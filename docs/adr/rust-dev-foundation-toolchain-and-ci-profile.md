@@ -30,8 +30,12 @@ relations:
     - "../specs/establish-rust-dev-foundation.md"
   derived-by:
     - "../designs/dev-foundation.md"
+    - "../plans/dev-foundation-bootstrap.md"
+    - "../test-specs/ci-profile-build-behavior.md"
+    - "../test-specs/manual-ci-workflow.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "../test-specs/manual-ci-workflow.md"
   references:
     - "https://doc.rust-lang.org/cargo/reference/profiles.html"
     - "https://doc.rust-lang.org/cargo/guide/build-performance.html"

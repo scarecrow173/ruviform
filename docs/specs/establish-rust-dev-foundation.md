@@ -31,8 +31,17 @@ relations:
   derived-by:
     - "../adr/rust-dev-foundation-toolchain-and-ci-profile.md"
     - "../designs/dev-foundation.md"
+    - "../plans/dev-foundation-bootstrap.md"
+    - "../test-specs/lockfile-reproducible-setup.md"
+    - "../test-specs/mise-verification-tasks.md"
+    - "../test-specs/ci-profile-build-behavior.md"
+    - "../test-specs/manual-ci-workflow.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "../test-specs/lockfile-reproducible-setup.md"
+    - "../test-specs/mise-verification-tasks.md"
+    - "../test-specs/ci-profile-build-behavior.md"
+    - "../test-specs/manual-ci-workflow.md"
   references:
     - "https://doc.rust-lang.org/cargo/reference/profiles.html"
     - "https://doc.rust-lang.org/cargo/guide/build-performance.html"
