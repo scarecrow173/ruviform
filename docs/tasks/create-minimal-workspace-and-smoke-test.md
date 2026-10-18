@@ -1,7 +1,7 @@
 ---
 id: "TASK-034IdQmBa6UdauVn9IG59X"
 type: "task"
-status: "todo"
+status: "done"
 title: "最小ワークスペースと smoke test の構築"
 created: "2026-10-19"
 updated: "2026-10-19"
@@ -10,15 +10,32 @@ relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/2"
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "doc"
+        path: "docs/impl/ir/create-minimal-workspace-and-smoke-test.md"
+      - type: "file"
+        path: "Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-core/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-core/src/lib.rs"
+    modified:
+      - type: "file"
+        path: ".gitignore"
+      - type: "file"
+        path: "docs/impl/ir/README.md"
+      - type: "file"
+        path: "docs/tasks/README.md"
     deleted: []
     renamed: []
     moved: []
-    generated: []
+    generated:
+      - type: "file"
+        path: "Cargo.lock"
   implements:
     - "../plans/dev-foundation-bootstrap.md"
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/create-minimal-workspace-and-smoke-test.md"
   depends-on:
     - "../plans/dev-foundation-bootstrap.md"
     - "pin-rust-toolchain-and-lockfile.md"
@@ -49,13 +66,13 @@ relations:
 
 plan `PLAN-034IdrispOUms1c32192B6` のスライス B（Phase B-1〜B-7）。workspace ルート `Cargo.toml` と最小メンバークレート `crates/ruviform-core` を新規作成し、smoke test が通る状態にする。`cargo new` / `cargo init` 等の雛形コマンドは使わず、生成物を完全制御するため全ファイル手書きで作成する。
 
-- [ ] workspace ルート `Cargo.toml` を新規作成する。design の定義ブロック全体を verbatim で転記する: `[workspace]`（`resolver = "2"`、`members = ["crates/ruviform-core"]`）、`[workspace.package]`（`edition = "2021"`、`rust-version = "1.85"`、`license = "MIT"`。いずれも仮置きとコメントで明記）、`[workspace.lints.rust]`（`unsafe_code`・`unused_qualifications`）、`[workspace.lints.clippy]`（`pedantic`・`missing_errors_doc`）、`[profile.dev]`（`debug = "full"`）、`[profile.ci]`（`inherits = "dev"`・`debug = "line-tables-only"`・`incremental = false`）、`[profile.ci.package."*"]`（`debug = "none"`）
-- [ ] `crates/ruviform-core/Cargo.toml` を新規作成する。`package.name = "ruviform-core"`、`edition.workspace = true`、`rust-version.workspace = true`、`license.workspace = true`、`[lints] workspace = true` を設定し、profile・独自 lint の重複は書かない（Cargo がメンバー側 profile を警告対象とするため）
-- [ ] `crates/ruviform-core/src/lib.rs` を新規作成する。`pub fn version() -> &'static str { env!("CARGO_PKG_VERSION") }` 程度の最小公開 API と、`#[cfg(test)]` 内に値が空でないことを確認する smoke test を書く（デバイス非依存の純粋関数のみ）
-- [ ] `mise exec -- cargo test --workspace` で smoke test が成功することを確認する
-- [ ] `Cargo.lock` が生成され、ignore されていないことを確認して追跡対象にする（ADR の決定どおり Git 追跡）
-- [ ] `.gitignore` に `target/` を追記する（既存エントリは変更しない）
-- [ ] `git status` で `target/`・`Cargo.lock` 以外に意図しない生成物が出ていないことを確認する
+- [x] workspace ルート `Cargo.toml` を新規作成する。design の定義ブロック全体を verbatim で転記する: `[workspace]`（`resolver = "2"`、`members = ["crates/ruviform-core"]`）、`[workspace.package]`（`edition = "2021"`、`rust-version = "1.85"`、`license = "MIT"`。いずれも仮置きとコメントで明記）、`[workspace.lints.rust]`（`unsafe_code`・`unused_qualifications`）、`[workspace.lints.clippy]`（`pedantic`・`missing_errors_doc`）、`[profile.dev]`（`debug = "full"`）、`[profile.ci]`（`inherits = "dev"`・`debug = "line-tables-only"`・`incremental = false`）、`[profile.ci.package."*"]`（`debug = "none"`）→ 作成済み・verbatim 一致を確認
+- [x] `crates/ruviform-core/Cargo.toml` を新規作成する。`package.name = "ruviform-core"`、`edition.workspace = true`、`rust-version.workspace = true`、`license.workspace = true`、`[lints] workspace = true` を設定し、profile・独自 lint の重複は書かない（Cargo がメンバー側 profile を警告対象とするため）→ 作成済み（`version = "0.1.0"` を仮置きで付与）
+- [x] `crates/ruviform-core/src/lib.rs` を新規作成する。`pub fn version() -> &'static str { env!("CARGO_PKG_VERSION") }` 程度の最小公開 API と、`#[cfg(test)]` 内に値が空でないことを確認する smoke test を書く（デバイス非依存の純粋関数のみ）→ 作成済み。`assert!(!x.is_empty())` は clippy pedantic `assert_is_empty` で `-D warnings` 下 error となるため `assert_ne!` 形式とした
+- [x] `mise exec -- cargo test --workspace` で smoke test が成功することを確認する → exit 0（unit test + doctest 各 1 件成功）
+- [x] `Cargo.lock` が生成され、ignore されていないことを確認して追跡対象にする（ADR の決定どおり Git 追跡）→ `git check-ignore Cargo.lock` exit 1。コミットは orchestrator のコミット単位に委譲し未コミットで保持
+- [x] `.gitignore` に `target/` を追記する（既存エントリは変更しない）→ 末尾に `# Rust build artifacts` セクションとして追記
+- [x] `git status` で `target/`・`Cargo.lock` 以外に意図しない生成物が出ていないことを確認する → `git status --porcelain` で意図しない生成物なし（`target/` は `!!` ignored）
 
 ## Classification
 
@@ -86,18 +103,18 @@ plan `PLAN-034IdrispOUms1c32192B6` のスライス B（Phase B-1〜B-7）。work
 
 ## Done When
 
-- [ ] workspace ルート `Cargo.toml` が design 定義と verbatim で一致し、メンバークレート側に profile・lint 重複がない
-- [ ] `cargo test --workspace` で smoke test が成功する
-- [ ] `Cargo.lock` が追跡対象で、`target/` が `.gitignore` により除外される
-- [ ] `dev` と `ci` プロファイルの成果物が `target/debug/` と `target/ci/` に分離生成される
+- [x] workspace ルート `Cargo.toml` が design 定義と verbatim で一致し、メンバークレート側に profile・lint 重複がない
+- [x] `cargo test --workspace` で smoke test が成功する
+- [x] `Cargo.lock` が追跡対象で、`target/` が `.gitignore` により除外される
+- [x] `dev` と `ci` プロファイルの成果物が `target/debug/` と `target/ci/` に分離生成される
 
 ## Verification
 
-- [ ] `mise exec -- cargo test --workspace` exits 0（smoke test 含む）
-- [ ] `mise exec -- cargo build --workspace --profile ci` exits 0 かつ `test -d target/ci` exits 0
-- [ ] `mise exec -- cargo build --workspace` exits 0 かつ `test -d target/debug` exits 0
-- [ ] `git check-ignore target/` が `target/` を出力する
-- [ ] `git check-ignore Cargo.lock` exits 1（ignore されていないこと）
-- [ ] `grep -c '^\[profile\.' Cargo.toml` が `3` を返し、`grep -c '^\[profile' crates/ruviform-core/Cargo.toml` が `0` を返す
-- [ ] `grep -n 'workspace = true' crates/ruviform-core/Cargo.toml` が `edition` / `rust-version` / `license` / `lints` の継承設定を返す
-- [ ] Manual: `git status` で `target/`・`Cargo.lock`・新規ソース以外の意図しない生成物がないこと（補助）
+- [x] `mise exec -- cargo test --workspace` exits 0（smoke test 含む）
+- [x] `mise exec -- cargo build --workspace --profile ci` exits 0 かつ `test -d target/ci` exits 0
+- [x] `mise exec -- cargo build --workspace` exits 0 かつ `test -d target/debug` exits 0
+- [x] `git check-ignore target/` が `target/` を出力する
+- [x] `git check-ignore Cargo.lock` exits 1（ignore されていないこと）
+- [x] `grep -c '^\[profile\.' Cargo.toml` が `3` を返し、`grep -c '^\[profile' crates/ruviform-core/Cargo.toml` が `0` を返す
+- [x] `grep -n 'workspace = true' crates/ruviform-core/Cargo.toml` が `edition` / `rust-version` / `license` / `lints` の継承設定を返す
+- [x] Manual: `git status` で `target/`・`Cargo.lock`・新規ソース以外の意図しない生成物がないこと（補助）→ `M .gitignore`・`M` 本 task、`?? Cargo.toml`/`Cargo.lock`/`crates/`/IR、`!! target/` のみ

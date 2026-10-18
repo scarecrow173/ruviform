@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = ["crates/ruviform-core"]
+
+[workspace.package]
+edition = "2021"          # 仮置き。#1 で edition / MSRV を再評価
+rust-version = "1.85"     # 仮置き MSRV。mise pin バージョン以上にはしない
+license = "MIT"           # 仮置き。配布方針確定前の暫定値
+
+[workspace.lints.rust]
+unsafe_code = "warn"      # lint ゲートの -D warnings で実質 deny。例外は局所許可＋SAFETY コメント（後述）
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"  # pedantic の過剰適用を初期段階で緩和（仮置き）
+
+# Local development: retain full debug information.
+[profile.dev]
+debug = "full"
+
+# CI: inherit development checks but generate smaller build artifacts.
+[profile.ci]
+inherits = "dev"
+debug = "line-tables-only"
+incremental = false
+
+# CI: dependencies outside the workspace do not need debug symbols.
+[profile.ci.package."*"]
+debug = "none"
