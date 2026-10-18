@@ -21,3 +21,65 @@ run = [
   "prek install",
   "git lfs install --local",
 ]
+
+# Rust verification tasks: single entry point shared by local dev and CI.
+# `fmt` rewrites source files in place; all other tasks are non-destructive
+# and produce build artifacts only under target/.
+
+[tasks.fmt]
+description = "Format workspace sources with `cargo fmt --all` (rewrites source files in place)"
+run = "cargo fmt --all"
+
+[tasks.fmt-check]
+description = "Check workspace formatting with `cargo fmt --all -- --check` (non-destructive; shared with CI)"
+run = "cargo fmt --all -- --check"
+
+[tasks.check]
+description = "Type-check workspace with `cargo check --workspace --all-targets` (dev profile; writes only target/)"
+run = "cargo check --workspace --all-targets"
+
+[tasks.lint]
+description = "Lint workspace with `cargo clippy --workspace --all-targets -- -D warnings` (dev profile; writes only target/)"
+run = "cargo clippy --workspace --all-targets -- -D warnings"
+
+[tasks.test]
+description = "Run workspace tests with `cargo test --workspace` (dev/test profile; writes only target/)"
+run = "cargo test --workspace"
+
+[tasks.build]
+description = "Build workspace with `cargo build --workspace` (dev profile; writes only target/)"
+run = "cargo build --workspace"
+
+# CI-only tasks: identical checks under `--profile ci` with incremental
+# compilation disabled. Artifacts go to target/ci/, separate from dev's
+# target/debug/. Not for routine local use (disk usage).
+
+[tasks.check-ci]
+description = "CI profile type-check: `cargo check --workspace --all-targets --profile ci` (non-destructive; writes only target/ci/)"
+run = "cargo check --workspace --all-targets --profile ci"
+env = { CARGO_INCREMENTAL = "0" }
+
+[tasks.lint-ci]
+description = "CI profile lint: `cargo clippy --workspace --all-targets --profile ci -- -D warnings` (non-destructive; writes only target/ci/)"
+run = "cargo clippy --workspace --all-targets --profile ci -- -D warnings"
+env = { CARGO_INCREMENTAL = "0" }
+
+[tasks.test-ci]
+description = "CI profile tests: `cargo test --workspace --profile ci` (non-destructive; writes only target/ci/)"
+run = "cargo test --workspace --profile ci"
+env = { CARGO_INCREMENTAL = "0" }
+
+[tasks.build-ci]
+description = "CI profile build: `cargo build --workspace --profile ci` (non-destructive; writes only target/ci/; run in CI only when needed)"
+run = "cargo build --workspace --profile ci"
+env = { CARGO_INCREMENTAL = "0" }
+
+[tasks.verify-ci]
+description = "Run the CI-equivalent verification sequence: fmt-check -> check-ci -> lint-ci -> test-ci (non-destructive; writes only target/)"
+run = [
+  "mise run fmt-check",
+  "mise run check-ci",
+  "mise run lint-ci",
+  "mise run test-ci",
+]
+env = { CARGO_INCREMENTAL = "0" }
