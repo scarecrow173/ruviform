@@ -1,0 +1,62 @@
+name: ci
+
+# Manual verification workflow. Intentionally dispatch-only: run it from the
+# Actions tab after this file is merged into the default branch.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (ubuntu-latest)
+    runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Measure disk usage (before build)
+        run: df -h
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+
+      - name: Restore tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Check config files with prek
+        run: mise exec -- prek run --all-files
+
+      - name: Check formatting (mise run fmt-check)
+        run: mise run fmt-check
+
+      - name: Type-check workspace (mise run check-ci)
+        run: mise run check-ci
+
+      - name: Lint workspace (mise run lint-ci)
+        run: mise run lint-ci
+
+      - name: Test workspace (mise run test-ci)
+        run: mise run test-ci
+
+      - name: Measure disk usage (after build)
+        run: |
+          df -h
+          du -sh target
+          du -sh target/ci/deps target/ci/build 2>/dev/null || true

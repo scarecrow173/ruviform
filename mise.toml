@@ -13,6 +13,7 @@ git-lfs = "3.8.0"
 "pipx:apm-cli" = { version = "0.33.0", uvx_args = "--prerelease allow" }
 "pipx:serena-agent" = "1.7.0"
 rust = "1.99.0"
+actionlint = "1.7.12"
 
 [tasks.setup]
 description = "Install APM dependencies, prek hooks and repository-local Git LFS"
