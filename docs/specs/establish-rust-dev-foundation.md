@@ -30,6 +30,7 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/2"
   derived-by:
     - "../adr/rust-dev-foundation-toolchain-and-ci-profile.md"
+    - "../designs/dev-foundation.md"
   verifies: []
   verified-by: []
   references:

@@ -6,3 +6,5 @@ Directory: `docs/designs`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| DESIGN-OVERVIEW | System Design Overview | draft | [overview.md](./overview.md) |
+| DESIGN-034IddXFCRKDIW01WXkSla | Rust 開発基盤の設計（最小ワークスペース・CIプロファイル・手動CI） | approved | [dev-foundation.md](./dev-foundation.md) |

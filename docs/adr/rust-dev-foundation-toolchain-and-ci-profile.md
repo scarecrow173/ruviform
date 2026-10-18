@@ -28,7 +28,8 @@ relations:
   refined-by: []
   derives-from:
     - "../specs/establish-rust-dev-foundation.md"
-  derived-by: []
+  derived-by:
+    - "../designs/dev-foundation.md"
   verifies: []
   verified-by: []
   references:
