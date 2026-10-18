@@ -1,7 +1,7 @@
 ---
 id: "TASK-034IdQiK2RW8ol4gpyUYLb"
 type: "task"
-status: "todo"
+status: "done"
 title: "Rust toolchain pin と lockfile 確定"
 created: "2026-10-19"
 updated: "2026-10-19"
@@ -10,15 +10,24 @@ relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/2"
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "doc"
+        path: "docs/impl/ir/pin-rust-toolchain-and-lockfile.md"
+    modified:
+      - type: "file"
+        path: "mise.toml"
+      - type: "file"
+        path: "mise.lock"
+      - type: "file"
+        path: "docs/impl/ir/README.md"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "../plans/dev-foundation-bootstrap.md"
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/pin-rust-toolchain-and-lockfile.md"
   depends-on:
     - "../plans/dev-foundation-bootstrap.md"
   blocks:
@@ -47,14 +56,14 @@ relations:
 
 plan `PLAN-034IdrispOUms1c32192B6` のスライス A（Phase A-1〜A-8）。`mise.toml` の `[tools]` に具体的 stable バージョンで Rust toolchain を pin し、`mise install` → `mise lock` で `mise.lock` に確定値を記録する。既存のツール・`[tasks.setup]`・APM/prek/Git LFS 運用を壊さないことが前提条件。
 
-- [ ] `mise ls-remote rust` で利用可能な stable を確認し、`minimum_release_age = "7d"` を考慮した最新の具体バージョンを選定する（`stable` / `latest` の浮動指定は禁止。design 仮置き MSRV `1.85` 以上であること）
-- [ ] `mise.toml` の `[tools]` に `rust = "<選定バージョン>"` を追記する（既存エントリ・`[settings]`・`[env]`・`[tasks.setup]` は変更しない）
-- [ ] `mise install` で toolchain を導入する
-- [ ] `cargo` / `rustfmt` / `clippy` の疎通を確認する。component が欠ける場合は rustup component 追加手順を `setup` タスクに明示する
-- [ ] `mise lock` で `mise.lock` を更新し、rust エントリが記録されたことを確認する
-- [ ] `mise run setup` を再実行し、`apm install` / `prek install` / `git lfs install --local` が成功すること（既存運用の無破壊）を確認する
-- [ ] `mise exec -- apm lock` で `apm.lock.yaml` の整合を確認し、`apm.yml` との差分がないことを確認する
-- [ ] 選定した Rust バージョンと根拠（stable 最新・仮置き MSRV 以上）を `docs/impl/ir/` の Implementation Record（未作成なら impl-doc 規約で作成）と実施 PR 本文に記録する
+- [x] `mise ls-remote rust` で利用可能な stable を確認し、`minimum_release_age = "7d"` を考慮した最新の具体バージョンを選定する（`stable` / `latest` の浮動指定は禁止。design 仮置き MSRV `1.85` 以上であること）→ `1.99.0` を選定（同日時点で 2 件の新規リリースが age フィルタで非表示、表示上の最新 stable）
+- [x] `mise.toml` の `[tools]` に `rust = "1.99.0"` を追記する（既存エントリ・`[settings]`・`[env]`・`[tasks.setup]` は変更しない）
+- [x] `mise install` で toolchain を導入する
+- [x] `cargo` / `rustfmt` / `clippy` の疎通を確認する。component が欠ける場合は rustup component 追加手順を `setup` タスクに明示する → 3 者とも疎通（rustup default 同梱のため追記不要）
+- [x] `mise lock` で `mise.lock` を更新し、rust エントリが記録されたことを確認する → `[[tools.rust]] version = "1.99.0"` 記録済み。`pipx:apm-cli` の `uvx_args` による dependency locking 非対応で exit 1 となる既存 caveat は IR に記録
+- [x] `mise run setup` を再実行し、`apm install` / `prek install` / `git lfs install --local` が成功すること（既存運用の無破壊）を確認する
+- [x] `mise exec -- apm lock` で `apm.lock.yaml` の整合を確認し、`apm.yml` との差分がないことを確認する → 両者無差分
+- [x] 選定した Rust バージョンと根拠（stable 最新・仮置き MSRV 以上）を `docs/impl/ir/` の Implementation Record（未作成なら impl-doc 規約で作成）と実施 PR 本文に記録する → `IMPL-034IdUNIqDaqtMaA6rRfEx` に記録（PR 本文への転記は plan Phase E）
 
 破壊的再初期化（`apm init --yes` 等）は行わない。`.github/`・`Cargo.toml`・クレート作成は後続タスクの範囲。
 
@@ -84,18 +93,18 @@ plan `PLAN-034IdrispOUms1c32192B6` のスライス A（Phase A-1〜A-8）。`mis
 
 ## Done When
 
-- [ ] `mise.toml` に `rust` が具体バージョンで pin され、`mise.lock` に rust エントリが記録されている
-- [ ] `cargo` / `rustfmt` / `clippy` が疎通し、欠落時の component 追加手順が必要なら `setup` タスクに明示されている
-- [ ] `mise run setup` が成功し、`apm.yml` / `apm.lock.yaml` に意図しない差分がない
-- [ ] 選定根拠が IR / 実施 PR に記録されている
+- [x] `mise.toml` に `rust` が具体バージョンで pin され、`mise.lock` に rust エントリが記録されている
+- [x] `cargo` / `rustfmt` / `clippy` が疎通し、欠落時の component 追加手順が必要なら `setup` タスクに明示されている
+- [x] `mise run setup` が成功し、`apm.yml` / `apm.lock.yaml` に意図しない差分がない
+- [x] 選定根拠が IR / 実施 PR に記録されている
 
 ## Verification
 
-- [ ] `mise exec -- cargo --version` exits 0
-- [ ] `mise exec -- cargo fmt --version` exits 0
-- [ ] `mise exec -- cargo clippy --version` exits 0
-- [ ] `git ls-files mise.lock apm.lock.yaml` が両ファイルを出力する
-- [ ] `git diff --exit-code -- apm.yml` exits 0
-- [ ] `mise run setup` exits 0
-- [ ] `grep -n 'rust = "' mise.toml` が `stable` / `latest` 以外の具体バージョン指定を返す
-- [ ] Manual: `mise.lock` に rust エントリが存在し、選定根拠が IR / PR に記録されている（補助）
+- [x] `mise exec -- cargo --version` exits 0（`cargo 1.99.0 (5f94df478 2026-08-27)`）
+- [x] `mise exec -- cargo fmt --version` exits 0（`rustfmt 1.10.0-stable`）
+- [x] `mise exec -- cargo clippy --version` exits 0（`clippy 0.1.99`）
+- [x] `git ls-files mise.lock apm.lock.yaml` が両ファイルを出力する
+- [x] `git diff --exit-code -- apm.yml` exits 0
+- [x] `mise run setup` exits 0
+- [x] `grep -n 'rust = "' mise.toml` が `stable` / `latest` 以外の具体バージョン指定を返す（`15:rust = "1.99.0"`）
+- [x] Manual: `mise.lock` に rust エントリが存在し、選定根拠が IR / PR に記録されている（補助）
