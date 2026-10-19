@@ -70,6 +70,8 @@ task `TASK-034IwCjptfvbSFBQaSKigx`（plan `PLAN-034IvX2cFeBjPV4UMfDJ2x` の終�
 
 結果: **V-1〜V-11 すべての判定基準を満たした**（`mise install --locked` の global-config caveat は Risk 8 の判定基準どおり「repo 管理の全 7 ツールが解決」を以て合否とし、pass + caveat 記録）。F-2 の最終スイープは S-1 ベースライン `IMPL-034IwOgrHkNf8v0cnrOpIl` と比較して、書き換え対象リテラル残存 11 行が全件 0 になり、非 `docs/` 残存は除外対象（`apm.lock.yaml` の APM 生成物パス 198 hit、レビュー済み無変更の `.pre-commit-config.yaml:1` のみ）となった。F-1 では ADR `derived-by` に plan バックリンクを追加し、plan `derives-from` に ADR を追加・`related` から除去して双方向整合を取った。
 
+追記（完了後の追検証）: 本 IR 作成時点で未実行としていた GitHub Actions 実ディスパッチは同日 2026-10-19 に `main` で 2 回実施された。初回は rust toolchain components 欠落で失敗し、修正（PR #7）後の 2 回目で全ステップ green となった。詳細は Validation 末尾の「完了後の追検証」節。
+
 ## Context
 
 - 実施タスク: `docs/tasks/run-placeholder-sweep-and-verification.md`（`TASK-034IwCjptfvbSFBQaSKigx`）
@@ -167,11 +169,25 @@ None.
 - F-6 README/AGENTS 目視監査・`test ! -f LICENSE`・no-change ファイル群の `git diff --exit-code`・`git diff main --name-only`
 - F-7 `node .agents/skills/doc-status/scripts/audit_docs.js --type all --json` — findings 0
 
+### 完了後の追検証: GitHub Actions 実ディスパッチ（2026-10-19）
+
+Issue #2 の workflow 設計（IR `IMPL-034IemQE6RlhuBXtirqKVX` `add-manual-ci-workflow.md`）で「本 PR マージ後に確認する」と引き継がれていた実ディスパッチを、dispatch-only workflow `ci`（`.github/workflows/ci.yml`）に対して `main` 上で 2 回実施した。
+
+| Run | 結果 | 内容 |
+| --- | --- | --- |
+| `39249234364` | **failed** | `mise run fmt-check` で `cargo-fmt is not installed for the toolchain '1.99.0-x86_64-unknown-linux-gnu'` により失敗。fresh Ubuntu runner への rustup 初期導入が minimal profile（rustfmt/clippy を含まない）であることが原因。Windows 側は既存インストールに同梱済みだったためローカルでは顕在化しなかった。`mise install --locked` 自体は成功 |
+| `39249585284` | **all green（約 30 秒）** | 修正 `aa9505e`（PR #7・merge commit `6aeadf6`。`mise.toml` の rust エントリを `components = ["rustfmt", "clippy"]` として pin し `mise.lock` を再生成）適用後、全ステップ pass |
+
+- 実測値（run `39249585284`）: `df -h` はビルド前 `/dev/root 72G・59G used・14G avail (82%)`、ビルド後 `60G used・13G avail (84%)`。`du -sh target` = `7.1M`（内訳: `target/ci/deps` 7.0M・`target/ci/build` 4.0K）。ディスク余裕は十分
+- pass した CI ステップ: `mise exec -- prek run --all-files` → `mise run fmt-check` → `check-ci` → `lint-ci` → `test-ci`（CI profile・job env `CARGO_INCREMENTAL=0`）
+- 初回ディスパッチで検出され PR #7 で修正された不具合（Linux fresh 環境での rust components 欠落 → `fmt-check` 失敗）は、実ディスパッチで捕捉を意図していたクロスプラットフォーム差異そのものであり、手動ディスパッチ設計の妥当性を実証する結果となった
+- これにより Issue #2 の workflow 設計で残っていた最後の「未実行」検証が消化された
+
 ### 未実行・未検証条件（引き継ぎ）
 
 - **macOS / Linux での実機検証**: 未実施（README Quickstart・AGENTS mise 節で「未検証」と明示済みのとおり）
 - **mise 未導入の素の Windows での手順**: 未実施（mise 導入はリポジトリ外前提として記載済み）
-- **GitHub Actions での実ディスパッチ**: 未実施（`.github/workflows/ci.yml` は `workflow_dispatch` 専用・静的検証のみ済み。README `## Status` に明示）
+- ~~GitHub Actions での実ディスパッチ~~: **解消済み**（上記「完了後の追検証」節。`main` で 2 回ディスパッチし、初回失敗→PR #7 修正後に全 green）
 - **`mise install --locked` の caveat**: global mise config が repo lockfile 外ツールを要求する環境ではその分のみ exit 1（今回実測）。repo 管理ツールの解決は全件成功しており、README/AGENTS のフォールバック記載と整合
 
 ## Risks
@@ -182,5 +198,6 @@ None.
 
 ## Follow-ups
 
+- README `## Status`（L18）の「GitHub Actions 上での実ディスパッチは未実施です」記述は「完了後の追検証」により陳腐化している。実ディスパッチ実績（失敗→PR #7 修正→全 green）を反映する README 更新は別タスク/別コミットで実施すること（本 IR の編集範囲外）。
 - オーケストレーター: `docs/impl/ir/README.md`・`docs/tasks/README.md` の index 更新と、本タスク分のコミット（本 IR・task status 更新・F-1 の plan/ADR front matter 編集を含む）。
 - 将来の変更者: `apm.yml` の manifest フィールド（`name`/`description`）を変更しても `apm.lock.yaml` には波及しない（lockfile は依存 pin のみを記録）。整合は `apm install --frozen` で担保する。
