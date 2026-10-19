@@ -1,6 +1,6 @@
-name: project-template
+name: ruviform
 version: 1.0.0
-description: Minimal language-agnostic development foundation
+description: Reusable multimedia foundation centered on Rust
 targets:
   - copilot
   - codex

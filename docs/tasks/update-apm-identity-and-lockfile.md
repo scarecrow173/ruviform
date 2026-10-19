@@ -1,7 +1,7 @@
 ---
 id: "TASK-034IwCbI6X4pBBby5Donzz"
 type: "task"
-status: "todo"
+status: "done"
 title: "apm.yml 識別子更新と APM lockfile 再生成"
 created: "2026-10-19"
 updated: "2026-10-19"
@@ -28,7 +28,8 @@ relations:
         path: "apm.lock.yaml"
   implements:
     - "../plans/replace-template-derived-docs-with-ruviform.md"
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/update-apm-identity-and-lockfile.md"
   depends-on:
     - "../plans/replace-template-derived-docs-with-ruviform.md"
     - "baseline-placeholder-sweep.md"
@@ -56,10 +57,10 @@ relations:
 
 plan `PLAN-034IvX2cFeBjPV4UMfDJ2x` のスライス T-IDENT（Phase I-1〜I-4）。`apm.yml` のリポジトリ識別子を `project-template` から `ruviform` に更新し、APM の依存解決・lockfile を再生成して整合を確認する。変更は `name`/`description` の 2 フィールドのみで、`version`/`targets`/`dependencies.apm`/`devDependencies.mcp`/`includes`/`scripts` は ADR 決定どおり無変更とする。
 
-- [ ] I-1. `apm.yml` の 2 フィールドのみ変更する: `name: project-template` → `name: ruviform`、`description: Minimal language-agnostic development foundation` → `description: Reusable multimedia foundation centered on Rust`。`version`/`targets`/`dependencies.apm`/`devDependencies.mcp`（serena・mise）/`includes`/`scripts` は ADR 決定どおり無変更
-- [ ] I-2. `mise exec -- apm install` → `mise exec -- apm lock` を実行して `apm.lock.yaml` を再生成し、`apm.yml` との整合と生成物（`apm_modules/`・各エージェント配布物は非追跡）との差分を確認する。lockfile・生成物は手編集しない
-- [ ] I-3. `mise exec -- apm install --frozen` を実行し exit 0 を確認する（`apm.yml` ↔ `apm.lock.yaml` が非同期なら失敗する厳格検証。apm-cli 0.33.0 は `--frozen` 対応済み・IR 実測済み）
-- [ ] I-4. `git status --ignored` で `apm_modules/`・各エージェント配布生成物が非追跡のままであることを確認する。APM 0.33.0 に専用 validate コマンドはないため、命名制約の適合は I-2/I-3 の成功で確認した旨を実施記録に残す（ADR の確認方法をそのまま採用）
+- [x] I-1. `apm.yml` の 2 フィールドのみ変更する: `name: project-template` → `name: ruviform`、`description: Minimal language-agnostic development foundation` → `description: Reusable multimedia foundation centered on Rust`。`version`/`targets`/`dependencies.apm`/`devDependencies.mcp`（serena・mise）/`includes`/`scripts` は ADR 決定どおり無変更
+- [x] I-2. `mise exec -- apm install` → `mise exec -- apm lock` を実行して `apm.lock.yaml` を再生成し、`apm.yml` との整合と生成物（`apm_modules/`・各エージェント配布物は非追跡）との差分を確認する。lockfile・生成物は手編集しない
+- [x] I-3. `mise exec -- apm install --frozen` を実行し exit 0 を確認する（`apm.yml` ↔ `apm.lock.yaml` が非同期なら失敗する厳格検証。apm-cli 0.33.0 は `--frozen` 対応済み・IR 実測済み）
+- [x] I-4. `git status --ignored` で `apm_modules/`・各エージェント配布生成物が非追跡のままであることを確認する。APM 0.33.0 に専用 validate コマンドはないため、命名制約の適合は I-2/I-3 の成功で確認した旨を実施記録に残す（ADR の確認方法をそのまま採用）
 
 ## Classification
 
@@ -88,17 +89,17 @@ plan `PLAN-034IvX2cFeBjPV4UMfDJ2x` のスライス T-IDENT（Phase I-1〜I-4）�
 
 ## Done When
 
-- [ ] `apm.yml` の diff が `name`/`description` の 2 フィールドのみで、それ以外のフィールドが無変更である
-- [ ] `apm.lock.yaml` が再生成され、`apm.yml` と整合する（`mise exec -- apm install --frozen` exit 0）
-- [ ] `apm_modules/`・エージェント配布生成物が非追跡のままである
-- [ ] 命名制約適合の確認経緯（専用 validate 非存在のため I-2/I-3 成功で代替）が IR に記録されている
+- [x] `apm.yml` の diff が `name`/`description` の 2 フィールドのみで、それ以外のフィールドが無変更である
+- [x] `apm.lock.yaml` が再生成され、`apm.yml` と整合する（`mise exec -- apm install --frozen` exit 0）
+- [x] `apm_modules/`・エージェント配布生成物が非追跡のままである
+- [x] 命名制約適合の確認経緯（専用 validate 非存在のため I-2/I-3 成功で代替）が IR に記録されている
 
 ## Verification
 
-- [ ] `git diff -- apm.yml` が `name`/`description` の 2 行のみの変更を示す
-- [ ] `grep -n "^name: ruviform$" apm.yml` exits 0
-- [ ] `mise exec -- apm install` exits 0 かつ `mise exec -- apm lock` exits 0（`apm.lock.yaml` 再生成）
-- [ ] `mise exec -- apm install --frozen` exits 0（厳格検証）
-- [ ] `git status --ignored` で `apm_modules/` が ignored として出力され、`git ls-files apm_modules` が空を返す
-- [ ] `mise exec -- prek run --all-files` exits 0（check-yaml が `apm.yml` の構文を検証）
-- [ ] Manual: `targets`/`dependencies.apm`/`devDependencies.mcp`/`includes`/`scripts`/`version` が無変更であること（補助）
+- [x] `git diff -- apm.yml` が `name`/`description` の 2 行のみの変更を示す
+- [x] `grep -n "^name: ruviform$" apm.yml` exits 0
+- [x] `mise exec -- apm install` exits 0 かつ `mise exec -- apm lock` exits 0（`apm.lock.yaml` 再生成）
+- [x] `mise exec -- apm install --frozen` exits 0（厳格検証）
+- [x] `git status --ignored` で `apm_modules/` が ignored として出力され、`git ls-files apm_modules` が空を返す
+- [x] `mise exec -- prek run --all-files` exits 0（check-yaml が `apm.yml` の構文を検証）
+- [x] Manual: `targets`/`dependencies.apm`/`devDependencies.mcp`/`includes`/`scripts`/`version` が無変更であること（補助）
