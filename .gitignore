@@ -15,9 +15,11 @@ tmp/
 .cache/
 .mise-data/
 
-# mise local state (dep-graph sidecars are not needed: apm uses the github
-# binary backend whose checksum is pinned directly in mise.lock)
-.mise/
+# mise local state — .mise/locks/ stays un-ignored because mise lockfile
+# revision 2 stores dep-graph sidecars there for pypi/npm-resolved tools
+# (mise.lock references them by digest; `mise install --locked` fails without)
+.mise/*
+!.mise/locks/
 
 # APM dependencies and generated deployment assets
 apm_modules/
