@@ -16,12 +16,12 @@ relations:
   superseded-by: []
   related:
     - "../../AGENTS.md"
+    - "ruviform-architecture-design-baseline.md"
   refines: []
   refined-by: []
   derives-from:
     - "dev-foundation.md"
     - "replace-template-derived-docs-with-ruviform.md"
-    - "ruviform-architecture-design-baseline.md"
   derived-by: []
   verifies: []
   verified-by: []
