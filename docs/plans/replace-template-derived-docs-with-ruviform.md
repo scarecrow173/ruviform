@@ -37,7 +37,13 @@ relations:
         path: "apm.lock.yaml"
   implements:
     - "../specs/replace-template-derived-docs-with-ruviform.md"
-  implemented-by: []
+  implemented-by:
+    - "../tasks/baseline-placeholder-sweep.md"
+    - "../tasks/rewrite-readme-for-ruviform.md"
+    - "../tasks/update-apm-identity-and-lockfile.md"
+    - "../tasks/rewrite-agents-for-ruviform.md"
+    - "../tasks/review-config-files-minimal-edits.md"
+    - "../tasks/run-placeholder-sweep-and-verification.md"
   depends-on:
     - "dev-foundation-bootstrap.md"
   blocks: []
