@@ -46,12 +46,11 @@ Ruviform は、Rust を中心とした再利用可能なマルチメディア基
 ```sh
 git clone https://github.com/scarecrow173/ruviform.git && cd ruviform
 
-# 1. ツール復元（mise.lock からの固定復元が正本手順）
-mise install --locked
-#    global mise config が repo lockfile に無いツールを要求する環境では、
-#    その外部ツール分のみ exit 1 になり得ます（repo 管理ツールは全て解決します）。
-#    その場合は lockfile 非使用のフォールバック:
+# 1. ツール復元（mise.lock に記録済みの固定バージョンを復元）
 mise install
+#    ※global mise config でリポジトリ管理外のツールを設定している環境では、
+#    それらも併せて解決・インストールされます（repo 管理ツールは lockfile
+#    記録の固定バージョンが使われます）。
 
 # 2. APM 依存・prek フック・リポジトリローカル Git LFS のセットアップ
 mise run setup                    # = apm install && prek install && git lfs install --local
