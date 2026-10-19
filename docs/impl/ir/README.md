@@ -8,6 +8,7 @@ Directory: `docs/impl/ir`
 | IMPL-034IwOgrHkNf8v0cnrOpIl | Baseline placeholder sweep | completed | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
 | IMPL-034Ie9ddczoaNNz2v7zAYp | Create minimal workspace and smoke test | completed | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | IMPL-034IedmXdoFo5aI22WR8m8 | Define mise dev and CI tasks | completed | [define-mise-dev-and-ci-tasks.md](./define-mise-dev-and-ci-tasks.md) |
+| IMPL-034ISfioxP51rGFoHh8MX3 | issue-1 architecture baseline repo reflection | completed | [issue-1-architecture-baseline-repo-reflection.md](./issue-1-architecture-baseline-repo-reflection.md) |
 | IMPL-034IdUNIqDaqtMaA6rRfEx | Pin Rust toolchain and lockfile | completed | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | IMPL-034IwXoGhCxs4EAP3HjoQF | Review config files minimal edits | completed | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | IMPL-034Ix98fGRcsRNYZ3EZnZJ | Rewrite AGENTS for Ruviform | completed | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
