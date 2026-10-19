@@ -32,7 +32,8 @@ relations:
   derives-from:
     - "../specs/architecture-design-baseline-deliverables.md"
     - "https://github.com/scarecrow173/ruviform/issues/1"
-  derived-by: []
+  derived-by:
+    - "../designs/ruviform-architecture-design-baseline.md"
   verifies: []
   verified-by: []
   references:

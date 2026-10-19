@@ -41,6 +41,7 @@ relations:
     - "../adr/plugin-architecture-clap-vst3.md"
     - "../adr/realtime-contract-and-verification-policy.md"
     - "../adr/ui-architecture-webview-hybrid.md"
+    - "../designs/ruviform-architecture-design-baseline.md"
   verifies: []
   verified-by: []
   references:
