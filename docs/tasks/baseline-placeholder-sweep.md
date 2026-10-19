@@ -1,7 +1,7 @@
 ---
 id: "TASK-034IwBWH50nD9Unn8HghJD"
 type: "task"
-status: "todo"
+status: "done"
 title: "テンプレート残存プレースホルダーのベースラインスイープ"
 created: "2026-10-19"
 updated: "2026-10-19"
@@ -24,7 +24,8 @@ relations:
     generated: []
   implements:
     - "../plans/replace-template-derived-docs-with-ruviform.md"
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/baseline-placeholder-sweep.md"
   depends-on:
     - "../plans/replace-template-derived-docs-with-ruviform.md"
   blocks:
@@ -53,12 +54,12 @@ relations:
 
 plan `PLAN-034IvX2cFeBjPV4UMfDJ2x` の前提ステップ S-1（ベースラインスイープ）。plan ではいずれのスライスにも属さない共有の pre-dispatch ステップとして定義されているが、タスク DAG の依存先は実在する task doc を指す必要があるため本タスクとして切り出した。`git ls-files` を母集団にプレースホルダー所在を確定して記録し、T-VERIFY（`run-placeholder-sweep-and-verification.md`）の最終スイープ（F-2 / V-1）と比較できるベースライン一覧を残す。本タスクは計測・記録のみであり、対象ファイルを一切書き換えない。
 
-- [ ] `git ls-files` で追跡ファイルの母集団を確定する
-- [ ] `git grep -in "project.template"` を実行し、一致箇所（パス・行番号・行内容）を記録する
-- [ ] `git grep -in "Use this template"` を実行し、一致箇所を記録する
-- [ ] `git grep -n "派生リポジトリ\|派生プロジェクト\|言語・フレームワーク非依存\|言語・フレームワークに依存しない"` を実行し、一致箇所を記録する
-- [ ] catch-all として `git grep -in "template\|テンプレート" -- . ':(exclude)docs/**'` を実行し、変種の残存を記録する
-- [ ] `docs/` 配下の履歴記録と `apm.lock.yaml` 等の生成物内 APM パッケージ由来パス（`assets/templates/` 等）は書き換え対象外であることを明示し、ベースライン一覧を本タスクの IR `docs/impl/ir/baseline-placeholder-sweep.md`（impl-doc 規約で新規作成）に記録する。plan の現状把握では `README.md`・`AGENTS.md`・`apm.yml`・`mise.toml` L8 コメントが主な残存箇所
+- [x] `git ls-files` で追跡ファイルの母集団を確定する → 55 ファイルを確定（IR `Baseline Sweep > Population` に verbatim 記録）
+- [x] `git grep -in "project.template"` を実行し、一致箇所（パス・行番号・行内容）を記録する → 32 hit（非 docs 2 件: `README.md:1`・`apm.yml:1`、docs 30 件）。IR に記録
+- [x] `git grep -in "Use this template"` を実行し、一致箇所を記録する → 24 hit（非 docs 1 件: `README.md:8`、docs 23 件）。IR に記録
+- [x] `git grep -n "派生リポジトリ\|派生プロジェクト\|言語・フレームワーク非依存\|言語・フレームワークに依存しない"` を実行し、一致箇所を記録する → 32 hit（非 docs 6 件: `AGENTS.md:3,5,75,80,91`・`README.md:3`、docs 26 件）。IR に記録
+- [x] catch-all として `git grep -in "template\|テンプレート" -- . ':(exclude)docs/**'` を実行し、変種の残存を記録する → 204 hit（`AGENTS.md` 3・`README.md` 2・`apm.yml` 1・`apm.lock.yaml` 198）。比較用に docs 込み版（383 hit、docs 179 件）と補助 `language.agnostic`（9 hit、非 docs 2 件）も実行・記録
+- [x] `docs/` 配下の履歴記録と `apm.lock.yaml` 等の生成物内 APM パッケージ由来パス（`assets/templates/` 等）は書き換え対象外であることを明示し、ベースライン一覧を本タスクの IR `docs/impl/ir/baseline-placeholder-sweep.md`（impl-doc 規約で新規作成）に記録する。plan の現状把握では `README.md`・`AGENTS.md`・`apm.yml`・`mise.toml` L8 コメントが主な残存箇所 → `apm.lock.yaml` 198 hit は全件 APM パッケージ由来パス（生成物除外）、docs/ hit は全件履歴記録（除外）と IR に明示。書き換え対象は `README.md` 3 行・`AGENTS.md` 5 行・`apm.yml` 2 行 + `mise.toml` L8 コメント（意味的残存）で plan 把握と一致
 
 ## Classification
 
@@ -86,16 +87,16 @@ plan `PLAN-034IvX2cFeBjPV4UMfDJ2x` の前提ステップ S-1（ベースライ�
 
 ## Done When
 
-- [ ] 4 系統の grep（`project.template`・`Use this template`・日本語派生表現・catch-all `template|テンプレート`）が実行され、一致箇所が一覧化されている
-- [ ] 除外対象（`docs/` 履歴・生成物内 APM パッケージ由来パス）が明示され、ベースラインが IR に記録されている
-- [ ] 後続スライスが比較可能な粒度（パス＋行番号＋一致パターン）で記録されている
-- [ ] 本タスクの実行で記録先の `docs/` 配下以外の追跡ファイルに差分がない
+- [x] 4 系統の grep（`project.template`・`Use this template`・日本語派生表現・catch-all `template|テンプレート`）が実行され、一致箇所が一覧化されている → IR `Baseline Sweep` 節に grep 別 hit 一覧を記録
+- [x] 除外対象（`docs/` 履歴・生成物内 APM パッケージ由来パス）が明示され、ベースラインが IR に記録されている → IR `Excluded:` 各節に除外分類と file:line 一覧を記録
+- [x] 後続スライスが比較可能な粒度（パス＋行番号＋一致パターン）で記録されている → `Rewrite Targets` 表と除外一覧はパス＋行番号＋該当 grep で記録
+- [x] 本タスクの実行で記録先の `docs/` 配下以外の追跡ファイルに差分がない → `git status --porcelain` で `docs/` 記録物以外の差分なしを確認
 
 ## Verification
 
-- [ ] `git grep -in "project.template"` を実行し、出力が IR のベースライン記録と一致する
-- [ ] `git grep -in "Use this template"` を実行し、同上
-- [ ] `git grep -n "派生リポジトリ\|派生プロジェクト\|言語・フレームワーク非依存\|言語・フレームワークに依存しない"` を実行し、同上
-- [ ] `git grep -in "template\|テンプレート" -- . ':(exclude)docs/**'` を実行し、同上
-- [ ] `test -f docs/impl/ir/baseline-placeholder-sweep.md` exits 0
-- [ ] Manual: `git status --porcelain` で `docs/` 配下の記録物以外に意図しない変更がないこと（補助）
+- [x] `git grep -in "project.template"` を実行し、出力が IR のベースライン記録と一致する → 32 hit（非 docs 2 件）で IR 記録と一致
+- [x] `git grep -in "Use this template"` を実行し、同上 → 24 hit（非 docs 1 件）で一致
+- [x] `git grep -n "派生リポジトリ\|派生プロジェクト\|言語・フレームワーク非依存\|言語・フレームワークに依存しない"` を実行し、同上 → 32 hit（非 docs 6 件）で一致
+- [x] `git grep -in "template\|テンプレート" -- . ':(exclude)docs/**'` を実行し、同上 → 204 hit で一致
+- [x] `test -f docs/impl/ir/baseline-placeholder-sweep.md` exits 0
+- [x] Manual: `git status --porcelain` で `docs/` 配下の記録物以外に意図しない変更がないこと（補助） → `docs/` 記録物（本 task・IR・両 index）以外に差分なし
