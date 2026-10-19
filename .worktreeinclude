@@ -1,27 +1,63 @@
 # .worktreeinclude — gitignored files copied into new worktrees
-# (gitignore syntax; only files that are ALSO gitignored are copied)
+# Orca copies a path only if the path ITSELF is gitignored; directory-wide
+# entries whose parent dir is not ignored, globs, and negations are skipped.
 
 # APM package sources and deployed agent assets — let worktree agents use
 # skills/hooks/commands immediately without re-running `apm install`
 apm_modules/
 .agents/
 .sdp/
-.claude/
-.codex/
-.cursor/
-.windsurf/
+
+# Deployed agent assets under tool dirs. The parent dirs (.claude/ etc.) are
+# NOT gitignored — .gitignore only ignores these child paths, so each literal
+# child path must be listed individually for Orca to copy it.
+.claude/agents/
+.claude/commands/
+.claude/hooks/
+.claude/skills/
+.claude/apm-hooks.json
+.claude/settings.json
+.codex/agents/
+.codex/hooks/
+.codex/prompts/
+.codex/apm-hooks.json
+.codex/config.toml
+.codex/hooks.json
+.cursor/agents/
+.cursor/commands/
+.cursor/rules/
+.cursor/hooks/
+.cursor/apm-hooks.json
+.cursor/hooks.json
+.cursor/mcp.json
 .github/agents/
+.github/commands/
+.github/instructions/
+.github/prompts/
+.github/skills/
 .github/hooks/
+.github/extensions/
+.github/apm-hooks.json
+.github/copilot-instructions.md
 .github/mcp.json
+.windsurf/agents/
+.windsurf/hooks/
+.windsurf/rules/
+.windsurf/workflows/
+.windsurf/apm-hooks.json
+.windsurf/hooks.json
 .mcp.json
 .vscode/mcp.json
 
-# Local secrets/environment (copied only if present and gitignored)
+# Local secrets/environment — literal paths only (globs are skipped by Orca)
 .env
-.env.*
+.env.local
+.env.development
+.env.production
+.env.test
 
 # Deliberately not copied (regenerable or path-coupled):
 #   target/           Rust build artifacts
 #   .serena/          Serena local state (absolute paths; re-created per checkout)
-#   .mise-data/ tmp/ logs/ .cache/ *.log  transient files
-#   .mise/locks/      already tracked — present in every worktree
+#   tmp/ logs/ .cache/ *.log .mise-data/  transient files
+#   .mise/            mise local state (.mise/locks/ is tracked — present anyway)
