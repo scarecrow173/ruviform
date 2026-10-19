@@ -77,7 +77,6 @@ mise run verify-ci                # CI 同等: fmt-check -> check-ci -> lint-ci 
 | `Cargo.toml` / `Cargo.lock` | Rust ワークスペース定義（共通 lint・`[profile.dev]` / `[profile.ci]`）と依存 lockfile |
 | `crates/ruviform-core/` | 最小メンバークレート（仮置き・smoke test） |
 | `mise.toml` / `mise.lock` | 開発ツール・検証タスクの正本と固定復元用 lockfile |
-| `.mise/locks/` | pipx 系ツールの dep-graph lock 生成物 |
 | `apm.yml` / `apm.lock.yaml` | APM 依存パッケージ・対象エージェント・MCP の定義と lockfile |
 | `.pre-commit-config.yaml` | prek による言語非依存の Git フック |
 | `.gitattributes` | 改行・テキスト属性と Git LFS 対象拡張子のルール |

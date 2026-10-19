@@ -15,10 +15,9 @@ tmp/
 .cache/
 .mise-data/
 
-# mise local state — .mise/locks/ stays tracked because mise.lock references
-# the pipx dependency sidecars by digest for `mise install --locked`
-.mise/*
-!.mise/locks/
+# mise local state (dep-graph sidecars are not needed: apm uses the github
+# binary backend whose checksum is pinned directly in mise.lock)
+.mise/
 
 # APM dependencies and generated deployment assets
 apm_modules/
