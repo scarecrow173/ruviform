@@ -60,3 +60,6 @@ apm_modules/
 # Local state produced by optional agent tooling
 .serena/
 .sdp/
+
+# Rust build artifacts
+target/
