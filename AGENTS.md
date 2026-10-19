@@ -1,8 +1,7 @@
 # AGENTS.md
 
-このリポジトリは、言語・フレームワークに依存しない開発基盤のテンプレートです。
-以下の開発・設計原則を基本とし、末尾にこのリポジトリ固有の作業契約と mise / APM の運用を定めます。
-派生リポジトリでは、プロジェクト固有の目的・制約・検証手順を必要に応じて追記してください。
+このリポジトリは Ruviform — Rust を中心とした再利用可能なマルチメディア基盤（設計・初期セットアップ段階）です。
+以下はこのリポジトリで作業するエージェント共通の作業契約であり、開発・設計原則、リポジトリ固有の作業契約、Rust ワークスペースの暫定開発規約、mise / APM の運用、Git と安全性の方針を定めます。
 
 ## 開発・設計原則
 
@@ -72,29 +71,89 @@
 - 調査の深さはタスクに応じて調整する。機械的な変更に、不具合調査と同じ深さの原因追跡を強制しない。
 - 公開APIや外部との契約、永続データ形式などの互換性を変える場合は、影響を確認して変更方針を明示する。
 - 完了時には変更内容、実行した検証と結果、未実行の検証、残る問題を区別して報告する。
-- このテンプレートに言語・フレームワーク固有の構成や、不要な `.github/`・`docs/` ディレクトリを追加しない。派生プロジェクトで必要に応じて定義する。
+- 実装されていない API・クレート・検証を、実在するものまたは実行済みと報告しない。
 
 ## 開発環境（mise）
 
 - 開発ツールとタスクの正本は `mise.toml` とする。
-- テンプレートには共通基盤ツールのみを置く。言語・フレームワーク別ツールや `lint` / `test` / `check` / `build` タスクは派生リポジトリで必要に応じて追加する。
-- 初回セットアップでは、miseをインストールした後に以下を実行する。
+- `mise.toml` は uv / prek / git-lfs / pipx 系の共通基盤ツールに加え、このリポジトリで pin した Rust ツールチェーン（`rust = "1.99.0"`）と actionlint を管理する。`fmt` / `check` / `lint` / `test` / `build` 等の検証タスクも同ファイルが正本（対応表は `## Rust ワークスペースと暫定開発規約` 節を参照）。
+- 初回セットアップでは、miseをインストールした後に以下を実行する（Windows 11 x64・Git Bash で検証済み。macOS / Linux は未検証）。
 
 ```sh
+# ツール復元（mise.lock からの固定復元が正本手順）
+mise install --locked
+# global mise config が repo lockfile に無いツールを要求する環境では
+# その外部ツール分のみ exit 1 になり得る。その場合はフォールバック:
 mise install
+
+# APM 依存・prek フック・リポジトリローカル Git LFS のセットアップ
 mise run setup
+
+# lockfile の厳格検証が必要な場合（apm.yml と apm.lock.yaml が非同期なら失敗）
+mise exec -- apm install --frozen
 ```
 
-- 初期化後は `mise.lock` を生成・確認してコミットし、以後の復元では `mise install --locked` を使用する。
 - 管理対象ツールを直接起動する必要がある場合は、原則 `mise exec -- <command>` を使用する。
 - `mise run setup` は `apm install` で依存関係を復元し、`prek install` でコミットフックを、`git lfs install --local` でリポジトリローカルの Git LFS フィルターとフックを有効化する。prekのフック定義は `.pre-commit-config.yaml` を正本とする。
-- Gitフックでは言語非依存の軽量チェックのみ実行し、言語別の Lint・テスト・ビルドは派生リポジトリのmiseタスクで管理する。
+- Gitフックでは言語非依存の軽量チェックのみ実行し、Lint・テスト・ビルド等の言語別検証は `mise.toml` のタスクで管理する。
 - 設定済みフックを全ファイルに実行する場合は `mise exec -- prek run --all-files` を使用する。
 - Git LFS は `mise.toml` でバージョン管理し、`.gitattributes` で対象を定義する。LFSを必要とするGitコマンドはmise管理のツールがPATH上にある環境で実行する（例: `mise exec -- git push`）。初回cloneでLFSオブジェクトが未取得なら、セットアップ後に `mise exec -- git lfs pull` を実行する。
+- lockfile の再生成条件は以下のとおり。
+
+| lockfile | 再生成トリガ | 手順 |
+| --- | --- | --- |
+| `mise.lock` | `mise.toml` の `[tools]` 変更・バージョン更新時 | `mise install` → `mise lock`（pipx ツールは `.mise/locks/` 配下に dep-graph 生成物が出力されるので合わせてコミット対象とする） |
+| `apm.lock.yaml` | `apm.yml` の dependencies / targets / MCP 変更時 | `apm install`（lock 自動更新）→ `apm lock` で整合確認 |
+| `Cargo.lock` | ワークスペースの `[dependencies]` 変更時 | `cargo build` / `cargo generate-lockfile` で自動更新 |
+
+- いずれかの lockfile が不整合となった場合は `git checkout -- <lockfile>` で戻し、上記の手順で再生成する。
+
+## Rust ワークスペースと暫定開発規約
+
+### ワークスペース構成
+
+- ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`edition`・`rust-version`・`license` の現行値は仮置き）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
+- メンバーは最小クレート `crates/ruviform-core`（仮置き・smoke test）のみ。最終的なクレート分割と公開 API は Issue [#1](https://github.com/scarecrow173/ruviform/issues/1) の詳細設計で確定する。
+
+### 検証入口
+
+- cargo コマンドは直接実行せず、`mise.toml` のタスクを `mise run <task>` 経由で呼ぶ。ローカル開発と CI で同じ入口を使う。
+
+| mise タスク | 実行内容 | 用途 |
+| --- | --- | --- |
+| `setup` | `apm install` + `prek install` + `git lfs install --local` | 初回セットアップ |
+| `fmt` | `cargo fmt --all` | 整形（ソースを書き換える） |
+| `fmt-check` | `cargo fmt --all -- --check` | 整形チェック（非破壊） |
+| `check` | `cargo check --workspace --all-targets` | 型チェック（dev プロファイル） |
+| `lint` | `cargo clippy --workspace --all-targets -- -D warnings` | lint（dev プロファイル） |
+| `test` | `cargo test --workspace` | テスト（dev プロファイル） |
+| `build` | `cargo build --workspace` | ビルド（dev プロファイル） |
+| `check-ci` / `lint-ci` / `test-ci` / `build-ci` | 上記各コマンドを `--profile ci`・`CARGO_INCREMENTAL=0` で実行 | CI 用途限定 |
+| `verify-ci` | `fmt-check` → `check-ci` → `lint-ci` → `test-ci` を順次実行 | CI 同等の検証列 |
+
+- `*-ci` タスクと `verify-ci` は CI 用途限定。成果物が `target/ci/` に `target/debug/` と並存して容量を消費するため常用しない。
+
+### 暫定規約
+
+- `unsafe` は原則禁止。必要な場合のみ SAFETY コメント付きの局所許可（`#[expect(unsafe_code)]`、未対応なら `#[allow(unsafe_code)]`）で例外的に認める。`workspace.lints.rust.unsafe_code = "warn"` は `lint` / `lint-ci` の `-D warnings` ゲートで実質 deny として機能し、局所許可のない `unsafe` は検証を通過しない。
+- feature: default feature は最小限とする。新規 feature・optional 依存は追加理由を PR に記録する。
+- 依存追加: メンテナンス状況・ライセンス・依存木サイズを確認し理由を記録する。`Cargo.lock` は追跡を継続する。
+- lint: `workspace.lints` が正本。CI は `clippy -- -D warnings` を必須ゲートとする。rustfmt は標準設定（`rustfmt.toml` は必要時に追加）。
+- doc test: 公開 API の例は doctest に書き、`cargo test` で検証する。
+
+### 暫定原則（詳細契約は #1 で確定）
+
+- クレート依存方向: 下位基盤クレートは上位クレートに依存しない。詳細な依存 DAG は #1 で確定する。
+- SIMD: SIMD 関連の前提・不変条件は暫定原則として示し、詳細な契約は #1 で確定する。
+- RT/オフラインの設計意図: リアルタイム音声経路とオフライン処理を区別し、リアルタイム音声経路ではブロッキング操作・意図しない allocation を避ける方向で設計する暫定原則とする。API ごとの保証は #1 で確定するまで未確定であり、未確定の API を RT-safe と断定しない。
+
+### ライセンス注記
+
+- ライセンスは未決定であり、`LICENSE` ファイルは存在しない。`Cargo.toml` の `license = "MIT"` は配布方針確定までの仮置きであり、ライセンスの決定を意味しない。
 
 ## AIエージェント環境（APM）
 
-- APM依存パッケージ、対象エージェント、MCPの定義は `apm.yml` を正本とする。
+- APM依存パッケージ、対象エージェント、MCPの定義は `apm.yml`（パッケージ名 `ruviform`）を正本とする。
 - 共通の開発支援パッケージをAPM経由で導入し、各パッケージの詳細な指示をこのファイルに複製しない。
 - `apm install` で依存関係を復元し、生成された `apm.lock.yaml` を確認してコミットする。
 - `apm.yml` を変更したら依存関係を再解決し、lockfileと生成物の整合性を確認する。
@@ -107,4 +166,5 @@ mise run setup
 - 明示的な依頼なく、履歴書き換え、強制push、ブランチ削除などの破壊的なGit操作を行わない。
 - 秘密情報、環境固有の認証情報、キャッシュやビルド生成物をコミットしない。
 - `.gitattributes` と `.gitignore` は共通ルールを保持し、言語別・製品固有の例外は必要になったときに追加する。
-- `mise.lock` と `apm.lock.yaml` は生成物であっても再現性のため追跡する。これらを他の一時生成物と混同しない。
+- テストフィクスチャは非メディア形式（JSON / YAML 等）で Git に置き、CI はフィクスチャが必要になるまで LFS オブジェクトを取得しない（`.gitattributes` の音声・動画・大型編集ソース拡張子の LFS ルールは維持。現行 `.github/workflows/ci.yml` も LFS 取得なし）。
+- `mise.lock`・`apm.lock.yaml`・`Cargo.lock` は生成物であっても再現性のため追跡する。これらを他の一時生成物と混同しない。
