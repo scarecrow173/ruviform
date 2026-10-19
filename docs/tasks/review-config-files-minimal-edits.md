@@ -1,7 +1,7 @@
 ---
 id: "TASK-034IwCiYXp6ub3O8Brcs3L"
 type: "task"
-status: "todo"
+status: "done"
 title: "設定ファイルのレビューと最小修正"
 created: "2026-10-19"
 updated: "2026-10-19"
@@ -26,7 +26,8 @@ relations:
     generated: []
   implements:
     - "../plans/replace-template-derived-docs-with-ruviform.md"
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/review-config-files-minimal-edits.md"
   depends-on:
     - "../plans/replace-template-derived-docs-with-ruviform.md"
     - "baseline-placeholder-sweep.md"
@@ -53,12 +54,12 @@ relations:
 
 plan `PLAN-034IvX2cFeBjPV4UMfDJ2x` のスライス T-CONFIG（Phase C-1〜C-6）。`mise.toml` のテンプレート前提コメントを現状適合させ、`.pre-commit-config.yaml`/`.gitignore`/`.gitattributes`/`Cargo.toml` を design の判定基準でレビューする。既定は無変更であり、Ruviform に不適切な文言が見つかった場合のみ最小修正する。レビュー結果（変更/無変更とその理由）は実施記録に残す。
 
-- [ ] C-1. `mise.toml` L8 コメント `# Infrastructure tools only; add a project language toolchain as needed.` を Rust ツールチェーン追加済みの現状に合わせて書き換える（例: `# Shared infrastructure tools plus this repository's pinned Rust toolchain.`）。コメントは英語のまま維持。`[tools]`・task description・`run`/`env` 定義・`[settings]`/`[env]` は無変更
-- [ ] C-2. `mise.toml` の全 task description をレビューし実態適合を確認する（食い違いが見つかった場合のみ description を修正。タスク定義本体は変更しない）
-- [ ] C-3. `.pre-commit-config.yaml` をレビューする: L1「Language-agnostic checks」という定位と builtin フック群（trailing-whitespace/end-of-file-fixer/check-yaml/check-toml/mixed-line-ending/fix-byte-order-marker/detect-private-key/check-illegal-windows-names）が Ruviform に適合することを確認。既定は無変更とし、コメント文言が「テンプレート前提」と読める場合のみ微修正
-- [ ] C-4. `.gitignore` をレビューする: `target/`・APM/Serena 生成物（`apm_modules/`・`.agents/`・各エージェント配布物）・秘密情報（`.env*`）・ローカル状態の除外が適合済みであることを確認。既定は無変更
-- [ ] C-5. `.gitattributes` をレビューする: 音声・動画・大型編集ソースの拡張子 LFS ルールが維持されていることを確認する（属性行は変更しない。フィクスチャ方針は G-5・R-4 で文書化済みであることと整合確認）
-- [ ] C-6. `Cargo.toml` が無変更であることを確認し、C-1〜C-5 のレビュー結果（変更/無変更とその理由）を実施記録に残す
+- [x] C-1. `mise.toml` L8 コメント `# Infrastructure tools only; add a project language toolchain as needed.` を Rust ツールチェーン追加済みの現状に合わせて書き換える（例: `# Shared infrastructure tools plus this repository's pinned Rust toolchain.`）。コメントは英語のまま維持。`[tools]`・task description・`run`/`env` 定義・`[settings]`/`[env]` は無変更
+- [x] C-2. `mise.toml` の全 task description をレビューし実態適合を確認する（食い違いが見つかった場合のみ description を修正。タスク定義本体は変更しない）
+- [x] C-3. `.pre-commit-config.yaml` をレビューする: L1「Language-agnostic checks」という定位と builtin フック群（trailing-whitespace/end-of-file-fixer/check-yaml/check-toml/mixed-line-ending/fix-byte-order-marker/detect-private-key/check-illegal-windows-names）が Ruviform に適合することを確認。既定は無変更とし、コメント文言が「テンプレート前提」と読める場合のみ微修正
+- [x] C-4. `.gitignore` をレビューする: `target/`・APM/Serena 生成物（`apm_modules/`・`.agents/`・各エージェント配布物）・秘密情報（`.env*`）・ローカル状態の除外が適合済みであることを確認。既定は無変更
+- [x] C-5. `.gitattributes` をレビューする: 音声・動画・大型編集ソースの拡張子 LFS ルールが維持されていることを確認する（属性行は変更しない。フィクスチャ方針は G-5・R-4 で文書化済みであることと整合確認）
+- [x] C-6. `Cargo.toml` が無変更であることを確認し、C-1〜C-5 のレビュー結果（変更/無変更とその理由）を実施記録に残す
 
 ## Classification
 
@@ -88,17 +89,17 @@ plan `PLAN-034IvX2cFeBjPV4UMfDJ2x` のスライス T-CONFIG（Phase C-1〜C-6）
 
 ## Done When
 
-- [ ] C-1〜C-6 がすべて完了し、`mise.toml` の diff がコメント（必要時 description）のみである
-- [ ] `.gitattributes`・`Cargo.toml`・`mise.lock`/`.mise/locks/` が無変更である
-- [ ] `.pre-commit-config.yaml`/`.gitignore` の変更/無変更の判定と理由が IR に記録されている
-- [ ] C-1〜C-5 の全レビュー結果（変更/無変更と理由）が IR に記録されている
+- [x] C-1〜C-6 がすべて完了し、`mise.toml` の diff がコメント（必要時 description）のみである
+- [x] `.gitattributes`・`Cargo.toml`・`mise.lock`/`.mise/locks/` が無変更である
+- [x] `.pre-commit-config.yaml`/`.gitignore` の変更/無変更の判定と理由が IR に記録されている
+- [x] C-1〜C-5 の全レビュー結果（変更/無変更と理由）が IR に記録されている
 
 ## Verification
 
-- [ ] `grep -n "Infrastructure tools only" mise.toml` exits 1（テンプレート前提コメントなし）
-- [ ] `mise exec -- prek run --all-files` exits 0（check-toml が `mise.toml`/`Cargo.toml`、check-yaml が `.pre-commit-config.yaml` の構文を検証）
-- [ ] `git diff --exit-code -- .gitattributes` exits 0（属性行無変更）
-- [ ] `git diff --exit-code -- Cargo.toml` exits 0（無変更）
-- [ ] `git diff --exit-code -- mise.lock .mise/locks/` exits 0（コメントのみの変更で lockfile 復元結果に影響しないこと）
-- [ ] `git diff -- mise.toml` がコメント・description 以外の変更を示さない（`[tools]`/`run`/`env`/`[settings]`/`[env]` 無変更）
-- [ ] Manual: IR に C-1〜C-5 の変更/無変更判定と理由が記録されていること（補助）
+- [x] `grep -n "Infrastructure tools only" mise.toml` exits 1（テンプレート前提コメントなし）
+- [x] `mise exec -- prek run --all-files` exits 0（check-toml が `mise.toml`/`Cargo.toml`、check-yaml が `.pre-commit-config.yaml` の構文を検証）
+- [x] `git diff --exit-code -- .gitattributes` exits 0（属性行無変更）
+- [x] `git diff --exit-code -- Cargo.toml` exits 0（無変更）
+- [x] `git diff --exit-code -- mise.lock .mise/locks/` exits 0（コメントのみの変更で lockfile 復元結果に影響しないこと）
+- [x] `git diff -- mise.toml` がコメント・description 以外の変更を示さない（`[tools]`/`run`/`env`/`[settings]`/`[env]` 無変更）
+- [x] Manual: IR に C-1〜C-5 の変更/無変更判定と理由が記録されていること（補助）
