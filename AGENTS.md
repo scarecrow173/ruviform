@@ -80,11 +80,10 @@
 - 初回セットアップでは、miseをインストールした後に以下を実行する（Windows 11 x64・Git Bash で検証済み。macOS / Linux は未検証）。
 
 ```sh
-# ツール復元（mise.lock からの固定復元が正本手順）
-mise install --locked
-# global mise config が repo lockfile に無いツールを要求する環境では
-# その外部ツール分のみ exit 1 になり得る。その場合はフォールバック:
+# ツール復元（mise.lock に記録済みの固定バージョンを復元）
 mise install
+# global mise config でリポジトリ管理外のツールを設定している環境では
+# それらも併せて解決・インストールされます
 
 # APM 依存・prek フック・リポジトリローカル Git LFS のセットアップ
 mise run setup

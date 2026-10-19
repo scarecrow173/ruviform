@@ -60,4 +60,5 @@ apm_modules/
 #   target/           Rust build artifacts
 #   .serena/          Serena local state (absolute paths; re-created per checkout)
 #   tmp/ logs/ .cache/ *.log .mise-data/  transient files
-#   .mise/            mise local state (.mise/locks/ is tracked — present anyway)
+#   .mise/            mise local state (committed .mise/locks/ sidecars
+#                     would arrive via checkout anyway)
