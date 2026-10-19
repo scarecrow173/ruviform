@@ -102,7 +102,7 @@ mise exec -- apm install --frozen
 
 | lockfile | 再生成トリガ | 手順 |
 | --- | --- | --- |
-| `mise.lock` | `mise.toml` の `[tools]` 変更・バージョン更新時 | `mise install` → `mise lock`（現行ツールは github / aqua 系バックエンドのため `.mise/locks/` sidecar は生成されない。PyPI・npm 解決の pipx / npm 系ツールを追加し sidecar が生成された場合は、`.gitignore` の `.mise/` ルールを見直してコミット対象とする） |
+| `mise.lock` | `mise.toml` の `[tools]` 変更・バージョン更新時 | `mise install` → `mise lock`（現行ツールは github / aqua 系バックエンドのため `.mise/locks/` sidecar は生成されない。PyPI・npm 解決の pipx / npm 系ツールを追加して sidecar が生成された場合は `.gitignore` の `!.mise/locks/` 例外によりそのままコミット対象になる） |
 | `apm.lock.yaml` | `apm.yml` の dependencies / targets / MCP 変更時 | `apm install`（lock 自動更新）→ `apm lock` で整合確認 |
 | `Cargo.lock` | ワークスペースの `[dependencies]` 変更時 | `cargo build` / `cargo generate-lockfile` で自動更新 |
 
