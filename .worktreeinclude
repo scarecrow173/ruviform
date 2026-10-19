@@ -1,0 +1,27 @@
+# .worktreeinclude — gitignored files copied into new worktrees
+# (gitignore syntax; only files that are ALSO gitignored are copied)
+
+# APM package sources and deployed agent assets — let worktree agents use
+# skills/hooks/commands immediately without re-running `apm install`
+apm_modules/
+.agents/
+.sdp/
+.claude/
+.codex/
+.cursor/
+.windsurf/
+.github/agents/
+.github/hooks/
+.github/mcp.json
+.mcp.json
+.vscode/mcp.json
+
+# Local secrets/environment (copied only if present and gitignored)
+.env
+.env.*
+
+# Deliberately not copied (regenerable or path-coupled):
+#   target/           Rust build artifacts
+#   .serena/          Serena local state (absolute paths; re-created per checkout)
+#   .mise-data/ tmp/ logs/ .cache/ *.log  transient files
+#   .mise/locks/      already tracked — present in every worktree
