@@ -60,12 +60,12 @@ relations:
     - "../../Cargo.toml"
     - "../designs/dev-foundation.md"
     - "../designs/overview.md"
-    - "../adr/replace-template-derived-docs-metadata-with-ruviform.md"
   refines: []
   refined-by: []
   derives-from:
     - "../designs/replace-template-derived-docs-with-ruviform.md"
     - "../specs/replace-template-derived-docs-with-ruviform.md"
+    - "../adr/replace-template-derived-docs-metadata-with-ruviform.md"
   derived-by: []
   verifies: []
   verified-by: []
