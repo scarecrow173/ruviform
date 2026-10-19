@@ -35,7 +35,12 @@ relations:
         path: "docs/plans/README.md"
   implements:
     - "../specs/architecture-design-baseline-deliverables.md"
-  implemented-by: []
+  implemented-by:
+    - "../tasks/apply-publish-false-policy-to-workspace.md"
+    - "../tasks/update-readme-for-issue-1-baseline.md"
+    - "../tasks/update-agents-interim-principles-to-fixed-contracts.md"
+    - "../tasks/align-designs-overview-status-annotations.md"
+    - "../tasks/verify-issue-1-repo-reflection.md"
   depends-on:
     - "dev-foundation-bootstrap.md"
     - "replace-template-derived-docs-with-ruviform.md"
