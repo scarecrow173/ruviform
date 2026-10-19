@@ -60,6 +60,7 @@ relations:
     - "../adr/replace-template-derived-docs-metadata-with-ruviform.md"
   derived-by:
     - "overview.md"
+    - "../plans/replace-template-derived-docs-with-ruviform.md"
   verifies: []
   verified-by: []
   references:
