@@ -10,7 +10,7 @@ UV_EXCLUDE_NEWER = "1 week"
 uv = "0.12"
 prek = "0.5.5"
 git-lfs = "3.8.0"
-"pipx:apm-cli" = "0.33.0"
+"github:microsoft/apm" = "0.33.0"
 "pipx:oraios/serena" = "1.7.0"
 rust = { version = "1.99.0", components = ["rustfmt", "clippy"] }
 actionlint = "1.7.12"
