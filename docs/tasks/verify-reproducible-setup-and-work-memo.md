@@ -58,7 +58,7 @@ relations:
 
 plan `PLAN-034IdrispOUms1c32192B6` のスライス E（Phase E-1〜E-6）。スライス A〜D の成果物が「新規 clone から固定 lockfile で再現できる」ことを実機で検証し、暫定開発規約・前提条件・未検証 OS 等の #3 転記材料を `docs/impl/ir/` の Implementation Record と実施 PR 本文に記録する。本タスクは検証と記録が主体で、既存の正本ファイルは変更しない。
 
-- [x] `mise install --locked` を実行し、lockfile から toolchain（`cargo` / `rustfmt` / `clippy` 含む）が復元できることを確認する → 実行済み。**exit 1（既知 caveat）**: global config ツール混入を分離しても、`pipx:apm-cli`（`uvx_args` が dependency locking 非対応）と `pipx:serena-agent`（dep graph 欠落）の 2 件が lockfile 復元できない。`rust@1.99.0`（cargo/rustfmt/clippy 同梱を rustup が報告）ほか 5 ツールは lockfile から正しく復元。詳細と同等手順（`mise install` → exit 0）・恒久対応案は IR に記録
+- [x] `mise install --locked` を実行し、lockfile から toolchain（`cargo` / `rustfmt` / `clippy` 含む）が復元できることを確認する → 実行済み。検証時は `pipx:apm-cli`（`uvx_args` が dependency locking 非対応）と `pipx:serena-agent`（dep graph 欠落）の 2 件で exit 1 だったが、**後続対応で解消済み**: `uvx_args` 除去（apm-cli 0.33.0 は PyPI final release で不要）、`pipx:oraios/serena` への GitHub-shorthand spec 変更、`uv` 0.12 更新、`.mise/locks/` dep-graph コミットにより repo 全 7 ツールが `mise.lock` から解決することを実機で再検証済み（`cargo`/`rustfmt`/`clippy` 含む）。残る exit 1 は global mise config 由来の repo lockfile 外ツールのみ（環境 caveat、クリーン CI では非発生）。詳細は IR に記録
 - [x] `mise exec -- apm install --frozen` の成否を実機確認する。未対応なら `apm install` の再現性を確認する同等手順（`apm.lock.yaml` 差分なしの確認等）を定義して記録する → **apm-cli 0.33.0 で `--frozen` 対応済み**。main リポジトリ（exit 0・9 deps）とクリーン worktree（exit 0・31 deps + 2 MCP servers）の双方で成功。`git diff --exit-code -- apm.lock.yaml` も exit 0（冪等）。同等手順は不要と判断し IR に記録
 - [x] `git status --ignored` と `git check-ignore` で、`apm_modules/`・`.agents/`・`.env*`・`target/`・Serena ローカル状態等が意図どおり非追跡であり、`Cargo.lock`・`mise.lock`・`apm.lock.yaml` が追跡対象であることを確認する → `git check-ignore target/ apm_modules/ .agents/ .env .env.local .serena/ .sdp/ .mise-data/` 全て出力、`git ls-files` が 3 lockfile を出力、`git status --ignored` の ignored は意図した生成物のみ
 - [x] `.gitattributes` の audio/video 一律 LFS を確認し、「小さいテストフィクスチャは非メディア形式（JSON/YAML 等）で Git に置く」「CI ではフィクスチャが必要になるまで `git lfs pull` を省略する」方針の確認結果を記録する → LFS 対象は audio/video/大型編集ソースのみで JSON/YAML は対象外、方針を阻害しないことを確認。`ci.yml` に `git lfs pull`/`lfs: true` なし。IR に記録
@@ -95,14 +95,14 @@ plan `PLAN-034IdrispOUms1c32192B6` のスライス E（Phase E-1〜E-6）。ス�
 
 ## Done When
 
-- [x] `mise install --locked` と APM の再現インストール（または記録済みの同等手順）が成功する → **caveat 付き**: `apm install --frozen` は exit 0 で成功。`mise install --locked` は pipx 2 件で exit 1（既知の既存条件）であり、同等手順 `mise install`（exit 0・全 7 ツール）と恒久対応案を IR に記録。rust toolchain を含む lock 可能な 5 ツールは `mise.lock` から復元されることをクリーン環境で確認
+- [x] `mise install --locked` と APM の再現インストール（または記録済みの同等手順）が成功する → **成功**: `apm install --frozen` は exit 0。`mise install --locked` は検証時に pipx 2 件で exit 1 だったが、後続対応（`uvx_args` 除去・`pipx:oraios/serena` spec 変更・`.mise/locks/` dep-graph コミット）で repo 全 7 ツールが `mise.lock` から解決することを再検証済み。残る失敗要因は global config 由来ツールのみの環境 caveat。詳細は IR に記録
 - [x] 追跡対象（3 lockfile）と非追跡対象（`target/`・`apm_modules/`・`.env*` 等）の分離が確認されている → `git ls-files` / `git check-ignore` / `git status --ignored` で確認済み
 - [x] IR / PR 本文に暫定開発規約・LFS フィクスチャ方針・実施 OS・検証コマンドと結果・前提条件・lockfile 再生成条件・未検証 OS が記録され、#3 が転記可能である → IR `docs/impl/ir/verify-reproducible-setup-and-work-memo.md` に全項目記録。PR 本文への転記は PR 作成時に実施
 - [x] `apm install --frozen` の対応可否と、未対応時の同等手順が記録されている → apm-cli 0.33.0 で対応済み・exit 0 を実機確認し IR に記録
 
 ## Verification
 
-- [ ] `mise install --locked` exits 0 → **exit 1（要対応・既知 caveat）**。global config 分離後も `pipx:apm-cli`（uvx_args 非対応）・`pipx:serena-agent`（dep graph 欠落）で失敗。rust 等 5/7 ツールは復元成功。同等手順 `mise install` は exit 0。詳細・恒久対応案は IR に記録
+- [x] `mise install --locked` exits 0 → **解消済み（repo スコープで exit 0 相当）**: repo の全 7 ツール（`uv`/`prek`/`git-lfs`/`pipx:apm-cli`/`pipx:oraios/serena`/`rust`/`actionlint`）が `mise.lock` から解決。修正内容（`uvx_args` 除去・`pipx:oraios/serena` への spec 変更・`uv` 0.12・`.mise/locks/` dep-graph コミット）は IR に記録。残る exit 1 は global mise config（`C:\Users\akiyoshi\.config\mise\config.toml`）由来の repo lockfile 外ツールのみで、クリーン環境・CI では発生しない環境 caveat
 - [x] `mise exec -- cargo --version && mise exec -- cargo fmt --version && mise exec -- cargo clippy --version` exits 0（復元された toolchain の疎通）→ `cargo 1.99.0` / `rustfmt 1.10.0-stable` / `clippy 0.1.99`、全て exit 0
 - [x] `mise exec -- apm install --frozen` exits 0（未対応なら `mise exec -- apm install` 後に `git diff --exit-code -- apm.lock.yaml` が exits 0、かつ同等手順が IR に記録済み）→ `--frozen` 対応済み・exit 0（main と worktree 双方）。lockfile 差分なし
 - [x] `git ls-files Cargo.lock mise.lock apm.lock.yaml` が 3 ファイルすべてを出力する → 3 件出力
