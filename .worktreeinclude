@@ -1,6 +1,5 @@
 # .worktreeinclude — gitignored files copied into new worktrees
-# Orca copies a path only if the path ITSELF is gitignored; directory-wide
-# entries whose parent dir is not ignored, globs, and negations are skipped.
+# Keep entries as explicit Git-ignored paths, distinct from tracked files.
 
 # APM package sources and deployed agent assets — let worktree agents use
 # skills/hooks/commands immediately without re-running `apm install`
@@ -10,7 +9,7 @@ apm_modules/
 
 # Deployed agent assets under tool dirs. The parent dirs (.claude/ etc.) are
 # NOT gitignored — .gitignore only ignores these child paths, so each literal
-# child path must be listed individually for Orca to copy it.
+# required child paths are listed explicitly.
 .claude/agents/
 .claude/commands/
 .claude/hooks/
@@ -49,7 +48,7 @@ apm_modules/
 .mcp.json
 .vscode/mcp.json
 
-# Local secrets/environment — literal paths only (globs are skipped by Orca)
+# Local environment files — explicit paths
 .env
 .env.local
 .env.development
