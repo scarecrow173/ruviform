@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034INYy2aDLxse9dy8MgGZ"
 type: "spec"
-status: "proposed"
+status: "approved"
 title: "Ruviform 設計ベースライン文書群の作成（アーキテクチャ・クレート構成・RT/オフライン実行モデル）"
 created: "2026-10-20"
 updated: "2026-10-20"
@@ -42,6 +42,7 @@ relations:
     - "../adr/realtime-contract-and-verification-policy.md"
     - "../adr/ui-architecture-webview-hybrid.md"
     - "../designs/ruviform-architecture-design-baseline.md"
+    - "../plans/apply-issue-1-architecture-baseline-to-repo.md"
   verifies: []
   verified-by: []
   references:
