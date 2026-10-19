@@ -20,6 +20,7 @@ relations:
   refined-by: []
   derives-from:
     - "dev-foundation.md"
+    - "replace-template-derived-docs-with-ruviform.md"
   derived-by: []
   verifies: []
   verified-by: []
@@ -63,3 +64,4 @@ Ruviform の設計成果物の全体マップ。現時点で確定している�
 ## Detailed Design Documents
 
 - [dev-foundation.md](dev-foundation.md) — Rust 開発基盤の設計（最小ワークスペース・CIプロファイル・手動CI）(approved)
+- [replace-template-derived-docs-with-ruviform.md](replace-template-derived-docs-with-ruviform.md) — テンプレート由来ドキュメント・識別子のRuviform固有化の設計（README/AGENTS 改稿・識別子更新の文書設計、Issue #3）(approved)

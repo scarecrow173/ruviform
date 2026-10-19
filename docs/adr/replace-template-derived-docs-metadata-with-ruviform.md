@@ -46,7 +46,8 @@ relations:
   derives-from:
     - "../specs/replace-template-derived-docs-with-ruviform.md"
     - "https://github.com/scarecrow173/ruviform/issues/3"
-  derived-by: []
+  derived-by:
+    - "../designs/replace-template-derived-docs-with-ruviform.md"
   verifies: []
   verified-by: []
   references:

@@ -54,6 +54,7 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/3"
   derived-by:
     - "../adr/replace-template-derived-docs-metadata-with-ruviform.md"
+    - "../designs/replace-template-derived-docs-with-ruviform.md"
   verifies: []
   verified-by: []
   references:
