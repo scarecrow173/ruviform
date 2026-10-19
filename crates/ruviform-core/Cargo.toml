@@ -1,9 +1,10 @@
 [package]
-name = "ruviform-core"    # 仮置き名。#1 で最終クレート分割を再評価
+name = "ruviform-core"    # 仮置き名。Phase 1 で ruviform-* クレート群への分割置換として削除予定（design A.8「crates/ruviform-core の処遇」）
 version = "0.1.0"         # 仮置き。公開方針確定前の暫定値
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [lints]
 workspace = true

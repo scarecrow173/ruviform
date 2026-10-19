@@ -1,7 +1,7 @@
 ---
 id: "TASK-034IRZk613ql8oL3Y2Yxli"
 type: "task"
-status: "todo"
+status: "done"
 title: "README.md の Issue #1 ベースライン向け差分更新"
 created: "2026-10-20"
 updated: "2026-10-20"

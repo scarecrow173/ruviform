@@ -111,8 +111,8 @@ mise exec -- apm install --frozen
 
 ### ワークスペース構成
 
-- ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`edition`・`rust-version`・`license` の現行値は仮置き）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
-- メンバーは最小クレート `crates/ruviform-core`（仮置き・smoke test）のみ。最終的なクレート分割と公開 API は Issue [#1](https://github.com/scarecrow173/ruviform/issues/1) の詳細設計で確定する。
+- ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`edition`・`rust-version`・`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
+- メンバーは最小クレート `crates/ruviform-core`（仮置き・smoke test）のみ。クレート DAG・分割案は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）に記録され、`members` は実装 Phase に応じて段階追加される。公開 API は引き続き未確定であり、実装 Issue で確定する。
 
 ### 検証入口
 
@@ -140,11 +140,13 @@ mise exec -- apm install --frozen
 - lint: `workspace.lints` が正本。CI は `clippy -- -D warnings` を必須ゲートとする。rustfmt は標準設定（`rustfmt.toml` は必要時に追加）。
 - doc test: 公開 API の例は doctest に書き、`cargo test` で検証する。
 
-### 暫定原則（詳細契約は #1 で確定）
+### アーキテクチャ確定契約（設計ベースライン）
 
-- クレート依存方向: 下位基盤クレートは上位クレートに依存しない。詳細な依存 DAG は #1 で確定する。
-- SIMD: SIMD 関連の前提・不変条件は暫定原則として示し、詳細な契約は #1 で確定する。
-- RT/オフラインの設計意図: リアルタイム音声経路とオフライン処理を区別し、リアルタイム音声経路ではブロッキング操作・意図しない allocation を避ける方向で設計する暫定原則とする。API ごとの保証は #1 で確定するまで未確定であり、未確定の API を RT-safe と断定しない。
+以下は Issue [#1](https://github.com/scarecrow173/ruviform/issues/1) 由来の設計ベースライン（[docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)、approved）で確定した契約の要約。詳細な定義・根拠は同書の各節が正本であり、本節と齟齬がある場合は同書を優先する。
+
+- RT/オフライン分離: リアルタイム（RT）経路と非 RT を API・ライフサイクルで分離する。処理契約は `Processor`（`prepare`/`process` 分離）と `RtContext` capability が定義する。RT クリティカルパスでは alloc/dealloc を禁止し、ブロッキング操作・I/O・無制限の待機/リトライ・非有界処理を制限する。「RT-safe」等の保証範囲は API 単位で定義・明示し、未確定の API を RT-safe と断定しない。検証可能な違反は CI で検出するが、CI 成功は完全証明ではない。OS レベルのハードリアルタイム保証は提供しない。正本: 同書「RT／非 RT の分離方式」「RT 契約（API 単位の保証定義）」節。
+- SIMD: スカラー参照実装を必須とし、カーネルごとに「ビット完全一致」または「ulp 上限内」の等価性契約を定義してスカラーを参照として検証する。stable Rust のみを使用し、`unsafe` は暫定規約どおり SAFETY コメント付きの局所許可のみで例外的に認める。SIMD 二層構造（ランタイム分岐＋フォールバック、dispatch 層の `ruviform-math` 集約を含む構造仮説）とバックエンド選定の採否は要 PoC。正本: 同書「DSP／SIMD 設計」採否。
+- クレート依存方向: 依存は上位 → 下位のみとし、循環依存は禁止。基礎クレートから GUI・オーディオデバイス・GPU への強制依存を作らない。詳細な層内順序・adapter ルール・契約型の所有は同書「レイヤー構造と依存方向ルール」節が正本。
 
 ### ライセンス注記
 

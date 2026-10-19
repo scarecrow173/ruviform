@@ -1,7 +1,7 @@
 ---
 id: "TASK-034IRZFUgbTZlBX2kH7psN"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue #1 リポジトリ反映の総合検証と spec/design バックリンク"
 created: "2026-10-20"
 updated: "2026-10-20"

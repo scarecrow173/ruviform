@@ -41,7 +41,8 @@ relations:
     - "../adr/licensing-and-distribution-policy.md"
     - "../discovery/explore-architecture-design-baseline.md"
     - "https://github.com/scarecrow173/ruviform/issues/1"
-  derived-by: []
+  derived-by:
+    - "../plans/apply-issue-1-architecture-baseline-to-repo.md"
   verifies: []
   verified-by: []
   references:

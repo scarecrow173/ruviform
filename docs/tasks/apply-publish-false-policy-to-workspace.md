@@ -1,7 +1,7 @@
 ---
 id: "TASK-034IRYXA0oq14nlgmC4Bch"
 type: "task"
-status: "todo"
+status: "done"
 title: "workspace への publish = false 方針の適用"
 created: "2026-10-20"
 updated: "2026-10-20"

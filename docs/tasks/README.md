@@ -7,8 +7,8 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034IdQtDnY6ZKHFhFhXKmW | 手動 CI ワークフローの追加 | done | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
-| TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | todo | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
-| TASK-034IRYXA0oq14nlgmC4Bch | workspace への publish = false 方針の適用 | todo | [apply-publish-false-policy-to-workspace.md](./apply-publish-false-policy-to-workspace.md) |
+| TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
+| TASK-034IRYXA0oq14nlgmC4Bch | workspace への publish = false 方針の適用 | done | [apply-publish-false-policy-to-workspace.md](./apply-publish-false-policy-to-workspace.md) |
 | TASK-034IwBWH50nD9Unn8HghJD | テンプレート残存プレースホルダーのベースラインスイープ | done | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
 | TASK-034IdQmBa6UdauVn9IG59X | 最小ワークスペースと smoke test の構築 | done | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | TASK-034IdQqbjQcZ0Ztsy5IPpm | mise 開発・CI 検証タスクの定義 | done | [define-mise-dev-and-ci-tasks.md](./define-mise-dev-and-ci-tasks.md) |
@@ -17,8 +17,8 @@ Directory: `docs/tasks`
 | TASK-034IwCiByN74V3hysJ9iTR | AGENTS.md の Ruviform 向け節単位改稿 | done | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | TASK-034IwCbgksOGvhF5E4CQbp | README.md の Ruviform 向け全面改稿 | done | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
 | TASK-034IwCjptfvbSFBQaSKigx | プレースホルダー最終スイープ・総合検証と ADR メタデータ編集 | done | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
-| TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | todo | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
+| TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
-| TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | todo | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |
-| TASK-034IRZFUgbTZlBX2kH7psN | Issue #1 リポジトリ反映の総合検証と spec/design バックリンク | todo | [verify-issue-1-repo-reflection.md](./verify-issue-1-repo-reflection.md) |
+| TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | done | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |
+| TASK-034IRZFUgbTZlBX2kH7psN | Issue #1 リポジトリ反映の総合検証と spec/design バックリンク | done | [verify-issue-1-repo-reflection.md](./verify-issue-1-repo-reflection.md) |
 | TASK-034IdQxdPQUxXweHBN1ZxT | 再現インストール検証と #3 転記用作業メモ | done | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |

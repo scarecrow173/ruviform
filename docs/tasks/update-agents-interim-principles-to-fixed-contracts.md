@@ -1,7 +1,7 @@
 ---
 id: "TASK-034IRZB7D249qUO1bLldy4"
 type: "task"
-status: "todo"
+status: "done"
 title: "AGENTS.md 暫定原則の確定契約化"
 created: "2026-10-20"
 updated: "2026-10-20"
