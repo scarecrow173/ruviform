@@ -34,6 +34,8 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/1"
   derived-by:
     - "../designs/ruviform-architecture-design-baseline.md"
+    - "../specs/implement-media-io-abstraction-and-first-backend-poc.md"
+    - "../plans/issue-20-i-o-poc.md"
   verifies: []
   verified-by: []
   references:

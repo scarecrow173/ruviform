@@ -28,6 +28,7 @@ relations:
     - "../../AGENTS.md"
   refines:
     - "../specs/implement-media-data-model-api.md"
+    - "../specs/implement-media-io-abstraction-and-first-backend-poc.md"
   refined-by: []
   derives-from:
     - "../designs/ruviform-architecture-design-baseline.md"

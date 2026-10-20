@@ -59,6 +59,8 @@ relations:
     - "../adr/video-proc-kernel-api-and-color-hdr-scope.md"
     - "../plans/implement-issue-26-video-foundation.md"
     - "../test-specs/video-foundation-api.md"
+    - "../specs/implement-media-io-abstraction-and-first-backend-poc.md"
+    - "../plans/issue-20-i-o-poc.md"
   verifies: []
   verified-by: []
   references:

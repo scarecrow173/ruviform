@@ -12,4 +12,5 @@ Directory: `docs/plans`
 | PLAN-034JcCFGe6ILSTWLgUIjAn | Issue #26 動画基盤 API の実装（video-core 所有権契約・video-proc 新設・色変換カーネル） | approved | [implement-issue-26-video-foundation.md](./implement-issue-26-video-foundation.md) |
 | PLAN-034JxNegJktSAJZ2LuO0N8 | Issue #21 RT 基盤の実装（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | completed | [implement-rt-foundation.md](./implement-rt-foundation.md) |
 | PLAN-034J6OTwge4rS96WZWkZgd | Issue #18 フォローアップの実装（公開 enum 方針適用・時間演算修正・改善トリアージ） | completed | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
+| PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | approved | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
