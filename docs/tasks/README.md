@@ -15,8 +15,11 @@ Directory: `docs/tasks`
 | TASK-034JcCRLsFJ7j8zPBi8mXY | ruviform-video-proc クレート骨格の新設 | done | [create-video-proc-crate-skeleton.md](./create-video-proc-crate-skeleton.md) |
 | TASK-034IdQqbjQcZ0Ztsy5IPpm | mise 開発・CI 検証タスクの定義 | done | [define-mise-dev-and-ci-tasks.md](./define-mise-dev-and-ci-tasks.md) |
 | TASK-034JcCQQD01mBg5JPjNiAS | video-core の所有権・drop・zero-copy 契約と RT ラベルの文書化 | done | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
+| TASK-034JglHTIvjo18tMdbO3DP | 採否 ADR 確定とワークスペース帳簿・索引の同期 | todo | [finalize-backend-adr-and-sync-docs.md](./finalize-backend-adr-and-sync-docs.md) |
 | TASK-034J6PpKd8jNFxEYS4CRdM | 時間演算の早期飽和・Err 修正（i128 中間演算） | done | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
 | TASK-034J5KQD1rDMZHFRah7pU0 | ruviform-audio-core のデータモデル実装 | done | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
+| TASK-034Jglv8LtJHUgWH3wlu0o | ruviform-audio-core の device ポート定義と契約テスト | todo | [implement-audio-core-device-port.md](./implement-audio-core-device-port.md) |
+| TASK-034JglAvWUFQoLhvYXOw2O | ruviform-audio-device クレート新設と cpal adapter 実装 | todo | [implement-audio-device-cpal-adapter.md](./implement-audio-device-cpal-adapter.md) |
 | TASK-034JxOaMsaSwEIVfvU9MC8 | ruviform-exec スレッド優先度機構の実装 | done | [implement-exec-thread-priority.md](./implement-exec-thread-priority.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | TASK-034J5KJgwtjFonTMQQIvpX | ruviform-media-core のデータモデル実装 | done | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
@@ -32,6 +35,7 @@ Directory: `docs/tasks`
 | TASK-034IwCiYXp6ub3O8Brcs3L | 設定ファイルのレビューと最小修正 | done | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | TASK-034IwCiByN74V3hysJ9iTR | AGENTS.md の Ruviform 向け節単位改稿 | done | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | TASK-034IwCbgksOGvhF5E4CQbp | README.md の Ruviform 向け全面改稿 | done | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
+| TASK-034JglHs8cNMDOvyZFeUpc | PoC example（list_devices・play_sine）実機手順と実験ログ | todo | [run-device-poc-examples-and-exp-log.md](./run-device-poc-examples-and-exp-log.md) |
 | TASK-034IwCjptfvbSFBQaSKigx | プレースホルダー最終スイープ・総合検証と ADR メタデータ編集 | done | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
 | TASK-034J6Pq9WM0XMkGqryZrvQ | フォローアップトリアージ由来の小修正（try_new・Custom 不変条件・丸め注記） | done | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | TASK-034J5KRwAtAqF1xu0moYuS | Issue #18 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |

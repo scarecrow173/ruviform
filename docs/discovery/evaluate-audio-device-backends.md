@@ -37,6 +37,7 @@ relations:
   derived-by:
     - "../specs/audio-device-backend-evaluation-poc.md"
     - "../adr/select-audio-device-backend.md"
+    - "../plans/implement-audio-device-port-and-cpal-poc.md"
   verifies: []
   verified-by: []
   references:
