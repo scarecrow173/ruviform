@@ -97,6 +97,7 @@ Optional platform adapters（opt-in・基礎層への依存は下向きのみ）
 ## Detailed Design Documents
 
 - [dev-foundation.md](dev-foundation.md) — Rust 開発基盤の設計（最小ワークスペース・CIプロファイル・手動CI）(approved)
+- [issue-28-ui-poc.md](issue-28-ui-poc.md) — Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式、`poc/ui/` 独立ワークスペース・`ui-poc` 実験ハーネス・採否 ADR へのエビデンス供給）(approved)
 - [replace-template-derived-docs-with-ruviform.md](replace-template-derived-docs-with-ruviform.md) — テンプレート由来ドキュメント・識別子のRuviform固有化の設計（README/AGENTS 改稿・識別子更新の文書設計、Issue #3）(approved)
 - [ruviform-architecture-design-baseline.md](ruviform-architecture-design-baseline.md) — Ruviform アーキテクチャ設計ベースライン（クレート DAG・データモデル・RT/オフライン実行モデル・DSP/SIMD・プラグイン・UI・検証計画・暫定ロードマップ、Issue #1）(approved)
 - [audio-device-boundary-and-poc.md](audio-device-boundary-and-poc.md) — オーディオデバイス境界（ポート trait・cpal adapter・コールバック配管）と PoC 検証設計（Issue #23）(approved)
