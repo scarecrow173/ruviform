@@ -111,7 +111,7 @@ mise exec -- apm install --frozen
 
 ### ワークスペース構成
 
-- ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`edition`・`rust-version`・`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
+- ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`edition = "2024"`・`rust-version = "1.85"` は Issue #34 で確定。`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
 - メンバーは最小クレート `crates/ruviform-core`（仮置き・smoke test）のみ。クレート DAG・分割案は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）に記録され、`members` は実装 Phase に応じて段階追加される。公開 API は引き続き未確定であり、実装 Issue で確定する。
 
 ### 検証入口
