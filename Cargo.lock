@@ -5,6 +5,9 @@ version = 4
 [[package]]
 name = "ruviform-audio-core"
 version = "0.1.0"
+dependencies = [
+ "ruviform-media-core",
+]
 
 [[package]]
 name = "ruviform-exec"
@@ -25,3 +28,6 @@ version = "0.1.0"
 [[package]]
 name = "ruviform-video-core"
 version = "0.1.0"
+dependencies = [
+ "ruviform-media-core",
+]
