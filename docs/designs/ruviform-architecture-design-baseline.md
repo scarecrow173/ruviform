@@ -50,10 +50,18 @@ relations:
     - "../specs/issue-18-followup-enum-and-time-fix.md"
     - "../plans/issue-18-followup-enum-and-time-fix.md"
     - "../test-specs/followup-enum-compat-and-time-arithmetic.md"
+<<<<<<< HEAD
     - "../specs/time-type-extension-framerate-timecode-rounding.md"
     - "../adr/framerate-timebase-separation-and-timecode-extension.md"
     - "time-model-extension.md"
     - "../plans/implement-rt-foundation.md"
+=======
+    - "../discovery/explore-video-foundation-api-scope.md"
+    - "../specs/implement-video-foundation-api.md"
+    - "../adr/video-proc-kernel-api-and-color-hdr-scope.md"
+    - "../plans/implement-issue-26-video-foundation.md"
+    - "../test-specs/video-foundation-api.md"
+>>>>>>> 4e20d3c (docs(issue-26): add video foundation api doc chain)
   verifies: []
   verified-by: []
   references:

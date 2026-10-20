@@ -34,6 +34,9 @@ relations:
   derived-by:
     - "../specs/issue-18-followup-enum-and-time-fix.md"
     - "../plans/issue-18-followup-enum-and-time-fix.md"
+    - "../specs/implement-video-foundation-api.md"
+    - "video-proc-kernel-api-and-color-hdr-scope.md"
+    - "../plans/implement-issue-26-video-foundation.md"
   verifies: []
   verified-by: []
   references:
