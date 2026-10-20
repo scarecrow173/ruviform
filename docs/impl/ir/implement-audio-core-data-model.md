@@ -42,6 +42,7 @@ relations:
   related:
     - "../../plans/implement-issue-18-data-model.md"
     - "../../designs/ruviform-architecture-design-baseline.md"
+    - "small-fixes-from-followup-triage.md"
   refines: []
   refined-by: []
   derives-from: []

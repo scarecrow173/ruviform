@@ -46,6 +46,10 @@ relations:
     - "../specs/implement-media-data-model-api.md"
     - "../plans/implement-issue-18-data-model.md"
     - "../test-specs/media-data-model-api.md"
+    - "../adr/public-enum-non-exhaustive-policy.md"
+    - "../specs/issue-18-followup-enum-and-time-fix.md"
+    - "../plans/issue-18-followup-enum-and-time-fix.md"
+    - "../test-specs/followup-enum-compat-and-time-arithmetic.md"
   verifies: []
   verified-by: []
   references:

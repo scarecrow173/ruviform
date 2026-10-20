@@ -3,7 +3,10 @@
 //! [`SpeakerMask`] is a bit set of speaker positions using the
 //! `WAVEFORMATEX`-style low-order-bit convention. [`ChannelLayout`] names
 //! the standard layouts; the variant — not a separate field — owns the
-//! channel count (`channels` counts set mask bits).
+//! channel count (`channels` counts set mask bits). [`SpeakerMaskSet`]
+//! wraps `SpeakerMask` with a non-empty invariant — the
+//! [`ChannelLayout::Custom`] payload, so a zero-channel layout cannot
+//! be built.
 
 use ruviform_media_core::{Error, Result};
 
@@ -97,13 +100,68 @@ impl SpeakerMask {
     }
 }
 
-/// A named channel layout, or a custom speaker mask.
+/// A non-empty [`SpeakerMask`] — the [`ChannelLayout::Custom`] payload.
+///
+/// `Custom` layouts must name at least one channel; this newtype makes
+/// the invariant structural so a zero-channel `ChannelLayout` cannot
+/// be built. [`SpeakerMask`] itself is unchanged — the empty mask
+/// remains a legal mask value outside `Custom`.
+///
+/// **RT contract:** RT-suitable — `Copy` value type; `const` ops.
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_audio_core::{SpeakerMask, SpeakerMaskSet};
+/// use ruviform_media_core::Error;
+///
+/// let set = SpeakerMaskSet::new(SpeakerMask::FRONT_LEFT).unwrap();
+/// assert_eq!(set.mask(), SpeakerMask::FRONT_LEFT);
+/// assert_eq!(
+///     SpeakerMaskSet::new(SpeakerMask::empty()),
+///     Err(Error::InvalidValue("mask"))
+/// );
+/// ```
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SpeakerMaskSet(SpeakerMask);
+
+impl SpeakerMaskSet {
+    /// Validated non-empty mask.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidValue`] when `mask` is empty.
+    pub const fn new(mask: SpeakerMask) -> Result<Self> {
+        if mask.is_empty() {
+            Err(Error::InvalidValue("mask"))
+        } else {
+            Ok(Self(mask))
+        }
+    }
+
+    /// The wrapped mask — always non-empty.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn mask(self) -> SpeakerMask {
+        self.0
+    }
+}
+
+/// A named channel layout, or a custom speaker mask set.
 ///
 /// The variant owns the channel count: [`ChannelLayout::channels`]
-/// derives it from the speaker mask. `Custom` should be built via
-/// [`ChannelLayout::custom`], which enforces a non-zero mask — building
-/// the variant directly with an empty mask is a contract violation that
-/// yields a degenerate zero-channel layout.
+/// derives it from the speaker mask. `Custom` carries a
+/// [`SpeakerMaskSet`] — non-empty by construction — so a zero-channel
+/// `ChannelLayout` cannot exist. Building a `Custom` layout from a raw
+/// [`SpeakerMask`] goes through [`ChannelLayout::custom`], which
+/// returns `Err` on an empty mask.
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
 ///
 /// **RT contract:** RT-suitable — `Copy` value type.
 ///
@@ -116,6 +174,7 @@ impl SpeakerMask {
 /// assert_eq!(ChannelLayout::FivePointOne.channels(), 6);
 /// assert!(ChannelLayout::custom(SpeakerMask::empty()).is_err());
 /// ```
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ChannelLayout {
     /// One channel: front center.
@@ -129,9 +188,10 @@ pub enum ChannelLayout {
     FivePointOne,
     /// Eight channels: 5.1 + side left/right.
     SevenPointOne,
-    /// Custom speaker mask — must be non-zero; build via
+    /// Custom speaker mask set — non-empty by construction
+    /// ([`SpeakerMaskSet`]); build from a [`SpeakerMask`] via
     /// [`ChannelLayout::custom`].
-    Custom(SpeakerMask),
+    Custom(SpeakerMaskSet),
 }
 
 impl ChannelLayout {
@@ -170,11 +230,12 @@ impl ChannelLayout {
                 .union(SpeakerMask::BACK_RIGHT)
                 .union(SpeakerMask::SIDE_LEFT)
                 .union(SpeakerMask::SIDE_RIGHT),
-            Self::Custom(mask) => mask,
+            Self::Custom(mask_set) => mask_set.mask(),
         }
     }
 
-    /// Validated custom layout — rejects an empty mask (zero channels).
+    /// Validated custom layout — rejects an empty mask (zero channels)
+    /// by wrapping it in [`SpeakerMaskSet`].
     ///
     /// **RT contract:** RT-suitable — `const`, pure.
     ///
@@ -196,10 +257,9 @@ impl ChannelLayout {
     /// );
     /// ```
     pub const fn custom(mask: SpeakerMask) -> Result<Self> {
-        if mask.is_empty() {
-            Err(Error::InvalidValue("mask"))
-        } else {
-            Ok(Self::Custom(mask))
+        match SpeakerMaskSet::new(mask) {
+            Ok(mask_set) => Ok(Self::Custom(mask_set)),
+            Err(error) => Err(error),
         }
     }
 }
@@ -245,7 +305,10 @@ mod tests {
             .union(SpeakerMask::BACK_LEFT)
             .union(SpeakerMask::from_bits(0x100));
         let layout = ChannelLayout::custom(mask).unwrap();
-        assert_eq!(layout, ChannelLayout::Custom(mask));
+        assert_eq!(
+            layout,
+            ChannelLayout::Custom(SpeakerMaskSet::new(mask).unwrap())
+        );
         assert_eq!(layout.speaker_mask(), mask);
         assert_eq!(layout.channels(), 3);
     }
@@ -259,10 +322,17 @@ mod tests {
     }
 
     #[test]
-    fn directly_constructed_empty_custom_is_degenerate() {
-        // Contract violation documented on the variant: yields a
-        // zero-channel layout rather than panicking.
-        let layout = ChannelLayout::Custom(SpeakerMask::empty());
-        assert_eq!(layout.channels(), 0);
+    fn custom_payload_is_structurally_non_empty() {
+        // `SpeakerMaskSet::new` rejects the empty mask, so no
+        // `ChannelLayout::Custom` value can be zero-channel — the
+        // degenerate layout the variant doc used to warn about is now
+        // unrepresentable.
+        assert_eq!(
+            SpeakerMaskSet::new(SpeakerMask::empty()),
+            Err(Error::InvalidValue("mask"))
+        );
+        let set = SpeakerMaskSet::new(SpeakerMask::BACK_RIGHT).unwrap();
+        assert_eq!(set.mask(), SpeakerMask::BACK_RIGHT);
+        assert_eq!(ChannelLayout::Custom(set).channels(), 1);
     }
 }

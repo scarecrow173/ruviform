@@ -10,7 +10,12 @@
 
 /// Color primaries of a video signal (ITU-T H.273-style labeling).
 ///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
 /// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum ColorPrimaries {
     /// Not specified — the interpretation is left to downstream
@@ -32,7 +37,12 @@ pub enum ColorPrimaries {
 /// Transfer (electro-optical) characteristics of a video signal
 /// (ITU-T H.273-style labeling).
 ///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
 /// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TransferCharacteristics {
     /// Not specified — the interpretation is left to downstream
@@ -54,7 +64,12 @@ pub enum TransferCharacteristics {
 /// Matrix coefficients used to convert between RGB and YCbCr
 /// (ITU-T H.273-style labeling).
 ///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
 /// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum MatrixCoefficients {
     /// Not specified — the interpretation is left to downstream
@@ -73,7 +88,12 @@ pub enum MatrixCoefficients {
 
 /// Quantization range of a video signal.
 ///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
 /// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum ColorRange {
     /// Not specified — the interpretation is left to downstream

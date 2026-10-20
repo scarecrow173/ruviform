@@ -41,11 +41,9 @@ fn pack_interleaved<S: Sample>(
     if dst.len() != data.len() {
         return Err(Error::InvalidValue("dst"));
     }
-    if channels != 0 {
-        for (frame_index, frame) in dst.chunks_exact_mut(channels).enumerate() {
-            for (channel_index, slot) in frame.iter_mut().enumerate() {
-                *slot = data[channel_index * frames + frame_index];
-            }
+    for (frame_index, frame) in dst.chunks_exact_mut(channels).enumerate() {
+        for (channel_index, slot) in frame.iter_mut().enumerate() {
+            *slot = data[channel_index * frames + frame_index];
         }
     }
     Ok(())
@@ -62,14 +60,28 @@ fn unpack_interleaved<S: Sample>(
     if src.len() != data.len() {
         return Err(Error::InvalidValue("src"));
     }
-    if channels != 0 {
-        for (frame_index, frame) in src.chunks_exact(channels).enumerate() {
-            for (channel_index, sample) in frame.iter().enumerate() {
-                data[channel_index * frames + frame_index] = *sample;
-            }
+    for (frame_index, frame) in src.chunks_exact(channels).enumerate() {
+        for (channel_index, sample) in frame.iter().enumerate() {
+            data[channel_index * frames + frame_index] = *sample;
         }
     }
     Ok(())
+}
+
+/// Shape check shared by the buffer constructors: returns the slab
+/// length `channels * frames`, or why it is not representable. The
+/// `isize::MAX` byte bound (the maximum single-allocation size) belongs
+/// to the shape check — `vec![S::default(); len]` would otherwise hit
+/// the same failure at allocation time.
+fn checked_slab_len<S: Sample>(spec: &BufferSpec) -> Result<usize> {
+    let len = spec
+        .channels()
+        .checked_mul(spec.frames)
+        .ok_or(Error::InvalidValue("frames"))?;
+    len.checked_mul(size_of::<S>())
+        .filter(|byte_len| isize::try_from(*byte_len).is_ok())
+        .ok_or(Error::InvalidValue("frames"))?;
+    Ok(len)
 }
 
 /// Geometry of an [`AudioBuffer`]: channel layout (which carries the
@@ -118,13 +130,14 @@ impl BufferSpec {
 /// Channel `c` occupies `data[c * frames .. (c + 1) * frames]` of one
 /// contiguous `Vec<S>`; `f32` (the default) is the canonical RT sample
 /// type. A buffer never grows after construction — there is no
-/// `push`/`reserve`-style API. A `Custom` layout with an empty mask
-/// yields a degenerate zero-channel buffer (see
-/// [`ChannelLayout::Custom`]).
+/// `push`/`reserve`-style API. Every layout carries at least one
+/// channel — [`ChannelLayout::Custom`] holds a validated non-empty
+/// mask set — so a zero-channel buffer cannot be built.
 ///
 /// **RT contract:** the storage for RT paths — accessors and views are
 /// allocation-free borrows; the allocating constructors
-/// ([`AudioBuffer::new`], [`AudioBuffer::from_interleaved`]) are
+/// ([`AudioBuffer::new`], [`AudioBuffer::try_new`],
+/// [`AudioBuffer::from_interleaved`]) are
 /// non-RT-only. See the per-method labels.
 ///
 /// # Examples
@@ -154,6 +167,9 @@ impl<S: Sample> AudioBuffer<S> {
     /// Allocates a zeroed channel-major planar buffer of
     /// `channels * frames` samples.
     ///
+    /// Panicking sibling of [`AudioBuffer::try_new`] — use `try_new` on
+    /// paths that must not panic (e.g. format negotiation).
+    ///
     /// **RT contract:** non-RT only — allocates.
     ///
     /// # Panics
@@ -161,25 +177,48 @@ impl<S: Sample> AudioBuffer<S> {
     /// Panics when `channels * frames` overflows `usize`, or when the
     /// slab's byte size (`channels * frames * size_of::<S>()`) exceeds
     /// `isize::MAX` — the maximum single-allocation size (same class of
-    /// failure as the allocation itself).
+    /// failure as the allocation itself). [`AudioBuffer::try_new`]
+    /// surfaces the same shape failures as `Err` instead.
     #[must_use]
     pub fn new(spec: BufferSpec) -> Self {
-        let len = spec
-            .channels()
-            .checked_mul(spec.frames)
-            .expect("BufferSpec channels * frames overflows usize");
-        // `vec![S::default(); len]` panics once the slab exceeds
-        // `isize::MAX` bytes — the capacity bound belongs to the shape
-        // check, so it is enforced here ahead of the allocation.
-        len.checked_mul(size_of::<S>())
-            .filter(|byte_len| isize::try_from(*byte_len).is_ok())
-            .expect("BufferSpec channels * frames exceeds isize::MAX bytes");
-        Self {
+        Self::try_new(spec)
+            .expect("BufferSpec channels * frames overflows usize or exceeds isize::MAX bytes")
+    }
+
+    /// Fallible variant of [`AudioBuffer::new`]: the same zeroed
+    /// channel-major slab, with the shape validation surfaced as `Err`
+    /// instead of a panic — the constructor for paths that must not
+    /// panic (e.g. format negotiation).
+    ///
+    /// **RT contract:** non-RT only — allocates.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidValue`] when `channels * frames` overflows
+    /// `usize`, or when the slab's byte size
+    /// (`channels * frames * size_of::<S>()`) exceeds `isize::MAX` —
+    /// the maximum single-allocation size.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_audio_core::{AudioBuffer, BufferSpec, ChannelLayout, SampleRate};
+    ///
+    /// let spec = BufferSpec {
+    ///     layout: ChannelLayout::Stereo,
+    ///     frames: 256,
+    ///     sample_rate: SampleRate::new(48_000).unwrap(),
+    /// };
+    /// assert!(AudioBuffer::<f32>::try_new(spec).is_ok());
+    /// ```
+    pub fn try_new(spec: BufferSpec) -> Result<Self> {
+        let len = checked_slab_len::<S>(&spec)?;
+        Ok(Self {
             data: vec![S::default(); len],
             frames: spec.frames,
             layout: spec.layout,
             sample_rate: spec.sample_rate,
-        }
+        })
     }
 
     /// Allocates a buffer and de-interleaves `src` (frame-major,
@@ -189,8 +228,10 @@ impl<S: Sample> AudioBuffer<S> {
     ///
     /// # Errors
     ///
-    /// [`Error::InvalidValue`] when `src.len() != channels * frames`, or
-    /// when `channels * frames` overflows `usize`.
+    /// [`Error::InvalidValue`] when `src.len() != channels * frames`,
+    /// when `channels * frames` overflows `usize`, or when the slab's
+    /// byte size exceeds `isize::MAX` (the same shape check as
+    /// [`AudioBuffer::try_new`]).
     ///
     /// # Examples
     ///
@@ -209,13 +250,12 @@ impl<S: Sample> AudioBuffer<S> {
     /// ```
     pub fn from_interleaved(src: &[S], spec: BufferSpec) -> Result<Self> {
         let channels = spec.channels();
-        let expected = channels
-            .checked_mul(spec.frames)
-            .ok_or(Error::InvalidValue("frames"))?;
-        if src.len() != expected {
+        if src.len() != checked_slab_len::<S>(&spec)? {
             return Err(Error::InvalidValue("src"));
         }
-        let mut buffer = Self::new(spec);
+        // The slab length was just validated; `try_new` re-runs the
+        // same shape check (two integer multiplies) and cannot fail.
+        let mut buffer = Self::try_new(spec)?;
         // `src.len()` was just checked against the slab length.
         unpack_interleaved(src, channels, spec.frames, &mut buffer.data)?;
         Ok(buffer)
@@ -559,7 +599,6 @@ impl<S: Sample> AudioBufferViewMut<'_, S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::SpeakerMask;
 
     fn stereo_spec(frames: usize) -> BufferSpec {
         BufferSpec {
@@ -704,14 +743,33 @@ mod tests {
     }
 
     #[test]
-    fn zero_channel_layout_yields_degenerate_buffer() {
-        let spec = BufferSpec {
-            layout: ChannelLayout::Custom(SpeakerMask::empty()),
-            ..stereo_spec(4)
-        };
-        let buffer = AudioBuffer::<f32>::new(spec);
-        assert_eq!(buffer.channels(), 0);
-        assert_eq!(buffer.data(), &[]);
-        assert_eq!(buffer.channel(0), None);
+    fn try_new_returns_buffer_for_valid_spec() {
+        let buffer = AudioBuffer::<f32>::try_new(stereo_spec(3)).unwrap();
+        assert_eq!(buffer.channels(), 2);
+        assert_eq!(buffer.frames(), 3);
+        assert_eq!(buffer.data(), &[0.0; 6]);
+        // Zero frames stays legal — a zero-length slab.
+        assert!(AudioBuffer::<f32>::try_new(stereo_spec(0)).is_ok());
+    }
+
+    #[test]
+    fn try_new_rejects_oversized_shapes() {
+        // channels * frames overflows usize.
+        assert_eq!(
+            AudioBuffer::<f32>::try_new(stereo_spec(usize::MAX)).map(|_| ()),
+            Err(Error::InvalidValue("frames"))
+        );
+        // The slab fits usize but its byte size exceeds isize::MAX.
+        assert_eq!(
+            AudioBuffer::<f32>::try_new(stereo_spec(isize::MAX as usize)).map(|_| ()),
+            Err(Error::InvalidValue("frames"))
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "BufferSpec channels * frames overflows usize or exceeds isize::MAX")]
+    fn new_keeps_its_panic_contract() {
+        // Same rejected shape as `try_new` — panic by contract.
+        let _ = AudioBuffer::<f32>::new(stereo_spec(usize::MAX));
     }
 }
