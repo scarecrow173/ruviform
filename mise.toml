@@ -51,6 +51,22 @@ run = "cargo test --workspace"
 description = "Build workspace with `cargo build --workspace` (dev profile; writes only target/)"
 run = "cargo build --workspace"
 
+# RT contract tests and benchmarks share the dev/bench profiles (no -ci
+# variants yet). No RT tests or benchmarks exist at this point: `test-rt`
+# selects tests by the `rt_` name prefix via a libtest name filter and a
+# zero-match run still exits successfully, so it is skip-equivalent until
+# RT tests are added under that naming convention. `bench` is a no-op
+# entry point until benchmarks are introduced (criterion is not yet a
+# dependency).
+
+[tasks.test-rt]
+description = "Run RT contract tests with `cargo test --workspace rt_` name filter (dev/test profile; zero matches = skip until `rt_*` tests exist; writes only target/)"
+run = "cargo test --workspace rt_"
+
+[tasks.bench]
+description = "Run workspace benchmarks with `cargo bench --workspace` (bench profile; currently no benchmarks, so effectively a no-op entry point; writes only target/)"
+run = "cargo bench --workspace"
+
 # CI-only tasks: identical checks under `--profile ci` with incremental
 # compilation disabled. Artifacts go to target/ci/, separate from dev's
 # target/debug/. Not for routine local use (disk usage).

@@ -127,10 +127,13 @@ mise exec -- apm install --frozen
 | `lint` | `cargo clippy --workspace --all-targets -- -D warnings` | lint（dev プロファイル） |
 | `test` | `cargo test --workspace` | テスト（dev プロファイル） |
 | `build` | `cargo build --workspace` | ビルド（dev プロファイル） |
+| `test-rt` | `cargo test --workspace rt_`（`rt_` プレフィックス命名の RT テストを名前フィルタで選択。0 件一致でも成功するため RT テスト未存在時はスキップ相当） | RT 契約テスト（現時点では RT テスト未実装） |
+| `bench` | `cargo bench --workspace` | ベンチマーク入口（ベンチマーク未実装のため現状は実質 no-op） |
 | `check-ci` / `lint-ci` / `test-ci` / `build-ci` | 上記各コマンドを `--profile ci`・`CARGO_INCREMENTAL=0` で実行 | CI 用途限定 |
 | `verify-ci` | `fmt-check` → `check-ci` → `lint-ci` → `test-ci` を順次実行 | CI 同等の検証列 |
 
 - `*-ci` タスクと `verify-ci` は CI 用途限定。成果物が `target/ci/` に `target/debug/` と並存して容量を消費するため常用しない。
+- `.github/workflows/ci.yml` は `workflow_dispatch` 専用の手動検証ワークフロー（push / pull_request / schedule 等の自動トリガーは設けない）。`verify` ジョブは `ubuntu-latest` / `windows-latest` / `macos-latest` の 3 OS matrix（ディスク計測ステップは ubuntu のみ）、`rt-verify`（`mise run test-rt`）と `bench`（`mise run bench`）ジョブは `ubuntu-latest` 単独。
 
 ### 暫定規約
 
