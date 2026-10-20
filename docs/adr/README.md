@@ -14,5 +14,6 @@ Directory: `docs/adr`
 | ADR-034J6OnZouPI8HQy6cIg9D | 公開 enum への `#[non_exhaustive]` 統一方針 | accepted | [public-enum-non-exhaustive-policy.md](./public-enum-non-exhaustive-policy.md) |
 | ADR-034IO00JjhxeTXUbCZtcDX | リアルタイム契約と検証方針 | accepted | [realtime-contract-and-verification-policy.md](./realtime-contract-and-verification-policy.md) |
 | ADR-034Ivm746Q38Wa21HeqUiI | テンプレート由来ドキュメント・識別子のRuviform固有化方針 | accepted | [replace-template-derived-docs-metadata-with-ruviform.md](./replace-template-derived-docs-metadata-with-ruviform.md) |
+| ADR-034Jcra57UlCiVE1Poq2DO | RT 基盤プリミティブの実装方式（SPSC・退避ドロップ・スナップショット交換・スレッド優先度・契約型） | proposed | [rt-foundation-primitives-implementation.md](./rt-foundation-primitives-implementation.md) |
 | ADR-034IcJdtqm6TP6MylyP5J7 | 開発基盤の toolchain・Cargoプロファイル・CI方針 | accepted | [rust-dev-foundation-toolchain-and-ci-profile.md](./rust-dev-foundation-toolchain-and-ci-profile.md) |
 | ADR-034IO01BpGWCl1DcEbcTQI | UIアーキテクチャ方針（WebViewファースト・ハイブリッド） | accepted | [ui-architecture-webview-hybrid.md](./ui-architecture-webview-hybrid.md) |
