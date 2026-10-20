@@ -4,10 +4,17 @@ type: "design"
 status: "draft"
 title: "System Design Overview"
 created: "2026-10-19"
-updated: "2026-10-19"
+updated: "2026-10-20"
 owners: []
 relations:
   source: []
+  changes:
+    added: []
+    modified: []
+    deleted: []
+    renamed: []
+    moved: []
+    generated: []
   implements: []
   implemented-by: []
   depends-on: []
@@ -92,3 +99,4 @@ Optional platform adapters（opt-in・基礎層への依存は下向きのみ）
 - [dev-foundation.md](dev-foundation.md) — Rust 開発基盤の設計（最小ワークスペース・CIプロファイル・手動CI）(approved)
 - [replace-template-derived-docs-with-ruviform.md](replace-template-derived-docs-with-ruviform.md) — テンプレート由来ドキュメント・識別子のRuviform固有化の設計（README/AGENTS 改稿・識別子更新の文書設計、Issue #3）(approved)
 - [ruviform-architecture-design-baseline.md](ruviform-architecture-design-baseline.md) — Ruviform アーキテクチャ設計ベースライン（クレート DAG・データモデル・RT/オフライン実行モデル・DSP/SIMD・プラグイン・UI・検証計画・暫定ロードマップ、Issue #1）(approved)
+- [time-model-extension.md](time-model-extension.md) — 時間モデル拡張の設計（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針、Issue #42）(approved)
