@@ -9,7 +9,12 @@ use core::fmt;
 
 /// Error type for `ruviform-media-core` value-type operations.
 ///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
 /// **RT contract:** RT-suitable — `Copy`, allocation-free.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Error {
     /// A [`TimeBase`](crate::TimeBase) was built with a zero numerator or

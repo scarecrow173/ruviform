@@ -27,6 +27,10 @@ unused_qualifications = "warn"
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 missing_errors_doc = "allow"  # pedantic の過剰適用を初期段階で緩和（仮置き）
+# restriction グループの lint を個別に warn 昇格: 全公開 enum に `#[non_exhaustive]` を
+# 強制する（docs/adr/public-enum-non-exhaustive-policy.md）。`lint`/`lint-ci` の
+# `-D warnings` ゲートで実質 deny として機能する。
+exhaustive_enums = "warn"
 
 # Local development: retain full debug information.
 [profile.dev]

@@ -141,6 +141,7 @@ mise exec -- apm install --frozen
 - feature: default feature は最小限とする。新規 feature・optional 依存は追加理由を PR に記録する。
 - 依存追加: メンテナンス状況・ライセンス・依存木サイズを確認し理由を記録する。`Cargo.lock` は追跡を継続する。
 - lint: `workspace.lints` が正本。CI は `clippy -- -D warnings` を必須ゲートとする。rustfmt は標準設定（`rustfmt.toml` は必要時に追加）。
+- 公開 enum: クレート外から到達可能な全公開 enum に enum レベルの `#[non_exhaustive]` を付与する（クレート内部限定 enum は対象外）。`#![allow(clippy::exhaustive_enums)]` は置かず、`workspace.lints.clippy` で restriction lint `exhaustive_enums = "warn"` を有効化し `-D warnings` ゲートで強制する。正本: [docs/adr/public-enum-non-exhaustive-policy.md](docs/adr/public-enum-non-exhaustive-policy.md)。
 - doc test: 公開 API の例は doctest に書き、`cargo test` で検証する。
 
 ### アーキテクチャ確定契約（設計ベースライン）

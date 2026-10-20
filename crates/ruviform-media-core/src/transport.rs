@@ -5,7 +5,12 @@ use crate::time::MediaTime;
 
 /// Playback state of a transport.
 ///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
 /// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TransportStatus {
     /// Not running; position is held or reset per caller policy.

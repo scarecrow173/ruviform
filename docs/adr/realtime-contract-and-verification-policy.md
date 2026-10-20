@@ -37,6 +37,8 @@ relations:
     - "../designs/ruviform-architecture-design-baseline.md"
     - "../specs/implement-media-data-model-api.md"
     - "../plans/implement-issue-18-data-model.md"
+    - "../specs/issue-18-followup-enum-and-time-fix.md"
+    - "../plans/issue-18-followup-enum-and-time-fix.md"
   verifies: []
   verified-by: []
   references: []

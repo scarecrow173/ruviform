@@ -1,7 +1,8 @@
 //! `ruviform-audio-core` — audio data types for the Ruviform media
 //! foundation: the sealed [`Sample`] trait (`f32`/`f64`), the audio time
 //! contract ([`SampleRate`], [`SampleIndex`]), channel layouts and
-//! speaker masks ([`ChannelLayout`], [`SpeakerMask`]), stream-level
+//! speaker masks ([`ChannelLayout`], [`SpeakerMask`],
+//! [`SpeakerMaskSet`]), stream-level
 //! format description ([`AudioFormat`], [`SampleFormat`]) and the
 //! channel-major contiguous planar [`AudioBuffer`] with its borrowed
 //! views ([`AudioBufferView`], [`AudioBufferViewMut`], [`BufferSpec`]).
@@ -27,7 +28,8 @@
 //!
 //! Buffer views and accessors are allocation-free, non-blocking borrows —
 //! RT-suitable. Allocating constructors ([`AudioBuffer::new`],
-//! [`AudioBuffer::from_interleaved`]) are labelled `**RT contract:**
+//! [`AudioBuffer::try_new`], [`AudioBuffer::from_interleaved`]) are
+//! labelled `**RT contract:**
 //! non-RT only`. A buffer never grows after construction: no
 //! `push`/`reserve`-style API exists. Per-API guarantees are documented
 //! as `**RT contract:**` lines on each item, mirroring the RT ADR rule
@@ -41,11 +43,12 @@
 // model: they deliberately echo their module (`buffer::AudioBuffer`,
 // `layout::ChannelLayout`, …) while being re-exported at the crate root,
 // and as a `publish = false` workspace-internal value-type crate this API
-// relies on exhaustive matching and literal construction rather than
-// `#[non_exhaustive]` forward-compat guards (`SampleFormat` excepted — it
-// is explicitly extensible).
+// relies on literal construction for structs. Every public enum carries
+// enum-level `#[non_exhaustive]`: exhaustive matching is reserved for
+// crate-internal code while external users (sibling crates included) get
+// forward compatibility — see
+// `docs/adr/public-enum-non-exhaustive-policy.md`.
 #![allow(clippy::module_name_repetitions)]
-#![allow(clippy::exhaustive_enums)]
 #![allow(clippy::exhaustive_structs)]
 
 mod buffer;
@@ -56,7 +59,7 @@ mod time;
 
 pub use buffer::{AudioBuffer, AudioBufferView, AudioBufferViewMut, BufferSpec};
 pub use format::{AudioFormat, SampleFormat};
-pub use layout::{ChannelLayout, SpeakerMask};
+pub use layout::{ChannelLayout, SpeakerMask, SpeakerMaskSet};
 pub use sample::Sample;
 pub use time::{SampleIndex, SampleRate};
 

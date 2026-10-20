@@ -7,6 +7,12 @@
 //! exceptions are the display-side [`MediaTime::to_seconds_f64`] and
 //! [`MediaDuration::to_seconds_f64`]). Negative instants are legal and
 //! represent pre-roll.
+//!
+//! Every conversion and arithmetic call applies at most one rounding —
+//! the final step, never per intermediate. Chained conversions
+//! therefore accumulate rounding error: keep values in their native
+//! base as the stable anchor and convert at display/IO boundaries —
+//! repeated base-hopping is discouraged.
 
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
@@ -128,9 +134,9 @@ impl TimeBase {
 /// [`TimeBase`] equals [`MediaTime::ZERO`].
 ///
 /// `Add`/`Sub` trait impls are deliberately absent: arithmetic can fail
-/// (base conversion or `i64` range), and that failure must surface as
-/// `Err`, never panic — use [`MediaTime::checked_add`] /
-/// [`MediaTime::checked_sub`].
+/// (the resulting instant may fall outside the `i64` range), and that
+/// failure must surface as `Err`, never panic — use
+/// [`MediaTime::checked_add`] / [`MediaTime::checked_sub`].
 ///
 /// **RT contract:** RT-suitable — `Copy`, allocation-free; all operations
 /// are exact integer math.
@@ -194,12 +200,17 @@ impl MediaTime {
     /// math via `i128` intermediates — exact when the value is
     /// representable in `to`, otherwise rounded per `rounding`.
     ///
+    /// One call applies at most one rounding — the final step. Chained
+    /// conversions accumulate rounding error: prefer converting from a
+    /// stable anchor (keep values in their native base, convert at
+    /// display/IO boundaries); repeated base-hopping is discouraged.
+    ///
     /// **RT contract:** RT-suitable — pure integer math, no allocation.
     ///
     /// # Errors
     ///
-    /// [`Error::TimeOverflow`] when the result (or an `i128` intermediate)
-    /// overflows.
+    /// [`Error::TimeOverflow`] when the converted value exceeds the
+    /// `i64` range.
     ///
     /// # Examples
     ///
@@ -240,16 +251,27 @@ impl MediaTime {
     }
 
     /// Adds a [`MediaDuration`], first converting it into this instant's
-    /// base with [`Rounding::NearestEven`]; an inexact duration is rounded.
+    /// base with [`Rounding::NearestEven`]; an inexact duration is rounded
+    /// once.
+    ///
+    /// The converted delta is held as an exact `i128` rational quotient,
+    /// so a duration whose conversion alone exceeds the `i64` range does
+    /// not fail early — only the final `self + delta` instant is checked
+    /// against the representable range.
     ///
     /// This is the deliberate replacement for an `Add` impl: the contract
     /// is total — no `f64`, no panic — and failure surfaces as `Err`.
+    ///
+    /// One call applies at most one rounding — repeated
+    /// add-and-convert loops accumulate rounding error, so accumulate
+    /// in a stable base (see the module docs).
     ///
     /// **RT contract:** RT-suitable — pure integer math, no allocation.
     ///
     /// # Errors
     ///
-    /// [`Error::TimeOverflow`] on conversion or `i64` range overflow.
+    /// [`Error::TimeOverflow`] when the resulting instant falls outside
+    /// the `i64` value range.
     ///
     /// # Examples
     ///
@@ -261,23 +283,37 @@ impl MediaTime {
     /// assert_eq!(t.checked_add(d), Ok(MediaTime::new(8, TimeBase::new(1, 4).unwrap())));
     /// ```
     pub fn checked_add(self, duration: MediaDuration) -> Result<Self> {
-        let delta = duration.convert(self.base, Rounding::NearestEven)?;
-        let value = self
-            .value
-            .checked_add(delta.value)
+        let delta = convert_value_wide(
+            duration.value,
+            duration.base,
+            self.base,
+            Rounding::NearestEven,
+        );
+        let value = i64::try_from(i128::from(self.value) + delta)
+            .ok()
             .ok_or(Error::TimeOverflow)?;
         Ok(Self::new(value, self.base))
     }
 
     /// Subtracts a [`MediaDuration`], first converting it into this
     /// instant's base with [`Rounding::NearestEven`]; an inexact duration
-    /// is rounded.
+    /// is rounded once.
+    ///
+    /// The converted delta is held as an exact `i128` rational quotient
+    /// and negated at `i128` width, so an `i64::MIN` duration is handled
+    /// exactly — only the final `self - delta` instant is checked against
+    /// the representable range.
+    ///
+    /// One call applies at most one rounding — repeated
+    /// subtract-and-convert loops accumulate rounding error, so accumulate
+    /// in a stable base (see the module docs).
     ///
     /// **RT contract:** RT-suitable — pure integer math, no allocation.
     ///
     /// # Errors
     ///
-    /// [`Error::TimeOverflow`] on conversion or `i64` range overflow.
+    /// [`Error::TimeOverflow`] when the resulting instant falls outside
+    /// the `i64` value range.
     ///
     /// # Examples
     ///
@@ -289,10 +325,14 @@ impl MediaTime {
     /// assert_eq!(t.checked_sub(d), Ok(MediaTime::ZERO));
     /// ```
     pub fn checked_sub(self, duration: MediaDuration) -> Result<Self> {
-        let delta = duration.convert(self.base, Rounding::NearestEven)?;
-        let value = self
-            .value
-            .checked_sub(delta.value)
+        let delta = convert_value_wide(
+            duration.value,
+            duration.base,
+            self.base,
+            Rounding::NearestEven,
+        );
+        let value = i64::try_from(i128::from(self.value) - delta)
+            .ok()
             .ok_or(Error::TimeOverflow)?;
         Ok(Self::new(value, self.base))
     }
@@ -427,8 +467,8 @@ impl MediaDuration {
     ///
     /// # Errors
     ///
-    /// [`Error::TimeOverflow`] when the result (or an `i128` intermediate)
-    /// overflows.
+    /// [`Error::TimeOverflow`] when the converted value exceeds the
+    /// `i64` range.
     ///
     /// # Examples
     ///
@@ -526,7 +566,12 @@ impl Hash for MediaDuration {
 /// default for media arithmetic because it is unbiased across repeated
 /// conversions.
 ///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
 /// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Rounding {
     /// Toward negative infinity.
@@ -598,9 +643,15 @@ impl MediaRange {
     /// The end instant: `start + duration`, expressed in `start`'s base.
     /// The duration is converted with [`Rounding::NearestEven`] first.
     ///
-    /// This function is total: if the conversion or the sum exceeds the
-    /// `i64` value range, the result saturates at `i64::MIN`/`i64::MAX` in
-    /// `start`'s base — never a panic.
+    /// The delta is kept as an exact `i128` rational quotient, so a
+    /// duration whose conversion alone exceeds the `i64` range still
+    /// yields the true end whenever `start + delta` is representable.
+    ///
+    /// This function is total: if the final `start + duration` exceeds
+    /// the `i64` value range, the result saturates at
+    /// `i64::MIN`/`i64::MAX` in `start`'s base — never a panic.
+    /// Saturation happens only on true final overflow; use
+    /// [`MediaRange::checked_end`] to observe it as an `Err` instead.
     ///
     /// **RT contract:** RT-suitable — pure integer math, no allocation.
     ///
@@ -614,22 +665,57 @@ impl MediaRange {
     /// ```
     #[must_use]
     pub fn end(self) -> MediaTime {
-        let delta = match self
-            .duration
-            .convert(self.start.base, Rounding::NearestEven)
-        {
-            Ok(d) => i128::from(d.value),
-            // Conversion overflow saturates in the duration's own direction.
-            Err(_) => i128::from(if self.duration.value < 0 {
-                i64::MIN
-            } else {
-                i64::MAX
-            }),
-        };
-        let end = i128::from(self.start.value) + delta;
+        let end = self.end_wide(Rounding::NearestEven);
         let clamped = end.clamp(i128::from(i64::MIN), i128::from(i64::MAX));
         // `clamped` is in `i64` range by construction; the fallback is unreachable.
         MediaTime::new(i64::try_from(clamped).unwrap_or(i64::MAX), self.start.base)
+    }
+
+    /// Checked variant of [`MediaRange::end`] with an explicit `rounding`
+    /// applied to the duration conversion.
+    ///
+    /// **RT contract:** RT-suitable — pure integer math, no allocation.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::TimeOverflow`] only when the final `start + delta`
+    /// instant falls outside the `i64` value range — an intermediate
+    /// delta that exceeds `i64` on its own is not an error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_media_core::{MediaDuration, MediaRange, MediaTime, Rounding, TimeBase};
+    ///
+    /// let base = TimeBase::new(1, 1).unwrap();
+    /// let range = MediaRange::new(MediaTime::new(i64::MAX - 1, base), MediaDuration::new(1, base));
+    /// assert_eq!(range.checked_end(Rounding::NearestEven).map(|t| t.value()), Ok(i64::MAX));
+    /// let overflowing = MediaRange::new(
+    ///     MediaTime::new(i64::MAX, base),
+    ///     MediaDuration::new(2, base),
+    /// );
+    /// assert!(overflowing.checked_end(Rounding::NearestEven).is_err());
+    /// ```
+    pub fn checked_end(self, rounding: Rounding) -> Result<MediaTime> {
+        let value = i64::try_from(self.end_wide(rounding))
+            .ok()
+            .ok_or(Error::TimeOverflow)?;
+        Ok(MediaTime::new(value, self.start.base))
+    }
+
+    /// `start + duration` in `start`'s base as an `i128`, with `rounding`
+    /// applied once to the duration's conversion. The exact intermediate
+    /// keeps full precision, so `i64` range checks apply only to this
+    /// final value; `|start| + |delta| <= 2^63 + 2^63 * (2^32 - 1)^2`
+    /// still fits `i128`.
+    fn end_wide(self, rounding: Rounding) -> i128 {
+        let delta = convert_value_wide(
+            self.duration.value,
+            self.duration.base,
+            self.start.base,
+            rounding,
+        );
+        i128::from(self.start.value) + delta
     }
 }
 
@@ -676,24 +762,19 @@ fn normalized_pair(value: i64, base: TimeBase) -> (i128, u128) {
 }
 
 /// Rescales `value` ticks of `from` into the fraction `num/den` ticks of
-/// `to` (`den > 0` always). Returns `None` only on `i128` intermediate
-/// overflow, reachable solely at `i64::MIN`-times-`u32::MAX` extremes.
-fn scaled_fraction(value: i64, from: TimeBase, to: TimeBase) -> Option<(i128, u128)> {
-    let num = i128::from(value)
-        .checked_mul(i128::from(from.numerator))?
-        .checked_mul(i128::from(to.denominator))?;
+/// `to` (`den > 0` always). `|num| <= 2^63 * (2^32 - 1)^2 < 2^127`, so the
+/// `i128` intermediate cannot overflow.
+fn scaled_fraction(value: i64, from: TimeBase, to: TimeBase) -> (i128, u128) {
+    let num = i128::from(value) * i128::from(from.numerator) * i128::from(to.denominator);
     let den = u128::from(from.denominator) * u128::from(to.numerator);
-    Some((num, den))
+    (num, den)
 }
 
-/// Converts `value` ticks of `from` into ticks of `to`; exact when
-/// representable, otherwise rounded per `rounding`. Overflow surfaces as
-/// [`Error::TimeOverflow`].
-fn convert_value(value: i64, from: TimeBase, to: TimeBase, rounding: Rounding) -> Result<i64> {
-    let (num, den) = scaled_fraction(value, from, to).ok_or(Error::TimeOverflow)?;
-
-    // Divide with explicit rounding on the magnitude; the sign is
-    // re-applied afterwards so all modes stay symmetric for pre-roll.
+/// Applies `rounding` to the exact rational `num / den` (`den > 0`),
+/// returning the quotient as `i128` with no `i64` range check. Rounding
+/// acts on the magnitude and the sign is re-applied afterwards, so all
+/// modes stay symmetric for pre-roll values.
+fn round_quotient(num: i128, den: u128, rounding: Rounding) -> i128 {
     let negative = num < 0;
     let mut q = num.unsigned_abs() / den;
     let r = num.unsigned_abs() % den;
@@ -711,20 +792,35 @@ fn convert_value(value: i64, from: TimeBase, to: TimeBase, rounding: Rounding) -
     if round_up {
         q += 1;
     }
-    // The result must fit `i64`: `|i64::MIN| == 2^63` on the negative side.
-    let limit: u128 = if negative { 1 << 63 } else { (1 << 63) - 1 };
-    if q > limit {
-        return Err(Error::TimeOverflow);
-    }
-    let magnitude = i128::try_from(q).ok().ok_or(Error::TimeOverflow)?;
-    let signed = if negative { -magnitude } else { magnitude };
-    i64::try_from(signed).ok().ok_or(Error::TimeOverflow)
+    // `q <= |num| + 1 <= 2^63 * (2^32 - 1)^2 + 1 < i128::MAX`, so the
+    // narrowing cannot fail; the fallback is unreachable.
+    let magnitude = i128::try_from(q).unwrap_or(i128::MAX);
+    if negative { -magnitude } else { magnitude }
+}
+
+/// Converts `value` ticks of `from` into ticks of `to` as an `i128`,
+/// applying `rounding` once — with no `i64` range check on the converted
+/// value itself. End/add/sub arithmetic uses this so range validity is
+/// judged only on the final instant.
+fn convert_value_wide(value: i64, from: TimeBase, to: TimeBase, rounding: Rounding) -> i128 {
+    let (num, den) = scaled_fraction(value, from, to);
+    round_quotient(num, den, rounding)
+}
+
+/// Converts `value` ticks of `from` into ticks of `to`; exact when
+/// representable, otherwise rounded per `rounding`. Overflow surfaces as
+/// [`Error::TimeOverflow`].
+fn convert_value(value: i64, from: TimeBase, to: TimeBase, rounding: Rounding) -> Result<i64> {
+    let (num, den) = scaled_fraction(value, from, to);
+    i64::try_from(round_quotient(num, den, rounding))
+        .ok()
+        .ok_or(Error::TimeOverflow)
 }
 
 /// Converts `value` ticks of `from` into ticks of `to` only when exactly
 /// representable; `None` on any remainder or overflow.
 fn convert_value_exact(value: i64, from: TimeBase, to: TimeBase) -> Option<i64> {
-    let (num, den) = scaled_fraction(value, from, to)?;
+    let (num, den) = scaled_fraction(value, from, to);
     let den = i128::try_from(den).ok()?;
     if num % den != 0 {
         return None;
@@ -960,5 +1056,206 @@ mod tests {
             MediaDuration::new(1, base(1, 3)),
         );
         assert_eq!(r.end(), MediaTime::new(5, base(1, 4)));
+    }
+
+    #[test]
+    fn range_end_delta_wider_than_i64() {
+        // Regression (Issue #41): the duration converts to a delta beyond
+        // the `i64` range in `start`'s base, yet `start + delta` is
+        // representable — `end()` must return the true instant, not the
+        // sum of a saturated delta.
+        //
+        // delta = 2 * i64::MAX ticks; i64::MIN + 2 * i64::MAX == i64::MAX - 1.
+        let range = MediaRange::new(
+            MediaTime::new(i64::MIN, base(1, 1)),
+            MediaDuration::new(i64::MAX, base(2, 1)),
+        );
+        assert_eq!(range.end(), MediaTime::new(i64::MAX - 1, base(1, 1)));
+
+        // Mirror with a huge negative delta and a large positive start:
+        // delta = 2 * (i64::MIN + 1) ticks; i64::MAX + delta == i64::MIN + 1.
+        let mirror = MediaRange::new(
+            MediaTime::new(i64::MAX, base(1, 1)),
+            MediaDuration::new(i64::MIN + 1, base(2, 1)),
+        );
+        assert_eq!(mirror.end(), MediaTime::new(i64::MIN + 1, base(1, 1)));
+
+        // Only a genuinely unrepresentable final value saturates.
+        let high = MediaRange::new(
+            MediaTime::new(i64::MAX, base(1, 1)),
+            MediaDuration::new(i64::MAX, base(2, 1)),
+        );
+        assert_eq!(high.end().value(), i64::MAX);
+        let low = MediaRange::new(
+            MediaTime::new(i64::MIN, base(1, 1)),
+            MediaDuration::new(i64::MIN, base(2, 1)),
+        );
+        assert_eq!(low.end().value(), i64::MIN);
+    }
+
+    #[test]
+    fn checked_add_sub_delta_wider_than_i64() {
+        // Same shape through checked_add: the converted delta overflows
+        // `i64` but the final instant is representable, so the operation
+        // must succeed instead of surfacing the conversion's Err.
+        let start = MediaTime::new(i64::MIN, base(1, 1));
+        let dur = MediaDuration::new(i64::MAX, base(2, 1));
+        assert_eq!(
+            start.checked_add(dur),
+            Ok(MediaTime::new(i64::MAX - 1, base(1, 1)))
+        );
+
+        // Negative-duration mirror through both operations.
+        let neg_dur = MediaDuration::new(i64::MIN + 1, base(2, 1));
+        assert_eq!(
+            MediaTime::new(i64::MAX, base(1, 1)).checked_add(neg_dur),
+            Ok(MediaTime::new(i64::MIN + 1, base(1, 1)))
+        );
+        assert_eq!(
+            start.checked_sub(neg_dur),
+            Ok(MediaTime::new(i64::MAX - 1, base(1, 1)))
+        );
+
+        // An `i64::MIN` duration must not trip the negation inside sub:
+        // -1 - i64::MIN == i64::MAX.
+        assert_eq!(
+            MediaTime::new(-1, base(1, 1)).checked_sub(MediaDuration::new(i64::MIN, base(1, 1))),
+            Ok(MediaTime::new(i64::MAX, base(1, 1)))
+        );
+
+        // Truly unrepresentable finals still surface Err.
+        assert_eq!(
+            MediaTime::new(i64::MAX, base(1, 1)).checked_add(dur),
+            Err(Error::TimeOverflow)
+        );
+        assert_eq!(start.checked_sub(dur), Err(Error::TimeOverflow));
+    }
+
+    #[test]
+    fn checked_end_errors_only_on_final_overflow() {
+        // Representable through an `i64`-overflowing delta: Ok.
+        let range = MediaRange::new(
+            MediaTime::new(i64::MIN, base(1, 1)),
+            MediaDuration::new(i64::MAX, base(2, 1)),
+        );
+        assert_eq!(
+            range.checked_end(Rounding::NearestEven),
+            Ok(MediaTime::new(i64::MAX - 1, base(1, 1)))
+        );
+
+        // Final sum beyond i64: Err in the correct direction of signs.
+        let high = MediaRange::new(
+            MediaTime::new(i64::MAX, base(1, 1)),
+            MediaDuration::new(i64::MAX, base(2, 1)),
+        );
+        assert_eq!(
+            high.checked_end(Rounding::NearestEven),
+            Err(Error::TimeOverflow)
+        );
+        let low = MediaRange::new(
+            MediaTime::new(i64::MIN, base(1, 1)),
+            MediaDuration::new(i64::MIN, base(2, 1)),
+        );
+        assert_eq!(
+            low.checked_end(Rounding::NearestEven),
+            Err(Error::TimeOverflow)
+        );
+    }
+
+    #[test]
+    fn checked_end_applies_each_rounding_mode_once() {
+        // delta = 1.5 ticks in start's 1/1 base: each mode applies a
+        // single rounding to the delta (same rules as `convert`).
+        let start = MediaTime::new(10, base(1, 1));
+        let one_and_half = MediaDuration::new(3, base(1, 2));
+        let cases = [
+            (Rounding::Floor, 11),
+            (Rounding::Ceil, 12),
+            (Rounding::TowardZero, 11),
+            (Rounding::AwayFromZero, 12),
+            // 1.5 -> 2: exact half, quotient 1 is odd -> rounds up.
+            (Rounding::NearestEven, 12),
+        ];
+        for (mode, expected) in cases {
+            assert_eq!(
+                MediaRange::new(start, one_and_half).checked_end(mode),
+                Ok(MediaTime::new(expected, base(1, 1))),
+                "mode {mode:?}"
+            );
+        }
+
+        // 2.5 -> NearestEven stays at 2 (even); AwayFromZero reaches 3.
+        let two_and_half = MediaDuration::new(5, base(1, 2));
+        assert_eq!(
+            MediaRange::new(start, two_and_half).checked_end(Rounding::NearestEven),
+            Ok(MediaTime::new(12, base(1, 1)))
+        );
+        assert_eq!(
+            MediaRange::new(start, two_and_half).checked_end(Rounding::AwayFromZero),
+            Ok(MediaTime::new(13, base(1, 1)))
+        );
+
+        // delta = -1.5 ticks: rounding stays symmetric for pre-roll.
+        let neg = MediaDuration::new(-3, base(1, 2));
+        let neg_cases = [
+            (Rounding::Floor, 8),
+            (Rounding::Ceil, 9),
+            (Rounding::TowardZero, 9),
+            (Rounding::AwayFromZero, 8),
+            // -1.5 -> -2: exact half, quotient 1 is odd -> rounds away.
+            (Rounding::NearestEven, 8),
+        ];
+        for (mode, expected) in neg_cases {
+            assert_eq!(
+                MediaRange::new(start, neg).checked_end(mode),
+                Ok(MediaTime::new(expected, base(1, 1))),
+                "mode {mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn negative_duration_moves_both_directions() {
+        // A negative duration puts end before start.
+        let backwards = MediaRange::new(
+            MediaTime::new(4, base(1, 4)),
+            MediaDuration::new(-1, base(1, 1)),
+        );
+        assert_eq!(backwards.end(), MediaTime::new(0, base(1, 4)));
+
+        // checked_add of a negative duration moves backwards;
+        // checked_sub of the same duration moves forwards.
+        let t = MediaTime::new(4, base(1, 4));
+        let neg = MediaDuration::new(-1, base(1, 1));
+        assert_eq!(t.checked_add(neg), Ok(MediaTime::new(0, base(1, 4))));
+        assert_eq!(t.checked_sub(neg), Ok(MediaTime::new(8, base(1, 4))));
+    }
+
+    #[test]
+    fn checked_end_agrees_with_checked_add() {
+        // `end` arithmetic and `checked_add` share the exact-delta
+        // semantics: they agree on Ok *and* on Err for the same inputs.
+        let starts = [
+            MediaTime::new(0, base(1, 1)),
+            MediaTime::new(i64::MIN, base(1, 1)),
+            MediaTime::new(i64::MAX, base(1, 1)),
+            MediaTime::new(10, base(1, 4)),
+        ];
+        let durations = [
+            MediaDuration::new(1, base(1, 1)),
+            MediaDuration::new(-1, base(1, 1)),
+            MediaDuration::new(i64::MAX, base(2, 1)),
+            MediaDuration::new(i64::MIN, base(1, 1)),
+            MediaDuration::new(3, base(1, 2)),
+        ];
+        for s in starts {
+            for d in durations {
+                assert_eq!(
+                    MediaRange::new(s, d).checked_end(Rounding::NearestEven),
+                    s.checked_add(d),
+                    "start={s:?} dur={d:?}"
+                );
+            }
+        }
     }
 }

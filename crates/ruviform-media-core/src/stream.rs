@@ -26,7 +26,12 @@ pub struct StreamId(pub u32);
 
 /// The media kind of a stream.
 ///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
 /// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum StreamKind {
     /// Audio stream.

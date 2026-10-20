@@ -33,11 +33,12 @@
 // The public names below deliberately echo their module
 // (`pixel::PixelFormat`, `plane::Plane`, …) while being re-exported at the
 // crate root; as a `publish = false` workspace-internal data-model crate
-// this API relies on exhaustive matching and literal construction rather
-// than `#[non_exhaustive]` forward-compat guards — `PixelFormat` itself
-// is the one decided exception (the pixel-format range stays extensible).
+// this API relies on literal construction for structs. Every public enum
+// carries enum-level `#[non_exhaustive]`: exhaustive matching is reserved
+// for crate-internal code while external users (sibling crates included)
+// get forward compatibility — see
+// `docs/adr/public-enum-non-exhaustive-policy.md`.
 #![allow(clippy::module_name_repetitions)]
-#![allow(clippy::exhaustive_enums)]
 #![allow(clippy::exhaustive_structs)]
 
 mod color;
