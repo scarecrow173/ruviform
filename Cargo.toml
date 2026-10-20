@@ -3,9 +3,10 @@ resolver = "2"
 members = ["crates/ruviform-core"]
 
 [workspace.package]
-edition = "2021"          # 仮置き。#1 で edition / MSRV を再評価
-rust-version = "1.85"     # 仮置き MSRV。mise pin バージョン以上にはしない
+edition = "2021"          # 仮置き。edition / MSRV の再評価は専用の確認タスク（design が挙げる edition/MSRV/publish 反映 Issue）へ送付し、現段階では変更しない
+rust-version = "1.85"     # 仮置き MSRV。mise pin バージョン以上にはしない。再評価は専用の確認タスク（edition/MSRV/publish 反映 Issue）へ送付し、現段階では変更しない
 license = "MIT"           # 仮置き。配布方針確定前の暫定値
+publish = false           # 未決定クレートは公開しない（licensing ADR 原則）。メンバーは publish.workspace = true で継承する
 
 [workspace.lints.rust]
 unsafe_code = "warn"      # lint ゲートの -D warnings で実質 deny。例外は局所許可＋SAFETY コメント（後述）

@@ -16,6 +16,7 @@ relations:
   superseded-by: []
   related:
     - "../../AGENTS.md"
+    - "ruviform-architecture-design-baseline.md"
   refines: []
   refined-by: []
   derives-from:
@@ -31,14 +32,39 @@ relations:
 
 # System Design Overview
 
-Ruviform の設計成果物の全体マップ。現時点で確定している設計は GitHub Issue #2 由来の Rust 開発基盤（`dev-foundation.md`）のみであり、プロダクト本体（DSP・video pipeline・SIMD・WebView・VST）の設計は #1 の詳細設計で扱う。
+Ruviform の設計成果物の全体マップ。開発基盤は GitHub Issue #2 由来の Rust 開発基盤（`dev-foundation.md`、approved）で確定済み。プロダクト本体のアーキテクチャ設計ベースライン（クレート DAG・データモデル・RT/オフライン実行モデル・DSP/SIMD・プラグイン・UI・検証計画・ロードマップ）は Issue #1 由来の `ruviform-architecture-design-baseline.md`（approved）がエントリポイントである。
 
 ## System Boundaries
 
 - **ツールチェーン層**: `mise.toml` / `apm.yml` を正本とし、`mise.lock` / `apm.lock.yaml` / `Cargo.lock` で再現性を確定する層。Rust toolchain・開発タスク・APM 依存を含む。
-- **Rust ワークスペース層**: ルート `Cargo.toml`（共通ポリシーと `[profile.dev]` / `[profile.ci]`）と最小メンバークレート `crates/ruviform-core`（仮置き）。最終的なクレート分割の境界は未定義（#1）。
+- **Rust ワークスペース層**: ルート `Cargo.toml`（共通ポリシーと `[profile.dev]` / `[profile.ci]`）と最小メンバークレート `crates/ruviform-core`（仮置き）。最終的なクレート分割の設計案は #1 の設計ベースライン（`ruviform-architecture-design-baseline.md`、approved）に記録され、実装 Phase に応じて `members` を段階追加する。
 - **CI 層**: `.github/workflows/ci.yml`。`workflow_dispatch` のみ・`contents: read`・Linux 必須検証・`--profile ci` での検証とディスク計測を担当する層。
-- **ドキュメント層**: `docs/` 配下の spec / ADR / design 群と `AGENTS.md` の運用契約。README／AGENTS 本文の改稿は #3 の境界。
+- **ドキュメント層**: `docs/` 配下の spec / ADR / design 群と `AGENTS.md` の運用契約。README／AGENTS 本文の改稿は #3 の境界。#1 設計ベースライン approved に伴う設計反映の差分更新は #1 A.8 タスクとして実施。
+
+## Product Architecture（Issue #1）
+
+プロダクト本体のレイヤー構造。詳細・クレート一覧・実行モデル・検証計画・ロードマップの正本は [ruviform-architecture-design-baseline.md](ruviform-architecture-design-baseline.md) を参照。
+
+```text
+Applications / Hosts / Integrations（利用側）
+        │
+Engines:  ruviform-audio / ruviform-video
+        │
+Domain foundations:  ruviform-dsp / ruviform-audio-analysis / ruviform-video-proc
+                     ruviform-media-io（demux/mux・decode/encode の抽象境界）
+                     ruviform-audio-core / ruviform-video-core
+        │
+Primitives:  ruviform-media-core / ruviform-rt / ruviform-exec / ruviform-math
+        ▲
+Optional platform adapters（opt-in・基礎層への依存は下向きのみ）:
+  ruviform-audio-device / ruviform-gpu / ruviform-io-* / ruviform-ui-webview
+
+拡張層:  ruviform-plugin-core / -host / -export / -clap / -vst3、ruviform-ui
+```
+
+- 依存は上位 → 下位のみ（循環依存禁止）。基礎クレートから GUI・オーディオデバイス・GPU への強制依存を作らない。
+- メディア I/O・codec・外部ライブラリは `ruviform-media-io` の抽象境界の背後にある分離クレート（opt-in）として扱い、外部型・エラー・機能フラグを公開 API に露出しない。
+- RT/非 RT は API・ライフサイクルで分離。RT パスは事前確保・有界・alloc/dealloc 禁止。検証可能な違反は CI、静的不可分は文書＋レビュー。
 
 ## Core Components
 
@@ -65,3 +91,4 @@ Ruviform の設計成果物の全体マップ。現時点で確定している�
 
 - [dev-foundation.md](dev-foundation.md) — Rust 開発基盤の設計（最小ワークスペース・CIプロファイル・手動CI）(approved)
 - [replace-template-derived-docs-with-ruviform.md](replace-template-derived-docs-with-ruviform.md) — テンプレート由来ドキュメント・識別子のRuviform固有化の設計（README/AGENTS 改稿・識別子更新の文書設計、Issue #3）(approved)
+- [ruviform-architecture-design-baseline.md](ruviform-architecture-design-baseline.md) — Ruviform アーキテクチャ設計ベースライン（クレート DAG・データモデル・RT/オフライン実行モデル・DSP/SIMD・プラグイン・UI・検証計画・暫定ロードマップ、Issue #1）(approved)

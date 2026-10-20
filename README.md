@@ -2,7 +2,7 @@
 
 Ruviform は、Rust を中心とした再利用可能なマルチメディア基盤です。現在は設計・初期セットアップ段階であり、開発環境と最小の Rust ワークスペースのみが整っています。
 
-音声処理と動画処理、およびその下位の計算基盤（DSP・解析・codec・container・SIMD）を、同じ基盤の上で再利用可能な形で提供する方向性を構想しています。対象読者は、リポジトリの訪問者と将来の利用者、コントリビューター、AI エージェント、および詳細設計を行う Issue [#1](https://github.com/scarecrow173/ruviform/issues/1) の設計者です。クレート分割・公開 API・対応プラットフォームなどの詳細設計は #1 の後続タスクで確定します。
+音声処理と動画処理、およびその下位の計算基盤（DSP・解析・codec・container・SIMD）を、同じ基盤の上で再利用可能な形で提供する方向性を構想しています。対象読者は、リポジトリの訪問者と将来の利用者、コントリビューター、および AI エージェントです。クレート DAG・データモデル・実行モデルなどのアーキテクチャ設計は Issue [#1](https://github.com/scarecrow173/ruviform/issues/1) 由来の設計ベースライン（[docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)、approved）に記録済みです。公開 API などの詳細とコード実装は後続 Issue で確定・実施します。
 
 ## Status
 
@@ -22,13 +22,19 @@ Ruviform は、Rust を中心とした再利用可能なマルチメディア基
 - 音声・動画クレート `ruviform-audio` / `ruviform-video`
 - 下位計算基盤: DSP・解析・codec・container・SIMD
 
-### 検討中（採否は #1 で決定）
+### 検討中（要 PoC）
 
-- `wgpu`、WebView UI、ネイティブ UI、プラグイン連携
+- WebView UI: UI ADR で WebView ファースト・ハイブリッドが方針決定済み。実装技術・描画バックエンドの採否は要 PoC
+- `wgpu` 等のネイティブ GPU 描画: エンジン層の opt-in adapter として設計済み。採否は要 PoC
+- ネイティブ UI: 採否は要 PoC
+- プラグイン連携: plugin ADR・設計ベースラインでアーキテクチャは決定済み（共通基盤＋CLAP/VST3 同格の規格アダプタ）。binding クレートの採否・構築方式は要 PoC
 
-### 未確定（#1 で決定）
+### 決定済み・未確定
 
-- 対応プラットフォーム、公開 API、サポート形式、ライセンス、edition / MSRV、最終的なクレート分割（`Cargo.toml` の `edition` / `rust-version` / `license` の現行値は仮置き）
+- **決定済み**: 対応プラットフォーム（Windows・macOS・Linux、x86_64＋aarch64）— platform ADR と設計ベースラインで決定
+- **未確定**: 公開 API、サポート形式、ライセンス、最終的なクレート分割（設計ベースラインにクレート DAG 設計案として記録済み・実装 Issue で確定）、edition / MSRV（再評価は専用の確認タスクへ送付。`Cargo.toml` の `edition` / `rust-version` / `license` の現行値は仮置き）
+
+リアルタイム（RT）契約について: 「RT-safe」等の保証範囲は API 単位で定義・明示され、保証は Ruviform 自身の RT 対応実装に限定されます（利用側コードの RT 安全性は保証しません）。検証可能な違反は CI で検出しますが、CI 成功は完全証明ではなく、OS レベルのハードリアルタイム保証は提供しません。現時点では RT 対応 API の実装は未着手です。詳細は設計ベースラインの「RT 契約（API 単位の保証定義）」「RT 違反検出の分担」節を参照してください。
 
 ## Quickstart
 
@@ -90,10 +96,11 @@ LFS とテストフィクスチャの方針: `.gitattributes` の音声（wav / 
 ## Documentation
 
 - [docs/designs/overview.md](docs/designs/overview.md) — 設計成果物の全体マップ
+- [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md) — Ruviform アーキテクチャ設計ベースライン（Issue #1 由来・approved）
 - [docs/designs/dev-foundation.md](docs/designs/dev-foundation.md) — Rust 開発基盤の設計（Issue #2 由来）
 - [docs/specs/](docs/specs/) — 仕様と Acceptance Criteria
 - [docs/adr/](docs/adr/) — 設計判断の記録（ADR）
-- Issue [#1](https://github.com/scarecrow173/ruviform/issues/1) — プロダクト本体の詳細設計（後続タスク）
+- Issue [#1](https://github.com/scarecrow173/ruviform/issues/1) — プロダクト本体の詳細設計（設計ベースライン approved・実装は後続 Issue）
 - Issue [#2](https://github.com/scarecrow173/ruviform/issues/2) — Rust 開発基盤の構築（完了）
 - Issue [#3](https://github.com/scarecrow173/ruviform/issues/3) — リポジトリ文書・識別子の Ruviform 向け整備
 
