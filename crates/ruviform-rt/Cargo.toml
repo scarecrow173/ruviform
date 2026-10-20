@@ -1,0 +1,11 @@
+[package]
+name = "ruviform-rt"
+description = "Real-time contract types and RT-safe primitives for the Ruviform media foundation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

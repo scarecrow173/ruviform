@@ -3,5 +3,25 @@
 version = 4
 
 [[package]]
-name = "ruviform-core"
+name = "ruviform-audio-core"
+version = "0.1.0"
+
+[[package]]
+name = "ruviform-exec"
+version = "0.1.0"
+
+[[package]]
+name = "ruviform-math"
+version = "0.1.0"
+
+[[package]]
+name = "ruviform-media-core"
+version = "0.1.0"
+
+[[package]]
+name = "ruviform-rt"
+version = "0.1.0"
+
+[[package]]
+name = "ruviform-video-core"
 version = "0.1.0"
