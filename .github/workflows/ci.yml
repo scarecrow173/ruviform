@@ -144,5 +144,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      - name: Run benchmarks (mise run bench)
-        run: mise run bench
+      # Smoke only: `--test` runs each benchmark once without measurement.
+      # Full measurement (mise run bench) stays a local manual run.
+      - name: Smoke-test benchmarks (mise run bench-smoke)
+        run: mise run bench-smoke

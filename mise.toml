@@ -54,18 +54,23 @@ run = "cargo build --workspace"
 # RT contract tests and benchmarks share the dev/bench profiles (no -ci
 # variants yet). `test-rt` selects the `rt_*`-prefixed RT contract tests by name
 # filter (added in Issues #18/#21, e.g. `rt_output_callback_path_allocates_nothing`);
-# a zero-match filter still exits successfully, so it stays meaningful as RT
+# a zero-match run still exits successfully, so it stays meaningful as RT
 # tests grow and degrades to a skip-equivalent pass if they are ever absent.
-# `bench` is a no-op entry point until benchmarks are introduced
-# (criterion is not yet a dependency).
+# `bench` is the full-measurement entry point; `bench-smoke` runs each
+# benchmark once via criterion's `--test` mode and is what CI's bench job
+# calls (full measurement stays a local, manual run).
 
 [tasks.test-rt]
 description = "Run RT contract tests with `cargo test --workspace rt_` name filter (dev/test profile; zero matches still exit successfully; writes only target/)"
 run = "cargo test --workspace rt_"
 
 [tasks.bench]
-description = "Run workspace benchmarks with `cargo bench --workspace` (bench profile; currently no benchmarks, so effectively a no-op entry point; writes only target/)"
+description = "Run workspace benchmarks with `cargo bench --workspace` (bench profile; full-measurement entry point; writes only target/ and target/criterion/)"
 run = "cargo bench --workspace"
+
+[tasks.bench-smoke]
+description = "Smoke-test the ruviform-math benchmarks with `cargo bench -p ruviform-math -- --test` (bench profile; runs each bench once without measurement; the CI bench job calls this; writes only target/)"
+run = "cargo bench -p ruviform-math -- --test"
 
 # CI-only tasks: identical checks under `--profile ci` with incremental
 # compilation disabled. Artifacts go to target/ci/, separate from dev's
