@@ -2,7 +2,8 @@
 resolver = "2"
 # Phase 1 基盤スケルトン（Issue #17）。層内順序: Primitives 最下位（math・rt）
 # → Primitives（media-core・exec）→ Domain foundations（audio-core・video-core）。
-# クレート間の path 依存は API 未確定のため未設定。設計ベースライン A.2/A.6 参照。
+# クレート間の path 依存は API 確定に伴い段階追加（Issue #18 で audio-core・
+# video-core → media-core を設定済み）。設計ベースライン A.2/A.6 参照。
 members = [
     "crates/ruviform-math",
     "crates/ruviform-rt",
