@@ -17,7 +17,8 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "../designs/dsp-simd-poc.md"
   depends-on:
     - "establish-rust-dev-foundation.md"
   blocks: []
