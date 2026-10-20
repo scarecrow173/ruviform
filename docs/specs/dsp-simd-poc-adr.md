@@ -19,6 +19,7 @@ relations:
   implements: []
   implemented-by:
     - "../designs/dsp-simd-poc.md"
+    - "../plans/dsp-simd-poc.md"
   depends-on:
     - "establish-rust-dev-foundation.md"
   blocks: []

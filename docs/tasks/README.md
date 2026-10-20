@@ -6,7 +6,9 @@ Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| TASK-034Jf1Cl3xf8K9wcSuvFYK | ベンチハーネス骨格と dev-dependencies | todo | [add-bench-harness-and-dev-deps.md](./add-bench-harness-and-dev-deps.md) |
 | TASK-034IdQtDnY6ZKHFhFhXKmW | 手動 CI ワークフローの追加 | done | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
+| TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | todo | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
 | TASK-034J6PiHv9GsKby7yH2eMO | 全公開 enum への `#[non_exhaustive]` 適用と exhaustive_enums allow の撤去 | done | [apply-non-exhaustive-to-public-enums.md](./apply-non-exhaustive-to-public-enums.md) |
 | TASK-034IRYXA0oq14nlgmC4Bch | workspace への publish = false 方針の適用 | done | [apply-publish-false-policy-to-workspace.md](./apply-publish-false-policy-to-workspace.md) |
@@ -20,6 +22,7 @@ Directory: `docs/tasks`
 | TASK-034J5KQD1rDMZHFRah7pU0 | ruviform-audio-core のデータモデル実装 | done | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
 | TASK-034Jglv8LtJHUgWH3wlu0o | ruviform-audio-core の device ポート定義と契約テスト | done | [implement-audio-core-device-port.md](./implement-audio-core-device-port.md) |
 | TASK-034JglAvWUFQoLhvYXOw2O | ruviform-audio-device クレート新設と cpal adapter 実装 | done | [implement-audio-device-cpal-adapter.md](./implement-audio-device-cpal-adapter.md) |
+| TASK-034Jf48NGXlyYcluiTnpOR | criterion ベンチ実装 | todo | [implement-criterion-benchmarks.md](./implement-criterion-benchmarks.md) |
 | TASK-034JxOaMsaSwEIVfvU9MC8 | ruviform-exec スレッド優先度機構の実装 | done | [implement-exec-thread-priority.md](./implement-exec-thread-priority.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | TASK-034J5KJgwtjFonTMQQIvpX | ruviform-media-core のデータモデル実装 | done | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
@@ -29,14 +32,18 @@ Directory: `docs/tasks`
 | TASK-034JxO9ex0aVfyvjYkcaWT | ruviform-rt 退役チャネル（遅延ドロップ）の実装 | done | [implement-rt-retire-channel.md](./implement-rt-retire-channel.md) |
 | TASK-034JxO9XLg2D5zvepCA7ry | ruviform-rt スナップショット交換の実装 | done | [implement-rt-snapshot-exchange.md](./implement-rt-snapshot-exchange.md) |
 | TASK-034JxO8rp2rxpfFdipPzUU | ruviform-rt SPSC チャネルの実装 | done | [implement-rt-spsc-channel.md](./implement-rt-spsc-channel.md) |
+| TASK-034Jf3MvCqPUi8pRT6jjES | 候補バックエンド実装と共有サポート | todo | [implement-simd-poc-candidate-backends.md](./implement-simd-poc-candidate-backends.md) |
+| TASK-034Jf3FazZdLzFAFTDXUa3 | スカラー参照カーネルと共通型 | todo | [implement-simd-poc-scalar-kernels.md](./implement-simd-poc-scalar-kernels.md) |
 | TASK-034J5KR5ueilYgXdyyF4ZU | ruviform-video-core のデータモデル実装 | done | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | TASK-034JcD1UTgLlW1lRoWI1Ng | video-proc カーネル API 形状と YUV→RGB 変換カーネルの実装 | done | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
+| TASK-034Jf4gzf7OAwNOoW3t9WV | impl record と文書整合 | todo | [record-impl-and-sync-docs.md](./record-impl-and-sync-docs.md) |
 | TASK-034IwCiYXp6ub3O8Brcs3L | 設定ファイルのレビューと最小修正 | done | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | TASK-034IwCiByN74V3hysJ9iTR | AGENTS.md の Ruviform 向け節単位改稿 | done | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | TASK-034IwCbgksOGvhF5E4CQbp | README.md の Ruviform 向け全面改稿 | done | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
 | TASK-034JglHs8cNMDOvyZFeUpc | PoC example（list_devices・play_sine）実機手順と実験ログ | done | [run-device-poc-examples-and-exp-log.md](./run-device-poc-examples-and-exp-log.md) |
 | TASK-034IwCjptfvbSFBQaSKigx | プレースホルダー最終スイープ・総合検証と ADR メタデータ編集 | done | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
+| TASK-034Jf49f5gwAy5fpTPvXG9 | ベンチ実行と結果収集 | todo | [run-simd-bench-and-collect-results.md](./run-simd-bench-and-collect-results.md) |
 | TASK-034J6Pq9WM0XMkGqryZrvQ | フォローアップトリアージ由来の小修正（try_new・Custom 不変条件・丸め注記） | done | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | TASK-034J5KRwAtAqF1xu0moYuS | Issue #18 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
 | TASK-034Jgi4vWCuaMUu3POps1c | Issue #20 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-20.md](./sync-docs-and-verify-issue-20.md) |
@@ -47,3 +54,4 @@ Directory: `docs/tasks`
 | TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | done | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |
 | TASK-034IRZFUgbTZlBX2kH7psN | Issue #1 リポジトリ反映の総合検証と spec/design バックリンク | done | [verify-issue-1-repo-reflection.md](./verify-issue-1-repo-reflection.md) |
 | TASK-034IdQxdPQUxXweHBN1ZxT | 再現インストール検証と #3 転記用作業メモ | done | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |
+| TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | todo | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |
