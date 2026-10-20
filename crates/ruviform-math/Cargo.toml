@@ -9,3 +9,28 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+# Issue #19 DSP/SIMD PoC harness. Candidate crates stay confined to
+# dev-dependencies: nothing here is reachable from `src/` or the public API.
+# Versions are caret-pinned; the committed Cargo.lock is the reproducibility
+# anchor (exact `=x.y.z` pins are intentionally not used).
+[dev-dependencies]
+# alloca の非対応ターゲット問題は 0.8.2 で修正済み（"don't build alloca on
+# unsupported targets"）。default-features を切って rayon + plotters を外し、
+# dev-dep のコンパイルコストを抑える（html_reports / csv_output は未使用でも
+# estimates.json は常に出力される）。
+criterion = { version = "0.8.2", default-features = false }
+# x86_64 では SSE2 が baseline で Fallback バリアント/トークンが cfg 上存在しないため、
+# force_support_fallback を有効化して Fallback::new() を構成可能にする。
+fearless_simd = { version = "1.1", features = ["force_support_fallback"] }
+fearless_simd_macros = "0.1"
+# x86-v4 は非 default（bytemuck/avx512_simd を引く）。AVX-512 評価のため有効化。
+# macro = #[pulp::with_simd] の評価対象。
+pulp = { version = "0.22", features = ["x86-v4", "macro"] }
+multiversion = "0.9"
+# 等価性判定（UlpsEq）。代替は float_eq — 実装時に API 使い勝手で 1 つに絞る。
+approx = "0.5"
+
+[[bench]]
+name = "simd_poc"
+harness = false
