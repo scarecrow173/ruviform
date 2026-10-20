@@ -43,6 +43,9 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/1"
   derived-by:
     - "../plans/apply-issue-1-architecture-baseline-to-repo.md"
+    - "../specs/implement-media-data-model-api.md"
+    - "../plans/implement-issue-18-data-model.md"
+    - "../test-specs/media-data-model-api.md"
   verifies: []
   verified-by: []
   references:
