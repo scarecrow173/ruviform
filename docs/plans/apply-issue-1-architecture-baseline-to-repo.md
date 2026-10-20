@@ -49,7 +49,6 @@ relations:
   superseded-by: []
   related:
     - "../../Cargo.toml"
-    - "../../crates/ruviform-core/Cargo.toml"
     - "../../README.md"
     - "../../AGENTS.md"
     - "../../mise.toml"
