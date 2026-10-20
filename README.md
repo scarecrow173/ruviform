@@ -14,8 +14,8 @@ Ruviform は、Rust を中心とした再利用可能なマルチメディア基
 
 - Rust 1.99.0 ツールチェーン（`mise.toml` で pin、`mise.lock` で固定復元）
 - 最小 Rust ワークスペース: ルート `Cargo.toml` と最小メンバー `crates/ruviform-core`（仮置き）の smoke test
-- `mise.toml` の検証タスク群（`setup` / `fmt-check` / `check` / `lint` / `test` / `build` / `*-ci` / `verify-ci`）
-- `workflow_dispatch` 専用 CI（`.github/workflows/ci.yml`）— ubuntu-latest 上で実ディスパッチ済み（fmt-check / check-ci / lint-ci / test-ci 全て pass）
+- `mise.toml` の検証タスク群（`setup` / `fmt-check` / `check` / `lint` / `test` / `build` / `test-rt` / `bench` / `*-ci` / `verify-ci`）
+- `workflow_dispatch` 専用 CI（`.github/workflows/ci.yml`）— 旧単一構成は ubuntu-latest で実ディスパッチ済み（fmt-check / check-ci / lint-ci / test-ci 全て pass）。現行構成は verify の 3-OS matrix＋`rt-verify`・`bench` レーンで、マージ後に初回ディスパッチして動作確認する
 
 ### 構想（未実装）
 
