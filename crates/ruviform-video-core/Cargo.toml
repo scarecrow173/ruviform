@@ -1,0 +1,11 @@
+[package]
+name = "ruviform-video-core"
+description = "Video frame/plane/pixel formats, strides, color space and HDR metadata, and frame time types for Ruviform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,11 @@
+[package]
+name = "ruviform-audio-core"
+description = "Audio buffer/frame/sample formats, channel layouts, audio time contract and device boundary ports for Ruviform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

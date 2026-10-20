@@ -1,0 +1,11 @@
+[package]
+name = "ruviform-media-core"
+description = "Rational time, time bases, PTS, stream/format descriptors, media error and transport state value types for Ruviform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

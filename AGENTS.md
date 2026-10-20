@@ -111,8 +111,8 @@ mise exec -- apm install --frozen
 
 ### ワークスペース構成
 
-- ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`edition = "2024"`・`rust-version = "1.85"` は Issue #34 で確定。`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
-- メンバーは最小クレート `crates/ruviform-core`（仮置き・smoke test）のみ。クレート DAG・分割案は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）に記録され、`members` は実装 Phase に応じて段階追加される。公開 API は引き続き未確定であり、実装 Issue で確定する。
+- ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`version = "0.1.0"` は仮置き。`edition = "2024"`・`rust-version = "1.85"` は Issue #34 で確定。`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
+- メンバーは Phase 1 基盤スケルトン6クレート（Issue #17 で仮置き `crates/ruviform-core` を分割置換）: Primitives `crates/ruviform-math`・`crates/ruviform-rt`（最下位）→ `crates/ruviform-media-core`・`crates/ruviform-exec`、Domain foundations `crates/ruviform-audio-core`・`crates/ruviform-video-core`。各クレートは crate-level doc に責務・許可依存層・RT 制約を転記したスケルトン（`version()` + doctest + smoke test）であり、クレート間の `path` 依存は API 未確定のため未設定。クレート DAG・分割案は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）に記録され、`members` は実装 Phase に応じて段階追加される。公開 API は引き続き未確定であり、実装 Issue で確定する。
 
 ### 検証入口
 
