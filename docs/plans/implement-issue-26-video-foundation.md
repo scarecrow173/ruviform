@@ -126,7 +126,7 @@ spec `SPEC-034JcicHlRidBgcK1wPtj2`（Issue #26）の受け入れ基準 AC1–AC1
 ### Phase D — T3b: RGB→YUV + Rgba8↔RgbaF16（AC7 後半・AC8・AC9）
 
 - [ ] D-1. `RgbToYuv` カーネル: src `Rgba8` → dst `Yuv420p`/`Yuv422p`/`Yuv444p`（dst format で選択）。適用係数はカーネル構築引数で指定（既定規則・`Identity`/未知 variant→構築時 `Err` は C-2 の共有ロジックを再利用。plan Open Question Q2）。chroma downsample（420=2×2・422=水平 2 の平均、端数列・行は存在画素のみ）。出力 `ColorInfo`: matrix→適用係数・range→適用 range・残り伝播
-- [ ] D-2. `Rgba8ToRgbaF16`/`RgbaF16ToRgba8` カーネル: チャンネル値の数値変換のみ（`ColorInfo` 不変伝播）。primitive `f16`（Rust 1.82+、MSRV 1.85 で可）で `to_le_bytes`/`from_le_bytes` によりバイト読み書き。正規化・丸め規則（Q3 既定）と等価性契約（ulp 上限・具体値）を doc 明記
+- [ ] D-2. `Rgba8ToRgbaF16`/`RgbaF16ToRgba8` カーネル: チャンネル値の数値変換のみ（`ColorInfo` 不変伝播）。primitive `f16`（Rust 1.82+、MSRV 1.85 で可）で `to_le_bytes`/`from_le_bytes` によりバイト読み書き。正規化・丸め規則（Q3 既定）と等価性契約（ulp 上限・具体値）を doc 明記（**実績注記**: primitive `f16` は `x86_64-pc-windows-msvc` で pinned ツールチェーン 1.99.0 時点でも unstable — E0658・rust-lang/rust#116909 — のため前提不成立。出荷実装は `f16::from_f64` と全入力ビット一致のソフトウェア IEEE 754 binary16 コーデック。LE binary16 のワイヤ契約は不変。詳細は [impl record](../impl/ir/implement-rgb-to-yuv-and-f16-kernels.md)）
 - [ ] D-3. golden vector + 単体テスト + doctest + `rt_` 契約テスト + `lib.rs` 再エクスポート
 
 ### Phase E — T4: ドキュメント同期・総合検証（AC11）
@@ -202,7 +202,7 @@ spec `SPEC-034JcicHlRidBgcK1wPtj2`（Issue #26）の受け入れ基準 AC1–AC1
 
 - **Q1 introspection API（T1）**: AC1 の「共有状態が観測できる」は `plane_mut()==None` を観測点として doc 明記する方針を既定とし、API 追加は行わない。契約文書化がそれを要求する場合のみ `is_shared()`/`is_exclusively_owned()` 相当の最小追加を許容し、追加時は根拠を記録する（spec In Scope・ADR D5-i の条件付き許容）。
 - **Q2 RGB→YUV の係数決定源（T3b）**: spec は「入力フレームの `ColorInfo.matrix` を参照」とあるが、RGB 入力の `matrix` は `Identity`/`Unspecified` が自然であり、入力参照だと Identity 規則により変換不能になり得る。既定: `RgbToYuv` の適用係数はカーネル構築引数（`prepare`/コンストラクタの setup）で指定し、引数側にも既定規則（`Unspecified`→Bt601/Limited、`Identity`/未知 variant→構築時 `Err`）を適用する。実装時に spec 文言との整合を doc で明確化する。
-- **Q3 `Rgba8 ↔ RgbaF16` の値規則（T3b）**: spec は「チャンネル値の数値変換のみ」。既定: u8→f16 は `v/255` による [0,1] 正規化、f16→u8 は逆写像 + 丸め規則（要 doc 明記）を採用する。等価性契約は浮動小数点を含むため ulp 上限（具体値をカーネル doc に明記）。
+- **Q3 `Rgba8 ↔ RgbaF16` の値規則（T3b）**: spec は「チャンネル値の数値変換のみ」。既定: u8→f16 は `v/255` による [0,1] 正規化、f16→u8 は逆写像 + 丸め規則（要 doc 明記）を採用する。等価性契約は浮動小数点を含むため ulp 上限（具体値をカーネル doc に明記）。（実績注記: 値規則は既定どおり採用。ただし primitive `f16` は windows-msvc で unstable のため、内部表現はソフトウェア binary16 コーデック — D-2 注記参照）
 - **Q4 `process` の dst 時刻伝播（T3a/T3b）**: spec 未規定。既定: `process` は `dst` の `pts`/`duration` を `src` から伝播する（色変換は時刻を変えない）をカーネル doc に明記する。
 - **Q5 Issue #26 コメント本文**: `gh` CLI 不在環境のため最終確認未実施（discovery Open Question どおり）。AC 認識は #41 トリアージ対応表由来の二次情報 — 実装着手前に `gh issue view 26 --comments` での確認を推奨。
 - `Yuv444p.chroma_subsampling() == Some((1,1))` の統一解釈は #18 由来の open question — 変換実装で自然確定する見込み。

@@ -1,7 +1,9 @@
 //! Plane views and shared plane backing: [`Plane`] and [`PlaneMut`] are
 //! borrowed, allocation-free views over one frame plane;
 //! [`SharedPlane`] is the `Arc`-backed input type of
-//! [`VideoFrame::from_shared_planes`](crate::VideoFrame::from_shared_planes).
+//! [`VideoFrame::from_shared_planes`](crate::VideoFrame::from_shared_planes) —
+//! together they are the sole zero-copy supply path for externally
+//! allocated buffers.
 //!
 //! A plane is a rectangular grid of `width`×`height` samples of
 //! `sample_bytes` bytes each. Rows are `row_bytes` long; `stride` bytes
@@ -153,9 +155,9 @@ impl<'a> Plane<'a> {
 ///
 /// Same layout semantics as [`Plane`]. Obtained from
 /// [`VideoFrame::plane_mut`](crate::VideoFrame::plane_mut), which yields
-/// `None` while the plane's backing is shared by a [`VideoFrame`]
-/// clone — the mutable view therefore always sees exclusively-owned
-/// backing.
+/// `None` while the plane's backing is shared by a
+/// [`VideoFrame`](crate::VideoFrame) clone — the mutable view therefore
+/// always sees exclusively-owned backing.
 ///
 /// **RT contract:** RT-suitable — borrowed view; every method is a pure,
 /// allocation-free (re)borrow returning `Option` instead of panicking.
@@ -300,15 +302,27 @@ impl<'a> PlaneMut<'a> {
 /// [`VideoFrame::from_shared_planes`](crate::VideoFrame::from_shared_planes).
 ///
 /// The caller keeps ownership of the allocation while the frame shares it
-/// via `Arc` — this is the permitted zero-copy supply path (the decoder
-/// mechanism producing these buffers is itself `要PoC` and not fixed here).
+/// via `Arc` — together with `from_shared_planes` this is the sole
+/// zero-copy supply path for externally allocated buffers (the decoder
+/// mechanism producing these buffers is itself `要PoC`, deferred to the
+/// media-io issue).
+///
+/// `data` addresses the plane from byte 0: there is no plane-offset
+/// field, so a plane starting partway into a larger shared buffer cannot
+/// be expressed — producers must repackage such regions into their own
+/// `Arc<[u8]>` first. This offset-less shape is a known limitation, to
+/// be re-evaluated in the media-io issue (ADR
+/// `docs/adr/video-proc-kernel-api-and-color-hdr-scope.md`, D5-i).
 ///
 /// `data` must cover at least `stride * (plane_height - 1) + row_bytes`
 /// bytes for the plane the frame derives it as; `stride` is per-plane and
-/// independent of `width`×`sample_bytes` (padding explicit).
+/// independent of `width`×`sample_bytes` (padding explicit). Longer
+/// backings are accepted — frame views trim to the usable region and
+/// never expose the tail.
 ///
-/// **RT contract:** non-RT only — constructing and cloning it manages
-/// `Arc` refcounts on the frame supply path, not on the media path.
+/// **RT contract:** non-RT only — constructing, cloning and dropping it
+/// manages `Arc` refcounts (and deallocates the backing on the last
+/// drop) on the frame supply path, not on the media path.
 #[derive(Clone, Debug)]
 pub struct SharedPlane {
     /// Plane pixels including row padding, reference-counted.

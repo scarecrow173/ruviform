@@ -3,10 +3,18 @@
 //! range of a frame, with optional [`HdrMetadata`] carrying
 //! [`MasteringDisplayInfo`] and [`ContentLightLevel`].
 //!
-//! These types describe color; they perform no conversion. Color
-//! conversion and HDR processing belong to `ruviform-video-proc` (a later
-//! crate), and the coverage range of the descriptors is still `要PoC` —
-//! the types themselves are the decided part.
+//! These types describe color; they perform no conversion. The decided
+//! scope of that description — ADR
+//! `docs/adr/video-proc-kernel-api-and-color-hdr-scope.md`, D3 — is HDR
+//! as *metadata carriage plus non-destructive handling*: [`ColorInfo`] /
+//! [`HdrMetadata`] travel with a frame, conversion kernels
+//! (`ruviform-video-proc`) apply `matrix`/`range` code-value math only
+//! and propagate `primaries`/`transfer`/`hdr` unchanged — no transfer
+//! function application (e.g. PQ/HLG linearization) and no tone
+//! mapping. Conversions interpret an `Unspecified` matrix as Bt601 and
+//! an `Unspecified` range as Limited, and update the output
+//! `matrix`/`range` to the applied values. Broader color management
+//! stays deferred to a later design target.
 
 /// Color primaries of a video signal (ITU-T H.273-style labeling).
 ///

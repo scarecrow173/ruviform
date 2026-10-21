@@ -50,18 +50,15 @@ relations:
     - "../specs/issue-18-followup-enum-and-time-fix.md"
     - "../plans/issue-18-followup-enum-and-time-fix.md"
     - "../test-specs/followup-enum-compat-and-time-arithmetic.md"
-<<<<<<< HEAD
     - "../specs/time-type-extension-framerate-timecode-rounding.md"
     - "../adr/framerate-timebase-separation-and-timecode-extension.md"
     - "time-model-extension.md"
     - "../plans/implement-rt-foundation.md"
-=======
     - "../discovery/explore-video-foundation-api-scope.md"
     - "../specs/implement-video-foundation-api.md"
     - "../adr/video-proc-kernel-api-and-color-hdr-scope.md"
     - "../plans/implement-issue-26-video-foundation.md"
     - "../test-specs/video-foundation-api.md"
->>>>>>> 4e20d3c (docs(issue-26): add video foundation api doc chain)
   verifies: []
   verified-by: []
   references:
@@ -284,8 +281,8 @@ media-io ADR の確定どおり、コンテナの demux/mux と codec の decode
 
 ### 採否
 
-- **決定**: 有理数時刻を中核。音声正準 = planar f32（境界で interleaved 変換）。動画フレーム + 色/HDR メタデータ。demux/mux・decode/encode の 4 系統分離 + 単一 `ruviform-media-io` への集約。`FrameRate`/`TimeBase` 意味分離（fps 向き newtype・`frame_duration()` のみ `TimeBase` 露出）、`Timecode` 引数の `FrameRate` 置換（破壊的変更）、ドロップフレーム対象レート集合の現行維持（`30000/1001`・`60000/1001` のみ）、丸め誤差累積ポリシーの文書契約化（Issue #42 文書群）。
-- **要PoC**: 色変換・HDR の対応範囲、個別 codec/container 採否、デコーダ zero-copy バッキングの具体方式。連鎖変換プロパティテストの harness 選定（proptest dev-dep vs deterministic 列挙、Issue #42）。
+- **決定**: 有理数時刻を中核。音声正準 = planar f32（境界で interleaved 変換）。動画フレーム + 色/HDR メタデータ。demux/mux・decode/encode の 4 系統分離 + 単一 `ruviform-media-io` への集約。色変換・HDR の対応範囲（Issue #26・video-proc ADR で確定: `Yuv*p ↔ Rgba8`・`Rgba8 ↔ RgbaF16` のスカラーカーネル — matrix Bt601/Bt709/Bt2020 × range Limited/Full・chroma resampling 込み、HDR = メタデータ搬送 + 非破壊で transfer 適用・トーンマップなし）。`FrameRate`/`TimeBase` 意味分離（fps 向き newtype・`frame_duration()` のみ `TimeBase` 露出）、`Timecode` 引数の `FrameRate` 置換（破壊的変更）、ドロップフレーム対象レート集合の現行維持（`30000/1001`・`60000/1001` のみ）、丸め誤差累積ポリシーの文書契約化（Issue #42 文書群）。
+- **要PoC**: 個別 codec/container 採否、デコーダ zero-copy バッキングの具体方式。連鎖変換プロパティテストの harness 選定（proptest dev-dep vs deterministic 列挙、Issue #42）。
 - **保留**: 音楽時間（小節/拍/PPQN）の自前設計、`f64` サンプル対応の深さ（f32 正準の決定に伴い需要ベースの後続評価）、色管理の広範統合（`moxcms` / OpenColorIO 級 — 第 2 ターゲット設計時）。ドロップフレーム非 NTSC nominal 一般化・フィールドレート対応、`Timecode` → `MediaTime` 逆変換 API、frame index 型の所有（media-core vs video-core）（Issue #42）。
 
 ## Data and Control Flow
@@ -488,13 +485,13 @@ media-io ADR の確定どおり、コンテナの demux/mux と codec の decode
 | ドロップフレーム対象レート集合（`30000/1001`・`60000/1001` のみ） | 決定（現行維持） | SMPTE 規格の定義域に一致（Issue #42 ADR） | 変更が必要なら新規 ADR/実装 Issue |
 | 丸め誤差累積ポリシー（呼び出しごと最大 1 回・安定アンカー・base-hopping 禁止の文書契約） | 決定 | Issue #42 設計文書（[time-model-extension.md](time-model-extension.md)）のポリシー節 | 実装 Issue（media-core・doc/プロパティテスト） |
 | `FrameRate` API 形状（fps 向き newtype・`frame_duration()` のみ TimeBase 露出） | 決定 | Issue #42 ADR/設計文書 | 実装 Issue（media-core） |
+| 色変換・HDR の対応範囲 | 決定 | Issue #26・video-proc ADR（D2-a 縮小版・D3-a）で確定: `Yuv*p ↔ Rgba8`・`Rgba8 ↔ RgbaF16` のスカラーカーネル（matrix Bt601/Bt709/Bt2020 × range Limited/Full・chroma resampling 込み）、HDR = メタデータ搬送 + 非破壊（transfer 適用・トーンマップなし） | 動画基盤 Issue（実装済み） |
 | SIMD 二層構造（分岐/フォールバック・dispatch 層集約の構造仮説） | 要PoC | platform ADR の有力仮説。採否・方式はベンチマーク比較評価で確定 | DSP/SIMD PoC Issue → 採否 ADR |
 | SIMD バックエンド選定（fearless_simd/pulp/multiversion）・採否基準 | 要PoC | ベンチマーク比較評価で確定（platform ADR） | DSP/SIMD PoC Issue → 採否 ADR |
 | 音声デバイス I/O バックエンド（cpal 等） | 要PoC | 抽象境界必須・メンテリスク | デバイス PoC Issue |
 | メディア I/O バックエンド（symphonia/ffmpeg 等・個別 codec） | 要PoC | 抽象境界は決定、個別対応は Out of Scope | メディア I/O 実装 Issue |
 | オーディオ codec 純 Rust 第一候補（symphonia） | 要PoC | 有力候補だが採否は後続 | メディア I/O 実装 Issue |
 | デコーダ zero-copy バッキングの具体方式 | 要PoC | 所有・境界設計は決定、方式は実装評価 | メディア I/O 実装 Issue |
-| 色変換・HDR の対応範囲 | 要PoC | 型・責務所在は決定、対応範囲は実装評価 | 動画基盤 Issue |
 | プラグイン binding クレート採否（clack/vst3）・基盤構築方式 | 要PoC | plugin ADR の決定範囲外 | プラグイン基盤 Issue → 方式 ADR |
 | `clack-extensions` thread-pool 等のプラグイン補助スレッド基盤 | 要PoC | binding 採否と連動 | プラグイン基盤 Issue |
 | プラグイン GUI ウィンドウ基盤（baseview/wxp 等） | 要PoC | 有力候補だが未検証 | プラグイン GUI Issue |

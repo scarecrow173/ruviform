@@ -12,23 +12,52 @@
 //! ## Allowed dependency layers
 //!
 //! Primitives (`ruviform-math`, `ruviform-rt`) and `ruviform-media-core`.
-//! Only media-core is used today: [`MediaTime`], [`MediaDuration`] and
-//! the media-wide [`Error`]/[`Result`] types.
+//! Only media-core is used today: [`MediaTime`](ruviform_media_core::MediaTime),
+//! [`MediaDuration`](ruviform_media_core::MediaDuration) and the
+//! media-wide [`Error`](ruviform_media_core::Error)/
+//! [`Result`](ruviform_media_core::Result) types.
+//!
+//! ## Ownership and lifecycle
+//!
+//! A [`VideoFrame`]'s plane backing is reference-counted (`Arc`):
+//! cloning a frame shares the backing — a cheap share, not a copy.
+//! Mutation requires exclusive ownership: while any clone shares a
+//! plane's backing, [`VideoFrame::plane_mut`] returns `None` for it (the
+//! `Arc::get_mut` write gate), so a shared frame is read-only and
+//! `plane_mut() == None` is the observable sharing signal — there is no
+//! other sharing-introspection API.
+//!
+//! Dropping the last `Arc` reference deallocates the backing, so a
+//! `VideoFrame` must not reach its final drop on an RT path — retired
+//! frames are handed to the non-RT side for dropping (the drop-retreat
+//! pattern of the architecture baseline). A future frame pool will be
+//! owned by the non-RT layer with explicit return/ownership-transfer
+//! APIs fixed in later design; the contract fixed here is shared-
+//! backing reference counting plus mutable access only under exclusive
+//! ownership.
+//!
+//! Externally allocated (e.g. decoder) buffers enter a frame only
+//! through [`SharedPlane`] + [`VideoFrame::from_shared_planes`] — the
+//! sole zero-copy supply path. `SharedPlane` has no plane-offset field
+//! (a known limitation, re-evaluated in the media-io issue).
 //!
 //! ## RT contract
 //!
 //! Frame and plane accessors are RT-suitable: borrowing a [`Plane`] /
 //! [`PlaneMut`] and slicing rows is allocation-free and never panics.
 //! Allocating constructors ([`VideoFrame::new_owned`],
-//! [`VideoFrame::from_shared_planes`]) and `VideoFrame`'s `Clone`
-//! (reference-counted lifetime management) are non-RT APIs. Per-API
+//! [`VideoFrame::from_shared_planes`]), `VideoFrame`'s `Clone` and its
+//! `Drop` (reference-counted lifetime management — releasing the last
+//! `Arc` deallocates the backing) are non-RT operations: an owned frame
+//! must leave the RT path before its last clone is dropped. Per-API
 //! guarantees are documented as `**RT contract:**` lines on each item,
 //! mirroring the RT ADR rule that the guaranteed scope is defined per
 //! API.
 //!
 //! Contract source: `docs/designs/ruviform-architecture-design-baseline.md`
-//! (crate table A.2, "動画データモデル") and
-//! `docs/adr/realtime-contract-and-verification-policy.md`.
+//! (crate table A.2, "動画データモデル"),
+//! `docs/adr/realtime-contract-and-verification-policy.md` and
+//! `docs/adr/video-proc-kernel-api-and-color-hdr-scope.md` (D5-i).
 
 // The public names below deliberately echo their module
 // (`pixel::PixelFormat`, `plane::Plane`, …) while being re-exported at the
