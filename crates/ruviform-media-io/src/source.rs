@@ -11,6 +11,13 @@
 //! A `Box<dyn MediaSource>` is `Send` (the trait has `Send` as a
 //! supertrait), so a source may be handed to a backend living on the
 //! I/O/decode thread (design baseline, thread-model section).
+//!
+//! Seekability is intentionally not a separate capability flag: the
+//! port requires [`Seek`], and a backend discovers at probe or seek
+//! time whether the implementation actually honours it (an unseekable
+//! implementation surfaces its seek failure through
+//! [`ErrorKind::Unsupported`](crate::ErrorKind), per the
+//! [`Demuxer::seek`](crate::Demuxer::seek) contract).
 
 use std::io::{Read, Seek};
 
@@ -35,30 +42,15 @@ use std::io::{Read, Seek};
 ///
 /// // `Cursor` implements `Read` + `Seek` + `Send`, so it is a
 /// // `MediaSource` through the blanket impl.
-/// fn takes_source(source: impl MediaSource) -> u64 {
-///     source.byte_len().unwrap_or(0)
-/// }
+/// fn takes_source(source: impl MediaSource) {}
 ///
-/// let cursor = Cursor::new(vec![0_u8; 8]);
-/// let _ = takes_source(cursor);
+/// takes_source(Cursor::new(vec![0_u8; 8]));
 ///
 /// // Object form works too — `Box<dyn MediaSource>` is `Send`.
 /// let boxed: Box<dyn MediaSource> = Box::new(Cursor::new(vec![1_u8; 4]));
-/// assert!(boxed.byte_len().is_none());
+/// takes_source(boxed);
 /// ```
-pub trait MediaSource: Read + Seek + Send {
-    /// Total byte length of the source, when known.
-    ///
-    /// `None` means "unknown" — a backend must not rely on the value
-    /// being present. The blanket impl uses the `None` default;
-    /// implement the trait manually on a newtype to supply a real
-    /// length.
-    ///
-    /// **RT contract:** non-RT only — may query underlying I/O state.
-    fn byte_len(&self) -> Option<u64> {
-        None
-    }
-}
+pub trait MediaSource: Read + Seek + Send {}
 
 impl<T: Read + Seek + Send> MediaSource for T {}
 
@@ -81,7 +73,5 @@ mod tests {
     #[test]
     fn boxed_source_crosses_threads() {
         check_send::<Box<dyn MediaSource>>();
-        let boxed: Box<dyn MediaSource> = Box::new(Cursor::new(vec![0_u8; 4]));
-        assert!(boxed.byte_len().is_none());
     }
 }
