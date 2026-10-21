@@ -28,7 +28,7 @@ Directory: `docs/tasks`
 | TASK-034JgsGmcPdPRoeRTvicjW | 独立 per-channel planar バッファのゼロコピー借用 view/newtype の実装 | done | [implement-borrowed-planar-view.md](./implement-borrowed-planar-view.md) |
 | TASK-034Jf48NGXlyYcluiTnpOR | criterion ベンチ実装 | done | [implement-criterion-benchmarks.md](./implement-criterion-benchmarks.md) |
 | TASK-034JxOaMsaSwEIVfvU9MC8 | ruviform-exec スレッド優先度機構の実装 | done | [implement-exec-thread-priority.md](./implement-exec-thread-priority.md) |
-| TASK-034JNwTz163N6eT3EJfdaD | FrameRate 型の実装（TimeBase newtype・検証付きコンストラクタ・nominal_fps） | todo | [implement-framerate-type.md](./implement-framerate-type.md) |
+| TASK-034JNwTz163N6eT3EJfdaD | FrameRate 型の実装（TimeBase newtype・検証付きコンストラクタ・nominal_fps） | done | [implement-framerate-type.md](./implement-framerate-type.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | TASK-034J5KJgwtjFonTMQQIvpX | ruviform-media-core のデータモデル実装 | done | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
 | TASK-034JghH9i5p72LmOoWIPGe | ruviform-media-io 抽象境界クレート実装 | done | [implement-media-io-abstraction.md](./implement-media-io-abstraction.md) |

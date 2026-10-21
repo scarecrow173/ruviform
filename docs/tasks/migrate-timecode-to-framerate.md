@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JNwTZ8WalgowFahLc8E"
 type: "task"
-status: "todo"
+status: "done"
 title: "Timecode API の FrameRate 移行（破壊的シグネチャ置換と呼び出し側移行）"
 created: "2026-10-21"
 updated: "2026-10-21"

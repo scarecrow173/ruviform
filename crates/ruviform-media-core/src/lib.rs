@@ -137,8 +137,8 @@ mod tests {
     /// label.
     #[test]
     fn rt_drop_frame_roundtrip() {
-        let rate = base(30_000, 1_001);
-        let frame_base = base(1_001, 30_000);
+        let rate = FrameRate::new(30_000, 1_001).unwrap();
+        let frame_base = rate.frame_duration();
         let label = |frames: i64| {
             Timecode::from_media_time_drop(MediaTime::new(frames, frame_base), rate).unwrap()
         };
