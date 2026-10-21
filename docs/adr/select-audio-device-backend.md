@@ -1,10 +1,10 @@
 ---
 id: "ADR-034Jc9RslnH7QSQ1nZEEHL"
 type: "adr"
-status: "proposed"
+status: "accepted"
 title: "オーディオデバイスバックエンドの選定（cpal 条件付き採用）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -102,7 +102,7 @@ Chosen option: "**cpal**（条件付き採用）"。Rust エコシステムの�
 
 ### Confirmation
 
-下記 Verification を、spec（audio-device-backend-evaluation-poc）の Acceptance Criteria と併せて確認する。本 ADR は PoC で確認後に `accepted` へ昇格する。確認項目: 列挙→既定構成→出力ストリーム開始→コールバック到達の実証、コールバック内非 alloc の検証、trait の非露出・`#[non_exhaustive]` 適合、cpal 依存の `ruviform-audio-device` 内閉じ込め。再評価トリガ: duplex の要件化、cpal メンテナンスの再停滞、対象プラットフォームでの致命的な挙動不良（いずれも発生時は本 ADR の status 見直しと代替候補の再評価を行う）。
+下記 Verification 全項目を PoC 証跡で確認し、2026-10-21 に `proposed` → `accepted` へ昇格した。証跡: 実験ログ `docs/impl/exp/device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl`（実機 Windows 11/WASAPI/cpal 0.18.2 実行記録）、IR `docs/impl/ir/implement-audio-core-device-port.md`・`docs/impl/ir/implement-audio-device-cpal-adapter.md`・`docs/impl/ir/run-device-poc-examples-and-record-experiment-log.md`、テスト `rt_output_callback_path_allocates_nothing`（assert_no_alloc）・`tests/mock_backend.rs`（非 cpal 差替可能性）。再評価トリガ（duplex の要件化・cpal メンテナンスの再停滞・対象プラットフォームでの致命的挙動不良）はいずれも観測されなかった。未観測として後続へ引き継ぐ項目: ALSA vs PipeWire 比較（Linux レーン）、Send/Sync の backend 間ばらつき、WASAPI exclusive/ASIO 要否、初回 callback timestamp=0 の原因確認。トリガ発生時は本 ADR の status 見直しと代替候補の再評価を行う。
 
 ## Implementation Plan
 
@@ -117,12 +117,12 @@ Chosen option: "**cpal**（条件付き採用）"。Rust エコシステムの�
 
 ## Verification
 
-* [ ] `ruviform-audio-core` の公開 API（`cargo doc` 出力・公開 trait/型）に cpal 由来の型・エラー・feature 名が存在しない。全公開 enum に `#[non_exhaustive]` が付いている
-* [ ] `ruviform-audio-device` を有効化しない構成でコアクレートが `cargo check`/`cargo build` に成功し、cpal 依存が `ruviform-audio-device` の `[dependencies]` にのみ記述されている（`cargo metadata` で確認）
-* [ ] PoC が「列挙 → 既定出力構成 → 出力ストリーム開始 → コールバック到達（planar f32 への境界変換）」を実証し、手順が `docs/impl/exp/` に記録されている（実機依存部分は手動検証。CI はデバイス非依存テストのみ）
-* [ ] コールバック内非 alloc が trait 契約として明示され、assert_no_alloc 相当またはコードレビュー証跡で検証されている
-* [ ] duplex 要件化時に第 2 backend を追加できる trait 形状になっている（バックエンド固有情報が trait シグネチャに混入していない）
-* [ ] `mise run fmt-check` / `check` / `lint` / `test` がパスし、`unsafe` は SAFETY コメント付き局所許可のみ
+* [x] `ruviform-audio-core` の公開 API（`cargo doc` 出力・公開 trait/型）に cpal 由来の型・エラー・feature 名が存在しない。全公開 enum に `#[non_exhaustive]` が付いている — `cargo doc --no-deps` 生成物の backend 名 grep 0 件（IR `implement-audio-core-device-port.md` Validation）。`exhaustive_enums` lint ゲートで強制
+* [x] `ruviform-audio-device` を有効化しない構成でコアクレートが `cargo check`/`cargo build` に成功し、cpal 依存が `ruviform-audio-device` の `[dependencies]` にのみ記述されている（`cargo metadata` で確認） — IR `implement-audio-device-cpal-adapter.md` Validation 記録どおり実測
+* [x] PoC が「列挙 → 既定出力構成 → 出力ストリーム開始 → コールバック到達（planar f32 への境界変換）」を実証し、手順が `docs/impl/exp/` に記録されている（実機依存部分は手動検証。CI はデバイス非依存テストのみ） — 実験ログ `device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl`: `list_devices`（WASAPI host・出力 5 台・既定 Audient iD4）と `play_sine`（`Fixed(480)` 拒否→`Default` 開通・496 コールバック・`RESULT: OK`）
+* [x] コールバック内非 alloc が trait 契約として明示され、assert_no_alloc 相当またはコードレビュー証跡で検証されている — `OutputDataCallback`/`OutputErrorCallback` doc の RT 契約 + `rt_output_callback_path_allocates_nothing`（assert_no_alloc）が `mise run test-rt` で合格 + 実機 counting `#[global_allocator]` で streaming 窓 2 alloc イベント（プロセス全体上限値）
+* [x] duplex 要件化時に第 2 backend を追加できる trait 形状になっている（バックエンド固有情報が trait シグネチャに混入していない） — `tests/mock_backend.rs` が非 cpal フェイク backend でポート全フローを `Box<dyn>` 経由で検証。trait 分解（Enumerator/Device/Stream）は設計 `DESIGN-034JcC9QK924kDbu4WhibC` どおり
+* [x] `mise run fmt-check` / `check` / `lint` / `test` がパスし、`unsafe` は SAFETY コメント付き局所許可のみ — workspace 検証全パス。`unsafe` は `play_sine` example の計数 `#[global_allocator]`（局所 `#[expect(unsafe_code)]` + SAFETY コメント）のみで src/ tests/ には存在しない
 
 ## Pros and Cons of the Options
 
