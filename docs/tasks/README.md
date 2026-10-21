@@ -6,7 +6,7 @@ Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
-| TASK-034Jf1Cl3xf8K9wcSuvFYK | ベンチハーネス骨格と dev-dependencies | todo | [add-bench-harness-and-dev-deps.md](./add-bench-harness-and-dev-deps.md) |
+| TASK-034Jf1Cl3xf8K9wcSuvFYK | ベンチハーネス骨格と dev-dependencies | done | [add-bench-harness-and-dev-deps.md](./add-bench-harness-and-dev-deps.md) |
 | TASK-034IdQtDnY6ZKHFhFhXKmW | 手動 CI ワークフローの追加 | done | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
 | TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | todo | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
@@ -32,8 +32,8 @@ Directory: `docs/tasks`
 | TASK-034JxO9ex0aVfyvjYkcaWT | ruviform-rt 退役チャネル（遅延ドロップ）の実装 | done | [implement-rt-retire-channel.md](./implement-rt-retire-channel.md) |
 | TASK-034JxO9XLg2D5zvepCA7ry | ruviform-rt スナップショット交換の実装 | done | [implement-rt-snapshot-exchange.md](./implement-rt-snapshot-exchange.md) |
 | TASK-034JxO8rp2rxpfFdipPzUU | ruviform-rt SPSC チャネルの実装 | done | [implement-rt-spsc-channel.md](./implement-rt-spsc-channel.md) |
-| TASK-034Jf3MvCqPUi8pRT6jjES | 候補バックエンド実装と共有サポート | todo | [implement-simd-poc-candidate-backends.md](./implement-simd-poc-candidate-backends.md) |
-| TASK-034Jf3FazZdLzFAFTDXUa3 | スカラー参照カーネルと共通型 | todo | [implement-simd-poc-scalar-kernels.md](./implement-simd-poc-scalar-kernels.md) |
+| TASK-034Jf3MvCqPUi8pRT6jjES | 候補バックエンド実装と共有サポート | done | [implement-simd-poc-candidate-backends.md](./implement-simd-poc-candidate-backends.md) |
+| TASK-034Jf3FazZdLzFAFTDXUa3 | スカラー参照カーネルと共通型 | done | [implement-simd-poc-scalar-kernels.md](./implement-simd-poc-scalar-kernels.md) |
 | TASK-034J5KR5ueilYgXdyyF4ZU | ruviform-video-core のデータモデル実装 | done | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | TASK-034JcD1UTgLlW1lRoWI1Ng | video-proc カーネル API 形状と YUV→RGB 変換カーネルの実装 | done | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
