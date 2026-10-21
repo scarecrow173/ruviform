@@ -1,9 +1,12 @@
 [workspace]
 resolver = "2"
-# Phase 1 基盤スケルトン（Issue #17）。層内順序: Primitives 最下位（math・rt）
-# → Primitives（media-core・exec）→ Domain foundations（audio-core・video-core）。
-# クレート間の path 依存は API 確定に伴い段階追加（Issue #18 で audio-core・
-# video-core → media-core を設定済み）。設計ベースライン A.2/A.6 参照。
+# Phase 1 基盤クレート群（Issue #17 で仮置き ruviform-core を分割置換）。層内
+# 順序: Primitives 最下位（math・rt）→ Primitives（media-core・exec）→
+# Domain foundations（audio-core・video-core）。実装状態: Issue #18 で
+# media-core・audio-core・video-core のデータモデル API、Issue #21 で rt・
+# exec の RT 基盤 API が確定・実装済み。math は引き続きスケルトン。クレート間の
+# path 依存は API 確定に伴い段階追加（Issue #18 で audio-core・video-core →
+# media-core を設定済み）。設計ベースライン A.2/A.6 参照。
 members = [
     "crates/ruviform-math",
     "crates/ruviform-rt",

@@ -39,6 +39,7 @@ relations:
     - "../plans/implement-issue-18-data-model.md"
     - "../specs/issue-18-followup-enum-and-time-fix.md"
     - "../plans/issue-18-followup-enum-and-time-fix.md"
+    - "../plans/implement-rt-foundation.md"
   verifies: []
   verified-by: []
   references: []

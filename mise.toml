@@ -52,10 +52,10 @@ description = "Build workspace with `cargo build --workspace` (dev profile; writ
 run = "cargo build --workspace"
 
 # RT contract tests and benchmarks share the dev/bench profiles (no -ci
-# variants yet). No RT tests or benchmarks exist at this point: `test-rt`
-# selects tests by the `rt_` name prefix via a libtest name filter and a
-# zero-match run still exits successfully, so it is skip-equivalent until
-# RT tests are added under that naming convention. `bench` is a no-op
+# variants yet). `test-rt` selects the `rt_*` RT contract tests (added in
+# Issues #18/#21) by the `rt_` name prefix via a libtest name filter; a
+# zero-match run still exits successfully, so it is skip-equivalent if
+# the naming-convention tests are ever absent. `bench` remains a no-op
 # entry point until benchmarks are introduced (criterion is not yet a
 # dependency).
 

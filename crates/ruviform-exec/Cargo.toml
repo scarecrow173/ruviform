@@ -7,5 +7,14 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[dependencies]
+# Private implementation detail — audio_thread_priority types, errors and
+# feature names must never appear in the public API. `default-features =
+# false` removes the `with_dbus`/`dep:dbus` path (native libdbus
+# dependency); on Linux promotion goes through the direct `SCHED_FIFO`
+# path (dependency-addition rationale:
+# docs/adr/rt-foundation-primitives-implementation.md).
+audio_thread_priority = { version = "0.38", default-features = false }
+
 [lints]
 workspace = true

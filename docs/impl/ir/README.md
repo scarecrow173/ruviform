@@ -19,7 +19,13 @@ Directory: `docs/impl/ir`
 | IMPL-034Ix98fGRcsRNYZ3EZnZJ | Rewrite AGENTS for Ruviform | completed | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | IMPL-034IwXvs801LZXZlip1tZ6 | Rewrite README for Ruviform | completed | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
 | IMPL-034Ixn011MsolyFpmBB87l | Run placeholder sweep and verification | completed | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
+| IMPL-034Jy2QPH4SUwoep9wQBW2 | ruviform-rt 中核型の実装 | completed | [ruviform-rt.md](./ruviform-rt.md) |
 | IMPL-034J7u3ZaCkeiCc8zzuQwd | Small fixes from followup triage | completed | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
+| IMPL-034JyiwDR1vV3SDIxU8Ng3 | SPSC チャネルの実装 | completed | [spsc.md](./spsc.md) |
+| IMPL-034JyAqvg5hMrhqv41ZXfk | リタイアチャネルの実装 | completed | [retire.md](./retire.md) |
+| IMPL-034JBQFUoXvQXzXWrpQtxV | スナップショット交換の実装 | completed | [snapshot.md](./snapshot.md) |
 | IMPL-034J5L5fAAqFUmUkYGAf1t | Sync docs and verify Issue 18 | completed | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
+| IMPL-034JCku503rJpSOXR7XpSc | RT 基盤ドキュメント同期と総合検証 | completed | [sync-rt-foundation-docs.md](./sync-rt-foundation-docs.md) |
+| IMPL-034JC5wFbM2VZc0U1W6Wsh | スレッド優先度機構の実装 | completed | [thread-priority.md](./thread-priority.md) |
 | IMPL-034IwXQh3FK347ImaDBdm4 | apm.yml 識別子更新と APM lockfile 再生成 | completed | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
 | IMPL-034IeuSyH91cISMHS4iUUz | Verify reproducible setup and work memo | completed | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |

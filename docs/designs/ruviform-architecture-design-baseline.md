@@ -53,6 +53,7 @@ relations:
     - "../specs/time-type-extension-framerate-timecode-rounding.md"
     - "../adr/framerate-timebase-separation-and-timecode-extension.md"
     - "time-model-extension.md"
+    - "../plans/implement-rt-foundation.md"
   verifies: []
   verified-by: []
   references:
