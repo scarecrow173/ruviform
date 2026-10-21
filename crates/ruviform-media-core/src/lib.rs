@@ -1,6 +1,7 @@
 //! `ruviform-media-core` — shared media value types for the Ruviform media
 //! foundation: rational time ([`TimeBase`], [`MediaTime`],
-//! [`MediaDuration`], [`MediaRange`], [`Rounding`]), container-level stream
+//! [`MediaDuration`], [`MediaRange`], [`FrameRate`], [`Rounding`]),
+//! container-level stream
 //! descriptors ([`StreamId`], [`StreamKind`], [`StreamDescriptor`]), the
 //! media-wide [`Error`]/[`Result`] types, display-side [`Timecode`]
 //! conversion (including SMPTE drop-frame labeling) and transport state
@@ -48,7 +49,7 @@ mod transport;
 
 pub use error::{Error, Result};
 pub use stream::{StreamDescriptor, StreamId, StreamKind};
-pub use time::{MediaDuration, MediaRange, MediaTime, Rounding, TimeBase};
+pub use time::{FrameRate, MediaDuration, MediaRange, MediaTime, Rounding, TimeBase};
 pub use timecode::Timecode;
 pub use transport::{TransportSnapshot, TransportStatus};
 

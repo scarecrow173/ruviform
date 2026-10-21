@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JNwTz163N6eT3EJfdaD"
 type: "task"
-status: "todo"
+status: "done"
 title: "FrameRate 型の実装（TimeBase newtype・検証付きコンストラクタ・nominal_fps）"
 created: "2026-10-21"
 updated: "2026-10-21"
