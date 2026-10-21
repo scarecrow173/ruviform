@@ -78,11 +78,11 @@ relations:
 
 ## Implementation Sequence
 
-- [ ] `DataCallbackState` に `sample_rate: u32` を追加・`new` シグネチャに追加し、`device.rs` で `negotiated.stream.sample_rate` の `u32` を渡す
-- [ ] `write_interleaved` に `sample_rate: u32` 引数を追加し、chunk ループで `OutputCallbackInfo` を per-chunk 合成（`frame * 1e9 / sample_rate` ns を `MediaDuration`→`checked_add`）
-- [ ] `checked_add` 失敗・`playback: None`・単一 chunk の各経路のフォールバックを doc コメントとテストで担保
-- [ ] per-chunk timestamp の単体テストを追加（オフセット値・フォールバック・`None`・単一 chunk 無変化）
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`prek` 全パス
+- [x] `DataCallbackState` に `sample_rate: u32` を追加・`new` シグネチャに追加し、`device.rs` で `negotiated.stream.sample_rate` の `u32` を渡す
+- [x] `write_interleaved` に `sample_rate: u32` 引数を追加し、chunk ループで `OutputCallbackInfo` を per-chunk 合成（`frame * 1e9 / sample_rate` ns を `MediaDuration`→`checked_add`）
+- [x] `checked_add` 失敗・`playback: None`・単一 chunk の各経路のフォールバックを doc コメントとテストで担保
+- [x] per-chunk timestamp の単体テストを追加（オフセット値・フォールバック・`None`・単一 chunk 無変化）
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`prek` 全パス
 
 ## Dependencies and Risks
 
@@ -98,10 +98,10 @@ relations:
 
 ## Verification
 
-- [ ] chunk 分割時の k 番目 instant が base + `f_k * 1e9 / sample_rate` ns（単体テスト）
-- [ ] `playback: None`・`checked_add` 失敗・単一 chunk 無変化のフォールバックテスト
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`prek run --all-files` 全パス
-- [ ] 監査で本変更起因 findings 0
+- [x] chunk 分割時の k 番目 instant が base + `f_k * 1e9 / sample_rate` ns（単体テスト）
+- [x] `playback: None`・`checked_add` 失敗・単一 chunk 無変化のフォールバックテスト
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`prek run --all-files` 全パス
+- [x] 監査で本変更起因 findings 0
 
 ## Open Questions / Gaps
 

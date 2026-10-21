@@ -103,8 +103,8 @@ relations:
 
 ## Verification Notes
 
-- [ ] chunk 分割時、k 番目 chunk の `callback`/`playback` が base + `f_k * 1e9 / sample_rate` ns に一致する単体テスト
-- [ ] `playback: None` でも `callback` のみ合成され panic しない
-- [ ] `checked_add` 失敗時に元 instant を渡すフォールバックテスト
-- [ ] 単一 chunk（`n <= max_chunk`）は instant 無変化
-- [ ] `mise run test`/`test-rt` 全パス
+- [x] chunk 分割時、k 番目 chunk の `callback`/`playback` が base + `f_k * 1e9 / sample_rate` ns に一致する単体テスト
+- [x] `playback: None` でも `callback` のみ合成され panic しない
+- [x] `checked_add` 失敗時に元 instant を渡すフォールバックテスト
+- [x] 単一 chunk（`n <= max_chunk`）は instant 無変化
+- [x] `mise run test`/`test-rt` 全パス

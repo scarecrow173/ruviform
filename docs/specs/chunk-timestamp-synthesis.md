@@ -94,11 +94,11 @@ PR #47 レビュー指摘（Issue #59）。現行は全 chunk に同一 instant 
 
 ## Acceptance Criteria
 
-- [ ] chunk 分割時（`n > max_chunk`）、k 番目 chunk の `callback`/`playback` instant が元 instant + `f_k * 1e9 / sample_rate` ナノ秒に一致する（単体テスト）
-- [ ] `playback: None` の場合も `callback` のみオブセット合成され、panic しない
-- [ ] `checked_add` 失敗時に元 instant がそのまま渡る（フォールバックテスト）
-- [ ] 単一 chunk 時（`n <= max_chunk`）は instant が変化しない（既存テストで担保）
-- [ ] `mise run test`・`mise run test-rt` 全パス・新テスト追加
+- [x] chunk 分割時（`n > max_chunk`）、k 番目 chunk の `callback`/`playback` instant が元 instant + `f_k * 1e9 / sample_rate` ナノ秒に一致する（単体テスト）
+- [x] `playback: None` の場合も `callback` のみオブセット合成され、panic しない
+- [x] `checked_add` 失敗時に元 instant がそのまま渡る（フォールバックテスト）
+- [x] 単一 chunk 時（`n <= max_chunk`）は instant が変化しない（既存テストで担保）
+- [x] `mise run test`・`mise run test-rt` 全パス・新テスト追加
 
 ## Deferred Design Concerns
 

@@ -31,6 +31,7 @@ relations:
   derives-from:
     - "../specs/chunk-timestamp-synthesis.md"
     - "../designs/audio-device-boundary-and-poc.md"
+    - "select-audio-device-backend.md"
   derived-by:
     - "../designs/chunk-timestamp-design.md"
     - "../plans/implement-issue-59-chunk-timestamp.md"
@@ -88,9 +89,9 @@ Chosen option: "案1: per-chunk offset 合成", because `sample_rate` を state 
 
 ## Verification
 
-* [ ] chunk 分割時に k 番目 chunk の instant が `f_k / sample_rate` オフセットされる単体テスト
-* [ ] `playback: None`・`checked_add` 失敗・単一 chunk の3フォールバックテスト
-* [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` 全パス
+* [x] chunk 分割時に k 番目 chunk の instant が `f_k / sample_rate` オフセットされる単体テスト
+* [x] `playback: None`・`checked_add` 失敗・単一 chunk の3フォールバックテスト
+* [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` 全パス
 
 ## Pros and Cons of the Options
 

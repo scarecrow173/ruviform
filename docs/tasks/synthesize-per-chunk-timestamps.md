@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JOul8zCtHMR49d9c78V"
 type: "task"
-status: "todo"
+status: "done"
 title: "write_interleaved の per-chunk timestamp 合成"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -83,16 +83,20 @@ relations:
 
 ## Done Criteria
 
-- [ ] `write_interleaved` が `sample_rate` を受け取り per-chunk に instant を合成する
-- [ ] `checked_add` 失敗時に元 instant を渡す
-- [ ] `playback: None` でも panic しない
-- [ ] 単一 chunk 時に `info` が変化しない
+- [x] `write_interleaved` が `sample_rate` を受け取り per-chunk に instant を合成する
+- [x] `checked_add` 失敗時に元 instant を渡す
+- [x] `playback: None` でも panic しない
+- [x] 単一 chunk 時に `info` が変化しない
 
 ## Verification
 
-- [ ] `mise run check`/`lint` パス
-- [ ] 追加テスト（T3）で振る舞いを検証
+- [x] `mise run check`/`lint` パス
+- [x] 追加テスト（T3）で振る舞いを検証
 
 ## Completion Notes
 
-<!-- Record outcome, deviations, and evidence after implementation. -->
+- `write_interleaved` に `sample_rate: u32` 引数を追加。chunk ループで `frame == 0 || sample_rate == 0` なら元 `info`、それ以外は `chunk_timestamp_info` ヘルパーで per-chunk 合成
+- オフセット計算: `u128::try_from(frame_offset).unwrap_or(u128::MAX) * 1_000_000_000 / u128::from(sample_rate)` で整数除算（`u128::from(usize)` は非対応のため `try_from` + saturate）
+- `i64` 変換失敗時・`MediaTime::checked_add` 失敗時は元の `OutputCallbackInfo`/instant を保持。`playback: None` は `None` のまま
+- 整数演算のみ・無アロケート・有界計算で RT 制約を維持。合成値はバッファ位置由来の推定値である旨を doc コメントに明記
+- `mise run check`/`lint` パス・T3 テストで振る舞い検証済み

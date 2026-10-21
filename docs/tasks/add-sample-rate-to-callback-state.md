@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JOukDzGSLe1s0mtlzeg"
 type: "task"
-status: "todo"
+status: "done"
 title: "DataCallbackState への sample_rate 配線"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -75,14 +75,17 @@ relations:
 
 ## Done Criteria
 
-- [ ] `DataCallbackState` が `sample_rate: u32` を保持
-- [ ] `device.rs` で negotiated の `u32` sample_rate を渡している
-- [ ] `mise run check` で型エラーなし
+- [x] `DataCallbackState` が `sample_rate: u32` を保持
+- [x] `device.rs` で negotiated の `u32` sample_rate を渡している
+- [x] `mise run check` で型エラーなし
 
 ## Verification
 
-- [ ] `mise run check` パス
+- [x] `mise run check` パス
 
 ## Completion Notes
 
-<!-- Record outcome, deviations, and evidence after implementation. -->
+- `DataCallbackState` に `sample_rate: u32` フィールドを追加し、`new` の引数で受け取る（stream オープン時に固定・callback 中は不変）
+- `device.rs` の構築箇所で `negotiated.stream.sample_rate`（cpal `StreamConfig` の `u32`）をそのまま渡す — 初回実装で `.0` タプルアクセスを試みてコンパイルエラー、primitive `u32` であることを確認して修正
+- `DataCallbackState::handle` から `write_interleaved` へ `self.sample_rate` を引き渡し
+- `mise run check` で型エラーなしを確認
