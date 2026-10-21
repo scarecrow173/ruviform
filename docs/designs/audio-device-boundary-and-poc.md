@@ -41,6 +41,12 @@ relations:
     - "../adr/chunk-outputcallbackinfo-timestamp.md"
     - "chunk-timestamp-design.md"
     - "../plans/implement-issue-59-chunk-timestamp.md"
+    - "../plans/implement-audio-device-port-and-cpal-poc.md"
+    - "../test-specs/audio-device-port-and-cpal-adapter.md"
+    - "../tasks/finalize-backend-adr-and-sync-docs.md"
+    - "../tasks/implement-audio-core-device-port.md"
+    - "../tasks/implement-audio-device-cpal-adapter.md"
+    - "../tasks/run-device-poc-examples-and-exp-log.md"
   verifies: []
   verified-by: []
   references:

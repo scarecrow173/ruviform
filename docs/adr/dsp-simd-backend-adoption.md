@@ -48,6 +48,8 @@ relations:
     - "../plans/implement-issue-52-msrv-raise.md"
     - "../adr/simd-ulp.md"
     - "../specs/simd-dispatch-layer.md"
+    - "../adr/denormal-mitigation-policy.md"
+    - "../specs/denormal-mitigation.md"
   verifies: []
   verified-by: []
   references:
