@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JPwYfiOnSaZJgGJQQyY"
 type: "task"
-status: "todo"
+status: "done"
 title: "dispatch_probe ベンチ追加"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -71,3 +71,10 @@ relations:
 ## Verification
 
 - [x] `cargo bench -p ruviform-math -- dispatch_probe` が完走する（bench-smoke 対象外でも単体実行確認）
+
+## Completion Notes
+
+- `dispatch_probe` グループを `simd_poc.rs` に追加: `level_new`・`token_avx2`・`dispatch_noop` の部品プローブ + `add_{scalar,fearless_avx2,fearless_dispatched}` の N=16/32 小サイズ帯（9 case）。
+- `dispatch!` は各 arm が異なる opaque `impl Simd` を返すため、`black_box(&simd)` で `()` に統一。トークン生成経路は保持。
+- 私の `use fearless_simd::{Level, dispatch}` import 追加で既存の `fearless_simd::Level::new()` 完全修飾が `unused_qualifications` に — `Level::new()` に短縮（2箇所）。
+- `cargo bench -p ruviform-math -- dispatch_probe --test` 完走確認。lint/check/fmt-check パス。

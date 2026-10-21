@@ -46,6 +46,7 @@ use criterion::{
     BatchSize, BenchmarkGroup, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main,
     measurement::WallTime,
 };
+use fearless_simd::{Level, dispatch};
 use ruviform_math::simd_poc::{
     BIQUAD_CHANNELS, BIQUAD_COEFFS, SineCoeffs, SineState, denormal_f32, fir_taps,
 };
@@ -148,10 +149,7 @@ fn print_env_metadata() {
         println!("cores: {}", core_count());
         println!("rustc: {}", rustc_version());
         println!("criterion: {}", criterion_version());
-        println!(
-            "fearless_simd Level::new(): {:?}",
-            fearless_simd::Level::new()
-        );
+        println!("fearless_simd Level::new(): {:?}", Level::new());
         println!("pulp::Arch::new(): {:?}", pulp::Arch::new());
         print_forced_levels();
         let skipped: Vec<&str> = registry()
@@ -167,7 +165,7 @@ fn print_env_metadata() {
 /// Forced-level constructibility report — x86 tier tokens.
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn print_forced_levels() {
-    let level = fearless_simd::Level::new();
+    let level = Level::new();
     println!(
         "fearless_simd forced levels: sse2={} sse4_2={} avx2={} avx512={}",
         level.as_sse2().is_some(),
@@ -460,6 +458,58 @@ fn bench_sine(c: &mut Criterion) {
     group.finish();
 }
 
+/// Issue #56 — direct per-call dispatch-cost probe. The `fearless_dispatched`
+/// regression on light kernels decomposes into a *fixed* per-call cost
+/// (LazyLock-cached `Level::new()` + `__dispatch_target` normalization +
+/// dispatch arm) added to the kernel's own `t(N)`. This group measures the
+/// pieces directly and adds a small-size `add` band (16/32) where the fixed
+/// cost dominates, so the N-fit in the analysis can be cross-checked against
+/// the probe value.
+fn bench_dispatch_probe(c: &mut Criterion) {
+    print_env_metadata();
+    let mut group = poc_group(c, "dispatch_probe");
+
+    // Component probes — fixed per-call costs in isolation.
+    group.bench_function("level_new", |b| {
+        b.iter(|| black_box(Level::new()));
+    });
+    group.bench_function("token_avx2", |b| {
+        b.iter(|| black_box(Level::new().as_avx2()));
+    });
+    group.bench_function("dispatch_noop", |b| {
+        b.iter(|| {
+            // Each `dispatch!` arm yields a distinct opaque `impl Simd`
+            // token type — borrow + `()` so the arms unify. The token is
+            // still materialized and consumed through `black_box`, so the
+            // dispatch path itself is measured.
+            dispatch!(Level::new(), simd => { black_box(&simd); });
+        });
+    });
+
+    // Small-size `add` band: at N=16/32 the kernel body is a handful of
+    // lanes so the fixed dispatch cost dominates the ratio — the clearest
+    // window onto the per-call component.
+    let cols = registry();
+    for probe_col in ["scalar", "fearless_avx2", "fearless_dispatched"] {
+        let col = cols.iter().find(|c| c.name == probe_col).unwrap();
+        for len in [16_usize, 32] {
+            let a = inputs::generate("normal", len, 0, SEED_A);
+            let b = inputs::generate("normal", len, 0, inputs::SEED_B);
+            let mut dst = vec![0.0; len];
+            group.throughput(Throughput::Elements(len as u64));
+            group.bench_function(
+                BenchmarkId::new(format!("add_{probe_col}"), len.to_string()),
+                |bench| {
+                    bench.iter(|| {
+                        (col.add)(black_box(&mut dst), black_box(&a), black_box(&b));
+                    });
+                },
+            );
+        }
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_add,
@@ -469,6 +519,7 @@ criterion_group!(
     bench_dot,
     bench_fir,
     bench_biquad,
-    bench_sine
+    bench_sine,
+    bench_dispatch_probe
 );
 criterion_main!(benches);
