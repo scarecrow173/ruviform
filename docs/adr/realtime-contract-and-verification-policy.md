@@ -43,6 +43,8 @@ relations:
     - "../plans/implement-rt-foundation.md"
     - "../specs/implement-video-foundation-api.md"
     - "video-proc-kernel-api-and-color-hdr-scope.md"
+    - "../specs/rt-verification-lane.md"
+    - "rt-assert-no-alloc-thread-check.md"
     - "../plans/implement-issue-26-video-foundation.md"
     - "../specs/implement-media-io-abstraction-and-first-backend-poc.md"
     - "../plans/issue-20-i-o-poc.md"

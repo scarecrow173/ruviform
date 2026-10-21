@@ -46,10 +46,14 @@
 //! unbounded waits/retries or unbounded work. All per-instance scratch
 //! is allocated in `activate`; the per-block path performs bounded
 //! scans only. `rt_`-prefixed tests select the RT contract lane
-//! (`mise run test-rt`); they exercise the contract paths but cannot
-//! *observe* allocation — until the Issue #22 RT-verification lane
-//! exists, the no-alloc guarantee is a documented contract plus code
-//! review target. `PoC` findings are recorded in
+//! (`mise run test-rt`); the Issue #22 RT-verification lane arms
+//! `assert_no_alloc` around the per-block path so any (de)allocation
+//! aborts the test binary — machine-detected, not just a documented
+//! contract. Passing CI is still not *proof* of RT safety: static
+//! constraints (lock duration, priority, execution-time bounds) remain
+//! documentation + review responsibilities per
+//! `docs/adr/realtime-contract-and-verification-policy.md`. `PoC`
+//! findings are recorded in
 //! `docs/impl/ir/poc-clap-binding-adapter.md`.
 //!
 //! Contract source: `docs/specs/implement-plugin-foundation.md`,
