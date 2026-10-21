@@ -530,6 +530,15 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
+    /// Issue #22 RT-verification lane: `AllocDisabler` swaps the test
+    /// binary's allocator so `assert_no_alloc` catches any
+    /// (de)allocation inside its measurement window. One static per
+    /// crate test binary; `gain.rs` tests measure against the same
+    /// allocator.
+    #[cfg(debug_assertions)]
+    #[global_allocator]
+    static ALLOC: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
+
     const FRAMES: u32 = 64;
     const FRAMES_USIZE: usize = 64;
     const RATE: u32 = 48_000;
@@ -705,14 +714,16 @@ mod tests {
 
     #[test]
     fn rt_process_drives_paired_stereo_block_allocation_free() {
-        // RT-contract test: the full `process` path — lifecycle gate,
-        // frame bound, borrowed planar views, event translation,
-        // transport, processor, mirror, status map — is bounded and
-        // performs no allocation *by construction* (scratch is
+        // RT-contract test: the full `process` path — thread-check
+        // gate, lifecycle gate, frame bound, borrowed planar views,
+        // event translation, transport, processor, mirror, status
+        // map — is bounded and performs no allocation (scratch is
         // pre-allocated at activate; every collection is a fixed-size
         // array or a capacity-reserved Vec that never grows past
-        // MAX_*). Observing zero allocator traffic is deferred to the
-        // RT-verification lane (Issue #22).
+        // MAX_*). The Issue #22 lane *observes* that: `assert_no_alloc`
+        // aborts the test binary on any (de)allocation inside the
+        // window. Setup — fixture/`EventBuffer` allocation — stays
+        // outside.
         let shared = GainShared::initialize().unwrap();
         let mut ap = activated(&shared, FRAMES);
         ap.start_processing().unwrap();
@@ -724,10 +735,11 @@ mod tests {
         {
             let (input_buffers, mut output_buffers) = fixture.guards();
             let audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
-            assert_eq!(
-                process_block(&mut ap, audio, &input_buffer, &mut output_buffer).unwrap(),
-                ClapProcessStatus::Continue
-            );
+            let status = assert_no_alloc::assert_no_alloc(|| {
+                process_block(&mut ap, audio, &input_buffer, &mut output_buffer)
+            })
+            .unwrap();
+            assert_eq!(status, ClapProcessStatus::Continue);
         }
         // The output buffers — the host's own memory, zero copy —
         // carry input × gain.

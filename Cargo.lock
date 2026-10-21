@@ -1267,6 +1267,7 @@ dependencies = [
 name = "ruviform-plugin-clap"
 version = "0.1.0"
 dependencies = [
+ "assert_no_alloc",
  "clack-common",
  "clack-extensions",
  "clack-host",
@@ -1288,6 +1289,7 @@ dependencies = [
 name = "ruviform-plugin-vst3"
 version = "0.1.0"
 dependencies = [
+ "assert_no_alloc",
  "ruviform-audio-core",
  "ruviform-media-core",
  "ruviform-plugin-core",

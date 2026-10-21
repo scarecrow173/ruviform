@@ -40,6 +40,9 @@ clack-host = { version = "=0.2.0", features = ["clack-plugin"] }
 # 側応答). Dev-dependency feature union keeps the lib target free of
 # the clack-host dependency.
 clack-extensions = { version = "=0.2.0", features = ["clack-host", "thread-check"] }
+# RT 境界テストの allocation/deallocation を機械検出する Issue #22
+# 検証レーン（audio-device の callback 経路検証と同方式）。
+assert_no_alloc = "1.1"
 
 [lints]
 workspace = true

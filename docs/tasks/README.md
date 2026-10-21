@@ -10,7 +10,7 @@ Directory: `docs/tasks`
 | TASK-034IdQtDnY6ZKHFhFhXKmW | 手動 CI ワークフローの追加 | done | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
 | TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | done | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
-| TASK-034JP1tb1wQI9ac2cEwBq4 | プラグイン境界 RT 契約テストへの assert_no_alloc 適用 | todo | [apply-assert-no-alloc-to-plugin-boundary.md](./apply-assert-no-alloc-to-plugin-boundary.md) |
+| TASK-034JP1tb1wQI9ac2cEwBq4 | プラグイン境界 RT 契約テストへの assert_no_alloc 適用 | done | [apply-assert-no-alloc-to-plugin-boundary.md](./apply-assert-no-alloc-to-plugin-boundary.md) |
 | TASK-034J6PiHv9GsKby7yH2eMO | 全公開 enum への `#[non_exhaustive]` 適用と exhaustive_enums allow の撤去 | done | [apply-non-exhaustive-to-public-enums.md](./apply-non-exhaustive-to-public-enums.md) |
 | TASK-034IRYXA0oq14nlgmC4Bch | workspace への publish = false 方針の適用 | done | [apply-publish-false-policy-to-workspace.md](./apply-publish-false-policy-to-workspace.md) |
 | TASK-034IwBWH50nD9Unn8HghJD | テンプレート残存プレースホルダーのベースラインスイープ | done | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
