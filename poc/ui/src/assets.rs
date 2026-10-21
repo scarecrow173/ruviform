@@ -55,6 +55,21 @@ pub fn app_asset_exists(rel: &str) -> bool {
     AppAssets::get(rel).is_some()
 }
 
+/// `poc://app/` 配下のアセット名一覧。
+/// release ビルドでは埋め込み辞書のキー列挙、debug ビルドでは `frontend/dist/`
+/// の FS 列挙（rust-embed のモード差をそのまま反映するため、AC6 の
+/// 「埋め込みのみで配信できるか」検証では embed_mode と併せて解釈する）。
+pub fn app_asset_names() -> Vec<String> {
+    AppAssets::iter().map(|name| name.into_owned()).collect()
+}
+
+/// `poc://app/...` アセットの内容（サイズ集計・埋め込み内容検証用）。
+/// debug ビルドでは FS から読むため、frontend/dist を持たない場所への
+/// バイナリ単体コピーでは None になる（release では埋め込み辞書を引く）。
+pub fn app_asset_data(rel: &str) -> Option<Vec<u8>> {
+    AppAssets::get(rel).map(|f| f.data.into_owned())
+}
+
 /// `poc://app/...` の配信。`/` または空パスは `index.html` に解決する。
 fn serve_app(path: &str) -> Response<Cow<'static, [u8]>> {
     let rel = path.trim_start_matches('/');

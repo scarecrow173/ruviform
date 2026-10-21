@@ -4,6 +4,7 @@
 // 完了時に onDone(stats) → done メッセージ、致命的失敗は onError → bench_error。
 
 import { createMeterHost } from "./meters";
+import { MutationMeter } from "./mutations";
 import { createRenderer } from "./renderers";
 import type { BackendName } from "./renderers";
 import { FrameRecorder, summarizeFrames } from "./stats";
@@ -14,10 +15,21 @@ export const WARMUP_FRAMES = 12;
 /** HUD テキストの更新間隔（DOM churn を workload から隔離するため逓減更新）。 */
 const HUD_INTERVAL = 15;
 
+/** FW 側が用意するメータ駆動 I/F（Solid の signal 駆動メータ等）。 */
+export interface MeterDriver {
+  setLevels(levels: Float32Array): void;
+}
+
 export interface BenchElements {
   canvas: HTMLCanvasElement;
   metersEl: HTMLElement;
   hud: HTMLElement;
+  /** 指定時は `metersEl` への命令的 DOM 構築（createMeterHost）をスキップし、
+   *  この driver へレベル更新を委譲する（AC5: FW 側メータ実装の接続点）。 */
+  metersHost?: MeterDriver;
+  /** 指定時はベンチ期間中の DOM mutation を MutationMeter で計装し、
+   *  done.stats.dom_mutations に記録する（AC5 更新粒度比較）。 */
+  observeEl?: HTMLElement;
   onDone: (stats: Record<string, unknown>) => void;
   onError: (message: string) => void;
 }
@@ -47,10 +59,20 @@ export class BenchRunner {
         cfg.backend,
         this.els.canvas
       );
-      const meters = createMeterHost(this.els.metersEl, METER_CHANNELS);
+      // FW 側 driver があればそちらへ委譲し、無ければ vanilla と同じ
+      // 命令的 DOM メータを `metersEl` 内に構築する。どちらが走ったかを
+      // stats.meters_driver に残す（注入パス利用の証跡 — AC5）。
+      const meters =
+        this.els.metersHost ?? createMeterHost(this.els.metersEl, METER_CHANNELS);
+      const metersDriver = this.els.metersHost ? "injected" : "createMeterHost";
       const gen = new WorkloadGenerator();
       const rec = new FrameRecorder();
       this.els.hud.textContent = `backend=${used} — running`;
+
+      // DOM mutation 計装（AC5）: メータ DOM の構築後・ループ開始前に開始し、
+      // warmup 込みの全 rAF フレームにわたる更新レコードを計数する。
+      const mutMeter = this.els.observeEl ? new MutationMeter() : null;
+      if (mutMeter && this.els.observeEl) mutMeter.start(this.els.observeEl);
 
       let rafCount = 0;
       const loop = (ts: number): void => {
@@ -74,6 +96,7 @@ export class BenchRunner {
           requestAnimationFrame(loop);
         } else {
           this.state = "done";
+          const dom = mutMeter?.stop() ?? null;
           const s = summarizeFrames(rec);
           this.els.hud.textContent = `backend=${used} | done ${rec.frames} frames | ${s.achieved_fps.toFixed(1)} fps`;
           this.els.onDone({
@@ -89,6 +112,10 @@ export class BenchRunner {
             achieved_fps: s.achieved_fps,
             frame_time_ms: rec.frameTimes,
             work_time_ms: rec.workTimes,
+            meters_driver: metersDriver,
+            dom_mutations: dom
+              ? { ...dom, observed_frames: rafCount, meter_channels: METER_CHANNELS }
+              : null,
           });
         }
       };

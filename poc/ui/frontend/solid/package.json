@@ -1,0 +1,19 @@
+{
+  "name": "@ui-poc/solid",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Solid (vite-plugin-solid + solid-js) port of the vanilla bench UI for the Issue #28 UI PoC AC5 comparison.",
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json && vite build"
+  },
+  "dependencies": {
+    "@ui-poc/bench-shared": "*",
+    "solid-js": "^1.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0",
+    "vite-plugin-solid": "^2.11.0"
+  }
+}

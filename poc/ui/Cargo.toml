@@ -24,6 +24,8 @@ build = "build.rs"
 # - winreg: WebView2 レジストリ検出（Windows）。MIT。
 # - windows + raw-window-handle: T4/AC3 の sibling HWND・ヒットテスト・
 #   z-order・リージョンクリップ・wgpu unsafe surface 作成（Windows のみ）。
+# - flate2: T5/AC5 の dist gzip -9 サイズ計測（rust backend = miniz_oxide）。
+#   MIT OR Apache-2.0。
 [lints.rust]
 # unsafe_code を warn に立て、windows-rs / wgpu create_surface_unsafe の
 # 呼出箇所を `#[expect(unsafe_code)]` + SAFETY コメントの局所許可に限定する
@@ -42,6 +44,8 @@ dpi = "0.1"
 pollster = "1"
 # tao Window・自前子 HWND → wgpu SurfaceTargetUnsafe::RawHandle の橋渡し（AC3）。
 raw-window-handle = "0.6"
+# AC5 dist バイトの gzip -9 計測（frontend 実験。pure-Rust miniz_oxide backend）。
+flate2 = "1"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"

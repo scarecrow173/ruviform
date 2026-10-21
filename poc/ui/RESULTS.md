@@ -15,8 +15,8 @@
 | AC2 | 描画バックエンド（canvas2d/webgl2/webgpu） | `--experiment render` | [AC2 render](#ac2---experiment-render) | **実測** |
 | AC3 | ネイティブサーフェス同居 | `--experiment surface` | [AC3 surface](#ac3---experiment-surface) | **実測** |
 | AC4 | メッセージ境界（IPC/プロトコル/pull） | `--experiment ipc` | [AC4 ipc](#ac4---experiment-ipc) | **実測** |
-| AC5 | フロントエンド FW + バンドラ比較 | `--experiment frontend` | （T5 で記録予定） | 未実施 |
-| AC6 | 配布（portable zip / 依存整理） | `--experiment dist` | （T5 で記録予定） | 未実施 |
+| AC5 | フロントエンド FW + バンドラ比較 | `--experiment frontend --variant vanilla\|solid` | [AC5 frontend](#ac5---experiment-frontend) | **実測** |
+| AC6 | 配布（portable zip / 依存整理） | `--experiment dist` + release 単体・zip 検証 | [AC6 dist](#ac6---experiment-dist) | **実測**（Windows）+ 文書評価（macOS/Linux） |
 | AC7 | 採否 ADR 確定 | `poc-adr-finalize` | （全 AC 完了後） | 未実施 |
 | AC8 | PoC 隔離（ルート無変更・独立 WS） | 構造検査 | [AC8 隔離](#ac8---ポック隔離) | **実測** |
 
@@ -66,6 +66,24 @@ mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
   --experiment surface --mode adjacent-parent --duration 30
 mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
   --experiment surface --mode adjacent-child --duration 30
+
+# AC5 frontend 比較実験（variant 別。canvas2d 経路・600 フレームで自己終了）
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment frontend --variant vanilla
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment frontend --variant solid
+
+# AC6 dist 実験（headless・GUI 非生成。WebView2 検出・バイナリサイズ・埋め込み状態を記録）
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --experiment dist
+
+# AC6 release 単一バイナリ（アセット埋め込みモード）
+mise exec -- cargo build --release --manifest-path poc/ui/Cargo.toml
+poc/ui/target/release/ui-poc.exe --check
+poc/ui/target/release/ui-poc.exe --experiment dist
+
+# AC6 portable zip 検証（PowerShell）
+#   Compress-Archive -Path <temp>\ui-poc.exe -DestinationPath ui-poc-portable.zip
+#   Expand-Archive ui-poc-portable.zip -DestinationPath <temp2> ; <temp2>\ui-poc.exe --check
 ```
 
 ## AC1 — `--experiment host`
@@ -290,6 +308,128 @@ wgpu を導入する採否になった場合は宣言値の見直しタスクへ
   （latest-wins で coalesce 耐性）にする、(c) UI 操作 intent は低レートの
   JSON intent を使う — という棲み分けが計測と整合する。
   coalesce 観察は design Open Question への実測回答として記録する。
+
+## AC5 — `--experiment frontend --variant vanilla|solid`
+
+計測環境: 上記 env 表どおり（Windows 11 x64・WebView2 155.0.4283.62・60Hz 表示）。
+対象: 同一ベンチ UI（AC2 ワークロード + bench-shared 計装）を **vanilla TS**
+（参照・FW ランタイムゼロ下限）と **Solid**（`vite-plugin-solid` 2.11.14 +
+`solid-js` 1.9.17・fine-grained signals）の 2 候補で構築。`poc://app/<variant>/index.html`
+で render 実験と同じ状態機械ベンチ（canvas2d・600 フレーム・warmup 12）を実行し、
+併せて FS/埋め込み側メトリック（dist バイト・ビルド時間・glue LOC）を収集する。
+DOM mutation 計装は bench-shared `MutationMeter`（MutationObserver:
+attributes/childList/characterData/added/removed）で両 variant 同一経路。
+`meters_driver` で実使用のメータ更新経路（vanilla=`createMeterHost` /
+solid=`injected`＝Solid signal 駆動）を証跡化した。
+
+| 判定 | variant | dist bytes raw / gzip-9 | build_ms | glue LOC（総/非空） | DOM mutations/meter 更新 | 証跡 | 文書評価 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **passed** | vanilla | 11,371 / 5,152 | 1,417 | 91 / 83 | 1.0（attr=style のみ 4,904・childList churn 53・characterData 0） | `out/frontend-vanilla-4.jsonl`・`docs/impl/exp/ac5-frontend-compare.jsonl` | 実測 |
+| **passed** | solid | 20,194 / 8,682 | 2,035 | 188 / 173 | 1.0（attr=style のみ 4,904・childList churn 53・characterData 0） | `out/frontend-solid-4.jsonl`・同上 | 実測 |
+
+gzip-9 はファイル毎に `flate2`/miniz_oxide best で圧縮した合計値
+（`gzip9_impl` メトリックに明記）。GNU `gzip -9` 実測のクロスチェック値は
+vanilla 5,169B・solid 8,702B で、実装差 −17B / −20B（0.3% 未満）に留まる。
+`meta_total_bytes_match=true`（埋め込みアセット列挙と FS 側 build-meta.json の
+total_bytes が一致）を両 variant で確認。
+
+### AC5 所見（採否材料）
+
+- **dist サイズ**: solid-js ランタイム分で raw +8,823B（+78%）・gzip-9 で
+  +3,530B（+69%）。ホスト全体（release exe 8.1MB）に対し gzip 差 +3.5KB は
+  無視できる水準だが、vanilla が「FW ランタイムゼロ下限」として機能した。
+- **ビルド時間**: vanilla 1,417ms → solid 2,035ms（+44%。初回計測では
+  1,659ms/2,186ms で +32% — 測定分散あり。`build_ms` は `tsc --noEmit +
+  vite build` のワークスペース単位時間）。`babel-preset-solid` の
+  JSX→リアクティブ変換コスト分、Solid が常に遅い。開発ループへの実害はない。
+- **glue LOC**: vanilla 91 行（非空 83）→ solid 188 行（非空 173、+2.1 倍）。
+  Solid 側は JSX コンポーネント（`Meters`）+ `render()` 配線 + signals で
+  構造化される一方、絶対量は小さい。bench UI 規模では宣言的構造の利得より
+  ボイラープレートが上回る。
+- **更新粒度（本比較の核心的観察）**: `dom_mutations` が両 variant で
+  **完全に同型** — attributes=4,904（全て `style`・8ch×613 frame で
+  mutations/meter 更新=1.0 丁度）、child_list=53（added/removed 各 53、
+  `hud.textContent` 置換 ~41 回 + プラットフォーム要因 ~12 の variant 共通経路）、
+  character_data=0。**Solid の fine-grained 更新は手書き vanilla と同一の
+  部分適用粒度を実測で確認** — VDOM 的な childList churn はゼロで、
+  signal→`style.transform` の直接適用に収束した。
+- **実行コスト**: `work_time_ms` avg は vanilla 0.53ms / solid 0.52ms、
+  achieved_fps 60.0・dropped=0 で実測差なし。ベンチ規模では FW オーバーヘッドは
+  計測分解能以下。
+- **開発ワークフロー観察**: 両 variant とも `frontend/<name>/` workspace +
+  `build.mjs` の VARIANTS 登録で同一経路（`npm run build` →
+  `dist/<variant>/` + `build-meta.json` → rust-embed）に載る。Solid は
+  vite.config に `vite-plugin-solid` を足すだけで Vite 7.3.7 の peer 適合を
+  確認済み。**Svelte 5 は design どおり YAGNI 延期** — 2 候補で AC5 判定に
+  十分であり、追加は VARIANTS 列 + variant src のみで同一計装経路に載るため
+  容易（必要時に追加可能なことを記録）。
+- **status 契約**: `--variant` 欠落/不正値は `failed`、variant の dist 欠落は
+  `skipped`（setup は args を見ないため run 側で判定）。
+
+## AC6 — `--experiment dist`（headless）+ release 単一バイナリ
+
+`--experiment dist` は `check_gui_prereqs` を呼ばない **headless 実験**
+（GUI 非生成・前提不足 skip なし）として実装し、WebView2 レジストリ検出
+（`check.rs` の winreg HKLM/HKCU `pv` 値経路）・`current_exe()` サイズ・
+埋め込みアセット状態・bootstrapper 案内を記録する。
+
+| 判定 | 検証 | エビデンス（集約値） | 証跡 | 文書評価 |
+| --- | --- | --- | --- | --- |
+| **passed** | dist（debug） | `webview2_version=155.0.4283.62`・`binary_bytes=18,052,096`・`embedded_ok=true`・`embed_mode=fs-debug`・`frontend_built=true`・`app_assets=11`・`index_html_bytes=3,316`・`bootstrapper_required=false`（検出済みのため案内は記録のみ） | `out/dist-manual-1.jsonl`・`docs/impl/exp/ac6-dist-single-binary.jsonl` | 実測 |
+| **passed** | release 単体 | `ui-poc.exe` **8,100,864B**。exe 単体を frontend/dist 不在の temp dir へコピー → `--check` 全項目（os/arch/webview2/wgpu/rustc）報告・`--experiment dist` passed・`embed_mode=embedded-release`・`--experiment frontend --variant vanilla` も passed（poc://app/vanilla が埋め込みのみで完走） | `out/dist-release-final.jsonl`・同上 | 実測 |
+| **passed** | portable zip | `Compress-Archive` で exe 単体 zip 化（**3,039,116B**・deflate 62% 削減）→ 別 temp dir へ `Expand-Archive` → `--check` 全項目報告・`--experiment dist` passed/`embedded_ok=true`（zip 内 exe 8,100,864B で同一物） | 同上 | 実測 |
+| 文書評価 | macOS | `.app` バンドル + codesign/公証（notarytool）・`productbuild`（.pkg）または DMG 配布。wry は WKWebView を OS 同梱で使うため追加ランタイム不要だが、Gatekeeper 通過には Developer ID 署名 + 公証が必須。本 PoC では macOS 実機未検証 | — | **文書評価** |
+| 文書評価 | Linux | `libwebkit2gtk-4.1` + GTK3 実行時依存（deb では `Depends: libwebkit2gtk-4.1-0, libgtk-3-0` 等を宣言）。glibc ベースラインは「最も古い対象ディストロでビルド」が定石。AppImage は依存同梱で回避可能だが WebKitGTK 同梱で大幅肥大化。本 PoC では Linux 実機未検証 | — | **文書評価** |
+
+bootstrapper 案内（WebView2 未検出時に stderr へも出力）:
+`WebView2 Evergreen Runtime not detected. Install via the official bootstrapper
+(https://go.microsoft.com/fwlink/p/?LinkId=2124703) or
+winget install Microsoft.EdgeWebView2Runtime` — Evergreen 配布の公式経路。
+
+### AC6 所見（採否材料）
+
+- **単一バイナリ配布は成立**: release ビルドで rust-embed が `frontend/dist`
+  全アセット（index + vanilla/solid/ipc 各バンドル + build-meta.json）を
+  exe に焼き込み、`frontend/dist` を持たない temp dir 単体でも `--check`・
+  全実験が完走した。配布物は exe 1 ファイルのみで、実行時前提は
+  **WebView2 Evergreen Runtime のみ**（本機 155.0.4283.62）。
+- **portable zip は最小構成で実用**: exe 1 個の zip が 3.0MB に圧縮され、
+  解凍先で追加セットアップ無しに動作。spec の「NSIS/WiX/Inno 等または
+  portable zip のいずれか」hands-on 要件を portable zip で充足し、
+  NSIS/WiX は参照評価（インストーラ必要時の後続判断）とする。
+- **dist 実験は headless 契約**: GUI を作らず前提 gating もしないため、
+  非表示環境・CI でも検出値（WebView2 有無・バイナリサイズ・埋め込み状態）を
+  `poc-metric.v1` として記録できる。`bootstrapper_required` で未検出環境を
+  機械判別可能。
+- **debug/release で埋め込みモードが異なる**: `embed_mode` メトリックで
+  `fs-debug`（rust-embed が FS 参照）/ `embedded-release`（バイナリ内埋め込み）を
+  明示 — 「release で埋め込まれている」をメトリック自体が証明する。
+
+### Linux 実行時依存リスク定量化（文書評価）
+
+wry は Linux で WebKitGTK を使い、API バージョンでリンクする libsoup/GTK が
+決まる。パッケージ名と API バージョンの対応を整理した（2026-10 時点・文書評価）:
+
+| API バージョン | GTK | libsoup | 状態 | ディストロ例 |
+| --- | --- | --- | --- | --- |
+| `webkit2gtk-4.0` | GTK3 | soup2 | **廃止方向**: WebKitGTK 2.52（2026-03・2.51.1 で soup2 コード削除）以降は提供されない。Debian unstable の webkit2gtk 2.52.0-1 は 4.1 のみ出荷、bookworm は 2.50.x に残留 | 旧 Debian/Ubuntu（～bookworm）の `libwebkit2gtk-4.0-37` |
+| `webkit2gtk-4.1` | GTK3 | soup3 | **現行・唯一の現実経路**: wry/Tauri v2 系の依存先。Debian/Ubuntu `libwebkit2gtk-4.1-0`（dev は `-dev`）・Fedora `webkit2gtk4.1`・Arch `webkit2gtk-4.1` | Ubuntu 22.04+・Debian 12+・Fedora 38+ |
+| `webkitgtk-6.0` | GTK4 | soup3 | GTK4 系。wry の tao/GTK3 経路とは非互換のため対象外 | Fedora 等 |
+
+- **リスク**: `libwebkit2gtk-4.1` が無い古いディストロ（Ubuntu 20.04 以前・
+  Debian 11 以前・CentOS/RHEL 系の glib2<2.70 環境）では soup3 経路自体が
+  提供されず、deb 依存宣言で解決不能 → AppImage 同梱かターゲット下限の
+  引き上げが必要。soup2/soup3 を同一プロセスに混在させるとクラッシュする
+  制約（両バージョンの同時リンク不可）にも注意。
+- **glibc ベースライン**: 配布バイナリの glibc 要求は「最も古い対象
+  ディストロでビルド」（manylinux 的発想・Debian oldstable や Ubuntu LTS での
+  ビルド）で下げるのが定石。AppImage は glibc 以外の依存を同梱できるが
+  WebKitGTK 同梱で大幅に肥大化するため、deb/Flatpak 等の配布系との
+  棲み分け判断が要る。
+- **macOS**: `.app` バンドル化 + Developer ID 署名 + notarytool 公証が
+  Gatekeeper 通過の前提。配布形態は `productbuild`（.pkg インストーラ）か
+  DMG ドラッグ＆ドロップ。WKWebView は OS 同梱のためランタイム追加依存は
+  無いが、署名/公証は CI ワークフロー組込みが必要（本 PoC 未検証）。
 
 ## AC8 — PoC 隔離
 

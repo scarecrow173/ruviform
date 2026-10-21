@@ -7,7 +7,10 @@
 - AC1 `--experiment host` … tao `Window` + wry `WebView` の基本検証（T1）
 - AC2 `--experiment render` … WebView 内描画バックエンド計測（T2。canvas2d/webgl2/webgpu）
 - AC4 `--experiment ipc` … メッセージ境界計測（T3。JSON RTT・バイナリ pull・evaluate_script push・併用）
-- AC3・AC5–AC7 の実験（surface / frontend / dist）は後続タスク T4/T5 の範囲
+- AC3 `--experiment surface` … wgpu + WebView 隣接同居検査（T4。adjacent-parent/adjacent-child）
+- AC5 `--experiment frontend --variant vanilla|solid` … フロントエンド FW 比較（T5）
+- AC6 `--experiment dist` … headless 配布検証（T5。WebView2 検出・バイナリサイズ・埋め込み状態）
+- AC7（採否 ADR 確定）は後続タスクの範囲
 - 計測契約は `poc-metric.v1`（`status`/`reason`/exit code 規約）。集約結果は
   [`RESULTS.md`](./RESULTS.md)（コミット対象）へ、生サンプルは `out/*.jsonl`（gitignore）へ、
   過程の観察は `docs/impl/exp/*.jsonl` へ記録する（3 層の証跡）
@@ -19,10 +22,11 @@
   **`mise exec --` 経由**で呼ぶこと
 - WebView2 Runtime（Windows 11 では標準同梱。`--check` で `webview2_version` を検出）
 - Node.js + npm（`frontend/` のビルドに使用。npm workspaces: `bench-shared`
-  （FW 非依存のワークロード・rAF 統計・レンダラ・ipc ブリッジ・ipcbench）と
-  `vanilla`（Vite + TypeScript 参照 UI）・`ipc`（AC4 メッセージ境界ベンチ）
-  を `npm run build` で一括ビルドし、`build.mjs` が `dist/` を集約する。
-  `solid` variant は T5 で追加）
+  （FW 非依存のワークロード・rAF 統計・レンダラ・ipc ブリッジ・ipcbench・
+  DOM mutation 計装）と `vanilla`（Vite + TypeScript 参照 UI）・
+  `solid`（vite-plugin-solid + solid-js の fine-grained signals UI）・
+  `ipc`（AC4 メッセージ境界ベンチ）を `npm run build` で一括ビルドし、
+  `build.mjs` が `dist/` を集約する）
 
 ## セットアップ
 
@@ -64,6 +68,25 @@ mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
 mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
   --experiment ipc --duration 10
 
+# AC3 surface 実験（wgpu + WebView 隣接同居・検査マトリクス）
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment surface --mode adjacent-parent --duration 30
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment surface --mode adjacent-child --duration 30
+
+# AC5 frontend 比較実験（--variant は必須。canvas2d 経路・600 フレームで自己終了）
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment frontend --variant vanilla
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment frontend --variant solid
+
+# AC6 dist 実験（headless・GUI 非生成。常に検出値を記録して passed）
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --experiment dist
+
+# release 単一バイナリ（frontend/dist がバイナリへ埋め込まれるモード）
+mise exec -- cargo build --release --manifest-path poc/ui/Cargo.toml
+poc/ui/target/release/ui-poc.exe --check
+
 # パラメータ指定例（タイムアウト秒・証跡出力先・フレーム数）
 mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
   --experiment host --duration 15 --out out/host-manual.jsonl --frames 300
@@ -102,13 +125,17 @@ poc/ui/
     exp/host.rs       # AC1 実験（状態機械は Rust 側が所有）
     exp/render.rs     # AC2 実験（backend 別フレーム統計・webgpu→webgl2 fallback）
     exp/ipc.rs        # AC4 実験（3 経路メッセージ境界計測 + 併用フェーズ）
+    exp/surface.rs    # AC3 実験（wgpu + WebView 隣接同居。adapter 境界の例外）
+    exp/frontend.rs   # AC5 実験（variant 比較: dist bytes/gzip-9・build_ms・glue LOC・DOM mutation）
+    exp/dist.rs       # AC6 実験（headless: WebView2 検出・バイナリサイズ・埋め込み状態）
   frontend/
-    package.json      # npm workspaces ルート（bench-shared + vanilla + ipc）
+    package.json      # npm workspaces ルート（bench-shared + vanilla + solid + ipc）
     package-lock.json # コミット対象（npm ci の正本）
-    build.mjs         # dist/ 集約（src/ + <variant>/dist → dist/<variant>/）
+    build.mjs         # ワークスペース別ビルド + dist/ 集約 + build-meta.json 刻印
     src/index.html    # host 実験用 JS エージェント（観測イベントを IPC 報告）
-    bench-shared/     # FW 非依存: workload/rAF stats/renderers(canvas2d|webgl2|webgpu)/ipc/runner/ipcbench
+    bench-shared/     # FW 非依存: workload/rAF stats/renderers/ipc/runner/ipcbench/mutations
     vanilla/          # Vite + TypeScript 参照ベンチ UI（FW ランタイムゼロ下限）
+    solid/            # vite-plugin-solid + solid-js ベンチ UI（fine-grained signals）
     ipc/              # Vite + TypeScript メッセージ境界ベンチ（AC4 ページ）
   RESULTS.md          # AC→実験→エビデンス行対応表（コミット対象）
   out/                # 生 JSONL（gitignore）

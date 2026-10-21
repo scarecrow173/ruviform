@@ -18,6 +18,9 @@ const runner = new BenchRunner({
   canvas,
   metersEl,
   hud,
+  // AC5 更新粒度計装: ベンチ期間中の DOM mutation を done.stats.dom_mutations に記録
+  // （solid variant と同一の計装経路 — bench-shared の MutationMeter を共有）。
+  observeEl: document.getElementById("app") as HTMLElement,
   onDone: (stats) => postMessage({ type: "done", stats }),
   onError: (message) => postMessage({ type: "bench_error", message }),
 });
