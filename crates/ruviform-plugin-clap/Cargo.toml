@@ -1,0 +1,39 @@
+[package]
+name = "ruviform-plugin-clap"
+description = "Thin CLAP adapter for the Ruviform standard-neutral plugin foundation, built on the clack binding crates — binding-method PoC (minimal gain plugin)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# `cdylib` exports the CLAP entry point (`clap_entry`); `rlib` keeps the
+# crate usable for unit tests / doctests. Binding-crate (`clack` /
+# `clap-sys`) types are an implementation detail and never appear in the
+# public Rust API.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+ruviform-media-core = { path = "../ruviform-media-core" }
+# Exact pins: this PoC evaluates `clack` 0.2.0 specifically; the
+# binding-method ADR may relax these after the decision is recorded.
+clack-plugin = "=0.2.0"
+clack-common = "=0.2.0"
+clack-extensions = { version = "=0.2.0", features = [
+    "clack-plugin",
+    "audio-ports",
+    "params",
+] }
+
+[dev-dependencies]
+# `clack-host` (feature `clack-plugin`) synthesizes the plugin-side
+# `Audio` object a host would hand to `process`, so tests drive the real
+# adapter path — including `ChannelPair::InPlace` classification — and
+# can prove zero-copy via pointer equality.
+clack-host = { version = "=0.2.0", features = ["clack-plugin"] }
+
+[lints]
+workspace = true

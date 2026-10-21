@@ -27,6 +27,8 @@ Directory: `docs/impl/ir`
 | IMPL-034JfTIFdaBP0PDUkO9yLm | Implement yuv to rgb kernel | completed | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
 | IMPL-034ISfioxP51rGFoHh8MX3 | issue-1 architecture baseline repo reflection | completed | [issue-1-architecture-baseline-repo-reflection.md](./issue-1-architecture-baseline-repo-reflection.md) |
 | IMPL-034IdUNIqDaqtMaA6rRfEx | Pin Rust toolchain and lockfile | completed | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
+| IMPL-3hbuFUHk736RlMIuzIoXne | CLAP binding PoC with clack | completed | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
+| IMPL-uFiKGxxXItHvsYSwD74IJg | VST3 binding adapter PoC | completed | [poc-vst3-binding-adapter.md](./poc-vst3-binding-adapter.md) |
 | IMPL-034IwXoGhCxs4EAP3HjoQF | Review config files minimal edits | completed | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | IMPL-034Ix98fGRcsRNYZ3EZnZJ | Rewrite AGENTS for Ruviform | completed | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | IMPL-034IwXvs801LZXZlip1tZ6 | Rewrite README for Ruviform | completed | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |

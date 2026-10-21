@@ -26,6 +26,7 @@ members = [
     "crates/ruviform-audio-device",
     # 拡張層（規格中立のプラグイン基盤。Issue #29 PoC で新設）
     "crates/ruviform-plugin-core",
+    "crates/ruviform-plugin-clap",
 ]
 
 [workspace.package]

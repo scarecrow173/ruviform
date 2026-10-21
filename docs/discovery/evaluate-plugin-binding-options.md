@@ -134,6 +134,28 @@ GitHub Issue [#29 [impl] プラグイン基盤（plugin-core + CLAP/VST3 adapter
 - `assert_no_alloc` 系の alloc 検証レーン整備は Issue #22 のスコープ（本 PoC では簡易検証または手動計測で代替するか要調整）
 - VST3 側のエントリポイント検証手段（最小ホストを自前で COM 呼び出しするか、`vst3-host` 等を検証専用 dev-dependency とするか）
 
+## PoC Findings — CLAP `clack` 0.2.0（T3 実測・2026-10-21）
+
+`crates/ruviform-plugin-clap`（cdylib+rlib、最小ゲインプラグイン）で実測した方式 ADR 入力:
+
+| 評価項目 | 実測結果 |
+| --- | --- |
+| 採用バージョン | `clack-plugin`/`clack-common`/`clack-extensions` `=0.2.0`（`clap-sys 0.5.0` 同梱）・dev-dep `clack-host =0.2.0` |
+| ゼロコピー可否 | **達成** — `ChannelPair` の per-channel `&[f32]`/`&mut [f32]` を `PlanarBufferView`/`PlanarBufferViewMut` で直接ラップ。`clack-host` ハーネス経由のテストでポインタ一致を実証（view がホストバッファを借用） |
+| unsafe 量・局所性 | **アダプタ記述 unsafe = 0**（`clack_export_entry!` マクロ生成の static のみ内部 allow）— 候補評価で最良の結果 |
+| process 経路 alloc | **なし** — 全スクラッチ（`BlockScratch`: チャンネルポインタ簿・イベント列）を `activate` で `with_capacity` 事前確保・`clear()` で容量保持。イベント未ソート時の整列は `sort_unstable_by_key` の in-place ソート（補助 alloc なし） |
+| in-place 処理 | `ChannelPair::InPlace` を clack が分類 → アダプタはその分類を写像（独自ポインタ比較なし）。専用分岐: in-place ペアは読み側 view を空にし出力を入出力として処理（`&`+`&mut` 同時構築を構造上回避）。部分エイリアス・重複出力は境界検証で reject |
+| ビルド要件 | **追加ツールチェーン不要**（clang/cmake/SDK なし・crates.io 取得のみ）。Windows x64 で `clap_entry` エクスポートを `.dll` に確認 |
+| MSRV/ライセンス | `rust_version 1.85` の workspace 制約内でビルド成功。ライセンス MIT OR Apache-2.0（ポリシー適合） |
+| 拡張カバレッジ | 使用: `audio-ports`・`params`（`PluginAudioPorts`/`PluginParams`+`in_place_pair` 宣言）。clack は params/events/thread-check/gui 等を feature 分割で提供 |
+| 保守状況 | clack 0.2.0 — crates.io 直近系の活発なリリース（評価時点）。API churn は要監視（0.x のため exact pin で固定、ADR で緩和可否を記録） |
+| 依存木サイズ | `cargo tree --prefix none | sort -u` = **15 パッケージ**（workspace クレート含む・host dev-dep 除く本経路） |
+| ライフサイクル写像 | CLAP init/activate/start_processing/process/stop_processing/deactivate/destroy → `Lifecycle` 遷移表へ 1 対 1 写像。プロトコル違反は `PluginError::Message` → `CLAP_PROCESS_ERROR` で reject（`AtomicU8` の `AtomicLifecycle` で main/audio スレッド共有） |
+| 境界検証 | `frames_count`>max_frames・チャンネル数>容量・f64-only/混在ペア・null ポインタ（frames>0）・非整列ポインタ・部分エイリアス・重複出力を定義済み reject/skip — spec 境界検証表と一致 |
+
+- 採否推奨: **CLAP 側は `clack` 採用を推奨**（unsafe ゼロ・ゼロコピー達成・追加ビルド要件なし・spec 契約を全て満たす最小 PoC が成立）
+- 留意点（ADR 記録対象）: 0.x API churn → exact pin で管理・緩和は方式 ADR で記録。`sort_unstable` の同オフセット順序差は単一パラメータ PoC では benign（複数パラメータでは host 順序差が可観測になりうる — T6 で安定化を検討）。`clack-host` は dev-dep としてテスト駆動に有効
+
 ## Promotion Candidates
 
 - [x] spec-doc needed: Issue #29 の実装範囲・受け入れ条件を [implement-plugin-foundation.md](../specs/implement-plugin-foundation.md)（`relations.derived-by` / spec 側 `derives-from` で相互リンク）として作成済み
@@ -145,3 +167,38 @@ GitHub Issue [#29 [impl] プラグイン基盤（plugin-core + CLAP/VST3 adapter
 - 上流文書（`relations.derives-from`）: Issue #29 と [plugin ADR](../adr/plugin-architecture-clap-vst3.md)（binding 方式の採否を後続評価に保留した決定 — 本探索の直接の起点）。
 - 関連ドキュメント（`relations.related`）: [plugin ADR](../adr/plugin-architecture-clap-vst3.md)（binding 方式を後続評価に保留した決定の正本）、[RT 契約 ADR](../adr/realtime-contract-and-verification-policy.md)（process パスの契約・検証方針）、[設計ベースライン](../designs/ruviform-architecture-design-baseline.md)（プラグインアーキテクチャ節・クレート表）、[implement-media-data-model-api.md](../specs/implement-media-data-model-api.md)（整合対象の `AudioBuffer` 借用モデルの実装 spec）、[AGENTS.md](../../AGENTS.md)（暫定開発規約）。
 - 調査証拠（`relations.references`）: crates.io / docs.rs / GitHub の各候補クレートページ（バージョン・ライセンス・`rust_version`・リポジトリ活動・API 形状の一次情報）。
+
+## PoC Findings — VST3 / T4 実測（2026-10-21 追記）
+
+`crates/ruviform-plugin-vst3`（task `TASK-034JgsHeZt7Bm40uBMo9wg`・IR [../impl/ir/poc-vst3-binding-adapter.md](../impl/ir/poc-vst3-binding-adapter.md)）の実測結果。方式 ADR（T5）の入力として記録する。
+
+### ビルド要件（Open Question の解消）
+
+- **`vst3` 0.3.0 は VST3 SDK ヘッダ・`vst3sdk` サブモジュールをビルド時に要求しない** — 生成済みバインディングがクレート内同梱で、crates.io 依存のみで `cargo build` 完走を実測（Windows x64・pinned 1.99.0）。`generate/` 機構は上流の再生成入力でありビルド入力ではない
+- `rust_version` は未宣言 — pinned 1.99.0 では素の `repr(C)`/extern 生成コードとしてビルド可能。MSRV 1.85 単独ビルドは未実測であり、T5/T6 での確認残件とする
+- ライセンス: MIT OR Apache-2.0（crates.io メタデータどおり）。生成バインディングの SDK 出自は upstream の `generate/` 参照が要継続調査
+
+### unsafe の量と局所性（実測）
+
+- 生成 trait は **全メソッド `unsafe fn`・レシーバ `&self`**（「no attempt to abstract」の記述どおり）。アダプタ側が負う unsafe は「シグネチャ義務 54 件」＋「局所 `unsafe {}` ブロック 51 件（約半数はテスト COM ダブル）」で、raw メモリ操作を伴う実質ブロックは `block.rs` の 3 箇所（slice 再解釈 ×2・bounce 書き戻し）に集中した
+- COM `&self` 契約のため `RefCell<ComponentState>`＋`Cell` の内部可変性が必須 — ホストの再入違反は panic で検出する選択（catch_unwind 層の要否は T5 論点）
+- edition 2024 固有: `#[no_mangle]` は `#[unsafe(no_mangle)]`（unsafe 属性として `#[expect(unsafe_code)]` が必要）、`&mut x`→`*mut` 暗黙変換は `borrow_as_ptr` で `&raw mut` が必須、生成定数はプラットフォーム依存型で `as` キャスト＋局所許容が要る
+
+### エントリポイント（実測）
+
+- `GetPluginFactory`＋Windows `InitDll`/`ExitDll` を PE エクスポートディレクトリ解析で実在確認（`nm`/`dumpbin` 非搭載環境のため Python パーサで代替 — `vst3-host` 等の dev-dep は不採用）
+- **命名不整合の発見**: upstream `vst3` example は macOS フックを `BundleEntry`/`BundleExit` と命名するが VST3 spec（・タスク文言）は小文字 `bundleEntry`/`bundleExit`。spec 名を採用 — upstream example に倣うと spec 不適合になる点は採用時の注意として記録
+- macOS/Linux エントリは `cfg` ゲート済みコードとして存在するが、クロスビルド未実測（T6 の残件）
+
+### ゼロコピー・イベント・ライフサイクル（実測）
+
+- `channelBuffers32` の `*mut *mut f32` → `PlanarBufferView{,Mut}` のゼロコピー経路が成立 — 非エイリアス出力チャンネルはホストバッファ直書きをテストで実測。全エイリアスパターン（`out[i]==in[j]`・出力重複）は per-channel 対比較で検出し該当チャンネルのみ activate 時確保の bounce 領域へ逃がす
+- `process` のチャンネルリストスクラッチ・イベントスクラッチは activate/`setupProcessing` 時の最大フレーム数で事前確保し process 経路で伸長しない構造（alloc 検証レーンは Issue #22 待ち）
+- `IParameterChanges`/`IParamValueQueue` は `ComRef::from_raw` で借用（refcount 非操作・非保持）、オフセットはブロック範囲へクランプ・stable sort・`MAX_BLOCK_EVENTS` 切り捨ての定義済み挙動
+- ライフサイクルは VST3 呼び出し列を中立 `Lifecycle` へ写像（`setActive`→Activate/Deactivate・`setupProcessing`→`prepare`・`setProcessing`→Start/StopProcessing・`terminate`→Destroy）、不正順序は `kResultFalse`
+- `kSample64` は f32 再解釈せず定義済み拒否（`setupProcessing`/`process` 双方）。state ストリーム・`IPlugView` GUI は `kNotImplemented` スタブ（T6 へ）
+
+### T5 方式 ADR への示唆
+
+- `vst3` は「唯一の保守された生成バインディング＋COM 足場」として lean どおり実用的 — ただし safe 抽象がなく、`RefCell` 内部可変性・`unsafe fn` 義務・手書きのバリデーション層は規格の COM 本質由来であり、自前 COM 層でも同等に必要（クレート採否より「薄アダプタ上の unsafe 局所化方針」が実質の決定点）
+- clack 側（T3）との対称比較点: アダプタが書く unsafe ブロック数・`&self` COM 可変性の有無・エントリ生成の自動度・ホスト側提供の有無・拡張カバレッジ — CLAP 側実測が揃い次第 T5 で判定
