@@ -12,6 +12,7 @@ Directory: `docs/impl/ir`
 | IMPL-034JfEIKHmfeyIZETbwKfD | Create video-proc crate skeleton | completed | [create-video-proc-crate-skeleton.md](./create-video-proc-crate-skeleton.md) |
 | IMPL-034IedmXdoFo5aI22WR8m8 | Define mise dev and CI tasks | completed | [define-mise-dev-and-ci-tasks.md](./define-mise-dev-and-ci-tasks.md) |
 | IMPL-034JftzSzGUrGW76DpIyVM | Document video-core ownership contract | completed | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
+| IMPL-034JEzb6zrstxQuNrV0fmM | DSP/SIMD PoC benchmark | completed | [dsp-simd-poc-benchmark.md](./dsp-simd-poc-benchmark.md) |
 | IMPL-034J7bMHds4IPYPvoxiMZR | Fix time arithmetic saturation | completed | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
 | IMPL-034J5L4kgMP7Hjh57OhJcs | Implement audio-core data model | completed | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
 | IMPL-034JxNTyasfMjdgGXnvVPY | Implement audio-core device port | completed | [implement-audio-core-device-port.md](./implement-audio-core-device-port.md) |
