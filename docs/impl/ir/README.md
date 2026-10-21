@@ -9,6 +9,7 @@ Directory: `docs/impl/ir`
 | IMPL-034JC0drffSR2IoiSS2k4M | Finalize backend ADR and sync workspace ledgers | completed | [finalize-backend-adr-and-sync-workspace-ledgers.md](./finalize-backend-adr-and-sync-workspace-ledgers.md) |
 | IMPL-034IwOgrHkNf8v0cnrOpIl | Baseline placeholder sweep | completed | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
 | IMPL-034Ie9ddczoaNNz2v7zAYp | Create minimal workspace and smoke test | completed | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
+| IMPL-8mKEqSbFQtdciXddX1oUij | Create plugin-core foundation crate | completed | [create-plugin-core-foundation.md](./create-plugin-core-foundation.md) |
 | IMPL-034JfEIKHmfeyIZETbwKfD | Create video-proc crate skeleton | completed | [create-video-proc-crate-skeleton.md](./create-video-proc-crate-skeleton.md) |
 | IMPL-034IedmXdoFo5aI22WR8m8 | Define mise dev and CI tasks | completed | [define-mise-dev-and-ci-tasks.md](./define-mise-dev-and-ci-tasks.md) |
 | IMPL-034JftzSzGUrGW76DpIyVM | Document video-core ownership contract | completed | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
