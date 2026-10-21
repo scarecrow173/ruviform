@@ -100,6 +100,7 @@ pub fn promote_current_thread_to_realtime(
     )
     .map(|handle| ThreadPriorityGuard {
         handle: Some(handle),
+        _not_send: core::marker::PhantomData,
     })
     .map_err(|_error| PriorityError::PromotionFailed("os real-time promotion request failed"))
 }
@@ -136,8 +137,12 @@ pub fn demote_current_thread_from_realtime(
 }
 
 /// Token holding a successful promotion (opaque — the internal OS
-/// handle is private). Meant to stay on the promoted thread: demotion
-/// targets the calling thread.
+/// handle is private). Required to stay on the promoted thread:
+/// demotion targets the calling thread, and on some platforms
+/// (e.g. Linux) the backend *panics* when demotion is invoked from a
+/// different thread. The guard is therefore deliberately `!Send` and
+/// `!Sync` on every platform — moving it to another thread is a
+/// compile error, not a runtime hazard.
 ///
 /// `Drop` attempts best-effort demotion and discards any failure —
 /// call [`demote_current_thread_from_realtime`] when failure detection
@@ -158,6 +163,11 @@ pub fn demote_current_thread_from_realtime(
 /// ```
 pub struct ThreadPriorityGuard {
     handle: Option<audio_thread_priority::RtPriorityHandle>,
+    // `!Send`/`!Sync` on all platforms: the wrapped OS handle is
+    // `Send` on unix, but demotion is calling-thread-scoped and the
+    // unix backends panic on a cross-thread demote — moving the guard
+    // must not compile.
+    _not_send: core::marker::PhantomData<*const ()>,
 }
 
 impl fmt::Debug for ThreadPriorityGuard {

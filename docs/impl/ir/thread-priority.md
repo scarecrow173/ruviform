@@ -159,10 +159,15 @@ RT 契約区間開始前＝mint 前に行うモデル）ため `ruviform-rt` へ
 - `unsafe` 不使用: upstream の safe API のみ利用（task 前提どおり）。
 - `ThreadPriorityParams` に `Debug`/`Clone`/`Copy` derive — 2×u32 の
   値型として不変条件なしで安全に保持できる最小 derive セット。
-- プラットフォーム依存の auto trait: guard の `Send`/`Sync` は
-  upstream handle から構造導出（Windows `HANDLE` で `!Send`、
-  fallback `struct {}` では `Send`）— demotion が calling thread に
-  作用するセマンティクスと整合するため境界は設けず doc のみ。
+- プラットフォーム依存の auto trait（レビューで修正）: guard の
+  `Send`/`Sync` は当初 upstream handle から構造導出のまま（Windows
+  `HANDLE` で `!Send`、unix fallback `struct {}` では `Send`）と
+  していたが、unix では guard を別スレッドへ move でき、そこでの
+  `Drop` が upstream の `assert!(pthread_self() == pthread_id)`
+  （`rt_linux.rs`）に衝突し safe API から panic 可能と判明
+  （P1）。`PhantomData<*const ()>` フィールド `_not_send` を追加し
+  全プラットフォームで `!Send`/`!Sync` に強制 — demotion の calling
+  thread セマンティクスを型で強制する正しい境界修正と判断。
 
 ## Related Experiments
 

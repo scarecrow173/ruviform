@@ -99,7 +99,7 @@ SPSC（`channel`/`Producer`/`Consumer`/`TryPushError`）をそのまま再利用
   `rt_retire_full_forgets_not_drops`・`rt_retire_no_alloc`（T2 の
   `crate::alloc_counter` を再利用）・`rt_endpoint_send_bounds`・
   非 RT の `local_pending_drops_on_drain`（`push_local` seam の検証）・
-  `drain_returns_zero_when_empty` 等。dealloc 観測は `Drop` で
+  `local_pending_drops_on_drain` 等。dealloc 観測は `Drop` で
   `Arc<AtomicBool>` を立てる `DropFlag` プローブ型。
 
 ### Decisions During Implementation

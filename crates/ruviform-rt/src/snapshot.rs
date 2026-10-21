@@ -9,7 +9,21 @@
 //! [`publish`](SnapshotWriter::publish) atomically replaces the
 //! snapshot and [`read`](SnapshotReader::read) hands the RT side a
 //! [`SnapshotGuard`] — a lock-free load plus an `Arc` clone: no
-//! allocation, no blocking.
+//! blocking, and no allocation *after warm-up* (see below).
+//!
+//! Warm-up contract: the internal `arc_swap` cell allocates a
+//! per-thread debt node the first time a given thread reads a given
+//! slot. Call [`SnapshotReader::read`] once on the RT thread during
+//! setup — before the RT contract interval begins (before `RtContext`
+//! mint / the first `process`) — so subsequent reads are
+//! allocation-free.
+//!
+//! Teardown contract: drop the [`SnapshotReader`] on the non-RT side
+//! (or before retiring the writer). If the writer is dropped first
+//! and the reader is then dropped on the RT thread, the last
+//! `Arc<ArcSwap<T>>` destroys the live snapshot and any `Arc`s still
+//! queued in the reader's retire channel — running `T` destructors on
+//! the RT thread.
 //!
 //! The core contract — *a snapshot's destructor never runs on the RT
 //! thread* — needs more than `arc-swap` alone. A raw `Arc` taken from
@@ -66,6 +80,7 @@ pub fn slot<T: Send + Sync + 'static>(
     initial: Arc<T>,
     retire_capacity: usize,
 ) -> (SnapshotWriter<T>, SnapshotReader<T>) {
+    debug_assert!(retire_capacity > 0, "slot retire_capacity must be non-zero");
     let (retirer, collector) = retire_channel(retire_capacity);
     let cell = Arc::new(ArcSwap::new(initial));
     (
@@ -214,7 +229,10 @@ impl<T: Send + Sync + 'static> SnapshotReader<T> {
     /// concurrent-guards contract.
     ///
     /// **RT contract:** RT-suitable — lock-free load + `Arc` clone,
-    /// no allocation, bounded.
+    /// bounded. Allocation-free *after warm-up*: the first `read` on
+    /// a given RT thread for a given slot may allocate an internal
+    /// debt node, so call `read` once during setup before the RT
+    /// contract interval.
     ///
     /// # Examples
     ///

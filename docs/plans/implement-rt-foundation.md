@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034JxNegJktSAJZ2LuO0N8"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "Issue #21 RT 基盤の実装（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構）"
 created: "2026-10-21"
 updated: "2026-10-21"

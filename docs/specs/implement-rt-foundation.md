@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034Jcr3dOT5Uxp4znj42II"
 type: "spec"
-status: "approved"
+status: "implemented"
 title: "RT 基盤の実装（ruviform-rt プリミティブ・スレッド優先度機構・スナップショット交換）"
 created: "2026-10-20"
 updated: "2026-10-20"
@@ -17,7 +17,9 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "../designs/rt-foundation-api-design.md"
+    - "../plans/implement-rt-foundation.md"
   depends-on:
     - "establish-rust-dev-foundation.md"
   blocks: []

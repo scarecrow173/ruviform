@@ -50,6 +50,7 @@ use crate::spsc::{Consumer, Producer, TryPushError, channel};
 /// ```
 #[must_use]
 pub fn retire_channel<T: Send + 'static>(capacity: usize) -> (Retirer<T>, DropCollector<T>) {
+    debug_assert!(capacity > 0, "retire_channel capacity must be non-zero");
     let (producer, consumer) = channel(capacity);
     (
         Retirer { inner: producer },

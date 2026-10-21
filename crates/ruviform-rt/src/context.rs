@@ -14,10 +14,11 @@
 /// started an RT contract section — the RT driver (`ruviform-audio`,
 /// inside the `ruviform-audio-device` device callback) or the offline
 /// driver (`ruviform-exec`'s non-RT driver, where no-alloc constraints do
-/// not apply). Application code must not be able to construct it, so this
-/// type intentionally has no public constructor and no public fields
-/// (the private field blocks literal construction). The mint API is
-/// `#[doc(hidden)]` and reserved for driver entry points.
+/// not apply). Application code must not be able to construct it: the
+/// private field blocks literal construction, and the only constructor —
+/// [`mint`](Self::mint) — is `#[doc(hidden)]` and reserved for driver
+/// entry points by convention (enforcement relies on code review, as
+/// documented in the mechanism ADR).
 ///
 /// `RtContext` is a single opaque type: it carries no runtime mode flag
 /// or variant distinguishing offline from RT issuance — the "no `if rt`

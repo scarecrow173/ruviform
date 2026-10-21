@@ -96,8 +96,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # Currently a skip-equivalent pass: no `rt_*` tests exist yet, and a
-      # name filter with zero matches still exits successfully.
+      # Selects the `rt_`-prefixed RT contract tests by name filter.
       - name: Run RT contract tests (mise run test-rt)
         run: mise run test-rt
 

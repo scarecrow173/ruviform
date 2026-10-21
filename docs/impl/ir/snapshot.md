@@ -128,6 +128,19 @@ bounded-leak、`DropCollector::push_local` seam）を前提に、オーバーフ
 
 ### Decisions During Implementation
 
+- **レビュー修正（P1）— warm-up / teardown 契約の明文化**:
+  `arc_swap` の debt node は（スレッド × スロット）初回 load で
+  `Box::leak` 確保（`arc-swap-1.9.3/src/debt/list.rs:169`）するため
+  `read` の「no allocation」主張は冷起動で成立しなかった。モジュール
+  doc と `read` doc に「RT 区間開始前に RT スレッドで 1 回 `read`
+  して warm-up する」前提条件を明記。また writer 先行 drop → RT 側で
+  reader drop すると live snapshot / キュー滞留 `Arc` の `T` 破棄が
+  RT スレッドで起きるため、モジュール doc に「reader は非 RT 側で
+  drop（または writer 退役前）」の teardown 契約を明記。実装コードは
+  設計どおりで不変（契約文書化のみ）。`slot` に
+  `retire_capacity > 0` の `debug_assert` も追加（capacity 0 は
+  bounded-leak が全件発動する退化を作る）。
+
 - `SnapshotGuard` に `T: Send + Sync + 'static` 境界を構造体宣言へ付与:
   `Drop` impl は構造体自身の境界を超えた bound を持てない（E0367）一方、
   `Retirer::retire` は `Arc<T>: Send + 'static`（＝ `T: Send + Sync +

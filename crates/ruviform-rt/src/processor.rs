@@ -122,7 +122,9 @@ pub trait Processor {
 /// Produced by [`Processor::prepare`] and driven per block via
 /// [`process`](Self::process), which demands a `&RtContext` — code that
 /// does not hold the capability token cannot call `process`, so
-/// execution outside a contract section is prevented at the type level.
+/// execution outside a contract section is prevented by capability
+/// gating (`RtContext::mint` is `#[doc(hidden)]` — enforcement is
+/// convention plus review, per the mechanism ADR).
 ///
 /// `Io` stays generic: `ruviform-rt` is the bottom-layer crate and does
 /// not depend on media types, so the buffer/event-block shape is

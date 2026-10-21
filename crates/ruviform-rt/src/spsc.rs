@@ -31,6 +31,7 @@ use core::fmt;
 /// ```
 #[must_use]
 pub fn channel<T: Send>(capacity: usize) -> (Producer<T>, Consumer<T>) {
+    debug_assert!(capacity > 0, "channel capacity must be non-zero");
     let (producer, consumer) = rtrb::RingBuffer::new(capacity);
     (Producer { inner: producer }, Consumer { inner: consumer })
 }
@@ -186,10 +187,14 @@ impl<T> Consumer<T> {
     /// Returns `None` when the channel is empty. The drain loop pops
     /// at most `capacity` elements, so the work stays bounded even
     /// while a producer pushes concurrently. Elements replaced by a
-    /// newer value are dropped on the calling thread.
+    /// newer value are dropped on the calling thread — see the RT
+    /// contract note.
     ///
-    /// **RT contract:** RT-suitable — wait-free pops, no allocation,
-    /// bounded by `capacity`.
+    /// **RT contract:** RT-suitable *only when* `T`'s destructor is
+    /// RT-safe — replaced elements are dropped inline. For payloads
+    /// whose `Drop` may deallocate, lock, or run unbounded code,
+    /// consume with [`try_pop`](Self::try_pop) and route the value to
+    /// the retire channel instead.
     ///
     /// # Examples
     ///
