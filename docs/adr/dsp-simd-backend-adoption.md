@@ -32,7 +32,8 @@ relations:
     - "../../AGENTS.md"
   refines:
     - "../designs/ruviform-architecture-design-baseline.md"
-  refined-by: []
+  refined-by:
+    - "../adr/simd-ulp.md"
   derives-from:
     - "../plans/dsp-simd-poc.md"
     - "../designs/dsp-simd-poc.md"
@@ -43,6 +44,8 @@ relations:
     - "workspace-msrv-1-85-1-89-fearless-simd.md"
     - "../designs/msrv-raise-design.md"
     - "../plans/implement-issue-52-msrv-raise.md"
+    - "../adr/simd-ulp.md"
+    - "../specs/simd-dispatch-layer.md"
   verifies: []
   verified-by: []
   references:

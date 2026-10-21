@@ -13,6 +13,7 @@ Directory: `docs/plans`
 | PLAN-034J5K603qXDNmT82wI9v7 | Issue #18 データモデル API の実装（media-core / audio-core / video-core） | completed | [implement-issue-18-data-model.md](./implement-issue-18-data-model.md) |
 | PLAN-034JcCFGe6ILSTWLgUIjAn | Issue #26 動画基盤 API の実装（video-core 所有権契約・video-proc 新設・色変換カーネル） | approved | [implement-issue-26-video-foundation.md](./implement-issue-26-video-foundation.md) |
 | PLAN-034JO2EWa8LuEEE4BFVZ9Q | Issue #52 workspace MSRV 引上げの実施（rust-version 1.85 → 1.89・ドキュメント同期・MSRV 実測検証） | approved | [implement-issue-52-msrv-raise.md](./implement-issue-52-msrv-raise.md) |
+| PLAN-034JQFeYbZCBHPYSBfQe7B | Issue #53 SIMD dispatch 層の実装計画 | approved | [implement-issue-53-simd-dispatch-layer.md](./implement-issue-53-simd-dispatch-layer.md) |
 | PLAN-034JcvpHIlt5JmqvgOquvI | プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding PoC） | completed | [implement-plugin-foundation.md](./implement-plugin-foundation.md) |
 | PLAN-034JxNegJktSAJZ2LuO0N8 | Issue #21 RT 基盤の実装（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | completed | [implement-rt-foundation.md](./implement-rt-foundation.md) |
 | PLAN-034J6OTwge4rS96WZWkZgd | Issue #18 フォローアップの実装（公開 enum 方針適用・時間演算修正・改善トリアージ） | completed | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
