@@ -50,6 +50,9 @@ relations:
     - "../specs/issue-18-followup-enum-and-time-fix.md"
     - "../plans/issue-18-followup-enum-and-time-fix.md"
     - "../test-specs/followup-enum-compat-and-time-arithmetic.md"
+    - "../specs/time-type-extension-framerate-timecode-rounding.md"
+    - "../adr/framerate-timebase-separation-and-timecode-extension.md"
+    - "time-model-extension.md"
   verifies: []
   verified-by: []
   references:
@@ -236,6 +239,7 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
 - 音声時間: サンプルインデックス（整数）+ サンプルレート（= timebase `1/rate`）。sample-accurate イベントはサンプルオフセットを保持する。
 - 動画時間: コンテナ timebase の PTS + フレームインデックス。VFR は per-frame PTS を正とし、CFR を仮定した処理を設計しない。
 - ドロップフレーム: タイムコードの**表示・ラベリング規約**であり、単調な媒体時間とは分離する。同期・編集の基本通貨は有理数 `MediaTime` であり、ドロップフレームはタイムコード変換層（media-core の表示用変換）の責務。
+- `FrameRate`/`TimeBase` の意味分離と `Timecode` API 拡張・丸め誤差累積ポリシーは Issue #42 文書群（[time-model-extension.md](time-model-extension.md)・[対応 ADR](../adr/framerate-timebase-separation-and-timecode-extension.md)）で確定。タイムコード変換は fps 向き有理数を表す `FrameRate` 型を受け取る。
 - シーク: エンジンの責務。demuxer に time 指定シークを要求し、decoder フラッシュと A/V 再同期を行う。
 - 責務所在のまとめ: 有理数時刻・変換・タイムコード表示・トランスポート状態の値型 = `ruviform-media-core`。時刻共有プリミティブ（`MasterClock`）= `ruviform-rt`。A/V 同期方針（`MasterClock` + PTS 追従）・シーク・VFR の実行時振る舞い = engines。codec 側の PTS/DTS 取出し = `ruviform-media-io` 抽象境界経由。
 - 第 1 期のトランスポート/イベント型の拡張余地: トランスポート状態型（再生状態・位置 `MediaTime` 等）とイベント型は拍位置（小節/拍/PPQN・テンポ）を持たず、サンプル・媒体時刻のみを表現する。将来の音楽時間導入に備え、opaque な拡張予約フィールドを残す。音楽時間の設計自体は保留（再着手トリガ: 第 2 期/テンポマップ設計 — 音楽時間設計 Issue）。
@@ -271,9 +275,9 @@ media-io ADR の確定どおり、コンテナの demux/mux と codec の decode
 
 ### 採否
 
-- **決定**: 有理数時刻を中核。音声正準 = planar f32（境界で interleaved 変換）。動画フレーム + 色/HDR メタデータ。demux/mux・decode/encode の 4 系統分離 + 単一 `ruviform-media-io` への集約。
-- **要PoC**: 色変換・HDR の対応範囲、個別 codec/container 採否、デコーダ zero-copy バッキングの具体方式。
-- **保留**: 音楽時間（小節/拍/PPQN）の自前設計、`f64` サンプル対応の深さ（f32 正準の決定に伴い需要ベースの後続評価）、色管理の広範統合（`moxcms` / OpenColorIO 級 — 第 2 ターゲット設計時）。
+- **決定**: 有理数時刻を中核。音声正準 = planar f32（境界で interleaved 変換）。動画フレーム + 色/HDR メタデータ。demux/mux・decode/encode の 4 系統分離 + 単一 `ruviform-media-io` への集約。`FrameRate`/`TimeBase` 意味分離（fps 向き newtype・`frame_duration()` のみ `TimeBase` 露出）、`Timecode` 引数の `FrameRate` 置換（破壊的変更）、ドロップフレーム対象レート集合の現行維持（`30000/1001`・`60000/1001` のみ）、丸め誤差累積ポリシーの文書契約化（Issue #42 文書群）。
+- **要PoC**: 色変換・HDR の対応範囲、個別 codec/container 採否、デコーダ zero-copy バッキングの具体方式。連鎖変換プロパティテストの harness 選定（proptest dev-dep vs deterministic 列挙、Issue #42）。
+- **保留**: 音楽時間（小節/拍/PPQN）の自前設計、`f64` サンプル対応の深さ（f32 正準の決定に伴い需要ベースの後続評価）、色管理の広範統合（`moxcms` / OpenColorIO 級 — 第 2 ターゲット設計時）。ドロップフレーム非 NTSC nominal 一般化・フィールドレート対応、`Timecode` → `MediaTime` 逆変換 API、frame index 型の所有（media-core vs video-core）（Issue #42）。
 
 ## Data and Control Flow
 
@@ -470,6 +474,11 @@ media-io ADR の確定どおり、コンテナの demux/mux と codec の decode
 | A/V 同期 = `MasterClock` + PTS 追従 | 決定 | discovery の定石（ffplay 型） | 実装 Issue（engines） |
 | RT→非RT = SPSC・Drop 退避・スナップショット交換 | 決定 | RT 実践パターンの標準（discovery） | 実装 Issue（rt） |
 | スカラー参照実装必須・stable-only・等価性契約原則 | 決定 | 検証参照として必須（platform ADR 前提） | 実装 Issue（math） |
+| `FrameRate`/`TimeBase` 意味分離（`FrameRate` = `TimeBase` newtype） | 決定 | Issue #42 ADR（`SampleRate` 先例整合・意味論的分離・依存ゼロ維持） | 実装 Issue（media-core） |
+| `Timecode` の `frame_rate` 引数を `FrameRate` へ破壊的置換 | 決定 | Issue #42 ADR（`publish = false`・外部利用者不在のうちの移行） | 実装 Issue（media-core） |
+| ドロップフレーム対象レート集合（`30000/1001`・`60000/1001` のみ） | 決定（現行維持） | SMPTE 規格の定義域に一致（Issue #42 ADR） | 変更が必要なら新規 ADR/実装 Issue |
+| 丸め誤差累積ポリシー（呼び出しごと最大 1 回・安定アンカー・base-hopping 禁止の文書契約） | 決定 | Issue #42 設計文書（[time-model-extension.md](time-model-extension.md)）のポリシー節 | 実装 Issue（media-core・doc/プロパティテスト） |
+| `FrameRate` API 形状（fps 向き newtype・`frame_duration()` のみ TimeBase 露出） | 決定 | Issue #42 ADR/設計文書 | 実装 Issue（media-core） |
 | SIMD 二層構造（分岐/フォールバック・dispatch 層集約の構造仮説） | 要PoC | platform ADR の有力仮説。採否・方式はベンチマーク比較評価で確定 | DSP/SIMD PoC Issue → 採否 ADR |
 | SIMD バックエンド選定（fearless_simd/pulp/multiversion）・採否基準 | 要PoC | ベンチマーク比較評価で確定（platform ADR） | DSP/SIMD PoC Issue → 採否 ADR |
 | 音声デバイス I/O バックエンド（cpal 等） | 要PoC | 抽象境界必須・メンテリスク | デバイス PoC Issue |
@@ -487,6 +496,7 @@ media-io ADR の確定どおり、コンテナの demux/mux と codec の decode
 | `assert_no_alloc` 型 CI 検査の具体実装 | 要PoC | 契約は決定・機構は後続 | RT 検証 Issue |
 | thread-check 型のスレッド契約検査機構の具体方式 | 要PoC | 契約は決定・機構は未選定 | RT 検証 Issue |
 | RT 通信・退避・スナップショット交換の実装方式・依存クレート（rtrb/basedrop/arc-swap 型等） | 要PoC | 構造は決定、実装依存は未採否 | RT 基盤 Issue |
+| 連鎖変換プロパティテストの harness 選定（proptest dev-dep vs deterministic 列挙） | 要PoC | media-core 依存ゼロ方針との兼ね合い（Issue #42 設計文書） | 実装 Issue（media-core） |
 | ライセンス正式決定（MIT or MIT OR Apache-2.0） | 保留 | licensing ADR が保留を確定 | 配布方針決定（公開前レビュー） |
 | サンドボックス/クラッシュ分離の実装方式 | 保留 | 境界設計は決定・実装は後続 | プラグイン分離 Issue |
 | OFX 等映像プラグイン規格の対応範囲 | 保留 | plugin ADR が別途設計に委任 | 第 2 ターゲット設計 Issue |
@@ -499,6 +509,9 @@ media-io ADR の確定どおり、コンテナの demux/mux と codec の decode
 | オフライン決定論的実行（seed/固定順序）の厳密保証範囲 | 保留 | 需要と検証設計が後続 | オフライン実行 Issue |
 | 全コンポーネント共通の描画抽象 | 保留（不採用方針） | 描画/コンポーネント分離は決定・共通抽象は強制しない（ui ADR） | 要件変更時の再検討 |
 | 個別機能ライブラリ採否（rubato・vtc・ringbuf 等） | 保留 | 包括ルール: 実装 Issue の依存追加規約（AGENTS.md）に委任 | 各実装 Issue |
+| ドロップフレーム非 NTSC nominal 一般化・フィールドレート対応 | 保留 | SMPTE 上定義外・現需要なし（Issue #42 ADR） | インターレース素材・非 NTSC drop 需要発生時の再検討 |
+| `Timecode` → `MediaTime` 逆変換 API | 保留 | Issue #42 受入条件外・需要未確定（Issue #42 設計文書の Deferred） | 編集/NLE 系需要発生時の後続 Issue |
+| frame index 型の所有（media-core vs video-core） | 保留 | Issue #26/#27 境界の設計問題（Issue #42 設計文書の Deferred） | 動画基盤/動画エンジン Issue |
 
 ## 暫定実装ロードマップ（A.6）
 

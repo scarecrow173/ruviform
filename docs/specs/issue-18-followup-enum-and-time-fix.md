@@ -58,6 +58,7 @@ relations:
     - "../adr/public-enum-non-exhaustive-policy.md"
   derived-by:
     - "../plans/issue-18-followup-enum-and-time-fix.md"
+    - "time-type-extension-framerate-timecode-rounding.md"
   verifies: []
   verified-by:
     - "../test-specs/followup-enum-compat-and-time-arithmetic.md"
