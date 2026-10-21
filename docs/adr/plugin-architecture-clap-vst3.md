@@ -35,6 +35,10 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/1"
   derived-by:
     - "../designs/ruviform-architecture-design-baseline.md"
+    - "../discovery/evaluate-plugin-binding-options.md"
+    - "../specs/implement-plugin-foundation.md"
+    - "../plans/implement-plugin-foundation.md"
+    - "../test-specs/plugin-foundation.md"
   verifies: []
   verified-by: []
   references:

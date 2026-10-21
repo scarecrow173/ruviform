@@ -71,7 +71,13 @@ relations:
     - "../tasks/sync-docs-and-verify-issue-18.md"
   depends-on:
     - "apply-issue-1-architecture-baseline-to-repo.md"
-  blocks: []
+  blocks:
+    - "implement-plugin-foundation.md"
+    - "issue-18-followup-enum-and-time-fix.md"
+    - "../tasks/implement-media-core-data-model.md"
+    - "../tasks/implement-audio-core-data-model.md"
+    - "../tasks/implement-video-core-data-model.md"
+    - "../tasks/sync-docs-and-verify-issue-18.md"
   supersedes: []
   superseded-by: []
   related:

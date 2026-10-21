@@ -29,6 +29,7 @@ relations:
     - "overview.md"
     - "dev-foundation.md"
     - "replace-template-derived-docs-with-ruviform.md"
+    - "../discovery/evaluate-plugin-binding-options.md"
   refines: []
   refined-by:
     - "../adr/dsp-simd-backend-adoption.md"
@@ -62,6 +63,9 @@ relations:
     - "../test-specs/video-foundation-api.md"
     - "../specs/implement-media-io-abstraction-and-first-backend-poc.md"
     - "../plans/issue-20-i-o-poc.md"
+    - "../specs/implement-plugin-foundation.md"
+    - "../plans/implement-plugin-foundation.md"
+    - "../test-specs/plugin-foundation.md"
   verifies: []
   verified-by: []
   references:

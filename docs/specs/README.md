@@ -12,6 +12,7 @@ Directory: `docs/specs`
 | SPEC-034IcwhwIFSNUNKtX7KK0Q | Rust 開発基盤の確立（mise/APM lockfile・最小ワークスペース・手動CI） | approved | [establish-rust-dev-foundation.md](./establish-rust-dev-foundation.md) |
 | SPEC-034J5FYaYfeL5zkzb4sIV4 | メディアデータモデル API の実装（media-core / audio-core / video-core） | implemented | [implement-media-data-model-api.md](./implement-media-data-model-api.md) |
 | SPEC-034JcaMXubILS7j1FX5qob | メディア I/O 抽象境界と第一バックエンド PoC の実装 | implemented | [implement-media-io-abstraction-and-first-backend-poc.md](./implement-media-io-abstraction-and-first-backend-poc.md) |
+| SPEC-034JcgdAKPNeh1YCFyprzh | プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding 方式 PoC） | approved | [implement-plugin-foundation.md](./implement-plugin-foundation.md) |
 | SPEC-034Jcr3dOT5Uxp4znj42II | RT 基盤の実装（ruviform-rt プリミティブ・スレッド優先度機構・スナップショット交換） | implemented | [implement-rt-foundation.md](./implement-rt-foundation.md) |
 | SPEC-034JcicHlRidBgcK1wPtj2 | 動画基盤 API の確定（video-core / video-proc・色変換・HDR 対応範囲） | approved | [implement-video-foundation-api.md](./implement-video-foundation-api.md) |
 | SPEC-034J6OCXHiP1izKRzbMmgz | Issue #18 フォローアップ（公開 enum 方針適用・時間演算修正・改善トリアージ） | implemented | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
