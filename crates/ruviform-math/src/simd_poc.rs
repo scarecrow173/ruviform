@@ -408,7 +408,11 @@ pub fn denormal_mix(len: usize, seed: u64, period: usize) -> Vec<f32> {
     let d = denormal_f32();
     for (i, x) in v.iter_mut().enumerate() {
         if i % period == 0 {
-            *x = if (i / period) % 2 == 0 { d } else { -d };
+            *x = if (i / period).is_multiple_of(2) {
+                d
+            } else {
+                -d
+            };
         }
     }
     v

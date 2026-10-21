@@ -294,7 +294,7 @@ pub(crate) fn prepare_block<'a>(
         if ptr.is_null() {
             return Err(Rejection::NullChannel);
         }
-        if (ptr as usize) % align_of::<f32>() != 0 {
+        if !(ptr as usize).is_multiple_of(align_of::<f32>()) {
             return Err(Rejection::Misaligned);
         }
     }

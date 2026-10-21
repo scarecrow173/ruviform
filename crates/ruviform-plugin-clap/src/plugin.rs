@@ -285,12 +285,12 @@ impl PluginMainThreadParams for GainMainThread<'_> {
             .iter()
             .take(adapt::MAX_EVENTS_PER_BLOCK)
         {
-            if let Some(neutral) = adapt::translate_param_event(event, &GAIN_PARAM) {
-                if let EventKind::ParamValue(param_event) = neutral.kind() {
-                    self.shared
-                        .gain_mirror
-                        .store(GAIN_PARAM.denormalize(param_event.value));
-                }
+            if let Some(neutral) = adapt::translate_param_event(event, &GAIN_PARAM)
+                && let EventKind::ParamValue(param_event) = neutral.kind()
+            {
+                self.shared
+                    .gain_mirror
+                    .store(GAIN_PARAM.denormalize(param_event.value));
             }
         }
     }
@@ -305,12 +305,12 @@ impl PluginAudioProcessorParams for GainAudioProcessor<'_> {
             .iter()
             .take(adapt::MAX_EVENTS_PER_BLOCK)
         {
-            if let Some(neutral) = adapt::translate_param_event(event, &GAIN_PARAM) {
-                if let EventKind::ParamValue(param_event) = neutral.kind() {
-                    self.shared
-                        .gain_mirror
-                        .store(GAIN_PARAM.denormalize(param_event.value));
-                }
+            if let Some(neutral) = adapt::translate_param_event(event, &GAIN_PARAM)
+                && let EventKind::ParamValue(param_event) = neutral.kind()
+            {
+                self.shared
+                    .gain_mirror
+                    .store(GAIN_PARAM.denormalize(param_event.value));
             }
         }
         self.processor
