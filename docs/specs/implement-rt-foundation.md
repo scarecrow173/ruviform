@@ -34,6 +34,7 @@ relations:
     - "../discovery/evaluate-rt-foundation-primitives.md"
   derived-by:
     - "../adr/rt-foundation-primitives-implementation.md"
+    - "../designs/rt-foundation-api-design.md"
   verifies: []
   verified-by: []
   references:
