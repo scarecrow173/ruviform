@@ -158,8 +158,9 @@ None.
 
 ## Follow-ups
 
-- **MSRV 引上げ Issue の起票**（未着手）: `fearless_simd` の本番 `[dependencies]` 昇格には workspace `rust-version` ≥1.89 への引上げが前提 — spec「Deferred Design Concerns」どおり別 Issue で判断（採否 ADR 決定 6）
-- **AVX-512 / aarch64 実測**: 実機または CI `workflow_dispatch` 環境で matrix/bench 再実行し、16 レーン `dot` が ulp 256 に収まることを確認してから有効化（未検証のまま本番 dispatch に含めない）
-- **dispatch 層の本番設計**: per-call `dispatch!` を軽量カーネルに使わず、`Level`/`Simd` トークンを prepare/ブロック境界で保持・繰り上げる設計（採否 ADR 決定 1/2 の条件）— 後続 DSP 実装 Issue
-- **denormal 対策の実装**: エンジン層 Issue へ移管（ホスト側 FTZ/DAZ 設定 or カーネル内ソフトウェア flush の API 契約）
+- **MSRV 引上げ Issue** [#52](https://github.com/scarecrow173/ruviform/issues/52): `fearless_simd` の本番 `[dependencies]` 昇格には workspace `rust-version` ≥1.89 への引上げが前提 — spec「Deferred Design Concerns」どおり別 Issue で判断（採否 ADR 決定 6）
+- **AVX-512 / aarch64 実測** [#55](https://github.com/scarecrow173/ruviform/issues/55): 実機または CI `workflow_dispatch` 環境で matrix/bench 再実行し、16 レーン `dot` が ulp 256 に収まることを確認してから有効化（未検証のまま本番 dispatch に含めない）
+- **dispatch 層の本番設計** [#53](https://github.com/scarecrow173/ruviform/issues/53): per-call `dispatch!` を軽量カーネルに使わず、`Level`/`Simd` トークンを prepare/ブロック境界で保持・繰り上げる設計 + 本番 API の入力前提・精度基準の明文化（採否 ADR 決定 1/2/3 の条件）
+- **denormal 対策の実装** [#54](https://github.com/scarecrow173/ruviform/issues/54): エンジン層 Issue へ移管（ホスト側 FTZ/DAZ 設定 or カーネル内ソフトウェア flush の API 契約）
+- **dispatched 劣後の原因分離** [#56](https://github.com/scarecrow173/ruviform/issues/56): `fearless_dispatched` 軽量カーネル劣後（add/scale @1024 で 0.62–0.66x）が dispatch コストか計測ノイズかを低負荷再計測で分離
 - **検証済み代替の再評価経路**: `pulp` 実装は PoC ハーネスに残置 — fearless_simd の dispatch が本番統合で構造的問題を示した場合の再評価対象（採否 ADR 決定 2）
