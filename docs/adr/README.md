@@ -8,6 +8,7 @@ Directory: `docs/adr`
 | --- | --- | --- | --- |
 | ADR-034JROe7Y5kwFgAkp9Q0bu | 音声エンジンのグラフ再構成方式（不変スナップショット交換） | accepted | [audio-engine-snapshot-swap.md](./audio-engine-snapshot-swap.md) |
 | ADR-034JOpkx5tdDPVGzdlb0bb | chunk 分割時の OutputCallbackInfo timestamp 合成 | accepted | [chunk-outputcallbackinfo-timestamp.md](./chunk-outputcallbackinfo-timestamp.md) |
+| ADR-034JZDNRML000000000002 | denormal 崖対策の実装方針（エンジン層ソフトウェア flush ノード） | accepted | [denormal-mitigation-policy.md](./denormal-mitigation-policy.md) |
 | ADR-034JRK9VFJbrUPAvy3FJ94 | オフライン実行の決定論保証範囲（逐次参照等価） | accepted | [offline-determinism-scope.md](./offline-determinism-scope.md) |
 | ADR-034JEe7SAbksaycyrum16R | DSP/SIMD 二層構造とバックエンドの採否 | accepted | [dsp-simd-backend-adoption.md](./dsp-simd-backend-adoption.md) |
 | ADR-034JcihlNe8WCZVpp9RBCq | DSP/SIMD PoC 評価アプローチ | accepted | [dsp-simd-poc.md](./dsp-simd-poc.md) |

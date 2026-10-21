@@ -10,6 +10,7 @@ Directory: `docs/designs`
 | DESIGN-034JcC9QK924kDbu4WhibC | オーディオデバイス境界 trait と ruviform-audio-device PoC の詳細設計 | approved | [audio-device-boundary-and-poc.md](./audio-device-boundary-and-poc.md) |
 | DESIGN-034JROdBjynllTNAVDZwaI | 音声エンジン設計 | approved | [audio-engine.md](./audio-engine.md) |
 | DESIGN-034JOoWdEHXnb8G1QyMzCm | chunk 分割時の per-chunk timestamp 合成設計 | approved | [chunk-timestamp-design.md](./chunk-timestamp-design.md) |
+| DESIGN-034JZDNRML000000000003 | DenormalFlush ノード設計 | approved | [denormal-flush-node.md](./denormal-flush-node.md) |
 | DESIGN-034IddXFCRKDIW01WXkSla | Rust 開発基盤の設計（最小ワークスペース・CIプロファイル・手動CI） | approved | [dev-foundation.md](./dev-foundation.md) |
 | DESIGN-034JPvz9ieX8KoPbwDcvaX | dispatch 固定コスト分離の計測設計 | approved | [dispatched-overhead-method.md](./dispatched-overhead-method.md) |
 | DESIGN-034JcqP2KiWsdes88fgvtt | DSP/SIMD 比較ベンチマーク PoC 詳細設計 | approved | [dsp-simd-poc.md](./dsp-simd-poc.md) |
