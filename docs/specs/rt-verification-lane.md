@@ -98,13 +98,13 @@ RT 契約 ADR（[realtime-contract-and-verification-policy.md](../adr/realtime-c
 
 ## Acceptance Criteria
 
-- [ ] `ruviform-plugin-clap`・`ruviform-plugin-vst3` の RT 契約テストが allocation 検出下で実行され、現行コードで全件パスする
-- [ ] allocation 検出機構が違反を検出できることを示す（`assert_no_alloc` が意図的な alloc で失敗することをテスト内で確認、または機構自体の信頼性を既存 `AllocDisabler` 実績で担保）
-- [ ] `plugin-clap` の `process` が `thread-check` 応答 `is_audio_thread = false` のホストで defined rejection を返す単体テスト
-- [ ] `thread-check` 非提供ホスト（`None`）では従来どおり `process` が成功する単体テスト
-- [ ] 検証文書（設計書・README）に「CI 成功は完全証明ではない・API 単位の保証は実装責任・OS ハード RT 保証を行わない」が明記されている
-- [ ] 静的に検証できない制約（ブロッキング・I/O・無制限待機・実行時間上界）がドキュメント契約 + コードレビュー観点として列挙されている
-- [ ] `mise run test-rt` が新規テストを含めて全パス
+- [x] `ruviform-plugin-clap`・`ruviform-plugin-vst3` の RT 契約テストが allocation 検出下で実行され、現行コードで全件パスする
+- [x] allocation 検出機構が違反を検出できることを示す（`assert_no_alloc` が意図的な alloc で失敗することをテスト内で確認、または機構自体の信頼性を既存 `AllocDisabler` 実績で担保）
+- [x] `plugin-clap` の `process` が `thread-check` 応答 `is_audio_thread = false` のホストで defined rejection を返す単体テスト
+- [x] `thread-check` 非提供ホスト（`None`）では従来どおり `process` が成功する単体テスト
+- [x] 検証文書（設計書・README）に「CI 成功は完全証明ではない・API 単位の保証は実装責任・OS ハード RT 保証を行わない」が明記されている
+- [x] 静的に検証できない制約（ブロッキング・I/O・無制限待機・実行時間上界）がドキュメント契約 + コードレビュー観点として列挙されている
+- [x] `mise run test-rt` が新規テストを含めて全パス
 
 ## Deferred Design Concerns
 

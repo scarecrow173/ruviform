@@ -82,14 +82,14 @@ CI で検出可能な RT 違反を機械検査する基盤を整備する — `a
 
 ## Implementation Sequence
 
-- [ ] `plugin-clap` の `clack-extensions` に `thread-check` feature 追加、`assert_no_alloc` dev-dep 追加
-- [ ] `GainShared` に `host: Option<HostSharedHandle<'static>>`・`thread_check: Option<HostThreadCheck>` を追加し、`new_shared` で `get_extension` + `with_arbitrary_lifetime` で保持（SAFETY コメント付き）
-- [ ] `process` 冒頭で `thread_check.is_audio_thread(&host)` を照会し `Some(false)` を defined rejection、`None`/`Some(true)` は従来処理
-- [ ] テストホスト `RtCheckHost`（`HostHandlers`・`Shared` が `HostThreadCheckImpl`）を実装し、`is_audio_thread` を `AtomicBool` で制御可能にする
-- [ ] `plugin-clap` の `rt_process_*`・ABI 通しテストを `assert_no_alloc` 下に配置
-- [ ] `plugin-vst3` の `rt_prepare_process_finish_round_trip` 等を `assert_no_alloc` 下に配置・deferred コメント更新
-- [ ] `README.md` に保証範囲限定を明記
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`bench-smoke`・`prek run --all-files` 全パス・doc 監査
+- [x] `plugin-clap` の `clack-extensions` に `thread-check` feature 追加、`assert_no_alloc` dev-dep 追加
+- [x] `GainShared` に `host: Option<HostSharedHandle<'static>>`・`thread_check: Option<HostThreadCheck>` を追加し、`new_shared` で `get_extension` + `with_arbitrary_lifetime` で保持（SAFETY コメント付き）
+- [x] `process` 冒頭で `thread_check.is_audio_thread(&host)` を照会し `Some(false)` を defined rejection、`None`/`Some(true)` は従来処理
+- [x] テストホスト `RtCheckHost`（`HostHandlers`・`Shared` が `HostThreadCheckImpl`）を実装し、`is_audio_thread` を `AtomicBool` で制御可能にする
+- [x] `plugin-clap` の `rt_process_*`・ABI 通しテストを `assert_no_alloc` 下に配置
+- [x] `plugin-vst3` の `rt_prepare_process_finish_round_trip` 等を `assert_no_alloc` 下に配置・deferred コメント更新
+- [x] `README.md` に保証範囲限定を明記
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`bench-smoke`・`prek run --all-files` 全パス・doc 監査
 
 ## Dependencies and Risks
 
@@ -105,11 +105,11 @@ CI で検出可能な RT 違反を機械検査する基盤を整備する — `a
 
 ## Verification
 
-- [ ] `plugin-clap`・`plugin-vst3` の RT 契約テストが `assert_no_alloc` 下で全件パス
-- [ ] `process` が `is_audio_thread = Some(false)` で defined rejection、`None` で従来動作を返す ABI 通しテスト
-- [ ] `README.md`・設計書に保証範囲限定が明記されている
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` 全パス
-- [ ] 監査で本変更起因 findings 0
+- [x] `plugin-clap`・`plugin-vst3` の RT 契約テストが `assert_no_alloc` 下で全件パス
+- [x] `process` が `is_audio_thread = Some(false)` で defined rejection、`None` で従来動作を返す ABI 通しテスト
+- [x] `README.md`・設計書に保証範囲限定が明記されている
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` 全パス
+- [x] 監査で本変更起因 findings 0
 
 ## Open Questions / Gaps
 

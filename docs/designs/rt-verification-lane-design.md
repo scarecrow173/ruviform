@@ -112,7 +112,7 @@ RT 契約 ADR は「検証可能な違反は CI で自動検出」を確定済�
 
 ## Verification Notes
 
-- [ ] `plugin-clap`・`plugin-vst3` の RT 契約テストが `assert_no_alloc` 下で実行され全件パス
-- [ ] `process` が `is_audio_thread = Some(false)` で `PluginError` defined rejection、`None` で従来動作を返す ABI 通しのテスト
-- [ ] `README.md`・本設計書に保証範囲限定が明記されている
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` 全パス
+- [x] `plugin-clap`・`plugin-vst3` の RT 契約テストが `assert_no_alloc` 下で実行され全件パス
+- [x] `process` が `is_audio_thread = Some(false)` で `PluginError` defined rejection、`None` で従来動作を返す ABI 通しのテスト
+- [x] `README.md`・本設計書に保証範囲限定が明記されている
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` 全パス
