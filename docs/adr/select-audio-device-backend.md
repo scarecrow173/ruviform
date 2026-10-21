@@ -37,6 +37,8 @@ relations:
   derived-by:
     - "../specs/chunk-timestamp-synthesis.md"
     - "chunk-outputcallbackinfo-timestamp.md"
+    - "../plans/implement-audio-device-port-and-cpal-poc.md"
+    - "../designs/audio-device-boundary-and-poc.md"
   verifies: []
   verified-by: []
   references:
