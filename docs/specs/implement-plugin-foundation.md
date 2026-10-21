@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034JcgdAKPNeh1YCFyprzh"
 type: "spec"
-status: "approved"
+status: "implemented"
 title: "プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding 方式 PoC）"
 created: "2026-10-20"
 updated: "2026-10-21"

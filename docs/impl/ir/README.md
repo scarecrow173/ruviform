@@ -43,6 +43,7 @@ Directory: `docs/impl/ir`
 | IMPL-034JBQFUoXvQXzXWrpQtxV | スナップショット交換の実装 | completed | [snapshot.md](./snapshot.md) |
 | IMPL-034J5L5fAAqFUmUkYGAf1t | Sync docs and verify Issue 18 | completed | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
 | IMPL-034eqXfRz3favrQAtrps6 | Sync docs and verify Issue 20 | completed | [sync-docs-and-verify-issue-20.md](./sync-docs-and-verify-issue-20.md) |
+| IMPL-1s0miPDg1HCKvs3VozeFDu | Sync docs and verify plugin foundation | completed | [sync-docs-and-verify-plugin-foundation.md](./sync-docs-and-verify-plugin-foundation.md) |
 | IMPL-034JygdA2K2Y2qhRHaQZGP | Sync docs Issue 26 | completed | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
 | IMPL-034JCku503rJpSOXR7XpSc | RT 基盤ドキュメント同期と総合検証 | completed | [sync-rt-foundation-docs.md](./sync-rt-foundation-docs.md) |
 | IMPL-034JC5wFbM2VZc0U1W6Wsh | スレッド優先度機構の実装 | completed | [thread-priority.md](./thread-priority.md) |

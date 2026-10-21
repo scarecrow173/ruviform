@@ -53,7 +53,7 @@ Directory: `docs/tasks`
 | TASK-034J6Pq9WM0XMkGqryZrvQ | フォローアップトリアージ由来の小修正（try_new・Custom 不変条件・丸め注記） | done | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | TASK-034J5KRwAtAqF1xu0moYuS | Issue #18 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
 | TASK-034Jgi4vWCuaMUu3POps1c | Issue #20 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-20.md](./sync-docs-and-verify-issue-20.md) |
-| TASK-034JgsIynX51YyqUrzgppO | プラグイン基盤のドキュメント同期と総合検証 | todo | [sync-docs-and-verify-plugin-foundation.md](./sync-docs-and-verify-plugin-foundation.md) |
+| TASK-034JgsIynX51YyqUrzgppO | プラグイン基盤のドキュメント同期と総合検証 | done | [sync-docs-and-verify-plugin-foundation.md](./sync-docs-and-verify-plugin-foundation.md) |
 | TASK-034JcD43sDKFAlPxYuAWmj | Issue #26 ドキュメント同期（baseline 採否表・AGENTS・README）と総合検証 | done | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
 | TASK-034JxObKHc0v3kUhnQiePv | RT 基盤ドキュメント同期と総合検証 | done | [sync-rt-foundation-docs-and-verify.md](./sync-rt-foundation-docs-and-verify.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |

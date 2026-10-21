@@ -1,7 +1,7 @@
 ---
 id: "DISC-034JccH31pBpKOSW5fst0g"
 type: "discovery"
-status: "promoted"
+status: "resolved"
 title: "プラグイン基盤 binding 方式の評価（Issue #29）"
 created: "2026-10-20"
 updated: "2026-10-20"

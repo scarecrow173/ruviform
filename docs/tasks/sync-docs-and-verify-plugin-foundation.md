@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JgsIynX51YyqUrzgppO"
 type: "task"
-status: "todo"
+status: "done"
 title: "プラグイン基盤のドキュメント同期と総合検証"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -10,15 +10,36 @@ relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/29"
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "docs/impl/ir/sync-docs-and-verify-plugin-foundation.md"
+    modified:
+      - type: "file"
+        path: "Cargo.toml"
+      - type: "file"
+        path: "README.md"
+      - type: "file"
+        path: "AGENTS.md"
+      - type: "file"
+        path: "docs/plans/implement-plugin-foundation.md"
+      - type: "file"
+        path: "docs/plans/README.md"
+      - type: "file"
+        path: "docs/specs/implement-plugin-foundation.md"
+      - type: "file"
+        path: "docs/specs/README.md"
+      - type: "file"
+        path: "docs/discovery/evaluate-plugin-binding-options.md"
+      - type: "file"
+        path: "docs/discovery/README.md"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "../plans/implement-plugin-foundation.md"
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/sync-docs-and-verify-plugin-foundation.md"
   depends-on:
     - "../plans/implement-plugin-foundation.md"
     - "create-plugin-core-foundation.md"
@@ -53,10 +74,10 @@ relations:
 
 plan `PLAN-034JcvpHIlt5JmqvgOquvI` の T7（Task Breakdown の `sync-docs-and-verify-plugin-foundation` 仮称行に対応）。T1〜T6 の完了を受け、ドキュメント記述の同期・plan 相互リンクのバックフィル・status/`changes` 同期・ワークスペース総合検証を実施する。
 
-- [ ] ルート `Cargo.toml` の層内順序コメント、`README.md`（`crates/` 節・実装状態）、`AGENTS.md`（ワークスペース構成節）を実装状態に同期する
-- [ ] plan `docs/plans/implement-plugin-foundation.md` の `relations.implemented-by` に 7 タスク全件のパスをバックフィルする（Task Breakdown 分割ルールの相互リンク義務）
-- [ ] spec / plan / test-spec / task の status・`changes` 記録を実施結果に同期する
-- [ ] 総合検証スイートを実行し全合格を確認（Verification 節のコマンド群 — plan V-7）
+- [x] ルート `Cargo.toml` の層内順序コメント、`README.md`（`crates/` 節・実装状態）、`AGENTS.md`（ワークスペース構成節）を実装状態に同期する
+- [x] plan `docs/plans/implement-plugin-foundation.md` の `relations.implemented-by` に 7 タスク全件のパスをバックフィルする（Task Breakdown 分割ルールの相互リンク義務）
+- [x] spec / plan / test-spec / task の status・`changes` 記録を実施結果に同期する
+- [x] 総合検証スイートを実行し全合格を確認（Verification 節のコマンド群 — plan V-7）
 
 ## Classification
 
@@ -88,12 +109,12 @@ plan `PLAN-034JcvpHIlt5JmqvgOquvI` の T7（Task Breakdown の `sync-docs-and-ve
 
 ## Done When
 
-- [ ] `Cargo.toml` / `README.md` / `AGENTS.md` の記述が実装状態と一致する
-- [ ] plan `relations.implemented-by` が 7 タスク全件を指し、spec/plan/test-spec/task の status・`changes` が実施結果と一致する
-- [ ] 検証スイート全項目が PASS し、`cargo metadata` で全クレート `publish` が `[]`・依存辺が plugin 系→Domain foundations+Primitives のみであることを確認した
+- [x] `Cargo.toml` / `README.md` / `AGENTS.md` の記述が実装状態と一致する
+- [x] plan `relations.implemented-by` が 7 タスク全件を指し、spec/plan/test-spec/task の status・`changes` が実施結果と一致する
+- [x] 検証スイート全項目が PASS し、`cargo metadata` で全クレート `publish` が `[]`・依存辺が plugin 系→Domain foundations+Primitives のみであることを確認した
 
 ## Verification
 
-- [ ] `mise run fmt-check` / `mise run check` / `mise run lint` / `mise run test` / `mise run test-rt` / `mise run bench` が全て PASS
-- [ ] `mise exec -- cargo metadata --format-version 1 --no-deps` で全クレート `publish` が `[]`・依存辺が plugin 系→Domain foundations+Primitives のみであることを確認
-- [ ] `mise exec -- prek run --all-files` で全フック Passed
+- [x] `mise run fmt-check` / `mise run check` / `mise run lint` / `mise run test` / `mise run test-rt` / `mise run bench` が全て PASS
+- [x] `mise exec -- cargo metadata --format-version 1 --no-deps` で全クレート `publish` が `[]`・依存辺が plugin 系→Domain foundations+Primitives のみであることを確認
+- [x] `mise exec -- prek run --all-files` で全フック Passed

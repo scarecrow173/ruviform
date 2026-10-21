@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034JcvpHIlt5JmqvgOquvI"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding PoC）"
 created: "2026-10-20"
 updated: "2026-10-20"
@@ -18,7 +18,14 @@ relations:
     generated: []
   implements:
     - "../specs/implement-plugin-foundation.md"
-  implemented-by: []
+  implemented-by:
+    - "../tasks/create-plugin-core-foundation.md"
+    - "../tasks/implement-borrowed-planar-view.md"
+    - "../tasks/poc-clap-binding-adapter.md"
+    - "../tasks/poc-vst3-binding-adapter.md"
+    - "../tasks/decide-plugin-binding-method-adr.md"
+    - "../tasks/implement-plugin-adapters.md"
+    - "../tasks/sync-docs-and-verify-plugin-foundation.md"
   depends-on:
     - "implement-issue-18-data-model.md"
   blocks: []
