@@ -33,6 +33,9 @@ use crate::format::{AudioFormat, SampleFormat};
 /// Implemented by adapters. A control-thread object: `Send`/`Sync` are
 /// deliberately not required (re-enumeration and thread-affinity policy
 /// belong to the engine's session arbitration).
+///
+/// **RT contract:** non-RT object — every method calls OS APIs and may
+/// allocate.
 pub trait DeviceEnumerator {
     /// Handles to the output-capable devices currently present — an
     /// empty `Vec` when none exist.
@@ -61,6 +64,9 @@ pub trait DeviceEnumerator {
 ///
 /// `Send` so the handle can be handed off the control thread; `Sync` is
 /// not required.
+///
+/// **RT contract:** non-RT object — every method calls OS APIs and may
+/// allocate or block.
 pub trait Device: Send {
     /// Human-readable device name for display. For identity, prefer
     /// [`Device::id`].
@@ -99,9 +105,11 @@ pub trait Device: Send {
     ///
     /// # Errors
     ///
-    /// [`DeviceError::UnsupportedConfig`] when no format maps to F32, or
-    /// the default channel count cannot map to a
-    /// [`ChannelLayout`](crate::ChannelLayout).
+    /// [`DeviceError::UnsupportedConfig`] only when no F32-capable
+    /// range with a mappable [`ChannelLayout`](crate::ChannelLayout)
+    /// exists. An unmappable *default* channel count is not itself an
+    /// error: the adapter may substitute a different-channel F32
+    /// format, so inspect the returned [`AudioFormat`] before use.
     fn default_output_format(&self) -> DeviceResult<AudioFormat>;
 
     /// The supported output-format space as a list of range
@@ -123,8 +131,10 @@ pub trait Device: Send {
     ///
     /// The callbacks fire on the backend's real-time thread after
     /// [`OutputStream::start`]. There is deliberately no `open_timeout`
-    /// parameter in v1 — the adapter delegates to the backend default
-    /// (a field on [`OutputStreamConfig`] can absorb it later).
+    /// parameter in v1 — opening delegates to the backend default,
+    /// which may block the calling thread indefinitely while the
+    /// device is acquired; call from a thread that may block (a field
+    /// on [`OutputStreamConfig`] can absorb a timeout later).
     ///
     /// **RT contract:** non-RT only — acquires OS resources and spawns
     /// threads.
@@ -145,6 +155,10 @@ pub trait Device: Send {
 /// An opened output stream. Dropping the stream stops output
 /// (backend-defined — the contract is that `Drop` stops delivery).
 /// `Send` so the stream can be controlled from another thread.
+///
+/// **RT contract:** mixed — only [`OutputStream::format`] is
+/// RT-suitable; `start`/`stop`/`buffer_size`/`now` are non-RT
+/// control-path operations.
 pub trait OutputStream: Send {
     /// Starts or resumes output delivery.
     ///
@@ -168,7 +182,10 @@ pub trait OutputStream: Send {
     /// invalidated.
     fn stop(&self) -> DeviceResult<()>;
 
-    /// The format actually in effect (the post-open truth).
+    /// The format the stream was opened with. Whether it is the
+    /// post-open truth is backend-defined — backends that cannot
+    /// report the applied format return the requested one, so treat
+    /// the value as the negotiated intent, not a measured fact.
     ///
     /// **RT contract:** RT-suitable — returns a stored value.
     #[must_use]
@@ -497,7 +514,10 @@ pub type OutputDataCallback =
 ///
 /// May run on the backend's stream thread — treat it as RT-adjacent.
 /// [`DeviceError`] is `Copy` precisely so this path never allocates;
-/// implementations must not allocate or block either.
+/// implementations must not allocate or block either. Like
+/// [`OutputDataCallback`], the callback must not panic — a panic on
+/// the backend stream thread can lead to undefined behavior or
+/// abnormal process termination.
 ///
 /// A non-fatal advisory may arrive ([`DeviceError::Backend`]
 /// `"device_changed"` — automatic re-routing of a default-device

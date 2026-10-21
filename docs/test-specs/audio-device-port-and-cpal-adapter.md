@@ -1,10 +1,10 @@
 ---
 id: "TSPEC-034JgliZJcJ6cl2OeZLkuZ"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "オーディオデバイス境界ポートと cpal adapter の契約保証"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:

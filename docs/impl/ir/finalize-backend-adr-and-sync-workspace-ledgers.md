@@ -76,8 +76,8 @@ task `TASK-034JglHTIvjo18tMdbO3DP`（plan `PLAN-034JgkWCimxdvr81k6b0ow` Phase D�
 ### Decisions During Implementation
 
 - **ADR 昇格（採用）を確定** — Verification 全項目に証跡が存在し、再評価トリガ 3 条件のいずれも実験ログで未観測。`Fixed(480)` 拒否は「致命的挙動不良」ではなく設計想定内の `UnsupportedConfig` 型表現（`Default` フォールバックで開通済み）と判定
-- **spec の AC 対応表を IR に記録・spec status は据え置き** — task の changes 宣言が spec を含まないため、spec 文書自体は変更せず AC 充足の判定結果を本 IR に記録（下記 Validation）。spec status の遷移はレビュー方針に委ねる
-- **未観測項目は ADR Confirmation に明記** — ALSA vs PipeWire・Send/Sync ばらつき・WASAPI exclusive/ASIO・初回 callback timestamp=0 を後続評価事項として ADR 本体に記録し、未観測を以て昇格を阻害しない判断根拠（Windows/WASAPI 実機での主要経路は実証済み）を残す
+- **spec の AC 対応表を IR に記録・spec/test-spec status は review sweep で遷移** — task の changes 宣言が spec を含まないため初回は据え置いたが、レビュー判定（B16）で ledger 不整合が指摘されたため、spec は慣行どおり `implemented`・test-spec は `approved` へ遷移し AC チェックボックスを確定済みに更新（README 索引も同期）
+- **未観測項目は ADR Confirmation に明記** — ALSA vs PipeWire・Send/Sync ばらつき・WASAPI exclusive/ASIO を後続評価事項として ADR 本体に記録し、未観測を以て昇格を阻害しない判断根拠（Windows/WASAPI 実機での主要経路は実証済み）を残す。初回 callback timestamp=0 はレビューで計測器バグと確定し除外済み
 
 ## Related Experiments
 

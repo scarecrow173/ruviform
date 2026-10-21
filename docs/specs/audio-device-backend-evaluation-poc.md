@@ -1,10 +1,10 @@
 ---
 id: "SPEC-034Jc9QEqYLVfg1CXXTiPV"
 type: "spec"
-status: "proposed"
+status: "implemented"
 title: "オーディオデバイス境界 trait と ruviform-audio-device PoC（バックエンド評価・採否）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -54,7 +54,7 @@ GitHub Issue #23 の成果物として、以下を確定・実装する。
 - **デバイス境界 trait（ポート）の設計・定義**: `ruviform-audio-core` に、オーディオデバイス境界を表す trait 群を定義する。責務表どおりポート定義の所有は audio-core であり、`ruviform-audio-device`（adapter）がこれを実装する。少なくともデバイス列挙・既定デバイス/既定構成の取得・構成の記述（`AudioFormat` / `BufferSpec` / `ChannelLayout` で表現）・出力ストリームの開始/停止・ストリーム時刻/タイムスタンプの取得（`MasterClock` 要件対応）をカバーする。コールバックは RT 契約区間の起点であり、事前確保済みバッファへの `&mut` 借用でデータを受け渡す形にする。`RtContext` の mint API は `ruviform-rt` 未実装のため、trait は将来の `RtContext` 配線（発行主体は `ruviform-audio`）を阻害しない設計とする
 - **`ruviform-audio-device` クレート新設 + cpal adapter PoC**: adapter ルール（foundations/Primitives + ポート定義元へのみ依存）に従う分離クレートとして `ruviform-audio-device` を新設し、cpal を内部依存として閉じ込めた adapter を実装する。PoC の実証範囲は「デバイス列挙 → 既定出力構成の取得 → 出力ストリーム開始 → コールバック到達（interleaved → planar f32 への境界変換を含む）」まで
 - **評価レポート**: discovery の評価軸に沿った候補比較と PoC 結果を `docs/impl/exp/` の実験ログ（または discovery 文書への追補）として記録する
-- **採否 ADR の確定**: [select-audio-device-backend.md](../adr/select-audio-device-backend.md)（cpal 条件付き採用・`proposed`）を PoC 結果で確認し、`accepted` へ昇格または差し戻す
+- **採否 ADR の確定**: [select-audio-device-backend.md](../adr/select-audio-device-backend.md)（cpal 条件付き採用・`accepted`）を PoC 結果で確認し、`accepted` へ昇格または差し戻す
 
 ## Why Now
 
@@ -101,12 +101,12 @@ GitHub Issue #23 の成果物として、以下を確定・実装する。
 
 ## Acceptance Criteria
 
-- [ ] 評価軸に沿った候補比較が文書化され、cpal 採否＋代替候補（cubeb-rs / rtaudio-rs / 直結）の扱いが採否 ADR で確定している
-- [ ] `ruviform-audio-core` にデバイス境界 trait（ポート）が定義され、外部型・エラー・feature 名が公開 API に露出していない。全公開 enum は `#[non_exhaustive]`
-- [ ] `ruviform-audio-device` が分離クレートとして存在し cpal 依存がそこに閉じている（feature 名に cpal を露出しない・コアクレートからの強制依存なし）
-- [ ] PoC が「デバイス列挙 → 既定出力構成の取得 → 出力ストリーム開始 → コールバック到達（planar f32 へ境界変換）」を実証する。実機依存部分は手動検証手順として文書化し、CI にはデバイス非依存テストのみ置く
-- [ ] コールバック内の非 alloc 規律が trait 契約として明示され、可能な範囲で検証されている（assert_no_alloc 相当またはコードレビュー証跡）
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` および `mise exec -- prek run --all-files` がパスし、`unsafe` なし（例外は SAFETY コメント付き局所許可）
+- [x] 評価軸に沿った候補比較が文書化され、cpal 採否＋代替候補（cubeb-rs / rtaudio-rs / 直結）の扱いが採否 ADR で確定している
+- [x] `ruviform-audio-core` にデバイス境界 trait（ポート）が定義され、外部型・エラー・feature 名が公開 API に露出していない。全公開 enum は `#[non_exhaustive]`
+- [x] `ruviform-audio-device` が分離クレートとして存在し cpal 依存がそこに閉じている（feature 名に cpal を露出しない・コアクレートからの強制依存なし）
+- [x] PoC が「デバイス列挙 → 既定出力構成の取得 → 出力ストリーム開始 → コールバック到達（planar f32 へ境界変換）」を実証する。実機依存部分は手動検証手順として文書化し、CI にはデバイス非依存テストのみ置く
+- [x] コールバック内の非 alloc 規律が trait 契約として明示され、可能な範囲で検証されている（assert_no_alloc 相当またはコードレビュー証跡）
+- [x] `mise run fmt-check` / `check` / `lint` / `test` および `mise exec -- prek run --all-files` がパスし、`unsafe` なし（例外は SAFETY コメント付き局所許可）
 
 ## Deferred Design Concerns
 

@@ -37,6 +37,12 @@ jobs:
           mise trust
           mise install --locked
 
+      # cpal's ALSA backend links via alsa-sys, whose build script
+      # requires the ALSA development headers (pkg-config).
+      - name: Install ALSA development headers (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
       - name: Restore cargo registry/git index cache
         uses: actions/cache@v6.1.0
         with:
@@ -86,6 +92,11 @@ jobs:
           mise trust
           mise install --locked
 
+      # cpal's ALSA backend links via alsa-sys, whose build script
+      # requires the ALSA development headers (pkg-config).
+      - name: Install ALSA development headers (Linux)
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
       - name: Restore cargo registry/git index cache
         uses: actions/cache@v6.1.0
         with:
@@ -96,7 +107,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # Selects the `rt_`-prefixed RT contract tests by name filter.
+      # Selects the `rt_*`-prefixed RT contract tests by name filter
+      # (e.g. `rt_output_callback_path_allocates_nothing`); a zero-match
+      # filter still exits successfully, so the job stays meaningful as
+      # RT tests grow.
       - name: Run RT contract tests (mise run test-rt)
         run: mise run test-rt
 
@@ -114,6 +128,11 @@ jobs:
         run: |
           mise trust
           mise install --locked
+
+      # cpal's ALSA backend links via alsa-sys, whose build script
+      # requires the ALSA development headers (pkg-config).
+      - name: Install ALSA development headers (Linux)
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: Restore cargo registry/git index cache
         uses: actions/cache@v6.1.0

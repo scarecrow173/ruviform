@@ -16,7 +16,7 @@ relations:
       - type: "file"
         path: "crates/ruviform-audio-device/examples/play_sine.rs"
       - type: "file"
-        path: "docs/impl/exp/*.md（実験ログ）"
+        path: "docs/impl/exp/*.jsonl（実験ログ）"
     modified: []
     deleted: []
     renamed: []
@@ -81,7 +81,7 @@ plan `PLAN-034JgkWCimxdvr81k6b0ow` の Phase C。設計正本 `DESIGN-034JcC9QK9
 
 - `crates/ruviform-audio-device/examples/list_devices.rs` — 新規
 - `crates/ruviform-audio-device/examples/play_sine.rs` — 新規（`select_f32_format` 補助関数同梱）
-- `docs/impl/exp/*.md` — 実験ログ（`new_experiment_log.js` で生成）
+- `docs/impl/exp/*.jsonl` — 実験ログ（`new_experiment_log.js` で生成）
 
 ## Done When
 

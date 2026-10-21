@@ -102,7 +102,7 @@ Chosen option: "**cpal**（条件付き採用）"。Rust エコシステムの�
 
 ### Confirmation
 
-下記 Verification 全項目を PoC 証跡で確認し、2026-10-21 に `proposed` → `accepted` へ昇格した。証跡: 実験ログ `docs/impl/exp/device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl`（実機 Windows 11/WASAPI/cpal 0.18.2 実行記録）、IR `docs/impl/ir/implement-audio-core-device-port.md`・`docs/impl/ir/implement-audio-device-cpal-adapter.md`・`docs/impl/ir/run-device-poc-examples-and-record-experiment-log.md`、テスト `rt_output_callback_path_allocates_nothing`（assert_no_alloc）・`tests/mock_backend.rs`（非 cpal 差替可能性）。再評価トリガ（duplex の要件化・cpal メンテナンスの再停滞・対象プラットフォームでの致命的挙動不良）はいずれも観測されなかった。未観測として後続へ引き継ぐ項目: ALSA vs PipeWire 比較（Linux レーン）、Send/Sync の backend 間ばらつき、WASAPI exclusive/ASIO 要否、初回 callback timestamp=0 の原因確認。トリガ発生時は本 ADR の status 見直しと代替候補の再評価を行う。
+下記 Verification 全項目を PoC 証跡で確認し、2026-10-21 に `proposed` → `accepted` へ昇格した。証跡: 実験ログ `docs/impl/exp/device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl`（実機 Windows 11/WASAPI/cpal 0.18.2 実行記録）、IR `docs/impl/ir/implement-audio-core-device-port.md`・`docs/impl/ir/implement-audio-device-cpal-adapter.md`・`docs/impl/ir/run-device-poc-examples-and-record-experiment-log.md`、テスト `rt_output_callback_path_allocates_nothing`（assert_no_alloc）・`tests/mock_backend.rs`（非 cpal 差替可能性）。再評価トリガ（duplex の要件化・cpal メンテナンスの再停滞・対象プラットフォームでの致命的挙動不良）はいずれも観測されなかった。未観測として後続へ引き継ぐ項目: ALSA vs PipeWire 比較（Linux レーン）、Send/Sync の backend 間ばらつき、WASAPI exclusive/ASIO 要否。なお初報で未観測項目に挙げた「初回 callback timestamp=0」は、レビューで example の計測器バグ（`fetch_min` が sentinel 上で更新不能）由来と確定し、修正後の再実行では backend 時計と整合する値が観測された（実験ログ seq11）。トリガ発生時は本 ADR の status 見直しと代替候補の再評価を行う。
 
 ## Implementation Plan
 

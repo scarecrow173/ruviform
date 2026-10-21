@@ -348,7 +348,14 @@ fn data_callback(step: f64) -> OutputDataCallback {
             MAX_FRAMES.fetch_max(frames, Ordering::Relaxed);
 
             let callback_ns = info.timestamp.callback.value();
-            FIRST_CALLBACK_NS.fetch_min(callback_ns, Ordering::Relaxed);
+            // Store-once: only the first callback swaps the sentinel
+            // for the observed value.
+            let _ = FIRST_CALLBACK_NS.compare_exchange(
+                i64::MIN,
+                callback_ns,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            );
             LAST_CALLBACK_NS.store(callback_ns, Ordering::Relaxed);
             match info.timestamp.playback {
                 Some(playback) => LAST_PLAYBACK_NS.store(playback.value(), Ordering::Relaxed),
