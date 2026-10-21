@@ -34,14 +34,14 @@
 //! `debug_assert` in debug builds; release builds process only the
 //! well-defined prefix.
 
-use fearless_simd::{Fallback, Select, Simd, SimdBase, SimdFloat};
-use fearless_simd_macros::simd;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64"))]
 use fearless_simd::Level;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use fearless_simd::{Avx2, Sse2, Sse4_2};
 #[cfg(target_arch = "aarch64")]
 use fearless_simd::Neon;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use fearless_simd::{Avx2, Sse2, Sse4_2};
+use fearless_simd::{Fallback, Select, Simd, SimdBase, SimdFloat};
+use fearless_simd_macros::simd;
 
 pub use crate::simd_poc::{BiquadCoeffs, SineCoeffs, SineState};
 
@@ -88,7 +88,9 @@ impl SimdToken {
                 return Self { sel: Sel::Avx2(t) };
             }
             if let Some(t) = level.as_sse4_2() {
-                return Self { sel: Sel::Sse4_2(t) };
+                return Self {
+                    sel: Sel::Sse4_2(t),
+                };
             }
             if let Some(t) = level.as_sse2() {
                 return Self { sel: Sel::Sse2(t) };
@@ -136,9 +138,7 @@ impl SimdToken {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[must_use]
     pub fn force_sse2() -> Option<Self> {
-        Level::new()
-            .as_sse2()
-            .map(|t| Self { sel: Sel::Sse2(t) })
+        Level::new().as_sse2().map(|t| Self { sel: Sel::Sse2(t) })
     }
 
     /// Forced SSE4.2 token (`None` when unsupported). Test/bench only.
@@ -146,9 +146,9 @@ impl SimdToken {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[must_use]
     pub fn force_sse4_2() -> Option<Self> {
-        Level::new()
-            .as_sse4_2()
-            .map(|t| Self { sel: Sel::Sse4_2(t) })
+        Level::new().as_sse4_2().map(|t| Self {
+            sel: Sel::Sse4_2(t),
+        })
     }
 
     /// Forced AVX2 token (`None` when unsupported). Test/bench only.
@@ -156,9 +156,7 @@ impl SimdToken {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[must_use]
     pub fn force_avx2() -> Option<Self> {
-        Level::new()
-            .as_avx2()
-            .map(|t| Self { sel: Sel::Avx2(t) })
+        Level::new().as_avx2().map(|t| Self { sel: Sel::Avx2(t) })
     }
 
     /// Forced NEON token (`None` when unsupported). Test/bench only.
@@ -166,9 +164,7 @@ impl SimdToken {
     #[cfg(target_arch = "aarch64")]
     #[must_use]
     pub fn force_neon() -> Option<Self> {
-        Level::new()
-            .as_neon()
-            .map(|t| Self { sel: Sel::Neon(t) })
+        Level::new().as_neon().map(|t| Self { sel: Sel::Neon(t) })
     }
 }
 
@@ -673,12 +669,15 @@ pub fn sine(simd: SimdToken, dst: &mut [f32], c: &SineCoeffs, state: &mut SineSt
 mod tests {
     use super::*;
 
+    #[global_allocator]
+    static ALLOC: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
+
     #[test]
     fn detect_returns_constructible_level() {
         let tok = SimdToken::detect();
         // Every supported host must resolve to a concrete level; on this
         // dev machine (AVX2) it must be "avx2".
-        assert!(!tok.level().is_empty());
+        assert_ne!(tok.level(), "");
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if std::arch::is_x86_feature_detected!("avx2") {
             assert_eq!(tok.level(), "avx2");
@@ -686,6 +685,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "fixture indices are far below the f32 exact-integer range"
+    )]
     fn add_matches_scalar_reference() {
         let tok = SimdToken::detect();
         let a: Vec<f32> = (0..300).map(|i| i as f32 * 0.5).collect();
@@ -698,6 +701,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "fixture indices are far below the f32 exact-integer range"
+    )]
     fn small_size_routes_scalar_and_matches_reference() {
         // Below the scalar-routing threshold the public path must still be
         // bit-identical to the scalar reference.
@@ -709,5 +716,136 @@ mod tests {
         add(tok, &mut d, &a, &b);
         crate::simd_poc::add(&mut expect, &a, &b);
         assert_eq!(d, expect);
+    }
+    /// Constructible forced tokens, for direct `*_impl` verification that
+    /// bypasses size routing.
+    fn forced_tokens() -> Vec<SimdToken> {
+        let mut v = vec![SimdToken::force_fallback()];
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        v.extend(
+            [
+                SimdToken::force_sse2(),
+                SimdToken::force_sse4_2(),
+                SimdToken::force_avx2(),
+            ]
+            .into_iter()
+            .flatten(),
+        );
+        #[cfg(target_arch = "aarch64")]
+        v.extend(SimdToken::force_neon());
+        v
+    }
+
+    /// All 8 kernels via the concrete token — exercised at every size,
+    /// including sizes below the routing thresholds.
+    #[expect(
+        clippy::many_single_char_names,
+        clippy::cast_precision_loss,
+        reason = "fixture values are small; short names mirror kernel signatures"
+    )]
+    fn verify_kernels<S: Simd>(simd: S, n: usize) {
+        let a: Vec<f32> = (0..n).map(|i| (i as f32 * 0.5) - 3.0).collect();
+        let b: Vec<f32> = (0..n).map(|i| (i as f32 * 0.25) + 1.0).collect();
+        let taps = crate::simd_poc::fir_taps();
+
+        let mut d = vec![0.0; n];
+        let mut e = vec![0.0; n];
+        add_impl(simd, &mut d, &a, &b);
+        crate::simd_poc::add(&mut e, &a, &b);
+        assert_eq!(d, e, "add n={n}");
+
+        scale_impl(simd, &mut d, &a, 0.5);
+        crate::simd_poc::scale(&mut e, &a, 0.5);
+        assert_eq!(d, e, "scale n={n}");
+
+        clamp_unit_impl(simd, &mut d, &a);
+        crate::simd_poc::clamp_unit(&mut e, &a);
+        assert_eq!(d, e, "clamp_unit n={n}");
+
+        fade_impl(simd, &mut d, &a, 0.0, 0.01);
+        crate::simd_poc::fade(&mut e, &a, 0.0, 0.01);
+        assert_eq!(d, e, "fade n={n}");
+
+        let got = dot_impl(simd, &a, &b);
+        let want = crate::simd_poc::dot(&a, &b);
+        // ulp-bounded contract (dot ≤ 256); bit-equality is not required.
+        assert!(
+            approx::ulps_eq!(got, want, max_ulps = 256),
+            "dot n={n}: {got} vs {want}"
+        );
+
+        fir_impl(simd, &mut d, &a, &taps);
+        crate::simd_poc::fir(&mut e, &a, &taps);
+        assert_eq!(d, e, "fir n={n}");
+
+        let channels = 2;
+        let frames = n / channels;
+        let src: Vec<f32> = (0..frames * channels)
+            .map(|i| (i as f32 * 0.1).sin())
+            .collect();
+        let mut d = vec![0.0; frames * channels];
+        let mut e = vec![0.0; frames * channels];
+        let mut st = vec![0.0; 2 * channels];
+        let mut st_e = vec![0.0; 2 * channels];
+        let c = crate::simd_poc::BIQUAD_COEFFS;
+        biquad_impl(simd, &mut d, &src, &c, &mut st, channels);
+        crate::simd_poc::biquad(&mut e, &src, &c, &mut st_e, channels);
+        assert_eq!(d, e, "biquad n={n}");
+        assert_eq!(st, st_e, "biquad state n={n}");
+
+        let mut st = SineState { y1: 0.0, y2: 0.5 };
+        let mut st_e = st;
+        let c = SineCoeffs::for_omega(0.1);
+        sine_impl(simd, &mut d, c, &mut st);
+        crate::simd_poc::sine(&mut e, &c, &mut st_e);
+        assert_eq!(d, e, "sine n={n}");
+        assert_eq!(st.y1, st_e.y1);
+    }
+
+    #[test]
+    fn forced_levels_match_scalar_reference_all_sizes() {
+        for tok in forced_tokens() {
+            for n in [1usize, 4, 16, 63, 64, 127, 128, 255, 256, 300, 1000] {
+                let frames = n / 2 * 2; // keep biquad friendly
+                let _ = frames;
+                match tok.sel {
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                    Sel::Avx2(t) => verify_kernels(t, n),
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                    Sel::Sse4_2(t) => verify_kernels(t, n),
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                    Sel::Sse2(t) => verify_kernels(t, n),
+                    #[cfg(target_arch = "aarch64")]
+                    Sel::Neon(t) => verify_kernels(t, n),
+                    Sel::Fallback(t) => verify_kernels(t, n),
+                }
+            }
+        }
+    }
+
+    /// Issue #22 RT lane — every routed public kernel call must be
+    /// allocation-free (fixture setup stays outside the measurement window).
+    #[test]
+    fn rt_dsp_kernels_no_alloc() {
+        let tok = SimdToken::detect();
+        let n = 1024;
+        let a = vec![0.5f32; n];
+        let b = vec![0.25f32; n];
+        let taps = crate::simd_poc::fir_taps();
+        let c = crate::simd_poc::BIQUAD_COEFFS;
+        let mut dst = vec![0.0f32; n];
+        let mut st2 = vec![0.0f32; 4];
+        let sc = SineCoeffs::for_omega(0.1);
+        let mut ss = SineState { y1: 0.0, y2: 0.0 };
+        assert_no_alloc::assert_no_alloc(|| {
+            add(tok, &mut dst, &a, &b);
+            scale(tok, &mut dst, &a, 0.5);
+            clamp_unit(tok, &mut dst, &a);
+            fade(tok, &mut dst, &a, 0.0, 0.001);
+            let _ = dot(tok, &a, &b);
+            fir(tok, &mut dst, &a, &taps);
+            biquad(tok, &mut dst, &a, &c, &mut st2, 2);
+            sine(tok, &mut dst, &sc, &mut ss);
+        });
     }
 }

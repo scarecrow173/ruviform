@@ -37,6 +37,8 @@ pulp = { version = "0.22", features = ["x86-v4", "macro"] }
 multiversion = "0.9"
 # 等価性判定（UlpsEq）。代替は float_eq — 実装時に API 使い勝手で 1 つに絞る。
 approx = "0.5"
+# rt_ テスト用のアロケーション検知（#22 レーン）。lib 依存には昇格しない。
+assert_no_alloc = "1.1"
 
 [[bench]]
 name = "simd_poc"
