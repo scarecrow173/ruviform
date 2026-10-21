@@ -66,6 +66,7 @@ relations:
     - "../specs/implement-plugin-foundation.md"
     - "../plans/implement-plugin-foundation.md"
     - "../test-specs/plugin-foundation.md"
+    - "docs/specs/plugin-isolation-design.md"
   verifies: []
   verified-by: []
   references:
