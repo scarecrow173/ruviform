@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JO3XBRTT20ZNbIBDPRM"
 type: "task"
-status: "todo"
+status: "done"
 title: "MSRV 1.89 実測検証と Issue #52 完了確認"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -80,17 +80,17 @@ ADR の検証基準どおり、Rust 1.89 toolchain で workspace 全ターゲッ
 
 ## Done Criteria
 
-- [ ] `cargo +1.89 check --workspace --all-targets` 成功
-- [ ] `cargo +1.89 check -p ruviform-math --lib` 成功
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke` 全パス
-- [ ] `prek run --all-files` パス
-- [ ] ドキュメント監査で本変更起因 findings 0
-- [ ] 上流文書の検証記録が実測結果で更新済み
+- [x] `cargo +1.89 check --workspace --all-targets` 成功
+- [x] `cargo +1.89 check -p ruviform-math --lib` 成功
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke` 全パス
+- [x] `prek run --all-files` パス
+- [x] ドキュメント監査で本変更起因 findings 0
+- [x] 上流文書の検証記録が実測結果で更新済み
 
 ## Verification
 
-- [ ] 上記 Done Criteria 全項目
+- [x] 上記 Done Criteria 全項目
 
 ## Completion Notes
 
-<!-- Record outcome, deviations, and evidence after implementation. -->
+`rustup toolchain install 1.89` で toolchain を取得し、`cargo +1.89 check --workspace --all-targets`・`-p ruviform-math --lib` とも成功。let-chains を使う bench/test ターゲットを含めて成立し、1.85 時点の「`--lib` のみ成立」という既知制限は解消。MSRV 引上げに伴い clippy が 1.87〜1.88 安定化 API（`as_chunks`/`as_chunks_mut`/`is_multiple_of`/let-chains collapsible_if）を提案するようになり、計 16 箇所に機械的修正を適用（`cargo clippy --fix` + `as_chunks_mut` 3箇所手動補完・`cargo fmt` 整形）。`mise run fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke`・`prek run --all-files` 全パス。doc 監査: 本チェーン起因 findings 0（残存5件は wave-1 由来の既存非ブロッキング警告）。

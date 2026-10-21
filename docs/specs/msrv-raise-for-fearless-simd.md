@@ -98,11 +98,11 @@ workspace の `rust-version` を `1.85` から採用バックエンド `fearless
 
 ## Acceptance Criteria
 
-- [ ] `Cargo.toml` の `rust-version` が ADR で確定した値に更新されている
-- [ ] `AGENTS.md` 等のドキュメント内 MSRV 言及が新値と一致する
-- [ ] `cargo +<new-msrv> check --workspace`（または選択した範囲）が成功し、結果が記録されている
-- [ ] `fearless_simd` を `[dependencies]` に移した場合に MSRV 不足で失敗しないことが確認できる（宣言値 ≥1.89）
-- [ ] MSRV 引上げの根拠・範囲・既知制限が ADR に記録され、後続の再評価トリガが明記されている
+- [x] `Cargo.toml` の `rust-version` が ADR で確定した値（1.89）に更新されている
+- [x] `AGENTS.md` 等のドキュメント内 MSRV 言及が新値と一致する（`AGENTS.md`・`README.md`・`crates/ruviform-io-symphonia/Cargo.toml` コメントを同期）
+- [x] `cargo +<new-msrv> check --workspace`（または選択した範囲）が成功し、結果が記録されている（実測: `cargo +1.89 check --workspace --all-targets`・`-p ruviform-math --lib` とも成功 — 結果は plan `PLAN-034JO2EWa8LuEEE4BFVZ9Q`・design `DESIGN-034JO1BQYrzMQsaFmL3YkF` に記録）
+- [x] `fearless_simd` を `[dependencies]` に移した場合に MSRV 不足で失敗しないことが確認できる（宣言値 1.89 = `fearless_simd` 1.1.0 の要求値。昇格自体は Issue #53 スコープ）
+- [x] MSRV 引上げの根拠・範囲・既知制限が ADR に記録され、後続の再評価トリガが明記されている（`ADR-034JNYt58J8NlUkn6RfJMs`）
 
 ## Deferred Design Concerns
 

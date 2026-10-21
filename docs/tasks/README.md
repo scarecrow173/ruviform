@@ -67,6 +67,6 @@ Directory: `docs/tasks`
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
 | TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | done | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |
 | TASK-034IRZFUgbTZlBX2kH7psN | Issue #1 リポジトリ反映の総合検証と spec/design バックリンク | done | [verify-issue-1-repo-reflection.md](./verify-issue-1-repo-reflection.md) |
-| TASK-034JO3XBRTT20ZNbIBDPRM | MSRV 1.89 実測検証と Issue #52 完了確認 | todo | [verify-msrv-1-89-build.md](./verify-msrv-1-89-build.md) |
+| TASK-034JO3XBRTT20ZNbIBDPRM | MSRV 1.89 実測検証と Issue #52 完了確認 | done | [verify-msrv-1-89-build.md](./verify-msrv-1-89-build.md) |
 | TASK-034IdQxdPQUxXweHBN1ZxT | 再現インストール検証と #3 転記用作業メモ | done | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |
 | TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | done | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |

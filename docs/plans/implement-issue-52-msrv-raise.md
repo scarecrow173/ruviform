@@ -80,11 +80,11 @@ ADR `ADR-034JNYt58J8NlUkn6RfJMs`（workspace MSRV 1.85 → 1.89）を `Cargo.tom
 
 ## Implementation Sequence
 
-- [ ] `Cargo.toml` の `rust-version = "1.85"` を `rust-version = "1.89"` に変更し、コメントを「Issue #34 で 1.85 確定 → Issue #52 / ADR で 1.89 に引上げ（fearless_simd 本番昇格前提）」に更新
-- [ ] `cargo +1.89 check --workspace --all-targets` を実行し、let-chains 使用の bench/test ターゲットを含めて成立することを確認（`rustup toolchain install 1.89` が必要なら先に実行）
-- [ ] `cargo +1.89 check -p ruviform-math --lib` で従来成立していた範囲の退行がないことを確認
-- [ ] `AGENTS.md`・その他 MSRV 言及箇所を `1.89` に同期
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`prek run --all-files` で pin toolchain（1.99）側の既存検証が維持されることを確認
+- [x] `Cargo.toml` の `rust-version = "1.85"` を `rust-version = "1.89"` に変更し、コメントを「Issue #34 で 1.85 確定 → Issue #52 / ADR で 1.89 に引上げ（fearless_simd 本番昇格前提）」に更新
+- [x] `cargo +1.89 check --workspace --all-targets` を実行し、let-chains 使用の bench/test ターゲットを含めて成立することを確認（`rustup toolchain install 1.89` を実施）
+- [x] `cargo +1.89 check -p ruviform-math --lib` で従来成立していた範囲の退行がないことを確認
+- [x] `AGENTS.md`・その他 MSRV 言及箇所を `1.89` に同期（`README.md`・`crates/ruviform-io-symphonia/Cargo.toml` コメントも同期）
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`prek run --all-files` で pin toolchain（1.99）側の既存検証が維持されることを確認
 
 ## Dependencies and Risks
 
@@ -99,12 +99,12 @@ ADR `ADR-034JNYt58J8NlUkn6RfJMs`（workspace MSRV 1.85 → 1.89）を `Cargo.tom
 
 ## Verification
 
-- [ ] `cargo +1.89 check --workspace --all-targets` 成功（let-chains ターゲット含む）
-- [ ] `cargo +1.89 check -p ruviform-math --lib` 成功
-- [ ] `Cargo.toml` `rust-version` が `1.89`・コメントに Issue #52/ADR 参照
-- [ ] `AGENTS.md` の MSRV 言及が `1.89` に一致
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`prek run --all-files` 全パス
-- [ ] `audit_docs.js --type all --json` で本変更起因 findings 0
+- [x] `cargo +1.89 check --workspace --all-targets` 成功（let-chains ターゲット含む）
+- [x] `cargo +1.89 check -p ruviform-math --lib` 成功
+- [x] `Cargo.toml` `rust-version` が `1.89`・コメントに Issue #52/ADR 参照
+- [x] `AGENTS.md` の MSRV 言及が `1.89` に一致
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`bench-smoke`・`prek run --all-files` 全パス
+- [x] `audit_docs.js --type all --json` で本変更起因 findings 0（残存5件は wave-1 由来の既存非ブロッキング警告）
 
 ## Open Questions / Gaps
 

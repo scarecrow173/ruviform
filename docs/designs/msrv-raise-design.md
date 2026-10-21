@@ -102,8 +102,8 @@ relations:
 
 ## Verification Notes
 
-- [ ] `cargo +1.89 check --workspace --all-targets` が成功（let-chains 使用ターゲットを含む）
-- [ ] `cargo +1.89 check -p ruviform-math --lib` が従来どおり成功（`--lib` 範囲の退行なし）
-- [ ] `Cargo.toml` の `rust-version` が `1.89`、隣接コメントが Issue #52/ADR 参照に更新されている
-- [ ] `AGENTS.md` の MSRV 言及が `1.89` に一致する
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` が全パス（mise pin 1.99 側の既存検証を維持）
+- [x] `cargo +1.89 check --workspace --all-targets` が成功（let-chains 使用ターゲットを含む。実測: 成功・従来の 1.85 時点の `--lib` のみ成立という既知制限は解消）
+- [x] `cargo +1.89 check -p ruviform-math --lib` が従来どおり成功（`--lib` 範囲の退行なし）
+- [x] `Cargo.toml` の `rust-version` が `1.89`、隣接コメントが Issue #52/ADR 参照に更新されている
+- [x] `AGENTS.md` の MSRV 言及が `1.89` に一致する
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` が全パス（mise pin 1.99 側の既存検証を維持。MSRV 引上げで新有効化された clippy lint — `as_chunks`/`is_multiple_of`/let-chains — の適用を含む）
