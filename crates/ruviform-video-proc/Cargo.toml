@@ -1,0 +1,15 @@
+[package]
+name = "ruviform-video-proc"
+description = "Color conversion, scaling and compositing base processing kernels and the GPU compute-kernel boundary port for Ruviform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-media-core = { path = "../ruviform-media-core" }
+ruviform-video-core = { path = "../ruviform-video-core" }
+
+[lints]
+workspace = true

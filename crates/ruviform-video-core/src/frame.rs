@@ -11,7 +11,9 @@
 //! reference, not a copy), so mutable plane access through
 //! [`VideoFrame::plane_mut`] is withheld while any clone shares the
 //! backing — lifetime management of shared frames is the caller's
-//! responsibility and a non-RT concern.
+//! responsibility and a non-RT concern. Dropping the last `Arc`
+//! reference deallocates the backing, so an owned frame leaves the RT
+//! path for the non-RT side before its final drop (drop retreat).
 
 use std::fmt;
 use std::sync::Arc;
@@ -112,19 +114,45 @@ fn row_bytes_of(width: u32, sample_bytes: usize) -> Result<usize> {
 /// — e.g. 4:2:0 chroma is `ceil(w/2)`×`ceil(h/2)`). Strides are
 /// per-plane and independent of `width`×`sample_bytes` — padding is
 /// explicit. [`VideoFrame::new_owned`] produces tightly packed planes;
-/// [`VideoFrame::from_shared_planes`] is the *permitted* zero-copy supply
-/// path for externally allocated (e.g. decoder) buffers and may carry
-/// padded strides — the decoder mechanism itself is `要PoC`, not fixed
-/// here.
+/// [`VideoFrame::from_shared_planes`] is the sole zero-copy supply path
+/// for externally allocated (e.g. decoder) buffers and may carry padded
+/// strides — the decoder mechanism itself is `要PoC`, deferred to the
+/// media-io issue.
+///
+/// # Ownership
 ///
 /// `Clone` is cheap: it shares the `Arc`'d plane backing — a new
-/// reference, not a copy. While any clone shares a plane's backing,
-/// [`plane_mut`](Self::plane_mut) returns `None` for it, so frame clones
-/// must be dropped (a non-RT lifetime-management concern of the caller)
-/// before the backing can be written through again.
+/// reference, not a copy. Mutation requires exclusive ownership: while
+/// any clone shares a plane's backing, [`plane_mut`](Self::plane_mut)
+/// returns `None` for it (the `Arc::get_mut` write gate), so a shared
+/// frame is read-only and `plane_mut() == None` is the observable
+/// sharing signal — there is no other sharing-introspection API.
+/// Dropping every other clone (a non-RT lifetime-management concern of
+/// the caller) restores mutable access.
+///
+/// # Drop and frame pools
+///
+/// Dropping the last `Arc` reference deallocates the plane backing —
+/// deallocation on the media path is an RT violation, so a `VideoFrame`
+/// must not reach its final drop on an RT path. Retired frames are
+/// handed to the non-RT side for dropping (the drop-retreat pattern of
+/// the architecture baseline). A future frame pool will be owned by the
+/// non-RT layer and its return/ownership-transfer protocol will be
+/// explicit APIs fixed in later design; the contract this type fixes
+/// today is shared-backing reference counting plus mutation only under
+/// exclusive ownership.
 ///
 /// PTS uses the container's [`MediaTime`]; `duration` is stored as an
 /// `Option` only — supplied explicitly or derived downstream.
+///
+/// **RT contract:** value access (`format`/`width`/`height`/`pts`/
+/// `duration`/`color`/`plane_count`), the `set_*` writers and
+/// [`plane`](Self::plane) are RT-suitable borrows. [`plane_mut`](
+/// Self::plane_mut) is RT-suitable but yields `None` while the backing
+/// is shared. `Clone` (an `Arc` refcount bump) and `Drop` (deallocates
+/// the backing when the last `Arc` is released) are non-RT — do not
+/// clone a `VideoFrame` on an RT path, and let its last owner leave the
+/// RT path before dropping it.
 #[derive(Clone)]
 pub struct VideoFrame {
     /// Pixel format — determines the plane layout.
@@ -201,17 +229,29 @@ impl VideoFrame {
         })
     }
 
-    /// Adopts caller-supplied `Arc`-backed planes — the permitted
-    /// zero-copy supply path.
+    /// Adopts caller-supplied `Arc`-backed planes — the sole zero-copy
+    /// supply path for externally allocated buffers.
+    ///
+    /// This is the only way external (e.g. decoder) buffers enter a
+    /// frame: one [`SharedPlane`] per image plane in the format's fixed
+    /// order (luma, `Cb`, `Cr` for planar YUV — see [`PixelFormat`]),
+    /// each carrying its own `Arc<[u8]>` backing. `SharedPlane` has no
+    /// plane-offset field — a
+    /// plane starting partway into a larger shared buffer cannot be
+    /// expressed, so producers holding such layouts must repackage them
+    /// into per-plane `Arc`s (a known limitation, re-evaluated in the
+    /// media-io issue).
     ///
     /// Validates `width`/`height` (non-zero), `planes.len() ==
     /// format.plane_count()`, per-plane `stride >= row_bytes` and
-    /// `data.len() >= stride * (plane_height - 1) + row_bytes`;
+    /// `data.len() >= stride * (plane_height - 1) + row_bytes` (longer
+    /// backings are accepted; views trim to the usable region);
     /// [`Error::InvalidValue`] otherwise. Plane grid dimensions are
     /// derived from `format` exactly as in [`new_owned`](Self::new_owned).
     ///
-    /// **RT contract:** non-RT only — takes ownership of supplied buffers
-    /// on the frame supply path.
+    /// **RT contract:** non-RT only — moves `Arc` references and
+    /// allocates the plane vector; runs on the frame supply path, not
+    /// on the media path.
     ///
     /// # Examples
     ///
@@ -377,9 +417,13 @@ impl VideoFrame {
 
     /// Mutable view of plane `i`.
     ///
-    /// Returns `None` when `i` is out of range *or* when the plane's
-    /// backing is still shared — `Arc::get_mut` fails while another
-    /// [`VideoFrame`] clone holds a reference.
+    /// Mutation requires exclusive ownership: returns `None` when `i` is
+    /// out of range *or* while the plane's backing is still shared —
+    /// the `Arc::get_mut` write gate fails as long as another
+    /// [`VideoFrame`] clone holds a reference. `plane_mut()` returning
+    /// `None` on an in-range index is the observable signal that a clone
+    /// still shares the backing; dropping every other clone restores
+    /// mutable access.
     ///
     /// **RT contract:** RT-suitable — allocation-free; mutability is
     /// gated on exclusive `Arc` ownership, never on copying.

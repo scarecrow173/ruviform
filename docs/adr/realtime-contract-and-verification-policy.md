@@ -39,7 +39,13 @@ relations:
     - "../plans/implement-issue-18-data-model.md"
     - "../specs/issue-18-followup-enum-and-time-fix.md"
     - "../plans/issue-18-followup-enum-and-time-fix.md"
+<<<<<<< HEAD
     - "../plans/implement-rt-foundation.md"
+=======
+    - "../specs/implement-video-foundation-api.md"
+    - "video-proc-kernel-api-and-color-hdr-scope.md"
+    - "../plans/implement-issue-26-video-foundation.md"
+>>>>>>> 4e20d3c (docs(issue-26): add video foundation api doc chain)
   verifies: []
   verified-by: []
   references: []

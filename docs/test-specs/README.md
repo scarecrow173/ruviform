@@ -15,3 +15,4 @@ Directory: `docs/test-specs`
 | TSPEC-034JxNwt3ReMphshEaeFVe | SPSC・退役・スナップショット交換の RT 契約保証 | approved | [rt-channel-and-snapshot-contracts.md](./rt-channel-and-snapshot-contracts.md) |
 | TSPEC-034JxNxcYxa29rPklpknWh | RtContext・Processor 契約・MasterClock の RT 契約保証 | approved | [rt-context-and-processor-contract.md](./rt-context-and-processor-contract.md) |
 | TSPEC-034JxNxYK4O6s8NA8gnaah | スレッド優先度ライフサイクルの契約保証 | approved | [thread-priority-lifecycle.md](./thread-priority-lifecycle.md) |
+| TSPEC-034JcCwISRw7E9Q8XoNvD8 | 動画基盤 API の契約保証（所有権・RT・色変換カーネル） | approved | [video-foundation-api.md](./video-foundation-api.md) |
