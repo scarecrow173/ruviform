@@ -1,24 +1,37 @@
 ---
 id: "TASK-034JfGCUwtk0lzJvJPr36B"
 type: "task"
-status: "todo"
+status: "done"
 title: "PoC UI ハーネスホスト（独立ワークスペース・wry+tao・計測契約）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/28"
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "dir"
+        path: "poc/ui"
+      - type: "doc"
+        path: "docs/impl/ir/poc-ui.md"
+      - type: "doc"
+        path: "docs/impl/exp/ac1-host-experiment-wry-tao-webview.jsonl"
+    modified:
+      - type: "file"
+        path: "docs/tasks/README.md"
+      - type: "file"
+        path: "docs/impl/ir/README.md"
+      - type: "doc"
+        path: "docs/tasks/poc-ui-harness-host.md"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "../plans/issue-28-ui-poc.md"
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/poc-ui.md"
   depends-on:
     - "../plans/issue-28-ui-poc.md"
   blocks:
@@ -50,18 +63,18 @@ relations:
 
 plan `PLAN-034JfDEU8mhCDj4ldYFZUG` の T1。design `DESIGN-034JcpvK9cZEfkeEbBLBoz` のハーネス構成を正本として、全実験の前提となる `poc/ui/` 独立ワークスペースと `ui-poc` バイナリ骨格・計測契約を構築し、`--experiment host`（AC1）と隔離（AC8）を検証する。
 
-- [ ] `poc/ui/` を `[workspace]` + `[package]`（`ui-poc` 単一 bin）の独立 cargo ワークスペースとして作成（ルート `Cargo.toml` の `members` は明示リストで glob なしのため `exclude` 不要。ルート `Cargo.toml`/`Cargo.lock`/`crates/`/`mise.toml` は無変更）
-- [ ] `poc/ui/.gitignore`（`node_modules/`・`*/dist/`・`out/`）・`poc/ui/README.md`（前提 `npm ci && npm run build`・ビルド/実行/再現手順・wgpu optional feature 化の逃げ道注記）を作成
-- [ ] `src/args.rs`: std-only 引数パース（`--experiment <name>`・`--frames N`・`--duration SEC`・`--backend`・`--mode`・`--variant`・`--out`・`--check`）
-- [ ] `src/check.rs`: capability 検出（WebView2 レジストリ `pv` 値・wgpu アダプタ・OS/toolchain）と `--check` の JSON 出力（GUI を作らず exit 0）
-- [ ] `src/main.rs`: dispatch と exit code 規約（passed/skipped → 0、failed → 1、CLI/内部エラー → 2）
-- [ ] `src/host.rs`: tao `Window` + wry `WebView`（`build_as_child` または `build` + `set_bounds`）・自己終了タイマ（N フレーム/timeout）・done シグナル受信。外部型（wry/tao/winreg）はこの層に封じ、`exp/*`・`metrics.rs` は内部 host I/F にのみ依存させる
-- [ ] `src/assets.rs`: `rust-embed` + `with_custom_protocol` で `poc://app/` 埋め込みアセット配信（debug=FS・release=埋め込み）と `poc://data/` の名前空間分離
-- [ ] `src/metrics.rs`: `poc-metric.v1` スキーマ（`{schema, experiment, ts, env:{os,arch,webview2_version,wgpu_adapter,rustc}, params, metrics, status, reason?}`）・パーセンタイル集計・最終 stdout 行出力 + `out/*.jsonl` 追記
-- [ ] `src/exp/mod.rs`: `Experiment` trait（setup/run/teardown）と実験レジストリ
-- [ ] `src/exp/` に `--experiment host`（AC1）を実装: `poc://app/index.html` の埋め込みロード・`window.ipc.postMessage` JSON intent → `with_ipc_handler` → `evaluate_script` echo・`set_bounds` リサイズ追従・フォーカス遷移ログ。メトリック `protocol_load`/`ipc_echo`/`resize_follow`/`focus_transition`/`webview2_version` を記録
-- [ ] `poc/ui/RESULTS.md` スケルトン（AC → 実験 → エビデンス行対応表・環境欄・再現コマンド欄・「文書評価」ラベル欄）を作成
-- [ ] 実機で `--experiment host` を実行し結果を `RESULTS.md` AC1 行と `docs/impl/exp/` ログに記録（ヘッドレス環境では `status:"skipped"` 経路の確認に留める）
+- [x] `poc/ui/` を `[workspace]` + `[package]`（`ui-poc` 単一 bin）の独立 cargo ワークスペースとして作成（ルート `Cargo.toml` の `members` は明示リストで glob なしのため `exclude` 不要。ルート `Cargo.toml`/`Cargo.lock`/`crates/`/`mise.toml` は無変更）
+- [x] `poc/ui/.gitignore`（`node_modules/`・`*/dist/`・`out/`）・`poc/ui/README.md`（前提 `npm ci && npm run build`・ビルド/実行/再現手順・wgpu optional feature 化の逃げ道注記）を作成
+- [x] `src/args.rs`: std-only 引数パース（`--experiment <name>`・`--frames N`・`--duration SEC`・`--backend`・`--mode`・`--variant`・`--out`・`--check`）
+- [x] `src/check.rs`: capability 検出（WebView2 レジストリ `pv` 値・wgpu アダプタ・OS/toolchain）と `--check` の JSON 出力（GUI を作らず exit 0）
+- [x] `src/main.rs`: dispatch と exit code 規約（passed/skipped → 0、failed → 1、CLI/内部エラー → 2）
+- [x] `src/host.rs`: tao `Window` + wry `WebView`（`build_as_child` または `build` + `set_bounds`）・自己終了タイマ（N フレーム/timeout）・done シグナル受信。外部型（wry/tao/winreg）はこの層に封じ、`exp/*`・`metrics.rs` は内部 host I/F にのみ依存させる
+- [x] `src/assets.rs`: `rust-embed` + `with_custom_protocol` で `poc://app/` 埋め込みアセット配信（debug=FS・release=埋め込み）と `poc://data/` の名前空間分離
+- [x] `src/metrics.rs`: `poc-metric.v1` スキーマ（`{schema, experiment, ts, env:{os,arch,webview2_version,wgpu_adapter,rustc}, params, metrics, status, reason?}`）・パーセンタイル集計・最終 stdout 行出力 + `out/*.jsonl` 追記
+- [x] `src/exp/mod.rs`: `Experiment` trait（setup/run/teardown）と実験レジストリ
+- [x] `src/exp/` に `--experiment host`（AC1）を実装: `poc://app/index.html` の埋め込みロード・`window.ipc.postMessage` JSON intent → `with_ipc_handler` → `evaluate_script` echo・`set_bounds` リサイズ追従・フォーカス遷移ログ。メトリック `protocol_load`/`ipc_echo`/`resize_follow`/`focus_transition`/`webview2_version` を記録
+- [x] `poc/ui/RESULTS.md` スケルトン（AC → 実験 → エビデンス行対応表・環境欄・再現コマンド欄・「文書評価」ラベル欄）を作成
+- [x] 実機で `--experiment host` を実行し結果を `RESULTS.md` AC1 行と `docs/impl/exp/` ログに記録（ヘッドレス環境では `status:"skipped"` 経路の確認に留める）
 
 ## Classification
 
@@ -90,16 +103,16 @@ plan `PLAN-034JfDEU8mhCDj4ldYFZUG` の T1。design `DESIGN-034JcpvK9cZEfkeEbBLBo
 
 ## Done When
 
-- [ ] `poc/ui` が独立ワークスペースとして `mise exec -- cargo build --manifest-path poc/ui/Cargo.toml` でビルドできる
-- [ ] `--check` が GUI を作らず capability 検出 JSON を出して exit 0 する
-- [ ] 実機で `--experiment host` が `status:"passed"`（または前提不足なら `status:"skipped"` + 非空 `reason`）で終了し、`poc-metric.v1` 最終行 JSON と `out/*.jsonl` が出る
-- [ ] AC1 項目（埋め込みアセットロード・IPC echo・リサイズ・フォーカス）が `RESULTS.md` に記録される
-- [ ] ルート `Cargo.toml`/`Cargo.lock`/`crates/`/`mise.toml` に差分がない（AC8）
+- [x] `poc/ui` が独立ワークスペースとして `mise exec -- cargo build --manifest-path poc/ui/Cargo.toml` でビルドできる
+- [x] `--check` が GUI を作らず capability 検出 JSON を出して exit 0 する
+- [x] 実機で `--experiment host` が `status:"passed"`（または前提不足なら `status:"skipped"` + 非空 `reason`）で終了し、`poc-metric.v1` 最終行 JSON と `out/*.jsonl` が出る
+- [x] AC1 項目（埋め込みアセットロード・IPC echo・リサイズ・フォーカス）が `RESULTS.md` に記録される
+- [x] ルート `Cargo.toml`/`Cargo.lock`/`crates/`/`mise.toml` に差分がない（AC8）
 
 ## Verification
 
-- [ ] `mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --check` — capability 検出 JSON を出して exit 0（ヘッドレスでも動作）
-- [ ] `mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --experiment host` — 最終 stdout 行が `poc-metric.v1` で `status` が `passed`/`skipped`/`failed` のいずれか（実機では `passed`・skipped 時は非空 `reason`）
-- [ ] `git status --porcelain -- Cargo.toml Cargo.lock crates mise.toml` — 出力が空（隔離確認）
-- [ ] `mise run check` && `mise run lint` && `mise run test` — ルート検証が PoC 前と同一に成功
-- [ ] Manual: `poc/ui/RESULTS.md` に AC → 実験 → エビデンス対応表のスケルトンと AC1 行が存在する（補助確認）
+- [x] `mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --check` — capability 検出 JSON を出して exit 0（ヘッドレスでも動作）
+- [x] `mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --experiment host` — 最終 stdout 行が `poc-metric.v1` で `status` が `passed`/`skipped`/`failed` のいずれか（実機では `passed`・skipped 時は非空 `reason`）
+- [x] `git status --porcelain -- Cargo.toml Cargo.lock crates mise.toml` — 出力が空（隔離確認）
+- [x] `mise run check` && `mise run lint` && `mise run test` — ルート検証が PoC 前と同一に成功
+- [x] Manual: `poc/ui/RESULTS.md` に AC → 実験 → エビデンス対応表のスケルトンと AC1 行が存在する（補助確認）

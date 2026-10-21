@@ -47,7 +47,7 @@ Directory: `docs/tasks`
 | TASK-034JfH9TmzdaGlsimZsJiq | PoC メッセージ境界計測（JSON RTT・バイナリ pull・evaluate_script push） | todo | [poc-message-boundary.md](./poc-message-boundary.md) |
 | TASK-034JfHavtGmdqmRGyDAbch | PoC ネイティブサーフェス合成（wgpu 隣接構成・PR #1762 評価） | todo | [poc-native-surface.md](./poc-native-surface.md) |
 | TASK-034JfGDrzj4yLZMu9A4qHS | PoC 描画バックエンド計測（canvas2d/webgl2/webgpu フレーム統計） | todo | [poc-render-backends.md](./poc-render-backends.md) |
-| TASK-034JfGCUwtk0lzJvJPr36B | PoC UI ハーネスホスト（独立ワークスペース・wry+tao・計測契約） | todo | [poc-ui-harness-host.md](./poc-ui-harness-host.md) |
+| TASK-034JfGCUwtk0lzJvJPr36B | PoC UI ハーネスホスト（独立ワークスペース・wry+tao・計測契約） | done | [poc-ui-harness-host.md](./poc-ui-harness-host.md) |
 | TASK-034JgsHeZt7Bm40uBMo9wg | coupler-rs vst3 による VST3 binding PoC（最小ゲインプラグイン） | done | [poc-vst3-binding-adapter.md](./poc-vst3-binding-adapter.md) |
 | TASK-034Jf4gzf7OAwNOoW3t9WV | impl record と文書整合 | done | [record-impl-and-sync-docs.md](./record-impl-and-sync-docs.md) |
 | TASK-034IwCiYXp6ub3O8Brcs3L | 設定ファイルのレビューと最小修正 | done | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |

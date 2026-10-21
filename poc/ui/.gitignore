@@ -1,0 +1,5 @@
+# PoC ワークスペース内で ignore 規則を完結させる（design「gitignore」）。
+# target/ はルート .gitignore の target/ パターンが任意階層を網羅済み。
+node_modules/
+*/dist/
+out/

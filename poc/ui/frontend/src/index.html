@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ui-poc host experiment</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #101418; color: #cfd8e3;
+               font: 13px/1.4 system-ui, sans-serif; }
+  #log { white-space: pre-wrap; padding: 8px; }
+</style>
+</head>
+<body>
+<div id="log">ui-poc host harness</div>
+<script>
+"use strict";
+// host 実験（AC1）の JS 側エージェント。状態機械は Rust 側が所有し、
+// このページは観測したイベントを JSON intent として window.ipc.postMessage で報告する。
+const post = (obj) => {
+  if (window.ipc && typeof window.ipc.postMessage === "function") {
+    window.ipc.postMessage(JSON.stringify(obj));
+  }
+};
+const logEl = document.getElementById("log");
+const say = (s) => { logEl.textContent += "\n" + s; };
+
+const state = { t0: 0, echoDone: false };
+
+// Rust 側 evaluate_script が呼ぶ受け口。
+window.__poc = {
+  echo(payload) {
+    const rtt = performance.now() - state.t0;
+    state.echoDone = true;
+    post({ type: "ipc_echo", ok: true, rtt_ms: rtt, echo: payload });
+    say("ipc_echo rtt=" + rtt.toFixed(2) + "ms");
+  },
+  // DOM 要素フォーカス遷移プローブ。
+  // OS ウィンドウフォーカスが取得不能な環境（バックグラウンド起動等）でも
+  // document 内のフォーカス遷移を観測するためのフォールバック経路。
+  // input.focus() → input.blur() で focus/blur イベント列を発生させ、
+  // 観測列と document.hasFocus() の真値を IPC で返す。
+  focusCycle() {
+    const el = document.createElement("input");
+    el.setAttribute("aria-hidden", "true");
+    el.style.position = "absolute";
+    el.style.opacity = "0";
+    el.style.pointerEvents = "none";
+    const events = [];
+    el.addEventListener("focus", () => events.push("focus"));
+    el.addEventListener("blur", () => events.push("blur"));
+    document.body.appendChild(el);
+    el.focus();
+    el.blur();
+    el.remove();
+    post({ type: "dom_focus", events, hasFocus: document.hasFocus() });
+  },
+};
+
+window.addEventListener("focus", () => post({ type: "focus", focused: true }));
+window.addEventListener("blur", () => post({ type: "focus", focused: false }));
+
+new ResizeObserver((entries) => {
+  for (const e of entries) {
+    post({
+      type: "resize_observed",
+      w: Math.round(e.contentRect.width),
+      h: Math.round(e.contentRect.height),
+      inner_w: window.innerWidth,
+      inner_h: window.innerHeight,
+    });
+  }
+}).observe(document.documentElement);
+
+window.addEventListener("load", () => {
+  // 埋め込みアセット (poc://app/) からのロード完了 + IPC 到達性の証明。
+  post({ type: "hello", href: location.href, ua: navigator.userAgent });
+  state.t0 = performance.now();
+  post({ type: "ping", t0: state.t0 });
+});
+
+// 診断用: viewport とフォーカス状態の現在値を定期報告（RO/イベント非発火時の切り分け）。
+setInterval(() => {
+  post({ type: "viewport", w: window.innerWidth, h: window.innerHeight,
+         dpr: window.devicePixelRatio,
+         hasFocus: document.hasFocus(),
+         visibility: document.visibilityState });
+}, 2000);
+</script>
+</body>
+</html>

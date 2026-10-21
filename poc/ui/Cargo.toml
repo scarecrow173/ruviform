@@ -1,0 +1,37 @@
+# Issue #28 UI 技術検証 PoC — 独立ワークスペース。
+# `[workspace]` テーブルを持つため poc/ui 自身がワークスペースルートとなり、
+# リポジトリルートのワークスペース（明示 members リスト）には吸収されない。
+# ルート Cargo.toml / Cargo.lock / crates/ / mise.toml への変更は AC8 で禁止。
+[workspace]
+members = ["."]
+resolver = "2"
+
+[package]
+name = "ui-poc"
+version = "0.1.0"
+edition = "2024"
+publish = false
+build = "build.rs"
+
+# 依存は PoC ワークスペース内に限定（design「非機能・規約上の制約」）。
+# - wry/tao: WebView ホスト（AC1）。Apache-2.0 OR MIT / Apache-2.0。
+# - wgpu: `--check` の GPU adapter 検出と T4 のネイティブサーフェス実験（AC3）。
+#   MSRV 1.87（mise pin 1.99.0 で充足）。MIT OR Apache-2.0。
+# - rust-embed: 埋め込みアセット配信（debug=FS 読み / release=埋め込み）。MIT。
+# - serde_json: poc-metric.v1 / IPC JSON。MIT OR Apache-2.0。
+# - http: wry の with_custom_protocol が使う Request/Response 型。MIT OR Apache-2.0。
+# - dpi: wry::Rect / tao PhysicalSize の共通座標型。Apache-2.0 OR MIT。
+# - winreg: WebView2 レジストリ検出（Windows）。MIT。
+[dependencies]
+wry = "0.57"
+tao = "0.37"
+wgpu = "30"
+rust-embed = "8"
+serde_json = "1"
+http = "1"
+dpi = "0.1"
+# wgpu 30 の enumerate_adapters 等の Future を --check（GUI 非生成）から同期待ちするため。
+pollster = "1"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"

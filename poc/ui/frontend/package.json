@@ -1,0 +1,11 @@
+{
+  "name": "ui-poc-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Issue #28 UI PoC frontend skeleton (T1 minimal). T2 introduces Vite + framework variants.",
+  "scripts": {
+    "build": "node build.mjs",
+    "clean": "node -e \"import('node:fs').then(m=>m.rmSync('dist',{recursive:true,force:true}))\""
+  }
+}
