@@ -8,6 +8,7 @@ Directory: `docs/test-specs`
 | --- | --- | --- | --- |
 | TSPEC-034JgliZJcJ6cl2OeZLkuZ | オーディオデバイス境界ポートと cpal adapter の契約保証 | approved | [audio-device-port-and-cpal-adapter.md](./audio-device-port-and-cpal-adapter.md) |
 | TSPEC-034Jeo1j5l7fBhYc8iYsTN | ベンチ・検証タスクと CI スモーク挙動の契約保証 | approved | [bench-tasks-and-ci-smoke.md](./bench-tasks-and-ci-smoke.md) |
+| TSPEC-034JOtlBoKc1LUny4Iu67z | chunk timestamp 合成の契約テスト | approved | [chunk-timestamp-contracts.md](./chunk-timestamp-contracts.md) |
 | TSPEC-034IdHsItEuo0TZWTPOJUu | ci プロファイルのビルド挙動と成果物分離 | proposed | [ci-profile-build-behavior.md](./ci-profile-build-behavior.md) |
 | TSPEC-034J6OIFK83GJIsST60Jck | 公開 enum 拡張性と時間演算精度の契約保証 | approved | [followup-enum-compat-and-time-arithmetic.md](./followup-enum-compat-and-time-arithmetic.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
