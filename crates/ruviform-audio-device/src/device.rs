@@ -142,7 +142,13 @@ impl Device for CpalDevice {
         // (callback + scratch) outright — no `Arc`/`Mutex` sharing
         // with the error closure, which owns `error_callback` alone.
         // A lock on the RT thread would violate the RT contract.
-        let mut state = DataCallbackState::new(data_callback, scratch, channels, frames_capacity);
+        let mut state = DataCallbackState::new(
+            data_callback,
+            scratch,
+            channels,
+            frames_capacity,
+            negotiated.stream.sample_rate,
+        );
         let mut error_callback = error_callback;
         let stream = self
             .inner

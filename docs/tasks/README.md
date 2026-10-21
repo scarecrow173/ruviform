@@ -7,7 +7,9 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034Jf1Cl3xf8K9wcSuvFYK | ベンチハーネス骨格と dev-dependencies | done | [add-bench-harness-and-dev-deps.md](./add-bench-harness-and-dev-deps.md) |
+| TASK-034JOulyBprt7B3tRAzkKZ | chunk timestamp 単体テストと Issue #59 完了確認 | done | [add-chunk-timestamp-tests.md](./add-chunk-timestamp-tests.md) |
 | TASK-034IdQtDnY6ZKHFhFhXKmW | 手動 CI ワークフローの追加 | done | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
+| TASK-034JOukDzGSLe1s0mtlzeg | DataCallbackState への sample_rate 配線 | done | [add-sample-rate-to-callback-state.md](./add-sample-rate-to-callback-state.md) |
 | TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | done | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034JNwUoAfb2TnY7nw07XH | 時間変換精度テストの追加（音声×映像行列・往復/連鎖誤差上界） | done | [add-time-precision-tests.md](./add-time-precision-tests.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
@@ -67,6 +69,7 @@ Directory: `docs/tasks`
 | TASK-034JgsIynX51YyqUrzgppO | プラグイン基盤のドキュメント同期と総合検証 | done | [sync-docs-and-verify-plugin-foundation.md](./sync-docs-and-verify-plugin-foundation.md) |
 | TASK-034JcD43sDKFAlPxYuAWmj | Issue #26 ドキュメント同期（baseline 採否表・AGENTS・README）と総合検証 | done | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
 | TASK-034JxObKHc0v3kUhnQiePv | RT 基盤ドキュメント同期と総合検証 | done | [sync-rt-foundation-docs-and-verify.md](./sync-rt-foundation-docs-and-verify.md) |
+| TASK-034JOul8zCtHMR49d9c78V | write_interleaved の per-chunk timestamp 合成 | done | [synthesize-per-chunk-timestamps.md](./synthesize-per-chunk-timestamps.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
 | TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | done | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |

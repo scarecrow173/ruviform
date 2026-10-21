@@ -21,12 +21,13 @@
 //!   data is ever delivered.
 
 use ruviform_audio_core::device::{
-    BufferSize, OutputCallbackInfo, OutputDataCallback, OutputStreamConfig, SupportedBufferSize,
-    SupportedOutputFormat,
+    BufferSize, DEVICE_CLOCK_TIMEBASE, OutputCallbackInfo, OutputDataCallback, OutputStreamConfig,
+    SupportedBufferSize, SupportedOutputFormat,
 };
 use ruviform_audio_core::{
     AudioBufferViewMut, AudioFormat, ChannelLayout, SampleFormat, SampleRate,
 };
+use ruviform_media_core::MediaDuration;
 
 /// Maps a cpal sample format onto the port's [`SampleFormat`].
 ///
@@ -308,6 +309,7 @@ pub(crate) fn write_interleaved(
     channels: usize,
     data: &mut [f32],
     info: OutputCallbackInfo,
+    sample_rate: u32,
     data_callback: &mut OutputDataCallback,
 ) {
     // `channels`/`frames_capacity` come from a validated config and the
@@ -336,9 +338,20 @@ pub(crate) fn write_interleaved(
         let len = chunk * channels;
         scratch[..len].fill(0.0);
         let dst = &mut data[frame * channels..(frame + chunk) * channels];
+        // Per-chunk timestamp synthesis: chunk starting at `frame` plays
+        // `frame / sample_rate` seconds after the buffer head, so both
+        // instants shift by that offset. The synthesized value is an
+        // estimate from buffer position — not a backend-measured instant.
+        // On `checked_add` overflow the original instant is kept rather
+        // than losing the timestamp.
+        let chunk_info = if frame == 0 || sample_rate == 0 {
+            info
+        } else {
+            chunk_timestamp_info(info, frame, sample_rate)
+        };
         match AudioBufferViewMut::try_new(&mut scratch[..len], channels, chunk) {
             Ok(view) => {
-                data_callback(view, info);
+                data_callback(view, chunk_info);
                 // `view` was consumed by the callback; re-borrow the
                 // slab for packing.
                 pack_chunk(&mut scratch[..len], channels, chunk, dst);
@@ -346,6 +359,42 @@ pub(crate) fn write_interleaved(
             Err(_) => dst.fill(0.0),
         }
         frame += chunk;
+    }
+}
+
+/// Synthesizes the per-chunk [`OutputCallbackInfo`]: both instants shift
+/// by `frame_offset / sample_rate` seconds expressed as
+/// [`DEVICE_CLOCK_TIMEBASE`] (nanosecond) ticks.
+///
+/// `u128` intermediates keep `frame_offset * 1e9` from overflowing even
+/// for implausible frame counts; the result saturates through
+/// `i64::try_from` — and if `checked_add` still overflows, the original
+/// instant is kept rather than losing the timestamp entirely.
+///
+/// **RT contract:** RT-suitable — integer math only, no allocation.
+fn chunk_timestamp_info(
+    info: OutputCallbackInfo,
+    frame_offset: usize,
+    sample_rate: u32,
+) -> OutputCallbackInfo {
+    let offset_ns =
+        u128::try_from(frame_offset).unwrap_or(u128::MAX) * 1_000_000_000 / u128::from(sample_rate);
+    let Ok(offset) = i64::try_from(offset_ns) else {
+        return info;
+    };
+    let delta = MediaDuration::new(offset, DEVICE_CLOCK_TIMEBASE);
+    OutputCallbackInfo {
+        timestamp: ruviform_audio_core::device::OutputTimestamp {
+            callback: info
+                .timestamp
+                .callback
+                .checked_add(delta)
+                .unwrap_or(info.timestamp.callback),
+            playback: info
+                .timestamp
+                .playback
+                .map(|p| p.checked_add(delta).unwrap_or(p)),
+        },
     }
 }
 
@@ -917,6 +966,7 @@ mod tests {
             channels,
             data,
             test_info(),
+            48_000,
             cb,
         );
     }
@@ -965,7 +1015,7 @@ mod tests {
         );
         let mut data = vec![0.0_f32; 20]; // 10 frames × 2ch
         let mut scratch = vec![f32::NAN; 8]; // capacity 4 × 2ch
-        write_interleaved(&mut scratch, 4, 2, &mut data, test_info(), &mut cb);
+        write_interleaved(&mut scratch, 4, 2, &mut data, test_info(), 48_000, &mut cb);
         // Per chunk, channel 1 carries the chunk's frame count:
         // chunks of 4, 4, then 2.
         let ch1: Vec<f32> = data.as_chunks::<2>().0.iter().map(|f| f[1]).collect();
@@ -986,10 +1036,105 @@ mod tests {
         let mut scratch = vec![f32::NAN; 4]; // only 2 frames × 2ch
         let mut cb = stereo_silence_callback();
         let mut data = vec![9.0_f32; 6];
-        write_interleaved(&mut scratch, 8, 2, &mut data, test_info(), &mut cb);
+        write_interleaved(&mut scratch, 8, 2, &mut data, test_info(), 48_000, &mut cb);
         // Every delivered sample is a known value (0.25 callback
         // output or 0.0 fill) — never NaN scratch or stale 9.0.
         assert!(data.iter().all(|s| *s == 0.25 || *s == 0.0), "{data:?}");
+    }
+
+    /// Collects each `OutputCallbackInfo` a callback receives into a
+    /// shared vec — `OutputDataCallback` requires `'static`.
+    fn info_collecting_callback() -> (
+        OutputDataCallback,
+        std::sync::Arc<std::sync::Mutex<Vec<OutputCallbackInfo>>>,
+    ) {
+        let infos = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured = std::sync::Arc::clone(&infos);
+        (
+            Box::new(
+                move |out: AudioBufferViewMut<'_, f32>, info: OutputCallbackInfo| {
+                    let _ = out;
+                    captured.lock().unwrap().push(info);
+                },
+            ),
+            infos,
+        )
+    }
+
+    #[test]
+    fn write_interleaved_synthesizes_per_chunk_timestamps() {
+        // 10 frames at capacity 4 → chunks starting at frames 0, 4, 8.
+        // At 48 kHz each chunk's instants shift by `f_k * 1e9 / 48_000`
+        // nanoseconds: 0, 83_333, 166_666 (integer division, sub-tick
+        // fraction truncated).
+        let (mut cb, infos) = info_collecting_callback();
+        let mut scratch = vec![0.0_f32; 8];
+        let mut data = vec![0.0_f32; 20];
+        let base = OutputCallbackInfo {
+            timestamp: OutputTimestamp {
+                callback: MediaTime::new(1_000, DEVICE_CLOCK_TIMEBASE),
+                playback: Some(MediaTime::new(2_000, DEVICE_CLOCK_TIMEBASE)),
+            },
+        };
+        write_interleaved(&mut scratch, 4, 2, &mut data, base, 48_000, &mut cb);
+
+        let infos = infos.lock().unwrap();
+        assert_eq!(infos.len(), 3);
+        let expected = [0_i64, 83_333, 166_666];
+        for (info, offset) in infos.iter().zip(expected) {
+            assert_eq!(info.timestamp.callback.value(), 1_000 + offset);
+            assert_eq!(
+                info.timestamp.playback.map(MediaTime::value),
+                Some(2_000 + offset)
+            );
+        }
+    }
+
+    #[test]
+    fn write_interleaved_chunk_timestamp_none_playback_stays_none() {
+        let (mut cb, infos) = info_collecting_callback();
+        let mut scratch = vec![0.0_f32; 8];
+        let mut data = vec![0.0_f32; 20];
+        write_interleaved(&mut scratch, 4, 2, &mut data, test_info(), 48_000, &mut cb);
+        let infos = infos.lock().unwrap();
+        assert!(infos.iter().all(|i| i.timestamp.playback.is_none()));
+    }
+
+    #[test]
+    fn write_interleaved_chunk_timestamp_add_overflow_keeps_original() {
+        // Base instant near `i64::MAX` → `checked_add` fails → the
+        // original instant is delivered instead of dropping it.
+        let (mut cb, infos) = info_collecting_callback();
+        let mut scratch = vec![0.0_f32; 8];
+        let mut data = vec![0.0_f32; 20];
+        let near_max = OutputCallbackInfo {
+            timestamp: OutputTimestamp {
+                callback: MediaTime::new(i64::MAX - 10, DEVICE_CLOCK_TIMEBASE),
+                playback: Some(MediaTime::new(i64::MAX - 10, DEVICE_CLOCK_TIMEBASE)),
+            },
+        };
+        write_interleaved(&mut scratch, 4, 2, &mut data, near_max, 48_000, &mut cb);
+        let infos = infos.lock().unwrap();
+        assert_eq!(infos.len(), 3);
+        assert_eq!(infos[0].timestamp.callback.value(), i64::MAX - 10);
+        // Overflowing chunks keep the original instant rather than None.
+        assert_eq!(infos[1].timestamp.callback.value(), i64::MAX - 10);
+        assert_eq!(
+            infos[1].timestamp.playback.map(MediaTime::value),
+            Some(i64::MAX - 10)
+        );
+    }
+
+    #[test]
+    fn write_interleaved_single_chunk_keeps_info_unchanged() {
+        let (mut cb, infos) = info_collecting_callback();
+        let mut scratch = vec![0.0_f32; 8];
+        let mut data = vec![0.0_f32; 8]; // 4 frames ≤ capacity
+        write_interleaved(&mut scratch, 4, 2, &mut data, test_info(), 48_000, &mut cb);
+        let infos = infos.lock().unwrap();
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].timestamp.callback.value(), 0);
+        assert!(infos[0].timestamp.playback.is_none());
     }
 
     #[test]
