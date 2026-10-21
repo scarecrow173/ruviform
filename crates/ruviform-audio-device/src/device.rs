@@ -94,9 +94,15 @@ impl Device for CpalDevice {
             .map_err(|e| map_error(&e, ErrorCtx::Control))?;
         // Report F32-capable ranges only — integer-only ranges are
         // filtered out, so an empty `Vec` means "no F32-capable range"
-        // (distinct from a failed query, which is `Err`).
+        // (distinct from a failed query, which is `Err`). Ranges with
+        // malformed rate bounds (inverted or zero ceiling) are dropped
+        // here at the untrusted-data boundary — negotiation can never
+        // honor them anyway.
         Ok(ranges
             .filter(|range| map_sample_format(range.sample_format()) == Some(SampleFormat::F32))
+            .filter(|range| {
+                range.min_sample_rate() <= range.max_sample_rate() && range.max_sample_rate() != 0
+            })
             .map(|range| SupportedOutputFormat {
                 channels: u32::from(range.channels()),
                 min_sample_rate: range.min_sample_rate(),

@@ -383,5 +383,5 @@ fn adapter_host_satisfies_the_same_enumerator_contract() {
     // The cpal-backed `Host` implements the same port — no hardware
     // touched to prove the shape.
     fn assert_enumerator(_: &dyn DeviceEnumerator) {}
-    assert_enumerator(&ruviform_audio_device::default_host());
+    assert_enumerator(&ruviform_audio_device::default_host().unwrap());
 }

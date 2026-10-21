@@ -11,7 +11,7 @@
 //! allocate). Nothing in this module is RT-suitable.
 
 use cpal::traits::HostTrait;
-use ruviform_audio_core::device::{Device, DeviceEnumerator, DeviceResult};
+use ruviform_audio_core::device::{Device, DeviceEnumerator, DeviceError, DeviceResult};
 
 use crate::device::CpalDevice;
 use crate::error::{ErrorCtx, map_error};
@@ -29,7 +29,7 @@ use crate::error::{ErrorCtx, map_error};
 /// ```no_run
 /// use ruviform_audio_core::device::DeviceEnumerator;
 ///
-/// let host = ruviform_audio_device::default_host();
+/// let host = ruviform_audio_device::default_host().unwrap();
 /// let devices = host.output_devices().unwrap_or_default();
 /// println!("{} output device(s) on host {}", devices.len(), host.name());
 /// ```
@@ -93,18 +93,31 @@ impl HostId {
 /// The OS default audio host — `WASAPI` on Windows, `CoreAudio` on
 /// macOS/iOS, `ALSA` on Linux (in the default feature set).
 ///
-/// **RT contract:** non-RT only — constructs the backend host.
+/// "Default" is the platform's first preferred host — the same host
+/// `available_host_ids()[0]` selects — acquired through the fallible
+/// [`host`] path: a failed backend initialization surfaces as a typed
+/// error, never the panic `cpal::default_host()` would raise.
+///
+/// **RT contract:** non-RT only — allocates and constructs the backend
+/// host.
+///
+/// # Errors
+///
+/// [`DeviceError::Backend`]`("host_unavailable")` when no backend host
+/// is compiled in or the default host fails to initialize (e.g. the
+/// platform audio service is down).
 ///
 /// # Examples
 ///
 /// ```no_run
-/// let host = ruviform_audio_device::default_host();
+/// let host = ruviform_audio_device::default_host().unwrap();
 /// ```
-#[must_use]
-pub fn default_host() -> Host {
-    Host {
-        inner: cpal::default_host(),
-    }
+pub fn default_host() -> DeviceResult<Host> {
+    let id = available_host_ids()
+        .into_iter()
+        .next()
+        .ok_or(DeviceError::Backend("host_unavailable"))?;
+    host(id)
 }
 
 /// The host identifiers currently usable on this system — only hosts
@@ -186,12 +199,21 @@ mod tests {
     fn host_is_a_device_enumerator() {
         // Compile-time trait conformance — no hardware touched.
         fn assert_enumerator(_: &dyn DeviceEnumerator) {}
-        assert_enumerator(&default_host());
+        assert_enumerator(&default_host().unwrap());
     }
 
     #[test]
     fn default_host_reports_a_consistent_id() {
-        let host = default_host();
+        let host = default_host().unwrap();
         assert_eq!(host.name(), host.id().name());
+    }
+
+    #[test]
+    fn default_host_selects_the_first_available_id() {
+        // The platform default is the first preferred host id, reached
+        // through the fallible `host()` path rather than cpal's
+        // panicking `default_host()`.
+        let host = default_host().unwrap();
+        assert_eq!(host.id(), available_host_ids()[0]);
     }
 }

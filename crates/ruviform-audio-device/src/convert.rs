@@ -57,6 +57,14 @@ pub(crate) fn layout_for_channels(channels: u32) -> Option<ChannelLayout> {
     }
 }
 
+/// A reported range is a negotiation candidate only when its sample-rate
+/// bounds are structurally valid (`min <= max`, nonzero ceiling).
+/// Malformed backend reports are skipped, never trusted — `u32::clamp`
+/// on inverted bounds would panic, and a zero ceiling admits no rate.
+fn valid_sample_rate_bounds(range: &SupportedOutputFormat) -> bool {
+    range.min_sample_rate <= range.max_sample_rate && range.max_sample_rate != 0
+}
+
 /// Synthesizes an [`AudioFormat`] from a raw rate + channel count —
 /// always `F32` (the only encoding this adapter opens). `None` when the
 /// count maps to no named layout or the rate is invalid.
@@ -75,7 +83,8 @@ pub(crate) fn f32_format(sample_rate: u32, channels: u32) -> Option<AudioFormat>
 /// unmappable channel count). Prefers a range matching the backend
 /// default's channel count, then one containing 48 kHz, then one
 /// containing the backend default rate; the chosen rate clamps the
-/// default rate into the picked range.
+/// default rate into the picked range. Ranges with malformed rate
+/// bounds are skipped before any selection.
 ///
 /// `supported` is expected to be F32-filtered already
 /// ([`crate::device`]).
@@ -86,6 +95,7 @@ pub(crate) fn synthesize_default_format(
 ) -> Option<AudioFormat> {
     supported
         .iter()
+        .filter(|range| valid_sample_rate_bounds(range))
         .filter(|range| layout_for_channels(range.channels).is_some())
         .max_by_key(|range| {
             (
@@ -101,15 +111,18 @@ pub(crate) fn synthesize_default_format(
 }
 
 /// Maps a cpal [`cpal::SupportedBufferSize`] onto the port type,
-/// validating the reported range: a backend-reported `min > max` folds
-/// into [`SupportedBufferSize::Unknown`] rather than emitting a
-/// violating invariant.
+/// validating the reported range: a backend-reported `min > max` or a
+/// zero ceiling (`max == 0`, which admits no size) folds into
+/// [`SupportedBufferSize::Unknown`] rather than emitting a violating
+/// invariant.
 pub(crate) fn map_supported_buffer_size(size: &cpal::SupportedBufferSize) -> SupportedBufferSize {
     match *size {
-        cpal::SupportedBufferSize::Range { min, max } if min <= max => SupportedBufferSize::Range {
-            min: usize::try_from(min).unwrap_or(usize::MAX),
-            max: usize::try_from(max).unwrap_or(usize::MAX),
-        },
+        cpal::SupportedBufferSize::Range { min, max } if min <= max && max != 0 => {
+            SupportedBufferSize::Range {
+                min: usize::try_from(min).unwrap_or(usize::MAX),
+                max: usize::try_from(max).unwrap_or(usize::MAX),
+            }
+        }
         cpal::SupportedBufferSize::Range { .. } | cpal::SupportedBufferSize::Unknown => {
             SupportedBufferSize::Unknown
         }
@@ -137,11 +150,16 @@ pub(crate) const DEFAULT_FRAMES_FALLBACK: usize = 8192;
 
 /// Negotiates `desired` against the supported space.
 ///
-/// Returns `Some` only when: `desired` requests `F32`; some supported
-/// range covers the requested channel count and sample rate; and a
-/// requested [`BufferSize::Fixed`] fits `u32` and the matched range's
-/// reported bounds (a `Range` report — `Unknown` imposes no bound).
-/// Anything else is `None` → the caller reports
+/// Every range matching format, channel count and sample rate is a
+/// candidate — malformed bounds are skipped first — and the buffer-size
+/// constraint is evaluated across *all* candidates, not only the first
+/// match: a [`BufferSize::Fixed`] request is admitted when any
+/// candidate's reported bound covers it (`Unknown` imposes no bound).
+///
+/// Returns `Some` only when: `desired` requests `F32`; at least one
+/// candidate exists; and a requested `Fixed` size fits `u32`, is
+/// nonzero, and is admitted by some candidate. Anything else is `None`
+/// → the caller reports
 /// [`ruviform_audio_core::device::DeviceError::UnsupportedConfig`].
 pub(crate) fn negotiate(
     desired: &OutputStreamConfig,
@@ -152,30 +170,41 @@ pub(crate) fn negotiate(
     }
     let channels = desired.format.layout.channels();
     let rate = desired.format.sample_rate.get();
-    let range = supported.iter().find(|range| {
-        range.sample_format == SampleFormat::F32
+    let mut candidates = supported.iter().filter(|range| {
+        valid_sample_rate_bounds(range)
+            && range.sample_format == SampleFormat::F32
             && range.channels == channels
             && range.min_sample_rate <= rate
             && rate <= range.max_sample_rate
-    })?;
+    });
 
     let (buffer_size, effective_max_frames) = match desired.buffer_size {
-        BufferSize::Default => (
-            cpal::BufferSize::Default,
-            match range.buffer_size {
-                SupportedBufferSize::Range { max, .. } => max,
-                _ => DEFAULT_FRAMES_FALLBACK,
-            },
-        ),
+        BufferSize::Default => {
+            // The scratch sizing estimate covers the loosest admissible
+            // bound across every candidate — a larger estimate only
+            // means a larger pre-sized slab.
+            let effective_max = candidates
+                .map(|range| match range.buffer_size {
+                    SupportedBufferSize::Range { max: 0, .. } => DEFAULT_FRAMES_FALLBACK,
+                    SupportedBufferSize::Range { max, .. } => max,
+                    _ => DEFAULT_FRAMES_FALLBACK,
+                })
+                .max()?;
+            (cpal::BufferSize::Default, effective_max)
+        }
         BufferSize::Fixed(frames) => {
             let frames_u32 = u32::try_from(frames).ok()?;
             if frames_u32 == 0 {
                 return None;
             }
-            if let SupportedBufferSize::Range { min, max } = range.buffer_size {
-                if frames < min || frames > max {
-                    return None;
-                }
+            let admitted = candidates.any(|range| match range.buffer_size {
+                SupportedBufferSize::Range { min, max } => min <= frames && frames <= max,
+                SupportedBufferSize::Unknown => true,
+                // A future variant is conservative — it does not admit.
+                _ => false,
+            });
+            if !admitted {
+                return None;
             }
             (cpal::BufferSize::Fixed(frames_u32), frames)
         }
@@ -438,6 +467,11 @@ mod tests {
             map_supported_buffer_size(&cpal::SupportedBufferSize::Range { min: 1024, max: 32 }),
             SupportedBufferSize::Unknown,
         );
+        // A zero-ceiling report admits no size — same `Unknown` fold.
+        assert_eq!(
+            map_supported_buffer_size(&cpal::SupportedBufferSize::Range { min: 0, max: 0 }),
+            SupportedBufferSize::Unknown,
+        );
         assert_eq!(
             map_supported_buffer_size(&cpal::SupportedBufferSize::Unknown),
             SupportedBufferSize::Unknown,
@@ -534,6 +568,145 @@ mod tests {
             ),
             None,
         );
+    }
+
+    #[test]
+    fn negotiate_fixed_considers_every_matching_range() {
+        // The first matching range rejects the request; a later one
+        // admits it — evaluating only the first match would falsely
+        // report `UnsupportedConfig`.
+        let supported = [
+            f32_range(
+                2,
+                44_100,
+                48_000,
+                SupportedBufferSize::Range { min: 32, max: 256 },
+            ),
+            f32_range(
+                2,
+                44_100,
+                48_000,
+                SupportedBufferSize::Range {
+                    min: 256,
+                    max: 1024,
+                },
+            ),
+        ];
+        let config = negotiate(
+            &desired(48_000, ChannelLayout::Stereo, BufferSize::Fixed(512)),
+            &supported,
+        )
+        .unwrap();
+        assert_eq!(config.stream.buffer_size, cpal::BufferSize::Fixed(512));
+        assert_eq!(config.effective_max_frames, 512);
+        // And a size no range admits is still rejected.
+        assert_eq!(
+            negotiate(
+                &desired(48_000, ChannelLayout::Stereo, BufferSize::Fixed(2048)),
+                &supported,
+            ),
+            None,
+        );
+    }
+
+    #[test]
+    fn negotiate_fixed_accepts_via_unknown_bound_among_ranges() {
+        // An `Unknown` buffer report imposes no bound — it admits any
+        // nonzero `Fixed` even when a sibling range is restrictive.
+        let supported = [
+            f32_range(
+                2,
+                44_100,
+                48_000,
+                SupportedBufferSize::Range { min: 32, max: 256 },
+            ),
+            f32_range(2, 44_100, 48_000, SupportedBufferSize::Unknown),
+        ];
+        assert!(
+            negotiate(
+                &desired(48_000, ChannelLayout::Stereo, BufferSize::Fixed(512)),
+                &supported,
+            )
+            .is_some(),
+        );
+    }
+
+    #[test]
+    fn negotiate_default_sizes_scratch_from_the_loosest_match() {
+        let supported = [
+            f32_range(
+                2,
+                44_100,
+                48_000,
+                SupportedBufferSize::Range { min: 32, max: 256 },
+            ),
+            f32_range(
+                2,
+                44_100,
+                48_000,
+                SupportedBufferSize::Range { min: 64, max: 2048 },
+            ),
+        ];
+        let config = negotiate(
+            &desired(48_000, ChannelLayout::Stereo, BufferSize::Default),
+            &supported,
+        )
+        .unwrap();
+        assert_eq!(config.effective_max_frames, 2048);
+    }
+
+    #[test]
+    fn negotiate_skips_malformed_ranges() {
+        // Inverted rate bounds can never be a candidate (and must not
+        // panic while being skipped).
+        let inverted = [f32_range(2, 96_000, 44_100, SupportedBufferSize::Unknown)];
+        assert_eq!(
+            negotiate(
+                &desired(48_000, ChannelLayout::Stereo, BufferSize::Default),
+                &inverted,
+            ),
+            None,
+        );
+        // A zero-ceiling buffer bound under `Default` falls back
+        // rather than producing a zero-capacity scratch.
+        let zero_ceiling = [f32_range(
+            2,
+            44_100,
+            48_000,
+            SupportedBufferSize::Range { min: 0, max: 0 },
+        )];
+        let config = negotiate(
+            &desired(48_000, ChannelLayout::Stereo, BufferSize::Default),
+            &zero_ceiling,
+        )
+        .unwrap();
+        assert_eq!(config.effective_max_frames, DEFAULT_FRAMES_FALLBACK);
+        // …but admits no `Fixed` request.
+        assert_eq!(
+            negotiate(
+                &desired(48_000, ChannelLayout::Stereo, BufferSize::Fixed(480)),
+                &zero_ceiling,
+            ),
+            None,
+        );
+    }
+
+    #[test]
+    fn synthesize_default_skips_malformed_rate_bounds() {
+        // Inverted or zero-ceiling bounds are skipped, never clamped.
+        let supported = [
+            f32_range(2, 96_000, 44_100, SupportedBufferSize::Unknown),
+            f32_range(2, 0, 0, SupportedBufferSize::Unknown),
+            f32_range(2, 44_100, 48_000, SupportedBufferSize::Unknown),
+        ];
+        assert_eq!(
+            synthesize_default_format(&supported, 2, 96_000),
+            f32_format(48_000, 2),
+        );
+        // With only malformed ranges there is no candidate — and no
+        // panic from `clamp` on inverted bounds.
+        let malformed_only = [f32_range(2, 96_000, 44_100, SupportedBufferSize::Unknown)];
+        assert_eq!(synthesize_default_format(&malformed_only, 2, 48_000), None);
     }
 
     // -- write_interleaved -----------------------------------------------------

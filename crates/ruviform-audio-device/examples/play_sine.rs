@@ -135,7 +135,13 @@ fn run() -> ExitCode {
     println!("play_sine: device PoC output verification");
     println!("  duration {PLAY_SECONDS:?}, watchdog {MAX_RUN:?}");
 
-    let host = default_host();
+    let host = match default_host() {
+        Ok(host) => host,
+        Err(error) => {
+            println!("  default_host() failed: {error}");
+            return ExitCode::from(2);
+        }
+    };
     println!("  host: {}", host.name());
 
     let device = match host.default_output_device() {
@@ -245,6 +251,9 @@ fn select_f32_format(supported: &[SupportedOutputFormat]) -> Option<AudioFormat>
     supported
         .iter()
         .filter(|range| range.sample_format == SampleFormat::F32)
+        .filter(|range| {
+            range.min_sample_rate <= range.max_sample_rate && range.max_sample_rate != 0
+        })
         .filter(|range| layout_for_channels(range.channels).is_some())
         .max_by_key(|range| {
             (

@@ -55,7 +55,7 @@
 //! use ruviform_audio_core::device::DeviceEnumerator;
 //!
 //! // Enumerate output devices on the OS default host — control path.
-//! let host = ruviform_audio_device::default_host();
+//! let host = ruviform_audio_device::default_host().unwrap();
 //! for device in host.output_devices().unwrap_or_default() {
 //!     println!("{}", device.name().unwrap_or_else(|_| "?".into()));
 //! }
