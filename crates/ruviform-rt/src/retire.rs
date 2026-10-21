@@ -219,10 +219,8 @@ impl<T: Send + 'static> DropCollector<T> {
     ///
     /// Deliberately `pub(crate)`, not public API: non-RT only by
     /// ownership — the [`DropCollector`] lives on the collecting
-    /// thread, and the pending `Vec` may allocate on push.
-    // No production caller until the `snapshot` module lands; the allow
-    // (not `expect`) stays valid once it does.
-    #[allow(dead_code)]
+    /// thread, and the pending `Vec` may allocate on push. Called by
+    /// `SnapshotWriter::publish` in the `snapshot` module.
     pub(crate) fn push_local(&mut self, value: T) {
         self.pending.push(value);
     }

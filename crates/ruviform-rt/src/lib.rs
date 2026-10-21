@@ -5,10 +5,9 @@
 //! `process` separated processing contract), the [`RtContext`]
 //! capability token, the [`MasterClock`] shared clock, the crate-wide
 //! [`Error`] / [`Result`] types, and the RT-safe primitives — the
-//! [`channel`] SPSC ring plus the [`retire_channel`] deferred-drop
-//! retire channel; immutable snapshot swapping lands with the
-//! remaining task of this foundation issue. Holds no scheduling or
-//! I/O.
+//! [`channel`] SPSC ring, the [`retire_channel`] deferred-drop
+//! retire channel, and the [`slot`] immutable snapshot exchange.
+//! Holds no scheduling or I/O.
 //!
 //! ## Allowed dependency layers
 //!
@@ -28,9 +27,9 @@
 //! (crate table A.2, "RT／非 RT の分離方式", "RT 契約"),
 //! `docs/adr/realtime-contract-and-verification-policy.md`, and
 //! `docs/adr/rt-foundation-primitives-implementation.md`. The core
-//! contract types, the SPSC channel, and the retire channel are
-//! implemented; the snapshot primitive lands with the remaining task
-//! of Issue #21.
+//! contract types, the SPSC channel, the retire channel, and the
+//! snapshot exchange are implemented — the full `ruviform-rt` API
+//! surface of Issue #21.
 
 // The public names below are the fixed API shape of the contract crate:
 // they deliberately echo their module (`clock::MasterClock`,
@@ -47,6 +46,7 @@ mod context;
 mod error;
 mod processor;
 mod retire;
+mod snapshot;
 mod spsc;
 
 pub use clock::MasterClock;
@@ -54,6 +54,7 @@ pub use context::RtContext;
 pub use error::{Error, Result};
 pub use processor::{Processor, RtProcessor};
 pub use retire::{DropCollector, Retirer, retire_channel};
+pub use snapshot::{SnapshotGuard, SnapshotReader, SnapshotWriter, slot};
 pub use spsc::{Consumer, Producer, TryPopError, TryPushError, channel};
 
 /// Returns the crate version string.
