@@ -215,10 +215,11 @@ pub fn dot(a: &[f32], b: &[f32]) -> f32 {
 
 /// `dst[n] = Σ_{k=0}^{FIR_TAPS-1} taps[k]·src[n−k]` — direct-form FIR.
 ///
-/// Contract: `dst.len() == src.len()` and `taps.len() == FIR_TAPS`; samples
-/// before `src[0]` are implicit zeros (zero history). Coefficients and input
-/// are finite. Equivalence: ulp ≤ 8; `NaN`/`Inf` inside the tap window
-/// propagates order-independently (`is_nan` match).
+/// Contract: `dst.len() == src.len()`; `taps` may have any length (outputs
+/// before `taps.len()` see implicit zero history — samples before `src[0]`
+/// are implicit zeros). Coefficients and input are finite. Equivalence:
+/// ulp ≤ 8; `NaN`/`Inf` inside the tap window propagates order-independently
+/// (`is_nan` match). `fir_taps()` generates the shared `FIR_TAPS` fixture.
 ///
 /// # Panics
 ///
@@ -231,7 +232,6 @@ pub fn dot(a: &[f32], b: &[f32]) -> f32 {
 )]
 pub fn fir(dst: &mut [f32], src: &[f32], taps: &[f32]) {
     debug_assert_eq!(dst.len(), src.len());
-    debug_assert_eq!(taps.len(), FIR_TAPS);
     for (n, d) in dst.iter_mut().enumerate() {
         let mut acc = 0.0_f32;
         for (&t, &x) in taps.iter().zip(src[..=n].iter().rev()) {

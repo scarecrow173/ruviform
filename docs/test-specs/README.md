@@ -21,6 +21,7 @@ Directory: `docs/test-specs`
 | TSPEC-034JxNwt3ReMphshEaeFVe | SPSC・退役・スナップショット交換の RT 契約保証 | approved | [rt-channel-and-snapshot-contracts.md](./rt-channel-and-snapshot-contracts.md) |
 | TSPEC-034JxNxcYxa29rPklpknWh | RtContext・Processor 契約・MasterClock の RT 契約保証 | approved | [rt-context-and-processor-contract.md](./rt-context-and-processor-contract.md) |
 | TSPEC-034JP1iphLdAZkyRbPkol1 | RT 検証レーン契約 | approved | [rt-verification-contracts.md](./rt-verification-contracts.md) |
+| TSPEC-034JQFftbYwM1JhPvmCvI1 | SIMD dispatch 層の等価性・RT 検証 | approved | [simd-dispatch-layer-tests.md](./simd-dispatch-layer-tests.md) |
 | TSPEC-034JenWCuRngWvxWm00Ls3 | SIMD 等価性 matrix の契約保証 | approved | [simd-equivalence-matrix-contract.md](./simd-equivalence-matrix-contract.md) |
 | TSPEC-034JxNxYK4O6s8NA8gnaah | スレッド優先度ライフサイクルの契約保証 | approved | [thread-priority-lifecycle.md](./thread-priority-lifecycle.md) |
 | TSPEC-034JNskaqcN34Ki4layRNK | FrameRate 型・Timecode シグネチャ・時間変換精度の契約保証 | approved | [time-type-extension-contracts.md](./time-type-extension-contracts.md) |

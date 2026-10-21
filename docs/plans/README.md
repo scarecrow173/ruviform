@@ -14,6 +14,7 @@ Directory: `docs/plans`
 | PLAN-034JP0n5QlXSj34GK30GBz | Issue #22 RT 検証基盤の実施（assert_no_alloc 適用・thread-check 統合・検証文書） | approved | [implement-issue-22-rt-verification.md](./implement-issue-22-rt-verification.md) |
 | PLAN-034JcCFGe6ILSTWLgUIjAn | Issue #26 動画基盤 API の実装（video-core 所有権契約・video-proc 新設・色変換カーネル） | approved | [implement-issue-26-video-foundation.md](./implement-issue-26-video-foundation.md) |
 | PLAN-034JO2EWa8LuEEE4BFVZ9Q | Issue #52 workspace MSRV 引上げの実施（rust-version 1.85 → 1.89・ドキュメント同期・MSRV 実測検証） | approved | [implement-issue-52-msrv-raise.md](./implement-issue-52-msrv-raise.md) |
+| PLAN-034JQFeYbZCBHPYSBfQe7B | Issue #53 SIMD dispatch 層の実装計画 | approved | [implement-issue-53-simd-dispatch-layer.md](./implement-issue-53-simd-dispatch-layer.md) |
 | PLAN-034JPwgFVQGc33sjgR8htz | Issue #56 dispatch 固定コスト分離の実施計画 | approved | [implement-issue-56-dispatch-analysis.md](./implement-issue-56-dispatch-analysis.md) |
 | PLAN-034JNstCXHhzzwOvo9iiCv | Issue #58 時間型拡張の実装（FrameRate 導入・Timecode シグネチャ移行・丸め誤差テスト） | completed | [implement-issue-58-time-type-extension.md](./implement-issue-58-time-type-extension.md) |
 | PLAN-034JOq2pk8YxpxyUXNJGFN | Issue #59 chunk 分割時の per-chunk timestamp 合成の実施 | approved | [implement-issue-59-chunk-timestamp.md](./implement-issue-59-chunk-timestamp.md) |

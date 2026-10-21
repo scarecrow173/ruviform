@@ -33,6 +33,7 @@ relations:
   refines: []
   refined-by:
     - "../adr/dsp-simd-backend-adoption.md"
+    - "../designs/simd-dispatch-layer.md"
   derives-from:
     - "../specs/architecture-design-baseline-deliverables.md"
     - "../adr/media-io-backend-abstraction.md"

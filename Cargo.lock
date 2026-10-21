@@ -1243,6 +1243,7 @@ name = "ruviform-math"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "assert_no_alloc",
  "criterion",
  "fearless_simd",
  "fearless_simd_macros",
