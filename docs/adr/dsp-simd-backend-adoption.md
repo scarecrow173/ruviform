@@ -38,7 +38,11 @@ relations:
     - "../designs/dsp-simd-poc.md"
     - "../specs/dsp-simd-poc-adr.md"
     - "dsp-simd-poc.md"
-  derived-by: []
+  derived-by:
+    - "../specs/msrv-raise-for-fearless-simd.md"
+    - "workspace-msrv-1-85-1-89-fearless-simd.md"
+    - "../designs/msrv-raise-design.md"
+    - "../plans/implement-issue-52-msrv-raise.md"
   verifies: []
   verified-by: []
   references:

@@ -24,6 +24,7 @@ relations:
   superseded-by: []
   related:
     - "../../AGENTS.md"
+    - "../adr/workspace-msrv-1-85-1-89-fearless-simd.md"
   refines: []
   refined-by: []
   derives-from:
