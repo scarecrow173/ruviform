@@ -33,6 +33,7 @@ relations:
   derived-by: []
   verifies:
     - "../specs/implement-plugin-foundation.md"
+    - "../adr/plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md"
   verified-by: []
   references:
     - "https://github.com/prokopyl/clack"

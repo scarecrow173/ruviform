@@ -16,7 +16,7 @@ Directory: `docs/tasks`
 | TASK-034IdQmBa6UdauVn9IG59X | 最小ワークスペースと smoke test の構築 | done | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | TASK-034JgsFV6CWAjSnPuekBgs | ruviform-plugin-core 共通基盤クレートの作成 | done | [create-plugin-core-foundation.md](./create-plugin-core-foundation.md) |
 | TASK-034JcCRLsFJ7j8zPBi8mXY | ruviform-video-proc クレート骨格の新設 | done | [create-video-proc-crate-skeleton.md](./create-video-proc-crate-skeleton.md) |
-| TASK-034JgsHEkIUa3P4jzOizoM | PoC 実測に基づく binding 方式 ADR の決定 | todo | [decide-plugin-binding-method-adr.md](./decide-plugin-binding-method-adr.md) |
+| TASK-034JgsHEkIUa3P4jzOizoM | PoC 実測に基づく binding 方式 ADR の決定 | done | [decide-plugin-binding-method-adr.md](./decide-plugin-binding-method-adr.md) |
 | TASK-034IdQqbjQcZ0Ztsy5IPpm | mise 開発・CI 検証タスクの定義 | done | [define-mise-dev-and-ci-tasks.md](./define-mise-dev-and-ci-tasks.md) |
 | TASK-034JcCQQD01mBg5JPjNiAS | video-core の所有権・drop・zero-copy 契約と RT ラベルの文書化 | done | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
 | TASK-034JglHTIvjo18tMdbO3DP | 採否 ADR 確定とワークスペース帳簿・索引の同期 | done | [finalize-backend-adr-and-sync-docs.md](./finalize-backend-adr-and-sync-docs.md) |

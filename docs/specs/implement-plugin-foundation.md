@@ -30,6 +30,7 @@ relations:
   derives-from:
     - "../adr/plugin-architecture-clap-vst3.md"
     - "../adr/realtime-contract-and-verification-policy.md"
+    - "../adr/plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md"
     - "../designs/ruviform-architecture-design-baseline.md"
     - "../discovery/evaluate-plugin-binding-options.md"
   derived-by:

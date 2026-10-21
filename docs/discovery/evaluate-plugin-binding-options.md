@@ -1,7 +1,7 @@
 ---
 id: "DISC-034JccH31pBpKOSW5fst0g"
 type: "discovery"
-status: "draft"
+status: "promoted"
 title: "プラグイン基盤 binding 方式の評価（Issue #29）"
 created: "2026-10-20"
 updated: "2026-10-20"
@@ -36,6 +36,7 @@ relations:
   derived-by:
     - "../specs/implement-plugin-foundation.md"
     - "../plans/implement-plugin-foundation.md"
+    - "../adr/plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md"
   verifies: []
   verified-by: []
   references:
@@ -159,7 +160,7 @@ GitHub Issue [#29 [impl] プラグイン基盤（plugin-core + CLAP/VST3 adapter
 ## Promotion Candidates
 
 - [x] spec-doc needed: Issue #29 の実装範囲・受け入れ条件を [implement-plugin-foundation.md](../specs/implement-plugin-foundation.md)（`relations.derived-by` / spec 側 `derives-from` で相互リンク）として作成済み
-- [ ] adr-doc needed: binding 方式の採否は PoC 実施後に方式 ADR として作成する（本書の代替案比較と PoC 評価計画が入力。現時点では未作成 — 方式確定後に `derived-by` でリンクする）
+- [x] adr-doc needed: binding 方式の採否は [plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md](../adr/plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md)（`ADR-034JDzseXORnckswW1oYKh`・accepted）として作成・決定済み（CLAP=`clack`、VST3=`vst3`。`derived-by` で相互リンク済み）
 
 ## Sources and Relations
 
