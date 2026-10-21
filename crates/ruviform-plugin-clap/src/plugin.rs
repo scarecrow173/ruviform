@@ -418,12 +418,8 @@ impl<'a> PluginAudioProcessor<'a, GainShared, GainMainThread<'a>> for GainAudioP
         // sync-out — keeps `params.value` honest on the main thread.
         self.processor
             .set_gain_plain(self.shared.gain_mirror.load());
-        let event_list = adapt::translate_events(
-            events.input,
-            self.scratch.events_scratch(),
-            &GAIN_PARAM,
-            frames_count,
-        )?;
+        let event_list =
+            adapt::translate_events(events.input, &mut self.scratch, &GAIN_PARAM, frames_count)?;
         let transport = process
             .transport
             .map(|t| adapt::adapt_transport(t, self.config.sample_rate(), process.steady_time));

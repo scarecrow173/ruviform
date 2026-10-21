@@ -195,7 +195,7 @@ GitHub Issue [#29 [impl] プラグイン基盤（plugin-core + CLAP/VST3 adapter
 
 - `channelBuffers32` の `*mut *mut f32` → `PlanarBufferView{,Mut}` のゼロコピー経路が成立 — 非エイリアス出力チャンネルはホストバッファ直書きをテストで実測。全エイリアスパターン（`out[i]==in[j]`・出力重複）は per-channel 対比較で検出し該当チャンネルのみ activate 時確保の bounce 領域へ逃がす
 - `process` のチャンネルリストスクラッチ・イベントスクラッチは activate/`setupProcessing` 時の最大フレーム数で事前確保し process 経路で伸長しない構造（alloc 検証レーンは Issue #22 待ち）
-- `IParameterChanges`/`IParamValueQueue` は `ComRef::from_raw` で借用（refcount 非操作・非保持）、ブロック範囲外オフセットはドロップ・stable sort・`MAX_BLOCK_EVENTS` 切り捨ての定義済み挙動（走査も `MAX_BLOCK_EVENTS` キュー/ポイントで有界）
+- `IParameterChanges`/`IParamValueQueue` は `ComRef::from_raw` で借用（refcount 非操作・非保持）、ブロック範囲外オフセットはドロップ・stable sort・`MAX_BLOCK_EVENTS` 切り捨ての定義済み挙動（走査はキュー訪問＋ポイント検査の合計作業予算 = 8×`MAX_BLOCK_EVENTS` で有界。枯渇時は収集済みイベントのみ処理の決定的切り捨て — PR レビュー後確定）
 - ライフサイクルは VST3 呼び出し列を中立 `Lifecycle` へ写像（`setActive`→Activate/Deactivate・`setupProcessing`→`prepare`・`setProcessing`→Start/StopProcessing・`terminate`→Destroy）、不正順序は `kResultFalse`
 - `kSample64` は f32 再解釈せず定義済み拒否（`setupProcessing`/`process` 双方）。state ストリーム・`IPlugView` GUI は `kNotImplemented` スタブ（T6 へ）
 

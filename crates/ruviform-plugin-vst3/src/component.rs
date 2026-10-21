@@ -88,6 +88,16 @@ const CHANNELS_PER_BUS: usize = 2;
 /// multi-GiB allocation (2 channels × 1 MiB frames ≈ 8 MiB).
 const MAX_NEGOTIATED_FRAMES: i32 = 1 << 20;
 
+/// Total `IParameterChanges` scan budget per block — queue visits and
+/// `getPoint` inspections combined. Bounds the *scan* work itself, not
+/// just the accepted event count: without it a host declaring
+/// `MAX_BLOCK_EVENTS` queues × `MAX_BLOCK_EVENTS` points each could
+/// force ~1M inspections while almost no events are accepted.
+/// 8 × `MAX_BLOCK_EVENTS` leaves generous headroom for legitimate
+/// automation while keeping the worst case in the low-thousands of
+/// cheap FFI calls.
+const MAX_PARAM_SCAN_OPERATIONS: usize = 8 * MAX_BLOCK_EVENTS;
+
 /// Per-instance component state — everything the `&self` COM methods
 /// need to mutate, behind one `RefCell`.
 struct ComponentState {
@@ -148,9 +158,16 @@ impl GainComponent {
     /// Reads `IParameterChanges` into `event_scratch`: one
     /// [`ParamEvent`] per gain queue point, out-of-block offsets and
     /// non-finite values dropped, list sorted by offset. The scan is
-    /// bounded — at most `MAX_BLOCK_EVENTS` queues and `MAX_BLOCK_EVENTS`
-    /// points per queue are visited, and it stops as soon as the
-    /// bounded scratch fills (defined truncation).
+    /// bounded: at most `MAX_BLOCK_EVENTS` queues and `MAX_BLOCK_EVENTS`
+    /// points per queue are visited, the scan stops as soon as the
+    /// bounded scratch fills, and — crucially — the *total* inspection
+    /// work is capped by [`MAX_PARAM_SCAN_OPERATIONS`] (queue visits +
+    /// point reads combined), so a hostile host cannot multiply
+    /// inspections to `queues × points` while few events are accepted.
+    ///
+    /// On budget exhaustion the scan stops deterministically — events
+    /// already collected are retained and processed (the
+    /// earliest-scanned events survive; the rest are dropped).
     ///
     /// # Safety
     ///
@@ -175,10 +192,19 @@ impl GainComponent {
         };
         // SAFETY: `changes` is a live `IParameterChanges` for the call.
         let count = usize::try_from(unsafe { changes.getParameterCount() }.max(0)).unwrap_or(0);
+        // Total work budget: each queue visit and each `getPoint`
+        // inspection consumes one unit — the scan cost itself is
+        // bounded independent of how many events are accepted.
+        let mut scan_budget = MAX_PARAM_SCAN_OPERATIONS;
         // A host may declare arbitrary queue/point counts; the scan
         // stays bounded — at most `MAX_BLOCK_EVENTS` queues and
-        // `MAX_BLOCK_EVENTS` points per queue.
+        // `MAX_BLOCK_EVENTS` points per queue, all within the total
+        // budget above.
         'queues: for index in 0..count.min(MAX_BLOCK_EVENTS) {
+            if scan_budget == 0 {
+                break;
+            }
+            scan_budget -= 1;
             // SAFETY: `index < count` within this live
             // `IParameterChanges`; the returned queue pointer is
             // borrowed for this call only.
@@ -197,6 +223,10 @@ impl GainComponent {
             // SAFETY: `queue` is a live `IParamValueQueue` for the call.
             let points = usize::try_from(unsafe { queue.getPointCount() }.max(0)).unwrap_or(0);
             for point in 0..points.min(MAX_BLOCK_EVENTS) {
+                if scan_budget == 0 {
+                    break 'queues;
+                }
+                scan_budget -= 1;
                 let mut offset = 0_i32;
                 let mut value = 0.0_f64;
                 // SAFETY: `point < points` within this live queue;
@@ -1280,6 +1310,125 @@ mod tests {
         unsafe {
             assert_eq!(processor.process(&raw mut data), kResultOk);
         }
+    }
+
+    /// A `IParamValueQueue` that declares `i32::MAX` points, counts
+    /// every `getPoint` inspection, and fails them all — measures the
+    /// *scan* work itself, which the accepted-event count cannot cap.
+    struct CountingQueue {
+        point_calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl Class for CountingQueue {
+        type Interfaces = (IParamValueQueue,);
+    }
+
+    impl IParamValueQueueTrait for CountingQueue {
+        #[expect(unsafe_code)]
+        unsafe fn getParameterId(&self) -> u32 {
+            GAIN_PARAM.id.0
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn getPointCount(&self) -> i32 {
+            i32::MAX
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn getPoint(&self, _index: i32, _offset: *mut i32, _value: *mut f64) -> tresult {
+            self.point_calls.fetch_add(1, Ordering::Relaxed);
+            kResultFalse
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn addPoint(&self, _offset: i32, _value: f64, _index: *mut i32) -> tresult {
+            kNotImplemented
+        }
+    }
+
+    /// The per-queue/per-point caps alone allow `MAX_BLOCK_EVENTS`²
+    /// inspections; the combined budget must bound the scan to
+    /// `MAX_PARAM_SCAN_OPERATIONS` queue visits + point reads —
+    /// measured, not just argued.
+    #[expect(unsafe_code)]
+    #[test]
+    fn rt_param_scan_total_budget_bounds_worst_case() {
+        let wrapper = ComWrapper::new(GainComponent::new());
+        let component = wrapper.to_com_ptr::<IComponent>().unwrap();
+        let processor = wrapper.to_com_ptr::<IAudioProcessor>().unwrap();
+        // SAFETY: live COM objects.
+        unsafe { activate(&component, &processor, 64) };
+
+        let point_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let queue_wrapper = ComWrapper::new(CountingQueue {
+            point_calls: point_calls.clone(),
+        });
+        let queue = queue_wrapper.to_com_ptr::<IParamValueQueue>().unwrap();
+        // More queues than the budget can ever reach — every one
+        // declaring `i32::MAX` failing points is the hostile worst
+        // case for scan work.
+        let changes_wrapper = ComWrapper::new(TestChanges {
+            queues: (0..32).map(|_| queue.clone()).collect(),
+        });
+        let changes = changes_wrapper.to_com_ptr::<IParameterChanges>().unwrap();
+
+        let mut input = [vec![0.5_f32; 64], vec![1.0; 64]];
+        let mut output = [vec![0.0_f32; 64], vec![0.0; 64]];
+        let mut block = TestBlock::new(&mut input, &mut output);
+        let mut data = block.data(64);
+        data.inputParameterChanges = changes.as_ptr();
+        // SAFETY: valid `ProcessData`; `changes` valid for the call.
+        unsafe {
+            assert_eq!(processor.process(&raw mut data), kResultOk);
+        }
+
+        let inspected = point_calls.load(Ordering::Relaxed);
+        // Point inspections plus the ≤32 queue visits stay within the
+        // combined budget — not ~32×1024 ≈ 32k and certainly not ~1M.
+        assert!(
+            inspected <= MAX_PARAM_SCAN_OPERATIONS,
+            "getPoint inspections {inspected} exceeded the total budget"
+        );
+    }
+
+    /// Budget exhaustion is deterministic — events already collected
+    /// are retained and processed; only the un-scanned tail drops.
+    #[expect(unsafe_code)]
+    #[test]
+    fn param_scan_budget_exhaustion_keeps_collected_events() {
+        let wrapper = ComWrapper::new(GainComponent::new());
+        let component = wrapper.to_com_ptr::<IComponent>().unwrap();
+        let processor = wrapper.to_com_ptr::<IAudioProcessor>().unwrap();
+        // SAFETY: live COM objects.
+        unsafe { activate(&component, &processor, 64) };
+
+        let good_wrapper = ComWrapper::new(TestQueue {
+            id: GAIN_PARAM.id.0,
+            points: vec![(0, 0.5)],
+        });
+        let good_queue = good_wrapper.to_com_ptr::<IParamValueQueue>().unwrap();
+        let lying_queue_wrapper = ComWrapper::new(LyingQueue);
+        let lying_queue = lying_queue_wrapper
+            .to_com_ptr::<IParamValueQueue>()
+            .unwrap();
+        let mut queues = vec![good_queue];
+        queues.extend((0..32).map(|_| lying_queue.clone()));
+        let changes_wrapper = ComWrapper::new(TestChanges { queues });
+        let changes = changes_wrapper.to_com_ptr::<IParameterChanges>().unwrap();
+
+        let mut input = [vec![0.5_f32; 64], vec![1.0; 64]];
+        let mut output = [vec![0.0_f32; 64], vec![0.0; 64]];
+        let mut block = TestBlock::new(&mut input, &mut output);
+        let mut data = block.data(64);
+        data.inputParameterChanges = changes.as_ptr();
+        // SAFETY: valid `ProcessData`; `changes` valid for the call.
+        unsafe {
+            assert_eq!(processor.process(&raw mut data), kResultOk);
+        }
+        // The first queue's gain point still reached the processor
+        // even though the budget ran out on the hostile tail.
+        assert_eq!(output[0], vec![0.25_f32; 64]);
+        assert_eq!(output[1], vec![0.5_f32; 64]);
     }
 
     /// Queues for parameter ids the plugin does not own are skipped

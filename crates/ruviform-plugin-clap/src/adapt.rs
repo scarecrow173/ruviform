@@ -87,6 +87,10 @@ pub(crate) struct BlockScratch {
     /// Neutral [`Event`]s translated from the input event list.
     /// Capacity `MAX_EVENTS_PER_BLOCK`.
     events: Vec<Event>,
+    /// Alternating buffer for the merge sort inside
+    /// [`translate_events`] — keeps the sort allocation-free on the RT
+    /// path. Capacity `MAX_EVENTS_PER_BLOCK`.
+    event_sort_scratch: Vec<Event>,
 }
 
 impl BlockScratch {
@@ -97,14 +101,8 @@ impl BlockScratch {
             input_ptrs: Vec::with_capacity(max_channels),
             output_ptrs: Vec::with_capacity(max_channels),
             events: Vec::with_capacity(max_events),
+            event_sort_scratch: Vec::with_capacity(max_events),
         }
-    }
-
-    /// The event scratch for [`translate_events`].
-    ///
-    /// **RT contract:** RT-suitable — borrow, no allocation.
-    pub(crate) fn events_scratch(&mut self) -> &mut Vec<Event> {
-        &mut self.events
     }
 }
 
@@ -618,19 +616,20 @@ pub(crate) fn translate_param_event(unknown: &UnknownEvent, param: &ParamInfo) -
 }
 
 /// Translates the input event list into a validated neutral
-/// [`EventList`] borrowing `scratch` — allocation-free (pushes stay
-/// within the pre-allocated capacity; bounds are checked first).
+/// [`EventList`] borrowing `scratch.events` — allocation-free (pushes
+/// stay within the pre-allocated capacity; bounds are checked first).
 ///
 /// CLAP requires sorted input events; if a host still delivers
-/// unsorted ones, the list is re-ordered in place with
-/// [`sort_events_by_frame_offset`] — the shared stable, in-place
-/// (allocation-free) sort, so the relative order of same-offset events
+/// unsorted ones, the list is re-ordered with
+/// [`sort_events_by_frame_offset`] over `scratch.event_sort_scratch` —
+/// the shared stable merge sort (allocation-free over the
+/// pre-allocated buffer), so the relative order of same-offset events
 /// is preserved. Events with out-of-block offsets are dropped
 /// individually — the shared drop policy, identical to the VST3
 /// adapter.
 ///
-/// **RT contract:** RT-suitable — bounded `O(n + n²)` scan over at
-/// most `MAX_EVENTS_PER_BLOCK` events, allocation-free.
+/// **RT contract:** RT-suitable — bounded `O(n + n log n)` work over
+/// at most `MAX_EVENTS_PER_BLOCK` events, allocation-free.
 ///
 /// # Errors
 ///
@@ -638,14 +637,15 @@ pub(crate) fn translate_param_event(unknown: &UnknownEvent, param: &ParamInfo) -
 /// `MAX_EVENTS_PER_BLOCK` (a defined rejection).
 pub(crate) fn translate_events<'a>(
     input: &InputEvents<'_>,
-    scratch: &'a mut Vec<Event>,
+    scratch: &'a mut BlockScratch,
     param: &ParamInfo,
     block_frames: u32,
 ) -> Result<EventList<'a>, PluginError> {
     if input.len() as usize > MAX_EVENTS_PER_BLOCK {
         return Err(PluginError::Message("event count exceeds per-block bound"));
     }
-    scratch.clear();
+    let events = &mut scratch.events;
+    events.clear();
     let mut sorted = true;
     let mut previous = 0_u32;
     for unknown in input.iter() {
@@ -662,15 +662,22 @@ pub(crate) fn translate_events<'a>(
             sorted = false;
         }
         previous = event.frame_offset();
-        scratch.push(event);
+        events.push(event);
     }
     if !sorted {
-        sort_events_by_frame_offset(scratch);
+        // `event_sort_scratch` is filled to the event count so it
+        // satisfies the merge sort's `len >= events.len()` precondition;
+        // capacity was reserved at `activate`.
+        scratch.event_sort_scratch.clear();
+        scratch
+            .event_sort_scratch
+            .extend_from_slice(&scratch.events);
+        sort_events_by_frame_offset(&mut scratch.events, &mut scratch.event_sort_scratch);
     }
     // The filtered list always satisfies `EventList`'s bounds; a
     // failure means the invariant broke — a defined reject, never a
     // silently-empty event set.
-    EventList::new(scratch.as_slice(), block_frames).map_err(|_| {
+    EventList::new(scratch.events.as_slice(), block_frames).map_err(|_| {
         debug_assert!(false, "filtered events must satisfy EventList");
         PluginError::Message("event list invariant violated")
     })
@@ -1380,7 +1387,7 @@ mod tests {
         block_frames: u32,
     ) -> Result<Vec<(u32, f64)>, PluginError> {
         let input = buffer.as_input();
-        let mut scratch = Vec::with_capacity(MAX_EVENTS_PER_BLOCK);
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
         let list = translate_events(&input, &mut scratch, &GAIN_PARAM, block_frames)?;
         Ok(list
             .iter()

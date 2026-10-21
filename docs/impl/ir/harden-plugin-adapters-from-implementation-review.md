@@ -19,6 +19,8 @@ relations:
       - type: "file"
         path: "crates/ruviform-plugin-clap/src/plugin.rs"
       - type: "file"
+        path: "crates/ruviform-plugin-core/src/event.rs"
+      - type: "file"
         path: "crates/ruviform-plugin-vst3/src/block.rs"
       - type: "file"
         path: "crates/ruviform-plugin-vst3/src/component.rs"
@@ -133,9 +135,19 @@ T7 完了後の実装 review-protocol（協調 Reviewer A + 敵対 Reviewer B �
 - 範囲重複チェックはポインタ加算のアドレス比較（`saturating_add`）に依拠 — `Provenance` 上の指針操作ではなくアドレス算術のため妥当。
 - CLAP 側の範囲重複判定は `raw_data()` 時点の生ポインタで行う — clack が `channel_pair` 内で構築するスライスは検査済みアドレスから生成されるため、判定漏れの新規経路はない。
 
+## PR #49 レビュー対応（追記）
+
+マージ前条件として「イベント受理数の上限と RT 処理量の上限が一致しない」が指摘され、以下を追加で確定・実装した。
+
+- **VST3 `collect_param_events` の合計作業予算**: 軸ごとの上限（1024 キュー × 1024 ポイント）のみでは受理イベントが少なくても最大 ~1M 回の `getPoint` 検査が起こり得た。`MAX_PARAM_SCAN_OPERATIONS = 8 × MAX_BLOCK_EVENTS`（キュー訪問＋ポイント検査の合計予算）を導入し、枯渇時は走査を停止して収集済みイベントのみ処理する決定的切り捨てを定義（`rt_param_scan_total_budget_bounds_worst_case` で実測: 32 キュー × `i32::MAX` ポイント宣言で検査回数 ≤ 予算を確認、`param_scan_budget_exhaustion_keeps_collected_events` で収集済みイベントの保持を確認）。
+- **`sort_events_by_frame_offset` の merge sort 化**: insertion sort は逆順 1024 件で ~524k ムーブ（O(n²)）だった。代替案（上限縮小 vs 固定容量・非割当ソート）を比較し、事前確保スクラッチ上の bottom-up merge sort を採用 — 安定・非割当を維持して最悪ケースを `n·⌈log2 n⌉ + 2n` コピー（1024 件で ~12k、~43 分の 1）へ。`rt_sort_worst_case_moves_stay_n_log_n` が逆順入力のコピー回数を実測して上界を主張。スクラッチ不足は定義済みフォールバック（in-place insertion sort）。両アダプタのスクラッチ（VST3 `EventScratch::sort_buf`・CLAP `BlockScratch::event_sort_scratch`）は activate/setup 時に予約済みで RT 経路は非割当のまま。
+- spec 122 に「整列の最悪ケース O(n log n) 有界」と「走査の合計作業予算・枯渇時の決定的切り捨て」を明記、discovery/IR も同期。
+
 ## Follow-ups
 
-- **Issue #22**（RT 検証基盤）: `rt_` テストは alloc 非観測のまま — no-alloc 保証は文書契約 + レビュー対象のまま。
+- **Issue #22**（RT 検証基盤）: `rt_` テストは alloc 非観測のまま — no-alloc 保証は文書契約 + レビュー対象のまま。イベント飽和・ホスト異常値・複数インスタンスの計測も同レーンの対象（PR レビュー指摘を記録）。
 - **コントローラ → プロセッサ値配線**: `setComponentHandler`/`IComponentHandler` 経由の編集伝搬は PoC 範囲外 — 後続 Issue で atomic mirror（CLAP `ParamMirror` 相当）の配線を検討。
 - **macOS/Linux VST3 エントリのクロスビルド実測**: cfg 構造は存在するが未検証。
 - **レビュー P3 メモ（対象外として記録）**: `#[expect(unsafe_code)]` 関数スコープの広さ・イベント切り捨ての到着順ポリシー（有界化 + パラメータフィルタで実害は緩和済み）。
+- **実ホスト検証**: ユニットテストに加えて実ホストでの load/process/stop/unload 検証（PR レビュー指摘 — PoC スコープ外として後続課題へ）。
+- **`ProcessContext` と `RtContext` の関係**: Issue #21 側の制約に照らして確定する（PR レビュー指摘 — RT 契約結合時の後続課題）。

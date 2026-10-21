@@ -78,9 +78,11 @@ pub(crate) enum Rejection {
 /// with capacity reserved at `configure` time. Sorted by frame offset
 /// before [`EventList`][ruviform_plugin_core::EventList] validation —
 /// the adapter-side sort the ordering contract allows for unsorted
-/// host input.
+/// host input. `sort_buf` backs the merge sort's alternating buffer
+/// so the sort stays allocation-free on the RT path.
 pub(crate) struct EventScratch {
     events: Vec<Event>,
+    sort_buf: Vec<Event>,
 }
 
 impl EventScratch {
@@ -88,7 +90,10 @@ impl EventScratch {
     ///
     /// **RT contract:** RT-suitable — pure.
     pub(crate) const fn empty() -> Self {
-        Self { events: Vec::new() }
+        Self {
+            events: Vec::new(),
+            sort_buf: Vec::new(),
+        }
     }
 
     /// Reserves event capacity — the `setupProcessing` allocation
@@ -96,6 +101,8 @@ impl EventScratch {
     pub(crate) fn configure(&mut self) {
         self.events.clear();
         self.events.reserve(MAX_BLOCK_EVENTS);
+        self.sort_buf.clear();
+        self.sort_buf.reserve(MAX_BLOCK_EVENTS);
     }
 
     /// Clears the per-block list.
@@ -118,14 +125,20 @@ impl EventScratch {
         true
     }
 
-    /// Stable-sorts by frame offset — in place, allocation-free (the
-    /// standard `sort_by_key` may allocate auxiliary scratch; the
-    /// shared insertion sort is guaranteed in-place).
+    /// Stable-sorts by frame offset — allocation-free over the
+    /// pre-reserved `sort_buf` (the standard `sort_by_key` may
+    /// allocate auxiliary scratch; the shared merge sort needs only
+    /// this buffer).
     ///
-    /// **RT contract:** `O(n²)` bounded over at most
-    /// `MAX_BLOCK_EVENTS` elements.
+    /// **RT contract:** `O(n log n)` bounded element copies over at
+    /// most `MAX_BLOCK_EVENTS` elements.
     pub(crate) fn sort(&mut self) {
-        ruviform_plugin_core::sort_events_by_frame_offset(&mut self.events);
+        // `sort_buf` is filled to the event count so it satisfies the
+        // merge sort's `len >= events.len()` precondition without a
+        // dummy element; capacity was reserved at `configure`.
+        self.sort_buf.clear();
+        self.sort_buf.extend_from_slice(&self.events);
+        ruviform_plugin_core::sort_events_by_frame_offset(&mut self.events, &mut self.sort_buf);
     }
 
     /// The collected events as a slice.

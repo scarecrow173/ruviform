@@ -9,8 +9,9 @@
 //! - **Ordering** — events are sorted by frame offset
 //!   (non-decreasing). [`EventList::new`] *rejects* unsorted input; an
 //!   adapter that receives unsorted host events must either pre-sort
-//!   ([`sort_events_by_frame_offset`] is stable and allocation-free,
-//!   preserving the order of same-offset events) or refuse the block.
+//!   ([`sort_events_by_frame_offset`] is stable and allocation-free
+//!   over a caller-provided scratch, preserving the order of
+//!   same-offset events) or refuse the block.
 //! - **Offset representation** — an event offset is a *within-block
 //!   frame offset* bounded by `offset < block_frames`. Absolute
 //!   [`MediaTime`] positions are deliberately **not** the wire
@@ -283,11 +284,19 @@ impl<'a> EventList<'a> {
 /// construction: unlike the standard library's stable
 /// `sort`/`sort_by_key` (which may allocate auxiliary scratch) and
 /// `sort_unstable` (which does not preserve same-offset order), this
-/// is an in-place insertion sort — allocation-free and stable, at
-/// `O(n²)` over the bounded per-block event count.
+/// is a bottom-up merge sort over a caller-provided `scratch` —
+/// stable, allocation-free, and `O(n log n)` element moves over the
+/// bounded per-block event count (the worst case — fully reversed
+/// input — costs `n·⌈log2 n⌉ + 2n` copies, not `n²`).
 ///
-/// **RT contract:** RT-suitable — `O(n²)` bounded comparisons on
-/// `Copy` elements, allocation-free.
+/// `scratch` must be at least `events.len()` long; adapters carry it
+/// in per-instance scratch reserved at activation/setup. A shorter
+/// scratch is a contract violation handled by a defined fallback —
+/// the bounded in-place insertion sort (still stable, still
+/// allocation-free).
+///
+/// **RT contract:** RT-suitable — `O(n log n)` bounded element moves
+/// on `Copy` elements, allocation-free when `scratch` is pre-sized.
 ///
 /// # Examples
 ///
@@ -313,10 +322,24 @@ impl<'a> EventList<'a> {
 ///         }),
 ///     ),
 /// ];
-/// sort_events_by_frame_offset(&mut events);
+/// let mut sort_scratch = events;
+/// sort_events_by_frame_offset(&mut events, &mut sort_scratch);
 /// assert!(EventList::new(&events, 128).is_ok());
 /// ```
-pub fn sort_events_by_frame_offset(events: &mut [Event]) {
+pub fn sort_events_by_frame_offset(events: &mut [Event], scratch: &mut [Event]) {
+    if scratch.len() < events.len() {
+        // Contract violation: the documented precondition is a scratch
+        // at least `events.len()` long. Fall back to the bounded
+        // in-place sort rather than allocating or panicking.
+        insertion_sort_by_frame_offset(events);
+        return;
+    }
+    merge_sort_events(events, &mut scratch[..events.len()]);
+}
+
+/// In-place insertion sort — the defined fallback when the merge
+/// scratch is undersized. Stable and allocation-free at `O(n²)`.
+fn insertion_sort_by_frame_offset(events: &mut [Event]) {
     for index in 1..events.len() {
         let value = events[index];
         let mut hole = index;
@@ -326,6 +349,70 @@ pub fn sort_events_by_frame_offset(events: &mut [Event]) {
         }
         events[hole] = value;
     }
+}
+
+/// Bottom-up stable merge sort alternating between `events` and
+/// `scratch` — `O(n log n)` bounded element copies, allocation-free.
+/// Returns the number of element copies performed (worst-case
+/// instrumentation for the RT bound).
+fn merge_sort_events(events: &mut [Event], scratch: &mut [Event]) -> usize {
+    let len = events.len();
+    debug_assert_eq!(scratch.len(), len);
+    if len < 2 {
+        return 0;
+    }
+    let mut moves = len;
+    scratch.copy_from_slice(events);
+    // Tracks which buffer currently holds the sorted runs — passes
+    // alternate `scratch → events` then `events → scratch`.
+    let mut sorted_in_events = false;
+    let mut width = 1_usize;
+    while width < len {
+        if sorted_in_events {
+            merge_pass(&*events, scratch, width);
+        } else {
+            merge_pass(&*scratch, events, width);
+        }
+        sorted_in_events = !sorted_in_events;
+        moves += len;
+        width *= 2;
+    }
+    if !sorted_in_events {
+        events.copy_from_slice(scratch);
+        moves += len;
+    }
+    moves
+}
+
+/// Merges consecutive `width`-sized run pairs from `src` into `dst`.
+fn merge_pass(src: &[Event], dst: &mut [Event], width: usize) {
+    let len = src.len();
+    let mut start = 0;
+    while start < len {
+        let mid = start.saturating_add(width).min(len);
+        let end = start.saturating_add(2 * width).min(len);
+        merge_runs(&src[start..mid], &src[mid..end], &mut dst[start..end]);
+        start = end;
+    }
+}
+
+/// Stable run merge — on equal offsets the left (earlier-arriving)
+/// run's element wins, preserving input order.
+fn merge_runs(left: &[Event], right: &[Event], dst: &mut [Event]) {
+    let (mut left_index, mut right_index, mut out) = (0, 0, 0);
+    while left_index < left.len() && right_index < right.len() {
+        dst[out] = if left[left_index].frame_offset() <= right[right_index].frame_offset() {
+            left_index += 1;
+            left[left_index - 1]
+        } else {
+            right_index += 1;
+            right[right_index - 1]
+        };
+        out += 1;
+    }
+    let left_rest = left.len() - left_index;
+    dst[out..out + left_rest].copy_from_slice(&left[left_index..]);
+    dst[out + left_rest..].copy_from_slice(&right[right_index..]);
 }
 
 #[cfg(test)]
@@ -409,7 +496,8 @@ mod tests {
             param_event(0, 0.9),
             param_event(5, 0.6),
         ];
-        sort_events_by_frame_offset(&mut events);
+        let mut scratch = events;
+        sort_events_by_frame_offset(&mut events, &mut scratch);
         let pairs: Vec<(u32, f64)> = events
             .iter()
             .map(|event| {
@@ -424,7 +512,57 @@ mod tests {
         assert_eq!(pairs, [(0, 0.9), (5, 0.5), (5, 0.6), (10, 0.1), (10, 0.2)]);
 
         let mut already_sorted = [param_event(0, 0.1), param_event(5, 0.5)];
-        sort_events_by_frame_offset(&mut already_sorted);
+        let mut scratch = already_sorted;
+        sort_events_by_frame_offset(&mut already_sorted, &mut scratch);
         assert_eq!(already_sorted[1].frame_offset(), 5);
+    }
+
+    /// Worst-case cost is `O(n log n)`, measured — not just
+    /// allocation-free: fully reversed input at the VST3 adapter bound
+    /// (`MAX_BLOCK_EVENTS = 1_024`) costs `n·⌈log2 n⌉ + 2n` element
+    /// copies (≈12k) where the previous insertion sort moved ≈524k.
+    #[test]
+    fn rt_sort_worst_case_moves_stay_n_log_n() {
+        const LEN: usize = 1_024;
+        let mut events = vec![param_event(0, 0.0); LEN];
+        for (index, event) in events.iter_mut().enumerate() {
+            *event = param_event(
+                u32::try_from(LEN - index).unwrap_or(u32::MAX),
+                f64::from(u32::try_from(index).unwrap_or(u32::MAX)),
+            );
+        }
+        let mut scratch = vec![param_event(0, 0.0); LEN];
+        let moves = merge_sort_events(&mut events, &mut scratch);
+        assert!(
+            events
+                .windows(2)
+                .all(|pair| pair[0].frame_offset() <= pair[1].frame_offset())
+        );
+        // ⌈log2 LEN⌉ passes + the initial and possible final copy.
+        let passes = usize::try_from(usize::BITS - (LEN - 1).leading_zeros()).unwrap_or(usize::MAX);
+        assert!(
+            moves <= LEN * (passes + 2),
+            "moves={moves} exceeds n·⌈log2 n⌉+2n"
+        );
+    }
+
+    /// An undersized scratch is a defined fallback — the bounded
+    /// in-place insertion sort — not a panic or an allocation.
+    #[test]
+    fn sort_events_undersized_scratch_falls_back_to_insertion() {
+        let mut events = [
+            param_event(10, 0.1),
+            param_event(5, 0.5),
+            param_event(0, 0.9),
+        ];
+        let mut scratch = [param_event(0, 0.0)];
+        sort_events_by_frame_offset(&mut events, &mut scratch);
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.frame_offset())
+                .collect::<Vec<_>>(),
+            [0, 5, 10]
+        );
     }
 }
