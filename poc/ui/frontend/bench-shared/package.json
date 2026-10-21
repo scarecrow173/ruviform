@@ -1,0 +1,17 @@
+{
+  "name": "@ui-poc/bench-shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "FW-independent bench parts for the Issue #28 UI PoC: workload generator, rAF frame stats, renderers, ipc bridge.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.74",
+    "typescript": "^5.9.0"
+  }
+}

@@ -4,8 +4,9 @@
 **捨て場付き検証ハーネス**である。本番ワークスペース（ルート `Cargo.toml` / `crates/`）から
 独立した Cargo ワークスペースであり、製品コードへの依存混入は行わない。
 
-- AC1 `--experiment host` … tao `Window` + wry `WebView` の基本検証（本タスク T1 の実装範囲）
-- AC2–AC7 の実験（render / surface / ipc / frontend / dist）は後続タスク T2–T5 の範囲
+- AC1 `--experiment host` … tao `Window` + wry `WebView` の基本検証（T1）
+- AC2 `--experiment render` … WebView 内描画バックエンド計測（T2。canvas2d/webgl2/webgpu）
+- AC3–AC7 の実験（surface / ipc / frontend / dist）は後続タスク T3–T5 の範囲
 - 計測契約は `poc-metric.v1`（`status`/`reason`/exit code 規約）。集約結果は
   [`RESULTS.md`](./RESULTS.md)（コミット対象）へ、生サンプルは `out/*.jsonl`（gitignore）へ、
   過程の観察は `docs/impl/exp/*.jsonl` へ記録する（3 層の証跡）
@@ -16,21 +17,26 @@
 - Rust toolchain: リポジトリ pin（mise `rust = "1.99.0"`）。cargo コマンドは
   **`mise exec --` 経由**で呼ぶこと
 - WebView2 Runtime（Windows 11 では標準同梱。`--check` で `webview2_version` を検出）
-- Node.js + npm（`frontend/` の最小ビルドに使用。T1 では `node build.mjs` の
-  コピー処理のみで、フレームワーク/bundler は未導入）
+- Node.js + npm（`frontend/` のビルドに使用。npm workspaces: `bench-shared`
+  （FW 非依存のワークロード・rAF 統計・レンダラ・ipc ブリッジ）と
+  `vanilla`（Vite + TypeScript 参照 UI）を `npm run build` で一括ビルドし、
+  `build.mjs` が `dist/` を集約する。`solid` variant は T5 で追加）
 
 ## セットアップ
 
 ```sh
 cd poc/ui/frontend
-npm ci          # package-lock.json から復元（T1 は依存パッケージ実質ゼロ）
-npm run build   # src/ -> dist/ へコピーし .ui-poc-built マーカーを配置
+npm ci          # package-lock.json から復元（workspaces 全依存）
+npm run build   # workspaces ビルド + dist/ 集約（.ui-poc-built マーカー配置）
 cd ../..
 ```
 
-`frontend/dist/` は gitignore 対象。未ビルド時は `build.rs` がスタブ `index.html`
-を生成するため `cargo build` / `--check` 単体は常に動くが、実験は
-`status:"skipped"`（`reason: "frontend not built"`）となる。
+`frontend/dist/` と `frontend/*/dist/` は gitignore 対象。未ビルド時は
+`build.rs` がスタブ `index.html` を生成するため `cargo build` / `--check`
+単体は常に動くが、実験は `status:"skipped"`（`reason: "frontend not built"`）
+となる。`dist/index.html` は host 実験ページ、`dist/<variant>/index.html`
+が各 FW バリアントのベンチ UI（render 実験は `poc://app/vanilla/index.html`
+を使う）。
 
 ## ビルド・実行
 
@@ -43,6 +49,14 @@ mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --check
 
 # AC1 host 実験（ウィンドウが一瞬表示され、done/timeout で自己終了）
 mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --experiment host
+
+# AC2 render 実験（--backend は必須。既定 600 フレーム記録で自己終了）
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment render --backend canvas2d --frames 600
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment render --backend webgl2 --frames 600
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment render --backend webgpu --frames 600  # navigator.gpu 不在なら webgl2 fallback
 
 # パラメータ指定例（タイムアウト秒・証跡出力先・フレーム数）
 mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
@@ -78,12 +92,16 @@ poc/ui/
     host.rs           # tao Window + wry WebView adapter（外部型はここに封じる）
     assets.rs         # rust-embed + poc://app（app 配信 / data 予約）
     metrics.rs        # poc-metric.v1 生成・stdout/out/*.jsonl 出力・集計
-    exp/mod.rs        # Experiment trait + 実験レジストリ
+    exp/mod.rs        # Experiment trait + 実験レジストリ + 共通前提ゲーティング
     exp/host.rs       # AC1 実験（状態機械は Rust 側が所有）
+    exp/render.rs     # AC2 実験（backend 別フレーム統計・webgpu→webgl2 fallback）
   frontend/
-    package.json      # npm run build -> build.mjs（src/ を dist/ へコピー）
-    build.mjs
+    package.json      # npm workspaces ルート（bench-shared + vanilla）
+    package-lock.json # コミット対象（npm ci の正本）
+    build.mjs         # dist/ 集約（src/ + <variant>/dist → dist/<variant>/）
     src/index.html    # host 実験用 JS エージェント（観測イベントを IPC 報告）
+    bench-shared/     # FW 非依存: workload/rAF stats/renderers(canvas2d|webgl2|webgpu)/ipc/runner
+    vanilla/          # Vite + TypeScript 参照ベンチ UI（FW ランタイムゼロ下限）
   RESULTS.md          # AC→実験→エビデンス行対応表（コミット対象）
   out/                # 生 JSONL（gitignore）
 ```
@@ -113,3 +131,13 @@ poc/ui/
   DOM window blur→focus 遷移は観測可能（`focus_transition.mechanism:"window"`）
 - `build_as_child` 経路では子コンテナ HWND リサイズが JS viewport に反映されない
   観測（T4/AC3 の隣接構成検証へ引継ぎ）
+- WebView2 の IPC / ページロード callback は tao `WaitUntil` を起床させない
+  （OS ウィンドウイベントではないため）。`host.rs` は `EventLoopProxy` の
+  user event で起床を明示する。これがないとウィンドウイベント途絶区間の
+  IPC メッセージ（done シグナル等）が deadline まで滞留する（T2 実測）
+- WebView2 UDF はシングルトンロック持ち。連続実行で前回ブラウザ子プロセスの
+  残留ロックが初期化をブロックするため、既定 data_dir は
+  `ui-poc-webview2-<pid>` のプロセス固有パス
+- `navigator.gpu` は WebView2 155.0.4283.62 で非公開（`--backend webgpu` は
+  機能検出失敗 → `fallback_to` 記録付きで WebGL2 実測となる。
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` の enable 系 flags 2 試行でも非公開のまま）

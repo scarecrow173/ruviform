@@ -47,6 +47,13 @@ pub fn frontend_built() -> bool {
     AppAssets::get(".ui-poc-built").is_some()
 }
 
+/// `poc://app/` 配下の指定アセットが存在するか。
+/// `frontend_built()` が通っても variant 別 dist（`vanilla/index.html` 等）が
+/// 欠ける部分ビルド状態を実験側の前提検査で検出するために使う。
+pub fn app_asset_exists(rel: &str) -> bool {
+    AppAssets::get(rel).is_some()
+}
+
 /// `poc://app/...` の配信。`/` または空パスは `index.html` に解決する。
 fn serve_app(path: &str) -> Response<Cow<'static, [u8]>> {
     let rel = path.trim_start_matches('/');

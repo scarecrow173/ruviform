@@ -137,7 +137,10 @@ pub fn run<F>(config: &HostConfig, mut on_event: F) -> Result<(), String>
 where
     F: FnMut(HostEvent, &Host<'_>),
 {
-    let mut event_loop: EventLoop<()> = EventLoopBuilder::new().build();
+    // user event 対応の EventLoop: WebView2 callback（IPC/ページロード）は
+    // OS ウィンドウイベントとして表れず `WaitUntil` を起床させないため、
+    // `create_proxy().send_event(())` で起床を駆動する。
+    let mut event_loop: EventLoop<()> = EventLoopBuilder::<()>::with_user_event().build();
     let window = WindowBuilder::new()
         .with_title(&config.title)
         .with_inner_size(LogicalSize::new(config.width, config.height))
@@ -147,19 +150,29 @@ where
 
     // wry/tao のイベントは UI スレッド上で同期的に処理されるため、
     // handler → イベントループ間の受け渡しは単一スレッドの Rc キューで足りる。
+    // ただし WebView2 の IPC / ページロード callback は tao の `WaitUntil`
+    // スリープを起床させないため、イベントループ代理（EventLoopProxy）の
+    // user event で起床を明示する。これがないと、ウィンドウイベントが途絶えた
+    // 区間に積まれた IPC イベント（done シグナル等）は deadline まで
+    // 配信されない（T1 の timeout_hit 併記と同根因。render 実験で顕在化）。
     let queue: Rc<RefCell<VecDeque<HostEvent>>> = Rc::new(RefCell::new(VecDeque::new()));
+    let proxy = event_loop.create_proxy();
 
-    // WebView2 データディレクトリは再現性のため一時 dir 固定（design Open Question の採用案）。
-    let data_dir = config
-        .data_dir
-        .clone()
-        .unwrap_or_else(|| std::env::temp_dir().join("ui-poc-webview2"));
+    // WebView2 データディレクトリは一時 dir 配下のプロセス固有パスとする。
+    // WebView2 は UDF にシングルトンロックを持ち、前回実行のブラウザ子プロセスが
+    // 生き残っていると次回起動の WebView2 初期化がブロックされる（連続実行で
+    // 実測）。固定パスによる再現性より、実行間の隔離を優先する。
+    let data_dir = config.data_dir.clone().unwrap_or_else(|| {
+        std::env::temp_dir().join(format!("ui-poc-webview2-{}", std::process::id()))
+    });
     let mut web_context = WebContext::new(Some(data_dir));
 
     let initial = window.inner_size();
     let webview = {
         let q_ipc = Rc::clone(&queue);
         let q_load = Rc::clone(&queue);
+        let proxy_ipc = proxy.clone();
+        let proxy_load = proxy.clone();
         WebViewBuilder::new_with_web_context(&mut web_context)
             .with_url(&config.url)
             .with_custom_protocol("poc".to_string(), |_id, request| {
@@ -169,12 +182,16 @@ where
                 q_ipc
                     .borrow_mut()
                     .push_back(HostEvent::Ipc(request.body().clone()));
+                // UI スレッド上の callback 内からでもループを起床させる
+                // （Windows では proxy がイベントループの隠しウィンドウへ PostMessage）。
+                let _ = proxy_ipc.send_event(());
             })
             .with_on_page_load_handler(move |event, url| {
                 if matches!(event, PageLoadEvent::Finished) {
                     q_load
                         .borrow_mut()
                         .push_back(HostEvent::PageLoadFinished { url });
+                    let _ = proxy_load.send_event(());
                 }
             })
             .with_bounds(full_rect(initial.width, initial.height))

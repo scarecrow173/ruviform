@@ -148,10 +148,9 @@ fn epoch_secs() -> u64 {
 }
 
 /// サンプル列の集計値（avg/p50/p95/p99）。frame_time_ms・rtt_ms 等の
-/// パーセンタイル集計に使う共通ルール。T2–T4（render/ipc 実験）が利用する
-/// 計測契約の一部として先行実装（T1 時点では未接続）。
+/// パーセンタイル集計に使う共通ルール（T2 以降の render/ipc 実験が利用する
+/// 計測契約の一部）。
 /// 空入力は全値 0.0 を返す（呼び出し側でサンプル数も記録すること）。
-#[allow(dead_code)]
 pub fn summarize(samples: &[f64]) -> Value {
     if samples.is_empty() {
         return json!({"count": 0, "avg": 0.0, "p50": 0.0, "p95": 0.0, "p99": 0.0});
@@ -173,7 +172,6 @@ pub fn summarize(samples: &[f64]) -> Value {
 }
 
 /// 最近接順位法（nearest-rank）のパーセンタイル。`sorted` は昇順前提。
-#[allow(dead_code)]
 fn percentile(sorted: &[f64], p: f64) -> f64 {
     debug_assert!(!sorted.is_empty());
     let rank = (p / 100.0 * sorted.len() as f64).ceil() as usize;

@@ -12,7 +12,7 @@
 | AC | 検証項目 | 実験 | 証跡行 | 状態 |
 | --- | --- | --- | --- | --- |
 | AC1 | WebView ホスト（wry+tao 起動・埋め込みロード・IPC・リサイズ・フォーカス） | `--experiment host` | [AC1 host](#ac1---experiment-host) | **実測** |
-| AC2 | 描画バックエンド（canvas2d/webgl2/webgpu） | `--experiment render` | （T2 で記録予定） | 未実施 |
+| AC2 | 描画バックエンド（canvas2d/webgl2/webgpu） | `--experiment render` | [AC2 render](#ac2---experiment-render) | **実測** |
 | AC3 | ネイティブサーフェス同居 | `--experiment surface` | （T4 で記録予定） | 未実施 |
 | AC4 | メッセージ境界（IPC/プロトコル/pull） | `--experiment ipc` | （T3 で記録予定） | 未実施 |
 | AC5 | フロントエンド FW + バンドラ比較 | `--experiment frontend` | （T5 で記録予定） | 未実施 |
@@ -48,6 +48,14 @@ mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --experiment host
 # 証跡出力先・タイムアウト指定
 mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
   --experiment host --duration 15 --out out/host-manual.jsonl
+
+# AC2 render 実験（backend 別・既定 600 フレームで自己終了）
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment render --backend canvas2d --frames 600
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment render --backend webgl2 --frames 600
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment render --backend webgpu --frames 600   # navigator.gpu 不在 → webgl2 fallback
 ```
 
 ## AC1 — `--experiment host`
@@ -92,6 +100,53 @@ mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
 独立ワークスペース + pin 1.99.0 でビルドするため実害なし。ルート側へ
 wgpu を導入する採否になった場合は宣言値の見直しタスクへ連携すること
 （本 PoC では判断しない）。
+
+## AC2 — `--experiment render`
+
+計測環境: 上記 env 表どおり（Windows 11 x64・WebView2 155.0.4283.62・60Hz 表示）。
+ワークロード: スクロール波形ピーク列 ~2,000 点/フレーム（1,000 列 × min/max）
++ 8ch レベルメータ群（DOM transform 更新）。`--frames 600`・warmup 12 フレーム。
+`frame_time_ms` は rAF タイムスタンプ差分（vsync 待ち込みの実間隔）、
+`work_time_ms` はフレーム内の生成+描画 JS 作業時間。
+
+| 判定 | backend（要求 → 実使用） | frame_time_ms avg/p50/p95/p99 | dropped | achieved_fps | work_time_ms avg/p99 | 証跡 | 文書評価 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **passed** | canvas2d → canvas2d | 16.667 / 16.70 / 16.80 / 16.80 | 0 | 60.00 | 0.46 / 0.70 | `out/render-1792563717.jsonl` | 実測 |
+| **passed** | webgl2 → webgl2 | 16.666 / 16.70 / 16.80 / 16.80 | 0 | 60.00 | 0.41 / 0.60 | `out/render-1792563728.jsonl` | 実測 |
+| **passed**（fallback） | webgpu → **webgl2** | 16.666 / 16.70 / 16.80 / 16.80 | 0 | 60.00 | 0.41 / 0.60 | `out/render-1792563740.jsonl` | 実測 |
+
+### AC2 所見（採否材料）
+
+- **`navigator.gpu` は WebView2 155 非公開**: `capabilities.navigator_gpu=false`。
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--enable-unsafe-webgpu"`、
+  `+ --enable-features=WebGPUService,WebGPU --enable-dawn-features=allow_unsafe_apis`
+  の 2 試行でも変化なし（`--backend webgpu --frames 120/300` で確認）。本環境で
+  WebGPU の実計測は不可能であり、機能検出 → WebGL2 フォールバックが設計どおり
+  動作した（`metrics.fallback_to={to:"webgl2",reason:"navigator.gpu unavailable"}`・
+  `status:"passed"`。フォールバックを失敗としない spec 要件どおり）。
+  WebView2 内 WebGPU を採用要件にする場合は、flags 以外の有効化経路
+  （SDK 側 opt-in API の有無等）を別途調査する必要がある。
+- **計測値の解釈**: 3 バックエンドとも `frame_time_ms` は表示 vsync（16.7ms・
+  60Hz）にロックされ `achieved_fps≈60`・`dropped=0`。バックエンド差は
+  `frame_time_ms` には現れず、フレーム内作業時間 `work_time_ms`
+  （canvas2d avg 0.46ms・webgl2/webgpu-fallback avg 0.41ms、p99 ≤0.7ms）側の
+  余裕が主証拠。本ワークロード（~2,000 点ピーク + 8 メータ）では 60fps
+  更新に対し 30 倍以上のヘッドルームがある。
+- **IPC 配送の非起床問題（T2 で発見・修正）**: WebView2 の IPC / ページロード
+  callback は tao `WaitUntil` スリープを起床させず、ウィンドウイベントが無い
+  区間の IPC メッセージは deadline まで滞留した（初回 render 実行は bench
+  完了後も全 60s を消費し `timeout_hit` 終了）。`host.rs` で `EventLoopProxy`
+  の user event による明示起床を実装し、`done` 受信 → 即終了
+  （`exit_reason:"done_signal"`）となった。同根因で T1 host 実験に
+  あった「`timeout_hit:true` 併記」も解消し、再実行で `ipc_echo` RTT が
+  255-940ms → 8.1ms、`resize_follow` retries 4 → 0 に改善。
+- **WebView2 UDF ロック競合**: 連続実行で前回ブラウザ子プロセスが UDF
+  シングルトンロックを保持し、WebView2 初期化がブロックされる事象を観測
+  （>100s ハング 1 件）。`host.rs` の既定 data_dir を
+  `ui-poc-webview2-<pid>` のプロセス固有パスへ変更し隔離。
+- **status 契約の実測**: `UI_POC_HEADLESS=1` → `skipped`（reason 非空・exit 0）、
+  `--backend` 欠落/不正値 → `failed`（reason 付き・exit 1）、
+  frontend 未ビルド → `skipped`（`vanilla/index.html` 単位で部分ビルドも検出）。
 
 ## AC8 — PoC 隔離
 

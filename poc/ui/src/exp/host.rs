@@ -23,7 +23,6 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use crate::args::RunArgs;
-use crate::assets;
 use crate::check::Environment;
 use crate::host::{self, HostConfig, HostEvent};
 use crate::metrics::Status;
@@ -97,21 +96,8 @@ impl Experiment for HostExperiment {
 
     fn setup(&mut self, env: &Environment) -> Result<(), Skip> {
         // 前提不足は status:"skipped"（test-spec のゲーティング契約）。
-        if env.headless_env {
-            return Err(Skip("UI_POC_HEADLESS=1".to_string()));
-        }
-        if !env.display_available {
-            return Err(Skip("no display environment".to_string()));
-        }
-        if cfg!(windows) && env.webview2_version.is_none() {
-            return Err(Skip("WebView2 runtime not detected".to_string()));
-        }
-        if !assets::frontend_built() {
-            return Err(Skip(
-                "frontend not built: run `npm ci && npm run build` in poc/ui/frontend".to_string(),
-            ));
-        }
-        Ok(())
+        // 共通前提は exp/mod.rs に集約済み。
+        super::check_gui_prereqs(env)
     }
 
     fn run(&mut self, env: &Environment, args: &RunArgs) -> Outcome {

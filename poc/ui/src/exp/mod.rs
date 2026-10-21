@@ -6,10 +6,12 @@
 //! （design「外部型を境界の背後に置く」評価軸）。
 
 pub mod host;
+pub mod render;
 
 use serde_json::Value;
 
 use crate::args::RunArgs;
+use crate::assets;
 use crate::check::Environment;
 use crate::metrics::Status;
 
@@ -40,16 +42,39 @@ pub trait Experiment {
     fn teardown(&mut self) {}
 }
 
+/// 全実験共通の前提ゲーティング（GUI・WebView2・frontend ビルド）。
+/// 前提不足は `status:"skipped"`（test-spec のゲーティング契約）であり、
+/// ゲーティング条件を実験ごとに重複させないためここに集約する。
+/// 実験固有の追加前提（variant 別 dist・GPU capability 等）は各 setup で続けて検査する。
+pub fn check_gui_prereqs(env: &Environment) -> Result<(), Skip> {
+    if env.headless_env {
+        return Err(Skip("UI_POC_HEADLESS=1".to_string()));
+    }
+    if !env.display_available {
+        return Err(Skip("no display environment".to_string()));
+    }
+    if cfg!(windows) && env.webview2_version.is_none() {
+        return Err(Skip("WebView2 runtime not detected".to_string()));
+    }
+    if !assets::frontend_built() {
+        return Err(Skip(
+            "frontend not built: run `npm ci && npm run build` in poc/ui/frontend".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// 実験名 → 実験インスタンスのレジストリ。
-/// T1 は `host`（AC1）のみ。T2-T5 が render/ipc/surface/frontend/dist を追加する。
+/// T1 は `host`（AC1）、T2 が `render`（AC2）を追加。T3-T5 が残りを追加する。
 pub fn lookup(name: &str) -> Option<Box<dyn Experiment>> {
     match name {
         "host" => Some(Box::new(host::HostExperiment::new())),
+        "render" => Some(Box::new(render::RenderExperiment::new())),
         _ => None,
     }
 }
 
 /// `--help` / エラーメッセージ用の既知実験名一覧。
 pub fn known_names() -> &'static [&'static str] {
-    &["host"]
+    &["host", "render"]
 }

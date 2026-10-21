@@ -31,6 +31,7 @@ Directory: `docs/impl/ir`
 | IMPL-034ISfioxP51rGFoHh8MX3 | issue-1 architecture baseline repo reflection | completed | [issue-1-architecture-baseline-repo-reflection.md](./issue-1-architecture-baseline-repo-reflection.md) |
 | IMPL-034IdUNIqDaqtMaA6rRfEx | Pin Rust toolchain and lockfile | completed | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | IMPL-3hbuFUHk736RlMIuzIoXne | CLAP binding PoC with clack | completed | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
+| IMPL-034JBSlPrPoY8WlSeBMTkX | PoC 描画バックエンド計測 | completed | [poc-render-backends.md](./poc-render-backends.md) |
 | IMPL-034JxC4eRod3t2ZFdmLrJJ | PoC UI ハーネスホスト | completed | [poc-ui.md](./poc-ui.md) |
 | IMPL-uFiKGxxXItHvsYSwD74IJg | VST3 binding adapter PoC | completed | [poc-vst3-binding-adapter.md](./poc-vst3-binding-adapter.md) |
 | IMPL-034IwXoGhCxs4EAP3HjoQF | Review config files minimal edits | completed | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
