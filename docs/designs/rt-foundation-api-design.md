@@ -300,7 +300,7 @@ impl<T: Send + 'static> Retirer<T> {
     /// オブジェクトを退役させる。内部は `try_push` 意味（ノンブロッキング・
     /// alloc なし・有界）。満杯時のオーバーフロー方針:
     /// **RT 側では drop/dealloc/blocking を絶対に行わず、
-    /// `core::mem::forget` による bounded-leak とする**。
+    /// `core::mem::forget` による leak-on-full とする**。
     /// drop-on-full は RT 側 dealloc になるため採用しない（ADR 決定）。
     /// 容量は呼び出し側契約（drain 周期ごとの最大退役数を見込んで確保する）。
     ///
@@ -390,7 +390,7 @@ impl<T: Send + Sync + 'static> SnapshotReader<T> {
 ///
 /// **RT contract:** RT-suitable — `Drop` は内部 `Arc` を inline drop
 /// せず reader の `Retirer` へ `retire()` で送出する（`try_push` +
-/// 満杯時 `core::mem::forget` bounded-leak は `Retirer` が内包 — retire
+/// 満杯時 `core::mem::forget` leak-on-full は `Retirer` が内包 — retire
 /// モジュールと同一方針・同一実装）。
 pub struct SnapshotGuard<'a, T> { /* Option<Arc<T>> + &'a RefCell<Retirer<Arc<T>>> */ }
 
@@ -404,7 +404,7 @@ impl<T> Drop for SnapshotGuard<'_, T> { /* retire channel へ送出 */ }
 重要不変条件（**本プリミティブの中核契約**）:
 
 - `SnapshotGuard` の `Drop` が内部 `Arc<T>` を reader 内 `RefCell<Retirer<Arc<T>>>` へ送出する（`Retirer::retire` = `try_push` + 満杯時 `mem::forget` をそのまま再利用 — オーバーフロー方針を単一実装に集約）。`RefCell` の `borrow_mut` は `Drop` 内で瞬間的（モメンタリ）に取得するだけなので、guard が複数同時に生存しても解放は逐次で競合しない（reader は `Send`・`!Sync` の単一 RT スレッドハンドル）。
-- チャネル満杯時のフォールバックは `core::mem::forget`（bounded-leak）。**guard の `Drop`・`read`・`publish` 経路のいずれでも RT スレッド上で dealloc/drop/ブロッキングが起きない**。
+- チャネル満杯時のフォールバックは `core::mem::forget`（leak-on-full）。**guard の `Drop`・`read`・`publish` 経路のいずれでも RT スレッド上で dealloc/drop/ブロッキングが起きない**。
 - したがってスナップショットの dealloc が起きうる地点は「非 RT 側 drain（`SnapshotWriter::collect`）」または「`SnapshotWriter::publish` 内部（非 RT）」のみ。
 - **arc-swap 単体ではこの保証を実現できない理由**（reader 側 last-drop の穴）: `ArcSwap::load_full` で得た `Arc` を生で保持すると、writer が swap して非 RT 側が自らのコピーを drop した後、RT reader が最後の参照を手放す瞬間に `Arc` の dealloc が RT スレッド上で実行されうる。guard 型経由でのみ参照を許し、guard `Drop` が常に退役チャネルへ迂回させる組合せでこの経路を塞ぐ。writer が swap で追い出した `Arc` も同一 drain 経路へ渡す（`DropCollector::push_local` 経由 — publish は非 RT のため直接 drop でも契約上は等価だが、dealloc 地点を drain に統一するため退役経路を使う）。
 
@@ -568,7 +568,7 @@ impl core::error::Error for PriorityError {}
 2. **`RtContext` 発行**: 単一 opaque 型・公開 ctor なし（`_private`）・実行時モードフラグ/variant なし。mint は `#[doc(hidden)] pub` で駆動者入口点のみが利用 — 強制は規約 + コードレビューであり型レベルの完全抑止ではない（ベースライン L284 の弱体化として ADR に記録済み）。オフライン発行コンテキストでは RT 制約が契約上緩和されるが、それは発行駆動者に紐づく文書契約であり実行時状態ではない。
 3. **prepare/process 分離**: `prepare` は非 RT（確保可）で `Rt: RtProcessor` を生成し、`process` は `&RtContext` を要求して契約区間外実行を型で抑止する。`process` は infallible — 処理失敗は `io` ドメイン状態。
 4. **チャネル契約**: 容量は構築時に固定（以後の伸長なし）。操作はノンブロッキング・alloc なし・有界。満杯時方針はリングレベル enum ではなく API 単位 — `try_push` は `Full(T)` で値を返して drop/coalesce/keep を呼び出し側ポリシーに委ね、latest-wins は `pop_latest` が担う。
-5. **退役経路契約**: `Retirer::retire` と `SnapshotGuard::drop` は RT 側で drop/dealloc/blocking を行わない。満杯時は `core::mem::forget` の bounded-leak（容量は呼び出し側契約）。dealloc は非 RT 側 drain（`DropCollector::drain`・`SnapshotWriter::collect`）と非 RT の `SnapshotWriter::publish` 内でのみ発生する。
+5. **退役経路契約**: `Retirer::retire` と `SnapshotGuard::drop` は RT 側で drop/dealloc/blocking を行わない。満杯時は `core::mem::forget` の leak-on-full（容量は呼び出し側契約）。dealloc は非 RT 側 drain（`DropCollector::drain`・`SnapshotWriter::collect`）と非 RT の `SnapshotWriter::publish` 内でのみ発生する。**リーク総量の上限は保証しない** — 有界なのはチャネル容量と `retire` 呼び出しごとの処理量のみであり、`retire` の呼び出し回数・レートに契約上の上限はないため、drain 間隔・生涯のいずれについても forget 件数は非有界。飽和は `overflows()` カウンタで観測可能（検知のみ・回収機構ではない）。長時間稼働におけるメモリ保持の厳密な上限は本契約の保証外とし、容量・drain cadence の調整と監視は運用側の責務、soak 検証は Issue #22 の責務とする。
 6. **スナップショット契約**: RT 側参照は `SnapshotGuard` 経由のみ。guard `Drop` は内部 `Arc` を reader の退役チャネルへ送出（reader 側 last-drop の穴を塞ぐ）。writer 差替で追い出された `Arc` も同一 drain 経路へ。共有 `Arc<T>` には `T: Send + Sync`。`SnapshotReader` は `Send`・`!Sync`（単一 RT スレッドハンドル）、`SnapshotGuard` は `!Send`・`!Sync`（RT スレッドから逃げない）。
 7. **時計契約**: `MasterClock` の timebase は構築時に固定・以後不変（tearing/seqlock 不要）。tick 更新は単一の論理 writer（現役駆動者）の文書契約。読み取りは wait-free。
 8. **スレッド境界の `Send`/`Sync`**: チャネルペイロード `T: Send`、退役オブジェクト `T: Send + 'static`、共有スナップショット `T: Send + Sync` を API 契約として宣言する。

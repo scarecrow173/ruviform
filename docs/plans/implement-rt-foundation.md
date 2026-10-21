@@ -116,7 +116,7 @@ approved spec `SPEC-034Jcr3dOT5Uxp4znj42II` と approved design `DESIGN-034JgsK9
 - `crates/ruviform-rt/src/context.rs` — `RtContext`（`_private` でリテラル構築防止・実行時モードフラグ/variant なし・`#[doc(hidden)] mint`）
 - `crates/ruviform-rt/src/processor.rs` — `Processor`（assoc `Setup`/`Rt`/`Error`・`prepare` は non-RT only）+ `RtProcessor`（assoc `Io`・infallible `process(&mut self, io, ctx)`）
 - `crates/ruviform-rt/src/spsc.rs` — `channel`/`Producer`/`Consumer`/`TryPushError`/`TryPopError`（`rtrb` ラップ。`pop_latest` 含む）
-- `crates/ruviform-rt/src/retire.rs` — `retire_channel`/`Retirer`/`DropCollector`（SPSC 上に構成。満杯時 `mem::forget` bounded-leak・Vec pending・`pub(crate) push_local`）
+- `crates/ruviform-rt/src/retire.rs` — `retire_channel`/`Retirer`/`DropCollector`（SPSC 上に構成。満杯時 `mem::forget` leak-on-full・Vec pending・`pub(crate) push_local`）
 - `crates/ruviform-rt/src/snapshot.rs` — `slot`/`SnapshotWriter`/`SnapshotReader`/`SnapshotGuard`（`arc-swap` + reader 内 `RefCell<Retirer<Arc<T>>>`）
 - `crates/ruviform-rt/src/clock.rs` — `MasterClock`（単一 `AtomicU64` tick + 構築時固定 `(u32, u32)` timebase）
 - `crates/ruviform-rt/src/lib.rs` — private `mod` 宣言 + `pub use` フラット再公開 + crate doc の実装済み化（"Phase 1 skeleton"・"Placeholder for Issue #17" 注記の除去）+ `version()` 維持（`RT-suitable` ラベル付与）

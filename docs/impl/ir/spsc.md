@@ -95,7 +95,8 @@ task `TASK-034JxO8rp2rxpfFdipPzUU`（plan `PLAN-034JxNegJktSAJZ2LuO0N8` Phase B�
   要素を呼び出しスレッドで inline drop するため、「RT-suitable」は
   `T` のデストラクタが RT-safe な場合のみと doc で条件化（重い
   `T` は `try_pop` + retire へ誘導）。`channel` に `capacity > 0`
-  の `debug_assert` 追加（0 は常時 full の退化）。
+  の `debug_assert` 追加（0 は常時 full の退化）。→ 再レビューで
+  release 無効化を理由に `assert!` へ昇格（retire IR 参照）。
 
 - **counting allocator はスレッドローカルゲート方式を採用**: design は「テストバイナリ単位の有効化フラグで enable 区間を限定し他テストの確保を誤計しない」と規定するが、グローバルフラグでは並列実行中の他テストの確保を原理的に除外できない。`const { }` 初期化の `thread_local!` `Cell<(bool, usize)>`（lazy 登録・アクセス時確保なし → allocator 内で再帰しない）でスレッド単位にゲートし、目的である「他テストの確保を誤計しない」を完全に満たす形にした。`try_with` でスレッド解体中のアクセスは Err → 非計測に倒し allocator 内 panic を回避。alloc/dealloc 双方を計測（RT 契約は "alloc/dealloc なし"）。`#[cfg(test)] mod alloc_counter` としてクレート内共有配置 — `#[global_allocator]` はテストバイナリに 1 つしか置けないため、T3/T4 の no-alloc テスト（`rt_snapshot_read_no_alloc` 等）はこれを再利用する
 - **`unsafe impl GlobalAlloc` はテストスコープのみ**: `GlobalAlloc` は unsafe trait で回避不能 — `#[expect(unsafe_code)]` + SAFETY コメント（`System` への純粋委譲）で局所許可。製品コードは `unsafe` 不使用を維持

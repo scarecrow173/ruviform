@@ -63,10 +63,11 @@ metadata:
 `Retirer<T>` / `DropCollector<T>`）を実装した。RT 側で退役した重い
 オブジェクトの `Drop`（dealloc・ロック・非有界ユーザコード）を非 RT
 側の `drain` へ送る SPSC ベースの basedrop 型機構で、満杯時は
-`core::mem::forget` の bounded-leak に倒れる（drop-on-full は RT 側
+`core::mem::forget` の leak-on-full に倒れる（drop-on-full は RT 側
 dealloc のため ADR で不採用）。公開 API は `retire_channel`（non-RT
 only）、`Retirer::retire`（RT-suitable）、`DropCollector::{drain,
-is_empty}`（non-RT only）の 4 項目。`drain` はチャネル受信分
+is_empty}`（non-RT only）の 4 項目（→ レビュー対応で
+`overflows()` が両端点に追加され計 6 項目）。`drain` はチャネル受信分
 （capacity 上限の bounded pop）とローカル pending `Vec` の双方を呼び出し
 スレッド上で drop する。
 
@@ -104,21 +105,31 @@ SPSC（`channel`/`Producer`/`Consumer`/`TryPushError`）をそのまま再利用
 
 ### Decisions During Implementation
 
-- **PR レビュー対応（P1）— bounded-leak の保証範囲を明確化＋飽和の
+- **PR レビュー対応（P1）— leak-on-full の保証範囲を明確化＋飽和の
   可観測性**: レビュー指摘どおり `mem::forget` ベースの
-  bounded-leak は「drain 間隔あたり」の有界であり生涯リーク上限
-  ではない（spec/ADR の設計意図どおりだが保証範囲の明文化が不足）。
-  採用した境界修正: `Retirer`/`DropCollector` 間で共有する
-  `Arc<AtomicUsize>` overflow カウンタを追加し、両端点に
-  `overflows() -> usize`（Relaxed 読み・RT-suitable/non-RT only を
-  各々ラベル）を公開。`retire` の forget パスで increment — 飽和は
-  silent ではなく観測可能という設計（reviewer 提示の選択肢のうち
-  「失敗の可観測性」に相当）。module doc に「bounded = per drain
-  interval、生涯リーク天井なし」「非ゼロ/増加 = capacity か drain
-  cadence の不足」「残余リスク（forget 値は終了まで生存）・長時間
-  soak 検証は Issue #22 の RT 検証基盤の責務」を明記。
-  capacity 0 は `debug_assert`（debug で panic）で仕様化、
-  teardown 順序（collector が retirer を outlive）は
+  leak-on-full はリーク総量の上限を保証しない（spec/ADR の設計意図
+  どおりだが保証範囲の明文化が不足）。採用した境界修正:
+  `Retirer`/`DropCollector` 間で共有する `Arc<AtomicUsize>`
+  overflow カウンタを追加し、両端点に `overflows() -> usize`
+  （Relaxed 読み・RT-suitable/non-RT only を各々ラベル）を公開。
+  `retire` の forget パスで increment — 飽和は silent ではなく
+  観測可能という設計（reviewer 提示の選択肢のうち「失敗の可観測性」
+  に相当）。
+- **PR 再レビュー対応（P1）— 保証範囲のさらなる正確化＋assert! 昇格**:
+  「drain 間隔あたり bounded」という表現も不正確だった（キュー滞留
+  ≤ capacity は同区間の `mem::forget` 回数を拘束しない — `retire`
+  呼び出し回数・レートに契約上の上限がないため、drain 間隔内でも
+  任意回数リークし得る）。正確な保証は「キュー容量・`retire` ごとの
+  処理量が有界・飽和件数が観測可能」までであり、リーク総量は
+  drain 間隔・生涯のいずれでも非有界と明記。呼称も誤読を招く
+  `bounded-leak` から機構記述の `leak-on-full` へ全コード・正典
+  ドキュメント（spec/ADR/design/test-spec/plan/IR）で改名し、design
+  の退役経路契約・spec 受入基準・test-spec 不変条件に「メモリ使用量
+  の厳密な上限は保証しない」を明記。容量 0 前提は `debug_assert` では
+  release で無効化されるため、構築は非 RT 経路であることから
+  `assert!` に昇格（全ビルドで拒否。should_panic テストは cfg ゲート
+  解除で全ビルド対象とし、`cargo test --release` で release 相当挙動も
+  実測検証）。teardown 順序（collector が retirer を outlive）は
   `rt_retire_teardown_collector_outlives` でテスト確定。
 
 - `push_local` に `#[allow(dead_code)]` を付与（`#[expect]` ではない）:
@@ -145,6 +156,9 @@ SPSC（`channel`/`Producer`/`Consumer`/`TryPushError`）をそのまま再利用
 ## Validation
 
 - `mise exec -- cargo test -p ruviform-rt`: 19 unit + 32 doctest 合格
+  （→ レビュー対応後は 24 unit + 36 doctest 相当に増加: overflow /
+  teardown / zero-capacity テスト追加。最終数はワークスペース
+  `mise run test` の出力を参照）
 - `mise exec -- cargo test -p ruviform-rt rt_`: `rt_` 命名 14 件のみ選択
   （retire 追加分 4 件を含む）・全合格、`rt_` 部分文字列の混入なし
 - `mise exec -- cargo clippy -p ruviform-rt --all-targets -- -D warnings`:
@@ -159,7 +173,7 @@ SPSC（`channel`/`Producer`/`Consumer`/`TryPushError`）をそのまま再利用
 - `push_local` の `#[allow(dead_code)]` はタスク 4 で snapshot が呼び出し元に
   なった時点で除去可能（残置しても害はないが、除去を T4 の完了条件に含める
   ことを推奨）。
-- 満杯時 `forget` は意図された bounded-leak であり、容量設計を誤るとリークが
+- 満杯時 `forget` は意図された leak-on-full であり（リーク総量は非有界 — 保証は容量・呼出処理量・可観測性まで）、容量設計を誤るとリークが
   増える — `capacity` の caller contract は API doc に記載済み。
 
 ## Follow-ups

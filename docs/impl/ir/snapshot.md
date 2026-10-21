@@ -84,7 +84,7 @@ task `TASK-034JxO9XLg2D5zvepCA7ry`（`implement-rt-snapshot-exchange.md`）。
 plan `PLAN-034JxNegJktSAJZ2LuO0N8` Phase D、design
 `DESIGN-034JgsK9khgDsPqG04Sp6i` の snapshot.rs API sketch が正本。T3 の
 retire channel（`Retirer::retire` の try_push + 満杯時 `mem::forget`
-bounded-leak、`DropCollector::push_local` seam）を前提に、オーバーフロー
+leak-on-full、`DropCollector::push_local` seam）を前提に、オーバーフロー
 方針を単一実装に集約する構成。
 
 ## Implementation
@@ -123,7 +123,7 @@ bounded-leak、`DropCollector::push_local` seam）を前提に、オーバーフ
   `rt_snapshot_read_no_alloc`（`crate::alloc_counter` 再利用）・
   `rt_endpoint_send_bounds`（writer/reader の `Send` 契約）。非 rt_ 補助
   テスト `multiple_guards_coexist`・`guard_drop_full_channel_leaks`
-  （満杯時 `mem::forget` bounded-leak が `Retirer` に内包されることの
+  （満杯時 `mem::forget` leak-on-full が `Retirer` に内包されることの
   確認 — 漏洩 `Arc` が count に残る）。
 
 ### Decisions During Implementation
@@ -139,7 +139,8 @@ bounded-leak、`DropCollector::push_local` seam）を前提に、オーバーフ
   drop（または writer 退役前）」の teardown 契約を明記。実装コードは
   設計どおりで不変（契約文書化のみ）。`slot` に
   `retire_capacity > 0` の `debug_assert` も追加（capacity 0 は
-  bounded-leak が全件発動する退化を作る）。
+  leak-on-full が全件発動する退化を作る）。→ 再レビューで release
+  無効化を理由に `assert!` へ昇格（retire IR 参照）。
 - **PR レビュー対応 — 飽和の可観測性**: retire チャネルの共有
   `Arc<AtomicUsize>` カウンタ（retire IR 参照）を `SnapshotWriter::
   retire_overflows() -> usize` として非 RT 監視側に露出（guard drop
@@ -192,7 +193,7 @@ bounded-leak、`DropCollector::push_local` seam）を前提に、オーバーフ
 
 - `arc-swap` の `load_full` は稀な同時 publish 時に理論上再試行しうるが、
   writer 単一・低頻度の前提で有界 — design sketch 同様に doc 記載済み。
-- reader 側 retire channel 満杯時は `mem::forget` bounded-leak —
+- reader 側 retire channel 満杯時は `mem::forget` leak-on-full —
   `retire_capacity` を drain 周期あたり最大同時 guard 退役数で見込む
   呼び出し側契約として doc 記載済み（retire channel 同一方針）。
 

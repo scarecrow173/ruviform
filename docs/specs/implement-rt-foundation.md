@@ -57,7 +57,7 @@ GitHub Issue #21 で定義された RT 基盤実装の成果物として、`ruvi
 
 - **契約型**: `RtContext` capability（RT 契約区間の境界トークン。単一の opaque 型とし、公開コンストラクタを持たず（`_private` フィールドでリテラル構築を防止）、オフライン/RT を区別する実行時モードフラグや variant は持たない — 「同一 API 内部で if rt 分岐しない」原則を維持する。オフライン発行コンテキストでの制約緩和は実行時状態ではなく、発行した駆動者に紐づく契約・ドキュメントレベルの記述とする。発行は RT 駆動者・オフライン駆動者の入口点に限る `#[doc(hidden)]` mint 経路）と、`prepare`/`process` のライフサイクル分離を型で表す `Processor` + `RtProcessor` の二 trait 契約（associated types で接続）。mint API 自体の `**RT contract:**` ラベルは `RT-suitable`（契約区間開始時の純粋なトークン構築）。
 - **SPSC チャネル**: RT ↔ 非 RT の有界・ノンブロッキング通知プリミティブ（RT → 非 RT: メータ・イベント・退避オブジェクト。非 RT → RT: パラメータ・制御コマンド）。`try_push`/`try_pop` 型の API。満杯時方針は汎用のリングレベル enum ではなく API 単位で表現し、`try_push` は満杯時に値を呼び出し元へ返却する（`TryPushError<T>` 型）ことで drop/coalesce/keep のポリシー適用を呼び出し側に委ねる。latest-wins のパラメータ適用には consumer 側の drain-latest ヘルパーを提供する。内部実装は `rtrb`。
-- **遅延ドロップ（retire channel）**: RT パスで退役した重いオブジェクトを非 RT 側へ送出して drop する仕組み。SPSC プリミティブ上に構成し、drain/drop の実行は非 RT 側のみ。退役経路は満杯時も RT 側で drop/dealloc/blocking を行わない文書化されたオーバーフロー方針を持つ（事前確保済み予備容量、および/または `core::mem::forget` による bounded-leak フォールバック）。
+- **遅延ドロップ（retire channel）**: RT パスで退役した重いオブジェクトを非 RT 側へ送出して drop する仕組み。SPSC プリミティブ上に構成し、drain/drop の実行は非 RT 側のみ。退役経路は満杯時も RT 側で drop/dealloc/blocking を行わない文書化されたオーバーフロー方針を持つ（事前確保済み予備容量、および/または `core::mem::forget` による leak-on-full フォールバック）。
 - **不変スナップショット交換**: 非 RT 側で構築した構成・実行プランのスナップショットを atomic に交換し、RT 側がブロック境界でノンブロッキングに参照するプリミティブ。RT 側のスナップショット参照は専用 guard 型経由でのみ取得し、guard 解放時に内部 `Arc` を retire channel へ送出する（dealloc は非 RT drain 側でのみ発生）。書き込み側の atomic 差替も、追い出された旧 `Arc` を同一の退役チャネル経由で退役させる。この保証は `arc-swap` 単体ではなく guard + retire channel の組合せで実現する。内部実装（atomic セル）は `arc-swap`。
 - **`MasterClock`**: A/V 同期の基準時計となる時刻共有プリミティブ。単一 `AtomicU64` の tick + 構築時に固定される timebase（以後不変のため tearing/seqlock は不要）で表現し、単一の論理 writer（現役の駆動者 — RT・オフラインいずれでも可）が tick を更新、読み取り側は wait-free。rt は最下位クレートのため時刻表現は rt 内の汎用表現（`MediaTime` 等 media-core 型への依存は持たない）。
 - **スレッド優先度機構（`ruviform-exec`）**: RT スレッドへの OS 優先度付与（MMCSS/time-constraint/`SCHED_FIFO` 系）を **`ruviform-exec`** の `non-RT only` API として提供する。`ruviform-rt` には置かない — Primitives 層は「OS 固有 API・デバイス依存を持たない」（ベースライン L160）ため OS 優先度 syscall を行う本機構は Primitives 最下位の rt に置けず、`ruviform-exec` の責務行は「OS スレッドの詳細は隠蔽」を要求するため exec が所有する（詳細は ADR）。呼び出しモデルは対象スレッド自身からの自己 promotion: exec 管理スレッドでは spawn 時セットアップで、デバイスコールバック由来スレッド（将来の audio-device）では初回コールバックの preamble — RT 契約区間の開始前（`RtContext` mint・初回 `process` 呼び出し前）に呼ぶ。ブロッキング的な syscall を伴うため `non-RT only` であり、active な RT 契約区間内からの呼び出しは契約違反。promotion 失敗は致命的でなく best-effort の `Result` + エラー型で返す。内部実装は `audio_thread_priority`（`default-features = false` で `with_dbus`/`dep:dbus` 経路を排除）。この構成では、rtkit/`CAP_SYS_NICE`/`RLIMIT_RTPRIO` のない非特権の標準デスクトップ Linux では promotion が失敗し、API はその失敗を `Result` として返す — この挙動をドキュメント化する。dbus 経路を再有効化する intent 命名の opt-in feature の追加は将来のフォローアップ候補（依存クレート自身の feature 名の再露出は外部型非露出規則で禁止されるため、独自命名の feature とする）。
@@ -84,7 +84,7 @@ GitHub Issue #21 で定義された RT 基盤実装の成果物として、`ruvi
   - 契約型: `RtContext`（単一の opaque capability で実行時モードフラグ/variant を持たない。`#[doc(hidden)]` mint API を駆動者入口点にのみ提供。mint API 自体は `RT-suitable` ラベル）と `Processor`/`RtProcessor` 二 trait（`prepare` → RT 処理オブジェクト生成 → `process(&mut self, io, ctx)` のライフサイクル分離）
   - SPSC チャネル（有界・ノンブロッキング・`try_push`/`try_pop` 型 API。満杯時は `try_push` が値を返す `TryPushError<T>` 型で呼び出し側の drop/coalesce/keep ポリシーに委譲 + latest-wins 用 consumer 側 drain-latest ヘルパー）
   - 遅延ドロップ retire channel（SPSC 上に構成・drain は非 RT 側のみ）
-  - 事前確保型の受け渡し構造: チャネル容量は構築時に固定（以後の伸長なし）とし、退役経路は満杯時でも RT 側で drop/dealloc/blocking を行わない文書化された方針（事前確保済み予備容量、および/または `core::mem::forget` による bounded-leak フォールバック）を実装する
+  - 事前確保型の受け渡し構造: チャネル容量は構築時に固定（以後の伸長なし）とし、退役経路は満杯時でも RT 側で drop/dealloc/blocking を行わない文書化された方針（事前確保済み予備容量、および/または `core::mem::forget` による leak-on-full フォールバック）を実装する
   - 不変スナップショット交換（atomic swap + RT 側参照は専用 guard 型経由でのみ取得。guard 解放と書き込み側差替の双方が退役 `Arc` を退役チャネルへ送出し、dealloc が非 RT drain でのみ発生する契約）
   - `MasterClock`（単一 `AtomicU64` tick + 構築時固定 timebase・単一論理 writer・wait-free 読み取り）
   - 共通 `Error`/`Result` 型
@@ -126,7 +126,7 @@ Issue #21・評価 discovery・採否 ADR の決定事項に基づく。
 - [ ] `Processor`（非 RT の `prepare`）と `RtProcessor`（RT の `process`）の二 trait 分離が存在し、`process` が `RtContext` を要求するシグネチャで契約区間外の実行を型で抑止している
 - [ ] SPSC チャネルが有界・ノンブロッキングの `try_push`/`try_pop` API を持ち、満杯時に `try_push` が値を呼び出し元へ返却する（`TryPushError<T>` 型）ことで drop/coalesce/keep のポリシー適用が呼び出し側に委ねられ、latest-wins 適用向けの consumer 側 drain-latest ヘルパーが API ドキュメントで定義されている
 - [ ] 遅延ドロップ retire channel があり、退役オブジェクトの `Drop` が非 RT 側の drain でのみ実行されることがテストで検証されている
-- [ ] 退役経路は満杯時でも RT 側で drop/dealloc/blocking を行わない（事前確保済み予備容量または文書化された bounded-leak 方針）ことが API ドキュメントで定義されテストで検証されている
+- [ ] 退役経路は満杯時でも RT 側で drop/dealloc/blocking を行わない（事前確保済み予備容量または文書化された leak-on-full 方針）ことが API ドキュメントで定義されテストで検証されている。なお leak-on-full はリーク総量の上限を保証しない（飽和は `overflows()` カウンタで観測可能とし、容量・drain cadence の調整は運用側契約とする）
 - [ ] RT 側スナップショット参照は専用 guard 型経由で取得され、guard 解放・書き込み側差替の双方が退役チャネルへ送出し、dealloc が非 RT drain 側でのみ発生する設計が API 契約と `rt_` テストで確認できる
 - [ ] `MasterClock` が単一 `AtomicU64` の tick + 構築時固定の timebase で表現され、単一の論理 writer（RT またはオフラインの現役駆動者）による tick 更新と wait-free 読み取りを提供する
 - [ ] チャネルペイロードと共有 `Arc<T>` スナップショット内容に `Send`/`Sync` 境界（共有 `Arc<T>` では `T: Send + Sync`）が API 契約で明示されている

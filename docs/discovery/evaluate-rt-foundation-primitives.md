@@ -86,7 +86,7 @@ relations:
 | `basedrop`（0.1.3）採用 | RT → 非 RT への Drop 移譲に特化した専用クレート。参照実装として適格 | 役割は SPSC 上の retire channel で完全に代替可能。専用化の利点より依存追加コストが勝る。版が古くメンテナンス頻度も低い | no（参照パターンとして採用） |
 | 他の lock-free collector（epoch 系・GC 系） | 高スループットの retire 管理 | 本件の需要は「重いオブジェクトの drop を非 RT 側へ逃がす」だけであり過剰 | no |
 
-- 含意: ベースラインの「basedrop 型パターン」は機構要件であってクレート採用の決定ではない。SPSC（rtrb）採用下では同一プリミティブの上に retire channel を構成するのが最も単純。満杯時方針は drop-on-full を採らない（RT 側で dealloc が発生するため）— チャネル容量を構築時に固定（伸長なし）とし、事前確保済み予備容量 + `core::mem::forget` による bounded-leak フォールバックで満杯時も RT 側の drop/dealloc/blocking を回避する方針を採用（ADR で決定）。
+- 含意: ベースラインの「basedrop 型パターン」は機構要件であってクレート採用の決定ではない。SPSC（rtrb）採用下では同一プリミティブの上に retire channel を構成するのが最も単純。満杯時方針は drop-on-full を採らない（RT 側で dealloc が発生するため）— チャネル容量を構築時に固定（伸長なし）とし、事前確保済み予備容量 + `core::mem::forget` による leak-on-full フォールバックで満杯時も RT 側の drop/dealloc/blocking を回避する方針を採用（ADR で決定）。
 
 ### 不変スナップショット交換（グラフ・構成の切替）
 
@@ -141,7 +141,7 @@ relations:
 各項目は仮説（傾向）であり、確定は ADR `rt-foundation-primitives-implementation` で行う。
 
 - **[仮説] SPSC リングは `rtrb` を private 依存として採用し、公開 API は自前型（`Producer`/`Consumer` 相当・`try_push` が満杯時に値を返す `TryPushError<T>` 型）でラップする。** 満杯時方針は汎用のリングレベル enum ではなく API 単位（呼び出し側の drop/coalesce/keep ポリシー + consumer 側 drain-latest ヘルパー）で表現する。根拠: ゼロ依存・オーディオ系実績・SPSC 限定が需要と一致。`ringbuf` は依存木が重く機能過剰（SPSC 限定は rtrb と対称）、手組みは `unsafe` 必須で規約と衝突。
-- **[仮説] 遅延ドロップは `basedrop` を採用せず、SPSC（rtrb）上に自前の retire channel を構成する。** RT 側は `try_push` で退役オブジェクトを送出、drop の実行は非 RT 側 drain のみ。追加依存ゼロで basedrop 型パターンを満たす。満杯時は drop-on-full を採らず（RT 側 dealloc になるため）、事前確保済み予備容量 + `core::mem::forget` bounded-leak フォールバックで RT 側の drop/dealloc/blocking を回避する（ADR で決定）。
+- **[仮説] 遅延ドロップは `basedrop` を採用せず、SPSC（rtrb）上に自前の retire channel を構成する。** RT 側は `try_push` で退役オブジェクトを送出、drop の実行は非 RT 側 drain のみ。追加依存ゼロで basedrop 型パターンを満たす。満杯時は drop-on-full を採らず（RT 側 dealloc になるため）、事前確保済み予備容量 + `core::mem::forget` leak-on-full フォールバックで RT 側の drop/dealloc/blocking を回避する（ADR で決定）。
 - **[仮説] スナップショット交換は `arc-swap` を private 依存として採用する（arc-swap 型）。** 読み取り lock-free の `Arc` atomic swap が「構成差替は稀・読み取りは毎ブロック」のパターンに適合。旧スナップショットの退役は retire channel と組み合わせ、RT 側で dealloc が起きないよう API 契約で固定する。`AtomicPtr` 手組み・left-right 型は不採用方向。
 - **[仮説] スレッド優先度は `audio_thread_priority` を `default-features = false`（`with_dbus`/`dep:dbus` 排除・pthread 直接経路）で private 依存として採用する。** 配置の傾向は `ruviform-rt` の `non-RT only` モジュールだったが、**最終決定（ADR）は `ruviform-exec` 配置**（Primitives 層の OS 固有 API 禁止 L160 との整合。呼び出しは対象スレッド自身による self-promotion — exec 管理スレッドは spawn 時、デバイスコールバック由来は初回コールバック preamble の RT 契約区間開始前）。promotion 失敗はパニックでなく `Result` + 分類されたエラー型で表出する方向。`default-features = false` 構成では非特権の標準デスクトップ Linux で promotion が失敗する挙動をドキュメント化する。OS 差（MMCSS/time-constraint/SCHED_FIFO の実効差）は API ドキュメントと別途検証に委ねる。
 - **[仮説] `RtContext` は現行の opaque 構造（`_private` で外部構築不可）を維持し、mint API は `#[doc(hidden)] pub` 関数として駆動者入口点（audio デバイスコールバック・exec オフライン駆動）にのみ公開する。** 単一型とし実行時のオフライン/RT モードフラグや variant は持たない（「同一 API 内部で if rt 分岐しない」原則を維持。オフライン発行での制約緩和は発行駆動者に紐づく契約・ドキュメントレベルの記述 — ADR で決定）。capability factory 型は mint 権限が 2 箇所の現状では過剰。
@@ -155,7 +155,7 @@ relations:
 
 - **OS 別の優先度付与の具体差**: MMCSS「Pro Audio」、macOS time-constraint policy、Linux `SCHED_FIFO`/`SCHED_OTHER`+rtkit の実効・上限・失敗条件は OS ごとに異なり、実機検証を要する。API 形状は確定できるが、各 OS での具体的パラメータ写像（要求レイテンシ・周期からの算出）は実装・実機評価で確定する。
 - **promotion 失敗の semantics**: 優先度付与が拒否/降格された場合に、呼び出し側へ返す情報の粒度（エラー分類・フォールバック方針・再試行可否）は API 設計で固定すべきか、呼び出し側ポリシーに委ねるべきかが未確定。→ 方針確定: 失敗は `Result` + 分類エラー型で表出し best-effort（致命ではない）。`default-features = false` 構成では非特権の標準デスクトップ Linux で失敗しうる挙動をドキュメント化（ADR で決定）。
-- **`basedrop` 非採用の再評価条件**: retire channel を SPSC 上に自前構成する方針で、RT 側 `try_push` が満杯で失敗した場合の退役オブジェクト扱い（RT 側 drop は禁止のため、満杯時は非 RT 側での事前確保済み予備スロット等の設計）が API 設計で必要。複雑化した場合は basedrop 系への差替を再評価する。→ 解決済み: drop-on-full は RT 側 dealloc になるため拒否し、チャネル容量を構築時に固定（伸長なし）の上で事前確保済み予備容量 + `core::mem::forget` bounded-leak フォールバックを採用（ADR で決定）。複雑化時の basedrop 系再評価の条件のみ残る。
+- **`basedrop` 非採用の再評価条件**: retire channel を SPSC 上に自前構成する方針で、RT 側 `try_push` が満杯で失敗した場合の退役オブジェクト扱い（RT 側 drop は禁止のため、満杯時は非 RT 側での事前確保済み予備スロット等の設計）が API 設計で必要。複雑化した場合は basedrop 系への差替を再評価する。→ 解決済み: drop-on-full は RT 側 dealloc になるため拒否し、チャネル容量を構築時に固定（伸長なし）の上で事前確保済み予備容量 + `core::mem::forget` leak-on-full フォールバックを採用（ADR で決定）。複雑化時の basedrop 系再評価の条件のみ残る。
 - **満杯時方針の API 表現**: 「ドロップ/統合」方針を API 単位で定義する際の型形（`PushError` への分類 enum、コールバック、上書き式リングの使い分け基準）は spec/plan で具体化する。→ 解決済み: 汎用のリングレベル方針 enum は採用せず、`try_push` が満杯時に値を返す `TryPushError<T>` 型で呼び出し側ポリシー（drop/coalesce/keep）に委譲し、latest-wins は consumer 側 drain-latest ヘルパーで提供（ADR で決定）。
 - **`RtContext` の中身**: 現行はプレースホルダー（`_private`）。オフライン発行で「RT 制約を適用しない」区別を型で持つか（フラグ・ variant）を API 設計で確定する。→ 解決済み: 単一の opaque 型とし実行時モードフラグ/variant は持たない（「同一 API 内部で if rt 分岐しない」原則を維持）。オフライン発行コンテキストでの制約緩和は発行駆動者に紐づく契約・ドキュメントレベルの記述（ADR で決定）。
 

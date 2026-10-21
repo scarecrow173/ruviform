@@ -11,23 +11,30 @@
 //! the [`spsc`](crate::spsc) primitive (the `basedrop` dependency was
 //! rejected — ADR).
 //!
-//! The full-queue overflow policy is a documented bounded-leak via
+//! The full-queue overflow policy is a documented leak-on-full via
 //! `core::mem::forget`: dropping the rejected value on the RT thread
 //! is the rejected alternative (drop-on-full is RT-side dealloc —
 //! ADR). `capacity` is therefore a caller contract — provision for
 //! the maximum number of retirements per drain cycle.
 //!
-//! "Bounded" scopes the leak **per drain interval**, not the process
-//! lifetime: at most `capacity` values sit queued between drains and
-//! each overflow forgets one more value, so sustained saturation
-//! leaks without an absolute ceiling. The contract is therefore
-//! *observable saturation*, not guaranteed reclamation —
-//! [`overflows()`](DropCollector::overflows) exposes the cumulative
-//! forgotten count on both endpoints. A non-zero or growing count
-//! means `capacity` or drain cadence is undersized for the real
-//! retire rate; the fix is operational (bigger capacity, faster
-//! drain), not an API change. Residual risk: each forgotten value
-//! stays allocated until process exit, so heavy payloads and a
+//! What the policy does and does not bound — be precise:
+//!
+//! * **Bounded**: the channel capacity itself; the per-call work of
+//!   [`Retirer::retire`] (wait-free, allocation-free, constant time).
+//! * **Not bounded**: the total leaked memory. `retire` calls are
+//!   caller-controlled with no contract limit on rate or count, so
+//!   *any* interval — including a single drain interval — can forget
+//!   an arbitrary number of values, and the lifetime total likewise
+//!   has no ceiling. **No upper bound on leaked memory is
+//!   guaranteed**, on any timescale.
+//!
+//! The contract is therefore *observable saturation*, not guaranteed
+//! reclamation — [`overflows()`](DropCollector::overflows) exposes
+//! the cumulative forgotten count on both endpoints. A non-zero or
+//! growing count means `capacity` or drain cadence is undersized for
+//! the real retire rate; the fix is operational (bigger capacity,
+//! faster drain), not an API change. Residual risk: each forgotten
+//! value stays allocated until process exit, so heavy payloads and a
 //! misconfigured cadence can accumulate real memory — long-duration
 //! soak verification of drain cadence belongs to the RT verification
 //! infrastructure (Issue #22), not to per-crate unit tests.
@@ -48,13 +55,19 @@ use crate::spsc::{Consumer, Producer, TryPushError, channel};
 /// The capacity is fixed at construction — the channel never grows.
 /// `capacity` is a caller contract: it bounds the number of
 /// retirements between drains before the [`Retirer::retire`]
-/// bounded-leak fallback engages (see its doc).
+/// leak-on-full fallback engages (see its doc).
 ///
 /// `T: Send + 'static` is the API contract for retired payloads:
 /// each value crosses to the collecting thread and leaves no borrow
 /// behind at the non-RT drain point.
 ///
 /// **RT contract:** non-RT only — construction allocates the ring.
+///
+/// # Panics
+///
+/// Panics when `capacity` is zero — a degenerate always-full channel
+/// leaks every retirement, rejected in all builds (construction is
+/// a non-RT call).
 ///
 /// # Examples
 ///
@@ -68,7 +81,7 @@ use crate::spsc::{Consumer, Producer, TryPushError, channel};
 /// ```
 #[must_use]
 pub fn retire_channel<T: Send + 'static>(capacity: usize) -> (Retirer<T>, DropCollector<T>) {
-    debug_assert!(capacity > 0, "retire_channel capacity must be non-zero");
+    assert!(capacity > 0, "retire_channel capacity must be non-zero");
     let (producer, consumer) = channel(capacity);
     let overflows = Arc::new(AtomicUsize::new(0));
     (
@@ -118,14 +131,16 @@ impl<T: Send + 'static> Retirer<T> {
     /// Overflow policy: on a full channel the value is **not**
     /// dropped here — dropping would run `T`'s destructor (and any
     /// deallocation) on the RT thread. The value is leaked via
-    /// `core::mem::forget` instead: a bounded-leak fallback, bounded
-    /// per drain interval (at most `capacity` queued plus one
-    /// forgotten per overflow), **not** lifetime-bounded. Every
-    /// forgotten value increments the shared
-    /// [`overflows`](Self::overflows) counter — saturation is
-    /// observable, not silent. Provision `capacity` for the maximum
-    /// number of retirements per drain cycle and monitor the counter
-    /// (drop-on-full is rejected because it is RT-side dealloc — ADR).
+    /// `core::mem::forget` instead: a leak-on-full fallback. What is
+    /// bounded is only the channel capacity and this call's work;
+    /// the *total* leaked memory is not bounded — `retire` calls are
+    /// caller-controlled and unlimited, so an unbounded number of
+    /// values can be forgotten on any timescale. Every forgotten
+    /// value increments the shared [`overflows`](Self::overflows)
+    /// counter — saturation is observable, not silent. Provision
+    /// `capacity` for the maximum number of retirements per drain
+    /// cycle and monitor the counter (drop-on-full is rejected
+    /// because it is RT-side dealloc — ADR).
     ///
     /// **RT contract:** RT-suitable — wait-free, no allocation,
     /// bounded.
@@ -147,7 +162,7 @@ impl<T: Send + 'static> Retirer<T> {
     }
 
     /// Returns the cumulative number of values forgotten because the
-    /// channel was full — the saturation signal of the bounded-leak
+    /// channel was full — the saturation signal of the leak-on-full
     /// overflow policy. Shared with the [`DropCollector`]: either
     /// endpoint can observe the same count.
     ///
@@ -273,7 +288,7 @@ impl<T: Send + 'static> DropCollector<T> {
 
     /// Returns the cumulative number of values the [`Retirer`] forgot
     /// because the channel was full — the saturation signal of the
-    /// bounded-leak overflow policy, shared with the retiring
+    /// leak-on-full overflow policy, shared with the retiring
     /// endpoint.
     ///
     /// This is the non-RT-side observation point: poll it next to
@@ -368,7 +383,7 @@ mod tests {
     /// RT contract: on a full channel `retire` falls back to
     /// `core::mem::forget` — the overflowed value's Drop flag never
     /// sets, proving the RT side ran no destructor (the documented
-    /// bounded-leak; drop-on-full would be RT-side dealloc).
+    /// leak-on-full; drop-on-full would be RT-side dealloc).
     #[test]
     fn rt_retire_full_forgets_not_drops() {
         let (mut retirer, mut collector) = retire_channel::<DropFlag>(2);
@@ -455,8 +470,9 @@ mod tests {
     }
 
     /// RT contract: the counter accumulates across drain cycles —
-    /// "bounded-leak" bounds the per-interval queue, not the lifetime
-    /// leak; repeated saturation is observable as a growing count.
+    /// the leak-on-full policy bounds channel capacity and per-call
+    /// work only, never the leak total; repeated saturation is
+    /// observable as a growing count.
     #[test]
     fn rt_retire_repeated_saturation_accumulates() {
         let (mut retirer, mut collector) = retire_channel::<u32>(2);
@@ -487,11 +503,10 @@ mod tests {
     }
 
     /// `capacity` must be non-zero — the degenerate always-full
-    /// channel is rejected in debug builds.
-    #[cfg(debug_assertions)]
+    /// channel is rejected unconditionally (non-RT construction).
     #[test]
     #[should_panic(expected = "capacity must be non-zero")]
-    fn zero_capacity_panics_in_debug() {
+    fn zero_capacity_rejected() {
         let _unused = retire_channel::<u32>(0);
     }
 

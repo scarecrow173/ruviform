@@ -43,11 +43,11 @@ relations:
 
 ## Purpose
 
-Issue #21 が導入する RT ↔ 非 RT 受け渡しプリミティブ——SPSC チャネル、退役（遅延ドロップ）チャネル、不変スナップショット交換——の振る舞い契約の「なぜテストが存在するか」を保持する。[spec](../specs/implement-rt-foundation.md) の受け入れ基準（SPSC の満杯時値返却・retire の非 RT drop・満杯時 bounded-leak・guard 経由スナップショット）と [design](../designs/rt-foundation-api-design.md) の不変条件 4–6 を、実装の改変や採用依存の差替（`rtrb` → `ringbuf` 再評価等）の際に「どの振る舞いを守るべきか」「そのテストはまだ必要か」を判断できる形で固定する。廃止してよいのは、対象契約自体を変更する ADR / spec 改訂が行われたとき（例: 退役経路の満杯時方針変更、スナップショットの複数 reader 化、満杯時方針のリングレベル一般化）。
+Issue #21 が導入する RT ↔ 非 RT 受け渡しプリミティブ——SPSC チャネル、退役（遅延ドロップ）チャネル、不変スナップショット交換——の振る舞い契約の「なぜテストが存在するか」を保持する。[spec](../specs/implement-rt-foundation.md) の受け入れ基準（SPSC の満杯時値返却・retire の非 RT drop・満杯時 leak-on-full・guard 経由スナップショット）と [design](../designs/rt-foundation-api-design.md) の不変条件 4–6 を、実装の改変や採用依存の差替（`rtrb` → `ringbuf` 再評価等）の際に「どの振る舞いを守るべきか」「そのテストはまだ必要か」を判断できる形で固定する。廃止してよいのは、対象契約自体を変更する ADR / spec 改訂が行われたとき（例: 退役経路の満杯時方針変更、スナップショットの複数 reader 化、満杯時方針のリングレベル一般化）。
 
 ## Feature
 
-RT ↔ 非 RT 間の有界・ノンブロッキング受け渡し契約: SPSC が構築時固定容量の FIFO で満杯時に値を呼び出し元へ返し、退役チャネルが退役オブジェクトの `Drop` を非 RT 側 drain に限定し満杯時 `core::mem::forget` の bounded-leak とし、スナップショット交換が専用 guard 経由参照で guard 解放と書き込み側差替の双方を同一退役経路へ送出すること。
+RT ↔ 非 RT 間の有界・ノンブロッキング受け渡し契約: SPSC が構築時固定容量の FIFO で満杯時に値を呼び出し元へ返し、退役チャネルが退役オブジェクトの `Drop` を非 RT 側 drain に限定し満杯時 `core::mem::forget` の leak-on-full とし、スナップショット交換が専用 guard 経由参照で guard 解放と書き込み側差替の双方を同一退役経路へ送出すること。
 
 ## Rules
 
@@ -57,7 +57,7 @@ RT ↔ 非 RT 間の有界・ノンブロッキング受け渡し契約: SPSC �
 - **容量・空満診断は近似値である**。`is_full`/`is_empty`/`capacity` の戻り値は観測時点の近似として扱い、正確性を契約としない（SPSC リングの同時更新を考慮した診断用）。
 - **RT 側操作は alloc しない**。`try_push`/`try_pop`/`pop_latest`/スナップショット `read`/guard `Drop` は、std のみのテストスコープ counting `#[global_allocator]`（外部依存なし。enable/reset/assert-zero/disable フラグで対象区間を限定し他テストの確保を誤計しないテスト内部装置）で確保ゼロを挙動検証する。
 - **退役オブジェクトの `Drop` は非 RT 側 drain でのみ実行される**。`Retirer::retire` は `try_push` 意味（ノンブロッキング・alloc なし・有界）で RT-suitable。`DropCollector::drain` は non-RT only で、受信済み分と `push_local` ローカル投入分の双方を drain 呼び出しスレッド上で drop する（戻り値は drop 件数）。
-- **退役経路の満杯時は `mem::forget` bounded-leak**。`retire` 満杯時に RT 側で drop/dealloc/blocking を行わず、`core::mem::forget` でリークに留める（drop-on-full は RT 側 dealloc になるため不採用 — ADR）。容量は drain 周期ごとの最大退役数を見込む呼び出し側契約。
+- **退役経路の満杯時は `mem::forget` leak-on-full**。`retire` 満杯時に RT 側で drop/dealloc/blocking を行わず、`core::mem::forget` でリークに留める（drop-on-full は RT 側 dealloc になるため不採用 — ADR）。容量は drain 周期ごとの最大退役数を見込む呼び出し側契約。**リーク総量の上限は drain 間隔・生涯ともに保証しない**（有界なのはキュー容量と各 `retire` の処理量のみ。`retire` 呼び出し回数は契約上無制限）。飽和は `overflows()` カウンタで観測可能。
 - **RT 側スナップショット参照は `SnapshotGuard` 経由のみ**。`read` は lock-free load + `Arc` clone（`&self` 受け・`RefCell` 内部可変で複数 guard 同時存在可）で alloc なし。guard は `Deref<Target = T>` で内容を読み、`!Send`・`!Sync`（取得した RT スレッドから逃げない）。
 - **guard `Drop` は内部 `Arc` を退役経路へ送出する**。inline drop せず reader 内の `RefCell<Retirer<Arc<T>>>` へ `retire` する（`Drop` 内の `borrow_mut` は瞬間的で逐次解放。reader 側 last-drop の穴を塞ぐ中核契約）。`SnapshotWriter::publish` で追い出された旧 `Arc` も `DropCollector::push_local` 経由で同一 drain 経路へ渡し、dealloc は「非 RT 側 drain（`SnapshotWriter::collect`）」または「非 RT の `publish` 内部」でのみ発生する。
 - **構築系 API は non-RT only**。`channel`/`retire_channel`/`slot`/`drain`/`collect`/`publish` は確保・伸長を伴うため `non-RT only` ラベルを持つ。
@@ -69,7 +69,7 @@ RT ↔ 非 RT 間の有界・ノンブロッキング受け渡し契約: SPSC �
 - Given: 複数の保留値を持つ consumer。When: `pop_latest` を呼ぶ。Then: 最新値のみ返り残りは捨てられる。空なら `None`（`rt_pop_latest_returns_newest`）。
 - Given: counting allocator を enable した区間。When: `try_push`/`try_pop`/`pop_latest`/`read`/guard drop を実行する。Then: 確保回数は 0（`rt_try_push_pop_no_alloc`・`rt_snapshot_read_no_alloc`）。
 - Given: `Drop` で `AtomicBool` を立てるテスト専用型の値。When: `retire` 直後に flag を確認し、その後 `drain` を呼ぶ。Then: retire 直後は flag 未セット（RT 側で drop しない）、drain 後にセットされ drain は drop 件数を返す（`rt_retire_then_drain_drops`）。
-- Given: 満杯の退役チャネル。When: さらに `retire` する。Then: 値は `mem::forget` され flag が立たない（drop も dealloc も RT 側で起きない bounded-leak）（`rt_retire_full_forgets_not_drops`）。
+- Given: 満杯の退役チャネル。When: さらに `retire` する。Then: 値は `mem::forget` され flag が立たない（drop も dealloc も RT 側で起きない leak-on-full）（`rt_retire_full_forgets_not_drops`）。
 - Given: `publish` で差し替えたスナップショット。When: `read` する。Then: 新しいスナップショットを観測する（`rt_snapshot_publish_visibility`）。
 - Given: `read` で取得した guard。When: guard を drop する。Then: 内部 `Arc` の `strong_count` が >0 のまま残り（RT 側で dealloc しない）、`SnapshotWriter::collect` 後に解放される（`rt_snapshot_guard_drop_routes_to_retire`）。
 - Given: `publish` で追い出された旧 `Arc`。When: `collect` する。Then: 旧 `Arc` が同一 drain 経路で解放される（`rt_snapshot_displaced_arc_freed_on_collect`）。
@@ -77,7 +77,7 @@ RT ↔ 非 RT 間の有界・ノンブロッキング受け渡し契約: SPSC �
 ## Guarantees
 
 - RT パス上の通知・退役・スナップショット参照が alloc/dealloc・ブロッキング・無制限待機なしで行えることが counting allocator と Drop-flag による挙動テストで保たれる。
-- 満杯時に値が静かに失われず（`Full(T)` 返却で呼び出し側ポリシーが適用可能）、退役経路で失われる場合も文書化済みの bounded-leak に留まる。
+- 満杯時に値が静かに失われず（`Full(T)` 返却で呼び出し側ポリシーが適用可能）、退役経路で失われる場合も文書化済みの leak-on-full に留まる。
 - スナップショットの dealloc が RT スレッド上で発生しない（reader 側 last-drop の穴が guard ルーティングで塞がれる）——`arc-swap` 単体では実現できない本プリミティブの中核契約が保たれる。
 - `T: Send`（チャネルペイロード）・`T: Send + 'static`（退役オブジェクト）・`T: Send + Sync`（共有スナップショット内容）のスレッド境界が API 契約で明示される。
 

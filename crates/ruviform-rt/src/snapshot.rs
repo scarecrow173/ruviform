@@ -58,7 +58,7 @@ use crate::retire::{DropCollector, Retirer, retire_channel};
 /// fixed capacity of the reader-side retire channel — a caller
 /// contract provisioning for the maximum number of guard drops per
 /// [`collect`](SnapshotWriter::collect) cycle before the
-/// bounded-leak fallback engages (see [`Retirer::retire`]).
+/// leak-on-full fallback engages (see [`Retirer::retire`]).
 ///
 /// `T: Send + Sync` is the API contract: the shared `Arc<T>`
 /// contents cross between the writer's non-RT thread and the
@@ -66,6 +66,12 @@ use crate::retire::{DropCollector, Retirer, retire_channel};
 ///
 /// **RT contract:** non-RT only — construction allocates the cell
 /// and the retire channel.
+///
+/// # Panics
+///
+/// Panics when `retire_capacity` is zero — a degenerate
+/// always-overflowing retire path forgets every `Arc`, rejected in
+/// all builds (construction is a non-RT call).
 ///
 /// # Examples
 ///
@@ -80,7 +86,7 @@ pub fn slot<T: Send + Sync + 'static>(
     initial: Arc<T>,
     retire_capacity: usize,
 ) -> (SnapshotWriter<T>, SnapshotReader<T>) {
-    debug_assert!(retire_capacity > 0, "slot retire_capacity must be non-zero");
+    assert!(retire_capacity > 0, "slot retire_capacity must be non-zero");
     let (retirer, collector) = retire_channel(retire_capacity);
     let cell = Arc::new(ArcSwap::new(initial));
     (
@@ -191,9 +197,12 @@ impl<T: Send + Sync + 'static> SnapshotWriter<T> {
 
     /// Returns the cumulative number of `Arc`s the reader side forgot
     /// because the retire channel was full — the saturation signal of
-    /// the slot's bounded-leak overflow policy (guard drops retire
+    /// the slot's leak-on-full overflow policy (guard drops retire
     /// their `Arc` through the reader's `Retirer`; a full channel
-    /// forgets it via `mem::forget` and counts it here).
+    /// forgets it via `mem::forget` and counts it here). The policy
+    /// bounds channel capacity and per-call work only — **no upper
+    /// bound on leaked memory is guaranteed**; see the `retire`
+    /// module doc for the exact contract.
     ///
     /// This is the non-RT-side observation point: poll it next to
     /// [`collect`](Self::collect). A zero count is the healthy steady
@@ -300,7 +309,7 @@ impl<T: Send + Sync + 'static> SnapshotReader<T> {
 ///
 /// **RT contract:** RT-suitable — `Drop` never runs `T`'s destructor
 /// or deallocates inline: it sends the inner `Arc` to the reader's
-/// [`Retirer`] (`try_push` plus a `mem::forget` bounded-leak on a
+/// [`Retirer`] (`try_push` plus a `mem::forget` leak-on-full on a
 /// full channel — the overflow policy `Retirer` already owns). The
 /// deferred drop runs on the non-RT side via
 /// [`SnapshotWriter::collect`].
@@ -473,7 +482,7 @@ mod tests {
     }
 
     /// On a full retire channel the guard drop falls back to the
-    /// `Retirer`-internal `mem::forget` bounded-leak — the
+    /// `Retirer`-internal `mem::forget` leak-on-full — the
     /// overflowed `Arc` stays allocated (still counted) instead of
     /// being dropped on the reading thread.
     #[test]
@@ -483,7 +492,7 @@ mod tests {
         assert_eq!(Arc::strong_count(&tracked), 2);
 
         // The first guard drop fills the channel; the second
-        // overflows into the bounded leak.
+        // overflows into the leak-on-full path.
         drop(reader.read());
         drop(reader.read());
         // External + cell + queued + leaked — the overflowed `Arc`
@@ -528,11 +537,11 @@ mod tests {
     }
 
     /// `retire_capacity` must be non-zero — the degenerate
-    /// always-overflow slot is rejected in debug builds.
-    #[cfg(debug_assertions)]
+    /// always-overflow slot is rejected unconditionally (non-RT
+    /// construction).
     #[test]
     #[should_panic(expected = "capacity must be non-zero")]
-    fn zero_retire_capacity_panics_in_debug() {
+    fn zero_retire_capacity_rejected() {
         let _unused = slot(Arc::new(0_u32), 0);
     }
 }

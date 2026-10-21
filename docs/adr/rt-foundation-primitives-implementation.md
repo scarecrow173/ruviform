@@ -75,7 +75,7 @@ GitHub Issue #21（RT 基盤実装）の決定として、`ruviform-rt` が提�
 
 **遅延ドロップ（Drop 退避）:**
 
-* SPSC（採用リング）の上に自前の retire channel を構成する（RT 側は退役オブジェクトを `try_push`、非 RT 側の drain で drop。満杯時方針: drop-on-full は RT 側で dealloc が発生するため採用せず、事前確保済み予備容量 + `core::mem::forget` による bounded-leak フォールバックで RT 側の drop/dealloc/blocking を回避する設計とする）
+* SPSC（採用リング）の上に自前の retire channel を構成する（RT 側は退役オブジェクトを `try_push`、非 RT 側の drain で drop。満杯時方針: drop-on-full は RT 側で dealloc が発生するため採用せず、事前確保済み予備容量 + `core::mem::forget` による leak-on-full フォールバックで RT 側の drop/dealloc/blocking を回避する設計とする）
 * `basedrop`（0.1.3、MIT OR Apache-2.0）を採用する
 * 他の lock-free collector（epoch 系・GC 系）を採用する
 
@@ -115,7 +115,7 @@ GitHub Issue #21（RT 基盤実装）の決定として、`ruviform-rt` が提�
 以下の組み合わせを採用する。
 
 * **SPSC リング**: `rtrb` を private 依存として採用し、`ruviform-rt` の公開 API（チャネル端点型・`try_push`/`try_pop` 型操作）は自前型で提供する。満杯時方針は汎用のリングレベル enum ではなく API 単位で表現し、`try_push` は満杯時に値を呼び出し元へ返却する（`TryPushError<T>` 型）— drop/coalesce/keep のポリシー適用は呼び出し側に委ね、latest-wins のパラメータ適用には consumer 側の drain-latest ヘルパーを提供する。理由: SPSC リングの事実標準であり依存ゼロ・オーディオエコシステム実績があり、ベースラインが求める「有界・ノンブロッキング・満杯時方針を API で定義」を `try_push`/`try_pop` モデルに直接写像できる。`ringbuf` は需要（SPSC のみ。必須の推移依存は `crossbeam-utils` で、SPSC 限定という点は rtrb と対称）に対して機能・依存が過剰、手組みは `unsafe` 必須で規約と衝突するため不採用。
-* **遅延ドロップ**: `basedrop` は採用せず、SPSC リングの上に自前の retire channel を構成する。理由: basedrop 型パターンの要件（RT 側から重い drop を非 RT 側へ逃がす）は採用済み SPSC への `try_push` + 非 RT 側 drain で完全に実現でき、追加依存の利点がない。満杯時方針: drop-on-full は RT 側で dealloc が発生するため拒否し、チャネル容量は構築時に固定（伸長なし）とした上で、事前確保済み予備容量 + `core::mem::forget` による bounded-leak フォールバックを採用する（満杯時も RT 側で drop/dealloc/blocking が起きないことを文書化した方針）。
+* **遅延ドロップ**: `basedrop` は採用せず、SPSC リングの上に自前の retire channel を構成する。理由: basedrop 型パターンの要件（RT 側から重い drop を非 RT 側へ逃がす）は採用済み SPSC への `try_push` + 非 RT 側 drain で完全に実現でき、追加依存の利点がない。満杯時方針: drop-on-full は RT 側で dealloc が発生するため拒否し、チャネル容量は構築時に固定（伸長なし）とした上で、事前確保済み予備容量 + `core::mem::forget` による leak-on-full フォールバックを採用する（満杯時も RT 側で drop/dealloc/blocking が起きないことを文書化した方針）。
 * **スナップショット交換**: `arc-swap` を private 依存として採用する。理由: `Arc` の atomic swap の標準実装で、読み取り側が lock-free・wait-free となり「構成の稀な差替 + 毎ブロックの読み取り」のパターンに適合する。arc-swap は内部の atomic セルとして使い、no-RT-dealloc の保証は自前の guard + retire channel 組合せで実現する: RT 側のスナップショット参照は専用 guard 型経由でのみ取得でき、guard の Drop が内部 `Arc` を retire channel へ送出する（RT reader が guard を保持している間に writer が swap し非 RT drain が旧スナップショットを drop しても、reader 側 guard の解放が最終参照になって RT スレッド上で dealloc が起きる経路を塞ぐ）。書き込み側の差替で追い出された `Arc` も同一の退役チャネルで退役させる。`AtomicPtr` 手組みは `unsafe` 必須・世代管理の検証コストが自前化するため不採用、left-right 型は本件の読み書き頻度に対して実装が過剰なため不採用。
 * **スレッド優先度**: `audio_thread_priority` を `default-features = false` で private 依存として採用し、**`ruviform-exec`** の `non-RT only` API として提供する（`ruviform-rt` には置かない）。配置を rt にしない理由: ベースライン L160 は Primitives 層に「GPU・OS 固有 API・デバイス依存を持たない」を課しており、OS 優先度 syscall を行う本機構は Primitives 最下位の rt には置けない。`ruviform-exec` の責務行は「OS スレッドの詳細は隠蔽」を要求しており、優先度 promotion はその OS 抽象化に属する。あわせて rt の依存は `rtrb`+`arc-swap` のみに維持できる。`ruviform-audio-device` 配置は exec 管理スレッド・オフライン駆動等の用途をカバーできず不採用。将来の層（audio-device 等）がより下位の配置を必要とした場合は配置を再評価しうるが、機構自体は配置に関わらず本 Issue のスコープとする。全面延期はベースラインが本 Issue を次フォーラムに指定しているため不採用。
   * **呼び出しモデル**: promotion は対象スレッド自身から呼ぶ自己昇格とする — exec 管理スレッドでは spawn 時セットアップで、デバイスコールバック由来スレッド（将来の audio-device）では初回コールバックの preamble（RT 契約区間の開始前 = `RtContext` mint・初回 `process` 呼び出し前）で呼ぶ。ブロッキング的な syscall を伴うため `non-RT only` とし、active な RT 契約区間内からの呼び出しは契約違反。promotion 失敗は致命的でなく best-effort の `Result` + 分類エラー型で表出する（パニックしない）。
@@ -172,7 +172,7 @@ GitHub Issue #21（RT 基盤実装）の決定として、`ruviform-rt` が提�
 **退避 — SPSC 上の自前 retire channel:**
 
 * 良い点: 追加依存ゼロで basedrop 型パターンを実現。退役経路が既存プリミティブと統一される。
-* 悪い点: 満杯時の退役オブジェクト扱いを API で設計する必要がある（drop-on-full は RT 側 dealloc になるため拒否。事前確保済み予備容量 + `core::mem::forget` bounded-leak フォールバックで解決）。
+* 悪い点: 満杯時の退役オブジェクト扱いを API で設計する必要がある（drop-on-full は RT 側 dealloc になるため拒否。事前確保済み予備容量 + `core::mem::forget` leak-on-full フォールバックで解決）。
 
 **退避 — `basedrop` 採用:**
 

@@ -19,6 +19,12 @@ use core::fmt;
 ///
 /// **RT contract:** non-RT only — construction allocates the ring.
 ///
+/// # Panics
+///
+/// Panics when `capacity` is zero — a degenerate always-full channel
+/// is a contract violation, rejected in all builds (construction is
+/// a non-RT call).
+///
 /// # Examples
 ///
 /// ```
@@ -31,7 +37,7 @@ use core::fmt;
 /// ```
 #[must_use]
 pub fn channel<T: Send>(capacity: usize) -> (Producer<T>, Consumer<T>) {
-    debug_assert!(capacity > 0, "channel capacity must be non-zero");
+    assert!(capacity > 0, "channel capacity must be non-zero");
     let (producer, consumer) = rtrb::RingBuffer::new(capacity);
     (Producer { inner: producer }, Consumer { inner: consumer })
 }
@@ -486,11 +492,10 @@ mod tests {
     }
 
     /// `capacity` must be non-zero — the degenerate always-full
-    /// channel is rejected in debug builds.
-    #[cfg(debug_assertions)]
+    /// channel is rejected unconditionally (non-RT construction).
     #[test]
     #[should_panic(expected = "capacity must be non-zero")]
-    fn zero_capacity_panics_in_debug() {
+    fn zero_capacity_rejected() {
         let _unused = channel::<u32>(0);
     }
 }
