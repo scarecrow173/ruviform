@@ -7,34 +7,70 @@ created: "2026-10-21"
 updated: "2026-10-21"
 owners: []
 relations:
-  source: []
+  source:
+    - "https://github.com/scarecrow173/ruviform/issues/28"
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "poc/ui/src/exp/surface.rs"
+      - type: "file"
+        path: "docs/impl/exp/ac3-surface-adjacent-parent.jsonl"
+      - type: "file"
+        path: "docs/impl/exp/ac3-surface-adjacent-child.jsonl"
+    modified:
+      - type: "file"
+        path: "poc/ui/Cargo.toml"
+      - type: "file"
+        path: "poc/ui/Cargo.lock"
+      - type: "file"
+        path: "poc/ui/src/exp/mod.rs"
+      - type: "file"
+        path: "poc/ui/src/args.rs"
+      - type: "file"
+        path: "poc/ui/RESULTS.md"
+      - type: "file"
+        path: "docs/tasks/poc-native-surface.md"
+      - type: "file"
+        path: "docs/tasks/README.md"
+      - type: "file"
+        path: "docs/impl/ir/README.md"
     deleted: []
     renamed: []
     moved: []
-    generated: []
+    generated:
+      - type: "file"
+        path: "poc/ui/out/ac3-surface-*.jsonl"
   implements:
-    - "docs/tasks/poc-native-surface.md"
+    - "../../tasks/poc-native-surface.md"
   implemented-by: []
-  depends-on: []
+  depends-on:
+    - "../../plans/issue-28-ui-poc.md"
+    - "../../designs/issue-28-ui-poc.md"
+    - "poc-ui.md"
+    - "poc-render-backends.md"
+    - "poc-message-boundary.md"
   blocks: []
   supersedes: []
   superseded-by: []
-  related: []
+  related:
+    - "../../specs/issue-28-ui-poc.md"
+    - "../../adr/ui-tech-selection-poc.md"
   refines: []
   refined-by: []
   derives-from: []
   derived-by: []
   verifies: []
-  verified-by: []
-  references: []
+  verified-by:
+    - "../../test-specs/issue-28-ui-poc.md"
+  references:
+    - "https://github.com/tauri-apps/wry/pull/1762"
   defers: []
   deferred-by: []
 metadata:
   experiments:
-    adopted: []
+    adopted:
+      - "../exp/ac3-surface-adjacent-parent.jsonl"
+      - "../exp/ac3-surface-adjacent-child.jsonl"
     rejected: []
 ---
 

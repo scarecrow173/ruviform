@@ -10,8 +10,32 @@ relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/28"
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "poc/ui/src/exp/surface.rs"
+      - type: "doc"
+        path: "docs/impl/ir/poc-native-surface.md"
+      - type: "doc"
+        path: "docs/impl/exp/ac3-surface-adjacent-parent.jsonl"
+      - type: "doc"
+        path: "docs/impl/exp/ac3-surface-adjacent-child.jsonl"
+    modified:
+      - type: "file"
+        path: "poc/ui/Cargo.toml"
+      - type: "file"
+        path: "poc/ui/Cargo.lock"
+      - type: "file"
+        path: "poc/ui/RESULTS.md"
+      - type: "file"
+        path: "poc/ui/src/args.rs"
+      - type: "file"
+        path: "poc/ui/src/exp/mod.rs"
+      - type: "doc"
+        path: "docs/tasks/poc-native-surface.md"
+      - type: "doc"
+        path: "docs/tasks/README.md"
+      - type: "doc"
+        path: "docs/impl/ir/README.md"
     deleted: []
     renamed: []
     moved: []

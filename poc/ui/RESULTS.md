@@ -90,7 +90,7 @@ poc/ui/target/release/ui-poc.exe --experiment dist
 
 | 判定 | 実験 | エビデンス（集約値） | 証跡 | 文書評価 |
 | --- | --- | --- | --- | --- |
-| **passed** | host | `protocol_load.ok=true`（`http://poc.app/index.html` 埋め込みロード + JS hello 確認）・`ipc_echo.ok=true`（RTT 255.7ms。初回 WebView2 ウォームアップ込みの実行では ~500-940ms）・`resize_follow.ok=true`（要求 `[947,631]` → RO 観測 `[947,631]`、±4px 許容、retries:4）・`focus_transition.ok=true`（`mechanism:"window"`、JS window blur→focus ペア `[false,true,false,true]`、API 記録 `set_focus:invoked`/`focus_parent:ok`/`focus:ok`）・`webview2_version=155.0.4283.62` | `out/host-1792554329.jsonl`・`docs/impl/exp/ac1-host-experiment-wry-tao-webview.jsonl` | 実測（Windows 11 x64） |
+| **passed** | host | `protocol_load.ok=true`（`http://poc.app/index.html` 埋め込みロード + JS hello 確認）・`ipc_echo.ok=true`（RTT 8.1ms。EventLoopProxy 非起床修正前の実行では 255.7ms・初回 WebView2 ウォームアップ込みでは ~500-940ms）・`resize_follow.ok=true`（要求 `[947,631]` → RO 観測 `[947,631]`、±4px 許容、retries:0。修正前の実行では retries:4）・`focus_transition.ok=true`（`mechanism:"window"`、JS window blur→focus ペア `[false,true,false,true]`、API 記録 `set_focus:invoked`/`focus_parent:ok`/`focus:ok`）・`webview2_version=155.0.4283.62` | `out/host-1792563666.jsonl`（非起床修正後の再実行）・`out/host-1792554329.jsonl`（修正前）・`docs/impl/exp/ac1-host-experiment-wry-tao-webview.jsonl` | 実測（Windows 11 x64） |
 
 ### AC1 所見（採否材料）
 
@@ -139,9 +139,9 @@ wgpu を導入する採否になった場合は宣言値の見直しタスクへ
 
 | 判定 | backend（要求 → 実使用） | frame_time_ms avg/p50/p95/p99 | dropped | achieved_fps | work_time_ms avg/p99 | 証跡 | 文書評価 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **passed** | canvas2d → canvas2d | 16.667 / 16.70 / 16.80 / 16.80 | 0 | 60.00 | 0.46 / 0.70 | `out/render-1792563717.jsonl` | 実測 |
-| **passed** | webgl2 → webgl2 | 16.666 / 16.70 / 16.80 / 16.80 | 0 | 60.00 | 0.41 / 0.60 | `out/render-1792563728.jsonl` | 実測 |
-| **passed**（fallback） | webgpu → **webgl2** | 16.666 / 16.70 / 16.80 / 16.80 | 0 | 60.00 | 0.41 / 0.60 | `out/render-1792563740.jsonl` | 実測 |
+| **passed** | canvas2d → canvas2d | 16.667 / 16.70 / 16.80 / 16.80 | 0 | 60.00 | 0.46 / 0.70 | `out/render-1792563717.jsonl`・`docs/impl/exp/ac2-render-canvas2d-webgl2-webgpu.jsonl` | 実測 |
+| **passed** | webgl2 → webgl2 | 16.666 / 16.70 / 16.80 / 16.80 | 0 | 60.00 | 0.41 / 0.60 | `out/render-1792563728.jsonl`・同上 | 実測 |
+| **passed**（fallback） | webgpu → **webgl2** | 16.666 / 16.70 / 16.80 / 16.80 | 0 | 60.00 | 0.41 / 0.60 | `out/render-1792563740.jsonl`・同上 | 実測 |
 
 ### AC2 所見（採否材料）
 
@@ -240,7 +240,7 @@ wgpu を導入する採否になった場合は宣言値の見直しタスクへ
   ホスト I/F の例外ケース」自体が adapter 分割設計（将来の `ruviform-gpu`
   adapter）への入力。
 - **unsafe 封じ込め**: `poc/ui/Cargo.toml` に `unsafe_code = "warn"` を追加し、
-  windows-rs 呼出と `create_surface_unsafe` の計 8 箇所を
+  windows-rs 呼出と `create_surface_unsafe` の計 12 箇所を
   `#[expect(unsafe_code)]` + SAFETY コメントの局所許可に限定。
   `clippy -D warnings` で封じ込めを機械検証（expect 外の unsafe は warn→deny）。
 - **macOS / Linux（文書評価）**: 実機未検証。**macOS** は layer-backed
@@ -264,7 +264,7 @@ wgpu を導入する採否になった場合は宣言値の見直しタスクへ
 
 | 判定 | 経路 | エビデンス（集約値） | 証跡 | 文書評価 |
 | --- | --- | --- | --- | --- |
-| **passed** | JSON RTT | `ipc_rtt_ms` 64B: avg 0.57-1.06 / p50 0.4 / p99 ≤3.3・1KiB: avg 0.46 / p50 0.4 / p99 1.2・16KiB: avg 2.11 / p50 1.6 / p99 7.1・64KiB: avg 4.33-4.42 / p50 4.3 / p99 ≤5.8（ms。各 32 往復・missed=0） | `out/ipc-1792564680.jsonl`・`out/ipc-1792564737.jsonl` | 実測 |
+| **passed** | JSON RTT | `ipc_rtt_ms` 64B: avg 0.57-1.06 / p50 0.4 / p99 ≤3.3・1KiB: avg 0.46 / p50 0.4 / p99 1.2・16KiB: avg 2.11 / p50 1.6 / p99 7.1・64KiB: avg 4.33-4.42 / p50 4.3 / p99 ≤5.8（ms。各 32 往復・missed=0） | `out/ipc-1792564680.jsonl`・`out/ipc-1792564737.jsonl`・`docs/impl/exp/ac4-ipc-json-rtt-pull-evaluate-script-push.jsonl` | 実測 |
 | **passed** | 単方向 ingest | `ipc_ingest_msg_s` ≒ 40,396-44,113 msg/s（500 msg・Rust 側到達窓 11.3-12.4ms・received=500/500・end_seen=true） | 同上 | 実測 |
 | **passed** | バイナリ pull | `protocol_pull_MBps` 64KiB: 2.86-2.95・1MiB: 94.3-115.1・16MiB: 88.4-146.1（要求毎 `protocol_pull_latency_ms`: 64KiB p50 1.6-2.2ms・1MiB p50 ~11ms・16MiB p50 ~189ms） | 同上 | 実測 |
 | **passed** | push | `push_msg_s` 192.6-218.2 msg/s（送信 burst 200 + paced 160 + coexist 96 = 456 件、受信 360+96・**dropped=0**）。`coalesced` 231-276/360・`max_batch` 105-109・interval p50 0.1ms / p95 15.8ms | 同上 | 実測 |
@@ -451,7 +451,9 @@ DOM 内合成・WebGPU 有効化経路）は「文書評価」/ 後続調査と�
 | **passed** | 配布（埋め込み単一バイナリ） | confirm（release 8,100,864B 単体・portable zip 3,039,116B の hands-on 充足。macOS / Linux は文書評価維持） | [AC6](#ac6----experiment-distheadless-release-単一バイナリ)・`docs/impl/exp/ac6-dist-single-binary.jsonl` |
 | **passed** | 採否の構造（コンポーネント単位・固定フォールバック階層にしない） | confirm | 全条項 + [AC8](#ac8--poc-隔離) |
 
-再現コマンド（本工程の検証入口）:
+再現コマンド（本工程の検証入口。`.agents/skills/` は `mise run setup` の
+`apm install` で復元される gitignore 対象依存のため、未セットアップ環境では
+先に `mise run setup` を実行すること）:
 
 ```sh
 node .agents/skills/doc-status/scripts/audit_docs.js --type adr --json
@@ -473,7 +475,11 @@ git status --porcelain -- Cargo.toml Cargo.lock crates mise.toml   # 空であ�
 ### 依存の境界
 
 wry 0.57 / tao 0.37 / wgpu 30 / rust-embed 8 / serde_json / http / dpi /
-pollster / winreg（Windows のみ）は `poc/ui` ワークスペース内に限定し、
+pollster / raw-window-handle / flate2 / winreg・windows（Windows のみ）は
+`poc/ui` ワークスペース内に限定し、
 ルート `Cargo.toml`/`Cargo.lock`/`crates/` へは一切追加しない
 （`poc/ui/Cargo.lock` はこのワークスペース内で生成・コミット対象）。
-`unsafe`・windows-rs 直接呼出は T1 では不使用。
+`unsafe`・windows-rs 直接呼出は T1 では不使用だったが、最終状態では
+`exp/surface.rs`（AC3）の `#[expect(unsafe_code)]` + SAFETY コメント付き
+局所許可（計 12 箇所）に限定され、`poc/ui/Cargo.toml` の
+`unsafe_code = "warn"` と `clippy -D warnings` で封じ込めを機械検証する。

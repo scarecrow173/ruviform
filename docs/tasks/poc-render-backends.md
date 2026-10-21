@@ -10,8 +10,48 @@ relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/28"
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "dir"
+        path: "poc/ui/frontend/bench-shared"
+      - type: "dir"
+        path: "poc/ui/frontend/vanilla"
+      - type: "file"
+        path: "poc/ui/src/exp/render.rs"
+      - type: "doc"
+        path: "docs/impl/ir/poc-render-backends.md"
+      - type: "doc"
+        path: "docs/impl/exp/ac2-render-canvas2d-webgl2-webgpu.jsonl"
+    modified:
+      - type: "file"
+        path: "poc/ui/.gitignore"
+      - type: "file"
+        path: "poc/ui/README.md"
+      - type: "file"
+        path: "poc/ui/RESULTS.md"
+      - type: "file"
+        path: "poc/ui/frontend/package.json"
+      - type: "file"
+        path: "poc/ui/frontend/package-lock.json"
+      - type: "file"
+        path: "poc/ui/frontend/build.mjs"
+      - type: "file"
+        path: "poc/ui/src/args.rs"
+      - type: "file"
+        path: "poc/ui/src/assets.rs"
+      - type: "file"
+        path: "poc/ui/src/host.rs"
+      - type: "file"
+        path: "poc/ui/src/metrics.rs"
+      - type: "file"
+        path: "poc/ui/src/exp/mod.rs"
+      - type: "file"
+        path: "poc/ui/src/exp/host.rs"
+      - type: "doc"
+        path: "docs/tasks/poc-render-backends.md"
+      - type: "doc"
+        path: "docs/tasks/README.md"
+      - type: "doc"
+        path: "docs/impl/ir/README.md"
     deleted: []
     renamed: []
     moved: []

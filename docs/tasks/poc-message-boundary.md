@@ -10,8 +10,50 @@ relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/28"
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "dir"
+        path: "poc/ui/frontend/ipc"
+      - type: "file"
+        path: "poc/ui/src/exp/ipc.rs"
+      - type: "file"
+        path: "poc/ui/frontend/bench-shared/src/ipcbench.ts"
+      - type: "doc"
+        path: "docs/impl/ir/poc-message-boundary.md"
+      - type: "doc"
+        path: "docs/impl/exp/ac4-ipc-json-rtt-pull-evaluate-script-push.jsonl"
+    modified:
+      - type: "file"
+        path: "poc/ui/README.md"
+      - type: "file"
+        path: "poc/ui/RESULTS.md"
+      - type: "file"
+        path: "poc/ui/frontend/bench-shared/src/index.ts"
+      - type: "file"
+        path: "poc/ui/frontend/bench-shared/src/ipc.ts"
+      - type: "file"
+        path: "poc/ui/frontend/package.json"
+      - type: "file"
+        path: "poc/ui/frontend/package-lock.json"
+      - type: "file"
+        path: "poc/ui/frontend/build.mjs"
+      - type: "file"
+        path: "poc/ui/src/args.rs"
+      - type: "file"
+        path: "poc/ui/src/assets.rs"
+      - type: "file"
+        path: "poc/ui/src/host.rs"
+      - type: "file"
+        path: "poc/ui/src/exp/mod.rs"
+      - type: "file"
+        path: "poc/ui/src/exp/host.rs"
+      - type: "file"
+        path: "poc/ui/src/exp/render.rs"
+      - type: "doc"
+        path: "docs/tasks/poc-message-boundary.md"
+      - type: "doc"
+        path: "docs/tasks/README.md"
+      - type: "doc"
+        path: "docs/impl/ir/README.md"
     deleted: []
     renamed: []
     moved: []

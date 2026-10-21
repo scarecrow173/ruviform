@@ -118,47 +118,47 @@ spec `SPEC-034Jc9BJlI7ULEBWoIlMP2`（Issue #28）の受け入れ基準 AC1–AC8
 
 ### T1: PoC ハーネスホスト（task: poc-ui-harness-host）
 
-- [ ] `poc/ui/` 独立ワークスペース骨格（`Cargo.toml` `[workspace]`+`[package]`・`.gitignore`・`Cargo.lock`）を作成し、ルート `Cargo.toml` / `Cargo.lock` / `crates/` が無変更であることを確認する
-- [ ] `args.rs`（std-only パース）+ `main.rs`（dispatch・exit code 0/1/2）+ `check.rs`（WebView2 レジストリ・wgpu アダプタ・OS/toolchain 検出、`--check` で JSON 出力 exit 0）
-- [ ] `host.rs`（tao Window + wry WebView・自己終了タイマ）+ `assets.rs`（`with_custom_protocol` で `poc://app/` 埋め込み配信）+ IPC echo（`window.ipc.postMessage` → `with_ipc_handler` → `evaluate_script` 返送）
-- [ ] `metrics.rs` に `poc-metric.v1` スキーマ・パーセンタイル・stdout 最終行 + `out/*.jsonl` 追記を実装
-- [ ] `RESULTS.md` スケルトン（AC → 実験 → エビデンス行対応表・再現コマンド欄・文書評価ラベル欄）と `README.md`（前提: `npm ci && npm run build`、再現手順）を作成
-- [ ] `--experiment host` を実機で実行し AC1 項目（`protocol_load`/`ipc_echo`/`resize_follow`/`focus_transition`/`webview2_version`）を記録
+- [x] `poc/ui/` 独立ワークスペース骨格（`Cargo.toml` `[workspace]`+`[package]`・`.gitignore`・`Cargo.lock`）を作成し、ルート `Cargo.toml` / `Cargo.lock` / `crates/` が無変更であることを確認する
+- [x] `args.rs`（std-only パース）+ `main.rs`（dispatch・exit code 0/1/2）+ `check.rs`（WebView2 レジストリ・wgpu アダプタ・OS/toolchain 検出、`--check` で JSON 出力 exit 0）
+- [x] `host.rs`（tao Window + wry WebView・自己終了タイマ）+ `assets.rs`（`with_custom_protocol` で `poc://app/` 埋め込み配信）+ IPC echo（`window.ipc.postMessage` → `with_ipc_handler` → `evaluate_script` 返送）
+- [x] `metrics.rs` に `poc-metric.v1` スキーマ・パーセンタイル・stdout 最終行 + `out/*.jsonl` 追記を実装
+- [x] `RESULTS.md` スケルトン（AC → 実験 → エビデンス行対応表・再現コマンド欄・文書評価ラベル欄）と `README.md`（前提: `npm ci && npm run build`、再現手順）を作成
+- [x] `--experiment host` を実機で実行し AC1 項目（`protocol_load`/`ipc_echo`/`resize_follow`/`focus_transition`/`webview2_version`）を記録
 
 ### T2: 描画バックエンド計測（task: poc-render-backends。T1 完了後・T3/T4 と並行可）
 
-- [ ] `frontend/` に npm workspaces 骨格 + `bench-shared/`（波形ピーク列 約 2,000 点/フレーム + メータ群のワークロード生成・rAF 統計・IPC ブリッジ）+ `vanilla/`（Vite+TS 参照 UI）を構築
-- [ ] `exp/render.rs` に `--backend canvas2d|webgl2|webgpu` dispatch と `frame_time_ms avg/p50/p95/p99`・`dropped`・`achieved_fps` の集約を実装（既定 600 フレームで自己終了）
-- [ ] WebGPU は `navigator.gpu` + adapter 要求の機能検出を実装し、失敗時 WebGL2 フォールバック + `metrics.fallback_to` 記録を確認
-- [ ] 3 バックエンド × 既定フレームで実機実行し、バックエンド別数値行を `RESULTS.md` に記録
+- [x] `frontend/` に npm workspaces 骨格 + `bench-shared/`（波形ピーク列 約 2,000 点/フレーム + メータ群のワークロード生成・rAF 統計・IPC ブリッジ）+ `vanilla/`（Vite+TS 参照 UI）を構築
+- [x] `exp/render.rs` に `--backend canvas2d|webgl2|webgpu` dispatch と `frame_time_ms avg/p50/p95/p99`・`dropped`・`achieved_fps` の集約を実装（既定 600 フレームで自己終了）
+- [x] WebGPU は `navigator.gpu` + adapter 要求の機能検出を実装し、失敗時 WebGL2 フォールバック + `metrics.fallback_to` 記録を確認
+- [x] 3 バックエンド × 既定フレームで実機実行し、バックエンド別数値行を `RESULTS.md` に記録
 
 ### T3: メッセージ境界計測（task: poc-message-boundary。T1 完了後・T2/T4 と並行可）
 
-- [ ] `exp/ipc.rs` に JSON RTT 計測（JS `{seq,t0}` postMessage → Rust `evaluate_script` 返送 → JS `t1−t0`。ペイロード 64B/1KiB/16KiB/64KiB）を実装し `ipc_rtt_ms{avg,p50,p99}`・`ipc_ingest_msg_s` を記録
-- [ ] `poc://data/blob?bytes=N` のバイナリ pull（`Response<Cow<'static,[u8]>>`）を実装し `protocol_pull_MBps`（64KiB/1MiB/16MiB）とリクエスト毎レイテンシを記録
-- [ ] `evaluate_script` 定速 push を実装し `push_msg_s`・受信間隔・ドロップ・coalesce 挙動を観察記録
-- [ ] 3 経路併用の実現性所見を `RESULTS.md` に記録
+- [x] `exp/ipc.rs` に JSON RTT 計測（JS `{seq,t0}` postMessage → Rust `evaluate_script` 返送 → JS `t1−t0`。ペイロード 64B/1KiB/16KiB/64KiB）を実装し `ipc_rtt_ms{avg,p50,p99}`・`ipc_ingest_msg_s` を記録
+- [x] `poc://data/blob?bytes=N` のバイナリ pull（`Response<Cow<'static,[u8]>>`）を実装し `protocol_pull_MBps`（64KiB/1MiB/16MiB）とリクエスト毎レイテンシを記録
+- [x] `evaluate_script` 定速 push を実装し `push_msg_s`・受信間隔・ドロップ・coalesce 挙動を観察記録
+- [x] 3 経路併用の実現性所見を `RESULTS.md` に記録
 
 ### T4: ネイティブサーフェス合成（task: poc-native-surface。T1 完了後・T2/T3 と並行可）
 
-- [ ] `exp/surface.rs` に `adjacent-parent`（tao 親 HWND を wgpu `Surface` 化・WebView を `build_as_child` で左領域・右に wgpu 描画）を実装
-- [ ] `adjacent-child`（sibling 子 HWND: windows-rs `WS_CHILD` + raw-window-handle。windows-rs 呼出箇所のみ SAFETY コメント付き局所 `unsafe`）を実装
-- [ ] 検査マトリクス（ヒットテスト・フォーカス遷移・z-order・リサイズ追従・wgpu フレーム継続）を両モードで pass/fail + 観察記録。`SetWindowRgn` クリップは試行観察
-- [ ] 「真の DOM 内合成は wry 未対応（PR #1762 = CompositionController/DirectComposition）」を `RESULTS.md` に記録し、macOS/Linux は文書評価行を追加。fork スパイクは隣接構成完了後の任意探索（「探索的付録」として分離）
+- [x] `exp/surface.rs` に `adjacent-parent`（tao 親 HWND を wgpu `Surface` 化・WebView を `build_as_child` で左領域・右に wgpu 描画）を実装
+- [x] `adjacent-child`（sibling 子 HWND: windows-rs `WS_CHILD` + raw-window-handle。windows-rs 呼出箇所のみ SAFETY コメント付き局所 `unsafe`）を実装
+- [x] 検査マトリクス（ヒットテスト・フォーカス遷移・z-order・リサイズ追従・wgpu フレーム継続）を両モードで pass/fail + 観察記録。`SetWindowRgn` クリップは試行観察
+- [x] 「真の DOM 内合成は wry 未対応（PR #1762 = CompositionController/DirectComposition）」を `RESULTS.md` に記録し、macOS/Linux は文書評価行を追加。fork スパイクは隣接構成完了後の任意探索（「探索的付録」として分離）
 
 ### T5: フロントエンド比較と配布（task: poc-frontend-and-dist。T1+T2 完了後）
 
-- [ ] `frontend/solid/`（Vite + vite-plugin-solid）に T2 のベンチ UI を移植し、`--variant vanilla|solid` で比較実行
-- [ ] dist 合計バイト（raw/gzip -9）・Vite ビルド時間・glue-code LOC・DOM mutation 数・ワークフロー観察を `RESULTS.md` に 2 候補比較行として記録（AC5）
-- [ ] `cargo build --release` で単一バイナリを作り、`exp/dist.rs` で WebView2 レジストリ検出（winreg・`pv` 値）・バイナリサイズ・未検出時 bootstrapper 案内を実装・実機検証
-- [ ] portable zip を hands-on で構成し、macOS（`.app`+署名/公証）・Linux（`libwebkit2gtk-4.1`+GTK3・deb 依存・glibc ベースライン・AppImage）を依存パッケージ/API バージョン表で定量化した文書評価行を記録（AC6）
+- [x] `frontend/solid/`（Vite + vite-plugin-solid）に T2 のベンチ UI を移植し、`--variant vanilla|solid` で比較実行
+- [x] dist 合計バイト（raw/gzip -9）・Vite ビルド時間・glue-code LOC・DOM mutation 数・ワークフロー観察を `RESULTS.md` に 2 候補比較行として記録（AC5）
+- [x] `cargo build --release` で単一バイナリを作り、`exp/dist.rs` で WebView2 レジストリ検出（winreg・`pv` 値）・バイナリサイズ・未検出時 bootstrapper 案内を実装・実機検証
+- [x] portable zip を hands-on で構成し、macOS（`.app`+署名/公証）・Linux（`libwebkit2gtk-4.1`+GTK3・deb 依存・glibc ベースライン・AppImage）を依存パッケージ/API バージョン表で定量化した文書評価行を記録（AC6）
 
 ### T6: 採否 ADR 確定（task: poc-adr-finalize。T2–T5 完了後）
 
-- [ ] `RESULTS.md` の AC → 実験 → エビデンス対応表を完成させ、各採否条項（WebView 実装/高頻度描画/合成方式/メッセージ境界/フロントエンド FW/配布/採否構造）をエビデンス行へのリンク付きで confirm または revise する
-- [ ] 実機未検証項目に「文書評価」ラベルがあることを監査し、ADR status を `accepted` に遷移（レビューは review-protocol で確認）
-- [ ] spec の AC チェックボックス完了と status 遷移（`approved` → `implemented`）・plan/task status 更新・`changes` 記録を同期し、impl 記録（`docs/impl/ir/`）が各 task に紐付いていることを監査
-- [ ] wgpu MSRV 1.87 と宣言 `rust-version = "1.85"` の衝突事実を MSRV 見直し専用タスクへ連携記録
+- [x] `RESULTS.md` の AC → 実験 → エビデンス対応表を完成させ、各採否条項（WebView 実装/高頻度描画/合成方式/メッセージ境界/フロントエンド FW/配布/採否構造）をエビデンス行へのリンク付きで confirm または revise する
+- [x] 実機未検証項目に「文書評価」ラベルがあることを監査し、ADR status を `accepted` に遷移（レビューは review-protocol で確認）
+- [x] spec の AC チェックボックス完了と status 遷移（`approved` → `implemented`）・plan/task status 更新・`changes` 記録を同期し、impl 記録（`docs/impl/ir/`）が各 task に紐付いていることを監査
+- [x] wgpu MSRV 1.87 と宣言 `rust-version = "1.85"` の衝突事実を MSRV 見直し専用タスクへ連携記録
 
 ## Dependencies and Risks
 

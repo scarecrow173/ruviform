@@ -38,6 +38,7 @@ relations:
     generated: []
   implements:
     - "../../tasks/poc-adr-finalize.md"
+    - "../../adr/ui-tech-selection-poc.md"
   implemented-by: []
   depends-on:
     - "../../plans/issue-28-ui-poc.md"

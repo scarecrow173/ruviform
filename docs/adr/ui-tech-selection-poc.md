@@ -37,7 +37,8 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/poc-adr-finalize.md"
   depends-on:
     - "ui-architecture-webview-hybrid.md"
   blocks: []
