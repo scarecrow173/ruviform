@@ -48,7 +48,7 @@ relations:
 
 ## What Should Be Built
 
-GitHub Issue #42 で定義された時間モデル拡張の設計成果物として、2 系統の決定・記録を行う。本 spec が要求するのは設計判断の確定と文書化であり、コード実装自体は後続の実装 Issue に委ねる（Issue #42 は design → spec フローの設計 Issue）。
+GitHub Issue #42 で定義された時間モデル拡張の設計成果物として、2 系統の決定・記録を行う。本 spec が要求するのは設計判断の確定と文書化であり、コード実装自体は後続の実装 Issue #58 に委ねる（Issue #42 は design → spec フローの設計 Issue。#58 は #27 より先に完了させる前提）。
 
 - **`FrameRate` / `TimeBase` の意味的分離と `Timecode` 拡張の方式決定**: フレームレート（nominal fps: 24, 25, `30000/1001`, `60000/1001` 等）を表す型と `TimeBase`（任意の有理数 tick 長 — 1 秒の分割）の責務分離を決定し、`Timecode` 関連 API が意味的に正しい型を受け取る形を定義する。現行 `Timecode::from_media_time` / `from_media_time_drop` の `frame_rate: TimeBase` 引数について、分離導入時の互換性方針（破壊的変更 or 新 API 併設）を決定・記録する。
 - **ドロップフレーム規則の拡張性の分類記録**: 30/60 nominal 以外のドロップフレーム一般化、フィールドレート等の拡張性を検討し、確定/保留/要PoC の 3 区分で設計ベースラインの分類表に記録する。
@@ -83,7 +83,7 @@ GitHub Issue #42 で定義された時間モデル拡張の設計成果物とし
 
 ### Out of Scope
 
-- コード実装そのもの（`FrameRate` 型・`Timecode` シグネチャ変更・テストの実装は後続の実装 Issue）
+- コード実装そのもの（`FrameRate` 型・`Timecode` シグネチャ変更・テストの実装は後続の実装 Issue #58）
 - 音楽時間（小節/拍/PPQN・テンポマップ）— Issue #33 スコープ（Issue #42 非目標どおり）
 - `MediaTime::convert` / `MediaDuration::convert` の変換契約自体の変更（丸めモード・`Err` 条件は #41 spec どおり現行維持）
 - `MasterClock` の実装（ruviform-rt・Issue #27 系のスコープ。本 spec はアンカーとしての参照位置づけのみ）
@@ -119,7 +119,7 @@ GitHub Issue #42 で定義された時間モデル拡張の設計成果物とし
 | `vtc` 等外部クレート採用の再評価 | ADR で却下候補として記録（依存ゼロ・外部型非露出方針） | 依存追加規約どおり各実装 Issue での再評価余地 | 依存ゼロ方針との不整合を暗黙に持ち込む |
 | frame index 型の所有（media-core vs video-core） | 本 spec の要求外。設計文書で Deferred に記録 | Issue #26 / #27 の境界設計 | フレーム番号の型所在が曖昧なまま実装が進む |
 | 音楽時間（小節/拍/PPQN・テンポマップ） | Issue #42 非目標どおり対象外 | Issue #33（ベースライン保留項目） | メディア時間と音楽時間の混在設計 |
-| `FrameRate` 実装・`Timecode` シグネチャ変更・プロパティテストのコード | 設計のみ。コードは本 spec の成果物に含めない | 後続の実装 Issue | 設計未確定のまま実装が先行する |
+| `FrameRate` 実装・`Timecode` シグネチャ変更・プロパティテストのコード | 設計のみ。コードは本 spec の成果物に含めない | 後続の実装 Issue #58 | 設計未確定のまま実装が先行する |
 
 ## Sources and Relations
 

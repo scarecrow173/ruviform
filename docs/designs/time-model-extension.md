@@ -175,7 +175,7 @@ impl Timecode {
 
 - **破壊的置換**（ADR 副次決定 1）。旧 `frame_rate: TimeBase` シグネチャは併設しない
 - 内部計算（`elapsed_frames` の `floor(t * rate)`・drop のラベルスキップ・`narrow_u32` 分解）は現行の厳密 `i128`/`u128` 整数演算を維持し、`frame_rate.numerator()`/`denominator()` をそのまま使う
-- `nominal` label grid（`(2*num + den) / (2*den)` の round-half-up）の計算は `FrameRate::nominal_fps()` に移譲し、`Timecode` 側と `FrameRate` 側で規則を二重実装しない
+- `nominal` label grid（`(2*num + den) / (2*den)` の round-half-up）の計算は `FrameRate::nominal_fps()` に移譲し、`Timecode` 側と `FrameRate` 側で規則を二重実装しない。分子・分母は `u64`（以上）へ拡張してから計算すること — `u32` 中間演算では `2*num` が num > 約 21 億で溢れる（現行 `timecode.rs` 実装も `u64::from` で拡張済み。実装 Issue #58 の受入条件に境界テストを明記）
 - **`nominal == 0` の拒否契約は現行維持**: `from_media_time` は `frame_rate.nominal_fps() == 0`（nominal grid が 0 に丸められる rate、例: `1/1000` fps 相当）を `Err(Error::InvalidValue("frame_rate"))` で拒否する。現行 `sub_fps_rate_is_rejected`（timecode.rs テスト）と同契約の継続であり、`% nominal` の %0 panic 防止でもある。`FrameRate::nominal_fps()` 自体は infallible のままとし、検査は呼び出し側の `from_media_time` が行う。`from_media_time_drop` は NTSC 2 レート以外を先に `Err(UnsupportedDropFrameRate)` で拒否するためこの経路には到達しない
 
 ### 変換規約
@@ -246,6 +246,8 @@ impl Timecode {
 | frame index 型の所有（media-core vs video-core） | 保留 | Issue #26/#27 境界の設計問題 | 動画基盤/動画エンジン Issue |
 | 連鎖変換プロパティテストの harness 選定（`proptest` dev-dep vs deterministic 列挙） | 要PoC | media-core 依存ゼロ方針と検証基盤の兼ね合いは実装評価 | 実装 Issue（media-core） |
 
+※ 上表および本書の「実装 Issue」は Issue #58 を指す（#27 動画エンジンより先に完了させる前提）。
+
 ## Risks and Trade-offs
 
 - **破壊的変更のワークスペース内波及**: `frame_rate: TimeBase` → `FrameRate` で既存呼び出し（media-core 内テスト・doctest）がコンパイルエラーになる → 影響はワークスペース内に限定され、実装 Issue で一括更新。`publish = false` の間に行うことが前提
@@ -269,6 +271,8 @@ impl Timecode {
 - [ ] `FrameRate` が `TimeBase` newtype として提案シグネチャどおりに存在し、`new()`/`from_fps()` が zero 入力を `Err(InvalidValue("frame_rate"))` で拒否する
 - [ ] `Timecode::from_media_time(_drop)` が `frame_rate: FrameRate` を受け取り、旧 `TimeBase` シグネチャが残っていない
 - [ ] `from_media_time` が `frame_rate.nominal_fps() == 0` を `Err(InvalidValue("frame_rate"))` で拒否する回帰テスト（現行 `sub_fps_rate_is_rejected` 相当）が存在する
+- [ ] `nominal_fps()` が `u64` 以上の中間演算で計算され、`u32::MAX` 級の極端有理数（`4294967295/1`・`1/4294967295`）の境界テストが存在する
+- [ ] 時間精度テスト行列（音声 base 44.1/48/90 kHz × 映像 rate 24・25・`30000/1001`・`60000/1001`、負値拒否・境界値）が実装 Issue（#58）に含まれ、アンカー直接変換と連鎖変換の誤差上界を比較するテストが存在する
 - [ ] drop 対応が `30000/1001`・`60000/1001` のみで他は `Err(UnsupportedDropFrameRate)` の現行契約が変わっていない
 - [ ] `frame_duration()` が唯一の `TimeBase` 返却 API で、`to_time_base()`・`From<FrameRate> for TimeBase`・`From<TimeBase> for FrameRate` が存在しない
 - [ ] 丸め累積ポリシー（3 原則・ユースケース別精度基準表・許容閾値定義・検証手段）が本文に記述されている
