@@ -195,6 +195,7 @@ review-protocol（Reviewer A 協調的 spec 適合 + Reviewer B 敵対的欠陥�
 - チェーン Ogg / 途中リンクの stream 再列挙（`ResetRequired` 対応。`streams()` スナップショットモデルの設計論点を含む）
 - symphonia-format-riff 上流不具合の起票検討（長さ不明 WAV の末尾欠損 + EOF 誤分類、block_align 非倍数残端末の静かな欠損）
 - gapless trim（`trim_start`/`trim_end`）の `Packet` 運搬先決定 — PoC で末尾パディング混入を観測
-- `Decoder` pending キューの有界化・backpressure 要否検討
+- `Decoder` pending キューの有界化・backpressure 要否検討（投入条件・回収手順・上限/失敗動作の契約化）
+- フレーム正確シークとの連携設計（Issue #27）: `Demuxer::seek` は request-only で着地点を返さない契約 — 着地点からの decode 前進・目標 PTS 照合・decoder flush・旧キュー破棄の調整が必要
 - `AudioFrame` の `Clone`/`PartialEq` 要否（audio-core 側の別論点）
 - `test-rt` フィルタの厳密化（プレフィックスマッチまたはレーン分離）は Issue #18 と共通の課題として RT 検証 Issue 側で検討

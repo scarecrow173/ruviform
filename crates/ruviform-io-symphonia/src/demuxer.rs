@@ -117,8 +117,11 @@ impl Demuxer for SymphoniaDemuxer {
     ///
     /// The request is the boundary operation; where the reader actually
     /// lands is returned by the backend but deliberately discarded —
-    /// media-io's `seek` is request-only. An unseekable source or a
-    /// container without a seek index reports
+    /// media-io's `seek` is request-only. Coordinating the landing point
+    /// with decoding (decode-forward to the target PTS, decoder flush,
+    /// stale-queue discard) is caller/engine-side work — part of the
+    /// frame-accurate seek design, not this `PoC`'s scope. An unseekable
+    /// source or a container without a seek index reports
     /// [`ErrorKind::Unsupported`]; an out-of-range position reports
     /// [`ErrorKind::InvalidValue`].
     ///

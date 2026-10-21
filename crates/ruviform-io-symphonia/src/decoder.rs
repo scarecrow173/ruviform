@@ -22,6 +22,13 @@ use crate::map;
 
 /// Media-I/O [`Decoder`] backed by a backend audio decoder.
 ///
+/// `send_packet` decodes eagerly and queues every resulting frame in an
+/// **unbounded** output queue: callers must interleave `receive_frame`
+/// until `Ok(None)` or memory grows without limit. Whether the boundary
+/// gains a bounded-queue/backpressure contract (input conditions,
+/// wait/collect procedure, limit, or failure behavior) is a follow-up
+/// design item.
+///
 /// **RT contract:** non-RT only — `send_packet` performs unbounded codec
 /// work and allocates; `receive_frame` allocates nothing itself but only
 /// drains what `send_packet` queued.
