@@ -18,6 +18,7 @@ Directory: `docs/designs`
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034JZPGUI0000000000002 | プラグイン GUI PoC 設計（外部親 HWND + 外部メッセージループへの wry attach） | approved | [plugin-gui-poc.md](./plugin-gui-poc.md) |
+| DESIGN-034JZLISO0000000000003 | プラグイン分離設計（境界・プロセス監視・RT 面制約） | approved | [plugin-isolation.md](./plugin-isolation.md) |
 | DESIGN-034IvBNBZvoikAgd6DJxdD | テンプレート由来ドキュメント・識別子のRuviform固有化の設計 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | DESIGN-034JgsK9khgDsPqG04Sp6i | RT 基盤 API 設計（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | approved | [rt-foundation-api-design.md](./rt-foundation-api-design.md) |
 | DESIGN-034JOU7C43HBPJBsnz8JQP | RT 検証レーン設計 | approved | [rt-verification-lane-design.md](./rt-verification-lane-design.md) |

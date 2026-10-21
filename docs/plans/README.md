@@ -17,6 +17,7 @@ Directory: `docs/plans`
 | PLAN-034JcCFGe6ILSTWLgUIjAn | Issue #26 動画基盤 API の実装（video-core 所有権契約・video-proc 新設・色変換カーネル） | approved | [implement-issue-26-video-foundation.md](./implement-issue-26-video-foundation.md) |
 | PLAN-034JZVID00000000000040 | Issue #27 実装計画 — 動画エンジン | approved | [implement-issue-27-video-engine.md](./implement-issue-27-video-engine.md) |
 | PLAN-034JZPGUI0000000000003 | Issue #30 実施計画 — プラグイン GUI PoC | approved | [implement-issue-30-plugin-gui-poc.md](./implement-issue-30-plugin-gui-poc.md) |
+| PLAN-034JZLISO0000000000004 | Issue #31 実施計画 — プラグイン分離設計確定 | approved | [implement-issue-31-plugin-isolation.md](./implement-issue-31-plugin-isolation.md) |
 | PLAN-034JO2EWa8LuEEE4BFVZ9Q | Issue #52 workspace MSRV 引上げの実施（rust-version 1.85 → 1.89・ドキュメント同期・MSRV 実測検証） | approved | [implement-issue-52-msrv-raise.md](./implement-issue-52-msrv-raise.md) |
 | PLAN-034JQFeYbZCBHPYSBfQe7B | Issue #53 SIMD dispatch 層の実装計画 | approved | [implement-issue-53-simd-dispatch-layer.md](./implement-issue-53-simd-dispatch-layer.md) |
 | PLAN-034JZDNRML000000000004 | Issue #54 実装計画 — denormal flush ノード | approved | [implement-issue-54-denormal-policy.md](./implement-issue-54-denormal-policy.md) |
