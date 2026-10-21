@@ -8,6 +8,7 @@ Directory: `docs/specs`
 | --- | --- | --- | --- |
 | SPEC-034INYy2aDLxse9dy8MgGZ | Ruviform 設計ベースライン文書群の作成（アーキテクチャ・クレート構成・RT/オフライン実行モデル） | approved | [architecture-design-baseline-deliverables.md](./architecture-design-baseline-deliverables.md) |
 | SPEC-034Jc9QEqYLVfg1CXXTiPV | オーディオデバイス境界 trait と ruviform-audio-device PoC（バックエンド評価・採否） | implemented | [audio-device-backend-evaluation-poc.md](./audio-device-backend-evaluation-poc.md) |
+| SPEC-034JPubrypO0IylcWkuqlz | fearless_dispatched 軽量カーネル劣後の原因分離（低負荷再計測） | approved | [dispatched-overhead-analysis.md](./dispatched-overhead-analysis.md) |
 | SPEC-034Jci19siJZexLs53Xh5d | DSP/SIMD 比較ベンチマーク PoC と採否 ADR | implemented | [dsp-simd-poc-adr.md](./dsp-simd-poc-adr.md) |
 | SPEC-034IcwhwIFSNUNKtX7KK0Q | Rust 開発基盤の確立（mise/APM lockfile・最小ワークスペース・手動CI） | approved | [establish-rust-dev-foundation.md](./establish-rust-dev-foundation.md) |
 | SPEC-034J5FYaYfeL5zkzb4sIV4 | メディアデータモデル API の実装（media-core / audio-core / video-core） | implemented | [implement-media-data-model-api.md](./implement-media-data-model-api.md) |

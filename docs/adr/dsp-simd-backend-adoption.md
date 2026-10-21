@@ -38,7 +38,9 @@ relations:
     - "../designs/dsp-simd-poc.md"
     - "../specs/dsp-simd-poc-adr.md"
     - "dsp-simd-poc.md"
-  derived-by: []
+  derived-by:
+    - "../specs/dispatched-overhead-analysis.md"
+    - "../designs/dispatched-overhead-method.md"
   verifies: []
   verified-by: []
   references:

@@ -7,6 +7,7 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034Jf1Cl3xf8K9wcSuvFYK | ベンチハーネス骨格と dev-dependencies | done | [add-bench-harness-and-dev-deps.md](./add-bench-harness-and-dev-deps.md) |
+| TASK-034JPwYfiOnSaZJgGJQQyY | dispatch_probe ベンチ追加 | todo | [add-dispatch-probe-bench.md](./add-dispatch-probe-bench.md) |
 | TASK-034IdQtDnY6ZKHFhFhXKmW | 手動 CI ワークフローの追加 | done | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
 | TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | done | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
@@ -54,6 +55,7 @@ Directory: `docs/tasks`
 | TASK-034IwCiByN74V3hysJ9iTR | AGENTS.md の Ruviform 向け節単位改稿 | done | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | TASK-034IwCbgksOGvhF5E4CQbp | README.md の Ruviform 向け全面改稿 | done | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
 | TASK-034JglHs8cNMDOvyZFeUpc | PoC example（list_devices・play_sine）実機手順と実験ログ | done | [run-device-poc-examples-and-exp-log.md](./run-device-poc-examples-and-exp-log.md) |
+| TASK-034JPwYHzq8qU5fxLnMLlO | 低負荷再計測と生データ収集 | todo | [run-dispatch-remeasure.md](./run-dispatch-remeasure.md) |
 | TASK-034IwCjptfvbSFBQaSKigx | プレースホルダー最終スイープ・総合検証と ADR メタデータ編集 | done | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
 | TASK-034Jf49f5gwAy5fpTPvXG9 | ベンチ実行と結果収集 | done | [run-simd-bench-and-collect-results.md](./run-simd-bench-and-collect-results.md) |
 | TASK-034J6Pq9WM0XMkGqryZrvQ | フォローアップトリアージ由来の小修正（try_new・Custom 不変条件・丸め注記） | done | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
@@ -67,4 +69,5 @@ Directory: `docs/tasks`
 | TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | done | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |
 | TASK-034IRZFUgbTZlBX2kH7psN | Issue #1 リポジトリ反映の総合検証と spec/design バックリンク | done | [verify-issue-1-repo-reflection.md](./verify-issue-1-repo-reflection.md) |
 | TASK-034IdQxdPQUxXweHBN1ZxT | 再現インストール検証と #3 転記用作業メモ | done | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |
+| TASK-034JPwZ8htMzYNPNgOceEI | 分析・レポート記述・文書整合 | todo | [write-dispatch-analysis-report.md](./write-dispatch-analysis-report.md) |
 | TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | done | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |
