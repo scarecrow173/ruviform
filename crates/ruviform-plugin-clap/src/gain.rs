@@ -253,10 +253,10 @@ impl PluginProcessor for GainProcessor {
                         Self::apply_gain_segment(src, dst, position, offset, gain);
                         processed_any = true;
                     }
-                    if let EventKind::ParamValue(param_event) = event.kind() {
-                        if param_event.param_id == GAIN_PARAM.id {
-                            gain = Self::denorm_gain(param_event.value);
-                        }
+                    if let EventKind::ParamValue(param_event) = event.kind()
+                        && param_event.param_id == GAIN_PARAM.id
+                    {
+                        gain = Self::denorm_gain(param_event.value);
                     }
                     position = offset;
                 }

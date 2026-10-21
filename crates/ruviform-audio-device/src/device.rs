@@ -69,10 +69,10 @@ impl Device for CpalDevice {
             .map_err(|e| map_error(&e, ErrorCtx::Control))?;
         // Fast path: the backend default is itself an openable F32
         // form (the overwhelmingly common case).
-        if map_sample_format(default.sample_format()) == Some(SampleFormat::F32) {
-            if let Some(format) = f32_format(default.sample_rate(), u32::from(default.channels())) {
-                return Ok(format);
-            }
+        if map_sample_format(default.sample_format()) == Some(SampleFormat::F32)
+            && let Some(format) = f32_format(default.sample_rate(), u32::from(default.channels()))
+        {
+            return Ok(format);
         }
         // The default is non-F32 or its channel count maps to no named
         // layout: synthesize an F32 form from the supported space so

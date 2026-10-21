@@ -34,10 +34,10 @@ pub(crate) fn copy_cstring(src: &str, dst: &mut [c_char]) {
             *dst = *src as c_char;
         }
     }
-    if len < bytes.len() {
-        if let Some(last) = dst.last_mut() {
-            *last = 0;
-        }
+    if len < bytes.len()
+        && let Some(last) = dst.last_mut()
+    {
+        *last = 0;
     }
 }
 

@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "時間モデル拡張の設計（FrameRate/TimeBase 分離・Timecode 拡張・丸め誤差累積方針）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -31,7 +31,12 @@ relations:
     - "../specs/time-type-extension-framerate-timecode-rounding.md"
     - "../adr/framerate-timebase-separation-and-timecode-extension.md"
     - "ruviform-architecture-design-baseline.md"
-  derived-by: []
+  derived-by:
+    - "../plans/implement-issue-58-time-type-extension.md"
+    - "../test-specs/time-type-extension-contracts.md"
+    - "../tasks/implement-framerate-type.md"
+    - "../tasks/migrate-timecode-to-framerate.md"
+    - "../tasks/add-time-precision-tests.md"
   verifies: []
   verified-by: []
   references:

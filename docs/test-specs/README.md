@@ -22,4 +22,5 @@ Directory: `docs/test-specs`
 | TSPEC-034JP1iphLdAZkyRbPkol1 | RT 検証レーン契約 | approved | [rt-verification-contracts.md](./rt-verification-contracts.md) |
 | TSPEC-034JenWCuRngWvxWm00Ls3 | SIMD 等価性 matrix の契約保証 | approved | [simd-equivalence-matrix-contract.md](./simd-equivalence-matrix-contract.md) |
 | TSPEC-034JxNxYK4O6s8NA8gnaah | スレッド優先度ライフサイクルの契約保証 | approved | [thread-priority-lifecycle.md](./thread-priority-lifecycle.md) |
+| TSPEC-034JNskaqcN34Ki4layRNK | FrameRate 型・Timecode シグネチャ・時間変換精度の契約保証 | approved | [time-type-extension-contracts.md](./time-type-extension-contracts.md) |
 | TSPEC-034JcCwISRw7E9Q8XoNvD8 | 動画基盤 API の契約保証（所有権・RT・色変換カーネル） | approved | [video-foundation-api.md](./video-foundation-api.md) |
