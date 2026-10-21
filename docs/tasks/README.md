@@ -9,6 +9,7 @@ Directory: `docs/tasks`
 | TASK-034Jf1Cl3xf8K9wcSuvFYK | ベンチハーネス骨格と dev-dependencies | done | [add-bench-harness-and-dev-deps.md](./add-bench-harness-and-dev-deps.md) |
 | TASK-034IdQtDnY6ZKHFhFhXKmW | 手動 CI ワークフローの追加 | done | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
 | TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | done | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
+| TASK-034JNwUoAfb2TnY7nw07XH | 時間変換精度テストの追加（音声×映像行列・往復/連鎖誤差上界） | done | [add-time-precision-tests.md](./add-time-precision-tests.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
 | TASK-034JO3X9ZpAvMoWiRIiMU4 | MSRV 1.89 適用とドキュメント同期（Cargo.toml・AGENTS.md） | done | [apply-msrv-1-89-and-sync-docs.md](./apply-msrv-1-89-and-sync-docs.md) |
 | TASK-034J6PiHv9GsKby7yH2eMO | 全公開 enum への `#[non_exhaustive]` 適用と exhaustive_enums allow の撤去 | done | [apply-non-exhaustive-to-public-enums.md](./apply-non-exhaustive-to-public-enums.md) |
@@ -28,6 +29,7 @@ Directory: `docs/tasks`
 | TASK-034JgsGmcPdPRoeRTvicjW | 独立 per-channel planar バッファのゼロコピー借用 view/newtype の実装 | done | [implement-borrowed-planar-view.md](./implement-borrowed-planar-view.md) |
 | TASK-034Jf48NGXlyYcluiTnpOR | criterion ベンチ実装 | done | [implement-criterion-benchmarks.md](./implement-criterion-benchmarks.md) |
 | TASK-034JxOaMsaSwEIVfvU9MC8 | ruviform-exec スレッド優先度機構の実装 | done | [implement-exec-thread-priority.md](./implement-exec-thread-priority.md) |
+| TASK-034JNwTz163N6eT3EJfdaD | FrameRate 型の実装（TimeBase newtype・検証付きコンストラクタ・nominal_fps） | done | [implement-framerate-type.md](./implement-framerate-type.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | TASK-034J5KJgwtjFonTMQQIvpX | ruviform-media-core のデータモデル実装 | done | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
 | TASK-034JghH9i5p72LmOoWIPGe | ruviform-media-io 抽象境界クレート実装 | done | [implement-media-io-abstraction.md](./implement-media-io-abstraction.md) |
@@ -41,6 +43,7 @@ Directory: `docs/tasks`
 | TASK-034Jf3FazZdLzFAFTDXUa3 | スカラー参照カーネルと共通型 | done | [implement-simd-poc-scalar-kernels.md](./implement-simd-poc-scalar-kernels.md) |
 | TASK-034J5KR5ueilYgXdyyF4ZU | ruviform-video-core のデータモデル実装 | done | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | TASK-034JcD1UTgLlW1lRoWI1Ng | video-proc カーネル API 形状と YUV→RGB 変換カーネルの実装 | done | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
+| TASK-034JNwTZ8WalgowFahLc8E | Timecode API の FrameRate 移行（破壊的シグネチャ置換と呼び出し側移行） | done | [migrate-timecode-to-framerate.md](./migrate-timecode-to-framerate.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | TASK-034JfHz5u1uXcPkG8d8t4B | PoC 採否 ADR 確定（エビデンス集約・confirm/revise・accepted 遷移） | done | [poc-adr-finalize.md](./poc-adr-finalize.md) |
 | TASK-034JgsGOtyuy2MkLRLZQI5 | clack 系による CLAP binding PoC（最小ゲインプラグイン） | done | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
@@ -60,6 +63,7 @@ Directory: `docs/tasks`
 | TASK-034J6Pq9WM0XMkGqryZrvQ | フォローアップトリアージ由来の小修正（try_new・Custom 不変条件・丸め注記） | done | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | TASK-034J5KRwAtAqF1xu0moYuS | Issue #18 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
 | TASK-034Jgi4vWCuaMUu3POps1c | Issue #20 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-20.md](./sync-docs-and-verify-issue-20.md) |
+| TASK-034JNwUPMqjwynDi5XzU09 | ドキュメント同期と Issue #58 完了検証（AGENTS.md 型列挙・全量検証・監査） | done | [sync-docs-and-verify-issue-58.md](./sync-docs-and-verify-issue-58.md) |
 | TASK-034JgsIynX51YyqUrzgppO | プラグイン基盤のドキュメント同期と総合検証 | done | [sync-docs-and-verify-plugin-foundation.md](./sync-docs-and-verify-plugin-foundation.md) |
 | TASK-034JcD43sDKFAlPxYuAWmj | Issue #26 ドキュメント同期（baseline 採否表・AGENTS・README）と総合検証 | done | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
 | TASK-034JxObKHc0v3kUhnQiePv | RT 基盤ドキュメント同期と総合検証 | done | [sync-rt-foundation-docs-and-verify.md](./sync-rt-foundation-docs-and-verify.md) |

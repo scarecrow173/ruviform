@@ -4,7 +4,7 @@ type: "adr"
 status: "accepted"
 title: "FrameRate/TimeBase 意味分離と Timecode 拡張"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -34,6 +34,9 @@ relations:
     - "../specs/time-type-extension-framerate-timecode-rounding.md"
   derived-by:
     - "../designs/time-model-extension.md"
+    - "../plans/implement-issue-58-time-type-extension.md"
+    - "../test-specs/time-type-extension-contracts.md"
+    - "../tasks/migrate-timecode-to-framerate.md"
   verifies: []
   verified-by: []
   references:
