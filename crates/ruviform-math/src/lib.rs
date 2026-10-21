@@ -25,6 +25,10 @@
 #[doc(hidden)]
 pub mod simd_poc;
 
+/// SIMD-dispatched DSP kernels — Issue #53 production dispatch layer.
+/// See the module docs for the precision contract and RT guarantees.
+pub mod dsp;
+
 /// Returns the crate version string.
 ///
 /// # Examples

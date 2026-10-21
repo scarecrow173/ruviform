@@ -8,7 +8,7 @@
 //! (`i128`/`u128`); `f64` never appears here.
 
 use crate::error::{Error, Result};
-use crate::time::{MediaTime, TimeBase};
+use crate::time::{FrameRate, MediaTime};
 
 /// A SMPTE-style timecode label: `HH:MM:SS:FF`, plus the drop-frame flag.
 ///
@@ -52,25 +52,22 @@ impl Timecode {
     /// # Examples
     ///
     /// ```
-    /// use ruviform_media_core::{MediaTime, TimeBase, Timecode};
+    /// use ruviform_media_core::{FrameRate, MediaTime, Timecode};
     ///
-    /// let rate = TimeBase::new(25, 1).unwrap();
-    /// let frame_base = TimeBase::new(1, 25).unwrap();
+    /// let rate = FrameRate::from_fps(25).unwrap();
+    /// let frame_base = rate.frame_duration();
     /// // frame 90_000 @ 25 fps == exactly one hour of labels.
     /// let tc = Timecode::from_media_time(MediaTime::new(90_000, frame_base), rate).unwrap();
     /// assert_eq!((tc.hours(), tc.minutes(), tc.seconds(), tc.frames()), (1, 0, 0, 0));
     /// assert!(!tc.is_drop_frame());
     /// ```
-    pub fn from_media_time(t: MediaTime, frame_rate: TimeBase) -> Result<Self> {
+    pub fn from_media_time(t: MediaTime, frame_rate: FrameRate) -> Result<Self> {
         // Nominal label grid: the integer rate nearest to `frame_rate`,
         // rounded half-up. A rate rounding to zero is no usable grid.
-        let num = u64::from(frame_rate.numerator());
-        let den = u64::from(frame_rate.denominator());
-        let nominal = (2 * num + den) / (2 * den);
+        let nominal = u128::from(frame_rate.nominal_fps());
         if nominal == 0 {
             return Err(Error::InvalidValue("frame_rate"));
         }
-        let nominal = u128::from(nominal);
 
         let frames_total = elapsed_frames(t, frame_rate)?;
         let frames = frames_total % nominal;
@@ -116,17 +113,17 @@ impl Timecode {
     /// # Examples
     ///
     /// ```
-    /// use ruviform_media_core::{MediaTime, TimeBase, Timecode};
+    /// use ruviform_media_core::{FrameRate, MediaTime, Timecode};
     ///
-    /// let rate = TimeBase::new(30_000, 1_001).unwrap();
-    /// let frame_base = TimeBase::new(1_001, 30_000).unwrap();
+    /// let rate = FrameRate::new(30_000, 1_001).unwrap();
+    /// let frame_base = rate.frame_duration();
     /// // Frame 1_800 is the first frame of minute 1: labels 00/01 are
     /// // dropped, so it reads 00:01:00:02.
     /// let tc = Timecode::from_media_time_drop(MediaTime::new(1_800, frame_base), rate).unwrap();
     /// assert_eq!((tc.minutes(), tc.seconds(), tc.frames()), (1, 0, 2));
     /// assert!(tc.is_drop_frame());
     /// ```
-    pub fn from_media_time_drop(t: MediaTime, frame_rate: TimeBase) -> Result<Self> {
+    pub fn from_media_time_drop(t: MediaTime, frame_rate: FrameRate) -> Result<Self> {
         // SMPTE drop-frame labeling exists only for the NTSC-family rates:
         // (nominal label rate, labels dropped per skipped minute).
         let (nominal, dropped) = match (frame_rate.numerator(), frame_rate.denominator()) {
@@ -214,7 +211,7 @@ impl Timecode {
 
 /// Exact elapsed frame count `floor(t * frame_rate)` for a non-negative
 /// [`MediaTime`], in `i128`/`u128` integer math.
-fn elapsed_frames(t: MediaTime, rate: TimeBase) -> Result<u128> {
+fn elapsed_frames(t: MediaTime, rate: FrameRate) -> Result<u128> {
     if t.value() < 0 {
         // Negative (pre-roll) media time has no SMPTE label; reported as
         // an error rather than silently clamped.
@@ -240,15 +237,20 @@ fn narrow_u32(x: u128) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::time::TimeBase;
 
     fn base(numerator: u32, denominator: u32) -> TimeBase {
         TimeBase::new(numerator, denominator).unwrap()
     }
 
+    fn rate(numerator: u32, denominator: u32) -> FrameRate {
+        FrameRate::new(numerator, denominator).unwrap()
+    }
+
     #[test]
     fn non_drop_labels() {
-        let rate = base(25, 1);
-        let frame_base = base(1, 25);
+        let rate = rate(25, 1);
+        let frame_base = rate.frame_duration();
         let tc = Timecode::from_media_time(MediaTime::new(90_000, frame_base), rate).unwrap();
         assert_eq!(
             (tc.hours(), tc.minutes(), tc.seconds(), tc.frames()),
@@ -269,8 +271,8 @@ mod tests {
 
     #[test]
     fn drop_labels_2997() {
-        let rate = base(30_000, 1_001);
-        let frame_base = base(1_001, 30_000);
+        let rate = rate(30_000, 1_001);
+        let frame_base = rate.frame_duration();
         let label = |frames: i64| {
             Timecode::from_media_time_drop(MediaTime::new(frames, frame_base), rate).unwrap()
         };
@@ -308,8 +310,8 @@ mod tests {
 
     #[test]
     fn drop_labels_5994() {
-        let rate = base(60_000, 1_001);
-        let frame_base = base(1_001, 60_000);
+        let rate = rate(60_000, 1_001);
+        let frame_base = rate.frame_duration();
         let label = |frames: i64| {
             Timecode::from_media_time_drop(MediaTime::new(frames, frame_base), rate).unwrap()
         };
@@ -335,15 +337,15 @@ mod tests {
     fn drop_requires_ntsc_rate() {
         let t = MediaTime::ZERO;
         assert_eq!(
-            Timecode::from_media_time_drop(t, base(25, 1)),
+            Timecode::from_media_time_drop(t, rate(25, 1)),
             Err(Error::UnsupportedDropFrameRate)
         );
         assert_eq!(
-            Timecode::from_media_time_drop(t, base(24, 1)),
+            Timecode::from_media_time_drop(t, rate(24, 1)),
             Err(Error::UnsupportedDropFrameRate)
         );
         // A non-normalized spelling normalizes to 30000/1001 and works.
-        let tc = Timecode::from_media_time_drop(t, base(60_000, 2_002)).unwrap();
+        let tc = Timecode::from_media_time_drop(t, rate(60_000, 2_002)).unwrap();
         assert!(tc.is_drop_frame());
     }
 
@@ -351,11 +353,11 @@ mod tests {
     fn negative_time_is_rejected() {
         let neg = MediaTime::new(-1, base(1, 1));
         assert_eq!(
-            Timecode::from_media_time(neg, base(25, 1)),
+            Timecode::from_media_time(neg, rate(25, 1)),
             Err(Error::InvalidValue("negative time"))
         );
         assert_eq!(
-            Timecode::from_media_time_drop(neg, base(30_000, 1_001)),
+            Timecode::from_media_time_drop(neg, rate(30_000, 1_001)),
             Err(Error::InvalidValue("negative time"))
         );
     }
@@ -364,7 +366,7 @@ mod tests {
     fn sub_fps_rate_is_rejected() {
         // A rate rounding to zero cannot form a label grid.
         assert_eq!(
-            Timecode::from_media_time(MediaTime::ZERO, base(1, 1_000)),
+            Timecode::from_media_time(MediaTime::ZERO, rate(1, 1_000)),
             Err(Error::InvalidValue("frame_rate"))
         );
     }
