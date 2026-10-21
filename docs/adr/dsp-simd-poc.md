@@ -4,7 +4,7 @@ type: "adr"
 status: "proposed"
 title: "DSP/SIMD PoC 評価アプローチ"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -29,7 +29,8 @@ relations:
   refined-by: []
   derives-from:
     - "../discovery/dsp-simd-poc-issue-19.md"
-  derived-by: []
+  derived-by:
+    - "dsp-simd-backend-adoption.md"
   verifies: []
   verified-by: []
   references:

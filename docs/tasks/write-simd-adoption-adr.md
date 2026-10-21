@@ -1,10 +1,10 @@
 ---
 id: "TASK-034Jf4g6600XCHwXaEZG26"
 type: "task"
-status: "todo"
+status: "done"
 title: "採否 ADR"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: []
 relations:
   source:
