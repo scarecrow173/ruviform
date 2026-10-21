@@ -52,15 +52,15 @@ description = "Build workspace with `cargo build --workspace` (dev profile; writ
 run = "cargo build --workspace"
 
 # RT contract tests and benchmarks share the dev/bench profiles (no -ci
-# variants yet). `test-rt` selects the `rt_*` RT contract tests (added in
-# Issues #18/#21) by the `rt_` name prefix via a libtest name filter; a
-# zero-match run still exits successfully, so it is skip-equivalent if
-# the naming-convention tests are ever absent. `bench` remains a no-op
-# entry point until benchmarks are introduced (criterion is not yet a
-# dependency).
+# variants yet). `test-rt` selects the `rt_*`-prefixed RT contract tests by name
+# filter (added in Issues #18/#21, e.g. `rt_output_callback_path_allocates_nothing`);
+# a zero-match filter still exits successfully, so it stays meaningful as RT
+# tests grow and degrades to a skip-equivalent pass if they are ever absent.
+# `bench` is a no-op entry point until benchmarks are introduced
+# (criterion is not yet a dependency).
 
 [tasks.test-rt]
-description = "Run RT contract tests with `cargo test --workspace rt_` name filter (dev/test profile; zero matches = skip until `rt_*` tests exist; writes only target/)"
+description = "Run RT contract tests with `cargo test --workspace rt_` name filter (dev/test profile; zero matches still exit successfully; writes only target/)"
 run = "cargo test --workspace rt_"
 
 [tasks.bench]

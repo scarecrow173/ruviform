@@ -6,6 +6,7 @@ Directory: `docs/impl/ir`
 | --- | --- | --- | --- |
 | IMPL-034IemQE6RlhuBXtirqKVX | Add manual CI workflow | completed | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
 | IMPL-034J6ZxczGEFBgX52lYD1y | Apply non_exhaustive to public enums | completed | [apply-non-exhaustive-to-public-enums.md](./apply-non-exhaustive-to-public-enums.md) |
+| IMPL-034JC0drffSR2IoiSS2k4M | Finalize backend ADR and sync workspace ledgers | completed | [finalize-backend-adr-and-sync-workspace-ledgers.md](./finalize-backend-adr-and-sync-workspace-ledgers.md) |
 | IMPL-034IwOgrHkNf8v0cnrOpIl | Baseline placeholder sweep | completed | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
 | IMPL-034Ie9ddczoaNNz2v7zAYp | Create minimal workspace and smoke test | completed | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | IMPL-034JfEIKHmfeyIZETbwKfD | Create video-proc crate skeleton | completed | [create-video-proc-crate-skeleton.md](./create-video-proc-crate-skeleton.md) |
@@ -13,6 +14,8 @@ Directory: `docs/impl/ir`
 | IMPL-034JftzSzGUrGW76DpIyVM | Document video-core ownership contract | completed | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
 | IMPL-034J7bMHds4IPYPvoxiMZR | Fix time arithmetic saturation | completed | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
 | IMPL-034J5L4kgMP7Hjh57OhJcs | Implement audio-core data model | completed | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
+| IMPL-034JxNTyasfMjdgGXnvVPY | Implement audio-core device port | completed | [implement-audio-core-device-port.md](./implement-audio-core-device-port.md) |
+| IMPL-034JymdvDZaaZVzUnlu3RS | Implement audio-device cpal adapter | completed | [implement-audio-device-cpal-adapter.md](./implement-audio-device-cpal-adapter.md) |
 | IMPL-034K7dWqYmSaPhOnIaPc02 | Implement io-symphonia backend PoC | completed | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | IMPL-034J5L3UVnQerTiQRlC7w3 | Implement media-core data model | completed | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
 | IMPL-034JxNThv4gsW2IpbkYmK4 | Implement media-io abstraction | completed | [implement-media-io-abstraction.md](./implement-media-io-abstraction.md) |
@@ -24,6 +27,7 @@ Directory: `docs/impl/ir`
 | IMPL-034IwXoGhCxs4EAP3HjoQF | Review config files minimal edits | completed | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | IMPL-034Ix98fGRcsRNYZ3EZnZJ | Rewrite AGENTS for Ruviform | completed | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | IMPL-034IwXvs801LZXZlip1tZ6 | Rewrite README for Ruviform | completed | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
+| IMPL-034JywI99DQ33dDEZVnnqC | Run device PoC examples and record experiment log | completed | [run-device-poc-examples-and-record-experiment-log.md](./run-device-poc-examples-and-record-experiment-log.md) |
 | IMPL-034Ixn011MsolyFpmBB87l | Run placeholder sweep and verification | completed | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
 | IMPL-034Jy2QPH4SUwoep9wQBW2 | ruviform-rt 中核型の実装 | completed | [ruviform-rt.md](./ruviform-rt.md) |
 | IMPL-034J7u3ZaCkeiCc8zzuQwd | Small fixes from followup triage | completed | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |

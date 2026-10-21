@@ -503,7 +503,53 @@ pub struct AudioBufferViewMut<'a, S: Sample = f32> {
     frames: usize,
 }
 
-impl<S: Sample> AudioBufferViewMut<'_, S> {
+impl<'a, S: Sample> AudioBufferViewMut<'a, S> {
+    /// Builds a mutable view over `data`, a channel-major slab with
+    /// `data.len() == channels * frames`. Borrow only — no allocation.
+    ///
+    /// This is the constructor adapters use to frame a pre-allocated
+    /// scratch slab with each device callback's actual frame count
+    /// (which may vary when the backend chooses the buffer size — see
+    /// [`BufferSize::Default`](crate::device::BufferSize::Default)).
+    /// `channels` is a plain count because views deliberately carry no
+    /// [`ChannelLayout`].
+    ///
+    /// **RT contract:** RT-suitable — borrow only, no allocation.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidValue`] when `channels == 0`, when
+    /// `channels * frames` overflows `usize`, or when
+    /// `data.len() != channels * frames`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_audio_core::AudioBufferViewMut;
+    ///
+    /// let mut slab = [0.0_f32; 6]; // 2 channels × 3 frames
+    /// let mut view = AudioBufferViewMut::try_new(&mut slab, 2, 3).unwrap();
+    /// view.channel_mut(1).unwrap()[0] = 0.5;
+    /// assert_eq!(view.data()[3], 0.5);
+    /// ```
+    pub fn try_new(data: &'a mut [S], channels: usize, frames: usize) -> Result<Self> {
+        if channels == 0 {
+            return Err(Error::InvalidValue("channels"));
+        }
+        // An overflowing shape can never equal the slice length.
+        let expected = channels
+            .checked_mul(frames)
+            .ok_or(Error::InvalidValue("frames"))?;
+        if data.len() != expected {
+            return Err(Error::InvalidValue("data"));
+        }
+        Ok(Self {
+            data,
+            channels,
+            frames,
+        })
+    }
+
     /// Channel count of the viewed buffer.
     ///
     /// **RT contract:** RT-suitable — pure, allocation-free.
@@ -687,6 +733,67 @@ mod tests {
             .unwrap();
         assert_eq!(buffer.channel(0), Some(&[7.0, 8.0][..]));
         assert_eq!(buffer.channel(1), Some(&[70.0, 80.0][..]));
+    }
+
+    #[test]
+    fn view_mut_try_new_borrows_a_channel_major_slab() {
+        let mut slab = [0.0_f32; 6];
+        {
+            let mut view = AudioBufferViewMut::try_new(&mut slab, 2, 3).unwrap();
+            assert_eq!(view.channels(), 2);
+            assert_eq!(view.frames(), 3);
+            assert_eq!(view.data(), &[0.0; 6]);
+            assert_eq!(view.channel(0), Some(&[0.0; 3][..]));
+            assert_eq!(view.channel(2), None);
+            view.channel_mut(1).unwrap()[0] = 9.0;
+        }
+        // The view only borrows: the write lands in the caller's slab at
+        // the channel-major offset (`channel * frames`).
+        assert_eq!(slab, [0.0, 0.0, 0.0, 9.0, 0.0, 0.0]);
+        // Zero frames stays legal — a zero-length slab.
+        let mut empty = [0.0_f32; 0];
+        assert!(AudioBufferViewMut::try_new(&mut empty, 2, 0).is_ok());
+    }
+
+    #[test]
+    fn view_mut_try_new_rejects_invalid_shapes() {
+        let mut slab = [0.0_f32; 6];
+        // Zero channels cannot be expressed by a view.
+        assert_eq!(
+            AudioBufferViewMut::try_new(&mut slab, 0, 3).map(|_| ()),
+            Err(Error::InvalidValue("channels"))
+        );
+        // `data.len()` must be exactly `channels * frames`.
+        assert_eq!(
+            AudioBufferViewMut::try_new(&mut slab, 2, 2).map(|_| ()),
+            Err(Error::InvalidValue("data"))
+        );
+        assert_eq!(
+            AudioBufferViewMut::try_new(&mut slab, 3, 3).map(|_| ()),
+            Err(Error::InvalidValue("data"))
+        );
+        // An overflowing shape can never match the slice length.
+        assert_eq!(
+            AudioBufferViewMut::try_new(&mut slab, usize::MAX, usize::MAX).map(|_| ()),
+            Err(Error::InvalidValue("frames"))
+        );
+    }
+
+    #[test]
+    fn rt_view_mut_try_new_feeds_interleaved_boundary_write() {
+        // Adapter-shaped usage: build a bounded per-callback view on a
+        // pre-allocated scratch slab, fill it through the view, then
+        // pack to interleaved `dst` — no allocation involved.
+        let mut scratch = [0.0_f32; 4];
+        let mut dst = [0.0_f32; 4];
+        {
+            let mut view = AudioBufferViewMut::try_new(&mut scratch, 2, 2).unwrap();
+            view.channel_mut(0).unwrap().copy_from_slice(&[1.0, 2.0]);
+            view.channel_mut(1).unwrap().copy_from_slice(&[10.0, 20.0]);
+            view.copy_to_interleaved(&mut dst).unwrap();
+        }
+        // Planar [1, 2 | 10, 20] packs to frame-major [1, 10, 2, 20].
+        assert_eq!(dst, [1.0, 10.0, 2.0, 20.0]);
     }
 
     #[test]

@@ -5,7 +5,8 @@
 //! [`SpeakerMaskSet`]), stream-level
 //! format description ([`AudioFormat`], [`SampleFormat`]) and the
 //! channel-major contiguous planar [`AudioBuffer`] with its borrowed
-//! views ([`AudioBufferView`], [`AudioBufferViewMut`], [`BufferSpec`]).
+//! views ([`AudioBufferView`], [`AudioBufferViewMut`], [`BufferSpec`]),
+//! and the device boundary ports ([`device`]).
 //!
 //! Planar `f32` is the canonical processing format; interleaved sample
 //! order exists only at device/file boundaries — through
@@ -14,14 +15,22 @@
 //!
 //! Holds no processing, I/O, or device implementations. `ruviform-audio`
 //! (engine) and `ruviform-audio-device` (adapter) connect through the
-//! device boundary defined in a later issue, structurally eliminating a
-//! direct engine ↔ adapter dependency.
+//! device boundary ports defined in [`device`], structurally eliminating
+//! a direct engine ↔ adapter dependency. The ports live in their own
+//! namespace (`ruviform_audio_core::device::*`) — deliberately not
+//! re-exported at the crate root, since the module bundles many items
+//! as one named "boundary" (see
+//! `docs/designs/audio-device-boundary-and-poc.md`).
 //!
 //! ## Allowed dependency layers
 //!
 //! Primitives (`ruviform-math`, `ruviform-rt`) and `ruviform-media-core`.
-//! Actually used: `ruviform-media-core` ([`TimeBase`], [`MediaTime`],
-//! [`Rounding`], [`Error`]/[`Result`]). `ruviform-audio-core` must not
+//! Actually used: `ruviform-media-core`
+//! ([`TimeBase`](ruviform_media_core::TimeBase),
+//! [`MediaTime`](ruviform_media_core::MediaTime),
+//! [`Rounding`](ruviform_media_core::Rounding),
+//! [`Error`](ruviform_media_core::Error)/[`Result`](ruviform_media_core::Result)).
+//! `ruviform-audio-core` must not
 //! depend on `ruviform-video-core` (same-tier dependency is prohibited).
 //!
 //! ## RT contract
@@ -52,6 +61,7 @@
 #![allow(clippy::exhaustive_structs)]
 
 mod buffer;
+pub mod device;
 mod format;
 mod layout;
 mod sample;
@@ -151,5 +161,343 @@ mod tests {
             SampleIndex::from_media_time(time, rate, Rounding::NearestEven),
             Ok(index)
         );
+    }
+
+    /// Compile-level contract tests for the [`crate::device`] port
+    /// (design `audio-device-boundary-and-poc.md` 検証設計節): object
+    /// safety, `Send` through trait objects, the HRTB coercion of
+    /// `OutputDataCallback`, `Copy`/`Clone` bounds on the value types
+    /// and the `DeviceError` contract. `StubEnumerator`/`StubDevice`/
+    /// `StubStream` double as the mock-backend check — a non-backend
+    /// implementation can implement the ports and drive the full flow
+    /// through `Box<dyn …>` without touching hardware.
+    mod device_contract {
+        use super::*;
+        use crate::device::{
+            BufferSize, DEVICE_CLOCK_TIMEBASE, Device, DeviceEnumerator, DeviceError, DeviceId,
+            DeviceResult, OutputCallbackInfo, OutputDataCallback, OutputErrorCallback,
+            OutputStream, OutputStreamConfig, OutputTimestamp, SupportedBufferSize,
+            SupportedOutputFormat,
+        };
+        use ruviform_media_core::MediaTime;
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        fn stub_format() -> AudioFormat {
+            AudioFormat {
+                sample_rate: SampleRate::new(48_000).unwrap(),
+                layout: ChannelLayout::Stereo,
+                sample_format: SampleFormat::F32,
+            }
+        }
+
+        struct StubStream {
+            format: AudioFormat,
+        }
+
+        impl OutputStream for StubStream {
+            fn start(&self) -> DeviceResult<()> {
+                Ok(())
+            }
+
+            fn stop(&self) -> DeviceResult<()> {
+                Ok(())
+            }
+
+            fn format(&self) -> AudioFormat {
+                self.format
+            }
+
+            fn buffer_size(&self) -> DeviceResult<BufferSize> {
+                Ok(BufferSize::Fixed(512))
+            }
+
+            fn now(&self) -> DeviceResult<MediaTime> {
+                Ok(MediaTime::new(0, DEVICE_CLOCK_TIMEBASE))
+            }
+        }
+
+        struct StubDevice {
+            format: AudioFormat,
+        }
+
+        impl Device for StubDevice {
+            fn name(&self) -> DeviceResult<String> {
+                Ok("stub-device".to_owned())
+            }
+
+            fn id(&self) -> DeviceResult<Option<DeviceId>> {
+                Ok(Some(DeviceId::new("stub-0".to_owned())))
+            }
+
+            fn default_output_format(&self) -> DeviceResult<AudioFormat> {
+                Ok(self.format)
+            }
+
+            fn supported_output_formats(&self) -> DeviceResult<Vec<SupportedOutputFormat>> {
+                Ok(vec![SupportedOutputFormat {
+                    channels: 2,
+                    min_sample_rate: 44_100,
+                    max_sample_rate: 48_000,
+                    buffer_size: SupportedBufferSize::Range { min: 32, max: 1024 },
+                    sample_format: SampleFormat::F32,
+                }])
+            }
+
+            fn open_output_stream(
+                &self,
+                config: &OutputStreamConfig,
+                mut data_callback: OutputDataCallback,
+                _error_callback: OutputErrorCallback,
+            ) -> DeviceResult<Box<dyn OutputStream>> {
+                // Fire one scripted callback on a scratch slab — the
+                // adapter-shaped per-callback `try_new` view.
+                let channels = config.format.layout.channels() as usize;
+                let frames = 4;
+                let mut scratch = vec![0.0_f32; channels * frames];
+                let view = AudioBufferViewMut::try_new(&mut scratch, channels, frames)
+                    .map_err(|_| DeviceError::Backend("stub_view"))?;
+                data_callback(
+                    view,
+                    OutputCallbackInfo {
+                        timestamp: OutputTimestamp {
+                            callback: MediaTime::new(0, DEVICE_CLOCK_TIMEBASE),
+                            playback: None,
+                        },
+                    },
+                );
+                Ok(Box::new(StubStream {
+                    format: config.format,
+                }))
+            }
+        }
+
+        struct StubEnumerator;
+
+        impl DeviceEnumerator for StubEnumerator {
+            fn output_devices(&self) -> DeviceResult<Vec<Box<dyn Device>>> {
+                Ok(vec![Box::new(StubDevice {
+                    format: stub_format(),
+                })])
+            }
+
+            fn default_output_device(&self) -> DeviceResult<Option<Box<dyn Device>>> {
+                Ok(Some(Box::new(StubDevice {
+                    format: stub_format(),
+                })))
+            }
+        }
+
+        /// `Box<dyn …>` composability + `Send` bounds on the port
+        /// traits and the exchanged value types.
+        #[test]
+        fn port_traits_compose_as_send_boxed_trait_objects() {
+            // Object safety: the ports are usable behind `&dyn …`
+            // (no generics, no `Self` returns, no associated types).
+            fn borrow_objects(_: &dyn DeviceEnumerator, _: &dyn Device, _: &dyn OutputStream) {}
+
+            // `Send` reaches through the trait objects — `Device` and
+            // `OutputStream` are `Send` supertrait-bound.
+            // `DeviceEnumerator` deliberately carries no `Send` bound
+            // (control-thread object); nothing asserts it either way.
+            fn requires_send<T: Send>() {}
+            requires_send::<Box<dyn Device>>();
+            requires_send::<Box<dyn OutputStream>>();
+            requires_send::<OutputDataCallback>();
+            requires_send::<OutputErrorCallback>();
+            requires_send::<DeviceError>();
+            requires_send::<OutputStreamConfig>();
+            requires_send::<BufferSize>();
+            requires_send::<SupportedBufferSize>();
+            requires_send::<SupportedOutputFormat>();
+            requires_send::<DeviceId>();
+            requires_send::<OutputTimestamp>();
+            requires_send::<OutputCallbackInfo>();
+
+            let enumerator: Box<dyn DeviceEnumerator> = Box::new(StubEnumerator);
+            let devices = enumerator.output_devices().unwrap();
+            assert_eq!(devices.len(), 1);
+            let device = enumerator.default_output_device().unwrap().unwrap();
+            let stream = device
+                .open_output_stream(
+                    &OutputStreamConfig {
+                        format: stub_format(),
+                        buffer_size: BufferSize::Default,
+                    },
+                    Box::new(|_out, _info| {}),
+                    Box::new(|_error| {}),
+                )
+                .unwrap();
+            borrow_objects(&*enumerator, &*device, &*stream);
+        }
+
+        /// A plain `FnMut(AudioBufferViewMut<'_, f32>,
+        /// OutputCallbackInfo) + Send + 'static` closure coerces onto
+        /// `OutputDataCallback`'s `for<'a>` bound (HRTB).
+        #[test]
+        fn output_data_callback_accepts_hrtb_closure() {
+            let frames_seen = Arc::new(AtomicUsize::new(0));
+            let seen = Arc::clone(&frames_seen);
+            let mut cb: OutputDataCallback = Box::new(
+                move |out: AudioBufferViewMut<'_, f32>, info: OutputCallbackInfo| {
+                    seen.fetch_add(out.frames(), Ordering::Relaxed);
+                    assert_eq!(info.timestamp.callback.base(), DEVICE_CLOCK_TIMEBASE);
+                },
+            );
+            // Drive the one closure from stack slabs of different
+            // lifetimes — the `for<'a>` bound is what makes a single
+            // callback serve every borrow.
+            for frames in [4_usize, 2] {
+                let mut scratch = vec![0.0_f32; 2 * frames];
+                cb(
+                    AudioBufferViewMut::try_new(&mut scratch, 2, frames).unwrap(),
+                    OutputCallbackInfo {
+                        timestamp: OutputTimestamp {
+                            callback: MediaTime::new(0, DEVICE_CLOCK_TIMEBASE),
+                            playback: Some(MediaTime::new(1_000_000, DEVICE_CLOCK_TIMEBASE)),
+                        },
+                    },
+                );
+            }
+            assert_eq!(frames_seen.load(Ordering::Relaxed), 6);
+        }
+
+        /// `DeviceError`: `Copy` + `Display` + `core::error::Error` —
+        /// the allocation-free normalized error contract.
+        #[test]
+        fn device_error_is_copy_display_and_std_error() {
+            fn requires_copy<T: Copy>() {}
+            fn requires_clone<T: Clone>() {}
+            fn requires_std_error<T: core::error::Error>() {}
+
+            requires_copy::<DeviceError>();
+            requires_copy::<OutputTimestamp>();
+            requires_copy::<OutputCallbackInfo>();
+            requires_copy::<OutputStreamConfig>();
+            requires_copy::<BufferSize>();
+            requires_copy::<SupportedBufferSize>();
+            // `Clone`-only value types (growth headroom).
+            requires_clone::<DeviceId>();
+            requires_clone::<SupportedOutputFormat>();
+
+            // Standard error contract — usable as `&dyn Error`.
+            requires_std_error::<DeviceError>();
+            let as_std: &dyn core::error::Error = &DeviceError::StreamInvalidated;
+            assert_ne!(as_std.to_string(), "");
+
+            // `Copy` semantics: the original stays usable.
+            let original = DeviceError::Backend("device_changed");
+            let copied = original;
+            assert_eq!(original, copied);
+
+            // Every variant produces non-empty fixed text; `Backend`
+            // emits its classification name verbatim.
+            for error in [
+                DeviceError::DeviceNotFound,
+                DeviceError::DeviceBusy,
+                DeviceError::UnsupportedConfig,
+                DeviceError::Unsupported,
+                DeviceError::Xrun,
+                DeviceError::RealtimeDenied,
+                DeviceError::StreamInvalidated,
+                DeviceError::Backend("backend_failure"),
+            ] {
+                assert_ne!(error.to_string(), "");
+            }
+            assert_eq!(
+                DeviceError::Backend("device_changed").to_string(),
+                "device_changed"
+            );
+
+            // `DeviceResult` is the module's `Result` alias.
+            let failure: DeviceResult<()> = Err(DeviceError::Xrun);
+            assert_eq!(failure, Err(DeviceError::Xrun));
+        }
+
+        /// The public enums carry the intended variants.
+        ///
+        /// `#[non_exhaustive]` itself is a compile-time property that is
+        /// invisible to `match` inside the defining crate — the
+        /// `clippy::exhaustive_enums` lint gate (`mise run lint`,
+        /// `-D warnings`) enforces it on every public enum. These
+        /// assertions pin the variants and value semantics the gate
+        /// protects.
+        #[test]
+        fn public_enums_expose_the_intended_variants() {
+            assert_eq!(BufferSize::default(), BufferSize::Default);
+            assert_ne!(BufferSize::Default, BufferSize::Fixed(0));
+            assert!(matches!(
+                SupportedBufferSize::Unknown,
+                SupportedBufferSize::Unknown
+            ));
+            let range = SupportedBufferSize::Range { min: 32, max: 1024 };
+            assert!(matches!(range, SupportedBufferSize::Range { min, max } if min <= max));
+            assert!(matches!(
+                DeviceError::Backend("xrun_minor"),
+                DeviceError::Backend("xrun_minor")
+            ));
+        }
+
+        /// The mock-backend walk: enumerate → default → describe →
+        /// open → scripted callback → start/stop/format/now, entirely
+        /// through `Box<dyn …>` — the replaceability contract.
+        #[test]
+        fn mock_backend_walks_the_port_flow() {
+            let enumerator: Box<dyn DeviceEnumerator> = Box::new(StubEnumerator);
+
+            let devices = enumerator.output_devices().unwrap();
+            assert_eq!(devices.len(), 1);
+            let listed = &*devices[0];
+            assert_eq!(listed.name().unwrap(), "stub-device");
+            assert_eq!(
+                listed.id().unwrap(),
+                Some(DeviceId::new("stub-0".to_owned()))
+            );
+            assert_eq!(listed.default_output_format().unwrap(), stub_format());
+            let space = listed.supported_output_formats().unwrap();
+            assert_eq!(space.len(), 1);
+            assert_eq!(space[0].channels, 2);
+            assert_eq!(
+                space[0].buffer_size,
+                SupportedBufferSize::Range { min: 32, max: 1024 }
+            );
+
+            let device = enumerator.default_output_device().unwrap().unwrap();
+            let frames_seen = Arc::new(AtomicUsize::new(0));
+            let errors_seen = Arc::new(AtomicUsize::new(0));
+            let seen = Arc::clone(&frames_seen);
+            let err_seen = Arc::clone(&errors_seen);
+            let config = OutputStreamConfig {
+                format: device.default_output_format().unwrap(),
+                buffer_size: BufferSize::Default,
+            };
+            let stream: Box<dyn OutputStream> = device
+                .open_output_stream(
+                    &config,
+                    Box::new(move |out: AudioBufferViewMut<'_, f32>, _info| {
+                        seen.fetch_add(out.frames(), Ordering::Relaxed);
+                    }),
+                    Box::new(move |_error: DeviceError| {
+                        err_seen.fetch_add(1, Ordering::Relaxed);
+                    }),
+                )
+                .unwrap();
+
+            stream.start().unwrap();
+            assert_eq!(stream.format(), config.format);
+            assert_eq!(stream.buffer_size().unwrap(), BufferSize::Fixed(512));
+            assert_eq!(
+                stream.now().unwrap(),
+                MediaTime::new(0, DEVICE_CLOCK_TIMEBASE)
+            );
+            stream.stop().unwrap();
+            drop(stream);
+
+            // The stub fired its scripted 4-frame callback once.
+            assert_eq!(frames_seen.load(Ordering::Relaxed), 4);
+            assert_eq!(errors_seen.load(Ordering::Relaxed), 0);
+        }
     }
 }
