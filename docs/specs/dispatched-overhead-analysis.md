@@ -84,11 +84,11 @@ relations:
 
 ## Acceptance Criteria
 
-- [ ] 低負荷環境での再計測データ（生データ jsonl + 環境メタデータ）が `docs/impl/exp/` に記録されている
-- [ ] `dispatch!` per-call 素コストがプローブ計測で定量されている
-- [ ] 軽量カーネルの劣後比率が N 依存モデルまたはラン間比較で「固定コスト vs ノイズ」に分類されている
-- [ ] 採否 ADR の検証項目「`fearless_dispatched` の軽量カーネル劣後が per-call dispatch コストかノイズかの分離」に回答する記述がある
-- [ ] #53 への設計示唆（prepare 固定の要否・トークン繰り上げ方針）が記録されている
+- [x] 低負荷環境での再計測データ（生データ jsonl + 環境メタデータ）が `docs/impl/exp/` に記録されている
+- [x] `dispatch!` per-call 素コストがプローブ計測で定量されている
+- [x] 軽量カーネルの劣後比率が N 依存モデルまたはラン間比較で「固定コスト vs ノイズ」に分類されている
+- [x] 採否 ADR の検証項目「`fearless_dispatched` の軽量カーネル劣後が per-call dispatch コストかノイズかの分離」に回答する記述がある
+- [x] #53 への設計示唆（prepare 固定の要否・トークン繰り上げ方針）が記録されている
 
 ## Open Questions
 

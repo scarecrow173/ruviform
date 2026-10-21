@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JPwYHzq8qU5fxLnMLlO"
 type: "task"
-status: "todo"
+status: "done"
 title: "低負荷再計測と生データ収集"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -73,3 +73,11 @@ relations:
 ## Verification
 
 - [x] 各 run 完走・計測ケース数記録
+
+## Completion Notes
+
+- 低負荷条件で 3 run 計測（計測中 OS CPU 9–20%・プロセス ~390・実行中エージェントは本セッションのみ。前回は並行エージェント実働 + コミット逼迫の高負荷）。
+- run 構成: `dispatch_probe` + `add`/`scale`/`clamp_unit`/`fade` フィルタ実行 ×3。各 261 ケース完走・クラッシュなし。
+- 生データ: `docs/impl/exp/data/dispatched-overhead-20261021-01/02/03.jsonl`（criterion estimates → `tmp/bench56/collect.py` で jsonl 化）。
+- プローブ値: `dispatch_noop` 1.29ns（3 run で ±0.005ns）・`level_new`/`token_avx2` ≈0.43ns — per-call 素コスト定量完了。
+- run 間分散 |Δ%|: p50 4.0%・p90 30.7%・p99 91.9%（前回 p50 1.8%・p90 25.7%・p99 237.7% より極端値は改善、分散は依然有意 → 構造的分離で結論）。

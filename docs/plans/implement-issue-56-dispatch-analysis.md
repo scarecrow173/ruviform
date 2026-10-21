@@ -74,10 +74,10 @@ relations:
 ## Implementation Sequence
 
 - [x] 低負荷環境の確認（CPU 負荷・プロセス状況を記録）— 実測 1% 負荷で確認済み
-- [ ] `dispatch_probe` ベンチ追加（公開 API のみ・unsafe なし）
-- [ ] elementwise 軽量カーネル（add/scale/clamp_unit/fade）の filtered 再計測 × 複数 run + プローブ測定
-- [ ] 生データ収集・分散統計・Δ(N) 解析
-- [ ] レポート記述（分類結論 + #53 示唆）・ADR 検証項目の完了反映
+- [x] `dispatch_probe` ベンチ追加（公開 API のみ・unsafe なし）
+- [x] elementwise 軽量カーネル（add/scale/clamp_unit/fade）の filtered 再計測 × 複数 run + プローブ測定
+- [x] 生データ収集・分散統計・Δ(N) 解析
+- [x] レポート記述（分類結論 + #53 示唆）・ADR 検証項目の完了反映
 
 ## Dependencies and Risks
 
@@ -93,11 +93,11 @@ relations:
 
 ## Verification
 
-- [ ] `cargo bench -p ruviform-math -- dispatch_probe` が実行され値を返す
-- [ ] elementwise 軽量カーネルが複数 run で再計測され分散統計がある
-- [ ] 結論分類（固定コスト/ノイズ/混在）が2系統の証拠で支持される
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`bench-smoke` パス
-- [ ] doc 監査で本チェーン起因 findings 0
+- [x] `cargo bench -p ruviform-math -- dispatch_probe` が実行され値を返す
+- [x] elementwise 軽量カーネルが複数 run で再計測され分散統計がある
+- [x] 結論分類（固定コスト/ノイズ/混在）が2系統の証拠で支持される
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`bench-smoke` パス
+- [x] doc 監査で本チェーン起因 findings 0
 
 ## Test Spec Evidence
 

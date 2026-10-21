@@ -99,6 +99,6 @@ elementwise 軽量カーネル（`add`・`scale`・`clamp_unit`・`fade`）で `
 
 ## Verification Notes
 
-- [ ] `dispatch_probe` ベンチがビルド・実行される
-- [ ] 複数 run の分散統計が計算されている
-- [ ] 判定（固定コスト/ノイズ/混在）が2系統の証拠で支持されている
+- [x] `dispatch_probe` ベンチがビルド・実行される
+- [x] 複数 run の分散統計が計算されている
+- [x] 判定（固定コスト/ノイズ/混在）が2系統の証拠で支持されている

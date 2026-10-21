@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JPwZ8htMzYNPNgOceEI"
 type: "task"
-status: "todo"
+status: "done"
 title: "分析・レポート記述・文書整合"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -78,3 +78,10 @@ relations:
 
 - [x] `mise run fmt-check`/`check`/`lint`/`test`/`bench-smoke` パス
 - [x] doc 監査で本チェーン起因 findings 0
+
+## Completion Notes
+
+- 分類結論: **混在（per-call 固定コスト実在 + 大サイズ帯はノイズ）**。2 系統証拠の一致: (a) `dispatch_noop` 1.29ns 安定・(b) 小 N で Δ=+6-7ns（add、run 間 ±0.1-1.5ns）安定・大 N で符号反転する ±20-70ns 散乱。
+- 前回の @1024 劣後（add 0.62x・scale 0.66x）は低負荷で 0.91-0.97x に回復 — ノイズ確定。小サイズ回帰（0.48-0.90x）は実在。
+- レポート: `docs/impl/exp/dispatched-overhead-20261021.md`。#53 示唆（prepare 固定の正当性・小 N 軽量カーネルのスカラールーティング・dispatched 大サイズ劣化なし）を記録。
+- `docs/adr/dsp-simd-backend-adoption.md` 検証項目を実測回答で完了化 + MSRV 項目を #52 実績で更新。
