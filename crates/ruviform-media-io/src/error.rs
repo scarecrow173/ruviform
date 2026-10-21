@@ -82,7 +82,7 @@ impl fmt::Display for ErrorKind {
 /// Media-I/O error: a normalized [`ErrorKind`] classification plus an
 /// optional type-erased backend diagnostic.
 ///
-/// Backend-specific causes (symphonia, `FFmpeg`, OS I/O, …) are boxed and
+/// Backend-specific causes (codec libraries, OS I/O, …) are boxed and
 /// reachable only through [`std::error::Error::source`] — the public
 /// surface stays free of external error types. `Error` is `Send`: it
 /// may cross the I/O/decode-thread boundary like any other data type.

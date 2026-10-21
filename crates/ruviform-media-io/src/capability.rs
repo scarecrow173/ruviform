@@ -124,7 +124,7 @@ impl Features {
 /// ```
 /// use ruviform_media_io::{Capabilities, CodecId, Features};
 ///
-/// // A demux + decode backend, like the symphonia PoC.
+/// // A demux + decode only backend (mux/encode unsupported).
 /// let capabilities = Capabilities {
 ///     functions: Features::DEMUX.union(Features::DECODE),
 ///     decode_codecs: vec![CodecId::Aac, CodecId::Mp3, CodecId::Flac],

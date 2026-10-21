@@ -1,10 +1,10 @@
 ---
 id: "TASK-034Jgi3OFauA1SWRPdvnnb"
 type: "task"
-status: "todo"
+status: "done"
 title: "ruviform-io-symphonia バックエンド PoC 実装"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: []
 relations:
   source:
@@ -20,7 +20,11 @@ relations:
       - type: "file"
         path: "crates/ruviform-io-symphonia/src/decoder.rs"
       - type: "file"
-        path: "crates/ruviform-io-symphonia/src/capability.rs"
+        path: "crates/ruviform-io-symphonia/src/error.rs"
+      - type: "file"
+        path: "crates/ruviform-io-symphonia/src/map.rs"
+      - type: "file"
+        path: "crates/ruviform-io-symphonia/src/source.rs"
       - type: "file"
         path: "crates/ruviform-io-symphonia/tests/wav_decode_poc.rs"
     modified:
@@ -70,16 +74,16 @@ relations:
 
 plan `PLAN-034JfKRCFCu8oJr5iCe6AV` の Phase 2。タスク 1 で確定した `ruviform-media-io` の trait・型を実装する第一バックエンド PoC `ruviform-io-symphonia` を、分離クレート + opt-in 依存として新設する（media-io ADR）。demux + decode のみを提供し、`Muxer` / `Encoder` 非提供を能力交渉「非対応」表現の実例とする。**PoC の目的は抽象境界の実証であり、個別 codec/container の正式採否は spec Out of Scope（後続 Issue）**。
 
-- [ ] `crates/ruviform-io-symphonia/Cargo.toml` 新設: workspace 継承 + `[lints] workspace = true` + `ruviform-media-io` への `path` 依存（+ 必要に応じ `ruviform-media-core` / `ruviform-audio-core` / `ruviform-video-core` への直接 `path` 依存 — ベースライン L203 許容。media-io は domain 型を再エクスポートしない）+ `symphonia` 依存。**default features のみ**（royalty-free codec/format のみ）とし、`all` 等の特許対象 codec を含む feature は有効化しない。依存追加理由（discovery 評価「純 Rust decode 最有力・Lean=yes・`forbid(unsafe)`・trait 分離が抽象境界の好モデル」・MPL-2.0・MSRV 1.85 整合）と MPL-2.0（弱コピーレフト・ファイル単位）の調査結果を Cargo.toml コメントまたは PR 記録へ残す（暫定規約の依存追加規約・licensing ADR の per-dep 調査義務）。symphonia は最新 0.6.x を対象（0.5→0.6 API 変更・MSRV 1.85）。ルート `Cargo.toml` の `members` へ追加
-- [ ] `src/demuxer.rs`: `Demuxer` 実装（symphonia `FormatReader` 系の wrap）。ストリーム列挙（`StreamDescriptor` + codec 記述型への写像）・パケット読み出し（`Packet` 変換: `StreamId`・PTS/DTS・フラグ・所有バイト列）・時刻指定シーク要求受け口。in-memory バイト供給用 `MediaSource` 経路を確立する（`MediaSource` trait は公開。既存 impl が合わなければ backend 内部実装として byte-backed `MediaSource` を持つ — 公開露出しない内部詳細）
-- [ ] `src/decoder.rs`: `Decoder` 実装（symphonia 音声デコーダ wrap → 出力を planar f32 正準 `AudioBuffer` へ変換 → `AudioFrame` の PTS/duration 写像。symphonia timebase → `MediaTime` / `TimeBase` 変換）。flush はデコーダ内部状態をリセットする
-- [ ] `src/capability.rs`（規模により `lib.rs` への併合は実装者裁量）: 能力情報（`Muxer` / `Encoder` を非対応と報告）
-- [ ] 能力交渉の両機構: 照会 API が `Muxer` / `Encoder` 非対応を報告し、**かつ** `Muxer` / `Encoder` の取得要求が正規化 `Error` の非対応分類を返す（panic・`unimplemented!()`・暗黙的失敗による表現は禁止）
-- [ ] エラー正規化: symphonia エラーを media-io `Error` 分類へ写像し、詳細は型消去済み `source` 診断へ封じる。公開 API に symphonia 型・エラー・feature 名を露出しない（参照実装としての型純度 — ベースライン L214 の「バックエンド内部 API は安定性契約対象外」とは別に型純度を維持）
-- [ ] `tests/wav_decode_poc.rs`: **in-memory で WAV/音声バイト列を合成**（RIFF ヘッダ合成ヘルパーをテスト内に用意。**LFS フィクスチャ不使用**）→ demux → decode → `AudioFrame` の end-to-end（フレーム数・PTS 進行・サンプル値を検証）
-- [ ] `src/lib.rs`: crate doc（symphonia による demux + decode のみの PoC・参照実装として型純度維持）+ 構築入口・能力照会の公開面。全公開 API に `**RT contract:** non-RT only` ラベル・全公開 enum に enum レベル `#[non_exhaustive]`・全公開 API に doctest/単体テスト
-- [ ] テスト名に `rt_` 部分文字列を含めない（`assert_` / `start_` / `convert_` 等も誤選択されるため禁止 — `cargo test --workspace rt_` 部分文字列フィルタ対策）
-- [ ] Phase 2 検証（下記 Verification 節）を実施し結果を記録する
+- [x] `crates/ruviform-io-symphonia/Cargo.toml` 新設: workspace 継承 + `[lints] workspace = true` + `ruviform-media-io` への `path` 依存（+ 必要に応じ `ruviform-media-core` / `ruviform-audio-core` / `ruviform-video-core` への直接 `path` 依存 — ベースライン L203 許容。media-io は domain 型を再エクスポートしない）+ `symphonia` 依存。**default features のみ**（royalty-free codec/format のみ）とし、`all` 等の特許対象 codec を含む feature は有効化しない。依存追加理由（discovery 評価「純 Rust decode 最有力・Lean=yes・`forbid(unsafe)`・trait 分離が抽象境界の好モデル」・MPL-2.0・MSRV 1.85 整合）と MPL-2.0（弱コピーレフト・ファイル単位）の調査結果を Cargo.toml コメントまたは PR 記録へ残す（暫定規約の依存追加規約・licensing ADR の per-dep 調査義務）。symphonia は最新 0.6.x を対象（0.5→0.6 API 変更・MSRV 1.85）。ルート `Cargo.toml` の `members` へ追加
+- [x] `src/demuxer.rs`: `Demuxer` 実装（symphonia `FormatReader` 系の wrap）。ストリーム列挙（`StreamDescriptor` + codec 記述型への写像）・パケット読み出し（`Packet` 変換: `StreamId`・PTS/DTS・フラグ・所有バイト列）・時刻指定シーク要求受け口。in-memory バイト供給用 `MediaSource` 経路を確立する（`MediaSource` trait は公開。既存 impl が合わなければ backend 内部実装として byte-backed `MediaSource` を持つ — 公開露出しない内部詳細）
+- [x] `src/decoder.rs`: `Decoder` 実装（symphonia 音声デコーダ wrap → 出力を planar f32 正準 `AudioBuffer` へ変換 → `AudioFrame` の PTS/duration 写像。symphonia timebase → `MediaTime` / `TimeBase` 変換）。flush はデコーダ内部状態をリセットする
+- [x] `src/capability.rs`（規模により `lib.rs` への併合は実装者裁量）: 能力情報（`Muxer` / `Encoder` を非対応と報告）
+- [x] 能力交渉の両機構: 照会 API が `Muxer` / `Encoder` 非対応を報告し、**かつ** `Muxer` / `Encoder` の取得要求が正規化 `Error` の非対応分類を返す（panic・`unimplemented!()`・暗黙的失敗による表現は禁止）
+- [x] エラー正規化: symphonia エラーを media-io `Error` 分類へ写像し、詳細は型消去済み `source` 診断へ封じる。公開 API に symphonia 型・エラー・feature 名を露出しない（参照実装としての型純度 — ベースライン L214 の「バックエンド内部 API は安定性契約対象外」とは別に型純度を維持）
+- [x] `tests/wav_decode_poc.rs`: **in-memory で WAV/音声バイト列を合成**（RIFF ヘッダ合成ヘルパーをテスト内に用意。**LFS フィクスチャ不使用**）→ demux → decode → `AudioFrame` の end-to-end（フレーム数・PTS 進行・サンプル値を検証）
+- [x] `src/lib.rs`: crate doc（symphonia による demux + decode のみの PoC・参照実装として型純度維持）+ 構築入口・能力照会の公開面。全公開 API に `**RT contract:** non-RT only` ラベル・全公開 enum に enum レベル `#[non_exhaustive]`・全公開 API に doctest/単体テスト
+- [x] テスト名に `rt_` 部分文字列を含めない（`assert_` / `start_` / `convert_` 等も誤選択されるため禁止 — `cargo test --workspace rt_` 部分文字列フィルタ対策）
+- [x] Phase 2 検証（下記 Verification 節）を実施し結果を記録する
 
 ## Classification
 
@@ -113,18 +117,18 @@ plan `PLAN-034JfKRCFCu8oJr5iCe6AV` の Phase 2。タスク 1 で確定した `ru
 
 ## Done When
 
-- [ ] in-memory 合成 WAV の demux → decode → `AudioFrame` 変換 end-to-end が `cargo test -p ruviform-io-symphonia` で成功する（フレーム数・PTS 進行・サンプル値を検証。LFS 不使用 — AC5）
-- [ ] 能力交渉の両機構が動作する: 照会 API が `Muxer` / `Encoder` 非対応を報告し、取得要求が正規化 `Error` の非対応分類を返す。panic / `unimplemented!()` でない（AC6）
-- [ ] 公開 API に symphonia 型・エラー・feature 名が露出せず、エラー詳細は型消去 `source` 診断へ封じられている（AC1・型純度）
-- [ ] symphonia 依存が `ruviform-io-symphonia` の `[dependencies]` に限定され default features のみであり、依存追加理由・MPL-2.0 調査が記録されている（AC4）
-- [ ] 全公開 API に `**RT contract:** non-RT only`・全公開 enum に `#[non_exhaustive]`（AC9 うち本タスク範囲）
-- [ ] 検証結果が記録され、実施記録 `docs/impl/ir/implement-io-symphonia-backend-poc.md` へ残せる状態（IR 作成・集約はタスク 3 で実施）
+- [x] in-memory 合成 WAV の demux → decode → `AudioFrame` 変換 end-to-end が `cargo test -p ruviform-io-symphonia` で成功する（フレーム数・PTS 進行・サンプル値を検証。LFS 不使用 — AC5）
+- [x] 能力交渉の両機構が動作する: 照会 API が `Muxer` / `Encoder` 非対応を報告し、取得要求が正規化 `Error` の非対応分類を返す。panic / `unimplemented!()` でない（AC6）
+- [x] 公開 API に symphonia 型・エラー・feature 名が露出せず、エラー詳細は型消去 `source` 診断へ封じられている（AC1・型純度）
+- [x] symphonia 依存が `ruviform-io-symphonia` の `[dependencies]` に限定され default features のみであり、依存追加理由・MPL-2.0 調査が記録されている（AC4）
+- [x] 全公開 API に `**RT contract:** non-RT only`・全公開 enum に `#[non_exhaustive]`（AC9 うち本タスク範囲）
+- [x] 検証結果が記録され、実施記録 `docs/impl/ir/implement-io-symphonia-backend-poc.md` へ残せる状態（IR 作成・集約はタスク 3 で実施）
 
 ## Verification
 
-- [ ] `mise exec -- cargo test -p ruviform-io-symphonia` — end-to-end を含む全テスト合格（AC5/AC6）
-- [ ] `mise exec -- cargo clippy -p ruviform-io-symphonia --all-targets -- -D warnings` — 0 warnings
-- [ ] `grep -rn "symphonia" crates/ruviform-media-io/src crates/ruviform-io-symphonia/src/lib.rs` — media-io 側 0 件・io-symphonia 公開面への露出なし（AC1）
-- [ ] `grep -rn "pub use" crates/ruviform-io-symphonia/src` — 外部型の再エクスポートなし（AC1・型純度）
-- [ ] `grep -rn "unimplemented!\|unreachable!\|panic!" crates/ruviform-io-symphonia/src` — 公開経路の panic 表現なし（AC6）
-- [ ] `mise exec -- cargo tree -p ruviform-media-io` — symphonia 辺が media-io に存在しない（AC4）
+- [x] `mise exec -- cargo test -p ruviform-io-symphonia` — end-to-end を含む全テスト合格（AC5/AC6）
+- [x] `mise exec -- cargo clippy -p ruviform-io-symphonia --all-targets -- -D warnings` — 0 warnings
+- [x] `grep -rn "symphonia" crates/ruviform-media-io/src crates/ruviform-io-symphonia/src/lib.rs` — media-io 側 0 件・io-symphonia 公開面への露出なし（AC1）
+- [x] `grep -rn "pub use" crates/ruviform-io-symphonia/src` — 外部型の再エクスポートなし（AC1・型純度）
+- [x] `grep -rn "unimplemented!\|unreachable!\|panic!" crates/ruviform-io-symphonia/src` — 公開経路の panic 表現なし（AC6）
+- [x] `mise exec -- cargo tree -p ruviform-media-io` — symphonia 辺が media-io に存在しない（AC4）

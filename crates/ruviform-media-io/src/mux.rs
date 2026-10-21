@@ -3,8 +3,8 @@
 //!
 //! **Unverified contract — no implementor yet:** no backend implements this
 //! trait yet — the spec defers mux-side verification to the first
-//! encode-capable backend (`ruviform-io-symphonia` is demux/decode
-//! only and reports [`ErrorKind::Unsupported`](crate::ErrorKind) for
+//! encode-capable backend (a demux/decode-only backend reports
+//! [`ErrorKind::Unsupported`](crate::ErrorKind) for
 //! it). The signature is the agreed boundary shape and is free to
 //! change under `publish = false` until a real implementation
 //! exercises it.
