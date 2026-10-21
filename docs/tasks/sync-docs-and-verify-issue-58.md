@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JNwUPMqjwynDi5XzU09"
 type: "task"
-status: "todo"
+status: "done"
 title: "ドキュメント同期と Issue #58 完了検証（AGENTS.md 型列挙・全量検証・監査）"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -46,14 +46,14 @@ relations:
 
 plan `PLAN-034JNstCXHhzzwOvo9iiCv` の Phase T4。T1–T3 のコード変更とドキュメント群の整合を取り、Issue #58 の完了条件を全量検証で確定させる。
 
-- [ ] `AGENTS.md` の `ruviform-media-core` 型列挙（「メディアデータモデル（`TimeBase`・`MediaTime`・…）」等の記述箇所）に `FrameRate` を追記 — 実際の記述を確認した上で最小限の同期に留める
-- [ ] `time.rs` / `timecode.rs` / `lib.rs` の doc コメントが最終コードと一致（`FrameRate` の説明・`frame_duration()` の逆数関係・新シグネチャの `# Errors` 記述）
-- [ ] plan 内チェックリストの全項目を完了マーク（上流文書の行動項目箇条書きは upstream 所有のため編集しない）
-- [ ] 全量検証: `mise run fmt-check`・`check`・`lint`・`test`・`test-rt` を実施し、結果を記録（`bench` は整数演算のみの変更で計量対象外・スキップ判断を plan に記録済み）
-- [ ] `mise exec -- prek run --all-files` でコミットフック全量を通す
-- [ ] ドキュメント監査 `audit_docs.js --type all --json` で 0 findings を確認（relation 双方向整合・README index 整合を含む）
-- [ ] spec `../specs/time-type-extension-framerate-timecode-rounding.md` の `status` を `implemented` に更新（spec の実装完了ステータス遷移 — graph の implemented 判定条件）
-- [ ] PR 準備: 対象ファイルのみ個別ステージ（`git add -A` 禁止・`apm.lock.yaml` 除外）、コミット、PR 作成。Issue #58 との紐付け（`Closes #58`）を本文に記載
+- [x] `AGENTS.md` の `ruviform-media-core` 型列挙（「メディアデータモデル（`TimeBase`・`MediaTime`・…）」等の記述箇所）に `FrameRate` を追記 — 実際の記述を確認した上で最小限の同期に留める
+- [x] `time.rs` / `timecode.rs` / `lib.rs` の doc コメントが最終コードと一致（`FrameRate` の説明・`frame_duration()` の逆数関係・新シグネチャの `# Errors` 記述）
+- [x] plan 内チェックリストの全項目を完了マーク（上流文書の行動項目箇条書きは upstream 所有のため編集しない）
+- [x] 全量検証: `mise run fmt-check`・`check`・`lint`・`test`・`test-rt` を実施し、結果を記録（`bench` は整数演算のみの変更で計量対象外・スキップ判断を plan に記録済み）
+- [x] `mise exec -- prek run --all-files` でコミットフック全量を通す
+- [x] ドキュメント監査 `audit_docs.js --type all --json` で 0 findings を確認（relation 双方向整合・README index 整合を含む）
+- [x] spec `../specs/time-type-extension-framerate-timecode-rounding.md` の `status` を `implemented` に更新（spec の実装完了ステータス遷移 — graph の implemented 判定条件）
+- [x] PR 準備: 対象ファイルのみ個別ステージ（`git add -A` 禁止・`apm.lock.yaml` 除外）、コミット、PR 作成。Issue #58 との紐付け（`Closes #58`）を本文に記載
 
 ## Classification
 
@@ -79,15 +79,15 @@ plan `PLAN-034JNstCXHhzzwOvo9iiCv` の Phase T4。T1–T3 のコード変更と�
 
 ## Done When
 
-- [ ] `AGENTS.md` と crate-level doc が実装済み API と一致する
-- [ ] `mise run fmt-check && mise run check && mise run lint && mise run test && mise run test-rt` がすべて実施・合格し、`prek run --all-files` が通る
-- [ ] ドキュメント監査が 0 findings
-- [ ] spec status が `implemented` に更新され、plan/task 群のステータスが最終状態に整合する
-- [ ] PR が作成されている（merge 判定は PR 上で実施）
+- [x] `AGENTS.md` と crate-level doc が実装済み API と一致する
+- [x] `mise run fmt-check && mise run check && mise run lint && mise run test && mise run test-rt` がすべて実施・合格し、`prek run --all-files` が通る
+- [x] ドキュメント監査が 0 findings
+- [x] spec status が `implemented` に更新され、plan/task 群のステータスが最終状態に整合する
+- [x] PR が作成されている（merge 判定は PR 上で実施）
 
 ## Verification
 
-- [ ] `mise run fmt-check && mise run check && mise run lint && mise run test && mise run test-rt` — 全合格
-- [ ] `mise exec -- prek run --all-files` — 合格
-- [ ] `node .agents/skills/doc-driven-dev-graph/scripts/audit_docs.js --type all --json` — findings 0
-- [ ] `git status` で `apm.lock.yaml` が未ステージのまま残っていることを確認
+- [x] `mise run fmt-check && mise run check && mise run lint && mise run test && mise run test-rt` — 全合格
+- [x] `mise exec -- prek run --all-files` — 合格
+- [x] `node .agents/skills/doc-driven-dev-graph/scripts/audit_docs.js --type all --json` — findings 0
+- [x] `git status` で `apm.lock.yaml` が未ステージのまま残っていることを確認

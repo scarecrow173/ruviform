@@ -47,11 +47,11 @@ relations:
 
 plan `PLAN-034JNstCXHhzzwOvo9iiCv` の Phase T3。丸め誤差累積ポリシー（呼び出しごと最大 1 回の丸め・安定アンカー・base-hopping 禁止）の検証可能な誤差上界を、`time.rs` の `mod tests` 内に deterministic 列挙テストとして追加する。誤差計測は `i128`/`u128` 有理数比較で行い `f64` を使わない。
 
-- [ ] 精度行列テスト: 音声 base（`TimeBase::new(1, 44_100)`・`(1, 48_000)`・`(1, 90_000)`）× 映像 frame duration（`FrameRate` の `frame_duration()` で `24`・`25`・`30000/1001`・`60000/1001`）の全組み合わせ × 値集合（`0`・`±1`・大きな正値・負値）で `MediaTime::convert(_, Rounding::NearestEven)` の丸め誤差 ≤ 宛先 base の 0.5 tick を検証。負値での丸め対称性を含む
-- [ ] 往復誤差上界テスト: `t → 中間 base → 元base` の 2 ホップで、累積誤差 ≤「中間 base の 0.5 tick を元 base 単位に換算した値 + 元 base の 0.5 tick」を検証。粗い中間 base 経由で誤差が大きくなり得る例（`1/48000 → 1/24 → 1/48000` で ~1000 tick）を含め上界内に収まることを確認
-- [ ] N 連鎖プロパティテスト: 代表 base 集合 `{1/48000, 1/44100, 1/90000, 1001/30000, 1001/60000, 1/25, 1/24}` の巡回連鎖（3 ホップ以上・始点=終点を含む）で、累積誤差 ≤ Σ（各ホップ宛先 base の 0.5 tick）の共通単位換算を検証
-- [ ] 対照実験: 同一始点・終点でアンカーからの直接変換（ポリシー遵守形）の誤差 ≤ 宛先 base の 0.5 tick を検証し、連鎖誤差がポリシー違反コストであることを定量化
-- [ ] 誤差計測ヘルパをテストモジュール内に定義（tick 差の有理数絶対値計算。公開 API は増やさない）
+- [x] 精度行列テスト: 音声 base（`TimeBase::new(1, 44_100)`・`(1, 48_000)`・`(1, 90_000)`）× 映像 frame duration（`FrameRate` の `frame_duration()` で `24`・`25`・`30000/1001`・`60000/1001`）の全組み合わせ × 値集合（`0`・`±1`・大きな正値・負値）で `MediaTime::convert(_, Rounding::NearestEven)` の丸め誤差 ≤ 宛先 base の 0.5 tick を検証。負値での丸め対称性を含む
+- [x] 往復誤差上界テスト: `t → 中間 base → 元base` の 2 ホップで、累積誤差 ≤「中間 base の 0.5 tick を元 base 単位に換算した値 + 元 base の 0.5 tick」を検証。粗い中間 base 経由で誤差が大きくなり得る例（`1/48000 → 1/24 → 1/48000` で ~1000 tick）を含め上界内に収まることを確認
+- [x] N 連鎖プロパティテスト: 代表 base 集合 `{1/48000, 1/44100, 1/90000, 1001/30000, 1001/60000, 1/25, 1/24}` の巡回連鎖（3 ホップ以上・始点=終点を含む）で、累積誤差 ≤ Σ（各ホップ宛先 base の 0.5 tick）の共通単位換算を検証
+- [x] 対照実験: 同一始点・終点でアンカーからの直接変換（ポリシー遵守形）の誤差 ≤ 宛先 base の 0.5 tick を検証し、連鎖誤差がポリシー違反コストであることを定量化
+- [x] 誤差計測ヘルパをテストモジュール内に定義（tick 差の有理数絶対値計算。公開 API は増やさない）
 
 ## Classification
 
@@ -76,13 +76,13 @@ plan `PLAN-034JNstCXHhzzwOvo9iiCv` の Phase T3。丸め誤差累積ポリシー
 
 ## Done When
 
-- [ ] 音声 3 base × 映像 4 rate × 値集合の全組み合わせで単回変換誤差 ≤ 0.5 tick が検証される
-- [ ] 往復誤差上界・N 連鎖誤差上界・直接変換対照の 3 形がテストとして存在し合格する
-- [ ] 負値・ゼロ・境界値が値集合に含まれる
-- [ ] テスト判定に `f64` を使用していない（整数有理数比較）
+- [x] 音声 3 base × 映像 4 rate × 値集合の全組み合わせで単回変換誤差 ≤ 0.5 tick が検証される
+- [x] 往復誤差上界・N 連鎖誤差上界・直接変換対照の 3 形がテストとして存在し合格する
+- [x] 負値・ゼロ・境界値が値集合に含まれる
+- [x] テスト判定に `f64` を使用していない（整数有理数比較）
 
 ## Verification
 
-- [ ] `mise exec -- cargo test -p ruviform-media-core` — 新規精度テスト群を含め合格
-- [ ] `mise exec -- cargo clippy -p ruviform-media-core --all-targets -- -D warnings` — 0 warnings
-- [ ] `mise run fmt-check` — 差分なし
+- [x] `mise exec -- cargo test -p ruviform-media-core` — 新規精度テスト群を含め合格
+- [x] `mise exec -- cargo clippy -p ruviform-media-core --all-targets -- -D warnings` — 0 warnings
+- [x] `mise run fmt-check` — 差分なし

@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034JceNZQvAawWwMH4ct91"
 type: "spec"
-status: "approved"
+status: "implemented"
 title: "時間型拡張（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針）"
 created: "2026-10-20"
 updated: "2026-10-21"

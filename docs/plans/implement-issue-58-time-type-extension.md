@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034JNstCXHhzzwOvo9iiCv"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "Issue #58 時間型拡張の実装（FrameRate 導入・Timecode シグネチャ移行・丸め誤差テスト）"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -107,35 +107,35 @@ Issue #42 の設計チェーン（spec `SPEC-034JceNZQvAawWwMH4ct91`・ADR `ADR-
 
 ### T1: `FrameRate` 型の実装（task: implement-framerate-type）
 
-- [ ] `time.rs` に `pub struct FrameRate(TimeBase)` を追加（`#[derive(Copy, Clone, PartialEq, Eq, Hash)]`・`Ord`/`PartialOrd` なし・`#[non_exhaustive]` なし — struct は ctor で不変条件を強制）
-- [ ] API: `pub const fn new(numerator: u32, denominator: u32) -> Result<Self>`（`TimeBase::new` に委譲・失敗は `Err(Error::InvalidValue("frame_rate"))` に正規化）、`pub const fn from_fps(fps: u32) -> Result<Self>`（`new(fps, 1)` 相当・`fps == 0` で同エラー）、`pub const fn numerator(self) -> u32`、`pub const fn denominator(self) -> u32`、`pub const fn frame_duration(self) -> TimeBase`（逆数 `TimeBase::new(denominator, numerator)`・保持値非ゼロで失敗し得ない）、`pub const fn nominal_fps(self) -> u32`（round-half-up `(2*num + den) / (2*den)` を `u64` 中間演算で — `u32` 中間だと `num > ~2^31` で `2*num` が溢れる）
-- [ ] `fmt::Debug` を `FrameRate(30000/1001)` 型の簡潔表示に（`SampleRate(48000)` 先例）
-- [ ] 単体テスト: gcd 正規化（`new(60_000, 2_002)` → `30000/1001`）、ゼロ拒否（`new(0,1)`/`new(1,0)`/`from_fps(0)` → `Err(InvalidValue("frame_rate"))`）、`frame_duration()` の逆数（`30000/1001` fps → `TimeBase(1001/30000)`）、`nominal_fps()` の round-half-up（`24`/`25`/`30000/1001`→30/`60000/1001`→60/`24000/1001`→24）と `u32::MAX` 級境界（`4294967295/1` → `u32::MAX` に飽和しないオーバーフローなし計算、`1/4294967295` → 0）
-- [ ] 全公開 API に `**RT contract:**` ラベル（RT-suitable — `const`・純粋整数演算・alloc なし）。`to_time_base()`・`From<FrameRate> for TimeBase`・`From<TimeBase> for FrameRate` を設けないことを doc で明示
+- [x] `time.rs` に `pub struct FrameRate(TimeBase)` を追加（`#[derive(Copy, Clone, PartialEq, Eq, Hash)]`・`Ord`/`PartialOrd` なし・`#[non_exhaustive]` なし — struct は ctor で不変条件を強制）
+- [x] API: `pub const fn new(numerator: u32, denominator: u32) -> Result<Self>`（`TimeBase::new` に委譲・失敗は `Err(Error::InvalidValue("frame_rate"))` に正規化）、`pub const fn from_fps(fps: u32) -> Result<Self>`（`new(fps, 1)` 相当・`fps == 0` で同エラー）、`pub const fn numerator(self) -> u32`、`pub const fn denominator(self) -> u32`、`pub const fn frame_duration(self) -> TimeBase`（逆数 `TimeBase::new(denominator, numerator)`・保持値非ゼロで失敗し得ない）、`pub const fn nominal_fps(self) -> u32`（round-half-up — 実装は `r >= d - r` 比較（`(2n+d)/(2d)` と等価、`u64` 中間演算は const fn で `u64::from` が未安定のため不可、かつ `u32` のままオーバーフローしない））
+- [x] `fmt::Debug` を `FrameRate(30000/1001)` 型の簡潔表示に（`SampleRate(48000)` 先例）
+- [x] 単体テスト: gcd 正規化（`new(60_000, 2_002)` → `30000/1001`）、ゼロ拒否（`new(0,1)`/`new(1,0)`/`from_fps(0)` → `Err(InvalidValue("frame_rate"))`）、`frame_duration()` の逆数（`30000/1001` fps → `TimeBase(1001/30000)`）、`nominal_fps()` の round-half-up（`24`/`25`/`30000/1001`→30/`60000/1001`→60/`24000/1001`→24）と `u32::MAX` 級境界（`4294967295/1` → `u32::MAX` に飽和しないオーバーフローなし計算、`1/4294967295` → 0）
+- [x] 全公開 API に `**RT contract:**` ラベル（RT-suitable — `const`・純粋整数演算・alloc なし）。`to_time_base()`・`From<FrameRate> for TimeBase`・`From<TimeBase> for FrameRate` を設けないことを doc で明示
 
 ### T2: `Timecode` API の `FrameRate` 移行（task: migrate-timecode-to-framerate）
 
-- [ ] `from_media_time(t: MediaTime, frame_rate: FrameRate)`・`from_media_time_drop(t: MediaTime, frame_rate: FrameRate)` に破壊的置換（旧 `TimeBase` シグネチャ併設なし）。`elapsed_frames(t, rate)` ヘルパの引数も `FrameRate` に変更し `rate.numerator()`/`rate.denominator()` を使用
-- [ ] `from_media_time` 内の nominal grid 計算（`(2*num + den) / (2*den)`）を削除して `frame_rate.nominal_fps()` に移譲（規則の二重実装を避ける）。`nominal_fps() == 0` 拒否は `Err(Error::InvalidValue("frame_rate"))` で現行維持
-- [ ] 呼び出し側移行: `timecode.rs` 単体テスト・doctest 両関数・`lib.rs` の `rt_drop_frame_roundtrip` を `FrameRate` 構築に書き換え（例: `FrameRate::new(30_000, 1_001).unwrap()`・`FrameRate::from_fps(25).unwrap()`）。ワークスペース内の他呼び出し箇所がないことを grep で確認（現状 `Timecode` 呼び出しは media-core 内テスト・doctest のみ）
-- [ ] 回帰テスト維持: `sub_fps_rate_is_rejected` 相当を `FrameRate` 版で残す（`FrameRate::new(1, 1_000)` → `nominal_fps()==0` → `Err(InvalidValue("frame_rate"))`）。drop 対応集合 `30000/1001`・`60000/1001` のみ・他は `Err(UnsupportedDropFrameRate)` の契約を維持するテスト（`drop_requires_ntsc_rate` 相当）を `FrameRate` 版で残す
-- [ ] エラー doc（`# Errors`）と `**RT contract:**` ラベルを新シグネチャに合わせて更新
+- [x] `from_media_time(t: MediaTime, frame_rate: FrameRate)`・`from_media_time_drop(t: MediaTime, frame_rate: FrameRate)` に破壊的置換（旧 `TimeBase` シグネチャ併設なし）。`elapsed_frames(t, rate)` ヘルパの引数も `FrameRate` に変更し `rate.numerator()`/`rate.denominator()` を使用
+- [x] `from_media_time` 内の nominal grid 計算（`(2*num + den) / (2*den)`）を削除して `frame_rate.nominal_fps()` に移譲（規則の二重実装を避ける）。`nominal_fps() == 0` 拒否は `Err(Error::InvalidValue("frame_rate"))` で現行維持
+- [x] 呼び出し側移行: `timecode.rs` 単体テスト・doctest 両関数・`lib.rs` の `rt_drop_frame_roundtrip` を `FrameRate` 構築に書き換え（例: `FrameRate::new(30_000, 1_001).unwrap()`・`FrameRate::from_fps(25).unwrap()`）。ワークスペース内の他呼び出し箇所がないことを grep で確認（現状 `Timecode` 呼び出しは media-core 内テスト・doctest のみ）
+- [x] 回帰テスト維持: `sub_fps_rate_is_rejected` 相当を `FrameRate` 版で残す（`FrameRate::new(1, 1_000)` → `nominal_fps()==0` → `Err(InvalidValue("frame_rate"))`）。drop 対応集合 `30000/1001`・`60000/1001` のみ・他は `Err(UnsupportedDropFrameRate)` の契約を維持するテスト（`drop_requires_ntsc_rate` 相当）を `FrameRate` 版で残す
+- [x] エラー doc（`# Errors`）と `**RT contract:**` ラベルを新シグネチャに合わせて更新
 
 ### T3: 時間精度・連鎖変換プロパティテストの追加（task: add-time-precision-tests）
 
-- [ ] **時間精度行列テスト**: 音声 base（`1/44100`・`1/48000`・`1/90000`）× 映像 rate（`FrameRate` の `frame_duration()` から導出する tick base: `24`・`25`・`30000/1001`・`60000/1001` fps 相当）の `MediaTime::convert` 変換を網羅。負値拒否（負 instants の丸め対称性を既存 `Rounding` 契約どおり検証）・境界値（`0`・`i64::MAX` 近傍・`i64::MIN` 近傍）を含む。アンカー直接変換の誤差が宛先 base の 0.5 tick 以下に収まることを全組み合わせで検証
-- [ ] **往復変換誤差上界テスト**: `t.convert(B, NearestEven).convert(元base, NearestEven)` の往復誤差が「中間 base B の 0.5 tick を元 base 単位に換算した値 + 元 base の 0.5 tick」以下であることを検証（粗い中間 base — 例: `1/48000` → `1/24` → `1/48000` — では大きな往復誤差が出得ることも境界ケースとして確認。設計例: 1000 tick @ `1/48000` → `1/24` で 0 に丸め → 復帰も 0 → 往復誤差 1000 tick が上界内に収まる）
-- [ ] **N 回連鎖の累積上界テスト**: 代表 base 集合 `{1/48000, 1/44100, 1/90000, 1001/30000, 1001/60000, 1/25, 1/24}` の巡回連鎖で、累積誤差が「Σ（各ホップ宛先 base の 0.5 tick）を共通単位（秒相当の有理数比較）に換算した値」を超えないことを検証。対照実験として「アンカーからの直接変換は常に宛先 base の 0.5 tick 以下」を同じ base 集合で確認し、ポリシー遵守形と base-hopping 形の誤差差を観測する
-- [ ] **実装方式**: `proptest` は採用せず、固定 base 集合 × 固定値集合の自前 deterministic 列挙で実装する（media-core は依存ゼロ方針 — dev-dependency すら現状持たず、列挙で要件を完全にカバーできるため依存追加規約上の理由記録・審査コストを回避。設計文書の「要PoC」分類項目を deterministic 列挙で解決した旨を IR に記録）
-- [ ] 誤差測定は `f64` を介さず整数有理数比較で行う（`|往復誤差|` の tick 差を `i128` の `value * base` 換算で比較。中核表現に `f64` を持ち込まない契約の維持）
+- [x] **時間精度行列テスト**: 音声 base（`1/44100`・`1/48000`・`1/90000`）× 映像 rate（`FrameRate` の `frame_duration()` から導出する tick base: `24`・`25`・`30000/1001`・`60000/1001` fps 相当）の `MediaTime::convert` 変換を網羅。負値拒否（負 instants の丸め対称性を既存 `Rounding` 契約どおり検証）・境界値（`0`・`i64::MAX` 近傍・`i64::MIN` 近傍）を含む。アンカー直接変換の誤差が宛先 base の 0.5 tick 以下に収まることを全組み合わせで検証
+- [x] **往復変換誤差上界テスト**: `t.convert(B, NearestEven).convert(元base, NearestEven)` の往復誤差が「中間 base B の 0.5 tick を元 base 単位に換算した値 + 元 base の 0.5 tick」以下であることを検証（粗い中間 base — 例: `1/48000` → `1/24` → `1/48000` — では大きな往復誤差が出得ることも境界ケースとして確認。設計例: 1000 tick @ `1/48000` → `1/24` で 0 に丸め → 復帰も 0 → 往復誤差 1000 tick が上界内に収まる）
+- [x] **N 回連鎖の累積上界テスト**: 代表 base 集合 `{1/48000, 1/44100, 1/90000, 1001/30000, 1001/60000, 1/25, 1/24}` の巡回連鎖で、累積誤差が「Σ（各ホップ宛先 base の 0.5 tick）を共通単位（秒相当の有理数比較）に換算した値」を超えないことを検証。対照実験として「アンカーからの直接変換は常に宛先 base の 0.5 tick 以下」を同じ base 集合で確認し、ポリシー遵守形と base-hopping 形の誤差差を観測する
+- [x] **実装方式**: `proptest` は採用せず、固定 base 集合 × 固定値集合の自前 deterministic 列挙で実装する（media-core は依存ゼロ方針 — dev-dependency すら現状持たず、列挙で要件を完全にカバーできるため依存追加規約上の理由記録・審査コストを回避。設計文書の「要PoC」分類項目を deterministic 列挙で解決した旨を IR に記録）
+- [x] 誤差測定は `f64` を介さず整数有理数比較で行う（`|往復誤差|` の tick 差を `i128` の `value * base` 換算で比較。中核表現に `f64` を持ち込まない契約の維持）
 
 ### T4: ドキュメント同期と総合検証（task: sync-docs-and-verify-issue-58）
 
-- [ ] spec#42 `implemented-by` に本 plan、status を `implemented` へ。design#42/adr#42/baseline/RT ADR/enum ADR の `derived-by` に本 plan を追加（双方向 relation 整合）
-- [ ] `AGENTS.md` ワークスペース節の media-core 記述への `FrameRate` 反映要否を確認・必要なら追記
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench`・`mise exec -- prek run --all-files` を実行・全パス
-- [ ] `node .agents/skills/doc-status/scripts/audit_docs.js --type all --json` の findings が 0
-- [ ] Issue #58 受け入れ条件全項目と設計文書 Verification Notes 11 項目の充足を確認し IR を記録
+- [x] spec#42 `implemented-by` に本 plan、status を `implemented` へ。design#42/adr#42/baseline/RT ADR/enum ADR の `derived-by` に本 plan を追加（双方向 relation 整合）
+- [x] `AGENTS.md` ワークスペース節の media-core 記述への `FrameRate` 反映要否を確認・必要なら追記
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`・`mise exec -- prek run --all-files` を実行・全パス（`bench` は変更が整数演算のみで対象の ruviform-math SIMD ベンチと無関係のため `bench-smoke` でベンチハーネス健全性のみ確認・全 Success）
+- [x] `node .agents/skills/doc-status/scripts/audit_docs.js --type all --json` の findings が 0
+- [x] Issue #58 受け入れ条件全項目と設計文書 Verification Notes 11 項目の充足を確認し IR を記録
 
 ## Dependencies and Risks
 
