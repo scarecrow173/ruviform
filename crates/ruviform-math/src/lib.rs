@@ -20,6 +20,11 @@
 //! (crate table A.2, "DSP／SIMD 設計"). Phase 1 skeleton — the public API is
 //! not yet defined and is fixed by later implementation issues.
 
+// Issue #19 DSP/SIMD PoC experiment bridge — see the module docs. Not part
+// of the public API contract; may be promoted or removed by the PoC ADR.
+#[doc(hidden)]
+pub mod simd_poc;
+
 /// Returns the crate version string.
 ///
 /// # Examples

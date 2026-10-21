@@ -14,7 +14,7 @@ Ruviform は、Rust を中心とした再利用可能なマルチメディア基
 
 - Rust 1.99.0 ツールチェーン（`mise.toml` で pin、`mise.lock` で固定復元）
 - Rust ワークスペース: ルート `Cargo.toml` と Phase 1 基盤7クレート `crates/ruviform-math` / `crates/ruviform-rt` / `crates/ruviform-exec` / `crates/ruviform-media-core` / `crates/ruviform-audio-core` / `crates/ruviform-video-core` / `crates/ruviform-video-proc`（Issue #17 で仮置き `crates/ruviform-core` を分割置換。media-core / audio-core / video-core は Issue #18 でデータモデル API を、rt / exec は Issue #21 で RT 基盤 API（rt: `Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換。exec: スレッド優先度機構）を、video-proc は Issue #26 で色変換カーネルを確定・実装済み。math は引き続きスケルトン）に加え、Issue #20 で `crates/ruviform-media-io`（非 RT 専用のメディア I/O 抽象境界クレート: demux/mux と decode/encode を分離した 4 系統 trait・`Packet`・`AudioFrame`・能力交渉・正規化エラー）と `crates/ruviform-io-symphonia`（symphonia による第一バックエンド PoC・分離クレート + opt-in・demux + decode のみ）を、Issue #23 で adapter クレート `crates/ruviform-audio-device`（cpal を内部依存に閉じ込め、`ruviform_audio_core::device` のポート trait を実装するオーディオデバイスバックエンド adapter）を実装済み
-- `mise.toml` の検証タスク群（`setup` / `fmt-check` / `check` / `lint` / `test` / `build` / `test-rt` / `bench` / `*-ci` / `verify-ci`）
+- `mise.toml` の検証タスク群（`setup` / `fmt-check` / `check` / `lint` / `test` / `build` / `test-rt` / `bench` / `bench-smoke` / `*-ci` / `verify-ci`）
 - `workflow_dispatch` 専用 CI（`.github/workflows/ci.yml`）— 旧単一構成は ubuntu-latest で実ディスパッチ済み（fmt-check / check-ci / lint-ci / test-ci 全て pass）。現行構成は verify の 3-OS matrix＋`rt-verify`・`bench` レーンで、マージ後に初回ディスパッチして動作確認する
 
 ### 構想（未実装）

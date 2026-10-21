@@ -8,6 +8,7 @@ Directory: `docs/plans`
 | --- | --- | --- | --- |
 | PLAN-034IR3qOr15LGNY9mEindJ | Issue #1 設計ベースラインの開発基盤・README／AGENTS への反映 | approved | [apply-issue-1-architecture-baseline-to-repo.md](./apply-issue-1-architecture-baseline-to-repo.md) |
 | PLAN-034IdrispOUms1c32192B6 | Rust 開発基盤のブートストラップ（toolchain pin・最小ワークスペース・mise タスク・手動CI） | approved | [dev-foundation-bootstrap.md](./dev-foundation-bootstrap.md) |
+| PLAN-034JdOWI3vblJW11kIueY0 | DSP/SIMD 比較ベンチマーク PoC 実装 | completed | [dsp-simd-poc.md](./dsp-simd-poc.md) |
 | PLAN-034JgkWCimxdvr81k6b0ow | オーディオデバイス境界ポートと ruviform-audio-device PoC の実装（Issue #23） | approved | [implement-audio-device-port-and-cpal-poc.md](./implement-audio-device-port-and-cpal-poc.md) |
 | PLAN-034J5K603qXDNmT82wI9v7 | Issue #18 データモデル API の実装（media-core / audio-core / video-core） | completed | [implement-issue-18-data-model.md](./implement-issue-18-data-model.md) |
 | PLAN-034JcCFGe6ILSTWLgUIjAn | Issue #26 動画基盤 API の実装（video-core 所有権契約・video-proc 新設・色変換カーネル） | approved | [implement-issue-26-video-foundation.md](./implement-issue-26-video-foundation.md) |
