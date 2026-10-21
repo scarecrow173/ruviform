@@ -261,8 +261,15 @@ impl Rgba8ToRgbaF16 {
                 // `row_bytes` is `width * 4` (src) / `width * 8` (dst),
                 // so exactly `width` pixel chunks pair up — padding
                 // never included.
-                for (src_px, dst_px) in src_row.chunks_exact(4).zip(dst_row.chunks_exact_mut(8)) {
-                    for (channel, dst_ch) in src_px.iter().zip(dst_px.chunks_exact_mut(2)) {
+                for (src_px, dst_px) in src_row
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .zip(dst_row.as_chunks_mut::<8>().0.iter_mut())
+                {
+                    for (channel, dst_ch) in
+                        src_px.iter().zip(dst_px.as_chunks_mut::<2>().0.iter_mut())
+                    {
                         dst_ch.copy_from_slice(&u8_to_f16_bits(*channel).to_le_bytes());
                     }
                 }
@@ -369,8 +376,14 @@ impl RgbaF16ToRgba8 {
                 // `row_bytes` is `width * 8` (src) / `width * 4` (dst),
                 // so exactly `width` pixel chunks pair up — padding
                 // never included.
-                for (src_px, dst_px) in src_row.chunks_exact(8).zip(dst_row.chunks_exact_mut(4)) {
-                    for (src_ch, dst_ch) in src_px.chunks_exact(2).zip(dst_px.iter_mut()) {
+                for (src_px, dst_px) in src_row
+                    .as_chunks::<8>()
+                    .0
+                    .iter()
+                    .zip(dst_row.as_chunks_mut::<4>().0.iter_mut())
+                {
+                    for (src_ch, dst_ch) in src_px.as_chunks::<2>().0.iter().zip(dst_px.iter_mut())
+                    {
                         *dst_ch = f16_bits_to_u8(u16::from_le_bytes([src_ch[0], src_ch[1]]));
                     }
                 }
@@ -415,7 +428,9 @@ mod tests {
             .plane_mut(0)
             .unwrap()
             .data_mut()
-            .chunks_exact_mut(4)
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
             .zip(pixels.iter())
             .for_each(|(dst, src)| dst.copy_from_slice(src));
         frame
@@ -427,8 +442,14 @@ mod tests {
         let mut frame = VideoFrame::new_owned(PixelFormat::RgbaF16, width, height, pts()).unwrap();
         {
             let mut plane = frame.plane_mut(0).unwrap();
-            for (dst_px, src_px) in plane.data_mut().chunks_exact_mut(8).zip(pixels.iter()) {
-                for (dst_ch, value) in dst_px.chunks_exact_mut(2).zip(src_px.iter()) {
+            for (dst_px, src_px) in plane
+                .data_mut()
+                .as_chunks_mut::<8>()
+                .0
+                .iter_mut()
+                .zip(pixels.iter())
+            {
+                for (dst_ch, value) in dst_px.as_chunks_mut::<2>().0.iter_mut().zip(src_px.iter()) {
                     dst_ch.copy_from_slice(&value.to_le_bytes());
                 }
             }

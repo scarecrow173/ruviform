@@ -968,13 +968,13 @@ mod tests {
         write_interleaved(&mut scratch, 4, 2, &mut data, test_info(), &mut cb);
         // Per chunk, channel 1 carries the chunk's frame count:
         // chunks of 4, 4, then 2.
-        let ch1: Vec<f32> = data.chunks_exact(2).map(|f| f[1]).collect();
+        let ch1: Vec<f32> = data.as_chunks::<2>().0.iter().map(|f| f[1]).collect();
         assert_eq!(
             ch1,
             [4.0; 8].into_iter().chain([2.0; 2]).collect::<Vec<_>>()
         );
         // Channel 0 packed the callback output for every frame.
-        assert!(data.chunks_exact(2).all(|f| f[0] == 0.25));
+        assert!(data.as_chunks::<2>().0.iter().all(|f| f[0] == 0.25));
     }
 
     // Exact comparisons: the callback wrote exactly `0.25`.

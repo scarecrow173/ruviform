@@ -232,10 +232,10 @@ mod tests {
                 O: BufferViewMut,
             {
                 assert!(events.is_empty());
-                if let (Some(i), Some(o)) = (inputs.first(), outputs.first_mut()) {
-                    if let (Some(src), Some(dst)) = (i.channel(0), o.channel_mut(0)) {
-                        dst.copy_from_slice(src);
-                    }
+                if let (Some(i), Some(o)) = (inputs.first(), outputs.first_mut())
+                    && let (Some(src), Some(dst)) = (i.channel(0), o.channel_mut(0))
+                {
+                    dst.copy_from_slice(src);
                 }
                 ProcessResult::CONTINUE
             }
