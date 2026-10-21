@@ -194,7 +194,7 @@ mod tests {
     /// RT contract: thread-boundary bounds are API contract — the shared
     /// clock is `Send + Sync` (Arc-shared between writer and readers) and
     /// the capability token is `Send + Sync` so a driver can carry the
-    /// proof to the contract thread.
+    /// token to the contract thread.
     #[test]
     fn rt_endpoint_thread_bounds() {
         expect_send::<MasterClock>();

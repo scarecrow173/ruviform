@@ -140,6 +140,12 @@ bounded-leak、`DropCollector::push_local` seam）を前提に、オーバーフ
   設計どおりで不変（契約文書化のみ）。`slot` に
   `retire_capacity > 0` の `debug_assert` も追加（capacity 0 は
   bounded-leak が全件発動する退化を作る）。
+- **PR レビュー対応 — 飽和の可観測性**: retire チャネルの共有
+  `Arc<AtomicUsize>` カウンタ（retire IR 参照）を `SnapshotWriter::
+  retire_overflows() -> usize` として非 RT 監視側に露出（guard drop
+  由来の forget を writer 側が観測）。reader/writer の endpoint 独立性
+  （writer drop 後も `read` は最終公開値を返す）を
+  `rt_snapshot_reader_outlives_writer` でテスト確定。
 
 - `SnapshotGuard` に `T: Send + Sync + 'static` 境界を構造体宣言へ付与:
   `Drop` impl は構造体自身の境界を超えた bound を持てない（E0367）一方、

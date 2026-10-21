@@ -17,11 +17,29 @@
 //! ADR). `capacity` is therefore a caller contract — provision for
 //! the maximum number of retirements per drain cycle.
 //!
+//! "Bounded" scopes the leak **per drain interval**, not the process
+//! lifetime: at most `capacity` values sit queued between drains and
+//! each overflow forgets one more value, so sustained saturation
+//! leaks without an absolute ceiling. The contract is therefore
+//! *observable saturation*, not guaranteed reclamation —
+//! [`overflows()`](DropCollector::overflows) exposes the cumulative
+//! forgotten count on both endpoints. A non-zero or growing count
+//! means `capacity` or drain cadence is undersized for the real
+//! retire rate; the fix is operational (bigger capacity, faster
+//! drain), not an API change. Residual risk: each forgotten value
+//! stays allocated until process exit, so heavy payloads and a
+//! misconfigured cadence can accumulate real memory — long-duration
+//! soak verification of drain cadence belongs to the RT verification
+//! infrastructure (Issue #22), not to per-crate unit tests.
+//!
 //! Teardown note: values still queued when the *last* channel
 //! endpoint is dropped run their destructors on the dropping thread
 //! (wrapped-ring semantics). Keep the [`DropCollector`] alive until
 //! after the [`Retirer`] is dropped so teardown deallocation stays on
 //! the non-RT side.
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::spsc::{Consumer, Producer, TryPushError, channel};
 
@@ -52,11 +70,16 @@ use crate::spsc::{Consumer, Producer, TryPushError, channel};
 pub fn retire_channel<T: Send + 'static>(capacity: usize) -> (Retirer<T>, DropCollector<T>) {
     debug_assert!(capacity > 0, "retire_channel capacity must be non-zero");
     let (producer, consumer) = channel(capacity);
+    let overflows = Arc::new(AtomicUsize::new(0));
     (
-        Retirer { inner: producer },
+        Retirer {
+            inner: producer,
+            overflows: Arc::clone(&overflows),
+        },
         DropCollector {
             inner: consumer,
             pending: Vec::new(),
+            overflows,
         },
     )
 }
@@ -81,6 +104,7 @@ pub fn retire_channel<T: Send + 'static>(capacity: usize) -> (Retirer<T>, DropCo
 #[derive(Debug)]
 pub struct Retirer<T> {
     inner: Producer<T>,
+    overflows: Arc<AtomicUsize>,
 }
 
 impl<T: Send + 'static> Retirer<T> {
@@ -95,9 +119,13 @@ impl<T: Send + 'static> Retirer<T> {
     /// dropped here — dropping would run `T`'s destructor (and any
     /// deallocation) on the RT thread. The value is leaked via
     /// `core::mem::forget` instead: a bounded-leak fallback, bounded
-    /// in rate by the drain cycle. Provision `capacity` for the
-    /// maximum number of retirements per drain cycle (drop-on-full
-    /// is rejected because it is RT-side dealloc — ADR).
+    /// per drain interval (at most `capacity` queued plus one
+    /// forgotten per overflow), **not** lifetime-bounded. Every
+    /// forgotten value increments the shared
+    /// [`overflows`](Self::overflows) counter — saturation is
+    /// observable, not silent. Provision `capacity` for the maximum
+    /// number of retirements per drain cycle and monitor the counter
+    /// (drop-on-full is rejected because it is RT-side dealloc — ADR).
     ///
     /// **RT contract:** RT-suitable — wait-free, no allocation,
     /// bounded.
@@ -113,8 +141,37 @@ impl<T: Send + 'static> Retirer<T> {
     /// ```
     pub fn retire(&mut self, value: T) {
         if let Err(TryPushError::Full(value)) = self.inner.try_push(value) {
+            self.overflows.fetch_add(1, Ordering::Relaxed);
             core::mem::forget(value);
         }
+    }
+
+    /// Returns the cumulative number of values forgotten because the
+    /// channel was full — the saturation signal of the bounded-leak
+    /// overflow policy. Shared with the [`DropCollector`]: either
+    /// endpoint can observe the same count.
+    ///
+    /// The count is `Relaxed`-ordered bookkeeping, not synchronized
+    /// with channel state. A zero count is the healthy steady state;
+    /// any non-zero or growing value means `capacity` or drain
+    /// cadence is undersized for the actual retire rate — each
+    /// forgotten value stays allocated until process exit.
+    ///
+    /// **RT contract:** RT-suitable — atomic load, no allocation,
+    /// bounded.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let (mut retirer, _collector) = ruviform_rt::retire_channel::<u32>(1);
+    ///
+    /// retirer.retire(1);
+    /// retirer.retire(2); // Full — forgotten, counter increments.
+    /// assert_eq!(retirer.overflows(), 1);
+    /// ```
+    #[must_use]
+    pub fn overflows(&self) -> usize {
+        self.overflows.load(Ordering::Relaxed)
     }
 }
 
@@ -147,6 +204,7 @@ impl<T: Send + 'static> Retirer<T> {
 pub struct DropCollector<T> {
     inner: Consumer<T>,
     pending: Vec<T>,
+    overflows: Arc<AtomicUsize>,
 }
 
 impl<T: Send + 'static> DropCollector<T> {
@@ -211,6 +269,36 @@ impl<T: Send + 'static> DropCollector<T> {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty() && self.pending.is_empty()
+    }
+
+    /// Returns the cumulative number of values the [`Retirer`] forgot
+    /// because the channel was full — the saturation signal of the
+    /// bounded-leak overflow policy, shared with the retiring
+    /// endpoint.
+    ///
+    /// This is the non-RT-side observation point: poll it next to
+    /// [`drain`](Self::drain). A zero count is the healthy steady
+    /// state; any non-zero or growing value means `capacity` or drain
+    /// cadence is undersized for the actual retire rate, and each
+    /// forgotten value stays allocated until process exit — resize
+    /// the channel or drain more often.
+    ///
+    /// **RT contract:** non-RT only — a monitoring accessor for the
+    /// collecting side (an atomic load, technically non-blocking).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let (mut retirer, mut collector) = ruviform_rt::retire_channel::<u32>(1);
+    ///
+    /// retirer.retire(1);
+    /// retirer.retire(2); // Full — forgotten.
+    /// assert_eq!(collector.overflows(), 1);
+    /// assert_eq!(collector.drain(), 1);
+    /// ```
+    #[must_use]
+    pub fn overflows(&self) -> usize {
+        self.overflows.load(Ordering::Relaxed)
     }
 
     /// Hands `value` to the local pending queue — the crate-internal
@@ -340,6 +428,71 @@ mod tests {
     fn rt_endpoint_send_bounds() {
         expect_send::<Retirer<u8>>();
         expect_send::<DropCollector<u8>>();
+    }
+
+    /// RT contract: the `overflows` counter is the saturation signal —
+    /// each full-channel `mem::forget` increments it exactly once, it
+    /// is shared between both endpoints, and `drain` does not touch it.
+    #[test]
+    fn rt_retire_overflow_counted_and_shared() {
+        let (mut retirer, mut collector) = retire_channel::<DropFlag>(1);
+        let (queued, flag_a) = DropFlag::flagged();
+        let (overflow, flag_b) = DropFlag::flagged();
+
+        assert_eq!(retirer.overflows(), 0);
+        assert_eq!(collector.overflows(), 0);
+
+        retirer.retire(queued);
+        retirer.retire(overflow);
+        assert_eq!(retirer.overflows(), 1);
+        assert_eq!(collector.overflows(), 1);
+        assert!(!flag_b.load(Ordering::SeqCst));
+
+        // Draining the queued value does not reset the signal.
+        assert_eq!(collector.drain(), 1);
+        assert!(flag_a.load(Ordering::SeqCst));
+        assert_eq!(collector.overflows(), 1);
+    }
+
+    /// RT contract: the counter accumulates across drain cycles —
+    /// "bounded-leak" bounds the per-interval queue, not the lifetime
+    /// leak; repeated saturation is observable as a growing count.
+    #[test]
+    fn rt_retire_repeated_saturation_accumulates() {
+        let (mut retirer, mut collector) = retire_channel::<u32>(2);
+
+        for cycle in 1..=3_usize {
+            retirer.retire(1);
+            retirer.retire(2);
+            retirer.retire(3); // overflow each cycle
+            assert_eq!(collector.drain(), 2);
+            assert_eq!(collector.overflows(), cycle);
+        }
+    }
+
+    /// RT contract: teardown order — values queued when the `Retirer`
+    /// is dropped are still delivered to `drain`, so their
+    /// destructors run on the collecting thread (the safe order the
+    /// module doc prescribes: collector outlives retirer).
+    #[test]
+    fn rt_retire_teardown_collector_outlives() {
+        let (mut retirer, mut collector) = retire_channel::<DropFlag>(2);
+        let (probe, flag) = DropFlag::flagged();
+        retirer.retire(probe);
+
+        drop(retirer);
+        assert!(!flag.load(Ordering::SeqCst));
+        assert_eq!(collector.drain(), 1);
+        assert!(flag.load(Ordering::SeqCst));
+    }
+
+    /// `capacity` must be non-zero — the degenerate always-full
+    /// channel is rejected in debug builds.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "capacity must be non-zero")]
+    fn zero_capacity_panics_in_debug() {
+        let _unused = retire_channel::<u32>(0);
     }
 
     /// `push_local` is the crate-internal seam: locally handed

@@ -104,6 +104,23 @@ SPSC（`channel`/`Producer`/`Consumer`/`TryPushError`）をそのまま再利用
 
 ### Decisions During Implementation
 
+- **PR レビュー対応（P1）— bounded-leak の保証範囲を明確化＋飽和の
+  可観測性**: レビュー指摘どおり `mem::forget` ベースの
+  bounded-leak は「drain 間隔あたり」の有界であり生涯リーク上限
+  ではない（spec/ADR の設計意図どおりだが保証範囲の明文化が不足）。
+  採用した境界修正: `Retirer`/`DropCollector` 間で共有する
+  `Arc<AtomicUsize>` overflow カウンタを追加し、両端点に
+  `overflows() -> usize`（Relaxed 読み・RT-suitable/non-RT only を
+  各々ラベル）を公開。`retire` の forget パスで increment — 飽和は
+  silent ではなく観測可能という設計（reviewer 提示の選択肢のうち
+  「失敗の可観測性」に相当）。module doc に「bounded = per drain
+  interval、生涯リーク天井なし」「非ゼロ/増加 = capacity か drain
+  cadence の不足」「残余リスク（forget 値は終了まで生存）・長時間
+  soak 検証は Issue #22 の RT 検証基盤の責務」を明記。
+  capacity 0 は `debug_assert`（debug で panic）で仕様化、
+  teardown 順序（collector が retirer を outlive）は
+  `rt_retire_teardown_collector_outlives` でテスト確定。
+
 - `push_local` に `#[allow(dead_code)]` を付与（`#[expect]` ではない）:
   タスク 4 が `snapshot.rs` を追加するまで本番呼び出し元が存在せず
   `-D warnings` ゲートで `dead_code` になるため。`expect` は利用開始後に

@@ -190,8 +190,10 @@ pub trait RtProcessor {
     /// 待機・非有界処理を行わない契約。infallible: 処理上の失敗は
     /// `io` ドメインの状態として表現する（`Result` を返さない）。
     ///
-    /// `ctx` は RT 契約区間の証明 — `RtContext` を持たないコードは
-    /// `process` を呼べないため、契約区間外実行を型で抑止する。
+    /// `ctx` は RT 契約区間の capability マーカー — `RtContext` を
+    /// 持たないコードは `process` を呼べない。mint は `#[doc(hidden)]`
+    /// の慣習制約であり型強制ではないため、トークン保持は RT 安全性
+    /// の証明ではない（enforcement は review 依存 — ADR）。
     fn process(&mut self, io: &mut Self::Io, ctx: &RtContext);
 }
 ```

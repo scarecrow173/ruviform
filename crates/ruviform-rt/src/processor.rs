@@ -165,8 +165,10 @@ pub trait RtProcessor {
     /// unbounded work. Infallible by contract: processing failures are
     /// expressed as `io`-domain state, never as a returned `Result`.
     ///
-    /// `ctx` is the proof of the RT contract section — an `RtContext`
-    /// minted by the driver that started the section.
+    /// `ctx` is the capability token for the RT contract section — an
+    /// `RtContext` minted by the driver that started the section (the
+    /// `#[doc(hidden)]` mint is convention-restricted, not
+    /// type-enforced; holding the token is not a proof of RT-safety).
     ///
     /// # Examples
     ///

@@ -188,6 +188,38 @@ impl<T: Send + Sync + 'static> SnapshotWriter<T> {
     pub fn collect(&mut self) -> usize {
         self.collector.drain()
     }
+
+    /// Returns the cumulative number of `Arc`s the reader side forgot
+    /// because the retire channel was full — the saturation signal of
+    /// the slot's bounded-leak overflow policy (guard drops retire
+    /// their `Arc` through the reader's `Retirer`; a full channel
+    /// forgets it via `mem::forget` and counts it here).
+    ///
+    /// This is the non-RT-side observation point: poll it next to
+    /// [`collect`](Self::collect). A zero count is the healthy steady
+    /// state; any non-zero or growing value means `retire_capacity`
+    /// or the collect cadence is undersized for the actual guard-drop
+    /// rate, and each forgotten `Arc` keeps its snapshot alive until
+    /// process exit — enlarge the slot's retire capacity or collect
+    /// more often.
+    ///
+    /// **RT contract:** non-RT only — a monitoring accessor for the
+    /// writing side (an atomic load, technically non-blocking).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    ///
+    /// let (mut writer, reader) = ruviform_rt::slot(Arc::new(1_u32), 1);
+    /// drop(reader.read()); // fills the retire channel (capacity 1)
+    /// drop(reader.read()); // overflow — forgotten, counted
+    /// assert_eq!(writer.retire_overflows(), 1);
+    /// ```
+    #[must_use]
+    pub fn retire_overflows(&self) -> usize {
+        self.collector.overflows()
+    }
 }
 
 /// Reading endpoint of a snapshot slot — the RT-side handle.
@@ -461,5 +493,46 @@ mod tests {
         assert_eq!(writer.collect(), 1);
         // The leaked `Arc` remains allocated.
         assert_eq!(Arc::strong_count(&tracked), 3);
+    }
+
+    /// RT contract: guard-drop retirements that overflow the retire
+    /// channel are counted by the shared counter — the writer's
+    /// `retire_overflows` is the non-RT-side saturation signal.
+    #[test]
+    fn rt_snapshot_retire_overflows_observable() {
+        let (mut writer, reader) = slot(Arc::new(0_u32), 1);
+        assert_eq!(writer.retire_overflows(), 0);
+
+        // First guard drop fills the channel; the second overflows.
+        drop(reader.read());
+        drop(reader.read());
+        assert_eq!(writer.retire_overflows(), 1);
+
+        assert_eq!(writer.collect(), 1);
+        // `collect` does not reset the signal.
+        assert_eq!(writer.retire_overflows(), 1);
+    }
+
+    /// Teardown contract: the reader is independent of the writer's
+    /// lifetime — after the writer drops, `read` still returns the
+    /// last published snapshot (the safe ordering is to drop the
+    /// reader on the non-RT side; dropping it *after* the writer on
+    /// an RT thread is what the module doc forbids).
+    #[test]
+    fn rt_snapshot_reader_outlives_writer() {
+        let (mut writer, reader) = slot(Arc::new(0_u32), 4);
+        writer.publish(Arc::new(42_u32));
+
+        drop(writer);
+        assert_eq!(*reader.read(), 42);
+    }
+
+    /// `retire_capacity` must be non-zero — the degenerate
+    /// always-overflow slot is rejected in debug builds.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "capacity must be non-zero")]
+    fn zero_retire_capacity_panics_in_debug() {
+        let _unused = slot(Arc::new(0_u32), 0);
     }
 }

@@ -484,4 +484,13 @@ mod tests {
         assert_eq!(full.into_inner(), 1);
         assert_ne!(TryPopError::Empty.to_string(), "");
     }
+
+    /// `capacity` must be non-zero — the degenerate always-full
+    /// channel is rejected in debug builds.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "capacity must be non-zero")]
+    fn zero_capacity_panics_in_debug() {
+        let _unused = channel::<u32>(0);
+    }
 }

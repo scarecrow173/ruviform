@@ -1,5 +1,5 @@
-//! The [`RtContext`] capability token — proof that the caller is inside
-//! an RT contract section.
+//! The [`RtContext`] capability token — marks that the caller is
+//! inside an RT contract section.
 
 /// Capability token marking that the caller is inside an RT contract
 /// section.
@@ -36,8 +36,9 @@
 /// ```
 /// use ruviform_rt::RtContext;
 ///
-/// // APIs on the RT path take `&RtContext` as proof of the contract
-/// // section. Only driver entry points can mint the token — see
+/// // APIs on the RT path take `&RtContext` as the capability marker
+/// // of the contract section. Only driver entry points mint the
+/// // token — a convention, not a type-level restriction — see
 /// // `RtProcessor::process` for how the token is consumed.
 /// fn needs_context(_ctx: &RtContext) {}
 /// ```
