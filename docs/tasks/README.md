@@ -12,6 +12,9 @@ Directory: `docs/tasks`
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
 | TASK-034J6PiHv9GsKby7yH2eMO | 全公開 enum への `#[non_exhaustive]` 適用と exhaustive_enums allow の撤去 | done | [apply-non-exhaustive-to-public-enums.md](./apply-non-exhaustive-to-public-enums.md) |
 | TASK-034IRYXA0oq14nlgmC4Bch | workspace への publish = false 方針の適用 | done | [apply-publish-false-policy-to-workspace.md](./apply-publish-false-policy-to-workspace.md) |
+| TASK-034JRQCnF0sLKz5obmCHNT | Issue #25 文書クローズと全量検証 | todo | [audio-engine-closeout.md](./audio-engine-closeout.md) |
+| TASK-034JRQBhUGz8OWIgGAnEgl | ruviform-audio クレート新設 + pull グラフ/ミキサー/プランスナップショット | todo | [audio-engine-graph-snapshot.md](./audio-engine-graph-snapshot.md) |
+| TASK-034JRQBPxKgu0yLVIB6Xm7 | セッション統合（OutputStream callback → RT グラフ駆動） | todo | [audio-engine-session.md](./audio-engine-session.md) |
 | TASK-034IwBWH50nD9Unn8HghJD | テンプレート残存プレースホルダーのベースラインスイープ | done | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
 | TASK-034IdQmBa6UdauVn9IG59X | 最小ワークスペースと smoke test の構築 | done | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | TASK-034JgsFV6CWAjSnPuekBgs | ruviform-plugin-core 共通基盤クレートの作成 | done | [create-plugin-core-foundation.md](./create-plugin-core-foundation.md) |
