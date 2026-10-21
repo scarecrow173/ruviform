@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JRcXokykm0XlpOqcor0"
 type: "task"
-status: "todo"
+status: "done"
 title: "並列ワーカープール駆動（有界キュー・順序再構成）"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -62,11 +62,11 @@ relations:
 
 ## Done When
 
-- [ ] `run_parallel` が `Setup: Clone+Send`・`Rt: Send`・`Io: Send` 境界で並列駆動
-- [ ] 出力順序が入力順序と一致（seq 再構成）
-- [ ] 有界キューがバックプレッシャーを提供（投入ブロック）
+- [x] `run_parallel` が `Setup: Clone+Send`・`Rt: Send`・`Io: Send` 境界で並列駆動
+- [x] 出力順序が入力順序と一致（seq 再構成）
+- [x] 有界キューがバックプレッシャーを提供（投入ブロック）
 
 ## Verification
 
-- [ ] workers ∈ {1,2,4,8} で出力が逐次と一致するテストがグリーン
-- [ ] prepare 失敗・ワーカーパニック・cancel のエラーパステストがグリーン
+- [x] workers ∈ {1,2,4,8} で出力が逐次と一致するテストがグリーン
+- [x] prepare 失敗・ワーカーパニック・cancel のエラーパステストがグリーン

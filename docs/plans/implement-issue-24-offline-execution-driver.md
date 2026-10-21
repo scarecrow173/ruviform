@@ -86,11 +86,11 @@ relations:
 
 ## Verification
 
-- [ ] 逐次/並列の出力一致（workers ∈ {1,2,4,8}）テストがグリーン
-- [ ] キャンセル即時停止・`Cancelled` 返却テストがグリーン
-- [ ] `Progress` 正確性・prepare 失敗集約・ワーカーパニック写像テストがグリーン
-- [ ] `mise run fmt-check`/`check`/`lint`/`test` パス、`unsafe` なし
-- [ ] doc 監査で本チェーン起因 findings 0
+- [x] 逐次/並列の出力一致（workers ∈ {1,2,4,8}）テストがグリーン
+- [x] キャンセル即時停止・`Cancelled` 返却テストがグリーン
+- [x] `Progress` 正確性・prepare 失敗集約・ワーカーパニック写像テストがグリーン
+- [x] `mise run fmt-check`/`check`/`lint`/`test` パス、`unsafe` なし
+- [x] doc 監査で本チェーン起因 findings 0
 
 ## Open Questions / Gaps
 

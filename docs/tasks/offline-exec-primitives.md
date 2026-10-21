@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JRcWTeJbPQAh5fUwPZs"
 type: "task"
-status: "todo"
+status: "done"
 title: "オフライン駆動プリミティブ（CancellationToken/Progress/OfflineError/逐次ドライバ）"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -62,11 +62,11 @@ relations:
 
 ## Done When
 
-- [ ] `OfflineDriver::run` が `Processor`/`Setup`/`Vec<Io>` を受け逐次駆動し `Vec<Io>` を返す
-- [ ] `CancellationToken`/`Progress`/`OfflineError` が公開 API としてコンパイル・doc 済み（`**RT contract:** non-RT only`）
-- [ ] 全公開 enum が `#[non_exhaustive]`
+- [x] `OfflineDriver::run` が `Processor`/`Setup`/`Vec<Io>` を受け逐次駆動し `Vec<Io>` を返す
+- [x] `CancellationToken`/`Progress`/`OfflineError` が公開 API としてコンパイル・doc 済み（`**RT contract:** non-RT only`）
+- [x] 全公開 enum が `#[non_exhaustive]`
 
 ## Verification
 
-- [ ] `mise run check`/`lint`/`fmt-check` パス
-- [ ] 逐次経路の基本テスト（順序保存・cancel 即時停止）がグリーン
+- [x] `mise run check`/`lint`/`fmt-check` パス
+- [x] 逐次経路の基本テスト（順序保存・cancel 即時停止）がグリーン

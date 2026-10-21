@@ -26,6 +26,7 @@ relations:
   refined-by: []
   derives-from:
     - "docs/specs/offline-execution-driver.md"
+    - "docs/adr/offline-determinism-scope.md"
   derived-by:
     - "docs/plans/implement-issue-24-offline-execution-driver.md"
     - "docs/test-specs/offline-execution-driver-tests.md"

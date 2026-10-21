@@ -29,6 +29,7 @@ relations:
     - "docs/designs/ruviform-architecture-design-baseline.md"
   derived-by:
     - "docs/designs/offline-execution-driver.md"
+    - "docs/adr/offline-determinism-scope.md"
   verifies: []
   verified-by: []
   references: []
@@ -88,13 +89,13 @@ relations:
 
 ## Acceptance Criteria
 
-- [ ] `OfflineDriver` で任意 `Processor` の `Rt` をチャンク列に対して逐次・並列駆動できる（公開 API）
-- [ ] 並列実行の出力順序が逐次実行と一致するテストがグリーン
-- [ ] `CancellationToken::cancel()` 後、ドライバが次チャンク境界で停止し `Cancelled` を返すテストがグリーン
-- [ ] `Progress` が完了チャンク数/総数を正確に報告するテストがグリーン
-- [ ] `Processor::prepare` の失敗が `OfflineError` として集約されるテストがグリーン
-- [ ] 決定論モードの保証範囲が設計文書（本 spec 由来 design/ADR）に明文化されている
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` パス、`unsafe` なし
+- [x] `OfflineDriver` で任意 `Processor` の `Rt` をチャンク列に対して逐次・並列駆動できる（公開 API）
+- [x] 並列実行の出力順序が逐次実行と一致するテストがグリーン
+- [x] `CancellationToken::cancel()` 後、ドライバが次チャンク境界で停止し `Cancelled` を返すテストがグリーン
+- [x] `Progress` が完了チャンク数/総数を正確に報告するテストがグリーン
+- [x] `Processor::prepare` の失敗が `OfflineError` として集約されるテストがグリーン
+- [x] 決定論モードの保証範囲が設計文書（本 spec 由来 design/ADR）に明文化されている
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` パス、`unsafe` なし
 
 ## Deferred Design Concerns
 
