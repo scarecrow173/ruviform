@@ -669,6 +669,7 @@ pub fn sine(simd: SimdToken, dst: &mut [f32], c: &SineCoeffs, state: &mut SineSt
 mod tests {
     use super::*;
 
+    #[cfg(debug_assertions)]
     #[global_allocator]
     static ALLOC: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
 
