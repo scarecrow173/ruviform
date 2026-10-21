@@ -21,6 +21,8 @@ Directory: `docs/tasks`
 | TASK-034JcCRLsFJ7j8zPBi8mXY | ruviform-video-proc クレート骨格の新設 | done | [create-video-proc-crate-skeleton.md](./create-video-proc-crate-skeleton.md) |
 | TASK-034JgsHEkIUa3P4jzOizoM | PoC 実測に基づく binding 方式 ADR の決定 | done | [decide-plugin-binding-method-adr.md](./decide-plugin-binding-method-adr.md) |
 | TASK-034IdQqbjQcZ0Ztsy5IPpm | mise 開発・CI 検証タスクの定義 | done | [define-mise-dev-and-ci-tasks.md](./define-mise-dev-and-ci-tasks.md) |
+| TASK-034JZDNRML000000000007 | Issue #54 文書クローズと全量検証 | done | [denormal-closeout.md](./denormal-closeout.md) |
+| TASK-034JZDNRML000000000006 | DenormalFlush ノード実装 + テスト | done | [denormal-flush-node.md](./denormal-flush-node.md) |
 | TASK-034JcCQQD01mBg5JPjNiAS | video-core の所有権・drop・zero-copy 契約と RT ラベルの文書化 | done | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
 | TASK-034JglHTIvjo18tMdbO3DP | 採否 ADR 確定とワークスペース帳簿・索引の同期 | done | [finalize-backend-adr-and-sync-docs.md](./finalize-backend-adr-and-sync-docs.md) |
 | TASK-034J6PpKd8jNFxEYS4CRdM | 時間演算の早期飽和・Err 修正（i128 中間演算） | done | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |

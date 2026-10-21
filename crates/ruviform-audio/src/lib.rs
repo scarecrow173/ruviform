@@ -25,11 +25,13 @@
 //! allocation, blocking and OS calls are contract violations. All
 //! construction/mutation APIs are `non-RT only`.
 
+mod denormal;
 mod graph;
 mod mixer;
 mod plan;
 mod session;
 
+pub use denormal::DenormalFlush;
 pub use graph::{AudioNode, Graph};
 pub use mixer::Mixer;
 pub use plan::{GraphPlan, PlanSwap, RtPlan};
@@ -235,6 +237,71 @@ mod tests {
         let mut buf = [0.0f32; 8];
         cb(AudioBufferViewMut::try_new(&mut buf, 2, 4).unwrap(), info());
         assert_eq!(buf, [0.5; 8]);
+    }
+
+    #[test]
+    fn denormal_flush_zeroes_denormals() {
+        let den = f32::MIN_POSITIVE / 2.0;
+        let mut buf = [den, -den, 1.0f32, 0.0, -0.0, f32::NAN, f32::INFINITY, -0.5];
+        DenormalFlush.pull(
+            &mut AudioBufferViewMut::try_new(&mut buf, 2, 4).unwrap(),
+            &RtContext::mint(),
+        );
+        assert_eq!(buf[0], 0.0);
+        assert!(buf[1].is_sign_negative() && buf[1] == 0.0);
+        assert_eq!(buf[2], 1.0);
+        assert_eq!(buf[3], 0.0);
+        assert!(buf[4].is_sign_negative());
+        assert!(buf[5].is_nan());
+        assert_eq!(buf[6], f32::INFINITY);
+        assert_eq!(buf[7], -0.5);
+    }
+
+    struct EmitDenormal;
+    impl AudioNode for EmitDenormal {
+        fn pull(&mut self, out: &mut AudioBufferViewMut<'_, f32>, _ctx: &RtContext) {
+            for ch in 0..out.channels() {
+                if let Some(plane) = out.channel_mut(ch) {
+                    plane.fill(f32::MIN_POSITIVE / 2.0);
+                }
+            }
+        }
+    }
+
+    struct ReadFirst;
+    impl AudioNode for ReadFirst {
+        fn pull(&mut self, out: &mut AudioBufferViewMut<'_, f32>, _ctx: &RtContext) {
+            assert_eq!(out.channel(0).unwrap()[0], 0.0);
+        }
+    }
+
+    #[test]
+    fn denormal_flush_in_graph_order() {
+        // Flush sits between nodes — only the preceding node's output
+        // is normalized before the next node runs.
+        let mut g = Graph::new();
+        g.push(Box::new(EmitDenormal));
+        g.push(Box::new(DenormalFlush));
+        g.push(Box::new(ReadFirst));
+        let mut buf = [0.0f32; 8];
+        g.pull(
+            &mut AudioBufferViewMut::try_new(&mut buf, 2, 4).unwrap(),
+            &RtContext::mint(),
+        );
+        assert_eq!(buf, [0.0; 8]);
+    }
+
+    #[test]
+    fn rt_denormal_flush_no_alloc() {
+        let den = f32::MIN_POSITIVE / 2.0;
+        let mut buf = [den, -den, 1.0, 2.0, den, -den, 0.5, -0.5];
+        let mut out = AudioBufferViewMut::try_new(&mut buf, 2, 4).unwrap();
+        let ctx = RtContext::mint();
+        assert_no_alloc::assert_no_alloc(|| {
+            DenormalFlush.pull(&mut out, &ctx);
+        });
+        assert_eq!(buf[0], 0.0);
+        assert_eq!(buf[2], 1.0);
     }
 
     #[cfg(debug_assertions)]
