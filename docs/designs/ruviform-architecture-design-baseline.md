@@ -45,6 +45,8 @@ relations:
     - "../discovery/explore-architecture-design-baseline.md"
     - "https://github.com/scarecrow173/ruviform/issues/1"
   derived-by:
+    - "docs/specs/video-engine.md"
+    - "docs/adr/video-av-sync-policy.md"
     - "../plans/apply-issue-1-architecture-baseline-to-repo.md"
     - "../specs/offline-execution-driver.md"
     - "../specs/implement-media-data-model-api.md"

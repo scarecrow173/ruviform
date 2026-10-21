@@ -92,6 +92,8 @@ Directory: `docs/tasks`
 | TASK-034IRZFUgbTZlBX2kH7psN | Issue #1 リポジトリ反映の総合検証と spec/design バックリンク | done | [verify-issue-1-repo-reflection.md](./verify-issue-1-repo-reflection.md) |
 | TASK-034JO3XBRTT20ZNbIBDPRM | MSRV 1.89 実測検証と Issue #52 完了確認 | done | [verify-msrv-1-89-build.md](./verify-msrv-1-89-build.md) |
 | TASK-034IdQxdPQUxXweHBN1ZxT | 再現インストール検証と #3 転記用作業メモ | done | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |
+| TASK-034JZVID00000000000070 | Issue #27 文書クローズと全量検証 | done | [video-engine-closeout.md](./video-engine-closeout.md) |
+| TASK-034JZVID00000000000060 | ruviform-video クレート実装 + テスト | done | [video-engine-crate.md](./video-engine-crate.md) |
 | TASK-034JP1sJ8ZJThe3Fj9w0mr | clack thread-check の有効化と process での is_audio_thread 照会 | done | [wire-clap-thread-check.md](./wire-clap-thread-check.md) |
 | TASK-034JPwZ8htMzYNPNgOceEI | 分析・レポート記述・文書整合 | done | [write-dispatch-analysis-report.md](./write-dispatch-analysis-report.md) |
 | TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | done | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |
