@@ -6,14 +6,15 @@
 //! capability token, the [`MasterClock`] shared clock, the crate-wide
 //! [`Error`] / [`Result`] types, and the RT-safe primitives — the
 //! [`channel`] SPSC ring, the [`retire_channel`] deferred-drop
-//! retire channel, and the [`slot`] immutable snapshot exchange.
+//! retire channel, and the [`slot`] immutable snapshot exchange, all
+//! built on fixed-capacity, pre-allocated handoff structures.
 //! Holds no scheduling or I/O.
 //!
 //! ## Allowed dependency layers
 //!
-//! None. External synchronization crates (e.g. `rtrb`) are
-//! implementation details; their types must not be exposed in the public
-//! API.
+//! None. External synchronization crates (`rtrb`, `arc-swap`) are
+//! private implementation details; their types must not be exposed in
+//! the public API.
 //!
 //! ## RT contract
 //!

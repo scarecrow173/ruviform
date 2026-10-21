@@ -112,7 +112,7 @@ mise exec -- apm install --frozen
 ### ワークスペース構成
 
 - ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`version = "0.1.0"` は仮置き。`edition = "2024"`・`rust-version = "1.85"` は Issue #34 で確定。`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
-- メンバーは Phase 1 基盤6クレート（Issue #17 で仮置き `crates/ruviform-core` を分割置換）: Primitives `crates/ruviform-math`・`crates/ruviform-rt`（最下位）→ `crates/ruviform-media-core`・`crates/ruviform-exec`、Domain foundations `crates/ruviform-audio-core`・`crates/ruviform-video-core`。各クレートの crate-level doc には責務・許可依存層・RT 制約を転記する。media-core・audio-core・video-core は Issue #18 でデータモデル API が確定・実装され、audio-core・video-core → media-core の `path` 依存が設定済み。math・rt・exec は引き続きスケルトン（`version()` + doctest + smoke test。rt は `RtContext` のみ実装済み）であり、残りの `path` 依存は API 確定に伴い追加する。クレート DAG・分割案は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）に記録され、`members` は実装 Phase に応じて段階追加される。上記3クレート以外の公開 API は引き続き未確定であり、実装 Issue で確定する。
+- メンバーは Phase 1 基盤6クレート（Issue #17 で仮置き `crates/ruviform-core` を分割置換）: Primitives `crates/ruviform-math`・`crates/ruviform-rt`（最下位）→ `crates/ruviform-media-core`・`crates/ruviform-exec`、Domain foundations `crates/ruviform-audio-core`・`crates/ruviform-video-core`。各クレートの crate-level doc には責務・許可依存層・RT 制約を転記する。media-core・audio-core・video-core は Issue #18 でデータモデル API が確定・実装され、audio-core・video-core → media-core の `path` 依存が設定済み。rt・exec は Issue #21 で実装済み（rt: `Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換の RT 基盤 API。exec: スレッド優先度機構）。math は引き続きスケルトン（`version()` + doctest + smoke test）であり、残りの `path` 依存は API 確定に伴い追加する。クレート DAG・分割案は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）に記録され、`members` は実装 Phase に応じて段階追加される。上記5クレート以外の公開 API は引き続き未確定であり、実装 Issue で確定する。
 
 ### 検証入口
 
@@ -127,7 +127,7 @@ mise exec -- apm install --frozen
 | `lint` | `cargo clippy --workspace --all-targets -- -D warnings` | lint（dev プロファイル） |
 | `test` | `cargo test --workspace` | テスト（dev プロファイル） |
 | `build` | `cargo build --workspace` | ビルド（dev プロファイル） |
-| `test-rt` | `cargo test --workspace rt_`（`rt_` プレフィックス命名の RT テストを名前フィルタで選択。0 件一致でも成功するため RT テスト未存在時はスキップ相当） | RT 契約テスト（現時点では RT テスト未実装） |
+| `test-rt` | `cargo test --workspace rt_`（`rt_` プレフィックス命名の RT テストを名前フィルタで選択。0 件一致でも成功するため RT テスト未存在時はスキップ相当） | RT 契約テスト（Issue #18 の値型と Issue #21 の RT 基盤で実装済み） |
 | `bench` | `cargo bench --workspace` | ベンチマーク入口（ベンチマーク未実装のため現状は実質 no-op） |
 | `check-ci` / `lint-ci` / `test-ci` / `build-ci` | 上記各コマンドを `--profile ci`・`CARGO_INCREMENTAL=0` で実行 | CI 用途限定 |
 | `verify-ci` | `fmt-check` → `check-ci` → `lint-ci` → `test-ci` を順次実行 | CI 同等の検証列 |

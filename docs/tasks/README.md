@@ -29,7 +29,7 @@ Directory: `docs/tasks`
 | TASK-034IwCjptfvbSFBQaSKigx | プレースホルダー最終スイープ・総合検証と ADR メタデータ編集 | done | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
 | TASK-034J6Pq9WM0XMkGqryZrvQ | フォローアップトリアージ由来の小修正（try_new・Custom 不変条件・丸め注記） | done | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | TASK-034J5KRwAtAqF1xu0moYuS | Issue #18 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
-| TASK-034JxObKHc0v3kUhnQiePv | RT 基盤ドキュメント同期と総合検証 | todo | [sync-rt-foundation-docs-and-verify.md](./sync-rt-foundation-docs-and-verify.md) |
+| TASK-034JxObKHc0v3kUhnQiePv | RT 基盤ドキュメント同期と総合検証 | done | [sync-rt-foundation-docs-and-verify.md](./sync-rt-foundation-docs-and-verify.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
 | TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | done | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |

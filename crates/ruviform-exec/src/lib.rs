@@ -25,9 +25,12 @@
 //! In particular `promote_*` / `demote_*` and `ThreadPriorityGuard`
 //! creation / destruction perform OS syscalls: promotion must run before the
 //! RT contract interval begins (before `RtContext` is minted and before the
-//! first `process` call). The non-RT driver that mints `RtContext` tokens to
-//! batch- and parallel-drive `Processor` kernels offline arrives with later
-//! implementation issues.
+//! first `process` call). Every public API carries an explicit
+//! `**RT contract:**` label — `RT-suitable` for the pure value types and
+//! `non-RT only` for the promotion mechanism — mirroring the RT ADR rule
+//! that the guaranteed scope is defined per API. The non-RT driver that
+//! mints `RtContext` tokens to batch- and parallel-drive `Processor`
+//! kernels offline arrives with later implementation issues.
 //!
 //! Contract source: `docs/designs/ruviform-architecture-design-baseline.md`
 //! (crate table A.2, "RT／非 RT の分離方式") and

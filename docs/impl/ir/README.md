@@ -25,6 +25,7 @@ Directory: `docs/impl/ir`
 | IMPL-034JyAqvg5hMrhqv41ZXfk | リタイアチャネルの実装 | completed | [retire.md](./retire.md) |
 | IMPL-034JBQFUoXvQXzXWrpQtxV | スナップショット交換の実装 | completed | [snapshot.md](./snapshot.md) |
 | IMPL-034J5L5fAAqFUmUkYGAf1t | Sync docs and verify Issue 18 | completed | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
+| IMPL-034JCku503rJpSOXR7XpSc | RT 基盤ドキュメント同期と総合検証 | completed | [sync-rt-foundation-docs.md](./sync-rt-foundation-docs.md) |
 | IMPL-034JC5wFbM2VZc0U1W6Wsh | スレッド優先度機構の実装 | completed | [thread-priority.md](./thread-priority.md) |
 | IMPL-034IwXQh3FK347ImaDBdm4 | apm.yml 識別子更新と APM lockfile 再生成 | completed | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
 | IMPL-034IeuSyH91cISMHS4iUUz | Verify reproducible setup and work memo | completed | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |
