@@ -8,7 +8,7 @@ Directory: `docs/tasks`
 | --- | --- | --- | --- |
 | TASK-034Jf1Cl3xf8K9wcSuvFYK | ベンチハーネス骨格と dev-dependencies | done | [add-bench-harness-and-dev-deps.md](./add-bench-harness-and-dev-deps.md) |
 | TASK-034IdQtDnY6ZKHFhFhXKmW | 手動 CI ワークフローの追加 | done | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
-| TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | todo | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
+| TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | done | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
 | TASK-034J6PiHv9GsKby7yH2eMO | 全公開 enum への `#[non_exhaustive]` 適用と exhaustive_enums allow の撤去 | done | [apply-non-exhaustive-to-public-enums.md](./apply-non-exhaustive-to-public-enums.md) |
 | TASK-034IRYXA0oq14nlgmC4Bch | workspace への publish = false 方針の適用 | done | [apply-publish-false-policy-to-workspace.md](./apply-publish-false-policy-to-workspace.md) |

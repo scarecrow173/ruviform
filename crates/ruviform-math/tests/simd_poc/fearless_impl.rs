@@ -14,11 +14,13 @@
 //!   (`x < lo → lo`, `x > hi → hi`, else `x`): comparisons are false for NaN
 //!   so NaN lanes propagate with their payload, which `min_precise` /
 //!   `max_precise` would *drop* by selecting the non-NaN operand.
-//! - `dot` / `fir` use `mul_add` (FMA) — allowed by the ulp ≤ 8 contract.
-//!   `biquad` deliberately does *not*: a fused product skips one rounding and
-//!   the recursive state update compounds it (measured 18–351 ulps at len 100
-//!   vs the contract's ≤16), so its vector body keeps the scalar reference's
-//!   exact mul/sub/add order instead — unfused ops are bit-exact per lane.
+//! - `dot` uses `mul_add` (FMA) — allowed by the ulp contract (revised bound;
+//!   see `equiv.rs`). `fir` / `biquad` deliberately do *not*: a fused product
+//!   skips one rounding and the scalar reference's per-output accumulation
+//!   order is preserved by these impls, so dropping FMA keeps them *bit-exact*
+//!   — measured FMA drift otherwise reaches thousands of ulps under
+//!   cancellation (`fir` len ≤ 4096: up to 3994 ulps, f64-truth verified as
+//!   pure rounding, not a bug). Unfused vector ops are exact per lane.
 //! - `fade` keeps `idx·step + g0` a separate mul/add — the contract forbids
 //!   FMA here.
 //! - `biquad` is lane = channel under a *planar* layout, so `x`/`y` are
@@ -139,12 +141,15 @@ fn dot_impl<S: Simd>(simd: S, a: &[f32], b: &[f32]) -> f32 {
     sum
 }
 
-/// Direct-form FIR — lane = output position, ordered tap loop with FMA;
-/// the zero-history head and the tail run sequentially (ulp ≤ 8).
+/// Direct-form FIR — lane = output position, ordered tap loop *without* FMA:
+/// each output's tap order already matches the scalar reference, so unfused
+/// `t*w + acc` is bit-exact per lane (a fused step skips one rounding and
+/// the accumulated drift exceeded the ulp ≤ 8 contract under cancellation —
+/// see the file header). The zero-history head and the tail run sequentially.
 #[simd]
 #[expect(
     clippy::suboptimal_flops,
-    reason = "the head/tail loops mirror the scalar reference's sequential multiply-then-add"
+    reason = "unfused multiply-then-add mirrors the scalar reference's exact rounding"
 )]
 fn fir_impl<S: Simd>(simd: S, dst: &mut [f32], src: &[f32], taps: &[f32]) {
     let n = S::f32s::LEN;
@@ -162,8 +167,11 @@ fn fir_impl<S: Simd>(simd: S, dst: &mut [f32], src: &[f32], taps: &[f32]) {
         let mut acc = S::f32s::splat(simd, 0.0);
         for (k, &t) in taps.iter().enumerate() {
             // Lane l reads src[i + l - k] — a contiguous, shifted window.
+            // `t*w + acc` stays unfused (see the fn comment): per-output the
+            // tap loop order equals the scalar reference, so each lane is
+            // bit-exact — FMA would re-round and drift past the ulp bound.
             let w = S::f32s::from_slice(simd, &src[i - k..i - k + n]);
-            acc = S::f32s::splat(simd, t).mul_add(w, acc);
+            acc = S::f32s::splat(simd, t) * w + acc;
         }
         acc.store_slice(&mut dst[i..i + n]);
         i += n;
@@ -215,7 +223,7 @@ fn biquad_impl<S: Simd>(
             // FMA (`mul_add`/`mul_sub`) is *not* used here: a fused product
             // skips one rounding and the recursive state compounds the
             // difference — measured drift of 18–351 ulps at len 100 vs the
-            // contract's ≤16. (Unfused vector ops are exact per lane.)
+            // contract's ≤8. (Unfused vector ops are exact per lane.)
             let y = b0 * x + z1;
             let z1_next = b1 * x - a1 * y + z2;
             z2 = b2 * x - a2 * y;
