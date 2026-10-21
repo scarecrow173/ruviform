@@ -57,7 +57,7 @@ Issue #29 のプラグイン基盤（`ruviform-plugin-core` + CLAP/VST3 アダ�
 - **プラグイン処理契約は `ruviform-plugin-core` が所有する**。prepare/process 形状の規格中立 trait（仮称 `PluginProcessor` 相当）はプラグイン作者が実装し、アダプタはこれを実装・駆動する側であって契約自体を定義しない。将来の `RtContext` 等の capability 注入を破壊的変更なく吸収できるよう、context 引数は opaque/予約型とする。
 - **ライフサイクル遷移は `create → init → activate → processing → deactivate → destroy` の規則に従う**。不正遷移は型と `Result` で表出され、両アダプタの規格状態遷移はこの共通状態機械へ写像される。
 - **借用 view は `process` コールバックスコープにライフタイムを束縛する**。所有権移転なしで per-channel ポインタ/スライス列をラップし、借用がコールバックを脱退するコードはコンパイルを通らない（borrow-escapes-scope 系のエラー）。canonical planar f32 と同一レイアウトで、f32 経路の変換回数はゼロ。
-- **in-place 処理でエイリアスした `&[f32]` + `&mut [f32]` を同時に構築しない**。入出力同一バッファ（CLAP `in_place_pair` / `ChannelPair::InPlace`、VST3 の同一 `channelBuffers32` ポインタ）はアダプタが境界でポインタ一致を検出し、専用 in-place view 分岐またはスクラッチ経路を適用する。
+- **in-place 処理でエイリアスした `&[f32]` + `&mut [f32]` を同時に構築しない**。入出力同一バッファ（CLAP `in_place_pair` / `ChannelPair::InPlace`、VST3 の同一 `channelBuffers32` ポインタ）はアダプタが境界でポインタ一致または範囲重複（`[ptr, ptr + frames×4)` の交差）を検出し、専用 in-place view 分岐・スクラッチ経路または定義済み拒否を適用する。
 - **`process` 経路は alloc/dealloc しない**。ポインタ列をスライス view 化するチャンネルリスト用スクラッチは activate/prepare 時に最大バスチャンネル数で事前確保される。RT 適合性は API 単位の `**RT contract:**` ラベルと `rt_` プレフィックスのテスト・レビュー可能なドキュメント契約で担保する。
 - **規格中立性と外部型非露出を守る**。`ruviform-plugin-core` に binding クレート（`clack`/`vst3`/`clap-sys` 等）への `use`・依存辺・公開シグネチャ上の規格固有型を持たない。クレート外から到達可能な全公開 enum に enum レベル `#[non_exhaustive]` を付与する。
 - **`unsafe` は SAFETY コメント付き局所許可に限定される**。必要箇所（VST3 生ポインタ列のスライス化等）は `#[expect(unsafe_code)]`（未対応なら `#[allow(unsafe_code)]`）の局所許可に封じ込め、plugin-core / アダプタの公開 API に `pub unsafe fn` を置かない。

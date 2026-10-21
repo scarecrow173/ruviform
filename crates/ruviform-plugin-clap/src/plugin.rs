@@ -269,14 +269,22 @@ impl PluginMainThreadParams for GainMainThread<'_> {
         }
         let text = text.to_str().ok()?.trim().trim_end_matches('x').trim();
         let value: f64 = text.parse().ok()?;
-        Some(value.clamp(GAIN_PARAM.min_value, GAIN_PARAM.max_value))
+        // `clamp` propagates NaN — a non-finite parse is rejected,
+        // never handed to the host as a value.
+        value
+            .is_finite()
+            .then(|| value.clamp(GAIN_PARAM.min_value, GAIN_PARAM.max_value))
     }
 
     fn flush(&self, input_parameter_changes: &InputEvents, _output: &mut OutputEvents) {
         // Main-thread flush (e.g. changes applied while inactive):
         // fold every ParamValue for our param into the mirror; offsets
-        // carry no meaning outside a process block.
-        for event in input_parameter_changes.iter() {
+        // carry no meaning outside a process block. The scan is
+        // bounded like the process path's.
+        for event in input_parameter_changes
+            .iter()
+            .take(adapt::MAX_EVENTS_PER_BLOCK)
+        {
             if let Some(neutral) = adapt::translate_param_event(event, &GAIN_PARAM) {
                 if let EventKind::ParamValue(param_event) = neutral.kind() {
                     self.shared
@@ -291,8 +299,12 @@ impl PluginMainThreadParams for GainMainThread<'_> {
 impl PluginAudioProcessorParams for GainAudioProcessor<'_> {
     fn flush(&mut self, input_parameter_changes: &InputEvents, _output: &mut OutputEvents) {
         // Audio-thread flush: mirror the change and resync the live
-        // processor — CLAP does not guarantee offsets here.
-        for event in input_parameter_changes.iter() {
+        // processor — CLAP does not guarantee offsets here. The scan
+        // is bounded like the process path's.
+        for event in input_parameter_changes
+            .iter()
+            .take(adapt::MAX_EVENTS_PER_BLOCK)
+        {
             if let Some(neutral) = adapt::translate_param_event(event, &GAIN_PARAM) {
                 if let EventKind::ParamValue(param_event) = neutral.kind() {
                     self.shared
@@ -393,7 +405,9 @@ impl<'a> PluginAudioProcessor<'a, GainShared, GainMainThread<'a>> for GainAudioP
         // Borrowed views over the single declared port pair. A missing
         // pair is processed as an empty block (events still flush).
         let mut views = match audio.port_pair(0) {
-            Some(mut pair) => adapt::build_block_views(&mut pair, &mut self.scratch)?,
+            Some(mut pair) => {
+                adapt::build_block_views(&mut pair, &mut self.scratch, self.config.max_frames())?
+            }
             None => adapt::BlockViews::empty(),
         };
         // Caller-owned reborrow array — see `adapt::planar_views`.

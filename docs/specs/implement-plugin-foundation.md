@@ -4,7 +4,7 @@ type: "spec"
 status: "implemented"
 title: "プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding 方式 PoC）"
 created: "2026-10-20"
-updated: "2026-10-21"
+updated: "2026-10-22"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -116,10 +116,10 @@ GitHub Issue #29 の成果物として、[plugin ADR](../adr/plugin-architecture
 - 公開 API の例は doctest に書き `cargo test` で検証する。RT-suitable な操作を検証するテストは `rt_` プレフィックスで命名し `mise run test-rt` で選択可能にする
 - binding クレート依存の追加は `Cargo.lock` 追跡のまま行い、メンテナンス状況・ライセンス・依存木サイズの確認結果を方式 ADR（採用時）または PoC 記録に残す
 - 共通ライフサイクル状態機械は遷移表として定義し、規格の状態遷移との写像規則を含む。遷移表は順方向チェーン `create → init → activate → processing → deactivate → destroy` に加えて次を規定する: (a) `processing → activate` の処理停止遷移（CLAP `stop_processing` / VST3 `setProcessing(false)` は processing 停止後の activate 済み非処理状態へ写像し、`deactivate` は processing 停止を前提とする）、(b) activate ↔ processing の再アクティベート往復を合法とする、(c) init/activate 失敗時の遷移先状態、(d) `destroy` は先行する deactivate を要求する、(e) ホストのプロトコル違反（activate 前の process 呼び出し・processing 中の deactivate 等）に対するアダプタの定義済み拒否
-- アダプタ境界はホストが供給する process データを検証する: `numSamples`（0 以下または prepare 済み最大フレーム数超過）、`numChannels`（activate 時に確保したスクラッチ容量超過）、`symbolicSampleSize`/`kSample64`（f64 入力は定義済みの拒否/スキップとし、f32 として再解釈しない）、チャンネルポインタのアライメント（f32 は 4 バイト）、null チャンネルポインタ。検証失敗は定義済みの結果（process 呼び出しの拒否・バッファスキップ・エラーステータス）を返し、未定義動作や無言のチャンネルインデックスずらしを生じさせない
-- in-place 検出の粒度は per-channel ポインタ対比較とする（バッファ全体/`in_place_pair` の等価判定のみに留めない）。部分エイリアス（`out[i] == in[j]`）や出力チャンネルポインタの重複も検出し、決定済みの in-place 方式で処理する。同一領域上に `&[f32]` と `&mut [f32]`、または 2 つの `&mut [f32]` を構築しない
+- アダプタ境界はホストが供給する process データを検証する: `numSamples`（負の値、または prepare 済み最大フレーム数超過は拒否。0 フレームはイベントフラッシュ経路として受理する）、`numChannels`（activate 時に確保したスクラッチ容量超過）、`symbolicSampleSize`/`kSample64`（f64 入力は定義済みの拒否/スキップとし、f32 として再解釈しない）、チャンネルポインタのアライメント（f32 は 4 バイト）、null チャンネルポインタ。検証失敗は定義済みの結果（process 呼び出しの拒否・バッファスキップ・エラーステータス）を返し、未定義動作や無言のチャンネルインデックスずらしを生じさせない
+- in-place 検出の粒度は per-channel ポインタ対比較とする（バッファ全体/`in_place_pair` の等価判定のみに留めない）。部分エイリアス（`out[i] == in[j]`）や出力チャンネルポインタの重複に加え、開始ポインタが一致しないサンプル範囲（`[ptr, ptr + frames×4)`）の部分的重複も検出し、決定済みの in-place 方式で処理するか定義済みの拒否とする。同一領域上に `&[f32]` と `&mut [f32]`、または 2 つの `&mut [f32]` を構築しない
 - `PluginProcessor::process`（規格中立処理契約）は借用した入出力 view を受け取り、そのライフタイムはコールバックスコープに束縛される。ゼロコピー契約は慣例ではなくシグネチャ自体で強制する
-- sample-accurate イベントリストは次の意味論を定義する: 順序（サンプルオフセットでソート済み。アダプタは未ソートのホスト入力をソートするか、拒否することを明記する）、オフセット表現（ブロック内フレームオフセットでブロックフレーム数未満に有界 — 絶対 `MediaTime` は wire 表現ではない）、パラメータ値域（正規化 f64 ↔ 内部表現の写像と NaN ポリシー）、ゼロフレーム時のイベントフラッシュ動作、process ステータス/テイルの中立ステータス型への写像
+- sample-accurate イベントリストは次の意味論を定義する: 順序（サンプルオフセットでソート済み。アダプタは未ソートのホスト入力をソートするか、拒否することを明記する）、オフセット表現（ブロック内フレームオフセットでブロックフレーム数未満に有界 — 絶対 `MediaTime` は wire 表現ではない。ブロック範囲外オフセットのイベントは個別にドロップし、誤ったフレームへのクランプやブロック全体の拒否は行わない）、パラメータ値域（正規化 f64 ↔ 内部表現の写像と NaN ポリシー）、ゼロフレーム時のイベントフラッシュ動作、process ステータス/テイルの中立ステータス型への写像
 - 借用 view のチャンネル契約: 1 つの view 内の全チャンネルスライスは均一なフレーム長を共有し（異種長は構築時に拒否）、チャンネル順はバスのチャンネルインデックス順に一致し、view のチャンネル数は activate 時にネゴシエートされたバス構成と整合する
 - 事前確保スクラッチ（チャンネルリスト・in-place バウンスバッファを含む）はすべてプラグインインスタンスごとの状態とし、`static`/`thread_local` で共有しない
 

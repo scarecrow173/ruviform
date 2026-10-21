@@ -16,6 +16,7 @@ Directory: `docs/impl/ir`
 | IMPL-034JftzSzGUrGW76DpIyVM | Document video-core ownership contract | completed | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
 | IMPL-034JEzb6zrstxQuNrV0fmM | DSP/SIMD PoC benchmark | completed | [dsp-simd-poc-benchmark.md](./dsp-simd-poc-benchmark.md) |
 | IMPL-034J7bMHds4IPYPvoxiMZR | Fix time arithmetic saturation | completed | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
+| IMPL-034JFAMvBdMrd7hd9RAr4j | Harden plugin adapters from implementation review | completed | [harden-plugin-adapters-from-implementation-review.md](./harden-plugin-adapters-from-implementation-review.md) |
 | IMPL-034J5L4kgMP7Hjh57OhJcs | Implement audio-core data model | completed | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
 | IMPL-034JxNTyasfMjdgGXnvVPY | Implement audio-core device port | completed | [implement-audio-core-device-port.md](./implement-audio-core-device-port.md) |
 | IMPL-034JymdvDZaaZVzUnlu3RS | Implement audio-device cpal adapter | completed | [implement-audio-device-cpal-adapter.md](./implement-audio-device-cpal-adapter.md) |

@@ -182,7 +182,7 @@ GitHub Issue [#29 [impl] プラグイン基盤（plugin-core + CLAP/VST3 adapter
 ### unsafe の量と局所性（実測）
 
 - 生成 trait は **全メソッド `unsafe fn`・レシーバ `&self`**（「no attempt to abstract」の記述どおり）。アダプタ側が負う unsafe は「シグネチャ義務 54 件」＋「局所 `unsafe {}` ブロック 51 件（約半数はテスト COM ダブル）」で、raw メモリ操作を伴う実質ブロックは `block.rs` の 3 箇所（slice 再解釈 ×2・bounce 書き戻し）に集中した
-- COM `&self` 契約のため `RefCell<ComponentState>`＋`Cell` の内部可変性が必須 — ホストの再入違反は panic で検出する選択（catch_unwind 層の要否は T5 論点）
+- COM `&self` 契約のため `RefCell<ComponentState>`＋アトミックの内部可変性が必須 — ホストの同一スレッド再入違反は `try_borrow_mut` の定義済み拒否で処理する（レビュー後の確定挙動。panic→FFI 越え unwind はホスト abort のため採用しない）
 - edition 2024 固有: `#[no_mangle]` は `#[unsafe(no_mangle)]`（unsafe 属性として `#[expect(unsafe_code)]` が必要）、`&mut x`→`*mut` 暗黙変換は `borrow_as_ptr` で `&raw mut` が必須、生成定数はプラットフォーム依存型で `as` キャスト＋局所許容が要る
 
 ### エントリポイント（実測）
@@ -195,7 +195,7 @@ GitHub Issue [#29 [impl] プラグイン基盤（plugin-core + CLAP/VST3 adapter
 
 - `channelBuffers32` の `*mut *mut f32` → `PlanarBufferView{,Mut}` のゼロコピー経路が成立 — 非エイリアス出力チャンネルはホストバッファ直書きをテストで実測。全エイリアスパターン（`out[i]==in[j]`・出力重複）は per-channel 対比較で検出し該当チャンネルのみ activate 時確保の bounce 領域へ逃がす
 - `process` のチャンネルリストスクラッチ・イベントスクラッチは activate/`setupProcessing` 時の最大フレーム数で事前確保し process 経路で伸長しない構造（alloc 検証レーンは Issue #22 待ち）
-- `IParameterChanges`/`IParamValueQueue` は `ComRef::from_raw` で借用（refcount 非操作・非保持）、オフセットはブロック範囲へクランプ・stable sort・`MAX_BLOCK_EVENTS` 切り捨ての定義済み挙動
+- `IParameterChanges`/`IParamValueQueue` は `ComRef::from_raw` で借用（refcount 非操作・非保持）、ブロック範囲外オフセットはドロップ・stable sort・`MAX_BLOCK_EVENTS` 切り捨ての定義済み挙動（走査も `MAX_BLOCK_EVENTS` キュー/ポイントで有界）
 - ライフサイクルは VST3 呼び出し列を中立 `Lifecycle` へ写像（`setActive`→Activate/Deactivate・`setupProcessing`→`prepare`・`setProcessing`→Start/StopProcessing・`terminate`→Destroy）、不正順序は `kResultFalse`
 - `kSample64` は f32 再解釈せず定義済み拒否（`setupProcessing`/`process` 双方）。state ストリーム・`IPlugView` GUI は `kNotImplemented` スタブ（T6 へ）
 

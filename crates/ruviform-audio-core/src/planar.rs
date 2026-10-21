@@ -299,20 +299,28 @@ impl<'a, S: Sample> PlanarBufferViewMut<'a, S> {
     }
 }
 
-/// Whether any two *non-empty* channel slices share a data pointer —
+/// Whether any two *non-empty* channel slices overlap in memory —
 /// i.e. the list would expose two `&mut` over one region. Zero-length
 /// slices carry dangling pointers and are skipped.
 ///
 /// `O(channels²)` — called from `debug_assert!` only (channel counts
 /// are small).
 fn has_duplicate_channel_region<S: Sample>(channels: &[&mut [S]]) -> bool {
+    fn range<T>(slice: &[T]) -> (usize, usize) {
+        let range = slice.as_ptr_range();
+        (range.start.addr(), range.end.addr())
+    }
     for (i, a) in channels.iter().enumerate() {
         if a.is_empty() {
             continue;
         }
-        let pa = a.as_ptr();
+        let (a_start, a_end) = range(a);
         for b in &channels[i + 1..] {
-            if !b.is_empty() && b.as_ptr() == pa {
+            if b.is_empty() {
+                continue;
+            }
+            let (b_start, b_end) = range(b);
+            if a_start < b_end && b_start < a_end {
                 return true;
             }
         }

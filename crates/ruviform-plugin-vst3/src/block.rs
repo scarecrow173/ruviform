@@ -11,12 +11,15 @@
 //!
 //! ## Aliasing / in-place policy
 //!
-//! Only *output* channels ever bounce. Per output channel `j`, if its
-//! pointer equals any input channel pointer (`out[j] == in[i]`,
-//! including partial cross aliases) or any earlier output channel
-//! pointer (`out[j] == out[k], k < j`), the output slice is routed
-//! through a per-instance bounce buffer and [`finish_block`] copies it
-//! back — deterministic last-writer-wins for duplicated outputs.
+//! Only *output* channels ever bounce. Per output channel `j`, the
+//! `[ptr, ptr + frames*4)` sample range is compared against every
+//! input channel range and every earlier output channel range. An
+//! exact-pointer match (`out[j] == in[i]` or `out[j] == out[k], k < j`)
+//! routes the output through a per-instance bounce buffer and
+//! [`finish_block`] copies it back — deterministic last-writer-wins
+//! for duplicated outputs. A *partial* overlap (ranges intersect but
+//! starts differ) is a malformed host buffer list and rejects the
+//! block — it could never be a meaningful in-place mapping.
 //! Inputs are read-only `&[f32]`: they may freely alias each other or
 //! the host memory of *bounced* outputs (never written during the
 //! block). Non-bounced outputs are pairwise disjoint and disjoint from
@@ -33,7 +36,7 @@
 //! #22 verification lane lands the no-alloc guarantee is a documented
 //! contract plus review target.
 
-use std::mem::align_of;
+use std::mem::{align_of, size_of};
 use std::ptr::{self, NonNull};
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut};
@@ -64,6 +67,11 @@ pub(crate) enum Rejection {
     NullChannel,
     /// A channel pointer is not 4-byte (`f32`) aligned.
     Misaligned,
+    /// An output channel's sample range *partially* overlaps an
+    /// input or an earlier output channel (exact-pointer equality is
+    /// the bounce case, not a rejection — but a shifted overlap is a
+    /// malformed host buffer list).
+    Overlap,
 }
 
 /// Per-instance event list scratch — bounded at [`MAX_BLOCK_EVENTS`]
@@ -206,23 +214,19 @@ impl ChannelScratch {
     }
 }
 
-/// Builds a block-relative frame offset from a raw host sample offset:
-/// clamps into `[0, frames-1]` (or `0` for a zero-frame block) so every
-/// event stays inside the block — a defined boundary mapping, recorded
-/// in the `PoC` findings.
+/// Maps a raw host sample offset to a block-relative frame offset:
+/// `Some` when `0 <= raw_offset < max(frames, 1)` (offset 0 stays
+/// legal for a zero-frame block, matching `EventList`'s flush
+/// semantics); `None` — the event is dropped — otherwise. The same
+/// drop policy as the CLAP adapter keeps out-of-block events from
+/// silently landing on a wrong frame.
 ///
 /// **RT contract:** RT-suitable — pure.
 #[must_use]
-pub(crate) fn block_offset(raw_offset: i32, frames: usize) -> u32 {
-    // Negative offsets become zero (block start); offsets at or past
-    // the end clamp to the last frame.
-    let Ok(raw) = u32::try_from(raw_offset) else {
-        return 0;
-    };
-    // `saturating_sub` keeps `frames == 0` at bound 0, matching
-    // `EventList`'s "only offset 0 is due" zero-frame flush.
-    let hi = u32::try_from(frames.saturating_sub(1)).unwrap_or(u32::MAX);
-    raw.min(hi)
+pub(crate) fn block_offset(raw_offset: i32, frames: usize) -> Option<u32> {
+    let raw = u32::try_from(raw_offset).ok()?;
+    let hi = u32::try_from(frames.max(1)).unwrap_or(u32::MAX);
+    (raw < hi).then_some(raw)
 }
 
 /// The validated, view-ready products of [`prepare_block`] — borrows
@@ -290,11 +294,28 @@ pub(crate) fn prepare_block<'a>(
         *slot = ptr::slice_from_raw_parts(ptr, frames);
     }
 
-    // Output channels: per-channel-pair alias detection.
+    // Output channels: per-channel *range* overlap detection — an
+    // exact-pointer match bounces, a shifted/partial overlap rejects
+    // the block (`Rejection::Overlap`).
+    let bytes = frames * size_of::<f32>();
     for (j, &ptr) in output_ptrs.iter().enumerate() {
-        let aliased_input = input_ptrs.contains(&ptr);
-        let aliased_output = output_ptrs[..j].contains(&ptr);
-        let bounced = aliased_input || aliased_output;
+        // `saturating_add`: a hostile pointer near the address-space
+        // top must not wrap the range empty — saturation makes every
+        // comparison overlap and the block rejects.
+        let start = ptr.addr();
+        let end = start.saturating_add(bytes);
+        let mut bounced = false;
+        for &other in input_ptrs.iter().chain(&output_ptrs[..j]) {
+            let other_start = other.addr();
+            let other_end = other_start.saturating_add(bytes);
+            if other_start < end && start < other_end {
+                if other_start == start {
+                    bounced = true;
+                } else {
+                    return Err(Rejection::Overlap);
+                }
+            }
+        }
         scratch.bounced[j] = bounced;
         scratch.out_host[j] = ptr;
         scratch.out_slices[j] = if bounced {
@@ -488,6 +509,35 @@ mod tests {
     }
 
     #[test]
+    fn shifted_range_overlap_is_rejected() {
+        let mut input = [vec![1.0_f32; 8], vec![2.0; 8]];
+        let mut output = [vec![0.0_f32; 8], vec![0.0; 8]];
+        let in_ptrs = ptrs(&mut input);
+        let out_ptrs = ptrs(&mut output);
+        let mut scratch = scratch_stereo(8);
+
+        // out[1] = in[0] + 1 — the ranges intersect but the starts
+        // differ: equality-only detection would miss the aliasing.
+        let shifted_in = [out_ptrs[0], in_ptrs[0].wrapping_add(1)];
+        assert!(matches!(
+            prepare_block(&in_ptrs, &shifted_in, 8, &mut scratch),
+            Err(Rejection::Overlap)
+        ));
+        // out[1] = out[0] + 4 — shifted output↔output overlap.
+        let shifted_out = [out_ptrs[0], out_ptrs[0].wrapping_add(4)];
+        assert!(matches!(
+            prepare_block(&in_ptrs, &shifted_out, 8, &mut scratch),
+            Err(Rejection::Overlap)
+        ));
+        // Same-index partial overlap: out[0] = in[0] + 1.
+        let shifted_same = [in_ptrs[0].wrapping_add(1), out_ptrs[1]];
+        assert!(matches!(
+            prepare_block(&in_ptrs, &shifted_same, 8, &mut scratch),
+            Err(Rejection::Overlap)
+        ));
+    }
+
+    #[test]
     fn event_scratch_collects_sorts_and_truncates() {
         let mut scratch = EventScratch::empty();
         scratch.configure();
@@ -510,13 +560,15 @@ mod tests {
     }
 
     #[test]
-    fn block_offset_clamps_into_block() {
-        assert_eq!(block_offset(-5, 64), 0);
-        assert_eq!(block_offset(0, 64), 0);
-        assert_eq!(block_offset(63, 64), 63);
-        assert_eq!(block_offset(64, 64), 63);
-        assert_eq!(block_offset(i32::MAX, 64), 63);
-        assert_eq!(block_offset(10, 0), 0);
+    fn block_offset_drops_out_of_block_events() {
+        assert_eq!(block_offset(-5, 64), None);
+        assert_eq!(block_offset(0, 64), Some(0));
+        assert_eq!(block_offset(63, 64), Some(63));
+        assert_eq!(block_offset(64, 64), None);
+        assert_eq!(block_offset(i32::MAX, 64), None);
+        // Zero-frame flush: only offset 0 stays in bounds.
+        assert_eq!(block_offset(0, 0), Some(0));
+        assert_eq!(block_offset(10, 0), None);
     }
 
     /// RT contract: `prepare_block` + view access + `finish_block` are

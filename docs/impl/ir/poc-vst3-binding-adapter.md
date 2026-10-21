@@ -92,9 +92,9 @@ task `TASK-034JgsHeZt7Bm40uBMo9wg`（plan `PLAN-034JcvpHIlt5JmqvgOquvI` T4）と
 | --- | --- |
 | `Cargo.toml` | workspace メタデータ継承・`crate-type = ["cdylib", "rlib"]`・`vst3 = "0.3.0"`・path 依存（plugin-core / audio-core / media-core）・workspace lints |
 | `lib.rs` | `GetPluginFactory`＋条件付きモジュールエントリ（Windows `InitDll`/`ExitDll`・macOS `bundleEntry`/`bundleExit`・Linux `ModuleEntry`/`ModuleExit`）。全エクスポートに `#[unsafe(no_mangle)]`＋`#[expect(unsafe_code)]`＋根拠コメント |
-| `component.rs` | `GainComponent`：`IComponentTrait`（バス列挙・activate・state スタブ）・`IAudioProcessorTrait`（`setupProcessing`/`setProcessing`/`process`・stereo 配置のみ）・`IProcessContextRequirementsTrait`。`RefCell<ComponentState>`＋`Cell` tail、ライフサイクル判定、`IParameterChanges`/`IParamValueQueue` のイベント収集、`ProcessContext`→`TransportInfo` 変換、COM テストダブル＋ライフサイクル/エイリアス/拒否テスト |
-| `block.rs` | `ChannelScratch`（ポインタ列→スライス列リスト・host 出力ポインタ・bounce フラグ・フラット bounce 領域）と `EventScratch`（`MAX_BLOCK_EVENTS = 1_024`・オフセットクランプ・stable sort・定義済み切り捨て）。`prepare_block` が境界検証＋エイリアス判定＋view 構築、`finish_block` が bounce 書き戻し |
-| `controller.rs` | `GainController`：`IEditControllerTrait`（`getParameterInfo`/正規化↔プレーン変換・文字列変換・state スタブ・`IPlugView` は `kNotImplemented`）。`Cell<f64>` ゲイン保持 |
+| `component.rs` | `GainComponent`：`IComponentTrait`（バス列挙・activate・state スタブ）・`IAudioProcessorTrait`（`setupProcessing`/`setProcessing`/`process`・stereo 配置のみ）・`IProcessContextRequirementsTrait`。`RefCell<ComponentState>`（`try_borrow_mut` で再入を定義済み拒否 — レビュー後確定）＋`AtomicU32` tail、ライフサイクル判定、`IParameterChanges`/`IParamValueQueue` のイベント収集、`ProcessContext`→`TransportInfo` 変換、COM テストダブル＋ライフサイクル/エイリアス/拒否テスト |
+| `block.rs` | `ChannelScratch`（ポインタ列→スライス列リスト・host 出力ポインタ・bounce フラグ・フラット bounce 領域）と `EventScratch`（`MAX_BLOCK_EVENTS = 1_024`・範囲外オフセットドロップ・stable sort・定義済み切り捨て）。`prepare_block` が境界検証＋範囲重複エイリアス判定＋view 構築、`finish_block` が bounce 書き戻し |
+| `controller.rs` | `GainController`：`IEditControllerTrait`（`getParameterInfo`/正規化↔プレーン変換・文字列変換・state スタブ・`IPlugView` は `kNotImplemented`）。`AtomicU64`（f64 ビット）ゲイン保持＋正規化ドメイン検証（レビュー後確定） |
 | `factory.rs` | `GainFactory`：`IPluginFactory`/`2`/`3` を実装し component/controller 両 CID を `ComWrapper` で生成・要求インターフェースへクエリ。ASCII/Unicode クラス情報 |
 | `gain.rs` | `GainProcessor`：中立 `PluginProcessor` 実装。`prepare` でゲイン 1.0 リセット、`process` で ParamID 0 のパラメータイベント適用→チャンネル対乗算 |
 | `strings.rs` | `copy_wstring`（UTF-16 `TChar`）・`copy_cstring` — 長さ付き固定バッファへの終端付きコピー |
@@ -104,10 +104,10 @@ task `TASK-034JgsHeZt7Bm40uBMo9wg`（plan `PLAN-034JcvpHIlt5JmqvgOquvI` T4）と
 ### Decisions During Implementation
 
 - **生成 trait は全メソッド `unsafe fn`・レシーバ `&self`**: `vst3` の設計どおり safe ラッパーは存在しない。アダプタ側 unsafe は 54 の `unsafe fn` シグネチャ義務と ~51 の局所 `unsafe {}` ブロック（うち約半数はテストの COM ダブル/エントリ読み取り、`block.rs` は実質 3 ブロック = `slice` 再解釈 ×2＋bounce 書き戻し）。すべて SAFETY コメント＋`#[expect(unsafe_code)]` でゲート通過
-- **COM `&self` → `RefCell` + `Cell`**: COM メソッドは `&self` しか取れないため内部可変性が必須。`RefCell` は再入アクセス（ホストのプロトコル違反）を未定義挙動ではなく panic で検出する選択 — VST3 の呼び出し規律（同一スレッド・非再入）は crate doc に明記
+- **COM `&self` → `RefCell` + アトミック**: COM メソッドは `&self` しか取れないため内部可変性が必須。`RefCell` は `try_borrow_mut` 経由で再入を `kResultFalse` の定義済み拒否とする（レビュー後確定 — panic→FFI 越え unwind はホスト abort のため不採用）— VST3 の呼び出し規律（同一スレッド・非再入）は crate doc に明記
 - **ライフサイクル写像**: `initialize`→`Initialize`、`setActive(true)`→`Activate`、`setupProcessing`→中立 `prepare`＋スクラッチ確保（Activated のまま）、`setProcessing(true)`→`StartProcessing`、`process`→`Process`、`setProcessing(false)`→`StopProcessing`、`setActive(false)`→`Deactivate`、`terminate`→`Destroy`。不正順序は `kResultFalse`（未定義でなく定義済み拒否）
-- **エイリアス戦略**: 全エイリアスパターン（`out[i]==in[j]` 部分交差・出力ポインタ重複を含む per-channel 対比較）で検出し、衝突出力チャンネルのみフラット bounce 領域へ。非衝突出力はホストバッファ直書き（ゼロコピー経路維持）。出力重複は決定的 last-writer-wins 書き戻し — T2 の bounce-scratch 安全デフォルトを採用し専用 in-place 分岐は不採用
-- **イベント経路**: `ComRef::from_raw` で借用（refcount 非操作・非保持）、`sampleOffset` は `[0, frames-1]` へクランプ（0 フレームは 0）、`ParamValue` 非有限値は定義済み drop、容量超過は定義済み切り捨て、stable sort 後に `EventList` 構築
+- **エイリアス戦略**: 全エイリアスパターン（`out[i]==in[j]` 部分交差・出力ポインタ重複を含む per-channel 対比較）で検出し、衝突出力チャンネルのみフラット bounce 領域へ。非衝突出力はホストバッファ直書き（ゼロコピー経路維持）。出力重複は決定的 last-writer-wins 書き戻し — T2 の bounce-scratch 安全デフォルトを採用し専用 in-place 分岐は不採用。レビューで完全一致→バウンス・部分重複→`Rejection::Overlap` 拒否の範囲比較へ強化
+- **イベント経路**: `ComRef::from_raw` で借用（refcount 非操作・非保持）、`sampleOffset` はブロック範囲外をドロップ（レビューで規格間ポリシーを「個別ドロップ」に統一 — 当初は `[0, frames-1]` へクランプ）、`ParamValue` 非有限値は定義済み drop、容量超過は定義済み切り捨て、stable sort 後に `EventList` 構築
 - **`kSample64` は拒否**: f64 入力を f32 へ再解釈しない — `setupProcessing`/`process` 双方で `kResultFalse`
 - **エントリポイント命名の不整合（記録済み finding）**: upstream `vst3` クレート example は macOS フックを `BundleEntry`/`BundleExit` と命名するが、VST3 spec（・本タスクの文言）は小文字 `bundleEntry`/`bundleExit`。spec 名を採用し `lib.rs` コメントと discovery 追記に記録
 - **`IPlugView` の実装位置**: 生成バインディングでは `vst3::Steinberg::IPlugView`（トップレベル、`Vst` 下ではない）。PoC は GUI なしのため `createView` は `kNotImplemented`
@@ -144,7 +144,7 @@ task `TASK-034JgsHeZt7Bm40uBMo9wg`（plan `PLAN-034JcvpHIlt5JmqvgOquvI` T4）と
 ## Risks
 
 - `vst3` の `rust_version` は未宣言 — pinned 1.99.0 でビルド実測済みだが MSRV 1.85 単独でのビルドは未実測（生成コードは素の `repr(C)`/extern で構成され新 API 依存は見られないが、MSRV ゲートでの再確認を T5/T6 に残す）
-- `RefCell` の borrow 失敗は panic — ホストの再入・並行違反を「検出」する設計だが、panic が unwind として ABI を越えないよう経路は crate doc で要約済み（catch_unwind 層の要否は T5 ADR の論点）
+- `RefCell` の borrow 失敗は panic — レビューで `try_borrow_mut` の `kResultFalse` 定義済み拒否へ置換済み（panic→FFI 越え unwind はホスト abort のため不採用。スレッド間並行は VST3 スレッド規約違反として防衛境界外）
 - `process` no-alloc は alloc 検証レーン（Issue #22）未整備のためテスト観測ではなく構造契約 — スクラッチは `setupProcessing`/`setActive` 時確保、`process` 内に `Vec` 伸長・ヒープ経路なしをコードレビューで担保
 - `component`/`controller` の `setComponentState`/`getState`、GUI（`IPlugView`）、`setHostContext` 活用は未実装スタブ — T6 の薄アダプタ完成タスクへ
 - Windows の `InitDll`/`ExitDll` は spec 任意フックを trivially-true で実装（統一形状のため）— macOS/Linux エントリは `cfg` コードのみでクロスビルド未実測

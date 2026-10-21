@@ -26,7 +26,12 @@
 //! `RefCell<ComponentState>` — a finding recorded for the binding ADR.
 //! The VST3 threading contract calls each method on a documented
 //! thread with no concurrent access; a protocol-violating re-entrant
-//! call aborts on `RefCell` instead of producing UB.
+//! call on the same thread is a defined `kResultFalse` rejection via
+//! `try_borrow_mut` rather than a `RefCell` panic unwinding through
+//! `extern "system"` (which would abort the host). Concurrent
+//! cross-thread calls remain a host threading-contract violation
+//! outside the defended boundary; only `getTailSamples` is documented
+//! for any-thread access, and its state is an atomic.
 //!
 //! ## `unsafe` discipline
 //!
@@ -41,8 +46,9 @@
 // and a no-op on Windows — suppress `unnecessary_cast` for this file.
 #![allow(clippy::unnecessary_cast)]
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::slice;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_media_core::{MediaTime, TimeBase, TransportStatus};
@@ -63,9 +69,9 @@ use vst3::Steinberg::{
 };
 use vst3::{Class, ComRef, uid};
 
-use crate::block::{self, ChannelScratch, EventScratch, PreparedBlock};
+use crate::block::{self, ChannelScratch, EventScratch, MAX_BLOCK_EVENTS, PreparedBlock};
 use crate::controller::GainController;
-use crate::gain::GainProcessor;
+use crate::gain::{GAIN_PARAM, GainProcessor};
 use crate::strings::copy_wstring;
 
 /// The VST3 `ProcessContext` — aliased to keep it distinct from the
@@ -75,6 +81,12 @@ type VstProcessContext = vst3::Steinberg::Vst::ProcessContext;
 /// Channel count negotiated for the single stereo bus pair — the `PoC`
 /// plugin only accepts `SpeakerArr::kStereo` (2 channels per bus).
 const CHANNELS_PER_BUS: usize = 2;
+
+/// Upper bound on the negotiated `maxSamplesPerBlock` — a defined
+/// `setupProcessing` rejection above this `PoC` ceiling keeps a
+/// hostile host from driving the per-instance bounce scratch into a
+/// multi-GiB allocation (2 channels × 1 MiB frames ≈ 8 MiB).
+const MAX_NEGOTIATED_FRAMES: i32 = 1 << 20;
 
 /// Per-instance component state — everything the `&self` COM methods
 /// need to mutate, behind one `RefCell`.
@@ -114,8 +126,8 @@ impl ComponentState {
 pub(crate) struct GainComponent {
     state: RefCell<ComponentState>,
     /// Latest tail length reported by the processor —
-    /// `getTailSamples` may run on any thread, so it stays a `Cell`.
-    tail: Cell<u32>,
+    /// `getTailSamples` may run on any thread, so it stays an atomic.
+    tail: AtomicU32,
 }
 
 impl Class for GainComponent {
@@ -129,14 +141,16 @@ impl GainComponent {
     pub(crate) fn new() -> Self {
         Self {
             state: RefCell::new(ComponentState::new()),
-            tail: Cell::new(0),
+            tail: AtomicU32::new(0),
         }
     }
 
     /// Reads `IParameterChanges` into `event_scratch`: one
-    /// [`ParamEvent`] per queue point, offsets clamped into the block,
-    /// non-finite values dropped, list sorted by offset. Defined
-    /// truncation at `MAX_BLOCK_EVENTS`.
+    /// [`ParamEvent`] per gain queue point, out-of-block offsets and
+    /// non-finite values dropped, list sorted by offset. The scan is
+    /// bounded — at most `MAX_BLOCK_EVENTS` queues and `MAX_BLOCK_EVENTS`
+    /// points per queue are visited, and it stops as soon as the
+    /// bounded scratch fills (defined truncation).
     ///
     /// # Safety
     ///
@@ -160,39 +174,61 @@ impl GainComponent {
             return;
         };
         // SAFETY: `changes` is a live `IParameterChanges` for the call.
-        let count = unsafe { changes.getParameterCount() }.max(0);
-        for index in 0..count {
+        let count = usize::try_from(unsafe { changes.getParameterCount() }.max(0)).unwrap_or(0);
+        // A host may declare arbitrary queue/point counts; the scan
+        // stays bounded — at most `MAX_BLOCK_EVENTS` queues and
+        // `MAX_BLOCK_EVENTS` points per queue.
+        'queues: for index in 0..count.min(MAX_BLOCK_EVENTS) {
             // SAFETY: `index < count` within this live
             // `IParameterChanges`; the returned queue pointer is
             // borrowed for this call only.
-            let Some(queue) = (unsafe { ComRef::from_raw(changes.getParameterData(index)) }) else {
+            let Some(queue) = (unsafe {
+                ComRef::from_raw(changes.getParameterData(i32::try_from(index).unwrap_or(i32::MAX)))
+            }) else {
                 continue;
             };
             // SAFETY: `queue` is a live `IParamValueQueue` for the call.
             let param_id = ParamId(unsafe { queue.getParameterId() });
+            // Foreign parameter ids never enter the scratch — they
+            // cannot consume the bounded event budget.
+            if param_id != GAIN_PARAM.id {
+                continue;
+            }
             // SAFETY: `queue` is a live `IParamValueQueue` for the call.
-            let points = unsafe { queue.getPointCount() }.max(0);
-            for point in 0..points {
+            let points = usize::try_from(unsafe { queue.getPointCount() }.max(0)).unwrap_or(0);
+            for point in 0..points.min(MAX_BLOCK_EVENTS) {
                 let mut offset = 0_i32;
                 let mut value = 0.0_f64;
                 // SAFETY: `point < points` within this live queue;
                 // `offset`/`value` are valid out-params.
-                if unsafe { queue.getPoint(point, &raw mut offset, &raw mut value) } != kResultTrue
+                if unsafe {
+                    queue.getPoint(
+                        i32::try_from(point).unwrap_or(i32::MAX),
+                        &raw mut offset,
+                        &raw mut value,
+                    )
+                } != kResultTrue
                 {
                     continue;
                 }
-                // Defined skip: non-finite values are dropped (the
-                // `ParamValue` NaN policy rejects them anyway).
+                // Defined skips: non-finite values (the `ParamValue`
+                // NaN policy) and out-of-block offsets (the shared
+                // drop policy — never clamped onto a wrong frame).
                 let Ok(value) = ParamValue::new(value) else {
                     continue;
                 };
-                let offset = block::block_offset(offset, frames);
+                let Some(offset) = block::block_offset(offset, frames) else {
+                    continue;
+                };
                 let event = Event::new(
                     offset,
                     EventKind::ParamValue(ParamEvent { param_id, value }),
                 );
-                // Defined truncation when the bounded scratch fills.
-                let _ = events.push(event);
+                // Scratch full → every remaining host point is dropped
+                // anyway; stop scanning (bounded-work guarantee).
+                if !events.push(event) {
+                    break 'queues;
+                }
             }
         }
         events.sort();
@@ -234,12 +270,10 @@ impl IPluginBaseTrait for GainComponent {
     /// `kResultFalse` rejection.
     #[expect(unsafe_code)]
     unsafe fn initialize(&self, _context: *mut FUnknown) -> tresult {
-        match self
-            .state
-            .borrow_mut()
-            .lifecycle
-            .transition(LifecycleEvent::Initialize)
-        {
+        let Ok(mut state) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        match state.lifecycle.transition(LifecycleEvent::Initialize) {
             Ok(_) => kResultOk,
             Err(_) => kResultFalse,
         }
@@ -249,12 +283,10 @@ impl IPluginBaseTrait for GainComponent {
     /// `Deactivate`; a still-activated terminate is rejected.
     #[expect(unsafe_code)]
     unsafe fn terminate(&self) -> tresult {
-        match self
-            .state
-            .borrow_mut()
-            .lifecycle
-            .transition(LifecycleEvent::Destroy)
-        {
+        let Ok(mut state) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        match state.lifecycle.transition(LifecycleEvent::Destroy) {
             Ok(_) => kResultOk,
             Err(_) => kResultFalse,
         }
@@ -361,20 +393,26 @@ impl IComponentTrait for GainComponent {
         } else {
             LifecycleEvent::Activate
         };
-        match self.state.borrow_mut().lifecycle.transition(event) {
+        let Ok(mut state) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        match state.lifecycle.transition(event) {
             Ok(_) => kResultOk,
             Err(_) => kResultFalse,
         }
     }
 
+    /// State (de)serialization is out of scope for the `PoC` —
+    /// `kNotImplemented` honestly reports that instead of a silent
+    /// `kResultOk` that would lose the host's state.
     #[expect(unsafe_code)]
     unsafe fn setState(&self, _state: *mut IBStream) -> tresult {
-        kResultOk
+        kNotImplemented
     }
 
     #[expect(unsafe_code)]
     unsafe fn getState(&self, _state: *mut IBStream) -> tresult {
-        kResultOk
+        kNotImplemented
     }
 }
 
@@ -452,7 +490,9 @@ impl IAudioProcessorTrait for GainComponent {
         }
         // SAFETY: caller-provided `ProcessSetup`, checked non-null.
         let setup = unsafe { &*setup };
-        let mut guard = self.state.borrow_mut();
+        let Ok(mut guard) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
         let state = &mut *guard;
         if state.lifecycle.state() != LifecycleState::Activated {
             return kResultFalse;
@@ -460,7 +500,7 @@ impl IAudioProcessorTrait for GainComponent {
         if setup.symbolicSampleSize != SymbolicSampleSizes_::kSample32 as i32 {
             return kResultFalse;
         }
-        if setup.maxSamplesPerBlock <= 0 {
+        if setup.maxSamplesPerBlock <= 0 || setup.maxSamplesPerBlock > MAX_NEGOTIATED_FRAMES {
             return kResultFalse;
         }
         if !setup.sampleRate.is_finite() || setup.sampleRate < 1.0 {
@@ -505,7 +545,9 @@ impl IAudioProcessorTrait for GainComponent {
         } else {
             LifecycleEvent::StartProcessing
         };
-        let mut component = self.state.borrow_mut();
+        let Ok(mut component) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
         if state != 0 && component.config.is_none() {
             // Defined reject: processing may not start before
             // `setupProcessing` negotiated the config.
@@ -536,7 +578,12 @@ impl IAudioProcessorTrait for GainComponent {
         // disjoint borrows (`events` borrows `event_scratch` while
         // `channel_scratch`/`context` are mutably borrowed); the guard
         // stays alive for the whole call.
-        let mut guard = self.state.borrow_mut();
+        let Ok(mut guard) = self.state.try_borrow_mut() else {
+            // A re-entrant call (e.g. a host vtable callback into
+            // another method while a borrow is held) is a defined
+            // rejection, not a `RefCell` panic across the FFI.
+            return kResultFalse;
+        };
         let state = &mut *guard;
         // Defined reject: `process` is only legal from `Processing`.
         if state.lifecycle.transition(LifecycleEvent::Process).is_err() {
@@ -570,12 +617,12 @@ impl IAudioProcessorTrait for GainComponent {
         // `ProcessContext` for this call.
         let transport = unsafe { Self::transport(data.processContext, state.sample_rate) };
         let frame_count = u32::try_from(frames).unwrap_or(u32::MAX);
-        // Events are sorted and offset-clamped by `collect_param_events`
-        // so `EventList::new` cannot reject; the fallback still avoids a
-        // panic on the RT path if that invariant ever breaks.
-        let Ok(events) = EventList::new(state.event_scratch.as_slice(), frame_count)
-            .or_else(|_| EventList::new(&[], frame_count))
-        else {
+        // `collect_param_events` sorts and drops out-of-block offsets,
+        // so `EventList::new` cannot reject; a failure means that
+        // invariant broke — a defined reject, never a silently-empty
+        // event set.
+        let Ok(events) = EventList::new(state.event_scratch.as_slice(), frame_count) else {
+            debug_assert!(false, "collected events must satisfy EventList");
             return kResultFalse;
         };
 
@@ -650,7 +697,7 @@ impl IAudioProcessorTrait for GainComponent {
             }
         };
 
-        self.tail.set(result.tail_frames);
+        self.tail.store(result.tail_frames, Ordering::Release);
         match result.status {
             ProcessStatus::Continue | ProcessStatus::Sleep => kResultOk,
             _ => kResultFalse,
@@ -660,7 +707,7 @@ impl IAudioProcessorTrait for GainComponent {
     /// Latest tail in frames — the gain processor reports none.
     #[expect(unsafe_code)]
     unsafe fn getTailSamples(&self) -> u32 {
-        self.tail.get()
+        self.tail.load(Ordering::Acquire)
     }
 }
 
@@ -1135,5 +1182,214 @@ mod tests {
             assert_eq!(processor.process(&raw mut data), kResultOk);
         }
         assert_eq!(output[0], vec![0.5_f32; 32]);
+    }
+
+    /// A hostile `IParamValueQueue`: reports `i32::MAX` points and
+    /// fails every `getPoint` — the bounded scan must still return.
+    struct LyingQueue;
+
+    impl Class for LyingQueue {
+        type Interfaces = (IParamValueQueue,);
+    }
+
+    impl IParamValueQueueTrait for LyingQueue {
+        #[expect(unsafe_code)]
+        unsafe fn getParameterId(&self) -> u32 {
+            GAIN_PARAM.id.0
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn getPointCount(&self) -> i32 {
+            i32::MAX
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn getPoint(&self, _index: i32, _offset: *mut i32, _value: *mut f64) -> tresult {
+            kResultFalse
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn addPoint(&self, _offset: i32, _value: f64, _index: *mut i32) -> tresult {
+            kNotImplemented
+        }
+    }
+
+    /// A hostile `IParameterChanges`: reports `i32::MAX` queues, all
+    /// null — the queue scan is likewise capped.
+    struct LyingChanges;
+
+    impl Class for LyingChanges {
+        type Interfaces = (IParameterChanges,);
+    }
+
+    impl IParameterChangesTrait for LyingChanges {
+        #[expect(unsafe_code)]
+        unsafe fn getParameterCount(&self) -> i32 {
+            i32::MAX
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn getParameterData(&self, _index: i32) -> *mut IParamValueQueue {
+            std::ptr::null_mut()
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn addParameterData(
+            &self,
+            _id: *const u32,
+            _index: *mut i32,
+        ) -> *mut IParamValueQueue {
+            std::ptr::null_mut()
+        }
+    }
+
+    /// Host-declared counts up to `i32::MAX` cannot hang the audio
+    /// thread: the scan caps at `MAX_BLOCK_EVENTS` queues/points and
+    /// returns.
+    #[expect(unsafe_code)]
+    #[test]
+    fn rt_param_scan_stays_bounded_when_host_counts_lie() {
+        let wrapper = ComWrapper::new(GainComponent::new());
+        let component = wrapper.to_com_ptr::<IComponent>().unwrap();
+        let processor = wrapper.to_com_ptr::<IAudioProcessor>().unwrap();
+        // SAFETY: live COM objects.
+        unsafe { activate(&component, &processor, 64) };
+
+        let mut input = [vec![0.5_f32; 64], vec![1.0; 64]];
+        let mut output = [vec![0.0_f32; 64], vec![0.0; 64]];
+        let mut block = TestBlock::new(&mut input, &mut output);
+
+        let lying_changes = ComWrapper::new(LyingChanges);
+        let changes = lying_changes.to_com_ptr::<IParameterChanges>().unwrap();
+        let mut data = block.data(64);
+        data.inputParameterChanges = changes.as_ptr();
+        // SAFETY: valid `ProcessData`; `changes` valid for the call.
+        unsafe {
+            assert_eq!(processor.process(&raw mut data), kResultOk);
+        }
+
+        let lying_queue = ComWrapper::new(LyingQueue);
+        let queue = lying_queue.to_com_ptr::<IParamValueQueue>().unwrap();
+        let changes_wrapper = ComWrapper::new(TestChanges {
+            queues: vec![queue],
+        });
+        let changes = changes_wrapper.to_com_ptr::<IParameterChanges>().unwrap();
+        let mut data = block.data(64);
+        data.inputParameterChanges = changes.as_ptr();
+        // SAFETY: valid `ProcessData`; `changes` valid for the call.
+        unsafe {
+            assert_eq!(processor.process(&raw mut data), kResultOk);
+        }
+    }
+
+    /// Queues for parameter ids the plugin does not own are skipped
+    /// before their points are scanned — foreign events can never
+    /// starve the bounded scratch.
+    #[expect(unsafe_code)]
+    #[test]
+    fn foreign_param_queues_never_reach_the_processor() {
+        let wrapper = ComWrapper::new(GainComponent::new());
+        let component = wrapper.to_com_ptr::<IComponent>().unwrap();
+        let processor = wrapper.to_com_ptr::<IAudioProcessor>().unwrap();
+        // SAFETY: live COM objects.
+        unsafe { activate(&component, &processor, 64) };
+
+        let queue_wrapper = ComWrapper::new(TestQueue {
+            id: 99,
+            points: vec![(0, 0.25)],
+        });
+        let queue = queue_wrapper.to_com_ptr::<IParamValueQueue>().unwrap();
+        let changes_wrapper = ComWrapper::new(TestChanges {
+            queues: vec![queue],
+        });
+        let changes = changes_wrapper.to_com_ptr::<IParameterChanges>().unwrap();
+
+        let mut input = [vec![0.5_f32; 64], vec![1.0; 64]];
+        let mut output = [vec![0.0_f32; 64], vec![0.0; 64]];
+        let mut block = TestBlock::new(&mut input, &mut output);
+        let mut data = block.data(64);
+        data.inputParameterChanges = changes.as_ptr();
+        // SAFETY: valid `ProcessData`; `changes` valid for the call.
+        unsafe {
+            assert_eq!(processor.process(&raw mut data), kResultOk);
+        }
+        // Unity pass-through: the foreign event was ignored.
+        assert_eq!(output[0], input[0]);
+        assert_eq!(output[1], input[1]);
+    }
+
+    /// An event offset outside the block is dropped, never clamped
+    /// onto a wrong frame — the shared drop policy.
+    #[expect(unsafe_code)]
+    #[test]
+    fn out_of_block_event_offsets_are_dropped() {
+        let wrapper = ComWrapper::new(GainComponent::new());
+        let component = wrapper.to_com_ptr::<IComponent>().unwrap();
+        let processor = wrapper.to_com_ptr::<IAudioProcessor>().unwrap();
+        // SAFETY: live COM objects.
+        unsafe { activate(&component, &processor, 64) };
+
+        let queue_wrapper = ComWrapper::new(TestQueue {
+            id: 0,
+            points: vec![(500, 0.25)],
+        });
+        let queue = queue_wrapper.to_com_ptr::<IParamValueQueue>().unwrap();
+        let changes_wrapper = ComWrapper::new(TestChanges {
+            queues: vec![queue],
+        });
+        let changes = changes_wrapper.to_com_ptr::<IParameterChanges>().unwrap();
+
+        let mut input = [vec![0.5_f32; 64], vec![1.0; 64]];
+        let mut output = [vec![0.0_f32; 64], vec![0.0; 64]];
+        let mut block = TestBlock::new(&mut input, &mut output);
+        let mut data = block.data(64);
+        data.inputParameterChanges = changes.as_ptr();
+        // SAFETY: valid `ProcessData`; `changes` valid for the call.
+        unsafe {
+            assert_eq!(processor.process(&raw mut data), kResultOk);
+        }
+        // The offset-500 event in a 64-frame block is dropped: the
+        // gain stays at the default — unity pass-through.
+        assert_eq!(output[0], input[0]);
+    }
+
+    /// `maxSamplesPerBlock` beyond `MAX_NEGOTIATED_FRAMES` is a
+    /// defined reject — the bounce scratch must stay bounded.
+    #[expect(unsafe_code)]
+    #[test]
+    fn setup_processing_rejects_excessive_max_frames() {
+        let wrapper = ComWrapper::new(GainComponent::new());
+        let component = wrapper.to_com_ptr::<IComponent>().unwrap();
+        let processor = wrapper.to_com_ptr::<IAudioProcessor>().unwrap();
+        // SAFETY: live COM objects.
+        unsafe {
+            assert_eq!(component.initialize(std::ptr::null_mut()), kResultOk);
+            assert_eq!(component.setActive(1), kResultOk);
+            let mut setup = ProcessSetup {
+                processMode: 0,
+                symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
+                maxSamplesPerBlock: i32::MAX,
+                sampleRate: 48_000.0,
+            };
+            assert_eq!(processor.setupProcessing(&raw mut setup), kResultFalse);
+            // The legal ceiling itself still negotiates.
+            setup.maxSamplesPerBlock = MAX_NEGOTIATED_FRAMES;
+            assert_eq!(processor.setupProcessing(&raw mut setup), kResultOk);
+            assert_eq!(component.setActive(0), kResultOk);
+            assert_eq!(component.terminate(), kResultOk);
+        }
+    }
+
+    /// State (de)serialization is out of scope — reported honestly as
+    /// `kNotImplemented`, never a silent success.
+    #[expect(unsafe_code)]
+    #[test]
+    fn state_stream_reports_not_implemented() {
+        let component = GainComponent::new();
+        // SAFETY: null `IBStream` is unused by the stubs.
+        unsafe {
+            assert_eq!(component.setState(std::ptr::null_mut()), kNotImplemented);
+            assert_eq!(component.getState(std::ptr::null_mut()), kNotImplemented);
+        }
     }
 }

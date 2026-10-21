@@ -5,11 +5,12 @@
 //! processor reports this class's CID from `getControllerClassId` and
 //! the host instantiates it separately. For the `PoC` the controller is
 //! state-light: it holds only the parameter's normalized value
-//! (`Cell<f64>` — the trait methods take `&self`).
+//! (`AtomicU64` of `f64` bits — the trait methods take `&self` and may
+//! be reached from a different host thread than the processor).
 
-use std::cell::Cell;
 use std::ffi::c_char;
 use std::ptr;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use vst3::Steinberg::Vst::{
     IComponentHandler, IEditController, IEditControllerTrait, ParameterInfo,
@@ -26,7 +27,7 @@ use crate::strings::copy_wstring;
 
 /// The VST3 edit controller for the `PoC` gain plugin.
 pub(crate) struct GainController {
-    gain: Cell<f64>,
+    gain: AtomicU64,
 }
 
 impl Class for GainController {
@@ -39,7 +40,7 @@ impl GainController {
 
     pub(crate) fn new() -> Self {
         Self {
-            gain: Cell::new(GAIN_PARAM.default_value),
+            gain: AtomicU64::new(GAIN_PARAM.default_value.to_bits()),
         }
     }
 }
@@ -167,6 +168,11 @@ impl IEditControllerTrait for GainController {
         let Ok(value) = text.parse::<f64>() else {
             return kInvalidArgument;
         };
+        // The normalized domain contract: non-finite or out-of-range
+        // parses (`"NaN"`, `"inf"`) are rejected, never stored.
+        if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+            return kInvalidArgument;
+        }
         // SAFETY: out-param checked non-null.
         unsafe { *value_normalized = value };
         kResultOk
@@ -195,7 +201,7 @@ impl IEditControllerTrait for GainController {
     #[expect(unsafe_code)]
     unsafe fn getParamNormalized(&self, id: u32) -> f64 {
         if id == GAIN_PARAM.id.0 {
-            self.gain.get()
+            f64::from_bits(self.gain.load(Ordering::Acquire))
         } else {
             0.0
         }
@@ -206,7 +212,12 @@ impl IEditControllerTrait for GainController {
         if id != GAIN_PARAM.id.0 {
             return kInvalidArgument;
         }
-        self.gain.set(value);
+        // The normalized domain contract: a non-finite or out-of-range
+        // value is a defined rejection, not a stored NaN.
+        if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+            return kInvalidArgument;
+        }
+        self.gain.store(value.to_bits(), Ordering::Release);
         kResultOk
     }
 
@@ -220,5 +231,72 @@ impl IEditControllerTrait for GainController {
     #[expect(unsafe_code)]
     unsafe fn createView(&self, _name: *const c_char) -> *mut IPlugView {
         ptr::null_mut()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vst3::Steinberg::Vst::String128;
+
+    /// A `&str` as a NUL-terminated `String128` — mirrors what a host
+    /// supplies to `getParamValueByString`.
+    fn wstring(text: &str) -> String128 {
+        let mut buf: String128 = [0; 128];
+        for (i, unit) in text.encode_utf16().enumerate() {
+            buf[i] = unit;
+        }
+        buf
+    }
+
+    /// Non-finite and out-of-range normalized values are defined
+    /// rejections, never stored — the same domain contract the event
+    /// path enforces via `ParamValue`.
+    #[expect(unsafe_code)]
+    #[test]
+    fn set_param_normalized_enforces_the_domain() {
+        let controller = GainController::new();
+        // SAFETY: no pointers involved.
+        unsafe {
+            assert_eq!(controller.setParamNormalized(0, 0.75), kResultOk);
+            assert_eq!(controller.getParamNormalized(0), 0.75);
+
+            for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 1.5, -0.1] {
+                assert_eq!(controller.setParamNormalized(0, bad), kInvalidArgument);
+            }
+            assert_eq!(controller.setParamNormalized(9, 0.5), kInvalidArgument);
+            // Rejected values were never stored.
+            assert_eq!(controller.getParamNormalized(0), 0.75);
+        }
+    }
+
+    /// `"NaN"`/`"inf"` parse as `f64` — the normalized-domain check
+    /// rejects them before they reach the out-param.
+    #[expect(unsafe_code)]
+    #[test]
+    fn get_param_value_by_string_enforces_the_domain() {
+        let controller = GainController::new();
+        let mut out = -1.0_f64;
+        let mut text = wstring("0.25");
+        // SAFETY: `text` is a valid 128-`TChar` buffer; `out` is a
+        // valid out-param.
+        unsafe {
+            assert_eq!(
+                controller.getParamValueByString(0, text.as_mut_ptr(), &raw mut out),
+                kResultOk
+            );
+            assert_eq!(out, 0.25);
+
+            for bad in ["NaN", "inf", "-inf", "2.0", "-0.5"] {
+                let mut text = wstring(bad);
+                assert_eq!(
+                    controller.getParamValueByString(0, text.as_mut_ptr(), &raw mut out),
+                    kInvalidArgument,
+                    "{bad} must be rejected"
+                );
+            }
+            // Never clobbered by a rejected parse.
+            assert_eq!(out, 0.25);
+        }
     }
 }

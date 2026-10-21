@@ -35,6 +35,7 @@
 //! scans over `channels`/`events`, no allocation, no blocking.
 //! [`BlockScratch`] is allocated once per instance at `activate`.
 
+use core::mem::size_of;
 use core::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
 use clack_common::events::UnknownEvent;
@@ -60,6 +61,11 @@ pub(crate) const MAX_CHANNELS: usize = 2;
 /// arbitrary event counts; the per-block scan must stay bounded, so
 /// oversized lists are a defined rejection rather than unbounded work.
 pub(crate) const MAX_EVENTS_PER_BLOCK: usize = 256;
+
+/// Retry bound for the atomic lifecycle CAS — two threads (audio and
+/// main) can contend, and contention beyond this cap means concurrent
+/// calls the CLAP threading contract forbids (a defined rejection).
+const MAX_CAS_ATTEMPTS: u32 = 8;
 
 /// Per-instance scratch allocated at `activate` — channel-pointer
 /// bookkeeping used by the alias scan and the neutral event list.
@@ -168,32 +174,54 @@ impl AtomicLifecycle {
         }
     }
 
-    /// The current state.
+    /// The current state — test introspection (production code
+    /// observes state only through `transition`).
     ///
     /// **RT contract:** RT-suitable — atomic load, allocation-free.
+    #[cfg(test)]
     pub(crate) fn state(&self) -> LifecycleState {
         decode_state(self.state.load(Ordering::Acquire))
     }
 
     /// Feeds `event` through the shared transition table atomically:
-    /// on a legal pair the machine stores `next`; on an illegal pair
-    /// the [`LifecycleError::IllegalTransition`] built by plugin-core's
+    /// the next state is computed against the *observed* state and
+    /// committed with a compare-exchange, so an audio-thread `Process`
+    /// racing a main-thread `StopProcessing` cannot lose an update
+    /// (a plain load→store pair would let the later store resurrect a
+    /// stale state and wedge the machine). On an illegal pair the
+    /// [`LifecycleError::IllegalTransition`] built by plugin-core's
     /// pure table is returned and the machine stays put.
     ///
-    /// **RT contract:** RT-suitable — pure table lookup + one load and
-    /// one store; no allocation, no blocking, no retry.
+    /// **RT contract:** RT-suitable — pure table lookup + a CAS loop
+    /// bounded to [`MAX_CAS_ATTEMPTS`]; no allocation, no blocking.
+    /// Contention beyond the cap means concurrent calls the CLAP
+    /// threading contract forbids — surfaced as a defined rejection.
     ///
     /// # Errors
     ///
     /// [`LifecycleError::IllegalTransition`] — the event is not legal
-    /// from the current state.
+    /// from the current state, or CAS contention exceeded the bound.
     pub(crate) fn transition(
         &self,
         event: LifecycleEvent,
     ) -> Result<LifecycleState, LifecycleError> {
-        let next = self.state().transition(event)?;
-        self.state.store(encode_state(next), Ordering::Release);
-        Ok(next)
+        let mut observed = self.state.load(Ordering::Acquire);
+        for _ in 0..MAX_CAS_ATTEMPTS {
+            let next = decode_state(observed).transition(event)?;
+            match self.state.compare_exchange_weak(
+                observed,
+                encode_state(next),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return Ok(next),
+                Err(current) => observed = current,
+            }
+        }
+        Err(LifecycleError::IllegalTransition {
+            from: decode_state(observed),
+            event,
+        })
     }
 }
 
@@ -370,37 +398,33 @@ fn validate_channel_pointers(ptrs: &[*mut f32], frames_count: u32) -> Result<(),
     Ok(())
 }
 
-/// Builds the borrowed channel slice lists for port pair `index` of
-/// one block.
+/// Collects the raw channel addresses into `scratch` and runs every
+/// pointer-granularity check: null/alignment validation plus the
+/// range-overlap alias verdict. Called before `channel_pair` so no
+/// aliased `&`/`&mut` pair is ever constructed.
 ///
 /// **RT contract:** RT-suitable — bounded `O(channels²)` scans
 /// (channel counts are ≤ `MAX_CHANNELS`), no allocation.
 ///
 /// # Errors
 ///
-/// `PluginError::Message` — any malformed boundary input (see module
-/// table): excess channels, null/unaligned pointers, `f64`-only or
-/// mismatched pairs, asymmetric pairs, mixed in-place classification
-/// or any input↔output / output↔output aliasing.
-pub(crate) fn build_block_views<'p>(
-    pair: &mut PortPair<'p>,
+/// `PluginError::Message` — null/unaligned pointers, missing channel
+/// buffers, or any overlapping channel range.
+fn collect_and_check_channel_pointers(
+    pair: &mut PortPair<'_>,
     scratch: &mut BlockScratch,
-) -> Result<BlockViews<'p>, PluginError> {
-    // Channel-count bound vs negotiated stereo capacity.
-    if pair.channel_pair_count() > MAX_CHANNELS {
-        return Err(PluginError::Message(
-            "channel count exceeds negotiated capacity",
-        ));
-    }
-    let frames_count = pair.frames_count();
-
-    // Per-channel null/alignment pre-validation on the raw pointer
-    // lists — before any channel slice exists.
+    frames_count: u32,
+) -> Result<(), PluginError> {
+    scratch.input_ptrs.clear();
+    scratch.output_ptrs.clear();
     if let Some(input) = pair.input() {
         match input.channels() {
             Ok(sample) => {
                 if let Some(channels) = sample.as_f32() {
                     validate_channel_pointers(channels.raw_data(), frames_count)?;
+                    scratch
+                        .input_ptrs
+                        .extend(channels.raw_data().iter().map(|ptr| ptr.addr()));
                 }
                 // f64-only input port: the pair-level match below
                 // either pairs it with f32 (mismatch → reject) or
@@ -416,6 +440,9 @@ pub(crate) fn build_block_views<'p>(
             Ok(sample) => {
                 if let Some(channels) = sample.as_f32() {
                     validate_channel_pointers(channels.raw_data(), frames_count)?;
+                    scratch
+                        .output_ptrs
+                        .extend(channels.raw_data().iter().map(|ptr| ptr.addr()));
                 }
             }
             Err(_) => {
@@ -423,6 +450,77 @@ pub(crate) fn build_block_views<'p>(
             }
         }
     }
+
+    // Range-overlap alias check on the collected raw addresses. Every
+    // channel range is `[ptr, ptr + frames_count*4)`. A same-index
+    // input/output match is the legal in-place shape (clack classifies
+    // it `InPlace` and only the mutable slice is used); *any other*
+    // intersecting pair — cross-index, partial, or output↔output —
+    // would put two `&mut` (or a `&`/`&mut` pair) over one region and
+    // rejects the block. Inputs may alias each other (shared `&`
+    // borrows only). `saturating_add` keeps a hostile pointer near the
+    // address-space top from wrapping the range empty.
+    let bytes = usize::try_from(frames_count)
+        .unwrap_or(usize::MAX)
+        .saturating_mul(size_of::<f32>());
+    for (j, &out_start) in scratch.output_ptrs.iter().enumerate() {
+        let out_end = out_start.saturating_add(bytes);
+        let overlaps = |start: usize, end: usize| start < out_end && out_start < end;
+        for &earlier in &scratch.output_ptrs[..j] {
+            if overlaps(earlier, earlier.saturating_add(bytes)) {
+                return Err(PluginError::Message("overlapping output channel regions"));
+            }
+        }
+        for (i, &in_start) in scratch.input_ptrs.iter().enumerate() {
+            let in_end = in_start.saturating_add(bytes);
+            if overlaps(in_start, in_end) && !(i == j && in_start == out_start) {
+                return Err(PluginError::Message("input/output channel overlap"));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Builds the borrowed channel slice lists for port pair `index` of
+/// one block.
+///
+/// **RT contract:** RT-suitable — bounded `O(channels²)` scans
+/// (channel counts are ≤ `MAX_CHANNELS`), no allocation.
+///
+/// # Errors
+///
+/// `PluginError::Message` — any malformed boundary input (see module
+/// table): excess channels, null/unaligned pointers, `f64`-only or
+/// mismatched pairs, asymmetric pairs, mixed in-place classification
+/// or any input↔output / output↔output aliasing.
+pub(crate) fn build_block_views<'p>(
+    pair: &mut PortPair<'p>,
+    scratch: &mut BlockScratch,
+    max_frames: u32,
+) -> Result<BlockViews<'p>, PluginError> {
+    // Channel-count bound vs negotiated stereo capacity.
+    if pair.channel_pair_count() > MAX_CHANNELS {
+        return Err(PluginError::Message(
+            "channel count exceeds negotiated capacity",
+        ));
+    }
+    let frames_count = pair.frames_count();
+    // The buffer-level `frames_count` is a separate host-supplied
+    // field from the process-level one (already bounded by the
+    // caller): bound it too so channel slices can never be built
+    // wider than the negotiated maximum.
+    if frames_count > max_frames {
+        return Err(PluginError::Message(
+            "buffer frames_count exceeds negotiated maximum",
+        ));
+    }
+
+    // Per-channel null/alignment pre-validation, raw-pointer
+    // collection and the range-overlap alias check — all before clack
+    // builds any channel slice inside `channel_pair`, so an aliasing
+    // verdict is reached from the raw pointer lists alone (a `usize`
+    // address is never dereferenced here).
+    collect_and_check_channel_pointers(pair, scratch, frames_count)?;
 
     // Paired channels — f32 canonical path. `SampleType::Both` uses
     // the f32 side; f64-only and mismatched pairs are defined
@@ -444,9 +542,8 @@ pub(crate) fn build_block_views<'p>(
         }
     };
 
-    // Classify each channel pair; collect slices + raw pointers.
-    scratch.input_ptrs.clear();
-    scratch.output_ptrs.clear();
+    // Classify each channel pair; collect slices. The raw pointer
+    // lists were already collected and range-checked above.
     let mut views = BlockViews::empty();
     let mut mode = None;
     let count = paired.channel_pair_count();
@@ -459,8 +556,6 @@ pub(crate) fn build_block_views<'p>(
                     ));
                 }
                 mode = Some(PairMode::Paired);
-                scratch.input_ptrs.push(input.as_ptr().addr());
-                scratch.output_ptrs.push(output.as_ptr().addr());
                 views.inputs[index] = input;
                 views.outputs[index] = output;
             }
@@ -473,7 +568,6 @@ pub(crate) fn build_block_views<'p>(
                 mode = Some(PairMode::InPlace);
                 // Only the mutable slice is collected — the input view
                 // stays empty so no &T/&mut T alias is ever built.
-                scratch.output_ptrs.push(io.as_ptr().addr());
                 views.outputs[index] = io;
             }
             Some(ChannelPair::InputOnly(_) | ChannelPair::OutputOnly(_)) => {
@@ -487,19 +581,6 @@ pub(crate) fn build_block_views<'p>(
     };
     views.mode = pair_mode;
     views.channel_count = count;
-
-    // Alias checks at per-channel pointer granularity (spec):
-    // clack classifies same-index equality as InPlace; here we catch
-    // cross-index partial aliases and duplicate output regions, both
-    // of which would put two &mut over one region.
-    for (i, out) in scratch.output_ptrs.iter().enumerate() {
-        if scratch.output_ptrs[i + 1..].contains(out) {
-            return Err(PluginError::Message("duplicate output channel region"));
-        }
-        if pair_mode == PairMode::Paired && scratch.input_ptrs.contains(out) {
-            return Err(PluginError::Message("input/output cross-alias detected"));
-        }
-    }
     Ok(views)
 }
 
@@ -544,7 +625,9 @@ pub(crate) fn translate_param_event(unknown: &UnknownEvent, param: &ParamInfo) -
 /// unsorted ones, the list is re-ordered in place with
 /// [`sort_events_by_frame_offset`] — the shared stable, in-place
 /// (allocation-free) sort, so the relative order of same-offset events
-/// is preserved.
+/// is preserved. Events with out-of-block offsets are dropped
+/// individually — the shared drop policy, identical to the VST3
+/// adapter.
 ///
 /// **RT contract:** RT-suitable — bounded `O(n + n²)` scan over at
 /// most `MAX_EVENTS_PER_BLOCK` events, allocation-free.
@@ -552,8 +635,7 @@ pub(crate) fn translate_param_event(unknown: &UnknownEvent, param: &ParamInfo) -
 /// # Errors
 ///
 /// `PluginError::Message` — event count exceeds
-/// `MAX_EVENTS_PER_BLOCK`, or offsets exceed the block bounds (via
-/// `EventList::new`).
+/// `MAX_EVENTS_PER_BLOCK` (a defined rejection).
 pub(crate) fn translate_events<'a>(
     input: &InputEvents<'_>,
     scratch: &'a mut Vec<Event>,
@@ -570,6 +652,12 @@ pub(crate) fn translate_events<'a>(
         let Some(event) = translate_param_event(unknown, param) else {
             continue;
         };
+        // Defined skip: an out-of-block offset drops just that event —
+        // the shared drop policy (never clamped onto a wrong frame),
+        // identical to the VST3 adapter.
+        if event.frame_offset() >= block_frames.max(1) {
+            continue;
+        }
         if event.frame_offset() < previous {
             sorted = false;
         }
@@ -579,8 +667,13 @@ pub(crate) fn translate_events<'a>(
     if !sorted {
         sort_events_by_frame_offset(scratch);
     }
-    EventList::new(scratch.as_slice(), block_frames)
-        .map_err(|_| PluginError::Message("event offsets exceed block bounds"))
+    // The filtered list always satisfies `EventList`'s bounds; a
+    // failure means the invariant broke — a defined reject, never a
+    // silently-empty event set.
+    EventList::new(scratch.as_slice(), block_frames).map_err(|_| {
+        debug_assert!(false, "filtered events must satisfy EventList");
+        PluginError::Message("event list invariant violated")
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -982,7 +1075,7 @@ mod tests {
         let (input_buffers, mut output_buffers) = fixture.guards();
         let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
         let mut pair = audio.port_pair(0).unwrap();
-        let mut views = build_block_views(&mut pair, &mut scratch).unwrap();
+        let mut views = build_block_views(&mut pair, &mut scratch, FRAMES).unwrap();
         assert_eq!(views.channel_count, 2);
         assert_eq!(views.mode, PairMode::Paired);
         // The collected slices are the host buffers themselves —
@@ -1016,7 +1109,7 @@ mod tests {
         }]);
         let mut input_only_audio = input_buffers.as_plugin_audio();
         let mut input_pair = input_only_audio.port_pair(0).unwrap();
-        assert!(build_block_views(&mut input_pair, &mut scratch).is_err());
+        assert!(build_block_views(&mut input_pair, &mut scratch, FRAMES).is_err());
 
         // Output-only pair: no input port at index 0.
         let mut outputs = [[0.0_f32; FRAMES_USIZE]; MAX_CHANNELS];
@@ -1029,7 +1122,7 @@ mod tests {
         }]);
         let mut output_only_audio = output_buffers.as_plugin_audio();
         let mut output_pair = output_only_audio.port_pair(0).unwrap();
-        assert!(build_block_views(&mut output_pair, &mut scratch).is_err());
+        assert!(build_block_views(&mut output_pair, &mut scratch, FRAMES).is_err());
     }
 
     #[test]
@@ -1054,7 +1147,7 @@ mod tests {
         let mut pair = audio.port_pair(0).unwrap();
         let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
         assert_eq!(pair.channel_pair_count(), 3);
-        assert!(build_block_views(&mut pair, &mut scratch).is_err());
+        assert!(build_block_views(&mut pair, &mut scratch, FRAMES).is_err());
     }
 
     #[test]
@@ -1081,7 +1174,7 @@ mod tests {
         }]);
         let mut f64_audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
         let mut f64_pair = f64_audio.port_pair(0).unwrap();
-        assert!(build_block_views(&mut f64_pair, &mut scratch).is_err());
+        assert!(build_block_views(&mut f64_pair, &mut scratch, FRAMES).is_err());
 
         // Mismatched f64-in / f32-out — `try_match` reports
         // `MismatchedBufferPair`, mapped to a reject.
@@ -1101,7 +1194,7 @@ mod tests {
         }]);
         let mut mixed_audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
         let mut mixed_pair = mixed_audio.port_pair(0).unwrap();
-        assert!(build_block_views(&mut mixed_pair, &mut scratch).is_err());
+        assert!(build_block_views(&mut mixed_pair, &mut scratch, FRAMES).is_err());
     }
 
     #[test]
@@ -1116,7 +1209,7 @@ mod tests {
             output_buffers.as_raw_buffers()[0].data32 = core::ptr::null_mut();
             let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
             let mut pair = audio.port_pair(0).unwrap();
-            assert!(build_block_views(&mut pair, &mut scratch).is_err());
+            assert!(build_block_views(&mut pair, &mut scratch, FRAMES).is_err());
         }
 
         // Null channel pointer with frames > 0 — would form a slice
@@ -1127,7 +1220,7 @@ mod tests {
             output_buffers.as_raw_buffers()[0].data32 = ptr_list.as_mut_ptr();
             let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
             let mut pair = audio.port_pair(0).unwrap();
-            assert!(build_block_views(&mut pair, &mut scratch).is_err());
+            assert!(build_block_views(&mut pair, &mut scratch, FRAMES).is_err());
         }
 
         // Unaligned channel pointer — likewise caught pre-slice. One
@@ -1142,7 +1235,7 @@ mod tests {
             output_buffers.as_raw_buffers()[0].data32 = ptr_list.as_mut_ptr();
             let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
             let mut pair = audio.port_pair(0).unwrap();
-            assert!(build_block_views(&mut pair, &mut scratch).is_err());
+            assert!(build_block_views(&mut pair, &mut scratch, FRAMES).is_err());
         }
     }
 
@@ -1172,7 +1265,7 @@ mod tests {
             output_buffers.as_raw_buffers()[0].data32 = ptr_list.as_mut_ptr();
             let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
             let mut pair = audio.port_pair(0).unwrap();
-            assert!(build_block_views(&mut pair, &mut scratch).is_err());
+            assert!(build_block_views(&mut pair, &mut scratch, FRAMES).is_err());
         }
 
         // Duplicate output channel regions — two &mut over one region.
@@ -1185,7 +1278,41 @@ mod tests {
             output_buffers.as_raw_buffers()[0].data32 = ptr_list.as_mut_ptr();
             let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
             let mut pair = audio.port_pair(0).unwrap();
-            assert!(build_block_views(&mut pair, &mut scratch).is_err());
+            assert!(build_block_views(&mut pair, &mut scratch, FRAMES).is_err());
+        }
+    }
+
+    #[test]
+    fn build_block_views_rejects_partial_range_overlap() {
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+
+        // Shifted overlap: out[0] = in[0] + 1 — the ranges intersect
+        // but the pointers differ, so equality-only detection would
+        // miss it. Caught on the raw pointer lists before any slice.
+        {
+            let mut ptr_list = [
+                fixture.inputs[0].as_mut_ptr().wrapping_add(1),
+                fixture.outputs[1].as_mut_ptr(),
+            ];
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            output_buffers.as_raw_buffers()[0].data32 = ptr_list.as_mut_ptr();
+            let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            let mut pair = audio.port_pair(0).unwrap();
+            assert!(build_block_views(&mut pair, &mut scratch, FRAMES).is_err());
+        }
+
+        // Shifted output↔output overlap: out[1] = out[0] + 8.
+        {
+            let mut ptr_list = [
+                fixture.outputs[0].as_mut_ptr(),
+                fixture.outputs[0].as_mut_ptr().wrapping_add(8),
+            ];
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            output_buffers.as_raw_buffers()[0].data32 = ptr_list.as_mut_ptr();
+            let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            let mut pair = audio.port_pair(0).unwrap();
+            assert!(build_block_views(&mut pair, &mut scratch, FRAMES).is_err());
         }
     }
 
@@ -1209,7 +1336,7 @@ mod tests {
             let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
             let mut pair = audio.port_pair(0).unwrap();
 
-            let mut views = build_block_views(&mut pair, &mut scratch).unwrap();
+            let mut views = build_block_views(&mut pair, &mut scratch, FRAMES).unwrap();
             assert_eq!(views.mode, PairMode::InPlace);
             // The shared region lands in `outputs` only — no &[f32]
             // is ever built over the same memory (adapter contract).
@@ -1316,22 +1443,23 @@ mod tests {
         }
         assert!(translated_sequence(&buffer, FRAMES).is_err());
 
-        // Offsets must stay inside the block — `EventList::new`
-        // enforces it even for the last legal offset.
+        // An out-of-block offset drops just that event — the shared
+        // drop policy, identical to the VST3 adapter.
         let mut buffer = EventBuffer::new();
         buffer.push(&gain_event(FRAMES, 0.5));
-        assert!(translated_sequence(&buffer, FRAMES).is_err());
+        assert_eq!(translated_sequence(&buffer, FRAMES).unwrap().len(), 0);
         buffer.clear();
         buffer.push(&gain_event(FRAMES - 1, 0.5));
         assert_eq!(translated_sequence(&buffer, FRAMES).unwrap().len(), 1);
 
         // Zero-frame blocks accept only offset zero — the neutral
-        // bound is `offset < max(block_frames, 1)`.
+        // bound is `offset < max(block_frames, 1)`; anything else is
+        // dropped, not an error.
         buffer.clear();
         buffer.push(&gain_event(0, 0.5));
         assert_eq!(translated_sequence(&buffer, 0).unwrap().len(), 1);
         buffer.push(&gain_event(1, 0.5));
-        assert!(translated_sequence(&buffer, 0).is_err());
+        assert_eq!(translated_sequence(&buffer, 0).unwrap().len(), 1);
     }
 
     // -- Transport -----------------------------------------------------------
