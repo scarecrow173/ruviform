@@ -6,7 +6,10 @@
 //! format description ([`AudioFormat`], [`SampleFormat`]) and the
 //! channel-major contiguous planar [`AudioBuffer`] with its borrowed
 //! views ([`AudioBufferView`], [`AudioBufferViewMut`], [`BufferSpec`]),
-//! and the device boundary ports ([`device`]).
+//! and the device boundary ports ([`device`]), plus independent per-channel
+//! planar borrowed views ([`PlanarBufferView`], [`PlanarBufferViewMut`]) for
+//! disjoint channel slice lists at processing boundaries (plugin APIs, device
+//! callbacks).
 //!
 //! Planar `f32` is the canonical processing format; interleaved sample
 //! order exists only at device/file boundaries — through
@@ -64,12 +67,14 @@ mod buffer;
 pub mod device;
 mod format;
 mod layout;
+mod planar;
 mod sample;
 mod time;
 
 pub use buffer::{AudioBuffer, AudioBufferView, AudioBufferViewMut, BufferSpec};
 pub use format::{AudioFormat, SampleFormat};
 pub use layout::{ChannelLayout, SpeakerMask, SpeakerMaskSet};
+pub use planar::{PlanarBufferView, PlanarBufferViewMut};
 pub use sample::Sample;
 pub use time::{SampleIndex, SampleRate};
 

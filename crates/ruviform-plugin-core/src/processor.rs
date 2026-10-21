@@ -13,9 +13,11 @@
 //! [`PluginProcessor::process`] receives *borrowed* input/output views
 //! through the [`BufferView`] / [`BufferViewMut`] accessor traits —
 //! deliberately a *trait contract*, not a concrete view type: the
-//! concrete per-channel borrowed view arrives in a follow-up task
-//! (placed in `ruviform-audio-core` or here) and will implement these
-//! traits. Because `process` takes views rather than owning buffers,
+//! concrete per-channel borrowed views
+//! (`ruviform_audio_core::PlanarBufferView` /
+//! `PlanarBufferViewMut`, implemented below) satisfy them, and
+//! adapters may wrap host buffers in their own implementors. Because
+//! `process` takes views rather than owning buffers,
 //! the zero-copy rule is enforced by the signature itself; the concrete
 //! view's lifetime parameter binds the borrow to the callback scope, so
 //! a view can never outlive the `process` call that produced it.
@@ -49,7 +51,8 @@ use crate::transport::TransportInfo;
 /// Read-side view contract over a per-channel planar `f32` buffer.
 ///
 /// Implemented by the borrowed view type(s) adapters wrap host buffers
-/// in — the concrete type is intentionally not defined here. One
+/// in — `ruviform_audio_core::PlanarBufferView` and
+/// `PlanarBufferViewMut` are the canonical implementors. One
 /// implementor = one bus: `channels()` is the bus's channel count and
 /// every channel slice shares [`BufferView::frames`].
 ///
@@ -372,6 +375,36 @@ impl ProcessResult {
             status,
             tail_frames,
         }
+    }
+}
+
+impl BufferView for ruviform_audio_core::PlanarBufferView<'_, f32> {
+    fn channels(&self) -> usize {
+        Self::channels(self)
+    }
+    fn frames(&self) -> usize {
+        Self::frames(self)
+    }
+    fn channel(&self, index: usize) -> Option<&[f32]> {
+        Self::channel(self, index)
+    }
+}
+
+impl BufferView for ruviform_audio_core::PlanarBufferViewMut<'_, f32> {
+    fn channels(&self) -> usize {
+        Self::channels(self)
+    }
+    fn frames(&self) -> usize {
+        Self::frames(self)
+    }
+    fn channel(&self, index: usize) -> Option<&[f32]> {
+        Self::channel(self, index)
+    }
+}
+
+impl BufferViewMut for ruviform_audio_core::PlanarBufferViewMut<'_, f32> {
+    fn channel_mut(&mut self, index: usize) -> Option<&mut [f32]> {
+        Self::channel_mut(self, index)
     }
 }
 

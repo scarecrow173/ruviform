@@ -24,7 +24,7 @@ Directory: `docs/tasks`
 | TASK-034J5KQD1rDMZHFRah7pU0 | ruviform-audio-core のデータモデル実装 | done | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
 | TASK-034Jglv8LtJHUgWH3wlu0o | ruviform-audio-core の device ポート定義と契約テスト | done | [implement-audio-core-device-port.md](./implement-audio-core-device-port.md) |
 | TASK-034JglAvWUFQoLhvYXOw2O | ruviform-audio-device クレート新設と cpal adapter 実装 | done | [implement-audio-device-cpal-adapter.md](./implement-audio-device-cpal-adapter.md) |
-| TASK-034JgsGmcPdPRoeRTvicjW | 独立 per-channel planar バッファのゼロコピー借用 view/newtype の実装 | todo | [implement-borrowed-planar-view.md](./implement-borrowed-planar-view.md) |
+| TASK-034JgsGmcPdPRoeRTvicjW | 独立 per-channel planar バッファのゼロコピー借用 view/newtype の実装 | done | [implement-borrowed-planar-view.md](./implement-borrowed-planar-view.md) |
 | TASK-034Jf48NGXlyYcluiTnpOR | criterion ベンチ実装 | done | [implement-criterion-benchmarks.md](./implement-criterion-benchmarks.md) |
 | TASK-034JxOaMsaSwEIVfvU9MC8 | ruviform-exec スレッド優先度機構の実装 | done | [implement-exec-thread-priority.md](./implement-exec-thread-priority.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |

@@ -96,6 +96,7 @@ spec `SPEC-034JcgdAKPNeh1YCFyprzh`（Issue #29）の受け入れ基準を充足�
 
 - lean: `crates/ruviform-audio-core/src/planar.rs` — 独立 per-channel バッファ列の借用 view/newtype（音声データモデルの借用形状として一般化）
 - fallback: `crates/ruviform-plugin-core/src/buffer.rs` — 同上（プラグイン ABI 境界固有と判断された場合）
+- **T2 確定結果（2026-10-21）: lean 採用 — `crates/ruviform-audio-core/src/planar.rs` に `PlanarBufferView<'a, S: Sample = f32>` / `PlanarBufferViewMut<'a, S: Sample = f32>` として実装**。根拠: 独立 per-channel 借用形状はプラグイン ABI 境界固有ではなく device/host 境界にも現れる汎用音声形状であり、`AudioBufferView`/`AudioBufferViewMut`・video-core `Plane`/`PlaneMut` と同じ「domain クレートに借用 view を置く」先例と整合。`S: Sample` ジェネリック化により f64 経路予約を閉塞しない。`BufferView`/`BufferViewMut` trait の impl は plugin-core 側に配置（trait ローカルのため orphan rule 適合・audio-core → plugin-core の逆依存を生じない）。in-place 方針の評価結果: bounce-scratch をあらゆるエイリアスパターンに効く uniform 安全デフォルトとし、binding が in-place ペアを分類する場合（`clack` の `ChannelPair::InPlace`）のみ専用分岐が有効 — 詳細は T5 の方式 ADR で決定記録
 
 変更対象（既存）:
 

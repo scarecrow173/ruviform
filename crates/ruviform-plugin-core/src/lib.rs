@@ -18,10 +18,10 @@
 //! standard adapters (`ruviform-plugin-clap` / `ruviform-plugin-vst3`)
 //! translate standard ABI data into these types and implement/drive
 //! [`PluginProcessor`]; they never define a processing contract of
-//! their own. The concrete per-channel borrowed planar view type is
-//! likewise defined elsewhere (a follow-up task places it in
-//! `ruviform-audio-core` or here) — `process` is generic over the
-//! [`BufferView`] contract precisely so that placement stays free.
+//! their own. The concrete per-channel borrowed planar views are
+//! `ruviform_audio_core::PlanarBufferView` / `PlanarBufferViewMut` —
+//! `process` stays generic over the [`BufferView`] contract so
+//! adapters may equally wrap host buffers in their own implementors.
 //!
 //! ## Allowed dependency layers
 //!
