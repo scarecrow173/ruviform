@@ -77,12 +77,12 @@ wave-2 順序表 #25。前提の #21（rt 基盤）・#23（デバイス境界�
 
 ## Acceptance Criteria
 
-- [ ] `ruviform-audio` クレートがワークスペースに存在し pull グラフ型が公開されている
-- [ ] モック OutputStream 経由でコールバック駆動の end-to-end 出力が得られる（テスト）
-- [ ] RT 経路で `assert_no_alloc` 窓内 0 allocation の `rt_` テストがグリーン
-- [ ] グラフ差替が実行中に panic/断続なく適用されるテストがグリーン
-- [ ] デバイス層の型が公開 API に露出しない（`ruviform-audio-device` 非依存）
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` パス
+- [x] `ruviform-audio` クレートがワークスペースに存在し pull グラフ型が公開されている
+- [x] モック OutputStream 経由でコールバック駆動の end-to-end 出力が得られる（テスト）
+- [x] RT 経路で `assert_no_alloc` 窓内 0 allocation の `rt_` テストがグリーン
+- [x] グラフ差替が実行中に panic/断続なく適用されるテストがグリーン
+- [x] デバイス層の型が公開 API に露出しない（`ruviform-audio-device` 非依存）
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` パス
 
 ## Deferred Design Concerns
 
@@ -130,7 +130,7 @@ wave-2 順序表 #25。前提の #21（rt 基盤）・#23（デバイス境界�
 
 ## Acceptance Criteria
 
-- [ ] <!-- observable behavior or verification -->
+- [x] 実装済み検証は plan の検証列と同一 — 全項目を参照
 
 ## Deferred Design Concerns
 

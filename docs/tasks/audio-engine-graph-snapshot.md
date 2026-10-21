@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JRQBhUGz8OWIgGAnEgl"
 type: "task"
-status: "todo"
+status: "done"
 title: "ruviform-audio クレート新設 + pull グラフ/ミキサー/プランスナップショット"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -62,9 +62,9 @@ relations:
 
 ## Done When
 
-- [ ] 実装がコンパイルし公開 API が doc 済み
-- [ ] 対応テストがグリーン
+- [x] 実装がコンパイルし公開 API が doc 済み
+- [x] 対応テストがグリーン
 
 ## Verification
 
-- [ ] `mise run check`/`lint`/`fmt-check`/`test` パス
+- [x] `mise run check`/`lint`/`fmt-check`/`test` パス

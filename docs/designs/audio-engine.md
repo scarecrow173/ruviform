@@ -129,4 +129,4 @@ Issue #25（spec `docs/specs/audio-engine.md`）。`ruviform-audio` エンジン
 
 ## Verification Notes
 
-- [ ] <!-- what validates this design before planning -->
+- [x] plan の検証列（モック駆動・rt no-alloc・plan swap）が設計を実証

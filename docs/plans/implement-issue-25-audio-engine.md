@@ -87,12 +87,12 @@ relations:
 
 ## Verification
 
-- [ ] pull グラフがモックノード列を正しい順序で駆動
-- [ ] ミキサーが planar 入力を和算して out に書く
-- [ ] `rt_callback_no_alloc`（assert_no_alloc 窓内 0 alloc）がグリーン
-- [ ] `plan_swap_under_run` が差替後に新プランを使い panic しない
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` パス
-- [ ] doc 監査で本チェーン起因 findings 0
+- [x] pull グラフがモックノード列を正しい順序で駆動
+- [x] ミキサーが planar 入力を和算して out に書く
+- [x] `rt_callback_no_alloc`（assert_no_alloc 窓内 0 alloc）がグリーン
+- [x] `plan_swap_under_run` が差替後に新プランを使い panic しない
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` パス
+- [x] doc 監査で本チェーン起因 findings 0
 
 ## Open Questions / Gaps
 
