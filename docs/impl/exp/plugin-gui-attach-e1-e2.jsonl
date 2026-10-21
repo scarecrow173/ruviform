@@ -1,0 +1,6 @@
+{"detail":"build_as_child on raw host HWND","metric":"e1_attach","result":"passed","schema":"poc-metric.v1"}
+{"detail":"window.ipc.postMessage ping received","metric":"e1_ipc","result":"passed","schema":"poc-metric.v1"}
+{"detail":"set_bounds 600x400 after attach","metric":"e1_resize","result":"passed","schema":"poc-metric.v1"}
+{"detail":"PageLoadEvent::Finished","metric":"e1_render","result":"passed","schema":"poc-metric.v1"}
+{"detail":"15732736","metric":"e2_mem_delta_bytes","result":"passed","schema":"poc-metric.v1"}
+{"detail":"28","metric":"e2_elapsed_ms","result":"passed","schema":"poc-metric.v1"}

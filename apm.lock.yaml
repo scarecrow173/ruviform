@@ -798,7 +798,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper
   host: github.com
-  resolved_commit: 397d10875e817db192b4348c9335d99d6110e5d3
+  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm
@@ -832,15 +832,15 @@ dependencies:
     .agents/skills/cheaper-code-write/SKILL.md: sha256:2a8c859a8b5c46721ab16ad67920d01c90ec08d29436d8bd8e01983edc0813af
     .agents/skills/cheaper-doc-write/SKILL.md: sha256:9b98039b90cd1abfbefd12c106fa45d040536d1b9a5bc1c5857c60f73057a725
     .agents/skills/cheaper-tool-operate/SKILL.md: sha256:0e50a9e020b1e2145c92a32f38ded05893bb46373fe6bd9aabc341d7f64ffcdf
-    .agents/skills/cheaper-usage/SKILL.md: sha256:fd044fd79f1b7052137448ce83eba610433ddb577ace81205a108075f4363ac1
-    .agents/skills/cheaper-usage/scripts/install-devin-hooks.ps1: sha256:75323504cfec6aa4484092099057568e190005745647cbcde9b91ec4fab834cb
+    .agents/skills/cheaper-usage/SKILL.md: sha256:e0b2b248224a1552c7a5309417b204610cc00724feef05fc99f071e1cb8e7245
+    .agents/skills/cheaper-usage/scripts/install-devin-hooks.ps1: sha256:ec5afcadd948e99b6e92faef0824240f8494b790f1f6bd60cb182697b7062376
     .claude/skills/cheaper-bulk-read/SKILL.md: sha256:370e2082887245b7279c3c90955dccae6ddb1317d5bbcff0a2b6289118e5fc53
     .claude/skills/cheaper-code-write/SKILL.md: sha256:2a8c859a8b5c46721ab16ad67920d01c90ec08d29436d8bd8e01983edc0813af
     .claude/skills/cheaper-doc-write/SKILL.md: sha256:9b98039b90cd1abfbefd12c106fa45d040536d1b9a5bc1c5857c60f73057a725
     .claude/skills/cheaper-tool-operate/SKILL.md: sha256:0e50a9e020b1e2145c92a32f38ded05893bb46373fe6bd9aabc341d7f64ffcdf
-    .claude/skills/cheaper-usage/SKILL.md: sha256:fd044fd79f1b7052137448ce83eba610433ddb577ace81205a108075f4363ac1
-    .claude/skills/cheaper-usage/scripts/install-devin-hooks.ps1: sha256:75323504cfec6aa4484092099057568e190005745647cbcde9b91ec4fab834cb
-  content_hash: sha256:b3be22f1ac66d83f2db34502aff995befcd21b53b06e7a0374c5e834a90a715f
+    .claude/skills/cheaper-usage/SKILL.md: sha256:e0b2b248224a1552c7a5309417b204610cc00724feef05fc99f071e1cb8e7245
+    .claude/skills/cheaper-usage/scripts/install-devin-hooks.ps1: sha256:ec5afcadd948e99b6e92faef0824240f8494b790f1f6bd60cb182697b7062376
+  content_hash: sha256:829037aa787ef276bd31a102a9c88a0d9b234ff27aa945679cdd631ad9e67fcf
 - repo_url: addyosmani/agent-skills
   name: code-simplification
   host: github.com
@@ -1421,7 +1421,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper-hook-claude
   host: github.com
-  resolved_commit: 397d10875e817db192b4348c9335d99d6110e5d3
+  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm-hook-claude
@@ -1441,7 +1441,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper-hook-codex
   host: github.com
-  resolved_commit: 397d10875e817db192b4348c9335d99d6110e5d3
+  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm-hook-codex
@@ -1455,13 +1455,13 @@ dependencies:
   deployed_file_hashes:
     .codex/hooks/apm-hook-codex/cheaper.ps1: sha256:6c96db9a08c98b289d7e560c38a5954f0235c246b4b588b35b9b10dcfe8ac9cb
     .codex/hooks/apm-hook-codex/cheaper.sh: sha256:92a804bbdcee4d370f718f1f8dcf62a6d417bc9a68701b0a80eb1a06b7ea94ba
-  content_hash: sha256:f9bb1e98b21cfe13081a2c617ec6ce299ba80ea689c062838f2c9c8a026c1343
+  content_hash: sha256:a45b3a860a156071a2278a3f6618132e4f8a02b3a6f1e041660bad7397710929
   target_subset:
   - codex
 - repo_url: scarecrow173/cheaper
   name: cheaper-hook-copilot
   host: github.com
-  resolved_commit: 397d10875e817db192b4348c9335d99d6110e5d3
+  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm-hook-copilot
@@ -1483,7 +1483,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper-hook-cursor
   host: github.com
-  resolved_commit: 397d10875e817db192b4348c9335d99d6110e5d3
+  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm-hook-cursor
@@ -1503,7 +1503,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper-hook-windsurf
   host: github.com
-  resolved_commit: 397d10875e817db192b4348c9335d99d6110e5d3
+  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm-hook-windsurf
@@ -2123,7 +2123,7 @@ deployments:
   owners:
   - scarecrow173/cheaper/packages/apm
   active_owner: scarecrow173/cheaper/packages/apm
-  content_hash: sha256:fd044fd79f1b7052137448ce83eba610433ddb577ace81205a108075f4363ac1
+  content_hash: sha256:e0b2b248224a1552c7a5309417b204610cc00724feef05fc99f071e1cb8e7245
 - kind: project-relative
   target: claude
   value: .claude/skills/cheaper-usage/scripts/install-devin-hooks.ps1
@@ -2132,7 +2132,7 @@ deployments:
   owners:
   - scarecrow173/cheaper/packages/apm
   active_owner: scarecrow173/cheaper/packages/apm
-  content_hash: sha256:75323504cfec6aa4484092099057568e190005745647cbcde9b91ec4fab834cb
+  content_hash: sha256:ec5afcadd948e99b6e92faef0824240f8494b790f1f6bd60cb182697b7062376
 - kind: project-relative
   target: claude
   value: .claude/skills/code-simplification
@@ -4697,7 +4697,7 @@ deployments:
   owners:
   - scarecrow173/cheaper/packages/apm
   active_owner: scarecrow173/cheaper/packages/apm
-  content_hash: sha256:fd044fd79f1b7052137448ce83eba610433ddb577ace81205a108075f4363ac1
+  content_hash: sha256:e0b2b248224a1552c7a5309417b204610cc00724feef05fc99f071e1cb8e7245
 - kind: project-relative
   target: codex
   value: .agents/skills/cheaper-usage/scripts/install-devin-hooks.ps1
@@ -4706,7 +4706,7 @@ deployments:
   owners:
   - scarecrow173/cheaper/packages/apm
   active_owner: scarecrow173/cheaper/packages/apm
-  content_hash: sha256:75323504cfec6aa4484092099057568e190005745647cbcde9b91ec4fab834cb
+  content_hash: sha256:ec5afcadd948e99b6e92faef0824240f8494b790f1f6bd60cb182697b7062376
 - kind: project-relative
   target: codex
   value: .agents/skills/code-simplification

@@ -36,7 +36,11 @@ relations:
   derives-from:
     - "../specs/audio-device-backend-evaluation-poc.md"
     - "../adr/select-audio-device-backend.md"
-  derived-by: []
+  derived-by:
+    - "../specs/chunk-timestamp-synthesis.md"
+    - "../adr/chunk-outputcallbackinfo-timestamp.md"
+    - "chunk-timestamp-design.md"
+    - "../plans/implement-issue-59-chunk-timestamp.md"
   verifies: []
   verified-by: []
   references:

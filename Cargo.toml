@@ -19,6 +19,7 @@ members = [
     "crates/ruviform-media-core",
     "crates/ruviform-audio-core",
     "crates/ruviform-video-core",
+    "crates/ruviform-video",
     "crates/ruviform-video-proc",
     "crates/ruviform-media-io",
     "crates/ruviform-io-symphonia",
@@ -28,12 +29,14 @@ members = [
     "crates/ruviform-plugin-core",
     "crates/ruviform-plugin-clap",
     "crates/ruviform-plugin-vst3",
+    # Engines（Issue #25 で新設）
+    "crates/ruviform-audio",
 ]
 
 [workspace.package]
 version = "0.1.0"         # 仮置き。公開方針確定前の暫定値
 edition = "2024"          # Issue #34 で確定（2021→2024）。rust-version >= 1.85 を要求する
-rust-version = "1.85"     # MSRV。edition 2024 の安定化版を下限として Issue #34 で確定。mise pin (1.99.0) を超えない。将来の依存（wgpu 等）で MSRV 引上げが必要になった時点で再評価する
+rust-version = "1.89"     # MSRV。Issue #34 で 1.85 確定 → Issue #52 / ADR-034JNYt58J8NlUkn6RfJMs で 1.89 に引上げ（fearless_simd 1.1.0 の MSRV 要求に合わせ本番昇格前提を解禁。mise pin (1.99.0) を超えない）
 license = "MIT"           # 仮置き。配布方針確定前の暫定値
 publish = false           # 未決定クレートは公開しない（licensing ADR 原則）。メンバーは publish.workspace = true で継承する
 

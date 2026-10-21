@@ -39,8 +39,10 @@ relations:
     - "../specs/implement-plugin-foundation.md"
     - "../plans/implement-plugin-foundation.md"
     - "../test-specs/plugin-foundation.md"
-    - "docs/specs/plugin-isolation-design.md"
+    - "docs/adr/plugin-gui-embedding.md"
     - "docs/adr/plugin-isolation-strategy.md"
+    - "docs/specs/plugin-gui-poc.md"
+    - "docs/specs/plugin-isolation-design.md"
   verifies: []
   verified-by: []
   references:

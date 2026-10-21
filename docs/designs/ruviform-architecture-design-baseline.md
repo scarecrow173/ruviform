@@ -33,6 +33,7 @@ relations:
   refines: []
   refined-by:
     - "../adr/dsp-simd-backend-adoption.md"
+    - "../designs/simd-dispatch-layer.md"
   derives-from:
     - "../specs/architecture-design-baseline-deliverables.md"
     - "../adr/media-io-backend-abstraction.md"
@@ -44,17 +45,23 @@ relations:
     - "../discovery/explore-architecture-design-baseline.md"
     - "https://github.com/scarecrow173/ruviform/issues/1"
   derived-by:
+    - "docs/specs/video-engine.md"
+    - "docs/adr/video-av-sync-policy.md"
     - "../plans/apply-issue-1-architecture-baseline-to-repo.md"
+    - "../specs/offline-execution-driver.md"
     - "../specs/implement-media-data-model-api.md"
     - "../plans/implement-issue-18-data-model.md"
     - "../test-specs/media-data-model-api.md"
     - "../adr/public-enum-non-exhaustive-policy.md"
+    - "../specs/audio-engine.md"
     - "../specs/issue-18-followup-enum-and-time-fix.md"
     - "../plans/issue-18-followup-enum-and-time-fix.md"
     - "../test-specs/followup-enum-compat-and-time-arithmetic.md"
     - "../specs/time-type-extension-framerate-timecode-rounding.md"
     - "../adr/framerate-timebase-separation-and-timecode-extension.md"
+    - "../specs/rt-verification-lane.md"
     - "time-model-extension.md"
+    - "../plans/implement-issue-58-time-type-extension.md"
     - "../plans/implement-rt-foundation.md"
     - "../discovery/explore-video-foundation-api-scope.md"
     - "../specs/implement-video-foundation-api.md"

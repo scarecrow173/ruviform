@@ -1,0 +1,29 @@
+# Issue #30 プラグイン GUI PoC — 独立ワークスペース（ルートには吸収されない）。
+[workspace]
+members = ["."]
+
+[package]
+name = "plugin-gui-poc"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# windows-rs による Win32 呼出しは unsafe が必須 — PoC 局所許容。
+[lints.rust]
+unsafe_code = "warn"
+
+[dependencies]
+wry = "0.57"
+dpi = "0.1"
+serde_json = "1"
+raw-window-handle = "0.6"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
