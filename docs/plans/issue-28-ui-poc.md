@@ -1,17 +1,29 @@
 ---
 id: "PLAN-034JfDEU8mhCDj4ldYFZUG"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "Issue #28 UI 技術検証 PoC 実施計画"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/28"
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "doc"
+        path: "docs/impl/ir/poc-adr-finalize.md"
+      - type: "doc"
+        path: "docs/impl/exp/ac7-adr-finalize.jsonl"
+    modified:
+      - type: "file"
+        path: "poc/ui/RESULTS.md"
+      - type: "doc"
+        path: "docs/adr/ui-tech-selection-poc.md"
+      - type: "doc"
+        path: "docs/specs/issue-28-ui-poc.md"
+      - type: "doc"
+        path: "docs/tasks/poc-adr-finalize.md"
     deleted: []
     renamed: []
     moved: []
@@ -67,7 +79,7 @@ spec `SPEC-034Jc9BJlI7ULEBWoIlMP2`（Issue #28）の受け入れ基準 AC1–AC8
 ## Design Inputs
 
 - [../designs/issue-28-ui-poc.md](../designs/issue-28-ui-poc.md) — `DESIGN-034JcpvK9cZEfkeEbBLBoz`（approved）。ハーネス構成・実験設計・計測契約（`poc-metric.v1`・`--check`・exit code・自己終了）・T1–T6 分解の正本。**本 plan はこの分解をそのまま採用する**
-- [../adr/ui-tech-selection-poc.md](../adr/ui-tech-selection-poc.md) — `ADR-034Jc9Cguud7nZ2Tt88Ptu`（proposed）。confirm / revise 対象の採否条項の正本（T6 の作業対象）
+- [../adr/ui-tech-selection-poc.md](../adr/ui-tech-selection-poc.md) — `ADR-034Jc9Cguud7nZ2Tt88Ptu`（accepted — T6 で全条項 confirm/revise 済み）。confirm / revise 対象の採否条項の正本（T6 の作業対象）
 - [../discovery/issue-28-ui-poc.md](../discovery/issue-28-ui-poc.md) — `DISC-034JbXZSba3SvOavRFfs66`。依存バージョン・プラットフォーム実情・未解決事項のファクト源
 - [../test-specs/issue-28-ui-poc.md](../test-specs/issue-28-ui-poc.md) — 判定規則（PASS / FAIL / SKIP・記録要件・文書評価ラベル・隔離検証）の正本。各実験の合格条件は本書に従う
 

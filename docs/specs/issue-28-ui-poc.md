@@ -1,17 +1,29 @@
 ---
 id: "SPEC-034Jc9BJlI7ULEBWoIlMP2"
 type: "spec"
-status: "approved"
+status: "implemented"
 title: "Issue #28 UI 技術検証 PoC（wry・描画バックエンド・フロントエンド FW・配布）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/28"
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "doc"
+        path: "docs/impl/ir/poc-adr-finalize.md"
+      - type: "doc"
+        path: "docs/impl/exp/ac7-adr-finalize.jsonl"
+    modified:
+      - type: "file"
+        path: "poc/ui/RESULTS.md"
+      - type: "doc"
+        path: "docs/adr/ui-tech-selection-poc.md"
+      - type: "doc"
+        path: "docs/plans/issue-28-ui-poc.md"
+      - type: "doc"
+        path: "docs/tasks/poc-adr-finalize.md"
     deleted: []
     renamed: []
     moved: []
@@ -101,14 +113,14 @@ GitHub Issue [#28 [poc] UI 技術検証（wry・描画バックエンド・フ�
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — WebView ホスト（wry + tao）**: Windows 11 上で `wry` + `tao` のスタンドアロン WebView アプリがビルド・起動する。ウィンドウが開き、フロントエンドの HTML/JS が `with_custom_protocol` 経由で**埋め込みアセットから**ロードされる（実行時に dev server 不要）。JS 側 `window.ipc.postMessage` の JSON intent が `with_ipc_handler` の Rust ハンドラで受信・処理できる。リサイズ追従・フォーカスが動作する
-- [ ] **AC2 — WebView 内描画バックエンド計測**: 同一の高頻度更新ワークロード（スクロール波形・レベルメータ相当、目安 60fps 目標）を Canvas2D / WebGL2 / WebGPU の各バックエンドで実行し、達成フレーム統計（平均/p50/p99 フレーム時間・ドロップ率等）をバックエンド別に数値で記録する。WebGPU は機能検出フォールバック込みで評価する
-- [ ] **AC3 — ネイティブ GPU サーフェスと合成**: `wgpu` がネイティブサーフェス（同一 tao ウィンドウ内の別領域、または隣接する別サーフェス）へ描画できることを確認する。WebView との同居を Windows の許す範囲で評価し、**隣接別サーフェス構成**（WebView 領域と並置/上位置）でイベントヒットテスト・フォーカス・z-order・リサイズ追従が動作するかを記録する。DOM 内合成（ネイティブ面を WebView の下に敷く構成）が Windows で未 merge の wry PR [#1762](https://github.com/tauri-apps/wry/pull/1762)（CompositionController/DirectComposition）を要することを記録し、fork パッチ適用が現実的なら探索的評価、非現実的なら「未 merge 上流エビデンス」として文書記録する。macOS / Linux の合成実現性は文書評価として整理する
-- [ ] **AC4 — メッセージ境界**: JSON intent（`with_ipc_handler` 経由）の round-trip 遅延・スループットを計測する。カスタムプロトコル経由のバイナリ pull 経路（`Request<Vec<u8>>` → `Response<Cow<'static,[u8]>>` 応答）が `fetch()` / `ArrayBuffer` で動作することを検証し、往復・スループットの数値を記録する。`evaluate_script` による差分 push 経路も計測対象に含め、3 経路併用の実現性を確認する
-- [ ] **AC5 — フロントエンドフレームワーク比較**: 同一の小規模ベンチマーク UI（高頻度部分更新を含む）を少なくとも 2 候補（例: Solid vs vanilla TS、または Solid vs Svelte 5）で構築し、バンドルサイズ・開発ワークフロー（Vite ビルド→埋め込み配線）・更新粒度を数値付きで比較記録する
-- [ ] **AC6 — 配布**: アセット埋め込み + カスタムプロトコルによる単一バイナリ構成が Windows で動作することを検証する（WebView2 存在検出 + evergreen 前提・未存在時の bootstrapper 手順を含む）。OS ごとのパッケージング方針を評価する: Windows は実機で検証（NSIS/WiX/Inno 等または portable zip のいずれかを hands-on）、macOS / Linux は文書評価。Linux `libwebkit2gtk-4.1` 実行時依存リスクを定量化して記録する
-- [ ] **AC7 — 採否 ADR の確定**: [採否 ADR](../adr/ui-tech-selection-poc.md) の全採否条項が、リンクされたエビデンスで confirm されるか revise され、status が `accepted` に遷移する。採否はコンポーネント単位であり固定フォールバック階層としない。実機で検証できなかった項目は「文書評価」と明示する
-- [ ] **AC8 — 使い捨て検証の隔離**: 既存ワークスペースクレートの公開 API に変更がない。PoC コードは cargo ワークスペース外、または非公開メンバーとして依存隔離されている（配置方式は設計段階で決定し、spec との齟齬があれば設計で解消する）
+- [x] **AC1 — WebView ホスト（wry + tao）**: Windows 11 上で `wry` + `tao` のスタンドアロン WebView アプリがビルド・起動する。ウィンドウが開き、フロントエンドの HTML/JS が `with_custom_protocol` 経由で**埋め込みアセットから**ロードされる（実行時に dev server 不要）。JS 側 `window.ipc.postMessage` の JSON intent が `with_ipc_handler` の Rust ハンドラで受信・処理できる。リサイズ追従・フォーカスが動作する
+- [x] **AC2 — WebView 内描画バックエンド計測**: 同一の高頻度更新ワークロード（スクロール波形・レベルメータ相当、目安 60fps 目標）を Canvas2D / WebGL2 / WebGPU の各バックエンドで実行し、達成フレーム統計（平均/p50/p99 フレーム時間・ドロップ率等）をバックエンド別に数値で記録する。WebGPU は機能検出フォールバック込みで評価する
+- [x] **AC3 — ネイティブ GPU サーフェスと合成**: `wgpu` がネイティブサーフェス（同一 tao ウィンドウ内の別領域、または隣接する別サーフェス）へ描画できることを確認する。WebView との同居を Windows の許す範囲で評価し、**隣接別サーフェス構成**（WebView 領域と並置/上位置）でイベントヒットテスト・フォーカス・z-order・リサイズ追従が動作するかを記録する。DOM 内合成（ネイティブ面を WebView の下に敷く構成）が Windows で未 merge の wry PR [#1762](https://github.com/tauri-apps/wry/pull/1762)（CompositionController/DirectComposition）を要することを記録し、fork パッチ適用が現実的なら探索的評価、非現実的なら「未 merge 上流エビデンス」として文書記録する。macOS / Linux の合成実現性は文書評価として整理する
+- [x] **AC4 — メッセージ境界**: JSON intent（`with_ipc_handler` 経由）の round-trip 遅延・スループットを計測する。カスタムプロトコル経由のバイナリ pull 経路（`Request<Vec<u8>>` → `Response<Cow<'static,[u8]>>` 応答）が `fetch()` / `ArrayBuffer` で動作することを検証し、往復・スループットの数値を記録する。`evaluate_script` による差分 push 経路も計測対象に含め、3 経路併用の実現性を確認する
+- [x] **AC5 — フロントエンドフレームワーク比較**: 同一の小規模ベンチマーク UI（高頻度部分更新を含む）を少なくとも 2 候補（例: Solid vs vanilla TS、または Solid vs Svelte 5）で構築し、バンドルサイズ・開発ワークフロー（Vite ビルド→埋め込み配線）・更新粒度を数値付きで比較記録する
+- [x] **AC6 — 配布**: アセット埋め込み + カスタムプロトコルによる単一バイナリ構成が Windows で動作することを検証する（WebView2 存在検出 + evergreen 前提・未存在時の bootstrapper 手順を含む）。OS ごとのパッケージング方針を評価する: Windows は実機で検証（NSIS/WiX/Inno 等または portable zip のいずれかを hands-on）、macOS / Linux は文書評価。Linux `libwebkit2gtk-4.1` 実行時依存リスクを定量化して記録する
+- [x] **AC7 — 採否 ADR の確定**: [採否 ADR](../adr/ui-tech-selection-poc.md) の全採否条項が、リンクされたエビデンスで confirm されるか revise され、status が `accepted` に遷移する。採否はコンポーネント単位であり固定フォールバック階層としない。実機で検証できなかった項目は「文書評価」と明示する
+- [x] **AC8 — 使い捨て検証の隔離**: 既存ワークスペースクレートの公開 API に変更がない。PoC コードは cargo ワークスペース外、または非公開メンバーとして依存隔離されている（配置方式は設計段階で決定し、spec との齟齬があれば設計で解消する）
 
 ## Deferred Design Concerns
 
@@ -126,5 +138,5 @@ GitHub Issue [#28 [poc] UI 技術検証（wry・描画バックエンド・フ�
 - 一次ソース: GitHub Issue [#28 [poc] UI 技術検証（wry・描画バックエンド・フロントエンド FW・配布）](https://github.com/scarecrow173/ruviform/issues/28)（`relations.source`）。PoC の範囲・評価対象・成果物の正本。
 - 上流ドキュメント（`relations.derives-from`）: [Issue #28 UI 技術検証 PoC の事前調査](../discovery/issue-28-ui-poc.md)（`DISC-034JbXZSba3SvOavRFfs66`。コンポーネント別ファクト・プラットフォーム実情・受け入れ基準候補の正本）、[UI アーキテクチャ ADR](../adr/ui-architecture-webview-hybrid.md)（accepted。本 PoC への委任元）。
 - 制約（`relations.related`）: [設計ベースライン](../designs/ruviform-architecture-design-baseline.md)（要 PoC 表・UI 節・スレッド契約）、[RT 契約 ADR](../adr/realtime-contract-and-verification-policy.md)（UI = 非 RT・RT から UI への同期呼び出し禁止）、[プラットフォーム ADR](../adr/platform-and-toolchain-targets.md)（3 OS・stable-only・GPU opt-in）、[ライセンス/配布 ADR](../adr/licensing-and-distribution-policy.md)（外部依存ライセンスの個別調査・公開前レビュー必須）、[`AGENTS.md`](../../AGENTS.md)（暫定開発規約・unsafe 原則禁止・publish=false・検証入口）。
-- 派生成果物（`relations.related`）: [採否 ADR](../adr/ui-tech-selection-poc.md)（`proposed`。本 spec の検証結果で各条項を confirm/revise する委託先）。
+- 派生成果物（`relations.related`）: [採否 ADR](../adr/ui-tech-selection-poc.md)（`accepted` — 全条項を本 spec の AC1–AC8 エビデンスで confirm/revise 済み。集約エビデンスの正本は `poc/ui/RESULTS.md`）。
 - 参考（`relations.references`）: [Issue #28](https://github.com/scarecrow173/ruviform/issues/28)、[Issue #1](https://github.com/scarecrow173/ruviform/issues/1)（全体アーキテクチャ詳細設計 — WebView ファースト方針の確定元）。

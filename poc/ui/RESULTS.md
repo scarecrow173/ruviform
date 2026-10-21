@@ -11,14 +11,14 @@
 
 | AC | 検証項目 | 実験 | 証跡行 | 状態 |
 | --- | --- | --- | --- | --- |
-| AC1 | WebView ホスト（wry+tao 起動・埋め込みロード・IPC・リサイズ・フォーカス） | `--experiment host` | [AC1 host](#ac1---experiment-host) | **実測** |
-| AC2 | 描画バックエンド（canvas2d/webgl2/webgpu） | `--experiment render` | [AC2 render](#ac2---experiment-render) | **実測** |
-| AC3 | ネイティブサーフェス同居 | `--experiment surface` | [AC3 surface](#ac3---experiment-surface) | **実測** |
-| AC4 | メッセージ境界（IPC/プロトコル/pull） | `--experiment ipc` | [AC4 ipc](#ac4---experiment-ipc) | **実測** |
-| AC5 | フロントエンド FW + バンドラ比較 | `--experiment frontend --variant vanilla\|solid` | [AC5 frontend](#ac5---experiment-frontend) | **実測** |
-| AC6 | 配布（portable zip / 依存整理） | `--experiment dist` + release 単体・zip 検証 | [AC6 dist](#ac6---experiment-dist) | **実測**（Windows）+ 文書評価（macOS/Linux） |
-| AC7 | 採否 ADR 確定 | `poc-adr-finalize` | （全 AC 完了後） | 未実施 |
-| AC8 | PoC 隔離（ルート無変更・独立 WS） | 構造検査 | [AC8 隔離](#ac8---ポック隔離) | **実測** |
+| AC1 | WebView ホスト（wry+tao 起動・埋め込みロード・IPC・リサイズ・フォーカス） | `--experiment host` | [AC1 host](#ac1----experiment-host) | **実測** |
+| AC2 | 描画バックエンド（canvas2d/webgl2/webgpu） | `--experiment render` | [AC2 render](#ac2----experiment-render) | **実測** |
+| AC3 | ネイティブサーフェス同居 | `--experiment surface` | [AC3 surface](#ac3----experiment-surface) | **実測** |
+| AC4 | メッセージ境界（IPC/プロトコル/pull） | `--experiment ipc` | [AC4 ipc](#ac4----experiment-ipc) | **実測** |
+| AC5 | フロントエンド FW + バンドラ比較 | `--experiment frontend --variant vanilla\|solid` | [AC5 frontend](#ac5----experiment-frontend---variant-vanillasolid) | **実測** |
+| AC6 | 配布（portable zip / 依存整理） | `--experiment dist` + release 単体・zip 検証 | [AC6 dist](#ac6----experiment-distheadless-release-単一バイナリ) | **実測**（Windows）+ 文書評価（macOS/Linux） |
+| AC7 | 採否 ADR 確定 | `docs/tasks/poc-adr-finalize.md`（T6・本工程） | [AC7 adr-finalize](#ac7--採否-adr-確定) | **実施**（ドキュメント工程） |
+| AC8 | PoC 隔離（ルート無変更・独立 WS） | 構造検査 | [AC8 隔離](#ac8--poc-隔離) | **実測** |
 
 ## 環境（env）
 
@@ -430,6 +430,39 @@ wry は Linux で WebKitGTK を使い、API バージョンでリンクする li
   Gatekeeper 通過の前提。配布形態は `productbuild`（.pkg インストーラ）か
   DMG ドラッグ＆ドロップ。WKWebView は OS 同梱のためランタイム追加依存は
   無いが、署名/公証は CI ワークフロー組込みが必要（本 PoC 未検証）。
+
+## AC7 — 採否 ADR 確定
+
+T6（`docs/tasks/poc-adr-finalize.md`）のドキュメント工程。
+[採否 ADR `ADR-034Jc9Cguud7nZ2Tt88Ptu`](../docs/adr/ui-tech-selection-poc.md) の
+全 7 採否条項を、本書の AC1–AC6・AC8 エビデンス行と `docs/impl/exp/*.jsonl`
+へのリンク付きで confirm / revise し、status を `proposed` → `accepted` へ
+遷移させた。実機未検証項目（macOS / Linux 実挙動・wry PR #1762 依存の
+DOM 内合成・WebGPU 有効化経路）は「文書評価」/ 後続調査として明示したまま
+採否に反映している。
+
+| 判定 | 採否条項 | verdict | 根拠エビデンス |
+| --- | --- | --- | --- |
+| **passed** | WebView 実装（`wry` 0.57 + `tao` 0.37 採用） | confirm | [AC1](#ac1----experiment-host)・`docs/impl/exp/ac1-host-experiment-wry-tao-webview.jsonl` |
+| **passed** | 高頻度描画（特性別併用） | revise（WebView2 155 では `navigator.gpu` 非公開・flags でも有効化せず → in-WebView WebGPU は実計測不能で「Windows 向け opt-in 特性」から現時点では採用要件外へ修正） | [AC2](#ac2----experiment-render)・`docs/impl/exp/ac2-render-canvas2d-webgl2-webgpu.jsonl` |
+| **passed** | ネイティブサーフェス合成（隣接別サーフェス + WebView） | revise（隣接同居は両モードで成立を確認する一方、既定 z-order は WebView コンテナ最上位・`SetWindowRgn` は子 HWND ツリーを切り抜けず DOM overlay 回避策として不十分と判明 → 回避策記述を修正。DOM 内真合成は PR #1762 依存の文書評価のまま） | [AC3](#ac3----experiment-surface)・`docs/impl/exp/ac3-surface-adjacent-{parent,child}.jsonl` |
+| **passed** | メッセージ境界（3 経路併用） | confirm（併用の実現性を実測。`evaluate_script` の暗黙 coalesce・小 pull の初回コールドパス・Rust 定速送信のタイマ量子支配を設計含意として条項へ追記） | [AC4](#ac4----experiment-ipc)・`docs/impl/exp/ac4-ipc-json-rtt-pull-evaluate-script-push.jsonl` |
+| **passed** | フロントエンド FW（Solid 採用） | confirm（vanilla 比較で同一の部分適用粒度・無視できるコスト差を実測。Svelte 5 / Preact は不採用・vanilla は最小下限として位置づけを明記） | [AC5](#ac5----experiment-frontend---variant-vanillasolid)・`docs/impl/exp/ac5-frontend-compare.jsonl` |
+| **passed** | 配布（埋め込み単一バイナリ） | confirm（release 8,100,864B 単体・portable zip 3,039,116B の hands-on 充足。macOS / Linux は文書評価維持） | [AC6](#ac6----experiment-distheadless-release-単一バイナリ)・`docs/impl/exp/ac6-dist-single-binary.jsonl` |
+| **passed** | 採否の構造（コンポーネント単位・固定フォールバック階層にしない） | confirm | 全条項 + [AC8](#ac8--poc-隔離) |
+
+再現コマンド（本工程の検証入口）:
+
+```sh
+node .agents/skills/doc-status/scripts/audit_docs.js --type adr --json
+node .agents/skills/doc-status/scripts/audit_docs.js --type all --json
+node .agents/skills/impl-doc/scripts/audit_impl_record.js --dir docs/impl/ir --json
+node .agents/skills/impl-doc/scripts/audit_experiment_log.js --dir docs/impl/exp --json
+git status --porcelain -- Cargo.toml Cargo.lock crates mise.toml   # 空であること（AC8 再確認）
+```
+
+証跡: `docs/impl/exp/ac7-adr-finalize.jsonl`（confirm/revise の逐条記録）・
+`docs/impl/ir/poc-adr-finalize.md`（実施記録）。
 
 ## AC8 — PoC 隔離
 

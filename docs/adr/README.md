@@ -21,5 +21,5 @@ Directory: `docs/adr`
 | ADR-034IcJdtqm6TP6MylyP5J7 | 開発基盤の toolchain・Cargoプロファイル・CI方針 | accepted | [rust-dev-foundation-toolchain-and-ci-profile.md](./rust-dev-foundation-toolchain-and-ci-profile.md) |
 | ADR-034Jc9RslnH7QSQ1nZEEHL | オーディオデバイスバックエンドの選定（cpal 条件付き採用） | accepted | [select-audio-device-backend.md](./select-audio-device-backend.md) |
 | ADR-034IO01BpGWCl1DcEbcTQI | UIアーキテクチャ方針（WebViewファースト・ハイブリッド） | accepted | [ui-architecture-webview-hybrid.md](./ui-architecture-webview-hybrid.md) |
-| ADR-034Jc9Cguud7nZ2Tt88Ptu | UI 技術選定（wry・描画バックエンド・フロントエンド FW・配布）— PoC 採否 | proposed | [ui-tech-selection-poc.md](./ui-tech-selection-poc.md) |
+| ADR-034Jc9Cguud7nZ2Tt88Ptu | UI 技術選定（wry・描画バックエンド・フロントエンド FW・配布）— PoC 採否 | accepted | [ui-tech-selection-poc.md](./ui-tech-selection-poc.md) |
 | ADR-034JcidaiOOip5EhNPOnDI | video-proc カーネル API 形状と色変換・HDR 対応範囲 | accepted | [video-proc-kernel-api-and-color-hdr-scope.md](./video-proc-kernel-api-and-color-hdr-scope.md) |

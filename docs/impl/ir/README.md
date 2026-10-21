@@ -31,6 +31,7 @@ Directory: `docs/impl/ir`
 | IMPL-034ISfioxP51rGFoHh8MX3 | issue-1 architecture baseline repo reflection | completed | [issue-1-architecture-baseline-repo-reflection.md](./issue-1-architecture-baseline-repo-reflection.md) |
 | IMPL-034IdUNIqDaqtMaA6rRfEx | Pin Rust toolchain and lockfile | completed | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | IMPL-3hbuFUHk736RlMIuzIoXne | CLAP binding PoC with clack | completed | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
+| IMPL-034JEE2YEByoDOnrH2M0XT | PoC 採否 ADR 確定（エビデンス集約と confirm/revise） | completed | [poc-adr-finalize.md](./poc-adr-finalize.md) |
 | IMPL-034JCy68I3essEUwu3PWnn | PoC メッセージ境界計測 | completed | [poc-message-boundary.md](./poc-message-boundary.md) |
 | IMPL-034JDpGD5vR4ITKQsHnye5 | PoC ネイティブサーフェス合成 | completed | [poc-native-surface.md](./poc-native-surface.md) |
 | IMPL-034JE49N0s52vniJdJrTpU | PoC フロントエンド比較と配布検証 | completed | [poc-frontend-and-dist.md](./poc-frontend-and-dist.md) |
