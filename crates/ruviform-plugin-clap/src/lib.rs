@@ -6,9 +6,9 @@
 //! `TASK-034JgsGOtyuy2MkLRLZQI5`): a minimal gain plugin exported as a
 //! real `clap_entry` cdylib entry point, whose `process` path feeds
 //! host-supplied per-channel buffers into the neutral
-//! [`PluginProcessor`] contract with **zero copies** by wrapping them
-//! in `ruviform_audio_core::PlanarBufferView` /
-//! `PlanarBufferViewMut`.
+//! [`PluginProcessor`][ruviform_plugin_core::PluginProcessor] contract
+//! with **zero copies** by wrapping them in
+//! `ruviform_audio_core::PlanarBufferView` / `PlanarBufferViewMut`.
 //!
 //! ## Responsibilities (thin adapter)
 //!
@@ -16,11 +16,14 @@
 //!   `clap_entry`), a plugin descriptor and the plugin factory.
 //! - Translate CLAP ABI data into the neutral foundation types —
 //!   audio buffers → planar views, `ParamValueEvent` →
-//!   [`EventList`] / [`ParamEvent`], `TransportEvent` →
-//!   [`TransportInfo`], `ProcessResult` → CLAP process status.
-//! - Drive the common [`Lifecycle`] machine from the CLAP call
-//!   sequence and reject host protocol violations through the shared
-//!   transition table instead of silently accepting them.
+//!   [`EventList`][ruviform_plugin_core::EventList] /
+//!   [`ParamEvent`][ruviform_plugin_core::ParamEvent], `TransportEvent`
+//!   → [`TransportInfo`][ruviform_plugin_core::TransportInfo],
+//!   `ProcessResult` → CLAP process status.
+//! - Drive the common [`Lifecycle`][ruviform_plugin_core::Lifecycle]
+//!   machine from the CLAP call sequence and reject host protocol
+//!   violations through the shared transition table instead of
+//!   silently accepting them.
 //! - Allocate all per-block scratch (channel-pointer bookkeeping,
 //!   event scratch) at activation time so the RT path never
 //!   allocates.

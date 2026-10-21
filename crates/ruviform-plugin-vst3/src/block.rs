@@ -110,12 +110,14 @@ impl EventScratch {
         true
     }
 
-    /// Stable-sorts by frame offset — in place, allocation-free.
+    /// Stable-sorts by frame offset — in place, allocation-free (the
+    /// standard `sort_by_key` may allocate auxiliary scratch; the
+    /// shared insertion sort is guaranteed in-place).
     ///
-    /// **RT contract:** `O(n log n)` bounded over at most
+    /// **RT contract:** `O(n²)` bounded over at most
     /// `MAX_BLOCK_EVENTS` elements.
     pub(crate) fn sort(&mut self) {
-        self.events.sort_by_key(|event| event.frame_offset());
+        ruviform_plugin_core::sort_events_by_frame_offset(&mut self.events);
     }
 
     /// The collected events as a slice.

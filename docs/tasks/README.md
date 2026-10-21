@@ -30,7 +30,7 @@ Directory: `docs/tasks`
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | TASK-034J5KJgwtjFonTMQQIvpX | ruviform-media-core のデータモデル実装 | done | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
 | TASK-034JghH9i5p72LmOoWIPGe | ruviform-media-io 抽象境界クレート実装 | done | [implement-media-io-abstraction.md](./implement-media-io-abstraction.md) |
-| TASK-034JgsI5J4HU4qcoEBQfDx | 薄い CLAP/VST3 規格アダプタの完成 | todo | [implement-plugin-adapters.md](./implement-plugin-adapters.md) |
+| TASK-034JgsI5J4HU4qcoEBQfDx | 薄い CLAP/VST3 規格アダプタの完成 | done | [implement-plugin-adapters.md](./implement-plugin-adapters.md) |
 | TASK-034JcD2Xk1x6RZjHn779an | RGB→YUV 変換と Rgba8↔RgbaF16 カーネルの実装 | done | [implement-rgb-to-yuv-and-f16-kernels.md](./implement-rgb-to-yuv-and-f16-kernels.md) |
 | TASK-034JxNNzWfWAMoQu4EgpqG | ruviform-rt 中核型の実装（Error・RtContext・Processor・MasterClock） | done | [implement-rt-core-types.md](./implement-rt-core-types.md) |
 | TASK-034JxO9ex0aVfyvjYkcaWT | ruviform-rt 退役チャネル（遅延ドロップ）の実装 | done | [implement-rt-retire-channel.md](./implement-rt-retire-channel.md) |

@@ -50,6 +50,7 @@ use ruviform_media_core::{MediaDuration, MediaRange, MediaTime, TimeBase, Transp
 use ruviform_plugin_core::{
     Event, EventKind, EventList, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent,
     ParamId, ParamInfo, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
+    sort_events_by_frame_offset,
 };
 
 /// Channel capacity negotiated by this `PoC`: one stereo port pair.
@@ -541,13 +542,12 @@ pub(crate) fn translate_param_event(unknown: &UnknownEvent, param: &ParamInfo) -
 ///
 /// CLAP requires sorted input events; if a host still delivers
 /// unsorted ones, the list is re-ordered in place with
-/// `sort_unstable_by_key` — no auxiliary allocation (a stable sort
-/// would allocate scratch). Caveat recorded for the ADR: the order
-/// of same-offset events may differ from host order under an
-/// unstable sort; it is benign for this single-param `PoC`.
+/// [`sort_events_by_frame_offset`] — the shared stable, in-place
+/// (allocation-free) sort, so the relative order of same-offset events
+/// is preserved.
 ///
-/// **RT contract:** RT-suitable — bounded `O(n + n·log n)` scan,
-/// allocation-free.
+/// **RT contract:** RT-suitable — bounded `O(n + n²)` scan over at
+/// most `MAX_EVENTS_PER_BLOCK` events, allocation-free.
 ///
 /// # Errors
 ///
@@ -577,7 +577,7 @@ pub(crate) fn translate_events<'a>(
         scratch.push(event);
     }
     if !sorted {
-        scratch.sort_unstable_by_key(|event: &Event| event.frame_offset());
+        sort_events_by_frame_offset(scratch);
     }
     EventList::new(scratch.as_slice(), block_frames)
         .map_err(|_| PluginError::Message("event offsets exceed block bounds"))
@@ -670,5 +670,763 @@ pub(crate) fn map_process_result(result: ProcessResult) -> Result<ClapProcessSta
         _ => Err(PluginError::Message(
             "processor returned an unmapped status",
         )),
+    }
+}
+
+/// Test-support fixtures shared by this crate's test modules —
+/// `clap_audio_buffer` descriptor plumbing built exclusively through
+/// clack-host's safe `AudioPorts` builders (no `unsafe` anywhere in
+/// this crate, tests included).
+///
+/// The returned [`InputAudioBuffers`]/[`OutputAudioBuffers`] must
+/// stay *locals of the test fn*: the paired plugin-side `Audio` borrows
+/// their descriptor slices for `'a`, so callers fuse them with
+/// [`OutputAudioBuffers::as_plugin_audio_with_inputs`] inline.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use clack_host::process::audio_buffers::{
+        AudioPortBuffer, AudioPortBufferType, AudioPorts, InputAudioBuffers, InputChannel,
+        OutputAudioBuffers,
+    };
+
+    use super::MAX_CHANNELS;
+
+    /// A stereo `f32` port pair: distinct input/output backing `Vec`s
+    /// plus the `AudioPorts` descriptor storage a host would own for
+    /// one `process` call.
+    pub(crate) struct StereoFixture {
+        /// Input channel data — also the shared region for in-place
+        /// blocks (the output descriptor is repointed at these
+        /// addresses, which is how real hosts request in-place
+        /// processing).
+        pub(crate) inputs: [Vec<f32>; MAX_CHANNELS],
+        /// Output channel data.
+        pub(crate) outputs: [Vec<f32>; MAX_CHANNELS],
+        /// Input-side `AudioPorts` storage.
+        pub(crate) input_ports: AudioPorts,
+        /// Output-side `AudioPorts` storage.
+        pub(crate) output_ports: AudioPorts,
+    }
+
+    impl StereoFixture {
+        /// `frames`-sample channels pre-filled with a non-unity
+        /// input pattern and silent outputs.
+        pub(crate) fn new(frames: usize) -> Self {
+            Self {
+                inputs: [vec![0.5; frames], vec![-0.25; frames]],
+                outputs: [vec![0.0; frames], vec![0.0; frames]],
+                input_ports: AudioPorts::with_capacity(MAX_CHANNELS, 1),
+                output_ports: AudioPorts::with_capacity(MAX_CHANNELS, 1),
+            }
+        }
+
+        /// The host-side buffer pair for this fixture — the exact
+        /// `clap_audio_buffer` descriptor shape `clap_process`
+        /// carries. Fuse them per test via
+        /// [`OutputAudioBuffers::as_plugin_audio_with_inputs`].
+        pub(crate) fn guards(&mut self) -> (InputAudioBuffers<'_>, OutputAudioBuffers<'_>) {
+            let Self {
+                inputs,
+                outputs,
+                input_ports,
+                output_ports,
+            } = self;
+            let input_buffers = input_ports.with_input_buffers([AudioPortBuffer {
+                latency: 0,
+                channels: AudioPortBufferType::f32_input_only(
+                    inputs.iter_mut().map(InputChannel::variable),
+                ),
+            }]);
+            let output_buffers = output_ports.with_output_buffers([AudioPortBuffer {
+                latency: 0,
+                channels: AudioPortBufferType::f32_output_only(
+                    outputs.iter_mut().map(Vec::as_mut_slice),
+                ),
+            }]);
+            (input_buffers, output_buffers)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_support::StereoFixture;
+    use super::*;
+    use clack_common::events::event_types::{MidiEvent, ParamValueEvent};
+    use clack_common::events::io::EventBuffer;
+    use clack_common::events::{EventFlags, EventHeader, Pckn};
+    use clack_common::utils::{BeatTime, ClapId, SecondsTime};
+    use clack_host::process::audio_buffers::{
+        AudioPortBuffer, AudioPortBufferType, AudioPorts, InputChannel,
+    };
+
+    use crate::gain::{GAIN_PARAM, GainProcessor};
+    use ruviform_plugin_core::{PluginProcessor, ProcessContext};
+
+    const FRAMES: u32 = 64;
+    const FRAMES_USIZE: usize = 64;
+    const RATE: u32 = 48_000;
+
+    /// `GAIN_PARAM`'s id as a [`ClapId`].
+    const fn gain_clap_id() -> ClapId {
+        ClapId::new(GAIN_PARAM.id.0)
+    }
+
+    /// A `ParamValue` event for our gain parameter; `value` is the
+    /// *plain* multiplier (the CLAP wire domain — `normalize` maps
+    /// `[0, 2]` onto `[0, 1]`).
+    const fn gain_event(time: u32, value: f64) -> ParamValueEvent {
+        ParamValueEvent::new(time, gain_clap_id(), Pckn::match_all(), value)
+    }
+
+    /// Drives `machine` through `events` in order, asserting both the
+    /// returned and the stored state after each transition.
+    fn assert_chain(machine: &AtomicLifecycle, chain: &[(LifecycleEvent, LifecycleState)]) {
+        for (event, expected) in chain {
+            assert_eq!(machine.transition(*event), Ok(*expected));
+            assert_eq!(machine.state(), *expected);
+        }
+    }
+
+    /// A machine pre-driven to `state` along the legal path.
+    fn lifecycle_at(state: LifecycleState) -> AtomicLifecycle {
+        use LifecycleEvent as E;
+        let machine = AtomicLifecycle::new();
+        let path: &[E] = match state {
+            LifecycleState::Created => &[],
+            LifecycleState::Initialized => &[E::Initialize],
+            LifecycleState::Activated => &[E::Initialize, E::Activate],
+            LifecycleState::Processing => &[E::Initialize, E::Activate, E::StartProcessing],
+            _ => panic!("unsupported precondition state"),
+        };
+        for event in path {
+            machine.transition(*event).unwrap();
+        }
+        assert_eq!(machine.state(), state);
+        machine
+    }
+
+    // -- Lifecycle driver -------------------------------------------------
+
+    #[test]
+    fn atomic_lifecycle_forward_chain_and_destroy() {
+        use LifecycleEvent as E;
+        use LifecycleState as S;
+        let machine = AtomicLifecycle::new();
+        assert_eq!(machine.state(), S::Created);
+        assert_chain(
+            &machine,
+            &[
+                (E::Initialize, S::Initialized),
+                (E::Activate, S::Activated),
+                (E::StartProcessing, S::Processing),
+                (E::Process, S::Processing), // per-block self-loop
+                (E::Process, S::Processing),
+                (E::StopProcessing, S::Activated),
+                (E::Deactivate, S::Initialized),
+                (E::Destroy, S::Destroyed),
+            ],
+        );
+    }
+
+    #[test]
+    fn atomic_lifecycle_reactivation_cycle() {
+        use LifecycleEvent as E;
+        use LifecycleState as S;
+        let machine = lifecycle_at(S::Activated);
+        assert_chain(
+            &machine,
+            &[
+                (E::StartProcessing, S::Processing),
+                (E::StopProcessing, S::Activated),
+                (E::Deactivate, S::Initialized),
+                // Re-activation after a full deactivate is legal.
+                (E::Activate, S::Activated),
+                (E::StartProcessing, S::Processing),
+                (E::StopProcessing, S::Activated),
+                (E::Deactivate, S::Initialized),
+            ],
+        );
+    }
+
+    #[test]
+    fn atomic_lifecycle_violations_leave_honest_state() {
+        use LifecycleEvent as E;
+        use LifecycleState as S;
+        // Every (state, event) pair outside the transition table is a
+        // defined rejection that leaves the machine where it was —
+        // never a fabricated transition.
+        for (state, event) in [
+            // Process anywhere outside Processing — including the
+            // "process before start_processing" case from Activated.
+            (S::Created, E::Process),
+            (S::Initialized, E::Process),
+            (S::Activated, E::Process),
+            // StartProcessing outside Activated.
+            (S::Created, E::StartProcessing),
+            (S::Initialized, E::StartProcessing),
+            (S::Processing, E::StartProcessing), // double start
+            // StopProcessing outside Processing.
+            (S::Activated, E::StopProcessing), // stop before start
+            // Deactivate requires Activated.
+            (S::Created, E::Deactivate),
+            (S::Initialized, E::Deactivate), // deactivate without activate
+            (S::Processing, E::Deactivate),  // processing → activate needs stop
+            // Destroy requires Initialized/Created.
+            (S::Activated, E::Destroy),
+            (S::Processing, E::Destroy),
+            // Initialize/Activate out of order.
+            (S::Initialized, E::Initialize),
+            (S::Created, E::Activate),
+        ] {
+            let machine = lifecycle_at(state);
+            assert_eq!(
+                machine.transition(event),
+                Err(LifecycleError::IllegalTransition { from: state, event }),
+                "{event:?} must reject from {state:?}"
+            );
+            assert_eq!(
+                machine.state(),
+                state,
+                "rejected transition must not move the machine"
+            );
+        }
+        // Destroyed is terminal for every event — including a double
+        // destroy.
+        let destroyed = lifecycle_at(S::Initialized);
+        destroyed.transition(E::Destroy).unwrap();
+        for event in [
+            E::Initialize,
+            E::Activate,
+            E::StartProcessing,
+            E::Process,
+            E::StopProcessing,
+            E::Deactivate,
+            E::Destroy,
+        ] {
+            assert!(destroyed.transition(event).is_err());
+            assert_eq!(destroyed.state(), S::Destroyed);
+        }
+    }
+
+    #[test]
+    fn param_mirror_roundtrip_is_atomic_plain() {
+        let mirror = ParamMirror::new(1.0);
+        assert_eq!(mirror.load(), 1.0);
+        mirror.store(0.5);
+        assert_eq!(mirror.load(), 0.5);
+    }
+
+    // -- Activation config -------------------------------------------------
+
+    #[test]
+    fn to_process_config_maps_activation_bounds() {
+        let config = to_process_config(&PluginAudioConfiguration {
+            sample_rate: 48_000.0,
+            min_frames_count: 1,
+            max_frames_count: 512,
+        })
+        .unwrap();
+        assert_eq!(config.sample_rate().get(), RATE);
+        assert_eq!(config.min_frames(), 1);
+        assert_eq!(config.max_frames(), 512);
+    }
+
+    #[test]
+    fn to_process_config_rejects_invalid_activation() {
+        // Non-finite, non-positive, fractional and over-u32 sample
+        // rates are all defined rejects — the neutral SampleRate is
+        // integer Hz.
+        for rate in [
+            0.0,
+            -1.0,
+            f64::NAN,
+            f64::INFINITY,
+            44_100.5,
+            f64::from(u32::MAX) + 1.0,
+        ] {
+            assert!(
+                to_process_config(&PluginAudioConfiguration {
+                    sample_rate: rate,
+                    min_frames_count: 1,
+                    max_frames_count: 512,
+                })
+                .is_err(),
+                "sample rate {rate} must reject"
+            );
+        }
+        // Zero max frames and min > max frame bounds.
+        for (min, max) in [(1, 0), (8, 4)] {
+            assert!(
+                to_process_config(&PluginAudioConfiguration {
+                    sample_rate: 48_000.0,
+                    min_frames_count: min,
+                    max_frames_count: max,
+                })
+                .is_err()
+            );
+        }
+    }
+
+    // -- Per-block buffer views --------------------------------------------
+
+    #[test]
+    fn build_block_views_paired_stereo_is_borrowed_zero_copy() {
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let in_left = fixture.inputs[0].as_ptr();
+        let in_right = fixture.inputs[1].as_ptr();
+        let out_left = fixture.outputs[0].as_ptr();
+        let out_right = fixture.outputs[1].as_ptr();
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
+
+        let (input_buffers, mut output_buffers) = fixture.guards();
+        let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+        let mut pair = audio.port_pair(0).unwrap();
+        let mut views = build_block_views(&mut pair, &mut scratch).unwrap();
+        assert_eq!(views.channel_count, 2);
+        assert_eq!(views.mode, PairMode::Paired);
+        // The collected slices are the host buffers themselves —
+        // pointer equality is the zero-copy proof.
+        assert_eq!(views.inputs[0].as_ptr(), in_left);
+        assert_eq!(views.inputs[1].as_ptr(), in_right);
+        assert_eq!(views.outputs[0].as_ptr(), out_left);
+        assert_eq!(views.outputs[1].as_ptr(), out_right);
+
+        let mut output_list: [&mut [f32]; MAX_CHANNELS] = [&mut [], &mut []];
+        let (input_view, output_view) = planar_views(&mut views, &mut output_list).unwrap();
+        assert_eq!(input_view.channels(), 2);
+        assert_eq!(output_view.channels(), 2);
+        assert_eq!(input_view.channel(0).unwrap().as_ptr(), in_left);
+        assert_eq!(output_view.channel(0).unwrap().as_ptr(), out_left);
+        assert_eq!(output_view.channel(1).unwrap().as_ptr(), out_right);
+    }
+
+    #[test]
+    fn build_block_views_rejects_asymmetric_pairs() {
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
+
+        // Input-only pair: no output port at index 0.
+        let mut inputs = [[0.5_f32; FRAMES_USIZE]; MAX_CHANNELS];
+        let mut input_ports = AudioPorts::with_capacity(MAX_CHANNELS, 1);
+        let input_buffers = input_ports.with_input_buffers([AudioPortBuffer {
+            latency: 0,
+            channels: AudioPortBufferType::f32_input_only(
+                inputs.iter_mut().map(InputChannel::variable),
+            ),
+        }]);
+        let mut input_only_audio = input_buffers.as_plugin_audio();
+        let mut input_pair = input_only_audio.port_pair(0).unwrap();
+        assert!(build_block_views(&mut input_pair, &mut scratch).is_err());
+
+        // Output-only pair: no input port at index 0.
+        let mut outputs = [[0.0_f32; FRAMES_USIZE]; MAX_CHANNELS];
+        let mut output_ports = AudioPorts::with_capacity(MAX_CHANNELS, 1);
+        let mut output_buffers = output_ports.with_output_buffers([AudioPortBuffer {
+            latency: 0,
+            channels: AudioPortBufferType::f32_output_only(
+                outputs.iter_mut().map(<[f32; FRAMES_USIZE]>::as_mut_slice),
+            ),
+        }]);
+        let mut output_only_audio = output_buffers.as_plugin_audio();
+        let mut output_pair = output_only_audio.port_pair(0).unwrap();
+        assert!(build_block_views(&mut output_pair, &mut scratch).is_err());
+    }
+
+    #[test]
+    fn build_block_views_rejects_excess_channels() {
+        let mut ins = [[0.5_f32; FRAMES_USIZE], [0.0; 64], [-0.5; 64]];
+        let mut outs = [[0.0_f32; FRAMES_USIZE]; 3];
+        let mut input_ports = AudioPorts::with_capacity(3, 1);
+        let mut output_ports = AudioPorts::with_capacity(3, 1);
+        let input_buffers = input_ports.with_input_buffers([AudioPortBuffer {
+            latency: 0,
+            channels: AudioPortBufferType::f32_input_only(
+                ins.iter_mut().map(InputChannel::variable),
+            ),
+        }]);
+        let mut output_buffers = output_ports.with_output_buffers([AudioPortBuffer {
+            latency: 0,
+            channels: AudioPortBufferType::f32_output_only(
+                outs.iter_mut().map(<[f32; FRAMES_USIZE]>::as_mut_slice),
+            ),
+        }]);
+        let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+        let mut pair = audio.port_pair(0).unwrap();
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
+        assert_eq!(pair.channel_pair_count(), 3);
+        assert!(build_block_views(&mut pair, &mut scratch).is_err());
+    }
+
+    #[test]
+    fn build_block_views_rejects_f64_only_and_mismatched_pairs() {
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
+
+        // f64-only pair — the adapter is f32-only; `SampleType::F64`
+        // is a defined reject, never a reinterpret-cast.
+        let mut ins64 = [[0.5_f64; FRAMES_USIZE]; MAX_CHANNELS];
+        let mut outs64 = [[0.0_f64; FRAMES_USIZE]; MAX_CHANNELS];
+        let mut in_ports = AudioPorts::with_capacity(MAX_CHANNELS, 1);
+        let mut out_ports = AudioPorts::with_capacity(MAX_CHANNELS, 1);
+        let input_buffers = in_ports.with_input_buffers([AudioPortBuffer {
+            latency: 0,
+            channels: AudioPortBufferType::f64_input_only(
+                ins64.iter_mut().map(InputChannel::variable),
+            ),
+        }]);
+        let mut output_buffers = out_ports.with_output_buffers([AudioPortBuffer {
+            latency: 0,
+            channels: AudioPortBufferType::f64_output_only(
+                outs64.iter_mut().map(<[f64; FRAMES_USIZE]>::as_mut_slice),
+            ),
+        }]);
+        let mut f64_audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+        let mut f64_pair = f64_audio.port_pair(0).unwrap();
+        assert!(build_block_views(&mut f64_pair, &mut scratch).is_err());
+
+        // Mismatched f64-in / f32-out — `try_match` reports
+        // `MismatchedBufferPair`, mapped to a reject.
+        let mut ins64b = [[0.5_f64; FRAMES_USIZE]; MAX_CHANNELS];
+        let mut outs32 = [[0.0_f32; FRAMES_USIZE]; MAX_CHANNELS];
+        let input_buffers = in_ports.with_input_buffers([AudioPortBuffer {
+            latency: 0,
+            channels: AudioPortBufferType::f64_input_only(
+                ins64b.iter_mut().map(InputChannel::variable),
+            ),
+        }]);
+        let mut output_buffers = out_ports.with_output_buffers([AudioPortBuffer {
+            latency: 0,
+            channels: AudioPortBufferType::f32_output_only(
+                outs32.iter_mut().map(<[f32; FRAMES_USIZE]>::as_mut_slice),
+            ),
+        }]);
+        let mut mixed_audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+        let mut mixed_pair = mixed_audio.port_pair(0).unwrap();
+        assert!(build_block_views(&mut mixed_pair, &mut scratch).is_err());
+    }
+
+    #[test]
+    fn build_block_views_rejects_malformed_output_descriptors() {
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+
+        // Both data32 and data64 null on the port — no backing store
+        // at all: reject before any channel slice exists.
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            output_buffers.as_raw_buffers()[0].data32 = core::ptr::null_mut();
+            let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            let mut pair = audio.port_pair(0).unwrap();
+            assert!(build_block_views(&mut pair, &mut scratch).is_err());
+        }
+
+        // Null channel pointer with frames > 0 — would form a slice
+        // over null (UB); caught on the raw pointer list first.
+        {
+            let mut ptr_list = [core::ptr::null_mut::<f32>(), fixture.inputs[1].as_mut_ptr()];
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            output_buffers.as_raw_buffers()[0].data32 = ptr_list.as_mut_ptr();
+            let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            let mut pair = audio.port_pair(0).unwrap();
+            assert!(build_block_views(&mut pair, &mut scratch).is_err());
+        }
+
+        // Unaligned channel pointer — likewise caught pre-slice. One
+        // byte past an f32-aligned base; the pointer is never
+        // dereferenced (`is_aligned` checks the address only).
+        {
+            let mut ptr_list = [
+                fixture.inputs[0].as_mut_ptr().wrapping_byte_add(1),
+                fixture.inputs[1].as_mut_ptr(),
+            ];
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            output_buffers.as_raw_buffers()[0].data32 = ptr_list.as_mut_ptr();
+            let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            let mut pair = audio.port_pair(0).unwrap();
+            assert!(build_block_views(&mut pair, &mut scratch).is_err());
+        }
+    }
+
+    #[test]
+    fn null_channel_pointers_are_legal_only_at_zero_frames() {
+        // Directly on the raw-pointer validator: null + 0 frames is
+        // the legal empty-slice case; any frames make it a reject.
+        let ptrs = [core::ptr::null_mut::<f32>(), core::ptr::null_mut::<f32>()];
+        assert!(validate_channel_pointers(&ptrs, 0).is_ok());
+        assert!(validate_channel_pointers(&ptrs, 1).is_err());
+    }
+
+    #[test]
+    fn build_block_views_rejects_cross_alias_and_duplicate_outputs() {
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+
+        // Partial alias: out[0] == in[1] and out[1] == in[0] — the
+        // stereo channel-swap a careless host could request. Two &mut
+        // regions would overlap the inputs.
+        {
+            let mut ptr_list = [
+                fixture.inputs[1].as_mut_ptr(),
+                fixture.inputs[0].as_mut_ptr(),
+            ];
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            output_buffers.as_raw_buffers()[0].data32 = ptr_list.as_mut_ptr();
+            let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            let mut pair = audio.port_pair(0).unwrap();
+            assert!(build_block_views(&mut pair, &mut scratch).is_err());
+        }
+
+        // Duplicate output channel regions — two &mut over one region.
+        {
+            let mut ptr_list = [
+                fixture.outputs[0].as_mut_ptr(),
+                fixture.outputs[0].as_mut_ptr(),
+            ];
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            output_buffers.as_raw_buffers()[0].data32 = ptr_list.as_mut_ptr();
+            let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            let mut pair = audio.port_pair(0).unwrap();
+            assert!(build_block_views(&mut pair, &mut scratch).is_err());
+        }
+    }
+
+    #[test]
+    fn in_place_pair_classifies_and_scales_shared_buffer() {
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let io_const = [fixture.inputs[0].as_ptr(), fixture.inputs[1].as_ptr()];
+        let io_ptrs = [
+            fixture.inputs[0].as_mut_ptr(),
+            fixture.inputs[1].as_mut_ptr(),
+        ];
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
+
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            // The output descriptor's channel list is replaced by the
+            // *input* addresses — a host reusing one buffer in/out
+            // makes clack classify `ChannelPair::InPlace` per channel.
+            let mut shared_list = io_ptrs;
+            output_buffers.as_raw_buffers()[0].data32 = shared_list.as_mut_ptr();
+            let mut audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            let mut pair = audio.port_pair(0).unwrap();
+
+            let mut views = build_block_views(&mut pair, &mut scratch).unwrap();
+            assert_eq!(views.mode, PairMode::InPlace);
+            // The shared region lands in `outputs` only — no &[f32]
+            // is ever built over the same memory (adapter contract).
+            let mut output_list: [&mut [f32]; MAX_CHANNELS] = [&mut [], &mut []];
+            let (input_view, output_view) = planar_views(&mut views, &mut output_list).unwrap();
+            assert_eq!(input_view.channels(), 0);
+            assert_eq!(output_view.channel(0).unwrap().as_ptr(), io_const[0]);
+            assert_eq!(output_view.channel(1).unwrap().as_ptr(), io_const[1]);
+
+            // Drive the processor exactly as `process` does: the empty
+            // input view makes each channel scale its own output
+            // buffer.
+            let mut processor = GainProcessor::new();
+            let mut context = ProcessContext::new();
+            let config = ProcessConfig::new(SampleRate::new(RATE).unwrap(), 1, FRAMES).unwrap();
+            processor.prepare(&config, &mut context).unwrap();
+            processor.set_gain_plain(0.5);
+            let mut outputs = [output_view];
+            let result = processor.process(
+                &[input_view],
+                &mut outputs,
+                EventList::empty(FRAMES),
+                None,
+                &mut context,
+            );
+            assert_eq!(result.status, ProcessStatus::Continue);
+        }
+
+        // The shared region was scaled in place — no copy, no alias.
+        assert_eq!(fixture.inputs[0], vec![0.25; FRAMES_USIZE]);
+        assert_eq!(fixture.inputs[1], vec![-0.125; FRAMES_USIZE]);
+    }
+
+    // -- Events ------------------------------------------------------------
+
+    /// Translates `buffer`'s contents into an [`EventList`],
+    /// returning the `(offset, normalized value)` sequence for
+    /// order/stability assertions.
+    fn translated_sequence(
+        buffer: &EventBuffer,
+        block_frames: u32,
+    ) -> Result<Vec<(u32, f64)>, PluginError> {
+        let input = buffer.as_input();
+        let mut scratch = Vec::with_capacity(MAX_EVENTS_PER_BLOCK);
+        let list = translate_events(&input, &mut scratch, &GAIN_PARAM, block_frames)?;
+        Ok(list
+            .iter()
+            .map(|event| {
+                let value = match event.kind() {
+                    EventKind::ParamValue(param_event) => param_event.value.get(),
+                    _ => unreachable!("only ParamValue events are translated"),
+                };
+                (event.frame_offset(), value)
+            })
+            .collect())
+    }
+
+    #[test]
+    fn translate_events_sorts_same_offset_events_stably() {
+        let mut buffer = EventBuffer::new();
+        // Unsorted input with two same-offset events — plain values
+        // 0.5 / 1.5 normalize to .25 / .75, making the original order
+        // distinguishable after sorting.
+        buffer.push(&gain_event(10, 0.5));
+        buffer.push(&gain_event(10, 1.5));
+        buffer.push(&gain_event(2, 1.0));
+        assert_eq!(
+            translated_sequence(&buffer, FRAMES).unwrap(),
+            [(2, 0.5), (10, 0.25), (10, 0.75)],
+            "stable sort keeps same-offset events in arrival order"
+        );
+    }
+
+    #[test]
+    fn translate_events_skips_non_param_and_foreign_events() {
+        let mut buffer = EventBuffer::new();
+        buffer.push(&MidiEvent::new(0, 0, [0x90, 60, 100])); // non-param kind
+        buffer.push(&gain_event(0, f64::NAN)); // non-finite value
+        buffer.push(&ParamValueEvent::new(
+            4,
+            ClapId::new(42), // a different parameter id
+            Pckn::match_all(),
+            0.5,
+        ));
+        // `CLAP_INVALID_ID` — `ClapId::new(u32::MAX)` panics, so the
+        // invalid id is injected into the raw event data (the exact
+        // byte shape a malformed host can deliver). `param_id()`
+        // decodes it to `None` → defined skip.
+        let mut raw = *gain_event(2, 0.5).as_raw();
+        raw.param_id = u32::MAX;
+        buffer.push(&ParamValueEvent::from_raw(&raw));
+        buffer.push(&gain_event(8, 0.5));
+        let translated = translated_sequence(&buffer, FRAMES).unwrap();
+        assert_eq!(translated, [(8, 0.25)]);
+    }
+
+    #[test]
+    fn translate_events_bounds_count_and_offsets() {
+        // A host may attach arbitrary event counts; the bounded scan
+        // rejects past MAX_EVENTS_PER_BLOCK before translating.
+        let mut buffer = EventBuffer::new();
+        for _ in 0..=MAX_EVENTS_PER_BLOCK {
+            buffer.push(&gain_event(0, 0.5));
+        }
+        assert!(translated_sequence(&buffer, FRAMES).is_err());
+
+        // Offsets must stay inside the block — `EventList::new`
+        // enforces it even for the last legal offset.
+        let mut buffer = EventBuffer::new();
+        buffer.push(&gain_event(FRAMES, 0.5));
+        assert!(translated_sequence(&buffer, FRAMES).is_err());
+        buffer.clear();
+        buffer.push(&gain_event(FRAMES - 1, 0.5));
+        assert_eq!(translated_sequence(&buffer, FRAMES).unwrap().len(), 1);
+
+        // Zero-frame blocks accept only offset zero — the neutral
+        // bound is `offset < max(block_frames, 1)`.
+        buffer.clear();
+        buffer.push(&gain_event(0, 0.5));
+        assert_eq!(translated_sequence(&buffer, 0).unwrap().len(), 1);
+        buffer.push(&gain_event(1, 0.5));
+        assert!(translated_sequence(&buffer, 0).is_err());
+    }
+
+    // -- Transport -----------------------------------------------------------
+
+    /// A [`TransportEvent`] value with `flags` — all other fields at
+    /// neutral defaults except the seconds positions.
+    fn transport_with(flags: TransportFlags, song_pos: f64) -> TransportEvent {
+        TransportEvent {
+            header: EventHeader::<TransportEvent>::new_core(0, EventFlags::empty()),
+            flags,
+            song_pos_beats: BeatTime::from_int(0),
+            song_pos_seconds: SecondsTime::from_float(song_pos),
+            tempo: 120.0,
+            tempo_inc: 0.0,
+            loop_start_beats: BeatTime::from_int(0),
+            loop_end_beats: BeatTime::from_int(0),
+            loop_start_seconds: SecondsTime::from_float(1.0),
+            loop_end_seconds: SecondsTime::from_float(3.0),
+            bar_start: BeatTime::from_int(0),
+            bar_number: 0,
+            time_signature_numerator: 4,
+            time_signature_denominator: 4,
+        }
+    }
+
+    #[test]
+    fn adapt_transport_maps_status_position_and_loop() {
+        let rate = SampleRate::new(RATE).unwrap();
+        let base = TimeBase::sample_rate(RATE).unwrap();
+
+        // Playing + seconds timeline: position is seconds × rate.
+        let info = adapt_transport(
+            &transport_with(
+                TransportFlags::IS_PLAYING | TransportFlags::HAS_SECONDS_TIMELINE,
+                1.5,
+            ),
+            rate,
+            Some(999),
+        );
+        assert_eq!(info.status(), TransportStatus::Playing);
+        assert_eq!(info.position(), MediaTime::new(72_000, base));
+        assert_eq!(info.loop_range(), None);
+
+        // Recording also maps to Playing; without the seconds
+        // timeline the steady_time sample counter is the position.
+        let info = adapt_transport(
+            &transport_with(TransportFlags::IS_RECORDING, 1.5),
+            rate,
+            Some(9_999),
+        );
+        assert_eq!(info.status(), TransportStatus::Playing);
+        assert_eq!(info.position(), MediaTime::new(9_999, base));
+
+        // No flags → Stopped; no steady time either → zero position.
+        let info = adapt_transport(&transport_with(TransportFlags::empty(), 1.5), rate, None);
+        assert_eq!(info.status(), TransportStatus::Stopped);
+        assert_eq!(info.position(), MediaTime::new(0, base));
+
+        // Loop range maps only when loop + seconds timeline and
+        // end > start: 1.0s..3.0s at 48 kHz.
+        let info = adapt_transport(
+            &transport_with(
+                TransportFlags::IS_PLAYING
+                    | TransportFlags::HAS_SECONDS_TIMELINE
+                    | TransportFlags::IS_LOOP_ACTIVE,
+                2.0,
+            ),
+            rate,
+            None,
+        );
+        assert_eq!(
+            info.loop_range(),
+            Some(MediaRange::new(
+                MediaTime::new(48_000, base),
+                MediaDuration::new(96_000, base),
+            ))
+        );
+    }
+
+    // -- Status mapping ------------------------------------------------------
+
+    #[test]
+    fn map_process_result_maps_neutral_statuses() {
+        assert_eq!(
+            map_process_result(ProcessResult::CONTINUE).unwrap(),
+            ClapProcessStatus::Continue
+        );
+        assert_eq!(
+            map_process_result(ProcessResult::new(ProcessStatus::Continue, 10)).unwrap(),
+            ClapProcessStatus::Tail
+        );
+        assert_eq!(
+            map_process_result(ProcessResult::SLEEP).unwrap(),
+            ClapProcessStatus::Sleep
+        );
+        assert!(map_process_result(ProcessResult::new(ProcessStatus::Error, 0)).is_err());
     }
 }

@@ -9,8 +9,8 @@
 //! - **Ordering** — events are sorted by frame offset
 //!   (non-decreasing). [`EventList::new`] *rejects* unsorted input; an
 //!   adapter that receives unsorted host events must either pre-sort
-//!   (a stable `sort_by_key(Event::frame_offset)` preserves the order
-//!   of same-offset events) or refuse the block.
+//!   ([`sort_events_by_frame_offset`] is stable and allocation-free,
+//!   preserving the order of same-offset events) or refuse the block.
 //! - **Offset representation** — an event offset is a *within-block
 //!   frame offset* bounded by `offset < block_frames`. Absolute
 //!   [`MediaTime`] positions are deliberately **not** the wire
@@ -274,6 +274,60 @@ impl<'a> EventList<'a> {
     }
 }
 
+/// Sorts `events` by frame offset in place — stable, so the relative
+/// order of same-offset events is preserved.
+///
+/// [`EventList::new`] requires sorted input and rejects unsorted
+/// sequences. Adapters that receive unsorted host events normalize
+/// them into pre-allocated scratch with this helper before
+/// construction: unlike the standard library's stable
+/// `sort`/`sort_by_key` (which may allocate auxiliary scratch) and
+/// `sort_unstable` (which does not preserve same-offset order), this
+/// is an in-place insertion sort — allocation-free and stable, at
+/// `O(n²)` over the bounded per-block event count.
+///
+/// **RT contract:** RT-suitable — `O(n²)` bounded comparisons on
+/// `Copy` elements, allocation-free.
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_plugin_core::{
+///     sort_events_by_frame_offset, Event, EventKind, EventList,
+///     ParamEvent, ParamId, ParamValue,
+/// };
+///
+/// let mut events = [
+///     Event::new(
+///         96,
+///         EventKind::ParamValue(ParamEvent {
+///             param_id: ParamId(1),
+///             value: ParamValue::new(0.5).unwrap(),
+///         }),
+///     ),
+///     Event::new(
+///         0,
+///         EventKind::ParamValue(ParamEvent {
+///             param_id: ParamId(1),
+///             value: ParamValue::new(0.25).unwrap(),
+///         }),
+///     ),
+/// ];
+/// sort_events_by_frame_offset(&mut events);
+/// assert!(EventList::new(&events, 128).is_ok());
+/// ```
+pub fn sort_events_by_frame_offset(events: &mut [Event]) {
+    for index in 1..events.len() {
+        let value = events[index];
+        let mut hole = index;
+        while hole > 0 && events[hole - 1].frame_offset() > value.frame_offset() {
+            events[hole] = events[hole - 1];
+            hole -= 1;
+        }
+        events[hole] = value;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,5 +396,35 @@ mod tests {
         assert!(list.is_empty());
         assert_eq!(list.as_slice(), &[]);
         assert_eq!(param_event(0, 0.5).reserved(), [0; 2]);
+    }
+
+    #[test]
+    fn sort_events_is_stable_and_alloc_free() {
+        // Same-offset events keep their input order (stability) — the
+        // distinguishable values ride on the payload.
+        let mut events = [
+            param_event(10, 0.1),
+            param_event(5, 0.5),
+            param_event(10, 0.2),
+            param_event(0, 0.9),
+            param_event(5, 0.6),
+        ];
+        sort_events_by_frame_offset(&mut events);
+        let pairs: Vec<(u32, f64)> = events
+            .iter()
+            .map(|event| {
+                (
+                    event.frame_offset(),
+                    match event.kind() {
+                        EventKind::ParamValue(param) => param.value.get(),
+                    },
+                )
+            })
+            .collect();
+        assert_eq!(pairs, [(0, 0.9), (5, 0.5), (5, 0.6), (10, 0.1), (10, 0.2)]);
+
+        let mut already_sorted = [param_event(0, 0.1), param_event(5, 0.5)];
+        sort_events_by_frame_offset(&mut already_sorted);
+        assert_eq!(already_sorted[1].frame_offset(), 5);
     }
 }

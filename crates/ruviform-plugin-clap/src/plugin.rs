@@ -80,14 +80,48 @@ pub(crate) struct GainShared {
 
 impl PluginShared<'_> for GainShared {}
 
-impl Drop for GainShared {
-    fn drop(&mut self) {
+impl GainShared {
+    /// The `plugin.init` hook's fallible core, minus the
+    /// [`HostSharedHandle`] the factory signature carries (unused by
+    /// this `PoC`): Created → Initialize is unconditional for this
+    /// stateless init. Kept as one authoritative body so tests drive
+    /// the same `Initialize` mapping the ABI callback does.
+    ///
+    /// **RT contract:** non-RT only — runs at instance creation.
+    ///
+    /// # Errors
+    ///
+    /// `PluginError::Message` — the lifecycle machine rejected
+    /// `Initialize` (a re-init host protocol violation).
+    fn initialize() -> Result<Self, PluginError> {
+        let shared = Self {
+            lifecycle: AtomicLifecycle::new(),
+            gain_mirror: ParamMirror::new(GAIN_PARAM.default_value),
+        };
+        shared
+            .lifecycle
+            .transition(LifecycleEvent::Initialize)
+            .map_err(|_| PluginError::Message("init outside Created state"))?;
+        Ok(shared)
+    }
+
+    /// The `plugin.destroy` transition — invoked from [`Drop`]; kept
+    /// as one authoritative body so tests can observe the terminal
+    /// state the destructor records (a dropped value cannot be
+    /// inspected afterwards).
+    fn destroy(&self) {
         // `plugin.destroy` — legal from Created/Initialized only; a
         // host destroying an activated/processing instance is a
         // protocol violation: the transition is *rejected* (the
         // machine does not silently fabricate a Deactivate), and the
         // instance then dies with the honest state recorded.
         let _ = self.lifecycle.transition(LifecycleEvent::Destroy);
+    }
+}
+
+impl Drop for GainShared {
+    fn drop(&mut self) {
+        self.destroy();
     }
 }
 
@@ -143,17 +177,8 @@ impl clack_plugin::entry::DefaultPluginFactory for GainClapPlugin {
 
     fn new_shared(_host: HostSharedHandle<'_>) -> Result<GainShared, PluginError> {
         // `plugin.init` — the CLAP init hook runs the shared/main
-        // constructors; Created → Initialize is unconditional for this
-        // stateless init.
-        let shared = GainShared {
-            lifecycle: AtomicLifecycle::new(),
-            gain_mirror: ParamMirror::new(GAIN_PARAM.default_value),
-        };
-        shared
-            .lifecycle
-            .transition(LifecycleEvent::Initialize)
-            .map_err(|_| PluginError::Message("init outside Created state"))?;
-        Ok(shared)
+        // constructors.
+        GainShared::initialize()
     }
 
     fn new_main_thread<'a>(
@@ -285,12 +310,22 @@ impl PluginAudioProcessorParams for GainAudioProcessor<'_> {
 // Audio processor
 // ---------------------------------------------------------------------------
 
-impl<'a> PluginAudioProcessor<'a, GainShared, GainMainThread<'a>> for GainAudioProcessor<'a> {
-    fn activate(
-        _host: HostAudioProcessorHandle<'a>,
-        _main_thread: &GainMainThread<'a>,
+impl<'a> GainAudioProcessor<'a> {
+    /// The body of [`PluginAudioProcessor::activate`], minus the host
+    /// handles the trait signature carries (unused by this `PoC`) —
+    /// kept as one authoritative body so tests drive the same
+    /// `Activate`/`ActivateFailed` mapping the ABI callback does.
+    ///
+    /// **RT contract:** non-RT only — allocates per-block scratch.
+    ///
+    /// # Errors
+    ///
+    /// As [`PluginAudioProcessor::activate`]: config or preparation
+    /// failure reports `ActivateFailed` (staying `Initialized`); a
+    /// lifecycle rejection is a host protocol violation.
+    fn activate_inner(
         shared: &'a GainShared,
-        audio_config: PluginAudioConfiguration,
+        audio_config: &PluginAudioConfiguration,
     ) -> Result<Self, PluginError> {
         // Fallible work happens while still Initialized so a failure
         // can honestly report `ActivateFailed` (legal from
@@ -299,7 +334,7 @@ impl<'a> PluginAudioProcessor<'a, GainShared, GainMainThread<'a>> for GainAudioP
             let _ = shared.lifecycle.transition(LifecycleEvent::ActivateFailed);
             PluginError::Message(message)
         };
-        let config = adapt::to_process_config(&audio_config)
+        let config = adapt::to_process_config(audio_config)
             .map_err(|_| fail("unsupported audio configuration"))?;
         let mut processor = GainProcessor::new();
         let mut context = ProcessContext::new();
@@ -320,6 +355,17 @@ impl<'a> PluginAudioProcessor<'a, GainShared, GainMainThread<'a>> for GainAudioP
             config,
             scratch: BlockScratch::new(adapt::MAX_CHANNELS, adapt::MAX_EVENTS_PER_BLOCK),
         })
+    }
+}
+
+impl<'a> PluginAudioProcessor<'a, GainShared, GainMainThread<'a>> for GainAudioProcessor<'a> {
+    fn activate(
+        _host: HostAudioProcessorHandle<'a>,
+        _main_thread: &GainMainThread<'a>,
+        shared: &'a GainShared,
+        audio_config: PluginAudioConfiguration,
+    ) -> Result<Self, PluginError> {
+        Self::activate_inner(shared, &audio_config)
     }
 
     fn process(
@@ -411,5 +457,473 @@ impl<'a> PluginAudioProcessor<'a, GainShared, GainMainThread<'a>> for GainAudioP
             .shared
             .lifecycle
             .transition(LifecycleEvent::StopProcessing);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clack_common::events::Pckn;
+    use clack_common::events::event_types::ParamValueEvent;
+    use clack_common::events::event_types::{TransportEvent, TransportFlags};
+    use clack_common::events::io::EventBuffer;
+    use clack_common::events::{EventFlags, EventHeader};
+    use clack_common::utils::{BeatTime, SecondsTime};
+    use clack_host::entry::PluginEntry;
+    use clack_host::host::HostInfo;
+    use clack_host::plugin::{PluginInstance, PluginInstanceError};
+    use clack_host::process::audio_buffers::InputAudioBuffers;
+    use clack_plugin::entry::SinglePluginEntry;
+
+    use crate::adapt::test_support::StereoFixture;
+    use ruviform_plugin_core::LifecycleState;
+
+    const FRAMES: u32 = 64;
+    const FRAMES_USIZE: usize = 64;
+    const RATE: u32 = 48_000;
+
+    /// An activation config at 48 kHz bounded to `max_frames`.
+    fn config(max_frames: u32) -> PluginAudioConfiguration {
+        PluginAudioConfiguration {
+            sample_rate: f64::from(RATE),
+            min_frames_count: 1,
+            max_frames_count: max_frames,
+        }
+    }
+
+    /// A `ParamValue` event for our gain parameter — `value` is the
+    /// *plain* multiplier (the CLAP wire domain).
+    const fn gain_event(time: u32, value: f64) -> ParamValueEvent {
+        ParamValueEvent::new(time, ClapId::new(GAIN_PARAM.id.0), Pckn::match_all(), value)
+    }
+
+    /// One `process` call against `ap` with no transport — the
+    /// smallest complete `Process`/`Events` plumbing a host builds
+    /// for `clap_process`.
+    fn process_block(
+        ap: &mut GainAudioProcessor<'_>,
+        audio: Audio<'_>,
+        input_buffer: &EventBuffer,
+        output_buffer: &mut EventBuffer,
+    ) -> Result<ClapProcessStatus, PluginError> {
+        let input_events = input_buffer.as_input();
+        let mut output_events = output_buffer.as_output();
+        ap.process(
+            Process {
+                transport: None,
+                steady_time: None,
+            },
+            audio,
+            Events {
+                input: &input_events,
+                output: &mut output_events,
+            },
+        )
+    }
+
+    /// An `Audio` with no ports at all — legal CLAP input (audio may
+    /// be absent); `port_pair(0)` is `None` → the empty-block path.
+    fn empty_audio() -> Audio<'static> {
+        InputAudioBuffers::empty().as_plugin_audio()
+    }
+
+    /// Initialized shared state plus an activated audio processor —
+    /// the legal path every test starts from.
+    fn activated(shared: &GainShared, max_frames: u32) -> GainAudioProcessor<'_> {
+        GainAudioProcessor::activate_inner(shared, &config(max_frames)).unwrap()
+    }
+
+    // -- Lifecycle mapping through GainClapPlugin's own objects --------------
+
+    #[test]
+    fn lifecycle_happy_path_maps_created_to_destroyed() {
+        let shared = GainShared::initialize().unwrap();
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Initialized);
+
+        let mut ap = activated(&shared, FRAMES);
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Activated);
+
+        ap.start_processing().unwrap();
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Processing);
+
+        // One empty-ports block — `Process` is a self-loop: the block
+        // runs (SLEEP: no channels) and the machine stays Processing.
+        let input_buffer = EventBuffer::new();
+        let mut output_buffer = EventBuffer::new();
+        assert_eq!(
+            process_block(&mut ap, empty_audio(), &input_buffer, &mut output_buffer).unwrap(),
+            ClapProcessStatus::Sleep
+        );
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Processing);
+
+        ap.stop_processing();
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Activated);
+
+        let main = GainMainThread { shared: &shared };
+        ap.deactivate(&main); // consumes the audio processor
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Initialized);
+
+        // `plugin.destroy` is `GainShared::drop` — the transition body
+        // is invoked explicitly so the terminal state is observable
+        // (the scope-end Drop run afterwards just records a rejected
+        // second Destroy — `_`).
+        shared.destroy();
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Destroyed);
+    }
+
+    #[test]
+    fn lifecycle_reactivation_cycles_are_legal() {
+        let shared = GainShared::initialize().unwrap();
+        let main = GainMainThread { shared: &shared };
+
+        for _ in 0..2 {
+            let mut ap = activated(&shared, FRAMES);
+            assert_eq!(shared.lifecycle.state(), LifecycleState::Activated);
+            ap.start_processing().unwrap();
+            ap.stop_processing();
+            ap.deactivate(&main);
+            assert_eq!(shared.lifecycle.state(), LifecycleState::Initialized);
+        }
+    }
+
+    #[test]
+    fn lifecycle_activate_failure_reports_initialized() {
+        let shared = GainShared::initialize().unwrap();
+        // Zero/invalid sample rate — `to_process_config` rejects →
+        // `ActivateFailed` → the machine lands back on Initialized.
+        let bad = PluginAudioConfiguration {
+            sample_rate: 0.0,
+            min_frames_count: 1,
+            max_frames_count: FRAMES,
+        };
+        assert!(GainAudioProcessor::activate_inner(&shared, &bad).is_err());
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Initialized);
+    }
+
+    #[test]
+    fn lifecycle_process_before_start_is_protocol_violation() {
+        let shared = GainShared::initialize().unwrap();
+        let mut ap = activated(&shared, FRAMES);
+
+        // `process` while Activated-but-not-started — the `Process`
+        // self-loop gate rejects and the honest state is kept.
+        let input_buffer = EventBuffer::new();
+        let mut output_buffer = EventBuffer::new();
+        assert!(process_block(&mut ap, empty_audio(), &input_buffer, &mut output_buffer).is_err());
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Activated);
+
+        // The instance is still usable: a legal sequence succeeds.
+        ap.start_processing().unwrap();
+        assert!(process_block(&mut ap, empty_audio(), &input_buffer, &mut output_buffer).is_ok());
+        ap.stop_processing();
+        let main = GainMainThread { shared: &shared };
+        ap.deactivate(&main);
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Initialized);
+    }
+
+    #[test]
+    fn lifecycle_deactivate_while_processing_is_rejected_honestly() {
+        let shared = GainShared::initialize().unwrap();
+        let mut ap = activated(&shared, FRAMES);
+        ap.start_processing().unwrap();
+
+        let main = GainMainThread { shared: &shared };
+        ap.deactivate(&main); // consumes ap — protocol violation recorded
+        // `deactivate` has no error channel: the rejected transition
+        // is recorded and the machine stays honestly in Processing
+        // (a later Destroy is likewise rejected — fail-closed).
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Processing);
+    }
+
+    #[test]
+    fn lifecycle_destroy_from_initialized_only() {
+        // Activated/processing instances reject Destroy (the drop
+        // records the rejection); a clean sequence reaches Destroyed.
+        let shared = GainShared::initialize().unwrap();
+        let mut ap = activated(&shared, FRAMES);
+        ap.start_processing().unwrap();
+        ap.stop_processing();
+        let main = GainMainThread { shared: &shared };
+        ap.deactivate(&main);
+        shared.destroy();
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Destroyed);
+    }
+
+    // -- Real process path -----------------------------------------------------
+
+    #[test]
+    fn rt_process_drives_paired_stereo_block_allocation_free() {
+        // RT-contract test: the full `process` path — lifecycle gate,
+        // frame bound, borrowed planar views, event translation,
+        // transport, processor, mirror, status map — is bounded and
+        // performs no allocation *by construction* (scratch is
+        // pre-allocated at activate; every collection is a fixed-size
+        // array or a capacity-reserved Vec that never grows past
+        // MAX_*). Observing zero allocator traffic is deferred to the
+        // RT-verification lane (Issue #22).
+        let shared = GainShared::initialize().unwrap();
+        let mut ap = activated(&shared, FRAMES);
+        ap.start_processing().unwrap();
+        shared.gain_mirror.store(0.5);
+
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let input_buffer = EventBuffer::new();
+        let mut output_buffer = EventBuffer::new();
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            let audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            assert_eq!(
+                process_block(&mut ap, audio, &input_buffer, &mut output_buffer).unwrap(),
+                ClapProcessStatus::Continue
+            );
+        }
+        // The output buffers — the host's own memory, zero copy —
+        // carry input × gain.
+        assert_eq!(fixture.outputs[0], vec![0.25; FRAMES_USIZE]);
+        assert_eq!(fixture.outputs[1], vec![-0.125; FRAMES_USIZE]);
+        assert_eq!(shared.gain_mirror.load(), 0.5);
+    }
+
+    #[test]
+    fn process_in_place_block_scales_shared_region() {
+        let shared = GainShared::initialize().unwrap();
+        let mut ap = activated(&shared, FRAMES);
+        ap.start_processing().unwrap();
+        shared.gain_mirror.store(0.5);
+
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let io_ptrs = [
+            fixture.inputs[0].as_mut_ptr(),
+            fixture.inputs[1].as_mut_ptr(),
+        ];
+        let input_buffer = EventBuffer::new();
+        let mut output_buffer = EventBuffer::new();
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            // In-place request: the output channel list *is* the input
+            // channel list (CLAP in-place-pair semantics).
+            let mut shared_list = io_ptrs;
+            output_buffers.as_raw_buffers()[0].data32 = shared_list.as_mut_ptr();
+            let audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            assert_eq!(
+                process_block(&mut ap, audio, &input_buffer, &mut output_buffer).unwrap(),
+                ClapProcessStatus::Continue
+            );
+        }
+        assert_eq!(fixture.inputs[0], vec![0.25; FRAMES_USIZE]);
+        assert_eq!(fixture.inputs[1], vec![-0.125; FRAMES_USIZE]);
+    }
+
+    #[test]
+    fn process_rejects_frames_beyond_negotiated_max() {
+        let shared = GainShared::initialize().unwrap();
+        let mut ap = activated(&shared, 32); // negotiated max 32 frames
+        ap.start_processing().unwrap();
+
+        // Host delivers a 64-frame block anyway — defined rejection.
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let input_buffer = EventBuffer::new();
+        let mut output_buffer = EventBuffer::new();
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            let audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            assert!(process_block(&mut ap, audio, &input_buffer, &mut output_buffer).is_err());
+        }
+        // The `Process` self-loop already ran — the block is a
+        // processing-state rejection, not a fabricated transition.
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Processing);
+    }
+
+    #[test]
+    fn process_applies_param_event_sample_accurately() {
+        let shared = GainShared::initialize().unwrap();
+        let mut ap = activated(&shared, FRAMES);
+        ap.start_processing().unwrap();
+        shared.gain_mirror.store(0.5);
+
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let mut input_buffer = EventBuffer::new();
+        input_buffer.push(&gain_event(32, 1.0)); // gain 1.0 from frame 32
+        let mut output_buffer = EventBuffer::new();
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            let audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            assert_eq!(
+                process_block(&mut ap, audio, &input_buffer, &mut output_buffer).unwrap(),
+                ClapProcessStatus::Continue
+            );
+        }
+        // Frames 0..32 at the block-start gain (0.5), frames 32.. at
+        // the event's 1.0 — input left channel is 0.5 everywhere.
+        assert_eq!(fixture.outputs[0][..32], [0.25; 32]);
+        assert_eq!(fixture.outputs[0][32..], [0.5; 32]);
+        // And the mirror carries the post-block value for params.
+        assert_eq!(shared.gain_mirror.load(), 1.0);
+    }
+
+    #[test]
+    fn process_without_audio_ports_flushes_events_and_sleeps() {
+        let shared = GainShared::initialize().unwrap();
+        let mut ap = activated(&shared, FRAMES);
+        ap.start_processing().unwrap();
+
+        // No audio buffers — the empty-block path still applies
+        // parameter events (mirror update observable via params).
+        let mut input_buffer = EventBuffer::new();
+        input_buffer.push(&gain_event(0, 0.25));
+        let mut output_buffer = EventBuffer::new();
+        assert_eq!(
+            process_block(&mut ap, empty_audio(), &input_buffer, &mut output_buffer).unwrap(),
+            ClapProcessStatus::Sleep
+        );
+        assert_eq!(shared.gain_mirror.load(), 0.25);
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Processing);
+    }
+
+    #[test]
+    fn process_accepts_transport_and_steady_time() {
+        let shared = GainShared::initialize().unwrap();
+        let mut ap = activated(&shared, FRAMES);
+        ap.start_processing().unwrap();
+
+        // A transport event in `Process::transport` — mapped through
+        // `adapt_transport`; GainProcessor ignores it, the path must
+        // still run clean.
+        let transport = TransportEvent {
+            header: EventHeader::<TransportEvent>::new_core(0, EventFlags::empty()),
+            flags: TransportFlags::IS_PLAYING | TransportFlags::HAS_SECONDS_TIMELINE,
+            song_pos_beats: BeatTime::from_int(0),
+            song_pos_seconds: SecondsTime::from_float(1.0),
+            tempo: 120.0,
+            tempo_inc: 0.0,
+            loop_start_beats: BeatTime::from_int(0),
+            loop_end_beats: BeatTime::from_int(0),
+            loop_start_seconds: SecondsTime::from_float(0.0),
+            loop_end_seconds: SecondsTime::from_float(2.0),
+            bar_start: BeatTime::from_int(0),
+            bar_number: 0,
+            time_signature_numerator: 4,
+            time_signature_denominator: 4,
+        };
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let input_buffer = EventBuffer::new();
+        let mut output_buffer = EventBuffer::new();
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            let audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+            let input_events = input_buffer.as_input();
+            let mut output_events = output_buffer.as_output();
+            assert_eq!(
+                ap.process(
+                    Process {
+                        transport: Some(&transport),
+                        steady_time: Some(1_234),
+                    },
+                    audio,
+                    Events {
+                        input: &input_events,
+                        output: &mut output_events,
+                    },
+                )
+                .unwrap(),
+                ClapProcessStatus::Continue
+            );
+        }
+        assert_eq!(shared.lifecycle.state(), LifecycleState::Processing);
+    }
+
+    // -- End-to-end through the real clap_plugin ABI ----------------------------
+
+    /// Instantiates the plugin through the exported `clap_entry` via
+    /// clack-host — the same path a real host drives (`plugin.init`
+    /// through `plugin.destroy`). `GainClapPlugin`'s `SinglePluginEntry`
+    /// is the crate's one authoritative entry body.
+    fn host_instance() -> (PluginEntry, PluginInstance<()>) {
+        let entry = PluginEntry::load_from_clack::<SinglePluginEntry<GainClapPlugin>>(c"gain.clap")
+            .unwrap();
+        let host = HostInfo::new("test host", "ruviform", "", "0.0.1").unwrap();
+        let instance = PluginInstance::<()>::new(
+            |()| (),
+            |()| (),
+            &entry,
+            c"org.ruviform.clap-gain-poc",
+            &host,
+        )
+        .unwrap();
+        (entry, instance)
+    }
+
+    #[test]
+    fn host_driven_entry_runs_full_lifecycle_through_abi() {
+        let (_entry, mut instance) = host_instance();
+        // plugin.activate through the real ABI — Activate mapping.
+        let stopped = instance.activate(|(), ()| (), config(FRAMES)).unwrap();
+        // start_processing — StartProcessing mapping.
+        let mut started = stopped.start_processing().unwrap();
+
+        // A real paired-stereo block through clap_process.
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let input_buffer = EventBuffer::new();
+        let mut output_buffer = EventBuffer::new();
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            let input_events = input_buffer.as_input();
+            let mut output_events = output_buffer.as_output();
+            let status = started
+                .process(
+                    &input_buffers,
+                    &mut output_buffers,
+                    &input_events,
+                    &mut output_events,
+                    None,
+                    None,
+                )
+                .unwrap();
+            assert_eq!(status, ClapProcessStatus::Continue);
+        }
+        // Default gain is 1.0 — outputs carry the inputs verbatim.
+        assert_eq!(fixture.outputs[0], vec![0.5; FRAMES_USIZE]);
+        assert_eq!(fixture.outputs[1], vec![-0.25; FRAMES_USIZE]);
+
+        // stop_processing → deactivate → drop(instance): the
+        // StopProcessing → Deactivate → Destroy mappings run through
+        // the real ABI (destroy fires on instance drop).
+        let stopped = started.stop_processing();
+        instance.deactivate(stopped);
+        drop(instance);
+    }
+
+    #[test]
+    fn host_driven_process_rejection_surfaces_as_error() {
+        let (_entry, mut instance) = host_instance();
+        let stopped = instance.activate(|(), ()| (), config(32)).unwrap();
+        let mut started = stopped.start_processing().unwrap();
+
+        // Host delivers a block beyond the negotiated 32-frame max —
+        // the adapter's boundary rejection comes back through the ABI
+        // as a processing error, never as UB.
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let input_buffer = EventBuffer::new();
+        let mut output_buffer = EventBuffer::new();
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            let input_events = input_buffer.as_input();
+            let mut output_events = output_buffer.as_output();
+            let err = started
+                .process(
+                    &input_buffers,
+                    &mut output_buffers,
+                    &input_events,
+                    &mut output_events,
+                    None,
+                    None,
+                )
+                .unwrap_err();
+            assert!(matches!(err, PluginInstanceError::ProcessingFailed));
+        }
+
+        let stopped = started.stop_processing();
+        instance.deactivate(stopped);
+        drop(instance);
     }
 }

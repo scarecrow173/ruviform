@@ -23,6 +23,7 @@ Directory: `docs/impl/ir`
 | IMPL-034K7dWqYmSaPhOnIaPc02 | Implement io-symphonia backend PoC | completed | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | IMPL-034J5L3UVnQerTiQRlC7w3 | Implement media-core data model | completed | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
 | IMPL-034JxNThv4gsW2IpbkYmK4 | Implement media-io abstraction | completed | [implement-media-io-abstraction.md](./implement-media-io-abstraction.md) |
+| IMPL-uPGpxTQ0PlYmsQy1T9Au0i | Implement thin CLAP and VST3 standard adapters | completed | [implement-plugin-adapters.md](./implement-plugin-adapters.md) |
 | IMPL-034JgwwQXOaYpCHRnN2X1e | Implement rgb to yuv and f16 kernels | completed | [implement-rgb-to-yuv-and-f16-kernels.md](./implement-rgb-to-yuv-and-f16-kernels.md) |
 | IMPL-034J5L4LL7z9gp1QZKqwa9 | Implement video-core data model | completed | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | IMPL-034JfTIFdaBP0PDUkO9yLm | Implement yuv to rgb kernel | completed | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |

@@ -73,7 +73,7 @@ mod transport;
 
 pub use bus::{BusDescriptor, BusDirection};
 pub use descriptor::PluginDescriptor;
-pub use event::{Event, EventKind, EventList, ParamEvent};
+pub use event::{Event, EventKind, EventList, ParamEvent, sort_events_by_frame_offset};
 pub use lifecycle::{Lifecycle, LifecycleError, LifecycleEvent, LifecycleState};
 pub use param::{ParamFlags, ParamId, ParamInfo, ParamValue};
 pub use processor::{

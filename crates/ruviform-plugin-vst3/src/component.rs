@@ -876,6 +876,54 @@ mod tests {
         assert_eq!(output[1], vec![1.0_f32; 64]);
     }
 
+    /// The activate ↔ processing cycle may repeat on one component:
+    /// after `setProcessing(0)` + `setActive(0)`, a fresh
+    /// `setActive(1)` → `setupProcessing` → `setProcessing(1)`
+    /// re-negotiates config and processes again — the shared
+    /// `Lifecycle` re-activation transitions.
+    #[expect(unsafe_code)]
+    #[test]
+    fn re_activation_cycles_through_lifecycle() {
+        let wrapper = ComWrapper::new(GainComponent::new());
+        let component = wrapper.to_com_ptr::<IComponent>().unwrap();
+        let processor = wrapper.to_com_ptr::<IAudioProcessor>().unwrap();
+        // SAFETY: live COM objects.
+        unsafe { activate(&component, &processor, 64) };
+
+        let mut input = [vec![0.5_f32; 64], vec![1.0; 64]];
+        let mut output = [vec![0.0_f32; 64], vec![0.0; 64]];
+        let mut block = TestBlock::new(&mut input, &mut output);
+        let mut data = block.data(64);
+
+        // SAFETY: `data` + bus/channel pointers valid for the calls.
+        unsafe {
+            assert_eq!(processor.process(&raw mut data), kResultOk);
+            assert_eq!(processor.setProcessing(0), kResultOk);
+            assert_eq!(component.setActive(0), kResultOk);
+
+            // Re-activate: fresh `setupProcessing` negotiates a new
+            // max-block size and processing resumes.
+            assert_eq!(component.setActive(1), kResultOk);
+            let mut setup = ProcessSetup {
+                processMode: 0,
+                symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
+                maxSamplesPerBlock: 32,
+                sampleRate: 48_000.0,
+            };
+            assert_eq!(processor.setupProcessing(&raw mut setup), kResultOk);
+            assert_eq!(processor.setProcessing(1), kResultOk);
+            let mut small = block.data(32);
+            assert_eq!(processor.process(&raw mut small), kResultOk);
+            // Blocks larger than the re-negotiated max are rejected.
+            assert_eq!(processor.process(&raw mut data), kResultFalse);
+
+            assert_eq!(processor.setProcessing(0), kResultOk);
+            assert_eq!(component.setActive(0), kResultOk);
+            assert_eq!(component.terminate(), kResultOk);
+        }
+        assert_eq!(output[0][..32], vec![0.5_f32; 32][..]);
+    }
+
     #[expect(unsafe_code)]
     #[test]
     fn process_rejected_outside_processing_state() {
