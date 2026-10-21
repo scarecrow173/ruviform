@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JxO8rp2rxpfFdipPzUU"
 type: "task"
-status: "todo"
+status: "done"
 title: "ruviform-rt SPSC チャネルの実装"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -55,15 +55,15 @@ relations:
 
 plan `PLAN-034JxNegJktSAJZ2LuO0N8` の Phase B。design `DESIGN-034JgsK9khgDsPqG04Sp6i` の `spsc.rs` API sketch を正本として、`rtrb` の SPSC リングをラップした有界・ノンブロッキングチャネルを実装する。
 
-- [ ] `crates/ruviform-rt/Cargo.toml` に `rtrb = "0.4"` を追加（crates.io 通常依存・private 実装詳細。`Cargo.lock` を更新）
-- [ ] `spsc.rs`: `pub fn channel<T: Send>(capacity: usize) -> (Producer<T>, Consumer<T>)`（構築時固定容量・`**RT contract:** non-RT only`）
-- [ ] `Producer<T>`: `try_push`（満杯時 `Err(TryPushError::Full(value))` で値を返却）・`is_full`・`capacity` — すべて `RT-suitable`。`T: Send` 時に `Send`・`!Sync`
-- [ ] `Consumer<T>`: `try_pop`（空時 `Err(TryPopError::Empty)`）・`pop_latest`（保留要素を drain し最新 1 件のみ・空なら `None`・回数は容量で有界）・`is_empty`・`capacity` — すべて `RT-suitable`
-- [ ] `TryPushError<T>`（`Full(T)`）・`TryPopError`（`Empty`）: enum レベル `#[non_exhaustive]`・`Debug`/`Clone`/`Copy`/`PartialEq`/`Eq`/`Hash` + `Display` + `core::error::Error`（`TryPushError<T>` の `Error` 実装は `T: Debug` 境界・表示は値を含めない）。`TryPushError::into_inner`
-- [ ] 診断アクセサ（`is_full`/`is_empty`/`capacity`）は doc に「観測時点の近似値・正確性を契約としない」を記載
-- [ ] `lib.rs` に `mod spsc;` + `pub use spsc::{channel, Consumer, Producer, TryPopError, TryPushError};` を追加
-- [ ] `rt_` テスト: `rt_push_pop_fifo`（FIFO・値保全）・`rt_full_try_push_returns_value`（満杯時 `Full(T)`・`into_inner` 回収）・`rt_pop_latest_returns_newest`（latest-wins）・`rt_try_push_pop_no_alloc`（std のみ test-scoped counting `#[global_allocator]` で確保 0）
-- [ ] 外部型非露出: `rtrb` の型・エラーが公開シグネチャに出ないこと（`Producer`/`Consumer` は `rtrb` 端点を抱える自有型）
+- [x] `crates/ruviform-rt/Cargo.toml` に `rtrb = "0.4"` を追加（crates.io 通常依存・private 実装詳細。`Cargo.lock` を更新）
+- [x] `spsc.rs`: `pub fn channel<T: Send>(capacity: usize) -> (Producer<T>, Consumer<T>)`（構築時固定容量・`**RT contract:** non-RT only`）
+- [x] `Producer<T>`: `try_push`（満杯時 `Err(TryPushError::Full(value))` で値を返却）・`is_full`・`capacity` — すべて `RT-suitable`。`T: Send` 時に `Send`・`!Sync`
+- [x] `Consumer<T>`: `try_pop`（空時 `Err(TryPopError::Empty)`）・`pop_latest`（保留要素を drain し最新 1 件のみ・空なら `None`・回数は容量で有界）・`is_empty`・`capacity` — すべて `RT-suitable`
+- [x] `TryPushError<T>`（`Full(T)`）・`TryPopError`（`Empty`）: enum レベル `#[non_exhaustive]`・`Debug`/`Clone`/`Copy`/`PartialEq`/`Eq`/`Hash` + `Display` + `core::error::Error`（`TryPushError<T>` の `Error` 実装は `T: Debug` 境界・表示は値を含めない）。`TryPushError::into_inner`
+- [x] 診断アクセサ（`is_full`/`is_empty`/`capacity`）は doc に「観測時点の近似値・正確性を契約としない」を記載
+- [x] `lib.rs` に `mod spsc;` + `pub use spsc::{channel, Consumer, Producer, TryPopError, TryPushError};` を追加
+- [x] `rt_` テスト: `rt_push_pop_fifo`（FIFO・値保全）・`rt_full_try_push_returns_value`（満杯時 `Full(T)`・`into_inner` 回収）・`rt_pop_latest_returns_newest`（latest-wins）・`rt_try_push_pop_no_alloc`（std のみ test-scoped counting `#[global_allocator]` で確保 0）
+- [x] 外部型非露出: `rtrb` の型・エラーが公開シグネチャに出ないこと（`Producer`/`Consumer` は `rtrb` 端点を抱える自有型）
 
 **`rt_` 命名規約（重要）**: RT 契約テストの fn 名は `rt_` プレフィックス。非 RT のテスト・doctest・ヘルパー関数名は `rt_` 部分文字列を含まないこと — `assert_*`・`start_*` は禁止（`expect_*`・`spawn_*` 等）。counting allocator ヘルパーの関数名にも注意。
 
@@ -92,15 +92,15 @@ plan `PLAN-034JxNegJktSAJZ2LuO0N8` の Phase B。design `DESIGN-034JgsK9khgDsPqG
 
 ## Done When
 
-- [ ] `channel`/`Producer`/`Consumer`/`TryPushError`/`TryPopError` が design sketch どおりのシグネチャで crate root から再公開される
-- [ ] 満杯時に `try_push` が `Full(T)` で値を返却し `pop_latest` が最新のみ返す
-- [ ] `rt_` テストが `mise run test-rt` で選択され、counting allocator で `try_push`/`try_pop`/`pop_latest` の確保 0 を検証
-- [ ] `rtrb` 型が公開 API に露出していない（シグネチャレビュー）
-- [ ] 全公開 API に `**RT contract:**` ラベルと doctest、両エラー enum に `#[non_exhaustive]`
+- [x] `channel`/`Producer`/`Consumer`/`TryPushError`/`TryPopError` が design sketch どおりのシグネチャで crate root から再公開される
+- [x] 満杯時に `try_push` が `Full(T)` で値を返却し `pop_latest` が最新のみ返す
+- [x] `rt_` テストが `mise run test-rt` で選択され、counting allocator で `try_push`/`try_pop`/`pop_latest` の確保 0 を検証
+- [x] `rtrb` 型が公開 API に露出していない（シグネチャレビュー）
+- [x] 全公開 API に `**RT contract:**` ラベルと doctest、両エラー enum に `#[non_exhaustive]`
 
 ## Verification
 
-- [ ] `mise exec -- cargo test -p ruviform-rt` — 単体テスト + doctest 合格
-- [ ] `mise exec -- cargo test -p ruviform-rt rt_` — `rt_` 命名テストのみ選択・合格
-- [ ] `mise run lint` — 0 warnings（`exhaustive_enums` ゲート含む）
-- [ ] `mise run fmt-check` — 差分なし
+- [x] `mise exec -- cargo test -p ruviform-rt` — 単体テスト + doctest 合格
+- [x] `mise exec -- cargo test -p ruviform-rt rt_` — `rt_` 命名テストのみ選択・合格
+- [x] `mise run lint` — 0 warnings（`exhaustive_enums` ゲート含む）
+- [x] `mise run fmt-check` — 差分なし
