@@ -98,6 +98,10 @@ pub(crate) struct DataCallbackState {
     scratch: Vec<f32>,
     channels: usize,
     frames_capacity: usize,
+    /// Negotiated sample rate — needed to synthesize per-chunk instant
+    /// offsets when a callback delivers more frames than the scratch
+    /// capacity (`write_interleaved` chunk path).
+    sample_rate: u32,
     /// First observed callback instant — the epoch anchor for the
     /// saturating timestamp fallback, recorded lazily because the
     /// stream clock is only observable once callbacks (or `now()`)
@@ -111,12 +115,14 @@ impl DataCallbackState {
         scratch: Vec<f32>,
         channels: usize,
         frames_capacity: usize,
+        sample_rate: u32,
     ) -> Self {
         Self {
             data_callback,
             scratch,
             channels,
             frames_capacity,
+            sample_rate,
             epoch: None,
         }
     }
@@ -137,6 +143,7 @@ impl DataCallbackState {
             self.channels,
             data,
             info,
+            self.sample_rate,
             &mut self.data_callback,
         );
     }
@@ -280,6 +287,7 @@ mod tests {
                 2,
                 &mut data,
                 OutputCallbackInfo { timestamp: mapped },
+                48_000,
                 &mut cb,
             );
         });

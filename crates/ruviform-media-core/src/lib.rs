@@ -1,6 +1,7 @@
 //! `ruviform-media-core` — shared media value types for the Ruviform media
 //! foundation: rational time ([`TimeBase`], [`MediaTime`],
-//! [`MediaDuration`], [`MediaRange`], [`Rounding`]), container-level stream
+//! [`MediaDuration`], [`MediaRange`], [`FrameRate`], [`Rounding`]),
+//! container-level stream
 //! descriptors ([`StreamId`], [`StreamKind`], [`StreamDescriptor`]), the
 //! media-wide [`Error`]/[`Result`] types, display-side [`Timecode`]
 //! conversion (including SMPTE drop-frame labeling) and transport state
@@ -48,7 +49,7 @@ mod transport;
 
 pub use error::{Error, Result};
 pub use stream::{StreamDescriptor, StreamId, StreamKind};
-pub use time::{MediaDuration, MediaRange, MediaTime, Rounding, TimeBase};
+pub use time::{FrameRate, MediaDuration, MediaRange, MediaTime, Rounding, TimeBase};
 pub use timecode::Timecode;
 pub use transport::{TransportSnapshot, TransportStatus};
 
@@ -136,8 +137,8 @@ mod tests {
     /// label.
     #[test]
     fn rt_drop_frame_roundtrip() {
-        let rate = base(30_000, 1_001);
-        let frame_base = base(1_001, 30_000);
+        let rate = FrameRate::new(30_000, 1_001).unwrap();
+        let frame_base = rate.frame_duration();
         let label = |frames: i64| {
             Timecode::from_media_time_drop(MediaTime::new(frames, frame_base), rate).unwrap()
         };

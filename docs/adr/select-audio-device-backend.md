@@ -34,7 +34,9 @@ relations:
   derives-from:
     - "../discovery/evaluate-audio-device-backends.md"
     - "https://github.com/scarecrow173/ruviform/issues/23"
-  derived-by: []
+  derived-by:
+    - "../specs/chunk-timestamp-synthesis.md"
+    - "chunk-outputcallbackinfo-timestamp.md"
   verifies: []
   verified-by: []
   references:
