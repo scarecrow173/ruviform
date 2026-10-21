@@ -176,7 +176,7 @@ impl YuvToRgb {
                     .ok_or(Error::InvalidValue("dst plane"))?;
                 // `row_bytes == width * 4` for Rgba8, so exactly `width`
                 // pixel chunks are produced — padding never included.
-                for (x, px) in dst_row.chunks_exact_mut(4).enumerate() {
+                for (x, px) in dst_row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
                     let cx = x / sub_w;
                     let [r, g, b] = coef.apply(luma_row[x], blue_row[cx], red_row[cx]);
                     px.copy_from_slice(&[r, g, b, u8::MAX]);

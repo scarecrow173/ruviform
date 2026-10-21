@@ -214,7 +214,7 @@ impl RgbToYuv {
                 // `row_bytes == width * 4` for Rgba8, so exactly `width`
                 // pixel chunks pair with the `width` luma samples —
                 // padding never included.
-                for (px, y_out) in src_row.chunks_exact(4).zip(luma_row.iter_mut()) {
+                for (px, y_out) in src_row.as_chunks::<4>().0.iter().zip(luma_row.iter_mut()) {
                     *y_out = self.coef.luma(px[0], px[1], px[2]);
                 }
             }
@@ -245,7 +245,7 @@ impl RgbToYuv {
                     let mut count = 0_i32;
                     for y in y0..y1 {
                         let src_row = rgba.row(y).ok_or(Error::InvalidValue("src planes"))?;
-                        for px in src_row.chunks_exact(4).skip(x0).take(x1 - x0) {
+                        for px in src_row.as_chunks::<4>().0.iter().skip(x0).take(x1 - x0) {
                             sum += self.coef.chroma(px[0], px[1], px[2])[plane_index - 1];
                             count += 1;
                         }
@@ -422,7 +422,13 @@ mod tests {
         let mut frame = VideoFrame::new_owned(PixelFormat::Rgba8, width, height, pts()).unwrap();
         {
             let mut plane = frame.plane_mut(0).unwrap();
-            for (dst_px, [r, g, b]) in plane.data_mut().chunks_exact_mut(4).zip(pixels.iter()) {
+            for (dst_px, [r, g, b]) in plane
+                .data_mut()
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(pixels.iter())
+            {
                 dst_px.copy_from_slice(&[*r, *g, *b, 255]);
             }
         }

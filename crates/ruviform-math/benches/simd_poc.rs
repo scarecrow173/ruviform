@@ -135,7 +135,9 @@ where
 /// recursive kernels re-enter the denormal range on every iteration.
 fn denormal_state(len: usize) -> Vec<f32> {
     let d = denormal_f32();
-    (0..len).map(|i| if i % 2 == 0 { d } else { -d }).collect()
+    (0..len)
+        .map(|i| if i.is_multiple_of(2) { d } else { -d })
+        .collect()
 }
 
 /// Prints the run-start environment block to stdout exactly once; the

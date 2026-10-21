@@ -1,10 +1,10 @@
 ---
 id: "SPEC-034JceNZQvAawWwMH4ct91"
 type: "spec"
-status: "approved"
+status: "implemented"
 title: "時間型拡張（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -17,7 +17,8 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "../plans/implement-issue-58-time-type-extension.md"
   depends-on:
     - "implement-media-data-model-api.md"
     - "../adr/public-enum-non-exhaustive-policy.md"
@@ -35,8 +36,10 @@ relations:
   derived-by:
     - "../adr/framerate-timebase-separation-and-timecode-extension.md"
     - "../designs/time-model-extension.md"
+    - "../plans/implement-issue-58-time-type-extension.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "../test-specs/time-type-extension-contracts.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/41"
     - "https://github.com/scarecrow173/ruviform/issues/27"
