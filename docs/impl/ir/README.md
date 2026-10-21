@@ -26,6 +26,7 @@ Directory: `docs/impl/ir`
 | IMPL-034IwXoGhCxs4EAP3HjoQF | Review config files minimal edits | completed | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | IMPL-034Ix98fGRcsRNYZ3EZnZJ | Rewrite AGENTS for Ruviform | completed | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | IMPL-034IwXvs801LZXZlip1tZ6 | Rewrite README for Ruviform | completed | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
+| IMPL-034JywI99DQ33dDEZVnnqC | Run device PoC examples and record experiment log | completed | [run-device-poc-examples-and-record-experiment-log.md](./run-device-poc-examples-and-record-experiment-log.md) |
 | IMPL-034Ixn011MsolyFpmBB87l | Run placeholder sweep and verification | completed | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
 | IMPL-034Jy2QPH4SUwoep9wQBW2 | ruviform-rt 中核型の実装 | completed | [ruviform-rt.md](./ruviform-rt.md) |
 | IMPL-034J7u3ZaCkeiCc8zzuQwd | Small fixes from followup triage | completed | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
