@@ -100,7 +100,7 @@ task `TASK-034Jgi3OFauA1SWRPdvnnb`（plan `PLAN-034JfKRCFCu8oJr5iCe6AV` Phase 2�
 ### Changes
 
 - `crates/ruviform-io-symphonia/Cargo.toml` — workspace 継承 + `[lints] workspace = true` + `ruviform-media-io` / `ruviform-media-core` / `ruviform-audio-core` への `path` 依存 + `symphonia = "0.6"`（default features のみ）。依存追加理由・MPL-2.0（弱コピーレフト・ファイル単位）・MSRV 1.85 整合・feature 制限を Cargo.toml コメントに記録（暫定規約の依存追加規約・licensing ADR）。ルート `Cargo.toml` の `members` へ追加・コメント同期
-- `src/source.rs` — `SourceAdapter`（media-io `MediaSource` → バックエンド `MediaSource` trait のアダプタ。`Sync` ギャップは `Mutex` + `get_mut` の非ロック経路で閉じる。crate 内部・公開非露出）
+- `src/source.rs` — `SourceAdapter`（media-io `MediaSource` → バックエンド `MediaSource` trait のアダプタ。`Sync` ギャップは `Mutex` + `get_mut` の非ロック経路で閉じる。crate 内部・公開非露出）。レビュー修正 wave（[T3 IR](sync-docs-and-verify-issue-20.md)）で `is_seekable` / `byte_len` を構築時 `Seek` probe のキャッシュ値から返す方式へ変更 — 真に非シーク可能なソースは `SeekError::Unseekable` → `Unsupported` に正規化され、Ogg の末尾走査・二分シークに必要な実長も供給される
 - `src/error.rs` — `map_error`: backend `Error` → `ErrorKind` 正規化写像表（`IoError(UnexpectedEof)`→`UnexpectedEos`、`IoError`→`Io`、`DecodeError`/`LimitError`/`ResetRequired`→`InvalidData`、`SeekError::{Unseekable,ForwardOnly}`→`Unsupported`、`SeekError` 他→`InvalidValue`、`Unsupported`→`Unsupported`）+ 原本を型消去 `source` 診断へ封入
 - `src/map.rs` — backend → 境界値型の純粋写像（`to_time_base` / `stream_kind` / `codec_id`（音声: PCM 系譜→`Pcm`、Vorbis/Opus/Mp3/Aac/Flac/Alac、動画: H264/Hevc/Vp9/Av1、他→`Other`）/ `audio_format` / `channel_layout`）。写像不能は `CodecFormat::Data` / `None` で正直に降格
 - `src/demuxer.rs` — `SymphoniaDemuxer`（`FormatReader` wrap。`streams` は probe 時スナップショット、`read_packet` は `Packet` 変換＋正常 EOS=`Ok(None)`、`seek` は時刻指定要求を `SeekMode::Accurate` へ）+ `make_decoder(StreamId)`（codec 非対応・非音声は `ErrorKind::Unsupported`/`InvalidValue`）
@@ -145,7 +145,7 @@ task `TASK-034Jgi3OFauA1SWRPdvnnb`（plan `PLAN-034JfKRCFCu8oJr5iCe6AV` Phase 2�
 
 - `Muxer` / `Encoder` は実装者ゼロの未検証契約のまま（spec Deferred。`publish = false` 下で第一 encode 対応バックエンド実装 Issue で実証・改訂可）
 - `next_ts` anchor による PTS 欠落補外は単一ストリーム順序を前提。異常な PTS 系列での補外誤差は engines 責務の再同期で吸収される設計
-- `SourceAdapter` の `byte_len` は `Mutex` poisoning 時に `None` 降格（panic 回避の意図的設計。実運用で lock 競合は発生しない）
+- チェーン Ogg（連結物理ストリーム）は第一リンク末尾で `ResetRequired` → `InvalidData` に正規化され打ち切り。`streams()` スナップショットモデルとの構造的衝突のため PoC では制限として crate doc に明記（レビュー候補 B5・後続課題）
 - 能力照会の under-claim 方針は codec 採否の正式判断を含まないため、decode 可能だが未広告の codec（ADPCM 等）の扱いは後続の codec 採否 Issue で再評価が必要
 
 ## Follow-ups

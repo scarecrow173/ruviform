@@ -4,7 +4,7 @@ type: "task"
 status: "done"
 title: "ruviform-media-io 抽象境界クレート実装"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: []
 relations:
   source:
@@ -46,7 +46,8 @@ relations:
     generated: []
   implements:
     - "../plans/issue-20-i-o-poc.md"
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/implement-media-io-abstraction.md"
   depends-on:
     - "../plans/issue-20-i-o-poc.md"
   blocks:

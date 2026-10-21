@@ -38,7 +38,8 @@ relations:
     generated: []
   implements:
     - "../plans/issue-20-i-o-poc.md"
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/implement-io-symphonia-backend-poc.md"
   depends-on:
     - "../plans/issue-20-i-o-poc.md"
     - "implement-media-io-abstraction.md"

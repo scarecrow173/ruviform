@@ -13,7 +13,9 @@ Directory: `docs/impl/ir`
 | IMPL-034JftzSzGUrGW76DpIyVM | Document video-core ownership contract | completed | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
 | IMPL-034J7bMHds4IPYPvoxiMZR | Fix time arithmetic saturation | completed | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
 | IMPL-034J5L4kgMP7Hjh57OhJcs | Implement audio-core data model | completed | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
+| IMPL-034K7dWqYmSaPhOnIaPc02 | Implement io-symphonia backend PoC | completed | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | IMPL-034J5L3UVnQerTiQRlC7w3 | Implement media-core data model | completed | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
+| IMPL-034JxNThv4gsW2IpbkYmK4 | Implement media-io abstraction | completed | [implement-media-io-abstraction.md](./implement-media-io-abstraction.md) |
 | IMPL-034JgwwQXOaYpCHRnN2X1e | Implement rgb to yuv and f16 kernels | completed | [implement-rgb-to-yuv-and-f16-kernels.md](./implement-rgb-to-yuv-and-f16-kernels.md) |
 | IMPL-034J5L4LL7z9gp1QZKqwa9 | Implement video-core data model | completed | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | IMPL-034JfTIFdaBP0PDUkO9yLm | Implement yuv to rgb kernel | completed | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
@@ -29,8 +31,9 @@ Directory: `docs/impl/ir`
 | IMPL-034JyAqvg5hMrhqv41ZXfk | リタイアチャネルの実装 | completed | [retire.md](./retire.md) |
 | IMPL-034JBQFUoXvQXzXWrpQtxV | スナップショット交換の実装 | completed | [snapshot.md](./snapshot.md) |
 | IMPL-034J5L5fAAqFUmUkYGAf1t | Sync docs and verify Issue 18 | completed | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
+| IMPL-034eqXfRz3favrQAtrps6 | Sync docs and verify Issue 20 | completed | [sync-docs-and-verify-issue-20.md](./sync-docs-and-verify-issue-20.md) |
+| IMPL-034JygdA2K2Y2qhRHaQZGP | Sync docs Issue 26 | completed | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
 | IMPL-034JCku503rJpSOXR7XpSc | RT 基盤ドキュメント同期と総合検証 | completed | [sync-rt-foundation-docs.md](./sync-rt-foundation-docs.md) |
 | IMPL-034JC5wFbM2VZc0U1W6Wsh | スレッド優先度機構の実装 | completed | [thread-priority.md](./thread-priority.md) |
-| IMPL-034JygdA2K2Y2qhRHaQZGP | Sync docs Issue 26 | completed | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
 | IMPL-034IwXQh3FK347ImaDBdm4 | apm.yml 識別子更新と APM lockfile 再生成 | completed | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
 | IMPL-034IeuSyH91cISMHS4iUUz | Verify reproducible setup and work memo | completed | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |

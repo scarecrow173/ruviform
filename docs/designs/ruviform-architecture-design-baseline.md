@@ -274,7 +274,7 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
 
 media-io ADR の確定どおり、コンテナの demux/mux と codec の decode/encode は**別の抽象**として分離する。概念を単一 crate `ruviform-media-io` に集約する案を採用する。
 
-- 抽象的な流れ: `Demuxer` → `Packet`（ストリーム参照 + PTS/DTS + フラグを持つ符号化単位）→ `Decoder` → `AudioBuffer` / `VideoFrame`。mux/encode は逆方向。
+- 抽象的な流れ: `Demuxer` → `Packet`（ストリーム参照 + PTS/DTS + フラグを持つ符号化単位）→ `Decoder` → `AudioFrame`（`AudioBuffer` + PTS/duration を束ねる media-io 側の出力型）/ `VideoFrame`。mux/encode は逆方向。
 - 分離する 4 系統: `Demuxer`（コンテナ→packet）、`Muxer`（packet→コンテナ）、`Decoder`（packet→frame）、`Encoder`（frame→packet）。デマルチプレックスとデコードを一つの「読み出し」抽象に併合しない。
 - **音声/動画共通仕組みの採否**: 採用（決定）。`Packet`・`StreamDescriptor`・`StreamKind::{Audio,Video,Data}`・能力交渉・エラーモデルはメディア領域で共通であり、単一コンテナが音声と動画を混在させる現実にも整合する。代替案（`ruviform-audio-io` / `ruviform-video-io` の分離）は、同一ドメインルール（ストリーム記述・時刻・能力交渉）を 2 クレートへ複製し、抽象の二重管理を生むため不採用。`ruviform-media-io` が audio-core/video-core の両方に依存する点は、両 core が純粋データ型のみで依存コストが小さいため許容する。
 - バックエンド: `ruviform-io-symphonia`・`ruviform-io-ffmpeg` 等の分離クレート（採否された場合の候補例）が trait を実装する差替可能な実装詳細。バックエンド選択はクレート/feature 単位の依存として表現し、実行時文字列指定等にはしない（media-io ADR）。**個別 codec/container の採否は後続 Issue**（spec Out of Scope と整合）。

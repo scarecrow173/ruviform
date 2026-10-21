@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "メディア I/O 抽象境界とバックエンド PoC の契約保証"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -33,7 +33,6 @@ relations:
   derived-by: []
   verifies:
     - "../specs/implement-media-io-abstraction-and-first-backend-poc.md"
-    - "../plans/issue-20-i-o-poc.md"
   verified-by: []
   references:
     - "https://github.com/pdeljanov/Symphonia"

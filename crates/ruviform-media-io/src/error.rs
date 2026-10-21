@@ -165,7 +165,7 @@ impl std::error::Error for Error {
 /// domain crates): the variant collapses into an [`ErrorKind`] and the
 /// original error is preserved as the type-erased diagnostic.
 ///
-/// **RT contract:** non-RT only — allocates the boxed source.
+/// Allocates the boxed diagnostic.
 impl From<media::Error> for Error {
     fn from(source: media::Error) -> Self {
         let kind = match source {
@@ -184,7 +184,7 @@ impl From<media::Error> for Error {
 /// [`MediaSource`](crate::MediaSource) (`Read`/`Seek`) and sink
 /// boundaries.
 ///
-/// **RT contract:** non-RT only — allocates the boxed source.
+/// Allocates the boxed diagnostic.
 impl From<std::io::Error> for Error {
     fn from(source: std::io::Error) -> Self {
         Self::with_source(ErrorKind::Io, source)

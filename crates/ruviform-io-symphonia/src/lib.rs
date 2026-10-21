@@ -41,6 +41,22 @@
 //! Ruviform registry has no `Adpcm` variant and claiming `Other` would
 //! over-claim.
 //!
+//! ## Known limitations
+//!
+//! `PoC` scope, recorded as follow-ups rather than hidden:
+//!
+//! - Chained Ogg (concatenated physical streams, e.g. Icecast) ends
+//!   playback at the first chain link: the backend signals
+//!   `ResetRequired`, which normalizes to [`ErrorKind::InvalidData`].
+//!   Re-enumerating streams mid-stream conflicts with the snapshot
+//!   `streams()` model and is deferred.
+//! - Gapless trim metadata (`trim_start`/`trim_end`) does not cross the
+//!   boundary yet, so the final Ogg/Vorbis frame may include encoder
+//!   padding samples (transport deferred by the spec).
+//! - Unseekable sources are reported honestly via the adapter's
+//!   construction-time probe; `Demuxer::seek` then surfaces
+//!   [`ErrorKind::Unsupported`] per contract.
+//!
 //! [`Demuxer`]: ruviform_media_io::Demuxer
 //! [`Decoder`]: ruviform_media_io::Decoder
 //! [`Muxer`]: ruviform_media_io::Muxer

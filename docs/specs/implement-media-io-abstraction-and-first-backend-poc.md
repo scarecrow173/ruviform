@@ -1,10 +1,10 @@
 ---
 id: "SPEC-034JcaMXubILS7j1FX5qob"
 type: "spec"
-status: "approved"
+status: "implemented"
 title: "メディア I/O 抽象境界と第一バックエンド PoC の実装"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -17,7 +17,8 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "../plans/issue-20-i-o-poc.md"
   depends-on:
     - "implement-media-data-model-api.md"
   blocks: []
@@ -35,6 +36,10 @@ relations:
     - "../adr/realtime-contract-and-verification-policy.md"
   derived-by:
     - "../plans/issue-20-i-o-poc.md"
+    - "../test-specs/media-io-abstraction-and-backend-poc.md"
+    - "../tasks/implement-media-io-abstraction.md"
+    - "../tasks/implement-io-symphonia-backend-poc.md"
+    - "../tasks/sync-docs-and-verify-issue-20.md"
   verifies: []
   verified-by:
     - "../test-specs/media-io-abstraction-and-backend-poc.md"
