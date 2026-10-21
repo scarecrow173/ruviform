@@ -86,6 +86,15 @@ name = "ruviform-media-core"
 version = "0.1.0"
 
 [[package]]
+name = "ruviform-media-io"
+version = "0.1.0"
+dependencies = [
+ "ruviform-audio-core",
+ "ruviform-media-core",
+ "ruviform-video-core",
+]
+
+[[package]]
 name = "ruviform-rt"
 version = "0.1.0"
 dependencies = [
