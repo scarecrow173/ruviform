@@ -54,6 +54,7 @@ relations:
     - "../test-specs/followup-enum-compat-and-time-arithmetic.md"
     - "../specs/time-type-extension-framerate-timecode-rounding.md"
     - "../adr/framerate-timebase-separation-and-timecode-extension.md"
+    - "../specs/rt-verification-lane.md"
     - "time-model-extension.md"
     - "../plans/implement-rt-foundation.md"
     - "../discovery/explore-video-foundation-api-scope.md"
