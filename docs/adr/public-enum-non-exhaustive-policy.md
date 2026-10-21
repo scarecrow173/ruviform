@@ -38,6 +38,7 @@ relations:
     - "../specs/implement-video-foundation-api.md"
     - "video-proc-kernel-api-and-color-hdr-scope.md"
     - "../plans/implement-issue-26-video-foundation.md"
+    - "../plans/implement-issue-58-time-type-extension.md"
   verifies: []
   verified-by: []
   references:
