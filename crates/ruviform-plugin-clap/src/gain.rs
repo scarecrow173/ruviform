@@ -393,9 +393,9 @@ mod tests {
     }
 
     /// RT contract: `process` performs bounded scans and segment
-    /// writes only — no allocation. (`rt_` tests cannot *observe*
-    /// allocation; the no-alloc guarantee is a documented contract +
-    /// review target until the Issue #22 lane lands.)
+    /// writes only — no allocation. The Issue #22 lane observes it:
+    /// `assert_no_alloc` aborts the test binary on any (de)allocation
+    /// inside the window (fixture/view construction stays outside).
     #[test]
     fn rt_process_full_stereo_block() {
         let in_left = [0.25_f32; 64];
@@ -410,13 +410,15 @@ mod tests {
         let mut context = ProcessContext::new();
         processor.prepare(&config(), &mut context).unwrap();
         let mut outputs = [output_view];
-        let result = processor.process(
-            &[input_view],
-            &mut outputs,
-            EventList::empty(64),
-            None,
-            &mut context,
-        );
+        let result = assert_no_alloc::assert_no_alloc(|| {
+            processor.process(
+                &[input_view],
+                &mut outputs,
+                EventList::empty(64),
+                None,
+                &mut context,
+            )
+        });
         assert_eq!(result.status, ProcessStatus::Continue);
         assert_eq!(out_left, [0.25; 64]);
         assert_eq!(out_right, [-0.25; 64]);

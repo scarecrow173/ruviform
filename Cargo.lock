@@ -258,6 +258,7 @@ checksum = "733d43b7ebd76a65931e8de2aa077200add4902514f4bda941c99326c14937dd"
 dependencies = [
  "bitflags",
  "clack-common",
+ "clack-host",
  "clack-plugin",
  "clap-sys",
 ]
@@ -1267,6 +1268,7 @@ dependencies = [
 name = "ruviform-plugin-clap"
 version = "0.1.0"
 dependencies = [
+ "assert_no_alloc",
  "clack-common",
  "clack-extensions",
  "clack-host",
@@ -1288,6 +1290,7 @@ dependencies = [
 name = "ruviform-plugin-vst3"
 version = "0.1.0"
 dependencies = [
+ "assert_no_alloc",
  "ruviform-audio-core",
  "ruviform-media-core",
  "ruviform-plugin-core",

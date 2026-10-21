@@ -145,6 +145,7 @@ mise exec -- apm install --frozen
 - lint: `workspace.lints` が正本。CI は `clippy -- -D warnings` を必須ゲートとする。rustfmt は標準設定（`rustfmt.toml` は必要時に追加）。
 - 公開 enum: クレート外から到達可能な全公開 enum に enum レベルの `#[non_exhaustive]` を付与する（クレート内部限定 enum は対象外）。`#![allow(clippy::exhaustive_enums)]` は置かず、`workspace.lints.clippy` で restriction lint `exhaustive_enums = "warn"` を有効化し `-D warnings` ゲートで強制する。正本: [docs/adr/public-enum-non-exhaustive-policy.md](docs/adr/public-enum-non-exhaustive-policy.md)。
 - doc test: 公開 API の例は doctest に書き、`cargo test` で検証する。
+- RT 検証レーン（Issue #22）: `rt_` プレフィックスの RT 契約テストは `assert_no_alloc` 測定窓内で処理経路を実行し、窓内の alloc/dealloc はテストバイナリを abort させて CI で検出する。fixture・warm-up の確保は窓外に置く。ruviform-rt 既存の `alloc_counter`（API セマンティクスの実装機能）は変更せず併存し、新規の検証用途には `assert_no_alloc` を使う。CLAP アダプタは CLAP `thread-check` 拡張を `plugin.init` で一度照会し、ホストが非オーディオスレッドと応答した `process` を defined rejection する（拡張未提供・応答不定は従来経路）。機械検出の対象は alloc/dealloc と当該スレッド契約のみ — ブロッキング操作・ファイル/ネットワーク I/O・無制限待機/リトライ・実行時間無界・ロック保持時間等の静的検証不能な制約はドキュメント契約 + コードレビュー観点であり、CI 成功は RT 安全性の完全証明ではない。
 
 ### アーキテクチャ確定契約（設計ベースライン）
 

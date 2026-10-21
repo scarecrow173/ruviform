@@ -20,5 +20,10 @@ ruviform-audio-core = { path = "../ruviform-audio-core" }
 ruviform-media-core = { path = "../ruviform-media-core" }
 vst3 = "0.3.0"
 
+[dev-dependencies]
+# RT 境界テストの allocation/deallocation を機械検出する Issue #22
+# 検証レーン（audio-device の callback 経路検証と同方式）。
+assert_no_alloc = "1.1"
+
 [lints]
 workspace = true

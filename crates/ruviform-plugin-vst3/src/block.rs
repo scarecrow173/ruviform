@@ -32,9 +32,9 @@
 //! allocated at `setupProcessing` time (non-RT) sized to the
 //! negotiated channel counts and `maxSamplesPerBlock`.
 //! `prepare_block`/`finish_block` never allocate — the `rt_` tests
-//! exercise the path but cannot observe allocation; until the Issue
-//! #22 verification lane lands the no-alloc guarantee is a documented
-//! contract plus review target.
+//! wrap the path in `assert_no_alloc` (Issue #22 verification lane),
+//! so any (de)allocation aborts the test binary instead of relying on
+//! documented contract alone.
 
 use std::mem::{align_of, size_of};
 use std::ptr::{self, NonNull};
@@ -408,6 +408,15 @@ mod tests {
     use super::*;
     use ruviform_plugin_core::{EventKind, ParamEvent, ParamId, ParamValue};
 
+    /// Issue #22 RT-verification lane: `AllocDisabler` swaps the test
+    /// binary's allocator so `assert_no_alloc` catches any
+    /// (de)allocation inside its measurement window. One static per
+    /// crate test binary; `component.rs` tests measure against the
+    /// same allocator.
+    #[cfg(debug_assertions)]
+    #[global_allocator]
+    static ALLOC: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
+
     fn scratch_stereo(max_frames: usize) -> ChannelScratch {
         let mut scratch = ChannelScratch::empty();
         scratch.configure(2, 2, max_frames);
@@ -585,9 +594,9 @@ mod tests {
     }
 
     /// RT contract: `prepare_block` + view access + `finish_block` are
-    /// bounded borrows/copies over pre-allocated scratch — no
-    /// allocation on the process path (`rt_` cannot observe alloc;
-    /// contract documented in the module docs).
+    /// bounded borrows/copies over pre-allocated scratch — the
+    /// `assert_no_alloc` window proves the process path performs no
+    /// (de)allocation (fixture/scratch allocation stays outside).
     #[test]
     fn rt_prepare_process_finish_round_trip() {
         let mut input = [vec![0.5_f32; 64], vec![1.0; 64]];
@@ -596,15 +605,17 @@ mod tests {
         let out_ptrs = ptrs(&mut output);
         let mut scratch = scratch_stereo(64);
 
-        {
-            let mut prepared = prepare_block(&in_ptrs, &out_ptrs, 64, &mut scratch).unwrap();
-            for c in 0..prepared.input.channels() {
-                let src = prepared.input.channel(c).unwrap();
-                let dst = prepared.output.channel_mut(c).unwrap();
-                dst.copy_from_slice(src);
+        assert_no_alloc::assert_no_alloc(|| {
+            {
+                let mut prepared = prepare_block(&in_ptrs, &out_ptrs, 64, &mut scratch).unwrap();
+                for c in 0..prepared.input.channels() {
+                    let src = prepared.input.channel(c).unwrap();
+                    let dst = prepared.output.channel_mut(c).unwrap();
+                    dst.copy_from_slice(src);
+                }
             }
-        }
-        finish_block(&mut scratch, 64);
+            finish_block(&mut scratch, 64);
+        });
         assert_eq!(output[0], input[0]);
         assert_eq!(output[1], input[1]);
     }
