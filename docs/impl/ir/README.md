@@ -32,6 +32,7 @@ Directory: `docs/impl/ir`
 | IMPL-034IdUNIqDaqtMaA6rRfEx | Pin Rust toolchain and lockfile | completed | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | IMPL-3hbuFUHk736RlMIuzIoXne | CLAP binding PoC with clack | completed | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
 | IMPL-034JCy68I3essEUwu3PWnn | PoC メッセージ境界計測 | completed | [poc-message-boundary.md](./poc-message-boundary.md) |
+| IMPL-034JDpGD5vR4ITKQsHnye5 | PoC ネイティブサーフェス合成 | completed | [poc-native-surface.md](./poc-native-surface.md) |
 | IMPL-034JBSlPrPoY8WlSeBMTkX | PoC 描画バックエンド計測 | completed | [poc-render-backends.md](./poc-render-backends.md) |
 | IMPL-034JxC4eRod3t2ZFdmLrJJ | PoC UI ハーネスホスト | completed | [poc-ui.md](./poc-ui.md) |
 | IMPL-uFiKGxxXItHvsYSwD74IJg | VST3 binding adapter PoC | completed | [poc-vst3-binding-adapter.md](./poc-vst3-binding-adapter.md) |

@@ -8,6 +8,9 @@
 pub mod host;
 pub mod ipc;
 pub mod render;
+// AC3: このモジュールだけが例外として wgpu / windows-rs を直接保持する
+// （汎用 host I/F が HWND 合成を表現しないという発見自体が評価軸）。
+pub mod surface;
 
 use serde_json::Value;
 
@@ -66,18 +69,19 @@ pub fn check_gui_prereqs(env: &Environment) -> Result<(), Skip> {
 }
 
 /// 実験名 → 実験インスタンスのレジストリ。
-/// T1 は `host`（AC1）、T2 が `render`（AC2）、T3 が `ipc`（AC4）を追加。
-/// T4/T5 が残りを追加する。
+/// T1 は `host`（AC1）、T2 が `render`（AC2）、T3 が `ipc`（AC4）、
+/// T4 が `surface`（AC3）を追加。T5 が残りを追加する。
 pub fn lookup(name: &str) -> Option<Box<dyn Experiment>> {
     match name {
         "host" => Some(Box::new(host::HostExperiment::new())),
         "render" => Some(Box::new(render::RenderExperiment::new())),
         "ipc" => Some(Box::new(ipc::IpcExperiment::new())),
+        "surface" => Some(Box::new(surface::SurfaceExperiment::new())),
         _ => None,
     }
 }
 
 /// `--help` / エラーメッセージ用の既知実験名一覧。
 pub fn known_names() -> &'static [&'static str] {
-    &["host", "render", "ipc"]
+    &["host", "render", "ipc", "surface"]
 }

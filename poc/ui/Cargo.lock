@@ -2632,10 +2632,12 @@ dependencies = [
  "dpi",
  "http",
  "pollster",
+ "raw-window-handle",
  "rust-embed",
  "serde_json",
  "tao",
  "wgpu",
+ "windows",
  "winreg",
  "wry",
 ]

@@ -45,7 +45,7 @@ const USAGE: &str = "usage: ui-poc --check\n\
        ui-poc --experiment <name> [--frames N] [--duration SEC] \
        [--backend <b>] [--mode <m>] [--variant <v>] [--out <path>]\n\
        \n\
-       experiments: host render ipc\n\
+       experiments: host render ipc surface\n\
        \n\
        exit codes: 0 = passed/skipped, 1 = failed, 2 = CLI/internal error";
 

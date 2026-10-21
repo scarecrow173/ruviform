@@ -13,7 +13,7 @@
 | --- | --- | --- | --- | --- |
 | AC1 | WebView ホスト（wry+tao 起動・埋め込みロード・IPC・リサイズ・フォーカス） | `--experiment host` | [AC1 host](#ac1---experiment-host) | **実測** |
 | AC2 | 描画バックエンド（canvas2d/webgl2/webgpu） | `--experiment render` | [AC2 render](#ac2---experiment-render) | **実測** |
-| AC3 | ネイティブサーフェス同居 | `--experiment surface` | （T4 で記録予定） | 未実施 |
+| AC3 | ネイティブサーフェス同居 | `--experiment surface` | [AC3 surface](#ac3---experiment-surface) | **実測** |
 | AC4 | メッセージ境界（IPC/プロトコル/pull） | `--experiment ipc` | [AC4 ipc](#ac4---experiment-ipc) | **実測** |
 | AC5 | フロントエンド FW + バンドラ比較 | `--experiment frontend` | （T5 で記録予定） | 未実施 |
 | AC6 | 配布（portable zip / 依存整理） | `--experiment dist` | （T5 で記録予定） | 未実施 |
@@ -60,6 +60,12 @@ mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
 # AC4 ipc 実験（JSON RTT・バイナリ pull・evaluate_script push・併用。自己終了）
 mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
   --experiment ipc --duration 10
+
+# AC3 surface 実験（wgpu + WebView 隣接同居・検査マトリクス。自己終了）
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment surface --mode adjacent-parent --duration 30
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment surface --mode adjacent-child --duration 30
 ```
 
 ## AC1 — `--experiment host`
@@ -151,6 +157,82 @@ wgpu を導入する採否になった場合は宣言値の見直しタスクへ
 - **status 契約の実測**: `UI_POC_HEADLESS=1` → `skipped`（reason 非空・exit 0）、
   `--backend` 欠落/不正値 → `failed`（reason 付き・exit 1）、
   frontend 未ビルド → `skipped`（`vanilla/index.html` 単位で部分ビルドも検出）。
+
+## AC3 — `--experiment surface`
+
+| 判定 | 実験 | エビデンス（集約値） | 証跡 | 文書評価 |
+| --- | --- | --- | --- | --- |
+| **passed** | surface `adjacent-parent` | 検査マトリクス全 9 項目記録: `surface_init` pass（tao 親 HWND へ wgpu Surface+device+pipeline 生成）・`webview_child` pass（`build_as_child` で左領域配置・hello 観測）・`hit_test_webview` pass・`hit_test_native` pass・`focus_transition` pass（DOM blur→focus ペア）・`z_order_overlap` obs・`resize_follow` pass（960x640→1020x700・JS viewport→左 510px）・`frame_continuity` pass（53 フレーム present・エラー 0）・`region_clip` obs | `out/ac3-surface-adjacent-parent.jsonl`・`docs/impl/exp/ac3-surface-adjacent-parent.jsonl` | 実測（Windows 11 x64） |
+| **passed** | surface `adjacent-child` | 同上 + sibling 子 HWND `ui_poc_gpu_child`（`WS_CHILD`・480x640 右領域）生成・`hit_test_native` pass（右領域の最上位 = sibling）・`z_order_overlap` pass（`HWND_TOP` raise で sibling が WebView 領域の最上位化を確認）・`frames_presented` 53 | `out/ac3-surface-adjacent-child.jsonl`・`docs/impl/exp/ac3-surface-adjacent-child.jsonl` | 実測（Windows 11 x64） |
+
+### AC3 所見（採否材料）
+
+- **隣接同居は両モードで成立**: `adjacent-parent`（親 HWND が wgpu 描画面・
+  WebView が左領域の子）と `adjacent-child`（右領域に sibling `WS_CHILD`
+  HWND + wgpu Surface）の双方で、WebView 描画・IPC・wgpu present が
+  同時に継続した（53 フレーム・0 エラー・resize/z-order/clip 各試験を挟んで継続）。
+- **WebView2 子 HWND ツリーはコンテナ矩形に厳密に限定される**:
+  `WRY_WEBVIEW`（wry コンテナ）→ `Chrome_WidgetWin_0` → `Chrome_WidgetWin_1`
+  → `Chrome_RenderWidgetHostHWND` + `Intermediate D3D Window` の全 5 層が
+  左領域矩形（実測 480x640 → resize 後 510x700）を持つことを
+  `EnumChildWindows` で確認。右領域を覆う WebView2 系子 HWND は存在しない
+  → ネイティブ描画は視覚的に隣接同居する。
+- **ヒットテスト判定方法**: `WindowFromPoint` は実デスクトップで外来
+  top-level ウィンドウ（観測: `Chrome_RenderWidgetHostHWND` `0x26031c`、
+  自ツリー列挙に存在しない = 他プロセス/オーバーレイ混入）を返し得るため
+  一次判定に使えない。本実験は `EnumChildWindows` + `GetWindowRect` 包含による
+  「自ツリー内被覆 HWND」で判定し、WindowFromPoint 生値は観察値として併記
+  （合成クリック実入力の検証は PoC 範囲外）。
+- **z-order**: `adjacent-child` の sibling は生成後も WebView コンテナが
+  最上位に留まる初期順序を観測（wry 側がコンテナを上位に維持する挙動）。
+  `SetWindowPos(HWND_TOP)` の明示 raise で sibling が WebView 領域の最上位に
+  なることを確認 → 「**windowed WebView2 の子 HWND は同一ウィンドウの
+  ネイティブ面より上に座る**」既知の制約と整合し、z-order 制御で一時的な
+  上書きは可能。
+- **SetWindowRgn クリップ試行**: `WRY_WEBVIEW` コンテナへのリージョン設定
+  自体は成功するが、切り欠き領域でも子 HWND ツリー（Chrome_WidgetWin_*）の
+  被覆は残存した（子 HWND は親リージョンで構造的に切り抜かれない）。
+  → DOM overlay 回避として `SetWindowRgn` 単体は不十分。実用には子 HWND 毎の
+  リージョン設定か `ICoreWebView2CompositionController` + DirectComposition
+  経路が要る。
+- **リサイズ追従**: `set_bounds`（WebView 左領域）+ `SetWindowPos`（sibling）+
+  `surface.configure` で両モードとも追従。`adjacent-child`（`build` 経路）
+  では wry 親 subclass の WM_SIZE 自動 SetBounds により一瞬全面化
+  （JS viewport 1020 を観測）してから実験側 `set_bounds` で 510 に戻る
+  遷移を記録 — 同居構成では resize 中に WebView が一時的に全面化し得る
+  実用上の注意。
+- **`build_as_child` viewport 追従（T1 引継ぎの解消）**: `adjacent-parent` は
+  `build_as_child` + `with_bounds` で構成し、resize 時の明示 `set_bounds` で
+  JS viewport が左領域 510px に正しく追従した。T1 の「build_as_child では
+  viewport が追従しない」観測は、あの経路ではリサイズ時に set_bounds を
+  再適用していなかったことが原因と判明（明示再適用で追従する）。
+- **フォーカス遷移**: `focus_parent()`→`focus()` で DOM blur→focus ペアを
+  両モードで観測（AC1 と同じ `mechanism:"window"` 経路。対話セッション外
+  では OS フォーカスを取れない制約は変わらず）。
+- **PR #1762 制限事実**: Windows の windowed WebView2 では子 HWND が同矩形
+  ネイティブ面の上に座るため、真の下層 DOM 内合成（ネイティブ描画の上に
+  DOM を重ねる）には `ICoreWebView2CompositionController` + DirectComposition
+  が必要で、wry は未対応（upstream 未 merge PR
+  [#1762](https://github.com/tauri-apps/wry/pull/1762)）。本 PoC では
+  fork スパイクは未実施（時間外オプション）。**採否は「隣接別サーフェス
+  + WebView オーバーレイ」方針のまま評価可能** — DOM 内真合成は将来拡張。
+- **adapter 境界の発見**: 本実験は `host.rs` の汎用 `Host`/`HostEvent`
+  I/F では HWND 合成を表現できず、`exp/surface.rs` が wgpu・windows-rs・
+  wry 子ビューを直接保持する構成になった。「ネイティブ合成実験は汎用
+  ホスト I/F の例外ケース」自体が adapter 分割設計（将来の `ruviform-gpu`
+  adapter）への入力。
+- **unsafe 封じ込め**: `poc/ui/Cargo.toml` に `unsafe_code = "warn"` を追加し、
+  windows-rs 呼出と `create_surface_unsafe` の計 8 箇所を
+  `#[expect(unsafe_code)]` + SAFETY コメントの局所許可に限定。
+  `clippy -D warnings` で封じ込めを機械検証（expect 外の unsafe は warn→deny）。
+- **macOS / Linux（文書評価）**: 実機未検証。**macOS** は layer-backed
+  NSView + `CAMetalLayer` sibling の隣接合成が最有力（NSView は layer 追加が
+  低コスト・z-order は subviews 順で DOM 上段配置も構造的に可能。要自前実装）。
+  **Linux** は X11/Wayland とも真の下層合成は実質不可寄りで、隣接構成か
+  Canvas 一本化に収束する見込み。どちらも実測ではなく文書評価として扱う。
+- **wgpu MSRV**: `wgpu = "30"` の MSRV 1.87 がルート宣言 `rust-version =
+  "1.85"`（Issue #34 で確定予定）と衝突する事実は [AC1 の MSRV メモ](#wgpu-msrv-メモdesign-リスク表対応)
+  に記録済み（pin 1.99.0 で実害なし・引き上げ判断は本 Issue ではしない）。
 
 ## AC4 — `--experiment ipc`
 
