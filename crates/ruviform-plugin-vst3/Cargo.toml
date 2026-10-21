@@ -1,0 +1,24 @@
+[package]
+name = "ruviform-plugin-vst3"
+description = "VST3 standard adapter for Ruviform: ABI entry points, COM class implementation and zero-copy planar buffer binding over ruviform-plugin-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# `cdylib` exports the VST3 module entry points (`GetPluginFactory` and
+# the platform-conditioned module hooks); `rlib` keeps the crate usable
+# for unit tests / doctests. Binding-crate (`vst3`) types are an
+# implementation detail and never appear in the public Rust API.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+ruviform-media-core = { path = "../ruviform-media-core" }
+vst3 = "0.3.0"
+
+[lints]
+workspace = true
