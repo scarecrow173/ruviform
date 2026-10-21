@@ -233,8 +233,10 @@ impl VideoFrame {
     /// supply path for externally allocated buffers.
     ///
     /// This is the only way external (e.g. decoder) buffers enter a
-    /// frame: one [`SharedPlane`] per image plane, each carrying its own
-    /// `Arc<[u8]>` backing. `SharedPlane` has no plane-offset field — a
+    /// frame: one [`SharedPlane`] per image plane in the format's fixed
+    /// order (luma, `Cb`, `Cr` for planar YUV — see [`PixelFormat`]),
+    /// each carrying its own `Arc<[u8]>` backing. `SharedPlane` has no
+    /// plane-offset field — a
     /// plane starting partway into a larger shared buffer cannot be
     /// expressed, so producers holding such layouts must repackage them
     /// into per-plane `Arc`s (a known limitation, re-evaluated in the

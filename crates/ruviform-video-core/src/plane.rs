@@ -307,6 +307,10 @@ impl<'a> PlaneMut<'a> {
 /// mechanism producing these buffers is itself `要PoC`, deferred to the
 /// media-io issue).
 ///
+/// One `SharedPlane` is supplied per image plane, in the format's fixed
+/// plane order — for the planar YUV formats: luma (`Y`) first, then
+/// `Cb`, then `Cr` (see [`PixelFormat`](crate::PixelFormat)).
+///
 /// `data` addresses the plane from byte 0: there is no plane-offset
 /// field, so a plane starting partway into a larger shared buffer cannot
 /// be expressed — producers must repackage such regions into their own

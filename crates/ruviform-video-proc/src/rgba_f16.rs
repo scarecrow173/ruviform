@@ -394,10 +394,12 @@ impl Default for RgbaF16ToRgba8 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use ruviform_media_core::{MediaDuration, MediaTime, TimeBase};
     use ruviform_video_core::{
         ColorInfo, ColorPrimaries, ColorRange, ContentLightLevel, HdrMetadata, MatrixCoefficients,
-        PixelFormat, TransferCharacteristics, VideoFrame,
+        PixelFormat, SharedPlane, TransferCharacteristics, VideoFrame,
     };
 
     use super::*;
@@ -570,6 +572,65 @@ mod tests {
         );
         assert_eq!(dst8.plane(0).unwrap().data(), &[0_u8; 4]);
         drop(sharing8);
+    }
+
+    /// A `stride > row_bytes` destination: both kernels write rows
+    /// only — padding bytes keep their caller-chosen contents.
+    #[test]
+    fn padded_dst_stride_is_never_written() {
+        // Forward: 1×2 `RgbaF16` dst — row_bytes 8, padded stride 10 →
+        // usable `10·(2−1) + 8` = 18 bytes; offsets 8–9 are inter-row
+        // padding carrying sentinels.
+        let src8 = rgba8_frame(1, 2, &[[128, 128, 128, 255], [128, 128, 128, 255]]);
+        let mut backing16 = vec![0_u8; 18];
+        backing16[8..10].copy_from_slice(&[0xEE, 0xEE]);
+        let mut dst16 = VideoFrame::from_shared_planes(
+            PixelFormat::RgbaF16,
+            1,
+            2,
+            pts(),
+            vec![SharedPlane {
+                data: Arc::from(backing16.into_boxed_slice()),
+                stride: 10,
+            }],
+        )
+        .unwrap();
+        assert_eq!(dst16.plane(0).unwrap().stride(), 10);
+        Rgba8ToRgbaF16::new().process(&src8, &mut dst16).unwrap();
+        // 128 → 0x3804 (LE `04 38`), 255 → 0x3C00 (LE `00 3C`): both
+        // rows written, padding intact.
+        assert_eq!(
+            dst16.plane(0).unwrap().data(),
+            &[
+                0x04, 0x38, 0x04, 0x38, 0x04, 0x38, 0x00, 0x3C, // row 0
+                0xEE, 0xEE, // inter-row padding
+                0x04, 0x38, 0x04, 0x38, 0x04, 0x38, 0x00, 0x3C, // row 1
+            ]
+        );
+
+        // Inverse: 1×2 `Rgba8` dst — row_bytes 4, padded stride 6 →
+        // usable `6·(2−1) + 4` = 10 bytes; offsets 4–5 are padding.
+        let src16 = f16_frame(1, 2, &[[0x3C00; 4], [0x3C00; 4]]);
+        let mut backing8 = vec![0_u8; 10];
+        backing8[4..6].copy_from_slice(&[0xEE, 0xEE]);
+        let mut dst8 = VideoFrame::from_shared_planes(
+            PixelFormat::Rgba8,
+            1,
+            2,
+            pts(),
+            vec![SharedPlane {
+                data: Arc::from(backing8.into_boxed_slice()),
+                stride: 6,
+            }],
+        )
+        .unwrap();
+        assert_eq!(dst8.plane(0).unwrap().stride(), 6);
+        RgbaF16ToRgba8::new().process(&src16, &mut dst8).unwrap();
+        // 1.0 → 255 on every channel: both rows written, padding intact.
+        assert_eq!(
+            dst8.plane(0).unwrap().data(),
+            &[255, 255, 255, 255, 0xEE, 0xEE, 255, 255, 255, 255]
+        );
     }
 
     /// Pure numeric conversion: the output `ColorInfo` is `src`'s

@@ -14,6 +14,12 @@
 /// relative to the luma/full-resolution grid
 /// ([`chroma_subsampling`](Self::chroma_subsampling)).
 ///
+/// For the planar YUV formats the plane order is fixed: plane 0 is luma
+/// (`Y`), plane 1 is `Cb` and plane 2 is `Cr` — producers supplying
+/// planes (e.g. via
+/// [`VideoFrame::from_shared_planes`](crate::VideoFrame::from_shared_planes))
+/// must use this order; consumers may rely on it.
+///
 /// **RT contract:** RT-suitable — `Copy` value type; every method is a pure
 /// `const fn` returning a small value.
 ///
