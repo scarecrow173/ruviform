@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JO3X9ZpAvMoWiRIiMU4"
 type: "task"
-status: "todo"
+status: "done"
 title: "MSRV 1.89 適用とドキュメント同期（Cargo.toml・AGENTS.md）"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -84,16 +84,16 @@ ADR `ADR-034JNYt58J8NlUkn6RfJMs` の決定どおり、workspace `rust-version` �
 
 ## Done Criteria
 
-- [ ] `Cargo.toml` の `rust-version` が `1.89`、コメントに Issue #52 / ADR 参照がある
-- [ ] メンバー `Cargo.toml` に個別 `rust-version` が存在しない（全件 `workspace = true` 継承）
-- [ ] `AGENTS.md` の MSRV 言及が `1.89` に一致
-- [ ] 他の MSRV 言及箇所が検索で洗い出され同期済み（または非存在を確認）
+- [x] `Cargo.toml` の `rust-version` が `1.89`、コメントに Issue #52 / ADR 参照がある
+- [x] メンバー `Cargo.toml` に個別 `rust-version` が存在しない（全件 `workspace = true` 継承）
+- [x] `AGENTS.md` の MSRV 言及が `1.89` に一致
+- [x] 他の MSRV 言及箇所が検索で洗い出され同期済み（または非存在を確認）
 
 ## Verification
 
-- [ ] `mise run fmt-check`（toml/md 整形ルールに抵触しないこと）
-- [ ] `mise run check` — pin toolchain 側で宣言値変更が既存検証を破らないこと
+- [x] `mise run fmt-check`（toml/md 整形ルールに抵触しないこと）
+- [x] `mise run check` — pin toolchain 側で宣言値変更が既存検証を破らないこと
 
 ## Completion Notes
 
-<!-- Record outcome, deviations, and evidence after implementation. -->
+同期した MSRV 言及箇所: `Cargo.toml`（宣言値 + コメント）、`AGENTS.md` L114、`README.md` L33、`crates/ruviform-io-symphonia/Cargo.toml` L32 コメント（symphonia 0.6 の MSRV 1.85 は workspace 1.89 で充足される記述に更新）。`poc/ui/RESULTS.md` の wgpu MSRV メモ（Issue #34 時点の衝突記録・Issue #57 追跡対象）と `docs/specs/dsp-simd-poc-adr.md` の前提記述は発行時点の記録のため変更しない。`mise.toml` の `rust = "1.99.0"` pin は据え置き。`cargo +1.89 check --workspace --all-targets` / `-p ruviform-math --lib` は先行実測で成功（詳細は verify タスクで記録）。
