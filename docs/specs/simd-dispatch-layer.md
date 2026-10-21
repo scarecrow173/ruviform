@@ -108,13 +108,13 @@ Issue [#53](https://github.com/scarecrow173/ruviform/issues/53)。採否 ADR（`
 
 ## Acceptance Criteria
 
-- [ ] dispatch トークン型が公開 API として存在し、一度の構築で全カーネル呼出しに再利用できる
-- [ ] 8 カーネルが公開 API 経由で呼べ、トークンとサイズに応じたルーティング（SIMD / スカラー）が設計書の規則どおり動作する
-- [ ] 各カーネルの公開 doc に精度契約（bit 完全一致 or ulp 上限 + 入力前提）が明記されている
-- [ ] `fearless_simd` が `[dependencies]` にあり lockfile が追跡されている
-- [ ] 公開 API 経路の等価性テスト（スカラー参照対照）がグリーン
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` / `bench-smoke` パス
-- [ ] doc 監査で本チェーン起因 findings 0
+- [x] dispatch トークン型が公開 API として存在し、一度の構築で全カーネル呼出しに再利用できる
+- [x] 8 カーネルが公開 API 経由で呼べ、トークンとサイズに応じたルーティング（SIMD / スカラー）が設計書の規則どおり動作する
+- [x] 各カーネルの公開 doc に精度契約（bit 完全一致 or ulp 上限 + 入力前提）が明記されている
+- [x] `fearless_simd` が `[dependencies]` にあり lockfile が追跡されている
+- [x] 公開 API 経路の等価性テスト（スカラー参照対照）がグリーン
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` / `bench-smoke` パス
+- [x] doc 監査で本チェーン起因 findings 0
 
 ## Deferred Design Concerns
 

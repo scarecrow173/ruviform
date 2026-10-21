@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JQH8r1Mfi5CItnm9Ebf"
 type: "task"
-status: "todo"
+status: "done"
 title: "fearless_simd 昇格 + dsp モジュール新設（SimdToken + カーネル本体）"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -66,11 +66,11 @@ relations:
 
 ## Done When
 
-- [ ] `fearless_simd` が `[dependencies]` にあり `Cargo.lock` が更新されている
-- [ ] `SimdToken::detect()` / `force_*` / `level()` がコンパイルし、内部 `*_impl` が全レベルトークンで呼べる
-- [ ] 公開 API に fearless_simd 型が露出しない
+- [x] `fearless_simd` が `[dependencies]` にあり `Cargo.lock` が更新されている
+- [x] `SimdToken::detect()` / `force_*` / `level()` がコンパイルし、内部 `*_impl` が全レベルトークンで呼べる
+- [x] 公開 API に fearless_simd 型が露出しない
 
 ## Verification
 
-- [ ] `mise run check` / `lint` / `fmt-check` パス
-- [ ] `SimdToken::detect()` が本機で `"avx2"` を返す（単体テストまたは doctest で確認）
+- [x] `mise run check` / `lint` / `fmt-check` パス
+- [x] `SimdToken::detect()` が本機で `"avx2"` を返す（単体テストまたは doctest で確認）

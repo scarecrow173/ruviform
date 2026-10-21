@@ -57,10 +57,10 @@ Directory: `docs/tasks`
 | TASK-034JglHs8cNMDOvyZFeUpc | PoC example（list_devices・play_sine）実機手順と実験ログ | done | [run-device-poc-examples-and-exp-log.md](./run-device-poc-examples-and-exp-log.md) |
 | TASK-034IwCjptfvbSFBQaSKigx | プレースホルダー最終スイープ・総合検証と ADR メタデータ編集 | done | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
 | TASK-034Jf49f5gwAy5fpTPvXG9 | ベンチ実行と結果収集 | done | [run-simd-bench-and-collect-results.md](./run-simd-bench-and-collect-results.md) |
-| TASK-034JQH8VJI6x2EXHMsOJU9 | 公開カーネル API + ルーティング + panic-free 化 + 精度契約 doc | todo | [simd-dispatch-api-routing.md](./simd-dispatch-api-routing.md) |
-| TASK-034JQH9WjGTpvxbXgZ1sXR | Issue #53 文書クローズと全量検証 | todo | [simd-dispatch-closeout.md](./simd-dispatch-closeout.md) |
-| TASK-034JQH8r1Mfi5CItnm9Ebf | fearless_simd 昇格 + dsp モジュール新設（SimdToken + カーネル本体） | todo | [simd-dispatch-token-and-kernels.md](./simd-dispatch-token-and-kernels.md) |
-| TASK-034JQH9rC2GoOQC8WTqmpY | 本番経路の検証（forced 単体・matrix 列・RT no-alloc） | todo | [simd-dispatch-verification.md](./simd-dispatch-verification.md) |
+| TASK-034JQH8VJI6x2EXHMsOJU9 | 公開カーネル API + ルーティング + panic-free 化 + 精度契約 doc | done | [simd-dispatch-api-routing.md](./simd-dispatch-api-routing.md) |
+| TASK-034JQH9WjGTpvxbXgZ1sXR | Issue #53 文書クローズと全量検証 | done | [simd-dispatch-closeout.md](./simd-dispatch-closeout.md) |
+| TASK-034JQH8r1Mfi5CItnm9Ebf | fearless_simd 昇格 + dsp モジュール新設（SimdToken + カーネル本体） | done | [simd-dispatch-token-and-kernels.md](./simd-dispatch-token-and-kernels.md) |
+| TASK-034JQH9rC2GoOQC8WTqmpY | 本番経路の検証（forced 単体・matrix 列・RT no-alloc） | done | [simd-dispatch-verification.md](./simd-dispatch-verification.md) |
 | TASK-034J6Pq9WM0XMkGqryZrvQ | フォローアップトリアージ由来の小修正（try_new・Custom 不変条件・丸め注記） | done | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | TASK-034J5KRwAtAqF1xu0moYuS | Issue #18 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
 | TASK-034Jgi4vWCuaMUu3POps1c | Issue #20 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-20.md](./sync-docs-and-verify-issue-20.md) |

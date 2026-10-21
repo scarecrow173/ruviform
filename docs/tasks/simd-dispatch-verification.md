@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JQH9rC2GoOQC8WTqmpY"
 type: "task"
-status: "todo"
+status: "done"
 title: "本番経路の検証（forced 単体・matrix 列・RT no-alloc）"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -67,10 +67,10 @@ relations:
 
 ## Done When
 
-- [ ] forced 全経路の契約適合テストがグリーン
-- [ ] matrix 本番列がグリーン
-- [ ] `rt_` テストが `assert_no_alloc` 窓内 0 alloc でグリーン
+- [x] forced 全経路の契約適合テストがグリーン
+- [x] matrix 本番列がグリーン
+- [x] `rt_` テストが `assert_no_alloc` 窓内 0 alloc でグリーン
 
 ## Verification
 
-- [ ] `mise run test` / `test-rt` / `lint` / `fmt-check` / `bench-smoke` パス
+- [x] `mise run test` / `test-rt` / `lint` / `fmt-check` / `bench-smoke` パス

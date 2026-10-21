@@ -77,10 +77,10 @@ Issue #53 — `ruviform-math` に本番 SIMD dispatch 層を実装する: prepar
 
 ## Implementation Sequence
 
-- [ ] T1: dep 昇格 + `dsp` モジュール新設（`SimdToken`/`Sel`/`detect`/`force_*`/`level` + `#[simd]` 8 カーネル本体を fearless_impl から移植）— コンパイル到達まで
-- [ ] T2: 公開カーネル関数 + ルーティング閾値 + panic-free 化（共通プレフィックス/channels クランプ）+ 精度契約 doc 明記
-- [ ] T3: 検証 — 単体テスト（forced token 全サイズ契約）・matrix 本番列追加・`rt_`+`assert_no_alloc` テスト・全量検証列
-- [ ] T4: 文書クローズ（spec AC・design verification・ADR verification・task ステータス・監査）
+- [x] T1: dep 昇格 + `dsp` モジュール新設（`SimdToken`/`Sel`/`detect`/`force_*`/`level` + `#[simd]` 8 カーネル本体を fearless_impl から移植）— コンパイル到達まで
+- [x] T2: 公開カーネル関数 + ルーティング閾値 + panic-free 化（共通プレフィックス/channels クランプ）+ 精度契約 doc 明記
+- [x] T3: 検証 — 単体テスト（forced token 全サイズ契約）・matrix 本番列追加・`rt_`+`assert_no_alloc` テスト・全量検証列
+- [x] T4: 文書クローズ（spec AC・design verification・ADR verification・task ステータス・監査）
 
 ## Dependencies and Risks
 
@@ -95,13 +95,13 @@ Issue #53 — `ruviform-math` に本番 SIMD dispatch 層を実装する: prepar
 
 ## Verification
 
-- [ ] `SimdToken::detect()` が本機で `"avx2"` を返す
-- [ ] forced 各 token で全 8 カーネル・全サイズ帯がスカラー参照と契約適合（単体テスト）
-- [ ] `tests/simd_equiv.rs` の本番列（`prod_detected`/`prod_avx2`/`prod_sse4_2`/`prod_fallback`/`prod_neon` probe-gated）がグリーン
-- [ ] `rt_dsp_kernels_no_alloc`（`assert_no_alloc`）がグリーン
-- [ ] 公開 API に fearless_simd 型が露出しない（`cargo doc` シグネチャ確認）
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke` パス
-- [ ] doc 監査で本チェーン起因 findings 0
+- [x] `SimdToken::detect()` が本機で `"avx2"` を返す
+- [x] forced 各 token で全 8 カーネル・全サイズ帯がスカラー参照と契約適合（単体テスト）
+- [x] `tests/simd_equiv.rs` の本番列（`prod_detected`/`prod_avx2`/`prod_sse4_2`/`prod_fallback`/`prod_neon` probe-gated）がグリーン
+- [x] `rt_dsp_kernels_no_alloc`（`assert_no_alloc`）がグリーン
+- [x] 公開 API に fearless_simd 型が露出しない（`cargo doc` シグネチャ確認）
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke` パス
+- [x] doc 監査で本チェーン起因 findings 0
 
 ## Open Questions / Gaps
 

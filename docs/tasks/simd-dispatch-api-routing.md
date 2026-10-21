@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JQH8VJI6x2EXHMsOJU9"
 type: "task"
-status: "todo"
+status: "done"
 title: "公開カーネル API + ルーティング + panic-free 化 + 精度契約 doc"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -66,11 +66,11 @@ relations:
 
 ## Done When
 
-- [ ] 8 関数すべてが公開・精度契約 doc 付き
-- [ ] 閾値 const が design 確定値と一致し根拠コメント付き
-- [ ] release で契約違反入力が panic しない（共通範囲のみ処理）
+- [x] 8 関数すべてが公開・精度契約 doc 付き
+- [x] 閾値 const が design 確定値と一致し根拠コメント付き
+- [x] release で契約違反入力が panic しない（共通範囲のみ処理）
 
 ## Verification
 
-- [ ] `mise run check` / `lint` / `fmt-check` パス
-- [ ] 閾値境界 ±1 の動作確認テストがグリーン
+- [x] `mise run check` / `lint` / `fmt-check` パス
+- [x] 閾値境界 ±1 の動作確認テストがグリーン

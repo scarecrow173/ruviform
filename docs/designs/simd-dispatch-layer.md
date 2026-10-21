@@ -169,13 +169,13 @@ SimdToken::detect() ──► dsp::add(tok, dst, a, b)
 
 ## Verification
 
-- [ ] `cargo check -p ruviform-math` で `fearless_simd` が `[dependencies]` 解決され、公開 API に fearless 型が露出しない（`cargo doc` / 公開シグネチャ目視）
-- [ ] `SimdToken::detect()` が AVX2 マシンで `level() == "avx2"` を返す
-- [ ] forced-token 単体テストで各 ISA 経路が全サイズ帯で契約適合（ルーティングのマスクを受けない内部 `*_impl` 直接検証）
-- [ ] `tests/simd_equiv.rs` に本番経路列（`prod_detected` + forced 各列）を追加してグリーン
-- [ ] `rt_` プレフィックステストで `assert_no_alloc` 測定窓内のカーネル呼出しが 0 allocation（#22 レーンと同機構）
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke` パス
-- [ ] doc 監査で本チェーン起因 findings 0
+- [x] `cargo check -p ruviform-math` で `fearless_simd` が `[dependencies]` 解決され、公開 API に fearless 型が露出しない（`cargo doc` / 公開シグネチャ目視）
+- [x] `SimdToken::detect()` が AVX2 マシンで `level() == "avx2"` を返す
+- [x] forced-token 単体テストで各 ISA 経路が全サイズ帯で契約適合（ルーティングのマスクを受けない内部 `*_impl` 直接検証）
+- [x] `tests/simd_equiv.rs` に本番経路列（`prod_detected` + forced 各列）を追加してグリーン
+- [x] `rt_` プレフィックステストで `assert_no_alloc` 測定窓内のカーネル呼出しが 0 allocation（#22 レーンと同機構）
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke` パス
+- [x] doc 監査で本チェーン起因 findings 0
 
 ## Alternatives Considered
 

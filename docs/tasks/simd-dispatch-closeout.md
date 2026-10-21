@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JQH9WjGTpvxbXgZ1sXR"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue #53 文書クローズと全量検証"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -64,10 +64,10 @@ relations:
 
 ## Done When
 
-- [ ] 全チェーン文書が実測結果を反映しチェックボックス確定
-- [ ] チェーン起因 findings 0
-- [ ] グラフ `exit-audit → complete`
+- [x] 全チェーン文書が実測結果を反映しチェックボックス確定
+- [x] チェーン起因 findings 0
+- [x] グラフ `exit-audit → complete`
 
 ## Verification
 
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke` + `prek run --all-files` + `audit_docs.js` 全パス
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke` + `prek run --all-files` + `audit_docs.js` 全パス
