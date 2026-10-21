@@ -27,6 +27,7 @@ pub(crate) mod equiv;
 pub(crate) mod fearless_impl;
 pub(crate) mod inputs;
 pub(crate) mod multiversion_impl;
+pub(crate) mod prod_impl;
 pub(crate) mod pulp_impl;
 
 use ruviform_math::simd_poc::{BiquadCoeffs, SineCoeffs, SineState};
@@ -115,6 +116,13 @@ pub(crate) fn registry() -> Vec<KernelImpl> {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     cols.extend([pulp_impl::V2, pulp_impl::V3, pulp_impl::V4]);
     cols.extend([pulp_impl::DISPATCHED, multiversion_impl::COLUMN]);
+    // Issue #53 production dispatch layer — the routed public API at the
+    // detected level plus each forced level the machine supports.
+    cols.extend([prod_impl::DETECTED, prod_impl::FALLBACK]);
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    cols.extend([prod_impl::SSE2, prod_impl::SSE4_2, prod_impl::AVX2]);
+    #[cfg(target_arch = "aarch64")]
+    cols.push(prod_impl::NEON);
     cols
 }
 

@@ -1,6 +1,6 @@
-//! Rational media time: [`TimeBase`], [`MediaTime`], [`MediaDuration`],
-//! [`MediaRange`] and the [`Rounding`] policy applied by inexact
-//! conversions.
+//! Rational media time: [`TimeBase`], [`FrameRate`], [`MediaTime`],
+//! [`MediaDuration`], [`MediaRange`] and the [`Rounding`] policy applied
+//! by inexact conversions.
 //!
 //! All arithmetic is exact rational integer math with `i128`/`u128`
 //! intermediates; `f64` never appears on the timekeeping path (the only
@@ -122,6 +122,179 @@ impl TimeBase {
             numerator: 1,
             denominator: rate,
         })
+    }
+}
+
+/// A rational frame rate in frames per second, stored as a normalized
+/// `numerator/denominator` fraction.
+///
+/// `FrameRate` is semantically distinct from [`TimeBase`]: it stores an
+/// fps-oriented rational (`numerator` frames per `denominator` seconds),
+/// whereas `TimeBase` stores the duration of one tick — the reciprocal.
+/// The stored value is therefore **not** exposed as a `TimeBase`; the
+/// only accessor returning a `TimeBase` is [`FrameRate::frame_duration`],
+/// which yields the true per-frame tick length (the reciprocal).
+/// Components are available via [`FrameRate::numerator`] and
+/// [`FrameRate::denominator`]. `to_time_base()` and `From` conversions
+/// between the two types are deliberately absent so an fps value cannot
+/// silently be used as a tick duration.
+///
+/// The value is normalized at construction (`60_000/2_002` reduces to
+/// `30_000/1_001`), so equality is exact rational equality.
+///
+/// **RT contract:** RT-suitable — `Copy` value type; every operation is
+/// `const`, pure and allocation-free.
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_media_core::{FrameRate, TimeBase};
+///
+/// let rate = FrameRate::new(30_000, 1_001).unwrap(); // 29.97 fps
+/// assert_eq!(rate.numerator(), 30_000);
+/// assert_eq!(rate.denominator(), 1_001);
+/// assert_eq!(rate.nominal_fps(), 30);
+/// assert_eq!(rate.frame_duration(), TimeBase::new(1_001, 30_000).unwrap());
+/// ```
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct FrameRate(TimeBase);
+
+impl FrameRate {
+    /// Creates a normalized `numerator/denominator` fps rational.
+    ///
+    /// **RT contract:** RT-suitable — pure `const` integer math.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidValue`] with `"frame_rate"` when `numerator` or
+    /// `denominator` is zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_media_core::FrameRate;
+    ///
+    /// assert!(FrameRate::new(0, 1).is_err());
+    /// assert!(FrameRate::new(1, 0).is_err());
+    /// // Normalization reduces to lowest terms:
+    /// assert_eq!(
+    ///     FrameRate::new(60_000, 2_002).unwrap(),
+    ///     FrameRate::new(30_000, 1_001).unwrap()
+    /// );
+    /// ```
+    pub const fn new(numerator: u32, denominator: u32) -> Result<Self> {
+        match TimeBase::new(numerator, denominator) {
+            Ok(fps) => Ok(Self(fps)),
+            Err(_) => Err(Error::InvalidValue("frame_rate")),
+        }
+    }
+
+    /// Shorthand for an integer frame rate (`fps/1` frames per second).
+    ///
+    /// **RT contract:** RT-suitable — pure `const` integer math.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidValue`] with `"frame_rate"` when `fps` is zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_media_core::FrameRate;
+    ///
+    /// assert_eq!(
+    ///     FrameRate::from_fps(24).unwrap(),
+    ///     FrameRate::new(24, 1).unwrap()
+    /// );
+    /// ```
+    pub const fn from_fps(fps: u32) -> Result<Self> {
+        Self::new(fps, 1)
+    }
+
+    /// The numerator of the normalized fps rational.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn numerator(self) -> u32 {
+        self.0.numerator()
+    }
+
+    /// The denominator of the normalized fps rational.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn denominator(self) -> u32 {
+        self.0.denominator()
+    }
+
+    /// The duration of one frame as a [`TimeBase`] — the reciprocal of
+    /// the stored fps rational (`denominator/numerator` seconds).
+    ///
+    /// This is the only accessor exposing the rate as a `TimeBase`, and
+    /// it returns the true tick length, never the fps-oriented stored
+    /// value.
+    ///
+    /// **RT contract:** RT-suitable — pure `const` integer math.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_media_core::{FrameRate, TimeBase};
+    ///
+    /// let rate = FrameRate::from_fps(25).unwrap();
+    /// assert_eq!(rate.frame_duration(), TimeBase::new(1, 25).unwrap());
+    /// ```
+    #[must_use]
+    pub const fn frame_duration(self) -> TimeBase {
+        // Components are non-zero and normalized (enforced at
+        // construction), and gcd is symmetric, so the reciprocal is
+        // already a valid normalized base.
+        TimeBase {
+            numerator: self.denominator(),
+            denominator: self.numerator(),
+        }
+    }
+
+    /// The nominal whole-number frame rate used for timecode labelling,
+    /// rounded half-up (`(2*n + d) / (2*d)`).
+    ///
+    /// NTSC rates map onto their broadcast nominals: `30000/1001` → `30`,
+    /// `60000/1001` → `60`, `24000/1001` → `24`. The half-up comparison is
+    /// written as `remainder >= denominator - remainder` so no widened
+    /// intermediate is needed and extreme rationals cannot overflow.
+    ///
+    /// **RT contract:** RT-suitable — pure `const` integer math.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_media_core::FrameRate;
+    ///
+    /// assert_eq!(FrameRate::new(30_000, 1_001).unwrap().nominal_fps(), 30);
+    /// assert_eq!(FrameRate::new(60_000, 1_001).unwrap().nominal_fps(), 60);
+    /// assert_eq!(FrameRate::from_fps(25).unwrap().nominal_fps(), 25);
+    /// ```
+    #[must_use]
+    pub const fn nominal_fps(self) -> u32 {
+        let numerator = self.numerator();
+        let denominator = self.denominator();
+        // Round half-up as `q + [2r >= d]`. `2 * r` could overflow `u32`
+        // when `d` is large, so the comparison is rewritten as
+        // `r >= d - r` (valid since `0 <= r < d`). The result fits `u32`:
+        // `q + 1 <= n / d + 1 <= n` for `d >= 2`, and `r == 0` when `d == 1`.
+        let quotient = numerator / denominator;
+        let remainder = numerator % denominator;
+        if remainder >= denominator - remainder {
+            quotient + 1
+        } else {
+            quotient
+        }
+    }
+}
+
+impl core::fmt::Debug for FrameRate {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "FrameRate({}/{})", self.numerator(), self.denominator())
     }
 }
 
@@ -852,6 +1025,217 @@ mod tests {
             ),
             (1, 90_000)
         );
+    }
+
+    fn rate(numerator: u32, denominator: u32) -> FrameRate {
+        FrameRate::new(numerator, denominator).unwrap()
+    }
+
+    #[test]
+    fn frame_rate_normalizes_and_validates() {
+        assert_eq!(rate(60_000, 2_002), rate(30_000, 1_001));
+        assert_eq!(rate(48, 2), rate(24, 1));
+        assert_eq!(FrameRate::new(0, 1), Err(Error::InvalidValue("frame_rate")));
+        assert_eq!(FrameRate::new(1, 0), Err(Error::InvalidValue("frame_rate")));
+        assert_eq!(
+            FrameRate::from_fps(0),
+            Err(Error::InvalidValue("frame_rate"))
+        );
+        assert_eq!(FrameRate::from_fps(24), Ok(rate(24, 1)));
+    }
+
+    #[test]
+    fn frame_duration_is_the_reciprocal_tick_length() {
+        assert_eq!(rate(30_000, 1_001).frame_duration(), base(1_001, 30_000));
+        assert_eq!(
+            FrameRate::from_fps(25).unwrap().frame_duration(),
+            base(1, 25)
+        );
+        // The stored fps rational itself is never exposed as a `TimeBase`:
+        // only the reciprocal frame duration is.
+        let ntsc = rate(30_000, 1_001);
+        assert_eq!(
+            (
+                ntsc.frame_duration().numerator(),
+                ntsc.frame_duration().denominator()
+            ),
+            (ntsc.denominator(), ntsc.numerator())
+        );
+    }
+
+    #[test]
+    fn nominal_fps_rounds_half_up_to_broadcast_nominals() {
+        assert_eq!(FrameRate::from_fps(24).unwrap().nominal_fps(), 24);
+        assert_eq!(FrameRate::from_fps(25).unwrap().nominal_fps(), 25);
+        assert_eq!(rate(30_000, 1_001).nominal_fps(), 30);
+        assert_eq!(rate(60_000, 1_001).nominal_fps(), 60);
+        assert_eq!(rate(24_000, 1_001).nominal_fps(), 24);
+        // Exact half rounds up.
+        assert_eq!(rate(5, 2).nominal_fps(), 3);
+        // Extreme rationals must not overflow the `2*num` intermediate.
+        assert_eq!(rate(u32::MAX, 1).nominal_fps(), u32::MAX);
+        assert_eq!(rate(1, u32::MAX).nominal_fps(), 0);
+    }
+
+    /// |a - b| in seconds as a `(numerator, denominator)` rational —
+    /// exact `i128`/`u128` math, no `f64` on the assertion path.
+    fn err_seconds(a: MediaTime, b: MediaTime) -> (u128, u128) {
+        let lhs = i128::from(a.value())
+            * i128::from(a.base().numerator())
+            * i128::from(b.base().denominator());
+        let rhs = i128::from(b.value())
+            * i128::from(b.base().numerator())
+            * i128::from(a.base().denominator());
+        (
+            (lhs - rhs).unsigned_abs(),
+            u128::from(a.base().denominator()) * u128::from(b.base().denominator()),
+        )
+    }
+
+    /// Sum of `0.5 * numerator/denominator` seconds over `bases`, as a
+    /// `(numerator, denominator)` rational over the common denominator
+    /// `2 * prod(d_i)`. Valid for the small base sets used in these
+    /// tests (each product fits `u128`).
+    fn half_tick_bound_seconds(bases: &[TimeBase]) -> (u128, u128) {
+        let product: u128 = bases.iter().map(|b| u128::from(b.denominator())).product();
+        let numerator: u128 = bases
+            .iter()
+            .map(|b| u128::from(b.numerator()) * (product / u128::from(b.denominator())))
+            .sum();
+        (numerator, product * 2)
+    }
+
+    /// Asserts the exact rational error `|a - b|` does not exceed the
+    /// rational `bound` (both in seconds).
+    fn assert_error_within(a: MediaTime, b: MediaTime, bound: (u128, u128)) {
+        let (err_num, err_den) = err_seconds(a, b);
+        assert!(
+            err_num * bound.1 <= bound.0 * err_den,
+            "error {err_num}/{err_den}s exceeds bound {}/{}s (a={a:?} b={b:?})",
+            bound.0,
+            bound.1
+        );
+    }
+
+    /// Audio clocks and video frame grids named in the rounding-policy
+    /// matrix (the video side is derived from [`FrameRate`]).
+    fn precision_matrix_bases() -> ([TimeBase; 3], [TimeBase; 4]) {
+        let audio = [base(1, 44_100), base(1, 48_000), base(1, 90_000)];
+        let video = [
+            rate(24, 1).frame_duration(),
+            rate(25, 1).frame_duration(),
+            rate(30_000, 1_001).frame_duration(),
+            rate(60_000, 1_001).frame_duration(),
+        ];
+        (audio, video)
+    }
+
+    #[test]
+    fn single_conversion_error_is_bounded_by_half_tick() {
+        let (audio, video) = precision_matrix_bases();
+        // Values stay small enough that every base pair stays
+        // representable (worst: 1e12 ticks at 1/24 s -> ~4e15 ticks at
+        // 1/90000); overflow is a separate contract (`convert` errs).
+        let values = [0_i64, 1, -1, 1_000, 1_000_000_000_000, -1_000_000_000_000];
+        for &from in audio.iter().chain(video.iter()) {
+            for &to in audio.iter().chain(video.iter()) {
+                let bound = half_tick_bound_seconds(&[to]);
+                for v in values {
+                    let t = MediaTime::new(v, from);
+                    let converted = t.convert(to, Rounding::NearestEven).unwrap();
+                    // |converted - t| <= 0.5 tick of the target base.
+                    // (v=1000 at 1/48000 -> 1/24 is an exact-half tie.)
+                    assert_error_within(t, converted, bound);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn round_trip_error_is_bounded_by_summed_half_ticks() {
+        // t -> B -> original: error <= 0.5 tick of B + 0.5 tick of the
+        // original base, both expressed in seconds. A coarse hop through
+        // 1/24 may round 1000 ticks of 1/48000 to 0 — that must still sit
+        // inside the summed bound even though it is huge in 1/48000 units.
+        let original = base(1, 48_000);
+        let coarse = base(1, 24);
+        let t = MediaTime::new(1_000, original);
+        let round_tripped = t
+            .convert(coarse, Rounding::NearestEven)
+            .unwrap()
+            .convert(original, Rounding::NearestEven)
+            .unwrap();
+        assert_eq!(round_tripped.value(), 0); // 1000 tick error at 1/48000
+        assert_error_within(
+            t,
+            round_tripped,
+            half_tick_bound_seconds(&[original, coarse]),
+        );
+
+        // Same bound must hold across the audio x video matrix.
+        let (audio, video) = precision_matrix_bases();
+        for &from in audio.iter().chain(video.iter()) {
+            for &via in audio.iter().chain(video.iter()) {
+                let bound = half_tick_bound_seconds(&[from, via]);
+                for v in [0_i64, 1, -1, 1_000_000, -999_999] {
+                    let t = MediaTime::new(v, from);
+                    let round_tripped = t
+                        .convert(via, Rounding::NearestEven)
+                        .unwrap()
+                        .convert(from, Rounding::NearestEven)
+                        .unwrap();
+                    assert_error_within(t, round_tripped, bound);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn chained_conversion_error_is_bounded_by_per_hop_half_ticks() {
+        // N-hop cycle: accumulated error <= sum over hops of 0.5 tick of
+        // each destination base (in seconds). Contrast: a direct
+        // anchor-to-destination conversion stays within 0.5 tick of the
+        // destination base — the chained cost is the policy's price.
+        let cycles: &[&[TimeBase]] = &[
+            &[
+                base(1, 48_000),
+                base(1_001, 30_000),
+                base(1, 25),
+                base(1, 48_000),
+            ],
+            &[
+                base(1, 44_100),
+                base(1, 90_000),
+                base(1_001, 60_000),
+                base(1, 44_100),
+            ],
+            &[
+                base(1, 48_000),
+                base(1, 44_100),
+                base(1, 24),
+                base(1, 48_000),
+            ],
+        ];
+        for cycle in cycles {
+            let bound = half_tick_bound_seconds(&cycle[1..]);
+            for v in [0_i64, 1, -1, 1_000_000, -1_000_000] {
+                let start = MediaTime::new(v, cycle[0]);
+                let mut t = start;
+                for &to in &cycle[1..] {
+                    t = t.convert(to, Rounding::NearestEven).unwrap();
+                }
+                assert_error_within(start, t, bound);
+                // Control: the direct conversion is much tighter.
+                let direct = start
+                    .convert(*cycle.last().unwrap(), Rounding::NearestEven)
+                    .unwrap();
+                assert_error_within(
+                    start,
+                    direct,
+                    half_tick_bound_seconds(&[*cycle.last().unwrap()]),
+                );
+            }
+        }
     }
 
     #[test]

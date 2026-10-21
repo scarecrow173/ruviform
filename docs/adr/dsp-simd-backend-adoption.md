@@ -32,13 +32,22 @@ relations:
     - "../../AGENTS.md"
   refines:
     - "../designs/ruviform-architecture-design-baseline.md"
-  refined-by: []
+  refined-by:
+    - "../adr/simd-ulp.md"
   derives-from:
     - "../plans/dsp-simd-poc.md"
     - "../designs/dsp-simd-poc.md"
     - "../specs/dsp-simd-poc-adr.md"
     - "dsp-simd-poc.md"
-  derived-by: []
+  derived-by:
+    - "../specs/dispatched-overhead-analysis.md"
+    - "../designs/dispatched-overhead-method.md"
+    - "../specs/msrv-raise-for-fearless-simd.md"
+    - "workspace-msrv-1-85-1-89-fearless-simd.md"
+    - "../designs/msrv-raise-design.md"
+    - "../plans/implement-issue-52-msrv-raise.md"
+    - "../adr/simd-ulp.md"
+    - "../specs/simd-dispatch-layer.md"
   verifies: []
   verified-by: []
   references:
@@ -165,11 +174,11 @@ Issue #19 の最終成果物として、DSP/SIMD PoC の計測証拠に基づき
 * [x] 等価性 matrix が確定基準でグリーン（`mise run test` 実績。bit 完全一致 5 カーネル + ulp: dot ≤256 実測 max 46・fir/biquad ≤8 実測 max 0）
 * [x] PoC コードの `unsafe` が 0 で `mise run lint` の `unsafe_code` ゲートを通過（`git grep "unsafe" crates/ruviform-math` は doc 言及 3 件のみ）
 * [x] `rustup run 1.85 cargo check -p ruviform-math --lib --locked` がグリーン（dev-dep 封じ込め下での MSRV 検証実績）
-* [ ] MSRV 引上げ Issue が起票され、`fearless_simd` の本番 `[dependencies]` 昇格判断がそこで行われる（後続作業 — 未着手）
+* [x] MSRV 引上げ Issue が起票され、`fearless_simd` の本番 `[dependencies]` 昇格判断がそこで行われる（[#52](https://github.com/scarecrow173/ruviform/issues/52): MSRV 1.89 を実測決定し昇格前提を解消。`[dependencies]` への昇格作業自体は [#53](https://github.com/scarecrow173/ruviform/issues/53) の dispatch 層実装と一体で実施）
 * [ ] AVX-512 実機または CI 環境での matrix/bench 再実行と 16 レーン `dot` の ulp 256 収まり確認（後続作業 — 環境不在）
 * [ ] aarch64 NEON の実測（CI `workflow_dispatch` 等 — コンパイル確認のみ実施済み、計測は未実施）
 * [ ] denormal 対策の実装（エンジン層 Issue — 本 PoC 範囲外）
-* [ ] `fearless_dispatched` の軽量カーネル劣後が per-call dispatch コストかノイズかの分離（低負荷環境での再計測 — 残課題として記録）
+* [x] `fearless_dispatched` の軽量カーネル劣後が per-call dispatch コストかノイズかの分離（[#56](https://github.com/scarecrow173/ruviform/issues/56) 低負荷再計測で回答: **per-call 固定コストが小サイズ帯劣後の原因** — `dispatch_noop` プローブ 1.29ns・add 小 N で安定した +6–7ns。大サイズ帯 @1024 の劣後観測は高負荷ノイズと確定。証跡: `docs/impl/exp/dispatched-overhead-20261021.md`）
 
 ## Pros and Cons of the Options
 

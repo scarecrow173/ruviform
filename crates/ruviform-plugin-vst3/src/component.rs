@@ -924,9 +924,9 @@ mod tests {
     }
 
     /// RT contract exercise: the `process` path over validated host
-    /// buffers — `rt_` cannot observe allocation; the no-alloc
-    /// guarantee rests on bounded per-block work documented in
-    /// `crate::block`.
+    /// buffers — the `assert_no_alloc` window (Issue #22 lane) proves
+    /// the vtable entry performs no (de)allocation; activation and
+    /// teardown calls stay outside the measurement.
     #[expect(unsafe_code)]
     #[test]
     fn rt_process_copies_gain_zero_copy() {
@@ -942,8 +942,11 @@ mod tests {
         let mut data = block.data(64);
 
         // SAFETY: `data` + bus/channel pointers valid for the call.
+        let result =
+            assert_no_alloc::assert_no_alloc(|| unsafe { processor.process(&raw mut data) });
+        assert_eq!(result, kResultOk);
+        // SAFETY: live COM objects.
         unsafe {
-            assert_eq!(processor.process(&raw mut data), kResultOk);
             assert_eq!(processor.setProcessing(0), kResultOk);
             assert_eq!(component.setActive(0), kResultOk);
             assert_eq!(component.terminate(), kResultOk);
@@ -1294,9 +1297,9 @@ mod tests {
         let mut data = block.data(64);
         data.inputParameterChanges = changes.as_ptr();
         // SAFETY: valid `ProcessData`; `changes` valid for the call.
-        unsafe {
-            assert_eq!(processor.process(&raw mut data), kResultOk);
-        }
+        let result =
+            assert_no_alloc::assert_no_alloc(|| unsafe { processor.process(&raw mut data) });
+        assert_eq!(result, kResultOk);
 
         let lying_queue = ComWrapper::new(LyingQueue);
         let queue = lying_queue.to_com_ptr::<IParamValueQueue>().unwrap();
@@ -1307,9 +1310,9 @@ mod tests {
         let mut data = block.data(64);
         data.inputParameterChanges = changes.as_ptr();
         // SAFETY: valid `ProcessData`; `changes` valid for the call.
-        unsafe {
-            assert_eq!(processor.process(&raw mut data), kResultOk);
-        }
+        let result =
+            assert_no_alloc::assert_no_alloc(|| unsafe { processor.process(&raw mut data) });
+        assert_eq!(result, kResultOk);
     }
 
     /// A `IParamValueQueue` that declares `i32::MAX` points, counts
@@ -1378,9 +1381,9 @@ mod tests {
         let mut data = block.data(64);
         data.inputParameterChanges = changes.as_ptr();
         // SAFETY: valid `ProcessData`; `changes` valid for the call.
-        unsafe {
-            assert_eq!(processor.process(&raw mut data), kResultOk);
-        }
+        let result =
+            assert_no_alloc::assert_no_alloc(|| unsafe { processor.process(&raw mut data) });
+        assert_eq!(result, kResultOk);
 
         let inspected = point_calls.load(Ordering::Relaxed);
         // Point inspections plus the ≤32 queue visits stay within the
