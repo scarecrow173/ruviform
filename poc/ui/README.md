@@ -6,7 +6,8 @@
 
 - AC1 `--experiment host` … tao `Window` + wry `WebView` の基本検証（T1）
 - AC2 `--experiment render` … WebView 内描画バックエンド計測（T2。canvas2d/webgl2/webgpu）
-- AC3–AC7 の実験（surface / ipc / frontend / dist）は後続タスク T3–T5 の範囲
+- AC4 `--experiment ipc` … メッセージ境界計測（T3。JSON RTT・バイナリ pull・evaluate_script push・併用）
+- AC3・AC5–AC7 の実験（surface / frontend / dist）は後続タスク T4/T5 の範囲
 - 計測契約は `poc-metric.v1`（`status`/`reason`/exit code 規約）。集約結果は
   [`RESULTS.md`](./RESULTS.md)（コミット対象）へ、生サンプルは `out/*.jsonl`（gitignore）へ、
   過程の観察は `docs/impl/exp/*.jsonl` へ記録する（3 層の証跡）
@@ -18,9 +19,10 @@
   **`mise exec --` 経由**で呼ぶこと
 - WebView2 Runtime（Windows 11 では標準同梱。`--check` で `webview2_version` を検出）
 - Node.js + npm（`frontend/` のビルドに使用。npm workspaces: `bench-shared`
-  （FW 非依存のワークロード・rAF 統計・レンダラ・ipc ブリッジ）と
-  `vanilla`（Vite + TypeScript 参照 UI）を `npm run build` で一括ビルドし、
-  `build.mjs` が `dist/` を集約する。`solid` variant は T5 で追加）
+  （FW 非依存のワークロード・rAF 統計・レンダラ・ipc ブリッジ・ipcbench）と
+  `vanilla`（Vite + TypeScript 参照 UI）・`ipc`（AC4 メッセージ境界ベンチ）
+  を `npm run build` で一括ビルドし、`build.mjs` が `dist/` を集約する。
+  `solid` variant は T5 で追加）
 
 ## セットアップ
 
@@ -35,8 +37,8 @@ cd ../..
 `build.rs` がスタブ `index.html` を生成するため `cargo build` / `--check`
 単体は常に動くが、実験は `status:"skipped"`（`reason: "frontend not built"`）
 となる。`dist/index.html` は host 実験ページ、`dist/<variant>/index.html`
-が各 FW バリアントのベンチ UI（render 実験は `poc://app/vanilla/index.html`
-を使う）。
+が各バリアントのベンチ UI（render 実験は `poc://app/vanilla/index.html`、
+ipc 実験は `poc://app/ipc/index.html` を使う）。
 
 ## ビルド・実行
 
@@ -57,6 +59,10 @@ mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
   --experiment render --backend webgl2 --frames 600
 mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
   --experiment render --backend webgpu --frames 600  # navigator.gpu 不在なら webgl2 fallback
+
+# AC4 ipc 実験（3 経路計測 + 併用フェーズ。--duration はタイムアウト上限）
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment ipc --duration 10
 
 # パラメータ指定例（タイムアウト秒・証跡出力先・フレーム数）
 mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
@@ -90,18 +96,20 @@ poc/ui/
     args.rs           # std-only CLI パース
     check.rs          # capability 検出（WebView2 reg / wgpu adapter / env）
     host.rs           # tao Window + wry WebView adapter（外部型はここに封じる）
-    assets.rs         # rust-embed + poc://app（app 配信 / data 予約）
+    assets.rs         # rust-embed + poc://app（app 配信 / data バイナリ応答）
     metrics.rs        # poc-metric.v1 生成・stdout/out/*.jsonl 出力・集計
     exp/mod.rs        # Experiment trait + 実験レジストリ + 共通前提ゲーティング
     exp/host.rs       # AC1 実験（状態機械は Rust 側が所有）
     exp/render.rs     # AC2 実験（backend 別フレーム統計・webgpu→webgl2 fallback）
+    exp/ipc.rs        # AC4 実験（3 経路メッセージ境界計測 + 併用フェーズ）
   frontend/
-    package.json      # npm workspaces ルート（bench-shared + vanilla）
+    package.json      # npm workspaces ルート（bench-shared + vanilla + ipc）
     package-lock.json # コミット対象（npm ci の正本）
     build.mjs         # dist/ 集約（src/ + <variant>/dist → dist/<variant>/）
     src/index.html    # host 実験用 JS エージェント（観測イベントを IPC 報告）
-    bench-shared/     # FW 非依存: workload/rAF stats/renderers(canvas2d|webgl2|webgpu)/ipc/runner
+    bench-shared/     # FW 非依存: workload/rAF stats/renderers(canvas2d|webgl2|webgpu)/ipc/runner/ipcbench
     vanilla/          # Vite + TypeScript 参照ベンチ UI（FW ランタイムゼロ下限）
+    ipc/              # Vite + TypeScript メッセージ境界ベンチ（AC4 ページ）
   RESULTS.md          # AC→実験→エビデンス行対応表（コミット対象）
   out/                # 生 JSONL（gitignore）
 ```
@@ -120,7 +128,7 @@ poc/ui/
 `check.rs` の `detect_wgpu_adapter` と T4 の `surface` 実験を `#[cfg(feature)]`
 で囲う設計とする（design「Open Questions」の採用案。T1 では常時有効のまま）。
 
-## 既知の挙動メモ（T1 実機観測）
+## 既知の挙動メモ（T1–T3 実機観測）
 
 - Windows のカスタムプロトコル要求は `poc://app/index.html` → `http://poc.app/index.html`
   に書き換えられてハンドラへ届く（`assets.rs` が両形式を受理）
@@ -141,3 +149,12 @@ poc/ui/
 - `navigator.gpu` は WebView2 155.0.4283.62 で非公開（`--backend webgpu` は
   機能検出失敗 → `fallback_to` 記録付きで WebGL2 実測となる。
   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` の enable 系 flags 2 試行でも非公開のまま）
+- `poc://data/blob` の初回 fetch は ~330ms のコールドパス（遅延確保バッファ
+  初期化 + カスタムスキーム経路ウォームアップ）。2 回目以降は p50 ~2ms。
+  pull 型転送を使う設計はウォームアップリクエストを含める（T3 実測）
+- `evaluate_script` 高頻度送信はドロップしないが受信側で暗黙に coalesce
+  される（バースト最大 ~105 件/タスク・定速 push の到着間隔は ~0ms と
+  ~15.6ms に二峰化）。高頻度状態同期は seq 付き差分（latest-wins）または
+  pull 型を前提とする（T3 実測・design Open Question への回答）
+- `host.rs` の `tick`（tao `WaitUntil` 周期起床）は名目 4ms → 実配信
+  ~11ms/tick で、Rust 側の ms 級定速駆動は OS タイマ分解能に支配される（T3 実測）

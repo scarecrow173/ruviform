@@ -14,7 +14,7 @@
 | AC1 | WebView ホスト（wry+tao 起動・埋め込みロード・IPC・リサイズ・フォーカス） | `--experiment host` | [AC1 host](#ac1---experiment-host) | **実測** |
 | AC2 | 描画バックエンド（canvas2d/webgl2/webgpu） | `--experiment render` | [AC2 render](#ac2---experiment-render) | **実測** |
 | AC3 | ネイティブサーフェス同居 | `--experiment surface` | （T4 で記録予定） | 未実施 |
-| AC4 | メッセージ境界（IPC/プロトコル/pull） | `--experiment ipc` | （T3 で記録予定） | 未実施 |
+| AC4 | メッセージ境界（IPC/プロトコル/pull） | `--experiment ipc` | [AC4 ipc](#ac4---experiment-ipc) | **実測** |
 | AC5 | フロントエンド FW + バンドラ比較 | `--experiment frontend` | （T5 で記録予定） | 未実施 |
 | AC6 | 配布（portable zip / 依存整理） | `--experiment dist` | （T5 で記録予定） | 未実施 |
 | AC7 | 採否 ADR 確定 | `poc-adr-finalize` | （全 AC 完了後） | 未実施 |
@@ -56,6 +56,10 @@ mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
   --experiment render --backend webgl2 --frames 600
 mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
   --experiment render --backend webgpu --frames 600   # navigator.gpu 不在 → webgl2 fallback
+
+# AC4 ipc 実験（JSON RTT・バイナリ pull・evaluate_script push・併用。自己終了）
+mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- \
+  --experiment ipc --duration 10
 ```
 
 ## AC1 — `--experiment host`
@@ -147,6 +151,63 @@ wgpu を導入する採否になった場合は宣言値の見直しタスクへ
 - **status 契約の実測**: `UI_POC_HEADLESS=1` → `skipped`（reason 非空・exit 0）、
   `--backend` 欠落/不正値 → `failed`（reason 付き・exit 1）、
   frontend 未ビルド → `skipped`（`vanilla/index.html` 単位で部分ビルドも検出）。
+
+## AC4 — `--experiment ipc`
+
+計測環境: 上記 env 表どおり（Windows 11 x64・WebView2 155.0.4283.62・60Hz 表示）。
+計測ページ: `poc://app/ipc/index.html`（`frontend/ipc` workspace + bench-shared
+`ipcbench.ts`）。フェーズ構成: JSON RTT（64B/1KiB/16KiB/64KiB × 各 32 往復）
+→ 単方向 ingest（500 msg フラッド）→ バイナリ pull（64KiB ×16・1MiB ×8・
+16MiB ×3）→ push（200 件バースト + 4ms tick 名目 ×160 件定速）→ coexist
+（定速 push 96 件中に rtt ping ×8 + pull fetch ×6 を並行）。
+反復回数・サイズ系列は Rust 側 `exp/ipc.rs` が `__poc.start(cfg)` で注入する単一源泉。
+
+| 判定 | 経路 | エビデンス（集約値） | 証跡 | 文書評価 |
+| --- | --- | --- | --- | --- |
+| **passed** | JSON RTT | `ipc_rtt_ms` 64B: avg 0.57-1.06 / p50 0.4 / p99 ≤3.3・1KiB: avg 0.46 / p50 0.4 / p99 1.2・16KiB: avg 2.11 / p50 1.6 / p99 7.1・64KiB: avg 4.33-4.42 / p50 4.3 / p99 ≤5.8（ms。各 32 往復・missed=0） | `out/ipc-1792564680.jsonl`・`out/ipc-1792564737.jsonl` | 実測 |
+| **passed** | 単方向 ingest | `ipc_ingest_msg_s` ≒ 40,396-44,113 msg/s（500 msg・Rust 側到達窓 11.3-12.4ms・received=500/500・end_seen=true） | 同上 | 実測 |
+| **passed** | バイナリ pull | `protocol_pull_MBps` 64KiB: 2.86-2.95・1MiB: 94.3-115.1・16MiB: 88.4-146.1（要求毎 `protocol_pull_latency_ms`: 64KiB p50 1.6-2.2ms・1MiB p50 ~11ms・16MiB p50 ~189ms） | 同上 | 実測 |
+| **passed** | push | `push_msg_s` 192.6-218.2 msg/s（送信 burst 200 + paced 160 + coexist 96 = 456 件、受信 360+96・**dropped=0**）。`coalesced` 231-276/360・`max_batch` 105-109・interval p50 0.1ms / p95 15.8ms | 同上 | 実測 |
+| **passed** | 3 経路併用 | 定速 push 受信中に rtt ping avg 0.71-0.94ms（単独 64B の 0.57-1.06 と同水準）・pull 64KiB avg 3.3ms / 1MiB avg 10ms・coexist push 96/96 受信・dropped=0 | 同上 | 実測 |
+
+### AC4 所見（採否材料）
+
+- **JSON intent 往復は実用的な遅延域**: ≤1KiB ペイロードで p50 0.4ms・p99 ≤3.3ms
+  の RTT。16KiB/64KiB ではペイロード比例で 2-4.4ms へ増大（postMessage の
+  JSON 文字列コスト＋往復配送）。UI 操作 intent・計測制御の用途には十分。
+  T1 の ipc_echo RTT 8-940ms は WebView2 ウォームアップ＋非起床問題の
+  影響であり、修正後の定常値は本表のとおり。
+- **単方向 ingest はバックログ排水型で ~40k msg/s**: 500 件フラッドは
+  Rust 側ディスパッチ窓 ~11-12ms で消化（1 msg ≒ 22µs、serde パース込み）。
+  配送はドロップなし（500/500 到達）。計測された値は「キュー滞留分の排水
+  レート」であり、連続高レート配信時の定常値ではない点に注意。
+- **バイナリ pull は ≥1MiB で ~90-146 MB/s**: `fetch("poc://data/blob?bytes=N")`
+  → `arrayBuffer()` 完走までで 1MiB ~11ms・16MiB ~190ms。高頻度描画データ
+  相当の pull 転送として実用的な帯域。一方 64KiB 級の小要求は
+  **初回リクエストに ~330ms のコールドパス**（遅延確保バッファ初期化 +
+  カスタムスキーム経路ウォームアップ）が乗り、p95 が 330ms となる
+  （2 回目以降は p50 1.6-2.2ms）。小さな pull を高頻度で使う設計は
+  ウォームアップリクエストを含めるか、初回コストを許容する必要がある。
+- **evaluate_script push はドロップしないが暗黙に coalesce される**:
+  456 件送信で dropped=0。ただし受信側では明確にバッチ化される —
+  バースト 200 件は最大 ~105-109 件/タスクのまとめ着弾、4ms tick 名目の
+  定速送信も受信間隔 p50 0.1ms・p95 15.8ms のクラスタ状（interval 分布が
+  ~0ms と ~15.6ms に二峰化。15.6ms は Windows タイマ量子と一致）。
+  すなわち「1 evaluate_script = 1 JS タスク実行」という粒度は
+  **高レートでは成立せず**、受信側はまとめて drain される。
+- **Rust 側定速送信は OS タイマ分解能に支配される**: `tick`（tao
+  `WaitUntil`）名目 4ms に対し実配信 ~11.1-11.2ms/tick（`tick_avg_ms`）。
+  これにより paced push の実送信レートは ~90 msg/s 頭打ちとなり、
+  `push_msg_s` 全体値（~193-218 msg/s）はバースト区間込みの合成値。
+  ms 級の精密 pacing が必要なら、1 tick 複数送信か別の駆動源が要る。
+- **3 経路併用は実現可能**: 定速 push 受信中の rtt ping・pull fetch は
+  遅延劣化ほぼ無し・ドロップ 0 で完走。**設計含意**: 高頻度状態同期は
+  「evaluate_script の逐次 push をそのまま UI 更新として消費する」構造を
+  避け、(a) 大容量・高頻度データは pull（`poc://data` fetch）型で
+  フロント側が間隔・併合を制御する、(b) push 通知は seq 付き差分
+  （latest-wins で coalesce 耐性）にする、(c) UI 操作 intent は低レートの
+  JSON intent を使う — という棲み分けが計測と整合する。
+  coalesce 観察は design Open Question への実測回答として記録する。
 
 ## AC8 — PoC 隔離
 

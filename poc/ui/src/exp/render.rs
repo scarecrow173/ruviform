@@ -142,6 +142,7 @@ impl Experiment for RenderExperiment {
             width: 960,
             height: 640,
             timeout,
+            tick: None,
             data_dir: None,
         };
 
@@ -208,6 +209,8 @@ fn dispatch(event: HostEvent, host: &host::Host<'_>, s: &mut State) {
             s.exit_reason = Some("timeout");
             host.finish();
         }
+        // tick 非利用実験では配信されない（HostConfig::tick=None）。
+        HostEvent::Tick => {}
     }
 }
 

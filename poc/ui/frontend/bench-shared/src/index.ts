@@ -10,3 +10,5 @@ export { createRenderer } from "./renderers";
 export type { BackendName, Renderer, RendererResult } from "./renderers";
 export { BenchRunner, WARMUP_FRAMES } from "./runner";
 export type { BenchElements, BenchState } from "./runner";
+export { IpcBench } from "./ipcbench";
+export type { IpcBenchConfig, IpcBenchHooks, IpcBenchState } from "./ipcbench";

@@ -108,6 +108,7 @@ impl Experiment for HostExperiment {
             width: 900,
             height: 600,
             timeout,
+            tick: None,
             data_dir: None,
         };
 
@@ -162,6 +163,9 @@ fn dispatch(event: HostEvent, host: &host::Host<'_>, s: &mut State) {
             s.exit_reason = Some("timeout");
             host.finish();
         }
+        // tick 非利用実験では配信されない（HostConfig::tick=None）が、
+        // 列挙の網羅性のため明示する。
+        HostEvent::Tick => {}
     }
 }
 

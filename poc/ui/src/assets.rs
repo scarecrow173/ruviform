@@ -3,8 +3,8 @@
 //! - `poc://app/...`  : `frontend/dist/` の埋め込み静的アセット配信
 //!   （rust-embed: debug ビルドは FS 読み・release ビルドは埋め込み。
 //!   dev server 不使用の証明 — AC1/AC6）。
-//! - `poc://data/...` : 計測用バイナリ応答の名前空間（T3/AC4 が実装する。
-//!   T1 では予約のみで 404 を返す）。
+//! - `poc://data/...` : 計測用バイナリ応答の名前空間（AC4 バイナリ pull 経路。
+//!   `poc://data/blob?bytes=N` が合成 `Cow` バッファを返す）。
 //!
 //! Windows/Android では wry が `poc://app/x` を `http://poc.app/x` に書き換えて
 //! ハンドラへ渡すため、host 名から `poc.` プレフィックスを剥がして名前空間を
@@ -12,6 +12,7 @@
 
 use std::borrow::Cow;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use http::{Request, Response, StatusCode};
 use rust_embed::RustEmbed;
@@ -72,11 +73,62 @@ fn serve_app(path: &str) -> Response<Cow<'static, [u8]>> {
     }
 }
 
-/// `poc://data/...`: 計測バイナリ応答の予約名前空間（T3/AC4 で実装）。
-/// T1 では名前空間の分離のみを示し、未実装であることを明示して 404 を返す。
+/// `poc://data/blob` が返せる最大バイト数（実験上限 16MiB に余裕を持たせた 32MiB）。
+const MAX_BLOB_BYTES: usize = 32 * 1024 * 1024;
+
+/// `poc://data/blob` 用の遅延初期化バッファ。初回要求時に 1 度だけ確保し、
+/// 以後は先頭 `bytes` バイトを `Cow::Borrowed` で返す。要求ごとの確保/充填を
+/// 避け、計測対象を「プロトコル転送そのもの」に絞るための設計。
+static BLOB_BUF: OnceLock<Vec<u8>> = OnceLock::new();
+
+/// 合成バッファ（内容は転送バイト数のみが計測対象のため決定論的パターン）。
+fn blob_buf() -> &'static [u8] {
+    BLOB_BUF.get_or_init(|| {
+        let mut v = vec![0u8; MAX_BLOB_BYTES];
+        for (i, b) in v.iter_mut().enumerate() {
+            *b = (i as u32).wrapping_mul(0x9E37_79B1) as u8;
+        }
+        v
+    })
+}
+
+/// `poc://data/...`: 計測バイナリ応答（AC4 バイナリ pull 経路）。
+/// JS 側の `fetch("poc://data/blob?bytes=N")` → `arrayBuffer()` までの経路を
+/// 通すため、CORS ヘッダ（`poc://app` → `poc://data` はオリジン横断）を付ける。
 fn serve_data(request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
-    let _ = request;
-    not_found("poc://data/ is reserved for AC4 binary-pull measurement (not implemented in T1)")
+    match request.uri().path().trim_start_matches('/') {
+        "blob" => serve_blob(request.uri().query()),
+        other => not_found(format!("unknown data path '{other}'")),
+    }
+}
+
+/// `poc://data/blob?bytes=N` の合成バッファ応答。
+/// `bytes` 欠落・非数値・範囲外は 400。`Access-Control-Allow-Origin: *` で
+/// `poc://app` オリジンからの fetch を許可する（app 応答と同じ方針）。
+fn serve_blob(query: Option<&str>) -> Response<Cow<'static, [u8]>> {
+    let bytes = query
+        .and_then(|q| q.split('&').find_map(|pair| pair.strip_prefix("bytes=")))
+        .and_then(|v| v.parse::<usize>().ok());
+    match bytes {
+        Some(n) if (1..=MAX_BLOB_BYTES).contains(&n) => Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/octet-stream")
+            .header("Access-Control-Allow-Origin", "*")
+            .header("Cache-Control", "no-store")
+            .body(Cow::Borrowed(&blob_buf()[..n]))
+            .unwrap_or_else(|_| empty_response(StatusCode::INTERNAL_SERVER_ERROR)),
+        Some(n) => bad_request(format!("bytes={n} out of range (1..={MAX_BLOB_BYTES})")),
+        None => bad_request("poc://data/blob requires ?bytes=<1..=MAX_BLOB_BYTES>"),
+    }
+}
+
+fn bad_request(msg: impl AsRef<str>) -> Response<Cow<'static, [u8]>> {
+    let body = msg.as_ref().as_bytes().to_vec();
+    Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .header("Content-Type", "text/plain; charset=utf-8")
+        .body(Cow::Owned(body))
+        .unwrap_or_else(|_| empty_response(StatusCode::BAD_REQUEST))
 }
 
 fn not_found(msg: impl AsRef<str>) -> Response<Cow<'static, [u8]>> {

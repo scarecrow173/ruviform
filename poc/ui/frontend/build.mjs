@@ -13,7 +13,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "dist");
 
 // ベンチ UI variant（T5 で solid を追加）。配信 URL は poc://app/<variant>/index.html。
-const VARIANTS = ["vanilla"];
+const VARIANTS = ["vanilla", "ipc"];
 
 const missing = VARIANTS.filter((v) => !existsSync(join(here, v, "dist", "index.html")));
 if (missing.length > 0) {

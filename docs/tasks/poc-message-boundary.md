@@ -1,10 +1,10 @@
 ---
 id: "TASK-034JfH9TmzdaGlsimZsJiq"
 type: "task"
-status: "todo"
+status: "done"
 title: "PoC メッセージ境界計測（JSON RTT・バイナリ pull・evaluate_script push）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -18,7 +18,8 @@ relations:
     generated: []
   implements:
     - "../plans/issue-28-ui-poc.md"
-  implemented-by: []
+  implemented-by:
+    - "../impl/ir/poc-message-boundary.md"
   depends-on:
     - "../plans/issue-28-ui-poc.md"
     - "poc-ui-harness-host.md"
@@ -48,11 +49,11 @@ relations:
 
 plan `PLAN-034JfDEU8mhCDj4ldYFZUG` の T3。design の AC4 実験設計を正本として、Rust ⇄ フロントエンド間の 3 経路（JSON intent・カスタムプロトコル バイナリ pull・`evaluate_script` push）を計測し、併用の実現性を記録する。
 
-- [ ] `src/exp/ipc.rs` に `--experiment ipc [--duration 10]` を実装（既定時間またはイテレーション完了で自己終了）
-- [ ] **JSON RTT 経路**: JS が `{seq,t0}` を `window.ipc.postMessage` → Rust が `with_ipc_handler` で受け `evaluate_script` で seq を返送 → JS が `t1−t0` を計測。ペイロード 64B / 1KiB / 16KiB / 64KiB × 既定反復で `ipc_rtt_ms{avg,p50,p99}` と単方向 `ipc_ingest_msg_s`（msg/s）を記録
-- [ ] **バイナリ pull 経路**: `poc://data/blob?bytes=N` に対する `fetch()` 反復で、`ArrayBuffer` 取得までの時間から `protocol_pull_MBps` とリクエスト毎レイテンシを記録（64KiB / 1MiB / 16MiB。Rust 側は合成 `Cow<'static,[u8]>` バッファを `Response` で返す）
-- [ ] **push 経路**: Rust が `evaluate_script` で定速送信し、JS 側の受信間隔・ドロップ数・coalesce 挙動を `push_msg_s` + 観察として記録（wry/WebView2 が高頻度 `evaluate_script` を暗黙に coalesce/drop するかは観察項目 — design Open Questions）
-- [ ] 3 経路併用の実現性所見（pull 型の間隔・coalesce 制御をフロント側で設計する必要の有無を含む）を `poc/ui/RESULTS.md`（AC4 行）と `docs/impl/exp/` ログに記録
+- [x] `src/exp/ipc.rs` に `--experiment ipc [--duration 10]` を実装（既定時間またはイテレーション完了で自己終了）
+- [x] **JSON RTT 経路**: JS が `{seq,t0}` を `window.ipc.postMessage` → Rust が `with_ipc_handler` で受け `evaluate_script` で seq を返送 → JS が `t1−t0` を計測。ペイロード 64B / 1KiB / 16KiB / 64KiB × 既定反復で `ipc_rtt_ms{avg,p50,p99}` と単方向 `ipc_ingest_msg_s`（msg/s）を記録
+- [x] **バイナリ pull 経路**: `poc://data/blob?bytes=N` に対する `fetch()` 反復で、`ArrayBuffer` 取得までの時間から `protocol_pull_MBps` とリクエスト毎レイテンシを記録（64KiB / 1MiB / 16MiB。Rust 側は合成 `Cow<'static,[u8]>` バッファを `Response` で返す）
+- [x] **push 経路**: Rust が `evaluate_script` で定速送信し、JS 側の受信間隔・ドロップ数・coalesce 挙動を `push_msg_s` + 観察として記録（wry/WebView2 が高頻度 `evaluate_script` を暗黙に coalesce/drop するかは観察項目 — design Open Questions）
+- [x] 3 経路併用の実現性所見（pull 型の間隔・coalesce 制御をフロント側で設計する必要の有無を含む）を `poc/ui/RESULTS.md`（AC4 行）と `docs/impl/exp/` ログに記録
 
 ## Classification
 
@@ -81,13 +82,13 @@ plan `PLAN-034JfDEU8mhCDj4ldYFZUG` の T3。design の AC4 実験設計を正本
 
 ## Done When
 
-- [ ] `--experiment ipc` が自己終了し、`ipc_rtt_ms{avg,p50,p99}`（64B/1KiB/16KiB/64KiB）・`ipc_ingest_msg_s`・`protocol_pull_MBps`（64KiB/1MiB/16MiB）・`push_msg_s` が `poc-metric.v1` で記録される
-- [ ] `fetch()`/`ArrayBuffer` によるバイナリ pull が動作し、往復・スループット数値が記録される
-- [ ] `evaluate_script` push の受信間隔・ドロップ・coalesce 観察が記録される
-- [ ] 3 経路併用の実現性所見が `RESULTS.md` に記録される
+- [x] `--experiment ipc` が自己終了し、`ipc_rtt_ms{avg,p50,p99}`（64B/1KiB/16KiB/64KiB）・`ipc_ingest_msg_s`・`protocol_pull_MBps`（64KiB/1MiB/16MiB）・`push_msg_s` が `poc-metric.v1` で記録される
+- [x] `fetch()`/`ArrayBuffer` によるバイナリ pull が動作し、往復・スループット数値が記録される
+- [x] `evaluate_script` push の受信間隔・ドロップ・coalesce 観察が記録される
+- [x] 3 経路併用の実現性所見が `RESULTS.md` に記録される
 
 ## Verification
 
-- [ ] `mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --experiment ipc --duration 10` — `poc-metric.v1` 最終行に `ipc_rtt_ms`・`ipc_ingest_msg_s`・`protocol_pull_MBps`・`push_msg_s` が含まれ `status` 規約どおり
-- [ ] `grep -c "ipc_rtt_ms\|protocol_pull_MBps\|push_msg_s" poc/ui/RESULTS.md` — AC4 行にメトリックキーが存在する（実施後）
-- [ ] Manual: `poc/ui/RESULTS.md` に 3 経路の数値行・観察・再現コマンドが存在する（補助確認）
+- [x] `mise exec -- cargo run --manifest-path poc/ui/Cargo.toml -- --experiment ipc --duration 10` — `poc-metric.v1` 最終行に `ipc_rtt_ms`・`ipc_ingest_msg_s`・`protocol_pull_MBps`・`push_msg_s` が含まれ `status` 規約どおり（`status:"passed"`・`exit_reason:"done_signal"`。`out/ipc-1792564680.jsonl`・`out/ipc-1792564737.jsonl`）
+- [x] `grep -c "ipc_rtt_ms\|protocol_pull_MBps\|push_msg_s" poc/ui/RESULTS.md` — AC4 行にメトリックキーが存在する（4 行一致）
+- [x] Manual: `poc/ui/RESULTS.md` に 3 経路の数値行・観察・再現コマンドが存在する（補助確認）

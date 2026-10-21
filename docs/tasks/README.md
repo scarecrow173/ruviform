@@ -44,7 +44,7 @@ Directory: `docs/tasks`
 | TASK-034JfHz5u1uXcPkG8d8t4B | PoC 採否 ADR 確定（エビデンス集約・confirm/revise・accepted 遷移） | todo | [poc-adr-finalize.md](./poc-adr-finalize.md) |
 | TASK-034JgsGOtyuy2MkLRLZQI5 | clack 系による CLAP binding PoC（最小ゲインプラグイン） | done | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
 | TASK-034JfHyxKSwvhiQ0sKqjXQ | PoC フロントエンド比較と配布検証（Solid 移植・単一バイナリ・OS 別方針） | todo | [poc-frontend-and-dist.md](./poc-frontend-and-dist.md) |
-| TASK-034JfH9TmzdaGlsimZsJiq | PoC メッセージ境界計測（JSON RTT・バイナリ pull・evaluate_script push） | todo | [poc-message-boundary.md](./poc-message-boundary.md) |
+| TASK-034JfH9TmzdaGlsimZsJiq | PoC メッセージ境界計測（JSON RTT・バイナリ pull・evaluate_script push） | done | [poc-message-boundary.md](./poc-message-boundary.md) |
 | TASK-034JfHavtGmdqmRGyDAbch | PoC ネイティブサーフェス合成（wgpu 隣接構成・PR #1762 評価） | todo | [poc-native-surface.md](./poc-native-surface.md) |
 | TASK-034JfGDrzj4yLZMu9A4qHS | PoC 描画バックエンド計測（canvas2d/webgl2/webgpu フレーム統計） | done | [poc-render-backends.md](./poc-render-backends.md) |
 | TASK-034JfGCUwtk0lzJvJPr36B | PoC UI ハーネスホスト（独立ワークスペース・wry+tao・計測契約） | done | [poc-ui-harness-host.md](./poc-ui-harness-host.md) |

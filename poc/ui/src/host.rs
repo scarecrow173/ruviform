@@ -38,6 +38,11 @@ pub struct HostConfig {
     pub height: u32,
     /// 自己終了タイムアウト。到達で Timeout → ループ終了。
     pub timeout: Duration,
+    /// 実験駆動の周期起床間隔。`Some(d)` で `deadline` 到達前まで
+    /// `HostEvent::Tick` を約 `d` 間隔で配信する（ipc 実験の定速 push 等）。
+    /// タイマ分解能は OS 依存（Windows 既定 ~15.6ms）のため、要求間隔は
+    /// 「最小間隔」であり実配信間隔は実測する。None で Tick 非配信。
+    pub tick: Option<Duration>,
     /// WebView2 データディレクトリ。None は一時 dir（再現性のため既定は一時領域）。
     pub data_dir: Option<PathBuf>,
 }
@@ -56,6 +61,9 @@ pub enum HostEvent {
     CloseRequested,
     /// `timeout` 到達（1 度だけ配信・配信後ループは必ず終了）。
     Timeout,
+    /// `HostConfig::tick` による周期起床（定速駆動が必要な実験向け）。
+    /// 実配信間隔は OS タイマ分解能に丸められる（計測は実験側が実値で行う）。
+    Tick,
 }
 
 /// 実験がホストへ行える最小操作。メソッドは失敗しても panic しない
@@ -71,6 +79,13 @@ impl Host<'_> {
     pub fn eval(&self, js: &str) {
         let r = self.webview.evaluate_script(js);
         eprintln!("[host] eval({js}) -> {r:?}");
+    }
+
+    /// `eval` と同じ JS 評価だが stderr ログを出さない。
+    /// 高頻度送信（定速 push・RTT echo 返送）では `eprintln!` の
+    /// コンソール出力コスト自体が計測を汚染するため、計測パスはこちらを使う。
+    pub fn eval_quiet(&self, js: &str) {
+        let _ = self.webview.evaluate_script(js);
     }
 
     /// ウィンドウのクライアント領域サイズ変更を要求する（→ Resized → set_bounds 追従）。
@@ -206,6 +221,10 @@ where
     };
 
     let deadline = Instant::now() + config.timeout;
+    // 実験駆動の周期起床（ipc 実験の定速 push 等）。
+    // `ResumeTimeReached` は「どちらの期限か」を区別しないため、到達時に
+    // `now >= deadline` で timeout と tick を振り分ける。
+    let next_tick = Cell::new(config.tick.map(|d| Instant::now() + d));
     // コールバック側（Host::finish）とループ側で共有する終了フラグ。
     // ループ側が clone を move で持つため、Host が参照する元は Rc に置く。
     let want_exit = Rc::new(Cell::new(false));
@@ -228,11 +247,23 @@ where
         }
         match event {
             Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
-                // タイムアウトは 1 度だけ通知し、その後は必ず終了する（自己終了契約）。
-                if !timeout_sent.replace(true) {
-                    on_event(HostEvent::Timeout, &host);
+                let now = Instant::now();
+                if now >= deadline {
+                    // タイムアウトは 1 度だけ通知し、その後は必ず終了する（自己終了契約）。
+                    if !timeout_sent.replace(true) {
+                        on_event(HostEvent::Timeout, &host);
+                    }
+                    loop_exit.set(true);
+                } else if let Some(interval) = config.tick {
+                    // tick 期限の到達。遅延分は追い越しで飛ばして次回期限を立て直す
+                    // （処理遅延時に過去分 tick が連続発火してループを占有しない）。
+                    on_event(HostEvent::Tick, &host);
+                    let mut nt = next_tick.get().unwrap_or(now);
+                    while nt <= now {
+                        nt += interval;
+                    }
+                    next_tick.set(Some(nt));
                 }
-                loop_exit.set(true);
             }
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
@@ -285,7 +316,12 @@ where
         if loop_exit.get() {
             *control_flow = ControlFlow::Exit;
         } else {
-            *control_flow = ControlFlow::WaitUntil(deadline);
+            // 次の起床期限は timeout と tick の早い方。
+            let next_wake = next_tick
+                .get()
+                .map(|t| if t < deadline { t } else { deadline })
+                .unwrap_or(deadline);
+            *control_flow = ControlFlow::WaitUntil(next_wake);
         }
     });
     Ok(())

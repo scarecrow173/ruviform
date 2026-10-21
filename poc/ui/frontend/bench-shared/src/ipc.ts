@@ -13,6 +13,6 @@ export function postMessage(obj: unknown): void {
 }
 
 /** Rust 側が evaluate_script 経由で呼ぶ `window.__poc` 受け口を登録する。 */
-export function installApi(api: { start: (cfg: unknown) => void }): void {
+export function installApi(api: Record<string, unknown>): void {
   (window as unknown as { __poc?: unknown }).__poc = api;
 }
