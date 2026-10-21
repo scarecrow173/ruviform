@@ -25,7 +25,7 @@ use ruviform_audio_core::device::{
 use ruviform_audio_core::{AudioFormat, SampleFormat};
 
 use crate::convert::{
-    f32_format, map_sample_format, map_supported_buffer_size, negotiate, synthesize_default_format,
+    f32_format, map_sample_format, map_supported_range, negotiate, synthesize_default_format,
 };
 use crate::error::{ErrorCtx, map_error};
 use crate::stream::{CpalOutputStream, DataCallbackState, FRAMES_CAPACITY_HARD_CAP};
@@ -92,24 +92,17 @@ impl Device for CpalDevice {
             .inner
             .supported_output_configs()
             .map_err(|e| map_error(&e, ErrorCtx::Control))?;
-        // Report F32-capable ranges only — integer-only ranges are
-        // filtered out, so an empty `Vec` means "no F32-capable range"
-        // (distinct from a failed query, which is `Err`). Ranges with
-        // malformed rate bounds (inverted or zero ceiling) are dropped
-        // here at the untrusted-data boundary — negotiation can never
-        // honor them anyway.
+        // Report usable F32-capable ranges only — malformed reports
+        // (non-F32, inverted/zero rate bounds, contradictory buffer
+        // bounds) are dropped at this untrusted-data boundary, so an
+        // empty `Vec` means "no usable F32-capable range" (distinct
+        // from a failed query, which is `Err`). A bound report the
+        // backend itself contradicts must not degrade to `Unknown`:
+        // `Unknown` means "no bound reported" and legitimately admits
+        // any `Fixed` request — a corrupt report must not gain that
+        // admission.
         Ok(ranges
-            .filter(|range| map_sample_format(range.sample_format()) == Some(SampleFormat::F32))
-            .filter(|range| {
-                range.min_sample_rate() <= range.max_sample_rate() && range.max_sample_rate() != 0
-            })
-            .map(|range| SupportedOutputFormat {
-                channels: u32::from(range.channels()),
-                min_sample_rate: range.min_sample_rate(),
-                max_sample_rate: range.max_sample_rate(),
-                buffer_size: map_supported_buffer_size(range.buffer_size()),
-                sample_format: SampleFormat::F32,
-            })
+            .filter_map(|range| map_supported_range(&range))
             .collect())
     }
 

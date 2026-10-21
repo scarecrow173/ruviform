@@ -65,6 +65,18 @@ fn valid_sample_rate_bounds(range: &SupportedOutputFormat) -> bool {
     range.min_sample_rate <= range.max_sample_rate && range.max_sample_rate != 0
 }
 
+/// The same structural-validity rule for the buffer-size axis: a
+/// port-level `Range` with `min > max` or a zero ceiling is a
+/// contradictory bound, never a candidate. `Unknown` (and any future
+/// variant) imposes no bound, hence nothing to violate — admission is
+/// decided in the `negotiate` arms, not here.
+fn valid_buffer_bounds(range: &SupportedOutputFormat) -> bool {
+    match range.buffer_size {
+        SupportedBufferSize::Range { min, max } => min <= max && max != 0,
+        _ => true,
+    }
+}
+
 /// Synthesizes an [`AudioFormat`] from a raw rate + channel count —
 /// always `F32` (the only encoding this adapter opens). `None` when the
 /// count maps to no named layout or the rate is invalid.
@@ -110,23 +122,68 @@ pub(crate) fn synthesize_default_format(
         })
 }
 
-/// Maps a cpal [`cpal::SupportedBufferSize`] onto the port type,
-/// validating the reported range: a backend-reported `min > max` or a
-/// zero ceiling (`max == 0`, which admits no size) folds into
-/// [`SupportedBufferSize::Unknown`] rather than emitting a violating
-/// invariant.
-pub(crate) fn map_supported_buffer_size(size: &cpal::SupportedBufferSize) -> SupportedBufferSize {
+/// Maps a cpal [`cpal::SupportedBufferSize`] onto the port type:
+///
+/// - `Unknown` → [`SupportedBufferSize::Unknown`] (unreported bound);
+/// - `Range { min: 0, max: 0 }` → `Unknown` — not a contradiction but
+///   upstream's "bound not published" encoding: cpal's `PipeWire` backend
+///   emits verbatim `min_quantum`/`max_quantum` fields that default to
+///   `0` until the server clock metadata arrives, and cpal's own build
+///   path treats `max_quantum == 0` as "no bound" (it skips `Fixed`
+///   validation entirely). Folding it to `Unknown` mirrors upstream
+///   semantics 1:1;
+/// - `Range { min > max }` → `None` — a self-contradictory report: the
+///   caller ([`map_supported_range`]) drops the whole candidate rather
+///   than letting it degrade to `Unknown` and gain `negotiate(Fixed)`
+///   admission it never earned.
+pub(crate) fn map_supported_buffer_size(
+    size: &cpal::SupportedBufferSize,
+) -> Option<SupportedBufferSize> {
     match *size {
-        cpal::SupportedBufferSize::Range { min, max } if min <= max && max != 0 => {
-            SupportedBufferSize::Range {
-                min: usize::try_from(min).unwrap_or(usize::MAX),
-                max: usize::try_from(max).unwrap_or(usize::MAX),
-            }
-        }
-        cpal::SupportedBufferSize::Range { .. } | cpal::SupportedBufferSize::Unknown => {
-            SupportedBufferSize::Unknown
-        }
+        cpal::SupportedBufferSize::Range { min, max } if min > max => None,
+        cpal::SupportedBufferSize::Range { min: 0, max: 0 }
+        | cpal::SupportedBufferSize::Unknown => Some(SupportedBufferSize::Unknown),
+        cpal::SupportedBufferSize::Range { min, max } => Some(SupportedBufferSize::Range {
+            min: usize::try_from(min).unwrap_or(usize::MAX),
+            max: usize::try_from(max).unwrap_or(usize::MAX),
+        }),
     }
+}
+
+/// Maps one cpal supported-format range onto the port type — or drops
+/// it (`None`) when the report is unusable at the untrusted-data
+/// boundary:
+///
+/// - non-F32 sample format (integer-only ranges are not reported);
+/// - zero channel count (a report that can never be driven);
+/// - malformed sample-rate bounds (`min > max` or a zero ceiling);
+/// - a self-contradictory buffer bound (`min > max`) — the whole
+///   candidate is discarded rather than folding the bound to `Unknown`:
+///   a contradictory bound report is not the same as an unreported
+///   bound, and must not gain `negotiate(Fixed)` admission.
+///
+/// A genuine "unreported" bound — cpal `Unknown`, or `PipeWire`'s
+/// unpublished-quanta `Range { min: 0, max: 0 }` — maps through as
+/// [`SupportedBufferSize::Unknown`].
+pub(crate) fn map_supported_range(
+    range: &cpal::SupportedStreamConfigRange,
+) -> Option<SupportedOutputFormat> {
+    if map_sample_format(range.sample_format()) != Some(SampleFormat::F32) {
+        return None;
+    }
+    if range.channels() == 0
+        || range.min_sample_rate() > range.max_sample_rate()
+        || range.max_sample_rate() == 0
+    {
+        return None;
+    }
+    Some(SupportedOutputFormat {
+        channels: u32::from(range.channels()),
+        min_sample_rate: range.min_sample_rate(),
+        max_sample_rate: range.max_sample_rate(),
+        buffer_size: map_supported_buffer_size(range.buffer_size())?,
+        sample_format: SampleFormat::F32,
+    })
 }
 
 /// The result of [`negotiate`]: the concrete cpal stream parameters
@@ -151,10 +208,11 @@ pub(crate) const DEFAULT_FRAMES_FALLBACK: usize = 8192;
 /// Negotiates `desired` against the supported space.
 ///
 /// Every range matching format, channel count and sample rate is a
-/// candidate — malformed bounds are skipped first — and the buffer-size
-/// constraint is evaluated across *all* candidates, not only the first
-/// match: a [`BufferSize::Fixed`] request is admitted when any
-/// candidate's reported bound covers it (`Unknown` imposes no bound).
+/// candidate — malformed rate or buffer bounds are skipped first — and
+/// the buffer-size constraint is evaluated across *all* candidates, not
+/// only the first match: a [`BufferSize::Fixed`] request is admitted
+/// when any candidate's reported bound covers it (`Unknown` imposes no
+/// bound).
 ///
 /// Returns `Some` only when: `desired` requests `F32`; at least one
 /// candidate exists; and a requested `Fixed` size fits `u32`, is
@@ -172,6 +230,7 @@ pub(crate) fn negotiate(
     let rate = desired.format.sample_rate.get();
     let mut candidates = supported.iter().filter(|range| {
         valid_sample_rate_bounds(range)
+            && valid_buffer_bounds(range)
             && range.sample_format == SampleFormat::F32
             && range.channels == channels
             && range.min_sample_rate <= rate
@@ -185,7 +244,6 @@ pub(crate) fn negotiate(
             // means a larger pre-sized slab.
             let effective_max = candidates
                 .map(|range| match range.buffer_size {
-                    SupportedBufferSize::Range { max: 0, .. } => DEFAULT_FRAMES_FALLBACK,
                     SupportedBufferSize::Range { max, .. } => max,
                     _ => DEFAULT_FRAMES_FALLBACK,
                 })
@@ -457,24 +515,152 @@ mod tests {
     // -- map_supported_buffer_size -------------------------------------------
 
     #[test]
-    fn map_supported_buffer_size_validates_range() {
+    fn map_supported_buffer_size_drops_only_contradictory_bounds() {
         assert_eq!(
             map_supported_buffer_size(&cpal::SupportedBufferSize::Range { min: 32, max: 1024 }),
-            SupportedBufferSize::Range { min: 32, max: 1024 },
+            Some(SupportedBufferSize::Range { min: 32, max: 1024 }),
         );
-        // Violating backend report folds into `Unknown`.
+        // A self-contradictory bound is `None` — the caller drops the
+        // whole candidate rather than degrading it to `Unknown`.
+        for size in [
+            cpal::SupportedBufferSize::Range { min: 1024, max: 32 },
+            cpal::SupportedBufferSize::Range { min: 32, max: 0 },
+        ] {
+            assert_eq!(map_supported_buffer_size(&size), None, "{size:?}");
+        }
+        // `Range { min: 0, max: 0 }` is *not* contradictory — it is
+        // upstream's "bound not published" encoding (cpal's PipeWire
+        // backend emits zero quanta until server clock metadata
+        // arrives, and treats `max == 0` as no bound at open time), so
+        // it maps to `Unknown` like a genuine unreported bound.
+        for size in [
+            cpal::SupportedBufferSize::Range { min: 0, max: 0 },
+            cpal::SupportedBufferSize::Unknown,
+        ] {
+            assert_eq!(
+                map_supported_buffer_size(&size),
+                Some(SupportedBufferSize::Unknown),
+                "{size:?}"
+            );
+        }
+    }
+
+    // -- map_supported_range (map → formats → negotiate chain) ------------
+
+    fn cpal_range(
+        channels: u16,
+        min: u32,
+        max: u32,
+        buffer: cpal::SupportedBufferSize,
+    ) -> cpal::SupportedStreamConfigRange {
+        cpal::SupportedStreamConfigRange::new(channels, min, max, buffer, cpal::SampleFormat::F32)
+    }
+
+    #[test]
+    fn map_supported_range_maps_valid_reports_verbatim() {
+        // A well-formed report passes through with every field intact.
         assert_eq!(
-            map_supported_buffer_size(&cpal::SupportedBufferSize::Range { min: 1024, max: 32 }),
-            SupportedBufferSize::Unknown,
+            map_supported_range(&cpal_range(
+                2,
+                44_100,
+                48_000,
+                cpal::SupportedBufferSize::Range { min: 32, max: 1024 },
+            )),
+            Some(SupportedOutputFormat {
+                channels: 2,
+                min_sample_rate: 44_100,
+                max_sample_rate: 48_000,
+                buffer_size: SupportedBufferSize::Range { min: 32, max: 1024 },
+                sample_format: SampleFormat::F32,
+            }),
         );
-        // A zero-ceiling report admits no size — same `Unknown` fold.
-        assert_eq!(
-            map_supported_buffer_size(&cpal::SupportedBufferSize::Range { min: 0, max: 0 }),
-            SupportedBufferSize::Unknown,
+    }
+
+    #[test]
+    fn boundary_drops_malformed_reports_instead_of_folding_to_unknown() {
+        // The real chain: a *contradictory* buffer bound is not an
+        // *unreported* bound — dropping the whole candidate prevents a
+        // corrupt report from gaining `negotiate(Fixed)` admission as
+        // `Unknown`.
+        for buffer in [
+            cpal::SupportedBufferSize::Range { min: 1024, max: 32 },
+            cpal::SupportedBufferSize::Range { min: 32, max: 0 },
+        ] {
+            let range = cpal_range(2, 44_100, 48_000, buffer);
+            assert_eq!(map_supported_range(&range), None, "{buffer:?}");
+        }
+        // Malformed sample-rate bounds, zero-channel reports, and
+        // non-F32 encodings drop too.
+        for range in [
+            cpal_range(2, 96_000, 44_100, cpal::SupportedBufferSize::Unknown),
+            cpal_range(2, 0, 0, cpal::SupportedBufferSize::Unknown),
+            cpal_range(0, 44_100, 48_000, cpal::SupportedBufferSize::Unknown),
+            cpal::SupportedStreamConfigRange::new(
+                2,
+                44_100,
+                48_000,
+                cpal::SupportedBufferSize::Unknown,
+                cpal::SampleFormat::I16,
+            ),
+        ] {
+            assert_eq!(map_supported_range(&range), None, "{range:?}");
+        }
+    }
+
+    #[test]
+    fn chain_genuine_unknown_admits_fixed_but_malformed_cannot() {
+        // `map_supported_range → supported_output_formats →
+        // negotiate(Fixed)` on synthesized backend reports: only a
+        // bound that is genuinely *unreported* — cpal `Unknown` or
+        // PipeWire's unpublished-quanta `Range { 0, 0 }` — survives as
+        // a constraint-free candidate. A contradictory bound cannot.
+        let malformed = cpal_range(
+            2,
+            44_100,
+            48_000,
+            cpal::SupportedBufferSize::Range { min: 1024, max: 32 },
         );
+        let genuine_unknown = cpal_range(2, 44_100, 48_000, cpal::SupportedBufferSize::Unknown);
+        let unpublished = cpal_range(
+            2,
+            44_100,
+            48_000,
+            cpal::SupportedBufferSize::Range { min: 0, max: 0 },
+        );
+        let surviving: Vec<_> = [malformed, genuine_unknown, unpublished]
+            .iter()
+            .filter_map(map_supported_range)
+            .collect();
         assert_eq!(
-            map_supported_buffer_size(&cpal::SupportedBufferSize::Unknown),
-            SupportedBufferSize::Unknown,
+            surviving.iter().map(|f| f.buffer_size).collect::<Vec<_>>(),
+            [SupportedBufferSize::Unknown; 2],
+        );
+        for mapped in &surviving {
+            let config = negotiate(
+                &desired(48_000, ChannelLayout::Stereo, BufferSize::Fixed(480)),
+                std::slice::from_ref(mapped),
+            )
+            .unwrap();
+            assert_eq!(config.stream.buffer_size, cpal::BufferSize::Fixed(480));
+        }
+        // …while a space containing only the contradictory report
+        // (dropped at the boundary) admits nothing.
+        let dropped_only: Vec<_> = [cpal_range(
+            2,
+            44_100,
+            48_000,
+            cpal::SupportedBufferSize::Range { min: 1024, max: 32 },
+        )]
+        .iter()
+        .filter_map(map_supported_range)
+        .collect();
+        assert_eq!(dropped_only, Vec::<SupportedOutputFormat>::new());
+        assert_eq!(
+            negotiate(
+                &desired(48_000, ChannelLayout::Stereo, BufferSize::Fixed(480)),
+                &dropped_only,
+            ),
+            None,
         );
     }
 
@@ -667,28 +853,33 @@ mod tests {
             ),
             None,
         );
-        // A zero-ceiling buffer bound under `Default` falls back
-        // rather than producing a zero-capacity scratch.
-        let zero_ceiling = [f32_range(
-            2,
-            44_100,
-            48_000,
+        // A contradictory or zero-ceiling buffer bound is skipped too —
+        // symmetric with the rate axis, so a malformed port-level range
+        // is never a candidate under either `Default` or `Fixed`.
+        // (The cpal-level `Range { 0, 0 }` "unpublished" encoding maps
+        // to `Unknown` at the boundary before this layer ever sees it.)
+        for size in [
             SupportedBufferSize::Range { min: 0, max: 0 },
-        )];
-        let config = negotiate(
-            &desired(48_000, ChannelLayout::Stereo, BufferSize::Default),
-            &zero_ceiling,
-        )
-        .unwrap();
-        assert_eq!(config.effective_max_frames, DEFAULT_FRAMES_FALLBACK);
-        // …but admits no `Fixed` request.
-        assert_eq!(
-            negotiate(
-                &desired(48_000, ChannelLayout::Stereo, BufferSize::Fixed(480)),
-                &zero_ceiling,
-            ),
-            None,
-        );
+            SupportedBufferSize::Range { min: 1024, max: 32 },
+        ] {
+            let malformed = [f32_range(2, 44_100, 48_000, size)];
+            assert_eq!(
+                negotiate(
+                    &desired(48_000, ChannelLayout::Stereo, BufferSize::Default),
+                    &malformed,
+                ),
+                None,
+                "{size:?}",
+            );
+            assert_eq!(
+                negotiate(
+                    &desired(48_000, ChannelLayout::Stereo, BufferSize::Fixed(480)),
+                    &malformed,
+                ),
+                None,
+                "{size:?}",
+            );
+        }
     }
 
     #[test]

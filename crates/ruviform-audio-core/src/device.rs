@@ -115,10 +115,11 @@ pub trait Device: Send {
     /// The supported output-format space as a list of range
     /// descriptions — the input to format negotiation.
     ///
-    /// Only F32-capable ranges are reported: integer-only ranges are
-    /// filtered out by the adapter, so an empty `Vec` means "no
-    /// F32-capable range" — distinct from a failed query, which is
-    /// `Err`.
+    /// Only *usable* F32-capable ranges are reported: integer-only
+    /// ranges and structurally invalid reports (inverted or
+    /// zero-ceiling bounds, zero channel count) are filtered out by
+    /// the adapter, so an empty `Vec` means "no usable F32-capable
+    /// range" — distinct from a failed query, which is `Err`.
     ///
     /// **RT contract:** non-RT only — calls OS APIs and allocates.
     ///
