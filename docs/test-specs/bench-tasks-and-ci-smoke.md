@@ -1,10 +1,10 @@
 ---
 id: "TSPEC-034Jeo1j5l7fBhYc8iYsTN"
 type: "test-spec"
-status: "draft"
+status: "approved"
 title: "ベンチ・検証タスクと CI スモーク挙動の契約保証"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:

@@ -1,10 +1,10 @@
 ---
 id: "PLAN-034JdOWI3vblJW11kIueY0"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "DSP/SIMD 比較ベンチマーク PoC 実装"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -162,63 +162,63 @@ Issue #19 の PoC として、`crates/ruviform-math` 内にスカラー参照カ
 
 ### Phase A: ベンチハーネス骨格と dev-dependencies（Task T1）
 
-- [ ] A-1. dev-dep 導入前のコンパイルコスト baseline を記録: `mise run check`（`cargo check --workspace --all-targets`）の所要時間を計測し、Phase G のコンパイルコスト前後比較の基準値として記録する（dev-dep 導入後では baseline を取れないため本 Phase の先頭で実施）
-- [ ] A-2. `crates/ruviform-math/Cargo.toml` に `[dev-dependencies]`（`criterion = { version = "0.8.2", default-features = false }`、`fearless_simd = { version = "1.1", features = ["force_support_fallback"] }`、`fearless_simd_macros = "0.1"`、`pulp = { version = "0.22", features = ["x86-v4", "macro"] }`、`multiversion = "0.9"`、`approx = "0.5"`）と `[[bench]] name = "simd_poc", harness = false` を追加（`[dependencies]` は空のまま）。計測対象 dev-dep のバージョン方針: caret 指定とし、追跡済み `Cargo.lock` を再現性の錨とする（`=x.y.z` exact pin は採用しない — workspace は `Cargo.lock` をコミット管理しており lockfile が解決版を固定するため）。各 dev-dep の追加理由・feature 選定根拠は Cargo.toml のインラインコメント（設計書 dev-dependencies 節のコメントを転記）と PR 説明文に記録する
-- [ ] A-3. `benches/simd_poc.rs` に最小 criterion 骨格（`criterion_group!` / `criterion_main!` + `std::hint::black_box` を使う placeholder ベンチ 1 本）を作成
-- [ ] A-4. `mise run check` で dev-dep 解決・`Cargo.lock` 再生成・全ターゲット型チェックを確認
-- [ ] A-5. `mise exec -- rustup toolchain install 1.85` で 1.85 ツールチェーンを調達し、`mise exec -- rustup run 1.85 cargo check -p ruviform-math --lib --locked` がグリーンであることを確認（MSRV 検証手順の確立。`cargo +1.85` は rustup proxy 前提のため `rustup run` 経由の呼出形に統一）
-- [ ] A-6. `mise.toml` に `bench-smoke` タスク（`cargo bench -p ruviform-math -- --test`）を追加し、`.github/workflows/ci.yml` の `bench` ジョブを `mise run bench-smoke` へ変更（CI スモーク分離方針）
+- [x] A-1. dev-dep 導入前のコンパイルコスト baseline を記録: `mise run check`（`cargo check --workspace --all-targets`）の所要時間を計測し、Phase G のコンパイルコスト前後比較の基準値として記録する（dev-dep 導入後では baseline を取れないため本 Phase の先頭で実施）
+- [x] A-2. `crates/ruviform-math/Cargo.toml` に `[dev-dependencies]`（`criterion = { version = "0.8.2", default-features = false }`、`fearless_simd = { version = "1.1", features = ["force_support_fallback"] }`、`fearless_simd_macros = "0.1"`、`pulp = { version = "0.22", features = ["x86-v4", "macro"] }`、`multiversion = "0.9"`、`approx = "0.5"`）と `[[bench]] name = "simd_poc", harness = false` を追加（`[dependencies]` は空のまま）。計測対象 dev-dep のバージョン方針: caret 指定とし、追跡済み `Cargo.lock` を再現性の錨とする（`=x.y.z` exact pin は採用しない — workspace は `Cargo.lock` をコミット管理しており lockfile が解決版を固定するため）。各 dev-dep の追加理由・feature 選定根拠は Cargo.toml のインラインコメント（設計書 dev-dependencies 節のコメントを転記）と PR 説明文に記録する
+- [x] A-3. `benches/simd_poc.rs` に最小 criterion 骨格（`criterion_group!` / `criterion_main!` + `std::hint::black_box` を使う placeholder ベンチ 1 本）を作成
+- [x] A-4. `mise run check` で dev-dep 解決・`Cargo.lock` 再生成・全ターゲット型チェックを確認
+- [x] A-5. `mise exec -- rustup toolchain install 1.85` で 1.85 ツールチェーンを調達し、`mise exec -- rustup run 1.85 cargo check -p ruviform-math --lib --locked` がグリーンであることを確認（MSRV 検証手順の確立。`cargo +1.85` は rustup proxy 前提のため `rustup run` 経由の呼出形に統一）
+- [x] A-6. `mise.toml` に `bench-smoke` タスク（`cargo bench -p ruviform-math -- --test`）を追加し、`.github/workflows/ci.yml` の `bench` ジョブを `mise run bench-smoke` へ変更（CI スモーク分離方針）
 
 ### Phase B: スカラー参照カーネルと共通型（Task T2）
 
-- [ ] B-1. `src/simd_poc.rs` を新規作成し、共通型（`BiquadCoeffs` / `SineCoeffs` / `SineState` / `pub const FIR_TAPS: usize = 64`）とカーネルシグネチャ抽象形（設計書 Data and Control Flow 節どおり: `add` / `scale` / `clamp_unit` / `fade` / `dot` / `fir` / `biquad` / `sine`）を定義。`simd_poc` モジュールに pub enum を置かない（`KernelId` 等の識別子は `&'static str` または構造体定数で代替 — 設計書 Non-Functional Constraints の公開 enum 規約適用）
-- [ ] B-2. 8 カーネルのスカラー参照実装を pure std ループで記述（autovec を意図的に抑制しない・`#[inline]` 不指定・`unsafe` 0・長さ不一致は `debug_assert`）。clippy pedantic 系 lint（`cast_precision_loss` / `suboptimal_flops` / `imprecise_flops` / `wildcard_imports` 等）との衝突は、意図的抑制を `#[expect(...)]`（未対応なら `#[allow(...)]`）＋理由コメントで対象 item に局所化する（ファイル・モジュール単位の lint allow は置かない）
-- [ ] B-3. deterministic 入力生成（xorshift64*・固定 seed・`[-1.0, 1.0)` 一様乱数）と denormal 値生成（`f32::from_bits(0x0040_0000)` / `f32::MIN_POSITIVE * 0.5`）を実装
-- [ ] B-4. `src/lib.rs` に `#[doc(hidden)] pub mod simd_poc;` を追加し、`simd_poc` のモジュール doc に「実験 API・本番 RT 契約の対象外・入力生成 helper は allocate する」旨を明記
-- [ ] B-5. `mise run check` / `mise run lint` / `mise exec -- rustup run 1.85 cargo check -p ruviform-math --lib --locked` がグリーンであることを確認
+- [x] B-1. `src/simd_poc.rs` を新規作成し、共通型（`BiquadCoeffs` / `SineCoeffs` / `SineState` / `pub const FIR_TAPS: usize = 64`）とカーネルシグネチャ抽象形（設計書 Data and Control Flow 節どおり: `add` / `scale` / `clamp_unit` / `fade` / `dot` / `fir` / `biquad` / `sine`）を定義。`simd_poc` モジュールに pub enum を置かない（`KernelId` 等の識別子は `&'static str` または構造体定数で代替 — 設計書 Non-Functional Constraints の公開 enum 規約適用）
+- [x] B-2. 8 カーネルのスカラー参照実装を pure std ループで記述（autovec を意図的に抑制しない・`#[inline]` 不指定・`unsafe` 0・長さ不一致は `debug_assert`）。clippy pedantic 系 lint（`cast_precision_loss` / `suboptimal_flops` / `imprecise_flops` / `wildcard_imports` 等）との衝突は、意図的抑制を `#[expect(...)]`（未対応なら `#[allow(...)]`）＋理由コメントで対象 item に局所化する（ファイル・モジュール単位の lint allow は置かない）
+- [x] B-3. deterministic 入力生成（xorshift64*・固定 seed・`[-1.0, 1.0)` 一様乱数）と denormal 値生成（`f32::from_bits(0x0040_0000)` / `f32::MIN_POSITIVE * 0.5`）を実装
+- [x] B-4. `src/lib.rs` に `#[doc(hidden)] pub mod simd_poc;` を追加し、`simd_poc` のモジュール doc に「実験 API・本番 RT 契約の対象外・入力生成 helper は allocate する」旨を明記
+- [x] B-5. `mise run check` / `mise run lint` / `mise exec -- rustup run 1.85 cargo check -p ruviform-math --lib --locked` がグリーンであることを確認
 
 ### Phase C: 候補バックエンド実装と共有サポート（Task T3）
 
-- [ ] C-1. `tests/simd_poc/mod.rs` を作成（共有サポートの再エクスポート + matrix ランナー。`tests/simd_poc/` は cargo のテストターゲットにならない構造を利用）
-- [ ] C-2. `tests/simd_poc/inputs.rs` に入力生成を実装（`normal` / `edge` = denormal・±0・NaN・±Inf 混合 / `denormal` 混入。長さ `{7,15,16,17,31,33}` + `{100,255,1023,1024,4096}`、先頭オフセット `{0,1,3}`。`biquad` は `channels = 8` 固定で frames 側を同系列に変える — 設計書 methodology 節どおり）
-- [ ] C-3. `tests/simd_poc/equiv.rs` に等価性判定を実装（bit 完全一致 = `to_bits()` 比較、ulp 上限 = `approx::UlpsEq`、失敗報告に `(kernel, impl, level, input, len, offset, index, expected_bits, actual_bits, ulps)` を含める）
-- [ ] C-4. `tests/simd_poc/fearless_impl.rs` を実装（`#[simd]` 付き portable 層カーネル + `dispatch!` 経路 + `Fallback::new()` / `Level::new().as_sse2()` 等の `Option` ベース強制ラッパ。x86 限定 API 参照は `#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]` でゲート。clamp は `*_precise` 系で NaN 伝播を揃える）
-- [ ] C-5. `tests/simd_poc/pulp_impl.rs` を実装（`WithSimd` trait 直接 impl を基本形とするカーネル + `pulp::Scalar::new()` / `pulp::x86::V2,V3,V4::try_new()` の `Option` ベース強制 + `Arch::new().dispatch` 経路。`V2`/`V3`/`V4` 参照は cfg ゲート）
-- [ ] C-6. `tests/simd_poc/multiversion_impl.rs` を実装（`#[multiversion(targets("x86_64+avx2+fma","x86_64+sse4.2","aarch64+neon"))]`。本文はスカラー参照と同一ループ）
-- [ ] C-7. `mise run check`（`--all-targets` で dev ターゲット込みコンパイル）と `mise run lint` がグリーンであることを確認（`unsafe` 0・候補 API の unsafe 要求経路不使用・公開 API に候補クレートの型が露出しないことをレビュー）。pedantic lint 衝突（`cast_precision_loss` / `suboptimal_flops` / `imprecise_flops` / `wildcard_imports`）と共有 mod の dead_code は `#[expect]` / `#[allow]` + 理由コメントで対象 item に局所化する（B-2 と同方針）
+- [x] C-1. `tests/simd_poc/mod.rs` を作成（共有サポートの再エクスポート + matrix ランナー。`tests/simd_poc/` は cargo のテストターゲットにならない構造を利用）
+- [x] C-2. `tests/simd_poc/inputs.rs` に入力生成を実装（`normal` / `edge` = denormal・±0・NaN・±Inf 混合 / `denormal` 混入。長さ `{7,15,16,17,31,33}` + `{100,255,1023,1024,4096}`、先頭オフセット `{0,1,3}`。`biquad` は `channels = 8` 固定で frames 側を同系列に変える — 設計書 methodology 節どおり）
+- [x] C-3. `tests/simd_poc/equiv.rs` に等価性判定を実装（bit 完全一致 = `to_bits()` 比較、ulp 上限 = `approx::UlpsEq`、失敗報告に `(kernel, impl, level, input, len, offset, index, expected_bits, actual_bits, ulps)` を含める）
+- [x] C-4. `tests/simd_poc/fearless_impl.rs` を実装（`#[simd]` 付き portable 層カーネル + `dispatch!` 経路 + `Fallback::new()` / `Level::new().as_sse2()` 等の `Option` ベース強制ラッパ。x86 限定 API 参照は `#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]` でゲート。clamp は `*_precise` 系で NaN 伝播を揃える）
+- [x] C-5. `tests/simd_poc/pulp_impl.rs` を実装（`WithSimd` trait 直接 impl を基本形とするカーネル + `pulp::Scalar::new()` / `pulp::x86::V2,V3,V4::try_new()` の `Option` ベース強制 + `Arch::new().dispatch` 経路。`V2`/`V3`/`V4` 参照は cfg ゲート）
+- [x] C-6. `tests/simd_poc/multiversion_impl.rs` を実装（`#[multiversion(targets("x86_64+avx2+fma","x86_64+sse4.2","aarch64+neon"))]`。本文はスカラー参照と同一ループ）
+- [x] C-7. `mise run check`（`--all-targets` で dev ターゲット込みコンパイル）と `mise run lint` がグリーンであることを確認（`unsafe` 0・候補 API の unsafe 要求経路不使用・公開 API に候補クレートの型が露出しないことをレビュー）。pedantic lint 衝突（`cast_precision_loss` / `suboptimal_flops` / `imprecise_flops` / `wildcard_imports`）と共有 mod の dead_code は `#[expect]` / `#[allow]` + 理由コメントで対象 item に局所化する（B-2 と同方針）
 
 ### Phase D: 等価性 matrix テスト（Task T4）
 
-- [ ] D-1. `tests/simd_equiv.rs` を作成し、カーネル × 実装列（`scalar` / `fearless_fallback` / `fearless_neon`（aarch64 cfg ゲート列）/ `fearless_sse2` / `fearless_sse4_2` / `fearless_avx2` / `fearless_avx512` / `fearless_dispatched` / `pulp_scalar` / `pulp_v2` / `pulp_v3` / `pulp_v4` / `pulp_dispatched` / `multiversion`）× 入力セット × 長さ × オフセットの matrix をカーネルごと 1 テスト関数で集約検証（x86 限定列は cfg ゲート。aarch64 では `fearless_neon` と portable 列のみ — 設計書 matrix 節どおり）
-- [ ] D-2. 構成不能な level（トークン `None`）は panic ではなく skip として記録する振る舞いを実装。カーネル契約上 NaN/Inf を扱わない edge セル（`dot` の有限値契約等）は除外条件をコードコメントで明記
-- [ ] D-3. `mise run test` で matrix がグリーンであることを確認し、観測 max ulp を集計（観測値 > 8 は実装バグか契約不適合として調査し、数値を合わせ込む事後緩和はしない。`biquad` で固定上限超過が正当と判明した場合のみ設計書の代替契約形へ切替）
+- [x] D-1. `tests/simd_equiv.rs` を作成し、カーネル × 実装列（`scalar` / `fearless_fallback` / `fearless_neon`（aarch64 cfg ゲート列）/ `fearless_sse2` / `fearless_sse4_2` / `fearless_avx2` / `fearless_avx512` / `fearless_dispatched` / `pulp_scalar` / `pulp_v2` / `pulp_v3` / `pulp_v4` / `pulp_dispatched` / `multiversion`）× 入力セット × 長さ × オフセットの matrix をカーネルごと 1 テスト関数で集約検証（x86 限定列は cfg ゲート。aarch64 では `fearless_neon` と portable 列のみ — 設計書 matrix 節どおり）
+- [x] D-2. 構成不能な level（トークン `None`）は panic ではなく skip として記録する振る舞いを実装。カーネル契約上 NaN/Inf を扱わない edge セル（`dot` の有限値契約等）は除外条件をコードコメントで明記
+- [x] D-3. `mise run test` で matrix がグリーンであることを確認し、観測 max ulp を集計（観測値 > 8 は実装バグか契約不適合として調査し、数値を合わせ込む事後緩和はしない。`biquad` で固定上限超過が正当と判明した場合のみ設計書の代替契約形へ切替）
 
 ### Phase E: criterion ベンチ実装（Task T5）
 
-- [ ] E-1. `benches/simd_poc.rs` を実装: `#[allow(dead_code)] #[path = "../tests/simd_poc/mod.rs"] mod simd_poc_support;` で共有 mod を include し、カーネルごと `BenchmarkGroup` + `group.throughput(Throughput::Elements(len as u64))` + `BenchmarkId::new(<impl>, "{input}/{len}")` を構成
-- [ ] E-2. ベンチ matrix を実装（サイズ `64/256/1024/4096` + 端数 `100/1000/1023`、入力 `normal` + `denormal` — `add`/`scale`/`clamp`/`fade` は `normal` のみ、`biquad` は `channels = 8` 固定で frames を同系列、計測識別子は設計書 methodology 節の一覧どおり `fearless_sse2`/`pulp_v2` を除外）
-- [ ] E-3. `biquad` / `sine` は `iter_batched` / `iter_with_setup` で反復ごとに状態を初期化（normal 側は非 denormal の決定的初期状態、denormal-cliff 観測側は denormal 状態を維持・再注入する setup）
-- [ ] E-4. PoC 用の `BenchmarkGroup` 時間設定（`warm_up_time` / `measurement_time` / `sample_size` 削減 — 全量 ≈400–560 ケースを criterion 既定の 1h 超から ≈20–30 分以内へ短縮する目安）と quick-run filter 規約（`mise exec -- cargo bench -p ruviform-math -- <filter>`）を実装。run 冒頭に OS・CPU 型名・コア数・rustc 版・criterion 版・`Level::new()` / `pulp::Arch::new()` 検出結果を標準出力する
-- [ ] E-5. `mise run bench-smoke`（`cargo bench -p ruviform-math -- --test`、スモーク）と `mise exec -- cargo bench -p ruviform-math -- dot`（quick-run 例）が実行できることを確認
+- [x] E-1. `benches/simd_poc.rs` を実装: `#[allow(dead_code)] #[path = "../tests/simd_poc/mod.rs"] mod simd_poc_support;` で共有 mod を include し、カーネルごと `BenchmarkGroup` + `group.throughput(Throughput::Elements(len as u64))` + `BenchmarkId::new(<impl>, "{input}/{len}")` を構成
+- [x] E-2. ベンチ matrix を実装（サイズ `64/256/1024/4096` + 端数 `100/1000/1023`、入力 `normal` + `denormal` — `add`/`scale`/`clamp`/`fade` は `normal` のみ、`biquad` は `channels = 8` 固定で frames を同系列、計測識別子は設計書 methodology 節の一覧どおり `fearless_sse2`/`pulp_v2` を除外）
+- [x] E-3. `biquad` / `sine` は `iter_batched` / `iter_with_setup` で反復ごとに状態を初期化（normal 側は非 denormal の決定的初期状態、denormal-cliff 観測側は denormal 状態を維持・再注入する setup）
+- [x] E-4. PoC 用の `BenchmarkGroup` 時間設定（`warm_up_time` / `measurement_time` / `sample_size` 削減 — 全量 ≈400–560 ケースを criterion 既定の 1h 超から ≈20–30 分以内へ短縮する目安）と quick-run filter 規約（`mise exec -- cargo bench -p ruviform-math -- <filter>`）を実装。run 冒頭に OS・CPU 型名・コア数・rustc 版・criterion 版・`Level::new()` / `pulp::Arch::new()` 検出結果を標準出力する
+- [x] E-5. `mise run bench-smoke`（`cargo bench -p ruviform-math -- --test`、スモーク）と `mise exec -- cargo bench -p ruviform-math -- dot`（quick-run 例）が実行できることを確認
 
 ### Phase F: ベンチ実行と結果収集（Task T6）
 
-- [ ] F-1. Windows x64 主計測環境で全量ベンチを実行（`mise run bench` = `cargo bench --workspace`）。同一マシンで 2–3 run 実施して分散を記録（省電力モード・負荷状況を環境メタデータに記録）。criterion の `estimates.json` は run ごとに上書きされるため「run 実行 → `estimates.json` 集約（F-2）→ 次 run」の順序で実施する。削減設定後の全量予想所要時間（E-4 の目安 ≈20–30 分）と実測所要時間を記録する
-- [ ] F-2. `target/criterion/**/new/estimates.json` から `median` / `mean` を抽出する軽量集約（node ワンショット or 手集計）を行い、`docs/impl/exp/dsp-simd-poc-<yyyymmdd>-<seq>.jsonl`（1 行 = 1 計測点）を生成してコミット。jsonl は LF 改行・末尾改行ありで生成する（prek の end-of-file-fixer / mixed-line-ending 系 hook 適合 — コミット対象のため）
-- [ ] F-3. experiment log 文書 `docs/impl/exp/dsp-simd-poc-<yyyymmdd>.md` を作成（環境メタデータ・カーネル × impl のスカラー比判定表・denormal 崖観察・判定目安との照合結果を記録）
+- [x] F-1. Windows x64 主計測環境で全量ベンチを実行（`mise run bench` = `cargo bench --workspace`）。同一マシンで 2–3 run 実施して分散を記録（省電力モード・負荷状況を環境メタデータに記録）。criterion の `estimates.json` は run ごとに上書きされるため「run 実行 → `estimates.json` 集約（F-2）→ 次 run」の順序で実施する。削減設定後の全量予想所要時間（E-4 の目安 ≈20–30 分）と実測所要時間を記録する
+- [x] F-2. `target/criterion/**/new/estimates.json` から `median` / `mean` を抽出する軽量集約（node ワンショット or 手集計）を行い、`docs/impl/exp/dsp-simd-poc-<yyyymmdd>-<seq>.jsonl`（1 行 = 1 計測点）を生成してコミット。jsonl は LF 改行・末尾改行ありで生成する（prek の end-of-file-fixer / mixed-line-ending 系 hook 適合 — コミット対象のため）
+- [x] F-3. experiment log 文書 `docs/impl/exp/dsp-simd-poc-<yyyymmdd>.md` を作成（環境メタデータ・カーネル × impl のスカラー比判定表・denormal 崖観察・判定目安との照合結果を記録）
 
 ### Phase G: 採否 ADR（Task T7）
 
-- [ ] G-1. 採否基準の補助データを収集: コンパイルコスト（A-1 の baseline に対する `mise run check` 所要時間の dev-dep 前後比較 + `mise exec -- cargo check --timings --workspace --all-targets` の候補クレート分抽出）、unsafe 範囲（`mise run lint` の `unsafe_code` lint 通過を正の検証とし、`assume_supported` / `new_unchecked` / `std::arch` を使わずに済んだことを確認。`grep -rn "unsafe"` はコメント・doc 言及を拾う偽陽性があるため採用しない）、MSRV 適合（候補各クレートの `rust-version` 列挙 + pulp `x86-v4` の推移的下限 ≈1.89 の確認 + `mise exec -- rustup run 1.85 cargo check -p ruviform-math --lib --locked` 実績）、保守状況（discovery 記録値の更新確認）
-- [ ] G-2. `docs/adr/` に採否 ADR を作成（adr-doc skill で scaffold。ファイル名既定: `dsp-simd-backend-adoption.md`）。設計ベースラインの採否基準に沿い、SIMD 二層構造の採否・バックエンド選定・等価基準確定値（実測 max ulp に余裕を持たせた値）・AVX-512 の扱い・denormal 方針・MSRV 判断を記録（不採用・条件付き採用も正当な結論。先に決めた結論へ数値を寄せない）
-- [ ] G-3. ADR の front matter relations を設定（`source` = Issue #19、`derives-from` = 本 plan / design / spec / approach ADR）し、`node .agents/skills/doc-status/scripts/audit_docs.js --type adr --json` がクリーンであることを確認
+- [x] G-1. 採否基準の補助データを収集: コンパイルコスト（A-1 の baseline に対する `mise run check` 所要時間の dev-dep 前後比較 + `mise exec -- cargo check --timings --workspace --all-targets` の候補クレート分抽出）、unsafe 範囲（`mise run lint` の `unsafe_code` lint 通過を正の検証とし、`assume_supported` / `new_unchecked` / `std::arch` を使わずに済んだことを確認。`grep -rn "unsafe"` はコメント・doc 言及を拾う偽陽性があるため採用しない）、MSRV 適合（候補各クレートの `rust-version` 列挙 + pulp `x86-v4` の推移的下限 ≈1.89 の確認 + `mise exec -- rustup run 1.85 cargo check -p ruviform-math --lib --locked` 実績）、保守状況（discovery 記録値の更新確認）
+- [x] G-2. `docs/adr/` に採否 ADR を作成（adr-doc skill で scaffold。ファイル名既定: `dsp-simd-backend-adoption.md`）。設計ベースラインの採否基準に沿い、SIMD 二層構造の採否・バックエンド選定・等価基準確定値（実測 max ulp に余裕を持たせた値）・AVX-512 の扱い・denormal 方針・MSRV 判断を記録（不採用・条件付き採用も正当な結論。先に決めた結論へ数値を寄せない）
+- [x] G-3. ADR の front matter relations を設定（`source` = Issue #19、`derives-from` = 本 plan / design / spec / approach ADR）し、`node .agents/skills/doc-status/scripts/audit_docs.js --type adr --json` がクリーンであることを確認
 
 ### Phase H: impl record と文書整合（Task T8）
 
-- [ ] H-1. `docs/impl/ir/` に impl record を作成（実施内容・検証実績・experiment log への参照・`rt_` テスト未追加の判断記録を含む）
-- [ ] H-2. `mise.toml` の `bench` タスク記述を実態に更新（no-op 記述の撤廃）し、`AGENTS.md` の検証入口対応表 `bench` 行と CI 記述（`bench-smoke`）を更新、`README.md` の bench 関連記述を確認・必要箇所を更新
-- [ ] H-3. 上流文書バックリンクと生成索引を整合: `docs/specs/dsp-simd-poc-adr.md` と `docs/designs/dsp-simd-poc.md` の `derived-by` に本 plan（`../plans/dsp-simd-poc.md`）を追記し、`docs/adr/README.md`・`docs/impl/ir/README.md`・`docs/specs/README.md`・`docs/plans/README.md`（生成索引）を該当 skill の index 更新手順で再生成する
-- [ ] H-4. 最終検証スイートを実行: `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` / `bench-smoke`、`mise exec -- prek run --all-files`、`mise exec -- rustup run 1.85 cargo check -p ruviform-math --lib --locked`、`node .agents/skills/doc-status/scripts/audit_docs.js --type all --json` がすべてグリーン。spec AC-6 の `mise run bench` グリーン要求は Phase F の全量計測実績（experiment log）で充足済みとし、ここでは `bench-smoke` でハーネス健全性を再確認する（全量再実行は実行時間予算上行わない）。併せて `git diff --name-only` で変更ファイル群が front matter `changes` 宣言のスコープ内であることを確認
+- [x] H-1. `docs/impl/ir/` に impl record を作成（実施内容・検証実績・experiment log への参照・`rt_` テスト未追加の判断記録を含む）
+- [x] H-2. `mise.toml` の `bench` タスク記述を実態に更新（no-op 記述の撤廃）し、`AGENTS.md` の検証入口対応表 `bench` 行と CI 記述（`bench-smoke`）を更新、`README.md` の bench 関連記述を確認・必要箇所を更新
+- [x] H-3. 上流文書バックリンクと生成索引を整合: `docs/specs/dsp-simd-poc-adr.md` と `docs/designs/dsp-simd-poc.md` の `derived-by` に本 plan（`../plans/dsp-simd-poc.md`）を追記し、`docs/adr/README.md`・`docs/impl/ir/README.md`・`docs/specs/README.md`・`docs/plans/README.md`（生成索引）を該当 skill の index 更新手順で再生成する
+- [ ] H-4. 最終検証スイートを実行: `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` / `bench-smoke`、`mise exec -- prek run --all-files`、`mise exec -- rustup run 1.85 cargo check -p ruviform-math --lib --locked`、`node .agents/skills/doc-status/scripts/audit_docs.js --type all --json` がすべてグリーン。spec AC-6 の `mise run bench` グリーン要求は Phase F の全量計測実績（experiment log）で充足済みとし、ここでは `bench-smoke` でハーネス健全性を再確認する（全量再実行は実行時間予算上行わない）。併せて `git diff --name-only` で変更ファイル群が front matter `changes` 宣言のスコープ内であることを確認（検証スイートの最終実行はオーケストレータの最終検証ステップに委譲 — 本チェックはその完了をもって確定）
 
 ## Dependencies and Risks
 

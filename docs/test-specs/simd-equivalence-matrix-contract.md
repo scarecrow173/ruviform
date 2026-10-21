@@ -1,10 +1,10 @@
 ---
 id: "TSPEC-034JenWCuRngWvxWm00Ls3"
 type: "test-spec"
-status: "draft"
+status: "approved"
 title: "SIMD 等価性 matrix の契約保証"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:

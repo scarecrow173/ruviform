@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "DSP/SIMD 比較ベンチマーク PoC 詳細設計"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -32,7 +32,11 @@ relations:
   derives-from:
     - "../specs/dsp-simd-poc-adr.md"
     - "../adr/dsp-simd-poc.md"
-  derived-by: []
+  derived-by:
+    - "../adr/dsp-simd-backend-adoption.md"
+    - "../plans/dsp-simd-poc.md"
+    - "../test-specs/bench-tasks-and-ci-smoke.md"
+    - "../test-specs/simd-equivalence-matrix-contract.md"
   verifies: []
   verified-by: []
   references:

@@ -1,10 +1,10 @@
 ---
 id: "DISC-034Jc7DRXwhHU9BTMwYJe2"
 type: "discovery"
-status: "draft"
+status: "resolved"
 title: "DSP/SIMD バックエンド比較 PoC の探索（Issue #19）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:

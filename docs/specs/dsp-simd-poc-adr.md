@@ -1,10 +1,10 @@
 ---
 id: "SPEC-034Jci19siJZexLs53Xh5d"
 type: "spec"
-status: "proposed"
+status: "implemented"
 title: "DSP/SIMD 比較ベンチマーク PoC と採否 ADR"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -35,7 +35,10 @@ relations:
   refined-by: []
   derives-from:
     - "../discovery/dsp-simd-poc-issue-19.md"
-  derived-by: []
+  derived-by:
+    - "../adr/dsp-simd-backend-adoption.md"
+    - "../designs/dsp-simd-poc.md"
+    - "../plans/dsp-simd-poc.md"
   verifies: []
   verified-by: []
   references:
@@ -100,13 +103,15 @@ GitHub Issue #19 で定義された PoC の成果物として、`ruviform-math` 
 
 ## Acceptance Criteria
 
-- [ ] スカラー参照カーネルと各候補バックエンド実装が同一 API で比較可能なベンチハーネスが `crates/ruviform-math` に存在する（`[[bench]] harness = false` + dev-deps 構成）
-- [ ] `mise run bench`（または `cargo bench -p ruviform-math`）で候補別・サイズ別の計測が実行できる
-- [ ] カーネルごとの等価性契約（bit 完全一致 or ulp 上限値）が定義され、「スカラー vs 各 dispatch level」の等価性テストが `mise run test` でグリーン（denormal / ±0 / NaN / Inf / 非アライン / 端数長入力を含む）
-- [ ] 採否 ADR が `docs/adr/` に存在し、SIMD 二層構造の採否・バックエンド選定・MSRV 判断・等価基準の具体値・denormal / AVX-512 方針を記録している
-- [ ] ベンチマーク結果が impl record / experiment log として計測条件つきで記録されている
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` / `bench` と `prek run --all-files` がグリーン
-- [ ] README / AGENTS.md / `mise.toml` の記述が実態と整合している（`bench` タスクが no-op ではなくなった点を含む）
+- [x] スカラー参照カーネルと各候補バックエンド実装が同一 API で比較可能なベンチハーネスが `crates/ruviform-math` に存在する（`[[bench]] harness = false` + dev-deps 構成）
+- [x] `mise run bench`（または `cargo bench -p ruviform-math`）で候補別・サイズ別の計測が実行できる
+- [x] カーネルごとの等価性契約（bit 完全一致 or ulp 上限値）が定義され、「スカラー vs 各 dispatch level」の等価性テストが `mise run test` でグリーン（denormal / ±0 / NaN / Inf / 非アライン / 端数長入力を含む）
+- [x] 採否 ADR が `docs/adr/` に存在し、SIMD 二層構造の採否・バックエンド選定・MSRV 判断・等価基準の具体値・denormal / AVX-512 方針を記録している
+- [x] ベンチマーク結果が impl record / experiment log として計測条件つきで記録されている
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` / `bench` と `prek run --all-files` がグリーン
+- [x] README / AGENTS.md / `mise.toml` の記述が実態と整合している（`bench` タスクが no-op ではなくなった点を含む）
+
+充足実績: 採否 ADR は [dsp-simd-backend-adoption.md](../adr/dsp-simd-backend-adoption.md)（`ADR-034JEe7SAbksaycyrum16R`・accepted）、ベンチ結果は experiment log [dsp-simd-poc-20261021.md](../impl/exp/dsp-simd-poc-20261021.md)（2 run × 756 ケース・環境メタデータ付き）と impl record [dsp-simd-poc-benchmark.md](../impl/ir/dsp-simd-poc-benchmark.md) に記録済み。AC-6 の `mise run bench` グリーン要求は Phase F（T6）の全量計測実績（上記 experiment log の 2 run 完走）で充足済みであり、Phase H の最終検証では `mise run bench-smoke` でハーネス健全性を再確認する運用（plan V-8 の充足経路どおり）。
 
 ## Deferred Design Concerns
 

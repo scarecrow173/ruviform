@@ -1,7 +1,7 @@
 ---
 id: "ADR-034JcihlNe8WCZVpp9RBCq"
 type: "adr"
-status: "proposed"
+status: "accepted"
 title: "DSP/SIMD PoC 評価アプローチ"
 created: "2026-10-20"
 updated: "2026-10-21"
@@ -30,6 +30,7 @@ relations:
   derives-from:
     - "../discovery/dsp-simd-poc-issue-19.md"
   derived-by:
+    - "../designs/dsp-simd-poc.md"
     - "dsp-simd-backend-adoption.md"
   verifies: []
   verified-by: []
