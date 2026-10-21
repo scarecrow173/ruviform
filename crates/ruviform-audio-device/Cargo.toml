@@ -1,0 +1,37 @@
+[package]
+name = "ruviform-audio-device"
+description = "Audio device I/O adapter for Ruviform (device boundary port implementation; cpal backend)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+# `MediaTime`/`TimeBase` を adapter が直接利用するため追加（設計書 manifest 方針どおり。
+# audio-core の device モジュールからの再エクスポート案もあったが、依存方向が同一で
+# ある以上、利用箇所を明示する直接依存を採用）。
+ruviform-media-core = { path = "../ruviform-media-core" }
+cpal = "0.18" # 統一 Error/ErrorKind・StreamTrait::now()・HW レイテンシ込み timestamp。
+              # default = []（OS 既定 host のみ。Linux=ALSA / Windows=WASAPI）。
+
+[dev-dependencies]
+# コールバック経路の非 alloc 機械検証の試行（PoC 受け入れ基準「コールバック内非
+# alloc の検証」をコードレビュー証跡だけでなく機械検証で補強するため。設計書
+# 「コールバック内非 alloc の検証方針」節）。
+assert_no_alloc = "1.1"
+
+[features]
+default = []
+# コールバックスレッドの RT 優先度昇格（cpal `realtime` → audio_thread_priority）。
+# opt-in の意図命名。cpal の `realtime` は Windows/Android にのみ作用する。
+# Linux の RT 昇格は `realtime-dbus`（rtkit 経由・要 `libdbus-1-dev`）であり、
+# 必要になれば別 feature として追加する。
+realtime = ["cpal/realtime"]
+# PipeWire host の任意実機比較用。PoC 既定構成では無効。有効化には
+# `libpipewire-0.3-dev` システム依存が必要（Linux のみ）。
+pipewire-backend = ["cpal/pipewire"]
+
+[lints]
+workspace = true
