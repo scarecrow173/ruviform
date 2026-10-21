@@ -1225,6 +1225,7 @@ name = "ruviform-exec"
 version = "0.1.0"
 dependencies = [
  "audio_thread_priority 0.38.0",
+ "ruviform-rt",
 ]
 
 [[package]]
