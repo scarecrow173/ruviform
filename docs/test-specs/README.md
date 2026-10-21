@@ -21,6 +21,7 @@ Directory: `docs/test-specs`
 | TSPEC-034IdHshzpNiPTqyyvwL6J | mise タスクによるローカル・CI 共通検証 | proposed | [mise-verification-tasks.md](./mise-verification-tasks.md) |
 | TSPEC-034JRcGrYYZnirStTwM7Z9 | オフライン実行ドライバ テスト仕様 | draft | [offline-execution-driver-tests.md](./offline-execution-driver-tests.md) |
 | TSPEC-034Jg6YSP6CLjJHnFGG5oL | プラグイン基盤 API の契約保証 | approved | [plugin-foundation.md](./plugin-foundation.md) |
+| TSPEC-034JZPGUI0000000000004 | プラグイン GUI PoC 判定規則 | approved | [plugin-gui-poc.md](./plugin-gui-poc.md) |
 | TSPEC-034JxNwt3ReMphshEaeFVe | SPSC・退役・スナップショット交換の RT 契約保証 | approved | [rt-channel-and-snapshot-contracts.md](./rt-channel-and-snapshot-contracts.md) |
 | TSPEC-034JxNxcYxa29rPklpknWh | RtContext・Processor 契約・MasterClock の RT 契約保証 | approved | [rt-context-and-processor-contract.md](./rt-context-and-processor-contract.md) |
 | TSPEC-034JP1iphLdAZkyRbPkol1 | RT 検証レーン契約 | approved | [rt-verification-contracts.md](./rt-verification-contracts.md) |

@@ -58,6 +58,8 @@ Directory: `docs/tasks`
 | TASK-034JRcXokykm0XlpOqcor0 | 並列ワーカープール駆動（有界キュー・順序再構成） | done | [offline-exec-parallel.md](./offline-exec-parallel.md) |
 | TASK-034JRcWTeJbPQAh5fUwPZs | オフライン駆動プリミティブ（CancellationToken/Progress/OfflineError/逐次ドライバ） | done | [offline-exec-primitives.md](./offline-exec-primitives.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
+| TASK-034JZPGUI0000000000006 | Issue #30 ADR + 文書クローズ | done | [plugin-gui-poc-closeout.md](./plugin-gui-poc-closeout.md) |
+| TASK-034JZPGUI0000000000005 | plugin-gui PoC ハーネス + 実機実験 | done | [plugin-gui-poc-harness.md](./plugin-gui-poc-harness.md) |
 | TASK-034JfHz5u1uXcPkG8d8t4B | PoC 採否 ADR 確定（エビデンス集約・confirm/revise・accepted 遷移） | done | [poc-adr-finalize.md](./poc-adr-finalize.md) |
 | TASK-034JgsGOtyuy2MkLRLZQI5 | clack 系による CLAP binding PoC（最小ゲインプラグイン） | done | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
 | TASK-034JfHyxKSwvhiQ0sKqjXQ | PoC フロントエンド比較と配布検証（Solid 移植・単一バイナリ・OS 別方針） | done | [poc-frontend-and-dist.md](./poc-frontend-and-dist.md) |

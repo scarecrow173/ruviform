@@ -34,6 +34,8 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/1"
   derived-by:
     - "../designs/ruviform-architecture-design-baseline.md"
+    - "docs/specs/plugin-gui-poc.md"
+    - "docs/adr/plugin-gui-embedding.md"
   verifies: []
   verified-by: []
   references:
