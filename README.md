@@ -1,6 +1,6 @@
 # Ruviform
 
-Ruviform は、Rust を中心とした再利用可能なマルチメディア基盤です。現在は設計・初期セットアップ段階であり、開発環境と Phase 1 基盤クレート群を持つ Rust ワークスペースが整っています（media-core / audio-core / video-core はデータモデル API、rt / exec は RT 基盤 API、video-proc は色変換カーネルを実装済み）。
+Ruviform は、Rust を中心とした再利用可能なマルチメディア基盤です。現在は設計・初期セットアップ段階であり、開発環境と Phase 1 基盤クレート群を持つ Rust ワークスペースが整っています（media-core / audio-core / video-core はデータモデル API、rt / exec は RT 基盤 API、video-proc は色変換カーネル、media-io はメディア I/O 抽象境界 API を実装済み。io-symphonia はその第一バックエンド PoC です）。
 
 音声処理と動画処理、およびその下位の計算基盤（DSP・解析・codec・container・SIMD）を、同じ基盤の上で再利用可能な形で提供する方向性を構想しています。対象読者は、リポジトリの訪問者と将来の利用者、コントリビューター、および AI エージェントです。クレート DAG・データモデル・実行モデルなどのアーキテクチャ設計は Issue [#1](https://github.com/scarecrow173/ruviform/issues/1) 由来の設計ベースライン（[docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)、approved）に記録済みです。残りの公開 API などの詳細とコード実装は後続 Issue で確定・実施します。
 
@@ -13,7 +13,7 @@ Ruviform は、Rust を中心とした再利用可能なマルチメディア基
 以下は実在し、Windows 11 x64（Git Bash）で検証済みです。
 
 - Rust 1.99.0 ツールチェーン（`mise.toml` で pin、`mise.lock` で固定復元）
-- Rust ワークスペース: ルート `Cargo.toml` と Phase 1 基盤7クレート `crates/ruviform-math` / `crates/ruviform-rt` / `crates/ruviform-exec` / `crates/ruviform-media-core` / `crates/ruviform-audio-core` / `crates/ruviform-video-core` / `crates/ruviform-video-proc`（Issue #17 で仮置き `crates/ruviform-core` を分割置換。media-core / audio-core / video-core は Issue #18 でデータモデル API を、rt / exec は Issue #21 で RT 基盤 API（rt: `Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換。exec: スレッド優先度機構）を、video-proc は Issue #26 で色変換カーネルを確定・実装済み。math は引き続きスケルトン）
+- Rust ワークスペース: ルート `Cargo.toml` と Phase 1 基盤7クレート `crates/ruviform-math` / `crates/ruviform-rt` / `crates/ruviform-exec` / `crates/ruviform-media-core` / `crates/ruviform-audio-core` / `crates/ruviform-video-core` / `crates/ruviform-video-proc`（Issue #17 で仮置き `crates/ruviform-core` を分割置換。media-core / audio-core / video-core は Issue #18 でデータモデル API を、rt / exec は Issue #21 で RT 基盤 API（rt: `Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換。exec: スレッド優先度機構）を、video-proc は Issue #26 で色変換カーネルを確定・実装済み。math は引き続きスケルトン）に加え、Issue #20 で `crates/ruviform-media-io`（非 RT 専用のメディア I/O 抽象境界クレート: demux/mux と decode/encode を分離した 4 系統 trait・`Packet`・`AudioFrame`・能力交渉・正規化エラー）と `crates/ruviform-io-symphonia`（symphonia による第一バックエンド PoC・分離クレート + opt-in・demux + decode のみ）を実装済み
 - `mise.toml` の検証タスク群（`setup` / `fmt-check` / `check` / `lint` / `test` / `build` / `test-rt` / `bench` / `*-ci` / `verify-ci`）
 - `workflow_dispatch` 専用 CI（`.github/workflows/ci.yml`）— 旧単一構成は ubuntu-latest で実ディスパッチ済み（fmt-check / check-ci / lint-ci / test-ci 全て pass）。現行構成は verify の 3-OS matrix＋`rt-verify`・`bench` レーンで、マージ後に初回ディスパッチして動作確認する
 
@@ -32,9 +32,9 @@ Ruviform は、Rust を中心とした再利用可能なマルチメディア基
 ### 決定済み・未確定
 
 - **決定済み**: 対応プラットフォーム（Windows・macOS・Linux、x86_64＋aarch64）— platform ADR と設計ベースラインで決定。edition 2024 / MSRV 1.85 — Issue #34 で確定
-- **未確定**: media-core / audio-core / video-core のデータモデル API・rt / exec の RT 基盤 API・video-proc の色変換カーネル API 以外の公開 API、サポート形式、ライセンス、最終的なクレート分割（設計ベースラインにクレート DAG 設計案として記録済み・実装 Issue で確定）。`Cargo.toml` の `license` の現行値は仮置き
+- **未確定**: media-core / audio-core / video-core のデータモデル API・rt / exec の RT 基盤 API・video-proc の色変換カーネル API・media-io の抽象境界 API 以外の公開 API、サポート形式（io-symphonia PoC の対応範囲は PoC 実証であり正式採否は後続 Issue）、ライセンス、最終的なクレート分割（設計ベースラインにクレート DAG 設計案として記録済み・実装 Issue で確定）。`Cargo.toml` の `license` の現行値は仮置き
 
-リアルタイム（RT）契約について: 「RT-safe」等の保証範囲は API 単位で定義・明示され、保証は Ruviform 自身の RT 対応実装に限定されます（利用側コードの RT 安全性は保証しません）。検証可能な違反は CI で検出しますが、CI 成功は完全証明ではなく、OS レベルのハードリアルタイム保証は提供しません。現時点では、Issue #18 で実装されたデータモデルの値型・バッファ型、Issue #21 で実装された RT 基盤 API（`Processor` / `RtProcessor` / `RtContext` / `MasterClock` / SPSC・retire channel / スナップショット交換 / スレッド優先度機構）、Issue #26 の video-proc カーネル API に API 単位の RT 契約ラベル（RT-suitable / non-RT only 等）が付与されています。詳細は設計ベースラインの「RT 契約（API 単位の保証定義）」「RT 違反検出の分担」節を参照してください。
+リアルタイム（RT）契約について: 「RT-safe」等の保証範囲は API 単位で定義・明示され、保証は Ruviform 自身の RT 対応実装に限定されます（利用側コードの RT 安全性は保証しません）。検証可能な違反は CI で検出しますが、CI 成功は完全証明ではなく、OS レベルのハードリアルタイム保証は提供しません。現時点では、Issue #18 で実装されたデータモデルの値型・バッファ型、Issue #21 で実装された RT 基盤 API（`Processor` / `RtProcessor` / `RtContext` / `MasterClock` / SPSC・retire channel / スナップショット交換 / スレッド優先度機構）、Issue #26 の video-proc カーネル API に API 単位の RT 契約ラベル（RT-suitable / non-RT only 等）が付与されており、Issue #20 の media-io / io-symphonia の公開 API は非 RT 専用のため全て non-RT only です。詳細は設計ベースラインの「RT 契約（API 単位の保証定義）」「RT 違反検出の分担」節を参照してください。
 
 ## Quickstart
 
@@ -80,7 +80,7 @@ mise run verify-ci                # CI 同等: fmt-check -> check-ci -> lint-ci 
 | パス | 役割 |
 | --- | --- |
 | `Cargo.toml` / `Cargo.lock` | Rust ワークスペース定義（共通 lint・`[profile.dev]` / `[profile.ci]`）と依存 lockfile |
-| `crates/` | Phase 1 基盤クレート群: `ruviform-math` / `ruviform-rt` / `ruviform-exec` / `ruviform-media-core`（Primitives）と `ruviform-audio-core` / `ruviform-video-core` / `ruviform-video-proc`（Domain foundations）。media-core / audio-core / video-core は Issue #18 でデータモデル API、rt / exec は Issue #21 で RT 基盤 API、video-proc は Issue #26 で色変換カーネルを実装済み。math は smoke test のみのスケルトン |
+| `crates/` | Phase 1 基盤クレート群: `ruviform-math` / `ruviform-rt` / `ruviform-exec` / `ruviform-media-core`（Primitives）と `ruviform-audio-core` / `ruviform-video-core` / `ruviform-video-proc`（Domain foundations）に加え、`ruviform-media-io`（非 RT 専用メディア I/O 抽象境界）と `ruviform-io-symphonia`（第一バックエンド PoC・分離クレート + opt-in・demux + decode のみ）。media-core / audio-core / video-core は Issue #18 でデータモデル API、rt / exec は Issue #21 で RT 基盤 API、video-proc は Issue #26 で色変換カーネル、media-io / io-symphonia は Issue #20 で抽象境界と PoC を実装済み。math は smoke test のみのスケルトン |
 | `mise.toml` / `mise.lock` | 開発ツール・検証タスクの正本と固定復元用 lockfile |
 | `apm.yml` / `apm.lock.yaml` | APM 依存パッケージ・対象エージェント・MCP の定義と lockfile |
 | `.pre-commit-config.yaml` | prek による言語非依存の Git フック |

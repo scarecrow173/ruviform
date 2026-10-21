@@ -1,0 +1,39 @@
+[package]
+name = "ruviform-io-symphonia"
+description = "First backend PoC for the ruviform-media-io abstraction boundary — demux + decode only, backed by the Symphonia media framework"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-media-io = { path = "../ruviform-media-io" }
+# Direct domain-crate path dependencies (media-io deliberately does not
+# re-export domain types; baseline L203 allows backend crates to depend on
+# the domain crates directly).
+ruviform-media-core = { path = "../ruviform-media-core" }
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+#
+# Dependency addition record (provisional convention + licensing ADR
+# per-dependency investigation duty):
+#   - Why: symphonia is the top pure-Rust decode candidate from the
+#     Issue #1 discovery evaluation ("純 Rust decode 最有力・Lean=yes・
+#     `forbid(unsafe)`・trait 分離が抽象境界の好モデル"). Its
+#     FormatReader/Decoder trait split is a close model for the media-io
+#     boundary, and `forbid(unsafe_code)` matches the workspace's
+#     no-unsafe convention.
+#   - License: MPL-2.0 — a weak, file-scoped copyleft. Compatible with
+#     the workspace licensing policy as an opt-in backend dependency;
+#     the per-dependency investigation record lives in this comment and
+#     the Issue #20 PR. Pre-publish license review remains a follow-up
+#     per the licensing ADR.
+#   - Version: 0.6 line (current 0.6.1). The 0.5 → 0.6 rework changed
+#     the public API; MSRV 1.85 matches the workspace `rust-version`.
+#   - Features: default features only — the royalty-free codec/format
+#     set. `all` and other patent-encumbered codec features are NOT
+#     enabled (licensing ADR feature restriction).
+symphonia = { version = "0.6", default-features = true }
+
+[lints]
+workspace = true

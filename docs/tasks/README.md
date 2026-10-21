@@ -18,7 +18,9 @@ Directory: `docs/tasks`
 | TASK-034J6PpKd8jNFxEYS4CRdM | 時間演算の早期飽和・Err 修正（i128 中間演算） | done | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
 | TASK-034J5KQD1rDMZHFRah7pU0 | ruviform-audio-core のデータモデル実装 | done | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
 | TASK-034JxOaMsaSwEIVfvU9MC8 | ruviform-exec スレッド優先度機構の実装 | done | [implement-exec-thread-priority.md](./implement-exec-thread-priority.md) |
+| TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | TASK-034J5KJgwtjFonTMQQIvpX | ruviform-media-core のデータモデル実装 | done | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
+| TASK-034JghH9i5p72LmOoWIPGe | ruviform-media-io 抽象境界クレート実装 | done | [implement-media-io-abstraction.md](./implement-media-io-abstraction.md) |
 | TASK-034JcD2Xk1x6RZjHn779an | RGB→YUV 変換と Rgba8↔RgbaF16 カーネルの実装 | done | [implement-rgb-to-yuv-and-f16-kernels.md](./implement-rgb-to-yuv-and-f16-kernels.md) |
 | TASK-034JxNNzWfWAMoQu4EgpqG | ruviform-rt 中核型の実装（Error・RtContext・Processor・MasterClock） | done | [implement-rt-core-types.md](./implement-rt-core-types.md) |
 | TASK-034JxO9ex0aVfyvjYkcaWT | ruviform-rt 退役チャネル（遅延ドロップ）の実装 | done | [implement-rt-retire-channel.md](./implement-rt-retire-channel.md) |
@@ -33,6 +35,7 @@ Directory: `docs/tasks`
 | TASK-034IwCjptfvbSFBQaSKigx | プレースホルダー最終スイープ・総合検証と ADR メタデータ編集 | done | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
 | TASK-034J6Pq9WM0XMkGqryZrvQ | フォローアップトリアージ由来の小修正（try_new・Custom 不変条件・丸め注記） | done | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | TASK-034J5KRwAtAqF1xu0moYuS | Issue #18 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
+| TASK-034Jgi4vWCuaMUu3POps1c | Issue #20 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-20.md](./sync-docs-and-verify-issue-20.md) |
 | TASK-034JcD43sDKFAlPxYuAWmj | Issue #26 ドキュメント同期（baseline 採否表・AGENTS・README）と総合検証 | done | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
 | TASK-034JxObKHc0v3kUhnQiePv | RT 基盤ドキュメント同期と総合検証 | done | [sync-rt-foundation-docs-and-verify.md](./sync-rt-foundation-docs-and-verify.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |

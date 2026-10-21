@@ -1,0 +1,16 @@
+[package]
+name = "ruviform-media-io"
+description = "Backend-agnostic media I/O abstraction boundary — demux/mux and decode/encode traits, packets, codec descriptors, decoded frames, capability negotiation and normalized errors for Ruviform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-media-core = { path = "../ruviform-media-core" }
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+ruviform-video-core = { path = "../ruviform-video-core" }
+
+[lints]
+workspace = true
