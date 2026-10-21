@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JP1sJ8ZJThe3Fj9w0mr"
 type: "task"
-status: "todo"
+status: "done"
 title: "clack thread-check の有効化と process での is_audio_thread 照会"
 created: "2026-10-21"
 updated: "2026-10-21"
@@ -69,13 +69,21 @@ relations:
 
 ## Done When
 
-- [ ] `thread-check` feature が有効で `GainShared` が `host`/`thread_check` を保持する
-- [ ] `process` が `is_audio_thread == Some(false)` で defined rejection、`None`/`Some(true)` で従来処理
-- [ ] `RtCheckHost` が `HostThreadCheckImpl` を実装し `declare_extensions` で register している
-- [ ] ABI 通しで両経路（許容・拒否）のテストが存在する
-- [ ] `with_arbitrary_lifetime` に SAFETY コメントがある
+- [x] `thread-check` feature が有効で `GainShared` が `host`/`thread_check` を保持する
+- [x] `process` が `is_audio_thread == Some(false)` で defined rejection、`None`/`Some(true)` で従来処理
+- [x] `RtCheckHost` が `HostThreadCheckImpl` を実装し `declare_extensions` で register している
+- [x] ABI 通しで両経路（許容・拒否）のテストが存在する
+- [x] `with_arbitrary_lifetime` に SAFETY コメントがある
 
 ## Verification
 
-- [ ] `mise run check`/`lint`/`test` パス
-- [ ] 新規2テストが `mise run test-rt`（`rt_*` 命名なら）または `mise run test` で実行・パス
+- [x] `mise run check`/`lint`/`test` パス（lint 最終パス・test 43 unit + 3 doctest 全パス）
+- [x] 新規2テスト `rt_process_off_audio_thread_is_defined_rejection` / `rt_process_on_audio_thread_passes_thread_check` が `rt_*` 命名で `mise run test-rt` 対象かつ `cargo test -p ruviform-plugin-clap` でパス
+
+## Completion Notes
+
+- `GainShared::initialize_with_host(host: HostSharedHandle<'_>)` を新設し、`plugin.init`（`new_shared`）で `host.get_extension::<HostThreadCheck>()` を一度だけ照会して `thread_check` に保持。`HostSharedHandle<'static>` は `with_arbitrary_lifetime()` で拡幅して `host` に保持（`#[expect(unsafe_code)]` + SAFETY: `clap_host` ポインタは plugin.init〜destroy 間有効・保持ハンドルは instance 生存中のみ使用）。
+- `process` 冒頭のガードは lifecycle transition より前に配置し、`Some(false)` で `Err(PluginError::Message("process called off the audio thread"))` を返す defined rejection。`Some(true)`・`None`（応答）・拡張未提供（`thread_check`/`host` が `None`）は従来経路。
+- テストホスト: `RtCheckHost`（`HostHandlers`）+ `RtCheckShared`（`SharedHandler` + `HostThreadCheckImpl`、`Arc<AtomicBool>` で応答を制御）、`declare_extensions` で `builder.register::<HostThreadCheck>()`。`clack-extensions` の dev-dep feature union に `clack-host` を追加し `HostThreadCheckImpl` をテストビルドのみで有効化（lib には clack-host が漏れない）。
+- 拡張未提供時の graceful degradation は既存 `host_instance()`（`()` ホスト・拡張なし）のライフサイクル/process テスト群がカバー。
+- clippy `trivially_copy_pass_by_ref` 対応で `initialize_with_host` は `HostSharedHandle`（Copy・8byte）を値渡しに変更。

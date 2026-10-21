@@ -26,6 +26,7 @@ clack-extensions = { version = "=0.2.0", features = [
     "clack-plugin",
     "audio-ports",
     "params",
+    "thread-check",
 ] }
 
 [dev-dependencies]
@@ -34,6 +35,11 @@ clack-extensions = { version = "=0.2.0", features = [
 # adapter path — including `ChannelPair::InPlace` classification — and
 # can prove zero-copy via pointer equality.
 clack-host = { version = "=0.2.0", features = ["clack-plugin"] }
+# Test builds additionally enable `clack-extensions/clack-host` so the
+# test host can implement `HostThreadCheckImpl` (thread-check の host
+# 側応答). Dev-dependency feature union keeps the lib target free of
+# the clack-host dependency.
+clack-extensions = { version = "=0.2.0", features = ["clack-host", "thread-check"] }
 
 [lints]
 workspace = true

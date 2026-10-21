@@ -47,6 +47,7 @@ use clack_extensions::params::{
     ParamDisplayWriter, ParamInfoFlags, ParamInfoWriter, PluginAudioProcessorParams,
     PluginMainThreadParams, PluginParams,
 };
+use clack_extensions::thread_check::HostThreadCheck;
 use clack_plugin::extensions::PluginExtensions;
 use clack_plugin::host::{HostAudioProcessorHandle, HostMainThreadHandle, HostSharedHandle};
 use clack_plugin::plugin::{
@@ -69,23 +70,29 @@ use crate::gain::{GAIN_PARAM, GainProcessor};
 
 /// Plugin-wide, thread-safe state (`[thread-safe]` in the CLAP model):
 /// the shared lifecycle machine and the gain parameter mirror.
-#[derive(Debug)]
 pub(crate) struct GainShared {
     /// The neutral lifecycle state machine, shared across threads.
     lifecycle: AtomicLifecycle,
     /// The gain parameter's current plain value, mirrored for the
     /// main-thread `params` extension.
     gain_mirror: ParamMirror,
+    /// Thread-safe host handle kept for `process`'s thread-contract
+    /// check — `None` for hostless test construction.
+    host: Option<HostSharedHandle<'static>>,
+    /// The host's `thread-check` extension token, resolved once at
+    /// `plugin.init` — `None` when the host does not provide it.
+    thread_check: Option<HostThreadCheck>,
 }
 
 impl PluginShared<'_> for GainShared {}
 
 impl GainShared {
     /// The `plugin.init` hook's fallible core, minus the
-    /// [`HostSharedHandle`] the factory signature carries (unused by
-    /// this `PoC`): Created → Initialize is unconditional for this
-    /// stateless init. Kept as one authoritative body so tests drive
-    /// the same `Initialize` mapping the ABI callback does.
+    /// [`HostSharedHandle`] the factory signature carries: Created →
+    /// Initialize is unconditional for this stateless init. Kept as
+    /// one authoritative body so tests drive the same `Initialize`
+    /// mapping the ABI callback does. `initialize_with_host` threads
+    /// the host's `thread-check` extension through.
     ///
     /// **RT contract:** non-RT only — runs at instance creation.
     ///
@@ -97,11 +104,31 @@ impl GainShared {
         let shared = Self {
             lifecycle: AtomicLifecycle::new(),
             gain_mirror: ParamMirror::new(GAIN_PARAM.default_value),
+            host: None,
+            thread_check: None,
         };
         shared
             .lifecycle
             .transition(LifecycleEvent::Initialize)
             .map_err(|_| PluginError::Message("init outside Created state"))?;
+        Ok(shared)
+    }
+
+    /// `initialize` plus the host wiring: resolves `thread-check`
+    /// once at `plugin.init` so `process`'s per-block cost stays a
+    /// single `is_audio_thread` FFI call (no extension lookup on the
+    /// RT path).
+    // SAFETY: `with_arbitrary_lifetime` widens the host handle to
+    // `'static`; the `clap_host` pointer it wraps stays valid for the
+    // whole plugin instance lifetime per the CLAP contract (the host
+    // owns the instance from `plugin.init` through `plugin.destroy`),
+    // and the stored handle is only dereferenced while the instance
+    // is alive.
+    #[expect(unsafe_code)]
+    fn initialize_with_host(host: HostSharedHandle<'_>) -> Result<Self, PluginError> {
+        let mut shared = Self::initialize()?;
+        shared.thread_check = host.get_extension::<HostThreadCheck>();
+        shared.host = Some(unsafe { host.with_arbitrary_lifetime() });
         Ok(shared)
     }
 
@@ -175,10 +202,10 @@ impl clack_plugin::entry::DefaultPluginFactory for GainClapPlugin {
             .with_features([features::AUDIO_EFFECT, features::STEREO])
     }
 
-    fn new_shared(_host: HostSharedHandle<'_>) -> Result<GainShared, PluginError> {
+    fn new_shared(host: HostSharedHandle<'_>) -> Result<GainShared, PluginError> {
         // `plugin.init` — the CLAP init hook runs the shared/main
         // constructors.
-        GainShared::initialize()
+        GainShared::initialize_with_host(host)
     }
 
     fn new_main_thread<'a>(
@@ -386,6 +413,17 @@ impl<'a> PluginAudioProcessor<'a, GainShared, GainMainThread<'a>> for GainAudioP
         mut audio: Audio,
         events: Events,
     ) -> Result<ClapProcessStatus, PluginError> {
+        // Thread-contract check (CLAP `thread-check`): when the host
+        // provides the extension and declares this is *not* the audio
+        // thread, `process` is a host protocol violation — a defined
+        // rejection, never UB. `None` (host without the extension)
+        // degrades gracefully: no check, unchanged behavior.
+        if let (Some(thread_check), Some(host)) = (self.shared.thread_check, self.shared.host)
+            && thread_check.is_audio_thread(&host) == Some(false)
+        {
+            return Err(PluginError::Message("process called off the audio thread"));
+        }
+
         // Lifecycle gate — the per-block self-loop; `Process` is
         // illegal outside `Processing`, surfacing host protocol
         // violations as CLAP_PROCESS_ERROR.
@@ -486,7 +524,11 @@ mod tests {
     use clack_plugin::entry::SinglePluginEntry;
 
     use crate::adapt::test_support::StereoFixture;
+    use clack_extensions::thread_check::{HostThreadCheck, HostThreadCheckImpl};
+    use clack_host::host::{HostExtensions, HostHandlers, SharedHandler};
     use ruviform_plugin_core::LifecycleState;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     const FRAMES: u32 = 64;
     const FRAMES_USIZE: usize = 64;
@@ -863,6 +905,74 @@ mod tests {
         (entry, instance)
     }
 
+    // -- thread-check host -------------------------------------------------
+
+    /// A test host that registers the CLAP `thread-check` extension
+    /// and answers `is_audio_thread`/`is_main_thread` from flippable
+    /// atomics — both the accept and the defined-rejection path are
+    /// drivable through the real ABI.
+    struct RtCheckHost;
+
+    /// `RtCheckHost`'s `[thread-safe]` shared handler; the atomics are
+    /// cloned in from the test so the answer can flip mid-scenario.
+    struct RtCheckShared {
+        is_audio: Arc<AtomicBool>,
+        is_main: Arc<AtomicBool>,
+    }
+
+    impl SharedHandler<'_> for RtCheckShared {
+        fn request_restart(&self) {}
+        fn request_process(&self) {}
+        fn request_callback(&self) {}
+    }
+
+    impl HostThreadCheckImpl for RtCheckShared {
+        fn is_main_thread(&self) -> bool {
+            self.is_main.load(Ordering::Relaxed)
+        }
+        fn is_audio_thread(&self) -> bool {
+            self.is_audio.load(Ordering::Relaxed)
+        }
+    }
+
+    impl HostHandlers for RtCheckHost {
+        type Shared<'a> = RtCheckShared;
+        type MainThread<'a> = ();
+        type AudioProcessor<'a> = ();
+
+        fn declare_extensions(builder: &mut HostExtensions<Self>, _shared: &RtCheckShared) {
+            builder.register::<HostThreadCheck>();
+        }
+    }
+
+    /// Like [`host_instance`], but the host answers the thread-check
+    /// extension from the returned atomics.
+    fn rt_check_host_instance() -> (
+        PluginEntry,
+        PluginInstance<RtCheckHost>,
+        Arc<AtomicBool>,
+        Arc<AtomicBool>,
+    ) {
+        let entry = PluginEntry::load_from_clack::<SinglePluginEntry<GainClapPlugin>>(c"gain.clap")
+            .unwrap();
+        let host = HostInfo::new("test host", "ruviform", "", "0.0.1").unwrap();
+        let is_audio = Arc::new(AtomicBool::new(true));
+        let is_main = Arc::new(AtomicBool::new(true));
+        let (audio_flag, main_flag) = (Arc::clone(&is_audio), Arc::clone(&is_main));
+        let instance = PluginInstance::<RtCheckHost>::new(
+            move |()| RtCheckShared {
+                is_audio: audio_flag,
+                is_main: main_flag,
+            },
+            |_| (),
+            &entry,
+            c"org.ruviform.clap-gain-poc",
+            &host,
+        )
+        .unwrap();
+        (entry, instance, is_audio, is_main)
+    }
+
     #[test]
     fn host_driven_entry_runs_full_lifecycle_through_abi() {
         let (_entry, mut instance) = host_instance();
@@ -935,5 +1045,68 @@ mod tests {
         let stopped = started.stop_processing();
         instance.deactivate(stopped);
         drop(instance);
+    }
+
+    // -- Thread-contract verification (Issue #22) ---------------------------
+
+    /// `process` on a host that declares the calling thread is *not*
+    /// the audio thread → defined rejection through the real ABI.
+    /// The `is_audio` flag flips *after* activation to model a host
+    /// that answers `is_audio_thread` per-call.
+    #[test]
+    fn rt_process_off_audio_thread_is_defined_rejection() {
+        let (_entry, mut instance, is_audio, _is_main) = rt_check_host_instance();
+        let stopped = instance.activate(|_, ()| (), config(FRAMES)).unwrap();
+        let mut started = stopped.start_processing().unwrap();
+        is_audio.store(false, Ordering::Relaxed);
+
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let input_buffer = EventBuffer::new();
+        let mut output_buffer = EventBuffer::new();
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            let input_events = input_buffer.as_input();
+            let mut output_events = output_buffer.as_output();
+            let err = started
+                .process(
+                    &input_buffers,
+                    &mut output_buffers,
+                    &input_events,
+                    &mut output_events,
+                    None,
+                    None,
+                )
+                .unwrap_err();
+            assert!(matches!(err, PluginInstanceError::ProcessingFailed));
+        }
+    }
+
+    /// The same host answering `is_audio_thread = true` keeps the
+    /// normal path — the check is transparent when the contract holds.
+    #[test]
+    fn rt_process_on_audio_thread_passes_thread_check() {
+        let (_entry, mut instance, _is_audio, _is_main) = rt_check_host_instance();
+        let stopped = instance.activate(|_, ()| (), config(FRAMES)).unwrap();
+        let mut started = stopped.start_processing().unwrap();
+
+        let mut fixture = StereoFixture::new(FRAMES_USIZE);
+        let input_buffer = EventBuffer::new();
+        let mut output_buffer = EventBuffer::new();
+        {
+            let (input_buffers, mut output_buffers) = fixture.guards();
+            let input_events = input_buffer.as_input();
+            let mut output_events = output_buffer.as_output();
+            let status = started
+                .process(
+                    &input_buffers,
+                    &mut output_buffers,
+                    &input_events,
+                    &mut output_events,
+                    None,
+                    None,
+                )
+                .unwrap();
+            assert_eq!(status, ClapProcessStatus::Continue);
+        }
     }
 }

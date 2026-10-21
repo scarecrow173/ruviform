@@ -258,6 +258,7 @@ checksum = "733d43b7ebd76a65931e8de2aa077200add4902514f4bda941c99326c14937dd"
 dependencies = [
  "bitflags",
  "clack-common",
+ "clack-host",
  "clack-plugin",
  "clap-sys",
 ]
