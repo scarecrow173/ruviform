@@ -34,7 +34,9 @@ relations:
   derives-from:
     - "../discovery/evaluate-rt-foundation-primitives.md"
     - "../specs/implement-rt-foundation.md"
-  derived-by: []
+  derived-by:
+    - "../designs/rt-foundation-api-design.md"
+    - "../plans/implement-rt-foundation.md"
   verifies: []
   verified-by: []
   references:

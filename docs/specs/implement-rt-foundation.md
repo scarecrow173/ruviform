@@ -35,8 +35,12 @@ relations:
   derived-by:
     - "../adr/rt-foundation-primitives-implementation.md"
     - "../designs/rt-foundation-api-design.md"
+    - "../plans/implement-rt-foundation.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "../test-specs/rt-channel-and-snapshot-contracts.md"
+    - "../test-specs/rt-context-and-processor-contract.md"
+    - "../test-specs/thread-priority-lifecycle.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/1"
   defers: []

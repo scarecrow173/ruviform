@@ -33,7 +33,11 @@ relations:
   derives-from:
     - "../specs/implement-rt-foundation.md"
     - "../adr/rt-foundation-primitives-implementation.md"
-  derived-by: []
+  derived-by:
+    - "../plans/implement-rt-foundation.md"
+    - "../test-specs/rt-channel-and-snapshot-contracts.md"
+    - "../test-specs/rt-context-and-processor-contract.md"
+    - "../test-specs/thread-priority-lifecycle.md"
   verifies: []
   verified-by: []
   references:
