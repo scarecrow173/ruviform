@@ -64,6 +64,7 @@ relations:
     - "../../test-specs/issue-28-ui-poc.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/34"
+    - "https://github.com/scarecrow173/ruviform/issues/57"
     - "https://github.com/tauri-apps/wry/pull/1762"
   defers: []
   deferred-by: []
@@ -83,7 +84,7 @@ T6（AC7・AC8 最終確認）を実施し、採否 ADR `ADR-034Jc9Cguud7nZ2Tt88
 - `poc/ui/RESULTS.md` の AC → 実験 → エビデンス対応表を完成させた（AC7 行を T6 作業へ紐付け、AC7 セクションに条項別 verdict 表と監査再現コマンドを追加。全行が env・再現コマンド・証跡を持つことを確認）
 - 採否 ADR の全 7 条項をエビデンスリンク付きで確定: **confirm 5 条項**（WebView 実装・メッセージ境界・フロントエンド FW・配布・採否構造）、**revise 2 条項**（高頻度描画・ネイティブサーフェス合成）
 - spec を `approved` → `implemented`（AC1–AC8 全チェック）、plan を `completed`、全 task（T1–T6）を `done` に同期。impl 記録が全 task に紐付いていること・exp ログが揃っていることを監査
-- wgpu MSRV 1.87 と宣言 `rust-version = "1.85"` の衝突を Issue #34 への入力として ADR Follow-ups・連携事項に記録（引き上げ自体は決めない）
+- wgpu MSRV 1.87 と宣言 `rust-version = "1.85"` の衝突を Issue #34 への入力として ADR Follow-ups・連携事項に記録（引き上げ自体は決めない。Issue #34 は 2026-10-20 に closed のため後続追跡は Issue #57）
 
 ## Context
 
@@ -134,7 +135,7 @@ T6（AC7・AC8 最終確認）を実施し、採否 ADR `ADR-034Jc9Cguud7nZ2Tt88
 
 ## Follow-ups
 
-- **MSRV 連携（Issue #34）**: `wgpu` MSRV 1.87 がルート宣言 `rust-version = "1.85"` と衝突する事実を、MSRV 見直し専用タスクへの入力として記録（ADR Follow-ups (a)・連携事項）。本 PoC は独立 WS + pin 1.99.0 のため実害なし。wgpu 採用条項はこの衝突解消を条件とする
+- **MSRV 連携（Issue #34 → #57）**: `wgpu` MSRV 1.87 がルート宣言 `rust-version = "1.85"` と衝突する事実を、MSRV 見直し専用タスクへの入力として記録（ADR Follow-ups (a)・連携事項）。本 PoC は独立 WS + pin 1.99.0 のため実害なし。wgpu 採用条項はこの衝突解消を条件とする。Issue #34 は 2026-10-20 に closed のため後続追跡は [Issue #57](https://github.com/scarecrow173/ruviform/issues/57)
 - **WebView2 内 WebGPU 有効化経路**: SDK 側 opt-in API の有無など、flags 以外の有効化経路の調査（再び採用候補にする場合の前提）
 - **wry PR #1762 追跡**: 上流 merge 状況の監視 / fork 保守採否は DOM 内合成が必要になった時点で判断
 - **macOS / Linux 実機検証**: `.app`+署名/公証・`libwebkit2gtk-4.1`+GTK3・deb/AppImage ・layer 合成の実機確認は配布対象 OS 確定時に実施

@@ -124,9 +124,9 @@ poc/ui/target/release/ui-poc.exe --experiment dist
 ### wgpu MSRV メモ（design リスク表対応）
 
 `wgpu = "30"` は MSRV 1.87 を要求するが、ルート `workspace.package` の
-`rust-version = "1.85"` 宣言（Issue #34 で確定予定）と衝突しうる。本 PoC は
+`rust-version = "1.85"` 宣言（Issue #34 で確定・同 Issue は closed）と衝突しうる。本 PoC は
 独立ワークスペース + pin 1.99.0 でビルドするため実害なし。ルート側へ
-wgpu を導入する採否になった場合は宣言値の見直しタスクへ連携すること
+wgpu を導入する採否になった場合は宣言値の見直しタスク（[Issue #57](https://github.com/scarecrow173/ruviform/issues/57)）へ連携すること
 （本 PoC では判断しない）。
 
 ## AC2 — `--experiment render`
@@ -249,7 +249,7 @@ wgpu を導入する採否になった場合は宣言値の見直しタスクへ
   **Linux** は X11/Wayland とも真の下層合成は実質不可寄りで、隣接構成か
   Canvas 一本化に収束する見込み。どちらも実測ではなく文書評価として扱う。
 - **wgpu MSRV**: `wgpu = "30"` の MSRV 1.87 がルート宣言 `rust-version =
-  "1.85"`（Issue #34 で確定予定）と衝突する事実は [AC1 の MSRV メモ](#wgpu-msrv-メモdesign-リスク表対応)
+  "1.85"`（Issue #34 で確定・closed。追跡は Issue #57）と衝突する事実は [AC1 の MSRV メモ](#wgpu-msrv-メモdesign-リスク表対応)
   に記録済み（pin 1.99.0 で実害なし・引き上げ判断は本 Issue ではしない）。
 
 ## AC4 — `--experiment ipc`

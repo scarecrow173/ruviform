@@ -64,6 +64,7 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/28"
     - "https://github.com/scarecrow173/ruviform/issues/1"
     - "https://github.com/scarecrow173/ruviform/issues/34"
+    - "https://github.com/scarecrow173/ruviform/issues/57"
     - "https://docs.rs/wry/latest/wry/"
     - "https://crates.io/crates/tao"
     - "https://crates.io/crates/wgpu"
@@ -157,7 +158,7 @@ metadata:
 
 * 良い点: 採否の各条項が PoC エビデンスにリンクされ、決定根拠が追跡可能になった。下書き採否を先に構造化したことで、PoC は「仮説の confirm/revise」に集中でき、実際に 2 条項（高頻度描画・合成方式）で実測による revise が発生した。特性別併用の描画構成は ui ADR の「固定順序・単一フォールバック階層にしない」方針と整合する
 * 悪い点: 採否が複数軸の組合せになり、PoC 工数が単一選定より増えた。revise により、in-WebView WebGPU の現行 WebView2 での非可用性・`SetWindowRgn` による DOM overlay 回避の不成立が確定事実として残った（`ruviform-ui` / `ruviform-ui-webview` の設計ではこれらの制約を前提にする）。wry PR #1762 未 merge の間、Windows での DOM 内合成は fork 前提のまま残る
-* Follow-ups（本 ADR の確定後に引き渡す事項）: (a) `rust-version = "1.85"` と wgpu MSRV 1.87 の衝突は MSRV 見直し専用タスク（[Issue #34](https://github.com/scarecrow173/ruviform/issues/34)）への入力として記録済み — wgpu を採用構成に含める条件となる。(b) WebView2 内 WebGPU の有効化経路（SDK opt-in API の有無等）の調査。(c) wry PR #1762 の上流 merge 状況の追跡 / fork 保守採否（DOM 内合成が必要になった場合）。(d) macOS / Linux の実機検証（文書評価項目の実測化）。(e) `wxp` 同梱パッチ差分の精査（プラグイン GUI Issue の参照材料）。(f) Linux 実配布方式（deb / AppImage / Flatpak）の選定は配布対象 OS 確定時
+* Follow-ups（本 ADR の確定後に引き渡す事項）: (a) `rust-version = "1.85"` と wgpu MSRV 1.87 の衝突は MSRV 見直し専用タスクへの入力として記録済み（当初の委譲先 [Issue #34](https://github.com/scarecrow173/ruviform/issues/34) は closed のため [Issue #57](https://github.com/scarecrow173/ruviform/issues/57) で追跡）— wgpu を採用構成に含める条件となる。(b) WebView2 内 WebGPU の有効化経路（SDK opt-in API の有無等）の調査。(c) wry PR #1762 の上流 merge 状況の追跡 / fork 保守採否（DOM 内合成が必要になった場合）。(d) macOS / Linux の実機検証（文書評価項目の実測化）。(e) `wxp` 同梱パッチ差分の精査（プラグイン GUI Issue の参照材料）。(f) Linux 実配布方式（deb / AppImage / Flatpak）の選定は配布対象 OS 確定時
 
 ### Confirmation
 
@@ -244,4 +245,4 @@ metadata:
 * 上流ドキュメント: [事前調査 DISC-034JbXZSba3SvOavRFfs66](../discovery/issue-28-ui-poc.md)（`relations.derives-from`。候補ファクト・Lean 仮説の正本）、[PoC spec](../specs/issue-28-ui-poc.md)（検証手順・受け入れ基準の正本）、[UI アーキテクチャ ADR](ui-architecture-webview-hybrid.md)（`depends-on`・委任元）
 * 関連 ADR: [RT 契約](realtime-contract-and-verification-policy.md)、[プラットフォーム](platform-and-toolchain-targets.md)、[ライセンス/配布](licensing-and-distribution-policy.md)、[設計ベースライン](../designs/ruviform-architecture-design-baseline.md)（要 PoC 表）
 * 外部参照（`relations.references`）: [wry docs.rs](https://docs.rs/wry/latest/wry/)、[tao](https://crates.io/crates/tao)、[wgpu](https://crates.io/crates/wgpu) / [wgpu.rs](https://wgpu.rs/)、[wry PR #1762](https://github.com/tauri-apps/wry/pull/1762)、[wxp](https://github.com/novonotes/wxp)、[nih-plug-webview](https://github.com/httnn/nih-plug-webview)、[WebView2 配布](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)、[WebKitGTK API versions](https://blogs.gnome.org/mcatanzaro/2025/04/28/webkitgtk-api-versions/)
-* 連携事項: `rust-version = "1.85"` と wgpu MSRV 1.87 の衝突は MSRV 見直し専用タスク（[Issue #34](https://github.com/scarecrow173/ruviform/issues/34) — `[workspace.package]` の `rust-version`・`edition` 確定の正本）へ入力として引き渡した（本 ADR では引き上げ自体は決めない。wgpu 採用条項はこの衝突解消を条件とする旨を Decision Outcome に明記）
+* 連携事項: `rust-version = "1.85"` と wgpu MSRV 1.87 の衝突は MSRV 見直し専用タスクへ入力として引き渡した（当初の委譲先 [Issue #34](https://github.com/scarecrow173/ruviform/issues/34) — `[workspace.package]` の `rust-version`・`edition` 確定の正本 — は 2026-10-20 に closed のため後続追跡は [Issue #57](https://github.com/scarecrow173/ruviform/issues/57)。本 ADR では引き上げ自体は決めない。wgpu 採用条項はこの衝突解消を条件とする旨を Decision Outcome に明記）
