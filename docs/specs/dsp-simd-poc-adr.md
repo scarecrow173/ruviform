@@ -39,6 +39,8 @@ relations:
     - "../adr/dsp-simd-backend-adoption.md"
     - "../designs/dsp-simd-poc.md"
     - "../plans/dsp-simd-poc.md"
+    - "msrv-raise-for-fearless-simd.md"
+    - "../adr/workspace-msrv-1-85-1-89-fearless-simd.md"
   verifies: []
   verified-by:
     - "../test-specs/simd-equivalence-matrix-contract.md"

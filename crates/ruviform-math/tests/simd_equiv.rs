@@ -115,6 +115,9 @@ fn registry_lists_expected_columns() {
         "pulp_scalar",
         "pulp_dispatched",
         "multiversion",
+        // Issue #53 production dispatch layer.
+        "prod_detected",
+        "prod_fallback",
     ] {
         assert!(
             cols.iter().any(|c| c.name == name),
@@ -125,11 +128,12 @@ fn registry_lists_expected_columns() {
         cols.iter()
             .all(|c| !c.name.is_empty() && !c.level.is_empty())
     );
-    assert!(
-        cols.iter()
-            .all(|c| matches!(c.backend, "scalar" | "fearless" | "pulp" | "multiversion"))
-    );
-    // Column naming: `{backend}_{level}` (scalar is `level = "reference"`).
+    assert!(cols.iter().all(|c| matches!(
+        c.backend,
+        "scalar" | "fearless" | "pulp" | "multiversion" | "prod"
+    )));
+    // Column naming: `{backend}_{level}` (scalar is `level = "reference"`; prod
+    // forced columns are `prod_{level}`).
     assert!(cols.iter().all(|c| c.name.starts_with(c.backend)));
 }
 

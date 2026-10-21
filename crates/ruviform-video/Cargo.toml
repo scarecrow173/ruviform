@@ -1,0 +1,20 @@
+[package]
+name = "ruviform-video"
+description = "Video engine: frame pipeline, A/V sync (MasterClock + PTS follow), seek mediation (Issue #27)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-rt = { path = "../ruviform-rt" }
+ruviform-media-core = { path = "../ruviform-media-core" }
+ruviform-video-core = { path = "../ruviform-video-core" }
+ruviform-media-io = { path = "../ruviform-media-io" }
+
+[dev-dependencies]
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+
+[lints]
+workspace = true
