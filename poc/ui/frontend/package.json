@@ -1,0 +1,17 @@
+{
+  "name": "ui-poc-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Issue #28 UI PoC frontend. npm workspaces: bench-shared (FW-independent bench parts) + vanilla (Vite+TS reference UI) + ipc (AC4 page) + solid (AC5 Solid port).",
+  "workspaces": [
+    "bench-shared",
+    "vanilla",
+    "ipc",
+    "solid"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "clean": "node -e \"import('node:fs').then(m=>{for(const d of ['dist','bench-shared/dist','vanilla/dist','ipc/dist','solid/dist'])m.rmSync(d,{recursive:true,force:true})})\""
+  }
+}

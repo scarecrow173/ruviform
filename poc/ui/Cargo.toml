@@ -1,0 +1,59 @@
+# Issue #28 UI 技術検証 PoC — 独立ワークスペース。
+# `[workspace]` テーブルを持つため poc/ui 自身がワークスペースルートとなり、
+# リポジトリルートのワークスペース（明示 members リスト）には吸収されない。
+# ルート Cargo.toml / Cargo.lock / crates/ / mise.toml への変更は AC8 で禁止。
+[workspace]
+members = ["."]
+resolver = "2"
+
+[package]
+name = "ui-poc"
+version = "0.1.0"
+edition = "2024"
+publish = false
+build = "build.rs"
+
+# 依存は PoC ワークスペース内に限定（design「非機能・規約上の制約」）。
+# - wry/tao: WebView ホスト（AC1）。Apache-2.0 OR MIT / Apache-2.0。
+# - wgpu: `--check` の GPU adapter 検出と T4 のネイティブサーフェス実験（AC3）。
+#   MSRV 1.87（mise pin 1.99.0 で充足）。MIT OR Apache-2.0。
+# - rust-embed: 埋め込みアセット配信（debug=FS 読み / release=埋め込み）。MIT。
+# - serde_json: poc-metric.v1 / IPC JSON。MIT OR Apache-2.0。
+# - http: wry の with_custom_protocol が使う Request/Response 型。MIT OR Apache-2.0。
+# - dpi: wry::Rect / tao PhysicalSize の共通座標型。Apache-2.0 OR MIT。
+# - winreg: WebView2 レジストリ検出（Windows）。MIT。
+# - windows + raw-window-handle: T4/AC3 の sibling HWND・ヒットテスト・
+#   z-order・リージョンクリップ・wgpu unsafe surface 作成（Windows のみ）。
+# - flate2: T5/AC5 の dist gzip -9 サイズ計測（rust backend = miniz_oxide）。
+#   MIT OR Apache-2.0。
+[lints.rust]
+# unsafe_code を warn に立て、windows-rs / wgpu create_surface_unsafe の
+# 呼出箇所を `#[expect(unsafe_code)]` + SAFETY コメントの局所許可に限定する
+# （暫定規約の PoC 内適用 — AC3 の unsafe 封じ込めを機械的に検証する）。
+unsafe_code = "warn"
+
+[dependencies]
+wry = "0.57"
+tao = "0.37"
+wgpu = "30"
+rust-embed = "8"
+serde_json = "1"
+http = "1"
+dpi = "0.1"
+# wgpu 30 の enumerate_adapters 等の Future を --check（GUI 非生成）から同期待ちするため。
+pollster = "1"
+# tao Window・自前子 HWND → wgpu SurfaceTargetUnsafe::RawHandle の橋渡し（AC3）。
+raw-window-handle = "0.6"
+# AC5 dist バイトの gzip -9 計測（frontend 実験。pure-Rust miniz_oxide backend）。
+flate2 = "1"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+# adjacent-child の sibling HWND 生成・ヒットテスト・z-order・リージョンクリップ（AC3）。
+# wry 0.57 が内部で使う windows 系と同系列（0.62）で HWND 型を共有する。
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }
