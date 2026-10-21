@@ -69,10 +69,10 @@ impl Device for CpalDevice {
             .map_err(|e| map_error(&e, ErrorCtx::Control))?;
         // Fast path: the backend default is itself an openable F32
         // form (the overwhelmingly common case).
-        if map_sample_format(default.sample_format()) == Some(SampleFormat::F32) {
-            if let Some(format) = f32_format(default.sample_rate(), u32::from(default.channels())) {
-                return Ok(format);
-            }
+        if map_sample_format(default.sample_format()) == Some(SampleFormat::F32)
+            && let Some(format) = f32_format(default.sample_rate(), u32::from(default.channels()))
+        {
+            return Ok(format);
         }
         // The default is non-F32 or its channel count maps to no named
         // layout: synthesize an F32 form from the supported space so
@@ -142,7 +142,13 @@ impl Device for CpalDevice {
         // (callback + scratch) outright — no `Arc`/`Mutex` sharing
         // with the error closure, which owns `error_callback` alone.
         // A lock on the RT thread would violate the RT contract.
-        let mut state = DataCallbackState::new(data_callback, scratch, channels, frames_capacity);
+        let mut state = DataCallbackState::new(
+            data_callback,
+            scratch,
+            channels,
+            frames_capacity,
+            negotiated.stream.sample_rate,
+        );
         let mut error_callback = error_callback;
         let stream = self
             .inner

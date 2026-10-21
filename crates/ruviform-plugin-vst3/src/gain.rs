@@ -74,14 +74,14 @@ impl PluginProcessor for GainProcessor {
         for event in events.iter() {
             // `EventKind` is `#[non_exhaustive]` — only the parameter
             // variant exists today; unknown future kinds are ignored.
-            if let EventKind::ParamValue(param) = event.kind() {
-                if param.param_id == GAIN_PARAM.id {
-                    // Normalized [0,1] `ParamValue` → f32 is a defined
-                    // narrowing within the normalized range.
-                    #[expect(clippy::cast_possible_truncation)]
-                    {
-                        self.gain = param.value.get() as f32;
-                    }
+            if let EventKind::ParamValue(param) = event.kind()
+                && param.param_id == GAIN_PARAM.id
+            {
+                // Normalized [0,1] `ParamValue` → f32 is a defined
+                // narrowing within the normalized range.
+                #[expect(clippy::cast_possible_truncation)]
+                {
+                    self.gain = param.value.get() as f32;
                 }
             }
         }

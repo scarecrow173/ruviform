@@ -24,6 +24,7 @@ relations:
   superseded-by: []
   related:
     - "../../AGENTS.md"
+    - "../specs/msrv-raise-for-fearless-simd.md"
   refines: []
   refined-by: []
   derives-from:

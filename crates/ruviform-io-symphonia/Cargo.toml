@@ -29,7 +29,7 @@ ruviform-audio-core = { path = "../ruviform-audio-core" }
 #     the Issue #20 PR. Pre-publish license review remains a follow-up
 #     per the licensing ADR.
 #   - Version: 0.6 line (current 0.6.1). The 0.5 → 0.6 rework changed
-#     the public API; MSRV 1.85 matches the workspace `rust-version`.
+#     the public API; MSRV 1.85 is satisfied by the workspace `rust-version` = 1.89.
 #   - Features: default features only — the royalty-free codec/format
 #     set. `all` and other patent-encumbered codec features are NOT
 #     enabled (licensing ADR feature restriction).
