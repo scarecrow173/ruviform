@@ -1077,6 +1077,167 @@ mod tests {
         assert_eq!(rate(1, u32::MAX).nominal_fps(), 0);
     }
 
+    /// |a - b| in seconds as a `(numerator, denominator)` rational —
+    /// exact `i128`/`u128` math, no `f64` on the assertion path.
+    fn err_seconds(a: MediaTime, b: MediaTime) -> (u128, u128) {
+        let lhs = i128::from(a.value())
+            * i128::from(a.base().numerator())
+            * i128::from(b.base().denominator());
+        let rhs = i128::from(b.value())
+            * i128::from(b.base().numerator())
+            * i128::from(a.base().denominator());
+        (
+            (lhs - rhs).unsigned_abs(),
+            u128::from(a.base().denominator()) * u128::from(b.base().denominator()),
+        )
+    }
+
+    /// Sum of `0.5 * numerator/denominator` seconds over `bases`, as a
+    /// `(numerator, denominator)` rational over the common denominator
+    /// `2 * prod(d_i)`. Valid for the small base sets used in these
+    /// tests (each product fits `u128`).
+    fn half_tick_bound_seconds(bases: &[TimeBase]) -> (u128, u128) {
+        let product: u128 = bases.iter().map(|b| u128::from(b.denominator())).product();
+        let numerator: u128 = bases
+            .iter()
+            .map(|b| u128::from(b.numerator()) * (product / u128::from(b.denominator())))
+            .sum();
+        (numerator, product * 2)
+    }
+
+    /// Asserts the exact rational error `|a - b|` does not exceed the
+    /// rational `bound` (both in seconds).
+    fn assert_error_within(a: MediaTime, b: MediaTime, bound: (u128, u128)) {
+        let (err_num, err_den) = err_seconds(a, b);
+        assert!(
+            err_num * bound.1 <= bound.0 * err_den,
+            "error {err_num}/{err_den}s exceeds bound {}/{}s (a={a:?} b={b:?})",
+            bound.0,
+            bound.1
+        );
+    }
+
+    /// Audio clocks and video frame grids named in the rounding-policy
+    /// matrix (the video side is derived from [`FrameRate`]).
+    fn precision_matrix_bases() -> ([TimeBase; 3], [TimeBase; 4]) {
+        let audio = [base(1, 44_100), base(1, 48_000), base(1, 90_000)];
+        let video = [
+            rate(24, 1).frame_duration(),
+            rate(25, 1).frame_duration(),
+            rate(30_000, 1_001).frame_duration(),
+            rate(60_000, 1_001).frame_duration(),
+        ];
+        (audio, video)
+    }
+
+    #[test]
+    fn single_conversion_error_is_bounded_by_half_tick() {
+        let (audio, video) = precision_matrix_bases();
+        // Values stay small enough that every base pair stays
+        // representable (worst: 1e12 ticks at 1/24 s -> ~4e15 ticks at
+        // 1/90000); overflow is a separate contract (`convert` errs).
+        let values = [0_i64, 1, -1, 1_000, 1_000_000_000_000, -1_000_000_000_000];
+        for &from in audio.iter().chain(video.iter()) {
+            for &to in audio.iter().chain(video.iter()) {
+                let bound = half_tick_bound_seconds(&[to]);
+                for v in values {
+                    let t = MediaTime::new(v, from);
+                    let converted = t.convert(to, Rounding::NearestEven).unwrap();
+                    // |converted - t| <= 0.5 tick of the target base.
+                    // (v=1000 at 1/48000 -> 1/24 is an exact-half tie.)
+                    assert_error_within(t, converted, bound);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn round_trip_error_is_bounded_by_summed_half_ticks() {
+        // t -> B -> original: error <= 0.5 tick of B + 0.5 tick of the
+        // original base, both expressed in seconds. A coarse hop through
+        // 1/24 may round 1000 ticks of 1/48000 to 0 — that must still sit
+        // inside the summed bound even though it is huge in 1/48000 units.
+        let original = base(1, 48_000);
+        let coarse = base(1, 24);
+        let t = MediaTime::new(1_000, original);
+        let round_tripped = t
+            .convert(coarse, Rounding::NearestEven)
+            .unwrap()
+            .convert(original, Rounding::NearestEven)
+            .unwrap();
+        assert_eq!(round_tripped.value(), 0); // 1000 tick error at 1/48000
+        assert_error_within(
+            t,
+            round_tripped,
+            half_tick_bound_seconds(&[original, coarse]),
+        );
+
+        // Same bound must hold across the audio x video matrix.
+        let (audio, video) = precision_matrix_bases();
+        for &from in audio.iter().chain(video.iter()) {
+            for &via in audio.iter().chain(video.iter()) {
+                let bound = half_tick_bound_seconds(&[from, via]);
+                for v in [0_i64, 1, -1, 1_000_000, -999_999] {
+                    let t = MediaTime::new(v, from);
+                    let round_tripped = t
+                        .convert(via, Rounding::NearestEven)
+                        .unwrap()
+                        .convert(from, Rounding::NearestEven)
+                        .unwrap();
+                    assert_error_within(t, round_tripped, bound);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn chained_conversion_error_is_bounded_by_per_hop_half_ticks() {
+        // N-hop cycle: accumulated error <= sum over hops of 0.5 tick of
+        // each destination base (in seconds). Contrast: a direct
+        // anchor-to-destination conversion stays within 0.5 tick of the
+        // destination base — the chained cost is the policy's price.
+        let cycles: &[&[TimeBase]] = &[
+            &[
+                base(1, 48_000),
+                base(1_001, 30_000),
+                base(1, 25),
+                base(1, 48_000),
+            ],
+            &[
+                base(1, 44_100),
+                base(1, 90_000),
+                base(1_001, 60_000),
+                base(1, 44_100),
+            ],
+            &[
+                base(1, 48_000),
+                base(1, 44_100),
+                base(1, 24),
+                base(1, 48_000),
+            ],
+        ];
+        for cycle in cycles {
+            let bound = half_tick_bound_seconds(&cycle[1..]);
+            for v in [0_i64, 1, -1, 1_000_000, -1_000_000] {
+                let start = MediaTime::new(v, cycle[0]);
+                let mut t = start;
+                for &to in &cycle[1..] {
+                    t = t.convert(to, Rounding::NearestEven).unwrap();
+                }
+                assert_error_within(start, t, bound);
+                // Control: the direct conversion is much tighter.
+                let direct = start
+                    .convert(*cycle.last().unwrap(), Rounding::NearestEven)
+                    .unwrap();
+                assert_error_within(
+                    start,
+                    direct,
+                    half_tick_bound_seconds(&[*cycle.last().unwrap()]),
+                );
+            }
+        }
+    }
+
     #[test]
     fn conversion_exact_and_rounding() {
         let one_sec = MediaTime::new(1, base(1, 1));

@@ -1,7 +1,7 @@
 ---
 id: "TASK-034JNwUoAfb2TnY7nw07XH"
 type: "task"
-status: "todo"
+status: "done"
 title: "時間変換精度テストの追加（音声×映像行列・往復/連鎖誤差上界）"
 created: "2026-10-21"
 updated: "2026-10-21"
