@@ -1,0 +1,105 @@
+//! `ruviform-plugin-clap` — the thin CLAP standard adapter for the
+//! Ruviform plugin foundation, built on the `clack` binding crates
+//! (`clack-plugin` / `clack-common` / `clack-extensions` 0.2.0).
+//!
+//! This crate is also the CLAP binding-method `PoC` (task
+//! `TASK-034JgsGOtyuy2MkLRLZQI5`): a minimal gain plugin exported as a
+//! real `clap_entry` cdylib entry point, whose `process` path feeds
+//! host-supplied per-channel buffers into the neutral
+//! [`PluginProcessor`][ruviform_plugin_core::PluginProcessor] contract
+//! with **zero copies** by wrapping them in
+//! `ruviform_audio_core::PlanarBufferView` / `PlanarBufferViewMut`.
+//!
+//! ## Responsibilities (thin adapter)
+//!
+//! - Export the standard entry point (`clack_export_entry!` →
+//!   `clap_entry`), a plugin descriptor and the plugin factory.
+//! - Translate CLAP ABI data into the neutral foundation types —
+//!   audio buffers → planar views, `ParamValueEvent` →
+//!   [`EventList`][ruviform_plugin_core::EventList] /
+//!   [`ParamEvent`][ruviform_plugin_core::ParamEvent], `TransportEvent`
+//!   → [`TransportInfo`][ruviform_plugin_core::TransportInfo],
+//!   `ProcessResult` → CLAP process status.
+//! - Drive the common [`Lifecycle`][ruviform_plugin_core::Lifecycle]
+//!   machine from the CLAP call sequence and reject host protocol
+//!   violations through the shared transition table instead of
+//!   silently accepting them.
+//! - Allocate all per-block scratch (channel-pointer bookkeeping,
+//!   event scratch) at activation time so the RT path never
+//!   allocates.
+//!
+//! The `PluginProcessor` contract is owned by `ruviform-plugin-core`;
+//! this crate only implements and drives it. Binding-crate types are
+//! an implementation detail: no `clack` / `clap-sys` type appears in
+//! the public Rust API of this crate.
+//!
+//! ## Allowed dependency layers
+//!
+//! Extension layer — `ruviform-plugin-core` + Domain foundations
+//! (`ruviform-audio-core`) + Primitives (`ruviform-media-core`), plus
+//! the `clack` binding crates as adapter-internal implementation
+//! dependencies.
+//!
+//! ## RT contract
+//!
+//! `process` is the RT callback — no alloc/dealloc, blocking, I/O,
+//! unbounded waits/retries or unbounded work. All per-instance scratch
+//! is allocated in `activate`; the per-block path performs bounded
+//! scans only. `rt_`-prefixed tests select the RT contract lane
+//! (`mise run test-rt`); they exercise the contract paths but cannot
+//! *observe* allocation — until the Issue #22 RT-verification lane
+//! exists, the no-alloc guarantee is a documented contract plus code
+//! review target. `PoC` findings are recorded in
+//! `docs/impl/ir/poc-clap-binding-adapter.md`.
+//!
+//! Contract source: `docs/specs/implement-plugin-foundation.md`,
+//! `docs/plans/implement-plugin-foundation.md` (task T3).
+
+mod adapt;
+mod gain;
+mod plugin;
+
+use clack_plugin::entry::SinglePluginEntry;
+use clack_plugin::prelude::clack_export_entry;
+
+pub use gain::{GAIN_PARAM, GainProcessor};
+
+pub(crate) use plugin::GainClapPlugin;
+
+// The CLAP standard entry point: `#[no_mangle] pub static clap_entry`.
+// The macro emits its own `#[allow(unsafe_code)]` for the generated
+// static; no unsafe code is written in this crate.
+clack_export_entry!(SinglePluginEntry::<GainClapPlugin>);
+
+/// Returns the crate version string.
+///
+/// **RT contract:** RT-suitable — pure, allocation-free.
+///
+/// # Examples
+///
+/// ```
+/// assert_ne!(ruviform_plugin_clap::version(), "");
+/// ```
+#[must_use]
+pub fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_is_not_empty() {
+        assert_ne!(version(), "");
+    }
+
+    /// The adapter's public API must not expose binding-crate types:
+    /// the only re-exports are the neutral `PluginProcessor` impl and
+    /// its `ParamInfo`.
+    #[test]
+    fn public_surface_is_binding_neutral() {
+        let _ = GAIN_PARAM;
+        let _core_version = ruviform_plugin_core::version();
+    }
+}

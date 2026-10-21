@@ -1,15 +1,16 @@
 [workspace]
 resolver = "2"
-# Phase 1 基盤クレート群（Issue #17 で仮置き ruviform-core を分割置換）+ video-proc（Issue #26 新設）+ media-io / io-symphonia（Issue #20 新設）。層内
+# Phase 1 基盤クレート群（Issue #17 で仮置き ruviform-core を分割置換）+ video-proc（Issue #26 新設）+ media-io / io-symphonia（Issue #20 新設）+ audio-device adapter（Issue #23 新設）+ plugin-core / plugin-clap / plugin-vst3（Issue #29 新設）。層内
 # 順序: Primitives 最下位（math・rt）→ Primitives（media-core・exec）→
 # Domain foundations（audio-core・video-core → video-proc）→ メディア I/O 抽象境界（media-io）
-# → バックエンド PoC（io-symphonia）。実装状態: Issue #18 で
+# → バックエンド PoC（io-symphonia）→ Adapters（audio-device）→ 拡張層（plugin-*）。実装状態: Issue #18 で
 # media-core・audio-core・video-core のデータモデル API、Issue #21 で rt・
 # exec の RT 基盤 API、Issue #26 で video-proc の色変換カーネル、Issue #20 で
-# media-io の抽象境界が確定・実装済み。math は引き続きスケルトン。クレート間の
+# media-io の抽象境界、Issue #29 で plugin 系の規格中立基盤と CLAP/VST3 アダプタが確定・実装済み。math は引き続きスケルトン。クレート間の
 # path 依存は API 確定に伴い段階追加（Issue #18 で audio-core・video-core →
 # media-core、Issue #26 で video-proc → video-core・media-core、Issue #20 で
-# media-io → domain 3 クレート、io-symphonia → media-io + domain クレートを設定済み）。
+# media-io → domain 3 クレート、io-symphonia → media-io + domain クレート、Issue #29 で
+# plugin-core → audio-core・media-core、plugin-clap / plugin-vst3 → plugin-core・audio-core・media-core＋各 binding クレートを設定済み）。
 # 設計ベースライン A.2/A.6 参照。
 members = [
     "crates/ruviform-math",
@@ -23,6 +24,10 @@ members = [
     "crates/ruviform-io-symphonia",
     # Adapters（ドメイン基盤の外側・engine と同じ利用側層。Issue #23 PoC で新設）
     "crates/ruviform-audio-device",
+    # 拡張層（規格中立のプラグイン基盤。Issue #29 PoC で新設）
+    "crates/ruviform-plugin-core",
+    "crates/ruviform-plugin-clap",
+    "crates/ruviform-plugin-vst3",
 ]
 
 [workspace.package]

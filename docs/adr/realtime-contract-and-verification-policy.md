@@ -28,6 +28,7 @@ relations:
     - "media-io-backend-abstraction.md"
     - "../../AGENTS.md"
     - "../discovery/explore-architecture-design-baseline.md"
+    - "../discovery/evaluate-plugin-binding-options.md"
   refines: []
   refined-by: []
   derives-from:
@@ -45,6 +46,9 @@ relations:
     - "../plans/implement-issue-26-video-foundation.md"
     - "../specs/implement-media-io-abstraction-and-first-backend-poc.md"
     - "../plans/issue-20-i-o-poc.md"
+    - "../specs/implement-plugin-foundation.md"
+    - "../plans/implement-plugin-foundation.md"
+    - "../test-specs/plugin-foundation.md"
   verifies: []
   verified-by: []
   references: []

@@ -20,11 +20,14 @@ relations:
   implemented-by: []
   depends-on:
     - "establish-rust-dev-foundation.md"
-  blocks: []
+  blocks:
+    - "implement-plugin-foundation.md"
+    - "issue-18-followup-enum-and-time-fix.md"
   supersedes: []
   superseded-by: []
   related:
     - "../../AGENTS.md"
+    - "../discovery/evaluate-plugin-binding-options.md"
   refines: []
   refined-by:
     - "../adr/public-enum-non-exhaustive-policy.md"

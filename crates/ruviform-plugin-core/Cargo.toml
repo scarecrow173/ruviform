@@ -1,0 +1,15 @@
+[package]
+name = "ruviform-plugin-core"
+description = "Standard-neutral plugin foundation: processing contract, lifecycle state machine, parameters, sample-accurate events, bus/transport descriptors for Ruviform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+ruviform-media-core = { path = "../ruviform-media-core" }
+
+[lints]
+workspace = true
