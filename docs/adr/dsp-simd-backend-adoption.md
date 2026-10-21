@@ -183,7 +183,7 @@ Issue #19 の最終成果物として、DSP/SIMD PoC の計測証拠に基づき
 ### Option B — `pulp`（検証済み代替として記録・不採用）
 
 * Good, because dispatched ≈ 強制列で per-call dispatch オーバーヘッド未観測（≈0.98–1.38 @1024）、dot で最大倍率（8.1–8.9x）、`Arch`/`try_new` で強制 level 指定可能・利用側 `unsafe` 0、実績十分（faer 系列・31M DL）。
-* Bad, because fir 2.6–3.7x・biquad ~1.5x と中核カーネルで fearless_simd に劣後。MSRV 未宣言（`x86-v4` では推移的 ≈1.89）。MIT 単独・依存 ~8（bytemuck・raw-cpuid・reborrow 等）。
+* Bad, because fir 2.6–3.7x・biquad ~1.5x と中核カーネルで fearless_simd に劣後。MSRV 未宣言（`x86-v4` では推移的 ≈1.89）。MIT 単独・依存 ~8（bytemuck・raw-cpuid・reborrow 等）。dispatch 網羅性の制限（レビュー補足）: `pulp::x86::Arch::new()` の分岐は V4 → V3 → Scalar で V2 層を持たず、SSE4.2 止まりの環境では dispatched 経路がスカラーに降りる（強制 `pulp_v2` 列のみが SSE4.2 を検証可能）。fearless_simd の `Level` は SSE2/SSE4.2/AVX2/AVX-512 を個別保持しこの層間ギャップを持たない。
 
 ### Option C — `multiversion` + autovec（不採用）
 

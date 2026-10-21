@@ -40,7 +40,9 @@ relations:
     - "../designs/dsp-simd-poc.md"
     - "../plans/dsp-simd-poc.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "../test-specs/simd-equivalence-matrix-contract.md"
+    - "../test-specs/bench-tasks-and-ci-smoke.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/1"
   defers: []

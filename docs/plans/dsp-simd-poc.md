@@ -76,7 +76,16 @@ relations:
         path: "docs/test-specs/README.md"
   implements:
     - "../specs/dsp-simd-poc-adr.md"
-  implemented-by: []
+  implemented-by:
+    - "../tasks/add-bench-harness-and-dev-deps.md"
+    - "../tasks/implement-simd-poc-scalar-kernels.md"
+    - "../tasks/implement-simd-poc-candidate-backends.md"
+    - "../tasks/add-simd-equivalence-matrix-tests.md"
+    - "../tasks/implement-criterion-benchmarks.md"
+    - "../tasks/run-simd-bench-and-collect-results.md"
+    - "../tasks/write-simd-adoption-adr.md"
+    - "../tasks/record-impl-and-sync-docs.md"
+    - "../impl/ir/dsp-simd-poc-benchmark.md"
   depends-on:
     - "dev-foundation-bootstrap.md"
   blocks: []

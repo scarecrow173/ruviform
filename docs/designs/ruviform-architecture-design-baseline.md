@@ -30,7 +30,8 @@ relations:
     - "dev-foundation.md"
     - "replace-template-derived-docs-with-ruviform.md"
   refines: []
-  refined-by: []
+  refined-by:
+    - "../adr/dsp-simd-backend-adoption.md"
   derives-from:
     - "../specs/architecture-design-baseline-deliverables.md"
     - "../adr/media-io-backend-abstraction.md"

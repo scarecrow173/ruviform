@@ -113,13 +113,13 @@ Issue #19 は、設計ベースライン「DSP／SIMD 設計（A.4）」節で�
 
 ## Verification
 
-* [ ] `crates/ruviform-math` の `Cargo.toml` に候補 3 系統・`criterion`・等価性判定クレートが dev-dependencies として宣言され、通常 dependencies に候補クレートが存在しない
-* [ ] `[[bench]] harness = false` の criterion ベンチが `mise run bench` で実行される
-* [ ] 等価性テストが dispatch level 明示指定で「スカラー vs 各 dispatch level」の matrix を構成し、入力に denormal / ±0 / NaN / Inf / 非アライン先頭 / 端数を含む
-* [ ] 各カーネルに bit 完全一致または ulp 上限の等価性契約がコード上に明示されている
-* [ ] PoC コードが `unsafe` を含まず `mise run lint` がグリーン
-* [ ] 候補クレートの型が ruviform-math の公開 API に露出していない
-* [ ] `mise.toml` の `bench` タスクと AGENTS.md の対応表が実ベンチ実行に合わせて更新されている
+* [x] `crates/ruviform-math` の `Cargo.toml` に候補 3 系統・`criterion`・等価性判定クレートが dev-dependencies として宣言され、通常 dependencies に候補クレートが存在しない
+* [x] `[[bench]] harness = false` の criterion ベンチが `mise run bench` で実行される — 全量 2 run × 756 ケース計測済み（[experiment log](../impl/exp/dsp-simd-poc-20261021.md)）
+* [x] 等価性テストが dispatch level 明示指定で「スカラー vs 各 dispatch level」の matrix を構成し、入力に denormal / ±0 / NaN / Inf / 非アライン先頭 / 端数を含む — `crates/ruviform-math/tests/simd_equiv.rs`
+* [x] 各カーネルに bit 完全一致または ulp 上限の等価性契約がコード上に明示されている — `tests/simd_poc/equiv.rs` の `Contract`（dot の最終 ulp 上限は採否 ADR で確定）
+* [x] PoC コードが `unsafe` を含まず `mise run lint` がグリーン
+* [x] 候補クレートの型が ruviform-math の公開 API に露出していない — `simd_poc` は `#[doc(hidden)]`、候補型は test/bench ターゲット内のみ
+* [x] `mise.toml` の `bench` タスクと AGENTS.md の対応表が実ベンチ実行に合わせて更新されている — `bench` / `bench-smoke` 記述を実態へ整合済み
 
 ## Pros and Cons of the Options
 

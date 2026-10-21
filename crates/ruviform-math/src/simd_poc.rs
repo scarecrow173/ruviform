@@ -190,8 +190,9 @@ pub fn fade(dst: &mut [f32], src: &[f32], g0: f32, step: f32) {
 ///
 /// Contract: `a.len() == b.len()`; finite inputs (reduction order may change
 /// rounding into `Inf`/`NaN`, so edge inputs are out of contract).
-/// Equivalence: ulp ≤ 8 (initial bound; reduction-order / FMA differences
-/// are expected and measured).
+/// Equivalence: ulp ≤ 256 (finalized in the adoption ADR from the observed
+/// 46-ulp max; reduction-order / FMA differences are expected and measured
+/// — see `MAX_ULPS_DOT` in `tests/simd_poc/equiv.rs`).
 ///
 /// # Panics
 ///

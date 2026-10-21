@@ -29,7 +29,9 @@ relations:
   refined-by: []
   derives-from:
     - "https://github.com/scarecrow173/ruviform/issues/19"
-  derived-by: []
+  derived-by:
+    - "../specs/dsp-simd-poc-adr.md"
+    - "../adr/dsp-simd-poc.md"
   verifies: []
   verified-by: []
   references:
@@ -152,9 +154,9 @@ relations:
 
 ## Promotion Candidates
 
-- [ ] spec-doc needed: PoC の成果物・受入基準（本 discovery から派生）
-- [ ] adr-doc needed: PoC アプローチ決定（比較対象・ベンチ基盤・ハーネス配置）
-- [ ] 実装完了時に採否 ADR（SIMD バックエンド・二層構造の採否）を作成
+- [x] spec-doc needed: PoC の成果物・受入基準（本 discovery から派生）— [dsp-simd-poc-adr.md](../specs/dsp-simd-poc-adr.md)（`derives-from` 連鎖で派生済み）
+- [x] adr-doc needed: PoC アプローチ決定（比較対象・ベンチ基盤・ハーネス配置）— [dsp-simd-poc.md](../adr/dsp-simd-poc.md)（`derives-from` 連鎖で派生済み）
+- [x] 実装完了時に採否 ADR（SIMD バックエンド・二層構造の採否）を作成 — [dsp-simd-backend-adoption.md](../adr/dsp-simd-backend-adoption.md)（accepted）
 
 ## Sources and Relations
 
