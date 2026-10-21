@@ -55,6 +55,7 @@ relations:
     - "../specs/time-type-extension-framerate-timecode-rounding.md"
     - "../adr/framerate-timebase-separation-and-timecode-extension.md"
     - "time-model-extension.md"
+    - "../plans/implement-issue-58-time-type-extension.md"
     - "../plans/implement-rt-foundation.md"
     - "../discovery/explore-video-foundation-api-scope.md"
     - "../specs/implement-video-foundation-api.md"

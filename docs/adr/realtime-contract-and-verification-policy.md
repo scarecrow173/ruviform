@@ -48,6 +48,7 @@ relations:
     - "../plans/issue-20-i-o-poc.md"
     - "../specs/implement-plugin-foundation.md"
     - "../plans/implement-plugin-foundation.md"
+    - "../plans/implement-issue-58-time-type-extension.md"
     - "../test-specs/plugin-foundation.md"
   verifies: []
   verified-by: []
