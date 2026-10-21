@@ -148,7 +148,7 @@ fn codec_id_for_video(codec: VideoCodecId) -> CodecId {
 /// decode contract is canonical planar f32 regardless of wire encoding.
 pub(crate) fn audio_format(params: &AudioCodecParameters) -> Option<AudioFormat> {
     let rate = params.sample_rate?;
-    let layout = channel_layout(params.channels.as_ref()?)?;
+    let layout = channel_layout(params.channels.as_ref()?)?.0;
     Some(AudioFormat {
         sample_rate: SampleRate::new(rate).ok()?,
         layout,
@@ -167,17 +167,32 @@ pub(crate) fn audio_format(params: &AudioCodecParameters) -> Option<AudioFormat>
 /// `AudioBuffer` construction depend on. Returns `None` for the empty
 /// `Channels::None` set or when the set needs more reserved bits than
 /// [`SpeakerMask`]'s u32 provides.
-pub(crate) fn channel_layout(channels: &Channels) -> Option<ChannelLayout> {
+///
+/// The returned `Vec<usize>` is the channel-order permutation: decoded
+/// plane `i` (backend canonical order — position bits LSB→MSB) belongs
+/// to boundary channel slot `order[i]` (layout-mask bits LSB→MSB). It is
+/// the identity for standard layouts and for every unpositioned set, but
+/// a `Positioned` mask mixing unnamed positions below `SIDE_LEFT`
+/// (backend bits 6–8) with named side channels (bits 9–10) reorders —
+/// the boundary packs unnamed positions onto reserved bits above the
+/// named range.
+pub(crate) fn channel_layout(channels: &Channels) -> Option<(ChannelLayout, Vec<usize>)> {
     match channels {
         Channels::Positioned(positions) => positioned_layout(*positions),
         Channels::None => None,
-        other => custom_layout_for_count(other.count()),
+        other => custom_layout_for_count(other.count()).map(|layout| {
+            let order = (0..layout.channels()).map(|index| index as usize).collect();
+            (layout, order)
+        }),
     }
 }
 
 /// Maps a `Positioned` mask: exact standard layouts first, then a
 /// `Custom` mask preserving named positions and channel count.
-fn positioned_layout(positions: Position) -> Option<ChannelLayout> {
+///
+/// The second tuple element is the plane → channel-slot permutation (see
+/// [`channel_layout`]); standard layouts yield the identity.
+fn positioned_layout(positions: Position) -> Option<(ChannelLayout, Vec<usize>)> {
     /// Backend `Position` bit → boundary `SpeakerMask` bit.
     ///
     /// The backend numbers its first 18 positions like the
@@ -208,30 +223,46 @@ fn positioned_layout(positions: Position) -> Option<ChannelLayout> {
         0x63f => Some(ChannelLayout::SevenPointOne),
         _ => None,
     };
-    if standard.is_some() {
-        return standard;
+    if let Some(standard) = standard {
+        let order = (0..standard.channels())
+            .map(|index| index as usize)
+            .collect();
+        return Some((standard, order));
     }
 
     // Non-standard set: named positions keep their named bits; every
     // unnamed position is assigned a reserved bit so the mask bit count
-    // stays equal to the channel count.
+    // stays equal to the channel count. `mapped` records each backend
+    // bit (LSB→MSB = plane order) against the mask bit it landed on, so
+    // the boundary's bit-ascending channel slots can be reconstructed.
     let mut mask = SpeakerMask::empty();
+    let mut mapped: Vec<u32> = Vec::new();
     let mut reserved = 0x100_u32; // first bit above the named range
     let mut remaining = bits;
     while remaining != 0 {
         let bit = remaining & remaining.wrapping_neg();
         if let Some((_, named)) = NAMED.iter().find(|(position, _)| *position == bit) {
             mask = mask.union(*named);
+            mapped.push(named.bits());
         } else {
             if reserved == 0 {
                 return None; // more unnamed channels than free mask bits
             }
             mask = mask.union(SpeakerMask::from_bits(reserved));
+            mapped.push(reserved);
             reserved <<= 1;
         }
         remaining &= remaining - 1;
     }
-    ChannelLayout::custom(mask).ok()
+    let layout = ChannelLayout::custom(mask).ok()?;
+    // Plane i carries backend bit `mapped[i]`; its boundary slot is that
+    // bit's rank among the mask's set bits.
+    let mask_bits = mask.bits();
+    let order = mapped
+        .iter()
+        .map(|bit| (mask_bits & (bit - 1)).count_ones() as usize)
+        .collect();
+    Some((layout, order))
 }
 
 /// Builds a `Custom` layout holding `count` reserved bits — used for
@@ -255,10 +286,16 @@ mod tests {
     #[test]
     fn positioned_standard_layouts_map_exactly() {
         let mono = Position::FRONT_CENTER;
-        assert_eq!(positioned_layout(mono), Some(ChannelLayout::Mono));
+        assert_eq!(
+            positioned_layout(mono),
+            Some((ChannelLayout::Mono, vec![0]))
+        );
 
         let stereo = Position::FRONT_LEFT.union(Position::FRONT_RIGHT);
-        assert_eq!(positioned_layout(stereo), Some(ChannelLayout::Stereo));
+        assert_eq!(
+            positioned_layout(stereo),
+            Some((ChannelLayout::Stereo, vec![0, 1]))
+        );
     }
 
     #[test]
@@ -268,16 +305,37 @@ mod tests {
         let mask = Position::FRONT_LEFT.union(Position::REAR_CENTER);
         let layout = positioned_layout(mask);
         assert!(layout.is_some());
-        assert_eq!(layout.map(ChannelLayout::channels), Some(2));
+        assert_eq!(layout.map(|(layout, _)| layout.channels()), Some(2));
+    }
+
+    #[test]
+    fn six_point_one_mask_reorders_side_channels() {
+        // FL FR FC LFE RC SL SR — the 6.1 set. The backend's canonical
+        // plane order is bit-ascending (…, RC=8, SL=9, SR=10), but the
+        // boundary mask packs RC onto a reserved bit above the named
+        // SIDE_* slots, so planes 4–6 land on boundary slots 6, 4, 5.
+        let mask = Position::FRONT_LEFT
+            .union(Position::FRONT_RIGHT)
+            .union(Position::FRONT_CENTER)
+            .union(Position::LFE1)
+            .union(Position::REAR_CENTER)
+            .union(Position::SIDE_LEFT)
+            .union(Position::SIDE_RIGHT);
+        let (layout, order) = positioned_layout(mask).expect("mappable mask");
+        assert_eq!(layout.channels(), 7);
+        assert_eq!(order, vec![0, 1, 2, 3, 6, 4, 5]);
     }
 
     #[test]
     fn discrete_channels_land_on_reserved_bits() {
         let layout = channel_layout(&Channels::Discrete(2));
         assert!(layout.is_some());
-        assert_eq!(layout.map(ChannelLayout::channels), Some(2));
+        assert_eq!(
+            layout.as_ref().map(|(layout, _)| layout.channels()),
+            Some(2)
+        );
         // Bits must sit above the named range.
-        let bits = layout.map(|layout| layout.speaker_mask().bits());
+        let bits = layout.map(|(layout, _)| layout.speaker_mask().bits());
         assert_eq!(bits, Some(0x300));
     }
 

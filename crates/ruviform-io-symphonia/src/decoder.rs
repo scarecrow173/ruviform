@@ -129,7 +129,7 @@ impl Decoder for SymphoniaDecoder {
         // construction is copied out before the borrow ends.
         let decoded = self.decoder.decode(&backend_packet).map_err(map_error)?;
         let rate = decoded.spec().rate();
-        let layout = map::channel_layout(decoded.spec().channels())
+        let (layout, order) = map::channel_layout(decoded.spec().channels())
             .ok_or_else(|| Error::from_kind(ErrorKind::Unsupported))?;
         let frames = decoded.frames();
         let mut planes: Vec<Vec<f32>> = Vec::new();
@@ -150,8 +150,10 @@ impl Decoder for SymphoniaDecoder {
         if planes.len() != buffer.channels() {
             return Err(Error::from_kind(ErrorKind::InvalidData));
         }
+        // Plane i carries backend canonical channel i; `order[i]` is its
+        // slot in the boundary layout — non-standard masks reorder.
         for (index, plane) in planes.iter().enumerate() {
-            if let Some(channel) = buffer.channel_mut(index) {
+            if let Some(channel) = order.get(index).and_then(|slot| buffer.channel_mut(*slot)) {
                 channel.copy_from_slice(plane);
             }
         }
@@ -167,11 +169,16 @@ impl Decoder for SymphoniaDecoder {
                     .convert(self.time_base, Rounding::NearestEven)
                     .ok()
             });
+        // Advance the extrapolation anchor before queueing: the value
+        // feeds the next PTS-less packet's timestamp, so an overflowing
+        // add must surface as `TimeOverflow`, not saturate silently.
+        let next_ts = pts
+            .value()
+            .checked_add(duration.map_or(0, MediaDuration::value))
+            .ok_or_else(|| Error::from_kind(ErrorKind::TimeOverflow))?;
         let mut frame = AudioFrame::new(buffer, pts);
         frame.set_duration(duration);
-        self.next_ts = pts
-            .value()
-            .saturating_add(duration.map_or(0, MediaDuration::value));
+        self.next_ts = next_ts;
         self.pending.push_back(Frame::Audio(frame));
         Ok(())
     }
