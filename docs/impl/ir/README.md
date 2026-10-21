@@ -13,6 +13,7 @@ Directory: `docs/impl/ir`
 | IMPL-034JftzSzGUrGW76DpIyVM | Document video-core ownership contract | completed | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
 | IMPL-034J7bMHds4IPYPvoxiMZR | Fix time arithmetic saturation | completed | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
 | IMPL-034J5L4kgMP7Hjh57OhJcs | Implement audio-core data model | completed | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
+| IMPL-034JxNTyasfMjdgGXnvVPY | Implement audio-core device port | completed | [implement-audio-core-device-port.md](./implement-audio-core-device-port.md) |
 | IMPL-034K7dWqYmSaPhOnIaPc02 | Implement io-symphonia backend PoC | completed | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | IMPL-034J5L3UVnQerTiQRlC7w3 | Implement media-core data model | completed | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
 | IMPL-034JxNThv4gsW2IpbkYmK4 | Implement media-io abstraction | completed | [implement-media-io-abstraction.md](./implement-media-io-abstraction.md) |
