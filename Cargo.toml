@@ -19,6 +19,7 @@ members = [
     "crates/ruviform-media-core",
     "crates/ruviform-audio-core",
     "crates/ruviform-video-core",
+    "crates/ruviform-video",
     "crates/ruviform-video-proc",
     "crates/ruviform-media-io",
     "crates/ruviform-io-symphonia",
