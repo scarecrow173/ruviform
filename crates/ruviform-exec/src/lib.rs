@@ -44,8 +44,10 @@
 // `docs/adr/public-enum-non-exhaustive-policy.md`.
 #![allow(clippy::module_name_repetitions)]
 
+pub mod offline;
 mod thread_priority;
 
+pub use offline::{CancellationToken, OfflineConfig, OfflineDriver, OfflineError, Progress};
 pub use thread_priority::{
     PriorityError, ThreadPriorityGuard, ThreadPriorityParams, demote_current_thread_from_realtime,
     promote_current_thread_to_realtime,

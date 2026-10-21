@@ -15,6 +15,7 @@ publish.workspace = true
 # path (dependency-addition rationale:
 # docs/adr/rt-foundation-primitives-implementation.md).
 audio_thread_priority = { version = "0.38", default-features = false }
+ruviform-rt = { path = "../ruviform-rt" }
 
 [lints]
 workspace = true
