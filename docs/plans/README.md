@@ -11,6 +11,7 @@ Directory: `docs/plans`
 | PLAN-034JdOWI3vblJW11kIueY0 | DSP/SIMD 比較ベンチマーク PoC 実装 | completed | [dsp-simd-poc.md](./dsp-simd-poc.md) |
 | PLAN-034JgkWCimxdvr81k6b0ow | オーディオデバイス境界ポートと ruviform-audio-device PoC の実装（Issue #23） | approved | [implement-audio-device-port-and-cpal-poc.md](./implement-audio-device-port-and-cpal-poc.md) |
 | PLAN-034J5K603qXDNmT82wI9v7 | Issue #18 データモデル API の実装（media-core / audio-core / video-core） | completed | [implement-issue-18-data-model.md](./implement-issue-18-data-model.md) |
+| PLAN-034JRcspAdty0HzWF0KzIr | Issue #24 オフライン実行ドライバ実装 | approved | [implement-issue-24-offline-execution-driver.md](./implement-issue-24-offline-execution-driver.md) |
 | PLAN-034JcCFGe6ILSTWLgUIjAn | Issue #26 動画基盤 API の実装（video-core 所有権契約・video-proc 新設・色変換カーネル） | approved | [implement-issue-26-video-foundation.md](./implement-issue-26-video-foundation.md) |
 | PLAN-034JcvpHIlt5JmqvgOquvI | プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding PoC） | completed | [implement-plugin-foundation.md](./implement-plugin-foundation.md) |
 | PLAN-034JxNegJktSAJZ2LuO0N8 | Issue #21 RT 基盤の実装（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | completed | [implement-rt-foundation.md](./implement-rt-foundation.md) |
