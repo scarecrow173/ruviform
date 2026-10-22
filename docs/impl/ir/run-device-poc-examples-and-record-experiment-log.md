@@ -102,10 +102,10 @@ task `TASK-034JglHs8cNMDOvyZFeUpc`（plan `PLAN-034JgkWCimxdvr81k6b0ow` Phase C�
 ## Risks
 
 - **初回コールバック timestamp=0 は計測バグ由来と確定（解消済み）** — 初報で「callback instant が 0」と記録したが、実態は `FIRST_CALLBACK_NS` 計測器の不具合（`AtomicI64::new(i64::MIN)` に `fetch_min` では更新されず、表示側が sentinel→0 に写像）。store-once `compare_exchange` へ修正して再実行したところ `first=55178557244100`（`stream.now()` 55178555903400 と整合）が観測され、backend 側の異常ではなかった（実験ログ seq11 に訂正イベント追記済み）
-- **WASAPI xrun 未報告** — error event 0 は「未発生」と「未報告」を区別しない（WASAPI は出力 xrun を報告しない）。Linux/ALSA レーンでの再観測が必要
+- **WASAPI xrun 未報告** — error event 0 は「未発生」と「未報告」を区別しない（WASAPI は出力 xrun を報告しない）。Linux/ALSA レーン（検証コンテナ・PulseAudio null sink 経由）でも error events 0 を観測（`docs/impl/exp/linux-container-device-and-arch-verification.jsonl` seq3）— ただしコンテナの仮想 sink では xrun 誘発条件（実機タイミング圧力）が再現されないため「xrun が発生した場合の報告挙動」は依然未観測
 - **計数アロケータは上限値** — 窓内 2 alloc イベントの帰属スレッド（cpal 内部か adapter か）は未同定。assert_no_alloc 側が adapter 自前パスの 0 を保証するため実害なし
 
 ## Follow-ups
 
 - Phase D: [../../tasks/finalize-backend-adr-and-sync-docs.md](../../tasks/finalize-backend-adr-and-sync-docs.md) — 本実験ログを証跡として ADR `ADR-034Jc9RslnH7QSQ1nZEEHL` 昇格判定
-- 未観測項目（実験ログ summary イベントで引き継ぎ済み）: ALSA vs PipeWire 比較（Linux レーン・`--features pipewire-backend` 任意検証）、Send/Sync の backend 間ばらつき、WASAPI exclusive/ASIO 要否。初回 callback timestamp=0 は計測バグ由来と確定し未観測項目から除外済み。なお chunk 分割経路は実機では未発火（全コールバック n ≤ frames_capacity）で、bounded chunked write はユニットテストのみの実証
+- 未観測項目: Send/Sync の backend 間ばらつき、WASAPI exclusive/ASIO 要否、macOS CoreAudio 実挙動（コンパイル通過のみ）。ALSA vs PipeWire 比較は検証コンテナで実測済み（`docs/impl/exp/linux-container-device-and-arch-verification.jsonl` — ALSA は正常系+異常系とも契約内、PipeWire は session manager 必須の要件を発見）。初回 callback timestamp=0 は計測バグ由来と確定し未観測項目から除外済み。なお chunk 分割経路は実機では未発火（全コールバック n ≤ frames_capacity）で、bounded chunked write はユニットテストのみの実証

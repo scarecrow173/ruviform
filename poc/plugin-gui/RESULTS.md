@@ -54,3 +54,33 @@ per-webview コストの大部分はプロセス外）。
 ```sh
 cd poc/plugin-gui && cargo run -- --count 8 --frames 240 --duration 120 --out <jsonl>
 ```
+
+## Follow-up — Issue #57 Linux 検証（2026-11、検証コンテナ Debian trixie・Xvfb・WebKitGTK 4.1）
+
+wry の Linux 子 attach は `build_as_child`（HWND）ではなく
+`WebViewBuilderExtUnix::build_gtk` — ホスト提供コンテナの模倣として
+`gtk::Fixed` を親に使用。`#[cfg(target_os = "linux")]` で同一メトリクス
+（e1_*/e2_*・multi_*）を採取する実装を追加。
+
+| 実験 | 結果 |
+| --- | --- |
+| e1_attach（build_gtk on gtk::Fixed） | **passed** |
+| e1_resize（set_bounds 600x400） | **passed** |
+| e1_render（PageLoadEvent::Finished） | **passed** |
+| e1_ipc（window.ipc.postMessage） | **passed** |
+| multi --count 4 | 4/4 attach・全件 120 frames 完了・dropped 0・frame_avg 16.667ms（vsync 一致）・work_avg 0.180ms |
+
+所見: Xvfb + WebKitGTK 4.1 ヘッドレスで attach/resize/描画/IPC の
+全経路が Windows と同じ契約で動作。wry の Linux 子 attach は
+gtk::Container 経由のため、プラグイン GUI ホスト実装では
+Linux 向けに gtk::Fixed 等のコンテナ提供が必要になる。
+
+### 再現（Linux コンテナ）
+
+```sh
+docker build -t ruviform-verify-linux ci/verify-linux
+docker run --rm -v "$PWD:/work" -w /work/poc/plugin-gui ruviform-verify-linux none
+# コンテナ内:
+xvfb-run -a cargo run -- --out <jsonl>
+xvfb-run -a cargo run -- --count 4 --frames 120 --duration 60
+```
