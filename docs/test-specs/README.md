@@ -6,6 +6,7 @@ Directory: `docs/test-specs`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| TSPEC-034Kq8IMaEOJAfVjWYgJwq | ruviform-audio-analysis テスト仕様 | approved | [audio-analysis-tests.md](./audio-analysis-tests.md) |
 | TSPEC-034JgliZJcJ6cl2OeZLkuZ | オーディオデバイス境界ポートと cpal adapter の契約保証 | approved | [audio-device-port-and-cpal-adapter.md](./audio-device-port-and-cpal-adapter.md) |
 | TSPEC-034JRQpjZtjsWuJOB1WYN0 | 音声エンジン テスト仕様 | draft | [audio-engine-tests.md](./audio-engine-tests.md) |
 | TSPEC-034Jeo1j5l7fBhYc8iYsTN | ベンチ・検証タスクと CI スモーク挙動の契約保証 | approved | [bench-tasks-and-ci-smoke.md](./bench-tasks-and-ci-smoke.md) |

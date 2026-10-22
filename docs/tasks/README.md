@@ -18,6 +18,8 @@ Directory: `docs/tasks`
 | TASK-034JO3X9ZpAvMoWiRIiMU4 | MSRV 1.89 適用とドキュメント同期（Cargo.toml・AGENTS.md） | done | [apply-msrv-1-89-and-sync-docs.md](./apply-msrv-1-89-and-sync-docs.md) |
 | TASK-034J6PiHv9GsKby7yH2eMO | 全公開 enum への `#[non_exhaustive]` 適用と exhaustive_enums allow の撤去 | done | [apply-non-exhaustive-to-public-enums.md](./apply-non-exhaustive-to-public-enums.md) |
 | TASK-034IRYXA0oq14nlgmC4Bch | workspace への publish = false 方針の適用 | done | [apply-publish-false-policy-to-workspace.md](./apply-publish-false-policy-to-workspace.md) |
+| TASK-034Kq90bnj2bifFFCKfMVA | Issue #92 文書クローズと全量検証 | done | [audio-analysis-closeout.md](./audio-analysis-closeout.md) |
+| TASK-034Kq8ZHrS7hOfvYmTEUQI | audio-analysis クレート骨格 + LevelMeter/SpectrumAnalyzer/WaveformPeaks | done | [audio-analysis-crate.md](./audio-analysis-crate.md) |
 | TASK-034JRQCnF0sLKz5obmCHNT | Issue #25 文書クローズと全量検証 | done | [audio-engine-closeout.md](./audio-engine-closeout.md) |
 | TASK-034JRQBhUGz8OWIgGAnEgl | ruviform-audio クレート新設 + pull グラフ/ミキサー/プランスナップショット | done | [audio-engine-graph-snapshot.md](./audio-engine-graph-snapshot.md) |
 | TASK-034JRQBPxKgu0yLVIB6Xm7 | セッション統合（OutputStream callback → RT グラフ駆動） | done | [audio-engine-session.md](./audio-engine-session.md) |

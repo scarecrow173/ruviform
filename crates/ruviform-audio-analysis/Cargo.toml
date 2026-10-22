@@ -1,0 +1,19 @@
+[package]
+name = "ruviform-audio-analysis"
+description = "Audio analysis layer for Ruviform: level/peak metering, FFT spectrum analysis and waveform peak data with prepare/process separation (RT-safe process)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+ruviform-dsp = { path = "../ruviform-dsp" }
+ruviform-media-core = { path = "../ruviform-media-core" }
+
+[dev-dependencies]
+assert_no_alloc = "1.1"
+
+[lints]
+workspace = true

@@ -95,6 +95,8 @@ relations:
     - "docs/test-specs/music-time-media-core-tests.md"
     - "docs/plans/implement-issue-91-musical-transport-abi.md"
     - "docs/test-specs/musical-transport-abi-tests.md"
+    - "docs/specs/audio-analysis.md"
+    - "docs/designs/audio-analysis.md"
   verifies: []
   verified-by: []
   references:
