@@ -30,6 +30,7 @@ Directory: `docs/plans`
 | PLAN-FHZdvjxcjsxFNodfVh9zOt | Issue #75 実施計画 — ruviform-dsp 新設 | approved | [implement-issue-75-ruviform-dsp.md](./implement-issue-75-ruviform-dsp.md) |
 | PLAN-034KoNkBdCIchL4xE1DI7Y | Issue #90 実施計画 — 音楽時間モデル（media-core::music） | approved | [implement-issue-90-music-time-media-core.md](./implement-issue-90-music-time-media-core.md) |
 | PLAN-034KoNkBdCIchL4xE1DI7Z | Issue #91 実施計画 — 音楽時間 ABI 拡張（TransportInfo.musical + CLAP/VST3 写像） | approved | [implement-issue-91-musical-transport-abi.md](./implement-issue-91-musical-transport-abi.md) |
+| PLAN-034Kq8IiJyWJrYeKbeaNK9 | Issue #92 実施計画 — ruviform-audio-analysis 新設 | approved | [implement-issue-92-audio-analysis.md](./implement-issue-92-audio-analysis.md) |
 | PLAN-034JcvpHIlt5JmqvgOquvI | プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding PoC） | completed | [implement-plugin-foundation.md](./implement-plugin-foundation.md) |
 | PLAN-034JxNegJktSAJZ2LuO0N8 | Issue #21 RT 基盤の実装（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | completed | [implement-rt-foundation.md](./implement-rt-foundation.md) |
 | PLAN-034J6OTwge4rS96WZWkZgd | Issue #18 フォローアップの実装（公開 enum 方針適用・時間演算修正・改善トリアージ） | completed | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
