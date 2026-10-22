@@ -32,3 +32,25 @@
 ```sh
 cd poc/plugin-gui && cargo run -- --out <jsonl path>
 ```
+
+## Follow-up — Issue #57 複数プラグイン GUI 共存（2026-11、Windows 11 x64・WebView2 155）
+
+`--count N --frames M` で N 個の子 HWND に wry WebView を attach し、
+各 WebView がプラグイン GUI 相当の rAF アニメーション（回転ノブ 24 個）を実行。
+全 WebView の done 統計を集約。証跡: `out/multi-*.jsonl`。
+
+| 判定 | N | frame_avg_ms | dropped 計 | work_avg_ms | mem_delta | attach→done |
+| --- | --- | --- | --- | --- | --- | --- |
+| **passed** | 1 | 16.666 | 0 | 0.098 | +13.6MB | 6.5s |
+| **passed** | 4 | 16.666 | 0 | 0.100 | +14.0MB | 5.1s |
+| **passed** | 8 | 16.736 | 1 | 0.078 | +14.3MB | 6.4s |
+
+所見: 8 個の WebView2 子 attach が同一親 HWND 内で全件 60fps 維持。
+ワーキングセット delta は頭打ち（WebView2 はブラウザプロセス共有のため
+per-webview コストの大部分はプロセス外）。
+
+### 再現
+
+```sh
+cd poc/plugin-gui && cargo run -- --count 8 --frames 240 --duration 120 --out <jsonl>
+```

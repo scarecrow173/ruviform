@@ -50,20 +50,30 @@ function signal(x: number): number {
 /**
  * フレームごとのワークロード生成器。
  * `next()` は内部バッファを使い回して返す（呼び出し側は同一フレーム内で消費すること）。
+ * `columns`/`channels` は Issue #57 高負荷再計測のスケール引数
+ * （既定値は Issue #28 PoC の基準ワークロードと同一）。
  */
 export class WorkloadGenerator {
-  private readonly peaks = new Float32Array(PEAK_COLUMNS * 2);
-  private readonly levels = new Float32Array(METER_CHANNELS);
+  private readonly peaks: Float32Array;
+  private readonly levels: Float32Array;
   private readonly rng = mulberry32(0x5eed);
   private frame = 0;
+
+  constructor(
+    private readonly columns: number = PEAK_COLUMNS,
+    private readonly channels: number = METER_CHANNELS
+  ) {
+    this.peaks = new Float32Array(columns * 2);
+    this.levels = new Float32Array(channels);
+  }
 
   /** 次フレーム分のピーク列 + メータ値を生成する。 */
   next(): FrameData {
     const t = this.frame / 60; // 仮想 60fps 時間軸（スクロール速度は実時間非依存で固定）
     const rng = this.rng;
     const peaks = this.peaks;
-    const columnSpan = 0.5 / PEAK_COLUMNS; // 表示窓幅 0.5 単位を 1,000 列へマップ
-    for (let i = 0; i < PEAK_COLUMNS; i++) {
+    const columnSpan = 0.5 / this.columns; // 表示窓幅 0.5 単位を列数へマップ
+    for (let i = 0; i < this.columns; i++) {
       const base = t * 2.0 + i * columnSpan;
       let lo = 1;
       let hi = -1;
@@ -76,7 +86,7 @@ export class WorkloadGenerator {
       peaks[i * 2 + 1] = hi;
     }
     // メータ群: チャンネル別位相の |signal| に attack 速・decay 遅で追従。
-    for (let ch = 0; ch < METER_CHANNELS; ch++) {
+    for (let ch = 0; ch < this.channels; ch++) {
       const target = Math.min(
         1,
         Math.abs(signal(t * 1.7 + ch * 0.9)) * 1.25 + (rng() - 0.5) * 0.08
@@ -88,9 +98,61 @@ export class WorkloadGenerator {
     this.frame++;
     return {
       peaks,
-      columns: PEAK_COLUMNS,
+      columns: this.columns,
       levels: this.levels,
       frame: this.frame - 1,
     };
+  }
+}
+
+/** プレビュー canvas の内部解像度（720p — 動画プレビュー相当の更新レイヤー）。 */
+export const PREVIEW_WIDTH = 1280;
+/** 同上（高さ）。 */
+export const PREVIEW_HEIGHT = 720;
+
+/**
+ * 動画プレビュー相当の合成レイヤー（Issue #57 高負荷再計測）。
+ * 1280x720 の canvas へ毎フレームシーンを描画する — 実 `<video>` の
+ * デコードコストは JS 側に現れないため、「コンポジタに毎フレーム
+ * 更新される 720p レイヤーがある」状態の近似として使う。
+ * 表示サイズは CSS で縮小し、内部解像度で描画コストを支払う。
+ */
+export class PreviewLayer {
+  /** 挿入対象の canvas 要素（呼び出し側が DOM へ配置する）。 */
+  readonly canvas: HTMLCanvasElement;
+  private readonly ctx: CanvasRenderingContext2D;
+  private frame = 0;
+
+  constructor() {
+    this.canvas = document.createElement("canvas");
+    this.canvas.width = PREVIEW_WIDTH;
+    this.canvas.height = PREVIEW_HEIGHT;
+    this.canvas.style.cssText =
+      "width:480px;height:270px;display:block;margin-top:8px;";
+    const ctx = this.canvas.getContext("2d");
+    if (!ctx) throw new Error("preview canvas 2d context unavailable");
+    this.ctx = ctx;
+  }
+
+  /** 1 フレーム分の合成プレビュー映像を描画する。 */
+  draw(): void {
+    const ctx = this.ctx;
+    const w = PREVIEW_WIDTH;
+    const h = PREVIEW_HEIGHT;
+    const t = this.frame / 60;
+    // カラーバー背景（全域塗り + 移動ブロック + タイムコード描字）。
+    const bars = ["#7a7a7a", "#c8c828", "#28c8c8", "#28c828", "#c828c8", "#c82828", "#2828c8"];
+    const bw = w / bars.length;
+    for (let i = 0; i < bars.length; i++) {
+      ctx.fillStyle = bars[i];
+      ctx.fillRect(i * bw, 0, bw, h);
+    }
+    const x = ((t * 240) % (w + 200)) - 100;
+    ctx.fillStyle = `hsl(${(t * 60) % 360},80%,55%)`;
+    ctx.fillRect(x, h * 0.3, 200, h * 0.4);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "48px monospace";
+    ctx.fillText(`TC ${this.frame}`, 40, h - 40);
+    this.frame++;
   }
 }

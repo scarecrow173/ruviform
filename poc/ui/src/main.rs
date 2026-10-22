@@ -74,6 +74,9 @@ fn run_experiment(run_args: &args::RunArgs) -> i32 {
         "backend": run_args.backend,
         "mode": run_args.mode,
         "variant": run_args.variant,
+        "peaks": run_args.peaks,
+        "meters": run_args.meters,
+        "preview": run_args.preview,
         "out": out_path.to_string_lossy(),
     });
 

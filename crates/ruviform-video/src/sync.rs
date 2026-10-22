@@ -89,10 +89,10 @@ impl FrameScheduler {
     /// negative than `drop_late` drops, otherwise presents.
     #[must_use]
     pub fn decide(&self, pts: MediaTime, master_now: MediaTime) -> SyncDecision {
-        if let Some(floor) = self.floor {
-            if pts < floor {
-                return SyncDecision::Drop;
-            }
+        if let Some(floor) = self.floor
+            && pts < floor
+        {
+            return SyncDecision::Drop;
         }
         let lateness = pts.to_seconds_f64() - master_now.to_seconds_f64();
         if lateness > self.thresholds.early {

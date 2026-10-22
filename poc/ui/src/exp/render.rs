@@ -76,6 +76,9 @@ struct State {
     start_sent: bool,
     /// alive( idle ) 駆動の start 再送回数。
     start_retries: u8,
+    /// JS `__poc.start` cfg の `load` 値（Issue #57 高負荷再計測の
+    /// `--peaks/--meters/--preview` を `{"load":{...}}` として保持）。
+    load: Value,
     /// `alive` ハートビートの受信総数と末尾サンプル（診断用）。
     alive_count: u64,
     alive_tail: Vec<Value>,
@@ -150,6 +153,11 @@ impl Experiment for RenderExperiment {
             phase: Some(Phase::AwaitLoad),
             backend,
             frames,
+            load: json!({
+                "peaks": args.peaks,
+                "meters": args.meters,
+                "preview": args.preview,
+            }),
             loaded_url: None,
             ready_seen: false,
             start_sent: false,
@@ -220,6 +228,7 @@ fn send_start(host: &host::Host<'_>, s: &mut State) {
     let cfg = serde_json::to_string(&json!({
         "backend": s.backend,
         "frames": s.frames,
+        "load": s.load,
     }))
     .unwrap_or_else(|_| "{}".to_string());
     host.eval(&format!("window.__poc && window.__poc.start({cfg})"));
@@ -306,6 +315,8 @@ fn assemble_metrics(s: &State, env: &Environment) -> Value {
         "capabilities": stats.get("caps"),
         "frames": stats.get("frames"),
         "frames_requested": s.frames,
+        "load_requested": s.load,
+        "load": stats.get("load"),
         "warmup_frames": stats.get("warmup_frames"),
         "elapsed_ms": stats.get("elapsed_ms"),
         "vsync_ms": stats.get("vsync_ms"),

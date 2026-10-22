@@ -36,6 +36,12 @@ pub struct RunArgs {
     pub variant: Option<String>,
     /// `--out` で指定された JSONL 追記先。None は既定パスを後で解決。
     pub out: Option<String>,
+    /// `--peaks` 値（render 実験のワークロード列数。Issue #57 高負荷再計測）。
+    pub peaks: Option<u64>,
+    /// `--meters` 値（render 実験のメータチャンネル数。同上）。
+    pub meters: Option<u64>,
+    /// `--preview`（render 実験に 720p 合成プレビューレイヤーを追加。同上）。
+    pub preview: bool,
 }
 
 /// 引数エラー（exit 2 / CLI エラーに対応）。
@@ -44,6 +50,7 @@ pub struct ArgsError(pub String);
 const USAGE: &str = "usage: ui-poc --check\n\
        ui-poc --experiment <name> [--frames N] [--duration SEC] \
        [--backend <b>] [--mode <m>] [--variant <v>] [--out <path>]\n\
+       [--peaks N] [--meters N] [--preview]\n\
        \n\
        experiments: host render ipc surface frontend dist\n\
        \n\
@@ -67,6 +74,9 @@ fn parse_from<I: Iterator<Item = String>>(mut it: I) -> Result<Command, ArgsErro
     let mut mode: Option<String> = None;
     let mut variant: Option<String> = None;
     let mut out: Option<String> = None;
+    let mut peaks: Option<u64> = None;
+    let mut meters: Option<u64> = None;
+    let mut preview = false;
     let mut check = false;
 
     let take = |flag: &str, it: &mut I| -> Result<String, ArgsError> {
@@ -94,6 +104,21 @@ fn parse_from<I: Iterator<Item = String>>(mut it: I) -> Result<Command, ArgsErro
             "--mode" => mode = Some(take("--mode", &mut it)?),
             "--variant" => variant = Some(take("--variant", &mut it)?),
             "--out" => out = Some(take("--out", &mut it)?),
+            "--peaks" => {
+                let v = take("--peaks", &mut it)?;
+                peaks =
+                    Some(v.parse::<u64>().map_err(|_| {
+                        ArgsError(format!("--peaks: invalid integer '{v}'\n{USAGE}"))
+                    })?);
+            }
+            "--meters" => {
+                let v = take("--meters", &mut it)?;
+                meters =
+                    Some(v.parse::<u64>().map_err(|_| {
+                        ArgsError(format!("--meters: invalid integer '{v}'\n{USAGE}"))
+                    })?);
+            }
+            "--preview" => preview = true,
             "-h" | "--help" => return Ok(Command::Help),
             other => return Err(ArgsError(format!("unknown argument '{other}'\n{USAGE}"))),
         }
@@ -111,6 +136,9 @@ fn parse_from<I: Iterator<Item = String>>(mut it: I) -> Result<Command, ArgsErro
             mode,
             variant,
             out,
+            peaks,
+            meters,
+            preview,
         })),
         None => Err(ArgsError(format!(
             "missing --experiment or --check\n{USAGE}"
