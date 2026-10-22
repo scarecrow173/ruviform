@@ -37,6 +37,7 @@ relations:
     - "../tasks/implement-framerate-type.md"
     - "../tasks/migrate-timecode-to-framerate.md"
     - "../tasks/add-time-precision-tests.md"
+    - "docs/specs/music-time-design.md"
   verifies: []
   verified-by: []
   references:

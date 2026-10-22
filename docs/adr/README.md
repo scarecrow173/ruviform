@@ -14,6 +14,7 @@ Directory: `docs/adr`
 | ADR-034JceOKDwTeWus9xBVXND | FrameRate/TimeBase 意味分離と Timecode 拡張 | accepted | [framerate-timebase-separation-and-timecode-extension.md](./framerate-timebase-separation-and-timecode-extension.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |
+| ADR-2iNuZm3ymoyzRUmpgnKr0x | 音楽時間モデル（PPQN 960 tick 中核・piecewise-constant テンポマップ） | accepted | [musical-time-model.md](./musical-time-model.md) |
 | ADR-034JRK9VFJbrUPAvy3FJ94 | オフライン実行の決定論保証範囲（逐次参照等価） | accepted | [offline-determinism-scope.md](./offline-determinism-scope.md) |
 | ADR-034IO01ZSFQcu2jEt2p0Tb | 対象プラットフォーム・CPUアーキテクチャ・ツールチェーン方針 | accepted | [platform-and-toolchain-targets.md](./platform-and-toolchain-targets.md) |
 | ADR-034IO01bG8AyjIJWxHeL77 | プラグインアーキテクチャ方針（ホスト・制作双方とCLAP/VST3同格） | accepted | [plugin-architecture-clap-vst3.md](./plugin-architecture-clap-vst3.md) |

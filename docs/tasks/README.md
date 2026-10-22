@@ -54,6 +54,7 @@ Directory: `docs/tasks`
 | TASK-034J5KR5ueilYgXdyyF4ZU | ruviform-video-core のデータモデル実装 | done | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | TASK-034JcD1UTgLlW1lRoWI1Ng | video-proc カーネル API 形状と YUV→RGB 変換カーネルの実装 | done | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
 | TASK-034JNwTZ8WalgowFahLc8E | Timecode API の FrameRate 移行（破壊的シグネチャ置換と呼び出し側移行） | done | [migrate-timecode-to-framerate.md](./migrate-timecode-to-framerate.md) |
+| TASK-gJ0wsCnJrG8Wo0JQSENFtz | 音楽時間 ABI 整合検証 + Issue #33 クローズ | done | [music-time-design-verify.md](./music-time-design-verify.md) |
 | TASK-034JRcXSEdyHdLa42O9KKP | Issue #24 文書クローズと全量検証 | done | [offline-exec-closeout.md](./offline-exec-closeout.md) |
 | TASK-034JRcXokykm0XlpOqcor0 | 並列ワーカープール駆動（有界キュー・順序再構成） | done | [offline-exec-parallel.md](./offline-exec-parallel.md) |
 | TASK-034JRcWTeJbPQAh5fUwPZs | オフライン駆動プリミティブ（CancellationToken/Progress/OfflineError/逐次ドライバ） | done | [offline-exec-primitives.md](./offline-exec-primitives.md) |
