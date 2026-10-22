@@ -76,7 +76,7 @@
 ## 開発環境（mise）
 
 - 開発ツールとタスクの正本は `mise.toml` とする。
-- `mise.toml` は uv / prek / git-lfs / pipx 系の共通基盤ツールに加え、このリポジトリで pin した Rust ツールチェーン（`rust = "1.99.0"`）と actionlint を管理する。`fmt` / `check` / `lint` / `test` / `build` 等の検証タスクも同ファイルが正本（対応表は `## Rust ワークスペースと暫定開発規約` 節を参照）。
+- `mise.toml` は uv / prek / git-lfs / pipx 系の共通基盤ツールに加え、このリポジトリで pin した Rust ツールチェーン（`rust = "1.99.0"`）と actionlint、UI PoC ビルド用の Node.js（`node = "26.12.1"`、Issue #83 のセキュリティ修正版）を管理する。`fmt` / `check` / `lint` / `test` / `build` 等の検証タスクも同ファイルが正本（対応表は `## Rust ワークスペースと暫定開発規約` 節を参照）。
 - 初回セットアップでは、miseをインストールした後に以下を実行する（Windows 11 x64・Git Bash で検証済み。macOS / Linux は未検証）。
 
 ```sh

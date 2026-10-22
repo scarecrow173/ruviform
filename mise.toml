@@ -14,6 +14,10 @@ git-lfs = "3.8.0"
 "pipx:oraios/serena" = "1.7.0"
 rust = { version = "1.99.0", components = ["rustfmt", "clippy"] }
 actionlint = "1.7.12"
+# UI PoC（poc/ui/frontend）の npm workspaces ビルド用。Issue #83:
+# 2026-10-21 Node.js セキュリティ更新を踏まえ修正版で固定
+# （26.x 系は 26.12.1 以上が要件）。
+node = "26.12.1"
 
 [tasks.setup]
 description = "Install APM dependencies, prek hooks and repository-local Git LFS"
