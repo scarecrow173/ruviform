@@ -1275,6 +1275,9 @@ dependencies = [
 [[package]]
 name = "ruviform-media-core"
 version = "0.1.0"
+dependencies = [
+ "assert_no_alloc",
+]
 
 [[package]]
 name = "ruviform-media-io"

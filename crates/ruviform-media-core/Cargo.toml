@@ -9,3 +9,6 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+assert_no_alloc = "1.1"

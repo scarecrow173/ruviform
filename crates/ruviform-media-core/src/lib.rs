@@ -4,8 +4,11 @@
 //! container-level stream
 //! descriptors ([`StreamId`], [`StreamKind`], [`StreamDescriptor`]), the
 //! media-wide [`Error`]/[`Result`] types, display-side [`Timecode`]
-//! conversion (including SMPTE drop-frame labeling) and transport state
-//! ([`TransportStatus`], [`TransportSnapshot`]).
+//! conversion (including SMPTE drop-frame labeling), transport state
+//! ([`TransportStatus`], [`TransportSnapshot`]) and musical time
+//! ([`Tick`], [`TempoMap`], [`MusicalTimeInfo`] — the [`PPQN`]-tick
+//! coordinate system convertible to [`MediaTime`] via a compiled tempo
+//! map).
 //!
 //! Holds no processing or I/O.
 //!
@@ -42,12 +45,17 @@
 #![allow(clippy::exhaustive_structs)]
 
 mod error;
+mod music;
 mod stream;
 mod time;
 mod timecode;
 mod transport;
 
 pub use error::{Error, Result};
+pub use music::{
+    MusicalPosition, MusicalTimeInfo, PPQN, Ppqn, TempoEvent, TempoMap, TempoMapBuilder, Tick,
+    TickDuration, TimeSignatureEvent,
+};
 pub use stream::{StreamDescriptor, StreamId, StreamKind};
 pub use time::{FrameRate, MediaDuration, MediaRange, MediaTime, Rounding, TimeBase};
 pub use timecode::Timecode;

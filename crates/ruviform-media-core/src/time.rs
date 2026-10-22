@@ -947,7 +947,7 @@ fn scaled_fraction(value: i64, from: TimeBase, to: TimeBase) -> (i128, u128) {
 /// returning the quotient as `i128` with no `i64` range check. Rounding
 /// acts on the magnitude and the sign is re-applied afterwards, so all
 /// modes stay symmetric for pre-roll values.
-fn round_quotient(num: i128, den: u128, rounding: Rounding) -> i128 {
+pub(crate) fn round_quotient(num: i128, den: u128, rounding: Rounding) -> i128 {
     let negative = num < 0;
     let mut q = num.unsigned_abs() / den;
     let r = num.unsigned_abs() % den;

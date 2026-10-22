@@ -91,6 +91,8 @@ relations:
     - "docs/adr/broad-color-management.md"
     - "docs/designs/second-target-design.md"
     - "docs/plans/implement-issue-32-second-target-design.md"
+    - "docs/plans/implement-issue-90-music-time-media-core.md"
+    - "docs/test-specs/music-time-media-core-tests.md"
   verifies: []
   verified-by: []
   references:
