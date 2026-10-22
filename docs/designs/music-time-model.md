@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合）"
 created: "2026-11-03"
-updated: "2026-11-03"
+updated: "2026-10-23"
 owners: []
 relations:
   source: []
@@ -34,8 +34,11 @@ relations:
     - "docs/designs/ruviform-architecture-design-baseline.md"
   derived-by:
     - "docs/plans/implement-issue-33-music-time.md"
+    - "docs/plans/implement-issue-90-music-time-media-core.md"
+    - "docs/test-specs/music-time-media-core-tests.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/music-time-media-core-tests.md"
   references: []
   defers: []
   deferred-by: []
