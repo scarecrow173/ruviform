@@ -14,6 +14,8 @@ Directory: `docs/impl/exp`
 | [ac7-adr-finalize.jsonl](./ac7-adr-finalize.jsonl) | AC7 / poc-adr-finalize | 採否 ADR 確定（エビデンス集約・条項別 confirm/revise verdict） |
 | [device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl](./device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl) | — / Issue #23 | オーディオデバイス PoC 実機実行ログ（list_devices・play_sine・WASAPI） |
 | [dsp-simd-poc-benchmark-comparison.jsonl](dsp-simd-poc-benchmark-comparison.jsonl) | — / Issue #19 | DSP/SIMD バックエンド比較ベンチ計測 |
+| [issue-57-high-load-webgpu-multi-webview.jsonl](./issue-57-high-load-webgpu-multi-webview.jsonl) | — / Issue #57 | UI PoC 後続課題（高負荷再計測・WebGPU 有効化・複数 WebView・wry #1762 追跡） |
+| [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) | — / Issue #60, #55, #57 | Linux 検証コンテナ実測（ALSA/PipeWire・host_unavailable・aarch64 NEON・AVX-512 試行・Xvfb UI） |
 
 ## Reports and raw data
 

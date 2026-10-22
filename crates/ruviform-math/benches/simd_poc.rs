@@ -460,6 +460,14 @@ fn bench_sine(c: &mut Criterion) {
     group.finish();
 }
 
+/// 固定レベル列は arch 依存: x86 は avx2、aarch64 は neon。
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+const PROBE_LEVEL_COL: &str = "fearless_avx2";
+#[cfg(target_arch = "aarch64")]
+const PROBE_LEVEL_COL: &str = "fearless_neon";
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64")))]
+const PROBE_LEVEL_COL: &str = "fearless_fallback";
+
 /// Issue #56 — direct per-call dispatch-cost probe. The `fearless_dispatched`
 /// regression on light kernels decomposes into a *fixed* per-call cost
 /// (LazyLock-cached `Level::new()` + `__dispatch_target` normalization +
@@ -475,8 +483,13 @@ fn bench_dispatch_probe(c: &mut Criterion) {
     group.bench_function("level_new", |b| {
         b.iter(|| black_box(Level::new()));
     });
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     group.bench_function("token_avx2", |b| {
         b.iter(|| black_box(Level::new().as_avx2()));
+    });
+    #[cfg(target_arch = "aarch64")]
+    group.bench_function("token_neon", |b| {
+        b.iter(|| black_box(Level::new().as_neon()));
     });
     group.bench_function("dispatch_noop", |b| {
         b.iter(|| {
@@ -492,8 +505,10 @@ fn bench_dispatch_probe(c: &mut Criterion) {
     // lanes so the fixed dispatch cost dominates the ratio — the clearest
     // window onto the per-call component.
     let cols = registry();
-    for probe_col in ["scalar", "fearless_avx2", "fearless_dispatched"] {
-        let col = cols.iter().find(|c| c.name == probe_col).unwrap();
+    for probe_col in ["scalar", PROBE_LEVEL_COL, "fearless_dispatched"] {
+        let Some(col) = cols.iter().find(|c| c.name == probe_col) else {
+            continue;
+        };
         for len in [16_usize, 32] {
             let a = inputs::generate("normal", len, 0, SEED_A);
             let b = inputs::generate("normal", len, 0, inputs::SEED_B);
