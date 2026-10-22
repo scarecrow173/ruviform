@@ -29,6 +29,7 @@ relations:
     - "docs/adr/plugin-isolation-strategy.md"
   derived-by:
     - "docs/plans/implement-issue-31-plugin-isolation.md"
+    - "docs/designs/plugin-host-l0.md"
   verifies: []
   verified-by: []
   references: []
