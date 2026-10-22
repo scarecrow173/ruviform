@@ -1,0 +1,18 @@
+[package]
+name = "ruviform-plugin-host"
+description = "Plugin host boundary for Ruviform: opaque instance handles and a serializable command surface, with the L0 in-process backend as the default path"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+
+[dev-dependencies]
+assert_no_alloc = "1.1"
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+
+[lints]
+workspace = true

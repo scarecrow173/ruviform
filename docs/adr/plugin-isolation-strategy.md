@@ -29,6 +29,7 @@ relations:
     - "docs/adr/plugin-architecture-clap-vst3.md"
   derived-by:
     - "docs/designs/plugin-isolation.md"
+    - "docs/designs/plugin-host-l0.md"
   verifies: []
   verified-by: []
   references: []

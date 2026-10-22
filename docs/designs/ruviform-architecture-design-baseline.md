@@ -77,6 +77,10 @@ relations:
     - "docs/specs/music-time-design.md"
     - "docs/adr/musical-time-model.md"
     - "docs/designs/music-time-model.md"
+    - "docs/specs/plugin-host-l0.md"
+    - "docs/designs/plugin-host-l0.md"
+    - "docs/plans/implement-issue-74-plugin-host-l0.md"
+    - "docs/test-specs/plugin-host-l0-tests.md"
   verifies: []
   verified-by: []
   references:
