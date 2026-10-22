@@ -798,7 +798,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper
   host: github.com
-  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
+  resolved_commit: 51f2f4c73ddfaf8f361f83bc489078dfd27c2879
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm
@@ -1421,7 +1421,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper-hook-claude
   host: github.com
-  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
+  resolved_commit: 51f2f4c73ddfaf8f361f83bc489078dfd27c2879
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm-hook-claude
@@ -1441,7 +1441,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper-hook-codex
   host: github.com
-  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
+  resolved_commit: 51f2f4c73ddfaf8f361f83bc489078dfd27c2879
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm-hook-codex
@@ -1461,7 +1461,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper-hook-copilot
   host: github.com
-  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
+  resolved_commit: 51f2f4c73ddfaf8f361f83bc489078dfd27c2879
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm-hook-copilot
@@ -1483,7 +1483,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper-hook-cursor
   host: github.com
-  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
+  resolved_commit: 51f2f4c73ddfaf8f361f83bc489078dfd27c2879
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm-hook-cursor
@@ -1503,7 +1503,7 @@ dependencies:
 - repo_url: scarecrow173/cheaper
   name: cheaper-hook-windsurf
   host: github.com
-  resolved_commit: a980b6d2da978c0e58e4d28fa43caca1fab7f93a
+  resolved_commit: 51f2f4c73ddfaf8f361f83bc489078dfd27c2879
   resolved_ref: main
   version: 1.0.0
   virtual_path: packages/apm-hook-windsurf
