@@ -51,7 +51,7 @@ use std::slice;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
-use ruviform_media_core::{MediaTime, TimeBase, TransportStatus};
+use ruviform_media_core::{MediaTime, MusicalTimeInfo, PPQN, TimeBase, TransportStatus};
 use ruviform_plugin_core::{
     Event, EventKind, EventList, Lifecycle, LifecycleEvent, LifecycleState, ParamEvent, ParamId,
     ParamValue, PluginProcessor, ProcessConfig, ProcessContext, ProcessStatus, TransportInfo,
@@ -266,9 +266,11 @@ impl GainComponent {
 
     /// Maps the optional VST3 `ProcessContext` to the neutral
     /// [`TransportInfo`]: `kPlaying` → `Playing`, otherwise `Stopped`;
-    /// `projectTimeSamples` → `MediaTime` at the negotiated rate.
-    /// Returns `None` when the context is absent or the rate
-    /// unset — matching the neutral `Option<TransportInfo>` contract.
+    /// `projectTimeSamples` → `MediaTime` at the negotiated rate;
+    /// musical fields → [`MusicalTimeInfo`] via
+    /// [`musical_from_context`]. Returns `None` when the context is
+    /// absent or the rate unset — matching the neutral
+    /// `Option<TransportInfo>` contract.
     ///
     /// # Safety
     ///
@@ -289,10 +291,78 @@ impl GainComponent {
         } else {
             TransportStatus::Stopped
         };
-        TimeBase::sample_rate(sample_rate)
-            .ok()
-            .map(|base| TransportInfo::new(status, MediaTime::new(ctx.projectTimeSamples, base)))
+        let musical = musical_from_context(ctx);
+        TimeBase::sample_rate(sample_rate).ok().map(|base| {
+            let info = TransportInfo::new(status, MediaTime::new(ctx.projectTimeSamples, base));
+            match musical {
+                Some(m) => info.with_musical(m),
+                None => info,
+            }
+        })
     }
+}
+
+/// Converts a VST3 PPQ (`TQuarterNotes`) position to PPQN-960 ticks:
+/// `ppq × 960`, rounded to nearest — the inverse of the design's
+/// `tick / 960` mapping. Saturates to the `i64` range.
+///
+/// **RT contract:** RT-suitable — pure math, allocation-free.
+fn ppq_to_ticks(ppq: f64) -> i64 {
+    let ticks = (ppq * 960.0).round();
+    // `as` on a finite f64 saturates at i64 bounds.
+    #[expect(clippy::cast_possible_truncation)]
+    {
+        ticks as i64
+    }
+}
+
+/// Maps a VST3 `ProcessContext`'s musical fields to a neutral
+/// [`MusicalTimeInfo`]: `Some` only when both
+/// `kProjectTimeMusicValid` and `kTempoValid` are set and `tempo` is a
+/// finite positive BPM — no implicit 4/4 or tempo is fabricated.
+/// Signature maps only with `kTimeSigValid` (else `0`/`0`), and
+/// `bar_start_tick` stays `0` unless `kBarPositionValid` accompanies
+/// a valid signature.
+///
+/// **RT contract:** RT-suitable — pure math, allocation-free.
+fn musical_from_context(ctx: &VstProcessContext) -> Option<MusicalTimeInfo> {
+    let state = ctx.state;
+    if state & ProcessContext_::StatesAndFlags_::kProjectTimeMusicValid as u32 == 0
+        || state & ProcessContext_::StatesAndFlags_::kTempoValid as u32 == 0
+        || !ctx.tempo.is_finite()
+        || ctx.tempo <= 0.0
+    {
+        return None;
+    }
+    let bpm_milli = (ctx.tempo * 1_000.0).round().clamp(1.0, 999_999_999.0);
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let bpm_milli = bpm_milli as u32;
+    let (sig_num, sig_den) = if state & ProcessContext_::StatesAndFlags_::kTimeSigValid as u32 != 0
+    {
+        match (
+            u8::try_from(ctx.timeSigNumerator),
+            u8::try_from(ctx.timeSigDenominator),
+        ) {
+            (Ok(n @ 1..), Ok(d @ 1..)) => (n, d),
+            _ => (0, 0),
+        }
+    } else {
+        (0, 0)
+    };
+    Some(MusicalTimeInfo {
+        position_ticks: ppq_to_ticks(ctx.projectTimeMusic),
+        bar_start_tick: if sig_num != 0
+            && state & ProcessContext_::StatesAndFlags_::kBarPositionValid as u32 != 0
+        {
+            ppq_to_ticks(ctx.barPositionMusic)
+        } else {
+            0
+        },
+        bpm_milli,
+        ppqn: PPQN.ticks_per_quarter(),
+        sig_num,
+        sig_den,
+    })
 }
 
 impl IPluginBaseTrait for GainComponent {
@@ -1543,5 +1613,102 @@ mod tests {
             assert_eq!(component.setState(std::ptr::null_mut()), kNotImplemented);
             assert_eq!(component.getState(std::ptr::null_mut()), kNotImplemented);
         }
+    }
+
+    /// A zeroed `ProcessContext` (all-zero is a valid bit pattern for
+    /// this C POD) with `state` flags set — the other fields stay at
+    /// the VST3 "invalid" defaults unless a test fills them.
+    #[expect(unsafe_code)]
+    fn process_context(state: u32) -> VstProcessContext {
+        // SAFETY: `ProcessContext` is a C POD — all-zero is valid.
+        let mut ctx: VstProcessContext = unsafe { core::mem::zeroed() };
+        ctx.state = state;
+        ctx
+    }
+
+    #[test]
+    fn musical_from_context_maps_valid_fields() {
+        use ProcessContext_::StatesAndFlags_ as F;
+        let mut ctx = process_context(
+            F::kProjectTimeMusicValid as u32
+                | F::kTempoValid as u32
+                | F::kTimeSigValid as u32
+                | F::kBarPositionValid as u32,
+        );
+        ctx.projectTimeMusic = 2.5;
+        ctx.barPositionMusic = 2.0;
+        ctx.tempo = 125.5;
+        ctx.timeSigNumerator = 6;
+        ctx.timeSigDenominator = 8;
+
+        let musical = musical_from_context(&ctx).unwrap();
+        assert_eq!(musical.position_ticks, 2_400);
+        assert_eq!(musical.bar_start_tick, 1_920);
+        assert_eq!(musical.bpm_milli, 125_500);
+        assert_eq!(musical.ppqn, 960);
+        assert_eq!((musical.sig_num, musical.sig_den), (6, 8));
+    }
+
+    #[test]
+    fn musical_from_context_gates_and_unset_forms() {
+        use ProcessContext_::StatesAndFlags_ as F;
+        const BOTH: u32 = F::kProjectTimeMusicValid as u32 | F::kTempoValid as u32;
+
+        // Missing position or tempo validity → None.
+        for state in [F::kProjectTimeMusicValid as u32, F::kTempoValid as u32, 0] {
+            let mut ctx = process_context(state);
+            ctx.tempo = 120.0;
+            assert_eq!(musical_from_context(&ctx), None);
+        }
+
+        // Non-positive / non-finite tempo → None.
+        for tempo in [0.0, -120.0, f64::NAN, f64::INFINITY] {
+            let mut ctx = process_context(BOTH);
+            ctx.tempo = tempo;
+            assert_eq!(musical_from_context(&ctx), None);
+        }
+
+        // Without kTimeSigValid: sig 0/0 and bar_start 0 even when
+        // the raw fields carry values and kBarPositionValid is set.
+        let mut ctx = process_context(BOTH | F::kBarPositionValid as u32);
+        ctx.tempo = 120.0;
+        ctx.timeSigNumerator = 4;
+        ctx.timeSigDenominator = 4;
+        ctx.barPositionMusic = 4.0;
+        let musical = musical_from_context(&ctx).unwrap();
+        assert_eq!((musical.sig_num, musical.sig_den), (0, 0));
+        assert_eq!(musical.bar_start_tick, 0);
+        assert_eq!(musical.bpm_milli, 120_000);
+
+        // Signature valid but bar flag absent → bar_start 0.
+        let mut ctx = process_context(BOTH | F::kTimeSigValid as u32);
+        ctx.tempo = 120.0;
+        ctx.timeSigNumerator = 4;
+        ctx.timeSigDenominator = 4;
+        ctx.barPositionMusic = 4.0;
+        let musical = musical_from_context(&ctx).unwrap();
+        assert_eq!((musical.sig_num, musical.sig_den), (4, 4));
+        assert_eq!(musical.bar_start_tick, 0);
+    }
+
+    /// The `transport()` wrapper composes media + musical mapping.
+    #[expect(unsafe_code)]
+    #[test]
+    fn transport_combines_media_and_musical() {
+        use ProcessContext_::StatesAndFlags_ as F;
+        let mut ctx = process_context(
+            F::kPlaying as u32 | F::kProjectTimeMusicValid as u32 | F::kTempoValid as u32,
+        );
+        ctx.projectTimeSamples = 96_000;
+        ctx.projectTimeMusic = 1.0;
+        ctx.tempo = 60.0;
+        // SAFETY: `ctx` outlives the call.
+        let info = unsafe { GainComponent::transport(&raw const ctx, 48_000) }.unwrap();
+        assert_eq!(info.status(), TransportStatus::Playing);
+        assert_eq!(info.position().value(), 96_000);
+        let musical = info.musical().unwrap();
+        assert_eq!(musical.position_ticks, 960);
+        assert_eq!(musical.bpm_milli, 60_000);
+        assert_eq!((musical.sig_num, musical.sig_den), (0, 0));
     }
 }

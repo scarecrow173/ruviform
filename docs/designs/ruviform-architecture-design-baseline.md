@@ -93,6 +93,8 @@ relations:
     - "docs/plans/implement-issue-32-second-target-design.md"
     - "docs/plans/implement-issue-90-music-time-media-core.md"
     - "docs/test-specs/music-time-media-core-tests.md"
+    - "docs/plans/implement-issue-91-musical-transport-abi.md"
+    - "docs/test-specs/musical-transport-abi-tests.md"
   verifies: []
   verified-by: []
   references:

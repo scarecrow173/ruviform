@@ -1,25 +1,27 @@
 //! Standard-neutral transport state: the [`TransportInfo`] snapshot
 //! handed to processing.
 //!
-//! The snapshot is deliberately free of musical time — no bars, beats,
-//! PPQN or tempo. Positions are [`MediaTime`] (a [`TimeBase`] plus an
-//! integer count) only, the same rule as the design baseline's time
-//! model. The opaque `reserved` extension field absorbs a future
-//! musical-time mapping without changing this type's shape — the same
-//! policy as `TransportSnapshot`'s `reserved` in
-//! `ruviform-media-core`.
+//! Positions are [`MediaTime`] (a [`TimeBase`] plus an integer count)
+//! only, the same rule as the design baseline's time model. Musical
+//! transport, when the host provides it, rides in the optional
+//! [`MusicalTimeInfo`] field — a `Copy` ABI snapshot at fixed PPQN
+//! resolution. The opaque `reserved` extension field absorbs future
+//! transport extensions without changing this type's shape — the same
+//! policy as `TransportSnapshot`'s `reserved` in `ruviform-media-core`.
 //!
 //! [`TimeBase`]: ruviform_media_core::TimeBase
 
-use ruviform_media_core::{MediaRange, MediaTime, TransportStatus};
+use ruviform_media_core::{MediaRange, MediaTime, MusicalTimeInfo, TransportStatus};
 
 /// An immutable, standard-neutral transport snapshot for one
-/// processing call: playback status, position and optional loop range.
+/// processing call: playback status, position, optional loop range and
+/// optional musical transport.
 ///
-/// Contains no musical time — `position`/`loop_range` are media times
-/// (`TimeBase` + integer count). `reserved` is an opaque extension
-/// field, always `[0; 2]` today, reserved for the future musical-time
-/// mapping; callers must not interpret its contents.
+/// `position`/`loop_range` are media times (`TimeBase` + integer
+/// count); `musical` is `None` when the host supplies no musical data —
+/// no implicit 4/4 or tempo is assumed. `reserved` is an opaque
+/// extension field, always `[0; 2]` today; callers must not interpret
+/// its contents.
 ///
 /// **RT contract:** RT-suitable — `Copy` value type.
 ///
@@ -34,6 +36,7 @@ use ruviform_media_core::{MediaRange, MediaTime, TransportStatus};
 /// assert_eq!(info.status(), TransportStatus::Playing);
 /// assert_eq!(info.position(), pos);
 /// assert_eq!(info.loop_range(), None);
+/// assert_eq!(info.musical(), None);
 /// assert_eq!(info.reserved(), [0; 2]);
 /// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -41,6 +44,7 @@ pub struct TransportInfo {
     status: TransportStatus,
     position: MediaTime,
     loop_range: Option<MediaRange>,
+    musical: Option<MusicalTimeInfo>,
     reserved: [u64; 2],
 }
 
@@ -54,6 +58,7 @@ impl TransportInfo {
             status,
             position,
             loop_range: None,
+            musical: None,
             reserved: [0; 2],
         }
     }
@@ -86,6 +91,18 @@ impl TransportInfo {
         }
     }
 
+    /// Returns a copy of this snapshot carrying `musical` — the
+    /// musical-time snapshot mapped from the host transport.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn with_musical(self, musical: MusicalTimeInfo) -> Self {
+        Self {
+            musical: Some(musical),
+            ..self
+        }
+    }
+
     /// The playback status.
     ///
     /// **RT contract:** RT-suitable — `const`, pure.
@@ -110,9 +127,17 @@ impl TransportInfo {
         self.loop_range
     }
 
-    /// Opaque extension reserve for the future musical-time mapping
-    /// (currently always `[0; 2]`). Callers must not interpret its
-    /// contents.
+    /// The musical-time snapshot, when the host supplied musical
+    /// transport data for this block.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn musical(self) -> Option<MusicalTimeInfo> {
+        self.musical
+    }
+
+    /// Opaque extension reserve (currently always `[0; 2]`). Callers
+    /// must not interpret its contents.
     ///
     /// **RT contract:** RT-suitable — `const`, pure.
     #[must_use]
