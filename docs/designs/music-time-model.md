@@ -35,10 +35,13 @@ relations:
   derived-by:
     - "docs/plans/implement-issue-33-music-time.md"
     - "docs/plans/implement-issue-90-music-time-media-core.md"
+    - "docs/plans/implement-issue-91-musical-transport-abi.md"
     - "docs/test-specs/music-time-media-core-tests.md"
+    - "docs/test-specs/musical-transport-abi-tests.md"
   verifies: []
   verified-by:
     - "docs/test-specs/music-time-media-core-tests.md"
+    - "docs/test-specs/musical-transport-abi-tests.md"
   references: []
   defers: []
   deferred-by: []
@@ -104,7 +107,7 @@ sorted TimeSignatureEvent[] = {tick, num, den}  // 拍子列（独立マップ�
 
 | 中立 ABI (`MusicalTimeInfo`) | CLAP `clap_event_transport` | VST3 `ProcessContext` |
 | --- | --- | --- |
-| `position_ticks` (PPQN=960) | `song_pos_beats`（`clap_beattime` = 拍の 1/65536）: `tick × 65536 / 960`、round-half-up（往復 ±1 beattime 許容 — ADR 記録） | `project_time_music`（PPQ double）: `tick / 960` |
+| `position_ticks` (PPQN=960) | `song_pos_beats`（`clap_beattime` = 拍の 1/2³¹, `CLAP_BEATTIME_FACTOR`）: `tick × 2³¹ / 960`、round-half-up（往復 ±1 beattime 許容 — ADR 記録） | `project_time_music`（PPQ double）: `tick / 960` |
 | `bpm_milli` | `tempo`（double）: `bpm_milli / 1000.0` | `tempo`（double）: 同左 |
 | `sig_num`/`sig_den` | `tsig_num`/`tsig_denom` | `time_sig_numerator`/`time_sig_denominator` |
 | `bar_start_tick` | `bar_start`（beattime 変換同上） | `bar_position_music`（PPQ 変換同上） |

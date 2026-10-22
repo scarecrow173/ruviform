@@ -20,6 +20,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Jg7SJdGz3QogvORe8QT | メディア I/O 抽象境界とバックエンド PoC の契約保証 | approved | [media-io-abstraction-and-backend-poc.md](./media-io-abstraction-and-backend-poc.md) |
 | TSPEC-034IdHshzpNiPTqyyvwL6J | mise タスクによるローカル・CI 共通検証 | proposed | [mise-verification-tasks.md](./mise-verification-tasks.md) |
 | TSPEC-034KoNprsmdPREx6TtcMB6 | 音楽時間モデル（media-core::music）テスト仕様 | approved | [music-time-media-core-tests.md](./music-time-media-core-tests.md) |
+| TSPEC-034KpKr9gVqJJNxYSJVaQF | 音楽時間 ABI 拡張テスト仕様 | approved | [musical-transport-abi-tests.md](./musical-transport-abi-tests.md) |
 | TSPEC-034JRcGrYYZnirStTwM7Z9 | オフライン実行ドライバ テスト仕様 | draft | [offline-execution-driver-tests.md](./offline-execution-driver-tests.md) |
 | TSPEC-034Jg6YSP6CLjJHnFGG5oL | プラグイン基盤 API の契約保証 | approved | [plugin-foundation.md](./plugin-foundation.md) |
 | TSPEC-034JZPGUI0000000000004 | プラグイン GUI PoC 判定規則 | approved | [plugin-gui-poc.md](./plugin-gui-poc.md) |

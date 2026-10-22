@@ -47,7 +47,9 @@ use clack_plugin::process::audio::{BufferError, ChannelPair, PortPair, SampleTyp
 use clack_plugin::process::{PluginAudioConfiguration, ProcessStatus as ClapProcessStatus};
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
-use ruviform_media_core::{MediaDuration, MediaRange, MediaTime, TimeBase, TransportStatus};
+use ruviform_media_core::{
+    MediaDuration, MediaRange, MediaTime, MusicalTimeInfo, PPQN, TimeBase, TransportStatus,
+};
 use ruviform_plugin_core::{
     Event, EventKind, EventList, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent,
     ParamId, ParamInfo, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
@@ -687,8 +689,26 @@ pub(crate) fn translate_events<'a>(
 // Transport
 // ---------------------------------------------------------------------------
 
+/// Converts a CLAP [`BeatTime`] (i64 fixed-point scaled by
+/// `CLAP_BEATTIME_FACTOR` = 2³¹) to PPQN-960 ticks:
+/// `bits × 960 / 2³¹`, rounded half away from zero — the exact
+/// inverse of `tick × 2³¹ / 960`.
+///
+/// **RT contract:** RT-suitable — pure math, allocation-free.
+fn beats_to_ticks(beats: clack_common::utils::BeatTime) -> i64 {
+    const HALF: i128 = (clack_common::utils::BeatTime::FACTOR / 2) as i128;
+    const FACTOR: i128 = clack_common::utils::BeatTime::FACTOR as i128;
+    let num = i128::from(beats.to_bits()) * 960;
+    let ticks = (num + if num >= 0 { HALF } else { -HALF }) / FACTOR;
+    // Clamped to the `i64` range, so this cast is lossless.
+    #[expect(clippy::cast_possible_truncation)]
+    {
+        ticks.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64
+    }
+}
+
 /// Maps a CLAP [`TransportEvent`] to the neutral [`TransportInfo`]
-/// snapshot — media time only, no musical time.
+/// snapshot.
 ///
 /// Status: `IS_PLAYING` or `IS_RECORDING` → `Playing`, otherwise
 /// `Stopped`. Position: `song_pos_seconds` × sample-rate when the
@@ -696,6 +716,13 @@ pub(crate) fn translate_events<'a>(
 /// counter, else zero. The loop range maps when both
 /// `IS_LOOP_ACTIVE` and a seconds timeline are present and
 /// `end > start`.
+///
+/// Musical transport maps to [`MusicalTimeInfo`] when both
+/// `HAS_BEATS_TIMELINE` and `HAS_TEMPO` are set and `tempo` is a
+/// finite positive BPM; otherwise `musical()` is `None` — no implicit
+/// 4/4 or tempo is fabricated. Signature fields map only with
+/// `HAS_TIME_SIGNATURE` (else `0`/`0`), and `bar_start_tick` stays
+/// `0` when no signature applies.
 ///
 /// **RT contract:** RT-suitable — pure math, allocation-free.
 pub(crate) fn adapt_transport(
@@ -741,6 +768,39 @@ pub(crate) fn adapt_transport(
                 MediaDuration::new(end_s - start_s, base),
             ));
         }
+    }
+    if flags.contains(TransportFlags::HAS_BEATS_TIMELINE | TransportFlags::HAS_TEMPO)
+        && transport.tempo.is_finite()
+        && transport.tempo > 0.0
+    {
+        let bpm_milli = (transport.tempo * 1_000.0)
+            .round()
+            .clamp(1.0, 999_999_999.0);
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let bpm_milli = bpm_milli as u32;
+        let (sig_num, sig_den) = if flags.contains(TransportFlags::HAS_TIME_SIGNATURE) {
+            match (
+                u8::try_from(transport.time_signature_numerator),
+                u8::try_from(transport.time_signature_denominator),
+            ) {
+                (Ok(n @ 1..), Ok(d @ 1..)) => (n, d),
+                _ => (0, 0),
+            }
+        } else {
+            (0, 0)
+        };
+        info = info.with_musical(MusicalTimeInfo {
+            position_ticks: beats_to_ticks(transport.song_pos_beats),
+            bar_start_tick: if sig_num != 0 {
+                beats_to_ticks(transport.bar_start)
+            } else {
+                0
+            },
+            bpm_milli,
+            ppqn: PPQN.ticks_per_quarter(),
+            sig_num,
+            sig_den,
+        });
     }
     info
 }
@@ -1544,6 +1604,83 @@ mod tests {
                 MediaDuration::new(96_000, base),
             ))
         );
+    }
+
+    #[test]
+    fn adapt_transport_maps_musical_fields() {
+        let rate = SampleRate::new(RATE).unwrap();
+        let flags = TransportFlags::HAS_BEATS_TIMELINE
+            | TransportFlags::HAS_TEMPO
+            | TransportFlags::HAS_TIME_SIGNATURE;
+        let mut transport = transport_with(flags, 0.0);
+        transport.song_pos_beats = BeatTime::from_float(2.5);
+        transport.bar_start = BeatTime::from_float(2.0);
+        transport.tempo = 125.5;
+        transport.time_signature_numerator = 6;
+        transport.time_signature_denominator = 8;
+
+        let musical = adapt_transport(&transport, rate, None).musical().unwrap();
+        assert_eq!(musical.position_ticks, 2_400);
+        assert_eq!(musical.bar_start_tick, 1_920);
+        assert_eq!(musical.bpm_milli, 125_500);
+        assert_eq!(musical.ppqn, 960);
+        assert_eq!((musical.sig_num, musical.sig_den), (6, 8));
+
+        // Rounding is half away from zero around a half tick:
+        // 0.5 tick is 2³⁰/960 ≈ 1_118_481.07 bits — one bit below
+        // rounds to 0, one bit above rounds to 1.
+        transport.song_pos_beats = BeatTime::from_bits(1_118_481);
+        assert_eq!(
+            adapt_transport(&transport, rate, None)
+                .musical()
+                .unwrap()
+                .position_ticks,
+            0
+        );
+        transport.song_pos_beats = BeatTime::from_bits(1_118_482);
+        assert_eq!(
+            adapt_transport(&transport, rate, None)
+                .musical()
+                .unwrap()
+                .position_ticks,
+            1
+        );
+    }
+
+    #[test]
+    fn adapt_transport_musical_gates_and_unset_forms() {
+        let rate = SampleRate::new(RATE).unwrap();
+
+        // Missing beats timeline or tempo → no musical snapshot.
+        for flags in [
+            TransportFlags::HAS_TEMPO,
+            TransportFlags::HAS_BEATS_TIMELINE,
+            TransportFlags::empty(),
+        ] {
+            let mut transport = transport_with(flags, 0.0);
+            transport.tempo = 120.0;
+            assert_eq!(adapt_transport(&transport, rate, None).musical(), None);
+        }
+
+        // Non-positive / non-finite tempo → None.
+        for tempo in [0.0, -120.0, f64::NAN, f64::INFINITY] {
+            let mut transport = transport_with(
+                TransportFlags::HAS_BEATS_TIMELINE | TransportFlags::HAS_TEMPO,
+                0.0,
+            );
+            transport.tempo = tempo;
+            assert_eq!(adapt_transport(&transport, rate, None).musical(), None);
+        }
+
+        // Without HAS_TIME_SIGNATURE: sig is 0/0 and bar_start is 0,
+        // even though the fixture carries a signature.
+        let flags = TransportFlags::HAS_BEATS_TIMELINE | TransportFlags::HAS_TEMPO;
+        let mut transport = transport_with(flags, 0.0);
+        transport.bar_start = BeatTime::from_float(4.0);
+        let musical = adapt_transport(&transport, rate, None).musical().unwrap();
+        assert_eq!((musical.sig_num, musical.sig_den), (0, 0));
+        assert_eq!(musical.bar_start_tick, 0);
+        assert_eq!(musical.bpm_milli, 120_000);
     }
 
     // -- Status mapping ------------------------------------------------------
