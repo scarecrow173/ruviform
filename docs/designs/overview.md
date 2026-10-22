@@ -100,5 +100,6 @@ Optional platform adapters（opt-in・基礎層への依存は下向きのみ）
 - [issue-28-ui-poc.md](issue-28-ui-poc.md) — Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式、`poc/ui/` 独立ワークスペース・`ui-poc` 実験ハーネス・採否 ADR へのエビデンス供給）(approved)
 - [replace-template-derived-docs-with-ruviform.md](replace-template-derived-docs-with-ruviform.md) — テンプレート由来ドキュメント・識別子のRuviform固有化の設計（README/AGENTS 改稿・識別子更新の文書設計、Issue #3）(approved)
 - [ruviform-architecture-design-baseline.md](ruviform-architecture-design-baseline.md) — Ruviform アーキテクチャ設計ベースライン（クレート DAG・データモデル・RT/オフライン実行モデル・DSP/SIMD・プラグイン・UI・検証計画・暫定ロードマップ、Issue #1）(approved)
+- [shared-foundations-and-modularization-policy.md](shared-foundations-and-modularization-policy.md) — 汎用 Foundation・Observability（Logging/Profiling/Metrics/Diagnostics/Debug）と段階的なクレート分割・依存/RT 境界の設計方針（方向性 approved、具体 API・新設は未決定）
 - [audio-device-boundary-and-poc.md](audio-device-boundary-and-poc.md) — オーディオデバイス境界（ポート trait・cpal adapter・コールバック配管）と PoC 検証設計（Issue #23）(approved)
 - [time-model-extension.md](time-model-extension.md) — 時間モデル拡張の設計（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針、Issue #42）(approved)
