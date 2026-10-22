@@ -22,6 +22,7 @@ Directory: `docs/specs`
 | SPEC-034J6OCXHiP1izKRzbMmgz | Issue #18 フォローアップ（公開 enum 方針適用・時間演算修正・改善トリアージ） | implemented | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
 | SPEC-034Jc9BJlI7ULEBWoIlMP2 | Issue #28 UI 技術検証 PoC（wry・描画バックエンド・フロントエンド FW・配布） | implemented | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
+| SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |
 | SPEC-034JRarfc0pLFZoZeGMVhn | オフライン実行ドライバ（チャンク駆動・進捗/キャンセル・決定論モード） | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | SPEC-034JZPGUI0000000000001 | プラグイン GUI PoC（規格準拠ネイティブビューへの WebView 埋め込み検証） | approved | [plugin-gui-poc.md](./plugin-gui-poc.md) |
 | SPEC-034JZLISO0000000000001 | プラグイン分離方式設計（サンドボックス・プロセス分離） | approved | [plugin-isolation-design.md](./plugin-isolation-design.md) |

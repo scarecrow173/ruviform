@@ -74,6 +74,9 @@ relations:
     - "../plans/implement-plugin-foundation.md"
     - "../test-specs/plugin-foundation.md"
     - "docs/specs/plugin-isolation-design.md"
+    - "docs/specs/music-time-design.md"
+    - "docs/adr/musical-time-model.md"
+    - "docs/designs/music-time-model.md"
   verifies: []
   verified-by: []
   references:
