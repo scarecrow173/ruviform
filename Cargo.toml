@@ -21,6 +21,8 @@ members = [
     "crates/ruviform-video-core",
     "crates/ruviform-video",
     "crates/ruviform-video-proc",
+    # Foundations (audio DSP kernels)
+    "crates/ruviform-dsp",
     "crates/ruviform-media-io",
     "crates/ruviform-io-symphonia",
     # Adapters（ドメイン基盤の外側・engine と同じ利用側層。Issue #23 PoC で新設）

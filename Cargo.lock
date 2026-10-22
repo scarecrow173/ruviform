@@ -1232,6 +1232,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-dsp"
+version = "0.1.0"
+dependencies = [
+ "assert_no_alloc",
+ "ruviform-audio-core",
+ "ruviform-math",
+ "ruviform-media-core",
+]
+
+[[package]]
 name = "ruviform-exec"
 version = "0.1.0"
 dependencies = [

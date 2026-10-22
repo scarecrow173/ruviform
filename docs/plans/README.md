@@ -26,6 +26,7 @@ Directory: `docs/plans`
 | PLAN-034JNstCXHhzzwOvo9iiCv | Issue #58 時間型拡張の実装（FrameRate 導入・Timecode シグネチャ移行・丸め誤差テスト） | completed | [implement-issue-58-time-type-extension.md](./implement-issue-58-time-type-extension.md) |
 | PLAN-034JOq2pk8YxpxyUXNJGFN | Issue #59 chunk 分割時の per-chunk timestamp 合成の実施 | approved | [implement-issue-59-chunk-timestamp.md](./implement-issue-59-chunk-timestamp.md) |
 | PLAN-FcYqNdQHMlWhhFuRcYDyWi | Issue #74 実施計画 — ruviform-plugin-host（L0）新設 | approved | [implement-issue-74-plugin-host-l0.md](./implement-issue-74-plugin-host-l0.md) |
+| PLAN-FHZdvjxcjsxFNodfVh9zOt | Issue #75 実施計画 — ruviform-dsp 新設 | approved | [implement-issue-75-ruviform-dsp.md](./implement-issue-75-ruviform-dsp.md) |
 | PLAN-034JcvpHIlt5JmqvgOquvI | プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding PoC） | completed | [implement-plugin-foundation.md](./implement-plugin-foundation.md) |
 | PLAN-034JxNegJktSAJZ2LuO0N8 | Issue #21 RT 基盤の実装（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | completed | [implement-rt-foundation.md](./implement-rt-foundation.md) |
 | PLAN-034J6OTwge4rS96WZWkZgd | Issue #18 フォローアップの実装（公開 enum 方針適用・時間演算修正・改善トリアージ） | completed | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
