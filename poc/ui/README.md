@@ -21,9 +21,12 @@
 - Rust toolchain: リポジトリ pin（mise `rust = "1.99.0"`）。cargo コマンドは
   **`mise exec --` 経由**で呼ぶこと
 - WebView2 Runtime（Windows 11 では標準同梱。`--check` で `webview2_version` を検出）
-- Node.js + npm（`frontend/` のビルドに使用。npm workspaces: `bench-shared`
-  （FW 非依存のワークロード・rAF 統計・レンダラ・ipc ブリッジ・ipcbench・
-  DOM mutation 計装）と `vanilla`（Vite + TypeScript 参照 UI）・
+- Node.js + npm（`frontend/` のビルドに使用。リポジトリ pin（mise
+  `node = "26.12.1"`、Issue #83 のセキュリティ修正版）を `mise install`
+  で復元し、npm コマンドは **`mise exec --` 経由**で呼ぶこと。
+  npm workspaces: `bench-shared`（FW 非依存のワークロード・rAF 統計・
+  レンダラ・ipc ブリッジ・ipcbench・DOM mutation 計装）と
+  `vanilla`（Vite + TypeScript 参照 UI）・
   `solid`（vite-plugin-solid + solid-js の fine-grained signals UI）・
   `ipc`（AC4 メッセージ境界ベンチ）を `npm run build` で一括ビルドし、
   `build.mjs` が `dist/` を集約する）
@@ -31,9 +34,10 @@
 ## セットアップ
 
 ```sh
+mise install --locked node   # mise.lock 記録の Node.js 26.12.1 を復元
 cd poc/ui/frontend
-npm ci          # package-lock.json から復元（workspaces 全依存）
-npm run build   # workspaces ビルド + dist/ 集約（.ui-poc-built マーカー配置）
+mise exec -- npm ci          # package-lock.json から復元（workspaces 全依存）
+mise exec -- npm run build   # workspaces ビルド + dist/ 集約（.ui-poc-built マーカー配置）
 cd ../..
 ```
 
