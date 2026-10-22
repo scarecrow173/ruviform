@@ -30,6 +30,7 @@ relations:
   derived-by:
     - "docs/designs/plugin-isolation.md"
     - "docs/designs/plugin-host-l0.md"
+    - "docs/adr/ofx-video-plugin-scope.md"
   verifies: []
   verified-by: []
   references: []

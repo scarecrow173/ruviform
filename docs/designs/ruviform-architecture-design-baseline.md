@@ -85,6 +85,12 @@ relations:
     - "docs/designs/ruviform-dsp.md"
     - "docs/plans/implement-issue-75-ruviform-dsp.md"
     - "docs/test-specs/ruviform-dsp-tests.md"
+    - "docs/specs/second-target-design.md"
+    - "docs/adr/second-target-editing-model.md"
+    - "docs/adr/ofx-video-plugin-scope.md"
+    - "docs/adr/broad-color-management.md"
+    - "docs/designs/second-target-design.md"
+    - "docs/plans/implement-issue-32-second-target-design.md"
   verifies: []
   verified-by: []
   references:

@@ -82,6 +82,7 @@ Directory: `docs/tasks`
 | TASK-034Jf49f5gwAy5fpTPvXG9 | ベンチ実行と結果収集 | done | [run-simd-bench-and-collect-results.md](./run-simd-bench-and-collect-results.md) |
 | TASK-H0PE3xMNpsPWNpf1zHdJtV | Issue #75 文書クローズと全量検証 | done | [ruviform-dsp-closeout.md](./ruviform-dsp-closeout.md) |
 | TASK-mNC1TFjl14YiCKvImNjrB6 | ruviform-dsp クレート実装 + テスト | done | [ruviform-dsp-crate.md](./ruviform-dsp-crate.md) |
+| TASK-6yBeOSA8bu0fh2nwosiwVj | 第 2 ターゲット設計の整合検証 + Issue #32 クローズ | done | [second-target-design-verify.md](./second-target-design-verify.md) |
 | TASK-034JQH8VJI6x2EXHMsOJU9 | 公開カーネル API + ルーティング + panic-free 化 + 精度契約 doc | done | [simd-dispatch-api-routing.md](./simd-dispatch-api-routing.md) |
 | TASK-034JQH9WjGTpvxbXgZ1sXR | Issue #53 文書クローズと全量検証 | done | [simd-dispatch-closeout.md](./simd-dispatch-closeout.md) |
 | TASK-034JQH8r1Mfi5CItnm9Ebf | fearless_simd 昇格 + dsp モジュール新設（SimdToken + カーネル本体） | done | [simd-dispatch-token-and-kernels.md](./simd-dispatch-token-and-kernels.md) |
