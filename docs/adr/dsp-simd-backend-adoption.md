@@ -50,6 +50,7 @@ relations:
     - "../specs/simd-dispatch-layer.md"
     - "../adr/denormal-mitigation-policy.md"
     - "../specs/denormal-mitigation.md"
+    - "docs/designs/ruviform-dsp.md"
   verifies: []
   verified-by: []
   references:

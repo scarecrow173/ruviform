@@ -45,6 +45,7 @@ relations:
     - "../adr/simd-ulp.md"
   derived-by:
     - "../plans/implement-issue-53-simd-dispatch-layer.md"
+    - "docs/designs/ruviform-dsp.md"
   verifies: []
   verified-by: []
   references: []

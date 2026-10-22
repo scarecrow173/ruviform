@@ -81,6 +81,10 @@ relations:
     - "docs/designs/plugin-host-l0.md"
     - "docs/plans/implement-issue-74-plugin-host-l0.md"
     - "docs/test-specs/plugin-host-l0-tests.md"
+    - "docs/specs/ruviform-dsp.md"
+    - "docs/designs/ruviform-dsp.md"
+    - "docs/plans/implement-issue-75-ruviform-dsp.md"
+    - "docs/test-specs/ruviform-dsp-tests.md"
   verifies: []
   verified-by: []
   references:
