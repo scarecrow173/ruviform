@@ -32,7 +32,9 @@ relations:
     - "../designs/ruviform-architecture-design-baseline.md"
     - "realtime-contract-and-verification-policy.md"
     - "public-enum-non-exhaustive-policy.md"
-  derived-by: []
+  derived-by:
+    - "docs/adr/broad-color-management.md"
+    - "docs/plans/implement-issue-26-video-foundation.md"
   verifies: []
   verified-by: []
   references:
