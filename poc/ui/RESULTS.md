@@ -483,3 +483,57 @@ pollster / raw-window-handle / flate2 / winreg・windows（Windows のみ）は
 `exp/surface.rs`（AC3）の `#[expect(unsafe_code)]` + SAFETY コメント付き
 局所許可（計 12 箇所）に限定され、`poc/ui/Cargo.toml` の
 `unsafe_code = "warn"` と `clippy -D warnings` で封じ込めを機械検証する。
+
+## Follow-up — Issue #57 高負荷再計測（2026-11、Windows 11 x64・WebView2 155.0.4283.62・60Hz）
+
+ワークロードを `--peaks`/`--meters`/`--preview` でスケールして再計測
+（実装: `bench-shared` の `WorkloadGenerator` 引数化 + 720p `PreviewLayer`）。
+**従来の 60fps/dropped=0 は基準 workload (~2,000点+8メータ) 限定の値であり SLA ではない**
+ことが今回の計測で確定。証跡: `out/load-*.jsonl`・`docs/impl/exp/issue-57-high-load-webgpu-multi-webview.jsonl`。
+
+| 判定 | 負荷 | backend | frame_time_ms avg/p99 | dropped | achieved_fps | work_time_ms avg/p99 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **passed** | timeline 10k列/64メータ | canvas2d | 32.6 / 50.0 | 0 | **30.7** | 3.9 / 5.3 |
+| **passed** | timeline 10k列/64メータ | webgl2 | 16.7 / 16.9 | 0 | 60.0 | 5.7 / 21.1 |
+| **passed** | timeline 32k列/128メータ | canvas2d | 114.2 / 133.4 | 0 | **8.75** | 16.9 / 18.2 |
+| **passed** | timeline 32k列/128メータ | webgl2 | 17.3 / 33.3 | 2 | 57.9 | 13.5 / 38.7 |
+| **passed** | 基準 + 720p プレビュー | canvas2d | 16.7 / 16.8 | 0 | 60.0 | 1.1 / 3.1 |
+| **passed** | 基準 + 720p プレビュー | webgl2 | 16.7 / 16.9 | 0 | 60.0 | 1.3 / 3.1 |
+| **passed** | 32k列/128メータ + プレビュー | canvas2d | 114.9 / 133.4 | 0 | **8.70** | 12.5 / 15.7 |
+| **passed** | 32k列/128メータ + プレビュー | webgl2 | 16.7 / 16.8 | 0 | 60.0 | 15.9 / 16.8 |
+
+所見:
+
+- **canvas2d は大規模タイムラインで破綻**: 10k 列で vsync 半分（30fps）、32k 列で 8.7fps。
+  JS work_time 自体は小さく、パス描画のラスター側が支配（frame_time 114ms ≫ work 17ms）。
+- **webgl2 は 32k 列 + プレビューでも 60fps 維持**、ただし work_time avg 15.9ms・p99 16.8ms
+  で 16.7ms 予算の限界 — これ以上の列数や併用負荷ではドロップする見込み。
+- 720p プレビュー単体の追加コストは ~0.6-0.8ms/frame。
+
+### WebView2 内 WebGPU 有効化経路（#57）
+
+- **根因確定**: `navigator_gpu=false` は WebView2 の機能不足ではなく、wry が Windows で
+  `poc://app` → `http://poc.app` に書き換える**非セキュアコンテキスト**が原因
+  （`navigator.gpu` は SecureContext 限定 API）。
+- **検証済み**: `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--unsafely-treat-insecure-origin-as-secure=http://poc.app`
+  で `navigator_gpu=true`・`webgpu_adapter=(nvidia/lovelace)`・`backend_used=webgpu`・60fps
+  （`out/webgpu-secure-origin.jsonl`）。
+- **本番経路**: browser flags は MS が「開発用途・本番出荷不可」と明記。本番では
+  `SetVirtualHostNameToFolderMapping` による **https 仮想ホスト**等の真正セキュアオリジンで
+  UI を配信すれば opt-in なしで WebGPU が使える見込み（macOS/Linux 実機確認は残課題）。
+
+### wry PR #1762（ICoreWebView2CompositionController）
+
+- 2026-11 時点 **open・mergeable_state=blocked**（最終更新 2026-07-22）。引き続き追跡。
+
+### 再現
+
+```sh
+# タイムライン負荷
+mise exec -- ui-poc --experiment render --backend webgl2 --frames 300 --peaks 32000 --meters 128
+# プレビュー負荷
+mise exec -- ui-poc --experiment render --backend canvas2d --frames 300 --preview
+# WebGPU（セキュアオリジン扱い）
+WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--unsafely-treat-insecure-origin-as-secure=http://poc.app" \
+  mise exec -- ui-poc --experiment render --backend webgpu --frames 120
+```

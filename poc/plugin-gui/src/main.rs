@@ -4,7 +4,8 @@
 //! 計測は `poc-metric.v1` 形式（JSON Lines）を stdout と
 //! `--out <path>` のファイルへ出力する。
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::num::NonZeroIsize;
@@ -12,9 +13,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use dpi::{PhysicalPosition, PhysicalSize, Position, Size};
-use raw_window_handle::{
-    HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle,
-};
+use raw_window_handle::{HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle};
 use wry::{PageLoadEvent, Rect, WebView, WebViewBuilder};
 
 /// raw-window-handle adapter around a host-provided HWND — the same
@@ -72,17 +71,15 @@ unsafe extern "system" fn host_wndproc(
     lparam: windows::Win32::Foundation::LPARAM,
 ) -> windows::Win32::Foundation::LRESULT {
     // SAFETY: 素 Win32 窓プロシージャ — DefWindowProcW へ全転送。
-    unsafe {
-        windows::Win32::UI::WindowsAndMessaging::DefWindowProcW(hwnd, msg, wparam, lparam)
-    }
+    unsafe { windows::Win32::UI::WindowsAndMessaging::DefWindowProcW(hwnd, msg, wparam, lparam) }
 }
 
 #[cfg(windows)]
 fn run() -> i32 {
-    use windows::core::w;
     use windows::Win32::Foundation::{LPARAM, WPARAM};
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::WindowsAndMessaging::*;
+    use windows::core::w;
 
     let out = std::env::args()
         .position(|a| a == "--out")
@@ -218,12 +215,282 @@ fn run() -> i32 {
     }
 }
 
+/// Issue #57 高負荷再計測 — 複数プラグイン GUI 共存の近似実験。
+/// `--count N --frames M` で N 個の子 HWND にそれぞれ wry WebView を
+/// `build_as_child` で attach し、各 WebView がプラグイン GUI 相当の
+/// rAF アニメーション（回転ノブ 24 個）を M フレーム回したのち
+/// `window.ipc.postMessage` で統計を返す。全 WebView 完了時に
+/// 集約メトリクスを poc-metric.v1 で出力する。
+#[cfg(windows)]
+fn run_multi(count: usize, frames: u32, duration_secs: u64, out: Option<File>) -> i32 {
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::WindowsAndMessaging::*;
+    use windows::core::w;
+
+    let mut m = Metrics { out };
+    let mem_before = working_set_bytes();
+
+    // グリッド配置（セル 400x300。count 上限は画面実用域として 16）。
+    let cols = (count as f64).sqrt().ceil() as u32;
+    let rows = count.div_ceil(cols as usize) as u32;
+    let (cw, ch) = (400i32, 300i32);
+    let (pw, ph) = (cols as i32 * cw, rows as i32 * ch + 40);
+
+    // SAFETY: 単一 WebView 版と同じ Win32 標準契約。class/hwnd は本スレッド内で完結。
+    let hwnd = unsafe {
+        let hinstance = GetModuleHandleW(None).unwrap();
+        let class = w!("plugin_gui_poc_parent");
+        let wc = WNDCLASSW {
+            lpfnWndProc: Some(host_wndproc),
+            hInstance: hinstance.into(),
+            lpszClassName: class,
+            ..Default::default()
+        };
+        RegisterClassW(&wc);
+        CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            class,
+            w!("plugin-gui-poc multi parent"),
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            pw,
+            ph,
+            None,
+            None,
+            Some(hinstance.into()),
+            None,
+        )
+        .unwrap()
+    };
+
+    // 各 WebView の done 統計を idx 付きで集約。
+    let done_map: Rc<RefCell<HashMap<usize, serde_json::Value>>> =
+        Rc::new(RefCell::new(HashMap::new()));
+    let loaded = Rc::new(Cell::new(0usize));
+    let start = Instant::now();
+
+    let bench_html = |idx: usize| -> String {
+        format!(
+            r#"<!doctype html><title>pgui-bench {idx}</title>
+            <body style="margin:0;background:#181820;overflow:hidden">
+            <canvas id="c" width="380" height="280"></canvas>
+            <script>
+            const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+            const FRAMES={frames},IDX={idx};
+            let prev,times=[],work=[],n=0;
+            function draw(t){{
+             ctx.fillStyle='#181820';ctx.fillRect(0,0,cv.width,cv.height);
+             for(let i=0;i<24;i++){{
+              const a=t*0.001*(1+i*0.07)+i;
+              const cx=40+(i%6)*60,cy=50+((i/6)|0)*60;
+              ctx.strokeStyle='hsl('+((i*40+t*0.05)%360)+',70%,60%)';ctx.lineWidth=3;
+              ctx.beginPath();ctx.arc(cx,cy,18,a,a+Math.PI*1.5);ctx.stroke();
+              ctx.fillStyle='#ccc';ctx.fillRect(cx-2,cy-18,4,10*Math.abs(Math.sin(a))+2);
+             }}
+            }}
+            function loop(ts){{
+             if(prev!==undefined&&n>=12)times.push(ts-prev);
+             prev=ts;
+             const w0=performance.now();draw(ts);work.push(performance.now()-w0);
+             n++;
+             if(n<FRAMES+12){{requestAnimationFrame(loop);}}
+             else{{
+              const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+              const dropped=times.filter(t=>t>33.4).length;
+              window.ipc.postMessage(JSON.stringify({{type:'done',idx:IDX,
+               frames:times.length,dropped,frame_avg_ms:avg(times),
+               work_avg_ms:avg(work)}}));
+             }}
+            }}
+            requestAnimationFrame(loop);
+            </script></body>"#,
+            frames = frames,
+            idx = idx
+        )
+    };
+
+    let mut webviews = Vec::new();
+    let mut attach_failed = 0usize;
+    for i in 0..count {
+        let col = (i % cols as usize) as i32;
+        let row = (i / cols as usize) as i32;
+        // SAFETY: 子 HWND は親 hwnd 直下に生成。Win32 標準契約。
+        let child = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                w!("plugin_gui_poc_parent"),
+                w!("child"),
+                WS_CHILD | WS_VISIBLE,
+                col * cw,
+                row * ch + 40,
+                cw,
+                ch,
+                Some(hwnd),
+                None,
+                Some(GetModuleHandleW(None).unwrap().into()),
+                None,
+            )
+            .unwrap()
+        };
+        let parent = HostWindow(child);
+        let done_map = Rc::clone(&done_map);
+        let loaded = Rc::clone(&loaded);
+        let r = WebViewBuilder::new()
+            .with_html(&bench_html(i))
+            .with_ipc_handler(move |req| {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(req.body()) {
+                    if v.get("type").and_then(|t| t.as_str()) == Some("done") {
+                        let idx =
+                            v.get("idx")
+                                .and_then(|x| x.as_u64())
+                                .unwrap_or(usize::MAX as u64) as usize;
+                        done_map.borrow_mut().insert(idx, v);
+                    }
+                }
+            })
+            .with_on_page_load_handler(move |event, _| {
+                if matches!(event, PageLoadEvent::Finished) {
+                    loaded.set(loaded.get() + 1);
+                }
+            })
+            .with_bounds(Rect {
+                position: Position::Physical(PhysicalPosition::new(0, 0)),
+                size: Size::Physical(PhysicalSize::new(cw as u32, ch as u32)),
+            })
+            .build_as_child(&parent);
+        match r {
+            Ok(w) => webviews.push(w),
+            Err(e) => {
+                attach_failed += 1;
+                m.emit("multi_attach", "failed", &format!("child {i}: {e}"));
+            }
+        }
+    }
+    m.emit(
+        "multi_attach",
+        if attach_failed == 0 {
+            "passed"
+        } else {
+            "failed"
+        },
+        &format!("{} of {} webviews attached", webviews.len(), count),
+    );
+
+    // メッセージループ: 全 WebView の done 受信 or タイムアウトで終了。
+    let mut msg = MSG::default();
+    let result = loop {
+        let mut quit = false;
+        // SAFETY: 標準 Win32 メッセージ処理。
+        unsafe {
+            while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+                if msg.message == WM_QUIT {
+                    quit = true;
+                    break;
+                }
+                let _ = TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
+        if quit {
+            break "quit";
+        }
+        let done = done_map.borrow().len();
+        if done >= count {
+            break "done";
+        }
+        if start.elapsed().as_secs() > duration_secs {
+            break "timeout";
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    let _ = webviews; // Drop でデタッチされるまで生存させる（本ループ終了時点で破棄）
+
+    let map = done_map.borrow();
+    let n = map.len().max(1) as f64;
+    let sum = |k: &str| -> f64 {
+        map.values()
+            .filter_map(|v| v.get(k).and_then(|x| x.as_f64()))
+            .sum()
+    };
+    let min_frames = map
+        .values()
+        .filter_map(|v| v.get("frames").and_then(|x| x.as_u64()))
+        .min()
+        .unwrap_or(0);
+    m.emit(
+        "multi_done",
+        if result == "done" { "passed" } else { "failed" },
+        &format!("{} of {} webviews done ({result})", map.len(), count),
+    );
+    m.emit("multi_min_frames", "passed", &min_frames.to_string());
+    m.emit(
+        "multi_dropped_total",
+        "passed",
+        &(sum("dropped") as u64).to_string(),
+    );
+    m.emit(
+        "multi_frame_avg_ms",
+        "passed",
+        &format!("{:.3}", sum("frame_avg_ms") / n),
+    );
+    m.emit(
+        "multi_work_avg_ms",
+        "passed",
+        &format!("{:.3}", sum("work_avg_ms") / n),
+    );
+    m.emit(
+        "multi_mem_delta_bytes",
+        "passed",
+        &(working_set_bytes() as i64 - mem_before as i64).to_string(),
+    );
+    m.emit(
+        "multi_elapsed_ms",
+        "passed",
+        &start.elapsed().as_millis().to_string(),
+    );
+    if result == "done" && attach_failed == 0 {
+        0
+    } else {
+        1
+    }
+}
+
+#[cfg(not(windows))]
+fn run_multi(_count: usize, _frames: u32, _duration_secs: u64, _out: Option<File>) -> i32 {
+    eprintln!("plugin-gui-poc: windows only (this host is skipped)");
+    2
+}
+
 #[cfg(not(windows))]
 fn run() -> i32 {
     eprintln!("plugin-gui-poc: windows only (this host is skipped)");
     2
 }
 
+fn arg_value(flag: &str) -> Option<String> {
+    std::env::args()
+        .position(|a| a == flag)
+        .and_then(|i| std::env::args().nth(i + 1))
+}
+
 fn main() {
+    let out = arg_value("--out").and_then(|p| File::create(p).ok());
+    if let Some(count) = arg_value("--count") {
+        let count: usize = count.parse().unwrap_or(0);
+        let frames: u32 = arg_value("--frames")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(300);
+        let duration: u64 = arg_value("--duration")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(60);
+        if count == 0 || count > 16 {
+            eprintln!("plugin-gui-poc: --count must be 1..=16");
+            std::process::exit(2);
+        }
+        std::process::exit(run_multi(count, frames, duration, out));
+    }
+    // 既存の単一 WebView 実験（`--out` は既に消費済みなので run() 側で再解決しない）。
+    let _ = out;
     std::process::exit(run());
 }

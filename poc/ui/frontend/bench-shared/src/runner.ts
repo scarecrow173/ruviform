@@ -8,7 +8,12 @@ import { MutationMeter } from "./mutations";
 import { createRenderer } from "./renderers";
 import type { BackendName } from "./renderers";
 import { FrameRecorder, summarizeFrames } from "./stats";
-import { METER_CHANNELS, WorkloadGenerator } from "./workload";
+import {
+  METER_CHANNELS,
+  PEAK_COLUMNS,
+  PreviewLayer,
+  WorkloadGenerator,
+} from "./workload";
 
 /** warmup として記録対象外とする先頭フレーム数（初動コストを統計から除く）。 */
 export const WARMUP_FRAMES = 12;
@@ -36,6 +41,16 @@ export interface BenchElements {
 
 export type BenchState = "idle" | "running" | "done" | "error";
 
+/** Issue #57 高負荷再計測のワークロードスケール（未指定は基準値）。 */
+export interface LoadConfig {
+  /** ピーク列数（既定 PEAK_COLUMNS=1000）。 */
+  peaks?: number;
+  /** レベルメータチャンネル数（既定 METER_CHANNELS=8）。 */
+  meters?: number;
+  /** 720p 合成プレビューレイヤーを毎フレーム描画する（動画プレビュー近似）。 */
+  preview?: boolean;
+}
+
 export class BenchRunner {
   private state: BenchState = "idle";
   private framesDone = 0;
@@ -51,7 +66,11 @@ export class BenchRunner {
   }
 
   /** `__poc.start` から呼ばれる実行本体。二重起動は冪等に無視する。 */
-  async start(cfg: { backend: BackendName; frames: number }): Promise<void> {
+  async start(cfg: {
+    backend: BackendName;
+    frames: number;
+    load?: LoadConfig;
+  }): Promise<void> {
     if (this.state !== "idle") return;
     this.state = "running";
     try {
@@ -59,13 +78,18 @@ export class BenchRunner {
         cfg.backend,
         this.els.canvas
       );
+      const columns = cfg.load?.peaks ?? PEAK_COLUMNS;
+      const meterChannels = cfg.load?.meters ?? METER_CHANNELS;
       // FW 側 driver があればそちらへ委譲し、無ければ vanilla と同じ
       // 命令的 DOM メータを `metersEl` 内に構築する。どちらが走ったかを
       // stats.meters_driver に残す（注入パス利用の証跡 — AC5）。
       const meters =
-        this.els.metersHost ?? createMeterHost(this.els.metersEl, METER_CHANNELS);
+        this.els.metersHost ??
+        createMeterHost(this.els.metersEl, meterChannels);
       const metersDriver = this.els.metersHost ? "injected" : "createMeterHost";
-      const gen = new WorkloadGenerator();
+      const gen = new WorkloadGenerator(columns, meterChannels);
+      const preview = cfg.load?.preview ? new PreviewLayer() : null;
+      if (preview) this.els.canvas.insertAdjacentElement("afterend", preview.canvas);
       const rec = new FrameRecorder();
       this.els.hud.textContent = `backend=${used} — running`;
 
@@ -84,6 +108,7 @@ export class BenchRunner {
         const frame = gen.next();
         renderer.draw(frame);
         meters.setLevels(frame.levels);
+        preview?.draw();
         if (recording) rec.recordWork(performance.now() - w0);
         this.framesDone = rec.frames;
 
@@ -113,8 +138,13 @@ export class BenchRunner {
             frame_time_ms: rec.frameTimes,
             work_time_ms: rec.workTimes,
             meters_driver: metersDriver,
+            load: {
+              peaks: columns,
+              meters: meterChannels,
+              preview: preview !== null,
+            },
             dom_mutations: dom
-              ? { ...dom, observed_frames: rafCount, meter_channels: METER_CHANNELS }
+              ? { ...dom, observed_frames: rafCount, meter_channels: meterChannels }
               : null,
           });
         }

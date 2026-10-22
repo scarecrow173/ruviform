@@ -8,6 +8,7 @@ import {
   installApi,
   postMessage,
   type BackendName,
+  type LoadConfig,
 } from "@ui-poc/bench-shared";
 
 const canvas = document.getElementById("wave") as HTMLCanvasElement;
@@ -29,13 +30,17 @@ const BACKENDS: readonly BackendName[] = ["canvas2d", "webgl2", "webgpu"];
 
 installApi({
   start(cfg: unknown) {
-    const c = (cfg ?? {}) as { backend?: string; frames?: number };
+    const c = (cfg ?? {}) as {
+      backend?: string;
+      frames?: number;
+      load?: LoadConfig;
+    };
     const backend = BACKENDS.includes(c.backend as BackendName)
       ? (c.backend as BackendName)
       : "canvas2d";
     const frames =
       typeof c.frames === "number" && c.frames > 0 ? Math.floor(c.frames) : 600;
-    void runner.start({ backend, frames });
+    void runner.start({ backend, frames, load: c.load });
   },
 });
 
