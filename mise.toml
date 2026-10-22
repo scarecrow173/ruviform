@@ -7,7 +7,9 @@ UV_EXCLUDE_NEWER = "1 week"
 
 # Shared infrastructure tools plus this repository's pinned Rust toolchain.
 [tools]
-uv = "0.12"
+# Issue #85: GHSA-hq85-5cpj-mr62（eMudhra/emSign 中間 CA 侵害）の
+# 修正版 0.13.4 以上を明示固定（0.12.x は同梱 CA バンドルに影響 CA が残る）。
+uv = "0.13.5"
 prek = "0.5.5"
 git-lfs = "3.8.0"
 "github:microsoft/apm" = "0.33.0"
