@@ -69,7 +69,9 @@ mutation（トラック追加/削除・クリップ挿入/削除/移動/トリ�
   未知 ID は `*NotFound`
 - `TrackId`/`ClipId` は `Timeline` 採番の単調増加 `u64` — 削除後も番号を
   再利用しない。ステール ID の参照は `*NotFound`
-- トラック内クリップ列は開始位置順を維持（同位置は挿入順・stable）。
+- トラック内クリップ列は `(range.start(), ClipId)` 順を維持
+  （`ClipId` は挿入順に単調増加するため、同開始位置は常に後挿入が
+  後ろ＝評価の勝者 — insert/move/trim のいずれの再ソートでも同一規則）。
   `move_clip`/start 変更を伴う `trim_clip` は再ソートする
 - 評価: `at` を timeline base へ `convert(NearestEven)` で 1 回だけ変換
   （失敗は `TimeOverflow`）。各 enabled トラックについて半開区間
@@ -80,7 +82,10 @@ mutation（トラック追加/削除・クリップ挿入/削除/移動/トリ�
   `source_time = source_range.start().checked_add(offset)`（source base へ
   `NearestEven` 変換）。`ActiveClip.source_range` は到達可能残区間
   `[source_time, min(out, in + range.duration()))` — `source_range` が
-  range より長い場合の末尾側は到達不能として報告しない
+  range より長い場合の末尾側は到達不能として報告しない。残スパンが
+  ソース base の 1 tick 未満へ丸められる場合、独立した `NearestEven`
+  変換同士が衝突し残区間は空（`end == start`）となり得る —
+  consumer は zero duration を許容する
 - ギャップ・無効トラックは `active` に要素を出さない（無音/黒は consumer
   責務）。`Evaluation`/`ActiveClip`/`ClipSpec` は pub フィールドの
   plain data、格納モデル（`Timeline`/`Track`/`Clip`）は全フィールド
@@ -149,5 +154,7 @@ mutation（トラック追加/削除・クリップ挿入/削除/移動/トリ�
 - `range.duration() <= source_range.duration()` の欠落・cross-base 近似比較
   → 1:1 写像を逸脱し残区間端 `in + range.duration()` が `out` を越える
 - オーバーラップ解決の非決定性 → 同一タイムラインで再生結果が経路依存になる
+- 空の残区間の見落とし → `end == start` の `ActiveClip.source_range` を
+  consumer が不正値として拒否する（zero duration は契約上の正常値）
 - 丸め箇所の増殖 → cross-base 誤差を暗黙に吸収（設計は変換箇所を `at` 1 回 +
   `checked_add` 2 呼出しに固定）

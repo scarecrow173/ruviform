@@ -106,7 +106,7 @@ D3-a（既存 pull engine への射影）を、非 RT クレート `ruviform-edi
 | `Clip` | `{id, source, range: MediaRange, source_range: MediaRange, attributes}`（全フィールド private — `id()`/`source()`/`range()`/`source_range()`/`attributes()` で読み取り） | タイムライン占有区間 `[start, start+duration)`・ソース選択 `[in, out)`・属性。`range` は `timeline.base()` 揃えで格納し、`source_range` はソース固有 base を保持する。不変条件: 両区間とも正 duration かつ `range.duration() <= source_range.duration()`（1:1 写像で `out` を越えないこと） |
 | `ClipSpec` | `{source, range, source_range, attributes}`（pub フィールドの plain data — 不変条件は持たず `insert_clip` で検証） | `insert_clip` の引数束（id 採番前のクリップ定義）。`range` の base は任意 — 格納時に timeline base へ正規化される |
 | `ClipAttributes` | `#[non_exhaustive]` enum `Audio{gain: f32, mute: bool}`/`Video{opacity: f32}` | 種別属性の最小セット — 解釈済み値であり未定義 payload ではない。`gain` は f32 リニア倍率（`[0.0, ∞)` かつ `is_finite()`）、`opacity` は不透明度（`[0.0, 1.0]` かつ `is_finite()`）で、値域を mutation 時に検証する。トラック `kind` と variant の一致も mutation 時に強制 |
-| `Track` | `{id, kind, clips: Vec<Clip>, enabled: bool}`（全フィールド private — `id()`/`kind()`/`clips() -> &[Clip]`/`enabled()` で読み取り） | 開始位置順に維持されるクリップ列（同位置は挿入順・stable）。`enabled = false` は評価で全クリップを非アクティブにする。`clips()` はアプリ側の挿入前オーバーラップ検査にも使う |
+| `Track` | `{id, kind, clips: Vec<Clip>, enabled: bool}`（全フィールド private — `id()`/`kind()`/`clips() -> &[Clip]`/`enabled()` で読み取り） | `(range.start(), ClipId)` 順に維持されるクリップ列（`ClipId` は挿入順に単調増加するため、同開始位置は常に後挿入が後ろ＝評価の勝者）。`enabled = false` は評価で全クリップを非アクティブにする。`clips()` はアプリ側の挿入前オーバーラップ検査にも使う |
 | `Timeline` | `{base: TimeBase, tracks: Vec<Track>}` + 採番カウンタ（全フィールド private） | `Timeline::new(base)` で構築する全 mutation の authoritative 窓口 — クリップ列のソート不変条件・kind 整合・区間検証・`range` の base 正規化を集約。読み取り: `base() -> TimeBase`・`tracks() -> &[Track]`・`track(TrackId) -> Option<&Track>`・`clip(TrackId, ClipId) -> Option<&Clip>`・`end() -> Option<MediaTime>`（全トラック横断の最大解決済みクリップ end。クリップなしでは `None`） |
 | `Evaluation` | `{at: MediaTime, active: Vec<ActiveClip>}`（pub フィールドの plain data — 読み取り専用スナップショット） | 位置 `at` の射影結果。トラック挿入順の per-track アクティブ列（ギャップ・無効トラックは要素を出さない） |
 | `ActiveClip` | `{track: TrackId, clip: ClipId, kind: TrackKind, source: ClipSource, source_range: MediaRange, attributes: ClipAttributes}`（pub フィールドの plain data — 読み取り専用スナップショット） | 1 トラックの勝者クリップ + トラック種別（consumer の engine 振分け用）+ 到達可能な残ソース区間 `[source_time, min(out, in + range.duration()))` + 属性スナップショット |
@@ -182,7 +182,11 @@ D3-a（既存 pull engine への射影）を、非 RT クレート `ruviform-edi
      できるソース末尾は `in + range.duration()` であり、`source_range` が
      より長い場合の末尾側は到達不能として報告しない。算出は
      `source_range.start().checked_add(range.duration())` と `out` の比較で
-     行い（media-core の checked 演算経路）、overflow は `TimeOverflow`
+     行い（media-core の checked 演算経路）、overflow は `TimeOverflow`。
+     `source_time` と残端は独立した `NearestEven` 変換で算出されるため、
+     残りの到達可能スパンがソース base の 1 tick 未満へ丸められると両者が
+     衝突し、残区間は**空（`end == start`）**となり得る —
+     consumer は zero duration を許容すること
    - 丸め回数: `at` 変換の 1 回 + `checked_add` 呼出しごとに最大 1 回
      （本経路では `source_time` 算出と残端 `in + range.duration()`
      算出の 2 呼出し → 最大 3 回）。cross-base 算術が誤差を暗黙に
@@ -227,6 +231,11 @@ D3-a（既存 pull engine への射影）を、非 RT クレート `ruviform-edi
   反映される逐次モデル。consumer は `TrackId`/`ClipId` で
   `Timeline::track()`/`clip()` 経由の追参照ができるため、射影へ最小限の
   情報のみ複製する
+- **空の残区間**: `ActiveClip.source_range` は `end == start` の空区間と
+  なり得る（残りの到達可能スパンがソース base の 1 tick 未満へ丸められ、
+  `source_time` と残端の独立 `NearestEven` 変換が衝突する場合）。
+  反転区間（`end < start`）は不変条件で排除されるが、zero duration は
+  契約上の正常値 — consumer はこれを許容する必要がある
 - **独自 `Error`（`HostError` 規約）を採用し `media_core::Error` 直接再利用は
   不採用**: `*NotFound`・`KindMismatch` 等のドメイン失敗を表現する必要があり、
   `InvalidValue(&'static str)` のみでは失敗の区別が付かない。`Copy` を維持し

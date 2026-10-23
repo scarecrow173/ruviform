@@ -77,25 +77,25 @@ relations:
 
 ## Implementation Sequence
 
-- [ ] 1. クレート骨格 — `crates/ruviform-edit` 新設。Cargo.toml は workspace
+- [x] 1. クレート骨格 — `crates/ruviform-edit` 新設。Cargo.toml は workspace
   継承（`version`/`edition`/`rust-version`/`license`/`publish`/`lints`）、
   依存は `ruviform-media-core` path のみ（audio-core/video-core は spec で
   許可されているが、最小属性セットでは media-core 時間型が主依存 —
   実需が出た時点で追加する YAGNI 規約）。workspace `members` 登録。
   `lib.rs` crate doc に責務（データ + 評価のみ）・許可依存層・RT 契約
   （全 API 非 RT — `evaluate` の確保を含み RT パスからの呼出し禁止）を明記
-- [ ] 2. データモデル型 + mutation — `error.rs`（`#[non_exhaustive]` `Copy`
+- [x] 2. データモデル型 + mutation — `error.rs`（`#[non_exhaustive]` `Copy`
   `Error`/`Result`）→ `model.rs`（ID newtype・`TrackKind`・`ClipAttributes`・
   `Clip`/`ClipSpec`/`Track`/`Timeline` + accessor + `add_track`/`remove_track`/
   `insert_clip`/`remove_clip`/`move_clip`/`trim_clip`/`enabled`）。全 mutation で
   design の完全検証ルールセットを再実行（正 duration・`checked_end` 厳密性と
   base-collapse・`range.duration() <= source_range.duration()`・kind 整合・
   属性サニティ・`*NotFound`）と `range` の timeline base 正規化を集約
-- [ ] 3. 評価射影 — `eval.rs`。`Timeline::evaluate(at)` が design の算術経路
+- [x] 3. 評価射影 — `eval.rs`。`Timeline::evaluate(at)` が design の算術経路
   （`at` の 1 回変換・半開包含・後開始/同開始後挿入優先・`source_time` 写像・
   到達可能残区間・`TimeOverflow`）で `Evaluation`/`ActiveClip` を返す
-- [ ] 4. テスト — test-spec 全ケース（mutation・検証拒否・評価規則・accessor）
-- [ ] 5. 文書クローズ — crate README・`crates/README.md` 索引行・検証列・
+- [x] 4. テスト — test-spec 全ケース（mutation・検証拒否・評価規則・accessor）
+- [x] 5. 文書クローズ — crate README・`crates/README.md` 索引行・検証列・
   doc 監査・チェーン frontmatter 更新
 
 ## Dependencies and Risks
@@ -114,11 +114,11 @@ relations:
 
 ## Verification
 
-- [ ] test-spec 全ケースパス（`mise run test`）
-- [ ] `mise run fmt-check`/`check`/`lint` パス
-- [ ] 依存が `ruviform-media-core` のみ（engine・他 foundations なし —
+- [x] test-spec 全ケースパス（`mise run test`）
+- [x] `mise run fmt-check`/`check`/`lint` パス
+- [x] 依存が `ruviform-media-core` のみ（engine・他 foundations なし —
   Cargo.toml 確認）
-- [ ] doc 監査チェーン起因 findings 0（`doc_status.js audit`）
+- [x] doc 監査チェーン起因 findings 0（`doc_status.js audit`）
 
 ## Open Questions / Gaps
 

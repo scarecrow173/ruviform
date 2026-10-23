@@ -1,7 +1,7 @@
 ---
 id: "TASK-034KPgPqF3NHzPtZPvvCHY"
 type: "task"
-status: "todo"
+status: "done"
 title: "edit クレート骨格 + データモデル型・mutation"
 created: "2026-10-23"
 updated: "2026-10-23"
@@ -9,8 +9,20 @@ owners: []
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-edit/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-edit/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-edit/src/error.rs"
+      - type: "file"
+        path: "crates/ruviform-edit/src/model.rs"
+    modified:
+      - type: "file"
+        path: "Cargo.toml"
+      - type: "file"
+        path: "Cargo.lock"
     deleted: []
     renamed: []
     moved: []
@@ -70,13 +82,21 @@ relations:
 
 ## Done When
 
-- [ ] 型が design の形状で実装される（格納モデル private+accessor・
+- [x] 型が design の形状で実装される（格納モデル private+accessor・
   `ClipSpec` は pub フィールド plain data・単調 ID・採番再利用なし）
-- [ ] 全 mutation（`add_track`/`remove_track`/`insert_clip`/`remove_clip`/
+- [x] 全 mutation（`add_track`/`remove_track`/`insert_clip`/`remove_clip`/
   `move_clip`/`trim_clip`/`enabled`）が完全検証ルールセットと `range` の
   base 正規化を実施
-- [ ] test-spec の mutation・検証拒否・accessor ケースをパス
+- [x] test-spec の mutation・検証拒否・accessor ケースをパス
 
 ## Verification
 
-- [ ] `mise run check`/`lint`/`test` パス
+- [x] `mise run check`/`lint`/`test` パス
+
+## Completion Notes
+
+- `crates/ruviform-edit` 新設 — workspace `members` 登録・`publish.workspace = true` 継承・依存は `ruviform-media-core` path のみ
+- `error.rs`: `#[non_exhaustive]` `Copy` `Error`（`TrackNotFound`/`ClipNotFound`/`InvalidRange`/`KindMismatch`/`InvalidValue`/`TimeOverflow`）+ `From<media_core::Error>` 正規化
+- `model.rs`: ID newtype・`TrackKind`/`ClipAttributes`（enum レベル `#[non_exhaustive]`）・`Clip`/`ClipSpec`/`Track`/`Timeline` + 全 mutation。`normalize_range`（`NearestEven` で start/duration を timeline base へ）と `validate_clip`（完全検証ルールセット）を mutation 境界に集約
+- 格納モデルは全フィールド private + accessor、`ClipSpec` は pub フィールド plain data。ID は単調採番・再利用なし
+- mutation・検証拒否・accessor の test-spec ケースを `model.rs`/`error.rs` のテストモジュールでパス
