@@ -86,8 +86,8 @@ Directory: `docs/tasks`
 | TASK-034IwCiYXp6ub3O8Brcs3L | 設定ファイルのレビューと最小修正 | done | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | TASK-034IwCiByN74V3hysJ9iTR | AGENTS.md の Ruviform 向け節単位改稿 | done | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | TASK-034IwCbgksOGvhF5E4CQbp | README.md の Ruviform 向け全面改稿 | done | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
-| TASK-034KV6AzIxXBCyJdl6BFjk | RT 観測計測ハーネスの実装（PoC scaffolding・criterion ベンチ・スモーク配線） | todo | [rt-observability-bench-harness.md](./rt-observability-bench-harness.md) |
-| TASK-034KV6AXTsAaxjMCc4m8px | RT 観測 PoC の計測実行・experiment/impl 記録・#103 判定フィードバック | todo | [rt-observability-poc-run-and-report.md](./rt-observability-poc-run-and-report.md) |
+| TASK-034KV6AzIxXBCyJdl6BFjk | RT 観測計測ハーネスの実装（PoC scaffolding・criterion ベンチ・スモーク配線） | done | [rt-observability-bench-harness.md](./rt-observability-bench-harness.md) |
+| TASK-034KV6AXTsAaxjMCc4m8px | RT 観測 PoC の計測実行・experiment/impl 記録・#103 判定フィードバック | done | [rt-observability-poc-run-and-report.md](./rt-observability-poc-run-and-report.md) |
 | TASK-034JglHs8cNMDOvyZFeUpc | PoC example（list_devices・play_sine）実機手順と実験ログ | done | [run-device-poc-examples-and-exp-log.md](./run-device-poc-examples-and-exp-log.md) |
 | TASK-034JPwYHzq8qU5fxLnMLlO | 低負荷再計測と生データ収集 | done | [run-dispatch-remeasure.md](./run-dispatch-remeasure.md) |
 | TASK-034IwCjptfvbSFBQaSKigx | プレースホルダー最終スイープ・総合検証と ADR メタデータ編集 | done | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |

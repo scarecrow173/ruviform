@@ -16,8 +16,10 @@ Directory: `docs/impl/exp`
 | [dsp-simd-poc-benchmark-comparison.jsonl](dsp-simd-poc-benchmark-comparison.jsonl) | — / Issue #19 | DSP/SIMD バックエンド比較ベンチ計測 |
 | [issue-57-high-load-webgpu-multi-webview.jsonl](./issue-57-high-load-webgpu-multi-webview.jsonl) | — / Issue #57 | UI PoC 後続課題（高負荷再計測・WebGPU 有効化・複数 WebView・wry #1762 追跡） |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) | — / Issue #60, #55, #57 | Linux 検証コンテナ実測（ALSA/PipeWire・host_unavailable・aarch64 NEON・AVX-512 試行・Xvfb UI） |
+| [rt-observability-poc.jsonl](./rt-observability-poc.jsonl) | — / Issue #104 | RT 観測コスト計測 PoC（counter/rt_bridge/overflow policy/timestamp・バックエンド採否評価・alloc-gap 実証） |
 
 ## Reports and raw data
 
 - [dsp-simd-poc-20261021.md](dsp-simd-poc-20261021.md) — Issue #19 DSP/SIMD PoC bench measurement report
-- `data/` — raw per-run measurement JSONL (`dsp-simd-poc-20261021-01.jsonl`, `-02.jsonl`; 1 line = 1 measurement point). Not an impl-doc event log, so it lives in a subdirectory outside the flat `*.jsonl` event-log audit scope
+- [rt-observability-poc-20261023.md](rt-observability-poc-20261023.md) — Issue #104 RT observability cost PoC measurement report (counter instrumentation, rt_bridge record/drain/overflow policies, RT primitive baselines, timestamp acquisition, backend evaluation, alloc coverage-gap demo, #103 verdict mapping)
+- `data/` — raw per-run measurement JSONL (`dsp-simd-poc-20261021-01.jsonl`, `-02.jsonl`; `rt-observability-poc-20261023-01.jsonl`, `-02.jsonl`, `-03.jsonl`; `rt-observability-poc-20261024-corrected-01.jsonl`, `-02.jsonl`, `-03.jsonl`; 1 line = 1 measurement point) plus corrected-run summary `rt-observability-poc-20261024-summary.json`, backend dependency snapshot `rt-observability-backend-metadata-20261024.json`, and capture script `rt-observability-capture.cjs`. Not an impl-doc event log, so it lives in a subdirectory outside the flat `*.jsonl` event-log audit scope

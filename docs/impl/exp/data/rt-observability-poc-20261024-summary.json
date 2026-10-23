@@ -1,0 +1,88 @@
+{
+  "revision": "matched-work-nonzero-v2",
+  "harness_sha256": "b0be85edd83e4a719b85202905e499be3dc1f915e4314234aa8ddc0313df2485",
+  "cells": {
+    "counter_equal_work/disabled": {
+      "runs_ns_per_op": [
+        1.3566855778769842,
+        1.363042883887183,
+        1.3471417666109025
+      ],
+      "mean_of_run_medians_ns_per_op": 1.3556234094583566
+    },
+    "counter_equal_work/flag/off": {
+      "runs_ns_per_op": [
+        2.0975002606306172,
+        2.0994917830716857,
+        2.094487736084576
+      ],
+      "mean_of_run_medians_ns_per_op": 2.0971599265956264
+    },
+    "counter_equal_work/flag/on": {
+      "runs_ns_per_op": [
+        5.383806979482099,
+        5.401210720615209,
+        5.382849798656969
+      ],
+      "mean_of_run_medians_ns_per_op": 5.389289166251426
+    },
+    "counter_equal_work/always": {
+      "runs_ns_per_op": [
+        5.33832158679208,
+        5.343669963005123,
+        5.345400577723577
+      ],
+      "mean_of_run_medians_ns_per_op": 5.3424640425069265
+    },
+    "overflow_policy_nonzero/drop": {
+      "runs_ns_per_op": [
+        1.5317793467439933,
+        1.5214689867646631,
+        1.52128276048568
+      ],
+      "mean_of_run_medians_ns_per_op": 1.5248436979981121
+    },
+    "overflow_policy_nonzero/count": {
+      "runs_ns_per_op": [
+        5.421879392394794,
+        5.416728192212626,
+        5.411039140455259
+      ],
+      "mean_of_run_medians_ns_per_op": 5.416548908354226
+    },
+    "overflow_policy_nonzero/aggregate": {
+      "runs_ns_per_op": [
+        5.4319961098263665,
+        5.440532969421888,
+        5.412172916123
+      ],
+      "mean_of_run_medians_ns_per_op": 5.428233998457085
+    },
+    "overflow_policy_nonzero/retire_leak": {
+      "runs_ns_per_op": [
+        5.391183799146443,
+        5.443237566439596,
+        5.405498118158143
+      ],
+      "mean_of_run_medians_ns_per_op": 5.413306494581394
+    }
+  },
+  "paired_counter_deltas_ns_per_op": {
+    "always": [
+      3.981636008915096,
+      3.98062707911794,
+      3.9982588111126747
+    ],
+    "flag/off": [
+      0.740814682753633,
+      0.7364488991845026,
+      0.7473459694736735
+    ],
+    "flag/on": [
+      4.027121401605115,
+      4.038167836728026,
+      4.035708032046067
+    ]
+  },
+  "interpretation": "Single-thread uncontended estimates; not worst-case RT latency bounds."
+}

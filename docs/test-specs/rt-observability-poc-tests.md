@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "RT 観測コスト計測 PoC ハーネスの計測保証"
 created: "2026-10-23"
-updated: "2026-10-23"
+updated: "2026-10-24"
 owners: []
 relations:
   source:
@@ -56,8 +56,8 @@ Issue #104 PoC の計測ハーネスが保証すべき計測の信頼性意図�
 
 ## Rules
 
-- **測定窓の純粋性**: ベンチの測定 iteration（criterion `iter` / `iter_batched` 等の被計測区間）とテストの計測窓は alloc/dealloc を行わない経路のみを対象とする。fixture 確保・`Vec` 準備・文字列整形などの allocate する準備処理は必ず窓外（`iter_batched` の setup 側・テストでは `alloc_counter::enable()` 前）に置く。self-consistency テストが scaffolding の RT 経路関数（`record`・`drain`・`overflows`・`Counter` 操作・タイムスタンプ helper）の窓内 alloc/dealloc = 0 を `alloc_counter` で検証する
-- **ハーネス非攪拌**: scaffolding の計測対象 API は wait-free/no-alloc/bounded を維持し、計測列間の差分のみが変わるよう同一シナリオでバリアント比較する（counter 有効/無効の評価はランタイムフラグ単独ではなく「計装なし / フラグ付き / 無条件計装」のバリアント列比較）。`black_box` 等で最適化による対象消去を抑止する
+- **測定窓の純粋性**: ベンチの測定 iteration（criterion `iter` / `iter_batched` 等の被計測区間）とテストの計測窓は alloc/dealloc を行わない経路のみを対象とする。fixture 確保・`Vec` 準備・文字列整形などの allocate する準備処理は必ず窓外（`iter_batched` の setup 側・テストでは `alloc_counter::enable()` 前）に置く。self-consistency テストが scaffolding の RT 経路関数（`record`・`drain`・`overflows`・`Counter` 操作・タイムスタンプ helper）の窓内 alloc/dealloc = 0 を `alloc_counter` で検証する。例外: 非 RT 制御セル `rt_primitives/slot/publish` は `publish` 契約上の displaced-`Arc` handoff（`push_local` による fresh pending `Vec` の成長を含む窓内 alloc）を被計測コストに含むことを許容する — `publish` は API 契約上の非 RT 経路であり、本セルは RT 経路純度の判定・比較には用いない対照列とする
+- **ハーネス非攪拌**: scaffolding の計測対象 API は wait-free/no-alloc/bounded を維持し、計測列間の差分のみが変わるよう同一シナリオでバリアント比較する（counter 有効/無効の評価はランタイムフラグ単独ではなく `counter_equal_work` — disabled / flag off / flag on / always の全列が同一 base workload（`wrapping_add`+`black_box`）を行い計装 step の有無のみが変わる equal-work 列比較 — で行い、オーバーフロー方針比較は `overflow_policy_nonzero` — aggregate が非ゼロ値を fold する記録を使う列 — で行う）。`black_box` 等で最適化による対象消去を抑止する
 - **有効データ条件**: 計測値は warm-up 済み・複数 sample の統計として記録し、criterion の出力（`estimates.json` の median/mean/CI）を 1 行 = 1 計測点の jsonl（LF・末尾改行あり、コミット可能・prek hook 適合）へ集約する。単発値・warm-up 前の値は採用しない
 - **分散記録**: 2–3 run を実施し run 間分散を記録する。criterion の `estimates.json` は run ごとに上書きされるため「run 実行 → 集約 → 次 run」の順序を守る（bench-tasks-and-ci-smoke と同一規約）
 - **環境メタデータ**: レポート冒頭に OS・CPU 型名・コア数・rustc 版・criterion 版・対象クレート版・負荷状況を記録する。絶対値は環境依存であり、判定には run 内相対比較（同一 run の基準列を分母にする比率）を用いる
@@ -68,7 +68,7 @@ Issue #104 PoC の計測ハーネスが保証すべき計測の信頼性意図�
 ## Examples
 
 - Given: `observability_poc` scaffolding 実装済み。When: `mise run test` を実行する。Then: `record`/`drain`/`overflows`/`Counter`/タイムスタンプ helper の self-consistency テストが `alloc_counter` 窓内 0 イベントでグリーンになる
-- Given: 呼出側スレッドで `alloc_counter::enable()` 後に alloc する thread を spawn・join。When: `count()` を読む。Then: 呼出側は 0 のまま（隙間の実証）。spawned thread 側で enable→alloc→count した場合は N>0 が返る（窓設置スレッドのみ観測可能）
+- Given: alloc する spawned thread を呼出側の `alloc_counter::enable()` 前に spawn し（spawn 自体は呼出側で alloc するため窓外）、窓内で spawned 側の alloc 完了を待って `disable()` 後に join する。When: `count()` を読む。Then: 呼出側は 0 のまま（隙間の実証）。spawned thread 側で enable→alloc→count した場合は N>0 が返る（窓設置スレッドのみ観測可能）
 - Given: `mise run bench-smoke`（`cargo bench -p ruviform-math -p ruviform-rt -- --test`）。When: 実行する。Then: ruviform-math・ruviform-rt 両方の全ベンチが計測なし 1 反復で完走し、ハーネス破損（panic・設定不備）があれば失敗する
 - Given: `mise exec -- cargo bench -p ruviform-rt -- counter`。When: 実行する。Then: `counter` を名に含む計測列のみが計測される（quick-run filter 規約）
 - Given: 2 回目のベンチ run 直前。When: 前回 run の `estimates.json` を確認する。Then: 次 run で上書きされるため、先に jsonl へ集約済みであることが必要となる

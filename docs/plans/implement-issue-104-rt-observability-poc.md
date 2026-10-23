@@ -1,10 +1,10 @@
 ---
 id: "PLAN-034KV6r7RDBR7CSvMSIB8e"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "Issue #104 RT 観測経路コスト計測 PoC の実施計画"
 created: "2026-10-23"
-updated: "2026-10-23"
+updated: "2026-10-24"
 owners: []
 relations:
   source:
@@ -38,6 +38,12 @@ relations:
         path: "docs/impl/exp/README.md"
       - type: "file"
         path: "docs/impl/ir/README.md"
+      - type: "file"
+        path: "docs/designs/foundation-observability-minimal-api.md"
+      - type: "file"
+        path: "docs/specs/implement-rt-foundation.md"
+      - type: "file"
+        path: "docs/adr/rt-foundation-primitives-implementation.md"
     deleted: []
     renamed: []
     moved: []
@@ -134,28 +140,28 @@ Issue #104 の PoC として、設計 `DESIGN-034KQXr3w4dYgKO79dklG9`（[foundat
 
 ### Phase A: 計測ハーネス実装（Task T1 — [rt-observability-bench-harness](../tasks/rt-observability-bench-harness.md)）
 
-- [ ] A-1. dev-dep 導入前のコンパイルコスト baseline を記録: `mise run check`（`cargo check --workspace --all-targets`）の所要時間を計測し、T2 の dev-dep 前後比較・レポート補助データの基準値として記録する
-- [ ] A-2. `crates/ruviform-rt/Cargo.toml` に `[dev-dependencies]`（`criterion = { version = "0.8.2", default-features = false }` — ruviform-math と同一 pin 方針: caret 指定・`Cargo.lock` を再現性の錨・`default-features = false` でコンパイルコスト抑制）と `[[bench]] name = "rt_observability_poc", harness = false` を追加（`[dependencies]` は変更しない）。dev-dep 追加理由は Cargo.toml インラインコメントに記録
-- [ ] A-3. `src/observability_poc.rs` を新規作成: `Counter`/`CounterReader` 計数ペア、`bridge`（`rtrb::RingBuffer<R>` を利用し drop-on-full + 共有 `Arc<AtomicUsize>` オーバーフローカウンタ + `drain` bounded + 両端 `overflows()`）、`ObsRecord` 固定サイズ Copy レコード、オーバーフロー方針バリアント API（`record` drop 系 / aggregate 系 / count 系）、タイムスタンプ取得 helper（`Instant` → epoch 相対 nanos → `i64` 変換 + レコード格納 — `instant_to_media_time` と同形の数学）。`unsafe` 0・pub enum なし・pure std + crate 内依存（`rtrb`）のみ。`lib.rs` に `#[doc(hidden)] pub mod observability_poc;` を追加し、モジュール doc に実験 API 宣言を記載
-- [ ] A-4. `#[cfg(test)]` テストを `src/observability_poc.rs` に実装: (a) self-consistency — crate の `alloc_counter` で `record`/`drain`/`overflows`/`Counter` 操作・タイムスタンプ helper の測定窓内 alloc/dealloc が 0 であることを検証（fixture 確保は窓外）、(b) カバレッジ隙間実証 — `alloc_counter` 窓を呼び出し側スレッドで開いて alloc する spawned thread を join しても呼び出し側 `count()` が 0 のまま（隙間）であること、spawned thread 内側で窓を開けばイベントが観測できること（窓設置スレッドのみ観測可能）を検証・標準出力に 3 組データを出す、(c) scaffolding 動作 — record 成功/drop-on-full 計数/drain bounded/方針バリアントの意味論
-- [ ] A-5. `benches/rt_observability_poc.rs` を実装（下記「計測マトリクス」節の列構成どおり）。`criterion_group!`/`criterion_main!`・`BenchmarkId` 規約・`iter_batched`/手動バッチ反復・削減時間設定（warm_up/measurement/sample — 全量目安 ≈10–20 分）・run 冒頭に OS・CPU 型名・コア数・rustc 版・criterion 版・測定対象クレート版を標準出力
-- [ ] A-6. `mise.toml` の `bench-smoke` を `cargo bench -p ruviform-math -p ruviform-rt -- --test` に更新（タスク記述も実態に合わせる）し、`AGENTS.md` の検証入口対応表 `bench`/`bench-smoke` 行を更新。`mise run bench-smoke` スモーク完走と `mise exec -- cargo bench -p ruviform-rt -- <filter>` の quick-run filter を確認
+- [x] A-1. dev-dep 導入前のコンパイルコスト baseline を記録: `mise run check`（`cargo check --workspace --all-targets`）の所要時間を計測し、T2 の dev-dep 前後比較・レポート補助データの基準値として記録する — **実績: 導入前 baseline の検証可能な記録は未保持。before/after 差分と推移的依存数は未検証として記録し、既存 criterion 再利用・dev-dep 限定を理由に計測欠落の逸脱を受理**
+- [x] A-2. `crates/ruviform-rt/Cargo.toml` に `[dev-dependencies]`（`criterion = { version = "0.8.2", default-features = false }` — ruviform-math と同一 pin 方針: caret 指定・`Cargo.lock` を再現性の錨・`default-features = false` でコンパイルコスト抑制）と `[[bench]] name = "rt_observability_poc", harness = false` を追加（`[dependencies]` は変更しない）。dev-dep 追加理由は Cargo.toml インラインコメントに記録
+- [x] A-3. `src/observability_poc.rs` を新規作成: `Counter`/`CounterReader` 計数ペア、`bridge`（`rtrb::RingBuffer<R>` を利用し drop-on-full + 共有 `Arc<AtomicUsize>` オーバーフローカウンタ + `drain` bounded + 両端 `overflows()`）、`ObsRecord` 固定サイズ Copy レコード、オーバーフロー方針バリアント API（`record` drop 系 / aggregate 系 / count 系）、タイムスタンプ取得 helper（`Instant` → epoch 相対 nanos → `i64` 変換 + レコード格納 — `instant_to_media_time` と同形の数学）。`unsafe` 0・pub enum なし・pure std + crate 内依存（`rtrb`）のみ。`lib.rs` に `#[doc(hidden)] pub mod observability_poc;` を追加し、モジュール doc に実験 API 宣言を記載
+- [x] A-4. `#[cfg(test)]` テストを `src/observability_poc.rs` に実装: (a) self-consistency — crate の `alloc_counter` で `record`/`drain`/`overflows`/`Counter` 操作・タイムスタンプ helper の測定窓内 alloc/dealloc が 0 であることを検証（fixture 確保は窓外）、(b) カバレッジ隙間実証 — `alloc_counter` 窓を呼び出し側スレッドで開いて alloc する spawned thread を join しても呼び出し側 `count()` が 0 のまま（隙間）であること、spawned thread 内側で窓を開けばイベントが観測できること（窓設置スレッドのみ観測可能）を検証・標準出力に 3 組データを出す、(c) scaffolding 動作 — record 成功/drop-on-full 計数/drain bounded/方針バリアントの意味論
+- [x] A-5. `benches/rt_observability_poc.rs` を実装（下記「計測マトリクス」節の列構成どおり）。`criterion_group!`/`criterion_main!`・`BenchmarkId` 規約・`iter_batched`/手動バッチ反復・削減時間設定（warm_up/measurement/sample — 全量目安 ≈10–20 分）・run 冒頭に OS・CPU 型名・コア数・rustc 版・criterion 版・測定対象クレート版を標準出力
+- [x] A-6. `mise.toml` の `bench-smoke` を `cargo bench -p ruviform-math -p ruviform-rt -- --test` に更新（タスク記述も実態に合わせる）し、`AGENTS.md` の検証入口対応表 `bench`/`bench-smoke` 行を更新。`mise run bench-smoke` スモーク完走と `mise exec -- cargo bench -p ruviform-rt -- <filter>` の quick-run filter を確認
 
 ### Phase B: 計測実行・記録・判定フィードバック（Task T2 — [rt-observability-poc-run-and-report](../tasks/rt-observability-poc-run-and-report.md)）
 
-- [ ] B-1. Windows x64 主計測環境で全量ベンチを実行（`mise run bench` = `cargo bench --workspace`）。2–3 run で分散を記録し「run → `estimates.json` 集約 → 次 run」の順序で実施。環境メタデータ（OS・CPU 型名・コア数・rustc 版・criterion 版・負荷状況）を記録
-- [ ] B-2. `estimates.json` から `docs/impl/exp/data/rt-observability-poc-<yyyymmdd>-<seq>.jsonl`（1 行 = 1 計測点、LF・末尾改行）を生成し、A-4(b) のカバレッジ隙間実証データ（呼出側窓=0・spawned 窓=N・spawned 側逆方向確認）を記録する
-- [ ] B-3. バックエンド評価を実施: `tracing`/`tracing-subscriber`/`metrics`/`tracy-client` の依存木・ライセンス・MSRV・保守状況の調査表（crates.io/docs.rs/cargo metadata 由来）+ 実施可能な範囲のマイクロコストプローブ（`target/rt-observability-backend-probe/` のスクラッチクレートで「global sink 未設定時の呼出コスト」を計測。workspace の `Cargo.toml`/`Cargo.lock` に一切追加しない）
-- [ ] B-4. experiment log（`new_experiment_log.js`）とレポート `docs/impl/exp/rt-observability-poc-<yyyymmdd>.md` を作成: 環境メタデータ・計測マトリクス判定表（counter on/off 差分・方針別コスト・タイムスタンプ取得コスト・既存プリミティブ基準値）・バックエンド評価表・カバレッジ隙間実証・**#103「要 PoC」項目への verdict 対応表**（telemetry / rt_bridge / metrics / profiling / logging それぞれに対し、計測データが示す推奨方向と未解決点を記録）
-- [ ] B-5. `docs/impl/ir/rt-observability-poc.md` を作成し、doc 監査・最終検証スイート（V-6）を実施
+- [x] B-1. Windows x64 主計測環境で全量ベンチを実行（`mise run bench` = `cargo bench --workspace`）。2–3 run で分散を記録し「run → `estimates.json` 集約 → 次 run」の順序で実施。環境メタデータ（OS・CPU 型名・コア数・rustc 版・criterion 版・負荷状況）を記録
+- [x] B-2. `estimates.json` から `docs/impl/exp/data/rt-observability-poc-<yyyymmdd>-<seq>.jsonl`（1 行 = 1 計測点、LF・末尾改行）を生成し、A-4(b) のカバレッジ隙間実証データ（呼出側窓=0・spawned 窓=N・spawned 側逆方向確認）を記録する
+- [x] B-3. バックエンド評価を実施: `tracing`/`tracing-subscriber`/`metrics`/`tracy-client` の依存木・ライセンス・MSRV・保守状況の調査表（crates.io/docs.rs/cargo metadata 由来）+ 実施可能な範囲のマイクロコストプローブ（`target/rt-observability-backend-probe/` のスクラッチクレートで「global sink 未設定時の呼出コスト」を計測。workspace の `Cargo.toml`/`Cargo.lock` に一切追加しない）
+- [x] B-4. experiment log（`new_experiment_log.js`）とレポート `docs/impl/exp/rt-observability-poc-<yyyymmdd>.md` を作成: 環境メタデータ・計測マトリクス判定表（counter on/off 差分・方針別コスト・タイムスタンプ取得コスト・既存プリミティブ基準値）・バックエンド評価表・カバレッジ隙間実証・**#103「要 PoC」項目への verdict 対応表**（telemetry / rt_bridge / metrics / profiling / logging それぞれに対し、計測データが示す推奨方向と未解決点を記録）
+- [x] B-5. `docs/impl/ir/rt-observability-poc.md` を作成し、doc 監査・最終検証スイート（V-6）を実施
 
 ### 計測マトリクス（ハーネス列構成の正本）
 
 | グループ | 計測列 | 観測対象 | 判定への供給 |
 | --- | --- | --- | --- |
-| `counter` | `disabled`（計装なしの同一操作）/ `flag_off`→`flag_on`（ランタイムフラグでゲートする計装）/ `always`（無条件 `fetch_add`）| prepared counter の有効/無効コストと、ランタイムフラグ経路の残存コスト | telemetry「要 PoC」: Counter 採否・デフォルト計装可否 |
+| `counter_equal_work` | `disabled` / `flag/off` / `flag/on` / `always` — 全列が同一 base workload（`wrapping_add`+`black_box`）を行い、計装 step（ランタイムフラグ付き / 無条件 `fetch_add`）の有無のみが変わる equal-work バリアント列（初回実装の非 equal-work `counter` 群はレビュー指摘で改訂）| prepared counter の有効/無効コストと、ランタイムフラグ経路の残存コスト（同一ワーク上の差分評価） | telemetry「要 PoC」: Counter 採否・デフォルト計装可否 |
 | `rt_bridge` | `record`（非満杯）/ `record`（満杯 = drop+計数パス）/ `drain`（空・部分・全量）/ `overflows`（read） | rt_bridge 形状のレコード経路 RT コストと、飽和時コスト差 | rt_bridge「要 PoC」: drop-on-full + 計測方針の実測裏付け |
-| `overflow_policy` | drop / aggregate / count の 3 方針バリアント（同一満杯シナリオ）+ `retire_channel` の leak-on-full 基準列 | 方針別の API 単位コスト（既存先例との比較） | rt_bridge 方針選択・将来 API 追加の方針材料 |
+| `overflow_policy_nonzero` | drop / aggregate / count の 3 方針バリアント（同一満杯シナリオ。aggregate は非ゼロ値を fold する記録を使用 — ゼロ値 fold では方針コストを判別できないレビュー指摘の是正）+ `retire_channel` の leak-on-full 基準列 | 方針別の API 単位コスト（既存先例との比較） | rt_bridge 方針選択・将来 API 追加の方針材料 |
 | `rt_primitives` | `channel` try_push/try_pop、`retire`/`overflows`、`MasterClock::tick`/`publish_tick`、`slot` publish/read | 既存 RT プリミティブの基準コスト（計装なし素コスト） | counter 計装の相対コストの分母・既存 API の計装余裕評価 |
 | `timestamp` | `Instant::now()` / `Instant`→epoch 相対 nanos→`i64`→レコード格納（`instant_to_media_time` 同形）/ `SystemTime::now()`（対照列） | タイムスタンプ取得コストのプラットフォーム実測 | rt_bridge レコード schema のタイムスタンプ取得方法 verdict |
 | `alloc_gap` | criterion ベンチ外 — A-4(b) のテストで定量実証（呼出側窓=0 / spawned 窓=N）| `assert_no_alloc` 型スレッドローカル窓のカバレッジ隙間 | RT 検証レーンの限界記録・将来の窓設置所有権設計材料 |
