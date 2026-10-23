@@ -92,7 +92,10 @@ fn f16_bits_to_u8(bits: u16) -> u8 {
 /// to even; overflows round to `±infinity`, sub-binary16-subnormal
 /// magnitudes to `±0`, `NaN` to the canonical quiet NaN `0x7E00`.
 /// Pure integer math after the `f64` bit decompose — deterministic.
-fn f64_to_f16_bits(value: f64) -> u16 {
+///
+/// Shared with the composite kernels (`composite.rs`) — `pub(crate)` so
+/// the codec has exactly one implementation.
+pub(crate) fn f64_to_f16_bits(value: f64) -> u16 {
     if value.is_nan() {
         return 0x7E00;
     }
@@ -155,7 +158,10 @@ fn round_shift_even(v: u64, shift: u32) -> u64 {
 /// Exact `binary16 → f64` decode of a bit pattern (every `binary16`
 /// value is exactly representable in `f64`; NaN stays NaN, `±inf` stay
 /// infinite).
-fn f16_bits_to_f64(bits: u16) -> f64 {
+///
+/// Shared with the composite kernels (`composite.rs`) — `pub(crate)` so
+/// the codec has exactly one implementation.
+pub(crate) fn f16_bits_to_f64(bits: u16) -> f64 {
     let sign = if bits & 0x8000 == 0 { 1.0 } else { -1.0 };
     let exp = i32::from((bits >> 10) & 0x1F);
     let mant = f64::from(bits & 0x3FF);
@@ -248,13 +254,13 @@ impl Rgba8ToRgbaF16 {
             return Err(Error::InvalidValue("dimensions"));
         }
         let src_color = src.color();
-        let src_plane = src.plane(0).ok_or(Error::InvalidValue("src planes"))?;
+        let src_plane = src.plane(0).ok_or(Error::InvalidValue("src plane"))?;
         {
             let mut dst_plane = dst.plane_mut(0).ok_or(Error::InvalidValue("dst plane"))?;
             for y in 0..src.height() {
                 // These row borrows cannot fail: `y < height` —
                 // `ok_or` keeps the contract panic-free regardless.
-                let src_row = src_plane.row(y).ok_or(Error::InvalidValue("src planes"))?;
+                let src_row = src_plane.row(y).ok_or(Error::InvalidValue("src plane"))?;
                 let dst_row = dst_plane
                     .row_mut(y)
                     .ok_or(Error::InvalidValue("dst plane"))?;
@@ -363,13 +369,13 @@ impl RgbaF16ToRgba8 {
             return Err(Error::InvalidValue("dimensions"));
         }
         let src_color = src.color();
-        let src_plane = src.plane(0).ok_or(Error::InvalidValue("src planes"))?;
+        let src_plane = src.plane(0).ok_or(Error::InvalidValue("src plane"))?;
         {
             let mut dst_plane = dst.plane_mut(0).ok_or(Error::InvalidValue("dst plane"))?;
             for y in 0..src.height() {
                 // These row borrows cannot fail: `y < height` —
                 // `ok_or` keeps the contract panic-free regardless.
-                let src_row = src_plane.row(y).ok_or(Error::InvalidValue("src planes"))?;
+                let src_row = src_plane.row(y).ok_or(Error::InvalidValue("src plane"))?;
                 let dst_row = dst_plane
                     .row_mut(y)
                     .ok_or(Error::InvalidValue("dst plane"))?;
