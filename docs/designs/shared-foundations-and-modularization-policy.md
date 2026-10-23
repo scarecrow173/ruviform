@@ -39,7 +39,8 @@ relations:
     - "ruviform-architecture-design-baseline.md"
     - "../adr/realtime-contract-and-verification-policy.md"
     - "../adr/rt-foundation-primitives-implementation.md"
-  derived-by: []
+  derived-by:
+    - "foundation-observability-minimal-api.md"
   verifies: []
   verified-by: []
   references:
@@ -240,7 +241,7 @@ RT callback / DSP / plugin
 
 ## 既存実装の棚卸し（コード調査）
 
-Issue #101 の後続として workspace 18 クレートに対し実施したコード棚卸しの結果を、各領域の判断材料として記録する。以下は実装の有無・重複・配置に関する事実の要約であり、採否・移動・新設の確定ではない。
+Issue #101 の後続として workspace 18 クレート（棚卸し時点の数）に対し実施したコード棚卸しの結果を、各領域の判断材料として記録する。以下は実装の有無・重複・配置に関する事実の要約であり、採否・移動・新設の確定ではない。
 
 ### Memory / Collections
 
@@ -265,7 +266,7 @@ Issue #101 の後続として workspace 18 クレートに対し実施したコ�
 
 ### Observability / Diagnostics / Debug
 
-- 全 18 クレートの `Cargo.toml` に observability 系依存（`log`・`tracing`・`metrics` 等）は存在しない。
+- 棚卸し時点の全 18 クレートの `Cargo.toml` に observability 系依存（`log`・`tracing`・`metrics` 等）は存在しない。
 - 型付きエラーによる Diagnostics が既存の慣用形である（media-io `ErrorKind`、`DeviceError`（Xrun 含む）、`HostError`、`OfflineError`、media-core `Error`）。dump／inspect／capture／replay に相当する実装は存在しない。
 - 既存の RT 契約 probe: `alloc_counter`、`assert_no_alloc` による `rt_` 検証レーン、CLAP thread-check（`is_audio_thread`）、retire overflow カウンタ。
 
@@ -329,11 +330,11 @@ Issue #101 の後続として workspace 18 クレートに対し実施したコ�
 | `tracing` / `tracing-subscriber` / `metrics` / `tracy-client` 等の採用 | **要 PoC** | **採用候補・未決定**。RT 記録経路・依存・MSRV・運用コストの評価 |
 | Debug の独立クレート化、Capture/Replay・Crash Investigation 仕様 | **保留** | ドメインをまたぐ具体的な利用需要が生まれたら |
 | 共通 `platform` / `ipc` / `process` の独立 | **要 PoC** | Issue #76 L1 の着手と 2 番目の OS サービス利用者の出現をトリガに、複数用途・OS 互換性・ABI・資源寿命を検証 |
-| 既存 18 クレート（`ruviform-rt`・`ruviform-exec`・`ruviform-math`・`*-core` 等）と accepted ADR の契約 | **実装済み** | 維持。変更には影響分析と必要な改訂を行う |
+| 既存 18 クレート（`ruviform-rt`・`ruviform-exec`・`ruviform-math`・`*-core` 等。棚卸し時点の数）と accepted ADR の契約 | **実装済み** | 維持。変更には影響分析と必要な改訂を行う |
 
 ## 適用・移行順序
 
-1. **設計整合（実施済み）:** 既存 18 クレートと accepted ADR の依存/公開 API/実行契約の棚卸しは完了した（「既存実装の棚卸し」節参照）。本書の候補を実装済みと誤認しない。
+1. **設計整合（実施済み）:** 棚卸し時点の既存 18 クレートと accepted ADR の依存/公開 API/実行契約の棚卸しは完了した（「既存実装の棚卸し」節参照）。本書の候補を実装済みと誤認しない。
 2. **Foundation 候補の最小設計:** Memory / Sync / Identity / Telemetry の必要な共通操作と、既存実装を流用できる範囲を確定する。
 3. **Observability 候補の最小設計:** Logging・Metrics・Diagnostics・Profiling・Debug probe の責務と、RT → 非 RT の記録境界を設計する。
 4. **PoC と採否:** キュー容量・Drop・スナップショットの寿命、RT 計測コスト、外部依存/OS/ABI を検証する。
