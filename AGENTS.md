@@ -112,14 +112,7 @@ mise exec -- apm install --frozen
 ### ワークスペース構成
 
 - ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`version = "0.1.0"` は仮置き。`edition = "2024"` は Issue #34 で確定。`rust-version = "1.89"` は Issue #34 で 1.85 確定後、Issue #52 / docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md で 1.89 に引上げ（fearless_simd 本番昇格前提）。`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
-- メンバーは層ごとに以下の計18クレートで構成される。各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は `crates/<name>/README.md` と crate-level doc に転記しており、そちらを参照。層構造と `path` 依存方向・クレート DAG の正本は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）であり、`members` は実装 Phase に応じて段階追加される。残りの `path` 依存は API 確定に伴い追加する。上記以外の公開 API は引き続き未確定であり、実装 Issue で確定する。
-  - Primitives（最下位・相互依存なし）: [`ruviform-math`](crates/ruviform-math/README.md)・[`ruviform-rt`](crates/ruviform-rt/README.md) → [`ruviform-media-core`](crates/ruviform-media-core/README.md)・[`ruviform-exec`](crates/ruviform-exec/README.md)
-  - Domain foundations: [`ruviform-audio-core`](crates/ruviform-audio-core/README.md)・[`ruviform-video-core`](crates/ruviform-video-core/README.md)・[`ruviform-video-proc`](crates/ruviform-video-proc/README.md)・[`ruviform-dsp`](crates/ruviform-dsp/README.md)・[`ruviform-audio-analysis`](crates/ruviform-audio-analysis/README.md)
-  - メディア I/O（非 RT 専用）: [`ruviform-media-io`](crates/ruviform-media-io/README.md)・[`ruviform-io-symphonia`](crates/ruviform-io-symphonia/README.md)
-  - Adapter: [`ruviform-audio-device`](crates/ruviform-audio-device/README.md)
-  - 拡張層: [`ruviform-plugin-core`](crates/ruviform-plugin-core/README.md) → [`ruviform-plugin-clap`](crates/ruviform-plugin-clap/README.md)・[`ruviform-plugin-vst3`](crates/ruviform-plugin-vst3/README.md)
-  - host 層: [`ruviform-plugin-host`](crates/ruviform-plugin-host/README.md)
-  - engine: [`ruviform-audio`](crates/ruviform-audio/README.md)・[`ruviform-video`](crates/ruviform-video/README.md)
+- メンバー構成（層別の計18クレート一覧と各クレート README へのリンク）は [crates/README.md](crates/README.md) を索引とする。各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は `crates/<name>/README.md` と crate-level doc に転記しており、そちらを参照。層構造と `path` 依存方向・クレート DAG の正本は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）であり、`members` は実装 Phase に応じて段階追加される。残りの `path` 依存は API 確定に伴い追加する。上記以外の公開 API は引き続き未確定であり、実装 Issue で確定する。
 - Adapter クレートとして `crates/ruviform-audio-device` を Issue #23（cpal 条件付き採用・[docs/adr/select-audio-device-backend.md](docs/adr/select-audio-device-backend.md)・accepted）で新設済み。adapter 層はドメイン基盤の外側（engine と同じ利用側層）で、foundations/Primitives への下向き依存のみを持つ。`ruviform-audio-device` は cpal を内部依存に閉じ込め、`ruviform_audio_core::device` のポート trait（`DeviceEnumerator`/`Device`/`OutputStream`）を `Box<dyn>` 経由で実装する。cpal の型・エラー・feature 名を公開 API に露出せず、コアクレートからの強制依存・adapter→adapter 依存は作らない。手動検証 example（`list_devices`・`play_sine`）は実機依存で CI 対象外。
 
 ### 検証入口
