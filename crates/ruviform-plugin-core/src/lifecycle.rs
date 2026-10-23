@@ -26,6 +26,11 @@
 //!
 //! - **Forward chain** — `create → init → activate → processing →
 //!   deactivate → destroy` is the happy path.
+//! - **`Processing` is activity, not an RT guarantee** — entering
+//!   `Processing` describes control-plane activity; it does not imply
+//!   real-time-safe execution. Video ports (e.g. `VideoPluginInstance`) run
+//!   all operations NONRT inside this state.
+//!
 //! - **Processing stop is not a deactivate** — `StopProcessing` lands
 //!   in `Activated` (activated but not processing; CLAP
 //!   `stop_processing` / VST3 `setProcessing(false)` map here).
@@ -67,7 +72,8 @@ pub enum LifecycleState {
     Initialized,
     /// Activated: processing resources allocated, not yet processing.
     Activated,
-    /// RT processing is running (`Process` is legal).
+    /// Processing activity is running (`Process` is legal) —
+    /// activity only, not an RT guarantee.
     Processing,
     /// Terminal state — every event is illegal from here.
     Destroyed,

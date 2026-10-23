@@ -112,3 +112,10 @@ run = [
   "mise run test-ci",
 ]
 env = { CARGO_INCREMENTAL = "0" }
+
+[tasks.test-plugin-core]
+description = "Run plugin-core contract tests"
+run = "cargo test -p ruviform-plugin-core"
+[tasks.lint-plugin-core]
+description = "Lint plugin-core and its test targets"
+run = "cargo clippy -p ruviform-plugin-core --all-targets -- -D warnings"

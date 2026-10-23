@@ -1,7 +1,7 @@
 ---
 id: "TASK-034L6ycSsF8VW32LLoNxXr"
 type: "task"
-status: "todo"
+status: "done"
 title: "Implement video plugin core contract"
 created: "2026-10-24"
 updated: "2026-10-24"
@@ -68,6 +68,6 @@ targeted proof（上記実 log）+ lead review + **意味のある core commit**
 
 ## Verification
 
-- [ ] `mise run test-plugin-core` — exit 0
-- [ ] `mise run lint-plugin-core` — exit 0
-- **expected**: 実実行 log 保存・全 contract test pass + lint 0。doc compile-fail は green 後に **real borrow error** を示す（unresolved symbol ではない）。
+- [x] `mise run test-plugin-core` — exit 0
+- [x] `mise run lint-plugin-core` — exit 0
+- **evidence**: `t1-final-green.log`（32 unit + 8 integration + 21 doctest + 2 compile_fail・exit 0）・`t1-final-lint.log`（exit 0）・`probe-view.log`/`probe-trait.log`（E0515 実 borrow error・exit 1）。doc compile-fail は green 後に real borrow error を示す（unresolved symbol ではない）

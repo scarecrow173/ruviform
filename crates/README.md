@@ -43,7 +43,7 @@ Ruviform ワークスペースのメンバークレート索引（計19クレー
 
 | クレート | 責務 |
 | --- | --- |
-| [`ruviform-plugin-core`](ruviform-plugin-core/README.md) | 規格中立プラグイン基盤 |
+| [`ruviform-plugin-core`](ruviform-plugin-core/README.md) | 規格中立プラグイン基盤（音声 RT・動画 NONRT 契約、typed plain 制御） |
 | [`ruviform-plugin-clap`](ruviform-plugin-clap/README.md) | CLAP 薄アダプタ |
 | [`ruviform-plugin-vst3`](ruviform-plugin-vst3/README.md) | VST3 アダプタ（ABI-only） |
 

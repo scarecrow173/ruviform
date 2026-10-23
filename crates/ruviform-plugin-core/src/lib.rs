@@ -6,11 +6,14 @@
 //! audio bus description ([`BusDescriptor`], [`BusDirection`]), a
 //! standard-neutral transport snapshot ([`TransportInfo`]), the common
 //! lifecycle state machine ([`Lifecycle`], [`LifecycleState`],
-//! [`LifecycleEvent`], [`LifecycleError`]) and the plugin processing
+//! [`LifecycleEvent`], [`LifecycleError`]), the audio processing
 //! contract ([`PluginProcessor`]) with its borrowed view contract
 //! ([`BufferView`], [`BufferViewMut`]) and support types
 //! ([`ProcessConfig`], [`ProcessContext`], [`ProcessResult`],
-//! [`ProcessStatus`], [`PrepareError`]).
+//! [`ProcessStatus`], [`PrepareError`]), plus the NONRT video plugin
+//! contract ([`VideoPluginInstance`], [`VideoProcessConfig`]) and the
+//! typed plain-parameter channel ([`PlainParamValue`],
+//! [`PlainParamInfo`], borrowed [`PluginDescriptorView`]).
 //!
 //! Standard-specific types and concepts — CLAP, VST3, and any
 //! binding-crate (`clack`, `vst3`, `clap-sys`, …) types — are
@@ -25,8 +28,8 @@
 //!
 //! ## Allowed dependency layers
 //!
-//! Extension layer — Domain foundations (`ruviform-audio-core`) +
-//! Primitives (`ruviform-media-core`) only. `ruviform-rt` is
+//! Extension layer — Domain foundations (`ruviform-audio-core`,
+//! `ruviform-video-core`) + Primitives (`ruviform-media-core`) only. `ruviform-rt` is
 //! deliberately *not* a dependency: accepting an `RtContext`
 //! capability is deferred to the RT-contract implementation issue, so
 //! context arguments are the opaque [`ProcessContext`] instead. Same-
@@ -71,16 +74,21 @@ mod param;
 mod processor;
 mod transport;
 
+mod plain_param;
+mod video;
+
 pub use bus::{BusDescriptor, BusDirection};
-pub use descriptor::PluginDescriptor;
+pub use descriptor::{PluginDescriptor, PluginDescriptorView};
 pub use event::{Event, EventKind, EventList, ParamEvent, sort_events_by_frame_offset};
 pub use lifecycle::{Lifecycle, LifecycleError, LifecycleEvent, LifecycleState};
 pub use param::{ParamFlags, ParamId, ParamInfo, ParamValue};
+pub use plain_param::{PlainParamInfo, PlainParamValue};
 pub use processor::{
     BufferView, BufferViewMut, PluginProcessor, PrepareError, ProcessConfig, ProcessContext,
     ProcessResult, ProcessStatus,
 };
 pub use transport::TransportInfo;
+pub use video::{VideoPluginInstance, VideoProcessConfig};
 
 /// Returns the crate version string.
 ///

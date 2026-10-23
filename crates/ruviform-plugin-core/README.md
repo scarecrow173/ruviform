@@ -16,6 +16,11 @@ CLAP・VST3・binding クレート（`clack`, `vst3`, `clap-sys` 等）由来の
 - プラグイン処理契約: `PluginProcessor` と借用ビュー契約（`BufferView`,
   `BufferViewMut`）、支援型（`ProcessConfig`, `ProcessContext`,
   `ProcessResult`, `ProcessStatus`, `PrepareError`）
+- 借用記述ビュー: `PluginDescriptorView`（owner より長生きしない pure borrow）
+- typed plain パラメータチャネル: `PlainParamValue`, `PlainParamInfo` —
+  規格中立の typed 制御（normalized wire 経路ではない）
+- 動画プラグイン契約: `VideoProcessConfig`, `VideoPluginInstance` —
+  **全操作 NONRT**（`render` 含む、audio `process` の RT 契約とは別経路）
 
 規格アダプタ（`ruviform-plugin-clap` / `ruviform-plugin-vst3`）は規格 ABI
 データをこれらの型へ翻訳して `PluginProcessor` を実装・駆動する —
@@ -27,8 +32,8 @@ CLAP・VST3・binding クレート（`clack`, `vst3`, `clap-sys` 等）由来の
 ## 層・許可依存
 
 - 層: 拡張層（Plugin 拡張層、設計ベースライン）
-- 許可依存: Domain foundations（`ruviform-audio-core`）+ Primitives
-  （`ruviform-media-core`）のみ。`ruviform-rt` は意図的に依存しない —
+- 許可依存: Domain foundations（`ruviform-audio-core`・`ruviform-video-core`）+
+  Primitives（`ruviform-media-core`）のみ。`ruviform-rt` は意図的に依存しない —
   `RtContext` 能力の受け入れは RT 契約実装 Issue に委譲し、コンテキスト引数は
   不透明な `ProcessContext` とする。同階層・上位階層への依存は禁止。
 
