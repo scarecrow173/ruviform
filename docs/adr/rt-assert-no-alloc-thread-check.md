@@ -4,7 +4,7 @@ type: "adr"
 status: "accepted"
 title: "RT 検証機構の選定（assert_no_alloc 標準化・thread-check 意味論）"
 created: "2026-10-21"
-updated: "2026-10-21"
+updated: "2026-10-23"
 owners: []
 relations:
   source:
@@ -35,6 +35,7 @@ relations:
   related:
     - "select-audio-device-backend.md"
     - "../specs/rt-verification-lane.md"
+    - "../designs/shared-foundations-and-modularization-policy.md"
   refines: []
   refined-by: []
   derives-from:

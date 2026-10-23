@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "RT 検証レーン設計"
 created: "2026-10-21"
-updated: "2026-10-21"
+updated: "2026-10-23"
 owners: []
 relations:
   source:
@@ -38,6 +38,7 @@ relations:
   related:
     - "rt-foundation-api-design.md"
     - "audio-device-boundary-and-poc.md"
+    - "shared-foundations-and-modularization-policy.md"
   refines: []
   refined-by: []
   derives-from:

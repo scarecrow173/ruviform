@@ -28,6 +28,7 @@ Directory: `docs/designs`
 | DESIGN-034IPynWe2V30FLubzQenb | Ruviform architecture design baseline | approved | [ruviform-architecture-design-baseline.md](./ruviform-architecture-design-baseline.md) |
 | DESIGN-lzqhLAShvqF3efUlehuaUS | ruviform-dsp 設計（上位 DSP カーネル・math::dsp 層分担・prepare/process 分離） | approved | [ruviform-dsp.md](./ruviform-dsp.md) |
 | DESIGN-Tl9CIdfNfmIADLgFIeaTOq | 第 2 ターゲット設計（NLE 編集モデル・OFX 範囲・色管理） | approved | [second-target-design.md](./second-target-design.md) |
+| DESIGN-034Kx6CVMPDNgzKhJwfgSp | 共通基盤・Observability・Diagnostics・Debug とクレート分割の設計方針 | approved | [shared-foundations-and-modularization-policy.md](./shared-foundations-and-modularization-policy.md) |
 | DESIGN-034JQxPUJjVzr5aekaU1B8 | SIMD dispatch 層設計（トークン繰り上げ + ルーティング + 公開 API 形） | approved | [simd-dispatch-layer.md](./simd-dispatch-layer.md) |
 | DESIGN-034JcePtzKFix4IuxyE5mD | 時間モデル拡張の設計（FrameRate/TimeBase 分離・Timecode 拡張・丸め誤差累積方針） | approved | [time-model-extension.md](./time-model-extension.md) |
 | DESIGN-034JZVID00000000000030 | 動画エンジン設計（パイプライン・スケジューラ・セッション） | approved | [video-engine.md](./video-engine.md) |

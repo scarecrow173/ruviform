@@ -155,6 +155,12 @@ mise exec -- apm install --frozen
 - SIMD: スカラー参照実装を必須とし、カーネルごとに「ビット完全一致」または「ulp 上限内」の等価性契約を定義してスカラーを参照として検証する。stable Rust のみを使用し、`unsafe` は暫定規約どおり SAFETY コメント付きの局所許可のみで例外的に認める。SIMD 二層構造（ランタイム分岐＋フォールバック、dispatch 層の `ruviform-math` 集約を含む構造仮説）とバックエンド選定の採否は要 PoC。正本: 同書「DSP／SIMD 設計」採否。
 - クレート依存方向: 依存は上位 → 下位のみとし、循環依存は禁止。基礎クレートから GUI・オーディオデバイス・GPU への強制依存を作らない。詳細な層内順序・adapter ルール・契約型の所有は同書「レイヤー構造と依存方向ルール」節が正本。
 
+### 共通基盤・Observability・Diagnostics・Debug の設計方針（必要時参照）
+
+- 共通基盤の責務境界、段階的なモジュール→クレート分割、Memory / Collections / Sync / Identity / Telemetry、Logging / Profiling / Metrics / Diagnostics / Debug、OS / IPC との境界は [docs/designs/shared-foundations-and-modularization-policy.md](docs/designs/shared-foundations-and-modularization-policy.md)（Issue #101、現在 draft。設計レビュー・合意後に approved へ変更）を設計方針の参照先とする。
+- これらの機能や RT 計測経路、クレート・依存 DAG・公開 API の所有者・feature 境界を新設・変更・レビューする際は、必要に応じて同書の該当節を参照する。無関係な変更に同書の全読は要求しない。
+- `ruviform-foundation` / `ruviform-observability` / `ruviform-debug` / `ruviform-platform` 等は現時点では構成候補であり、クレート・API が実装されたことを意味しない。具体的な実装・既存 API の移動は別途設計・検証する。既存 accepted ADR（特に RT 契約・RT プリミティブ方式）と矛盾する変更は、必要な ADR 改訂を経て行う。
+
 ### ライセンス注記
 
 - ライセンスは未決定であり、`LICENSE` ファイルは存在しない。`Cargo.toml` の `license = "MIT"` は配布方針確定までの仮置きであり、ライセンスの決定を意味しない。

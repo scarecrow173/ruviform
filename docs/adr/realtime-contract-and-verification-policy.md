@@ -52,6 +52,7 @@ relations:
     - "../plans/implement-plugin-foundation.md"
     - "../plans/implement-issue-58-time-type-extension.md"
     - "../test-specs/plugin-foundation.md"
+    - "../designs/shared-foundations-and-modularization-policy.md"
   verifies: []
   verified-by: []
   references: []
