@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-exec"
-description = "Non-RT execution infrastructure (thread pool, job parallelism, progress and cancellation) for Ruviform"
+description = "Non-RT execution infrastructure (thread-priority promotion and OfflineDriver batch/parallel driving with progress and cancellation) for Ruviform"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

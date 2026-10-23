@@ -1,6 +1,8 @@
 //! `ruviform-exec` — non-RT execution infrastructure for the Ruviform media
-//! foundation: thread pool, job parallelism, progress / cancellation tokens,
-//! and batch driving.
+//! foundation: the OS thread-priority mechanism and `OfflineDriver`'s
+//! offline batch / parallel driving with progress / cancellation tokens.
+//! Worker threads are scoped inside `OfflineDriver::run_parallel`; no
+//! standalone thread-pool or executor API is provided.
 //!
 //! Holds no RT primitives. As part of its "hide OS thread details"
 //! responsibility it owns the thread-priority mechanism —
