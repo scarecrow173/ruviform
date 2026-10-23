@@ -45,6 +45,12 @@ mod alloc_counter;
 mod clock;
 mod context;
 mod error;
+// Issue #104 RT 観測コスト計測 PoC experiment bridge — see the module
+// docs. Measurement scaffolding for the #103 "要 PoC" verdicts; not
+// part of the public API contract and not covered by the production
+// RT contract.
+#[doc(hidden)]
+pub mod observability_poc;
 mod processor;
 mod retire;
 mod snapshot;

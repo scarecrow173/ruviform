@@ -129,8 +129,8 @@ mise exec -- apm install --frozen
 | `test` | `cargo test --workspace` | テスト（dev プロファイル） |
 | `build` | `cargo build --workspace` | ビルド（dev プロファイル） |
 | `test-rt` | `cargo test --workspace rt_`（`rt_` プレフィックス命名の RT テストを名前フィルタで選択。0 件一致でも成功するため RT テスト未存在時はスキップ相当） | RT 契約テスト（Issue #18・#21・#26 で導入後、media-core・dsp・audio-analysis・plugin 系・math::dsp・audio-device 等の RT-suitable API を持つ各クレートへ順次拡大済み） |
-| `bench` | `cargo bench --workspace` | ベンチマーク全量計測入口（現在は `ruviform-math` の SIMD PoC ベンチが対象。計測時間が長いためローカル手動実行向け） |
-| `bench-smoke` | `cargo bench -p ruviform-math -- --test` | ベンチスモーク（各ベンチを計測なしで 1 回実行。CI `bench` ジョブが呼ぶ入口） |
+| `bench` | `cargo bench --workspace` | ベンチマーク全量計測入口（現在は `ruviform-math` の SIMD PoC ベンチと `ruviform-rt` の RT 観測 PoC ベンチが対象。計測時間が長いためローカル手動実行向け） |
+| `bench-smoke` | `cargo bench -p ruviform-math -p ruviform-rt -- --test` | ベンチスモーク（各ベンチを計測なしで 1 回実行。CI `bench` ジョブが呼ぶ入口） |
 | `check-ci` / `lint-ci` / `test-ci` / `build-ci` | 上記各コマンドを `--profile ci`・`CARGO_INCREMENTAL=0` で実行 | CI 用途限定 |
 | `verify-ci` | `fmt-check` → `check-ci` → `lint-ci` → `test-ci` を順次実行 | CI 同等の検証列 |
 

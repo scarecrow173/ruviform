@@ -17,5 +17,16 @@ arc-swap = "1"
 # docs/adr/rt-foundation-primitives-implementation.md).
 rtrb = "0.4"
 
+# Issue #104 RT 観測コスト計測 PoC ハーネス（benches/rt_observability_poc.rs）。
+# ruviform-math の simd_poc と同一 pin 方針: caret 指定・追跡済み Cargo.lock を
+# 再現性の錨とし、default-features = false で rayon + plotters を外して
+# dev-dep のコンパイルコストを抑える。dev-dep 限定 — [dependencies] には昇格しない。
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false }
+
+[[bench]]
+name = "rt_observability_poc"
+harness = false
+
 [lints]
 workspace = true

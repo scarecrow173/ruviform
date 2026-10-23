@@ -1352,6 +1352,7 @@ name = "ruviform-rt"
 version = "0.1.0"
 dependencies = [
  "arc-swap",
+ "criterion",
  "rtrb",
 ]
 
