@@ -28,9 +28,9 @@
 //! first `process` call). Every public API carries an explicit
 //! `**RT contract:**` label — `RT-suitable` for the pure value types and
 //! `non-RT only` for the promotion mechanism — mirroring the RT ADR rule
-//! that the guaranteed scope is defined per API. The non-RT driver that
-//! mints `RtContext` tokens to batch- and parallel-drive `Processor`
-//! kernels offline arrives with later implementation issues.
+//! that the guaranteed scope is defined per API. [`OfflineDriver`] is the
+//! non-RT driver that mints `RtContext` tokens to batch- and parallel-drive
+//! `Processor` kernels offline (Issue #24).
 //!
 //! Contract source: `docs/designs/ruviform-architecture-design-baseline.md`
 //! (crate table A.2, "RT／非 RT の分離方式") and
