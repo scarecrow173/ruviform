@@ -157,7 +157,7 @@ mise exec -- apm install --frozen
 
 ### 共通基盤・Observability・Diagnostics・Debug の設計方針（必要時参照）
 
-- 共通基盤の責務境界、段階的なモジュール→クレート分割、Memory / Collections / Sync / Identity / Telemetry、Logging / Profiling / Metrics / Diagnostics / Debug、OS / IPC との境界は [docs/designs/shared-foundations-and-modularization-policy.md](docs/designs/shared-foundations-and-modularization-policy.md)（Issue #101、現在 draft。設計レビュー・合意後に approved へ変更）を設計方針の参照先とする。
+- 共通基盤の責務境界、段階的なモジュール→クレート分割、Memory / Collections / Sync / Identity / Telemetry、Logging / Profiling / Metrics / Diagnostics / Debug、OS / IPC との境界は [docs/designs/shared-foundations-and-modularization-policy.md](docs/designs/shared-foundations-and-modularization-policy.md)（Issue #101）を設計方針の参照先とする。
 - これらの機能や RT 計測経路、クレート・依存 DAG・公開 API の所有者・feature 境界を新設・変更・レビューする際は、必要に応じて同書の該当節を参照する。無関係な変更に同書の全読は要求しない。
 - `ruviform-foundation` / `ruviform-observability` / `ruviform-debug` / `ruviform-platform` 等は現時点では構成候補であり、クレート・API が実装されたことを意味しない。具体的な実装・既存 API の移動は別途設計・検証する。既存 accepted ADR（特に RT 契約・RT プリミティブ方式）と矛盾する変更は、必要な ADR 改訂を経て行う。
 
