@@ -211,9 +211,10 @@ impl OfflineDriver {
         Ok(out)
     }
 
-    /// Parallel drive: a fixed pool of `config.workers` threads, each with
-    /// its own `Rt` prepared from `setup.clone()`, pulls `(seq, chunk)`
-    /// from a bounded channel; results are reassembled in input order.
+    /// Parallel drive: `config.workers` worker threads spawned per call
+    /// via `std::thread::scope`, each with its own `Rt` prepared from
+    /// `setup.clone()`, pull `(seq, chunk)` from a bounded channel;
+    /// results are reassembled in input order.
     ///
     /// Bounded channels on both sides provide backpressure: the producer
     /// loop blocks once `queue_capacity` chunks are in flight. Requires
