@@ -26,10 +26,17 @@
 //! baseline: a non-RT `prepare`/constructor fixes coefficients and work
 //! areas and produces a prepared processing object, whose
 //! `process(&mut self, src: &VideoFrame, dst: &mut VideoFrame)` is
-//! allocation-free. No kernel takes an `RtContext` argument or implements
-//! a `Processor` trait — when `ruviform-rt` defines `Processor`, the
-//! kernel types implement it as an additive, backward-compatible
-//! extension (ADR D1).
+//! allocation-free. The composite family keeps this shape while taking
+//! animating edit parameters as per-call `process` arguments —
+//! `process(src, dst, opacity)` for [`CompositeOver`],
+//! `process(from, to, dst, t)` for [`Crossfade`] and
+//! `process(src, dst, map)` for [`AffineTransform`] — because
+//! constructor-baked animation inputs would force a non-RT re-`prepare`
+//! per frame. Per-call validation/quantization stays a bounded scalar
+//! step, so `process` remains allocation-free. No kernel takes an
+//! `RtContext` argument or implements a `Processor` trait — when
+//! `ruviform-rt` defines `Processor`, the kernel types implement it as
+//! an additive, backward-compatible extension (ADR D1).
 //!
 //! ## Kernels
 //!
@@ -45,11 +52,25 @@
 //!   channel normalization (`v/255` ↔ `round(clamp(v)·255)`, `ColorInfo`
 //!   carried unchanged; ulp-bounded forward, bit-exact inverse
 //!   equivalence contract).
+//! - [`CompositeOver`] — `src over dst` source-over alpha compositing
+//!   on straight alpha, in place on `dst`, with a per-call `opacity`
+//!   (self-consistent Q8 integer expansion on `Rgba8`, `f32` pipeline +
+//!   RNE `binary16` rounding on `RgbaF16`; bit-exact / ≤ 2 ulp
+//!   equivalence contract).
+//! - [`Crossfade`] — `dst = from·(1−t) + to·t` two-source dissolve on
+//!   all four channels with a per-call `t` (same quantization and
+//!   equivalence rules as [`CompositeOver`]).
+//! - [`AffineTransform`] — integer-rectangle translate+scale via
+//!   [`Rect`]/[`RectMap`]: cell-center nearest sampling, off-canvas and
+//!   uncovered pixels filled with transparent black (pure pixel
+//!   mapping/copy — bit-exact on both formats).
 //!
 //! Kernels are scalar reference implementations per the baseline
 //! DSP/SIMD decision — each kernel documents whether a future optimized
-//! backend must be bit-exact or within a ulp bound. Scaling and
-//! compositing kernels stay reserved for later issues.
+//! backend must be bit-exact or within a ulp bound. Higher-quality
+//! scaling filters (bilinear and above), full affine (rotation/shear),
+//! additional blend modes and planar-YUV compositing stay reserved for
+//! later issues.
 //!
 //! ## RT constraints
 //!
@@ -81,11 +102,15 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::exhaustive_structs)]
 
+mod affine;
 mod coef;
+mod composite;
 mod rgb_to_yuv;
 mod rgba_f16;
 mod yuv_to_rgb;
 
+pub use affine::{AffineTransform, Rect, RectMap};
+pub use composite::{CompositeOver, Crossfade};
 pub use rgb_to_yuv::RgbToYuv;
 pub use rgba_f16::{Rgba8ToRgbaF16, RgbaF16ToRgba8};
 pub use yuv_to_rgb::YuvToRgb;

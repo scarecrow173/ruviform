@@ -156,9 +156,9 @@ impl YuvToRgb {
         let src_color = src.color();
         let coef =
             &self.coef[coef::matrix_slot(src_color.matrix)?][coef::range_slot(src_color.range)?];
-        let luma = src.plane(0).ok_or(Error::InvalidValue("src planes"))?;
-        let blue_plane = src.plane(1).ok_or(Error::InvalidValue("src planes"))?;
-        let red_plane = src.plane(2).ok_or(Error::InvalidValue("src planes"))?;
+        let luma = src.plane(0).ok_or(Error::InvalidValue("src plane"))?;
+        let blue_plane = src.plane(1).ok_or(Error::InvalidValue("src plane"))?;
+        let red_plane = src.plane(2).ok_or(Error::InvalidValue("src plane"))?;
         {
             let mut dst_plane = dst.plane_mut(0).ok_or(Error::InvalidValue("dst plane"))?;
             for y in 0..src.height() {
@@ -166,11 +166,9 @@ impl YuvToRgb {
                 // `div_ceil` chroma grids keep `cy`/`cx` in range —
                 // `ok_or` keeps the contract panic-free regardless.
                 let cy = y / sub_h;
-                let luma_row = luma.row(y).ok_or(Error::InvalidValue("src planes"))?;
-                let blue_row = blue_plane
-                    .row(cy)
-                    .ok_or(Error::InvalidValue("src planes"))?;
-                let red_row = red_plane.row(cy).ok_or(Error::InvalidValue("src planes"))?;
+                let luma_row = luma.row(y).ok_or(Error::InvalidValue("src plane"))?;
+                let blue_row = blue_plane.row(cy).ok_or(Error::InvalidValue("src plane"))?;
+                let red_row = red_plane.row(cy).ok_or(Error::InvalidValue("src plane"))?;
                 let dst_row = dst_plane
                     .row_mut(y)
                     .ok_or(Error::InvalidValue("dst plane"))?;

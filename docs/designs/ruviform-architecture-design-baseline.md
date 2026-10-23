@@ -100,6 +100,8 @@ relations:
     - "docs/designs/audio-analysis.md"
     - "docs/specs/edit-data-model.md"
     - "docs/designs/edit-data-model.md"
+    - "docs/specs/composite-transition-kernels.md"
+    - "docs/designs/composite-transition-kernels.md"
     - "shared-foundations-and-modularization-policy.md"
   verifies: []
   verified-by: []

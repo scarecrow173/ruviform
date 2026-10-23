@@ -33,6 +33,8 @@ relations:
     - "docs/designs/second-target-design.md"
     - "docs/specs/edit-data-model.md"
     - "docs/designs/edit-data-model.md"
+    - "docs/specs/composite-transition-kernels.md"
+    - "docs/designs/composite-transition-kernels.md"
   verifies: []
   verified-by: []
   references: []

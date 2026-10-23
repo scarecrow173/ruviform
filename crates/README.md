@@ -22,7 +22,7 @@ Ruviform ワークスペースのメンバークレート索引（計19クレー
 | --- | --- |
 | [`ruviform-audio-core`](ruviform-audio-core/README.md) | オーディオデータモデル（`SampleRate`・planar buffer view・device ポート trait） |
 | [`ruviform-video-core`](ruviform-video-core/README.md) | ビデオデータモデル（フレーム・ピクセル形式） |
-| [`ruviform-video-proc`](ruviform-video-proc/README.md) | ビデオ処理カーネル（色変換） |
+| [`ruviform-video-proc`](ruviform-video-proc/README.md) | ビデオ処理カーネル（色変換・コンポジット/遷移） |
 | [`ruviform-dsp`](ruviform-dsp/README.md) | ドメイン型付き audio DSP カーネル（`Window`・`Biquad`・`FirFilter`・`Fft`・`LinearResampler`） |
 | [`ruviform-audio-analysis`](ruviform-audio-analysis/README.md) | 解析層（`LevelMeter`・`SpectrumAnalyzer`・`WaveformPeaks`） |
 

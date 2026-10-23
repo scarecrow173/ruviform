@@ -13,6 +13,7 @@ Directory: `docs/tasks`
 | TASK-034JOukDzGSLe1s0mtlzeg | DataCallbackState への sample_rate 配線 | done | [add-sample-rate-to-callback-state.md](./add-sample-rate-to-callback-state.md) |
 | TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | done | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034JNwUoAfb2TnY7nw07XH | 時間変換精度テストの追加（音声×映像行列・往復/連鎖誤差上界） | done | [add-time-precision-tests.md](./add-time-precision-tests.md) |
+| TASK-034KSVq7PFSELAOY00SIZG | AffineTransform カーネル + 文書クローズ | done | [affine-kernel-and-closeout.md](./affine-kernel-and-closeout.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
 | TASK-034JP1tb1wQI9ac2cEwBq4 | プラグイン境界 RT 契約テストへの assert_no_alloc 適用 | done | [apply-assert-no-alloc-to-plugin-boundary.md](./apply-assert-no-alloc-to-plugin-boundary.md) |
 | TASK-034JO3X9ZpAvMoWiRIiMU4 | MSRV 1.89 適用とドキュメント同期（Cargo.toml・AGENTS.md） | done | [apply-msrv-1-89-and-sync-docs.md](./apply-msrv-1-89-and-sync-docs.md) |
@@ -24,6 +25,7 @@ Directory: `docs/tasks`
 | TASK-034JRQBhUGz8OWIgGAnEgl | ruviform-audio クレート新設 + pull グラフ/ミキサー/プランスナップショット | done | [audio-engine-graph-snapshot.md](./audio-engine-graph-snapshot.md) |
 | TASK-034JRQBPxKgu0yLVIB6Xm7 | セッション統合（OutputStream callback → RT グラフ駆動） | done | [audio-engine-session.md](./audio-engine-session.md) |
 | TASK-034IwBWH50nD9Unn8HghJD | テンプレート残存プレースホルダーのベースラインスイープ | done | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
+| TASK-034KSVlq4M72vjrxvDRQbP | コンポジットカーネル実装（CompositeOver + Crossfade + 共有 f16 コーデック格上げ） | done | [composite-kernels.md](./composite-kernels.md) |
 | TASK-034IdQmBa6UdauVn9IG59X | 最小ワークスペースと smoke test の構築 | done | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | TASK-034JgsFV6CWAjSnPuekBgs | ruviform-plugin-core 共通基盤クレートの作成 | done | [create-plugin-core-foundation.md](./create-plugin-core-foundation.md) |
 | TASK-034JcCRLsFJ7j8zPBi8mXY | ruviform-video-proc クレート骨格の新設 | done | [create-video-proc-crate-skeleton.md](./create-video-proc-crate-skeleton.md) |

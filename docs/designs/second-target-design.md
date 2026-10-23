@@ -38,6 +38,8 @@ relations:
     - "docs/plans/implement-issue-32-second-target-design.md"
     - "docs/specs/edit-data-model.md"
     - "docs/designs/edit-data-model.md"
+    - "docs/specs/composite-transition-kernels.md"
+    - "docs/designs/composite-transition-kernels.md"
   verifies: []
   verified-by: ["docs/tasks/second-target-design-verify.md"]
   references: []

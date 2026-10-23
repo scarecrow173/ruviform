@@ -35,6 +35,8 @@ relations:
   derived-by:
     - "docs/adr/broad-color-management.md"
     - "docs/plans/implement-issue-26-video-foundation.md"
+    - "docs/specs/composite-transition-kernels.md"
+    - "docs/designs/composite-transition-kernels.md"
   verifies: []
   verified-by: []
   references:
