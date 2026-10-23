@@ -98,6 +98,8 @@ relations:
     - "docs/test-specs/musical-transport-abi-tests.md"
     - "docs/specs/audio-analysis.md"
     - "docs/designs/audio-analysis.md"
+    - "docs/specs/edit-data-model.md"
+    - "docs/designs/edit-data-model.md"
     - "shared-foundations-and-modularization-policy.md"
   verifies: []
   verified-by: []

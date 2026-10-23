@@ -34,6 +34,7 @@ relations:
     - "docs/adr/ofx-video-plugin-scope.md"
     - "docs/adr/broad-color-management.md"
     - "docs/designs/second-target-design.md"
+    - "docs/specs/edit-data-model.md"
   verifies: []
   verified-by: []
   references: []
