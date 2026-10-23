@@ -37,6 +37,7 @@ relations:
   derived-by:
     - "../designs/rt-foundation-api-design.md"
     - "../plans/implement-rt-foundation.md"
+    - "../designs/shared-foundations-and-modularization-policy.md"
   verifies: []
   verified-by: []
   references:

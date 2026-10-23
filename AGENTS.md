@@ -112,7 +112,7 @@ mise exec -- apm install --frozen
 ### ワークスペース構成
 
 - ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`version = "0.1.0"` は仮置き。`edition = "2024"` は Issue #34 で確定。`rust-version = "1.89"` は Issue #34 で 1.85 確定後、Issue #52 / docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md で 1.89 に引上げ（fearless_simd 本番昇格前提）。`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
-- メンバーは Phase 1 基盤7クレート（Issue #17 で仮置き `crates/ruviform-core` を分割置換した6クレート + Issue #26 で新設の `crates/ruviform-video-proc`）と Issue #20 のメディア I/O 2クレート: Primitives `crates/ruviform-math`・`crates/ruviform-rt`（最下位）→ `crates/ruviform-media-core`・`crates/ruviform-exec`、Domain foundations `crates/ruviform-audio-core`・`crates/ruviform-video-core`・`crates/ruviform-video-proc`、メディア I/O 抽象境界 `crates/ruviform-media-io`（非 RT 専用）、第一バックエンド PoC `crates/ruviform-io-symphonia`（分離クレート + opt-in）。各クレートの crate-level doc には責務・許可依存層・RT 制約を転記する。media-core・audio-core・video-core は Issue #18 でデータモデル API が確定・実装され、audio-core・video-core → media-core の `path` 依存が設定済み。rt・exec は Issue #21 で実装済み（rt: `Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換の RT 基盤 API。exec: スレッド優先度機構）。video-proc は Issue #26 で新設・色変換カーネル（`YuvToRgb`・`RgbToYuv`・`Rgba8ToRgbaF16`・`RgbaF16ToRgba8`）が実装済みであり、video-proc → video-core・media-core の `path` 依存が設定済み。media-io は Issue #20 で抽象境界 API（demux/mux と decode/encode を分離した 4 系統 trait・`Packet`・codec 記述型・`AudioFrame`・能力交渉・正規化エラー）を確定・実装し、media-io → media-core/audio-core/video-core・io-symphonia → media-io + media-core + audio-core の `path` 依存を設定済み（io-symphonia は domain 型の直接依存も許容するバックエンド権限を使用。ベースライン L203）。io-symphonia は symphonia 0.6（default features のみ・MPL-2.0）を用いる demux + decode のみの PoC であり、symphonia が encode を持たないため `Muxer`/`Encoder` は非対応（能力交渉の「非対応」表現の実例）。media-io・io-symphonia はともに非 RT 専用で、全公開 API に `**RT contract:** non-RT only` を付す。拡張層として Issue #29 で `crates/ruviform-plugin-core`・`crates/ruviform-plugin-clap`・`crates/ruviform-plugin-vst3` を新設済み（規格中立プラグイン基盤 + CLAP/VST3 薄アダプタ。plugin-core → audio-core・media-core、アダプタ → plugin-core・audio-core・media-core＋各 binding クレート `clack`/`vst3` の `path` ・外部依存を設定済み。binding 方式は方式 ADR で決定）。math は引き続きスケルトン（`version()` + doctest + smoke test）であり、残りの `path` 依存は API 確定に伴い追加する。クレート DAG・分割案は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）に記録され、`members` は実装 Phase に応じて段階追加される。上記実装済みクレート以外の公開 API は引き続き未確定であり、実装 Issue で確定する。
+- メンバー構成（層別の計18クレート一覧と各クレート README へのリンク）は [crates/README.md](crates/README.md) を索引とする。各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は `crates/<name>/README.md` と crate-level doc に転記しており、そちらを参照。層構造と `path` 依存方向・クレート DAG の正本は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）であり、`members` は実装 Phase に応じて段階追加される。残りの `path` 依存は API 確定に伴い追加する。上記以外の公開 API は引き続き未確定であり、実装 Issue で確定する。
 - Adapter クレートとして `crates/ruviform-audio-device` を Issue #23（cpal 条件付き採用・[docs/adr/select-audio-device-backend.md](docs/adr/select-audio-device-backend.md)・accepted）で新設済み。adapter 層はドメイン基盤の外側（engine と同じ利用側層）で、foundations/Primitives への下向き依存のみを持つ。`ruviform-audio-device` は cpal を内部依存に閉じ込め、`ruviform_audio_core::device` のポート trait（`DeviceEnumerator`/`Device`/`OutputStream`）を `Box<dyn>` 経由で実装する。cpal の型・エラー・feature 名を公開 API に露出せず、コアクレートからの強制依存・adapter→adapter 依存は作らない。手動検証 example（`list_devices`・`play_sine`）は実機依存で CI 対象外。
 
 ### 検証入口
@@ -128,7 +128,7 @@ mise exec -- apm install --frozen
 | `lint` | `cargo clippy --workspace --all-targets -- -D warnings` | lint（dev プロファイル） |
 | `test` | `cargo test --workspace` | テスト（dev プロファイル） |
 | `build` | `cargo build --workspace` | ビルド（dev プロファイル） |
-| `test-rt` | `cargo test --workspace rt_`（`rt_` プレフィックス命名の RT テストを名前フィルタで選択。0 件一致でも成功するため RT テスト未存在時はスキップ相当） | RT 契約テスト（Issue #18 の値型・Issue #21 の RT 基盤・Issue #26 の `ruviform-video-proc` カーネルで実装済み） |
+| `test-rt` | `cargo test --workspace rt_`（`rt_` プレフィックス命名の RT テストを名前フィルタで選択。0 件一致でも成功するため RT テスト未存在時はスキップ相当） | RT 契約テスト（Issue #18・#21・#26 で導入後、media-core・dsp・audio-analysis・plugin 系・math::dsp・audio-device 等の RT-suitable API を持つ各クレートへ順次拡大済み） |
 | `bench` | `cargo bench --workspace` | ベンチマーク全量計測入口（現在は `ruviform-math` の SIMD PoC ベンチが対象。計測時間が長いためローカル手動実行向け） |
 | `bench-smoke` | `cargo bench -p ruviform-math -- --test` | ベンチスモーク（各ベンチを計測なしで 1 回実行。CI `bench` ジョブが呼ぶ入口） |
 | `check-ci` / `lint-ci` / `test-ci` / `build-ci` | 上記各コマンドを `--profile ci`・`CARGO_INCREMENTAL=0` で実行 | CI 用途限定 |
@@ -154,6 +154,12 @@ mise exec -- apm install --frozen
 - RT/オフライン分離: リアルタイム（RT）経路と非 RT を API・ライフサイクルで分離する。処理契約は `Processor`（`prepare`/`process` 分離）と `RtContext` capability が定義する。RT クリティカルパスでは alloc/dealloc を禁止し、ブロッキング操作・I/O・無制限の待機/リトライ・非有界処理を制限する。「RT-safe」等の保証範囲は API 単位で定義・明示し、未確定の API を RT-safe と断定しない。検証可能な違反は CI で検出するが、CI 成功は完全証明ではない。OS レベルのハードリアルタイム保証は提供しない。正本: 同書「RT／非 RT の分離方式」「RT 契約（API 単位の保証定義）」節。
 - SIMD: スカラー参照実装を必須とし、カーネルごとに「ビット完全一致」または「ulp 上限内」の等価性契約を定義してスカラーを参照として検証する。stable Rust のみを使用し、`unsafe` は暫定規約どおり SAFETY コメント付きの局所許可のみで例外的に認める。SIMD 二層構造（ランタイム分岐＋フォールバック、dispatch 層の `ruviform-math` 集約を含む構造仮説）とバックエンド選定の採否は要 PoC。正本: 同書「DSP／SIMD 設計」採否。
 - クレート依存方向: 依存は上位 → 下位のみとし、循環依存は禁止。基礎クレートから GUI・オーディオデバイス・GPU への強制依存を作らない。詳細な層内順序・adapter ルール・契約型の所有は同書「レイヤー構造と依存方向ルール」節が正本。
+
+### 共通基盤・Observability・Diagnostics・Debug の設計方針（必要時参照）
+
+- 共通基盤の責務境界、段階的なモジュール→クレート分割、Memory / Collections / Sync / Identity / Telemetry、Logging / Profiling / Metrics / Diagnostics / Debug、OS / IPC との境界は [docs/designs/shared-foundations-and-modularization-policy.md](docs/designs/shared-foundations-and-modularization-policy.md)（Issue #101、現在 draft。設計レビュー・合意後に approved へ変更）を設計方針の参照先とする。
+- これらの機能や RT 計測経路、クレート・依存 DAG・公開 API の所有者・feature 境界を新設・変更・レビューする際は、必要に応じて同書の該当節を参照する。無関係な変更に同書の全読は要求しない。
+- `ruviform-foundation` / `ruviform-observability` / `ruviform-debug` / `ruviform-platform` 等は現時点では構成候補であり、クレート・API が実装されたことを意味しない。具体的な実装・既存 API の移動は別途設計・検証する。既存 accepted ADR（特に RT 契約・RT プリミティブ方式）と矛盾する変更は、必要な ADR 改訂を経て行う。
 
 ### ライセンス注記
 

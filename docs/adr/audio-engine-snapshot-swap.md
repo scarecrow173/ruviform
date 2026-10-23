@@ -21,7 +21,8 @@ relations:
   blocks: []
   supersedes: []
   superseded-by: []
-  related: []
+  related:
+    - "../designs/shared-foundations-and-modularization-policy.md"
   refines: []
   refined-by: []
   derives-from: []

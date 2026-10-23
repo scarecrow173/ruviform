@@ -4,7 +4,7 @@ type: "plan"
 status: "completed"
 title: "Issue #18 データモデル API の実装（media-core / audio-core / video-core）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-23"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -72,8 +72,10 @@ relations:
   depends-on:
     - "apply-issue-1-architecture-baseline-to-repo.md"
   blocks:
+    - "implement-issue-26-video-foundation.md"
     - "implement-plugin-foundation.md"
     - "issue-18-followup-enum-and-time-fix.md"
+    - "issue-20-i-o-poc.md"
     - "../tasks/implement-media-core-data-model.md"
     - "../tasks/implement-audio-core-data-model.md"
     - "../tasks/implement-video-core-data-model.md"

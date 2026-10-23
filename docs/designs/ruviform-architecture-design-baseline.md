@@ -34,6 +34,7 @@ relations:
   refined-by:
     - "../adr/dsp-simd-backend-adoption.md"
     - "../designs/simd-dispatch-layer.md"
+    - "shared-foundations-and-modularization-policy.md"
   derives-from:
     - "../specs/architecture-design-baseline-deliverables.md"
     - "../adr/media-io-backend-abstraction.md"
@@ -97,6 +98,7 @@ relations:
     - "docs/test-specs/musical-transport-abi-tests.md"
     - "docs/specs/audio-analysis.md"
     - "docs/designs/audio-analysis.md"
+    - "shared-foundations-and-modularization-policy.md"
   verifies: []
   verified-by: []
   references:
