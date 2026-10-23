@@ -13,3 +13,4 @@ Directory: `docs/discovery`
 | DISC-034IO8gG0n5xCqh66w8KUp | Issue #1 詳細設計に向けた要求確定とエコシステム調査 | draft | [explore-architecture-design-baseline.md](./explore-architecture-design-baseline.md) |
 | DISC-034JcicdqiAQzbUKFHiCbc | Issue #26 に向けた動画基盤 API・色変換/HDR 対応範囲の調査 | draft | [explore-video-foundation-api-scope.md](./explore-video-foundation-api-scope.md) |
 | DISC-034JbXZSba3SvOavRFfs66 | Issue #28 UI 技術検証 PoC の事前調査 | draft | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
+| DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |

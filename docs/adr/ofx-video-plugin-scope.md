@@ -26,13 +26,16 @@ relations:
   superseded-by: []
   related: []
   refines: []
-  refined-by: []
+  refined-by:
+    - "ofx-host-video-contract-and-c-abi.md"
   derives-from:
     - "docs/specs/second-target-design.md"
     - "docs/designs/plugin-isolation.md"
     - "docs/adr/plugin-isolation-strategy.md"
     - "docs/designs/ruviform-architecture-design-baseline.md"
-  derived-by: []
+  derived-by:
+    - "ofx-host-video-contract-and-c-abi.md"
+    - "../specs/ofx-host-adapter.md"
   verifies: []
   verified-by: []
   references: []

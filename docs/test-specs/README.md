@@ -25,6 +25,7 @@ Directory: `docs/test-specs`
 | TSPEC-034KoNprsmdPREx6TtcMB6 | 音楽時間モデル（media-core::music）テスト仕様 | approved | [music-time-media-core-tests.md](./music-time-media-core-tests.md) |
 | TSPEC-034KpKr9gVqJJNxYSJVaQF | 音楽時間 ABI 拡張テスト仕様 | approved | [musical-transport-abi-tests.md](./musical-transport-abi-tests.md) |
 | TSPEC-034JRcGrYYZnirStTwM7Z9 | オフライン実行ドライバ テスト仕様 | draft | [offline-execution-driver-tests.md](./offline-execution-driver-tests.md) |
+| TSPEC-034L6w60ZWfGC89xBPgw4L | OFX Host Native Contract Tests | proposed | [ofx-host-native-contract-tests.md](./ofx-host-native-contract-tests.md) |
 | TSPEC-034Jg6YSP6CLjJHnFGG5oL | プラグイン基盤 API の契約保証 | approved | [plugin-foundation.md](./plugin-foundation.md) |
 | TSPEC-034JZPGUI0000000000004 | プラグイン GUI PoC 判定規則 | approved | [plugin-gui-poc.md](./plugin-gui-poc.md) |
 | TSPEC-5ibPChaXqhbfYjL713aqKw | plugin-host L0 テスト仕様 | approved | [plugin-host-l0-tests.md](./plugin-host-l0-tests.md) |
@@ -39,3 +40,4 @@ Directory: `docs/test-specs`
 | TSPEC-034JNskaqcN34Ki4layRNK | FrameRate 型・Timecode シグネチャ・時間変換精度の契約保証 | approved | [time-type-extension-contracts.md](./time-type-extension-contracts.md) |
 | TSPEC-034JZVID00000000000050 | 動画エンジン テスト仕様 | approved | [video-engine-tests.md](./video-engine-tests.md) |
 | TSPEC-034JcCwISRw7E9Q8XoNvD8 | 動画基盤 API の契約保証（所有権・RT・色変換カーネル） | approved | [video-foundation-api.md](./video-foundation-api.md) |
+| TSPEC-034L6w5zHELr4fPxPNpBsk | Video Plugin Plain Contract Tests | proposed | [video-plugin-plain-contract-tests.md](./video-plugin-plain-contract-tests.md) |

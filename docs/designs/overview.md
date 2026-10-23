@@ -4,7 +4,7 @@ type: "design"
 status: "draft"
 title: "System Design Overview"
 created: "2026-10-19"
-updated: "2026-10-20"
+updated: "2026-10-24"
 owners: []
 relations:
   source: []
@@ -104,3 +104,4 @@ Optional platform adapters（opt-in・基礎層への依存は下向きのみ）
 - [foundation-observability-minimal-api.md](foundation-observability-minimal-api.md) — Foundation/Observability 候補モジュールの最小 API スケッチ・新設時期トリガ・依存 DAG・Counter 選定の設計（Issue #103。#101 設計の「適用・移行順序」2・3）(draft)
 - [audio-device-boundary-and-poc.md](audio-device-boundary-and-poc.md) — オーディオデバイス境界（ポート trait・cpal adapter・コールバック配管）と PoC 検証設計（Issue #23）(approved)
 - [time-model-extension.md](time-model-extension.md) — 時間モデル拡張の設計（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針、Issue #42）(approved)
+- [ofx-host-adapter.md](ofx-host-adapter.md) — OFX ホストアダプタ詳細設計（video 契約境界・C ABI バインディング・セッション/lifecycle・image/time/param 意味論、Issue #98）(approved)

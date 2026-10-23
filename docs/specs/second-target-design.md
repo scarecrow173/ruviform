@@ -30,6 +30,7 @@ relations:
   derives-from:
     - "docs/designs/ruviform-architecture-design-baseline.md"
   derived-by:
+    - "ofx-host-adapter.md"
     - "docs/adr/second-target-editing-model.md"
     - "docs/adr/ofx-video-plugin-scope.md"
     - "docs/adr/broad-color-management.md"
