@@ -12,6 +12,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Jeo1j5l7fBhYc8iYsTN | ベンチ・検証タスクと CI スモーク挙動の契約保証 | approved | [bench-tasks-and-ci-smoke.md](./bench-tasks-and-ci-smoke.md) |
 | TSPEC-034JOtlBoKc1LUny4Iu67z | chunk timestamp 合成の契約テスト | approved | [chunk-timestamp-contracts.md](./chunk-timestamp-contracts.md) |
 | TSPEC-034IdHsItEuo0TZWTPOJUu | ci プロファイルのビルド挙動と成果物分離 | proposed | [ci-profile-build-behavior.md](./ci-profile-build-behavior.md) |
+| TSPEC-034KSVh4JNdOEJMzGYbZic | video-proc コンポジット/遷移カーネル テスト仕様 | approved | [composite-transition-kernels-tests.md](./composite-transition-kernels-tests.md) |
 | TSPEC-034JZDNRML000000000005 | denormal flush テスト仕様 | approved | [denormal-flush-tests.md](./denormal-flush-tests.md) |
 | TSPEC-034KPgCJjA5nOIvEtscQj8 | ruviform-edit 編集データモデル テスト仕様 | approved | [edit-data-model-tests.md](./edit-data-model-tests.md) |
 | TSPEC-034J6OIFK83GJIsST60Jck | 公開 enum 拡張性と時間演算精度の契約保証 | approved | [followup-enum-compat-and-time-arithmetic.md](./followup-enum-compat-and-time-arithmetic.md) |

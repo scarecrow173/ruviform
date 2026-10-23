@@ -35,6 +35,7 @@ relations:
     - "docs/adr/broad-color-management.md"
     - "docs/designs/second-target-design.md"
     - "docs/specs/edit-data-model.md"
+    - "docs/specs/composite-transition-kernels.md"
   verifies: []
   verified-by: []
   references: []
