@@ -35,7 +35,9 @@ relations:
   refined-by: []
   derives-from:
     - "shared-foundations-and-modularization-policy.md"
-  derived-by: []
+  derived-by:
+    - "../plans/implement-issue-104-rt-observability-poc.md"
+    - "../test-specs/rt-observability-poc-tests.md"
   verifies: []
   verified-by: []
   references:
