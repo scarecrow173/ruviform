@@ -186,7 +186,7 @@ impl RgbToYuv {
             return Err(Error::InvalidValue("dimensions"));
         }
         let src_color = src.color();
-        let rgba = src.plane(0).ok_or(Error::InvalidValue("src planes"))?;
+        let rgba = src.plane(0).ok_or(Error::InvalidValue("src plane"))?;
         // Verify every dst plane is exclusively owned before a single
         // byte is written: `plane_mut` yields `None` while a clone still
         // shares the backing. Each borrow is released immediately —
@@ -207,7 +207,7 @@ impl RgbToYuv {
                 // These row borrows cannot fail: `y < height` on a
                 // well-formed frame — `ok_or` keeps the contract
                 // panic-free regardless.
-                let src_row = rgba.row(y).ok_or(Error::InvalidValue("src planes"))?;
+                let src_row = rgba.row(y).ok_or(Error::InvalidValue("src plane"))?;
                 let luma_row = luma_plane
                     .row_mut(y)
                     .ok_or(Error::InvalidValue("dst plane"))?;
@@ -244,7 +244,7 @@ impl RgbToYuv {
                     let mut sum = 0_i32;
                     let mut count = 0_i32;
                     for y in y0..y1 {
-                        let src_row = rgba.row(y).ok_or(Error::InvalidValue("src planes"))?;
+                        let src_row = rgba.row(y).ok_or(Error::InvalidValue("src plane"))?;
                         for px in src_row.as_chunks::<4>().0.iter().skip(x0).take(x1 - x0) {
                             sum += self.coef.chroma(px[0], px[1], px[2])[plane_index - 1];
                             count += 1;
