@@ -4,7 +4,7 @@ type: "spec"
 status: "implemented"
 title: "メディアデータモデル API の実装（media-core / audio-core / video-core）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-23"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -21,8 +21,11 @@ relations:
   depends-on:
     - "establish-rust-dev-foundation.md"
   blocks:
+    - "implement-media-io-abstraction-and-first-backend-poc.md"
     - "implement-plugin-foundation.md"
+    - "implement-video-foundation-api.md"
     - "issue-18-followup-enum-and-time-fix.md"
+    - "time-type-extension-framerate-timecode-rounding.md"
   supersedes: []
   superseded-by: []
   related:
