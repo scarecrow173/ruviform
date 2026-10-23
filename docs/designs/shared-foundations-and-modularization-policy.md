@@ -32,7 +32,6 @@ relations:
     - "../../AGENTS.md"
     - "overview.md"
     - "plugin-isolation.md"
-    - "../adr/audio-engine-snapshot-swap.md"
   refines:
     - "ruviform-architecture-design-baseline.md"
   refined-by: []
@@ -99,12 +98,13 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
 ┌─ Engines / 拡張層（Plugin・UI）/ Optional platform adapters ─┐
 │ Engines:   ruviform-audio・ruviform-video                     │
 │ 拡張層:    ruviform-plugin-core → ruviform-plugin-host・      │
-│            ruviform-plugin-export → ruviform-plugin-clap・    │
-│            ruviform-plugin-vst3                               │
-│            ruviform-ui → ruviform-ui-webview                  │
-│ Adapters:  ruviform-audio-device・ruviform-gpu・              │
+│            ruviform-plugin-export（未実装）→                  │
+│            ruviform-plugin-clap・ruviform-plugin-vst3         │
+│            ruviform-ui（未実装）→                             │
+│            ruviform-ui-webview（未実装）                      │
+│ Adapters:  ruviform-audio-device・ruviform-gpu（未実装）・    │
 │            ruviform-io-*（ruviform-io-symphonia 等）・        │
-│            ruviform-ui-webview                                │
+│            ruviform-ui-webview（未実装）                      │
 └──┬───────────────────────────────────────────────────────────┘
    ▼ Domain foundations
 ┌──────────────────────────────────────────────────────────────┐
@@ -128,7 +128,7 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
   ruviform-ipc
 ```
 
-上図は [全体設計ベースライン](ruviform-architecture-design-baseline.md) の層構造・層内順序に厳密に合わせた概念図であり、Cargo DAG の全エッジを表すものではない。縦方向は依存方向（上位 → 下位）を示し、`ruviform-math`・`ruviform-rt` は最下位・相互依存なし（baseline 確定済み）である。下段の構成候補は領域の分類を示す構成仮説であり baseline 層に混在させる確定依存位置ではない。`ruviform-observability` と `ruviform-exec` のような候補と既存クレートの上下関係は固定せず、`ruviform-rt → ruviform-foundation` のような新規依存は既定路線ではない（後述「依存方向と既存契約との整合」参照）。ポートを定義する所有者と、実装を提供するアダプタを個別に指定する。ポート定義が上位層にある場合の依存も baseline の規則どおり合法である（例: `ruviform-ui-webview` → `ruviform-ui` は WebView ホスト境界の定義元への依存として許容）。
+上図は [全体設計ベースライン](ruviform-architecture-design-baseline.md) の層構造・層内順序に厳密に合わせた概念図であり、Cargo DAG の全エッジを表すものではない。縦方向は依存方向（上位 → 下位）を示し、`ruviform-math`・`ruviform-rt` は最下位・相互依存なし（baseline 確定済み）である。下段の構成候補は領域の分類を示す構成仮説であり baseline 層に混在させる確定依存位置ではない。`ruviform-observability` と `ruviform-exec` のような候補と既存クレートの上下関係は固定せず、`ruviform-rt → ruviform-foundation` のような新規依存は既定路線ではない（後述「依存方向と既存契約との整合」参照）。ポートを定義する所有者と、実装を提供するアダプタを個別に指定する。ポート定義が上位層にある場合の依存も baseline の規則どおり合法である（例: `ruviform-ui-webview` → `ruviform-ui` は WebView ホスト境界の定義元への依存として許容）。図中の `（未実装）` は baseline クレート表で計画済みだがコード棚卸し時点でクレートとして存在しない名前（`ruviform-plugin-export`・`ruviform-ui`・`ruviform-ui-webview`・`ruviform-gpu`）を示し、実装済みクレートおよび本書の構成候補名と区別して読むこと。
 
 ### 領域ごとの構成候補と採否状態
 
@@ -153,7 +153,7 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
 | `identity` | 世代付き ID・スロット等の汎用ハンドル構成部品 | `PluginHandle`（`ruviform-plugin-host`）や `StreamId`（`ruviform-media-core`）・`ParamId`（`ruviform-plugin-core`）等のドメイン別型を不必要に統合しない |
 | `telemetry` | 固定サイズのイベントレコード、カウンタ、記録用リング、取りこぼし（オーバーフロー）の観測など、出力先に依存しない軽量記録機構 | ログフォーマット・Subscriber・export・ファイル I/O を含めない |
 
-既存 `ruviform-rt` の `alloc_counter`（`#[cfg(test)]` 限定のテスト専用・内部計測アロケータ）を含め、Memory／Telemetry／RT 検証の所有者や重複を棚卸しする。現時点で移動先を確定しない（**要 PoC**）。既存 ADR・公開 API・RT 契約との互換性と RT コストを検証してから判断する。
+既存 `ruviform-rt` の `alloc_counter`（`#[cfg(test)]` 限定のテスト専用・内部計測アロケータ）を含め、Memory／Telemetry／RT 検証の所有者や重複はコード棚卸し済みである（後述「既存実装の棚卸し」節参照）。現時点で移動先を確定しない（**要 PoC**）。既存 ADR・公開 API・RT 契約との互換性と RT コストを検証してから判断する。
 
 ### Memory と所有権
 
@@ -165,7 +165,7 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
 
 `foundation::sync` のキューは原則 **同一プロセス内**のメモリ所有権・同期を扱う。共有メモリ上のレイアウト、相対オフセット、ABI、クラッシュ後の回収、プロセス間通知は別途 System Services / IPC の所有とする。キューが wait-free であっても、容量不足時の返却値の Drop、スナップショット参照の最終解放、終了処理などは別の契約が必要。
 
-既存 `ruviform-rt` の SPSC（`channel`）を Foundation へ移動するかは**要 PoC**。汎用利用者の実在、RT 側互換性、依存 DAG、公開 API の影響を評価してから決定する。`ruviform-rt` の退役オブジェクト回収（`retire_channel`）とスナップショット交換（`slot`）は RT 特有の契約を維持する。
+既存 `ruviform-rt` の SPSC（`channel`）を Foundation へ移動するかは**要 PoC**。汎用利用者の実在、RT 側互換性、依存 DAG、公開 API の影響を評価してから決定する。コード棚卸しでは `channel`／`retire_channel`／`slot` にプロダクション利用者が存在せず（`rt` の外部利用は `RtContext`（audio・exec）・`Processor`／`RtProcessor`（exec）・`MasterClock`（video）のみ）、「汎用利用者の実在」の条件は現時点で満たされないため、現状のデフォルトは移動しない。内部では `slot` は `retire_channel` 上に、`retire_channel` は `channel` 上に構築されているため、`channel` 単独の Foundation 移動は `retire_channel`／`slot` の同時移動か、非既定の `ruviform-rt → foundation` 依存を意味する。`ruviform-rt` の退役オブジェクト回収（`retire_channel`）とスナップショット交換（`slot`）は RT 特有の契約を維持する。
 
 ## Observability・Diagnostics・Debug の責務区分
 
@@ -238,6 +238,42 @@ RT callback / DSP / plugin
 - 計測無効時と有効時の双方で RT 実行時間・レイテンシを評価する。OS レベルの hard RT を保証するものではない。
 - RT → 非 RT の有界観測レコード転送機構は、構成候補上 `ruviform-observability` の `rt_bridge` が所有する（`foundation::sync` は汎用 SPSC・bounded queue プリミティブの提供候補、`foundation::telemetry` はレコード schema・カウンタの所有候補）。実配置は後続の個別設計で確定する。
 
+## 既存実装の棚卸し（コード調査）
+
+Issue #101 の後続として workspace 18 クレートに対し実施したコード棚卸しの結果を、各領域の判断材料として記録する。以下は実装の有無・重複・配置に関する事実の要約であり、採否・移動・新設の確定ではない。
+
+### Memory / Collections
+
+- 割り込み計測（alloc 検出）は 3 系統が存在する: `ruviform-rt` の `alloc_counter`（`#[cfg(test)]` 限定・`pub(crate)`・スレッドローカル計数の `GlobalAlloc`、テスト専用）、`assert_no_alloc` の dev 依存（math・media-core・dsp・audio-analysis・audio-device・plugin-clap・plugin-vst3・plugin-host・ruviform-audio の 9 クレート）、`ruviform-audio-device` の `play_sine` example 内の private `CountingAlloc`＋`AtomicUsize`。example 側の機構は、`assert_no_alloc` のスレッドローカル測定窓がバックエンド所有のコールバックスレッドを観測できないという、検証レーンの既知のカバレッジ隙間を補うために存在する。
+- 汎用 Pool / Arena / Storage モジュールは存在しない。`arrayvec`・`heapless`・`smallvec` 系の依存もなく、ポインタのアラインメント検証は plugin-clap・plugin-vst3 の 2 adapter が個別に実装している（`ruviform-audio-device`・`ruviform-io-symphonia` 等には存在しない）。「prepare で確保・process は借用」は dsp・audio-analysis・adapter の scratch 型に共通するワークスペース規約であり、共有コードではない。
+
+### Sync
+
+- `ruviform-rt` の `channel`・`retire_channel`・`slot` はプロダクション利用者を持たない（`rt` の外部利用は `RtContext`（audio・exec）・`Processor`／`RtProcessor`（exec）・`MasterClock`（video）のみ）。内部依存連鎖として `slot` は `retire_channel` 上に、`retire_channel` は `channel` 上に構築されている（`retire.rs`・`snapshot.rs` の内部 import 参照）。
+- スナップショット交換は 2 系統が併存する: `rt::slot` と、`ruviform-audio` の `PlanSwap`（`plan.rs`・`RwLock`＋`try_read`＋`Arc` キャッシュ）。後者は [音声グラフ交換 ADR](../adr/audio-engine-snapshot-swap.md) が raw `arc-swap`／`RwLock` を比較した上で選んだ意図的な分岐であり、同 ADR は当時利用可能だった `rt::slot` 自体を比較対象に含めていない（Sources 末尾の注記参照）。
+- 有界キューはこれらに加え `ruviform-exec` の `offline` 内部 `sync_channel`（bounded MPSC パイプライン）があり計 3 形状。`Atomic*` 型名の出現は crates/ 全体で約 75 箇所（数え方: `AtomicUsize`・`AtomicU64`・`AtomicBool` 等の型名を grep・コメント／テスト含む。`src/` のみなら 46 箇所）。いずれも所有者ローカルであり、共有カウンタ型・cache-line padding は存在しない。
+
+### Identity
+
+- 世代付きハンドルは `PluginHandle`（`ruviform-plugin-host` の `{slot, generation}`）のみ。`StreamId`・`ParamId` はレジストリ newtype、`DeviceId` は opaque `String` であり、セマンティクスが異なるため統合は偽の抽象化となる（「Foundation 候補の内訳」表の `identity` 注意と同旨）。
+
+### Telemetry / 観測レコード
+
+- RT 経路の飽和・取りこぼし観測カウンタとしては `retire_channel` 1 組あたり 1 本の共有 `Arc<AtomicUsize>` のみであり、`Retirer::overflows`・`DropCollector::overflows`・`SnapshotWriter::retire_overflows` の 3 アクセサが同一カウンタを読む。その他に所有者ローカルな prepared atomic として `Progress`（`ruviform-exec`・`completed`／`total` の `Arc<AtomicU64>`）、`MasterClock::tick`（`ruviform-rt`・`AtomicU64`）、plugin の param mirror（plugin-clap の `gain_plain_bits: AtomicU64`・`AtomicLifecycle`、plugin-vst3 の `tail: AtomicU32`）等が存在する。
+- 固定サイズ Copy レコードの既存先例として、`Event`・`TransportInfo`・`ProcessConfig`・`ProcessContext`（いずれも plugin-core）と `TransportSnapshot`（media-core）の計 5 型が `reserved: [u64; 2]` 拡張フィールドを持つ（plugin-core の規約に media-core の `TransportSnapshot` が加わる形）。テレメトリのリング・レコード受け渡し機構は未実装であり、cpal `StreamInstant`→`MediaTime` マッピング（`ruviform-audio-device`）が RT 経路唯一のタイムスタンプ実装である。
+- 命名衝突の注意: `rt` の `Snapshot*` プリミティブと、ドメイン側の "snapshot"（`TransportSnapshot`・`LevelMeter` のスナップショット・`RtPlan` 等）は別概念である。テレメトリレコードの schema 設計時は用語を区別する。
+
+### Observability / Diagnostics / Debug
+
+- 全 18 クレートの `Cargo.toml` に observability 系依存（`log`・`tracing`・`metrics` 等）は存在しない。
+- 型付きエラーによる Diagnostics が既存の慣用形である（media-io `ErrorKind`、`DeviceError`（Xrun 含む）、`HostError`、`OfflineError`、media-core `Error`）。dump／inspect／capture／replay に相当する実装は存在しない。
+- 既存の RT 契約 probe: `alloc_counter`、`assert_no_alloc` による `rt_` 検証レーン、CLAP thread-check（`is_audio_thread`）、retire overflow カウンタ。
+
+### Process / IPC / Platform
+
+- `ruviform-exec` の OS 接地面はスレッド優先度機構（Windows MMCSS・macOS time-constraint・Linux `SCHED_FIFO`。`audio_thread_priority` は非公開の実装詳細）と `OfflineDriver` のみであり、プロセス管理・IPC・共有メモリの実装は workspace に存在しない。なお [全体設計ベースライン](ruviform-architecture-design-baseline.md) L240・L352・L392 の「スレッドプール／ワーカープール」表記は Issue #24 の実装（`run_parallel` 呼び出しごとに `std::thread::scope` で生成される scoped worker）より前の記述であり、次回 baseline 改訂時の更新候補とする。
+- プラグイン L1 は [plugin-isolation](plugin-isolation.md) 上の設計のみである。L0 のコマンド面は既にシリアライズ可能な plain data（`ruviform-plugin-host` の `command.rs`）であり、L1 化時にコマンド表現の再設計を要しない。
+
 ## 依存方向と既存契約との整合
 
 - Foundation を新設する場合、メディアドメイン、`rt`、`exec`、Observability、Engine、`plugin-*`、OS adapter への逆依存を作らない。`core` / `alloc` / 必要な `std` と監査した最小の外部依存だけを持つ。共通化対象の意味・所有権・ライフサイクルを揃える。
@@ -287,21 +323,38 @@ RT callback / DSP / plugin
 | ライブラリはグローバル Subscriber・Logger・Recorder を暗黙に初期化・変更しない | **方針** | 採用。利用側が初期化を所有し、最終的な初期化と出力設定は Host/Application 側が担う |
 | `ruviform-foundation`・`ruviform-observability`・`ruviform-debug`・`ruviform-platform`・`ruviform-process`・`ruviform-ipc` のクレート名と内部モジュール構成 | **構成候補** | 候補名であり実装済みではない。新設時期・最小 API・依存 DAG は後続設計で確定 |
 | `ruviform-foundation`・`ruviform-observability` の新設・API 範囲 | **保留** | 実際に必要な型と依存関係を設計してから Issue 化 |
-| SPSC・Identity・Memory の既存実装からの移動、`alloc_counter` の所有者 | **要 PoC** | 既存 ADR・公開 API・RT 契約と照合し、互換性・効果を検証 |
+| `channel`／`retire_channel`／`slot` の Foundation 移動可否 | **要 PoC** | 2 番目のプロダクション利用者の出現をトリガに、既存 ADR・公開 API・RT 契約と照合して互換性・効果を検証。内部依存連鎖により 3 プリミティブ同時の判断になる |
+| Identity・Memory の汎用化要否 | **要 PoC** | 汎用利用者・実装の実在をトリガに、既存 ADR・公開 API・RT 契約と照合して判断（現状 Identity はドメイン別型のみ・Memory の汎用実装は非存在のため「移動」ではなく新規設計の要否判断） |
+| `alloc_counter` の所有者 | **要 PoC** | test 専用枠を超える計測アロケータ需要の発生をトリガに判断（`#[cfg(test)]` ゲートのためプロダクション利用者トリガは構造的に不成立） |
 | `tracing` / `tracing-subscriber` / `metrics` / `tracy-client` 等の採用 | **要 PoC** | **採用候補・未決定**。RT 記録経路・依存・MSRV・運用コストの評価 |
 | Debug の独立クレート化、Capture/Replay・Crash Investigation 仕様 | **保留** | ドメインをまたぐ具体的な利用需要が生まれたら |
-| 共通 `platform` / `ipc` / `process` の独立 | **要 PoC** | Issue #76 L1 を含む複数用途、OS 互換性、ABI・資源寿命を検証 |
+| 共通 `platform` / `ipc` / `process` の独立 | **要 PoC** | Issue #76 L1 の着手と 2 番目の OS サービス利用者の出現をトリガに、複数用途・OS 互換性・ABI・資源寿命を検証 |
 | 既存 18 クレート（`ruviform-rt`・`ruviform-exec`・`ruviform-math`・`*-core` 等）と accepted ADR の契約 | **実装済み** | 維持。変更には影響分析と必要な改訂を行う |
 
 ## 適用・移行順序
 
-1. **設計整合:** 既存 18 クレートと accepted ADR の依存/公開 API/実行契約を棚卸しする。本書の候補を実装済みと誤認しない。
+1. **設計整合（実施済み）:** 既存 18 クレートと accepted ADR の依存/公開 API/実行契約の棚卸しは完了した（「既存実装の棚卸し」節参照）。本書の候補を実装済みと誤認しない。
 2. **Foundation 候補の最小設計:** Memory / Sync / Identity / Telemetry の必要な共通操作と、既存実装を流用できる範囲を確定する。
 3. **Observability 候補の最小設計:** Logging・Metrics・Diagnostics・Profiling・Debug probe の責務と、RT → 非 RT の記録境界を設計する。
 4. **PoC と採否:** キュー容量・Drop・スナップショットの寿命、RT 計測コスト、外部依存/OS/ABI を検証する。
 5. **実装・移行:** 利益が確認できるモジュール/クレートだけ実装し、re-export・契約テスト・CI・依存 DAG 検証を伴って段階的に移行する。
 
 新規クレート追加、公開 API の変更、accepted ADR を変更する際は、実装 Issue または ADR で判断根拠・影響・検証範囲を記録する。
+
+## 後続 Issue と再着手条件
+
+棚卸し結果を踏まえた未確定事項のトリアージを記録する。
+
+- **起票済み**（本書の方針に基づき直ちに着手可能な設計・検証タスク）
+  - [#103](https://github.com/scarecrow173/ruviform/issues/103) — [design] Foundation / Observability 候補モジュールの新設時期・最小 API・依存 DAG の設計（「適用・移行順序」の 2・3 に相当）。
+  - [#104](https://github.com/scarecrow173/ruviform/issues/104) — [poc] RT 観測経路のコスト計測と方式評価（prepared counter・固定サイズレコード・`rt_bridge` 候補の RT 実行時間・レイテンシ評価、オーバーフロー方針（破棄／集約／計測）・タイムスタンプ取得方法、`tracing`／`metrics`／`tracy-client` 等バックエンド採否評価（依存・ライセンス・MSRV・RT コスト））。
+- **延期**（再着手条件を明示して保留）
+  - `channel`／`retire_channel`／`slot` の Foundation 移動可否 — トリガ: 2 番目のプロダクション利用者の出現（内部依存連鎖により 3 プリミティブ同時の判断になる）。
+  - Identity・Memory の汎用化要否 — トリガ: 汎用利用者・実装の実在（現状 Identity はドメイン別型のみ・Memory の汎用実装は非存在のため「移動」ではなく新規設計の要否判断）。
+  - `alloc_counter` の所有者決定 — トリガ: test 専用枠を超える計測アロケータ需要（`#[cfg(test)]` ゲートのためプロダクション利用者トリガは構造的に不成立）。
+  - `ruviform-debug` の独立クレート化 — トリガ: ドメインをまたぐ具体的な利用需要。
+  - `platform` / `process` / `ipc` の独立クレート化 — トリガ: Issue #76 L1 の作業着手と 2 番目の OS サービス利用者の出現。
+  - L1 の汎用プロセス基盤とプラグイン固有境界の切り分け — Issue #76 の着手時に解決する。
 
 ## 作業時に参照する条件
 
@@ -319,3 +372,4 @@ RT callback / DSP / plugin
 - [Issue #101](https://github.com/scarecrow173/ruviform/issues/101)、[Issue #76](https://github.com/scarecrow173/ruviform/issues/76)、[Issue #17](https://github.com/scarecrow173/ruviform/issues/17)、[PR #100（未マージの参考ドラフト）](https://github.com/scarecrow173/ruviform/pull/100)
 - [Bevy utilities](https://github.com/bevyengine/bevy/tree/main/crates/bevy_utils)、[Logging](https://github.com/bevyengine/bevy/tree/main/crates/bevy_log)、[Diagnostics](https://github.com/bevyengine/bevy/tree/main/crates/bevy_diagnostic)
 - [Cargo Features](https://doc.rust-lang.org/cargo/reference/features.html)、[Cargo Workspaces](https://doc.rust-lang.org/cargo/reference/workspaces.html)
+- 注記: [音声グラフ交換 ADR](../adr/audio-engine-snapshot-swap.md) は raw `arc-swap`／`RwLock` の比較を行っているが、当時既に利用可能だった `ruviform-rt` の `slot`（スナップショット交換プリミティブ）自体は検討対象に含めていない。将来の ADR 改訂時に補完を検討する（本書では ADR 本文は変更しない）。
