@@ -39,6 +39,7 @@ relations:
     - "rt-foundation-api-design.md"
     - "audio-device-boundary-and-poc.md"
     - "shared-foundations-and-modularization-policy.md"
+    - "foundation-observability-minimal-api.md"
   refines: []
   refined-by: []
   derives-from:
