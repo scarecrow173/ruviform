@@ -15,6 +15,7 @@ Directory: `docs/designs`
 | DESIGN-034IddXFCRKDIW01WXkSla | Rust 開発基盤の設計（最小ワークスペース・CIプロファイル・手動CI） | approved | [dev-foundation.md](./dev-foundation.md) |
 | DESIGN-034JPvz9ieX8KoPbwDcvaX | dispatch 固定コスト分離の計測設計 | approved | [dispatched-overhead-method.md](./dispatched-overhead-method.md) |
 | DESIGN-034JcqP2KiWsdes88fgvtt | DSP/SIMD 比較ベンチマーク PoC 詳細設計 | approved | [dsp-simd-poc.md](./dsp-simd-poc.md) |
+| DESIGN-034KNBPbww1kvzVUF4Ab1H | ruviform-edit 設計（NLE 編集データモデル + 評価射影） | approved | [edit-data-model.md](./edit-data-model.md) |
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | approved | [music-time-model.md](./music-time-model.md) |

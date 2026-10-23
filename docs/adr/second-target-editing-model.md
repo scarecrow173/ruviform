@@ -31,6 +31,8 @@ relations:
     - "docs/designs/ruviform-architecture-design-baseline.md"
   derived-by:
     - "docs/designs/second-target-design.md"
+    - "docs/specs/edit-data-model.md"
+    - "docs/designs/edit-data-model.md"
   verifies: []
   verified-by: []
   references: []
