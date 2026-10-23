@@ -47,6 +47,7 @@ Directory: `docs/impl/ir`
 | IMPL-034J7u3ZaCkeiCc8zzuQwd | Small fixes from followup triage | completed | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | IMPL-034JyiwDR1vV3SDIxU8Ng3 | SPSC チャネルの実装 | completed | [spsc.md](./spsc.md) |
 | IMPL-034JyAqvg5hMrhqv41ZXfk | リタイアチャネルの実装 | completed | [retire.md](./retire.md) |
+| IMPL-034KW9YgStAXSjv8Dxwxvs | rt-observability-poc | completed | [rt-observability-poc.md](./rt-observability-poc.md) |
 | IMPL-034JBQFUoXvQXzXWrpQtxV | スナップショット交換の実装 | completed | [snapshot.md](./snapshot.md) |
 | IMPL-034J5L5fAAqFUmUkYGAf1t | Sync docs and verify Issue 18 | completed | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
 | IMPL-034eqXfRz3favrQAtrps6 | Sync docs and verify Issue 20 | completed | [sync-docs-and-verify-issue-20.md](./sync-docs-and-verify-issue-20.md) |

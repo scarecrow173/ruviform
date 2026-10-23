@@ -4,7 +4,7 @@ type: "adr"
 status: "accepted"
 title: "RT 基盤プリミティブの実装方式（SPSC・退避ドロップ・スナップショット交換・スレッド優先度・契約型）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-10-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -38,6 +38,7 @@ relations:
     - "../designs/rt-foundation-api-design.md"
     - "../plans/implement-rt-foundation.md"
     - "../designs/shared-foundations-and-modularization-policy.md"
+    - "../designs/foundation-observability-minimal-api.md"
   verifies: []
   verified-by: []
   references:

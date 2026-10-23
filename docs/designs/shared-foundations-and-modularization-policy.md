@@ -41,6 +41,8 @@ relations:
     - "../adr/rt-foundation-primitives-implementation.md"
   derived-by:
     - "foundation-observability-minimal-api.md"
+    - "../plans/implement-issue-104-rt-observability-poc.md"
+    - "../test-specs/rt-observability-poc-tests.md"
   verifies: []
   verified-by: []
   references:

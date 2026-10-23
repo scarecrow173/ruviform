@@ -76,8 +76,8 @@ description = "Run workspace benchmarks with `cargo bench --workspace` (bench pr
 run = "cargo bench --workspace"
 
 [tasks.bench-smoke]
-description = "Smoke-test the ruviform-math benchmarks with `cargo bench -p ruviform-math -- --test` (bench profile; runs each bench once without measurement; the CI bench job calls this; writes only target/)"
-run = "cargo bench -p ruviform-math -- --test"
+description = "Smoke-test the ruviform-math and ruviform-rt benchmarks with `cargo bench -p ruviform-math -p ruviform-rt -- --test` (bench profile; runs each bench once without measurement; the CI bench job calls this; writes only target/)"
+run = "cargo bench -p ruviform-math -p ruviform-rt -- --test"
 
 # CI-only tasks: identical checks under `--profile ci` with incremental
 # compilation disabled. Artifacts go to target/ci/, separate from dev's

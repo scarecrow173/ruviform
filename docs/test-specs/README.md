@@ -30,6 +30,7 @@ Directory: `docs/test-specs`
 | TSPEC-5ibPChaXqhbfYjL713aqKw | plugin-host L0 テスト仕様 | approved | [plugin-host-l0-tests.md](./plugin-host-l0-tests.md) |
 | TSPEC-034JxNwt3ReMphshEaeFVe | SPSC・退役・スナップショット交換の RT 契約保証 | approved | [rt-channel-and-snapshot-contracts.md](./rt-channel-and-snapshot-contracts.md) |
 | TSPEC-034JxNxcYxa29rPklpknWh | RtContext・Processor 契約・MasterClock の RT 契約保証 | approved | [rt-context-and-processor-contract.md](./rt-context-and-processor-contract.md) |
+| TSPEC-034KV6hs4k3mZ6jVBgDaKf | RT 観測コスト計測 PoC ハーネスの計測保証 | approved | [rt-observability-poc-tests.md](./rt-observability-poc-tests.md) |
 | TSPEC-034JP1iphLdAZkyRbPkol1 | RT 検証レーン契約 | approved | [rt-verification-contracts.md](./rt-verification-contracts.md) |
 | TSPEC-Sn3LD1xCxNBxTN3FHLJUFa | ruviform-dsp テスト仕様 | approved | [ruviform-dsp-tests.md](./ruviform-dsp-tests.md) |
 | TSPEC-034JQFftbYwM1JhPvmCvI1 | SIMD dispatch 層の等価性・RT 検証 | approved | [simd-dispatch-layer-tests.md](./simd-dispatch-layer-tests.md) |
