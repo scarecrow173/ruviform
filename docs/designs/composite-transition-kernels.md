@@ -107,7 +107,7 @@ D1-b（非 RT prepare → alloc-free `process` の二相形状）・D2（合成�
 | --- | --- | --- |
 | `CompositeOver` | `new()`（無引数）+ `process(&mut self, src: &VideoFrame, dst: &mut VideoFrame, opacity: f32) -> Result<()>` | `dst` の現内容を基底層として `src` を source-over 合成する in-place 演算 — NLE のレイヤスタックを下から順に積層する用途。`opacity` は `src` アルファへの一様乗算 |
 | `Crossfade` | `new()` + `process(&mut self, from: &VideoFrame, to: &VideoFrame, dst: &mut VideoFrame, t: f32) -> Result<()>` | `dst = from·(1−t) + to·t` の全 4 チャネル加重混合（アルファを含む）。遷移 A→B の進行度 `t` に対応 — dip-to-black は `to`/黒フレーム、フェードイン/アウトは不透明黒との混合で表現 |
-| `AffineTransform` | `new()` + `process(&mut self, src: &VideoFrame, dst: &mut VideoFrame, map: &RectMap) -> Result<()>` | `map.dst` 矩形内の `dst` 画素を `map.src` 矩形へ逆写像し最近傍サンプリング。`dst` は全画素を書換え（矩形外は transparent black）— 変換のみの完結した出力フレームを生成 |
+| `AffineTransform` | `new()` + `process(&mut self, src: &VideoFrame, dst: &mut VideoFrame, map: RectMap) -> Result<()>` | `map.dst` 矩形内の `dst` 画素を `map.src` 矩形へ逆写像し最近傍サンプリング。`dst` は全画素を書換え（矩形外は transparent black）— 変換のみの完結した出力フレームを生成 |
 | `Rect` | `{x: i32, y: i32, w: u32, h: u32}` — pub フィールドの plain data（不変条件は `process` 検証で強制）。`Copy`/`Clone`/`Debug`/`PartialEq`/`Eq` を derive | 写像矩形。左上原点・整数画素座標、`w`/`h` は画素数。`dst` 側の `x`/`y` は負値を許容（キャンバス外への配置） |
 | `RectMap` | `{src: Rect, dst: Rect}` — pub フィールドの plain data | `src` 矩形 → `dst` 矩形の矩形写像。縮尺は `dst.w/src.w`・`dst.h/src.h` の軸毎の有理数比（整数比に限らない） |
 
@@ -154,8 +154,10 @@ D1-b（非 RT prepare → alloc-free `process` の二相形状）・D2（合成�
 ### `Crossfade` 規約
 
 - 意味: `dst = from·(1−t) + to·t` を RGBA 全 4 チャネルに適用する
-  ディゾルブ。`t = 0` で `dst == from`、`t = 1` で `dst == to` の
-  端点再現性を持つ
+  ディゾルブ。`t = 0` で `dst` は `from` を、`t = 1` で `to` を
+  再現する端点再現性を持つ — `Rgba8` は bit-exact、`RgbaF16` は
+  有限チャネルを数値的に再現（`−0.0` は `+0.0` へ・NaN ペイロード
+  は `0x7E00` へ正規化され得る）
 - パラメータ正規化: `t` は `is_finite()` かつ `[0.0, 1.0]` — 違反は
   `InvalidValue("t")`。`tq = round(t·255)` の Q8 重みへ呼出し毎に
   1 回だけ量子化し、両ピクセルパスが同じ量子化重みを使う
@@ -235,8 +237,10 @@ D1-b（非 RT prepare → alloc-free `process` の二相形状）・D2（合成�
   不変が実際の早期復帰として保証され、transparent `dst` の RGB を
   正準化することもない。`oa = 0` → transparent black 画素。
   共有 `dst`（clone 保持中）は拒否
-- `Crossfade`: `t = 0`/`t = 1` で入力を bit-exact に再現。`from`/`to`/
-  `dst` のフォーマット・寸法の不一致は拒否
+- `Crossfade`: `t = 0`/`t = 1` で入力を再現（`Rgba8` は bit-exact、
+  `RgbaF16` は `−0.0` → `+0.0`・NaN ペイロード → `0x7E00` の正規化
+  を除き数値的一致）。`from`/`to`/`dst` のフォーマット・寸法の
+  不一致は拒否
 - `AffineTransform`: `map.dst` がキャンバス外/空 → 全画素 transparent
   black。拡大（`dst` 矩形 > `src` 矩形）は同一 `src` 画素の複製、
   縮小は間引き — いずれも有界。`map.src` の境界逸脱・空矩形は拒否

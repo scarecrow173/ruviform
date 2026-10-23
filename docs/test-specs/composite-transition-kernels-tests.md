@@ -85,10 +85,11 @@ transparent-black 充填の完結変換）。対象フォーマットは `Rgba8`
 - `Crossfade`（`Rgba8`、整数・round-half-up）: `tq = round(t·255)` へ
   呼出し毎に 1 回量子化し `oc = round((a_c·(255−tq) + b_c·tq)/255)`。
   `RgbaF16` は `from·(1 − tq/255) + to·(tq/255)` を f32 評価 +
-  binary16 丸め。`t = 0` で `dst == from`、`t = 1` で `dst == to` の
-  端点 bit-exact 再現性を持つ。`from`/`to` の同一フレーム参照は
-  許容（両者とも immutable borrow）— `dst` の共有 `Arc` backing のみ
-  拒否
+  binary16 丸め。`t = 0`/`t = 1` で入力を再現する端点再現性を持つ —
+  `Rgba8` は bit-exact、`RgbaF16` は有限チャネルを数値的に再現
+  （`−0.0` は `+0.0` へ・NaN ペイロードは `0x7E00` へ正規化され得る）。
+  `from`/`to` の同一フレーム参照は許容（両者とも immutable borrow）—
+  `dst` の共有 `Arc` backing のみ拒否
 - `AffineTransform`: `dst` 矩形内の画素 `(x, y)` について `offset =
   x − map.dst.x` と置き、`sx = map.src.x + (2·offset·map.src.w +
   map.src.w) / (2·map.dst.w)`（`sy` 同形）— `floor((offset +
@@ -148,9 +149,11 @@ transparent-black 充填の完結変換）。対象フォーマットは `Rgba8`
   で `dst` 不変
 - `CompositeOver` の in-place メタデータ: 合成後も `dst` の
   `ColorInfo`/`pts`/`duration` は呼出し前の値を保持
-- `Crossfade` 端点: `t = 0.0` → `dst` が `from` と bit-exact 一致、
-  `t = 1.0` → `to` と一致（`tq = 0`/`255`）。中間 `t` の golden
-  vector は `tq` 量子化込みの整数式で検証
+- `Crossfade` 端点: `t = 0.0` → `dst` が `from` を、`t = 1.0` → `to`
+  を再現（`tq = 0`/`255`。`Rgba8` は bit-exact — `RgbaF16` は
+  `−0.0` → `+0.0`・NaN ペイロード → `0x7E00` の正規化を除き有限
+  チャネル一致）。中間 `t` の golden vector は `tq` 量子化込みの
+  整数式で検証
 - `Crossfade` 同一フレーム: `from` と `to` に同じ `&VideoFrame` を
   渡しても成功する（`dst` の clone 共有のみ `InvalidValue("dst
   plane")`）
@@ -165,6 +168,10 @@ transparent-black 充填の完結変換）。対象フォーマットは `Rgba8`
   `map.src.w` に到達しない構造的保証の実証）
 - `map.dst.x` 負値: キャンバス左外へはみ出す配置は交差部分のみ
   書込み、キャンバス内の矩形外画素は transparent black
+- `map.dst` の右端・下端オーバーハング: `x + w > width`・
+  `y + h > height` の矩形はキャンバス端でクリップされ、交差部分のみ
+  対応する `offset` で写像（クリップされた offset の列・行は
+  サンプルされない）— 矩形外のキャンバス画素は transparent black
 - `map.src` 検証拒否: `w = 0`/`h = 0` の空矩形・`x < 0`/`y < 0`・
   `x+w > width`/`y+h > height` の境界逸脱 → `InvalidValue("src rect")`
 - `map.dst` 完全キャンバス外・空矩形: エラーなしで `dst` 全画素が

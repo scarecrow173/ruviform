@@ -20,13 +20,32 @@ Issue #26 で実装済みの色変換カーネル:
   （`v/255` ↔ `round(clamp(v)·255)`、`ColorInfo` は不変で引き継ぐ。
   順方向は ulp 有界・逆方向は bit-exact の等価契約）
 
+Issue #97 で実装済みのコンポジット/遷移カーネル（対象フォーマットは
+`Rgba8`・`RgbaF16` のみ・straight alpha・符号空間演算）:
+
+- `CompositeOver` — `src over dst` の source-over アルファ合成を `dst`
+  in-place に適用（呼出し毎 `opacity`。`Rgba8` は自己無撞着 Q8 整数展開で
+  bit-exact、`RgbaF16` は f32 評価 + RNE binary16 丸めで ≤ 2 ulp の
+  等価契約）
+- `Crossfade` — `dst = from·(1−t) + to·t` の全 4 チャネル加重混合遷移
+  （呼出し毎 `t`。量子化・等価契約は `CompositeOver` と同規則）
+- `AffineTransform` — `Rect`/`RectMap` による整数矩形写像の
+  translate+scale（セル中心最近傍・写像演算 `u128`/`i128`・範囲外は
+  transparent black 充填・`dst` 全画素書換え。画素演算を持たない
+  写像/複写のみで両フォーマット bit-exact）
+
 カーネルはベースラインの二相処理形状: 非 RT の `prepare`/コンストラクタが
 係数とワークエリアを固定して準備済み処理オブジェクトを生成し、その
-`process(&mut self, src, dst)` はアロケーションなし。`RtContext` 引数・
+`process(&mut self, src, dst)` はアロケーションなし。コンポジット族は
+アニメーションする編集パラメータを `process` の呼出し毎引数に取る
+（`process(src, dst, opacity)` / `process(from, to, dst, t)` /
+`process(src, dst, map)` — ctor 焼付けではフレーム毎の非 RT prepare を
+RT パスで呼ぶ違反を誘発するため）。`RtContext` 引数・
 `Processor` trait 実装は取らない — `ruviform-rt` の `Processor` への実装は
 後方互換の追加拡張とする（ADR D1）。全カーネルはスカラー参照実装 —
 将来の最適化バックエンドが bit-exact か ulp 有界かは各カーネルが文書化する。
-スケーリング・コンポジットカーネルは後続 Issue へ保留。
+bilinear 以上のフィルタ・フルアフィン（回転/せん断）・追加 blend モード・
+planar YUV への適用は後続 Issue へ保留。
 
 GPU コンピュートカーネル境界ポート（ベースライン「契約型・境界ポートの所有」表の
 ユーザー側ポート）の所有を宣言するのみ — ポート trait 自体は `ruviform-gpu`
@@ -51,4 +70,5 @@ GPU コンピュートカーネル境界ポート（ベースライン「契約�
 
 - 設計ベースライン: docs/designs/ruviform-architecture-design-baseline.md（クレート表 A.2、`ruviform-video-proc` 行、「契約型・境界ポートの所有」GPU 境界行、Domain foundations 層順）
 - カーネル API・色/HDR スコープ ADR（D1/D4/D6/D7）: docs/adr/video-proc-kernel-api-and-color-hdr-scope.md
-- Issue #26（クレート新設・色変換カーネル実装）
+- コンポジット/遷移カーネル設計: docs/designs/composite-transition-kernels.md
+- Issue #26（クレート新設・色変換カーネル実装）・Issue #97（コンポジット/遷移カーネル実装）

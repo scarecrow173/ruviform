@@ -89,11 +89,11 @@ wipe 等の追加遷移・`ruviform-edit`/engine 配線・`assert_no_alloc` 導�
 
 ## Implementation Sequence
 
-- [ ] 1. 共有内部整備 — `rgba_f16.rs` の `f64_to_f16_bits`/
+- [x] 1. 共有内部整備 — `rgba_f16.rs` の `f64_to_f16_bits`/
   `f16_bits_to_f64` を `pub(crate)` へ格上げし、`composite.rs` の骨格
   （呼出し毎 Q8 量子化ヘルパ・フォーマット/寸法/共有 backing の
   書込み前検証）を配置する
-- [ ] 2. `CompositeOver` — `new()`（無引数・`Default` impl）+
+- [x] 2. `CompositeOver` — `new()`（無引数・`Default` impl）+
   `process(src, dst, opacity)`。`opacity` の `is_finite()` + `[0, 1]`
   検証（違反は `InvalidValue("opacity")`）→ `w = round(opacity·255)`
   量子化 → フレーム検証（format 一致 ∈ {`Rgba8`, `RgbaF16`}・寸法
@@ -103,22 +103,22 @@ wipe 等の追加遷移・`ruviform-edit`/engine 配線・`assert_no_alloc` 導�
   `oa == 0` → `(0,0,0,0)`）、`RgbaF16` は同一式を f32 ドメイン評価 +
   RNE binary16 丸め（`oa < 2⁻¹⁴` ガード → `(0,0,0,0)`）。`dst` の
   `ColorInfo`/`pts`/`duration` は不変
-- [ ] 3. `Crossfade` — `new()` + `process(from, to, dst, t)`。`t` の
+- [x] 3. `Crossfade` — `new()` + `process(from, to, dst, t)`。`t` の
   `is_finite()` + `[0, 1]` 検証 → `tq = round(t·255)` 量子化 →
   3 フレームの format/寸法一致 + 共有 `dst` 検証 → 全 4 チャネル
   lerp（`Rgba8` 整数 round-half-up / `RgbaF16` f32 + RNE 丸め）。
   `dst` メタデータへ `from` の `ColorInfo`/`pts`/`duration` を伝播
-- [ ] 4. `AffineTransform` + `Rect`/`RectMap` — `process(src, dst, map)`。
+- [x] 4. `AffineTransform` + `Rect`/`RectMap` — `process(src, dst, map)`。
   `map.src` の非空・`src` フレーム内包含を `i64` 拡幅で検証
   （違反は `InvalidValue("src rect")`）、`map.dst` 空/キャンバス非交差は
   エラーとせず全画素 transparent black。写像演算（`2·offset·map.src.w`
   等）は `i128`/`u128`、セル中心最近傍、矩形外は transparent black 充填。
   `dst` メタデータへ `src` の値を伝播
-- [ ] 5. `lib.rs` 更新 — `mod composite`/`mod affine` + `pub use`、
+- [x] 5. `lib.rs` 更新 — `mod composite`/`mod affine` + `pub use`、
   「Kernel API shape」段落へ `process(src, dst, opacity)` /
   `process(from, to, dst, t)` / `process(src, dst, map)` のコンポジット族
   規約を追記、カーネル一覧へ 3 カーネル追加・予約記述の差替え
-- [ ] 6. テスト — test-spec 全ケース（golden vector・端点・trap
+- [x] 6. テスト — test-spec 全ケース（golden vector・端点・trap
   vector・検証拒否・`rt_process_*` RT 契約テスト）を各モジュールの
   inline `#[cfg(test)] mod tests` へ実装
 
@@ -148,13 +148,13 @@ wipe 等の追加遷移・`ruviform-edit`/engine 配線・`assert_no_alloc` 導�
 
 ## Verification
 
-- [ ] test-spec 全ケースパス（`mise run test`）
-- [ ] `mise run test-rt` で `rt_process_*` テストが選択・パス
-- [ ] `mise run fmt-check`/`check`/`lint` パス
-- [ ] `crates/ruviform-video-proc` の依存が `ruviform-video-core`・
+- [x] test-spec 全ケースパス（`mise run test`）
+- [x] `mise run test-rt` で `rt_process_*` テストが選択・パス
+- [x] `mise run fmt-check`/`check`/`lint` パス
+- [x] `crates/ruviform-video-proc` の依存が `ruviform-video-core`・
   `ruviform-media-core` のみ（同順位・`ruviform-rt`・engine 依存なし —
   Cargo.toml 確認）
-- [ ] doc 監査チェーン起因 findings 0（`doc_status.js audit`）
+- [x] doc 監査チェーン起因 findings 0（`doc_status.js audit`）
 
 ## Open Questions / Gaps
 
