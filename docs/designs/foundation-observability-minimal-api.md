@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Foundation/Observability 候補モジュールの最小 API・依存 DAG・新設時期の設計"
 created: "2026-10-23"
-updated: "2026-10-23"
+updated: "2026-10-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -35,6 +35,8 @@ relations:
   refined-by: []
   derives-from:
     - "shared-foundations-and-modularization-policy.md"
+    - "../specs/implement-rt-foundation.md"
+    - "../adr/rt-foundation-primitives-implementation.md"
   derived-by:
     - "../plans/implement-issue-104-rt-observability-poc.md"
     - "../test-specs/rt-observability-poc-tests.md"
@@ -56,6 +58,8 @@ relations:
 本書は [共通基盤・Observability・クレート分割の設計方針](shared-foundations-and-modularization-policy.md)（Issue #101・approved）「適用・移行順序」の 2（Foundation 候補の最小設計）・3（Observability 候補の最小設計）を実行し、Issue [#103](https://github.com/scarecrow173/ruviform/issues/103) の成果物として `foundation::{collections, memory, sync, identity, telemetry}` と `observability::{logging, profiling, metrics, diagnostics, debug, rt_bridge, export}` 候補モジュールの最小 API スケッチ・新設時期トリガ・依存 DAG を定める。
 
 入力は同書「既存実装の棚卸し」節で確定した事実と、棚卸し済みサイトの直接のコード確認範囲（`offline.rs` 内部の `failed`/`CancellationToken`・`play_sine.rs` の static 群・テスト内 atomic・`GuiHandle`/`GuiParentToken` 等の個別確認）に限る。新たな棚卸し領域の探索や利用者の想定は追加しない。**本書は各候補の「もし抽出するなら」の最小形と「いつ抽出判断を起こすか」のトリガを設計するのであり、クレート新設・既存実装の移動・外部依存の採用を確定しない。** `ruviform-foundation`・`ruviform-observability`・そのモジュール名は引き続き構成候補であり、本書の API スケッチは実装コードではなく設計上の輪郭である。
+
+RT 候補形状の前提（事前確保・bounded/non-blocking 通信・retire の取りこぼし観測）は既存 RT 基盤 [spec](../specs/implement-rt-foundation.md) と採用 [ADR](../adr/rt-foundation-primitives-implementation.md) から継承する。これらへの派生リンクは既存契約の根拠を明示するもので、PoC API の本番契約への昇格や既存 spec の範囲拡張を意味しない。
 
 ## 状態区分と判定ルール
 
