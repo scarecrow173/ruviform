@@ -64,3 +64,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034LEq4wNzRtVbGyHmKjXs` | Issue #98 OFX host closeout — Task 5 implementation | completed | [issue-98-ofx-host-closeout-task-5-implementation.md](./issue-98-ofx-host-closeout-task-5-implementation.md) |
 | `IMPL-034LFHxKq9vNmTzRwYpJdG` | Issue #99 RgbaF32 format + transfer internals — Task 1 implementation | completed | [issue-99-rgba-f32-transfer-task-1-implementation.md](./issue-99-rgba-f32-transfer-task-1-implementation.md) |
 | `IMPL-034LINnXPOUOZEuD5lHPdy` | Issue #99 working-space kernels — Task 2 implementation | completed | [issue-99-working-space-kernels-task-2-implementation.md](./issue-99-working-space-kernels-task-2-implementation.md) |
+| `IMPL-034LJ7kQmXwNpVtRhYsZdF` | Issue #99 ToneMapSdr kernel — Task 3 implementation | completed | [issue-99-tone-map-sdr-task-3-implementation.md](./issue-99-tone-map-sdr-task-3-implementation.md) |

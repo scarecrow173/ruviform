@@ -368,8 +368,8 @@ impl Default for ToWorking {
 /// `round(clamp(v, 0, 1)·255)` (round-half-up) — negative and `> 1`
 /// encoded signals saturate at the quantization step. Feeding HDR
 /// working-space content (values `> 1.0`) straight into an SDR
-/// primaries/transfer pair without a `ToneMapSdr`-stage tone map
-/// (a later Issue #99 task) is consumer misuse — the highlights
+/// primaries/transfer pair without a [`ToneMapSdr`](crate::ToneMapSdr)-stage
+/// tone map is consumer misuse — the highlights
 /// saturate by design.
 ///
 /// The identity construction (`Bt2020` + `Linear`) applies the

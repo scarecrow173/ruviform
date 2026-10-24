@@ -117,7 +117,7 @@ Directory: `docs/tasks`
 | TASK-034JcD43sDKFAlPxYuAWmj | Issue #26 ドキュメント同期（baseline 採否表・AGENTS・README）と総合検証 | done | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
 | TASK-034JxObKHc0v3kUhnQiePv | RT 基盤ドキュメント同期と総合検証 | done | [sync-rt-foundation-docs-and-verify.md](./sync-rt-foundation-docs-and-verify.md) |
 | TASK-034JOul8zCtHMR49d9c78V | write_interleaved の per-chunk timestamp 合成 | done | [synthesize-per-chunk-timestamps.md](./synthesize-per-chunk-timestamps.md) |
-| TASK-034LFHdEfDbppnNeuh0u48 | ToneMapSdr カーネル実装（BT.2390 EETF） | todo | [tone-map-sdr-kernel.md](./tone-map-sdr-kernel.md) |
+| TASK-034LFHdEfDbppnNeuh0u48 | ToneMapSdr カーネル実装（BT.2390 EETF） | done | [tone-map-sdr-kernel.md](./tone-map-sdr-kernel.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
 | TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | done | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |

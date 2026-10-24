@@ -74,10 +74,6 @@ pub(crate) const HLG_NOMINAL_PEAK: f64 = 1000.0;
 
 /// BT.2390 target display luminance (cd/m²) — the fixed SDR endpoint
 /// the `ToneMapSdr` EETF maps onto.
-// Sole consumer is `ToneMapSdr`, which lands in a later Issue #99
-// task — `expect` (not `allow`) so the attribute is flagged for
-// removal the moment the constant gains a real user.
-#[expect(dead_code)]
 pub(crate) const L_DS: f64 = 100.0;
 
 /// Distinct transfer slots — must match [`transfer_slot`] and the

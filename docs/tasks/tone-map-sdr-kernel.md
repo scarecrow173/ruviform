@@ -1,23 +1,32 @@
 ---
 id: "TASK-034LFHdEfDbppnNeuh0u48"
 type: "task"
-status: "todo"
+status: "done"
 title: "ToneMapSdr カーネル実装（BT.2390 EETF）"
 created: "2026-10-25"
 updated: "2026-10-25"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/tone_map.rs"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/transfer.rs"
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/working_space.rs"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-99-tone-map-sdr-task-3-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
     - "docs/tasks/rgba-f32-format-and-transfer-internals.md"
@@ -69,8 +78,8 @@ approved plan `implement-issue-99-color-conversion-kernels.md` の **actions 7�
 
 ## Verification
 
-- [ ] `mise run test` — exit 0（tone_map.rs の unit tests 全 pass）
-- [ ] `mise run lint` — exit 0
-- [ ] `mise run test-rt` — exit 0 かつ本 task の `rt_process_*` が一致・pass
-- [ ] `rg -n "pub use tone_map" crates/ruviform-video-proc/src/lib.rs` — re-export 存在
-- [ ] `rg -n "RT contract" crates/ruviform-video-proc/src/tone_map.rs` — API 単位の RT ラベル存在
+- [x] `mise run test` — exit 0（tone_map.rs の unit tests 全 pass — video-proc lib 147/147・doctests 21/21・実 log）
+- [x] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
+- [x] `mise run test-rt` — exit 0 かつ本 task の `rt_process_*` が一致・pass（`tone_map::tests::rt_process_tone_map_sdr_*` 2 件を実選択・実 log）
+- [x] `rg -n "pub use tone_map" crates/ruviform-video-proc/src/lib.rs` — `pub use tone_map::ToneMapSdr;` 存在（L132）
+- [x] `rg -n "RT contract" crates/ruviform-video-proc/src/tone_map.rs` — API 単位の RT ラベル存在（`ToneMapSdr::new`/`process` の 2 箇所）

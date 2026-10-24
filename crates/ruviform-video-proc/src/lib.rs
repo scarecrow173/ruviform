@@ -60,6 +60,11 @@
 //!   exit (`BT.2020 → dst primaries` matrix + transfer encode baked
 //!   by the constructor; ≤ 4 ulp contract, `Rgba8` ±1 code
 //!   quantization bound).
+//! - [`ToneMapSdr`] — `RgbaF32` → `RgbaF32` HDR→SDR tone map
+//!   (BT.2390-8 §5.4 EETF on the BT.2020 luma with ratio-preserving
+//!   RGB scaling; `L_HS`/`L_min` derived from `src`'s `HdrMetadata`
+//!   per call, `hdr` consumed — output records `hdr: None`; ≤ 4 ulp
+//!   `binary32` equivalence contract).
 //! - [`CompositeOver`] — `src over dst` source-over alpha compositing
 //!   on straight alpha, in place on `dst`, with a per-call `opacity`
 //!   (self-consistent Q8 integer expansion on `Rgba8`, `f32` pipeline +
@@ -115,6 +120,7 @@ mod coef;
 mod composite;
 mod rgb_to_yuv;
 mod rgba_f16;
+mod tone_map;
 mod transfer;
 mod working_space;
 mod yuv_to_rgb;
@@ -123,6 +129,7 @@ pub use affine::{AffineTransform, Rect, RectMap};
 pub use composite::{CompositeOver, Crossfade};
 pub use rgb_to_yuv::RgbToYuv;
 pub use rgba_f16::{Rgba8ToRgbaF16, RgbaF16ToRgba8};
+pub use tone_map::ToneMapSdr;
 pub use working_space::{FromWorking, ToWorking};
 pub use yuv_to_rgb::YuvToRgb;
 

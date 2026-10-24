@@ -58,7 +58,7 @@ relations:
 
 # Issue #99 実施計画 — video-proc 色変換カーネル（linear working space + ICC 入出力経路）
 
-> status: in-progress — Task 1 (rgba-f32-format-and-transfer-internals) 完了済み。Task 2 (working-space-kernels) 完了（actions 4–6・`mise run check`/`lint`/`test`/`test-rt` 全 exit 0・独立 review 2 件 P0/P1 なし・指摘全修正済み）。Task 3–7 未着手 — 全体完了を意味しない。task/test-spec は起票済み（2 TSpec proposed・7 task）。実装・検証・commit は task/lead 側の責務 — 本計画はコード・検証の完了を主張しない。
+> status: in-progress — Task 1 (rgba-f32-format-and-transfer-internals) 完了済み。Task 2 (working-space-kernels) 完了（actions 4–6・`mise run check`/`lint`/`test`/`test-rt` 全 exit 0・独立 review 2 件 P0/P1 なし・指摘全修正済み）。Task 3 (tone-map-sdr-kernel) 完了（actions 7–8・`mise run check`/`lint`/`test`/`test-rt` 全 exit 0・独立 review 2 件 APPROVE・P0/P1/P2 なし）。Task 4–7 未着手 — 全体完了を意味しない。task/test-spec は起票済み（2 TSpec proposed・7 task）。実装・検証・commit は task/lead 側の責務 — 本計画はコード・検証の完了を主張しない。
 
 ## Goal
 
