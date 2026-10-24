@@ -24,12 +24,14 @@ use crate::host::{NativeLib, OfxHost, OfxLibrary, PluginDesc, PluginRejection};
 /// the catalog's lifetime.
 #[expect(unsafe_code)]
 unsafe fn entry(lib: &Library, name: &'static [u8]) -> Result<*const c_void, OfxError> {
-    unsafe { lib.get::<*const c_void>(name) }.map(|s| *s).map_err(|_| {
-        OfxError::Library(format!(
-            "missing OFX export `{}`",
-            String::from_utf8_lossy(name)
-        ))
-    })
+    unsafe { lib.get::<*const c_void>(name) }
+        .map(|s| *s)
+        .map_err(|_| {
+            OfxError::Library(format!(
+                "missing OFX export `{}`",
+                String::from_utf8_lossy(name)
+            ))
+        })
 }
 
 /// A `*const c_char` from the bridge copied out to an owned `String`.
@@ -43,7 +45,11 @@ unsafe fn copy_cstr(raw: *const std::ffi::c_char) -> Option<String> {
     if raw.is_null() {
         return None;
     }
-    Some(unsafe { std::ffi::CStr::from_ptr(raw) }.to_string_lossy().into_owned())
+    Some(
+        unsafe { std::ffi::CStr::from_ptr(raw) }
+            .to_string_lossy()
+            .into_owned(),
+    )
 }
 
 fn rejection_error(status: i32) -> OfxError {
@@ -56,7 +62,10 @@ fn rejection_error(status: i32) -> OfxError {
         k if k == crate::ffi::status::ERR_VALUE => {
             OfxError::InvalidValue("invalid descriptor value")
         }
-        s => OfxError::Native { action: "admission", status: s },
+        s => OfxError::Native {
+            action: "admission",
+            status: s,
+        },
     }
 }
 
@@ -95,8 +104,7 @@ impl OfxHost {
             .map_err(|e| OfxError::Library(format!("load failed: {e}")))?;
         let get_count = unsafe { entry(&lib, b"OfxGetNumberOfPlugins\0") }?;
         let get_plugin = unsafe { entry(&lib, b"OfxGetPlugin\0") }?;
-        let set_host =
-            unsafe { entry(&lib, b"OfxSetHost\0") }.unwrap_or(std::ptr::null());
+        let set_host = unsafe { entry(&lib, b"OfxSetHost\0") }.unwrap_or(std::ptr::null());
 
         let mut catalog = std::ptr::null_mut();
         // SAFETY: all pointers are valid — `host` is a live RvHost,
@@ -119,7 +127,10 @@ impl OfxHost {
             return Err(if rc == crate::ffi::status::ERR_MEMORY {
                 OfxError::Memory
             } else {
-                OfxError::Native { action: "catalog admission", status: rc }
+                OfxError::Native {
+                    action: "catalog admission",
+                    status: rc,
+                }
             });
         }
 
@@ -132,21 +143,14 @@ impl OfxHost {
             for i in 0..count {
                 let desc = sys::rv_ofx_catalog_descriptor(catalog, i);
                 if desc.is_null() {
-                    let identifier =
-                        copy_cstr(sys::rv_ofx_catalog_identifier(catalog, i));
+                    let identifier = copy_cstr(sys::rv_ofx_catalog_identifier(catalog, i));
                     let status = sys::rv_ofx_catalog_rejection(catalog, i);
-                    rejections.push(PluginRejection::new(
-                        i,
-                        identifier,
-                        rejection_error(status),
-                    ));
+                    rejections.push(PluginRejection::new(i, identifier, rejection_error(status)));
                 } else {
                     plugins.push(PluginDesc {
                         token: desc,
-                        id: copy_cstr(sys::rv_ofx_descriptor_string(desc, 0))
-                            .unwrap_or_default(),
-                        name: copy_cstr(sys::rv_ofx_descriptor_string(desc, 1))
-                            .unwrap_or_default(),
+                        id: copy_cstr(sys::rv_ofx_descriptor_string(desc, 0)).unwrap_or_default(),
+                        name: copy_cstr(sys::rv_ofx_descriptor_string(desc, 1)).unwrap_or_default(),
                         vendor: copy_cstr(sys::rv_ofx_descriptor_string(desc, 2))
                             .unwrap_or_default(),
                         version: copy_cstr(sys::rv_ofx_descriptor_string(desc, 3))

@@ -34,7 +34,10 @@ mod native {
         ) -> i32;
         fn rv_ofx_instance_new(descriptor: *mut c_void, effect: *mut *mut c_void) -> i32;
         fn rv_ofx_instance_configure(
-            effect: *mut c_void, width: u32, height: u32, frame_rate: f64,
+            effect: *mut c_void,
+            width: u32,
+            height: u32,
+            frame_rate: f64,
         ) -> i32;
         fn rv_ofx_instance_create(effect: *mut c_void) -> i32;
         fn rv_ofx_instance_destroy(effect: *mut c_void) -> i32;
@@ -69,18 +72,25 @@ mod native {
                     library,
                 };
                 assert!(!bridge.host.is_null(), "real host allocation");
-                let count = *bridge.library.get::<*const c_void>(
-                    b"OfxGetNumberOfPlugins\0",
-                ).expect("count symbol");
-                let plugin = *bridge.library.get::<*const c_void>(
-                    b"OfxGetPlugin\0",
-                ).expect("plugin symbol");
-                let set_host = *bridge.library.get::<*const c_void>(
-                    b"OfxSetHost\0",
-                ).expect("DLL SetHost symbol");
+                let count = *bridge
+                    .library
+                    .get::<*const c_void>(b"OfxGetNumberOfPlugins\0")
+                    .expect("count symbol");
+                let plugin = *bridge
+                    .library
+                    .get::<*const c_void>(b"OfxGetPlugin\0")
+                    .expect("plugin symbol");
+                let set_host = *bridge
+                    .library
+                    .get::<*const c_void>(b"OfxSetHost\0")
+                    .expect("DLL SetHost symbol");
                 assert_eq!(
                     rv_ofx_catalog_open(
-                        bridge.host, count, plugin, set_host, &raw mut bridge.catalog,
+                        bridge.host,
+                        count,
+                        plugin,
+                        set_host,
+                        &raw mut bridge.catalog,
                     ),
                     0,
                     "native catalog open",
@@ -121,21 +131,30 @@ mod native {
             assert!(rv_ofx_catalog_descriptor(bridge.catalog, 1).is_null());
             let identifier = rv_ofx_descriptor_string(descriptor, 0);
             assert!(!identifier.is_null());
-            assert_eq!(CStr::from_ptr(identifier).to_str().expect("UTF-8"), "org.ruviform.gain");
+            assert_eq!(
+                CStr::from_ptr(identifier).to_str().expect("UTF-8"),
+                "org.ruviform.gain"
+            );
             assert_eq!(rv_ofx_param_count(descriptor), 5);
             assert_eq!(rv_ofx_instance_new(descriptor, &raw mut bridge.effect), 0);
             assert!(!bridge.effect.is_null());
             assert_eq!(rv_ofx_param_count(bridge.effect), 5);
             assert_eq!(rv_ofx_instance_configure(bridge.effect, 3, 2, 30.0), 0);
             assert_eq!(rv_ofx_param_set(bridge.effect, 0, 0, 3.0, 0, 1), 0);
-            assert_eq!(rv_ofx_instance_create(bridge.effect), 0, "Create with joined OS worker");
-            let created = bridge.library
+            assert_eq!(
+                rv_ofx_instance_create(bridge.effect),
+                0,
+                "Create with joined OS worker"
+            );
+            let created = bridge
+                .library
                 .get::<unsafe extern "C" fn(*mut f64) -> i32>(b"ofx_fixture_created_gain\0")
                 .expect("created value probe");
             let mut value = f64::NAN;
             assert_eq!(created(&raw mut value), 0);
             assert_eq!(value, 3.0, "C Create must read the staged native value");
-            let probe = bridge.library
+            let probe = bridge
+                .library
                 .get::<unsafe extern "C" fn(i32) -> i32>(b"ofx_fixture_probe\0")
                 .expect("suite probe");
             for which in 0..5 {

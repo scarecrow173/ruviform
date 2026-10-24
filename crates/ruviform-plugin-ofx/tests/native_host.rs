@@ -1,9 +1,9 @@
 //! Native contracts observed through a real, pinned-SDK C fixture.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 
 use ruviform_media_core::{FrameRate, MediaTime, TimeBase};
 use ruviform_plugin_core::{
@@ -83,7 +83,9 @@ fn snapshot() -> Vec<usize> {
 }
 
 fn guarded() -> std::sync::MutexGuard<'static, ()> {
-    let guard = TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let guard = TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     for row in &COUNTS {
         for cell in row {
             cell.store(0, Ordering::SeqCst);
@@ -198,7 +200,10 @@ mod fixture_ffi {
         pub fn gain(&self) -> (f64, f64) {
             let (mut value, mut at_time) = (f64::NAN, f64::NAN);
             // SAFETY: outputs are live writable doubles; host DLL is live.
-            assert_eq!(unsafe { (self.read_gain)(&raw mut value, &raw mut at_time) }, 0);
+            assert_eq!(
+                unsafe { (self.read_gain)(&raw mut value, &raw mut at_time) },
+                0
+            );
             (value, at_time)
         }
 
@@ -669,11 +674,13 @@ suite_probe!(property_suite_typed_scalar_n_reset_and_errors, 0, 0);
 suite_probe!(parameter_suite_varargs_keys_and_unsupported_slots, 1, 0);
 suite_probe!(
     memory_suites_own_aligned_storage_and_reject_stale_handles,
-    2, 0
+    2,
+    0
 );
 suite_probe!(
     foreign_os_worker_calls_suites_without_control_plane_access,
-    3, WORKER_ON_CREATE
+    3,
+    WORKER_ON_CREATE
 );
 
 #[test]
@@ -860,10 +867,7 @@ fn render_bracket_maps_frames_and_time_bottom_left() {
         .map(|cell| (cell.load(Ordering::SeqCst) - 1) / 2)
         .collect();
     let position = |event| events.iter().position(|value| *value == event);
-    assert!(
-        position(BEGIN_RENDER) < position(RENDER)
-            && position(RENDER) < position(END_RENDER)
-    );
+    assert!(position(BEGIN_RENDER) < position(RENDER) && position(RENDER) < position(END_RENDER));
     assert_eq!(instance.state(), LifecycleState::Processing);
     drop(library);
     drop(host);

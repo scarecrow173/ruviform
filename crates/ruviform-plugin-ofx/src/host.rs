@@ -24,7 +24,11 @@ pub struct PluginRejection {
 
 impl PluginRejection {
     pub(crate) fn new(native_index: usize, identifier: Option<String>, error: OfxError) -> Self {
-        Self { native_index, identifier, error }
+        Self {
+            native_index,
+            identifier,
+            error,
+        }
     }
 
     /// Index of the rejected entry in the native plugin enumeration.
@@ -115,7 +119,13 @@ impl NativeLib {
         plugins: Vec<PluginDesc>,
         rejections: Vec<PluginRejection>,
     ) -> Self {
-        Self { catalog, _lib: lib, _host: host, plugins, rejections }
+        Self {
+            catalog,
+            _lib: lib,
+            _host: host,
+            plugins,
+            rejections,
+        }
     }
 }
 
@@ -151,13 +161,16 @@ impl OfxLibrary {
     /// Borrowed descriptor view of the admitted plugin at `admitted_index`.
     #[must_use]
     pub fn plugin(&self, admitted_index: usize) -> Option<PluginDescriptorView<'_>> {
-        self.inner.plugins.get(admitted_index).map(|p| PluginDescriptorView {
-            id: &p.id,
-            name: &p.name,
-            vendor: &p.vendor,
-            version: &p.version,
-            features: &[],
-        })
+        self.inner
+            .plugins
+            .get(admitted_index)
+            .map(|p| PluginDescriptorView {
+                id: &p.id,
+                name: &p.name,
+                vendor: &p.vendor,
+                version: &p.version,
+                features: &[],
+            })
     }
 
     /// Create an instance of the admitted plugin at `admitted_index`.
@@ -208,7 +221,10 @@ impl OfxHost {
     ///
     /// [`OfxError::Unsupported`] when another host session is still alive.
     pub fn new() -> Result<Self, OfxError> {
-        Ok(Self { native: NativeHost::new()?, libraries: HashMap::new() })
+        Ok(Self {
+            native: NativeHost::new()?,
+            libraries: HashMap::new(),
+        })
     }
 
     pub(crate) fn native(&self) -> &Rc<NativeHost> {

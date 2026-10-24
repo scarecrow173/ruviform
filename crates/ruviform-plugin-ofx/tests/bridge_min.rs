@@ -1,13 +1,19 @@
 #[expect(unsafe_code)]
 mod t {
+    use libloading::Library;
     use std::ffi::c_void;
     use std::path::Path;
-    use libloading::Library;
     #[link(name = "ofx_bridge", kind = "static")]
     unsafe extern "C" {
         fn rv_ofx_host_new() -> *mut c_void;
         fn rv_ofx_host_free(h: *mut c_void);
-        fn rv_ofx_catalog_open(h: *mut c_void, gc: *const c_void, gp: *const c_void, sh: *const c_void, c: *mut *mut c_void) -> i32;
+        fn rv_ofx_catalog_open(
+            h: *mut c_void,
+            gc: *const c_void,
+            gp: *const c_void,
+            sh: *const c_void,
+            c: *mut *mut c_void,
+        ) -> i32;
         fn rv_ofx_catalog_close(c: *mut c_void);
         fn rv_ofx_catalog_descriptor(c: *mut c_void, i: usize) -> *mut c_void;
         fn rv_ofx_instance_new(d: *mut c_void, e: *mut *mut c_void) -> i32;
@@ -22,10 +28,18 @@ mod t {
         let path = Path::new(env!("OFX_FIXTURE_DLL"));
         unsafe {
             let lib = Library::new(path).expect("fixture");
-            let configure = lib.get::<unsafe extern "C" fn(i32, Option<extern "C" fn(i32, i32)>)>(b"ofx_fixture_configure\0").unwrap();
+            let configure = lib
+                .get::<unsafe extern "C" fn(i32, Option<extern "C" fn(i32, i32)>)>(
+                    b"ofx_fixture_configure\0",
+                )
+                .unwrap();
             configure(0, None); // no worker on create
-            let probe = lib.get::<unsafe extern "C" fn(i32) -> i32>(b"ofx_fixture_probe\0").unwrap();
-            let gc = *lib.get::<*const c_void>(b"OfxGetNumberOfPlugins\0").unwrap();
+            let probe = lib
+                .get::<unsafe extern "C" fn(i32) -> i32>(b"ofx_fixture_probe\0")
+                .unwrap();
+            let gc = *lib
+                .get::<*const c_void>(b"OfxGetNumberOfPlugins\0")
+                .unwrap();
             let gp = *lib.get::<*const c_void>(b"OfxGetPlugin\0").unwrap();
             let sh = *lib.get::<*const c_void>(b"OfxSetHost\0").unwrap();
             let h = rv_ofx_host_new();

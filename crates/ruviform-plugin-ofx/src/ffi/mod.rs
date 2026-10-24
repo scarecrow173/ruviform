@@ -34,18 +34,12 @@ pub(crate) mod sys {
         ) -> i32;
         pub(crate) fn rv_ofx_catalog_close(catalog: *mut c_void);
         pub(crate) fn rv_ofx_catalog_count(catalog: *mut c_void) -> usize;
-        pub(crate) fn rv_ofx_catalog_descriptor(
-            catalog: *mut c_void,
-            index: usize,
-        ) -> *mut c_void;
+        pub(crate) fn rv_ofx_catalog_descriptor(catalog: *mut c_void, index: usize) -> *mut c_void;
         pub(crate) fn rv_ofx_catalog_identifier(
             catalog: *mut c_void,
             index: usize,
         ) -> *const c_char;
-        pub(crate) fn rv_ofx_catalog_rejection(
-            catalog: *mut c_void,
-            index: usize,
-        ) -> i32;
+        pub(crate) fn rv_ofx_catalog_rejection(catalog: *mut c_void, index: usize) -> i32;
         pub(crate) fn rv_ofx_descriptor_string(
             descriptor: *mut c_void,
             field: i32,
@@ -85,10 +79,8 @@ pub(crate) mod sys {
             integer: i32,
             host_write: i32,
         ) -> i32;
-        pub(crate) fn rv_ofx_instance_new(
-            descriptor: *mut c_void,
-            effect: *mut *mut c_void,
-        ) -> i32;
+        pub(crate) fn rv_ofx_instance_new(descriptor: *mut c_void, effect: *mut *mut c_void)
+        -> i32;
         pub(crate) fn rv_ofx_instance_configure(
             effect: *mut c_void,
             width: u32,

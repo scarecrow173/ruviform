@@ -65,7 +65,9 @@ unsafe fn copy_cstr(raw: *const std::ffi::c_char) -> String {
     if raw.is_null() {
         return String::new();
     }
-    unsafe { CStr::from_ptr(raw) }.to_string_lossy().into_owned()
+    unsafe { CStr::from_ptr(raw) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Owned snapshot of one parameter's metadata + kind, kept beside the
@@ -223,12 +225,17 @@ impl OfxInstance {
 
     /// Illegal current state for `op` — rejected before entering native.
     fn illegal(&self, op: &'static str) -> OfxError {
-        OfxError::InvalidState { operation: op, state: self.state() }
+        OfxError::InvalidState {
+            operation: op,
+            state: self.state(),
+        }
     }
 
     /// Apply `event` to the lifecycle, mapping the transition error.
     fn transit(&mut self, event: LifecycleEvent, op: &'static str) -> Result<(), OfxError> {
-        self.lifecycle.transition(event).map_err(|_| self.illegal(op))?;
+        self.lifecycle
+            .transition(event)
+            .map_err(|_| self.illegal(op))?;
         Ok(())
     }
 
@@ -343,7 +350,9 @@ impl VideoPluginInstance for OfxInstance {
             return Err(self.illegal("initialize"));
         }
         if config.format() != PixelFormat::Rgba8 {
-            return Err(OfxError::Unsupported("only PixelFormat::Rgba8 is supported"));
+            return Err(OfxError::Unsupported(
+                "only PixelFormat::Rgba8 is supported",
+            ));
         }
         let fps = f64::from(config.frame_rate().numerator())
             / f64::from(config.frame_rate().denominator());
@@ -399,12 +408,11 @@ impl VideoPluginInstance for OfxInstance {
             return Err(self.illegal("render"));
         };
         if input.format() != PixelFormat::Rgba8 || output.format() != PixelFormat::Rgba8 {
-            return Err(OfxError::Unsupported("only PixelFormat::Rgba8 is supported"));
+            return Err(OfxError::Unsupported(
+                "only PixelFormat::Rgba8 is supported",
+            ));
         }
-        if input.width() != w
-            || input.height() != h
-            || output.width() != w
-            || output.height() != h
+        if input.width() != w || input.height() != h || output.width() != w || output.height() != h
         {
             return Err(OfxError::InvalidValue(
                 "frame dimensions differ from the configured size",
