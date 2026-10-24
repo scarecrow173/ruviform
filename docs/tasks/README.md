@@ -69,7 +69,7 @@ Directory: `docs/tasks`
 | TASK-034JRcXokykm0XlpOqcor0 | 並列ワーカープール駆動（有界キュー・順序再構成） | done | [offline-exec-parallel.md](./offline-exec-parallel.md) |
 | TASK-034JRcWTeJbPQAh5fUwPZs | オフライン駆動プリミティブ（CancellationToken/Progress/OfflineError/逐次ドライバ） | done | [offline-exec-primitives.md](./offline-exec-primitives.md) |
 | TASK-034L6ycSsF8VW32LLoNxXr | Implement video plugin core contract | done | [ofx-core-contract-implementation.md](./ofx-core-contract-implementation.md) |
-| TASK-034L6yiJbB3boniBUWvfmC | OFX host closeout | todo | [ofx-host-closeout.md](./ofx-host-closeout.md) |
+| TASK-034L6yiJbB3boniBUWvfmC | OFX host closeout | done | [ofx-host-closeout.md](./ofx-host-closeout.md) |
 | TASK-034L6yib4dmV9rd1MUZxbw | OFX host final verification | done | [ofx-host-final-verification.md](./ofx-host-final-verification.md) |
 | TASK-034L6yeVFSaiVUoV4RiRtm | Implement native OFX runtime | done | [ofx-native-runtime-implementation.md](./ofx-native-runtime-implementation.md) |
 | TASK-034L6yh0fBmRabh1TMLv2F | Implement OFX video rendering | done | [ofx-render-implementation.md](./ofx-render-implementation.md) |
