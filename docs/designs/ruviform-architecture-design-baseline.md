@@ -208,6 +208,8 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
    ruviform-ui（UI 基盤・WebView 非依存部分）
 ```
 
+> Issue #98 Task 1 で plugin-core→video-core を実追加。中立動画ポートは全操作 NONRT。OFX adapter/native は未実装。
+
 依存方向ルール:
 
 - Primitives はいかなる上位層・プラットフォーム・外部バックエンドにも依存しない。GPU・OS 固有 API・デバイス依存を持たない（platform ADR 確定）。
@@ -254,7 +256,7 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
 | `ruviform-audio-device` | オーディオデバイス I/O のアダプタ（cpal 有力）。抽象境界経由の差替可能実装詳細。codec は持たない | `ruviform-audio-core` が定義するデバイス境界 trait の実装 | Domain foundations + Primitives | デバイスコールバックが RT パスの起点。コールバック内は RT 契約適用 |
 | `ruviform-gpu` | `wgpu` 等の GPU 描画・計算のアダプタ（バージョン差・フォールバック吸収）。エンジン層の opt-in | `ruviform-video-proc` が定義する GPU 計算境界・`ruviform-ui` が定義する描画境界の実装。`wgpu` 等のバックエンド型は非公開 | Domain foundations + Primitives + 拡張層（ruviform-ui） | 非 RT |
 | `ruviform-io-symphonia` / `ruviform-io-ffmpeg` 等 | メディア I/O バックエンド（候補の例示であり採否決定ではない）。`ruviform-media-io` の抽象境界の実装詳細 | 個別バックエンドクレートの公開 API（登録・バックエンド固有 feature は当該クレート内に限定） | Domain foundations + Primitives | 非 RT |
-| `ruviform-plugin-core` | プラグイン共通処理基盤：パラメータ・イベント（sample-accurate）・ライフサイクル・RT 契約・規格中立型。規格 ABI は持たない | 規格中立のプラグイン基盤 API | Domain foundations + Primitives | `process` 系は RT 適合。初期化・状態保存等は非 RT |
+| `ruviform-plugin-core` | プラグイン共通処理基盤：パラメータ・イベント（sample-accurate）・ライフサイクル・RT 契約・規格中立型＋ NONRT 動画ポート（`VideoPluginInstance`/`VideoProcessConfig`）・typed plain 制御（`PlainParamValue`/`PlainParamInfo`）・借用記述ビュー（`PluginDescriptorView`）。規格 ABI は持たない | 規格中立のプラグイン基盤 API | 実依存: `ruviform-audio-core`・`ruviform-video-core`・`ruviform-media-core`（Domain foundations + Primitives） | audio `process` 系は RT 適合・初期化・状態保存等は非 RT。video ポートは全操作 NONRT |
 | `ruviform-plugin-host` | ホスト側：プラグインスキャン・ロード・インスタンス管理・分離（プロセス内デフォルト、分離は境界設計で阻害しない）。規格 ABI 詳細は adapter に委譲 | ホスト API・インスタンスハンドル・分離境界 | Domain foundations + Primitives + 拡張層（ruviform-plugin-core） | プラグイン `process` 呼び出しは RT パス。ロード・スキャン・再構成は非 RT |
 | `ruviform-plugin-export` | 制作側：Ruviform 製プラグインのビルド・エクスポート基盤（ライフサイクル実装・規格準拠エントリ生成）。規格 ABI 詳細は adapter に委譲 | 制作基盤 API・プラグイン定義 | Domain foundations + Primitives + 拡張層（ruviform-plugin-core） | プラグイン `process` 実装は RT 契約の適用対象 |
 | `ruviform-plugin-clap` / `ruviform-plugin-vst3` | CLAP／VST3 の規格固有アダプタ（エントリポイント・ABI 変換・ライフサイクルマッピング）。薄いアダプタとして分離。binding クレート利用は実装詳細 | 規格固有部の公開面は最小。共通基盤に規格固有型を持ち込まない | Domain foundations + Primitives + 拡張層（ruviform-plugin-core・ruviform-plugin-host・ruviform-plugin-export） | 規格コールバック（process 等）が RT 境界 |

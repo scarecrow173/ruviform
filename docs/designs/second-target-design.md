@@ -35,6 +35,7 @@ relations:
     - "docs/designs/ruviform-architecture-design-baseline.md"
     - "docs/designs/plugin-isolation.md"
   derived-by:
+    - "../specs/ofx-host-adapter.md"
     - "docs/plans/implement-issue-32-second-target-design.md"
     - "docs/specs/edit-data-model.md"
     - "docs/designs/edit-data-model.md"

@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計19クレート）。
+Ruviform ワークスペースのメンバークレート索引（計20クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -43,7 +43,8 @@ Ruviform ワークスペースのメンバークレート索引（計19クレー
 
 | クレート | 責務 |
 | --- | --- |
-| [`ruviform-plugin-core`](ruviform-plugin-core/README.md) | 規格中立プラグイン基盤 |
+| [`ruviform-plugin-core`](ruviform-plugin-core/README.md) | 規格中立プラグイン基盤（音声 RT・動画 NONRT 契約、typed plain 制御） |
+| [`ruviform-plugin-ofx`](ruviform-plugin-ofx/README.md) | OpenFX Image Effect ホストアダプタ（実 foreign ABI・NONRT L0） |
 | [`ruviform-plugin-clap`](ruviform-plugin-clap/README.md) | CLAP 薄アダプタ |
 | [`ruviform-plugin-vst3`](ruviform-plugin-vst3/README.md) | VST3 アダプタ（ABI-only） |
 

@@ -45,6 +45,68 @@ pub struct PluginDescriptor {
     pub features: &'static [&'static str],
 }
 
+/// Borrowed descriptor view for plugins that own dynamic metadata.
+///
+/// Same fields as [`PluginDescriptor`] but borrowing `&'a str`/`&'a [&'a str]`
+/// instead of `'static` — adapters projecting native-owned metadata use this.
+/// No `Box::leak` / forged statics: the view never outlives its owner.
+///
+/// ```
+/// use ruviform_plugin_core::PluginDescriptorView;
+///
+/// let id = String::from("org.example.dyn");
+/// let name = String::from("Dyn");
+/// let vendor = String::from("Vendor");
+/// let version = String::from("2.0.0");
+/// let feats = [String::from("video-effect"), String::from("utility")];
+/// let fv: Vec<&str> = feats.iter().map(String::as_str).collect();
+/// let view = PluginDescriptorView {
+///     id: &id, name: &name, vendor: &vendor, version: &version,
+///     features: &fv,
+/// };
+/// assert_eq!(view.id, "org.example.dyn");
+/// assert_eq!(view.name, "Dyn");
+/// assert_eq!(view.features, &["video-effect", "utility"]);
+/// ```
+///
+/// ```compile_fail
+/// use ruviform_plugin_core::{PluginDescriptor, PluginDescriptorView};
+/// fn escape() -> PluginDescriptorView<'static> {
+///     let owner = PluginDescriptor {
+///         id: "org.example.d", name: "D", vendor: "V",
+///         version: "1", features: &[],
+///     };
+///     owner.view()
+/// }
+/// ```
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PluginDescriptorView<'a> {
+    /// Stable standard-neutral identifier (reverse-DNS style).
+    pub id: &'a str,
+    /// Human-readable plugin name.
+    pub name: &'a str,
+    /// Vendor / author name.
+    pub vendor: &'a str,
+    /// Version string in a standard-neutral form.
+    pub version: &'a str,
+    /// Feature descriptors (category tags); may be empty.
+    pub features: &'a [&'a str],
+}
+
+impl PluginDescriptor {
+    /// Borrowed view of this static descriptor.
+    #[must_use]
+    pub fn view(&self) -> PluginDescriptorView<'_> {
+        PluginDescriptorView {
+            id: self.id,
+            name: self.name,
+            vendor: self.vendor,
+            version: self.version,
+            features: self.features,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

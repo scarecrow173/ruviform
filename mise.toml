@@ -112,3 +112,24 @@ run = [
   "mise run test-ci",
 ]
 env = { CARGO_INCREMENTAL = "0" }
+
+[tasks.test-plugin-core]
+description = "Run plugin-core contract tests"
+run = "cargo test -p ruviform-plugin-core"
+[tasks.lint-plugin-core]
+description = "Lint plugin-core and its test targets"
+run = "cargo clippy -p ruviform-plugin-core --all-targets -- -D warnings"
+
+[tasks.test-ofx]
+description = "Run OFX native host and fixture contract tests"
+run = "cargo test -p ruviform-plugin-ofx"
+[tasks.test-ofx-bridge]
+description = "Run OFX bottom-up C bridge native smoke gate"
+run = "cargo test -p ruviform-plugin-ofx --test bridge_native"
+[tasks.lint-ofx]
+description = "Lint OFX host and its test targets"
+run = "cargo clippy -p ruviform-plugin-ofx --all-targets -- -D warnings"
+[tasks.test-ofx-msrv]
+description = "Test plugin-core and OFX library, tests and C bridge on MSRV 1.89"
+run = "mise exec rust@1.89.0 -- cargo test -p ruviform-plugin-core -p ruviform-plugin-ofx"
+env = { CARGO_TARGET_DIR = "target/msrv-ofx" }

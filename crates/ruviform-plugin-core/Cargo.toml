@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 ruviform-audio-core = { path = "../ruviform-audio-core" }
 ruviform-media-core = { path = "../ruviform-media-core" }
+ruviform-video-core = { path = "../ruviform-video-core" }
 
 [lints]
 workspace = true

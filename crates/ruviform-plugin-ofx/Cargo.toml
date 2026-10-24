@@ -1,0 +1,21 @@
+[package]
+name = "ruviform-plugin-ofx"
+description = "OpenFX Image Effect host adapter for Ruviform — real foreign-ABI L0 host for the neutral video plugin contract (Issue #98)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+ruviform-video-core = { path = "../ruviform-video-core" }
+ruviform-media-core = { path = "../ruviform-media-core" }
+libloading = "0.8.9"
+
+[build-dependencies]
+cc = "1.9.0"
+
+
+[lints]
+workspace = true
