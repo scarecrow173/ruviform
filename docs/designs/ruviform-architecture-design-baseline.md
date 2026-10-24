@@ -102,6 +102,8 @@ relations:
     - "docs/designs/edit-data-model.md"
     - "docs/specs/composite-transition-kernels.md"
     - "docs/designs/composite-transition-kernels.md"
+    - "docs/specs/color-conversion-kernels.md"
+    - "docs/designs/color-conversion-kernels.md"
     - "shared-foundations-and-modularization-policy.md"
   verifies: []
   verified-by: []
