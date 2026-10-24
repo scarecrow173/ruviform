@@ -35,7 +35,7 @@ Directory: `docs/plans`
 | PLAN-034KPgI4Qmc4o0yAzYskID | Issue #96 実施計画 — ruviform-edit 新設 | approved | [implement-issue-96-edit-model.md](./implement-issue-96-edit-model.md) |
 | PLAN-034KSVb6BAzhMH2cZgxnSy | Issue #97 実施計画 — video-proc コンポジット/遷移カーネル追加 | approved | [implement-issue-97-composite-kernels.md](./implement-issue-97-composite-kernels.md) |
 | PLAN-034L5BRUxRuns9cuoAdq8n | Implement Issue 98 OFX Host Adapter | completed | [implement-issue-98-ofx-host-adapter.md](./implement-issue-98-ofx-host-adapter.md) |
-| PLAN-034LFFj86hwRvUljHN54Mc | Issue #99 実施計画 — video-proc 色変換カーネル（linear working space + ICC 入出力経路） | approved | [implement-issue-99-color-conversion-kernels.md](./implement-issue-99-color-conversion-kernels.md) |
+| PLAN-034LFFj86hwRvUljHN54Mc | Issue #99 実施計画 — video-proc 色変換カーネル（linear working space + ICC 入出力経路） | in-progress | [implement-issue-99-color-conversion-kernels.md](./implement-issue-99-color-conversion-kernels.md) |
 | PLAN-034JcvpHIlt5JmqvgOquvI | プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding PoC） | completed | [implement-plugin-foundation.md](./implement-plugin-foundation.md) |
 | PLAN-034JxNegJktSAJZ2LuO0N8 | Issue #21 RT 基盤の実装（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | completed | [implement-rt-foundation.md](./implement-rt-foundation.md) |
 | PLAN-034J6OTwge4rS96WZWkZgd | Issue #18 フォローアップの実装（公開 enum 方針適用・時間演算修正・改善トリアージ） | completed | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |

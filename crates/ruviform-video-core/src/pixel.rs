@@ -53,6 +53,15 @@ pub enum PixelFormat {
     /// Packed RGBA, IEEE 754 half-precision float per channel — one plane,
     /// 8 bytes per pixel.
     RgbaF16,
+    /// Packed RGBA, IEEE 754 single-precision (`binary32`)
+    /// little-endian float per channel — one plane, 16 bytes per pixel.
+    ///
+    /// This is also the storage format of the color-management working
+    /// space: tagged `{primaries: Bt2020, transfer: Linear,
+    /// matrix: Identity, range: Full}`, a frame holds linear-light,
+    /// absolute-luminance pixel values (`1.0` = 100 cd/m²), not limited
+    /// to `[0, 1]`.
+    RgbaF32,
 }
 
 impl PixelFormat {
@@ -66,7 +75,7 @@ impl PixelFormat {
     pub const fn plane_count(self) -> usize {
         match self {
             Self::Yuv420p | Self::Yuv422p | Self::Yuv444p => 3,
-            Self::Rgba8 | Self::RgbaF16 => 1,
+            Self::Rgba8 | Self::RgbaF16 | Self::RgbaF32 => 1,
         }
     }
 
@@ -76,13 +85,17 @@ impl PixelFormat {
     /// **RT contract:** RT-suitable — pure `const fn`.
     #[must_use]
     pub const fn is_planar(self) -> bool {
-        matches!(self, Self::Yuv420p | Self::Yuv422p | Self::Yuv444p)
+        match self {
+            Self::Yuv420p | Self::Yuv422p | Self::Yuv444p => true,
+            Self::Rgba8 | Self::RgbaF16 | Self::RgbaF32 => false,
+        }
     }
 
     /// Bytes per sample on `plane` — the size of one grid element on that
     /// plane (one 8-bit component on a YUV plane; one whole pixel on a
     /// packed plane: 4 bytes for [`Rgba8`](Self::Rgba8), 8 bytes for
-    /// [`RgbaF16`](Self::RgbaF16)).
+    /// [`RgbaF16`](Self::RgbaF16), 16 bytes for
+    /// [`RgbaF32`](Self::RgbaF32)).
     ///
     /// Returns 0 when `plane` is out of range for this format.
     ///
@@ -96,6 +109,7 @@ impl PixelFormat {
             Self::Yuv420p | Self::Yuv422p | Self::Yuv444p => 1,
             Self::Rgba8 => 4,
             Self::RgbaF16 => 8,
+            Self::RgbaF32 => 16,
         }
     }
 
@@ -113,7 +127,7 @@ impl PixelFormat {
             Self::Yuv420p => Some((2, 2)),
             Self::Yuv422p => Some((2, 1)),
             Self::Yuv444p => Some((1, 1)),
-            Self::Rgba8 | Self::RgbaF16 => None,
+            Self::Rgba8 | Self::RgbaF16 | Self::RgbaF32 => None,
         }
     }
 }
@@ -130,6 +144,7 @@ mod tests {
             (PixelFormat::Yuv444p, 3, true),
             (PixelFormat::Rgba8, 1, false),
             (PixelFormat::RgbaF16, 1, false),
+            (PixelFormat::RgbaF32, 1, false),
         ] {
             assert_eq!(format.plane_count(), planes);
             assert_eq!(format.is_planar(), planar);
@@ -150,7 +165,9 @@ mod tests {
         }
         assert_eq!(PixelFormat::Rgba8.bytes_per_sample(0), 4);
         assert_eq!(PixelFormat::RgbaF16.bytes_per_sample(0), 8);
+        assert_eq!(PixelFormat::RgbaF32.bytes_per_sample(0), 16);
         assert_eq!(PixelFormat::Rgba8.bytes_per_sample(1), 0);
+        assert_eq!(PixelFormat::RgbaF32.bytes_per_sample(1), 0);
     }
 
     #[test]
@@ -160,5 +177,6 @@ mod tests {
         assert_eq!(PixelFormat::Yuv444p.chroma_subsampling(), Some((1, 1)));
         assert_eq!(PixelFormat::Rgba8.chroma_subsampling(), None);
         assert_eq!(PixelFormat::RgbaF16.chroma_subsampling(), None);
+        assert_eq!(PixelFormat::RgbaF32.chroma_subsampling(), None);
     }
 }

@@ -1,23 +1,30 @@
 ---
 id: "TASK-034LFH4wXKj32ElWzaI2lb"
 type: "task"
-status: "todo"
+status: "done"
 title: "RgbaF32 pixel format + transfer/primaries 内部基盤"
 created: "2026-10-25"
 updated: "2026-10-25"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/transfer.rs"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-video-core/src/pixel.rs"
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/lib.rs"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-99-rgba-f32-transfer-task-1-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
   blocks: []
@@ -68,8 +75,8 @@ approved plan `implement-issue-99-color-conversion-kernels.md` の **actions 1�
 
 ## Verification
 
-- [ ] `mise run check` — exit 0
-- [ ] `mise run lint` — exit 0
-- [ ] `mise run test` — exit 0（pixel.rs の `RgbaF32` 行・transfer.rs の unit tests が実行・pass）
-- [ ] `rg -n "RgbaF32" crates/ruviform-video-core/src/pixel.rs` — variant + 4 メソッド arm + テスト行に一致
-- [ ] `rg -n "mod transfer" crates/ruviform-video-proc/src/lib.rs` — `pub(crate)` 登録・公開 re-export なし
+- [x] `mise run check` — exit 0（`cargo check --workspace --all-targets`・実 log）
+- [x] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
+- [x] `mise run test` — exit 0（pixel.rs の `RgbaF32` 行・transfer.rs の unit tests が実行・pass — video-proc lib tests 100/100・実 log）
+- [x] `rg -n "RgbaF32" crates/ruviform-video-core/src/pixel.rs` — variant + 4 メソッド arm + テスト行に一致（10 箇所）
+- [x] `rg -n "mod transfer" crates/ruviform-video-proc/src/lib.rs` — `pub(crate)` 登録・公開 re-export なし

@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034LFFj86hwRvUljHN54Mc"
 type: "plan"
-status: "approved"
+status: "in-progress"
 title: "Issue #99 実施計画 — video-proc 色変換カーネル（linear working space + ICC 入出力経路）"
 created: "2026-10-25"
 updated: "2026-10-25"
@@ -58,7 +58,7 @@ relations:
 
 # Issue #99 実施計画 — video-proc 色変換カーネル（linear working space + ICC 入出力経路）
 
-> status: approved — 未実装の実行計画。起票済み: 2 test-spec（proposed）・7 task（todo）。実装・検証・commit は task/lead 側の責務 — 本計画はコード・検証の完了を主張しない。
+> status: in-progress — Task 1 (rgba-f32-format-and-transfer-internals) 完了（actions 1–3・`mise run check`/`lint`/`test` 全 exit 0・lead review F1–F5 修正済み）。Task 2–7 未着手 — 全体完了を意味しない。task/test-spec は起票済み（2 TSpec proposed・7 task）。実装・検証・commit は task/lead 側の責務 — 本計画はコード・検証の完了を主張しない。
 
 ## Goal
 

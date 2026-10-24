@@ -107,6 +107,7 @@ mod coef;
 mod composite;
 mod rgb_to_yuv;
 mod rgba_f16;
+mod transfer;
 mod yuv_to_rgb;
 
 pub use affine::{AffineTransform, Rect, RectMap};
