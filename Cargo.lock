@@ -1338,6 +1338,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-plugin-ofx"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "libloading",
+ "ruviform-media-core",
+ "ruviform-plugin-core",
+ "ruviform-video-core",
+]
+
+[[package]]
 name = "ruviform-plugin-vst3"
 version = "0.1.0"
 dependencies = [

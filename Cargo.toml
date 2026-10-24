@@ -13,6 +13,7 @@ resolver = "2"
 # plugin-core → audio-core・media-core、plugin-clap / plugin-vst3 → plugin-core・audio-core・media-core＋各 binding クレートを設定済み）。
 # 設計ベースライン A.2/A.6 参照。
 members = [
+    "crates/ruviform-plugin-ofx",
     "crates/ruviform-math",
     "crates/ruviform-rt",
     "crates/ruviform-exec",

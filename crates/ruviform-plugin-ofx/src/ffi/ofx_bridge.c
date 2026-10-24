@@ -1,0 +1,934 @@
+/* ofx_bridge.c   host/catalog/instance lifecycle, admission, ImageEffectV1.
+ * All SDK-facing handles are generation tokens. Foreign calls run unlocked:
+ * prepare under g_mu -> release -> call -> reacquire -> commit. */
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <stdio.h>
+#include <limits.h>
+#include "ofx_internal.h"
+
+int32_t ofx_bridge_image_effect_api_version(void) {
+    return kOfxImageEffectPluginApiVersion;
+}
+
+const void *rv_fetch_suite(void *self, const char *name, int ver) {
+    (void)self;
+    if (!name || ver != 1) return NULL;
+    if (!strcmp(name, kOfxPropertySuite)) return rv_prop_suite_ptr();
+    if (!strcmp(name, kOfxParameterSuite)) return rv_param_suite_ptr();
+    if (!strcmp(name, kOfxImageEffectSuite)) return rv_fx_suite_ptr();
+    if (!strcmp(name, kOfxMemorySuite)) return rv_mem_suite_ptr();
+    return NULL;
+}
+
+/* ---------- host ---------- */
+
+void *rv_ofx_host_new(void) {
+    RvHost *h;
+    if (rv_lock()) return NULL;
+    if (g_active) { rv_unlock(); return NULL; }
+    h = (RvHost *)calloc(1, sizeof(RvHost));
+    if (!h) { rv_unlock(); return NULL; }
+    h->api.fetchSuite = rv_fetch_suite;
+    h->props = rv_po_new(0);
+    if (!h->props) { free(h); rv_unlock(); return NULL; }
+    h->api.host = (OfxPropertySetHandle)(uintptr_t)h->props->tok;
+    h->alive = 1;
+    g_active = h;
+    rv_unlock();
+    return h;
+}
+
+static void effect_free(RvEffect *e) {
+    RvClip *c;
+    if (!e) return;
+    rv_tok_revoke(e->tok);
+    rv_tok_revoke(e->props_tok);
+    rv_params_free(e->params, e->nparams, g_active);
+    rv_po_free(e->props);
+    c = e->clips;
+    while (c) {
+        RvClip *n = c->next;
+        rv_tok_revoke(c->tok);
+        rv_tok_revoke(c->props_tok);
+        rv_po_free(c->props);
+        free(c);
+        c = n;
+    }
+    free(e);
+}
+
+void rv_ofx_host_free(void *vh) {
+    RvHost *h = (RvHost *)vh;
+    RvStrNode *s;
+    if (!h) return;
+    if (rv_lock()) return;
+    if (h != g_active || !h->alive) { rv_unlock(); return; }
+    g_active = NULL;
+    h->alive = 0;
+    while (h->catalogs) {
+        /* catalogs must be closed first; detach anyway and poison the
+         * back-pointer so a late close degrades to no-op */
+        RvCatalog *d = h->catalogs;
+        h->catalogs = d->next;
+        d->host = NULL;
+    }
+    s = h->strings;
+    while (s) { RvStrNode *n = s->next; free(s->s); free(s); s = n; }
+    /* rv_mem_free revokes the H_MEMORY token, unlinks, frees buffer+node */
+    while (h->mem) (void)rv_mem_free(h, h->mem->p);
+    if (h->props) { rv_tok_revoke(h->props->tok); rv_po_free(h->props); }
+    free(h);
+    rv_unlock();
+}
+
+/* ---------- admission ---------- */
+
+typedef int (*FnGetCount)(void);
+typedef OfxPlugin *(*FnGetPlugin)(int);
+typedef OfxStatus (*FnSetHost)(OfxHost *);
+
+static int adv_has_str(RvPropsObj *o, const char *name, const char *want) {
+    int dim = 0, i;
+    char *s = NULL;
+    if (rv_po_dim(o, name, &dim) != kOfxStatOK || dim <= 0) return 0;
+    for (i = 0; i < dim; i++) {
+        s = NULL;
+        if (rv_po_get(o, name, RV_PT_STRING, i, NULL, NULL, &s, NULL) == kOfxStatOK &&
+            s && !strcmp(s, want)) return 1;
+    }
+    return 0;
+}
+
+static RvEffect *effect_new(int is_inst, uintptr_t parent) {
+    RvEffect *e = (RvEffect *)calloc(1, sizeof(RvEffect));
+    if (!e) return NULL;
+    e->is_instance = is_inst;
+    e->props = rv_po_new(0);
+    if (!e->props) { free(e); return NULL; }
+    e->tok = rv_tok_new(H_EFFECT, e, parent);
+    e->props_tok = e->props->tok;
+    if (!e->tok) { rv_tok_revoke(e->props->tok); rv_po_free(e->props); free(e); return NULL; }
+    return e;
+}
+
+/* foreign call unlocked: prepare under lock, release, call, reacquire */
+static OfxStatus call_action(OfxPlugin *raw, const char *action,
+                             void *handle, void *inargs, void *outargs) {
+    return raw->mainEntry(action, handle, inargs, outargs);
+}
+
+static int entry_admit(RvHost *h, RvCatalog *c, RvEffect *e) {
+    OfxPlugin *raw = e->raw;
+    OfxPropertySetHandle in;
+    OfxStatus st;
+    char *ctx = NULL;
+    size_t i;
+    int has_src = 0, has_out = 0, has_string = 0;
+    RvClip *cl;
+    (void)c;
+
+    /* seed descriptor props the plugin will fill */
+    rv_seed_s(e->props, kOfxPropLabel, 1, e->identifier);
+    rv_seed_i(e->props, kOfxImageEffectPluginPropSingleInstance, 1, 0);
+    e->props_tok = e->props->tok;
+
+    /* unlock around foreign calls */
+    rv_unlock();
+    raw->setHost(&h->api);
+    st = call_action(raw, kOfxActionLoad, NULL, NULL, NULL);
+    rv_lock();
+    if (st != kOfxStatOK) return st;
+    e->loaded = 1;
+
+    rv_unlock();
+    st = call_action(raw, kOfxActionDescribe, e->tok ? (void *)(uintptr_t)e->tok : NULL, NULL, NULL);
+    rv_lock();
+    if (st != kOfxStatOK) return st;
+
+    /* Filter required across whole advertised context list */
+    if (!adv_has_str(e->props, kOfxImageEffectPropSupportedContexts,
+                     kOfxImageEffectContextFilter))
+        return kOfxStatErrUnsupported;
+
+    {
+        RvPropsObj *o = rv_po_new(e->tok);
+        if (!o) return kOfxStatErrMemory;
+        rv_po_set(o, kOfxImageEffectPropContext, RV_PT_STRING, 0, 0, 0,
+                  kOfxImageEffectContextFilter, NULL);
+        in = (OfxPropertySetHandle)(uintptr_t)o->tok;
+        rv_unlock();
+        st = call_action(raw, kOfxImageEffectActionDescribeInContext,
+                         (void *)(uintptr_t)e->tok, (void *)in, NULL);
+        rv_lock();
+        rv_tok_revoke(o->tok);
+        rv_po_free(o);
+    }
+    if (st != kOfxStatOK) return st;
+
+    /* validate clips: Source + Output present and RGBA */
+    for (cl = e->clips; cl; cl = cl->next) {
+        if (!cl->name || !cl->props) continue;
+        if (adv_has_str(cl->props, kOfxImageEffectPropSupportedComponents,
+                        kOfxImageComponentRGBA)) {
+            if (!strcmp(cl->name, "Source")) has_src = 1;
+            if (!strcmp(cl->name, "Output")) has_out = 1;
+        }
+    }
+    if (!has_src || !has_out) return kOfxStatErrUnsupported;
+
+    /* read back param metadata; unsupported kinds flag rejection */
+    for (i = 0; i < e->nparams; i++) {
+        RvParam *pr = e->params[i];
+        if (rv_params_read_meta(h, pr) != kOfxStatOK)
+            return kOfxStatFailed;
+        if (pr->kind == PK_STRING) has_string = 1;
+        else if (!rv_param_domain_ok(pr, pr->kind,
+                                     pr->kind == PK_DOUBLE ? pr->ddef : 0,
+                                     pr->kind == PK_DOUBLE ? 0 : pr->idef, 0))
+            return kOfxStatErrValue;
+    }
+    if (has_string) return kOfxStatErrUnsupported;
+
+    /* descriptor fields */
+    {
+        char *sv = NULL;
+        int si = 0;
+        char buf[32];
+        rv_po_get(e->props, kOfxPropLabel, RV_PT_STRING, 0, NULL, NULL, &sv, NULL);
+        e->label = rv_str_own(h, sv ? sv : e->identifier);
+        rv_po_get(e->props, kOfxImageEffectPluginPropSingleInstance, RV_PT_INT, 0,
+                  &si, NULL, NULL, NULL);
+        e->single_instance = si;
+        snprintf(buf, sizeof(buf), "%u.%u",
+                 raw->pluginVersionMajor, raw->pluginVersionMinor);
+        e->version = rv_str_own(h, buf);
+        e->vendor = rv_str_own(h, "");
+    }
+    (void)ctx;
+    return kOfxStatOK;
+}
+
+int rv_ofx_catalog_open(void *vh, const void *get_count,
+                        const void *get_plugin, const void *set_host,
+                        void **catalog) {
+    RvHost *h = (RvHost *)vh;
+    RvCatalog *c = NULL;
+    FnGetCount gc = (FnGetCount)get_count;
+    FnGetPlugin gp = (FnGetPlugin)get_plugin;
+    FnSetHost sh = (FnSetHost)set_host;
+    int n, i, rc = kOfxStatOK;
+
+    if (!vh || !gc || !gp || !catalog) return kOfxStatErrBadHandle;
+    *catalog = NULL;
+    if (rv_lock()) return kOfxStatFailed;
+    if (!h->alive) { rv_unlock(); return kOfxStatErrBadHandle; }
+
+    rv_unlock();
+    if (sh) {
+        OfxStatus s = sh(&h->api);
+        if (s != kOfxStatOK) return (int)s;
+    }
+    n = gc();
+    rv_lock();
+    if (n < 0) { rv_unlock(); return kOfxStatErrValue; }
+    /* the unlocked foreign window above may have raced host teardown */
+    if (!h->alive) { rv_unlock(); return kOfxStatErrBadHandle; }
+
+    c = (RvCatalog *)calloc(1, sizeof(RvCatalog));
+    if (!c) { rv_unlock(); return kOfxStatErrMemory; }
+    c->host = h;
+    c->next = h->catalogs;
+    h->catalogs = c;
+
+    for (i = 0; i < n; i++) {
+        RvEffect *e;
+        OfxPlugin *raw;
+        rv_unlock();
+        raw = gp(i);
+        rv_lock();
+        e = effect_new(0, 0);
+        if (!e) { rc = kOfxStatErrMemory; break; }
+        e->native_index = i;
+        e->raw = raw;
+        e->next_quar = NULL;
+        if (!raw) {
+            e->rejected = 1;
+            e->rejection_status = kOfxStatErrBadHandle;
+        } else {
+            e->identifier = rv_str_own(h, raw->pluginIdentifier ? raw->pluginIdentifier : "");
+            if (!raw->pluginApi || strcmp(raw->pluginApi, kOfxImageEffectPluginApi) ||
+                raw->apiVersion != kOfxImageEffectPluginApiVersion)
+                e->rejection_status = kOfxStatErrUnsupported;
+            else if (!e->identifier || !e->identifier[0])
+                e->rejection_status = kOfxStatErrValue;
+            else if (!raw->setHost || !raw->mainEntry)
+                e->rejection_status = kOfxStatErrBadHandle;
+            else e->rejection_status = entry_admit(h, c, e);
+            if (e->rejection_status != kOfxStatOK) {
+                e->rejected = 1;
+                /* a rejected entry that reached Load unloads now;
+                   admission keeps no claim on its code */
+                if (e->loaded && e->raw->mainEntry) {
+                    rv_unlock();
+                    (void)call_action(e->raw, kOfxActionUnload, NULL, NULL, NULL);
+                    rv_lock();
+                    e->loaded = 0;
+                }
+            }
+        }
+        e->cat = c;
+        /* append at tail to preserve scan order */
+        {
+            RvEffect **p = &c->entries;
+            while (*p) p = &(*p)->next;
+            *p = e;
+        }
+    }
+    *catalog = c;
+    rv_unlock();
+    return rc;
+}
+
+void rv_ofx_catalog_close(void *vc) {
+    RvCatalog *c = (RvCatalog *)vc;
+    RvEffect *e;
+    if (!c) return;
+    if (rv_lock()) return;
+    /* detach from host   NULL when host already tore down */
+    if (c->host) {
+        RvCatalog **p = &c->host->catalogs;
+        while (*p && *p != c) p = &(*p)->next;
+        if (*p) *p = c->next;
+        c->host = NULL;
+    }
+    /* Unload each entry that had a successful Load   once */
+    for (e = c->entries; e; e = e->next) {
+        if (e->loaded && e->raw && e->raw->mainEntry) {
+            rv_unlock();
+            call_action(e->raw, kOfxActionUnload, NULL, NULL, NULL);
+            rv_lock();
+            e->loaded = 0;
+        }
+    }
+    while (c->entries) {
+        e = c->entries;
+        c->entries = e->next;
+        effect_free(e);
+    }
+    while (c->quar) {
+        e = c->quar;
+        c->quar = e->next_quar;
+        effect_free(e);
+    }
+    free(c);
+    rv_unlock();
+}
+
+size_t rv_ofx_catalog_count(void *vc) {
+    RvCatalog *c = (RvCatalog *)vc;
+    size_t n = 0;
+    RvEffect *e;
+    if (rv_lock()) return 0;
+    if (c) for (e = c->entries; e; e = e->next) n++;
+    rv_unlock();
+    return n;
+}
+
+static RvEffect *entry_at(RvCatalog *c, size_t idx) {
+    RvEffect *e;
+    if (!c) return NULL;
+    for (e = c->entries; e; e = e->next)
+        if ((size_t)e->native_index == idx) return e;
+    return NULL;
+}
+
+void *rv_ofx_catalog_descriptor(void *vc, size_t idx) {
+    RvEffect *e;
+    if (rv_lock()) return NULL;
+    e = entry_at((RvCatalog *)vc, idx);
+    {
+        uintptr_t tok = (e && !e->rejected) ? e->tok : 0;
+        rv_unlock();
+        return (void *)tok;
+    }
+}
+const char *rv_ofx_catalog_identifier(void *vc, size_t idx) {
+    RvEffect *e;
+    const char *r = NULL;
+    if (rv_lock()) return NULL;
+    e = entry_at((RvCatalog *)vc, idx);
+    if (e) r = e->identifier;
+    rv_unlock();
+    return r;
+}
+int rv_ofx_catalog_rejection(void *vc, size_t idx) {
+    RvEffect *e;
+    int r;
+    if (rv_lock()) return kOfxStatFailed;
+    e = entry_at((RvCatalog *)vc, idx);
+    r = e ? e->rejection_status : kOfxStatErrBadHandle;
+    rv_unlock();
+    return r;
+}
+
+const char *rv_ofx_descriptor_string(void *vd, int field) {
+    RvEffect *e;
+    const char *r = NULL;
+    if (rv_lock()) return NULL;
+    e = (RvEffect *)rv_tok_get((uintptr_t)vd, H_EFFECT);
+    if (e) switch (field) {
+        case 0: r = e->identifier; break;
+        case 1: r = e->label; break;
+        case 2: r = e->vendor; break;
+        case 3: r = e->version; break;
+        default: break;
+    }
+    rv_unlock();
+    return r;
+}
+
+/* ---------- params (descriptor OR attempt) ---------- */
+
+static RvEffect *eff_of(void *v) {
+    return (RvEffect *)rv_tok_get((uintptr_t)v, H_EFFECT);
+}
+
+size_t rv_ofx_param_count(void *eff) {
+    RvEffect *e;
+    size_t n = 0;
+    if (rv_lock()) return 0;
+    e = eff_of(eff);
+    if (e) n = e->nparams;
+    rv_unlock();
+    return n;
+}
+
+int rv_ofx_param_info(void *eff, size_t idx, int *kind,
+                      const char **name, const char **unit,
+                      double *mn, double *mx, double *dm, double *dx,
+                      double *dd, int *di, unsigned int *flags, size_t *cc) {
+    RvEffect *e;
+    RvParam *pr;
+    int rc = kOfxStatOK;
+    if (rv_lock()) return kOfxStatFailed;
+    e = eff_of(eff);
+    if (!e || idx >= e->nparams) { rv_unlock(); return kOfxStatErrBadHandle; }
+    pr = e->params[idx];
+    if (kind) *kind = pr->kind;
+    if (name) *name = pr->name;
+    if (unit) *unit = "";
+    if (mn) *mn = pr->mn;
+    if (mx) *mx = pr->mx;
+    if (dm) *dm = pr->dmn;
+    if (dx) *dx = pr->dmx;
+    if (dd) *dd = pr->ddef;
+    if (di) *di = pr->idef;
+    if (flags) *flags = (pr->enabled ? 0u : (1u << 4)) |
+                        (pr->kind == PK_CHOICE ? (1u << 2) : 0u) |
+                        pr->flags;
+    if (cc) *cc = (size_t)pr->nchoices;
+    rv_unlock();
+    return rc;
+}
+
+const char *rv_ofx_param_choice(void *eff, size_t idx, size_t c) {
+    RvEffect *e;
+    const char *r = NULL;
+    if (rv_lock()) return NULL;
+    e = eff_of(eff);
+    if (e && idx < e->nparams && c < (size_t)e->params[idx]->nchoices)
+        r = e->params[idx]->choices[c];
+    rv_unlock();
+    return r;
+}
+
+int rv_ofx_param_get(void *eff, size_t idx, double *vd, int *vi) {
+    RvEffect *e;
+    int rc;
+    if (rv_lock()) return kOfxStatFailed;
+    e = eff_of(eff);
+    if (!e || !e->is_instance || idx >= e->nparams) { rv_unlock(); return kOfxStatErrBadHandle; }
+    {
+        RvParam *pr = e->params[idx];
+        if (pr->kind == PK_DOUBLE) { if (!vd) rc = kOfxStatErrBadHandle; else { *vd = pr->cur_d; rc = kOfxStatOK; } }
+        else { if (!vi) rc = kOfxStatErrBadHandle; else { *vi = pr->cur_i; rc = kOfxStatOK; } }
+    }
+    rv_unlock();
+    return rc;
+}
+
+int rv_ofx_param_validate(void *eff, size_t idx, int kind,
+                          double vd, int vi, int hw) {
+    RvEffect *e;
+    int rc;
+    if (rv_lock()) return kOfxStatFailed;
+    e = eff_of(eff);
+    if (!e || !e->is_instance || idx >= e->nparams) { rv_unlock(); return kOfxStatErrBadHandle; }
+    rc = rv_param_domain_ok(e->params[idx], kind, vd, vi, hw)
+         ? kOfxStatOK : kOfxStatErrValue;
+    rv_unlock();
+    return rc;
+}
+
+int rv_ofx_param_set(void *eff, size_t idx, int kind,
+                     double vd, int vi, int hw) {
+    RvEffect *e;
+    int rc;
+    if (rv_lock()) return kOfxStatFailed;
+    e = eff_of(eff);
+    if (!e || !e->is_instance || idx >= e->nparams) { rv_unlock(); return kOfxStatErrBadHandle; }
+    if (!rv_param_domain_ok(e->params[idx], kind, vd, vi, hw))
+        rc = kOfxStatErrValue;
+    else {
+        if (kind == PK_DOUBLE) e->params[idx]->cur_d = vd;
+        else e->params[idx]->cur_i = vi;
+        rc = kOfxStatOK;
+    }
+    rv_unlock();
+    return rc;
+}
+
+/* ---------- instance ---------- */
+
+int rv_ofx_instance_new(void *vd, void **out) {
+    RvEffect *d, *i;
+    if (!out) return kOfxStatErrBadHandle;
+    *out = NULL;
+    if (rv_lock()) return kOfxStatFailed;
+    d = (RvEffect *)rv_tok_get((uintptr_t)vd, H_EFFECT);
+    if (!d || d->is_instance) { rv_unlock(); return kOfxStatErrBadHandle; }
+    i = effect_new(1, d->tok);
+    if (!i) { rv_unlock(); return kOfxStatErrMemory; }
+    i->desc = d;
+    i->params = rv_params_clone(d->params, d->nparams, g_active, i->tok);
+    if (d->nparams && !i->params) { effect_free(i); rv_unlock(); return kOfxStatErrMemory; }
+    i->nparams = d->nparams;
+    /* clone clips */
+    {
+        RvClip *c;
+        for (c = d->clips; c; c = c->next) {
+            RvClip *q = (RvClip *)calloc(1, sizeof(RvClip));
+            if (!q) { effect_free(i); rv_unlock(); return kOfxStatErrMemory; }
+            q->name = rv_str_own(g_active, c->name ? c->name : "");
+            q->props = rv_po_new(i->tok);
+            q->tok = rv_tok_new(H_CLIP, q, i->tok);
+            if (q->props) q->props_tok = q->props->tok;
+            q->next = i->clips;
+            i->clips = q;
+        }
+    }
+    /* staged values ride on cloned params */
+    i->pset_tok = rv_tok_new(H_PSET, i, i->tok);
+    *out = (void *)(uintptr_t)i->tok;
+    rv_unlock();
+    return kOfxStatOK;
+}
+
+int rv_ofx_instance_configure(void *eff, uint32_t w, uint32_t h, double fps) {
+    RvEffect *i;
+    if (rv_lock()) return kOfxStatFailed;
+    i = eff_of(eff);
+    if (!i || !i->is_instance) { rv_unlock(); return kOfxStatErrBadHandle; }
+    if (!w || !h || !isfinite(fps) || fps <= 0.0 ||
+        (uint64_t)w * 4u > INT32_MAX ||
+        (uint64_t)w * 4u * (uint64_t)h > (uint64_t)PTRDIFF_MAX) {
+        rv_unlock(); return kOfxStatErrValue; }
+    i->w = w; i->h = h; i->fps = fps;
+    {
+        double sz[2] = {(double)w, (double)h};
+        double off[2] = {0.0, 0.0};
+        rv_po_setn(i->props, "OfxImageEffectPropProjectSize", RV_PT_DOUBLE, 2, NULL, sz, NULL, NULL);
+        rv_po_setn(i->props, "OfxImageEffectPropProjectOffset", RV_PT_DOUBLE, 2, NULL, off, NULL, NULL);
+        rv_po_setn(i->props, "OfxImageEffectPropProjectExtent", RV_PT_DOUBLE, 2, NULL, sz, NULL, NULL);
+        rv_po_set(i->props, kOfxImageEffectPropFrameRate, RV_PT_DOUBLE, 0, 0, fps, NULL, NULL);
+        rv_po_set(i->props, kOfxImagePropPixelAspectRatio, RV_PT_DOUBLE, 0, 0, 1.0, NULL, NULL);
+        rv_po_set(i->props, kOfxImageEffectPropFieldToRender, RV_PT_STRING, 0, 0, 0,
+                  kOfxImageFieldNone, NULL);
+        rv_po_set(i->props, kOfxImageEffectPropPreMultiplication, RV_PT_STRING, 0, 0, 0,
+                  kOfxImageUnPreMultiplied, NULL);
+    }
+    i->configured = 1;
+    rv_unlock();
+    return kOfxStatOK;
+}
+
+int rv_ofx_instance_create(void *eff) {
+    RvEffect *i;
+    OfxPlugin *raw;
+    uintptr_t itok;
+    OfxStatus st;
+    if (rv_lock()) return kOfxStatFailed;
+    i = eff_of(eff);
+    if (!i || !i->is_instance || !i->desc || !i->desc->raw) { rv_unlock(); return kOfxStatErrBadHandle; }
+    if (i->created || i->destroyed) { rv_unlock(); return kOfxStatFailed; }
+    if (i->desc->single_instance && i->desc->live > 0) {
+        rv_unlock();
+        return kOfxStatErrExists;
+    }
+    i->create_attempted++;
+    raw = i->desc->raw;
+    itok = i->tok;
+    rv_unlock();
+    st = call_action(raw, kOfxActionCreateInstance,
+                     (void *)itok, NULL, NULL);
+    rv_lock();
+    /* the attempt may have been released during the foreign window */
+    i = eff_of(eff);
+    if (!i) { rv_unlock(); return kOfxStatErrBadHandle; }
+    if (st != kOfxStatOK) { rv_unlock(); return (int)st; }
+    i->created = 1;
+    i->desc->live++;
+    rv_unlock();
+    return kOfxStatOK;
+}
+
+int rv_ofx_instance_changed(void *eff, size_t idx) {
+    RvEffect *i;
+    OfxPlugin *raw;
+    uintptr_t itok;
+    OfxStatus st = kOfxStatOK;
+    OfxStatus st2;
+    RvPropsObj *o;
+    uintptr_t in;
+    if (rv_lock()) return kOfxStatFailed;
+    i = eff_of(eff);
+    if (!i || !i->is_instance || !i->created) { rv_unlock(); return kOfxStatErrBadHandle; }
+    if (idx >= i->nparams) { rv_unlock(); return kOfxStatErrBadIndex; }
+    o = rv_po_new(i->tok);
+    if (!o) { rv_unlock(); return kOfxStatErrMemory; }
+    rv_po_set(o, kOfxPropName, RV_PT_STRING, 0, 0, 0, i->params[idx]->name, NULL);
+    rv_po_set(o, kOfxPropType, RV_PT_STRING, 0, 0, 0, kOfxTypeParameter, NULL);
+    rv_po_set(o, kOfxPropChangeReason, RV_PT_STRING, 0, 0, 0, kOfxChangeUserEdited, NULL);
+    rv_po_set(o, kOfxPropTime, RV_PT_DOUBLE, 0, 0, 0.0, NULL, NULL);
+    {
+        double rs[2] = {1.0, 1.0};
+        rv_po_setn(o, kOfxImageEffectPropRenderScale, RV_PT_DOUBLE, 2, NULL, rs, NULL, NULL);
+    }
+    in = o->tok;
+    raw = i->desc->raw;
+    itok = i->tok;
+    rv_unlock();
+    st = call_action(raw, kOfxActionBeginInstanceChanged,
+                     (void *)itok, (void *)in, NULL);
+    if (st == kOfxStatOK || st == kOfxStatReplyDefault) {
+        st = call_action(raw, kOfxActionInstanceChanged,
+                         (void *)itok, (void *)in, NULL);
+    }
+    st2 = call_action(raw, kOfxActionEndInstanceChanged,
+                      (void *)itok, (void *)in, NULL);
+    if (st == kOfxStatOK) st = st2;
+    /* ReplyDefault means the action was ignored   not a failure */
+    if (st == kOfxStatReplyDefault) st = kOfxStatOK;
+    rv_lock();
+    rv_tok_revoke(in);
+    rv_po_free(o);
+    rv_unlock();
+    return (int)st;
+}
+
+int rv_ofx_instance_preferences(void *eff) {
+    RvEffect *i;
+    OfxPlugin *raw;
+    uintptr_t itok;
+    OfxStatus st;
+    RvPropsObj *o;
+    uintptr_t out;
+    if (rv_lock()) return kOfxStatFailed;
+    i = eff_of(eff);
+    if (!i || !i->is_instance || !i->created) { rv_unlock(); return kOfxStatErrBadHandle; }
+    o = rv_po_new(i->tok);
+    if (!o) { rv_unlock(); return kOfxStatErrMemory; }
+    rv_seed_s(o, "OfxImageClipPropComponents_Source", 1, kOfxImageComponentRGBA);
+    rv_seed_s(o, "OfxImageClipPropComponents_Output", 1, kOfxImageComponentRGBA);
+    rv_seed_s(o, "OfxImageClipPropDepth_Source", 1, kOfxBitDepthByte);
+    rv_seed_s(o, "OfxImageClipPropDepth_Output", 1, kOfxBitDepthByte);
+    rv_seed_d(o, "OfxImageClipPropPAR_Source", 1, 1.0);
+    rv_seed_d(o, "OfxImageClipPropPAR_Output", 1, 1.0);
+    rv_seed_s(o, kOfxImageClipPropFieldOrder, 1, kOfxImageFieldNone);
+    rv_seed_d(o, kOfxImageEffectPropFrameRate, 1, i->fps);
+    rv_seed_s(o, kOfxImageEffectPropPreMultiplication, 1, kOfxImageUnPreMultiplied);
+    rv_seed_i(o, "OfxImageClipPropContinuousSamples", 1, 0);
+    rv_seed_i(o, "OfxImageClipPropFrameVarying", 1, 0);
+    out = o->tok;
+    raw = i->desc->raw;
+    itok = i->tok;
+    rv_unlock();
+    st = call_action(raw, kOfxImageEffectActionGetClipPreferences,
+                     (void *)itok, NULL, (void *)out);
+    rv_lock();
+    /* validate unchanged supported values   the fixed RGBA8/byte contract
+     * the adapter can actually consume */
+    if (st == kOfxStatOK || st == kOfxStatReplyDefault) {
+        static const char *const want_s[][2] = {
+            {"OfxImageClipPropComponents_Source", kOfxImageComponentRGBA},
+            {"OfxImageClipPropComponents_Output", kOfxImageComponentRGBA},
+            {"OfxImageClipPropDepth_Source", kOfxBitDepthByte},
+            {"OfxImageClipPropDepth_Output", kOfxBitDepthByte},
+            {kOfxImageClipPropFieldOrder, kOfxImageFieldNone},
+            {kOfxImageEffectPropPreMultiplication, kOfxImageUnPreMultiplied},
+        };
+        static const char *const want_d[] = {
+            "OfxImageClipPropPAR_Source", "OfxImageClipPropPAR_Output",
+        };
+        size_t k;
+        for (k = 0; k < sizeof(want_s) / sizeof(want_s[0]); k++) {
+            char *s = NULL;
+            if (rv_po_get(o, want_s[k][0], RV_PT_STRING, 0,
+                          NULL, NULL, &s, NULL) == kOfxStatOK &&
+                s && strcmp(s, want_s[k][1]))
+                { st = kOfxStatErrUnsupported; break; }
+        }
+        for (k = 0; st != kOfxStatErrUnsupported &&
+                    k < sizeof(want_d) / sizeof(want_d[0]); k++) {
+            double v = 0.0;
+            if (rv_po_get(o, want_d[k], RV_PT_DOUBLE, 0,
+                          NULL, &v, NULL, NULL) == kOfxStatOK &&
+                v != 1.0)
+                st = kOfxStatErrUnsupported;
+        }
+    }
+    rv_tok_revoke(out);
+    rv_po_free(o);
+    rv_unlock();
+    return (int)((st == kOfxStatOK || st == kOfxStatReplyDefault) ? kOfxStatOK : st);
+}
+
+int rv_ofx_instance_destroy(void *eff) {
+    RvEffect *i;
+    OfxPlugin *raw;
+    uintptr_t itok;
+    OfxStatus st;
+    if (rv_lock()) return kOfxStatFailed;
+    i = eff_of(eff);
+    if (!i || !i->is_instance) { rv_unlock(); return kOfxStatErrBadHandle; }
+    if (i->destroyed) { rv_unlock(); return kOfxStatFailed; }
+    i->destroyed = 1;
+    if (!i->created) { rv_unlock(); return kOfxStatOK; }
+    raw = i->desc->raw;
+    itok = i->tok;
+    rv_unlock();
+    st = call_action(raw, kOfxActionDestroyInstance,
+                     (void *)itok, NULL, NULL);
+    rv_lock();
+    i = eff_of(eff);
+    if (!i) { rv_unlock(); return (int)(st == kOfxStatOK ? kOfxStatErrBadHandle : st); }
+    if (st != kOfxStatOK) {
+        i->quarantined = 1;
+        /* uncertain instance keeps the SingleInstance reservation and is
+         * reclaimed only when its catalog runs the Unload teardown */
+        if (i->desc->cat) {
+            i->next_quar = i->desc->cat->quar;
+            i->desc->cat->quar = i;
+        }
+        rv_unlock();
+        return (int)st;
+    }
+    i->desc->live--;
+    rv_unlock();
+    return kOfxStatOK;
+}
+
+void rv_ofx_instance_release(void *eff) {
+    RvEffect *i;
+    if (rv_lock()) return;
+    i = eff_of(eff);
+    if (!i || !i->is_instance) { rv_unlock(); return; }
+    if (i->created && !i->destroyed) {
+        OfxStatus st;
+        OfxPlugin *raw = i->desc->raw;
+        uintptr_t itok = i->tok;
+        i->destroyed = 1;
+        rv_unlock();
+        st = call_action(raw, kOfxActionDestroyInstance,
+                         (void *)itok, NULL, NULL);
+        rv_lock();
+        i = eff_of(eff);
+        if (!i) { rv_unlock(); return; }
+        if (st == kOfxStatOK) {
+            i->desc->live--;
+        } else {
+            i->quarantined = 1;
+            if (i->desc->cat) {
+                i->next_quar = i->desc->cat->quar;
+                i->desc->cat->quar = i;
+            }
+        }
+    }
+    if (!i->quarantined) {
+        effect_free(i);
+    }
+    /* quarantined instances are freed at catalog close */
+    rv_unlock();
+}
+
+/* ---------- ImageEffectV1 ---------- */
+
+static RvEffect *eff_of_handle(OfxImageEffectHandle h) {
+    return (RvEffect *)rv_tok_get((uintptr_t)h, H_EFFECT);
+}
+
+static OfxStatus fx_props(OfxImageEffectHandle h, OfxPropertySetHandle *props) {
+    RvEffect *i;
+    if (rv_lock()) return kOfxStatFailed;
+    i = eff_of_handle(h);
+    if (!i || !props) { rv_unlock(); return kOfxStatErrBadHandle; }
+    *props = (OfxPropertySetHandle)(uintptr_t)i->props_tok;
+    rv_unlock();
+    return kOfxStatOK;
+}
+
+static OfxStatus fx_paramset(OfxImageEffectHandle h, OfxParamSetHandle *pset) {
+    RvEffect *i;
+    if (rv_lock()) return kOfxStatFailed;
+    i = eff_of_handle(h);
+    if (!i || !pset) { rv_unlock(); return kOfxStatErrBadHandle; }
+    if (!i->pset_tok)
+        i->pset_tok = rv_tok_new(H_PSET, i, i->tok);
+    *pset = (OfxParamSetHandle)(uintptr_t)i->pset_tok;
+    rv_unlock();
+    return *pset ? kOfxStatOK : kOfxStatErrMemory;
+}
+
+static OfxStatus fx_clipDefine(OfxImageEffectHandle h, const char *name,
+                               OfxPropertySetHandle *props) {
+    RvEffect *i;
+    RvClip *cl;
+    if (rv_lock()) return kOfxStatFailed;
+    i = eff_of_handle(h);
+    if (!i || !name || !props) { rv_unlock(); return kOfxStatErrBadHandle; }
+    /* duplicate clip name -> exists */
+    for (cl = i->clips; cl; cl = cl->next)
+        if (cl->name && !strcmp(cl->name, name)) {
+            *props = (OfxPropertySetHandle)(uintptr_t)cl->props_tok;
+            rv_unlock(); return kOfxStatOK;
+        }
+    cl = (RvClip *)calloc(1, sizeof(RvClip));
+    if (!cl) { rv_unlock(); return kOfxStatErrMemory; }
+    cl->name = rv_str_own(g_active, name);
+    cl->props = rv_po_new(i->tok);
+    cl->tok = rv_tok_new(H_CLIP, cl, i->tok);
+    if (cl->props) cl->props_tok = cl->props->tok;
+    if (!cl->name || !cl->props || !cl->tok) {
+        rv_tok_revoke(cl->tok);
+        if (cl->props) rv_tok_revoke(cl->props->tok);
+        rv_po_free(cl->props); free(cl); rv_unlock(); return kOfxStatErrMemory; }
+    cl->next = i->clips;
+    i->clips = cl;
+    *props = (OfxPropertySetHandle)(uintptr_t)cl->props_tok;
+    rv_unlock();
+    return kOfxStatOK;
+}
+
+static OfxStatus fx_clipGetHandle(OfxImageEffectHandle h, const char *name,
+                                  OfxImageClipHandle *clip,
+                                  OfxPropertySetHandle *props) {
+    RvEffect *i;
+    RvClip *cl;
+    if (rv_lock()) return kOfxStatFailed;
+    i = eff_of_handle(h);
+    if (!i || !name || !clip) { rv_unlock(); return kOfxStatErrBadHandle; }
+    for (cl = i->clips; cl; cl = cl->next)
+        if (cl->name && !strcmp(cl->name, name)) {
+            *clip = (OfxImageClipHandle)(uintptr_t)cl->tok;
+            if (props) *props = (OfxPropertySetHandle)(uintptr_t)cl->props_tok;
+            rv_unlock(); return kOfxStatOK;
+        }
+    *clip = NULL;
+    rv_unlock();
+    return kOfxStatErrUnknown;
+}
+
+static OfxStatus fx_clipProps(OfxImageClipHandle c, OfxPropertySetHandle *props) {
+    RvClip *cl;
+    if (rv_lock()) return kOfxStatFailed;
+    cl = (RvClip *)rv_tok_get((uintptr_t)c, H_CLIP);
+    if (!cl || !props) { rv_unlock(); return kOfxStatErrBadHandle; }
+    *props = (OfxPropertySetHandle)(uintptr_t)cl->props_tok;
+    rv_unlock();
+    return kOfxStatOK;
+}
+
+static OfxStatus fx_clipGetImage(OfxImageClipHandle c, OfxTime t,
+                                 const OfxRectD *r, OfxPropertySetHandle *img) {
+    (void)t; (void)r;
+    if (rv_lock()) return kOfxStatFailed;
+    if (!rv_tok_get((uintptr_t)c, H_CLIP) || !img) { rv_unlock(); return kOfxStatErrBadHandle; }
+    *img = NULL;
+    rv_unlock();
+    return kOfxStatFailed; /* no active frame   Task 3 */
+}
+static OfxStatus fx_clipRelease(OfxPropertySetHandle img) {
+    if (rv_lock()) return kOfxStatFailed;
+    if (!rv_tok_get((uintptr_t)img, -1)) { rv_unlock(); return kOfxStatErrBadHandle; }
+    rv_unlock();
+    return kOfxStatOK;
+}
+static OfxStatus fx_clipRoD(OfxImageClipHandle c, OfxTime t, OfxRectD *r) {
+    (void)t;
+    if (rv_lock()) return kOfxStatFailed;
+    if (!rv_tok_get((uintptr_t)c, H_CLIP) || !r) { rv_unlock(); return kOfxStatErrBadHandle; }
+    rv_unlock();
+    return kOfxStatFailed;
+}
+static int fx_abort(OfxImageEffectHandle h) { (void)h; return 0; }
+
+static OfxStatus fx_imgAlloc(OfxImageEffectHandle h, size_t n, OfxImageMemoryHandle *mem) {
+    void *p = NULL;
+    uintptr_t t;
+    if (!mem) return kOfxStatErrBadHandle;
+    *mem = NULL;
+    if (rv_lock()) return kOfxStatFailed;
+    if (h && !eff_of_handle(h)) { rv_unlock(); return kOfxStatErrBadHandle; }
+    if (rv_mem_alloc(g_active, n, &p) != kOfxStatOK) { rv_unlock(); return kOfxStatErrMemory; }
+    t = rv_tok_new(H_MEMORY, p, 0);
+    if (!t) { rv_mem_free(g_active, p); rv_unlock(); return kOfxStatErrMemory; }
+    *mem = (OfxImageMemoryHandle)(uintptr_t)t;
+    rv_unlock();
+    return kOfxStatOK;
+}
+static OfxStatus fx_imgLock(OfxImageMemoryHandle m, void **ptr) {
+    void *p;
+    if (!ptr) return kOfxStatErrBadHandle;
+    *ptr = NULL;
+    if (rv_lock()) return kOfxStatFailed;
+    p = rv_tok_get((uintptr_t)m, H_MEMORY);
+    if (!p) { rv_unlock(); return kOfxStatErrBadHandle; }
+    *ptr = p;
+    rv_unlock();
+    return kOfxStatOK;
+}
+static OfxStatus fx_imgUnlock(OfxImageMemoryHandle m) {
+    if (rv_lock()) return kOfxStatFailed;
+    if (!rv_tok_get((uintptr_t)m, H_MEMORY)) { rv_unlock(); return kOfxStatErrBadHandle; }
+    rv_unlock();
+    return kOfxStatOK;
+}
+static OfxStatus fx_imgFree(OfxImageMemoryHandle m) {
+    void *p;
+    if (rv_lock()) return kOfxStatFailed;
+    p = rv_tok_get((uintptr_t)m, H_MEMORY);
+    if (!p) { rv_unlock(); return kOfxStatErrBadHandle; }
+    rv_tok_revoke((uintptr_t)m);
+    rv_mem_free(g_active, p);
+    rv_unlock();
+    return kOfxStatOK;
+}
+
+static OfxImageEffectSuiteV1 g_fx_suite = {
+    .getPropertySet = fx_props,
+    .getParamSet = fx_paramset,
+    .clipDefine = fx_clipDefine,
+    .clipGetHandle = fx_clipGetHandle,
+    .clipGetPropertySet = fx_clipProps,
+    .clipGetImage = fx_clipGetImage,
+    .clipReleaseImage = fx_clipRelease,
+    .clipGetRegionOfDefinition = fx_clipRoD,
+    .abort = fx_abort,
+    .imageMemoryAlloc = fx_imgAlloc,
+    .imageMemoryLock = fx_imgLock,
+    .imageMemoryUnlock = fx_imgUnlock,
+    .imageMemoryFree = fx_imgFree,
+};
+const void *rv_fx_suite_ptr(void) { return &g_fx_suite; }

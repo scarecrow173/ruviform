@@ -1,7 +1,7 @@
 ---
 id: "TASK-034L6yeVFSaiVUoV4RiRtm"
 type: "task"
-status: "todo"
+status: "done"
 title: "Implement native OFX runtime"
 created: "2026-10-24"
 updated: "2026-10-24"
@@ -73,6 +73,6 @@ green 実 log + lead review の後にのみ **buildable な native scope 全体�
 
 ## Verification
 
-- [ ] `mise run test-ofx` — exit 0
-- [ ] `mise run lint-ofx` — exit 0
-- [ ] `mise run test-ofx-msrv` — exit 0（MSRV 1.89 で lib+tests+C bridge コンパイル・実 log）
+- [x] `mise run test-ofx` — exit 0（27 native_host + bridge_min + bridge_native 全 pass・実 log）
+- [x] `mise run lint-ofx` — exit 0（clippy `-D warnings` clean）
+- [x] `mise run test-ofx-msrv` — exit 0（MSRV 1.89 で lib+tests+C bridge コンパイル・native 27/27 pass・実 log）

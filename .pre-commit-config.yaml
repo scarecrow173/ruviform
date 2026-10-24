@@ -4,12 +4,15 @@ repos:
     hooks:
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
+        # vendored upstream files must stay byte-identical to manifest.json
+        exclude: '^crates/ruviform-plugin-ofx/vendor/'
       - id: end-of-file-fixer
+        exclude: '^crates/ruviform-plugin-ofx/vendor/'
       - id: check-yaml
       - id: check-toml
       - id: mixed-line-ending
-        exclude: '\.(ps1|bat|cmd)$'
+        exclude: '(\.(ps1|bat|cmd)$|^crates/ruviform-plugin-ofx/vendor/)'
       - id: fix-byte-order-marker
-        exclude: '\.ps1$'
+        exclude: '(\.ps1$|^crates/ruviform-plugin-ofx/vendor/)'
       - id: detect-private-key
       - id: check-illegal-windows-names
