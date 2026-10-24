@@ -52,6 +52,14 @@
 //!   channel normalization (`v/255` ↔ `round(clamp(v)·255)`, `ColorInfo`
 //!   carried unchanged; ulp-bounded forward, bit-exact inverse
 //!   equivalence contract).
+//! - [`ToWorking`] — `Rgba8`/`RgbaF16`/`RgbaF32` → `RgbaF32` entry
+//!   into the f32 linear working space (fused transfer decode +
+//!   `src primaries → BT.2020` gamut transform driven by the frame's
+//!   `ColorInfo`; ≤ 4 ulp `binary32` equivalence contract).
+//! - [`FromWorking`] — `RgbaF32` → `Rgba8`/`RgbaF32` working-space
+//!   exit (`BT.2020 → dst primaries` matrix + transfer encode baked
+//!   by the constructor; ≤ 4 ulp contract, `Rgba8` ±1 code
+//!   quantization bound).
 //! - [`CompositeOver`] — `src over dst` source-over alpha compositing
 //!   on straight alpha, in place on `dst`, with a per-call `opacity`
 //!   (self-consistent Q8 integer expansion on `Rgba8`, `f32` pipeline +
@@ -108,12 +116,14 @@ mod composite;
 mod rgb_to_yuv;
 mod rgba_f16;
 mod transfer;
+mod working_space;
 mod yuv_to_rgb;
 
 pub use affine::{AffineTransform, Rect, RectMap};
 pub use composite::{CompositeOver, Crossfade};
 pub use rgb_to_yuv::RgbToYuv;
 pub use rgba_f16::{Rgba8ToRgbaF16, RgbaF16ToRgba8};
+pub use working_space::{FromWorking, ToWorking};
 pub use yuv_to_rgb::YuvToRgb;
 
 /// Returns the crate version string.

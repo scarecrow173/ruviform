@@ -60,11 +60,6 @@
 //! (「決定サマリ」・「`RgbaF32` と working-space 定義」) and
 //! `docs/test-specs/color-working-space-kernel-tests.md`.
 
-// The consuming kernels (`ToWorking`/`FromWorking`/`ToneMapSdr`) land
-// in later Issue #99 tasks — until then the unit tests are the only
-// users of these items. Remove this attribute when they land.
-#![allow(dead_code)]
-
 use ruviform_media_core::{Error, Result};
 use ruviform_video_core::{ColorPrimaries, TransferCharacteristics};
 
@@ -79,6 +74,10 @@ pub(crate) const HLG_NOMINAL_PEAK: f64 = 1000.0;
 
 /// BT.2390 target display luminance (cd/m²) — the fixed SDR endpoint
 /// the `ToneMapSdr` EETF maps onto.
+// Sole consumer is `ToneMapSdr`, which lands in a later Issue #99
+// task — `expect` (not `allow`) so the attribute is flagged for
+// removal the moment the constant gains a real user.
+#[expect(dead_code)]
 pub(crate) const L_DS: f64 = 100.0;
 
 /// Distinct transfer slots — must match [`transfer_slot`] and the

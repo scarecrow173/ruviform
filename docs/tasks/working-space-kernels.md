@@ -1,23 +1,30 @@
 ---
 id: "TASK-034LFHddlrfvXu5Jlmwdr0"
 type: "task"
-status: "todo"
+status: "done"
 title: "working space カーネル実装（ToWorking + FromWorking）"
 created: "2026-10-25"
 updated: "2026-10-25"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/working_space.rs"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/transfer.rs"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-99-working-space-kernels-task-2-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
     - "docs/tasks/rgba-f32-format-and-transfer-internals.md"
@@ -71,8 +78,8 @@ approved plan `implement-issue-99-color-conversion-kernels.md` の **actions 4�
 
 ## Verification
 
-- [ ] `mise run test` — exit 0（working_space.rs の unit tests 全 pass）
-- [ ] `mise run lint` — exit 0
-- [ ] `mise run test-rt` — exit 0 かつ本 task の `rt_process_*` が一致・pass
-- [ ] `rg -n "pub use working_space" crates/ruviform-video-proc/src/lib.rs` — re-export 存在
-- [ ] `rg -n "RT contract" crates/ruviform-video-proc/src/working_space.rs` — API 単位の RT ラベル存在
+- [x] `mise run test` — exit 0（working_space.rs の unit tests 全 pass — video-proc lib 130/130・doctests 19/19・実 log）
+- [x] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
+- [x] `mise run test-rt` — exit 0 かつ本 task の `rt_process_*` が一致・pass（`working_space::tests::rt_process_*` 4 件を実選択 — video-proc `rt_` 一致計 19 件・実 log）
+- [x] `rg -n "pub use working_space" crates/ruviform-video-proc/src/lib.rs` — `pub use working_space::{FromWorking, ToWorking};` 存在（L126）
+- [x] `rg -n "RT contract" crates/ruviform-video-proc/src/working_space.rs` — API 単位の RT ラベル存在（`ToWorking::new`/`process`・`FromWorking::new`/`process` の 4 箇所）
