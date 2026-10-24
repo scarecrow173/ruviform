@@ -24,7 +24,7 @@ int rv_lock(void);      /* init-once + lock; 0 ok, nonzero init failure */
 void rv_unlock(void);
 
 enum { H_EFFECT, H_PSET, H_PARAM, H_CLIP, H_EPROPS, H_PPROPS, H_CPROPS,
-       H_INARGS, H_OUTARGS, H_ENTRY, H_MEMORY };
+       H_INARGS, H_OUTARGS, H_ENTRY, H_MEMORY, H_IMAGE };
 
 uintptr_t rv_tok_new(int kind, void *payload, uintptr_t parent);
 void *rv_tok_get(uintptr_t tok, int kind); /* NULL on stale/wrong kind */
@@ -102,12 +102,23 @@ typedef struct RvParam {
     uintptr_t tok, props_tok;
 } RvParam;
 
+struct RvEffect;
 typedef struct RvClip {
     char *name;
     RvPropsObj *props;
     uintptr_t tok, props_tok;
+    struct RvEffect *eff;         /* owning effect (descriptor or attempt) */
     struct RvClip *next;
 } RvClip;
+
+/* one live image handle handed to the plugin during a render bracket;
+ * image props are an ordinary RvPropsObj resolved through the token */
+typedef struct RvImg {
+    RvClip *clip;
+    RvPropsObj *props;
+    uintptr_t tok;
+    struct RvImg *next;
+} RvImg;
 
 /* one type serves the frozen admission descriptor AND live attempts */
 typedef struct RvEffect {
@@ -132,6 +143,12 @@ typedef struct RvEffect {
     int created, create_attempted, destroyed, quarantined, configured;
     uint32_t w, h;
     double fps;
+    /* per-render staging: adapter-owned 16B aligned buffers exposed
+     * bottom-left to the plugin for the bracket duration only */
+    unsigned char *stage_src, *stage_dst;
+    size_t stage_stride;
+    int render_active;
+    RvImg *images;               /* images handed out, still unreleased */
     struct RvEffect *next_quar;  /* quarantine list on catalog */
 } RvEffect;
 

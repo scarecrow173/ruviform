@@ -1,23 +1,44 @@
 ---
 id: "TASK-034L6yh0fBmRabh1TMLv2F"
 type: "task"
-status: "todo"
+status: "done"
 title: "Implement OFX video rendering"
 created: "2026-10-24"
-updated: "2026-10-24"
+updated: "2026-10-25"
 owners: ["scarecrow173"]
 relations:
   source: []
   changes:
     added: []
-    modified: []
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-ofx/src/ffi/mod.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-ofx/src/ffi/ofx_bridge.c"
+      - type: "file"
+        path: "crates/ruviform-plugin-ofx/src/ffi/ofx_bridge.h"
+      - type: "file"
+        path: "crates/ruviform-plugin-ofx/src/ffi/ofx_internal.h"
+      - type: "file"
+        path: "crates/ruviform-plugin-ofx/src/ffi/ofx_registry.c"
+      - type: "file"
+        path: "crates/ruviform-plugin-ofx/src/instance.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-ofx/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-ofx/tests/fixture/fixture_control.h"
+      - type: "file"
+        path: "crates/ruviform-plugin-ofx/tests/fixture/ofx_test_fixture.c"
+      - type: "file"
+        path: "crates/ruviform-plugin-ofx/tests/native_host.rs"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-98-ofx-host-adapter.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-98-ofx-render-task-3-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-98-ofx-host-adapter.md"
     - "docs/tasks/ofx-native-runtime-implementation.md"
@@ -68,6 +89,6 @@ approved plan の **actions 9/10/11/12 を 1 task の ordered substeps として
 
 ## Verification
 
-- [ ] `mise run test-ofx` — exit 0
-- [ ] `mise run lint-ofx` — exit 0
-- [ ] `mise run test-ofx-msrv` — exit 0（実 log）
+- [x] `mise run test-ofx` — exit 0（native_host 36 + bridge_min + bridge_native 全 38 pass・実 log）
+- [x] `mise run lint-ofx` — exit 0（clippy `-D warnings` clean）
+- [x] `mise run test-ofx-msrv` — exit 0（MSRV 1.89 で lib+tests+C bridge コンパイル・全 pass・実 log）

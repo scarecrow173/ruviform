@@ -3,13 +3,14 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
-use ruviform_media_core::FrameRate;
+use ruviform_media_core::{FrameRate, MediaTime, TimeBase};
 use ruviform_plugin_core::{
     LifecycleState, ParamId, PlainParamValue, VideoPluginInstance, VideoProcessConfig,
 };
 use ruviform_plugin_ofx::{OfxError, OfxHost, OfxLibrary};
-use ruviform_video_core::PixelFormat;
+use ruviform_video_core::{PixelFormat, SharedPlane, VideoFrame};
 
 const DLL_SET_HOST: usize = 0;
 const GET_COUNT: usize = 1;
@@ -26,7 +27,10 @@ const BEGIN_CHANGED: usize = 11;
 const CHANGED: usize = 12;
 const END_CHANGED: usize = 13;
 const CLIP_PREFS: usize = 14;
-const EVENTS: usize = 15;
+const BEGIN_RENDER: usize = 15;
+const RENDER: usize = 16;
+const END_RENDER: usize = 17;
+const EVENTS: usize = 18;
 
 const REFUSE_SET_HOST: i32 = 1;
 const FAIL_CREATE: i32 = 1 << 1;
@@ -43,6 +47,10 @@ const WIDE_BOUNDS: i32 = 1 << 11;
 const NULL_ENTRY: i32 = 1 << 12;
 const STRING_PARAM: i32 = 1 << 13;
 const WORKER_ON_CREATE: i32 = 1 << 14;
+const FAIL_BEGIN_RENDER: i32 = 1 << 15;
+const FAIL_RENDER: i32 = 1 << 16;
+const FAIL_END_RENDER: i32 = 1 << 17;
+const REPLY_DEFAULT_BRACKET: i32 = 1 << 18;
 
 static TEST_LOCK: Mutex<()> = Mutex::new(());
 static COUNTS: [[AtomicUsize; 2]; EVENTS] = [const { [const { AtomicUsize::new(0) }; 2] }; EVENTS];
@@ -117,6 +125,9 @@ mod fixture_ffi {
     type Probe = unsafe extern "C" fn(i32) -> i32;
     type ReadGain = unsafe extern "C" fn(*mut f64, *mut f64) -> i32;
     type CreatedGain = unsafe extern "C" fn(*mut f64) -> i32;
+    type LastRenderTime = unsafe extern "C" fn(*mut f64) -> i32;
+    type LastRowBytes = unsafe extern "C" fn(*mut i32, *mut i32) -> i32;
+    type SrcCorners = unsafe extern "C" fn(*mut u8) -> i32;
 
     pub struct Fixture {
         auxiliary: Option<Library>,
@@ -124,6 +135,9 @@ mod fixture_ffi {
         probe: Probe,
         read_gain: ReadGain,
         created_gain: CreatedGain,
+        last_render_time: LastRenderTime,
+        last_rowbytes: LastRowBytes,
+        src_corners: SrcCorners,
     }
 
     impl Fixture {
@@ -143,6 +157,15 @@ mod fixture_ffi {
                 let created_gain = *library
                     .get(b"ofx_fixture_created_gain\0")
                     .expect("created value export");
+                let last_render_time = *library
+                    .get(b"ofx_fixture_last_render_time\0")
+                    .expect("render time export");
+                let last_rowbytes = *library
+                    .get(b"ofx_fixture_last_rowbytes\0")
+                    .expect("rowbytes export");
+                let src_corners = *library
+                    .get(b"ofx_fixture_src_corners\0")
+                    .expect("corners export");
                 configure(mode, observe);
                 Self {
                     auxiliary: Some(library),
@@ -150,6 +173,9 @@ mod fixture_ffi {
                     probe,
                     read_gain,
                     created_gain,
+                    last_render_time,
+                    last_rowbytes,
+                    src_corners,
                 }
             }
         }
@@ -181,6 +207,35 @@ mod fixture_ffi {
             // SAFETY: output is a live double and the host DLL is live.
             assert_eq!(unsafe { (self.created_gain)(&raw mut value) }, 0);
             value
+        }
+
+        pub fn last_render_time(&self) -> f64 {
+            let mut value = f64::NAN;
+            // SAFETY: output is a live double and the host DLL is live.
+            assert_eq!(unsafe { (self.last_render_time)(&raw mut value) }, 0);
+            value
+        }
+
+        pub fn last_rowbytes(&self) -> (i32, i32) {
+            let (mut src, mut dst) = (0, 0);
+            // SAFETY: outputs are live writable ints and the host DLL is live.
+            assert_eq!(
+                unsafe { (self.last_rowbytes)(&raw mut src, &raw mut dst) },
+                0
+            );
+            (src, dst)
+        }
+
+        pub fn src_corners(&self) -> [[u8; 4]; 4] {
+            let mut bytes = [0_u8; 16];
+            // SAFETY: output is a live 16-byte buffer and the host DLL is live.
+            assert_eq!(unsafe { (self.src_corners)(bytes.as_mut_ptr()) }, 0);
+            [
+                bytes[0..4].try_into().expect("pixel"),
+                bytes[4..8].try_into().expect("pixel"),
+                bytes[8..12].try_into().expect("pixel"),
+                bytes[12..16].try_into().expect("pixel"),
+            ]
         }
     }
 
@@ -693,4 +748,349 @@ fn generic_ui_consumes_borrowed_metadata_and_plain_values() {
     assert_eq!(count(CHANGED, 0), 0, "Created writes are staged only");
     instance.initialize(&config()).expect("initialize");
     assert_eq!(fixture.created_gain(), 3.0);
+}
+
+/* ---------- per-frame render contract ---------- */
+
+const PTS: MediaTime = MediaTime::ZERO;
+
+/// 2×2 RGBA8 frame at stride 16 (`row_bytes` 8) — the padding bytes between
+/// rows carry `0xAA` sentinels the plugin must never observe or produce.
+fn padded_frame(fill: &[u8]) -> VideoFrame {
+    let mut data = vec![0xAA_u8; 24];
+    data[0..8].copy_from_slice(&fill[0..8]);
+    data[16..24].copy_from_slice(&fill[8..16]);
+    VideoFrame::from_shared_planes(
+        PixelFormat::Rgba8,
+        2,
+        2,
+        PTS,
+        vec![SharedPlane {
+            data: Arc::from(data.into_boxed_slice()),
+            stride: 16,
+        }],
+    )
+    .expect("frame geometry")
+}
+
+/// Top-left, top-right, bottom-left, bottom-right pixels — video frames
+/// are top-row-first; the OFX bottom-left contract flips the exposure.
+fn pattern_input() -> VideoFrame {
+    padded_frame(&[
+        10, 20, 30, 255, 40, 50, 60, 255, // top row
+        70, 80, 90, 255, 100, 110, 120, 255, // bottom row
+    ])
+}
+
+fn row(frame: &VideoFrame, y: u32) -> Vec<u8> {
+    frame
+        .plane(0)
+        .expect("plane 0")
+        .row(y)
+        .expect("row")
+        .to_vec()
+}
+
+fn padding(frame: &VideoFrame) -> &[u8] {
+    &frame.plane(0).expect("plane 0").data()[8..16]
+}
+
+fn processing_instance(
+    fixture: &fixture_ffi::Fixture,
+    mode: i32,
+) -> (OfxHost, OfxLibrary, ruviform_plugin_ofx::OfxInstance) {
+    let mut host = OfxHost::new().expect("host");
+    let library = admit(&mut host);
+    let mut instance = library.create_instance(0).expect("created");
+    fixture.mode(mode);
+    instance.initialize(&config()).expect("initialize");
+    instance.activate().expect("activate");
+    instance.start_processing().expect("start");
+    (host, library, instance)
+}
+
+#[test]
+fn render_bracket_maps_frames_and_time_bottom_left() {
+    let _guard = guarded();
+    let mut fixture = fixture_ffi::Fixture::new(0);
+    let (host, library, mut instance) = processing_instance(&fixture, 0);
+    let prefs_before = count(CLIP_PREFS, 0);
+    instance
+        .set_parameter(ParamId(0), PlainParamValue::Double(2.0))
+        .expect("live gain write");
+
+    let input = pattern_input();
+    let mut output = padded_frame(&[0_u8; 16]);
+    let at = MediaTime::new(45_000, TimeBase::COMMON_90K);
+    instance.render(&input, &mut output, at).expect("render");
+    fixture.release_auxiliary();
+
+    // gain 2.0 applied per RGB channel: out = in * 2 (+0.5 truncates);
+    // alpha is copied unscaled.
+    assert_eq!(row(&output, 0), vec![20, 40, 60, 255, 80, 100, 120, 255]);
+    assert_eq!(
+        row(&output, 1),
+        vec![140, 160, 180, 255, 200, 220, 240, 255]
+    );
+    assert_eq!(padding(&output), &[0xAA; 8], "row padding untouched");
+
+    // Bottom-left exposure: image (0,0) is the frame's bottom-left pixel,
+    // and rowBytes is the negated padded staging stride.
+    assert_eq!(
+        fixture.src_corners(),
+        [
+            [70, 80, 90, 255],
+            [100, 110, 120, 255],
+            [10, 20, 30, 255],
+            [40, 50, 60, 255],
+        ]
+    );
+    assert_eq!(fixture.last_rowbytes(), (-16, -16));
+    assert_eq!(fixture.last_render_time(), 0.5);
+
+    // Transactional ordering: clip-pref revalidation precedes one
+    // Begin -> Render -> End bracket per call.
+    assert_eq!(count(CLIP_PREFS, 0), prefs_before + 1);
+    assert_eq!(count(BEGIN_RENDER, 0), 1);
+    assert_eq!(count(RENDER, 0), 1);
+    assert_eq!(count(END_RENDER, 0), 1);
+    let len = SEQUENCE_LEN.load(Ordering::SeqCst);
+    let events: Vec<_> = SEQUENCE[..len]
+        .iter()
+        .map(|cell| (cell.load(Ordering::SeqCst) - 1) / 2)
+        .collect();
+    let position = |event| events.iter().position(|value| *value == event);
+    assert!(
+        position(BEGIN_RENDER) < position(RENDER)
+            && position(RENDER) < position(END_RENDER)
+    );
+    assert_eq!(instance.state(), LifecycleState::Processing);
+    drop(library);
+    drop(host);
+}
+
+#[test]
+fn render_rejections_happen_before_any_native_entry() {
+    let _guard = guarded();
+    let mut fixture = fixture_ffi::Fixture::new(0);
+    let (host, library, mut instance) = processing_instance(&fixture, 0);
+    fixture.release_auxiliary();
+    let input = pattern_input();
+    let mut output = padded_frame(&[0_u8; 16]);
+    let at = MediaTime::new(0, TimeBase::COMMON_90K);
+
+    let before = count(BEGIN_RENDER, 0);
+    let wrong = VideoFrame::new_owned(PixelFormat::Rgba8, 4, 4, PTS).expect("other size");
+    let mut wrong_out = wrong.clone();
+    assert!(instance.render(&wrong, &mut wrong_out, at).is_err());
+    let yuv = VideoFrame::new_owned(PixelFormat::Yuv420p, 2, 2, PTS).expect("yuv");
+    let mut yuv_out = VideoFrame::new_owned(PixelFormat::Yuv420p, 2, 2, PTS).expect("yuv");
+    assert!(instance.render(&yuv, &mut yuv_out, at).is_err());
+    assert_eq!(count(BEGIN_RENDER, 0), before);
+
+    instance.stop_processing().expect("stop");
+    let before_seq = snapshot();
+    assert!(instance.render(&input, &mut output, at).is_err());
+    assert_eq!(snapshot(), before_seq);
+    assert_eq!(instance.state(), LifecycleState::Activated);
+    drop(library);
+    drop(host);
+}
+
+#[test]
+fn render_revalidates_clip_preferences_before_every_bracket() {
+    let _guard = guarded();
+    let mut fixture = fixture_ffi::Fixture::new(0);
+    let (host, library, mut instance) = processing_instance(&fixture, 0);
+    fixture.release_auxiliary();
+    let input = pattern_input();
+    let mut output = padded_frame(&[0xAA_u8; 16]);
+    let at = MediaTime::new(0, TimeBase::COMMON_90K);
+
+    // enabled = 0 makes GetClipPreferences offer RGB output — outside the
+    // fixed RGBA8 contract — which must fail before the bracket opens.
+    instance
+        .set_parameter(ParamId(3), PlainParamValue::Boolean(false))
+        .expect("enabled write");
+    let prefs_before = count(CLIP_PREFS, 0);
+    let result = instance.render(&input, &mut output, at);
+    assert!(
+        matches!(result, Err(OfxError::Unsupported(_))),
+        "unsupported offer must fail: {result:?}"
+    );
+    assert_eq!(count(CLIP_PREFS, 0), prefs_before + 1);
+    assert_eq!(count(BEGIN_RENDER, 0), 0);
+    assert_eq!(count(RENDER, 0), 0);
+    assert_eq!(count(END_RENDER, 0), 0);
+    assert_eq!(instance.state(), LifecycleState::Processing);
+    assert_eq!(
+        output.plane(0).expect("plane").data(),
+        &[0xAA; 24],
+        "untouched output"
+    );
+    drop(library);
+    drop(host);
+}
+
+#[test]
+fn failed_begin_render_skips_bracket_and_keeps_output_untouched() {
+    let _guard = guarded();
+    let mut fixture = fixture_ffi::Fixture::new(0);
+    let (host, library, mut instance) = processing_instance(&fixture, 0);
+    fixture.release_auxiliary();
+    fixture.mode(FAIL_BEGIN_RENDER);
+    let input = pattern_input();
+    let mut output = padded_frame(&[0xAA_u8; 16]);
+    assert!(
+        instance
+            .render(&input, &mut output, MediaTime::new(0, TimeBase::COMMON_90K))
+            .is_err()
+    );
+    assert_eq!(count(BEGIN_RENDER, 0), 1);
+    assert_eq!(count(RENDER, 0), 0);
+    assert_eq!(count(END_RENDER, 0), 0, "a failed Begin opens no bracket");
+    assert_eq!(output.plane(0).expect("plane").data(), &[0xAA; 24]);
+    assert_eq!(instance.state(), LifecycleState::Processing);
+    fixture.mode(0);
+    instance
+        .render(&input, &mut output, MediaTime::new(0, TimeBase::COMMON_90K))
+        .expect("brackets are independent per call");
+    assert_eq!(count(END_RENDER, 0), 1);
+    drop(library);
+    drop(host);
+}
+
+#[test]
+fn failed_render_still_closes_bracket_and_keeps_output_untouched() {
+    let _guard = guarded();
+    let mut fixture = fixture_ffi::Fixture::new(0);
+    let (host, library, mut instance) = processing_instance(&fixture, 0);
+    fixture.release_auxiliary();
+    fixture.mode(FAIL_RENDER);
+    let input = pattern_input();
+    let mut output = padded_frame(&[0xAA_u8; 16]);
+    assert!(
+        instance
+            .render(&input, &mut output, MediaTime::new(0, TimeBase::COMMON_90K))
+            .is_err()
+    );
+    assert_eq!(count(BEGIN_RENDER, 0), 1);
+    assert_eq!(count(RENDER, 0), 1);
+    assert_eq!(count(END_RENDER, 0), 1, "an open bracket is always closed");
+    assert_eq!(output.plane(0).expect("plane").data(), &[0xAA; 24]);
+    assert_eq!(instance.state(), LifecycleState::Processing);
+    drop(library);
+    drop(host);
+}
+
+#[test]
+fn failed_end_render_propagates_and_keeps_output_untouched() {
+    let _guard = guarded();
+    let mut fixture = fixture_ffi::Fixture::new(0);
+    let (host, library, mut instance) = processing_instance(&fixture, 0);
+    fixture.release_auxiliary();
+    fixture.mode(FAIL_END_RENDER);
+    let input = pattern_input();
+    let mut output = padded_frame(&[0xAA_u8; 16]);
+    assert!(
+        instance
+            .render(&input, &mut output, MediaTime::new(0, TimeBase::COMMON_90K))
+            .is_err()
+    );
+    assert_eq!(count(BEGIN_RENDER, 0), 1);
+    assert_eq!(count(RENDER, 0), 1);
+    assert_eq!(count(END_RENDER, 0), 1);
+    assert_eq!(output.plane(0).expect("plane").data(), &[0xAA; 24]);
+    assert_eq!(instance.state(), LifecycleState::Processing);
+    drop(library);
+    drop(host);
+}
+
+#[test]
+fn render_destroy_and_release_stay_consistent_after_brackets() {
+    let _guard = guarded();
+    let mut fixture = fixture_ffi::Fixture::new(0);
+    let (host, library, mut instance) = processing_instance(&fixture, 0);
+    fixture.release_auxiliary();
+    let input = pattern_input();
+    let mut output = padded_frame(&[0_u8; 16]);
+    let at = MediaTime::new(0, TimeBase::COMMON_90K);
+    instance.render(&input, &mut output, at).expect("first");
+    instance.render(&input, &mut output, at).expect("second");
+    assert_eq!(count(BEGIN_RENDER, 0), 2);
+    assert_eq!(count(RENDER, 0), 2);
+    assert_eq!(count(END_RENDER, 0), 2);
+    instance.stop_processing().expect("stop");
+    instance.deactivate().expect("deactivate");
+    instance.destroy().expect("destroy");
+    drop(instance);
+    drop(library);
+    drop(host);
+    assert_eq!(count(DESTROY, 0), 1);
+    assert_eq!(count(UNLOAD, 0), 1);
+}
+
+#[test]
+fn reply_default_bracket_is_a_legal_render() {
+    let _guard = guarded();
+    let mut fixture = fixture_ffi::Fixture::new(0);
+    let (host, library, mut instance) = processing_instance(&fixture, 0);
+    // Begin/EndSequenceRender are optional actions — ReplyDefault means
+    // "not trapped, but all is well anyway", not a bracket failure.
+    fixture.mode(REPLY_DEFAULT_BRACKET);
+    fixture.release_auxiliary();
+    let input = pattern_input();
+    let mut output = padded_frame(&[0_u8; 16]);
+    instance
+        .render(&input, &mut output, MediaTime::new(0, TimeBase::COMMON_90K))
+        .expect("ReplyDefault bracket is a legal render");
+
+    // Default gain 1.0: out = in * 1.0 + 0.5 truncates to the input pixels.
+    assert_eq!(row(&output, 0), vec![10, 20, 30, 255, 40, 50, 60, 255]);
+    assert_eq!(row(&output, 1), vec![70, 80, 90, 255, 100, 110, 120, 255]);
+    assert_eq!(count(BEGIN_RENDER, 0), 1);
+    assert_eq!(count(RENDER, 0), 1);
+    assert_eq!(count(END_RENDER, 0), 1);
+    assert_eq!(instance.state(), LifecycleState::Processing);
+    drop(library);
+    drop(host);
+}
+
+#[test]
+fn render_rejects_float_depth_offer_and_recovers() {
+    let _guard = guarded();
+    let mut fixture = fixture_ffi::Fixture::new(0);
+    let (host, library, mut instance) = processing_instance(&fixture, 0);
+    fixture.release_auxiliary();
+    let input = pattern_input();
+    let mut output = padded_frame(&[0xAA_u8; 16]);
+    let at = MediaTime::new(0, TimeBase::COMMON_90K);
+
+    // mode choice 0 makes GetClipPreferences offer float depth — outside
+    // the byte contract — which must fail before the bracket opens.
+    instance
+        .set_parameter(ParamId(1), PlainParamValue::Choice(0))
+        .expect("mode write");
+    let result = instance.render(&input, &mut output, at);
+    assert!(
+        matches!(result, Err(OfxError::Unsupported(_))),
+        "float depth offer must fail: {result:?}"
+    );
+    assert_eq!(count(BEGIN_RENDER, 0), 0);
+    assert_eq!(count(RENDER, 0), 0);
+    assert_eq!(count(END_RENDER, 0), 0);
+    assert_eq!(instance.state(), LifecycleState::Processing);
+    assert_eq!(output.plane(0).expect("plane").data(), &[0xAA; 24]);
+
+    // Restoring the byte-conformant offer renders on the next call.
+    instance
+        .set_parameter(ParamId(1), PlainParamValue::Choice(1))
+        .expect("restore mode");
+    instance
+        .render(&input, &mut output, at)
+        .expect("recovered render");
+    assert_eq!(count(END_RENDER, 0), 1);
+    assert_eq!(instance.state(), LifecycleState::Processing);
+    drop(library);
+    drop(host);
 }

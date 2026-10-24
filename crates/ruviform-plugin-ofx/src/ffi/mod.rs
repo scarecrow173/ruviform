@@ -98,6 +98,14 @@ pub(crate) mod sys {
         pub(crate) fn rv_ofx_instance_create(effect: *mut c_void) -> i32;
         pub(crate) fn rv_ofx_instance_changed(effect: *mut c_void, index: usize) -> i32;
         pub(crate) fn rv_ofx_instance_preferences(effect: *mut c_void) -> i32;
+        pub(crate) fn rv_ofx_instance_render(
+            effect: *mut c_void,
+            src: *const u8,
+            src_stride: usize,
+            dst: *mut u8,
+            dst_stride: usize,
+            time: f64,
+        ) -> i32;
         pub(crate) fn rv_ofx_instance_destroy(effect: *mut c_void) -> i32;
         pub(crate) fn rv_ofx_instance_release(effect: *mut c_void);
     }

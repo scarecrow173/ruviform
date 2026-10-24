@@ -23,6 +23,9 @@ enum FixtureEvent {
     FX_CHANGED,
     FX_END_CHANGED,
     FX_CLIP_PREFS,
+    FX_BEGIN_RENDER,
+    FX_RENDER,
+    FX_END_RENDER,
     FX_EVENT_COUNT
 };
 
@@ -41,7 +44,11 @@ enum FixtureMode {
     FX_WIDE_BOUNDS = 1 << 11,
     FX_NULL_ENTRY = 1 << 12,
     FX_STRING_PARAM = 1 << 13,
-    FX_WORKER_ON_CREATE = 1 << 14
+    FX_WORKER_ON_CREATE = 1 << 14,
+    FX_FAIL_BEGIN_RENDER = 1 << 15,
+    FX_FAIL_RENDER = 1 << 16,
+    FX_FAIL_END_RENDER = 1 << 17,
+    FX_REPLY_DEFAULT_BRACKET = 1 << 18
 };
 
 enum FixtureProbe {
@@ -59,5 +66,11 @@ FIXTURE_EXPORT void ofx_fixture_set_mode(int mode);
 FIXTURE_EXPORT int ofx_fixture_probe(int which);
 FIXTURE_EXPORT int ofx_fixture_read_gain(double *current, double *at_time);
 FIXTURE_EXPORT int ofx_fixture_created_gain(double *value);
+/* Last Render observation: effect time the fixture saw in inArgs, the
+ * rowBytes the host exposed on Source/Output images, and the Source
+ * pixels at image coords (0,0) (1,0) (0,1) (1,1)   16 bytes. */
+FIXTURE_EXPORT int ofx_fixture_last_render_time(double *time);
+FIXTURE_EXPORT int ofx_fixture_last_rowbytes(int *src, int *dst);
+FIXTURE_EXPORT int ofx_fixture_src_corners(unsigned char rgba16[16]);
 
 #endif

@@ -109,6 +109,8 @@ pub struct OfxInstance {
     /// Whether the native `CreateInstance` succeeded — staged vs live
     /// write-through differ around this point.
     created: bool,
+    /// Configured frame size — `render` frames must match it.
+    dims: Option<(u32, u32)>,
     desc: DescMeta,
     ids: Vec<ParamId>,
     metas: Vec<ParamMeta>,
@@ -212,6 +214,7 @@ impl OfxInstance {
             _lib: lib,
             lifecycle: Lifecycle::new(),
             created: false,
+            dims: None,
             desc: desc_meta,
             ids,
             metas,
@@ -359,6 +362,7 @@ impl VideoPluginInstance for OfxInstance {
             return Err(map_status("CreateInstance", rc));
         }
         self.created = true;
+        self.dims = Some((config.width(), config.height()));
         self.transit(LifecycleEvent::Initialize, "initialize")
     }
 
@@ -376,17 +380,64 @@ impl VideoPluginInstance for OfxInstance {
     }
 
     fn start_processing(&mut self) -> Result<(), OfxError> {
-        // No native sequence action yet — render lands in the next task.
+        // The native sequence bracket is per-frame — each `render` call
+        // wraps Begin/Render/EndSequenceRender around its own staging.
         self.transit(LifecycleEvent::StartProcessing, "start_processing")
     }
 
+    #[expect(unsafe_code)]
     fn render(
         &mut self,
-        _input: &VideoFrame,
-        _output: &mut VideoFrame,
-        _at: MediaTime,
+        input: &VideoFrame,
+        output: &mut VideoFrame,
+        at: MediaTime,
     ) -> Result<(), OfxError> {
-        Err(OfxError::Unsupported("native render lands in the render task"))
+        // Transit first: `Process` is only legal from `Processing`, so an
+        // out-of-state render is rejected before any foreign call.
+        self.transit(LifecycleEvent::Process, "render")?;
+        let Some((w, h)) = self.dims else {
+            return Err(self.illegal("render"));
+        };
+        if input.format() != PixelFormat::Rgba8 || output.format() != PixelFormat::Rgba8 {
+            return Err(OfxError::Unsupported("only PixelFormat::Rgba8 is supported"));
+        }
+        if input.width() != w
+            || input.height() != h
+            || output.width() != w
+            || output.height() != h
+        {
+            return Err(OfxError::InvalidValue(
+                "frame dimensions differ from the configured size",
+            ));
+        }
+        let src = input
+            .plane(0)
+            .ok_or(OfxError::InvalidValue("input frame has no plane 0"))?;
+        let mut dst = output
+            .plane_mut(0)
+            .ok_or(OfxError::InvalidValue("output frame has no plane 0"))?;
+        let time = at.to_seconds_f64();
+        if !time.is_finite() {
+            return Err(OfxError::InvalidValue("render time is not finite"));
+        }
+        // SAFETY: `effect` is a live configured instance token. `src`/`dst`
+        // rows are at least `w*4` bytes (bridge rejects smaller strides and
+        // copies only `w*4` per row), and both planes outlive the call —
+        // the staging buffers exposed to the plugin are bracket-scoped.
+        let rc = unsafe {
+            sys::rv_ofx_instance_render(
+                self.effect,
+                src.data().as_ptr(),
+                src.stride(),
+                dst.data_mut().as_mut_ptr(),
+                dst.stride(),
+                time,
+            )
+        };
+        if rc != status::OK {
+            return Err(map_status("Render", rc));
+        }
+        Ok(())
     }
 
     fn stop_processing(&mut self) -> Result<(), OfxError> {

@@ -71,6 +71,14 @@ int rv_ofx_instance_configure(void *effect, uint32_t width, uint32_t height,
 int rv_ofx_instance_create(void *effect);
 int rv_ofx_instance_changed(void *effect, size_t param_index);
 int rv_ofx_instance_preferences(void *effect);
+/* Per-frame Begin/Render/End bracket over adapter-owned staging buffers.
+ * `src`/`dst` are top-row-first RGBA8 frames of the configured size with
+ * strides >= width*4; the plugin sees bottom-left data (negative rowBytes).
+ * The clip-preference contract is revalidated before every bracket, and
+ * output rows/padding are committed only after a fully successful bracket. */
+int rv_ofx_instance_render(void *effect, const unsigned char *src,
+                           size_t src_stride, unsigned char *dst,
+                           size_t dst_stride, double time);
 int rv_ofx_instance_destroy(void *effect);
 /* Never issues Destroy twice. Failed-Destroy resources remain quarantined
  * until catalog Unload and continue holding SingleInstance admission. */

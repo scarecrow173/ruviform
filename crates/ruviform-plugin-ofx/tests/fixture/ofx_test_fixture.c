@@ -4,6 +4,7 @@
  * actions with checked statuses, per-instance data via kOfxPropInstanceData. */
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include <float.h>
 #include "fixture_internal.h"
 
@@ -12,6 +13,9 @@ static int g_mode = 0;
 static FixtureObserver g_observer = NULL;
 static FixtureInstance *g_instances = NULL;
 static double g_created_gain = 0.0;
+static double g_render_time = 0.0;
+static int g_src_rowbytes = 0, g_dst_rowbytes = 0;
+static unsigned char g_src_corners[16];
 
 static void emit(int event, int native_index) {
     if (g_observer) g_observer(event, native_index);
@@ -215,6 +219,119 @@ static OfxStatus destroy_inst(OfxImageEffectHandle effect, int idx) {
     return kOfxStatOK;
 }
 
+/* pointwise gain over the full image bounds. Uses only the image
+ * property contract (data pointer + signed rowBytes + bounds), so the
+ * host's bottom-left/negative-rowBytes exposure is what makes the SDK
+ * corner assertions meaningful. */
+static OfxStatus render_inst(OfxImageEffectHandle effect,
+                             OfxPropertySetHandle in_args, int idx) {
+    FixtureInstance *inst;
+    const OfxPropertySuiteV1 *p;
+    const OfxParameterSuiteV1 *pp;
+    const OfxImageEffectSuiteV1 *fx;
+    OfxParamSetHandle pset = NULL;
+    OfxParamHandle gain = NULL;
+    OfxImageClipHandle src_clip = NULL, dst_clip = NULL;
+    OfxPropertySetHandle src_img = NULL, dst_img = NULL;
+    void *src_data = NULL, *dst_data = NULL;
+    int src_rb = 0, dst_rb = 0, bounds[4] = {0, 0, 0, 0};
+    double t = 0.0, g = 1.0;
+    int x, y, x1, y1, x2, y2;
+    OfxStatus st = kOfxStatFailed, r1, r2;
+
+    emit(FX_RENDER, idx);
+    if (g_mode & FX_FAIL_RENDER) return kOfxStatFailed;
+    inst = fx_find_instance(effect);
+    p = fx_props(); pp = fx_params(); fx = fx_effects();
+    if (!inst || !p || !pp || !fx) return kOfxStatErrBadHandle;
+    if (!in_args ||
+        p->propGetDouble(in_args, kOfxPropTime, 0, &t) != kOfxStatOK)
+        return kOfxStatFailed;
+    if (fx->getParamSet(effect, &pset) != kOfxStatOK || !pset) return kOfxStatFailed;
+    if (pp->paramGetHandle(pset, "gain", &gain, NULL) != kOfxStatOK || !gain)
+        return kOfxStatFailed;
+    if (pp->paramGetValueAtTime(gain, t, &g) != kOfxStatOK) return kOfxStatFailed;
+    if (fx->clipGetHandle(effect, "Source", &src_clip, NULL) != kOfxStatOK || !src_clip)
+        return kOfxStatFailed;
+    if (fx->clipGetHandle(effect, "Output", &dst_clip, NULL) != kOfxStatOK || !dst_clip)
+        return kOfxStatFailed;
+    if (fx->clipGetImage(src_clip, t, NULL, &src_img) != kOfxStatOK || !src_img)
+        return kOfxStatFailed;
+    if (fx->clipGetImage(dst_clip, t, NULL, &dst_img) != kOfxStatOK || !dst_img) {
+        (void)fx->clipReleaseImage(src_img);
+        return kOfxStatFailed;
+    }
+    if (p->propGetPointer(src_img, kOfxImagePropData, 0, &src_data) != kOfxStatOK ||
+        p->propGetPointer(dst_img, kOfxImagePropData, 0, &dst_data) != kOfxStatOK ||
+        p->propGetInt(src_img, kOfxImagePropRowBytes, 0, &src_rb) != kOfxStatOK ||
+        p->propGetInt(dst_img, kOfxImagePropRowBytes, 0, &dst_rb) != kOfxStatOK ||
+        p->propGetIntN(dst_img, kOfxImagePropBounds, 4, bounds) != kOfxStatOK)
+        goto done;
+    g_src_rowbytes = src_rb;
+    g_dst_rowbytes = dst_rb;
+    g_render_time = t;
+    x1 = bounds[0]; y1 = bounds[1]; x2 = bounds[2]; y2 = bounds[3];
+    /* record the Source pixels the host exposed at image coords
+     * (x1,y1)..(x1+1,y1+1)   under the bottom-left contract these are the
+     * bottom-left 2x2 of the frame */
+    for (y = 0; y < 2; y++)
+        for (x = 0; x < 2; x++)
+            memcpy(g_src_corners + (y * 2 + x) * 4,
+                   (const unsigned char *)src_data +
+                       (ptrdiff_t)(y1 + y) * src_rb + (ptrdiff_t)(x1 + x) * 4,
+                   4);
+    for (y = y1; y < y2; y++) {
+        const unsigned char *sr =
+            (const unsigned char *)src_data + (ptrdiff_t)y * src_rb;
+        unsigned char *dr = (unsigned char *)dst_data + (ptrdiff_t)y * dst_rb;
+        for (x = x1; x < x2; x++) {
+            const unsigned char *sp = sr + (ptrdiff_t)x * 4;
+            unsigned char *dp = dr + (ptrdiff_t)x * 4;
+            dp[0] = (unsigned char)(sp[0] * g + 0.5);
+            dp[1] = (unsigned char)(sp[1] * g + 0.5);
+            dp[2] = (unsigned char)(sp[2] * g + 0.5);
+            dp[3] = sp[3];
+        }
+    }
+    st = kOfxStatOK;
+done:
+    r1 = fx->clipReleaseImage(src_img);
+    r2 = fx->clipReleaseImage(dst_img);
+    if (st == kOfxStatOK && (r1 != kOfxStatOK || r2 != kOfxStatOK))
+        st = kOfxStatFailed;
+    return st;
+}
+
+/* GetClipPreferences: slave params steer the offered output contract.
+ * enabled == 0 offers RGB output (outside the host RGBA contract);
+ * mode choice 0 offers float depth (outside the byte contract). Both
+ * are legal param writes whose effect only the next render rejects. */
+static OfxStatus clip_prefs(OfxImageEffectHandle effect,
+                            OfxPropertySetHandle out_args, int idx) {
+    FixtureInstance *inst;
+    const OfxPropertySuiteV1 *p;
+    const OfxParameterSuiteV1 *pp;
+    const OfxImageEffectSuiteV1 *fx;
+    OfxParamSetHandle pset = NULL;
+    OfxParamHandle prm = NULL;
+    int v = 0;
+    emit(FX_CLIP_PREFS, idx);
+    if (g_mode & FX_FAIL_CLIP_PREFS) return kOfxStatFailed;
+    inst = fx_find_instance(effect);
+    p = fx_props(); pp = fx_params(); fx = fx_effects();
+    if (!inst || !p || !pp || !fx || !out_args) return kOfxStatOK;
+    if (fx->getParamSet(effect, &pset) != kOfxStatOK || !pset) return kOfxStatOK;
+    if (pp->paramGetHandle(pset, "enabled", &prm, NULL) == kOfxStatOK && prm &&
+        pp->paramGetValue(prm, &v) == kOfxStatOK && v == 0)
+        (void)p->propSetString(out_args, "OfxImageClipPropComponents_Output", 0,
+                               kOfxImageComponentRGB);
+    if (pp->paramGetHandle(pset, "mode", &prm, NULL) == kOfxStatOK && prm &&
+        pp->paramGetValue(prm, &v) == kOfxStatOK && v == 0)
+        (void)p->propSetString(out_args, "OfxImageClipPropDepth_Output", 0,
+                               kOfxBitDepthFloat);
+    return kOfxStatOK;
+}
+
 static void unload_free_instances(void) {
     /* free fixture-owned memory only  - NO foreign calls on stale handles */
     FixtureInstance *i = g_instances;
@@ -242,9 +359,22 @@ static OfxStatus main_entry(int idx, const char *action, const void *handle,
     if (!strcmp(action, kOfxActionBeginInstanceChanged)) { emit(FX_BEGIN_CHANGED, idx); return kOfxStatOK; }
     if (!strcmp(action, kOfxActionEndInstanceChanged))   { emit(FX_END_CHANGED, idx);   return kOfxStatOK; }
     if (!strcmp(action, kOfxActionInstanceChanged))      { emit(FX_CHANGED, idx);       return kOfxStatOK; }
-    if (!strcmp(action, kOfxImageEffectActionGetClipPreferences)) {
-        emit(FX_CLIP_PREFS, idx);
-        return (g_mode & FX_FAIL_CLIP_PREFS) ? kOfxStatFailed : kOfxStatOK;
+    if (!strcmp(action, kOfxImageEffectActionGetClipPreferences))
+        return clip_prefs((OfxImageEffectHandle)handle, out_args, idx);
+    if (!strcmp(action, kOfxImageEffectActionBeginSequenceRender)) {
+        emit(FX_BEGIN_RENDER, idx);
+        if (g_mode & FX_FAIL_BEGIN_RENDER) return kOfxStatFailed;
+        /* legal non-answer: "not trapped, but all is well anyway" */
+        return (g_mode & FX_REPLY_DEFAULT_BRACKET) ? kOfxStatReplyDefault
+                                                 : kOfxStatOK;
+    }
+    if (!strcmp(action, kOfxImageEffectActionRender))
+        return render_inst((OfxImageEffectHandle)handle, in_args, idx);
+    if (!strcmp(action, kOfxImageEffectActionEndSequenceRender)) {
+        emit(FX_END_RENDER, idx);
+        if (g_mode & FX_FAIL_END_RENDER) return kOfxStatFailed;
+        return (g_mode & FX_REPLY_DEFAULT_BRACKET) ? kOfxStatReplyDefault
+                                                 : kOfxStatOK;
     }
     return kOfxStatReplyDefault;
 }
@@ -320,5 +450,24 @@ int ofx_fixture_read_gain(double *current, double *at_time) {
 int ofx_fixture_created_gain(double *value) {
     if (!value || fx_live_count() == 0) return 1;
     *value = fx_created_gain_value();
+    return 0;
+}
+
+int ofx_fixture_last_render_time(double *time) {
+    if (!time) return 1;
+    *time = g_render_time;
+    return 0;
+}
+
+int ofx_fixture_last_rowbytes(int *src, int *dst) {
+    if (!src || !dst) return 1;
+    *src = g_src_rowbytes;
+    *dst = g_dst_rowbytes;
+    return 0;
+}
+
+int ofx_fixture_src_corners(unsigned char rgba16[16]) {
+    if (!rgba16) return 1;
+    memcpy(rgba16, g_src_corners, 16);
     return 0;
 }

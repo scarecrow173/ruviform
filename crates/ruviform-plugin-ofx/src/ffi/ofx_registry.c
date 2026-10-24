@@ -46,14 +46,14 @@ typedef struct RvTok {
     int kind;
     void *payload;
     uintptr_t parent;
-    struct RvTok *next, *child;
+    struct RvTok *next;
 } RvTok;
 static RvTok *g_toks = NULL;
 static uintptr_t g_next = 0x10000; /* never reset across sessions */
 
 /* caller holds g_mu */
 uintptr_t rv_tok_new(int kind, void *payload, uintptr_t parent) {
-    RvTok *n, *p = NULL;
+    RvTok *n;
     if (g_next == (uintptr_t)-1) return 0;
     n = (RvTok *)calloc(1, sizeof(*n));
     if (!n) return 0;
@@ -63,11 +63,6 @@ uintptr_t rv_tok_new(int kind, void *payload, uintptr_t parent) {
     n->parent = parent;
     n->next = g_toks;
     g_toks = n;
-    if (parent) {
-        for (p = g_toks; p && p->tok != parent; p = p->next) ;
-        if (p) { n->child = p->child; p->child = NULL; /* parent link via parent field */ }
-        (void)p;
-    }
     return n->tok;
 }
 
@@ -367,6 +362,11 @@ static RvPropsObj *po_of_props(OfxPropertySetHandle h) {
         o = (RvPropsObj *)rv_tok_get(t, H_CPROPS); if (o) return o;
         o = (RvPropsObj *)rv_tok_get(t, H_INARGS); if (o) return o;
         o = (RvPropsObj *)rv_tok_get(t, H_OUTARGS); if (o) return o;
+        {
+            /* an image handle resolves to its own property set */
+            RvImg *im = (RvImg *)rv_tok_get(t, H_IMAGE);
+            if (im) return im->props;
+        }
     }
     return NULL;
 }
