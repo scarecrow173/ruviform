@@ -70,7 +70,7 @@ Directory: `docs/tasks`
 | TASK-034JRcWTeJbPQAh5fUwPZs | オフライン駆動プリミティブ（CancellationToken/Progress/OfflineError/逐次ドライバ） | done | [offline-exec-primitives.md](./offline-exec-primitives.md) |
 | TASK-034L6ycSsF8VW32LLoNxXr | Implement video plugin core contract | done | [ofx-core-contract-implementation.md](./ofx-core-contract-implementation.md) |
 | TASK-034L6yiJbB3boniBUWvfmC | OFX host closeout | todo | [ofx-host-closeout.md](./ofx-host-closeout.md) |
-| TASK-034L6yib4dmV9rd1MUZxbw | OFX host final verification | todo | [ofx-host-final-verification.md](./ofx-host-final-verification.md) |
+| TASK-034L6yib4dmV9rd1MUZxbw | OFX host final verification | done | [ofx-host-final-verification.md](./ofx-host-final-verification.md) |
 | TASK-034L6yeVFSaiVUoV4RiRtm | Implement native OFX runtime | done | [ofx-native-runtime-implementation.md](./ofx-native-runtime-implementation.md) |
 | TASK-034L6yh0fBmRabh1TMLv2F | Implement OFX video rendering | done | [ofx-render-implementation.md](./ofx-render-implementation.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |

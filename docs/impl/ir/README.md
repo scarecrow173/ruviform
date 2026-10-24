@@ -60,3 +60,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034L7tPv92QOGFgOtTLZNN` | Issue #98 core video contract — Task 1 implementation | completed | [issue-98-core-video-contract-task-1-implementation.md](./issue-98-core-video-contract-task-1-implementation.md) |
 | `IMPL-034L8PMnubPCKoGlLUCJBn` | Issue #98 native OFX runtime — Task 2 implementation | completed | [issue-98-native-ofx-runtime-task-2-implementation.md](./issue-98-native-ofx-runtime-task-2-implementation.md) |
 | `IMPL-034L9vKxRmTwQzNcYuHdPfGs` | Issue #98 OFX render — Task 3 implementation | completed | [issue-98-ofx-render-task-3-implementation.md](./issue-98-ofx-render-task-3-implementation.md) |
+| `IMPL-034LCw7fQzNpVxRyTkBmHsGd` | Issue #98 OFX final verification — Task 4 implementation | completed | [issue-98-ofx-final-verification-task-4-implementation.md](./issue-98-ofx-final-verification-task-4-implementation.md) |

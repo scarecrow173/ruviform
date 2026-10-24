@@ -1,0 +1,11 @@
+[check] $ cargo check --workspace --all-targets
+    Checking ruviform-plugin-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-core)
+    Checking ruviform-rt v0.1.0 (F:\repositry\ruviform\crates\ruviform-rt)
+   Compiling ruviform-plugin-ofx v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-ofx)
+    Checking ruviform-audio v0.1.0 (F:\repositry\ruviform\crates\ruviform-audio)
+    Checking ruviform-exec v0.1.0 (F:\repositry\ruviform\crates\ruviform-exec)
+    Checking ruviform-video v0.1.0 (F:\repositry\ruviform\crates\ruviform-video)
+    Checking ruviform-plugin-vst3 v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-vst3)
+    Checking ruviform-plugin-clap v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-clap)
+    Checking ruviform-plugin-host v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-host)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.55s

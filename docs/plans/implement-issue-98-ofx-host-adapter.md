@@ -42,7 +42,7 @@ relations:
 
 # Implement Issue 98 OFX Host Adapter Implementation Plan
 
-> status: in-progress — Task 1 (core contract) は commit 済み（`3fd3f04`）。Task 2 (native runtime) 完了・commit 済み（`b9b170c`・A5–A8・3 gate green・lead review 修正済み）。Task 3 (render) 完了（A9–A12・3 gate green・lead review 修正済み）。Task 4 (final verification)・Task 5 (closeout) 未着手 — 全体完了を意味しない。task/test-spec は起票済み（2 TSpec proposed・5 task）。
+> status: in-progress — Task 1 (core contract) は commit 済み（`3fd3f04`）。Task 2 (native runtime) 完了・commit 済み（`b9b170c`・A5–A8・3 gate green・lead review 修正済み）。Task 3 (render) 完了（A9–A12・3 gate green・lead review 修正済み）。Task 4 (final verification) 完了（full gate 8 コマンド全 exit 0・実 log 保存・test-rt 実一致 94 件）。Task 5 (closeout) 未着手 — 全体完了を意味しない。task/test-spec は起票済み（2 TSpec proposed・5 task）。
 >
 > **Plan review history**: Cycle 1（Validator + Judge・`scratch/plan-validator.md`/`plan-judge.md`）= BLOCKED — confirmed 2 documentary P1（R1: SingleInstance/CreateInstance ordering・R2: action 5/6 prerequisite ordering）を修正し、independent Judge により **APPROVED — readiness ACCEPT**（`scratch/plan-judge-final.md`・両 P1 は CONFIRMED-FIXED・runtime check 未実施のまま承認）。targeted reverification 完了・design の 2-cycle verdict は再開していない。実失敗と未実行の区別を保持する。
 >
