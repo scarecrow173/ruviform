@@ -1,0 +1,304 @@
+[test-rt] $ cargo test --workspace rt_
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio-e2545b2bd8adcb9e.exe)
+
+running 2 tests
+test tests::rt_callback_path_no_alloc ... ok
+test tests::rt_denormal_flush_no_alloc ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio_analysis-5d8dafe7e0728db6.exe)
+
+running 3 tests
+test level::tests::rt_process_allocates_nothing ... ok
+test spectrum::tests::rt_process_allocates_nothing ... ok
+test spectrum::tests::short_input_zero_pads_and_long_input_truncates ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio_core-46be6155c2db2315.exe)
+
+running 8 tests
+test buffer::tests::rt_view_mut_try_new_feeds_interleaved_boundary_write ... ok
+test tests::device_contract::port_traits_compose_as_send_boxed_trait_objects ... ok
+test planar::tests::rt_planar_write_view_construction_and_access ... ok
+test tests::rt_interleaved_roundtrip_via_views ... ok
+test planar::tests::rt_planar_read_view_construction_and_access ... ok
+test tests::rt_view_channel_access ... ok
+test tests::device_contract::mock_backend_walks_the_port_flow ... ok
+test tests::rt_sample_index_media_time_conversion ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio_device-ff8e33d6cc25c6fd.exe)
+
+running 1 test
+test stream::tests::rt_output_callback_path_allocates_nothing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.00s
+
+     Running tests\mock_backend.rs (target\debug\deps\mock_backend-5eb33862e0fa3077.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_dsp-aac6a318e814663a.exe)
+
+running 1 test
+test tests::rt_process_paths_do_not_allocate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_edit-2d95505439aa2da2.exe)
+
+running 9 tests
+test eval::tests::move_clip_onto_equal_start_resolves_to_later_insertion ... ok
+test model::tests::insert_clip_rejects_kind_mismatch_and_bad_attributes ... ok
+test model::tests::insert_clip_sorts_by_start_and_normalizes_range ... ok
+test model::tests::insert_clip_propagates_time_overflow ... ok
+test model::tests::insert_clip_rejects_base_collapsed_ranges ... ok
+test model::tests::insert_clip_rejects_range_longer_than_source ... ok
+test eval::tests::overlap_on_equal_start_resolves_to_later_insertion ... ok
+test model::tests::insert_clip_rejects_non_positive_duration ... ok
+test eval::tests::trim_clip_onto_equal_start_resolves_to_later_insertion ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 24 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_exec-39afacbb68237c03.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_io_symphonia-20791d2f2a0c7612.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests\wav_decode_poc.rs (target\debug\deps\wav_decode_poc-5e080b214e44d584.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_math-c8c0f83988efcef0.exe)
+
+running 1 test
+test dsp::tests::rt_dsp_kernels_no_alloc ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+
+     Running tests\simd_equiv.rs (target\debug\deps\simd_equiv-e64caea69015cc54.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_media_core-aab6bbe1ec17efbe.exe)
+
+running 5 tests
+test music::tests::rt_conversion_no_alloc ... ok
+test tests::rt_drop_frame_roundtrip ... ok
+test tests::rt_checked_arithmetic ... ok
+test tests::rt_cross_base_ordering ... ok
+test tests::rt_convert_exact_and_rounding ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_media_io-e352c67f241cf18d.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_clap-824a24e1cc893487.exe)
+
+running 9 tests
+test adapt::tests::adapt_transport_maps_musical_fields ... ok
+test plugin::tests::lifecycle_process_before_start_is_protocol_violation ... ok
+test plugin::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test adapt::tests::adapt_transport_maps_status_position_and_loop ... ok
+test plugin::tests::rt_process_on_audio_thread_passes_thread_check ... ok
+test plugin::tests::process_accepts_transport_and_steady_time ... ok
+test gain::tests::rt_process_full_stereo_block ... ok
+test adapt::tests::adapt_transport_musical_gates_and_unset_forms ... ok
+test plugin::tests::rt_process_off_audio_thread_is_defined_rejection ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 37 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_core-093cda5a8314b518.exe)
+
+running 10 tests
+test event::tests::sort_events_is_stable_and_alloc_free ... ok
+test event::tests::sort_events_undersized_scratch_falls_back_to_insertion ... ok
+test tests::rt_event_list_validation ... ok
+test tests::rt_lifecycle_transition_table ... ok
+test wire::tests::decode_rejects_short_and_truncated_frames ... ok
+test wire::tests::transport_roundtrip_minimal_and_full ... ok
+test event::tests::rt_sort_worst_case_moves_stay_n_log_n ... ok
+test tests::rt_transport_snapshot_accessors ... ok
+test tests::rt_process_call_with_borrowed_views ... ok
+test tests::rt_param_value_mapping ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 0.00s
+
+     Running tests\video_contract.rs (target\debug\deps\video_contract-dfbda66734affb34.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_export-19fb6984392f2cba.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\bin\ruviform-plugin-l1-runner.rs (target\debug\deps\ruviform_plugin_l1_runner-63144e12c9699d73.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_runner_e2e.rs (target\debug\deps\l1_runner_e2e-ad335532d00e5306.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_host-791fb841a16b8056.exe)
+
+running 1 test
+test tests::rt_process_no_alloc ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running unittests src\bin\l1-test-worker.rs (target\debug\deps\l1_test_worker-394f65ae97ee7779.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_proxy_e2e.rs (target\debug\deps\l1_proxy_e2e-35e1973e5a911097.exe)
+
+running 2 tests
+test rt_l1_result_leg_try_ops ... ok
+test rt_l1_process_path_no_alloc ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.01s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_ofx-ae727318811ac994.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\bridge_min.rs (target\debug\deps\bridge_min-b732ada19271c158.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests\bridge_native.rs (target\debug\deps\bridge_native-e8c0c8453842b02b.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests\native_host.rs (target\debug\deps\native_host-6e45c238e3ddc0a0.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 36 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_vst3-763c5231d49e68a7.exe)
+
+running 5 tests
+test block::tests::rt_prepare_process_finish_round_trip ... ok
+test component::tests::transport_combines_media_and_musical ... ok
+test component::tests::rt_param_scan_stays_bounded_when_host_counts_lie ... ok
+test component::tests::rt_process_copies_gain_zero_copy ... ok
+test component::tests::rt_param_scan_total_budget_bounds_worst_case ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_rt-a2723792745a08df.exe)
+
+running 24 tests
+test retire::tests::rt_endpoint_send_bounds ... ok
+test retire::tests::rt_retire_teardown_collector_outlives ... ok
+test retire::tests::rt_retire_no_alloc ... ok
+test snapshot::tests::rt_snapshot_publish_visibility ... ok
+test snapshot::tests::rt_snapshot_retire_overflows_observable ... ok
+test spsc::tests::rt_full_try_push_returns_value ... ok
+test snapshot::tests::rt_endpoint_send_bounds ... ok
+test snapshot::tests::rt_snapshot_guard_drop_routes_to_retire ... ok
+test retire::tests::rt_retire_repeated_saturation_accumulates ... ok
+test snapshot::tests::rt_snapshot_read_no_alloc ... ok
+test spsc::tests::rt_push_pop_fifo ... ok
+test spsc::tests::rt_try_push_pop_no_alloc ... ok
+test retire::tests::rt_retire_full_forgets_not_drops ... ok
+test snapshot::tests::rt_snapshot_displaced_arc_freed_on_collect ... ok
+test snapshot::tests::rt_snapshot_reader_outlives_writer ... ok
+test retire::tests::rt_retire_overflow_counted_and_shared ... ok
+test spsc::tests::rt_endpoint_send_bounds ... ok
+test retire::tests::rt_retire_then_drain_drops ... ok
+test spsc::tests::rt_pop_latest_returns_newest ... ok
+test tests::rt_clock_tick_visibility ... ok
+test tests::rt_clock_timebase_fixed ... ok
+test tests::rt_endpoint_thread_bounds ... ok
+test tests::rt_mint_token_usable ... ok
+test tests::rt_prepare_then_process ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_video-1ec3565eca364c7e.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_video_core-e88bf9fce35f0aab.exe)
+
+running 3 tests
+test tests::rt_plane_access_and_row_slicing ... ok
+test tests::rt_plane_mut_row_write ... ok
+test tests::rt_timestamp_access ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_video_proc-b954b8c4b35934e4.exe)
+
+running 27 tests
+test affine::tests::rt_process_affine_transform_never_mutates_source ... ok
+test composite::tests::rt_process_composite_over_f32_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_crossfade_never_mutates_sources ... ok
+test affine::tests::rt_process_affine_transform_f32_is_repeatable_and_deterministic ... ok
+test affine::tests::rt_process_affine_transform_is_repeatable_and_deterministic ... ok
+test rgb_to_yuv::tests::rt_process_never_mutates_source ... ok
+test composite::tests::rt_process_crossfade_f32_never_mutates_sources ... ok
+test affine::tests::rt_process_affine_transform_f32_never_mutates_source ... ok
+test composite::tests::rt_process_composite_over_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_crossfade_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_composite_over_f32_never_mutates_source ... ok
+test rgb_to_yuv::tests::rt_process_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_composite_over_never_mutates_source ... ok
+test composite::tests::rt_process_crossfade_f32_is_repeatable_and_deterministic ... ok
+test rgba_f16::tests::rt_process_to_f16_never_mutates_source ... ok
+test rgba_f16::tests::rt_process_to_f16_is_repeatable_and_deterministic ... ok
+test rgba_f16::tests::rt_process_to_u8_is_repeatable_and_deterministic ... ok
+test rgba_f16::tests::rt_process_to_u8_never_mutates_source ... ok
+test tone_map::tests::rt_process_tone_map_sdr_is_repeatable_and_deterministic ... ok
+test tone_map::tests::rt_process_tone_map_sdr_never_mutates_source ... ok
+test transfer::tests::resolved_tables_report_the_applied_value ... ok
+test working_space::tests::rt_process_from_working_is_repeatable_and_deterministic ... ok
+test working_space::tests::rt_process_from_working_never_mutates_source ... ok
+test working_space::tests::rt_process_to_working_never_mutates_source ... ok
+test working_space::tests::rt_process_to_working_is_repeatable_and_deterministic ... ok
+test yuv_to_rgb::tests::rt_process_is_repeatable_and_deterministic ... ok
+test yuv_to_rgb::tests::rt_process_never_mutates_source ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 144 filtered out; finished in 0.00s

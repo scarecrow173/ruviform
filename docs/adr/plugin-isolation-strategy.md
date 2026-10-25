@@ -31,6 +31,10 @@ relations:
     - "docs/designs/plugin-isolation.md"
     - "docs/designs/plugin-host-l0.md"
     - "docs/adr/ofx-video-plugin-scope.md"
+    - "docs/discovery/plugin-l1-out-of-process.md"
+    - "docs/specs/plugin-l1-out-of-process.md"
+    - "docs/designs/plugin-l1-out-of-process.md"
+    - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
   verifies: []
   verified-by: []
   references: []

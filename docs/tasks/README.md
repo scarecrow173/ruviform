@@ -62,6 +62,9 @@ Directory: `docs/tasks`
 | TASK-034Jf3FazZdLzFAFTDXUa3 | スカラー参照カーネルと共通型 | done | [implement-simd-poc-scalar-kernels.md](./implement-simd-poc-scalar-kernels.md) |
 | TASK-034J5KR5ueilYgXdyyF4ZU | ruviform-video-core のデータモデル実装 | done | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | TASK-034JcD1UTgLlW1lRoWI1Ng | video-proc カーネル API 形状と YUV→RGB 変換カーネルの実装 | done | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
+| TASK-034LNY736TLX2w3k4RFFZM | plugin-core L1 基盤（契約移設 + Lifecycle Failed + wire codec） | done | [l1-core-contracts-and-wire-codec.md](./l1-core-contracts-and-wire-codec.md) |
+| TASK-034LNYf8Qj1NeGAKmaP7B4 | plugin-host L1 プロキシ制御面（spawn/handshake/コマンド転送/クラッシュ検出） | done | [l1-proxy-control-plane.md](./l1-proxy-control-plane.md) |
+| TASK-034LNYmL2ezSeFFgddaeDX | L1 共有メモリデータ面 + RT 脚 + pass-through | done | [l1-shm-data-plane-and-rt-legs.md](./l1-shm-data-plane-and-rt-legs.md) |
 | TASK-034JNwTZ8WalgowFahLc8E | Timecode API の FrameRate 移行（破壊的シグネチャ置換と呼び出し側移行） | done | [migrate-timecode-to-framerate.md](./migrate-timecode-to-framerate.md) |
 | TASK-034KoQ7sXAxjPHQbdWqDVW | Issue #90 文書クローズと全量検証 | done | [music-time-closeout.md](./music-time-closeout.md) |
 | TASK-gJ0wsCnJrG8Wo0JQSENFtz | 音楽時間 ABI 整合検証 + Issue #33 クローズ | done | [music-time-design-verify.md](./music-time-design-verify.md) |
@@ -77,11 +80,15 @@ Directory: `docs/tasks`
 | TASK-034L6yeVFSaiVUoV4RiRtm | Implement native OFX runtime | done | [ofx-native-runtime-implementation.md](./ofx-native-runtime-implementation.md) |
 | TASK-034L6yh0fBmRabh1TMLv2F | Implement OFX video rendering | done | [ofx-render-implementation.md](./ofx-render-implementation.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
+| TASK-034LNYeFTd7EgCwbDA0GWD | ruviform-plugin-export 新設 + run() ランナー + l1-runner bin | done | [plugin-export-crate-and-l1-runner.md](./plugin-export-crate-and-l1-runner.md) |
 | TASK-034JZPGUI0000000000006 | Issue #30 ADR + 文書クローズ | done | [plugin-gui-poc-closeout.md](./plugin-gui-poc-closeout.md) |
 | TASK-034JZPGUI0000000000005 | plugin-gui PoC ハーネス + 実機実験 | done | [plugin-gui-poc-harness.md](./plugin-gui-poc-harness.md) |
+| TASK-034LNYndN4rzshflcqGHt5 | PluginHost コンポジット + 選択 API + doc 整合 | done | [plugin-host-composite-and-l1-e2e.md](./plugin-host-composite-and-l1-e2e.md) |
 | TASK-Cay381BHNWhN855kjvMcL1 | Issue #74 文書クローズと全量検証 | done | [plugin-host-l0-closeout.md](./plugin-host-l0-closeout.md) |
 | TASK-AMKTeO5Inr8CXr3RzX3uOV | ruviform-plugin-host クレート実装 + テスト | done | [plugin-host-l0-crate.md](./plugin-host-l0-crate.md) |
 | TASK-034JZLISO0000000000005 | plugin-host API 整合検証 + Issue #31 クローズ | done | [plugin-isolation-verify.md](./plugin-isolation-verify.md) |
+| TASK-034LNYvBEBtmjJIUa6xJMi | Issue #76 プラグイン L1 分離 closeout | done | [plugin-l1-closeout.md](./plugin-l1-closeout.md) |
+| TASK-034LNYv07MQpWKTmfQ3vX0 | Issue #76 プラグイン L1 分離 final verification | done | [plugin-l1-final-verification.md](./plugin-l1-final-verification.md) |
 | TASK-034JfHz5u1uXcPkG8d8t4B | PoC 採否 ADR 確定（エビデンス集約・confirm/revise・accepted 遷移） | done | [poc-adr-finalize.md](./poc-adr-finalize.md) |
 | TASK-034JgsGOtyuy2MkLRLZQI5 | clack 系による CLAP binding PoC（最小ゲインプラグイン） | done | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
 | TASK-034JfHyxKSwvhiQ0sKqjXQ | PoC フロントエンド比較と配布検証（Solid 移植・単一バイナリ・OS 別方針） | done | [poc-frontend-and-dist.md](./poc-frontend-and-dist.md) |

@@ -30,6 +30,9 @@ relations:
     - "docs/designs/ruviform-architecture-design-baseline.md"
   derived-by:
     - "docs/designs/plugin-host-l0.md"
+    - "docs/discovery/plugin-l1-out-of-process.md"
+    - "docs/specs/plugin-l1-out-of-process.md"
+    - "docs/designs/plugin-l1-out-of-process.md"
   verifies: []
   verified-by: []
   references: []

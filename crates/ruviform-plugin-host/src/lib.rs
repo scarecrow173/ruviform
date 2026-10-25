@@ -3,19 +3,50 @@
 //! application and plugin instances, defined by the plugin-isolation
 //! design (Issue #31 → `docs/designs/plugin-isolation.md`,
 //! `docs/adr/plugin-isolation-strategy.md`) and implemented here at
-//! level L0 (in-process, the default path).
+//! levels L0 (in-process, the default path) and L1 (opt-in
+//! out-of-process, Issue #76 → `docs/designs/plugin-l1-out-of-process.md`).
 //!
 //! ## Boundary
 //!
 //! Callers see plain data: [`HostCommand`]/[`HostReply`]/[`HostError`]
 //! plus the opaque [`PluginHandle`]. Non-RT operations — scan,
 //! instantiate, the [`LifecycleEvent`]-driven lifecycle verbs, state
-//! save/restore and GUI open/close — all travel this one surface, so
-//! an out-of-process (L1) backend can serve the identical commands
-//! later without callers changing. Per the isolation design `process`
-//! is **not** a command: in L0 it stays a direct call into
-//! [`PluginProcessor`], which [`InProcessHost::process`] /
-//! [`InProcessHost::processor`] expose without IPC or blocking.
+//! save/restore and GUI open/close — all travel this one surface.
+//! Per the isolation design `process` is **not** a command: in L0 it
+//! stays a direct call into [`PluginProcessor`], which
+//! [`InProcessHost::process`] / [`InProcessHost::plugin_mut`] expose
+//! without IPC or blocking.
+//!
+//! ## Backends
+//!
+//! - **L0 (default)** — [`InProcessHost`]: factories registered via
+//!   `register_factory` run in-process; `process` is a direct
+//!   [`PluginProcessor`] call.
+//! - **L1 (opt-in, Issue #76)** — one child process per instance:
+//!   a framed stdio control plane, a `shared_memory` data plane and
+//!   `ruviform-rt` SPSC try-legs so the caller thread never touches
+//!   pipes, shm or blocking I/O. A live-exit child converges the
+//!   instance to `Failed` and reports it once through
+//!   [`PluginHost::try_recv_notification`] as
+//!   [`HostNotification::InstanceFailed`]; a `Failed` instance
+//!   rejects every command but `Destroy` (`Err(HostError::Failed)`)
+//!   and its `process` leg emits silence — `Ok(CONTINUE)`, never a
+//!   hang.
+//!
+//! [`PluginHost`] is the composite that serves both behind one
+//! unified [`PluginHandle`] space: `register_factory` claims a
+//! `plugin_id` for L0, [`PluginHost::register_out_of_process`]
+//! ([`OutOfProcessSpec`]) claims one for L1, and
+//! `Instantiate { plugin_id }` keeps its shape — the caller never
+//! names a layer. Duplicate `plugin_id` claims across routes are the
+//! defined rejection `Err(HostError::DuplicatePluginId)`.
+//!
+//! **Latency contract (L1):** an L1-routed block is answered
+//! `lookahead_blocks` blocks later — latency =
+//! `lookahead_blocks × block_frames / sample_rate` (default
+//! 2 × 512 frames @ 48 kHz ≈ 21.3 ms; per-spec
+//! [`OutOfProcessSpec::lookahead_blocks`]). Underruns pass through
+//! the last received block (silence before the first), never error.
 //!
 //! ## Plugin side
 //!
@@ -29,28 +60,49 @@
 //! ## Allowed dependency layers
 //!
 //! Extension layer — `ruviform-plugin-core` (and transitively the
-//! foundations it uses) only. No standard-specific or binding-crate
-//! types appear here; `ruviform-plugin-clap` / `-vst3` adapt to
-//! [`Plugin`]/[`PluginFactory`].
+//! foundations it uses), `ruviform-rt` (Primitives — the L1 RT legs)
+//! and `shared_memory` (confined to the internal `l1::shm` module —
+//! never exposed on the public API or feature names). No
+//! standard-specific or binding-crate types appear here;
+//! `ruviform-plugin-clap` / `-vst3` adapt to [`Plugin`]/[`PluginFactory`].
 //!
 //! ## RT contract
 //!
 //! [`InProcessHost::process`], [`InProcessHost::plugin_mut`] and
 //! [`InProcessHost::lifecycle_state`] are RT-suitable — a `const`
 //! lifecycle table lookup plus a direct call, no allocation, no
-//! blocking, no IPC. Command dispatch (`execute`,
-//! `register_factory`) is **non-RT only**.
+//! blocking, no IPC. [`PluginHost::process`] is RT-suitable on both
+//! routes (L1 = `try_push`/`try_pop` + bounded staging copies only);
+//! [`PluginHost::plugin_mut`] is RT-suitable but returns `None` for
+//! L1 slots. [`PluginHost::lifecycle_state`] is const-cheap for L0
+//! slots; for L1 slots it takes the instance's shared mutex — treat
+//! it as non-RT. Command dispatch (`execute`, `register_*`) and
+//! `try_recv_notification` are **non-RT only**.
 //!
 //! Contract source: `docs/designs/plugin-isolation.md`,
-//! `docs/designs/plugin-host-l0.md`, `docs/adr/plugin-isolation-strategy.md`.
+//! `docs/designs/plugin-host-l0.md`,
+//! `docs/designs/plugin-l1-out-of-process.md`,
+//! `docs/adr/plugin-isolation-strategy.md`.
+//!
+//! [`LifecycleEvent`]: ruviform_plugin_core::LifecycleEvent
+//! [`PluginProcessor`]: ruviform_plugin_core::PluginProcessor
 
 #![allow(clippy::module_name_repetitions)]
 
 mod command;
+mod composite;
 mod host;
+// The `pub(crate)` L1 out-of-process instance machinery (Issue #76):
+// spawn + stdio handshake, driver/reader threads, the shm data plane
+// and the idempotent `Failed` convergence. `composite::PluginHost` is
+// its only in-crate consumer; items kept solely for the `#[path]`
+// test include (`tests/l1_proxy_e2e.rs`) carry their own
+// `dead_code` allowances instead of a blanket module-level one.
+pub(crate) mod l1;
 mod plugin;
 
 pub use command::{GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, PluginHandle};
+pub use composite::{ChildExit, HostNotification, OutOfProcessSpec, PluginHost};
 pub use host::InProcessHost;
 pub use plugin::{ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase};
 
@@ -464,6 +516,40 @@ mod tests {
         assert_eq!(
             host.execute(HostCommand::Initialize { handle }),
             Err(HostError::InvalidHandle)
+        );
+    }
+
+    #[test]
+    fn reused_slot_generations_do_not_alias() {
+        let mut host = host_with_gain();
+        // Churn one slot: each destroy frees it for the next
+        // instantiate, and the generation must keep bumping — a
+        // generation that reset on reuse would let a stale handle
+        // validate against a different live instance.
+        let handle0 = instantiate(&mut host);
+        host.execute(HostCommand::Destroy { handle: handle0 })
+            .unwrap();
+        let handle1 = instantiate(&mut host);
+        host.execute(HostCommand::Destroy { handle: handle1 })
+            .unwrap();
+        let handle2 = instantiate(&mut host);
+
+        assert_eq!(handle0.slot(), handle1.slot());
+        assert_eq!(handle1.slot(), handle2.slot());
+        assert_eq!(handle1.generation(), 1);
+        assert_eq!(handle2.generation(), 2);
+
+        // The second stale handle must not alias the live instance;
+        // the live handle still works.
+        assert_eq!(
+            host.execute(HostCommand::Initialize { handle: handle1 }),
+            Err(HostError::InvalidHandle)
+        );
+        host.execute(HostCommand::Initialize { handle: handle2 })
+            .unwrap();
+        assert_eq!(
+            host.lifecycle_state(handle2),
+            Some(LifecycleState::Initialized)
         );
     }
 
