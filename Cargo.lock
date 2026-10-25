@@ -1439,6 +1439,8 @@ dependencies = [
  "assert_no_alloc",
  "ruviform-audio-core",
  "ruviform-plugin-core",
+ "ruviform-rt",
+ "shared_memory",
 ]
 
 [[package]]

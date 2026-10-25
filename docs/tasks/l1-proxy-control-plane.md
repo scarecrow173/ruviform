@@ -1,23 +1,38 @@
 ---
 id: "TASK-034LNYf8Qj1NeGAKmaP7B4"
 type: "task"
-status: "todo"
+status: "done"
 title: "plugin-host L1 プロキシ制御面（spawn/handshake/コマンド転送/クラッシュ検出）"
 created: "2026-10-25"
 updated: "2026-10-25"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/l1/mod.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/l1/shm.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/bin/l1-test-worker.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-host/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/lib.rs"
+      - type: "file"
+        path: "Cargo.lock"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-76-l1-proxy-control-plane-task-3-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
     - "docs/tasks/l1-core-contracts-and-wire-codec.md"
@@ -53,8 +68,8 @@ approved plan `implement-issue-76-plugin-l1-out-of-process.md` の **actions 9�
 ### A10 — L1 インスタンス機構（spawn/handshake・driver/reader・`Failed` 収束）
 
 - spawn: `Command`（`OutOfProcessSpec.program`/`args` + `--ruviform-plugin-id <id>`/`--ruviform-shm-key <key>`）→ `Hello` 受信 → `Scan` → `Scanned` の `wire::Descriptor` を `OutOfProcessSpec.descriptor` とフィールド等価照合 → `Instantiated{handle}`。いずれかの失敗・version 不一致・`command_timeout` → `Err(HostError::Ipc)` + child kill/reap
-- `driver` スレッド: `Child` を単独所有・stdin・コマンド mpsc・`try_wait` 監視（~200µs `DRIVER_POLL_INTERVAL`）・shutdown watchdog（猶予超過で `child.kill()`）
-- `reader` スレッド: stdout・`CommandReply` → 待機 waiter 起床・EOF → `seen_eof`（`Failed` 収束の一経路）
+- `driver` スレッド: `Shared.child`（`Mutex<Child>` — driver が操作するが `Arc<Shared>` 経由で共有。wedged 状態で `write_all` ブロック中でも収束側が直接 `kill()` できるよう design の単独所有から変更）・stdin・コマンド mpsc・`try_wait` 監視（~200µs `DRIVER_POLL_INTERVAL`）・shutdown watchdog（猶予超過で `child.kill()`）
+- `reader` スレッド: stdout・`CommandReply` → 待機 waiter 起床・EOF → `seen_eof`（`Failed` 収束の一経路）。teardown では join せず detach（stdio を継承した孫プロセスが stdout を持ち続けると `read_exact` が永久ブロックし得るため）
 - ローカル lifecycle ミラー（非 RT コマンドで更新 — `process` 等価の const 検査に使う）
 - `Failed` 冪等収束: `seen_eof`・`try_wait → Some(ExitStatus)` の先着で 1 回のみ — `HostNotification::InstanceFailed { handle, exit: ChildExit }` を通知キュー（std mpsc）へ + pending コマンド waiter を `HostError::Ipc` で起床。ライブ中 exit は code 不問 `Failed`（voluntary exit 0 もプロトコル違反）・`Shutdown` 後 exit のみ clean teardown・自動再起動なし
 - `Destroy` → `Shutdown` 送信 + reap + スロット解放
@@ -107,9 +122,11 @@ approved plan `implement-issue-76-plugin-l1-out-of-process.md` の **actions 9�
 
 ## Verification
 
-- [ ] `mise run check` — exit 0（`l1`/`l1-test-worker` の型チェック）
-- [ ] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
-- [ ] `mise run test` — exit 0（制御面 E2E 全 pass — parity・クラッシュ→`Failed`+通知+拒否・handshake 失敗・GUI `Unsupported`）
-- [ ] `cargo tree -p ruviform-plugin-host` — `ruviform-rt` + `shared_memory`（+ transitive）が含まれる
-- [ ] `rg -n "unsafe" crates/ruviform-plugin-host/src/l1` — 自前 `unsafe` ゼロ（`as_slice`/`as_mut_slice` のみ）
-- [ ] `rg -n "pub.*shm|shared_memory" crates/ruviform-plugin-host/src/lib.rs` — `shared_memory` が公開 API に露出しない（`mod l1` は `pub(crate)`）
+- [x] `mise run check` — exit 0（`l1`/`l1-test-worker` の型チェック・実 log）
+- [x] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
+- [x] `mise run test` — exit 0（制御面 E2E 20 tests 全 pass — parity・クラッシュ→`Failed`+通知+拒否・handshake 失敗・GUI `Unsupported` — workspace 55 suites・実 log）
+- [x] `cargo tree -p ruviform-plugin-host` — `ruviform-rt` + `shared_memory`（+ transitive）が含まれる
+- [x] `rg -n "unsafe" crates/ruviform-plugin-host/src/l1` — scoped `#[expect(unsafe_code)]` ×2（`l1/shm.rs` `bytes`/`bytes_mut`・SAFETY コメント付き — deviation: `shared_memory` 0.12.4 の `as_slice`/`as_slice_mut` は `unsafe fn`・`l1/mod.rs` は unsafe ゼロ — 詳細は IR）
+- [x] `rg -n "pub.*shm|shared_memory" crates/ruviform-plugin-host/src/lib.rs` — `shared_memory` が公開 API に露出しない（`mod l1` は `pub(crate)`・`shared_memory` 型は `l1/shm.rs` に閉じ込め）
+
+補足（task doc の Verification 範囲外・IR に記録）: `mise run fmt-check` exit 0・`mise run test-rt` exit 0（既存レーン無退行 — `l1` は非 RT のみ）。レビュー修正（P1: `Shared.child` 共有 + converge 側 force-kill・P2: driver-only `shutdown_initiated`・`try_wait` Err の kill+reap・reader detach・shm key retry・driver write 前 terminal check・doc 群）は mutation 検証済み — 詳細は `docs/impl/ir/issue-76-l1-proxy-control-plane-task-3-implementation.md`。

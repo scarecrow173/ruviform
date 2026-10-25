@@ -51,6 +51,13 @@
 
 mod command;
 mod host;
+// The `pub(crate)` L1 out-of-process instance machinery (Issue #76):
+// spawn + stdio handshake, driver/reader threads and the idempotent
+// `Failed` convergence. Nothing in this crate consumes it yet — the
+// data plane and the `PluginHost` composite are later tasks; until
+// then `dead_code` stays allowed here rather than on each item.
+#[allow(dead_code)]
+pub(crate) mod l1;
 mod plugin;
 
 pub use command::{GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, PluginHandle};
