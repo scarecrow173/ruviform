@@ -26,7 +26,7 @@ Directory: `docs/tasks`
 | TASK-034JRQBPxKgu0yLVIB6Xm7 | セッション統合（OutputStream callback → RT グラフ駆動） | done | [audio-engine-session.md](./audio-engine-session.md) |
 | TASK-034IwBWH50nD9Unn8HghJD | テンプレート残存プレースホルダーのベースラインスイープ | done | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
 | TASK-034LFHv6XBnCj3XsdaEGVG | Issue #99 色変換カーネル closeout | todo | [color-conversion-closeout.md](./color-conversion-closeout.md) |
-| TASK-034LFHuE6Ii7Wqar445Znn | Issue #99 色変換カーネル final verification | todo | [color-conversion-final-verification.md](./color-conversion-final-verification.md) |
+| TASK-034LFHuE6Ii7Wqar445Znn | Issue #99 色変換カーネル final verification | done | [color-conversion-final-verification.md](./color-conversion-final-verification.md) |
 | TASK-034KSVlq4M72vjrxvDRQbP | コンポジットカーネル実装（CompositeOver + Crossfade + 共有 f16 コーデック格上げ） | done | [composite-kernels.md](./composite-kernels.md) |
 | TASK-034IdQmBa6UdauVn9IG59X | 最小ワークスペースと smoke test の構築 | done | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | TASK-034JgsFV6CWAjSnPuekBgs | ruviform-plugin-core 共通基盤クレートの作成 | done | [create-plugin-core-foundation.md](./create-plugin-core-foundation.md) |
