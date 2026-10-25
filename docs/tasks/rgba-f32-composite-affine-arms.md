@@ -1,23 +1,36 @@
 ---
 id: "TASK-034LFHlxNkMOGDilPsdP0f"
 type: "task"
-status: "todo"
+status: "done"
 title: "既存カーネルの RgbaF32 arm 拡張（CompositeOver/Crossfade/AffineTransform）"
 created: "2026-10-25"
 updated: "2026-10-25"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
     added: []
-    modified: []
+    modified:
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/composite.rs"
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/affine.rs"
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-video-proc/README.md"
+      - type: "file"
+        path: "crates/README.md"
+      - type: "file"
+        path: "docs/tasks/rgba-f32-composite-affine-arms.md"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-99-rgba-f32-arms-task-5-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
     - "docs/tasks/rgba-f32-format-and-transfer-internals.md"
@@ -47,7 +60,7 @@ approved plan `implement-issue-99-color-conversion-kernels.md` の **actions 12�
 
 - `CompositeOver`: `RgbaF32 → RgbaF32` arm — `RgbaF16` パスと同式を f32 で評価（binary16 丸めなし・Q8 量子化を継承 — `q8` helper の既存規約どおり）。straight alpha・premultiply 前提なし・transparent black・メタデータ規約（dst = over 側の color/pts/duration 伝播）は不変
 - `Crossfade`: `RgbaF32 → RgbaF32` arm — 同式 f32 評価（`a×(1−t) + b×t` 混合・binary16 丸めなし）
-- 等価性契約: 参照実装（f64 評価を binary32 へ丸め）に ≤ 2 ulp — doc の等価性契約節を `RgbaF16`（≤ 1 ulp binary16）と並記で更新
+- 等価性契約: 参照実装（f64 評価を binary32 へ丸め）に ≤ 2 ulp — doc の等価性契約節を `RgbaF16`（≤ 2 ulp binary16）と並記で更新
 - `RgbaF32` src を受けない既存 arm（`Rgba8`/`RgbaF16`）の挙動不変 — `_` arm は graceful 拒否のまま
 
 ### A13 — `affine.rs` — `AffineTransform` `RgbaF32` arm
@@ -67,8 +80,8 @@ approved plan `implement-issue-99-color-conversion-kernels.md` の **actions 12�
 
 ## Verification
 
-- [ ] `mise run test` — exit 0（composite.rs/affine.rs の `RgbaF32` ケース全 pass）
-- [ ] `mise run lint` — exit 0
-- [ ] `mise run test-rt` — exit 0 かつ本 task の `rt_process_*` が一致・pass
-- [ ] `rg -n "RgbaF32" crates/ruviform-video-proc/src/composite.rs crates/ruviform-video-proc/src/affine.rs` — 両モジュールに arm が存在
-- [ ] `rg -n "RgbaF32" crates/ruviform-video-proc/README.md crates/README.md` — 一覧/索引が実装状況と一致
+- [x] `mise run test` — exit 0（video-proc lib tests 171/171 — composite.rs の `RgbaF32` 18 件・affine.rs の 6 件を含む全 pass・実 log）
+- [x] `mise run lint` — exit 0（clippy `--workspace --all-targets -D warnings` clean）
+- [x] `mise run test-rt` — exit 0 かつ本 task の `rt_process_*_f32_*` 6 件が一致・pass（video-proc で 27 件一致・workspace 107 件実選択）
+- [x] `rg -n "RgbaF32" crates/ruviform-video-proc/src/composite.rs crates/ruviform-video-proc/src/affine.rs` — 両モジュールに arm が存在（受理 match arm + dispatch + doc + tests で 49 件一致）
+- [x] `rg -n "RgbaF32" crates/ruviform-video-proc/README.md crates/README.md` — kernel 一覧/索引行が実装状況と一致（9 件一致 — Issue #99 kernel section + composite/affine format 表 + video-proc 索引行）

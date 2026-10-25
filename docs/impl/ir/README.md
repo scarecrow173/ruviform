@@ -66,3 +66,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034LINnXPOUOZEuD5lHPdy` | Issue #99 working-space kernels — Task 2 implementation | completed | [issue-99-working-space-kernels-task-2-implementation.md](./issue-99-working-space-kernels-task-2-implementation.md) |
 | `IMPL-034LJ7kQmXwNpVtRhYsZdF` | Issue #99 ToneMapSdr kernel — Task 3 implementation | completed | [issue-99-tone-map-sdr-task-3-implementation.md](./issue-99-tone-map-sdr-task-3-implementation.md) |
 | `IMPL-034LLGAQ0YeoT4FWlZ6YyD` | Issue #99 IccTransform + IccIntent — Task 4 implementation | completed | [issue-99-icc-transform-task-4-implementation.md](./issue-99-icc-transform-task-4-implementation.md) |
+| `IMPL-034LMyg7k2P0ar6eR0gedo` | Issue #99 RgbaF32 composite/affine arms — Task 5 implementation | completed | [issue-99-rgba-f32-arms-task-5-implementation.md](./issue-99-rgba-f32-arms-task-5-implementation.md) |

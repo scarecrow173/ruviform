@@ -68,15 +68,16 @@
 //! - [`CompositeOver`] — `src over dst` source-over alpha compositing
 //!   on straight alpha, in place on `dst`, with a per-call `opacity`
 //!   (self-consistent Q8 integer expansion on `Rgba8`, `f32` pipeline +
-//!   RNE `binary16` rounding on `RgbaF16`; bit-exact / ≤ 2 ulp
+//!   RNE `binary16` rounding on `RgbaF16`, unrounded `f32` pipeline on
+//!   `RgbaF32` — the linear working-space arm; bit-exact / ≤ 2 ulp
 //!   equivalence contract).
 //! - [`Crossfade`] — `dst = from·(1−t) + to·t` two-source dissolve on
-//!   all four channels with a per-call `t` (same quantization and
-//!   equivalence rules as [`CompositeOver`]).
+//!   all four channels with a per-call `t` (same formats, quantization
+//!   and equivalence rules as [`CompositeOver`]).
 //! - [`AffineTransform`] — integer-rectangle translate+scale via
 //!   [`Rect`]/[`RectMap`]: cell-center nearest sampling, off-canvas and
 //!   uncovered pixels filled with transparent black (pure pixel
-//!   mapping/copy — bit-exact on both formats).
+//!   mapping/copy — bit-exact on every accepted format).
 //! - `IccTransform` — `Rgba8`/`RgbaF32` → `Rgba8`/`RgbaF32` conversion
 //!   through a caller-supplied ICC profile pair (`IccIntent` selects
 //!   the rendering intent; bit-exact vs the pinned engine's executor

@@ -6,11 +6,12 @@
 //!
 //! ## Formats
 //!
-//! [`PixelFormat::Rgba8`] and [`PixelFormat::RgbaF16`] only, and
-//! `src`/`dst` must share the format. The kernel never inspects
-//! channel values — it copies whole pixels or writes zero bytes — so
-//! both formats share a single code path (`sample_bytes` sized pixel
-//! copies). Planar YUV is out of scope.
+//! [`PixelFormat::Rgba8`], [`PixelFormat::RgbaF16`] and
+//! [`PixelFormat::RgbaF32`] only, and `src`/`dst` must share the
+//! format. The kernel never inspects channel values — it copies whole
+//! pixels or writes zero bytes — so all three formats share a single
+//! code path (`sample_bytes` sized pixel copies). Planar YUV is out
+//! of scope.
 //!
 //! ## Mapping rule
 //!
@@ -50,8 +51,8 @@
 //! ## Equivalence contract
 //!
 //! The kernel performs no pixel arithmetic — mapping and copying only
-//! — so it is **bit-exact** on both formats: every conforming backend
-//! must emit identical bytes.
+//! — so it is **bit-exact** on every accepted format: every conforming
+//! backend must emit identical bytes.
 //!
 //! Rows are processed through `Plane::row`/`PlaneMut::row_mut` only,
 //! so `stride > row_bytes` padding is never read or written.
@@ -188,7 +189,7 @@ impl AffineTransform {
     ///
     /// # Errors
     ///
-    /// [`Error::InvalidValue`] — `src` is not `Rgba8`/`RgbaF16`
+    /// [`Error::InvalidValue`] — `src` is not `Rgba8`/`RgbaF16`/`RgbaF32`
     /// (`"src format"`), `dst` has a different format (`"dst format"`),
     /// `map.src` is empty or reaches outside the `src` frame
     /// (`"src rect"`), or `dst`'s backing is still shared
@@ -209,7 +210,7 @@ impl AffineTransform {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn process(&mut self, src: &VideoFrame, dst: &mut VideoFrame, map: RectMap) -> Result<()> {
         match src.format() {
-            PixelFormat::Rgba8 | PixelFormat::RgbaF16 => {}
+            PixelFormat::Rgba8 | PixelFormat::RgbaF16 | PixelFormat::RgbaF32 => {}
             _ => return Err(Error::InvalidValue("src format")),
         }
         if dst.format() != src.format() {
@@ -262,8 +263,8 @@ impl AffineTransform {
                 )
             });
             let (cols, rows, ox, oy) = span.unwrap_or((0..0, 0..0, 0, 0));
-            // Bytes per pixel — 4 for `Rgba8`, 8 for `RgbaF16`; the
-            // copy path is format-agnostic.
+            // Bytes per pixel — 4 for `Rgba8`, 8 for `RgbaF16`, 16 for
+            // `RgbaF32`; the copy path is format-agnostic.
             let px = src_plane.sample_bytes();
             let head_bytes = cols.start as usize * px;
             let tail_start = cols.end as usize * px;
@@ -276,7 +277,7 @@ impl AffineTransform {
                     .ok_or(Error::InvalidValue("dst plane"))?;
                 if !rows.contains(&y) {
                     // Off-span row (or no span at all): transparent
-                    // black is zero bytes in both formats.
+                    // black is zero bytes in every format.
                     dst_row.fill(0);
                     continue;
                 }
@@ -374,6 +375,43 @@ mod tests {
             .zip(row[x * 8..x * 8 + 8].as_chunks::<2>().0.iter())
         {
             *dst = u16::from_le_bytes(*ch);
+        }
+        out
+    }
+
+    /// Builds an `RgbaF32` frame of `pixels` — channels given as
+    /// `binary32` bit patterns, written little-endian (bit-exact
+    /// coverage wants arbitrary patterns: NaN payloads, `−0.0`,
+    /// subnormals).
+    fn f32_frame(width: u32, height: u32, pixels: &[[u32; 4]]) -> VideoFrame {
+        let mut frame = VideoFrame::new_owned(PixelFormat::RgbaF32, width, height, pts()).unwrap();
+        {
+            let mut plane = frame.plane_mut(0).unwrap();
+            for (dst_px, src_px) in plane
+                .data_mut()
+                .as_chunks_mut::<16>()
+                .0
+                .iter_mut()
+                .zip(pixels.iter())
+            {
+                for (dst_ch, bits) in dst_px.as_chunks_mut::<4>().0.iter_mut().zip(src_px.iter()) {
+                    dst_ch.copy_from_slice(&bits.to_le_bytes());
+                }
+            }
+        }
+        frame
+    }
+
+    /// Reads the `x`-th `RgbaF32` pixel of row `y` back as `binary32`
+    /// bit patterns.
+    fn f32_px(frame: &VideoFrame, x: usize, y: u32) -> [u32; 4] {
+        let row = frame.plane(0).unwrap().row(y).unwrap();
+        let mut out = [0_u32; 4];
+        for (dst, ch) in out
+            .iter_mut()
+            .zip(row[x * 16..x * 16 + 16].as_chunks::<4>().0.iter())
+        {
+            *dst = u32::from_le_bytes(*ch);
         }
         out
     }
@@ -717,6 +755,98 @@ mod tests {
         assert_eq!(f16_px(&dst, 3, 0), [0x4000, 0x3C00, 0x3800, 0x3400]);
     }
 
+    /// `RgbaF32` path — same mapping as `Rgba8`/`RgbaF16`, pixels
+    /// copied as opaque bytes (bit-exact): a 2→4 upscale replicates
+    /// `[0,0,1,1]`, `binary32` patterns and all — including a NaN
+    /// payload, `−0.0` and a subnormal, which proves no arithmetic is
+    /// applied to the channel values.
+    #[test]
+    fn f32_upscale_copies_pixels_bit_exact() {
+        let src = f32_frame(
+            2,
+            1,
+            &[
+                [0x3F80_0000, 0x8000_0000, 0x7FC0_0001, 0x0000_0001],
+                [0x4000_0000, 0x3F00_0000, 0x3E80_0000, 0x3E00_0000],
+            ],
+        );
+        let mut dst = f32_frame(4, 1, &[[0x0000_0000; 4]; 4]);
+        AffineTransform::new()
+            .process(&src, &mut dst, map(0, 0, 2, 1, 0, 0, 4, 1))
+            .unwrap();
+        assert_eq!(
+            f32_px(&dst, 0, 0),
+            [0x3F80_0000, 0x8000_0000, 0x7FC0_0001, 0x0000_0001]
+        );
+        assert_eq!(
+            f32_px(&dst, 1, 0),
+            [0x3F80_0000, 0x8000_0000, 0x7FC0_0001, 0x0000_0001]
+        );
+        assert_eq!(
+            f32_px(&dst, 2, 0),
+            [0x4000_0000, 0x3F00_0000, 0x3E80_0000, 0x3E00_0000]
+        );
+        assert_eq!(
+            f32_px(&dst, 3, 0),
+            [0x4000_0000, 0x3F00_0000, 0x3E80_0000, 0x3E00_0000]
+        );
+    }
+
+    /// `map.dst` partially or fully off-canvas on `RgbaF32`: uncovered
+    /// canvas becomes transparent black — zero bytes, i.e. `+0.0`
+    /// `binary32` channels.
+    #[test]
+    fn f32_off_canvas_fills_transparent_black() {
+        let src = f32_frame(1, 1, &[[0x3F80_0000; 4]]);
+        let mut dst = f32_frame(3, 1, &[[0x7F80_0000; 4]; 3]);
+        AffineTransform::new()
+            .process(&src, &mut dst, map(0, 0, 1, 1, 1, 0, 1, 1))
+            .unwrap();
+        assert_eq!(f32_px(&dst, 0, 0), [0; 4]);
+        assert_eq!(f32_px(&dst, 1, 0), [0x3F80_0000; 4]);
+        assert_eq!(f32_px(&dst, 2, 0), [0; 4]);
+
+        // Fully off-canvas `map.dst`: every pixel transparent black.
+        AffineTransform::new()
+            .process(&src, &mut dst, map(0, 0, 1, 1, 3, 0, 1, 1))
+            .unwrap();
+        for x in 0..3 {
+            assert_eq!(f32_px(&dst, x, 0), [0; 4], "x {x}");
+        }
+    }
+
+    /// Format disagreements on `RgbaF32` — `dst` in another format —
+    /// and a shared `dst` backing are rejected before any write.
+    #[test]
+    fn f32_rejects_mismatched_formats() {
+        let src32 = f32_frame(1, 1, &[[0x3F80_0000; 4]]);
+        let mut dst8 = rgba8_frame(1, 1, &[[9; 4]]);
+        let mut dst16 = f16_frame(1, 1, &[[0x3C00; 4]]);
+        let mut dst32 = f32_frame(1, 1, &[[0; 4]]);
+        let mut kernel = AffineTransform::new();
+        let full = map(0, 0, 1, 1, 0, 0, 1, 1);
+
+        assert_eq!(
+            kernel.process(&src32, &mut dst8, full),
+            Err(Error::InvalidValue("dst format"))
+        );
+        assert_eq!(
+            kernel.process(&src32, &mut dst16, full),
+            Err(Error::InvalidValue("dst format"))
+        );
+
+        // Shared `dst` backing.
+        let sharing = dst32.clone();
+        assert_eq!(
+            kernel.process(&src32, &mut dst32, full),
+            Err(Error::InvalidValue("dst plane"))
+        );
+        drop(sharing);
+
+        // No rejection wrote anything.
+        assert_eq!(f32_px(&dst32, 0, 0), [0; 4]);
+    }
+
     /// `dst` takes `src`'s `ColorInfo`/`pts`/`duration` — a transform
     /// keeps the source frame's identity.
     #[test]
@@ -731,6 +861,29 @@ mod tests {
             ..ColorInfo::default()
         });
         let mut dst = rgba8_frame(2, 1, &[[0; 4]; 2]);
+        dst.set_pts(MediaTime::ZERO);
+        AffineTransform::new()
+            .process(&src, &mut dst, map(0, 0, 1, 1, 0, 0, 2, 1))
+            .unwrap();
+        assert_eq!(dst.color().primaries, ColorPrimaries::Bt2020);
+        assert_eq!(dst.pts(), src_pts);
+        assert_eq!(dst.duration(), Some(duration));
+    }
+
+    /// Same propagation on the `RgbaF32` arm — the transform keeps
+    /// the source frame's identity there too.
+    #[test]
+    fn f32_propagates_src_metadata() {
+        let mut src = f32_frame(1, 1, &[[0x3F80_0000; 4]]);
+        let src_pts = MediaTime::new(7, TimeBase::COMMON_90K);
+        let duration = MediaDuration::new(9_000, TimeBase::COMMON_90K);
+        src.set_pts(src_pts);
+        src.set_duration(Some(duration));
+        src.set_color(ColorInfo {
+            primaries: ColorPrimaries::Bt2020,
+            ..ColorInfo::default()
+        });
+        let mut dst = f32_frame(2, 1, &[[0; 4]; 2]);
         dst.set_pts(MediaTime::ZERO);
         AffineTransform::new()
             .process(&src, &mut dst, map(0, 0, 1, 1, 0, 0, 2, 1))
@@ -821,6 +974,51 @@ mod tests {
         let mut dst = rgba8_frame(2, 2, &[[0; 4]; 4]);
         AffineTransform::new()
             .process(&src, &mut dst, map(0, 0, 2, 2, 0, 0, 1, 1))
+            .unwrap();
+        assert_eq!(src.plane(0).unwrap().data(), &before);
+    }
+
+    /// RT contract on the `RgbaF32` arm: `process` is allocation-free,
+    /// non-blocking and bounded — observably: repeated calls on the
+    /// same kernel succeed and stay deterministic, never panic.
+    #[test]
+    fn rt_process_affine_transform_f32_is_repeatable_and_deterministic() {
+        let src = f32_frame(2, 1, &[[0x3F80_0000; 4], [0x4000_0000; 4]]);
+        let mut dst = f32_frame(4, 1, &[[0; 4]; 4]);
+        let mut kernel = AffineTransform::new();
+        for _ in 0..64 {
+            kernel
+                .process(&src, &mut dst, map(0, 0, 2, 1, 0, 0, 4, 1))
+                .unwrap();
+            assert_eq!(
+                (0..4).map(|x| f32_px(&dst, x, 0)).collect::<Vec<_>>(),
+                vec![
+                    [0x3F80_0000; 4],
+                    [0x3F80_0000; 4],
+                    [0x4000_0000; 4],
+                    [0x4000_0000; 4],
+                ]
+            );
+        }
+    }
+
+    /// RT contract on the `RgbaF32` arm: `process` writes only the
+    /// caller-provided `dst` — `src` stays byte-identical across the
+    /// call.
+    #[test]
+    fn rt_process_affine_transform_f32_never_mutates_source() {
+        let src = f32_frame(
+            2,
+            1,
+            &[
+                [0x3F80_0000, 0x8000_0000, 0x7FC0_0001, 0x0000_0001],
+                [0x4000_0000; 4],
+            ],
+        );
+        let before: [u8; 32] = src.plane(0).unwrap().data().try_into().unwrap();
+        let mut dst = f32_frame(2, 1, &[[0; 4]; 2]);
+        AffineTransform::new()
+            .process(&src, &mut dst, map(0, 0, 2, 1, 0, 0, 2, 1))
             .unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &before);
     }
