@@ -120,6 +120,15 @@ run = "cargo test -p ruviform-plugin-core"
 description = "Lint plugin-core and its test targets"
 run = "cargo clippy -p ruviform-plugin-core --all-targets -- -D warnings"
 
+# Feature lanes: `cargo test --workspace` only covers default features, so
+# feature-gated code paths get their own tasks and a separate CI job.
+[tasks.test-video-proc-icc]
+description = "Run video-proc tests with the icc feature enabled (moxcms ICC path)"
+run = "cargo test -p ruviform-video-proc --features icc"
+[tasks.lint-video-proc-icc]
+description = "Lint video-proc and its test targets with the icc feature enabled"
+run = "cargo clippy -p ruviform-video-proc --all-targets --features icc -- -D warnings"
+
 [tasks.test-ofx]
 description = "Run OFX native host and fixture contract tests"
 run = "cargo test -p ruviform-plugin-ofx"

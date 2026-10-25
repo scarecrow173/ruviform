@@ -114,6 +114,42 @@ jobs:
       - name: Run RT contract tests (mise run test-rt)
         run: mise run test-rt
 
+  icc-verify:
+    name: icc-verify
+    runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+
+      - name: Restore tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # `cargo test --workspace` covers default features only — the
+      # feature-gated ICC path (`ruviform-video-proc --features icc`)
+      # gets its own lane so it cannot silently regress.
+      - name: Test video-proc icc feature (mise run test-video-proc-icc)
+        run: mise run test-video-proc-icc
+
+      - name: Lint video-proc icc feature (mise run lint-video-proc-icc)
+        run: mise run lint-video-proc-icc
+
   bench:
     name: bench
     runs-on: ubuntu-latest

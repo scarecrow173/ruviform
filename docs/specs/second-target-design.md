@@ -37,6 +37,7 @@ relations:
     - "docs/designs/second-target-design.md"
     - "docs/specs/edit-data-model.md"
     - "docs/specs/composite-transition-kernels.md"
+    - "docs/specs/color-conversion-kernels.md"
   verifies: []
   verified-by: []
   references: []

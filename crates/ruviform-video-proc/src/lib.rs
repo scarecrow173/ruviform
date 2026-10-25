@@ -52,18 +52,36 @@
 //!   channel normalization (`v/255` ↔ `round(clamp(v)·255)`, `ColorInfo`
 //!   carried unchanged; ulp-bounded forward, bit-exact inverse
 //!   equivalence contract).
+//! - [`ToWorking`] — `Rgba8`/`RgbaF16`/`RgbaF32` → `RgbaF32` entry
+//!   into the f32 linear working space (fused transfer decode +
+//!   `src primaries → BT.2020` gamut transform driven by the frame's
+//!   `ColorInfo`; ≤ 4 ulp `binary32` equivalence contract).
+//! - [`FromWorking`] — `RgbaF32` → `Rgba8`/`RgbaF32` working-space
+//!   exit (`BT.2020 → dst primaries` matrix + transfer encode baked
+//!   by the constructor; ≤ 4 ulp contract, `Rgba8` ±1 code
+//!   quantization bound).
+//! - [`ToneMapSdr`] — `RgbaF32` → `RgbaF32` HDR→SDR tone map
+//!   (BT.2390-8 §5.4 EETF on the BT.2020 luma with ratio-preserving
+//!   RGB scaling; `L_HS`/`L_min` derived from `src`'s `HdrMetadata`
+//!   per call, `hdr` consumed — output records `hdr: None`; ≤ 4 ulp
+//!   `binary32` equivalence contract).
 //! - [`CompositeOver`] — `src over dst` source-over alpha compositing
 //!   on straight alpha, in place on `dst`, with a per-call `opacity`
 //!   (self-consistent Q8 integer expansion on `Rgba8`, `f32` pipeline +
-//!   RNE `binary16` rounding on `RgbaF16`; bit-exact / ≤ 2 ulp
+//!   RNE `binary16` rounding on `RgbaF16`, unrounded `f32` pipeline on
+//!   `RgbaF32` — the linear working-space arm; bit-exact / ≤ 2 ulp
 //!   equivalence contract).
 //! - [`Crossfade`] — `dst = from·(1−t) + to·t` two-source dissolve on
-//!   all four channels with a per-call `t` (same quantization and
-//!   equivalence rules as [`CompositeOver`]).
+//!   all four channels with a per-call `t` (same formats, quantization
+//!   and equivalence rules as [`CompositeOver`]).
 //! - [`AffineTransform`] — integer-rectangle translate+scale via
 //!   [`Rect`]/[`RectMap`]: cell-center nearest sampling, off-canvas and
 //!   uncovered pixels filled with transparent black (pure pixel
-//!   mapping/copy — bit-exact on both formats).
+//!   mapping/copy — bit-exact on every accepted format).
+//! - `IccTransform` — `Rgba8`/`RgbaF32` → `Rgba8`/`RgbaF32` conversion
+//!   through a caller-supplied ICC profile pair (`IccIntent` selects
+//!   the rendering intent; bit-exact vs the pinned engine's executor
+//!   output). **Cargo feature `icc` only** — see "Cargo features".
 //!
 //! Kernels are scalar reference implementations per the baseline
 //! DSP/SIMD decision — each kernel documents whether a future optimized
@@ -71,6 +89,18 @@
 //! scaling filters (bilinear and above), full affine (rotation/shear),
 //! additional blend modes and planar-YUV compositing stay reserved for
 //! later issues.
+//!
+//! ## Cargo features
+//!
+//! - `icc` (default off — `default = []`): exposes `IccTransform` and
+//!   `IccIntent`, the ICC profile transform path driven by an
+//!   optional ICC engine dependency kept as a private implementation
+//!   detail (no engine types, errors or feature names appear in the
+//!   public API). With the feature off the crate keeps zero external
+//!   dependencies — `ruviform-video-core`/`ruviform-media-core` `path`
+//!   deps only. `cargo test --workspace` does not cover the feature;
+//!   run `mise run test-video-proc-icc` /
+//!   `mise run lint-video-proc-icc` for the feature lane.
 //!
 //! ## RT constraints
 //!
@@ -105,14 +135,23 @@
 mod affine;
 mod coef;
 mod composite;
+#[cfg(feature = "icc")]
+mod icc;
 mod rgb_to_yuv;
 mod rgba_f16;
+mod tone_map;
+mod transfer;
+mod working_space;
 mod yuv_to_rgb;
 
 pub use affine::{AffineTransform, Rect, RectMap};
 pub use composite::{CompositeOver, Crossfade};
+#[cfg(feature = "icc")]
+pub use icc::{IccIntent, IccTransform};
 pub use rgb_to_yuv::RgbToYuv;
 pub use rgba_f16::{Rgba8ToRgbaF16, RgbaF16ToRgba8};
+pub use tone_map::ToneMapSdr;
+pub use working_space::{FromWorking, ToWorking};
 pub use yuv_to_rgb::YuvToRgb;
 
 /// Returns the crate version string.

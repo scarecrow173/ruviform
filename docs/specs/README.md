@@ -11,6 +11,7 @@ Directory: `docs/specs`
 | SPEC-034Jc9QEqYLVfg1CXXTiPV | オーディオデバイス境界 trait と ruviform-audio-device PoC（バックエンド評価・採否） | implemented | [audio-device-backend-evaluation-poc.md](./audio-device-backend-evaluation-poc.md) |
 | SPEC-034JROd7c0jBSZ1hnPEAg5 | 音声エンジン（pull グラフ・デバイスアダプタ統合・RT パス） | approved | [audio-engine.md](./audio-engine.md) |
 | SPEC-034JOoOaExdxXgKrQ80l7x | chunk 分割時の OutputCallbackInfo timestamp 合成 | approved | [chunk-timestamp-synthesis.md](./chunk-timestamp-synthesis.md) |
+| SPEC-034LEXC13iAgtRjaqGTPoF | ruviform-video-proc 色変換カーネル追加（linear working space + ICC 入出力経路） | proposed | [color-conversion-kernels.md](./color-conversion-kernels.md) |
 | SPEC-034KScJM81H7da9TxzL0H5 | ruviform-video-proc コンポジット/遷移カーネル追加（blend/affine 初期セット） | approved | [composite-transition-kernels.md](./composite-transition-kernels.md) |
 | SPEC-034JZDNRML000000000001 | denormal 対策（エンジン層: ソフトウェア flush 方針） | approved | [denormal-mitigation.md](./denormal-mitigation.md) |
 | SPEC-034JPubrypO0IylcWkuqlz | fearless_dispatched 軽量カーネル劣後の原因分離（低負荷再計測） | approved | [dispatched-overhead-analysis.md](./dispatched-overhead-analysis.md) |

@@ -1,0 +1,15 @@
+{
+  "command": "audit",
+  "blocking": 0,
+  "documents": 303,
+  "findings": []
+}
+
+
+===== FINAL AUDIT (post-docs re-run, covers new IR + task/plan/README updates) =====
+{
+  "command": "audit",
+  "blocking": 0,
+  "documents": 303,
+  "findings": []
+}

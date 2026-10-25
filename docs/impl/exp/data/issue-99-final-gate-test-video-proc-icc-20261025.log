@@ -1,0 +1,228 @@
+[test-video-proc-icc] $ cargo test -p ruviform-video-proc --features icc
+   Compiling ruviform-video-proc v0.1.0 (F:\repositry\ruviform\crates\ruviform-video-proc)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.51s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_video_proc-a9eebe35f434cdda.exe)
+
+running 188 tests
+test affine::tests::f32_propagates_src_metadata ... ok
+test affine::tests::f16_upscale_copies_pixels_bit_exact ... ok
+test affine::tests::identity_map_is_bit_exact_copy ... ok
+test affine::tests::padded_strides_are_never_touched ... ok
+test affine::tests::downscale_4_to_2_decimates_by_cell_centers ... ok
+test affine::tests::empty_dst_rect_writes_all_transparent_black ... ok
+test affine::tests::dst_fully_overwritten_outside_mapped_rect ... ok
+test affine::tests::f32_rejects_mismatched_formats ... ok
+test affine::tests::negative_dst_x_clips_to_canvas ... ok
+test affine::tests::f32_off_canvas_fills_transparent_black ... ok
+test affine::tests::off_canvas_dst_rect_writes_all_transparent_black ... ok
+test affine::tests::propagates_src_metadata ... ok
+test affine::tests::rejects_invalid_frames ... ok
+test affine::tests::right_bottom_overhang_clips_to_canvas ... ok
+test affine::tests::f32_upscale_copies_pixels_bit_exact ... ok
+test affine::tests::rejects_src_rects_outside_frame ... ok
+test affine::tests::rt_process_affine_transform_f32_is_repeatable_and_deterministic ... ok
+test affine::tests::rt_process_affine_transform_f32_never_mutates_source ... ok
+test affine::tests::rt_process_affine_transform_is_repeatable_and_deterministic ... ok
+test affine::tests::rt_process_affine_transform_never_mutates_source ... ok
+test affine::tests::src_rect_at_far_edges_is_in_range ... ok
+test affine::tests::sub_rect_crop_and_placement ... ok
+test affine::tests::upscale_1_to_2_replicates_source_pixel ... ok
+test affine::tests::upscale_2_to_4_replicates_pairs_last_column_in_range ... ok
+test affine::tests::vertical_mapping_uses_height_axis ... ok
+test coef::tests::coefficient_table_matches_bt601_limited_spot_check ... ok
+test coef::tests::rgb_coefficient_table_matches_bt601_limited_spot_check ... ok
+test coef::tests::rgb_coefficients_keep_gray_chroma_neutral ... ok
+test coef::tests::slot_resolution_applies_default_rules ... ok
+test coef::tests::slot_resolution_rejects_unusable_values ... ok
+test composite::tests::composite_over_f16_golden ... ok
+test composite::tests::composite_over_f16_denormal_alpha_writes_transparent_black ... ok
+test composite::tests::composite_over_f16_preserves_hdr_channels ... ok
+test composite::tests::composite_over_f16_propagates_non_finite_channels ... ok
+test composite::tests::composite_over_f32_faint_alpha_diverges_from_f16_cut ... ok
+test composite::tests::composite_over_f32_golden ... ok
+test composite::tests::composite_over_f32_keeps_dst_metadata ... ok
+test composite::tests::composite_over_f32_mid_opacity_within_ulp_bound ... ok
+test composite::tests::composite_over_f32_out_of_range_alpha_writes_transparent_black ... ok
+test composite::tests::composite_over_f32_preserves_unclamped_channels ... ok
+test composite::tests::composite_over_f32_propagates_non_finite_channels ... ok
+test composite::tests::composite_over_f32_rejects_mismatched_frames ... ok
+test composite::tests::composite_over_f32_zero_opacity_leaves_dst_byte_identical ... ok
+test composite::tests::composite_over_full_and_zero_source_alpha ... ok
+test composite::tests::composite_over_keeps_dst_metadata ... ok
+test composite::tests::composite_over_mid_opacity_golden ... ok
+test composite::tests::composite_over_oc_boundary_stays_in_range ... ok
+test composite::tests::composite_over_rejects_invalid_frames ... ok
+test composite::tests::composite_over_rejects_out_of_range_opacity ... ok
+test composite::tests::composite_over_shared_dst_rejected_before_opacity_early_return ... ok
+test composite::tests::composite_over_zero_alpha_writes_transparent_black ... ok
+test composite::tests::composite_over_zero_opacity_leaves_dst_byte_identical ... ok
+test composite::tests::crossfade_allows_same_frame_as_both_sources ... ok
+test composite::tests::crossfade_endpoints_reproduce_sources ... ok
+test composite::tests::crossfade_f16_endpoints_normalize_zero_sign_and_nan_payload ... ok
+test composite::tests::crossfade_f16_golden ... ok
+test composite::tests::crossfade_f16_propagates_non_finite_channels ... ok
+test composite::tests::crossfade_f32_endpoints_reproduce_finite_channels ... ok
+test composite::tests::crossfade_f32_golden_within_ulp_bound ... ok
+test composite::tests::crossfade_f32_propagates_from_metadata ... ok
+test composite::tests::crossfade_f32_propagates_non_finite_channels ... ok
+test composite::tests::crossfade_f32_rejects_mismatched_formats ... ok
+test composite::tests::crossfade_golden_quantized_weights ... ok
+test composite::tests::crossfade_propagates_from_metadata ... ok
+test composite::tests::crossfade_rejects_invalid_frames ... ok
+test composite::tests::crossfade_rejects_out_of_range_t ... ok
+test composite::tests::padded_dst_stride_is_never_written ... ok
+test composite::tests::rt_process_composite_over_f32_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_composite_over_f32_never_mutates_source ... ok
+test composite::tests::rt_process_composite_over_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_composite_over_never_mutates_source ... ok
+test composite::tests::rt_process_crossfade_f32_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_crossfade_f32_never_mutates_sources ... ok
+test icc::tests::generate_fixtures ... ignored, one-shot fixture regeneration — run explicitly when the pinned engine changes
+test composite::tests::rt_process_crossfade_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_crossfade_never_mutates_sources ... ok
+test icc::tests::icc_transform_ctor_rejects_non_rgb_color_space ... ok
+test icc::tests::icc_transform_ctor_rejects_unparsable_profiles ... ok
+test icc::tests::icc_transform_ctor_rejects_untransformable_pair ... ok
+test icc::tests::icc_transform_alpha_passes_through ... ok
+test icc::tests::icc_transform_intents_build_and_run ... ok
+test icc::tests::icc_transform_invalid_inputs_are_rejected ... ok
+test icc::tests::icc_transform_padded_dst_stride_is_never_written ... ok
+test icc::tests::icc_transform_mixed_endpoints ... ok
+test icc::tests::icc_transform_padded_src_stride_reads_rows_only ... ok
+test icc::tests::icc_transform_records_unspecified_color_and_timestamps ... ok
+test icc::tests::icc_transform_rgba8_output_matches_engine_bit_exact ... ok
+test icc::tests::icc_transform_rgba_f32_bit_exact_golden ... ok
+test icc::tests::icc_transform_rgba_f32_keeps_extended_range ... ok
+test rgb_to_yuv::tests::alpha_is_dropped ... ok
+test icc::tests::icc_transform_srgb_identity_rgba8_bit_exact ... ok
+test rgb_to_yuv::tests::chroma_downsample_420_averages_the_whole_cell ... ok
+test rgb_to_yuv::tests::chroma_downsample_420_covers_existing_cells_only ... ok
+test icc::tests::rt_process_icc_never_mutates_source ... ok
+test rgb_to_yuv::tests::chroma_downsample_422_averages_horizontal_pairs ... ok
+test icc::tests::rt_process_icc_is_repeatable_and_deterministic ... ok
+test rgb_to_yuv::tests::chroma_downsample_averages_q16_before_quantizing ... ok
+test rgb_to_yuv::tests::invalid_inputs_are_rejected ... ok
+test rgb_to_yuv::tests::golden_vectors_cover_every_matrix_range_pair ... ok
+test rgb_to_yuv::tests::output_color_and_time_propagate ... ok
+test rgb_to_yuv::tests::padded_dst_stride_is_never_written ... ok
+test rgb_to_yuv::tests::rgb_yuv_roundtrip_recovers_uniform_cells ... ok
+test rgb_to_yuv::tests::rt_process_never_mutates_source ... ok
+test rgb_to_yuv::tests::shared_dst_backing_is_rejected ... ok
+test rgb_to_yuv::tests::rt_process_is_repeatable_and_deterministic ... ok
+test rgb_to_yuv::tests::unspecified_args_use_defaults ... ok
+test rgba_f16::tests::color_and_time_pass_through_unchanged ... ok
+test rgba_f16::tests::invalid_inputs_are_rejected ... ok
+test rgba_f16::tests::f16_edge_values_clamp_and_round ... ok
+test rgba_f16::tests::padded_dst_stride_is_never_written ... ok
+test rgba_f16::tests::edge_values_normalize_to_documented_f16 ... ok
+test rgba_f16::tests::rt_process_to_f16_is_repeatable_and_deterministic ... ok
+test rgba_f16::tests::rt_process_to_f16_never_mutates_source ... ok
+test rgba_f16::tests::roundtrips_all_u8_codes_exactly ... ok
+test rgba_f16::tests::rt_process_to_u8_is_repeatable_and_deterministic ... ok
+test rgba_f16::tests::rt_process_to_u8_never_mutates_source ... ok
+test rgba_f16::tests::shared_dst_backing_is_rejected ... ok
+test tests::version_is_not_empty ... ok
+test tone_map::tests::rt_process_tone_map_sdr_never_mutates_source ... ok
+test tests::video_core_dependency_is_reachable ... ok
+test tone_map::tests::rt_process_tone_map_sdr_is_repeatable_and_deterministic ... ok
+test tone_map::tests::tone_map_sdr_consumes_hdr_and_propagates_metadata ... ok
+test tone_map::tests::tone_map_sdr_does_not_validate_the_working_space_tag ... ok
+test tone_map::tests::tone_map_sdr_eetf_shape_below_and_above_the_knee ... ok
+test tone_map::tests::tone_map_sdr_invalid_inputs_are_rejected ... ok
+test tone_map::tests::tone_map_sdr_inverted_l_min_is_ignored ... ok
+test tone_map::tests::tone_map_sdr_l_hs_defaults_to_1000_nits ... ok
+test tone_map::tests::tone_map_sdr_l_hs_falls_back_to_max_cll ... ok
+test tone_map::tests::tone_map_sdr_l_hs_prefers_mastering_display ... ok
+test tone_map::tests::tone_map_sdr_l_min_drives_the_black_lift ... ok
+test tone_map::tests::tone_map_sdr_non_positive_luma_passes_through ... ok
+test tone_map::tests::tone_map_sdr_padded_dst_stride_is_never_written ... ok
+test tone_map::tests::tone_map_sdr_maps_default_1000nit_source ... ok
+test tone_map::tests::tone_map_sdr_padded_src_stride_reads_rows_only ... ok
+test tone_map::tests::tone_map_sdr_scales_rgb_by_the_luma_ratio ... ok
+test tone_map::tests::tone_map_sdr_sdr_equivalent_source_passes_through ... ok
+test transfer::tests::bt2020_matrices_are_identity ... ok
+test transfer::tests::bt709_decode_toe_and_power ... ok
+test transfer::tests::bt709_encode_is_unclamped_inverse ... ok
+test transfer::tests::combined_matrices_round_trip_and_preserve_white ... ok
+test transfer::tests::decode_encode_round_trip_through_slot_tables ... ok
+test transfer::tests::hlg_decode_clamps_outside_signal_domain ... ok
+test transfer::tests::hlg_encode_clamps_to_signal_domain ... ok
+test transfer::tests::linear_decode_encode_is_identity ... ok
+test transfer::tests::pq_decode_clamps_outside_signal_domain ... ok
+test transfer::tests::pq_encode_clamps_to_signal_domain ... ok
+test transfer::tests::resolved_tables_report_the_applied_value ... ok
+test transfer::tests::slot_resolution_applies_default_rules ... ok
+test working_space::tests::from_working_ctor_accepts_every_known_variant ... ok
+test working_space::tests::from_working_ctor_unspecified_resolves_to_bt709 ... ok
+test working_space::tests::from_working_encodes_bt709_to_rgba8 ... ok
+test working_space::tests::from_working_encodes_pq_to_rgba8 ... ok
+test working_space::tests::from_working_identity_ctor_f32_passthrough ... ok
+test working_space::tests::from_working_identity_ctor_is_pure_quantization ... ok
+test working_space::tests::from_working_invalid_inputs_are_rejected ... ok
+test working_space::tests::from_working_nan_channels_quantize_to_zero ... ok
+test working_space::tests::from_working_padded_dst_stride_is_never_written ... ok
+test working_space::tests::from_working_records_metadata ... ok
+test working_space::tests::from_working_rgba_f32_writes_the_unclamped_encode ... ok
+test working_space::tests::rt_process_from_working_is_repeatable_and_deterministic ... ok
+test working_space::tests::rt_process_from_working_never_mutates_source ... ok
+test working_space::tests::rt_process_to_working_is_repeatable_and_deterministic ... ok
+test working_space::tests::rt_process_to_working_never_mutates_source ... ok
+test working_space::tests::to_working_decodes_bt709_tagged_rgba8 ... ok
+test working_space::tests::to_working_accepts_every_known_color_variant ... ok
+test working_space::tests::to_working_decodes_bt709_tagged_rgba_f16 ... ok
+test working_space::tests::to_working_decodes_hlg_to_the_absolute_scale ... ok
+test working_space::tests::to_working_decodes_pq_tagged_signal ... ok
+test working_space::tests::to_working_does_not_validate_matrix_or_range ... ok
+test working_space::tests::to_working_identity_path_copies_pixels_and_records ... ok
+test working_space::tests::to_working_invalid_inputs_are_rejected ... ok
+test working_space::tests::to_working_maps_p3d65_primaries_to_bt2020 ... ok
+test working_space::tests::to_working_non_finite_channels_propagate ... ok
+test working_space::tests::to_working_padded_dst_stride_is_never_written ... ok
+test working_space::tests::to_working_padded_src_stride_reads_rows_only ... ok
+test working_space::tests::to_working_reads_rgba_f16_signals ... ok
+test working_space::tests::to_working_records_working_space_metadata ... ok
+test working_space::tests::to_working_unspecified_resolves_to_bt709 ... ok
+test yuv_to_rgb::tests::chroma_upsample_420_covers_existing_cells_only ... ok
+test yuv_to_rgb::tests::chroma_upsample_422_shares_cells_horizontally ... ok
+test yuv_to_rgb::tests::golden_vectors_cover_every_matrix_range_pair ... ok
+test yuv_to_rgb::tests::invalid_inputs_are_rejected ... ok
+test yuv_to_rgb::tests::output_color_and_time_propagate ... ok
+test yuv_to_rgb::tests::padded_dst_stride_is_never_written ... ok
+test yuv_to_rgb::tests::rt_process_is_repeatable_and_deterministic ... ok
+test yuv_to_rgb::tests::rt_process_never_mutates_source ... ok
+test yuv_to_rgb::tests::shared_dst_backing_is_rejected ... ok
+test yuv_to_rgb::tests::unspecified_color_fields_use_defaults ... ok
+
+test result: ok. 187 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests ruviform_video_proc
+
+running 24 tests
+test crates\ruviform-video-proc\src\icc.rs - icc::IccIntent (line 127) ... ok
+test crates\ruviform-video-proc\src\composite.rs - composite::CompositeOver::new (line 357) ... ok
+test crates\ruviform-video-proc\src\affine.rs - affine::AffineTransform (line 132) ... ok
+test crates\ruviform-video-proc\src\composite.rs - composite::Crossfade::new (line 514) ... ok
+test crates\ruviform-video-proc\src\composite.rs - composite::Crossfade (line 482) ... ok
+test crates\ruviform-video-proc\src\lib.rs - version (line 163) ... ok
+test crates\ruviform-video-proc\src\affine.rs - affine::AffineTransform::new (line 177) ... ok
+test crates\ruviform-video-proc\src\composite.rs - composite::CompositeOver (line 326) ... ok
+test crates\ruviform-video-proc\src\icc.rs - icc::IccTransform (line 169) ... ok
+test crates\ruviform-video-proc\src\rgba_f16.rs - rgba_f16::RgbaF16ToRgba8::new (line 340) ... ok
+test crates\ruviform-video-proc\src\rgba_f16.rs - rgba_f16::Rgba8ToRgbaF16 (line 192) ... ok
+test crates\ruviform-video-proc\src\rgba_f16.rs - rgba_f16::Rgba8ToRgbaF16::new (line 225) ... ok
+test crates\ruviform-video-proc\src\rgb_to_yuv.rs - rgb_to_yuv::RgbToYuv (line 90) ... ok
+test crates\ruviform-video-proc\src\icc.rs - icc::IccTransform::new (line 223) ... ok
+test crates\ruviform-video-proc\src\rgb_to_yuv.rs - rgb_to_yuv::RgbToYuv::new (line 142) ... ok
+test crates\ruviform-video-proc\src\rgba_f16.rs - rgba_f16::RgbaF16ToRgba8 (line 306) ... ok
+test crates\ruviform-video-proc\src\tone_map.rs - tone_map::ToneMapSdr (line 261) ... ok
+test crates\ruviform-video-proc\src\tone_map.rs - tone_map::ToneMapSdr::new (line 308) ... ok
+test crates\ruviform-video-proc\src\working_space.rs - working_space::FromWorking (line 403) ... ok
+test crates\ruviform-video-proc\src\working_space.rs - working_space::FromWorking::new (line 459) ... ok
+test crates\ruviform-video-proc\src\working_space.rs - working_space::ToWorking (line 188) ... ok
+test crates\ruviform-video-proc\src\working_space.rs - working_space::ToWorking::new (line 229) ... ok
+test crates\ruviform-video-proc\src\yuv_to_rgb.rs - yuv_to_rgb::YuvToRgb::new (line 118) ... ok
+test crates\ruviform-video-proc\src\yuv_to_rgb.rs - yuv_to_rgb::YuvToRgb (line 77) ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.24s
+
+all doctests ran in 2.35s; merged doctests compilation took 0.11s

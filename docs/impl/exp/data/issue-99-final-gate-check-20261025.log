@@ -1,0 +1,2 @@
+[check] $ cargo check --workspace --all-targets
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.24s

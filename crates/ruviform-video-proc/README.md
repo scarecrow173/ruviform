@@ -20,19 +20,40 @@ Issue #26 で実装済みの色変換カーネル:
   （`v/255` ↔ `round(clamp(v)·255)`、`ColorInfo` は不変で引き継ぐ。
   順方向は ulp 有界・逆方向は bit-exact の等価契約）
 
+Issue #99 で実装済みの色管理カーネル（f32 linear working space —
+`RgbaF32` + `{Bt2020, Linear, Identity, Full}`・`1.0` = 100 cd/m²
+絶対輝度・`[0,1]` 制限なし）:
+
+- `ToWorking` — `Rgba8`/`RgbaF16`/`RgbaF32` → `RgbaF32`（`ColorInfo`
+  駆動の transfer decode + `src primaries → BT.2020` gamut 融合変換。
+  ≤ 4 ulp `binary32` 等価契約）
+- `FromWorking` — `RgbaF32` → `Rgba8`/`RgbaF32`（ctor 焼付けの
+  `BT.2020 → dst primaries` 行列 + transfer encode。≤ 4 ulp 等価契約、
+  `Rgba8` は ±1 code 量子化 bound）
+- `ToneMapSdr` — `RgbaF32` → `RgbaF32`（BT.2390-8 §5.4 EETF による
+  HDR→SDR 輝度写像。`src.color().hdr` から `L_HS`/`L_min` を導出し
+  消費 — 出力は `hdr: None`。≤ 4 ulp `binary32` 等価契約）
+- `IccTransform` / `IccIntent`（**Cargo feature `icc` のみ**）—
+  `Rgba8`/`RgbaF32` 任意組合せの ICC profile 変換（`IccIntent` で
+  rendering intent 選択、pin 版エンジンの executor 出力に bit-exact。
+  feature off 時は外部依存ゼロ。検証 lane は
+  `mise run test-video-proc-icc` / `mise run lint-video-proc-icc`）
+
 Issue #97 で実装済みのコンポジット/遷移カーネル（対象フォーマットは
-`Rgba8`・`RgbaF16` のみ・straight alpha・符号空間演算）:
+`Rgba8`・`RgbaF16`・`RgbaF32`（#99 で追加 — linear-light 合成の
+deferred を閉じる arm）・straight alpha・符号空間演算）:
 
 - `CompositeOver` — `src over dst` の source-over アルファ合成を `dst`
   in-place に適用（呼出し毎 `opacity`。`Rgba8` は自己無撞着 Q8 整数展開で
-  bit-exact、`RgbaF16` は f32 評価 + RNE binary16 丸めで ≤ 2 ulp の
-  等価契約）
+  bit-exact、`RgbaF16` は f32 評価 + RNE binary16 丸め、`RgbaF32` は
+  binary16 丸めなしの f32 評価で ≤ 2 ulp の等価契約）
 - `Crossfade` — `dst = from·(1−t) + to·t` の全 4 チャネル加重混合遷移
-  （呼出し毎 `t`。量子化・等価契約は `CompositeOver` と同規則）
+  （呼出し毎 `t`。受理フォーマット・量子化・等価契約は `CompositeOver`
+  と同規則）
 - `AffineTransform` — `Rect`/`RectMap` による整数矩形写像の
   translate+scale（セル中心最近傍・写像演算 `u128`/`i128`・範囲外は
   transparent black 充填・`dst` 全画素書換え。画素演算を持たない
-  写像/複写のみで両フォーマット bit-exact）
+  写像/複写のみで全受理フォーマット bit-exact）
 
 カーネルはベースラインの二相処理形状: 非 RT の `prepare`/コンストラクタが
 係数とワークエリアを固定して準備済み処理オブジェクトを生成し、その
@@ -71,4 +92,5 @@ GPU コンピュートカーネル境界ポート（ベースライン「契約�
 - 設計ベースライン: docs/designs/ruviform-architecture-design-baseline.md（クレート表 A.2、`ruviform-video-proc` 行、「契約型・境界ポートの所有」GPU 境界行、Domain foundations 層順）
 - カーネル API・色/HDR スコープ ADR（D1/D4/D6/D7）: docs/adr/video-proc-kernel-api-and-color-hdr-scope.md
 - コンポジット/遷移カーネル設計: docs/designs/composite-transition-kernels.md
-- Issue #26（クレート新設・色変換カーネル実装）・Issue #97（コンポジット/遷移カーネル実装）
+- 色管理/working space カーネル設計: docs/designs/color-conversion-kernels.md
+- Issue #26（クレート新設・色変換カーネル実装）・Issue #97（コンポジット/遷移カーネル実装）・Issue #99（色管理カーネル + `RgbaF32` composite/affine arm）

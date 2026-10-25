@@ -6,24 +6,26 @@
 //!
 //! ## Formats
 //!
-//! Both kernels accept [`PixelFormat::Rgba8`] and
-//! [`PixelFormat::RgbaF16`] only, and every frame in one call must
-//! share the format. Planar YUV formats are out of scope: they carry no
-//! alpha, and compositing on a chroma lattice is a separate design
-//! concern.
+//! Both kernels accept [`PixelFormat::Rgba8`],
+//! [`PixelFormat::RgbaF16`] and [`PixelFormat::RgbaF32`] only, and
+//! every frame in one call must share the format. Planar YUV formats
+//! are out of scope: they carry no alpha, and compositing on a chroma
+//! lattice is a separate design concern.
 //!
 //! ## Value rules
 //!
 //! Alpha is straight (unassociated) — the FFmpeg-style packed-RGBA
 //! convention — and all math happens in the code space as-is: no
-//! transfer linearization and no gamut mapping (linear-light
-//! compositing is deferred to the color-management issue).
+//! transfer linearization and no gamut mapping. `RgbaF32` frames from
+//! the `BT.2020`/`Linear` working space are what close the #97
+//! deferred item — compositing them *is* linear-light compositing,
+//! while the kernels stay code-space math throughout.
 //!
 //! The per-call mixing parameters — `opacity` for [`CompositeOver`],
 //! `t` for [`Crossfade`] — are validated (`is_finite()` and `[0, 1]`)
 //! and quantized once per `process` call to Q8 weights
-//! (`w = round(opacity·255)`, `tq = round(t·255)`); both pixel paths
-//! share the quantized weight.
+//! (`w = round(opacity·255)`, `tq = round(t·255)`); every pixel path
+//! shares the quantized weight.
 //!
 //! ### `CompositeOver` (`src over dst`, in place)
 //!
@@ -45,6 +47,15 @@
 //!   region, where the division is ill-conditioned — is cut from the
 //!   equivalence contract; the defined output is `(0, 0, 0, 0)`.
 //!   Non-finite channel values (NaN/±∞) propagate per `f32` semantics.
+//! - `RgbaF32` — the same `f32` evaluation stored to `binary32` with
+//!   no `binary16` rounding (no re-quantization at all beyond the Q8
+//!   weight — the point of the linear working-space arm). `oa <
+//!   2⁻¹²⁶` — zero and the `binary32` subnormal region, where the
+//!   division is ill-conditioned — is cut from the equivalence
+//!   contract the same way; the defined output is `(0, 0, 0, 0)`.
+//!   Channels are not clamped (HDR and negative wide-gamut values
+//!   are preserved) and non-finite values propagate per `f32`
+//!   semantics.
 //! - `w == 0` returns early — the quantized weight is what triggers:
 //!   `opacity = 0`, or any `opacity < 0.5/255 ≈ 0.002` quantizing to
 //!   `w = 0` — after all validation (shared `dst` included), before
@@ -59,10 +70,13 @@
 //! - `RgbaF16` — `oc = a_c·(1 − tq/255) + b_c·(tq/255)` evaluated in
 //!   `f32` and rounded to `binary16` — same single-quantization rule:
 //!   only `tq` is quantized, channel values stay continuous.
+//! - `RgbaF32` — the same `f32` evaluation stored to `binary32` with
+//!   no `binary16` rounding — again only `tq` is quantized.
 //! - `tq = 0` reproduces `from` and `tq = 255` reproduces `to` —
-//!   bit-exactly for `Rgba8`; for `RgbaF16` finite channels are
-//!   reproduced numerically: the `f32` add can canonicalize `−0.0` to
-//!   `+0.0`, and NaN payloads fold to `0x7E00`. `from` and `to` may
+//!   bit-exactly for `Rgba8`; for `RgbaF16`/`RgbaF32` finite channels
+//!   are reproduced numerically: the `f32` add can canonicalize `−0.0`
+//!   to `+0.0`, and NaN payloads may normalize (to `0x7E00` through
+//!   the `binary16` write on `RgbaF16`). `from` and `to` may
 //!   reference the same frame — both are immutable borrows — while
 //!   `dst` must not share its backing.
 //!
@@ -87,11 +101,18 @@
 //!   rounding — an optimized backend must stay within **2 ulp
 //!   (`binary16` domain)** per channel. The `oa < 2⁻¹⁴` region and
 //!   non-finite channel values are outside the contract.
+//! - `RgbaF32` paths are the documented `f32` pipeline stored to
+//!   `binary32` with no `binary16` rounding — the `f64` evaluation of
+//!   the formulas rounded to `binary32` is the reference an optimized
+//!   backend must match within **2 ulp (`binary32` domain)** per
+//!   channel. The `oa < 2⁻¹²⁶` (`binary32` subnormal) region and
+//!   non-finite channel values are outside the contract.
 //!
 //! Rows are processed through `Plane::row`/`PlaneMut::row_mut` only, so
 //! `stride > row_bytes` padding is never read or written. `RgbaF16`
 //! pixels are four little-endian `binary16` channels in R, G, B, A
-//! order (the `rgba_f16.rs` byte-layout contract).
+//! order (the `rgba_f16.rs` byte-layout contract); `RgbaF32` pixels
+//! are four little-endian `binary32` channels in the same order.
 
 use ruviform_media_core::{Error, Result};
 use ruviform_video_core::{PixelFormat, VideoFrame};
@@ -106,8 +127,8 @@ use crate::rgba_f16::{f16_bits_to_f64, f64_to_f16_bits};
 const F16_MIN_NORMAL: f32 = 1.0 / 16384.0;
 
 /// Quantizes a validated `[0, 1]` mixing parameter to the Q8 weight
-/// `round(v·255)` — run exactly once per `process` call so both pixel
-/// paths share the weight.
+/// `round(v·255)` — run exactly once per `process` call so every
+/// pixel path shares the weight.
 // `v·255` is in `[0, 255]` after the callers' `is_finite`/`[0, 1]`
 // validation and `.round()` makes it integral and non-negative — the
 // cast can neither truncate nor lose a sign.
@@ -140,6 +161,24 @@ fn f16_channel(pair: &[u8]) -> f32 {
 /// round-to-nearest-even.
 fn f16_bytes(v: f32) -> [u8; 2] {
     f64_to_f16_bits(f64::from(v)).to_le_bytes()
+}
+
+/// Smallest normal `binary32` magnitude (`2⁻¹²⁶`): the `binary32`
+/// counterpart of [`F16_MIN_NORMAL`] — below this the source-over
+/// division is ill-conditioned, so the defined output is transparent
+/// black. NaN fails the comparison and propagates per `f32` semantics.
+const F32_MIN_NORMAL: f32 = f32::MIN_POSITIVE;
+
+/// Decodes one little-endian `binary32` channel (4 bytes of a pixel
+/// chunk) to `f32` — a bit-exact read of the `RgbaF32` byte layout.
+fn f32_channel(quad: &[u8]) -> f32 {
+    f32::from_le_bytes([quad[0], quad[1], quad[2], quad[3]])
+}
+
+/// Encodes one `f32` channel to a little-endian `binary32` quad — a
+/// bit-exact write (no `binary16` rounding on the `RgbaF32` path).
+fn f32_bytes(v: f32) -> [u8; 4] {
+    v.to_le_bytes()
 }
 
 /// `Rgba8` source-over on one pixel pair — the self-consistent Q8
@@ -200,6 +239,36 @@ fn composite_over_f16(src_px: &[u8], dst_px: &mut [u8], sa_scale: f32) {
     dst_px[6..8].copy_from_slice(&f16_bytes(oa));
 }
 
+/// `RgbaF32` source-over on one pixel pair — the same formulas as
+/// [`composite_over_f16`] evaluated in `f32` and stored to `binary32`
+/// with no `binary16` rounding. `sa_scale` is the per-call quantized
+/// `w/255`.
+// The reference formula is `c_s·sa + c_b·b` evaluated as written — a
+// fused `mul_add` would change the rounding of the normative pipeline.
+#[allow(clippy::suboptimal_flops)]
+fn composite_over_f32(src_px: &[u8], dst_px: &mut [u8], sa_scale: f32) {
+    let a_s = f32_channel(&src_px[12..16]);
+    let a_b = f32_channel(&dst_px[12..16]);
+    let sa = a_s * sa_scale;
+    let b = a_b * (1.0 - sa);
+    let oa = sa + b;
+    // `oa == 0.0` and the `binary32` subnormal region: the division is
+    // ill-conditioned there, so the defined output is transparent
+    // black — the `binary32` counterpart of the `oa < 2⁻¹⁴` cut on the
+    // `RgbaF16` path. NaN fails the comparison and propagates.
+    if oa < F32_MIN_NORMAL {
+        dst_px.copy_from_slice(&[0_u8; 16]);
+        return;
+    }
+    for ch in 0..3 {
+        let c_s = f32_channel(&src_px[ch * 4..ch * 4 + 4]);
+        let c_b = f32_channel(&dst_px[ch * 4..ch * 4 + 4]);
+        let oc = (c_s * sa + c_b * b) / oa;
+        dst_px[ch * 4..ch * 4 + 4].copy_from_slice(&f32_bytes(oc));
+    }
+    dst_px[12..16].copy_from_slice(&f32_bytes(oa));
+}
+
 /// `Rgba8` dissolve on one pixel triple — `oc = round((a_c·(255−tq) +
 /// b_c·tq)/255)` on all four channels, integer round-half-up
 /// (denominator 255 is odd — no `.5` ties can occur).
@@ -223,6 +292,19 @@ fn crossfade_f16(a_px: &[u8], b_px: &[u8], dst_px: &mut [u8], t: f32) {
         let a = f16_channel(&a_px[ch * 2..ch * 2 + 2]);
         let b = f16_channel(&b_px[ch * 2..ch * 2 + 2]);
         dst_px[ch * 2..ch * 2 + 2].copy_from_slice(&f16_bytes(a * (1.0 - t) + b * t));
+    }
+}
+
+/// `RgbaF32` dissolve on one pixel triple — `a_c·(1 − t) + b_c·t` in
+/// `f32` on all four channels, stored to `binary32` with no `binary16`
+/// rounding. `t` is the per-call quantized `tq/255`.
+// Same normative-formula rule as `crossfade_f16` — no `mul_add`.
+#[allow(clippy::suboptimal_flops)]
+fn crossfade_f32(a_px: &[u8], b_px: &[u8], dst_px: &mut [u8], t: f32) {
+    for ch in 0..4 {
+        let a = f32_channel(&a_px[ch * 4..ch * 4 + 4]);
+        let b = f32_channel(&b_px[ch * 4..ch * 4 + 4]);
+        dst_px[ch * 4..ch * 4 + 4].copy_from_slice(&f32_bytes(a * (1.0 - t) + b * t));
     }
 }
 
@@ -286,7 +368,7 @@ impl CompositeOver {
     /// # Errors
     ///
     /// [`Error::InvalidValue`] — `opacity` is not finite or outside
-    /// `[0, 1]` (`"opacity"`), `src` is not `Rgba8`/`RgbaF16`
+    /// `[0, 1]` (`"opacity"`), `src` is not `Rgba8`/`RgbaF16`/`RgbaF32`
     /// (`"src format"`), `dst` has a different format (`"dst format"`),
     /// the frames disagree on dimensions (`"dimensions"`), or `dst`'s
     /// backing is still shared (`dst.plane_mut(0)` → `None`,
@@ -302,11 +384,11 @@ impl CompositeOver {
         if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
             return Err(Error::InvalidValue("opacity"));
         }
-        // Quantize once per call — both pixel paths share `w`/`w/255`.
+        // Quantize once per call — every pixel path shares `w`/`w/255`.
         let w = q8_weight(opacity);
         let sa_scale = q8_scale(w);
         match src.format() {
-            PixelFormat::Rgba8 | PixelFormat::RgbaF16 => {}
+            PixelFormat::Rgba8 | PixelFormat::RgbaF16 | PixelFormat::RgbaF32 => {}
             _ => return Err(Error::InvalidValue("src format")),
         }
         if dst.format() != src.format() {
@@ -352,6 +434,16 @@ impl CompositeOver {
                             .zip(dst_row.as_chunks_mut::<8>().0.iter_mut())
                         {
                             composite_over_f16(src_px, dst_px, sa_scale);
+                        }
+                    }
+                    PixelFormat::RgbaF32 => {
+                        for (src_px, dst_px) in src_row
+                            .as_chunks::<16>()
+                            .0
+                            .iter()
+                            .zip(dst_row.as_chunks_mut::<16>().0.iter_mut())
+                        {
+                            composite_over_f32(src_px, dst_px, sa_scale);
                         }
                     }
                     // Validated above — this arm only keeps the match
@@ -433,8 +525,9 @@ impl Crossfade {
     /// # Errors
     ///
     /// [`Error::InvalidValue`] — `t` is not finite or outside `[0, 1]`
-    /// (`"t"`), `from` is not `Rgba8`/`RgbaF16` (`"src format"`), `to`
-    /// or `dst` disagree on the format (`"to format"`/`"dst format"`),
+    /// (`"t"`), `from` is not `Rgba8`/`RgbaF16`/`RgbaF32`
+    /// (`"src format"`), `to` or `dst` disagree on the format
+    /// (`"to format"`/`"dst format"`),
     /// the three frames disagree on dimensions (`"dimensions"`), or
     /// `dst`'s backing is still shared (`dst.plane_mut(0)` → `None`,
     /// `"dst plane"`). Every check runs before any write — a failed
@@ -454,11 +547,11 @@ impl Crossfade {
         if !t.is_finite() || !(0.0..=1.0).contains(&t) {
             return Err(Error::InvalidValue("t"));
         }
-        // Quantize once per call — both pixel paths share `tq`/`tq/255`.
+        // Quantize once per call — every pixel path shares `tq`/`tq/255`.
         let tq = q8_weight(t);
         let t_scale = q8_scale(tq);
         match from.format() {
-            PixelFormat::Rgba8 | PixelFormat::RgbaF16 => {}
+            PixelFormat::Rgba8 | PixelFormat::RgbaF16 | PixelFormat::RgbaF32 => {}
             _ => return Err(Error::InvalidValue("src format")),
         }
         if to.format() != from.format() {
@@ -508,6 +601,17 @@ impl Crossfade {
                             .zip(dst_row.as_chunks_mut::<8>().0.iter_mut())
                         {
                             crossfade_f16(a_px, b_px, dst_px, t_scale);
+                        }
+                    }
+                    PixelFormat::RgbaF32 => {
+                        for ((a_px, b_px), dst_px) in from_row
+                            .as_chunks::<16>()
+                            .0
+                            .iter()
+                            .zip(to_row.as_chunks::<16>().0.iter())
+                            .zip(dst_row.as_chunks_mut::<16>().0.iter_mut())
+                        {
+                            crossfade_f32(a_px, b_px, dst_px, t_scale);
                         }
                     }
                     // Validated above — this arm only keeps the match
@@ -593,6 +697,56 @@ mod tests {
             *dst = u16::from_le_bytes(*ch);
         }
         out
+    }
+
+    /// Builds an `RgbaF32` frame of `pixels` — channels given as `f32`
+    /// values (or `f32::from_bits` patterns), written little-endian.
+    fn f32_frame(width: u32, height: u32, pixels: &[[f32; 4]]) -> VideoFrame {
+        let mut frame = VideoFrame::new_owned(PixelFormat::RgbaF32, width, height, pts()).unwrap();
+        {
+            let mut plane = frame.plane_mut(0).unwrap();
+            for (dst_px, src_px) in plane
+                .data_mut()
+                .as_chunks_mut::<16>()
+                .0
+                .iter_mut()
+                .zip(pixels.iter())
+            {
+                for (dst_ch, value) in dst_px.as_chunks_mut::<4>().0.iter_mut().zip(src_px.iter()) {
+                    dst_ch.copy_from_slice(&value.to_le_bytes());
+                }
+            }
+        }
+        frame
+    }
+
+    /// Reads the `x`-th `RgbaF32` pixel of row `y` back as `f32`
+    /// values.
+    fn f32_px(frame: &VideoFrame, x: usize, y: u32) -> [f32; 4] {
+        let row = frame.plane(0).unwrap().row(y).unwrap();
+        let mut out = [0.0_f32; 4];
+        for (dst, ch) in out
+            .iter_mut()
+            .zip(row[x * 16..x * 16 + 16].as_chunks::<4>().0.iter())
+        {
+            *dst = f32::from_le_bytes(*ch);
+        }
+        out
+    }
+
+    /// Asserts `actual` is within `ulp` `binary32` steps of `expected`
+    /// (the `f64` reference value rounded to `binary32`) — the
+    /// `RgbaF32` arms' ≤ 2 ulp equivalence bound. Sign-magnitude bit
+    /// distance is the ulp distance for the same-sign comparisons
+    /// used here.
+    // The `f64 → f32` narrowing is the contract's own rounding step.
+    #[allow(clippy::cast_possible_truncation)]
+    fn assert_ulp(actual: f32, expected: f64, ulp: u32) {
+        let expected = expected as f32;
+        assert!(
+            actual.to_bits().abs_diff(expected.to_bits()) <= ulp,
+            "expected {expected} ± {ulp} ulp, got {actual}",
+        );
     }
 
     /// `w = 255` (`opacity = 1`): an opaque source overwrites `dst`
@@ -830,6 +984,234 @@ mod tests {
         assert_eq!(f16_px(&dst, 1, 0), [0x7C00, 0x0000, 0x0000, 0x3C00]);
     }
 
+    /// `RgbaF32` acceptance + golden — `opacity = 1` (`w/255 = 1.0`):
+    /// the same `f32` formulas as `RgbaF16` with no `binary16`
+    /// rounding. `a_s = 1.0` overwrites completely; `a_s = 0.5`/
+    /// `a_b = 0.5` gives `sa = 0.5`, `b = 0.25`, `oa = 0.75` with
+    /// every channel landing exactly (`oc = (0.375, 0.375, 0.5625)/
+    /// 0.75`); `a_s = 0.0` keeps the backdrop.
+    #[test]
+    fn composite_over_f32_golden() {
+        let src = f32_frame(
+            1,
+            3,
+            &[
+                [1.0, 0.0, 0.5, 1.0],
+                [0.25, 0.5, 1.0, 0.5],
+                [0.7, 0.7, 0.7, 0.0],
+            ],
+        );
+        let mut dst = f32_frame(
+            1,
+            3,
+            &[
+                [0.0, 0.0, 0.0, 0.0],
+                [1.0, 0.5, 0.25, 0.5],
+                [0.1, 0.2, 0.3, 1.0],
+            ],
+        );
+        CompositeOver::new().process(&src, &mut dst, 1.0).unwrap();
+        assert_eq!(f32_px(&dst, 0, 0), [1.0, 0.0, 0.5, 1.0]);
+        assert_eq!(f32_px(&dst, 0, 1), [0.5, 0.5, 0.75, 0.75]);
+        // `sa = 0`, `b = a_b = 1.0`, `oa = 1.0` → `oc = c_b` exactly.
+        assert_eq!(f32_px(&dst, 0, 2), [0.1, 0.2, 0.3, 1.0]);
+    }
+
+    /// Equivalence bound — `opacity = 0.5` quantizes to `w = 128`
+    /// (`sa_scale = 128/255` in `f32`): every channel must match the
+    /// `f64` evaluation of `sa = a_s·(w/255)`, `b = a_b·(1−sa)`,
+    /// `oc = (c_s·sa + c_b·b)/oa` rounded to `binary32` within
+    /// ≤ 2 ulp.
+    #[test]
+    fn composite_over_f32_mid_opacity_within_ulp_bound() {
+        let src = f32_frame(1, 1, &[[0.2, 0.9, 1.5, 0.6]]);
+        let mut dst = f32_frame(1, 1, &[[0.8, 0.1, 0.3, 0.4]]);
+        CompositeOver::new().process(&src, &mut dst, 0.5).unwrap();
+        // `f64` reference evaluation of the documented formula — the
+        // stored `f32` channels widened exactly.
+        let w = 128.0_f64 / 255.0;
+        let a_s = f64::from(0.6_f32);
+        let a_b = f64::from(0.4_f32);
+        let sa = a_s * w;
+        let b = a_b * (1.0 - sa);
+        let oa = sa + b;
+        let got = f32_px(&dst, 0, 0);
+        for (ch, (c_s, c_b)) in got[..3].iter().zip([
+            (f64::from(0.2_f32), f64::from(0.8_f32)),
+            (f64::from(0.9_f32), f64::from(0.1_f32)),
+            (f64::from(1.5_f32), f64::from(0.3_f32)),
+        ]) {
+            assert_ulp(*ch, (c_s * sa + c_b * b) / oa, 2);
+        }
+        assert_ulp(got[3], oa, 2);
+    }
+
+    /// `oa` outside the `binary32` normal range — zero, subnormal
+    /// (`< 2⁻¹²⁶`) or negative — takes the defined transparent-black
+    /// output, the `binary32` counterpart of the `oa < 2⁻¹⁴` cut on
+    /// the `RgbaF16` path.
+    #[test]
+    fn composite_over_f32_out_of_range_alpha_writes_transparent_black() {
+        let src = f32_frame(
+            1,
+            3,
+            &[
+                [1.0, 1.0, 1.0, 0.0],
+                // Smallest `binary32` subnormal `a_s` ≈ 1.4e-45.
+                [1.0, 1.0, 1.0, f32::from_bits(1)],
+                [1.0, 1.0, 1.0, -0.5],
+            ],
+        );
+        let mut dst = f32_frame(1, 3, &[[0.5, 0.5, 0.5, 0.0]; 3]);
+        CompositeOver::new().process(&src, &mut dst, 1.0).unwrap();
+        for y in 0..3 {
+            assert_eq!(f32_px(&dst, 0, y).map(f32::to_bits), [0; 4], "row {y}");
+        }
+    }
+
+    /// The `oa < 2⁻¹⁴` cut is `RgbaF16`-specific: `a_s = 2⁻²⁰` sits in
+    /// the divergence window `[2⁻¹²⁶, 2⁻¹⁴)` — a `binary16` subnormal
+    /// but a normal `binary32` — so the same input writes transparent
+    /// black on `RgbaF16` while `RgbaF32` composites it normally.
+    #[test]
+    fn composite_over_f32_faint_alpha_diverges_from_f16_cut() {
+        // `2⁻²⁰` as a `binary16` subnormal (0x0010) → `oa < 2⁻¹⁴` →
+        // the defined transparent black.
+        let src16 = f16_frame(1, 1, &[[0x3C00, 0x3C00, 0x3C00, 0x0010]]);
+        let mut dst16 = f16_frame(1, 1, &[[0x3C00, 0x3C00, 0x3C00, 0x0000]]);
+        CompositeOver::new()
+            .process(&src16, &mut dst16, 1.0)
+            .unwrap();
+        assert_eq!(f16_px(&dst16, 0, 0), [0x0000; 4]);
+
+        // The same `a_s` as a normal `binary32` (0x3580_0000) →
+        // `oa ≥ 2⁻¹²⁶` → composites: `oc = c_s`, `oa = 2⁻²⁰`.
+        let src32 = f32_frame(1, 1, &[[1.0, 1.0, 1.0, f32::from_bits(0x3580_0000)]]);
+        let mut dst32 = f32_frame(1, 1, &[[1.0, 1.0, 1.0, 0.0]]);
+        CompositeOver::new()
+            .process(&src32, &mut dst32, 1.0)
+            .unwrap();
+        assert_eq!(
+            f32_px(&dst32, 0, 0),
+            [1.0, 1.0, 1.0, f32::from_bits(0x3580_0000)]
+        );
+    }
+
+    /// Non-finite channel values propagate per `f32` semantics — they
+    /// are input data, not validated parameters.
+    #[test]
+    fn composite_over_f32_propagates_non_finite_channels() {
+        // `a_s = NaN` → `sa`/`oa` NaN → every channel NaN.
+        // `c_r = +∞` with `a_s = 1.0` → `oc_r = +∞`.
+        let src = f32_frame(
+            2,
+            1,
+            &[[1.0, 1.0, 1.0, f32::NAN], [f32::INFINITY, 0.0, 0.0, 1.0]],
+        );
+        let mut dst = f32_frame(2, 1, &[[0.0; 4]; 2]);
+        CompositeOver::new().process(&src, &mut dst, 1.0).unwrap();
+        assert!(f32_px(&dst, 0, 0).iter().all(|c| c.is_nan()));
+        assert_eq!(f32_px(&dst, 1, 0), [f32::INFINITY, 0.0, 0.0, 1.0]);
+    }
+
+    /// Channels are not clamped — HDR code values above 1.0 and
+    /// negative wide-gamut remnants pass through the compositing math
+    /// (the point of the unclamped `f32` arm).
+    #[test]
+    fn composite_over_f32_preserves_unclamped_channels() {
+        // Opaque source with `c_r = 2.0`, `c_g = −0.25` → passthrough.
+        let src = f32_frame(1, 1, &[[2.0, -0.25, 0.5, 1.0]]);
+        let mut dst = f32_frame(1, 1, &[[0.0; 4]]);
+        CompositeOver::new().process(&src, &mut dst, 1.0).unwrap();
+        assert_eq!(f32_px(&dst, 0, 0), [2.0, -0.25, 0.5, 1.0]);
+    }
+
+    /// `w == 0` early return on `RgbaF32` — `dst` stays byte-identical
+    /// down to `−0.0`/subnormal/NaN-payload bits, and a shared backing
+    /// is still rejected before the early return.
+    #[test]
+    fn composite_over_f32_zero_opacity_leaves_dst_byte_identical() {
+        let src = f32_frame(1, 1, &[[1.0; 4]]);
+        let mut dst = f32_frame(
+            1,
+            1,
+            &[[
+                f32::from_bits(0x8000_0000), // −0.0
+                f32::from_bits(0x0000_0001), // smallest subnormal
+                f32::from_bits(0x7FC0_0001), // NaN payload
+                f32::from_bits(0x0000_0000),
+            ]],
+        );
+        let before = dst.plane(0).unwrap().data().to_vec();
+        CompositeOver::new().process(&src, &mut dst, 0.0).unwrap();
+        assert_eq!(dst.plane(0).unwrap().data(), &before[..]);
+
+        // Validation precedes the early return: a shared `dst` is
+        // rejected even when `opacity = 0` would write nothing.
+        let sharing = dst.clone();
+        assert_eq!(
+            CompositeOver::new().process(&src, &mut dst, 0.0),
+            Err(Error::InvalidValue("dst plane"))
+        );
+        assert_eq!(dst.plane(0).unwrap().data(), &before[..]);
+        drop(sharing);
+    }
+
+    /// `RgbaF32` sources are accepted, but every frame in the call
+    /// must share the format — mixing with `Rgba8`/`RgbaF16` rejects
+    /// `"dst format"` in either direction, and dimension mismatch on
+    /// `RgbaF32` frames rejects `"dimensions"`, all before any write.
+    #[test]
+    fn composite_over_f32_rejects_mismatched_frames() {
+        let src32 = f32_frame(1, 1, &[[1.0; 4]]);
+        let src8 = rgba8_frame(1, 1, &[[0; 4]]);
+        let mut dst32 = f32_frame(1, 1, &[[0.0; 4]]);
+        let mut dst8 = rgba8_frame(1, 1, &[[0; 4]]);
+        let mut dst16 = f16_frame(1, 1, &[[0x3C00; 4]]);
+        let mut dst32_wide = f32_frame(2, 1, &[[0.0; 4]; 2]);
+        let mut kernel = CompositeOver::new();
+
+        assert_eq!(
+            kernel.process(&src32, &mut dst8, 1.0),
+            Err(Error::InvalidValue("dst format"))
+        );
+        assert_eq!(
+            kernel.process(&src32, &mut dst16, 1.0),
+            Err(Error::InvalidValue("dst format"))
+        );
+        assert_eq!(
+            kernel.process(&src8, &mut dst32, 1.0),
+            Err(Error::InvalidValue("dst format"))
+        );
+        assert_eq!(
+            kernel.process(&src32, &mut dst32_wide, 1.0),
+            Err(Error::InvalidValue("dimensions"))
+        );
+        // No rejection wrote anything.
+        assert_eq!(f32_px(&dst32, 0, 0), [0.0; 4]);
+        assert_eq!(f32_px(&dst32_wide, 0, 0), [0.0; 4]);
+    }
+
+    /// In-place canvas semantics on `RgbaF32`: `dst`'s
+    /// `ColorInfo`/`pts`/`duration` keep their pre-call values.
+    #[test]
+    fn composite_over_f32_keeps_dst_metadata() {
+        let src = f32_frame(1, 1, &[[0.5; 4]]);
+        let mut dst = f32_frame(1, 1, &[[0.0; 4]]);
+        let duration = MediaDuration::new(3_000, TimeBase::COMMON_90K);
+        dst.set_color(ColorInfo {
+            primaries: ColorPrimaries::Bt2020,
+            ..ColorInfo::default()
+        });
+        dst.set_pts(MediaTime::ZERO);
+        dst.set_duration(Some(duration));
+        CompositeOver::new().process(&src, &mut dst, 1.0).unwrap();
+        assert_eq!(f32_px(&dst, 0, 0), [0.5; 4]);
+        assert_eq!(dst.color().primaries, ColorPrimaries::Bt2020);
+        assert_eq!(dst.pts(), MediaTime::ZERO);
+        assert_eq!(dst.duration(), Some(duration));
+    }
+
     /// In-place canvas semantics: `dst`'s `ColorInfo`/`pts`/`duration`
     /// keep their pre-call values — compositing never re-identifies
     /// the frame.
@@ -1039,6 +1421,133 @@ mod tests {
         assert_eq!(f16_px(&dst, 1, 0), [0x7C00, 0x37F8, 0x37F8, 0x3C00]);
     }
 
+    /// `RgbaF32` acceptance + golden — `tq = 128`, `t = 128/255`
+    /// evaluated in `f32` with no `binary16` rounding: each channel
+    /// is the `f64` reference `a·(1 − 128/255) + b·(128/255)` rounded
+    /// to `binary32` within ≤ 2 ulp.
+    #[test]
+    fn crossfade_f32_golden_within_ulp_bound() {
+        let from = f32_frame(1, 1, &[[1.0, 0.25, -0.5, 0.75]]);
+        let to = f32_frame(1, 1, &[[0.5, 0.75, 0.125, 0.25]]);
+        let mut dst = f32_frame(1, 1, &[[0.0; 4]]);
+        Crossfade::new().process(&from, &to, &mut dst, 0.5).unwrap();
+        let t = 128.0_f64 / 255.0;
+        let got = f32_px(&dst, 0, 0);
+        for (ch, (a, b)) in got.iter().zip([
+            (f64::from(1.0_f32), f64::from(0.5_f32)),
+            (f64::from(0.25_f32), f64::from(0.75_f32)),
+            (f64::from(-0.5_f32), f64::from(0.125_f32)),
+            (f64::from(0.75_f32), f64::from(0.25_f32)),
+        ]) {
+            assert_ulp(*ch, a * (1.0 - t) + b * t, 2);
+        }
+    }
+
+    /// `RgbaF32` endpoint reproduction is numeric, like `RgbaF16`:
+    /// `tq = 0` reproduces finite `from` channels and `tq = 255`
+    /// reproduces finite `to` channels, but `a·1.0 + b·0.0`
+    /// canonicalizes `−0.0` to `+0.0` and NaN channels propagate with
+    /// possibly-normalized payloads.
+    #[test]
+    fn crossfade_f32_endpoints_reproduce_finite_channels() {
+        let mut kernel = Crossfade::new();
+        let mut dst = f32_frame(1, 1, &[[0.0; 4]]);
+
+        // `tq = 0`: `1.0`/`2.0`/`0.5` reproduce bit-exactly; `−0.0`
+        // becomes `+0.0`; a NaN channel stays NaN.
+        let from = f32_frame(1, 1, &[[1.0, -0.0, f32::from_bits(0x7FC0_0001), 2.0]]);
+        let to = f32_frame(1, 1, &[[0.5; 4]]);
+        kernel.process(&from, &to, &mut dst, 0.0).unwrap();
+        let got = f32_px(&dst, 0, 0);
+        assert_eq!(got[0].to_bits(), 1.0_f32.to_bits());
+        assert_eq!(got[1].to_bits(), 0.0_f32.to_bits());
+        assert!(got[2].is_nan());
+        assert_eq!(got[3].to_bits(), 2.0_f32.to_bits());
+
+        // `tq = 255` is symmetric on `to`.
+        let from = f32_frame(1, 1, &[[0.25; 4]]);
+        let to = f32_frame(1, 1, &[[0.5, -0.0, f32::from_bits(0x7FC0_0001), 1.0]]);
+        kernel.process(&from, &to, &mut dst, 1.0).unwrap();
+        let got = f32_px(&dst, 0, 0);
+        assert_eq!(got[0].to_bits(), 0.5_f32.to_bits());
+        assert_eq!(got[1].to_bits(), 0.0_f32.to_bits());
+        assert!(got[2].is_nan());
+        assert_eq!(got[3].to_bits(), 1.0_f32.to_bits());
+    }
+
+    /// Non-finite channel values propagate per `f32` semantics — NaN
+    /// in `from` and +∞ in `to` appear as non-finite results in `dst`.
+    /// Channels are not clamped: HDR and negative values mix through.
+    #[test]
+    fn crossfade_f32_propagates_non_finite_channels() {
+        let from = f32_frame(2, 1, &[[f32::NAN, 0.0, 0.0, 1.0], [1.0; 4]]);
+        let to = f32_frame(
+            2,
+            1,
+            &[[0.0, 0.0, 0.0, 1.0], [f32::INFINITY, 0.0, 0.0, 1.0]],
+        );
+        let mut dst = f32_frame(2, 1, &[[0.0; 4]; 2]);
+        Crossfade::new().process(&from, &to, &mut dst, 0.5).unwrap();
+        assert!(f32_px(&dst, 0, 0)[0].is_nan());
+        // +∞ in `to`'s R: `oc_r = 1·(1−t) + ∞·t = +∞`.
+        assert_eq!(f32_px(&dst, 1, 0)[0], f32::INFINITY);
+        // Alpha mixes like any channel — `1.0·(1−t) + 1.0·t = 1.0`.
+        assert_eq!(f32_px(&dst, 1, 0)[3], 1.0);
+    }
+
+    /// `RgbaF32` sources are accepted, but `to`/`dst` must share the
+    /// format — mixing with `Rgba8`/`RgbaF16` rejects before any
+    /// write.
+    #[test]
+    fn crossfade_f32_rejects_mismatched_formats() {
+        let from32 = f32_frame(1, 1, &[[0.0; 4]]);
+        let to32 = f32_frame(1, 1, &[[1.0; 4]]);
+        let to8 = rgba8_frame(1, 1, &[[255; 4]]);
+        let mut dst8 = rgba8_frame(1, 1, &[[9; 4]]);
+        let mut dst16 = f16_frame(1, 1, &[[0x3C00; 4]]);
+        let mut dst32 = f32_frame(1, 1, &[[0.0; 4]]);
+        let mut kernel = Crossfade::new();
+
+        // `to` disagrees on format.
+        assert_eq!(
+            kernel.process(&from32, &to8, &mut dst32, 0.5),
+            Err(Error::InvalidValue("to format"))
+        );
+        // `dst` disagrees on format.
+        assert_eq!(
+            kernel.process(&from32, &to32, &mut dst8, 0.5),
+            Err(Error::InvalidValue("dst format"))
+        );
+        assert_eq!(
+            kernel.process(&from32, &to32, &mut dst16, 0.5),
+            Err(Error::InvalidValue("dst format"))
+        );
+        // No rejection wrote anything.
+        assert_eq!(f32_px(&dst32, 0, 0), [0.0; 4]);
+    }
+
+    /// `dst` takes `from`'s `ColorInfo`/`pts`/`duration` on `RgbaF32`
+    /// too — the first source owns the output identity, not `to`.
+    #[test]
+    fn crossfade_f32_propagates_from_metadata() {
+        let mut from = f32_frame(1, 1, &[[0.0; 4]]);
+        let from_pts = MediaTime::new(7, TimeBase::COMMON_90K);
+        let duration = MediaDuration::new(9_000, TimeBase::COMMON_90K);
+        from.set_pts(from_pts);
+        from.set_duration(Some(duration));
+        from.set_color(ColorInfo {
+            primaries: ColorPrimaries::Bt2020,
+            ..ColorInfo::default()
+        });
+        let to = f32_frame(1, 1, &[[1.0; 4]]);
+        let mut dst = f32_frame(1, 1, &[[0.0; 4]]);
+        dst.set_pts(MediaTime::ZERO);
+        Crossfade::new().process(&from, &to, &mut dst, 0.5).unwrap();
+        assert_eq!(dst.color().primaries, ColorPrimaries::Bt2020);
+        assert_eq!(dst.pts(), from_pts);
+        assert_eq!(dst.duration(), Some(duration));
+    }
+
     /// `dst` takes `from`'s `ColorInfo`/`pts`/`duration` — the first
     /// source owns the output identity, not `to`.
     #[test]
@@ -1167,6 +1676,91 @@ mod tests {
         let from_before: [u8; 8] = from.plane(0).unwrap().data().try_into().unwrap();
         let to_before: [u8; 8] = to.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = rgba8_frame(2, 1, &[[0; 4], [0; 4]]);
+        Crossfade::new()
+            .process(&from, &to, &mut dst, 0.25)
+            .unwrap();
+        assert_eq!(from.plane(0).unwrap().data(), &from_before);
+        assert_eq!(to.plane(0).unwrap().data(), &to_before);
+    }
+
+    /// RT contract on the `RgbaF32` arm: `process` is allocation-free,
+    /// non-blocking and bounded — observably: repeated calls on the
+    /// same kernel succeed and stay deterministic, never panic.
+    /// (`CompositeOver` is in-place, so `dst` is restored between
+    /// iterations.)
+    #[test]
+    fn rt_process_composite_over_f32_is_repeatable_and_deterministic() {
+        let src = f32_frame(1, 1, &[[0.2, 0.9, 1.5, 0.6]]);
+        let mut dst = f32_frame(1, 1, &[[0.8, 0.1, 0.3, 0.4]]);
+        let mut kernel = CompositeOver::new();
+        kernel.process(&src, &mut dst, 0.5).unwrap();
+        let expected = f32_px(&dst, 0, 0);
+        for _ in 0..64 {
+            dst.plane_mut(0)
+                .unwrap()
+                .data_mut()
+                .as_chunks_mut::<16>()
+                .0
+                .iter_mut()
+                .for_each(|px| *px = f32_px_bytes([0.8, 0.1, 0.3, 0.4]));
+            kernel.process(&src, &mut dst, 0.5).unwrap();
+            assert_eq!(f32_px(&dst, 0, 0), expected);
+        }
+    }
+
+    /// Writes one `RgbaF32` pixel (four little-endian `binary32`
+    /// channels) — the test-side writer for in-place restoration.
+    fn f32_px_bytes(px: [f32; 4]) -> [u8; 16] {
+        let mut out = [0_u8; 16];
+        for (i, ch) in px.iter().enumerate() {
+            out[4 * i..4 * i + 4].copy_from_slice(&ch.to_le_bytes());
+        }
+        out
+    }
+
+    /// RT contract on the `RgbaF32` arm: `process` writes only the
+    /// caller-provided `dst` — `src` stays byte-identical across the
+    /// call.
+    #[test]
+    fn rt_process_composite_over_f32_never_mutates_source() {
+        let src = f32_frame(2, 1, &[[1.0, -0.0, 0.25, 0.5], [0.125, 2.0, 0.0, 1.0]]);
+        let before: [u8; 32] = src.plane(0).unwrap().data().try_into().unwrap();
+        let mut dst = f32_frame(2, 1, &[[0.0; 4]; 2]);
+        CompositeOver::new().process(&src, &mut dst, 0.75).unwrap();
+        assert_eq!(src.plane(0).unwrap().data(), &before);
+    }
+
+    /// RT contract on the `RgbaF32` arm: `process` is allocation-free,
+    /// non-blocking and bounded — observably: repeated calls on the
+    /// same kernel succeed and stay deterministic, never panic.
+    #[test]
+    fn rt_process_crossfade_f32_is_repeatable_and_deterministic() {
+        let from = f32_frame(1, 1, &[[1.0, 0.25, -0.5, 0.75]]);
+        let to = f32_frame(1, 1, &[[0.5, 0.75, 0.125, 0.25]]);
+        let mut dst = f32_frame(1, 1, &[[0.0; 4]]);
+        let mut kernel = Crossfade::new();
+        kernel.process(&from, &to, &mut dst, 0.5).unwrap();
+        let expected = f32_px(&dst, 0, 0);
+        for _ in 0..64 {
+            kernel.process(&from, &to, &mut dst, 0.5).unwrap();
+            assert_eq!(f32_px(&dst, 0, 0), expected);
+        }
+    }
+
+    /// RT contract on the `RgbaF32` arm: `process` writes only the
+    /// caller-provided `dst` — `from` and `to` both stay
+    /// byte-identical across the call.
+    #[test]
+    fn rt_process_crossfade_f32_never_mutates_sources() {
+        let from = f32_frame(2, 1, &[[1.0, -0.0, 0.25, 0.5], [0.125, 2.0, 0.0, 1.0]]);
+        let to = f32_frame(
+            2,
+            1,
+            &[[0.0, 0.5, 1.5, 0.75], [f32::INFINITY, 0.0, 0.25, 0.5]],
+        );
+        let from_before: [u8; 32] = from.plane(0).unwrap().data().try_into().unwrap();
+        let to_before: [u8; 32] = to.plane(0).unwrap().data().try_into().unwrap();
+        let mut dst = f32_frame(2, 1, &[[0.0; 4]; 2]);
         Crossfade::new()
             .process(&from, &to, &mut dst, 0.25)
             .unwrap();

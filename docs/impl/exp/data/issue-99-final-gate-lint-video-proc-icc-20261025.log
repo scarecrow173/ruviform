@@ -1,0 +1,3 @@
+[lint-video-proc-icc] $ cargo clippy -p ruviform-video-proc --all-targets --fea…
+    Checking ruviform-video-proc v0.1.0 (F:\repositry\ruviform\crates\ruviform-video-proc)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.20s

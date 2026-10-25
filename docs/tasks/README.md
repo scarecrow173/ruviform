@@ -25,6 +25,8 @@ Directory: `docs/tasks`
 | TASK-034JRQBhUGz8OWIgGAnEgl | ruviform-audio クレート新設 + pull グラフ/ミキサー/プランスナップショット | done | [audio-engine-graph-snapshot.md](./audio-engine-graph-snapshot.md) |
 | TASK-034JRQBPxKgu0yLVIB6Xm7 | セッション統合（OutputStream callback → RT グラフ駆動） | done | [audio-engine-session.md](./audio-engine-session.md) |
 | TASK-034IwBWH50nD9Unn8HghJD | テンプレート残存プレースホルダーのベースラインスイープ | done | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
+| TASK-034LFHv6XBnCj3XsdaEGVG | Issue #99 色変換カーネル closeout | done | [color-conversion-closeout.md](./color-conversion-closeout.md) |
+| TASK-034LFHuE6Ii7Wqar445Znn | Issue #99 色変換カーネル final verification | done | [color-conversion-final-verification.md](./color-conversion-final-verification.md) |
 | TASK-034KSVlq4M72vjrxvDRQbP | コンポジットカーネル実装（CompositeOver + Crossfade + 共有 f16 コーデック格上げ） | done | [composite-kernels.md](./composite-kernels.md) |
 | TASK-034IdQmBa6UdauVn9IG59X | 最小ワークスペースと smoke test の構築 | done | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | TASK-034JgsFV6CWAjSnPuekBgs | ruviform-plugin-core 共通基盤クレートの作成 | done | [create-plugin-core-foundation.md](./create-plugin-core-foundation.md) |
@@ -39,6 +41,7 @@ Directory: `docs/tasks`
 | TASK-034KPgQj9u5utlkxH3JGqv | edit 評価射影 + テスト・文書クローズ | done | [edit-evaluation-and-closeout.md](./edit-evaluation-and-closeout.md) |
 | TASK-034JglHTIvjo18tMdbO3DP | 採否 ADR 確定とワークスペース帳簿・索引の同期 | done | [finalize-backend-adr-and-sync-docs.md](./finalize-backend-adr-and-sync-docs.md) |
 | TASK-034J6PpKd8jNFxEYS4CRdM | 時間演算の早期飽和・Err 修正（i128 中間演算） | done | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
+| TASK-034LFHl0gbFixJl7RmlzQm | IccTransform + IccIntent 実装（feature icc・moxcms 経路） | done | [icc-transform-feature.md](./icc-transform-feature.md) |
 | TASK-034J5KQD1rDMZHFRah7pU0 | ruviform-audio-core のデータモデル実装 | done | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
 | TASK-034Jglv8LtJHUgWH3wlu0o | ruviform-audio-core の device ポート定義と契約テスト | done | [implement-audio-core-device-port.md](./implement-audio-core-device-port.md) |
 | TASK-034JglAvWUFQoLhvYXOw2O | ruviform-audio-device クレート新設と cpal adapter 実装 | done | [implement-audio-device-cpal-adapter.md](./implement-audio-device-cpal-adapter.md) |
@@ -91,6 +94,8 @@ Directory: `docs/tasks`
 | TASK-034IwCiYXp6ub3O8Brcs3L | 設定ファイルのレビューと最小修正 | done | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | TASK-034IwCiByN74V3hysJ9iTR | AGENTS.md の Ruviform 向け節単位改稿 | done | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | TASK-034IwCbgksOGvhF5E4CQbp | README.md の Ruviform 向け全面改稿 | done | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
+| TASK-034LFHlxNkMOGDilPsdP0f | 既存カーネルの RgbaF32 arm 拡張（CompositeOver/Crossfade/AffineTransform） | done | [rgba-f32-composite-affine-arms.md](./rgba-f32-composite-affine-arms.md) |
+| TASK-034LFH4wXKj32ElWzaI2lb | RgbaF32 pixel format + transfer/primaries 内部基盤 | done | [rgba-f32-format-and-transfer-internals.md](./rgba-f32-format-and-transfer-internals.md) |
 | TASK-034KV6AzIxXBCyJdl6BFjk | RT 観測計測ハーネスの実装（PoC scaffolding・criterion ベンチ・スモーク配線） | done | [rt-observability-bench-harness.md](./rt-observability-bench-harness.md) |
 | TASK-034KV6AXTsAaxjMCc4m8px | RT 観測 PoC の計測実行・experiment/impl 記録・#103 判定フィードバック | done | [rt-observability-poc-run-and-report.md](./rt-observability-poc-run-and-report.md) |
 | TASK-034JglHs8cNMDOvyZFeUpc | PoC example（list_devices・play_sine）実機手順と実験ログ | done | [run-device-poc-examples-and-exp-log.md](./run-device-poc-examples-and-exp-log.md) |
@@ -112,6 +117,7 @@ Directory: `docs/tasks`
 | TASK-034JcD43sDKFAlPxYuAWmj | Issue #26 ドキュメント同期（baseline 採否表・AGENTS・README）と総合検証 | done | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
 | TASK-034JxObKHc0v3kUhnQiePv | RT 基盤ドキュメント同期と総合検証 | done | [sync-rt-foundation-docs-and-verify.md](./sync-rt-foundation-docs-and-verify.md) |
 | TASK-034JOul8zCtHMR49d9c78V | write_interleaved の per-chunk timestamp 合成 | done | [synthesize-per-chunk-timestamps.md](./synthesize-per-chunk-timestamps.md) |
+| TASK-034LFHdEfDbppnNeuh0u48 | ToneMapSdr カーネル実装（BT.2390 EETF） | done | [tone-map-sdr-kernel.md](./tone-map-sdr-kernel.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
 | TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | done | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |
@@ -121,5 +127,6 @@ Directory: `docs/tasks`
 | TASK-034JZVID00000000000070 | Issue #27 文書クローズと全量検証 | done | [video-engine-closeout.md](./video-engine-closeout.md) |
 | TASK-034JZVID00000000000060 | ruviform-video クレート実装 + テスト | done | [video-engine-crate.md](./video-engine-crate.md) |
 | TASK-034JP1sJ8ZJThe3Fj9w0mr | clack thread-check の有効化と process での is_audio_thread 照会 | done | [wire-clap-thread-check.md](./wire-clap-thread-check.md) |
+| TASK-034LFHddlrfvXu5Jlmwdr0 | working space カーネル実装（ToWorking + FromWorking） | done | [working-space-kernels.md](./working-space-kernels.md) |
 | TASK-034JPwZ8htMzYNPNgOceEI | 分析・レポート記述・文書整合 | done | [write-dispatch-analysis-report.md](./write-dispatch-analysis-report.md) |
 | TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | done | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |

@@ -30,7 +30,10 @@ relations:
     - "docs/specs/second-target-design.md"
     - "docs/adr/video-proc-kernel-api-and-color-hdr-scope.md"
     - "docs/designs/ruviform-architecture-design-baseline.md"
-  derived-by: []
+  derived-by:
+    - "docs/specs/color-conversion-kernels.md"
+    - "docs/designs/color-conversion-kernels.md"
+    - "docs/plans/implement-issue-99-color-conversion-kernels.md"
   verifies: []
   verified-by: []
   references: []

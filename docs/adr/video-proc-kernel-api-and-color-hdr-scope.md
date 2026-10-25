@@ -37,6 +37,9 @@ relations:
     - "docs/plans/implement-issue-26-video-foundation.md"
     - "docs/specs/composite-transition-kernels.md"
     - "docs/designs/composite-transition-kernels.md"
+    - "docs/specs/color-conversion-kernels.md"
+    - "docs/designs/color-conversion-kernels.md"
+    - "docs/plans/implement-issue-99-color-conversion-kernels.md"
   verifies: []
   verified-by: []
   references:

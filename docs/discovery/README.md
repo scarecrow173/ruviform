@@ -6,6 +6,7 @@ Directory: `docs/discovery`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| DISC-034LEXAPQpsGvnYeoKEahA | 色変換カーネル（f32 linear working space + ICC 入出力経路）の探索（Issue #99） | resolved | [color-conversion-kernels.md](./color-conversion-kernels.md) |
 | DISC-034Jc7DRXwhHU9BTMwYJe2 | DSP/SIMD バックエンド比較 PoC の探索（Issue #19） | resolved | [dsp-simd-poc-issue-19.md](./dsp-simd-poc-issue-19.md) |
 | DISC-034Jc8wchRH37hqfhNLRPJ | オーディオデバイスバックエンド評価（cpal 等）の探索 | resolved | [evaluate-audio-device-backends.md](./evaluate-audio-device-backends.md) |
 | DISC-034JccH31pBpKOSW5fst0g | プラグイン基盤 binding 方式の評価（Issue #29） | resolved | [evaluate-plugin-binding-options.md](./evaluate-plugin-binding-options.md) |
