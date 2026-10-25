@@ -82,7 +82,7 @@ use std::ffi::OsString;
 use std::io::{self, Read, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::process::ExitCode;
-use std::sync::atomic::{Ordering, compiler_fence};
+use std::sync::atomic::{Ordering, fence};
 
 use ruviform_plugin_core::wire::{self, Command as WireCommand, Message, Reply as WireReply};
 use ruviform_plugin_core::{
@@ -228,19 +228,26 @@ fn serve(
                     return ExitCode::FAILURE;
                 }
             }
-            // TODO(Task 4 — seq-space partition): the doorbell `seq`
-            // space must be defined as disjoint from the command
-            // `seq` space so `BlockDone`/`Reply` correlation can
-            // never alias a command waiter; the partition rule lands
-            // with the host-side data plane.
+            // The doorbell `seq` space is disjoint from the command
+            // `seq` space by construction: the host sets
+            // `BLOCK_SEQ_FLAG` (`1 << 63`, `l1::data` in
+            // `ruviform-plugin-host`) on every `BlockIn` seq and
+            // demultiplexes the child's replies on that bit. The
+            // child echoes the seq verbatim — `BlockDone` on
+            // success, `Reply{seq, Err}` on rejection — so no
+            // child-side partition work is needed.
             Message::BlockIn { seq } => {
                 // The doorbell's release edge on the writer side is
-                // paired here before touching shm.
-                compiler_fence(Ordering::Acquire);
+                // paired here before touching shm — a real atomic
+                // fence (`std::sync::atomic::fence`), not a compiler
+                // fence: ordering across the process boundary rests
+                // on the fence plus the pipe-read syscall.
+                fence(Ordering::Acquire);
                 let reply = match runner.process_block(seq) {
                     Ok(result) => {
-                        // Publish the out-slot before the doorbell.
-                        compiler_fence(Ordering::Release);
+                        // Publish the out-slot before the doorbell —
+                        // same real-fence Release edge.
+                        fence(Ordering::Release);
                         Message::BlockDone { seq, result }
                     }
                     Err(error) => Message::Reply {

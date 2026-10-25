@@ -41,9 +41,10 @@
 //! | +24 | `out_off` | `u32` | `HEADER_LEN + in_depth * SLOT_BYTES` |
 //!
 //! The slot body layout (`seq`/scalars/transport/result/events/planar
-//! `f32` samples — the `wire::shm` slot offsets) is data-plane work —
-//! Task 4 extends this module with slot access; the control plane
-//! only needs the segment to exist for the child's attach.
+//! `f32` samples — the `wire::shm` slot offsets) is accessed through
+//! [`View`]: the `driver` thread's `in_slot_mut` (sole in-slot
+//! writer) and the `reader` thread's `out_slot` (sole out-slot
+//! reader), one side per slot under strict alternation.
 
 use std::process;
 use std::sync::OnceLock;
@@ -191,8 +192,8 @@ impl Segment {
 
     /// Re-reads the header and checks every field against the values
     /// this segment was created with — the self-verification half of
-    /// the header write/verify pair (used by tests and by Task 4's
-    /// slot setup).
+    /// the header write/verify pair (used by tests and by the data
+    /// plane's `View` setup).
     pub(crate) fn verify_header(&self, in_depth: u32, out_depth: u32) -> bool {
         let bytes = bytes(&self.mem);
         if bytes.len() < self.declared_len {
@@ -242,15 +243,74 @@ fn write_header(
     Ok(())
 }
 
+/// A non-owning local attach to the proxy's own segment — the
+/// data-plane view the `driver`/`reader` threads open for
+/// themselves.
+///
+/// `Shmem` is `!Send` (its `MapData` holds a raw mapping pointer and
+/// the crate declares no `Send`/`Sync` impls), so the owning
+/// [`Segment`] cannot be shared with — or moved to — the I/O
+/// threads. Instead each thread `open`s the same `os_id` locally:
+/// `open` never sets `is_owner`, so dropping a `View` unmaps the
+/// thread's own mapping and never unlinks the segment (the owner
+/// `Segment` in [`L1Instance`](super::L1Instance) keeps that duty).
+///
+/// Which thread maps which region is fixed by the thread table:
+/// the `driver` attaches [`View::in_slot_mut`] access only (it is
+/// the sole writer of the in-slot array), the `reader` attaches
+/// [`View::out_slot`] access only (sole reader of the out-slot
+/// array). The header fields ([`Segment::declared_len`], the slot
+/// depths) are known to both through [`wire::shm`]'s consts and the
+/// spawn-time depth — a `View` does not re-validate the header.
+pub(crate) struct View {
+    mem: Shmem,
+}
+
+impl View {
+    /// Attaches to the named segment `key` on the calling thread —
+    /// `Err(())` when the mapping fails (the caller converges the
+    /// instance: a segment the child attached cannot be absent for
+    /// the owner).
+    pub(crate) fn attach(key: &str) -> Result<Self, ()> {
+        ShmemConf::new()
+            .os_id(key)
+            .open()
+            .map(|mem| Self { mem })
+            .map_err(|_| ())
+    }
+
+    /// The in-slot byte slice for doorbell `seq` (`seq % in_depth`
+    /// selects the slot, per the wire contract). `in_depth` is the
+    /// spawn-time depth.
+    pub(crate) fn in_slot_mut(&mut self, in_depth: u32, seq: u64) -> &mut [u8] {
+        let index =
+            usize::try_from(seq % u64::from(in_depth)).expect("in-slot index always fits usize");
+        let start = shm::IN_SLOTS_OFF + index * shm::SLOT_BYTES;
+        &mut bytes_mut(&mut self.mem)[start..start + shm::SLOT_BYTES]
+    }
+
+    /// The out-slot byte slice for doorbell `seq` — the slot the
+    /// child filled (`seq % out_depth`; out slots start at
+    /// `out_slots_off(in_depth)`).
+    pub(crate) fn out_slot(&self, in_depth: u32, out_depth: u32, seq: u64) -> &[u8] {
+        let index =
+            usize::try_from(seq % u64::from(out_depth)).expect("out-slot index always fits usize");
+        let start = shm::out_slots_off(in_depth) + index * shm::SLOT_BYTES;
+        &bytes(&self.mem)[start..start + shm::SLOT_BYTES]
+    }
+}
+
 /// The segment as a read-only byte slice.
 fn bytes(mem: &Shmem) -> &[u8] {
     // SAFETY: `Shmem::as_slice` is `unsafe` because the crate cannot
     // prove the mapped range immutable — another process maps the same
-    // pages. Here it is only used to re-read the fixed header, which
-    // is written once by this owner before spawn and never mutated
-    // afterwards (slot bodies are Task 4's strict-alternation
-    // doorbell protocol); the length is the attach/create-validated
-    // mapping length.
+    // pages. The L1 slot protocol supplies that guarantee: header bytes
+    // are written once by this owner before spawn, and each slot is
+    // touched by exactly one side at a time under the strict-
+    // alternation doorbell rule (the producer reuses slot `seq % D`
+    // only after `done seq - D`; `View::out_slot` is called only on the
+    // reader thread after the `BlockDone` acquire edge; the length is
+    // the attach/create-validated mapping length).
     #[expect(unsafe_code)]
     unsafe {
         mem.as_slice()
@@ -259,18 +319,19 @@ fn bytes(mem: &Shmem) -> &[u8] {
 
 /// The segment as a mutable byte slice.
 fn bytes_mut(mem: &mut Shmem) -> &mut [u8] {
-    // SAFETY: same protocol argument as `bytes` — the header region
-    // being written is touched only by this owner before the child is
-    // spawned (the child receives the `os_id` on argv), so no other
-    // process can observe a partial header; the `&mut Shmem` borrow
-    // keeps the slice exclusive within this call.
+    // SAFETY: same protocol argument as `bytes` — header bytes are
+    // written once before spawn, and the in-slot written through
+    // `View::in_slot_mut` is owned by this host between doorbells under
+    // the strict-alternation rule, so no other process touches it
+    // meanwhile; the `&mut Shmem` borrow keeps the slice exclusive
+    // within this call.
     #[expect(unsafe_code)]
     unsafe {
         mem.as_slice_mut()
     }
 }
 
-fn get_u32(bytes: &[u8], offset: usize) -> u32 {
+pub(crate) fn get_u32(bytes: &[u8], offset: usize) -> u32 {
     u32::from_le_bytes(
         bytes[offset..offset + 4]
             .try_into()
@@ -278,6 +339,18 @@ fn get_u32(bytes: &[u8], offset: usize) -> u32 {
     )
 }
 
-fn put_u32(bytes: &mut [u8], offset: usize, value: u32) {
+pub(crate) fn get_u64(bytes: &[u8], offset: usize) -> u64 {
+    u64::from_le_bytes(
+        bytes[offset..offset + 8]
+            .try_into()
+            .expect("u64 field is 8 bytes"),
+    )
+}
+
+pub(crate) fn put_u32(bytes: &mut [u8], offset: usize, value: u32) {
     bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+}
+
+pub(crate) fn put_u64(bytes: &mut [u8], offset: usize, value: u64) {
+    bytes[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
 }

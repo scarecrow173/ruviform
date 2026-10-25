@@ -72,3 +72,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034LPNEgk770ZFr8yU3823` | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | `IMPL-034LT7uqDVQ21ywpL4up76` | Issue #76 plugin-export crate + L1 runner — Task 2 implementation | completed | [issue-76-plugin-export-task-2-implementation.md](./issue-76-plugin-export-task-2-implementation.md) |
 | `IMPL-034LT7uOCDj9JkF6u9Ut0L` | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |
+| `IMPL-034LVAYFtNda72goeeCUwD` | Issue #76 L1 shm data plane + RT legs — Task 4 implementation | completed | [issue-76-l1-shm-data-plane-task-4-implementation.md](./issue-76-l1-shm-data-plane-task-4-implementation.md) |

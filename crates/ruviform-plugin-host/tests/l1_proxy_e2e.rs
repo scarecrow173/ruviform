@@ -18,16 +18,28 @@
 mod l1;
 
 use std::ffi::OsString;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use ruviform_audio_core::SampleRate;
+use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
+use ruviform_media_core::{MediaTime, TransportStatus};
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    GuiParentToken, HostError, LifecycleState, PluginDescriptor, PrepareError, ProcessConfig,
+    Event, EventKind, EventList, GuiParentToken, HostError, HostInput, HostOutput, LifecycleError,
+    LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamValue, PluginDescriptor,
+    PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
 };
 
 use l1::{ChildExit, L1Instance, SpawnSpec};
+
+/// `assert_no_alloc` arms a thread-local forbid flag through the
+/// global allocator — required exactly once per test binary (the
+/// `rt_l1_*` contract tests).
+#[cfg(debug_assertions)]
+#[global_allocator]
+static ALLOC_DISABLER: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
 
 /// The descriptor `l1-test-worker` reports for `Scan` — the
 /// `SpawnSpec` oracle must field-match it.
@@ -543,4 +555,852 @@ fn shm_unique_keys_never_repeat() {
     for _ in 0..64 {
         assert!(keys.insert(unique_key(3)));
     }
+}
+
+// ------------------------------------------------------------------
+// Data plane (Issue #76 task 4): shm slots, doorbells, the RT legs.
+// ------------------------------------------------------------------
+
+/// A spawned instance driven to `Processing` — Initialize → Activate
+/// (512-frame cap) → `StartProcessing`.
+fn processing_instance(args: &[&str]) -> L1Instance {
+    let mut instance = L1Instance::spawn(&spec(args)).unwrap();
+    instance.execute(wire::Command::Initialize).unwrap();
+    instance
+        .execute(wire::Command::Activate { config: config() })
+        .unwrap();
+    instance.execute(wire::Command::StartProcessing).unwrap();
+    instance
+}
+
+/// One `process` call over mono planar views — the erased
+/// `HostInput`/`HostOutput` surface the composite will use.
+fn run_block(
+    instance: &mut L1Instance,
+    input: &[f32],
+    output: &mut [f32],
+) -> Result<ProcessResult, HostError> {
+    let in_list = [input];
+    let input_view = PlanarBufferView::new(&in_list).unwrap();
+    let inputs = [HostInput(&input_view)];
+    let mut out_list = [&mut output[..]];
+    let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+    let mut outputs = [HostOutput(&mut output_view)];
+    instance.process(
+        &inputs,
+        &mut outputs,
+        EventList::empty(u32::try_from(input.len()).unwrap()),
+        None,
+    )
+}
+
+/// One `RtLeg::process` call (the caller-thread half, no child) —
+/// `mirror` is passed in so the leg is testable without an instance.
+fn run_leg(
+    leg: &mut l1::data::RtLeg,
+    mirror: LifecycleState,
+    input: &[f32],
+    output: &mut [f32],
+) -> Result<ProcessResult, HostError> {
+    run_leg_full(
+        leg,
+        mirror,
+        input,
+        output,
+        EventList::empty(u32::try_from(input.len()).unwrap()),
+        None,
+    )
+}
+
+/// `run_leg` with an explicit `EventList`/`TransportInfo` — the
+/// encode paths in `stage_in` need real records under them.
+fn run_leg_full(
+    leg: &mut l1::data::RtLeg,
+    mirror: LifecycleState,
+    input: &[f32],
+    output: &mut [f32],
+    events: EventList<'_>,
+    transport: Option<TransportInfo>,
+) -> Result<ProcessResult, HostError> {
+    let in_list = [input];
+    let input_view = PlanarBufferView::new(&in_list).unwrap();
+    let inputs = [HostInput(&input_view)];
+    let mut out_list = [&mut output[..]];
+    let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+    let mut outputs = [HostOutput(&mut output_view)];
+    leg.process(mirror, &inputs, &mut outputs, events, transport)
+}
+
+/// Bit-exact sample comparison — the shm path round-trips `f32`
+/// bit patterns through `to_bits`/`from_bits` and the worker gain
+/// (×0.5) is exactly representable, so defined values compare equal
+/// bit-for-bit (no epsilon needed or wanted).
+fn sample_eq(actual: f32, expected: f32) -> bool {
+    actual.to_bits() == expected.to_bits()
+}
+
+/// Whether `sample` is a defined data-plane value: silence or the
+/// gained (`×0.5`) copy of an input that could have completed by the
+/// current call — never a torn mix, never garbage.
+fn is_defined_sample(sample: f32, inputs: &[f32]) -> bool {
+    sample_eq(sample, 0.0) || inputs.iter().any(|&v| sample_eq(sample, 0.5 * v))
+}
+
+/// Process roundtrip (task 4): the child applies `WORKER_GAIN`
+/// (×0.5) over shared memory — when a doorbell completes inside the
+/// lookahead window the output is exactly `0.5 · in[n−2]` (the
+/// defined 2-block delay); when it has not arrived yet the leg
+/// passes through `last_output`/silence. Every output sample is a
+/// defined value — never a torn mix — and every call is
+/// `Ok(CONTINUE)`.
+#[test]
+fn process_roundtrip_gain_and_lookahead_delay() {
+    let mut instance = processing_instance(&[]);
+    let frames = 512;
+    let mut inputs: Vec<f32> = Vec::new();
+    let mut matched = 0_u32;
+    for call in 0..32_u32 {
+        let value = 0.2 + 0.01 * f32::from(u8::try_from(call).unwrap() + 1);
+        let input = vec![value; frames];
+        let mut output = vec![0.0_f32; frames];
+        // A real-time-scale budget between calls — a 512-frame block
+        // at 48 kHz is ~10.7 ms; 5 ms keeps the worker comfortably
+        // ahead of the 2-block lookahead without racing it.
+        thread::sleep(Duration::from_millis(5));
+        let result = run_block(&mut instance, &input, &mut output);
+        assert_eq!(result, Ok(ProcessResult::CONTINUE));
+        if call >= 2 {
+            let expected = 0.5 * inputs[call as usize - 2];
+            if output.iter().all(|&s| sample_eq(s, expected)) {
+                // The `call−2` block landed through the doorbell —
+                // the defined lookahead delay, exactly.
+                matched += 1;
+            } else {
+                // Underrun/pass-through — still only defined values:
+                // silence or the gained copy of an older input.
+                assert!(
+                    output.iter().all(|&s| is_defined_sample(s, &inputs)),
+                    "call {call}: output carried an undefined sample {}",
+                    output[0]
+                );
+            }
+        } else {
+            // `seq - lookahead` underflow — defined silence.
+            assert!(output.iter().all(|&s| sample_eq(s, 0.0)));
+        }
+        inputs.push(value);
+    }
+    // The pipeline must actually deliver: on a paced caller nearly
+    // every doorbell completes inside its lookahead window; 16 of 30
+    // leaves generous headroom for loaded CI hosts.
+    assert!(
+        matched >= 16,
+        "the lookahead pipeline never filled — {matched} matched calls"
+    );
+    instance.destroy();
+}
+
+/// `process` outside `Processing` is the same `Lifecycle` rejection
+/// L0 returns — before any buffer is touched.
+#[test]
+fn process_requires_processing_state() {
+    let mut instance = L1Instance::spawn(&spec(&[])).unwrap();
+    instance.execute(wire::Command::Initialize).unwrap();
+    instance
+        .execute(wire::Command::Activate { config: config() })
+        .unwrap();
+    let input = [0.5_f32; 512];
+    let mut output = [1.0_f32; 512];
+    assert!(matches!(
+        run_block(&mut instance, &input, &mut output),
+        Err(HostError::Lifecycle(LifecycleError::IllegalTransition {
+            from: LifecycleState::Activated,
+            event: LifecycleEvent::Process,
+        }))
+    ));
+    // The rejection precedes any copy — the output is untouched.
+    assert!(output.iter().all(|&s| sample_eq(s, 1.0)));
+    instance.destroy();
+}
+
+/// A block the wire cannot express (`frames >` activated
+/// `max_frames`) is `Err(Ipc)` — the defined rejection, not a torn
+/// slot write.
+#[test]
+fn process_over_capacity_block_is_ipc_error() {
+    let mut instance = processing_instance(&[]);
+    let input = vec![1.0_f32; 1024];
+    let mut output = vec![0.0_f32; 1024];
+    assert_eq!(
+        run_block(&mut instance, &input, &mut output),
+        Err(HostError::Ipc)
+    );
+    instance.destroy();
+}
+
+/// Healthy-underrun / `last_output` pass-through: rapid back-to-back
+/// calls outrun the child's pipe turnaround, so the leg emits only
+/// defined values (silence or the gained block) and never blocks;
+/// once the caller paces at real-time scale the pipeline fills and
+/// `0.5` lands exactly.
+#[test]
+fn process_underrun_passes_through_defined_output() {
+    let mut instance = processing_instance(&[]);
+    let input = [1.0_f32; 512];
+    let mut output = vec![-1.0_f32; 512];
+    // Back-to-back — most calls underrun: outputs are silence or the
+    // last completed block, never garbage and never a hang.
+    for _ in 0..16 {
+        assert_eq!(
+            run_block(&mut instance, &input, &mut output),
+            Ok(ProcessResult::CONTINUE)
+        );
+        assert!(
+            output
+                .iter()
+                .all(|&s| sample_eq(s, 0.0) || sample_eq(s, 0.5)),
+            "underrun emitted an undefined sample"
+        );
+    }
+    // Real-time pacing fills the pipeline — a completed block must
+    // land, and `last_output` keeps it alive through later gaps.
+    thread::sleep(Duration::from_millis(20));
+    for _ in 0..8 {
+        thread::sleep(Duration::from_millis(5));
+        run_block(&mut instance, &input, &mut output).unwrap();
+    }
+    assert!(
+        output.iter().all(|&s| sample_eq(s, 0.5)),
+        "the filled pipeline never delivered the gained block"
+    );
+    instance.destroy();
+}
+
+/// Crash while processing: the dead child answers nothing more —
+/// the leg passes through (never an RT error, never a hang) until
+/// convergence lands, then `Failed` yields defined silence. Every
+/// call is `Ok(CONTINUE)`.
+#[test]
+fn process_after_crash_passes_through_then_silences() {
+    let mut instance = processing_instance(&[]);
+    let input = [1.0_f32; 512];
+    let mut output = [0.0_f32; 512];
+    // Get at least one doorbell genuinely in flight, then kill.
+    run_block(&mut instance, &input, &mut output).unwrap();
+    instance.kill();
+    // Before `Failed` lands the leg still answers immediately.
+    assert_eq!(
+        run_block(&mut instance, &input, &mut output),
+        Ok(ProcessResult::CONTINUE)
+    );
+    wait_for_failed(&instance);
+    output.fill(-1.0);
+    assert_eq!(
+        run_block(&mut instance, &input, &mut output),
+        Ok(ProcessResult::CONTINUE)
+    );
+    assert!(
+        output.iter().all(|&s| sample_eq(s, 0.0)),
+        "a Failed instance must output silence"
+    );
+    instance.destroy();
+}
+
+/// Wedged data plane: `--hang-after-msgs=4` lets the lifecycle
+/// handshake through but never answers a doorbell — the RT leg must
+/// pass through `Ok(CONTINUE)` forever without blocking (never a
+/// wall-clock wait on the child), and teardown still honors
+/// `Shutdown`.
+#[test]
+fn process_hung_child_passes_through_without_blocking() {
+    let mut instance = processing_instance(&["--hang-after-msgs=4"]);
+    let input = [1.0_f32; 512];
+    let mut output = [7.0_f32; 512];
+    let started = Instant::now();
+    for _ in 0..32 {
+        assert_eq!(
+            run_block(&mut instance, &input, &mut output),
+            Ok(ProcessResult::CONTINUE)
+        );
+        assert!(
+            output.iter().all(|&s| sample_eq(s, 0.0)),
+            "a child that never completes a block must output silence"
+        );
+    }
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "the RT leg blocked on the wedged child"
+    );
+    instance.destroy();
+}
+
+// ------------------------------------------------------------------
+// RT contract tests (the `rt_l1_*` lane `mise run test-rt` selects).
+// ------------------------------------------------------------------
+
+/// `RtLeg::process` — the whole caller-thread path (lifecycle gate →
+/// in-staging write → `try_push` → bounded result drain → out-copy /
+/// pass-through) — must run allocation-free, *including* the legs
+/// the earlier version of this test never reached: `stage_in`'s
+/// event/transport wire encodes (the `scratch` Vec paths — sized so
+/// no encode can outgrow the preallocated capacity), the `held`
+/// stash, `copy_out` and the `last_output` pass-through history
+/// update. Fixture, staging, the channels, the fabricated slot
+/// buffer and warm-up all sit outside the `assert_no_alloc` window;
+/// inside it, results are fabricated via `read_out_slot` (atomic
+/// stores only) and pushed through the real result channel (a
+/// bounded ring `try_push`) so `copy_out`/`held`/`pass_through` run
+/// for real.
+#[test]
+fn rt_l1_process_path_no_alloc() {
+    use l1::data::{BLOCK_SEQ_FLAG, RtLeg, Staging, Submit, read_out_slot};
+    use l1::shm::{put_u32, put_u64};
+
+    const FRAMES: usize = 512;
+    let (submit_tx, _submit_rx) = ruviform_rt::channel::<Submit>(3);
+    let (mut result_tx, result_rx) = ruviform_rt::channel::<u64>(3);
+    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx);
+    let staging = Arc::new(Staging::new(3, u32::try_from(FRAMES).unwrap(), 0));
+    leg.arm(Arc::clone(&staging));
+
+    // Every call carries an event + a transport record so the
+    // `stage_in` encode loops run inside the window.
+    let events = [Event::new(
+        64,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.75).unwrap(),
+        }),
+    )];
+    let event_list = EventList::new(&events, u32::try_from(FRAMES).unwrap()).unwrap();
+    let transport = TransportInfo::new(TransportStatus::Playing, MediaTime::ZERO);
+
+    let input = [1.0_f32; FRAMES];
+    let mut output = [0.0_f32; FRAMES];
+    // The out-slot the reader would publish — allocated here once,
+    // then re-stamped per seq (the `read_out_slot` fabrications are
+    // atomic stores on the preallocated stage; the result channel is
+    // a bounded ring). `read_out_slot` returns `false` only on a
+    // protocol violation — impossible for this well-formed slot.
+    let mut slot = vec![0_u8; wire::shm::SLOT_BYTES];
+    put_u32(
+        &mut slot,
+        wire::shm::SLOT_OFF_FRAMES,
+        u32::try_from(FRAMES).unwrap(),
+    );
+    put_u32(&mut slot, wire::shm::SLOT_OFF_CHANNELS, 1);
+    for frame in 0..FRAMES {
+        let base = wire::shm::SAMPLES_OFF + frame * 4;
+        slot[base..base + 4].copy_from_slice(&0.5_f32.to_le_bytes());
+    }
+    // Fabricates + queues block `n`'s result exactly like the
+    // reader's `BlockDone` leg (allocation-free by construction).
+    let mut feed_result = |block: u64| {
+        let wire_seq = block | BLOCK_SEQ_FLAG;
+        put_u64(&mut slot, wire::shm::SLOT_OFF_SEQ, wire_seq);
+        let out_stage = usize::try_from(wire_seq % 3).unwrap();
+        assert!(read_out_slot(
+            &slot,
+            wire_seq,
+            &staging.outs[out_stage],
+            FRAMES,
+            ProcessResult::CONTINUE,
+        ));
+        result_tx.try_push(wire_seq).unwrap();
+    };
+
+    // Warm-up outside the window: first-touch staging pages, channel
+    // state, per-call view construction and real matched results
+    // (establishing `last_output` history) all belong to fixture
+    // setup.
+    for call in 0..4_u64 {
+        if call >= 2 {
+            feed_result(call - 2);
+        }
+        run_leg_full(
+            &mut leg,
+            LifecycleState::Processing,
+            &input,
+            &mut output,
+            event_list,
+            Some(transport),
+        )
+        .unwrap();
+    }
+
+    // `block` is the leg's monotone counter — it has ticked once per
+    // call above. Inside the window: `n % 3 == 0` feeds a *future*
+    // seq (stashed in `held`, resolved next call) while `expected`
+    // stays absent → pass-through; `n % 3 == 1` resolves `expected`
+    // out of `held`; `n % 3 == 2` feeds `expected` directly →
+    // channel-matched `copy_out`. Every path runs under the
+    // forbid-allocation window.
+    let mut block: u64 = 4;
+    assert_no_alloc::assert_no_alloc(|| {
+        for n in 0..48_u64 {
+            let expected = block - 2;
+            match n % 3 {
+                0 => feed_result(expected + 1),
+                2 => feed_result(expected),
+                _ => {}
+            }
+            let result = run_leg_full(
+                &mut leg,
+                LifecycleState::Processing,
+                &input,
+                &mut output,
+                event_list,
+                Some(transport),
+            )
+            .unwrap();
+            assert_eq!(result, ProcessResult::CONTINUE);
+            assert!(
+                output
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.0) || sample_eq(s, 0.5))
+            );
+            block += 1;
+        }
+    });
+}
+
+/// The result leg is `try_push`/`try_pop` end to end: a reader-side
+/// `try_push` of the done seq is consumed by the leg's bounded
+/// `try_pop` drain — matched results copy out, a failed result
+/// (`mark_failed`) and stale seqs fall back to the defined
+/// pass-through, and the submit leg's doorbell seqs carry
+/// `BLOCK_SEQ_FLAG` (the command-space partition).
+#[test]
+fn rt_l1_result_leg_try_ops() {
+    use l1::data::{BLOCK_SEQ_FLAG, RtLeg, Staging, Submit, mark_failed, read_out_slot};
+    use l1::shm::{put_u32, put_u64};
+
+    const FRAMES: usize = 512;
+    let staging = Arc::new(Staging::new(3, u32::try_from(FRAMES).unwrap(), 0));
+    let (submit_tx, mut submit_rx) = ruviform_rt::channel::<Submit>(3);
+    let (mut result_tx, result_rx) = ruviform_rt::channel::<u64>(3);
+    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx);
+    leg.arm(Arc::clone(&staging));
+
+    let input = [1.0_f32; FRAMES];
+    let mut output = [0.0_f32; FRAMES];
+    // Calls 0/1: `seq - lookahead` underflows — silence, and the
+    // doorbell seqs on the submit channel carry the partition flag
+    // plus the armed ring's generation.
+    for n in 0..2_u64 {
+        assert_eq!(
+            run_leg(&mut leg, LifecycleState::Processing, &input, &mut output),
+            Ok(ProcessResult::CONTINUE)
+        );
+        assert!(output.iter().all(|&s| sample_eq(s, 0.0)));
+        assert_eq!(
+            submit_rx.try_pop(),
+            Ok(Submit {
+                seq: BLOCK_SEQ_FLAG | n,
+                generation: 0
+            })
+        );
+    }
+
+    // Build the out-slot the reader would publish for seq 0 — the
+    // authoritative wire layout via `read_out_slot`, no shortcuts.
+    // NB: the stage index is `seq % depth` on the *flagged* wire seq
+    // (identically to the shm slot), which for `FLAG|0` is `2`.
+    let out_stage = usize::try_from(BLOCK_SEQ_FLAG % 3).unwrap();
+    let mut slot = vec![0_u8; wire::shm::SLOT_BYTES];
+    put_u64(&mut slot, wire::shm::SLOT_OFF_SEQ, BLOCK_SEQ_FLAG);
+    put_u32(
+        &mut slot,
+        wire::shm::SLOT_OFF_FRAMES,
+        u32::try_from(FRAMES).unwrap(),
+    );
+    put_u32(&mut slot, wire::shm::SLOT_OFF_CHANNELS, 1);
+    for frame in 0..FRAMES {
+        let base = wire::shm::SAMPLES_OFF + frame * 4;
+        slot[base..base + 4].copy_from_slice(&0.5_f32.to_le_bytes());
+    }
+    assert!(read_out_slot(
+        &slot,
+        BLOCK_SEQ_FLAG,
+        &staging.outs[out_stage],
+        FRAMES,
+        ProcessResult::CONTINUE,
+    ));
+    result_tx.try_push(BLOCK_SEQ_FLAG).unwrap();
+
+    // Call 2 completes block 0 — matched result → the child's 0.5.
+    assert_eq!(
+        run_leg(&mut leg, LifecycleState::Processing, &input, &mut output),
+        Ok(ProcessResult::CONTINUE)
+    );
+    assert!(output.iter().all(|&s| sample_eq(s, 0.5)));
+
+    // Call 3 expects seq 1 — never answered → `last_output` (0.5).
+    assert_eq!(
+        run_leg(&mut leg, LifecycleState::Processing, &input, &mut output),
+        Ok(ProcessResult::CONTINUE)
+    );
+    assert!(output.iter().all(|&s| sample_eq(s, 0.5)));
+
+    // The child's flagged `Reply` rejection lands as `mark_failed` —
+    // call 4 expects seq 2 → failed result → pass-through, never the
+    // (zero) staged slot.
+    result_tx.try_push(mark_failed(BLOCK_SEQ_FLAG | 2)).unwrap();
+    assert_eq!(
+        run_leg(&mut leg, LifecycleState::Processing, &input, &mut output),
+        Ok(ProcessResult::CONTINUE)
+    );
+    assert!(output.iter().all(|&s| sample_eq(s, 0.5)));
+
+    // A late seq-1 result is stale by call 5 — drained and dropped
+    // without disturbing the `seq 3` expectation.
+    result_tx.try_push(BLOCK_SEQ_FLAG | 1).unwrap();
+    output.fill(-1.0);
+    assert_eq!(
+        run_leg(&mut leg, LifecycleState::Processing, &input, &mut output),
+        Ok(ProcessResult::CONTINUE)
+    );
+    assert!(output.iter().all(|&s| sample_eq(s, 0.5)));
+
+    // Failed-mirror leg: defined silence, `Ok(CONTINUE)`.
+    output.fill(-1.0);
+    assert_eq!(
+        run_leg(&mut leg, LifecycleState::Failed, &input, &mut output),
+        Ok(ProcessResult::CONTINUE)
+    );
+    assert!(output.iter().all(|&s| sample_eq(s, 0.0)));
+}
+
+/// `lookahead_blocks == 0` would degenerate the data plane to
+/// permanent silence — `expected` would be the very seq the same
+/// `process` call just submitted, so no result could ever precede
+/// it. `spawn` rejects the spec `Err(Ipc)` like any other unusable
+/// configuration.
+#[test]
+fn lookahead_zero_is_rejected() {
+    let mut spec = spec(&[]);
+    spec.lookahead_blocks = 0;
+    assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
+}
+
+/// Submits carry the armed ring's generation — the driver-side gate
+/// (`armed_for`) then drops a submit queued under a superseded ring
+/// instead of serializing the new ring's zeroed stage under a real
+/// seq (F3: the re-activation stale-submit case). A dropped seq's
+/// result simply never arrives — the RT leg resolves that as the
+/// defined pass-through.
+#[test]
+fn submit_carries_staging_generation_and_stale_is_dropped() {
+    use l1::data::{BLOCK_SEQ_FLAG, RtLeg, Staging, Submit, armed_for};
+
+    let (submit_tx, mut submit_rx) = ruviform_rt::channel::<Submit>(3);
+    let (_result_tx, result_rx) = ruviform_rt::channel::<u64>(3);
+    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx);
+    leg.arm(Arc::new(Staging::new(3, 512, 7)));
+
+    let input = [1.0_f32; 512];
+    let mut output = [0.0_f32; 512];
+    run_leg(&mut leg, LifecycleState::Processing, &input, &mut output).unwrap();
+    assert_eq!(
+        submit_rx.try_pop(),
+        Ok(Submit {
+            seq: BLOCK_SEQ_FLAG,
+            generation: 7
+        })
+    );
+
+    // Re-activation installs a new ring (generation 8) — submits
+    // queued under generation 7 are stale from here on.
+    let new_ring = Arc::new(Staging::new(3, 512, 8));
+    leg.arm(Arc::clone(&new_ring));
+    run_leg(&mut leg, LifecycleState::Processing, &input, &mut output).unwrap();
+    assert_eq!(
+        submit_rx.try_pop(),
+        Ok(Submit {
+            seq: BLOCK_SEQ_FLAG | 1,
+            generation: 8
+        })
+    );
+
+    // The driver's gate: a stale-generation submit is dropped; the
+    // current generation still doorbells; no armed ring drops too.
+    let armed = Some(Arc::clone(&new_ring));
+    assert!(
+        armed_for(
+            armed.as_ref(),
+            Submit {
+                seq: BLOCK_SEQ_FLAG,
+                generation: 7
+            }
+        )
+        .is_none(),
+        "a pre-swap submit must never be doorbell'd"
+    );
+    let kept = armed_for(
+        armed.as_ref(),
+        Submit {
+            seq: BLOCK_SEQ_FLAG | 1,
+            generation: 8,
+        },
+    );
+    assert!(kept.is_some_and(|ring| Arc::ptr_eq(&ring, &new_ring)));
+    assert!(
+        armed_for(
+            None,
+            Submit {
+                seq: BLOCK_SEQ_FLAG | 1,
+                generation: 8
+            }
+        )
+        .is_none()
+    );
+}
+
+/// Rapid re-activation while doorbells may still be queued: submits
+/// staged under the superseded ring are dropped by the generation
+/// gate — never serialized from the new ring's zeroed stage and
+/// doorbell'd under a real seq. The worker answers a zero-dim
+/// (never-staged) block with the `ZERO_DIM_RESULT` marker
+/// (`ProcessResult{Sleep, 0xDEAD}`), so any stale doorbell that did
+/// go through would surface as that unmistakable result rather than
+/// `CONTINUE`; stale seqs that resolve at all must resolve as
+/// failed/pass-through.
+#[test]
+fn reactivation_cycle_never_publishes_stale_blocks() {
+    /// The worker's `ZERO_DIM_RESULT` marker — kept local so the
+    /// fixture constant stays in one place.
+    const ZERO_DIM_RESULT: ProcessResult = ProcessResult::new(ProcessStatus::Sleep, 0xDEAD);
+
+    let mut instance = processing_instance(&[]);
+    let input = [1.0_f32; 512];
+    let mut output = [0.0_f32; 512];
+    for cycle in 0..32 {
+        // Queue doorbells as close to the ring swap as the API
+        // allows, then cycle the lifecycle through re-activation.
+        for _ in 0..3 {
+            run_block(&mut instance, &input, &mut output).unwrap();
+        }
+        instance.execute(wire::Command::StopProcessing).unwrap();
+        instance.execute(wire::Command::Deactivate).unwrap();
+        instance
+            .execute(wire::Command::Activate { config: config() })
+            .unwrap();
+        instance.execute(wire::Command::StartProcessing).unwrap();
+        for call in 0..6 {
+            let result = run_block(&mut instance, &input, &mut output);
+            assert_ne!(
+                result,
+                Ok(ZERO_DIM_RESULT),
+                "cycle {cycle} call {call}: a zeroed block was doorbell'd and published"
+            );
+            assert_eq!(result, Ok(ProcessResult::CONTINUE));
+            assert!(
+                output
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.0) || sample_eq(s, 0.5)),
+                "cycle {cycle} call {call}: output carried an undefined sample"
+            );
+        }
+    }
+    instance.destroy();
+}
+
+/// Hostile child dims (F1): an out-slot reporting `frames` over the
+/// activated `frame_capacity` (or `channels` over the wire bound) is
+/// a protocol violation — `read_out_slot` withholds it (returns
+/// `false`, publishes nothing, and the reader survives without an
+/// out-of-bounds index) instead of panicking or leaking cross-plane
+/// corruption through the `Release` store.
+#[test]
+fn read_out_slot_rejects_dims_over_activated_contract() {
+    use l1::data::{BLOCK_SEQ_FLAG, Staging, read_out_slot};
+    use l1::shm::{put_u32, put_u64};
+
+    const FRAMES: usize = 512;
+    let out_stage = usize::try_from(BLOCK_SEQ_FLAG % 3).unwrap();
+    let seq = BLOCK_SEQ_FLAG;
+    let mut slot = vec![0_u8; wire::shm::SLOT_BYTES];
+    put_u64(&mut slot, wire::shm::SLOT_OFF_SEQ, seq);
+
+    // In-contract dims still publish (the activated bound is the
+    // bound, not the wire max — `FRAMES` here is the capacity).
+    let staging = Staging::new(3, u32::try_from(FRAMES).unwrap(), 0);
+    put_u32(
+        &mut slot,
+        wire::shm::SLOT_OFF_FRAMES,
+        u32::try_from(FRAMES).unwrap(),
+    );
+    put_u32(&mut slot, wire::shm::SLOT_OFF_CHANNELS, 1);
+    assert!(read_out_slot(
+        &slot,
+        seq,
+        &staging.outs[out_stage],
+        FRAMES,
+        ProcessResult::CONTINUE,
+    ));
+    assert_eq!(
+        staging.outs[out_stage].seq.load(Ordering::Acquire),
+        seq,
+        "a published stage carries the seq tag"
+    );
+
+    // Every over-contract dim is withheld — `frames` past the
+    // activated capacity (the pre-fix panic path) or `channels`
+    // past `WIRE_MAX_CHANNELS` — and nothing is published (the seq
+    // tag stays at its initial value, so the RT leg's tag check
+    // fails closed).
+    for (frames, channels) in [
+        (8_192_u32, 1_u32),
+        (u32::MAX, 1),
+        (513, 1),
+        (512, 17),
+        (512, u32::MAX),
+    ] {
+        let staging = Staging::new(3, u32::try_from(FRAMES).unwrap(), 0);
+        put_u32(&mut slot, wire::shm::SLOT_OFF_FRAMES, frames);
+        put_u32(&mut slot, wire::shm::SLOT_OFF_CHANNELS, channels);
+        assert!(
+            !read_out_slot(
+                &slot,
+                seq,
+                &staging.outs[out_stage],
+                FRAMES,
+                ProcessResult::CONTINUE,
+            ),
+            "frames={frames} channels={channels} must be withheld"
+        );
+        assert_eq!(
+            staging.outs[out_stage].seq.load(Ordering::Acquire),
+            0,
+            "a rejected slot must not publish (frames={frames} channels={channels})"
+        );
+    }
+}
+
+/// Stale-plane hygiene (F2): an outputs-only block (or a channel
+/// slice missing from the input bus) still claims `block.channels`
+/// planes in `stage.channels` — `stage_in` must serialize zeros for
+/// every claimed plane, never the previous occupant's samples.
+#[test]
+fn stage_in_zero_fills_planes_without_a_source() {
+    use l1::data::{BLOCK_SEQ_FLAG, RtLeg, Staging, Submit, write_in_slot};
+    use l1::shm::get_u32;
+
+    const FRAMES: usize = 512;
+    let (submit_tx, _submit_rx) = ruviform_rt::channel::<Submit>(3);
+    let (mut result_tx, result_rx) = ruviform_rt::channel::<u64>(3);
+    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx);
+    let staging = Arc::new(Staging::new(3, u32::try_from(FRAMES).unwrap(), 0));
+    leg.arm(Arc::clone(&staging));
+
+    // The in-slot index for wire seq `FLAG|n` is `(FLAG|n) % 3`, so
+    // the outputs-only block at call 4 (`FLAG|4`, index 0) reuses
+    // the slot block 1 (`FLAG|1`) staged its samples into.
+    let reuse_seq = BLOCK_SEQ_FLAG | 4;
+    let slot_index = usize::try_from(reuse_seq % 3).unwrap();
+    let input = [1.0_f32; FRAMES];
+    let mut output = [0.0_f32; FRAMES];
+
+    // Blocks 0..2 stage real samples into the three in-slots.
+    for _ in 0..3 {
+        run_leg(&mut leg, LifecycleState::Processing, &input, &mut output).unwrap();
+    }
+    // Let block 1's completion land — the drained seq clears
+    // `cleared[0]`, opening slot 0's alternation gate for block 4
+    // (the staging tag check need not match; the seq alone does it).
+    result_tx.try_push(BLOCK_SEQ_FLAG | 1).unwrap();
+    run_leg(&mut leg, LifecycleState::Processing, &input, &mut output).unwrap();
+
+    // Block 4 (wire seq `FLAG|4`, slot 0 again) with NO input bus —
+    // an outputs-only block: `block.channels` still claims the
+    // output's channel count, so `stage_in` must zero-fill the
+    // plane rather than leave block 1's samples behind.
+    let mut out_list = [&mut output[..]];
+    let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+    let mut outputs = [HostOutput(&mut output_view)];
+    leg.process(
+        LifecycleState::Processing,
+        &[],
+        &mut outputs,
+        EventList::empty(u32::try_from(FRAMES).unwrap()),
+        None,
+    )
+    .unwrap();
+
+    // Serialize the staged slot exactly as the driver would and
+    // verify the claimed plane is all zeros.
+    let mut slot = vec![0_u8; wire::shm::SLOT_BYTES];
+    write_in_slot(&mut slot, reuse_seq, &staging.ins[slot_index], FRAMES);
+    assert_eq!(
+        get_u32(&slot, wire::shm::SLOT_OFF_FRAMES),
+        u32::try_from(FRAMES).unwrap()
+    );
+    assert_eq!(get_u32(&slot, wire::shm::SLOT_OFF_CHANNELS), 1);
+    for frame in 0..FRAMES {
+        let base = wire::shm::SAMPLES_OFF + frame * 4;
+        assert_eq!(
+            &slot[base..base + 4],
+            &0.0_f32.to_le_bytes(),
+            "plane 0 frame {frame} leaked stale data"
+        );
+    }
+}
+
+/// A real flagged-`Reply` block rejection (F7): after
+/// `--reject-blocks-after-msgs=2` the worker answers each `BlockIn`
+/// past the first two with `Reply{seq, Err(PluginFailed)}` — the
+/// defined rejection shape — which the reader lands as
+/// `mark_failed(seq)`. Every expected seq past the flag resolves
+/// `Ok(CONTINUE)` with pass-through output (`last_output` or
+/// silence), never a successful publish of the rejected block and
+/// never a hang.
+#[test]
+fn rejected_block_replies_resolve_pass_through() {
+    // Seqs 0 and 1 process normally (gain ×0.5); seqs 2+ get the
+    // flagged rejection.
+    let mut instance = processing_instance(&["--reject-blocks-after-msgs=2"]);
+    let mut inputs: Vec<f32> = Vec::new();
+    let mut processed = 0_u32;
+    for call in 0..12_u32 {
+        // Distinct inputs per call so a rejected block's
+        // pass-through can never alias its would-be-processed
+        // value.
+        let value = 0.2 + 0.1 * f32::from(u8::try_from(call).unwrap());
+        let input = vec![value; 512];
+        let mut output = vec![7.0_f32; 512];
+        thread::sleep(Duration::from_millis(5));
+        let result = run_block(&mut instance, &input, &mut output);
+        assert_eq!(result, Ok(ProcessResult::CONTINUE));
+        assert!(
+            output.iter().all(|&s| is_defined_sample(s, &inputs)),
+            "call {call}: output carried an undefined sample"
+        );
+        if (2..4).contains(&call) {
+            // Calls expecting seqs 0/1 — the pipeline must have
+            // actually delivered at least once before the rejection
+            // window, or the test proves nothing.
+            if output
+                .iter()
+                .all(|&s| sample_eq(s, 0.5 * inputs[call as usize - 2]))
+            {
+                processed += 1;
+            }
+        }
+        if call >= 4 {
+            // Calls expecting seqs 2+ — rejected: the output is a
+            // defined pass-through, never `0.5 *` this block's
+            // input.
+            let processed_value = 0.5 * inputs[call as usize - 2];
+            assert!(
+                output.iter().any(|&s| !sample_eq(s, processed_value)),
+                "call {call}: a rejected block published processed output"
+            );
+        }
+        inputs.push(value);
+    }
+    assert!(
+        processed >= 1,
+        "the lookahead pipeline never delivered a processed block"
+    );
+    instance.destroy();
 }

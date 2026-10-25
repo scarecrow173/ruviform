@@ -5,14 +5,14 @@
 //!
 //! ## Scope
 //!
-//! This is the **control plane** only: spawn, the `Hello`/`Scan`
-//! handshake, `Command`/`Reply` parity for the L0 command set, crash
-//! detection and teardown. The shared-memory *data plane*
-//! (`BlockIn`/`BlockDone` doorbells, slot staging, the RT try-legs and
-//! the `process` equivalent) is the next task — `l1::shm` here only
-//! creates the named segment and writes its header so the child can
-//! attach. The `PluginHost` composite public surface is a later task
-//! too, so nothing here is public.
+//! Both planes live here: the **control plane** (spawn, the
+//! `Hello`/`Scan` handshake, `Command`/`Reply` parity for the L0
+//! command set, crash detection and teardown) and the shared-memory
+//! **data plane** — `l1::shm` owns the named segment and the
+//! I/O-thread `View`s; `l1::data` carries the `BlockIn`/`BlockDone`
+//! doorbells, the cross-thread slot staging and the RT try-legs
+//! behind [`L1Instance::process`]. The `PluginHost` composite public
+//! surface is a later task, so nothing here is public.
 //!
 //! ## Import discipline
 //!
@@ -27,8 +27,8 @@
 //!
 //! | thread | owns | duties |
 //! | --- | --- | --- |
-//! | `driver` | `Shared.child` (`Mutex<Child>` — operated only here, but shared so a converging thread can `kill` a wedged child even while this thread is blocked in `write_all`) · child stdin | serializes outgoing frames · `try_wait` crash watch every [`DRIVER_POLL_INTERVAL`] · shutdown watchdog (grace → `child.kill()`) |
-//! | `reader` | child stdout | demuxes child→parent frames (`Reply` → keyed waiter wake) · first frame must be `Hello` · EOF → `seen_eof` convergence path |
+//! | `driver` | `Shared.child` (`Mutex<Child>` — operated only here, but shared so a converging thread can `kill` a wedged child even while this thread is blocked in `write_all`) · child stdin | serializes outgoing frames · drains the data-plane `submit` channel (dropping stale-generation seqs): each popped seq becomes a shm in-slot write + `BlockIn` doorbell · `try_wait` crash watch every [`DRIVER_POLL_INTERVAL`] · shutdown watchdog (grace → `child.kill()`) |
+//! | `reader` | child stdout | demuxes child→parent frames (unflagged `Reply` → keyed waiter wake · flagged `Reply` → `mark_failed` block completion · `BlockDone` → shm out-slot read + result-channel push) · first frame must be `Hello` · EOF → `seen_eof` convergence path |
 //!
 //! The caller thread never performs blocking pipe I/O except the
 //! bounded waits documented on [`L1Instance::execute`] /
@@ -64,19 +64,23 @@
 //! not-reading child (the kill turns the write into EPIPE) — and
 //! pending waiters wake `Err(HostError::Ipc)`.
 
+pub(crate) mod data;
 pub(crate) mod shm;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::io::{self, Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command as ProcCommand, ExitStatus, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering, fence};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use ruviform_plugin_core::wire::{self, WIRE_FRAME_HEADER_LEN, WIRE_MAX_PAYLOAD};
-use ruviform_plugin_core::{HostError, LifecycleState, PluginDescriptor, PrepareError};
+use ruviform_plugin_core::{
+    EventList, HostError, HostInput, HostOutput, LifecycleState, PluginDescriptor, PrepareError,
+    ProcessResult, TransportInfo,
+};
 
 /// The driver's crash-watch and command-drain poll interval
 /// (~200 µs per the design; the effective granularity is the OS
@@ -137,8 +141,12 @@ pub(crate) struct SpawnSpec {
     /// Extra arguments passed before the `--ruviform-*` bootstrap flags.
     pub(crate) args: Vec<OsString>,
     /// Lookahead depth in blocks (default 2) — fixes the shm slot
-    /// depth `D = lookahead_blocks + 1`. The data plane consumes it in
-    /// the next task; here it sizes the created segment.
+    /// depth `D = lookahead_blocks + 1`, both SPSC channel
+    /// capacities and the RT leg's result horizon
+    /// (`expected = block − lookahead`). `0` is rejected by
+    /// [`L1Instance::spawn`] (`Err(Ipc)`): the just-submitted seq
+    /// could never already have a result, so the leg would pass
+    /// through forever.
     pub(crate) lookahead_blocks: u32,
     /// Defined timeout for the `Hello`, `Scan` and every later
     /// `Reply` wait (default 10 s).
@@ -195,15 +203,28 @@ enum Notify {
 
 /// Mutex-protected proxy state shared by the caller, driver and
 /// reader threads. Locking is legal everywhere here — none of these
-/// threads is an RT thread (the RT try-legs are the next task and
-/// will not take this mutex).
+/// threads is an RT thread (the RT leg in `l1::data` never takes
+/// this mutex; it reads the [`Shared::rt_state`] snapshot instead).
 struct Inner {
     /// In-flight commands by correlation seq.
     waiters: HashMap<u64, Waiter>,
     /// Local lifecycle mirror — updated on successful lifecycle
     /// commands and by convergence; the child's `Lifecycle` stays the
     /// authority, this mirror only reflects reported outcomes.
+    /// Kept in lock-step with `Shared::rt_state` via
+    /// [`Shared::set_mirror`].
     mirror: LifecycleState,
+    /// Doorbell seqs the driver has written `BlockIn` for and the
+    /// reader has not yet completed — the `BlockDone` / flagged
+    /// `Reply` legality set. Seqs are partitioned by
+    /// [`data::BLOCK_SEQ_FLAG`], so they can never alias `waiters`
+    /// keys.
+    block_in_flight: HashSet<u64>,
+    /// The armed data-plane staging ring — `Some` after a successful
+    /// `Activate`, replaced on re-activation. `Arc` so the I/O
+    /// threads borrow it under the lock without holding the lock
+    /// across shm work.
+    staging: Option<Arc<data::Staging>>,
     /// `Some` once convergence ran — exactly once.
     terminal: Option<Terminal>,
     /// `Shutdown` was written on the wire — a later child exit is
@@ -224,6 +245,12 @@ struct Inner {
 /// `ChildExit` into.
 struct Shared {
     inner: Mutex<Inner>,
+    /// The const-cheap lifecycle snapshot the RT leg inspects —
+    /// written with `Release` by [`Shared::set_mirror`] at every
+    /// `Inner::mirror` mutation, read lock-free with `Acquire` by
+    /// `L1Instance::process`. Fails closed: the RT leg never needs
+    /// the mutex.
+    rt_state: AtomicU8,
     /// The spawned child, installed by the driver immediately after
     /// `spawn` and before `driver_main` runs. Shared so any
     /// converging thread can `kill()` a wedged child even while the
@@ -253,6 +280,16 @@ impl Shared {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
         })
+    }
+
+    /// The single mirror-mutation point: updates `Inner::mirror` and
+    /// publishes the same state to the lock-free `rt_state` snapshot
+    /// the RT leg reads. `Release` pairs the `Acquire` load in
+    /// `L1Instance::process`.
+    fn set_mirror(&self, inner: &mut Inner, state: LifecycleState) {
+        inner.mirror = state;
+        self.rt_state
+            .store(data::mirror_encode(state), Ordering::Release);
     }
 }
 
@@ -321,11 +358,14 @@ fn converge(shared: &Shared, exit: Option<ChildExit>) {
         } else {
             Some(Terminal::Clean)
         };
-        inner.mirror = if failed {
-            LifecycleState::Failed
-        } else {
-            LifecycleState::Destroyed
-        };
+        shared.set_mirror(
+            &mut inner,
+            if failed {
+                LifecycleState::Failed
+            } else {
+                LifecycleState::Destroyed
+            },
+        );
         // Unbounded-channel sends never block — safe under the lock,
         // and keeping them inside the critical section makes
         // "exactly once" trivially atomic.
@@ -395,11 +435,28 @@ fn spawn_child(command: &mut ProcCommand) -> Result<(Child, ChildStdin, ChildStd
     Ok((child, stdin, stdout))
 }
 
-/// The reader thread: first frame must be `Hello`, afterwards every
-/// `Reply` wakes its keyed waiter. Any other message kind, an
-/// unreadable stream or EOF converges — EOF is the `seen_eof` `Failed`
-/// path.
-fn reader_main(mut stdout: ChildStdout, shared: &Shared, hello_tx: &mpsc::Sender<Result<u16, ()>>) {
+/// The reader thread: first frame must be `Hello`, afterwards it
+/// demultiplexes three reply families — unflagged `Reply` frames
+/// wake their keyed command waiters, `BlockDone` completes a
+/// doorbell (shm out-slot read plus result-channel push), and a
+/// `Reply` whose seq carries [`data::BLOCK_SEQ_FLAG`] is the
+/// child's block-rejection path (slot parse failure, lifecycle
+/// rejection, plugin panic) — also a block completion, marked so
+/// the RT leg passes through. Any other message kind, an unreadable
+/// stream or EOF converges — EOF is the `seen_eof` `Failed` path.
+///
+/// `view` is this thread's own shm mapping (the `Shmem` handle is
+/// `!Send`, so each I/O thread opens the owner `Segment`'s key
+/// locally); `in_depth`/`out_depth` are the spawn-time ring sizes.
+fn reader_main(
+    mut stdout: ChildStdout,
+    shared: &Shared,
+    hello_tx: &mpsc::Sender<Result<u16, ()>>,
+    mut result_tx: ruviform_rt::Producer<u64>,
+    view: &shm::View,
+    in_depth: u32,
+    out_depth: u32,
+) {
     if let Ok(wire::Message::Hello { version, .. }) = read_message(&mut stdout) {
         let _ = hello_tx.send(Ok(version));
     } else {
@@ -411,6 +468,22 @@ fn reader_main(mut stdout: ChildStdout, shared: &Shared, hello_tx: &mpsc::Sender
     }
     loop {
         match read_message(&mut stdout) {
+            Ok(wire::Message::Reply { seq, .. }) if data::is_block_seq(seq) => {
+                // A block rejection: the child answered the flagged
+                // seq with an `Err` `Reply` instead of `BlockDone` —
+                // the block still completes (marked failed) so the
+                // strict alternation can proceed.
+                let known = shared.lock().block_in_flight.remove(&seq);
+                if !known {
+                    converge(shared, None);
+                    return;
+                }
+                // Channel capacity is `depth` and at most `depth`
+                // doorbells are ever in flight — `try_push` cannot
+                // overflow; a full push means the RT side already
+                // drained past this seq, which is equally harmless.
+                let _ = result_tx.try_push(data::mark_failed(seq));
+            }
             Ok(wire::Message::Reply { seq, result }) => {
                 let waiter = shared.lock().waiters.remove(&seq);
                 if let Some(waiter) = waiter {
@@ -420,10 +493,42 @@ fn reader_main(mut stdout: ChildStdout, shared: &Shared, hello_tx: &mpsc::Sender
                     let _ = waiter.send(result);
                 }
             }
+            Ok(wire::Message::BlockDone { seq, result }) => {
+                // A doorbell reply must carry a flagged seq this
+                // driver actually rang — an unflagged or unknown one
+                // is a protocol violation.
+                let known = data::is_block_seq(seq) && shared.lock().block_in_flight.remove(&seq);
+                if !known {
+                    converge(shared, None);
+                    return;
+                }
+                // Acquire edge — pairs the child's `fence(Release)`
+                // before `BlockDone`; nothing below may be reordered
+                // above it. A real atomic fence (not a compiler
+                // fence): the cross-process ordering rests on this
+                // hardware fence plus the pipe-read syscall boundary.
+                fence(Ordering::Acquire);
+                if let Some(staging) = shared.lock().staging.clone() {
+                    let slot = usize::try_from(seq % u64::from(out_depth))
+                        .expect("slot index always fits usize");
+                    let _published = data::read_out_slot(
+                        view.out_slot(in_depth, out_depth, seq),
+                        seq,
+                        &staging.outs[slot],
+                        staging.frame_capacity,
+                        result,
+                    );
+                    // `_published == false` means the child wrote a
+                    // mismatched slot seq — the data is withheld and
+                    // the RT leg's tag check fails closed; the done
+                    // still completes the alternation either way.
+                }
+                let _ = result_tx.try_push(seq);
+            }
             Ok(_) => {
-                // `Hello` twice, `BlockDone` we never rang, or a
-                // parent→child kind arriving child→parent: protocol
-                // violation — the execution context is failed.
+                // `Hello` twice or a parent→child kind arriving
+                // child→parent: protocol violation — the execution
+                // context is failed.
                 converge(shared, None);
                 return;
             }
@@ -483,14 +588,22 @@ fn reap(shared: &Shared, deadline: Option<Instant>) -> ChildExit {
 /// The driver thread: operates the shared `Child` handle and owns
 /// the child's stdin. Drains the command channel on a
 /// `DRIVER_POLL_INTERVAL` cadence, watches `try_wait` for the crash
-/// path and runs the shutdown watchdog. A `Failed` convergence kills
-/// the child itself (see [`converge`]) — that is also what unwedges
-/// this thread out of a blocking `write_all`.
+/// path, runs the shutdown watchdog and drains the data-plane
+/// `submit` channel — every popped seq becomes an in-slot shm write
+/// plus a `BlockIn` doorbell (this thread does all the blocking
+/// pipe work; the RT caller only `try_push`es seqs).
+///
+/// `view` is this thread's own shm mapping (`Shmem` is `!Send` —
+/// each I/O thread opens the owner `Segment`'s key locally) and
+/// `in_depth` sizes the in-slot ring.
 fn driver_main(
     shared: &Shared,
     mut stdin: ChildStdin,
     rx: &mpsc::Receiver<DriverCmd>,
     shutdown_grace: Duration,
+    submit: &mut ruviform_rt::Consumer<data::Submit>,
+    view: &mut shm::View,
+    in_depth: u32,
 ) {
     let mut shutdown_deadline: Option<Instant> = None;
     loop {
@@ -543,6 +656,59 @@ fn driver_main(
                 return;
             }
         }
+        // Data plane: every seq the RT caller submitted becomes an
+        // in-slot write plus a `BlockIn` doorbell — bounded by the
+        // channel capacity, never blocking on the RT side.
+        while let Ok(submit) = submit.try_pop() {
+            let seq = submit.seq;
+            let staging = {
+                let mut inner = shared.lock();
+                if inner.terminal.is_some() || inner.shutdown_initiated {
+                    // A dead or shutting-down child takes no new
+                    // doorbells — the seq is consumed, its result
+                    // simply never arrives (the RT leg passes
+                    // through).
+                    None
+                } else {
+                    let staging = data::armed_for(inner.staging.as_ref(), submit);
+                    if staging.is_some() {
+                        // The doorbell goes in flight BEFORE the
+                        // write — the reader's `BlockDone` /
+                        // flagged-`Reply` must always find it here.
+                        inner.block_in_flight.insert(seq);
+                    }
+                    // `None` here is either "no ring armed yet" or a
+                    // stale-generation submit — queued before a
+                    // re-activation swapped `inner.staging`, so
+                    // serializing it would doorbell the new ring's
+                    // zeroed stage under a real seq. Dropped without
+                    // a doorbell: `block_in_flight` never sees it and
+                    // the RT leg resolves the absent result as
+                    // pass-through.
+                    staging
+                }
+            };
+            let Some(staging) = staging else {
+                continue;
+            };
+            let slot = usize::try_from(seq % u64::from(in_depth)).expect("slot index fits usize");
+            data::write_in_slot(
+                view.in_slot_mut(in_depth, seq),
+                seq,
+                &staging.ins[slot],
+                staging.frame_capacity,
+            );
+            // Release edge — the slot writes above must be visible
+            // to the child before the `BlockIn` it acquires on. A
+            // real atomic fence (not a compiler fence): ordering
+            // across the process boundary rests on this hardware
+            // fence plus the pipe-write syscall.
+            fence(Ordering::Release);
+            if write_message(&mut stdin, &wire::Message::BlockIn { seq }).is_err() {
+                converge(shared, None);
+                return;
+            }
+        }
         match try_wait_child(shared) {
             Ok(Some(status)) => {
                 converge(shared, Some(ChildExit::from_status(status)));
@@ -569,6 +735,124 @@ fn driver_main(
     }
 }
 
+/// The driver's spawn hand-off: `Ok(stdout)` carries the child's piped
+/// stdout across to the caller (which hands it to the reader thread);
+/// `Err(())` reports a spawn-time failure.
+type SpawnRx = mpsc::Receiver<Result<ChildStdout, ()>>;
+
+/// The reader's handshake channel: `Ok(version)` carries the child's
+/// `Hello` version; `Err(())` reports a broken handshake/data plane.
+type HelloRx = mpsc::Receiver<Result<u16, ()>>;
+
+/// Spawns the `l1-driver` thread — the child process itself is spawned
+/// *inside* the thread and handed to [`L1Instance::spawn`] through
+/// `spawn_rx`: keeping the `Child` created and installed on the driver
+/// from birth means no failure path between thread creation and
+/// handshake can leak a running worker — every post-driver error
+/// funnels through channel disconnect plus the shared-child kill, and
+/// a driver-spawn failure happens before the child exists.
+#[allow(clippy::too_many_arguments)]
+fn spawn_driver(
+    shared: &Arc<Shared>,
+    mut command: ProcCommand,
+    driver_rx: mpsc::Receiver<DriverCmd>,
+    mut submit_rx: ruviform_rt::Consumer<data::Submit>,
+    shm_key: String,
+    depth: u32,
+    grace: Duration,
+) -> Result<(thread::JoinHandle<()>, SpawnRx), HostError> {
+    let (spawn_tx, spawn_rx) = mpsc::channel();
+    let driver_shared = Arc::clone(shared);
+    let join = thread::Builder::new()
+        .name("l1-driver".to_owned())
+        .spawn(move || {
+            let Ok((child, stdin, stdout)) = spawn_child(&mut command) else {
+                let _ = spawn_tx.send(Err(()));
+                return;
+            };
+            // Install the shared handle BEFORE any converge can
+            // run — from here on every `Failed` transition can
+            // force-kill the child even while this driver is
+            // blocked in a stdin write.
+            if let Err(still_owned) = driver_shared.child.set(Mutex::new(child)) {
+                // Unreachable (single install site) — but never
+                // leak a running child even so.
+                let mut child = still_owned
+                    .into_inner()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = spawn_tx.send(Err(()));
+                return;
+            }
+            // This thread's own shm mapping for the in-slot
+            // writes — `Shmem` is `!Send`, so it opens the key
+            // here rather than moving the owner `Segment`.
+            let Ok(mut view) = shm::View::attach(&shm_key) else {
+                kill_child(&driver_shared);
+                if let Some(mut child) = driver_shared.child_lock() {
+                    let _ = child.wait();
+                }
+                let _ = spawn_tx.send(Err(()));
+                return;
+            };
+            // Ownership of `stdout` crosses to the reader thread
+            // through the caller; the child itself never leaves.
+            if spawn_tx.send(Ok(stdout)).is_err() {
+                kill_child(&driver_shared);
+                if let Some(mut child) = driver_shared.child_lock() {
+                    let _ = child.wait();
+                }
+                return;
+            }
+            driver_main(
+                &driver_shared,
+                stdin,
+                &driver_rx,
+                grace,
+                &mut submit_rx,
+                &mut view,
+                depth,
+            );
+        })
+        .map_err(|_| HostError::Ipc)?;
+    Ok((join, spawn_rx))
+}
+
+/// Spawns the `l1-reader` thread: attaches its own shm `View` by key
+/// *before* `Hello` so a broken data plane fails the spawn rather than
+/// the first `BlockDone`, then runs [`reader_main`].
+fn spawn_reader(
+    shared: &Arc<Shared>,
+    stdout: ChildStdout,
+    result_tx: ruviform_rt::Producer<u64>,
+    shm_key: String,
+    depth: u32,
+) -> Result<(thread::JoinHandle<()>, HelloRx), HostError> {
+    let (hello_tx, hello_rx) = mpsc::channel();
+    let reader_shared = Arc::clone(shared);
+    let join = thread::Builder::new()
+        .name("l1-reader".to_owned())
+        .spawn(move || {
+            let Ok(view) = shm::View::attach(&shm_key) else {
+                let _ = hello_tx.send(Err(()));
+                converge(&reader_shared, None);
+                return;
+            };
+            reader_main(
+                stdout,
+                &reader_shared,
+                &hello_tx,
+                result_tx,
+                &view,
+                depth,
+                depth,
+            );
+        })
+        .map_err(|_| HostError::Ipc)?;
+    Ok((join, hello_rx))
+}
+
 /// One L1 instance: a spawned child plus its `driver`/`reader` threads,
 /// the notification queue and the local lifecycle mirror.
 ///
@@ -589,8 +873,19 @@ pub(crate) struct L1Instance {
     notify_rx: mpsc::Receiver<ChildExit>,
     command_timeout: Duration,
     next_seq: AtomicU64,
-    /// The named shm segment — kept alive so the child can attach;
-    /// slot ownership moves to the threads with the data-plane task.
+    /// The shm slot count `D` (`lookahead_blocks + 1`) — sizes the
+    /// segment, both SPSC channels and the staging ring.
+    depth: u32,
+    /// The RT leg: caller-thread end of the data plane (submit
+    /// producer, result consumer, staging, pass-through history).
+    rt: data::RtLeg,
+    /// Counts successful `Activate`s — stamped onto each new
+    /// [`data::Staging`] ring so the driver can drop `submit`s
+    /// queued under a superseded ring (see [`data::Submit`]).
+    staging_generation: u64,
+    /// The named shm segment — owner-side lifecycle anchor (kept
+    /// alive so the child and the I/O threads' `View`s can attach;
+    /// it unlinks when the instance drops).
     segment: shm::Segment,
 }
 
@@ -605,12 +900,28 @@ impl L1Instance {
     /// **RT contract:** non-RT only — blocks up to
     /// `3 × command_timeout` in the worst case (the spawn hand-off,
     /// the `Hello` wait and the `Scan` reply each carry one).
+    ///
+    /// `lookahead_blocks == 0` is `Err(Ipc)` — with `D = 1` the
+    /// result horizon `expected = block` is the seq the same
+    /// `process` call just submitted, so no result can ever arrive
+    /// first: the leg would pass through forever (permanent
+    /// silence). The spec is rejected like any other unusable
+    /// spawn configuration rather than silently degraded.
     pub(crate) fn spawn(spec: &SpawnSpec) -> Result<Self, HostError> {
+        if spec.lookahead_blocks == 0 {
+            return Err(HostError::Ipc);
+        }
         let depth = spec.lookahead_blocks.saturating_add(1);
         let slot =
             u32::try_from(INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed)).unwrap_or(u32::MAX);
         let segment = shm::Segment::create(slot, depth, depth).map_err(|()| HostError::Ipc)?;
-
+        // The data-plane SPSC legs — capacity `D`, so at most a full
+        // ring of doorbells/results is ever in flight. `submit`:
+        // RT caller → driver; `result`: reader → RT caller.
+        let (submit_tx, submit_rx) =
+            ruviform_rt::channel::<data::Submit>(usize::try_from(depth).unwrap_or(usize::MAX));
+        let (result_tx, result_rx) =
+            ruviform_rt::channel::<u64>(usize::try_from(depth).unwrap_or(usize::MAX));
         let mut command = ProcCommand::new(&spec.program);
         command
             .args(&spec.args)
@@ -623,67 +934,34 @@ impl L1Instance {
             // stderr piping is a deferred design concern — inherit
             // keeps child diagnostics visible without extra plumbing.
             .stderr(Stdio::inherit());
-        // The driver thread spawns the child itself and hands `stdout`
-        // back through `spawn_tx` — this keeps the `Child` created and
-        // installed on the driver from birth, so no failure path
-        // between thread creation and handshake can leak a running
-        // worker: every post-driver error funnels through
-        // channel disconnect plus the shared-child kill, and a
-        // driver-spawn failure happens before the child exists.
         let (driver_tx, driver_rx) = mpsc::channel();
         let (notify_tx, notify_rx) = mpsc::channel();
-        let (hello_tx, hello_rx) = mpsc::channel();
-        let (spawn_tx, spawn_rx) = mpsc::channel();
         let shared = Arc::new(Shared {
             inner: Mutex::new(Inner {
                 waiters: HashMap::new(),
                 mirror: LifecycleState::Created,
+                block_in_flight: HashSet::new(),
+                staging: None,
                 terminal: None,
                 shutdown_initiated: false,
                 seen_eof: false,
                 notify: Notify::Idle,
             }),
+            rt_state: AtomicU8::new(data::mirror_encode(LifecycleState::Created)),
             child: OnceLock::new(),
             notify_tx,
         });
-        let driver_shared = Arc::clone(&shared);
-        let grace = spec.command_timeout;
-        let driver_join = thread::Builder::new()
-            .name("l1-driver".to_owned())
-            .spawn(move || {
-                let Ok((child, stdin, stdout)) = spawn_child(&mut command) else {
-                    let _ = spawn_tx.send(Err(()));
-                    return;
-                };
-                // Install the shared handle BEFORE any converge can
-                // run — from here on every `Failed` transition can
-                // force-kill the child even while this driver is
-                // blocked in a stdin write.
-                if let Err(still_owned) = driver_shared.child.set(Mutex::new(child)) {
-                    // Unreachable (single install site) — but never
-                    // leak a running child even so.
-                    let mut child = still_owned
-                        .into_inner()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    let _ = spawn_tx.send(Err(()));
-                    return;
-                }
-                // Ownership of `stdout` crosses to the reader thread
-                // through the caller; the child itself never leaves.
-                if spawn_tx.send(Ok(stdout)).is_err() {
-                    kill_child(&driver_shared);
-                    if let Some(mut child) = driver_shared.child_lock() {
-                        let _ = child.wait();
-                    }
-                    return;
-                }
-                driver_main(&driver_shared, stdin, &driver_rx, grace);
-            });
-        let Ok(driver_join) = driver_join else {
-            return Err(HostError::Ipc);
-        };
+        // `Shmem` is `!Send` — each I/O thread opens its own `View`
+        // of the owner segment by key on its own stack frame.
+        let (driver_join, spawn_rx) = spawn_driver(
+            &shared,
+            command,
+            driver_rx,
+            submit_rx,
+            segment.key().to_owned(),
+            depth,
+            spec.command_timeout,
+        )?;
         let Ok(Ok(stdout)) = spawn_rx.recv_timeout(spec.command_timeout) else {
             // Child spawn failed or timed out: disconnecting the
             // command channel makes the driver kill/reap whatever
@@ -692,18 +970,20 @@ impl L1Instance {
             let _ = driver_join.join();
             return Err(HostError::Ipc);
         };
-        let reader_shared = Arc::clone(&shared);
-        let reader_join = thread::Builder::new()
-            .name("l1-reader".to_owned())
-            .spawn(move || reader_main(stdout, &reader_shared, &hello_tx));
-        let Ok(reader_join) = reader_join else {
-            // The driver is already running — kill the child through
-            // the shared handle and disconnect; the driver reaps and
-            // exits (bounded — `kill` is forceful on both OSes).
-            kill_child(&shared);
-            drop(driver_tx);
-            let _ = driver_join.join();
-            return Err(HostError::Ipc);
+        let reader_spawn =
+            spawn_reader(&shared, stdout, result_tx, segment.key().to_owned(), depth);
+        let (reader_join, hello_rx) = match reader_spawn {
+            Ok(pair) => pair,
+            Err(error) => {
+                // The driver is already running — kill the child
+                // through the shared handle and disconnect; the
+                // driver reaps and exits (bounded — `kill` is
+                // forceful on both OSes).
+                kill_child(&shared);
+                drop(driver_tx);
+                let _ = driver_join.join();
+                return Err(error);
+            }
         };
 
         let mut instance = Self {
@@ -714,6 +994,9 @@ impl L1Instance {
             notify_rx,
             command_timeout: spec.command_timeout,
             next_seq: AtomicU64::new(0),
+            depth,
+            rt: data::RtLeg::new(depth, spec.lookahead_blocks, submit_tx, result_rx),
+            staging_generation: 0,
             segment,
         };
         match instance.handshake(spec, &hello_rx) {
@@ -729,11 +1012,7 @@ impl L1Instance {
 
     /// `Hello` (version check) → `Scan` → descriptor field-match —
     /// the handshake sequence fixed by the design.
-    fn handshake(
-        &mut self,
-        spec: &SpawnSpec,
-        hello_rx: &mpsc::Receiver<Result<u16, ()>>,
-    ) -> Result<(), HostError> {
+    fn handshake(&mut self, spec: &SpawnSpec, hello_rx: &HelloRx) -> Result<(), HostError> {
         match hello_rx.recv_timeout(spec.command_timeout) {
             Ok(Ok(version)) if version == wire::WIRE_VERSION => {}
             _ => return Err(HostError::Ipc),
@@ -790,14 +1069,34 @@ impl L1Instance {
             _ => {}
         }
         let post = post_command_state(&cmd);
+        let activate_frames = match &cmd {
+            wire::Command::Activate { config } => Some(config.max_frames()),
+            _ => None,
+        };
         let reply = self.request(cmd)?;
         if let Some(state) = post {
             let mut inner = self.shared.lock();
             // Never resurrect a converged instance — the reply may
             // have raced the crash paths.
             if inner.terminal.is_none() {
-                inner.mirror = state;
+                self.shared.set_mirror(&mut inner, state);
             }
+        }
+        if let Some(frames) = activate_frames {
+            // A successful `Activate` arms the data plane: build the
+            // staging ring (non-RT allocation) and publish it to the
+            // I/O threads plus the RT leg in one step. A concurrent
+            // convergence leaves the armed ring unobserved — harmless.
+            // The bumped `generation` lets the driver drop submits
+            // queued under the superseded ring — see `data::Submit`.
+            self.staging_generation += 1;
+            let staging = Arc::new(data::Staging::new(
+                self.depth,
+                frames,
+                self.staging_generation,
+            ));
+            self.shared.lock().staging = Some(Arc::clone(&staging));
+            self.rt.arm(staging);
         }
         Ok(reply)
     }
@@ -875,7 +1174,8 @@ impl L1Instance {
         self.join_threads();
         {
             let mut inner = self.shared.lock();
-            inner.mirror = LifecycleState::Destroyed;
+            self.shared
+                .set_mirror(&mut inner, LifecycleState::Destroyed);
             inner.terminal.get_or_insert(Terminal::Clean);
         }
     }
@@ -895,11 +1195,34 @@ impl L1Instance {
     /// track successful commands, `Failed`/`Destroyed` are terminal
     /// conditions.
     ///
-    /// **RT contract:** non-RT only — takes the shared mutex (the
-    /// data-plane task replaces the mirror read on the RT leg with a
-    /// const-cheap snapshot).
+    /// **RT contract:** non-RT only — takes the shared mutex (the RT
+    /// leg reads the const-cheap [`Shared::rt_state`] snapshot
+    /// instead).
     pub(crate) fn lifecycle_state(&self) -> LifecycleState {
         self.shared.lock().mirror
+    }
+
+    /// The `process` equivalent — the RT leg of the data plane.
+    /// Stages the input into `staging_in[seq % D]`, submits the
+    /// doorbell seq on the `submit` channel (`try_push` only), drains
+    /// `result` for the `seq - lookahead_blocks` completion, copies
+    /// the matching output block out, and falls back to the defined
+    /// pass-through (`last_output` or silence) on every non-match.
+    /// A `Failed` instance still returns `Ok(CONTINUE)` with silence
+    /// — the crash is a control-plane fact, never an RT error.
+    ///
+    /// **RT contract:** RT-suitable — atomic staging writes and
+    /// `try_push`/`try_pop` only; no locks, no pipes, no shm, no
+    /// allocation (the `rt_l1_*` contract tests assert this).
+    pub(crate) fn process(
+        &mut self,
+        inputs: &[HostInput<'_>],
+        outputs: &mut [HostOutput<'_>],
+        events: EventList<'_>,
+        transport: Option<TransportInfo>,
+    ) -> Result<ProcessResult, HostError> {
+        let mirror = data::mirror_decode(self.shared.rt_state.load(Ordering::Acquire));
+        self.rt.process(mirror, inputs, outputs, events, transport)
     }
 
     /// Pops the queued `Failed` notification — `Some` exactly once

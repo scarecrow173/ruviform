@@ -15,7 +15,8 @@ ruviform-rt = { path = "../ruviform-rt" }
 # to the internal `l1::shm` module — never exposed on the public API or
 # feature names. Note: 0.12.4's `as_slice`/`as_slice_mut` are `unsafe fn`
 # (the design recorded them as safe); the only scoped `#[expect(unsafe_code)]`
-# call sites live in `l1::shm` with SAFETY comments.
+# call sites live in `l1::shm` and the `l1-test-worker` bin (the child-side
+# attach mirrors the same segment protocol), each with SAFETY comments.
 shared_memory = "0.12"
 
 [[bin]]
@@ -25,6 +26,7 @@ path = "src/bin/l1-test-worker.rs"
 [dev-dependencies]
 assert_no_alloc = "1.1"
 ruviform-audio-core = { path = "../ruviform-audio-core" }
+ruviform-media-core = { path = "../ruviform-media-core" }
 
 [lints]
 workspace = true

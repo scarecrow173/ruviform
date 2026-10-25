@@ -1438,6 +1438,7 @@ version = "0.1.0"
 dependencies = [
  "assert_no_alloc",
  "ruviform-audio-core",
+ "ruviform-media-core",
  "ruviform-plugin-core",
  "ruviform-rt",
  "shared_memory",

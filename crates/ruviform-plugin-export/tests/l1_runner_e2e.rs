@@ -426,7 +426,7 @@ fn e2e_happy_path() {
         MediaTime::new(0, TimeBase::sample_rate(48_000).unwrap()),
     );
     write_in_slot(&mut segment, 0, 4, 2, &events, Some(&transport), &inputs);
-    std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::Release);
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Release);
     host.send(&Message::BlockIn { seq: 0 });
     match host.recv() {
         Message::BlockDone { seq, result } => {
@@ -435,7 +435,7 @@ fn e2e_happy_path() {
         }
         other => panic!("expected BlockDone, got {other:?}"),
     }
-    std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::Acquire);
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Acquire);
     let (frames, channels, _result, samples) = read_out_slot(&segment, 0);
     assert_eq!((frames, channels), (4, 2));
     assert_eq!(samples[0], [1.5, -1.5, 0.75, -0.75]);
@@ -443,7 +443,7 @@ fn e2e_happy_path() {
 
     // Block 1: no events — the applied gain (1.5) persists.
     write_in_slot(&mut segment, 1, 4, 2, &[], None, &inputs);
-    std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::Release);
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Release);
     host.send(&Message::BlockIn { seq: 1 });
     match host.recv() {
         Message::BlockDone { seq, result } => {
@@ -452,7 +452,7 @@ fn e2e_happy_path() {
         }
         other => panic!("expected BlockDone, got {other:?}"),
     }
-    std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::Acquire);
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Acquire);
     let (_, _, _, samples) = read_out_slot(&segment, 1);
     assert_eq!(samples[0], [1.5, -1.5, 0.75, -0.75]);
 

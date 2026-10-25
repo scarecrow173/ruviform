@@ -1488,8 +1488,12 @@ mod tests {
         );
         // A maximal wire `TransportInfo` (91 B) fits the region; a
         // wire `ProcessResult` (5 B) fits `RESULT_LEN`.
-        const { assert!(shm::TRANSPORT_LEN >= 91); }
-        const { assert!(shm::RESULT_LEN >= 5); }
+        const {
+            assert!(shm::TRANSPORT_LEN >= 91);
+        }
+        const {
+            assert!(shm::RESULT_LEN >= 5);
+        }
     }
 
     fn roundtrip(message: &Message) -> Message {
