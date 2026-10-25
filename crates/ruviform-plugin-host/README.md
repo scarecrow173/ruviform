@@ -14,7 +14,7 @@ Ruviform メディア基盤のプラグインホスト層: ホストアプリケ
   全てこの一面を通り、後続のアウトプロセス（L1）バックエンドが呼び出し側の
   変更なしに同一コマンドを提供できる。
 - `process` は分離設計上コマンド**ではない**: L0 では `PluginProcessor` への
-  直接呼び出しのままで、`InProcessHost::process`/`InProcessHost::processor`
+  直接呼び出しのままで、`InProcessHost::process`/`InProcessHost::plugin_mut`
   が IPC ・ブロッキングなしで公開する。
 - プラグイン側: `Plugin` は `PluginProcessor` を非 RT インスタンスフック
   （`init`・処理通知・状態・GUI — 全てデフォルト実装付きで、最小プラグインは

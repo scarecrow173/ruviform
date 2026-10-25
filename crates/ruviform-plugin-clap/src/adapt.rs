@@ -136,6 +136,7 @@ const STATE_INITIALIZED: u8 = 1;
 const STATE_ACTIVATED: u8 = 2;
 const STATE_PROCESSING: u8 = 3;
 const STATE_DESTROYED: u8 = 4;
+const STATE_FAILED: u8 = 5;
 /// Forward-compat sentinel: a future `LifecycleState` variant encodes
 /// here and rejects every event (defined rejection, never a silent
 /// accept).
@@ -148,6 +149,7 @@ fn encode_state(state: LifecycleState) -> u8 {
         LifecycleState::Activated => STATE_ACTIVATED,
         LifecycleState::Processing => STATE_PROCESSING,
         LifecycleState::Destroyed => STATE_DESTROYED,
+        LifecycleState::Failed => STATE_FAILED,
         _ => STATE_UNKNOWN,
     }
 }
@@ -158,6 +160,7 @@ fn decode_state(raw: u8) -> LifecycleState {
         STATE_INITIALIZED => LifecycleState::Initialized,
         STATE_ACTIVATED => LifecycleState::Activated,
         STATE_PROCESSING => LifecycleState::Processing,
+        STATE_FAILED => LifecycleState::Failed,
         // Unknown encodings (including `STATE_DESTROYED` and the
         // sentinel) decode to the terminal state — every event rejects.
         _ => LifecycleState::Destroyed,
@@ -957,6 +960,9 @@ mod tests {
             LifecycleState::Initialized => &[E::Initialize],
             LifecycleState::Activated => &[E::Initialize, E::Activate],
             LifecycleState::Processing => &[E::Initialize, E::Activate, E::StartProcessing],
+            // `Failed` is reachable straight from `Created` — the host
+            // reports the dead context, no init required.
+            LifecycleState::Failed => &[E::Failed],
             _ => panic!("unsupported precondition state"),
         };
         for event in path {
@@ -1067,6 +1073,32 @@ mod tests {
             assert!(destroyed.transition(event).is_err());
             assert_eq!(destroyed.state(), S::Destroyed);
         }
+    }
+
+    #[test]
+    fn atomic_lifecycle_failed_survives_the_atomic_round_trip() {
+        use LifecycleEvent as E;
+        use LifecycleState as S;
+        // `Failed` must encode and decode as itself — a decode that
+        // collapsed it into `Destroyed` would still read terminal, but
+        // the table's only escape (`Destroy`) would become illegal and
+        // wedge the instance.
+        let machine = lifecycle_at(S::Failed);
+        assert_eq!(machine.state(), S::Failed);
+        for event in [
+            E::Initialize,
+            E::Activate,
+            E::StartProcessing,
+            E::Process,
+            E::StopProcessing,
+            E::Deactivate,
+            E::Failed, // re-reporting Failed is illegal
+        ] {
+            assert!(machine.transition(event).is_err());
+            assert_eq!(machine.state(), S::Failed);
+        }
+        assert_eq!(machine.transition(E::Destroy), Ok(S::Destroyed));
+        assert_eq!(machine.state(), S::Destroyed);
     }
 
     #[test]

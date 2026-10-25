@@ -2,8 +2,8 @@
 //! slots, command dispatch and the direct-call RT `process` path.
 
 use ruviform_plugin_core::{
-    EventList, Lifecycle, LifecycleError, LifecycleEvent, LifecycleState, ProcessConfig,
-    ProcessContext, ProcessResult, TransportInfo,
+    EventList, Lifecycle, LifecycleEvent, LifecycleState, ProcessConfig, ProcessContext,
+    ProcessResult, TransportInfo,
 };
 
 use crate::{
@@ -48,12 +48,16 @@ impl Instance {
 ///
 /// **RT contract:** command dispatch (`execute`, `register_factory`)
 /// is **non-RT only**. [`InProcessHost::process`] and
-/// [`InProcessHost::processor`] are the RT surface — allocation-free
+/// [`InProcessHost::plugin_mut`] are the RT surface — allocation-free
 /// and non-blocking by construction.
 pub struct InProcessHost {
     factories: Vec<Box<dyn PluginFactory>>,
     /// `None` marks a destroyed slot available for reuse.
     instances: Vec<Option<Instance>>,
+    /// Per-slot handle generation — survives `destroy`, so a reused
+    /// slot's next handle bumps past every stale one instead of
+    /// aliasing it.
+    generations: Vec<u16>,
     /// Indices of reusable `None` slots.
     free_slots: Vec<u32>,
 }
@@ -73,6 +77,7 @@ impl InProcessHost {
         Self {
             factories: Vec::new(),
             instances: Vec::new(),
+            generations: Vec::new(),
             free_slots: Vec::new(),
         }
     }
@@ -158,7 +163,7 @@ impl InProcessHost {
 
     /// The RT processing path: validates `Processing` state (feeding
     /// the lifecycle `Process` event) then calls the plugin's erased
-    /// [`Plugin::process_host`] directly.
+    /// [`ErasedPlugin::process_host`] directly.
     ///
     /// This is the L0 branch of the isolation design — a plain
     /// in-process call, no IPC and no blocking. `inputs`/`outputs`
@@ -200,10 +205,8 @@ impl InProcessHost {
         let plugin = self.factories[position].create();
         if let Some(slot) = self.free_slots.pop() {
             let index = slot as usize;
-            let generation = self.instances[index]
-                .as_ref()
-                .map_or(0, |instance| instance.generation)
-                .wrapping_add(1);
+            let generation = self.generations[index].wrapping_add(1);
+            self.generations[index] = generation;
             self.instances[index] = Some(Instance::new(plugin, generation));
             Ok(HostReply::Instantiated {
                 handle: PluginHandle::new(slot, generation),
@@ -211,6 +214,7 @@ impl InProcessHost {
         } else {
             let slot = u32::try_from(self.instances.len()).expect("instance slots fit u32");
             self.instances.push(Some(Instance::new(plugin, 0)));
+            self.generations.push(0);
             Ok(HostReply::Instantiated {
                 handle: PluginHandle::new(slot, 0),
             })
@@ -338,11 +342,5 @@ impl InProcessHost {
             .and_then(Option::as_mut)
             .filter(|instance| instance.generation == handle.generation())
             .ok_or(HostError::InvalidHandle)
-    }
-}
-
-impl From<LifecycleError> for HostError {
-    fn from(error: LifecycleError) -> Self {
-        Self::Lifecycle(error)
     }
 }

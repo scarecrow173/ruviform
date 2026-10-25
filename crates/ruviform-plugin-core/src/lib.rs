@@ -11,9 +11,14 @@
 //! ([`BufferView`], [`BufferViewMut`]) and support types
 //! ([`ProcessConfig`], [`ProcessContext`], [`ProcessResult`],
 //! [`ProcessStatus`], [`PrepareError`]), plus the NONRT video plugin
-//! contract ([`VideoPluginInstance`], [`VideoProcessConfig`]) and the
+//! contract ([`VideoPluginInstance`], [`VideoProcessConfig`]), the
 //! typed plain-parameter channel ([`PlainParamValue`],
-//! [`PlainParamInfo`], borrowed [`PluginDescriptorView`]).
+//! [`PlainParamInfo`], borrowed [`PluginDescriptorView`]), the
+//! plugin-side instance contracts ([`Plugin`], [`PluginFactory`],
+//! [`ErasedPlugin`], [`erase`], [`HostInput`], [`HostOutput`]), the
+//! shared host-boundary vocabulary ([`PluginHandle`], [`GuiHandle`],
+//! [`GuiParentToken`], [`HostError`]) and the L1 out-of-process wire
+//! codec ([`wire`]).
 //!
 //! Standard-specific types and concepts — CLAP, VST3, and any
 //! binding-crate (`clack`, `vst3`, `clap-sys`, …) types — are
@@ -66,23 +71,29 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::exhaustive_structs)]
 
+mod boundary;
 mod bus;
 mod descriptor;
 mod event;
 mod lifecycle;
 mod param;
+mod plugin;
 mod processor;
 mod transport;
 
 mod plain_param;
 mod video;
 
+pub mod wire;
+
+pub use boundary::{GuiHandle, GuiParentToken, HostError, PluginHandle};
 pub use bus::{BusDescriptor, BusDirection};
 pub use descriptor::{PluginDescriptor, PluginDescriptorView};
 pub use event::{Event, EventKind, EventList, ParamEvent, sort_events_by_frame_offset};
 pub use lifecycle::{Lifecycle, LifecycleError, LifecycleEvent, LifecycleState};
 pub use param::{ParamFlags, ParamId, ParamInfo, ParamValue};
 pub use plain_param::{PlainParamInfo, PlainParamValue};
+pub use plugin::{ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase};
 pub use processor::{
     BufferView, BufferViewMut, PluginProcessor, PrepareError, ProcessConfig, ProcessContext,
     ProcessResult, ProcessStatus,

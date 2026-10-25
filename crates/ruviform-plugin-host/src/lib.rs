@@ -15,7 +15,7 @@
 //! later without callers changing. Per the isolation design `process`
 //! is **not** a command: in L0 it stays a direct call into
 //! [`PluginProcessor`], which [`InProcessHost::process`] /
-//! [`InProcessHost::processor`] expose without IPC or blocking.
+//! [`InProcessHost::plugin_mut`] expose without IPC or blocking.
 //!
 //! ## Plugin side
 //!
@@ -43,6 +43,9 @@
 //!
 //! Contract source: `docs/designs/plugin-isolation.md`,
 //! `docs/designs/plugin-host-l0.md`, `docs/adr/plugin-isolation-strategy.md`.
+//!
+//! [`LifecycleEvent`]: ruviform_plugin_core::LifecycleEvent
+//! [`PluginProcessor`]: ruviform_plugin_core::PluginProcessor
 
 #![allow(clippy::module_name_repetitions)]
 
@@ -464,6 +467,40 @@ mod tests {
         assert_eq!(
             host.execute(HostCommand::Initialize { handle }),
             Err(HostError::InvalidHandle)
+        );
+    }
+
+    #[test]
+    fn reused_slot_generations_do_not_alias() {
+        let mut host = host_with_gain();
+        // Churn one slot: each destroy frees it for the next
+        // instantiate, and the generation must keep bumping — a
+        // generation that reset on reuse would let a stale handle
+        // validate against a different live instance.
+        let handle0 = instantiate(&mut host);
+        host.execute(HostCommand::Destroy { handle: handle0 })
+            .unwrap();
+        let handle1 = instantiate(&mut host);
+        host.execute(HostCommand::Destroy { handle: handle1 })
+            .unwrap();
+        let handle2 = instantiate(&mut host);
+
+        assert_eq!(handle0.slot(), handle1.slot());
+        assert_eq!(handle1.slot(), handle2.slot());
+        assert_eq!(handle1.generation(), 1);
+        assert_eq!(handle2.generation(), 2);
+
+        // The second stale handle must not alias the live instance;
+        // the live handle still works.
+        assert_eq!(
+            host.execute(HostCommand::Initialize { handle: handle1 }),
+            Err(HostError::InvalidHandle)
+        );
+        host.execute(HostCommand::Initialize { handle: handle2 })
+            .unwrap();
+        assert_eq!(
+            host.lifecycle_state(handle2),
+            Some(LifecycleState::Initialized)
         );
     }
 

@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034LNXQmQvHjRBD57FCPBw"
 type: "plan"
-status: "approved"
+status: "in-progress"
 title: "Issue #76 実施計画 — プラグイン L1 アウトプロセス分離（plugin-export 新設 + plugin-host L1 プロキシ）"
 created: "2026-10-25"
 updated: "2026-10-25"
@@ -62,7 +62,7 @@ relations:
 
 # Issue #76 実施計画 — プラグイン L1 アウトプロセス分離（plugin-export 新設 + plugin-host L1 プロキシ）
 
-> status: approved — Refs #76。approved design `docs/designs/plugin-l1-out-of-process.md`（DESIGN-034LNAalREIHyUQNVXLLin）の正本どおり。**7 buildable task** と **3 test-spec** を起票済み（task は全て `todo`・test-spec は全て `proposed`）。GitHub merge は lead の authoritative `gh` のみ — 本計画は PR merged / issue closed の主張を含まない。
+> status: in-progress — Refs #76。approved design `docs/designs/plugin-l1-out-of-process.md`（DESIGN-034LNAalREIHyUQNVXLLin）の正本どおり。Task 1 (l1-core-contracts-and-wire-codec) 完了（actions 1–4・`fmt-check`/`check`/`lint`/`test` 49 binaries・`test-plugin-core` 95・`lint-plugin-core`・`test-rt` 109 件全 exit 0・`cargo doc -p ruviform-plugin-host` 0 warnings・独立 review 2 件 + fix agent — P1 stale-handle generation 修正・P2 CLAP `STATE_FAILED` 往復・指摘全修正・全 mutation 検証済み）。Task 2–7 未着手 — 全体完了を意味しない。**7 buildable task** と **3 test-spec** を起票済み（task は Task 1 `done`・残り `todo`・test-spec は全て `proposed`）。GitHub merge は lead の authoritative `gh` のみ — 本計画は PR merged / issue closed の主張を含まない。
 
 ## Goal
 

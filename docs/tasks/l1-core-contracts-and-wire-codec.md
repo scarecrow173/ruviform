@@ -1,23 +1,46 @@
 ---
 id: "TASK-034LNY736TLX2w3k4RFFZM"
 type: "task"
-status: "todo"
+status: "done"
 title: "plugin-core L1 基盤（契約移設 + Lifecycle Failed + wire codec）"
 created: "2026-10-25"
 updated: "2026-10-25"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/boundary.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/plugin.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/wire.rs"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/lifecycle.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-clap/src/adapt.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/command.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/host.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/plugin.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/README.md"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-76-l1-core-wire-task-1-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
   blocks: []
@@ -109,11 +132,13 @@ approved plan `implement-issue-76-plugin-l1-out-of-process.md` の **actions 1�
 
 ## Verification
 
-- [ ] `mise run check` — exit 0（移設後の全 crate 型チェック）
-- [ ] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
-- [ ] `mise run test` — exit 0（`Failed` 遷移表・codec roundtrip/malformed/version/Descriptor 等価・既存 L0 テスト全 pass）
-- [ ] `mise run test-plugin-core` — exit 0（core 集中レーン）
-- [ ] `mise run lint-plugin-core` — exit 0
-- [ ] `cargo tree -p ruviform-plugin-core` — 外部依存ゼロ（serde/postcard 不在）
-- [ ] `rg -n "pub use ruviform_plugin_core" crates/ruviform-plugin-host/src/plugin.rs crates/ruviform-plugin-host/src/command.rs` — 再エクスポート化を確認
-- [ ] `rg -n "Failed" crates/ruviform-plugin-core/src/lifecycle.rs` — `LifecycleState::Failed`/`LifecycleEvent::Failed`/`is_failed` 存在
+- [x] `mise run check` — exit 0（移設後の全 crate 型チェック・実 log）
+- [x] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
+- [x] `mise run test` — exit 0（`Failed` 遷移表・codec roundtrip/malformed/version/Descriptor 等価・既存 L0 テスト全 pass — 49 test binaries・実 log）
+- [x] `mise run test-plugin-core` — exit 0（core 集中レーン — lib 59・video_contract 8・doctests 26・他 2 = 95 pass）
+- [x] `mise run lint-plugin-core` — exit 0
+- [x] `cargo tree -p ruviform-plugin-core` — third-party 依存ゼロ（`path` 依存 audio/media/video-core のみ・serde/postcard 不在を実確認）
+- [x] `rg -n "pub use ruviform_plugin_core" crates/ruviform-plugin-host/src/plugin.rs crates/ruviform-plugin-host/src/command.rs` — 再エクスポート化を確認（plugin.rs L16・command.rs L22）
+- [x] `rg -n "Failed" crates/ruviform-plugin-core/src/lifecycle.rs` — `LifecycleState::Failed`/`LifecycleEvent::Failed`/`is_failed` 存在
+
+補足（task doc の Verification 範囲外・IR に記録）: `mise run fmt-check` exit 0・`mise run test-rt` exit 0（実一致 109 件）・`cargo doc -p ruviform-plugin-host` 0 warnings（audio-core に pre-existing 警告 2 件）。レビュー修正（generation 世代管理・CLAP `STATE_FAILED`・coverage 追加・doc link）は全て mutation 検証済み — 詳細は `docs/impl/ir/issue-76-l1-core-wire-task-1-implementation.md`。

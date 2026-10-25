@@ -20,6 +20,8 @@
 //! | `Processing` | `Process` | `Processing` | processing self-loop |
 //! | `Created` | `Destroy` | `Destroyed` | uninitialized instance may be destroyed |
 //! | `Initialized` | `Destroy` | `Destroyed` | destroy requires the deactivated state |
+//! | `Created`/`Initialized`/`Activated`/`Processing` | `Failed` | `Failed` | reported terminal execution-context failure |
+//! | `Failed` | `Destroy` | `Destroyed` | the only escape from `Failed` |
 //! | *any other pair* | | | `Err(IllegalTransition)` |
 //!
 //! Defined rules, in words:
@@ -43,9 +45,17 @@
 //! - **Failure destinations** — a failed init stays in `Created`
 //!   (`InitFailed`), a failed activate stays in `Initialized`
 //!   (`ActivateFailed`); the operation may be retried.
+//! - **`Failed` is a terminal semi-state** — a *reported*
+//!   execution-context failure (an out-of-process child dying, losing
+//!   its response or breaking the protocol — injected by the host,
+//!   never emitted by the plugin itself). Only `Destroy` escapes it;
+//!   every other event is illegal. Unlike the retryable
+//!   `InitFailed`/`ActivateFailed` destinations there is no recovery —
+//!   the instance can only be torn down.
 //! - **`Destroy` requires prior deactivate** — `Destroy` is legal only
-//!   from `Initialized` (the post-deactivate state) and `Created`
-//!   (never initialized); destroying an `Activated` or `Processing`
+//!   from `Initialized` (the post-deactivate state), `Created` (never
+//!   initialized) and `Failed` (the failed context is only torn down,
+//!   never recovered); destroying an `Activated` or `Processing`
 //!   instance is a protocol violation.
 //! - **Protocol violations are rejected** — `Process` before
 //!   activation (`Created`/`Initialized`), `Process` while activated
@@ -75,6 +85,14 @@ pub enum LifecycleState {
     /// Processing activity is running (`Process` is legal) —
     /// activity only, not an RT guarantee.
     Processing,
+    /// Terminal execution-context failure: the context the instance
+    /// ran in is gone (e.g. an out-of-process child died or broke the
+    /// protocol). Reached only through the reported
+    /// [`LifecycleEvent::Failed`] event; the only legal way out is
+    /// `Destroy` → `Destroyed`. Unlike the retryable
+    /// `InitFailed`/`ActivateFailed` destinations, `Failed` is not
+    /// recoverable — `accepts_processing()` is `false`.
+    Failed,
     /// Terminal state — every event is illegal from here.
     Destroyed,
 }
@@ -99,7 +117,8 @@ impl LifecycleState {
             | (S::Activated, E::Deactivate) => S::Initialized,
             (S::Initialized, E::Activate) | (S::Processing, E::StopProcessing) => S::Activated,
             (S::Activated, E::StartProcessing) | (S::Processing, E::Process) => S::Processing,
-            (S::Created | S::Initialized, E::Destroy) => S::Destroyed,
+            (S::Created | S::Initialized | S::Activated | S::Processing, E::Failed) => S::Failed,
+            (S::Created | S::Initialized | S::Failed, E::Destroy) => S::Destroyed,
             _ => {
                 return Err(LifecycleError::IllegalTransition { from: self, event });
             }
@@ -124,15 +143,25 @@ impl LifecycleState {
     pub const fn is_destroyed(self) -> bool {
         matches!(self, Self::Destroyed)
     }
+
+    /// Whether this is the [`LifecycleState::Failed`] semi-terminal
+    /// state — a dead execution context that only `Destroy` escapes.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn is_failed(self) -> bool {
+        matches!(self, Self::Failed)
+    }
 }
 
 /// An operation that drives the lifecycle machine — the standard-neutral
 /// events adapters feed in.
 ///
-/// `InitFailed` / `ActivateFailed` are *reported* transitions: an
-/// adapter reports the failure destination explicitly instead of
-/// silently staying. `Process` is the per-block self-loop that makes
-/// "process before activation" a defined, rejectable transition.
+/// `InitFailed` / `ActivateFailed` / `Failed` are *reported*
+/// transitions: a failure destination is reported explicitly instead
+/// of silently staying. `Process` is the per-block self-loop that
+/// makes "process before activation" a defined, rejectable
+/// transition.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy — new variants may be added without breaking downstream
@@ -161,9 +190,19 @@ pub enum LifecycleEvent {
     /// Per-block processing — `Processing → Processing`; illegal from
     /// every other state.
     Process,
-    /// Terminal transition — legal from `Created`/`Initialized` only;
-    /// an activated plugin must be deactivated first.
+    /// Terminal transition — legal from `Created`/`Initialized` (and
+    /// from `Failed`, where it is the only legal event); an activated
+    /// plugin must be deactivated first.
     Destroy,
+    /// Reported terminal execution-context failure — `Created` /
+    /// `Initialized` / `Activated` / `Processing` → `Failed`.
+    ///
+    /// The host injects this event when the instance's execution
+    /// context is lost (an L1 child process dying, losing its
+    /// response or breaking the protocol); plugins never emit it.
+    /// Unlike the retryable `InitFailed`/`ActivateFailed`
+    /// destinations, `Failed` is terminal — only `Destroy` escapes it.
+    Failed,
 }
 
 /// Rejection of an illegal lifecycle transition.
@@ -320,6 +359,9 @@ mod tests {
             S::Initialized => &[E::Initialize][..],
             S::Activated => &[E::Initialize, E::Activate][..],
             S::Processing => &[E::Initialize, E::Activate, E::StartProcessing][..],
+            // `Failed` is reachable straight from `Created` — no init
+            // required.
+            S::Failed => &[E::Failed][..],
             S::Destroyed => &[E::Initialize, E::Destroy][..],
         };
         for event in path {
@@ -435,7 +477,8 @@ mod tests {
         ] {
             assert!(lifecycle_at(state).transition(event).is_err());
         }
-        // Destroyed is terminal for every event.
+        // Destroyed is terminal for every event — including the
+        // reported-failure events and a double destroy.
         for event in [
             E::Initialize,
             E::Activate,
@@ -444,6 +487,9 @@ mod tests {
             E::StopProcessing,
             E::Deactivate,
             E::Destroy,
+            E::Failed,
+            E::InitFailed,
+            E::ActivateFailed,
         ] {
             assert_eq!(
                 lifecycle_at(S::Destroyed).transition(event),
@@ -453,6 +499,53 @@ mod tests {
                 })
             );
         }
+    }
+
+    #[test]
+    fn failed_is_reachable_from_every_live_state() {
+        for state in [S::Created, S::Initialized, S::Activated, S::Processing] {
+            assert_eq!(lifecycle_at(state).transition(E::Failed), Ok(S::Failed));
+        }
+    }
+
+    #[test]
+    fn failed_is_terminal_and_only_destroy_escapes() {
+        // Every non-`Destroy` event — including re-reporting `Failed`
+        // — is illegal from `Failed`.
+        for event in [
+            E::Initialize,
+            E::InitFailed,
+            E::Activate,
+            E::ActivateFailed,
+            E::StartProcessing,
+            E::Process,
+            E::StopProcessing,
+            E::Deactivate,
+            E::Failed,
+        ] {
+            assert_eq!(
+                lifecycle_at(S::Failed).transition(event),
+                Err(LifecycleError::IllegalTransition {
+                    from: S::Failed,
+                    event,
+                })
+            );
+        }
+        // The single escape: teardown.
+        let mut failed = lifecycle_at(S::Failed);
+        assert_eq!(failed.transition(E::Destroy), Ok(S::Destroyed));
+        assert!(failed.state().is_destroyed());
+    }
+
+    #[test]
+    fn failed_reports_via_state_queries() {
+        let failed = lifecycle_at(S::Failed).state();
+        assert!(failed.is_failed());
+        assert!(!failed.is_destroyed());
+        assert!(!failed.accepts_processing());
+        // `Destroyed` and the live states are not `Failed`.
+        assert!(!S::Destroyed.is_failed());
+        assert!(!S::Processing.is_failed());
     }
 
     #[test]
