@@ -227,8 +227,6 @@ pub(crate) struct OutStage {
 /// `max_frames × WIRE_MAX_CHANNELS` per slot — the channel count is
 /// only known at `process` time, so the wire bound is the reserve.
 pub(crate) struct Staging {
-    /// Slot count — `lookahead_blocks + 1`, fixed at spawn.
-    pub(crate) depth: u32,
     /// Per-channel sample capacity of one slot (the activated
     /// `max_frames`).
     pub(crate) frame_capacity: usize,
@@ -274,7 +272,6 @@ impl Staging {
             })
             .collect();
         Self {
-            depth,
             frame_capacity,
             generation,
             ins,

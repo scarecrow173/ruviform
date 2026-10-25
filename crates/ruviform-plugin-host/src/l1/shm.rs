@@ -186,6 +186,9 @@ impl Segment {
     /// The declared segment length (header + all slots). On Windows
     /// the mapping's reported length can exceed this; the invariant is
     /// "the mapping covers it".
+    // Test-support surface — reachable through the `#[path]` include
+    // in `tests/l1_proxy_e2e.rs`, not through in-crate code.
+    #[allow(dead_code)]
     pub(crate) fn declared_len(&self) -> usize {
         self.declared_len
     }
@@ -194,6 +197,9 @@ impl Segment {
     /// this segment was created with — the self-verification half of
     /// the header write/verify pair (used by tests and by the data
     /// plane's `View` setup).
+    // Test-support surface — reachable through the `#[path]` include
+    // in `tests/l1_proxy_e2e.rs`, not through in-crate code.
+    #[allow(dead_code)]
     pub(crate) fn verify_header(&self, in_depth: u32, out_depth: u32) -> bool {
         let bytes = bytes(&self.mem);
         if bytes.len() < self.declared_len {

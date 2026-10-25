@@ -53,7 +53,7 @@ Ruviform ワークスペースのメンバークレート索引（計21クレー
 
 | クレート | 責務 |
 | --- | --- |
-| [`ruviform-plugin-host`](ruviform-plugin-host/README.md) | 規格中立プラグインホスト境界（L0 インプロセス） |
+| [`ruviform-plugin-host`](ruviform-plugin-host/README.md) | 規格中立プラグインホスト境界（L0 インプロセス + L1 アウトプロセス — `PluginHost` コンポジットが登録時ルーティング） |
 
 ## Engines
 

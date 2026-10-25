@@ -1,23 +1,48 @@
 ---
 id: "TASK-034LNYndN4rzshflcqGHt5"
 type: "task"
-status: "todo"
+status: "done"
 title: "PluginHost コンポジット + 選択 API + doc 整合"
 created: "2026-10-25"
 updated: "2026-10-25"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/composite.rs"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/l1/mod.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/l1/data.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/l1/shm.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/bin/l1-test-worker.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/README.md"
+      - type: "file"
+        path: "crates/ruviform-plugin-export/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-export/README.md"
+      - type: "file"
+        path: "crates/README.md"
+      - type: "file"
+        path: "Cargo.toml"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-76-plugin-host-composite-task-5-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
     - "docs/tasks/l1-shm-data-plane-and-rt-legs.md"
@@ -105,10 +130,12 @@ approved plan `implement-issue-76-plugin-l1-out-of-process.md` の **actions 15�
 
 ## Verification
 
-- [ ] `mise run fmt-check` — exit 0
-- [ ] `mise run check` — exit 0
-- [ ] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
-- [ ] `mise run test` — exit 0（`PluginHost` E2E 全 pass — L0+L1 混在・runner bin 結合・`DuplicatePluginId`・L1 kill→`InstanceFailed`・L0 無退行）
-- [ ] `mise run test-rt` — exit 0 かつ `rt_l1_*` が実一致（一致件数記録）
-- [ ] `rg -n "pub struct PluginHost\|pub struct OutOfProcessSpec\|pub enum HostNotification\|pub struct ChildExit" crates/ruviform-plugin-host/src/composite.rs` — 公開型の存在
-- [ ] `rg -n "lookahead_blocks.*block_frames.*sample_rate\|遅延" crates/ruviform-plugin-host/src/lib.rs` — 遅延契約の doc 明記
+- [x] `mise run fmt-check` — exit 0（実 log）
+- [x] `mise run check` — exit 0（実 log）
+- [x] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean — `#[expect(unsafe_code)]` は `l1::shm` ×2 + `l1-test-worker` ×2 の scoped site のみ）
+- [x] `mise run test` — exit 0（`l1_proxy_e2e` **42 tests** 全 pass — 新規 `composite_e2e` 8 tests（L0+L1 混在・runner bin 結合・`DuplicatePluginId`・L1 kill→`InstanceFailed` exactly once・`Destroy` legality・stale handle non-cross-route・advisory `stop_processing` mirror・shadowed registration）+ 既存 34 無退行）
+- [x] `mise run test-rt` — exit 0 かつ `rt_l1_process_path_no_alloc`/`rt_l1_result_leg_try_ops` が実一致（`rt_` filter で **2 件実選択** — 0 件スキップではない）
+- [x] `rg -n "pub struct PluginHost\|pub struct OutOfProcessSpec\|pub enum HostNotification\|pub struct ChildExit" crates/ruviform-plugin-host/src/composite.rs` — 公開型の存在（`OutOfProcessSpec` L65・`ChildExit` L109・`HostNotification` L143・`PluginHost` L210）
+- [x] `rg -n "lookahead_blocks.*block_frames.*sample_rate\|遅延" crates/ruviform-plugin-host/src/lib.rs` — 遅延契約の doc 明記（L46）
+
+補足（task doc の Verification 範囲外・IR に記録）: レビュー修正（P2 ×2 — wire reply-kind pairing `host_reply`/`expected_reply_kind`・advisory `stop_processing` mirror lag `err_committed_state` + `--fail-stop-processing` fixture・doc/test 群）を全て適用。deviation: `register_factory` infallible 維持（first-claimant shadowing）・`runner_program()` の `current_exe` → `target/<profile>` 解決（workspace test entry のみ）・`Box<L1Instance>` large_enum_variant。詳細は `docs/impl/ir/issue-76-plugin-host-composite-task-5-implementation.md`。

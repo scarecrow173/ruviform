@@ -4,7 +4,7 @@
 
 ## 責務
 
-- `run(Vec<Box<dyn PluginFactory>>) -> ExitCode` — プラグインバイナリの `main` から呼ぶ唯一の公開入口。argv を解釈し、stdio コントロールプレーン上で wire プロトコル（`ruviform-plugin-core::wire`）を駆動し、`--ruviform-shm-key` で指定された共有メモリデータプレーンをアタッチして単一プラグインインスタンスをホストする。
+- `run(Vec<Box<dyn PluginFactory>>) -> ExitCode` — プラグインバイナリの `main` から呼ぶ唯一の公開入口。argv を解釈し、stdio コントロールプレーン上で wire プロトコル（`ruviform-plugin-core::wire`）を駆動し、`--ruviform-shm-key` で指定された共有メモリデータプレーンをアタッチして単一プラグインインスタンスをホストする。親側では `ruviform_plugin_host::PluginHost` コンポジットがこのバイナリを `OutOfProcessSpec.program` として登録し、`Instantiate` ごとに spawn する。
 - `src/bin/ruviform-plugin-l1-runner.rs` — リファレンス runner。決定的な `GainPlugin`（`dev.ruviform.mock.gain`）と panic fixture `PanicPlugin`（`dev.ruviform.mock.panic`）を内蔵し、E2E（`tests/l1_runner_e2e.rs`）の spawn 対象となる。
 
 ## argv 契約

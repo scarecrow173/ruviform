@@ -83,7 +83,7 @@ Directory: `docs/tasks`
 | TASK-034LNYeFTd7EgCwbDA0GWD | ruviform-plugin-export 新設 + run() ランナー + l1-runner bin | done | [plugin-export-crate-and-l1-runner.md](./plugin-export-crate-and-l1-runner.md) |
 | TASK-034JZPGUI0000000000006 | Issue #30 ADR + 文書クローズ | done | [plugin-gui-poc-closeout.md](./plugin-gui-poc-closeout.md) |
 | TASK-034JZPGUI0000000000005 | plugin-gui PoC ハーネス + 実機実験 | done | [plugin-gui-poc-harness.md](./plugin-gui-poc-harness.md) |
-| TASK-034LNYndN4rzshflcqGHt5 | PluginHost コンポジット + 選択 API + doc 整合 | todo | [plugin-host-composite-and-l1-e2e.md](./plugin-host-composite-and-l1-e2e.md) |
+| TASK-034LNYndN4rzshflcqGHt5 | PluginHost コンポジット + 選択 API + doc 整合 | done | [plugin-host-composite-and-l1-e2e.md](./plugin-host-composite-and-l1-e2e.md) |
 | TASK-Cay381BHNWhN855kjvMcL1 | Issue #74 文書クローズと全量検証 | done | [plugin-host-l0-closeout.md](./plugin-host-l0-closeout.md) |
 | TASK-AMKTeO5Inr8CXr3RzX3uOV | ruviform-plugin-host クレート実装 + テスト | done | [plugin-host-l0-crate.md](./plugin-host-l0-crate.md) |
 | TASK-034JZLISO0000000000005 | plugin-host API 整合検証 + Issue #31 クローズ | done | [plugin-isolation-verify.md](./plugin-isolation-verify.md) |

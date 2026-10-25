@@ -23,6 +23,7 @@
 //! | `--leave-heir-after-msgs=N` | after the Nth received message is fully answered, spawn a copy of this binary with `--sleep-ms=15000` (inheriting stdio — the grandchild holds the parent's stdout pipe open) then `exit(0)`; EOF never reaches the proxy's reader thread |
 //! | `--sleep-ms=M` | sleep `M` ms then exit 0 — the heir mode used by `--leave-heir-after-msgs`; not meant to be spawned directly by tests |
 //! | `--hello-version=V` | `Hello.version` override (default [`wire::WIRE_VERSION`]) for the version-mismatch handshake test |
+//! | `--fail-stop-processing` | `StopProcessing` commits `Processing → Activated` then replies `Err(HostError::PluginFailed)` — the real runner's commit-then-advisory shape (a hook error arrives post-commit), exercising the host-side mirror fix |
 //!
 //! Message counting covers parent→child frames (`Command`, `BlockIn`,
 //! `Shutdown`) — the handshake `Scan` the proxy sends itself counts
@@ -85,6 +86,9 @@ struct Flags {
     sleep_ms: Option<u64>,
     /// `Hello.version` override.
     hello_version: u16,
+    /// `StopProcessing` commits the transition then replies
+    /// `Err(PluginFailed)` — the real runner's advisory-error shape.
+    fail_stop_processing: bool,
     /// `--ruviform-shm-key` value — attached after `Hello`.
     shm_key: Option<String>,
 }
@@ -99,6 +103,7 @@ fn parse_flags() -> Flags {
         leave_heir_after_msgs: None,
         sleep_ms: None,
         hello_version: wire::WIRE_VERSION,
+        fail_stop_processing: false,
         shm_key: None,
     };
     let mut args = std::env::args_os().skip(1);
@@ -120,6 +125,8 @@ fn parse_flags() -> Flags {
             flags.sleep_ms = value.parse().ok();
         } else if let Some(value) = arg.strip_prefix("--hello-version=") {
             flags.hello_version = value.parse().unwrap_or(wire::WIRE_VERSION);
+        } else if arg == "--fail-stop-processing" {
+            flags.fail_stop_processing = true;
         } else if arg == "--ruviform-plugin-id" {
             // Value-carrying bootstrap flag — consumed and ignored.
             let _ = args.next();
@@ -169,6 +176,7 @@ fn dispatch(
     lifecycle: &mut Lifecycle,
     state: &mut Vec<u8>,
     cmd: &wire::Command,
+    fail_stop_processing: bool,
 ) -> Result<wire::Reply, HostError> {
     match cmd {
         wire::Command::Scan => Ok(wire::Reply::Scanned(vec![wire::Descriptor::from(
@@ -199,7 +207,16 @@ fn dispatch(
             transition(lifecycle, LifecycleEvent::StartProcessing).map(|()| wire::Reply::Ok)
         }
         wire::Command::StopProcessing => {
-            transition(lifecycle, LifecycleEvent::StopProcessing).map(|()| wire::Reply::Ok)
+            // Commit first, like the real runner
+            // (`Runner::stop_processing` applies the transition
+            // before the hook runs): `--fail-stop-processing` then
+            // reports the advisory `Err` *after* the commit.
+            transition(lifecycle, LifecycleEvent::StopProcessing)?;
+            if fail_stop_processing {
+                Err(HostError::PluginFailed)
+            } else {
+                Ok(wire::Reply::Ok)
+            }
         }
         wire::Command::Deactivate => {
             transition(lifecycle, LifecycleEvent::Deactivate).map(|()| wire::Reply::Ok)
@@ -567,7 +584,8 @@ fn main() -> ExitCode {
         match message {
             wire::Message::Command { seq, cmd } => {
                 if !hung {
-                    let result = dispatch(&mut lifecycle, &mut state, &cmd);
+                    let result =
+                        dispatch(&mut lifecycle, &mut state, &cmd, flags.fail_stop_processing);
                     // Track the activated bound like the real runner
                     // (`Runner::activated_max_frames`): set on a
                     // successful `Activate`, cleared on `Deactivate`.

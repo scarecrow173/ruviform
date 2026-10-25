@@ -1404,3 +1404,784 @@ fn rejected_block_replies_resolve_pass_through() {
     );
     instance.destroy();
 }
+
+// ------------------------------------------------------------------
+// Composite (`PluginHost`) public surface (Issue #76 task 5):
+// unified handle space, registration-time L0/L1 routing and the
+// public notification surface — exercised end-to-end over both the
+// `l1-test-worker` fixture and the real `ruviform-plugin-l1-runner`
+// bin from `ruviform-plugin-export`.
+// ------------------------------------------------------------------
+
+mod composite_e2e {
+    use std::ffi::OsString;
+    use std::path::Path;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut};
+    use ruviform_plugin_core::{
+        ErasedPlugin, Event, EventKind, EventList, GuiParentToken, HostError, HostInput,
+        HostOutput, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamInfo,
+        ParamValue, PluginDescriptor, ProcessConfig, ProcessResult, TransportInfo,
+    };
+    use ruviform_plugin_host::{
+        HostCommand, HostNotification, HostReply, OutOfProcessSpec, Plugin, PluginFactory,
+        PluginHandle, PluginHost,
+    };
+
+    use super::{NOTIFY_TIMEOUT, WORKER_DESCRIPTOR, config, sample_eq};
+
+    /// The L0-side fixture: a gain plugin with an adjustable
+    /// normalized-gain parameter and a state blob — distinct id and
+    /// descriptor from `l1-test-worker`.
+    const L0_GAIN_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
+        id: "org.ruviform.test.l0-gain",
+        name: "L0 Test Gain",
+        vendor: "Ruviform",
+        version: "0.1.0",
+        features: &[],
+    };
+
+    /// The descriptor `ruviform-plugin-l1-runner`'s built-in
+    /// `GainPlugin` reports — the `OutOfProcessSpec` oracle must
+    /// field-match it.
+    const RUNNER_GAIN_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
+        id: "dev.ruviform.mock.gain",
+        name: "Gain",
+        vendor: "Ruviform",
+        version: "1.0.0",
+        features: &["audio-effect"],
+    };
+
+    struct L0Gain {
+        gain: f32,
+    }
+
+    impl ruviform_plugin_core::PluginProcessor for L0Gain {
+        fn prepare(
+            &mut self,
+            _config: &ProcessConfig,
+            _context: &mut ruviform_plugin_core::ProcessContext,
+        ) -> Result<(), ruviform_plugin_core::PrepareError> {
+            Ok(())
+        }
+
+        fn process<I, O>(
+            &mut self,
+            inputs: &[I],
+            outputs: &mut [O],
+            events: EventList<'_>,
+            _transport: Option<TransportInfo>,
+            _context: &mut ruviform_plugin_core::ProcessContext,
+        ) -> ProcessResult
+        where
+            I: ruviform_plugin_core::BufferView,
+            O: ruviform_plugin_core::BufferViewMut,
+        {
+            for event in events.iter() {
+                if let EventKind::ParamValue(ParamEvent { param_id, value }) = event.kind()
+                    && param_id == ParamId(0)
+                {
+                    // Normalized [0,1] `ParamValue` → f32 is a
+                    // defined narrowing within the range.
+                    #[expect(clippy::cast_possible_truncation)]
+                    let gain = value.get() as f32;
+                    self.gain = gain;
+                }
+            }
+            for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
+                for channel in 0..output.channels() {
+                    if let (Some(src), Some(dst)) =
+                        (input.channel(channel), output.channel_mut(channel))
+                    {
+                        for (s, d) in src.iter().zip(dst.iter_mut()) {
+                            *d = *s * self.gain;
+                        }
+                    }
+                }
+            }
+            ProcessResult::CONTINUE
+        }
+    }
+
+    impl Plugin for L0Gain {
+        fn descriptor(&self) -> PluginDescriptor {
+            L0_GAIN_DESCRIPTOR
+        }
+
+        fn params(&self) -> &[ParamInfo] {
+            &[]
+        }
+
+        fn save_state(&mut self) -> Result<Vec<u8>, HostError> {
+            Ok(self.gain.to_le_bytes().to_vec())
+        }
+
+        fn restore_state(&mut self, state: &[u8]) -> Result<(), HostError> {
+            let bytes: [u8; 4] = state.try_into().map_err(|_| HostError::PluginFailed)?;
+            self.gain = f32::from_le_bytes(bytes);
+            Ok(())
+        }
+    }
+
+    struct L0GainFactory;
+
+    impl PluginFactory for L0GainFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            L0_GAIN_DESCRIPTOR
+        }
+
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            ruviform_plugin_host::erase(L0Gain { gain: 1.0 })
+        }
+    }
+
+    /// A factory claiming the *worker* id — registered after an L1
+    /// claim to exercise `register_factory`'s infallible shadowing.
+    /// `create` is never reached: the first claimant (the L1 route)
+    /// serves `Instantiate`.
+    struct ShadowedWorkerFactory;
+
+    impl PluginFactory for ShadowedWorkerFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            WORKER_DESCRIPTOR
+        }
+
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            ruviform_plugin_host::erase(L0Gain { gain: 1.0 })
+        }
+    }
+
+    /// A second factory claiming the *L0 gain* id — the L0-after-L0
+    /// shadow. Its `gain` differs so `SaveState` reveals which
+    /// factory `Instantiate` actually served.
+    struct L0GainHalfFactory;
+
+    impl PluginFactory for L0GainHalfFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            L0_GAIN_DESCRIPTOR
+        }
+
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            ruviform_plugin_host::erase(L0Gain { gain: 0.5 })
+        }
+    }
+
+    /// The `l1-test-worker` executable — same package, so
+    /// `CARGO_BIN_EXE_*` names it directly.
+    fn worker_program() -> OsString {
+        OsString::from(env!("CARGO_BIN_EXE_l1-test-worker"))
+    }
+
+    /// The `ruviform-plugin-l1-runner` executable — a
+    /// `ruviform-plugin-export` package bin, so `CARGO_BIN_EXE_*`
+    /// cannot name it here. `cargo test --workspace` builds every
+    /// member's bin targets into the shared profile dir — locate it
+    /// relative to this test binary (`target/<profile>/deps/` →
+    /// `target/<profile>/`).
+    fn runner_program() -> OsString {
+        let exe = std::env::current_exe().expect("current_exe");
+        let dir = exe
+            .parent()
+            .and_then(Path::parent)
+            .expect("test binary lives under target/<profile>/deps");
+        let path = dir.join(format!(
+            "ruviform-plugin-l1-runner{}",
+            std::env::consts::EXE_SUFFIX
+        ));
+        assert!(
+            path.is_file(),
+            "ruviform-plugin-l1-runner missing at {} — run `mise run \
+             test` (workspace test builds all member bins)",
+            path.display()
+        );
+        path.into_os_string()
+    }
+
+    /// A `PluginHost` with the L0 gain factory and an L1
+    /// `l1-test-worker` route registered.
+    fn mixed_host(worker_args: &[&str]) -> PluginHost {
+        let mut host = PluginHost::new();
+        host.register_factory(Box::new(L0GainFactory));
+        let mut spec = OutOfProcessSpec::new(WORKER_DESCRIPTOR, worker_program());
+        spec.args = worker_args.iter().map(OsString::from).collect();
+        host.register_out_of_process(spec).unwrap();
+        host
+    }
+
+    fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
+        match host
+            .execute(HostCommand::Instantiate {
+                plugin_id: plugin_id.to_owned(),
+            })
+            .unwrap()
+        {
+            HostReply::Instantiated { handle } => handle,
+            other => panic!("unexpected reply: {other:?}"),
+        }
+    }
+
+    /// One `process` call on the composite — the public-surface
+    /// mirror of `run_block`.
+    fn host_block(
+        host: &mut PluginHost,
+        handle: PluginHandle,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> Result<ProcessResult, HostError> {
+        host_block_with_events(
+            host,
+            handle,
+            input,
+            output,
+            EventList::empty(u32::try_from(input.len()).unwrap()),
+        )
+    }
+
+    fn host_block_with_events(
+        host: &mut PluginHost,
+        handle: PluginHandle,
+        input: &[f32],
+        output: &mut [f32],
+        events: EventList<'_>,
+    ) -> Result<ProcessResult, HostError> {
+        let in_list = [input];
+        let input_view = PlanarBufferView::new(&in_list).unwrap();
+        let inputs = [HostInput(&input_view)];
+        let mut out_list = [&mut output[..]];
+        let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+        let mut outputs = [HostOutput(&mut output_view)];
+        host.process(handle, &inputs, &mut outputs, events, None)
+    }
+
+    /// Drive one instance through `Processing` — identical command
+    /// series on either route.
+    fn drive_to_processing(host: &mut PluginHost, handle: PluginHandle) {
+        host.execute(HostCommand::Initialize { handle }).unwrap();
+        host.execute(HostCommand::Activate {
+            handle,
+            config: config(),
+        })
+        .unwrap();
+        host.execute(HostCommand::StartProcessing { handle })
+            .unwrap();
+    }
+
+    /// Polls the composite's `lifecycle_state` until `Failed`.
+    fn wait_host_failed(host: &PluginHost, handle: PluginHandle) {
+        let deadline = Instant::now() + NOTIFY_TIMEOUT;
+        while host.lifecycle_state(handle) != Some(LifecycleState::Failed) {
+            assert!(Instant::now() < deadline, "instance never reached Failed");
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// Polls `try_recv_notification` until the `InstanceFailed`
+    /// notification arrives or `NOTIFY_TIMEOUT` elapses.
+    fn wait_host_notification(
+        host: &mut PluginHost,
+    ) -> (PluginHandle, ruviform_plugin_host::ChildExit) {
+        let deadline = Instant::now() + NOTIFY_TIMEOUT;
+        loop {
+            if let Some(HostNotification::InstanceFailed { handle, exit }) =
+                host.try_recv_notification()
+            {
+                return (handle, exit);
+            }
+            assert!(
+                Instant::now() < deadline,
+                "InstanceFailed notification never arrived"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// The mixed-route E2E (spec AC1 parity through the composite):
+    /// one `PluginHost` serves an L0 factory and an L1
+    /// `l1-test-worker` route behind the identical command series —
+    /// scan → instantiate → lifecycle → process → state → destroy —
+    /// and the caller never names a layer.
+    #[test]
+    fn mixed_routes_full_series() {
+        let mut host = mixed_host(&[]);
+
+        // Scan reports every registration's descriptor in order.
+        let HostReply::Scanned(descriptors) = host.execute(HostCommand::Scan).unwrap() else {
+            panic!("unexpected reply");
+        };
+        assert_eq!(descriptors, vec![L0_GAIN_DESCRIPTOR, WORKER_DESCRIPTOR]);
+
+        // The same `Instantiate{plugin_id}` shape reaches both routes.
+        let l0 = instantiate(&mut host, L0_GAIN_DESCRIPTOR.id);
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        assert_ne!(l0, l1);
+        assert_eq!(host.lifecycle_state(l0), Some(LifecycleState::Created));
+        assert_eq!(host.lifecycle_state(l1), Some(LifecycleState::Created));
+
+        // Lifecycle verbs return identical replies on both routes.
+        for handle in [l0, l1] {
+            drive_to_processing(&mut host, handle);
+            assert_eq!(
+                host.lifecycle_state(handle),
+                Some(LifecycleState::Processing)
+            );
+        }
+
+        // L0 `process` is the direct call: gain 1.0 → identity.
+        let input = [0.75_f32; 512];
+        let mut out_l0 = [0.0_f32; 512];
+        assert_eq!(
+            host_block(&mut host, l0, &input, &mut out_l0),
+            Ok(ProcessResult::CONTINUE)
+        );
+        assert!(out_l0.iter().all(|&s| sample_eq(s, 0.75)));
+
+        // L1 `process` is the shm/try-leg path: delivered blocks are
+        // exactly `0.5 ×` the input `lookahead` calls ago; underruns
+        // are defined pass-through (silence/last block) and every
+        // call is `Ok(CONTINUE)`.
+        let mut out_l1 = [-1.0_f32; 512];
+        let mut delivered = false;
+        for _ in 0..16 {
+            thread::sleep(Duration::from_millis(5));
+            assert_eq!(
+                host_block(&mut host, l1, &input, &mut out_l1),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert!(
+                out_l1
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.0) || sample_eq(s, 0.375)),
+                "L1 output carried an undefined sample"
+            );
+            delivered |= out_l1.iter().all(|&s| sample_eq(s, 0.375));
+        }
+        assert!(delivered, "the L1 pipeline never delivered a block");
+
+        // State round-trips on both routes through the same verbs.
+        let HostReply::State { bytes } =
+            host.execute(HostCommand::SaveState { handle: l0 }).unwrap()
+        else {
+            panic!("unexpected reply");
+        };
+        assert_eq!(bytes, 1.0_f32.to_le_bytes());
+        host.execute(HostCommand::RestoreState {
+            handle: l0,
+            bytes: 0.5_f32.to_le_bytes().to_vec(),
+        })
+        .unwrap();
+        let mut out_restored = [0.0_f32; 512];
+        host_block(&mut host, l0, &input, &mut out_restored).unwrap();
+        assert!(out_restored.iter().all(|&s| sample_eq(s, 0.375)));
+
+        let HostReply::State { bytes } =
+            host.execute(HostCommand::SaveState { handle: l1 }).unwrap()
+        else {
+            panic!("unexpected reply");
+        };
+        assert_eq!(bytes, [0x11, 0x22, 0x33, 0x44]);
+        host.execute(HostCommand::RestoreState {
+            handle: l1,
+            bytes: vec![0xAA, 0xBB],
+        })
+        .unwrap();
+        assert_eq!(
+            host.execute(HostCommand::SaveState { handle: l1 }),
+            Ok(HostReply::State {
+                bytes: vec![0xAA, 0xBB]
+            })
+        );
+
+        // `plugin_mut`: real for the L0 slot, `None` for L1 (no
+        // in-process plugin object exists behind a child process).
+        let plugin = host.plugin_mut(l0).expect("L0 slot has a plugin");
+        assert_eq!(plugin.descriptor(), L0_GAIN_DESCRIPTOR);
+        assert!(host.plugin_mut(l1).is_none());
+        // GUI on L1 is the defined `Unsupported` rejection; the L0
+        // fixture's default hook lands the same — for `CloseGui`
+        // as much as `OpenGui`.
+        for handle in [l0, l1] {
+            assert_eq!(
+                host.execute(HostCommand::OpenGui {
+                    handle,
+                    parent: GuiParentToken::new(0)
+                }),
+                Err(HostError::Unsupported)
+            );
+            assert_eq!(
+                host.execute(HostCommand::CloseGui { handle }),
+                Err(HostError::Unsupported)
+            );
+        }
+
+        // Identical teardown on both routes; handles die with the
+        // slots.
+        for handle in [l0, l1] {
+            host.execute(HostCommand::StopProcessing { handle })
+                .unwrap();
+            host.execute(HostCommand::Deactivate { handle }).unwrap();
+            host.execute(HostCommand::Destroy { handle }).unwrap();
+            assert_eq!(host.lifecycle_state(handle), None);
+            assert_eq!(
+                host.execute(HostCommand::Initialize { handle }),
+                Err(HostError::InvalidHandle)
+            );
+        }
+        // Clean teardown — nothing to notify.
+        assert!(host.try_recv_notification().is_none());
+    }
+
+    /// A `plugin_id` claimed twice — in either order, across either
+    /// route — is `Err(HostError::DuplicatePluginId)` on
+    /// `register_out_of_process`; the first claimant keeps the route.
+    #[test]
+    fn duplicate_plugin_id_is_a_defined_rejection() {
+        let mut host = mixed_host(&[]);
+
+        // L1 claiming the L0 factory's id, or re-claiming its own id.
+        for descriptor in [L0_GAIN_DESCRIPTOR, WORKER_DESCRIPTOR] {
+            let spec = OutOfProcessSpec::new(descriptor, worker_program());
+            assert_eq!(
+                host.register_out_of_process(spec),
+                Err(HostError::DuplicatePluginId)
+            );
+        }
+
+        // The first claimant's route still serves the id — the
+        // losing spec was never registered.
+        let handle = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        drive_to_processing(&mut host, handle);
+        host.execute(HostCommand::StopProcessing { handle })
+            .unwrap();
+        host.execute(HostCommand::Deactivate { handle }).unwrap();
+        host.execute(HostCommand::Destroy { handle }).unwrap();
+    }
+
+    /// `register_factory` is infallible, so a `plugin_id` already
+    /// claimed keeps its first route — L0-after-L1 and L0-after-L0
+    /// alike. The shadowed factory stays `Scan`-listed (the
+    /// composite reports every accepted registration, matching
+    /// `InProcessHost`'s repeated-id semantics) while `Instantiate`
+    /// honours only the first claimant.
+    #[test]
+    fn shadowed_factory_registration_keeps_first_claimant() {
+        // L0-after-L1: the L1 claim survives a same-id factory.
+        let mut host = PluginHost::new();
+        host.register_out_of_process(OutOfProcessSpec::new(WORKER_DESCRIPTOR, worker_program()))
+            .unwrap();
+        host.register_factory(Box::new(ShadowedWorkerFactory));
+
+        let HostReply::Scanned(descriptors) = host.execute(HostCommand::Scan).unwrap() else {
+            panic!("unexpected reply");
+        };
+        assert_eq!(descriptors, vec![WORKER_DESCRIPTOR, WORKER_DESCRIPTOR]);
+        // `Instantiate` serves the L1 route — an out-of-process slot
+        // has no plugin object and `SaveState` returns the worker's
+        // blob, not the L0 gain's.
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        assert!(host.plugin_mut(l1).is_none());
+        let HostReply::State { bytes } =
+            host.execute(HostCommand::SaveState { handle: l1 }).unwrap()
+        else {
+            panic!("unexpected reply");
+        };
+        assert_eq!(bytes, [0x11, 0x22, 0x33, 0x44]);
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+
+        // L0-after-L0: the first factory keeps serving the id —
+        // `SaveState` reports the first claimant's gain, not the
+        // shadow's 0.5.
+        let mut host = PluginHost::new();
+        host.register_factory(Box::new(L0GainFactory));
+        host.register_factory(Box::new(L0GainHalfFactory));
+        let HostReply::Scanned(descriptors) = host.execute(HostCommand::Scan).unwrap() else {
+            panic!("unexpected reply");
+        };
+        assert_eq!(descriptors, vec![L0_GAIN_DESCRIPTOR, L0_GAIN_DESCRIPTOR]);
+        let l0 = instantiate(&mut host, L0_GAIN_DESCRIPTOR.id);
+        let HostReply::State { bytes } =
+            host.execute(HostCommand::SaveState { handle: l0 }).unwrap()
+        else {
+            panic!("unexpected reply");
+        };
+        assert_eq!(bytes, 1.0_f32.to_le_bytes());
+        host.execute(HostCommand::Destroy { handle: l0 }).unwrap();
+    }
+
+    /// `kill_child` drives the documented crash path through the
+    /// public surface: `Failed` transition → exactly one
+    /// `InstanceFailed` notification carrying the public handle and
+    /// the child's `ChildExit` → defined rejections afterwards.
+    /// There is no automatic restart — the instance stays `Failed`.
+    #[test]
+    fn l1_kill_reports_failed_once() {
+        let mut host = mixed_host(&[]);
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        drive_to_processing(&mut host, l1);
+
+        host.kill_child(l1).unwrap();
+        wait_host_failed(&host, l1);
+
+        let (notified, exit) = wait_host_notification(&mut host);
+        assert_eq!(notified, l1);
+
+        // A reaped status always carries something: Windows reports
+        // the kill as an exit code, unix as a signal.
+        assert!(
+            exit.code.is_some() || exit.signal.is_some(),
+            "notification carried no exit status"
+        );
+        // Exactly once — the queue is already drained.
+        assert!(host.try_recv_notification().is_none());
+
+        // Defined rejections on a `Failed` instance — and no
+        // automatic restart: every command keeps failing.
+        assert_eq!(
+            host.execute(HostCommand::Initialize { handle: l1 }),
+            Err(HostError::Failed)
+        );
+        assert_eq!(
+            host.execute(HostCommand::SaveState { handle: l1 }),
+            Err(HostError::Failed)
+        );
+        assert_eq!(
+            host.execute(HostCommand::Scan),
+            Ok(HostReply::Scanned(vec![
+                L0_GAIN_DESCRIPTOR,
+                WORKER_DESCRIPTOR
+            ]))
+        );
+        // `process` on the failed leg: `Ok(CONTINUE)` + silence.
+        let input = [1.0_f32; 512];
+        let mut output = [7.0_f32; 512];
+        assert_eq!(
+            host_block(&mut host, l1, &input, &mut output),
+            Ok(ProcessResult::CONTINUE)
+        );
+        assert!(output.iter().all(|&s| sample_eq(s, 0.0)));
+
+        // `Destroy` is the escape — `Ok`; the notification was
+        // exactly once.
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+        assert_eq!(host.lifecycle_state(l1), None);
+        assert!(host.try_recv_notification().is_none());
+    }
+
+    /// The L0 legality rule is enforced at the composite for L1 too:
+    /// `Destroy` from `Activated`/`Processing` is
+    /// `Err(HostError::Lifecycle(_))` — the child is never told
+    /// (`L1Instance::destroy` is unconditional; the gate lives here).
+    #[test]
+    fn l1_destroy_honours_lifecycle_legality() {
+        let mut host = mixed_host(&[]);
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        host.execute(HostCommand::Initialize { handle: l1 })
+            .unwrap();
+        host.execute(HostCommand::Activate {
+            handle: l1,
+            config: config(),
+        })
+        .unwrap();
+        assert!(matches!(
+            host.execute(HostCommand::Destroy { handle: l1 }),
+            Err(HostError::Lifecycle(LifecycleError::IllegalTransition {
+                from: LifecycleState::Activated,
+                event: LifecycleEvent::Destroy,
+            }))
+        ));
+        // The rejection left the machine untouched.
+        assert_eq!(host.lifecycle_state(l1), Some(LifecycleState::Activated));
+
+        host.execute(HostCommand::StartProcessing { handle: l1 })
+            .unwrap();
+        assert!(matches!(
+            host.execute(HostCommand::Destroy { handle: l1 }),
+            Err(HostError::Lifecycle(LifecycleError::IllegalTransition {
+                from: LifecycleState::Processing,
+                event: LifecycleEvent::Destroy,
+            }))
+        ));
+
+        // Legal path: back down to `Initialized`, then `Destroy → Ok`.
+        host.execute(HostCommand::StopProcessing { handle: l1 })
+            .unwrap();
+        host.execute(HostCommand::Deactivate { handle: l1 })
+            .unwrap();
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+        assert_eq!(host.lifecycle_state(l1), None);
+    }
+
+    /// `StopProcessing` is the one commit-then-advisory verb: the
+    /// child applies `Processing → Activated` *before* the
+    /// `stop_processing()` hook can decline (L0 semantics exactly),
+    /// so a hook `Err` surfaces post-commit — `execute` reports the
+    /// `Err` while `lifecycle_state()` must already read
+    /// `Activated`. `--fail-stop-processing` drives that shape.
+    #[test]
+    fn l1_stop_processing_advisory_err_still_reports_activated() {
+        let mut host = mixed_host(&["--fail-stop-processing"]);
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        drive_to_processing(&mut host, l1);
+
+        assert_eq!(
+            host.execute(HostCommand::StopProcessing { handle: l1 }),
+            Err(HostError::PluginFailed)
+        );
+        // The child already left `Processing` — a lagging mirror
+        // would keep reporting `Processing` and keep doorbelling.
+        assert_eq!(host.lifecycle_state(l1), Some(LifecycleState::Activated));
+        // The RT leg agrees: outside `Processing` it is the same
+        // `Err(Lifecycle)` L0 returns, never a doorbell.
+        let input = [1.0_f32; 512];
+        let mut output = [0.0_f32; 512];
+        assert!(matches!(
+            host_block(&mut host, l1, &input, &mut output),
+            Err(HostError::Lifecycle(_))
+        ));
+        // Child-side legality is the oracle: `StartProcessing` is
+        // legal from `Activated` (illegal from `Processing`), so the
+        // child really is where the mirror claims.
+        host.execute(HostCommand::StartProcessing { handle: l1 })
+            .unwrap();
+        assert_eq!(host.lifecycle_state(l1), Some(LifecycleState::Processing));
+        // The flag is persistent — the second stop repeats the
+        // commit-then-advisory shape.
+        assert_eq!(
+            host.execute(HostCommand::StopProcessing { handle: l1 }),
+            Err(HostError::PluginFailed)
+        );
+        assert_eq!(host.lifecycle_state(l1), Some(LifecycleState::Activated));
+
+        host.execute(HostCommand::Deactivate { handle: l1 })
+            .unwrap();
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+        assert_eq!(host.lifecycle_state(l1), None);
+    }
+
+    /// Unified-handle hygiene: destroyed slots are reused with a
+    /// bumped generation and stale handles can never cross-route —
+    /// a dead L0 handle stays dead even when an L1 instance occupies
+    /// the slot it was minted from (and vice versa).
+    #[test]
+    fn stale_handles_never_cross_route() {
+        let mut host = mixed_host(&[]);
+        let l0 = instantiate(&mut host, L0_GAIN_DESCRIPTOR.id);
+        host.execute(HostCommand::Initialize { handle: l0 })
+            .unwrap();
+        host.execute(HostCommand::Destroy { handle: l0 }).unwrap();
+        assert_eq!(
+            host.execute(HostCommand::Initialize { handle: l0 }),
+            Err(HostError::InvalidHandle)
+        );
+        assert!(host.plugin_mut(l0).is_none());
+        assert_eq!(host.kill_child(l0), Err(HostError::InvalidHandle));
+
+        // The freed slot is reused — by *either* route — with a
+        // bumped generation, and the stale L0 handle cannot reach it.
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        assert_eq!(l1.slot(), l0.slot());
+        assert_eq!(l1.generation(), l0.generation() + 1);
+        assert_eq!(
+            host.execute(HostCommand::Initialize { handle: l0 }),
+            Err(HostError::InvalidHandle)
+        );
+        host.execute(HostCommand::Initialize { handle: l1 })
+            .unwrap();
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+
+        // The slot re-fills on the L0 route too; the stale L1 handle
+        // stays dead, and `kill_child` on a live L0 slot is the
+        // defined `Unsupported` (no child exists).
+        let l0b = instantiate(&mut host, L0_GAIN_DESCRIPTOR.id);
+        assert_eq!(
+            host.execute(HostCommand::Initialize { handle: l1 }),
+            Err(HostError::InvalidHandle)
+        );
+        assert_eq!(host.kill_child(l0b), Err(HostError::Unsupported));
+        host.execute(HostCommand::Destroy { handle: l0b }).unwrap();
+    }
+
+    /// The real `ruviform-plugin-l1-runner` bin behind
+    /// `OutOfProcessSpec.program` — the export-side conjunction:
+    /// spawn → handshake (descriptor match against the runner's
+    /// built-in `GainPlugin`) → lifecycle → shm block processing with
+    /// the param event → state round-trip → `Destroy`.
+    #[test]
+    fn runner_bin_serves_real_gain_plugin() {
+        let mut host = PluginHost::new();
+        host.register_out_of_process(OutOfProcessSpec::new(
+            RUNNER_GAIN_DESCRIPTOR,
+            runner_program(),
+        ))
+        .unwrap();
+
+        let HostReply::Scanned(descriptors) = host.execute(HostCommand::Scan).unwrap() else {
+            panic!("unexpected reply");
+        };
+        assert_eq!(descriptors, vec![RUNNER_GAIN_DESCRIPTOR]);
+
+        let handle = instantiate(&mut host, RUNNER_GAIN_DESCRIPTOR.id);
+        drive_to_processing(&mut host, handle);
+
+        // ParamValue 0.25 → denormalized over [0, 2.0] → gain 0.5:
+        // delivered blocks carry `0.5 ×` an earlier input exactly;
+        // underruns are defined pass-through.
+        let event = Event::new(
+            0,
+            EventKind::ParamValue(ParamEvent {
+                param_id: ParamId(0),
+                value: ParamValue::new(0.25).unwrap(),
+            }),
+        );
+        let events = [event];
+        let event_list = EventList::new(&events, 512).unwrap();
+        let mut inputs: Vec<f32> = Vec::new();
+        let mut delivered = false;
+        for call in 0..32_u32 {
+            let value = 0.2 + 0.01 * f32::from(u8::try_from(call % 16).unwrap() + 1);
+            let input = vec![value; 512];
+            let mut output = vec![0.0_f32; 512];
+            thread::sleep(Duration::from_millis(5));
+            assert_eq!(
+                host_block_with_events(&mut host, handle, &input, &mut output, event_list),
+                Ok(ProcessResult::CONTINUE)
+            );
+            if output.iter().all(|&s| sample_eq(s, 0.0)) {
+                // Defined underrun silence.
+            } else {
+                // A delivered block is exactly `0.5 ×` some earlier
+                // input (the runner applies the param gain).
+                assert!(
+                    output
+                        .iter()
+                        .all(|&s| inputs.iter().any(|&v| sample_eq(s, 0.5 * v))),
+                    "call {call}: undefined output sample {}",
+                    output[0]
+                );
+                delivered = true;
+            }
+            inputs.push(value);
+        }
+        assert!(delivered, "the runner pipeline never delivered");
+
+        // State round-trip through the wire: `RFG1` + f32 gain.
+        let HostReply::State { bytes } = host.execute(HostCommand::SaveState { handle }).unwrap()
+        else {
+            panic!("unexpected reply");
+        };
+        assert_eq!(&bytes[..4], b"RFG1");
+        assert_eq!(bytes[4..], 0.5_f32.to_le_bytes());
+        host.execute(HostCommand::RestoreState {
+            handle,
+            bytes: [b"RFG1".as_slice(), &0.75_f32.to_le_bytes()].concat(),
+        })
+        .unwrap();
+
+        host.execute(HostCommand::StopProcessing { handle })
+            .unwrap();
+        host.execute(HostCommand::Deactivate { handle }).unwrap();
+        host.execute(HostCommand::Destroy { handle }).unwrap();
+        assert_eq!(host.lifecycle_state(handle), None);
+    }
+}

@@ -4,7 +4,10 @@
 //! The crate is a thin library whose single public entry is [`run`]: a
 //! plugin author's (or adapter's) binary calls it from `main` with the
 //! built-in factories, and the child process then serves one plugin
-//! instance to the parent host over the L1 protocol.
+//! instance to the parent host over the L1 protocol. On the parent
+//! side the binary is registered as
+//! `ruviform_plugin_host::OutOfProcessSpec::program` — the
+//! `PluginHost` composite spawns it per `Instantiate`.
 //!
 //! ## Process model
 //!

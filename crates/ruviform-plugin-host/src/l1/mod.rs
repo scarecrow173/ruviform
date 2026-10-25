@@ -11,8 +11,10 @@
 //! **data plane** — `l1::shm` owns the named segment and the
 //! I/O-thread `View`s; `l1::data` carries the `BlockIn`/`BlockDone`
 //! doorbells, the cross-thread slot staging and the RT try-legs
-//! behind [`L1Instance::process`]. The `PluginHost` composite public
-//! surface is a later task, so nothing here is public.
+//! behind [`L1Instance::process`]. The `crate::composite::PluginHost`
+//! facade is this module's only in-crate consumer; nothing here is
+//! public — the public surface (`PluginHost`/`OutOfProcessSpec`/
+//! `HostNotification`/`ChildExit`) lives in `composite.rs`.
 //!
 //! ## Import discipline
 //!
@@ -98,12 +100,13 @@ const DRIVER_JOIN_POLL: Duration = Duration::from_millis(2);
 const DRIVER_JOIN_MARGIN: Duration = Duration::from_secs(1);
 
 /// Process-wide instance counter feeding [`shm::unique_key`]'s `slot`
-/// component (the composite's real slot numbers are a later task —
-/// this only needs to discriminate instances).
+/// component (the composite's public slot numbers live in
+/// `crate::composite` and are not shared here — this only needs to
+/// discriminate instances for key uniquing).
 static INSTANCE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// How the child process ended — reported on the notification queue
-/// inside the (later-task) `HostNotification::InstanceFailed`.
+/// inside `HostNotification::InstanceFailed`.
 /// `signal` is `Some` only on unix.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct ChildExit {
@@ -129,7 +132,7 @@ impl ChildExit {
 }
 
 /// Spawn parameters for one L1 instance — the `pub(crate)` mirror of
-/// the later public `OutOfProcessSpec`.
+/// the public `crate::composite::OutOfProcessSpec`.
 #[derive(Debug)]
 pub(crate) struct SpawnSpec {
     /// Registration-supplied `'static` descriptor: supplies the argv
@@ -861,10 +864,10 @@ fn spawn_reader(
 /// waits at most `command_timeout` per command; `destroy`/`drop` are
 /// bounded by the shutdown watchdog's kill guarantee.
 ///
-/// **Send/Sync:** decided by the Task-5 composite — the fields are
-/// channel/`Mutex`/`JoinHandle` types (auto-`Send` today), but whether
-/// an instance may cross threads is a public-surface decision, not
-/// something this primitive fixes early.
+/// **Send/Sync:** `!Send`/`!Sync` — `segment` holds a
+/// `shared_memory::Shmem` (raw pointer), so an instance cannot leave
+/// its owning thread; `PluginHost` inherits that (documented on the
+/// composite).
 pub(crate) struct L1Instance {
     shared: Arc<Shared>,
     driver_tx: Option<mpsc::Sender<DriverCmd>>,
@@ -885,7 +888,8 @@ pub(crate) struct L1Instance {
     staging_generation: u64,
     /// The named shm segment — owner-side lifecycle anchor (kept
     /// alive so the child and the I/O threads' `View`s can attach;
-    /// it unlinks when the instance drops).
+    /// it unlinks when the instance drops). RAII-only — never read.
+    #[allow(dead_code)]
     segment: shm::Segment,
 }
 
@@ -1069,19 +1073,46 @@ impl L1Instance {
             _ => {}
         }
         let post = post_command_state(&cmd);
+        // The mirror state an `Err` reply still leaves behind —
+        // `Some` only for `StopProcessing` (see
+        // `err_committed_state`).
+        let on_err = err_committed_state(&cmd);
         let activate_frames = match &cmd {
             wire::Command::Activate { config } => Some(config.max_frames()),
             _ => None,
         };
-        let reply = self.request(cmd)?;
-        if let Some(state) = post {
+        let result = self.request(cmd);
+        let committed = match &result {
+            Ok(_) => post,
+            // `Err(Lifecycle)` is always the pre-commit legality
+            // rejection — the child never transitioned, so the
+            // mirror must not move either.
+            Err(HostError::Lifecycle(_)) => None,
+            // Any other `Err` is post-commit for `StopProcessing`
+            // alone: the child applies `Processing → Activated`
+            // *before* the `stop_processing()` hook can decline
+            // (the commit-then-advisory ordering
+            // `InProcessHost::stop_processing` has in-process — the
+            // hook error is advisory there too), so the mirror must
+            // follow the commit or `lifecycle_state()` lies and the
+            // RT leg keeps doorbelling a state the child already
+            // left — the lag L0 does not have. Every other verb's
+            // `Err` is pre-commit or rolled back child-side
+            // (`err_committed_state` audits them), so it rightly
+            // leaves the mirror untouched.
+            Err(_) => on_err,
+        };
+        if let Some(state) = committed {
             let mut inner = self.shared.lock();
             // Never resurrect a converged instance — the reply may
-            // have raced the crash paths.
+            // have raced the crash paths (a timed-out
+            // `StopProcessing` converges `Failed`; the guard keeps
+            // the mirror `Failed`, never `Activated`).
             if inner.terminal.is_none() {
                 self.shared.set_mirror(&mut inner, state);
             }
         }
+        let reply = result?;
         if let Some(frames) = activate_frames {
             // A successful `Activate` arms the data plane: build the
             // staging ring (non-RT allocation) and publish it to the
@@ -1147,8 +1178,9 @@ impl L1Instance {
     /// already-destroyed instances alike, so there is no `Err` to
     /// return. This primitive is unconditional: rejecting a
     /// `HostCommand::Destroy` from `Activated`/`Processing` (the L0
-    /// legality rule) is the Task-5 composite's gate, not this
-    /// layer's.
+    /// legality rule) is `crate::composite::PluginHost`'s gate — it
+    /// mirrors `lifecycle_state()` through `LifecycleEvent::Destroy`
+    /// before calling this — not this layer's.
     ///
     /// **RT contract:** non-RT only — bounded by `command_timeout`
     /// of shutdown grace plus the kill guarantee.
@@ -1300,6 +1332,33 @@ fn post_command_state(cmd: &wire::Command) -> Option<LifecycleState> {
             Some(LifecycleState::Activated)
         }
         wire::Command::StartProcessing => Some(LifecycleState::Processing),
+        _ => None,
+    }
+}
+
+/// The lifecycle state an `Err` reply still leaves the instance in —
+/// `Some` only for `StopProcessing`, the one commit-then-advisory
+/// verb in the runner's dispatch: it applies
+/// `Processing → Activated` *before* running the
+/// `stop_processing()` hook (`ruviform_plugin_export::Runner`'s exact
+/// ordering, matching L0's `InProcessHost::stop_processing`), so a
+/// hook/plugin-class `Err` arrives after the transition and the
+/// child stays `Activated`. `Err(Lifecycle)` is always the
+/// pre-commit legality rejection — the caller filters it, not this
+/// table.
+///
+/// The full-verb audit behind `Some`/`None`: `Initialize` and
+/// `Activate` either reject pre-commit (`Err(Lifecycle)`) or take
+/// the `InitFailed`/`ActivateFailed` loop back to the pre-command
+/// state; `StartProcessing` commits, then rolls a hook failure back
+/// to `Activated` — likewise its pre-command state; `Deactivate`'s
+/// transition *is* its dispatch, so every `Err` it reports is
+/// pre-commit; `SaveState`, `RestoreState` and the GUI verbs carry
+/// no lifecycle transition at all. Every other `Err` therefore
+/// leaves the child — and the mirror — in the pre-command state.
+fn err_committed_state(cmd: &wire::Command) -> Option<LifecycleState> {
+    match cmd {
+        wire::Command::StopProcessing => Some(LifecycleState::Activated),
         _ => None,
     }
 }
