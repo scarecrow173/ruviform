@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-# Phase 1 基盤クレート群（Issue #17 で仮置き ruviform-core を分割置換）+ video-proc（Issue #26 新設）+ media-io / io-symphonia（Issue #20 新設）+ audio-device adapter（Issue #23 新設）+ plugin-core / plugin-clap / plugin-vst3（Issue #29 新設）+ edit（Issue #96 新設）。層内
+# Phase 1 基盤クレート群（Issue #17 で仮置き ruviform-core を分割置換）+ video-proc（Issue #26 新設）+ media-io / io-symphonia（Issue #20 新設）+ audio-device adapter（Issue #23 新設）+ plugin-core / plugin-clap / plugin-vst3（Issue #29 新設）+ plugin-export（Issue #76 新設）+ edit（Issue #96 新設）。層内
 # 順序: Primitives 最下位（math・rt）→ Primitives（media-core・exec）→
 # Domain foundations（audio-core・video-core → video-proc）→ メディア I/O 抽象境界（media-io）
 # → バックエンド PoC（io-symphonia）→ Adapters（audio-device）→ 拡張層（plugin-*）。実装状態: Issue #18 で
@@ -33,6 +33,8 @@ members = [
     "crates/ruviform-plugin-core",
     "crates/ruviform-plugin-clap",
     "crates/ruviform-plugin-vst3",
+    # プラグイン側 L1 ランナー層（Issue #76 — 子プロセスエントリ run() + 参照 runner bin）
+    "crates/ruviform-plugin-export",
     # Host 層（Issue #74 — L0 インプロセス・ハンドル/コマンド境界）
     "crates/ruviform-plugin-host",
     # Engines（Issue #25 で新設）

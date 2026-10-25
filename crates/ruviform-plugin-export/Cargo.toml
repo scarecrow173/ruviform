@@ -1,0 +1,25 @@
+[package]
+name = "ruviform-plugin-export"
+description = "Thin out-of-process (L1) plugin runner for Ruviform: run(factories) is the child-process entry point driving a singleton plugin instance over the stdio control plane and a shared-memory data plane"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+# Child-side shared-memory attach (plan「依存の確定」— the design dep table
+# records plugin-core only, but `--ruviform-shm-key` attach is impossible
+# without it and hand-rolled unsafe is rejected). Same adoption record /
+# containment condition as plugin-host: MIT OR Apache-2.0, confined to the
+# internal `shm` module, never exposed on the public API or feature names.
+shared_memory = "0.12"
+
+[dev-dependencies]
+# The E2E minimal host needs ProcessConfig/TransportInfo value types.
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+ruviform-media-core = { path = "../ruviform-media-core" }
+
+[lints]
+workspace = true

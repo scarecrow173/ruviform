@@ -70,3 +70,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034LYmCRRqhSAMAdRCj0rX` | Issue #99 色変換カーネル final verification — Task 6 implementation | completed | [issue-99-final-verification-task-6-implementation.md](./issue-99-final-verification-task-6-implementation.md) |
 | `IMPL-034LZxQm9NvTyRHwKdPsGjF` | Issue #99 色変換カーネル closeout — Task 7 implementation | completed | [issue-99-color-conversion-closeout-task-7-implementation.md](./issue-99-color-conversion-closeout-task-7-implementation.md) |
 | `IMPL-034LPNEgk770ZFr8yU3823` | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
+| `IMPL-034LT7uqDVQ21ywpL4up76` | Issue #76 plugin-export crate + L1 runner — Task 2 implementation | completed | [issue-76-plugin-export-task-2-implementation.md](./issue-76-plugin-export-task-2-implementation.md) |

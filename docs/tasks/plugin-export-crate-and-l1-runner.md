@@ -1,23 +1,44 @@
 ---
 id: "TASK-034LNYeFTd7EgCwbDA0GWD"
 type: "task"
-status: "todo"
+status: "done"
 title: "ruviform-plugin-export 新設 + run() ランナー + l1-runner bin"
 created: "2026-10-25"
 updated: "2026-10-25"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-plugin-export/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-plugin-export/README.md"
+      - type: "file"
+        path: "crates/ruviform-plugin-export/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-export/src/shm.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-export/src/bin/ruviform-plugin-l1-runner.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-export/tests/l1_runner_e2e.rs"
+    modified:
+      - type: "file"
+        path: "Cargo.toml"
+      - type: "file"
+        path: "crates/README.md"
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/wire.rs"
+      - type: "file"
+        path: "Cargo.lock"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-76-plugin-export-task-2-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
     - "docs/tasks/l1-core-contracts-and-wire-codec.md"
@@ -108,9 +129,11 @@ approved plan `implement-issue-76-plugin-l1-out-of-process.md` の **actions 5�
 
 ## Verification
 
-- [ ] `mise run check` — exit 0（新規 crate の型チェック）
-- [ ] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
-- [ ] `mise run test` — exit 0（runner E2E 全 pass — 正常系 lifecycle + gain 正当性 + 異常系拒否群）
-- [ ] `rg -n "ruviform-plugin-export" Cargo.toml crates/README.md` — workspace member + 索引行の存在
-- [ ] `cargo tree -p ruviform-plugin-export` — `ruviform-plugin-core` + `shared_memory`（+ transitive）のみ
-- [ ] `rg -n "unsafe" crates/ruviform-plugin-export/src` — 自前 `unsafe` ゼロ（`as_slice`/`as_mut_slice` のみ）
+- [x] `mise run check` — exit 0（新規 crate の型チェック・実 log）
+- [x] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
+- [x] `mise run test` — exit 0（runner E2E 11 tests 全 pass — 正常系 lifecycle + gain 正当性 + 異常系拒否群 — workspace 55 suites・実 log）
+- [x] `rg -n "ruviform-plugin-export" Cargo.toml crates/README.md` — workspace member + 索引行の存在（計 21 クレート）
+- [x] `cargo tree -p ruviform-plugin-export` — `ruviform-plugin-core` + `shared_memory`（+ transitive）のみ（dev-deps: audio-core/media-core）
+- [x] `rg -n "unsafe" crates/ruviform-plugin-export/src` — scoped `#[expect(unsafe_code)]` ×2（`shm.rs` `bytes`/`bytes_mut`・SAFETY コメント付き — deviation: `shared_memory` 0.12.4 の `as_slice`/`as_slice_mut` は `unsafe fn`。task doc の「自前 unsafe ゼロ」想定は設計記載と異なり、局所許可として記録 — 詳細は IR）
+
+補足（task doc の Verification 範囲外・IR に記録）: `mise run fmt-check` exit 0・`mise run test-rt` exit 0（既存レーン無退行 — export は非 RT のみ）。レビュー修正（guarded `descriptor()` panic・`staging_out` 再ゼロ化・argv exit-2 pin・bounded inbound label・`wire::shm` 正本化）は mutation 検証済み — 詳細は `docs/impl/ir/issue-76-plugin-export-task-2-implementation.md`。

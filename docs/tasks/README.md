@@ -80,7 +80,7 @@ Directory: `docs/tasks`
 | TASK-034L6yeVFSaiVUoV4RiRtm | Implement native OFX runtime | done | [ofx-native-runtime-implementation.md](./ofx-native-runtime-implementation.md) |
 | TASK-034L6yh0fBmRabh1TMLv2F | Implement OFX video rendering | done | [ofx-render-implementation.md](./ofx-render-implementation.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
-| TASK-034LNYeFTd7EgCwbDA0GWD | ruviform-plugin-export 新設 + run() ランナー + l1-runner bin | todo | [plugin-export-crate-and-l1-runner.md](./plugin-export-crate-and-l1-runner.md) |
+| TASK-034LNYeFTd7EgCwbDA0GWD | ruviform-plugin-export 新設 + run() ランナー + l1-runner bin | done | [plugin-export-crate-and-l1-runner.md](./plugin-export-crate-and-l1-runner.md) |
 | TASK-034JZPGUI0000000000006 | Issue #30 ADR + 文書クローズ | done | [plugin-gui-poc-closeout.md](./plugin-gui-poc-closeout.md) |
 | TASK-034JZPGUI0000000000005 | plugin-gui PoC ハーネス + 実機実験 | done | [plugin-gui-poc-harness.md](./plugin-gui-poc-harness.md) |
 | TASK-034LNYndN4rzshflcqGHt5 | PluginHost コンポジット + 選択 API + doc 整合 | todo | [plugin-host-composite-and-l1-e2e.md](./plugin-host-composite-and-l1-e2e.md) |

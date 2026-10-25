@@ -103,6 +103,124 @@ pub const WIRE_MAX_STATE_BYTES: u32 = 16 * 1_024 * 1_024;
 /// `1 + payload_len` bytes, and hands the whole frame to [`decode`].
 pub const WIRE_FRAME_HEADER_LEN: usize = 5;
 
+/// The L1 shared-memory data-plane layout — the **authoritative
+/// wire-side definition** of the `[header][in-slots][out-slots]`
+/// segment and the fixed slot record both ends consume:
+/// `ruviform-plugin-host::l1::shm` (the creating owner) and
+/// `ruviform-plugin-export::shm` (the attaching runner). Neither side
+/// re-declares these constants — the layout is wire data, so the
+/// wire contract owner defines it.
+///
+/// All fields are little-endian. The header is 7 `u32` fields
+/// ([`HEADER_LEN`] bytes); each slot is [`SLOT_BYTES`]:
+///
+/// | offset | field | size | notes |
+/// | --- | --- | --- | --- |
+/// | +0 | `seq` | `u64` | echoes the doorbell `seq` |
+/// | +8 | `frames` | `u32` | ≤ [`WIRE_MAX_FRAMES`] |
+/// | +12 | `channels` | `u32` | ≤ [`WIRE_MAX_CHANNELS`] |
+/// | +16 | `event_count` | `u32` | ≤ [`WIRE_MAX_EVENTS`] |
+/// | +20 | `flags` | `u32` | bit0 ([`FLAG_TRANSPORT`]) |
+/// | +24 | `transport` | [`TRANSPORT_LEN`] | wire `TransportInfo` when flagged |
+/// | +120 | `result` | [`RESULT_LEN`] | wire `ProcessResult` (out-slots) |
+/// | +128 | `events` | `event_count * `[`EVENT_WIRE_SIZE`] | wire `Event` records |
+/// | +33920 | `samples` | [`SAMPLES_LEN`] | planar `f32` LE, channel stride [`SAMPLE_STRIDE`] |
+///
+/// The segment holds no shared control state — slot selection is the
+/// doorbell `seq` (`seq % depth`) under strict in/out alternation.
+pub mod shm {
+    use super::{WIRE_MAX_CHANNELS, WIRE_MAX_EVENTS, WIRE_MAX_FRAMES};
+
+    /// Segment magic — `"RVL1"` (Ruviform L1) as four LE bytes,
+    /// validated on attach.
+    pub const MAGIC: u32 = u32::from_le_bytes(*b"RVL1");
+
+    /// Byte length of the fixed segment header (7 LE `u32` fields:
+    /// `magic`, `wire_version`, `in_depth`, `out_depth`, `slot_bytes`,
+    /// `in_off`, `out_off`).
+    pub const HEADER_LEN: usize = 28;
+
+    /// Header field offsets — every field is one LE `u32`.
+    pub const OFF_MAGIC: usize = 0;
+    /// Header `wire_version` field offset.
+    pub const OFF_WIRE_VERSION: usize = 4;
+    /// Header `in_depth` field offset.
+    pub const OFF_IN_DEPTH: usize = 8;
+    /// Header `out_depth` field offset.
+    pub const OFF_OUT_DEPTH: usize = 12;
+    /// Header `slot_bytes` field offset.
+    pub const OFF_SLOT_BYTES: usize = 16;
+    /// Header `in_off` field offset.
+    pub const OFF_IN_OFF: usize = 20;
+    /// Header `out_off` field offset.
+    pub const OFF_OUT_OFF: usize = 24;
+
+    /// `flags` bit 0: the slot carries a wire-encoded `TransportInfo`
+    /// in its `transport` region. All other bits are reserved and
+    /// must be zero.
+    pub const FLAG_TRANSPORT: u32 = 1;
+
+    /// Slot field offsets — `seq` is `u64`, the rest are `u32`.
+    pub const SLOT_OFF_SEQ: usize = 0;
+    /// Slot `frames` field offset.
+    pub const SLOT_OFF_FRAMES: usize = 8;
+    /// Slot `channels` field offset.
+    pub const SLOT_OFF_CHANNELS: usize = 12;
+    /// Slot `event_count` field offset.
+    pub const SLOT_OFF_EVENT_COUNT: usize = 16;
+    /// Slot `flags` field offset.
+    pub const SLOT_OFF_FLAGS: usize = 20;
+
+    /// Byte offset of the slot `transport` region.
+    pub const TRANSPORT_OFF: usize = 24;
+    /// Reserved capacity of the `transport` region — the maximum
+    /// wire size of `TransportInfo` under `WIRE_VERSION` 1 is 91 B.
+    pub const TRANSPORT_LEN: usize = 96;
+    /// Byte offset of the slot `result` region.
+    pub const RESULT_OFF: usize = TRANSPORT_OFF + TRANSPORT_LEN;
+    /// Reserved capacity of the `result` region — a wire
+    /// `ProcessResult` is 5 B.
+    pub const RESULT_LEN: usize = 8;
+    /// Byte offset of the slot `events` region.
+    pub const EVENTS_OFF: usize = RESULT_OFF + RESULT_LEN;
+    /// Byte length of one wire-encoded `Event` record under
+    /// `WIRE_VERSION` 1 (`u32` offset + `u8` kind + `u32` param id +
+    /// `f64` value + `u64` reserved ×2).
+    pub const EVENT_WIRE_SIZE: usize = 33;
+    /// Byte offset of the slot `samples` region.
+    pub const SAMPLES_OFF: usize = EVENTS_OFF + EVENT_WIRE_SIZE * WIRE_MAX_EVENTS as usize;
+    /// Byte stride of one channel plane inside `samples`
+    /// (`WIRE_MAX_FRAMES` LE `f32`s).
+    pub const SAMPLE_STRIDE: usize = WIRE_MAX_FRAMES as usize * 4;
+    /// Byte length of the fixed-capacity `samples` region
+    /// (`WIRE_MAX_CHANNELS` planes).
+    pub const SAMPLES_LEN: usize = WIRE_MAX_CHANNELS as usize * SAMPLE_STRIDE;
+    /// Fixed byte length of one in/out slot under `WIRE_VERSION` 1.
+    pub const SLOT_BYTES: usize = SAMPLES_OFF + SAMPLES_LEN;
+
+    /// Byte offset of the in-slot array — always right after the
+    /// header.
+    pub const IN_SLOTS_OFF: usize = HEADER_LEN;
+
+    /// Byte offset of the out-slot array for `in_depth` in-slots —
+    /// the value stored in the header `out_off` field.
+    #[must_use]
+    pub const fn out_slots_off(in_depth: u32) -> usize {
+        HEADER_LEN + in_depth as usize * SLOT_BYTES
+    }
+
+    /// The declared segment length: header plus `in_depth` +
+    /// `out_depth` slots (saturating — callers size mappings with it;
+    /// on Windows the mapped length may round up to the allocation
+    /// granularity, so attach checks coverage, not equality).
+    #[must_use]
+    pub const fn segment_len(in_depth: u32, out_depth: u32) -> usize {
+        HEADER_LEN
+            .saturating_add((in_depth as usize).saturating_mul(SLOT_BYTES))
+            .saturating_add((out_depth as usize).saturating_mul(SLOT_BYTES))
+    }
+}
+
 /// One frame on the wire — the six message kinds of the L1 protocol.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
@@ -1335,6 +1453,43 @@ mod tests {
 
     fn config() -> ProcessConfig {
         ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, 512).unwrap()
+    }
+
+    /// The `shm` layout constants form one chain — every offset is
+    /// derived, so both the host-side owner and the runner-side
+    /// attach compute the same segment byte-for-byte.
+    #[test]
+    fn shm_layout_offsets_are_self_consistent() {
+        assert_eq!(shm::OFF_MAGIC + 4, shm::OFF_WIRE_VERSION);
+        assert_eq!(shm::OFF_WIRE_VERSION + 4, shm::OFF_IN_DEPTH);
+        assert_eq!(shm::OFF_IN_DEPTH + 4, shm::OFF_OUT_DEPTH);
+        assert_eq!(shm::OFF_OUT_DEPTH + 4, shm::OFF_SLOT_BYTES);
+        assert_eq!(shm::OFF_SLOT_BYTES + 4, shm::OFF_IN_OFF);
+        assert_eq!(shm::OFF_OUT_OFF + 4, shm::HEADER_LEN);
+        assert_eq!(shm::SLOT_OFF_FLAGS + 4, shm::TRANSPORT_OFF);
+        assert_eq!(shm::TRANSPORT_OFF + shm::TRANSPORT_LEN, shm::RESULT_OFF);
+        assert_eq!(shm::RESULT_OFF + shm::RESULT_LEN, shm::EVENTS_OFF);
+        assert_eq!(shm::EVENTS_OFF, 128);
+        assert_eq!(
+            shm::EVENTS_OFF + shm::EVENT_WIRE_SIZE * WIRE_MAX_EVENTS as usize,
+            shm::SAMPLES_OFF
+        );
+        assert_eq!(shm::SAMPLE_STRIDE, WIRE_MAX_FRAMES as usize * 4);
+        assert_eq!(
+            shm::SAMPLES_LEN,
+            WIRE_MAX_CHANNELS as usize * shm::SAMPLE_STRIDE
+        );
+        assert_eq!(shm::SAMPLES_OFF + shm::SAMPLES_LEN, shm::SLOT_BYTES);
+        assert_eq!(shm::IN_SLOTS_OFF, shm::HEADER_LEN);
+        assert_eq!(shm::out_slots_off(3), shm::HEADER_LEN + 3 * shm::SLOT_BYTES);
+        assert_eq!(
+            shm::segment_len(2, 3),
+            shm::HEADER_LEN + 5 * shm::SLOT_BYTES
+        );
+        // A maximal wire `TransportInfo` (91 B) fits the region; a
+        // wire `ProcessResult` (5 B) fits `RESULT_LEN`.
+        const { assert!(shm::TRANSPORT_LEN >= 91); }
+        const { assert!(shm::RESULT_LEN >= 5); }
     }
 
     fn roundtrip(message: &Message) -> Message {
