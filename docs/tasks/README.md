@@ -41,7 +41,7 @@ Directory: `docs/tasks`
 | TASK-034KPgQj9u5utlkxH3JGqv | edit 評価射影 + テスト・文書クローズ | done | [edit-evaluation-and-closeout.md](./edit-evaluation-and-closeout.md) |
 | TASK-034JglHTIvjo18tMdbO3DP | 採否 ADR 確定とワークスペース帳簿・索引の同期 | done | [finalize-backend-adr-and-sync-docs.md](./finalize-backend-adr-and-sync-docs.md) |
 | TASK-034J6PpKd8jNFxEYS4CRdM | 時間演算の早期飽和・Err 修正（i128 中間演算） | done | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
-| TASK-034LFHl0gbFixJl7RmlzQm | IccTransform + IccIntent 実装（feature icc・moxcms 経路） | todo | [icc-transform-feature.md](./icc-transform-feature.md) |
+| TASK-034LFHl0gbFixJl7RmlzQm | IccTransform + IccIntent 実装（feature icc・moxcms 経路） | done | [icc-transform-feature.md](./icc-transform-feature.md) |
 | TASK-034J5KQD1rDMZHFRah7pU0 | ruviform-audio-core のデータモデル実装 | done | [implement-audio-core-data-model.md](./implement-audio-core-data-model.md) |
 | TASK-034Jglv8LtJHUgWH3wlu0o | ruviform-audio-core の device ポート定義と契約テスト | done | [implement-audio-core-device-port.md](./implement-audio-core-device-port.md) |
 | TASK-034JglAvWUFQoLhvYXOw2O | ruviform-audio-device クレート新設と cpal adapter 実装 | done | [implement-audio-device-cpal-adapter.md](./implement-audio-device-cpal-adapter.md) |

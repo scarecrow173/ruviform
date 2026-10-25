@@ -57,14 +57,14 @@ spec `docs/specs/color-conversion-kernels.md`・approved design `docs/designs/co
 - **alpha**: moxcms `Layout::Rgba` の alpha パススルー経路を使い、alpha は変換しない（実装時に alpha 非変換を検証し doc に規約明記）
 - **`ColorInfo` 更新**: `dst.color = {primaries: Unspecified, transfer: Unspecified, matrix: Identity, range: Full, hdr: None}` — ICC profile が記述する色空間は CICP enum へ写像できないため unspecified が正直な記録（consumer が既知なら `set_color` で上書き）。`pts`/`duration` は `src` から伝播
 - **検証/エラー規約**: 全検証は書込み前 — 共有 `dst` は `InvalidValue("dst plane")`・format 不適合は `InvalidValue("src format")`/`"dst format"`・寸法不一致は `InvalidValue("dimensions")`。拒否呼出しは `dst` を一切変更しない（panic-free・部分書込みなし）
-- **等価性契約**: pin した moxcms バージョン + feature 集合（`default-features = false` + `lut` + `extended_range`・SIMD 系無効）の出力が参照 — executor は決定的（スカラー経路のみ・ホスト非依存）であり、正規化/量子化 shim は厳密なため golden vector は executor 出力に対し **bit-exact** で検証する。moxcms バージョン/feature 変更時は golden を再導出する。クロスエンジン等価性（lcms2/qcms との一致）は契約外
+- **等価性契約**: pin した moxcms バージョン + feature 集合（`default-features = false` + `lut` + `extended_range`・SIMD 系無効）の出力が参照 — executor は同一 build 構成内で決定的（スカラー経路のみだが、moxcms `mlaf` が aarch64 NEON baseline・`target_feature = "fma"` x86/x86_64 で fused FMA を選択するため、bit 出力は target-feature/architecture 間で異なり得る）。正規化/量子化 shim は厳密なため golden vector は同一 build 構成上で executor 出力に対し **bit-exact** で検証する — literal golden vector は x86_64 非 FMA baseline（CI `icc-verify` lane）に pin し `cfg` でゲートする。moxcms バージョン/feature 変更時は golden を再導出する。クロスエンジン等価性（lcms2/qcms との一致）は契約外
 - **extended range**: `RgbaF32` dst は moxcms extended-mode 出力（負・1 超を保持 — HDR/広色域 profile 変換の情報損失を防ぐ）、`Rgba8` dst は量子化 clamp
 - **RT 契約**: `process` は `**RT contract:**` ラベル付き alloc-free・非ブロッキング・有界 — moxcms executor が事前構築パイプライン上の純粋写像である設計に依拠（実装レビューで確認）。`rt_process_*` 命名テスト（repeatable/deterministic・ソース非破壊 — alloc 機械検出は別 Issue）を持ち、feature `icc` 有効時の `mise run test-rt` 相当経路で選択可能。ctor は非 RT
 - **検証経路の別レーン**: `cargo test --workspace`（default feature）は icc 配下を検証しない — `cargo test -p ruviform-video-proc --features icc` を実行する mise タスク（plan が `test-video-proc-icc`/`lint-video-proc-icc` を定義）と CI ステップが存在し、feature 有効列が実際に選択・実行される
 
 ## Examples
 
-- **sRGB→sRGB identity 相当**: 同一 sRGB ICC profile（fixture バイト列）の `IccTransform` が `Rgba8`→`Rgba8` で executor 参照出力と bit-exact — golden vector を pin 版 moxcms で導出・同梱
+- **sRGB→sRGB identity 相当**: 同一 sRGB ICC profile（fixture バイト列）の `IccTransform` が `Rgba8`→`Rgba8` で executor 参照出力と bit-exact — golden vector を pin 版 moxcms（x86_64 非 FMA baseline）で導出・同梱し、literal golden テストは `target_arch`/`target_feature` の `cfg` でゲート
 - **`Rgba8`→`RgbaF32` / `RgbaF32`→`Rgba8` / `RgbaF32`→`RgbaF32`**: 端点組合せの golden — `RgbaF32` 出力は extended range で [0,1] 外を保持、`Rgba8` 出力は `round(clamp·255)`（± 境界は厳密）
 - **ctor 拒否**: 不正/切詰 profile バイト列 → `InvalidValue("icc profile")`（`dst` ・フレーム不関与）。transform 構築不能な profile 組合せ → `InvalidValue("icc transform")`
 - **alpha 非変換**: alpha = 0.5 系の入力画素で出力 alpha が入力と一致（moxcms alpha パススルー規約の実証）

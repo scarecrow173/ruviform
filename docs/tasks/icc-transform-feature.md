@@ -1,23 +1,46 @@
 ---
 id: "TASK-034LFHl0gbFixJl7RmlzQm"
 type: "task"
-status: "todo"
+status: "done"
 title: "IccTransform + IccIntent 実装（feature icc・moxcms 経路）"
 created: "2026-10-25"
 updated: "2026-10-25"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/icc.rs"
+      - type: "file"
+        path: "crates/ruviform-video-proc/tests/fixture/srgb.icc"
+      - type: "file"
+        path: "crates/ruviform-video-proc/tests/fixture/display_p3.icc"
+      - type: "file"
+        path: "crates/ruviform-video-proc/tests/fixture/gray_gamma22.icc"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-video-proc/Cargo.toml"
+      - type: "file"
+        path: "Cargo.lock"
+      - type: "file"
+        path: "crates/ruviform-video-proc/src/lib.rs"
+      - type: "file"
+        path: "mise.toml"
+      - type: "file"
+        path: ".github/workflows/ci.yml"
+      - type: "file"
+        path: ".gitattributes"
+      - type: "file"
+        path: "docs/test-specs/icc-transform-contract-tests.md"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-99-icc-transform-task-4-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
     - "docs/tasks/rgba-f32-format-and-transfer-internals.md"
@@ -78,10 +101,10 @@ approved plan `implement-issue-99-color-conversion-kernels.md` の **actions 9�
 
 ## Verification
 
-- [ ] `mise run test-video-proc-icc` — exit 0（feature-on テスト全 pass・bit-exact golden 一致）
-- [ ] `mise run lint-video-proc-icc` — exit 0
-- [ ] `mise run test` / `mise run lint` — exit 0（feature-off ベース経路無退行）
-- [ ] `cargo tree -p ruviform-video-proc` — feature-off ツリーに `moxcms` を含まない
-- [ ] `rg -n 'cfg.*feature = "icc"' crates/ruviform-video-proc/src/lib.rs` — mod/re-export が feature-gated
-- [ ] `rg -n "icc" crates/ruviform-video-proc/Cargo.toml` — optional dep + `icc = ["dep:moxcms"]` 定義
-- [ ] `rg -n "test-video-proc-icc|lint-video-proc-icc" mise.toml .github/workflows/ci.yml` — lane 定義が両方に存在
+- [x] `mise run test-video-proc-icc` — exit 0（feature-on テスト全 pass — lib 163/163・doctests 24/24・bit-exact golden 一致・実 log）
+- [x] `mise run lint-video-proc-icc` — exit 0（clippy `--all-targets --features icc -D warnings` clean）
+- [x] `mise run test` / `mise run lint` — exit 0（feature-off ベース経路無退行・実 log）
+- [x] `cargo tree -p ruviform-video-proc` — feature-off ツリーに `moxcms` を含まない（media-core/video-core のみ実確認）
+- [x] `rg -n 'cfg.*feature = "icc"' crates/ruviform-video-proc/src/lib.rs` — mod/re-export が feature-gated（L137 `mod icc`・L148 `pub use`）
+- [x] `rg -n "icc" crates/ruviform-video-proc/Cargo.toml` — optional dep + `icc = ["dep:moxcms"]` 定義（L13–24・L27）
+- [x] `rg -n "test-video-proc-icc|lint-video-proc-icc" mise.toml .github/workflows/ci.yml` — lane 定義が両方に存在（mise.toml L125/L128・ci.yml L147–151）

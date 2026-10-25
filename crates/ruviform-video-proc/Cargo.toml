@@ -10,6 +10,21 @@ publish.workspace = true
 [dependencies]
 ruviform-media-core = { path = "../ruviform-media-core" }
 ruviform-video-core = { path = "../ruviform-video-core" }
+# Optional ICC engine behind feature `icc` (Issue #99 /
+# docs/designs/color-conversion-kernels.md): BSD-3-Clause OR Apache-2.0,
+# pure-Rust 3-crate tree (moxcms + num-traits + pxfm), MSRV 1.89.
+# `default-features = false` keeps moxcms's `#![forbid(unsafe_code)]`
+# active; `lut` covers mft1/mft2/mAB LUT profiles and `extended_range`
+# enables `allow_extended_range_rgb_xyz` ([0,1]-preserving f32 output).
+# SIMD/`in_place`/`options`/`any_to_any` stay off (scalar reference path).
+# `any_to_any` in particular must stay off: enabling it later would
+# break the alloc-free `process` contract — the Katana executor it
+# selects allocates per transform.
+moxcms = { version = "0.9", optional = true, default-features = false, features = ["lut", "extended_range"] }
+
+[features]
+default = []
+icc = ["dep:moxcms"]
 
 [lints]
 workspace = true

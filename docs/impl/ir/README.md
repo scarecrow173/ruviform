@@ -65,3 +65,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034LFHxKq9vNmTzRwYpJdG` | Issue #99 RgbaF32 format + transfer internals — Task 1 implementation | completed | [issue-99-rgba-f32-transfer-task-1-implementation.md](./issue-99-rgba-f32-transfer-task-1-implementation.md) |
 | `IMPL-034LINnXPOUOZEuD5lHPdy` | Issue #99 working-space kernels — Task 2 implementation | completed | [issue-99-working-space-kernels-task-2-implementation.md](./issue-99-working-space-kernels-task-2-implementation.md) |
 | `IMPL-034LJ7kQmXwNpVtRhYsZdF` | Issue #99 ToneMapSdr kernel — Task 3 implementation | completed | [issue-99-tone-map-sdr-task-3-implementation.md](./issue-99-tone-map-sdr-task-3-implementation.md) |
+| `IMPL-034LLGAQ0YeoT4FWlZ6YyD` | Issue #99 IccTransform + IccIntent — Task 4 implementation | completed | [issue-99-icc-transform-task-4-implementation.md](./issue-99-icc-transform-task-4-implementation.md) |
