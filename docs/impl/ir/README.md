@@ -68,3 +68,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034LLGAQ0YeoT4FWlZ6YyD` | Issue #99 IccTransform + IccIntent — Task 4 implementation | completed | [issue-99-icc-transform-task-4-implementation.md](./issue-99-icc-transform-task-4-implementation.md) |
 | `IMPL-034LMyg7k2P0ar6eR0gedo` | Issue #99 RgbaF32 composite/affine arms — Task 5 implementation | completed | [issue-99-rgba-f32-arms-task-5-implementation.md](./issue-99-rgba-f32-arms-task-5-implementation.md) |
 | `IMPL-034LYmCRRqhSAMAdRCj0rX` | Issue #99 色変換カーネル final verification — Task 6 implementation | completed | [issue-99-final-verification-task-6-implementation.md](./issue-99-final-verification-task-6-implementation.md) |
+| `IMPL-034LZxQm9NvTyRHwKdPsGjF` | Issue #99 色変換カーネル closeout — Task 7 implementation | completed | [issue-99-color-conversion-closeout-task-7-implementation.md](./issue-99-color-conversion-closeout-task-7-implementation.md) |

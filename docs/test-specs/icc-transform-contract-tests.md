@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034LFCoZvNuuSaGpSTrbp0"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "IccTransform ICC 経路 契約テスト仕様"
 created: "2026-10-25"
 updated: "2026-10-25"
@@ -38,7 +38,7 @@ relations:
 
 # IccTransform ICC 経路 契約テスト仕様
 
-> status: proposed — 未実施の検証文書。run 可能コマンド（`--features icc` 選択列を含む）は task 側に定義する（本書は契約と oracle の正本）。
+> status: approved — Issue #99 の実装（Task 4 + Task 6 full gate・feature `icc` lane 全 green）で契約が実結果により確認済み。run 可能コマンド（`--features icc` 選択列を含む）は task 側に定義する（本書は契約と oracle の正本）。
 
 ## Purpose
 

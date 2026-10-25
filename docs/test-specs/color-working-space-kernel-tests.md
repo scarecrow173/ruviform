@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034LFChh51ZlHnSWXsKqDw"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "video-proc 色変換・working space カーネル テスト仕様"
 created: "2026-10-25"
 updated: "2026-10-25"
@@ -38,7 +38,7 @@ relations:
 
 # video-proc 色変換・working space カーネル テスト仕様
 
-> status: proposed — 未実施の検証文書。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
+> status: approved — Issue #99 の実装（Task 1–6・full gate 全 green）で契約が実結果により確認済み。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
 
 ## Purpose
 
