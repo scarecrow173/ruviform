@@ -31,6 +31,9 @@ Directory: `docs/test-specs`
 | TSPEC-034Jg6YSP6CLjJHnFGG5oL | プラグイン基盤 API の契約保証 | approved | [plugin-foundation.md](./plugin-foundation.md) |
 | TSPEC-034JZPGUI0000000000004 | プラグイン GUI PoC 判定規則 | approved | [plugin-gui-poc.md](./plugin-gui-poc.md) |
 | TSPEC-5ibPChaXqhbfYjL713aqKw | plugin-host L0 テスト仕様 | approved | [plugin-host-l0-tests.md](./plugin-host-l0-tests.md) |
+| TSPEC-034LNXHpBkMIVTg6nAQUVh | plugin L1 プロキシ契約（コマンド parity・クラッシュ Failed・pass-through・RT 脚）テスト仕様 | proposed | [plugin-l1-proxy-contract-tests.md](./plugin-l1-proxy-contract-tests.md) |
+| TSPEC-034LNXHUv8qjXSdWNUU2Ps | plugin L1 runner（ruviform-plugin-export）E2E テスト仕様 | proposed | [plugin-l1-runner-e2e-tests.md](./plugin-l1-runner-e2e-tests.md) |
+| TSPEC-034LNXxXa2vencBWSvgemD | plugin L1 ワイヤ codec・ライフサイクル Failed 拡張 テスト仕様 | proposed | [plugin-l1-wire-codec-tests.md](./plugin-l1-wire-codec-tests.md) |
 | TSPEC-034JxNwt3ReMphshEaeFVe | SPSC・退役・スナップショット交換の RT 契約保証 | approved | [rt-channel-and-snapshot-contracts.md](./rt-channel-and-snapshot-contracts.md) |
 | TSPEC-034JxNxcYxa29rPklpknWh | RtContext・Processor 契約・MasterClock の RT 契約保証 | approved | [rt-context-and-processor-contract.md](./rt-context-and-processor-contract.md) |
 | TSPEC-034KV6hs4k3mZ6jVBgDaKf | RT 観測コスト計測 PoC ハーネスの計測保証 | approved | [rt-observability-poc-tests.md](./rt-observability-poc-tests.md) |

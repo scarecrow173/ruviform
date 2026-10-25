@@ -29,6 +29,7 @@ Directory: `docs/plans`
 | PLAN-034JOq2pk8YxpxyUXNJGFN | Issue #59 chunk 分割時の per-chunk timestamp 合成の実施 | approved | [implement-issue-59-chunk-timestamp.md](./implement-issue-59-chunk-timestamp.md) |
 | PLAN-FcYqNdQHMlWhhFuRcYDyWi | Issue #74 実施計画 — ruviform-plugin-host（L0）新設 | approved | [implement-issue-74-plugin-host-l0.md](./implement-issue-74-plugin-host-l0.md) |
 | PLAN-FHZdvjxcjsxFNodfVh9zOt | Issue #75 実施計画 — ruviform-dsp 新設 | approved | [implement-issue-75-ruviform-dsp.md](./implement-issue-75-ruviform-dsp.md) |
+| PLAN-034LNXQmQvHjRBD57FCPBw | Issue #76 実施計画 — プラグイン L1 アウトプロセス分離（plugin-export 新設 + plugin-host L1 プロキシ） | approved | [implement-issue-76-plugin-l1-out-of-process.md](./implement-issue-76-plugin-l1-out-of-process.md) |
 | PLAN-034KoNkBdCIchL4xE1DI7Y | Issue #90 実施計画 — 音楽時間モデル（media-core::music） | approved | [implement-issue-90-music-time-media-core.md](./implement-issue-90-music-time-media-core.md) |
 | PLAN-034KoNkBdCIchL4xE1DI7Z | Issue #91 実施計画 — 音楽時間 ABI 拡張（TransportInfo.musical + CLAP/VST3 写像） | approved | [implement-issue-91-musical-transport-abi.md](./implement-issue-91-musical-transport-abi.md) |
 | PLAN-034Kq8IiJyWJrYeKbeaNK9 | Issue #92 実施計画 — ruviform-audio-analysis 新設 | approved | [implement-issue-92-audio-analysis.md](./implement-issue-92-audio-analysis.md) |

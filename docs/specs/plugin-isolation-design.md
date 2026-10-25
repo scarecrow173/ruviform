@@ -31,6 +31,8 @@ relations:
     - "docs/adr/plugin-isolation-strategy.md"
     - "docs/designs/plugin-isolation.md"
     - "docs/specs/plugin-host-l0.md"
+    - "docs/discovery/plugin-l1-out-of-process.md"
+    - "docs/specs/plugin-l1-out-of-process.md"
   verifies: []
   verified-by: []
   references: []

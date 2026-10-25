@@ -36,6 +36,10 @@ relations:
   derived-by:
     - "docs/plans/implement-issue-74-plugin-host-l0.md"
     - "docs/test-specs/plugin-host-l0-tests.md"
+    - "docs/discovery/plugin-l1-out-of-process.md"
+    - "docs/specs/plugin-l1-out-of-process.md"
+    - "docs/designs/plugin-l1-out-of-process.md"
+    - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-host-l0-tests.md"
