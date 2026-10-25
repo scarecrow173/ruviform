@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034LNXHpBkMIVTg6nAQUVh"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "plugin L1 プロキシ契約（コマンド parity・クラッシュ Failed・pass-through・RT 脚）テスト仕様"
 created: "2026-10-25"
 updated: "2026-10-25"
@@ -40,7 +40,7 @@ relations:
 
 # plugin L1 プロキシ契約（コマンド parity・クラッシュ Failed・pass-through・RT 脚）テスト仕様
 
-> status: proposed — Issue #76 の plugin-host L1 プロキシ + `PluginHost` コンポジットの受入契約。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
+> status: approved — Issue #76 の実装（Task 1–6・full gate 全 green・`l1_proxy_e2e` 42 tests + `rt_l1_*` 2 件実選択）で契約が実結果により確認済み。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
 
 ## Purpose
 
@@ -63,7 +63,7 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed）・approved design `d
 - **pass-through（spec AC5）**: 健全インスタンスのアンダーラン → 直前に受信した出力ブロック（受信歴なし → 無音）・`Failed` → 無音。いずれも `Ok(ProcessResult::CONTINUE)` — RT 面の定義済み拒否は pass-through 出力そのものでハングしない。submit/result チャネル満杯・応答遅延・無応答はエラーでなくフォールバック
 - **遅延契約**: `lookahead_blocks`（既定 2）× `block_frames / sample_rate`（2 × 512f @ 48 kHz ≈ 21.3 ms）— API doc・crate doc に明記。ブロック面に wall-clock タイムアウトは置かない（underrun が機構）
 - **shm データ面**: インスタンス毎に named segment 1 本（proxy が一意 key `pid + slot + counter` で生成・argv `--ruviform-shm-key` で子へ引き渡し・所有権は proxy・Destroy/drop で unlink）。`[header][in-slots][out-slots]`・slot `{seq u64, frames u32, channels u32, event_count u32, flags, transport wire, result wire, events wire, samples f32[]}`・`WIRE_MAX_FRAMES = 8192`/`WIRE_MAX_CHANNELS = 16`/`WIRE_MAX_EVENTS = 1024`（slot ≈ 550 KB・D=3 ≈ 3.3 MB/インスタンス）。`Activate` の `ProcessConfig` が上限超 → `Err(HostError::Prepare(PrepareError::UnsupportedConfig))`
-- **shm 制御状態なし**: head/tail・ロック・atomic 配置を shm に持たない — スロット選択は doorbell `seq`（`seq % D`）・in/out は厳密交互制御（producer は `done seq-D` 受領後にのみ再利用）・doorbell バイト列が release/acquire エッジ（writer `compiler_fence(Release)` 前・reader `compiler_fence(Acquire)` 後）・shm アクセスは `as_slice`/`as_mut_slice` のみ（自前 `unsafe` ゼロ）
+- **shm 制御状態なし**: head/tail・ロック・atomic 配置を shm に持たない — スロット選択は doorbell `seq`（`seq % D`）・in/out は厳密交互制御（producer は `done seq-D` 受領後にのみ再利用）・doorbell バイト列が release/acquire エッジ（writer `atomic::fence(Release)` 前・reader `atomic::fence(Acquire)` 後 — 実装は `std::sync::atomic::fence` の hardware fence・design 初出文言の `compiler_fence` から Task 4 で強化済み）・shm アクセスは `as_slice`/`as_mut_slice` のみ（自前 `unsafe` ゼロ）
 - **RT 契約（spec AC3）**: submit/result 両脚は `ruviform_rt::channel`（`u64` seq）— RT 側は `try_push`/`try_pop` + 事前確保 staging への bounded memcpy のみ（pipe/shm/ブロッキング read は driver/reader 側）。`rt_l1_process_path_no_alloc`（assert_no_alloc 窓で `process` try 経路 0 alloc）・`rt_l1_result_leg_try_ops` を持ち `mise run test-rt` で選択可能。非 RT テスト名に `rt_` を含めない
 - **拒否面一覧**: 違法 lifecycle 遷移 → `Err(HostError::Lifecycle(_))`（子側 `Lifecycle` 判定）・`Failed` インスタンスへのコマンド（`Destroy` 除く）→ `Err(HostError::Failed)`・`Failed` への `Destroy` → `Ok`・`Failed` への `process` → `Ok(CONTINUE)` + 無音・spawn/handshake/version/transport 失敗・コマンド応答タイムアウト → `Err(HostError::Ipc)`（タイムアウトは併せて `Failed` 遷移）・L1 への `OpenGui`/`CloseGui` → `Err(HostError::Unsupported)`（proxy が子へ送らず拒否）・`Activate` 上限超 → `Prepare(UnsupportedConfig)`・重複 plugin_id → `DuplicatePluginId`
 - **`shared_memory` 隔離**: `shared_memory` の利用は internal `shm` モジュールに閉じ込め・公開 API・feature 名に露出しない（design 採用条件・置換コスト ~200 LOC）

@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034LNXxXa2vencBWSvgemD"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "plugin L1 ワイヤ codec・ライフサイクル Failed 拡張 テスト仕様"
 created: "2026-10-25"
 updated: "2026-10-25"
@@ -40,7 +40,7 @@ relations:
 
 # plugin L1 ワイヤ codec・ライフサイクル Failed 拡張 テスト仕様
 
-> status: proposed — Issue #76 の L1 実装前提となる plugin-core 共有基盤の契約。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
+> status: approved — Issue #76 の実装（Task 1–6・full gate 全 green）で契約が実結果により確認済み。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
 
 ## Purpose
 

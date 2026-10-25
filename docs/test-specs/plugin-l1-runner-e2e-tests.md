@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034LNXHUv8qjXSdWNUU2Ps"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "plugin L1 runner（ruviform-plugin-export）E2E テスト仕様"
 created: "2026-10-25"
 updated: "2026-10-25"
@@ -40,7 +40,7 @@ relations:
 
 # plugin L1 runner（ruviform-plugin-export）E2E テスト仕様
 
-> status: proposed — Issue #76 の `ruviform-plugin-export` クレート新設・薄いランナー・参照 runner の受入契約。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
+> status: approved — Issue #76 の実装（Task 2・Task 6 full gate 全 green・`l1_runner_e2e` 11 tests）で契約が実結果により確認済み。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
 
 ## Purpose
 

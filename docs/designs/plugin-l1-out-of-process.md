@@ -163,7 +163,7 @@ pub struct Descriptor {                 // PluginDescriptor の所有 wire 形
 
 - `shared_memory` の named segment を **インスタンス毎に 1 本**。proxy が `os_id` に一意 key（pid + slot + counter 由来）を生成して作成し、argv `--ruviform-shm-key` で子へ引き渡して attach。所有権は proxy、Destroy/drop で unlink。
 - レイアウト: `[header][in-slots][out-slots]`。header = `{magic, wire_version, in_depth, out_depth, slot_bytes, in_off, out_off}`。slot = `{seq u64, frames u32, channels u32, event_count u32, flags, transport wire, result wire, events wire, samples f32[]}`。固定上限は wire 定数 `WIRE_MAX_FRAMES = 8192`・`WIRE_MAX_CHANNELS = 16`・`WIRE_MAX_EVENTS = 1024`（slot ≈ 550 KB、D=3 で ≈ 3.3 MB/インスタンス）。`Activate` の `ProcessConfig` が上限超なら `Prepare(UnsupportedConfig)` で defined rejection — codec 境界での検証は untrusted データの検証として wire 層に置く。
-- **shm 内に共有制御状態を持たない**: head/tail インデックス・ロック・atomic 配置を置かず、スロット選択は doorbell の `seq` が担い、in/out は厳密な交互制御（producer は `done seq-D` 受領後にのみ slot `seq%D` を再利用）。doorbell バイト列がプロセス間の release/acquire エッジを構成する — writer は doorbell 送信前に `core::sync::atomic::compiler_fence(Ordering::Release)`、reader は受信後に `compiler_fence(Ordering::Acquire)` を打ち、shm アクセスは安全な `as_slice`/`as_mut_slice` のみ（**自前 `unsafe` ゼロ**が shm 機構選定の条件）。
+- **shm 内に共有制御状態を持たない**: head/tail インデックス・ロック・atomic 配置を置かず、スロット選択は doorbell の `seq` が担い、in/out は厳密な交互制御（producer は `done seq-D` 受領後にのみ slot `seq%D` を再利用）。doorbell バイト列がプロセス間の release/acquire エッジを構成する — writer は doorbell 送信前に `std::sync::atomic::fence(Ordering::Release)`、reader は受信後に `atomic::fence(Ordering::Acquire)` を打ち（実装は hardware fence — `compiler_fence` は同一 process 内のコンパイラ並べ替え規制に留まり cross-process 可視性を保証しないため Issue #76 Task 4 で強化・Task 7 closeout で本書へ同期）、shm アクセスは安全な `as_slice`/`as_mut_slice` のみ（**自前 `unsafe` ゼロ**が shm 機構選定の条件）。
 
 ### plugin-export（薄いランナー）
 

@@ -1,23 +1,46 @@
 ---
 id: "TASK-034LNYvBEBtmjJIUa6xJMi"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue #76 プラグイン L1 分離 closeout"
 created: "2026-10-25"
 updated: "2026-10-25"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "docs/impl/ir/issue-76-plugin-l1-closeout-task-7-implementation.md"
+    modified:
+      - type: "file"
+        path: "docs/tasks/plugin-l1-closeout.md"
+      - type: "file"
+        path: "docs/tasks/README.md"
+      - type: "file"
+        path: "docs/impl/ir/README.md"
+      - type: "file"
+        path: "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
+      - type: "file"
+        path: "docs/plans/README.md"
+      - type: "file"
+        path: "docs/test-specs/plugin-l1-wire-codec-tests.md"
+      - type: "file"
+        path: "docs/test-specs/plugin-l1-proxy-contract-tests.md"
+      - type: "file"
+        path: "docs/test-specs/plugin-l1-runner-e2e-tests.md"
+      - type: "file"
+        path: "docs/test-specs/README.md"
+      - type: "file"
+        path: "docs/designs/plugin-l1-out-of-process.md"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-76-plugin-l1-closeout-task-7-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
     - "docs/tasks/plugin-l1-final-verification.md"
@@ -47,6 +70,6 @@ canonical closeout（plan action 19）: 実績 IR（`docs/impl/ir/`）・coverag
 
 ## Verification
 
-- [ ] `mise exec -- node .agents/skills/doc-status/scripts/doc_status.js audit --json` — exit 0・0 findings（全 doc 編集後に実実行）
-- [ ] `rg -q '^status: "completed"$' docs/plans/implement-issue-76-plugin-l1-out-of-process.md` — exit 0（全 7 task 完了の実 closeout 後に plan status を `"completed"` へ遷移済み）
+- [x] `mise exec -- node .agents/skills/doc-status/scripts/doc_status.js audit --json` — exit 0・0 findings（2026-10-25・全 doc 編集後に実実行）
+- [x] `rg -q '^status: "completed"$' docs/plans/implement-issue-76-plugin-l1-out-of-process.md` — exit 0（全 7 task 完了の実 closeout 後に plan status を `"completed"` へ遷移済み）
 - **expected**: IR/coverage/status は immutable な実 log のレビューから記述 — 新規メトリクス再計算なし・検証未実施のまま status を進めない。GitHub merge は lead の authoritative `gh` のみ
