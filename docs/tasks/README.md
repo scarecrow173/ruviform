@@ -88,7 +88,7 @@ Directory: `docs/tasks`
 | TASK-AMKTeO5Inr8CXr3RzX3uOV | ruviform-plugin-host クレート実装 + テスト | done | [plugin-host-l0-crate.md](./plugin-host-l0-crate.md) |
 | TASK-034JZLISO0000000000005 | plugin-host API 整合検証 + Issue #31 クローズ | done | [plugin-isolation-verify.md](./plugin-isolation-verify.md) |
 | TASK-034LNYvBEBtmjJIUa6xJMi | Issue #76 プラグイン L1 分離 closeout | todo | [plugin-l1-closeout.md](./plugin-l1-closeout.md) |
-| TASK-034LNYv07MQpWKTmfQ3vX0 | Issue #76 プラグイン L1 分離 final verification | todo | [plugin-l1-final-verification.md](./plugin-l1-final-verification.md) |
+| TASK-034LNYv07MQpWKTmfQ3vX0 | Issue #76 プラグイン L1 分離 final verification | done | [plugin-l1-final-verification.md](./plugin-l1-final-verification.md) |
 | TASK-034JfHz5u1uXcPkG8d8t4B | PoC 採否 ADR 確定（エビデンス集約・confirm/revise・accepted 遷移） | done | [poc-adr-finalize.md](./poc-adr-finalize.md) |
 | TASK-034JgsGOtyuy2MkLRLZQI5 | clack 系による CLAP binding PoC（最小ゲインプラグイン） | done | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
 | TASK-034JfHyxKSwvhiQ0sKqjXQ | PoC フロントエンド比較と配布検証（Solid 移植・単一バイナリ・OS 別方針） | done | [poc-frontend-and-dist.md](./poc-frontend-and-dist.md) |

@@ -1,0 +1,1368 @@
+[test] $ cargo test --workspace
+   Compiling ruviform-plugin-host v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.98s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio-e2545b2bd8adcb9e.exe)
+
+running 8 tests
+test tests::denormal_flush_in_graph_order ... ok
+test tests::rt_callback_path_no_alloc ... ok
+test tests::rt_denormal_flush_no_alloc ... ok
+test tests::mixer_sums_planar_channels ... ok
+test tests::plan_swap_applies_next_block ... ok
+test tests::graph_pull_drives_nodes_in_order ... ok
+test tests::denormal_flush_zeroes_denormals ... ok
+test tests::session_drives_plan_through_callback ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio_analysis-5d8dafe7e0728db6.exe)
+
+running 15 tests
+test level::tests::empty_channel_yields_zero_levels ... ok
+test level::tests::rejects_channel_count_mismatch ... ok
+test level::tests::rejects_zero_channels ... ok
+test peaks::tests::empty_input_yields_zero_pairs ... ok
+test spectrum::tests::nyquist_tone_lands_in_last_bin ... ok
+test level::tests::rt_process_allocates_nothing ... ok
+test peaks::tests::more_bins_than_samples_pads_with_zero_pairs ... ok
+test peaks::tests::uneven_tail_bin_is_shorter ... ok
+test level::tests::measures_peak_and_rms_per_channel ... ok
+test spectrum::tests::dc_signal_concentrates_in_bin_zero ... ok
+test peaks::tests::decimates_into_min_max_pairs ... ok
+test spectrum::tests::rejects_non_power_of_two_size ... ok
+test spectrum::tests::short_input_zero_pads_and_long_input_truncates ... ok
+test peaks::tests::rejects_zero_bins ... ok
+test spectrum::tests::rt_process_allocates_nothing ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio_core-46be6155c2db2315.exe)
+
+running 47 tests
+test buffer::tests::buffer_and_views_expose_spec_and_slab ... ok
+test buffer::tests::from_interleaved_places_frame_major_samples ... ok
+test buffer::tests::from_interleaved_validates_source_length ... ok
+test buffer::tests::channel_mut_writes_through ... ok
+test buffer::tests::new_keeps_its_panic_contract - should panic ... ok
+test buffer::tests::interleaved_copies_validate_slice_length ... ok
+test buffer::tests::empty_specs_are_legal ... ok
+test buffer::tests::new_allocates_zeroed_channel_major_slab ... ok
+test buffer::tests::f64_buffers_use_the_same_layout ... ok
+test buffer::tests::rt_view_mut_try_new_feeds_interleaved_boundary_write ... ok
+test buffer::tests::try_new_rejects_oversized_shapes ... ok
+test buffer::tests::spec_channels_comes_from_layout ... ok
+test buffer::tests::try_new_returns_buffer_for_valid_spec ... ok
+test buffer::tests::view_mut_try_new_rejects_invalid_shapes ... ok
+test buffer::tests::copy_from_interleaved_updates_planar_slab ... ok
+test format::tests::audio_format_is_a_copy_value_type ... ok
+test format::tests::sample_format_default_is_f32 ... ok
+test buffer::tests::view_mut_try_new_borrows_a_channel_major_slab ... ok
+test layout::tests::custom_layout_keeps_its_mask ... ok
+test layout::tests::custom_layout_rejects_empty_mask ... ok
+test layout::tests::custom_payload_is_structurally_non_empty ... ok
+test layout::tests::speaker_mask_bit_operations ... ok
+test planar::tests::empty_views_expose_no_samples ... ok
+test planar::tests::read_view_borrows_independent_channels ... ok
+test layout::tests::known_layouts_map_to_their_masks ... ok
+test planar::tests::read_view_rejects_heterogeneous_frame_lengths ... ok
+test planar::tests::rt_planar_read_view_construction_and_access ... ok
+test planar::tests::rt_planar_write_view_construction_and_access ... ok
+test planar::tests::write_view_borrows_and_writes_independent_channels ... ok
+test planar::tests::write_view_rejects_heterogeneous_frame_lengths ... ok
+test sample::tests::bytes_match_scalar_sizes ... ok
+test sample::tests::generic_buffer_code_uses_default_as_zero ... ok
+test tests::device_contract::device_error_is_copy_display_and_std_error ... ok
+test tests::device_contract::mock_backend_walks_the_port_flow ... ok
+test tests::device_contract::output_data_callback_accepts_hrtb_closure ... ok
+test tests::device_contract::public_enums_expose_the_intended_variants ... ok
+test tests::device_contract::port_traits_compose_as_send_boxed_trait_objects ... ok
+test tests::rt_interleaved_roundtrip_via_views ... ok
+test tests::rt_sample_index_media_time_conversion ... ok
+test tests::rt_view_channel_access ... ok
+test tests::version_is_not_empty ... ok
+test time::tests::media_time_to_sample_index_exact_at_44100 ... ok
+test time::tests::media_time_to_sample_index_negative_rounding ... ok
+test time::tests::media_time_to_sample_index_rounds_per_mode ... ok
+test time::tests::sample_index_media_time_roundtrip ... ok
+test time::tests::media_time_to_sample_index_overflow_is_error ... ok
+test time::tests::sample_index_to_media_time_is_exact ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio_device-ff8e33d6cc25c6fd.exe)
+
+running 43 tests
+test convert::tests::boundary_drops_malformed_reports_instead_of_folding_to_unknown ... ok
+test convert::tests::map_sample_format_maps_floats_only ... ok
+test convert::tests::map_supported_buffer_size_drops_only_contradictory_bounds ... ok
+test convert::tests::map_supported_range_maps_valid_reports_verbatim ... ok
+test convert::tests::negotiate_fixed_accepts_via_unknown_bound_among_ranges ... ok
+test convert::tests::negotiate_matches_rate_channels_and_default_buffer ... ok
+test convert::tests::negotiate_rejects_unsupported_requests ... ok
+test convert::tests::map_sample_format_rejects_integers_and_dsd ... ok
+test convert::tests::layout_for_channels_rejects_unknown_counts ... ok
+test convert::tests::negotiate_default_sizes_scratch_from_the_loosest_match ... ok
+test convert::tests::negotiate_fixed_considers_every_matching_range ... ok
+test convert::tests::layout_for_channels_maps_known_counts ... ok
+test convert::tests::negotiate_fixed_must_fit_reported_range ... ok
+test convert::tests::chain_genuine_unknown_admits_fixed_but_malformed_cannot ... ok
+test convert::tests::negotiate_skips_malformed_ranges ... ok
+test convert::tests::negotiate_default_falls_back_when_no_bound_reported ... ok
+test convert::tests::pack_chunk_failure_zero_fills_dst ... ok
+test convert::tests::synthesize_default_prefers_same_channels_and_48k ... ok
+test convert::tests::synthesize_default_returns_none_without_mappable_channels ... ok
+test convert::tests::synthesize_default_skips_malformed_rate_bounds ... ok
+test convert::tests::write_interleaved_bounds_chunks_by_actual_scratch ... ok
+test convert::tests::write_interleaved_chunk_timestamp_add_overflow_keeps_original ... ok
+test convert::tests::write_interleaved_chunk_timestamp_none_playback_stays_none ... ok
+test convert::tests::write_interleaved_chunks_when_frames_exceed_capacity ... ok
+test convert::tests::write_interleaved_packs_planar_into_frame_major ... ok
+test convert::tests::write_interleaved_single_chunk_keeps_info_unchanged ... ok
+test convert::tests::write_interleaved_synthesizes_per_chunk_timestamps ... ok
+test convert::tests::write_interleaved_zero_fills_unwritten_and_tail ... ok
+test error::tests::device_changed_is_a_non_fatal_advisory ... ok
+test error::tests::device_not_available_maps_per_context ... ok
+test error::tests::direct_variants_map_identically_on_both_paths ... ok
+test error::tests::mapped_errors_never_allocate_and_stay_displayable ... ok
+test error::tests::unclassifiable_variants_map_to_backend_classifications ... ok
+test host_impl::tests::default_host_reports_a_consistent_id ... ok
+test error::tests::xrun_is_xrun_only_on_the_error_callback_path ... ok
+test host_impl::tests::default_host_selects_the_first_available_id ... ok
+test host_impl::tests::host_id_exposes_a_static_name ... ok
+test host_impl::tests::host_is_a_device_enumerator ... ok
+test stream::tests::instant_to_media_time_falls_back_to_epoch_delta ... ok
+test stream::tests::instant_to_media_time_none_when_both_overflow ... ok
+test stream::tests::instant_to_media_time_primary_path ... ok
+test stream::tests::map_output_timestamp_carries_callback_and_playback ... ok
+test stream::tests::rt_output_callback_path_allocates_nothing ... ok
+
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\mock_backend.rs (target\debug\deps\mock_backend-5eb33862e0fa3077.exe)
+
+running 4 tests
+test adapter_host_satisfies_the_same_enumerator_contract ... ok
+test ports_are_object_safe_and_send ... ok
+test full_session_flow_over_boxed_trait_objects ... ok
+test closures_coerce_onto_the_hrtb_callback_types ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_dsp-aac6a318e814663a.exe)
+
+running 10 tests
+test tests::biquad_design_rejects_out_of_range ... ok
+test tests::fir_matches_kernel_semantics_with_history ... ok
+test tests::resampler_identity_and_downsample ... ok
+test tests::fft_roundtrips_impulse_and_constant ... ok
+test tests::resampler_block_processing_equals_one_shot ... ok
+test tests::window_coefficients_match_definitions ... ok
+test tests::biquad_filter_passes_dc_through_lowpass ... ok
+test tests::rt_process_paths_do_not_allocate ... ok
+test tests::biquad_process_multi_channel ... ok
+test tests::fir_rejects_overlength_and_mismatch ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_edit-2d95505439aa2da2.exe)
+
+running 33 tests
+test error::tests::display_covers_every_variant ... ok
+test eval::tests::disabled_track_contributes_no_element ... ok
+test eval::tests::empty_timeline_evaluates_to_no_active_clips ... ok
+test eval::tests::cross_base_at_converts_once_into_timeline_base ... ok
+test eval::tests::at_conversion_overflow_returns_time_overflow ... ok
+test error::tests::media_core_errors_normalize ... ok
+test eval::tests::residual_may_collapse_to_an_empty_range ... ok
+test eval::tests::gap_positions_and_half_open_bounds_emit_nothing ... ok
+test eval::tests::move_clip_onto_equal_start_resolves_to_later_insertion ... ok
+test eval::tests::source_mapping_respects_the_source_base ... ok
+test eval::tests::overlap_resolves_to_the_latest_start ... ok
+test eval::tests::per_track_gaps_are_independent ... ok
+test eval::tests::evaluation_is_deterministic ... ok
+test eval::tests::overlap_on_equal_start_resolves_to_later_insertion ... ok
+test eval::tests::removed_clip_and_removed_track_contribute_nothing ... ok
+test eval::tests::source_time_maps_through_nonzero_in_and_residual_clamps ... ok
+test eval::tests::trim_clip_onto_equal_start_resolves_to_later_insertion ... ok
+test model::tests::add_track_appends_and_mints_monotonic_ids ... ok
+test model::tests::end_is_the_max_resolved_clip_end ... ok
+test model::tests::insert_clip_propagates_time_overflow ... ok
+test eval::tests::foreign_base_clip_evaluates_in_timeline_base ... ok
+test model::tests::insert_clip_rejects_base_collapsed_ranges ... ok
+test eval::tests::active_clips_follow_track_insertion_order ... ok
+test model::tests::insert_clip_rejects_kind_mismatch_and_bad_attributes ... ok
+test model::tests::insert_clip_rejects_non_positive_duration ... ok
+test model::tests::insert_clip_rejects_range_longer_than_source ... ok
+test model::tests::insert_clip_sorts_by_start_and_normalizes_range ... ok
+test model::tests::move_clip_resorts_and_keeps_duration ... ok
+test model::tests::remove_clip_returns_it_and_rejects_stale_ids ... ok
+test model::tests::remove_track_returns_it_and_ids_stay_stale ... ok
+test model::tests::new_timeline_is_empty ... ok
+test model::tests::set_track_enabled_toggles_the_flag ... ok
+test model::tests::trim_clip_respecifies_atomically_and_resorts ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_exec-39afacbb68237c03.exe)
+
+running 9 tests
+test offline::tests::offline_run_reports_progress ... ok
+test offline::tests::offline_run_sequential_matches_input_order ... ok
+test tests::version_is_not_empty ... ok
+test thread_priority::tests::display_covers_every_variant ... ok
+test offline::tests::offline_run_maps_worker_panic ... ok
+test offline::tests::offline_run_aggregates_prepare_failure ... ok
+test thread_priority::tests::promotion_returns_result ... ok
+test offline::tests::offline_run_cancels_at_chunk_boundary ... ok
+test offline::tests::offline_run_parallel_deterministic_output ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_io_symphonia-20791d2f2a0c7612.exe)
+
+running 15 tests
+test demuxer::tests::media_time_converts_to_seconds ... ok
+test demuxer::tests::media_time_fractional_position_converts ... ok
+test error::tests::decode_and_unsupported_map_to_their_kinds ... ok
+test map::tests::discrete_channels_land_on_reserved_bits ... ok
+test error::tests::seek_errors_split_between_unsupported_and_invalid_value ... ok
+test source::tests::probe_preserves_position ... ok
+test map::tests::empty_channels_yield_no_layout ... ok
+test error::tests::io_error_maps_to_io_kind ... ok
+test map::tests::positioned_standard_layouts_map_exactly ... ok
+test map::tests::pcm_codecs_map_to_pcm_id ... ok
+test source::tests::seekable_source_reports_real_length ... ok
+test map::tests::nonstandard_positioned_mask_preserves_count ... ok
+test map::tests::six_point_one_mask_reorders_side_channels ... ok
+test source::tests::unseekable_source_is_reported_honestly ... ok
+test error::tests::unexpected_eof_maps_to_unexpected_eos ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\wav_decode_poc.rs (target\debug\deps\wav_decode_poc-5e080b214e44d584.exe)
+
+running 7 tests
+test probe_rejects_non_container_bytes ... ok
+test demux_enumerates_the_wav_stream ... ok
+test make_decoder_rejects_unknown_streams_and_capabilities_split ... ok
+test seek_positions_the_next_packet ... ok
+test packets_carry_stream_pts_and_duration ... ok
+test decoder_rejects_packets_for_other_streams ... ok
+test decode_yields_planar_f32_frames_with_progressing_pts ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_math-c8c0f83988efcef0.exe)
+
+running 22 tests
+test dsp::tests::add_matches_scalar_reference ... ok
+test simd_poc::tests::add_produces_elementwise_sum ... ok
+test dsp::tests::detect_returns_constructible_level ... ok
+test simd_poc::tests::fir_convolves_with_zero_history ... ok
+test simd_poc::tests::scale_multiplies_by_gain ... ok
+test simd_poc::tests::denormal_f32_is_subnormal ... ok
+test dsp::tests::small_size_routes_scalar_and_matches_reference ... ok
+test simd_poc::tests::sine_coeffs_for_omega_builds_undamped_recurrence ... ok
+test simd_poc::tests::biquad_processes_planar_channels_independently ... ok
+test simd_poc::tests::fir_impulse_tap_copies_src ... ok
+test simd_poc::tests::fir_taps_fixture_is_deterministic ... ok
+test simd_poc::tests::clamp_unit_bounds_and_propagates_nan ... ok
+test simd_poc::tests::dot_accumulates_products_in_order ... ok
+test simd_poc::tests::fade_applies_index_ramp ... ok
+test simd_poc::tests::biquad_runs_direct_form_two_recurrence ... ok
+test simd_poc::tests::denormal_mix_replaces_periodically ... ok
+test simd_poc::tests::sine_recurrence_updates_output_and_state ... ok
+test simd_poc::tests::uniform_f32_is_deterministic_and_in_range ... ok
+test simd_poc::tests::xorshift64_star_is_deterministic ... ok
+test tests::version_is_not_empty ... ok
+test dsp::tests::rt_dsp_kernels_no_alloc ... ok
+test dsp::tests::forced_levels_match_scalar_reference_all_sizes ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\simd_equiv.rs (target\debug\deps\simd_equiv-e64caea69015cc54.exe)
+
+running 10 tests
+test registry_lists_expected_columns ... ok
+test matrix_cells_cover_registry ... ok
+test matrix_dot ... ok
+test matrix_sine ... ok
+test matrix_scale ... ok
+test matrix_clamp_unit ... ok
+test matrix_add ... ok
+test matrix_fade ... ok
+test matrix_biquad ... ok
+test matrix_fir ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.48s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_media_core-aab6bbe1ec17efbe.exe)
+
+running 48 tests
+test error::tests::display_covers_every_variant ... ok
+test music::tests::musical_position_none_without_signature ... ok
+test music::tests::preroll_negative_tick ... ok
+test music::tests::tick_to_media_constant_tempo ... ok
+test stream::tests::descriptor_is_a_copy_value_type ... ok
+test stream::tests::descriptor_may_omit_duration ... ok
+test music::tests::rt_conversion_no_alloc ... ok
+test music::tests::tick_arithmetic ... ok
+test music::tests::media_to_tick_roundtrip ... ok
+test music::tests::tick_to_media_anchor_exact ... ok
+test music::tests::musical_time_info_is_copy_24b ... ok
+test music::tests::builder_sorts_and_validates ... ok
+test tests::rt_checked_arithmetic ... ok
+test tests::rt_convert_exact_and_rounding ... ok
+test music::tests::tick_to_media_milli_bpm ... ok
+test music::tests::time_info_snapshot ... ok
+test music::tests::musical_position_decomposes ... ok
+test tests::rt_cross_base_ordering ... ok
+test tests::rt_drop_frame_roundtrip ... ok
+test tests::version_is_not_empty ... ok
+test time::tests::chained_conversion_error_is_bounded_by_per_hop_half_ticks ... ok
+test time::tests::checked_add_sub ... ok
+test time::tests::checked_add_sub_delta_wider_than_i64 ... ok
+test time::tests::checked_end_agrees_with_checked_add ... ok
+test time::tests::checked_end_applies_each_rounding_mode_once ... ok
+test time::tests::checked_end_errors_only_on_final_overflow ... ok
+test time::tests::conversion_exact_and_rounding ... ok
+test time::tests::conversion_overflow_surfaces ... ok
+test time::tests::cross_base_equality_ordering_and_hash ... ok
+test time::tests::duration_display_seconds ... ok
+test time::tests::duration_is_signed_and_converts ... ok
+test time::tests::frame_duration_is_the_reciprocal_tick_length ... ok
+test time::tests::frame_rate_normalizes_and_validates ... ok
+test time::tests::negative_duration_moves_both_directions ... ok
+test time::tests::negative_time_is_pre_roll ... ok
+test time::tests::nominal_fps_rounds_half_up_to_broadcast_nominals ... ok
+test time::tests::range_end_delta_wider_than_i64 ... ok
+test time::tests::range_end_in_starts_base ... ok
+test time::tests::round_trip_error_is_bounded_by_summed_half_ticks ... ok
+test time::tests::time_base_normalizes_and_validates ... ok
+test time::tests::single_conversion_error_is_bounded_by_half_tick ... ok
+test timecode::tests::drop_labels_2997 ... ok
+test timecode::tests::drop_labels_5994 ... ok
+test timecode::tests::drop_requires_ntsc_rate ... ok
+test timecode::tests::negative_time_is_rejected ... ok
+test timecode::tests::non_drop_labels ... ok
+test timecode::tests::sub_fps_rate_is_rejected ... ok
+test transport::tests::snapshot_carries_status_and_position ... ok
+
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_media_io-e352c67f241cf18d.exe)
+
+running 40 tests
+test capability::tests::capabilities_send_bounds ... ok
+test capability::tests::default_reports_nothing_provided ... ok
+test codec::tests::private_bytes_are_kept_opaque ... ok
+test codec::tests::codec_id_is_carried_with_name ... ok
+test demux::tests::demux_send_bounds ... ok
+test capability::tests::features_combine_as_a_bit_set ... ok
+test codec::tests::codec_send_bounds ... ok
+test capability::tests::codec_lookup_needs_both_flag_and_listing ... ok
+test decode::tests::decode_send_bounds ... ok
+test decode::tests::drain_defaults_to_noop ... ok
+test demux::tests::stub_demuxer_enumerates_and_reads_to_eos ... ok
+test demux::tests::seek_is_accepted_as_a_request ... ok
+test encode::tests::drain_defaults_to_noop ... ok
+test codec::tests::format_mapping_yields_domain_formats ... ok
+test decode::tests::flush_discards_pending_output ... ok
+test decode::tests::stub_decoder_pumps_packets_to_frames ... ok
+test encode::tests::encode_send_bounds ... ok
+test encode::tests::mismatched_frame_variant_is_an_error ... ok
+test encode::tests::stub_encoder_pumps_frames_to_packets ... ok
+test error::tests::display_covers_every_kind ... ok
+test error::tests::error_send_bounds ... ok
+test error::tests::io_error_maps_to_io_kind ... ok
+test error::tests::kind_classification_is_carried ... ok
+test error::tests::upstream_value_errors_map_to_normalized_kinds ... ok
+test error::tests::source_is_carried_type_erased ... ok
+test frame::tests::audio_frame_buffer_access_and_take ... ok
+test frame::tests::audio_frame_carries_pts_and_duration ... ok
+test frame::tests::frame_enum_pts_matches_inner ... ok
+test frame::tests::frame_send_bounds ... ok
+test mux::tests::mux_send_bounds ... ok
+test mux::tests::object_form_is_usable ... ok
+test packet::tests::flags_combine_and_query ... ok
+test mux::tests::stub_muxer_takes_ownership_and_finishes ... ok
+test packet::tests::packet_holds_every_field_verbatim ... ok
+test packet::tests::packet_send_bounds ... ok
+test packet::tests::timestamps_may_be_absent ... ok
+test source::tests::boxed_source_crosses_threads ... ok
+test source::tests::cursor_is_a_media_source ... ok
+test tests::boundary_types_cross_threads ... ok
+test tests::version_is_not_empty ... ok
+
+test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_clap-824a24e1cc893487.exe)
+
+running 46 tests
+test adapt::tests::adapt_transport_maps_status_position_and_loop ... ok
+test adapt::tests::adapt_transport_maps_musical_fields ... ok
+test adapt::tests::atomic_lifecycle_forward_chain_and_destroy ... ok
+test adapt::tests::build_block_views_paired_stereo_is_borrowed_zero_copy ... ok
+test adapt::tests::build_block_views_rejects_partial_range_overlap ... ok
+test adapt::tests::map_process_result_maps_neutral_statuses ... ok
+test adapt::tests::atomic_lifecycle_violations_leave_honest_state ... ok
+test adapt::tests::adapt_transport_musical_gates_and_unset_forms ... ok
+test adapt::tests::build_block_views_rejects_cross_alias_and_duplicate_outputs ... ok
+test adapt::tests::build_block_views_rejects_asymmetric_pairs ... ok
+test adapt::tests::build_block_views_rejects_excess_channels ... ok
+test adapt::tests::atomic_lifecycle_failed_survives_the_atomic_round_trip ... ok
+test adapt::tests::in_place_pair_classifies_and_scales_shared_buffer ... ok
+test adapt::tests::param_mirror_roundtrip_is_atomic_plain ... ok
+test adapt::tests::build_block_views_rejects_malformed_output_descriptors ... ok
+test adapt::tests::atomic_lifecycle_reactivation_cycle ... ok
+test adapt::tests::to_process_config_maps_activation_bounds ... ok
+test adapt::tests::null_channel_pointers_are_legal_only_at_zero_frames ... ok
+test adapt::tests::build_block_views_rejects_f64_only_and_mismatched_pairs ... ok
+test adapt::tests::translate_events_skips_non_param_and_foreign_events ... ok
+test adapt::tests::to_process_config_rejects_invalid_activation ... ok
+test adapt::tests::translate_events_bounds_count_and_offsets ... ok
+test adapt::tests::translate_events_sorts_same_offset_events_stably ... ok
+test gain::tests::in_place_mode_scales_output_as_input ... ok
+test gain::tests::empty_block_flushes_events_and_sleeps ... ok
+test gain::tests::rt_process_full_stereo_block ... ok
+test gain::tests::param_events_apply_sample_accurately ... ok
+test gain::tests::unknown_param_ids_are_ignored ... ok
+test plugin::tests::host_driven_entry_runs_full_lifecycle_through_abi ... ok
+test plugin::tests::host_driven_process_rejection_surfaces_as_error ... ok
+test plugin::tests::lifecycle_activate_failure_reports_initialized ... ok
+test plugin::tests::lifecycle_deactivate_while_processing_is_rejected_honestly ... ok
+test plugin::tests::lifecycle_happy_path_maps_created_to_destroyed ... ok
+test plugin::tests::lifecycle_destroy_from_initialized_only ... ok
+test plugin::tests::lifecycle_process_before_start_is_protocol_violation ... ok
+test plugin::tests::process_accepts_transport_and_steady_time ... ok
+test plugin::tests::lifecycle_reactivation_cycles_are_legal ... ok
+test plugin::tests::process_in_place_block_scales_shared_region ... ok
+test plugin::tests::process_rejects_frames_beyond_negotiated_max ... ok
+test plugin::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test plugin::tests::rt_process_off_audio_thread_is_defined_rejection ... ok
+test plugin::tests::process_without_audio_ports_flushes_events_and_sleeps ... ok
+test plugin::tests::rt_process_on_audio_thread_passes_thread_check ... ok
+test plugin::tests::process_applies_param_event_sample_accurately ... ok
+test tests::public_surface_is_binding_neutral ... ok
+test tests::version_is_not_empty ... ok
+
+test result: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_core-093cda5a8314b518.exe)
+
+running 60 tests
+test bus::tests::channels_comes_from_layout ... ok
+test event::tests::sorted_bounded_list_is_accepted ... ok
+test event::tests::zero_frame_block_flushes_only_offset_zero ... ok
+test lifecycle::tests::failed_is_terminal_and_only_destroy_escapes ... ok
+test lifecycle::tests::failure_destinations_stay_put ... ok
+test event::tests::sort_events_undersized_scratch_falls_back_to_insertion ... ok
+test event::tests::empty_list_and_event_reserved ... ok
+test event::tests::rt_sort_worst_case_moves_stay_n_log_n ... ok
+test event::tests::offsets_are_bounded_by_block_frames ... ok
+test lifecycle::tests::destroy_requires_prior_deactivate ... ok
+test event::tests::sort_events_is_stable_and_alloc_free ... ok
+test lifecycle::tests::failed_is_reachable_from_every_live_state ... ok
+test lifecycle::tests::failed_reports_via_state_queries ... ok
+test event::tests::unsorted_input_is_rejected ... ok
+test lifecycle::tests::forward_chain_is_legal ... ok
+test lifecycle::tests::display_formats_illegal_transition ... ok
+test descriptor::tests::descriptor_holds_literal_fields ... ok
+test lifecycle::tests::protocol_violations_are_rejected ... ok
+test lifecycle::tests::stop_processing_lands_in_activated_not_initialized ... ok
+test lifecycle::tests::reactivation_cycles_are_legal ... ok
+test param::tests::degenerate_range_normalizes_to_zero ... ok
+test param::tests::flags_bitmask_ops ... ok
+test param::tests::normalize_denormalize_round_trip ... ok
+test param::tests::default_normalized_uses_plain_default ... ok
+test param::tests::out_of_range_clamps_and_non_finite_rejected ... ok
+test processor::tests::process_copies_through_views_zero_copy ... ok
+test tests::process_config_and_context_reserved ... ok
+test processor::tests::process_config_validates_bounds ... ok
+test tests::rt_event_list_validation ... ok
+test tests::rt_lifecycle_transition_table ... ok
+test tests::rt_param_value_mapping ... ok
+test tests::rt_process_call_with_borrowed_views ... ok
+test tests::rt_transport_snapshot_accessors ... ok
+test tests::version_is_not_empty ... ok
+test transport::tests::snapshot_carries_status_position_and_loop ... ok
+test wire::tests::boundary_tokens_roundtrip ... ok
+test wire::tests::command_roundtrip_covers_every_verb ... ok
+test wire::tests::decode_rejects_bad_tags_and_invariant_violations ... ok
+test wire::tests::decode_rejects_impossible_counts_without_allocating ... ok
+test wire::tests::decode_rejects_declared_lengths_over_wire_max ... ok
+test wire::tests::decode_rejects_length_mismatch ... ok
+test wire::tests::decode_rejects_nonzero_reserved_and_bad_utf8 ... ok
+test wire::tests::decode_rejects_unknown_kind_and_trailing_payload ... ok
+test wire::tests::decode_rejects_short_and_truncated_frames ... ok
+test wire::tests::doorbells_roundtrip ... ok
+test wire::tests::descriptor_from_static_and_field_equivalence ... ok
+test wire::tests::descriptor_field_codec_roundtrip_and_bounds ... ok
+test wire::tests::event_rejects_nan_and_unknown_kind ... ok
+test wire::tests::event_and_event_list_roundtrip ... ok
+test wire::tests::hello_roundtrip_and_version_is_carried_verbatim ... ok
+test wire::tests::encode_appends_one_frame_per_call ... ok
+test wire::tests::frame_layout_is_little_endian_and_length_prefixed ... ok
+test wire::tests::host_error_field_roundtrip ... ok
+test wire::tests::media_time_roundtrip_and_bad_base_rejected ... ok
+test wire::tests::process_config_and_result_roundtrip ... ok
+test wire::tests::reply_roundtrip_carries_every_host_error ... ok
+test wire::tests::reply_roundtrip_covers_every_payload ... ok
+test wire::tests::shm_layout_offsets_are_self_consistent ... ok
+test wire::tests::transport_roundtrip_minimal_and_full ... ok
+test wire::tests::wire_error_display_is_observable ... ok
+
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\video_contract.rs (target\debug\deps\video_contract-dfbda66734affb34.exe)
+
+running 8 tests
+test descriptor_view_borrows_all_fields ... ok
+test plain_param_value_stable_copy_variants ... ok
+test video_process_config_accepts_neutral_formats ... ok
+test plain_param_info_choice_metadata_contract ... ok
+test descriptor_view_borrows_owned_strings ... ok
+test video_process_config_validates_nonzero_dims ... ok
+test generic_consumer_compiles_without_ofx_types ... ok
+test plain_param_info_double_metadata_contract ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_export-19fb6984392f2cba.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\bin\ruviform-plugin-l1-runner.rs (target\debug\deps\ruviform_plugin_l1_runner-63144e12c9699d73.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_runner_e2e.rs (target\debug\deps\l1_runner_e2e-ad335532d00e5306.exe)
+
+running 11 tests
+test e2e_shm_attach_failure ... ok
+test e2e_plugin_panic_is_plugin_failed_and_child_survives ... ok
+test e2e_happy_path ... ok
+test e2e_blockin_requires_processing ... ok
+test e2e_descriptor_panic_at_argv_exits_failure ... ok
+test e2e_shm_header_mismatch ... ok
+test e2e_stdin_eof_exits_zero ... ok
+test e2e_underwritten_channels_are_zero_filled ... ok
+test e2e_version_mismatch_is_a_parent_side_handshake_failure ... ok
+test e2e_descriptor_panic_at_scan_is_plugin_failed ... ok
+test e2e_argv_rejections ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_host-791fb841a16b8056.exe)
+
+running 11 tests
+test tests::activate_failure_reports_activate_failed ... ok
+test tests::process_requires_processing_state ... ok
+test tests::reused_slot_generations_do_not_alias ... ok
+test tests::gui_unsupported_by_default ... ok
+test tests::instantiate_unknown_id_rejected ... ok
+test tests::rt_process_no_alloc ... ok
+test tests::scan_lists_registered_factories ... ok
+test tests::stale_handle_rejected ... ok
+test tests::lifecycle_command_chain ... ok
+test tests::state_roundtrip ... ok
+test tests::illegal_transitions_rejected ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\bin\l1-test-worker.rs (target\debug\deps\l1_test_worker-394f65ae97ee7779.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_proxy_e2e.rs (target\debug\deps\l1_proxy_e2e-35e1973e5a911097.exe)
+
+running 42 tests
+test activate_over_wire_limit_rejected ... ok
+test composite_e2e::duplicate_plugin_id_is_a_defined_rejection ... ok
+test composite_e2e::stale_handles_never_cross_route ... ok
+test composite_e2e::l1_kill_reports_failed_once ... ok
+test composite_e2e::l1_stop_processing_advisory_err_still_reports_activated ... ok
+test command_parity_lifecycle_and_state ... ok
+test lookahead_zero_is_rejected ... ok
+test handshake_descriptor_mismatch ... ok
+test composite_e2e::shadowed_factory_registration_keeps_first_claimant ... ok
+test destroy_is_clean_teardown ... ok
+test composite_e2e::l1_destroy_honours_lifecycle_legality ... ok
+test drop_reaps_live_child ... ok
+test destroy_detaches_reader_when_heir_holds_stdout ... ok
+test crash_transitions_failed_and_notifies ... ok
+test gui_defined_rejection ... ok
+test handshake_version_mismatch ... ok
+test read_out_slot_rejects_dims_over_activated_contract ... ok
+test rt_l1_process_path_no_alloc ... ok
+test rt_l1_result_leg_try_ops ... ok
+test shm_create_gives_up_on_persistent_collision ... ok
+test shm_create_retries_past_stale_name ... ok
+test shm_header_roundtrip_matches_wire_layout ... ok
+test shm_unique_keys_never_repeat ... ok
+test stage_in_zero_fills_planes_without_a_source ... ok
+test submit_carries_staging_generation_and_stale_is_dropped ... ok
+test spawn_failure_is_ipc ... ok
+test illegal_transitions_match_l0_semantics ... ok
+test process_after_crash_passes_through_then_silences ... ok
+test kill_transitions_failed_and_notifies ... ok
+test process_hung_child_passes_through_without_blocking ... ok
+test process_over_capacity_block_is_ipc_error ... ok
+test process_requires_processing_state ... ok
+test composite_e2e::mixed_routes_full_series ... ok
+test composite_e2e::runner_bin_serves_real_gain_plugin ... ok
+test voluntary_exit_zero_is_failure ... ok
+test process_underrun_passes_through_defined_output ... ok
+test rejected_block_replies_resolve_pass_through ... ok
+test reactivation_cycle_never_publishes_stale_blocks ... ok
+test process_roundtrip_gain_and_lookahead_delay ... ok
+test handshake_scan_timeout ... ok
+test hang_converges_on_command_timeout ... ok
+test wedged_child_write_converges_and_teardown_is_bounded ... ok
+
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_ofx-ae727318811ac994.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\bridge_min.rs (target\debug\deps\bridge_min-b732ada19271c158.exe)
+
+running 1 test
+test t::probe_each ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\bridge_native.rs (target\debug\deps\bridge_native-e8c0c8453842b02b.exe)
+
+running 1 test
+test native::native_bridge_executes_sdk_actions_and_all_suite_probes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\native_host.rs (target\debug\deps\native_host-6e45c238e3ddc0a0.exe)
+
+running 36 tests
+test canonical_path_cache_does_not_repeat_native_admission ... ok
+test empty_identifier_rejected_per_entry ... ok
+test failed_begin_render_skips_bracket_and_keeps_output_untouched ... ok
+test fixture_exports_real_compiled_control_abi ... ok
+test failed_destroy_is_terminal_and_quarantines_single_instance ... ok
+test library_failures_are_not_successful_empty_admission ... ok
+test failed_end_render_propagates_and_keeps_output_untouched ... ok
+test failed_render_still_closes_bracket_and_keeps_output_untouched ... ok
+test finite_wide_endpoints_do_not_require_finite_domain_width ... ok
+test foreign_os_worker_calls_suites_without_control_plane_access ... ok
+test failed_create_preserves_staging_and_can_retry_without_destroy ... ok
+test generic_ui_consumes_borrowed_metadata_and_plain_values ... ok
+test invalid_api_rejected_per_entry ... ok
+test created_only_destroy_never_calls_native_destroy ... ok
+test lifecycle_rejections_do_not_enter_native_code ... ok
+test live_instance_owns_native_code_after_root_and_library_drop ... ok
+test memory_suites_own_aligned_storage_and_reject_stale_handles ... ok
+test mixed_admission_preserves_native_indexes_and_order ... ok
+test neutral_configuration_is_restricted_before_native_create ... ok
+test null_main_entry_rejected_per_entry ... ok
+test null_raw_entry_rejected_per_entry ... ok
+test null_set_host_rejected_per_entry ... ok
+test parameter_suite_varargs_keys_and_unsupported_slots ... ok
+test plain_double_roundtrip_preserves_actual_c_values ... ok
+test property_suite_typed_scalar_n_reset_and_errors ... ok
+test readonly_is_a_host_ui_restriction_not_a_native_write_prohibition ... ok
+test render_bracket_maps_frames_and_time_bottom_left ... ok
+test render_destroy_and_release_stay_consistent_after_brackets ... ok
+test render_rejections_happen_before_any_native_entry ... ok
+test render_rejects_float_depth_offer_and_recovers ... ok
+test render_revalidates_clip_preferences_before_every_bracket ... ok
+test reply_default_bracket_is_a_legal_render ... ok
+test second_live_session_is_rejected ... ok
+test single_instance_is_reserved_at_initialize_not_wrapper_creation ... ok
+test unsupported_context_returns_empty_admitted_library ... ok
+test unsupported_parameter_kind_rejected_per_entry ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_vst3-763c5231d49e68a7.exe)
+
+running 31 tests
+test block::tests::block_offset_drops_out_of_block_events ... ok
+test block::tests::in_place_channel_bounces_and_writes_back ... ok
+test block::tests::event_scratch_collects_sorts_and_truncates ... ok
+test block::tests::rt_prepare_process_finish_round_trip ... ok
+test block::tests::prepare_rejects_each_boundary_violation ... ok
+test component::tests::musical_from_context_maps_valid_fields ... ok
+test block::tests::partial_cross_alias_and_output_duplicate_are_detected ... ok
+test block::tests::prepare_builds_zero_copy_views ... ok
+test component::tests::musical_from_context_gates_and_unset_forms ... ok
+test block::tests::shifted_range_overlap_is_rejected ... ok
+test component::tests::in_place_aliased_buffers_bounce_and_write_back ... ok
+test component::tests::out_of_block_event_offsets_are_dropped ... ok
+test component::tests::param_change_events_reach_the_processor ... ok
+test component::tests::process_rejected_outside_processing_state ... ok
+test component::tests::process_rejects_bad_block_shapes ... ok
+test component::tests::protocol_violations_are_defined_rejects ... ok
+test component::tests::foreign_param_queues_never_reach_the_processor ... ok
+test component::tests::re_activation_cycles_through_lifecycle ... ok
+test component::tests::param_scan_budget_exhaustion_keeps_collected_events ... ok
+test component::tests::rt_param_scan_stays_bounded_when_host_counts_lie ... ok
+test component::tests::rt_process_copies_gain_zero_copy ... ok
+test component::tests::state_stream_reports_not_implemented ... ok
+test controller::tests::get_param_value_by_string_enforces_the_domain ... ok
+test component::tests::transport_combines_media_and_musical ... ok
+test component::tests::zero_frame_block_flushes_offset_zero_events ... ok
+test gain::tests::gain_applies_param_event_then_scales ... ok
+test component::tests::rt_param_scan_total_budget_bounds_worst_case ... ok
+test controller::tests::set_param_normalized_enforces_the_domain ... ok
+test strings::tests::copy_wstring_terminates_and_truncates ... ok
+test strings::tests::copy_cstring_terminates_and_truncates ... ok
+test component::tests::setup_processing_rejects_excessive_max_frames ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_rt-a2723792745a08df.exe)
+
+running 44 tests
+test error::tests::display_covers_every_variant ... ok
+test observability_poc::tests::bridge_records_and_drains_fifo ... ok
+test observability_poc::tests::overflow_policy_variants ... ok
+test retire::tests::rt_retire_full_forgets_not_drops ... ok
+test observability_poc::tests::zero_capacity_rejected - should panic ... ok
+test observability_poc::tests::alloc_window_covers_only_owning_thread ... ok
+test observability_poc::tests::scaffolding_paths_alloc_free_in_window ... ok
+test observability_poc::tests::bridge_drain_bounded_by_capacity ... ok
+test observability_poc::tests::bridge_drop_on_full_counts ... ok
+test retire::tests::rt_retire_no_alloc ... ok
+test observability_poc::tests::counter_pair_increments_and_reads ... ok
+test retire::tests::rt_retire_then_drain_drops ... ok
+test observability_poc::tests::endpoint_send_bounds ... ok
+test observability_poc::tests::timestamp_helpers_fill_record ... ok
+test retire::tests::rt_retire_repeated_saturation_accumulates ... ok
+test retire::tests::rt_endpoint_send_bounds ... ok
+test retire::tests::rt_retire_teardown_collector_outlives ... ok
+test retire::tests::zero_capacity_rejected - should panic ... ok
+test retire::tests::local_pending_drops_on_drain ... ok
+test retire::tests::rt_retire_overflow_counted_and_shared ... ok
+test snapshot::tests::guard_drop_full_channel_leaks ... ok
+test snapshot::tests::multiple_guards_coexist ... ok
+test snapshot::tests::rt_snapshot_guard_drop_routes_to_retire ... ok
+test snapshot::tests::rt_snapshot_publish_visibility ... ok
+test snapshot::tests::rt_snapshot_read_no_alloc ... ok
+test snapshot::tests::rt_snapshot_reader_outlives_writer ... ok
+test snapshot::tests::rt_snapshot_retire_overflows_observable ... ok
+test snapshot::tests::rt_endpoint_send_bounds ... ok
+test spsc::tests::counting_alloc_records_when_enabled ... ok
+test snapshot::tests::zero_retire_capacity_rejected - should panic ... ok
+test snapshot::tests::rt_snapshot_displaced_arc_freed_on_collect ... ok
+test spsc::tests::display_covers_every_variant ... ok
+test spsc::tests::rt_pop_latest_returns_newest ... ok
+test spsc::tests::rt_endpoint_send_bounds ... ok
+test spsc::tests::rt_full_try_push_returns_value ... ok
+test spsc::tests::rt_try_push_pop_no_alloc ... ok
+test spsc::tests::rt_push_pop_fifo ... ok
+test tests::rt_endpoint_thread_bounds ... ok
+test tests::rt_clock_timebase_fixed ... ok
+test tests::rt_mint_token_usable ... ok
+test tests::version_is_not_empty ... ok
+test tests::rt_clock_tick_visibility ... ok
+test spsc::tests::zero_capacity_rejected - should panic ... ok
+test tests::rt_prepare_then_process ... ok
+
+test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_video-1ec3565eca364c7e.exe)
+
+running 5 tests
+test tests::audio_frame_is_skipped ... ok
+test tests::scheduler_decision_table ... ok
+test tests::pipeline_applies_stages_in_order ... ok
+test tests::session_drives_decode_loop ... ok
+test tests::session_seek_resyncs ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_video_core-e88bf9fce35f0aab.exe)
+
+running 23 tests
+test color::tests::defaults_are_all_unspecified ... ok
+test frame::tests::owned_planes_derive_dims_per_format ... ok
+test frame::tests::clone_shares_backing_until_dropped ... ok
+test frame::tests::shared_planes_keep_padded_stride ... ok
+test pixel::tests::bytes_per_sample_per_plane ... ok
+test plane::tests::mutable_view_exposes_plane_geometry ... ok
+test color::tests::hdr_metadata_is_copy_and_optional ... ok
+test frame::tests::shared_plane_validation_errors ... ok
+test frame::tests::owned_frame_rejects_oversized_planes ... ok
+test frame::tests::owned_frames_are_zeroed_and_tightly_packed ... ok
+test pixel::tests::subsampling_per_format ... ok
+test plane::tests::required_len_accounts_for_last_row ... ok
+test plane::tests::view_rejects_overlapping_rows ... ok
+test plane::tests::view_rejects_undersized_backing ... ok
+test plane::tests::view_trims_to_usable_region ... ok
+test frame::tests::shared_plane_views_trim_to_usable_region ... ok
+test tests::rt_plane_mut_row_write ... ok
+test tests::rt_timestamp_access ... ok
+test plane::tests::mutable_view_writes_through ... ok
+test pixel::tests::plane_layout_per_format ... ok
+test tests::version_is_not_empty ... ok
+test frame::tests::timestamp_duration_and_color_accessors ... ok
+test tests::rt_plane_access_and_row_slicing ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_video_proc-b954b8c4b35934e4.exe)
+
+running 171 tests
+test affine::tests::downscale_4_to_2_decimates_by_cell_centers ... ok
+test affine::tests::empty_dst_rect_writes_all_transparent_black ... ok
+test affine::tests::f32_off_canvas_fills_transparent_black ... ok
+test affine::tests::f16_upscale_copies_pixels_bit_exact ... ok
+test affine::tests::f32_rejects_mismatched_formats ... ok
+test affine::tests::dst_fully_overwritten_outside_mapped_rect ... ok
+test affine::tests::f32_upscale_copies_pixels_bit_exact ... ok
+test affine::tests::f32_propagates_src_metadata ... ok
+test affine::tests::identity_map_is_bit_exact_copy ... ok
+test affine::tests::off_canvas_dst_rect_writes_all_transparent_black ... ok
+test affine::tests::padded_strides_are_never_touched ... ok
+test affine::tests::propagates_src_metadata ... ok
+test affine::tests::rejects_src_rects_outside_frame ... ok
+test affine::tests::right_bottom_overhang_clips_to_canvas ... ok
+test affine::tests::negative_dst_x_clips_to_canvas ... ok
+test affine::tests::rejects_invalid_frames ... ok
+test affine::tests::rt_process_affine_transform_f32_never_mutates_source ... ok
+test affine::tests::rt_process_affine_transform_is_repeatable_and_deterministic ... ok
+test affine::tests::rt_process_affine_transform_f32_is_repeatable_and_deterministic ... ok
+test affine::tests::src_rect_at_far_edges_is_in_range ... ok
+test affine::tests::rt_process_affine_transform_never_mutates_source ... ok
+test affine::tests::sub_rect_crop_and_placement ... ok
+test affine::tests::upscale_2_to_4_replicates_pairs_last_column_in_range ... ok
+test coef::tests::coefficient_table_matches_bt601_limited_spot_check ... ok
+test coef::tests::rgb_coefficient_table_matches_bt601_limited_spot_check ... ok
+test coef::tests::slot_resolution_applies_default_rules ... ok
+test affine::tests::upscale_1_to_2_replicates_source_pixel ... ok
+test composite::tests::composite_over_f16_denormal_alpha_writes_transparent_black ... ok
+test composite::tests::composite_over_f16_golden ... ok
+test composite::tests::composite_over_f16_preserves_hdr_channels ... ok
+test coef::tests::rgb_coefficients_keep_gray_chroma_neutral ... ok
+test affine::tests::vertical_mapping_uses_height_axis ... ok
+test coef::tests::slot_resolution_rejects_unusable_values ... ok
+test composite::tests::composite_over_f32_golden ... ok
+test composite::tests::composite_over_f32_preserves_unclamped_channels ... ok
+test composite::tests::composite_over_f16_propagates_non_finite_channels ... ok
+test composite::tests::composite_over_f32_propagates_non_finite_channels ... ok
+test composite::tests::composite_over_f32_rejects_mismatched_frames ... ok
+test composite::tests::composite_over_f32_out_of_range_alpha_writes_transparent_black ... ok
+test composite::tests::composite_over_f32_zero_opacity_leaves_dst_byte_identical ... ok
+test composite::tests::composite_over_f32_keeps_dst_metadata ... ok
+test composite::tests::composite_over_f32_mid_opacity_within_ulp_bound ... ok
+test composite::tests::composite_over_f32_faint_alpha_diverges_from_f16_cut ... ok
+test composite::tests::composite_over_mid_opacity_golden ... ok
+test composite::tests::composite_over_full_and_zero_source_alpha ... ok
+test composite::tests::composite_over_keeps_dst_metadata ... ok
+test composite::tests::composite_over_rejects_out_of_range_opacity ... ok
+test composite::tests::composite_over_zero_opacity_leaves_dst_byte_identical ... ok
+test composite::tests::crossfade_allows_same_frame_as_both_sources ... ok
+test composite::tests::composite_over_shared_dst_rejected_before_opacity_early_return ... ok
+test composite::tests::composite_over_zero_alpha_writes_transparent_black ... ok
+test composite::tests::composite_over_oc_boundary_stays_in_range ... ok
+test composite::tests::composite_over_rejects_invalid_frames ... ok
+test composite::tests::crossfade_endpoints_reproduce_sources ... ok
+test composite::tests::crossfade_f16_endpoints_normalize_zero_sign_and_nan_payload ... ok
+test composite::tests::crossfade_f16_golden ... ok
+test composite::tests::crossfade_f16_propagates_non_finite_channels ... ok
+test composite::tests::crossfade_f32_endpoints_reproduce_finite_channels ... ok
+test composite::tests::crossfade_f32_golden_within_ulp_bound ... ok
+test composite::tests::crossfade_f32_propagates_from_metadata ... ok
+test composite::tests::crossfade_f32_propagates_non_finite_channels ... ok
+test composite::tests::crossfade_f32_rejects_mismatched_formats ... ok
+test composite::tests::crossfade_golden_quantized_weights ... ok
+test composite::tests::crossfade_propagates_from_metadata ... ok
+test composite::tests::crossfade_rejects_out_of_range_t ... ok
+test composite::tests::padded_dst_stride_is_never_written ... ok
+test composite::tests::crossfade_rejects_invalid_frames ... ok
+test composite::tests::rt_process_composite_over_f32_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_composite_over_f32_never_mutates_source ... ok
+test composite::tests::rt_process_composite_over_never_mutates_source ... ok
+test composite::tests::rt_process_composite_over_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_crossfade_f32_never_mutates_sources ... ok
+test composite::tests::rt_process_crossfade_f32_is_repeatable_and_deterministic ... ok
+test composite::tests::rt_process_crossfade_never_mutates_sources ... ok
+test rgb_to_yuv::tests::alpha_is_dropped ... ok
+test composite::tests::rt_process_crossfade_is_repeatable_and_deterministic ... ok
+test rgb_to_yuv::tests::chroma_downsample_420_covers_existing_cells_only ... ok
+test rgb_to_yuv::tests::chroma_downsample_averages_q16_before_quantizing ... ok
+test rgb_to_yuv::tests::chroma_downsample_422_averages_horizontal_pairs ... ok
+test rgb_to_yuv::tests::invalid_inputs_are_rejected ... ok
+test rgb_to_yuv::tests::chroma_downsample_420_averages_the_whole_cell ... ok
+test rgb_to_yuv::tests::output_color_and_time_propagate ... ok
+test rgb_to_yuv::tests::rgb_yuv_roundtrip_recovers_uniform_cells ... ok
+test rgb_to_yuv::tests::shared_dst_backing_is_rejected ... ok
+test rgb_to_yuv::tests::rt_process_is_repeatable_and_deterministic ... ok
+test rgb_to_yuv::tests::rt_process_never_mutates_source ... ok
+test rgb_to_yuv::tests::golden_vectors_cover_every_matrix_range_pair ... ok
+test rgb_to_yuv::tests::padded_dst_stride_is_never_written ... ok
+test rgba_f16::tests::f16_edge_values_clamp_and_round ... ok
+test rgba_f16::tests::edge_values_normalize_to_documented_f16 ... ok
+test rgba_f16::tests::invalid_inputs_are_rejected ... ok
+test rgb_to_yuv::tests::unspecified_args_use_defaults ... ok
+test rgba_f16::tests::color_and_time_pass_through_unchanged ... ok
+test rgba_f16::tests::padded_dst_stride_is_never_written ... ok
+test rgba_f16::tests::rt_process_to_f16_is_repeatable_and_deterministic ... ok
+test rgba_f16::tests::rt_process_to_u8_is_repeatable_and_deterministic ... ok
+test rgba_f16::tests::rt_process_to_u8_never_mutates_source ... ok
+test rgba_f16::tests::rt_process_to_f16_never_mutates_source ... ok
+test rgba_f16::tests::roundtrips_all_u8_codes_exactly ... ok
+test tests::version_is_not_empty ... ok
+test tests::video_core_dependency_is_reachable ... ok
+test rgba_f16::tests::shared_dst_backing_is_rejected ... ok
+test tone_map::tests::rt_process_tone_map_sdr_is_repeatable_and_deterministic ... ok
+test tone_map::tests::tone_map_sdr_consumes_hdr_and_propagates_metadata ... ok
+test tone_map::tests::rt_process_tone_map_sdr_never_mutates_source ... ok
+test tone_map::tests::tone_map_sdr_eetf_shape_below_and_above_the_knee ... ok
+test tone_map::tests::tone_map_sdr_invalid_inputs_are_rejected ... ok
+test tone_map::tests::tone_map_sdr_l_hs_defaults_to_1000_nits ... ok
+test tone_map::tests::tone_map_sdr_l_hs_falls_back_to_max_cll ... ok
+test tone_map::tests::tone_map_sdr_l_hs_prefers_mastering_display ... ok
+test tone_map::tests::tone_map_sdr_l_min_drives_the_black_lift ... ok
+test tone_map::tests::tone_map_sdr_inverted_l_min_is_ignored ... ok
+test tone_map::tests::tone_map_sdr_padded_dst_stride_is_never_written ... ok
+test tone_map::tests::tone_map_sdr_does_not_validate_the_working_space_tag ... ok
+test tone_map::tests::tone_map_sdr_scales_rgb_by_the_luma_ratio ... ok
+test transfer::tests::bt2020_matrices_are_identity ... ok
+test tone_map::tests::tone_map_sdr_padded_src_stride_reads_rows_only ... ok
+test transfer::tests::bt709_encode_is_unclamped_inverse ... ok
+test tone_map::tests::tone_map_sdr_non_positive_luma_passes_through ... ok
+test tone_map::tests::tone_map_sdr_sdr_equivalent_source_passes_through ... ok
+test tone_map::tests::tone_map_sdr_maps_default_1000nit_source ... ok
+test transfer::tests::hlg_encode_clamps_to_signal_domain ... ok
+test transfer::tests::combined_matrices_round_trip_and_preserve_white ... ok
+test transfer::tests::decode_encode_round_trip_through_slot_tables ... ok
+test transfer::tests::hlg_decode_clamps_outside_signal_domain ... ok
+test transfer::tests::pq_encode_clamps_to_signal_domain ... ok
+test transfer::tests::bt709_decode_toe_and_power ... ok
+test transfer::tests::pq_decode_clamps_outside_signal_domain ... ok
+test transfer::tests::resolved_tables_report_the_applied_value ... ok
+test transfer::tests::linear_decode_encode_is_identity ... ok
+test transfer::tests::slot_resolution_applies_default_rules ... ok
+test working_space::tests::from_working_ctor_accepts_every_known_variant ... ok
+test working_space::tests::from_working_ctor_unspecified_resolves_to_bt709 ... ok
+test working_space::tests::from_working_encodes_bt709_to_rgba8 ... ok
+test working_space::tests::from_working_identity_ctor_f32_passthrough ... ok
+test working_space::tests::from_working_identity_ctor_is_pure_quantization ... ok
+test working_space::tests::from_working_invalid_inputs_are_rejected ... ok
+test working_space::tests::from_working_nan_channels_quantize_to_zero ... ok
+test working_space::tests::from_working_rgba_f32_writes_the_unclamped_encode ... ok
+test working_space::tests::from_working_padded_dst_stride_is_never_written ... ok
+test working_space::tests::from_working_records_metadata ... ok
+test working_space::tests::from_working_encodes_pq_to_rgba8 ... ok
+test working_space::tests::rt_process_to_working_is_repeatable_and_deterministic ... ok
+test working_space::tests::rt_process_from_working_never_mutates_source ... ok
+test working_space::tests::to_working_decodes_bt709_tagged_rgba_f16 ... ok
+test working_space::tests::rt_process_from_working_is_repeatable_and_deterministic ... ok
+test working_space::tests::rt_process_to_working_never_mutates_source ... ok
+test working_space::tests::to_working_decodes_bt709_tagged_rgba8 ... ok
+test working_space::tests::to_working_does_not_validate_matrix_or_range ... ok
+test working_space::tests::to_working_accepts_every_known_color_variant ... ok
+test working_space::tests::to_working_identity_path_copies_pixels_and_records ... ok
+test working_space::tests::to_working_invalid_inputs_are_rejected ... ok
+test working_space::tests::to_working_maps_p3d65_primaries_to_bt2020 ... ok
+test working_space::tests::to_working_decodes_hlg_to_the_absolute_scale ... ok
+test working_space::tests::to_working_padded_dst_stride_is_never_written ... ok
+test working_space::tests::to_working_padded_src_stride_reads_rows_only ... ok
+test working_space::tests::to_working_reads_rgba_f16_signals ... ok
+test working_space::tests::to_working_non_finite_channels_propagate ... ok
+test working_space::tests::to_working_unspecified_resolves_to_bt709 ... ok
+test yuv_to_rgb::tests::chroma_upsample_420_covers_existing_cells_only ... ok
+test working_space::tests::to_working_records_working_space_metadata ... ok
+test working_space::tests::to_working_decodes_pq_tagged_signal ... ok
+test yuv_to_rgb::tests::chroma_upsample_422_shares_cells_horizontally ... ok
+test yuv_to_rgb::tests::golden_vectors_cover_every_matrix_range_pair ... ok
+test yuv_to_rgb::tests::invalid_inputs_are_rejected ... ok
+test yuv_to_rgb::tests::output_color_and_time_propagate ... ok
+test yuv_to_rgb::tests::padded_dst_stride_is_never_written ... ok
+test yuv_to_rgb::tests::rt_process_is_repeatable_and_deterministic ... ok
+test yuv_to_rgb::tests::shared_dst_backing_is_rejected ... ok
+test yuv_to_rgb::tests::unspecified_color_fields_use_defaults ... ok
+test yuv_to_rgb::tests::rt_process_never_mutates_source ... ok
+
+test result: ok. 171 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests ruviform_audio
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_audio_analysis
+
+running 3 tests
+test crates\ruviform-audio-analysis\src\spectrum.rs - spectrum::SpectrumAnalyzer (line 22) ... ok
+test crates\ruviform-audio-analysis\src\level.rs - level::LevelMeter (line 32) ... ok
+test crates\ruviform-audio-analysis\src\peaks.rs - peaks::WaveformPeaks::peaks (line 43) ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+all doctests ran in 0.44s; merged doctests compilation took 0.35s
+   Doc-tests ruviform_audio_core
+
+running 30 tests
+test crates\ruviform-audio-core\src\buffer.rs - buffer::AudioBuffer (line 145) ... ok
+test crates\ruviform-audio-core\src\buffer.rs - buffer::AudioBufferViewMut<'a,S>::channel_mut (line 600) ... ok
+test crates\ruviform-audio-core\src\buffer.rs - buffer::AudioBufferViewMut<'a,S>::try_new (line 527) ... ok
+test crates\ruviform-audio-core\src\buffer.rs - buffer::AudioBufferView<'a,S>::channel (line 460) ... ok
+test crates\ruviform-audio-core\src\device.rs - device::BufferSize (line 268) ... ok
+test crates\ruviform-audio-core\src\device.rs - device::DeviceId (line 364) ... ok
+test crates\ruviform-audio-core\src\device.rs - device::OutputDataCallback (line 483) ... ok
+test crates\ruviform-audio-core\src\device.rs - device::DEVICE_CLOCK_TIMEBASE (line 404) ... ok
+test crates\ruviform-audio-core\src\buffer.rs - buffer::AudioBuffer<S>::channel (line 318) ... ok
+test crates\ruviform-audio-core\src\buffer.rs - buffer::AudioBuffer<S>::copy_to_interleaved (line 382) ... ok
+test crates\ruviform-audio-core\src\buffer.rs - buffer::BufferSpec (line 97) ... ok
+test crates\ruviform-audio-core\src\buffer.rs - buffer::AudioBuffer<S>::try_new (line 204) ... ok
+test crates\ruviform-audio-core\src\device.rs - device::DeviceError (line 545) ... ok
+test crates\ruviform-audio-core\src\buffer.rs - buffer::AudioBuffer<S>::from_interleaved (line 238) ... ok
+test crates\ruviform-audio-core\src\device.rs - device::SupportedOutputFormat (line 325) ... ok
+test crates\ruviform-audio-core\src\device.rs - device::OutputStreamConfig (line 237) ... ok
+test crates\ruviform-audio-core\src\format.rs - format::AudioFormat (line 40) ... ok
+test crates\ruviform-audio-core\src\format.rs - format::SampleFormat (line 18) ... ok
+test crates\ruviform-audio-core\src\layout.rs - layout::ChannelLayout (line 170) ... ok
+test crates\ruviform-audio-core\src\layout.rs - layout::ChannelLayout::custom (line 248) ... ok
+test crates\ruviform-audio-core\src\layout.rs - layout::SpeakerMask (line 24) ... ok
+test crates\ruviform-audio-core\src\layout.rs - layout::SpeakerMaskSet (line 114) ... ok
+test crates\ruviform-audio-core\src\lib.rs - version (line 87) ... ok
+test crates\ruviform-audio-core\src\planar.rs - planar::PlanarBufferView (line 73) ... ok
+test crates\ruviform-audio-core\src\planar.rs - planar::PlanarBufferViewMut (line 193) ... ok
+test crates\ruviform-audio-core\src\sample.rs - sample::Sample (line 31) ... ok
+test crates\ruviform-audio-core\src\time.rs - time::SampleIndex (line 109) ... ok
+test crates\ruviform-audio-core\src\time.rs - time::SampleIndex::from_media_time (line 146) ... ok
+test crates\ruviform-audio-core\src\time.rs - time::SampleRate (line 24) ... ok
+test crates\ruviform-audio-core\src\time.rs - time::SampleRate::time_base (line 65) ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+
+running 2 tests
+test crates\ruviform-audio-core\src\planar.rs - planar::PlanarBufferView (line 89) - compile fail ... ok
+test crates\ruviform-audio-core\src\planar.rs - planar::PlanarBufferViewMut (line 209) - compile fail ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+all doctests ran in 0.99s; merged doctests compilation took 0.51s
+   Doc-tests ruviform_audio_device
+
+running 6 tests
+test crates\ruviform-audio-device\src\host.rs - host_impl::Host (line 29) - compile ... ok
+test crates\ruviform-audio-device\src\host.rs - host_impl::default_host (line 112) - compile ... ok
+test crates\ruviform-audio-device\src\host.rs - host_impl::host (line 155) - compile ... ok
+test crates\ruviform-audio-device\src\lib.rs - (line 54) - compile ... ok
+test crates\ruviform-audio-device\src\host.rs - host_impl::HostId (line 51) ... ok
+test crates\ruviform-audio-device\src\host.rs - host_impl::available_host_ids (line 131) ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+all doctests ran in 0.55s; merged doctests compilation took 0.46s
+   Doc-tests ruviform_dsp
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_edit
+
+running 4 tests
+test crates\ruviform-edit\src\lib.rs - version (line 67) ... ok
+test crates\ruviform-edit\src\eval.rs - eval::Timeline::evaluate (line 114) ... ok
+test crates\ruviform-edit\src\model.rs - model::Timeline::new (line 280) ... ok
+test crates\ruviform-edit\src\model.rs - model::TrackId (line 39) ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+all doctests ran in 0.43s; merged doctests compilation took 0.33s
+   Doc-tests ruviform_exec
+
+running 7 tests
+test crates\ruviform-exec\src\lib.rs - version (line 64) ... ok
+test crates\ruviform-exec\src\thread_priority.rs - thread_priority::ThreadPriorityGuard (line 156) ... ok
+test crates\ruviform-exec\src\thread_priority.rs - thread_priority::demote_current_thread_from_realtime (line 118) ... ok
+test crates\ruviform-exec\src\thread_priority.rs - thread_priority::ThreadPriorityParams::audio (line 41) ... ok
+test crates\ruviform-exec\src\thread_priority.rs - thread_priority::PriorityError (line 204) ... ok
+test crates\ruviform-exec\src\thread_priority.rs - thread_priority::ThreadPriorityParams (line 21) ... ok
+test crates\ruviform-exec\src\thread_priority.rs - thread_priority::promote_current_thread_to_realtime (line 80) ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+all doctests ran in 0.43s; merged doctests compilation took 0.34s
+   Doc-tests ruviform_io_symphonia
+
+running 5 tests
+test crates\ruviform-io-symphonia\src\lib.rs - make_muxer (line 204) ... ok
+test crates\ruviform-io-symphonia\src\lib.rs - version (line 100) ... ok
+test crates\ruviform-io-symphonia\src\lib.rs - capabilities (line 122) ... ok
+test crates\ruviform-io-symphonia\src\lib.rs - open_demuxer (line 164) ... ok
+test crates\ruviform-io-symphonia\src\lib.rs - make_encoder (line 229) ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+all doctests ran in 0.76s; merged doctests compilation took 0.58s
+   Doc-tests ruviform_math
+
+running 1 test
+test crates\ruviform-math\src\lib.rs - version (line 36) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+all doctests ran in 0.38s; merged doctests compilation took 0.30s
+   Doc-tests ruviform_media_core
+
+running 31 tests
+test crates\ruviform-media-core\src\lib.rs - version (line 70) ... ok
+test crates\ruviform-media-core\src\music.rs - music::TempoMap::tick_to_media (line 482) ... ok
+test crates\ruviform-media-core\src\time.rs - time::FrameRate::from_fps (line 202) ... ok
+test crates\ruviform-media-core\src\stream.rs - stream::StreamDescriptor (line 55) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaDuration::new (line 608) ... ok
+test crates\ruviform-media-core\src\time.rs - time::FrameRate (line 150) ... ok
+test crates\ruviform-media-core\src\time.rs - time::FrameRate::frame_duration (line 241) ... ok
+test crates\ruviform-media-core\src\music.rs - music::TempoMapBuilder (line 254) ... ok
+test crates\ruviform-media-core\src\time.rs - time::FrameRate::new (line 174) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaDuration::ZERO (line 589) ... ok
+test crates\ruviform-media-core\src\time.rs - time::FrameRate::nominal_fps (line 270) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaDuration::convert (line 648) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaDuration::convert_exact (line 666) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaDuration::to_seconds_f64 (line 692) ... ok
+test crates\ruviform-media-core\src\stream.rs - stream::StreamId (line 18) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaRange::checked_end (line 860) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaRange::end (line 833) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaRange::new (line 786) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaTime::ZERO (line 328) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaTime::checked_add (line 451) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaTime::checked_sub (line 493) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaTime::convert (line 390) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaTime::convert_exact (line 409) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaTime::new (line 344) ... ok
+test crates\ruviform-media-core\src\time.rs - time::MediaTime::to_seconds_f64 (line 525) ... ok
+test crates\ruviform-media-core\src\time.rs - time::TimeBase::new (line 60) ... ok
+test crates\ruviform-media-core\src\time.rs - time::TimeBase::sample_rate (line 111) ... ok
+test crates\ruviform-media-core\src\timecode.rs - timecode::Timecode::from_media_time (line 54) ... ok
+test crates\ruviform-media-core\src\timecode.rs - timecode::Timecode::from_media_time_drop (line 115) ... ok
+test crates\ruviform-media-core\src\transport.rs - transport::TransportSnapshot::new (line 49) ... ok
+test crates\ruviform-media-core\src\transport.rs - transport::TransportSnapshot::reserved (line 111) ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+all doctests ran in 0.62s; merged doctests compilation took 0.42s
+   Doc-tests ruviform_media_io
+
+running 19 tests
+test crates\ruviform-media-io\src\error.rs - error::Error (line 94) ... ok
+test crates\ruviform-media-io\src\capability.rs - capability::Capabilities::can_decode (line 189) ... ok
+test crates\ruviform-media-io\src\frame.rs - frame::Frame::pts (line 179) ... ok
+test crates\ruviform-media-io\src\codec.rs - codec::CodecDescriptor (line 167) ... ok
+test crates\ruviform-media-io\src\codec.rs - codec::CodecDescriptor::audio_format (line 204) ... ok
+test crates\ruviform-media-io\src\capability.rs - capability::Features (line 32) ... ok
+test crates\ruviform-media-io\src\codec.rs - codec::CodecFormat (line 119) ... ok
+test crates\ruviform-media-io\src\codec.rs - codec::CodecId (line 35) ... ok
+test crates\ruviform-media-io\src\demux.rs - demux::StreamInfo (line 34) ... ok
+test crates\ruviform-media-io\src\codec.rs - codec::CodecId::name (line 84) ... ok
+test crates\ruviform-media-io\src\capability.rs - capability::Capabilities (line 124) ... ok
+test crates\ruviform-media-io\src\error.rs - error::ErrorKind (line 36) ... ok
+test crates\ruviform-media-io\src\frame.rs - frame::Frame (line 154) ... ok
+test crates\ruviform-media-io\src\frame.rs - frame::AudioFrame (line 37) ... ok
+test crates\ruviform-media-io\src\capability.rs - capability::Capabilities::can_demux (line 158) ... ok
+test crates\ruviform-media-io\src\lib.rs - version (line 93) ... ok
+test crates\ruviform-media-io\src\packet.rs - packet::Packet (line 143) ... ok
+test crates\ruviform-media-io\src\packet.rs - packet::PacketFlags (line 26) ... ok
+test crates\ruviform-media-io\src\source.rs - source::MediaSource (line 39) ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+all doctests ran in 0.62s; merged doctests compilation took 0.49s
+   Doc-tests ruviform_plugin_clap
+
+running 3 tests
+test crates\ruviform-plugin-clap\src\lib.rs - version (line 84) ... ok
+test crates\ruviform-plugin-clap\src\gain.rs - gain::GAIN_PARAM (line 38) ... ok
+test crates\ruviform-plugin-clap\src\gain.rs - gain::GainProcessor (line 65) ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+all doctests ran in 0.50s; merged doctests compilation took 0.38s
+   Doc-tests ruviform_plugin_core
+
+running 26 tests
+test crates\ruviform-plugin-core\src\event.rs - event::EventList (line 163) ... ok
+test crates\ruviform-plugin-core\src\param.rs - param::ParamFlags (line 48) ... ok
+test crates\ruviform-plugin-core\src\bus.rs - bus::BusDescriptor (line 40) ... ok
+test crates\ruviform-plugin-core\src\lifecycle.rs - lifecycle::Lifecycle (line 272) ... ok
+test crates\ruviform-plugin-core\src\event.rs - event::ParamEvent (line 41) ... ok
+test crates\ruviform-plugin-core\src\processor.rs - processor::BufferView (line 64) ... ok
+test crates\ruviform-plugin-core\src\lib.rs - version (line 110) ... ok
+test crates\ruviform-plugin-core\src\event.rs - event::sort_events_by_frame_offset (line 303) ... ok
+test crates\ruviform-plugin-core\src\event.rs - event::Event (line 88) ... ok
+test crates\ruviform-plugin-core\src\param.rs - param::ParamValue (line 120) ... ok
+test crates\ruviform-plugin-core\src\param.rs - param::ParamId (line 33) ... ok
+test crates\ruviform-plugin-core\src\descriptor.rs - descriptor::PluginDescriptorView (line 54) ... ok
+test crates\ruviform-plugin-core\src\param.rs - param::ParamInfo (line 177) ... ok
+test crates\ruviform-plugin-core\src\lifecycle.rs - lifecycle::LifecycleError (line 218) ... ok
+test crates\ruviform-plugin-core\src\processor.rs - processor::BufferViewMut (line 114) ... ok
+test crates\ruviform-plugin-core\src\descriptor.rs - descriptor::PluginDescriptor (line 20) ... ok
+test crates\ruviform-plugin-core\src\processor.rs - processor::ProcessConfig (line 166) ... ok
+test crates\ruviform-plugin-core\src\processor.rs - processor::ProcessContext (line 251) ... ok
+test crates\ruviform-plugin-core\src\processor.rs - processor::ProcessResult (line 343) ... ok
+test crates\ruviform-plugin-core\src\transport.rs - transport::TransportInfo (line 30) ... ok
+test crates\ruviform-plugin-core\src\transport.rs - transport::TransportInfo::with_loop_range (line 73) ... ok
+test crates\ruviform-plugin-core\src\wire.rs - wire::Descriptor::matches (line 393) ... ok
+test crates\ruviform-plugin-core\src\wire.rs - wire::Message (line 235) ... ok
+test crates\ruviform-plugin-core\src\wire.rs - wire::Reader (line 499) ... ok
+test crates\ruviform-plugin-core\src\wire.rs - wire::decode (line 713) ... ok
+test crates\ruviform-plugin-core\src\wire.rs - wire::encode (line 637) ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+running 2 tests
+test crates\ruviform-plugin-core\src\descriptor.rs - descriptor::PluginDescriptorView (line 72) - compile fail ... ok
+test crates\ruviform-plugin-core\src\video.rs - video::VideoPluginInstance (line 79) - compile fail ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+all doctests ran in 0.67s; merged doctests compilation took 0.47s
+   Doc-tests ruviform_plugin_export
+
+running 1 test
+test crates\ruviform-plugin-export\src\lib.rs - run (line 117) - compile ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.39s; merged doctests compilation took 0.33s
+   Doc-tests ruviform_plugin_host
+
+running 1 test
+test crates\ruviform-plugin-host\src\lib.rs - version (line 115) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+all doctests ran in 0.51s; merged doctests compilation took 0.40s
+   Doc-tests ruviform_plugin_ofx
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_plugin_vst3
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_rt
+
+running 52 tests
+test crates\ruviform-rt\src\error.rs - error::Result (line 54) ... ok
+test crates\ruviform-rt\src\clock.rs - clock::MasterClock::publish_tick (line 89) ... ok
+test crates\ruviform-rt\src\observability_poc.rs - observability_poc::Counter::read (line 124) ... ok
+test crates\ruviform-rt\src\observability_poc.rs - observability_poc::bridge (line 198) ... ok
+test crates\ruviform-rt\src\clock.rs - clock::MasterClock::tick (line 108) ... ok
+test crates\ruviform-rt\src\clock.rs - clock::MasterClock (line 30) ... ok
+test crates\ruviform-rt\src\error.rs - error::Error (line 20) ... ok
+test crates\ruviform-rt\src\clock.rs - clock::MasterClock::new (line 60) ... ok
+test crates\ruviform-rt\src\observability_poc.rs - observability_poc::RtRecorder (line 237) ... ok
+test crates\ruviform-rt\src\observability_poc.rs - observability_poc::Counter (line 92) ... ok
+test crates\ruviform-rt\src\observability_poc.rs - observability_poc::CounterReader (line 155) ... ok
+test crates\ruviform-rt\src\clock.rs - clock::MasterClock::timebase (line 127) ... ok
+test crates\ruviform-rt\src\observability_poc.rs - observability_poc::ObsRecord (line 405) ... ok
+test crates\ruviform-rt\src\context.rs - context::RtContext (line 36) ... ok
+test crates\ruviform-rt\src\lib.rs - version (line 73) ... ok
+test crates\ruviform-rt\src\observability_poc.rs - observability_poc::RecordSink (line 331) ... ok
+test crates\ruviform-rt\src\observability_poc.rs - observability_poc::counter (line 63) ... ok
+test crates\ruviform-rt\src\observability_poc.rs - observability_poc::instant_to_epoch_nanos (line 472) ... ok
+test crates\ruviform-rt\src\observability_poc.rs - observability_poc::timestamped_record (line 495) ... ok
+test crates\ruviform-rt\src\processor.rs - processor::Processor (line 27) ... ok
+test crates\ruviform-rt\src\processor.rs - processor::Processor::prepare (line 92) ... ok
+test crates\ruviform-rt\src\processor.rs - processor::RtProcessor (line 138) ... ok
+test crates\ruviform-rt\src\processor.rs - processor::RtProcessor::process (line 175) ... ok
+test crates\ruviform-rt\src\retire.rs - retire::DropCollector (line 211) ... ok
+test crates\ruviform-rt\src\retire.rs - retire::DropCollector<T>::drain (line 243) ... ok
+test crates\ruviform-rt\src\retire.rs - retire::DropCollector<T>::is_empty (line 277) ... ok
+test crates\ruviform-rt\src\retire.rs - retire::DropCollector<T>::overflows (line 306) ... ok
+test crates\ruviform-rt\src\retire.rs - retire::Retirer (line 112) ... ok
+test crates\ruviform-rt\src\retire.rs - retire::Retirer<T>::overflows (line 180) ... ok
+test crates\ruviform-rt\src\retire.rs - retire::Retirer<T>::retire (line 150) ... ok
+test crates\ruviform-rt\src\retire.rs - retire::retire_channel (line 74) ... ok
+test crates\ruviform-rt\src\snapshot.rs - snapshot::SnapshotGuard (line 319) ... ok
+test crates\ruviform-rt\src\snapshot.rs - snapshot::SnapshotReader (line 246) ... ok
+test crates\ruviform-rt\src\snapshot.rs - snapshot::SnapshotReader<T>::read (line 280) ... ok
+test crates\ruviform-rt\src\snapshot.rs - snapshot::SnapshotWriter (line 123) ... ok
+test crates\ruviform-rt\src\snapshot.rs - snapshot::SnapshotWriter<T>::collect (line 186) ... ok
+test crates\ruviform-rt\src\snapshot.rs - snapshot::SnapshotWriter<T>::publish (line 156) ... ok
+test crates\ruviform-rt\src\snapshot.rs - snapshot::SnapshotWriter<T>::retire_overflows (line 220) ... ok
+test crates\ruviform-rt\src\snapshot.rs - snapshot::slot (line 78) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::Consumer (line 153) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::Consumer<T>::capacity (line 261) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::Consumer<T>::is_empty (line 239) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::Consumer<T>::pop_latest (line 207) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::Consumer<T>::try_pop (line 174) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::Producer (line 57) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::Producer<T>::capacity (line 130) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::Producer<T>::is_full (line 108) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::Producer<T>::try_push (line 83) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::TryPopError (line 344) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::TryPushError (line 284) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::TryPushError<T>::into_inner (line 309) ... ok
+test crates\ruviform-rt\src\spsc.rs - spsc::channel (line 30) ... ok
+
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+all doctests ran in 0.93s; merged doctests compilation took 0.62s
+   Doc-tests ruviform_video
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_video_core
+
+running 6 tests
+test crates\ruviform-video-core\src\frame.rs - frame::VideoFrame::new_owned (line 186) ... ok
+test crates\ruviform-video-core\src\color.rs - color::ColorInfo (line 183) ... ok
+test crates\ruviform-video-core\src\frame.rs - frame::VideoFrame::from_shared_planes (line 258) ... ok
+test crates\ruviform-video-core\src\lib.rs - version (line 92) ... ok
+test crates\ruviform-video-core\src\pixel.rs - pixel::PixelFormat (line 28) ... ok
+test crates\ruviform-video-core\src\frame.rs - frame::VideoFormat (line 35) ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+all doctests ran in 0.46s; merged doctests compilation took 0.36s
+   Doc-tests ruviform_video_proc
+
+running 21 tests
+test crates\ruviform-video-proc\src\rgb_to_yuv.rs - rgb_to_yuv::RgbToYuv::new (line 142) ... ok
+test crates\ruviform-video-proc\src\rgb_to_yuv.rs - rgb_to_yuv::RgbToYuv (line 90) ... ok
+test crates\ruviform-video-proc\src\composite.rs - composite::CompositeOver::new (line 357) ... ok
+test crates\ruviform-video-proc\src\affine.rs - affine::AffineTransform (line 132) ... ok
+test crates\ruviform-video-proc\src\composite.rs - composite::CompositeOver (line 326) ... ok
+test crates\ruviform-video-proc\src\tone_map.rs - tone_map::ToneMapSdr::new (line 308) ... ok
+test crates\ruviform-video-proc\src\rgba_f16.rs - rgba_f16::RgbaF16ToRgba8::new (line 340) ... ok
+test crates\ruviform-video-proc\src\lib.rs - version (line 163) ... ok
+test crates\ruviform-video-proc\src\rgba_f16.rs - rgba_f16::Rgba8ToRgbaF16 (line 192) ... ok
+test crates\ruviform-video-proc\src\rgba_f16.rs - rgba_f16::Rgba8ToRgbaF16::new (line 225) ... ok
+test crates\ruviform-video-proc\src\affine.rs - affine::AffineTransform::new (line 177) ... ok
+test crates\ruviform-video-proc\src\composite.rs - composite::Crossfade (line 482) ... ok
+test crates\ruviform-video-proc\src\rgba_f16.rs - rgba_f16::RgbaF16ToRgba8 (line 306) ... ok
+test crates\ruviform-video-proc\src\tone_map.rs - tone_map::ToneMapSdr (line 261) ... ok
+test crates\ruviform-video-proc\src\working_space.rs - working_space::FromWorking (line 403) ... ok
+test crates\ruviform-video-proc\src\composite.rs - composite::Crossfade::new (line 514) ... ok
+test crates\ruviform-video-proc\src\working_space.rs - working_space::FromWorking::new (line 459) ... ok
+test crates\ruviform-video-proc\src\working_space.rs - working_space::ToWorking (line 188) ... ok
+test crates\ruviform-video-proc\src\working_space.rs - working_space::ToWorking::new (line 229) ... ok
+test crates\ruviform-video-proc\src\yuv_to_rgb.rs - yuv_to_rgb::YuvToRgb (line 77) ... ok
+test crates\ruviform-video-proc\src\yuv_to_rgb.rs - yuv_to_rgb::YuvToRgb::new (line 118) ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+all doctests ran in 0.65s; merged doctests compilation took 0.47s

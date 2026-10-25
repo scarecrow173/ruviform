@@ -1,7 +1,7 @@
 ---
 id: "TASK-034LNYv07MQpWKTmfQ3vX0"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue #76 プラグイン L1 分離 final verification"
 created: "2026-10-25"
 updated: "2026-10-25"
@@ -10,11 +10,33 @@ relations:
   source: []
   changes:
     added: []
-    modified: []
+    modified:
+      - type: "file"
+        path: "docs/tasks/plugin-l1-final-verification.md"
+      - type: "file"
+        path: "docs/tasks/README.md"
     deleted: []
     renamed: []
     moved: []
-    generated: []
+    generated:
+      - type: "file"
+        path: "docs/impl/exp/data/issue-76-final-gate-fmt-check-20261025.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-76-final-gate-check-20261025.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-76-final-gate-lint-20261025.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-76-final-gate-test-20261025.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-76-final-gate-test-rt-20261025.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-76-final-gate-bench-smoke-20261025.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-76-final-gate-prek-20261025.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-76-final-gate-doc-audit-20261025.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-76-final-gate-cargo-tree-20261025.log"
   implements:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
   implemented-by: []
@@ -47,12 +69,13 @@ relations:
 
 ## Verification
 
-- [ ] `mise run fmt-check` — exit 0（`issue-76-final-gate-fmt-check-*.log`）
-- [ ] `mise run check` — exit 0（`issue-76-final-gate-check-*.log`）
-- [ ] `mise run lint` — exit 0（`issue-76-final-gate-lint-*.log`）
-- [ ] `mise run test` — exit 0（全 test binaries・passed 件数を記録 — L1 E2E 統合テストを含む・`issue-76-final-gate-test-*.log`）
-- [ ] `mise run test-rt` — exit 0 かつ **実一致件数 >0**（`rt_l1_process_path_no_alloc`/`rt_l1_result_leg_try_ops` が実選択 — `issue-76-final-gate-test-rt-*.log`）
-- [ ] `mise run bench-smoke` — exit 0（`issue-76-final-gate-bench-smoke-*.log`）
-- [ ] `mise exec -- prek run --all-files` — exit 0（`issue-76-final-gate-prek-*.log`）
-- [ ] `mise exec -- node .agents/skills/doc-status/scripts/doc_status.js audit --json` — exit 0・blocking 0・findings []（`issue-76-final-gate-doc-audit-*.log`）
+- [x] `mise run fmt-check` — exit 0（`issue-76-final-gate-fmt-check-20261025.log`）
+- [x] `mise run check` — exit 0（`issue-76-final-gate-check-20261025.log`）
+- [x] `mise run lint` — exit 0（`issue-76-final-gate-lint-20261025.log`）
+- [x] `mise run test` — exit 0（55 test binaries・1021 passed・0 failed — L1 E2E 統合テスト含む: `l1_runner_e2e` 11・`l1_proxy_e2e` 42・`issue-76-final-gate-test-20261025.log`）
+- [x] `mise run test-rt` — exit 0 かつ **実一致件数 111 >0**（`rt_l1_process_path_no_alloc`・`rt_l1_result_leg_try_ops` が `l1_proxy_e2e` で実選択・2 passed・0 failed・`issue-76-final-gate-test-rt-20261025.log`）
+- [x] `mise run bench-smoke` — exit 0（`issue-76-final-gate-bench-smoke-20261025.log`）
+- [x] `mise exec -- prek run --all-files` — exit 0（7 hooks passed・1 skipped=Windows 非対象・`issue-76-final-gate-prek-20261025.log`）
+- [x] `mise exec -- node .agents/skills/doc-status/scripts/doc_status.js audit --json` — exit 0・blocking 0・findings []（documents 317・`issue-76-final-gate-doc-audit-20261025.log`）
+- [x] （補助）`cargo tree -p ruviform-plugin-export/-host --edges normal` — 直接外部依存は `shared_memory` のみ・host は `ruviform-rt`＋`shared_memory`（ruviform-rt 自身の arc-swap/rtrb 以外の外部依存クリープなし・`issue-76-final-gate-cargo-tree-20261025.log`）
 - **expected**: 全コマンド実実行・log 保存済み（`docs/impl/exp/data/`）。full gate は plan 最終段で 1 回のみ実施 — 実施時のみチェックを付け log パスを `changes.generated` へ追記する
