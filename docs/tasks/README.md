@@ -64,7 +64,7 @@ Directory: `docs/tasks`
 | TASK-034Jf3FazZdLzFAFTDXUa3 | スカラー参照カーネルと共通型 | done | [implement-simd-poc-scalar-kernels.md](./implement-simd-poc-scalar-kernels.md) |
 | TASK-034J5KR5ueilYgXdyyF4ZU | ruviform-video-core のデータモデル実装 | done | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | TASK-034JcD1UTgLlW1lRoWI1Ng | video-proc カーネル API 形状と YUV→RGB 変換カーネルの実装 | done | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
-| TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | todo | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
+| TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034LNY736TLX2w3k4RFFZM | plugin-core L1 基盤（契約移設 + Lifecycle Failed + wire codec） | done | [l1-core-contracts-and-wire-codec.md](./l1-core-contracts-and-wire-codec.md) |
 | TASK-034MrsLWkKNHnu7jX1ghp8 | L1 endpoint（leg 移出・arm channel・pending_arm・leg 返却・drain-before-early-return） | todo | [l1-endpoint-arm-and-leg-return.md](./l1-endpoint-arm-and-leg-return.md) |
 | TASK-034LNYf8Qj1NeGAKmaP7B4 | plugin-host L1 プロキシ制御面（spawn/handshake/コマンド転送/クラッシュ検出） | done | [l1-proxy-control-plane.md](./l1-proxy-control-plane.md) |

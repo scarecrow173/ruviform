@@ -57,6 +57,8 @@ Plan actions 12–13。`PluginHost` コンポジットに endpoint の**公開�
 - **`plugin_mut` の公開面 parity**: `PluginHost::plugin_mut` が `Shared` L0 slot で `None` を返す（T2 で `InProcessHost::plugin_mut` が `Shared`→`None` — composite 側は透過）。L1 と同じ defined 挙動として doc に統一記述
 - **composite 級単体テスト**: L0/L1 両スロットで `prepare_endpoint` → `Ok`・各 rejection 分岐（`Created`/`Failed`/`Destroyed`/stale/`Plain`/2本目/leg 未返却/bounds 各種 — `0`・`> WIRE_MAX_*`・`< activated`・`u32::MAX` の defined rejection 含む）が統一表どおりの `Err` 型を返す・**拒否順序**（state 系 → slot-shape/presence → bounds — state 違反 + bad bounds でも state 系 `Err` が勝つ）・L1 bad bounds で leg が移出されず再 attach 可能・`latency_frames` 値（L0 `Some(0)`・L1 activated `Some(lookahead×cap)`・未 `Activate`/`None`）・`plugin_mut` L0-Shared `None` parity・`EndpointUnavailable` が wire 型（`Ipc`/`Unsupported`）に潰れないこと
 
+補足: T4 prelude は presence/占有 → bounds の順で評価すること（attach_endpoint 内側の bounds→CAS 順とは別層の契約。占有中に不正 bounds を渡した場合の公開 Err を EndpointUnavailable とするため）。
+
 ## Classification
 
 - `normal-plan-task`（公開 API 面・統一表・doc — 機構は T2/T3 依存）

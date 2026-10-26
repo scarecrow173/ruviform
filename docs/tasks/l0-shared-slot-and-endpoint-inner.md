@@ -1,23 +1,34 @@
 ---
 id: "TASK-034MrsLrqKnu9N3YfxnSGl"
 type: "task"
-status: "todo"
+status: "done"
 title: "L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束）"
 created: "2026-10-26"
 updated: "2026-10-26"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/endpoint.rs"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-host/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/host.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/lib.rs"
+      - type: "file"
+        path: "Cargo.lock"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-113-l0-shared-slot-and-endpoint-inner-task-2-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
     - "docs/tasks/plugin-core-endpoint-primitives.md"
@@ -93,21 +104,23 @@ Plan actions 4–7。`ruviform-plugin-host` の L0（in-process）経路に endp
 
 ## Done When
 
-- [ ] `Instance` が `Plain`/`Shared` スロットを持ち、`create_sendable` 有無で dispatch される — 非 Send factory の L0 利用（`plugin_mut`/`process`）に退行なし
-- [ ] `Shared` slot の全 verb（lifecycle + `SaveState`/`RestoreState`/`OpenGui`/`CloseGui`）が 3 段 lock 形態（entry pre-check → `match lock` → lock 内再読）で、transition commit → `set_state` mirror store → plugin hook が同一クリティカルセクション内にある
-- [ ] `mirror ∈ {Activated, Processing} ⟹ activated.is_some()` 不変条件が構造的に保持される（`Failed`/`Destroyed` ≥ `Activated` の u8 順 — `≥` 比較禁止・列挙で書く）
-- [ ] `destroy` のみ `into_inner` で teardown する（hook 不呼出）・`&self` 照会（`lifecycle_state`）が mirror のみ読み `core.lock()` を取らない・`plugin_mut` が `Shared` で `None`・host `process` が busy で `Err(EndpointUnavailable)`
-- [ ] `src/endpoint.rs` に `PluginEndpoint`/`EndpointBounds`/`EndpointInner`/`L0Endpoint` が存在し、epoch CAS attach（`next_epoch` 単調増・`attached` 非 0 → `Err(EndpointUnavailable)`）と `Drop` での自分の epoch のみ返却（`compare_exchange(epoch, 0)`）が実装される
-- [ ] L0 inner `process` が mirror fast-skip → `try_lock` → 再読 → `activated` gate → `catch_unwind` の経路で、panic/poisoned/`Failed` を `fetch_max(Failed)` + `Ok(CONTINUE)` + 無音へ収束させる
-- [ ] `attach_endpoint` が拒否順序を守る（state 系 `InvalidHandle`/`Failed`/`Lifecycle` → slot-shape `EndpointUnavailable` → activated 層 bounds 検査 → epoch CAS → scratch 確保）— L0 activated 層の bounds 検査（非 0・`≥ SendCore.activated.max_frames`・`≤ WIRE_MAX_*`）+ `AudioBuffer::try_new(BufferSpec{..})` `Err` → `Prepare(UnsupportedConfig)` 写像が実装される（uniform prelude は T4 所有・本層は activated 層の再検査）
-- [ ] 再 Activate bound gate — `Shared` slot で `attached` epoch ≠ 0 かつ `new_config.max_frames > bound.max_frames`（`SharedSlot::bound` 簿記値との比較・`attached` が authoritative 判定）の `Activate` が `Err(Prepare(UnsupportedConfig))` で拒否される（commit・`activated` 更新より前 — L1 `rt.is_none()` gate の mirror）・bound 内の再 Activate は合法で `activated` が新値へ更新される
-- [ ] `mirror_encode`/`mirror_decode` が `l1::data` に維持され `crate::l1::data::` 経路で L0 側から利用される（`src/mirror.rs` 新設なし・l1 crate-free discipline 維持）
-- [ ] narrow gate（下記 Verification）が exit 0 — L0 単体テスト一式が通る
+- [x] `Instance` が `Plain`/`Shared` スロットを持ち、`create_sendable` 有無で dispatch される — 非 Send factory の L0 利用（`plugin_mut`/`process`）に退行なし
+- [x] `Shared` slot の全 verb（lifecycle + `SaveState`/`RestoreState`/`OpenGui`/`CloseGui`）が 3 段 lock 形態（entry pre-check → `match lock` → lock 内再読）で、transition commit → `set_state` mirror store → plugin hook が同一クリティカルセクション内にある
+- [x] `mirror ∈ {Activated, Processing} ⟹ activated.is_some()` 不変条件が構造的に保持される（`Failed`/`Destroyed` ≥ `Activated` の u8 順 — `≥` 比較禁止・列挙で書く）
+- [x] `destroy` のみ `into_inner` で teardown する（hook 不呼出）・`&self` 照会（`lifecycle_state`）が mirror のみ読み `core.lock()` を取らない・`plugin_mut` が `Shared` で `None`・host `process` が busy で `Err(EndpointUnavailable)`
+- [x] `src/endpoint.rs` に `PluginEndpoint`/`EndpointBounds`/`EndpointInner`/`L0Endpoint` が存在し、epoch CAS attach（`next_epoch` 単調増・`attached` 非 0 → `Err(EndpointUnavailable)`）と `Drop` での自分の epoch のみ返却（`compare_exchange(epoch, 0)`）が実装される
+- [x] L0 inner `process` が mirror fast-skip → `try_lock` → 再読 → `activated` gate → `catch_unwind` の経路で、panic/poisoned/`Failed` を `fetch_max(Failed)` + `Ok(CONTINUE)` + 無音へ収束させる
+- [x] `attach_endpoint` が拒否順序を守る（state 系 `InvalidHandle`/`Failed`/`Lifecycle` → slot-shape `EndpointUnavailable` → activated 層 bounds 検査 → epoch CAS → scratch 確保）— L0 activated 層の bounds 検査（非 0・`≥ SendCore.activated.max_frames`・`≤ WIRE_MAX_*`）+ `AudioBuffer::try_new(BufferSpec{..})` `Err` → `Prepare(UnsupportedConfig)` 写像が実装される（uniform prelude は T4 所有・本層は activated 層の再検査）
+- [x] 再 Activate bound gate — `Shared` slot で `attached` epoch ≠ 0 かつ `new_config.max_frames > bound.max_frames`（`SharedSlot::bound` 簿記値との比較・`attached` が authoritative 判定）の `Activate` が `Err(Prepare(UnsupportedConfig))` で拒否される（commit・`activated` 更新より前 — L1 `rt.is_none()` gate の mirror）・bound 内の再 Activate は合法で `activated` が新値へ更新される
+- [x] `mirror_encode`/`mirror_decode` が `l1::data` に維持され `crate::l1::data::` 経路で L0 側から利用される（`src/mirror.rs` 新設なし・l1 crate-free discipline 維持）
+- [x] narrow gate（下記 Verification）が exit 0 — L0 単体テスト一式が通る
 
 ## Verification
 
-- [ ] `mise run check` — exit 0
-- [ ] `mise run lint` — exit 0
-- [ ] `mise run test` — exit 0（既存 L0/host テスト無退行 + 新規 L0 単体テスト）
-- [ ] `mise exec -- cargo test -p ruviform-plugin-host` — L0 単体一式（Shared dispatch・verb 到達・epoch・`Failed` 収束・busy bypass・`plugin_mut` `None`・poisoned destroy）
-- [ ] 対象 test-spec: `docs/test-specs/plugin-endpoint-contract-tests.md` — 規則「L0 Shared セルの verb 到達」「verb 3 段 lock 形態」「`&self` 照会は観測 union のみ」「L0 endpoint `process` 経路」「単一 endpoint 規則（L0 側）」を担保
+- [x] `mise run check` — exit 0
+- [x] `mise run lint` — exit 0
+- [x] `mise run test` — exit 0（既存 L0/host テスト無退行 + 新規 L0 単体テスト）
+- [x] `mise exec -- cargo test -p ruviform-plugin-host` — L0 単体一式（Shared dispatch・verb 到達・epoch・`Failed` 収束・busy bypass・`plugin_mut` `None`・poisoned destroy）
+- [x] 対象 test-spec: `docs/test-specs/plugin-endpoint-contract-tests.md` — 規則「L0 Shared セルの verb 到達」「verb 3 段 lock 形態」「`&self` 照会は観測 union のみ」「L0 endpoint `process` 経路」「単一 endpoint 規則（L0 側）」を担保
+
+補足（task doc の Verification 範囲外・IR に記録）: `mise run fmt-check`/`mise run build` exit 0・`mise run test-rt` exit 0（新規 `rt_` 実一致 = `rt_endpoint_process_no_alloc`・`rt_endpoint_busy_bypass_no_alloc` の 2 件 — plugin-host lib 内の既存 `rt_process_no_alloc` + 文字列フィルタの副次一致 `shared_start_failure_rolls_back_to_activated` を含め lib 4 件、`l1_proxy_e2e` 側 `rt_l1_*` 2 件も pass）。レビュー（A=APPROVE・B=全攻撃面クリア）の確定修正（poison 起源 comment・`#[cfg_attr(not(test), expect(dead_code))]` tripwire・attach 順序 doc + T4 watch line・verb starvation doc・epoch skip comment）適用済み — 詳細は `docs/impl/ir/issue-113-l0-shared-slot-and-endpoint-inner-task-2-implementation.md`。

@@ -91,6 +91,7 @@
 
 mod command;
 mod composite;
+mod endpoint;
 mod host;
 // The `pub(crate)` L1 out-of-process instance machinery (Issue #76):
 // spawn + stdio handshake, driver/reader threads, the shm data plane
@@ -103,6 +104,7 @@ mod plugin;
 
 pub use command::{GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, PluginHandle};
 pub use composite::{ChildExit, HostNotification, OutOfProcessSpec, PluginHost};
+pub use endpoint::{EndpointBounds, PluginEndpoint};
 pub use host::InProcessHost;
 pub use plugin::{
     ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
