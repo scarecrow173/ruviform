@@ -47,9 +47,21 @@ relations:
     - "docs/designs/plugin-l1-out-of-process.md"
     - "docs/designs/engine-plugin-host-integration.md"
     - "docs/designs/ruviform-architecture-design-baseline.md"
-  derived-by: []
+  derived-by:
+    - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
+    - "docs/tasks/clap-host-bridge.md"
+    - "docs/tasks/vst3-host-bridge.md"
+    - "docs/tasks/real-adapter-runner-bins.md"
+    - "docs/tasks/real-adapter-e2e-and-lane.md"
+    - "docs/tasks/real-adapter-final-verification.md"
+    - "docs/test-specs/adapter-host-bridge-contract-tests.md"
+    - "docs/test-specs/real-adapter-l1-e2e-tests.md"
+    - "docs/test-specs/l1-real-plugin-lane-tests.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/adapter-host-bridge-contract-tests.md"
+    - "docs/test-specs/real-adapter-l1-e2e-tests.md"
+    - "docs/test-specs/l1-real-plugin-lane-tests.md"
   references: []
   defers: []
   deferred-by: []

@@ -20,7 +20,9 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "docs/designs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
   depends-on: []
   blocks: []
   supersedes: []
@@ -48,8 +50,12 @@ relations:
     - "docs/adr/plugin-architecture-clap-vst3.md"
   derived-by:
     - "docs/designs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/adapter-host-bridge-contract-tests.md"
+    - "docs/test-specs/real-adapter-l1-e2e-tests.md"
+    - "docs/test-specs/l1-real-plugin-lane-tests.md"
   references: []
   defers: []
   deferred-by:

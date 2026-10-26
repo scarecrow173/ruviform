@@ -26,6 +26,7 @@ Directory: `docs/tasks`
 | TASK-034JRQBPxKgu0yLVIB6Xm7 | セッション統合（OutputStream callback → RT グラフ駆動） | done | [audio-engine-session.md](./audio-engine-session.md) |
 | TASK-034MrsUVP3NUi1Nrap9gyd | audio シーム（AudioNode FnMut impl + plan.rs 退役 — Retirer/ptr_eq/Drop for RtPlan/drain） | done | [audio-fnmut-node-and-plan-retirement.md](./audio-fnmut-node-and-plan-retirement.md) |
 | TASK-034IwBWH50nD9Unn8HghJD | テンプレート残存プレースホルダーのベースラインスイープ | done | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
+| TASK-034MLSwRAMOjT59ZH5kQFn | CLAP host bridge（host feature・ClapLibrary/descriptor+param 合成・intern-once・lifecycle/params/error 写像・ClapPluginFactory） | todo | [clap-host-bridge.md](./clap-host-bridge.md) |
 | TASK-034LFHv6XBnCj3XsdaEGVG | Issue #99 色変換カーネル closeout | done | [color-conversion-closeout.md](./color-conversion-closeout.md) |
 | TASK-034LFHuE6Ii7Wqar445Znn | Issue #99 色変換カーネル final verification | done | [color-conversion-final-verification.md](./color-conversion-final-verification.md) |
 | TASK-034KSVlq4M72vjrxvDRQbP | コンポジットカーネル実装（CompositeOver + Crossfade + 共有 f16 コーデック格上げ） | done | [composite-kernels.md](./composite-kernels.md) |
@@ -104,6 +105,9 @@ Directory: `docs/tasks`
 | TASK-034JfGDrzj4yLZMu9A4qHS | PoC 描画バックエンド計測（canvas2d/webgl2/webgpu フレーム統計） | done | [poc-render-backends.md](./poc-render-backends.md) |
 | TASK-034JfGCUwtk0lzJvJPr36B | PoC UI ハーネスホスト（独立ワークスペース・wry+tao・計測契約） | done | [poc-ui-harness-host.md](./poc-ui-harness-host.md) |
 | TASK-034JgsHeZt7Bm40uBMo9wg | coupler-rs vst3 による VST3 binding PoC（最小ゲインプラグイン） | done | [poc-vst3-binding-adapter.md](./poc-vst3-binding-adapter.md) |
+| TASK-034MLSyEUOp70P1hRsepM9 | 実プラグイン L1 E2E + opt-in lane（tests/l1_real_adapter_e2e.rs 両規格・mise task・l1-real-verify job・OFX 境界明文化・doc 同期） | todo | [real-adapter-e2e-and-lane.md](./real-adapter-e2e-and-lane.md) |
+| TASK-034MLSzaZebh5KuCkE4guN | real-adapter final verification + closeout（Full Gate・opt-in lane 実測・AC 証跡・status 同期） | todo | [real-adapter-final-verification.md](./real-adapter-final-verification.md) |
+| TASK-034MLSxXJkDzlYvxqtGWDY | 規格別 runner bin（required-features=["host"]・DLL_PREFIX fixture 解決・RUVIFORM_L1_REAL_PLUGIN_DIR・compile-time 固定 factories） | todo | [real-adapter-runner-bins.md](./real-adapter-runner-bins.md) |
 | TASK-034Jf4gzf7OAwNOoW3t9WV | impl record と文書整合 | done | [record-impl-and-sync-docs.md](./record-impl-and-sync-docs.md) |
 | TASK-034IwCiYXp6ub3O8Brcs3L | 設定ファイルのレビューと最小修正 | done | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | TASK-034IwCiByN74V3hysJ9iTR | AGENTS.md の Ruviform 向け節単位改稿 | done | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
@@ -140,6 +144,7 @@ Directory: `docs/tasks`
 | TASK-034IdQxdPQUxXweHBN1ZxT | 再現インストール検証と #3 転記用作業メモ | done | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |
 | TASK-034JZVID00000000000070 | Issue #27 文書クローズと全量検証 | done | [video-engine-closeout.md](./video-engine-closeout.md) |
 | TASK-034JZVID00000000000060 | ruviform-video クレート実装 + テスト | done | [video-engine-crate.md](./video-engine-crate.md) |
+| TASK-034MLSxnXfu3lnbTX3LQzI | VST3 host bridge（host feature・Vst3Library/dlopen+class scan・COM host objects・lifecycle 写像・Vst3PluginFactory） | todo | [vst3-host-bridge.md](./vst3-host-bridge.md) |
 | TASK-034JP1sJ8ZJThe3Fj9w0mr | clack thread-check の有効化と process での is_audio_thread 照会 | done | [wire-clap-thread-check.md](./wire-clap-thread-check.md) |
 | TASK-034LFHddlrfvXu5Jlmwdr0 | working space カーネル実装（ToWorking + FromWorking） | done | [working-space-kernels.md](./working-space-kernels.md) |
 | TASK-034JPwZ8htMzYNPNgOceEI | 分析・レポート記述・文書整合 | done | [write-dispatch-analysis-report.md](./write-dispatch-analysis-report.md) |
