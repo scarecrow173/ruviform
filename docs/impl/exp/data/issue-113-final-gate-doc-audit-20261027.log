@@ -1,0 +1,9 @@
+# gate=doc-audit started=2026-10-26T16:01:27Z
+$ mise exec -- node .agents/skills/doc-status/scripts/doc_status.js audit --json
+{
+  "command": "audit",
+  "blocking": 0,
+  "documents": 332,
+  "findings": []
+}
+# gate=doc-audit exit=0 finished=2026-10-26T16:01:43Z

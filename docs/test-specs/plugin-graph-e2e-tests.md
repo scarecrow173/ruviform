@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034MrshMb3JSLSRiyAbWcK"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "plugin グラフ E2E（L0/L1 endpoint → FnMut AudioNode → pull グラフ → mock device）テスト仕様"
 created: "2026-10-26"
 updated: "2026-10-26"
@@ -41,7 +41,7 @@ relations:
 
 # plugin グラフ E2E（L0/L1 endpoint → FnMut AudioNode → pull グラフ → mock device）テスト仕様
 
-> status: proposed — Issue #113 の spec AC1/AC3/AC9（実グラフ消費・構成面・L0/L1 graph E2E）と AC5/AC6 のグラフ経路部分を固定する。endpoint 面の単独契約は `plugin-endpoint-contract-tests.md`、`rt_` no-alloc 実測と退役観測は `plugin-rt-retirement-tests.md` が担当する。run 可能コマンドは task 側に定義する。
+> status: approved — Issue #113 の実装（Task 1–7・Full Gate 全 green）で契約が実結果により確認済み。endpoint 面の単独契約は `plugin-endpoint-contract-tests.md`、`rt_` no-alloc 実測と退役観測は `plugin-rt-retirement-tests.md` が担当する。run 可能コマンドは task 側に定義する。
 
 ## Purpose
 

@@ -40,7 +40,7 @@ Directory: `docs/tasks`
 | TASK-034JcCQQD01mBg5JPjNiAS | video-core の所有権・drop・zero-copy 契約と RT ラベルの文書化 | done | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
 | TASK-034KPgPqF3NHzPtZPvvCHY | edit クレート骨格 + データモデル型・mutation | done | [edit-crate-and-model.md](./edit-crate-and-model.md) |
 | TASK-034KPgQj9u5utlkxH3JGqv | edit 評価射影 + テスト・文書クローズ | done | [edit-evaluation-and-closeout.md](./edit-evaluation-and-closeout.md) |
-| TASK-034Mrt2jiucAb69qBSYoEg | engine-plugin 統合 final verification + closeout（Full Gate・AC-to-test 証跡・status 同期） | todo | [engine-plugin-final-verification.md](./engine-plugin-final-verification.md) |
+| TASK-034Mrt2jiucAb69qBSYoEg | engine-plugin 統合 final verification + closeout（Full Gate・AC-to-test 証跡・status 同期） | done | [engine-plugin-final-verification.md](./engine-plugin-final-verification.md) |
 | TASK-034JglHTIvjo18tMdbO3DP | 採否 ADR 確定とワークスペース帳簿・索引の同期 | done | [finalize-backend-adr-and-sync-docs.md](./finalize-backend-adr-and-sync-docs.md) |
 | TASK-034J6PpKd8jNFxEYS4CRdM | 時間演算の早期飽和・Err 修正（i128 中間演算） | done | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
 | TASK-034LFHl0gbFixJl7RmlzQm | IccTransform + IccIntent 実装（feature icc・moxcms 経路） | done | [icc-transform-feature.md](./icc-transform-feature.md) |

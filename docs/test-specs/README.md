@@ -28,15 +28,15 @@ Directory: `docs/test-specs`
 | TSPEC-034KpKr9gVqJJNxYSJVaQF | 音楽時間 ABI 拡張テスト仕様 | approved | [musical-transport-abi-tests.md](./musical-transport-abi-tests.md) |
 | TSPEC-034JRcGrYYZnirStTwM7Z9 | オフライン実行ドライバ テスト仕様 | draft | [offline-execution-driver-tests.md](./offline-execution-driver-tests.md) |
 | TSPEC-034L6w60ZWfGC89xBPgw4L | OFX Host Native Contract Tests | proposed | [ofx-host-native-contract-tests.md](./ofx-host-native-contract-tests.md) |
-| TSPEC-034MrsawZsMkT7wzC5cbuK | plugin endpoint 契約（prepare/bounds・Shared セル・arm 経路・leg 返却・Send 証拠）テスト仕様 | proposed | [plugin-endpoint-contract-tests.md](./plugin-endpoint-contract-tests.md) |
+| TSPEC-034MrsawZsMkT7wzC5cbuK | plugin endpoint 契約（prepare/bounds・Shared セル・arm 経路・leg 返却・Send 証拠）テスト仕様 | approved | [plugin-endpoint-contract-tests.md](./plugin-endpoint-contract-tests.md) |
 | TSPEC-034Jg6YSP6CLjJHnFGG5oL | プラグイン基盤 API の契約保証 | approved | [plugin-foundation.md](./plugin-foundation.md) |
-| TSPEC-034MrshMb3JSLSRiyAbWcK | plugin グラフ E2E（L0/L1 endpoint → FnMut AudioNode → pull グラフ → mock device）テスト仕様 | proposed | [plugin-graph-e2e-tests.md](./plugin-graph-e2e-tests.md) |
+| TSPEC-034MrshMb3JSLSRiyAbWcK | plugin グラフ E2E（L0/L1 endpoint → FnMut AudioNode → pull グラフ → mock device）テスト仕様 | approved | [plugin-graph-e2e-tests.md](./plugin-graph-e2e-tests.md) |
 | TSPEC-034JZPGUI0000000000004 | プラグイン GUI PoC 判定規則 | approved | [plugin-gui-poc.md](./plugin-gui-poc.md) |
 | TSPEC-5ibPChaXqhbfYjL713aqKw | plugin-host L0 テスト仕様 | approved | [plugin-host-l0-tests.md](./plugin-host-l0-tests.md) |
 | TSPEC-034LNXHpBkMIVTg6nAQUVh | plugin L1 プロキシ契約（コマンド parity・クラッシュ Failed・pass-through・RT 脚）テスト仕様 | approved | [plugin-l1-proxy-contract-tests.md](./plugin-l1-proxy-contract-tests.md) |
 | TSPEC-034LNXHUv8qjXSdWNUU2Ps | plugin L1 runner（ruviform-plugin-export）E2E テスト仕様 | approved | [plugin-l1-runner-e2e-tests.md](./plugin-l1-runner-e2e-tests.md) |
 | TSPEC-034LNXxXa2vencBWSvgemD | plugin L1 ワイヤ codec・ライフサイクル Failed 拡張 テスト仕様 | approved | [plugin-l1-wire-codec-tests.md](./plugin-l1-wire-codec-tests.md) |
-| TSPEC-034Mrsijk0b3tEOMrMG0MN | plugin/audio RT 契約 + 退役（assert_no_alloc・arm_apply・leg 返却・plan 退役 drain）テスト仕様 | proposed | [plugin-rt-retirement-tests.md](./plugin-rt-retirement-tests.md) |
+| TSPEC-034Mrsijk0b3tEOMrMG0MN | plugin/audio RT 契約 + 退役（assert_no_alloc・arm_apply・leg 返却・plan 退役 drain）テスト仕様 | approved | [plugin-rt-retirement-tests.md](./plugin-rt-retirement-tests.md) |
 | TSPEC-034JxNwt3ReMphshEaeFVe | SPSC・退役・スナップショット交換の RT 契約保証 | approved | [rt-channel-and-snapshot-contracts.md](./rt-channel-and-snapshot-contracts.md) |
 | TSPEC-034JxNxcYxa29rPklpknWh | RtContext・Processor 契約・MasterClock の RT 契約保証 | approved | [rt-context-and-processor-contract.md](./rt-context-and-processor-contract.md) |
 | TSPEC-034KV6hs4k3mZ6jVBgDaKf | RT 観測コスト計測 PoC ハーネスの計測保証 | approved | [rt-observability-poc-tests.md](./rt-observability-poc-tests.md) |

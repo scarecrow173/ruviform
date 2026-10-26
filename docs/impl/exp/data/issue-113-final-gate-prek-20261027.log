@@ -1,0 +1,11 @@
+# gate=prek started=2026-10-26T16:01:27Z
+$ mise exec -- prek run --all-files
+trim trailing whitespace.................................................Passed
+fix end of files.........................................................Passed
+check yaml...............................................................Passed
+check toml...............................................................Passed
+mixed line ending........................................................Passed
+fix utf-8 byte order marker..............................................Passed
+detect private key.......................................................Passed
+check illegal windows names..........................(no files to check)Skipped
+# gate=prek exit=0 finished=2026-10-26T16:01:27Z

@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034MrsawZsMkT7wzC5cbuK"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "plugin endpoint 契約（prepare/bounds・Shared セル・arm 経路・leg 返却・Send 証拠）テスト仕様"
 created: "2026-10-26"
 updated: "2026-10-26"
@@ -40,7 +40,7 @@ relations:
 
 # plugin endpoint 契約（prepare/bounds・Shared セル・arm 経路・leg 返却・Send 証拠）テスト仕様
 
-> status: proposed — Issue #113 の endpoint 面（`PluginHost::prepare_endpoint`/`PluginEndpoint`/`EndpointBounds`・L0 Shared セル・L1 arm/返却経路・拒否表）の受入契約を固定する。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
+> status: approved — Issue #113 の実装（Task 1–7・Full Gate 全 green）で契約が実結果により確認済み。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
 
 ## Purpose
 

@@ -1,0 +1,5 @@
+# gate=lint-plugin-core started=2026-10-26T16:01:20Z
+$ mise run lint-plugin-core
+[lint-plugin-core] $ cargo clippy -p ruviform-plugin-core --all-targets -- -D w…
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+# gate=lint-plugin-core exit=0 finished=2026-10-26T16:01:21Z

@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034Mrsijk0b3tEOMrMG0MN"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "plugin/audio RT 契約 + 退役（assert_no_alloc・arm_apply・leg 返却・plan 退役 drain）テスト仕様"
 created: "2026-10-26"
 updated: "2026-10-26"
@@ -43,7 +43,7 @@ relations:
 
 # plugin/audio RT 契約 + 退役（assert_no_alloc・arm_apply・leg 返却・plan 退役 drain）テスト仕様
 
-> status: proposed — Issue #113 の spec AC7（`rt_` no-alloc 実測）と AC8（退役の非 RT drop・`retired_overflows` 観測）を固定する。endpoint 公開面の契約は `plugin-endpoint-contract-tests.md`、グラフ E2E 正当性は `plugin-graph-e2e-tests.md` が担当する。run 可能コマンドは task 側に定義する。
+> status: approved — Issue #113 の実装（Task 1–7・Full Gate 全 green）で契約が実結果により確認済み。endpoint 公開面の契約は `plugin-endpoint-contract-tests.md`、グラフ E2E 正当性は `plugin-graph-e2e-tests.md` が担当する。run 可能コマンドは task 側に定義する。
 
 ## Purpose
 

@@ -1,0 +1,177 @@
+# gate=test-plugin-host started=2026-10-26T16:01:44Z
+$ mise exec -- cargo test -p ruviform-plugin-host
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_host-77492339c4d7a79a.exe)
+
+running 72 tests
+test composite::tests::attach_endpoint_routes_l0_slots_to_inprocess ... ok
+test composite::tests::prepare_endpoint_observes_poisoned_cell_as_failed ... ok
+test endpoint::tests::endpoint_types_are_send ... ok
+test endpoint::tests::l1_endpoint_dims_gate_never_surfaces_ipc ... ok
+test endpoint::tests::l1_endpoint_non_processing_rejects ... ok
+test endpoint::tests::l1_endpoint_failed_converges ... ok
+test endpoint::tests::l1_endpoint_drop_full_recovers_on_thread ... ok
+test endpoint::tests::l1_endpoint_drop_returns_leg ... ok
+test endpoint::tests::l1_endpoint_wire_unrepresentable_maps_to_prepare ... ok
+test endpoint::tests::l1_endpoint_process_passes_through ... ok
+test endpoint::tests::l1_endpoint_over_bound_arm_passes_through ... ok
+test composite::tests::prepare_endpoint_mints_both_routes ... ok
+test endpoint::tests::process_audio_stages_and_writes_back ... ok
+test endpoint::tests::process_audio_err_leaves_out_unchanged ... ok
+test host::tests::attach_epoch_drop_and_stale_endpoint ... ok
+test composite::tests::prepare_endpoint_rejects_failed ... ok
+test host::tests::attach_rejects_in_pinned_order ... ok
+test host::tests::busy_cell_bypasses_endpoint_and_host_process ... ok
+test composite::tests::attach_endpoint_routes_l1_slots_to_the_leg ... ok
+test host::tests::endpoint_outlives_instance_teardown ... ok
+test composite::tests::endpoint_unavailable_stays_local ... ok
+test endpoint::tests::process_audio_bound_clip_rejects_with_out_unchanged ... ok
+test composite::tests::prepare_endpoint_pins_the_rejection_order ... ok
+test endpoint::tests::l1_endpoint_arm_drain_generation_gate ... ok
+test composite::tests::plugin_mut_none_for_shared_and_l1 ... ok
+test host::tests::endpoint_panic_converges_failed_silences_output ... ok
+test host::tests::endpoint_process_applies_gain_and_gates_blocks ... ok
+test host::tests::instantiate_selects_slot_by_create_sendable ... ok
+test host::tests::lifecycle_state_reads_mirror_while_core_held ... ok
+test host::tests::plain_slot_keeps_direct_path ... ok
+test host::tests::poisoned_verb_converges_and_destroy_tears_down ... ok
+test host::tests::reactivate_bound_gate ... ok
+test host::tests::rt_endpoint_busy_bypass ... ok
+test host::tests::rt_endpoint_busy_bypass_no_alloc ... ok
+test host::tests::rt_endpoint_l0_process_no_alloc ... ok
+test host::tests::rt_endpoint_process_no_alloc ... ok
+test host::tests::shared_cell_types_are_send ... ok
+test host::tests::shared_plugin_mut_is_none ... ok
+test host::tests::shared_prepare_failure_keeps_initialized ... ok
+test host::tests::shared_start_failure_rolls_back_to_activated ... ok
+test host::tests::shared_verbs_reach_plugin_while_attached ... ok
+test endpoint::tests::rt_endpoint_l1_process_no_alloc ... ok
+test endpoint::tests::rt_l1_endpoint_process_no_alloc ... ok
+test endpoint::tests::rt_endpoint_arm_apply_no_alloc ... ok
+test endpoint::tests::rt_l1_endpoint_arm_drain_no_alloc ... ok
+test l1::data::tests::arm_apply_swaps_ring_and_keeps_seq_bookkeeping ... ok
+test tests::activate_failure_reports_activate_failed ... ok
+test tests::gui_unsupported_by_default ... ok
+test tests::illegal_transitions_rejected ... ok
+test tests::instantiate_unknown_id_rejected ... ok
+test l1::tests::dropped_submit_result_frees_alternation_slot ... ok
+test tests::lifecycle_command_chain ... ok
+test tests::process_requires_processing_state ... ok
+test tests::reused_slot_generations_do_not_alias ... ok
+test tests::rt_process_no_alloc ... ok
+test tests::scan_lists_registered_factories ... ok
+test tests::stale_handle_rejected ... ok
+test tests::state_roundtrip ... ok
+test l1::tests::destroy_with_a_live_endpoint_does_not_block ... ok
+test l1::data::tests::rt_l1_arm_apply_no_alloc ... ok
+test l1::tests::leg_returned_after_destroy_is_not_restored ... ok
+test l1::tests::prepare_endpoint_takes_leg_and_blocks_reattach ... ok
+test l1::tests::rt_l1_detached_process_no_alloc ... ok
+test l1::tests::detached_process_returns_endpoint_unavailable_then_restores ... ok
+test l1::tests::restored_leg_rearms_to_the_newer_staging ... ok
+test l1::tests::pending_arm_is_latest_wins_and_retries ... ok
+test composite::tests::latency_frames_reports_per_route ... ok
+test l1::tests::activate_above_attach_bound_is_rejected_while_detached ... ok
+test composite::tests::latency_frames_gates_l1_on_the_mirror ... ok
+test l1::tests::prepare_endpoint_rejections_leave_leg_home ... ok
+test l1::tests::latency_frames_gate_vs_armed_read ... ok
+test composite::tests::prepare_endpoint_bounds_matrix ... ok
+
+test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests src\bin\l1-test-worker.rs (target\debug\deps\l1_test_worker-5af81bb982116492.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_proxy_e2e.rs (target\debug\deps\l1_proxy_e2e-9779b18bdba6be3a.exe)
+
+running 55 tests
+test activate_over_wire_limit_rejected ... ok
+test command_parity_lifecycle_and_state ... ok
+test composite_e2e::l1_destroy_honours_lifecycle_legality ... ok
+test composite_e2e::duplicate_plugin_id_is_a_defined_rejection ... ok
+test drop_reaps_live_child ... ok
+test composite_e2e::l1_kill_reports_failed_once ... ok
+test l1::data::tests::arm_apply_swaps_ring_and_keeps_seq_bookkeeping ... ok
+test handshake_descriptor_mismatch ... ok
+test destroy_detaches_reader_when_heir_holds_stdout ... ok
+test l1::data::tests::rt_l1_arm_apply_no_alloc ... ok
+test l1::tests::detached_process_returns_endpoint_unavailable_then_restores ... ok
+test l1::tests::destroy_with_a_live_endpoint_does_not_block ... ok
+test l1::tests::dropped_submit_result_frees_alternation_slot ... ok
+test crash_transitions_failed_and_notifies ... ok
+test l1::tests::activate_above_attach_bound_is_rejected_while_detached ... ok
+test composite_e2e::stale_handles_never_cross_route ... ok
+test l1::tests::leg_returned_after_destroy_is_not_restored ... ok
+test l1::tests::prepare_endpoint_takes_leg_and_blocks_reattach ... ok
+test composite_e2e::l1_stop_processing_advisory_err_still_reports_activated ... ok
+test lookahead_zero_is_rejected ... ok
+test l1::tests::pending_arm_is_latest_wins_and_retries ... ok
+test l1::tests::restored_leg_rearms_to_the_newer_staging ... ok
+test l1::tests::rt_l1_detached_process_no_alloc ... ok
+test destroy_is_clean_teardown ... ok
+test gui_defined_rejection ... ok
+test l1::tests::latency_frames_gate_vs_armed_read ... ok
+test l1::tests::prepare_endpoint_rejections_leave_leg_home ... ok
+test composite_e2e::shadowed_factory_registration_keeps_first_claimant ... ok
+test handshake_version_mismatch ... ok
+test rt_l1_process_path_no_alloc ... ok
+test read_out_slot_rejects_dims_over_activated_contract ... ok
+test rt_l1_result_leg_try_ops ... ok
+test shm_create_gives_up_on_persistent_collision ... ok
+test illegal_transitions_match_l0_semantics ... ok
+test shm_unique_keys_never_repeat ... ok
+test shm_header_roundtrip_matches_wire_layout ... ok
+test shm_create_retries_past_stale_name ... ok
+test stage_in_zero_fills_planes_without_a_source ... ok
+test spawn_failure_is_ipc ... ok
+test submit_carries_staging_generation_and_stale_is_dropped ... ok
+test kill_transitions_failed_and_notifies ... ok
+test process_after_crash_passes_through_then_silences ... ok
+test composite_e2e::mixed_routes_full_series ... ok
+test process_hung_child_passes_through_without_blocking ... ok
+test process_over_capacity_block_is_ipc_error ... ok
+test process_requires_processing_state ... ok
+test composite_e2e::runner_bin_serves_real_gain_plugin ... ok
+test voluntary_exit_zero_is_failure ... ok
+test process_underrun_passes_through_defined_output ... ok
+test rejected_block_replies_resolve_pass_through ... ok
+test reactivation_cycle_never_publishes_stale_blocks ... ok
+test process_roundtrip_gain_and_lookahead_delay ... ok
+test handshake_scan_timeout ... ok
+test hang_converges_on_command_timeout ... ok
+test wedged_child_write_converges_and_teardown_is_bounded ... ok
+
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+
+     Running tests\plugin_graph_e2e.rs (target\debug\deps\plugin_graph_e2e-828af39af3717b34.exe)
+
+running 13 tests
+test endpoint_capturing_closure_is_send ... ok
+test l0_endpoint_node_drives_gain_through_session ... ok
+test l0_lifecycle_while_attached ... ok
+test bound_clip_err_leaves_out_unchanged ... ok
+test l0_graph_attached_verbs_answer ... ok
+test plan_swap_retires_endpoint_node_on_drain ... ok
+test rt_endpoint_graph_pull_no_alloc ... ok
+test session_teardown_collects_retired_plan ... ok
+test source_position_err_yields_silence_not_stale ... ok
+test l0_panic_converges_failed_with_silence ... ok
+test l1_leg_returns_through_retired_plan_drain ... ok
+test l1_kill_child_converges_failed_once_then_silence ... ok
+test l1_endpoint_node_drives_worker_gain_through_session ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+   Doc-tests ruviform_plugin_host
+
+running 2 tests
+test crates\ruviform-plugin-host\src\lib.rs - version (line 159) ... ok
+test crates\ruviform-plugin-host\src\composite.rs - composite::PluginHost::prepare_endpoint (line 535) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+all doctests ran in 0.70s; merged doctests compilation took 0.55s
+# gate=test-plugin-host exit=0 finished=2026-10-26T16:01:47Z
