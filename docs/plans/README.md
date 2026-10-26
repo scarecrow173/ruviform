@@ -11,6 +11,7 @@ Directory: `docs/plans`
 | PLAN-034JdOWI3vblJW11kIueY0 | DSP/SIMD 比較ベンチマーク PoC 実装 | completed | [dsp-simd-poc.md](./dsp-simd-poc.md) |
 | PLAN-034JgkWCimxdvr81k6b0ow | オーディオデバイス境界ポートと ruviform-audio-device PoC の実装（Issue #23） | approved | [implement-audio-device-port-and-cpal-poc.md](./implement-audio-device-port-and-cpal-poc.md) |
 | PLAN-034KV6r7RDBR7CSvMSIB8e | Issue #104 RT 観測経路コスト計測 PoC の実施計画 | completed | [implement-issue-104-rt-observability-poc.md](./implement-issue-104-rt-observability-poc.md) |
+| PLAN-034MrrISpCH4LObubGof0Q | Issue #113 実施計画 — エンジン/利用側へのプラグイン統合（RT endpoint 所有分離 + グラフ接着） | approved | [implement-issue-113-engine-plugin-integration.md](./implement-issue-113-engine-plugin-integration.md) |
 | PLAN-034J5K603qXDNmT82wI9v7 | Issue #18 データモデル API の実装（media-core / audio-core / video-core） | completed | [implement-issue-18-data-model.md](./implement-issue-18-data-model.md) |
 | PLAN-034JP0n5QlXSj34GK30GBz | Issue #22 RT 検証基盤の実施（assert_no_alloc 適用・thread-check 統合・検証文書） | approved | [implement-issue-22-rt-verification.md](./implement-issue-22-rt-verification.md) |
 | PLAN-034JRcspAdty0HzWF0KzIr | Issue #24 オフライン実行ドライバ実装 | approved | [implement-issue-24-offline-execution-driver.md](./implement-issue-24-offline-execution-driver.md) |

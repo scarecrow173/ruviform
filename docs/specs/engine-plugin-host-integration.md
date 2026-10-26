@@ -20,7 +20,9 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "docs/designs/engine-plugin-host-integration.md"
+    - "docs/plans/implement-issue-113-engine-plugin-integration.md"
   depends-on: []
   blocks: []
   supersedes: []
@@ -44,8 +46,12 @@ relations:
     - "docs/adr/audio-engine-snapshot-swap.md"
   derived-by:
     - "docs/designs/engine-plugin-host-integration.md"
+    - "docs/plans/implement-issue-113-engine-plugin-integration.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/plugin-endpoint-contract-tests.md"
+    - "docs/test-specs/plugin-graph-e2e-tests.md"
+    - "docs/test-specs/plugin-rt-retirement-tests.md"
   references: []
   defers: []
   deferred-by:

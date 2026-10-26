@@ -113,6 +113,7 @@ relations:
     - "docs/specs/engine-plugin-host-integration.md"
     - "docs/adr/plugin-rt-ownership-split.md"
     - "docs/designs/engine-plugin-host-integration.md"
+    - "docs/plans/implement-issue-113-engine-plugin-integration.md"
   verifies: []
   verified-by: []
   references:

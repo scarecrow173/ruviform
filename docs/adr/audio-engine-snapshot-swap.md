@@ -32,6 +32,8 @@ relations:
     - "docs/specs/engine-plugin-host-integration.md"
     - "docs/adr/plugin-rt-ownership-split.md"
     - "docs/designs/engine-plugin-host-integration.md"
+    - "docs/plans/implement-issue-113-engine-plugin-integration.md"
+    - "docs/test-specs/plugin-rt-retirement-tests.md"
   verifies: []
   verified-by: []
   references: []

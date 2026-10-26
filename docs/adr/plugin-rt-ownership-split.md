@@ -46,8 +46,10 @@ relations:
     - "./plugin-isolation-strategy.md"
   derived-by:
     - "docs/designs/engine-plugin-host-integration.md"
+    - "docs/plans/implement-issue-113-engine-plugin-integration.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/plugin-rt-retirement-tests.md"
   references: []
   defers: []
   deferred-by: []
