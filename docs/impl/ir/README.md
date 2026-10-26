@@ -83,3 +83,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034MGZ77fXX8R8KvK7aHuy` | Issue #113 plugin graph E2E + RT lane — Task 6 implementation | completed | [issue-113-plugin-graph-e2e-and-rt-lane-task-6-implementation.md](./issue-113-plugin-graph-e2e-and-rt-lane-task-6-implementation.md) |
 | `IMPL-034N7fVxQmRzTyKpHsGdJcWu` | Issue #113 engine-plugin 統合 final verification + closeout — Task 7 implementation | completed | [issue-113-engine-plugin-final-verification-task-7-implementation.md](./issue-113-engine-plugin-final-verification-task-7-implementation.md) |
 | `IMPL-034MRyrqJRqI9iIjgk5hIX` | Issue #114 CLAP host bridge — Task 1 implementation | completed | [issue-114-clap-host-bridge-task-1-implementation.md](./issue-114-clap-host-bridge-task-1-implementation.md) |
+| `IMPL-034MRCMPz6M4DGPJGY0ZgX` | Issue #114 VST3 host bridge — Task 2 implementation | completed | [issue-114-vst3-host-bridge-task-2-implementation.md](./issue-114-vst3-host-bridge-task-2-implementation.md) |

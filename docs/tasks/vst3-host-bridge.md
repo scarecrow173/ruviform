@@ -1,23 +1,32 @@
 ---
 id: "TASK-034MLSxnXfu3lnbTX3LQzI"
 type: "task"
-status: "todo"
+status: "done"
 title: "VST3 host bridge（host feature・Vst3Library/dlopen+class scan・COM host objects・lifecycle 写像・Vst3PluginFactory）"
 created: "2026-10-26"
 updated: "2026-10-27"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-plugin-vst3/src/host.rs"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-vst3/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-plugin-vst3/src/lib.rs"
+      - type: "file"
+        path: "Cargo.lock"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-114-vst3-host-bridge-task-2-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
   blocks: []
@@ -82,20 +91,22 @@ Plan actions 5–9。`ruviform-plugin-vst3` に feature `host` で feature-seale
 
 ## Done When
 
-- [ ] `[features] host` が定義され、`cargo build -p ruviform-plugin-vst3 --features host` が通る（`libloading`/`ruviform-plugin-export` が `host` 指定時のみ dep 木に出現 — `cargo tree` で `host` off 時に新規 dep が non-optional 木に出ないことを確認）
-- [ ] `Vst3Library::load` が fixture cdylib を `libloading` で開き `GetPluginFactory` で `IPluginFactory` ComPtr を得て、`descriptors()` が `countClasses`/`getClassInfo2`/`getClassInfoUnicode` で `"Audio Module Class"` のみ採用した cached `PluginDescriptor` を返す（`id` = cid 16byte 小文字 hex・platform-order）
-- [ ] COM host objects（`IHostApplication`/`IComponentHandler`/`IParameterChanges`/`IParamValueQueue`）が `Class`/`ComWrapper` で実装され、`initialize(context)`/`setComponentHandler`/`inputParameterChanges` 経路で fixture に供給される
-- [ ] `Vst3Plugin` が `init`（`createInstance` chain + `initialize` + `setComponentHandler`）/`prepare`（`setActive(true)`→`setupProcessing` の順 + input scratch/channel pointer 配列を `channels × max_frames` で一括確保）/`start_processing`（`setProcessing(true)`）/`process_host`（`process(ProcessData)` 単一 bus・kSample32・kRealtime・input は bounce copy-in・output は `HostOutput.channel_mut` 直接参照）/`stop_processing`（`setProcessing(false)`）/`params`（`getParameterCount`/`getParameterInfo` — factory 構築時 eager 列挙の cached 表を pre-`init` を含む全 lifecycle で返す）を写像し、`Drop` で best-effort `setProcessing(false)`→`setActive(false)`→`terminate`→release を駆動（`Arc<Vst3Library>` で drop 順序保証）
-- [ ] `save_state`/`restore_state`/`open_gui`/`close_gui` が `Err(Unsupported)` 既定で、規格 state 動詞（`setState`/`getState`/`setComponentState`）を一度も呼ばない
-- [ ] unit test が `--features host` で pass — descriptor（id hex は `GainComponent::CID` bytes derive・literal は regression pin）/param 既知値・`"Component Controller Class"` filter・error 写像・fixture 欠落 `assert!` fail
-- [ ] narrow gate（下記 Verification）が exit 0 — `cargo test`/`clippy`/`check`/`lint`/`test` で default 構成不変グリーン
+- [x] `[features] host` が定義され、`cargo build -p ruviform-plugin-vst3 --features host` が通る（`libloading`/`ruviform-plugin-export` が `host` 指定時のみ dep 木に出現 — `cargo tree` で `host` off 時に新規 dep が non-optional 木に出ないことを確認）
+- [x] `Vst3Library::load` が fixture cdylib を `libloading` で開き `GetPluginFactory` で `IPluginFactory` ComPtr を得て、`descriptors()` が `countClasses`/`getClassInfo2`/`getClassInfoUnicode` で `"Audio Module Class"` のみ採用した cached `PluginDescriptor` を返す（`id` = cid 16byte 小文字 hex・platform-order）
+- [x] COM host objects（`IHostApplication`/`IComponentHandler`/`IParameterChanges`/`IParamValueQueue`）が `Class`/`ComWrapper` で実装され、`initialize(context)`/`setComponentHandler`/`inputParameterChanges` 経路で fixture に供給される
+- [x] `Vst3Plugin` が `init`（`createInstance` chain + `initialize` + `setComponentHandler`）/`prepare`（`setActive(true)`→`setupProcessing` の順 + input scratch/channel pointer 配列を `channels × max_frames` で一括確保）/`start_processing`（`setProcessing(true)`）/`process_host`（`process(ProcessData)` 単一 bus・kSample32・kRealtime・input は bounce copy-in・output は `HostOutput.channel_mut` 直接参照）/`stop_processing`（`setProcessing(false)`）/`params`（`getParameterCount`/`getParameterInfo` — factory 構築時 eager 列挙の cached 表を pre-`init` を含む全 lifecycle で返す）を写像し、`Drop` で best-effort `setProcessing(false)`→`setActive(false)`→`terminate`→release を駆動（`Arc<Vst3Library>` で drop 順序保証）
+- [x] `save_state`/`restore_state`/`open_gui`/`close_gui` が `Err(Unsupported)` 既定で、規格 state 動詞（`setState`/`getState`/`setComponentState`）を一度も呼ばない
+- [x] unit test が `--features host` で pass — descriptor（id hex は `GainComponent::CID` bytes derive・literal は regression pin）/param 既知値・`"Component Controller Class"` filter・error 写像・fixture 欠落 `assert!` fail
+- [x] narrow gate（下記 Verification）が exit 0 — `cargo test`/`clippy`/`check`/`lint`/`test` で default 構成不変グリーン
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-vst3 --features host` — exit 0（bridge unit test + 既存 component/controller/factory unit test 無退行）
-- [ ] `cargo clippy -p ruviform-plugin-vst3 --all-targets --features host -- -D warnings` — exit 0（COM vtable/libloading 箇所の scoped `#[expect(unsafe_code)]` + SAFETY のみ・0 warning）
-- [ ] `mise run check` — exit 0（`cargo check --workspace --all-targets` — `host` 未指定で `host.rs` 非 compile・default 構成不変）
-- [ ] `mise run lint` — exit 0（`cargo clippy --workspace --all-targets -D warnings` — `host` 未指定の default 木で無退行）
-- [ ] `mise run test` — exit 0（`cargo test --workspace` — `host` 未指定の default 木で無退行）
-- [ ] `cargo tree -p ruviform-plugin-vst3` — `libloading`/`ruviform-plugin-export` が `host` off で non-optional 木に出ない・`vst3` は既存必須のまま
-- [ ] `cargo tree -p ruviform-plugin-vst3 --features host` — `libloading`/`ruviform-plugin-export` が `host` 指定時のみ出現
+- [x] `cargo test -p ruviform-plugin-vst3 --features host` — exit 0（bridge unit test + 既存 component/controller/factory unit test 無退行）
+- [x] `cargo clippy -p ruviform-plugin-vst3 --all-targets --features host -- -D warnings` — exit 0（COM vtable/libloading 箇所の scoped `#[expect(unsafe_code)]` + SAFETY のみ・0 warning）
+- [x] `mise run check` — exit 0（`cargo check --workspace --all-targets` — `host` 未指定で `host.rs` 非 compile・default 構成不変）
+- [x] `mise run lint` — exit 0（`cargo clippy --workspace --all-targets -D warnings` — `host` 未指定の default 木で無退行）
+- [x] `mise run test` — exit 0（`cargo test --workspace` — `host` 未指定の default 木で無退行）
+- [x] `cargo tree -p ruviform-plugin-vst3` — `libloading`/`ruviform-plugin-export` が `host` off で non-optional 木に出ない・`vst3` は既存必須のまま
+- [x] `cargo tree -p ruviform-plugin-vst3 --features host` — `libloading`/`ruviform-plugin-export` が `host` 指定時のみ出現
+
+補足（task doc の Verification 範囲外・IR に記録）: `mise run fmt-check` exit 0・`cargo doc` 0 warning・bridge unit test 16 件 + crate 全体で 47 unit test pass。敵対的レビュー 1 ラウンドの確定修正 8 件（`LoadGuard` exit-hook pairing・single-component `cast` branch・`restartComponent` `kNotImplemented`・drop tresult `debug_assert`s・`continousTimeSamples` dead-write removal・count caps・load-hoisted param tables・transport coverage）適用済み + param 列挙を task doc の「factory 構築時」から `Vst3Library::load` 時点へ hoist する deviation（`factories()` 複数回呼出しで再 instantiate・再 leak しない once-per-load 構造 — CLAP bridge と同型）— 詳細は `docs/impl/ir/issue-114-vst3-host-bridge-task-2-implementation.md`。

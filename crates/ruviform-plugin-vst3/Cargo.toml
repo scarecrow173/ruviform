@@ -14,11 +14,30 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# `host` — the host-side bridge (`src/host.rs`): dlopens a real VST3
+# module in-process via `libloading`, scans its class table and drives
+# the raw `vst3`-crate COM objects onto the neutral
+# `PluginFactory`/`Plugin` contracts for the L1 out-of-process runner
+# (Issue #114, task `docs/tasks/vst3-host-bridge.md`).
+host = ["dep:libloading", "dep:ruviform-plugin-export"]
+
 [dependencies]
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 ruviform-audio-core = { path = "../ruviform-audio-core" }
 ruviform-media-core = { path = "../ruviform-media-core" }
+# `vst3` stays a required dependency — the plugin-side adapter is its
+# primary consumer and the `host` bridge reuses the same bindings
+# (`Class`/`ComWrapper`/`Interface`/constants via `vst3::` re-exports).
 vst3 = "0.3.0"
+# `libloading` 0.8.9 — the same version the OFX adapter already uses
+# for dlopen; no new version is introduced (dependency-rationale
+# recorded in `docs/designs/issue-114-real-adapter-l1-e2e.md`).
+libloading = { version = "0.8.9", optional = true }
+# The runner binary (`required-features = ["host"]`, Task 3) consumes
+# `run()`; keeping the dep optional keeps the default dep tree and the
+# plugin-side cdylib unchanged.
+ruviform-plugin-export = { path = "../ruviform-plugin-export", optional = true }
 
 [dev-dependencies]
 # RT 境界テストの allocation/deallocation を機械検出する Issue #22
