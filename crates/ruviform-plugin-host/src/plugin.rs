@@ -13,4 +13,6 @@
 //! these traits over their wrapped plugin objects and register a
 //! factory with the host; this crate never names a plugin standard.
 
-pub use ruviform_plugin_core::{ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase};
+pub use ruviform_plugin_core::{
+    ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
+};

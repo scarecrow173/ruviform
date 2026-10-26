@@ -119,6 +119,9 @@ fn command_parity_lifecycle_and_state() {
         Ok(wire::Reply::Ok)
     );
     assert_eq!(instance.lifecycle_state(), LifecycleState::Activated);
+    // The armed ring reports the lookahead horizon — `(depth − 1)
+    // × armed frame_capacity` = 2 × 512.
+    assert_eq!(instance.latency_frames(), Some(1024));
 
     assert_eq!(
         instance.execute(wire::Command::StartProcessing),
@@ -155,6 +158,10 @@ fn command_parity_lifecycle_and_state() {
         Ok(wire::Reply::Ok)
     );
     assert_eq!(instance.lifecycle_state(), LifecycleState::Initialized);
+    // The armed ring survives `Deactivate` (`staging` is never
+    // cleared) but the public query gates on the mirror — `None`,
+    // L0 parity, not the stale horizon.
+    assert_eq!(instance.latency_frames(), None);
 
     // A post-handshake `Scan` still reports the child's descriptors.
     match instance.execute(wire::Command::Scan) {
@@ -1086,9 +1093,10 @@ fn lookahead_zero_is_rejected() {
 /// Submits carry the armed ring's generation — the driver-side gate
 /// (`armed_for`) then drops a submit queued under a superseded ring
 /// instead of serializing the new ring's zeroed stage under a real
-/// seq (F3: the re-activation stale-submit case). A dropped seq's
-/// result simply never arrives — the RT leg resolves that as the
-/// defined pass-through.
+/// seq (the re-activation stale-submit case). A dropped seq still
+/// completes: the driver synthesizes a `mark_failed` result on the
+/// shared result producer so the leg's alternation gate frees the
+/// slot and resolves the block as the defined pass-through.
 #[test]
 fn submit_carries_staging_generation_and_stale_is_dropped() {
     use l1::data::{BLOCK_SEQ_FLAG, RtLeg, Staging, Submit, armed_for};

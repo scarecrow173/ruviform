@@ -39,14 +39,16 @@
 //! with the previous occupant `s - D`. The RT leg enforces this
 //! *producer-side*: `s` is staged and pushed only when the done for
 //! the slot's last pushed seq was already observed on the result
-//! channel (`cleared[i] >= last_pushed[i]`). Because results arrive
-//! strictly in doorbell order and `expected = seq - lookahead` with
-//! `D = lookahead + 1`, that gate also guarantees the shm in-slot is
-//! free before the driver writes it, and that `staging.outs[i]`
-//! still holds block `s`'s data — the consume call for `s` happens
-//! before `s + D` is even submitted, so no overwrite can interleave.
-//! The out-stage `seq` tag is the belt-and-suspenders check for a
-//! misbehaving child.
+//! channel (`cleared[i] >= last_pushed[i]`). Because every seq
+//! yields exactly one completion element in seq order — a real
+//! `BlockDone`/rejection, or the driver's synthesized
+//! [`mark_failed`] for a dropped submit — and
+//! `expected = seq - lookahead` with `D = lookahead + 1`, that gate
+//! also guarantees the shm in-slot is free before the driver writes
+//! it, and that `staging.outs[i]` still holds block `s`'s data — the
+//! consume call for `s` happens before `s + D` is even submitted, so
+//! no overwrite can interleave. The out-stage `seq` tag is the
+//! belt-and-suspenders check for a misbehaving child.
 //!
 //! ## Pass-through
 //!
@@ -72,7 +74,7 @@ use ruviform_plugin_core::{
     BufferView, BufferViewMut, EventList, HostError, HostInput, HostOutput, LifecycleError,
     LifecycleEvent, LifecycleState, ProcessResult, ProcessStatus, TransportInfo,
 };
-use ruviform_rt::{Consumer, Producer};
+use ruviform_rt::{Consumer, Producer, Retirer};
 
 use super::shm::{get_u32, get_u64, put_u32, put_u64};
 
@@ -101,9 +103,12 @@ pub(crate) const fn is_block_seq(seq: u64) -> bool {
 /// submit whose generation is no longer the armed ring's — it can
 /// only have been queued before a re-activation swapped
 /// `Inner::staging`, and serializing it would doorbell the new
-/// ring's zeroed stage under a real seq. The dropped seq's result
-/// simply never arrives, which the RT leg already resolves as the
-/// defined pass-through (expected result absent).
+/// ring's zeroed stage under a real seq. A dropped seq is still
+/// completed: the driver synthesizes a [`mark_failed`] result onto
+/// the result channel so the strict-alternation gate frees the
+/// slot and the leg resolves the block as the defined pass-through
+/// (an unanswered seq would wedge the slot — then the ring —
+/// permanently).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Submit {
     /// The doorbell seq (carries [`BLOCK_SEQ_FLAG`]).
@@ -115,8 +120,10 @@ pub(crate) struct Submit {
 /// The driver-side stale-submit gate: a queued [`Submit`] may be
 /// doorbell'd only while the armed ring is still the one it was
 /// staged under. `None` means "drop it" — the seq never enters
-/// `block_in_flight`, no `BlockIn` is written, and the RT leg
-/// resolves the never-arriving result as pass-through.
+/// `block_in_flight`, no `BlockIn` is written (so no shm in-slot
+/// race exists), and the driver synthesizes a [`mark_failed`]
+/// completion on the result channel: the RT leg resolves it as the
+/// defined pass-through and the slot's alternation gate is freed.
 pub(crate) fn armed_for(staging: Option<&Arc<Staging>>, submit: Submit) -> Option<Arc<Staging>> {
     match staging {
         Some(staging) if staging.generation == submit.generation => Some(Arc::clone(staging)),
@@ -505,6 +512,79 @@ impl RtLeg {
         self.have_output = false;
     }
 
+    /// The endpoint-side ring swap — **RT-suitable** twin of
+    /// [`RtLeg::arm`], called by `L1Endpoint`'s `process` drain for
+    /// a newer-generation `Arc<Staging>` arriving on the arm
+    /// channel. Unlike `arm` (the host-side `Activate` path), only
+    /// the ring-binding state resets: `staging`/`frame_capacity`/
+    /// the `last_output` contents/`last_frames`/`last_channels`/
+    /// `have_output`. The displaced ring goes to `retirer` — a
+    /// push onto the retire channel, so no `Staging` destructor
+    /// runs on this thread.
+    ///
+    /// The seq-space bookkeeping (`last_pushed`/`cleared`/`held`/
+    /// `submit_dims`/`next_block`/`depth`/`lookahead`) **persists**
+    /// across the swap: blocks submitted under the old ring can
+    /// still be in flight, so the strict-alternation invariant
+    /// `cleared[i] >= last_pushed[i] ⇒ slot i free` must not be
+    /// lost, and a stale done must never alias a re-armed seq
+    /// (`next_block` stays monotone as before).
+    ///
+    /// `last_output` is cleared and resized inside the capacity
+    /// `L1Instance::prepare_endpoint` reserved
+    /// (`bound.max_frames × WIRE_MAX_CHANNELS` — re-arms above the
+    /// bound are rejected by the control-side `Activate` gate plus
+    /// the endpoint drain's `frame_capacity > bound` backstop), so
+    /// the `resize` below never reallocs on the RT path.
+    pub(crate) fn arm_apply(&mut self, arm: Arc<Staging>, retirer: &mut Retirer<Arc<Staging>>) {
+        self.frame_capacity = arm.frame_capacity;
+        self.last_output.clear();
+        debug_assert!(
+            self.last_output.capacity() >= arm.frame_capacity * wire::WIRE_MAX_CHANNELS as usize,
+            "arm_apply resize must fit the prepare_endpoint reserve"
+        );
+        self.last_output
+            .resize(arm.frame_capacity * wire::WIRE_MAX_CHANNELS as usize, 0.0);
+        if let Some(old) = self.staging.replace(arm) {
+            retirer.retire(old);
+        }
+        self.last_frames = 0;
+        self.last_channels = 0;
+        self.have_output = false;
+    }
+
+    /// The generation of the currently armed ring — `0` when
+    /// unarmed (`staging_generation` starts at 1, so an unarmed
+    /// leg accepts the first arm offered). The endpoint drain's
+    /// `generation > armed` monotone-apply gate reads this; the
+    /// private `staging` field is not visible outside this module.
+    pub(crate) fn armed_generation(&self) -> u64 {
+        self.staging
+            .as_ref()
+            .map_or(0, |staging| staging.generation)
+    }
+
+    /// Per-channel sample capacity of the currently armed ring —
+    /// `0` when unarmed. `EndpointInner::L1::process` runs the
+    /// per-block dims pre-gate (`frames ≤ armed capacity`) against
+    /// this so `block_data`'s `Err(Ipc)` for the same condition
+    /// never surfaces on the endpoint's public face.
+    pub(crate) fn armed_frame_capacity(&self) -> usize {
+        self.staging
+            .as_ref()
+            .map_or(0, |staging| staging.frame_capacity)
+    }
+
+    /// Ensures `last_output` capacity covers `sample_count` samples
+    /// — called once by `L1Instance::prepare_endpoint` (non-RT)
+    /// with `bound.max_frames × WIRE_MAX_CHANNELS`, after which
+    /// [`RtLeg::arm_apply`]'s `resize` always fits inside capacity
+    /// and never reallocs on the RT path.
+    pub(crate) fn reserve_last_output(&mut self, sample_count: usize) {
+        self.last_output
+            .reserve(sample_count.saturating_sub(self.last_output.len()));
+    }
+
     /// The `process` equivalent — RT-suitable: bounded atomic
     /// staging writes, `try_push`/`try_pop` only, no locks, no shm,
     /// no allocation. `mirror` is the const-cheap lifecycle snapshot
@@ -794,7 +874,10 @@ impl RtLeg {
     /// `last_output` (or silence when nothing was ever received)
     /// into `outputs` — the pass-through fallback for underruns,
     /// dropped submissions, and missing or failed results.
-    fn pass_through(&mut self, outputs: &mut [HostOutput<'_>]) {
+    /// `pub(crate)` so `L1Endpoint::process` can converge a block
+    /// the arm drain flagged unrepresentable onto the same defined
+    /// output.
+    pub(crate) fn pass_through(&mut self, outputs: &mut [HostOutput<'_>]) {
         for output in outputs.iter_mut() {
             for channel in 0..output.channels() {
                 if let Some(dst) = output.channel_mut(channel) {
@@ -825,5 +908,139 @@ impl RtLeg {
                 }
             }
         }
+    }
+}
+
+/// The pieces `L1Instance::prepare_endpoint` hands to
+/// `crate::endpoint` for assembling the detached L1 endpoint —
+/// everything the endpoint owns and nothing it must not. This is
+/// the crate-free boundary type for the leg extraction: it lives
+/// in `l1::data` (which resolves inside the `#[path]`-included
+/// `tests/l1_proxy_e2e.rs` module tree) and names only
+/// `l1`/external types — the `crate::endpoint` types it feeds
+/// (`L1Endpoint`/`EndpointBounds`) are never named here.
+///
+/// - `leg`: the checked-out caller-thread data-plane half —
+///   submit producer, result consumer, armed `Arc<Staging>`,
+///   seq bookkeeping, `last_output` pass-through buffer.
+/// - `mirror`: a clone of `Shared::rt_state` — the same atomic,
+///   so `set_mirror` publishes reach the endpoint with the same
+///   monotonic behavior the host leg observed.
+/// - `arm_rx`: consumer half of the per-attach arm channel
+///   (capacity 2). `L1Instance::execute`/`prepare_endpoint`/
+///   teardown push `Arc<Staging>` activations through the producer
+///   the instance keeps; `L1Endpoint::process` drains it.
+/// - `arm_retirer`: the endpoint's `Retirer` — every drained arm
+///   (applied or stale) and every displaced ring is pushed here so
+///   `Arc<Staging>` destructors never run on the RT thread; the
+///   matching `DropCollector` lives on `L1Instance` and drains on
+///   non-RT `&mut` entry points.
+/// - `return_tx`: producer half of the leg-return channel
+///   (capacity 1). `L1Endpoint::drop` `try_push`es the leg back;
+///   on `Full` (already occupied — reachable only through a
+///   double-drop anomaly) it recovers the leg via
+///   `TryPushError::into_inner` and drops it on the dropping
+///   thread instead.
+pub(crate) struct EndpointLegParts {
+    pub(crate) leg: RtLeg,
+    pub(crate) mirror: Arc<AtomicU8>,
+    pub(crate) arm_rx: Consumer<Arc<Staging>>,
+    pub(crate) arm_retirer: Retirer<Arc<Staging>>,
+    pub(crate) return_tx: Producer<RtLeg>,
+}
+
+#[cfg(test)]
+mod tests {
+    //! `RtLeg::arm_apply` contract tests — the endpoint-side ring
+    //! swap (Issue #113 task 3): ring-binding reset vs seq-space
+    //! bookkeeping persistence, retirement of the displaced ring
+    //! and the no-allocation RT path.
+
+    use super::*;
+
+    /// A leg + armed gen-1 ring — bounded channels only; the
+    /// channel peer ends are dropped (try-ops stay bounded).
+    fn armed_leg(depth: u32, frames: u32) -> (RtLeg, Arc<Staging>) {
+        let (submit_tx, _submit_rx) = ruviform_rt::channel::<Submit>(depth as usize);
+        let (_result_tx, result_rx) = ruviform_rt::channel::<u64>(depth as usize);
+        let mut leg = RtLeg::new(depth, depth - 1, submit_tx, result_rx);
+        let staging = Arc::new(Staging::new(depth, frames, 1));
+        leg.arm(Arc::clone(&staging));
+        (leg, staging)
+    }
+
+    /// `arm_apply` replaces only the ring binding — `staging`,
+    /// `frame_capacity`, `last_output` contents, `last_frames`,
+    /// `last_channels`, `have_output` — while every seq-space
+    /// counter (`next_block`/`last_pushed`/`cleared`/`held`/
+    /// `submit_dims`) survives the swap so in-flight blocks of the
+    /// old ring still resolve.
+    #[test]
+    fn arm_apply_swaps_ring_and_keeps_seq_bookkeeping() {
+        let (mut leg, old_staging) = armed_leg(3, 512);
+        let (mut retirer, mut collector) = ruviform_rt::retire_channel::<Arc<Staging>>(4);
+        // Seq/bookkeeping state a swap must preserve.
+        leg.next_block = 7;
+        leg.last_pushed[1] = Some(9);
+        leg.cleared[0] = 3;
+        leg.held.push(5);
+        leg.submit_dims[2] = (8, 2);
+        // Ring-binding state a swap must reset.
+        leg.have_output = true;
+        leg.last_frames = 100;
+        leg.last_channels = 2;
+
+        let new_staging = Arc::new(Staging::new(3, 256, 2));
+        leg.arm_apply(Arc::clone(&new_staging), &mut retirer);
+
+        // The new ring is bound.
+        assert_eq!(leg.armed_generation(), 2);
+        assert_eq!(leg.armed_frame_capacity(), 256);
+        assert_eq!(leg.frame_capacity, 256);
+        assert_eq!(
+            leg.last_output.len(),
+            256 * wire::WIRE_MAX_CHANNELS as usize
+        );
+        // Output-history state resets with the ring.
+        assert!(!leg.have_output);
+        assert_eq!(leg.last_frames, 0);
+        assert_eq!(leg.last_channels, 0);
+        // Seq-space bookkeeping persists.
+        assert_eq!(leg.next_block, 7);
+        assert_eq!(leg.last_pushed[1], Some(9));
+        assert_eq!(leg.cleared[0], 3);
+        assert_eq!(leg.held, vec![5]);
+        assert_eq!(leg.submit_dims[2], (8, 2));
+        // The displaced ring went to the retirer — the collector's
+        // drain is the only place it can drop.
+        assert_eq!(collector.drain(), 1);
+        assert_eq!(Arc::strong_count(&old_staging), 1);
+        assert_eq!(Arc::strong_count(&new_staging), 2);
+    }
+
+    /// Issue #22 lane: `arm_apply` — `last_output` clear + resize
+    /// inside the `prepare_endpoint` reserve, `staging` swap and
+    /// the retire `try_push` — must not allocate. Fixture, the new
+    /// ring and the reserve all sit outside the window.
+    #[test]
+    fn rt_l1_arm_apply_no_alloc() {
+        let (mut leg, _old_staging) = armed_leg(3, 512);
+        let (mut retirer, mut collector) = ruviform_rt::retire_channel::<Arc<Staging>>(4);
+        let new_staging = Arc::new(Staging::new(3, 256, 2));
+        // The `prepare_endpoint` reserve makes the resize free.
+        leg.reserve_last_output(512 * wire::WIRE_MAX_CHANNELS as usize);
+        // Warm-up outside the window.
+        leg.arm_apply(Arc::clone(&new_staging), &mut retirer);
+        let newer = Arc::new(Staging::new(3, 512, 3));
+        assert_no_alloc::assert_no_alloc(|| {
+            for _ in 0..8 {
+                leg.arm_apply(Arc::clone(&newer), &mut retirer);
+            }
+        });
+        // Retirement ran inside the window — the bounded channel
+        // drains at most its capacity per pass (overflow is the
+        // design's leak-on-full signal, not an allocation).
+        assert!(collector.drain() > 0);
+        assert_eq!(leg.armed_generation(), 3);
     }
 }

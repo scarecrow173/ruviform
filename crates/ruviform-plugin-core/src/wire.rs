@@ -236,7 +236,7 @@ pub mod shm {
 /// use ruviform_plugin_core::wire::{self, Message};
 ///
 /// let mut frame = Vec::new();
-/// wire::encode(&Message::Shutdown, &mut frame);
+/// wire::encode(&Message::Shutdown, &mut frame).unwrap();
 /// assert_eq!(wire::decode(&frame), Ok(Message::Shutdown));
 /// ```
 #[non_exhaustive]
@@ -618,12 +618,25 @@ impl<'a> Reader<'a> {
 /// Appends `message` to `out` as one `[u32 LE payload_len][u8
 /// kind][payload]` frame.
 ///
-/// Encoding never fails on well-formed values — every wire type
-/// serializes verbatim. Encode is the trusted side: it does not
+/// Encoding never fails on wire-representable values — every wire
+/// type serializes verbatim. Encode is the trusted side: it does not
 /// enforce the per-field `WIRE_MAX_*` bounds, so e.g. a state blob
 /// over [`WIRE_MAX_STATE_BYTES`] or a string over
 /// [`WIRE_MAX_STRING_BYTES`] produces a frame the peer's [`decode`]
 /// must reject.
+///
+/// The append is **all-or-nothing**: on failure `out` is truncated
+/// back to its pre-call length, so no partial frame (e.g. a dangling
+/// `REPLY_ERR` tag) is left behind.
+///
+/// # Errors
+///
+/// [`WireError::UnsupportedVariant`] when a nested value has no
+/// representation under [`WIRE_VERSION`] — currently a
+/// [`Message::Reply`] whose `Err` carries the local-only
+/// [`HostError::EndpointUnavailable`] (or a `#[non_exhaustive]`
+/// variant added after this protocol revision). `out` is left
+/// unchanged.
 ///
 /// # Panics
 ///
@@ -644,12 +657,32 @@ impl<'a> Reader<'a> {
 ///         capabilities: 0,
 ///     },
 ///     &mut frame,
-/// );
+/// )
+/// .unwrap();
 /// assert_eq!(frame.len(), wire::WIRE_FRAME_HEADER_LEN + 6);
 /// ```
-pub fn encode(message: &Message, out: &mut Vec<u8>) {
+pub fn encode(message: &Message, out: &mut Vec<u8>) -> Result<(), WireError> {
     let start = out.len();
     out.extend_from_slice(&0_u32.to_le_bytes()); // payload_len placeholder
+    if let Err(error) = encode_body(message, out) {
+        // All-or-nothing append: roll the partial frame (e.g. a
+        // dangling `REPLY_ERR` tag) back so the caller's `out` is
+        // left exactly as found — every `Err` exit from `encode_body`
+        // lands here, not just the arms fallible today.
+        out.truncate(start);
+        return Err(error);
+    }
+    let payload_len = len_u32(out.len() - start - WIRE_FRAME_HEADER_LEN);
+    out[start..start + 4].copy_from_slice(&payload_len.to_le_bytes());
+    Ok(())
+}
+
+/// Writes the `kind` byte plus payload fields of `message` after the
+/// length placeholder [`encode`] already emitted. Fallible only
+/// through a nested value with no [`WIRE_VERSION`] representation —
+/// `encode` owns the all-or-nothing rollback for every `Err` from
+/// here.
+fn encode_body(message: &Message, out: &mut Vec<u8>) -> Result<(), WireError> {
     match message {
         Message::Hello {
             version,
@@ -674,7 +707,9 @@ pub fn encode(message: &Message, out: &mut Vec<u8>) {
                 }
                 Err(error) => {
                     push_u8(out, REPLY_ERR);
-                    encode_host_error(error, out);
+                    // The only fallible step today — propagates to
+                    // `encode`, which performs the rollback.
+                    encode_host_error(error, out)?;
                 }
             }
         }
@@ -691,8 +726,7 @@ pub fn encode(message: &Message, out: &mut Vec<u8>) {
             push_u8(out, KIND_SHUTDOWN);
         }
     }
-    let payload_len = len_u32(out.len() - start - WIRE_FRAME_HEADER_LEN);
-    out[start..start + 4].copy_from_slice(&payload_len.to_le_bytes());
+    Ok(())
 }
 
 /// Decodes one complete frame (`[u32 LE payload_len][u8
@@ -714,7 +748,7 @@ pub fn encode(message: &Message, out: &mut Vec<u8>) {
 /// use ruviform_plugin_core::wire::{self, Message, WireError};
 ///
 /// let mut frame = Vec::new();
-/// wire::encode(&Message::BlockIn { seq: 9 }, &mut frame);
+/// wire::encode(&Message::BlockIn { seq: 9 }, &mut frame).unwrap();
 /// assert_eq!(wire::decode(&frame), Ok(Message::BlockIn { seq: 9 }));
 /// // A trailing garbage byte makes the declared length a lie.
 /// frame.push(0);
@@ -1050,24 +1084,66 @@ pub fn decode_plugin_handle(reader: &mut Reader<'_>) -> Result<PluginHandle, Wir
 /// Appends a [`HostError`] (`u8` variant tag + variant payload:
 /// `Lifecycle` carries `u8` lifecycle-error tag, `u8` state, `u8`
 /// event; `Prepare` carries `u8` prepare-error tag).
-pub fn encode_host_error(error: &HostError, out: &mut Vec<u8>) {
-    match error {
-        HostError::UnknownPluginId => push_u8(out, 0),
-        HostError::InvalidHandle => push_u8(out, 1),
+///
+/// # Errors
+///
+/// [`WireError::UnsupportedVariant`] when `error` has no
+/// representation under [`WIRE_VERSION`] — the local-only
+/// [`HostError::EndpointUnavailable`] (a host-local topology fact,
+/// deliberately not collapsed into `Ipc`/`Unsupported`) or a
+/// `#[non_exhaustive]` variant added after this protocol revision.
+/// Nothing is appended on failure.
+pub fn encode_host_error(error: &HostError, out: &mut Vec<u8>) -> Result<(), WireError> {
+    let start = out.len();
+    let result: Result<(), WireError> = match error {
+        HostError::UnknownPluginId => {
+            push_u8(out, 0);
+            Ok(())
+        }
+        HostError::InvalidHandle => {
+            push_u8(out, 1);
+            Ok(())
+        }
         HostError::Lifecycle(lifecycle) => {
             push_u8(out, 2);
             encode_lifecycle_error(*lifecycle, out);
+            Ok(())
         }
         HostError::Prepare(prepare) => {
             push_u8(out, 3);
             push_u8(out, encode_prepare_error(*prepare));
+            Ok(())
         }
-        HostError::PluginFailed => push_u8(out, 4),
-        HostError::Unsupported => push_u8(out, 5),
-        HostError::Failed => push_u8(out, 6),
-        HostError::Ipc => push_u8(out, 7),
-        HostError::DuplicatePluginId => push_u8(out, 8),
+        HostError::PluginFailed => {
+            push_u8(out, 4);
+            Ok(())
+        }
+        HostError::Unsupported => {
+            push_u8(out, 5);
+            Ok(())
+        }
+        HostError::Failed => {
+            push_u8(out, 6);
+            Ok(())
+        }
+        HostError::Ipc => {
+            push_u8(out, 7);
+            Ok(())
+        }
+        HostError::DuplicatePluginId => {
+            push_u8(out, 8);
+            Ok(())
+        }
+        _ => Err(WireError::UnsupportedVariant),
+    };
+    if let Err(e) = result {
+        // "Nothing is appended on failure" is a per-call guarantee:
+        // roll back whatever this call wrote so a rejection after a
+        // partial field can never leak into the caller's buffer.
+        out.truncate(start);
+        return Err(e);
     }
+    Ok(())
 }
 
 /// Reads a [`HostError`].
@@ -1498,7 +1574,7 @@ mod tests {
 
     fn roundtrip(message: &Message) -> Message {
         let mut frame = Vec::new();
-        encode(message, &mut frame);
+        encode(message, &mut frame).unwrap();
         decode(&frame).unwrap()
     }
 
@@ -1553,7 +1629,8 @@ mod tests {
                 capabilities: 0b1011,
             },
             &mut frame,
-        );
+        )
+        .unwrap();
         assert_eq!(decode(&frame), Err(WireError::Malformed));
     }
 
@@ -1607,6 +1684,9 @@ mod tests {
 
     #[test]
     fn reply_roundtrip_carries_every_host_error() {
+        // Every wire-representable variant — `EndpointUnavailable` is
+        // deliberately absent (local-only; see
+        // `encode_rejects_endpoint_unavailable_and_restores_out`).
         let errors = [
             HostError::UnknownPluginId,
             HostError::InvalidHandle,
@@ -1659,21 +1739,22 @@ mod tests {
                 capabilities: 3,
             },
             &mut frame,
-        );
+        )
+        .unwrap();
         assert_eq!(frame, [6, 0, 0, 0, KIND_HELLO, 1, 0, 3, 0, 0, 0]);
         assert_eq!(frame.len(), WIRE_FRAME_HEADER_LEN + 6);
 
         // Shutdown → empty payload.
         let mut frame = Vec::new();
-        encode(&Message::Shutdown, &mut frame);
+        encode(&Message::Shutdown, &mut frame).unwrap();
         assert_eq!(frame, [0, 0, 0, 0, KIND_SHUTDOWN]);
     }
 
     #[test]
     fn encode_appends_one_frame_per_call() {
         let mut buf = Vec::new();
-        encode(&Message::Shutdown, &mut buf);
-        encode(&Message::BlockIn { seq: 1 }, &mut buf);
+        encode(&Message::Shutdown, &mut buf).unwrap();
+        encode(&Message::BlockIn { seq: 1 }, &mut buf).unwrap();
         // First frame is exactly 5 bytes; the rest is the second frame.
         assert_eq!(decode(&buf[..WIRE_FRAME_HEADER_LEN]), Ok(Message::Shutdown));
         assert_eq!(
@@ -1735,7 +1816,7 @@ mod tests {
     fn decode_rejects_length_mismatch() {
         // Declared < actual.
         let mut frame = Vec::new();
-        encode(&Message::Shutdown, &mut frame);
+        encode(&Message::Shutdown, &mut frame).unwrap();
         frame.push(0);
         assert_eq!(decode(&frame), Err(WireError::Malformed));
         // Declared > actual.
@@ -1955,6 +2036,10 @@ mod tests {
 
     #[test]
     fn host_error_field_roundtrip() {
+        // Every wire-representable variant — `EndpointUnavailable` is
+        // deliberately absent: it is a local-only host fact with no
+        // wire representation (covered by
+        // `encode_rejects_endpoint_unavailable_and_restores_out`).
         for error in [
             HostError::UnknownPluginId,
             HostError::InvalidHandle,
@@ -1969,11 +2054,52 @@ mod tests {
             HostError::Ipc,
             HostError::DuplicatePluginId,
         ] {
-            assert_eq!(
-                field_roundtrip(&error, encode_host_error, decode_host_error),
-                error
-            );
+            // `encode_host_error` is fallible like `encode_transport`
+            // — exercised directly rather than through the infallible
+            // `field_roundtrip` helper.
+            let mut payload = Vec::new();
+            encode_host_error(&error, &mut payload).unwrap();
+            let mut reader = Reader::new(&payload);
+            assert_eq!(decode_host_error(&mut reader), Ok(error));
+            assert!(reader.is_empty(), "trailing bytes after field decode");
         }
+    }
+
+    #[test]
+    fn encode_rejects_endpoint_unavailable_and_restores_out() {
+        // `EndpointUnavailable` is a local-only host fact — no wire
+        // representation, never collapsed into `Ipc`/`Unsupported`.
+        let mut payload = Vec::new();
+        assert_eq!(
+            encode_host_error(&HostError::EndpointUnavailable, &mut payload),
+            Err(WireError::UnsupportedVariant)
+        );
+        assert!(payload.is_empty(), "nothing is appended on failure");
+
+        // `encode` is an all-or-nothing append: a failed frame leaves
+        // `out` exactly as found — no partial `REPLY_ERR` frame.
+        let mut out = vec![0xAA, 0xBB, 0xCC];
+        let before = out.clone();
+        let message = Message::Reply {
+            seq: 7,
+            result: Err(HostError::EndpointUnavailable),
+        };
+        assert_eq!(
+            encode(&message, &mut out),
+            Err(WireError::UnsupportedVariant)
+        );
+        assert_eq!(out, before);
+
+        // The rejection disturbed nothing: a following `Ok` reply
+        // still appends a complete frame that decodes cleanly, with
+        // the pre-existing bytes untouched.
+        let ok = Message::Reply {
+            seq: 8,
+            result: Ok(Reply::Ok),
+        };
+        encode(&ok, &mut out).unwrap();
+        assert_eq!(out[..before.len()], before[..]);
+        assert_eq!(decode(&out[before.len()..]), Ok(ok));
     }
 
     #[test]

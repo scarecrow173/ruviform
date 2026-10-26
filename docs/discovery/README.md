@@ -8,6 +8,7 @@ Directory: `docs/discovery`
 | --- | --- | --- | --- |
 | DISC-034LEXAPQpsGvnYeoKEahA | 色変換カーネル（f32 linear working space + ICC 入出力経路）の探索（Issue #99） | resolved | [color-conversion-kernels.md](./color-conversion-kernels.md) |
 | DISC-034Jc7DRXwhHU9BTMwYJe2 | DSP/SIMD バックエンド比較 PoC の探索（Issue #19） | resolved | [dsp-simd-poc-issue-19.md](./dsp-simd-poc-issue-19.md) |
+| DISC-034MbMMsIDqdQqkkTzFSTf | エンジン/利用側へのプラグイン統合（plugin-host ノード化 + L1 選択配線）の探索（Issue #113） | resolved | [engine-plugin-host-integration.md](./engine-plugin-host-integration.md) |
 | DISC-034Jc8wchRH37hqfhNLRPJ | オーディオデバイスバックエンド評価（cpal 等）の探索 | resolved | [evaluate-audio-device-backends.md](./evaluate-audio-device-backends.md) |
 | DISC-034JccH31pBpKOSW5fst0g | プラグイン基盤 binding 方式の評価（Issue #29） | resolved | [evaluate-plugin-binding-options.md](./evaluate-plugin-binding-options.md) |
 | DISC-034JcqEc2b3EHNgH9CRLaC | RT 基盤プリミティブの実装方式評価（SPSC・退避ドロップ・スナップショット交換・スレッド優先度） | draft | [evaluate-rt-foundation-primitives.md](./evaluate-rt-foundation-primitives.md) |

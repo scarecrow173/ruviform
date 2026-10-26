@@ -14,6 +14,11 @@ ruviform-media-core = { path = "../ruviform-media-core" }
 
 [dev-dependencies]
 assert_no_alloc = "1.1"
+# Compile-time Send/Sync evidence for the FnMut blanket impl and the
+# plan/swap handle types — plain `expect_send` functions cannot express
+# the negative (!Send) side; `static_assertions` is the published
+# stable crate for both directions (Issue #113 task T5).
+static_assertions = "1.1"
 
 [lints]
 workspace = true

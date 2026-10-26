@@ -1,0 +1,5 @@
+# gate=check started=2026-10-26T16:00:53Z
+$ mise run check
+[check] $ cargo check --workspace --all-targets
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.21s
+# gate=check exit=0 finished=2026-10-26T16:00:55Z

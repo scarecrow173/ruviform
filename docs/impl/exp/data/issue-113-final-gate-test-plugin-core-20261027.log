@@ -1,0 +1,132 @@
+# gate=test-plugin-core started=2026-10-26T16:01:18Z
+$ mise run test-plugin-core
+[test-plugin-core] $ cargo test -p ruviform-plugin-core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_core-093cda5a8314b518.exe)
+
+running 67 tests
+test bus::tests::channels_comes_from_layout ... ok
+test descriptor::tests::descriptor_holds_literal_fields ... ok
+test event::tests::offsets_are_bounded_by_block_frames ... ok
+test event::tests::empty_list_and_event_reserved ... ok
+test event::tests::sort_events_undersized_scratch_falls_back_to_insertion ... ok
+test event::tests::unsorted_input_is_rejected ... ok
+test event::tests::sort_events_is_stable_and_alloc_free ... ok
+test lifecycle::tests::display_formats_illegal_transition ... ok
+test event::tests::sorted_bounded_list_is_accepted ... ok
+test event::tests::zero_frame_block_flushes_only_offset_zero ... ok
+test lifecycle::tests::destroy_requires_prior_deactivate ... ok
+test lifecycle::tests::forward_chain_is_legal ... ok
+test lifecycle::tests::failed_is_reachable_from_every_live_state ... ok
+test lifecycle::tests::failed_is_terminal_and_only_destroy_escapes ... ok
+test lifecycle::tests::failure_destinations_stay_put ... ok
+test lifecycle::tests::protocol_violations_are_rejected ... ok
+test lifecycle::tests::failed_reports_via_state_queries ... ok
+test event::tests::rt_sort_worst_case_moves_stay_n_log_n ... ok
+test lifecycle::tests::reactivation_cycles_are_legal ... ok
+test lifecycle::tests::stop_processing_lands_in_activated_not_initialized ... ok
+test param::tests::default_normalized_uses_plain_default ... ok
+test param::tests::degenerate_range_normalizes_to_zero ... ok
+test param::tests::flags_bitmask_ops ... ok
+test param::tests::normalize_denormalize_round_trip ... ok
+test param::tests::out_of_range_clamps_and_non_finite_rejected ... ok
+test plugin::tests::create_sendable_defaults_to_none ... ok
+test plugin::tests::create_sendable_returns_send_erased_plugin ... ok
+test plugin::tests::erase_sendable_boxes_a_send_erased_plugin ... ok
+test plugin::tests::send_erased_plugin_drives_the_erased_surface ... ok
+test processor::tests::audio_buffer_view_mut_writes_reach_the_slab ... ok
+test processor::tests::audio_buffer_view_satisfies_buffer_view_channel_major ... ok
+test processor::tests::process_config_validates_bounds ... ok
+test processor::tests::process_copies_through_views_zero_copy ... ok
+test tests::process_config_and_context_reserved ... ok
+test tests::rt_event_list_validation ... ok
+test tests::rt_lifecycle_transition_table ... ok
+test tests::rt_param_value_mapping ... ok
+test tests::rt_process_call_with_borrowed_views ... ok
+test tests::rt_transport_snapshot_accessors ... ok
+test tests::version_is_not_empty ... ok
+test transport::tests::snapshot_carries_status_position_and_loop ... ok
+test wire::tests::boundary_tokens_roundtrip ... ok
+test wire::tests::command_roundtrip_covers_every_verb ... ok
+test wire::tests::decode_rejects_bad_tags_and_invariant_violations ... ok
+test wire::tests::decode_rejects_declared_lengths_over_wire_max ... ok
+test wire::tests::decode_rejects_impossible_counts_without_allocating ... ok
+test wire::tests::decode_rejects_length_mismatch ... ok
+test wire::tests::decode_rejects_nonzero_reserved_and_bad_utf8 ... ok
+test wire::tests::decode_rejects_short_and_truncated_frames ... ok
+test wire::tests::decode_rejects_unknown_kind_and_trailing_payload ... ok
+test wire::tests::descriptor_field_codec_roundtrip_and_bounds ... ok
+test wire::tests::descriptor_from_static_and_field_equivalence ... ok
+test wire::tests::doorbells_roundtrip ... ok
+test wire::tests::encode_appends_one_frame_per_call ... ok
+test wire::tests::encode_rejects_endpoint_unavailable_and_restores_out ... ok
+test wire::tests::event_and_event_list_roundtrip ... ok
+test wire::tests::event_rejects_nan_and_unknown_kind ... ok
+test wire::tests::frame_layout_is_little_endian_and_length_prefixed ... ok
+test wire::tests::hello_roundtrip_and_version_is_carried_verbatim ... ok
+test wire::tests::host_error_field_roundtrip ... ok
+test wire::tests::media_time_roundtrip_and_bad_base_rejected ... ok
+test wire::tests::process_config_and_result_roundtrip ... ok
+test wire::tests::reply_roundtrip_carries_every_host_error ... ok
+test wire::tests::reply_roundtrip_covers_every_payload ... ok
+test wire::tests::shm_layout_offsets_are_self_consistent ... ok
+test wire::tests::transport_roundtrip_minimal_and_full ... ok
+test wire::tests::wire_error_display_is_observable ... ok
+
+test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\video_contract.rs (target\debug\deps\video_contract-dfbda66734affb34.exe)
+
+running 8 tests
+test descriptor_view_borrows_all_fields ... ok
+test descriptor_view_borrows_owned_strings ... ok
+test plain_param_info_choice_metadata_contract ... ok
+test plain_param_info_double_metadata_contract ... ok
+test plain_param_value_stable_copy_variants ... ok
+test video_process_config_accepts_neutral_formats ... ok
+test generic_consumer_compiles_without_ofx_types ... ok
+test video_process_config_validates_nonzero_dims ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_plugin_core
+
+running 26 tests
+test crates\ruviform-plugin-core\src\event.rs - event::Event (line 88) ... ok
+test crates\ruviform-plugin-core\src\bus.rs - bus::BusDescriptor (line 40) ... ok
+test crates\ruviform-plugin-core\src\event.rs - event::ParamEvent (line 41) ... ok
+test crates\ruviform-plugin-core\src\descriptor.rs - descriptor::PluginDescriptorView (line 54) ... ok
+test crates\ruviform-plugin-core\src\event.rs - event::sort_events_by_frame_offset (line 303) ... ok
+test crates\ruviform-plugin-core\src\param.rs - param::ParamInfo (line 177) ... ok
+test crates\ruviform-plugin-core\src\event.rs - event::EventList (line 163) ... ok
+test crates\ruviform-plugin-core\src\lifecycle.rs - lifecycle::Lifecycle (line 272) ... ok
+test crates\ruviform-plugin-core\src\lifecycle.rs - lifecycle::LifecycleError (line 218) ... ok
+test crates\ruviform-plugin-core\src\lib.rs - version (line 119) ... ok
+test crates\ruviform-plugin-core\src\param.rs - param::ParamFlags (line 48) ... ok
+test crates\ruviform-plugin-core\src\param.rs - param::ParamValue (line 120) ... ok
+test crates\ruviform-plugin-core\src\param.rs - param::ParamId (line 33) ... ok
+test crates\ruviform-plugin-core\src\descriptor.rs - descriptor::PluginDescriptor (line 20) ... ok
+test crates\ruviform-plugin-core\src\processor.rs - processor::BufferViewMut (line 117) ... ok
+test crates\ruviform-plugin-core\src\processor.rs - processor::BufferView (line 67) ... ok
+test crates\ruviform-plugin-core\src\processor.rs - processor::ProcessConfig (line 169) ... ok
+test crates\ruviform-plugin-core\src\processor.rs - processor::ProcessContext (line 254) ... ok
+test crates\ruviform-plugin-core\src\processor.rs - processor::ProcessResult (line 346) ... ok
+test crates\ruviform-plugin-core\src\transport.rs - transport::TransportInfo (line 30) ... ok
+test crates\ruviform-plugin-core\src\transport.rs - transport::TransportInfo::with_loop_range (line 73) ... ok
+test crates\ruviform-plugin-core\src\wire.rs - wire::Descriptor::matches (line 393) ... ok
+test crates\ruviform-plugin-core\src\wire.rs - wire::Message (line 235) ... ok
+test crates\ruviform-plugin-core\src\wire.rs - wire::Reader (line 499) ... ok
+test crates\ruviform-plugin-core\src\wire.rs - wire::decode (line 747) ... ok
+test crates\ruviform-plugin-core\src\wire.rs - wire::encode (line 650) ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+
+
+running 2 tests
+test crates\ruviform-plugin-core\src\descriptor.rs - descriptor::PluginDescriptorView (line 72) - compile fail ... ok
+test crates\ruviform-plugin-core\src\video.rs - video::VideoPluginInstance (line 79) - compile fail ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+all doctests ran in 1.34s; merged doctests compilation took 0.62s
+# gate=test-plugin-core exit=0 finished=2026-10-26T16:01:20Z

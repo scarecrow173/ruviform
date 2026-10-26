@@ -17,6 +17,7 @@ Directory: `docs/specs`
 | SPEC-034JPubrypO0IylcWkuqlz | fearless_dispatched 軽量カーネル劣後の原因分離（低負荷再計測） | approved | [dispatched-overhead-analysis.md](./dispatched-overhead-analysis.md) |
 | SPEC-034Jci19siJZexLs53Xh5d | DSP/SIMD 比較ベンチマーク PoC と採否 ADR | implemented | [dsp-simd-poc-adr.md](./dsp-simd-poc-adr.md) |
 | SPEC-034KNvB6d6rMoH8b8xST22 | ruviform-edit 新設（NLE 非破壊編集データモデル + 評価射影） | approved | [edit-data-model.md](./edit-data-model.md) |
+| SPEC-034MbMNCaEATFCOgSdtwkA | エンジン/利用側へのプラグイン統合（plugin-host ノード化 + L1 選択配線） | proposed | [engine-plugin-host-integration.md](./engine-plugin-host-integration.md) |
 | SPEC-034IcwhwIFSNUNKtX7KK0Q | Rust 開発基盤の確立（mise/APM lockfile・最小ワークスペース・手動CI） | approved | [establish-rust-dev-foundation.md](./establish-rust-dev-foundation.md) |
 | SPEC-034J5FYaYfeL5zkzb4sIV4 | メディアデータモデル API の実装（media-core / audio-core / video-core） | implemented | [implement-media-data-model-api.md](./implement-media-data-model-api.md) |
 | SPEC-034JcaMXubILS7j1FX5qob | メディア I/O 抽象境界と第一バックエンド PoC の実装 | implemented | [implement-media-io-abstraction-and-first-backend-poc.md](./implement-media-io-abstraction-and-first-backend-poc.md) |

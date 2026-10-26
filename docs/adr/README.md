@@ -24,6 +24,7 @@ Directory: `docs/adr`
 | ADR-034JDzseXORnckswW1oYKh | Plugin binding method: clack for CLAP, coupler-rs vst3 for VST3 | accepted | [plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md](./plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md) |
 | ADR-034JZPGUI0000000000007 | プラグイン GUI 埋め込み方式（外部親ウィンドウへの wry attach） | accepted | [plugin-gui-embedding.md](./plugin-gui-embedding.md) |
 | ADR-034JZLISO0000000000002 | プラグイン分離戦略（インプロセス既定 + opt-in アウトプロセス） | accepted | [plugin-isolation-strategy.md](./plugin-isolation-strategy.md) |
+| ADR-034MbMOuLa1T5TWfzINoHl | プラグイン処理の non-RT 制御/RT 処理所有分離（transferable RT endpoint） | accepted | [plugin-rt-ownership-split.md](./plugin-rt-ownership-split.md) |
 | ADR-034J6OnZouPI8HQy6cIg9D | 公開 enum への `#[non_exhaustive]` 統一方針 | accepted | [public-enum-non-exhaustive-policy.md](./public-enum-non-exhaustive-policy.md) |
 | ADR-034IO00JjhxeTXUbCZtcDX | リアルタイム契約と検証方針 | accepted | [realtime-contract-and-verification-policy.md](./realtime-contract-and-verification-policy.md) |
 | ADR-034Ivm746Q38Wa21HeqUiI | テンプレート由来ドキュメント・識別子のRuviform固有化方針 | accepted | [replace-template-derived-docs-metadata-with-ruviform.md](./replace-template-derived-docs-metadata-with-ruviform.md) |

@@ -34,6 +34,14 @@ impl std::error::Error for SessionError {}
 /// A live output session. Owns the stream; the callback keeps running
 /// until the session is dropped.
 ///
+/// **Field order is load-bearing** (declaration order = drop order):
+/// `stream` — which owns the data callback, which owns the `RtPlan`
+/// and its `Retirer` — drops before `swap`, which owns the
+/// `DropCollector`. Retirements pushed by `RtPlan::drop` therefore
+/// always land in a live collector, and plans still queued when the
+/// collector drops run their destructors on this (non-RT) teardown
+/// thread — never on the RT callback.
+///
 /// **RT contract:** construction/`start`/`stop`/drop are non-RT only.
 pub struct Session {
     stream: Box<dyn OutputStream>,
@@ -79,6 +87,32 @@ impl Session {
     /// **RT contract:** non-RT only.
     pub fn swap(&self, plan: crate::plan::GraphPlan) {
         self.swap.swap(plan);
+    }
+
+    /// Drops every plan retired by the RT side so far, running the
+    /// destructors on the calling thread — the explicit drain point
+    /// for sessions that never call [`swap`](Self::swap).
+    ///
+    /// Returns the number of dropped plans.
+    ///
+    /// **RT contract:** non-RT only — runs destructors, bounded by the
+    /// queued count.
+    // must_use_candidate: the drain itself is the contract — the count
+    // is advisory, so callers may legitimately ignore it.
+    #[allow(clippy::must_use_candidate)]
+    pub fn drain_retired(&self) -> usize {
+        self.swap.drain_retired()
+    }
+
+    /// Cumulative count of retired plans leaked because the retire
+    /// channel was full (leak-on-full — never dropped on the RT
+    /// side). Zero is the healthy steady state; non-zero means the
+    /// retire capacity or drain cadence is undersized.
+    ///
+    /// **RT contract:** non-RT only — monitoring accessor.
+    #[must_use]
+    pub fn retired_overflows(&self) -> usize {
+        self.swap.retired_overflows()
     }
 
     /// Starts output delivery.

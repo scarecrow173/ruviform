@@ -1,0 +1,7 @@
+# gate=cargo-doc started=2026-10-26T16:01:47Z
+$ env RUSTDOCFLAGS=-D warnings mise exec -- cargo doc -p ruviform-plugin-host -p ruviform-audio --no-deps
+ Documenting ruviform-audio v0.1.0 (F:\repositry\ruviform\crates\ruviform-audio)
+ Documenting ruviform-plugin-host v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-host)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.74s
+   Generated F:\repositry\ruviform\target\doc\ruviform_audio\index.html and 2 other files
+# gate=cargo-doc exit=0 finished=2026-10-26T16:01:49Z

@@ -109,6 +109,11 @@ relations:
     - "docs/designs/color-conversion-kernels.md"
     - "shared-foundations-and-modularization-policy.md"
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
+    - "docs/discovery/engine-plugin-host-integration.md"
+    - "docs/specs/engine-plugin-host-integration.md"
+    - "docs/adr/plugin-rt-ownership-split.md"
+    - "docs/designs/engine-plugin-host-integration.md"
+    - "docs/plans/implement-issue-113-engine-plugin-integration.md"
   verifies: []
   verified-by: []
   references:

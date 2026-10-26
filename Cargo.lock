@@ -1306,6 +1306,7 @@ dependencies = [
  "ruviform-audio-core",
  "ruviform-media-core",
  "ruviform-rt",
+ "static_assertions",
 ]
 
 [[package]]
@@ -1437,11 +1438,13 @@ name = "ruviform-plugin-host"
 version = "0.1.0"
 dependencies = [
  "assert_no_alloc",
+ "ruviform-audio",
  "ruviform-audio-core",
  "ruviform-media-core",
  "ruviform-plugin-core",
  "ruviform-rt",
  "shared_memory",
+ "static_assertions",
 ]
 
 [[package]]
@@ -1621,6 +1624,12 @@ name = "smallvec"
 version = "1.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "strength_reduce"

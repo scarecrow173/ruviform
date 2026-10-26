@@ -35,6 +35,9 @@ relations:
     - "docs/specs/plugin-l1-out-of-process.md"
     - "docs/designs/plugin-l1-out-of-process.md"
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
+    - "docs/discovery/engine-plugin-host-integration.md"
+    - "docs/specs/engine-plugin-host-integration.md"
+    - "docs/adr/plugin-rt-ownership-split.md"
   verifies: []
   verified-by: []
   references: []

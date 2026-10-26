@@ -43,10 +43,38 @@
 //!
 //! **Latency contract (L1):** an L1-routed block is answered
 //! `lookahead_blocks` blocks later — latency =
-//! `lookahead_blocks × block_frames / sample_rate` (default
-//! 2 × 512 frames @ 48 kHz ≈ 21.3 ms; per-spec
-//! [`OutOfProcessSpec::lookahead_blocks`]). Underruns pass through
+//! `lookahead_blocks × activated max_frames` frames (default
+//! 2 × 512 = 1024 frames ≈ 21.3 ms at 48 kHz; per-spec
+//! [`OutOfProcessSpec::lookahead_blocks`]; divide `frames` by the
+//! activated sample rate for seconds). Underruns pass through
 //! the last received block (silence before the first), never error.
+//!
+//! ## Endpoint surface (Issue #113)
+//!
+//! [`PluginHost::prepare_endpoint`] detaches one activated
+//! instance's processing leg into a [`PluginEndpoint`] — a `Send`
+//! object moved once into the RT-side owner (e.g. a graph node
+//! closure), carrying the same `process`/`latency_frames`
+//! vocabulary as the host path. The endpoint surface exists on the
+//! composite only: a standalone [`InProcessHost`] keeps its
+//! direct-call `process`/`plugin_mut` path. One instance carries at
+//! most one endpoint at a time — a second attach, an L0 slot whose
+//! factory skipped [`PluginFactory::create_sendable`], or an L1 leg
+//! still checked out is the defined rejection
+//! [`HostError::EndpointUnavailable`] (a host-local topology fact —
+//! it deliberately carries no wire encoding). `PluginHost` issues
+//! handles for audio instances only: video plugin instances
+//! ([`VideoPluginInstance`](ruviform_plugin_core::VideoPluginInstance))
+//! are **non-RT in every operation** — the endpoint/RT route simply
+//! does not exist for them.
+//!
+//! The pipeline-latency query is [`PluginHost::latency_frames`]:
+//! `Some(0)` for an activated L0 instance,
+//! `Some(lookahead_blocks × activated max_frames)` for L1, `None`
+//! before `Activate` or for an invalid handle — the same value a
+//! detached [`PluginEndpoint::latency_frames`] keeps from attach
+//! (a re-`Activate` may change the true latency; the endpoint's
+//! stored integer does not track it).
 //!
 //! ## Plugin side
 //!
@@ -74,10 +102,22 @@
 //! blocking, no IPC. [`PluginHost::process`] is RT-suitable on both
 //! routes (L1 = `try_push`/`try_pop` + bounded staging copies only);
 //! [`PluginHost::plugin_mut`] is RT-suitable but returns `None` for
-//! L1 slots. [`PluginHost::lifecycle_state`] is const-cheap for L0
-//! slots; for L1 slots it takes the instance's shared mutex — treat
-//! it as non-RT. Command dispatch (`execute`, `register_*`) and
-//! `try_recv_notification` are **non-RT only**.
+//! L1 slots (and for L0 `Shared` slots — the plugin sits behind the
+//! shared mutex). [`PluginHost::lifecycle_state`] and
+//! [`PluginHost::latency_frames`] are const-cheap for L0 slots; for
+//! L1 slots they take the instance's shared mutex — treat them as
+//! non-RT. [`PluginEndpoint::process`] is the endpoint's
+//! RT leg — `Send`, `try_lock`-only and allocation-free on the
+//! block path (the `rt_`-prefixed tests pin that), and
+//! [`PluginEndpoint::process_audio`] is its graph-facing sibling
+//! — the single-bus `pull`-shaped shell over `process` under
+//! the same RT contract. The attach-time getters
+//! ([`PluginEndpoint::bounds`], [`PluginEndpoint::max_frames`],
+//! [`PluginEndpoint::channels`], [`PluginEndpoint::latency_frames`])
+//! are const-cheap; [`PluginHost::prepare_endpoint`] itself is the
+//! non-RT mint.
+//! Command dispatch (`execute`, `register_*`), `prepare_endpoint`
+//! and `try_recv_notification` are **non-RT only**.
 //!
 //! Contract source: `docs/designs/plugin-isolation.md`,
 //! `docs/designs/plugin-host-l0.md`,
@@ -91,6 +131,7 @@
 
 mod command;
 mod composite;
+mod endpoint;
 mod host;
 // The `pub(crate)` L1 out-of-process instance machinery (Issue #76):
 // spawn + stdio handshake, driver/reader threads, the shm data plane
@@ -103,8 +144,11 @@ mod plugin;
 
 pub use command::{GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, PluginHandle};
 pub use composite::{ChildExit, HostNotification, OutOfProcessSpec, PluginHost};
+pub use endpoint::{EndpointBounds, PluginEndpoint};
 pub use host::InProcessHost;
-pub use plugin::{ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase};
+pub use plugin::{
+    ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
+};
 
 /// Returns the crate version string.
 ///

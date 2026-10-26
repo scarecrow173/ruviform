@@ -1,0 +1,8 @@
+# gate=build started=2026-10-26T16:01:25Z
+$ mise run build
+[build] $ cargo build --workspace
+   Compiling ruviform-plugin-clap v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-clap)
+   Compiling ruviform-plugin-host v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-host)
+   Compiling ruviform-plugin-export v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-export)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.43s
+# gate=build exit=0 finished=2026-10-26T16:01:27Z

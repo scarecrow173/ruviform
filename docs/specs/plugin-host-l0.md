@@ -33,6 +33,8 @@ relations:
     - "docs/discovery/plugin-l1-out-of-process.md"
     - "docs/specs/plugin-l1-out-of-process.md"
     - "docs/designs/plugin-l1-out-of-process.md"
+    - "docs/discovery/engine-plugin-host-integration.md"
+    - "docs/specs/engine-plugin-host-integration.md"
   verifies: []
   verified-by: []
   references: []

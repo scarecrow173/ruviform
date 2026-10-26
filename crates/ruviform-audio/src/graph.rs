@@ -18,6 +18,24 @@ pub trait AudioNode: Send {
     fn pull(&mut self, out: &mut AudioBufferViewMut<'_, f32>, ctx: &RtContext);
 }
 
+/// Blanket adhesion for `Send` closures: any
+/// `FnMut(&mut AudioBufferViewMut<'_, f32>, &RtContext) + Send`
+/// is a node — the consumer's wiring closure pushes straight into
+/// [`Graph::push`] as `Box<dyn AudioNode>`. The `Send` bound is the
+/// contract: captures that cannot cross to the RT thread fail to
+/// compile here, not at runtime.
+///
+/// **RT contract:** the closure inherits the node contract — it must
+/// not allocate, block, or call OS APIs inside the call.
+impl<F> AudioNode for F
+where
+    F: FnMut(&mut AudioBufferViewMut<'_, f32>, &RtContext) + Send,
+{
+    fn pull(&mut self, out: &mut AudioBufferViewMut<'_, f32>, ctx: &RtContext) {
+        self(out, ctx);
+    }
+}
+
 /// An ordered node list; `pull` drives nodes in registration order.
 ///
 /// **RT contract:** construction/mutation is non-RT; [`Graph::pull`]
