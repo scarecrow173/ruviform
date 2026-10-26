@@ -24,7 +24,7 @@ Directory: `docs/tasks`
 | TASK-034JRQCnF0sLKz5obmCHNT | Issue #25 文書クローズと全量検証 | done | [audio-engine-closeout.md](./audio-engine-closeout.md) |
 | TASK-034JRQBhUGz8OWIgGAnEgl | ruviform-audio クレート新設 + pull グラフ/ミキサー/プランスナップショット | done | [audio-engine-graph-snapshot.md](./audio-engine-graph-snapshot.md) |
 | TASK-034JRQBPxKgu0yLVIB6Xm7 | セッション統合（OutputStream callback → RT グラフ駆動） | done | [audio-engine-session.md](./audio-engine-session.md) |
-| TASK-034MrsUVP3NUi1Nrap9gyd | audio シーム（AudioNode FnMut impl + plan.rs 退役 — Retirer/ptr_eq/Drop for RtPlan/drain） | todo | [audio-fnmut-node-and-plan-retirement.md](./audio-fnmut-node-and-plan-retirement.md) |
+| TASK-034MrsUVP3NUi1Nrap9gyd | audio シーム（AudioNode FnMut impl + plan.rs 退役 — Retirer/ptr_eq/Drop for RtPlan/drain） | done | [audio-fnmut-node-and-plan-retirement.md](./audio-fnmut-node-and-plan-retirement.md) |
 | TASK-034IwBWH50nD9Unn8HghJD | テンプレート残存プレースホルダーのベースラインスイープ | done | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
 | TASK-034LFHv6XBnCj3XsdaEGVG | Issue #99 色変換カーネル closeout | done | [color-conversion-closeout.md](./color-conversion-closeout.md) |
 | TASK-034LFHuE6Ii7Wqar445Znn | Issue #99 色変換カーネル final verification | done | [color-conversion-final-verification.md](./color-conversion-final-verification.md) |
