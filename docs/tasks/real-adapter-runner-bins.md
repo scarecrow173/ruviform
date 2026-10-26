@@ -1,23 +1,32 @@
 ---
 id: "TASK-034MLSxXJkDzlYvxqtGWDY"
 type: "task"
-status: "todo"
+status: "done"
 title: "規格別 runner bin（required-features=[\"host\"]・DLL_PREFIX fixture 解決・RUVIFORM_L1_REAL_PLUGIN_DIR・compile-time 固定 factories）"
 created: "2026-10-26"
 updated: "2026-10-27"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-plugin-clap/src/bin/ruviform-plugin-clap-l1-runner.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-vst3/src/bin/ruviform-plugin-vst3-l1-runner.rs"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-clap/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-plugin-vst3/Cargo.toml"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-114-real-adapter-runner-bins-task-3-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
     - "docs/tasks/clap-host-bridge.md"
@@ -82,18 +91,20 @@ Plan actions 10–11。両 adapter crate に規格別 runner bin を実装する
 
 ## Done When
 
-- [ ] `[[bin]] required-features = ["host"]` が両 crate に存在し、default build（`cargo build -p ...` `host` 未指定）では生成されず `--features host` でのみ生成される
-- [ ] CLAP runner が `RUVIFORM_L1_REAL_PLUGIN_DIR`/`current_exe` sibling の `{DLL_PREFIX}ruviform_plugin_clap{DLL_SUFFIX}` で fixture を解決し `ClapLibrary::load` → `run` を駆動する
-- [ ] VST3 runner が同型で `Vst3Library::load` → `run` を駆動する
-- [ ] 引数なし起動で fixture load 成功後 `run` argv parse が `missing --ruviform-shm-key` → exit 2（fixture load 証拠 + usage reject）— shell 直接起動で確認
-- [ ] `RUVIFORM_L1_REAL_PLUGIN_DIR=<empty dir>` 起動で stderr diagnostic + exit 1（binary 不在 defined rejection — `run` 未到達）
-- [ ] `spec.args` が空のまま消費され、`run` argv 規約（`--ruviform-shm-key` 必須・`--ruviform-plugin-id` は `factories.len() != 1` のときのみ必須・非一致 id/未知引数 → usage reject exit 2・`descriptor()` panic → exit 1）が拡張されない
-- [ ] narrow gate（下記 Verification）が exit 0
+- [x] `[[bin]] required-features = ["host"]` が両 crate に存在し、default build（`cargo build -p ...` `host` 未指定）では生成されず `--features host` でのみ生成される
+- [x] CLAP runner が `RUVIFORM_L1_REAL_PLUGIN_DIR`/`current_exe` sibling の `{DLL_PREFIX}ruviform_plugin_clap{DLL_SUFFIX}` で fixture を解決し `ClapLibrary::load` → `run` を駆動する
+- [x] VST3 runner が同型で `Vst3Library::load` → `run` を駆動する
+- [x] 引数なし起動で fixture load 成功後 `run` argv parse が `missing --ruviform-shm-key` → exit 2（fixture load 証拠 + usage reject）— shell 直接起動で確認
+- [x] `RUVIFORM_L1_REAL_PLUGIN_DIR=<empty dir>` 起動で stderr diagnostic + exit 1（binary 不在 defined rejection — `run` 未到達）
+- [x] `spec.args` が空のまま消費され、`run` argv 規約（`--ruviform-shm-key` 必須・`--ruviform-plugin-id` は `factories.len() != 1` のときのみ必須・非一致 id/未知引数 → usage reject exit 2・`descriptor()` panic → exit 1）が拡張されない
+- [x] narrow gate（下記 Verification）が exit 0
 
 ## Verification
 
-- [ ] `cargo build -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host` — exit 0（両 runner bin + fixture cdylib 生成）
-- [ ] `cargo build -p ruviform-plugin-clap -p ruviform-plugin-vst3` — exit 0（default・`required-features` で runner bin 非生成・既存 bin/target 無退行）
-- [ ] `cargo test -p ruviform-plugin-clap --features host` ・ `cargo test -p ruviform-plugin-vst3 --features host` — exit 0（`CARGO_BIN_EXE_*` が same-crate runner bin を解決）
-- [ ] `mise run check`・`mise run lint`・`mise run test` — exit 0（default 構成不変グリーン — `required-features` で runner bin は default 木に出ない）
-- [ ] runner 直接起動（shell・引数なし）→ exit 2・`RUVIFORM_L1_REAL_PLUGIN_DIR=<empty>` 起動 → stderr + exit 1 — defined 挙動の shell 確認
+- [x] `cargo build -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host` — exit 0（両 runner bin + fixture cdylib 生成）
+- [x] `cargo build -p ruviform-plugin-clap -p ruviform-plugin-vst3` — exit 0（default・`required-features` で runner bin 非生成・既存 bin/target 無退行）
+- [x] `cargo test -p ruviform-plugin-clap --features host` ・ `cargo test -p ruviform-plugin-vst3 --features host` — exit 0（`CARGO_BIN_EXE_*` が same-crate runner bin を解決）
+- [x] `mise run check`・`mise run lint`・`mise run test` — exit 0（default 構成不変グリーン — `required-features` で runner bin は default 木に出ない）
+- [x] runner 直接起動（shell・引数なし）→ exit 2・`RUVIFORM_L1_REAL_PLUGIN_DIR=<empty>` 起動 → stderr + exit 1 — defined 挙動の shell 確認
+
+補足（task doc の Verification 範囲外・IR に記録）: `mise run fmt-check` exit 0・`mise run test-rt` exit 0・runner unit test 各 2 件（override verbatim join・sibling 解決 + fixture 実在 assert — `--features host` で pass）。敵対的レビュー 1 ラウンドは clean verdict（確定修正 0 件）— informational 指摘 2 件（空文字 `RUVIFORM_L1_REAL_PLUGIN_DIR` の verbatim 語義・empty factories → `run` usage reject exit 2 への委譲）は spec-accepted として記録 — 詳細は `docs/impl/ir/issue-114-real-adapter-runner-bins-task-3-implementation.md`。

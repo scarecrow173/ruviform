@@ -107,7 +107,7 @@ Directory: `docs/tasks`
 | TASK-034JgsHeZt7Bm40uBMo9wg | coupler-rs vst3 による VST3 binding PoC（最小ゲインプラグイン） | done | [poc-vst3-binding-adapter.md](./poc-vst3-binding-adapter.md) |
 | TASK-034MLSyEUOp70P1hRsepM9 | 実プラグイン L1 E2E + opt-in lane（tests/l1_real_adapter_e2e.rs 両規格・mise task・l1-real-verify job・OFX 境界明文化・doc 同期） | todo | [real-adapter-e2e-and-lane.md](./real-adapter-e2e-and-lane.md) |
 | TASK-034MLSzaZebh5KuCkE4guN | real-adapter final verification + closeout（Full Gate・opt-in lane 実測・AC 証跡・status 同期） | todo | [real-adapter-final-verification.md](./real-adapter-final-verification.md) |
-| TASK-034MLSxXJkDzlYvxqtGWDY | 規格別 runner bin（required-features=["host"]・DLL_PREFIX fixture 解決・RUVIFORM_L1_REAL_PLUGIN_DIR・compile-time 固定 factories） | todo | [real-adapter-runner-bins.md](./real-adapter-runner-bins.md) |
+| TASK-034MLSxXJkDzlYvxqtGWDY | 規格別 runner bin（required-features=["host"]・DLL_PREFIX fixture 解決・RUVIFORM_L1_REAL_PLUGIN_DIR・compile-time 固定 factories） | done | [real-adapter-runner-bins.md](./real-adapter-runner-bins.md) |
 | TASK-034Jf4gzf7OAwNOoW3t9WV | impl record と文書整合 | done | [record-impl-and-sync-docs.md](./record-impl-and-sync-docs.md) |
 | TASK-034IwCiYXp6ub3O8Brcs3L | 設定ファイルのレビューと最小修正 | done | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | TASK-034IwCiByN74V3hysJ9iTR | AGENTS.md の Ruviform 向け節単位改稿 | done | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |

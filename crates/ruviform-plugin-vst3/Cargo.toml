@@ -14,6 +14,16 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# The VST3-specific L1 child-process runner (Issue #114, task
+# `docs/tasks/real-adapter-runner-bins.md`): dlopens the fixture cdylib
+# through the `host` bridge and hands the scanned factories to
+# `ruviform_plugin_export::run`. `required-features` keeps the binary
+# out of the default build — it exists only under `--features host`.
+[[bin]]
+name = "ruviform-plugin-vst3-l1-runner"
+path = "src/bin/ruviform-plugin-vst3-l1-runner.rs"
+required-features = ["host"]
+
 [features]
 # `host` — the host-side bridge (`src/host.rs`): dlopens a real VST3
 # module in-process via `libloading`, scans its class table and drives
