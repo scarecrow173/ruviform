@@ -78,12 +78,6 @@ struct SharedSlot {
     bound: Option<EndpointBounds>,
     /// Host-side epoch issuer — monotonic, starts at 1, bumped per
     /// claimed attach.
-    // Consumed by `attach_endpoint`, whose only in-crate caller is
-    // Task 4's `PluginHost::prepare_endpoint` — unit tests until then
-    // (`not(test)` because the tests already exercise it). `#[expect]`,
-    // not `#[allow]`: once T4 lands the real caller the non-test build's
-    // unfulfilled expectation fails the lint gate — remove it then.
-    #[cfg_attr(not(test), expect(dead_code))]
     next_epoch: u64,
 }
 
@@ -372,6 +366,100 @@ impl InProcessHost {
         }
     }
 
+    /// The attach-side lifecycle gate, shared by the public prelude
+    /// ([`PluginHost::prepare_endpoint`](crate::PluginHost::prepare_endpoint)
+    /// runs it for its own state step) and the inner
+    /// [`InProcessHost::attach_endpoint`] — the design's rejection
+    /// order puts state before every other check.
+    ///
+    /// `Failed` — the union observation (`Shared` reads the mirror,
+    /// so an endpoint's `fetch_max(Failed)` is seen ahead of the
+    /// bookkeeping lifecycle, **plus** the `core` poison flag,
+    /// which covers a panicked plugin call that unwound before the
+    /// mirror could move) — converges the bookkeeping lifecycle and
+    /// reports `Err(HostError::Failed)`; anything below `Activated`
+    /// (`Created`/`Initialized`/an anomalous terminal observation)
+    /// is `Err(HostError::Lifecycle)`, the same shape a rejected
+    /// `Process` event takes.
+    ///
+    /// **RT contract:** non-RT only — a bookkeeping transition may
+    /// run; no locks are taken.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle;
+    /// [`HostError::Failed`] on the `Failed` union; and
+    /// [`HostError::Lifecycle`] below `Activated`.
+    pub(crate) fn check_attachable_state(&mut self, handle: PluginHandle) -> Result<(), HostError> {
+        let instance = self.instance_mut(handle)?;
+        // For `Shared` the mirror is the observation union (the
+        // endpoint may have converged it to `Failed` ahead of the
+        // bookkeeping lifecycle); `Plain` reads the lifecycle
+        // itself.
+        let observed = match &instance.slot {
+            // The union's poison half: a panicked plugin call that
+            // unwound through a held `core` guard (a verb-CS hook
+            // or the host-side `process` arm) leaves the mirror at
+            // its last committed store, so `is_poisoned` is the
+            // same `Failed` observation the inner `lock()` `Err`
+            // arm and `destroy` make — a non-locking flag read, so
+            // "no locks in the prelude" stays true.
+            InstanceSlot::Shared(slot) if slot.core.is_poisoned() => LifecycleState::Failed,
+            InstanceSlot::Shared(slot) => mirror_decode(slot.mirror.load(Ordering::Acquire)),
+            InstanceSlot::Plain { .. } => instance.lifecycle.state(),
+        };
+        match observed {
+            LifecycleState::Activated | LifecycleState::Processing => Ok(()),
+            LifecycleState::Failed => Err(converge_failed(&mut instance.lifecycle)),
+            state => Err(HostError::Lifecycle(LifecycleError::IllegalTransition {
+                from: state,
+                event: LifecycleEvent::Process,
+            })),
+        }
+    }
+
+    /// The attach-side occupancy gate — the public prelude's
+    /// presence check for the L0 route
+    /// ([`PluginHost::prepare_endpoint`](crate::PluginHost::prepare_endpoint)
+    /// runs it before the uniform bounds check so an occupied or
+    /// incapable slot reports `EndpointUnavailable` ahead of any
+    /// bounds violation).
+    ///
+    /// Both `Err(HostError::EndpointUnavailable)` reasons live here:
+    /// a `Plain` slot (a non-`Send` factory — never endpoint-
+    /// capable) and a `Shared` slot whose epoch flag is already
+    /// claimed (`attached != 0` — the single-endpoint rule). The
+    /// read is one atomic load; the inner attach's epoch CAS stays
+    /// the authoritative claim (this is a pre-check, not the attach
+    /// itself).
+    ///
+    /// **RT contract:** non-RT only by call site — the body is a
+    /// lock-free atomic read.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle;
+    /// [`HostError::EndpointUnavailable`] for a `Plain` slot or a
+    /// `Shared` slot with a live endpoint.
+    pub(crate) fn check_endpoint_free(&self, handle: PluginHandle) -> Result<(), HostError> {
+        let instance = self
+            .instances
+            .get(handle.slot() as usize)
+            .and_then(Option::as_ref)
+            .filter(|instance| instance.generation == handle.generation())
+            .ok_or(HostError::InvalidHandle)?;
+        match &instance.slot {
+            InstanceSlot::Plain { .. } => Err(HostError::EndpointUnavailable),
+            InstanceSlot::Shared(slot) => {
+                if slot.attached.load(Ordering::Acquire) == 0 {
+                    Ok(())
+                } else {
+                    Err(HostError::EndpointUnavailable)
+                }
+            }
+        }
+    }
+
     /// The L0 inner of `PluginHost::prepare_endpoint` — attaches one
     /// RT endpoint to a live `Shared` instance.
     ///
@@ -403,38 +491,17 @@ impl InProcessHost {
     /// # Errors
     ///
     /// [`HostError`] — per the pinned order above.
-    // The only in-crate caller is Task 4's `PluginHost::prepare_endpoint`
-    // — until it lands, unit tests are the sole consumers (`not(test)`
-    // because the tests already exercise it). `#[expect]`, not
-    // `#[allow]`: once T4 wires the caller the non-test build's
-    // unfulfilled expectation fails the lint gate — remove it then.
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(crate) fn attach_endpoint(
         &mut self,
         handle: PluginHandle,
         bounds: EndpointBounds,
     ) -> Result<PluginEndpoint, HostError> {
+        // (1) state — the same gate the public prelude runs
+        // (`PluginHost::prepare_endpoint` calls it for its own (1)
+        // step; this repeat is the inner layer's defense-in-depth —
+        // a state rejection always precedes every other check).
+        self.check_attachable_state(handle)?;
         let instance = self.instance_mut(handle)?;
-        // (1) state check — before slot shape. For `Shared` the
-        // mirror is the observation union (the endpoint may have
-        // converged it to `Failed` ahead of the bookkeeping
-        // lifecycle); `Plain` reads the lifecycle itself.
-        let observed = match &instance.slot {
-            InstanceSlot::Shared(slot) => mirror_decode(slot.mirror.load(Ordering::Acquire)),
-            InstanceSlot::Plain { .. } => instance.lifecycle.state(),
-        };
-        match observed {
-            LifecycleState::Activated | LifecycleState::Processing => {}
-            LifecycleState::Failed => {
-                return Err(converge_failed(&mut instance.lifecycle));
-            }
-            state => {
-                return Err(HostError::Lifecycle(LifecycleError::IllegalTransition {
-                    from: state,
-                    event: LifecycleEvent::Process,
-                }));
-            }
-        }
         // (2) slot shape — `Plain` instances are not endpoint-capable.
         let InstanceSlot::Shared(slot) = &mut instance.slot else {
             return Err(HostError::EndpointUnavailable);

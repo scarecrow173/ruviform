@@ -119,6 +119,9 @@ fn command_parity_lifecycle_and_state() {
         Ok(wire::Reply::Ok)
     );
     assert_eq!(instance.lifecycle_state(), LifecycleState::Activated);
+    // The armed ring reports the lookahead horizon — `(depth − 1)
+    // × armed frame_capacity` = 2 × 512.
+    assert_eq!(instance.latency_frames(), Some(1024));
 
     assert_eq!(
         instance.execute(wire::Command::StartProcessing),
@@ -155,6 +158,10 @@ fn command_parity_lifecycle_and_state() {
         Ok(wire::Reply::Ok)
     );
     assert_eq!(instance.lifecycle_state(), LifecycleState::Initialized);
+    // The armed ring survives `Deactivate` (`staging` is never
+    // cleared) but the public query gates on the mirror — `None`,
+    // L0 parity, not the stale horizon.
+    assert_eq!(instance.latency_frames(), None);
 
     // A post-handshake `Scan` still reports the child's descriptors.
     match instance.execute(wire::Command::Scan) {

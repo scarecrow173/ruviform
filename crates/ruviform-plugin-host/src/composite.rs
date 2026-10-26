@@ -42,7 +42,8 @@ use std::time::Duration;
 use ruviform_audio_core::SampleRate;
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    EventList, LifecycleEvent, LifecycleState, PluginDescriptor, ProcessResult, TransportInfo,
+    EventList, LifecycleEvent, LifecycleState, PluginDescriptor, PrepareError, ProcessResult,
+    TransportInfo,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L1Endpoint, PluginEndpoint};
@@ -75,8 +76,8 @@ pub struct OutOfProcessSpec {
     /// flags.
     pub args: Vec<OsString>,
     /// Lookahead depth in blocks (default **2**) — fixes the L1
-    /// latency contract `lookahead_blocks × block_frames /
-    /// sample_rate`. `0` is rejected at spawn (`Err(HostError::Ipc)`)
+    /// latency contract `lookahead_blocks × activated max_frames`
+    /// frames. `0` is rejected at spawn (`Err(HostError::Ipc)`)
     /// because the result horizon could never be met.
     pub lookahead_blocks: u32,
     /// Defined timeout for the handshake and every later `Reply`
@@ -190,19 +191,32 @@ enum Slot {
 ///
 /// **Latency contract (L1):** a block submitted to an L1 instance is
 /// answered `lookahead_blocks` blocks later — latency
-/// = `lookahead_blocks × block_frames / sample_rate`
-/// (default 2 × 512 frames @ 48 kHz ≈ 21.3 ms). An answer that never
-/// arrives is not an error: the defined pass-through (last received
-/// block, else silence) plays instead.
+/// = `lookahead_blocks × activated max_frames` frames
+/// (default 2 × 512 = 1024 frames ≈ 21.3 ms at 48 kHz; divide
+/// `frames` by the activated sample rate for seconds). An answer
+/// that never arrives is not an error: the defined pass-through
+/// (last received block, else silence) plays instead.
+///
+/// **Endpoint surface:** [`PluginHost::prepare_endpoint`] detaches
+/// one instance's processing leg into a [`PluginEndpoint`] — `Send`,
+/// moved once into the RT-side owner (e.g. a graph node closure) —
+/// carrying the same `process`/`latency_frames` vocabulary the host
+/// reports. One instance carries at most one endpoint at a time.
+/// Video plugin instances never reach this path: every
+/// [`VideoPluginInstance`](ruviform_plugin_core::VideoPluginInstance)
+/// operation is non-RT, so the endpoint/RT surface simply does not
+/// exist for them.
 ///
 /// **RT contract:** [`PluginHost::process`] and
 /// [`PluginHost::plugin_mut`] are RT-suitable — L0 slots take the
 /// direct-call path and L1 slots take the `try_push`/`try_pop` legs
 /// plus preallocated staging; neither allocates, blocks or touches
 /// pipes/shm on the caller thread. [`PluginHost::lifecycle_state`]
-/// is const-cheap for L0 slots but takes the L1 instance's shared
-/// mutex — treat it as non-RT for L1 handles. `execute`,
-/// `register_*` and `try_recv_notification` are **non-RT only**.
+/// and [`PluginHost::latency_frames`] are `&self` queries —
+/// lock-free for L0 slots but they take the L1 instance's shared
+/// mutex, so treat them as non-RT for L1 handles. `execute`,
+/// `register_*`, `prepare_endpoint` and `try_recv_notification` are
+/// **non-RT only**.
 ///
 /// **Send/Sync:** `PluginHost` is neither `Send` nor `Sync` — the L0
 /// backend already holds `Box<dyn ErasedPlugin>` (no auto-traits on
@@ -363,10 +377,44 @@ impl PluginHost {
         }
     }
 
+    /// The instance's pipeline latency in whole frames — `None`
+    /// before `Activate` and for an invalid handle. L0 slots answer
+    /// `Some(0)` once activated (a direct call adds no pipeline
+    /// latency); L1 slots answer `Some(lookahead_blocks × activated
+    /// max_frames)` — default 2 × 512 = 1024 frames ≈ 21.3 ms at
+    /// 48 kHz (divide `frames` by the activated sample rate for
+    /// seconds). This is the same quantity a detached
+    /// [`PluginEndpoint::latency_frames`] reported at attach; a
+    /// re-`Activate` can change it.
+    ///
+    /// **RT contract:** `&self`, non-draining. For L0 slots it is a
+    /// lock-free mirror/lifecycle read — never the `core` mutex
+    /// (the query may be carried on an RT-adjacent lane). For L1
+    /// slots it takes the instance's shared control mutex — treat
+    /// it as non-RT there, exactly like
+    /// [`PluginHost::lifecycle_state`].
+    #[must_use]
+    pub fn latency_frames(&self, handle: PluginHandle) -> Option<u32> {
+        let index = handle.slot() as usize;
+        if self.generations.get(index).copied() != Some(handle.generation()) {
+            return None;
+        }
+        match self.instances.get(index)?.as_ref()? {
+            Slot::InProcess(inner) => match self.l0.lifecycle_state(*inner) {
+                Some(LifecycleState::Activated | LifecycleState::Processing) => Some(0),
+                _ => None,
+            },
+            Slot::OutOfProcess(instance) => instance.latency_frames(),
+        }
+    }
+
     /// Direct access to an L0 instance for the L0 RT path (e.g.
     /// bespoke [`ErasedPlugin::process_host`] dispatch) — `None` for
-    /// an invalid handle **and for every L1 slot**: an out-of-process
-    /// instance has no in-process plugin object to lend.
+    /// an invalid handle, for every L1 slot **and for an L0
+    /// `Shared` slot** (a `Send`-capable plugin lives behind the
+    /// shared mutex — a `&mut` cannot be lent out of it, the same
+    /// defined answer L1 gives): an out-of-process instance has no
+    /// in-process plugin object to lend.
     ///
     /// **RT contract:** RT-suitable — no allocation, no blocking.
     #[must_use]
@@ -404,7 +452,10 @@ impl PluginHost {
     /// activated frame capacity the wire can express;
     /// [`HostError::EndpointUnavailable`] while an L1 slot's RT leg
     /// is checked out to a detached endpoint (the processing
-    /// surface moved — retry on the endpoint, not here).
+    /// surface moved — retry on the endpoint, not here) **or while
+    /// an L0 `Shared` slot's cell is busy** — `try_lock`
+    /// `WouldBlock`, a non-RT verb mid-flight on the shared mutex;
+    /// the defined busy bypass, `outputs` untouched.
     pub fn process(
         &mut self,
         handle: PluginHandle,
@@ -422,11 +473,213 @@ impl PluginHost {
         }
     }
 
+    /// Mints the instance's RT processing endpoint — the public
+    /// attach surface of the ownership split (Issue #113 →
+    /// `docs/designs/engine-plugin-host-integration.md`). The
+    /// returned [`PluginEndpoint`] is `Send` and owns the RT leg:
+    /// move it exactly once into the RT-side owner (e.g. a graph
+    /// node closure) and drive `process` there; this host keeps the
+    /// command surface.
+    ///
+    /// One instance carries at most one endpoint at a time. The
+    /// seat frees when the endpoint drops — L0 returns its epoch on
+    /// `Drop`, L1 restores the checked-out leg at the next `&mut`
+    /// host entry point's drain — after which a fresh
+    /// `prepare_endpoint` may attach again.
+    ///
+    /// Defined rejections, in the pinned public order — handle,
+    /// then state, then presence, then bounds:
+    ///
+    /// | order | condition | result |
+    /// | --- | --- | --- |
+    /// | handle | stale/unknown handle | `Err(HostError::InvalidHandle)` |
+    /// | (1) state | `Created`/`Initialized` | `Err(HostError::Lifecycle(_))` |
+    /// | (1) state | `Failed` | `Err(HostError::Failed)` |
+    /// | (2) presence | L0 `Plain` slot (a non-`Send` factory — [`PluginFactory::create_sendable`] was `None`) · L0 second attach · L1 leg checked out | `Err(HostError::EndpointUnavailable)` |
+    /// | (3) bounds | `max_frames == 0` · `channels == 0` · `max_frames > WIRE_MAX_FRAMES` (8192) · `channels > WIRE_MAX_CHANNELS` (16) · `max_frames <` activated `max_frames` | `Err(HostError::Prepare(PrepareError::UnsupportedConfig))` |
+    /// | internal | L1 post-take assembly anomaly — unreachable in-protocol (`debug_assert`'d; the checked-out leg is restored before the `Err` returns) | `Err(HostError::Ipc)` |
+    ///
+    /// Presence is checked **before** bounds on purpose — an
+    /// occupied or incapable slot answers `EndpointUnavailable`
+    /// even when the bounds are also invalid (the inner attach
+    /// paths check bounds before their own occupancy claim; the
+    /// public order is the composite's, per the design's rejection
+    /// table). The bounds check is split the same way the contract
+    /// splits it: the *uniform* half runs here once — non-zero and
+    /// inside the wire caps, so a `u32::MAX` shape is the same
+    /// defined rejection and can never reach an allocation — and
+    /// the activated-layer half (`max_frames ≥ activated
+    /// max_frames`) is re-validated inside the route's attach,
+    /// which keeps its own pinned order. `bounds.channels` carries
+    /// no activated-bus equality rule in v1 (plugins expose no
+    /// channel query); the per-block rule `out.channels() ==
+    /// bound.channels` is the endpoint's bound clip.
+    ///
+    /// A rejected `prepare_endpoint` consumes nothing: the instance
+    /// stays attachable and processable exactly as found.
+    ///
+    /// **RT contract:** non-RT only — per-attach channel minting,
+    /// the bound-shaped `in_scratch` allocation and the shared
+    /// locks — the L1 instance's shared control mutex, the L0
+    /// `Shared` slot's `core` cell lock — are all prepare-side
+    /// costs. The minted endpoint's
+    /// `process`/`latency_frames`/`bounds` are the RT legs.
+    ///
+    /// # Errors
+    ///
+    /// Per the rejection table above — every rejection is a defined
+    /// `Err`, never a panic or an allocation abort.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_audio_core::SampleRate;
+    /// use ruviform_plugin_core::{
+    ///     BufferView, BufferViewMut, EventList, ParamInfo, PluginDescriptor,
+    ///     PluginProcessor, PrepareError, ProcessConfig, ProcessContext,
+    ///     ProcessResult, ProcessStatus, TransportInfo,
+    /// };
+    /// use ruviform_plugin_host::{
+    ///     EndpointBounds, ErasedPlugin, HostCommand, HostReply, Plugin,
+    ///     PluginFactory, PluginHost, erase, erase_sendable,
+    /// };
+    ///
+    /// // A `Send`-capable plugin opts into endpoint sharing — its
+    /// // factory implements `create_sendable`.
+    /// struct Gain;
+    /// impl PluginProcessor for Gain {
+    ///     fn prepare(
+    ///         &mut self,
+    ///         _config: &ProcessConfig,
+    ///         _context: &mut ProcessContext,
+    ///     ) -> Result<(), PrepareError> {
+    ///         Ok(())
+    ///     }
+    ///     fn process<I, O>(
+    ///         &mut self,
+    ///         inputs: &[I],
+    ///         outputs: &mut [O],
+    ///         _events: EventList<'_>,
+    ///         _transport: Option<TransportInfo>,
+    ///         _context: &mut ProcessContext,
+    ///     ) -> ProcessResult
+    ///     where
+    ///         I: BufferView,
+    ///         O: BufferViewMut,
+    ///     {
+    ///         for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
+    ///             for channel in 0..output.channels() {
+    ///                 if let (Some(src), Some(dst)) =
+    ///                     (input.channel(channel), output.channel_mut(channel))
+    ///                 {
+    ///                     dst.copy_from_slice(src);
+    ///                 }
+    ///             }
+    ///         }
+    ///         ProcessResult::new(ProcessStatus::Continue, ProcessResult::TAIL_NONE)
+    ///     }
+    /// }
+    /// impl Plugin for Gain {
+    ///     fn descriptor(&self) -> PluginDescriptor {
+    ///         PluginDescriptor {
+    ///             id: "org.example.gain",
+    ///             name: "Gain",
+    ///             vendor: "Example",
+    ///             version: "1.0.0",
+    ///             features: &[],
+    ///         }
+    ///     }
+    ///     fn params(&self) -> &[ParamInfo] {
+    ///         &[]
+    ///     }
+    /// }
+    /// struct GainFactory;
+    /// impl PluginFactory for GainFactory {
+    ///     fn descriptor(&self) -> PluginDescriptor {
+    ///         Gain.descriptor()
+    ///     }
+    ///     fn create(&self) -> Box<dyn ErasedPlugin> {
+    ///         erase(Gain)
+    ///     }
+    ///     fn create_sendable(&self) -> Option<Box<dyn ErasedPlugin + Send>> {
+    ///         Some(erase_sendable(Gain))
+    ///     }
+    /// }
+    ///
+    /// let mut host = PluginHost::new();
+    /// host.register_factory(Box::new(GainFactory));
+    /// let HostReply::Instantiated { handle } = host
+    ///     .execute(HostCommand::Instantiate {
+    ///         plugin_id: "org.example.gain".to_owned(),
+    ///     })
+    ///     .unwrap()
+    /// else {
+    ///     panic!("unexpected reply")
+    /// };
+    /// host.execute(HostCommand::Initialize { handle }).unwrap();
+    /// host.execute(HostCommand::Activate {
+    ///     handle,
+    ///     config: ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, 512).unwrap(),
+    /// })
+    /// .unwrap();
+    ///
+    /// // The endpoint detaches the processing leg — `Send`, ready to
+    /// // move into the RT-side owner. L0 reports zero added latency.
+    /// let endpoint = host
+    ///     .prepare_endpoint(
+    ///         handle,
+    ///         EndpointBounds {
+    ///             max_frames: 512,
+    ///             channels: 2,
+    ///         },
+    ///     )
+    ///     .unwrap();
+    /// assert_eq!(endpoint.latency_frames(), 0);
+    /// assert_eq!(host.latency_frames(handle), Some(0));
+    /// ```
+    pub fn prepare_endpoint(
+        &mut self,
+        handle: PluginHandle,
+        bounds: EndpointBounds,
+    ) -> Result<PluginEndpoint, HostError> {
+        // The prelude — the pinned public order. `slot_mut` resolves
+        // the handle first (stale/unknown → `InvalidHandle`), then
+        // each route runs (1) state and (2) presence/occupancy
+        // before the uniform bounds check below: a state rejection
+        // always wins, and an occupied or incapable slot answers
+        // `EndpointUnavailable` even for invalid bounds.
+        match self.slot_mut(handle)? {
+            Slot::InProcess(inner) => {
+                let inner = *inner;
+                self.l0.check_attachable_state(inner)?;
+                self.l0.check_endpoint_free(inner)?;
+            }
+            Slot::OutOfProcess(instance) => {
+                // The `&mut` entry-point drain — collects a leg
+                // queued on the return channel so the occupancy
+                // read below sees post-return truth (the inner
+                // `prepare_endpoint` re-runs the same drain).
+                instance.drain_endpoint_channels();
+                instance.check_attachable_state()?;
+                if instance.leg_detached() {
+                    return Err(HostError::EndpointUnavailable);
+                }
+            }
+        }
+        // The uniform bounds half — the layer-independent rules
+        // only; `max_frames ≥ activated max_frames` stays with the
+        // inners' activated-layer re-validation.
+        check_uniform_bounds(bounds)?;
+        self.attach_endpoint(handle, bounds)
+    }
+
     /// The inner entry point for endpoint attachment (Issue #113
     /// task 3) — routes the handle to the L0 or L1 attach path.
-    /// The public surface (`PluginHost::prepare_endpoint`, the
-    /// attach-side prelude and `in_scratch` hand-off) is Task 4;
-    /// this is the route-aware inner the prelude will call.
+    /// [`PluginHost::prepare_endpoint`] calls it after the public
+    /// prelude (state → presence → uniform bounds); the pinned
+    /// per-route order inside is the activated layer's own
+    /// defense-in-depth re-validation, not the public contract's
+    /// order.
     ///
     /// L0 delegates to [`InProcessHost::attach_endpoint`] — its
     /// `Shared`-slot gate already distinguishes attachable
@@ -444,13 +697,6 @@ impl PluginHost {
     ///
     /// [`HostError`] — per the route's own pinned order
     /// (`InvalidHandle` first from [`PluginHost::slot_mut`]).
-    // The only in-crate caller is Task 4's `prepare_endpoint`
-    // prelude — until it lands, unit tests are the sole consumers
-    // (`not(test)` because the tests already exercise it).
-    // `#[expect]`, not `#[allow]`: once T4 wires the caller the
-    // non-test build's unfulfilled expectation fails the lint gate
-    // — remove it then.
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(crate) fn attach_endpoint(
         &mut self,
         handle: PluginHandle,
@@ -497,8 +743,13 @@ impl PluginHost {
                     bounds,
                     in_scratch,
                     // `Activated`/`Processing` implies an armed ring
-                    // — `latency_frames` is `Some` there.
-                    instance.latency_frames().unwrap_or(0),
+                    // — `armed_latency_frames` is `Some` there. The
+                    // ungated read is deliberate: the endpoint
+                    // carries the armed horizon its leg holds even
+                    // if convergence flips the mirror mid-attach
+                    // (the public `latency_frames` gate must not
+                    // leak into the bookkeeping value).
+                    instance.armed_latency_frames().unwrap_or(0),
                 ))
             }
         }
@@ -672,6 +923,27 @@ impl PluginHost {
     }
 }
 
+/// The uniform half of the attach bounds contract — the
+/// layer-independent rules [`PluginHost::prepare_endpoint`] checks
+/// at step (3) of the pinned public order (after state and
+/// presence, before the route's inner attach). Every violation is
+/// the defined `Err(Prepare(UnsupportedConfig))`: non-zero
+/// dimensions, inside the wire caps — so a `u32::MAX` shape is the
+/// same rejection and never reaches an allocation. The
+/// layer-dependent half (`max_frames ≥ activated max_frames`) is
+/// deliberately not here: it stays with the inner attach paths,
+/// which own the activated-layer contract.
+fn check_uniform_bounds(bounds: EndpointBounds) -> Result<(), HostError> {
+    if bounds.max_frames == 0
+        || bounds.channels == 0
+        || bounds.max_frames > wire::WIRE_MAX_FRAMES
+        || bounds.channels > wire::WIRE_MAX_CHANNELS
+    {
+        return Err(HostError::Prepare(PrepareError::UnsupportedConfig));
+    }
+    Ok(())
+}
+
 /// The `handle` every dispatchable command carries — `dispatch` is
 /// only reached by the handle verbs.
 fn command_handle(command: &HostCommand) -> PluginHandle {
@@ -785,6 +1057,8 @@ mod tests {
     //! arm must reach `L1Instance::prepare_endpoint` — the leg
     //! checkout — never the L0 `InstanceSlot::Shared` path, and the
     //! `&mut` entry points must drain the endpoint channels.
+
+    use std::panic::{AssertUnwindSafe, catch_unwind};
 
     use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
     use ruviform_plugin_core::{
@@ -962,5 +1236,463 @@ mod tests {
         );
         // Freshly attachable — a second attach mints cleanly.
         let _again = host.attach_endpoint(handle, bounds).unwrap();
+    }
+
+    // ---------------------------------------------------------------
+    // `prepare_endpoint` / `latency_frames` — the public endpoint
+    // surface (Issue #113 task 4): the pinned rejection order and
+    // the unified defined-rejection table on both routes.
+    // ---------------------------------------------------------------
+
+    /// A factory that never opts into `create_sendable` — its
+    /// instances stay `Plain` (not endpoint-capable) and answer
+    /// `EndpointUnavailable`.
+    struct PlainGainFactory;
+
+    impl PluginFactory for PlainGainFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESCRIPTOR
+        }
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            erase(SendGain { gain: 1.0 })
+        }
+        // `create_sendable` keeps the default `None`.
+    }
+
+    /// A `Send` plugin whose `process` panics — the endpoint's
+    /// `catch_unwind` publishes `Failed` onto the shared mirror
+    /// (the union's second writer), the observation path the L0
+    /// `Failed`-rejection test needs.
+    struct PanicGain;
+
+    impl PluginProcessor for PanicGain {
+        fn prepare(
+            &mut self,
+            _config: &ProcessConfig,
+            _context: &mut ProcessContext,
+        ) -> Result<(), PrepareError> {
+            Ok(())
+        }
+
+        fn process<I, O>(
+            &mut self,
+            _inputs: &[I],
+            _outputs: &mut [O],
+            _events: EventList<'_>,
+            _transport: Option<TransportInfo>,
+            _context: &mut ProcessContext,
+        ) -> ProcessResult
+        where
+            I: BufferView,
+            O: BufferViewMut,
+        {
+            panic!("panic gain must never process again")
+        }
+    }
+
+    impl Plugin for PanicGain {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESCRIPTOR
+        }
+        fn params(&self) -> &[ParamInfo] {
+            &[]
+        }
+    }
+
+    struct PanicGainFactory;
+
+    impl PluginFactory for PanicGainFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESCRIPTOR
+        }
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            erase(PanicGain)
+        }
+        fn create_sendable(&self) -> Option<Box<dyn ErasedPlugin + Send>> {
+            Some(erase_sendable(PanicGain))
+        }
+    }
+
+    /// Register `factory`, instantiate its plugin and drive the
+    /// instance to `Processing` — `Activated` when `start` is false.
+    fn l0_instance(factory: Box<dyn PluginFactory>, start: bool) -> (PluginHost, PluginHandle) {
+        let mut host = PluginHost::new();
+        host.register_factory(factory);
+        let HostReply::Instantiated { handle } = host
+            .execute(HostCommand::Instantiate {
+                plugin_id: DESCRIPTOR.id.to_owned(),
+            })
+            .unwrap()
+        else {
+            panic!("unexpected reply")
+        };
+        host.execute(HostCommand::Initialize { handle }).unwrap();
+        host.execute(HostCommand::Activate {
+            handle,
+            config: config(1, 512),
+        })
+        .unwrap();
+        if start {
+            host.execute(HostCommand::StartProcessing { handle })
+                .unwrap();
+        }
+        (host, handle)
+    }
+
+    /// An L1 slot from `L1Instance::test_fixture` — childless, but
+    /// the endpoint machinery (leg checkout, mirror, arm channels)
+    /// is fully exercisable.
+    fn l1_instance(state: LifecycleState, frames: Option<u32>) -> (PluginHost, PluginHandle) {
+        let mut host = PluginHost::new();
+        let handle = host.mint(Slot::OutOfProcess(Box::new(L1Instance::test_fixture(
+            state, frames,
+        ))));
+        (host, handle)
+    }
+
+    /// One `PluginEndpoint::process` block over mono planar views.
+    fn run_endpoint(endpoint: &mut PluginEndpoint) -> Result<ProcessResult, HostError> {
+        let input = [0.5_f32; 8];
+        let mut output = [9.0_f32; 8];
+        let in_list = [&input[..]];
+        let input_view = PlanarBufferView::new(&in_list).unwrap();
+        let inputs = [HostInput(&input_view)];
+        let mut out_list = [&mut output[..]];
+        let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+        let mut outputs = [HostOutput(&mut output_view)];
+        endpoint.process(&inputs, &mut outputs, EventList::empty(8), None)
+    }
+
+    /// The public mint attaches on both routes — L0 through the
+    /// `Shared`-slot inner, L1 through the leg checkout — and the
+    /// minted endpoint reports the route's own latency figure.
+    #[test]
+    fn prepare_endpoint_mints_both_routes() {
+        let (mut host, handle) = l0_instance(Box::new(SendGainFactory), true);
+        let endpoint = host
+            .prepare_endpoint(handle, bounds(512, 2))
+            .expect("L0 Shared attach");
+        assert_eq!(endpoint.bounds(), bounds(512, 2));
+        assert_eq!(endpoint.latency_frames(), 0);
+        assert_eq!(host.latency_frames(handle), Some(0));
+
+        let (mut host, handle) = l1_instance(LifecycleState::Processing, Some(512));
+        let endpoint = host
+            .prepare_endpoint(handle, bounds(512, 2))
+            .expect("L1 leg checkout");
+        assert_eq!(endpoint.bounds(), bounds(512, 2));
+        // `(depth - 1) × armed frame_capacity` — 2 × 512.
+        assert_eq!(endpoint.latency_frames(), 1024);
+        assert_eq!(host.latency_frames(handle), Some(1024));
+    }
+
+    /// The pinned public order — handle → state → presence → bounds.
+    /// A state rejection wins over invalid bounds; an occupied or
+    /// incapable slot answers `EndpointUnavailable` even when the
+    /// bounds are also invalid (the composite's order, deliberately
+    /// the inverse of the L0 inner's bounds-before-CAS).
+    #[test]
+    fn prepare_endpoint_pins_the_rejection_order() {
+        // (1) state beats bounds — `Created` with zero frames is
+        // `Lifecycle`, never `Prepare`.
+        let mut host = PluginHost::new();
+        host.register_factory(Box::new(SendGainFactory));
+        let HostReply::Instantiated { handle } = host
+            .execute(HostCommand::Instantiate {
+                plugin_id: DESCRIPTOR.id.to_owned(),
+            })
+            .unwrap()
+        else {
+            panic!("unexpected reply")
+        };
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(0, 2)),
+            Err(HostError::Lifecycle(_))
+        ));
+        // `Initialized` is still below `Activated` — same answer.
+        host.execute(HostCommand::Initialize { handle }).unwrap();
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(0, 2)),
+            Err(HostError::Lifecycle(_))
+        ));
+
+        // (2) presence beats bounds — an occupied L0 slot answers
+        // `EndpointUnavailable` even though the bound is invalid.
+        let (mut host, handle) = l0_instance(Box::new(SendGainFactory), true);
+        let _endpoint = host.prepare_endpoint(handle, bounds(512, 2)).unwrap();
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(0, 0)),
+            Err(HostError::EndpointUnavailable)
+        ));
+        // The L1 route — a checked-out leg is the same occupancy.
+        let (mut host, handle) = l1_instance(LifecycleState::Processing, Some(512));
+        let _endpoint = host.prepare_endpoint(handle, bounds(512, 2)).unwrap();
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(0, 0)),
+            Err(HostError::EndpointUnavailable)
+        ));
+        // A `Plain` slot is never endpoint-capable — invalid bounds
+        // do not change the answer.
+        let (mut host, handle) = l0_instance(Box::new(PlainGainFactory), true);
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(0, 0)),
+            Err(HostError::EndpointUnavailable)
+        ));
+
+        // Handle beats everything — stale (post-`Destroy`) and
+        // never-minted handles answer `InvalidHandle` before any
+        // state, presence or bounds check runs.
+        let (mut host, handle) = l0_instance(Box::new(SendGainFactory), false);
+        host.execute(HostCommand::Deactivate { handle }).unwrap();
+        host.execute(HostCommand::Destroy { handle }).unwrap();
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(0, 0)),
+            Err(HostError::InvalidHandle)
+        ));
+        assert!(matches!(
+            host.prepare_endpoint(PluginHandle::new(77, 0), bounds(0, 0)),
+            Err(HostError::InvalidHandle)
+        ));
+    }
+
+    /// `Failed` — the union observation — is `Err(Failed)` on both
+    /// routes: L1's mirror reports the terminal state directly;
+    /// L0's mirror is published by the endpoint itself when a
+    /// panicking plugin is caught (`fetch_max` second writer), and
+    /// the public state gate converges the bookkeeping lifecycle.
+    #[test]
+    fn prepare_endpoint_rejects_failed() {
+        let (mut host, handle) = l1_instance(LifecycleState::Failed, Some(512));
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(512, 2)),
+            Err(HostError::Failed)
+        ));
+
+        // L0 — drive a block through a panicking `Send` plugin on
+        // the endpoint; the catch publishes `Failed` to the mirror.
+        let (mut host, handle) = l0_instance(Box::new(PanicGainFactory), true);
+        let mut endpoint = host.prepare_endpoint(handle, bounds(512, 1)).unwrap();
+        assert_eq!(
+            run_endpoint(&mut endpoint).unwrap(),
+            ProcessResult::CONTINUE
+        );
+        // The union now reports `Failed` — the state gate converges
+        // the bookkeeping lifecycle and rejects the next attach.
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(512, 1)),
+            Err(HostError::Failed)
+        ));
+        assert_eq!(host.lifecycle_state(handle), Some(LifecycleState::Failed));
+    }
+
+    /// A poisoned `Shared` cell is the union's other `Failed` half
+    /// — host-side `process` has no `catch_unwind`, so a panicking
+    /// plugin unwinds through the held `core` guard and poisons it
+    /// while the mirror keeps its last committed `Processing`
+    /// store. The prelude's state gate reads the poison flag the
+    /// same way the inner `lock()` arm and `destroy` do, so the
+    /// pinned state-before-bounds order reports `Err(Failed)` even
+    /// for invalid bounds — before the fix the stale-`Processing`
+    /// mirror let the same call fall through to `Err(Prepare)`.
+    #[test]
+    fn prepare_endpoint_observes_poisoned_cell_as_failed() {
+        let (mut host, handle) = l0_instance(Box::new(PanicGainFactory), true);
+        // The panic propagates out of `PluginHost::process` — and
+        // unwinds through the `core` guard on the way, poisoning
+        // the shared cell while the mirror stays `Processing`.
+        let panicked = catch_unwind(AssertUnwindSafe(|| {
+            let _ = run_block(&mut host, handle);
+        }));
+        assert!(panicked.is_err());
+        // Invalid bounds cannot mask the `Failed` observation —
+        // state precedes bounds in the pinned order.
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(0, 0)),
+            Err(HostError::Failed)
+        ));
+        // Valid bounds — the same `Failed` answer the inner
+        // `lock()` arm would have converged to.
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(512, 2)),
+            Err(HostError::Failed)
+        ));
+    }
+
+    /// The bounds matrix — every violation is the defined
+    /// `Err(Prepare(UnsupportedConfig))`, `u32::MAX` included (a
+    /// defined rejection, never an allocation abort), and consumes
+    /// nothing: the instance stays attachable afterwards.
+    #[test]
+    fn prepare_endpoint_bounds_matrix() {
+        for (max_frames, channels) in [
+            (0, 2),
+            (512, 0),
+            (wire::WIRE_MAX_FRAMES + 1, 2),
+            (u32::MAX, 2),
+            (512, wire::WIRE_MAX_CHANNELS + 1),
+            (512, u32::MAX),
+            // Below the activated 512 — the inner layer's own check.
+            (256, 2),
+        ] {
+            let (mut host, handle) = l0_instance(Box::new(SendGainFactory), true);
+            assert!(
+                matches!(
+                    host.prepare_endpoint(handle, bounds(max_frames, channels)),
+                    Err(HostError::Prepare(PrepareError::UnsupportedConfig))
+                ),
+                "L0 bounds ({max_frames}, {channels}) must reject UnsupportedConfig"
+            );
+            // A rejected attach consumed nothing — still attachable.
+            host.prepare_endpoint(handle, bounds(512, 2)).unwrap();
+        }
+        // The same matrix on L1 — a rejected attach never moves the
+        // leg, so the instance stays attachable.
+        for (max_frames, channels) in [
+            (0, 2),
+            (512, 0),
+            (wire::WIRE_MAX_FRAMES + 1, 2),
+            (u32::MAX, 2),
+            (512, wire::WIRE_MAX_CHANNELS + 1),
+            (512, u32::MAX),
+            (256, 2),
+        ] {
+            let (mut host, handle) = l1_instance(LifecycleState::Processing, Some(512));
+            assert!(
+                matches!(
+                    host.prepare_endpoint(handle, bounds(max_frames, channels)),
+                    Err(HostError::Prepare(PrepareError::UnsupportedConfig))
+                ),
+                "L1 bounds ({max_frames}, {channels}) must reject UnsupportedConfig"
+            );
+            host.prepare_endpoint(handle, bounds(512, 2)).unwrap();
+        }
+    }
+
+    /// `EndpointUnavailable` stays a host-local topology fact —
+    /// never `Ipc`/`Unsupported` — on every occupancy rejection,
+    /// including the host-side `process` of a detached L1 leg; and
+    /// a returned leg makes the instance attachable again.
+    #[test]
+    fn endpoint_unavailable_stays_local() {
+        // L0 — the epoch claim makes the second attach `EU`.
+        let (mut host, handle) = l0_instance(Box::new(SendGainFactory), true);
+        let _endpoint = host.prepare_endpoint(handle, bounds(512, 2)).unwrap();
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(512, 2)),
+            Err(HostError::EndpointUnavailable)
+        ));
+        // L1 — the checked-out leg reports `EU` on both surfaces:
+        // the second attach and the host-side `process` alike.
+        let (mut host, handle) = l1_instance(LifecycleState::Processing, Some(512));
+        let endpoint = host.prepare_endpoint(handle, bounds(512, 2)).unwrap();
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(512, 2)),
+            Err(HostError::EndpointUnavailable)
+        ));
+        assert!(matches!(
+            run_block(&mut host, handle),
+            Err(HostError::EndpointUnavailable)
+        ));
+        // Dropping the endpoint returns the leg through the
+        // channel; the next `&mut` entry point's drain restores it
+        // and a fresh attach mints cleanly.
+        drop(endpoint);
+        assert!(host.try_recv_notification().is_none());
+        host.prepare_endpoint(handle, bounds(512, 2)).unwrap();
+    }
+
+    /// `latency_frames` — L0 `Some(0)` once activated, `None`
+    /// before; L1 `Some(lookahead × armed capacity)` while a ring
+    /// is armed, `None` without one; `None` for a stale handle.
+    /// The `&self` query is non-draining: a live endpoint's leg
+    /// stays checked out.
+    #[test]
+    fn latency_frames_reports_per_route() {
+        // L0 — `Created`/`Initialized` report `None`; activated
+        // reports `Some(0)`.
+        let mut host = PluginHost::new();
+        host.register_factory(Box::new(SendGainFactory));
+        let HostReply::Instantiated { handle } = host
+            .execute(HostCommand::Instantiate {
+                plugin_id: DESCRIPTOR.id.to_owned(),
+            })
+            .unwrap()
+        else {
+            panic!("unexpected reply")
+        };
+        assert_eq!(host.latency_frames(handle), None);
+        host.execute(HostCommand::Initialize { handle }).unwrap();
+        assert_eq!(host.latency_frames(handle), None);
+        host.execute(HostCommand::Activate {
+            handle,
+            config: config(1, 512),
+        })
+        .unwrap();
+        assert_eq!(host.latency_frames(handle), Some(0));
+        host.execute(HostCommand::StartProcessing { handle })
+            .unwrap();
+        assert_eq!(host.latency_frames(handle), Some(0));
+
+        // L1 — `Some(lookahead × armed capacity)`, `None` unarmed.
+        let (host, handle) = l1_instance(LifecycleState::Activated, Some(512));
+        assert_eq!(host.latency_frames(handle), Some(1024));
+        let (host, handle) = l1_instance(LifecycleState::Processing, Some(256));
+        assert_eq!(host.latency_frames(handle), Some(512));
+        let (host, handle) = l1_instance(LifecycleState::Created, None);
+        assert_eq!(host.latency_frames(handle), None);
+
+        // Stale handle — `None`.
+        assert_eq!(host.latency_frames(PluginHandle::new(77, 0)), None);
+
+        // Non-draining `&self`: the query cannot restore a leg a
+        // live endpoint still holds.
+        let (mut host, handle) = l1_instance(LifecycleState::Processing, Some(512));
+        let _endpoint = host.prepare_endpoint(handle, bounds(512, 2)).unwrap();
+        assert_eq!(host.latency_frames(handle), Some(1024));
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(512, 2)),
+            Err(HostError::EndpointUnavailable)
+        ));
+    }
+
+    /// The L1 `latency_frames` read gates on the lifecycle mirror —
+    /// parity with the L0 `lifecycle ∈ {Activated, Processing}`
+    /// gate. The armed ring is never cleared, so a bare `staging`
+    /// read would keep reporting the stale horizon past
+    /// `Deactivate`/`Failed`; the fixture pins exactly the
+    /// observable state those transitions leave behind
+    /// (`Initialized`/`Failed` mirror + `staging` still armed — a
+    /// real `Deactivate` verified end-to-end in
+    /// `tests/l1_proxy_e2e.rs`'s lifecycle parity test).
+    #[test]
+    fn latency_frames_gates_l1_on_the_mirror() {
+        // Post-`Deactivate` shape — the ring stays armed but the
+        // pipeline no longer runs, so the answer is `None` again.
+        let (host, handle) = l1_instance(LifecycleState::Initialized, Some(512));
+        assert_eq!(host.latency_frames(handle), None);
+        // `Failed` with the ring still armed — convergence keeps
+        // `staging`.
+        let (host, handle) = l1_instance(LifecycleState::Failed, Some(512));
+        assert_eq!(host.latency_frames(handle), None);
+        // `Destroyed` — the same `None` while the slot still
+        // resolves.
+        let (host, handle) = l1_instance(LifecycleState::Destroyed, Some(512));
+        assert_eq!(host.latency_frames(handle), None);
+        // Sanity — the gated answer inside the mirror's live set.
+        let (host, handle) = l1_instance(LifecycleState::Activated, Some(512));
+        assert_eq!(host.latency_frames(handle), Some(1024));
+    }
+
+    /// `plugin_mut` parity — `None` for an L0 `Shared` slot (the
+    /// shared mutex owns the plugin) exactly as for L1, while a
+    /// `Plain` slot still lends its plugin.
+    #[test]
+    fn plugin_mut_none_for_shared_and_l1() {
+        let (mut host, handle) = l0_instance(Box::new(SendGainFactory), true);
+        assert!(host.plugin_mut(handle).is_none());
+        let (mut host, handle) = l1_instance(LifecycleState::Processing, Some(512));
+        assert!(host.plugin_mut(handle).is_none());
+        let (mut host, handle) = l0_instance(Box::new(PlainGainFactory), true);
+        assert!(host.plugin_mut(handle).is_some());
     }
 }

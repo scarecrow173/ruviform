@@ -6,9 +6,9 @@
 //!
 //! One instance carries at most one endpoint, minted while the
 //! instance is `Activated`/`Processing` (the composite's
-//! `prepare_endpoint` — Task 4's public surface — owns the
-//! attach-side prelude; [`InProcessHost::attach_endpoint`] is the
-//! L0 inner). The endpoint is `Send` and holds only endpoint legs:
+//! `prepare_endpoint` owns the attach-side prelude;
+//! [`InProcessHost::attach_endpoint`] is the L0 inner). The
+//! endpoint is `Send` and holds only endpoint legs:
 //! shared-cell `Arc` handles for L0, the moved RT leg for L1 (Task
 //! 3). It never carries a `PluginHost`, an `L1Instance`, a raw
 //! non-`Send` plugin object, a shared-memory segment or a child
@@ -102,13 +102,10 @@ impl PluginEndpoint {
     /// Assembles one endpoint from its layer leg — called by the
     /// attach paths (`InProcessHost::attach_endpoint` for L0; the
     /// composite's `attach_endpoint` builds `EndpointInner::L1`
-    /// from `l1::data::EndpointLegParts` for L1).
-    // `attach_endpoint` is its only constructor caller — the public
-    // mint surface (`PluginHost::prepare_endpoint`) lands in Task 4
-    // (`not(test)` because the tests already exercise it). `#[expect]`,
-    // not `#[allow]`: once T3/T4 wire the callers the non-test build's
-    // unfulfilled expectation fails the lint gate — remove it then.
-    #[cfg_attr(not(test), expect(dead_code))]
+    /// from `l1::data::EndpointLegParts` for L1) — the public mint
+    /// surface is [`PluginHost::prepare_endpoint`].
+    ///
+    /// [`PluginHost::prepare_endpoint`]: crate::PluginHost::prepare_endpoint
     pub(crate) fn new(
         inner: EndpointInner,
         bound: EndpointBounds,
@@ -178,13 +175,6 @@ impl PluginEndpoint {
 /// from `l1::data::EndpointLegParts` (the `src/l1/` tree stays
 /// crate-free, so `endpoint.rs` is where the parts become the
 /// endpoint).
-// Both variants are constructed only by the `attach_endpoint`
-// inners — whose in-crate caller is Task 4's
-// `PluginHost::prepare_endpoint` (`not(test)` because the tests
-// already exercise it). `#[expect]`, not `#[allow]`: once T4 wires
-// the caller the non-test build's unfulfilled expectation fails
-// the lint gate — remove it then.
-#[cfg_attr(not(test), expect(dead_code))]
 pub(crate) enum EndpointInner {
     /// L0 in-process: shares the instance's `SendCore` cell with the
     /// host.
@@ -511,9 +501,6 @@ impl Drop for L1Endpoint {
 /// `in_scratch` — a named layout where one exists, else a custom
 /// mask of the low `channels` bits (`channels ≤ WIRE_MAX_CHANNELS`
 /// holds already — the bounds check runs before this).
-// Used only by `in_scratch` — see its `dead_code` note; the
-// `#[expect]` drops with it once T4 wires the public caller.
-#[cfg_attr(not(test), expect(dead_code))]
 fn bound_layout(channels: u32) -> Result<ChannelLayout, HostError> {
     match channels {
         1 => Ok(ChannelLayout::Mono),
@@ -533,10 +520,6 @@ fn bound_layout(channels: u32) -> Result<ChannelLayout, HostError> {
 /// (`InProcessHost::attach_endpoint` / the composite's
 /// `attach_endpoint` L1 arm); any `try_new` failure maps to
 /// `Err(Prepare(UnsupportedConfig))`.
-// Its callers are the `attach_endpoint` inners — see their
-// `dead_code` notes; the `#[expect]` drops once T4 wires the
-// public caller.
-#[cfg_attr(not(test), expect(dead_code))]
 pub(crate) fn in_scratch(
     bounds: EndpointBounds,
     sample_rate: SampleRate,

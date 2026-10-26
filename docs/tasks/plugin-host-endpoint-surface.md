@@ -1,23 +1,44 @@
 ---
 id: "TASK-034MrsUoYlicb5uG8XpODT"
 type: "task"
-status: "todo"
+status: "done"
 title: "PluginHost endpoint 公開面（prepare_endpoint・latency_frames・統一拒否表・crate doc）"
 created: "2026-10-26"
 updated: "2026-10-26"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "docs/impl/ir/issue-113-plugin-host-endpoint-surface-task-4-implementation.md"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/composite.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/endpoint.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/host.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/l1/mod.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs"
+      - type: "file"
+        path: "docs/tasks/plugin-host-endpoint-surface.md"
+      - type: "file"
+        path: "docs/tasks/README.md"
+      - type: "file"
+        path: "docs/impl/ir/README.md"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-113-plugin-host-endpoint-surface-task-4-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
     - "docs/tasks/l0-shared-slot-and-endpoint-inner.md"
@@ -59,6 +80,8 @@ Plan actions 12–13。`PluginHost` コンポジットに endpoint の**公開�
 
 補足: T4 prelude は presence/占有 → bounds の順で評価すること（attach_endpoint 内側の bounds→CAS 順とは別層の契約。占有中に不正 bounds を渡した場合の公開 Err を EndpointUnavailable とするため）。
 
+補足: bounds 検査の uniform/activated 分割は意図的である — prelude が担うのは非 0・wire 上限（`≤ WIRE_MAX_*`）の uniform 半分のみで、`max_frames ≥ activated max_frames` の半分は route 内側に残る（L0 では `activated` が `core.lock()` 下でのみ読めるため public prelude では検査不能）。観測される拒否順序・`Err` 型はどちらの層でも同一。
+
 ## Classification
 
 - `normal-plan-task`（公開 API 面・統一表・doc — 機構は T2/T3 依存）
@@ -85,19 +108,21 @@ Plan actions 12–13。`PluginHost` コンポジットに endpoint の**公開�
 
 ## Done When
 
-- [ ] `PluginHost::prepare_endpoint` が `Slot` で dispatch し、統一 defined-rejection 表（`Lifecycle`/`Failed`/`InvalidHandle`/`EndpointUnavailable`/`Prepare(UnsupportedConfig)`）どおりの `Err` 型を全分岐で返す — video 分岐は存在しない（`PluginHost` が video handle を発行しない dead row — `Err(Unsupported)` 分岐を設けない）
-- [ ] **bounds-validation prelude を本 task が所有** — 拒否順序の (3) bounds 位置（(1) handle/state 系・(2) slot-shape/attach-liveness 判定の後・slot 内側 attach 呼出し前 — composite は既存の per-slot routing・lifecycle 読みで先行判定し新 accessor は不要）に `bounds` の uniform 検査（非 0・`≤ WIRE_MAX_FRAMES`(8192)/`≤ WIRE_MAX_CHANNELS`(16)・`≥ activated max_frames`）を行い、`u32::MAX` を含む違反を `Err(Prepare(UnsupportedConfig))` で返す — T2/T3 内側は activated 層の defense-in-depth 再検査として残る
-- [ ] **拒否順序が pin される** — (1) state 系（`Lifecycle`/`Failed`/`InvalidHandle`）→ (2) slot-shape/presence（`EndpointUnavailable` — `Plain`/2本目/`rt.is_none()`）→ (3) bounds（`Prepare(UnsupportedConfig)`）。state 違反と bad bounds が同時でも state 系 `Err` が返る
-- [ ] `PluginHost::latency_frames` が L0=`Some(0)`・L1=`Some(lookahead_blocks × activated max_frames)`・未 `Activate`/無効=`None` を返す（`&self`・L0 `core` mutex の blocking lock なし — L1 `shared.lock()` は non-RT 側 mutex で対象外）
-- [ ] `EndpointUnavailable` が local-only topology 事実として公開され、`Ipc`/`Unsupported` へ潰れない・`Err(Ipc)` が `process`/`process_audio` の公開面から露出しない
-- [ ] crate doc に endpoint 面（`PluginHost` のみ）・遅延契約・video NONRT 境界・RT 契約が明記される — `composite.rs` と `lib.rs` L44-49 付近の stale 遅延式 doc が修正版式へ同期される
-- [ ] `plugin_mut` が L0-Shared slot で `None`（L1 と parity）を返す
-- [ ] narrow gate（下記 Verification）が exit 0 — composite 級テスト一式が通る
+- [x] `PluginHost::prepare_endpoint` が `Slot` で dispatch し、統一 defined-rejection 表（`Lifecycle`/`Failed`/`InvalidHandle`/`EndpointUnavailable`/`Prepare(UnsupportedConfig)`）どおりの `Err` 型を全分岐で返す — video 分岐は存在しない（`PluginHost` が video handle を発行しない dead row — `Err(Unsupported)` 分岐を設けない）（`prepare_endpoint_mints_both_routes`・`prepare_endpoint_pins_the_rejection_order`・`prepare_endpoint_rejects_failed` で pin — `Err(Ipc)` defensive row も表内に保持）
+- [x] **bounds-validation prelude を本 task が所有** — 拒否順序の (3) bounds 位置（(1) handle/state 系・(2) slot-shape/attach-liveness 判定の後・slot 内側 attach 呼出し前）に `bounds` の uniform 検査を `check_uniform_bounds` として実装（非 0・`≤ WIRE_MAX_FRAMES`(8192)/`≤ WIRE_MAX_CHANNELS`(16)）。`u32::MAX` を含む違反を `Err(Prepare(UnsupportedConfig))` で返す — `max_frames ≥ activated max_frames` の半分は route 内側の activated 層再検査に残る（uniform/activated 分割 — task doc「新 accessor は不要」の記述は occupancy state が private だったため pub(crate) accessor 追加で supersede・公開 API 増なし。`prepare_endpoint_bounds_matrix` で L0/L1 各 7 条件を pin）
+- [x] **拒否順序が pin される** — (1) state 系（`Lifecycle`/`Failed`/`InvalidHandle`）→ (2) slot-shape/presence（`EndpointUnavailable` — `Plain`/2本目/`rt.is_none()`）→ (3) bounds（`Prepare(UnsupportedConfig)`）。state 違反と bad bounds が同時でも state 系 `Err` が返る（`prepare_endpoint_pins_the_rejection_order` — `Created`+bad bounds → `Lifecycle`・占有+bad bounds → `EndpointUnavailable`・stale handle → `InvalidHandle` が全て先行判定として pin）
+- [x] `PluginHost::latency_frames` が L0=`Some(0)`・L1=`Some(lookahead_blocks × activated max_frames)`・未 `Activate`/無効=`None` を返す（`&self`・L0 は mirror/lifecycle 読みのみで `core` mutex の blocking lock なし — L1 `shared.lock()` は non-RT 側 mutex で対象外。L1 側は mirror gate で `Deactivate`/`Failed`/`Destroyed` → `None` — `latency_frames_reports_per_route`・`latency_frames_gates_l1_on_the_mirror`・`latency_frames_gate_vs_armed_read` で pin）
+- [x] `EndpointUnavailable` が local-only topology 事実として公開され、`Ipc`/`Unsupported` へ潰れない・`Err(Ipc)` が `process`/`process_audio` の公開面から露出しない（`endpoint_unavailable_stays_local` — L0 2 本目・L1 leg checkout 中の attach 双方 + detached leg への host-side `process` が全て `EndpointUnavailable`）
+- [x] crate doc に endpoint 面（`PluginHost` のみ）・遅延契約・video NONRT 境界・RT 契約が明記される — `composite.rs` と `lib.rs` L44-49 付近の stale 遅延式 doc が修正版式へ同期される（`lookahead_blocks × activated max_frames` frames 整数・秒換算は `frames / sample_rate` — `cargo doc -p ruviform-plugin-host` 0 warnings）
+- [x] `plugin_mut` が L0-Shared slot で `None`（L1 と parity）を返す（`plugin_mut_none_for_shared_and_l1` — Shared `None`・L1 `None`・Plain `Some` の 3 分岐 pin）
+- [x] narrow gate（下記 Verification）が exit 0 — composite 級テスト一式が通る（新規 10 件: composite.rs **9** + l1/mod.rs **1**）
 
 ## Verification
 
-- [ ] `mise run check` — exit 0
-- [ ] `mise run lint` — exit 0
-- [ ] `mise run test` — exit 0（既存 composite テスト無退行 + 新規 composite 級テスト）
-- [ ] `mise exec -- cargo test -p ruviform-plugin-host` — composite 級一式（統一 rejection・`latency_frames` 値・`plugin_mut` parity・`EndpointUnavailable` 型）
-- [ ] 対象 test-spec: `docs/test-specs/plugin-endpoint-contract-tests.md` — 規則「`prepare_endpoint` 拒否面」「`latency_frames`」「単一 endpoint 規則」「`EndpointUnavailable` local-only」を担保
+- [x] `mise run check` — exit 0
+- [x] `mise run lint` — exit 0（`cargo clippy --workspace --all-targets -- -D warnings` clean — 消費済み `expect(dead_code)` 11 件除去後も残留 lint なし）
+- [x] `mise run test` — exit 0（`cargo test --workspace` — **55 test binaries 全 pass・0 fail・計 1105 tests**。既存 composite/L1 テスト無退行 + 新規 composite 級 **9** 件 + l1 **1** 件）
+- [x] `mise exec -- cargo test -p ruviform-plugin-host` — exit 0（lib **65** + `l1-test-worker` **0** + `l1_proxy_e2e` **55** + doctest **2** — 全 pass・統一 rejection・`latency_frames` 値・`plugin_mut` parity・`EndpointUnavailable` 型・`prepare_endpoint` doctest を含む）
+- [x] 対象 test-spec: `docs/test-specs/plugin-endpoint-contract-tests.md` — 規則「`prepare_endpoint` 拒否面」「`latency_frames`」「単一 endpoint 規則」「`EndpointUnavailable` local-only」を担保（拒否順序 pin・bounds matrix 7 条件 ×2 経路・poison union `Failed`・leg 返却後再 attach を新規テストで実証）
+
+補足（task doc の Verification 範囲外・IR に記録）: `mise run fmt-check`/`mise run build`/`mise run test-rt` exit 0（`rt_` フィルタ実一致 — plugin-host lib **8** 件 + e2e **4** 件、本 task は非 RT mint のため新規 `rt_` なし）・`cargo doc -p ruviform-plugin-host --no-deps` 0 warnings・**review-driven 修正 5 件適用済み**（`latency_frames` mirror gate + `armed_latency_frames` 簿記 read・`is_poisoned` union half・doc completeness・L1 matrix row・task-doc bounds-split note）— 詳細は `docs/impl/ir/issue-113-plugin-host-endpoint-surface-task-4-implementation.md`。

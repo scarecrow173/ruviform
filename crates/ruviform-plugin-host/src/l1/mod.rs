@@ -1404,9 +1404,56 @@ impl L1Instance {
         rt.process(mirror, inputs, outputs, events, transport)
     }
 
+    /// The attach-side lifecycle gate, shared by the public prelude
+    /// ([`PluginHost::prepare_endpoint`](crate::PluginHost::prepare_endpoint)'s
+    /// L1 arm runs it for its own state step — the design's
+    /// rejection order puts state before every other check) and
+    /// [`L1Instance::prepare_endpoint`] itself.
+    ///
+    /// `shared.lock().mirror` — the control plane's committed state
+    /// — decides: `Activated`/`Processing` pass; `Failed` is
+    /// `Err(HostError::Failed)`; anything below `Activated` is
+    /// `Err(HostError::Lifecycle)`, the same shape a rejected
+    /// `Process` event takes. No convergence runs here — the mirror
+    /// is already the committed authority on this side.
+    ///
+    /// **RT contract:** non-RT only — takes the shared mutex.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Failed`] for a `Failed` instance and
+    /// [`HostError::Lifecycle`] below `Activated`.
+    pub(crate) fn check_attachable_state(&self) -> Result<(), HostError> {
+        let inner = self.shared.lock();
+        match inner.mirror {
+            LifecycleState::Activated | LifecycleState::Processing => Ok(()),
+            LifecycleState::Failed => Err(HostError::Failed),
+            state => Err(HostError::Lifecycle(
+                ruviform_plugin_core::LifecycleError::IllegalTransition {
+                    from: state,
+                    event: ruviform_plugin_core::LifecycleEvent::Process,
+                },
+            )),
+        }
+    }
+
+    /// Whether the RT leg is checked out to a detached endpoint —
+    /// `rt.is_none()`, the single-endpoint rule's authoritative
+    /// occupancy fact (the leg returns only through a `return_rx`
+    /// drain). The composite's attach prelude reads it so an
+    /// occupied instance reports `EndpointUnavailable` before any
+    /// bounds check.
+    ///
+    /// **RT contract:** non-RT only by call site — a field read.
+    pub(crate) fn leg_detached(&self) -> bool {
+        self.rt.is_none()
+    }
+
     /// Checks the RT leg out for a detached endpoint — the L1 half
-    /// of `attach_endpoint` the composite wires (Issue #113 task 3;
-    /// the public `PluginHost::prepare_endpoint` surface is T4).
+    /// of `attach_endpoint` the composite wires (Issue #113 task 3 —
+    /// [`PluginHost::prepare_endpoint`](crate::PluginHost::prepare_endpoint)
+    /// reaches it through the composite's `attach_endpoint` after
+    /// the public prelude).
     ///
     /// Defined rejections, in the pinned order:
     /// 1. **lifecycle/state** — `Failed` → `Err(HostError::Failed)`;
@@ -1433,30 +1480,17 @@ impl L1Instance {
     ///
     /// **RT contract:** non-RT only — channel minting and the
     /// `last_output` reserve allocate.
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(crate) fn prepare_endpoint(
         &mut self,
         bound_max_frames: u32,
         bound_channels: u32,
     ) -> Result<data::EndpointLegParts, HostError> {
         self.drain_endpoint_channels();
-        // (1) lifecycle/state — before anything moves.
-        {
-            let inner = self.shared.lock();
-            match inner.mirror {
-                LifecycleState::Activated | LifecycleState::Processing => {}
-                LifecycleState::Failed => return Err(HostError::Failed),
-                state => {
-                    return Err(HostError::Lifecycle(
-                        ruviform_plugin_core::LifecycleError::IllegalTransition {
-                            from: state,
-                            event: ruviform_plugin_core::LifecycleEvent::Process,
-                        },
-                    ));
-                }
-            }
-        }
-        if self.rt.is_none() {
+        // (1) lifecycle/state — before anything moves (the same
+        // gate the public prelude runs; repeating it here is the
+        // inner layer's defense-in-depth).
+        self.check_attachable_state()?;
+        if self.leg_detached() {
             return Err(HostError::EndpointUnavailable);
         }
         // (2) bounds — checked *before* the leg moves so a rejected
@@ -1506,7 +1540,6 @@ impl L1Instance {
     /// Infallible today: channel minting, the seed push, the
     /// reserve and bookkeeping cannot fail — see the caller for
     /// the post-take restore contract any future `Err` must honor.
-    #[cfg_attr(not(test), expect(dead_code))]
     fn endpoint_channel_setup(
         &mut self,
         mut leg: data::RtLeg,
@@ -1647,22 +1680,50 @@ impl L1Instance {
     /// Per-block processing latency the instance's armed ring adds
     /// — `(depth − 1) × armed frame_capacity`, the result horizon
     /// the composite reports through `PluginEndpoint` — `None`
-    /// before `Activate`. A `&self` observation point: deliberately
-    /// **non-draining** (the signature cannot take `&mut self`).
+    /// before `Activate` **and once the mirror leaves
+    /// `Activated`/`Processing`**: the armed ring is never cleared,
+    /// so a bare `staging` read would keep reporting a stale
+    /// horizon for a `Deactivate`d/`Failed` pipeline that no longer
+    /// runs (parity with the composite's L0 lifecycle gate). A
+    /// `&self` observation point: deliberately **non-draining**
+    /// (the signature cannot take `&mut self`).
     ///
     /// **RT contract:** non-RT only — takes the shared mutex.
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(crate) fn latency_frames(&self) -> Option<u32> {
         let inner = self.shared.lock();
+        match inner.mirror {
+            LifecycleState::Activated | LifecycleState::Processing => {}
+            _ => return None,
+        }
+        Self::armed_latency(&inner, self.depth)
+    }
+
+    /// The armed ring's latency figure with no lifecycle gate —
+    /// `Some` while a ring is armed, `None` before `Activate`. The
+    /// composite's attach path reads it for endpoint bookkeeping:
+    /// the endpoint is minted carrying the armed horizon its leg
+    /// still holds — a mid-attach mirror flip (convergence) does
+    /// not disarm the ring, so this internal read must not gate on
+    /// the mirror the way the public query does.
+    ///
+    /// **RT contract:** non-RT only — takes the shared mutex.
+    pub(crate) fn armed_latency_frames(&self) -> Option<u32> {
+        Self::armed_latency(&self.shared.lock(), self.depth)
+    }
+
+    /// `(depth − 1) × armed frame_capacity` — `None` while no ring
+    /// is armed. The shared read behind [`L1Instance::latency_frames`]
+    /// (lifecycle-gated) and [`L1Instance::armed_latency_frames`]
+    /// (ungated).
+    fn armed_latency(inner: &Inner, depth: u32) -> Option<u32> {
         inner.staging.as_ref().map(|staging| {
-            u32::try_from((self.depth - 1) as usize * staging.frame_capacity).unwrap_or(u32::MAX)
+            u32::try_from((depth - 1) as usize * staging.frame_capacity).unwrap_or(u32::MAX)
         })
     }
 
     /// The sample rate of the last successful `Activate` — the
     /// composite uses it to size the endpoint input scratch.
     /// `Some` exactly when a staging ring is armed.
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(crate) fn activated_sample_rate(&self) -> Option<u32> {
         self.activated_sample_rate
     }
@@ -2016,6 +2077,35 @@ mod tests {
         assert!(instance.pending_arm.is_none());
         assert_eq!(instance.arm_retire_overflows(), 0);
         assert!(instance.prepare_endpoint(512, 2).is_ok());
+    }
+
+    /// The public `latency_frames` gates on the mirror while the
+    /// internal `armed_latency_frames` does not: the armed ring is
+    /// never cleared, so a `Failed`/`Initialized` (post-
+    /// `Deactivate`) mirror must answer `None` — L0 parity — while
+    /// the attach bookkeeping read still reports the armed horizon
+    /// the leg carries.
+    #[test]
+    fn latency_frames_gate_vs_armed_read() {
+        for state in [
+            LifecycleState::Initialized,
+            LifecycleState::Failed,
+            LifecycleState::Destroyed,
+        ] {
+            let instance = L1Instance::test_fixture(state, Some(512));
+            assert_eq!(
+                instance.latency_frames(),
+                None,
+                "{state:?} with an armed ring must report None"
+            );
+            assert_eq!(instance.armed_latency_frames(), Some(1024));
+        }
+        let instance = L1Instance::test_fixture(LifecycleState::Processing, Some(512));
+        assert_eq!(instance.latency_frames(), Some(1024));
+        // Unarmed is `None` on both reads.
+        let instance = L1Instance::test_fixture(LifecycleState::Activated, None);
+        assert_eq!(instance.latency_frames(), None);
+        assert_eq!(instance.armed_latency_frames(), None);
     }
 
     /// `pending_arm` latest-wins: once the arm channel is full, a
