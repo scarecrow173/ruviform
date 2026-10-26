@@ -50,6 +50,8 @@ relations:
     - "../specs/plugin-l1-out-of-process.md"
     - "../designs/plugin-l1-out-of-process.md"
     - "engine-plugin-host-integration.md"
+    - "issue-114-real-adapter-l1-e2e.md"
+    - "../specs/issue-114-real-adapter-l1-e2e.md"
   verifies: []
   verified-by: []
   references: []

@@ -48,6 +48,8 @@ relations:
     - "../specs/engine-plugin-host-integration.md"
     - "../adr/plugin-rt-ownership-split.md"
     - "../designs/engine-plugin-host-integration.md"
+    - "issue-114-real-adapter-l1-e2e.md"
+    - "../specs/issue-114-real-adapter-l1-e2e.md"
   verifies: []
   verified-by: []
   references: []

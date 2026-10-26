@@ -43,6 +43,8 @@ relations:
     - "docs/adr/plugin-isolation-strategy.md"
     - "docs/specs/plugin-gui-poc.md"
     - "docs/specs/plugin-isolation-design.md"
+    - "docs/discovery/issue-114-real-adapter-l1-e2e.md"
+    - "docs/specs/issue-114-real-adapter-l1-e2e.md"
   verifies: []
   verified-by: []
   references:
