@@ -30,6 +30,9 @@ relations:
   derived-by:
     - "docs/plans/implement-issue-25-audio-engine.md"
     - "docs/test-specs/audio-engine-tests.md"
+    - "docs/discovery/engine-plugin-host-integration.md"
+    - "docs/specs/engine-plugin-host-integration.md"
+    - "docs/designs/engine-plugin-host-integration.md"
   verifies: []
   verified-by: []
   references: []

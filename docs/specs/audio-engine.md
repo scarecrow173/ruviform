@@ -30,6 +30,8 @@ relations:
   derived-by:
     - "docs/designs/audio-engine.md"
     - "docs/adr/audio-engine-snapshot-swap.md"
+    - "docs/discovery/engine-plugin-host-integration.md"
+    - "docs/specs/engine-plugin-host-integration.md"
   verifies: []
   verified-by: []
   references: []

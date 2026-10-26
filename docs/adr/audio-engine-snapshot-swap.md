@@ -26,7 +26,12 @@ relations:
   refines: []
   refined-by: []
   derives-from: []
-  derived-by: []
+  derived-by:
+    - "docs/designs/audio-engine.md"
+    - "docs/discovery/engine-plugin-host-integration.md"
+    - "docs/specs/engine-plugin-host-integration.md"
+    - "docs/adr/plugin-rt-ownership-split.md"
+    - "docs/designs/engine-plugin-host-integration.md"
   verifies: []
   verified-by: []
   references: []

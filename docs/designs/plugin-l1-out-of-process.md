@@ -41,13 +41,18 @@ relations:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
     - "docs/test-specs/plugin-l1-proxy-contract-tests.md"
     - "docs/test-specs/plugin-l1-runner-e2e-tests.md"
+    - "docs/discovery/engine-plugin-host-integration.md"
+    - "docs/specs/engine-plugin-host-integration.md"
+    - "docs/adr/plugin-rt-ownership-split.md"
+    - "docs/designs/engine-plugin-host-integration.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
     - "docs/test-specs/plugin-l1-proxy-contract-tests.md"
     - "docs/test-specs/plugin-l1-runner-e2e-tests.md"
   references: []
-  defers: []
+  defers:
+    - "docs/specs/engine-plugin-host-integration.md"
   deferred-by: []
 ---
 
