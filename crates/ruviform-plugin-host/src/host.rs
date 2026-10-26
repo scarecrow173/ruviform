@@ -1004,10 +1004,11 @@ mod tests {
     use std::panic::{AssertUnwindSafe, catch_unwind};
     use std::rc::Rc;
 
-    use ruviform_audio_core::SampleRate;
+    use ruviform_audio_core::{AudioBufferViewMut, SampleRate};
     use ruviform_plugin_core::{
         BufferView, BufferViewMut, ParamInfo, PluginDescriptor, PluginProcessor, ProcessStatus,
     };
+    use ruviform_rt::RtContext;
 
     use super::*;
     use crate::{GuiParentToken, Plugin, erase, erase_sendable};
@@ -2110,5 +2111,116 @@ mod tests {
                 );
             }
         });
+    }
+
+    /// One `PluginEndpoint::process_audio` block over a stereo
+    /// slab — the graph-node `pull` shape: `out` carries the
+    /// upstream block in and the result back.
+    fn run_audio(
+        endpoint: &mut PluginEndpoint,
+        slab: &mut [f32],
+        channels: usize,
+        ctx: &RtContext,
+    ) -> Result<ProcessResult, HostError> {
+        let frames = slab.len() / channels;
+        let mut out = AudioBufferViewMut::try_new(slab, channels, frames).unwrap();
+        endpoint.process_audio(
+            &mut out,
+            EventList::empty(u32::try_from(frames).unwrap()),
+            None,
+            ctx,
+        )
+    }
+
+    /// Issue #22 lane (`rt_endpoint_l0_process_no_alloc`): the
+    /// `process_audio` shell on the L0 leg — bound clip, the
+    /// `in_scratch` channel-major copy, mirror read, `try_lock`,
+    /// `catch_unwind`, plugin call — must not allocate inside the
+    /// measurement window.
+    #[test]
+    fn rt_endpoint_l0_process_no_alloc() {
+        let mut host = send_host();
+        let handle = instantiate(&mut host, SEND_DESCRIPTOR.id);
+        drive_to_processing(&mut host, handle);
+        let mut endpoint = host.attach_endpoint(handle, bounds(512, 2)).unwrap();
+
+        let ctx = RtContext::mint();
+        let mut slab = [0.5f32; 16]; // 2ch × 8 frames
+        // Warm-up outside the window — the first `catch_unwind`
+        // registers per-thread panic state, the staged-copy path
+        // runs once.
+        run_audio(&mut endpoint, &mut slab, 2, &ctx).unwrap();
+        assert_no_alloc::assert_no_alloc(|| {
+            for _ in 0..64 {
+                // Transform semantics — the previous output would
+                // feed back as input; refill a fixed block instead.
+                slab.fill(0.5);
+                run_audio(&mut endpoint, &mut slab, 2, &ctx).unwrap();
+            }
+        });
+        // Gain ×2 through the staged copy — 0.5 in, 1.0 out.
+        assert_eq!(slab, [1.0f32; 16]);
+    }
+
+    /// Spec「`rt_endpoint_busy_bypass`」(`process_audio` level): the
+    /// held-lock bypass, the poisoned-cell `Failed` convergence and
+    /// the non-`Processing` rejection all answer their defined
+    /// output without allocating or hanging.
+    #[test]
+    fn rt_endpoint_busy_bypass() {
+        let ctx = RtContext::mint();
+        // -- busy: a held `core` lock → `Err(EndpointUnavailable)`,
+        // `out` unchanged.
+        let mut host = send_host();
+        let handle = instantiate(&mut host, SEND_DESCRIPTOR.id);
+        drive_to_processing(&mut host, handle);
+        let mut endpoint = host.attach_endpoint(handle, bounds(512, 2)).unwrap();
+        let mut slab = [9.0f32; 16];
+        run_audio(&mut endpoint, &mut slab, 2, &ctx).unwrap();
+        let core = Arc::clone(&shared_slot(&host, handle).core);
+        let guard = core.lock().unwrap();
+        assert_no_alloc::assert_no_alloc(|| {
+            for _ in 0..8 {
+                assert_eq!(
+                    run_audio(&mut endpoint, &mut slab, 2, &ctx).err(),
+                    Some(HostError::EndpointUnavailable)
+                );
+            }
+        });
+        drop(guard);
+        // -- poisoned: a panic through a held guard poisons the
+        // cell — `try_lock`'s `Poisoned` arm converges `Failed`
+        // (defined `Ok(CONTINUE)` + silence), no `Err`.
+        let poisoned = catch_unwind(AssertUnwindSafe(|| {
+            let _held = core.lock().unwrap();
+            panic!("poison the shared cell");
+        }));
+        assert!(poisoned.is_err());
+        slab.fill(9.0);
+        assert_no_alloc::assert_no_alloc(|| {
+            for _ in 0..8 {
+                assert_eq!(
+                    run_audio(&mut endpoint, &mut slab, 2, &ctx),
+                    Ok(ProcessResult::CONTINUE)
+                );
+            }
+        });
+        assert_eq!(slab, [0.0f32; 16]);
+        // -- non-`Processing`: an `Activated` mirror is the defined
+        // `Err(Lifecycle)` — `out` unchanged.
+        let mut host = send_host();
+        let handle = instantiate(&mut host, SEND_DESCRIPTOR.id);
+        drive_to_activated(&mut host, handle);
+        let mut endpoint = host.attach_endpoint(handle, bounds(512, 2)).unwrap();
+        slab.fill(9.0);
+        assert_no_alloc::assert_no_alloc(|| {
+            for _ in 0..8 {
+                assert!(matches!(
+                    run_audio(&mut endpoint, &mut slab, 2, &ctx),
+                    Err(HostError::Lifecycle(_))
+                ));
+            }
+        });
+        assert_eq!(slab, [9.0f32; 16]);
     }
 }

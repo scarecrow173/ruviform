@@ -108,8 +108,14 @@
 //! L1 slots they take the instance's shared mutex — treat them as
 //! non-RT. [`PluginEndpoint::process`] is the endpoint's
 //! RT leg — `Send`, `try_lock`-only and allocation-free on the
-//! block path (the `rt_`-prefixed tests pin that);
-//! [`PluginHost::prepare_endpoint`] itself is the non-RT mint.
+//! block path (the `rt_`-prefixed tests pin that), and
+//! [`PluginEndpoint::process_audio`] is its graph-facing sibling
+//! — the single-bus `pull`-shaped shell over `process` under
+//! the same RT contract. The attach-time getters
+//! ([`PluginEndpoint::bounds`], [`PluginEndpoint::max_frames`],
+//! [`PluginEndpoint::channels`], [`PluginEndpoint::latency_frames`])
+//! are const-cheap; [`PluginHost::prepare_endpoint`] itself is the
+//! non-RT mint.
 //! Command dispatch (`execute`, `register_*`), `prepare_endpoint`
 //! and `try_recv_notification` are **non-RT only**.
 //!

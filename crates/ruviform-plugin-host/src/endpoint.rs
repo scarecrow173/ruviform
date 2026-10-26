@@ -24,18 +24,34 @@
 //! | block outside the activated config / bound | `Err(HostError::Prepare(_))`, `outputs` unchanged |
 //! | shared cell busy (`try_lock` `WouldBlock`) | `Err(HostError::EndpointUnavailable)`, `outputs` unchanged |
 //!
+//! [`PluginEndpoint::process_audio`] is the engine's single-bus
+//! graph shell over the same table: it clips `out` against the
+//! attach bound, stages the upstream block through the attach-time
+//! `in_scratch` slab as the input bus and lets the leg write the
+//! result back into `out` (transform semantics — the node's `pull`
+//! is read-modify-write in place). Its `Err` means exactly
+//! "`out` unchanged": at a transform position that is the upstream
+//! bypass; at a **source position** — no meaningful upstream
+//! input — the adapter contract requires the consuming node
+//! closure to zero the buffer first
+//! (`out.data_mut().fill(0.0)` before calling `process_audio`), so
+//! a bypassed or rejected block emits silence rather than stale
+//! upstream contents.
+//!
 //! [`InProcessHost::attach_endpoint`]: crate::InProcessHost
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, TryLockError};
 
-use ruviform_audio_core::{AudioBuffer, BufferSpec, ChannelLayout, SampleRate, SpeakerMask};
+use ruviform_audio_core::{
+    AudioBuffer, AudioBufferViewMut, BufferSpec, ChannelLayout, SampleRate, SpeakerMask,
+};
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, EventList, HostError, HostInput, HostOutput, LifecycleError,
     LifecycleEvent, LifecycleState, PrepareError, ProcessResult, TransportInfo,
 };
-use ruviform_rt::{Consumer, Producer, Retirer};
+use ruviform_rt::{Consumer, Producer, Retirer, RtContext};
 
 use crate::host::SendCore;
 use crate::l1::data::{EndpointLegParts, RtLeg, Staging, mirror_decode, mirror_encode};
@@ -89,9 +105,7 @@ pub struct PluginEndpoint {
     bound: EndpointBounds,
     /// `process_audio`'s bound-shaped input copy target —
     /// `bound.channels × bound.max_frames`, allocated at attach so
-    /// the RT path never allocates. Read by `process_audio` once the
-    /// public shell lands (endpoint public shell is Task 6).
-    #[expect(dead_code)]
+    /// the RT path never allocates.
     in_scratch: AudioBuffer<f32>,
     /// Reported pipeline latency in frames — `0` for L0,
     /// `lookahead_blocks × activated max_frames` for L1.
@@ -139,6 +153,22 @@ impl PluginEndpoint {
         self.latency_frames
     }
 
+    /// The attached block-size ceiling (`bound.max_frames`).
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn max_frames(&self) -> u32 {
+        self.bound.max_frames
+    }
+
+    /// The attached channel contract (`bound.channels`).
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn channels(&self) -> u32 {
+        self.bound.channels
+    }
+
     /// One processing block — [`PluginHost::process`]'s exact
     /// vocabulary: erased bus views, the per-block event list and an
     /// optional transport snapshot.
@@ -167,6 +197,102 @@ impl PluginEndpoint {
     ) -> Result<ProcessResult, HostError> {
         self.inner
             .process(self.bound, inputs, outputs, events, transport)
+    }
+
+    /// One processing block in the engine's graph vocabulary — the
+    /// single-bus shell over [`Self::process`]: `out` carries the
+    /// upstream block in and the result back (transform semantics —
+    /// the graph node's read-modify-write-in-place `pull` shape).
+    ///
+    /// The order is fixed:
+    ///
+    /// 1. **bound clip** — `out.channels()` must equal
+    ///    [`bounds`](Self::bounds)`.channels` and `out.frames()`
+    ///    must not exceed `bounds.max_frames`; a violation is
+    ///    `Err(HostError::Prepare(PrepareError::UnsupportedConfig))`
+    ///    with `out` unchanged. The clip precedes everything else —
+    ///    the staged slice's premise.
+    /// 2. **per-block view + channel-major copy** — `out`'s samples
+    ///    are copied into the head `channels × frames` region of the
+    ///    attach-time `in_scratch` slab and reframed as the input
+    ///    bus of the real block dimensions.
+    /// 3. **leg dispatch** — the `EndpointInner::process` variant
+    ///    gate runs with
+    ///    that staged input bus and `out` as the single output bus.
+    ///    The activated-contract gate lives inside the layer legs
+    ///    (L0: `SendCore.activated`'s `[min_frames, max_frames]`
+    ///    under the lock; L1: the armed ring's `frame_capacity` as
+    ///    the frames ceiling) — the `bound` supplies only the
+    ///    channel equality and the frames ceiling already clipped
+    ///    here. The gate's block dimensions come from the
+    ///    in-bus-first rule — `in_scratch`'s view mirrors `out`'s
+    ///    dimensions, so `out`'s own `frames()`/`channels()` are
+    ///    what both the clip and the inner gate see.
+    ///
+    /// Every `Err` leaves `out` unchanged — at a transform position
+    /// that is the defined upstream bypass. At a **source
+    /// position** (no meaningful upstream input) the adapter
+    /// contract requires the consuming closure to zero the buffer
+    /// first — `out.data_mut().fill(0.0)` before calling — so a
+    /// bypassed or rejected block emits silence, never stale
+    /// upstream contents.
+    ///
+    /// `_ctx` is the RT-section capability token — minted by the
+    /// driver entry point and threaded through the calling node's
+    /// `pull` signature. The endpoint does not read it; taking it
+    /// keeps `process_audio` inside the RT contract section by
+    /// convention.
+    ///
+    /// **RT contract:** RT-suitable — one bounded channel-major
+    /// copy plus the leg dispatch; no allocation, no blocking (the
+    /// `rt_endpoint_*` tests pin that).
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Prepare`] when `out`'s shape violates the
+    /// attached bound or the activated config; plus the same
+    /// `Err` rows as [`Self::process`] ([`HostError::Lifecycle`] for
+    /// non-`Processing`, [`HostError::EndpointUnavailable`] while an
+    /// L0 shared cell is busy).
+    pub fn process_audio(
+        &mut self,
+        out: &mut AudioBufferViewMut<'_, f32>,
+        events: EventList<'_>,
+        transport: Option<TransportInfo>,
+        _ctx: &RtContext,
+    ) -> Result<ProcessResult, HostError> {
+        // Disjoint field borrows — `inner` dispatches while
+        // `in_scratch` hosts the staged input view.
+        let Self {
+            inner,
+            bound,
+            in_scratch,
+            ..
+        } = self;
+        let (channels, frames) = (out.channels(), out.frames());
+        // (1) bound clip — `in_scratch` is `bound`-shaped, so the
+        // slice below is in-bounds iff the clip holds; the check
+        // precedes any copy or dispatch.
+        if channels != bound.channels as usize || frames > bound.max_frames as usize {
+            return Err(HostError::Prepare(PrepareError::UnsupportedConfig));
+        }
+        // (2) per-block input view + channel-major copy of `out`'s
+        // upstream contents into `in_scratch`. `try_new` is
+        // infallible here — the slice is exactly `channels * frames`
+        // and `channels` is nonzero — but stays a defined `Err`,
+        // never a panic.
+        let slab = &mut in_scratch.data_mut()[..channels * frames];
+        let mut input = AudioBufferViewMut::try_new(slab, channels, frames)
+            .map_err(|_| HostError::Prepare(PrepareError::UnsupportedConfig))?;
+        input.data_mut().copy_from_slice(out.data());
+        // (3) the layer leg — the staged copy is the input bus,
+        // `out` the single output bus; the `Err` paths leave `out`
+        // untouched (transform-position upstream bypass — the
+        // source-position `fill(0.0)` convention is the calling
+        // closure's duty, per the module doc).
+        let inputs = [HostInput(&input)];
+        let mut outputs = [HostOutput(out)];
+        inner.process(*bound, &inputs, &mut outputs, events, transport)
     }
 }
 
@@ -629,6 +755,18 @@ mod tests {
         collector: DropCollector<Arc<Staging>>,
         /// The shared lifecycle mirror the endpoint reads.
         mirror: Arc<AtomicU8>,
+        /// The driver-side doorbell consumer — kept alive so the
+        /// leg's `try_push` keeps landing (a dropped end turns
+        /// every submit away); the rt_ lane drains it to play the
+        /// child's per-block completion.
+        submit_rx: Consumer<Submit>,
+        /// The reader-side result producer — the child's
+        /// completion channel; the rt_ lane pushes raw done seqs.
+        result_tx: Producer<u64>,
+        /// A second handle on the seed ring `l1_leg` armed — the
+        /// rt_ lane publishes out-slot tags through it the way the
+        /// reader does (stale once a test applies a newer arm).
+        staging: Arc<Staging>,
     }
 
     /// A manually assembled `L1Endpoint` + the host-side channel
@@ -637,10 +775,11 @@ mod tests {
     /// bound the drain checks arms against.
     fn l1_leg(mirror: LifecycleState, armed_frames: u32) -> (L1Endpoint, L1HostEnds) {
         const DEPTH: u32 = 3;
-        let (submit_tx, _submit_rx) = ruviform_rt::channel::<Submit>(DEPTH as usize);
-        let (_result_tx, result_rx) = ruviform_rt::channel::<u64>(DEPTH as usize);
+        let (submit_tx, submit_rx) = ruviform_rt::channel::<Submit>(DEPTH as usize);
+        let (result_tx, result_rx) = ruviform_rt::channel::<u64>(DEPTH as usize);
         let mut leg = RtLeg::new(DEPTH, DEPTH - 1, submit_tx, result_rx);
-        leg.arm(Arc::new(Staging::new(DEPTH, armed_frames, 1)));
+        let staging = Arc::new(Staging::new(DEPTH, armed_frames, 1));
+        leg.arm(Arc::clone(&staging));
         // `prepare_endpoint` reserves `last_output` to the bound —
         // mirror that so `arm_apply`'s resize stays in capacity.
         leg.reserve_last_output(armed_frames as usize * 16);
@@ -661,6 +800,9 @@ mod tests {
                 return_rx,
                 collector: arm_collector,
                 mirror,
+                submit_rx,
+                result_tx,
+                staging,
             },
         )
     }
@@ -697,6 +839,35 @@ mod tests {
             EventList::empty(u32::try_from(input.len()).unwrap()),
             None,
         )
+    }
+
+    /// The driver/reader pair's per-block cadence, run on the test
+    /// thread: drain every doorbell, publish each submitted
+    /// block's out-slot (`frames`/`channels`/pattern samples, then
+    /// the `seq` tag last — the same publish-last edge
+    /// `read_out_slot` uses) and push the raw done seq onto the
+    /// result channel. That makes the next `expected` seq resolve
+    /// *matched* — drain → out-slot check → `copy_out` →
+    /// `last_output` — instead of pass-through: the branch the
+    /// `rt_*` windows below must also cover. Bounded
+    /// `try_pop`/`try_push` plus atomic stores only, so it is
+    /// safe inside an `assert_no_alloc` window.
+    fn complete_submits(ends: &mut L1HostEnds) {
+        while let Ok(submit) = ends.submit_rx.try_pop() {
+            let slot = usize::try_from(submit.seq % ends.staging.outs.len() as u64)
+                .expect("slot index always fits usize");
+            let stage = &ends.staging.outs[slot];
+            // The mono-8 block shape `run_l1`/`run_audio` drive.
+            stage.frames.store(8, Ordering::Relaxed);
+            stage.channels.store(1, Ordering::Relaxed);
+            for sample in &stage.samples[..8] {
+                sample.store(0.25_f32.to_bits(), Ordering::Relaxed);
+            }
+            stage.seq.store(submit.seq, Ordering::Release);
+            ends.result_tx
+                .try_push(submit.seq)
+                .expect("the bounded drain keeps the channel ahead");
+        }
     }
 
     /// The endpoint `process` path: the `Processing` mirror passes
@@ -922,23 +1093,35 @@ mod tests {
 
     /// Issue #22 lane: the detached `RtLeg` process path through
     /// `L1Endpoint` — arm drain, mirror gate, dims pre-gate, stage/
-    /// doorbell/pass-through — must not allocate. Fixture, channels
-    /// and warm-up all sit outside the window.
+    /// doorbell and the *matched* resolution (result drain →
+    /// out-slot check → `copy_out` → `last_output`) — must not
+    /// allocate. Fixture, channels and warm-up sit outside the
+    /// window; the per-block child completion (`complete_submits`)
+    /// interleaves inside it — bounded channel ops, alloc-free.
     #[test]
     fn rt_l1_endpoint_process_no_alloc() {
         let bound = EndpointBounds {
             max_frames: 512,
             channels: 1,
         };
-        let (mut endpoint, _ends) = l1_leg(LifecycleState::Processing, 512);
+        let (mut endpoint, mut ends) = l1_leg(LifecycleState::Processing, 512);
         let mut output = [0.0_f32; 8];
-        // Warm-up outside the window.
+        // Warm-up outside the window — two paced blocks plus the
+        // interleaved completions fill the lookahead so measured
+        // blocks resolve *matched*, not pass-through.
         run_l1(&mut endpoint, bound, &INPUT, &mut output).unwrap();
+        complete_submits(&mut ends);
+        run_l1(&mut endpoint, bound, &INPUT, &mut output).unwrap();
+        complete_submits(&mut ends);
         assert_no_alloc::assert_no_alloc(|| {
             for _ in 0..64 {
                 run_l1(&mut endpoint, bound, &INPUT, &mut output).unwrap();
+                complete_submits(&mut ends);
             }
         });
+        // The pipeline resolved: the published 0.25 pattern, not
+        // pass-through silence.
+        assert!(all_eq(&output, 0.25));
     }
 
     /// Issue #22 lane: the arm drain inside `process` — `try_pop`,
@@ -962,6 +1145,172 @@ mod tests {
             }
         });
         assert_eq!(endpoint.leg.as_ref().unwrap().armed_generation(), 2);
+        assert_eq!(ends.collector.drain(), 1);
+    }
+
+    // ---------------------------------------------------------------
+    // `process_audio` — the public single-bus shell (Issue #113
+    // task 6): bound clip → staged channel-major copy → leg
+    // dispatch, plus the `rt_endpoint_*` no-alloc lane.
+    // ---------------------------------------------------------------
+
+    /// The `bound` every `process_audio` fixture below attaches
+    /// under — mono (the `l1_leg` fixture arms a mono ring).
+    const AUDIO_BOUND: EndpointBounds = EndpointBounds {
+        max_frames: 512,
+        channels: 1,
+    };
+
+    /// Wraps the `l1_leg` fixture into a full `PluginEndpoint` —
+    /// the leg the composite's L1 attach path would assemble, with
+    /// the bound-shaped `in_scratch` `prepare_endpoint` preallocates.
+    /// `armed_frames` is the armed ring's frame capacity.
+    fn l1_plugin_endpoint(
+        mirror: LifecycleState,
+        armed_frames: u32,
+    ) -> (PluginEndpoint, L1HostEnds) {
+        let (endpoint, ends) = l1_leg(mirror, armed_frames);
+        let scratch = in_scratch(AUDIO_BOUND, SampleRate::new(48_000).unwrap())
+            .expect("mono bound-shaped scratch");
+        (
+            PluginEndpoint::new(
+                EndpointInner::L1(Box::new(endpoint)),
+                AUDIO_BOUND,
+                scratch,
+                // The recorded latency is inert on the process
+                // path — mirror the L1 fixture's `2 × 512`.
+                1024,
+            ),
+            ends,
+        )
+    }
+
+    /// One `process_audio` block over a mono slab — mirrors the
+    /// graph node's `pull` shape: `out` carries the block in and
+    /// back.
+    fn run_audio(
+        endpoint: &mut PluginEndpoint,
+        slab: &mut [f32; 8],
+        ctx: &RtContext,
+    ) -> Result<ProcessResult, HostError> {
+        let mut out = AudioBufferViewMut::try_new(&mut slab[..], 1, 8).unwrap();
+        endpoint.process_audio(&mut out, EventList::empty(8), None, ctx)
+    }
+
+    /// The bound clip: `out.channels() != bound.channels` and
+    /// `out.frames() > bound.max_frames` are both
+    /// `Err(Prepare(UnsupportedConfig))` with `out` untouched —
+    /// before any copy or dispatch.
+    #[test]
+    fn process_audio_bound_clip_rejects_with_out_unchanged() {
+        let ctx = RtContext::mint();
+        let (mut endpoint, _ends) = l1_plugin_endpoint(LifecycleState::Processing, 512);
+        // Channels mismatch — stereo `out` against a mono bound.
+        let mut stereo = [9.0_f32; 16];
+        let mut out = AudioBufferViewMut::try_new(&mut stereo, 2, 8).unwrap();
+        assert!(matches!(
+            endpoint.process_audio(&mut out, EventList::empty(8), None, &ctx),
+            Err(HostError::Prepare(PrepareError::UnsupportedConfig))
+        ));
+        assert!(all_eq(&stereo, 9.0));
+        // Frames over the bound — 1024 > 512.
+        let mut oversized = [9.0_f32; 1024];
+        let mut out = AudioBufferViewMut::try_new(&mut oversized, 1, 1024).unwrap();
+        assert!(matches!(
+            endpoint.process_audio(&mut out, EventList::empty(1024), None, &ctx),
+            Err(HostError::Prepare(PrepareError::UnsupportedConfig))
+        ));
+        assert!(all_eq(&oversized, 9.0));
+    }
+
+    /// `Err` from the leg (non-`Processing` mirror) leaves `out`
+    /// unchanged — the transform-position bypass row the adapter
+    /// contract pins (`fill(0.0)` at a source position is the
+    /// calling closure's duty, not the endpoint's).
+    #[test]
+    fn process_audio_err_leaves_out_unchanged() {
+        let ctx = RtContext::mint();
+        let (mut endpoint, _ends) = l1_plugin_endpoint(LifecycleState::Activated, 512);
+        let mut slab = [9.0_f32; 8];
+        assert!(matches!(
+            run_audio(&mut endpoint, &mut slab, &ctx),
+            Err(HostError::Lifecycle(_))
+        ));
+        assert!(all_eq(&slab, 9.0));
+    }
+
+    /// The staged-copy path end to end at the shell: the upstream
+    /// `out` contents reach the leg's input stage, and the defined
+    /// output is written back into `out` (no child on this leg —
+    /// the pass-through row is silence before the first received
+    /// block).
+    #[test]
+    fn process_audio_stages_and_writes_back() {
+        let ctx = RtContext::mint();
+        let (mut endpoint, _ends) = l1_plugin_endpoint(LifecycleState::Processing, 512);
+        let mut slab = [0.75_f32; 8];
+        assert_eq!(
+            run_audio(&mut endpoint, &mut slab, &ctx),
+            Ok(ProcessResult::CONTINUE)
+        );
+        assert!(all_eq(&slab, 0.0));
+    }
+
+    /// Issue #22 lane (`rt_endpoint_l1_process_no_alloc`): the
+    /// `process_audio` shell on the L1 leg — bound clip, slab copy,
+    /// arm drain, mirror gate, dims pre-gate, stage/doorbell and
+    /// the *matched* resolution — must not allocate. Fixture,
+    /// `RtContext` and warm-up sit outside the window; the per-block
+    /// child completion (`complete_submits`) interleaves inside it
+    /// — bounded channel ops, alloc-free.
+    #[test]
+    fn rt_endpoint_l1_process_no_alloc() {
+        let ctx = RtContext::mint();
+        let (mut endpoint, mut ends) = l1_plugin_endpoint(LifecycleState::Processing, 512);
+        let mut slab = [0.5_f32; 8];
+        // Warm-up outside the window — first-touch of the staged
+        // copy path, plus the interleaved completions that fill
+        // the lookahead so measured blocks resolve *matched*, not
+        // pass-through.
+        run_audio(&mut endpoint, &mut slab, &ctx).unwrap();
+        complete_submits(&mut ends);
+        run_audio(&mut endpoint, &mut slab, &ctx).unwrap();
+        complete_submits(&mut ends);
+        assert_no_alloc::assert_no_alloc(|| {
+            for _ in 0..64 {
+                run_audio(&mut endpoint, &mut slab, &ctx).unwrap();
+                complete_submits(&mut ends);
+            }
+        });
+        // The pipeline resolved: the published 0.25 pattern, not
+        // pass-through silence.
+        assert!(all_eq(&slab, 0.25));
+    }
+
+    /// Issue #22 lane (`rt_endpoint_arm_apply_no_alloc`): a
+    /// newer-generation `Arc<Staging>` drained and applied inside
+    /// `process_audio` — `arm_apply`'s in-capacity `resize` plus the
+    /// displaced ring's `Retirer` push — must not allocate.
+    #[test]
+    fn rt_endpoint_arm_apply_no_alloc() {
+        let ctx = RtContext::mint();
+        let (mut endpoint, mut ends) = l1_plugin_endpoint(LifecycleState::Processing, 512);
+        let mut slab = [0.5_f32; 8];
+        // Warm-up outside the window.
+        run_audio(&mut endpoint, &mut slab, &ctx).unwrap();
+        let newer = Arc::new(Staging::new(3, 512, 2));
+        assert!(ends.arm_tx.try_push(newer).is_ok());
+        assert_no_alloc::assert_no_alloc(|| {
+            for _ in 0..8 {
+                run_audio(&mut endpoint, &mut slab, &ctx).unwrap();
+            }
+        });
+        // The gen-2 ring applied; the displaced gen-1 ring retired
+        // (destructor runs on the collector side, not the window).
+        let EndpointInner::L1(leg) = &endpoint.inner else {
+            panic!("l1 fixture leg")
+        };
+        assert_eq!(leg.leg.as_ref().unwrap().armed_generation(), 2);
         assert_eq!(ends.collector.drain(), 1);
     }
 }

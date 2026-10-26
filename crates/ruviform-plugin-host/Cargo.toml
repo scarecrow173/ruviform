@@ -31,6 +31,11 @@ path = "src/bin/l1-test-worker.rs"
 
 [dev-dependencies]
 assert_no_alloc = "1.1"
+# Issue #113 graph E2E (`tests/plugin_graph_e2e.rs`): the endpoint →
+# `FnMut` node → `Graph`/`Session` adhesion is tested from the host
+# side only — the engine never gains a plugin dependency (AC3; the
+# dev-dep direction keeps the dependency DAG acyclic).
+ruviform-audio = { path = "../ruviform-audio" }
 ruviform-media-core = { path = "../ruviform-media-core" }
 # Issue #113 Send evidence: `docs/test-specs/plugin-endpoint-contract-tests.md`
 # pins `assert_not_impl_any!` for the `!Send` negative side (`Rc`/`RefCell`/

@@ -1,23 +1,44 @@
 ---
 id: "TASK-034Mrt1HhkO2vVKksdYxgA"
 type: "task"
-status: "todo"
+status: "done"
 title: "endpoint process/process_audio shell + グラフ E2E + rt_ レーン（bound clip・in-bus-first・source-position 慣行）"
 created: "2026-10-26"
 updated: "2026-10-26"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/plugin_graph_e2e.rs"
+      - type: "file"
+        path: "docs/impl/ir/issue-113-plugin-graph-e2e-and-rt-lane-task-6-implementation.md"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-host/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/endpoint.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/host.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/lib.rs"
+      - type: "file"
+        path: "Cargo.lock"
+      - type: "file"
+        path: "docs/tasks/plugin-graph-e2e-and-rt-lane.md"
+      - type: "file"
+        path: "docs/tasks/README.md"
+      - type: "file"
+        path: "docs/impl/ir/README.md"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-113-plugin-graph-e2e-and-rt-lane-task-6-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
     - "docs/tasks/plugin-host-endpoint-surface.md"
@@ -96,21 +117,23 @@ Plan actions 17–19。`PluginEndpoint` の公開 `process`/`process_audio` shel
 
 ## Done When
 
-- [ ] `PluginEndpoint::process`/`process_audio` が存在し、`process` が `events: EventList<'_>`・`transport: Option<TransportInfo>` を by-value（両 `Copy`）で受け `Result<ProcessResult, HostError>` を返し、`process_audio` が順序固定（(1) bound clip → (2) per-block `AudioBufferViewMut::try_new` view + channel-major 複写 → (3) `inner.process`）で `Result<ProcessResult, HostError>`（`tail_frames` 保持 — `ProcessStatus` ではない）を返す
-- [ ] bound clip（`out.channels()==bound.channels`・`frames ≤ bound.max_frames`）違反が `Err(Prepare(UnsupportedConfig))` で `out` 不変更 — activated gate が in-bus-first（frames/channels は実ビュー・bound は上限のみ）
-- [ ] `Err` 時 `out` 不変更 + source-position `fill(0.0)` 慣行が doc + E2E で pin される（transform 位置は上流 bypass・source 位置は無音）・`Err(Ipc)` が `process`/`process_audio` の公開面から露出しない（`armed_frame_capacity` pre-gate）
-- [ ] `expect_send::<PluginEndpoint>()`（`#[cfg(test)]` inline）+ 具象 `L0Endpoint`/`L1Endpoint`・ノード closure 型・`GraphPlan`/`RtPlan`/callback capture が `Send` — `unsafe impl` なし・enum variant を型名として assert しない・`static_assertions` dev-dep の `assert_not_impl_any!` で `!Send` 側（`Rc`/`PluginHost`/`L1Instance` 等）も固定
-- [ ] `tests/plugin_graph_e2e.rs` が mock device で L0/L1 graph E2E（`register_factory`/`register_out_of_process` + `execute(HostCommand::Instantiate{plugin_id})` の実 API 経路・`graph.push` — `push_node`/`PluginHost::instantiate(InProcess)` を使わない — gain 正当性・lifecycle・`kill_child`→`Failed`+通知 once+無音・latency 値・退役 DropFlag・leg 還流・source-position・verb 到達）をカバーし、`CARGO_BIN_EXE_l1-test-worker` が crate 内に閉じる
-- [ ] `rt_endpoint_l0_process_no_alloc`/`rt_endpoint_l1_process_no_alloc`/`rt_endpoint_arm_apply_no_alloc`/`rt_endpoint_busy_bypass` が `assert_no_alloc` 窓内で通る（fixture 窓外・実一致件数記録）
-- [ ] `ruviform-audio` の prod 依存に plugin クレートがない（dev-dep は `ruviform-plugin-host` 側のみ — AC3。`static_assertions`/`ruviform-audio` とも dev-dep のみ）
-- [ ] narrow gate（下記 Verification）が exit 0 — E2E・`rt_`・Send 証拠が通る
+- [x] `PluginEndpoint::process`/`process_audio` が存在し、`process` が `events: EventList<'_>`・`transport: Option<TransportInfo>` を by-value（両 `Copy`）で受け `Result<ProcessResult, HostError>` を返し、`process_audio` が順序固定（(1) bound clip → (2) per-block `AudioBufferViewMut::try_new` view + channel-major 複写 → (3) `inner.process`）で `Result<ProcessResult, HostError>`（`tail_frames` 保持 — `ProcessStatus` ではない）を返す
+- [x] bound clip（`out.channels()==bound.channels`・`frames ≤ bound.max_frames`）違反が `Err(Prepare(UnsupportedConfig))` で `out` 不変更 — activated gate が in-bus-first（frames/channels は実ビュー・bound は上限のみ）
+- [x] `Err` 時 `out` 不変更 + source-position `fill(0.0)` 慣行が doc + E2E で pin される（transform 位置は上流 bypass・source 位置は無音 — `bound_clip_err_leaves_out_unchanged`/`source_position_err_yields_silence_not_stale`/`process_audio_err_leaves_out_unchanged`/`process_audio_bound_clip_rejects_with_out_unchanged` で pin）・`Err(Ipc)` が `process`/`process_audio` の公開面から露出しない（`armed_frame_capacity` pre-gate — T3 維持）
+- [x] `expect_send::<PluginEndpoint>()`（`#[cfg(test)]` inline）+ 具象 `L0Endpoint`/`L1Endpoint`・ノード closure 型・`GraphPlan`/`RtPlan`/callback capture が `Send` — `unsafe impl` なし・enum variant を型名として assert しない・`static_assertions` dev-dep の `assert_not_impl_any!` で `!Send` 側（`Rc`/`PluginHost`/`L1Instance` 等）も固定（`plugin_graph_e2e.rs` 側は `assert_impl_all!(PluginEndpoint: Send)`・`GraphPlan`/`RtPlan`/`PlanSwap`/`Session`/`OutputDataCallback` + `expect_send` で endpoint-capturing closure 具象型を検証 — `endpoint_capturing_closure_is_send`）
+- [x] `tests/plugin_graph_e2e.rs` が mock device で L0/L1 graph E2E（`register_factory`/`register_out_of_process` + `execute(HostCommand::Instantiate{plugin_id})` の実 API 経路・`graph.push` — `push_node`/`PluginHost::instantiate(InProcess)` を使わない — gain 正当性・lifecycle・`kill_child`→`Failed`+通知 once+無音・latency 値・退役 DropFlag・leg 還流・source-position・verb 到達）をカバーし、`CARGO_BIN_EXE_l1-test-worker` が crate 内に閉じる（**13 テスト** — `plugin_id` route のみ・`set_param` は v1 surface に存在しないため verb 行は `SaveState`/`RestoreState`/`StopProcessing`/`StartProcessing` で代替 — deviation）
+- [x] `rt_endpoint_l0_process_no_alloc`/`rt_endpoint_l1_process_no_alloc`/`rt_endpoint_arm_apply_no_alloc`/`rt_endpoint_busy_bypass` が `assert_no_alloc` 窓内で通る（fixture 窓外・実一致件数記録 — L1 系は `complete_submits` child-sim で lookahead を満たし **matched branch を窓内実測**）
+- [x] `ruviform-audio` の prod 依存に plugin クレートがない（dev-dep は `ruviform-plugin-host` 側のみ — AC3。`static_assertions`/`ruviform-audio` とも dev-dep のみ — `cargo tree` で実証）
+- [x] narrow gate（下記 Verification）が exit 0 — E2E・`rt_`・Send 証拠が通る
 
 ## Verification
 
-- [ ] `mise run check` — exit 0
-- [ ] `mise run lint` — exit 0
-- [ ] `mise run test` — exit 0（既存テスト無退行 + `plugin_graph_e2e` E2E + `expect_send` 型証明 + unit）
-- [ ] `mise run test-rt` — exit 0・**実一致件数を記録**（`rt_endpoint_*` 4 本 + `rt_plan_*`/`rt_fn_node_*`（T5）+ 既存 `rt_` — 0 件スキップを成功と偽らない）
-- [ ] `mise exec -- cargo test -p ruviform-plugin-host --test plugin_graph_e2e` — E2E 単体実行
-- [ ] `mise exec -- cargo tree -p ruviform-audio` — DAG に `ruviform-plugin-*` が出現しない（AC3）
-- [ ] 対象 test-spec: `docs/test-specs/plugin-graph-e2e-tests.md`（AC1/AC3/AC5/AC6/AC9 の E2E 面）・`docs/test-specs/plugin-rt-retirement-tests.md`（`rt_endpoint_*`・退役観測）・`docs/test-specs/plugin-endpoint-contract-tests.md`（`Send` 証拠・`process`/`process_audio` 契約）
+- [x] `mise run check` — exit 0
+- [x] `mise run lint` — exit 0
+- [x] `mise run test` — exit 0（`cargo test --workspace` — **56 test binaries・1125 tests・0 failed** — 既存テスト無退行 + `plugin_graph_e2e` E2E 13 件 + `expect_send` 型証明 + unit/rt_ 新規 7 件）
+- [x] `mise run test-rt` — exit 0・**実一致件数 129**（workspace 全体。ruviform-plugin-host: lib **12**（`rt_` 真 prefix 11 + substring 一致 `shared_start_failure_rolls_back_to_activated` 1）+ `l1_proxy_e2e` **4** + `plugin_graph_e2e` **1**（`rt_endpoint_graph_pull_no_alloc`）— 新規 `rt_endpoint_*` 5 本 = spec 4 本 + graph pull — 0 件スキップ・0 件バイナリなし）
+- [x] `mise exec -- cargo test -p ruviform-plugin-host --test plugin_graph_e2e` — exit 0・**13 tests 全 pass**
+- [x] `mise exec -- cargo tree -p ruviform-audio` — DAG は `ruviform-audio-core`/`ruviform-media-core`/`ruviform-rt` のみで `ruviform-plugin-*` が出現しない（AC3）
+- [x] 対象 test-spec: `docs/test-specs/plugin-graph-e2e-tests.md`（AC1/AC3/AC5/AC6/AC9 の E2E 面）・`docs/test-specs/plugin-rt-retirement-tests.md`（`rt_endpoint_*`・退役観測）・`docs/test-specs/plugin-endpoint-contract-tests.md`（`Send` 証拠・`process`/`process_audio` 契約）
+
+補足（task doc の Verification 範囲外・IR に記録）: `mise run fmt-check` exit 0・`mise exec -- cargo test -p ruviform-plugin-host` exit 0（lib **72** + `l1_proxy_e2e` **55** + `plugin_graph_e2e` **13** + doctest **2** = **142**）・`mise exec -- cargo doc -p ruviform-plugin-host --no-deps` exit 0・warning 0・`mise exec -- cargo tree -p ruviform-plugin-host --edges normal` で `ruviform-audio` 非出現（dev-only 実証 — `cargo tree` に `--no-dev` は存在せず `--edges normal` を使用）。**deviation**: (a) `set_param` は v1 surface に存在しない — verb 行は `SaveState`/`RestoreState`/`StopProcessing`/`StartProcessing` で代替、(b) `Gain.dropped` probe は drain 時点に立てない（`SendCore` cell を host slot が `Arc` 共有 — drain は endpoint 側 handle のみ解放）ため plan-swap テストは「drain 時点 `!dropped`・clean teardown 後 `dropped`」の 2 点 assert、(c) L1 e2e の pacing/`matched >= 16` は `l1_proxy_e2e` 慣行を継承。詳細は `docs/impl/ir/issue-113-plugin-graph-e2e-and-rt-lane-task-6-implementation.md`。
