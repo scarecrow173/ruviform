@@ -213,6 +213,27 @@ pub trait PluginFactory {
     ///
     /// **RT contract:** non-RT only — may allocate and block.
     fn create(&self) -> Box<dyn ErasedPlugin>;
+
+    /// Opt-in `Send` capability: creates one fresh instance boxed as
+    /// a `Send` erased plugin — the instance a host may hand to a
+    /// cross-thread RT endpoint share (e.g. a graph node).
+    ///
+    /// The default returns `None`: factories that cannot produce a
+    /// `Send` instance (e.g. the wrapped plugin object holds
+    /// thread-affine state) leave the capability unimplemented, and
+    /// their instances keep driving host-side surfaces only —
+    /// endpoint-style consumers reject them with the defined
+    /// [`HostError::EndpointUnavailable`].
+    ///
+    /// A factory returning `Some` MUST construct an instance of the
+    /// same plugin [`PluginFactory::create`] would — descriptor- and
+    /// behavior-equivalent; hosts may call it in place of `create()`
+    /// when the instance may attach an RT endpoint.
+    ///
+    /// **RT contract:** non-RT only — may allocate and block.
+    fn create_sendable(&self) -> Option<Box<dyn ErasedPlugin + Send>> {
+        None
+    }
 }
 
 /// The dyn-safe mirror of [`Plugin`]: the storage type
@@ -318,4 +339,139 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
 /// **RT contract:** non-RT only — allocates the box.
 pub fn erase<P: Plugin + 'static>(plugin: P) -> Box<dyn ErasedPlugin> {
     Box::new(Erased(plugin))
+}
+
+/// Erases a concrete `Send` [`Plugin`] into a `Send`-capable boxed
+/// [`ErasedPlugin`] — the [`erase()`] companion for factories that
+/// implement [`PluginFactory::create_sendable`].
+///
+/// `Erased<P>` is `Send` whenever `P: Send`, so the capability stays
+/// opt-in: no blanket `Send` bound lands on [`Plugin`] or
+/// [`ErasedPlugin`].
+///
+/// **RT contract:** non-RT only — allocates the box.
+pub fn erase_sendable<P: Plugin + Send + 'static>(plugin: P) -> Box<dyn ErasedPlugin + Send> {
+    Box::new(Erased(plugin))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ProcessStatus;
+    use ruviform_audio_core::SampleRate;
+
+    /// Compile-time `Send` witness for the erased box.
+    fn expect_send<T: Send>(_: &T) {}
+
+    const DESC: PluginDescriptor = PluginDescriptor {
+        id: "org.example.send-gain",
+        name: "SendGain",
+        vendor: "Ruviform",
+        version: "1.0.0",
+        features: &["audio-effect"],
+    };
+
+    /// Minimal `Send` plugin — the endpoint-capability fixture.
+    struct SendGain;
+
+    impl PluginProcessor for SendGain {
+        fn prepare(
+            &mut self,
+            _config: &ProcessConfig,
+            _context: &mut ProcessContext,
+        ) -> Result<(), PrepareError> {
+            Ok(())
+        }
+
+        fn process<I, O>(
+            &mut self,
+            _inputs: &[I],
+            _outputs: &mut [O],
+            _events: EventList<'_>,
+            _transport: Option<TransportInfo>,
+            _context: &mut ProcessContext,
+        ) -> ProcessResult
+        where
+            I: BufferView,
+            O: BufferViewMut,
+        {
+            ProcessResult::CONTINUE
+        }
+    }
+
+    impl Plugin for SendGain {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESC
+        }
+        fn params(&self) -> &[ParamInfo] {
+            &[]
+        }
+    }
+
+    /// Factory without the opt-in: `create_sendable` keeps its
+    /// `None` default.
+    struct PlainFactory;
+
+    impl PluginFactory for PlainFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESC
+        }
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            erase(SendGain)
+        }
+    }
+
+    /// Factory that opts into the `Send` capability.
+    struct SendFactory;
+
+    impl PluginFactory for SendFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESC
+        }
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            erase(SendGain)
+        }
+        fn create_sendable(&self) -> Option<Box<dyn ErasedPlugin + Send>> {
+            Some(erase_sendable(SendGain))
+        }
+    }
+
+    #[test]
+    fn create_sendable_defaults_to_none() {
+        // The capability is opt-in: a factory that does not implement
+        // it reports `None`, never a silently non-`Send` box.
+        assert!(PlainFactory.create_sendable().is_none());
+    }
+
+    #[test]
+    fn create_sendable_returns_send_erased_plugin() {
+        let plugin = SendFactory
+            .create_sendable()
+            .expect("send-capable factory yields an instance");
+        expect_send(&plugin);
+        assert_eq!(plugin.descriptor().id, DESC.id);
+    }
+
+    #[test]
+    fn erase_sendable_boxes_a_send_erased_plugin() {
+        let plugin: Box<dyn ErasedPlugin + Send> = erase_sendable(SendGain);
+        expect_send(&plugin);
+        assert_eq!(plugin.descriptor().id, DESC.id);
+        // `erase()`'s non-`Send` contract is unchanged — the plain
+        // `Box<dyn ErasedPlugin>` carries no `Send` bound.
+        let plain: Box<dyn ErasedPlugin> = erase(SendGain);
+        assert_eq!(plain.descriptor().id, DESC.id);
+    }
+
+    #[test]
+    fn send_erased_plugin_drives_the_erased_surface() {
+        let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, 512).unwrap();
+        let mut context = ProcessContext::new();
+        let mut plugin = erase_sendable(SendGain);
+        plugin.prepare(&config, &mut context).unwrap();
+        let mut outputs: [HostOutput<'_>; 0] = [];
+        let result =
+            plugin.process_host(&[], &mut outputs, EventList::empty(512), None, &mut context);
+        assert_eq!(result.status, ProcessStatus::Continue);
+    }
 }

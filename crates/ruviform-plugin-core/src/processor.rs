@@ -13,9 +13,10 @@
 //! [`PluginProcessor::process`] receives *borrowed* input/output views
 //! through the [`BufferView`] / [`BufferViewMut`] accessor traits —
 //! deliberately a *trait contract*, not a concrete view type: the
-//! concrete per-channel borrowed views
-//! (`ruviform_audio_core::PlanarBufferView` /
-//! `PlanarBufferViewMut`, implemented below) satisfy them, and
+//! concrete borrowed views implemented below —
+//! `ruviform_audio_core::PlanarBufferView` / `PlanarBufferViewMut`
+//! (per-channel slice lists) and `ruviform_audio_core::AudioBufferView`
+//! / `AudioBufferViewMut` (channel-major slabs) — satisfy them, and
 //! adapters may wrap host buffers in their own implementors. Because
 //! `process` takes views rather than owning buffers,
 //! the zero-copy rule is enforced by the signature itself; the concrete
@@ -51,8 +52,10 @@ use crate::transport::TransportInfo;
 /// Read-side view contract over a per-channel planar `f32` buffer.
 ///
 /// Implemented by the borrowed view type(s) adapters wrap host buffers
-/// in — `ruviform_audio_core::PlanarBufferView` and
-/// `PlanarBufferViewMut` are the canonical implementors. One
+/// in — `ruviform_audio_core::PlanarBufferView` /
+/// `PlanarBufferViewMut` (per-channel slice lists) and
+/// `ruviform_audio_core::AudioBufferView` / `AudioBufferViewMut`
+/// (channel-major slabs) are the canonical implementors. One
 /// implementor = one bus: `channels()` is the bus's channel count and
 /// every channel slice shares [`BufferView::frames`].
 ///
@@ -408,6 +411,36 @@ impl BufferViewMut for ruviform_audio_core::PlanarBufferViewMut<'_, f32> {
     }
 }
 
+impl BufferView for ruviform_audio_core::AudioBufferView<'_, f32> {
+    fn channels(&self) -> usize {
+        Self::channels(self)
+    }
+    fn frames(&self) -> usize {
+        Self::frames(self)
+    }
+    fn channel(&self, index: usize) -> Option<&[f32]> {
+        Self::channel(self, index)
+    }
+}
+
+impl BufferView for ruviform_audio_core::AudioBufferViewMut<'_, f32> {
+    fn channels(&self) -> usize {
+        Self::channels(self)
+    }
+    fn frames(&self) -> usize {
+        Self::frames(self)
+    }
+    fn channel(&self, index: usize) -> Option<&[f32]> {
+        Self::channel(self, index)
+    }
+}
+
+impl BufferViewMut for ruviform_audio_core::AudioBufferViewMut<'_, f32> {
+    fn channel_mut(&mut self, index: usize) -> Option<&mut [f32]> {
+        Self::channel_mut(self, index)
+    }
+}
+
 /// The standard-neutral plugin processing contract owned by
 /// `ruviform-plugin-core`.
 ///
@@ -605,5 +638,73 @@ mod tests {
             ProcessConfig::new(rate, 513, 512),
             Err(Error::InvalidValue("frames"))
         );
+    }
+
+    /// `AudioBufferView` satisfies `BufferView` with channel-major
+    /// offsets: `channel(i)` is `&data[i*frames .. (i+1)*frames]`.
+    #[test]
+    fn audio_buffer_view_satisfies_buffer_view_channel_major() {
+        use ruviform_audio_core::{AudioBuffer, BufferSpec, ChannelLayout};
+
+        let spec = BufferSpec {
+            layout: ChannelLayout::Stereo,
+            frames: 4,
+            sample_rate: SampleRate::new(48_000).unwrap(),
+        };
+        let mut buffer = AudioBuffer::<f32>::try_new(spec).unwrap();
+        // Channel-major slab: [ch0 f0..f3 | ch1 f0..f3].
+        buffer
+            .data_mut()
+            .copy_from_slice(&[1.0, 2.0, 3.0, 4.0, 10.0, 11.0, 12.0, 13.0]);
+
+        let view = buffer.view();
+        assert_eq!(BufferView::channels(&view), 2);
+        assert_eq!(BufferView::frames(&view), 4);
+        assert_eq!(
+            BufferView::channel(&view, 0),
+            Some(&[1.0, 2.0, 3.0, 4.0][..])
+        );
+        assert_eq!(
+            BufferView::channel(&view, 1),
+            Some(&[10.0, 11.0, 12.0, 13.0][..])
+        );
+        assert_eq!(BufferView::channel(&view, 2), None);
+    }
+
+    /// `AudioBufferViewMut` satisfies `BufferView`/`BufferViewMut`;
+    /// `channel_mut` writes land in the underlying channel-major slab.
+    #[test]
+    fn audio_buffer_view_mut_writes_reach_the_slab() {
+        use ruviform_audio_core::{AudioBufferViewMut, ChannelLayout};
+
+        // 2 channels × 4 frames channel-major slab.
+        let mut slab = [1.0_f32, 2.0, 3.0, 4.0, 10.0, 11.0, 12.0, 13.0];
+        {
+            let mut view = AudioBufferViewMut::try_new(&mut slab, 2, 4).unwrap();
+            assert_eq!(BufferView::channels(&view), 2);
+            assert_eq!(BufferView::frames(&view), 4);
+            assert_eq!(
+                BufferView::channel(&view, 1),
+                Some(&[10.0, 11.0, 12.0, 13.0][..])
+            );
+            assert_eq!(BufferView::channel(&view, 2), None);
+            BufferViewMut::channel_mut(&mut view, 0).unwrap()[0] = 42.0;
+            assert!(BufferViewMut::channel_mut(&mut view, 2).is_none());
+        }
+        assert_eq!(slab[0], 42.0);
+        assert_eq!(slab[4], 10.0);
+
+        // `AudioBuffer::view_mut` builds the same channel-major view.
+        let spec = ruviform_audio_core::BufferSpec {
+            layout: ChannelLayout::Mono,
+            frames: 2,
+            sample_rate: SampleRate::new(48_000).unwrap(),
+        };
+        let mut buffer = ruviform_audio_core::AudioBuffer::<f32>::try_new(spec).unwrap();
+        {
+            let mut view = buffer.view_mut();
+            BufferViewMut::channel_mut(&mut view, 0).unwrap().fill(0.5);
+        }
+        assert_eq!(buffer.channel(0), Some(&[0.5, 0.5][..]));
     }
 }

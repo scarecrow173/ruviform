@@ -148,6 +148,23 @@ pub enum HostError {
     /// A `plugin_id` was registered twice — e.g. the same id claimed
     /// by both an in-process factory and an out-of-process spec.
     DuplicatePluginId,
+    /// The instance cannot currently provide the requested RT
+    /// endpoint — e.g. its factory did not opt into
+    /// [`PluginFactory::create_sendable`](crate::PluginFactory::create_sendable),
+    /// an endpoint is already attached, or the L1 processing leg is
+    /// checked out.
+    ///
+    /// **Local-only** — a host-local topology fact that never carries
+    /// a wire encoding: [`crate::wire::encode`] /
+    /// [`crate::wire::encode_host_error`] reject it with
+    /// `Err(WireError::UnsupportedVariant)` instead of collapsing it
+    /// into `Ipc`/`Unsupported` (it is neither a transport failure
+    /// nor a plugin-declined operation). Returning it from a
+    /// [`Plugin`](crate::Plugin) hook inside an L1 child runner is a
+    /// contract violation — the defined outcome there is the
+    /// `UnsupportedVariant` rejection above plus the runner
+    /// terminating the child, so the host observes `Ipc`/`Failed`.
+    EndpointUnavailable,
 }
 
 impl fmt::Display for HostError {
@@ -162,6 +179,9 @@ impl fmt::Display for HostError {
             Self::Failed => f.write_str("instance is in the terminal failed state"),
             Self::Ipc => f.write_str("inter-process transport failed"),
             Self::DuplicatePluginId => f.write_str("plugin id already registered"),
+            Self::EndpointUnavailable => {
+                f.write_str("RT endpoint is unavailable for this instance")
+            }
         }
     }
 }

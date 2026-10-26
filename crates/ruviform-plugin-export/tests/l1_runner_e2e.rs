@@ -122,7 +122,7 @@ impl MiniHost {
     fn send(&mut self, message: &Message) {
         let stdin = self.stdin.as_mut().expect("stdin still open");
         let mut frame = Vec::new();
-        wire::encode(message, &mut frame);
+        wire::encode(message, &mut frame).expect("encode message");
         stdin.write_all(&frame).expect("write child stdin");
         stdin.flush().expect("flush child stdin");
     }

@@ -1,23 +1,46 @@
 ---
 id: "TASK-034MrsDzlHRpUHHLtYkZdN"
 type: "task"
-status: "todo"
+status: "done"
 title: "plugin-core endpoint 前提面（EndpointUnavailable・fallible encode・Send capability・view impl）"
 created: "2026-10-26"
 updated: "2026-10-26"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
     added: []
-    modified: []
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/boundary.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/plugin.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/processor.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-core/src/wire.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-export/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-export/tests/l1_runner_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/bin/l1-test-worker.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/l1/mod.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/plugin.rs"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-113-plugin-core-endpoint-primitives-task-1-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
   blocks: []
@@ -83,18 +106,20 @@ Plan actions 1–3。`ruviform-plugin-core` に Issue #113 全後続 task が使
 
 ## Done When
 
-- [ ] `HostError::EndpointUnavailable` が local-only variant として存在し、`Display` arm を持ち、wire 表現可能 variant リストに含まれない
-- [ ] `encode`/`encode_host_error` が `Result<(), WireError>` を返し、`Reply{Err(EndpointUnavailable)}` encode が `Err(UnsupportedVariant)` かつ `out` が `truncate(start)` で呼出し前に不変
-- [ ] `encode_reply` が infallible のまま — 全 `wire::encode` 呼出し inventory が `Result` 対応（4 call site: `l1/mod.rs` L421・`l1-test-worker.rs` L160・export `send` L794・`l1_runner_e2e.rs` `send` L125・wire.rs doctest 3 件・inline test helper — statement-position `unused_must_use` 残留なし）
-- [ ] `PluginFactory::create_sendable`（default `None`）と `erase_sendable` が存在し、Send fixture が `Box<dyn ErasedPlugin + Send>` を返す・非 Send 契約は変わらない（全域 bound なし）・`erase_sendable` が `ruviform-plugin-host` の `plugin.rs`→`lib.rs` pub-use 経路でも到達可能（`erase` と parity）
-- [ ] `AudioBufferView`/`AudioBufferViewMut` が `BufferView`/`BufferViewMut` を実装し、`channel(i)` の channel-major オフセットが単体テストで固定される
-- [ ] narrow gate（下記 Verification）が exit 0 — 既存 wire roundtrip/テストに無退行
+- [x] `HostError::EndpointUnavailable` が local-only variant として存在し、`Display` arm を持ち、wire 表現可能 variant リストに含まれない
+- [x] `encode`/`encode_host_error` が `Result<(), WireError>` を返し、`Reply{Err(EndpointUnavailable)}` encode が `Err(UnsupportedVariant)` かつ `out` が `truncate(start)` で呼出し前に不変
+- [x] `encode_reply` が infallible のまま — 全 `wire::encode` 呼出し inventory が `Result` 対応（4 call site: `l1/mod.rs` L421・`l1-test-worker.rs` L160・export `send` L794・`l1_runner_e2e.rs` `send` L125・wire.rs doctest 3 件・inline test helper — statement-position `unused_must_use` 残留なし）
+- [x] `PluginFactory::create_sendable`（default `None`）と `erase_sendable` が存在し、Send fixture が `Box<dyn ErasedPlugin + Send>` を返す・非 Send 契約は変わらない（全域 bound なし）・`erase_sendable` が `ruviform-plugin-host` の `plugin.rs`→`lib.rs` pub-use 経路でも到達可能（`erase` と parity）
+- [x] `AudioBufferView`/`AudioBufferViewMut` が `BufferView`/`BufferViewMut` を実装し、`channel(i)` の channel-major オフセットが単体テストで固定される
+- [x] narrow gate（下記 Verification）が exit 0 — 既存 wire roundtrip/テストに無退行
 
 ## Verification
 
-- [ ] `mise run check` — exit 0
-- [ ] `mise run lint` — exit 0
-- [ ] `mise run test` — exit 0（既存 wire roundtrip・host 側テストの無退行 + 新規単体テスト + wire.rs doctest 3 件の `Result` 対応）
-- [ ] `mise run test-plugin-core`（core 集中の既存レーン）— exit 0・`EndpointUnavailable` encode 拒否と `out` 不変を pin
-- [ ] `mise run lint-plugin-core`（core 集中 lint の既存レーン）— exit 0・`unused_must_use` 残留なし（call site/doctest/helper 全網羅の実証）
-- [ ] 対象 test-spec: `docs/test-specs/plugin-endpoint-contract-tests.md` — 規則「`EndpointUnavailable` は local-only variant」「defined 拒否表」の前提面（本 task では wire/型契約のみ — endpoint 機構自体は T2/T3/T6）
+- [x] `mise run check` — exit 0（`cargo check --workspace --all-targets`・実 log）
+- [x] `mise run lint` — exit 0（clippy `--all-targets -D warnings` clean）
+- [x] `mise run test` — exit 0（`cargo test --workspace` — **55 test binaries 全 pass**・既存 wire roundtrip/host 側テスト無退行 + 新規単体テスト + wire.rs doctest 3 件の `Result` 対応 — 初回実行で `l1_proxy_e2e::wedged_child_write_converges_and_teardown_is_bounded` が spawn `Err(Ipc)` で 1 度 flake（並列負荷下の handshake 競合・本 task 非起因 — 単独再実行と全量再実行の双方で pass））
+- [x] `mise run test-plugin-core`（core 集中の既存レーン）— exit 0（lib **67**・`video_contract` **8**・doctests **26**・compile-fail **2** = **103 pass** — `encode_rejects_endpoint_unavailable_and_restores_out` が `Err(UnsupportedVariant)` + `out` byte-identity + 後続 append 無傷を pin）
+- [x] `mise run lint-plugin-core`（core 集中 lint の既存レーン）— exit 0・`unused_must_use` 残留なし（call site 4 件 + doctest 3 件 + inline helper 全網羅の実証）
+- [x] 対象 test-spec: `docs/test-specs/plugin-endpoint-contract-tests.md` — 規則「`EndpointUnavailable` は local-only variant」「defined 拒否表」の前提面を実装（本 task は wire/型契約のみ — endpoint 機構自体は T2/T3/T6・test-spec の confirmed 更新は final verification で実施）
+
+補足（task doc の Verification 範囲外・IR に記録）: `mise run fmt-check` exit 0。`cargo doc` の shm doc table に pre-existing 警告 8 件（本 task 非起因・未対処 — follow-up 記録）。レビュー（A=APPROVE・B=APPROVE-WITH-FIXES）の確定修正 4 件（function-boundary rollback・doc drift・`create_sendable` 等価 doc・`EndpointUnavailable` L1-runner consequence doc）適用済み — 詳細は `docs/impl/ir/issue-113-plugin-core-endpoint-primitives-task-1-implementation.md`。

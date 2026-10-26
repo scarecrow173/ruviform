@@ -104,7 +104,9 @@ mod plugin;
 pub use command::{GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, PluginHandle};
 pub use composite::{ChildExit, HostNotification, OutOfProcessSpec, PluginHost};
 pub use host::InProcessHost;
-pub use plugin::{ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase};
+pub use plugin::{
+    ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
+};
 
 /// Returns the crate version string.
 ///

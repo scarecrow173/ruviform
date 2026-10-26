@@ -418,7 +418,7 @@ fn read_message(reader: &mut impl Read) -> io::Result<wire::Message> {
 /// Writes one framed message.
 fn write_message(writer: &mut impl Write, message: &wire::Message) -> io::Result<()> {
     let mut frame = Vec::new();
-    wire::encode(message, &mut frame);
+    wire::encode(message, &mut frame).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     writer.write_all(&frame)?;
     writer.flush()
 }

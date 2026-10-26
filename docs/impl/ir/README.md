@@ -75,3 +75,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034LVAYFtNda72goeeCUwD` | Issue #76 L1 shm data plane + RT legs — Task 4 implementation | completed | [issue-76-l1-shm-data-plane-task-4-implementation.md](./issue-76-l1-shm-data-plane-task-4-implementation.md) |
 | `IMPL-034LX97oTeWiGsXQQ4DYcH` | Issue #76 PluginHost composite + L1 E2E — Task 5 implementation | completed | [issue-76-plugin-host-composite-task-5-implementation.md](./issue-76-plugin-host-composite-task-5-implementation.md) |
 | `IMPL-034Map3xCZ4qfcYjTbEmx4` | Issue #76 プラグイン L1 分離 closeout — Task 7 implementation | completed | [issue-76-plugin-l1-closeout-task-7-implementation.md](./issue-76-plugin-l1-closeout-task-7-implementation.md) |
+| `IMPL-034MuVj3LeNgeJ60Yn4MvU` | Issue #113 plugin-core endpoint primitives — Task 1 implementation | completed | [issue-113-plugin-core-endpoint-primitives-task-1-implementation.md](./issue-113-plugin-core-endpoint-primitives-task-1-implementation.md) |

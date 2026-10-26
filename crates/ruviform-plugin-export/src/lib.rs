@@ -791,7 +791,7 @@ fn fill(input: &mut impl Read, buf: &mut [u8]) -> Result<Fill, ()> {
 /// reader sees it immediately.
 fn send(output: &mut impl Write, message: &Message, buf: &mut Vec<u8>) -> io::Result<()> {
     buf.clear();
-    wire::encode(message, buf);
+    wire::encode(message, buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     output.write_all(buf)?;
     output.flush()
 }

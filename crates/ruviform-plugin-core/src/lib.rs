@@ -15,10 +15,10 @@
 //! typed plain-parameter channel ([`PlainParamValue`],
 //! [`PlainParamInfo`], borrowed [`PluginDescriptorView`]), the
 //! plugin-side instance contracts ([`Plugin`], [`PluginFactory`],
-//! [`ErasedPlugin`], [`erase`], [`HostInput`], [`HostOutput`]), the
-//! shared host-boundary vocabulary ([`PluginHandle`], [`GuiHandle`],
-//! [`GuiParentToken`], [`HostError`]) and the L1 out-of-process wire
-//! codec ([`wire`]).
+//! [`ErasedPlugin`], [`erase`], [`erase_sendable`], [`HostInput`],
+//! [`HostOutput`]), the shared host-boundary vocabulary
+//! ([`PluginHandle`], [`GuiHandle`], [`GuiParentToken`],
+//! [`HostError`]) and the L1 out-of-process wire codec ([`wire`]).
 //!
 //! Standard-specific types and concepts — CLAP, VST3, and any
 //! binding-crate (`clack`, `vst3`, `clap-sys`, …) types — are
@@ -26,10 +26,17 @@
 //! standard adapters (`ruviform-plugin-clap` / `ruviform-plugin-vst3`)
 //! translate standard ABI data into these types and implement/drive
 //! [`PluginProcessor`]; they never define a processing contract of
-//! their own. The concrete per-channel borrowed planar views are
-//! `ruviform_audio_core::PlanarBufferView` / `PlanarBufferViewMut` —
-//! `process` stays generic over the [`BufferView`] contract so
-//! adapters may equally wrap host buffers in their own implementors.
+//! their own. The concrete per-channel borrowed views are
+//! `ruviform_audio_core::PlanarBufferView` / `PlanarBufferViewMut`
+//! (per-channel slice lists) and `ruviform_audio_core::AudioBufferView`
+//! / `AudioBufferViewMut` (channel-major slabs) — `process` stays
+//! generic over the [`BufferView`] contract so adapters may equally
+//! wrap host buffers in their own implementors. Factories that can
+//! hand a `Send` instance to a cross-thread RT endpoint opt in via
+//! [`PluginFactory::create_sendable`] (default `None`) and box it
+//! with [`erase_sendable`]; [`HostError::EndpointUnavailable`] is the
+//! local-only rejection for instances that cannot supply one — it
+//! never travels the wire.
 //!
 //! ## Allowed dependency layers
 //!
@@ -93,7 +100,9 @@ pub use event::{Event, EventKind, EventList, ParamEvent, sort_events_by_frame_of
 pub use lifecycle::{Lifecycle, LifecycleError, LifecycleEvent, LifecycleState};
 pub use param::{ParamFlags, ParamId, ParamInfo, ParamValue};
 pub use plain_param::{PlainParamInfo, PlainParamValue};
-pub use plugin::{ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase};
+pub use plugin::{
+    ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
+};
 pub use processor::{
     BufferView, BufferViewMut, PluginProcessor, PrepareError, ProcessConfig, ProcessContext,
     ProcessResult, ProcessStatus,

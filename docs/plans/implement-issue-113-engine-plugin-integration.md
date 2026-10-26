@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034MrrISpCH4LObubGof0Q"
 type: "plan"
-status: "approved"
+status: "in-progress"
 title: "Issue #113 実施計画 — エンジン/利用側へのプラグイン統合（RT endpoint 所有分離 + グラフ接着）"
 created: "2026-10-26"
 updated: "2026-10-26"
@@ -64,7 +64,7 @@ relations:
 
 # Issue #113 実施計画 — エンジン/利用側へのプラグイン統合（RT endpoint 所有分離 + グラフ接着） Implementation Plan
 
-> status: approved — Refs #113。approved design `docs/designs/engine-plugin-host-integration.md`（DESIGN-034Mclz5y96MrTg7R2BNCx・決定サマリ a–k）を正本とし、spec `docs/specs/engine-plugin-host-integration.md`（proposed・11 AC）と ADR `docs/adr/plugin-rt-ownership-split.md`（accepted・transferable RT endpoint + non-RT 制御所有分離）の確定分岐を実装する。本計画は planning artifact のみ — 実装・commit は lead が管理する。
+> status: in-progress — Refs #113。approved design `docs/designs/engine-plugin-host-integration.md`（DESIGN-034Mclz5y96MrTg7R2BNCx・決定サマリ a–k）を正本とし、spec `docs/specs/engine-plugin-host-integration.md`（proposed・11 AC）と ADR `docs/adr/plugin-rt-ownership-split.md`（accepted・transferable RT endpoint + non-RT 制御所有分離）の確定分岐を実装する。Task 1 (plugin-core-endpoint-primitives) 完了（actions 1–3・`HostError::EndpointUnavailable` local-only variant・`encode`/`encode_host_error` の `Result<(), WireError>` 化 + `encode_body` 抽出の function-boundary rollback（all-or-nothing append）・`create_sendable`/`erase_sendable` opt-in `Send` capability + host re-export parity・`AudioBufferView`/`AudioBufferViewMut` の `BufferView`/`BufferViewMut` impl・call site 4 件 + doctest 3 件の `Result` 対応・`fmt-check`/`check`/`lint`/`test` 55 binaries・`test-plugin-core` 103・`lint-plugin-core` 全 exit 0・独立 review 2 件 — A=APPROVE・B=APPROVE-WITH-FIXES・確定修正 4 件適用）。Task 2–7 未着手 — 全体完了を意味しない。**7 buildable task** と **3 test-spec** を起票済み（task は Task 1 `done`・残り `todo`・test-spec は全て `proposed`）。実装・commit は lead が管理し、GitHub merge は lead の authoritative `gh` のみ — 本計画は PR merged / issue closed の主張を含まない。
 
 ## Goal
 
