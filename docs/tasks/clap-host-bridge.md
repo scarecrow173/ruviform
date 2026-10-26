@@ -1,23 +1,32 @@
 ---
 id: "TASK-034MLSwRAMOjT59ZH5kQFn"
 type: "task"
-status: "todo"
+status: "done"
 title: "CLAP host bridge（host feature・ClapLibrary/descriptor+param 合成・intern-once・lifecycle/params/error 写像・ClapPluginFactory）"
 created: "2026-10-26"
 updated: "2026-10-27"
-owners: []
+owners: ["scarecrow173"]
 relations:
   source: []
   changes:
-    added: []
-    modified: []
+    added:
+      - type: "file"
+        path: "crates/ruviform-plugin-clap/src/host.rs"
+    modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-clap/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-plugin-clap/src/lib.rs"
+      - type: "file"
+        path: "Cargo.lock"
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
     - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-114-clap-host-bridge-task-1-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
   blocks: []
@@ -83,20 +92,22 @@ Plan actions 1–4。`ruviform-plugin-clap` に feature `host` で feature-seale
 
 ## Done When
 
-- [ ] `[features] host` が定義され、`cargo build -p ruviform-plugin-clap --features host` が通る（`clack-host`/`ruviform-plugin-export`/`clack-extensions/clack-host` が `host` 指定時のみ dep 木に出現 — `cargo tree` で `host` off 時に新規 dep が non-optional 木に出ないことを確認）
-- [ ] `ClapLibrary::load` が fixture cdylib を `PluginEntry::load` で開き、`descriptors()` が load 時 scan の cached `PluginDescriptor` を返す（`id`/`name`/`vendor`/`version`/`features` 全 field・`features` 順序保持・intern-once）
-- [ ] `ClapPluginFactory::descriptor()` が cached 値・`create()` が `ClapPlugin` を返し、`create_sendable` が default `None`
-- [ ] `ClapPlugin` が `init`（`PluginInstance::new`）/`prepare`（`activate` — `StoppedPluginAudioProcessor` 戻り値を field 格納 + input scratch・`AudioPorts`/`EventBuffer`/`OutputEvents` persistent buffer を `prepare` で一括確保）/`start_processing`/`stop_processing`/`process_host`（input bounce copy-in・`from_raw_buffers` const-cast 不採用・`steady_time`/`transport` = `None`/`None` defined boundary）/`params`（factory 構築時 eager 列挙の cached 表を pre-`init` を含む全 lifecycle で返す）を中立動詞に写像し、`Drop` で best-effort `stop_processing`→`deactivate`→destroy を駆動、`save_state`/`restore_state`/`open_gui`/`close_gui` が `Err(Unsupported)` 既定
-- [ ] `BridgeHandlers::declare_extensions` が `HostThreadCheck` を登録しない（fixture `None` fallback 維持）
-- [ ] unit test が `--features host` で pass — descriptor/param 既知値・`descriptors()` 複数回同一性・error 写像・fixture 欠落 `assert!` fail
-- [ ] narrow gate（下記 Verification）が exit 0 — `cargo test`/`clippy`/`check`/`lint`/`test` で default 構成不変グリーン
+- [x] `[features] host` が定義され、`cargo build -p ruviform-plugin-clap --features host` が通る（`clack-host`/`ruviform-plugin-export`/`clack-extensions/clack-host` が `host` 指定時のみ dep 木に出現 — `cargo tree` で `host` off 時に新規 dep が non-optional 木に出ないことを確認）
+- [x] `ClapLibrary::load` が fixture cdylib を `PluginEntry::load` で開き、`descriptors()` が load 時 scan の cached `PluginDescriptor` を返す（`id`/`name`/`vendor`/`version`/`features` 全 field・`features` 順序保持・intern-once）
+- [x] `ClapPluginFactory::descriptor()` が cached 値・`create()` が `ClapPlugin` を返し、`create_sendable` が default `None`
+- [x] `ClapPlugin` が `init`（`PluginInstance::new`）/`prepare`（`activate` — `StoppedPluginAudioProcessor` 戻り値を field 格納 + input scratch・`AudioPorts`/`EventBuffer`/`OutputEvents` persistent buffer を `prepare` で一括確保）/`start_processing`/`stop_processing`/`process_host`（input bounce copy-in・`from_raw_buffers` const-cast 不採用・`steady_time`/`transport` = `None`/`None` defined boundary）/`params`（factory 構築時 eager 列挙の cached 表を pre-`init` を含む全 lifecycle で返す）を中立動詞に写像し、`Drop` で best-effort `stop_processing`→`deactivate`→destroy を駆動、`save_state`/`restore_state`/`open_gui`/`close_gui` が `Err(Unsupported)` 既定
+- [x] `BridgeHandlers::declare_extensions` が `HostThreadCheck` を登録しない（fixture `None` fallback 維持）
+- [x] unit test が `--features host` で pass — descriptor/param 既知値・`descriptors()` 複数回同一性・error 写像・fixture 欠落 `assert!` fail
+- [x] narrow gate（下記 Verification）が exit 0 — `cargo test`/`clippy`/`check`/`lint`/`test` で default 構成不変グリーン
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-clap --features host` — exit 0（bridge unit test + `load_from_clack` typed-entry test + 既存 unit test 無退行）
-- [ ] `cargo clippy -p ruviform-plugin-clap --all-targets --features host -- -D warnings` — exit 0（host feature の scoped `#[expect(unsafe_code)]` + SAFETY 箇所のみ・0 warning）
-- [ ] `mise run check` — exit 0（`cargo check --workspace --all-targets` — `host` 未指定で `host.rs` 非 compile・default 構成不変）
-- [ ] `mise run lint` — exit 0（`cargo clippy --workspace --all-targets -D warnings` — `host` 未指定の default 木で無退行）
-- [ ] `mise run test` — exit 0（`cargo test --workspace` — `host` 未指定の default 木で無退行・`l1_real_adapter_e2e.rs` は `#![cfg]` で空）
-- [ ] `cargo tree -p ruviform-plugin-clap` — `clack-host`/`libloading`/`ruviform-plugin-export` が `host` off で non-optional 木に出ない・`clack-extensions` は既存 non-optional のまま
-- [ ] `cargo tree -p ruviform-plugin-clap --features host` — `clack-host`/`libloading`/`ruviform-plugin-export`/`clack-extensions/clack-host` が `host` 指定時のみ出現
+- [x] `cargo test -p ruviform-plugin-clap --features host` — exit 0（bridge unit test + `load_from_clack` typed-entry test + 既存 unit test 無退行）
+- [x] `cargo clippy -p ruviform-plugin-clap --all-targets --features host -- -D warnings` — exit 0（host feature の scoped `#[expect(unsafe_code)]` + SAFETY 箇所のみ・0 warning）
+- [x] `mise run check` — exit 0（`cargo check --workspace --all-targets` — `host` 未指定で `host.rs` 非 compile・default 構成不変）
+- [x] `mise run lint` — exit 0（`cargo clippy --workspace --all-targets -D warnings` — `host` 未指定の default 木で無退行）
+- [x] `mise run test` — exit 0（`cargo test --workspace` — `host` 未指定の default 木で無退行・`l1_real_adapter_e2e.rs` は `#![cfg]` で空）
+- [x] `cargo tree -p ruviform-plugin-clap` — `clack-host`/`libloading`/`ruviform-plugin-export` が `host` off で non-optional 木に出ない・`clack-extensions` は既存 non-optional のまま
+- [x] `cargo tree -p ruviform-plugin-clap --features host` — `clack-host`/`libloading`/`ruviform-plugin-export`/`clack-extensions/clack-host` が `host` 指定時のみ出現
+
+補足（task doc の Verification 範囲外・IR に記録）: `mise run fmt-check` exit 0・`cargo doc` 0 warning・bridge unit test 17 件（rt_ test `rt_process_drives_fixture_block_allocation_free` 含む — Issue #22 `assert_no_alloc` 検証レーン）+ crate 全体で 63 unit test pass。敵対的レビュー 1 ラウンドの確定修正 7 件（`OutputEvents::void()` RT-alloc hole・opaque error payload・prepare ordering・`min_frames` floor・load-hoisted param tables・count caps・rt_ test）適用済み + output 側も bounce 採用の deviation（`&mut dyn BufferViewMut` の単一 borrow 制約 — task doc の直接 alias 許容から変更・unsafe 境界を `PluginEntry::load` 1 箇所に保持）— 詳細は `docs/impl/ir/issue-114-clap-host-bridge-task-1-implementation.md`。
