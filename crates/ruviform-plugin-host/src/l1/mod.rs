@@ -29,7 +29,7 @@
 //!
 //! | thread | owns | duties |
 //! | --- | --- | --- |
-//! | `driver` | `Shared.child` (`Mutex<Child>` — operated only here, but shared so a converging thread can `kill` a wedged child even while this thread is blocked in `write_all`) · child stdin | serializes outgoing frames · drains the data-plane `submit` channel (dropping stale-generation seqs): each popped seq becomes a shm in-slot write + `BlockIn` doorbell · `try_wait` crash watch every [`DRIVER_POLL_INTERVAL`] · shutdown watchdog (grace → `child.kill()`) |
+//! | `driver` | `Shared.child` (`Mutex<Child>` — operated only here, but shared so a converging thread can `kill` a wedged child even while this thread is blocked in `write_all`) · child stdin | serializes outgoing frames · drains the data-plane `submit` channel (stale-generation or post-terminal seqs are dropped *with a synthesized `mark_failed` result* through the shared `result_tx` so the leg's alternation gate never wedges): each doorbell'd seq becomes a shm in-slot write + `BlockIn` · `try_wait` crash watch every [`DRIVER_POLL_INTERVAL`] · shutdown watchdog (grace → `child.kill()`) |
 //! | `reader` | child stdout | demuxes child→parent frames (unflagged `Reply` → keyed waiter wake · flagged `Reply` → `mark_failed` block completion · `BlockDone` → shm out-slot read + result-channel push) · first frame must be `Hello` · EOF → `seen_eof` convergence path |
 //!
 //! The caller thread never performs blocking pipe I/O except the
@@ -41,7 +41,9 @@
 //! acquiring the other, so no cross-lock deadlock exists. `child`
 //! sections stay tiny (one `try_wait`/`kill`/`wait` call; `reap`
 //! re-acquires per poll) so a converging `kill` never queues behind
-//! a long hold.
+//! a long hold. `Shared.result_tx` — the result-channel producer
+//! shared by both I/O threads — is a leaf mutex held for a single
+//! bounded `try_push` and never nested inside `inner`/`child`.
 //!
 //! ## `Failed` convergence
 //!
@@ -81,7 +83,7 @@ use std::time::{Duration, Instant};
 use ruviform_plugin_core::wire::{self, WIRE_FRAME_HEADER_LEN, WIRE_MAX_PAYLOAD};
 use ruviform_plugin_core::{
     EventList, HostError, HostInput, HostOutput, LifecycleState, PluginDescriptor, PrepareError,
-    ProcessResult, TransportInfo,
+    ProcessConfig, ProcessResult, TransportInfo,
 };
 
 /// The driver's crash-watch and command-drain poll interval
@@ -251,9 +253,10 @@ struct Shared {
     /// The const-cheap lifecycle snapshot the RT leg inspects —
     /// written with `Release` by [`Shared::set_mirror`] at every
     /// `Inner::mirror` mutation, read lock-free with `Acquire` by
-    /// `L1Instance::process`. Fails closed: the RT leg never needs
-    /// the mutex.
-    rt_state: AtomicU8,
+    /// `L1Instance::process`. `Arc` so a detached endpoint holds
+    /// the same atomic and observes identical mirror updates.
+    /// Fails closed: the RT leg never needs the mutex.
+    rt_state: Arc<AtomicU8>,
     /// The spawned child, installed by the driver immediately after
     /// `spawn` and before `driver_main` runs. Shared so any
     /// converging thread can `kill()` a wedged child even while the
@@ -265,6 +268,20 @@ struct Shared {
     /// disjoint (see module docs) — no deadlock between the two.
     child: OnceLock<Mutex<Child>>,
     notify_tx: mpsc::Sender<ChildExit>,
+    /// The result-channel producer — shared because *two* non-RT
+    /// threads complete seqs: the reader pushes real `BlockDone`/
+    /// rejection completions, and the driver pushes a synthesized
+    /// `mark_failed` completion for every `submit` it drops without
+    /// a doorbell (a stale-generation or post-terminal seq never
+    /// enters `block_in_flight`, so it can never produce a real
+    /// result — and an unanswered seq wedges its slot's
+    /// strict-alternation gate forever). `Producer` is
+    /// single-owner, hence the `Mutex`: both lockers are non-RT
+    /// threads and the critical section is a single bounded
+    /// `try_push`. A leaf lock — never held while acquiring
+    /// `inner` or `child` — so the disjoint-sections rule in the
+    /// module docs is preserved.
+    result_tx: Mutex<ruviform_rt::Producer<u64>>,
 }
 
 impl Shared {
@@ -293,6 +310,22 @@ impl Shared {
         inner.mirror = state;
         self.rt_state
             .store(data::mirror_encode(state), Ordering::Release);
+    }
+
+    /// Pushes one element onto the RT leg's result channel — the
+    /// shared-producer entry point both I/O threads use (the reader
+    /// for real completions, the driver for synthesized
+    /// `mark_failed` completions on doorbell-less drops). Channel
+    /// capacity is `D` and at most `D` seqs are ever in flight —
+    /// each yields exactly one completion element — so `try_push`
+    /// cannot overflow in-protocol; a `Full` is tolerated like the
+    /// reader's own pushes. Poison-tolerant like [`Shared::lock`].
+    fn push_result(&self, el: u64) {
+        let _ = self
+            .result_tx
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .try_push(el);
     }
 }
 
@@ -451,11 +484,13 @@ fn spawn_child(command: &mut ProcCommand) -> Result<(Child, ChildStdin, ChildStd
 /// `view` is this thread's own shm mapping (the `Shmem` handle is
 /// `!Send`, so each I/O thread opens the owner `Segment`'s key
 /// locally); `in_depth`/`out_depth` are the spawn-time ring sizes.
+/// Result pushes go through the shared [`Shared::result_tx`]
+/// producer — the driver completes dropped seqs on the same
+/// channel.
 fn reader_main(
     mut stdout: ChildStdout,
     shared: &Shared,
     hello_tx: &mpsc::Sender<Result<u16, ()>>,
-    mut result_tx: ruviform_rt::Producer<u64>,
     view: &shm::View,
     in_depth: u32,
     out_depth: u32,
@@ -482,10 +517,10 @@ fn reader_main(
                     return;
                 }
                 // Channel capacity is `depth` and at most `depth`
-                // doorbells are ever in flight — `try_push` cannot
+                // seqs are ever in flight — `try_push` cannot
                 // overflow; a full push means the RT side already
                 // drained past this seq, which is equally harmless.
-                let _ = result_tx.try_push(data::mark_failed(seq));
+                shared.push_result(data::mark_failed(seq));
             }
             Ok(wire::Message::Reply { seq, result }) => {
                 let waiter = shared.lock().waiters.remove(&seq);
@@ -526,7 +561,7 @@ fn reader_main(
                     // the RT leg's tag check fails closed; the done
                     // still completes the alternation either way.
                 }
-                let _ = result_tx.try_push(seq);
+                shared.push_result(seq);
             }
             Ok(_) => {
                 // `Hello` twice or a parent→child kind arriving
@@ -661,16 +696,17 @@ fn driver_main(
         }
         // Data plane: every seq the RT caller submitted becomes an
         // in-slot write plus a `BlockIn` doorbell — bounded by the
-        // channel capacity, never blocking on the RT side.
+        // channel capacity, never blocking on the RT side. A seq
+        // that is dropped instead (stale generation, dead or
+        // shutting-down child) still owes the leg a completion —
+        // the synthesized `mark_failed` below.
         while let Ok(submit) = submit.try_pop() {
             let seq = submit.seq;
             let staging = {
                 let mut inner = shared.lock();
                 if inner.terminal.is_some() || inner.shutdown_initiated {
                     // A dead or shutting-down child takes no new
-                    // doorbells — the seq is consumed, its result
-                    // simply never arrives (the RT leg passes
-                    // through).
+                    // doorbells — the seq is consumed here.
                     None
                 } else {
                     let staging = data::armed_for(inner.staging.as_ref(), submit);
@@ -685,13 +721,22 @@ fn driver_main(
                     // re-activation swapped `inner.staging`, so
                     // serializing it would doorbell the new ring's
                     // zeroed stage under a real seq. Dropped without
-                    // a doorbell: `block_in_flight` never sees it and
-                    // the RT leg resolves the absent result as
-                    // pass-through.
+                    // a doorbell: `block_in_flight` never sees it.
                     staging
                 }
             };
             let Some(staging) = staging else {
+                // A dropped seq was never doorbell'd — no shm write
+                // happened, so no out-slot race exists — but the leg
+                // still waits on a completion to clear the slot's
+                // alternation gate (`cleared[i] >= last_pushed[i]`).
+                // Left unanswered it would wedge the slot (then the
+                // whole ring) forever: a fully-synced leg passing
+                // through 100%. Synthesize the `mark_failed`
+                // completion — one seq, exactly one element — so the
+                // normal `drain_to` path frees the slot and resolves
+                // the block as the defined pass-through.
+                shared.push_result(data::mark_failed(seq));
                 continue;
             };
             let slot = usize::try_from(seq % u64::from(in_depth)).expect("slot index fits usize");
@@ -824,11 +869,11 @@ fn spawn_driver(
 
 /// Spawns the `l1-reader` thread: attaches its own shm `View` by key
 /// *before* `Hello` so a broken data plane fails the spawn rather than
-/// the first `BlockDone`, then runs [`reader_main`].
+/// the first `BlockDone`, then runs [`reader_main`]. Result pushes go
+/// through the shared [`Shared::result_tx`] producer.
 fn spawn_reader(
     shared: &Arc<Shared>,
     stdout: ChildStdout,
-    result_tx: ruviform_rt::Producer<u64>,
     shm_key: String,
     depth: u32,
 ) -> Result<(thread::JoinHandle<()>, HelloRx), HostError> {
@@ -842,15 +887,7 @@ fn spawn_reader(
                 converge(&reader_shared, None);
                 return;
             };
-            reader_main(
-                stdout,
-                &reader_shared,
-                &hello_tx,
-                result_tx,
-                &view,
-                depth,
-                depth,
-            );
+            reader_main(stdout, &reader_shared, &hello_tx, &view, depth, depth);
         })
         .map_err(|_| HostError::Ipc)?;
     Ok((join, hello_rx))
@@ -881,11 +918,50 @@ pub(crate) struct L1Instance {
     depth: u32,
     /// The RT leg: caller-thread end of the data plane (submit
     /// producer, result consumer, staging, pass-through history).
-    rt: data::RtLeg,
+    /// `None` while an endpoint has it checked out — the
+    /// authoritative "endpoint attached" fact. The bookkeeping
+    /// fields below are per-attach and cleared by the non-RT
+    /// [`L1Instance::drain_endpoint_channels`] once a restored leg
+    /// is home (a wait-free `process`-path restore leaves them in
+    /// place), but `rt` presence is what `process`/
+    /// `prepare_endpoint`/`execute`'s bound gate key on.
+    rt: Option<data::RtLeg>,
     /// Counts successful `Activate`s — stamped onto each new
     /// [`data::Staging`] ring so the driver can drop `submit`s
     /// queued under a superseded ring (see [`data::Submit`]).
     staging_generation: u64,
+    /// Producer half of the per-attach arm channel (capacity 2) —
+    /// `Some` exactly while an endpoint holds the leg. Successful
+    /// `Activate`s and the pending-arm resend push
+    /// `Arc<data::Staging>` through it; the endpoint's `process`
+    /// drains the consumer half.
+    arm_tx: Option<ruviform_rt::Producer<Arc<data::Staging>>>,
+    /// Latest-wins slot for an `Arc<data::Staging>` that did not
+    /// fit a full arm channel — re-sent (`try_push`) at the top of
+    /// every mutable entry point; `None` when nothing is owed.
+    /// `Full` is a no-op: the endpoint holds an at-least-as-new
+    /// ring already delivered or in flight.
+    pending_arm: Option<Arc<data::Staging>>,
+    /// Consumer half of the leg-return channel (capacity 1) —
+    /// `L1Endpoint::drop` pushes the checked-out leg here and the
+    /// next mutable entry point's drain restores it into `rt`.
+    return_rx: Option<ruviform_rt::Consumer<data::RtLeg>>,
+    /// Drains the `Retirer` the endpoint pushes drained arms
+    /// (applied or stale) and displaced rings into — the
+    /// destructor work stays on the non-RT side. Drained on every
+    /// mutable entry point that is allowed to run destructors —
+    /// never inside `process`.
+    arm_collector: Option<ruviform_rt::DropCollector<Arc<data::Staging>>>,
+    /// The `(max_frames, channels)` bound this attach promised the
+    /// endpoint — a re-`Activate` above `bound.0` while the leg is
+    /// detached is `Err(Prepare(UnsupportedConfig))`, so the ring
+    /// the endpoint's `last_output` was sized for is never
+    /// outgrown.
+    endpoint_bound: Option<(u32, u32)>,
+    /// Sample rate of the last successful `Activate` — the
+    /// composite reads it to size the endpoint input scratch.
+    /// `Some` exactly when a staging ring is armed.
+    activated_sample_rate: Option<u32>,
     /// The named shm segment — owner-side lifecycle anchor (kept
     /// alive so the child and the I/O threads' `View`s can attach;
     /// it unlinks when the instance drops). RAII-only — never read.
@@ -951,9 +1027,10 @@ impl L1Instance {
                 seen_eof: false,
                 notify: Notify::Idle,
             }),
-            rt_state: AtomicU8::new(data::mirror_encode(LifecycleState::Created)),
+            rt_state: Arc::new(AtomicU8::new(data::mirror_encode(LifecycleState::Created))),
             child: OnceLock::new(),
             notify_tx,
+            result_tx: Mutex::new(result_tx),
         });
         // `Shmem` is `!Send` — each I/O thread opens its own `View`
         // of the owner segment by key on its own stack frame.
@@ -974,8 +1051,7 @@ impl L1Instance {
             let _ = driver_join.join();
             return Err(HostError::Ipc);
         };
-        let reader_spawn =
-            spawn_reader(&shared, stdout, result_tx, segment.key().to_owned(), depth);
+        let reader_spawn = spawn_reader(&shared, stdout, segment.key().to_owned(), depth);
         let (reader_join, hello_rx) = match reader_spawn {
             Ok(pair) => pair,
             Err(error) => {
@@ -999,8 +1075,19 @@ impl L1Instance {
             command_timeout: spec.command_timeout,
             next_seq: AtomicU64::new(0),
             depth,
-            rt: data::RtLeg::new(depth, spec.lookahead_blocks, submit_tx, result_rx),
+            rt: Some(data::RtLeg::new(
+                depth,
+                spec.lookahead_blocks,
+                submit_tx,
+                result_rx,
+            )),
             staging_generation: 0,
+            arm_tx: None,
+            pending_arm: None,
+            return_rx: None,
+            arm_collector: None,
+            endpoint_bound: None,
+            activated_sample_rate: None,
             segment,
         };
         match instance.handshake(spec, &hello_rx) {
@@ -1052,6 +1139,10 @@ impl L1Instance {
     ///
     /// **RT contract:** non-RT only — waits at most `command_timeout`.
     pub(crate) fn execute(&mut self, cmd: wire::Command) -> Result<wire::Reply, HostError> {
+        // The non-RT entry-point drain — collects a returned leg,
+        // re-sends `pending_arm` and drains the arm
+        // `DropCollector` before any command work.
+        self.drain_endpoint_channels();
         {
             let inner = self.shared.lock();
             match inner.terminal {
@@ -1072,13 +1163,25 @@ impl L1Instance {
             }
             _ => {}
         }
+        // The re-`Activate` bound gate: while the leg is detached
+        // (`self.rt.is_none()` — the authoritative attached fact)
+        // the endpoint's scratch contract is fixed, so a new
+        // activation above the attach bound is rejected before the
+        // command reaches the wire.
+        if let wire::Command::Activate { config } = &cmd
+            && self.rt.is_none()
+            && let Some((bound_max_frames, _)) = self.endpoint_bound
+            && config.max_frames() > bound_max_frames
+        {
+            return Err(HostError::Prepare(PrepareError::UnsupportedConfig));
+        }
         let post = post_command_state(&cmd);
         // The mirror state an `Err` reply still leaves behind —
         // `Some` only for `StopProcessing` (see
         // `err_committed_state`).
         let on_err = err_committed_state(&cmd);
-        let activate_frames = match &cmd {
-            wire::Command::Activate { config } => Some(config.max_frames()),
+        let activate_config = match &cmd {
+            wire::Command::Activate { config } => Some(*config),
             _ => None,
         };
         let result = self.request(cmd);
@@ -1113,7 +1216,7 @@ impl L1Instance {
             }
         }
         let reply = result?;
-        if let Some(frames) = activate_frames {
+        if let Some(config) = activate_config {
             // A successful `Activate` arms the data plane: build the
             // staging ring (non-RT allocation) and publish it to the
             // I/O threads plus the RT leg in one step. A concurrent
@@ -1123,13 +1226,33 @@ impl L1Instance {
             self.staging_generation += 1;
             let staging = Arc::new(data::Staging::new(
                 self.depth,
-                frames,
+                config.max_frames(),
                 self.staging_generation,
             ));
-            self.shared.lock().staging = Some(Arc::clone(&staging));
-            self.rt.arm(staging);
+            self.arm_staging(staging, config);
         }
         Ok(reply)
+    }
+
+    /// Publishes a freshly activated staging ring: `Inner::staging`
+    /// for the I/O threads, then the RT consumer — `RtLeg::arm`
+    /// when the leg is local, the arm channel while an endpoint
+    /// holds it (`pending_arm` latest-wins on `Full`). Also records
+    /// the activation's sample rate for endpoint scratch sizing.
+    fn arm_staging(&mut self, staging: Arc<data::Staging>, config: ProcessConfig) {
+        self.shared.lock().staging = Some(Arc::clone(&staging));
+        self.activated_sample_rate = Some(config.sample_rate().get());
+        match (&mut self.rt, &mut self.arm_tx) {
+            (Some(rt), _) => rt.arm(staging),
+            (None, Some(arm_tx)) => {
+                if let Err(ruviform_rt::TryPushError::Full(arm)) = arm_tx.try_push(staging) {
+                    // Latest-wins: the ring this displaced is
+                    // superseded before the endpoint could see it.
+                    self.pending_arm = Some(arm);
+                }
+            }
+            (None, None) => {}
+        }
     }
 
     /// Registers the waiter, queues the frame and waits — the part of
@@ -1185,6 +1308,12 @@ impl L1Instance {
     /// **RT contract:** non-RT only — bounded by `command_timeout`
     /// of shutdown grace plus the kill guarantee.
     pub(crate) fn destroy(&mut self) {
+        // Teardown drains like every non-RT `&mut` entry point —
+        // bounded `try_*` ops only, never a wait on endpoint
+        // liveness. A live endpoint's leg simply lands in the
+        // return channel after this point and is dropped when the
+        // channel's last consumer goes away.
+        self.drain_endpoint_channels();
         let failed = {
             let inner = self.shared.lock();
             inner.mirror.is_failed() || matches!(inner.terminal, Some(Terminal::Failed))
@@ -1245,7 +1374,13 @@ impl L1Instance {
     ///
     /// **RT contract:** RT-suitable — atomic staging writes and
     /// `try_push`/`try_pop` only; no locks, no pipes, no shm, no
-    /// allocation (the `rt_l1_*` contract tests assert this).
+    /// allocation (the `rt_l1_*` contract tests assert this). The
+    /// endpoint-channel drain that runs here is the wait-free half
+    /// only — resend + leg restore — and it runs no destructors at
+    /// all: a restored leg keeps its stale per-attach channel ends
+    /// until the next non-RT drain (`clear_endpoint_fields` drops
+    /// the rtrb rings and runs `Arc<Staging>` destructors), and
+    /// there is no `DropCollector::drain` either.
     pub(crate) fn process(
         &mut self,
         inputs: &[HostInput<'_>],
@@ -1253,8 +1388,303 @@ impl L1Instance {
         events: EventList<'_>,
         transport: Option<TransportInfo>,
     ) -> Result<ProcessResult, HostError> {
+        // The wait-free drain half runs ahead of the detached
+        // early-return so a returned leg is always collected — it
+        // runs no destructors at all (the restore leaves the stale
+        // channel ends for the non-RT drain, and the
+        // `arm_collector` destructor drain stays out too).
+        self.drain_endpoint_channels_wait_free();
+        let Some(rt) = self.rt.as_mut() else {
+            // The leg is checked out to an endpoint — the defined
+            // `EndpointUnavailable` (not `Ipc`): the processing
+            // surface moved; this is not a wire failure.
+            return Err(HostError::EndpointUnavailable);
+        };
         let mirror = data::mirror_decode(self.shared.rt_state.load(Ordering::Acquire));
-        self.rt.process(mirror, inputs, outputs, events, transport)
+        rt.process(mirror, inputs, outputs, events, transport)
+    }
+
+    /// Checks the RT leg out for a detached endpoint — the L1 half
+    /// of `attach_endpoint` the composite wires (Issue #113 task 3;
+    /// the public `PluginHost::prepare_endpoint` surface is T4).
+    ///
+    /// Defined rejections, in the pinned order:
+    /// 1. **lifecycle/state** — `Failed` → `Err(HostError::Failed)`;
+    ///    anything before `Activated` → `Err(Lifecycle)` (an
+    ///    endpoint exists only for a processing surface). A second
+    ///    attach while the leg is already checked out →
+    ///    `Err(EndpointUnavailable)` (the single-endpoint rule —
+    ///    `rt.is_none()` is authoritative).
+    /// 2. **bounds, before the take** — `bound_max_frames`/
+    ///    `bound_channels` must be non-zero and within
+    ///    [`wire::WIRE_MAX_FRAMES`]/[`wire::WIRE_MAX_CHANNELS`], and
+    ///    `bound_max_frames` must cover the currently armed ring —
+    ///    `Err(Prepare(UnsupportedConfig))`. Nothing moves.
+    /// 3. **leg extraction** — `self.rt.take()`. From here every
+    ///    fallible step would have to restore `self.rt = Some(leg)`
+    ///    before returning so a rejected attach leaves the instance
+    ///    attachable/processable — the helper carries that contract.
+    /// 4. channel mint + seed + reserve + bookkeeping — today all
+    ///    infallible; see [`L1Instance::endpoint_channel_setup`].
+    ///
+    /// The returned [`data::EndpointLegParts`] own only the RT leg
+    /// and endpoint-side channel ends — the endpoint never sees the
+    /// child, shm segment, `Shared` mutex or I/O threads.
+    ///
+    /// **RT contract:** non-RT only — channel minting and the
+    /// `last_output` reserve allocate.
+    #[cfg_attr(not(test), expect(dead_code))]
+    pub(crate) fn prepare_endpoint(
+        &mut self,
+        bound_max_frames: u32,
+        bound_channels: u32,
+    ) -> Result<data::EndpointLegParts, HostError> {
+        self.drain_endpoint_channels();
+        // (1) lifecycle/state — before anything moves.
+        {
+            let inner = self.shared.lock();
+            match inner.mirror {
+                LifecycleState::Activated | LifecycleState::Processing => {}
+                LifecycleState::Failed => return Err(HostError::Failed),
+                state => {
+                    return Err(HostError::Lifecycle(
+                        ruviform_plugin_core::LifecycleError::IllegalTransition {
+                            from: state,
+                            event: ruviform_plugin_core::LifecycleEvent::Process,
+                        },
+                    ));
+                }
+            }
+        }
+        if self.rt.is_none() {
+            return Err(HostError::EndpointUnavailable);
+        }
+        // (2) bounds — checked *before* the leg moves so a rejected
+        // attach leaves everything exactly as found.
+        let armed_frames = self
+            .shared
+            .lock()
+            .staging
+            .as_ref()
+            .map_or(0, |staging| staging.frame_capacity);
+        if bound_max_frames == 0
+            || bound_channels == 0
+            || bound_max_frames > wire::WIRE_MAX_FRAMES
+            || bound_channels > wire::WIRE_MAX_CHANNELS
+            || (bound_max_frames as usize) < armed_frames
+        {
+            return Err(HostError::Prepare(PrepareError::UnsupportedConfig));
+        }
+        // (3) leg extraction — post-take `Err` paths restore it.
+        // Today the helper is infallible, but the contract stands:
+        // any future fallible step must restore `self.rt =
+        // Some(leg)` and clear the per-attach fields before
+        // returning so a rejected attach leaves the instance
+        // attachable/processable.
+        let leg = self.rt.take().expect("presence checked above");
+        Ok(self.endpoint_channel_setup(leg, bound_max_frames, bound_channels))
+    }
+
+    /// The post-take half of [`L1Instance::prepare_endpoint`] —
+    /// steps (4)–(8) of the pinned order:
+    /// 4. mint the per-attach channels: arm capacity 2, arm retirer
+    ///    capacity 4, leg-return capacity 1;
+    /// 5. seed arm — the current `Inner::staging` clone. The
+    ///    endpoint applies it only when its generation is newer
+    ///    than the leg's armed ring (the detached-`Activate`
+    ///    self-repair); the same-generation normal path is a
+    ///    normalized no-op retired unapplied;
+    /// 6. `last_output` pre-reserve to `bound.max_frames ×
+    ///    WIRE_MAX_CHANNELS` so `RtLeg::arm_apply`'s `resize` always
+    ///    fits inside capacity and never reallocs on the RT path;
+    /// 7. bookkeeping — the per-attach fields a returned leg's
+    ///    restore (`drain_endpoint_channels`) resets;
+    /// 8. assemble [`data::EndpointLegParts`] — the leg plus the
+    ///    endpoint-side channel ends and mirror — for
+    ///    `crate::endpoint::L1Endpoint`.
+    ///
+    /// Infallible today: channel minting, the seed push, the
+    /// reserve and bookkeeping cannot fail — see the caller for
+    /// the post-take restore contract any future `Err` must honor.
+    #[cfg_attr(not(test), expect(dead_code))]
+    fn endpoint_channel_setup(
+        &mut self,
+        mut leg: data::RtLeg,
+        bound_max_frames: u32,
+        bound_channels: u32,
+    ) -> data::EndpointLegParts {
+        let (mut arm_tx, arm_rx) = ruviform_rt::channel::<Arc<data::Staging>>(2);
+        let (arm_retirer, arm_collector) = ruviform_rt::retire_channel::<Arc<data::Staging>>(4);
+        let (return_tx, return_rx) = ruviform_rt::channel::<data::RtLeg>(1);
+        // (5) seed arm — `Inner::staging` clone, same generation as
+        // the leg's armed ring in the normal path (a normalized
+        // no-op for the endpoint drain), legitimately newer after a
+        // detached `Activate`.
+        if let Some(staging) = self.shared.lock().staging.clone() {
+            let _ = arm_tx.try_push(staging);
+        }
+        // (6) the `last_output` reserve — see the method docs.
+        leg.reserve_last_output(bound_max_frames as usize * wire::WIRE_MAX_CHANNELS as usize);
+        // (7) bookkeeping.
+        self.arm_tx = Some(arm_tx);
+        self.pending_arm = None;
+        self.return_rx = Some(return_rx);
+        self.arm_collector = Some(arm_collector);
+        self.endpoint_bound = Some((bound_max_frames, bound_channels));
+        // (8) the parts `crate::endpoint` assembles `L1Endpoint` from.
+        data::EndpointLegParts {
+            leg,
+            mirror: Arc::clone(&self.shared.rt_state),
+            arm_rx,
+            arm_retirer,
+            return_tx,
+        }
+    }
+
+    /// The per-attach channel drain every mutable/non-RT entry
+    /// point runs first: retry `pending_arm` delivery, collect a
+    /// returned leg (restoring `rt`), drain the arm `DropCollector`,
+    /// then finish a restore — re-arm the leg onto a newer
+    /// `Inner::staging` the detached endpoint never consumed and
+    /// clear the stale per-attach bookkeeping. All bounded `try_*`
+    /// ops: it never waits on endpoint liveness.
+    ///
+    /// The finishing step lives **only** here, never on the RT
+    /// path: `clear_endpoint_fields` drops the last ends of the
+    /// rtrb rings (freeing their allocations) and retiring the
+    /// collector drops `Arc<Staging>`s — destructor work the
+    /// wait-free half in [`L1Instance::process`] must not run.
+    /// The wait-free restore therefore leaves the stale ends in
+    /// place (bounded and inert); the leg keeps its old ring
+    /// until this pass runs, so blocks processed in that window
+    /// submit under the stale generation — the driver drops them
+    /// (`armed_for`) and the leg passes through — then this pass
+    /// re-arms and the divergence self-heals. The clear detector
+    /// is `rt.is_some() && return_rx.is_some()`: while an attach
+    /// is live `rt` is `None`; once the leg is home the stale
+    /// ends are garbage either way.
+    pub(crate) fn drain_endpoint_channels(&mut self) {
+        self.drain_endpoint_channels_wait_free();
+        if let Some(collector) = &mut self.arm_collector {
+            let _ = collector.drain();
+        }
+        if self.rt.is_some() && self.return_rx.is_some() {
+            // A leg restored above — or by an earlier wait-free
+            // pass inside `process` — may carry a ring the
+            // detached `Activate` already superseded: re-arm it
+            // onto the current `Inner::staging` or every later
+            // submit fails `armed_for` and the instance passes
+            // through forever (with `latency_frames` diverging
+            // too). `RtLeg::arm`'s `last_output` resize fits the
+            // attach-time `reserve_last_output` (the detached
+            // `Activate` bound gate caps the ring at
+            // `bound.max_frames`), so it never reallocs here.
+            let staging = self.shared.lock().staging.clone();
+            if let (Some(rt), Some(staging)) = (&mut self.rt, staging)
+                && staging.generation > rt.armed_generation()
+            {
+                rt.arm(staging);
+            }
+            self.clear_endpoint_fields();
+        }
+    }
+
+    /// The wait-free subset of the drain — `try_push` resend +
+    /// `try_pop` leg restore only. `process` runs exactly this;
+    /// it must run **no destructors at all** — the restore puts
+    /// `self.rt` back but leaves the stale per-attach ends in
+    /// place (freeing the rtrb rings and dropping stale
+    /// `Arc<Staging>`s on the RT thread would violate the
+    /// contract). [`L1Instance::drain_endpoint_channels`] adds
+    /// the collector drain, the re-arm and the field clear for
+    /// every other mutable entry point.
+    ///
+    /// The restore is gated on a non-terminal lifecycle mirror
+    /// (read from the same lock-free `rt_state` `process`
+    /// inspects): a leg returned after `Destroy` stays queued and
+    /// is dropped with the channel ends at teardown — bounded —
+    /// rather than resurrecting a `Destroyed` instance.
+    fn drain_endpoint_channels_wait_free(&mut self) {
+        if let Some(arm_tx) = &mut self.arm_tx
+            && let Some(arm) = self.pending_arm.take()
+            && let Err(ruviform_rt::TryPushError::Full(arm)) = arm_tx.try_push(arm)
+        {
+            // Still full — the newest arm stays owed; the next
+            // mutable entry point retries the send.
+            self.pending_arm = Some(arm);
+        }
+        let terminal =
+            data::mirror_decode(self.shared.rt_state.load(Ordering::Acquire)).is_destroyed();
+        if !terminal
+            && let Some(return_rx) = &mut self.return_rx
+            && let Ok(leg) = return_rx.try_pop()
+        {
+            // Restore only — `clear_endpoint_fields` stays on the
+            // non-RT drain (the stale ends' teardown is destructor
+            // work).
+            self.rt = Some(leg);
+        }
+    }
+
+    /// Clears every per-attach field — **non-RT only**, called by
+    /// [`L1Instance::drain_endpoint_channels`] once a returned leg
+    /// is home (the attach is gone — the drops below free the rtrb
+    /// rings and the collector's queued `Arc<Staging>`s, all
+    /// destructor work kept off the RT path) and by the post-take
+    /// `Err` restore in [`L1Instance::prepare_endpoint`]. Stale
+    /// producers/consumers/collector/bound bookkeeping must not
+    /// survive into the next attach, which mints fresh channels.
+    /// Teardown drops the fields with the struct the same way —
+    /// a queued unreclaimed leg is dropped with the channel ends.
+    fn clear_endpoint_fields(&mut self) {
+        self.arm_tx = None;
+        self.pending_arm = None;
+        self.return_rx = None;
+        self.arm_collector = None;
+        self.endpoint_bound = None;
+    }
+
+    /// Per-block processing latency the instance's armed ring adds
+    /// — `(depth − 1) × armed frame_capacity`, the result horizon
+    /// the composite reports through `PluginEndpoint` — `None`
+    /// before `Activate`. A `&self` observation point: deliberately
+    /// **non-draining** (the signature cannot take `&mut self`).
+    ///
+    /// **RT contract:** non-RT only — takes the shared mutex.
+    #[cfg_attr(not(test), expect(dead_code))]
+    pub(crate) fn latency_frames(&self) -> Option<u32> {
+        let inner = self.shared.lock();
+        inner.staging.as_ref().map(|staging| {
+            u32::try_from((self.depth - 1) as usize * staging.frame_capacity).unwrap_or(u32::MAX)
+        })
+    }
+
+    /// The sample rate of the last successful `Activate` — the
+    /// composite uses it to size the endpoint input scratch.
+    /// `Some` exactly when a staging ring is armed.
+    #[cfg_attr(not(test), expect(dead_code))]
+    pub(crate) fn activated_sample_rate(&self) -> Option<u32> {
+        self.activated_sample_rate
+    }
+
+    /// The arm `DropCollector`'s cumulative overflow count — the
+    /// leak-on-full saturation signal of the arm retire channel
+    /// (a `Retirer` forgets the value on a full channel). `0` is
+    /// the healthy steady state; any non-zero count means the
+    /// endpoint retires arms faster than the non-RT drains run —
+    /// the same observation point `PlanSwap`'s `retired_overflows`
+    /// exposes for plan retirement.
+    ///
+    /// A `&self` observation point like [`L1Instance::latency_frames`]:
+    /// deliberately **non-draining** — an atomic load only.
+    ///
+    /// **RT contract:** non-RT only by convention — an atomic load,
+    /// technically non-blocking.
+    #[cfg_attr(not(test), expect(dead_code))]
+    pub(crate) fn arm_retire_overflows(&self) -> usize {
+        self.arm_collector
+            .as_ref()
+            .map_or(0, ruviform_rt::DropCollector::overflows)
     }
 
     /// Pops the queued `Failed` notification — `Some` exactly once
@@ -1314,8 +1744,11 @@ impl Drop for L1Instance {
     /// the driver's `Disconnected` arm kills and reaps the child and
     /// converges (any notification lands on the dropped receiver). A
     /// `Shutdown` already in flight keeps its grace. Bounded by the
-    /// driver's kill guarantee.
+    /// driver's kill guarantee — the endpoint-channel drain is the
+    /// same bounded `try_*` subset, never a wait on endpoint
+    /// liveness.
     fn drop(&mut self) {
+        self.drain_endpoint_channels();
         drop(self.driver_tx.take());
         self.join_threads();
     }
@@ -1360,5 +1793,464 @@ fn err_committed_state(cmd: &wire::Command) -> Option<LifecycleState> {
     match cmd {
         wire::Command::StopProcessing => Some(LifecycleState::Activated),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+impl L1Instance {
+    /// Child-free fixture for the endpoint-machinery tests — this
+    /// module's and `crate::composite`'s. Real `Shared`, channel
+    /// legs and shm segment, but no spawned child: `driver_tx`/
+    /// `driver_join`/`reader_join` are `None`, so `destroy`/`Drop`
+    /// run the bounded teardown without touching a process and
+    /// `request` fails `Err(Ipc)` past the defined rejections (the
+    /// detached `Activate` gate is still exercised — it runs
+    /// before the wire).
+    ///
+    /// `mirror` is the state `Inner.mirror` and `rt_state` start
+    /// at; `activated_frames` arms a gen-1 staging ring of that
+    /// capacity and records a 48 kHz activation.
+    pub(crate) fn test_fixture(mirror: LifecycleState, activated_frames: Option<u32>) -> Self {
+        const DEPTH: u32 = 3;
+        let (submit_tx, _submit_rx) = ruviform_rt::channel::<data::Submit>(DEPTH as usize);
+        let (result_tx, result_rx) = ruviform_rt::channel::<u64>(DEPTH as usize);
+        let (notify_tx, notify_rx) = mpsc::channel();
+        let staging = activated_frames.map(|frames| Arc::new(data::Staging::new(DEPTH, frames, 1)));
+        let mut leg = data::RtLeg::new(DEPTH, DEPTH - 1, submit_tx, result_rx);
+        if let Some(staging) = &staging {
+            leg.arm(Arc::clone(staging));
+        }
+        let shared = Arc::new(Shared {
+            inner: Mutex::new(Inner {
+                waiters: HashMap::new(),
+                mirror,
+                block_in_flight: HashSet::new(),
+                staging,
+                terminal: None,
+                shutdown_initiated: false,
+                seen_eof: false,
+                notify: Notify::Idle,
+            }),
+            rt_state: Arc::new(AtomicU8::new(data::mirror_encode(mirror))),
+            child: OnceLock::new(),
+            notify_tx,
+            result_tx: Mutex::new(result_tx),
+        });
+        Self {
+            shared,
+            driver_tx: None,
+            driver_join: None,
+            reader_join: None,
+            notify_rx,
+            command_timeout: Duration::from_millis(50),
+            next_seq: AtomicU64::new(0),
+            depth: DEPTH,
+            rt: Some(leg),
+            staging_generation: u64::from(activated_frames.is_some()),
+            arm_tx: None,
+            pending_arm: None,
+            return_rx: None,
+            arm_collector: None,
+            endpoint_bound: None,
+            activated_sample_rate: activated_frames.map(|_| 48_000),
+            segment: shm::Segment::create(
+                u32::try_from(INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed)).unwrap_or(u32::MAX),
+                DEPTH,
+                DEPTH,
+            )
+            .expect("fixture segment"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! `L1Instance` endpoint-machinery tests — leg extraction and
+    //! the pinned rejection order, the seed arm, `pending_arm`
+    //! latest-wins, leg return + per-attach cleanup, the detached
+    //! `process`/`Activate` surfaces and the `&self` non-drain
+    //! observation points.
+
+    use super::*;
+    use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
+
+    fn config(min_frames: u32, max_frames: u32) -> ProcessConfig {
+        ProcessConfig::new(SampleRate::new(48_000).unwrap(), min_frames, max_frames).unwrap()
+    }
+
+    /// One `L1Instance::process` block over mono planar views — the
+    /// erased `HostInput`/`HostOutput` surface.
+    fn run_block(instance: &mut L1Instance) -> Result<ProcessResult, HostError> {
+        let input = [0.5_f32; 8];
+        let mut output = [0.0_f32; 8];
+        let in_list = [&input[..]];
+        let input_view = PlanarBufferView::new(&in_list).unwrap();
+        let inputs = [HostInput(&input_view)];
+        let mut out_list = [&mut output[..]];
+        let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+        let mut outputs = [HostOutput(&mut output_view)];
+        instance.process(&inputs, &mut outputs, EventList::empty(8), None)
+    }
+
+    /// Leg extraction: `prepare_endpoint` takes `rt` (the
+    /// authoritative attached fact), mints the per-attach channels,
+    /// seeds the arm channel with the armed `Inner::staging` clone
+    /// and clones the shared mirror — a second attach hits the
+    /// single-endpoint `EndpointUnavailable`.
+    #[test]
+    fn prepare_endpoint_takes_leg_and_blocks_reattach() {
+        let mut instance = L1Instance::test_fixture(LifecycleState::Activated, Some(512));
+        let mut parts = instance.prepare_endpoint(512, 2).unwrap();
+        assert!(instance.rt.is_none());
+        assert!(instance.arm_tx.is_some());
+        assert!(instance.return_rx.is_some());
+        assert!(instance.arm_collector.is_some());
+        assert_eq!(instance.endpoint_bound, Some((512, 2)));
+        // The seed arm is the armed ring's clone — same generation
+        // in the normal path (the endpoint retires it unapplied).
+        let seed = parts.arm_rx.try_pop().expect("seeded arm");
+        assert_eq!(seed.generation, 1);
+        assert!(parts.arm_rx.try_pop().is_err());
+        // The mirror is the *same* atomic `rt_state` publishes.
+        assert!(Arc::ptr_eq(&parts.mirror, &instance.shared.rt_state));
+        // Single-endpoint rule — `rt.is_none()` is authoritative.
+        assert!(matches!(
+            instance.prepare_endpoint(512, 2),
+            Err(HostError::EndpointUnavailable)
+        ));
+    }
+
+    /// The pinned rejection order: lifecycle/state first, then
+    /// bounds **before** the take — a rejected attach leaves the
+    /// leg home, so the instance stays attachable and processable.
+    #[test]
+    fn prepare_endpoint_rejections_leave_leg_home() {
+        // State gate — `Failed` is `Err(Failed)`, below `Activated`
+        // is `Err(Lifecycle)`.
+        let mut failed = L1Instance::test_fixture(LifecycleState::Failed, Some(512));
+        assert!(matches!(
+            failed.prepare_endpoint(512, 2),
+            Err(HostError::Failed)
+        ));
+        assert!(failed.rt.is_some());
+        for state in [
+            LifecycleState::Created,
+            LifecycleState::Initialized,
+            LifecycleState::Destroyed,
+        ] {
+            let mut instance = L1Instance::test_fixture(state, None);
+            assert!(
+                matches!(
+                    instance.prepare_endpoint(512, 2),
+                    Err(HostError::Lifecycle(_))
+                ),
+                "{state:?} must reject with Lifecycle"
+            );
+            assert!(instance.rt.is_some());
+        }
+        // Bounds — every violation is `Prepare(UnsupportedConfig)`
+        // and nothing moves.
+        let mut instance = L1Instance::test_fixture(LifecycleState::Activated, Some(512));
+        for (frames, channels) in [
+            (0, 2),
+            (512, 0),
+            (wire::WIRE_MAX_FRAMES + 1, 2),
+            (512, wire::WIRE_MAX_CHANNELS + 1),
+            // Below the armed ring's 512-frame capacity.
+            (256, 2),
+        ] {
+            assert!(
+                matches!(
+                    instance.prepare_endpoint(frames, channels),
+                    Err(HostError::Prepare(PrepareError::UnsupportedConfig))
+                ),
+                "bounds ({frames}, {channels}) must reject with Prepare"
+            );
+            assert!(instance.rt.is_some());
+        }
+        // A legal bound still attaches — nothing was consumed.
+        assert!(instance.prepare_endpoint(512, 2).is_ok());
+        assert!(instance.rt.is_none());
+    }
+
+    /// `process` while the leg is detached is the defined
+    /// `Err(EndpointUnavailable)` — not `Ipc` — and a returned leg
+    /// restores processing plus fresh attachability. The wait-free
+    /// drain subset runs inside `process` itself, before the
+    /// detached check — and it restores the leg *without* clearing
+    /// the per-attach ends: dropping them (rtrb ring frees +
+    /// `Arc<Staging>` destructors) is non-RT work the next
+    /// `drain_endpoint_channels` performs.
+    #[test]
+    fn detached_process_returns_endpoint_unavailable_then_restores() {
+        let mut instance = L1Instance::test_fixture(LifecycleState::Processing, Some(512));
+        let mut parts = instance.prepare_endpoint(512, 2).unwrap();
+        assert!(matches!(
+            run_block(&mut instance),
+            Err(HostError::EndpointUnavailable)
+        ));
+        // The `&self` observation points stay non-draining — the
+        // leg sits in the return channel unread.
+        assert!(parts.return_tx.try_push(parts.leg).is_ok());
+        assert_eq!(instance.lifecycle_state(), LifecycleState::Processing);
+        assert!(instance.try_recv_notification().is_none());
+        assert_eq!(instance.latency_frames(), Some(1024));
+        assert!(instance.rt.is_none());
+        // The wait-free drain inside `process` collects it — the
+        // same call proceeds to the data plane, and the stale
+        // per-attach ends are deliberately left in place (the
+        // wait-free half runs no destructors).
+        assert_eq!(run_block(&mut instance).unwrap(), ProcessResult::CONTINUE);
+        assert!(instance.rt.is_some());
+        assert!(instance.arm_tx.is_some());
+        assert!(instance.return_rx.is_some());
+        assert!(instance.arm_collector.is_some());
+        assert!(instance.endpoint_bound.is_some());
+        // The non-RT drain finishes the restore — every per-attach
+        // field cleared, freshly attachable.
+        instance.drain_endpoint_channels();
+        assert!(instance.arm_tx.is_none());
+        assert!(instance.return_rx.is_none());
+        assert!(instance.arm_collector.is_none());
+        assert!(instance.endpoint_bound.is_none());
+        assert!(instance.pending_arm.is_none());
+        assert_eq!(instance.arm_retire_overflows(), 0);
+        assert!(instance.prepare_endpoint(512, 2).is_ok());
+    }
+
+    /// `pending_arm` latest-wins: once the arm channel is full, a
+    /// newer activation displaces the queued newest (never a merge
+    /// — the endpoint only ever wants the freshest ring); the
+    /// resend keeps retrying at every mutable entry point until the
+    /// channel accepts it.
+    #[test]
+    fn pending_arm_is_latest_wins_and_retries() {
+        let mut instance = L1Instance::test_fixture(LifecycleState::Activated, Some(512));
+        let mut parts = instance.prepare_endpoint(512, 2).unwrap();
+        let config = config(1, 512);
+        let ring = |generation| Arc::new(data::Staging::new(3, 512, generation));
+        // Channel is `[seed]` — g2 fills it; g3/g4 go pending,
+        // latest-wins.
+        instance.arm_staging(ring(2), config);
+        instance.arm_staging(ring(3), config);
+        instance.arm_staging(ring(4), config);
+        assert_eq!(instance.pending_arm.as_ref().unwrap().generation, 4);
+        // A resend on a still-full channel keeps the pending arm.
+        instance.drain_endpoint_channels();
+        assert_eq!(instance.pending_arm.as_ref().unwrap().generation, 4);
+        // Pop the seed → resend lands g4 behind g2.
+        assert_eq!(parts.arm_rx.try_pop().unwrap().generation, 1);
+        instance.drain_endpoint_channels();
+        assert!(instance.pending_arm.is_none());
+        assert_eq!(parts.arm_rx.try_pop().unwrap().generation, 2);
+        assert_eq!(parts.arm_rx.try_pop().unwrap().generation, 4);
+        // g3 never reached the channel — latest-wins superseded it.
+        assert!(parts.arm_rx.try_pop().is_err());
+    }
+
+    /// The detached `Activate` bound gate: while the leg is out, a
+    /// re-activation above the attach bound is `Err(Prepare)`
+    /// before the wire; at/under the bound it proceeds (and fails
+    /// `Ipc` here only because the fixture has no driver). With the
+    /// leg home there is no bound gate at all.
+    #[test]
+    fn activate_above_attach_bound_is_rejected_while_detached() {
+        let mut instance = L1Instance::test_fixture(LifecycleState::Activated, Some(512));
+        let _parts = instance.prepare_endpoint(512, 2).unwrap();
+        assert!(matches!(
+            instance.execute(wire::Command::Activate {
+                config: config(1, 1024),
+            }),
+            Err(HostError::Prepare(PrepareError::UnsupportedConfig))
+        ));
+        // Within the bound the gate passes — `request` fails `Ipc`
+        // (the fixture has no driver), proving the gate ran first.
+        assert!(matches!(
+            instance.execute(wire::Command::Activate {
+                config: config(1, 512),
+            }),
+            Err(HostError::Ipc)
+        ));
+        // Leg home → no gate: the same over-sized config reaches
+        // `request` untouched by `endpoint_bound`.
+        let mut home = L1Instance::test_fixture(LifecycleState::Activated, Some(512));
+        assert!(matches!(
+            home.execute(wire::Command::Activate {
+                config: config(1, 1024),
+            }),
+            Err(HostError::Ipc)
+        ));
+    }
+
+    /// `arm_staging` while detached pushes through the arm channel
+    /// (not `RtLeg::arm`); when the endpoint is dropped before
+    /// consuming it, the restored leg still carries the superseded
+    /// ring — the non-RT drain re-arms it onto the newer
+    /// `Inner::staging` (F2: left stale, every later submit would
+    /// fail the driver's `armed_for` gate and the instance would
+    /// pass through forever). A re-attach then seeds the *same*
+    /// generation — the normalized no-op.
+    #[test]
+    fn restored_leg_rearms_to_the_newer_staging() {
+        let mut instance = L1Instance::test_fixture(LifecycleState::Activated, Some(512));
+        let mut parts = instance.prepare_endpoint(512, 2).unwrap();
+        instance.arm_staging(Arc::new(data::Staging::new(3, 512, 2)), config(1, 512));
+        // The g2 arm queued behind the seed; the leg is still gen 1.
+        assert!(parts.return_tx.try_push(parts.leg).is_ok());
+        instance.drain_endpoint_channels();
+        // The restored leg is re-armed to `Inner::staging` (gen 2)
+        // — the endpoint never consumed the queued arm.
+        assert_eq!(instance.rt.as_ref().unwrap().armed_generation(), 2);
+        let mut parts = instance.prepare_endpoint(512, 2).unwrap();
+        assert_eq!(parts.leg.armed_generation(), 2);
+        // The seed is now the same-generation normalized no-op.
+        assert_eq!(parts.arm_rx.try_pop().unwrap().generation, 2);
+        assert!(parts.arm_rx.try_pop().is_err());
+    }
+
+    /// A leg returned after `Destroy` is never restored onto the
+    /// terminal instance — the drain's lifecycle gate leaves it
+    /// queued and the channel ends die with the instance (bounded
+    /// teardown). An endpoint dropped earlier — while the instance
+    /// was still live — still restores.
+    #[test]
+    fn leg_returned_after_destroy_is_not_restored() {
+        let mut instance = L1Instance::test_fixture(LifecycleState::Processing, Some(512));
+        let mut parts = instance.prepare_endpoint(512, 2).unwrap();
+        instance.destroy();
+        assert_eq!(instance.lifecycle_state(), LifecycleState::Destroyed);
+        assert!(parts.return_tx.try_push(parts.leg).is_ok());
+        // The `Destroyed` gate refuses the restore — the leg stays
+        // queued in `return_rx` and drops with the channel ends.
+        instance.drain_endpoint_channels();
+        assert!(instance.rt.is_none());
+        drop(instance);
+    }
+
+    /// A submit the driver drops without a doorbell (stale
+    /// generation — or a terminal/shutting-down child) still owes
+    /// the leg exactly one completion: the synthesized
+    /// `mark_failed` result `push_result` delivers. Without it the
+    /// slot's `cleared[i] >= last_pushed[i]` gate wedges
+    /// permanently — every later seq for that slot fails the gate.
+    /// This pins the leg-side half: a pushed synthesized
+    /// completion frees the slot through the normal `drain_to`.
+    #[test]
+    fn dropped_submit_result_frees_alternation_slot() {
+        const DEPTH: u32 = 3;
+        // Live channel ends so `try_push` lands and `last_pushed`
+        // records each seq — the wedge is real only while the
+        // submit actually pushed.
+        let (submit_tx, mut submit_rx) = ruviform_rt::channel::<data::Submit>(DEPTH as usize);
+        let (result_tx, result_rx) = ruviform_rt::channel::<u64>(DEPTH as usize);
+        let (notify_tx, _notify_rx) = mpsc::channel();
+        let shared = Shared {
+            inner: Mutex::new(Inner {
+                waiters: HashMap::new(),
+                mirror: LifecycleState::Processing,
+                block_in_flight: HashSet::new(),
+                staging: Some(Arc::new(data::Staging::new(DEPTH, 512, 1))),
+                terminal: None,
+                shutdown_initiated: false,
+                seen_eof: false,
+                notify: Notify::Idle,
+            }),
+            rt_state: Arc::new(AtomicU8::new(data::mirror_encode(
+                LifecycleState::Processing,
+            ))),
+            child: OnceLock::new(),
+            notify_tx,
+            result_tx: Mutex::new(result_tx),
+        };
+        let mut leg = data::RtLeg::new(DEPTH, DEPTH - 1, submit_tx, result_rx);
+        leg.arm(Arc::new(data::Staging::new(DEPTH, 512, 1)));
+        // Fill every slot's gate: three submits, no completions —
+        // the wedge the F3 fix unwedges.
+        for _ in 0..DEPTH {
+            run_leg(&mut leg).unwrap();
+        }
+        for block in 0..u64::from(DEPTH) {
+            assert_eq!(
+                submit_rx.try_pop().unwrap().seq,
+                data::BLOCK_SEQ_FLAG | block
+            );
+        }
+        // Every slot busy → this call submits nothing (and passes
+        // through — an unanswered seq never errored, it fell back).
+        run_leg(&mut leg).unwrap();
+        assert!(submit_rx.try_pop().is_err());
+        // The driver-side drop synthesizes one completion per
+        // dropped seq — one per slot here.
+        for block in 0..u64::from(DEPTH) {
+            shared.push_result(data::mark_failed(data::BLOCK_SEQ_FLAG | block));
+        }
+        // Block 4's own submit still gates (its slot check runs
+        // before the drain frees it) but its `drain_to` consumes
+        // all three completions — `cleared` catches up. Block 5
+        // then resubmits on its slot (`cleared[i] ==
+        // last_pushed[i]`): `FLAG | 5`. Without the synthesized
+        // results every slot stays wedged and this `try_pop`
+        // never yields again.
+        run_leg(&mut leg).unwrap();
+        assert!(submit_rx.try_pop().is_err());
+        run_leg(&mut leg).unwrap();
+        assert_eq!(submit_rx.try_pop().unwrap().seq, data::BLOCK_SEQ_FLAG | 5);
+    }
+
+    /// One `data::RtLeg::process` block over mono planar views —
+    /// the leg-level sibling of [`run_block`] for the
+    /// channel-level pin above.
+    fn run_leg(leg: &mut data::RtLeg) -> Result<ProcessResult, HostError> {
+        let input = [0.5_f32; 8];
+        let mut output = [0.0_f32; 8];
+        let in_list = [&input[..]];
+        let input_view = PlanarBufferView::new(&in_list).unwrap();
+        let inputs = [HostInput(&input_view)];
+        let mut out_list = [&mut output[..]];
+        let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+        let mut outputs = [HostOutput(&mut output_view)];
+        leg.process(
+            LifecycleState::Processing,
+            &inputs,
+            &mut outputs,
+            EventList::empty(8),
+            None,
+        )
+    }
+
+    /// `destroy` with a live endpoint never waits on it: the
+    /// bounded drain runs, teardown proceeds, and the endpoint's
+    /// later leg return lands on the dead channel without blocking
+    /// (bounded teardown by construction).
+    #[test]
+    fn destroy_with_a_live_endpoint_does_not_block() {
+        let mut instance = L1Instance::test_fixture(LifecycleState::Processing, Some(512));
+        let mut parts = instance.prepare_endpoint(512, 2).unwrap();
+        instance.destroy();
+        assert_eq!(instance.lifecycle_state(), LifecycleState::Destroyed);
+        drop(instance);
+        // The return channel's consumer is gone — the push is a
+        // bounded `try_*` either way, never a block.
+        let _ = parts.return_tx.try_push(parts.leg);
+    }
+
+    /// Issue #22 lane: the detached `process` early-return — the
+    /// wait-free drain subset (`try_push` resend + `try_pop`
+    /// restore, no `DropCollector` destructor work) plus the
+    /// `EndpointUnavailable` check — must not allocate.
+    #[test]
+    fn rt_l1_detached_process_no_alloc() {
+        let mut instance = L1Instance::test_fixture(LifecycleState::Processing, Some(512));
+        let _parts = instance.prepare_endpoint(512, 2).unwrap();
+        // Warm-up outside the window.
+        assert!(run_block(&mut instance).is_err());
+        assert_no_alloc::assert_no_alloc(|| {
+            for _ in 0..8 {
+                assert!(matches!(
+                    run_block(&mut instance),
+                    Err(HostError::EndpointUnavailable)
+                ));
+            }
+        });
     }
 }

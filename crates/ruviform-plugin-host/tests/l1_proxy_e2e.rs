@@ -1086,9 +1086,10 @@ fn lookahead_zero_is_rejected() {
 /// Submits carry the armed ring's generation — the driver-side gate
 /// (`armed_for`) then drops a submit queued under a superseded ring
 /// instead of serializing the new ring's zeroed stage under a real
-/// seq (F3: the re-activation stale-submit case). A dropped seq's
-/// result simply never arrives — the RT leg resolves that as the
-/// defined pass-through.
+/// seq (the re-activation stale-submit case). A dropped seq still
+/// completes: the driver synthesizes a `mark_failed` result on the
+/// shared result producer so the leg's alternation gate frees the
+/// slot and resolves the block as the defined pass-through.
 #[test]
 fn submit_carries_staging_generation_and_stale_is_dropped() {
     use l1::data::{BLOCK_SEQ_FLAG, RtLeg, Staging, Submit, armed_for};

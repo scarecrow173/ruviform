@@ -39,11 +39,13 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::time::Duration;
 
+use ruviform_audio_core::SampleRate;
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
     EventList, LifecycleEvent, LifecycleState, PluginDescriptor, ProcessResult, TransportInfo,
 };
 
+use crate::endpoint::{EndpointBounds, EndpointInner, L1Endpoint, PluginEndpoint};
 use crate::l1::{ChildExit as L1ChildExit, L1Instance, SpawnSpec};
 use crate::{
     ErasedPlugin, HostCommand, HostError, HostInput, HostOutput, HostReply, InProcessHost,
@@ -399,7 +401,10 @@ impl PluginHost {
     /// [`HostError::InvalidHandle`] for a stale/unknown handle;
     /// [`HostError::Lifecycle`] when the instance is not
     /// `Processing`; [`HostError::Ipc`] when the block exceeds the
-    /// activated frame capacity the wire can express.
+    /// activated frame capacity the wire can express;
+    /// [`HostError::EndpointUnavailable`] while an L1 slot's RT leg
+    /// is checked out to a detached endpoint (the processing
+    /// surface moved — retry on the endpoint, not here).
     pub fn process(
         &mut self,
         handle: PluginHandle,
@@ -414,6 +419,88 @@ impl PluginHost {
                 self.l0.process(inner, inputs, outputs, events, transport)
             }
             Slot::OutOfProcess(instance) => instance.process(inputs, outputs, events, transport),
+        }
+    }
+
+    /// The inner entry point for endpoint attachment (Issue #113
+    /// task 3) — routes the handle to the L0 or L1 attach path.
+    /// The public surface (`PluginHost::prepare_endpoint`, the
+    /// attach-side prelude and `in_scratch` hand-off) is Task 4;
+    /// this is the route-aware inner the prelude will call.
+    ///
+    /// L0 delegates to [`InProcessHost::attach_endpoint`] — its
+    /// `Shared`-slot gate already distinguishes attachable
+    /// instances. L1 checks the leg out of the
+    /// [`L1Instance`](crate::l1::L1Instance) — `prepare_endpoint`
+    /// owns the pinned rejection order (state → bounds-before-take
+    /// → leg extraction with post-take restore) — then assembles
+    /// [`EndpointInner::L1`], the bound-shaped `in_scratch` at the
+    /// activated sample rate and the instance's pipeline latency.
+    ///
+    /// **RT contract:** non-RT only — channel minting, the
+    /// `last_output` reserve and `in_scratch` all allocate.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError`] — per the route's own pinned order
+    /// (`InvalidHandle` first from [`PluginHost::slot_mut`]).
+    // The only in-crate caller is Task 4's `prepare_endpoint`
+    // prelude — until it lands, unit tests are the sole consumers
+    // (`not(test)` because the tests already exercise it).
+    // `#[expect]`, not `#[allow]`: once T4 wires the caller the
+    // non-test build's unfulfilled expectation fails the lint gate
+    // — remove it then.
+    #[cfg_attr(not(test), expect(dead_code))]
+    pub(crate) fn attach_endpoint(
+        &mut self,
+        handle: PluginHandle,
+        bounds: EndpointBounds,
+    ) -> Result<PluginEndpoint, HostError> {
+        match self.slot_mut(handle)? {
+            Slot::InProcess(inner) => {
+                let inner = *inner;
+                self.l0.attach_endpoint(inner, bounds)
+            }
+            Slot::OutOfProcess(instance) => {
+                // `prepare_endpoint` runs the drain, the state/bounds
+                // rejections and the take/restore contract itself.
+                let parts = instance.prepare_endpoint(bounds.max_frames, bounds.channels)?;
+                // The leg is checked out now — assemble the
+                // endpoint first so a post-take failure can restore:
+                // `drop` pushes the leg onto the return channel and
+                // `drain_endpoint_channels` moves it home, leaving
+                // the instance attachable/processable (the
+                // `prepare_endpoint` post-take contract).
+                let endpoint = L1Endpoint::from(parts);
+                // `Activated`/`Processing` implies a staging ring,
+                // which implies a recorded sample rate — and
+                // `in_scratch` for bound-validated shapes cannot
+                // fail. Both `Err` legs are therefore unreachable
+                // today, but they still restore the leg rather
+                // than leak the checkout.
+                let assembled = instance
+                    .activated_sample_rate()
+                    .and_then(|rate| SampleRate::new(rate).ok())
+                    .ok_or(HostError::Ipc)
+                    .and_then(|rate| crate::endpoint::in_scratch(bounds, rate));
+                let in_scratch = match assembled {
+                    Ok(scratch) => scratch,
+                    Err(error) => {
+                        debug_assert!(false, "post-take assembly is infallible");
+                        drop(endpoint);
+                        instance.drain_endpoint_channels();
+                        return Err(error);
+                    }
+                };
+                Ok(PluginEndpoint::new(
+                    EndpointInner::L1(Box::new(endpoint)),
+                    bounds,
+                    in_scratch,
+                    // `Activated`/`Processing` implies an armed ring
+                    // — `latency_frames` is `Some` there.
+                    instance.latency_frames().unwrap_or(0),
+                ))
+            }
         }
     }
 
@@ -435,6 +522,11 @@ impl PluginHost {
             let Some(Slot::OutOfProcess(instance)) = slot else {
                 continue;
             };
+            // The `&mut` entry-point drain — restores a returned leg
+            // and re-sends/drains the arm channels before the
+            // notification check (`&self` queries such as
+            // `lifecycle_state` stay deliberately non-draining).
+            instance.drain_endpoint_channels();
             if let Some(exit) = instance.try_recv_notification() {
                 // The slot is still live (freed slots never carry an
                 // instance), so the current generation is the minted
@@ -684,5 +776,191 @@ fn host_reply(expected: ReplyKind, reply: wire::Reply) -> Result<HostReply, Host
         // Every other pairing — a kind mismatch, `Scanned`, or a
         // future reply kind — is a protocol anomaly.
         _ => Err(HostError::Ipc),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! `attach_endpoint` route tests (Issue #113 task 3): the L1
+    //! arm must reach `L1Instance::prepare_endpoint` — the leg
+    //! checkout — never the L0 `InstanceSlot::Shared` path, and the
+    //! `&mut` entry points must drain the endpoint channels.
+
+    use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
+    use ruviform_plugin_core::{
+        BufferView, BufferViewMut, ParamInfo, PluginDescriptor, PluginProcessor, PrepareError,
+        ProcessConfig, ProcessContext, ProcessStatus,
+    };
+
+    use super::*;
+    use crate::{Plugin, erase, erase_sendable};
+
+    const DESCRIPTOR: PluginDescriptor = PluginDescriptor {
+        id: "org.ruviform.test.composite-gain",
+        name: "Test Composite Gain",
+        vendor: "Ruviform",
+        version: "0.1.0",
+        features: &[],
+    };
+
+    /// Minimal `Send` gain — the `Shared`-slot fixture for the L0
+    /// route check (same shape as `host.rs`'s `SendGain`; the
+    /// per-module duplication is intentional).
+    struct SendGain {
+        gain: f32,
+    }
+
+    impl PluginProcessor for SendGain {
+        fn prepare(
+            &mut self,
+            _config: &ProcessConfig,
+            _context: &mut ProcessContext,
+        ) -> Result<(), PrepareError> {
+            Ok(())
+        }
+
+        fn process<I, O>(
+            &mut self,
+            inputs: &[I],
+            outputs: &mut [O],
+            _events: EventList<'_>,
+            _transport: Option<TransportInfo>,
+            _context: &mut ProcessContext,
+        ) -> ProcessResult
+        where
+            I: BufferView,
+            O: BufferViewMut,
+        {
+            for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
+                for channel in 0..output.channels() {
+                    if let (Some(src), Some(dst)) =
+                        (input.channel(channel), output.channel_mut(channel))
+                    {
+                        for (s, d) in src.iter().zip(dst.iter_mut()) {
+                            *d = *s * self.gain;
+                        }
+                    }
+                }
+            }
+            ProcessResult::new(ProcessStatus::Continue, ProcessResult::TAIL_NONE)
+        }
+    }
+
+    impl Plugin for SendGain {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESCRIPTOR
+        }
+        fn params(&self) -> &[ParamInfo] {
+            &[]
+        }
+    }
+
+    struct SendGainFactory;
+
+    impl PluginFactory for SendGainFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESCRIPTOR
+        }
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            erase(SendGain { gain: 2.0 })
+        }
+        fn create_sendable(&self) -> Option<Box<dyn ErasedPlugin + Send>> {
+            Some(erase_sendable(SendGain { gain: 2.0 }))
+        }
+    }
+
+    fn config(min_frames: u32, max_frames: u32) -> ProcessConfig {
+        ProcessConfig::new(SampleRate::new(48_000).unwrap(), min_frames, max_frames).unwrap()
+    }
+
+    fn bounds(max_frames: u32, channels: u32) -> EndpointBounds {
+        EndpointBounds {
+            max_frames,
+            channels,
+        }
+    }
+
+    /// One `PluginHost::process` block over mono planar views.
+    fn run_block(host: &mut PluginHost, handle: PluginHandle) -> Result<ProcessResult, HostError> {
+        let input = [0.5_f32; 8];
+        let mut output = [0.0_f32; 8];
+        let in_list = [&input[..]];
+        let input_view = PlanarBufferView::new(&in_list).unwrap();
+        let inputs = [HostInput(&input_view)];
+        let mut out_list = [&mut output[..]];
+        let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+        let mut outputs = [HostOutput(&mut output_view)];
+        host.process(handle, &inputs, &mut outputs, EventList::empty(8), None)
+    }
+
+    /// The L0 arm: an `InProcess` slot delegates to
+    /// `InProcessHost::attach_endpoint` — a `Shared`-slot L0
+    /// instance attaches exactly as it would without the composite.
+    #[test]
+    fn attach_endpoint_routes_l0_slots_to_inprocess() {
+        let mut host = PluginHost::new();
+        host.register_factory(Box::new(SendGainFactory));
+        let HostReply::Instantiated { handle } = host
+            .execute(HostCommand::Instantiate {
+                plugin_id: DESCRIPTOR.id.to_owned(),
+            })
+            .unwrap()
+        else {
+            panic!("unexpected reply")
+        };
+        host.execute(HostCommand::Initialize { handle }).unwrap();
+        host.execute(HostCommand::Activate {
+            handle,
+            config: config(1, 512),
+        })
+        .unwrap();
+        host.execute(HostCommand::StartProcessing { handle })
+            .unwrap();
+        let endpoint = host.attach_endpoint(handle, bounds(512, 2)).unwrap();
+        assert_eq!(endpoint.bounds(), bounds(512, 2));
+        // L0 is a direct call — no pipeline latency.
+        assert_eq!(endpoint.latency_frames(), 0);
+    }
+
+    /// The L1 arm: an `OutOfProcess` slot checks the leg out of the
+    /// `L1Instance` — it must not be mistaken for an
+    /// `InstanceSlot::Shared`. The minted endpoint carries the
+    /// bound, the armed ring's pipeline latency and the single-
+    /// endpoint occupancy; `process` while detached is
+    /// `EndpointUnavailable`; the `&mut` `try_recv_notification`
+    /// drain restores the returned leg for a fresh attach.
+    #[test]
+    fn attach_endpoint_routes_l1_slots_to_the_leg() {
+        let mut host = PluginHost::new();
+        let handle = host.mint(Slot::OutOfProcess(Box::new(L1Instance::test_fixture(
+            LifecycleState::Processing,
+            Some(512),
+        ))));
+        let bounds = bounds(512, 2);
+        let endpoint = host.attach_endpoint(handle, bounds).unwrap();
+        assert_eq!(endpoint.bounds(), bounds);
+        // `(depth - 1) × armed frame_capacity` — 2 × 512.
+        assert_eq!(endpoint.latency_frames(), 1024);
+        // Single-endpoint rule — the leg is checked out.
+        assert!(matches!(
+            host.attach_endpoint(handle, bounds),
+            Err(HostError::EndpointUnavailable)
+        ));
+        // Detached host-side `process` — the defined
+        // `EndpointUnavailable`, not `Ipc`.
+        assert!(matches!(
+            run_block(&mut host, handle),
+            Err(HostError::EndpointUnavailable)
+        ));
+        // Endpoint drop returns the leg; the `&mut`
+        // `try_recv_notification` drain restores it.
+        drop(endpoint);
+        assert!(host.try_recv_notification().is_none());
+        assert_eq!(
+            run_block(&mut host, handle).unwrap(),
+            ProcessResult::CONTINUE
+        );
+        // Freshly attachable — a second attach mints cleanly.
+        let _again = host.attach_endpoint(handle, bounds).unwrap();
     }
 }

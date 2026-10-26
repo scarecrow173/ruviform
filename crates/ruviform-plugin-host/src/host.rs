@@ -14,7 +14,6 @@
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, TryLockError};
 
-use ruviform_audio_core::{AudioBuffer, BufferSpec, ChannelLayout, SpeakerMask};
 use ruviform_plugin_core::wire::{WIRE_MAX_CHANNELS, WIRE_MAX_FRAMES};
 use ruviform_plugin_core::{
     EventList, Lifecycle, LifecycleError, LifecycleEvent, LifecycleState, PrepareError,
@@ -156,25 +155,6 @@ fn converge_failed(lifecycle: &mut Lifecycle) -> HostError {
         let _ = lifecycle.transition(LifecycleEvent::Failed);
     }
     HostError::Failed
-}
-
-/// The `ChannelLayout` a bound channel count maps to for `in_scratch`
-/// — a named layout where one exists, else a custom mask of the low
-/// `channels` bits (`channels ≤ WIRE_MAX_CHANNELS` holds already —
-/// the bounds check runs before this).
-// Used only by `attach_endpoint` — see its `dead_code` note; the
-// `#[expect]` drops with it once T4 wires the public caller.
-#[cfg_attr(not(test), expect(dead_code))]
-fn bound_layout(channels: u32) -> Result<ChannelLayout, HostError> {
-    match channels {
-        1 => Ok(ChannelLayout::Mono),
-        2 => Ok(ChannelLayout::Stereo),
-        4 => Ok(ChannelLayout::Quad),
-        6 => Ok(ChannelLayout::FivePointOne),
-        8 => Ok(ChannelLayout::SevenPointOne),
-        n => ChannelLayout::custom(SpeakerMask::from_bits((1 << n) - 1))
-            .map_err(|_| HostError::Prepare(PrepareError::UnsupportedConfig)),
-    }
 }
 
 /// The L0 host: executes [`HostCommand`]s in-process against
@@ -505,15 +485,7 @@ impl InProcessHost {
         // (5) bound-shaped `in_scratch` preallocation — any failure
         // releases the just-claimed epoch (a rejected attach consumes
         // nothing).
-        let in_scratch = bound_layout(bounds.channels).and_then(|layout| {
-            AudioBuffer::try_new(BufferSpec {
-                layout,
-                frames: bounds.max_frames as usize,
-                sample_rate: activated.sample_rate(),
-            })
-            .map_err(|_| HostError::Prepare(PrepareError::UnsupportedConfig))
-        });
-        let in_scratch = match in_scratch {
+        let in_scratch = match crate::endpoint::in_scratch(bounds, activated.sample_rate()) {
             Ok(scratch) => scratch,
             Err(error) => {
                 slot.attached.store(0, Ordering::Release);
