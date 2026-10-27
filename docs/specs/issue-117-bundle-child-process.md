@@ -146,6 +146,7 @@ Issue 要求範囲:
 
 - **R-G1**: `OutOfProcessSpec` に bundle/dedicated の選択を表現する面を追加 — **推奨: route（登録 `plugin_id`/`OutOfProcessSpec`）単位の pool が自然な既定**（(program, args) 同一性が pool キーとして機能）。明示 pool キーで route 跨ぎ bundle を可能にする拡張はこの枠組みの上で検討。OPEN: フィールド形（`Isolation` enum vs `bundle_key` 等）・既定値（dedicated が安全側既定か、bundle が既定か）・pool の寿命規則（最後の instance destroy で子を畳むか keep-alive するか）
 - **R-G2**: dedicated（現行 per-instance spawn）は隔離オプションとして残す — bundle への一本化は隔離粒度の退化を全利用者に強制するため採用しない
+- **R-G3（隔離の意味の限定）**: bundle のインスタンス分離は **state/attribution 分離**（lifecycle・segment・seq 空間・`Failed` 帰属の分離）であって **アドレス空間隔離ではない** — 全 per-instance segment は同一子プロセス空間に map されるため、悪意ある・破損した plugin は同居インスタンスの slot へ書き込み得る（host 側の防衛は `read_out_slot` 相当の fail-closed 検査で defined per-instance 失敗に封じる）。crash 隔離に加え **liveness 隔離も trade する** — 1 インスタンスの plugin hang は子の単一スレッド `serve` を wedge させ command timeout 経由で同居全員を `Failed` にし、大きな frame（state payload 等）が共有 stdin/stdout を serialize して他インスタンスの応答を遅らせ得る。選択語彙の doc にこれらの限定を公開契約として明記する
 
 ### `Failed`・通知 semantics（OPEN → ADR 確定）
 
@@ -156,7 +157,7 @@ Issue 要求範囲:
 
 - **R-R1**: runner は `instance` キーの registry を持ち、`Command`/`BlockIn` を対象 instance に dispatch する — plugin hook panic は現行どおり `Err(PluginFailed)` に正規化（instance-scoped・runner は生き続ける）
 - **R-R2**: argv 規約 — **推奨: v2 runner は `<runner>` 単体（+`--ruviform-*` 管理フラグのみ）で起動し、`--ruviform-shm-key`・`--ruviform-plugin-id` は `CreateInstance` payload へ移す**。OPEN: 確定 argv 形・`--ruviform-plugin-id` が複数 factory runner で `CreateInstance{plugin_id}` に移る際の意味
-- **R-R3**: 終了規約 — **推奨: 子の終了は host 送信 `Shutdown`（または stdin EOF）のみ**（最後の `DestroyInstance` で host が `Shutdown` を送る現行语义の延長）。子の自律 exit は新語彙を要るため入れない
+- **R-R3**: 終了規約 — **推奨: 子の終了は host 送信 `Shutdown`（または stdin EOF）のみ**（最後の `DestroyInstance` で host が `Shutdown` を送る現行意味の延長）。子の自律 exit は新語彙を要るため入れない
 - **R-R4**: runner registry は bounded — `WIRE_MAX_INSTANCES` 相当上限を超える `CreateInstance` は defined `Err` で拒否（untrusted host からの無制限 registry 膨張を防ぐ）
 
 ### 検証
@@ -169,18 +170,20 @@ Issue 要求範囲:
 
 ## Acceptance Criteria
 
-> 各 AC は「確定した選択肢が採用された場合に検証されるべき振る舞い」を記す。**OPEN と印した論点は design/ADR 確定後に対応する検証へ落とす**。
+> 各 AC は「確定した選択肢が採用された場合に検証されるべき振る舞い」を記す。~~OPEN と印した論点は design/ADR 確定後に対応する検証へ落とす~~ → **design `../designs/issue-117-bundle-child-process.md`（軸 1-14）と ADR `../adr/issue-117-bundle-child-failed-granularity.md` で全 OPEN 論点が確定済み** — 以下は確定契約に対する検証として記述する。
 
-- [ ] **AC1（wire v2 codec）**: `WIRE_VERSION = 2` で、`instance` 識別子を持つ `Command`/`BlockIn`/`BlockDone` と `CreateInstance`/`DestroyInstance` 動詞が codec round-trip を持ち、`Hello.version` 不一致（v1 子・v1 host）は handshake 失敗で定義済み拒否される。decode が不正 `instance`（未定義値・未登録 handle・過剰なインスタンス数宣言）は defined 拒否し、panic・無制限アロケーションしない
-- [ ] **AC2（bundle 制御面）**: 同一 L1 route の 2 回目以降の `Instantiate` が **子プロセスを追加 spawn せず** 既存子へ `CreateInstance` で成立し、各インスタンスが独立した `PluginHandle`・独立した lifecycle（init→activate→start→stop→deactivate→save/restore→destroy）・独立した `process` 等価経路（per-instance shm segment + `RtLeg`）を持つ。`Scan`/`Instantiate`/`Destroy` 等の caller 側コマンド系列は L0/dedicated と同一面を維持する
-- [ ] **AC3（seq/correlation）**: 2 インスタンスが同一子内で並行してコマンド・ブロックを処理しても、`Reply`/`BlockDone` が正しい instance・seq に相関し、混線・他インスタンスへの誤配・waiter ハングがない（R-W3 の確定規則に従って検証）
-- [ ] **AC4（`Failed` 粒度 — OPEN）**: 確定した粒度で検証する。推奨形（子スコープ terminal）なら: bundle 内 1 インスタンスでも子プロセスが死ねば **bundle 内全 live インスタンスが `LifecycleState::Failed`** に収束・全 pending waiters が `Err(Ipc)` wake・全 RT leg が pass-through 側に落ち・以後の全コマンド/`process` が定義済み拒否になる。dedicated 経路では従来どおり 1 インスタンスのみ `Failed`
-- [ ] **AC5（通知）**: 確定した通知 semantics で検証する。推奨形（per-instance fan-out）なら: bundle crash で **影響を受けた各インスタンスに `HostNotification::InstanceFailed{handle, exit}` が 1 つずつ** 観測され、`exit` は全て同一の `ChildExit`。1 インスタンスだけ残った場合でもその通知は正しい handle で届く
-- [ ] **AC6（runner registry）**: runner が `instance` で dispatch し、plugin hook panic が `Err(PluginFailed)` に正規化されて対象 instance のみ失敗・runner と他 instance は生き続ける。`CreateInstance` 超過（上限越え・未登録 handle 宛コマンド）は defined `Err` で拒否され runner が死なない
-- [ ] **AC7（dedicated 無退行）**: dedicated 経路（isolation 指定）で既存 E2E（`l1_proxy_e2e`・`l1_runner_e2e` 相当）が無退行 — 現行の spawn/handshake/lifecycle/block/crash 契約が変わらない
+- [ ] **AC1（wire v2 codec）**: `WIRE_VERSION = 2` で、`instance` 識別子を持つ `Command`/`Reply`/`BlockIn`/`BlockDone` と `CreateInstance`/`DestroyInstance` 動詞が codec round-trip を持ち、`Hello.version` 不一致（v1 子・v1 host）は handshake 失敗で定義済み拒否される。decode が不正 `instance`（`WIRE_MAX_INSTANCES` 以上・`WIRE_INSTANCE_NONE` 不整合・未登録 handle）は defined 拒否し、panic・無制限アロケーションしない。`encode_host_error(HostError::InstanceLimit) → tag 9`・`decode(9) → InstanceLimit` の両向き round-trip が pin される（`encode_host_error` の `_ => Err(UnsupportedVariant)` wildcard arm — 追加忘れで defined 拒否が子死亡に化ける退行を防ぐ）
+- [ ] **AC2（bundle 制御面）**: 同一 L1 route の 2 回目以降の `Instantiate` が **子プロセスを追加 spawn せず** 既存子へ `CreateInstance` で成立し、各インスタンスが独立した `PluginHandle`・独立した lifecycle（init→activate→start→stop→deactivate→save/restore→destroy）・独立した `process` 等価経路（per-instance shm segment + `RtLeg`）を持つ。`Scan`/`Instantiate`/`Destroy` 等の caller 側コマンド系列は L0/dedicated と同一面を維持する。pool 選択述語 `live_count < WIRE_MAX_INSTANCES && !terminal && !shutdown_initiated` に従い、該当子が無ければ新規 spawn する
+- [ ] **AC3（seq/correlation）**: 2 インスタンスが同一子内で並行してコマンド・ブロックを処理しても、`Reply`/`BlockDone` が正しい instance・seq に相関し、混線・他インスタンスへの誤配・waiter ハングがない（コマンド seq 子ワイド + `waiter.instance` 照合・block seq per-instance + `block_in_flight: HashSet<(u32,u64)>` の確定規則）
+- [ ] **AC4（`Failed` 粒度 — 確定）**: 子スコープ terminal 基礎 + 帰属可能な per-instance 収束 + inert 規則の全分岐を検証する: (a) 子死亡/帰属不能違反で **bundle 内全 live インスタンスが `LifecycleState::Failed`** に収束・全 pending waiters が `Err(Ipc)` wake・全 RT leg が pass-through・以後 `Err(Failed)`; (b) 帰属可能違反（live instance の `block_in_flight` に無い block seq）は対象 instance のみ `Failed`・兄弟生存; (c) **inert** — registered-but-not-live（`converge_instance` 済み `Failed`・`Destroying`）宛 frame（drain 済み waiter 宛 `Reply`・合成済み doorbell 宛 `BlockDone`）と `i ∉ Inner.instances` 宛完了は静かに drop され違反・収束・通知を起こさない; (d) `Shutdown` 送信後の子 frame・EOF は non-event（clean teardown 不変）; (e) `DestroyInstance` doorbell window — serialize で entry が `Destroying` 化・以後の submit は `mark_failed` 合成・in-flight doorbell は通常完了・reply で entry 除去（残存 seq は `mark_failed` 解放）
+- [ ] **AC5（通知）**: bundle crash で **影響を受けた各インスタンスに `HostNotification::InstanceFailed{handle, exit}` が 1 つずつ** 観測され、`exit` は全て同一の `ChildExit`。per-instance 収束（子生存）は `ChildExit{None,None}` で 1 通知。mid-`CreateInstance` の子死亡は **通知なし**（公開 handle 未 mint — `Err(Ipc)` で `Instantiate` 失敗）、mid-`DestroyInstance` の子死亡は entry が registered のまま `Failed` + 通知 emit + `Destroy` は `Ok` を返す
+- [ ] **AC6（runner registry）**: runner が `instance` で dispatch し、plugin hook panic が `Err(PluginFailed)` に正規化されて対象 instance のみ失敗・runner と他 instance は生き続ける。`CreateInstance` 超過（上限越え `Err(InstanceLimit)`・既登録 handle 重複 `Err(Ipc)`）と **未登録 registry key 宛の `BlockIn`/動詞 → flagged `Reply{i,seq,Err(InvalidHandle)}`** は defined `Err` で拒否され runner が死なない（runner 側 protocol violation にならない）。Scan 照合済み id に対する `Err(UnknownPluginId)` reply は host が `Err(Ipc)` に畳む
+- [ ] **AC7（dedicated 無退行 — 確定 seam）**: `PluginHost` + `isolation: Dedicated` の route（または `#[path]` harness が駆動する `pub(crate)` spawn+`CreateInstance` helper）で既存 E2E（`l1_proxy_e2e`・`l1_runner_e2e` 相当）が無退行 — v2 handshake（spawn→Hello→`Scan`→`CreateInstance`）経由でも lifecycle/block/crash 契約が変わらない
 - [ ] **AC8（RT 契約）**: bundle 経路でも `rt_` 命名テストが `mise run test-rt` でグリーン — endpoint detach→process→leg return の per-instance 不変条件が維持される
-- [ ] **AC9（上限）**: `CreateInstance` が `WIRE_MAX_INSTANCES` 相当上限を超えると defined `Err` で拒否され、host 側は `Err(HostError)` で `Instantiate` を失敗させる（panic・無限待ちなし）。上限内の destroy→create で handle 空間が確定規則（単調 or 再利用）どおり振る舞う
+- [ ] **AC9（上限・handle reuse・live_count）**: `CreateInstance` が `WIRE_MAX_INSTANCES` 相当上限を超えると defined `Err(HostError::InstanceLimit)` で拒否され、host 側は `Err` で `Instantiate` を失敗させる（panic・無限待ちなし）。上限内の destroy→create で handle 空間が再利用規則どおり振る舞う — wire-ID reuse（destroy→create で同一 `i`）時に driver が前世代の queued submit を持ち得る場合、`Destroying` 化が新規 doorbell を止め `mark_failed` で解放し、新インスタンスの ring に stale doorbell が届かない。`live_count` は `Failed` 未 `Destroy` entry を含む registered 全件を数える。`Failed` + live 子への `Destroy` は `DestroyInstance` を送信して runner slot を回収し、terminal 子への `Destroy` はローカル撤去のみで `Ok` を返す
 - [ ] **AC10（CI/監査）**: `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` 全パス・`doc_status.js audit` blocking 0・findings なし
+- [ ] **AC11（pool/子 lifecycle — shutdown-on-empty）**: 最後の `Destroy` で live=0 になった子は `Shutdown`+grace+reap+pool eviction。`converge_child` は terminal 子を pool から除去。spawn/handshake/`CreateInstance` 失敗は pool entry を巻き戻す（`live_count` も戻る）。`L1Instance` drop は live 兄弟を持つ子を殺さず、最後の参照が外れた子は最後の referrer が bounded teardown（`Shutdown` or kill + reap + join）を完了する
+- [ ] **AC12（in-flight lifecycle crash）**: `CreateInstance` 送信中の子死亡 → ローカル収束のみ・`InstanceFailed` 通知なし・`Instantiate` caller へ `Err(Ipc)`・registry entry 除去（`live_count` リークなし）。`DestroyInstance` 送信中の子死亡 → entry は registered のまま `Failed` 収束 + per-instance 通知 emit + `Destroy` は `Ok` を返す（公開 slot は解放 — 現行意味維持）
 
 ## Deferred Design Concerns
 
@@ -194,7 +197,7 @@ Issue 要求範囲:
 | bundle 相関通知 variant（`BundleFailed` 等） | 初期不要と推奨（per-instance fan-out で契約維持・`#[non_exhaustive]` で後追加可） | observer が bundle 相関を要求した時点の follow-up | observer が「同一子の死」を識別できない（現状でも推測可能: 同一 `ChildExit` の連続通知） |
 | pool keep-alive（最後の instance destroy 後も子を残すか） | OPEN — `Shutdown` 明示送信を推奨 | design | warm pool で spawn コスト削減効果が薄れる or 空子がリーク |
 | 異種 plugin_id の混在 bundle（同一 runner binary・複数 factory） | 選択形として記録（明示 pool キー拡張で可能） | design — 必須要件ではない | runner binary が plugin_id 毎に別 process を要し bundle 効果が限定される |
-| `kill_child`（検証用）の bundle 版形 | OPEN — handle 指定で所属子 kill（現行语义延長）を推奨 | design | 検証面で bundle crash 注入が書けない |
+| `kill_child`（検証用）の bundle 版形 | OPEN — handle 指定で所属子 kill（現行意味延長）を推奨 | design | 検証面で bundle crash 注入が書けない |
 | 共有 shm segment / `wire::shm` レイアウト改訂 | **out of scope と確定** — per-instance segment 維持 | Issue #118 系 | 本 Issue が shm 再設計に沈む |
 | frame-I/O dedup・`runner_program()` 解決 | 別 Issue 継続 | Issue #123 | bundle で instance 付き frame を 4 系統が読み書きする変更量が増える（先行で縮むが必須ではない） |
 

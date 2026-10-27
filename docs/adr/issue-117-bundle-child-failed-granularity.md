@@ -62,10 +62,16 @@ Issue #117 は L1 を「1 インスタンス = 1 子プロセス」から **1 �
 
 ### 1. `Failed` 粒度 — 子スコープ terminal を基礎とし、帰属可能な違反のみ instance 単独 `Failed` を許す
 
-- **子スコープ収束**（同居全 live インスタンスを `Failed` へ）: 子死亡・kill・stdout EOF・stdin write 失敗・デコード不能 frame・未知 kind・重複 `Hello`・waiter に無い `Reply`・`Reply.instance` と送信記録の不一致・未知 `instance` 宛 frame・コマンド応答 timeout。**帰属不能な破壊を部分 `Failed` に切り分けることはしない** — 「この破壊は instance X 起因」と主張できないのに他を「健全」と宣言する方が不正確だから
+- **子スコープ収束**（同居全 live インスタンスを `Failed` へ）: 子死亡・kill・stdout EOF・stdin write 失敗・デコード不能 frame（`instance` 範囲外/scope 不整合の `Malformed` を含む）・未知 kind・重複 `Hello`・**live instance に解決する** waiter に無い `Reply`・`Reply.instance` と送信記録の不一致・コマンド応答 timeout。**帰属不能な破壊を部分 `Failed` に切り分けることはしない** — 「この破壊は instance X 起因」と主張できないのに他を「健全」と宣言する方が不正確だから
 - **instance スコープ収束**（対象のみ `Failed`、子と兄弟は生存）: frame が well-formed で demux キー `(instance, block seq)` が一意に live instance へ帰属する違反のみ — 定義上は「live instance に対し `block_in_flight` に無い block seq の `BlockDone`/flagged `Reply` が届く」こと。runner registry は instance 毎に lifecycle・segment・block seq を分離しており、その組の破壊はそのインスタンスの channel 破壊と確定できる
+- **inert — 違反ではなく静かに drop**（いずれの収束も起こさない）:
+  - `instance` が **registered-but-not-live**（`converge_instance` 済み `Failed` 未 `Destroy`・`Destroying`）な entry に解決する frame — waiter 不在の `Reply`・`block_in_flight` に無い `BlockDone`/flagged `Reply`。記録は収束・破棄経路が正当に drain 済みであり、後追い frame を違反とみなすと正常経路の遅延完了で子・兄弟を殺してしまう（典型: `converge_instance(i)` が doorbell に `mark_failed` を合成した後の `BlockDone{i,s}`・waiter drain 後の `Reply{i}`）。**「waiter-less `Reply` ⇒ 子スコープ」の厳格規則は live instance にのみ適用する**
+  - `instance ∉ Inner.instances`（post-removal or 未登録値）宛の `Reply`/`BlockDone` 完了 — `DestroyInstance` reply で entry が除去された後の遅延完了・未使用値の捏造 frame。**決して protocol violation にしない**（追跡対象が存在せず、捏造 handle による兄弟殺し = DoS を拒む）
+  - `Shutdown` 送信済み（`shutdown_initiated`）の子から届く frame・EOF — non-event。clean teardown を変えない（現行 `failed = !shutdown_initiated` 意味の維持）
 - per-command の `Err(HostError)`（`PluginFailed`/`Lifecycle`/`InvalidHandle`/`InstanceLimit`/`Unsupported`）は現行どおり **instance 単位の定義済み拒否** — well-formed reply は常に帰属可能であり `Failed` ではない
 - 完全インスタンススコープ（子死亡でも他は `Failed` にしない）は **物理的に不可能** — プラグインコードは子プロセスと共に死ぬ
+
+（注: 「registered」= `Inner.instances` に登録済み・未除去 — runner registry slot を占有する集合で、`Failed` 未 `Destroy`・`Destroying` を含む。「live」= registered のうち converge 未収束・`Destroying` でないもの。判定表の全行は design `docs/designs/issue-117-bundle-child-process.md`「`Failed` 粒度・通知の確定契約」が正本。本 ADR は review 指摘で確定した inert 規則・`DestroyInstance` doorbell window・post-`Shutdown` non-event の行を織込済み）
 
 ### 2. `HostNotification::InstanceFailed` — per-instance fan-out を維持
 
@@ -90,6 +96,8 @@ bundle crash では**影響を受けた各 live インスタンスへ `InstanceF
 
 - `LifecycleState::Failed` の意味は「この論理インスタンスは二度と応答しない」で一貫 — **それが子の死を意味するか instance channel の死を意味するかは `exit` payload と通知列からのみ読める**。observer は `exit: {None,None}` を「子は生きているが instance は終端」の印として解釈できる
 - bundle crash では observer が N 個の `InstanceFailed`（同一 `ChildExit`）を受け取る — 「1 通知 = 1 子死亡」ではなく「1 通知 = 1 インスタンス終端」の契約
+- **`Bundled` は crash 隔離だけでなく liveness 隔離も trade する**: 1 インスタンスの plugin hang（`process`/hook が返らない）は子の単一スレッド `serve` ループを wedge させ、`command_timeout` 経由で同居**全** live インスタンスが `Failed` 収束する。共有 stdin/stdout は大きな frame（multi-MB `RestoreState` payload 等）を serialize し、他インスタンスの doorbell・コマンド応答を遅らせ得る（block 経路は RT leg の pass-through で継続するが、コマンド面の HoL blocking は実害）。強い liveness 隔離が要る route は `Dedicated` を選ぶ — 選択肢が残るのはこの trade が公開契約として明記されるからこそ
+- inert 規則の副作用: registered-but-not-live・post-removal 宛の frame を違反扱いしないため、dishonest/破損した子が drain 済み領域へ frame を撃ち続けても検出されない（無害だが監査痕跡は残らない — 診断用の debug counter/log は実装詳細として許容、契約上の拒否にはしない）
 - `OutOfProcessSpec` に pub field が 1 つ増え公開 API は additive に拡張（`#[non_exhaustive]` enum）。`InstanceLimit` の `HostError` 追加も同方針
 - dedicated 経路の `Failed` 粒度は不変（1 子 = 1 instance で子スコープ収束がそのインスタンスのみに帰着するため、実装上同じコードパスで自然に 1:1 になる）
 
@@ -97,6 +105,9 @@ bundle crash では**影響を受けた各 live インスタンスへ `InstanceF
 
 - [ ] bundle crash（`kill_child`・crash fixture）で同居全 live インスタンスが `LifecycleState::Failed` へ収束し、各 handle に `InstanceFailed` が 1 つずつ届く（`exit` 同値）
 - [ ] 帰属可能違反（live instance の `block_in_flight` に無い `BlockDone`）で対象 instance のみ `Failed`・兄弟は生存継続
-- [ ] 帰属不能違反（waiter なし `Reply`・不正 `instance`・EOF）で全 live インスタンス `Failed`
+- [ ] 帰属不能違反（live instance 宛の waiter なし `Reply`・`Reply.instance` 不一致・`instance` 範囲外/scope 不整合・EOF）で全 live インスタンス `Failed`
+- [ ] registered-but-not-live 宛 frame（`converge_instance` 後の `BlockDone{i,s}`・waiter drain 後の `Reply{i}`）・`i ∉ instances` 宛完了が inert drop — 収束・通知・兄弟への影響なし、違反として記録されない
+- [ ] `DestroyInstance` doorbell window — `Destroying` 化以後の新規 submit は `mark_failed` 合成、in-flight doorbell は通常完了、reply で entry 除去・残存 seq は `mark_failed` 解放・除去後の `(i,seq)` 完了は inert（runner 側対称契約: 未登録 key は flagged `Err(InvalidHandle)` で runner が死なない）
+- [ ] `Shutdown` 送信後の子 frame・EOF が non-event — clean teardown（mirror `Destroyed`・通知なし）を変えない
 - [ ] per-instance 収束の通知が `ChildExit{None,None}` で 1 度だけ届く
 - [ ] `isolation: Dedicated` の route で 1 インスタンスのみ `Failed` になる既存契約が無退行
