@@ -37,8 +37,14 @@ relations:
     - "docs/adr/plugin-isolation-strategy.md"
   derived-by:
     - "docs/designs/issue-117-bundle-child-process.md"
+    - "docs/plans/implement-issue-117-bundle-child-process.md"
+    - "docs/tasks/l1-child-instance-split.md"
+    - "docs/tasks/l1-route-pool-and-isolation-surface.md"
+    - "docs/tasks/l1-bundle-e2e-and-granularity-verification.md"
+    - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/76"
     - "https://github.com/scarecrow173/ruviform/issues/119"

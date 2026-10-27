@@ -19,6 +19,7 @@ relations:
   implements: []
   implemented-by:
     - "../designs/issue-117-bundle-child-process.md"
+    - "../plans/implement-issue-117-bundle-child-process.md"
   depends-on:
     - "issue-119-l1-wire-version-policy.md"
   blocks: []
@@ -44,8 +45,15 @@ relations:
   derived-by:
     - "../designs/issue-117-bundle-child-process.md"
     - "../adr/issue-117-bundle-child-failed-granularity.md"
+    - "../plans/implement-issue-117-bundle-child-process.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "../test-specs/issue-117-wire-v2-codec-tests.md"
+    - "../test-specs/issue-117-bundle-failed-granularity-tests.md"
+    - "../test-specs/issue-117-bundle-e2e-tests.md"
+    - "../test-specs/plugin-l1-wire-codec-tests.md"
+    - "../test-specs/plugin-l1-proxy-contract-tests.md"
+    - "../test-specs/plugin-l1-runner-e2e-tests.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/76"
     - "https://github.com/scarecrow173/ruviform/issues/113"

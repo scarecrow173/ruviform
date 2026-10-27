@@ -47,6 +47,7 @@ relations:
     - "../specs/issue-117-bundle-child-process.md"
     - "../designs/issue-117-bundle-child-process.md"
     - "../adr/issue-117-bundle-child-failed-granularity.md"
+    - "../plans/implement-issue-117-bundle-child-process.md"
   verifies: []
   verified-by: []
   references:

@@ -19,6 +19,9 @@ Directory: `docs/test-specs`
 | TSPEC-034KPgCJjA5nOIvEtscQj8 | ruviform-edit 編集データモデル テスト仕様 | approved | [edit-data-model-tests.md](./edit-data-model-tests.md) |
 | TSPEC-034J6OIFK83GJIsST60Jck | 公開 enum 拡張性と時間演算精度の契約保証 | approved | [followup-enum-compat-and-time-arithmetic.md](./followup-enum-compat-and-time-arithmetic.md) |
 | TSPEC-034LFCoZvNuuSaGpSTrbp0 | IccTransform ICC 経路 契約テスト仕様 | approved | [icc-transform-contract-tests.md](./icc-transform-contract-tests.md) |
+| TSPEC-034NlQ9qbEN4prlkfCwvdl | L1 bundle E2E tests（Issue #117 — pool lifecycle・隔離 surface・runner registry・dedicated 非回帰） | proposed | [issue-117-bundle-e2e-tests.md](./issue-117-bundle-e2e-tests.md) |
+| TSPEC-034NlQ8vmaETbrprsDYNkH | L1 bundle Failed 粒度 tests（Issue #117 — child/instance scope 判定表・fan-out・Destroying doorbell） | proposed | [issue-117-bundle-failed-granularity-tests.md](./issue-117-bundle-failed-granularity-tests.md) |
+| TSPEC-034NlQ76ZnpNmAnyT0HgY9 | L1 wire v2 codec tests（Issue #117 — instance envelope・新動詞・scope 判定表・InstanceLimit） | proposed | [issue-117-wire-v2-codec-tests.md](./issue-117-wire-v2-codec-tests.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |

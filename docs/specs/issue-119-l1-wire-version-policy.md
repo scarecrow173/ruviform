@@ -54,6 +54,9 @@ relations:
     - "../discovery/issue-117-bundle-child-process-discovery.md"
     - "issue-117-bundle-child-process.md"
     - "../designs/issue-117-bundle-child-process.md"
+    - "../plans/implement-issue-117-bundle-child-process.md"
+    - "../tasks/l1-wire-v2-codec-cutover.md"
+    - "../test-specs/issue-117-wire-v2-codec-tests.md"
   verifies: []
   verified-by:
     - "../test-specs/plugin-l1-wire-codec-tests.md"
