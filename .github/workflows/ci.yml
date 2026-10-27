@@ -184,3 +184,52 @@ jobs:
       # Full measurement (mise run bench) stays a local manual run.
       - name: Smoke-test benchmarks (mise run bench-smoke)
         run: mise run bench-smoke
+
+  l1-real-verify:
+    name: l1-real-verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Keep sibling OS jobs running so a manual verification run reports
+      # the result for every platform even if one of them fails — the
+      # dlopen/spawn/COM paths this lane exercises are platform-shaped.
+      # First exercise on macOS: the raw-.dylib (non-bundle) CLAP
+      # resolution and the VST3 bundleEntry paths run here for the
+      # first time — a red macOS leg is a platform finding, not a
+      # regression.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+
+      - name: Restore tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # The real-plugin L1 lane (Issue #114) is the only execution entry
+      # for the `#[ignore]`-gated adapter E2E: it builds the fixture
+      # cdylibs + `host`-feature runner bins, runs the in-process bridge
+      # + runner-bin unit tests, then the out-of-process E2E. No ALSA
+      # step — the adapter dependency tree contains no cpal.
+      - name: Run real-plugin L1 lane (mise run test-l1-real-plugin)
+        run: mise run test-l1-real-plugin
+
+      - name: Lint host feature (mise run lint-l1-real-plugin)
+        run: mise run lint-l1-real-plugin

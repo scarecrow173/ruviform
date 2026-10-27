@@ -142,3 +142,24 @@ run = "cargo clippy -p ruviform-plugin-ofx --all-targets -- -D warnings"
 description = "Test plugin-core and OFX library, tests and C bridge on MSRV 1.89"
 run = "mise exec rust@1.89.0 -- cargo test -p ruviform-plugin-core -p ruviform-plugin-ofx"
 env = { CARGO_TARGET_DIR = "target/msrv-ofx" }
+
+# Real-plugin L1 lane (Issue #114): the `#[ignore]`-gated E2E tests under
+# `tests/l1_real_adapter_e2e.rs` need the workspace-built fixture cdylib and the
+# `host`-feature L1 runner binary, so the lane builds them deterministically
+# first, then runs the in-process unit test layer (`--lib` bridge contract tests
+# plus `--bins` for the runner binaries' own `#[cfg(test)]` fixture-resolution
+# tests — neither is reached by the `--test`/`--ignored` selection) and finally
+# the out-of-process E2E. This task is the only intended entry point for those
+# tests — `cargo test --workspace` never runs them (`#[ignore]` + `#![cfg]` +
+# `required-features` + optional deps).
+[tasks.test-l1-real-plugin]
+description = "Build the CLAP/VST3 fixture cdylibs and `host`-feature L1 runner bins, run the in-process bridge + runner-bin unit tests (`--lib --bins`), then the `#[ignore]`-gated real-plugin L1 E2E (`--test l1_real_adapter_e2e -- --ignored`) — requires the fixture + `host` artifacts this task itself builds"
+run = [
+  "cargo build -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host",
+  "cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host --lib --bins",
+  "cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host --test l1_real_adapter_e2e -- --ignored",
+]
+
+[tasks.lint-l1-real-plugin]
+description = "Lint the CLAP/VST3 adapter crates at `-D warnings` with feature `host` (bridge, runner bins and E2E test targets) — outside the default `lint` task's feature set"
+run = "cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 --all-targets --features host -- -D warnings"

@@ -75,6 +75,11 @@ clack-extensions = { version = "=0.2.0", features = ["clack-host", "thread-check
 # RT 境界テストの allocation/deallocation を機械検出する Issue #22
 # 検証レーン（audio-device の callback 経路検証と同方式）。
 assert_no_alloc = "1.1"
+# Issue #114（T4）: `tests/l1_real_adapter_e2e.rs` が実 fixture cdylib +
+# `host` runner を `PluginHost`/`OutOfProcessSpec` 経由で駆動する。
+# dev-dep 方向（adapter → host）で依存 DAG の非環を維持する — plugin-host は
+# adapter crate に依存しない。
+ruviform-plugin-host = { path = "../ruviform-plugin-host" }
 
 [lints]
 workspace = true

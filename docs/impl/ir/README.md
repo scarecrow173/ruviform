@@ -85,3 +85,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034MRyrqJRqI9iIjgk5hIX` | Issue #114 CLAP host bridge — Task 1 implementation | completed | [issue-114-clap-host-bridge-task-1-implementation.md](./issue-114-clap-host-bridge-task-1-implementation.md) |
 | `IMPL-034MRCMPz6M4DGPJGY0ZgX` | Issue #114 VST3 host bridge — Task 2 implementation | completed | [issue-114-vst3-host-bridge-task-2-implementation.md](./issue-114-vst3-host-bridge-task-2-implementation.md) |
 | `IMPL-034MS9G9d3xl5J3Q1Wk1bn` | Issue #114 real adapter runner bins — Task 3 implementation | completed | [issue-114-real-adapter-runner-bins-task-3-implementation.md](./issue-114-real-adapter-runner-bins-task-3-implementation.md) |
+| `IMPL-034MTufALVIX739hFwiVkS` | Issue #114 real adapter L1 E2E + opt-in lane — Task 4 implementation | completed | [issue-114-real-adapter-l1-e2e-opt-in-lane-task-4-implementation.md](./issue-114-real-adapter-l1-e2e-opt-in-lane-task-4-implementation.md) |

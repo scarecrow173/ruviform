@@ -42,6 +42,45 @@ bounce-scratch 戦略（チャネルごと bounce + `finish_block` 書き戻し�
 処理のみで、確保・ブロック・I/O を行わない。Issue #22 検証レーンの
 `assert_no_alloc` で境界の allocation/deallocation を機械検出する。
 
+## feature `host` — 規格 host-side bridge + L1 runner（Issue #114）
+
+default feature 集合に含まない `host` を有効化すると、host 側 bridge
+`ruviform_plugin_vst3::host` が公開される。`Vst3Library::load(path)` が実
+VST3 モジュールを `libloading` で dlopen し、raw `vst3` COM bindings 直駆動で
+class scan（`"Audio Module Class"` filter）→ `createInstance` →
+`IComponent`/`IAudioProcessor` + `IEditController` を中立
+`PluginFactory`/`ErasedPlugin` 契約へ写像する（`PluginDescriptor`/`ParamInfo`
+の `'static` 境界は load/factory 構築時の 1 回限り bounded `String::leak`/
+`Vec::leak` で実体化）。`save_state`/`restore_state`/`open_gui`/`close_gui`
+は `Plugin` 既定の `Err(HostError::Unsupported)` のまま — bridge は規格
+state/GUI 動詞を呼ばない（fixture の `setState`/`getState` は no-op stub・
+偽の round-trip を観測しない）。
+
+descriptor `id` は component CID（`GainComponent::CID` = `vst3::uid(
+0x5A1B2C3D, 0x4E5F6A7B, 0x8C9D0E1F, 0x2A3B4C5D)`）raw 16 byte の小文字 hex
+— `uid()` byte order は **platform 依存**（Windows `3d2c1b5a5f4e7b6a8c9d
+0e1f2a3b4c5d`・非 Windows `5a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d`）のため、
+期待値は test が `uid()` bytes から実行時に derive する（`#[cfg]`-conditional
+literal は regression pin のみ）。
+
+runner bin `ruviform-plugin-vst3-l1-runner`（`[[bin]] required-features =
+["host"]`）は compile-time 固定 — fixture cdylib
+`{DLL_PREFIX}ruviform_plugin_vst3{DLL_SUFFIX}` を `RUVIFORM_L1_REAL_PLUGIN_DIR`
+（任意 env override）→ 未設定時は runner executable sibling
+（`target/<profile>/`）で解決し、スキャン済み factory を
+`ruviform_plugin_export::run(factories)` へ渡す。`run` の argv 規約
+（`--ruviform-shm-key` 必須・`--ruviform-plugin-id`・未知引数 usage reject →
+exit 2）は不変で、plugin path を argv で受け渡す機構はない（load 失敗は
+`eprintln!` + exit 1 pre-Hello → 親 spawn `Err(HostError::Ipc)`）。
+
+検証入口は opt-in lane のみ: `mise run test-l1-real-plugin` が
+`cargo build --features host`（fixture + runner 生成）→ `cargo test --lib
+--bins`（in-process bridge 契約層 + runner bin の fixture 解決 unit test）
+→ `cargo test --test l1_real_adapter_e2e -- --ignored`
+（`PluginHost`/`OutOfProcessSpec` 経由の実バイナリ L1 E2E — `#[ignore]`
+ゲートで既定 `cargo test` 経路から分離）の 3 段を実行する。
+lint は `mise run lint-l1-real-plugin`（`--features host`・`-D warnings`）。
+
 ## 関連
 
 - 設計ベースライン: docs/designs/ruviform-architecture-design-baseline.md

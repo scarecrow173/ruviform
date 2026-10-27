@@ -1413,6 +1413,7 @@ dependencies = [
  "ruviform-media-core",
  "ruviform-plugin-core",
  "ruviform-plugin-export",
+ "ruviform-plugin-host",
 ]
 
 [[package]]
@@ -1469,6 +1470,7 @@ dependencies = [
  "ruviform-media-core",
  "ruviform-plugin-core",
  "ruviform-plugin-export",
+ "ruviform-plugin-host",
  "vst3",
 ]
 
