@@ -88,7 +88,7 @@ Issue #114 — #76 で確立した L1 アウトプロセス経路（`ruviform_pl
 | e | VST3 host binding | **`vst3` 0.3.0 raw COM bindings 直駆動 + `libloading` 0.8.9**（`vst3` は plugin-side で既存 prod dep・`libloading` は `ruviform-plugin-ofx` と同一バージョン — ともに feature `host` で optional 化はしない: vst3 は既存必須 dep のまま、libloading のみ optional）。外部 crate `vst3-host` 0.10.0 は評価の上**不採用**（依存追加の判断を参照）。host-side COM object は adapter 内で `Class`/`ComWrapper` 実装 |
 | f | fixture 供給源 | **workspace 生成 cdylib をそのまま規格 fixture に使う** — `target/<profile>/ruviform_plugin_clap.dll`・`ruviform_plugin_vst3.dll`（実 `clap_entry`/`GetPluginFactory` export・dlopen 可能）。新規 fixture crate・外部ダウンロード・bundle 化は不要（`.clap`/`.vst3` 配布形の再現は deferred） |
 | g | E2E トポロジー | **adapter crate 内 `tests/l1_real_adapter_e2e.rs`（`#![cfg(feature = "host")]` + 各テスト `#[ignore = "…"]`）** — `env!("CARGO_BIN_EXE_<runner>")` で runner 解決（same-crate 規約）・fixture 既知 metadata の const `PluginDescriptor` を `spec.descriptor` に供給（handshake field-equality が子側の実 metadata 合成写像を検証 — §`'static` メタデータ実体化）→ `PluginHost`/`OutOfProcessSpec` で `l1_proxy_e2e` 同型の spawn→lifecycle→shm block→state 動詞→destroy。device-independent（音声デバイス不使用 — 入出力はテストベクトル） |
-| h | CI lane | **専用 mise task + `#[ignore]` ゲート**（ユーザー決定）。`test-l1-real-plugin`（`cargo build --features host` → `cargo test --features host -- --ignored`）+ `lint-l1-real-plugin`（clippy `--features host`）。env-gated skip は不採用（repo に慣行なし・silent skip 禁止 — 欠落時は fail）。`RUVIFORM_L1_REAL_PLUGIN_DIR` を runner 側の任意 fixture dir override として定義。CI 反映は既存 `ci.yml`（workflow_dispatch）内の `l1-real-verify` job — **別 workflow ファイルは作らない** |
+| h | CI lane | **専用 mise task + `#[ignore]` ゲート**（ユーザー決定）。`test-l1-real-plugin`（`cargo build --features host` → `cargo test --features host --lib --bins` → `cargo test --features host --test l1_real_adapter_e2e -- --ignored` — 実装確定の 3 段）+ `lint-l1-real-plugin`（clippy `--features host`）。env-gated skip は不採用（repo に慣行なし・silent skip 禁止 — 欠落時は fail）。`RUVIFORM_L1_REAL_PLUGIN_DIR` を runner 側の任意 fixture dir override として定義。CI 反映は既存 `ci.yml`（workflow_dispatch）内の `l1-real-verify` job — **別 workflow ファイルは作らない** |
 | i | descriptor 合成 | **bridge が実バイナリ metadata から `PluginDescriptor` を合成**（CLAP: `clap_plugin_descriptor` の id/name/vendor/version/features を順序保持で写像。VST3: `IPluginFactory2::getClassInfo2`/`IPluginFactory3::getClassInfoUnicode` — `"Audio Module Class"` category のみ採用・id = CID 16byte hex・name/vendor/version・subCategories → features）。`PluginDescriptor` の `'static` 境界は §`'static` メタデータ実体化の intern-once で満たし、host 側 `spec.descriptor` は fixture 既知値の const literal — handshake field-equality が合成写像の実検証となる |
 | j | `unsafe` 封じ込め | `PluginEntry::load`/`libloading`/COM vtable 呼出しは `host` モジュール内の scoped `#[expect(unsafe_code)]` + SAFETY コメント — OFX `ffi/loader.rs` の先例型 |
 
@@ -128,8 +128,10 @@ Issue #114 — #76 で確立した L1 アウトプロセス経路（`ruviform_pl
 pub struct ClapLibrary { /* PluginEntry — loaded .clap shared object */ }
 impl ClapLibrary {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, ClapHostError>;
-    pub fn descriptors(&self) -> Vec<PluginDescriptor>;      // entry factory scan → 合成
+    pub fn descriptors(&self) -> &[PluginDescriptor];        // entry factory scan → 合成
                                                              //   （'static 実体化は §`'static` メタデータ実体化）
+                                                             //   — 実装確定: load 時 scan の cached 表を
+                                                             //     slice で返す（Vec ではない）
     pub fn factories(&self) -> Vec<ClapPluginFactory>;        // descriptor 毎の bridge factory
 }
 #[non_exhaustive]
@@ -139,11 +141,13 @@ struct ClapPlugin { /* PluginInstance<BridgeHandlers> — !Send・子 single-thr
 ```
 
 - **lifecycle 写像**: `init` → `PluginInstance::new`（clap `plugin.init` 経路）・`prepare` → `activate(PluginAudioConfiguration)`・`start_processing`/`stop_processing` → clap 同名動詞・`process_host` → `StartedPluginAudioProcessor::process`（`HostInput`/`HostOutput` view → `InputAudioBuffers`/`OutputAudioBuffers` 変換、`EventKind::ParamValue` → `params` extension の in-events、`ProcessResult` → CLAP status 読取り）
+- **buffer 受け渡し（実装確定差分 — Task 1）**: `HostInput`/`HostOutput` ともに **bridge-owned scratch 経由の bounce**（input copy-in・output copy-back）。planning 時点では output を `HostOutput.channel_mut` の `&mut [f32]` 直接 alias に許容したが、中立 `process_host` の outputs は `&mut dyn BufferViewMut` で 1 live borrow につき 1 `&mut [f32]` しか yield しない — multi-channel 直接 alias は raw-pointer 組立（追加 `unsafe`）を要し、unsafe 境界を `PluginEntry::load` 1 箇所に保つ方針（決定 j）と衝突するため output も対称 bounce に確定（unconnected output channel は defined drop・declared block と channel slice の長さ不一致は `ProcessStatus::Error` の defined rejection）。VST3 側は `channelBuffers32` への直接指しを維持 — 両 bridge の非対称は意図的（IR `issue-114-clap-host-bridge-task-1-implementation.md`）
 - **params**: `params` extension の count/info → 中立 `ParamInfo` 表（denormalize 含む — `name`/`unit` の `'static` 実体化は §`'static` メタデータ実体化）
 - **descriptor**: `clap_plugin_descriptor` の id/name/vendor/version/features（順序保持）→ `PluginDescriptor` 全 field 写像（`'static` 実体化は §`'static` メタデータ実体化）— handshake field-equality が写像の実検証となる（親側は const pin — §descriptor 合成と handshake 整合）
 - **thread-check 方針**: fixture は `plugin.init` で `HostThreadCheck` extension を解決し、host が `is_audio_thread == Some(false)` と応答した `process` を defined rejection する（plugin.rs）。runner は単一 command thread で `process` を駆動するため、bridge の `HostHandlers::declare_extensions` は **`HostThreadCheck` を登録しない** — extension 不在は `host.get_extension::<HostThreadCheck>()` が `None` を返す fixture の graceful fallback（check 不実施・挙動不変）に落ちる。`is_audio_thread = true` と応答する代替は棄却 — command thread は RT audio thread ではなく、不実の capability 申告は thread 契約違反を覆い隠す。fixture が解決を試みる host extension は `thread-check` のみ（plugin.rs: `get_extension` 呼出は init の 1 箇所）
 - **error 写像**: `PluginInstanceError`/`PluginEntryError` → `HostError`/`ClapHostError` への defined 写像。load/instantiate 失敗は panic-free の `Err` か `create()` 内 panic（`run` が catch → exit 1 → spawn `Err(Ipc)`）のいずれかの defined rejection に収束
 - **`Send`**: `PluginInstance` は `!Send`（clack-host 定義）— 子は single-thread、`create_sendable` は default `None`（L1 経路で不要求）
+- **teardown（実装確定差分 — Task 1）**: 中立 `Plugin` 面には deactivate/destroy hook がないため、`Drop for ClapPlugin` が best-effort に `stop_processing`（still-started processor の `into_stopped`）→ `deactivate` → instance drop（`plugin.destroy`）を駆動する。`entry`（clack 内部 Arc-backed）を factory/instance が clone するため module unmap は最後の instance drop まで発生しない（OFX `OfxLibrary::share` と同型の lifetime 保証）
 - **unsafe**: `PluginEntry::load` のみ（dlopen）— `host.rs` 内 scoped `#[expect(unsafe_code)]` + SAFETY
 
 ### VST3 bridge（`ruviform-plugin-vst3::host`）
@@ -155,8 +159,10 @@ struct ClapPlugin { /* PluginInstance<BridgeHandlers> — !Send・子 single-thr
 pub struct Vst3Library { /* libloading::Library + IPluginFactory ComPtr */ }
 impl Vst3Library {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Vst3HostError>;
-    pub fn descriptors(&self) -> Vec<PluginDescriptor>;      // class-info scan → 合成
+    pub fn descriptors(&self) -> &[PluginDescriptor];        // class-info scan → 合成
                                                              //   （'static 実体化は §`'static` メタデータ実体化）
+                                                             //   — 実装確定: load 時 scan の cached 表を
+                                                             //     slice で返す（Vec ではない）
     pub fn factories(&self) -> Vec<Vst3PluginFactory>;
 }
 #[non_exhaustive]
@@ -166,11 +172,11 @@ struct Vst3Plugin { /* component + controller pair + host objects — !Send */ }
 ```
 
 - **load**: `libloading::Library::new` → `GetPluginFactory` → `IPluginFactory` ComPtr。platform module hook（Windows `InitDll`・Linux `ModuleEntry`・macOS `bundleEntry`）は export されていれば呼ぶ（fixture は全て trivially-true 実装 — best-effort）
-- **scan/descriptor**: `countClasses` + `getClassInfo2`/`getClassInfoUnicode` を列挙し `category == "Audio Module Class"` をプラグインとして採用（`Component Controller Class` は pair 対象・独立プラグインではない）。id = CID の 16byte hex・name/vendor/version/`subCategories` → `PluginDescriptor`（`'static` 実体化は §`'static` メタデータ実体化）
+- **scan/descriptor**: `countClasses` + `getClassInfo2`/`getClassInfoUnicode` を列挙し `category == "Audio Module Class"` をプラグインとして採用（`Component Controller Class` は pair 対象・独立プラグインではない）。id = CID の 16byte hex（実装確定 — `tuid_hex` が raw `TUID` byte を lowercase hex 化。`vst3::uid()` の byte layout は **platform 依存**: Windows は先頭 GUID field が反転するため Windows/非 Windows で id hex が異なる・`TUID` 要素は `c_char`（本 platform では `i8`）のため符号拡張なし reinterpret（`cast_unsigned`）が必須 — E2E 側は prod とは独立に `uid(...)` bytes から hex を derive し `#[cfg]`-conditional literal で両形を regression pin）・name/vendor/version/`subCategories` → `PluginDescriptor`（`'static` 実体化は §`'static` メタデータ実体化）
 - **instantiate / minimal-host call 列**: `createInstance(component CID)` → QI `IComponent`/`IAudioProcessor`・`getControllerClassId` → `createInstance(controller CID)` → `IEditController` → component・controller 双方の `IPluginBase::initialize(context)` に最小 `IHostApplication` を `ComWrapper` で供給 → `IEditController::setComponentHandler(handler)` で最小 `IComponentHandler` を controller に注入。handler 注入経路は `initialize(context)` ではない — context が運ぶのは `IHostApplication` で、`IComponentHandler` は `setComponentHandler` 経由が spec の定める面（fixture: controller.rs — handler 非保持の `kResultOk` acknowledge）。bus 情報問合せ（`getBusCount`/`getBusInfo`/`getBusArrangement`）は fixture では optional（stereo 既定受理）。`IPluginFactory3::setHostContext` は fixture が trivial acknowledge（`kResultOk`）のため呼んでも省略してもよい。実装面は「fixture 形状 + spec の必須面」に scope する（component.rs test の `TestQueue`/`TestChanges` が同型先例）
 - **lifecycle 写像**: `prepare`（`Activate` 内）→ **`IComponent::setActive(true)` → `IAudioProcessor::setupProcessing(ProcessSetup{kRealtime, kSample32, maxSamplesPerBlock, sampleRate})` の順** — fixture は `setupProcessing` に Activated 済みを要求し、未活性なら `kResultFalse`（component.rs — fixture 自身の `activate()` test helper も `setActive(1)` → `setupProcessing` の順）。`setBusArrangements` は fixture では不要（stereo 既定受理・呼出 gate なし）。`start_processing` → `setProcessing(true)`（negotiated config を要求）・`process_host` → `IAudioProcessor::process(ProcessData)`（`HostInput`/`HostOutput` → `AudioBusBuffers` channel pointer array・`EventKind::ParamValue` → bridge 所有の `IParameterChanges`/`IParamValueQueue` COM object — 子内 host 実装として `Class`/`ComWrapper` で提供）・`stop_processing` → `setProcessing(false)`・`Deactivate` → `setActive(false)`（`Processing` 中は `kResultFalse` 拒否のため stop 先行の対称形）。再 Activate では `setActive(true)` → `setupProcessing` の再交渉を行う（activation 毎の config — fixture の re-activation test と同型）
-- **params**: `IEditController::getParameterCount`/`getParameterInfo` → 中立 `ParamInfo` 表（`'static` 実体化は §`'static` メタデータ実体化）
-- **teardown**: `setProcessing(false)` → `setActive(false)` → `terminate`（両 object）→ release → `ExitDll`/`ModuleExit`/`bundleExit`（export 時のみ）→ `Library` drop — fixture の drop 順序は instance → library（factory/instance が `Arc<Vst3Library>` 参照を保持して unload 順を保証）
+- **params**: `IEditController::getParameterCount`/`getParameterInfo` → 中立 `ParamInfo` 表（`'static` 実体化は §`'static` メタデータ実体化）。実装確定 — 列挙は **`Vst3Library::load` 時点に hoist**（`factories()` は複数回呼出可のため per-call 列挙は呼出し毎に throwaway pair を instantiate し intern 済み表を再 leak する — load 時 1 回 + `factories()` は cache 読取りのみで「once-per-load・no per-call growth」の intern-once 不変条件を構造的に保持。CLAP bridge と同構造 — IR `issue-114-vst3-host-bridge-task-2-implementation.md`）
+- **teardown**: `setProcessing(false)` → `setActive(false)` → `terminate`（両 object）→ release → `ExitDll`/`ModuleExit`/`bundleExit`（export 時のみ）→ `Library` drop — fixture の drop 順序は instance → library（factory/instance が `Arc<Vst3Library>` 参照を保持して unload 順を保証）。実装確定 — `Vst3Plugin`/`LibraryInner` の `Drop` と `LoadGuard` で同順を RAII 駆動し、`init` 途中失敗は `Initialized` 済み object のみ逆順 `terminate` で rollback（`ComPtr` drop が release を担い leak なし）
 - **v1 の defined 境界**: 単一 audio in/out bus・`kSample32`・`kRealtime` のみ受理（fixture の形）。event bus・note expression・`IConnectionPoint`・`IBStream` state・`IProgramListData` 等は未対応（defined rejection or 未実装 — fixture が要求しない面）。**state 動詞は呼ばない** — `IComponent::getState`/`setState` は `kNotImplemented` stub、`IEditController::setState`/`getState` は `kResultOk` no-op stub（component.rs / controller.rs）。controller 経由では `Ok(State(empty))` が返り defined rejection にならず、component 経由は `IBStream` object の供給が要る — よって bridge は規格 state 動詞を一切呼ばず、`save_state`/`restore_state` は `Plugin` 既定の `Err(HostError::Unsupported)` を継承する。E2E はその defined rejection を観測する
 - **unsafe**: `libloading` + 全 vtable 呼出しは `host.rs`/`host/` モジュール内の scoped `#[expect(unsafe_code)]` + SAFETY — OFX `ffi/loader.rs` 先例
 
@@ -284,6 +290,11 @@ let mut spec = OutOfProcessSpec::new(EXPECTED, OsString::from(runner));
 description = "Build real CLAP/VST3 plugin fixtures + L1 runner binaries (--features host), then run the #[ignore]-gated real-binary L1 E2E tests (opt-in lane — Issue #114)"
 run = [
   "cargo build -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host",
+  # 実装確定（Task 4 review 修正）— `--lib --bins` 段を挟み、in-process
+  # bridge 契約層 + runner bin の `#[cfg(test)]` fixture 解決 unit test も
+  # lane/CI に載せる（`--test l1_real_adapter_e2e -- --ignored` 単独では
+  # 両者は実行されない）
+  "cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host --lib --bins",
   "cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host --test l1_real_adapter_e2e -- --ignored",
 ]
 
@@ -314,8 +325,8 @@ run = "cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 --all-target
 - **子側**: `l1_runner_e2e` の `MiniHost` 形で adapter runner を直接駆動する補助検証（必要に応じて — 主証拠は host 側 E2E）
 - **host 側 E2E（主証拠・`#[ignore]` lane）**: `l1_proxy_e2e.rs` `runner_bin_serves_real_gain_plugin` 同型を規格毎 — spawn→`Scan`（実 descriptor）→instantiate→lifecycle→shm block（gain データ正当性・lookahead/pass-through 意味不変）→state 動詞 defined 応答→destroy/exit(0)。異常系 1 本/規格（`kill_child` → `Failed`+once 通知+以後拒否）
 - **異常系**: 既存 `l1-test-worker`/`l1_runner_e2e` が wire 契約の大部分を担う（不変）— adapter runner では kill 系を代表観測し、binary 不在は spawn `Err(Ipc)` を別途 pin
-- **RT レーン**: 変更なし — 子内 bridge は `rt_` 対象外（runner は非 RT 側）。host 側 `rt_` テストが `mise run test-rt` で不変グリーン
-- **lane 運用**: `mise run test-l1-real-plugin`（build → `--ignored` test）・`lint-l1-real-plugin`・ci.yml `l1-real-verify` job
+- **RT レーン**: 実装確定 — 子内 bridge は runner が非 RT 側だが、bridge の `process_host` 経路の alloc-free を `assert_no_alloc` で pin する `rt_process_drives_fixture_block_allocation_free` を feature `host` 内に追加（Task 1 review 修正 — opt-in lane `--lib` 段でのみ実行）。default `cargo test --workspace rt_`（`mise run test-rt`）の一致件数は feature-gate により不変・不変グリーン
+- **lane 運用**: `mise run test-l1-real-plugin`（build → `--lib --bins` unit test → `--ignored` E2E の実装確定 3 段）・`lint-l1-real-plugin`・ci.yml `l1-real-verify` job
 
 ## Risks and Trade-offs
 

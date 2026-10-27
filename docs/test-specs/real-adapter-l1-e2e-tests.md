@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034MLRBDZVBiSYnXZ5dTrr"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "実規格アダプタ L1 E2E（spawn/handshake/lifecycle/shm block/state defined 応答/destroy + 異常系継承）テスト仕様"
 created: "2026-10-26"
 updated: "2026-10-27"
@@ -40,7 +40,7 @@ relations:
 
 # 実規格アダプタ L1 E2E（spawn/handshake/lifecycle/shm block/state defined 応答/destroy + 異常系継承）テスト仕様
 
-> status: proposed — Refs #114。`docs/specs/issue-114-real-adapter-l1-e2e.md`（AC1–AC4・AC7）を verify。配置: `crates/ruviform-plugin-clap/tests/l1_real_adapter_e2e.rs`・`crates/ruviform-plugin-vst3/tests/l1_real_adapter_e2e.rs` — `#![cfg(feature = "host")]` + 各テスト `#[ignore = "..."]` ゲート（opt-in — `mise run test-l1-real-plugin` が唯一の実行入口）。既存 `l1_proxy_e2e.rs`（`ruviform-plugin-host` crate 側・mock worker）の E2E 形を踏襲し、`run`/`OutOfProcessSpec`/`PluginHost`/wire/`RtLeg` の公開契約は**変更しない**（AC7 — 本 spec は契約維持側の実証を担う）。
+> status: approved — Issue #114 の実装（Task 1–5・Full Gate 全 green・`mise run test-l1-real-plugin` の `--ignored` 段で CLAP 3 + VST3 3 E2E 実 pass — 実 fixture cdylib を dlopen する実子プロセス）で契約が実結果により確認済み。Refs #114。`docs/specs/issue-114-real-adapter-l1-e2e.md`（AC1–AC4・AC7）を verify。配置: `crates/ruviform-plugin-clap/tests/l1_real_adapter_e2e.rs`・`crates/ruviform-plugin-vst3/tests/l1_real_adapter_e2e.rs` — `#![cfg(feature = "host")]` + 各テスト `#[ignore = "..."]` ゲート（opt-in — `mise run test-l1-real-plugin` が唯一の実行入口）。既存 `l1_proxy_e2e.rs`（`ruviform-plugin-host` crate 側・mock worker）の E2E 形を踏襲し、`run`/`OutOfProcessSpec`/`PluginHost`/wire/`RtLeg` の公開契約は**変更しない**（AC7 — 本 spec は契約維持側の実証を担う）。
 
 ## Purpose
 

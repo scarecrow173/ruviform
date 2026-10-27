@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034MLRCbJ8DILg5vtGVsQB"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様"
 created: "2026-10-26"
 updated: "2026-10-27"
@@ -40,7 +40,7 @@ relations:
 
 # 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様
 
-> status: proposed — Refs #114。`docs/specs/issue-114-real-adapter-l1-e2e.md`（AC6・AC8 の lane 側）を verify。対象: `mise.toml` の `test-l1-real-plugin`/`lint-l1-real-plugin` task・`.github/workflows/ci.yml` 内の `l1-real-verify` job・`#[ignore]`/`#![cfg]`/`required-features` のゲート機構 — **lane 自身の配線が正しく、default 経路を汚さず、fixture 欠落を silent skip せず、opt-in で実検証できる**ことを pin。
+> status: approved — Issue #114 の実装（Task 1–5・Full Gate 全 green・`mise run test-l1-real-plugin`/`lint-l1-real-plugin` 実測 exit 0 — fixture+runner 生成・`--lib --bins`・`--ignored` E2E 全 pass）で契約が実結果により確認済み。Refs #114。`docs/specs/issue-114-real-adapter-l1-e2e.md`（AC6・AC8 の lane 側）を verify。対象: `mise.toml` の `test-l1-real-plugin`/`lint-l1-real-plugin` task・`.github/workflows/ci.yml` 内の `l1-real-verify` job・`#[ignore]`/`#![cfg]`/`required-features` のゲート機構 — **lane 自身の配線が正しく、default 経路を汚さず、fixture 欠落を silent skip せず、opt-in で実検証できる**ことを pin。
 
 ## Purpose
 

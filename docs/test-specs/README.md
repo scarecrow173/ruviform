@@ -6,7 +6,7 @@ Directory: `docs/test-specs`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
-| TSPEC-034MLRB5YDVNIaDpjhYknO | 規格アダプタ host bridge 契約（descriptor/param 合成・lifecycle 写像・defined rejection・intern-once）テスト仕様 | proposed | [adapter-host-bridge-contract-tests.md](./adapter-host-bridge-contract-tests.md) |
+| TSPEC-034MLRB5YDVNIaDpjhYknO | 規格アダプタ host bridge 契約（descriptor/param 合成・lifecycle 写像・defined rejection・intern-once）テスト仕様 | approved | [adapter-host-bridge-contract-tests.md](./adapter-host-bridge-contract-tests.md) |
 | TSPEC-034Kq8IMaEOJAfVjWYgJwq | ruviform-audio-analysis テスト仕様 | approved | [audio-analysis-tests.md](./audio-analysis-tests.md) |
 | TSPEC-034JgliZJcJ6cl2OeZLkuZ | オーディオデバイス境界ポートと cpal adapter の契約保証 | approved | [audio-device-port-and-cpal-adapter.md](./audio-device-port-and-cpal-adapter.md) |
 | TSPEC-034JRQpjZtjsWuJOB1WYN0 | 音声エンジン テスト仕様 | draft | [audio-engine-tests.md](./audio-engine-tests.md) |
@@ -20,7 +20,7 @@ Directory: `docs/test-specs`
 | TSPEC-034J6OIFK83GJIsST60Jck | 公開 enum 拡張性と時間演算精度の契約保証 | approved | [followup-enum-compat-and-time-arithmetic.md](./followup-enum-compat-and-time-arithmetic.md) |
 | TSPEC-034LFCoZvNuuSaGpSTrbp0 | IccTransform ICC 経路 契約テスト仕様 | approved | [icc-transform-contract-tests.md](./icc-transform-contract-tests.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
-| TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | proposed | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
+| TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |
 | TSPEC-034J5K0lC6EBv1PrsliYd2 | メディアデータモデル API の契約保証 | approved | [media-data-model-api.md](./media-data-model-api.md) |
@@ -39,7 +39,7 @@ Directory: `docs/test-specs`
 | TSPEC-034LNXHUv8qjXSdWNUU2Ps | plugin L1 runner（ruviform-plugin-export）E2E テスト仕様 | approved | [plugin-l1-runner-e2e-tests.md](./plugin-l1-runner-e2e-tests.md) |
 | TSPEC-034LNXxXa2vencBWSvgemD | plugin L1 ワイヤ codec・ライフサイクル Failed 拡張 テスト仕様 | approved | [plugin-l1-wire-codec-tests.md](./plugin-l1-wire-codec-tests.md) |
 | TSPEC-034Mrsijk0b3tEOMrMG0MN | plugin/audio RT 契約 + 退役（assert_no_alloc・arm_apply・leg 返却・plan 退役 drain）テスト仕様 | approved | [plugin-rt-retirement-tests.md](./plugin-rt-retirement-tests.md) |
-| TSPEC-034MLRBDZVBiSYnXZ5dTrr | 実規格アダプタ L1 E2E（spawn/handshake/lifecycle/shm block/state defined 応答/destroy + 異常系継承）テスト仕様 | proposed | [real-adapter-l1-e2e-tests.md](./real-adapter-l1-e2e-tests.md) |
+| TSPEC-034MLRBDZVBiSYnXZ5dTrr | 実規格アダプタ L1 E2E（spawn/handshake/lifecycle/shm block/state defined 応答/destroy + 異常系継承）テスト仕様 | approved | [real-adapter-l1-e2e-tests.md](./real-adapter-l1-e2e-tests.md) |
 | TSPEC-034JxNwt3ReMphshEaeFVe | SPSC・退役・スナップショット交換の RT 契約保証 | approved | [rt-channel-and-snapshot-contracts.md](./rt-channel-and-snapshot-contracts.md) |
 | TSPEC-034JxNxcYxa29rPklpknWh | RtContext・Processor 契約・MasterClock の RT 契約保証 | approved | [rt-context-and-processor-contract.md](./rt-context-and-processor-contract.md) |
 | TSPEC-034KV6hs4k3mZ6jVBgDaKf | RT 観測コスト計測 PoC ハーネスの計測保証 | approved | [rt-observability-poc-tests.md](./rt-observability-poc-tests.md) |

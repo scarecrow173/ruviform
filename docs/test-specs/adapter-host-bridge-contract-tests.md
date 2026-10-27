@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034MLRB5YDVNIaDpjhYknO"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "規格アダプタ host bridge 契約（descriptor/param 合成・lifecycle 写像・defined rejection・intern-once）テスト仕様"
 created: "2026-10-26"
 updated: "2026-10-27"
@@ -40,7 +40,7 @@ relations:
 
 # 規格アダプタ host bridge 契約（descriptor/param 合成・lifecycle 写像・defined rejection・intern-once）テスト仕様
 
-> status: proposed — Refs #114。`docs/specs/issue-114-real-adapter-l1-e2e.md`（AC2・AC3 の bridge 層・AC7）を verify。配置: 各 adapter crate `src/host.rs` 内 `#[cfg(all(test, feature = "host"))]` unit test — **in-process dlopen** で実規格バイナリを load し bridge の合成写像を pin（L1 プロセス面は [real-adapter-l1-e2e-tests](real-adapter-l1-e2e-tests.md) が担う）。実行入口: `cargo test -p ruviform-plugin-clap --features host` / `cargo test -p ruviform-plugin-vst3 --features host`（`#[ignore]` なしの通常層 — lane では `test-l1-real-plugin` の明示 `--lib` step（`cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host --lib`）で実行される — `--test l1_real_adapter_e2e -- --ignored` 単独では本層は実行されない）。
+> status: approved — Issue #114 の実装（Task 1–5・Full Gate 全 green）で契約が実結果により確認済み（`cargo test -p ruviform-plugin-clap/-vst3 --features host` — CLAP lib 63・VST3 lib 47 unit test 実 pass）。Refs #114。`docs/specs/issue-114-real-adapter-l1-e2e.md`（AC2・AC3 の bridge 層・AC7）を verify。配置: 各 adapter crate `src/host.rs` 内 `#[cfg(all(test, feature = "host"))]` unit test — **in-process dlopen** で実規格バイナリを load し bridge の合成写像を pin（L1 プロセス面は [real-adapter-l1-e2e-tests](real-adapter-l1-e2e-tests.md) が担う）。実行入口: `cargo test -p ruviform-plugin-clap --features host` / `cargo test -p ruviform-plugin-vst3 --features host`（`#[ignore]` なしの通常層 — lane では `test-l1-real-plugin` の明示 `--lib --bins` step（`cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host --lib --bins`）で実行される — `--test l1_real_adapter_e2e -- --ignored` 単独では本層は実行されない）。
 
 ## Purpose
 

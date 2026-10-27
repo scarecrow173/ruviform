@@ -1,0 +1,30 @@
+# gate=cargo-tree-adapters-normal started=2026-10-27T00:34:42Z
+$ mise exec -- cargo tree -p ruviform-plugin-clap -p ruviform-plugin-vst3 --edges normal
+ruviform-plugin-clap v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-clap)
+├── clack-common v0.2.0
+│   ├── bitflags v2.13.2
+│   └── clap-sys v0.5.0
+├── clack-extensions v0.2.0
+│   ├── bitflags v2.13.2
+│   ├── clack-common v0.2.0 (*)
+│   ├── clack-plugin v0.2.0
+│   │   ├── clack-common v0.2.0 (*)
+│   │   └── clap-sys v0.5.0
+│   └── clap-sys v0.5.0
+├── clack-plugin v0.2.0 (*)
+├── ruviform-audio-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-audio-core)
+│   └── ruviform-media-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-media-core)
+├── ruviform-media-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-media-core)
+└── ruviform-plugin-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-core)
+    ├── ruviform-audio-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-audio-core) (*)
+    ├── ruviform-media-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-media-core)
+    └── ruviform-video-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-video-core)
+        └── ruviform-media-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-media-core)
+
+ruviform-plugin-vst3 v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-vst3)
+├── ruviform-audio-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-audio-core) (*)
+├── ruviform-media-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-media-core)
+├── ruviform-plugin-core v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-core) (*)
+└── vst3 v0.3.0
+    └── com-scrape-types v0.1.1
+# gate=cargo-tree-adapters-normal exit=0 finished=2026-10-27T00:34:42Z

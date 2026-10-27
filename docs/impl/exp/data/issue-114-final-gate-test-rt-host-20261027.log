@@ -1,0 +1,59 @@
+# gate=test-rt-host started=2026-10-27T00:35:18Z
+$ mise exec -- cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host rt_
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_clap-4d08db16577578c2.exe)
+
+running 11 tests
+test adapt::tests::adapt_transport_maps_musical_fields ... ok
+test adapt::tests::adapt_transport_maps_status_position_and_loop ... ok
+test adapt::tests::adapt_transport_musical_gates_and_unset_forms ... ok
+test gain::tests::rt_process_full_stereo_block ... ok
+test plugin::tests::lifecycle_process_before_start_is_protocol_violation ... ok
+test plugin::tests::process_accepts_transport_and_steady_time ... ok
+test plugin::tests::rt_process_on_audio_thread_passes_thread_check ... ok
+test plugin::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test host::tests::rt_process_drives_fixture_block_allocation_free ... ok
+test plugin::tests::rt_process_off_audio_thread_is_defined_rejection ... ok
+test host::tests::process_before_start_is_defined_error ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.00s
+
+     Running unittests src\bin\ruviform-plugin-clap-l1-runner.rs (target\debug\deps\ruviform_plugin_clap_l1_runner-c9b58b7b22878764.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\l1_real_adapter_e2e.rs (target\debug\deps\l1_real_adapter_e2e-1f54190dd4fc285f.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_vst3-86f3b7605cec03d3.exe)
+
+running 8 tests
+test block::tests::rt_prepare_process_finish_round_trip ... ok
+test component::tests::rt_param_scan_stays_bounded_when_host_counts_lie ... ok
+test component::tests::rt_process_copies_gain_zero_copy ... ok
+test host::tests::transport_snapshot_maps_to_process_context ... ok
+test component::tests::rt_param_scan_total_budget_bounds_worst_case ... ok
+test component::tests::transport_combines_media_and_musical ... ok
+test host::tests::process_before_start_is_defined_error ... ok
+test host::tests::process_with_transport_snapshot_is_defined ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s
+
+     Running unittests src\bin\ruviform-plugin-vst3-l1-runner.rs (target\debug\deps\ruviform_plugin_vst3_l1_runner-efdf9d851a5ba6c9.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\l1_real_adapter_e2e.rs (target\debug\deps\l1_real_adapter_e2e-dc57b46e44b75b38.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+# gate=test-rt-host exit=0 finished=2026-10-27T00:35:19Z

@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034MLRinXTGEtewrMHtDSh"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "Issue #114 実施計画 — 規格アダプタ host-side bridge（CLAP/VST3）+ 実プラグイン L1 E2E（compile-time runner + opt-in lane）"
 created: "2026-10-26"
 updated: "2026-10-27"
@@ -60,7 +60,7 @@ relations:
 
 # Issue #114 実施計画 — 規格アダプタ host-side bridge（CLAP/VST3）+ 実プラグイン L1 E2E（compile-time runner + opt-in lane） Implementation Plan
 
-> status: approved — Refs #114。approved design `docs/designs/issue-114-real-adapter-l1-e2e.md`（DESIGN-034MIeiBWXpLjwgA1yolIT・決定サマリ a–j）を正本とし、spec `docs/specs/issue-114-real-adapter-l1-e2e.md`（proposed・AC1–AC8）と 2026-10-26 のユーザー決定（規格スコープ CLAP+VST3 両方・runner オーサリング compile-time 固定・CI lane = 専用 mise task + `#[ignore]` ゲート）を実装する。**5 buildable task**（task 文書は起票済み）。全 API 名・dep version・fixture metadata は実コード照合済み（vendored `clack-host 0.2.0`/`clack-common 0.2.0`/`clack-extensions 0.2.0`/`vst3 0.3.0`・`Cargo.lock`・両 adapter crate・`ruviform-plugin-export`/`plugin-host`/`plugin-core`）。
+> status: completed — Refs #114。全 5 task 完了。approved design `docs/designs/issue-114-real-adapter-l1-e2e.md`（DESIGN-034MIeiBWXpLjwgA1yolIT・決定サマリ a–j）を正本とし、spec `docs/specs/issue-114-real-adapter-l1-e2e.md`（implemented・AC1–AC8）と 2026-10-26 のユーザー決定（規格スコープ CLAP+VST3 両方・runner オーサリング compile-time 固定・CI lane = 専用 mise task + `#[ignore]` ゲート）を実装した。Task 1 (clap-host-bridge) 完了（actions 1–4・`ClapLibrary`/`ClapPluginFactory`/`ClapPlugin`/`ClapHostError`・双方向 bounce・intern-once・`Drop` teardown・`cargo test --features host` 63 unit test・bridge rt_ test 追加・commit `841ed4e`）。Task 2 (vst3-host-bridge) 完了（actions 5–9・`Vst3Library`/`Vst3PluginFactory`/`Vst3Plugin`/`Vst3HostError`・最小 COM host objects・load-hoisted param table・47 unit test・commit `2a98fc2`）。Task 3 (real-adapter-runner-bins) 完了（actions 10–12・`required-features=["host"]` runner bin 両規格・sibling fixture 解決・`RUVIFORM_L1_REAL_PLUGIN_DIR`・exit 2/1 defined 収束・commit `e1fa4d1`）。Task 4 (real-adapter-e2e-and-lane) 完了（actions 12–14・`l1_real_adapter_e2e.rs` 両規格・`test-l1-real-plugin`/`lint-l1-real-plugin` 3 段 lane・`l1-real-verify` job 3-OS・OFX 境界明文化・commit `70e02b7`）。Task 5 (real-adapter-final-verification) 完了（actions 15–16・Full Gate 19 コマンド全 exit 0・AC1–AC8 証跡・status 同期 — `docs/impl/ir/issue-114-real-adapter-final-verification-closeout-task-5-implementation.md`）。GitHub merge は lead の authoritative `gh` のみ — 本計画は PR merged / issue closed の主張を含まない。
 
 ## Goal
 
@@ -150,8 +150,8 @@ relations:
 | 15 | **Full Gate（1 回のみ・本計画最後段）** — `mise run fmt-check`・`check`・`lint`・`test`・`test-rt`・`bench-smoke`・`mise run test-l1-real-plugin`・`mise run lint-l1-real-plugin`・`mise exec -- prek run --all-files`・doc audit・`cargo tree` DAG 監査・`mise exec -- cargo doc -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host --no-deps`（rustdoc warning 0）— 全 log `docs/impl/exp/data/issue-114-final-gate-*-*.log` 保存・`test-rt` は実一致件数で証明 | gate |
 | 16 | canonical closeout — 実績 IR（`docs/impl/ir/issue-114-*.md`）・coverage 記述・task/plan status 同期・3 test-spec を実結果で `approved` 化・design/spec の実装相違は正本へ同期反映。GitHub merge は lead の authoritative `gh` のみ | closeout |
 
-- test-spec（起票済み・proposed）: [adapter-host-bridge-contract-tests](../test-specs/adapter-host-bridge-contract-tests.md)・[real-adapter-l1-e2e-tests](../test-specs/real-adapter-l1-e2e-tests.md)・[l1-real-plugin-lane-tests](../test-specs/l1-real-plugin-lane-tests.md) — `verified-by` は実ファイルに更新済み
-- **5 task 文書**（起票済み・todo・actions 1-4/5-9/10-11/12-14/15-16）: [clap-host-bridge](../tasks/clap-host-bridge.md)・[vst3-host-bridge](../tasks/vst3-host-bridge.md)・[real-adapter-runner-bins](../tasks/real-adapter-runner-bins.md)・[real-adapter-e2e-and-lane](../tasks/real-adapter-e2e-and-lane.md)・[real-adapter-final-verification](../tasks/real-adapter-final-verification.md)
+- test-spec（起票済み・**approved** — 実測証拠で approved 化済み）: [adapter-host-bridge-contract-tests](../test-specs/adapter-host-bridge-contract-tests.md)・[real-adapter-l1-e2e-tests](../test-specs/real-adapter-l1-e2e-tests.md)・[l1-real-plugin-lane-tests](../test-specs/l1-real-plugin-lane-tests.md) — `verified-by` は実ファイルに更新済み
+- **5 task 文書**（起票済み・**全 done**・actions 1-4/5-9/10-11/12-14/15-16）: [clap-host-bridge](../tasks/clap-host-bridge.md)・[vst3-host-bridge](../tasks/vst3-host-bridge.md)・[real-adapter-runner-bins](../tasks/real-adapter-runner-bins.md)・[real-adapter-e2e-and-lane](../tasks/real-adapter-e2e-and-lane.md)・[real-adapter-final-verification](../tasks/real-adapter-final-verification.md)
 - 各 task 間は狭い検証のみ（full suite 繰返しはしない — Full Gate は action 15 の一回）
 
 ## Test Oracles（design/test-spec の正本どおり・新規代替機構禁止）

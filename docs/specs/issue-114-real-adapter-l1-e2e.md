@@ -1,10 +1,10 @@
 ---
 id: "SPEC-034MHDt79C7KINncq66sE3"
 type: "spec"
-status: "proposed"
+status: "implemented"
 title: "L1 規格アダプタの子プロセス組込み・実プラグイン E2E（CLAP/VST3）"
 created: "2026-10-26"
-updated: "2026-10-26"
+updated: "2026-10-27"
 owners: ["scarecrow173"]
 relations:
   source:

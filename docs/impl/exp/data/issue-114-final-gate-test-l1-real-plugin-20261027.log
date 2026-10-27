@@ -1,0 +1,171 @@
+# gate=test-l1-real-plugin started=2026-10-27T00:33:39Z
+$ mise run test-l1-real-plugin
+[test-l1-real-plugin] $ cargo build -p ruviform-plugin-clap -p ruviform-plugin-…
+   Compiling ruviform-plugin-clap v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-clap)
+   Compiling ruviform-plugin-vst3 v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-vst3)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.03s
+[test-l1-real-plugin] $ cargo test -p ruviform-plugin-clap -p ruviform-plugin-v…
+   Compiling ruviform-plugin-clap v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-clap)
+   Compiling ruviform-plugin-vst3 v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-vst3)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.75s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_clap-4d08db16577578c2.exe)
+
+running 63 tests
+test adapt::tests::adapt_transport_maps_musical_fields ... ok
+test adapt::tests::adapt_transport_maps_status_position_and_loop ... ok
+test adapt::tests::adapt_transport_musical_gates_and_unset_forms ... ok
+test adapt::tests::atomic_lifecycle_failed_survives_the_atomic_round_trip ... ok
+test adapt::tests::atomic_lifecycle_forward_chain_and_destroy ... ok
+test adapt::tests::atomic_lifecycle_reactivation_cycle ... ok
+test adapt::tests::build_block_views_rejects_excess_channels ... ok
+test adapt::tests::atomic_lifecycle_violations_leave_honest_state ... ok
+test adapt::tests::build_block_views_rejects_asymmetric_pairs ... ok
+test adapt::tests::build_block_views_rejects_cross_alias_and_duplicate_outputs ... ok
+test adapt::tests::build_block_views_rejects_f64_only_and_mismatched_pairs ... ok
+test adapt::tests::null_channel_pointers_are_legal_only_at_zero_frames ... ok
+test adapt::tests::map_process_result_maps_neutral_statuses ... ok
+test adapt::tests::build_block_views_rejects_malformed_output_descriptors ... ok
+test adapt::tests::build_block_views_paired_stereo_is_borrowed_zero_copy ... ok
+test adapt::tests::build_block_views_rejects_partial_range_overlap ... ok
+test adapt::tests::in_place_pair_classifies_and_scales_shared_buffer ... ok
+test adapt::tests::param_mirror_roundtrip_is_atomic_plain ... ok
+test adapt::tests::to_process_config_maps_activation_bounds ... ok
+test adapt::tests::to_process_config_rejects_invalid_activation ... ok
+test adapt::tests::translate_events_skips_non_param_and_foreign_events ... ok
+test adapt::tests::translate_events_sorts_same_offset_events_stably ... ok
+test adapt::tests::translate_events_bounds_count_and_offsets ... ok
+test gain::tests::empty_block_flushes_events_and_sleeps ... ok
+test gain::tests::in_place_mode_scales_output_as_input ... ok
+test gain::tests::param_events_apply_sample_accurately ... ok
+test gain::tests::rt_process_full_stereo_block ... ok
+test gain::tests::unknown_param_ids_are_ignored ... ok
+test host::tests::descriptors_are_cached_across_calls ... ok
+test host::tests::descriptors_match_fixture_known_values ... ok
+test host::tests::load_non_clap_binary_returns_error ... ok
+test host::tests::prepare_above_wire_max_frames_is_unsupported ... ok
+test host::tests::lifecycle_roundtrip_processes_passthrough_block ... ok
+test host::tests::factory_reports_cached_descriptor_and_no_sendable ... ok
+test host::tests::entry_error_keeps_erased_display_and_source ... ok
+test host::tests::load_missing_path_returns_error ... ok
+test host::tests::param_event_reaches_plugin_denormalized ... ok
+test host::tests::process_before_start_is_defined_error ... ok
+test host::tests::process_above_max_frames_is_defined_error ... ok
+test host::tests::prepare_while_processing_is_defined_error ... ok
+test host::tests::process_below_min_frames_is_defined_error ... ok
+test plugin::tests::host_driven_process_rejection_surfaces_as_error ... ok
+test host::tests::process_with_mismatched_channel_length_is_defined_error ... ok
+test host::tests::unsupported_state_and_gui_verbs_are_defaults ... ok
+test host::tests::params_table_matches_fixture_at_every_lifecycle_point ... ok
+test plugin::tests::host_driven_entry_runs_full_lifecycle_through_abi ... ok
+test plugin::tests::lifecycle_activate_failure_reports_initialized ... ok
+test host::tests::rt_process_drives_fixture_block_allocation_free ... ok
+test plugin::tests::lifecycle_deactivate_while_processing_is_rejected_honestly ... ok
+test plugin::tests::lifecycle_destroy_from_initialized_only ... ok
+test plugin::tests::lifecycle_happy_path_maps_created_to_destroyed ... ok
+test plugin::tests::lifecycle_process_before_start_is_protocol_violation ... ok
+test plugin::tests::lifecycle_reactivation_cycles_are_legal ... ok
+test plugin::tests::process_accepts_transport_and_steady_time ... ok
+test plugin::tests::process_applies_param_event_sample_accurately ... ok
+test plugin::tests::process_in_place_block_scales_shared_region ... ok
+test plugin::tests::process_rejects_frames_beyond_negotiated_max ... ok
+test plugin::tests::process_without_audio_ports_flushes_events_and_sleeps ... ok
+test plugin::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test plugin::tests::rt_process_off_audio_thread_is_defined_rejection ... ok
+test plugin::tests::rt_process_on_audio_thread_passes_thread_check ... ok
+test tests::version_is_not_empty ... ok
+test tests::public_surface_is_binding_neutral ... ok
+
+test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src\bin\ruviform-plugin-clap-l1-runner.rs (target\debug\deps\ruviform_plugin_clap_l1_runner-c9b58b7b22878764.exe)
+
+running 2 tests
+test tests::override_dir_resolves_inside_the_given_dir ... ok
+test tests::sibling_resolution_finds_the_workspace_fixture ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_vst3-86f3b7605cec03d3.exe)
+
+running 47 tests
+test block::tests::block_offset_drops_out_of_block_events ... ok
+test block::tests::event_scratch_collects_sorts_and_truncates ... ok
+test block::tests::in_place_channel_bounces_and_writes_back ... ok
+test block::tests::prepare_builds_zero_copy_views ... ok
+test block::tests::shifted_range_overlap_is_rejected ... ok
+test block::tests::prepare_rejects_each_boundary_violation ... ok
+test block::tests::rt_prepare_process_finish_round_trip ... ok
+test component::tests::out_of_block_event_offsets_are_dropped ... ok
+test component::tests::foreign_param_queues_never_reach_the_processor ... ok
+test component::tests::musical_from_context_gates_and_unset_forms ... ok
+test component::tests::process_rejects_bad_block_shapes ... ok
+test component::tests::param_change_events_reach_the_processor ... ok
+test component::tests::process_rejected_outside_processing_state ... ok
+test component::tests::musical_from_context_maps_valid_fields ... ok
+test block::tests::partial_cross_alias_and_output_duplicate_are_detected ... ok
+test component::tests::param_scan_budget_exhaustion_keeps_collected_events ... ok
+test component::tests::in_place_aliased_buffers_bounce_and_write_back ... ok
+test component::tests::protocol_violations_are_defined_rejects ... ok
+test component::tests::re_activation_cycles_through_lifecycle ... ok
+test component::tests::rt_param_scan_stays_bounded_when_host_counts_lie ... ok
+test component::tests::rt_process_copies_gain_zero_copy ... ok
+test component::tests::state_stream_reports_not_implemented ... ok
+test component::tests::transport_combines_media_and_musical ... ok
+test component::tests::rt_param_scan_total_budget_bounds_worst_case ... ok
+test component::tests::zero_frame_block_flushes_offset_zero_events ... ok
+test controller::tests::get_param_value_by_string_enforces_the_domain ... ok
+test controller::tests::set_param_normalized_enforces_the_domain ... ok
+test gain::tests::gain_applies_param_event_then_scales ... ok
+test host::tests::descriptors_are_cached_across_calls ... ok
+test host::tests::controller_class_is_not_a_plugin ... ok
+test host::tests::load_non_vst3_binary_returns_error ... ok
+test host::tests::factory_reports_cached_descriptor_and_no_sendable ... ok
+test host::tests::drop_mid_processing_completes_teardown ... ok
+test host::tests::lifecycle_roundtrip_processes_passthrough_block ... ok
+test host::tests::descriptors_match_fixture_known_values ... ok
+test host::tests::oversized_block_is_defined_error ... ok
+test host::tests::transport_snapshot_maps_to_process_context ... ok
+test host::tests::param_event_reaches_plugin_normalized ... ok
+test host::tests::prepare_rejects_frames_above_wire_ceiling ... ok
+test host::tests::process_before_start_is_defined_error ... ok
+test host::tests::params_table_matches_fixture_at_every_lifecycle_point ... ok
+test host::tests::load_missing_path_returns_error ... ok
+test strings::tests::copy_cstring_terminates_and_truncates ... ok
+test strings::tests::copy_wstring_terminates_and_truncates ... ok
+test host::tests::process_with_transport_snapshot_is_defined ... ok
+test host::tests::unsupported_state_and_gui_verbs_are_defaults ... ok
+test component::tests::setup_processing_rejects_excessive_max_frames ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src\bin\ruviform-plugin-vst3-l1-runner.rs (target\debug\deps\ruviform_plugin_vst3_l1_runner-efdf9d851a5ba6c9.exe)
+
+running 2 tests
+test tests::override_dir_resolves_inside_the_given_dir ... ok
+test tests::sibling_resolution_finds_the_workspace_fixture ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[test-l1-real-plugin] $ cargo test -p ruviform-plugin-clap -p ruviform-plugin-v…
+   Compiling ruviform-plugin-clap v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-clap)
+   Compiling ruviform-plugin-vst3 v0.1.0 (F:\repositry\ruviform\crates\ruviform-plugin-vst3)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.97s
+     Running tests\l1_real_adapter_e2e.rs (target\debug\deps\l1_real_adapter_e2e-1f54190dd4fc285f.exe)
+
+running 3 tests
+test real_adapter_l1_missing_runner_is_ipc_rejection ... ok
+test real_adapter_l1_kill_reports_failed_once ... ok
+test real_adapter_l1_full_series ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running tests\l1_real_adapter_e2e.rs (target\debug\deps\l1_real_adapter_e2e-dc57b46e44b75b38.exe)
+
+running 3 tests
+test real_adapter_l1_missing_runner_is_ipc_rejection ... ok
+test real_adapter_l1_kill_reports_failed_once ... ok
+test real_adapter_l1_full_series ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+# gate=test-l1-real-plugin exit=0 finished=2026-10-27T00:33:45Z

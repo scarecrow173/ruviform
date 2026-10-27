@@ -1,0 +1,19 @@
+# gate=doc-audit started=2026-10-27T00:35:33Z
+$ mise exec -- node .agents/skills/doc-status/scripts/doc_status.js audit --json
+{
+  "command": "audit",
+  "blocking": 0,
+  "documents": 344,
+  "findings": []
+}
+# gate=doc-audit exit=0 finished=2026-10-27T00:35:50Z
+
+# post-edit final audit re-run (after closeout doc sync — status/checkbox edits)
+$ mise exec -- node .agents/skills/doc-status/scripts/doc_status.js audit --json
+{
+  "command": "audit",
+  "blocking": 0,
+  "documents": 344,
+  "findings": []
+}
+# final-audit exit=0 finished=2026-10-27T00:51:02Z

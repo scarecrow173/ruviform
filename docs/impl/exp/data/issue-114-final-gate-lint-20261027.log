@@ -1,0 +1,5 @@
+# gate=lint started=2026-10-27T00:32:25Z
+$ mise run lint
+[lint] $ cargo clippy --workspace --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.34s
+# gate=lint exit=0 finished=2026-10-27T00:32:26Z
