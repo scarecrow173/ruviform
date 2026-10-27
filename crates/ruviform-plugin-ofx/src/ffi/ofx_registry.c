@@ -332,22 +332,101 @@ void rv_seed_d(RvPropsObj *o, const char *n, int d, double v) { seed(o, n, RV_PT
 void rv_seed_s(RvPropsObj *o, const char *n, int d, const char *v) { seed(o, n, RV_PT_STRING, d, 0, 0, v, NULL); }
 void rv_seed_p(RvPropsObj *o, const char *n, int d, void *v) { seed(o, n, RV_PT_POINTER, d, 0, 0, NULL, v); }
 
+/* frees one prop record's arrays; name and string payloads are
+ * host-pool owned   retired with the host, never freed here */
+static void prop_free(RvProp *p) {
+    if (!p) return;
+    free(p->vi); free(p->vd); free(p->vp);
+    free(p->ds);
+    free(p->vs);
+    free(p->di); free(p->dd); free(p->dp);
+    free(p);
+}
+
 void rv_po_free(RvPropsObj *o) {
     RvProp *p;
     if (!o) return;
     p = o->head;
     while (p) {
         RvProp *n = p->next;
-        int k;
-        free(p->vi); free(p->vd); free(p->vp);
-        if (p->ds) free(p->ds); /* pool strings retire with host */
-        free(p->vs);
-        free(p->di); free(p->dd); free(p->dp);
-        for (k = 0; k < p->cap; k++) (void)k;
-        free(p);
+        prop_free(p);
         p = n;
     }
     free(o);
+}
+
+/* clone the value array of one prop, mirroring grow()'s element sizing
+ * (int/double share double-width slots, string/pointer share ptr slots) */
+static int vals_clone(RvProp *q, const RvProp *p) {
+    size_t esz = (p->type == RV_PT_INT || p->type == RV_PT_DOUBLE)
+               ? sizeof(double) : sizeof(char *);
+    const void *sv;
+    void *dv;
+    if (p->cap <= 0) return 1;
+    sv = (p->type == RV_PT_INT) ? (const void *)p->vi
+       : (p->type == RV_PT_DOUBLE) ? (const void *)p->vd
+       : (p->type == RV_PT_STRING) ? (const void *)p->vs : (const void *)p->vp;
+    if (!sv) return 1;
+    dv = malloc(esz * (size_t)p->cap);
+    if (!dv) return 0;
+    memcpy(dv, sv, esz * (size_t)p->cap);
+    if (p->type == RV_PT_INT) q->vi = (int *)dv;
+    else if (p->type == RV_PT_DOUBLE) q->vd = (double *)dv;
+    else if (p->type == RV_PT_STRING) q->vs = (char **)dv;
+    else q->vp = (void **)dv;
+    return 1;
+}
+
+/* clone the reset snapshot array (ddim elements of the matching type);
+ * an unseeded prop or a prop whose snapshot was never allocated mirrors
+ * as absent */
+static int seed_clone(RvProp *q, const RvProp *p) {
+    size_t n = (size_t)p->ddim;
+    if (!p->seeded || p->ddim <= 0) return 1;
+    if (p->type == RV_PT_INT) {
+        if (!p->di) return 1;
+        q->di = (int *)malloc(sizeof(int) * n);
+        if (!q->di) return 0;
+        memcpy(q->di, p->di, sizeof(int) * n);
+    } else if (p->type == RV_PT_DOUBLE) {
+        if (!p->dd) return 1;
+        q->dd = (double *)malloc(sizeof(double) * n);
+        if (!q->dd) return 0;
+        memcpy(q->dd, p->dd, sizeof(double) * n);
+    } else if (p->type == RV_PT_STRING) {
+        if (!p->ds) return 1;
+        q->ds = (char **)malloc(sizeof(char *) * n);
+        if (!q->ds) return 0;
+        memcpy(q->ds, p->ds, sizeof(char *) * n);
+    } else {
+        if (!p->dp) return 1;
+        q->dp = (void **)malloc(sizeof(void *) * n);
+        if (!q->dp) return 0;
+        memcpy(q->dp, p->dp, sizeof(void *) * n);
+    }
+    return 1;
+}
+
+OfxStatus rv_po_clone(RvPropsObj *dst, const RvPropsObj *src) {
+    RvProp *p;
+    if (!dst || !src) return kOfxStatErrBadHandle;
+    for (p = src->head; p; p = p->next) {
+        RvProp *q = (RvProp *)calloc(1, sizeof(*q));
+        if (!q) return kOfxStatErrMemory;
+        q->name = p->name; /* host-pool string   shared, retires with host */
+        q->type = p->type;
+        q->dim = p->dim;
+        q->cap = p->cap;
+        q->seeded = p->seeded;
+        q->ddim = p->ddim;
+        if (!vals_clone(q, p) || !seed_clone(q, p)) {
+            prop_free(q);
+            return kOfxStatErrMemory;
+        }
+        q->next = dst->head;
+        dst->head = q;
+    }
+    return kOfxStatOK;
 }
 
 /* ---------- PropertyV1 (designated initializers, SDK order) ---------- */

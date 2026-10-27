@@ -313,6 +313,36 @@ static int run_worker(OfxHost *host, OfxImageEffectHandle effect) {
 }
 #endif
 
+/* ---------- CLIP PROPS probe: instance clip set mirrors descriptor ---------- */
+
+static int probe_clip_props_run(OfxHost *host, OfxImageEffectHandle effect) {
+    const OfxPropertySuiteV1 *p = (const OfxPropertySuiteV1 *)fetch(host, kOfxPropertySuite, 1);
+    const OfxImageEffectSuiteV1 *fx = fx_effects();
+    OfxImageClipHandle src_clip = NULL, dst_clip = NULL;
+    OfxPropertySetHandle cps = NULL;
+    char *s = NULL;
+    if (!p || !fx || !effect) return 6001;
+    /* the instance clip property set must mirror the descriptor-declared
+     * contract the fixture wrote during DescribeInContext (Issue #124) */
+    if (fx->clipGetHandle(effect, "Source", &src_clip, &cps) != kOfxStatOK ||
+        !src_clip || !cps) return 6002;
+    if (p->propGetString(cps, kOfxImageEffectPropSupportedComponents, 0, &s) != kOfxStatOK ||
+        !s || strcmp(s, kOfxImageComponentRGBA) != 0) return 6003;
+    s = NULL;
+    cps = NULL;
+    if (fx->clipGetHandle(effect, "Output", &dst_clip, &cps) != kOfxStatOK ||
+        !dst_clip || !cps) return 6004;
+    if (p->propGetString(cps, kOfxImageEffectPropSupportedComponents, 0, &s) != kOfxStatOK ||
+        !s || strcmp(s, kOfxImageComponentRGBA) != 0) return 6005;
+    /* clipGetPropertySet resolves the same mirrored set on the clip handle */
+    s = NULL;
+    cps = NULL;
+    if (fx->clipGetPropertySet(src_clip, &cps) != kOfxStatOK || !cps) return 6006;
+    if (p->propGetString(cps, kOfxImageEffectPropSupportedComponents, 0, &s) != kOfxStatOK ||
+        !s || strcmp(s, kOfxImageComponentRGBA) != 0) return 6007;
+    return 0;
+}
+
 /* ---------- dispatch ---------- */
 
 int ofx_fixture_probe(int which) {
@@ -325,6 +355,7 @@ int ofx_fixture_probe(int which) {
     case FX_PROBE_MEMORY:   return probe_memory_run(host, effect);
     case FX_PROBE_WORKER:   return run_worker(host, effect);
     case FX_PROBE_READONLY: return probe_readonly_run(host, effect);
+    case FX_PROBE_CLIP_PROPS: return probe_clip_props_run(host, effect);
     default: return 9000;
     }
 }

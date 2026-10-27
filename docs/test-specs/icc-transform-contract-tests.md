@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "IccTransform ICC 経路 契約テスト仕様"
 created: "2026-10-25"
-updated: "2026-10-25"
+updated: "2026-10-27"
 owners: []
 relations:
   source: []
@@ -30,6 +30,7 @@ relations:
   verifies:
     - "docs/specs/color-conversion-kernels.md"
     - "docs/designs/color-conversion-kernels.md"
+    - "docs/specs/issue-125-icc-lut-fixture-coverage.md"
   verified-by: []
   references: []
   defers: []
@@ -38,7 +39,7 @@ relations:
 
 # IccTransform ICC 経路 契約テスト仕様
 
-> status: approved — Issue #99 の実装（Task 4 + Task 6 full gate・feature `icc` lane 全 green）で契約が実結果により確認済み。run 可能コマンド（`--features icc` 選択列を含む）は task 側に定義する（本書は契約と oracle の正本）。
+> status: approved — Issue #99 の実装（Task 4 + Task 6 full gate・feature `icc` lane 全 green）で契約が実結果により確認済み。Issue #125 で LUT tag fixture coverage（intent 区別 pair・mft1/mft2/mAB・欠落 tag 拒否）を同規則で拡張済み。run 可能コマンド（`--features icc` 選択列を含む）は task 側に定義する（本書は契約と oracle の正本）。
 
 ## Purpose
 
@@ -58,6 +59,10 @@ spec `docs/specs/color-conversion-kernels.md`・approved design `docs/designs/co
 - **`ColorInfo` 更新**: `dst.color = {primaries: Unspecified, transfer: Unspecified, matrix: Identity, range: Full, hdr: None}` — ICC profile が記述する色空間は CICP enum へ写像できないため unspecified が正直な記録（consumer が既知なら `set_color` で上書き）。`pts`/`duration` は `src` から伝播
 - **検証/エラー規約**: 全検証は書込み前 — 共有 `dst` は `InvalidValue("dst plane")`・format 不適合は `InvalidValue("src format")`/`"dst format"`・寸法不一致は `InvalidValue("dimensions")`。拒否呼出しは `dst` を一切変更しない（panic-free・部分書込みなし）
 - **等価性契約**: pin した moxcms バージョン + feature 集合（`default-features = false` + `lut` + `extended_range`・SIMD 系無効）の出力が参照 — executor は同一 build 構成内で決定的（スカラー経路のみだが、moxcms `mlaf` が aarch64 NEON baseline・`target_feature = "fma"` x86/x86_64 で fused FMA を選択するため、bit 出力は target-feature/architecture 間で異なり得る）。正規化/量子化 shim は厳密なため golden vector は同一 build 構成上で executor 出力に対し **bit-exact** で検証する — literal golden vector は x86_64 非 FMA baseline（CI `icc-verify` lane）に pin し `cfg` でゲートする。moxcms バージョン/feature 変更時は golden を再導出する。クロスエンジン等価性（lcms2/qcms との一致）は契約外
+- **intent 区別 fixture**: matrix-shaper profile は intent で出力が変わらないため、intent が実際の写像を変える証明は LUT tag を持つ fixture で行う — `lut_intent_pair.icc` は A2B0(Perceptual)≠A2B1(RelativeColorimetric)・B2A0≠B2A1 の mft2 tag を持ち、A2B 方向（`lut_intent_pair → srgb`）と B2A 方向（`srgb → lut_intent_pair`）の両方で Perceptual/RelativeColorimetric の `Rgba8` 出力がバイト列レベルで異なり、かつ各 intent の出力が同 intent で構築した raw executor oracle に bit-exact で一致することを検証する
+- **LUT tag 型網羅**: moxcms feature `lut` が有効でも従来 fixture は matrix-shaper のみだったため、`mft1`/`mft2`/`mAB` の各 tag 型を通る fixture を持ち、`LutWarehouse::Lut`（mft1=mft1/lut8Type・`Store8`・256 エントリ in/out table、mft2=lut16Type・`Store16`・2 エントリ）と `LutWarehouse::Multidimensional`（mAB/mBA・2³ `Store16` CLUT + M 行列）を `ColorProfile::new_from_slice` で構造検証する。各型は A2B/B2A 両方向で `IccTransform` が raw executor oracle と bit-exact に一致し、CLUT の観測可能な意味（channel swap・scale・rotation）を行動 assertion で固定する
+- **欠落 intent tag 拒否**: `lut_a2b0_only.icc`（A2B0 のみ保持）は A2B + Perceptual で構築成功、A2B + RelativeColorimetric（A2B1 欠落）と B2A 両 intent（B2A table 欠落）は `InvalidValue("icc transform")` で `new` 段階で拒否 — engine の tag 選択規約を契約として固定する
+- **fixture 再生成規約**: 全 `.icc` fixture（built-in profile 3 件 + 合成 LUT profile 5 件）は `generate_fixtures` ignored test が pinned moxcms `encode()` から一括再生成し、生成時に `ColorProfile::new_from_slice` で読戻し検証する。合成 profile は公開 `ColorProfile`/`LutDataType`/`LutMultidimensionalType` を直接構築する — 例外として moxcms 0.9.1 encoder が `lut8Type` に `lut16Type` 専用の entry-count 4 byte を混入する既知の非対称 bug があり、generator は `mft1` tag を spec 準拠 48-byte header へ修正する局所 workaround（`fix_mft1_tags`）を持つ — コミット済み fixture byte は正しい CMM が書く byte と一致させる。再生成手順・`.gitattributes` の `*.icc binary` 網羅は変えない
 - **extended range**: `RgbaF32` dst は moxcms extended-mode 出力（負・1 超を保持 — HDR/広色域 profile 変換の情報損失を防ぐ）、`Rgba8` dst は量子化 clamp
 - **RT 契約**: `process` は `**RT contract:**` ラベル付き alloc-free・非ブロッキング・有界 — moxcms executor が事前構築パイプライン上の純粋写像である設計に依拠（実装レビューで確認）。`rt_process_*` 命名テスト（repeatable/deterministic・ソース非破壊 — alloc 機械検出は別 Issue）を持ち、feature `icc` 有効時の `mise run test-rt` 相当経路で選択可能。ctor は非 RT
 - **検証経路の別レーン**: `cargo test --workspace`（default feature）は icc 配下を検証しない — `cargo test -p ruviform-video-proc --features icc` を実行する mise タスク（plan が `test-video-proc-icc`/`lint-video-proc-icc` を定義）と CI ステップが存在し、feature 有効列が実際に選択・実行される
@@ -72,6 +77,9 @@ spec `docs/specs/color-conversion-kernels.md`・approved design `docs/designs/co
 - **共通拒否**: 非対象 format・寸法不一致・共有 `dst` backing → `InvalidValue` で `dst` 部分書込みなし。`stride > row_bytes` パディングは不変
 - **feature 無効**: `--features icc` なしのクレートに `IccTransform`/`IccIntent` が露出しない（`use` 文のコンパイル失敗で構造検証 — feature-gated 公開面の契約）
 - **`rt_process_*`（icc feature 有効時）**: 反復呼出しは決定的・panic せず `src` byte-identical
+- **intent 区別**: `lut_intent_pair → srgb`（A2B）と `srgb → lut_intent_pair`（B2A）で Perceptual 出力が RelativeColorimetric より channel-wise に暗い（×0.5 vs identity table）かつ各 intent は対応 raw executor と bit-exact
+- **mft1/mft2/mAB 行動**: mft1 の R↔B swap は純赤入力が青優位で出る・`lut_mft1 → lut_mft1` が swap∘swap で入力を往復。mft2 は `lut_mft2 → lut_mft2` で A2B×0.5 ∘ B2A×0.75 ≈ ×0.375 を観測。mAB は rotation CLUT で純緑が青優位になり、matrix-shaper baseline（`srgb→srgb` では緑のまま）と区別される
+- **欠落 tag 拒否**: `lut_a2b0_only → srgb` は Perceptual で動くが RelativeColorimetric は `InvalidValue("icc transform")`、`srgb → lut_a2b0_only` は両 intent とも同拒否
 
 ## Guarantees
 

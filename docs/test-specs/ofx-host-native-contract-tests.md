@@ -4,7 +4,7 @@ type: "test-spec"
 status: "proposed"
 title: "OFX Host Native Contract Tests"
 created: "2026-10-24"
-updated: "2026-10-24"
+updated: "2026-10-27"
 owners: ["scarecrow173"]
 relations:
   source: []
@@ -29,6 +29,7 @@ relations:
   derived-by: []
   verifies:
     - "docs/specs/ofx-host-adapter.md"
+    - "docs/specs/issue-124-ofx-cross-window-h-exposure.md"
     - "docs/designs/ofx-host-adapter.md"
   verified-by: []
   references: []
@@ -53,6 +54,8 @@ approved spec `docs/specs/ofx-host-adapter.md`・approved design `docs/designs/o
 ## Rules
 
 - **Admission**: optional DLL `OfxSetHost` → `OfxGetNumberOfPlugins`/`OfxGetPlugin` → per-plugin setHost/main entry → `Load` → `Describe`/`DescribeInContext` → `Create` の順序。mixed DLL（Filter 可 + Generator 除外）で可 entry は利用可能・rejections は `PluginRejection`（native_index/identifier/error）として構造化。admitted index ≠ native index。empty admitted lib は成功 Library + rejections（fake 'compatible' なし）
+- **Cross-window host teardown**: `rv_ofx_catalog_open` が mutex 外実行する全 foreign window（`OfxSetHost`・`GetNumberOfPlugins`・`GetPlugin`・admission 内 `setHost`/`Load`/`Describe`/`DescribeInContext`）で `rv_ofx_host_free` が再入しても defined: host は即 poison（`g_api.host`=NULL・`alive`=0・catalog detach）・RvHost block の reclaim は open-call lease drop まで deferral されるため post-window アクセスは全て有効メモリ。open は `ErrBadHandle` + `*catalog=NULL`（pool 参照を持つ detached partial catalog は caller へ escape しない）。foreign 側へ渡る `OfxHost*` は static storage（reclaim block 内に置かない）・`fetchSuite` は process lifetime 有効。二度目 `host_free` は defined no-op・後続 `host_new`/`host_free` は clean session（`bridge_host_lease.rs` の hostile callback で固定）
+- **Instance clip props**: instance clip の property set は descriptor clip が `DescribeInContext` で書いた全 record（値 + seed snapshot）を mirror — instance action は `SupportedComponents=RGBA` を instance clip props 経由で読める（fixture probe `FX_PROBE_CLIP_PROPS`=5 が Source/Output 両 clip・`clipGetHandle`/`clipGetPropertySet` 両経路で検証）。string payload は同一 host 配下で pool 共有
 - **Instance lifecycle**: `CreateInstance` 前に SingleInstance を検査・予約（live/uncertain quarantine 残存時は 2 回目 initialize を NativeCreate なしに拒否）。`NativeDestroy` 高々 1 回・失敗でも terminal・uncertain resource は Unload まで隔離。成功 Create なしでは NativeDestroy なし。違法遷移は foreign call 前に reject（foreign callback 0 件で検証）
 - **Property/Param**: PropertyV1 scalar/N/reset/dimension は SDK type/index/status どおり。ParamV1 全 slot 提供・all-OK stub なし: get/set scalar 実装・`getAtTime` = current・`NumKeys`→0/OK・`KeyTime`/`DeleteKey`→BadIndex・`KeyIndex`→-1/Failed・`DeleteAll`→OK empty・`SetAtTime`/`Derivative`/`Integral`/`Copy`/`EditBegin`/`EditEnd`→明示 Unsupported（no mutation・unknown/stale handle は先に BadHandle）。Choice varargs は `int*`（`char**` ではない）。未知/未対応 suite・version → NULL
 - **Memory**: MemorySuite/`imageMemory` は real 16B aligned owned pointer・alloc 失敗 `ErrMemory`。callback C 文字列は stable（temporary `CString.as_ptr` 依存禁止）

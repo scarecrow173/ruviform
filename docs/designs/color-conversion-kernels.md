@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "ruviform-video-proc 色変換カーネル設計（f32 linear working space + ICC 入出力経路）"
 created: "2026-10-25"
-updated: "2026-10-25"
+updated: "2026-10-27"
 owners: []
 relations:
   source:
@@ -48,6 +48,8 @@ relations:
     - "docs/plans/implement-issue-99-color-conversion-kernels.md"
     - "docs/test-specs/color-working-space-kernel-tests.md"
     - "docs/test-specs/icc-transform-contract-tests.md"
+    - "docs/specs/issue-125-icc-lut-fixture-coverage.md"
+    - "docs/plans/implement-issue-125-icc-lut-fixture-coverage.md"
     - "docs/specs/video-proc-rt-verification-lane.md"
     - "docs/plans/implement-issue-126-video-proc-rt-lane.md"
   verifies: []

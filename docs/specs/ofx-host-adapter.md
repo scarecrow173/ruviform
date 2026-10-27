@@ -35,6 +35,7 @@ relations:
     - "../adr/ofx-host-video-contract-and-c-abi.md"
     - "../designs/ofx-host-adapter.md"
     - "../plans/implement-issue-98-ofx-host-adapter.md"
+    - "issue-124-ofx-cross-window-h-exposure.md"
   verifies: []
   verified-by:
     - "../test-specs/video-plugin-plain-contract-tests.md"

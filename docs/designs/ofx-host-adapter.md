@@ -31,6 +31,8 @@ relations:
     - "../discovery/ofx-host-adapter-boundary-and-bindings.md"
   derived-by:
     - "../plans/implement-issue-98-ofx-host-adapter.md"
+    - "../plans/implement-issue-124-ofx-window-lease.md"
+    - "../specs/issue-124-ofx-cross-window-h-exposure.md"
     - "../test-specs/video-plugin-plain-contract-tests.md"
     - "../test-specs/ofx-host-native-contract-tests.md"
   verifies: []

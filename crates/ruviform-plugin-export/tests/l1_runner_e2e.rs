@@ -15,7 +15,7 @@
 //! the proxy's `l1/shm.rs` consume; this minimal host is a third
 //! consumer, so all three sides agree by construction.
 
-use std::io::{BufReader, Read, Write};
+use std::io::BufReader;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
@@ -88,15 +88,16 @@ impl MiniHost {
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
+            let mut frame_buf = Vec::new();
             loop {
-                match read_message(&mut reader) {
+                match wire::read_message(&mut reader, &mut frame_buf) {
                     Ok(message) => {
                         if tx.send(Ok(message)).is_err() {
                             return;
                         }
                     }
                     Err(reason) => {
-                        let _ = tx.send(Err(reason));
+                        let _ = tx.send(Err(reason.to_string()));
                         return;
                     }
                 }
@@ -121,10 +122,7 @@ impl MiniHost {
 
     fn send(&mut self, message: &Message) {
         let stdin = self.stdin.as_mut().expect("stdin still open");
-        let mut frame = Vec::new();
-        wire::encode(message, &mut frame).expect("encode message");
-        stdin.write_all(&frame).expect("write child stdin");
-        stdin.flush().expect("flush child stdin");
+        wire::write_message(stdin, message, &mut Vec::new()).expect("write child stdin");
     }
 
     fn send_command(&mut self, seq: u64, cmd: WireCommand) {
@@ -182,24 +180,6 @@ impl MiniHost {
             std::thread::sleep(Duration::from_millis(20));
         }
     }
-}
-
-fn read_message(reader: &mut impl Read) -> Result<Message, String> {
-    let mut header = [0_u8; 4];
-    reader
-        .read_exact(&mut header)
-        .map_err(|e| format!("frame header read: {e}"))?;
-    let payload_len = u32::from_le_bytes(header) as usize;
-    if payload_len > wire::WIRE_MAX_PAYLOAD as usize {
-        return Err("declared payload over WIRE_MAX_PAYLOAD".to_owned());
-    }
-    let mut frame = Vec::with_capacity(wire::WIRE_FRAME_HEADER_LEN + payload_len);
-    frame.extend_from_slice(&header);
-    frame.resize(wire::WIRE_FRAME_HEADER_LEN + payload_len, 0);
-    reader
-        .read_exact(&mut frame[4..])
-        .map_err(|e| format!("frame body read: {e}"))?;
-    wire::decode(&frame).map_err(|e| format!("frame decode: {e}"))
 }
 
 // --- minimal host shm side -------------------------------------------

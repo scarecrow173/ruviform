@@ -30,6 +30,7 @@ relations:
     - "docs/adr/plugin-architecture-clap-vst3.md"
   derived-by:
     - "docs/designs/plugin-gui-poc.md"
+    - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
   verifies: []
   verified-by: []
   references: []
