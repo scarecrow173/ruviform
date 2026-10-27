@@ -76,7 +76,7 @@ Issue #115 — #76 で L1 インスタンスへの `OpenGui`/`CloseGui` 要求�
 | --- | --- |
 | 現行 `Unsupported` 拒否を維持するか実装するか | **defer — `Err(HostError::Unsupported)` 維持を確定**（host-side short-circuit のまま。解除条件は「境界の pin」節） |
 | `OpenGui`/`CloseGui` wire 動詞・`Reply::Opened`・`GuiHandle`/`GuiParentToken` | **keep-for-future** — L0 コマンド集合との parity と L0 GUI 将来実装経路のため存置。除去は `WIRE_VERSION` bump を要する破壊的変更で利益なし |
-| `gui_open` write-only field（`host.rs` Instance 簿記）の使途 | **keep-for-future** — #123 の sub-item は「フィールド除去」でなく「double-`OpenGui` の `GuiHandle` orphan ゲート」を実装対象とする（理由は「境界の pin」節） |
+| `gui_open` write-only field（`host.rs` Instance 簿記）の使途 | **removed — #123 で除去済み** — 宣言・初期化・4 write に対し read 0 件の dead field と確証され、「orphan ゲート追加」ではなく「除去」が採択・実施された（理由は「境界の pin」節）。本書の keep-for-future 判定は wire 語彙側にのみ残る |
 | 採否確定後の後続 | 本書 approve で design ゲート完了。[impl] Issue は解除条件の顕在化時に起票（現時点で起票しない） |
 
 ## OS 別メカニズム調査（プロセス境界越しの親ウィンドウ埋め込み）
@@ -143,9 +143,13 @@ Issue #115 — #76 で L1 インスタンスへの `OpenGui`/`CloseGui` 要求�
 - **(c) per-OS 実現可能性の再評価** — Windows: 越境 `SetParent` + WebView2 foreign-parent の実機検証 / Linux: X11 セッション限定 XEmbed の受容 or Wayland 新機構の出現 / macOS: 公認の越境 view 機構の出現（既存 `CAContext`/`CALayerHost` 系への入力転送追加を含む）。少なくとも 1 OS で robust な経路が立つことが最低条件
 - **(d) 需要の顕在化** — GUI 必須かつクラッシュ隔離が同時に要求されるプラグイン利用形態の出現（L0 で代替不能なケース）
 
-### `gui_open` field の fate（Issue #123 sub-item への確定回答）
+### `gui_open` field の fate（Issue #123 で「除去」として解決済み）
 
-**keep-for-future。** `host.rs` `Instance::gui_open` は `OpenGui` 成功時 `true`・`CloseGui` 成功時 `false` に書かれる host 側簿記で、「1 インスタンスにつき同時に開く GUI surface は高々 1 つ」という不変条件の保持材料である。本書の defer 判定は L1 で動詞が成功しないことを意味するが、**L0（in-process）で `open_gui` を実装するプラグインが現れた瞬間にこの不変条件は必要になる**。現状 write-only なのは読み手となる gate が未導入なだけであり、#123 の sub-item は「フィールド除去」ではなく **double-`OpenGui` に対する orphan ゲート**（`gui_open == true` での再 `OpenGui` を defined rejection — `GuiHandle` は Drop-less トークンのため二度目の `Opened` は先の handle を leak させる）を実装対象とするのが正しい解である。フィールド除去は L0 GUI 実装時に同一簿記を再導入するコストを生み、guard 対象の不変条件自体は backend 非依存で残るため不採用。
+**removed — sibling Issue #123 は本書初稿の keep-for-future 回答と異なる解決（除去）を採択・実施済みであり、本節はそれに整合するよう訂正する。** `host.rs` `Instance::gui_open` は宣言・初期化・`open_gui`/`close_gui` 内の 4 write を持つが、全クレート範囲で read 0 件の dead field と確証され（`rg gui_open crates/` = 0 件 — spec `docs/specs/issue-76-followup-l1-internal-cleanup.md`・IR `docs/impl/ir/issue-123-l1-internal-cleanup-implementation.md`）、「double-`OpenGui` orphan ゲート追加」ではなく**除去**として実施された。gate が一度も存在しなかったため除去は挙動中立であり、wire の `OpenGui`/`CloseGui` defined rejection は不変。
+
+#123 reviewer の判定要点（本書はこれを受け入れる）: (i) keep+gate は unreachable-path の投機的状態になる — 現状は全ての `open_gui` が `Err(Unsupported)` を返すため gate は発火し得ない、(ii) #76 Task 1 IR は `gui_open` について「使途を決定 or 除去」を許容選択肢として記録済み、(iii) 将来の実ゲートが欲するのは bare bool ではなく `Option<GuiHandle>` 型の状態、(iv) wire 面（動詞・`GuiHandle`・`GuiParentToken`）は存置で、失われたのは dead な host 側簿記 field のみ。
+
+**本書に残る判定**: wire 語彙（`OpenGui`/`CloseGui`/`Reply::Opened`/`GuiHandle`/`GuiParentToken`）の keep-for-future は不変であり、orphan ゲートの意図（1 インスタンスにつき同時に開く GUI surface は高々 1 つ — `GuiHandle` は Drop-less トークンのため二度目の `Opened` は先の handle を leak させる）は**保持すべき field としてではなく設計指針として存続**する。将来 L0/L1 で GUI を実装する Issue は `Option<GuiHandle>` 型の ≤1-surface 強制 + destroy 時 auto-close 相当を含む自身の設計済み状態を導入する — #123 IR Follow-ups が「Issue #115（GUI 設計）は `gui_open` とは別の、設計済みの状態/invariant を導入すること」と hand-off を記録済み。
 
 ### wire / `#[non_exhaustive]` 互換ノート
 
@@ -167,12 +171,12 @@ Issue #115 — #76 で L1 インスタンスへの `OpenGui`/`CloseGui` 要求�
 - L1 GUI 実装本体（越境埋め込み + runner UI スレッド + wire 動詞拡張） | 上記 4 基準を同時に満たさず YAGNI/構造上の非整合 | 解除条件 (a)–(d) の揃い | GUI 必須プラグインを L1 で使えない（L0 選択で回避可能）
 - child runner の UI スレッド/event pump 設計 | L1 GUI 採否未確定の間は設計対象にならない | L1 GUI [impl] Issue 起票時 | runner 再設計は大規模 — 早期着手の利益なし
 - L0（in-process）GUI 実装 | 本 Issue の境界は L1 採否まで。L0 経路は #30/ADR で attach 機構が確定済みだが実装は別 Issue 級 | engine/利用側からの GUI 需要 | `open_gui` 既定 `Unsupported` のままでは全バックエンドで GUI 不可
-- `gui_open` double-open ゲート | #123 sub-item として既にトリアゲ済み・本書は keep+gate の結論のみ供給 | #123 実施時 | 未ゲートのままでは L0 GUI 実装時に `GuiHandle` orphan 可能
+- `gui_open` double-open ゲート | #123 で field 除去として解決済み（gate 非採用 — 発火し得ない unreachable-path の投機的状態を避けるため）。orphan 回避の意図は保持すべき field ではなく設計指針へ移行 | 将来 GUI を実装する Issue（L0 GUI [impl] 等）が `Option<GuiHandle>` 型の ≤1-surface 強制 + destroy 時 auto-close 相当の状態を設計・導入する時 | 未強制のままでは L0 GUI 実装時に `GuiHandle` orphan 可能
 
 ## Verification Notes
 
 - [ ] 採否（defer）と判定基準 4 項目が本書に記録され、reviewer の approve を得た
 - [ ] `Err(HostError::Unsupported)` の現行意味（host-side short-circuit・wire 非送信）が本判定で変化していない（`l1/mod.rs` 参照・コード変更なし）
-- [ ] `gui_open` keep-for-future + orphan ゲート方針が #123 sub-item へ本書経由で引き渡されている（`references`/`deferred-by` 関係）
+- [ ] `gui_open` が #123 で除去済みである事実・wire 語彙の keep-for-future 維持・将来 GUI 実装時に独自の設計済み状態（`Option<GuiHandle>` 型の ≤1-surface 強制等）を導入する指針が本書に記録され、#123 spec（`docs/specs/issue-76-followup-l1-internal-cleanup.md`）/ IR（`docs/impl/ir/issue-123-l1-internal-cleanup-implementation.md`）と整合している
 - [ ] wire 語彙存置・`#[non_exhaustive]` 圧力なし・capability 不触が明記されている
 - [ ] doc 監査 findings 0
