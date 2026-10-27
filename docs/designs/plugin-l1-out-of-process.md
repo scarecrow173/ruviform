@@ -52,6 +52,7 @@ relations:
     - "docs/plans/issue-76-followup-l1-internal-cleanup.md"
     - "docs/designs/issue-114-real-adapter-l1-e2e.md"
     - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
+    - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -61,6 +62,7 @@ relations:
   defers:
     - "docs/specs/engine-plugin-host-integration.md"
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
   deferred-by: []
 ---
 

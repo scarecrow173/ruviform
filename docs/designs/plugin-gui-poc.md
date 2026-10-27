@@ -30,6 +30,7 @@ relations:
   derived-by:
     - "docs/plans/implement-issue-30-plugin-gui-poc.md"
     - "docs/test-specs/plugin-gui-poc.md"
+    - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-gui-poc.md"
