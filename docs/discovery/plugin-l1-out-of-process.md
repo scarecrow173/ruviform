@@ -53,6 +53,7 @@ relations:
     - "issue-114-real-adapter-l1-e2e.md"
     - "../specs/issue-114-real-adapter-l1-e2e.md"
     - "../designs/issue-115-l1-gui-cross-process-parenting.md"
+    - "issue-117-bundle-child-process-discovery.md"
   verifies: []
   verified-by: []
   references: []

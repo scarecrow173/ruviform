@@ -48,6 +48,8 @@ relations:
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
     - "docs/specs/issue-119-l1-wire-version-policy.md"
     - "docs/plans/implement-issue-119-l1-wire-version-policy.md"
+    - "docs/discovery/issue-117-bundle-child-process-discovery.md"
+    - "docs/specs/issue-117-bundle-child-process.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"

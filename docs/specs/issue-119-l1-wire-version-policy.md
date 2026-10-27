@@ -51,6 +51,8 @@ relations:
     - "../designs/plugin-l1-out-of-process.md"
   derived-by:
     - "../plans/implement-issue-119-l1-wire-version-policy.md"
+    - "../discovery/issue-117-bundle-child-process-discovery.md"
+    - "issue-117-bundle-child-process.md"
   verifies: []
   verified-by:
     - "../test-specs/plugin-l1-wire-codec-tests.md"
