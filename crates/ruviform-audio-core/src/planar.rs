@@ -120,8 +120,8 @@ impl<'a, S: Sample> PlanarBufferView<'a, S> {
     ///
     /// # Errors
     ///
-    /// [`Error::InvalidValue("planar_frames")`] when channel slices do
-    /// not share a single frame length.
+    /// [`Error::InvalidValue`] (`"planar_frames"`) when channel slices
+    /// do not share a single frame length.
     pub fn new(channels: &'a [&'a [S]]) -> Result<Self> {
         let frames = channels.first().map_or(0, |c| c.len());
         if channels.iter().any(|c| c.len() != frames) {
@@ -240,8 +240,8 @@ impl<'a, S: Sample> PlanarBufferViewMut<'a, S> {
     ///
     /// # Errors
     ///
-    /// [`Error::InvalidValue("planar_frames")`] when channel slices do
-    /// not share a single frame length.
+    /// [`Error::InvalidValue`] (`"planar_frames"`) when channel slices
+    /// do not share a single frame length.
     pub fn new(channels: &'a mut [&'a mut [S]]) -> Result<Self> {
         let frames = channels.first().map_or(0, |c| c.len());
         if channels.iter().any(|c| c.len() != frames) {

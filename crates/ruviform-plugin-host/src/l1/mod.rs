@@ -73,14 +73,13 @@ pub(crate) mod shm;
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
-use std::io::{self, Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command as ProcCommand, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering, fence};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use ruviform_plugin_core::wire::{self, WIRE_FRAME_HEADER_LEN, WIRE_MAX_PAYLOAD};
+use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
     EventList, HostError, HostInput, HostOutput, LifecycleState, PluginDescriptor, PrepareError,
     ProcessConfig, ProcessResult, TransportInfo,
@@ -426,36 +425,6 @@ fn converge(shared: &Shared, exit: Option<ChildExit>) {
     }
 }
 
-/// Reads one frame: `[u32 LE payload_len][u8 kind][payload]`. Any I/O
-/// error — EOF included — or a malformed/oversized frame is `Err`;
-/// the caller converges on it (EOF and protocol violation share the
-/// `Failed` path).
-fn read_message(reader: &mut impl Read) -> io::Result<wire::Message> {
-    let mut header = [0_u8; WIRE_FRAME_HEADER_LEN];
-    reader.read_exact(&mut header)?;
-    let payload_len =
-        u32::from_le_bytes(header[..4].try_into().expect("u32 length is 4 bytes")) as usize;
-    if payload_len > WIRE_MAX_PAYLOAD as usize {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "declared payload_len exceeds WIRE_MAX_PAYLOAD",
-        ));
-    }
-    let mut frame = Vec::with_capacity(WIRE_FRAME_HEADER_LEN + payload_len);
-    frame.extend_from_slice(&header);
-    frame.resize(WIRE_FRAME_HEADER_LEN + payload_len, 0);
-    reader.read_exact(&mut frame[WIRE_FRAME_HEADER_LEN..])?;
-    wire::decode(&frame).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-}
-
-/// Writes one framed message.
-fn write_message(writer: &mut impl Write, message: &wire::Message) -> io::Result<()> {
-    let mut frame = Vec::new();
-    wire::encode(message, &mut frame).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    writer.write_all(&frame)?;
-    writer.flush()
-}
-
 /// Spawns the configured child and takes its piped stdio — run on the
 /// driver thread so `Child` ownership never crosses a thread boundary.
 /// A failure after a successful `spawn` (theoretically unreachable
@@ -495,7 +464,13 @@ fn reader_main(
     in_depth: u32,
     out_depth: u32,
 ) {
-    if let Ok(wire::Message::Hello { version, .. }) = read_message(&mut stdout) {
+    // One scratch allocation reused across frames — the wire layer
+    // owns the framing; EOF and protocol violations share the
+    // `Err`/`Failed` path here.
+    let mut frame_buf = Vec::new();
+    if let Ok(wire::Message::Hello { version, .. }) =
+        wire::read_message(&mut stdout, &mut frame_buf)
+    {
         let _ = hello_tx.send(Ok(version));
     } else {
         // Missing `Hello` or a dead pipe before it — handshake
@@ -505,7 +480,7 @@ fn reader_main(
         return;
     }
     loop {
-        match read_message(&mut stdout) {
+        match wire::read_message(&mut stdout, &mut frame_buf) {
             Ok(wire::Message::Reply { seq, .. }) if data::is_block_seq(seq) => {
                 // A block rejection: the child answered the flagged
                 // seq with an `Err` `Reply` instead of `BlockDone` —
@@ -644,6 +619,9 @@ fn driver_main(
     in_depth: u32,
 ) {
     let mut shutdown_deadline: Option<Instant> = None;
+    // One encode scratch reused for every outbound frame — commands,
+    // the `Shutdown`, and each `BlockIn` doorbell.
+    let mut encode_buf = Vec::new();
     loop {
         match rx.recv_timeout(DRIVER_POLL_INTERVAL) {
             Ok(DriverCmd::Command { seq, cmd }) => {
@@ -657,7 +635,13 @@ fn driver_main(
                     if let Some(waiter) = waiter {
                         let _ = waiter.send(Err(HostError::Ipc));
                     }
-                } else if write_message(&mut stdin, &wire::Message::Command { seq, cmd }).is_err() {
+                } else if wire::write_message(
+                    &mut stdin,
+                    &wire::Message::Command { seq, cmd },
+                    &mut encode_buf,
+                )
+                .is_err()
+                {
                     converge(shared, None);
                 }
             }
@@ -678,7 +662,7 @@ fn driver_main(
                 }
                 // The peer may already be half-dead — a write failure
                 // only means the watchdog will finish the job.
-                let _ = write_message(&mut stdin, &wire::Message::Shutdown);
+                let _ = wire::write_message(&mut stdin, &wire::Message::Shutdown, &mut encode_buf);
                 shutdown_deadline = Some(Instant::now() + shutdown_grace);
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -752,7 +736,9 @@ fn driver_main(
             // across the process boundary rests on this hardware
             // fence plus the pipe-write syscall.
             fence(Ordering::Release);
-            if write_message(&mut stdin, &wire::Message::BlockIn { seq }).is_err() {
+            if wire::write_message(&mut stdin, &wire::Message::BlockIn { seq }, &mut encode_buf)
+                .is_err()
+            {
                 converge(shared, None);
                 return;
             }

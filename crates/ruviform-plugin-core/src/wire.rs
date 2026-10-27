@@ -55,6 +55,7 @@
 //! singleton instance.
 
 use core::fmt;
+use std::io::{self, Read, Write};
 
 use ruviform_audio_core::SampleRate;
 use ruviform_media_core::{
@@ -1512,6 +1513,165 @@ pub fn decode_descriptor(reader: &mut Reader<'_>) -> Result<Descriptor, WireErro
         version,
         features,
     })
+}
+
+// --- Stream transport ----------------------------------------------------
+
+/// Reads one frame — `[u32 LE payload_len][u8 kind][payload]` — from
+/// `reader` into `buf`, which is replaced wholesale: on `Ok(true)` it
+/// holds exactly the complete frame, header included, ready for
+/// [`decode`]. The `buf` parameter lets a serving loop reuse one
+/// allocation across frames.
+///
+/// `Ok(false)` is a *clean* EOF at a frame boundary — the peer's
+/// stream ended with zero bytes pending where a length field would
+/// start. Anything else is `Err`: a partial length field, a truncated
+/// body, a declared `payload_len` over [`WIRE_MAX_PAYLOAD`], or the
+/// reader's own error. The clean-EOF/truncation distinction is
+/// load-bearing for runners: a parent gone at a boundary is a normal
+/// teardown, a mid-frame cut is a transport violation.
+///
+/// **RT contract:** non-RT — blocking `Read` calls plus a `buf`
+/// resize that may allocate.
+///
+/// # Errors
+///
+/// `std::io::Error` — `InvalidData` for an over-limit declared
+/// length, `UnexpectedEof` for a partial header or truncated body, or
+/// the reader's own error verbatim.
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_plugin_core::wire::{self, Message};
+///
+/// let mut frame = Vec::new();
+/// wire::encode(&Message::Shutdown, &mut frame).unwrap();
+///
+/// let mut buf = Vec::new();
+/// let mut cursor = std::io::Cursor::new(frame);
+/// assert!(wire::read_frame(&mut cursor, &mut buf).unwrap());
+/// assert_eq!(wire::decode(&buf), Ok(Message::Shutdown));
+/// // A second read at the boundary reports clean EOF.
+/// assert!(!wire::read_frame(&mut cursor, &mut buf).unwrap());
+/// ```
+pub fn read_frame(reader: &mut impl Read, buf: &mut Vec<u8>) -> io::Result<bool> {
+    let mut header = [0_u8; 4];
+    let mut read = 0;
+    while read < header.len() {
+        match reader.read(&mut header[read..]) {
+            Ok(0) => break,
+            Ok(n) => read += n,
+            // `read_exact` retries `Interrupted` internally — the
+            // manual length-field loop does the same.
+            Err(ref error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(error) => return Err(error),
+        }
+    }
+    if read == 0 {
+        // Clean EOF at a frame boundary.
+        return Ok(false);
+    }
+    if read < header.len() {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "partial frame header",
+        ));
+    }
+    let payload_len = u32::from_le_bytes(header) as usize;
+    if payload_len > WIRE_MAX_PAYLOAD as usize {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "declared payload_len exceeds WIRE_MAX_PAYLOAD",
+        ));
+    }
+    buf.clear();
+    buf.extend_from_slice(&header);
+    buf.resize(WIRE_FRAME_HEADER_LEN + payload_len, 0);
+    // Kind byte plus payload — a mid-body EOF reports `UnexpectedEof`,
+    // the same kind as a partial header.
+    reader.read_exact(&mut buf[4..])?;
+    Ok(true)
+}
+
+/// Reads and decodes one [`Message`] — the convenience over
+/// [`read_frame`] for callers that treat a clean EOF at a frame
+/// boundary as an error too (the proxy's converge-on-`Failed`
+/// contract; the fixture worker maps any read failure to its
+/// clean-teardown exit anyway).
+///
+/// **RT contract:** non-RT — blocking `Read`, a `buf` resize that may
+/// allocate, plus [`decode`]'s payload allocations.
+///
+/// # Errors
+///
+/// `std::io::Error` — `UnexpectedEof` on EOF (clean-at-boundary or
+/// mid-frame), `InvalidData` for an over-limit declared length or an
+/// undecodable frame, or the reader's own error verbatim.
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_plugin_core::wire::{self, Message};
+///
+/// let mut frame = Vec::new();
+/// wire::encode(&Message::BlockIn { seq: 7 }, &mut frame).unwrap();
+///
+/// let mut buf = Vec::new();
+/// let mut cursor = std::io::Cursor::new(frame);
+/// assert_eq!(
+///     wire::read_message(&mut cursor, &mut buf).unwrap(),
+///     Message::BlockIn { seq: 7 },
+/// );
+/// // EOF at the boundary is `UnexpectedEof` at this level.
+/// assert_eq!(
+///     wire::read_message(&mut cursor, &mut buf)
+///         .unwrap_err()
+///         .kind(),
+///     std::io::ErrorKind::UnexpectedEof,
+/// );
+/// ```
+pub fn read_message(reader: &mut impl Read, buf: &mut Vec<u8>) -> io::Result<Message> {
+    if !read_frame(reader, buf)? {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "clean EOF at a frame boundary",
+        ));
+    }
+    decode(buf).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
+
+/// Encodes `message` into `buf` (replaced wholesale) and writes the
+/// frame to `writer`, flushing so a blocked peer reader sees it
+/// immediately. The `buf` parameter lets a serving loop reuse one
+/// allocation across frames.
+///
+/// **RT contract:** non-RT — blocking `Write`/`flush` plus
+/// [`encode`]'s `buf` growth.
+///
+/// # Errors
+///
+/// `std::io::Error` — `InvalidData` wrapping the [`WireError`] when
+/// `message` fails to encode, or the writer's own error verbatim.
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_plugin_core::wire::{self, Message};
+///
+/// let mut out = Vec::new();
+/// wire::write_message(&mut out, &Message::BlockIn { seq: 7 }, &mut Vec::new()).unwrap();
+/// assert_eq!(wire::decode(&out), Ok(Message::BlockIn { seq: 7 }));
+/// ```
+pub fn write_message(
+    writer: &mut impl Write,
+    message: &Message,
+    buf: &mut Vec<u8>,
+) -> io::Result<()> {
+    buf.clear();
+    encode(message, buf).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    writer.write_all(buf)?;
+    writer.flush()
 }
 
 #[cfg(test)]
