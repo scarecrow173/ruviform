@@ -50,6 +50,7 @@ relations:
     - "docs/tasks/plugin-host-composite-and-l1-e2e.md"
     - "docs/tasks/plugin-l1-final-verification.md"
     - "docs/tasks/plugin-l1-closeout.md"
+    - "docs/specs/issue-76-followup-l1-internal-cleanup.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"

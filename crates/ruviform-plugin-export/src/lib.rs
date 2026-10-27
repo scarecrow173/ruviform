@@ -142,7 +142,7 @@ pub fn run(factories: Vec<Box<dyn PluginFactory>>) -> ExitCode {
     let mut encode_buf = Vec::new();
     // `Hello` is the first frame the child emits — before the shm
     // attach, so an attach failure reaches the parent as Hello + EOF.
-    if send(
+    if wire::write_message(
         &mut output,
         &Message::Hello {
             version: wire::WIRE_VERSION,
@@ -201,23 +201,22 @@ fn serve(
 ) -> ExitCode {
     let mut frame_buf = Vec::new();
     loop {
-        match read_frame(input, &mut frame_buf) {
-            Ok(true) => {}
+        let message = match wire::read_frame(input, &mut frame_buf) {
+            Ok(true) => match wire::decode(&frame_buf) {
+                Ok(message) => message,
+                Err(error) => {
+                    eprintln!("ruviform-plugin-export: undecodable frame: {error}");
+                    runner.normalize();
+                    return ExitCode::FAILURE;
+                }
+            },
             Ok(false) => {
                 // Clean EOF at a frame boundary — the parent is gone.
                 runner.normalize();
                 return ExitCode::SUCCESS;
             }
-            Err(reason) => {
-                eprintln!("ruviform-plugin-export: {reason}");
-                runner.normalize();
-                return ExitCode::FAILURE;
-            }
-        }
-        let message = match wire::decode(&frame_buf) {
-            Ok(message) => message,
             Err(error) => {
-                eprintln!("ruviform-plugin-export: undecodable frame: {error}");
+                eprintln!("ruviform-plugin-export: {error}");
                 runner.normalize();
                 return ExitCode::FAILURE;
             }
@@ -225,7 +224,8 @@ fn serve(
         match message {
             Message::Command { seq, cmd } => {
                 let result = runner.dispatch(cmd);
-                if send(output, &Message::Reply { seq, result }, encode_buf).is_err() {
+                if wire::write_message(output, &Message::Reply { seq, result }, encode_buf).is_err()
+                {
                     eprintln!("ruviform-plugin-export: control-plane write failed");
                     runner.normalize();
                     return ExitCode::FAILURE;
@@ -258,7 +258,7 @@ fn serve(
                         result: Err(error),
                     },
                 };
-                if send(output, &reply, encode_buf).is_err() {
+                if wire::write_message(output, &reply, encode_buf).is_err() {
                     eprintln!("ruviform-plugin-export: control-plane write failed");
                     runner.normalize();
                     return ExitCode::FAILURE;
@@ -711,87 +711,4 @@ impl BufferViewMut for SlotOutView<'_> {
             None
         }
     }
-}
-
-/// Why a frame could not be read completely.
-enum ReadFail {
-    /// EOF mid-frame — protocol loss.
-    Truncated,
-    /// `payload_len` over [`wire::WIRE_MAX_PAYLOAD`].
-    LimitExceeded,
-    /// stdin I/O error.
-    Io,
-}
-
-impl std::fmt::Display for ReadFail {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Truncated => f.write_str("stdin frame truncated"),
-            Self::LimitExceeded => f.write_str("declared frame length exceeds WIRE_MAX_PAYLOAD"),
-            Self::Io => f.write_str("stdin read failed"),
-        }
-    }
-}
-
-/// Reads one `[u32 LE payload_len][u8 kind][payload]` frame into
-/// `buf`. `Ok(true)` = a complete frame; `Ok(false)` = clean EOF at a
-/// frame boundary; `Err` = a defined rejection (mid-frame truncation,
-/// over-limit length, I/O error) — never a hang, never a partial
-/// consume.
-fn read_frame(input: &mut impl Read, buf: &mut Vec<u8>) -> Result<bool, ReadFail> {
-    let mut header = [0_u8; 4];
-    match fill(input, &mut header) {
-        Ok(Fill::Eof) => return Ok(false),
-        Ok(Fill::Truncated) => return Err(ReadFail::Truncated),
-        Ok(Fill::Done) => {}
-        Err(()) => return Err(ReadFail::Io),
-    }
-    let payload_len = u32::from_le_bytes(header) as usize;
-    if payload_len > wire::WIRE_MAX_PAYLOAD as usize {
-        return Err(ReadFail::LimitExceeded);
-    }
-    buf.clear();
-    buf.extend_from_slice(&header);
-    buf.resize(wire::WIRE_FRAME_HEADER_LEN + payload_len, 0);
-    match fill(input, &mut buf[4..]) {
-        Ok(Fill::Done) => Ok(true),
-        Ok(Fill::Eof | Fill::Truncated) => Err(ReadFail::Truncated),
-        Err(()) => Err(ReadFail::Io),
-    }
-}
-
-enum Fill {
-    Done,
-    /// Zero bytes were available at the start of the field.
-    Eof,
-    /// EOF hit partway through a field.
-    Truncated,
-}
-
-fn fill(input: &mut impl Read, buf: &mut [u8]) -> Result<Fill, ()> {
-    let mut read = 0;
-    while read < buf.len() {
-        match input.read(&mut buf[read..]) {
-            Ok(0) => {
-                return Ok(if read == 0 {
-                    Fill::Eof
-                } else {
-                    Fill::Truncated
-                });
-            }
-            Ok(n) => read += n,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-            Err(_) => return Err(()),
-        }
-    }
-    Ok(Fill::Done)
-}
-
-/// Encodes `message` and writes the frame, flushing so the parent's
-/// reader sees it immediately.
-fn send(output: &mut impl Write, message: &Message, buf: &mut Vec<u8>) -> io::Result<()> {
-    buf.clear();
-    wire::encode(message, buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    output.write_all(buf)?;
-    output.flush()
 }

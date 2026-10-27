@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "共通基盤・Observability・Diagnostics・Debug とクレート分割の設計方針"
 created: "2026-10-22"
-updated: "2026-10-23"
+updated: "2026-10-27"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -41,6 +41,7 @@ relations:
     - "../adr/rt-foundation-primitives-implementation.md"
   derived-by:
     - "foundation-observability-minimal-api.md"
+    - "issue-122-shared-platform-process-ipc-eval.md"
     - "../plans/implement-issue-104-rt-observability-poc.md"
     - "../test-specs/rt-observability-poc-tests.md"
   verifies: []

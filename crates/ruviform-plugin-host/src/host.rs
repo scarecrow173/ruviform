@@ -111,8 +111,6 @@ struct Instance {
     /// Stamped into [`PluginHandle`]s; bumped on reuse so a stale
     /// handle is rejected instead of aliasing a new instance.
     generation: u16,
-    /// Whether a GUI surface is currently open.
-    gui_open: bool,
 }
 
 impl Instance {
@@ -121,7 +119,6 @@ impl Instance {
             slot,
             lifecycle: Lifecycle::new(),
             generation,
-            gui_open: false,
         }
     }
 }
@@ -951,18 +948,14 @@ impl InProcessHost {
         match &mut instance.slot {
             InstanceSlot::Plain { plugin, .. } => {
                 let gui: GuiHandle = plugin.open_gui(parent)?;
-                instance.gui_open = true;
                 Ok(HostReply::Opened { gui })
             }
             InstanceSlot::Shared(slot) => {
-                let reply =
-                    Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
-                        core.plugin
-                            .open_gui(parent)
-                            .map(|gui| HostReply::Opened { gui })
-                    })?;
-                instance.gui_open = true;
-                Ok(reply)
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin
+                        .open_gui(parent)
+                        .map(|gui| HostReply::Opened { gui })
+                })
             }
         }
     }
@@ -972,15 +965,12 @@ impl InProcessHost {
         match &mut instance.slot {
             InstanceSlot::Plain { plugin, .. } => {
                 plugin.close_gui()?;
-                instance.gui_open = false;
                 Ok(HostReply::Ok)
             }
             InstanceSlot::Shared(slot) => {
                 Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
                     core.plugin.close_gui().map(|()| HostReply::Ok)
-                })?;
-                instance.gui_open = false;
-                Ok(HostReply::Ok)
+                })
             }
         }
     }
