@@ -48,13 +48,18 @@ relations:
     - "docs/test-specs/plugin-endpoint-contract-tests.md"
     - "docs/test-specs/plugin-graph-e2e-tests.md"
     - "docs/test-specs/plugin-rt-retirement-tests.md"
+    - "docs/discovery/issue-114-real-adapter-l1-e2e.md"
+    - "docs/specs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/designs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-endpoint-contract-tests.md"
     - "docs/test-specs/plugin-graph-e2e-tests.md"
     - "docs/test-specs/plugin-rt-retirement-tests.md"
   references: []
-  defers: []
+  defers:
+    - "docs/specs/issue-114-real-adapter-l1-e2e.md"
   deferred-by: []
 ---
 

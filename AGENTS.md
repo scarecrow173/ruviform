@@ -133,9 +133,11 @@ mise exec -- apm install --frozen
 | `bench-smoke` | `cargo bench -p ruviform-math -p ruviform-rt -- --test` | ベンチスモーク（各ベンチを計測なしで 1 回実行。CI `bench` ジョブが呼ぶ入口） |
 | `check-ci` / `lint-ci` / `test-ci` / `build-ci` | 上記各コマンドを `--profile ci`・`CARGO_INCREMENTAL=0` で実行 | CI 用途限定 |
 | `verify-ci` | `fmt-check` → `check-ci` → `lint-ci` → `test-ci` を順次実行 | CI 同等の検証列 |
+| `test-l1-real-plugin` | `cargo build -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host` → `cargo test -p ... --features host --lib --bins` → `cargo test -p ... --features host --test l1_real_adapter_e2e -- --ignored` | 実規格プラグイン L1 E2E opt-in lane（Issue #114。fixture cdylib + `host` feature runner bin を要し `#[ignore]` + `#![cfg]` + `required-features` で既定経路から分離。CI `l1-real-verify` ジョブが呼ぶ入口） |
+| `lint-l1-real-plugin` | `cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 --all-targets --features host -- -D warnings` | `host` feature 配下の bridge/runner/E2E ターゲット lint（既定 `lint` の feature 集合外） |
 
 - `*-ci` タスクと `verify-ci` は CI 用途限定。成果物が `target/ci/` に `target/debug/` と並存して容量を消費するため常用しない。
-- `.github/workflows/ci.yml` は `workflow_dispatch` 専用の手動検証ワークフロー（push / pull_request / schedule 等の自動トリガーは設けない）。`verify` ジョブは `ubuntu-latest` / `windows-latest` / `macos-latest` の 3 OS matrix（ディスク計測ステップは ubuntu のみ）、`rt-verify`（`mise run test-rt`）と `bench`（`mise run bench-smoke`）ジョブは `ubuntu-latest` 単独。
+- `.github/workflows/ci.yml` は `workflow_dispatch` 専用の手動検証ワークフロー（push / pull_request / schedule 等の自動トリガーは設けない）。`verify` と `l1-real-verify`（`mise run test-l1-real-plugin` + `mise run lint-l1-real-plugin`・Issue #114 の実規格プラグイン lane）ジョブは `ubuntu-latest` / `windows-latest` / `macos-latest` の 3 OS matrix（`verify` のディスク計測ステップは ubuntu のみ）、`rt-verify`（`mise run test-rt`）・`icc-verify`（`test-video-proc-icc`/`lint-video-proc-icc`）・`bench`（`mise run bench-smoke`）ジョブは `ubuntu-latest` 単独。
 
 ### 暫定規約
 

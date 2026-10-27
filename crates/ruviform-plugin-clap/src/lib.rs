@@ -56,11 +56,26 @@
 //! findings are recorded in
 //! `docs/impl/ir/poc-clap-binding-adapter.md`.
 //!
+//! ## Host bridge (`feature = "host"`)
+//!
+//! The optional `host` feature compiles [`host`], the mirror image of
+//! this adapter: a host-side bridge that loads a real `.clap` shared
+//! object in-process with `clack-host` and maps its descriptor,
+//! parameters and lifecycle onto the neutral
+//! [`PluginFactory`][ruviform_plugin_core::PluginFactory] /
+//! [`Plugin`][ruviform_plugin_core::Plugin] contracts. It exists for
+//! the L1 out-of-process runner (Issue #114) and stays out of the
+//! default dependency tree — `PluginEntry::load` is the crate's one
+//! `unsafe` boundary, scoped inside `host` with `#[expect(unsafe_code)]`
+//! + SAFETY justifications.
+//!
 //! Contract source: `docs/specs/implement-plugin-foundation.md`,
 //! `docs/plans/implement-plugin-foundation.md` (task T3).
 
 mod adapt;
 mod gain;
+#[cfg(feature = "host")]
+pub mod host;
 mod plugin;
 
 use clack_plugin::entry::SinglePluginEntry;
@@ -105,5 +120,12 @@ mod tests {
     fn public_surface_is_binding_neutral() {
         let _ = GAIN_PARAM;
         let _core_version = ruviform_plugin_core::version();
+        // `host::ClapHostError` carries erased `Box<dyn Error>`
+        // payloads — no named clack type in the public signature.
+        #[cfg(feature = "host")]
+        {
+            fn assert_error_bounds<T: std::error::Error + Send + Sync>() {}
+            assert_error_bounds::<host::ClapHostError>();
+        }
     }
 }

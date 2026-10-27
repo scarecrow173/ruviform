@@ -45,8 +45,8 @@ Ruviform ワークスペースのメンバークレート索引（計21クレー
 | --- | --- |
 | [`ruviform-plugin-core`](ruviform-plugin-core/README.md) | 規格中立プラグイン基盤（音声 RT・動画 NONRT 契約、typed plain 制御） |
 | [`ruviform-plugin-ofx`](ruviform-plugin-ofx/README.md) | OpenFX Image Effect ホストアダプタ（実 foreign ABI・NONRT L0） |
-| [`ruviform-plugin-clap`](ruviform-plugin-clap/README.md) | CLAP 薄アダプタ |
-| [`ruviform-plugin-vst3`](ruviform-plugin-vst3/README.md) | VST3 アダプタ（ABI-only） |
+| [`ruviform-plugin-clap`](ruviform-plugin-clap/README.md) | CLAP 薄アダプタ + feature `host` で規格 host-side bridge・L1 runner bin（Issue #114・opt-in lane `mise run test-l1-real-plugin`） |
+| [`ruviform-plugin-vst3`](ruviform-plugin-vst3/README.md) | VST3 アダプタ（ABI-only）+ feature `host` で規格 host-side bridge・L1 runner bin（Issue #114・opt-in lane `mise run test-l1-real-plugin`） |
 | [`ruviform-plugin-export`](ruviform-plugin-export/README.md) | プラグイン側 L1 薄ランナー（子プロセスエントリ `run(factories)` + 参照 runner bin `ruviform-plugin-l1-runner`） |
 
 ## Host 層

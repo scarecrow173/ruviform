@@ -39,6 +39,8 @@ relations:
     - "docs/plans/implement-issue-76-plugin-l1-out-of-process.md"
     - "docs/discovery/engine-plugin-host-integration.md"
     - "docs/specs/engine-plugin-host-integration.md"
+    - "docs/discovery/issue-114-real-adapter-l1-e2e.md"
+    - "docs/specs/issue-114-real-adapter-l1-e2e.md"
   verifies: []
   verified-by: []
   references: []

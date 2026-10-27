@@ -24,6 +24,20 @@ audio `process` 系の RT 保証とは別経路。
 パラメータ・clip preferences まで到達する。`render` は映像 task まで
 `OfxError::Unsupported`。
 
+## L1（out-of-process）境界 — Issue #114 AC5
+
+`VideoPluginInstance` は全操作 NONRT（`render` を含む制御プレーン同期呼出し）
+で、video wire は未確立（L1 の wire/shm データ面は planar `f32` audio 専用 —
+Issue #113 design 確定面）。そのため OFX プラグインは L1 子プロセス経路
+（`ruviform_plugin_export::run(factories)` + audio shm block）に**構造上
+載らない** — `run` の argv 規約・`L1Instance` の audio block 契約は video
+port を表現できず、audio 面の `#[ignore]` E2E lane
+（`mise run test-l1-real-plugin`）も OFX を対象に取らない。
+
+OFX の L1 経路・video wire 確立は Issue #118 で追跡する。延期 trigger は
+NONRT video port の分離要求が確定した時点（L1 design の deferred 項目と
+整合）。
+
 ## 関連
 
 - vendored pinned headers: `vendor/openfx/`（`manifest.json` に sha256 記録）

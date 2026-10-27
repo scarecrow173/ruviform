@@ -14,6 +14,29 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# The CLAP-specific L1 child-process runner (Issue #114, task
+# `docs/tasks/real-adapter-runner-bins.md`): dlopens the fixture cdylib
+# through the `host` bridge and hands the scanned factories to
+# `ruviform_plugin_export::run`. `required-features` keeps the binary
+# out of the default build — it exists only under `--features host`.
+[[bin]]
+name = "ruviform-plugin-clap-l1-runner"
+path = "src/bin/ruviform-plugin-clap-l1-runner.rs"
+required-features = ["host"]
+
+[features]
+# `host` — the host-side bridge (`src/host.rs`): loads a real `.clap`
+# shared object in-process via `clack-host` and maps it onto the neutral
+# `PluginFactory`/`Plugin` contracts for the L1 out-of-process runner.
+# `clack-extensions` is a non-optional dependency, so its feature is
+# wired with the plain `dep/feat` syntax (the weak `dep?/feat` form only
+# exists for optional dependencies).
+host = [
+    "dep:clack-host",
+    "dep:ruviform-plugin-export",
+    "clack-extensions/clack-host",
+]
+
 [dependencies]
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 ruviform-audio-core = { path = "../ruviform-audio-core" }
@@ -28,6 +51,15 @@ clack-extensions = { version = "=0.2.0", features = [
     "params",
     "thread-check",
 ] }
+# `clack-host` is promoted from a dev-dependency to an optional prod
+# dependency under `host` (Issue #114 — the bridge dlopens real `.clap`
+# binaries). The dev-dependency entry below is kept for the
+# `load_from_clack` typed-entry tests; the two entries union features.
+clack-host = { version = "=0.2.0", optional = true }
+# The runner binary (`required-features = ["host"]`, Task 3) consumes
+# `run()`; keeping the dep optional keeps the default dep tree and the
+# plugin-side cdylib unchanged.
+ruviform-plugin-export = { path = "../ruviform-plugin-export", optional = true }
 
 [dev-dependencies]
 # `clack-host` (feature `clack-plugin`) synthesizes the plugin-side
@@ -43,6 +75,11 @@ clack-extensions = { version = "=0.2.0", features = ["clack-host", "thread-check
 # RT 境界テストの allocation/deallocation を機械検出する Issue #22
 # 検証レーン（audio-device の callback 経路検証と同方式）。
 assert_no_alloc = "1.1"
+# Issue #114（T4）: `tests/l1_real_adapter_e2e.rs` が実 fixture cdylib +
+# `host` runner を `PluginHost`/`OutOfProcessSpec` 経由で駆動する。
+# dev-dep 方向（adapter → host）で依存 DAG の非環を維持する — plugin-host は
+# adapter crate に依存しない。
+ruviform-plugin-host = { path = "../ruviform-plugin-host" }
 
 [lints]
 workspace = true

@@ -47,13 +47,16 @@ relations:
   derived-by:
     - "docs/designs/engine-plugin-host-integration.md"
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
+    - "docs/discovery/issue-114-real-adapter-l1-e2e.md"
+    - "docs/specs/issue-114-real-adapter-l1-e2e.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-endpoint-contract-tests.md"
     - "docs/test-specs/plugin-graph-e2e-tests.md"
     - "docs/test-specs/plugin-rt-retirement-tests.md"
   references: []
-  defers: []
+  defers:
+    - "docs/specs/issue-114-real-adapter-l1-e2e.md"
   deferred-by:
     - "docs/specs/plugin-l1-out-of-process.md"
     - "docs/designs/plugin-l1-out-of-process.md"

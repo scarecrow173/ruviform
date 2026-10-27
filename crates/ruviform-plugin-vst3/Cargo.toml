@@ -14,16 +14,50 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# The VST3-specific L1 child-process runner (Issue #114, task
+# `docs/tasks/real-adapter-runner-bins.md`): dlopens the fixture cdylib
+# through the `host` bridge and hands the scanned factories to
+# `ruviform_plugin_export::run`. `required-features` keeps the binary
+# out of the default build — it exists only under `--features host`.
+[[bin]]
+name = "ruviform-plugin-vst3-l1-runner"
+path = "src/bin/ruviform-plugin-vst3-l1-runner.rs"
+required-features = ["host"]
+
+[features]
+# `host` — the host-side bridge (`src/host.rs`): dlopens a real VST3
+# module in-process via `libloading`, scans its class table and drives
+# the raw `vst3`-crate COM objects onto the neutral
+# `PluginFactory`/`Plugin` contracts for the L1 out-of-process runner
+# (Issue #114, task `docs/tasks/vst3-host-bridge.md`).
+host = ["dep:libloading", "dep:ruviform-plugin-export"]
+
 [dependencies]
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 ruviform-audio-core = { path = "../ruviform-audio-core" }
 ruviform-media-core = { path = "../ruviform-media-core" }
+# `vst3` stays a required dependency — the plugin-side adapter is its
+# primary consumer and the `host` bridge reuses the same bindings
+# (`Class`/`ComWrapper`/`Interface`/constants via `vst3::` re-exports).
 vst3 = "0.3.0"
+# `libloading` 0.8.9 — the same version the OFX adapter already uses
+# for dlopen; no new version is introduced (dependency-rationale
+# recorded in `docs/designs/issue-114-real-adapter-l1-e2e.md`).
+libloading = { version = "0.8.9", optional = true }
+# The runner binary (`required-features = ["host"]`, Task 3) consumes
+# `run()`; keeping the dep optional keeps the default dep tree and the
+# plugin-side cdylib unchanged.
+ruviform-plugin-export = { path = "../ruviform-plugin-export", optional = true }
 
 [dev-dependencies]
 # RT 境界テストの allocation/deallocation を機械検出する Issue #22
 # 検証レーン（audio-device の callback 経路検証と同方式）。
 assert_no_alloc = "1.1"
+# Issue #114（T4）: `tests/l1_real_adapter_e2e.rs` が実 fixture cdylib +
+# `host` runner を `PluginHost`/`OutOfProcessSpec` 経由で駆動する。
+# dev-dep 方向（adapter → host）で依存 DAG の非環を維持する — plugin-host は
+# adapter crate に依存しない。
+ruviform-plugin-host = { path = "../ruviform-plugin-host" }
 
 [lints]
 workspace = true

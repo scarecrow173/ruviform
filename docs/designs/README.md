@@ -20,6 +20,7 @@ Directory: `docs/designs`
 | DESIGN-034KNBPbww1kvzVUF4Ab1H | ruviform-edit 設計（NLE 編集データモデル + 評価射影） | approved | [edit-data-model.md](./edit-data-model.md) |
 | DESIGN-034Mclz5y96MrTg7R2BNCx | エンジン/利用側へのプラグイン統合（RT endpoint 所有分離 + グラフ接着） | approved | [engine-plugin-host-integration.md](./engine-plugin-host-integration.md) |
 | DESIGN-034KQXr3w4dYgKO79dklG9 | Foundation/Observability 候補モジュールの最小 API・依存 DAG・新設時期の設計 | approved | [foundation-observability-minimal-api.md](./foundation-observability-minimal-api.md) |
+| DESIGN-034MIeiBWXpLjwgA1yolIT | L1 規格アダプタの子プロセス組込み・実プラグイン E2E（CLAP + VST3 host-side bridge — Issue #114） | approved | [issue-114-real-adapter-l1-e2e.md](./issue-114-real-adapter-l1-e2e.md) |
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | approved | [music-time-model.md](./music-time-model.md) |

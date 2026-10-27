@@ -1,0 +1,5 @@
+# gate=lint-l1-real-plugin started=2026-10-27T00:33:54Z
+$ mise run lint-l1-real-plugin
+[lint-l1-real-plugin] $ cargo clippy -p ruviform-plugin-clap -p ruviform-plugin…
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
+# gate=lint-l1-real-plugin exit=0 finished=2026-10-27T00:33:55Z

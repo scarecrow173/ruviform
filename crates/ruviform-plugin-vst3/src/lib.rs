@@ -35,12 +35,28 @@
 //! event scratch is per-instance state allocated at
 //! `setupProcessing`; the process path performs only bounded work and
 //! never allocates, blocks or does I/O.
+//!
+//! ## Host bridge (`feature = "host"`)
+//!
+//! The optional `host` feature compiles [`host`], the mirror image of
+//! this adapter: a host-side bridge that dlopens a real VST3 module
+//! in-process via `libloading`, scans its class table through the raw
+//! `vst3`-crate COM bindings and maps descriptors, parameters and the
+//! component/controller lifecycle onto the neutral
+//! [`PluginFactory`][ruviform_plugin_core::PluginFactory] /
+//! [`Plugin`][ruviform_plugin_core::Plugin] contracts. It exists for
+//! the L1 out-of-process runner (Issue #114) and stays out of the
+//! default dependency tree — the `libloading`/COM boundary is scoped
+//! inside `host` with `#[expect(unsafe_code)]` + SAFETY
+//! justifications.
 
 mod block;
 mod component;
 mod controller;
 mod factory;
 mod gain;
+#[cfg(feature = "host")]
+pub mod host;
 mod strings;
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]

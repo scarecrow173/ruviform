@@ -1,0 +1,17 @@
+# gate=runner-direct-launch started=2026-10-27T00:36:11Z
+# AC1 evidence — runner direct launch (no args) + missing-fixture env override
+$ target/debug/ruviform-plugin-clap-l1-runner.exe  (no args -> usage reject)
+ruviform-plugin-export: missing --ruviform-shm-key
+usage: <runner> --ruviform-shm-key <key> [--ruviform-plugin-id <id>]
+clap-runner exit=2
+$ target/debug/ruviform-plugin-vst3-l1-runner.exe  (no args -> usage reject)
+ruviform-plugin-export: missing --ruviform-shm-key
+usage: <runner> --ruviform-shm-key <key> [--ruviform-plugin-id <id>]
+vst3-runner exit=2
+$ RUVIFORM_L1_REAL_PLUGIN_DIR=/nonexistent target/debug/ruviform-plugin-clap-l1-runner.exe  (missing fixture -> exit 1)
+ruviform-plugin-clap-l1-runner: cannot load fixture C:/Program Files/Git/nonexistent\ruviform_plugin_clap.dll: CLAP entry load failed: Failed to load plugin descriptor library: LoadLibraryExW failed
+clap-runner-missing-fixture exit=1
+$ RUVIFORM_L1_REAL_PLUGIN_DIR=/nonexistent target/debug/ruviform-plugin-vst3-l1-runner.exe  (missing fixture -> exit 1)
+ruviform-plugin-vst3-l1-runner: cannot load fixture C:/Program Files/Git/nonexistent\ruviform_plugin_vst3.dll: VST3 library load failed: LoadLibraryExW failed
+vst3-runner-missing-fixture exit=1
+# gate=runner-direct-launch finished=2026-10-27T00:36:16Z

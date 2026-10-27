@@ -1412,6 +1412,8 @@ dependencies = [
  "ruviform-audio-core",
  "ruviform-media-core",
  "ruviform-plugin-core",
+ "ruviform-plugin-export",
+ "ruviform-plugin-host",
 ]
 
 [[package]]
@@ -1463,9 +1465,12 @@ name = "ruviform-plugin-vst3"
 version = "0.1.0"
 dependencies = [
  "assert_no_alloc",
+ "libloading",
  "ruviform-audio-core",
  "ruviform-media-core",
  "ruviform-plugin-core",
+ "ruviform-plugin-export",
+ "ruviform-plugin-host",
  "vst3",
 ]
 

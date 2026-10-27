@@ -46,6 +46,10 @@ relations:
     - "docs/adr/plugin-rt-ownership-split.md"
     - "docs/designs/engine-plugin-host-integration.md"
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
+    - "docs/discovery/issue-114-real-adapter-l1-e2e.md"
+    - "docs/specs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/designs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -54,6 +58,7 @@ relations:
   references: []
   defers:
     - "docs/specs/engine-plugin-host-integration.md"
+    - "docs/specs/issue-114-real-adapter-l1-e2e.md"
   deferred-by: []
 ---
 

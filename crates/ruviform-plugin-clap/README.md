@@ -29,7 +29,8 @@ binding クレート型は実装詳細 — `clack`/`clap-sys` の型はこのク
 - 層: 拡張層（Plugin 拡張層、設計ベースライン）
 - 許可依存: `ruviform-plugin-core` + Domain foundations（`ruviform-audio-core`）+
   Primitives（`ruviform-media-core`）、および `clack` binding クレート
-  （アダプタ内部の実装依存。`clack-host` はテスト用 dev-dependency）。
+  （アダプタ内部の実装依存。`clack-host` はテスト用 dev-dependency に加え、
+  feature `host` では optional prod dependency — 後述）。
 
 ## RT 契約
 
@@ -41,6 +42,36 @@ Issue #22 RT 検証レーンはブロックごとパスを `assert_no_alloc` で
 確保/解放を機械検出する。CI 通過は RT 安全性の*証明*ではない — 静的制約
 （ロック時間・優先度・実行時間上界）は `docs/adr/realtime-contract-and-verification-policy.md`
 に従い文書化 + レビューの責務として残る。
+
+## feature `host` — 規格 host-side bridge + L1 runner（Issue #114）
+
+default feature 集合に含まない `host` を有効化すると、host 側 bridge
+`ruviform_plugin_clap::host` が公開される。`ClapLibrary::load(path)` が実
+`.clap` 共有オブジェクトを `clack-host` 経由で dlopen し、`descriptors()` /
+`factories()` がスキャン結果を中立 `PluginDescriptor`/`PluginFactory`/
+`ErasedPlugin` 契約へ写像する（`PluginDescriptor`/`ParamInfo` の `'static`
+境界は load/factory 構築時の 1 回限り bounded `String::leak`/`Vec::leak` で
+実体化）。`save_state`/`restore_state`/`open_gui`/`close_gui` は `Plugin`
+既定の `Err(HostError::Unsupported)` のまま — bridge は規格 state/GUI 動詞を
+呼ばない（fixture の state 面は未実装・偽の round-trip を観測しない）。
+
+runner bin `ruviform-plugin-clap-l1-runner`（`[[bin]] required-features =
+["host"]`）は compile-time 固定 — fixture cdylib
+`{DLL_PREFIX}ruviform_plugin_clap{DLL_SUFFIX}` を `RUVIFORM_L1_REAL_PLUGIN_DIR`
+（任意 env override）→ 未設定時は runner executable sibling
+（`target/<profile>/`）で解決し、スキャン済み factory を
+`ruviform_plugin_export::run(factories)` へ渡す。`run` の argv 規約
+（`--ruviform-shm-key` 必須・`--ruviform-plugin-id`・未知引数 usage reject →
+exit 2）は不変で、plugin path を argv で受け渡す機構はない（load 失敗は
+`eprintln!` + exit 1 pre-Hello → 親 spawn `Err(HostError::Ipc)`）。
+
+検証入口は opt-in lane のみ: `mise run test-l1-real-plugin` が
+`cargo build --features host`（fixture + runner 生成）→ `cargo test --lib
+--bins`（in-process bridge 契約層 + runner bin の fixture 解決 unit test）
+→ `cargo test --test l1_real_adapter_e2e -- --ignored`
+（`PluginHost`/`OutOfProcessSpec` 経由の実バイナリ L1 E2E — `#[ignore]`
+ゲートで既定 `cargo test` 経路から分離）の 3 段を実行する。
+lint は `mise run lint-l1-real-plugin`（`--features host`・`-D warnings`）。
 
 ## 関連
 
