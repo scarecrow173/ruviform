@@ -406,6 +406,10 @@ impl IccTransform {
 mod tests {
     use std::sync::Arc;
 
+    use moxcms::{
+        LocalizableString, LutDataType, LutMultidimensionalType, LutStore, LutType, LutWarehouse,
+        Matrix3d, ProfileClass, ProfileText, ToneReprCurve, Vector3d, white_point_d50,
+    };
     use ruviform_media_core::{MediaDuration, MediaTime, TimeBase};
     use ruviform_video_core::{ContentLightLevel, HdrMetadata, SharedPlane};
 
@@ -416,26 +420,311 @@ mod tests {
     const SRGB: &[u8] = include_bytes!("../tests/fixture/srgb.icc");
     const DISPLAY_P3: &[u8] = include_bytes!("../tests/fixture/display_p3.icc");
     const GRAY_GAMMA22: &[u8] = include_bytes!("../tests/fixture/gray_gamma22.icc");
+    /// Synthetic LUT-tag fixtures — `LutWarehouse` A2B/B2A tags on
+    /// hand-built RGB profiles, encoded by the pinned engine (see
+    /// `generate_fixtures` and the builders below).
+    ///
+    /// - `LUT_INTENT_PAIR`: mft2 A2B0 = ×0.5 / A2B1 = identity and
+    ///   B2A0 = ×0.5 / B2A1 = identity — Perceptual and
+    ///   `RelativeColorimetric` bake observably different mappings.
+    /// - `LUT_MFT1`: mft1 (`Store8`, 256-entry in/out tables) R↔B
+    ///   channel swap in both directions and both intents.
+    /// - `LUT_MFT2`: mft2 (`Store16`, 2-entry in/out tables) — A2B
+    ///   ×0.5 and B2A ×0.75 scales in both intents.
+    /// - `LUT_MAB`: `LutMultidimensionalType` — linear a/b/m curves,
+    ///   a non-identity M matrix and a 2³ channel-rotation CLUT in
+    ///   both directions and both intents.
+    /// - `LUT_A2B0_ONLY`: a single mft2 A2B0 tag (×0.5) — no other
+    ///   intent or direction tables, for the missing-tag rejection.
+    const LUT_INTENT_PAIR: &[u8] = include_bytes!("../tests/fixture/lut_intent_pair.icc");
+    const LUT_MFT1: &[u8] = include_bytes!("../tests/fixture/lut_mft1.icc");
+    const LUT_MFT2: &[u8] = include_bytes!("../tests/fixture/lut_mft2.icc");
+    const LUT_MAB: &[u8] = include_bytes!("../tests/fixture/lut_mab.icc");
+    const LUT_A2B0_ONLY: &[u8] = include_bytes!("../tests/fixture/lut_a2b0_only.icc");
 
     fn pts() -> MediaTime {
         MediaTime::new(42, TimeBase::COMMON_90K)
     }
 
+    /// Quantizes a normalized `[0, 1]` CLUT node value into a
+    /// `Store8` sample — `round(v · 255)`.
+    // `v` is clamped into `[0, 1]`, so `* 255` lands in `[0, 255]`
+    // and `.round()` makes it integral — the cast is lossless.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn lut_u8(v: f32) -> u8 {
+        (v.clamp(0.0, 1.0) * 255.0).round() as u8
+    }
+
+    /// Quantizes a normalized `[0, 1]` CLUT node value into a
+    /// `Store16` sample — `round(v · 65535)`.
+    // Same reasoning as `lut_u8`: the value is integral in
+    // `[0, 65535]` after `.round()`.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn lut_u16(v: f32) -> u16 {
+        (v.clamp(0.0, 1.0) * 65535.0).round() as u16
+    }
+
+    /// Samples `map` over the 2×2×2 trilinear CLUT grid — node index
+    /// `x·4 + y·2 + z` (`x`/`y`/`z` = R/G/B axes, the engine `Cube`
+    /// ordering), three channels interleaved.
+    fn clut2(map: impl Fn(f32, f32, f32) -> [f32; 3]) -> Vec<f32> {
+        let mut out = Vec::with_capacity(8 * 3);
+        for x in 0..2_u8 {
+            for y in 0..2_u8 {
+                for z in 0..2_u8 {
+                    out.extend_from_slice(&map(f32::from(x), f32::from(y), f32::from(z)));
+                }
+            }
+        }
+        out
+    }
+
+    /// An `LutDataType` (mft1 `Lut8` / mft2 `Lut16`) 3×3 LUT tag —
+    /// linear input/output tables and a 2³ CLUT driven by `map`.
+    /// mft1 input/output tables are the format-fixed 256 entries per
+    /// channel; mft2 uses the minimal 2-entry linear ramps.
+    fn mft_lut(map: impl Fn(f32, f32, f32) -> [f32; 3], lut_type: LutType) -> LutWarehouse {
+        let (input_table, clut_table, output_table, entries) = match lut_type {
+            LutType::Lut8 => (
+                LutStore::Store8((0..=255_u8).collect::<Vec<u8>>().repeat(3)),
+                LutStore::Store8(clut2(map).iter().map(|v| lut_u8(*v)).collect()),
+                LutStore::Store8((0..=255_u8).collect::<Vec<u8>>().repeat(3)),
+                256_u16,
+            ),
+            _ => (
+                LutStore::Store16(vec![0, u16::MAX, 0, u16::MAX, 0, u16::MAX]),
+                LutStore::Store16(clut2(map).iter().map(|v| lut_u16(*v)).collect()),
+                LutStore::Store16(vec![0, u16::MAX, 0, u16::MAX, 0, u16::MAX]),
+                2_u16,
+            ),
+        };
+        LutWarehouse::Lut(LutDataType {
+            num_input_channels: 3,
+            num_output_channels: 3,
+            num_clut_grid_points: 2,
+            matrix: Matrix3d::IDENTITY,
+            num_input_table_entries: entries,
+            num_output_table_entries: entries,
+            input_table,
+            clut_table,
+            output_table,
+            lut_type,
+        })
+    }
+
+    /// An `LutMultidimensionalType` tag — mAB when installed under an
+    /// A2B tag, mBA under a B2A tag. Linear a/b/m curves (b curves are
+    /// mandatory — moxcms rejects an mAB without them), `matrix` in
+    /// the M stage slot and a 2³ CLUT driven by `map` behind linear
+    /// a curves.
+    fn mab_lut(map: impl Fn(f32, f32, f32) -> [f32; 3], matrix: Matrix3d) -> LutWarehouse {
+        // An empty `Lut` tone curve is the engine's linear curve.
+        let linear = || ToneReprCurve::Lut(Vec::new());
+        let mut grid_points = [0_u8; 16];
+        grid_points[..3].copy_from_slice(&[2, 2, 2]);
+        LutWarehouse::Multidimensional(LutMultidimensionalType {
+            num_input_channels: 3,
+            num_output_channels: 3,
+            grid_points,
+            clut: Some(LutStore::Store16(
+                clut2(map).iter().map(|v| lut_u16(*v)).collect(),
+            )),
+            a_curves: vec![linear(), linear(), linear()],
+            b_curves: vec![linear(), linear(), linear()],
+            m_curves: vec![linear(), linear(), linear()],
+            matrix,
+            bias: Vector3d::default(),
+        })
+    }
+
+    /// Encodes a synthetic RGB↔XYZ (PCS) ICC profile carrying the
+    /// given per-intent LUT tags — `None` leaves the tag absent.
+    fn lut_rgb_profile(
+        description: &str,
+        a2b0: Option<LutWarehouse>,
+        a2b1: Option<LutWarehouse>,
+        b2a0: Option<LutWarehouse>,
+        b2a1: Option<LutWarehouse>,
+    ) -> Vec<u8> {
+        let mut profile = ColorProfile::default();
+        profile.profile_class = ProfileClass::DisplayDevice;
+        profile.color_space = DataColorSpace::Rgb;
+        profile.pcs = DataColorSpace::Xyz;
+        profile.rendering_intent = RenderingIntent::Perceptual;
+        let white = white_point_d50().to_xyzd();
+        profile.white_point = white;
+        profile.media_white_point = Some(white);
+        profile.lut_a_to_b_perceptual = a2b0;
+        profile.lut_a_to_b_colorimetric = a2b1;
+        profile.lut_b_to_a_perceptual = b2a0;
+        profile.lut_b_to_a_colorimetric = b2a1;
+        profile.description = Some(ProfileText::Localizable(vec![LocalizableString::new(
+            "en".to_string(),
+            "US".to_string(),
+            description.to_string(),
+        )]));
+        fix_mft1_tags(&profile.encode().unwrap())
+    }
+
+    /// Rewrites a freshly-encoded profile so every `mft1`/`lut8Type`
+    /// tag is spec-valid: moxcms 0.9.1 `write_lut_entry` emits the
+    /// `lut16Type` 2×u16 entry-count fields for `Lut8` too — four
+    /// bytes the `lut8Type` header does not carry (input tables begin
+    /// at offset 48). The engine's own spec-correct reader then
+    /// mis-parses the encoder's output, shifting every table four
+    /// bytes early. This rewrites each `mft1` body as
+    /// `body[..48] ++ body[52..]` and re-lays-out the tag directory —
+    /// a fixture-side workaround pinned to the observed encoder
+    /// layout, confined to the generator so committed fixture bytes
+    /// are what a correct CMM would have written.
+    fn fix_mft1_tags(encoded: &[u8]) -> Vec<u8> {
+        // ICC layout: 128-byte header, u32 tag count, 12-byte
+        // directory records (signature, offset, size), then aligned
+        // tag bodies. Every tag body begins with its type signature.
+        let tag_count = u32::from_be_bytes(encoded[128..132].try_into().unwrap()) as usize;
+        let dir_end = 132 + tag_count * 12;
+        let mut bodies = Vec::with_capacity(tag_count);
+        for i in 0..tag_count {
+            let e = 132 + i * 12;
+            let off = u32::from_be_bytes(encoded[e + 4..e + 8].try_into().unwrap()) as usize;
+            let size = u32::from_be_bytes(encoded[e + 8..e + 12].try_into().unwrap()) as usize;
+            let body = &encoded[off..off + size];
+            let fixed = if body[..4] == *b"mft1" {
+                assert!(body.len() > 52, "mft1 tag too small for the 52-byte header");
+                [&body[..48], &body[52..]].concat()
+            } else {
+                body.to_vec()
+            };
+            bodies.push(fixed);
+        }
+        let mut out = encoded[..dir_end].to_vec();
+        for (i, body) in bodies.iter().enumerate() {
+            while !out.len().is_multiple_of(4) {
+                out.push(0);
+            }
+            let e = 132 + i * 12;
+            let tag_offset = u32::try_from(out.len()).unwrap();
+            let tag_size = u32::try_from(body.len()).unwrap();
+            out[e + 4..e + 8].copy_from_slice(&tag_offset.to_be_bytes());
+            out[e + 8..e + 12].copy_from_slice(&tag_size.to_be_bytes());
+            out.extend_from_slice(body);
+        }
+        // Header bytes 0..4 hold the total profile size.
+        let total = u32::try_from(out.len()).unwrap();
+        out[..4].copy_from_slice(&total.to_be_bytes());
+        out
+    }
+
+    // CLUT node maps — each maps one grid coordinate to its stored
+    // output triple. All are linear, so trilinear interpolation
+    // reproduces them (up to store quantization).
+    /// ×0.5 darkening — the intent pair's Perceptual tables.
+    fn halve3(x: f32, y: f32, z: f32) -> [f32; 3] {
+        [x * 0.5, y * 0.5, z * 0.5]
+    }
+    /// ×0.75 darkening — the mft2 fixture's B2A tables.
+    fn scale34_3(x: f32, y: f32, z: f32) -> [f32; 3] {
+        [x * 0.75, y * 0.75, z * 0.75]
+    }
+    /// Identity — the intent pair's colorimetric tables.
+    fn ident3(x: f32, y: f32, z: f32) -> [f32; 3] {
+        [x, y, z]
+    }
+    /// R↔B channel swap — the mft1 fixture's tables.
+    fn swap_rb3(x: f32, y: f32, z: f32) -> [f32; 3] {
+        [z, y, x]
+    }
+    /// (x, y, z) → (z, x, y) channel rotation — the mAB fixture's CLUT.
+    fn rotate3(x: f32, y: f32, z: f32) -> [f32; 3] {
+        [z, x, y]
+    }
+
+    /// A non-identity M-stage matrix for the mAB fixture — exercises
+    /// the matrix stage (engine skips it only for IDENTITY + zero
+    /// bias + all-linear m curves).
+    fn mab_matrix() -> Matrix3d {
+        Matrix3d {
+            v: [[1.0, 0.0, 0.0], [0.0, 0.9, 0.0], [0.0, 0.0, 1.0]],
+        }
+    }
+
     /// One-shot fixture (re)generator — rewrites the committed `.icc`
-    /// files under `tests/fixture/` from the pinned engine's built-in
-    /// profiles. Run explicitly:
+    /// files under `tests/fixture/`: the pinned engine's built-in
+    /// profiles plus the synthetic LUT-tag profiles from the builders
+    /// above. Run explicitly:
     /// `cargo test -p ruviform-video-proc --features icc generate_fixtures -- --ignored`.
     #[test]
     #[ignore = "one-shot fixture regeneration — run explicitly when the pinned engine changes"]
     fn generate_fixtures() {
         let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixture");
         std::fs::create_dir_all(dir).unwrap();
-        for (name, profile) in [
-            ("srgb.icc", ColorProfile::new_srgb()),
-            ("display_p3.icc", ColorProfile::new_display_p3()),
-            ("gray_gamma22.icc", ColorProfile::new_gray_with_gamma(2.2)),
-        ] {
-            std::fs::write(format!("{dir}/{name}"), profile.encode().unwrap()).unwrap();
+        let halve = |t| mft_lut(t, LutType::Lut16);
+        let fixtures: [(&str, Vec<u8>); 8] = [
+            ("srgb.icc", ColorProfile::new_srgb().encode().unwrap()),
+            (
+                "display_p3.icc",
+                ColorProfile::new_display_p3().encode().unwrap(),
+            ),
+            (
+                "gray_gamma22.icc",
+                ColorProfile::new_gray_with_gamma(2.2).encode().unwrap(),
+            ),
+            (
+                "lut_intent_pair.icc",
+                lut_rgb_profile(
+                    "icc-lut-intent-pair",
+                    Some(halve(halve3)),
+                    Some(mft_lut(ident3, LutType::Lut16)),
+                    Some(halve(halve3)),
+                    Some(mft_lut(ident3, LutType::Lut16)),
+                ),
+            ),
+            (
+                "lut_mft1.icc",
+                lut_rgb_profile(
+                    "icc-lut-mft1",
+                    Some(mft_lut(swap_rb3, LutType::Lut8)),
+                    Some(mft_lut(swap_rb3, LutType::Lut8)),
+                    Some(mft_lut(swap_rb3, LutType::Lut8)),
+                    Some(mft_lut(swap_rb3, LutType::Lut8)),
+                ),
+            ),
+            (
+                "lut_mft2.icc",
+                lut_rgb_profile(
+                    "icc-lut-mft2",
+                    Some(halve(halve3)),
+                    Some(halve(halve3)),
+                    Some(mft_lut(scale34_3, LutType::Lut16)),
+                    Some(mft_lut(scale34_3, LutType::Lut16)),
+                ),
+            ),
+            (
+                "lut_mab.icc",
+                lut_rgb_profile(
+                    "icc-lut-mab",
+                    Some(mab_lut(rotate3, mab_matrix())),
+                    Some(mab_lut(rotate3, mab_matrix())),
+                    Some(mab_lut(rotate3, mab_matrix())),
+                    Some(mab_lut(rotate3, mab_matrix())),
+                ),
+            ),
+            (
+                "lut_a2b0_only.icc",
+                lut_rgb_profile("icc-lut-a2b0-only", Some(halve(halve3)), None, None, None),
+            ),
+        ];
+        for (name, bytes) in fixtures {
+            // The generator validates its own output: every committed
+            // fixture must parse back, and each synthetic LUT profile
+            // must be an RGB device profile — a fixture that
+            // `new_from_slice` rejects would fail every test that
+            // consumes it.
+            let parsed = ColorProfile::new_from_slice(&bytes).unwrap();
+            if name.starts_with("lut_") {
+                assert_eq!(parsed.color_space, DataColorSpace::Rgb, "{name}");
+            }
+            std::fs::write(format!("{dir}/{name}"), &bytes).unwrap();
         }
     }
 
@@ -874,8 +1163,9 @@ mod tests {
         // baked deterministically — NOT that the intent changes the
         // mapping: matrix-shaper sRGB fixtures carry no
         // intent-distinguishing LUT, so identical output bytes are
-        // expected here. An intent-distinguishing LUT fixture pair is
-        // a recorded follow-up.
+        // expected here. The intent-distinguishing proof lives on the
+        // LUT fixtures: `icc_transform_intent_selects_distinct_a2b_luts`
+        // and `icc_transform_intent_selects_distinct_b2a_luts`.
         assert_eq!(outs[0], outs[1]);
     }
 
@@ -1053,5 +1343,387 @@ mod tests {
             .process(&src, &mut dst)
             .unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &before);
+    }
+
+    /// Runs `kernel` over a one-row `Rgba8` frame holding `pixels`
+    /// and returns the destination row bytes.
+    fn run_rgba8(kernel: &mut IccTransform, pixels: &[[u8; 4]]) -> Vec<u8> {
+        let width = u32::try_from(pixels.len()).unwrap();
+        let src = rgba8_frame(width, 1, pixels, ColorInfo::default());
+        let mut dst = VideoFrame::new_owned(PixelFormat::Rgba8, width, 1, pts()).unwrap();
+        kernel.process(&src, &mut dst).unwrap();
+        dst.plane(0).unwrap().data().to_vec()
+    }
+
+    /// The bit-exact oracle for `run_rgba8`: the raw engine executor
+    /// (same profiles/options/`intent`) followed by the same
+    /// `quantize8` the kernel applies.
+    fn oracle_rgba8(
+        src_profile: &[u8],
+        dst_profile: &[u8],
+        intent: RenderingIntent,
+        pixels: &[[u8; 4]],
+    ) -> Vec<u8> {
+        let executor = raw_executor(src_profile, dst_profile, intent);
+        let mut out = Vec::with_capacity(pixels.len() * 4);
+        for px in pixels {
+            let mut dst = [0.0_f32; 4];
+            executor.transform(&rgba8_signal(*px), &mut dst).unwrap();
+            out.extend(dst.map(quantize8));
+        }
+        out
+    }
+
+    /// A mid-gamut pixel set where every LUT fixture's mapping is
+    /// byte-observable (nonzero, non-saturated channels).
+    const LUT_PIXELS: &[[u8; 4]] = &[
+        [200, 100, 50, 255],
+        [128, 200, 50, 255],
+        [60, 90, 200, 128],
+        [17, 34, 51, 64],
+    ];
+
+    /// Structure: every synthetic LUT fixture parses back as an RGB
+    /// profile carrying the intended `LutWarehouse` tags — mft1
+    /// `Lut8`/`Store8` with the format-fixed 256-entry in/out tables,
+    /// mft2 `Lut16`/`Store16` with 2-entry tables, mAB as
+    /// `Multidimensional` with a 2³ `Store16` CLUT — in the right
+    /// intent/direction slots.
+    #[test]
+    fn lut_fixtures_parse_with_intended_tag_shapes() {
+        // `lut_mft1`: all four tags are mft1 `Lut8` warehouses with
+        // 256-entry `Store8` in/out tables and a 2³ `Store8` CLUT.
+        let profile = ColorProfile::new_from_slice(LUT_MFT1).unwrap();
+        assert_eq!(profile.color_space, DataColorSpace::Rgb);
+        for wh in [
+            &profile.lut_a_to_b_perceptual,
+            &profile.lut_a_to_b_colorimetric,
+            &profile.lut_b_to_a_perceptual,
+            &profile.lut_b_to_a_colorimetric,
+        ] {
+            let Some(LutWarehouse::Lut(lut)) = wh else {
+                panic!("mft1 tag is not a `Lut` warehouse");
+            };
+            assert_eq!(lut.lut_type, LutType::Lut8);
+            assert_eq!(lut.num_input_table_entries, 256);
+            assert_eq!(lut.num_clut_grid_points, 2);
+            assert!(matches!(lut.input_table, LutStore::Store8(_)));
+            assert!(matches!(&lut.clut_table, LutStore::Store8(v) if v.len() == 24));
+            assert!(matches!(lut.output_table, LutStore::Store8(_)));
+        }
+
+        // `lut_mft2`: same shape, `Lut16`/`Store16`, 2-entry tables.
+        let profile = ColorProfile::new_from_slice(LUT_MFT2).unwrap();
+        for wh in [
+            &profile.lut_a_to_b_perceptual,
+            &profile.lut_a_to_b_colorimetric,
+            &profile.lut_b_to_a_perceptual,
+            &profile.lut_b_to_a_colorimetric,
+        ] {
+            let Some(LutWarehouse::Lut(lut)) = wh else {
+                panic!("mft2 tag is not a `Lut` warehouse");
+            };
+            assert_eq!(lut.lut_type, LutType::Lut16);
+            assert_eq!(lut.num_input_table_entries, 2);
+            assert_eq!(lut.num_output_table_entries, 2);
+            assert!(matches!(lut.input_table, LutStore::Store16(_)));
+            assert!(matches!(&lut.clut_table, LutStore::Store16(v) if v.len() == 24));
+            assert!(matches!(lut.output_table, LutStore::Store16(_)));
+        }
+
+        // `lut_mab`: all four tags are `Multidimensional` warehouses —
+        // mAB under A2B, mBA under B2A — with a 2³ `Store16` CLUT and
+        // three b/m curves (a curves are optional in the format).
+        let profile = ColorProfile::new_from_slice(LUT_MAB).unwrap();
+        for wh in [
+            &profile.lut_a_to_b_perceptual,
+            &profile.lut_a_to_b_colorimetric,
+            &profile.lut_b_to_a_perceptual,
+            &profile.lut_b_to_a_colorimetric,
+        ] {
+            let Some(LutWarehouse::Multidimensional(lut)) = wh else {
+                panic!("mAB tag is not a `Multidimensional` warehouse");
+            };
+            assert_eq!(&lut.grid_points[..3], &[2, 2, 2]);
+            assert!(matches!(&lut.clut, Some(LutStore::Store16(v)) if v.len() == 24));
+            assert_eq!(lut.b_curves.len(), 3);
+            assert_eq!(lut.m_curves.len(), 3);
+        }
+
+        // `lut_intent_pair`: the two A2B tags differ (×0.5 vs
+        // identity), as do the two B2A tags — this is what makes the
+        // intent observably change the mapping.
+        let profile = ColorProfile::new_from_slice(LUT_INTENT_PAIR).unwrap();
+        let (Some(LutWarehouse::Lut(a2b0)), Some(LutWarehouse::Lut(a2b1))) = (
+            &profile.lut_a_to_b_perceptual,
+            &profile.lut_a_to_b_colorimetric,
+        ) else {
+            panic!("intent-pair A2B tags are not `Lut` warehouses");
+        };
+        assert_ne!(a2b0, a2b1);
+        let (Some(LutWarehouse::Lut(b2a0)), Some(LutWarehouse::Lut(b2a1))) = (
+            &profile.lut_b_to_a_perceptual,
+            &profile.lut_b_to_a_colorimetric,
+        ) else {
+            panic!("intent-pair B2A tags are not `Lut` warehouses");
+        };
+        assert_ne!(b2a0, b2a1);
+
+        // `lut_a2b0_only`: only the A2B0/Perceptual tag is present.
+        let profile = ColorProfile::new_from_slice(LUT_A2B0_ONLY).unwrap();
+        assert!(matches!(
+            profile.lut_a_to_b_perceptual,
+            Some(LutWarehouse::Lut(_))
+        ));
+        assert!(profile.lut_a_to_b_colorimetric.is_none());
+        assert!(profile.lut_b_to_a_perceptual.is_none());
+        assert!(profile.lut_b_to_a_colorimetric.is_none());
+    }
+
+    /// Intent selection (A2B direction): `lut_intent_pair → sRGB`
+    /// picks A2B0 (×0.5) for Perceptual and A2B1 (identity) for
+    /// `RelativeColorimetric` — the baked mapping is observably
+    /// different, each side bit-exact against the raw executor baked
+    /// with the same intent.
+    #[test]
+    fn icc_transform_intent_selects_distinct_a2b_luts() {
+        let perceptual = run_rgba8(
+            &mut IccTransform::new(LUT_INTENT_PAIR, SRGB, IccIntent::Perceptual).unwrap(),
+            LUT_PIXELS,
+        );
+        let colorimetric = run_rgba8(
+            &mut IccTransform::new(LUT_INTENT_PAIR, SRGB, IccIntent::RelativeColorimetric).unwrap(),
+            LUT_PIXELS,
+        );
+        // ×0.5 PCS vs identity PCS: every pixel comes out
+        // channel-wise darker (or equal where a channel clamps)
+        // under Perceptual, and observably different bytes overall.
+        assert_ne!(perceptual, colorimetric);
+        for (p, c) in perceptual.chunks(4).zip(colorimetric.chunks(4)) {
+            assert!(
+                p[0] <= c[0] && p[1] <= c[1] && p[2] <= c[2],
+                "{p:?} vs {c:?}"
+            );
+            assert!(p[..3] != c[..3], "{p:?} vs {c:?}");
+        }
+        assert_eq!(
+            perceptual,
+            oracle_rgba8(
+                LUT_INTENT_PAIR,
+                SRGB,
+                RenderingIntent::Perceptual,
+                LUT_PIXELS
+            )
+        );
+        assert_eq!(
+            colorimetric,
+            oracle_rgba8(
+                LUT_INTENT_PAIR,
+                SRGB,
+                RenderingIntent::RelativeColorimetric,
+                LUT_PIXELS
+            )
+        );
+    }
+
+    /// Intent selection (B2A direction): `sRGB → lut_intent_pair`
+    /// picks B2A0 (×0.5) for Perceptual and B2A1 (identity) for
+    /// `RelativeColorimetric` — the mirror of the A2B case.
+    #[test]
+    fn icc_transform_intent_selects_distinct_b2a_luts() {
+        let perceptual = run_rgba8(
+            &mut IccTransform::new(SRGB, LUT_INTENT_PAIR, IccIntent::Perceptual).unwrap(),
+            LUT_PIXELS,
+        );
+        let colorimetric = run_rgba8(
+            &mut IccTransform::new(SRGB, LUT_INTENT_PAIR, IccIntent::RelativeColorimetric).unwrap(),
+            LUT_PIXELS,
+        );
+        assert_ne!(perceptual, colorimetric);
+        for (p, c) in perceptual.chunks(4).zip(colorimetric.chunks(4)) {
+            assert!(p[0] < c[0] && p[1] < c[1] && p[2] < c[2], "{p:?} vs {c:?}");
+        }
+        assert_eq!(
+            perceptual,
+            oracle_rgba8(
+                SRGB,
+                LUT_INTENT_PAIR,
+                RenderingIntent::Perceptual,
+                LUT_PIXELS
+            )
+        );
+        assert_eq!(
+            colorimetric,
+            oracle_rgba8(
+                SRGB,
+                LUT_INTENT_PAIR,
+                RenderingIntent::RelativeColorimetric,
+                LUT_PIXELS
+            )
+        );
+    }
+
+    /// mft1 path: the `Lut8` R↔B swap runs in both directions — each
+    /// output is bit-exact against the raw executor, and the swap is
+    /// observable two ways: pure red exits blue-dominant in each
+    /// direction, and the self-pipeline `lut_mft1 → lut_mft1`
+    /// (swap ∘ swap = identity) roundtrips the input within
+    /// quantization.
+    #[test]
+    fn icc_transform_mft1_lut_path_swaps_channels() {
+        // Forward (A2B mft1 → sRGB B2A) and reverse (sRGB A2B → B2A
+        // mft1) both build and match the engine.
+        for (src, dst) in [(LUT_MFT1, SRGB), (SRGB, LUT_MFT1)] {
+            let out = run_rgba8(
+                &mut IccTransform::new(src, dst, IccIntent::Perceptual).unwrap(),
+                LUT_PIXELS,
+            );
+            assert_eq!(
+                out,
+                oracle_rgba8(src, dst, RenderingIntent::Perceptual, LUT_PIXELS)
+            );
+            // Behavioral pin on the channel swap — pure red comes out
+            // blue-dominant, so the CLUT genuinely permutes channels.
+            let out = run_rgba8(
+                &mut IccTransform::new(src, dst, IccIntent::Perceptual).unwrap(),
+                &[[255, 0, 0, 255]],
+            );
+            assert!(
+                out[2] > out[0] && out[2] > out[1],
+                "swapped red came out {out:?}"
+            );
+        }
+        // Swap ∘ swap = identity: the self-pipeline returns each
+        // pixel near-verbatim (±2 covers resample/store
+        // quantization).
+        let mut kernel = IccTransform::new(LUT_MFT1, LUT_MFT1, IccIntent::Perceptual).unwrap();
+        let out = run_rgba8(&mut kernel, LUT_PIXELS);
+        for (px, ch) in LUT_PIXELS.iter().zip(out.chunks(4)) {
+            for i in 0..3 {
+                assert!(
+                    px[i].abs_diff(ch[i]) <= 2,
+                    "swap∘swap pixel {px:?} came out {ch:?}"
+                );
+            }
+            assert_eq!(px[3], ch[3], "alpha passthrough");
+        }
+    }
+
+    /// mft2 path: the `Lut16` scales run in both directions — output
+    /// is bit-exact against the raw executor, and the self-pipeline
+    /// `lut_mft2 → lut_mft2` composes A2B ×0.5 with B2A ×0.75 into an
+    /// observable ×0.375 darkening.
+    #[test]
+    fn icc_transform_mft2_lut_path_scales_channels() {
+        for (src, dst) in [(LUT_MFT2, SRGB), (SRGB, LUT_MFT2)] {
+            let out = run_rgba8(
+                &mut IccTransform::new(src, dst, IccIntent::Perceptual).unwrap(),
+                LUT_PIXELS,
+            );
+            assert_eq!(
+                out,
+                oracle_rgba8(src, dst, RenderingIntent::Perceptual, LUT_PIXELS)
+            );
+        }
+        let mut kernel = IccTransform::new(LUT_MFT2, LUT_MFT2, IccIntent::Perceptual).unwrap();
+        let out = run_rgba8(&mut kernel, LUT_PIXELS);
+        for (px, ch) in LUT_PIXELS.iter().zip(out.chunks(4)) {
+            for i in 0..3 {
+                // ×0.5 × 0.75 = ×0.375; ±3 covers store quantization.
+                let expected = f32::from(px[i]) * 0.375;
+                assert!(
+                    (f32::from(ch[i]) - expected).abs() <= 3.0,
+                    "×0.375 pixel {px:?} came out {ch:?}"
+                );
+            }
+            assert_eq!(px[3], ch[3], "alpha passthrough");
+        }
+    }
+
+    /// mAB/mBA path: the `LutMultidimensionalType` tags run in both
+    /// directions — output is bit-exact against the raw executor, and
+    /// the CLUT channel rotation is observable: pure green rotates to
+    /// a blue-dominant PCS, so `lut_mab → srgb` emits a blue pixel.
+    #[test]
+    fn icc_transform_mab_lut_path_executes_clut() {
+        for (src, dst) in [(LUT_MAB, SRGB), (SRGB, LUT_MAB)] {
+            let out = run_rgba8(
+                &mut IccTransform::new(src, dst, IccIntent::Perceptual).unwrap(),
+                LUT_PIXELS,
+            );
+            assert_eq!(
+                out,
+                oracle_rgba8(src, dst, RenderingIntent::Perceptual, LUT_PIXELS)
+            );
+        }
+        // Behavioral pin on the rotation: device green → A2B rotate →
+        // blue-ish PCS → sRGB B2A → blue-dominant output.
+        let out = run_rgba8(
+            &mut IccTransform::new(LUT_MAB, SRGB, IccIntent::Perceptual).unwrap(),
+            &[[0, 255, 0, 255]],
+        );
+        assert!(
+            out[2] > 128 && out[2] > out[0] && out[2] > out[1],
+            "rotated green came out {out:?}"
+        );
+        // The same input through the no-op sRGB→sRGB path stays
+        // green — the difference is the mAB LUT, not the pipeline.
+        let baseline = run_rgba8(
+            &mut IccTransform::new(SRGB, SRGB, IccIntent::Perceptual).unwrap(),
+            &[[0, 255, 0, 255]],
+        );
+        assert!(baseline[1] > baseline[2]);
+    }
+
+    /// Missing-tag rejection: `lut_a2b0_only` carries only A2B0.
+    /// Forward + Perceptual selects it and runs; forward +
+    /// `RelativeColorimetric` needs the absent A2B1 tag — `new` rejects
+    /// with `"icc transform"`. The reverse direction has no B2A
+    /// tables at all — both intents reject.
+    #[test]
+    fn icc_transform_missing_intent_lut_tag_rejects() {
+        assert!(
+            IccTransform::new(LUT_A2B0_ONLY, SRGB, IccIntent::Perceptual).is_ok(),
+            "A2B0 + Perceptual must build"
+        );
+        assert_eq!(
+            IccTransform::new(LUT_A2B0_ONLY, SRGB, IccIntent::RelativeColorimetric).map(|_| ()),
+            Err(Error::InvalidValue("icc transform")),
+            "missing A2B1 must reject"
+        );
+        for intent in [IccIntent::Perceptual, IccIntent::RelativeColorimetric] {
+            assert_eq!(
+                IccTransform::new(SRGB, LUT_A2B0_ONLY, intent).map(|_| ()),
+                Err(Error::InvalidValue("icc transform")),
+                "missing B2A tables must reject ({intent:?})"
+            );
+        }
+    }
+
+    /// RT contract on the LUT path: repeated `process` on an
+    /// mAB-tag kernel stays deterministic and never mutates `src` —
+    /// the per-pixel executor is stateless.
+    #[test]
+    fn rt_process_icc_lut_path_is_deterministic_and_pure() {
+        let src = rgba8_frame(
+            2,
+            1,
+            &[[200, 100, 50, 255], [60, 90, 200, 128]],
+            ColorInfo::default(),
+        );
+        let before = src.plane(0).unwrap().data().to_vec();
+        let mut dst = VideoFrame::new_owned(PixelFormat::Rgba8, 2, 1, pts()).unwrap();
+        let mut kernel = IccTransform::new(LUT_MAB, SRGB, IccIntent::Perceptual).unwrap();
+        let mut first = [0_u8; 8];
+        for i in 0..64 {
+            kernel.process(&src, &mut dst).unwrap();
+            let row = dst.plane(0).unwrap().row(0).unwrap();
+            if i == 0 {
+                first.copy_from_slice(row);
+            } else {
+                assert_eq!(row, &first);
+            }
+        }
+        assert_eq!(src.plane(0).unwrap().data(), &before[..]);
     }
 }
