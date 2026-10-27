@@ -22,7 +22,7 @@ Directory: `docs/designs`
 | DESIGN-034KQXr3w4dYgKO79dklG9 | Foundation/Observability 候補モジュールの最小 API・依存 DAG・新設時期の設計 | approved | [foundation-observability-minimal-api.md](./foundation-observability-minimal-api.md) |
 | DESIGN-034MIeiBWXpLjwgA1yolIT | L1 規格アダプタの子プロセス組込み・実プラグイン E2E（CLAP + VST3 host-side bridge — Issue #114） | approved | [issue-114-real-adapter-l1-e2e.md](./issue-114-real-adapter-l1-e2e.md) |
 | DESIGN-034N3J1C5vystrbJl69R1q | L1 GUI — プロセス境界越しの親ウィンドウ埋め込みの採否設計（Issue #115） | approved | [issue-115-l1-gui-cross-process-parenting.md](./issue-115-l1-gui-cross-process-parenting.md) |
-| DESIGN-034Qa7Kf2NpXw9RtYbHc5d | L1 bundle 子プロセス（1 子プロセス N インスタンス）設計（Issue #117） | draft | [issue-117-bundle-child-process.md](./issue-117-bundle-child-process.md) |
+| DESIGN-034Qa7Kf2NpXw9RtYbHc5d | L1 bundle 子プロセス（1 子プロセス N インスタンス）設計（Issue #117） | approved | [issue-117-bundle-child-process.md](./issue-117-bundle-child-process.md) |
 | DESIGN-034N3EYKKosV8OzCP7Y9tY | 共通 platform/process/ipc 基盤の抽出評価（Issue #122） | approved | [issue-122-shared-platform-process-ipc-eval.md](./issue-122-shared-platform-process-ipc-eval.md) |
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
