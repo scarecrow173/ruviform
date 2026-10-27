@@ -52,6 +52,11 @@ typedef struct RvPropsObj { RvProp *head; uintptr_t tok; } RvPropsObj;
 
 RvPropsObj *rv_po_new(uintptr_t parent);
 void rv_po_free(RvPropsObj *o);
+/* free every record but keep the propset object + token alive   record
+ * name/string payloads are session-pool owned, so a process-lifetime
+ * propset (the dedicated api.host set) drops its records at session
+ * poison to never outlive the pool they reference (Issue #131) */
+void rv_po_clear(RvPropsObj *o);
 OfxStatus rv_po_set(RvPropsObj *o, const char *n, int t, int i,
                     int vi, double vd, const char *vs, void *vp);
 OfxStatus rv_po_setn(RvPropsObj *o, const char *n, int t, int c,

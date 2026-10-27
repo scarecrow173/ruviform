@@ -345,7 +345,16 @@ static void seed(RvPropsObj *o, const char *n, int t, int dim,
             if (p->dd) { for (k = 0; k < ddim; k++) p->dd[k] = vd; ok = 1; }
         } else if (p->type == RV_PT_STRING) {
             p->ds = (char **)calloc((size_t)ddim, sizeof(char *));
-            if (p->ds) { for (k = 0; k < ddim; k++) p->ds[k] = rv_str_own(g_active, vs ? vs : ""); ok = 1; }
+            /* a NULL element would reach propGetString as a NULL result
+             * on reset   mark seeded only when every snapshot string
+             * actually pooled (Issue #131) */
+            if (p->ds) {
+                ok = 1;
+                for (k = 0; k < ddim; k++) {
+                    p->ds[k] = rv_str_own(g_active, vs ? vs : "");
+                    if (!p->ds[k]) { ok = 0; break; }
+                }
+            }
         } else {
             p->dp = (void **)calloc((size_t)ddim, sizeof(void *));
             if (p->dp) { for (k = 0; k < ddim; k++) p->dp[k] = vp; ok = 1; }
@@ -371,15 +380,28 @@ static void prop_free(RvProp *p) {
     free(p);
 }
 
-void rv_po_free(RvPropsObj *o) {
+/* drop every record but keep the propset object and its token: the
+ * record structs and their value/snapshot arrays are heap-owned, while
+ * the name/string payloads they reference belong to the session host's
+ * string pool. a process-lifetime propset (the dedicated api.host set)
+ * must retire its records when the session dies so it can never reach
+ * into a reclaimed pool; the next session's writes rebuild fresh
+ * records on its own pool (Issue #131) */
+void rv_po_clear(RvPropsObj *o) {
     RvProp *p;
     if (!o) return;
     p = o->head;
+    o->head = NULL;
     while (p) {
         RvProp *n = p->next;
         prop_free(p);
         p = n;
     }
+}
+
+void rv_po_free(RvPropsObj *o) {
+    if (!o) return;
+    rv_po_clear(o);
     free(o);
 }
 

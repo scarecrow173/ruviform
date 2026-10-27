@@ -29,13 +29,15 @@ static GUARD: Mutex<()> = Mutex::new(());
 
 #[expect(unsafe_code)]
 mod t {
-    use std::ffi::{c_char, c_void};
+    use std::ffi::{CStr, c_char, c_void};
     use std::ptr;
     use std::sync::atomic::{AtomicPtr, Ordering};
 
     use crate::GUARD;
 
     const K_OFX_STAT_OK: i32 = 0;
+    const K_OFX_STAT_ERR_UNKNOWN: i32 = 3;
+    const K_OFX_STAT_ERR_MEMORY: i32 = 8;
     const K_OFX_STAT_ERR_BAD_HANDLE: i32 = 9;
 
     /// `OfxHost` layout mirror (vendor/openfx `ofxCore.h`).
@@ -43,6 +45,51 @@ mod t {
     struct OfxHost {
         host: *mut c_void,
         fetch_suite: Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32) -> *const c_void>,
+    }
+
+    /// `OfxPropertySuiteV1` layout mirror (vendor/openfx `ofxProperty.h`)
+    /// in SDK field order — only the slots a test drives are read, the
+    /// rest exist to keep the ABI offsets correct.
+    #[repr(C)]
+    #[allow(dead_code)]
+    // SDK field names all share the `prop` prefix by definition.
+    #[allow(clippy::struct_field_names)]
+    struct OfxPropertySuiteV1 {
+        prop_set_pointer:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *mut c_void) -> i32>,
+        prop_set_string:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *const c_char) -> i32>,
+        prop_set_double: Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, f64) -> i32>,
+        prop_set_int: Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, i32) -> i32>,
+        prop_set_pointer_n: Option<
+            unsafe extern "C" fn(*mut c_void, *const c_char, i32, *const *mut c_void) -> i32,
+        >,
+        prop_set_string_n: Option<
+            unsafe extern "C" fn(*mut c_void, *const c_char, i32, *const *const c_char) -> i32,
+        >,
+        prop_set_double_n:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *const f64) -> i32>,
+        prop_set_int_n:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *const i32) -> i32>,
+        prop_get_pointer:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *mut *mut c_void) -> i32>,
+        prop_get_string:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *mut *mut c_char) -> i32>,
+        prop_get_double:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *mut f64) -> i32>,
+        prop_get_int:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *mut i32) -> i32>,
+        prop_get_pointer_n:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *mut *mut c_void) -> i32>,
+        prop_get_string_n:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *mut *mut c_char) -> i32>,
+        prop_get_double_n:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *mut f64) -> i32>,
+        prop_get_int_n:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, i32, *mut i32) -> i32>,
+        prop_reset: Option<unsafe extern "C" fn(*mut c_void, *const c_char) -> i32>,
+        prop_get_dimension:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, *mut i32) -> i32>,
     }
 
     /// `OfxPlugin` layout mirror (vendor/openfx `ofxCore.h`).
@@ -74,6 +121,7 @@ mod t {
             sh: *const c_void,
             c: *mut *mut c_void,
         ) -> i32;
+        fn rv_ofx_catalog_close(c: *mut c_void);
     }
 
     /// Host pointer the hostile callback tears down mid-window.
@@ -152,6 +200,29 @@ mod t {
     }
     extern "C" fn benign_dll_set_host(_api: *mut OfxHost) -> i32 {
         K_OFX_STAT_OK
+    }
+    /// Benign catalog-level `OfxSetHost` that only captures the static
+    /// API object so a test can drive `g_api.host`'s property set through
+    /// the real `PropertyV1` suite afterwards.
+    extern "C" fn capture_api_set_host(api: *mut OfxHost) -> i32 {
+        SEEN_API.store(api, Ordering::Relaxed);
+        K_OFX_STAT_OK
+    }
+
+    /// Read `host` + `fetchSuite` off a captured `OfxHost*` and resolve
+    /// the `PropertyV1` table. `api` is process-static storage and the
+    /// returned suite pointer names the static `g_prop_suite`.
+    unsafe fn api_host_prop_suite(api: *mut OfxHost) -> (*mut c_void, *const OfxPropertySuiteV1) {
+        // SAFETY: `api` is the process-static `g_api` the bridge handed
+        // the callback; its fields and the fetched suite table outlive
+        // every session.
+        unsafe {
+            let host_ps = (*api).host;
+            let fetch = (*api).fetch_suite.expect("api.fetchSuite must exist");
+            let suite = fetch(host_ps, c"OfxPropertySuite".as_ptr(), 1);
+            assert!(!suite.is_null(), "PropertyV1 must be fetchable");
+            (host_ps, suite.cast::<OfxPropertySuiteV1>())
+        }
     }
     unsafe extern "C" fn get_plugin_null(_i: i32) -> *mut c_void {
         ptr::null_mut()
@@ -310,6 +381,87 @@ mod t {
             assert_dead_open_outcome(h, c);
         }
     }
+
+    /// Issue #131 regression: `g_api.host`'s dedicated property set is
+    /// process-lifetime, but every record a plugin writes pools its
+    /// name/value strings on the *session* host. `rv_ofx_host_free` must
+    /// retire the records with the session so a post-teardown suite call
+    /// on the still-bound `api.host` can never read a reclaimed pool —
+    /// and the next session must see a clean set. Without the retire,
+    /// `pfind`/`propGetString` would strcmp/deref freed pool strings.
+    #[test]
+    fn host_propset_records_retire_with_session() {
+        let _g = GUARD
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        unsafe {
+            let h = rv_ofx_host_new();
+            assert!(!h.is_null());
+            reset_observations(h);
+            let mut c = ptr::null_mut();
+            let rc = rv_ofx_catalog_open(
+                h,
+                get_count_one as extern "C" fn() -> i32 as *const c_void,
+                get_plugin_null as unsafe extern "C" fn(i32) -> *mut c_void as *const c_void,
+                capture_api_set_host as extern "C" fn(*mut OfxHost) -> i32 as *const c_void,
+                &raw mut c,
+            );
+            assert_eq!(rc, K_OFX_STAT_OK);
+            assert!(
+                !c.is_null(),
+                "a catalog of only rejected entries still opens"
+            );
+            let api = SEEN_API.load(Ordering::Relaxed);
+            assert!(!api.is_null(), "catalog setHost must deliver g_api");
+            let (host_ps, suite) = api_host_prop_suite(api);
+            assert!(!host_ps.is_null(), "api.host must name the host propset");
+            let set_string = (*suite).prop_set_string.expect("propSetString");
+            let get_string = (*suite).prop_get_string.expect("propGetString");
+            let get_dim = (*suite).prop_get_dimension.expect("propGetDimension");
+            let reset = (*suite).prop_reset.expect("propReset");
+            let name = c"ruviform.test.hostprop".as_ptr();
+            // session-1 write lands a record on the once-bound set, its
+            // strings pooled on the session host
+            assert_eq!(
+                set_string(host_ps, name, 0, c"session-one".as_ptr()),
+                K_OFX_STAT_OK
+            );
+            let mut dim = 0;
+            assert_eq!(get_dim(host_ps, name, &raw mut dim), K_OFX_STAT_OK);
+            assert_eq!(dim, 1);
+            rv_ofx_catalog_close(c);
+            rv_ofx_host_free(h);
+            // post-teardown touch is defined: the records retired with
+            // the session, so reads/reset miss on the empty set and a
+            // write fails on the absent session pool
+            assert_eq!(get_dim(host_ps, name, &raw mut dim), K_OFX_STAT_ERR_UNKNOWN);
+            let mut s: *mut c_char = ptr::null_mut();
+            assert_eq!(
+                get_string(host_ps, name, 0, &raw mut s),
+                K_OFX_STAT_ERR_UNKNOWN
+            );
+            assert_eq!(reset(host_ps, name), K_OFX_STAT_ERR_UNKNOWN);
+            assert_eq!(
+                set_string(host_ps, name, 0, c"dead".as_ptr()),
+                K_OFX_STAT_ERR_MEMORY
+            );
+            // the next session rewrites fresh records on its own pool and
+            // sees none of session one's state
+            let h2 = rv_ofx_host_new();
+            assert!(!h2.is_null(), "a new session must start after reclaim");
+            assert_eq!(
+                set_string(host_ps, name, 0, c"session-two".as_ptr()),
+                K_OFX_STAT_OK
+            );
+            assert_eq!(get_dim(host_ps, name, &raw mut dim), K_OFX_STAT_OK);
+            assert_eq!(dim, 1);
+            let mut s2: *mut c_char = ptr::null_mut();
+            assert_eq!(get_string(host_ps, name, 0, &raw mut s2), K_OFX_STAT_OK);
+            assert_eq!(CStr::from_ptr(s2).to_bytes(), b"session-two");
+            rv_ofx_host_free(h2);
+            assert_eq!(get_dim(host_ps, name, &raw mut dim), K_OFX_STAT_ERR_UNKNOWN);
+        }
+    }
 }
 
 /// Foreign-window lease coverage for the non-catalog lifecycle paths
@@ -332,6 +484,7 @@ mod window_lease {
     use crate::GUARD;
 
     const K_OFX_STAT_OK: i32 = 0;
+    const K_OFX_STAT_FAILED: i32 = 1;
     const K_OFX_STAT_ERR_BAD_HANDLE: i32 = 9;
 
     // Fixture observer events (tests/fixture/fixture_control.h).
@@ -557,9 +710,10 @@ mod window_lease {
         ARMED.store(true, Ordering::Relaxed);
         unsafe {
             let rc = rv_ofx_instance_render(s.effect, src.as_ptr(), 16, dst.as_mut_ptr(), 16, 0.0);
-            assert_ne!(
-                rc, K_OFX_STAT_OK,
-                "dead-session render must not report success"
+            assert_eq!(
+                rc, K_OFX_STAT_FAILED,
+                "dead-session render preserves the action's own failure \
+                 (its in-window suite calls hit swept tokens)"
             );
             assert_eq!(
                 dst, [0xEEu8; 64],
@@ -584,10 +738,33 @@ mod window_lease {
         ARMED.store(true, Ordering::Relaxed);
         unsafe {
             let rc = rv_ofx_instance_destroy(s.effect);
-            assert_ne!(
-                rc, K_OFX_STAT_OK,
-                "dead-session destroy must not report success"
+            assert_eq!(
+                rc, K_OFX_STAT_FAILED,
+                "dead-session destroy preserves the action's own failure \
+                 (its in-window suite calls hit swept tokens)"
             );
+            rv_ofx_instance_release(s.effect);
+            rv_ofx_catalog_close(s.catalog);
+            assert_dead_session(s.host);
+        }
+    }
+
+    /// Same Destroy window, reached through the release-drop path:
+    /// `rv_ofx_instance_release` runs `DestroyInstance` itself when the
+    /// attempt was created, and the hostile free landing inside that
+    /// window must still leave release/close/session-teardown defined.
+    #[test]
+    fn free_inside_release_destroy_window_defined() {
+        let _g = GUARD
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let s = Session::open(-1, true, false);
+        unsafe {
+            assert_eq!(rv_ofx_instance_create(s.effect), K_OFX_STAT_OK);
+        }
+        TARGET.store(FX_DESTROY, Ordering::Relaxed);
+        ARMED.store(true, Ordering::Relaxed);
+        unsafe {
             rv_ofx_instance_release(s.effect);
             rv_ofx_catalog_close(s.catalog);
             assert_dead_session(s.host);

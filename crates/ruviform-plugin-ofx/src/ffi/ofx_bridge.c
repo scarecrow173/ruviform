@@ -145,6 +145,15 @@ void rv_ofx_host_free(void *vh) {
      * reach objects whose pool strings are gone. the dedicated api.host
      * set is process-lifetime and survives the sweep */
     rv_tok_sweep(g_host_props ? g_host_props->tok : 0);
+    /* ...but its records do not: each RvProp name/value string pooled on
+     * this session, so they must retire here with it. clearing at poison
+     * (not deferred reclaim) keeps records exactly session-scoped: a new
+     * session can already start inside an open lease window, and a
+     * reclaim-time clear would then wipe records the new session just
+     * pooled on its own host. an empty head keeps every reader defined
+     * (pfind misses, writes fail on the NULL g_active pool) until the
+     * next session rewrites them (Issue #131) */
+    rv_po_clear(g_host_props);
     /* an open foreign-call window still dereferences h after re-locking;
      * poison above is immediate, reclaim waits for the last lease drop */
     if (!h->foreign) host_reclaim(h);
@@ -311,6 +320,12 @@ int rv_ofx_catalog_open(void *vh, const void *get_count,
     rv_unlock();
     if (sh) {
         OfxStatus s = sh(&g_api);
+        /* error precedence residual (deferred, Issue #131): unlike the
+         * post-gc() check below, the plugin's non-OK status is returned
+         * without first consulting h->alive, and an OK sh that poisoned
+         * the host still runs gc() before the dead-session rejection.
+         * every path stays defined via the sweep   only which error a
+         * doubly-faulted window reports is open */
         if (s != kOfxStatOK) {
             rv_lock();
             host_unlease(h);
@@ -430,7 +445,12 @@ void rv_ofx_catalog_close(void *vc) {
     }
     /* Unload each entry that had a successful Load   once, and only when
      * no non-quarantined attempt still holds the descriptor: Unloading
-     * under a live attempt is an action-serialization violation */
+     * under a live attempt is an action-serialization violation. When
+     * host is NULL (poison already detached this catalog) the session
+     * pool is gone or going, so the Unload is skipped entirely and the
+     * plugin's successful Load is deliberately left unbalanced   the
+     * admission-rejection path can still Unload because its open lease
+     * keeps the same pool alive (Issue #131) */
     for (e = c->entries; e; e = e->next) {
         if (host && e->loaded && e->raw && e->raw->mainEntry &&
             entry_open_live(c, e) == 0) {

@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "OFX ホストアダプタ（Issue #98）"
 created: "2026-10-24"
-updated: "2026-10-24"
+updated: "2026-10-27"
 owners: ["scarecrow173"]
 relations:
   source:

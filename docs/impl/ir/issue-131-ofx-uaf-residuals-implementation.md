@@ -21,6 +21,8 @@ relations:
       - type: "file"
         path: "crates/ruviform-plugin-ofx/src/ffi/ofx_bridge.h"
       - type: "file"
+        path: "crates/ruviform-plugin-ofx/src/host.rs"
+      - type: "file"
         path: "crates/ruviform-plugin-ofx/tests/bridge_host_lease.rs"
       - type: "file"
         path: "docs/test-specs/ofx-host-native-contract-tests.md"
@@ -101,6 +103,15 @@ Issue #124 が `rv_ofx_catalog_open` に導入した poison-immediate / deferred
   - `mod window_lease` 新設: fixture 実 DLL の observer が action 内で `rv_ofx_host_free`（+ close 試験では再入 `rv_ofx_catalog_close`）を発火 — Create/Changed/ClipPrefs/Render/Destroy/Unload の 6 window で hostile teardown を固定。file-scope `GUARD` で `t`/`window_lease` 両 mod を共有直列化（global `g_active` への同時 mutate 抑止）
 - docs: `ofx-host-native-contract-tests.md` Cross-window rule 拡張・`ofx-host-adapter.md` token/lease/api.host 記述更新・`issue-124` spec に「Issue #131 Revisions」節（status は不変）
 
+### Post-review fixes（2 名レビュー APPROVE-WITH-FIXES の統合指摘へ対応）
+
+- **P1 `g_host_props` record UAF（両レビュー収束）**: `pensure`→`rv_str_own(g_active, name)`・`rv_po_set`→`vs[i]`・`seed`→`ds[k]` が session pool の string を record に載せるが、`g_host_props`（once-bind・sweep exempt）は process-lifetime — session-1 の `propSet*` 後に `host_free`/`host_reclaim` すると record の name/vs/ds が dangling に。`rv_po_clear(RvPropsObj *)` を新設（`prop_free` で record struct+配列のみ heap-free・string は pool 所有のまま・`head=NULL`）し、`rv_ofx_host_free` の poison path で `rv_tok_sweep` 直後に `g_host_props` の record を退役。回帰テスト `host_propset_records_retire_with_session`（`mod t`、static bridge 直接 link — `capture_api_set_host` で `g_api` を捕捉し実 PropertyV1 suite で `api.host` へ書込 → free → propset 触診が `ErrUnknown`/`ErrMemory` で defined → 次 session は clean set へ書込）を追加
+- **P2 `seed()` の string 要素 gating**: `p->ds` の `rv_str_own` が途中失敗すると NULL 要素が reset→`propGetString` へ届く — 全要素 pool 成功時のみ `ok=1`/`seeded`
+- **P2 `sh()` error precedence residual**: `catalog_open` の `sh(&g_api)` window は plugin status を `h->alive` より先に返し、dead+OK 時も `gc()` が走る — 挙動は変えず defer note をコードコメント + spec Deferred 表 + 本 IR Follow-ups に記録
+- **P2 Unload asymmetry の文書化**: `catalog_close` の `host &&` gate コメントへ「detached（host NULL）経路は plugin の Load を意図的に unbalanced のまま残す（pool reclaim 済みへ foreign call しない）。admission-rejection 経路は open lease が pool を延命するため Unload 可能」と明記
+- **P2 新規テスト**: `free_inside_release_destroy_window_defined`（`mod window_lease` — release-drop 経由の Destroy window hostile free）。`free_inside_render_window_defined`/`free_inside_destroy_window_defined` の oracle を `rc != OK` → `rc == kOfxStatFailed`（action 自体の失敗保持 — in-window suite call が swept token に当たるため fixture は Failed を返す）へ tighten
+- **P2 doc 整理**: issue-131 spec の `verified-by` を task → `docs/test-specs/ofx-host-native-contract-tests.md` へ修正・同 test-spec の `verifies` に #131 spec を追加・`docs/designs/ofx-host-adapter.md`/`docs/specs/ofx-host-adapter.md` の `updated:` を変更日へ更新・design の `g_api.host` 行に session-scoped record 退役を追記・`host.rs` の SAFETY コメントを session token 表現へ修正
+
 ### Decisions During Implementation
 
 - **(a) uniform lease 採用**: spec §Why Now に記録。(b) `!Send` 明示依存は contract-violation までの拒否であり防御にならず、fixture observer は same-thread で実際に到達する。(c) pool refcount は ownership model の大掛かりな変更で、token sweep + lease で同等の到達不能性が得られるため YAGNI
@@ -108,6 +119,9 @@ Issue #124 が `rv_ofx_catalog_open` に導入した poison-immediate / deferred
 - **`rv_ofx_catalog_close` で `host` を detach 前に捕捉**: `c->host=NULL` 後に読むと常に NULL で Unload が全 skip になる実装ミスを初期に修正済み
 - **`Session::open` で `configure` 拒否を許容**: 前のテストが fixture instance を残した場合 `ofx_fixture_configure` は no-op — 同じ observer fn・`set_mode(0)`・`ARMED` disarm で per-test 状態を確定
 - **file-scope `GUARD`**: 両 test mod が別 `Mutex` を持つと `g_active` を並行 mutate し得る — 共有化で直列性を確定
+- **P1 は reviewer 推奨 option (b)（record 退役）を採用 — option (a)「`g_host_props` 宛 write 拒否」は不採用**: (a) は `po_of_props` か `rv_po_set` で `o == g_host_props` を特別扱いする弾き方だが、(i) OFX 上 host propset への write は合法な plugin 行動であり仕様上の defined error にしにくい、(ii) `g_host_props` という内部実装詳細を suite 層へ知らせる境界漏洩、(iii) read 側にも残留 record の寿命問題が残る。(b) は「record は pool string を参照するので pool の owner=session と同期して退役」という所有責務の正しい層での修正で、次 session が clean な set を得るので蓄積リークもない。一貫性として `rv_po_free` の record 走査を `rv_po_clear` へ共通化
+- **record 退役は deferred reclaim（`host_reclaim`）ではなく poison 時点（`rv_ofx_host_free` sweep 直後）**: reclaim は open lease が残る間延期されるが、その間に hostile callback が `rv_ofx_host_new` で次 session を開始し得る（poison 済み `g_active==NULL` で受理）→ 新 session の propSet が `g_host_props` に record を積んだ後で旧 host の reclaim が走ると、reclaim 側 clear が新 session の record まで巻き込む cross-session 破壊になる。poison 時点の clear は「この session が積んだ record だけ」を確実に落とす（`g_active=NULL` 後は新 record を作れないため集合は確定済み）
+- **`seed()` string gating は `ok` フラグで**: calloc 成功後に要素 loop の途中失敗を `ok=0` で検出 — `p->ds` の半端埋まり配列は `prop_free` が始末する（要素 string は pool 所有）ので `seeded=0` 維持のみで良く追加 cleanup は不要
 
 ## Related Experiments
 
@@ -121,15 +135,15 @@ Issue #124 が `rv_ofx_catalog_open` に導入した poison-immediate / deferred
 
 ## Validation
 
-- `mise exec -- cargo test -p ruviform-plugin-ofx --test bridge_host_lease` — 10/10 green（既存 4 window + 新規 6 window hostile teardown）
-- `mise run test-ofx` — crate 全テスト green（bridge_native/bridge_min/native_host/lease を含む）
-- `mise run fmt-check` — clean
+- `mise exec -- cargo test -p ruviform-plugin-ofx --test bridge_host_lease` — 12/12 green（既存 4 window + 新規 7 window hostile teardown + `host_propset_records_retire_with_session` 回帰）
+- `mise run test-ofx` — crate 全テスト green（bridge_native/bridge_min/native_host/lease を含む、post-review 修正後に再実行）
+- `mise run fmt-check` — clean（`mise run fmt` で新規テストの整形差分を取り込み済み）
 - `mise run check` — clean
 - `mise run lint` — clean（clippy -D warnings）
 - `mise run test` — workspace 全テスト green
 - `mise run test-rt` — `rt_` プレフィックステスト green（0 件一致でも成功）
-- `mise run lint-ofx` — `cargo clippy -p ruviform-plugin-ofx --all-targets -- -D warnings` clean
-- C bridge は `build.rs` の `-WX -W4`（MSVC）で警告ゼロ — 非 ASCII コメントを一度導入して C4819→C2220 で落ちたのを ASCII へ修正して再 green
+- `mise run lint-ofx` — `cargo clippy -p ruviform-plugin-ofx --all-targets -- -D warnings` clean（suite mirror の `struct_field_names`・`dead_code`・`doc_markdown`・`ptr_as_ptr` 指摘を scoped allow / `.cast()` / backtick で解消）
+- C bridge は `build.rs` の `-WX -W4`（MSVC）で警告ゼロ — 非 ASCII コメントを一度導入して C4819→C2220 で落ちたのを ASCII へ修正して再 green（post-review 追加分も ASCII のみ）
 - `node .agents/skills/doc-status/scripts/doc_status.js audit --json` — 0 blocking / 361 docs / findings 0
 - `node .agents/skills/impl-doc/scripts/audit_impl_record.js --json` — 新規 IR に finding なし（残存 findings は pre-existing の legacy IR のみ）
 
@@ -151,6 +165,11 @@ Issue #124 が `rv_ofx_catalog_open` に導入した poison-immediate / deferred
 
 - catalog handle token 化（`rv_ofx_catalog_close`/`count`/`descriptor`/`identifier`/`rejection`/`descriptor_string` が raw pointer を受ける caller contract）を別 issue で検討するなら同じ `H_CATALOG` kind + `rv_tok_get` パターンで拡張可能
 - `catalog_identifier`/`descriptor_string` の戻り値 lifetime を pool-independent にするなら、open 時 facade 側複製とは別に C 側で `rv_str_own(NULL,…)` 的な catalog-local pool を検討
+- `catalog_open` の `sh`（DLL `OfxSetHost`）window error precedence（P2・挙動据置き — spec §Deferred とコードコメントに記録済み）: 非 OK status が `h->alive` 確認より先に返り、dead+OK の `sh` 後も `gc()` が dead session 上で走る。sweep により全経路 defined のまま — doubly-faulted window が `ErrBadHandle` ではなく plugin status を返す点のみ要揃え
+- P3 記録（対応不要・既知の性質）:
+  - `mem_alloc`/`mem_free` は `g_active` を lock 前に lock-free 参照する benign race（pre-existing — 読み違いは最悪でも `ErrMissingHostFeature`/`ErrBadHandle` の誤方向で、UAF にはならない。g_mu 直列化で実害なし）
+  - `eff_host_lease` の `!host` 分岐と `h != g_active` 判定は token 時代では実質 unreachable の documented defense — sweep が先に不 resolve にするため cross-session 一致は起きないが、防御層として明示維持（削除しない）
+  - `catalog_identifier` 等の raw `char*` 戻り値契約は spec §Deferred で確認済み（caller contract・facade は open 時複製）
 
 ## Sources and Relations
 
@@ -167,3 +186,15 @@ Issue #124 が `rv_ofx_catalog_open` に導入した poison-immediate / deferred
 - 焦点: (a) 選択の正当性、`eff_host_lease` が `host_tok` 一致を要求する点（cross-session stale token は token sweep で不 resolve、一致なら lease）、`catalog_open` dead 経路の `host_unlease`→`rv_unlock`→`rv_ofx_catalog_close` の順序、`rv_tok_sweep` の `keep` が `g_host_props` のみであること、`seed()` の seeded/ddim を snapshot 確保後に立てる点
 - テスト: `window_lease` mod の 6 テストは fixture observer が実 action 内で `rv_ofx_host_free`（+`rv_ofx_catalog_close`）を発火 — same-thread hostile re-entry の実 path
 - 未検証: MSVC/非 Windows host での build（本環境は Windows MSVC のみ実行）
+
+### Review round 1 findings digest（2 名 APPROVE-WITH-FIXES 統合 → 全 disposition）
+
+- **P1 `g_host_props` が session pool string を参照する record を抱えたまま process-lifetime（UAF）** → `rv_po_clear` を poison 時に呼び record を session-scoped 退役（option (b)。poison 時点配置の根拠は Decisions 参照）。回帰: `t::host_propset_records_retire_with_session`
+- **P2 `seed()` string snapshot の `ok` が `rv_str_own` NULL 要素を無視** → 全要素 gating
+- **P2 `sh()` error precedence residual** → 挙動据置き・defer note をコード/spec/IR に記録
+- **P2 doc relations/updated** → spec `verified-by` を test-spec へ、test-spec `verifies` へ #131 spec を追加、design/spec `updated:` 更新
+- **P2 `host.rs` SAFETY 文面** → session token 表現へ
+- **P2 Unload asymmetry（detached close は plugin Load を unbalanced に残す）** → `catalog_close` コメントへ明記
+- **P2 release 経由 Destroy window 未カバー** → `free_inside_release_destroy_window_defined` 追加（`FX_DESTROY` は release path でも発火するため新 fixture event 不要）
+- **P2 render/destroy oracle `rc != OK` → `kOfxStatFailed` へ tighten**（action 自身の失敗保持が defined code）
+- **P3**: `mem_*` の lock 前 `g_active` 参照（benign race）・`eff_host_lease` unreachable-defense・raw `char*` 契約（spec-deferred 確認）→ Follow-ups 記録のみ
