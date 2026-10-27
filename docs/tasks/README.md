@@ -19,6 +19,7 @@ Directory: `docs/tasks`
 | TASK-034JO3X9ZpAvMoWiRIiMU4 | MSRV 1.89 適用とドキュメント同期（Cargo.toml・AGENTS.md） | done | [apply-msrv-1-89-and-sync-docs.md](./apply-msrv-1-89-and-sync-docs.md) |
 | TASK-034J6PiHv9GsKby7yH2eMO | 全公開 enum への `#[non_exhaustive]` 適用と exhaustive_enums allow の撤去 | done | [apply-non-exhaustive-to-public-enums.md](./apply-non-exhaustive-to-public-enums.md) |
 | TASK-034IRYXA0oq14nlgmC4Bch | workspace への publish = false 方針の適用 | done | [apply-publish-false-policy-to-workspace.md](./apply-publish-false-policy-to-workspace.md) |
+| TASK-034N9j4dL22V16U4g7py5Z | media-core/dsp/audio-analysis lib test binary への AllocDisabler 宣言 | done | [arm-assert-no-alloc-lane.md](./arm-assert-no-alloc-lane.md) |
 | TASK-034Kq90bnj2bifFFCKfMVA | Issue #92 文書クローズと全量検証 | done | [audio-analysis-closeout.md](./audio-analysis-closeout.md) |
 | TASK-034Kq8ZHrS7hOfvYmTEUQI | audio-analysis クレート骨格 + LevelMeter/SpectrumAnalyzer/WaveformPeaks | done | [audio-analysis-crate.md](./audio-analysis-crate.md) |
 | TASK-034JRQCnF0sLKz5obmCHNT | Issue #25 文書クローズと全量検証 | done | [audio-engine-closeout.md](./audio-engine-closeout.md) |

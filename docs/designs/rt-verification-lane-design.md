@@ -47,6 +47,7 @@ relations:
     - "../adr/rt-assert-no-alloc-thread-check.md"
   derived-by:
     - "../plans/implement-issue-22-rt-verification.md"
+    - "../plans/implement-issue-130-arm-assert-no-alloc.md"
     - "../test-specs/rt-verification-contracts.md"
   verifies: []
   verified-by: []

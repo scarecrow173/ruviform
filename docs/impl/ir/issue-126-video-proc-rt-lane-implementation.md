@@ -173,7 +173,7 @@ OFX crate 自体は変更なし。既存 gate（`test-ofx`・`lint-ofx`）の gr
 
 ## Follow-ups
 
-- **他 3 crate の `assert_no_alloc` lane が未武装（pre-existing・本 Issue scope 外）** — `ruviform-media-core`・`ruviform-dsp`・`ruviform-audio-analysis` は `assert_no_alloc` 測定窓をテスト内に持つが `#[global_allocator] AllocDisabler` を宣言しておらず、窓内 alloc を abort で機械検出できない（本作業中の grep で当該 3 crate に `global_allocator`/`AllocDisabler` 宣言なしを確認）。レビューで浮上した既存問題であり修正は本 Issue の scope 外 — follow-up issue として追跡する。
+- **他 3 crate の `assert_no_alloc` lane が未武装（pre-existing・本 Issue scope 外）** — `ruviform-media-core`・`ruviform-dsp`・`ruviform-audio-analysis` は `assert_no_alloc` 測定窓をテスト内に持つが `#[global_allocator] AllocDisabler` を宣言しておらず、窓内 alloc を abort で機械検出できない（本作業中の grep で当該 3 crate に `global_allocator`/`AllocDisabler` 宣言なしを確認）。レビューで浮上した既存問題であり修正は本 Issue の scope 外 — follow-up issue として追跡する。**→ Issue [#130](https://github.com/scarecrow173/ruviform/issues/130) で解決済み（3 crate の lib test binary へ `AllocDisabler` を 1 個ずつ宣言・sanity abort で武装を実証 — [issue-130-arm-assert-no-alloc-lane-implementation.md](issue-130-arm-assert-no-alloc-lane-implementation.md)）。**
 
 ## Decisions During Implementation
 

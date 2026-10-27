@@ -79,6 +79,16 @@ pub fn version() -> &'static str {
 mod tests {
     use super::*;
 
+    /// Issue #130 RT-verification lane: `AllocDisabler` swaps the lib
+    /// test binary's allocator so `assert_no_alloc` catches any
+    /// (de)allocation inside its measurement window. One static per
+    /// crate test binary — `music::tests::rt_conversion_no_alloc`
+    /// measures against this same allocator; the crate has no
+    /// `tests/*.rs` integration binary.
+    #[cfg(debug_assertions)]
+    #[global_allocator]
+    static ALLOC: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
+
     fn base(numerator: u32, denominator: u32) -> TimeBase {
         TimeBase::new(numerator, denominator).unwrap()
     }
