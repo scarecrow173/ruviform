@@ -69,6 +69,7 @@ Directory: `docs/tasks`
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034LNY736TLX2w3k4RFFZM | plugin-core L1 基盤（契約移設 + Lifecycle Failed + wire codec） | done | [l1-core-contracts-and-wire-codec.md](./l1-core-contracts-and-wire-codec.md) |
 | TASK-034MrsLWkKNHnu7jX1ghp8 | L1 endpoint（leg 移出・arm channel・pending_arm・leg 返却・drain-before-early-return） | done | [l1-endpoint-arm-and-leg-return.md](./l1-endpoint-arm-and-leg-return.md) |
+| TASK-034N3QIPDPFbB37OxHMZLy | Issue #123 L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | done | [l1-internal-cleanup.md](./l1-internal-cleanup.md) |
 | TASK-034LNYf8Qj1NeGAKmaP7B4 | plugin-host L1 プロキシ制御面（spawn/handshake/コマンド転送/クラッシュ検出） | done | [l1-proxy-control-plane.md](./l1-proxy-control-plane.md) |
 | TASK-034LNYmL2ezSeFFgddaeDX | L1 共有メモリデータ面 + RT 脚 + pass-through | done | [l1-shm-data-plane-and-rt-legs.md](./l1-shm-data-plane-and-rt-legs.md) |
 | TASK-034JNwTZ8WalgowFahLc8E | Timecode API の FrameRate 移行（破壊的シグネチャ置換と呼び出し側移行） | done | [migrate-timecode-to-framerate.md](./migrate-timecode-to-framerate.md) |
@@ -83,6 +84,7 @@ Directory: `docs/tasks`
 | TASK-034L6ycSsF8VW32LLoNxXr | Implement video plugin core contract | done | [ofx-core-contract-implementation.md](./ofx-core-contract-implementation.md) |
 | TASK-034L6yiJbB3boniBUWvfmC | OFX host closeout | done | [ofx-host-closeout.md](./ofx-host-closeout.md) |
 | TASK-034L6yib4dmV9rd1MUZxbw | OFX host final verification | done | [ofx-host-final-verification.md](./ofx-host-final-verification.md) |
+| TASK-034N3SaVVNHQRJjWEndfH7 | OFX host window lease + clip props clone 実装 | done | [ofx-host-window-lease-implementation.md](./ofx-host-window-lease-implementation.md) |
 | TASK-034L6yeVFSaiVUoV4RiRtm | Implement native OFX runtime | done | [ofx-native-runtime-implementation.md](./ofx-native-runtime-implementation.md) |
 | TASK-034L6yh0fBmRabh1TMLv2F | Implement OFX video rendering | done | [ofx-render-implementation.md](./ofx-render-implementation.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |

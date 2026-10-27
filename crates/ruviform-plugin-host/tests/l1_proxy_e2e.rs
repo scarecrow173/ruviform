@@ -1423,7 +1423,7 @@ fn rejected_block_replies_resolve_pass_through() {
 
 mod composite_e2e {
     use std::ffi::OsString;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -1584,27 +1584,41 @@ mod composite_e2e {
 
     /// The `ruviform-plugin-l1-runner` executable — a
     /// `ruviform-plugin-export` package bin, so `CARGO_BIN_EXE_*`
-    /// cannot name it here. `cargo test --workspace` builds every
-    /// member's bin targets into the shared profile dir — locate it
-    /// relative to this test binary (`target/<profile>/deps/` →
-    /// `target/<profile>/`).
+    /// cannot name it here (cargo scopes the variable to same-package
+    /// bins; no cross-package compile-time mechanism exists).
+    /// Resolution mirrors the #114 fixture convention
+    /// (`RUVIFORM_L1_REAL_PLUGIN_DIR`): a `RUVIFORM_L1_RUNNER` env
+    /// override wins verbatim, otherwise the binary is located
+    /// relative to this test binary — its own directory first (the
+    /// layout when the test exe sits directly in `target/<profile>/`),
+    /// then `deps/`'s parent (the usual `cargo test` layout).
     fn runner_program() -> OsString {
+        if let Some(path) = std::env::var_os("RUVIFORM_L1_RUNNER") {
+            return path;
+        }
         let exe = std::env::current_exe().expect("current_exe");
-        let dir = exe
+        let file_name = format!("ruviform-plugin-l1-runner{}", std::env::consts::EXE_SUFFIX);
+        let candidates: Vec<PathBuf> = exe
             .parent()
-            .and_then(Path::parent)
-            .expect("test binary lives under target/<profile>/deps");
-        let path = dir.join(format!(
-            "ruviform-plugin-l1-runner{}",
-            std::env::consts::EXE_SUFFIX
-        ));
-        assert!(
-            path.is_file(),
-            "ruviform-plugin-l1-runner missing at {} — run `mise run \
-             test` (workspace test builds all member bins)",
-            path.display()
+            .into_iter()
+            .chain(exe.parent().and_then(Path::parent))
+            .map(|dir| dir.join(&file_name))
+            .collect();
+        for path in &candidates {
+            if path.is_file() {
+                return path.clone().into_os_string();
+            }
+        }
+        panic!(
+            "ruviform-plugin-l1-runner missing — searched {}; run \
+             `mise run test` (workspace test builds all member bins) \
+             or set RUVIFORM_L1_RUNNER",
+            candidates
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         );
-        path.into_os_string()
     }
 
     /// A `PluginHost` with the L0 gain factory and an L1

@@ -157,7 +157,7 @@ mod native {
                 .library
                 .get::<unsafe extern "C" fn(i32) -> i32>(b"ofx_fixture_probe\0")
                 .expect("suite probe");
-            for which in 0..5 {
+            for which in 0..6 {
                 assert_eq!(probe(which), 0, "SDK suite oracle {which}");
             }
             assert_eq!(rv_ofx_instance_destroy(bridge.effect), 0);

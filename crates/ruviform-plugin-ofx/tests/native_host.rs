@@ -682,6 +682,7 @@ suite_probe!(
     3,
     WORKER_ON_CREATE
 );
+suite_probe!(instance_clip_properties_mirror_descriptor_contract, 5, 0);
 
 #[test]
 fn readonly_is_a_host_ui_restriction_not_a_native_write_prohibition() {
