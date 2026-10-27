@@ -74,6 +74,17 @@ void *rv_tok_get(uintptr_t tok, int kind) {
     return NULL;
 }
 
+void rv_tok_sweep(uintptr_t keep) {
+    for (;;) {
+        RvTok *n;
+        uintptr_t z = 0;
+        for (n = g_toks; n; n = n->next)
+            if (n->tok != keep) { z = n->tok; break; }
+        if (!z) return;
+        rv_tok_revoke(z);
+    }
+}
+
 void rv_tok_revoke(uintptr_t tok) {
     RvTok **n;
     for (n = &g_toks; *n; n = &(*n)->next)
@@ -320,12 +331,29 @@ static void seed(RvPropsObj *o, const char *n, int t, int dim,
     rv_po_set(o, n, t, 0, vi, vd, vs, vp);
     p = pfind(o, n);
     if (!p || p->seeded) return;
-    p->seeded = 1;
-    p->ddim = dim > 0 ? dim : 1;
-    if (p->type == RV_PT_INT) { p->di = (int *)calloc((size_t)p->ddim, sizeof(int)); if (p->di) for (k = 0; k < p->ddim; k++) p->di[k] = vi; }
-    else if (p->type == RV_PT_DOUBLE) { p->dd = (double *)calloc((size_t)p->ddim, sizeof(double)); if (p->dd) for (k = 0; k < p->ddim; k++) p->dd[k] = vd; }
-    else if (p->type == RV_PT_STRING) { p->ds = (char **)calloc((size_t)p->ddim, sizeof(char *)); if (p->ds) for (k = 0; k < p->ddim; k++) p->ds[k] = rv_str_own(g_active, vs ? vs : ""); }
-    else { p->dp = (void **)calloc((size_t)p->ddim, sizeof(void *)); if (p->dp) for (k = 0; k < p->ddim; k++) p->dp[k] = vp; }
+    /* mark seeded only after the snapshot array exists   a failed calloc
+     * must not leave rv_po_reset dereferencing a NULL snapshot array
+     * (Issue #131) */
+    {
+        int ddim = dim > 0 ? dim : 1;
+        int ok = 0;
+        if (p->type == RV_PT_INT) {
+            p->di = (int *)calloc((size_t)ddim, sizeof(int));
+            if (p->di) { for (k = 0; k < ddim; k++) p->di[k] = vi; ok = 1; }
+        } else if (p->type == RV_PT_DOUBLE) {
+            p->dd = (double *)calloc((size_t)ddim, sizeof(double));
+            if (p->dd) { for (k = 0; k < ddim; k++) p->dd[k] = vd; ok = 1; }
+        } else if (p->type == RV_PT_STRING) {
+            p->ds = (char **)calloc((size_t)ddim, sizeof(char *));
+            if (p->ds) { for (k = 0; k < ddim; k++) p->ds[k] = rv_str_own(g_active, vs ? vs : ""); ok = 1; }
+        } else {
+            p->dp = (void **)calloc((size_t)ddim, sizeof(void *));
+            if (p->dp) { for (k = 0; k < ddim; k++) p->dp[k] = vp; ok = 1; }
+        }
+        if (!ok) return;
+        p->ddim = ddim;
+        p->seeded = 1;
+    }
 }
 void rv_seed_i(RvPropsObj *o, const char *n, int d, int v) { seed(o, n, RV_PT_INT, d, v, 0, NULL, NULL); }
 void rv_seed_d(RvPropsObj *o, const char *n, int d, double v) { seed(o, n, RV_PT_DOUBLE, d, 0, v, NULL, NULL); }

@@ -32,7 +32,9 @@ relations:
   derived-by:
     - "../plans/implement-issue-98-ofx-host-adapter.md"
     - "../plans/implement-issue-124-ofx-window-lease.md"
+    - "../plans/issue-131-ofx-uaf-residuals.md"
     - "../specs/issue-124-ofx-cross-window-h-exposure.md"
+    - "../specs/issue-131-ofx-uaf-residuals-non-catalog-window-leases-lifecycle-hardening.md"
     - "../test-specs/video-plugin-plain-contract-tests.md"
     - "../test-specs/ofx-host-native-contract-tests.md"
   verifies: []
@@ -169,9 +171,10 @@ impl PluginRejection { pub fn native_index(&self) -> usize; pub fn identifier(&s
 
 ## Private boundary design
 
-- C bridge が pinned SDK suite テーブル・stable heap `OfxHost`・typed accessor を所有
+- C bridge が pinned SDK suite テーブル・process-static `OfxHost`（`g_api`・`host` field は専用 process-lifetime property set を一度だけ束縛する read-only 値）・typed accessor を所有（Issue #124/#131）
 - 公開 `Rc` 制御面は `!Send`/`!Sync` で、synchronized な Send-safe callback registry / native state とは分離。callback は plugin 作成 thread から来得るため **Rc/RefCell/制御 metadata snapshot に触れない** — callback データは mutex 保護の owned state / stable buffer のみ。Mutex や借用 registry guard を foreign call を跨いで保持しない。`!Send` が foreign callback 安全性を証明するとは言わない
-- opaque generation token は never-reused・owner/kind 検査（unknown/stale → `BadHandle` を deref 前に）。実際の MemorySuite `void*` 確保は managed owned pointer で、fake generation ID ではない。MemorySuite/`imageMemory` の allocation は明示 **16 バイト alignment の real 実装**で、alloc 失敗は `ErrMemory`。callback/host が渡す C 文字列は SDK の合法な使用期間より長生きする stable 所有で、temporary `CString.as_ptr` の lifetime 依存は禁止
+- opaque generation token は never-reused・owner/kind 検査（unknown/stale → `BadHandle` を deref 前に）。caller 側 host handle も session token（`H_HOST`）で、host poison は session が公開した全 token を sweep する — reclaim 後に resolve する foreign-reachable handle は存在しない（Issue #131）。実際の MemorySuite `void*` 確保は managed owned pointer で、fake generation ID ではない。MemorySuite/`imageMemory` の allocation は明示 **16 バイト alignment の real 実装**で、alloc 失敗は `ErrMemory`。callback/host が渡す C 文字列は SDK の合法な使用期間より長生きする stable 所有で、temporary `CString.as_ptr` の lifetime 依存は禁止
+- `g_mu` を解放する foreign-call window は全て owning session host の lease 下で走る（`RvHost.foreign` counter・lock 延長ではない）— teardown が window 内に落ちても block+string pool は最終 lease drop まで確保され、post-window bookkeeping は poisoned host 上で defined rejection（Issue #124 の catalog_open 方針を #131 で全 window へ一般化）。`rv_ofx_catalog_close` は `closing` flag で再入を no-op にし、`catalog_open` の dead-session 経路は lock 非保持で close を呼ぶ（foreign Unload が callback thread join する場合の self-deadlock 回避）
 - SDK がサポートする single-instance property は `kOfxImageEffectPluginPropSingleInstance` を成功 NativeCreate 前に enforce。複数 Created wrapper は可・live native instance がある間の 2 回目 initialize は Create せず失敗。`InstanceChunkCount` のような存在しない property は発明しない
 - `NativeDestroy` は成功作成済み instance に高々 1 回・terminal。失敗時は uncertain resource を session 所有で Unload まで隔離し、破壊済みという誤前提で別 SingleInstance ネイティブを再 admission しない。native crash isolation は約束しない
 - unsafe は FFI boundary module に局在し各 unsafe 操作に SAFETY コメント + scoped expect/allow（workspace ポリシー）。core や FFI 上位の crate 全体 `allow(unsafe_code)` は置かない

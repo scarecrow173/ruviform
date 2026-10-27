@@ -125,6 +125,15 @@ Issue #98 の各 IR が「個別修正」と記録した残件（Issue #124）�
 | host 死亡後の catalog string view | 現行「strings retire with host」契約のまま。loader は `Rc<NativeHost>` で host ≥ catalog を保証済み | 必要になった時点の follow-up issue | host < catalog の逆転利用で stale string pointer を観測し得る（現状 contract 外） |
 | GetClipPreferences out-args の instance clip props 反映 | 対象外 — descriptor 宣言 clone のみ | 次の OFX 機能 issue | prefs で宣言された値と instance clip props の drift（render は固定契約で reject 済み） |
 
+## Issue #131 Revisions
+
+Issue #131 で本 spec の残件（`catalog_open` 以外の foreign window の lease・`g_api.host` 境界・host pointer ABA・nested close）を同型防御で一般化した。現行の実装との差異:
+
+- `g_api.host` は poison で消去されない — 専用 process-lifetime property set を一度だけ束縛する read-only 値（confused-deputy と off-lock write の両方を解消）。poison 時の「`g_api.host` 消去」記述は superseded
+- caller 側 host handle は generation token（`H_HOST`）— `rv_ofx_host_free`/`rv_ofx_catalog_open` は token resolve で stale 値を deref なしに拒否（ABA 不可能）
+- host poison は session の全 token を sweep — reclaim 後に resolve する handle は残らない
+- 全 instance/catalog-close foreign window が同一 lease を保有し、`rv_ofx_catalog_close` は `closing` ガードで再入 no-op。`catalog_open` dead 経路は lock 非保持で close を呼ぶ（nested-close の g_mu 保持 self-deadlock 解消）
+
 ## Sources and Relations
 
 - [GitHub Issue #124](https://github.com/scarecrow173/ruviform/issues/124) — 一次ソース（`relations.source`）。2 項目のスコープ正本

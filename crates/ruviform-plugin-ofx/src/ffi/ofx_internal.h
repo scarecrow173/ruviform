@@ -1,9 +1,13 @@
 /* ofx_internal.h   private shared state between bridge translation units.
- * All SDK-facing handles are generation tokens (uintptr >= 0x10000) cast to
- * the opaque pointer types   never dereferenced as SDK structs. Registry
- * nodes carry owner + parent for cascade revocation. A single recursive
- * global mutex protects all registry/property/param/memory state; it is
- * NEVER held across a foreign call (setHost/mainEntry). */
+ * All SDK-facing handles     and the caller-visible host handle     are
+ * generation tokens (uintptr >= 0x10000) cast to the opaque pointer
+ * types   never dereferenced as SDK structs. Registry nodes carry owner
+ * + parent for cascade revocation; host poison sweeps every session
+ * token so no foreign-reachable handle outlives its pool. A single
+ * recursive global mutex protects all registry/property/param/memory
+ * state; it is NEVER held across a foreign call (setHost/mainEntry),
+ * and every such call site holds a foreign-window lease on the owning
+ * host while the lock is released. */
 #ifndef RUVIFORM_OFX_INTERNAL_H
 #define RUVIFORM_OFX_INTERNAL_H
 
@@ -24,11 +28,14 @@ int rv_lock(void);      /* init-once + lock; 0 ok, nonzero init failure */
 void rv_unlock(void);
 
 enum { H_EFFECT, H_PSET, H_PARAM, H_CLIP, H_EPROPS, H_PPROPS, H_CPROPS,
-       H_INARGS, H_OUTARGS, H_ENTRY, H_MEMORY, H_IMAGE };
+       H_INARGS, H_OUTARGS, H_ENTRY, H_MEMORY, H_IMAGE, H_HOST };
 
 uintptr_t rv_tok_new(int kind, void *payload, uintptr_t parent);
 void *rv_tok_get(uintptr_t tok, int kind); /* NULL on stale/wrong kind */
 void rv_tok_revoke(uintptr_t tok);         /* cascades to children */
+/* revoke every live token except `keep` (0 = keep none); host teardown
+ * uses it so no foreign-reachable handle outlives the session's pool */
+void rv_tok_sweep(uintptr_t keep);
 
 /* ---------- property storage ---------- */
 enum { RV_PT_INT = 1, RV_PT_DOUBLE, RV_PT_STRING, RV_PT_POINTER };
@@ -75,8 +82,10 @@ typedef struct RvHost {
     unsigned foreign;       /* open foreign-call window leases   reclaim
                              * is deferred while nonzero so post-window
                              * code never touches a freed block */
+    uintptr_t tok;          /* H_HOST session token; the caller-visible
+                             * host handle so a stale value can never
+                             * alias a recycled RvHost block (ABA) */
     struct RvCatalog *catalogs;
-    RvPropsObj *props;
     RvStrNode *strings;
     RvMemNode *mem;
 } RvHost;
@@ -146,6 +155,9 @@ typedef struct RvEffect {
     /* attempt fields */
     struct RvEffect *next;       /* catalog entry list link */
     struct RvEffect *desc;       /* descriptor this attempt cloned from */
+    uintptr_t host_tok;          /* session token of the owning host:
+                                  * a window leases it only while the
+                                  * token still names the live session */
     int created, create_attempted, destroyed, quarantined, configured;
     uint32_t w, h;
     double fps;
@@ -160,6 +172,8 @@ typedef struct RvEffect {
 
 typedef struct RvCatalog {
     RvHost *host;
+    int closing;                 /* set while close owns the teardown;
+                                  * a re-entrant close degrades to no-op */
     RvEffect *entries;           /* linked list, scan order */
     RvEffect *quar;              /* failed-destroy instances until Unload */
     struct RvCatalog *next;

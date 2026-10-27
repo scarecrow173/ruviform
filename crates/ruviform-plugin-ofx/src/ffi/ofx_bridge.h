@@ -24,8 +24,9 @@ extern "C" {
 int32_t ofx_bridge_image_effect_api_version(void);
 
 /* Private fixed-arity ABI. No SDK layout crosses into Rust. All opaque
- * handles except the host/catalog pointers are generation tokens, never
- * dereferenced. Strings are owned by the host until its teardown. */
+ * handles except the catalog pointer are generation tokens, never
+ * dereferenced; the host handle is the session token host_new returns.
+ * Strings are owned by the host until its teardown. */
 void *rv_ofx_host_new(void);
 void rv_ofx_host_free(void *host);
 

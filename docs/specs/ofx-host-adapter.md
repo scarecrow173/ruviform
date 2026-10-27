@@ -36,6 +36,7 @@ relations:
     - "../designs/ofx-host-adapter.md"
     - "../plans/implement-issue-98-ofx-host-adapter.md"
     - "issue-124-ofx-cross-window-h-exposure.md"
+    - "issue-131-ofx-uaf-residuals-non-catalog-window-leases-lifecycle-hardening.md"
   verifies: []
   verified-by:
     - "../test-specs/video-plugin-plain-contract-tests.md"

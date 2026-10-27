@@ -44,6 +44,7 @@ Directory: `docs/plans`
 | PLAN-034LFFj86hwRvUljHN54Mc | Issue #99 実施計画 — video-proc 色変換カーネル（linear working space + ICC 入出力経路） | completed | [implement-issue-99-color-conversion-kernels.md](./implement-issue-99-color-conversion-kernels.md) |
 | PLAN-034JcvpHIlt5JmqvgOquvI | プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding PoC） | completed | [implement-plugin-foundation.md](./implement-plugin-foundation.md) |
 | PLAN-034JxNegJktSAJZ2LuO0N8 | Issue #21 RT 基盤の実装（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | completed | [implement-rt-foundation.md](./implement-rt-foundation.md) |
+| PLAN-034N9piQHt6Evb7QShnGx8 | Issue #131 OFX UAF residuals 実施計画 | approved | [issue-131-ofx-uaf-residuals.md](./issue-131-ofx-uaf-residuals.md) |
 | PLAN-034J6OTwge4rS96WZWkZgd | Issue #18 フォローアップの実装（公開 enum 方針適用・時間演算修正・改善トリアージ） | completed | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |

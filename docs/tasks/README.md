@@ -87,6 +87,7 @@ Directory: `docs/tasks`
 | TASK-034N3SaVVNHQRJjWEndfH7 | OFX host window lease + clip props clone 実装 | done | [ofx-host-window-lease-implementation.md](./ofx-host-window-lease-implementation.md) |
 | TASK-034L6yeVFSaiVUoV4RiRtm | Implement native OFX runtime | done | [ofx-native-runtime-implementation.md](./ofx-native-runtime-implementation.md) |
 | TASK-034L6yh0fBmRabh1TMLv2F | Implement OFX video rendering | done | [ofx-render-implementation.md](./ofx-render-implementation.md) |
+| TASK-034N9p1bBWmE7AioxpndKq | OFX UAF residuals — non-catalog window lease + lifecycle hardening | done | [ofx-uaf-residuals-non-catalog-window-lease-lifecycle-hardening.md](./ofx-uaf-residuals-non-catalog-window-lease-lifecycle-hardening.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | TASK-034MrsDzlHRpUHHLtYkZdN | plugin-core endpoint 前提面（EndpointUnavailable・fallible encode・Send capability・view impl） | done | [plugin-core-endpoint-primitives.md](./plugin-core-endpoint-primitives.md) |
 | TASK-034LNYeFTd7EgCwbDA0GWD | ruviform-plugin-export 新設 + run() ランナー + l1-runner bin | done | [plugin-export-crate-and-l1-runner.md](./plugin-export-crate-and-l1-runner.md) |
