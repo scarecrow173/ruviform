@@ -1,7 +1,7 @@
 ---
 id: "DESIGN-034N3EYKKosV8OzCP7Y9tY"
 type: "design"
-status: "draft"
+status: "approved"
 title: "共通 platform/process/ipc 基盤の抽出評価（Issue #122）"
 created: "2026-10-27"
 updated: "2026-10-27"
@@ -75,15 +75,18 @@ Issue の指示に従い、platform/process/ipc プリミティブの**実在す
 | --- | --- | --- |
 | `crates/ruviform-plugin-host/src/l1/shm.rs`（362 行） | **所有者側** — セグメント生成・キー一意化・ヘッダ書込・drop 時 unlink・I/O スレッド用ローカル attach | `process_salt` L74-81・`unique_key` L97-104・`Segment::create`/`create_keyed`/`create_named` L135-178・`key`/`declared_len`/`verify_header` L182-215・`write_header` L220-250・`View::attach`/`in_slot_mut`/`out_slot` L280-306・`bytes`/`bytes_mut`（scoped `unsafe` ×2）L310-338・`get_u32`/`get_u64`/`put_u32`/`put_u64` L340-362 |
 | `crates/ruviform-plugin-export/src/shm.rs`（265 行） | **接続側** — 名前付きセグメント attach・ヘッダ検証・スロット parse/write（create/unlink は持たない） | `Segment::attach`+ヘッダ検証 L85-130・`in_slot` L136-171・`write_out_slot` L178-210・`bytes`/`bytes_mut`（scoped `unsafe` ×2）L214-241・`get_u32`/`get_u64`/`put_u32`/`put_u64` L243-265 |
-| `crates/ruviform-plugin-core/src/wire.rs` `pub mod shm` L131-213 | **共有契約の正本（既に集約済み）** — `MAGIC`・`HEADER_LEN`・ヘッダ/スロット offset・`SLOT_BYTES`・`SAMPLE_STRIDE`・`out_slots_off`・`segment_len` | wire 層の一部として両側が共通参照 |
+| `crates/ruviform-plugin-core/src/wire.rs` `pub mod shm` L131-222 | **共有契約の正本（既に集約済み）** — `MAGIC`・`HEADER_LEN`・ヘッダ/スロット offset・`SLOT_BYTES`・`SAMPLE_STRIDE`・`out_slots_off`・`segment_len` | wire 層の一部として両側が共通参照 |
+| `crates/ruviform-plugin-host/src/bin/l1-test-worker.rs`（テスト fixture・runner 役割ミラー） | export `shm` の接続側を模倣 — `Segment::attach`+全ヘッダ検証 L255-304・`process_block`（in-slot parse・out-slot write・degenerate 次元処理）L306-371・`bytes`/`bytes_mut`（scoped `unsafe` ×2）L374-398・`get_u32`/`get_u64`/`put_u32`/`put_u64` L400-422 | 全 offset は `wire::shm` consts 経由（レイアウトは複写せず契約を参照）。`shared_memory` 直接利用（L42 import・L256 attach） |
+| `crates/ruviform-plugin-export/tests/l1_runner_e2e.rs`（E2E テスト・owner 役割ミラー `MiniHost`） | host `l1::shm` の所有者側を模倣 — `unique_key` L207-210・`create_segment_with`（`ShmemConf::create`+ヘッダ書込）L212-243・`write_in_slot` L249-298・`read_out_slot` L300-339・`segment_bytes`/`segment_bytes_mut`（scoped `unsafe` ×2）L341-353・`get_u32`/`get_u64`/`put_u32`/`put_u64` L354-368 | 同様に `wire::shm` consts 経由。`shared_memory` 直接利用（L30 import・L217 create）。`MiniHost` 本体 L60-185 は process 節を参照 |
 
 #76 レビューが確認した「byte-identical layout」は **`wire::shm` に単一正本として既に集約済み**であり、レイアウト自体は重複していない。残る実重複は薄い OS 接地面の糊のみ:
 
-- `ShmemConf::new().os_id(key).open()` による attach — host `shm.rs:281-285` / export `shm.rs:86-89`（~5 行）
-- `bytes`/`bytes_mut` の scoped `unsafe` accessor — host `shm.rs:310-338` / export `shm.rs:214-241`（形状は同型だが SAFETY 論証は側ごとに異なる: 所有者書込み済みヘッダ+strict alternation vs attach 検証済み+単一スレッド runner）
-- `get_u32`/`get_u64`/`put_u32`/`put_u64` — host `shm.rs:340-362` / export `shm.rs:243-265`（同一実装の 4 ヘルパ ×2、~23 行）
+- `ShmemConf` によるセグメント create/attach — host `shm.rs`（`create` 系 L135-178・ローカル `open` :281-285）/ export `shm.rs`（`open` :86-89）に加え、テスト側でも `l1-test-worker.rs:256`（`open`）・`l1_runner_e2e.rs:217`（`create`）が同一 API を直接呼ぶ（~5 行/箇所）
+- `bytes`/`bytes_mut` の scoped `unsafe` slice accessor — **計 8 サイト / 4 ファイル**: プロダクション 4 サイト（host `shm.rs` `#[expect(unsafe_code)]` L320-323・L334-337、export `shm.rs` 同 L224-227・L237-240）+ テストミラー 4 サイト（`l1-test-worker.rs` L382-385・L394-397、`l1_runner_e2e.rs` `segment_bytes`/`segment_bytes_mut` L341-344・L349-352）。形状は同型だが SAFETY 論証は側ごとに異なる（所有者書込み済みヘッダ+strict alternation vs attach 検証済み+単一スレッド runner — テスト側は各役割の論証を引き継ぐ）
+- `get_u32`/`get_u64`/`put_u32`/`put_u64` — 同一実装の 4 ヘルパが **4 箇所**（host `shm.rs:340-362` / export `shm.rs:243-265` / `l1-test-worker.rs:400-422` / `l1_runner_e2e.rs:354-368`、~23 行/箇所）
+- ヘッダ検証・スロット parse/write 手続き — export `shm.rs`（attach 時の全ヘッダ検証・`in_slot`/`write_out_slot`）を `l1-test-worker.rs` `Segment`/`process_block`（L243-422）が、host `shm.rs`（`write_header`・`in_slot_mut`/`out_slot`）を `l1_runner_e2e.rs` `create_segment_with`/`write_in_slot`/`read_out_slot`（L212-339）が、同一 `wire::shm` 契約に対して手続きレベルで複写
 
-役割分割であって重複ではない部分: create/key 一意化/unlink/ヘッダ書込は host のみ、ヘッダ検証/slot parse/write は export のみ。両側は「2 つの独立利用者」ではなく **1 つの L1 wire プロトコルの 2 半**である。
+役割分割であって重複ではない部分: create/key 一意化/unlink/ヘッダ書込は host のみ、ヘッダ検証/slot parse/write は export のみ。両側は「2 つの独立利用者」ではなく **1 つの L1 wire プロトコルの 2 半**である。テスト側の 2 ミラーはこの役割分割をそのまま検証用に複写したもの（`l1-test-worker` が runner 役割、`MiniHost` が owner 役割）で、新たな独立利用者ではない — ただし手続きレベルの重複量としては正直に計上する（後述「実重複量」）。
 
 ### process spawn / reap / kill / wait
 
@@ -91,8 +94,9 @@ Issue の指示に従い、platform/process/ipc プリミティブの**実在す
 | --- | --- |
 | `crates/ruviform-plugin-host/src/l1/mod.rs` | `ChildExit::from_status`（unix `ExitStatusExt::signal` 含む）L124-133・`kill_child` L338-342・`converge` L376-427・`spawn_child` L464-472・`try_wait_child` L588-593・`reap` L604-624・`driver_main`/`reader_main` L637-784/L490-583・`spawn_driver`/`spawn_reader` L803-932・`L1Instance::spawn` L990-・`abort` L1762・`join_threads` L1784 |
 | `crates/ruviform-plugin-host/src/bin/l1-test-worker.rs` | テスト fixture の heir spawn（`--leave-heir-after-msgs` — 検証用途のみ） |
+| `crates/ruviform-plugin-export/tests/l1_runner_e2e.rs` | `MiniHost` L60-185 — `spawn`/`spawn_with_env`（`Command::spawn`+stdin/stdout 取得+reader スレッド demux）L69-112・`wait_exit` L172-184（`try_wait` poll + `Instant` デッドライン + `kill` — **2 つ目の reap ループ**） |
 
-ワークスペース内で `std::process::Command`/`Child` を扱うプロダクションコードは `l1/mod.rs` の 1 系統のみ（export 側は被 spawn 側で spawn/reap を持たない）。spawn/reap/kill は `Shared`/`converge`/waiter 起床/通知という **L1 固有の冪等収束機構と深く癒着**しており、汎用化可能な残滓は `Command::spawn` + `stdin/stdout` 取得 + `try_wait`/`wait`/`kill` の薄い呼出し（実質数十行）に留まる。
+ワークスペース内で `std::process::Command`/`Child` を扱うプロダクションコードは `l1/mod.rs` の 1 系統のみ（export 側は被 spawn 側で spawn/reap を持たない）。ただしテスト側には `MiniHost`（`l1_runner_e2e.rs` L60-185）が存在し、その `wait_exit` は `try_wait` poll + デッドライン + `kill` という **2 つ目の reap ループ**である（`l1-test-worker.rs` の heir spawn も fixture 用途で `Command` を使う）。spawn/reap/kill は `Shared`/`converge`/waiter 起床/通知という **L1 固有の冪等収束機構と深く癒着**しており、汎用化可能な残滓は `Command::spawn` + `stdin/stdout` 取得 + `try_wait`/`wait`/`kill` の薄い呼出し（`MiniHost` 側も同形、実質数十行）に留まる。
 
 ### pipe framing（stdio 上の長さプレフィクスフレーム I/O）
 
@@ -100,13 +104,14 @@ Issue の指示に従い、platform/process/ipc プリミティブの**実在す
 | --- | --- |
 | `crates/ruviform-plugin-host/src/l1/mod.rs` | `read_message` L433-449・`write_message` L452-457 — `[u32 LE payload_len][u8 kind][payload]`・`WIRE_MAX_PAYLOAD` 上限・`io::Result` |
 | `crates/ruviform-plugin-export/src/lib.rs` | `read_frame` L741-761 + `fill` L771-788 + `send` L792-797 — 同フレーム形・`ReadFail`（Truncated/LimitExceeded/Io）分類とフレーム境界 clean EOF の区別 |
-| テスト側コピー | `src/bin/l1-test-worker.rs` L140-162（`read_message`/`write_message` 第 3 コピー）・`tests/l1_proxy_e2e.rs` 内の最小 host 実装 |
+| テスト側コピー | `src/bin/l1-test-worker.rs` L140-163（`read_message`/`write_message` — 第 3 コピー）・`export/tests/l1_runner_e2e.rs` の最小 host 実装 `MiniHost`（`read_message` L187-204 + `send` の inline frame 書込 L122-129 — **第 4 コピー**） |
+| （参考: 複写でない再利用） | `host/tests/l1_proxy_e2e.rs` は最小 host を持たず、`#[path]` で実体の `l1` モジュールを取り込む（L16-18）— ソース再利用でありフレーム I/O の別実装ではない |
 
-codec（`wire::encode`/`decode`・`WIRE_FRAME_HEADER_LEN`・`WIRE_MAX_PAYLOAD`）は既に plugin-core 集約済み。重複しているのはストリーム上の読み書き糊 ~50-60 行/側であり、エラー分類は各側の契約（`io::Result` vs `ReadFail`+EOF 区別）で意図的に異なる。**この dedup は既に Issue #123 が「frame-I/O dedup ×4」として追跡**しており、予定されている着地は `wire` 層共通 helper（plugin-core）または test-only dedup — 新 foundation クレートではない。
+codec（`wire::encode`/`decode`・`WIRE_FRAME_HEADER_LEN`・`WIRE_MAX_PAYLOAD`）は既に plugin-core 集約済み。重複しているのはストリーム上の読み書き糊 ~50-60 行/側であり、エラー分類は各側の契約（`io::Result` vs `ReadFail`+EOF 区別 vs テスト側の `Result<_, String>`/`expect`）で意図的に異なる。「×4」の内訳は `l1/mod.rs`・export `lib.rs`・`l1-test-worker.rs`・`l1_runner_e2e.rs` の 4 実装（`l1_proxy_e2e.rs` は `#[path]` 取り込みで別実装を持たない）。**この dedup は既に Issue #123 が「frame-I/O dedup ×4」として追跡**しており、予定されている着地は `wire` 層共通 helper（plugin-core）または test-only dedup — 新 foundation クレートではない。
 
 ### wait / timeout
 
-`DRIVER_POLL_INTERVAL`（mod.rs:93）・`DRIVER_JOIN_POLL`（:97）・`DRIVER_JOIN_MARGIN`（:102）・`recv_timeout` による有界待機（`spawn_rx` :1046・`hello_rx` :1107・`reply_rx` :1283・driver poll :648）・`reap`/`join_threads` の `Instant` デッドライン（:604-624・:1784-1797）。全て `std` の `mpsc::recv_timeout`/`Instant`/`thread::sleep` の直接使用であり、共有抽象の対象となる重複は存在しない。
+`DRIVER_POLL_INTERVAL`（mod.rs:93）・`DRIVER_JOIN_POLL`（:97）・`DRIVER_JOIN_MARGIN`（:102）・`recv_timeout` による有界待機（`spawn_rx` :1046・`hello_rx` :1107・`reply_rx` :1283・driver poll :648）・`reap`/`join_threads` の `Instant` デッドライン（:604-624・:1784-1797）。全て `std` の `mpsc::recv_timeout`/`Instant`/`thread::sleep` の直接使用であり、プロダクションでは共有抽象の対象となる重複は存在しない。ただしテスト側 `MiniHost::wait_exit`（`l1_runner_e2e.rs` L172-184）が `try_wait` poll + `Instant` デッドライン + `kill` という **2 つ目の wait/reap ループ**（~13 行・テスト限定）を持つ — `std` プリミティブの直接使用で共有抽象を要する規模ではないが、「wait/timeout の重複ゼロ」はプロダクション範囲の記述として読むべきである。
 
 ### dlopen / dynamic loading（#114 追加分を含む）
 
@@ -126,7 +131,7 @@ codec（`wire::encode`/`decode`・`WIRE_FRAME_HEADER_LEN`・`WIRE_MAX_PAYLOAD`�
 
 ### 消費者カウント（正直な評価）
 
-OS サービス利用「箇所」は増えたが、**独立した利用「ケース」は依然 1 系統**: L1 wire（shm+spawn+pipe）は host/export に分かれた同一プロトコルの両半であり、wire 契約は既に plugin-core で共有済み。dlopen は 3 サイトあるが外部クレートが共有抽象を担う。thread-priority は単一利用者のまま。「2 番目の OS サービス利用者」の出現というトリガ文はコード上の 2 実装を指したが、意味のある重複（同一責務を担う知識の分散）としては、レイアウトは正本化済み・残る糊は役割非対称かつ薄い。
+OS サービス利用「箇所」は増えたが、**独立した利用「ケース」は依然 1 系統**: L1 wire（shm+spawn+pipe）は host/export に分かれた同一プロトコルの両半であり、wire 契約は既に plugin-core で共有済み。テスト側の `l1-test-worker`（runner 役割ミラー）と `MiniHost`（owner 役割ミラー）はこの「1 プロトコル・2 役割」を検証用に各々複写するものであり、利用ケースを増やすものではない — ただし複写の存在は実重複量に正直に計上する。dlopen は 3 サイトあるが外部クレートが共有抽象を担う。thread-priority は単一利用者のまま。「2 番目の OS サービス利用者」の出現というトリガ文はコード上の 2 実装を指したが、意味のある重複（同一責務を担う知識の分散）としては、レイアウトは正本化済み・残る糊は役割非対称かつ薄い（テストミラーを含めても責務は同一プロトコルの検証に閉じる）。
 
 ## 決定サマリ
 
@@ -135,7 +140,7 @@ OS サービス利用「箇所」は増えたが、**独立した利用「ケー
 | a | 共通 `platform`/`process`/`ipc` クレートの新設 | **延期継続（抽出しない・keep local）** — 方針書の分割判断の軸を現状満たさず、再トリガ条件を具体化して保留に戻す |
 | b | frame-I/O dedup | **新クレートでは解決しない** — Issue #123 の既定方針どおり plugin-core `wire` 層の共通 helper（または test-only dedup）に委ねる。`wire` は host/export 双方が既に依存する正本位置 |
 | c | dlopen 抽象 | **共通化しない** — `libloading`/`clack-host` が既に共有実装。規格固有 ABI 知識は adapter 責務（OFX/cpal 先例） |
-| d | 暫定封じ込め | **現行維持** — `shared_memory` は `l1::shm`/export `shm` に限定（採用条件）・`unsafe` は 4 箇所の scoped サイトに限定・spawn/reap/wait は `l1/` モジュール内 |
+| d | 暫定封じ込め | **現行維持** — `shared_memory` は公開 API・feature 名に露出しない（採用条件の **public-API 封じ込めは成立**。直接利用はプロダクション 2 モジュール `l1::shm`/export `shm` + テスト 2 ターゲット `l1-test-worker.rs`/`l1_runner_e2e.rs` の計 4 ファイル）・`unsafe` は scoped サイト計 8 箇所（プロダクション 4 + テストミラー 4）に限定・spawn/reap/wait は `l1/` モジュール + `MiniHost` テストミラー内 |
 
 ## 判定根拠
 
@@ -144,17 +149,17 @@ OS サービス利用「箇所」は増えたが、**独立した利用「ケー
 | 分割判断の軸 | 評価 |
 | --- | --- |
 | 独立利用 | **不成立** — 抽出候補の API 単体では利用者非依存の意味を持たない。shm 両半は L1 役割非対称、spawn/reap は `converge`/waiter 意味に癒着 |
-| 依存・可搬性 | **既達成** — OS/`unsafe`/外部依存の分離はモジュール封じ込めで済んでいる（`shared_memory` は 2 モジュール内、libloading/clack-host は adapter feature 内） |
+| 依存・可搬性 | **既達成** — OS/`unsafe`/外部依存の分離は封じ込めで済んでいる（`shared_memory` の直接利用はプロダクション 2 モジュール + テスト 2 ターゲット内に留まり、libloading/clack-host は adapter feature 内） |
 | 契約 | **抽出不能な部分が核心** — `bytes`/`bytes_mut` の SAFETY 不変条件は strict-alternation プロトコル依存であり、汎用クレートが所有できない。呼出し側がプロトコル知識を供給する限り、汎用側が所有するのは `Shmem` の薄い所有権のみ |
 | 開発・互換性 | **時期尚早** — #117（bundle 子: 1 子 N インスタンス）・#118（video/NONRT データ面: shm レイアウト見直し）・#120（共有リーパー/io 多重化: `try_wait` poll → poll/epoll/IOCP イベント駆動）がまさに抽出候補面を再設計する。今 API 化すると再設計前の形を固定する |
-| 安全性 | **現状で局所化済み** — 監査対象の `unsafe` は 2 モジュール × 2 箇所の scoped サイトに限定済み。抽出しても SAFETY 論証自体は利用側に残るため監査範囲は実質縮小しない |
+| 安全性 | **現状で局所化済み** — 監査対象の `unsafe` は計 8 箇所の `#[expect(unsafe_code)]` scoped サイトに限定済み（プロダクション: `l1/shm.rs`・export `shm.rs` 各 2 箇所 / テストミラー: `l1-test-worker.rs`・`l1_runner_e2e.rs` 各 2 箇所）。抽出しても SAFETY 論証自体は利用側に残るため監査範囲は実質縮小しない |
 | ビルド | **根拠なし** — 実測なし |
 
 「分割しない条件」（方針書 L307）のうち「実装詳細のためだけに `pub` を増やす」「依存 DAG が複雑化するだけ」「利用者も保証契約も未定」に該当する。
 
 ### 実重複量
 
-正本化済み（`wire::shm`・codec）を除く残存重複は attach 糊 ~5 行・`unsafe` accessor 同型 ~30 行・LE get/put ~23 行・frame I/O ~50-60 行/側。**新クレート 1 つ分に満たない ~100-200 行の糊**であり、その大半は `shared_memory`/`std` の再ラップ（wrapper over wrapper）になる。行数は補助指標だが、契約・所有権の違い（上表）が伴わないため分割理由にならない。
+正本化済み（`wire::shm`・codec）を除く残存重複は、プロダクション 2 側で attach/create 糊 ~5 行/側・`unsafe` accessor 同型 ~30 行/側・LE get/put ~23 行/側・frame I/O ~50-60 行/側の **~100-200 行の糊**。テスト側を含めた全量では `unsafe` accessor 計 8 サイト・LE get/put 計 4 コピー・frame I/O 計 4 実装に加え、`l1-test-worker` の `Segment`/`process_block` ミラー（L243-422）と `MiniHost` ミラー（`l1_runner_e2e.rs` L60-368）という検証目的の手続き複写が存在し、数百行規模になる。ただしミラー分は同一 wire 契約を両役割から検証する意図的複写であり、抽出可能な新しい共有知識ではない。糊の大半は `shared_memory`/`std` の再ラップ（wrapper over wrapper）になる。行数は補助指標だが、契約・所有権の違い（上表）が伴わないため分割理由にならない。
 
 ### 依存 DAG 帰結
 
@@ -181,10 +186,10 @@ OS サービス利用「箇所」は増えたが、**独立した利用「ケー
 
 1. L1 wire プロトコル外の**独立した** OS サービス利用者が出現する（例: #117 bundle の汎用 worker pool 管理、crash-report/supervisor プロセス、sandboxed decoder、GPU process 分離）。
 2. #120 の event-driven reaper/io 多重化が実装された上で、spawn/reap/wait 系コードが依然 ≥2 クレートに重複している。
-3. #118 等で第 2 の shm レイアウトが導入され、`unsafe` slice accessor + validation パターンが 3 箇所目に出現する。
+3. #118 等で**第 2 の shm レイアウト**が導入され、そのレイアウト用の `unsafe` slice accessor + validation パターンが **第 2 レイアウト側の 3 箇所目**に出現する（現行レイアウトの accessor/validation ミラーは既に計 4 ファイル — プロダクション 2 + テスト 2 — に存在するため、既存レイアウトの複写増加ではトリガしない）。
 4. #123 の wire 層 dedup が不十分と判明し、`platform::ipc::framed` のような共置が必要になる。
 
-それまでは現行の封じ込めを維持する: `shared_memory` は `l1::shm`/export `shm` 内に限定（公開 API・feature 名への露出禁止）・wire 由来の dedup は plugin-core `wire` 経由（#123）・dlopen は adapter 内 scoped `unsafe` に限定。
+それまでは現行の封じ込めを維持する: `shared_memory` の公開 API・feature 名への露出禁止（直接利用はプロダクション 2 モジュール + テスト 2 ターゲットの現状のまま）・wire 由来の dedup は plugin-core `wire` 経由（#123）・dlopen は adapter 内 scoped `unsafe` に限定。
 
 ## 既存設計・ADR との整合
 
@@ -206,7 +211,7 @@ OS サービス利用「箇所」は増えたが、**独立した利用「ケー
 - [x] #114 で追加された dlopen 利用者（adapter `host` feature + runner bins）を評価対象に含めた
 - [x] #117/#118/#120 の OPEN 状態と各スコープを確認し、premature 判定の根拠に使用
 - [x] frame-I/O dedup の既存追跡（#123）を確認し、新クレートで解決しない方針と整合させた
-- [ ] 本書の status 承認（reviewer による `draft` → `approved`）
+- [x] レビュー指摘の census 訂正（`unsafe` サイト計数 8/4 ファイル・`shared_memory` 直接利用範囲・テスト側ミラー 2 件の計上・`l1_proxy_e2e` 帰属訂正・`wire::shm` 範囲・再トリガ条件 3 の明確化）を反映し、status を `draft` → `approved` へ
 
 ## Sources
 
@@ -216,5 +221,5 @@ OS サービス利用「箇所」は増えたが、**独立した利用「ケー
 - [プラグイン分離設計](plugin-isolation.md)・[プラグイン分離戦略 ADR](../adr/plugin-isolation-strategy.md)
 - [Ruviform architecture design baseline](ruviform-architecture-design-baseline.md)（層構造・依存方向の正本）
 - [audio-device backend 選定 ADR](../adr/select-audio-device-backend.md)（adapter confinement 先例）
-- コード棚卸し対象: `crates/ruviform-plugin-host/src/l1/{mod.rs,shm.rs,data.rs}`、`crates/ruviform-plugin-export/src/{lib.rs,shm.rs}`、`crates/ruviform-plugin-core/src/wire.rs`、`crates/ruviform-plugin-ofx/src/ffi/loader.rs`、`crates/ruviform-plugin-{clap,vst3}/src/host.rs`、`crates/ruviform-{rt,exec}/src/`
+- コード棚卸し対象: `crates/ruviform-plugin-host/src/l1/{mod.rs,shm.rs,data.rs}`、`crates/ruviform-plugin-host/src/bin/l1-test-worker.rs`、`crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs`、`crates/ruviform-plugin-export/src/{lib.rs,shm.rs}`、`crates/ruviform-plugin-export/tests/l1_runner_e2e.rs`、`crates/ruviform-plugin-core/src/wire.rs`、`crates/ruviform-plugin-ofx/src/ffi/loader.rs`、`crates/ruviform-plugin-{clap,vst3}/src/host.rs`、`crates/ruviform-{rt,exec}/src/`
 - Issue [#122](https://github.com/scarecrow173/ruviform/issues/122)、[#76](https://github.com/scarecrow173/ruviform/issues/76)、[#101](https://github.com/scarecrow173/ruviform/issues/101)、[#114](https://github.com/scarecrow173/ruviform/issues/114)、[#117](https://github.com/scarecrow173/ruviform/issues/117)、[#118](https://github.com/scarecrow173/ruviform/issues/118)、[#120](https://github.com/scarecrow173/ruviform/issues/120)、[#123](https://github.com/scarecrow173/ruviform/issues/123)
