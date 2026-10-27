@@ -30,6 +30,7 @@ relations:
   derived-by:
     - "docs/designs/plugin-gui-poc.md"
     - "docs/adr/plugin-gui-embedding.md"
+    - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
   verifies: []
   verified-by: []
   references: []
