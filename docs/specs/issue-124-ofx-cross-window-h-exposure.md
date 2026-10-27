@@ -100,6 +100,7 @@ Issue #98 の各 IR が「個別修正」と記録した残件（Issue #124）�
 - facade の `!Send` 契約・threading model の変更（Rust 側は不変。C 層の防御強化のみ）
 - catalog/effect token・quarantine・render staging・staging bottom-left 露出など、issue スコープ外の bridge 機構
 - catalog が host より長生きする一般ケースの string view 保護（loader は `Rc<NativeHost>` で host ≥ catalog を既に保証）
+- `catalog_open` 以外の foreign window（`rv_ofx_instance_*`/`rv_ofx_instance_render`・`rv_ofx_catalog_close` Unload 等）の同型防御 — lease 非保有経路は facade `!Send` 単一スレッド契約に依存（後続 issue で検討）
 - GetClipPreferences out-args → instance clip props への書き戻し（本 spec は descriptor 宣言の clone のみ）
 
 ## Requirements

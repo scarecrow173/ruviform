@@ -71,7 +71,7 @@ approved plan `docs/plans/implement-issue-124-ofx-window-lease.md`（Issue #124�
 
 - [x] `tests/fixture/fixture_control.h` に `FX_PROBE_CLIP_PROPS` を追加し、`ofx_fixture_probes.c` に instance clip property set が descriptor 宣言 `kOfxImageEffectPropSupportedComponents=RGBA`（Source/Output 両方）を返す probe を実装。bridge_min/bridge_native/native_host の probe ループを 6 件へ拡張
 - [x] `tests/bridge_host_lease.rs`（新規）に hostile callback テストを追加: window 中 `rv_ofx_host_free` を走らせ `kOfxStatErrBadHandle`・`*catalog==NULL`・二度目 free no-op・新 session 成功を assert。`OfxSetHost` 相当の callback 内で `g_api` 分離を固定（api ポインタが window 中に有効・`api.host` が poison で NULL 化）
-- [x] `mise run test-ofx` で pre-fix red を確認・記録（probe=ErrUnknown/非ゼロ・api host non-NULL）
+- [x] `mise run test-ofx` で contract test green を確認。pre-fix red run は未記録 — pre-fix では `api->host` read 自体が UAF のため deterministic な red ログ取得を優先せず、post-fix 契約を直接 assert する形にした（IR `Decisions During Implementation` に記録の決定）
 
 ### B2 — implement
 

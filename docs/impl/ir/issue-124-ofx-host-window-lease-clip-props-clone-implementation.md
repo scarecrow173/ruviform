@@ -143,3 +143,16 @@ metadata:
 
 - Issue #124 を close（本 commit の merge bookkeeping で対応）
 - `l1_proxy_e2e` の flake（`wedged_child_write_*`/`rejected_block_replies_*` が負荷下で散発）は本件範囲外 — Issue #114 の既存 lane 問題として別途報告候補
+
+### Review residuals（non-blocking）
+
+レビューで挙がった non-blocking 残件を記録する（実装自体は approved・本節は記録のみ）。
+
+- **same-shape UAF が `catalog_open` 外に残存**: 非 catalog 系 foreign window（`rv_ofx_instance_create`/`rv_ofx_instance_changed`/`rv_ofx_instance_preferences`/`rv_ofx_instance_render`→`rv_clip_prefs_validate`/`rv_ofx_instance_destroy`/`rv_ofx_instance_release`、`rv_ofx_catalog_close` の Unload）は lease を取らず、window 後の `rv_po_get`/`strcmp`/`fx_clipGet*` が `host_reclaim` で解放済みの pool string に触れ得る。facade `!Send` 単一スレッド契約への依存 — 後続 issue を parent が起票
+- **nested-close edge**: dead-host teardown 中の `rv_ofx_catalog_close` は outer frame が `g_mu` 保有中に実行される — foreign Unload が host suite 上で thread spawn+join すれば deadlock（pre-fix の UAF より strictly better・edge ケース）
+- `rv_ofx_catalog_close` に re-entrancy guard なし — 自身の Unload window 内での再入 close は double-free
+- `h != g_active` の ABA: raw-pointer identity — allocator reuse が stale `h` を新 session に alias し得る。SDK handle には generation token があるが host pointer は tokenize されていない（API shape 固有の制約）
+- `g_api.host` confused-deputy: session 跨ぎで前 session の host pointer を読み得る + off-lock read は形式的に non-atomic（実用上 pointer-width で benign）
+- error precedence nit: `sh()` エラーが BadHandle ではなく元 status を返す
+- pre-existing latent: `seed()` が calloc 成功確認前に `seeded=1` を立てる → `rv_po_reset` NULL-deref リスク（別修正候補）
+- test coverage: ~7 window type 中 4 を hostile callback で検証（同一 mechanism の共有経路）
