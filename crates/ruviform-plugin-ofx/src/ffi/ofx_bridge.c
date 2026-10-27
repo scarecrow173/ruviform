@@ -22,6 +22,13 @@ const void *rv_fetch_suite(void *self, const char *name, int ver) {
     return NULL;
 }
 
+/* the OfxHost handed to foreign code (OfxSetHost / plugin setHost) lives
+ * in static storage: a pointer a plugin may retain past a call window
+ * must not point into the reclaimable RvHost block. fetchSuite stays
+ * valid for the process lifetime; host is rebound per session and
+ * cleared the instant the host is poisoned */
+static OfxHost g_api = { NULL, rv_fetch_suite };
+
 static void img_free(RvImg *im);
 static void stage_free(void *p);
 
@@ -33,10 +40,9 @@ void *rv_ofx_host_new(void) {
     if (g_active) { rv_unlock(); return NULL; }
     h = (RvHost *)calloc(1, sizeof(RvHost));
     if (!h) { rv_unlock(); return NULL; }
-    h->api.fetchSuite = rv_fetch_suite;
     h->props = rv_po_new(0);
     if (!h->props) { free(h); rv_unlock(); return NULL; }
-    h->api.host = (OfxPropertySetHandle)(uintptr_t)h->props->tok;
+    g_api.host = (OfxPropertySetHandle)(uintptr_t)h->props->tok;
     h->alive = 1;
     g_active = h;
     rv_unlock();
@@ -76,14 +82,33 @@ static void effect_free(RvEffect *e) {
     free(e);
 }
 
+/* caller holds g_mu; h is already poisoned   g_active cleared, alive=0,
+ * catalogs detached, g_api.host NULL. reclaim the host-owned pools and
+ * the block itself */
+static void host_reclaim(RvHost *h) {
+    RvStrNode *s = h->strings;
+    while (s) { RvStrNode *n = s->next; free(s->s); free(s); s = n; }
+    /* rv_mem_free revokes the H_MEMORY token, unlinks, frees buffer+node */
+    while (h->mem) (void)rv_mem_free(h, h->mem->p);
+    if (h->props) { rv_tok_revoke(h->props->tok); rv_po_free(h->props); }
+    free(h);
+}
+
+/* caller holds g_mu. drops one foreign-call lease; a host poisoned while
+ * a window was open is reclaimed when the last lease drops. callers must
+ * not dereference h after this returns */
+static void host_unlease(RvHost *h) {
+    if (h->foreign && --h->foreign == 0 && !h->alive) host_reclaim(h);
+}
+
 void rv_ofx_host_free(void *vh) {
     RvHost *h = (RvHost *)vh;
-    RvStrNode *s;
     if (!h) return;
     if (rv_lock()) return;
     if (h != g_active || !h->alive) { rv_unlock(); return; }
     g_active = NULL;
     h->alive = 0;
+    g_api.host = NULL;
     while (h->catalogs) {
         /* catalogs must be closed first; detach anyway and poison the
          * back-pointer so a late close degrades to no-op */
@@ -91,12 +116,9 @@ void rv_ofx_host_free(void *vh) {
         h->catalogs = d->next;
         d->host = NULL;
     }
-    s = h->strings;
-    while (s) { RvStrNode *n = s->next; free(s->s); free(s); s = n; }
-    /* rv_mem_free revokes the H_MEMORY token, unlinks, frees buffer+node */
-    while (h->mem) (void)rv_mem_free(h, h->mem->p);
-    if (h->props) { rv_tok_revoke(h->props->tok); rv_po_free(h->props); }
-    free(h);
+    /* an open foreign-call window still dereferences h after re-locking;
+     * poison above is immediate, reclaim waits for the last lease drop */
+    if (!h->foreign) host_reclaim(h);
     rv_unlock();
 }
 
@@ -151,17 +173,22 @@ static int entry_admit(RvHost *h, RvCatalog *c, RvEffect *e) {
     rv_seed_i(e->props, kOfxImageEffectPluginPropSingleInstance, 1, 0);
     e->props_tok = e->props->tok;
 
-    /* unlock around foreign calls */
+    /* unlock around foreign calls; the caller holds a lease on h so the
+     * block stays valid across the window   alive may still drop */
     rv_unlock();
-    raw->setHost(&h->api);
+    raw->setHost(&g_api);
     st = call_action(raw, kOfxActionLoad, NULL, NULL, NULL);
     rv_lock();
+    /* a Load that actually succeeded stays owed an Unload even when the
+     * host died inside the window   the rejection/close path balances it */
+    if (st == kOfxStatOK) e->loaded = 1;
+    if (!h->alive) return kOfxStatErrBadHandle;
     if (st != kOfxStatOK) return st;
-    e->loaded = 1;
 
     rv_unlock();
     st = call_action(raw, kOfxActionDescribe, e->tok ? (void *)(uintptr_t)e->tok : NULL, NULL, NULL);
     rv_lock();
+    if (!h->alive) return kOfxStatErrBadHandle;
     if (st != kOfxStatOK) return st;
 
     /* Filter required across whole advertised context list */
@@ -182,6 +209,7 @@ static int entry_admit(RvHost *h, RvCatalog *c, RvEffect *e) {
         rv_tok_revoke(o->tok);
         rv_po_free(o);
     }
+    if (!h->alive) return kOfxStatErrBadHandle;
     if (st != kOfxStatOK) return st;
 
     /* validate clips: Source + Output present and RGBA */
@@ -240,21 +268,31 @@ int rv_ofx_catalog_open(void *vh, const void *get_count,
     if (!vh || !gc || !gp || !catalog) return kOfxStatErrBadHandle;
     *catalog = NULL;
     if (rv_lock()) return kOfxStatFailed;
-    if (!h->alive) { rv_unlock(); return kOfxStatErrBadHandle; }
+    /* pointer comparison first: a stale h is rejected without a deref */
+    if (h != g_active || !h->alive) { rv_unlock(); return kOfxStatErrBadHandle; }
+    /* lease: h stays allocated across every foreign window below even if
+     * teardown poisons it mid-call; reclaim waits for the lease drop */
+    h->foreign++;
 
     rv_unlock();
     if (sh) {
-        OfxStatus s = sh(&h->api);
-        if (s != kOfxStatOK) return (int)s;
+        OfxStatus s = sh(&g_api);
+        if (s != kOfxStatOK) {
+            rv_lock();
+            host_unlease(h);
+            rv_unlock();
+            return (int)s;
+        }
     }
     n = gc();
     rv_lock();
-    if (n < 0) { rv_unlock(); return kOfxStatErrValue; }
-    /* the unlocked foreign window above may have raced host teardown */
-    if (!h->alive) { rv_unlock(); return kOfxStatErrBadHandle; }
+    /* the unlocked foreign window above may have raced host teardown;
+     * the lease keeps h readable so alive is a defined check */
+    if (!h->alive) { host_unlease(h); rv_unlock(); return kOfxStatErrBadHandle; }
+    if (n < 0) { host_unlease(h); rv_unlock(); return kOfxStatErrValue; }
 
     c = (RvCatalog *)calloc(1, sizeof(RvCatalog));
-    if (!c) { rv_unlock(); return kOfxStatErrMemory; }
+    if (!c) { host_unlease(h); rv_unlock(); return kOfxStatErrMemory; }
     c->host = h;
     c->next = h->catalogs;
     h->catalogs = c;
@@ -265,6 +303,7 @@ int rv_ofx_catalog_open(void *vh, const void *get_count,
         rv_unlock();
         raw = gp(i);
         rv_lock();
+        if (!h->alive) { rc = kOfxStatErrBadHandle; break; }
         e = effect_new(0, 0);
         if (!e) { rc = kOfxStatErrMemory; break; }
         e->native_index = i;
@@ -303,7 +342,17 @@ int rv_ofx_catalog_open(void *vh, const void *get_count,
             *p = e;
         }
     }
+    if (!h->alive) {
+        /* teardown ran inside a window: entries hold host-pool strings
+         * that die with reclaim, so the partial catalog is torn down in
+         * place instead of escaping to the caller. The catalog was
+         * already detached by host poison, so close is a defined path */
+        rc = kOfxStatErrBadHandle;
+        rv_ofx_catalog_close(c);
+        c = NULL;
+    }
     *catalog = c;
+    host_unlease(h);
     rv_unlock();
     return rc;
 }
@@ -544,7 +593,9 @@ int rv_ofx_instance_new(void *vd, void **out) {
     i->params = rv_params_clone(d->params, d->nparams, g_active, i->tok);
     if (d->nparams && !i->params) { effect_free(i); rv_unlock(); return kOfxStatErrMemory; }
     i->nparams = d->nparams;
-    /* clone clips */
+    /* clone clips   the instance clip property set mirrors the
+     * descriptor-declared records so instance actions see the contract
+     * the plugin wrote during DescribeInContext (Issue #124) */
     {
         RvClip *c;
         for (c = d->clips; c; c = c->next) {
@@ -554,6 +605,14 @@ int rv_ofx_instance_new(void *vd, void **out) {
             q->props = rv_po_new(i->tok);
             q->tok = rv_tok_new(H_CLIP, q, i->tok);
             if (q->props) q->props_tok = q->props->tok;
+            if (q->props && c->props &&
+                rv_po_clone(q->props, c->props) != kOfxStatOK) {
+                rv_tok_revoke(q->tok);
+                rv_tok_revoke(q->props->tok);
+                rv_po_free(q->props);
+                free(q);
+                effect_free(i); rv_unlock(); return kOfxStatErrMemory;
+            }
             q->eff = i;
             q->next = i->clips;
             i->clips = q;

@@ -56,7 +56,8 @@ enum FixtureProbe {
     FX_PROBE_PARAM,
     FX_PROBE_MEMORY,
     FX_PROBE_WORKER,
-    FX_PROBE_READONLY
+    FX_PROBE_READONLY,
+    FX_PROBE_CLIP_PROPS
 };
 
 typedef void (*FixtureObserver)(int event, int native_index);

@@ -51,7 +51,7 @@ mod t {
             assert_eq!(rv_ofx_instance_configure(e, 3, 2, 30.0), 0);
             assert_eq!(rv_ofx_param_set(e, 0, 0, 3.0, 0, 1), 0);
             assert_eq!(rv_ofx_instance_create(e), 0);
-            for which in 0..5 {
+            for which in 0..6 {
                 assert_eq!(probe(which), 0, "probe({which}) failed");
             }
             assert_eq!(rv_ofx_instance_destroy(e), 0);
