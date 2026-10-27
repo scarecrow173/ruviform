@@ -28,6 +28,7 @@ relations:
     - "docs/adr/ui-architecture-webview-hybrid.md"
     - "docs/adr/ui-tech-selection-poc.md"
     - "docs/designs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/specs/issue-119-l1-wire-version-policy.md"
   refines: []
   refined-by: []
   derives-from:
@@ -115,7 +116,7 @@ Issue #115 — #76 で L1 インスタンスへの `OpenGui`/`CloseGui` 要求�
 
 - **GUI thread affinity**: CLAP `clap_plugin_gui` の全メソッドは `[main-thread]` 呼出し規約（`create`/`destroy`/`set_parent`/`set_size`/`show`/`hide`/`set_scale`/…）、VST3 `IPlugView` も UI/main thread 規約。L1 ではプラグインは**子プロセス**内に生きるため、GUI 呼出しは「子プロセスの UI スレッド + メッセージポンプ」でサービスする必要がある
 - **現行 runner との不整合**: `ruviform-plugin-export` は stdin/stdout frame の単一スレッドループで、GUI を動かすスレッドモデルを持たない。仮に host 側 short-circuit を外して動詞を通しても、コマンドループスレッド上で `open_gui` を呼ぶ構造は規格の main-thread 意味論もイベントポンプ要件も満たさない — 実装には runner の再設計（UI スレッド起動・コマンドの UI スレッド marshaling・pump 統合）が前提になる
-- **wire 語彙不足**: 現行 wire は `OpenGui`/`CloseGui` のみで GUI lifecycle の実動詞（`set_size`/`show`/`hide`/`set_scale`/`adjust_size` 相当）を持たない。追加は wire policy 上 `WIRE_VERSION` bump が前提（`wire.rs` — "new verbs arrive only with a [`WIRE_VERSION`] bump"）であり、その枠組み自体が Issue #119 の未決事項
+- **wire 語彙不足**: 現行 wire は `OpenGui`/`CloseGui` のみで GUI lifecycle の実動詞（`set_size`/`show`/`hide`/`set_scale`/`adjust_size` 相当）を持たない。追加は wire policy 上 `WIRE_VERSION` bump が前提（`wire.rs` — "new verbs arrive only with a [`WIRE_VERSION`] bump"）であり、その枠組みは Issue #119 で単一最新バージョン方針として確定済み
 - **`GuiParentToken` の非対称性**: `u64` トークンは HWND（カーネルハンドル・セッション共有可）や XID（サーバグローバル ID）を運べるが、`NSView *` は**プロセス局所ポインタ**で他プロセスには意味を持たない。トークン doc が HWND/NSView pointer を例示する時点で in-process 意味論が埋め込まれており、この非対称性自体が「全 OS で統一できる越境意味論が存在しない」ことを裏付ける
 
 ## 採否判定基準と判定
@@ -138,7 +139,7 @@ Issue #115 — #76 で L1 インスタンスへの `OpenGui`/`CloseGui` 要求�
 
 ### 解除条件（re-engagement triggers — 全て揃った時点で [impl] Issue 起票を再検討）
 
-- **(a) wire versioning 枠組みの確定** — Issue #119。GUI lifecycle 動詞（size/show/hide/scale 系）の追加は `WIRE_VERSION` bump と capability 設計を前提とし、現行 `capabilities != 0` を `Malformed` 拒否する hardening とも整合させる必要がある
+- **(a) wire versioning 枠組みの確定** — Issue #119 で確定済み（`docs/specs/issue-119-l1-wire-version-policy.md`・`docs/designs/plugin-l1-out-of-process.md`「ワイヤバージョン方針」）。単一最新バージョン方針・交渉機構なし・非互換変更で `WIRE_VERSION` bump — GUI lifecycle 動詞（size/show/hide/scale 系）の追加はその bump を要する非互換変更として扱い、capability 有効化もその時点でプロトコル変更として設計する（現行 `capabilities != 0` を `Malformed` 拒否する hardening と整合）
 - **(b) child runner の UI スレッド + event pump 設計** — 単一スレッド stdin/stdout ループと規格 main-thread 意味論の両立設計（コマンドの UI スレッドへの marshaling・`process` 脚との分離維持）
 - **(c) per-OS 実現可能性の再評価** — Windows: 越境 `SetParent` + WebView2 foreign-parent の実機検証 / Linux: X11 セッション限定 XEmbed の受容 or Wayland 新機構の出現 / macOS: 公認の越境 view 機構の出現（既存 `CAContext`/`CALayerHost` 系への入力転送追加を含む）。少なくとも 1 OS で robust な経路が立つことが最低条件
 - **(d) 需要の顕在化** — GUI 必須かつクラッシュ隔離が同時に要求されるプラグイン利用形態の出現（L0 で代替不能なケース）

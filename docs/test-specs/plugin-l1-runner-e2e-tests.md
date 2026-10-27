@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "plugin L1 runner（ruviform-plugin-export）E2E テスト仕様"
 created: "2026-10-25"
-updated: "2026-10-25"
+updated: "2026-10-27"
 owners: []
 relations:
   source: []
@@ -32,6 +32,7 @@ relations:
   verifies:
     - "docs/specs/plugin-l1-out-of-process.md"
     - "docs/designs/plugin-l1-out-of-process.md"
+    - "docs/specs/issue-119-l1-wire-version-policy.md"
   verified-by: []
   references: []
   defers: []
@@ -68,7 +69,7 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed・AC6）・approved des
 
 - **正常系 E2E**: 最小 host 実装が `ruviform-plugin-l1-runner` を spawn（argv に `--ruviform-plugin-id`/`--ruviform-shm-key`）→ `Hello` → `Scan`（`Scanned` の `wire::Descriptor` が `GainPlugin` descriptor と等価）→ `Initialize`/`Activate`/`StartProcessing` → shm in-slot に既知入力を書き `BlockIn` → `BlockDone` → out-slot が gain 乗算後の値を持つ（gain 正当性）→ `SaveState`/`RestoreState` の往復 → `StopProcessing`/`Deactivate` → `Shutdown` で exit(0)
 - **argv 異常**: `--ruviform-plugin-id`/`--ruviform-shm-key` なし・未知引数 → usage/`Err` で非ゼロ終了・`Hello` を送らずハングしない
-- **shm header 不一致**: 引き渡した key が存在しない・header magic/形状が不正 → attach/header 検証で非ゼロ終了（定義済み拒否）
+- **shm header 不一致**: 引き渡した key が存在しない・header magic/`wire_version`/形状が不正 → attach/header 検証で非ゼロ終了（定義済み拒否 — `wire_version` 不一致は `Hello.version` と同一の厳密一致契約、Issue #119）
 - **panic → `PluginFailed`**: `process_host`（または `Initialize` 等）を panic する `ErasedPlugin` → catch され `Reply`/`BlockDone` が `Err(HostError::PluginFailed)` — 子は終了せず後続コマンドを受理し続ける（プロセス死亡ではない）
 - **非 Processing で `BlockIn`**: `StartProcessing` 前に `BlockIn` → `Reply`/`BlockDone` が `Err(HostError::Lifecycle(_))`（L0 と同一意味）
 - **version 不一致**: `Hello.version != WIRE_VERSION` → 親（test 側最小 host）が handshake 失敗として kill（proxy contract spec と整合 — runner 自体は version を送るだけ）
@@ -87,7 +88,7 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed・AC6）・approved des
 
 - proxy/host 側の `Failed` 遷移・pass-through・RT 脚（`plugin-l1-proxy-contract-tests.md` が担当）・wire codec/`Failed` 遷移表自体（`plugin-l1-wire-codec-tests.md` が担当）
 - 実プラグイン（CLAP/VST3/OFX）の L1 組込み — `GainPlugin` モックで検証（adapter の `run` 呼出しは adapter 側 Issue）
-- bundle 子（1 子 N インスタンス — runner は singleton）・wire バージョン進化・stderr 配管・自動再起動
+- bundle 子（1 子 N インスタンス — runner は singleton）・複数 wire バージョン共存/交渉（単一最新バージョン方針は Issue #119 で確定 — `docs/specs/issue-119-l1-wire-version-policy.md`）・stderr 配管・自動再起動
 - shm スロットレイアウトの所有（host 側 `l1/shm.rs` が作成 — runner は attach/検証のみ）・`shared_memory` の採否判断（design 記録どおり）
 - macOS/Linux でのローカル実証 — Windows ローカルのみ・3 OS は CI `verify` ジョブ（platform notes 下記）
 

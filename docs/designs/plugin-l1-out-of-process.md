@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）"
 created: "2026-10-25"
-updated: "2026-10-25"
+updated: "2026-10-27"
 owners: []
 relations:
   source: []
@@ -53,6 +53,8 @@ relations:
     - "docs/designs/issue-114-real-adapter-l1-e2e.md"
     - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
+    - "docs/specs/issue-119-l1-wire-version-policy.md"
+    - "docs/plans/implement-issue-119-l1-wire-version-policy.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -174,6 +176,16 @@ pub struct Descriptor {                 // PluginDescriptor の所有 wire 形
 - handshake: spawn → argv `--ruviform-plugin-id <id>` `--ruviform-shm-key <key>` → 子 `Hello` → 親 `Scan` → 子 `Scanned`（照合）→ `Instantiated{handle}` 応答。いずれか失敗・タイムアウト（`command_timeout`）で `Err(HostError::Ipc)` + child kill/reap。
 - データ型写像: `ProcessConfig`/`ProcessResult`/`GuiHandle`/`GuiParentToken`/`HostError` は core 共有型を codec が直接 encode/decode。`TransportInfo`/`Event`/`EventList`/`MediaTime` 系は **repr 固定の wire レイアウト**（accessor 経由で encode、ctor で decode — `repr(Rust)` の memcpy 横断はしない）。
 
+**ワイヤバージョン方針（Issue #119 で確定 — 初期開発期の単一バージョンポリシー）**:
+
+- サポートする wire プロトコルは常に**最新の単一バージョンのみ** — 旧バージョンの decode・変換・フォールバック・共存は実装しない。
+- `WIRE_VERSION` は通信契約の世代を表す単一整数 — 非互換なプロトコル変更時にのみ更新し、SemVer/Cargo バージョンとは連動させない。
+- `Hello.version` は厳密一致・不一致は handshake 失敗（kill + `HostError::Ipc`）— **バージョン交渉機構は追加しない**。SHM 側も同一契約: セグメント header の `wire_version` フィールドは `WIRE_VERSION` との厳密一致で検証する（runner は attach 時の不一致を非ゼロ終了で拒否、proxy 側は header write 後の `verify_header` が同一値を確認）。
+- 非互換変更 → `WIRE_VERSION` bump + ホスト/ランナーの同一版更新。内部リファクタや wire に影響しない Rust API 変更では bump しない。
+- `Hello.capabilities` は予約領域のまま非ゼロ `Malformed` 拒否を維持 — capability の有効化はその時点でプロトコル変更として設計し、bit 割当は現時点で行わない。
+- `WIRE_MAX_*` は安全上限として維持 — 変更時は送受信受理範囲・SHM 容量・既存拒否動作への影響を確認し、相互運用を壊す変更は bump 対象とする。上限交渉機構は設けない。
+- 複数バージョン対応は、独立配布されるホスト/ランナー間の互換が必要になった段階で再検討する（現行は同一ワークスペース・同一リビジョンで配布する前提）。
+
 ### 共有メモリデータ面
 
 - `shared_memory` の named segment を **インスタンス毎に 1 本**。proxy が `os_id` に一意 key（pid + slot + counter 由来）を生成して作成し、argv `--ruviform-shm-key` で子へ引き渡して attach。所有権は proxy、Destroy/drop で unlink。
@@ -281,7 +293,7 @@ spawn 引数の受け渡し・`CARGO_BIN_EXE_*` の利用は各 crate 内に閉�
 - 規格アダプタ（clap/vst3/ofx）の子プロセス組込み・実プラグイン L1 E2E | runner 形態の前提が本書で確定・別 Issue 級の配線 | 実プラグインでの L1 需要 | 検証がモック範囲に留まる
 - bundle 子（1 子 N インスタンス）| per-instance spawn の方が `Failed` 粒度に整合・単純 | メモリ/spawn コスト要求 | インスタンス数スケールに弱い
 - エンジン/利用側への L1 配線 | plugin-host の engine 消費自体が未実装 | engine プラグイン統合 Issue | L1 が consumer から到達不能
-- wire バージョニング/進化 | 初版 `WIRE_VERSION=1` で十分 | プロトコル改変要求 | 互換性対応コスト
+- 複数 wire バージョン共存・交渉機構 | Issue #119 で単一最新バージョン方針を確定（交渉機構・互換レイヤーなし・bump 判断基準は上記「ワイヤバージョン方針」に記録） | 独立配布されるホスト/ランナー間のバージョン互換が要求される段階 | 独立配布形態で新旧バージョンの混在が扱えない
 - stderr ログ配管 | inherit で運用可能・診断価値は副次的 | 子プロセスのログ解析要求 | クラッシュ時の手がかりが stderr 依存
 - video/NONRT プラグインの L1 経路 | 本 Issue は audio `process` 経路のみ | NONRT video port の分離要求 | video plugin は L1 不可
 - ドライバの共有リーパー/io 多重化 | per-instance 2 スレッドが最も単純明確 | インスタンス数増大 | スレッド数 = 2×instance のコスト

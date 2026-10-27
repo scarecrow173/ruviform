@@ -4,7 +4,7 @@ type: "spec"
 status: "proposed"
 title: "プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）"
 created: "2026-10-25"
-updated: "2026-10-25"
+updated: "2026-10-27"
 owners: []
 relations:
   source:
@@ -46,6 +46,8 @@ relations:
     - "docs/discovery/issue-114-real-adapter-l1-e2e.md"
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
+    - "docs/specs/issue-119-l1-wire-version-policy.md"
+    - "docs/plans/implement-issue-119-l1-wire-version-policy.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -116,6 +118,7 @@ Issue #76。#31 分割で L0（#74・CLOSED）の次に位置づけられた実�
 - **依存方向**: `ruviform-plugin-export` の許可依存はベースライン A.2（Domain foundations + Primitives + 拡張層 `ruviform-plugin-core`）に従う。plugin-host 側の追加依存（IPC/直列化・`ruviform-rt` 等の Primitives）はベースライン層ルール内に限定し、外部依存の採用は暫定規約（メンテナンス状況・ライセンス・依存木サイズの確認と理由記録）に従う — shm IPC 機構の採否は design で確定
 - **`unsafe` 原則禁止**: 共有メモリ・プロセス制御の実装は安全 API を持つ外部クレートを内部依存に閉じ込める方針を優先し、自前 `unsafe` は局所許可が必要な場合のみ（`rtrb` 先例）
 - **ワイヤ境界**: コマンド直列化・共有メモリレイアウトはワイヤ仕様として定義し、所有境界（plugin-core / host / export のどこが持つか）は design で確定（ベースライン層順序との整合が課題 — discovery 記録済み）
+- **ワイヤバージョン方針（Issue #119 で確定）**: サポートする wire プロトコルは常に最新の単一バージョンのみ — `Hello.version` は厳密一致で不一致は handshake 失敗（kill + `HostError::Ipc`）、shm header の `wire_version` も同一の厳密一致検証とする。バージョン交渉・上限交渉機構・旧バージョンの decode/変換/共存は実装しない。`WIRE_VERSION` は非互換なプロトコル変更時のみ更新する通信契約の世代番号（SemVer/Cargo バージョン非連動）で、bump 時はホスト/ランナーを同一版で更新する。`Hello.capabilities` は予約領域のまま非ゼロ `Malformed` 拒否を維持、`WIRE_MAX_*` は固定安全上限として維持する。複数バージョン対応は独立配布のホスト/ランナー互換が必要になった段階で再検討する
 - `rt_` 命名の RT 契約テストを持ち `mise run test-rt` で選択可能。非 RT 系テスト名に `rt_` を含めない
 
 ## Acceptance Criteria
@@ -134,7 +137,7 @@ Issue #76。#31 分割で L0（#74・CLOSED）の次に位置づけられた実�
 - 自動再起動・監視ポリシー | 状態復元はプラグイン責務の設計判断（#31）| supervisor 型運用要求の発生 | 手動復旧の運用負荷
 - 規格アダプタの子プロセス組込み（実 CLAP/VST3 の L1 実行） | runner 形態の設計確定が前提・別 Issue 級の配線 | 実プラグインでの L1 需要 | 検証がモック範囲に留まる
 - エンジン/利用側への L1 選択配線 | plugin-host の engine 消費自体が未実装 | engine プラグイン統合 Issue | L1 が consumer から到達不能
-- ワイヤプロトコルのバージョニング/進化 | 初版で十分 | プロトコル改変の要求発生 | 互換性対応コスト
+- 複数 wire バージョン共存・交渉機構 | 初期開発期の単一最新バージョン方針を Issue #119 で確定（交渉機構・互換レイヤーなし — Requirements「ワイヤバージョン方針」参照） | 独立配布のホスト/ランナー間バージョン互換の要求発生 | 独立配布形態で新旧バージョンの混在が扱えない
 
 ## Sources and Relations
 
