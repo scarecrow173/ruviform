@@ -110,11 +110,11 @@ Issue #76 の各 IR に記録された小粒残件 4 項目を集約解消する
 
 ## Acceptance Criteria
 
-- [ ] `mise run check`・`mise run lint`・`mise run test`・`mise run test-rt` が全て成功する
-- [ ] `cargo doc -p ruviform-audio-core --no-deps` が warning 0 件で完了する
-- [ ] `grep -rn "read_message\|write_message\|read_frame" crates/` が wire 層定義と各消費側の呼出しのみを示し、同形状の framing 実装が残らない
-- [ ] `grep -rn "gui_open" crates/` が 0 件を返す
-- [ ] `l1_proxy_e2e` の runner 消費テストが `RUVIFORM_L1_RUNNER` 未設定で現行どおり pass する
+- [x] `mise run check`・`mise run lint`・`mise run test`・`mise run test-rt` が全て成功する（実績: 全 exit 0 — task `docs/tasks/l1-internal-cleanup.md` Verification・IR Validation に実 log 記録）
+- [x] `cargo doc -p ruviform-audio-core --no-deps` が warning 0 件で完了する（実績: exit 0・warning 0 — `planar.rs` の 2 warning 解消）
+- [x] `grep -rn "read_message\|write_message\|read_frame" crates/` が wire 層定義と各消費側の呼出しのみを示し、同形状の framing 実装が残らない（実績: frame 実装は `wire.rs` の 3 `pub fn` のみ — `l1_runner_e2e` の `fn send` は `wire::write_message` への薄い委譲）
+- [x] `grep -rn "gui_open" crates/` が 0 件を返す（実績: 0 件）
+- [x] `l1_proxy_e2e` の runner 消費テストが `RUVIFORM_L1_RUNNER` 未設定で現行どおり pass する（実績: `composite_e2e::runner_bin_serves_real_gain_plugin` が dual-layout fallback 解決で pass）
 
 ## Deferred Design Concerns
 

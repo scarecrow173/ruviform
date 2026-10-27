@@ -90,15 +90,15 @@ Issue #76 IR の小粒残件 4 項目（frame-I/O dedup・`runner_program` 解�
 
 ## Implementation Sequence
 
-- [ ] action 1: `wire.rs` に `read_frame`（`Ok(true)` frame/`Ok(false)` boundary EOF/`Err` 切断・limit・io）、`read_message`（`read_frame` + `decode`・boundary EOF → `UnexpectedEof`）、`write_message`（`encode` + `write_all` + `flush`・共有 scratch buf）を `pub` で追加。`std::io` Read/Write 前提・doc に EOF 意味論と non-RT 契約を明記
-- [ ] action 2: `l1/mod.rs` の私有 helper を削除し呼出しを `wire::` へ（`reader_main` に `frame_buf`・`driver_main` に `encode_buf` を確保し、per-message alloc を現行どおり再使用へ転換）。`WIRE_FRAME_HEADER_LEN`/`WIRE_MAX_PAYLOAD` import の残存要否を確認
-- [ ] action 3: `l1-test-worker.rs` の私有 helper を削除し呼出しを `wire::` へ（`block_in`/`block_in_dispatch` 系の signature 変更は避け、per-call scratch を使う）
-- [ ] action 4: `export/src/lib.rs` の `read_frame`/`send`/`fill`/`ReadFail` を削除。`serve` の read 分岐を `wire::read_frame` + `wire::decode` に写像（`ReadFail` の 3 診断は `io::Error` kind/message で等価表現、終了コード・normalize 経路は不変）
-- [ ] action 5: `l1_runner_e2e.rs` の `read_message`/`MiniHost::send` を `wire::` 消費へ置換
-- [ ] action 6: `l1_proxy_e2e.rs` の `runner_program()` を `RUVIFORM_L1_RUNNER` env（`var_os` verbatim）→ `current_exe` 相対（exe dir 自身→deps/ 親の順で `is_file` 検査）へ書き換え、欠落時の panic message に両経路を明記
-- [ ] action 7: `host.rs` の `Instance.gui_open` を除去（宣言・`new` 初期化・`open_gui`/`close_gui` の 4 write）。read が存在しないことは全量 grep で確証済み
-- [ ] action 8: `planar.rs:123,243` の intra-doc link を `[`Error::InvalidValue`] (`"planar_frames"`)` へ修正
-- [ ] action 9: `mise run fmt` → `fmt-check`/`check`/`lint`/`test`/`test-rt` + `cargo doc -p ruviform-audio-core --no-deps`（warning 0）を通し、IR・index 更新・監査後に commit
+- [x] action 1: `wire.rs` に `read_frame`（`Ok(true)` frame/`Ok(false)` boundary EOF/`Err` 切断・limit・io）、`read_message`（`read_frame` + `decode`・boundary EOF → `UnexpectedEof`）、`write_message`（`encode` + `write_all` + `flush`・共有 scratch buf）を `pub` で追加。`std::io` Read/Write 前提・doc に EOF 意味論と non-RT 契約を明記（実績: 3 helper + doctest ×3 — review で Err taxonomy pin の unit test を追加）
+- [x] action 2: `l1/mod.rs` の私有 helper を削除し呼出しを `wire::` へ（`reader_main` に `frame_buf`・`driver_main` に `encode_buf` を確保し、per-message alloc を現行どおり再使用へ転換）。`WIRE_FRAME_HEADER_LEN`/`WIRE_MAX_PAYLOAD` import の残存要否を確認（実績: 私有 helper 削除・両定数の残存 import なし）
+- [x] action 3: `l1-test-worker.rs` の私有 helper を削除し呼出しを `wire::` へ（`block_in`/`block_in_dispatch` 系の signature 変更は避け、per-call scratch を使う）（実績: per-call `Vec::new()` scratch・signature 不変）
+- [x] action 4: `export/src/lib.rs` の `read_frame`/`send`/`fill`/`ReadFail` を削除。`serve` の read 分岐を `wire::read_frame` + `wire::decode` に写像（`ReadFail` の 3 診断は `io::Error` kind/message で等価表現、終了コード・normalize 経路は不変）（実績: EOF 区別・oversized 確保前拒否・exit code 契約を保存）
+- [x] action 5: `l1_runner_e2e.rs` の `read_message`/`MiniHost::send` を `wire::` 消費へ置換（実績: reader は `wire::read_message`・`send` は `wire::write_message` 委譲）
+- [x] action 6: `l1_proxy_e2e.rs` の `runner_program()` を `RUVIFORM_L1_RUNNER` env（`var_os` verbatim）→ `current_exe` 相対（exe dir 自身→deps/ 親の順で `is_file` 検査）へ書き換え、欠落時の panic message に両経路を明記（実績: dual-layout fallback + panic に `RUVIFORM_L1_RUNNER` と探索した両候補 path を明記）
+- [x] action 7: `host.rs` の `Instance.gui_open` を除去（宣言・`new` 初期化・`open_gui`/`close_gui` の 4 write）。read が存在しないことは全量 grep で確証済み（実績: `rg gui_open crates/` = 0 件・GUI 動詞の defined rejection 不変）
+- [x] action 8: `planar.rs:123,243` の intra-doc link を `[`Error::InvalidValue`] (`"planar_frames"`)` へ修正（実績: `cargo doc -p ruviform-audio-core --no-deps` warning 0 件）
+- [x] action 9: `mise run fmt` → `fmt-check`/`check`/`lint`/`test`/`test-rt` + `cargo doc -p ruviform-audio-core --no-deps`（warning 0）を通し、IR・index 更新・監査後に commit（実績: 全 gate exit 0・doc audit 0 findings・commit `0c8eec3` — lint は `l1-test-worker` `too_many_lines` 局所 allow・test は負荷依存 flake の孤立 rerun + suite 再実行で green）
 
 ## Dependencies and Risks
 
@@ -112,12 +112,12 @@ Issue #76 IR の小粒残件 4 項目（frame-I/O dedup・`runner_program` 解�
 
 ## Verification
 
-- [ ] `mise run fmt-check` が差分なしで終了する
-- [ ] `mise run check`・`mise run lint`・`mise run test`・`mise run test-rt` が全て成功する
-- [ ] `cargo doc -p ruviform-audio-core --no-deps` が warning 0 件で完了する
-- [ ] `grep -rn "gui_open" crates/` が 0 件を返す
-- [ ] `grep -rn "fn read_message\|fn write_message\|fn read_frame\|fn send" crates/ruviform-plugin-host crates/ruviform-plugin-export` が私有実装残存なしを示す
-- [ ] `RUVIFORM_L1_RUNNER` 未設定で `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` の runner 消費テストが pass する
+- [x] `mise run fmt-check` が差分なしで終了する（実績: exit 0）
+- [x] `mise run check`・`mise run lint`・`mise run test`・`mise run test-rt` が全て成功する（実績: 全 exit 0 — `test` は `l1_proxy_e2e` 2 test の既知負荷依存 flake を孤立 rerun + suite 再実行で green 確認）
+- [x] `cargo doc -p ruviform-audio-core --no-deps` が warning 0 件で完了する（実績: exit 0・warning 0）
+- [x] `grep -rn "gui_open" crates/` が 0 件を返す（実績: 0 件）
+- [x] `grep -rn "fn read_message\|fn write_message\|fn read_frame\|fn send" crates/ruviform-plugin-host crates/ruviform-plugin-export` が私有実装残存なしを示す（実績: frame 実装は `wire.rs` の 3 `pub fn` のみ — `l1_runner_e2e` の `fn send` は `wire::write_message` への薄い委譲）
+- [x] `RUVIFORM_L1_RUNNER` 未設定で `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` の runner 消費テストが pass する（実績: `composite_e2e::runner_bin_serves_real_gain_plugin` 等が dual-layout fallback 解決で pass）
 
 ## Open Questions / Gaps
 
