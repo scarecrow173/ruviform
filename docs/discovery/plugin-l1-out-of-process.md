@@ -52,6 +52,7 @@ relations:
     - "engine-plugin-host-integration.md"
     - "issue-114-real-adapter-l1-e2e.md"
     - "../specs/issue-114-real-adapter-l1-e2e.md"
+    - "../designs/issue-115-l1-gui-cross-process-parenting.md"
   verifies: []
   verified-by: []
   references: []
