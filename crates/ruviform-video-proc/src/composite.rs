@@ -1613,9 +1613,12 @@ mod tests {
     }
 
     /// RT contract: `process` is allocation-free, non-blocking and
-    /// bounded — observably: repeated calls on the same kernel succeed
-    /// and stay deterministic, never panic. (`CompositeOver` is
-    /// in-place, so `dst` is restored between iterations.)
+    /// bounded — the `assert_no_alloc` window aborts the test binary
+    /// on any (de)allocation inside it (fixture/kernel construction
+    /// stays outside), and observably repeated calls on the same
+    /// kernel succeed and stay deterministic, never panic.
+    /// (`CompositeOver` is in-place, so `dst` is restored between
+    /// iterations.)
     #[test]
     fn rt_process_composite_over_is_repeatable_and_deterministic() {
         let src = rgba8_frame(1, 1, &[[100, 200, 50, 128]]);
@@ -1626,14 +1629,15 @@ mod tests {
                 .unwrap()
                 .data_mut()
                 .copy_from_slice(&[40, 80, 160, 200]);
-            kernel.process(&src, &mut dst, 0.5).unwrap();
+            assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst, 0.5)).unwrap();
             assert_eq!(dst.plane(0).unwrap().row(0).unwrap(), &[58, 116, 127, 214]);
         }
     }
 
     /// RT contract: `process` writes only the caller-provided `dst` —
     /// `src` stays byte-identical across the call (a borrow, not a
-    /// drain).
+    /// drain), and the `assert_no_alloc` window aborts on any
+    /// (de)allocation inside it.
     #[test]
     fn rt_process_composite_over_never_mutates_source() {
         let src = rgba8_frame(
@@ -1648,13 +1652,16 @@ mod tests {
         );
         let before: [u8; 16] = src.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = rgba8_frame(2, 2, &[[0; 4]; 4]);
-        CompositeOver::new().process(&src, &mut dst, 0.75).unwrap();
+        let mut kernel = CompositeOver::new();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst, 0.75)).unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &before);
     }
 
     /// RT contract: `process` is allocation-free, non-blocking and
-    /// bounded — observably: repeated calls on the same kernel succeed
-    /// and stay deterministic, never panic.
+    /// bounded — the `assert_no_alloc` window aborts the test binary
+    /// on any (de)allocation inside it (fixture/kernel construction
+    /// stays outside), and observably repeated calls on the same
+    /// kernel succeed and stay deterministic, never panic.
     #[test]
     fn rt_process_crossfade_is_repeatable_and_deterministic() {
         let from = rgba8_frame(1, 1, &[[0, 0, 0, 255]]);
@@ -1662,13 +1669,15 @@ mod tests {
         let mut dst = rgba8_frame(1, 1, &[[0; 4]]);
         let mut kernel = Crossfade::new();
         for _ in 0..64 {
-            kernel.process(&from, &to, &mut dst, 0.5).unwrap();
+            assert_no_alloc::assert_no_alloc(|| kernel.process(&from, &to, &mut dst, 0.5)).unwrap();
             assert_eq!(dst.plane(0).unwrap().row(0).unwrap(), &[50, 75, 100, 255]);
         }
     }
 
     /// RT contract: `process` writes only the caller-provided `dst` —
-    /// `from` and `to` both stay byte-identical across the call.
+    /// `from` and `to` both stay byte-identical across the call, and
+    /// the `assert_no_alloc` window aborts on any (de)allocation
+    /// inside it.
     #[test]
     fn rt_process_crossfade_never_mutates_sources() {
         let from = rgba8_frame(2, 1, &[[1, 2, 3, 4], [5, 6, 7, 8]]);
@@ -1676,16 +1685,17 @@ mod tests {
         let from_before: [u8; 8] = from.plane(0).unwrap().data().try_into().unwrap();
         let to_before: [u8; 8] = to.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = rgba8_frame(2, 1, &[[0; 4], [0; 4]]);
-        Crossfade::new()
-            .process(&from, &to, &mut dst, 0.25)
-            .unwrap();
+        let mut kernel = Crossfade::new();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&from, &to, &mut dst, 0.25)).unwrap();
         assert_eq!(from.plane(0).unwrap().data(), &from_before);
         assert_eq!(to.plane(0).unwrap().data(), &to_before);
     }
 
     /// RT contract on the `RgbaF32` arm: `process` is allocation-free,
-    /// non-blocking and bounded — observably: repeated calls on the
-    /// same kernel succeed and stay deterministic, never panic.
+    /// non-blocking and bounded — the `assert_no_alloc` window aborts
+    /// the test binary on any (de)allocation inside it (fixture/kernel
+    /// construction stays outside), and observably repeated calls on
+    /// the same kernel succeed and stay deterministic, never panic.
     /// (`CompositeOver` is in-place, so `dst` is restored between
     /// iterations.)
     #[test]
@@ -1703,7 +1713,7 @@ mod tests {
                 .0
                 .iter_mut()
                 .for_each(|px| *px = f32_px_bytes([0.8, 0.1, 0.3, 0.4]));
-            kernel.process(&src, &mut dst, 0.5).unwrap();
+            assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst, 0.5)).unwrap();
             assert_eq!(f32_px(&dst, 0, 0), expected);
         }
     }
@@ -1720,19 +1730,23 @@ mod tests {
 
     /// RT contract on the `RgbaF32` arm: `process` writes only the
     /// caller-provided `dst` — `src` stays byte-identical across the
-    /// call.
+    /// call, and the `assert_no_alloc` window aborts on any
+    /// (de)allocation inside it.
     #[test]
     fn rt_process_composite_over_f32_never_mutates_source() {
         let src = f32_frame(2, 1, &[[1.0, -0.0, 0.25, 0.5], [0.125, 2.0, 0.0, 1.0]]);
         let before: [u8; 32] = src.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = f32_frame(2, 1, &[[0.0; 4]; 2]);
-        CompositeOver::new().process(&src, &mut dst, 0.75).unwrap();
+        let mut kernel = CompositeOver::new();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst, 0.75)).unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &before);
     }
 
     /// RT contract on the `RgbaF32` arm: `process` is allocation-free,
-    /// non-blocking and bounded — observably: repeated calls on the
-    /// same kernel succeed and stay deterministic, never panic.
+    /// non-blocking and bounded — the `assert_no_alloc` window aborts
+    /// the test binary on any (de)allocation inside it (fixture/kernel
+    /// construction stays outside), and observably repeated calls on
+    /// the same kernel succeed and stay deterministic, never panic.
     #[test]
     fn rt_process_crossfade_f32_is_repeatable_and_deterministic() {
         let from = f32_frame(1, 1, &[[1.0, 0.25, -0.5, 0.75]]);
@@ -1742,14 +1756,15 @@ mod tests {
         kernel.process(&from, &to, &mut dst, 0.5).unwrap();
         let expected = f32_px(&dst, 0, 0);
         for _ in 0..64 {
-            kernel.process(&from, &to, &mut dst, 0.5).unwrap();
+            assert_no_alloc::assert_no_alloc(|| kernel.process(&from, &to, &mut dst, 0.5)).unwrap();
             assert_eq!(f32_px(&dst, 0, 0), expected);
         }
     }
 
     /// RT contract on the `RgbaF32` arm: `process` writes only the
     /// caller-provided `dst` — `from` and `to` both stay
-    /// byte-identical across the call.
+    /// byte-identical across the call, and the `assert_no_alloc`
+    /// window aborts on any (de)allocation inside it.
     #[test]
     fn rt_process_crossfade_f32_never_mutates_sources() {
         let from = f32_frame(2, 1, &[[1.0, -0.0, 0.25, 0.5], [0.125, 2.0, 0.0, 1.0]]);
@@ -1761,9 +1776,8 @@ mod tests {
         let from_before: [u8; 32] = from.plane(0).unwrap().data().try_into().unwrap();
         let to_before: [u8; 32] = to.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = f32_frame(2, 1, &[[0.0; 4]; 2]);
-        Crossfade::new()
-            .process(&from, &to, &mut dst, 0.25)
-            .unwrap();
+        let mut kernel = Crossfade::new();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&from, &to, &mut dst, 0.25)).unwrap();
         assert_eq!(from.plane(0).unwrap().data(), &from_before);
         assert_eq!(to.plane(0).unwrap().data(), &to_before);
     }

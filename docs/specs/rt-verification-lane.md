@@ -46,6 +46,7 @@ relations:
     - "../adr/rt-assert-no-alloc-thread-check.md"
     - "../designs/rt-verification-lane-design.md"
     - "../plans/implement-issue-22-rt-verification.md"
+    - "video-proc-rt-verification-lane.md"
   verifies: []
   verified-by:
     - "../test-specs/rt-verification-contracts.md"

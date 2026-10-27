@@ -44,6 +44,7 @@ relations:
   derived-by:
     - "../designs/rt-verification-lane-design.md"
     - "../plans/implement-issue-22-rt-verification.md"
+    - "../specs/video-proc-rt-verification-lane.md"
   verifies: []
   verified-by: []
   references:

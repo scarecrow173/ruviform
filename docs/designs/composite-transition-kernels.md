@@ -41,6 +41,8 @@ relations:
   derived-by:
     - "docs/plans/implement-issue-97-composite-kernels.md"
     - "docs/test-specs/composite-transition-kernels-tests.md"
+    - "docs/specs/video-proc-rt-verification-lane.md"
+    - "docs/plans/implement-issue-126-video-proc-rt-lane.md"
   verifies: []
   verified-by:
     - "docs/test-specs/composite-transition-kernels-tests.md"
@@ -313,7 +315,7 @@ D1-b（非 RT prepare → alloc-free `process` の二相形状）・D2（合成�
 - premultiplied-alpha 変種 | straight で初期要件を充足 | GPU 経路・外部バッファとの整合要求 | alpha 解釈の API 表面拡大
 - wipe/dip-to-black 等の遷移追加 | `Crossfade` で dip-to-black は導出可能。wipe は幾何パターン設計が別論点 | NLE 要件の確定 | 遷移カバレッジ不足
 - planar YUV へのコンポジット/変換適用 | クロマ格子・siting を考慮した設計が別論点 | YUV 直接処理の要求発生 | RGB 変換を介する二段処理が必要
-- video-proc への `assert_no_alloc` 導入 | 本設計の `rt_process_*` は determinism・source 非破壊・レビュー担保の alloc-free のみを検証し機械検出は行わない — レーン適用は RT 検証レーン拡大の別 Issue 管轄 | 次の RT 保証強化 Issue | alloc 違反の機械検出なし
+- video-proc への `assert_no_alloc` 導入 | 本設計の `rt_process_*` は determinism・source 非破壊・レビュー担保の alloc-free のみを検証し機械検出は行わない — レーン適用は RT 検証レーン拡大の別 Issue 管轄 | 次の RT 保証強化 Issue | alloc 違反の機械検出なし — **Issue #126 で解決済み**: 全 `rt_process_*` へ `assert_no_alloc` 窓を適用し per-process alloc 0 を実測（IR: [issue-126-video-proc-rt-lane-implementation.md](../impl/ir/issue-126-video-proc-rt-lane-implementation.md)）
 
 ## 実装単位
 

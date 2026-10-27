@@ -932,17 +932,20 @@ mod tests {
     }
 
     /// RT contract: `process` is allocation-free, non-blocking and
-    /// bounded — observably: repeated calls on the same kernel succeed
-    /// and stay deterministic, never panic.
+    /// bounded — the `assert_no_alloc` window aborts the test binary
+    /// on any (de)allocation inside it (fixture/kernel construction
+    /// stays outside), and observably repeated calls on the same
+    /// kernel succeed and stay deterministic, never panic.
     #[test]
     fn rt_process_affine_transform_is_repeatable_and_deterministic() {
         let src = rgba8_frame(2, 1, &[[10, 0, 0, 10], [20, 0, 0, 20]]);
         let mut dst = rgba8_frame(4, 1, &[[0; 4]; 4]);
         let mut kernel = AffineTransform::new();
         for _ in 0..64 {
-            kernel
-                .process(&src, &mut dst, map(0, 0, 2, 1, 0, 0, 4, 1))
-                .unwrap();
+            assert_no_alloc::assert_no_alloc(|| {
+                kernel.process(&src, &mut dst, map(0, 0, 2, 1, 0, 0, 4, 1))
+            })
+            .unwrap();
             assert_eq!(
                 rgba8_px(&dst),
                 vec![
@@ -957,7 +960,8 @@ mod tests {
 
     /// RT contract: `process` writes only the caller-provided `dst` —
     /// `src` stays byte-identical across the call (a borrow, not a
-    /// drain).
+    /// drain), and the `assert_no_alloc` window aborts on any
+    /// (de)allocation inside it.
     #[test]
     fn rt_process_affine_transform_never_mutates_source() {
         let src = rgba8_frame(
@@ -972,24 +976,29 @@ mod tests {
         );
         let before: [u8; 16] = src.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = rgba8_frame(2, 2, &[[0; 4]; 4]);
-        AffineTransform::new()
-            .process(&src, &mut dst, map(0, 0, 2, 2, 0, 0, 1, 1))
-            .unwrap();
+        let mut kernel = AffineTransform::new();
+        assert_no_alloc::assert_no_alloc(|| {
+            kernel.process(&src, &mut dst, map(0, 0, 2, 2, 0, 0, 1, 1))
+        })
+        .unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &before);
     }
 
     /// RT contract on the `RgbaF32` arm: `process` is allocation-free,
-    /// non-blocking and bounded — observably: repeated calls on the
-    /// same kernel succeed and stay deterministic, never panic.
+    /// non-blocking and bounded — the `assert_no_alloc` window aborts
+    /// the test binary on any (de)allocation inside it, and observably
+    /// repeated calls on the same kernel succeed and stay
+    /// deterministic, never panic.
     #[test]
     fn rt_process_affine_transform_f32_is_repeatable_and_deterministic() {
         let src = f32_frame(2, 1, &[[0x3F80_0000; 4], [0x4000_0000; 4]]);
         let mut dst = f32_frame(4, 1, &[[0; 4]; 4]);
         let mut kernel = AffineTransform::new();
         for _ in 0..64 {
-            kernel
-                .process(&src, &mut dst, map(0, 0, 2, 1, 0, 0, 4, 1))
-                .unwrap();
+            assert_no_alloc::assert_no_alloc(|| {
+                kernel.process(&src, &mut dst, map(0, 0, 2, 1, 0, 0, 4, 1))
+            })
+            .unwrap();
             assert_eq!(
                 (0..4).map(|x| f32_px(&dst, x, 0)).collect::<Vec<_>>(),
                 vec![
@@ -1004,7 +1013,8 @@ mod tests {
 
     /// RT contract on the `RgbaF32` arm: `process` writes only the
     /// caller-provided `dst` — `src` stays byte-identical across the
-    /// call.
+    /// call, and the `assert_no_alloc` window aborts on any
+    /// (de)allocation inside it.
     #[test]
     fn rt_process_affine_transform_f32_never_mutates_source() {
         let src = f32_frame(
@@ -1017,9 +1027,11 @@ mod tests {
         );
         let before: [u8; 32] = src.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = f32_frame(2, 1, &[[0; 4]; 2]);
-        AffineTransform::new()
-            .process(&src, &mut dst, map(0, 0, 2, 1, 0, 0, 2, 1))
-            .unwrap();
+        let mut kernel = AffineTransform::new();
+        assert_no_alloc::assert_no_alloc(|| {
+            kernel.process(&src, &mut dst, map(0, 0, 2, 1, 0, 0, 2, 1))
+        })
+        .unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &before);
     }
 }

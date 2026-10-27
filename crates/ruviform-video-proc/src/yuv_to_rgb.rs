@@ -602,8 +602,10 @@ mod tests {
     }
 
     /// RT contract: a prepared kernel's `process` is allocation-free,
-    /// non-blocking and bounded — observably: repeated calls on the same
-    /// kernel succeed and stay deterministic, never panic.
+    /// non-blocking and bounded — the `assert_no_alloc` window aborts
+    /// the test binary on any (de)allocation inside it (fixture/kernel
+    /// construction stays outside), and observably repeated calls on
+    /// the same kernel succeed and stay deterministic, never panic.
     #[test]
     fn rt_process_is_repeatable_and_deterministic() {
         let src = one_pixel_444(
@@ -619,14 +621,15 @@ mod tests {
         let mut dst = VideoFrame::new_owned(PixelFormat::Rgba8, 1, 1, pts()).unwrap();
         let mut kernel = YuvToRgb::new();
         for _ in 0..64 {
-            kernel.process(&src, &mut dst).unwrap();
+            assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst)).unwrap();
             assert_eq!(dst.plane(0).unwrap().row(0).unwrap(), &[255, 24, 0, 255]);
         }
     }
 
     /// RT contract: `process` writes only the caller-provided `dst` —
-    /// never allocates a new frame, and `src` stays byte-identical
-    /// across the call (a borrow, not a drain).
+    /// never allocates a new frame, `src` stays byte-identical across
+    /// the call (a borrow, not a drain), and the `assert_no_alloc`
+    /// window aborts on any (de)allocation inside it.
     #[test]
     fn rt_process_never_mutates_source() {
         let mut src = VideoFrame::new_owned(PixelFormat::Yuv420p, 4, 2, pts()).unwrap();
@@ -643,7 +646,8 @@ mod tests {
         }
         let luma_before: [u8; 8] = src.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = VideoFrame::new_owned(PixelFormat::Rgba8, 4, 2, pts()).unwrap();
-        YuvToRgb::new().process(&src, &mut dst).unwrap();
+        let mut kernel = YuvToRgb::new();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst)).unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &luma_before);
     }
 }
