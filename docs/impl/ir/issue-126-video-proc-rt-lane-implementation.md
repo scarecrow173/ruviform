@@ -139,6 +139,17 @@ OFX crate 自体は変更なし。既存 gate（`test-ofx`・`lint-ofx`）の gr
 - `color-conversion-kernels.md` deferred 表: 「video-proc への `assert_no_alloc` 導入（`IccTransform` の executor 内部 alloc を含む機械検証レーン）」行 → Issue #126 で解決済み（全 28 件適用・executor 内部 alloc 0 を実測）。
 - `composite-transition-kernels.md` deferred 表: 「video-proc への `assert_no_alloc` 導入」行 → 同じく Issue #126 で解決済み。
 
+## Related Experiments
+
+### Adopted
+
+- **sanity abort 検証（一時 test）** — `AllocDisabler` 宣言後、意図的な `Vec` 確保を測定窓内に置いた一時 test で abort を実証してから除去。lane が「armed かつ検出可能」であることを機械確認する手段として採用（docs/impl/exp の gate 記録は Validation 参照）。test-spec の lane-armed 要件（`rt-verification-contracts.md` Rule 1–2）に準拠。
+
+### Rejected
+
+- **ctor/fixture の窓内保持** — 構築系の確保を窓内に残す案は ctor が `Result` を返す非 RT 段階で偽陽性となるため棄却（窓外 hoist を Decisions 節に記録）。
+- **warm-up 初回呼出の窓内化** — composite f32 repeatability で初回呼出を窓内に含める案は、期待値確立が測定対象ではないため棄却（各反復呼出のみ個別測定）。
+
 ## Validation
 
 | Gate | 結果 |
@@ -153,6 +164,12 @@ OFX crate 自体は変更なし。既存 gate（`test-ofx`・`lint-ofx`）の gr
 | `mise run test-ofx` | exit 0（36 + 1 + 1 pass — OFX 評価対象 crate の既存 green） |
 | `mise run lint-ofx` | exit 0 |
 | doc audit | `blocking: 0`・`findings: []`（最終編集後に実施 — Validation 記録参照） |
+
+## Risks
+
+- **`rt_` name filter は substring match** — `resolved_tables_repo**rt_t**he_applied_value` のように RT 意味論を持たない test が lane に混入し得る（既知・不変更）。今後新規 test 命名で同様の衝突が起きても検出件数の報告で区別する必要がある。
+- **`AllocDisabler` の武装範囲は lib test binary 1 個** — integration test（`tests/` 配下）内の video-proc RT 経路は `#[global_allocator]` を持たないため測定窓外。現状 video-proc の RT test は全て lib test binary 内にあるため実害なしだが、今後 integration test へ RT test を追加する場合は同パターンの宣言が必要。
+- **`test` lane で観測した `l1_proxy_e2e` flake は既知の load-sensitive 族** — video-proc 変更とは無関係（再実行・単独実行ともに pass）。頻発する場合は別途調査 Issue の検討対象。
 
 ## Follow-ups
 
