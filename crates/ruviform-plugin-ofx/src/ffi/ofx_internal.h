@@ -56,6 +56,10 @@ OfxStatus rv_po_getn(RvPropsObj *o, const char *n, int t, int c,
                      int *vi, double *vd, char **vs, void **vp);
 OfxStatus rv_po_dim(RvPropsObj *o, const char *n, int *dim);
 OfxStatus rv_po_reset(RvPropsObj *o, const char *n);
+/* clone every prop record (values + seed snapshots) into an empty dst;
+ * string payloads stay host-pool owned   src and dst must live under
+ * the same host for the clone to remain valid */
+OfxStatus rv_po_clone(RvPropsObj *dst, const RvPropsObj *src);
 /* seed helpers   explicit schema, no autocreated defaults */
 void rv_seed_i(RvPropsObj *o, const char *n, int dim, int v);
 void rv_seed_d(RvPropsObj *o, const char *n, int dim, double v);
@@ -67,8 +71,10 @@ typedef struct RvStrNode { char *s; struct RvStrNode *next; } RvStrNode;
 typedef struct RvMemNode { void *p; struct RvMemNode *next; } RvMemNode;
 
 typedef struct RvHost {
-    OfxHost api;
     int alive;
+    unsigned foreign;       /* open foreign-call window leases   reclaim
+                             * is deferred while nonzero so post-window
+                             * code never touches a freed block */
     struct RvCatalog *catalogs;
     RvPropsObj *props;
     RvStrNode *strings;

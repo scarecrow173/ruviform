@@ -82,6 +82,7 @@ Directory: `docs/tasks`
 | TASK-034L6ycSsF8VW32LLoNxXr | Implement video plugin core contract | done | [ofx-core-contract-implementation.md](./ofx-core-contract-implementation.md) |
 | TASK-034L6yiJbB3boniBUWvfmC | OFX host closeout | done | [ofx-host-closeout.md](./ofx-host-closeout.md) |
 | TASK-034L6yib4dmV9rd1MUZxbw | OFX host final verification | done | [ofx-host-final-verification.md](./ofx-host-final-verification.md) |
+| TASK-034N3SaVVNHQRJjWEndfH7 | OFX host window lease + clip props clone 実装 | done | [ofx-host-window-lease-implementation.md](./ofx-host-window-lease-implementation.md) |
 | TASK-034L6yeVFSaiVUoV4RiRtm | Implement native OFX runtime | done | [ofx-native-runtime-implementation.md](./ofx-native-runtime-implementation.md) |
 | TASK-034L6yh0fBmRabh1TMLv2F | Implement OFX video rendering | done | [ofx-render-implementation.md](./ofx-render-implementation.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |

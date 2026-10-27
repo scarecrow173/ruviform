@@ -14,7 +14,8 @@
 //! Native OFX libraries are admitted through [`OfxHost::load_library`],
 //! which runs the real `Load`/`Describe`/`DescribeInContext` sequence over a
 //! private C bridge and records per-entry [`PluginRejection`]s. Instances
-//! follow the neutral [`LifecycleState`] contract; each `render` call runs
+//! follow the neutral [`LifecycleState`](ruviform_plugin_core::LifecycleState)
+//! contract; each `render` call runs
 //! one Begin/Render/`EndSequenceRender` bracket over adapter-owned staging.
 
 mod error;

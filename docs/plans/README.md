@@ -13,6 +13,7 @@ Directory: `docs/plans`
 | PLAN-034KV6r7RDBR7CSvMSIB8e | Issue #104 RT 観測経路コスト計測 PoC の実施計画 | completed | [implement-issue-104-rt-observability-poc.md](./implement-issue-104-rt-observability-poc.md) |
 | PLAN-034MrrISpCH4LObubGof0Q | Issue #113 実施計画 — エンジン/利用側へのプラグイン統合（RT endpoint 所有分離 + グラフ接着） | completed | [implement-issue-113-engine-plugin-integration.md](./implement-issue-113-engine-plugin-integration.md) |
 | PLAN-034MLRinXTGEtewrMHtDSh | Issue #114 実施計画 — 規格アダプタ host-side bridge（CLAP/VST3）+ 実プラグイン L1 E2E（compile-time runner + opt-in lane） | completed | [implement-issue-114-real-adapter-l1-e2e.md](./implement-issue-114-real-adapter-l1-e2e.md) |
+| PLAN-034N3RoM1d6QGgIGM8VObU | Issue #124 OFX フォローアップ実施計画（catalog_open cross-window h 露出修正 + instance clip props clone） | completed | [implement-issue-124-ofx-window-lease.md](./implement-issue-124-ofx-window-lease.md) |
 | PLAN-034J5K603qXDNmT82wI9v7 | Issue #18 データモデル API の実装（media-core / audio-core / video-core） | completed | [implement-issue-18-data-model.md](./implement-issue-18-data-model.md) |
 | PLAN-034JP0n5QlXSj34GK30GBz | Issue #22 RT 検証基盤の実施（assert_no_alloc 適用・thread-check 統合・検証文書） | approved | [implement-issue-22-rt-verification.md](./implement-issue-22-rt-verification.md) |
 | PLAN-034JRcspAdty0HzWF0KzIr | Issue #24 オフライン実行ドライバ実装 | approved | [implement-issue-24-offline-execution-driver.md](./implement-issue-24-offline-execution-driver.md) |
