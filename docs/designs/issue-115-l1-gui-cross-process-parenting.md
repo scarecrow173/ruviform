@@ -1,7 +1,7 @@
 ---
 id: "DESIGN-034N3J1C5vystrbJl69R1q"
 type: "design"
-status: "draft"
+status: "approved"
 title: "L1 GUI — プロセス境界越しの親ウィンドウ埋め込みの採否設計（Issue #115）"
 created: "2026-10-27"
 updated: "2026-10-27"
@@ -44,6 +44,7 @@ relations:
   references:
     - "https://github.com/scarecrow173/ruviform/issues/30"
     - "https://github.com/scarecrow173/ruviform/issues/57"
+    - "https://github.com/scarecrow173/ruviform/issues/118"
     - "https://github.com/scarecrow173/ruviform/issues/119"
     - "https://github.com/scarecrow173/ruviform/issues/123"
     - "https://github.com/tauri-apps/wry/pull/1762"
@@ -67,6 +68,7 @@ Issue #115 — #76 で L1 インスタンスへの `OpenGui`/`CloseGui` 要求�
 - L1 host 側は `execute()` が `OpenGui`/`CloseGui` を `Err(Unsupported)` で short-circuit（wire 非送信）。Issue #114 の real-adapter L1 E2E も `Err(Unsupported)` 返却を実子プロセスで pin 済み
 - 子プロセス側 `ruviform-plugin-export` runner は **stdin/stdout frame の単一スレッドメッセージループ**（`src/lib.rs` — "single-threaded message loop"）。`WireCommand::OpenGui`/`CloseGui` の dispatch 腕は存在するが（`lib.rs` `Runner::dispatch`）、仮に到達すればコマンドループスレッド上で `plugin.open_gui()` を呼ぶ — GUI イベントポンプも UI スレッドも持たない
 - GUI 関連の先行知見はすべて**インプロセス**前提: #30 PoC（wry `build_as_child` → ホスト提供 HWND・Windows 実機）・ADR `plugin-gui-embedding`（素 wry 採用・accepted）・#57 follow-up（同一親内 wry 8 個 60fps・Linux は `build_gtk` on `gtk::Fixed` = 同一プロセス GTK コンテナ）・`ui-tech-selection` ADR（wry PR #1762 未 merge・wxp はインプロセスライフサイクルパッチの参照実装）
+- 直交する別平面として Issue #118（OFX/NONRT video の L1 経路・`VideoPluginInstance`）が追跡中 — video port は本書が扱う GUI 動詞面（`OpenGui`/`CloseGui`/`set_parent` 意味論）とは別の wire/port 設計であり、本書の採否・解除条件は video 経路を拘束しない（逆も同様）
 
 ## 決定サマリ（Issue スコープ → 本書の結論）
 
@@ -91,23 +93,23 @@ Issue #115 — #76 で L1 インスタンスへの `OpenGui`/`CloseGui` 要求�
 ### X11 — XEmbed 越境
 
 - X プロトコル上の Window はサーバ側オブジェクト（プロセス非依存）のため越境埋め込みが原理的に可能。正規機構は **XEmbed**（`XEMBED` プロトコル・`GtkSocket`/`GtkPlug` 実装）であり、VST3 `IPlugView` の Linux platform type `"X11EmbedWindowID"` はまさに XEmbed ID を期待する
-- ただし: (a) wry の Linux 子 attach は `WebViewBuilderExtUnix::build_gtk` — **同一プロセス内の `gtk::Container`** を要求し（#57 Linux 検証は親 `gtk::Fixed`・in-process）、`GtkSocket` ベースの越境 attach 経路は wry に存在しない。(b) `GtkSocket`/`GtkPlug` は GTK3 系機構で GTK4 で除去済み — wry が依存する WebKitGTK 4.1 / GTK 系の主流では越境経路の土台が消えている。(c) **Wayland は越境埋め込みを設計上提供しない** — `xdg-foreign` は toplevel 間の transient-parent hint のみで、クライアント間サーフェス分離がプロトコル原則
+- ただし: (a) wry の Linux 子 attach は `WebViewBuilderExtUnix::build_gtk` — **同一プロセス内の `gtk::Container`** を要求し（#57 Linux 検証は親 `gtk::Fixed`・in-process）、`GtkSocket` ベースの越境 attach 経路は wry に存在しない。(b) `GtkSocket`/`GtkPlug` の存否は GTK 世代で段階的: GTK3 では deprecated だが現存する機構であり、wry の現行依存 WebKitGTK 4.1 は GTK3 系 — つまり機構自体は依存木内に残るが wry API は expose しない（(a) の通り）。除去されるのは GTK4 以降で、Wayland にはそもそも存在しない。(c) **Wayland は越境埋め込みを設計上提供しない** — `xdg-foreign` は toplevel 間の transient-parent hint のみで、クライアント間サーフェス分離がプロトコル原則
 - 判定: X11 セッション限定なら XEmbed 理論上成立。現行 wry/GTK4/Wayland 経路では**実質不可**
 
 ### macOS — `NSView` 越境
 
 - `NSView` 階層はプロセス内のオブジェクトグラフであり、別プロセスの view を子にする公認 API は**存在しない**。VST3 type `"NSView"`・CLAP `clap_window` cocoa は同一プロセス内ポインタ受け渡しを前提とする
-- 代替としての別プロセス `NSWindow` child 化・`IOSurface`/layer 越境合成は「埋め込み」ではなく合成経路であり、hit-testing・resize・lifecycle を全て自前で再実装する領域 — プラグイン GUI 契約の単純な写像として成立しない
-- 判定: **不可**（公認機構なし）
+- 出荷済みの越境機構として CoreAnimation の `CAContext`/`CALayerHost`/`CARemoteLayer` 系（及び deprecated の `NSRemoteView`）が存在するが、これは**合成（compositing）専用経路** — 他プロセスの layer ツリー描画を自プロセスへホストできる一方、公認の入力転送機構を持たず hit-testing・responder chain・focus は越境できない。よって `set_parent(NSView*)` の「子 NSView として機能する埋め込み」意味論を満たせず、却下の結論は変わらない。別プロセス `NSWindow` child 化・`IOSurface` 合成も同種の合成経路で、hit-testing・resize・lifecycle を全て自前で再実装する領域 — プラグイン GUI 契約の単純な写像として成立しない
+- 判定: **不可**（越境 view embed の公認機構なし — `CAContext`/`CALayerHost` 系は入力転送を持たない合成専用）
 
 ### 調査まとめ
 
 | OS | 越境機構 | wry/現行経路との整合 | 判定 |
 | --- | --- | --- | --- |
 | Windows | `SetParent`/`WS_CHILD`（入力キュー結合付き） | `build_as_child` の越境指定は未検証・WebView2 foreign-parent は undocumented | 条件付き（脆弱） |
-| X11 | XEmbed（`GtkSocket`/`GtkPlug`） | `build_gtk` は in-process コンテナ前提・GTK4 で機構消滅 | 旧式機構のみ |
+| X11 | XEmbed（`GtkSocket`/`GtkPlug` — GTK3 では deprecated だが現存・GTK4 で除去） | `build_gtk` は in-process コンテナ前提・`GtkSocket` 経路を expose しない | 旧式機構のみ |
 | Wayland | なし（`xdg-foreign` は toplevel hint のみ） | — | 不可 |
-| macOS | なし（`NSView` 越境 embed 公認 API なし） | — | 不可 |
+| macOS | `CAContext`/`CALayerHost`/`CARemoteLayer` + deprecated `NSRemoteView`（合成専用・公認入力転送なし） | — | 不可 |
 
 ## 規格 GUI 意味論・runner 制約との衝突
 
@@ -138,7 +140,7 @@ Issue #115 — #76 で L1 インスタンスへの `OpenGui`/`CloseGui` 要求�
 
 - **(a) wire versioning 枠組みの確定** — Issue #119。GUI lifecycle 動詞（size/show/hide/scale 系）の追加は `WIRE_VERSION` bump と capability 設計を前提とし、現行 `capabilities != 0` を `Malformed` 拒否する hardening とも整合させる必要がある
 - **(b) child runner の UI スレッド + event pump 設計** — 単一スレッド stdin/stdout ループと規格 main-thread 意味論の両立設計（コマンドの UI スレッドへの marshaling・`process` 脚との分離維持）
-- **(c) per-OS 実現可能性の再評価** — Windows: 越境 `SetParent` + WebView2 foreign-parent の実機検証 / Linux: X11 セッション限定 XEmbed の受容 or Wayland 新機構の出現 / macOS: 公認の越境 view 機構の出現。少なくとも 1 OS で robust な経路が立つことが最低条件
+- **(c) per-OS 実現可能性の再評価** — Windows: 越境 `SetParent` + WebView2 foreign-parent の実機検証 / Linux: X11 セッション限定 XEmbed の受容 or Wayland 新機構の出現 / macOS: 公認の越境 view 機構の出現（既存 `CAContext`/`CALayerHost` 系への入力転送追加を含む）。少なくとも 1 OS で robust な経路が立つことが最低条件
 - **(d) 需要の顕在化** — GUI 必須かつクラッシュ隔離が同時に要求されるプラグイン利用形態の出現（L0 で代替不能なケース）
 
 ### `gui_open` field の fate（Issue #123 sub-item への確定回答）
