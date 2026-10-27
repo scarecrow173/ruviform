@@ -4,7 +4,7 @@ type: "adr"
 status: "accepted"
 title: "プラグイン処理の non-RT 制御/RT 処理所有分離（transferable RT endpoint）"
 created: "2026-10-25"
-updated: "2026-10-26"
+updated: "2026-10-28"
 owners: ["scarecrow173"]
 metadata:
   adr:
@@ -47,6 +47,7 @@ relations:
   derived-by:
     - "docs/designs/engine-plugin-host-integration.md"
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
+    - "docs/designs/issue-117-bundle-child-process.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-rt-retirement-tests.md"

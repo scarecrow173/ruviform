@@ -4,7 +4,7 @@ type: "spec"
 status: "implemented"
 title: "Issue #119 L1 wire バージョン方針（単一最新バージョン・交渉機構なし）"
 created: "2026-10-27"
-updated: "2026-10-27"
+updated: "2026-10-28"
 owners: []
 relations:
   source:
@@ -53,6 +53,7 @@ relations:
     - "../plans/implement-issue-119-l1-wire-version-policy.md"
     - "../discovery/issue-117-bundle-child-process-discovery.md"
     - "issue-117-bundle-child-process.md"
+    - "../designs/issue-117-bundle-child-process.md"
   verifies: []
   verified-by:
     - "../test-specs/plugin-l1-wire-codec-tests.md"

@@ -4,7 +4,7 @@ type: "spec"
 status: "proposed"
 title: "プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）"
 created: "2026-10-25"
-updated: "2026-10-27"
+updated: "2026-10-28"
 owners: []
 relations:
   source:
@@ -50,6 +50,8 @@ relations:
     - "docs/plans/implement-issue-119-l1-wire-version-policy.md"
     - "docs/discovery/issue-117-bundle-child-process-discovery.md"
     - "docs/specs/issue-117-bundle-child-process.md"
+    - "docs/designs/issue-117-bundle-child-process.md"
+    - "docs/adr/issue-117-bundle-child-failed-granularity.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"

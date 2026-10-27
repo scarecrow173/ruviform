@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）"
 created: "2026-10-25"
-updated: "2026-10-27"
+updated: "2026-10-28"
 owners: []
 relations:
   source: []
@@ -57,6 +57,8 @@ relations:
     - "docs/plans/implement-issue-119-l1-wire-version-policy.md"
     - "docs/discovery/issue-117-bundle-child-process-discovery.md"
     - "docs/specs/issue-117-bundle-child-process.md"
+    - "docs/designs/issue-117-bundle-child-process.md"
+    - "docs/adr/issue-117-bundle-child-failed-granularity.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -67,6 +69,7 @@ relations:
     - "docs/specs/engine-plugin-host-integration.md"
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
+    - "docs/designs/issue-117-bundle-child-process.md"
   deferred-by: []
 ---
 
@@ -173,7 +176,7 @@ pub struct Descriptor {                 // PluginDescriptor の所有 wire 形
 
 `wire::Command`/`wire::Reply`/`wire::Descriptor` は core の公開型であるため、公開 enum 規約に従い `#[non_exhaustive]` を付与する（`wire::Descriptor` は struct なので対象外）。wire プロトコル自体は `WIRE_VERSION` の handshake 照合で厳格一致を強制するため、フィールド追加はバージョン更新とセットで行う。
 
-- **語彙写像**: `HostCommand::Instantiate` ↔ spawn + handshake、`Destroy` ↔ `Shutdown` + reap。残り 10 動詞は `wire::Command` に 1:1 で写す（handle は子が singleton のため落とす — 将来の bundle 子は `Instantiate`/handle 修飾を wire に追加するプロトコル改訂）。
+- **語彙写像**: `HostCommand::Instantiate` ↔ spawn + handshake、`Destroy` ↔ `Shutdown` + reap。残り 10 動詞は `wire::Command` に 1:1 で写す（handle は子が singleton のため落とす — 将来の bundle 子は `Instantiate`/handle 修飾を wire に追加するプロトコル改訂。**Issue #117 design `docs/designs/issue-117-bundle-child-process.md` がこの予告を `WIRE_VERSION` 2 の envelope `instance` + `CreateInstance`/`DestroyInstance` として確定** — 実装 bump 時に本節は v2 形状へ更新される）。
 - **`PluginDescriptor` の `&'static` 問題**: 公開 `HostReply::Scanned(Vec<PluginDescriptor>)` は L1 ルートでも **registration 供給の 'static 値**を返す（下記 `OutOfProcessSpec.descriptor`）。child は `Hello` 後の `Scan` 応答で内蔵 descriptor を `wire::Descriptor` として報告し、proxy が spec の descriptor とフィールド等価で照合する（不一致 → kill + `HostError::Ipc`）。**所有文字列→`&'static` への変換は設計上発生せず、`Box::leak` は使わない**。
 - handshake: spawn → argv `--ruviform-plugin-id <id>` `--ruviform-shm-key <key>` → 子 `Hello` → 親 `Scan` → 子 `Scanned`（照合）→ `Instantiated{handle}` 応答。いずれか失敗・タイムアウト（`command_timeout`）で `Err(HostError::Ipc)` + child kill/reap。
 - データ型写像: `ProcessConfig`/`ProcessResult`/`GuiHandle`/`GuiParentToken`/`HostError` は core 共有型を codec が直接 encode/decode。`TransportInfo`/`Event`/`EventList`/`MediaTime` 系は **repr 固定の wire レイアウト**（accessor 経由で encode、ctor で decode — `repr(Rust)` の memcpy 横断はしない）。
@@ -293,7 +296,7 @@ spawn 引数の受け渡し・`CARGO_BIN_EXE_*` の利用は各 crate 内に閉�
 - L1 GUI（プロセス境界越しの親ウィンドウ埋め込み）| 規格・プラットフォーム固有の大課題・本 Issue 範囲外 | L1 インスタンスへの GUI 要求 | `Unsupported` 拒否のままでは GUI 持ちプラグインが L1 で使えない
 - 自動再起動・supervisor ポリシー | 状態復元はプラグイン責務の #31 確定判断 | supervisor 型運用要求 | 手動復旧の運用負荷
 - 規格アダプタ（clap/vst3/ofx）の子プロセス組込み・実プラグイン L1 E2E | runner 形態の前提が本書で確定・別 Issue 級の配線 | 実プラグインでの L1 需要 | 検証がモック範囲に留まる
-- bundle 子（1 子 N インスタンス）| per-instance spawn の方が `Failed` 粒度に整合・単純 | メモリ/spawn コスト要求 | インスタンス数スケールに弱い
+- bundle 子（1 子 N インスタンス）| Issue #117 で設計確定 — wire v2（envelope `instance`・`CreateInstance`/`DestroyInstance`・`WIRE_MAX_INSTANCES=64`）+ route 単位 pool + 子スコープ基礎の `Failed` 粒度（design `docs/designs/issue-117-bundle-child-process.md`・ADR `docs/adr/issue-117-bundle-child-failed-granularity.md`） | 明示 pool キー・pool keep-alive・`BundleFailed` 相関通知等の残件は同 design の Deferred 表 | —
 - エンジン/利用側への L1 配線 | plugin-host の engine 消費自体が未実装 | engine プラグイン統合 Issue | L1 が consumer から到達不能
 - 複数 wire バージョン共存・交渉機構 | Issue #119 で単一最新バージョン方針を確定（交渉機構・互換レイヤーなし・bump 判断基準は上記「ワイヤバージョン方針」に記録） | 独立配布されるホスト/ランナー間のバージョン互換が要求される段階 | 独立配布形態で新旧バージョンの混在が扱えない
 - stderr ログ配管 | inherit で運用可能・診断価値は副次的 | 子プロセスのログ解析要求 | クラッシュ時の手がかりが stderr 依存

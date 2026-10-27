@@ -45,6 +45,8 @@ relations:
     - "../impl/ir/issue-76-l1-core-wire-task-1-implementation.md"
   derived-by:
     - "../specs/issue-117-bundle-child-process.md"
+    - "../designs/issue-117-bundle-child-process.md"
+    - "../adr/issue-117-bundle-child-failed-granularity.md"
   verifies: []
   verified-by: []
   references:

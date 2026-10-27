@@ -17,7 +17,8 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "../designs/issue-117-bundle-child-process.md"
   depends-on:
     - "issue-119-l1-wire-version-policy.md"
   blocks: []
@@ -40,7 +41,9 @@ relations:
     - "plugin-l1-out-of-process.md"
     - "../designs/plugin-l1-out-of-process.md"
     - "issue-119-l1-wire-version-policy.md"
-  derived-by: []
+  derived-by:
+    - "../designs/issue-117-bundle-child-process.md"
+    - "../adr/issue-117-bundle-child-failed-granularity.md"
   verifies: []
   verified-by: []
   references:

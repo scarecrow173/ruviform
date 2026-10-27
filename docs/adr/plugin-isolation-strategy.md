@@ -4,7 +4,7 @@ type: "adr"
 status: "accepted"
 title: "プラグイン分離戦略（インプロセス既定 + opt-in アウトプロセス）"
 created: "2026-10-21"
-updated: "2026-10-21"
+updated: "2026-10-28"
 owners: []
 relations:
   source: []
@@ -40,6 +40,8 @@ relations:
     - "docs/adr/plugin-rt-ownership-split.md"
     - "docs/discovery/issue-114-real-adapter-l1-e2e.md"
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/designs/issue-117-bundle-child-process.md"
+    - "docs/adr/issue-117-bundle-child-failed-granularity.md"
   verifies: []
   verified-by: []
   references: []
