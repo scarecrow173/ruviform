@@ -190,10 +190,13 @@ fn unique_key(tag: &str) -> String {
 
 /// Creates the segment and writes the canonical header.
 fn create_segment(key: &str) -> Shmem {
-    create_segment_with(key, shm::MAGIC)
+    create_segment_with(key, shm::MAGIC, u32::from(wire::WIRE_VERSION))
 }
 
-fn create_segment_with(key: &str, magic: u32) -> Shmem {
+/// Creates a segment whose header carries the given `magic` and
+/// `wire_version` — header-corruption tests override one field at a
+/// time against otherwise-valid values.
+fn create_segment_with(key: &str, magic: u32, wire_version: u32) -> Shmem {
     let mut mem = ShmemConf::new()
         .os_id(key)
         .size(SEGMENT_LEN)
@@ -201,7 +204,7 @@ fn create_segment_with(key: &str, magic: u32) -> Shmem {
         .expect("create shared-memory segment");
     let bytes = segment_bytes_mut(&mut mem);
     put_u32(bytes, shm::OFF_MAGIC, magic);
-    put_u32(bytes, shm::OFF_WIRE_VERSION, u32::from(wire::WIRE_VERSION));
+    put_u32(bytes, shm::OFF_WIRE_VERSION, wire_version);
     put_u32(bytes, shm::OFF_IN_DEPTH, IN_DEPTH);
     put_u32(bytes, shm::OFF_OUT_DEPTH, OUT_DEPTH);
     put_u32(
@@ -551,12 +554,28 @@ fn e2e_shm_attach_failure() {
 #[test]
 fn e2e_shm_header_mismatch() {
     let key = unique_key("bad-magic");
-    let _segment = create_segment_with(&key, 0xDEAD_BEEF);
+    let _segment = create_segment_with(&key, 0xDEAD_BEEF, u32::from(wire::WIRE_VERSION));
     let mut host = MiniHost::spawn_runner(GAIN_ID, &key);
     host.expect_hello();
     assert!(
         !host.wait_exit().success(),
         "header mismatch must exit non-zero"
+    );
+}
+
+/// A segment whose header `wire_version` differs from the runner's
+/// `WIRE_VERSION` → header validation fails → non-zero exit. The shm
+/// version check is the same strict-equality contract as the `Hello`
+/// handshake (Issue #119 single-version policy).
+#[test]
+fn e2e_shm_header_wire_version_mismatch() {
+    let key = unique_key("bad-version");
+    let _segment = create_segment_with(&key, shm::MAGIC, u32::from(wire::WIRE_VERSION) + 1);
+    let mut host = MiniHost::spawn_runner(GAIN_ID, &key);
+    host.expect_hello();
+    assert!(
+        !host.wait_exit().success(),
+        "header wire-version mismatch must exit non-zero"
     );
 }
 

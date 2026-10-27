@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "plugin L1 ワイヤ codec・ライフサイクル Failed 拡張 テスト仕様"
 created: "2026-10-25"
-updated: "2026-10-25"
+updated: "2026-10-27"
 owners: []
 relations:
   source: []
@@ -32,6 +32,7 @@ relations:
   verifies:
     - "docs/specs/plugin-l1-out-of-process.md"
     - "docs/designs/plugin-l1-out-of-process.md"
+    - "docs/specs/issue-119-l1-wire-version-policy.md"
   verified-by: []
   references: []
   defers: []
@@ -88,7 +89,7 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed）・approved design `d
 - L1 プロキシの E2E 契約（コマンド parity・クラッシュ→`Failed`+通知・pass-through・RT 脚）— `plugin-l1-proxy-contract-tests.md` が担当
 - runner（export）の argv/shm attach/メッセージループの結合 — `plugin-l1-runner-e2e-tests.md` が担当
 - shm スロットレイアウト・doorbell fence・`WIRE_MAX_*` 適用の process 経路（slot 配置は proxy 側 — codec は型 codec のみ）
-- wire バージョニング/進化（`WIRE_VERSION=1` の初版で十分 — design deferred）
+- 複数バージョン共存・交渉機構の検証（単一最新バージョン方針は Issue #119 で確定 — `docs/specs/issue-119-l1-wire-version-policy.md`。本 spec の固定対象は現行 `WIRE_VERSION` の契約のみ）
 - bundle 子（1 子 N インスタンス — `Instantiate`/handle 修飾は将来プロトコル改訂）
 - 実プラグイン（CLAP/VST3/OFX）の L1 組込み
 

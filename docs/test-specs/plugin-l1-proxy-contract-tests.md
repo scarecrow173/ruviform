@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "plugin L1 プロキシ契約（コマンド parity・クラッシュ Failed・pass-through・RT 脚）テスト仕様"
 created: "2026-10-25"
-updated: "2026-10-25"
+updated: "2026-10-27"
 owners: []
 relations:
   source: []
@@ -32,6 +32,7 @@ relations:
   verifies:
     - "docs/specs/plugin-l1-out-of-process.md"
     - "docs/designs/plugin-l1-out-of-process.md"
+    - "docs/specs/issue-119-l1-wire-version-policy.md"
   verified-by: []
   references: []
   defers: []

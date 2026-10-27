@@ -32,7 +32,21 @@
 //! message repeats it. A version mismatch is a handshake failure
 //! decided by the proxy (kill + `HostError::Ipc`), not by the codec —
 //! [`decode`] accepts any `u16` version. Payload field-set changes
-//! therefore always ride a `WIRE_VERSION` bump.
+//! therefore always ride a `WIRE_VERSION` bump. The shm header's
+//! `wire_version` field is validated against [`WIRE_VERSION`] with
+//! the same strict equality on attach.
+//!
+//! The supported protocol is always the single latest version (the
+//! Issue #119 policy): no decode, translation, fallback or
+//! coexistence for older revisions is implemented, and there is no
+//! version- or limit-negotiation mechanism. `WIRE_VERSION` is a plain
+//! integer generation of the communication contract — bumped on
+//! incompatible protocol changes only, not tied to `SemVer` or crate
+//! versions — and a bump means host and runner ship the same
+//! revision together. `Hello.capabilities` stays reserved and must
+//! be `0`; enabling a capability is itself designed as a protocol
+//! change. The full policy is recorded in
+//! `docs/designs/plugin-l1-out-of-process.md`.
 //!
 //! ## Bounded reads and defined rejections
 //!
