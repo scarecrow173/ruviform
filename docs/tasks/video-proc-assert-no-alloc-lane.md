@@ -69,7 +69,7 @@ relations:
 
 1. `crates/ruviform-video-proc/Cargo.toml` — `[dev-dependencies] assert_no_alloc = "1.1"` 追加（audio-device/plugin-clap と同一指定形・Issue #126/#22 レーンの理由コメント付き）。moxcms `any_to_any` の alloc コメントへ「rt_ lane で機械検証済み」注記を追加
 2. `crates/ruviform-video-proc/src/lib.rs` `mod tests` — `#[cfg(debug_assertions)] #[global_allocator] static ALLOC: assert_no_alloc::AllocDisabler` を宣言（crate lib test binary に 1 個 — 全モジュールの `rt_` テストが同一アロケータを共有。integration test binary は存在しない）
-3. 9 モジュールの全 `rt_process_*` テスト（28 件）で `process` 呼出を `assert_no_alloc::assert_no_alloc(|| ...)` 測定窓内へ移す — fixture 確保・kernel ctor（非 RT）・`let` binding・assert 評価は窓外に維持。`Kernel::new().process(...)` の chained call は `let mut kernel` へ hoist して ctor を窓外に置く
+3. 8 モジュールの全 `rt_process_*` テスト（28 件）で `process` 呼出を `assert_no_alloc::assert_no_alloc(|| ...)` 測定窓内へ移す — fixture 確保・kernel ctor（非 RT）・`let` binding・assert 評価は窓外に維持。`Kernel::new().process(...)` の chained call は `let mut kernel` へ hoist して ctor を窓外に置く
 4. 各 `rt_process_*` doc コメントを「alloc-free の機械検証（`assert_no_alloc` 窓 — 違反時 test binary abort）+ repeatable/deterministic・非破壊の観測検証」へ更新
 5. `mise run test -p ruviform-video-proc` + `mise run test-video-proc-icc` で全件パス確認 — alloc 検出（test binary abort）なら原因を特定し、所有レイヤーで修正 or 窓を適用できない正確な経路と理由を IR/spec に記録
 6. OFX host 側評価を IR/spec に記録 — `VideoPluginInstance` 全操作 NONRT 契約（baseline + ofx design）・`OfxInstance` が `Rc` 由来の `!Send`/`!Sync`・`render` の per-frame staging が C bridge `stage_alloc`（`_aligned_malloc`/`malloc`）で Rust `AllocDisabler` の観測外 — 適用外と判断
@@ -90,7 +90,7 @@ relations:
 
 ## Dependencies
 
-- 先行タスク: なし（`assert_no_alloc` 1.1.2 は `Cargo.lock` 解決済み・他 8 crate で使用中）
+- 先行タスク: なし（`assert_no_alloc` 1.1.2 は `Cargo.lock` 解決済み・他 9 crate で使用中）
 
 ## Affected Files
 

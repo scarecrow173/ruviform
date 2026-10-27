@@ -13,6 +13,12 @@ relations:
     added:
       - type: "file"
         path: "docs/impl/ir/issue-126-video-proc-rt-lane-implementation.md"
+      - type: "file"
+        path: "docs/specs/video-proc-rt-verification-lane.md"
+      - type: "file"
+        path: "docs/plans/implement-issue-126-video-proc-rt-lane.md"
+      - type: "file"
+        path: "docs/tasks/video-proc-assert-no-alloc-lane.md"
     modified:
       - type: "file"
         path: "crates/ruviform-video-proc/Cargo.toml"
@@ -42,12 +48,6 @@ relations:
         path: "docs/adr/rt-assert-no-alloc-thread-check.md"
       - type: "file"
         path: "docs/specs/rt-verification-lane.md"
-      - type: "file"
-        path: "docs/specs/video-proc-rt-verification-lane.md"
-      - type: "file"
-        path: "docs/plans/implement-issue-126-video-proc-rt-lane.md"
-      - type: "file"
-        path: "docs/tasks/video-proc-assert-no-alloc-lane.md"
       - type: "file"
         path: "docs/specs/README.md"
       - type: "file"
@@ -112,9 +112,9 @@ metadata:
 
 ### Changes
 
-- `crates/ruviform-video-proc/Cargo.toml` — `[dev-dependencies] assert_no_alloc = "1.1"`（`Cargo.lock` 解決済み 1.1.2・他 8 crate と同一指定形）。moxcms `any_to_any` の alloc 懸念コメントへ「Issue #126 RT lane で機械検証済み」注記を追加。
+- `crates/ruviform-video-proc/Cargo.toml` — `[dev-dependencies] assert_no_alloc = "1.1"`（`Cargo.lock` 解決済み 1.1.2・他 9 crate と同一指定形）。moxcms `any_to_any` の alloc 懸念コメントへ「Issue #126 RT lane で機械検証済み」注記を追加。
 - `crates/ruviform-video-proc/src/lib.rs` — `mod tests` に `#[cfg(debug_assertions)] #[global_allocator] static ALLOC: assert_no_alloc::AllocDisabler` を 1 個宣言。crate は integration test binary を持たないため lib test binary 1 個の宣言で全 `rt_` テストをカバー（feature `icc` 非依存 — feature off/on 両 build で有効）。
-- 9 モジュール・全 28 件の `rt_process_*` テストで `process` 呼出を `assert_no_alloc::assert_no_alloc(|| ...)` 窓内へ移動 — fixture 確保・kernel ctor（非 RT 段階）・warm-up 呼出・assert 評価は窓外に維持。`Kernel::new(...).process(...)` chained call は `let mut kernel` へ hoist して ctor を窓外に配置:
+- 8 モジュール・全 28 件の `rt_process_*` テストで `process` 呼出を `assert_no_alloc::assert_no_alloc(|| ...)` 窓内へ移動 — fixture 確保・kernel ctor（非 RT 段階）・warm-up 呼出・assert 評価は窓外に維持。`Kernel::new(...).process(...)` chained call は `let mut kernel` へ hoist して ctor を窓外に配置:
   - `affine.rs` 4 件・`composite.rs` 8 件（f32 repeatability 系の warm-up 呼出は窓外に維持）・`rgba_f16.rs` 4 件・`rgb_to_yuv.rs` 2 件・`tone_map.rs` 2 件・`working_space.rs` 4 件・`yuv_to_rgb.rs` 2 件・`icc.rs` 2 件。
 - 各 rt_ テストの doc コメントを「determinism/非破壊の観測検証のみ」から「`assert_no_alloc` 窓による alloc 機械検証（違反時 test binary abort）+ 観測検証」へ更新。`icc.rs` の `IccTransform::process` API doc・テストコメントは「baked moxcms executor 内部を含む経路の alloc を窓が捕捉する」旨を明記。
 - `docs/designs/color-conversion-kernels.md`・`docs/designs/composite-transition-kernels.md` — deferred 表の「video-proc への `assert_no_alloc` 導入」行へ Issue #126 解決注記を追記。
@@ -153,6 +153,10 @@ OFX crate 自体は変更なし。既存 gate（`test-ofx`・`lint-ofx`）の gr
 | `mise run test-ofx` | exit 0（36 + 1 + 1 pass — OFX 評価対象 crate の既存 green） |
 | `mise run lint-ofx` | exit 0 |
 | doc audit | `blocking: 0`・`findings: []`（最終編集後に実施 — Validation 記録参照） |
+
+## Follow-ups
+
+- **他 3 crate の `assert_no_alloc` lane が未武装（pre-existing・本 Issue scope 外）** — `ruviform-media-core`・`ruviform-dsp`・`ruviform-audio-analysis` は `assert_no_alloc` 測定窓をテスト内に持つが `#[global_allocator] AllocDisabler` を宣言しておらず、窓内 alloc を abort で機械検出できない（本作業中の grep で当該 3 crate に `global_allocator`/`AllocDisabler` 宣言なしを確認）。レビューで浮上した既存問題であり修正は本 Issue の scope 外 — follow-up issue として追跡する。
 
 ## Decisions During Implementation
 

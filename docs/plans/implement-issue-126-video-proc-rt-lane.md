@@ -108,7 +108,7 @@ relations:
 ## Implementation Sequence
 
 - [x] `Cargo.toml` に dev-dep 追加 + `lib.rs` `mod tests` に `AllocDisabler` 宣言
-- [x] 9 モジュールの全 `rt_process_*` テストで `process` 呼出を `assert_no_alloc::assert_no_alloc(|| ...)` 窓内へ（ctor/fixture/assert は窓外に維持 — `Kernel::new()` が `Result` を返す場合は `let` へ hoist）
+- [x] 8 モジュールの全 `rt_process_*` テストで `process` 呼出を `assert_no_alloc::assert_no_alloc(|| ...)` 窓内へ（ctor/fixture/assert は窓外に維持 — `Kernel::new()` が `Result` を返す場合は `let` へ hoist）
 - [x] 各 rt テストの doc コメントを「観測検証」から「`assert_no_alloc` 窓による機械検証 + 観測検証」へ更新
 - [x] `mise run test -p ruviform-video-proc`（default）+ `mise run test-video-proc-icc` で全件パス確認 — alloc 検出（abort）なら原因特定 → 所有レイヤーで修正 or 正確な非適用記録
 - [x] OFX 評価の記録（spec/task/IR — NONRT 契約 + `Rc` `!Send`/`!Sync` + C bridge `stage_alloc` が Rust allocator 外）
@@ -117,7 +117,7 @@ relations:
 
 ## Dependencies and Risks
 
-- `assert_no_alloc` 1.1.2 は `Cargo.lock` 解決済み（他 8 crate が同一 dev-dep で使用中）— lockfile 新規解決なし
+- `assert_no_alloc` 1.1.2 は `Cargo.lock` 解決済み（他 9 crate が同一 dev-dep で使用中）— lockfile 新規解決なし
 - `AllocDisabler` はテストバイナリ全体の global allocator を差し替える — video-proc は integration test バイナリを持たないため `lib.rs` の lib test binary 1 個に宣言すれば全 `rt_` テストをカバー（`tests/fixture/` は `.icc` データのみで `*.rs` なし）
 - moxcms executor が実際に alloc する場合（LUT path・interceptor 等）は test binary abort で顕在化 — その場合は `Layout`/`TransformOptions` 選択の見直しか engine 側への報告・窓対象経路の限定を判断する（spec の正直な outcome 条項）
 - `assert_no_alloc` が観測するのは Rust global allocator のみ — C/FFI 側 alloc（OFX bridge）は本 lane の適用外（OFX 除外の技術的根拠でもある）
