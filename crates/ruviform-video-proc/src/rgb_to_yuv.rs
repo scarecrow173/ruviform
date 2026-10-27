@@ -870,8 +870,10 @@ mod tests {
     }
 
     /// RT contract: a prepared kernel's `process` is allocation-free,
-    /// non-blocking and bounded — observably: repeated calls on the same
-    /// kernel succeed and stay deterministic, never panic.
+    /// non-blocking and bounded — the `assert_no_alloc` window aborts
+    /// the test binary on any (de)allocation inside it (fixture/kernel
+    /// construction stays outside), and observably repeated calls on
+    /// the same kernel succeed and stay deterministic, never panic.
     #[test]
     fn rt_process_is_repeatable_and_deterministic() {
         let src = rgba_frame(
@@ -884,7 +886,7 @@ mod tests {
         // Row 0 pixels are red and green: Y = 63 and 173. The cell's
         // mixed chroma averages near-neutral: Cb = Cr = 128.
         for _ in 0..64 {
-            kernel.process(&src, &mut dst).unwrap();
+            assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst)).unwrap();
             assert_eq!(dst.plane(0).unwrap().row(0).unwrap(), &[63, 173]);
             assert_eq!(dst.plane(1).unwrap().row(0).unwrap(), &[128]);
             assert_eq!(dst.plane(2).unwrap().row(0).unwrap(), &[128]);
@@ -892,8 +894,9 @@ mod tests {
     }
 
     /// RT contract: `process` writes only the caller-provided `dst` —
-    /// never allocates a new frame, and `src` stays byte-identical
-    /// across the call (a borrow, not a drain).
+    /// never allocates a new frame, `src` stays byte-identical across
+    /// the call (a borrow, not a drain), and the `assert_no_alloc`
+    /// window aborts on any (de)allocation inside it.
     #[test]
     fn rt_process_never_mutates_source() {
         let src = rgba_frame(
@@ -912,10 +915,8 @@ mod tests {
         );
         let before: [u8; 32] = src.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = VideoFrame::new_owned(PixelFormat::Yuv420p, 4, 2, pts()).unwrap();
-        RgbToYuv::new(MatrixCoefficients::Bt601, ColorRange::Limited)
-            .unwrap()
-            .process(&src, &mut dst)
-            .unwrap();
+        let mut kernel = RgbToYuv::new(MatrixCoefficients::Bt601, ColorRange::Limited).unwrap();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst)).unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &before);
     }
 }

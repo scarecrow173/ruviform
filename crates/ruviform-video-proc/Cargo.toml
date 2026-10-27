@@ -19,8 +19,17 @@ ruviform-video-core = { path = "../ruviform-video-core" }
 # SIMD/`in_place`/`options`/`any_to_any` stay off (scalar reference path).
 # `any_to_any` in particular must stay off: enabling it later would
 # break the alloc-free `process` contract — the Katana executor it
-# selects allocates per transform.
+# selects allocates per transform. The current scalar executor path is
+# verified alloc-free mechanically by the `assert_no_alloc` rt_ lane
+# since Issue #126.
 moxcms = { version = "0.9", optional = true, default-features = false, features = ["lut", "extended_range"] }
+
+[dev-dependencies]
+# Issue #126: `assert_no_alloc` 測定窓を全 `rt_process_*` テストの
+# `process` 経路（`IccTransform` の moxcms executor 内部 alloc 含む）
+# へ適用する RT 検証レーン（Issue #22・#97/#98 と同一方式 —
+# `alloc_counter` 併存の ADR 確定どおり新規 lane は assert_no_alloc）。
+assert_no_alloc = "1.1"
 
 [features]
 default = []

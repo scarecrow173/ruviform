@@ -1505,6 +1505,7 @@ dependencies = [
 name = "ruviform-video-proc"
 version = "0.1.0"
 dependencies = [
+ "assert_no_alloc",
  "moxcms",
  "ruviform-media-core",
  "ruviform-video-core",

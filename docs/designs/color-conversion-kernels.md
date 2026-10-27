@@ -50,6 +50,8 @@ relations:
     - "docs/test-specs/icc-transform-contract-tests.md"
     - "docs/specs/issue-125-icc-lut-fixture-coverage.md"
     - "docs/plans/implement-issue-125-icc-lut-fixture-coverage.md"
+    - "docs/specs/video-proc-rt-verification-lane.md"
+    - "docs/plans/implement-issue-126-video-proc-rt-lane.md"
   verifies: []
   verified-by:
     - "docs/test-specs/color-working-space-kernel-tests.md"
@@ -459,7 +461,7 @@ engine/射影層 — 複数ソースの linear-light 混合と、ICC/CICP で
 - `FromWorking` の `RgbaF16` dst・`RgbaF32 ↔ RgbaF16` shuffle・10/12-bit integer パイプライン | `RgbaF32`/`Rgba8` で初期要件を充足 | 高ビット深度要求の発生 | f32 経路の精度/性能コストが残る
 - トーンマップ対象ピークのパラメータ化（`L_DS` 固定 100 nits → 可変）・追加 tone operator（BT.2446/mobius/hable）・HLG L_W の設定化 | 初期 SDR 100 nits 固定で要件を充足 | 非 SDR ターゲット・品質要求の発生 | 適応範囲が限られる
 - `stage` 分割カーネル（gamut-only・transfer-only の独立適用） | 融合経路 + identity 組合せで表現可能 | stage 単位適用の実需発生 | 2 パス化による性能コスト
-- video-proc への `assert_no_alloc` 導入（`IccTransform` の executor 内部 alloc を含む機械検証レーン） | 現行 `rt_process_*` は determinism/非破壊/レビュー担保 — #97 設計と同じフォローアップ管轄 | 次の RT 保証強化 Issue | alloc 違反の機械検出なし
+- video-proc への `assert_no_alloc` 導入（`IccTransform` の executor 内部 alloc を含む機械検証レーン） | 現行 `rt_process_*` は determinism/非破壊/レビュー担保 — #97 設計と同じフォローアップ管轄 | 次の RT 保証強化 Issue | alloc 違反の機械検出なし — **Issue #126 で解決済み**: 全 `rt_process_*` へ `assert_no_alloc` 窓を適用し、moxcms executor 内部を含む per-process alloc 0 を実測（IR: [issue-126-video-proc-rt-lane-implementation.md](../impl/ir/issue-126-video-proc-rt-lane-implementation.md)）
 - `moxcms` のバージョン/feature 更新時の golden 再導出手続き | pin + `Cargo.lock` で現状固定 | バージョン更新要求 | 等価性契約の基盤が暗黙変化し得る
 
 ## 実装単位

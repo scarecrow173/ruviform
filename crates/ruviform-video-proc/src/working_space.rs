@@ -1175,8 +1175,10 @@ mod tests {
     }
 
     /// RT contract: `process` is allocation-free, non-blocking and
-    /// bounded — observably: repeated calls on the same kernel succeed
-    /// and stay deterministic, never panic.
+    /// bounded — the `assert_no_alloc` window aborts the test binary
+    /// on any (de)allocation inside it (fixture/kernel construction
+    /// stays outside), and observably repeated calls on the same
+    /// kernel succeed and stay deterministic, never panic.
     #[test]
     fn rt_process_to_working_is_repeatable_and_deterministic() {
         let src = rgba8_frame(
@@ -1189,7 +1191,7 @@ mod tests {
         let mut kernel = ToWorking::new();
         let mut first = [0_u8; 16];
         for i in 0..64 {
-            kernel.process(&src, &mut dst).unwrap();
+            assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst)).unwrap();
             let row = dst.plane(0).unwrap().row(0).unwrap();
             if i == 0 {
                 first.copy_from_slice(row);
@@ -1201,7 +1203,8 @@ mod tests {
 
     /// RT contract: `process` writes only the caller-provided `dst` —
     /// `src` stays byte-identical across the call (a borrow, not a
-    /// drain).
+    /// drain), and the `assert_no_alloc` window aborts on any
+    /// (de)allocation inside it.
     #[test]
     fn rt_process_to_working_never_mutates_source() {
         let src = rgba_f32_frame(
@@ -1212,7 +1215,8 @@ mod tests {
         );
         let before: [u8; 32] = src.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = VideoFrame::new_owned(PixelFormat::RgbaF32, 2, 1, pts()).unwrap();
-        ToWorking::new().process(&src, &mut dst).unwrap();
+        let mut kernel = ToWorking::new();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst)).unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &before);
     }
 
@@ -1555,8 +1559,10 @@ mod tests {
     }
 
     /// RT contract: `process` is allocation-free, non-blocking and
-    /// bounded — observably: repeated calls on the same kernel succeed
-    /// and stay deterministic, never panic.
+    /// bounded — the `assert_no_alloc` window aborts the test binary
+    /// on any (de)allocation inside it (fixture/kernel construction
+    /// stays outside), and observably repeated calls on the same
+    /// kernel succeed and stay deterministic, never panic.
     #[test]
     fn rt_process_from_working_is_repeatable_and_deterministic() {
         let src = rgba_f32_frame(1, 1, &[[1.0, 0.5, 0.25, 0.75]], working_tag());
@@ -1565,7 +1571,7 @@ mod tests {
             FromWorking::new(ColorPrimaries::Bt709, TransferCharacteristics::Pq).unwrap();
         let mut first = [0_u8; 4];
         for i in 0..64 {
-            kernel.process(&src, &mut dst).unwrap();
+            assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst)).unwrap();
             let row = dst.plane(0).unwrap().row(0).unwrap();
             if i == 0 {
                 first.copy_from_slice(row);
@@ -1577,7 +1583,8 @@ mod tests {
 
     /// RT contract: `process` writes only the caller-provided `dst` —
     /// `src` stays byte-identical across the call (a borrow, not a
-    /// drain).
+    /// drain), and the `assert_no_alloc` window aborts on any
+    /// (de)allocation inside it.
     #[test]
     fn rt_process_from_working_never_mutates_source() {
         let src = rgba_f32_frame(
@@ -1588,10 +1595,9 @@ mod tests {
         );
         let before: [u8; 32] = src.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = VideoFrame::new_owned(PixelFormat::RgbaF32, 2, 1, pts()).unwrap();
-        FromWorking::new(ColorPrimaries::Bt709, TransferCharacteristics::Bt709)
-            .unwrap()
-            .process(&src, &mut dst)
-            .unwrap();
+        let mut kernel =
+            FromWorking::new(ColorPrimaries::Bt709, TransferCharacteristics::Bt709).unwrap();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst)).unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &before);
     }
 }

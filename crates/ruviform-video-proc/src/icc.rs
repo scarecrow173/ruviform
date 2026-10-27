@@ -295,8 +295,11 @@ impl IccTransform {
     /// and bounded (exactly `width`×`height` single-pixel executor
     /// calls over borrowed rows; the only scratch is stack channel
     /// quads; the executor is a pure mapping on the pipeline the
-    /// constructor pre-built). Dropping `src`/`dst` stays the
-    /// caller's non-RT concern.
+    /// constructor pre-built). Allocation-free is verified
+    /// mechanically: the `rt_process_icc_*` tests run `process`
+    /// inside an `assert_no_alloc` window, so an executor-internal
+    /// (de)allocation aborts the test binary (Issue #126). Dropping
+    /// `src`/`dst` stays the caller's non-RT concern.
     pub fn process(&mut self, src: &VideoFrame, dst: &mut VideoFrame) -> Result<()> {
         let src_format = src.format();
         match src_format {
@@ -1306,8 +1309,13 @@ mod tests {
     }
 
     /// RT contract: `process` is allocation-free, non-blocking and
-    /// bounded — observably: repeated calls on the same kernel succeed
-    /// and stay deterministic, never panic.
+    /// bounded — the `assert_no_alloc` window aborts the test binary
+    /// on any (de)allocation inside it, **including allocations inside
+    /// the baked moxcms executor** (the kernel wraps the engine's
+    /// `transform` call inside the window; the allocating
+    /// `IccTransform::new` prepare step and fixtures stay outside) —
+    /// and observably repeated calls on the same kernel succeed and
+    /// stay deterministic, never panic.
     #[test]
     fn rt_process_icc_is_repeatable_and_deterministic() {
         let src = rgba8_frame(1, 1, &[[128, 200, 50, 255]], ColorInfo::default());
@@ -1315,7 +1323,7 @@ mod tests {
         let mut kernel = IccTransform::new(SRGB, DISPLAY_P3, IccIntent::Perceptual).unwrap();
         let mut first = [0_u8; 4];
         for i in 0..64 {
-            kernel.process(&src, &mut dst).unwrap();
+            assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst)).unwrap();
             let row = dst.plane(0).unwrap().row(0).unwrap();
             if i == 0 {
                 first.copy_from_slice(row);
@@ -1327,7 +1335,8 @@ mod tests {
 
     /// RT contract: `process` writes only the caller-provided `dst` —
     /// `src` stays byte-identical across the call (a borrow, not a
-    /// drain).
+    /// drain), and the `assert_no_alloc` window aborts on any
+    /// (de)allocation inside it, engine-internal allocations included.
     #[test]
     fn rt_process_icc_never_mutates_source() {
         let src = rgba_f32_frame(
@@ -1338,10 +1347,8 @@ mod tests {
         );
         let before: [u8; 32] = src.plane(0).unwrap().data().try_into().unwrap();
         let mut dst = VideoFrame::new_owned(PixelFormat::RgbaF32, 2, 1, pts()).unwrap();
-        IccTransform::new(SRGB, DISPLAY_P3, IccIntent::Perceptual)
-            .unwrap()
-            .process(&src, &mut dst)
-            .unwrap();
+        let mut kernel = IccTransform::new(SRGB, DISPLAY_P3, IccIntent::Perceptual).unwrap();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&src, &mut dst)).unwrap();
         assert_eq!(src.plane(0).unwrap().data(), &before);
     }
 

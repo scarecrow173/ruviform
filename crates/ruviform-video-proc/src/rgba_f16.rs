@@ -696,15 +696,17 @@ mod tests {
     }
 
     /// RT contract: `process` is allocation-free, non-blocking and
-    /// bounded — observably: repeated calls on the same kernel succeed
-    /// and stay deterministic, never panic.
+    /// bounded — the `assert_no_alloc` window aborts the test binary
+    /// on any (de)allocation inside it (fixture/kernel construction
+    /// stays outside), and observably repeated calls on the same
+    /// kernel succeed and stay deterministic, never panic.
     #[test]
     fn rt_process_to_f16_is_repeatable_and_deterministic() {
         let src8 = rgba8_frame(1, 1, &[[0, 128, 255, 7]]);
         let mut dst16 = VideoFrame::new_owned(PixelFormat::RgbaF16, 1, 1, pts()).unwrap();
         let mut forward = Rgba8ToRgbaF16::new();
         for _ in 0..64 {
-            forward.process(&src8, &mut dst16).unwrap();
+            assert_no_alloc::assert_no_alloc(|| forward.process(&src8, &mut dst16)).unwrap();
             let row = dst16.plane(0).unwrap().row(0).unwrap();
             assert_eq!(&row[..2], &[0x00, 0x00]); // 0 → 0.0
             assert_eq!(&row[2..4], &[0x04, 0x38]); // 128 → 0.501953125
@@ -712,8 +714,10 @@ mod tests {
     }
 
     /// RT contract: `process` is allocation-free, non-blocking and
-    /// bounded — observably: repeated calls on the same kernel succeed
-    /// and stay deterministic, never panic.
+    /// bounded — the `assert_no_alloc` window aborts the test binary
+    /// on any (de)allocation inside it (fixture/kernel construction
+    /// stays outside), and observably repeated calls on the same
+    /// kernel succeed and stay deterministic, never panic.
     #[test]
     fn rt_process_to_u8_is_repeatable_and_deterministic() {
         // [0.25, 0.5, 0.75, 1.0].
@@ -721,7 +725,7 @@ mod tests {
         let mut dst8 = VideoFrame::new_owned(PixelFormat::Rgba8, 1, 1, pts()).unwrap();
         let mut backward = RgbaF16ToRgba8::new();
         for _ in 0..64 {
-            backward.process(&src16, &mut dst8).unwrap();
+            assert_no_alloc::assert_no_alloc(|| backward.process(&src16, &mut dst8)).unwrap();
             // 0.25·255 = 63.75 → 64; 0.5·255 = 127.5 → 128;
             // 0.75·255 = 191.25 → 191.
             assert_eq!(dst8.plane(0).unwrap().row(0).unwrap(), &[64, 128, 191, 255]);
@@ -729,8 +733,9 @@ mod tests {
     }
 
     /// RT contract: `process` writes only the caller-provided `dst` —
-    /// never allocates a new frame, and `src` stays byte-identical
-    /// across the call (a borrow, not a drain).
+    /// never allocates a new frame, `src` stays byte-identical across
+    /// the call (a borrow, not a drain), and the `assert_no_alloc`
+    /// window aborts on any (de)allocation inside it.
     #[test]
     fn rt_process_to_f16_never_mutates_source() {
         let src8 = rgba8_frame(
@@ -745,19 +750,22 @@ mod tests {
         );
         let before: [u8; 16] = src8.plane(0).unwrap().data().try_into().unwrap();
         let mut dst16 = VideoFrame::new_owned(PixelFormat::RgbaF16, 2, 2, pts()).unwrap();
-        Rgba8ToRgbaF16::new().process(&src8, &mut dst16).unwrap();
+        let mut kernel = Rgba8ToRgbaF16::new();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&src8, &mut dst16)).unwrap();
         assert_eq!(src8.plane(0).unwrap().data(), &before);
     }
 
     /// RT contract: `process` writes only the caller-provided `dst` —
-    /// never allocates a new frame, and `src` stays byte-identical
-    /// across the call (a borrow, not a drain).
+    /// never allocates a new frame, `src` stays byte-identical across
+    /// the call (a borrow, not a drain), and the `assert_no_alloc`
+    /// window aborts on any (de)allocation inside it.
     #[test]
     fn rt_process_to_u8_never_mutates_source() {
         let src16 = f16_frame(2, 2, &[[0x2C66; 4], [0x3000; 4], [0x3400; 4], [0x3800; 4]]);
         let before: [u8; 32] = src16.plane(0).unwrap().data().try_into().unwrap();
         let mut dst8 = VideoFrame::new_owned(PixelFormat::Rgba8, 2, 2, pts()).unwrap();
-        RgbaF16ToRgba8::new().process(&src16, &mut dst8).unwrap();
+        let mut kernel = RgbaF16ToRgba8::new();
+        assert_no_alloc::assert_no_alloc(|| kernel.process(&src16, &mut dst8)).unwrap();
         assert_eq!(src16.plane(0).unwrap().data(), &before);
     }
 }
