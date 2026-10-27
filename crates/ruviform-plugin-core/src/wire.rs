@@ -2396,4 +2396,45 @@ mod tests {
             assert_ne!(error.to_string(), "");
         }
     }
+
+    /// The `Ok(false)`/`Err` split is load-bearing: the export runner
+    /// maps a clean EOF at a frame boundary to a normal exit and any
+    /// `Err` to a transport-violation exit, so the taxonomy is pinned
+    /// here at the wire layer that owns it.
+    #[test]
+    fn read_frame_distinguishes_clean_eof_from_error_kinds() {
+        let mut buf = Vec::new();
+
+        // Zero bytes pending where a length field would start — a
+        // clean EOF at a frame boundary.
+        let mut cursor = io::Cursor::new(Vec::new());
+        assert!(!read_frame(&mut cursor, &mut buf).unwrap());
+
+        // A partial length field is a mid-header cut —
+        // `UnexpectedEof`, never clean EOF.
+        for stream in [&[0x01_u8][..], &[0x01, 0x02, 0x03][..]] {
+            let mut cursor = io::Cursor::new(stream.to_vec());
+            assert_eq!(
+                read_frame(&mut cursor, &mut buf).unwrap_err().kind(),
+                io::ErrorKind::UnexpectedEof,
+            );
+        }
+
+        // A complete header declaring a `payload_len` over the cap is
+        // `InvalidData` — rejected before any body read/allocation.
+        let mut cursor = io::Cursor::new((WIRE_MAX_PAYLOAD + 1).to_le_bytes().to_vec());
+        assert_eq!(
+            read_frame(&mut cursor, &mut buf).unwrap_err().kind(),
+            io::ErrorKind::InvalidData,
+        );
+
+        // A complete header whose body never arrives is `UnexpectedEof`.
+        let mut frame = 1_u32.to_le_bytes().to_vec();
+        frame.push(0); // kind byte only — the declared payload is missing
+        let mut cursor = io::Cursor::new(frame);
+        assert_eq!(
+            read_frame(&mut cursor, &mut buf).unwrap_err().kind(),
+            io::ErrorKind::UnexpectedEof,
+        );
+    }
 }

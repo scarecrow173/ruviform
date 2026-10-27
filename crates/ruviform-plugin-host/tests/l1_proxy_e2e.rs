@@ -1423,7 +1423,7 @@ fn rejected_block_replies_resolve_pass_through() {
 
 mod composite_e2e {
     use std::ffi::OsString;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -1598,21 +1598,26 @@ mod composite_e2e {
         }
         let exe = std::env::current_exe().expect("current_exe");
         let file_name = format!("ruviform-plugin-l1-runner{}", std::env::consts::EXE_SUFFIX);
-        let dirs = exe
+        let candidates: Vec<PathBuf> = exe
             .parent()
             .into_iter()
-            .chain(exe.parent().and_then(Path::parent));
-        for dir in dirs {
-            let path = dir.join(&file_name);
+            .chain(exe.parent().and_then(Path::parent))
+            .map(|dir| dir.join(&file_name))
+            .collect();
+        for path in &candidates {
             if path.is_file() {
-                return path.into_os_string();
+                return path.clone().into_os_string();
             }
         }
         panic!(
-            "ruviform-plugin-l1-runner missing near {} — run `mise run \
-             test` (workspace test builds all member bins) or set \
-             RUVIFORM_L1_RUNNER",
-            exe.display()
+            "ruviform-plugin-l1-runner missing — searched {}; run \
+             `mise run test` (workspace test builds all member bins) \
+             or set RUVIFORM_L1_RUNNER",
+            candidates
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         );
     }
 

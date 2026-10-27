@@ -1762,8 +1762,8 @@ impl L1Instance {
     ///
     /// The reader is *detached*, not joined: a POSIX child can leave
     /// a stdio-inheriting grandchild holding the stdout pipe open
-    /// after its own death, so the reader's `read_exact` may never
-    /// see EOF — joining could hang forever. Dropping the
+    /// after its own death, so the reader's `wire::read_message` may
+    /// never see EOF — joining could hang forever. Dropping the
     /// `JoinHandle` detaches; the reader touches only `Arc`-shared
     /// state (kept alive by its own Arc) and process exit reaps the
     /// thread.

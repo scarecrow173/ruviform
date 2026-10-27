@@ -471,6 +471,10 @@ fn block_in_dispatch(
     block_in(lifecycle, segment, seq, activated_max_frames, stdout)
 }
 
+// The scripted fixture `main` runs past the pedantic line limit —
+// the multi-line `wire::write_message` call sites pushed it over.
+// Splitting the dispatch is out of this change's causal scope, so
+// the allow stays local with its reason recorded.
 #[allow(clippy::too_many_lines)]
 fn main() -> ExitCode {
     let flags = parse_flags();
