@@ -48,6 +48,8 @@ relations:
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
     - "docs/discovery/issue-114-real-adapter-l1-e2e.md"
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/specs/issue-76-followup-l1-internal-cleanup.md"
+    - "docs/plans/issue-76-followup-l1-internal-cleanup.md"
     - "docs/designs/issue-114-real-adapter-l1-e2e.md"
     - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"

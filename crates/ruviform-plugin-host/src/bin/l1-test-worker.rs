@@ -30,11 +30,11 @@
 //! as message 1 — except `--reject-blocks-after-msgs`, which counts
 //! `BlockIn` doorbells only.
 
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::process::ExitCode;
 use std::sync::atomic::{Ordering, fence};
 
-use ruviform_plugin_core::wire::{self, WIRE_FRAME_HEADER_LEN, WIRE_MAX_PAYLOAD, shm};
+use ruviform_plugin_core::wire::{self, shm};
 use ruviform_plugin_core::{
     HostError, Lifecycle, LifecycleEvent, PluginDescriptor, PrepareError, ProcessResult,
     ProcessStatus,
@@ -135,31 +135,6 @@ fn parse_flags() -> Flags {
         }
     }
     flags
-}
-
-fn read_message(reader: &mut impl Read) -> io::Result<wire::Message> {
-    let mut header = [0_u8; WIRE_FRAME_HEADER_LEN];
-    reader.read_exact(&mut header)?;
-    let payload_len =
-        u32::from_le_bytes(header[..4].try_into().expect("u32 length is 4 bytes")) as usize;
-    if payload_len > WIRE_MAX_PAYLOAD as usize {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "declared payload_len exceeds WIRE_MAX_PAYLOAD",
-        ));
-    }
-    let mut frame = Vec::with_capacity(WIRE_FRAME_HEADER_LEN + payload_len);
-    frame.extend_from_slice(&header);
-    frame.resize(WIRE_FRAME_HEADER_LEN + payload_len, 0);
-    reader.read_exact(&mut frame[WIRE_FRAME_HEADER_LEN..])?;
-    wire::decode(&frame).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-}
-
-fn write_message(writer: &mut impl Write, message: &wire::Message) -> io::Result<()> {
-    let mut frame = Vec::new();
-    wire::encode(message, &mut frame).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    writer.write_all(&frame)?;
-    writer.flush()
 }
 
 fn transition(lifecycle: &mut Lifecycle, event: LifecycleEvent) -> Result<(), HostError> {
@@ -438,12 +413,13 @@ fn block_in(
     stdout: &mut impl Write,
 ) -> io::Result<()> {
     if let Err(error) = transition(lifecycle, LifecycleEvent::Process) {
-        return write_message(
+        return wire::write_message(
             stdout,
             &wire::Message::Reply {
                 seq,
                 result: Err(error),
             },
+            &mut Vec::new(),
         );
     }
     fence(Ordering::Acquire);
@@ -458,7 +434,7 @@ fn block_in(
             result: Err(HostError::Ipc),
         },
     };
-    write_message(stdout, &message)
+    wire::write_message(stdout, &message, &mut Vec::new())
 }
 
 /// One `BlockIn` dispatch — `hung` answers nothing (the wedged data
@@ -483,17 +459,23 @@ fn block_in_dispatch(
         return Ok(());
     }
     if reject_blocks_after_msgs.is_some_and(|limit| blocks_received > limit) {
-        return write_message(
+        return wire::write_message(
             stdout,
             &wire::Message::Reply {
                 seq,
                 result: Err(HostError::PluginFailed),
             },
+            &mut Vec::new(),
         );
     }
     block_in(lifecycle, segment, seq, activated_max_frames, stdout)
 }
 
+// The scripted fixture `main` runs past the pedantic line limit —
+// the multi-line `wire::write_message` call sites pushed it over.
+// Splitting the dispatch is out of this change's causal scope, so
+// the allow stays local with its reason recorded.
+#[allow(clippy::too_many_lines)]
 fn main() -> ExitCode {
     let flags = parse_flags();
     if let Some(ms) = flags.sleep_ms {
@@ -505,12 +487,13 @@ fn main() -> ExitCode {
     let mut stdin = io::stdin().lock();
     let mut stdout = io::stdout().lock();
 
-    if write_message(
+    if wire::write_message(
         &mut stdout,
         &wire::Message::Hello {
             version: flags.hello_version,
             capabilities: 0,
         },
+        &mut Vec::new(),
     )
     .is_err()
     {
@@ -569,7 +552,7 @@ fn main() -> ExitCode {
                     .spawn();
             std::process::exit(0);
         }
-        let Ok(message) = read_message(&mut stdin) else {
+        let Ok(message) = wire::read_message(&mut stdin, &mut Vec::new()) else {
             // stdin EOF or a broken/malformed frame — clean teardown,
             // same as `Shutdown`.
             return ExitCode::SUCCESS;
@@ -598,7 +581,13 @@ fn main() -> ExitCode {
                             _ => {}
                         }
                     }
-                    if write_message(&mut stdout, &wire::Message::Reply { seq, result }).is_err() {
+                    if wire::write_message(
+                        &mut stdout,
+                        &wire::Message::Reply { seq, result },
+                        &mut Vec::new(),
+                    )
+                    .is_err()
+                    {
                         return ExitCode::FAILURE;
                     }
                 }
