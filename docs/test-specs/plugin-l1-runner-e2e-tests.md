@@ -41,7 +41,7 @@ relations:
 
 # plugin L1 runner（ruviform-plugin-export）E2E テスト仕様
 
-> status: approved — Issue #76 の実装（Task 2・Task 6 full gate 全 green・`l1_runner_e2e` 11 tests）で契約が実結果により確認済み。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
+> status: approved — Issue #76 の実装（Task 2・Task 6 full gate 全 green・`l1_runner_e2e` 11 tests）で契約が実結果により確認済み。Issue #119 で shm header `wire_version` 拒否の pin を +1 追加（計 12 tests）。run 可能コマンドは task 側に定義する（本書は契約と oracle の正本）。
 
 ## Purpose
 
