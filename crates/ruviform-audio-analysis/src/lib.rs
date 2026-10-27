@@ -39,3 +39,16 @@ pub mod spectrum;
 pub use level::{ChannelLevel, LevelMeter};
 pub use peaks::{PeakPair, WaveformPeaks};
 pub use spectrum::SpectrumAnalyzer;
+
+#[cfg(test)]
+mod tests {
+    /// Issue #130 RT-verification lane: `AllocDisabler` swaps the lib
+    /// test binary's allocator so `assert_no_alloc` catches any
+    /// (de)allocation inside its measurement window. One static per
+    /// crate test binary — the `level`/`spectrum` modules'
+    /// `rt_process_allocates_nothing` tests measure against this same
+    /// allocator; the crate has no `tests/*.rs` integration binary.
+    #[cfg(debug_assertions)]
+    #[global_allocator]
+    static ALLOC: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
+}
