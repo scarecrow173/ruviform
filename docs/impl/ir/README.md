@@ -92,3 +92,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034N3SIoHoHOf6TdLjhDna` | Issue #125 ICC LUT fixture coverage implementation | completed | [issue-125-icc-lut-fixture-coverage-implementation.md](./issue-125-icc-lut-fixture-coverage-implementation.md) |
 | `IMPL-034N4iNMJizNkkhp4ZwXrT` | Issue #126 video-proc assert_no_alloc RT 検証レーン適用 — implementation | completed | [issue-126-video-proc-rt-lane-implementation.md](./issue-126-video-proc-rt-lane-implementation.md) |
 | `IMPL-034N9jmYNeY4BGVmBIAOIT` | Issue #130 arm assert_no_alloc lane — implementation | completed | [issue-130-arm-assert-no-alloc-lane-implementation.md](./issue-130-arm-assert-no-alloc-lane-implementation.md) |
+| `IMPL-034N9p1KjpaIhOVj7A76Cj` | Issue #131 OFX UAF residuals — non-catalog window leases + lifecycle hardening implementation | completed | [issue-131-ofx-uaf-residuals-implementation.md](./issue-131-ofx-uaf-residuals-implementation.md) |

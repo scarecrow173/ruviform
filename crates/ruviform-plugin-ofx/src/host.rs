@@ -71,7 +71,7 @@ impl NativeHost {
     #[expect(unsafe_code)]
     fn new() -> Result<Rc<Self>, OfxError> {
         // SAFETY: `rv_ofx_host_new` returns NULL when a session is live; a
-        // non-null pointer is a fully owned host handle freed via Drop.
+        // non-null value is the session's own host token, retired via Drop.
         let raw = unsafe { sys::rv_ofx_host_new() };
         if raw.is_null() {
             return Err(OfxError::Unsupported("a live host session already exists"));
@@ -87,8 +87,9 @@ impl NativeHost {
 impl Drop for NativeHost {
     #[expect(unsafe_code)]
     fn drop(&mut self) {
-        // SAFETY: `raw` was allocated by `rv_ofx_host_new` and is freed once —
-        // this is the only `rv_ofx_host_free` call site for it.
+        // SAFETY: `raw` is the session token `rv_ofx_host_new` returned for
+        // this host; `rv_ofx_host_free` resolves and retires it exactly once
+        // here — this is the only `rv_ofx_host_free` call site for the token.
         unsafe { sys::rv_ofx_host_free(self.raw) }
     }
 }

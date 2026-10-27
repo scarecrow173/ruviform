@@ -25,9 +25,12 @@ const void *rv_fetch_suite(void *self, const char *name, int ver) {
 /* the OfxHost handed to foreign code (OfxSetHost / plugin setHost) lives
  * in static storage: a pointer a plugin may retain past a call window
  * must not point into the reclaimable RvHost block. fetchSuite stays
- * valid for the process lifetime; host is rebound per session and
- * cleared the instant the host is poisoned */
+ * valid for the process lifetime; host names a dedicated property set
+ * created once and bound once under g_mu, so the field is read-only
+ * after first publish     never rebound, never poisoned, and a token a
+ * plugin retains can never alias a later session's state (Issue #131) */
 static OfxHost g_api = { NULL, rv_fetch_suite };
+static RvPropsObj *g_host_props;
 
 static void img_free(RvImg *im);
 static void stage_free(void *p);
@@ -36,17 +39,26 @@ static void stage_free(void *p);
 
 void *rv_ofx_host_new(void) {
     RvHost *h;
+    uintptr_t tok;
     if (rv_lock()) return NULL;
     if (g_active) { rv_unlock(); return NULL; }
     h = (RvHost *)calloc(1, sizeof(RvHost));
     if (!h) { rv_unlock(); return NULL; }
-    h->props = rv_po_new(0);
-    if (!h->props) { free(h); rv_unlock(); return NULL; }
-    g_api.host = (OfxPropertySetHandle)(uintptr_t)h->props->tok;
+    /* the caller-visible handle is a generation token, not the block:
+     * a stale value resolves to NULL instead of aliasing recycled
+     * storage */
+    h->tok = rv_tok_new(H_HOST, h, 0);
+    if (!h->tok) { free(h); rv_unlock(); return NULL; }
+    if (!g_host_props) {
+        g_host_props = rv_po_new(0);
+        if (!g_host_props) { rv_tok_revoke(h->tok); free(h); rv_unlock(); return NULL; }
+        g_api.host = (OfxPropertySetHandle)(uintptr_t)g_host_props->tok;
+    }
     h->alive = 1;
     g_active = h;
+    tok = h->tok;
     rv_unlock();
-    return h;
+    return (void *)tok;
 }
 
 static void effect_free(RvEffect *e) {
@@ -83,14 +95,13 @@ static void effect_free(RvEffect *e) {
 }
 
 /* caller holds g_mu; h is already poisoned   g_active cleared, alive=0,
- * catalogs detached, g_api.host NULL. reclaim the host-owned pools and
- * the block itself */
+ * catalogs detached, every session token revoked. reclaim the
+ * host-owned pools and the block itself */
 static void host_reclaim(RvHost *h) {
     RvStrNode *s = h->strings;
     while (s) { RvStrNode *n = s->next; free(s->s); free(s); s = n; }
     /* rv_mem_free revokes the H_MEMORY token, unlinks, frees buffer+node */
     while (h->mem) (void)rv_mem_free(h, h->mem->p);
-    if (h->props) { rv_tok_revoke(h->props->tok); rv_po_free(h->props); }
     free(h);
 }
 
@@ -98,17 +109,30 @@ static void host_reclaim(RvHost *h) {
  * a window was open is reclaimed when the last lease drops. callers must
  * not dereference h after this returns */
 static void host_unlease(RvHost *h) {
-    if (h->foreign && --h->foreign == 0 && !h->alive) host_reclaim(h);
+    if (h && h->foreign && --h->foreign == 0 && !h->alive) host_reclaim(h);
+}
+
+/* caller holds g_mu. lease the session host this attempt was created
+ * under. NULL when the owning session is gone: the pool its foreign
+ * actions would touch is already reclaimed, so no foreign call may run */
+static RvHost *eff_host_lease(const RvEffect *i) {
+    if (g_active && g_active->tok == i->host_tok) {
+        g_active->foreign++;
+        return g_active;
+    }
+    return NULL;
 }
 
 void rv_ofx_host_free(void *vh) {
-    RvHost *h = (RvHost *)vh;
-    if (!h) return;
+    RvHost *h;
     if (rv_lock()) return;
-    if (h != g_active || !h->alive) { rv_unlock(); return; }
+    /* vh is the session token host_new returned; a stale or replayed
+     * value resolves to NULL (or a wrong object) rather than a raw
+     * pointer into possibly-reclaimed storage */
+    h = (RvHost *)rv_tok_get((uintptr_t)vh, H_HOST);
+    if (!h || h != g_active || !h->alive) { rv_unlock(); return; }
     g_active = NULL;
     h->alive = 0;
-    g_api.host = NULL;
     while (h->catalogs) {
         /* catalogs must be closed first; detach anyway and poison the
          * back-pointer so a late close degrades to no-op */
@@ -116,6 +140,20 @@ void rv_ofx_host_free(void *vh) {
         h->catalogs = d->next;
         d->host = NULL;
     }
+    /* every token the session published dies with the host: a suite call
+     * or release that lands after reclaim resolves nothing, so it cannot
+     * reach objects whose pool strings are gone. the dedicated api.host
+     * set is process-lifetime and survives the sweep */
+    rv_tok_sweep(g_host_props ? g_host_props->tok : 0);
+    /* ...but its records do not: each RvProp name/value string pooled on
+     * this session, so they must retire here with it. clearing at poison
+     * (not deferred reclaim) keeps records exactly session-scoped: a new
+     * session can already start inside an open lease window, and a
+     * reclaim-time clear would then wipe records the new session just
+     * pooled on its own host. an empty head keeps every reader defined
+     * (pfind misses, writes fail on the NULL g_active pool) until the
+     * next session rewrites them (Issue #131) */
+    rv_po_clear(g_host_props);
     /* an open foreign-call window still dereferences h after re-locking;
      * poison above is immediate, reclaim waits for the last lease drop */
     if (!h->foreign) host_reclaim(h);
@@ -144,6 +182,9 @@ static RvEffect *effect_new(int is_inst, uintptr_t parent) {
     RvEffect *e = (RvEffect *)calloc(1, sizeof(RvEffect));
     if (!e) return NULL;
     e->is_instance = is_inst;
+    /* bind the attempt to the session that creates it   window leases
+     * later require this token to still name the live host */
+    e->host_tok = g_active ? g_active->tok : 0;
     e->props = rv_po_new(0);
     if (!e->props) { free(e); return NULL; }
     e->tok = rv_tok_new(H_EFFECT, e, parent);
@@ -258,7 +299,7 @@ static int entry_admit(RvHost *h, RvCatalog *c, RvEffect *e) {
 int rv_ofx_catalog_open(void *vh, const void *get_count,
                         const void *get_plugin, const void *set_host,
                         void **catalog) {
-    RvHost *h = (RvHost *)vh;
+    RvHost *h;
     RvCatalog *c = NULL;
     FnGetCount gc = (FnGetCount)get_count;
     FnGetPlugin gp = (FnGetPlugin)get_plugin;
@@ -268,8 +309,10 @@ int rv_ofx_catalog_open(void *vh, const void *get_count,
     if (!vh || !gc || !gp || !catalog) return kOfxStatErrBadHandle;
     *catalog = NULL;
     if (rv_lock()) return kOfxStatFailed;
-    /* pointer comparison first: a stale h is rejected without a deref */
-    if (h != g_active || !h->alive) { rv_unlock(); return kOfxStatErrBadHandle; }
+    /* the handle is a session token: a stale h is rejected without a
+     * deref     it can never alias a recycled RvHost block */
+    h = (RvHost *)rv_tok_get((uintptr_t)vh, H_HOST);
+    if (!h || h != g_active || !h->alive) { rv_unlock(); return kOfxStatErrBadHandle; }
     /* lease: h stays allocated across every foreign window below even if
      * teardown poisons it mid-call; reclaim waits for the lease drop */
     h->foreign++;
@@ -277,6 +320,12 @@ int rv_ofx_catalog_open(void *vh, const void *get_count,
     rv_unlock();
     if (sh) {
         OfxStatus s = sh(&g_api);
+        /* error precedence residual (deferred, Issue #131): unlike the
+         * post-gc() check below, the plugin's non-OK status is returned
+         * without first consulting h->alive, and an OK sh that poisoned
+         * the host still runs gc() before the dead-session rejection.
+         * every path stays defined via the sweep   only which error a
+         * doubly-faulted window reports is open */
         if (s != kOfxStatOK) {
             rv_lock();
             host_unlease(h);
@@ -342,19 +391,22 @@ int rv_ofx_catalog_open(void *vh, const void *get_count,
             *p = e;
         }
     }
-    if (!h->alive) {
+    {
         /* teardown ran inside a window: entries hold host-pool strings
-         * that die with reclaim, so the partial catalog is torn down in
-         * place instead of escaping to the caller. The catalog was
-         * already detached by host poison, so close is a defined path */
-        rc = kOfxStatErrBadHandle;
-        rv_ofx_catalog_close(c);
-        c = NULL;
+         * that die with reclaim, so a partial catalog is torn down in
+         * place instead of escaping to the caller. the catalog was
+         * already detached by host poison, so close is a defined path.
+         * the recursive call runs with no lock held     a foreign Unload
+         * inside close may join a thread calling back into host suites,
+         * and must not find g_mu owned by this frame (Issue #131) */
+        int dead = !h->alive;
+        *catalog = dead ? NULL : c;
+        if (dead) rc = kOfxStatErrBadHandle;
+        host_unlease(h);
+        rv_unlock();
+        if (dead && c) rv_ofx_catalog_close(c);
+        return rc;
     }
-    *catalog = c;
-    host_unlease(h);
-    rv_unlock();
-    return rc;
 }
 
 /* live attempts minus the ones parked on this catalog's quarantine list
@@ -370,9 +422,20 @@ static int entry_open_live(const RvCatalog *c, const RvEffect *e) {
 
 void rv_ofx_catalog_close(void *vc) {
     RvCatalog *c = (RvCatalog *)vc;
+    RvHost *host;
     RvEffect *e;
     if (!c) return;
     if (rv_lock()) return;
+    /* a re-entrant close from inside a foreign Unload window must not
+     * re-walk or re-free the catalog this frame is tearing down */
+    if (c->closing) { rv_unlock(); return; }
+    c->closing = 1;
+    /* lease the owning host across the Unload windows so post-window
+     * bookkeeping stays defined when teardown lands inside one. NULL
+     * once poison detached it: with no session, no foreign call may run
+     *     the pool the plugin's callback would touch is already gone */
+    host = c->host;
+    if (host) host->foreign++;
     /* detach from host   NULL when host already tore down */
     if (c->host) {
         RvCatalog **p = &c->host->catalogs;
@@ -382,9 +445,14 @@ void rv_ofx_catalog_close(void *vc) {
     }
     /* Unload each entry that had a successful Load   once, and only when
      * no non-quarantined attempt still holds the descriptor: Unloading
-     * under a live attempt is an action-serialization violation */
+     * under a live attempt is an action-serialization violation. When
+     * host is NULL (poison already detached this catalog) the session
+     * pool is gone or going, so the Unload is skipped entirely and the
+     * plugin's successful Load is deliberately left unbalanced   the
+     * admission-rejection path can still Unload because its open lease
+     * keeps the same pool alive (Issue #131) */
     for (e = c->entries; e; e = e->next) {
-        if (e->loaded && e->raw && e->raw->mainEntry &&
+        if (host && e->loaded && e->raw && e->raw->mainEntry &&
             entry_open_live(c, e) == 0) {
             rv_unlock();
             call_action(e->raw, kOfxActionUnload, NULL, NULL, NULL);
@@ -411,6 +479,7 @@ void rv_ofx_catalog_close(void *vc) {
         effect_free(e);
     }
     free(c);
+    host_unlease(host);
     rv_unlock();
 }
 
@@ -659,6 +728,7 @@ int rv_ofx_instance_configure(void *eff, uint32_t w, uint32_t h, double fps) {
 
 int rv_ofx_instance_create(void *eff) {
     RvEffect *i;
+    RvHost *host;
     OfxPlugin *raw;
     uintptr_t itok;
     OfxStatus st;
@@ -670,6 +740,11 @@ int rv_ofx_instance_create(void *eff) {
         rv_unlock();
         return kOfxStatErrExists;
     }
+    /* lease the owning session across the Create window: a re-entrant
+     * rv_ofx_host_free inside the action keeps this block (and its pool)
+     * allocated until the lease drops below */
+    host = eff_host_lease(i);
+    if (!host) { rv_unlock(); return kOfxStatErrBadHandle; }
     i->create_attempted++;
     raw = i->desc->raw;
     itok = i->tok;
@@ -677,18 +752,21 @@ int rv_ofx_instance_create(void *eff) {
     st = call_action(raw, kOfxActionCreateInstance,
                      (void *)itok, NULL, NULL);
     rv_lock();
-    /* the attempt may have been released during the foreign window */
+    /* the attempt may have been released     or its token revoked by host
+     * poison     during the foreign window */
     i = eff_of(eff);
-    if (!i) { rv_unlock(); return kOfxStatErrBadHandle; }
-    if (st != kOfxStatOK) { rv_unlock(); return (int)st; }
+    if (!i) { host_unlease(host); rv_unlock(); return kOfxStatErrBadHandle; }
+    if (st != kOfxStatOK) { host_unlease(host); rv_unlock(); return (int)st; }
     i->created = 1;
     i->desc->live++;
+    host_unlease(host);
     rv_unlock();
     return kOfxStatOK;
 }
 
 int rv_ofx_instance_changed(void *eff, size_t idx) {
     RvEffect *i;
+    RvHost *host;
     OfxPlugin *raw;
     uintptr_t itok;
     OfxStatus st = kOfxStatOK;
@@ -699,8 +777,10 @@ int rv_ofx_instance_changed(void *eff, size_t idx) {
     i = eff_of(eff);
     if (!i || !i->is_instance || !i->created) { rv_unlock(); return kOfxStatErrBadHandle; }
     if (idx >= i->nparams) { rv_unlock(); return kOfxStatErrBadIndex; }
+    host = eff_host_lease(i);
+    if (!host) { rv_unlock(); return kOfxStatErrBadHandle; }
     o = rv_po_new(i->tok);
-    if (!o) { rv_unlock(); return kOfxStatErrMemory; }
+    if (!o) { host_unlease(host); rv_unlock(); return kOfxStatErrMemory; }
     rv_po_set(o, kOfxPropName, RV_PT_STRING, 0, 0, 0, i->params[idx]->name, NULL);
     rv_po_set(o, kOfxPropType, RV_PT_STRING, 0, 0, 0, kOfxTypeParameter, NULL);
     rv_po_set(o, kOfxPropChangeReason, RV_PT_STRING, 0, 0, 0, kOfxChangeUserEdited, NULL);
@@ -725,18 +805,23 @@ int rv_ofx_instance_changed(void *eff, size_t idx) {
     /* ReplyDefault means the action was ignored   not a failure */
     if (st == kOfxStatReplyDefault) st = kOfxStatOK;
     rv_lock();
+    /* teardown inside the window makes the action result untrusted;
+     * the lease kept the reads above and the pool reads below defined */
+    if (!host->alive) st = kOfxStatErrBadHandle;
     rv_tok_revoke(in);
     rv_po_free(o);
+    host_unlease(host);
     rv_unlock();
     return (int)st;
 }
 
 /* Seed the offered clip contract, run GetClipPreferences unlocked, and
  * verify the plugin left the fixed RGBA8/byte values intact. Called with
- * the lock held; returns with the lock held. `i` is not dereferenced after
- * the foreign window. */
+ * the lock held and a lease on the owning session host (non-NULL);
+ * returns with the lock held. `i` is not dereferenced after the foreign
+ * window. */
 static OfxStatus rv_clip_prefs_validate(RvEffect *i, OfxPlugin *raw,
-                                        uintptr_t itok) {
+                                        uintptr_t itok, const RvHost *host) {
     OfxStatus st;
     RvPropsObj *o;
     uintptr_t out;
@@ -758,6 +843,9 @@ static OfxStatus rv_clip_prefs_validate(RvEffect *i, OfxPlugin *raw,
     st = call_action(raw, kOfxImageEffectActionGetClipPreferences,
                      (void *)itok, NULL, (void *)out);
     rv_lock();
+    /* the lease keeps the `o` reads below defined when teardown landed
+     * inside the window, but a dead session's result is untrusted */
+    if (!host->alive) st = kOfxStatErrBadHandle;
     /* validate unchanged supported values   the fixed RGBA8/byte contract
      * the adapter can actually consume */
     if (st == kOfxStatOK || st == kOfxStatReplyDefault) {
@@ -796,11 +884,15 @@ static OfxStatus rv_clip_prefs_validate(RvEffect *i, OfxPlugin *raw,
 
 int rv_ofx_instance_preferences(void *eff) {
     RvEffect *i;
+    RvHost *host;
     OfxStatus st;
     if (rv_lock()) return kOfxStatFailed;
     i = eff_of(eff);
     if (!i || !i->is_instance || !i->created) { rv_unlock(); return kOfxStatErrBadHandle; }
-    st = rv_clip_prefs_validate(i, i->desc->raw, i->tok);
+    host = eff_host_lease(i);
+    if (!host) { rv_unlock(); return kOfxStatErrBadHandle; }
+    st = rv_clip_prefs_validate(i, i->desc->raw, i->tok, host);
+    host_unlease(host);
     rv_unlock();
     return (int)st;
 }
@@ -827,6 +919,7 @@ int rv_ofx_instance_render(void *eff, const unsigned char *src,
                            size_t src_stride, unsigned char *dst,
                            size_t dst_stride, double time) {
     RvEffect *i;
+    RvHost *host;
     OfxPlugin *raw;
     uintptr_t itok;
     OfxStatus st;
@@ -843,9 +936,14 @@ int rv_ofx_instance_render(void *eff, const unsigned char *src,
     if (!src || !dst || !isfinite(time)) {
         rv_unlock(); return (int)kOfxStatErrValue;
     }
+    /* lease the owning session across the validate + render-bracket
+     * windows: teardown inside an action keeps the block and pool
+     * readable until the bracket closes */
+    host = eff_host_lease(i);
+    if (!host) { rv_unlock(); return (int)kOfxStatErrBadHandle; }
     row_bytes = (size_t)i->w * 4u;
     if (src_stride < row_bytes || dst_stride < row_bytes) {
-        rv_unlock(); return (int)kOfxStatErrValue;
+        host_unlease(host); rv_unlock(); return (int)kOfxStatErrValue;
     }
     stride = (row_bytes + 15u) & ~(size_t)15u;
     bytes = stride * (size_t)i->h;
@@ -854,7 +952,7 @@ int rv_ofx_instance_render(void *eff, const unsigned char *src,
     if (!i->stage_src || !i->stage_dst) {
         stage_free(i->stage_src); stage_free(i->stage_dst);
         i->stage_src = i->stage_dst = NULL;
-        rv_unlock(); return (int)kOfxStatErrMemory;
+        host_unlease(host); rv_unlock(); return (int)kOfxStatErrMemory;
     }
     i->stage_stride = stride;
     /* zero both buffers: deterministic row padding on src, and a defined
@@ -868,7 +966,7 @@ int rv_ofx_instance_render(void *eff, const unsigned char *src,
     itok = i->tok;
 
     /* unconditional clip-prefs revalidation before the bracket opens */
-    st = rv_clip_prefs_validate(i, raw, itok);
+    st = rv_clip_prefs_validate(i, raw, itok, host);
     if (st == kOfxStatOK) {
         inb = rv_po_new(itok);
         inr = rv_po_new(itok);
@@ -910,6 +1008,9 @@ int rv_ofx_instance_render(void *eff, const unsigned char *src,
     }
     if (inb) { rv_tok_revoke(inb->tok); rv_po_free(inb); }
     if (inr) { rv_tok_revoke(inr->tok); rv_po_free(inr); }
+    /* a session torn down inside a window leaves staged pixels the dead
+     * host's plugin produced     untrusted, so the commit is skipped */
+    if (st == kOfxStatOK && !host->alive) st = kOfxStatErrBadHandle;
     /* retire images the plugin failed to release inside the bracket */
     while (i->images) {
         RvImg *im = i->images;
@@ -926,12 +1027,14 @@ int rv_ofx_instance_render(void *eff, const unsigned char *src,
     stage_free(i->stage_dst);
     i->stage_src = i->stage_dst = NULL;
     i->stage_stride = 0;
+    host_unlease(host);
     rv_unlock();
     return (int)st;
 }
 
 int rv_ofx_instance_destroy(void *eff) {
     RvEffect *i;
+    RvHost *host;
     OfxPlugin *raw;
     uintptr_t itok;
     OfxStatus st;
@@ -952,6 +1055,19 @@ int rv_ofx_instance_destroy(void *eff) {
         rv_unlock();
         return (int)kOfxStatFailed;
     }
+    /* lease the owning session across the Destroy window   when the
+     * owning session is already gone, running native Destroy would let
+     * the plugin touch a reclaimed pool; park it as uncertain instead */
+    host = eff_host_lease(i);
+    if (!host) {
+        i->quarantined = 1;
+        if (i->desc->cat) {
+            i->next_quar = i->desc->cat->quar;
+            i->desc->cat->quar = i;
+        }
+        rv_unlock();
+        return (int)kOfxStatErrBadHandle;
+    }
     raw = i->desc->raw;
     itok = i->tok;
     rv_unlock();
@@ -959,7 +1075,10 @@ int rv_ofx_instance_destroy(void *eff) {
                      (void *)itok, NULL, NULL);
     rv_lock();
     i = eff_of(eff);
-    if (!i) { rv_unlock(); return (int)(st == kOfxStatOK ? kOfxStatErrBadHandle : st); }
+    if (!i) {
+        host_unlease(host); rv_unlock();
+        return (int)(st == kOfxStatOK ? kOfxStatErrBadHandle : st);
+    }
     if (st != kOfxStatOK) {
         i->quarantined = 1;
         /* uncertain instance keeps the SingleInstance reservation and is
@@ -968,16 +1087,19 @@ int rv_ofx_instance_destroy(void *eff) {
             i->next_quar = i->desc->cat->quar;
             i->desc->cat->quar = i;
         }
+        host_unlease(host);
         rv_unlock();
         return (int)st;
     }
     i->desc->live--;
+    host_unlease(host);
     rv_unlock();
     return kOfxStatOK;
 }
 
 void rv_ofx_instance_release(void *eff) {
     RvEffect *i;
+    RvHost *host;
     if (rv_lock()) return;
     i = eff_of(eff);
     if (!i || !i->is_instance) { rv_unlock(); return; }
@@ -993,20 +1115,32 @@ void rv_ofx_instance_release(void *eff) {
         rv_unlock();
         return;
     }
+    host = eff_host_lease(i);
     if (i->created && !i->destroyed) {
         OfxStatus st;
         OfxPlugin *raw = i->desc->raw;
         uintptr_t itok = i->tok;
         i->destroyed = 1;
-        rv_unlock();
-        st = call_action(raw, kOfxActionDestroyInstance,
-                         (void *)itok, NULL, NULL);
-        rv_lock();
-        i = eff_of(eff);
-        if (!i) { rv_unlock(); return; }
-        if (st == kOfxStatOK) {
-            i->desc->live--;
+        if (host) {
+            rv_unlock();
+            st = call_action(raw, kOfxActionDestroyInstance,
+                             (void *)itok, NULL, NULL);
+            rv_lock();
+            i = eff_of(eff);
+            if (!i) { host_unlease(host); rv_unlock(); return; }
+            if (st == kOfxStatOK) {
+                i->desc->live--;
+            } else {
+                i->quarantined = 1;
+                if (i->desc->cat) {
+                    i->next_quar = i->desc->cat->quar;
+                    i->desc->cat->quar = i;
+                }
+            }
         } else {
+            /* owning session is gone   the foreign Destroy would touch a
+             * reclaimed pool, so the attempt is parked as uncertain
+             * instead of running the action (Issue #131) */
             i->quarantined = 1;
             if (i->desc->cat) {
                 i->next_quar = i->desc->cat->quar;
@@ -1018,6 +1152,7 @@ void rv_ofx_instance_release(void *eff) {
         effect_free(i);
     }
     /* quarantined instances are freed at catalog close */
+    host_unlease(host);
     rv_unlock();
 }
 

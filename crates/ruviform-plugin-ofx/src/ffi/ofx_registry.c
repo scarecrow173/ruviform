@@ -74,6 +74,17 @@ void *rv_tok_get(uintptr_t tok, int kind) {
     return NULL;
 }
 
+void rv_tok_sweep(uintptr_t keep) {
+    for (;;) {
+        RvTok *n;
+        uintptr_t z = 0;
+        for (n = g_toks; n; n = n->next)
+            if (n->tok != keep) { z = n->tok; break; }
+        if (!z) return;
+        rv_tok_revoke(z);
+    }
+}
+
 void rv_tok_revoke(uintptr_t tok) {
     RvTok **n;
     for (n = &g_toks; *n; n = &(*n)->next)
@@ -320,12 +331,38 @@ static void seed(RvPropsObj *o, const char *n, int t, int dim,
     rv_po_set(o, n, t, 0, vi, vd, vs, vp);
     p = pfind(o, n);
     if (!p || p->seeded) return;
-    p->seeded = 1;
-    p->ddim = dim > 0 ? dim : 1;
-    if (p->type == RV_PT_INT) { p->di = (int *)calloc((size_t)p->ddim, sizeof(int)); if (p->di) for (k = 0; k < p->ddim; k++) p->di[k] = vi; }
-    else if (p->type == RV_PT_DOUBLE) { p->dd = (double *)calloc((size_t)p->ddim, sizeof(double)); if (p->dd) for (k = 0; k < p->ddim; k++) p->dd[k] = vd; }
-    else if (p->type == RV_PT_STRING) { p->ds = (char **)calloc((size_t)p->ddim, sizeof(char *)); if (p->ds) for (k = 0; k < p->ddim; k++) p->ds[k] = rv_str_own(g_active, vs ? vs : ""); }
-    else { p->dp = (void **)calloc((size_t)p->ddim, sizeof(void *)); if (p->dp) for (k = 0; k < p->ddim; k++) p->dp[k] = vp; }
+    /* mark seeded only after the snapshot array exists   a failed calloc
+     * must not leave rv_po_reset dereferencing a NULL snapshot array
+     * (Issue #131) */
+    {
+        int ddim = dim > 0 ? dim : 1;
+        int ok = 0;
+        if (p->type == RV_PT_INT) {
+            p->di = (int *)calloc((size_t)ddim, sizeof(int));
+            if (p->di) { for (k = 0; k < ddim; k++) p->di[k] = vi; ok = 1; }
+        } else if (p->type == RV_PT_DOUBLE) {
+            p->dd = (double *)calloc((size_t)ddim, sizeof(double));
+            if (p->dd) { for (k = 0; k < ddim; k++) p->dd[k] = vd; ok = 1; }
+        } else if (p->type == RV_PT_STRING) {
+            p->ds = (char **)calloc((size_t)ddim, sizeof(char *));
+            /* a NULL element would reach propGetString as a NULL result
+             * on reset   mark seeded only when every snapshot string
+             * actually pooled (Issue #131) */
+            if (p->ds) {
+                ok = 1;
+                for (k = 0; k < ddim; k++) {
+                    p->ds[k] = rv_str_own(g_active, vs ? vs : "");
+                    if (!p->ds[k]) { ok = 0; break; }
+                }
+            }
+        } else {
+            p->dp = (void **)calloc((size_t)ddim, sizeof(void *));
+            if (p->dp) { for (k = 0; k < ddim; k++) p->dp[k] = vp; ok = 1; }
+        }
+        if (!ok) return;
+        p->ddim = ddim;
+        p->seeded = 1;
+    }
 }
 void rv_seed_i(RvPropsObj *o, const char *n, int d, int v) { seed(o, n, RV_PT_INT, d, v, 0, NULL, NULL); }
 void rv_seed_d(RvPropsObj *o, const char *n, int d, double v) { seed(o, n, RV_PT_DOUBLE, d, 0, v, NULL, NULL); }
@@ -343,15 +380,28 @@ static void prop_free(RvProp *p) {
     free(p);
 }
 
-void rv_po_free(RvPropsObj *o) {
+/* drop every record but keep the propset object and its token: the
+ * record structs and their value/snapshot arrays are heap-owned, while
+ * the name/string payloads they reference belong to the session host's
+ * string pool. a process-lifetime propset (the dedicated api.host set)
+ * must retire its records when the session dies so it can never reach
+ * into a reclaimed pool; the next session's writes rebuild fresh
+ * records on its own pool (Issue #131) */
+void rv_po_clear(RvPropsObj *o) {
     RvProp *p;
     if (!o) return;
     p = o->head;
+    o->head = NULL;
     while (p) {
         RvProp *n = p->next;
         prop_free(p);
         p = n;
     }
+}
+
+void rv_po_free(RvPropsObj *o) {
+    if (!o) return;
+    rv_po_clear(o);
     free(o);
 }
 
