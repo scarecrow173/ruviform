@@ -305,7 +305,7 @@ spawn 引数の受け渡し・`CARGO_BIN_EXE_*` の利用は各 crate 内に閉�
 - 複数 wire バージョン共存・交渉機構 | Issue #119 で単一最新バージョン方針を確定（交渉機構・互換レイヤーなし・bump 判断基準は上記「ワイヤバージョン方針」に記録） | 独立配布されるホスト/ランナー間のバージョン互換が要求される段階 | 独立配布形態で新旧バージョンの混在が扱えない
 - stderr ログ配管 | inherit で運用可能・診断価値は副次的 | 子プロセスのログ解析要求 | クラッシュ時の手がかりが stderr 依存
 - video/NONRT プラグインの L1 経路 | 本 Issue は audio `process` 経路のみ | NONRT video port の分離要求 | video plugin は L1 不可
-- ドライバの共有リーパー/io 多重化 | per-child 2 スレッドが最も単純明確（wire v2 bundle で N instance が共有 — Issue #117 着地済み） | 子プロセス数・インスタンス数増大 | スレッド数 = 2×子プロセスのコスト（Dedicated 経路では per-instance に退化）
+- ドライバの共有リーパー/io 多重化 | **Issue #120 deferred（post-#117 再評価）** — #117 で Bundled 既定により管理単位が per-instance → per-child に移行し「スレッド線形増」の前提は構造解消（2 スレッド/≤64 instance）。reader は既にブロッキング read→EOF で即時検出、`DRIVER_POLL_INTERVAL` は `recv_timeout` hybrid（idle ≈ ≤1-2% core/child）。フル io-mux は 3 バックエンド + Windows named-pipe 再構成 + wedged-kill 契約の非ブロッキング化が必要で現状は不釣合い | 再トリガ: 実測 >16-32 子 / 200µs wake 起因の実測 idle-CPU・電力問題 / #121 stderr 配管導入（3 スレッド目）/ sub-poll 検出や doorbell レイテンシ厳格化の新契約 / 単一 reader スループット上限実測 | スレッド数 = 2×子プロセスのコスト（Dedicated 経路では per-instance に退化）。縮小案: R1 submit wake（std のみ・doorbell 即時化）+ R2 共有プラットフォーム reaper（生 pid FFI）で poll 除去は可能 |
 
 ## Verification Notes
 
