@@ -210,7 +210,8 @@ fn wait_notification(host: &mut PluginHost) -> HostNotification {
 /// `wait_for_failed` only observes the mirror, which converges one
 /// driver poll (~200 µs) before the exit status completes the
 /// notification. Only needed where a later `poll` phase could
-/// preempt the drain — the lingering `GaveUp` re-emit.
+/// preempt the drain — multi-notification fan-outs and the
+/// lingering `GaveUp` re-emit.
 fn settle_notification() {
     thread::sleep(Duration::from_millis(50));
 }
@@ -423,12 +424,14 @@ fn restarted_bundled_reaches_each_recipe_state() {
     // One child exit fans all three notifications out atomically —
     // every entry recovered independently on the fresh pooled child.
     let (old_a, new_a, echo_a, restored_a) = restarted(&events, id_a).unwrap();
-    let (old_b, new_b, _echo_b, _restored_b) = restarted(&events, id_b).unwrap();
+    let (old_b, new_b, echo_b, restored_b) = restarted(&events, id_b).unwrap();
     let (old_c, new_c, echo_c, restored_c) = restarted(&events, id_c).unwrap();
     assert_eq!((old_a, old_b, old_c), (ha, hb, hc));
     assert_eq!(echo_a, Some(bounds()));
+    assert_eq!(echo_b, Some(bounds()));
     assert_eq!(echo_c, Some(bounds()));
     assert_eq!(restored_a, RestoreOutcome::NotRequested);
+    assert_eq!(restored_b, RestoreOutcome::NotRequested);
     assert_eq!(restored_c, RestoreOutcome::NotRequested);
     assert_eq!(
         host.lifecycle_state(new_a),
@@ -733,6 +736,9 @@ fn mid_create_death_attempt_failed_without_mint() {
     host.kill_child(a).unwrap();
     wait_for_failed(&host, a);
     wait_for_failed(&host, b);
+    // Both fan-out sends must land before the first drain — a torn
+    // drain would invert the `(next_attempt_at, id)` attempt order.
+    settle_notification();
     let events = poll_until_event(&mut sup, &mut host, t0, |evs| {
         !attempt_faileds(evs, id_b).is_empty()
     });
@@ -986,6 +992,9 @@ fn adopt_failed_handle_recovers() {
     host.kill_child(a).unwrap();
     wait_for_failed(&host, a);
     wait_for_failed(&host, b);
+    // Both fan-out sends must land before `wait_notification` —
+    // otherwise it could pop `b`'s notification first (slot order).
+    settle_notification();
     // Variant A: the caller already consumed the notification.
     let notified = wait_notification(&mut host);
     assert!(matches!(
@@ -1087,6 +1096,10 @@ fn stable_window_crash_starts_fresh_episode() {
     sup.set_checkpoint(id, vec![0xBB]).unwrap();
     host.kill_child(new).unwrap();
     wait_for_failed(&host, new);
+    // The notification must be queued before the `later` poll —
+    // otherwise Phase-2's `Live` sweep resets `failures` first and
+    // the pinned Phase-1 drain reset is never exercised.
+    settle_notification();
     let later = recovered_at + Duration::from_secs(61);
     let events = poll_until_event(&mut sup, &mut host, later, |evs| !evs.is_empty());
     assert_eq!(events.len(), 1);
@@ -1145,6 +1158,9 @@ fn bundle_burst_cap_defers_and_unsupervised() {
     for &h in watched.iter().chain(std::iter::once(&unwatched)) {
         wait_for_failed(&host, h);
     }
+    // All five fan-out sends must land before the first drain — a
+    // torn drain would leave entries `Live` or drop `Unsupervised`.
+    settle_notification();
     let events = poll_until_event(&mut sup, &mut host, t0, |evs| {
         count_restarted(evs, ids[0]) + count_restarted(evs, ids[1]) >= 2
     });
@@ -1189,6 +1205,7 @@ fn bundle_burst_cap_defers_and_unsupervised() {
     for &h in &current {
         wait_for_failed(&host, h);
     }
+    settle_notification();
     let events = poll_until_event(&mut sup, &mut host, t0, |evs| {
         count_restarted(evs, ids[0]) + count_restarted(evs, ids[1]) >= 2
     });
