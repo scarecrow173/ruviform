@@ -88,17 +88,18 @@ Chosen option: "**Option A — `PluginHost::video() -> VideoPluginHost<'_>` 借�
 
 ### 1. video 表面の形 — `PluginHost::video(&mut self) -> VideoPluginHost<'_>`
 
-- `ruviform-plugin-host` に新 module `video`（仮称 `src/video.rs`）を追加し、`VideoHostCommand`/`VideoHostReply`（両 `#[non_exhaustive]`）・`VideoOutOfProcessSpec`・`VideoPluginHost<'a>` を定義する。`VideoPluginHost<'a>` は `&'a mut PluginHost` を保持する薄い view で、`register_out_of_process(spec)`・`execute(VideoHostCommand)`・`descriptor`/`lifecycle_state`/`kill_child`/`try_recv_notification`（`PluginHost` 本体へ delegate）を持つ
+- `ruviform-plugin-host` に新 module `video`（仮称 `src/video.rs`）を追加し、`VideoHostCommand`/`VideoHostReply`（両 `#[non_exhaustive]`）・`VideoOutOfProcessSpec`・`VideoPluginHost<'a>` を定義する。`VideoPluginHost<'a>` は `&'a mut PluginHost` を保持する薄い view で、`register_out_of_process(spec)`・`execute(VideoHostCommand)`・`lifecycle_state`/`kill_child`/`try_recv_notification`（`PluginHost` 本体へ delegate）を持つ。`descriptor(handle)` は**新規 surface** — `PluginHost` に同名メソッドは存在しない（delegate 先はなく、`descriptors` 登録表から route 非依存に引く薄い lookup として video view 側に実装する）
 - `VideoHostCommand` の動詞集合: `Scan`・`Instantiate{plugin_id, config: VideoProcessConfig}`・`Destroy{handle}`・`Initialize`・`Activate`・`StartProcessing`・`Render{handle, input: VideoFrame, at: MediaTime}`・`StopProcessing`・`Deactivate`・`GetParams`・`GetParamInfo{handle,id}`・`GetParamValue{handle,id}`・`SetParamValue{handle,id,value}`（詳細は design `docs/designs/issue-118-video-l1.md`）
 - audio `HostCommand`/`HostReply`/`PluginHost::execute`/`OutOfProcessSpec`/`OutOfProcessIsolation` は**無変更**。`PluginHost::video()` の追加のみ
 
 ### 2. `plugin_id` 名空間 — 単一 map・kind タグ付き route
 
-- `PluginHost.routes` は `plugin_id → Route` の単一 map のまま。`Route` に `OutOfProcessVideo{spec: VideoSpawnSpec}` variant（`pool` 字段なし — Dedicated のみで pool は要らない）を追加する
+- `PluginHost.routes` は `plugin_id → Route` の単一 map のまま。`Route` に `OutOfProcessVideo{spec: VideoSpawnSpec}` variant（`pool` 字段なし — Dedicated のみで pool は要らない）を追加する。`VideoSpawnSpec` は **新規 minimal 型**で audio `SpawnSpec` を再利用しない — `lookahead_blocks`/`instance_depth()` は audio doorbell ring の概念であり video では dead field になる（字段構成は `{descriptor, program, args, command_timeout, render_timeout}`）
 - 登録衝突: audio `register_factory`/`register_out_of_process` と video `register_out_of_process` が同一 `plugin_id` を claim した場合は双方向とも **`Err(HostError::DuplicatePluginId)`**（map key 衝突の既存規則 — 1 id = 1 route = 1 kind）
-- `Scan`: audio `HostCommand::Scan` は `InProcess`/`OutOfProcess` route のみ列挙し video route を隠す。video `VideoHostCommand::Scan` は video route のみ列挙（各表面は自分の kind の記述だけを返す — cross-kind id を instantiate 面に見せない）
+- `Scan`: audio `HostCommand::Scan` は `InProcess`/`OutOfProcess` route のみ列挙し video route を隠す。video `VideoHostCommand::Scan` は video route のみ列挙（各表面は自分の kind の記述だけを返す — cross-kind id を instantiate 面に見せない）。実装上、`Scan` reply は現行 `self.descriptors.clone()` の全量返却（`composite.rs` L456）なので、**`descriptors` の各 entry が登録面の kind を tag として持つ**（audio 登録 → audio-kind・video 登録 → video-kind）必要がある — 無タグのまま video 登録を push すると video descriptor が audio `Scan` に漏れる。`Scan` reply は requester の kind の entry だけに filter する（shadowed 登録は自分の登録面の kind で残る — 現行の shadowed-listing 意味論を kind 内に維持）
 - `Instantiate`: audio `Instantiate{plugin_id}` が video route を引く場合 → **`Err(HostError::UnknownPluginId)`**（その surface からは instantiate 不能な id = 未登録と同語彙）。逆方向も同型
 - cross-kind 動詞: audio `HostCommand` が video slot を指す → **`Err(HostError::Unsupported)`**（「その instance は要求された操作を実装しない」既存語彙 — dispatch の slot 分岐で wire 非送信に拒否）。`VideoHostCommand` が audio slot を指す場合も同型。`prepare_endpoint` が video slot を指す → **`Err(HostError::EndpointUnavailable)`**（wire を通らない local-only 語彙が既存）
+- `Slot` variant 追加に伴う全 match site の答えは design の「`Slot` match site 全網羅」表が正本 — 要点: `try_recv_notification`（`composite.rs` L873-877）は video `notify_rx` を drain する**必須 arm**（現行 `let Some(Slot::OutOfProcess(_))` は video slot を静かに skip し、`InstanceFailed` 通知が失われる）。direct `PluginHost` メソッドが video handle を受けた場合: `process` → `Err(Unsupported)`・`latency_frames` → `None`・`plugin_mut` → `None`・`lifecycle_state` → `Some(mirror)`・`kill_child`/`destroy` → 既存機構どおり動作
 
 ### 3. isolation — `VideoOutOfProcessSpec` に `isolation` 字段を持たせない（Dedicated 固定・構造的 pin）
 
@@ -123,14 +124,15 @@ Chosen option: "**Option A — `PluginHost::video() -> VideoPluginHost<'_>` 借�
 
 ## Implementation Plan
 
-* Affected paths: `crates/ruviform-plugin-host/src/video.rs`（新規 — `VideoHostCommand`/`VideoHostReply`/`VideoOutOfProcessSpec`/`VideoPluginHost<'a>`）・`crates/ruviform-plugin-host/src/composite.rs`（`Route::OutOfProcessVideo` variant・`video()` accessor・Scan/Instantiate の kind filter・cross-kind dispatch 拒否）・`crates/ruviform-plugin-host/src/lib.rs`（re-export）・`crates/ruviform-plugin-host/src/l1/`（`VideoL1Instance`・`vshm` module・`InstKind` 分離 — 詳細は design）
+* Affected paths: `crates/ruviform-plugin-host/src/video.rs`（新規 — `VideoHostCommand`/`VideoHostReply`/`VideoOutOfProcessSpec`/`VideoPluginHost<'a>`・`descriptor` 新規 surface）・`crates/ruviform-plugin-host/src/composite.rs`（`Route::OutOfProcessVideo` variant・`video()` accessor・`descriptors` entry の kind-tag + Scan/Instantiate の kind filter・cross-kind dispatch 拒否・`try_recv_notification` の video `notify_rx` drain arm・`Slot` 全 match site の video 答え）・`crates/ruviform-plugin-host/src/lib.rs`（re-export）・`crates/ruviform-plugin-host/src/l1/`（`VideoL1Instance`・`vshm` module・`InstKind` 分離 — 詳細は design）
 * Patterns to follow: `command.rs` の `HostCommand`/`HostReply` 形（`#[non_exhaustive]` + handle payload）・`composite.rs` の `Route`/slot/dispatch 構造・`OutOfProcessSpec::new` の既定値 field 形（`command_timeout`/`render_timeout`）・issue-117 design の additive `Route`/`HostError` 拡張
 * Patterns to avoid: `HostCommand`/`HostReply` に video variant を足さない（人間確定済みの禁止形）・`VideoPluginHost` が独自の slot table/mint を持つ形（handle alias の温床 — 借用 view のみ）・`VideoOutOfProcessSpec` に `isolation`/`lookahead_blocks` 字段を足さない（構造的 pin）
-* Dependencies or configuration: `ruviform_plugin_core::{VideoProcessConfig, PlainParamInfoOwned, PlainParamValue, ParamId}`・`ruviform_video_core::VideoFrame`・`ruviform_media_core::MediaTime` の `ruviform-plugin-host` への参照（既存の下向き依存方向と同じ — plugin-host は既に plugin-core に依存）
+* Dependencies or configuration: `ruviform_plugin_core::{VideoProcessConfig, PlainParamInfoOwned, PlainParamValue, ParamId}`・`ruviform_video_core::VideoFrame`・`ruviform_media_core::MediaTime` の `ruviform-plugin-host` への参照（既存の下向き依存方向と同じ — plugin-host は既に plugin-core に依存）。`ruviform-media-core` は現状 dev-dep のみ（`Cargo.toml` L39）→ `[dependencies]` への昇格が要る（`ruviform-audio-core` の #113 昇格と同じ経路・transitive 増加なし）。`ruviform-plugin-export` 側は `ruviform-video-core` + `ruviform-media-core` が新規/昇格で要る（`VideoEntry` が `VideoFrame`/`MediaTime` を構築 — create-path ADR 側の記録）
 
 ## Verification
 
-* [ ] `cargo test -p ruviform-plugin-host` で kind filter（audio `Scan`/`Instantiate` が video route を見ない・video `Scan` が audio route を見ない）・`DuplicatePluginId` 双方向衝突・cross-kind `Unsupported`・`EndpointUnavailable` をカバーする unit/E2E が追加され pass
+* [ ] `cargo test -p ruviform-plugin-host` で kind filter（audio `Scan`/`Instantiate` が video route を見ない・video `Scan` が audio route を見ない — `descriptors` kind-tag による filter）・`DuplicatePluginId` 双方向衝突・cross-kind `Unsupported`・`EndpointUnavailable` をカバーする unit/E2E が追加され pass
+* [ ] video handle に対する direct `PluginHost` メソッドの答え: `process` → `Err(Unsupported)`・`latency_frames`/`plugin_mut` → `None`・`prepare_endpoint` → `Err(EndpointUnavailable)`・`lifecycle_state` → `Some(mirror)`・`try_recv_notification` が video slot の `InstanceFailed` を fan-out する（skip しない）
 * [ ] `VideoOutOfProcessSpec` の struct 定義に `isolation`/`lookahead_blocks` 字段がない（ソースレビューで確認 — compile-time pin なのでランタイムテストは要らない）
 * [ ] `mise run lint`・`mise run test` が全 workspace で pass（audio 無退行）
 * [ ] `doc_status.js audit --json` が blocking 0
