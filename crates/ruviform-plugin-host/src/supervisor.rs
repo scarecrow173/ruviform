@@ -216,6 +216,13 @@ pub enum RestoreOutcome {
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy; each struct variant is `#[non_exhaustive]` too, so new
 /// fields stay additive for downstream matchers.
+///
+/// A watched `InstanceFailed`'s `exit` is consumed but not echoed —
+/// the supervisor never branches on `ChildExit` (every supervised
+/// failure is a recovery candidate; the value is also ambiguous —
+/// see the design doc), so no variant carries it. The raw
+/// notification survives verbatim only on the `Unsupervised`
+/// pass-through — an intentional asymmetry.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub enum SupervisionEvent {
@@ -268,6 +275,21 @@ pub enum SupervisionEvent {
         /// The episode's last attempt error — `None` when give-up
         /// happened with no attempt issued (`max_attempts` 0).
         last_error: Option<HostError>,
+    },
+    /// A live minted handle was dropped from cleanup tracking — the
+    /// double unwind-failure corner: the entry's single `lingering`
+    /// slot stayed occupied by an older residue whose inline retry
+    /// failed again, so the newer handle is left to the caller's own
+    /// bookkeeping. It is **not** destroyed — `Destroy`/salvage is
+    /// the caller's call; its late death arrives as
+    /// [`SupervisionEvent::Unsupervised`] (an orphan matches no
+    /// entry's watch set).
+    #[non_exhaustive]
+    Orphaned {
+        /// The entry's stable logical key.
+        id: SupervisedId,
+        /// The live handle no longer tracked for cleanup.
+        handle: PluginHandle,
     },
     /// A notification for a handle no entry watches — pass-through,
     /// since `poll` is the sole drain point and unwatched instances
@@ -360,7 +382,9 @@ struct Entry {
     /// every `poll` retries its cleanup (Phase 2). Carried over a
     /// `Pending → Live` transition; cleared by `Ok`/`Err(InvalidHandle)`
     /// (externally destroyed) cleanup or a matching late-death
-    /// notification.
+    /// notification. Single slot: a second residue arriving while the
+    /// first stays stuck leaves tracking and is reported as
+    /// [`SupervisionEvent::Orphaned`] — see `store_lingering`.
     lingering: Option<PluginHandle>,
     /// The state machine position.
     state: EntryState,
@@ -485,9 +509,14 @@ impl Supervisor {
     /// instead: `Destroy` frees its slot (dropping any still-queued
     /// `InstanceFailed` with it — no double recovery), then the entry
     /// registers `Pending { next_attempt_at: None }` so the next
-    /// `poll` attempts immediately even if the caller already
-    /// consumed the notification. A `Destroy` error is absorbed —
-    /// adoption continues, the slot release is best-effort.
+    /// `poll` issues an attempt immediately even if the caller
+    /// already consumed the notification — or gives up immediately
+    /// when the episode's attempt budget is already exhausted
+    /// (`max_attempts = 0`: adoption skipped the drain's give-up
+    /// gate, so `poll` applies the `failures >= max_attempts` check
+    /// before issuing and reports `GaveUp { attempts: 0, .. }`).
+    /// A `Destroy` error is absorbed — adoption continues, the slot
+    /// release is best-effort.
     ///
     /// The first host-receiving call binds `bound_host`; later calls
     /// on a different host are rejected `Err(WrongHost)`.
@@ -555,8 +584,10 @@ impl Supervisor {
     /// [`Supervisor::current_handle`] first if that matters.
     ///
     /// A `Live` entry can still carry lingering cleanup residue —
-    /// returning the current handle abandons it to the caller's host
-    /// management (only one handle can be returned).
+    /// returning the current handle abandons it to the caller's own
+    /// bookkeeping (only one handle can be returned): the residue
+    /// stays live and leaves tracking entirely, so a late death
+    /// arrives as [`SupervisionEvent::Unsupervised`].
     ///
     /// **RT contract:** non-RT only.
     #[must_use]
@@ -605,23 +636,24 @@ impl Supervisor {
     ///
     /// # Errors
     ///
-    /// [`SupervisionError::CheckpointTooLarge`] when the blob cannot
-    /// fit one `RestoreState` frame — rejected before the wire so an
-    /// oversized frame never kills the child; `SaveState` output
-    /// itself already fits the shared codec bound.
-    /// [`SupervisionError::NotWatched`] for an unknown id.
+    /// [`SupervisionError::NotWatched`] for an unknown id — the entry
+    /// lookup runs first, the same validation order `set_recipe`
+    /// applies. [`SupervisionError::CheckpointTooLarge`] when the
+    /// blob cannot fit one `RestoreState` frame — rejected before
+    /// the wire so an oversized frame never kills the child;
+    /// `SaveState` output itself already fits the shared codec bound.
     pub fn set_checkpoint(
         &mut self,
         id: SupervisedId,
         bytes: Vec<u8>,
     ) -> Result<(), SupervisionError> {
-        if bytes.len().saturating_add(WIRE_COMMAND_ENVELOPE) > wire::WIRE_MAX_PAYLOAD as usize {
-            return Err(SupervisionError::CheckpointTooLarge);
-        }
         let entry = self
             .entries
             .get_mut(&id)
             .ok_or(SupervisionError::NotWatched)?;
+        if bytes.len().saturating_add(WIRE_COMMAND_ENVELOPE) > wire::WIRE_MAX_PAYLOAD as usize {
+            return Err(SupervisionError::CheckpointTooLarge);
+        }
         entry.checkpoint = Some(bytes);
         Ok(())
     }
@@ -631,6 +663,7 @@ impl Supervisor {
     /// `false` for an unknown id.
     ///
     /// **RT contract:** non-RT only.
+    #[must_use]
     pub fn clear_checkpoint(&mut self, id: SupervisedId) -> bool {
         self.entries
             .get_mut(&id)
@@ -664,7 +697,8 @@ impl Supervisor {
     /// backoff/window decisions (caller contract, unchecked).
     /// Attempts a `max_attempts_per_poll` cap leaves pending emit no
     /// event until their attempt runs (`current_handle` observes the
-    /// `Pending` state as `None`).
+    /// `Pending` state as `None`, or `Some(lingering)` while cleanup
+    /// residue is still carried).
     ///
     /// **WARNING — sole drain point:** this call is the bound host's
     /// only `try_recv_notification` drain. Draining notifications
@@ -720,11 +754,24 @@ impl Supervisor {
                 }
             }
         }
-        // Phase 3 — attempt issuance: ready entries (`None` deadline =
-        // immediate, else `now >= next_attempt_at`) run in
-        // `(next_attempt_at, id)` order — `None` sorts first — capped
-        // at `max_attempts_per_poll`; overflow stays `Pending` for the
-        // next poll with no event.
+        // Phase 3 — attempt issuance (`issue_attempts` owns the ready
+        // sort, the `max_attempts_per_poll` budget and the per-entry
+        // replay bookkeeping).
+        self.issue_attempts(host, now, &mut events);
+        events
+    }
+
+    /// Phase 3 of [`Supervisor::poll`] — ready `Pending` entries
+    /// (`None` deadline = immediate, else `now >= next_attempt_at`)
+    /// run in `(next_attempt_at, id)` order — `None` sorts first —
+    /// capped at `max_attempts_per_poll`; overflow stays `Pending`
+    /// for the next poll with no event.
+    fn issue_attempts(
+        &mut self,
+        host: &mut PluginHost,
+        now: Instant,
+        events: &mut Vec<SupervisionEvent>,
+    ) {
         let mut ready: Vec<(Option<Instant>, SupervisedId)> = self
             .entries
             .iter()
@@ -740,15 +787,33 @@ impl Supervisor {
         ready.sort_unstable();
         let mut budget = self.policy.max_attempts_per_poll;
         for (_deadline, id) in ready {
-            if budget == 0 {
-                break;
-            }
             let Some(entry) = self.entries.get_mut(&id) else {
                 continue;
             };
             let EntryState::Pending { failed, .. } = entry.state else {
                 continue;
             };
+            // An episode already at the attempt cap gives up without
+            // issuing — reachable only through the `watch` adopt path,
+            // which enters `Pending` without passing the drain's
+            // give-up gate (drain-admitted `Pending` always has
+            // `failures < max_attempts`). Under `max_attempts = 0` an
+            // adopted `failures = 0` entry lands here and reports the
+            // same `GaveUp { 0, None }` the drain produces. Emitted
+            // before/outside the budget: no attempt is issued, so the
+            // `max_attempts_per_poll` cap does not apply.
+            if entry.failures >= self.policy.max_attempts {
+                entry.state = EntryState::GaveUp;
+                events.push(SupervisionEvent::GaveUp {
+                    id,
+                    attempts: entry.failures,
+                    last_error: entry.last_error,
+                });
+                continue;
+            }
+            if budget == 0 {
+                break;
+            }
             budget -= 1;
             match Self::attempt(host, entry) {
                 Ok((new, restored)) => {
@@ -767,8 +832,10 @@ impl Supervisor {
                 Err(AttemptFailure { error, minted }) => {
                     entry.failures = entry.failures.saturating_add(1);
                     entry.last_error = Some(error);
-                    if let Some(minted) = minted {
-                        Self::unwind_minted(host, entry, minted);
+                    if let Some(minted) = minted
+                        && let Some(orphan) = Self::unwind_minted(host, entry, minted)
+                    {
+                        events.push(SupervisionEvent::Orphaned { id, handle: orphan });
                     }
                     if entry.failures >= self.policy.max_attempts {
                         entry.state = EntryState::GaveUp;
@@ -794,7 +861,6 @@ impl Supervisor {
                 }
             }
         }
-        events
     }
 
     /// The 1 `Supervisor` = 1 `PluginHost` binding: the first
@@ -860,6 +926,9 @@ impl Supervisor {
         // while `InstanceFailed` stays the sole variant — a future
         // variant makes the `else` live and must pass through as
         // `Unsupervised`, not break the build.
+        // `exit` is destructured away deliberately — watched failures
+        // never branch on `ChildExit` (design decision; the raw
+        // notification reaches the caller only via `Unsupervised`).
         #[allow(irrefutable_let_patterns)]
         let HostNotification::InstanceFailed { handle, .. } = notification else {
             return Some(SupervisionEvent::Unsupervised { notification });
@@ -1037,10 +1106,15 @@ impl Supervisor {
     /// handle; a persistent `Err` keeps it as `lingering` (exposed via
     /// `current_handle`, retried every Phase 2), while
     /// `Ok`/`Err(InvalidHandle)` — already freed externally — leaves
-    /// nothing to track.
-    fn unwind_minted(host: &mut PluginHost, entry: &mut Entry, minted: PluginHandle) {
+    /// nothing to track. Returns the live handle that could not be
+    /// tracked, if any — see [`Self::store_lingering`].
+    fn unwind_minted(
+        host: &mut PluginHost,
+        entry: &mut Entry,
+        minted: PluginHandle,
+    ) -> Option<PluginHandle> {
         match Self::cleanup_instance(host, minted) {
-            Ok(()) | Err(HostError::InvalidHandle) => {}
+            Ok(()) | Err(HostError::InvalidHandle) => None,
             Err(_) => Self::store_lingering(host, entry, minted),
         }
     }
@@ -1049,15 +1123,28 @@ impl Supervisor {
     /// holds one handle, so a residue already recorded gets one
     /// inline retry first — freed, the new failure takes the slot;
     /// still stuck, the oldest outstanding stays tracked (FIFO) and
-    /// the newer live handle is left to the host's own bookkeeping —
+    /// the newer live handle is left to the caller's own bookkeeping —
     /// a double unwind-failure corner, not the design's normal path.
-    fn store_lingering(host: &mut PluginHost, entry: &mut Entry, handle: PluginHandle) {
+    /// Returns that dropped handle so the caller can surface it as
+    /// [`SupervisionEvent::Orphaned`]; `None` when `handle` was
+    /// stored or already tracked.
+    fn store_lingering(
+        host: &mut PluginHost,
+        entry: &mut Entry,
+        handle: PluginHandle,
+    ) -> Option<PluginHandle> {
         match entry.lingering {
-            None => entry.lingering = Some(handle),
-            Some(old) if old == handle => {}
+            None => {
+                entry.lingering = Some(handle);
+                None
+            }
+            Some(old) if old == handle => None,
             Some(old) => match Self::cleanup_instance(host, old) {
-                Ok(()) | Err(HostError::InvalidHandle) => entry.lingering = Some(handle),
-                Err(_) => {}
+                Ok(()) | Err(HostError::InvalidHandle) => {
+                    entry.lingering = Some(handle);
+                    None
+                }
+                Err(_) => Some(handle),
             },
         }
     }
@@ -1512,6 +1599,13 @@ mod tests {
             sup.set_checkpoint(SupervisedId(999), vec![1, 2, 3]),
             Err(SupervisionError::NotWatched)
         );
+        // The entry lookup wins over the blob bound — the same
+        // validation order `set_recipe` applies.
+        let oversized = vec![0_u8; max_payload - WIRE_COMMAND_ENVELOPE + 1];
+        assert_eq!(
+            sup.set_checkpoint(SupervisedId(999), oversized),
+            Err(SupervisionError::NotWatched)
+        );
     }
 
     #[test]
@@ -1721,6 +1815,37 @@ mod tests {
         assert_eq!(gave_up(&event), (0, None));
         assert!(matches!(sup.entries[&id].state, EntryState::GaveUp));
         assert_eq!(host.lifecycle_state(handle), None);
+    }
+
+    #[test]
+    fn adopt_zero_max_attempts_gives_up() {
+        // The `watch(Failed)` adopt path registers exactly this
+        // fixture — `Pending { next_attempt_at: None, failed }` with
+        // `failures = 0` — without passing the drain's give-up gate,
+        // so Phase 3 must apply `failures >= max_attempts` itself:
+        // `max_attempts = 0` means "never attempt" even on the adopt
+        // path. (A `Failed` handle needs L1 machinery — the fixture
+        // is the state `watch` inserts, so this pins the Phase-3
+        // half of adoption; the `Failed`-detection half is L1 E2E.)
+        let mut host = default_host();
+        let failed = instantiate(&mut host, PID);
+        let mut sup = Supervisor::new(RestartPolicy {
+            max_attempts: 0,
+            ..RestartPolicy::default()
+        })
+        .unwrap();
+        let id = SupervisedId(1);
+        sup.entries.insert(id, pending_entry(None, failed));
+
+        let events = sup.poll(&mut host, Instant::now());
+        // Zero `Instantiate` issued — an attempt would have emitted
+        // `Restarted`/`AttemptFailed`; the only event is the give-up,
+        // identical to the drain path's `GaveUp { 0, None }`.
+        assert_eq!(events.len(), 1);
+        assert_eq!(gave_up(&events[0]), (0, None));
+        assert!(matches!(sup.entries[&id].state, EntryState::GaveUp));
+        // The dead handle was never touched either.
+        assert_eq!(host.lifecycle_state(failed), Some(LifecycleState::Created));
     }
 
     #[test]
@@ -2125,5 +2250,43 @@ mod tests {
 
         // Already gone — `Ok(())`, nothing owed.
         Supervisor::cleanup_instance(&mut host, PluginHandle::new(99, 0)).unwrap();
+    }
+
+    #[test]
+    fn store_lingering_retries_occupied_slot() {
+        let mut host = default_host();
+        let old = instantiate(&mut host, PID);
+        let new = instantiate(&mut host, PID);
+        let mut entry = pending_entry(None, PluginHandle::new(50, 0));
+
+        // Empty slot takes the residue; the same handle is idempotent.
+        assert_eq!(
+            Supervisor::store_lingering(&mut host, &mut entry, old),
+            None
+        );
+        assert_eq!(entry.lingering, Some(old));
+        assert_eq!(
+            Supervisor::store_lingering(&mut host, &mut entry, old),
+            None
+        );
+        assert_eq!(entry.lingering, Some(old));
+
+        // Occupied slot: the stored residue gets one inline retry —
+        // freed here, so the newer failure takes the slot and no
+        // `Orphaned` is reported.
+        assert_eq!(
+            Supervisor::store_lingering(&mut host, &mut entry, new),
+            None
+        );
+        assert_eq!(entry.lingering, Some(new));
+        assert_eq!(host.lifecycle_state(old), None);
+        assert_eq!(host.lifecycle_state(new), Some(LifecycleState::Created));
+
+        // The `Err(_)` arm — residue stays stuck and the newer handle
+        // is returned for `SupervisionEvent::Orphaned` — needs a
+        // cleanup failure the L0 fixture cannot produce: residues are
+        // minted handles (`Created`/`Initialized`/`Activated` at most),
+        // whose unwind verbs (`Deactivate`/`Destroy`) carry no
+        // fallible plugin hook on L0. That corner is L1 E2E territory.
     }
 }
