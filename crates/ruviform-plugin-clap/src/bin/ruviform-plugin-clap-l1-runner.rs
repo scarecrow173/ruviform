@@ -6,11 +6,16 @@
 //! own. It dlopens the workspace-built CLAP fixture cdylib
 //! (`{DLL_PREFIX}ruviform_plugin_clap{DLL_SUFFIX}`) through the `host`
 //! bridge, hands the scanned `ClapPluginFactory`s to
-//! [`ruviform_plugin_export::run`], and serves one plugin instance per
-//! spawn over the L1 wire. The `run` argv contract
-//! (`--ruviform-shm-key`, `--ruviform-plugin-id`, unknown-argument
-//! usage rejection → exit 2) is unchanged — no plugin-path or loader
-//! argument exists and `OutOfProcessSpec::args` stays empty.
+//! [`ruviform_plugin_export::run`], and serves plugin instances over
+//! the L1 wire (one child hosting up to `WIRE_MAX_INSTANCES` of them
+//! through `run`'s per-instance registry). Wire v2's `run` takes no
+//! argv at all — the v1 `--ruviform-shm-key`/`--ruviform-plugin-id`
+//! bootstrap flags moved into the `CreateInstance` payload, and any
+//! argument (`--ruviform-*` included) is a usage rejection → exit 2 —
+//! so no plugin-path or loader argument exists and
+//! `OutOfProcessSpec::args` stays empty. `run` selects a factory by
+//! `plugin_id` alone — embedding two factories with the same id in one
+//! binary is an authoring error (the second is unreachable).
 //!
 //! ## Fixture resolution
 //!

@@ -4,9 +4,10 @@
 //!
 //! `shared_memory` is confined to this module (adoption condition —
 //! its types never appear on the public API or feature names). The
-//! segment is created and owned by the proxy; the child only attaches
-//! (`open`) by the `--ruviform-shm-key` `os_id` and never creates or
-//! unlinks. Dropping the [`Segment`] unlinks the named object (POSIX
+//! segment is created and owned by the proxy — one per instance, on
+//! a shared child each registry entry gets its own; the child only
+//! attaches (`open`) by the `os_id` carried in `CreateInstance`'s
+//! `shm_key` field and never creates or unlinks. Dropping the [`Segment`] unlinks the named object (POSIX
 //! `shm_unlink` via the owner `Drop`; on Windows the mapping is
 //! unmapped and its persistence file is delete-on-close renamed).
 //!
@@ -177,8 +178,8 @@ impl Segment {
         Ok(Self { mem, declared_len })
     }
 
-    /// The `os_id` the child attaches with — the value passed as
-    /// `--ruviform-shm-key`.
+    /// The `os_id` the child attaches with — the value carried by
+    /// `CreateInstance`'s `shm_key` field.
     pub(crate) fn key(&self) -> &str {
         self.mem.get_os_id()
     }
@@ -251,7 +252,9 @@ fn write_header(
 
 /// A non-owning local attach to the proxy's own segment — the
 /// data-plane view the `driver`/`reader` threads open for
-/// themselves.
+/// themselves, one per registered instance (the driver's
+/// `views` map on `DriverCmd::AddInstance`, the reader's lazily on
+/// the first `BlockDone`/`Reply` attributed to the instance).
 ///
 /// `Shmem` is `!Send` (its `MapData` holds a raw mapping pointer and
 /// the crate declares no `Send`/`Sync` impls), so the owning
@@ -259,7 +262,7 @@ fn write_header(
 /// threads. Instead each thread `open`s the same `os_id` locally:
 /// `open` never sets `is_owner`, so dropping a `View` unmaps the
 /// thread's own mapping and never unlinks the segment (the owner
-/// `Segment` in [`L1Instance`](super::L1Instance) keeps that duty).
+/// `Segment` in the instance's `InstShared` entry keeps that duty).
 ///
 /// Which thread maps which region is fixed by the thread table:
 /// the `driver` attaches [`View::in_slot_mut`] access only (it is
@@ -274,9 +277,10 @@ pub(crate) struct View {
 
 impl View {
     /// Attaches to the named segment `key` on the calling thread —
-    /// `Err(())` when the mapping fails (the caller converges the
-    /// instance: a segment the child attached cannot be absent for
-    /// the owner).
+    /// `Err(())` when the mapping fails. A segment the child attached
+    /// cannot be absent for the owner, so either caller treats it as
+    /// a host-side environmental failure and converges the whole
+    /// child (`converge_child`).
     pub(crate) fn attach(key: &str) -> Result<Self, ()> {
         ShmemConf::new()
             .os_id(key)

@@ -73,7 +73,7 @@ relations:
 
 Issue #114 — #76 で確立した L1 アウトプロセス経路（`ruviform_plugin_export::run(factories)` runner + `PluginHost` コンポジット proxy）の検証が `GainPlugin`/`l1-test-worker`/`UnderwritePlugin`/`PanicPlugin` のモック範囲に留まる。本書は discovery `docs/discovery/issue-114-real-adapter-l1-e2e.md` の Open Questions と spec `docs/specs/issue-114-real-adapter-l1-e2e.md` の受入基準を、**2026-10-26 のユーザー決定**（規格スコープ CLAP+VST3 両方・runner オーサリング compile-time 固定・CI lane = 専用 mise task + `#[ignore]` ゲート）に基づき確定する。
 
-上流確定事項（再決定しない）: 1 子 = 1 インスタンス（per-`Instantiate` spawn）・`--ruviform-plugin-id`/`--ruviform-shm-key` の argv 規約・`Hello`→`Scan` handshake（`spec.descriptor` field-equality）・`Failed`+once 通知+pass-through・自動再起動なし・`command_timeout` 既定 10s・wire/shm は planar `f32` audio 専用・video/`VideoPluginInstance` は L1 非対象・`run` の argv 規約不変（未知引数は defined rejection）・`CARGO_BIN_EXE_*` 利用は各 crate 内に閉じる（L1 design 規約）。
+上流確定事項（再決定しない — **Issue #117 の `WIRE_VERSION` 1→2 bump 着地後の v2 前提へ更新済み**）: 1 子 = N インスタンスの bundle 形態（`OutOfProcessSpec::isolation` — `Bundled` 既定・`Dedicated` は per-instance spawn の capacity-1 経路）・argv 規約 `<runner>` + spec.args（`--ruviform-plugin-id`/`--ruviform-shm-key` は `CreateInstance` payload へ移転・任意引数は defined rejection）・`Hello`→`Scan`→`CreateInstance` handshake（`spec.descriptor` field-equality）・`Failed`+per-instance 通知（bundled route の子 kill は影響各 live instance へ 1 つずつ）+pass-through・自動再起動なし・`command_timeout` 既定 10s・wire/shm は planar `f32` audio 専用・video/`VideoPluginInstance` は L1 非対象・`run` の argv 規約不変（`run` ベースの runner は引数を取らず任意引数は defined rejection）・`CARGO_BIN_EXE_*` 利用は各 crate 内に閉じる（L1 design 規約）。
 
 ブリッジは**子プロセス内**で動作する — runner バイナリが規格バイナリを dlopen して `PluginFactory`/`ErasedPlugin` へ写像し、host 側（親プロセス）が見るのは L1 wire のみ。本 Issue は親プロセス側のプラグイン load に触れない。
 
@@ -351,7 +351,7 @@ run = "cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 --all-target
 
 ## Verification Notes
 
-- [ ] spec AC1: CLAP・VST3 各 adapter crate に `required-features = ["host"]` の compile-time 固定 runner bin が存在し、`run` argv 規約不変で `--ruviform-plugin-id` 選択が機能する
+- [ ] spec AC1: CLAP・VST3 各 adapter crate に `required-features = ["host"]` の compile-time 固定 runner bin が存在し、`run` argv 規約（v2: `<runner>` + spec.args・任意引数は defined rejection）と整合する — plugin 選択は `CreateInstance` payload の `plugin_id` が担う
 - [ ] spec AC2/AC3: `PluginHost`/`OutOfProcessSpec` で実 `.clap`/`.vst3` 形バイナリを載せた子が spawn→handshake→lifecycle→shm block→state 動詞→destroy を完走し、規格 ABI 経由の出力がデータ正当性を持つ（`l1_real_adapter_e2e` 両ファイル）
 - [ ] spec AC4: 子 kill → `Failed`+once 通知+pass-through・binary 不在 → spawn `Err(Ipc)`・ハングなし
 - [ ] spec AC5: OFX 境界が本書・spec に明文化され #118 参照・trigger が記録される

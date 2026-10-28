@@ -58,7 +58,7 @@
 //!
 //! ## Host bridge (`feature = "host"`)
 //!
-//! The optional `host` feature compiles [`host`], the mirror image of
+//! The optional `host` feature compiles `host`, the mirror image of
 //! this adapter: a host-side bridge that loads a real `.clap` shared
 //! object in-process with `clack-host` and maps its descriptor,
 //! parameters and lifecycle onto the neutral

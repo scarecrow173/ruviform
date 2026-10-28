@@ -13,6 +13,7 @@ Directory: `docs/plans`
 | PLAN-034KV6r7RDBR7CSvMSIB8e | Issue #104 RT 観測経路コスト計測 PoC の実施計画 | completed | [implement-issue-104-rt-observability-poc.md](./implement-issue-104-rt-observability-poc.md) |
 | PLAN-034MrrISpCH4LObubGof0Q | Issue #113 実施計画 — エンジン/利用側へのプラグイン統合（RT endpoint 所有分離 + グラフ接着） | completed | [implement-issue-113-engine-plugin-integration.md](./implement-issue-113-engine-plugin-integration.md) |
 | PLAN-034MLRinXTGEtewrMHtDSh | Issue #114 実施計画 — 規格アダプタ host-side bridge（CLAP/VST3）+ 実プラグイン L1 E2E（compile-time runner + opt-in lane） | completed | [implement-issue-114-real-adapter-l1-e2e.md](./implement-issue-114-real-adapter-l1-e2e.md) |
+| PLAN-034NlJVJxcfEkAxcclU9Zw | Issue #117 実施計画 — L1 bundle 子プロセス（1 子プロセス N インスタンス） | completed | [implement-issue-117-bundle-child-process.md](./implement-issue-117-bundle-child-process.md) |
 | PLAN-034NhK1lX72CUL3VIU7gOG | Issue #119 実施計画 — L1 wire バージョン方針の記録と契約検証 | completed | [implement-issue-119-l1-wire-version-policy.md](./implement-issue-119-l1-wire-version-policy.md) |
 | PLAN-034N3RoM1d6QGgIGM8VObU | Issue #124 OFX フォローアップ実施計画（catalog_open cross-window h 露出修正 + instance clip props clone） | completed | [implement-issue-124-ofx-window-lease.md](./implement-issue-124-ofx-window-lease.md) |
 | PLAN-034N3OJ2PTwjfEeCLuuvmQ | Issue #125 実装計画 — ICC LUT fixture coverage | completed | [implement-issue-125-icc-lut-fixture-coverage.md](./implement-issue-125-icc-lut-fixture-coverage.md) |

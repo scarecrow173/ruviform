@@ -15,6 +15,7 @@ Directory: `docs/discovery`
 | DISC-034IO8gG0n5xCqh66w8KUp | Issue #1 詳細設計に向けた要求確定とエコシステム調査 | draft | [explore-architecture-design-baseline.md](./explore-architecture-design-baseline.md) |
 | DISC-034JcicdqiAQzbUKFHiCbc | Issue #26 に向けた動画基盤 API・色変換/HDR 対応範囲の調査 | draft | [explore-video-foundation-api-scope.md](./explore-video-foundation-api-scope.md) |
 | DISC-034MHDcCcgTMOTFraQb90l | L1 規格アダプタの子プロセス組込み・実プラグイン E2E（CLAP/VST3/OFX）の探索（Issue #114） | resolved | [issue-114-real-adapter-l1-e2e.md](./issue-114-real-adapter-l1-e2e.md) |
+| DISC-034NiVjJSeI0gfYX87KMjH | L1 bundle 子プロセス（1 子プロセス N インスタンス）の探索（Issue #117） | active | [issue-117-bundle-child-process-discovery.md](./issue-117-bundle-child-process-discovery.md) |
 | DISC-034JbXZSba3SvOavRFfs66 | Issue #28 UI 技術検証 PoC の事前調査 | draft | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |

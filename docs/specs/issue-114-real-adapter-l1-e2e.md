@@ -96,7 +96,7 @@ Issue #114 — #76 で確立した L1 アウトプロセス経路（`run(factori
 
 ### In Scope
 
-- runner バイナリのオーサリング面 — 規格アダプタが供給する `PluginFactory`/`ErasedPlugin` bridge を `run(factories)` で exe 化する **compile-time 固定** の runner bin（規格毎）。`run` の argv 規約（`--ruviform-*` bootstrap flag・未知引数の defined rejection）は不変に維持し、プラグインバイナリ指定は runner 内の compile-time 確定解決（実行時引数注入は行わない）
+- runner バイナリのオーサリング面 — 規格アダプタが供給する `PluginFactory`/`ErasedPlugin` bridge を `run(factories)` で exe 化する **compile-time 固定** の runner bin（規格毎）。`run` の argv 規約（`--ruviform-*` bootstrap flag・未知引数の defined rejection）は不変に維持し（#114 時点の記録 — **但書**: Issue #117 の `WIRE_VERSION` 1→2 bump で argv 規約は v2 へ更新済み: `--ruviform-*` bootstrap flag は `CreateInstance` payload へ移転・任意引数の defined rejection（exit 2）は維持）、プラグインバイナリ指定は runner 内の compile-time 確定解決（実行時引数注入は行わない）
 - host 側 CLAP bridge の実装 — 実 CLAP バイナリ（workspace 生成の `ruviform_plugin_clap` cdylib）を子プロセスで load・instantiate し `PluginFactory`/`ErasedPlugin` に bridge する部品（`clack-host` — dev-dep → production dep 昇格は依存追加規約の理由記録に従う）
 - host 側 VST3 bridge の実装 — 実 VST3 バイナリ（workspace 生成の `ruviform_plugin_vst3` cdylib）を子プロセスで load・instantiate し `PluginFactory`/`ErasedPlugin` に bridge する部品（`vst3` crate の raw COM bindings 直駆動 — host 側 loader API を持たないため adapter が最小 host を実装する。dlopen は `libloading`）
 - 実 CLAP・VST3 プラグインの L1 E2E — `PluginHost`/`OutOfProcessSpec` 経由で spawn→`Hello`/`Scan` handshake（descriptor 整合）→lifecycle コマンド往復→shm block process（gain 等のデータ正当性）→state 動詞の defined 応答往復→`Shutdown`/Destroy で exit(0) を両規格で実証。crash/異常系は既存契約の維持を確認（`Failed` + once 通知 + pass-through・自動再起動なし）
@@ -120,7 +120,7 @@ Issue #114 — #76 で確立した L1 アウトプロセス経路（`run(factori
 ## Requirements
 
 - **実バイナリ経路の実証（CLAP + VST3）**: E2E は真の規格バイナリ（workspace 生成の `.clap`/`.vst3` 形 shared object — compile-time typed entry のみに留まらない file-load/dlopen 経路）を両規格で対象とし、`PluginHost` 経由の spawn→lifecycle→process→destroy がデータ正当性（モックでない規格 ABI 経由の処理出力）を持つこと
-- **wire/host/runner 契約維持**: wire プロトコル・shm レイアウト・`argv` 規約（`--ruviform-shm-key`/`--ruviform-plugin-id`）・`OutOfProcessSpec` 面・`Failed`+通知+pass-through・自動再起動なしの契約を変えない。runner は compile-time 固定 registration（`run` argv 規約の拡張・`spec.args` 経由のプラグイン path 受け渡しは行わない — ユーザー決定）
+- **wire/host/runner 契約維持**: wire プロトコル・shm レイアウト・`argv` 規約（`--ruviform-shm-key`/`--ruviform-plugin-id`）・`OutOfProcessSpec` 面・`Failed`+通知+pass-through・自動再起動なしの契約を変えない（#114 時点の記録 — **但書**: Issue #117 の `WIRE_VERSION` 1→2 bump で argv 規約・`Failed` 通知粒度は v2 へ変わる: `--ruviform-*` は `CreateInstance` payload へ移転し `OutOfProcessSpec::isolation` が追加され、bundled route の子 kill は影響各 live instance への N 通知列となる）。runner は compile-time 固定 registration（`run` argv 規約の拡張・`spec.args` 経由のプラグイン path 受け渡しは行わない — ユーザー決定）
 - **descriptor 整合**: `OutOfProcessSpec.descriptor` と子の `Scanned` 報告の field-equality が実プラグイン経由でも維持される（adapter が実バイナリ metadata から `PluginDescriptor` を合成する経路の存在）
 - **異常系契約維持**: 実プラグインの panic → `Err(HostError::PluginFailed)` で子存続・子プロセス強制終了 → `Failed` + `HostNotification::InstanceFailed` once + 以後定義済み拒否・pass-through（直前受信 or 無音）・応答なしハングなし。規格バイナリ不在・load 失敗・instantiate 失敗は defined rejection（spawn `Err(HostError::Ipc)` 系）で収束しハングしない
 - **RT 契約維持**: L1 の RT 側読取り経路（`RtLeg`/endpoint）に変更を加えない — `rt_` 命名テストが `mise run test-rt` でグリーン。子内の foreign ABI オブジェクトに `Send` は要求しない（`create_sendable` は L1 経路で不要求）
@@ -131,7 +131,7 @@ Issue #114 — #76 で確立した L1 アウトプロセス経路（`run(factori
 
 ## Acceptance Criteria
 
-- [ ] AC1（runner オーサリング面確定）: `run(factories)` を規格アダプタ供給の実プラグイン bridge factory 構成で exe 化する **compile-time 固定** runner bin が規格毎（CLAP・VST3）に存在する — `run` argv 規約（bootstrap flag・未知引数 reject）との整合が保たれ、実行時プラグイン指定（argv/`spec.args`）を持たない
+- [ ] AC1（runner オーサリング面確定）: `run(factories)` を規格アダプタ供給の実プラグイン bridge factory 構成で exe 化する **compile-time 固定** runner bin が規格毎（CLAP・VST3）に存在する — `run` argv 規約（v2: `<runner>` + spec.args・任意引数 reject — bootstrap flag は `CreateInstance` payload へ移転）との整合が保たれ、実行時プラグイン指定（argv/`spec.args`）を持たない
 - [ ] AC2（実 CLAP L1 E2E）: `PluginHost`/`OutOfProcessSpec` 経由で実 CLAP バイナリを載せた子プロセスが spawn→`Hello`/`Scan` handshake→Instantiate→lifecycle 往復→shm block process→state 動詞→Destroy で完走し、規格 ABI 経由の実処理出力（gain 等）のデータ正当性が検証される — `l1_proxy_e2e` 同型の device-independent な host 側 E2E として
 - [ ] AC3（実 VST3 L1 E2E）: 同構成で実 VST3 バイナリを載せた子プロセスが同じ経路を完走し、規格 ABI（`GetPluginFactory`→`IPluginFactory`→`IComponent`/`IAudioProcessor` COM 経路）の実処理出力のデータ正当性が検証される
 - [ ] AC4（異常系維持）: 実 adapter 構成の子が既存契約を維持 — 子強制終了 → `Failed` + `InstanceFailed` once + pass-through・自動再起動なし・応答なしハングなしが観測できる（既存 `l1-test-worker`/`l1_runner_e2e` の異常系と同契約）。規格バイナリ不在時は spawn 系の defined rejection で収束しハング・silent skip しない

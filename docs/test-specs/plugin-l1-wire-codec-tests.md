@@ -33,6 +33,7 @@ relations:
     - "docs/specs/plugin-l1-out-of-process.md"
     - "docs/designs/plugin-l1-out-of-process.md"
     - "docs/specs/issue-119-l1-wire-version-policy.md"
+    - "docs/specs/issue-117-bundle-child-process.md"
   verified-by: []
   references: []
   defers: []
@@ -49,7 +50,7 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed）・approved design `d
 
 ## Feature
 
-`ruviform-plugin-core` の L1 共有基盤 3 系: (a) plugin-side contract の所有移転（host が `pub use` で再エクスポートする互換維持付き）、(b) `Lifecycle` 状態機械への `Failed` 終端準状態追加（`LifecycleEvent::Failed` 報告遷移・`is_failed()`・`accepts_processing() == false`）、(c) `wire` モジュール — 親子プロセス間コマンド/ブロック doorbell のフレーム化 codec（`[u32 LE payload_len][u8 kind][payload]`・`WIRE_VERSION = 1`・`Hello`/`Command`/`Reply`/`BlockIn`/`BlockDone`/`Shutdown`）と `wire::Command`/`wire::Reply`/`wire::Descriptor` 型。
+`ruviform-plugin-core` の L1 共有基盤 3 系: (a) plugin-side contract の所有移転（host が `pub use` で再エクスポートする互換維持付き）、(b) `Lifecycle` 状態機械への `Failed` 終端準状態追加（`LifecycleEvent::Failed` 報告遷移・`is_failed()`・`accepts_processing() == false`）、(c) `wire` モジュール — 親子プロセス間コマンド/ブロック doorbell のフレーム化 codec（`[u32 LE payload_len][u8 kind][payload]`・`WIRE_VERSION = 2`（Issue #117 で v2 へ改訂 — `Command`/`Reply`/`BlockIn`/`BlockDone` payload は `[u64 seq][u32 instance][rest]` envelope・`Hello`/`Shutdown` は instance 非持ち）・`Hello`/`Command`/`Reply`/`BlockIn`/`BlockDone`/`Shutdown`）と `wire::Command`/`wire::Reply`/`wire::Descriptor` 型。
 
 ## Rules
 
@@ -57,9 +58,9 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed）・approved design `d
 - **`HostError` 拡張**: `Failed`（`Failed` インスタンスへのコマンド拒否）・`Ipc`（spawn/handshake/バージョン/transport 失敗・コマンド応答タイムアウト）・`DuplicatePluginId`（L0/L1 同一 plugin_id 重複登録）の 3 variant を追加 — `#[non_exhaustive]` で non-breaking・Display arm を持つ
 - **`LifecycleState::Failed`**: 終端準状態 — `(Failed, Destroy) → Destroyed` のみ合法（その他の `Failed` からの遷移は `IllegalTransition`）。`accepts_processing()` は `false`・`is_failed()` は `true` を返す。`Created|Initialized|Activated|Processing → Failed` は `LifecycleEvent::Failed` で到達
 - **`LifecycleEvent::Failed`**: 報告遷移（`InitFailed`/`ActivateFailed` 系の命名規約）— host が子プロセス死亡・応答喪失・プロトコル喪失など実行コンテキストの終端失敗を注入する。retry 可能な `InitFailed`/`ActivateFailed` とは意味が異なり terminal である旨を doc が区別する。遷移表は const のまま・`#[non_exhaustive]` で非破壊追加
-- **wire フレーム**: `[u32 LE payload_len][u8 kind][payload]` — `payload_len` は payload バイト長（kind・len フィールド自体を含まない）。`Hello { version: u16, capabilities: u32 }` のみが `WIRE_VERSION = 1` を運ぶ — 不一致は handshake 失敗（kill + `HostError::Ipc`）
-- **wire メッセージ 6 種**: `Hello`（子→親・最初のフレーム）・`Command { seq: u64, cmd: wire::Command }`（親→子・相関 seq）・`Reply { seq: u64, result: Result<wire::Reply, HostError> }`（子→親・`HostError` を直接 encode）・`BlockIn { seq: u64 }`（親→子 doorbell・in-slot `seq % D`）・`BlockDone { seq: u64, result: ProcessResult }`（子→親 doorbell・out-slot `seq % D`）・`Shutdown`（親→子・`HostCommand::Destroy` の wire 意味）
-- **`wire::Command`**（`HostCommand` の handle 非修飾ミラー — 子は singleton）: `Scan`/`Initialize`/`Activate { config: ProcessConfig }`/`StartProcessing`/`StopProcessing`/`Deactivate`/`SaveState`/`RestoreState { bytes: Vec<u8> }`/`OpenGui { parent: GuiParentToken }`/`CloseGui`。`Instantiate`/`Destroy` は wire 動詞を持たない（`Instantiate` ↔ spawn + handshake・`Destroy` ↔ `Shutdown` + reap）
+- **wire フレーム**: `[u32 LE payload_len][u8 kind][payload]` — `payload_len` は payload バイト長（kind・len フィールド自体を含まない）。`Hello { version: u16, capabilities: u32 }` のみが `WIRE_VERSION = 2` を運ぶ — 不一致は handshake 失敗（kill + `HostError::Ipc`）
+- **wire メッセージ 6 種**: `Hello`（子→親・最初のフレーム）・`Command { seq: u64, instance: u32, cmd: wire::Command }`（親→子・相関 seq + instance envelope）・`Reply { seq: u64, instance: u32, result: Result<wire::Reply, HostError> }`（子→親・`HostError` を直接 encode）・`BlockIn { instance: u32, seq: u64 }`（親→子 doorbell・in-slot `seq % D`）・`BlockDone { instance: u32, seq: u64, result: ProcessResult }`（子→親 doorbell・out-slot `seq % D`）・`Shutdown`（親→子・`HostCommand::Destroy` の wire 意味）。`Command`/`Reply`/`BlockIn`/`BlockDone` payload は `[u64 seq][u32 instance][rest]` envelope・`Hello`/`Shutdown` は instance 非持ち（Issue #117 — 子は N instance を host する bundle 形態。`instance` scope 判定表・`WIRE_MAX_INSTANCES=64`/`WIRE_INSTANCE_NONE=u32::MAX` の詳細は `issue-117-wire-v2-codec-tests` が oracle）
+- **`wire::Command`**（`HostCommand` の handle 非修飾ミラー）: `Scan`/`Initialize`/`Activate { config: ProcessConfig }`/`StartProcessing`/`StopProcessing`/`Deactivate`/`SaveState`/`RestoreState { bytes: Vec<u8> }`/`OpenGui { parent: GuiParentToken }`/`CloseGui`/`CreateInstance { plugin_id, shm_key, in_depth, out_depth }`（tag 10）・`DestroyInstance`（tag 11）。v2 では `Instantiate`/`Destroy` が `CreateInstance`/`DestroyInstance` wire 動詞へ写像される（`Instantiate` ↔ spawn + `Scan` + `CreateInstance`・`Destroy` ↔ `DestroyInstance` + live=0 で `Shutdown` + reap）
 - **`wire::Reply`**: `Ok`/`Scanned(Vec<Descriptor>)`/`State { bytes: Vec<u8> }`/`Opened { gui: GuiHandle }`
 - **`wire::Descriptor`**: `PluginDescriptor` の所有 wire 形 — `id`/`name`/`vendor`/`version: String`・`features: Vec<String>`・`From<PluginDescriptor>` とフィールド等価比較を提供（`&'static` → owned 変換を wire 側で完結させ、公開 `HostReply::Scanned` は registration 供給の 'static 値を返す設計と整合 — `Box::leak` なし）
 - **`#[non_exhaustive]` 方針**: `wire::Command`/`wire::Reply`/`Message`（enum）は enum レベル `#[non_exhaustive]`（公開 enum 規約）。`wire::Descriptor` は struct のため対象外。wire プロトコル自体は `WIRE_VERSION` handshake で厳格一致 — フィールド追加はバージョン更新とセット
@@ -72,7 +73,7 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed）・approved design `d
 - **`Failed` 遷移表**: `lifecycle_at(Processing).transition(Failed) → Ok(Failed)`・`(Failed, Destroy) → Ok(Destroyed)`・`(Failed, Initialize|Activate|StartProcessing|Process|StopProcessing|Deactivate|SaveState 相当の各 event) → IllegalTransition`・`accepts_processing() == false`・`is_failed() == true`
 - **wire roundtrip**: `Command{seq: 7, cmd: Activate{config}}` → encode → decode で同一 seq/config・`Reply{seq: 7, result: Ok(State{bytes})}` で bytes 往復・`Descriptor` が `PluginDescriptor`（'static）→ `wire::Descriptor`（owned）でフィールド等価
 - **malformed frame**: `payload_len` 超過の切詰バッファ → `Err`・未知 `kind` byte → `Err`・`payload_len` が `WIRE_MAX_*` 上限を超える宣言 → `Err`（確保しない）
-- **`Hello` バージョン**: `version != WIRE_VERSION` は handshake 失敗 — `wire::Hello` の `version` フィールドが `1` 以外で codec 層の decode は受理するが handshake 意味（プロキシ側）では kill + `Ipc`（ proxy contract spec が固定）
+- **`Hello` バージョン**: `version != WIRE_VERSION`（`!= 2`）は handshake 失敗 — `wire::Hello` の `version` フィールドが `2` 以外で codec 層の decode は受理するが handshake 意味（プロキシ側）では kill + `Ipc`（ proxy contract spec が固定）
 - **移設互換**: `ruviform_plugin_host::Plugin`/`PluginFactory`/`ErasedPlugin`/`erase`/`HostInput`/`HostOutput`/`HostError`/`GuiHandle`/`GuiParentToken`/`PluginHandle` の既存 use が変わらずコンパイル — `InProcessHost` の既存テストが全パス
 
 ## Guarantees
@@ -90,7 +91,8 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed）・approved design `d
 - runner（export）の argv/shm attach/メッセージループの結合 — `plugin-l1-runner-e2e-tests.md` が担当
 - shm スロットレイアウト・doorbell fence・`WIRE_MAX_*` 適用の process 経路（slot 配置は proxy 側 — codec は型 codec のみ）
 - 複数バージョン共存・交渉機構の検証（単一最新バージョン方針は Issue #119 で確定 — `docs/specs/issue-119-l1-wire-version-policy.md`。本 spec の固定対象は現行 `WIRE_VERSION` の契約のみ）
-- bundle 子（1 子 N インスタンス — `Instantiate`/handle 修飾は将来プロトコル改訂）
+- bundle 子の v2 増分契約 — `instance` envelope 詳細・`WIRE_MAX_INSTANCES`/`WIRE_INSTANCE_NONE`・新動詞 payload bounds・scope 判定表・`HostError::InstanceLimit` wire tag は `issue-117-wire-v2-codec-tests` が oracle（v2 で改訂済み — 本 spec は引き継ぎ frame/kind/型契約を v2 で保持する baseline）
+- host/runner の demux・registry・converge 意味論（`issue-117-bundle-failed-granularity-tests`・`issue-117-bundle-e2e-tests` が対象）
 - 実プラグイン（CLAP/VST3/OFX）の L1 組込み
 
 ## Risk

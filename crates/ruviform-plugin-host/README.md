@@ -19,11 +19,16 @@ Ruviform メディア基盤のプラグインホスト層: ホストアプリケ
   `Instantiate { plugin_id }` の呼び出し形は変わらない — 呼び出し側は層を
   意識しない。`plugin_id` の重複 claim（順序・ルート不問）は
   `Err(HostError::DuplicatePluginId)` の defined rejection。
-- L1 経路: インスタンスごとに 1 子プロセス。stdio の framed コントロール
-  プレーン + `shared_memory` データプレーン + `ruviform-rt` SPSC try 脚。
-  ライブ中の子プロセス終了はインスタンスを `Failed` へ収束させ、
-  `PluginHost::try_recv_notification` が
-  `HostNotification::InstanceFailed` を一度だけ報告する。`Failed`
+- L1 経路: `OutOfProcessSpec::isolation` で子プロセス形態を選択 — `Bundled`
+  （既定）は route の pool が共有子へ最大 `WIRE_MAX_INSTANCES` 個の
+  インスタンスを詰め、`Dedicated` は `Instantiate` 毎に専用子を spawn する。
+  stdio の framed コントロールプレーン + `shared_memory` データプレーン +
+  `ruviform-rt` SPSC try 脚。ライブ中の子プロセス終了はその子がホストする
+  各 live インスタンスを `Failed` へ収束させ、
+  `PluginHost::try_recv_notification` が影響を受けたインスタンス毎に
+  `HostNotification::InstanceFailed` を 1 つずつ報告する（bundled route の
+  子 kill = N 通知列 — 粒度正本は
+  `docs/adr/issue-117-bundle-child-failed-granularity.md`）。`Failed`
   インスタンスは `Destroy` 以外の全コマンドを `Err(HostError::Failed)` で
   拒否し、`process` は `Ok(CONTINUE)` + 無音を返す。
 - `process` は分離設計上コマンド**ではない**: L0 では `PluginProcessor` への

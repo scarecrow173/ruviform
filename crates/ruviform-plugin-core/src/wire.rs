@@ -20,11 +20,23 @@
 //! | `kind` | message | direction | payload |
 //! | --- | --- | --- | --- |
 //! | 0 | [`Message::Hello`] | child → parent | `u16 version`, `u32 capabilities` |
-//! | 1 | [`Message::Command`] | parent → child | `u64 seq`, [`Command`] |
-//! | 2 | [`Message::Reply`] | child → parent | `u64 seq`, `u8` result tag + [`Reply`] or [`HostError`] |
-//! | 3 | [`Message::BlockIn`] | parent → child | `u64 seq` — doorbell for shm in-slot `seq % D` |
-//! | 4 | [`Message::BlockDone`] | child → parent | `u64 seq`, [`ProcessResult`] — doorbell for shm out-slot `seq % D` |
-//! | 5 | [`Message::Shutdown`] | parent → child | empty — `Destroy`'s wire meaning |
+//! | 1 | [`Message::Command`] | parent → child | `u64 seq`, `u32 instance`, [`Command`] |
+//! | 2 | [`Message::Reply`] | child → parent | `u64 seq`, `u32 instance`, `u8` result tag + [`Reply`] or [`HostError`] |
+//! | 3 | [`Message::BlockIn`] | parent → child | `u64 seq`, `u32 instance` — doorbell for shm in-slot `seq % D` |
+//! | 4 | [`Message::BlockDone`] | child → parent | `u64 seq`, `u32 instance`, [`ProcessResult`] — doorbell for shm out-slot `seq % D` |
+//! | 5 | [`Message::Shutdown`] | parent → child | empty — child teardown |
+//!
+//! The `u32 instance` field is the wire-v2 envelope (Issue #117): one
+//! child hosts up to [`WIRE_MAX_INSTANCES`] plugin instances in a
+//! runner-side registry, and the field is the registry key the frame
+//! addresses. [`Message::Hello`] and [`Message::Shutdown`] carry none
+//! — they are child-scoped by kind. `Reply`/`BlockDone` echo the
+//! received `instance` verbatim. The codec enforces the verb↔scope
+//! table on [`decode`]: only [`Command::Scan`] is child-scoped
+//! (envelope [`WIRE_INSTANCE_NONE`]); every other verb and both
+//! doorbells require a live range instance
+//! (`< WIRE_MAX_INSTANCES`). A scope violation or an out-of-range
+//! `instance` is [`WireError::Malformed`].
 //!
 //! ## Versioning
 //!
@@ -62,11 +74,13 @@
 //!
 //! ## `Instantiate`/`Destroy` vocabulary mapping
 //!
-//! `HostCommand::Instantiate` maps to spawn + handshake and
-//! `HostCommand::Destroy` to `Shutdown` + reap, so [`Command`] carries
-//! neither verb — the remaining ten host commands map one-to-one onto
-//! its variants, with the handle dropped because a runner child is a
-//! singleton instance.
+//! `HostCommand::Instantiate` maps to spawn + handshake +
+//! [`Command::CreateInstance`] and `HostCommand::Destroy` to
+//! [`Command::DestroyInstance`] + `Shutdown` + reap (on the child's
+//! last instance). The remaining host commands map one-to-one onto
+//! the instance-scoped [`Command`] variants, with the public handle
+//! replaced by the envelope `instance` — a child-local `u32` the host
+//! mints.
 
 use core::fmt;
 use std::io::{self, Read, Write};
@@ -85,7 +99,8 @@ use crate::{
 /// The protocol version carried by [`Message::Hello`]. A proxy and a
 /// runner must agree on it exactly — a mismatch fails the handshake
 /// (`HostError::Ipc`); payload changes always ride a version bump.
-pub const WIRE_VERSION: u16 = 1;
+/// `2` is the Issue #117 instance-envelope revision.
+pub const WIRE_VERSION: u16 = 2;
 
 /// Maximum frames per processing block carried on the wire
 /// (`Activate` configs and shm block payloads share this bound).
@@ -113,6 +128,17 @@ pub const WIRE_MAX_ELEMENTS: u32 = 1_024;
 /// (`SaveState`/`RestoreState` replies and commands).
 pub const WIRE_MAX_STATE_BYTES: u32 = 16 * 1_024 * 1_024;
 
+/// Maximum live plugin-instance handles per child process (wire v2).
+/// The `u32 instance` envelope field is the runner's registry key;
+/// an instance-scoped frame is [`WireError::Malformed`] when it is
+/// neither `< WIRE_MAX_INSTANCES` nor [`WIRE_INSTANCE_NONE`].
+pub const WIRE_MAX_INSTANCES: u32 = 64;
+
+/// The `u32 instance` value addressing the child as a whole —
+/// only [`Command::Scan`] uses it. Every other verb and both
+/// doorbells require a live-range instance `< WIRE_MAX_INSTANCES`.
+pub const WIRE_INSTANCE_NONE: u32 = u32::MAX;
+
 /// Byte length of the frame header: `u32` payload length plus `u8`
 /// kind. A stream reader first reads 4 length bytes, then
 /// `1 + payload_len` bytes, and hands the whole frame to [`decode`].
@@ -127,7 +153,7 @@ pub const WIRE_FRAME_HEADER_LEN: usize = 5;
 /// wire contract owner defines it.
 ///
 /// All fields are little-endian. The header is 7 `u32` fields
-/// ([`HEADER_LEN`] bytes); each slot is [`SLOT_BYTES`]:
+/// ([`shm::HEADER_LEN`] bytes); each slot is [`shm::SLOT_BYTES`]:
 ///
 /// | offset | field | size | notes |
 /// | --- | --- | --- | --- |
@@ -135,11 +161,11 @@ pub const WIRE_FRAME_HEADER_LEN: usize = 5;
 /// | +8 | `frames` | `u32` | ≤ [`WIRE_MAX_FRAMES`] |
 /// | +12 | `channels` | `u32` | ≤ [`WIRE_MAX_CHANNELS`] |
 /// | +16 | `event_count` | `u32` | ≤ [`WIRE_MAX_EVENTS`] |
-/// | +20 | `flags` | `u32` | bit0 ([`FLAG_TRANSPORT`]) |
-/// | +24 | `transport` | [`TRANSPORT_LEN`] | wire `TransportInfo` when flagged |
-/// | +120 | `result` | [`RESULT_LEN`] | wire `ProcessResult` (out-slots) |
-/// | +128 | `events` | `event_count * `[`EVENT_WIRE_SIZE`] | wire `Event` records |
-/// | +33920 | `samples` | [`SAMPLES_LEN`] | planar `f32` LE, channel stride [`SAMPLE_STRIDE`] |
+/// | +20 | `flags` | `u32` | bit0 ([`shm::FLAG_TRANSPORT`]) |
+/// | +24 | `transport` | [`shm::TRANSPORT_LEN`] | wire `TransportInfo` when flagged |
+/// | +120 | `result` | [`shm::RESULT_LEN`] | wire `ProcessResult` (out-slots) |
+/// | +128 | `events` | `event_count * `[`shm::EVENT_WIRE_SIZE`] | wire `Event` records |
+/// | +33920 | `samples` | [`shm::SAMPLES_LEN`] | planar `f32` LE, channel stride [`shm::SAMPLE_STRIDE`] |
 ///
 /// The segment holds no shared control state — slot selection is the
 /// doorbell `seq` (`seq % depth`) under strict in/out alternation.
@@ -189,7 +215,7 @@ pub mod shm {
     /// Byte offset of the slot `transport` region.
     pub const TRANSPORT_OFF: usize = 24;
     /// Reserved capacity of the `transport` region — the maximum
-    /// wire size of `TransportInfo` under `WIRE_VERSION` 1 is 91 B.
+    /// wire size of `TransportInfo` under `WIRE_VERSION` 2 is 91 B.
     pub const TRANSPORT_LEN: usize = 96;
     /// Byte offset of the slot `result` region.
     pub const RESULT_OFF: usize = TRANSPORT_OFF + TRANSPORT_LEN;
@@ -199,7 +225,7 @@ pub mod shm {
     /// Byte offset of the slot `events` region.
     pub const EVENTS_OFF: usize = RESULT_OFF + RESULT_LEN;
     /// Byte length of one wire-encoded `Event` record under
-    /// `WIRE_VERSION` 1 (`u32` offset + `u8` kind + `u32` param id +
+    /// `WIRE_VERSION` 2 (`u32` offset + `u8` kind + `u32` param id +
     /// `f64` value + `u64` reserved ×2).
     pub const EVENT_WIRE_SIZE: usize = 33;
     /// Byte offset of the slot `samples` region.
@@ -210,7 +236,7 @@ pub mod shm {
     /// Byte length of the fixed-capacity `samples` region
     /// (`WIRE_MAX_CHANNELS` planes).
     pub const SAMPLES_LEN: usize = WIRE_MAX_CHANNELS as usize * SAMPLE_STRIDE;
-    /// Fixed byte length of one in/out slot under `WIRE_VERSION` 1.
+    /// Fixed byte length of one in/out slot under `WIRE_VERSION` 2.
     pub const SLOT_BYTES: usize = SAMPLES_OFF + SAMPLES_LEN;
 
     /// Byte offset of the in-slot array — always right after the
@@ -263,7 +289,7 @@ pub enum Message {
         /// Protocol version — [`WIRE_VERSION`] on a live handshake.
         version: u16,
         /// Capability bitmask reserved for protocol extensions;
-        /// must be `0` under [`WIRE_VERSION`] `1` — decode rejects a
+        /// must be `0` under [`WIRE_VERSION`] `2` — decode rejects a
         /// nonzero value as [`WireError::Malformed`], like any other
         /// nonzero reserved field.
         capabilities: u32,
@@ -272,6 +298,11 @@ pub enum Message {
     Command {
         /// Correlation id echoed by the matching [`Message::Reply`].
         seq: u64,
+        /// The registry slot the command addresses —
+        /// [`WIRE_INSTANCE_NONE`] for [`Command::Scan`], a live-range
+        /// `< WIRE_MAX_INSTANCES` handle for every other verb
+        /// (decode-enforced).
+        instance: u32,
         /// The command verb and its payload.
         cmd: Command,
     },
@@ -280,6 +311,9 @@ pub enum Message {
     Reply {
         /// Correlation id of the command being answered.
         seq: u64,
+        /// Echo of the request's `instance` — the host correlates it
+        /// against the waiter's expected handle.
+        instance: u32,
         /// `Ok` carries a [`Reply`]; `Err` carries a [`HostError`].
         result: Result<Reply, HostError>,
     },
@@ -287,25 +321,33 @@ pub enum Message {
     BlockIn {
         /// Block sequence number; selects the shm slot.
         seq: u64,
+        /// Live-range instance the block belongs to (never
+        /// [`WIRE_INSTANCE_NONE`]; decode-enforced).
+        instance: u32,
     },
     /// Child → parent: doorbell for shm output slot `seq % D`.
     BlockDone {
         /// Block sequence number; selects the shm slot.
         seq: u64,
+        /// Echo of the `BlockIn` `instance`.
+        instance: u32,
         /// The plugin's processing status for this block.
         result: ProcessResult,
     },
-    /// Parent → child: clean teardown (`HostCommand::Destroy`'s wire
-    /// meaning). The runner normalizes the lifecycle and exits.
+    /// Parent → child: clean teardown. The runner normalizes every
+    /// live instance and exits; after `DestroyInstance` has drained
+    /// the registry this is the only frame left to send.
     Shutdown,
 }
 
 /// The wire mirror of the host's handle-qualified commands.
 ///
-/// One variant per dispatchable verb; `Instantiate`/`Destroy` have no
-/// wire verb (spawn + handshake and `Shutdown` + reap carry them) and
-/// no variant carries a [`PluginHandle`] — a runner child is a
-/// singleton instance.
+/// One variant per dispatchable verb. `Instantiate` rides
+/// [`Command::CreateInstance`] (after spawn + handshake + `Scan`) and
+/// `Destroy` rides [`Command::DestroyInstance`] followed by the
+/// instance-less `Shutdown`. The public [`PluginHandle`] does not
+/// appear in payloads — the envelope `instance` field on
+/// [`Message::Command`] carries the child-local handle instead.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy — new verbs arrive only with a [`WIRE_VERSION`] bump.
@@ -315,8 +357,34 @@ pub enum Message {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
     /// Enumerate the runner's built-in descriptors →
-    /// [`Reply::Scanned`].
+    /// [`Reply::Scanned`]. Child-scoped: the envelope `instance`
+    /// must be [`WIRE_INSTANCE_NONE`].
     Scan,
+    /// Register a new plugin instance in the child under the
+    /// envelope `instance` handle → [`Reply::Ok`]. Carries the v1
+    /// bootstrap arguments (plugin selection + shm attachment) that
+    /// wire v1 passed as `--ruviform-*` argv flags. Fails with
+    /// [`HostError::UnknownPluginId`] (unscanned id),
+    /// [`HostError::InstanceLimit`] (registry full),
+    /// [`HostError::Ipc`] (shm attach failure or a duplicate
+    /// `instance` handle) or [`HostError::PluginFailed`] (factory
+    /// panic) — the child stays alive on every defined failure.
+    CreateInstance {
+        /// Registered plugin id (matched against `factory.descriptor().id`).
+        plugin_id: String,
+        /// OS shared-memory key the host created for this instance's
+        /// data plane — the child attaches it.
+        shm_key: String,
+        /// Input-slot ring depth the host created the segment with.
+        in_depth: u32,
+        /// Output-slot ring depth the host created the segment with.
+        out_depth: u32,
+    },
+    /// Normalize (best-effort lifecycle teardown), detach the shm
+    /// segment and remove the envelope `instance` handle from the
+    /// registry → [`Reply::Ok`]. An unregistered handle is
+    /// [`HostError::InvalidHandle`].
+    DestroyInstance,
     /// `Created → Initialized` — run the plugin's init hook.
     Initialize,
     /// `Initialized → Activated` — run `prepare` under `config`.
@@ -617,6 +685,30 @@ impl<'a> Reader<'a> {
         String::from_utf8(bytes).map_err(|_| WireError::Malformed)
     }
 
+    /// Reads the wire-v2 `u32 instance` envelope field —
+    /// [`WireError::Malformed`] when the value is neither a live
+    /// handle `< WIRE_MAX_INSTANCES` nor [`WIRE_INSTANCE_NONE`]. The
+    /// verb↔scope table (`Scan`↔`NONE`, doorbells↔live) is checked by
+    /// the caller, which knows the frame kind.
+    pub fn read_instance(&mut self) -> Result<u32, WireError> {
+        let instance = self.read_u32()?;
+        if instance != WIRE_INSTANCE_NONE && instance >= WIRE_MAX_INSTANCES {
+            return Err(WireError::Malformed);
+        }
+        Ok(instance)
+    }
+
+    /// Reads a `u32 instance` that must name a live handle —
+    /// [`WIRE_INSTANCE_NONE`] is a scope violation
+    /// ([`WireError::Malformed`]) for doorbells and every non-`Scan`
+    /// command.
+    pub fn read_live_instance(&mut self) -> Result<u32, WireError> {
+        match self.read_instance()? {
+            WIRE_INSTANCE_NONE => Err(WireError::Malformed),
+            instance => Ok(instance),
+        }
+    }
+
     /// Consumes exactly `N` bytes as an array — the primitive-read
     /// workhorse; never panics.
     fn array<const N: usize>(&mut self) -> Result<&'a [u8; N], WireError> {
@@ -707,14 +799,20 @@ fn encode_body(message: &Message, out: &mut Vec<u8>) -> Result<(), WireError> {
             push_u16(out, *version);
             push_u32(out, *capabilities);
         }
-        Message::Command { seq, cmd } => {
+        Message::Command { seq, instance, cmd } => {
             push_u8(out, KIND_COMMAND);
             push_u64(out, *seq);
+            push_u32(out, *instance);
             encode_command(cmd, out);
         }
-        Message::Reply { seq, result } => {
+        Message::Reply {
+            seq,
+            instance,
+            result,
+        } => {
             push_u8(out, KIND_REPLY);
             push_u64(out, *seq);
+            push_u32(out, *instance);
             match result {
                 Ok(reply) => {
                     push_u8(out, REPLY_OK);
@@ -728,13 +826,19 @@ fn encode_body(message: &Message, out: &mut Vec<u8>) -> Result<(), WireError> {
                 }
             }
         }
-        Message::BlockIn { seq } => {
+        Message::BlockIn { seq, instance } => {
             push_u8(out, KIND_BLOCK_IN);
             push_u64(out, *seq);
+            push_u32(out, *instance);
         }
-        Message::BlockDone { seq, result } => {
+        Message::BlockDone {
+            seq,
+            instance,
+            result,
+        } => {
             push_u8(out, KIND_BLOCK_DONE);
             push_u64(out, *seq);
+            push_u32(out, *instance);
             encode_process_result(result, out);
         }
         Message::Shutdown => {
@@ -763,8 +867,21 @@ fn encode_body(message: &Message, out: &mut Vec<u8>) -> Result<(), WireError> {
 /// use ruviform_plugin_core::wire::{self, Message, WireError};
 ///
 /// let mut frame = Vec::new();
-/// wire::encode(&Message::BlockIn { seq: 9 }, &mut frame).unwrap();
-/// assert_eq!(wire::decode(&frame), Ok(Message::BlockIn { seq: 9 }));
+/// wire::encode(
+///     &Message::BlockIn {
+///         seq: 9,
+///         instance: 0,
+///     },
+///     &mut frame,
+/// )
+/// .unwrap();
+/// assert_eq!(
+///     wire::decode(&frame),
+///     Ok(Message::BlockIn {
+///         seq: 9,
+///         instance: 0
+///     })
+/// );
 /// // A trailing garbage byte makes the declared length a lie.
 /// frame.push(0);
 /// assert_eq!(wire::decode(&frame), Err(WireError::Malformed));
@@ -797,12 +914,29 @@ pub fn decode(frame: &[u8]) -> Result<Message, WireError> {
                 capabilities,
             }
         }
-        KIND_COMMAND => Message::Command {
-            seq: reader.read_u64()?,
-            cmd: decode_command(&mut reader)?,
-        },
+        KIND_COMMAND => {
+            let seq = reader.read_u64()?;
+            let instance = reader.read_instance()?;
+            let verb = reader.read_u8()?;
+            // Verb↔scope table: `Scan` is the only child-scoped verb
+            // (`instance == WIRE_INSTANCE_NONE`); every other verb
+            // requires a live-range instance. Scope is settled by the
+            // envelope and verb tag — both fixed-position — before the
+            // untrusted verb payload is interpreted, so a scope
+            // violation is the defined `Malformed` rejection even on
+            // an incomplete body.
+            if (verb == VERB_SCAN) != (instance == WIRE_INSTANCE_NONE) {
+                return Err(WireError::Malformed);
+            }
+            let cmd = decode_command(verb, &mut reader)?;
+            Message::Command { seq, instance, cmd }
+        }
         KIND_REPLY => Message::Reply {
             seq: reader.read_u64()?,
+            // `Scan` replies echo `WIRE_INSTANCE_NONE`; all others
+            // echo a live-range instance — either is legal here, the
+            // host's per-waiter check attributes it.
+            instance: reader.read_instance()?,
             result: match reader.read_u8()? {
                 REPLY_OK => Ok(decode_reply(&mut reader)?),
                 REPLY_ERR => Err(decode_host_error(&mut reader)?),
@@ -811,9 +945,13 @@ pub fn decode(frame: &[u8]) -> Result<Message, WireError> {
         },
         KIND_BLOCK_IN => Message::BlockIn {
             seq: reader.read_u64()?,
+            // Doorbells are always instance-scoped — `NONE` is a
+            // scope violation, not an unset field.
+            instance: reader.read_live_instance()?,
         },
         KIND_BLOCK_DONE => Message::BlockDone {
             seq: reader.read_u64()?,
+            instance: reader.read_live_instance()?,
             result: decode_process_result(&mut reader)?,
         },
         KIND_SHUTDOWN => Message::Shutdown,
@@ -834,6 +972,10 @@ const KIND_REPLY: u8 = 2;
 const KIND_BLOCK_IN: u8 = 3;
 const KIND_BLOCK_DONE: u8 = 4;
 const KIND_SHUTDOWN: u8 = 5;
+
+/// `Command` verb tag 0: `Scan` — the only child-scoped verb, named
+/// here because the decode-time scope table keys on it.
+const VERB_SCAN: u8 = 0;
 
 /// [`Message::Reply`] result discriminant: `Ok(Reply)`.
 const REPLY_OK: u8 = 0;
@@ -891,7 +1033,7 @@ fn push_str(out: &mut Vec<u8>, value: &str) {
 
 fn encode_command(command: &Command, out: &mut Vec<u8>) {
     match command {
-        Command::Scan => push_u8(out, 0),
+        Command::Scan => push_u8(out, VERB_SCAN),
         Command::Initialize => push_u8(out, 1),
         Command::Activate { config } => {
             push_u8(out, 2);
@@ -910,12 +1052,27 @@ fn encode_command(command: &Command, out: &mut Vec<u8>) {
             encode_gui_parent_token(parent, out);
         }
         Command::CloseGui => push_u8(out, 9),
+        Command::CreateInstance {
+            plugin_id,
+            shm_key,
+            in_depth,
+            out_depth,
+        } => {
+            push_u8(out, 10);
+            push_str(out, plugin_id);
+            push_str(out, shm_key);
+            push_u32(out, *in_depth);
+            push_u32(out, *out_depth);
+        }
+        Command::DestroyInstance => push_u8(out, 11),
     }
 }
 
-fn decode_command(reader: &mut Reader<'_>) -> Result<Command, WireError> {
-    match reader.read_u8()? {
-        0 => Ok(Command::Scan),
+/// Decodes one verb payload; `verb` is the tag byte the caller
+/// already consumed for the scope check.
+fn decode_command(verb: u8, reader: &mut Reader<'_>) -> Result<Command, WireError> {
+    match verb {
+        VERB_SCAN => Ok(Command::Scan),
         1 => Ok(Command::Initialize),
         2 => Ok(Command::Activate {
             config: decode_process_config(reader)?,
@@ -931,6 +1088,28 @@ fn decode_command(reader: &mut Reader<'_>) -> Result<Command, WireError> {
             parent: decode_gui_parent_token(reader)?,
         }),
         9 => Ok(Command::CloseGui),
+        10 => {
+            let plugin_id = reader.read_string()?;
+            let shm_key = reader.read_string()?;
+            let in_depth = reader.read_u32()?;
+            let out_depth = reader.read_u32()?;
+            // Depth declarations are bounded like every other scalar
+            // that sizes an allocation — `0` is invalid data,
+            // over-bound is the defined length rejection.
+            if in_depth > WIRE_MAX_ELEMENTS || out_depth > WIRE_MAX_ELEMENTS {
+                return Err(WireError::LimitExceeded);
+            }
+            if in_depth == 0 || out_depth == 0 {
+                return Err(WireError::Malformed);
+            }
+            Ok(Command::CreateInstance {
+                plugin_id,
+                shm_key,
+                in_depth,
+                out_depth,
+            })
+        }
+        11 => Ok(Command::DestroyInstance),
         _ => Err(WireError::Malformed),
     }
 }
@@ -1149,6 +1328,10 @@ pub fn encode_host_error(error: &HostError, out: &mut Vec<u8>) -> Result<(), Wir
             push_u8(out, 8);
             Ok(())
         }
+        HostError::InstanceLimit => {
+            push_u8(out, 9);
+            Ok(())
+        }
         _ => Err(WireError::UnsupportedVariant),
     };
     if let Err(e) = result {
@@ -1184,6 +1367,7 @@ pub fn decode_host_error(reader: &mut Reader<'_>) -> Result<HostError, WireError
         6 => Ok(HostError::Failed),
         7 => Ok(HostError::Ipc),
         8 => Ok(HostError::DuplicatePluginId),
+        9 => Ok(HostError::InstanceLimit),
         _ => Err(WireError::Malformed),
     }
 }
@@ -1349,7 +1533,7 @@ fn decode_musical_time_info(reader: &mut Reader<'_>) -> Result<MusicalTimeInfo, 
 /// # Errors
 ///
 /// [`WireError::UnsupportedVariant`] when `status` is a
-/// `#[non_exhaustive]` variant added after [`WIRE_VERSION`] `1` — it
+/// `#[non_exhaustive]` variant added after [`WIRE_VERSION`] `2` — it
 /// has no representation under this protocol revision. Nothing is
 /// appended on failure.
 pub fn encode_transport(info: &TransportInfo, out: &mut Vec<u8>) -> Result<(), WireError> {
@@ -1629,13 +1813,23 @@ pub fn read_frame(reader: &mut impl Read, buf: &mut Vec<u8>) -> io::Result<bool>
 /// use ruviform_plugin_core::wire::{self, Message};
 ///
 /// let mut frame = Vec::new();
-/// wire::encode(&Message::BlockIn { seq: 7 }, &mut frame).unwrap();
+/// wire::encode(
+///     &Message::BlockIn {
+///         seq: 7,
+///         instance: 0,
+///     },
+///     &mut frame,
+/// )
+/// .unwrap();
 ///
 /// let mut buf = Vec::new();
 /// let mut cursor = std::io::Cursor::new(frame);
 /// assert_eq!(
 ///     wire::read_message(&mut cursor, &mut buf).unwrap(),
-///     Message::BlockIn { seq: 7 },
+///     Message::BlockIn {
+///         seq: 7,
+///         instance: 0
+///     },
 /// );
 /// // EOF at the boundary is `UnexpectedEof` at this level.
 /// assert_eq!(
@@ -1674,8 +1868,22 @@ pub fn read_message(reader: &mut impl Read, buf: &mut Vec<u8>) -> io::Result<Mes
 /// use ruviform_plugin_core::wire::{self, Message};
 ///
 /// let mut out = Vec::new();
-/// wire::write_message(&mut out, &Message::BlockIn { seq: 7 }, &mut Vec::new()).unwrap();
-/// assert_eq!(wire::decode(&out), Ok(Message::BlockIn { seq: 7 }));
+/// wire::write_message(
+///     &mut out,
+///     &Message::BlockIn {
+///         seq: 7,
+///         instance: 0,
+///     },
+///     &mut Vec::new(),
+/// )
+/// .unwrap();
+/// assert_eq!(
+///     wire::decode(&out),
+///     Ok(Message::BlockIn {
+///         seq: 7,
+///         instance: 0
+///     })
+/// );
 /// ```
 pub fn write_message(
     writer: &mut impl Write,
@@ -1744,6 +1952,13 @@ mod tests {
         const {
             assert!(shm::RESULT_LEN >= 5);
         }
+        // `WIRE_MAX_INSTANCES` at the default depth (3 slots each
+        // way, `lookahead_blocks` 2 + 1) caps one child's named
+        // mappings at ~204.4 MiB — the Issue #117 capacity rationale
+        // (design L375), pinned so a layout change re-weighs it.
+        const {
+            assert!(shm::segment_len(3, 3) * WIRE_MAX_INSTANCES as usize == 214_353_664);
+        }
     }
 
     fn roundtrip(message: &Message) -> Message {
@@ -1810,24 +2025,46 @@ mod tests {
 
     #[test]
     fn command_roundtrip_covers_every_verb() {
-        let commands = [
-            Command::Scan,
-            Command::Initialize,
-            Command::Activate { config: config() },
-            Command::StartProcessing,
-            Command::StopProcessing,
-            Command::Deactivate,
-            Command::SaveState,
-            Command::RestoreState {
-                bytes: vec![0xDE, 0xAD, 0xBE, 0xEF],
-            },
-            Command::OpenGui {
-                parent: GuiParentToken::new(0xABCD_EF12_3456_7890),
-            },
-            Command::CloseGui,
-        ];
-        for cmd in commands {
-            let message = Message::Command { seq: 7, cmd };
+        // `Scan` is the only child-scoped verb — its envelope is
+        // `WIRE_INSTANCE_NONE`; every other verb rides a live
+        // instance handle.
+        for (cmd, instance) in [
+            (Command::Scan, WIRE_INSTANCE_NONE),
+            (
+                Command::CreateInstance {
+                    plugin_id: "org.ruviform.test.gain".to_owned(),
+                    shm_key: "rvf-test-segment".to_owned(),
+                    in_depth: 4,
+                    out_depth: 4,
+                },
+                0,
+            ),
+            (Command::DestroyInstance, 0),
+            (Command::Initialize, 0),
+            (Command::Activate { config: config() }, 0),
+            (Command::StartProcessing, 0),
+            (Command::StopProcessing, 0),
+            (Command::Deactivate, 0),
+            (Command::SaveState, 0),
+            (
+                Command::RestoreState {
+                    bytes: vec![0xDE, 0xAD, 0xBE, 0xEF],
+                },
+                0,
+            ),
+            (
+                Command::OpenGui {
+                    parent: GuiParentToken::new(0xABCD_EF12_3456_7890),
+                },
+                0,
+            ),
+            (Command::CloseGui, 0),
+        ] {
+            let message = Message::Command {
+                seq: 7,
+                instance,
+                cmd,
+            };
             assert_eq!(roundtrip(&message), message);
         }
     }
@@ -1850,6 +2087,7 @@ mod tests {
         for reply in replies {
             let message = Message::Reply {
                 seq: 7,
+                instance: 3,
                 result: Ok(reply),
             };
             assert_eq!(roundtrip(&message), message);
@@ -1879,10 +2117,12 @@ mod tests {
             HostError::Failed,
             HostError::Ipc,
             HostError::DuplicatePluginId,
+            HostError::InstanceLimit,
         ];
         for error in errors {
             let message = Message::Reply {
                 seq: 7,
+                instance: 3,
                 result: Err(error),
             };
             assert_eq!(roundtrip(&message), message);
@@ -1892,20 +2132,204 @@ mod tests {
     #[test]
     fn doorbells_roundtrip() {
         assert_eq!(
-            roundtrip(&Message::BlockIn { seq: u64::MAX }),
-            Message::BlockIn { seq: u64::MAX }
+            roundtrip(&Message::BlockIn {
+                seq: u64::MAX,
+                instance: 0
+            }),
+            Message::BlockIn {
+                seq: u64::MAX,
+                instance: 0
+            }
         );
         let done = Message::BlockDone {
             seq: 1_023,
+            instance: WIRE_MAX_INSTANCES - 1,
             result: ProcessResult::new(ProcessStatus::Sleep, 2_048),
         };
         assert_eq!(roundtrip(&done), done);
         assert_eq!(roundtrip(&Message::Shutdown), Message::Shutdown);
     }
 
+    // --- wire-v2 instance envelope -------------------------------------
+
+    /// Builds one `[len][kind][payload]` frame by hand — the
+    /// decode-side envelope tests need encodings `encode` cannot
+    /// produce (scope violations, out-of-range instances).
+    fn raw_frame(kind: u8, payload: &[u8]) -> Vec<u8> {
+        let mut frame = Vec::new();
+        push_u32(&mut frame, len_u32(payload.len()));
+        push_u8(&mut frame, kind);
+        frame.extend_from_slice(payload);
+        frame
+    }
+
+    /// A `Command` payload: `u64 seq`, `u32 instance`, `u8` verb tag
+    /// (+ `u8` verb-tag payload byte when `tagged`).
+    fn command_payload(seq: u64, instance: u32, tag: u8) -> Vec<u8> {
+        let mut payload = Vec::new();
+        push_u64(&mut payload, seq);
+        push_u32(&mut payload, instance);
+        push_u8(&mut payload, tag);
+        payload
+    }
+
+    #[test]
+    fn scan_is_the_only_child_scoped_verb() {
+        // Scan with a live instance → scope violation.
+        assert_eq!(
+            decode(&raw_frame(KIND_COMMAND, &command_payload(1, 0, 0))),
+            Err(WireError::Malformed)
+        );
+        // Scan with WIRE_INSTANCE_NONE → legal.
+        assert_eq!(
+            decode(&raw_frame(
+                KIND_COMMAND,
+                &command_payload(1, WIRE_INSTANCE_NONE, 0)
+            )),
+            Ok(Message::Command {
+                seq: 1,
+                instance: WIRE_INSTANCE_NONE,
+                cmd: Command::Scan,
+            })
+        );
+        // Initialize (verb tag 1) with WIRE_INSTANCE_NONE → scope
+        // violation.
+        assert_eq!(
+            decode(&raw_frame(
+                KIND_COMMAND,
+                &command_payload(1, WIRE_INSTANCE_NONE, 1)
+            )),
+            Err(WireError::Malformed)
+        );
+        // CreateInstance (tag 10) with NONE → same scope violation:
+        // registration names a live handle in the envelope.
+        assert_eq!(
+            decode(&raw_frame(
+                KIND_COMMAND,
+                &command_payload(1, WIRE_INSTANCE_NONE, 10)
+            )),
+            Err(WireError::Malformed)
+        );
+    }
+
+    #[test]
+    fn instance_envelope_rejects_out_of_range_values() {
+        // `WIRE_MAX_INSTANCES` itself and everything above it —
+        // except `WIRE_INSTANCE_NONE` — is out of range. Check
+        // Command, Reply, and both doorbells.
+        for bad in [
+            WIRE_MAX_INSTANCES,
+            WIRE_MAX_INSTANCES + 1,
+            WIRE_INSTANCE_NONE - 1,
+        ] {
+            assert_eq!(
+                decode(&raw_frame(KIND_COMMAND, &command_payload(1, bad, 0))),
+                Err(WireError::Malformed),
+                "instance {bad} must be rejected",
+            );
+
+            let mut payload = Vec::new();
+            push_u64(&mut payload, 1);
+            push_u32(&mut payload, bad);
+            push_u8(&mut payload, REPLY_OK);
+            push_u8(&mut payload, 0); // Reply::Ok
+            assert_eq!(
+                decode(&raw_frame(KIND_REPLY, &payload)),
+                Err(WireError::Malformed),
+                "reply instance {bad} must be rejected",
+            );
+        }
+        // A Scan reply legitimately echoes WIRE_INSTANCE_NONE — only
+        // Command/Reply allow it at all.
+        let mut payload = Vec::new();
+        push_u64(&mut payload, 1);
+        push_u32(&mut payload, WIRE_INSTANCE_NONE);
+        push_u8(&mut payload, REPLY_OK);
+        push_u8(&mut payload, 1); // Scanned
+        push_u32(&mut payload, 0); // zero descriptors
+        assert_eq!(
+            decode(&raw_frame(KIND_REPLY, &payload)),
+            Ok(Message::Reply {
+                seq: 1,
+                instance: WIRE_INSTANCE_NONE,
+                result: Ok(Reply::Scanned(Vec::new())),
+            })
+        );
+    }
+
+    #[test]
+    fn doorbells_require_a_live_instance() {
+        let mut payload = Vec::new();
+        push_u64(&mut payload, 1);
+        push_u32(&mut payload, WIRE_INSTANCE_NONE);
+        assert_eq!(
+            decode(&raw_frame(KIND_BLOCK_IN, &payload)),
+            Err(WireError::Malformed)
+        );
+        // BlockDone carries a ProcessResult after the envelope.
+        push_u8(&mut payload, 0); // status
+        push_u32(&mut payload, 0); // tail
+        assert_eq!(
+            decode(&raw_frame(KIND_BLOCK_DONE, &payload)),
+            Err(WireError::Malformed)
+        );
+        // Out-of-range (≥ WIRE_MAX_INSTANCES, ≠ NONE) is equally
+        // rejected on doorbells.
+        let mut payload = Vec::new();
+        push_u64(&mut payload, 1);
+        push_u32(&mut payload, WIRE_MAX_INSTANCES);
+        assert_eq!(
+            decode(&raw_frame(KIND_BLOCK_IN, &payload)),
+            Err(WireError::Malformed)
+        );
+    }
+
+    #[test]
+    fn create_instance_payload_bounds_are_enforced() {
+        // Zero depth on either side → Malformed.
+        for (in_depth, out_depth) in [(0_u32, 4_u32), (4, 0)] {
+            let mut payload = Vec::new();
+            push_u64(&mut payload, 1);
+            push_u32(&mut payload, 0); // instance
+            push_u8(&mut payload, 10); // CreateInstance
+            push_str(&mut payload, "id");
+            push_str(&mut payload, "key");
+            push_u32(&mut payload, in_depth);
+            push_u32(&mut payload, out_depth);
+            assert_eq!(
+                decode(&raw_frame(KIND_COMMAND, &payload)),
+                Err(WireError::Malformed)
+            );
+        }
+        // Over-bound depth → LimitExceeded.
+        let mut payload = Vec::new();
+        push_u64(&mut payload, 1);
+        push_u32(&mut payload, 0);
+        push_u8(&mut payload, 10);
+        push_str(&mut payload, "id");
+        push_str(&mut payload, "key");
+        push_u32(&mut payload, WIRE_MAX_ELEMENTS + 1);
+        push_u32(&mut payload, 4);
+        assert_eq!(
+            decode(&raw_frame(KIND_COMMAND, &payload)),
+            Err(WireError::LimitExceeded)
+        );
+        // Over-cap string → LimitExceeded, not an allocation.
+        let mut payload = Vec::new();
+        push_u64(&mut payload, 1);
+        push_u32(&mut payload, 0);
+        push_u8(&mut payload, 10);
+        push_u32(&mut payload, WIRE_MAX_STRING_BYTES + 1);
+        assert_eq!(
+            decode(&raw_frame(KIND_COMMAND, &payload)),
+            Err(WireError::LimitExceeded)
+        );
+    }
+
     #[test]
     fn frame_layout_is_little_endian_and_length_prefixed() {
-        // Hello{version: 1, capabilities: 3} → len 6, kind 0, LE fields.
+        // Hello{version: WIRE_VERSION, capabilities: 3} → len 6,
+        // kind 0, LE fields.
         let mut frame = Vec::new();
         encode(
             &Message::Hello {
@@ -1915,7 +2339,10 @@ mod tests {
             &mut frame,
         )
         .unwrap();
-        assert_eq!(frame, [6, 0, 0, 0, KIND_HELLO, 1, 0, 3, 0, 0, 0]);
+        let mut expected = vec![6, 0, 0, 0, KIND_HELLO];
+        expected.extend_from_slice(&WIRE_VERSION.to_le_bytes());
+        expected.extend_from_slice(&3_u32.to_le_bytes());
+        assert_eq!(frame, expected);
         assert_eq!(frame.len(), WIRE_FRAME_HEADER_LEN + 6);
 
         // Shutdown → empty payload.
@@ -1928,12 +2355,22 @@ mod tests {
     fn encode_appends_one_frame_per_call() {
         let mut buf = Vec::new();
         encode(&Message::Shutdown, &mut buf).unwrap();
-        encode(&Message::BlockIn { seq: 1 }, &mut buf).unwrap();
+        encode(
+            &Message::BlockIn {
+                seq: 1,
+                instance: 0,
+            },
+            &mut buf,
+        )
+        .unwrap();
         // First frame is exactly 5 bytes; the rest is the second frame.
         assert_eq!(decode(&buf[..WIRE_FRAME_HEADER_LEN]), Ok(Message::Shutdown));
         assert_eq!(
             decode(&buf[WIRE_FRAME_HEADER_LEN..]),
-            Ok(Message::BlockIn { seq: 1 })
+            Ok(Message::BlockIn {
+                seq: 1,
+                instance: 0
+            })
         );
     }
 
@@ -2025,6 +2462,7 @@ mod tests {
         // A nested length prefix over its field cap: descriptor count.
         let mut payload = Vec::new();
         push_u64(&mut payload, 1); // seq
+        push_u32(&mut payload, 0); // instance
         push_u8(&mut payload, REPLY_OK);
         push_u8(&mut payload, 1); // Scanned
         push_u32(&mut payload, WIRE_MAX_ELEMENTS + 1);
@@ -2044,11 +2482,10 @@ mod tests {
         );
         // State blob over the cap.
         let mut command_bytes = Vec::new();
-        push_u8(&mut command_bytes, 7); // RestoreState
         push_u32(&mut command_bytes, WIRE_MAX_STATE_BYTES + 1);
         let mut command_reader = Reader::new(&command_bytes);
         assert_eq!(
-            decode_command(&mut command_reader),
+            decode_command(7, &mut command_reader), // RestoreState
             Err(WireError::LimitExceeded)
         );
     }
@@ -2059,6 +2496,7 @@ mod tests {
         // bytes is truncated before any elements are read.
         let mut payload = Vec::new();
         push_u64(&mut payload, 1);
+        push_u32(&mut payload, 0); // instance
         push_u8(&mut payload, REPLY_OK);
         push_u8(&mut payload, 1); // Scanned
         push_u32(&mut payload, 10); // count 10, zero bytes follow
@@ -2071,14 +2509,35 @@ mod tests {
 
     #[test]
     fn decode_rejects_bad_tags_and_invariant_violations() {
-        // Unknown Command verb tag.
+        // Unknown Command verb tag — seq(8) + instance(4) + tag.
         assert_eq!(
-            decode(&[9, 0, 0, 0, KIND_COMMAND, 1, 0, 0, 0, 0, 0, 0, 0, 200]),
+            decode(&[
+                13,
+                0,
+                0,
+                0,
+                KIND_COMMAND,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                200
+            ]),
             Err(WireError::Malformed)
         );
         // Unknown Reply result tag (not REPLY_OK/REPLY_ERR).
         assert_eq!(
-            decode(&[9, 0, 0, 0, KIND_REPLY, 1, 0, 0, 0, 0, 0, 0, 0, 2]),
+            decode(&[
+                13, 0, 0, 0, KIND_REPLY, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2
+            ]),
             Err(WireError::Malformed)
         );
         // Unknown HostError tag.
@@ -2227,6 +2686,7 @@ mod tests {
             HostError::Failed,
             HostError::Ipc,
             HostError::DuplicatePluginId,
+            HostError::InstanceLimit,
         ] {
             // `encode_host_error` is fallible like `encode_transport`
             // — exercised directly rather than through the infallible
@@ -2256,6 +2716,7 @@ mod tests {
         let before = out.clone();
         let message = Message::Reply {
             seq: 7,
+            instance: 0,
             result: Err(HostError::EndpointUnavailable),
         };
         assert_eq!(
@@ -2269,6 +2730,7 @@ mod tests {
         // the pre-existing bytes untouched.
         let ok = Message::Reply {
             seq: 8,
+            instance: 0,
             result: Ok(Reply::Ok),
         };
         encode(&ok, &mut out).unwrap();

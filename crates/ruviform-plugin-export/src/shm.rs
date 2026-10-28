@@ -5,7 +5,9 @@
 //! `shared_memory` is confined to this module (adoption condition — its
 //! types never appear on the public API or feature names). The segment
 //! is owned by the parent proxy; the child only attaches (`open`) by the
-//! `--ruviform-shm-key` `os_id` and never creates or unlinks.
+//! `os_id` a `CreateInstance` command payload carries (wire v2 — the v1
+//! `--ruviform-shm-key` argv flag is gone) and never creates or
+//! unlinks.
 //!
 //! ## Deviation from `docs/designs/plugin-l1-out-of-process.md`
 //!
@@ -78,11 +80,16 @@ pub(crate) struct Segment {
 }
 
 impl Segment {
-    /// Attaches to the named segment `key` and validates the header.
+    /// Attaches to the named segment `key` and validates the header,
+    /// including that the header's `in_depth`/`out_depth` equal the
+    /// depths the host declared in the `CreateInstance` payload — a
+    /// mismatch means the segment belongs to a different ring layout
+    /// than the host claims.
     ///
     /// Every failure is a defined rejection reported as `Err(&'static
-    /// str)` — the caller maps it to a non-zero process exit.
-    pub(crate) fn attach(key: &str) -> Result<Self, &'static str> {
+    /// str)` — the caller maps it to `Err(HostError::Ipc)` on the
+    /// `CreateInstance` reply while the child stays alive.
+    pub(crate) fn attach(key: &str, in_depth: u32, out_depth: u32) -> Result<Self, &'static str> {
         let mem = ShmemConf::new()
             .os_id(key)
             .open()
@@ -97,10 +104,13 @@ impl Segment {
         if get_u32(bytes, shm::OFF_WIRE_VERSION) != u32::from(wire::WIRE_VERSION) {
             return Err("shared-memory header wire-version mismatch");
         }
-        let in_depth = get_u32(bytes, shm::OFF_IN_DEPTH);
-        let out_depth = get_u32(bytes, shm::OFF_OUT_DEPTH);
-        if in_depth == 0 || out_depth == 0 {
+        let header_in = get_u32(bytes, shm::OFF_IN_DEPTH);
+        let header_out = get_u32(bytes, shm::OFF_OUT_DEPTH);
+        if header_in == 0 || header_out == 0 {
             return Err("shared-memory header has a zero slot depth");
+        }
+        if header_in != in_depth || header_out != out_depth {
+            return Err("shared-memory header slot depth differs from the declared depths");
         }
         if get_u32(bytes, shm::OFF_SLOT_BYTES) as usize != shm::SLOT_BYTES {
             return Err("shared-memory header slot size mismatch");
@@ -110,20 +120,20 @@ impl Segment {
             return Err("shared-memory header in-offset mismatch");
         }
         let out_off = get_u32(bytes, shm::OFF_OUT_OFF) as usize;
-        if out_off != shm::out_slots_off(in_depth) {
+        if out_off != shm::out_slots_off(header_in) {
             return Err("shared-memory header out-offset mismatch");
         }
         // `≥`, not `==`: on Windows the mapped length is the
         // `VirtualQuery` region size rounded to the 64 KiB allocation
         // granularity; slot accesses stay inside the declared layout
         // either way, so the invariant is "the mapping covers it".
-        if bytes.len() < out_off + out_depth as usize * shm::SLOT_BYTES {
+        if bytes.len() < out_off + header_out as usize * shm::SLOT_BYTES {
             return Err("shared-memory segment smaller than the declared layout");
         }
         Ok(Self {
             mem,
-            in_depth: u64::from(in_depth),
-            out_depth: u64::from(out_depth),
+            in_depth: u64::from(header_in),
+            out_depth: u64::from(header_out),
             in_off,
             out_off,
         })

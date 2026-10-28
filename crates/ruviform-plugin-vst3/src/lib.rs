@@ -38,7 +38,7 @@
 //!
 //! ## Host bridge (`feature = "host"`)
 //!
-//! The optional `host` feature compiles [`host`], the mirror image of
+//! The optional `host` feature compiles `host`, the mirror image of
 //! this adapter: a host-side bridge that dlopens a real VST3 module
 //! in-process via `libloading`, scans its class table through the raw
 //! `vst3`-crate COM bindings and maps descriptors, parameters and the

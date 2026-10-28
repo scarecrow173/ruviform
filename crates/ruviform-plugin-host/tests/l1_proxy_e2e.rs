@@ -32,7 +32,7 @@ use ruviform_plugin_core::{
     PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
 };
 
-use l1::{ChildExit, L1Instance, SpawnSpec};
+use l1::{ChildExit, L1Child, L1Instance, SpawnSpec};
 
 /// `assert_no_alloc` arms a thread-local forbid flag through the
 /// global allocator — required exactly once per test binary (the
@@ -214,13 +214,14 @@ fn illegal_transitions_match_l0_semantics() {
 }
 
 /// Crash contract (spec AC4, EOF/`try_wait` paths): the worker dies
-/// on the 3rd received message — the handshake `Scan` is message 1 —
-/// so `Activate`'s pending waiter is woken `Err(Ipc)`, the instance
-/// converges `Failed` with exactly one notification, and every later
-/// command except `Destroy` is rejected.
+/// on the 4th received message — the handshake `Scan` is message 1,
+/// `CreateInstance` is 2 — so `Activate`'s pending waiter is woken
+/// `Err(Ipc)`, the instance converges `Failed` with exactly one
+/// notification, and every later command except `Destroy` is
+/// rejected.
 #[test]
 fn crash_transitions_failed_and_notifies() {
-    let mut instance = L1Instance::spawn(&spec(&["--crash-after-msgs=3"])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&["--crash-after-msgs=4"])).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     // The pending command is woken `Ipc` by the convergence.
@@ -263,9 +264,10 @@ fn crash_transitions_failed_and_notifies() {
 #[test]
 fn voluntary_exit_zero_is_failure() {
     let mut instance =
-        L1Instance::spawn(&spec(&["--crash-after-msgs=2", "--crash-exit-code=0"])).unwrap();
+        L1Instance::spawn(&spec(&["--crash-after-msgs=3", "--crash-exit-code=0"])).unwrap();
 
-    // Message 2 (`Initialize`) kills the worker mid-command.
+    // Message 3 (`Initialize` — after `Scan` and `CreateInstance`)
+    // kills the worker mid-command.
     assert_eq!(
         instance.execute(wire::Command::Initialize),
         Err(HostError::Ipc)
@@ -309,9 +311,10 @@ fn kill_transitions_failed_and_notifies() {
 /// rejection table: timeout ⇒ `Ipc` + `Failed`).
 #[test]
 fn hang_converges_on_command_timeout() {
-    let mut instance = L1Instance::spawn(&fast_timeout_spec(&["--hang-after-msgs=1"])).unwrap();
+    let mut instance = L1Instance::spawn(&fast_timeout_spec(&["--hang-after-msgs=2"])).unwrap();
 
-    // `Scan` (handshake) was message 1 — `Initialize` is never answered.
+    // `Scan` and `CreateInstance` (the handshake) were messages 1–2 —
+    // `Initialize` is never answered.
     assert_eq!(
         instance.execute(wire::Command::Initialize),
         Err(HostError::Ipc)
@@ -437,8 +440,9 @@ fn drop_reaps_live_child() {
     // Reaching here at all is the assertion — Drop must not hang.
 }
 
-/// Wedged-child teardown (A1): after `--stop-reading-after-msgs=2`
-/// the child never drains stdin again, so a `RestoreState` frame far
+/// Wedged-child teardown (A1): after `--stop-reading-after-msgs=3`
+/// (`Scan`, `CreateInstance`, `Initialize` all answered) the child
+/// never drains stdin again, so a `RestoreState` frame far
 /// over the pipe capacity leaves the driver blocked in `write_all`.
 /// The `command_timeout` convergence must itself kill the child —
 /// that is what turns the wedged write into EPIPE and lets the
@@ -446,7 +450,7 @@ fn drop_reaps_live_child() {
 #[test]
 fn wedged_child_write_converges_and_teardown_is_bounded() {
     let mut instance =
-        L1Instance::spawn(&fast_timeout_spec(&["--stop-reading-after-msgs=2"])).unwrap();
+        L1Instance::spawn(&fast_timeout_spec(&["--stop-reading-after-msgs=3"])).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     // ~256 KiB — comfortably past every supported platform's pipe
@@ -468,15 +472,16 @@ fn wedged_child_write_converges_and_teardown_is_bounded() {
     );
 }
 
-/// Detached reader (A4): `--leave-heir-after-msgs=1` makes the worker
-/// answer the handshake `Scan`, then spawn a stdio-inheriting
+/// Detached reader (A4): `--leave-heir-after-msgs=2` makes the worker
+/// answer `Scan` and `CreateInstance` (the whole handshake), then
+/// spawn a stdio-inheriting
 /// grandchild and exit — the parent's stdout pipe stays open, so the
 /// reader thread never observes EOF. `try_wait` still converges
 /// `Failed`, and destroy/drop must detach the blocked reader rather
 /// than join it.
 #[test]
 fn destroy_detaches_reader_when_heir_holds_stdout() {
-    let mut instance = L1Instance::spawn(&spec(&["--leave-heir-after-msgs=1"])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&["--leave-heir-after-msgs=2"])).unwrap();
 
     wait_for_failed(&instance);
     let exit = wait_notification(&instance).expect("notification missing");
@@ -813,14 +818,15 @@ fn process_after_crash_passes_through_then_silences() {
     instance.destroy();
 }
 
-/// Wedged data plane: `--hang-after-msgs=4` lets the lifecycle
-/// handshake through but never answers a doorbell — the RT leg must
-/// pass through `Ok(CONTINUE)` forever without blocking (never a
-/// wall-clock wait on the child), and teardown still honors
+/// Wedged data plane: `--hang-after-msgs=5` lets the lifecycle
+/// handshake through (`Scan`, `CreateInstance`, `Initialize`,
+/// `Activate`, `StartProcessing`) but never answers a doorbell — the
+/// RT leg must pass through `Ok(CONTINUE)` forever without blocking
+/// (never a wall-clock wait on the child), and teardown still honors
 /// `Shutdown`.
 #[test]
 fn process_hung_child_passes_through_without_blocking() {
-    let mut instance = processing_instance(&["--hang-after-msgs=4"]);
+    let mut instance = processing_instance(&["--hang-after-msgs=5"]);
     let input = [1.0_f32; 512];
     let mut output = [7.0_f32; 512];
     let started = Instant::now();
@@ -839,6 +845,316 @@ fn process_hung_child_passes_through_without_blocking() {
         "the RT leg blocked on the wedged child"
     );
     instance.destroy();
+}
+
+// ------------------------------------------------------------------
+// Issue #117 bundled-child coverage at the `pub(crate)` layer: N
+// facades on one `L1Child` — the `create_instance` + `from_parts`
+// pair `PluginHost`'s `Bundled` route drives through its pool (the
+// composite-level rows live in `composite_e2e` below).
+// ------------------------------------------------------------------
+
+/// Two facades on one `L1Child`, minted the pooled route's way.
+fn bundled_pair(child: &Arc<L1Child>, spawn_spec: &SpawnSpec) -> (L1Instance, L1Instance) {
+    let depth = spawn_spec.instance_depth().unwrap();
+    let a = L1Instance::from_parts(
+        Arc::clone(child),
+        child.create_instance(spawn_spec, depth).unwrap(),
+    );
+    let b = L1Instance::from_parts(
+        Arc::clone(child),
+        child.create_instance(spawn_spec, depth).unwrap(),
+    );
+    (a, b)
+}
+
+/// The core bundle contract (issue-117 bundle-e2e rules): one child
+/// process hosts two instances — distinct wire handles
+/// (lowest-free mint), independent lifecycle machines (the mirror
+/// *and* the child's own legality agree per instance), independent
+/// state blobs, and independent data planes: interleaved doorbells
+/// never cross — every output is silence or `0.5 ×` *that*
+/// instance's own input history, so a cross-talked block would
+/// surface as an undefined sample on the receiving side. Killing
+/// the shared child fans `Failed` out to both facades, each
+/// notification carrying the same `ChildExit`.
+#[test]
+fn bundled_child_hosts_independent_instances() {
+    let spawn_spec = spec(&[]);
+    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+    // One child, two wire handles — the lowest-free mint.
+    assert_eq!(a.test_wire_instance(), 0);
+    assert_eq!(b.test_wire_instance(), 1);
+    assert_eq!(child.live_count(), 2);
+    assert!(child.pool_eligible());
+    assert_eq!(a.lifecycle_state(), LifecycleState::Created);
+    assert_eq!(b.lifecycle_state(), LifecycleState::Created);
+
+    // Lifecycle independence: `a` walks to `Processing` while `b`
+    // stays `Created` — and the child's *own* legality agrees (an
+    // `Activate` stamped for `b` is the per-instance
+    // `Err(Lifecycle)`, not a child-scope violation).
+    a.execute(wire::Command::Initialize).unwrap();
+    a.execute(wire::Command::Activate { config: config() })
+        .unwrap();
+    a.execute(wire::Command::StartProcessing).unwrap();
+    assert_eq!(b.lifecycle_state(), LifecycleState::Created);
+    assert!(matches!(
+        b.execute(wire::Command::Activate { config: config() }),
+        Err(HostError::Lifecycle(_))
+    ));
+
+    // Per-instance state blobs — `a`'s `RestoreState` does not
+    // touch `b`'s blob.
+    a.execute(wire::Command::RestoreState { bytes: vec![0xAA] })
+        .unwrap();
+    assert_eq!(
+        b.execute(wire::Command::SaveState),
+        Ok(wire::Reply::State {
+            bytes: vec![0x11, 0x22, 0x33, 0x44]
+        })
+    );
+    b.execute(wire::Command::Initialize).unwrap();
+    b.execute(wire::Command::Activate { config: config() })
+        .unwrap();
+    b.execute(wire::Command::StartProcessing).unwrap();
+
+    // Interleaved processing on disjoint input ranges: the defined
+    // set for each side is `{0} ∪ {0.5 × own history}` — any reply
+    // or shm segment crossing instances lands outside it.
+    let frames = 512;
+    let mut a_inputs: Vec<f32> = Vec::new();
+    let mut b_inputs: Vec<f32> = Vec::new();
+    let mut delivered_a = false;
+    let mut delivered_b = false;
+    for call in 0..24_u32 {
+        let va = 0.2 + 0.01 * f32::from(u8::try_from(call).unwrap() + 1);
+        let vb = 5.0 + 0.01 * f32::from(u8::try_from(call).unwrap() + 1);
+        let input_a = vec![va; frames];
+        let input_b = vec![vb; frames];
+        let mut out_a = vec![0.0_f32; frames];
+        let mut out_b = vec![0.0_f32; frames];
+        // A real-time-scale pace so most doorbells complete inside
+        // the lookahead window on the shared serve loop.
+        thread::sleep(Duration::from_millis(5));
+        assert_eq!(
+            run_block(&mut a, &input_a, &mut out_a),
+            Ok(ProcessResult::CONTINUE)
+        );
+        assert_eq!(
+            run_block(&mut b, &input_b, &mut out_b),
+            Ok(ProcessResult::CONTINUE)
+        );
+        assert!(
+            out_a.iter().all(|&s| is_defined_sample(s, &a_inputs)),
+            "call {call}: a carried a foreign/undefined sample {}",
+            out_a[0]
+        );
+        assert!(
+            out_b.iter().all(|&s| is_defined_sample(s, &b_inputs)),
+            "call {call}: b carried a foreign/undefined sample {}",
+            out_b[0]
+        );
+        delivered_a |= call >= 2
+            && out_a
+                .iter()
+                .all(|&s| sample_eq(s, 0.5 * a_inputs[call as usize - 2]));
+        delivered_b |= call >= 2
+            && out_b
+                .iter()
+                .all(|&s| sample_eq(s, 0.5 * b_inputs[call as usize - 2]));
+        a_inputs.push(va);
+        b_inputs.push(vb);
+    }
+    assert!(delivered_a, "a's pipeline never delivered a block");
+    assert!(delivered_b, "b's pipeline never delivered a block");
+
+    // The kill is child-scoped: one `kill()` fans `Failed` out to
+    // every live facade on the shared child — each instance's own
+    // notification channel carries the same `ChildExit`.
+    a.kill();
+    wait_for_failed(&a);
+    wait_for_failed(&b);
+    let exit_a = wait_notification(&a).expect("a's notification missing");
+    let exit_b = wait_notification(&b).expect("b's notification missing");
+    assert_eq!(exit_a, exit_b);
+    assert!(exit_a.code.is_some() || exit_a.signal.is_some());
+    assert!(a.try_recv_notification().is_none());
+    assert!(b.try_recv_notification().is_none());
+    // Converged entries stay registered until `Destroy` reclaims
+    // the runner slots.
+    assert_eq!(child.live_count(), 2);
+    a.destroy();
+    b.destroy();
+    assert_eq!(child.live_count(), 0);
+    assert!(child.is_terminal());
+}
+
+/// The instance-scope convergence at wire fidelity: an instance
+/// failed *alone* (the demux's attributable violation — stamped
+/// through the `test_converge_instance` seam because the worker
+/// has no instance-scope fault vocabulary) stays registered on the
+/// live child; `Destroy` on it still sends the real
+/// `DestroyInstance` — the runner-slot reclaim — while the sibling
+/// keeps serving, and the freed wire handle becomes the next
+/// lowest-free mint.
+#[test]
+fn bundled_failed_instance_destroy_recovers_handle() {
+    let spawn_spec = spec(&[]);
+    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+
+    // Fail `a` alone — the attributable instance-scope violation
+    // (`ChildExit{None, None}`: the child is alive, there is no
+    // exit status to report).
+    child.test_converge_instance(0);
+    assert_eq!(a.lifecycle_state(), LifecycleState::Failed);
+    assert_eq!(
+        a.try_recv_notification(),
+        Some(ChildExit {
+            code: None,
+            signal: None
+        })
+    );
+    assert!(a.try_recv_notification().is_none());
+    assert_eq!(b.lifecycle_state(), LifecycleState::Created);
+    assert!(!child.is_terminal());
+    assert_eq!(child.live_count(), 2);
+
+    // The sibling is untouched — the child still serves its
+    // commands (per-instance granularity, not child-scope).
+    b.execute(wire::Command::Initialize).unwrap();
+    assert_eq!(b.lifecycle_state(), LifecycleState::Initialized);
+
+    // `Destroy` on the failed instance still goes on the wire —
+    // the runner's registry slot is really reclaimed.
+    a.destroy();
+    assert_eq!(a.lifecycle_state(), LifecycleState::Destroyed);
+    assert_eq!(child.live_count(), 1);
+    assert!(!child.is_terminal());
+
+    // The reclaimed handle is the lowest-free mint: the next
+    // `create_instance` re-uses wire handle 0 — and the runner
+    // accepting it proves the previous slot left its registry.
+    let mut c = L1Instance::from_parts(
+        Arc::clone(&child),
+        child
+            .create_instance(&spawn_spec, spawn_spec.instance_depth().unwrap())
+            .unwrap(),
+    );
+    assert_eq!(c.test_wire_instance(), 0);
+    assert_eq!(child.live_count(), 2);
+    c.execute(wire::Command::Initialize).unwrap();
+
+    b.destroy();
+    c.destroy();
+}
+
+/// Shutdown-on-empty at the `pub(crate)` layer: a mid-bundle
+/// `Destroy` leaves the shared child serving the surviving
+/// sibling, and the last *facade* reference's `destroy` runs the
+/// bounded `Shutdown`+reap teardown itself (the
+/// `Arc::strong_count == 1` rule — the composite's pool eviction
+/// reads the same `live_count` at route level).
+#[test]
+fn bundled_last_facade_teardown_keeps_siblings_alive() {
+    let spawn_spec = spec(&[]);
+    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+    a.execute(wire::Command::Initialize).unwrap();
+    b.execute(wire::Command::Initialize).unwrap();
+    let weak = Arc::downgrade(&child);
+
+    // `a`'s `Destroy` reclaims its slot — `b` (plus this test's own
+    // `child` reference) keeps the child alive: no teardown.
+    a.destroy();
+    assert_eq!(child.live_count(), 1);
+    assert!(!child.is_terminal());
+    assert_eq!(b.lifecycle_state(), LifecycleState::Initialized);
+    // The surviving sibling still serves — `a`'s exit never
+    // reached a `Shutdown`.
+    assert_eq!(
+        b.execute(wire::Command::SaveState),
+        Ok(wire::Reply::State {
+            bytes: vec![0x11, 0x22, 0x33, 0x44]
+        })
+    );
+
+    // Shed every reference except `b`'s own facade Arc — `b`'s
+    // `destroy` then sees `strong_count == 1` and runs the bounded
+    // `Shutdown`+grace+reap teardown inline.
+    drop(a);
+    drop(child);
+    assert!(weak.upgrade().is_some());
+    b.destroy();
+    assert_eq!(b.lifecycle_state(), LifecycleState::Destroyed);
+    // The teardown stamped `terminal` — `b.child()` keeps the Arc
+    // alive long enough to observe it (a clean teardown never
+    // notifies).
+    assert!(b.child().is_terminal());
+    assert!(b.try_recv_notification().is_none());
+    drop(b);
+    assert!(weak.upgrade().is_none());
+}
+
+/// Mid-`DestroyInstance` death at the `pub(crate)` layer: the
+/// child dies on receipt of `a`'s `DestroyInstance` (message 4 —
+/// after `Scan` + two `CreateInstance`s) — `a.destroy()` still
+/// completes (`Destroyed`, entry removed) and its minted
+/// notification still lands on the facade's own queue; `b`
+/// converges `Failed` by the same child-scope fan-out.
+#[test]
+fn bundled_mid_destroy_death_keeps_notification() {
+    let spawn_spec = spec(&["--crash-after-msgs=4"]);
+    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+
+    // `DestroyInstance` is the crashing message — the request
+    // fails `Err(Ipc)` but `destroy` proceeds to removal.
+    a.destroy();
+    assert_eq!(a.lifecycle_state(), LifecycleState::Destroyed);
+    // The minted notification survives entry removal — the
+    // `Pending` flush / already-`Sent` race resolves either way,
+    // but exactly one notification must exist.
+    assert!(a.try_recv_notification().is_some());
+    assert!(a.try_recv_notification().is_none());
+
+    // `b` is the child-scope sibling: `Failed`, notified once.
+    wait_for_failed(&b);
+    let exit_b = wait_notification(&b).expect("b's notification missing");
+    assert!(exit_b.code.is_some() || exit_b.signal.is_some());
+    assert!(b.try_recv_notification().is_none());
+    b.destroy();
+    assert!(child.is_terminal());
+}
+
+/// `Err(InstanceLimit)` at the real-child layer: `create_instance`
+/// mints up to `WIRE_MAX_INSTANCES` wire handles on one child,
+/// then answers the defined capacity rejection — the same fact the
+/// pooled route distinguishes from `Ipc` when it decides to spawn
+/// the next child (host-internal: `Instantiate` can never observe
+/// it — a full child makes the pool spawn first).
+#[test]
+fn bundled_create_past_capacity_is_instance_limit() {
+    let spawn_spec = spec(&[]);
+    let depth = spawn_spec.instance_depth().unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let mut parts = Vec::new();
+    for _ in 0..wire::WIRE_MAX_INSTANCES {
+        parts.push(child.create_instance(&spawn_spec, depth).unwrap());
+    }
+    assert_eq!(child.live_count(), wire::WIRE_MAX_INSTANCES as usize);
+    assert!(!child.pool_eligible());
+    assert!(!child.is_terminal());
+    assert_eq!(
+        child.create_instance(&spawn_spec, depth).map(|_| ()),
+        Err(HostError::InstanceLimit)
+    );
+    // The child stayed healthy — the rejection minted nothing.
+    assert_eq!(child.live_count(), wire::WIRE_MAX_INSTANCES as usize);
+    drop(parts);
+    child.teardown();
 }
 
 // ------------------------------------------------------------------
@@ -1078,6 +1394,67 @@ fn rt_l1_result_leg_try_ops() {
     assert!(output.iter().all(|&s| sample_eq(s, 0.0)));
 }
 
+/// The bundled RT contract: two `Processing` facades on *one* live
+/// `L1Child` — each `process` call exercises its own staging,
+/// submit/result rings and `rt_state` snapshot, and the caller-thread
+/// path stays allocation-free under `assert_no_alloc` exactly like
+/// the singleton leg (per-instance state must not share a hot-path
+/// allocation). Child/facade setup and the warm-up blocks sit
+/// outside the window; inside it, real doorbells are in flight on
+/// the shared child while both legs run — defined outputs only.
+#[test]
+fn rt_l1_bundled_process_no_alloc() {
+    let spawn_spec = spec(&[]);
+    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+    for instance in [&mut a, &mut b] {
+        instance.execute(wire::Command::Initialize).unwrap();
+        instance
+            .execute(wire::Command::Activate { config: config() })
+            .unwrap();
+        instance.execute(wire::Command::StartProcessing).unwrap();
+    }
+
+    let input = [0.5_f32; 512];
+    let mut out_a = [0.0_f32; 512];
+    let mut out_b = [0.0_f32; 512];
+    // Warm-up outside the window: first-touch staging pages, channel
+    // state and the driver's `AddInstance` attach belong to setup.
+    for _ in 0..4 {
+        run_block(&mut a, &input, &mut out_a).unwrap();
+        run_block(&mut b, &input, &mut out_b).unwrap();
+    }
+    assert_no_alloc::assert_no_alloc(|| {
+        for _ in 0..24 {
+            assert_eq!(
+                run_block(&mut a, &input, &mut out_a),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert_eq!(
+                run_block(&mut b, &input, &mut out_b),
+                Ok(ProcessResult::CONTINUE)
+            );
+            // Defined values only — silence or the child's `0.5 ×`
+            // (underrun pass-through included), never a torn mix.
+            assert!(
+                out_a
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.0) || sample_eq(s, 0.25))
+            );
+            assert!(
+                out_b
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.0) || sample_eq(s, 0.25))
+            );
+        }
+    });
+    // Both legs stayed `Processing` — no cross-talk, no convergence.
+    assert_eq!(a.lifecycle_state(), LifecycleState::Processing);
+    assert_eq!(b.lifecycle_state(), LifecycleState::Processing);
+    a.destroy();
+    b.destroy();
+}
+
 /// `lookahead_blocks == 0` would degenerate the data plane to
 /// permanent silence — `expected` would be the very seq the same
 /// `process` call just submitted, so no result could ever precede
@@ -1087,6 +1464,20 @@ fn rt_l1_result_leg_try_ops() {
 fn lookahead_zero_is_rejected() {
     let mut spec = spec(&[]);
     spec.lookahead_blocks = 0;
+    assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
+}
+
+/// `D = lookahead_blocks + 1` is declared on `CreateInstance`'s
+/// `in_depth`/`out_depth`, which the wire codec caps at
+/// `WIRE_MAX_ELEMENTS` — an over-cap lookahead is the same defined
+/// `Err(Ipc)` rejection, before any segment or child exists (so the
+/// `u32::MAX` case also proves the `+ 1` cannot overflow).
+#[test]
+fn lookahead_over_wire_depth_cap_is_rejected() {
+    let mut spec = spec(&[]);
+    spec.lookahead_blocks = wire::WIRE_MAX_ELEMENTS;
+    assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
+    spec.lookahead_blocks = u32::MAX;
     assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
 }
 
@@ -1434,11 +1825,13 @@ mod composite_e2e {
         ParamValue, PluginDescriptor, ProcessConfig, ProcessResult, TransportInfo,
     };
     use ruviform_plugin_host::{
-        HostCommand, HostNotification, HostReply, OutOfProcessSpec, Plugin, PluginFactory,
-        PluginHandle, PluginHost,
+        HostCommand, HostNotification, HostReply, OutOfProcessIsolation, OutOfProcessSpec, Plugin,
+        PluginFactory, PluginHandle, PluginHost,
     };
 
-    use super::{NOTIFY_TIMEOUT, WORKER_DESCRIPTOR, config, sample_eq};
+    use super::{
+        NOTIFY_TIMEOUT, WORKER_DESCRIPTOR, bundled_pair, config, l1::L1Child, sample_eq, spec,
+    };
 
     /// The L0-side fixture: a gain plugin with an adjustable
     /// normalized-gain parameter and a state blob — distinct id and
@@ -2205,5 +2598,505 @@ mod composite_e2e {
         host.execute(HostCommand::Deactivate { handle }).unwrap();
         host.execute(HostCommand::Destroy { handle }).unwrap();
         assert_eq!(host.lifecycle_state(handle), None);
+    }
+
+    // --------------------------------------------------------------
+    // Issue #117 `Bundled` route E2E — the pool selects one child
+    // for every `Instantiate` that fits; the rows below pin the
+    // whole contract through the public `PluginHost` surface.
+    // --------------------------------------------------------------
+
+    /// The pooled-route contract end to end: two `Instantiate`s on
+    /// the default `Bundled` route land on *one* child — proven
+    /// operationally by the kill fan-out at the end — with distinct
+    /// public handles, independent lifecycle (the child's own
+    /// per-instance legality agrees with each mirror), independent
+    /// state blobs, and interleaved data planes that never cross
+    /// (disjoint input ranges make a foreign block an undefined
+    /// sample). One `kill_child` then converges *both* `Failed`
+    /// and emits one `InstanceFailed` per minted handle carrying
+    /// the same `ChildExit`.
+    #[test]
+    fn bundled_route_shares_one_child_across_instances() {
+        let mut host = mixed_host(&[]);
+        let a = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        let b = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        assert_ne!(a, b);
+        assert_eq!(host.lifecycle_state(a), Some(LifecycleState::Created));
+        assert_eq!(host.lifecycle_state(b), Some(LifecycleState::Created));
+
+        // Lifecycle independence: `a` walks to `Processing` while
+        // `b` stays `Created` — and the child's per-instance
+        // legality agrees (`Activate` on `b` is the defined
+        // `Err(Lifecycle)`, not a child-scope violation).
+        drive_to_processing(&mut host, a);
+        assert_eq!(host.lifecycle_state(b), Some(LifecycleState::Created));
+        assert!(matches!(
+            host.execute(HostCommand::Activate {
+                handle: b,
+                config: config(),
+            }),
+            Err(HostError::Lifecycle(_))
+        ));
+        drive_to_processing(&mut host, b);
+
+        // Per-instance state blobs — `a`'s `RestoreState` does not
+        // touch `b`'s.
+        host.execute(HostCommand::RestoreState {
+            handle: a,
+            bytes: vec![0xAA],
+        })
+        .unwrap();
+        assert_eq!(
+            host.execute(HostCommand::SaveState { handle: b }),
+            Ok(HostReply::State {
+                bytes: vec![0x11, 0x22, 0x33, 0x44]
+            })
+        );
+
+        // Interleaved processing on disjoint input ranges — the
+        // `(instance, seq)` correlation oracle at the data plane:
+        // any reply or shm segment crossing instances lands an
+        // undefined sample.
+        let mut a_inputs: Vec<f32> = Vec::new();
+        let mut b_inputs: Vec<f32> = Vec::new();
+        let mut delivered_a = false;
+        let mut delivered_b = false;
+        for call in 0..24_u32 {
+            let va = 0.2 + 0.01 * f32::from(u8::try_from(call).unwrap() + 1);
+            let vb = 5.0 + 0.01 * f32::from(u8::try_from(call).unwrap() + 1);
+            let input_a = vec![va; 512];
+            let input_b = vec![vb; 512];
+            let mut out_a = vec![0.0_f32; 512];
+            let mut out_b = vec![0.0_f32; 512];
+            thread::sleep(Duration::from_millis(5));
+            assert_eq!(
+                host_block(&mut host, a, &input_a, &mut out_a),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert_eq!(
+                host_block(&mut host, b, &input_b, &mut out_b),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert!(
+                out_a
+                    .iter()
+                    .all(|&s| super::is_defined_sample(s, &a_inputs)),
+                "call {call}: a carried a foreign/undefined sample {}",
+                out_a[0]
+            );
+            assert!(
+                out_b
+                    .iter()
+                    .all(|&s| super::is_defined_sample(s, &b_inputs)),
+                "call {call}: b carried a foreign/undefined sample {}",
+                out_b[0]
+            );
+            delivered_a |= call >= 2
+                && out_a
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.5 * a_inputs[call as usize - 2]));
+            delivered_b |= call >= 2
+                && out_b
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.5 * b_inputs[call as usize - 2]));
+            a_inputs.push(va);
+            b_inputs.push(vb);
+        }
+        assert!(delivered_a, "a's pipeline never delivered");
+        assert!(delivered_b, "b's pipeline never delivered");
+
+        // The child-scope oracle: one `kill_child` converges every
+        // co-resident instance — under `Bundled` both handles are on
+        // the same child, so both go `Failed` and each minted
+        // handle gets exactly one `InstanceFailed` with the same
+        // exit status.
+        host.kill_child(a).unwrap();
+        wait_host_failed(&host, a);
+        wait_host_failed(&host, b);
+        let mut notified = [
+            wait_host_notification(&mut host),
+            wait_host_notification(&mut host),
+        ];
+        notified.sort_by_key(|(handle, _)| handle.slot());
+        assert_eq!(notified[0].0, a);
+        assert_eq!(notified[1].0, b);
+        assert_eq!(notified[0].1, notified[1].1);
+        assert!(host.try_recv_notification().is_none());
+
+        // Both stay `Failed` until `Destroy` — no restart.
+        for handle in [a, b] {
+            assert_eq!(
+                host.execute(HostCommand::Initialize { handle }),
+                Err(HostError::Failed)
+            );
+            host.execute(HostCommand::Destroy { handle }).unwrap();
+            assert_eq!(host.lifecycle_state(handle), None);
+        }
+    }
+
+    /// Shutdown-on-empty through the public route: the first
+    /// `Destroy` reclaims its slot but the shared child keeps
+    /// serving the sibling (`live_count != 0` — observed as `b`
+    /// still answering); after the last `Destroy` the next
+    /// `Instantiate` is served fresh and works normally — the
+    /// emptied child was never re-served. The pool eviction and
+    /// `Shutdown`+grace+reap teardown inside that last `Destroy`
+    /// are the mechanism, pinned at the composite unit level;
+    /// this row observes only the sibling-kept-serving and
+    /// respawn halves. A clean teardown never notifies.
+    #[test]
+    fn bundled_last_destroy_shuts_down_child_and_respawns() {
+        let mut host = mixed_host(&[]);
+        let a = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        let b = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        host.execute(HostCommand::Initialize { handle: a }).unwrap();
+        host.execute(HostCommand::Initialize { handle: b }).unwrap();
+
+        // Mid-bundle destroy: `b` keeps the child alive — the pool
+        // does not evict a child with live siblings.
+        host.execute(HostCommand::Destroy { handle: a }).unwrap();
+        assert_eq!(host.lifecycle_state(a), None);
+        assert_eq!(host.lifecycle_state(b), Some(LifecycleState::Initialized));
+        // `b` still serves — the child never saw `Shutdown` for `a`.
+        assert_eq!(
+            host.execute(HostCommand::SaveState { handle: b }),
+            Ok(HostReply::State {
+                bytes: vec![0x11, 0x22, 0x33, 0x44]
+            })
+        );
+
+        // The last `Destroy` empties the registry — the
+        // unit-pinned shutdown-on-empty arm evicts and tears the
+        // child down inside this call; what this row observes is
+        // only the clean half: no notification, no residue.
+        host.execute(HostCommand::Destroy { handle: b }).unwrap();
+        assert_eq!(host.lifecycle_state(b), None);
+        assert!(host.try_recv_notification().is_none());
+
+        // The route recovered: the next `Instantiate` spawns fresh
+        // (the dead pool entry was evicted, not re-served).
+        let c = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        drive_to_processing(&mut host, c);
+        host.execute(HostCommand::StopProcessing { handle: c })
+            .unwrap();
+        host.execute(HostCommand::Deactivate { handle: c }).unwrap();
+        host.execute(HostCommand::Destroy { handle: c }).unwrap();
+        assert!(host.try_recv_notification().is_none());
+    }
+
+    /// Mid-`CreateInstance` death: the second `Instantiate` reuses
+    /// the pooled child, whose crash knob fires on receipt of the
+    /// third parent→child message (`Scan`, `CreateInstance` ×2) —
+    /// the `CreateInstance` waiter is woken `Err(Ipc)`, no facade is
+    /// minted (no `Failed` notification for a handle that never
+    /// existed), the converged child is evicted, and the minted
+    /// sibling fans out its own `Failed` + exactly one
+    /// notification. The route then recovers on a fresh child.
+    #[test]
+    fn bundled_mid_create_death_notifies_only_minted() {
+        let mut host = mixed_host(&["--crash-after-msgs=3"]);
+        let a = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+
+        // The reused child's `CreateInstance` is the crash
+        // message — `Instantiate` surfaces `Err(Ipc)`, no handle.
+        assert_eq!(
+            host.execute(HostCommand::Instantiate {
+                plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+            }),
+            Err(HostError::Ipc)
+        );
+
+        // The minted instance converged `Failed` by the child-scope
+        // fan-out — exactly one `InstanceFailed`, carrying `a`'s
+        // handle. The never-minted `B` emits nothing.
+        wait_host_failed(&host, a);
+        let (notified, exit) = wait_host_notification(&mut host);
+        assert_eq!(notified, a);
+        assert!(exit.code.is_some() || exit.signal.is_some());
+        assert!(host.try_recv_notification().is_none());
+
+        host.execute(HostCommand::Destroy { handle: a }).unwrap();
+        // The route recovered — the evicted child's replacement
+        // spawns and mints `c` normally. The crash knob is
+        // per-child, so `c`'s `DestroyInstance` is *its* third
+        // message: `Destroy` re-runs the mid-destroy death path and
+        // still frees the slot `Ok` (its notification leaves with
+        // the freed slot, exactly like `a`'s above).
+        let c = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        assert_eq!(
+            host.execute(HostCommand::Destroy { handle: c }),
+            Ok(HostReply::Ok)
+        );
+        assert_eq!(host.lifecycle_state(c), None);
+        assert!(host.try_recv_notification().is_none());
+    }
+
+    /// Mid-`CreateInstance` death on a FRESH pooled child — the
+    /// `create_on_fresh` failure arm (composite.rs): with the pool
+    /// empty the first `Instantiate` pays a spawn whose own
+    /// `CreateInstance` is the crash message
+    /// (`--crash-after-msgs=2`: `Scan`, then the `CreateInstance`
+    /// — the crash fires pre-dispatch, so the waiter is woken
+    /// `Err(Ipc)` by convergence). No facade mints (a sibling-free
+    /// death — unlike the reused-child arm there is nothing minted
+    /// to fan a notification out to), and the arm pops and tears
+    /// the child down inside the same bounded call so the pool
+    /// keeps nothing re-servable. The retry pays another fresh
+    /// spawn — the identical death, the knob being per-child — and
+    /// a clean child still mints a co-resident pair and serves
+    /// normally: the failed spawn left nothing wedged behind.
+    #[test]
+    fn bundled_fresh_create_death_leaves_pool_unpoisoned() {
+        use ruviform_plugin_core::wire;
+
+        let mut host = mixed_host(&["--crash-after-msgs=2"]);
+
+        // `Instantiate` → `Err(Ipc)` — no handle, no facade, so
+        // nothing was ever minted and no `InstanceFailed` arrives.
+        assert_eq!(
+            host.execute(HostCommand::Instantiate {
+                plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+            }),
+            Err(HostError::Ipc)
+        );
+        assert!(host.try_recv_notification().is_none());
+
+        // The pool kept nothing re-servable: the retry pays a
+        // fresh spawn that dies at the identical `CreateInstance`
+        // — a retained dead entry would self-evict to the same
+        // `Err(Ipc)`, so the distinguishing oracle for
+        // "popped, not merely evictable" stays at the composite
+        // unit level; this row pins the arm's `Err(Ipc)`
+        // granularity, mint-nothing notification semantics and
+        // that later `Instantiate`s are never wedged.
+        assert_eq!(
+            host.execute(HostCommand::Instantiate {
+                plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+            }),
+            Err(HostError::Ipc)
+        );
+        assert!(host.try_recv_notification().is_none());
+
+        // Nothing leaked into later spawns: a clean child still
+        // mints a co-resident pair and serves (the `bundled_pair`
+        // idiom).
+        let spawn_spec = spec(&[]);
+        let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+        let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+        a.execute(wire::Command::Initialize).unwrap();
+        assert_eq!(b.lifecycle_state(), LifecycleState::Created);
+        a.destroy();
+        b.destroy();
+    }
+
+    /// Mid-`DestroyInstance` death: `Destroy` is unconditional once
+    /// the lifecycle gate passes — the child dying on the request
+    /// (`--crash-after-msgs=4`: `Scan`, `CreateInstance` ×2, the
+    /// `DestroyInstance`) still reports `Ok`, the slot frees, and
+    /// the sibling converges `Failed` by the same fan-out with its
+    /// own notification (the destroyed instance's own notification
+    /// leaves with its slot — `b`'s is the observable one).
+    #[test]
+    fn bundled_mid_destroy_death_ok_and_sibling_failed() {
+        let mut host = mixed_host(&["--crash-after-msgs=4"]);
+        let a = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        let b = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+
+        // `a`'s `DestroyInstance` is the crash message — the
+        // request fails, but `Destroy` still frees the slot `Ok`.
+        assert_eq!(
+            host.execute(HostCommand::Destroy { handle: a }),
+            Ok(HostReply::Ok)
+        );
+        assert_eq!(host.lifecycle_state(a), None);
+
+        // `b` converged `Failed` on the same child's death — one
+        // notification carrying `b`'s handle and the real exit.
+        wait_host_failed(&host, b);
+        let (notified, exit) = wait_host_notification(&mut host);
+        assert_eq!(notified, b);
+        assert!(exit.code.is_some() || exit.signal.is_some());
+        assert!(host.try_recv_notification().is_none());
+        host.execute(HostCommand::Destroy { handle: b }).unwrap();
+    }
+
+    /// `Dedicated` is the capacity-1 degeneration of the same
+    /// machinery: two `Instantiate`s get one child *each*, so
+    /// killing `a`'s child converges `a` alone — `b` stays
+    /// `Processing` and keeps delivering blocks. The non-regression
+    /// pin the `Bundled` fan-out tests are the dual of.
+    #[test]
+    fn dedicated_route_isolates_instances_per_child() {
+        let mut host = PluginHost::new();
+        let mut spec = OutOfProcessSpec::new(WORKER_DESCRIPTOR, worker_program());
+        spec.isolation = OutOfProcessIsolation::Dedicated;
+        host.register_out_of_process(spec).unwrap();
+
+        let a = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        let b = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        assert_ne!(a, b);
+        drive_to_processing(&mut host, a);
+        drive_to_processing(&mut host, b);
+
+        host.kill_child(a).unwrap();
+        wait_host_failed(&host, a);
+        let (notified, exit) = wait_host_notification(&mut host);
+        assert_eq!(notified, a);
+        assert!(exit.code.is_some() || exit.signal.is_some());
+        assert!(host.try_recv_notification().is_none());
+
+        // `b`'s child is a different process — untouched.
+        assert_eq!(host.lifecycle_state(b), Some(LifecycleState::Processing));
+        let input = [1.0_f32; 512];
+        let mut output = [0.0_f32; 512];
+        let mut delivered = false;
+        for _ in 0..16 {
+            thread::sleep(Duration::from_millis(5));
+            assert_eq!(
+                host_block(&mut host, b, &input, &mut output),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert!(
+                output
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.0) || sample_eq(s, 0.5)),
+                "b emitted an undefined sample after a's child died"
+            );
+            delivered |= output.iter().all(|&s| sample_eq(s, 0.5));
+        }
+        assert!(delivered, "b's dedicated child stopped delivering");
+
+        host.execute(HostCommand::Destroy { handle: a }).unwrap();
+        host.execute(HostCommand::StopProcessing { handle: b })
+            .unwrap();
+        host.execute(HostCommand::Deactivate { handle: b }).unwrap();
+        host.execute(HostCommand::Destroy { handle: b }).unwrap();
+    }
+
+    /// Asserts every sample of one out block is inside `allowed`
+    /// (silence or its delivered value) and reports whether the
+    /// whole block equals `target` — the delivery/persistence
+    /// oracle the runner-pipeline polls.
+    fn out_block_delivered(out: &[f32], allowed: &[f32], target: f32, what: &str) -> bool {
+        assert!(
+            out.iter()
+                .all(|&s| allowed.iter().any(|&v| sample_eq(s, v))),
+            "{what} carried a foreign/undefined sample"
+        );
+        out.iter().all(|&s| sample_eq(s, target))
+    }
+
+    /// The real `ruviform-plugin-l1-runner` under the `Bundled`
+    /// route: two `Instantiate`s land on one runner child whose
+    /// per-instance registry keeps lifecycle, param state and shm
+    /// processing independent — `a`'s param event sets gain 0.5,
+    /// `b`'s sets 0.75, and delivered blocks carry only the owning
+    /// instance's multiplier — then one `kill_child` fans `Failed`
+    /// out to both with the same exit status.
+    #[test]
+    fn runner_bin_serves_bundled_gain_instances() {
+        let mut host = PluginHost::new();
+        host.register_out_of_process(OutOfProcessSpec::new(
+            RUNNER_GAIN_DESCRIPTOR,
+            runner_program(),
+        ))
+        .unwrap();
+        let a = instantiate(&mut host, RUNNER_GAIN_DESCRIPTOR.id);
+        let b = instantiate(&mut host, RUNNER_GAIN_DESCRIPTOR.id);
+        assert_ne!(a, b);
+        drive_to_processing(&mut host, a);
+        drive_to_processing(&mut host, b);
+
+        // Per-instance param events on the shared child: 0.25 →
+        // gain 0.5 on `a`, 0.375 → 0.75 on `b` (normalized [0,1]
+        // denormalized over the gain range [0,2]).
+        let events_a = [Event::new(
+            0,
+            EventKind::ParamValue(ParamEvent {
+                param_id: ParamId(0),
+                value: ParamValue::new(0.25).unwrap(),
+            }),
+        )];
+        let events_b = [Event::new(
+            0,
+            EventKind::ParamValue(ParamEvent {
+                param_id: ParamId(0),
+                value: ParamValue::new(0.375).unwrap(),
+            }),
+        )];
+        let events_a = EventList::new(&events_a, 512).unwrap();
+        let events_b = EventList::new(&events_b, 512).unwrap();
+        let input_a = [1.0_f32; 512];
+        let input_b = [2.0_f32; 512];
+        let mut out_a = [0.0_f32; 512];
+        let mut out_b = [0.0_f32; 512];
+        let mut delivered_a = false;
+        let mut delivered_b = false;
+        for _ in 0..24 {
+            thread::sleep(Duration::from_millis(5));
+            assert_eq!(
+                host_block_with_events(&mut host, a, &input_a, &mut out_a, events_a),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert_eq!(
+                host_block_with_events(&mut host, b, &input_b, &mut out_b, events_b),
+                Ok(ProcessResult::CONTINUE)
+            );
+            // Defined sets are per-instance: `a` yields silence or
+            // `0.5 × 1.0`, `b` silence or `0.75 × 2.0` — the wrong
+            // multiplier or a foreign input is an undefined sample.
+            delivered_a |= out_block_delivered(&out_a, &[0.0, 0.5], 0.5, "a");
+            delivered_b |= out_block_delivered(&out_b, &[0.0, 1.5], 1.5, "b");
+        }
+        assert!(delivered_a, "a's runner pipeline never delivered");
+        assert!(delivered_b, "b's runner pipeline never delivered");
+
+        // Param persistence, no re-send: the events above already
+        // landed (`delivered_*`), so blocks carrying NO param event
+        // still apply each instance's own gain. A child-scoped
+        // last-write-wins store would leave `a` on `b`'s 0.75 —
+        // `a`'s defined set stays {silence, `0.5 × 1.0`} and `b`'s
+        // {silence, `0.75 × 2.0`}; a wrong-gain block is undefined.
+        let mut persisted_a = false;
+        let mut persisted_b = false;
+        for call in 0..16_u32 {
+            thread::sleep(Duration::from_millis(5));
+            assert_eq!(
+                host_block(&mut host, a, &input_a, &mut out_a),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert_eq!(
+                host_block(&mut host, b, &input_b, &mut out_b),
+                Ok(ProcessResult::CONTINUE)
+            );
+            // Call N's output is block N−2 (lookahead): the first
+            // two calls still deliver event-era blocks; calls ≥2
+            // deliver blocks that carried no event — a `0.5`/`1.5`
+            // there is the persisted param, not a re-sent one. The
+            // defined sets keep policing the wrong-gain case on
+            // every call.
+            persisted_a |= out_block_delivered(&out_a, &[0.0, 0.5], 0.5, "a") && call >= 2;
+            persisted_b |= out_block_delivered(&out_b, &[0.0, 1.5], 1.5, "b") && call >= 2;
+        }
+        assert!(persisted_a, "a's gain did not persist without an event");
+        assert!(persisted_b, "b's gain did not persist without an event");
+
+        // Child-scoped kill: both instances on the one runner child
+        // converge `Failed` — two `InstanceFailed`s, same exit.
+        host.kill_child(a).unwrap();
+        wait_host_failed(&host, a);
+        wait_host_failed(&host, b);
+        let mut notified = [
+            wait_host_notification(&mut host),
+            wait_host_notification(&mut host),
+        ];
+        notified.sort_by_key(|(handle, _)| handle.slot());
+        assert_eq!(notified[0].0, a);
+        assert_eq!(notified[1].0, b);
+        assert_eq!(notified[0].1, notified[1].1);
+        assert!(host.try_recv_notification().is_none());
+        host.execute(HostCommand::Destroy { handle: a }).unwrap();
+        host.execute(HostCommand::Destroy { handle: b }).unwrap();
     }
 }

@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）"
 created: "2026-10-25"
-updated: "2026-10-27"
+updated: "2026-10-28"
 owners: []
 relations:
   source: []
@@ -55,6 +55,10 @@ relations:
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
     - "docs/specs/issue-119-l1-wire-version-policy.md"
     - "docs/plans/implement-issue-119-l1-wire-version-policy.md"
+    - "docs/discovery/issue-117-bundle-child-process-discovery.md"
+    - "docs/specs/issue-117-bundle-child-process.md"
+    - "docs/designs/issue-117-bundle-child-process.md"
+    - "docs/adr/issue-117-bundle-child-failed-granularity.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -65,6 +69,7 @@ relations:
     - "docs/specs/engine-plugin-host-integration.md"
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
+    - "docs/designs/issue-117-bundle-child-process.md"
   deferred-by: []
 ---
 
@@ -105,16 +110,16 @@ Issue #76 — #74（L0・CLOSED）で確定したハンドル + 直列化コマ�
 
 ### 子プロセスモデル
 
-**1 子プロセス = 1 プラグインインスタンス（per-`Instantiate` spawn）**。`PluginHandle` ↔ child が 1:1 で、child の死亡が即そのインスタンスの `Failed` となる spec の粒度契約に一致する。runner が複数 factory を内蔵する場合は argv `--ruviform-plugin-id` で選択する。
+**1 子プロセス = N プラグインインスタンス**（Issue #117 wire v2 で確定・実装済み）。`OutOfProcessSpec::isolation` が形態を選ぶ: `Bundled`（既定）は route の pool が共有子へ最大 `WIRE_MAX_INSTANCES`（64）個のインスタンスを詰め、`Dedicated` は `Instantiate` 毎の専用 spawn（capacity-1 経路 — 従来の per-instance spawn 形で強隔離 opt-in）。子の死亡は同居する**全** live インスタンスの `Failed`（通知は影響各インスタンスへ 1 つずつ）— `Failed` 粒度契約の正本は `docs/adr/issue-117-bundle-child-failed-granularity.md`。runner が複数 factory を内蔵する場合は `CreateInstance` payload の `plugin_id` で選択する（v1 の argv `--ruviform-plugin-id` は wire v2 で廃止）。
 
-### スレッド構成（per L1 インスタンス = 子プロセス 1 + スレッド 2）
+### スレッド構成（per L1 子プロセス = 子プロセス 1 + スレッド 2 — N インスタンスで共有）
 
 | スレッド | 所有 | 責務 |
 | --- | --- | --- |
-| `driver` | `Child`（`Mutex` 不要 — 単独所有）・stdin・shm in-slot・command mpsc・submit `Consumer` | コマンド直列化送信・ブロック投入（shm 書込 + doorbell）・`try_wait` 周期監視（約 200µs ループ、poll 間隔は実装定数 `DRIVER_POLL_INTERVAL`）・シャットダウン監視犬（猶予超過で `child.kill()`） |
-| `reader` | stdout・shm out-slot・result `Producer` | 子→親メッセージの多重解除（`CommandReply`→待機者起床・`BlockDone`→staging 複写 + result push）・EOF 検出（`seen_eof` flag） |
+| `driver` | `Child`（`Shared.child` の `Mutex` — driver が操作するが、収束スレッドが wedged 子を `kill` できるよう共有）・stdin・全インスタンスの shm in-slot・command mpsc・per-instance submit `Consumer` map | コマンド直列化送信・ブロック投入（shm 書込 + doorbell `BlockIn{instance, seq}`）・`try_wait` 周期監視（約 200µs ループ、poll 間隔は実装定数 `DRIVER_POLL_INTERVAL`）・シャットダウン監視犬（猶予超過で `child.kill()`） |
+| `reader` | stdout・全インスタンスの shm out-slot・result `Producer` | 子→親メッセージの `(instance, seq)` 多重解除（`Reply`→待機者起床・`BlockDone`→staging 複写 + result push）・EOF 検出（`seen_eof` flag） |
 
-クラッシュ検出は 2 経路が冪等に収束する: (i) reader が stdout EOF を検出 → `seen_eof` セット、(ii) driver の `try_wait` が `Some(ExitStatus)` を返す。先に発火した方がインスタンスを `Failed` 遷移させ、`HostNotification` をキューへ送り、pending コマンド待機者へ `HostError::Ipc` で起床する。`try_wait` は reaping を兼ねる（`Some` 返却時に回収済み）。ライブ中の child exit はコード/シグナル不問で `Failed`（自発 exit 0 を含む — プロトコル違反）。`Shutdown` 送信後の exit のみ clean teardown。
+クラッシュ検出は 2 経路が冪等に収束する: (i) reader が stdout EOF を検出 → `seen_eof` セット、(ii) driver の `try_wait` が `Some(ExitStatus)` を返す。先に発火した方が収束を実行し、子がホストする各 live インスタンスを `Failed` 遷移させ、`HostNotification` をインスタンス毎にキューへ送り、pending コマンド待機者へ `HostError::Ipc` で起床する。`try_wait` は reaping を兼ねる（`Some` 返却時に回収済み）。ライブ中の child exit はコード/シグナル不問で `Failed`（自発 exit 0 を含む — プロトコル違反）。`Shutdown` 送信後の exit のみ clean teardown。
 
 ### L1 `process` 等価経路（RT 脚 = プロセス内 SPSC × 2）
 
@@ -134,21 +139,24 @@ RT caller <──staging out[seq%D]──try_pop─────── result ch 
 
 ワイヤ型・codec は plugin-core の `wire` モジュールに単一定義する — discovery 案 (iii)「双方個別定義」は同一プロトコルの実装二重化で相互運用不良の温床となり、規約（同一責務の authoritative 実装は一箇所）に反するため棄却。core は codec を**手書きリトルエンディアン**とし serde 系を持ち込まない（serde を core に入れると全 adapter の依存木に流れる）。
 
-フレーム: `[u32 LE payload_len][u8 kind][payload]`。バージョンは `Hello` のみが運ぶ（`WIRE_VERSION = 1` — 不一致は handshake 失敗として kill + `HostError::Ipc`）。
+フレーム: `[u32 LE payload_len][u8 kind][payload]`。バージョンは `Hello` のみが運ぶ（`WIRE_VERSION = 2` — Issue #117 の `instance` envelope 化・新動詞で bump。不一致は handshake 失敗として kill + `HostError::Ipc`）。
 
 | メッセージ | 方向 | 内容 |
 | --- | --- | --- |
-| `Hello { version: u16, capabilities: u32 }` | 子→親 | 起動直後の最初のフレーム |
-| `Command { seq: u64, cmd: wire::Command }` | 親→子 | コマンド相関 seq 付き |
-| `Reply { seq: u64, result: Result<wire::Reply, HostError> }` | 子→親 | `HostError` は core 共有語彙をそのまま encode |
-| `BlockIn { seq: u64 }` | 親→子 | shm in-slot `seq % D` への doorbell |
-| `BlockDone { seq: u64, result: ProcessResult }` | 子→親 | shm out-slot `seq % D` への doorbell |
-| `Shutdown` | 親→子 | `HostCommand::Destroy` の wire 意味。runner は状態機械が許す範囲で deactivate→destroy 正規化後に exit(0) |
+| `Hello { version: u16, capabilities: u32 }` | 子→親 | 起動直後の最初のフレーム（instance 非持ち） |
+| `Command { seq: u64, instance: u32, cmd: wire::Command }` | 親→子 | コマンド相関 seq + `instance` envelope（`Scan` のみ child-scope `WIRE_INSTANCE_NONE`・他動詞は live-range handle） |
+| `Reply { seq: u64, instance: u32, result: Result<wire::Reply, HostError> }` | 子→親 | `HostError` は core 共有語彙をそのまま encode・`instance` は要求の echo |
+| `BlockIn { seq: u64, instance: u32 }` | 親→子 | shm in-slot `seq % D` への doorbell（instance-scope のみ） |
+| `BlockDone { seq: u64, instance: u32, result: ProcessResult }` | 子→親 | shm out-slot `seq % D` への doorbell（instance-scope のみ） |
+| `Shutdown` | 親→子 | 全登録インスタンスを正規化（状態機械が許す範囲で deactivate→destroy）して runner が exit(0) |
 
 ```rust
 // plugin-core::wire（概念形 — シグネチャの正本）
-pub enum Command {        // HostCommand の handle 非修飾ミラー（子は singleton）
-    Scan,
+pub enum Command {        // HostCommand の handle 非修飾ミラー（handle は envelope `instance` が担う）
+    Scan,                                   // child-scope のみ（instance = WIRE_INSTANCE_NONE）
+    CreateInstance { plugin_id: String, shm_key: String,
+                     in_depth: u32, out_depth: u32 },
+    DestroyInstance,
     Initialize,
     Activate { config: ProcessConfig },
     StartProcessing, StopProcessing, Deactivate,
@@ -171,9 +179,9 @@ pub struct Descriptor {                 // PluginDescriptor の所有 wire 形
 
 `wire::Command`/`wire::Reply`/`wire::Descriptor` は core の公開型であるため、公開 enum 規約に従い `#[non_exhaustive]` を付与する（`wire::Descriptor` は struct なので対象外）。wire プロトコル自体は `WIRE_VERSION` の handshake 照合で厳格一致を強制するため、フィールド追加はバージョン更新とセットで行う。
 
-- **語彙写像**: `HostCommand::Instantiate` ↔ spawn + handshake、`Destroy` ↔ `Shutdown` + reap。残り 10 動詞は `wire::Command` に 1:1 で写す（handle は子が singleton のため落とす — 将来の bundle 子は `Instantiate`/handle 修飾を wire に追加するプロトコル改訂）。
+- **語彙写像**: `HostCommand::Instantiate` ↔ spawn + handshake（`Hello`→`Scan`→`Scanned` 照合）+ `CreateInstance`、`Destroy` ↔ `DestroyInstance`（+ 子の live=0 で `Shutdown` + reap）。残り 10 動詞は `wire::Command` に 1:1 で写し、handle は envelope `instance` が担う — **Issue #117 で `WIRE_VERSION` 2 の `instance` envelope + `CreateInstance`/`DestroyInstance` として確定・実装済み**（`docs/designs/issue-117-bundle-child-process.md`）。
 - **`PluginDescriptor` の `&'static` 問題**: 公開 `HostReply::Scanned(Vec<PluginDescriptor>)` は L1 ルートでも **registration 供給の 'static 値**を返す（下記 `OutOfProcessSpec.descriptor`）。child は `Hello` 後の `Scan` 応答で内蔵 descriptor を `wire::Descriptor` として報告し、proxy が spec の descriptor とフィールド等価で照合する（不一致 → kill + `HostError::Ipc`）。**所有文字列→`&'static` への変換は設計上発生せず、`Box::leak` は使わない**。
-- handshake: spawn → argv `--ruviform-plugin-id <id>` `--ruviform-shm-key <key>` → 子 `Hello` → 親 `Scan` → 子 `Scanned`（照合）→ `Instantiated{handle}` 応答。いずれか失敗・タイムアウト（`command_timeout`）で `Err(HostError::Ipc)` + child kill/reap。
+- handshake: spawn → argv `<runner>` + `spec.args`（wire v2 — `--ruviform-plugin-id`/`--ruviform-shm-key` は `CreateInstance` payload へ移転・任意引数は usage reject）→ 子 `Hello` → 親 `Scan`（child-scope・envelope `instance = WIRE_INSTANCE_NONE`）→ 子 `Scanned`（照合）→ `CreateInstance{i, plugin_id, shm_key, in_depth, out_depth}` → `Reply::Ok` で `Instantiated{handle}`。いずれか失敗・タイムアウト（`command_timeout`）で `Err(HostError::Ipc)` — fresh spawn は kill/reap（bundled pool 経由の `CreateInstance` 失敗は対象 instance のみ rollback・同居 sibling は生存）。
 - データ型写像: `ProcessConfig`/`ProcessResult`/`GuiHandle`/`GuiParentToken`/`HostError` は core 共有型を codec が直接 encode/decode。`TransportInfo`/`Event`/`EventList`/`MediaTime` 系は **repr 固定の wire レイアウト**（accessor 経由で encode、ctor で decode — `repr(Rust)` の memcpy 横断はしない）。
 
 **ワイヤバージョン方針（Issue #119 で確定 — 初期開発期の単一バージョンポリシー）**:
@@ -188,7 +196,7 @@ pub struct Descriptor {                 // PluginDescriptor の所有 wire 形
 
 ### 共有メモリデータ面
 
-- `shared_memory` の named segment を **インスタンス毎に 1 本**。proxy が `os_id` に一意 key（pid + slot + counter 由来）を生成して作成し、argv `--ruviform-shm-key` で子へ引き渡して attach。所有権は proxy、Destroy/drop で unlink。
+- `shared_memory` の named segment を **インスタンス毎に 1 本**（共有子でも registry entry 毎に独立）。proxy が `os_id` に一意 key（pid + slot + counter 由来）を生成して作成し、`CreateInstance` payload の `shm_key` で子へ引き渡して attach（wire v2 — v1 の argv `--ruviform-shm-key` は廃止）。所有権は proxy、Destroy/drop で unlink。
 - レイアウト: `[header][in-slots][out-slots]`。header = `{magic, wire_version, in_depth, out_depth, slot_bytes, in_off, out_off}`。slot = `{seq u64, frames u32, channels u32, event_count u32, flags, transport wire, result wire, events wire, samples f32[]}`。固定上限は wire 定数 `WIRE_MAX_FRAMES = 8192`・`WIRE_MAX_CHANNELS = 16`・`WIRE_MAX_EVENTS = 1024`（slot ≈ 550 KB、D=3 で ≈ 3.3 MB/インスタンス）。`Activate` の `ProcessConfig` が上限超なら `Prepare(UnsupportedConfig)` で defined rejection — codec 境界での検証は untrusted データの検証として wire 層に置く。
 - **shm 内に共有制御状態を持たない**: head/tail インデックス・ロック・atomic 配置を置かず、スロット選択は doorbell の `seq` が担い、in/out は厳密な交互制御（producer は `done seq-D` 受領後にのみ slot `seq%D` を再利用）。doorbell バイト列がプロセス間の release/acquire エッジを構成する — writer は doorbell 送信前に `std::sync::atomic::fence(Ordering::Release)`、reader は受信後に `atomic::fence(Ordering::Acquire)` を打ち（実装は hardware fence — `compiler_fence` は同一 process 内のコンパイラ並べ替え規制に留まり cross-process 可視性を保証しないため Issue #76 Task 4 で強化・Task 7 closeout で本書へ同期）、shm アクセスは安全な `as_slice`/`as_mut_slice` のみ（**自前 `unsafe` ゼロ**が shm 機構選定の条件）。
 
@@ -196,13 +204,14 @@ pub struct Descriptor {                 // PluginDescriptor の所有 wire 形
 
 ```rust
 // 子プロセスのエントリ。プラグイン作者/adapter のバイナリが main から呼ぶ。
-// argv 規約: --ruviform-plugin-id <id>（複数 factory 時必須・単一なら省略可）
-//           --ruviform-shm-key <key>（shm attach 名）
+// argv 規約: <runner>（引数なし — wire v2 で --ruviform-* bootstrap flag は
+//           廃止。plugin id/shm key は CreateInstance payload が運ぶ。
+//           任意引数は usage reject → exit 2・Hello 非送出）
 // 返却: プロセス exit code として直返し
 pub fn run(factories: Vec<Box<dyn PluginFactory>>) -> std::process::ExitCode;
 ```
 
-責務: argv 解釈 → `Hello` 送信 → shm attach + header 検証 → シングルスレッドのメッセージループ（stdin フレーム読取り → `wire::Command` を `ErasedPlugin` へ dispatch → `Reply`。`BlockIn` → `Lifecycle` が `Processing` を確認後 `process_host` を shm スロット上の `BufferView`/`BufferViewMut` adapter 経由で呼出し → `BlockDone`）→ `Shutdown`/stdin EOF で lifecycle 正規化して終了。runner は panic を catch して `HostError::PluginFailed` に変換（プラグインパニックで子を殺さない — ホスト検出手段と区別するため）。shm 上の in/out スロットは固定レイアウトの planar `f32` — core の `BufferView`/`BufferViewMut` を実装する軽量 view で wrap する（runner 内 unsafe なし）。
+責務: `Hello` 送信 → シングルスレッドのメッセージループ（stdin フレーム読取り → `wire::Command{seq, instance, cmd}` を instance で解決 — `Scan` → factory 列挙・`CreateInstance` → 検証 chain（plugin id → capacity → dup → shm attach + header 検証）後に `instances` registry へ insert・`DestroyInstance` → 撤去・他動詞 → `instances[instance]` の `ErasedPlugin` へ dispatch（未登録 handle → flagged `Err(InvalidHandle)` reply・子は継続）。`BlockIn{instance, seq}` → その entry の `Lifecycle` が `Processing` を確認後 `process_host` を shm スロット上の `BufferView`/`BufferViewMut` adapter 経由で呼出し → `BlockDone`）→ `Shutdown`/stdin EOF で全 entry の lifecycle 正規化して終了。runner は panic を catch して `HostError::PluginFailed` に変換（プラグインパニックで子を殺さない — ホスト検出手段と区別するため）。shm 上の in/out スロットは固定レイアウトの planar `f32` — core の `BufferView`/`BufferViewMut` を実装する軽量 view で wrap する（runner 内 unsafe なし）。factory 選択は `CreateInstance` の `plugin_id` のみ（host は `Scanned` を descriptor 全体で field-match するが payload が運ぶのは id のみ）— 同一 id の factory を 1 binary に 2 つ内蔵するのは authoring error。
 
 ## 公開面（plugin-host 追加）
 
@@ -291,12 +300,12 @@ spawn 引数の受け渡し・`CARGO_BIN_EXE_*` の利用は各 crate 内に閉�
 - L1 GUI（プロセス境界越しの親ウィンドウ埋め込み）| 規格・プラットフォーム固有の大課題・本 Issue 範囲外 | L1 インスタンスへの GUI 要求 | `Unsupported` 拒否のままでは GUI 持ちプラグインが L1 で使えない
 - 自動再起動・supervisor ポリシー | 状態復元はプラグイン責務の #31 確定判断 | supervisor 型運用要求 | 手動復旧の運用負荷
 - 規格アダプタ（clap/vst3/ofx）の子プロセス組込み・実プラグイン L1 E2E | runner 形態の前提が本書で確定・別 Issue 級の配線 | 実プラグインでの L1 需要 | 検証がモック範囲に留まる
-- bundle 子（1 子 N インスタンス）| per-instance spawn の方が `Failed` 粒度に整合・単純 | メモリ/spawn コスト要求 | インスタンス数スケールに弱い
+- bundle 子（1 子 N インスタンス）| Issue #117 で設計確定 — wire v2（envelope `instance`・`CreateInstance`/`DestroyInstance`・`WIRE_MAX_INSTANCES=64`）+ route 単位 pool + 子スコープ基礎の `Failed` 粒度（design `docs/designs/issue-117-bundle-child-process.md`・ADR `docs/adr/issue-117-bundle-child-failed-granularity.md`） | 明示 pool キー・pool keep-alive・`BundleFailed` 相関通知等の残件は同 design の Deferred 表 | —
 - エンジン/利用側への L1 配線 | plugin-host の engine 消費自体が未実装 | engine プラグイン統合 Issue | L1 が consumer から到達不能
 - 複数 wire バージョン共存・交渉機構 | Issue #119 で単一最新バージョン方針を確定（交渉機構・互換レイヤーなし・bump 判断基準は上記「ワイヤバージョン方針」に記録） | 独立配布されるホスト/ランナー間のバージョン互換が要求される段階 | 独立配布形態で新旧バージョンの混在が扱えない
 - stderr ログ配管 | inherit で運用可能・診断価値は副次的 | 子プロセスのログ解析要求 | クラッシュ時の手がかりが stderr 依存
 - video/NONRT プラグインの L1 経路 | 本 Issue は audio `process` 経路のみ | NONRT video port の分離要求 | video plugin は L1 不可
-- ドライバの共有リーパー/io 多重化 | per-instance 2 スレッドが最も単純明確 | インスタンス数増大 | スレッド数 = 2×instance のコスト
+- ドライバの共有リーパー/io 多重化 | per-child 2 スレッドが最も単純明確（wire v2 bundle で N instance が共有 — Issue #117 着地済み） | 子プロセス数・インスタンス数増大 | スレッド数 = 2×子プロセスのコスト（Dedicated 経路では per-instance に退化）
 
 ## Verification Notes
 

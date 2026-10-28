@@ -259,7 +259,8 @@ fn real_adapter_l1_full_series() {
     let mut host = PluginHost::new();
     // `spec.args` stays empty and `lookahead_blocks`/`command_timeout`
     // keep their `OutOfProcessSpec::new` defaults (2 blocks / 10 s) —
-    // the `run` argv contract is unchanged.
+    // wire v2's `run` takes no argv at all (plugin id/shm key ride the
+    // `CreateInstance` payload; any argument is a usage reject).
     host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
         .unwrap();
 
