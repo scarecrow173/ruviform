@@ -58,6 +58,8 @@ relations:
     - "../tasks/l1-wire-v2-codec-cutover.md"
     - "../test-specs/issue-117-wire-v2-codec-tests.md"
     - "issue-118-video-l1.md"
+    - "../designs/issue-118-video-l1.md"
+    - "../adr/issue-118-video-l1-create-path-segment.md"
   verifies: []
   verified-by:
     - "../test-specs/plugin-l1-wire-codec-tests.md"

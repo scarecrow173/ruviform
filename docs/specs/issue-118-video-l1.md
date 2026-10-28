@@ -44,6 +44,9 @@ relations:
     - "../adr/plugin-isolation-strategy.md"
     - "../discovery/issue-118-video-l1.md"
     - "../impl/ir/issue-76-l1-shm-data-plane-task-4-implementation.md"
+    - "../designs/issue-118-video-l1.md"
+    - "../adr/issue-118-video-l1-host-surface.md"
+    - "../adr/issue-118-video-l1-create-path-segment.md"
   refines: []
   refined-by: []
   derives-from:
@@ -55,7 +58,10 @@ relations:
     - "../designs/issue-117-bundle-child-process.md"
     - "engine-plugin-host-integration.md"
     - "../designs/engine-plugin-host-integration.md"
-  derived-by: []
+  derived-by:
+    - "../designs/issue-118-video-l1.md"
+    - "../adr/issue-118-video-l1-host-surface.md"
+    - "../adr/issue-118-video-l1-create-path-segment.md"
   verifies: []
   verified-by: []
   references:
@@ -81,7 +87,7 @@ Issue #118 — audio `process` ブロック経路とは別の **NONRT video デ�
 4. **`Failed` + 通知 + scope 契約の parity** — #117 確定の 子スコープ terminal + 帰属可能 per-instance 収束 + inert 規則 + `InstanceFailed` fan-out を video 経路にも適用。自動再起動なし
 5. **wire バージョン** — 新動詞・新 shm layout・video bounds は `WIRE_VERSION` bump 内に閉じ込める（#119 単一最新方針 — 交渉機構なし）
 
-呼出し側の `plugin_id` route・spawn・handle・通知モデルは #117 の形状を維持する（`Instantiate{plugin_id}` が video route を引く — ただし統合面の正確な形は R-F5 で決定委譲）。
+呼出し側の `plugin_id` route・spawn・handle・通知モデルは #117 の形状を維持する。統合面の正確な形は R-F5 で確定済み — 別立て video 表面 `PluginHost::video() -> VideoPluginHost<'_>`（`VideoHostCommand::Instantiate{plugin_id, config}` が video route を引く。design `docs/designs/issue-118-video-l1.md`・ADR `docs/adr/issue-118-video-l1-host-surface.md` 参照）。
 
 ## Why Now
 
@@ -137,12 +143,14 @@ Issue #118 — audio `process` ブロック経路とは別の **NONRT video デ�
 
 ### Decision points（design/ADR に委譲 — spec が確定しない内部構造・公開既定値）
 
-- **R-F1**: フレーム輸送の確定形 — 推奨: per-instance 専用 video segment + descriptor-over-Command/Reply（軸 1 (a)+(d)）。代替: `VideoFrameIn`/`VideoFrameDone` 型の新 doorbell kind。attach タイミング（`CreateInstance` 拡張で上限宣言 vs `initialize` 後の第 2 attach）も design
-- **R-F2**: render timeout — 推奨: video 専用 timeout（audio `command_timeout` 既定 10s とは別管理）。値・設定経路（固定 vs SpawnSpec）・timeout→`Failed` 写像は design。timeout した slot/instance の扱い（`Failed` 収束が自然だが猶予幅は design）
-- **R-F3**: pool depth — 推奨: depth=1 の in/out slot 対（同期 render に十分）+ 将来の ring 拡張余地。async 完了・pipeline 化は v1 では入れない
-- **R-F4**: video route isolation 既定 — 推奨: 初版は Dedicated のみ許可 or Bundled opt-in + HoL 文書化。**人間判断を仰ぐ公開既定値論点**（Bundled video で遅い render が兄弟 audio doorbell を塞ぐリスクの許容可否）
-- **R-F5**: host 統合面 — `Instantiate{plugin_id}` + `HostCommand` 拡張で video 動詞を足すか、video 専用 host 表面を別立てするか。**人間判断を仰ぐ公開 API 論点**
-- **R-F6**: `Scan`/capability 広告 — video factory の記述方法（descriptor kind/能力タグ）は design
+確定状況（2026-10-29 時点 — design `docs/designs/issue-118-video-l1.md` 決定サマリを正本とする）:
+
+- **R-F1**: フレーム輸送の確定形 — **✅ 確定（人間確認済み）**: per-instance 専用 video segment + descriptor-over-Command/Reply（軸 1 (a)+(d)）。`VideoRender{at, input:VideoFrameDesc}` → `Reply::Rendered{output:VideoFrameDesc}`、plane bytes は per-instance segment の in/out 領域。新 doorbell kind は作らない。attach タイミングは `CreateVideoInstance{plugin_id, shm_key, config}` で create 時に解決（ADR `docs/adr/issue-118-video-l1-create-path-segment.md`）
+- **R-F2**: render timeout — **design で確定案**: video 専用 `render_timeout`（`VideoOutOfProcessSpec` 字段・既定 60 s）を `VideoRender` reply wait に適用。`command_timeout`（既定 10 s）は handshake/lifecycle/param 動詞に適用。timeout→`Err(Ipc)`+子スコープ `Failed` 収束（帰属不能 wedge の #117 規則）
+- **R-F3**: pool depth — **design で確定案**: depth=1 固定（in/out 各 1 領域・`VideoProcessConfig` から一意に算出された canonical packing — `stride=row_bytes` tightly packed）。slot ring/depth 字段は v1 wire に持たせない
+- **R-F4**: video route isolation 既定 — **✅ 確定（人間確認済み）**: video-capable instance は **Dedicated のみ**。`VideoOutOfProcessSpec` に `isolation` 字段を持たせず `Bundled`+video を構造的に表現不能にする（runtime 拒否でなく「書けない」pin — AC5/R-V5 は「非対応の形で pin」側で満たす。ADR `docs/adr/issue-118-video-l1-host-surface.md`）
+- **R-F5**: host 統合面 — **✅ 確定（人間確認済み + design で形を確定）**: **別立て video 表面** — audio `HostCommand`/`Instantiate` には video 動詞を足さない。形は `PluginHost::video(&mut self) -> VideoPluginHost<'_>` 借用 façade + `VideoHostCommand`/`VideoHostReply`（`#[non_exhaustive]`）。`plugin_id` は単一名前空間・route kind タグ（cross-kind `Instantiate` → `Err(UnknownPluginId)`・登録衝突 → `Err(DuplicatePluginId)`・cross-kind 動詞 → `Err(Unsupported)`。ADR `docs/adr/issue-118-video-l1-host-surface.md`）
+- **R-F6**: `Scan`/capability 広告 — **design で確定案**: wire に kind 記述を足さない（`Hello.capabilities` は v3 でも reserved-zero 維持）。video 子の `Scan` は video factory の descriptor を返し、kind 混同は host 側 `spec.descriptor` field-match で検出。route kind は host 側のみの属性
 
 ### Verification
 

@@ -65,6 +65,8 @@ relations:
     - "docs/adr/issue-116-supervisor-placement.md"
     - "docs/discovery/issue-118-video-l1.md"
     - "docs/specs/issue-118-video-l1.md"
+    - "docs/designs/issue-118-video-l1.md"
+    - "docs/adr/issue-118-video-l1-create-path-segment.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -78,6 +80,7 @@ relations:
     - "docs/designs/issue-117-bundle-child-process.md"
     - "docs/specs/issue-116-supervisor.md"
     - "docs/designs/issue-116-supervisor.md"
+    - "docs/designs/issue-118-video-l1.md"
   deferred-by: []
 ---
 

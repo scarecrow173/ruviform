@@ -51,6 +51,7 @@ relations:
     - "../designs/issue-116-supervisor.md"
     - "../discovery/issue-118-video-l1.md"
     - "issue-118-video-l1.md"
+    - "../designs/issue-118-video-l1.md"
   verifies: []
   verified-by:
     - "../test-specs/issue-117-wire-v2-codec-tests.md"

@@ -48,6 +48,7 @@ relations:
     - "docs/adr/issue-116-supervisor-placement.md"
     - "docs/discovery/issue-118-video-l1.md"
     - "docs/tasks/l1-supervisor-e2e.md"
+    - "docs/designs/issue-118-video-l1.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"

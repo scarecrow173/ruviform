@@ -58,6 +58,7 @@ relations:
     - "docs/adr/issue-116-supervisor-placement.md"
     - "docs/discovery/issue-118-video-l1.md"
     - "docs/specs/issue-118-video-l1.md"
+    - "docs/designs/issue-118-video-l1.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"

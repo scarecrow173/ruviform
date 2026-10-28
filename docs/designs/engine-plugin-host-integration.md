@@ -62,6 +62,7 @@ relations:
   references: []
   defers:
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/designs/issue-118-video-l1.md"
   deferred-by: []
 ---
 

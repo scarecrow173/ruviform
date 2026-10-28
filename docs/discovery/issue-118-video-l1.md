@@ -42,6 +42,9 @@ relations:
     - "../specs/implement-video-foundation-api.md"
     - "../adr/video-proc-kernel-api-and-color-hdr-scope.md"
     - "../impl/ir/issue-76-l1-shm-data-plane-task-4-implementation.md"
+    - "../designs/issue-118-video-l1.md"
+    - "../adr/issue-118-video-l1-host-surface.md"
+    - "../adr/issue-118-video-l1-create-path-segment.md"
   refines: []
   refined-by: []
   derives-from:
@@ -57,6 +60,9 @@ relations:
     - "issue-114-real-adapter-l1-e2e.md"
   derived-by:
     - "../specs/issue-118-video-l1.md"
+    - "../designs/issue-118-video-l1.md"
+    - "../adr/issue-118-video-l1-host-surface.md"
+    - "../adr/issue-118-video-l1-create-path-segment.md"
   verifies: []
   verified-by: []
   references:
