@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NlQlLZkVZRtEVfF8Sdp"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 子構造再編（Shared/Inner→L1Child+InstShared split・demux・converge split・Destroying gate）"
 created: "2026-10-28"
 updated: "2026-10-28"
@@ -18,8 +18,6 @@ relations:
         path: "crates/ruviform-plugin-host/src/l1/shm.rs"
       - type: "file"
         path: "crates/ruviform-plugin-host/src/l1/data.rs"
-      - type: "file"
-        path: "crates/ruviform-plugin-host/src/composite.rs"
     deleted: []
     renamed: []
     moved: []

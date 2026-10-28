@@ -8,8 +8,9 @@
 //! Command replies and block doorbells share the `u64` seq field of
 //! `wire::Message::Reply`. To keep a `Reply` for a rejected `BlockIn`
 //! from ever aliasing a command waiter, the host partitions the seq
-//! space: command seqs come from `next_seq` (`0..`), and every
-//! `BlockIn` seq carries [`BLOCK_SEQ_FLAG`] (`1 << 63`). The child
+//! space: command seqs come from the child-wide
+//! `Shared::next_cmd_seq` (`0..`), and every `BlockIn` seq carries
+//! [`BLOCK_SEQ_FLAG`] (`1 << 63`). The child
 //! echoes the doorbell seq verbatim in `BlockDone` (success) or
 //! `Reply{seq, Err}` (rejection — slot parse failure, lifecycle
 //! rejection, plugin panic), so the reader demultiplexes on the flag
@@ -101,9 +102,9 @@ pub(crate) const fn is_block_seq(seq: u64) -> bool {
 /// A `submit`-channel element: the doorbell `seq` plus the
 /// [`Staging::generation`] it was staged under. The driver drops a
 /// submit whose generation is no longer the armed ring's — it can
-/// only have been queued before a re-activation swapped
-/// `Inner::staging`, and serializing it would doorbell the new
-/// ring's zeroed stage under a real seq. A dropped seq is still
+/// only have been queued before a re-activation swapped the
+/// instance's `InstShared::staging`, and serializing it would
+/// doorbell the new ring's zeroed stage under a real seq. A dropped seq is still
 /// completed: the driver synthesizes a [`mark_failed`] result onto
 /// the result channel so the strict-alternation gate frees the
 /// slot and the leg resolves the block as the defined pass-through

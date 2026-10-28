@@ -1,7 +1,10 @@
-//! The `pub(crate)` L1 out-of-process instance machinery — one child
-//! process per instance, a framed stdio control plane, two I/O threads
-//! and the idempotent `Failed` convergence required by the L1 design
-//! (`docs/designs/plugin-l1-out-of-process.md`).
+//! The `pub(crate)` L1 out-of-process instance machinery — the
+//! shared-child bundle model of Issue #117: one child process hosts
+//! N plugin instances (the dedicated route is the capacity-1 case,
+//! built over exactly the same machinery), a framed stdio control
+//! plane, two per-child I/O threads and the scope-split `Failed`
+//! convergence the `docs/designs/issue-117-bundle-child-process.md`
+//! demux table fixes.
 //!
 //! ## Scope
 //!
@@ -25,12 +28,12 @@
 //! and `self::`/`super::` only. Do not `use crate::...` in this
 //! module tree.
 //!
-//! ## Thread model (per instance = 1 child + 2 threads)
+//! ## Thread model (per child = 1 process + 2 threads)
 //!
 //! | thread | owns | duties |
 //! | --- | --- | --- |
-//! | `driver` | `Shared.child` (`Mutex<Child>` — operated only here, but shared so a converging thread can `kill` a wedged child even while this thread is blocked in `write_all`) · child stdin | serializes outgoing frames · drains the data-plane `submit` channel (stale-generation or post-terminal seqs are dropped *with a synthesized `mark_failed` result* through the shared `result_tx` so the leg's alternation gate never wedges): each doorbell'd seq becomes a shm in-slot write + `BlockIn` · `try_wait` crash watch every [`DRIVER_POLL_INTERVAL`] · shutdown watchdog (grace → `child.kill()`) |
-//! | `reader` | child stdout | demuxes child→parent frames (unflagged `Reply` → keyed waiter wake · flagged `Reply` → `mark_failed` block completion · `BlockDone` → shm out-slot read + result-channel push) · first frame must be `Hello` · EOF → `seen_eof` convergence path |
+//! | `driver` | `Shared.child` (`Mutex<Child>` — operated only here, but shared so a converging thread can `kill` a wedged child even while this thread is blocked in `write_all`) · child stdin | serializes outgoing frames · installs/uninstalls per-instance data-plane ends on `DriverCmd::AddInstance`/`RemoveInstance` (the `submits`/`views` maps are keyed by instance) · drains every instance's submit channel (a seq dropped without a doorbell — stale generation, `Destroying` gate, dead or shutting-down child — still gets exactly one synthesized `mark_failed` completion so its leg's alternation gate never wedges): each doorbell'd seq becomes a shm in-slot write + `BlockIn{instance, seq}` · `try_wait` crash watch every [`DRIVER_POLL_INTERVAL`] · shutdown watchdog (grace → `child.kill()`) |
+//! | `reader` | child stdout | demuxes child→parent frames by the Issue #117 decision table — unflagged `Reply` → `(instance, seq)` waiter correlation · flagged `Reply`/`BlockDone` → `(instance, seq)` block completion + lazy per-instance `View` attach · first frame must be `Hello` · EOF → `seen_eof` convergence path |
 //!
 //! The caller thread never performs blocking pipe I/O except the
 //! bounded waits documented on [`L1Instance::execute`] /
@@ -41,32 +44,55 @@
 //! acquiring the other, so no cross-lock deadlock exists. `child`
 //! sections stay tiny (one `try_wait`/`kill`/`wait` call; `reap`
 //! re-acquires per poll) so a converging `kill` never queues behind
-//! a long hold. `Shared.result_tx` — the result-channel producer
-//! shared by both I/O threads — is a leaf mutex held for a single
-//! bounded `try_push` and never nested inside `inner`/`child`.
+//! a long hold. Each instance's `InstShared.result_tx` is plain
+//! data — the `!Sync` producer's bounded `try_push`es run inside
+//! the `inner` section that already guards the `instances` map.
 //!
-//! ## `Failed` convergence
+//! ## `Failed` convergence — child scope vs instance scope
 //!
 //! Crash detection has two paths that converge idempotently:
 //! (i) the reader observes stdout EOF (`seen_eof`), (ii) the driver's
 //! `Child::try_wait` returns `Some(ExitStatus)` (reaping as it goes).
-//! Whichever fires first performs the one-time transition —
-//! `terminal = Failed`, the local lifecycle mirror moves to
-//! `LifecycleState::Failed`, every pending command waiter is woken
-//! with `Err(HostError::Ipc)`, and exactly one `ChildExit`
-//! notification is queued. Any exit while the instance is live —
-//! including a voluntary `exit(0)` — is `Failed` (a protocol
-//! violation); only an exit after `Shutdown` was initiated is a clean
-//! teardown (`terminal = Clean`, mirror → `Destroyed`, no
-//! notification). There is no automatic restart.
+//! Whichever fires first performs the one-time `converge_child` —
+//! `terminal = Failed`, every registered instance's lifecycle mirror
+//! moves to `LifecycleState::Failed`, every pending command waiter is
+//! woken with `Err(HostError::Ipc)`, every in-flight doorbell gets a
+//! synthesized `mark_failed` completion, and each *minted* instance
+//! (a `Creating` entry minted no public handle — mid-create deaths
+//! report `Err(Ipc)` on the `Instantiate` caller instead) gets
+//! exactly one `ChildExit` notification, all carrying the same exit
+//! status. Any exit while the child is live — including a voluntary
+//! `exit(0)` — is `Failed` (a protocol violation); only an exit
+//! after `Shutdown` was initiated is a clean teardown
+//! (`terminal = Clean`, mirrors → `Destroyed`, no notification).
+//! There is no automatic restart.
 //!
-//! Protocol-level failures (a malformed or oversized frame, a second
-//! `Hello`, an unexpected `BlockDone`, a stdin write error, a
-//! `command_timeout`) converge the same way: the converging thread
-//! itself kills the child through `Shared.child` — that is what
-//! unwedges a driver blocked in a pipe `write_all` on a live-but-
-//! not-reading child (the kill turns the write into EPIPE) — and
-//! pending waiters wake `Err(HostError::Ipc)`.
+//! The per-instance half — `converge_instance(i)` — is what keeps
+//! `Failed` granular on a shared child: a violation the demux table
+//! attributes to live instance `i` (a `BlockDone`/flagged `Reply`
+//! for an `(i, seq)` never rung) fails `i` alone — mirror `Failed`,
+//! its waiters `Err(Ipc)`, its doorbells `mark_failed`, one
+//! `ChildExit{code:None, signal:None}` notification (the child is
+//! alive — there is no exit status to report) — while `terminal`,
+//! `seen_eof`, `shutdown_initiated` and every sibling stay
+//! untouched. The entry remains registered — the runner-side slot
+//! still exists — until `DestroyInstance` reclaims it.
+//!
+//! Child-scope violations — an unattributable frame (`Hello` twice,
+//! a parent→child kind, a waiter-less `Reply` on a *live* instance,
+//! a `Reply` whose `instance` echo mismatches the waiter's stamp, a
+//! `WIRE_INSTANCE_NONE` or out-of-range stamp on a block frame), a
+//! malformed frame, a stdin write error, a `command_timeout` —
+//! converge the same way: the converging thread itself kills the
+//! child through `Shared.child` — that is what unwedges a driver
+//! blocked in a pipe `write_all` on a live-but-not-reading child —
+//! and pending waiters wake `Err(HostError::Ipc)`. Frames targeting
+//! registered-but-not-live entries (`Creating`/`Destroying`/
+//! `Failed`) or removed instances are inert drops — never
+//! violations; a `BlockDone{i, seq}` whose doorbell is still in
+//! flight completes normally even while `i` is `Destroying` (the
+//! doorbell window), and any frame arriving after `Shutdown` was
+//! initiated is a non-event.
 
 pub(crate) mod data;
 pub(crate) mod shm;
@@ -92,11 +118,11 @@ use ruviform_plugin_core::{
 const DRIVER_POLL_INTERVAL: Duration = Duration::from_micros(200);
 
 /// Poll cadence for the bounded driver join in
-/// [`L1Instance::join_threads`].
+/// [`L1Child::join_driver`].
 const DRIVER_JOIN_POLL: Duration = Duration::from_millis(2);
 
 /// Extra time past `command_timeout` (the shutdown grace) that
-/// `join_threads` waits for the driver before force-killing a wedged
+/// `join_driver` waits for the driver before force-killing a wedged
 /// child — covers the driver's own watchdog kill + reap turnaround.
 const DRIVER_JOIN_MARGIN: Duration = Duration::from_secs(1);
 
@@ -105,13 +131,6 @@ const DRIVER_JOIN_MARGIN: Duration = Duration::from_secs(1);
 /// `crate::composite` and are not shared here — this only needs to
 /// discriminate instances for key uniquing).
 static INSTANCE_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-/// The dedicated route's fixed registry handle: wire-v2 stamps every
-/// instance-scoped envelope of a capacity-1 child with it (`Scan`
-/// bypasses it with `WIRE_INSTANCE_NONE`). T2/T3's route pools mint
-/// per-bundle handles; `L1Instance::instance` then carries the mint
-/// instead of this constant.
-const DEDICATED_INSTANCE: u32 = 0;
 
 /// How the child process ended — reported on the notification queue
 /// inside `HostNotification::InstanceFailed`.
@@ -197,11 +216,12 @@ enum Terminal {
 }
 
 /// One pending command: the envelope `instance` the request was
-/// stamped with plus the unbounded channel the reader sends the
+/// stamped with (the reply's `instance` must echo it — a mismatch is
+/// an attribution failure, child-scope `Failed` per the Issue #117
+/// demux table) and the unbounded channel the reader sends the
 /// child's reply (or the converger sends `Err(Ipc)`) onto. The
-/// reply's `instance` must echo the expected value — a mismatch is
-/// an attribution failure, converged `Failed` like any other
-/// child-scope violation (Issue #117 demux table).
+/// `instance` stamp is also what `converge_instance` drains by —
+/// per-instance failure granularity on pending commands.
 struct Waiter {
     /// The `instance` the matching `Reply` must echo — the
     /// request's stamped envelope value (`WIRE_INSTANCE_NONE` for
@@ -228,57 +248,155 @@ enum Notify {
     Sent,
 }
 
-/// Mutex-protected proxy state shared by the caller, driver and
-/// reader threads. Locking is legal everywhere here — none of these
-/// threads is an RT thread (the RT leg in `l1::data` never takes
-/// this mutex; it reads the [`Shared::rt_state`] snapshot instead).
-struct Inner {
-    /// In-flight commands by correlation seq.
-    waiters: HashMap<u64, Waiter>,
-    /// Local lifecycle mirror — updated on successful lifecycle
-    /// commands and by convergence; the child's `Lifecycle` stays the
-    /// authority, this mirror only reflects reported outcomes.
-    /// Kept in lock-step with `Shared::rt_state` via
-    /// [`Shared::set_mirror`].
+/// Instance registration phase — the demux liveness axis and the
+/// `DestroyInstance` doorbell-window driver (Issue #117 demux
+/// table). `Creating`/`Destroying`/`Failed` are all
+/// **registered-but-not-live**: their late frames are inert drops,
+/// never violations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InstPhase {
+    /// Registered before the `CreateInstance` reply arrives —
+    /// inert demux target; `converge_child` converges it but never
+    /// notifies (no handle was minted — the `Instantiate` caller
+    /// gets `Err(Ipc)` instead).
+    Creating,
+    /// `CreateInstance` replied `Ok` — a live instance:
+    /// attributable violations converge it alone
+    /// (`converge_instance`), child-scope events converge the whole
+    /// child.
+    Live,
+    /// `DestroyInstance` was serialized to stdin — the doorbell
+    /// window: in-flight `(i, seq)` doorbells still complete
+    /// normally, new submits synthesize `mark_failed`, and the
+    /// entry is removed when the reply lands.
+    Destroying,
+    /// Converged `Failed` (mirror, waiters, doorbells and the
+    /// one-shot notification are done) — stays registered until
+    /// `DestroyInstance` reclaims the runner registry slot.
+    Failed,
+}
+
+/// The per-instance segment descriptor the I/O threads attach by
+/// `key` — depths ride along for slot indexing.
+#[derive(Clone)]
+struct SegmentInfo {
+    /// Named segment `os_id` — `shm::View::attach`'s input.
+    key: String,
+    /// In-slot ring depth (`D`) the instance's segment was created
+    /// with — the `BlockIn` doorbell's slot-index modulus.
+    in_depth: u32,
+    /// Out-slot ring depth — the `BlockDone` slot-index modulus.
+    out_depth: u32,
+}
+
+/// Per-instance state — the value half of `Inner.instances` (wire
+/// handle → instance). Every field mutates only under the
+/// `Shared.inner` lock; `rt_state` is additionally readable
+/// lock-free by the RT leg and the `L1Instance` facade (they clone
+/// the `Arc`).
+struct InstShared {
+    /// The const-cheap lifecycle snapshot the RT leg inspects —
+    /// written `Release` by `set_mirror`, read `Acquire` by
+    /// `L1Instance::process` and a detached endpoint's mirror.
+    /// Fails closed: the RT side never takes the mutex.
+    rt_state: Arc<AtomicU8>,
+    /// Local lifecycle mirror — the child's `Lifecycle` stays the
+    /// authority; this only reflects reported outcomes.
     mirror: LifecycleState,
-    /// Doorbell seqs the driver has written `BlockIn` for and the
-    /// reader has not yet completed — the `BlockDone` / flagged
-    /// `Reply` legality set. Seqs are partitioned by
-    /// [`data::BLOCK_SEQ_FLAG`], so they can never alias `waiters`
-    /// keys.
-    block_in_flight: HashSet<u64>,
-    /// The armed data-plane staging ring — `Some` after a successful
-    /// `Activate`, replaced on re-activation. `Arc` so the I/O
-    /// threads borrow it under the lock without holding the lock
-    /// across shm work.
+    /// The instance's own `ChildExit` notification endpoint — a
+    /// child crash fans one notification out to every minted
+    /// instance's queue.
+    notify_tx: mpsc::Sender<ChildExit>,
+    /// One-shot `Failed` notification state.
+    notify: Notify,
+    /// The armed data-plane staging ring — `Some` after a
+    /// successful `Activate`, replaced on re-activation. `Arc` so
+    /// the I/O threads borrow it under the lock without holding
+    /// the lock across shm work.
     staging: Option<Arc<data::Staging>>,
-    /// `Some` once convergence ran — exactly once.
+    /// Segment descriptor — the reader's lazy `View` attach and
+    /// both threads' slot indexing read it.
+    shm: SegmentInfo,
+    /// The instance's result-channel producer — `!Sync`, behind a
+    /// **leaf lock** so the bounded `try_push`es run inside the
+    /// `inner` critical section that guards the map through an
+    /// `&InstShared` (both I/O threads complete seqs here: the
+    /// reader pushes real `BlockDone`/rejection completions, the
+    /// driver pushes the synthesized `mark_failed` every
+    /// doorbell-less drop owes the leg).
+    result_tx: Mutex<ruviform_rt::Producer<u64>>,
+    /// Demux liveness + the `DestroyInstance` doorbell window.
+    phase: InstPhase,
+}
+
+impl InstShared {
+    /// The demux-table liveness test: registered, unconverged and
+    /// not `Destroying` — `Creating` counts as registered-but-not-
+    /// live (no handle minted; its only legal frame is the
+    /// waiter-correlated `CreateInstance` reply itself).
+    fn live(&self) -> bool {
+        matches!(self.phase, InstPhase::Live)
+    }
+
+    /// Whether `CreateInstance` completed — only minted instances
+    /// receive `InstanceFailed` notifications on a child crash (a
+    /// mid-create death reports `Err(Ipc)` to the `Instantiate`
+    /// caller instead; emitting `Failed` for a handle that never
+    /// existed would be a lie).
+    fn minted(&self) -> bool {
+        !matches!(self.phase, InstPhase::Creating)
+    }
+
+    /// The single mirror-mutation point: updates `mirror` and
+    /// publishes the same state to the lock-free `rt_state`
+    /// snapshot the RT leg reads — `Release` pairs the `Acquire`
+    /// load in `L1Instance::process`.
+    fn set_mirror(&mut self, state: LifecycleState) {
+        self.mirror = state;
+        self.rt_state
+            .store(data::mirror_encode(state), Ordering::Release);
+    }
+}
+
+/// Mutex-protected child-shared state — everything the caller,
+/// driver and reader threads touch under one lock. Locking is
+/// legal everywhere here — none of these threads is an RT thread
+/// (each instance's RT leg in `l1::data` never takes this mutex;
+/// it reads its `InstShared::rt_state` snapshot instead).
+struct Inner {
+    /// In-flight commands by correlation seq — the seq space is
+    /// **child-wide** (the mint lives on `Shared.next_cmd_seq`);
+    /// only the `Waiter.instance` stamp is per-instance.
+    waiters: HashMap<u64, Waiter>,
+    /// Registered instances by wire handle — `Failed`-until-
+    /// `Destroy` and `Destroying` entries stay registered
+    /// (registered-but-not-live for the demux table); removal is
+    /// `DestroyInstance`-reply-granular. The map's keyset is the
+    /// lowest-free mint oracle and its `len()` is the `live_count`
+    /// shutdown-on-empty counts.
+    instances: HashMap<u32, InstShared>,
+    /// Doorbells in flight — `(instance, seq)` because block seqs
+    /// are per-instance while the doorbell set is shared. Seqs are
+    /// partitioned by [`data::BLOCK_SEQ_FLAG`], so they can never
+    /// alias `waiters` keys.
+    block_in_flight: HashSet<(u32, u64)>,
+    /// `Some` once `converge_child` ran — exactly once.
     terminal: Option<Terminal>,
     /// `Shutdown` was written on the wire — a later child exit is
-    /// clean teardown rather than `Failed`. Set only on the driver,
-    /// immediately before the `Shutdown` write and only while no
-    /// terminal condition has converged, so a child that crashed
-    /// before the wire `Shutdown` still converges `Failed` and keeps
-    /// its notification.
+    /// clean teardown rather than `Failed`. Set only on the
+    /// driver, immediately before the `Shutdown` write and only
+    /// while no terminal condition has converged, so a child that
+    /// crashed before the wire `Shutdown` still converges `Failed`
+    /// and keeps its notification.
     shutdown_initiated: bool,
     /// The reader observed stdout EOF (one `Failed` path).
     seen_eof: bool,
-    /// One-shot `Failed` notification state.
-    notify: Notify,
 }
 
-/// Shared proxy state: the mutex-guarded [`Inner`], the shared child
-/// handle and the notification queue endpoint threads push
-/// `ChildExit` into.
+/// Shared child state: the mutex-guarded [`Inner`], the shared
+/// child handle and the child-wide command-seq mint.
 struct Shared {
     inner: Mutex<Inner>,
-    /// The const-cheap lifecycle snapshot the RT leg inspects —
-    /// written with `Release` by [`Shared::set_mirror`] at every
-    /// `Inner::mirror` mutation, read lock-free with `Acquire` by
-    /// `L1Instance::process`. `Arc` so a detached endpoint holds
-    /// the same atomic and observes identical mirror updates.
-    /// Fails closed: the RT leg never needs the mutex.
-    rt_state: Arc<AtomicU8>,
     /// The spawned child, installed by the driver immediately after
     /// `spawn` and before `driver_main` runs. Shared so any
     /// converging thread can `kill()` a wedged child even while the
@@ -289,21 +407,10 @@ struct Shared {
     /// **Lock order:** `inner` and `child` sections are always
     /// disjoint (see module docs) — no deadlock between the two.
     child: OnceLock<Mutex<Child>>,
-    notify_tx: mpsc::Sender<ChildExit>,
-    /// The result-channel producer — shared because *two* non-RT
-    /// threads complete seqs: the reader pushes real `BlockDone`/
-    /// rejection completions, and the driver pushes a synthesized
-    /// `mark_failed` completion for every `submit` it drops without
-    /// a doorbell (a stale-generation or post-terminal seq never
-    /// enters `block_in_flight`, so it can never produce a real
-    /// result — and an unanswered seq wedges its slot's
-    /// strict-alternation gate forever). `Producer` is
-    /// single-owner, hence the `Mutex`: both lockers are non-RT
-    /// threads and the critical section is a single bounded
-    /// `try_push`. A leaf lock — never held while acquiring
-    /// `inner` or `child` — so the disjoint-sections rule in the
-    /// module docs is preserved.
-    result_tx: Mutex<ruviform_rt::Producer<u64>>,
+    /// Child-wide command-seq mint — `Relaxed` fetch-add; the
+    /// [`data::BLOCK_SEQ_FLAG`] space is never drawn from it, so
+    /// command seqs can never alias doorbell seqs.
+    next_cmd_seq: AtomicU64,
 }
 
 impl Shared {
@@ -314,8 +421,8 @@ impl Shared {
     }
 
     /// Locks the installed child handle (poison-tolerant like
-    /// [`Shared::lock`]). `None` only before the driver installs the
-    /// child — unreachable once `driver_main` runs.
+    /// [`Shared::lock`]). `None` only before the driver installs
+    /// the child — unreachable once `driver_main` runs.
     fn child_lock(&self) -> Option<MutexGuard<'_, Child>> {
         self.child.get().map(|child| {
             child
@@ -324,31 +431,56 @@ impl Shared {
         })
     }
 
-    /// The single mirror-mutation point: updates `Inner::mirror` and
-    /// publishes the same state to the lock-free `rt_state` snapshot
-    /// the RT leg reads. `Release` pairs the `Acquire` load in
-    /// `L1Instance::process`.
-    fn set_mirror(&self, inner: &mut Inner, state: LifecycleState) {
-        inner.mirror = state;
-        self.rt_state
-            .store(data::mirror_encode(state), Ordering::Release);
+    /// Pushes one element onto instance `i`'s result channel under
+    /// the `inner` lock — channel capacity is `D` and at most `D`
+    /// seqs are ever in flight per instance, each yielding exactly
+    /// one completion element, so `try_push` cannot overflow
+    /// in-protocol; a `Full` is tolerated like the reader's own
+    /// pushes, and a missing entry means the leg died with its
+    /// `Destroy` (the seq it owed is moot).
+    fn push_result(&self, instance: u32, el: u64) {
+        let inner = self.lock();
+        if let Some(inst) = inner.instances.get(&instance) {
+            let _ = lock_mutex(&inst.result_tx).try_push(el);
+        }
     }
+}
 
-    /// Pushes one element onto the RT leg's result channel — the
-    /// shared-producer entry point both I/O threads use (the reader
-    /// for real completions, the driver for synthesized
-    /// `mark_failed` completions on doorbell-less drops). Channel
-    /// capacity is `D` and at most `D` seqs are ever in flight —
-    /// each yields exactly one completion element — so `try_push`
-    /// cannot overflow in-protocol; a `Full` is tolerated like the
-    /// reader's own pushes. Poison-tolerant like [`Shared::lock`].
-    fn push_result(&self, el: u64) {
-        let _ = self
-            .result_tx
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .try_push(el);
-    }
+/// Poison-tolerant `Mutex::lock` — same convention as
+/// [`Shared::lock`].
+fn lock_mutex<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// One child process and its two I/O threads — the shareable unit
+/// N `L1Instance`s live on (the dedicated route is the capacity-1
+/// case, built through exactly the same machinery). `L1Child`
+/// carries what the last referrer's bounded teardown needs — the
+/// driver channel endpoint and both join handles — plus the
+/// `Arc<Shared>` every facade clones; the process handle itself
+/// stays inside `Shared` so a converging I/O thread can `kill` it.
+///
+/// The I/O threads hold `Arc<Shared>` only — never `Arc<L1Child>`
+/// — so `Arc::strong_count` on a facade's `child` counts exactly
+/// the live referrers (facades, and a T3 pool slot later): `1`
+/// inside a `Drop` means the last referrer is tearing down.
+pub(crate) struct L1Child {
+    shared: Arc<Shared>,
+    /// The driver's command channel — `Option` so teardown can
+    /// disconnect it (the driver's `Disconnected` arm is itself a
+    /// bounded teardown path: kill + reap + converge).
+    driver_tx: Mutex<Option<mpsc::Sender<DriverCmd>>>,
+    driver_join: Mutex<Option<thread::JoinHandle<()>>>,
+    /// Detached, never joined — a stdio-inheriting grandchild can
+    /// hold the child's stdout pipe open past its death
+    /// (`--leave-heir` pins ~15 s), so joining could stall the
+    /// teardown bound.
+    reader_join: Mutex<Option<thread::JoinHandle<()>>>,
+    /// `command_timeout` — doubles as the shutdown-grace and
+    /// join-bounds window.
+    command_timeout: Duration,
 }
 
 /// `child.kill()` through the shared handle — uncatchable on both
@@ -363,12 +495,13 @@ fn kill_child(shared: &Shared) {
     }
 }
 
-/// Orders for the driver thread — it serializes outgoing frames and
-/// runs the process lifecycle operations through this channel.
+/// Orders for the driver thread — it serializes outgoing frames,
+/// installs/uninstalls per-instance data-plane ends and runs the
+/// process lifecycle operations through this channel.
 enum DriverCmd {
     /// Serialize and write a `Command` frame — `instance` is the
     /// stamped wire-v2 envelope (`WIRE_INSTANCE_NONE` for `Scan`,
-    /// the dedicated handle `0` for everything else under T1).
+    /// the minted handle for everything else).
     Command {
         seq: u64,
         instance: u32,
@@ -377,42 +510,95 @@ enum DriverCmd {
     /// Write `Shutdown`, then give the child `command_timeout` of
     /// grace before `kill()`.
     Shutdown,
+    /// Install an instance's data-plane ends on the driver: the
+    /// submit-channel consumer and the `shm_key` for this thread's
+    /// own `shm::View` attach (`Shmem` is `!Send` — the mapping
+    /// must happen on the driver's stack frame). A failed attach
+    /// is a host-side segment loss — child-scope convergence.
+    AddInstance {
+        instance: u32,
+        submit: ruviform_rt::Consumer<data::Submit>,
+        shm_key: String,
+    },
+    /// Uninstall an instance's ends — the consumer and view drop
+    /// with the entry. Sent at `DestroyInstance`-reply-granular
+    /// removal (and rollback), so a wire handle reused by a later
+    /// `AddInstance` never sees the previous generation's queued
+    /// submits.
+    RemoveInstance { instance: u32 },
 }
 
-/// The idempotent convergence every terminal path funnels through.
-/// `exit` is `Some` when the caller observed the final `ExitStatus`
-/// (the driver's `try_wait`/`reap`) and `None` when it did not
-/// (stdout EOF, protocol violation, write error, timeout).
+/// Lowest-free wire-handle mint — `[0, WIRE_MAX_INSTANCES)` minus
+/// the `instances` keyset; `None` at capacity (the caller folds it
+/// to `HostError::InstanceLimit`). Runs inside the `inner` lock so
+/// mint-and-insert is atomic, and reuse is reply-granular: a
+/// reclaimed handle only frees once the old entry left the map, so
+/// a stale `(i, ·)` frame from the previous generation demuxes
+/// `Creating`/inert — never attributed to the new instance.
+fn mint_instance(inner: &Inner) -> Option<u32> {
+    (0..wire::WIRE_MAX_INSTANCES).find(|i| !inner.instances.contains_key(i))
+}
+
+/// `DestroyInstance`-reply-granular entry removal: residual
+/// `(i, seq)` doorbells first get a synthesized `mark_failed`
+/// completion (the leg's alternation gate must be freed — this is
+/// the reuse-safety half of the doorbell window), then the entry
+/// leaves `instances`; every later `(i, ·)` frame demuxes to the
+/// inert post-removal row.
+fn remove_instance(inner: &mut Inner, instance: u32) {
+    let residuals: Vec<u64> = inner
+        .block_in_flight
+        .iter()
+        .filter(|(i, _)| *i == instance)
+        .map(|(_, seq)| *seq)
+        .collect();
+    for seq in residuals {
+        inner.block_in_flight.remove(&(instance, seq));
+        if let Some(inst) = inner.instances.get(&instance) {
+            let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+        }
+    }
+    inner.instances.remove(&instance);
+}
+
+/// The child-scope convergence every child-terminal path funnels
+/// through. `exit` is `Some` when the caller observed the final
+/// `ExitStatus` (the driver's `try_wait`/`reap`) and `None` when it
+/// did not (stdout EOF, protocol violation, write error, timeout).
 ///
-/// First caller wins the transition; on `Failed` it queues the
-/// single `ChildExit` notification — immediately when the status is
-/// already known, or once the driver reaps it ([`Notify::Pending`]),
-/// so the notification always carries the real exit status
-/// regardless of which crash path fired first. Either way pending
-/// waiters are woken with `Err(HostError::Ipc)` — a command can never
-/// hang on a dead context.
+/// First caller wins the transition; on `Failed` it fans one
+/// `ChildExit` notification out to every *minted* instance —
+/// immediately when the status is already known, or once the driver
+/// reaps it ([`Notify::Pending`] completes per-instance), so each
+/// notification always carries the real exit status regardless of
+/// which crash path fired first. Either way pending waiters are
+/// woken with `Err(HostError::Ipc)` — a command can never hang on a
+/// dead context — and every in-flight doorbell is completed with a
+/// synthesized `mark_failed` so no leg's alternation gate wedges.
 ///
-/// A `Failed` transition also force-kills the child *here* — through
-/// `Shared.child`, not via an order on the driver's channel: a wedged
-/// child that stops draining stdin leaves the driver blocked in
-/// `write_all`
-/// (frames can exceed the ~64 KiB pipe capacity), and this direct
-/// kill is what turns that write into EPIPE and lets the driver
-/// unwind. `kill` is uncatchable on both OSes, so the driver's
-/// `try_wait`/`reap` then observes the real exit status and a
-/// `Pending` notification completes with it.
-fn converge(shared: &Shared, exit: Option<ChildExit>) {
+/// A `Failed` transition also force-kills the child *here* —
+/// through `Shared.child`, not via an order on the driver's
+/// channel: a wedged child that stops draining stdin leaves the
+/// driver blocked in `write_all` (frames can exceed the ~64 KiB
+/// pipe capacity), and this direct kill is what turns that write
+/// into EPIPE and lets the driver unwind. `kill` is uncatchable on
+/// both OSes, so the driver's `try_wait`/`reap` then observes the
+/// real exit status and `Pending` notifications complete with it.
+fn converge_child(shared: &Shared, exit: Option<ChildExit>) {
     let failed = {
         let mut inner = shared.lock();
         if inner.terminal.is_some() {
             // Already converged — but a late exit status still
-            // completes a pending notification, exactly once.
+            // completes pending notifications, exactly once each.
             if matches!(inner.terminal, Some(Terminal::Failed))
-                && inner.notify == Notify::Pending
                 && let Some(exit) = exit
             {
-                inner.notify = Notify::Sent;
-                let _ = shared.notify_tx.send(exit);
+                for inst in inner.instances.values_mut() {
+                    if inst.notify == Notify::Pending {
+                        inst.notify = Notify::Sent;
+                        let _ = inst.notify_tx.send(exit);
+                    }
+                }
             }
             return;
         }
@@ -422,28 +608,47 @@ fn converge(shared: &Shared, exit: Option<ChildExit>) {
         } else {
             Some(Terminal::Clean)
         };
-        shared.set_mirror(
-            &mut inner,
-            if failed {
+        for inst in inner.instances.values_mut() {
+            // `minted()` BEFORE the phase flip — a `Creating`
+            // entry never minted a public handle, so it converges
+            // silently: its `Instantiate` caller already gets
+            // `Err(Ipc)` via the drained waiter below, and
+            // emitting `Failed` for a handle that never existed
+            // would be a lie.
+            let minted = inst.minted();
+            inst.set_mirror(if failed {
                 LifecycleState::Failed
             } else {
                 LifecycleState::Destroyed
-            },
-        );
-        // Unbounded-channel sends never block — safe under the lock,
-        // and keeping them inside the critical section makes
-        // "exactly once" trivially atomic.
+            });
+            if failed {
+                inst.phase = InstPhase::Failed;
+                // Already-`Sent` entries keep their exactly-once
+                // guarantee.
+                if minted && inst.notify == Notify::Idle {
+                    inst.notify = match exit {
+                        Some(exit) => {
+                            let _ = inst.notify_tx.send(exit);
+                            Notify::Sent
+                        }
+                        None => Notify::Pending,
+                    };
+                }
+            }
+        }
+        // Unbounded-channel sends never block — safe under the
+        // lock, and keeping them inside the critical section
+        // makes "exactly once" trivially atomic.
         for (_, waiter) in inner.waiters.drain() {
             let _ = waiter.tx.send(Err(HostError::Ipc));
         }
-        if failed {
-            inner.notify = match exit {
-                Some(exit) => {
-                    let _ = shared.notify_tx.send(exit);
-                    Notify::Sent
-                }
-                None => Notify::Pending,
-            };
+        // Free every in-flight doorbell with a synthesized
+        // `mark_failed` so live legs drain their alternation
+        // gates — one seq, exactly one completion.
+        for (instance, seq) in std::mem::take(&mut inner.block_in_flight) {
+            if let Some(inst) = inner.instances.get(&instance) {
+                let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+            }
         }
         failed
     };
@@ -451,6 +656,336 @@ fn converge(shared: &Shared, exit: Option<ChildExit>) {
         // Disjoint critical sections only — `inner` is already
         // released before `child` is taken (module lock order).
         kill_child(shared);
+    }
+}
+
+/// The instance-scope convergence — the attributable-violation
+/// half of the demux table. Fails `instance` alone: mirror
+/// `Failed`, its pending waiters `Err(Ipc)`, its in-flight
+/// doorbells `mark_failed`, and exactly one
+/// `ChildExit{code:None, signal:None}` notification (the child is
+/// alive — there is no exit status to report). The entry stays
+/// registered until `DestroyInstance` reclaims the runner registry
+/// slot.
+///
+/// **Invariant:** child state (`Inner.terminal`, `seen_eof`,
+/// `shutdown_initiated`) and every sibling's entry are untouched —
+/// that is what keeps `Failed` granular on a shared child.
+fn converge_instance(shared: &Shared, instance: u32) {
+    let mut inner = shared.lock();
+    {
+        let Some(inst) = inner.instances.get_mut(&instance) else {
+            return;
+        };
+        if !inst.live() {
+            // Already converged/`Destroying`/`Creating` —
+            // idempotent; the demux only routes `live` violations
+            // here anyway.
+            return;
+        }
+        inst.phase = InstPhase::Failed;
+        inst.set_mirror(LifecycleState::Failed);
+        if inst.notify == Notify::Idle {
+            inst.notify = Notify::Sent;
+            let _ = inst.notify_tx.send(ChildExit {
+                code: None,
+                signal: None,
+            });
+        }
+    }
+    // This instance's pending commands — the per-instance drain
+    // that makes `Failed` granular (siblings' waiters stay live).
+    let seqs: Vec<u64> = inner
+        .waiters
+        .iter()
+        .filter(|(_, waiter)| waiter.instance == instance)
+        .map(|(&seq, _)| seq)
+        .collect();
+    for seq in seqs {
+        if let Some(waiter) = inner.waiters.remove(&seq) {
+            let _ = waiter.tx.send(Err(HostError::Ipc));
+        }
+    }
+    // This instance's doorbells — the same `mark_failed` release
+    // a child-scope convergence performs, scoped to `instance`.
+    let seqs: Vec<u64> = inner
+        .block_in_flight
+        .iter()
+        .filter(|(i, _)| *i == instance)
+        .map(|(_, seq)| *seq)
+        .collect();
+    for seq in seqs {
+        inner.block_in_flight.remove(&(instance, seq));
+        if let Some(inst) = inner.instances.get(&instance) {
+            let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+        }
+    }
+}
+
+/// What the reader does with one inbound frame — the Issue #117
+/// demux decision table (design L304–320) as data. [`demux`]
+/// decides under the `inner` lock; [`demux_execute`] performs the
+/// verdict.
+enum Demux {
+    /// Waiter-correlated `Reply` — deliver `result` to `tx` (an
+    /// `Err(HostError)` payload is the defined per-command
+    /// rejection, never a convergence).
+    Deliver {
+        tx: mpsc::Sender<Result<wire::Reply, HostError>>,
+        result: Result<wire::Reply, HostError>,
+    },
+    /// Doorbell `(instance, seq)` completion — `Some` is a real
+    /// `BlockDone` (out-slot read + `seq` push), `None` a flagged
+    /// `Reply` rejection (`mark_failed` push).
+    Complete {
+        instance: u32,
+        seq: u64,
+        result: Option<ProcessResult>,
+    },
+    /// Registered-but-not-live (`Creating`/`Destroying`/`Failed`)
+    /// or unregistered-instance frame — silently dropped.
+    Inert,
+    /// Post-`Shutdown` (or post-terminal) frame — clean teardown
+    /// in flight or done; no-op.
+    NonEvent,
+    /// Instance-attributable violation — `converge_instance(i)`.
+    Instance(u32),
+    /// Unattributable / child-scope violation —
+    /// `converge_child`.
+    Child,
+}
+
+/// The classification core of the demux table — mutates only the
+/// bookkeeping the frame answers (removes the correlated waiter /
+/// doorbell entry) and returns what the reader should do. All
+/// side-effect execution lives in [`demux_execute`], which runs
+/// the verdict after releasing `inner`.
+fn demux(inner: &mut Inner, msg: &wire::Message) -> Demux {
+    // Post-`Shutdown` and post-terminal frames are non-events:
+    // teardown is already decided, nothing left to attribute.
+    if inner.terminal.is_some() || inner.shutdown_initiated {
+        return Demux::NonEvent;
+    }
+    match msg {
+        wire::Message::Reply {
+            seq,
+            instance,
+            result,
+        } => {
+            if data::is_block_seq(*seq) {
+                // A block rejection — completes a doorbell like a
+                // `BlockDone`, just with a `mark_failed` element.
+                demux_block(inner, *instance, *seq, None)
+            } else {
+                // Correlation first: a waiter at `seq` resolves
+                // the reply regardless of the registered state of
+                // `instance` — the `Scan` reply legitimately echoes
+                // `WIRE_INSTANCE_NONE`, and a `Creating` entry's
+                // `CreateInstance` answer is exactly this row.
+                match inner.waiters.remove(seq) {
+                    Some(waiter) => {
+                        if waiter.instance == *instance {
+                            Demux::Deliver {
+                                tx: waiter.tx,
+                                result: result.clone(),
+                            }
+                        } else {
+                            // Echo mismatch — the correlation space
+                            // itself is broken: unattributable,
+                            // child-scope. The doomed caller still
+                            // wakes now rather than at timeout.
+                            let _ = waiter.tx.send(Err(HostError::Ipc));
+                            Demux::Child
+                        }
+                    }
+                    None => {
+                        if *instance == wire::WIRE_INSTANCE_NONE {
+                            // Child-scope replies only exist as a
+                            // `Scan` answer — an uncorrelated `NONE`
+                            // can attribute to nothing.
+                            Demux::Child
+                        } else if *instance >= wire::WIRE_MAX_INSTANCES {
+                            // Out-of-range stamp — unattributable.
+                            Demux::Child
+                        } else {
+                            match inner.instances.get(instance) {
+                                // A waiter-less `Reply` on a *live*
+                                // instance is a child-scope
+                                // violation — nothing pending can
+                                // explain it.
+                                Some(inst) if inst.live() => Demux::Child,
+                                _ => Demux::Inert,
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        wire::Message::BlockDone {
+            seq,
+            instance,
+            result,
+        } => demux_block(inner, *instance, *seq, Some(*result)),
+        // `Hello` twice, or a parent→child kind (`Command`,
+        // `BlockIn`, `Shutdown`) arriving child→parent:
+        // child-scope violation.
+        _ => Demux::Child,
+    }
+}
+
+/// The `BlockDone`/flagged-`Reply` half of the table — doorbell
+/// correlation on `(instance, seq)` first, then the
+/// instance-resolution rows.
+fn demux_block(inner: &mut Inner, instance: u32, seq: u64, result: Option<ProcessResult>) -> Demux {
+    // The stamp must be a live-range handle — `NONE` or
+    // out-of-range can never attribute a doorbell.
+    if instance == wire::WIRE_INSTANCE_NONE || instance >= wire::WIRE_MAX_INSTANCES {
+        return Demux::Child;
+    }
+    if inner.block_in_flight.remove(&(instance, seq)) {
+        // A real doorbell completing — normally even while the
+        // instance is `Destroying` (the doorbell window).
+        return Demux::Complete {
+            instance,
+            seq,
+            result,
+        };
+    }
+    // `(i, seq)` was never rung — flag-bit status included.
+    match inner.instances.get(&instance) {
+        Some(inst) if inst.live() => Demux::Instance(instance),
+        _ => Demux::Inert,
+    }
+}
+
+/// What [`demux_execute`] resolved — the reader's flow-control
+/// signal and the unit-test pin row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Verdict {
+    /// A `Reply` was delivered to its waiter.
+    Delivered,
+    /// A doorbell was completed (real read or `mark_failed`).
+    Completed,
+    /// Registered-but-not-live / unregistered frame — dropped.
+    Inert,
+    /// Post-`Shutdown`/terminal frame — ignored.
+    NonEvent,
+    /// `converge_instance(i)` ran — the reader keeps going.
+    Instance(u32),
+    /// `converge_child` ran — the reader exits.
+    Child,
+}
+
+/// Runs a `Demux::Complete`: lazily attaches the reader's `View`
+/// for the instance's segment (first doorbell only — an attach
+/// failure is a host-side segment loss, a child-scope
+/// convergence), performs the out-slot read into the armed
+/// staging, and pushes the result element.
+fn complete_doorbell(
+    shared: &Shared,
+    views: &mut HashMap<u32, ReaderView>,
+    instance: u32,
+    seq: u64,
+    result: Option<ProcessResult>,
+) -> Verdict {
+    let Some(result) = result else {
+        // Flagged-`Reply` rejection — `mark_failed`, no shm work.
+        shared.push_result(instance, data::mark_failed(seq));
+        return Verdict::Completed;
+    };
+    if let std::collections::hash_map::Entry::Vacant(slot) = views.entry(instance) {
+        let shm = {
+            let inner = shared.lock();
+            inner.instances.get(&instance).map(|inst| inst.shm.clone())
+        };
+        // The entry raced removal — the remover already freed the
+        // residual doorbell bookkeeping; nothing left to complete.
+        let Some(shm) = shm else {
+            return Verdict::Completed;
+        };
+        let Ok(view) = shm::View::attach(&shm.key) else {
+            converge_child(shared, None);
+            return Verdict::Child;
+        };
+        slot.insert(ReaderView {
+            view,
+            in_depth: shm.in_depth,
+            out_depth: shm.out_depth,
+        });
+    }
+    let rview = views.get(&instance).expect("view installed above");
+    let staging = {
+        let inner = shared.lock();
+        inner
+            .instances
+            .get(&instance)
+            .and_then(|inst| inst.staging.clone())
+    };
+    // Acquire edge — pairs the child's `fence(Release)` before
+    // `BlockDone`; nothing below may be reordered above it. A real
+    // atomic fence (not a compiler fence): the cross-process
+    // ordering rests on this hardware fence plus the pipe-read
+    // syscall boundary.
+    fence(Ordering::Acquire);
+    if let Some(staging) = staging {
+        let slot = usize::try_from(seq % u64::from(rview.out_depth))
+            .expect("slot index always fits usize");
+        let _published = data::read_out_slot(
+            rview.view.out_slot(rview.in_depth, rview.out_depth, seq),
+            seq,
+            &staging.outs[slot],
+            staging.frame_capacity,
+            result,
+        );
+        // `_published == false` means the child wrote a mismatched
+        // slot seq — the data is withheld and the RT leg's tag
+        // check fails closed; the done still completes the
+        // alternation either way.
+    }
+    shared.push_result(instance, seq);
+    Verdict::Completed
+}
+
+/// The reader's per-instance shm window — `View` plus the ring
+/// depths needed to index out-slots.
+struct ReaderView {
+    view: shm::View,
+    in_depth: u32,
+    out_depth: u32,
+}
+
+/// Executes one inbound frame end-to-end: [`demux`] classifies it
+/// under the lock, then the verdict's side effects run — waiter
+/// delivery, doorbell completion (shm work), or the converges.
+fn demux_execute(
+    shared: &Shared,
+    msg: &wire::Message,
+    views: &mut HashMap<u32, ReaderView>,
+) -> Verdict {
+    let action = {
+        let mut inner = shared.lock();
+        demux(&mut inner, msg)
+    };
+    match action {
+        Demux::Deliver { tx, result } => {
+            let _ = tx.send(result);
+            Verdict::Delivered
+        }
+        Demux::Complete {
+            instance,
+            seq,
+            result,
+        } => complete_doorbell(shared, views, instance, seq, result),
+        Demux::Inert => Verdict::Inert,
+        Demux::NonEvent => Verdict::NonEvent,
+        Demux::Instance(instance) => {
+            converge_instance(shared, instance);
+            Verdict::Instance(instance)
+        }
+        Demux::Child => {
+            converge_child(shared, None);
+            Verdict::Child
+        }
     }
 }
 
@@ -469,38 +1004,27 @@ fn spawn_child(command: &mut ProcCommand) -> Result<(Child, ChildStdin, ChildStd
     Ok((child, stdin, stdout))
 }
 
-/// The reader thread: first frame must be `Hello`, afterwards it
-/// demultiplexes three reply families — unflagged `Reply` frames
-/// wake their keyed command waiters, `BlockDone` completes a
-/// doorbell (shm out-slot read plus result-channel push), and a
-/// `Reply` whose seq carries [`data::BLOCK_SEQ_FLAG`] is the
-/// child's block-rejection path (slot parse failure, lifecycle
-/// rejection, plugin panic) — also a block completion, marked so
-/// the RT leg passes through. Any other message kind, an unreadable
-/// stream or EOF converges — EOF is the `seen_eof` `Failed` path.
+/// The reader thread: first frame must be `Hello`, afterwards every
+/// frame goes through [`demux_execute`] — the Issue #117 decision
+/// table — which delivers waiter-correlated `Reply`s, completes
+/// doorbells (`BlockDone` out-slot reads and flagged-`Reply`
+/// `mark_failed` rejections alike), drops inert frames, fails single
+/// instances on attributable violations (`converge_instance`) and
+/// ends the loop on child-scope ones (`converge_child`). An
+/// unreadable stream or EOF is the `seen_eof` `Failed` path.
 ///
-/// `view` is this thread's own shm mapping (the `Shmem` handle is
-/// `!Send`, so each I/O thread opens the owner `Segment`'s key
-/// locally); `in_depth`/`out_depth` are the spawn-time ring sizes;
-/// `self_instance` is the wire-v2 handle this child serves (the only
-/// legal `instance` on block frames — `Scan` replies still echo
-/// `WIRE_INSTANCE_NONE`, attributed by the waiter's stamp). Result
-/// pushes go through the shared [`Shared::result_tx`]
-/// producer — the driver completes dropped seqs on the same
-/// channel.
-fn reader_main(
-    mut stdout: ChildStdout,
-    shared: &Shared,
-    hello_tx: &mpsc::Sender<Result<u16, ()>>,
-    view: &shm::View,
-    in_depth: u32,
-    out_depth: u32,
-    self_instance: u32,
-) {
+/// `views` maps each live instance to this thread's own shm mapping
+/// (the `Shmem` handle is `!Send`, so the `View` is attached lazily
+/// here — on the first `BlockDone` for that instance — from the
+/// entry's `SegmentInfo`). Result pushes go through each instance's
+/// `InstShared.result_tx` under the `inner` lock — the driver
+/// completes dropped seqs on the same per-instance channel.
+fn reader_main(mut stdout: ChildStdout, shared: &Shared, hello_tx: &mpsc::Sender<Result<u16, ()>>) {
     // One scratch allocation reused across frames — the wire layer
     // owns the framing; EOF and protocol violations share the
     // `Err`/`Failed` path here.
     let mut frame_buf = Vec::new();
+    let mut views: HashMap<u32, ReaderView> = HashMap::new();
     if let Ok(wire::Message::Hello { version, .. }) =
         wire::read_message(&mut stdout, &mut frame_buf)
     {
@@ -509,113 +1033,20 @@ fn reader_main(
         // Missing `Hello` or a dead pipe before it — handshake
         // failure surfaces through `hello_tx` and convergence.
         let _ = hello_tx.send(Err(()));
-        converge(shared, None);
+        converge_child(shared, None);
         return;
     }
     loop {
-        match wire::read_message(&mut stdout, &mut frame_buf) {
-            Ok(wire::Message::Reply { seq, instance, .. }) if data::is_block_seq(seq) => {
-                // A block rejection: the child answered the flagged
-                // seq with an `Err` `Reply` instead of `BlockDone` —
-                // the block still completes (marked failed) so the
-                // strict alternation can proceed. A `BlockIn` was
-                // only ever stamped with this child's `instance`
-                // handle — a foreign echo is inert, not a violation.
-                if instance != self_instance {
-                    continue;
-                }
-                let known = shared.lock().block_in_flight.remove(&seq);
-                if !known {
-                    converge(shared, None);
-                    return;
-                }
-                // Channel capacity is `depth` and at most `depth`
-                // seqs are ever in flight — `try_push` cannot
-                // overflow; a full push means the RT side already
-                // drained past this seq, which is equally harmless.
-                shared.push_result(data::mark_failed(seq));
+        let Ok(msg) = wire::read_message(&mut stdout, &mut frame_buf) else {
+            {
+                let mut inner = shared.lock();
+                inner.seen_eof = true;
             }
-            Ok(wire::Message::Reply {
-                seq,
-                instance,
-                result,
-            }) => {
-                let waiter = shared.lock().waiters.remove(&seq);
-                if let Some(waiter) = waiter {
-                    // A stale/unknown seq (timed-out waiter already
-                    // removed) is dropped — the reply can no longer
-                    // hurt anyone. A live waiter attributes the
-                    // reply by `instance`: the echo must match the
-                    // request's stamped envelope — a mismatch is the
-                    // demux table's child-scope violation, so the
-                    // waiter is gone and the instance converges
-                    // `Failed` rather than satisfying the wrong
-                    // command.
-                    if waiter.instance != instance {
-                        converge(shared, None);
-                        return;
-                    }
-                    let _ = waiter.tx.send(result);
-                }
-            }
-            Ok(wire::Message::BlockDone {
-                seq,
-                instance,
-                result,
-            }) => {
-                // A doorbell reply must carry a flagged seq this
-                // driver actually rang — an unflagged or unknown one
-                // is a protocol violation. Like the flagged `Reply`
-                // arm, a foreign `instance` echo is inert: the
-                // doorbell was stamped `self_instance` on the way
-                // out, so an off-instance `BlockDone` cannot belong
-                // to this ring and is dropped.
-                if instance != self_instance {
-                    continue;
-                }
-                let known = data::is_block_seq(seq) && shared.lock().block_in_flight.remove(&seq);
-                if !known {
-                    converge(shared, None);
-                    return;
-                }
-                // Acquire edge — pairs the child's `fence(Release)`
-                // before `BlockDone`; nothing below may be reordered
-                // above it. A real atomic fence (not a compiler
-                // fence): the cross-process ordering rests on this
-                // hardware fence plus the pipe-read syscall boundary.
-                fence(Ordering::Acquire);
-                if let Some(staging) = shared.lock().staging.clone() {
-                    let slot = usize::try_from(seq % u64::from(out_depth))
-                        .expect("slot index always fits usize");
-                    let _published = data::read_out_slot(
-                        view.out_slot(in_depth, out_depth, seq),
-                        seq,
-                        &staging.outs[slot],
-                        staging.frame_capacity,
-                        result,
-                    );
-                    // `_published == false` means the child wrote a
-                    // mismatched slot seq — the data is withheld and
-                    // the RT leg's tag check fails closed; the done
-                    // still completes the alternation either way.
-                }
-                shared.push_result(seq);
-            }
-            Ok(_) => {
-                // `Hello` twice or a parent→child kind arriving
-                // child→parent: protocol violation — the execution
-                // context is failed.
-                converge(shared, None);
-                return;
-            }
-            Err(_) => {
-                {
-                    let mut inner = shared.lock();
-                    inner.seen_eof = true;
-                }
-                converge(shared, None);
-                return;
-            }
+            converge_child(shared, None);
+            return;
+        };
+        if demux_execute(shared, &msg, &mut views) == Verdict::Child {
+            return;
         }
     }
 }
@@ -661,56 +1092,77 @@ fn reap(shared: &Shared, deadline: Option<Instant>) -> ChildExit {
     }
 }
 
+/// A driver exit on broken stdin or a vanished host segment: converge
+/// `Failed` — which force-kills the wedged child itself — then reap
+/// so every `Notify::Pending` completes with the real exit status.
+/// The deadline is already reached when `reap` runs, so this is one
+/// `kill` (idempotent) plus a `wait` on an already-doomed child —
+/// bounded by the kill, never by the peer.
+fn converge_and_reap(shared: &Shared) {
+    converge_child(shared, None);
+    let exit = reap(shared, Some(Instant::now()));
+    converge_child(shared, Some(exit));
+}
+
 /// The driver thread: operates the shared `Child` handle and owns
 /// the child's stdin. Drains the command channel on a
 /// `DRIVER_POLL_INTERVAL` cadence, watches `try_wait` for the crash
-/// path, runs the shutdown watchdog and drains the data-plane
-/// `submit` channel — every popped seq becomes an in-slot shm write
-/// plus a `BlockIn` doorbell (this thread does all the blocking
-/// pipe work; the RT caller only `try_push`es seqs).
+/// path, runs the shutdown watchdog and drains every instance's
+/// data-plane `submit` channel — each popped seq becomes an in-slot
+/// shm write plus a `BlockIn{instance, seq}` doorbell (this thread
+/// does all the blocking pipe work; the RT caller only `try_push`es
+/// seqs).
 ///
-/// `view` is this thread's own shm mapping (`Shmem` is `!Send` —
-/// each I/O thread opens the owner `Segment`'s key locally),
-/// `in_depth` sizes the in-slot ring and `self_instance` is the
-/// wire-v2 handle every `BlockIn` doorbell is stamped with.
-// Thread-entry plumbing carries the whole per-child context — the
-// same allow `spawn_driver`/`spawn_reader` record.
-#[allow(clippy::too_many_arguments)]
+/// `submits`/`views` are keyed by instance — `AddInstance`/
+/// `RemoveInstance` install and uninstall them as the child mints
+/// and reclaims registry entries.
 fn driver_main(
     shared: &Shared,
     mut stdin: ChildStdin,
     rx: &mpsc::Receiver<DriverCmd>,
     shutdown_grace: Duration,
-    submit: &mut ruviform_rt::Consumer<data::Submit>,
-    view: &mut shm::View,
-    in_depth: u32,
-    self_instance: u32,
 ) {
     let mut shutdown_deadline: Option<Instant> = None;
     // One encode scratch reused for every outbound frame — commands,
     // the `Shutdown`, and each `BlockIn` doorbell.
     let mut encode_buf = Vec::new();
+    // Per-instance data-plane ends — installed/uninstalled over the
+    // child's life by `AddInstance`/`RemoveInstance` orders.
+    let mut submits: HashMap<u32, ruviform_rt::Consumer<data::Submit>> = HashMap::new();
+    let mut views: HashMap<u32, shm::View> = HashMap::new();
     loop {
         match rx.recv_timeout(DRIVER_POLL_INTERVAL) {
+            Ok(DriverCmd::AddInstance {
+                instance,
+                submit,
+                shm_key,
+            }) => {
+                // `Shmem` is `!Send` — the view must attach on this
+                // thread's stack frame. A failure means the host's
+                // own segment vanished — a child-scope
+                // environmental failure.
+                let Ok(view) = shm::View::attach(&shm_key) else {
+                    converge_and_reap(shared);
+                    return;
+                };
+                submits.insert(instance, submit);
+                views.insert(instance, view);
+            }
+            Ok(DriverCmd::RemoveInstance { instance }) => {
+                submits.remove(&instance);
+                views.remove(&instance);
+            }
             Ok(DriverCmd::Command { seq, instance, cmd }) => {
-                // A converged instance (or teardown in flight) gets no
-                // new wire messages — the spec forbids writes after
-                // `Failed`; wake the waiter `Err(Ipc)` instead of
-                // writing a doomed frame.
-                let reject = shutdown_deadline.is_some() || shared.lock().terminal.is_some();
-                if reject {
-                    let waiter = shared.lock().waiters.remove(&seq);
-                    if let Some(waiter) = waiter {
-                        let _ = waiter.tx.send(Err(HostError::Ipc));
-                    }
-                } else if wire::write_message(
+                if !driver_command(
+                    shared,
                     &mut stdin,
-                    &wire::Message::Command { seq, instance, cmd },
+                    seq,
+                    instance,
+                    cmd,
                     &mut encode_buf,
-                )
-                .is_err()
-                {
-                    converge(shared, None);
+                    shutdown_deadline.is_some(),
+                ) {
+                    return;
                 }
             }
             Ok(DriverCmd::Shutdown) => {
@@ -742,27 +1194,26 @@ fn driver_main(
                     kill_child(shared);
                 }
                 let exit = reap(shared, shutdown_deadline);
-                converge(shared, Some(exit));
+                converge_child(shared, Some(exit));
                 return;
             }
         }
-        // Data plane: every seq the RT caller submitted becomes an
-        // in-slot write plus a `BlockIn` doorbell — bounded by the
-        // channel capacity, never blocking on the RT side.
+        // Data plane: every seq any instance's RT caller submitted
+        // becomes an in-slot write plus a `BlockIn{instance, seq}`
+        // doorbell — bounded by the channel capacity, never
+        // blocking on the RT side.
         if !drain_submits(
             shared,
             &mut stdin,
-            submit,
-            view,
-            in_depth,
-            self_instance,
+            &mut submits,
+            &mut views,
             &mut encode_buf,
         ) {
             return;
         }
         match try_wait_child(shared) {
             Ok(Some(status)) => {
-                converge(shared, Some(ChildExit::from_status(status)));
+                converge_child(shared, Some(ChildExit::from_status(status)));
                 return;
             }
             Ok(None) => {}
@@ -774,98 +1225,183 @@ fn driver_main(
                 // `ChildExit`, still completing `Notify::Pending`).
                 kill_child(shared);
                 let exit = reap(shared, Some(Instant::now()));
-                converge(shared, Some(exit));
+                converge_child(shared, Some(exit));
                 return;
             }
         }
         if shutdown_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
             let exit = reap(shared, Some(Instant::now()));
-            converge(shared, Some(exit));
+            converge_child(shared, Some(exit));
             return;
         }
     }
 }
 
-/// One driver poll's worth of `submit` drains: every popped seq
-/// becomes an in-slot shm write plus a `BlockIn` doorbell stamped
-/// with `self_instance`. A seq that is dropped instead (stale
-/// generation, dead or shutting-down child) still owes the leg a
-/// completion — the synthesized `mark_failed` below. Returns `false`
-/// when a doorbell write failed and convergence ran — the driver
-/// exits with it.
+/// One `DriverCmd::Command` — the gate, the wire write and the
+/// `Destroying` doorbell-window transition. Returns `false` when
+/// convergence ended the driver (a stdin write failure).
+///
+/// A converged child (or teardown in flight) takes no new wire
+/// messages — the spec forbids writes after `Failed`; the same holds
+/// per-instance: a converged or `Destroying` entry's queued commands
+/// never reach the wire either. `DestroyInstance` is exempt —
+/// reclaiming a `Failed`/`Destroying` entry's runner slot is its
+/// job. Rejected commands wake their waiter `Err(Ipc)` instead of
+/// writing a doomed frame.
+fn driver_command(
+    shared: &Shared,
+    stdin: &mut ChildStdin,
+    seq: u64,
+    instance: u32,
+    cmd: wire::Command,
+    encode_buf: &mut Vec<u8>,
+    shutting_down: bool,
+) -> bool {
+    let destroy = matches!(cmd, wire::Command::DestroyInstance);
+    let reject = shutting_down || {
+        let inner = shared.lock();
+        inner.terminal.is_some()
+            || (!destroy
+                && matches!(
+                    inner.instances.get(&instance),
+                    Some(inst) if matches!(inst.phase, InstPhase::Failed | InstPhase::Destroying)
+                ))
+    };
+    if reject {
+        let waiter = shared.lock().waiters.remove(&seq);
+        if let Some(waiter) = waiter {
+            let _ = waiter.tx.send(Err(HostError::Ipc));
+        }
+        return true;
+    }
+    if wire::write_message(
+        stdin,
+        &wire::Message::Command { seq, instance, cmd },
+        encode_buf,
+    )
+    .is_err()
+    {
+        converge_and_reap(shared);
+        return false;
+    }
+    if destroy {
+        // The doorbell window opens the instant `DestroyInstance`
+        // hits the wire — NOT at the reply: from here the demux
+        // table treats `i` as registered-but-not-live (inert late
+        // frames) and `drain_submits` synthesizes `mark_failed` for
+        // new submits instead of ringing new doorbells. A `Failed`
+        // entry stays `Failed` — the destroy reclaims a dead slot.
+        let mut inner = shared.lock();
+        if let Some(inst) = inner.instances.get_mut(&instance)
+            && inst.phase == InstPhase::Live
+        {
+            inst.phase = InstPhase::Destroying;
+        }
+    }
+    true
+}
+
+/// One driver poll's worth of `submit` drains across every
+/// registered instance: each popped seq becomes an in-slot shm
+/// write plus a `BlockIn{instance, seq}` doorbell. A seq dropped
+/// instead — stale generation, `Destroying`/`Failed`/`Creating`
+/// entry, dead or shutting-down child — still owes its leg exactly
+/// one completion: the synthesized `mark_failed` below. Returns
+/// `false` when a doorbell write failed and convergence ran — the
+/// driver exits with it.
 fn drain_submits(
     shared: &Shared,
     stdin: &mut ChildStdin,
-    submit: &mut ruviform_rt::Consumer<data::Submit>,
-    view: &mut shm::View,
-    in_depth: u32,
-    self_instance: u32,
+    submits: &mut HashMap<u32, ruviform_rt::Consumer<data::Submit>>,
+    views: &mut HashMap<u32, shm::View>,
     encode_buf: &mut Vec<u8>,
 ) -> bool {
-    while let Ok(submit) = submit.try_pop() {
-        let seq = submit.seq;
-        let staging = {
-            let mut inner = shared.lock();
-            if inner.terminal.is_some() || inner.shutdown_initiated {
-                // A dead or shutting-down child takes no new
-                // doorbells — the seq is consumed here.
-                None
-            } else {
-                let staging = data::armed_for(inner.staging.as_ref(), submit);
-                if staging.is_some() {
-                    // The doorbell goes in flight BEFORE the
-                    // write — the reader's `BlockDone` /
-                    // flagged-`Reply` must always find it here.
-                    inner.block_in_flight.insert(seq);
+    for (&instance, submit) in submits.iter_mut() {
+        while let Ok(submit) = submit.try_pop() {
+            let seq = submit.seq;
+            let staged = {
+                let mut inner = shared.lock();
+                let live_child = inner.terminal.is_none() && !inner.shutdown_initiated;
+                match inner.instances.get_mut(&instance) {
+                    Some(inst) if live_child && inst.phase == InstPhase::Live => {
+                        let staging = data::armed_for(inst.staging.as_ref(), submit);
+                        if let Some(staging) = staging {
+                            let in_depth = inst.shm.in_depth;
+                            // The doorbell goes in flight BEFORE
+                            // the write — the reader's `BlockDone` /
+                            // flagged-`Reply` must always find it
+                            // here.
+                            inner.block_in_flight.insert((instance, seq));
+                            Some((staging, in_depth))
+                        } else {
+                            // `None` is either "no ring armed yet"
+                            // or a stale-generation submit — queued
+                            // before a re-activation swapped
+                            // `inst.staging`, so serializing it
+                            // would doorbell the new ring's zeroed
+                            // stage under a real seq. Dropped
+                            // without a doorbell: `block_in_flight`
+                            // never sees it — the owed
+                            // `mark_failed` completion goes out
+                            // here instead.
+                            let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+                            None
+                        }
+                    }
+                    // `Destroying`/`Failed`/`Creating`, or a dead /
+                    // shutting-down child — the `Destroying` gate:
+                    // no doorbell, but the seq still owes the leg
+                    // its completion.
+                    Some(inst) => {
+                        let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+                        None
+                    }
+                    // The entry raced removal — the remover freed
+                    // the residual doorbell bookkeeping already;
+                    // nothing to complete.
+                    None => None,
                 }
-                // `None` here is either "no ring armed yet" or a
-                // stale-generation submit — queued before a
-                // re-activation swapped `inner.staging`, so
-                // serializing it would doorbell the new ring's
-                // zeroed stage under a real seq. Dropped without
-                // a doorbell: `block_in_flight` never sees it.
-                staging
-            }
-        };
-        let Some(staging) = staging else {
-            // A dropped seq was never doorbell'd — no shm write
-            // happened, so no out-slot race exists — but the leg
-            // still waits on a completion to clear the slot's
-            // alternation gate (`cleared[i] >= last_pushed[i]`).
-            // Left unanswered it would wedge the slot (then the
-            // whole ring) forever: a fully-synced leg passing
-            // through 100%. Synthesize the `mark_failed`
-            // completion — one seq, exactly one element — so the
-            // normal `drain_to` path frees the slot and resolves
-            // the block as the defined pass-through.
-            shared.push_result(data::mark_failed(seq));
-            continue;
-        };
-        let slot = usize::try_from(seq % u64::from(in_depth)).expect("slot index fits usize");
-        data::write_in_slot(
-            view.in_slot_mut(in_depth, seq),
-            seq,
-            &staging.ins[slot],
-            staging.frame_capacity,
-        );
-        // Release edge — the slot writes above must be visible
-        // to the child before the `BlockIn` it acquires on. A
-        // real atomic fence (not a compiler fence): ordering
-        // across the process boundary rests on this hardware
-        // fence plus the pipe-write syscall.
-        fence(Ordering::Release);
-        if wire::write_message(
-            stdin,
-            &wire::Message::BlockIn {
+            };
+            let Some((staging, in_depth)) = staged else {
+                // A dropped seq was never doorbell'd — no shm write
+                // happened, so no out-slot race exists — but the
+                // leg still waits on a completion to clear the
+                // slot's alternation gate (`cleared[i] >=
+                // last_pushed[i]`). Left unanswered it would wedge
+                // the slot (then the whole ring) forever: a
+                // fully-synced leg passing through 100%. The
+                // `mark_failed` push inside the lock above
+                // synthesizes exactly one completion so the normal
+                // `drain_to` path frees the slot and resolves the
+                // block as the defined pass-through.
+                continue;
+            };
+            let Some(view) = views.get_mut(&instance) else {
+                // `AddInstance` installs consumer and view
+                // atomically — unreachable; a miss means the maps
+                // diverged, so drop the doorbell rather than read
+                // the wrong segment.
+                continue;
+            };
+            let slot = usize::try_from(seq % u64::from(in_depth)).expect("slot index fits usize");
+            data::write_in_slot(
+                view.in_slot_mut(in_depth, seq),
                 seq,
-                instance: self_instance,
-            },
-            encode_buf,
-        )
-        .is_err()
-        {
-            converge(shared, None);
-            return false;
+                &staging.ins[slot],
+                staging.frame_capacity,
+            );
+            // Release edge — the slot writes above must be visible
+            // to the child before the `BlockIn` it acquires on. A
+            // real atomic fence (not a compiler fence): ordering
+            // across the process boundary rests on this hardware
+            // fence plus the pipe-write syscall.
+            fence(Ordering::Release);
+            if wire::write_message(stdin, &wire::Message::BlockIn { seq, instance }, encode_buf)
+                .is_err()
+            {
+                converge_and_reap(shared);
+                return false;
+            }
         }
     }
     true
@@ -881,22 +1417,17 @@ type SpawnRx = mpsc::Receiver<Result<ChildStdout, ()>>;
 type HelloRx = mpsc::Receiver<Result<u16, ()>>;
 
 /// Spawns the `l1-driver` thread — the child process itself is spawned
-/// *inside* the thread and handed to [`L1Instance::spawn`] through
+/// *inside* the thread and handed to [`L1Child::spawn`] through
 /// `spawn_rx`: keeping the `Child` created and installed on the driver
 /// from birth means no failure path between thread creation and
 /// handshake can leak a running worker — every post-driver error
 /// funnels through channel disconnect plus the shared-child kill, and
 /// a driver-spawn failure happens before the child exists.
-#[allow(clippy::too_many_arguments)]
 fn spawn_driver(
     shared: &Arc<Shared>,
     mut command: ProcCommand,
     driver_rx: mpsc::Receiver<DriverCmd>,
-    mut submit_rx: ruviform_rt::Consumer<data::Submit>,
-    shm_key: String,
-    depth: u32,
     grace: Duration,
-    self_instance: u32,
 ) -> Result<(thread::JoinHandle<()>, SpawnRx), HostError> {
     let (spawn_tx, spawn_rx) = mpsc::channel();
     let driver_shared = Arc::clone(shared);
@@ -922,17 +1453,6 @@ fn spawn_driver(
                 let _ = spawn_tx.send(Err(()));
                 return;
             }
-            // This thread's own shm mapping for the in-slot
-            // writes — `Shmem` is `!Send`, so it opens the key
-            // here rather than moving the owner `Segment`.
-            let Ok(mut view) = shm::View::attach(&shm_key) else {
-                kill_child(&driver_shared);
-                if let Some(mut child) = driver_shared.child_lock() {
-                    let _ = child.wait();
-                }
-                let _ = spawn_tx.send(Err(()));
-                return;
-            };
             // Ownership of `stdout` crosses to the reader thread
             // through the caller; the child itself never leaves.
             if spawn_tx.send(Ok(stdout)).is_err() {
@@ -942,58 +1462,401 @@ fn spawn_driver(
                 }
                 return;
             }
-            driver_main(
-                &driver_shared,
-                stdin,
-                &driver_rx,
-                grace,
-                &mut submit_rx,
-                &mut view,
-                depth,
-                self_instance,
-            );
+            driver_main(&driver_shared, stdin, &driver_rx, grace);
         })
         .map_err(|_| HostError::Ipc)?;
     Ok((join, spawn_rx))
 }
 
-/// Spawns the `l1-reader` thread: attaches its own shm `View` by key
-/// *before* `Hello` so a broken data plane fails the spawn rather than
-/// the first `BlockDone`, then runs [`reader_main`]. Result pushes go
-/// through the shared [`Shared::result_tx`] producer.
+/// Spawns the `l1-reader` thread — runs [`reader_main`]. No shm
+/// `View` is attached up front: instances arrive over the child's
+/// life via `CreateInstance`, and the reader attaches each entry's
+/// segment lazily on its first `BlockDone` (a host-side attach
+/// failure there is a child-scope convergence).
 fn spawn_reader(
     shared: &Arc<Shared>,
     stdout: ChildStdout,
-    shm_key: String,
-    depth: u32,
-    self_instance: u32,
 ) -> Result<(thread::JoinHandle<()>, HelloRx), HostError> {
     let (hello_tx, hello_rx) = mpsc::channel();
     let reader_shared = Arc::clone(shared);
     let join = thread::Builder::new()
         .name("l1-reader".to_owned())
-        .spawn(move || {
-            let Ok(view) = shm::View::attach(&shm_key) else {
-                let _ = hello_tx.send(Err(()));
-                converge(&reader_shared, None);
-                return;
-            };
-            reader_main(
-                stdout,
-                &reader_shared,
-                &hello_tx,
-                &view,
-                depth,
-                depth,
-                self_instance,
-            );
-        })
+        .spawn(move || reader_main(stdout, &reader_shared, &hello_tx))
         .map_err(|_| HostError::Ipc)?;
     Ok((join, hello_rx))
 }
 
-/// One L1 instance: a spawned child plus its `driver`/`reader` threads,
-/// the notification queue and the local lifecycle mirror.
+/// What [`L1Child::create_instance`] hands the facade — the
+/// instance-local bundle a successful `CreateInstance` minted.
+struct InstanceParts {
+    /// The minted wire handle.
+    instance: u32,
+    /// The facade's clone of `InstShared.rt_state` — the lock-free
+    /// mirror snapshot `process`/`lifecycle_state` read. Survives
+    /// entry removal: post-`Destroy` `lifecycle_state` still answers
+    /// `Destroyed` because `L1Instance::destroy` writes the final
+    /// state onto this `Arc` when the entry goes away.
+    rt_state: Arc<AtomicU8>,
+    /// The instance's own `ChildExit` queue — `InstShared.notify_tx`'s
+    /// pair.
+    notify_rx: mpsc::Receiver<ChildExit>,
+    /// The RT leg: caller-thread end of the data plane (submit
+    /// producer, result consumer, staging, pass-through history).
+    rt: data::RtLeg,
+    /// The owner-side segment anchor — RAII, unlinks on drop.
+    segment: shm::Segment,
+    /// The shm slot count `D` (`lookahead_blocks + 1`) this
+    /// instance's segment/channels/staging were sized with.
+    depth: u32,
+}
+
+impl L1Child {
+    /// Spawns a fresh child — driver + reader threads, the process
+    /// itself, the `Hello` version gate — the shareable unit a
+    /// dedicated [`L1Instance::spawn`] (and later a T3 pool slot)
+    /// builds on. `Scan`/descriptor match and `CreateInstance` are
+    /// deliberately *not* here: `scan_match` is a child-scope verb
+    /// the caller decides to run (the dedicated route always does),
+    /// and `create_instance` mints per-instance.
+    ///
+    /// **RT contract:** non-RT only — blocks up to
+    /// `2 × command_timeout` (spawn hand-off + `Hello` wait).
+    fn spawn(command: ProcCommand, command_timeout: Duration) -> Result<Arc<Self>, HostError> {
+        let (driver_tx, driver_rx) = mpsc::channel();
+        let shared = Arc::new(Shared {
+            inner: Mutex::new(Inner {
+                waiters: HashMap::new(),
+                instances: HashMap::new(),
+                block_in_flight: HashSet::new(),
+                terminal: None,
+                shutdown_initiated: false,
+                seen_eof: false,
+            }),
+            child: OnceLock::new(),
+            next_cmd_seq: AtomicU64::new(0),
+        });
+        let (driver_join, spawn_rx) = spawn_driver(&shared, command, driver_rx, command_timeout)?;
+        let Ok(Ok(stdout)) = spawn_rx.recv_timeout(command_timeout) else {
+            // Child spawn failed or timed out: disconnecting the
+            // command channel makes the driver kill/reap whatever
+            // it started (bounded); it may not have spawned at all.
+            drop(driver_tx);
+            let _ = driver_join.join();
+            return Err(HostError::Ipc);
+        };
+        let (reader_join, hello_rx) = match spawn_reader(&shared, stdout) {
+            Ok(pair) => pair,
+            Err(error) => {
+                // The driver is already running — kill the child
+                // through the shared handle and disconnect; the
+                // driver reaps and exits (bounded — `kill` is
+                // forceful on both OSes).
+                kill_child(&shared);
+                drop(driver_tx);
+                let _ = driver_join.join();
+                return Err(error);
+            }
+        };
+        match hello_rx.recv_timeout(command_timeout) {
+            Ok(Ok(version)) if version == wire::WIRE_VERSION => {}
+            _ => {
+                // Missing/mismatched `Hello` — the spawn is
+                // unusable; kill + reap, never a live-but-empty
+                // child.
+                kill_child(&shared);
+                drop(driver_tx);
+                let _ = driver_join.join();
+                drop(reader_join);
+                return Err(HostError::Ipc);
+            }
+        }
+        Ok(Arc::new(Self {
+            shared,
+            driver_tx: Mutex::new(Some(driver_tx)),
+            driver_join: Mutex::new(Some(driver_join)),
+            reader_join: Mutex::new(Some(reader_join)),
+            command_timeout,
+        }))
+    }
+
+    /// `Scan` → descriptor field-match — the child-scope handshake
+    /// half the dedicated route always runs after [`L1Child::spawn`]
+    /// (a T3 pooled child is scanned once at mint instead). A
+    /// `Failed`-child `Err` surfaces as `Ipc` like every handshake
+    /// failure.
+    fn scan_match(&self, spec: &SpawnSpec) -> Result<(), HostError> {
+        match self
+            .request(wire::WIRE_INSTANCE_NONE, wire::Command::Scan)
+            .map_err(|_| HostError::Ipc)?
+        {
+            wire::Reply::Scanned(descriptors) => {
+                if descriptors.iter().any(|d| d.matches(&spec.descriptor)) {
+                    Ok(())
+                } else {
+                    Err(HostError::Ipc)
+                }
+            }
+            _ => Err(HostError::Ipc),
+        }
+    }
+
+    /// Mints a wire handle, registers the `InstShared` (`Creating`),
+    /// installs the data-plane ends on the driver and sends
+    /// `CreateInstance` — the per-instance half of the v2 handshake.
+    /// `Reply::Ok` flips the entry `Live` and returns the facade
+    /// parts; every failure path — defined `Err` reply, request
+    /// failure, unexpected variant — rolls the entry back (the
+    /// runner inserts only on success, so no runner residue) and
+    /// returns `Err(Ipc)`: **the caller decides** whether the child
+    /// was fresh (`abort` — the dedicated route) or shared
+    /// (siblings stay live — the T3 pool path).
+    ///
+    /// `depth` is `D = lookahead_blocks + 1` — segment, channels
+    /// and `RtLeg` sizing in one.
+    fn create_instance(&self, spec: &SpawnSpec, depth: u32) -> Result<InstanceParts, HostError> {
+        // Segment + SPSC legs are per-instance from birth — minted
+        // here so the entry's `SegmentInfo` names the key before
+        // `CreateInstance` ships it. The `notify`/`result`
+        // producers live in `InstShared` (child-shared); the
+        // `submit` consumer rides `AddInstance` to the driver.
+        let slot =
+            u32::try_from(INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed)).unwrap_or(u32::MAX);
+        let segment = shm::Segment::create(slot, depth, depth).map_err(|()| HostError::Ipc)?;
+        let (submit_tx, submit_rx) =
+            ruviform_rt::channel::<data::Submit>(usize::try_from(depth).unwrap_or(usize::MAX));
+        let (result_tx, result_rx) =
+            ruviform_rt::channel::<u64>(usize::try_from(depth).unwrap_or(usize::MAX));
+        let (notify_tx, notify_rx) = mpsc::channel();
+        let rt_state = Arc::new(AtomicU8::new(data::mirror_encode(LifecycleState::Created)));
+        let instance = {
+            let mut inner = self.shared.lock();
+            if inner.terminal.is_some() || inner.shutdown_initiated {
+                return Err(HostError::Ipc);
+            }
+            // The lowest-free mint under the lock — handle +
+            // insert are atomic; a full registry is the defined
+            // `InstanceLimit`.
+            let Some(instance) = mint_instance(&inner) else {
+                return Err(HostError::InstanceLimit);
+            };
+            inner.instances.insert(
+                instance,
+                InstShared {
+                    rt_state: Arc::clone(&rt_state),
+                    mirror: LifecycleState::Created,
+                    notify_tx,
+                    notify: Notify::Idle,
+                    staging: None,
+                    shm: SegmentInfo {
+                        key: segment.key().to_owned(),
+                        in_depth: depth,
+                        out_depth: depth,
+                    },
+                    result_tx: Mutex::new(result_tx),
+                    phase: InstPhase::Creating,
+                },
+            );
+            instance
+        };
+        // The driver installs the data-plane ends before
+        // `CreateInstance` ships — submits cannot precede
+        // `Activate`, so the ordering is slack; what matters is
+        // the register/send pair is atomic from the wire's view.
+        self.send_driver(DriverCmd::AddInstance {
+            instance,
+            submit: submit_rx,
+            shm_key: segment.key().to_owned(),
+        });
+        let create = self.request(
+            instance,
+            wire::Command::CreateInstance {
+                plugin_id: spec.descriptor.id.to_owned(),
+                shm_key: segment.key().to_owned(),
+                in_depth: depth,
+                out_depth: depth,
+            },
+        );
+        if let Ok(wire::Reply::Ok) = create {
+            self.shared
+                .lock()
+                .instances
+                .get_mut(&instance)
+                .expect("entry registered above")
+                .phase = InstPhase::Live;
+            Ok(InstanceParts {
+                instance,
+                rt_state,
+                notify_rx,
+                rt: data::RtLeg::new(depth, spec.lookahead_blocks, submit_tx, result_rx),
+                segment,
+                depth,
+            })
+        } else {
+            // Roll the entry back — `RemoveInstance` frees this
+            // handle's driver ends for reuse; the runner keeps
+            // no residue for a failed `CreateInstance`.
+            let mut inner = self.shared.lock();
+            remove_instance(&mut inner, instance);
+            drop(inner);
+            self.send_driver(DriverCmd::RemoveInstance { instance });
+            Err(HostError::Ipc)
+        }
+    }
+
+    /// Registers the waiter, queues the frame and waits — the
+    /// command channel the handshake (`Scan`/`CreateInstance`) and
+    /// [`L1Instance::request`] share. `instance` is the stamped
+    /// envelope value: `WIRE_INSTANCE_NONE` for the child-scope
+    /// `Scan`, the minted handle otherwise.
+    ///
+    /// The instance-scope gate runs **inside** the waiter insert —
+    /// atomically: `Scan` needs no entry; ordinary commands require
+    /// `Live`; `CreateInstance` is legal while `Creating` (it IS
+    /// the create); `DestroyInstance` is legal on `Failed`/
+    /// `Destroying` entries (reclaiming their runner slot is its
+    /// job). Everything else on a dead/destroying/removed entry is
+    /// `Err(Ipc)` — `Failed` → `Err(HostError::Failed)`.
+    ///
+    /// **RT contract:** non-RT only — waits at most `command_timeout`;
+    /// a reply timeout converges the child `Failed` (`Ipc`).
+    fn request(&self, instance: u32, cmd: wire::Command) -> Result<wire::Reply, HostError> {
+        let seq = self.shared.next_cmd_seq.fetch_add(1, Ordering::Relaxed);
+        let (tx, reply_rx) = mpsc::channel();
+        {
+            let mut inner = self.shared.lock();
+            match inner.terminal {
+                Some(Terminal::Failed) => return Err(HostError::Failed),
+                Some(Terminal::Clean) => return Err(HostError::Ipc),
+                None => {}
+            }
+            if inner.shutdown_initiated {
+                return Err(HostError::Ipc);
+            }
+            if instance != wire::WIRE_INSTANCE_NONE {
+                match inner.instances.get(&instance) {
+                    Some(inst) => match inst.phase {
+                        InstPhase::Live => {}
+                        InstPhase::Creating
+                            if matches!(cmd, wire::Command::CreateInstance { .. }) => {}
+                        InstPhase::Failed | InstPhase::Destroying
+                            if matches!(cmd, wire::Command::DestroyInstance) => {}
+                        InstPhase::Failed => return Err(HostError::Failed),
+                        _ => return Err(HostError::Ipc),
+                    },
+                    None => return Err(HostError::Ipc),
+                }
+            }
+            inner.waiters.insert(seq, Waiter { instance, tx });
+        }
+        let sent = {
+            let driver_tx = lock_mutex(&self.driver_tx);
+            driver_tx.as_ref().is_some_and(|driver_tx| {
+                driver_tx
+                    .send(DriverCmd::Command { seq, instance, cmd })
+                    .is_ok()
+            })
+        };
+        if !sent {
+            self.shared.lock().waiters.remove(&seq);
+            return Err(HostError::Ipc);
+        }
+        match reply_rx.recv_timeout(self.command_timeout) {
+            Ok(result) => result,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                self.shared.lock().waiters.remove(&seq);
+                // A reply timeout is `Ipc` plus `Failed` — the child
+                // is presumed lost; `converge_child` kills it (which
+                // is also what unblocks a driver stuck mid-write).
+                converge_child(&self.shared, None);
+                Err(HostError::Ipc)
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(HostError::Ipc),
+        }
+    }
+
+    /// Best-effort driver order — a dead channel means the driver is
+    /// already down (converged); the order's absence cannot hurt.
+    fn send_driver(&self, cmd: DriverCmd) {
+        let driver_tx = lock_mutex(&self.driver_tx);
+        if let Some(driver_tx) = driver_tx.as_ref() {
+            let _ = driver_tx.send(cmd);
+        }
+    }
+
+    /// Disconnects the command channel — the driver's
+    /// `Disconnected` arm is itself a bounded teardown (kill +
+    /// reap + converge).
+    fn disconnect_driver(&self) {
+        drop(lock_mutex(&self.driver_tx).take());
+    }
+
+    /// Bounded driver join — the grace window plus a reap margin,
+    /// then a force-kill through the shared handle (the kill turns
+    /// a wedged `write_all` into EPIPE; the post-kill join then
+    /// completes once the driver unwinds and reaps). The reader is
+    /// *detached* — a stdio-inheriting grandchild can hold the
+    /// child's stdout pipe open past its death, so joining could
+    /// stall forever; it touches only `Arc`-shared state.
+    fn join_driver(&self) {
+        if let Some(join) = lock_mutex(&self.driver_join).take() {
+            let deadline = Instant::now() + self.command_timeout + DRIVER_JOIN_MARGIN;
+            while !join.is_finished() {
+                if Instant::now() >= deadline {
+                    kill_child(&self.shared);
+                    break;
+                }
+                thread::sleep(DRIVER_JOIN_POLL);
+            }
+            let _ = join.join();
+        }
+    }
+
+    /// Registered-instance count — the `live_count` the
+    /// shutdown-on-empty rule counts (`Creating`/`Failed`/
+    /// `Destroying` entries included until `DestroyInstance`
+    /// reclaims them). The T3 pool's child-selection predicate
+    /// reads this; T2's dedicated route never does.
+    #[expect(dead_code)]
+    fn live_count(&self) -> usize {
+        self.shared.lock().instances.len()
+    }
+
+    /// Fresh-spawn abort: kill + disconnect + join — no
+    /// notification owed, no `Shutdown` grace (the spawn never
+    /// answered as a live child).
+    fn abort(&self) {
+        kill_child(&self.shared);
+        self.disconnect_driver();
+        self.join_driver();
+        drop(lock_mutex(&self.reader_join).take());
+    }
+
+    /// Bounded last-referrer teardown: a `Shutdown` while the child
+    /// still looks live (the driver's `Disconnected` arm then honors
+    /// the grace deadline — clean teardown, not a kill), then
+    /// disconnect + the join bound + reader detach. Idempotent —
+    /// every piece is `take()`/best-effort.
+    fn teardown(&self) {
+        {
+            let inner = self.shared.lock();
+            if inner.terminal.is_none() && !inner.seen_eof {
+                drop(inner);
+                self.send_driver(DriverCmd::Shutdown);
+            }
+        }
+        self.disconnect_driver();
+        self.join_driver();
+        drop(lock_mutex(&self.reader_join).take());
+        // The driver's `Disconnected` arm converges before it exits
+        // — `get_or_insert` covers the defensive remainder only.
+        self.shared.lock().terminal.get_or_insert(Terminal::Clean);
+    }
+}
+
+/// One L1 instance: its registry entry on a shared [`L1Child`]
+/// (dedicated = the capacity-1 route through the same machinery),
+/// the per-instance notification queue, the `RtLeg` and the local
+/// lifecycle mirror snapshot.
 ///
 /// **RT contract:** every call here is **non-RT only** — spawns,
 /// thread joins and pipe writes may block and allocate. `execute`
@@ -1005,19 +1868,25 @@ fn spawn_reader(
 /// its owning thread; `PluginHost` inherits that (documented on the
 /// composite).
 pub(crate) struct L1Instance {
+    /// `child.shared`'s clone — the hot-path lock (design keeps both:
+    /// `shared` for `inner` access, `child` for driver/ownership).
     shared: Arc<Shared>,
-    driver_tx: Option<mpsc::Sender<DriverCmd>>,
-    driver_join: Option<thread::JoinHandle<()>>,
-    reader_join: Option<thread::JoinHandle<()>>,
-    notify_rx: mpsc::Receiver<ChildExit>,
-    command_timeout: Duration,
-    next_seq: AtomicU64,
-    /// The wire-v2 `instance` envelope handle this child's registry
-    /// entry lives under — `0` under the T1 dedicated route
-    /// (capacity-1: one child serves exactly one instance). T2/T3's
-    /// route pools mint per-bundle handles here; `Scan` bypasses the
-    /// handle with `WIRE_INSTANCE_NONE` instead.
+    /// The child this instance lives on — `Arc::strong_count == 1`
+    /// inside `destroy`/`Drop` means the last referrer, which owns
+    /// the bounded teardown (live siblings must never be killed).
+    child: Arc<L1Child>,
+    /// The minted wire handle — stamps every non-`Scan` command and
+    /// this instance's `BlockIn` doorbells (`Scan` bypasses the
+    /// handle with `WIRE_INSTANCE_NONE`).
     instance: u32,
+    /// This instance's own `ChildExit` notification queue —
+    /// `InstShared.notify_tx`'s pair: a child crash fans one
+    /// notification out per minted instance.
+    notify_rx: mpsc::Receiver<ChildExit>,
+    /// The facade's clone of `InstShared.rt_state` — the lock-free
+    /// mirror snapshot `process`/`lifecycle_state` read; survives
+    /// entry removal (`destroy` writes `Destroyed` onto it).
+    rt_state: Arc<AtomicU8>,
     /// The shm slot count `D` (`lookahead_blocks + 1`) — sizes the
     /// segment, both SPSC channels and the staging ring.
     depth: u32,
@@ -1075,16 +1944,19 @@ pub(crate) struct L1Instance {
 }
 
 impl L1Instance {
-    /// Spawns the child, starts `driver`/`reader` and runs the
-    /// handshake: `Hello` (version must equal [`wire::WIRE_VERSION`])
-    /// → `Scan` → the reported `wire::Descriptor`s must field-match
-    /// `spec.descriptor`. Any failure — spawn error, timeout, version
-    /// or descriptor mismatch — is `Err(HostError::Ipc)` with the
-    /// child killed and reaped.
+    /// Spawns a dedicated child and runs the full v2 handshake:
+    /// `Hello` (version must equal [`wire::WIRE_VERSION`], inside
+    /// [`L1Child::spawn`]) → `Scan` → the reported
+    /// `wire::Descriptor`s must field-match `spec.descriptor` →
+    /// `CreateInstance` mints the registry entry. Any failure —
+    /// spawn error, timeout, version/descriptor mismatch — is
+    /// `Err(HostError::Ipc)` with the fresh child killed and reaped
+    /// (a fresh-spawn failure tears the whole child down — the
+    /// shared-child rollback is the T3 pool path's concern).
     ///
     /// **RT contract:** non-RT only — blocks up to
-    /// `3 × command_timeout` in the worst case (the spawn hand-off,
-    /// the `Hello` wait and the `Scan` reply each carry one).
+    /// `4 × command_timeout` in the worst case (spawn hand-off,
+    /// `Hello` wait, `Scan` reply, `CreateInstance` reply).
     ///
     /// `lookahead_blocks == 0` is `Err(Ipc)` — with `D = 1` the
     /// result horizon `expected = block` is the seq the same
@@ -1103,20 +1975,10 @@ impl L1Instance {
         // `lookahead_blocks < WIRE_MAX_ELEMENTS` here, so `+ 1`
         // cannot overflow and `depth` stays inside the codec cap.
         let depth = spec.lookahead_blocks + 1;
-        let slot =
-            u32::try_from(INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed)).unwrap_or(u32::MAX);
-        let segment = shm::Segment::create(slot, depth, depth).map_err(|()| HostError::Ipc)?;
-        // The data-plane SPSC legs — capacity `D`, so at most a full
-        // ring of doorbells/results is ever in flight. `submit`:
-        // RT caller → driver; `result`: reader → RT caller.
-        let (submit_tx, submit_rx) =
-            ruviform_rt::channel::<data::Submit>(usize::try_from(depth).unwrap_or(usize::MAX));
-        let (result_tx, result_rx) =
-            ruviform_rt::channel::<u64>(usize::try_from(depth).unwrap_or(usize::MAX));
         // Wire v2: no `--ruviform-*` bootstrap flags — the plugin id
         // and shm key travel in the `CreateInstance` payload during
-        // `handshake`. `spec.args` still prepends the runner's own
-        // flags (e.g. the test worker's fault knobs).
+        // `create_instance`. `spec.args` still prepends the runner's
+        // own flags (e.g. the test worker's fault knobs).
         let mut command = ProcCommand::new(&spec.program);
         command
             .args(&spec.args)
@@ -1125,82 +1987,28 @@ impl L1Instance {
             // stderr piping is a deferred design concern — inherit
             // keeps child diagnostics visible without extra plumbing.
             .stderr(Stdio::inherit());
-        let (driver_tx, driver_rx) = mpsc::channel();
-        let (notify_tx, notify_rx) = mpsc::channel();
-        let shared = Arc::new(Shared {
-            inner: Mutex::new(Inner {
-                waiters: HashMap::new(),
-                mirror: LifecycleState::Created,
-                block_in_flight: HashSet::new(),
-                staging: None,
-                terminal: None,
-                shutdown_initiated: false,
-                seen_eof: false,
-                notify: Notify::Idle,
-            }),
-            rt_state: Arc::new(AtomicU8::new(data::mirror_encode(LifecycleState::Created))),
-            child: OnceLock::new(),
-            notify_tx,
-            result_tx: Mutex::new(result_tx),
-        });
-        // `Shmem` is `!Send` — each I/O thread opens its own `View`
-        // of the owner segment by key on its own stack frame.
-        let (driver_join, spawn_rx) = spawn_driver(
-            &shared,
-            command,
-            driver_rx,
-            submit_rx,
-            segment.key().to_owned(),
-            depth,
-            spec.command_timeout,
-            DEDICATED_INSTANCE,
-        )?;
-        let Ok(Ok(stdout)) = spawn_rx.recv_timeout(spec.command_timeout) else {
-            // Child spawn failed or timed out: disconnecting the
-            // command channel makes the driver kill/reap whatever
-            // it started (bounded); it may not have spawned at all.
-            drop(driver_tx);
-            let _ = driver_join.join();
-            return Err(HostError::Ipc);
-        };
-        let reader_spawn = spawn_reader(
-            &shared,
-            stdout,
-            segment.key().to_owned(),
-            depth,
-            DEDICATED_INSTANCE,
-        );
-        let (reader_join, hello_rx) = match reader_spawn {
-            Ok(pair) => pair,
+        let child = L1Child::spawn(command, spec.command_timeout)?;
+        let result = child
+            .scan_match(spec)
+            .and_then(|()| child.create_instance(spec, depth));
+        let parts = match result {
+            Ok(parts) => parts,
             Err(error) => {
-                // The driver is already running — kill the child
-                // through the shared handle and disconnect; the
-                // driver reaps and exits (bounded — `kill` is
-                // forceful on both OSes).
-                kill_child(&shared);
-                drop(driver_tx);
-                let _ = driver_join.join();
+                // Fresh-child failure — kill + reap, no
+                // notification: the instance never went live.
+                child.abort();
                 return Err(error);
             }
         };
-
-        let shm_key = segment.key().to_owned();
-        let mut instance = Self {
+        let shared = Arc::clone(&child.shared);
+        Ok(Self {
             shared,
-            driver_tx: Some(driver_tx),
-            driver_join: Some(driver_join),
-            reader_join: Some(reader_join),
-            notify_rx,
-            command_timeout: spec.command_timeout,
-            next_seq: AtomicU64::new(0),
-            instance: DEDICATED_INSTANCE,
-            depth,
-            rt: Some(data::RtLeg::new(
-                depth,
-                spec.lookahead_blocks,
-                submit_tx,
-                result_rx,
-            )),
+            child,
+            instance: parts.instance,
+            notify_rx: parts.notify_rx,
+            rt_state: parts.rt_state,
+            depth: parts.depth,
+            rt: Some(parts.rt),
             staging_generation: 0,
             arm_tx: None,
             pending_arm: None,
@@ -1208,68 +2016,8 @@ impl L1Instance {
             arm_collector: None,
             endpoint_bound: None,
             activated_sample_rate: None,
-            segment,
-        };
-        match instance.handshake(spec, &hello_rx, &shm_key) {
-            Ok(()) => Ok(instance),
-            Err(error) => {
-                // Handshake failure: kill + reap, no notification —
-                // the instance never went live.
-                instance.abort();
-                Err(error)
-            }
-        }
-    }
-
-    /// `Hello` (version check) → `Scan` → descriptor field-match →
-    /// `CreateInstance` — the wire-v2 handshake sequence fixed by the
-    /// Issue #117 design. `shm_key` names the segment this spawn
-    /// already created; `CreateInstance` is the point the child's
-    /// registry learns the handle.
-    fn handshake(
-        &mut self,
-        spec: &SpawnSpec,
-        hello_rx: &HelloRx,
-        shm_key: &str,
-    ) -> Result<(), HostError> {
-        match hello_rx.recv_timeout(spec.command_timeout) {
-            Ok(Ok(version)) if version == wire::WIRE_VERSION => {}
-            _ => return Err(HostError::Ipc),
-        }
-        // Every handshake failure is `Ipc` — including a `Failed`
-        // surfaced by `request` when the child died between `Hello`
-        // and `Scan`.
-        match self
-            .request(wire::Command::Scan)
-            .map_err(|_| HostError::Ipc)?
-        {
-            wire::Reply::Scanned(descriptors) => {
-                if !descriptors.iter().any(|d| d.matches(&spec.descriptor)) {
-                    return Err(HostError::Ipc);
-                }
-            }
-            _ => return Err(HostError::Ipc),
-        }
-        // Registry registration carries the v1 argv bootstrap fields
-        // — plugin selection + shm attachment — as the `CreateInstance`
-        // payload. The reply is `Ok` on success; every defined
-        // failure (`UnknownPluginId` after a field-match Scan means
-        // the child is lying, a duplicate handle the host never
-        // mints, `InstanceLimit` at capacity 1, `Ipc`, `PluginFailed`)
-        // folds into the handshake's uniform `Err(Ipc)` — the spawn
-        // is unusable, never a live-but-empty child.
-        match self
-            .request(wire::Command::CreateInstance {
-                plugin_id: spec.descriptor.id.to_owned(),
-                shm_key: shm_key.to_owned(),
-                in_depth: self.depth,
-                out_depth: self.depth,
-            })
-            .map_err(|_| HostError::Ipc)?
-        {
-            wire::Reply::Ok => Ok(()),
-            _ => Err(HostError::Ipc),
-        }
+            segment: parts.segment,
+        })
     }
 
     /// Sends one wire command and waits for its reply — the
@@ -1298,6 +2046,17 @@ impl L1Instance {
             }
             if inner.shutdown_initiated {
                 return Err(HostError::Ipc);
+            }
+            // Instance-scope rejections — a `Failed` entry is
+            // `Err(Failed)` (granular: siblings still answer);
+            // `Destroying`/removed entries are `Err(Ipc)`.
+            // `Creating` is unreachable here — the entry flips
+            // `Live` inside `create_instance` before the facade
+            // exists.
+            match inner.instances.get(&self.instance) {
+                Some(inst) if inst.mirror.is_failed() => return Err(HostError::Failed),
+                Some(inst) if inst.live() => {}
+                _ => return Err(HostError::Ipc),
             }
         }
         match &cmd {
@@ -1356,9 +2115,13 @@ impl L1Instance {
             // Never resurrect a converged instance — the reply may
             // have raced the crash paths (a timed-out
             // `StopProcessing` converges `Failed`; the guard keeps
-            // the mirror `Failed`, never `Activated`).
-            if inner.terminal.is_none() {
-                self.shared.set_mirror(&mut inner, state);
+            // the mirror `Failed`, never `Activated`). The instance
+            // entry keys the mirror — a live entry only.
+            if inner.terminal.is_none()
+                && let Some(inst) = inner.instances.get_mut(&self.instance)
+                && inst.live()
+            {
+                inst.set_mirror(state);
             }
         }
         let reply = result?;
@@ -1380,13 +2143,16 @@ impl L1Instance {
         Ok(reply)
     }
 
-    /// Publishes a freshly activated staging ring: `Inner::staging`
-    /// for the I/O threads, then the RT consumer — `RtLeg::arm`
-    /// when the leg is local, the arm channel while an endpoint
-    /// holds it (`pending_arm` latest-wins on `Full`). Also records
-    /// the activation's sample rate for endpoint scratch sizing.
+    /// Publishes a freshly activated staging ring:
+    /// `InstShared::staging` for the I/O threads, then the RT
+    /// consumer — `RtLeg::arm` when the leg is local, the arm
+    /// channel while an endpoint holds it (`pending_arm`
+    /// latest-wins on `Full`). Also records the activation's
+    /// sample rate for endpoint scratch sizing.
     fn arm_staging(&mut self, staging: Arc<data::Staging>, config: ProcessConfig) {
-        self.shared.lock().staging = Some(Arc::clone(&staging));
+        if let Some(inst) = self.shared.lock().instances.get_mut(&self.instance) {
+            inst.staging = Some(Arc::clone(&staging));
+        }
         self.activated_sample_rate = Some(config.sample_rate().get());
         match (&mut self.rt, &mut self.arm_tx) {
             (Some(rt), _) => rt.arm(staging),
@@ -1401,67 +2167,42 @@ impl L1Instance {
         }
     }
 
-    /// Registers the waiter, queues the frame and waits — the part of
-    /// `execute` the handshake `Scan`/`CreateInstance` shares. The
-    /// wire-v2 envelope `instance` is derived from the verb scope:
-    /// `Scan` is child-scoped (`WIRE_INSTANCE_NONE`); everything else
-    /// is stamped with this instance's dedicated handle — the same
-    /// value the reader's waiter attribution checks the echo against.
+    /// The instance-scope gate + child-side request — the wire-v2
+    /// envelope `instance` is derived from the verb scope: `Scan` is
+    /// child-scoped (`WIRE_INSTANCE_NONE`); everything else is
+    /// stamped with this instance's minted handle — the same value
+    /// the reader's waiter attribution checks the echo against. The
+    /// phase gate lives inside [`L1Child::request`] (atomic with
+    /// the waiter insert).
     fn request(&mut self, cmd: wire::Command) -> Result<wire::Reply, HostError> {
         let instance = match cmd {
             wire::Command::Scan => wire::WIRE_INSTANCE_NONE,
             _ => self.instance,
         };
-        let seq = self.next_seq.fetch_add(1, Ordering::Relaxed);
-        let (tx, reply_rx) = mpsc::channel();
-        {
-            let mut inner = self.shared.lock();
-            match inner.terminal {
-                Some(Terminal::Failed) => return Err(HostError::Failed),
-                Some(Terminal::Clean) => return Err(HostError::Ipc),
-                None => {}
-            }
-            if inner.shutdown_initiated {
-                return Err(HostError::Ipc);
-            }
-            inner.waiters.insert(seq, Waiter { instance, tx });
-        }
-        let Some(driver_tx) = &self.driver_tx else {
-            self.shared.lock().waiters.remove(&seq);
-            return Err(HostError::Ipc);
-        };
-        if driver_tx
-            .send(DriverCmd::Command { seq, instance, cmd })
-            .is_err()
-        {
-            self.shared.lock().waiters.remove(&seq);
-            return Err(HostError::Ipc);
-        }
-        match reply_rx.recv_timeout(self.command_timeout) {
-            Ok(result) => result,
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                self.shared.lock().waiters.remove(&seq);
-                // A reply timeout is `Ipc` plus `Failed` — the child
-                // is presumed lost; `converge` kills it (which is
-                // also what unblocks a driver stuck mid-write).
-                converge(&self.shared, None);
-                Err(HostError::Ipc)
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => Err(HostError::Ipc),
-        }
+        self.child.request(instance, cmd)
     }
 
     /// `Destroy`'s control-plane meaning: wire v2's teardown is
-    /// `DestroyInstance` (reclaims the child's registry slot) followed
-    /// by `Shutdown` — neither is sent to a `Failed` instance (it is
-    /// killed instead), then reap and join. Always succeeds and is
-    /// idempotent — the defined rejection is `Destroy → Ok` for live,
-    /// `Failed` and already-destroyed instances alike, so there is no
-    /// `Err` to return. This primitive is unconditional: rejecting a
+    /// `DestroyInstance` (reclaims the child's registry slot) then —
+    /// when this facade is the child's last referrer — `Shutdown`,
+    /// reap and join (the shutdown-on-empty + last-reference rules).
+    /// A `Failed` *child* is already killed/converged; a `Failed`
+    /// *instance* still sends `DestroyInstance` (the driver's gate
+    /// exempts it — reclaiming the dead entry's runner slot is its
+    /// job), then the entry leaves `Inner.instances` so its
+    /// `live_count` frees. Always succeeds and is idempotent — the
+    /// defined rejection is `Destroy → Ok` for live, `Failed` and
+    /// already-destroyed instances alike, so there is no `Err` to
+    /// return. This primitive is unconditional: rejecting a
     /// `HostCommand::Destroy` from `Activated`/`Processing` (the L0
     /// legality rule) is `crate::composite::PluginHost`'s gate — it
     /// mirrors `lifecycle_state()` through `LifecycleEvent::Destroy`
     /// before calling this — not this layer's.
+    ///
+    /// **Last-reference teardown:** `Arc::strong_count(&self.child)
+    /// == 1` means no live siblings — only then does `Shutdown`+
+    /// grace+reap+join run (a live sibling's child must never be
+    /// killed). Under the dedicated route the count is always 1.
     ///
     /// **RT contract:** non-RT only — bounded by `command_timeout`
     /// of shutdown grace plus the kill guarantee.
@@ -1472,39 +2213,50 @@ impl L1Instance {
         // return channel after this point and is dropped when the
         // channel's last consumer goes away.
         self.drain_endpoint_channels();
-        let failed = {
+        let (child_terminal, registered) = {
             let inner = self.shared.lock();
-            inner.mirror.is_failed() || matches!(inner.terminal, Some(Terminal::Failed))
+            (
+                inner.terminal.is_some(),
+                inner.instances.contains_key(&self.instance),
+            )
         };
-        if failed {
-            // Kill through the shared handle — a channel message
-            // could sit behind a wedged `write_all` forever.
-            kill_child(&self.shared);
-        } else if self.driver_tx.is_some() {
-            // The registry slot is reclaimed before the wire
-            // `Shutdown` — teardown is unconditional, so a dead or
-            // wedged reply path (`Err(Ipc)`/timeout → convergence)
-            // still proceeds to `Shutdown` below. `request` no-ops
-            // to `Err(Ipc)` on a `test_fixture` (no driver channel)
+        if registered {
+            // The registry slot is reclaimed while the child can
+            // still answer — teardown is unconditional, so a dead
+            // or wedged reply path (`Err(Ipc)`/timeout → child
+            // convergence) still proceeds to removal below. A
+            // terminal child's request no-ops to `Err`, so the
+            // request is skipped there. `request` also no-ops to
+            // `Err(Ipc)` on a `test_fixture` (no driver channel)
             // — harmless.
-            let _ = self.request(wire::Command::DestroyInstance);
-        }
-        if let Some(driver_tx) = self.driver_tx.take() {
-            if !failed {
-                // `shutdown_initiated` is set only on the driver —
-                // immediately before it writes the wire `Shutdown` —
-                // so a child that crashed before that point still
-                // converges `Failed` and keeps its notification.
-                let _ = driver_tx.send(DriverCmd::Shutdown);
+            if !child_terminal {
+                let _ = self.request(wire::Command::DestroyInstance);
             }
-            drop(driver_tx);
-        }
-        self.join_threads();
-        {
+            // `DestroyInstance`-reply-granular removal — run here
+            // whether or not the reply landed: residual `(i,·)`
+            // doorbells get their synthesized `mark_failed`, later
+            // frames demux to the inert post-removal row.
             let mut inner = self.shared.lock();
-            self.shared
-                .set_mirror(&mut inner, LifecycleState::Destroyed);
-            inner.terminal.get_or_insert(Terminal::Clean);
+            remove_instance(&mut inner, self.instance);
+            drop(inner);
+            self.child.send_driver(DriverCmd::RemoveInstance {
+                instance: self.instance,
+            });
+        }
+        // The mirror outlives the entry — `lifecycle_state` keeps
+        // answering `Destroyed` post-removal through the facade's
+        // own `rt_state` copy (the `Release`/`Acquire` pair the
+        // `InstShared` writes used).
+        self.rt_state.store(
+            data::mirror_encode(LifecycleState::Destroyed),
+            Ordering::Release,
+        );
+        if Arc::strong_count(&self.child) == 1 {
+            // The last referrer tears the child down — `Shutdown`+
+            // grace while the child still looks live, kill path
+            // when terminal/wedged. Sibling referrers would keep
+            // `strong_count > 1` and skip this entirely.
+            self.child.teardown();
         }
     }
 
@@ -1521,13 +2273,14 @@ impl L1Instance {
 
     /// The local lifecycle mirror — `Created` through `Processing`
     /// track successful commands, `Failed`/`Destroyed` are terminal
-    /// conditions.
+    /// conditions. Reads the facade's lock-free `rt_state` snapshot —
+    /// the same value `InstShared::set_mirror` publishes, still
+    /// answering after the entry itself is removed.
     ///
-    /// **RT contract:** non-RT only — takes the shared mutex (the RT
-    /// leg reads the const-cheap [`Shared::rt_state`] snapshot
-    /// instead).
+    /// **RT contract:** non-RT only by call site — a single atomic
+    /// load, technically non-blocking.
     pub(crate) fn lifecycle_state(&self) -> LifecycleState {
-        self.shared.lock().mirror
+        data::mirror_decode(self.rt_state.load(Ordering::Acquire))
     }
 
     /// The `process` equivalent — the RT leg of the data plane.
@@ -1567,7 +2320,7 @@ impl L1Instance {
             // surface moved; this is not a wire failure.
             return Err(HostError::EndpointUnavailable);
         };
-        let mirror = data::mirror_decode(self.shared.rt_state.load(Ordering::Acquire));
+        let mirror = data::mirror_decode(self.rt_state.load(Ordering::Acquire));
         rt.process(mirror, inputs, outputs, events, transport)
     }
 
@@ -1577,22 +2330,22 @@ impl L1Instance {
     /// rejection order puts state before every other check) and
     /// [`L1Instance::prepare_endpoint`] itself.
     ///
-    /// `shared.lock().mirror` — the control plane's committed state
+    /// `rt_state`'s decode — the control plane's committed state
     /// — decides: `Activated`/`Processing` pass; `Failed` is
     /// `Err(HostError::Failed)`; anything below `Activated` is
     /// `Err(HostError::Lifecycle)`, the same shape a rejected
     /// `Process` event takes. No convergence runs here — the mirror
     /// is already the committed authority on this side.
     ///
-    /// **RT contract:** non-RT only — takes the shared mutex.
+    /// **RT contract:** non-RT only by call site — a single atomic
+    /// load.
     ///
     /// # Errors
     ///
     /// [`HostError::Failed`] for a `Failed` instance and
     /// [`HostError::Lifecycle`] below `Activated`.
     pub(crate) fn check_attachable_state(&self) -> Result<(), HostError> {
-        let inner = self.shared.lock();
-        match inner.mirror {
+        match data::mirror_decode(self.rt_state.load(Ordering::Acquire)) {
             LifecycleState::Activated | LifecycleState::Processing => Ok(()),
             LifecycleState::Failed => Err(HostError::Failed),
             state => Err(HostError::Lifecycle(
@@ -1665,8 +2418,9 @@ impl L1Instance {
         let armed_frames = self
             .shared
             .lock()
-            .staging
-            .as_ref()
+            .instances
+            .get(&self.instance)
+            .and_then(|inst| inst.staging.as_ref())
             .map_or(0, |staging| staging.frame_capacity);
         if bound_max_frames == 0
             || bound_channels == 0
@@ -1716,11 +2470,17 @@ impl L1Instance {
         let (mut arm_tx, arm_rx) = ruviform_rt::channel::<Arc<data::Staging>>(2);
         let (arm_retirer, arm_collector) = ruviform_rt::retire_channel::<Arc<data::Staging>>(4);
         let (return_tx, return_rx) = ruviform_rt::channel::<data::RtLeg>(1);
-        // (5) seed arm — `Inner::staging` clone, same generation as
-        // the leg's armed ring in the normal path (a normalized
-        // no-op for the endpoint drain), legitimately newer after a
-        // detached `Activate`.
-        if let Some(staging) = self.shared.lock().staging.clone() {
+        // (5) seed arm — the entry's `staging` clone, same
+        // generation as the leg's armed ring in the normal path (a
+        // normalized no-op for the endpoint drain), legitimately
+        // newer after a detached `Activate`.
+        let seed = self
+            .shared
+            .lock()
+            .instances
+            .get(&self.instance)
+            .and_then(|inst| inst.staging.clone());
+        if let Some(staging) = seed {
             let _ = arm_tx.try_push(staging);
         }
         // (6) the `last_output` reserve — see the method docs.
@@ -1734,7 +2494,7 @@ impl L1Instance {
         // (8) the parts `crate::endpoint` assembles `L1Endpoint` from.
         data::EndpointLegParts {
             leg,
-            mirror: Arc::clone(&self.shared.rt_state),
+            mirror: Arc::clone(&self.rt_state),
             arm_rx,
             arm_retirer,
             return_tx,
@@ -1772,14 +2532,19 @@ impl L1Instance {
             // A leg restored above — or by an earlier wait-free
             // pass inside `process` — may carry a ring the
             // detached `Activate` already superseded: re-arm it
-            // onto the current `Inner::staging` or every later
+            // onto the entry's current `staging` or every later
             // submit fails `armed_for` and the instance passes
             // through forever (with `latency_frames` diverging
             // too). `RtLeg::arm`'s `last_output` resize fits the
             // attach-time `reserve_last_output` (the detached
             // `Activate` bound gate caps the ring at
             // `bound.max_frames`), so it never reallocs here.
-            let staging = self.shared.lock().staging.clone();
+            let staging = self
+                .shared
+                .lock()
+                .instances
+                .get(&self.instance)
+                .and_then(|inst| inst.staging.clone());
             if let (Some(rt), Some(staging)) = (&mut self.rt, staging)
                 && staging.generation > rt.armed_generation()
             {
@@ -1813,8 +2578,7 @@ impl L1Instance {
             // mutable entry point retries the send.
             self.pending_arm = Some(arm);
         }
-        let terminal =
-            data::mirror_decode(self.shared.rt_state.load(Ordering::Acquire)).is_destroyed();
+        let terminal = data::mirror_decode(self.rt_state.load(Ordering::Acquire)).is_destroyed();
         if !terminal
             && let Some(return_rx) = &mut self.return_rx
             && let Ok(leg) = return_rx.try_pop()
@@ -1857,35 +2621,33 @@ impl L1Instance {
     ///
     /// **RT contract:** non-RT only — takes the shared mutex.
     pub(crate) fn latency_frames(&self) -> Option<u32> {
-        let inner = self.shared.lock();
-        match inner.mirror {
+        match data::mirror_decode(self.rt_state.load(Ordering::Acquire)) {
             LifecycleState::Activated | LifecycleState::Processing => {}
             _ => return None,
         }
-        Self::armed_latency(&inner, self.depth)
+        self.armed_latency_frames()
     }
 
     /// The armed ring's latency figure with no lifecycle gate —
-    /// `Some` while a ring is armed, `None` before `Activate`. The
-    /// composite's attach path reads it for endpoint bookkeeping:
-    /// the endpoint is minted carrying the armed horizon its leg
-    /// still holds — a mid-attach mirror flip (convergence) does
-    /// not disarm the ring, so this internal read must not gate on
-    /// the mirror the way the public query does.
+    /// `Some` while a ring is armed, `None` before `Activate` or
+    /// once the entry is removed. The composite's attach path reads
+    /// it for endpoint bookkeeping: the endpoint is minted carrying
+    /// the armed horizon its leg still holds — a mid-attach mirror
+    /// flip (convergence) does not disarm the ring, so this
+    /// internal read must not gate on the mirror the way the public
+    /// query does.
     ///
     /// **RT contract:** non-RT only — takes the shared mutex.
     pub(crate) fn armed_latency_frames(&self) -> Option<u32> {
-        Self::armed_latency(&self.shared.lock(), self.depth)
-    }
-
-    /// `(depth − 1) × armed frame_capacity` — `None` while no ring
-    /// is armed. The shared read behind [`L1Instance::latency_frames`]
-    /// (lifecycle-gated) and [`L1Instance::armed_latency_frames`]
-    /// (ungated).
-    fn armed_latency(inner: &Inner, depth: u32) -> Option<u32> {
-        inner.staging.as_ref().map(|staging| {
-            u32::try_from((depth - 1) as usize * staging.frame_capacity).unwrap_or(u32::MAX)
-        })
+        let inner = self.shared.lock();
+        inner
+            .instances
+            .get(&self.instance)
+            .and_then(|inst| inst.staging.as_ref())
+            .map(|staging| {
+                u32::try_from((self.depth - 1) as usize * staging.frame_capacity)
+                    .unwrap_or(u32::MAX)
+            })
     }
 
     /// The sample rate of the last successful `Activate` — the
@@ -1922,63 +2684,21 @@ impl L1Instance {
     pub(crate) fn try_recv_notification(&self) -> Option<ChildExit> {
         self.notify_rx.try_recv().ok()
     }
-
-    /// Handshake-failure teardown: kill + reap + join, bounded by
-    /// [`join_threads`]. No notification is emitted — the instance
-    /// never went live.
-    fn abort(&mut self) {
-        kill_child(&self.shared);
-        drop(self.driver_tx.take());
-        self.join_threads();
-    }
-
-    /// Waits for the driver thread to finish — bounded. The driver
-    /// exits on `try_wait`/`Disconnected`/the shutdown watchdog (all
-    /// prompt once the child is dead), but a wedged child can leave
-    /// it blocked in `write_all` where it never observes the dropped
-    /// channel — so the join polls `is_finished` for the shutdown
-    /// grace plus a reap margin, then force-kills through the shared
-    /// handle (the kill turns the write into EPIPE; the post-kill
-    /// `join` then completes once the driver unwinds and reaps).
-    ///
-    /// The reader is *detached*, not joined: a POSIX child can leave
-    /// a stdio-inheriting grandchild holding the stdout pipe open
-    /// after its own death, so the reader's `wire::read_message` may
-    /// never see EOF — joining could hang forever. Dropping the
-    /// `JoinHandle` detaches; the reader touches only `Arc`-shared
-    /// state (kept alive by its own Arc) and process exit reaps the
-    /// thread.
-    fn join_threads(&mut self) {
-        if let Some(join) = self.driver_join.take() {
-            // Grace for the shutdown watchdog's `command_timeout`
-            // window plus a reap margin; past it the driver can only
-            // be wedged — force-kill before the blocking join.
-            let deadline = Instant::now() + self.command_timeout + DRIVER_JOIN_MARGIN;
-            while !join.is_finished() {
-                if Instant::now() >= deadline {
-                    kill_child(&self.shared);
-                    break;
-                }
-                thread::sleep(DRIVER_JOIN_POLL);
-            }
-            let _ = join.join();
-        }
-        drop(self.reader_join.take());
-    }
 }
 
 impl Drop for L1Instance {
-    /// Dropping without `Destroy` disconnects the command channel —
-    /// the driver's `Disconnected` arm kills and reaps the child and
-    /// converges (any notification lands on the dropped receiver). A
-    /// `Shutdown` already in flight keeps its grace. Bounded by the
+    /// Dropping without `Destroy` runs the same unconditional path —
+    /// `DestroyInstance` slot reclaim (bounded request), entry
+    /// removal, then the last-reference teardown when no sibling
+    /// keeps the child (`Arc::strong_count == 1`): `Shutdown`+grace
+    /// or the driver's `Disconnected` kill/reap. Bounded by the
     /// driver's kill guarantee — the endpoint-channel drain is the
     /// same bounded `try_*` subset, never a wait on endpoint
     /// liveness.
     fn drop(&mut self) {
-        self.drain_endpoint_channels();
-        drop(self.driver_tx.take());
-        self.join_threads();
+        if !self.lifecycle_state().is_destroyed() {
+            self.destroy();
+        }
     }
 }
 
@@ -2027,19 +2747,23 @@ fn err_committed_state(cmd: &wire::Command) -> Option<LifecycleState> {
 #[cfg(test)]
 impl L1Instance {
     /// Child-free fixture for the endpoint-machinery tests — this
-    /// module's and `crate::composite`'s. Real `Shared`, channel
-    /// legs and shm segment, but no spawned child: `driver_tx`/
-    /// `driver_join`/`reader_join` are `None`, so `destroy`/`Drop`
-    /// run the bounded teardown without touching a process and
-    /// `request` fails `Err(Ipc)` past the defined rejections (the
-    /// detached `Activate` gate is still exercised — it runs
-    /// before the wire).
+    /// module's and `crate::composite`'s. Real `Shared`, a registered
+    /// `InstShared` entry, channel legs and shm segment, but no
+    /// spawned child: the child's `driver_tx`/`driver_join`/
+    /// `reader_join` are `None`, so `destroy`/`Drop` run the bounded
+    /// teardown without touching a process and `request` fails
+    /// `Err(Ipc)` past the defined rejections (the detached
+    /// `Activate` gate is still exercised — it runs before the
+    /// wire).
     ///
-    /// `mirror` is the state `Inner.mirror` and `rt_state` start
-    /// at; `activated_frames` arms a gen-1 staging ring of that
-    /// capacity and records a 48 kHz activation.
+    /// `mirror` is the state the entry's `mirror`/`rt_state` start
+    /// at (`Failed`/`Destroyed` mirrors register the entry as
+    /// `Failed`-phase — registered-but-not-live); `activated_frames`
+    /// arms a gen-1 staging ring of that capacity and records a
+    /// 48 kHz activation.
     pub(crate) fn test_fixture(mirror: LifecycleState, activated_frames: Option<u32>) -> Self {
         const DEPTH: u32 = 3;
+        const INSTANCE: u32 = 0;
         let (submit_tx, _submit_rx) = ruviform_rt::channel::<data::Submit>(DEPTH as usize);
         let (result_tx, result_rx) = ruviform_rt::channel::<u64>(DEPTH as usize);
         let (notify_tx, notify_rx) = mpsc::channel();
@@ -2048,31 +2772,59 @@ impl L1Instance {
         if let Some(staging) = &staging {
             leg.arm(Arc::clone(staging));
         }
+        let rt_state = Arc::new(AtomicU8::new(data::mirror_encode(mirror)));
+        let segment = shm::Segment::create(
+            u32::try_from(INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed)).unwrap_or(u32::MAX),
+            DEPTH,
+            DEPTH,
+        )
+        .expect("fixture segment");
+        let mut instances = HashMap::new();
+        instances.insert(
+            INSTANCE,
+            InstShared {
+                rt_state: Arc::clone(&rt_state),
+                mirror,
+                notify_tx,
+                notify: Notify::Idle,
+                staging,
+                shm: SegmentInfo {
+                    key: segment.key().to_owned(),
+                    in_depth: DEPTH,
+                    out_depth: DEPTH,
+                },
+                result_tx: Mutex::new(result_tx),
+                phase: if mirror.is_failed() || mirror.is_destroyed() {
+                    InstPhase::Failed
+                } else {
+                    InstPhase::Live
+                },
+            },
+        );
         let shared = Arc::new(Shared {
             inner: Mutex::new(Inner {
                 waiters: HashMap::new(),
-                mirror,
+                instances,
                 block_in_flight: HashSet::new(),
-                staging,
                 terminal: None,
                 shutdown_initiated: false,
                 seen_eof: false,
-                notify: Notify::Idle,
             }),
-            rt_state: Arc::new(AtomicU8::new(data::mirror_encode(mirror))),
             child: OnceLock::new(),
-            notify_tx,
-            result_tx: Mutex::new(result_tx),
+            next_cmd_seq: AtomicU64::new(0),
         });
         Self {
-            shared,
-            driver_tx: None,
-            driver_join: None,
-            reader_join: None,
+            shared: Arc::clone(&shared),
+            child: Arc::new(L1Child {
+                shared,
+                driver_tx: Mutex::new(None),
+                driver_join: Mutex::new(None),
+                reader_join: Mutex::new(None),
+                command_timeout: Duration::from_millis(50),
+            }),
+            instance: INSTANCE,
             notify_rx,
-            command_timeout: Duration::from_millis(50),
-            next_seq: AtomicU64::new(0),
-            instance: 0,
+            rt_state,
             depth: DEPTH,
             rt: Some(leg),
             staging_generation: u64::from(activated_frames.is_some()),
@@ -2082,12 +2834,7 @@ impl L1Instance {
             arm_collector: None,
             endpoint_bound: None,
             activated_sample_rate: activated_frames.map(|_| 48_000),
-            segment: shm::Segment::create(
-                u32::try_from(INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed)).unwrap_or(u32::MAX),
-                DEPTH,
-                DEPTH,
-            )
-            .expect("fixture segment"),
+            segment,
         }
     }
 }
@@ -2141,7 +2888,7 @@ mod tests {
         assert_eq!(seed.generation, 1);
         assert!(parts.arm_rx.try_pop().is_err());
         // The mirror is the *same* atomic `rt_state` publishes.
-        assert!(Arc::ptr_eq(&parts.mirror, &instance.shared.rt_state));
+        assert!(Arc::ptr_eq(&parts.mirror, &instance.rt_state));
         // Single-endpoint rule — `rt.is_none()` is authoritative.
         assert!(matches!(
             instance.prepare_endpoint(512, 2),
@@ -2386,8 +3133,8 @@ mod tests {
     }
 
     /// A submit the driver drops without a doorbell (stale
-    /// generation — or a terminal/shutting-down child) still owes
-    /// the leg exactly one completion: the synthesized
+    /// generation — or a terminal/`Destroying`/dead entry) still
+    /// owes the leg exactly one completion: the synthesized
     /// `mark_failed` result `push_result` delivers. Without it the
     /// slot's `cleared[i] >= last_pushed[i]` gate wedges
     /// permanently — every later seq for that slot fails the gate.
@@ -2396,29 +3143,29 @@ mod tests {
     #[test]
     fn dropped_submit_result_frees_alternation_slot() {
         const DEPTH: u32 = 3;
+        const INSTANCE: u32 = 0;
         // Live channel ends so `try_push` lands and `last_pushed`
         // records each seq — the wedge is real only while the
         // submit actually pushed.
         let (submit_tx, mut submit_rx) = ruviform_rt::channel::<data::Submit>(DEPTH as usize);
         let (result_tx, result_rx) = ruviform_rt::channel::<u64>(DEPTH as usize);
-        let (notify_tx, _notify_rx) = mpsc::channel();
+        let (inst, _notify_rx, _) = inst_shared(LifecycleState::Processing);
+        let mut inst = inst;
+        inst.result_tx = Mutex::new(result_tx);
+        inst.staging = Some(Arc::new(data::Staging::new(DEPTH, 512, 1)));
+        let mut instances = HashMap::new();
+        instances.insert(INSTANCE, inst);
         let shared = Shared {
             inner: Mutex::new(Inner {
                 waiters: HashMap::new(),
-                mirror: LifecycleState::Processing,
+                instances,
                 block_in_flight: HashSet::new(),
-                staging: Some(Arc::new(data::Staging::new(DEPTH, 512, 1))),
                 terminal: None,
                 shutdown_initiated: false,
                 seen_eof: false,
-                notify: Notify::Idle,
             }),
-            rt_state: Arc::new(AtomicU8::new(data::mirror_encode(
-                LifecycleState::Processing,
-            ))),
             child: OnceLock::new(),
-            notify_tx,
-            result_tx: Mutex::new(result_tx),
+            next_cmd_seq: AtomicU64::new(0),
         };
         let mut leg = data::RtLeg::new(DEPTH, DEPTH - 1, submit_tx, result_rx);
         leg.arm(Arc::new(data::Staging::new(DEPTH, 512, 1)));
@@ -2440,7 +3187,7 @@ mod tests {
         // The driver-side drop synthesizes one completion per
         // dropped seq — one per slot here.
         for block in 0..u64::from(DEPTH) {
-            shared.push_result(data::mark_failed(data::BLOCK_SEQ_FLAG | block));
+            shared.push_result(INSTANCE, data::mark_failed(data::BLOCK_SEQ_FLAG | block));
         }
         // Block 4's own submit still gates (its slot check runs
         // before the drain frees it) but its `drain_to` consumes
@@ -2510,5 +3257,482 @@ mod tests {
                 ));
             }
         });
+    }
+
+    // ---- Issue #117 T2: demux + convergence machinery ---------------
+
+    /// One registered `InstShared` entry for the demux/converge
+    /// tests — `Live` phase, `mirror`/`rt_state` at `state`, real
+    /// notify + result channel ends handed back for assertions.
+    fn inst_shared(
+        state: LifecycleState,
+    ) -> (
+        InstShared,
+        mpsc::Receiver<ChildExit>,
+        ruviform_rt::Consumer<u64>,
+    ) {
+        let (notify_tx, notify_rx) = mpsc::channel();
+        let (result_tx, result_rx) = ruviform_rt::channel::<u64>(3);
+        let rt_state = Arc::new(AtomicU8::new(data::mirror_encode(state)));
+        (
+            InstShared {
+                rt_state,
+                mirror: state,
+                notify_tx,
+                notify: Notify::Idle,
+                staging: None,
+                shm: SegmentInfo {
+                    key: "demux-test".to_owned(),
+                    in_depth: 3,
+                    out_depth: 3,
+                },
+                result_tx: Mutex::new(result_tx),
+                phase: InstPhase::Live,
+            },
+            notify_rx,
+            result_rx,
+        )
+    }
+
+    /// A child-level `Shared` with `instances` registered — the
+    /// demux/converge fixture; each returned receiver is the
+    /// matching entry's notify queue.
+    struct DemuxFixture {
+        shared: Shared,
+        notify_rxs: HashMap<u32, mpsc::Receiver<ChildExit>>,
+        result_rxs: HashMap<u32, ruviform_rt::Consumer<u64>>,
+    }
+
+    impl DemuxFixture {
+        /// `count` live entries registered at `state` — handles
+        /// `0..count`.
+        fn live(count: u32, state: LifecycleState) -> Self {
+            let mut instances = HashMap::new();
+            let mut notify_rxs = HashMap::new();
+            let mut result_rxs = HashMap::new();
+            for instance in 0..count {
+                let (inst, notify_rx, result_rx) = inst_shared(state);
+                instances.insert(instance, inst);
+                notify_rxs.insert(instance, notify_rx);
+                result_rxs.insert(instance, result_rx);
+            }
+            Self {
+                shared: Shared {
+                    inner: Mutex::new(Inner {
+                        waiters: HashMap::new(),
+                        instances,
+                        block_in_flight: HashSet::new(),
+                        terminal: None,
+                        shutdown_initiated: false,
+                        seen_eof: false,
+                    }),
+                    child: OnceLock::new(),
+                    next_cmd_seq: AtomicU64::new(0),
+                },
+                notify_rxs,
+                result_rxs,
+            }
+        }
+    }
+
+    /// Waiter-correlated `Reply` — delivered to its channel and
+    /// attributed by the `instance` echo.
+    #[test]
+    fn demux_delivers_waiter_correlated_reply() {
+        let fixture = DemuxFixture::live(1, LifecycleState::Processing);
+        let (tx, rx) = mpsc::channel();
+        fixture
+            .shared
+            .lock()
+            .waiters
+            .insert(7, Waiter { instance: 0, tx });
+        let verdict = demux_execute(
+            &fixture.shared,
+            &wire::Message::Reply {
+                seq: 7,
+                instance: 0,
+                result: Ok(wire::Reply::Ok),
+            },
+            &mut HashMap::new(),
+        );
+        assert_eq!(verdict, Verdict::Delivered);
+        assert!(matches!(rx.try_recv(), Ok(Ok(wire::Reply::Ok))));
+    }
+
+    /// A `Reply` echoing a different `instance` than its waiter's
+    /// stamp is an attribution failure — child-scope convergence,
+    /// and the doomed waiter still wakes `Err(Ipc)` now rather
+    /// than at timeout.
+    #[test]
+    fn demux_reply_instance_mismatch_is_child_scope() {
+        let fixture = DemuxFixture::live(2, LifecycleState::Processing);
+        let (tx, rx) = mpsc::channel();
+        fixture
+            .shared
+            .lock()
+            .waiters
+            .insert(7, Waiter { instance: 0, tx });
+        let verdict = demux_execute(
+            &fixture.shared,
+            &wire::Message::Reply {
+                seq: 7,
+                instance: 1,
+                result: Ok(wire::Reply::Ok),
+            },
+            &mut HashMap::new(),
+        );
+        assert_eq!(verdict, Verdict::Child);
+        assert!(matches!(rx.try_recv(), Ok(Err(HostError::Ipc))));
+        assert!(matches!(
+            fixture.shared.lock().terminal,
+            Some(Terminal::Failed)
+        ));
+    }
+
+    /// The strict `waiter-less Reply ⇒ child-scope` rule applies
+    /// only to a *live* instance — `Failed`/`Destroying`/removed
+    /// targets are inert drops instead.
+    #[test]
+    fn demux_waiterless_reply_scope_by_instance_phase() {
+        let fixture = DemuxFixture::live(3, LifecycleState::Processing);
+        // Live entry, no waiter — child-scope violation.
+        let verdict = demux_execute(
+            &fixture.shared,
+            &wire::Message::Reply {
+                seq: 9,
+                instance: 0,
+                result: Ok(wire::Reply::Ok),
+            },
+            &mut HashMap::new(),
+        );
+        assert_eq!(verdict, Verdict::Child);
+
+        // On a fresh child: mark instance 1 `Failed` — its late
+        // waiter-less `Reply` is inert, not a violation.
+        let fixture = DemuxFixture::live(3, LifecycleState::Processing);
+        fixture.shared.lock().instances.get_mut(&1).unwrap().phase = InstPhase::Failed;
+        let verdict = demux_execute(
+            &fixture.shared,
+            &wire::Message::Reply {
+                seq: 9,
+                instance: 1,
+                result: Ok(wire::Reply::Ok),
+            },
+            &mut HashMap::new(),
+        );
+        assert_eq!(verdict, Verdict::Inert);
+        // Unregistered value — also inert.
+        let verdict = demux_execute(
+            &fixture.shared,
+            &wire::Message::Reply {
+                seq: 9,
+                instance: 40,
+                result: Ok(wire::Reply::Ok),
+            },
+            &mut HashMap::new(),
+        );
+        assert_eq!(verdict, Verdict::Inert);
+        assert!(fixture.shared.lock().terminal.is_none());
+    }
+
+    /// A flagged `Reply` is the child's `BlockIn` rejection —
+    /// completes the `(i, seq)` doorbell with `mark_failed`, no
+    /// shm work.
+    #[test]
+    fn demux_flagged_reply_completes_doorbell_failed() {
+        let mut fixture = DemuxFixture::live(1, LifecycleState::Processing);
+        let seq = data::BLOCK_SEQ_FLAG | 5;
+        fixture.shared.lock().block_in_flight.insert((0, seq));
+        let verdict = demux_execute(
+            &fixture.shared,
+            &wire::Message::Reply {
+                seq,
+                instance: 0,
+                result: Err(HostError::PluginFailed),
+            },
+            &mut HashMap::new(),
+        );
+        assert_eq!(verdict, Verdict::Completed);
+        assert_eq!(
+            fixture.result_rxs.get_mut(&0).unwrap().try_pop().unwrap(),
+            data::mark_failed(seq)
+        );
+        assert!(fixture.shared.lock().block_in_flight.is_empty());
+    }
+
+    /// `BlockDone` for `(i, seq)` not in `block_in_flight` — the
+    /// attributable per-instance violation: `converge_instance(i)`
+    /// fails that instance alone (`ChildExit{None, None}`), leaves
+    /// the child live and siblings untouched, keeps the entry
+    /// registered.
+    #[test]
+    fn demux_unknown_blockdone_converges_one_instance() {
+        let fixture = DemuxFixture::live(2, LifecycleState::Processing);
+        let seq = data::BLOCK_SEQ_FLAG | 5;
+        // An in-flight doorbell + waiter on the OTHER instance —
+        // the proof nothing leaks across.
+        fixture.shared.lock().block_in_flight.insert((1, seq));
+        let (tx, _rx) = mpsc::channel();
+        fixture
+            .shared
+            .lock()
+            .waiters
+            .insert(3, Waiter { instance: 1, tx });
+        let verdict = demux_execute(
+            &fixture.shared,
+            &wire::Message::BlockDone {
+                seq,
+                instance: 0,
+                result: ProcessResult::CONTINUE,
+            },
+            &mut HashMap::new(),
+        );
+        assert_eq!(verdict, Verdict::Instance(0));
+        {
+            let inner = fixture.shared.lock();
+            let failed = &inner.instances[&0];
+            assert_eq!(failed.phase, InstPhase::Failed);
+            assert_eq!(failed.mirror, LifecycleState::Failed);
+            assert_eq!(failed.notify, Notify::Sent);
+            assert_eq!(inner.instances[&1].phase, InstPhase::Live);
+            assert_eq!(inner.instances[&1].mirror, LifecycleState::Processing);
+            assert!(inner.terminal.is_none());
+            // The sibling's waiter + doorbell bookkeeping survived.
+            assert!(inner.waiters.contains_key(&3));
+            assert!(inner.block_in_flight.contains(&(1, seq)));
+        }
+        assert_eq!(
+            fixture.notify_rxs.get(&0).unwrap().try_recv().unwrap(),
+            ChildExit {
+                code: None,
+                signal: None
+            }
+        );
+        assert!(fixture.notify_rxs.get(&1).unwrap().try_recv().is_err());
+    }
+
+    /// A `BlockDone` for an in-flight `(i, seq)` on a
+    /// `Destroying` entry still completes — the doorbell window —
+    /// while the same frame on a `Failed` entry demuxes inert.
+    #[test]
+    fn demux_destroying_window_vs_failed_inert() {
+        let fixture = DemuxFixture::live(2, LifecycleState::Processing);
+        let seq = data::BLOCK_SEQ_FLAG | 5;
+        {
+            let mut inner = fixture.shared.lock();
+            inner.instances.get_mut(&0).unwrap().phase = InstPhase::Destroying;
+            inner.block_in_flight.insert((0, seq));
+        }
+        // `Complete` — the doorbell window: a `BlockDone` on a
+        // `Destroying` entry is still answered normally.
+        let mut inner = fixture.shared.lock();
+        let action = demux(
+            &mut inner,
+            &wire::Message::BlockDone {
+                seq,
+                instance: 0,
+                result: ProcessResult::CONTINUE,
+            },
+        );
+        assert!(matches!(
+            action,
+            Demux::Complete {
+                instance: 0,
+                seq: s,
+                result: Some(ProcessResult::CONTINUE)
+            } if s == seq
+        ));
+        // Same frame for a `Failed` entry with no in-flight
+        // doorbell — inert.
+        inner.instances.get_mut(&1).unwrap().phase = InstPhase::Failed;
+        let action = demux(
+            &mut inner,
+            &wire::Message::BlockDone {
+                seq,
+                instance: 1,
+                result: ProcessResult::CONTINUE,
+            },
+        );
+        assert!(matches!(action, Demux::Inert));
+    }
+
+    /// Post-`Shutdown` frames are non-events — `shutdown_initiated`
+    /// makes every demux verdict `NonEvent` before any instance
+    /// resolution.
+    #[test]
+    fn demux_post_shutdown_frames_are_nonevents() {
+        let fixture = DemuxFixture::live(1, LifecycleState::Processing);
+        fixture.shared.lock().shutdown_initiated = true;
+        let mut inner = fixture.shared.lock();
+        for msg in [
+            wire::Message::Reply {
+                seq: 9,
+                instance: 0,
+                result: Ok(wire::Reply::Ok),
+            },
+            wire::Message::BlockDone {
+                seq: data::BLOCK_SEQ_FLAG | 5,
+                instance: 0,
+                result: ProcessResult::CONTINUE,
+            },
+            wire::Message::Hello {
+                version: wire::WIRE_VERSION,
+                capabilities: 0,
+            },
+        ] {
+            assert!(matches!(demux(&mut inner, &msg), Demux::NonEvent));
+        }
+    }
+
+    /// `converge_child` fans one `ChildExit` out per *minted*
+    /// instance — the `Creating` entry converges silently (its
+    /// `Instantiate` caller gets `Err(Ipc)` through the drained
+    /// waiter instead), waiters wake `Err(Ipc)`, in-flight
+    /// doorbells get their `mark_failed` completions.
+    #[test]
+    fn converge_child_fans_out_per_minted_instance() {
+        let mut fixture = DemuxFixture::live(2, LifecycleState::Processing);
+        // A mid-create entry — registered but never minted.
+        let (tx0, rx0) = mpsc::channel();
+        let (tx1, rx1) = mpsc::channel();
+        {
+            let (mut inst, notify_rx, result_rx) = inst_shared(LifecycleState::Created);
+            inst.phase = InstPhase::Creating;
+            let mut inner = fixture.shared.lock();
+            inner.instances.insert(7, inst);
+            fixture.notify_rxs.insert(7, notify_rx);
+            fixture.result_rxs.insert(7, result_rx);
+            // Two waiters — one live instance, one mid-create —
+            // and doorbells.
+            inner.waiters.insert(
+                3,
+                Waiter {
+                    instance: 0,
+                    tx: tx0,
+                },
+            );
+            inner.waiters.insert(
+                4,
+                Waiter {
+                    instance: 7,
+                    tx: tx1,
+                },
+            );
+            inner.block_in_flight.insert((0, data::BLOCK_SEQ_FLAG | 5));
+            inner.block_in_flight.insert((1, data::BLOCK_SEQ_FLAG | 6));
+        }
+        converge_child(&fixture.shared, None);
+        {
+            let inner = fixture.shared.lock();
+            assert!(matches!(inner.terminal, Some(Terminal::Failed)));
+            assert!(inner.waiters.is_empty());
+            assert!(inner.block_in_flight.is_empty());
+            for instance in [0, 1, 7] {
+                assert_eq!(inner.instances[&instance].phase, InstPhase::Failed);
+                assert_eq!(inner.instances[&instance].mirror, LifecycleState::Failed);
+            }
+            // Minted → Pending (no exit status yet); the creating
+            // entry stays silent.
+            assert_eq!(inner.instances[&0].notify, Notify::Pending);
+            assert_eq!(inner.instances[&1].notify, Notify::Pending);
+            assert_eq!(inner.instances[&7].notify, Notify::Idle);
+        }
+        // Waiters wake `Err(Ipc)` — including the creating
+        // entry's own in-flight command.
+        assert!(matches!(rx0.try_recv(), Ok(Err(HostError::Ipc))));
+        assert!(matches!(rx1.try_recv(), Ok(Err(HostError::Ipc))));
+        // Doorbells complete `mark_failed` — one per instance.
+        assert_eq!(
+            fixture.result_rxs.get_mut(&0).unwrap().try_pop().unwrap(),
+            data::mark_failed(data::BLOCK_SEQ_FLAG | 5)
+        );
+        assert_eq!(
+            fixture.result_rxs.get_mut(&1).unwrap().try_pop().unwrap(),
+            data::mark_failed(data::BLOCK_SEQ_FLAG | 6)
+        );
+        // A late exit status completes the pending notifications —
+        // exactly once, per minted instance.
+        converge_child(
+            &fixture.shared,
+            Some(ChildExit {
+                code: Some(3),
+                signal: None,
+            }),
+        );
+        assert_eq!(
+            fixture.notify_rxs[&0].try_recv().unwrap(),
+            ChildExit {
+                code: Some(3),
+                signal: None
+            }
+        );
+        assert_eq!(
+            fixture.notify_rxs[&1].try_recv().unwrap(),
+            ChildExit {
+                code: Some(3),
+                signal: None
+            }
+        );
+        // The mid-create entry never notifies — exactly once means
+        // zero here.
+        assert!(fixture.notify_rxs[&7].try_recv().is_err());
+        // Idempotent — a second convergence changes nothing.
+        converge_child(
+            &fixture.shared,
+            Some(ChildExit {
+                code: Some(9),
+                signal: None,
+            }),
+        );
+        assert!(fixture.notify_rxs[&0].try_recv().is_err());
+    }
+
+    /// `remove_instance` frees residual `(i,·)` doorbells with
+    /// `mark_failed` — the leg's alternation gate is released
+    /// before the entry leaves the map (the reuse-safety half of
+    /// the doorbell window).
+    #[test]
+    fn remove_instance_completes_residual_doorbells() {
+        let mut fixture = DemuxFixture::live(2, LifecycleState::Processing);
+        let seq = data::BLOCK_SEQ_FLAG | 5;
+        {
+            let mut inner = fixture.shared.lock();
+            inner.block_in_flight.insert((0, seq));
+            inner.block_in_flight.insert((1, data::BLOCK_SEQ_FLAG | 6));
+            remove_instance(&mut inner, 0);
+            assert!(!inner.instances.contains_key(&0));
+            assert!(!inner.block_in_flight.contains(&(0, seq)));
+            // The sibling's doorbell bookkeeping is untouched.
+            assert!(
+                inner
+                    .block_in_flight
+                    .contains(&(1, data::BLOCK_SEQ_FLAG | 6))
+            );
+        }
+        assert_eq!(
+            fixture.result_rxs.get_mut(&0).unwrap().try_pop().unwrap(),
+            data::mark_failed(seq)
+        );
+        assert!(fixture.result_rxs.get_mut(&1).unwrap().try_pop().is_err());
+    }
+
+    /// `mint_instance` is lowest-free and `None` at
+    /// `WIRE_MAX_INSTANCES` — the `InstanceLimit` boundary.
+    #[test]
+    fn mint_instance_lowest_free_and_capacity() {
+        let fixture = DemuxFixture::live(1, LifecycleState::Processing);
+        {
+            let inner = fixture.shared.lock();
+            assert_eq!(mint_instance(&inner), Some(1));
+        }
+        // Fill to capacity — mint must yield `None`.
+        {
+            let mut inner = fixture.shared.lock();
+            for instance in 1..wire::WIRE_MAX_INSTANCES {
+                let (inst, _, _) = inst_shared(LifecycleState::Created);
+                inner.instances.insert(instance, inst);
+            }
+            assert_eq!(mint_instance(&inner), None);
+        }
     }
 }
