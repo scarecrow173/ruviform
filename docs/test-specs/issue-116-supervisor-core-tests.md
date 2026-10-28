@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034NOX3x1mfWrROBAq4Wqu"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "L1 supervisor core tests（Issue #116 — watch/poll state machine・backoff・GaveUp・host binding・checkpoint bound）"
 created: "2026-10-28"
 updated: "2026-10-29"

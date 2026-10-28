@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NOXJpTlwWqDQf7WFQFQ"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 supervisor final verification（Full Gate・AC 証拠・IR・status 同期）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -50,7 +50,8 @@ relations:
     generated: []
   implements:
     - "docs/plans/implement-issue-116-supervisor.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-116-supervisor-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-116-supervisor.md"
     - "docs/tasks/l1-test-worker-fault-flags.md"
@@ -114,19 +115,19 @@ T1-T3 で着地した supervisor 実装の Full Gate・AC/R-V 証拠収集・IR�
 
 ## Done When
 
-- [ ] Full Gate（`fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke`/`cargo doc`/`prek`/opt-in lane/doc audit）が全 pass
-- [ ] spec AC1-AC10 + R-V1–R-V6 の全行が test 名 + 実行結果で証拠化されている（IR coverage 表）
-- [ ] literal sweep が残存なし — `composite.rs`/`l1/`/`host.rs`/`wire.rs` 無 diff・`supervisor.rs` が `pub(crate)`/`crate::l1` 非参照・`l1_supervisor_e2e.rs` が `#[path]` 非使用・core/export への supervisor 語彙混入なし
-- [ ] IR が AC/R-V 証拠・task 完了・design 差分（spec OPEN → design 確定値の照合）を収録し `docs/impl/ir/README.md` index に登録されている
-- [ ] spec/task/plan/test-spec の status が実装状態へ同期されている（spec `draft → implemented`・plan `approved → completed`・task `done`・test-spec `approved`・index 列同期）
-- [ ] `doc_status.js audit --json` が `blocking:0`・`findings:[]` を返す
+- [x] Full Gate（`fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke`/`cargo doc`/`prek`/opt-in lane/doc audit）が全 pass（実績: 全コマンド初回 exit 0 — `test` 60 binaries・1294 passed・0 failed・`test-rt` 137 一致 0 failed・`cargo doc` は `RUSTDOCFLAGS="-D warnings"` 下で初回から warning 0・補正不要）
+- [x] spec AC1-AC10 + R-V1–R-V6 の全行が test 名 + 実行結果で証拠化されている（IR coverage 表 — `docs/impl/ir/issue-116-supervisor-implementation.md`・各 AC/R-V へ test 名・file:line・pin 内容を記録）
+- [x] literal sweep が残存なし — `composite.rs`/`l1/`/`host.rs`/`wire.rs` 無 diff・`supervisor.rs` が `pub(crate)`/`crate::l1` 非参照・`l1_supervisor_e2e.rs` が `#[path]` 非使用・core/export への supervisor 語彙混入なし（実績: merge-base `fc02103` 対比 4 file byte-level 無 diff・`supervisor.rs` の `use` は `lib.rs` 公開面のみ・`#[path]`/`mod l1` 0 hit・語彙 grep 0 hit）
+- [x] IR が AC/R-V 証拠・task 完了・design 差分（spec OPEN → design 確定値の照合 — `SupervisedId` 採用・`Err(Unsupported)` skip 確定・`RestartPolicy` 既定値・`Orphaned` 追加・`--hang-after-msgs` 未使用/`--fail-stop-processing` 到達不能 deviation）を収録し `docs/impl/ir/README.md` index に登録されている（行追加済み）
+- [x] spec/task/plan/test-spec の status が実装状態へ同期されている（spec `draft → implemented`・plan `approved → completed`・2 test-spec `proposed → approved`・4 task `todo → done`・design/ADR/discovery `updated:`-tick + design Verification Notes checkbox 証拠化・5 index 行同期）
+- [x] `doc_status.js audit --json` が `blocking:0`・`findings:[]` を返す（実績: baseline 及び最終編集後とも `blocking:0`・`findings:[]`・392 documents）
 
 ## Verification
 
-- [ ] `mise run fmt-check`・`check`・`lint`・`test`・`test-rt`・`bench-smoke` が全 exit 0
-- [ ] `mise run lint-l1-real-plugin`・`mise run test-l1-real-plugin` が pass（opt-in lane — `required-features = "host"` で default gate 外。host 公開面 additive の共有面 sanity）
-- [ ] `mise exec -- cargo doc -p ruviform-plugin-host --no-deps` が warning 0
-- [ ] `mise exec -- prek run --all-files` が pass
-- [ ] focused E2E（`l1_supervisor_e2e`・`l1_proxy_e2e`・`--lib` supervisor unit）が全 pass
-- [ ] `node .agents/skills/doc-status/scripts/doc_status.js audit --json` が `blocking:0`・`findings:[]` を返す
-- [ ] spec AC1-AC10 + R-V1–R-V6 の証拠 matrix が完備されている（IR coverage 表）
+- [x] `mise run fmt-check`・`check`・`lint`・`test`・`test-rt`・`bench-smoke` が全 exit 0（実績: 全初回 pass — `test` 60 binaries・1294 passed・0 failed・`test-rt` 137 一致 0 failed・既知負荷依存 flake 未発生）
+- [x] `mise run lint-l1-real-plugin`・`mise run test-l1-real-plugin` が pass（opt-in lane — `required-features = "host"` で default gate 外。host 公開面 additive の共有面 sanity）（実績: lint exit 0・test 3 段全 green — build → `--lib --bins`（CLAP 63+2/VST3 47+2）→ `--ignored`（CLAP 3+VST3 3・実子プロセス））
+- [x] `mise exec -- cargo doc -p ruviform-plugin-host --no-deps` が warning 0（実績: `RUSTDOCFLAGS="-D warnings"` 下で初回から exit 0・warning 0 — 新規公開 API doc・sole-drain WARNING 全解決済み）
+- [x] `mise exec -- prek run --all-files` が pass（exit 0・全 hook pass — `check illegal windows names` は no files で Skipped）
+- [x] focused E2E（`l1_supervisor_e2e`・`l1_proxy_e2e`・`--lib` supervisor unit）が全 pass（実績: `l1_supervisor_e2e` 22/22・`l1_proxy_e2e` 100/100 無 diff green・`--lib supervisor` 33/33）
+- [x] `node .agents/skills/doc-status/scripts/doc_status.js audit --json` が `blocking:0`・`findings:[]` を返す（baseline 及び最終編集後に実施）
+- [x] spec AC1-AC10 + R-V1–R-V6 の証拠 matrix が完備されている（IR coverage 表）

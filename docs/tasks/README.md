@@ -77,10 +77,10 @@ Directory: `docs/tasks`
 | TASK-034LNYf8Qj1NeGAKmaP7B4 | plugin-host L1 プロキシ制御面（spawn/handshake/コマンド転送/クラッシュ検出） | done | [l1-proxy-control-plane.md](./l1-proxy-control-plane.md) |
 | TASK-034NlQmTAKwSUzU49wWswM | L1 route pool + 隔離選択面（OutOfProcessIsolation・Route struct variant・pool lifecycle） | done | [l1-route-pool-and-isolation-surface.md](./l1-route-pool-and-isolation-surface.md) |
 | TASK-034LNYmL2ezSeFFgddaeDX | L1 共有メモリデータ面 + RT 脚 + pass-through | done | [l1-shm-data-plane-and-rt-legs.md](./l1-shm-data-plane-and-rt-legs.md) |
-| TASK-034NOXIiAgzm2Ur1Ud7nLt | L1 supervisor core（src/supervisor.rs — watch/poll state machine・attempt replay・checkpoint bound・host binding） | todo | [l1-supervisor-core.md](./l1-supervisor-core.md) |
-| TASK-034NOXIS4eJ3G8peEvr6pq | L1 supervisor E2E（実子 restart・bundle burst・crash-loop GaveUp・restore 分類・Send witness） | todo | [l1-supervisor-e2e.md](./l1-supervisor-e2e.md) |
-| TASK-034NOXJpTlwWqDQf7WFQFQ | L1 supervisor final verification（Full Gate・AC 証拠・IR・status 同期） | todo | [l1-supervisor-final-verification.md](./l1-supervisor-final-verification.md) |
-| TASK-034NOXyYOTNwDoH2c7VhrV | l1-test-worker fault flags（--fail-restore・--state-unsupported・--fail-initialize・--fail-start-processing） | todo | [l1-test-worker-fault-flags.md](./l1-test-worker-fault-flags.md) |
+| TASK-034NOXIiAgzm2Ur1Ud7nLt | L1 supervisor core（src/supervisor.rs — watch/poll state machine・attempt replay・checkpoint bound・host binding） | done | [l1-supervisor-core.md](./l1-supervisor-core.md) |
+| TASK-034NOXIS4eJ3G8peEvr6pq | L1 supervisor E2E（実子 restart・bundle burst・crash-loop GaveUp・restore 分類・Send witness） | done | [l1-supervisor-e2e.md](./l1-supervisor-e2e.md) |
+| TASK-034NOXJpTlwWqDQf7WFQFQ | L1 supervisor final verification（Full Gate・AC 証拠・IR・status 同期） | done | [l1-supervisor-final-verification.md](./l1-supervisor-final-verification.md) |
+| TASK-034NOXyYOTNwDoH2c7VhrV | l1-test-worker fault flags（--fail-restore・--state-unsupported・--fail-initialize・--fail-start-processing） | done | [l1-test-worker-fault-flags.md](./l1-test-worker-fault-flags.md) |
 | TASK-034NlQlfkFL52FRHRjhYmr | L1 wire v2 codec + 全系統 v2 cutover（envelope・新動詞・InstanceLimit・registry・harness） | done | [l1-wire-v2-codec-cutover.md](./l1-wire-v2-codec-cutover.md) |
 | TASK-034NlPHnwYkRTWHq1nvYvo | L1 wire v2 docs/metadata sweep（README・bin doc・test-spec・親文書 addenda・literal sweep） | done | [l1-wire-v2-docs-sweep.md](./l1-wire-v2-docs-sweep.md) |
 | TASK-034NhK97jcINkcEKDNbpum | L1 wire バージョン方針の記録と契約検証の補強 | done | [l1-wire-version-policy.md](./l1-wire-version-policy.md) |

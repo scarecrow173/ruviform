@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NOXyYOTNwDoH2c7VhrV"
 type: "task"
-status: "todo"
+status: "done"
 title: "l1-test-worker fault flags（--fail-restore・--state-unsupported・--fail-initialize・--fail-start-processing）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -83,13 +83,13 @@ relations:
 
 ## Done When
 
-- [ ] `--fail-restore`・`--state-unsupported`・`--fail-initialize`・`--fail-start-processing` が parse され argv doc table に記録されている
-- [ ] `RestoreState` → `Err(PluginFailed)`（`--fail-restore`）/`Err(Unsupported)`（`--state-unsupported`・併用時はこちら優先の定義済み順序）で state blob 不変更・`Initialize`/`StartProcessing` → `Err(PluginFailed)` で lifecycle 不 commit（`Created`/`Activated` 残留）
-- [ ] flag 未指定時の挙動は現行と同値（既存 `l1_proxy_e2e` 全 pass で非退行 — `--fail-stop-processing` 経路も不変）
-- [ ] dispatch signature が flag 群を安全に運ぶ（bool 位置引数 5 連になっていない — `&Flags` or 小 struct）
+- [x] `--fail-restore`・`--state-unsupported`・`--fail-initialize`・`--fail-start-processing` が parse され argv doc table に記録されている（実績: `db80ead` — `src/bin/l1-test-worker.rs` L29-32 doc table・L172-179 parse・`Flags` struct field）
+- [x] `RestoreState` → `Err(PluginFailed)`（`--fail-restore`）/`Err(Unsupported)`（`--state-unsupported`・併用時はこちら優先の定義済み順序）で state blob 不変更・`Initialize`/`StartProcessing` → `Err(PluginFailed)` で lifecycle 不 commit（`Created`/`Activated` 残留）（実績: T3 E2E で全系発火 — `checkpoint_unsupported_skips_without_attempt`/`checkpoint_pluginfailed_burns_attempts_to_gaveup`/`fail_initialize_attempt_cleans_created`/`fail_start_processing_attempt_unwinds_activated` 全 pass）
+- [x] flag 未指定時の挙動は現行と同値（既存 `l1_proxy_e2e` 全 pass で非退行 — `--fail-stop-processing` 経路も不変）（実績: T4 gate で `l1_proxy_e2e` 100/100 無 diff green）
+- [x] dispatch signature が flag 群を安全に運ぶ（bool 位置引数 5 連になっていない — `&Flags` or 小 struct）（実績: `Flags` struct 経由 — `flags.hang_after_msgs`/`fail_stop_processing` 等 field アクセス形）
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` が全 pass（flag 未指定系の非退行）
-- [ ] `mise run fmt-check`・`mise run check`・`mise run lint`・`mise run test`・`mise run test-rt` が全 pass
-- [ ] flag 付き spawn で `RestoreState`/`Initialize`/`StartProcessing` が対応する `Err` を返すことを dispatch 経路または直接 spawn smoke で確認（E2E 接続自体は T3 の範囲）
+- [x] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` が全 pass（flag 未指定系の非退行）（実績: T4 gate 100/100 pass）
+- [x] `mise run fmt-check`・`mise run check`・`mise run lint`・`mise run test`・`mise run test-rt` が全 pass（実績: T4 Full Gate 全 exit 0 — `test` 60 binaries・1294 passed・`test-rt` 137 一致 0 failed）
+- [x] flag 付き spawn で `RestoreState`/`Initialize`/`StartProcessing` が対応する `Err` を返すことを dispatch 経路または直接 spawn smoke で確認（E2E 接続自体は T3 の範囲）（実績: T3 `l1_supervisor_e2e` 22/22 で flag 経由の `Err` 分類を実子経路で検証）

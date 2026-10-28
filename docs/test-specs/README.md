@@ -19,8 +19,8 @@ Directory: `docs/test-specs`
 | TSPEC-034KPgCJjA5nOIvEtscQj8 | ruviform-edit 編集データモデル テスト仕様 | approved | [edit-data-model-tests.md](./edit-data-model-tests.md) |
 | TSPEC-034J6OIFK83GJIsST60Jck | 公開 enum 拡張性と時間演算精度の契約保証 | approved | [followup-enum-compat-and-time-arithmetic.md](./followup-enum-compat-and-time-arithmetic.md) |
 | TSPEC-034LFCoZvNuuSaGpSTrbp0 | IccTransform ICC 経路 契約テスト仕様 | approved | [icc-transform-contract-tests.md](./icc-transform-contract-tests.md) |
-| TSPEC-034NOX3x1mfWrROBAq4Wqu | L1 supervisor core tests（Issue #116 — watch/poll state machine・backoff・GaveUp・host binding・checkpoint bound） | proposed | [issue-116-supervisor-core-tests.md](./issue-116-supervisor-core-tests.md) |
-| TSPEC-034NOXcdTo4m1tfmRleM0V | L1 supervisor E2E tests（Issue #116 — 実子 restart・bundle burst・crash-loop GaveUp・restore 分類・lingering） | proposed | [issue-116-supervisor-e2e-tests.md](./issue-116-supervisor-e2e-tests.md) |
+| TSPEC-034NOX3x1mfWrROBAq4Wqu | L1 supervisor core tests（Issue #116 — watch/poll state machine・backoff・GaveUp・host binding・checkpoint bound） | approved | [issue-116-supervisor-core-tests.md](./issue-116-supervisor-core-tests.md) |
+| TSPEC-034NOXcdTo4m1tfmRleM0V | L1 supervisor E2E tests（Issue #116 — 実子 restart・bundle burst・crash-loop GaveUp・restore 分類・lingering） | approved | [issue-116-supervisor-e2e-tests.md](./issue-116-supervisor-e2e-tests.md) |
 | TSPEC-034NlQ9qbEN4prlkfCwvdl | L1 bundle E2E tests（Issue #117 — pool lifecycle・隔離 surface・runner registry・dedicated 非回帰） | approved | [issue-117-bundle-e2e-tests.md](./issue-117-bundle-e2e-tests.md) |
 | TSPEC-034NlQ8vmaETbrprsDYNkH | L1 bundle Failed 粒度 tests（Issue #117 — child/instance scope 判定表・fan-out・Destroying doorbell） | approved | [issue-117-bundle-failed-granularity-tests.md](./issue-117-bundle-failed-granularity-tests.md) |
 | TSPEC-034NlQ76ZnpNmAnyT0HgY9 | L1 wire v2 codec tests（Issue #117 — instance envelope・新動詞・scope 判定表・InstanceLimit） | approved | [issue-117-wire-v2-codec-tests.md](./issue-117-wire-v2-codec-tests.md) |

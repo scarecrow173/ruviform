@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034NMZAKKGWufQ5vWwZNYe"
 type: "spec"
-status: "draft"
+status: "implemented"
 title: "Issue #116 L1 自動再起動・supervisor ポリシー"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -73,7 +73,7 @@ relations:
 
 # Issue #116 L1 自動再起動・supervisor ポリシー
 
-> **DRAFT** — 本書は discovery（[issue-116-supervisor](../discovery/issue-116-supervisor.md)）を下流として記録した設計前仕様である。decision matrix の選択肢・推奨方向は design/ADR で確定するまで OPEN — 本書が確定させるのは Issue が要求する振る舞い・不変条件・受入基準の骨格であり、公開 API 形や内部構造の確定ではない。
+> **IMPLEMENTED** — 本書は discovery（[issue-116-supervisor](../discovery/issue-116-supervisor.md)）を下流として記録した設計前仕様である。decision matrix の全 OPEN 行は design `../designs/issue-116-supervisor.md`（API sketch・遷移表・失敗分類表）と ADR `../adr/issue-116-supervisor-placement.md` で確定済み — 本書が確定させるのは Issue が要求する振る舞い・不変条件・受入基準であり、内部構造の確定ではない。実装記録: `docs/impl/ir/issue-116-supervisor-implementation.md`（AC1–AC10 + R-V1–R-V6 証拠写像を収録）。
 
 ## What Should Be Built
 

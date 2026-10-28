@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034NOXcdTo4m1tfmRleM0V"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "L1 supervisor E2E tests（Issue #116 — 実子 restart・bundle burst・crash-loop GaveUp・restore 分類・lingering）"
 created: "2026-10-28"
 updated: "2026-10-29"

@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NOXIiAgzm2Ur1Ud7nLt"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 supervisor core（src/supervisor.rs — watch/poll state machine・attempt replay・checkpoint bound・host binding）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -95,13 +95,13 @@ relations:
 
 ## Done When
 
-- [ ] 全公開型・全 API が design sketch 確定形（`#[non_exhaustive]` enum + struct variant・`usize` bound_host・`Copy` `SupervisionError`）で `lib.rs` から公開される
-- [ ] `watch`（live/stale/未登録/dup/`Failed` adopt）・`unwatch`・`set_recipe`・`set_checkpoint` bound・`clear_checkpoint`・`current_handle`・`poll` Phase 0-3・attempt/replay/cleanup/lingering・`delay` 数学が遷移表どおり
-- [ ] `composite.rs`/`l1/`/`host.rs`/`wire.rs` 無 diff・`supervisor.rs` が `crate::l1`/`pub(crate)` 内部型を参照しない（AC1/AC4 — review で確認）
-- [ ] unit test が `issue-116-supervisor-core-tests` の検証行を網羅して pass — Phase-1 drain の通知駆動行（watched `InstanceFailed` → `Destroy`/`Pending`・後発死 match・`GaveUp` 再 emit・`Unsupervised` pass-through）は L0 host が `InstanceFailed` を emit しない（`composite.rs` L200-201 — queue は L1 `Failed` 遷移のみを運ぶ）ため `poll` 経由では unit 到達不能で、実子経路の到達は T3 がカバー。unit test は synthesized `Entry`/`PluginHandle::new`（同 crate 内なので `#[non_exhaustive]` `HostNotification`/`ChildExit` も構築可）で内部 drain ハンドラを直接駆動して drain ロジック行を網羅する
+- [x] 全公開型・全 API が design sketch 確定形（`#[non_exhaustive]` enum + struct variant・`usize` bound_host・`Copy` `SupervisionError`）で `lib.rs` から公開される（実績: `47fef7c`+`637abae` — `src/supervisor.rs` 2292 行・`pub use` re-export）
+- [x] `watch`（live/stale/未登録/dup/`Failed` adopt）・`unwatch`・`set_recipe`・`set_checkpoint` bound・`clear_checkpoint`・`current_handle`・`poll` Phase 0-3・attempt/replay/cleanup/lingering・`delay` 数学が遷移表どおり（実績: unit test 33/33 — `watch_*`/`unwatch_returns_handle_by_state`/`set_recipe_replaces_and_validates`/`set_checkpoint_wire_bound`/`clear_checkpoint_reports_presence`/`current_handle_prefers_current_then_residue`/`poll_*`/`delay_grows_exponentially_and_clamps` 全 pass。review fix `637abae` で `Orphaned` variant・adopt `max_attempts=0` 発行前検査を追加）
+- [x] `composite.rs`/`l1/`/`host.rs`/`wire.rs` 無 diff・`supervisor.rs` が `crate::l1`/`pub(crate)` 内部型を参照しない（AC1/AC4 — review で確認）（実績: T4 literal sweep — merge-base `fc02103` 対比 4 ファイル全て byte-level 無 diff・`use` は `lib.rs` 公開面のみ）
+- [x] unit test が `issue-116-supervisor-core-tests` の検証行を網羅して pass — Phase-1 drain の通知駆動行（watched `InstanceFailed` → `Destroy`/`Pending`・後発死 match・`GaveUp` 再 emit・`Unsupervised` pass-through）は L0 host が `InstanceFailed` を emit しない（`composite.rs` L200-201 — queue は L1 `Failed` 遷移のみを運ぶ）ため `poll` 経由では unit 到達不能で、実子経路の到達は T3 がカバー。unit test は synthesized `Entry`/`PluginHandle::new`（同 crate 内なので `#[non_exhaustive]` `HostNotification`/`ChildExit` も構築可）で内部 drain ハンドラを直接駆動して drain ロジック行を網羅する（実績: `--lib supervisor` 33/33 — `drain_*` 9 行 + `poll_*` + watch/binding/lingering 行を synthesized fixture で直接駆動）
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-host --lib` — supervisor unit test が全 pass
-- [ ] `mise run fmt-check`・`mise run check`・`mise run lint`・`mise run test`・`mise run test-rt` が全 pass
-- [ ] `mise exec -- cargo doc -p ruviform-plugin-host --no-deps` が warning 0（新規公開 API doc — sole-drain WARNING 含む）
+- [x] `cargo test -p ruviform-plugin-host --lib` — supervisor unit test が全 pass（実績: T4 gate `--lib supervisor` 33/33）
+- [x] `mise run fmt-check`・`mise run check`・`mise run lint`・`mise run test`・`mise run test-rt` が全 pass（実績: T4 Full Gate 全 exit 0 — `test` 60 binaries・1294 passed・`test-rt` 137 一致 0 failed）
+- [x] `mise exec -- cargo doc -p ruviform-plugin-host --no-deps` が warning 0（新規公開 API doc — sole-drain WARNING 含む）（実績: T4 gate `RUSTDOCFLAGS="-D warnings"` 下で初回から exit 0・warning 0）

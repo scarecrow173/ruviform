@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034NOXmaWmUZjtJxQeNUhL"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "Issue #116 実施計画 — L1 supervisor（自動再起動 opt-in util 層）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -105,7 +105,7 @@ relations:
 
 # Issue #116 実施計画 — L1 supervisor（自動再起動 opt-in util 層） Implementation Plan
 
-> status: approved — Refs #116。approved design（`docs/designs/issue-116-supervisor.md`）+ accepted ADR（`docs/adr/issue-116-supervisor-placement.md`）を正本として、`PluginHost` 公開 API のみで動く opt-in supervisor util（`src/supervisor.rs`）を 4-task DAG で実装する。T1 は `l1-test-worker` の失敗分類 fixture flag、T2 は supervisor 本体（watch/poll state machine・attempt replay・backoff・checkpoint bound・host binding）、T3 は実子プロセス E2E（別 test target — `pub(crate)` 非到達が「公開 API のみ使用」の compile-level 証明）、T4 は Full Gate + AC/R-V 証拠 + IR + status 同期。spec は `draft` のまま — status 同期は T4 の範囲。core `PluginHost`（AC4「自動再起動なし」）・`composite.rs`/`l1/`/wire/adapter/runner は無 diff が確定契約。
+> status: completed — Refs #116。全 4 task 完了。approved design（`docs/designs/issue-116-supervisor.md`）+ accepted ADR（`docs/adr/issue-116-supervisor-placement.md`）を正本として、`PluginHost` 公開 API のみで動く opt-in supervisor util（`src/supervisor.rs`）を 4-task DAG で実装した。T1 `l1-test-worker` fault flags（`db80ead` — `--fail-restore`/`--state-unsupported`/`--fail-initialize`/`--fail-start-processing` + argv doc・`&Flags` dispatch）。T2 supervisor core（`47fef7c`+`637abae` — `Supervisor`/`SupervisedId`/`RestartPolicy`/`RestartRecipe`/`SupervisionEvent`/`SupervisionError`/`RestoreOutcome`・watch/poll state machine・attempt replay/cleanup/lingering・backoff + `stable_window` reset・checkpoint bound・`usize` host binding・unit test 33・review fix で `Orphaned` variant）。T3 実子 E2E（`e0b31f3`+`9a82dca` — `tests/l1_supervisor_e2e.rs` 22 tests・`#[path]` harness 不使用の別 test target で `pub(crate)` 非到達を compile-level 強制）。T4 final verification（Full Gate 全コマンド初回 exit 0・AC1–AC10 + R-V1–R-V6 証跡・status 同期 — `docs/impl/ir/issue-116-supervisor-implementation.md`）。core `PluginHost`（AC4「自動再起動なし」）・`composite.rs`/`l1/`/`host.rs`/wire は merge-base 対比 byte-level 無 diff の確定契約を維持。GitHub merge は lead の authoritative `gh` のみ — 本計画は PR merged / issue closed の主張を含まない。
 
 ## Goal
 

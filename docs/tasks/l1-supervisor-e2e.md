@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NOXIS4eJ3G8peEvr6pq"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 supervisor E2E（実子 restart・bundle burst・crash-loop GaveUp・restore 分類・Send witness）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -94,12 +94,12 @@ relations:
 
 ## Done When
 
-- [ ] happy path（Dedicated+Bundled）・checkpoint 4 分類（`Applied`/`NotRequested`/`Skipped`/`PluginFailed` burn）・backoff 全系（drain reset 回帰・`max_attempts=0`・`InertPolicy`・crash-loop `GaveUp`）・bundle burst cap 繰越・attempt 失敗全段・lingering・adopt・`GaveUp`/`Unsupervised`/`unwatch`・opt-in・`Send`/`Sync` witness が実子経路で pin されている
-- [ ] `l1_proxy_e2e.rs`/`composite.rs`/`l1/`/`host.rs`/`wire.rs`/`lib.rs`（T2 分を除く）に supervisor 関連 diff がない・`#[path]` harness 不使用（public API のみ import — AC1 の compile-level 証明）
-- [ ] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` が無 diff green（R-V5 — supervisor 非混入・AC4 非退行）
+- [x] happy path（Dedicated+Bundled）・checkpoint 4 分類（`Applied`/`NotRequested`/`Skipped`/`PluginFailed` burn）・backoff 全系（drain reset 回帰・`max_attempts=0`・`InertPolicy`・crash-loop `GaveUp`）・bundle burst cap 繰越・attempt 失敗全段・lingering・adopt・`GaveUp`/`Unsupervised`/`unwatch`・opt-in・`Send`/`Sync` witness が実子経路で pin されている（実績: `e0b31f3`+`9a82dca` — `tests/l1_supervisor_e2e.rs` 22 tests 全 pass — `restarted_dedicated_*`/`restarted_bundled_*`/`checkpoint_*`/`stable_window_crash_starts_fresh_episode`/`zero_max_attempts_adopt_gives_up_immediately`/`inert_policy_rejected`/`crash_loop_bounded_gaveup`/`bundle_burst_cap_defers_and_unsupervised`/`mid_create_death_attempt_failed_without_mint`/`fail_initialize_*`/`fail_start_processing_*`/`activate_over_limit_*`/`lingering_*`/`adopt_failed_handle_recovers`/`wrong_host_*`/`plain_host_*`/`rt_l1_supervised_process_no_alloc`）
+- [x] `l1_proxy_e2e.rs`/`composite.rs`/`l1/`/`host.rs`/`wire.rs`/`lib.rs`（T2 分を除く）に supervisor 関連 diff がない・`#[path]` harness 不使用（public API のみ import — AC1 の compile-level 証明）（実績: T4 literal sweep — `l1_proxy_e2e.rs`/`composite.rs`/`l1/`/`host.rs`/`wire.rs` 無 diff・`l1_supervisor_e2e.rs` に `#[path]`/`mod l1` 0 hit）
+- [x] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` が無 diff green（R-V5 — supervisor 非混入・AC4 非退行）（実績: T4 gate 100/100 pass）
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-host --test l1_supervisor_e2e` が全 pass
-- [ ] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` が全 pass（無退行 — `l1_proxy_e2e.rs` 無 diff のまま）
-- [ ] `mise run fmt-check`・`mise run check`・`mise run lint`・`mise run test`・`mise run test-rt` が全 pass
+- [x] `cargo test -p ruviform-plugin-host --test l1_supervisor_e2e` が全 pass（実績: T4 gate 22/22 pass）
+- [x] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` が全 pass（無退行 — `l1_proxy_e2e.rs` 無 diff のまま）（実績: T4 gate 100/100 pass）
+- [x] `mise run fmt-check`・`mise run check`・`mise run lint`・`mise run test`・`mise run test-rt` が全 pass（実績: T4 Full Gate 全 exit 0）
