@@ -75,9 +75,9 @@ relations:
       - type: "file"
         path: "crates/ruviform-plugin-host/README.md"
       - type: "file"
-        path: "docs/specs/issue-118-video-l1.md"
+        path: "crates/ruviform-plugin-core/README.md"
       - type: "file"
-        path: "docs/designs/issue-118-video-l1.md"
+        path: "docs/specs/issue-118-video-l1.md"
       - type: "file"
         path: "docs/designs/plugin-l1-out-of-process.md"
       - type: "file"
@@ -87,6 +87,12 @@ relations:
       - type: "file"
         path: "docs/specs/engine-plugin-host-integration.md"
       - type: "file"
+        path: "docs/specs/issue-117-bundle-child-process.md"
+      - type: "file"
+        path: "docs/specs/issue-119-l1-wire-version-policy.md"
+      - type: "file"
+        path: "docs/adr/issue-117-bundle-child-failed-granularity.md"
+      - type: "file"
         path: "docs/test-specs/plugin-l1-wire-codec-tests.md"
       - type: "file"
         path: "docs/test-specs/plugin-l1-proxy-contract-tests.md"
@@ -95,17 +101,19 @@ relations:
       - type: "file"
         path: "docs/test-specs/real-adapter-l1-e2e-tests.md"
       - type: "file"
+        path: "docs/test-specs/issue-117-wire-v2-codec-tests.md"
+      - type: "file"
+        path: "docs/test-specs/issue-117-bundle-e2e-tests.md"
+      - type: "file"
+        path: "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
+      - type: "file"
+        path: "docs/impl/ir/issue-117-bundle-child-implementation.md"
+      - type: "file"
         path: "docs/tasks/README.md"
       - type: "file"
         path: "docs/plans/README.md"
       - type: "file"
-        path: "docs/test-specs/README.md"
-      - type: "file"
         path: "docs/specs/README.md"
-      - type: "file"
-        path: "docs/designs/README.md"
-      - type: "file"
-        path: "docs/adr/README.md"
       - type: "file"
         path: "docs/impl/ir/README.md"
     deleted: []
@@ -191,7 +199,7 @@ relations:
 - **wire v3 codec は基盤（T1）** — 新動詞・Reply・video 型 codec・`InvalidValue`・`WIRE_MAX_VIDEO_*`・`wire::vshm` 定盤は全下流の前提。ただし #117 T1 と違い **additive bump**（既存 tag・envelope・audio shm は無変更）なので atomic cutover ではない — plugin-core 単独で完結し、既存 suite は `WIRE_VERSION` 定数の両側使用で green に留まる（`Hello.version`/shm header の version 比較は定数参照のため bump 自体は非破壊）
 - **runner 側（T2）と host 側（T3）は並行可能** — plugin-export（`run_video`/`VideoEntry`/attach 検証）と plugin-host（`video()` façade/`Slot`/`vshm::Segment`/`Creating` ゲート）は別 crate・別ファイル集合。共有するのは T1 の wire 契約のみ。T2 が plugin-core に触れるのは新規 `video_plugin.rs` のみで T3 のファイルと非交差
 - **fixture + 公開面 E2E（T4）は T2+T3 の join** — `l1-test-video-worker`（hand-rolled・audio fixture 無変更）+ `tests/l1_video_e2e.rs`（`PluginHost::video()` 公開 API のみ — #116 `l1_supervisor_e2e` 先例どおり `#[path]` harness なしの別 target）
-- **docs sweep（T5）は T4 と並行可**（doc file のみ・code file と非交差）、**final gate + closeout（T6）** が収束点
+- **docs sweep（T5）は T4 以後の直列**（README が `[[bin]] l1-test-video-worker`・`tests/l1_video_e2e.rs` を記述するため — 着地前の artifact を書けない honest-docs 原則）、**final gate + closeout（T6）** が収束点
 
 ## Files / Ownership
 
@@ -204,14 +212,14 @@ relations:
 | T5 `l1-video-docs-sweep` | docs/metadata | crate README×3・親文書 addenda×4・test-spec reconcile×4・bin doc | README `run_video`/`video()` 追記・deferred 行 re-engagement 注記・v2 記述の v3 reconcile |
 | T6 `l1-video-l1-final-verification` | 全列 | workspace 全体・`docs/impl/ir/` | Full Gate・AC1-AC9/R-V1-V6 証拠・IR・status 同期 |
 
-cross-crate 依存の形: T1 は plugin-core 単独。T2/T3 は T1 のみに依存し互いに非交差（T2 は plugin-core の新規 1 file + plugin-export、T3 は plugin-host のみ — 共有 file ゼロ）。T4 は T2（real video runner bin）と T3（façade + worker 用 wire）の join。T5 は T2-T4 の事実確定後なら T4 と並行可能。T6 が全収束点。
+cross-crate 依存の形: T1 は plugin-core 単独。T2/T3 は T1 のみに依存し互いに非交差（T2 は plugin-core の新規 1 file + plugin-export、T3 は plugin-host のみ — 共有 file ゼロ）。T4 は T2（real video runner bin）と T3（façade + worker 用 wire）の join。T5 は T2-T4 の事実確定後（T4 を含む — README の bin/test 行が T4 artifact を記述するため depends-on に含める）。T6 が全収束点。
 
 ## Ordering Rationale
 
 1. **wire v3（plugin-core）が基盤** — 動詞・Reply・video 型・bound・`vshm` layout 定盤は T2（runner が decode・attach）も T3（host が encode・segment create）も参照する唯一の正本。`InvalidValue` は T2（runner `id ∈ parameters()` 拒否）と T3（façade pre-validate）の双方が使う
 2. **T2 ∥ T3** — crate と file が非交差。`run_video` の意味論は wire 契約と `erase_video` に閉じ、`video()` façade の意味論は wire 契約と `L1Child`/`Inner` 共有機構に閉じる。統合面でのみ出会う
 3. **T4 は join 点** — E2E は façade→wire→worker/runner の全系統を通すため両側の完成が前提。worker bin は hand-rolled で T2 の `run_video` を使わないが、E2E の real-runner lane（`ruviform-plugin-l1-video-runner` 経由の `PluginHost::video()` 駆動 — `l1_proxy_e2e` が worker と real runner の両 lane を持つ先例どおり）は T2 の bin が要る
-4. **T5 ∥ T4 → T6** — docs は実装着地後、gate は最後
+4. **T4 → T5 → T6** — docs は実装着地後（T4 の bin/test artifact が README 記述対象のため serial）、gate は最後
 
 crate 別並行性: T2 と T3 は完全並行可能（merge 前 branch 上でも commit が独立して buildable — plugin-core への additive 追加のみが T1 で先行確定済みのため）。T4 内の worker 実装と E2E 記述は同 file 集合なので直列。
 
@@ -222,7 +230,7 @@ T1 l1-wire-v3-video-codec                    (plugin-core — AC1/R-V1/R-V6 code
   ├─ T2 l1-video-runner-and-erased-surface   (plugin-export — AC6/AC7/R-B7/R-V2 子側/R-V6 attach 層)
   └─ T3 l1-video-host-surface                (plugin-host — AC2/AC5/R-F5 host 面/encode obligation (a)/Creating ゲート)
        └─ T4 l1-video-fixture-and-e2e        (join — AC2-AC6/R-V2/R-V3/R-V5 E2E)
-            └─ T5 l1-video-docs-sweep        (docs/metadata — T2-T4 以後・T4 と並行可)
+            └─ T5 l1-video-docs-sweep        (docs/metadata — T2-T4 全着地後の直列 sweep)
                  └─ T6 l1-video-l1-final-verification  (AC8/AC9 + 全 AC 収束)
 ```
 
@@ -230,12 +238,12 @@ T1 l1-wire-v3-video-codec                    (plugin-core — AC1/R-V1/R-V6 code
 | --- | --- |
 | T1 `l1-wire-v3-video-codec` | `WIRE_VERSION`→3・`Command` tag 12-22（`CreateVideoInstance`/`VideoInitialize`/`VideoActivate`/`VideoStartProcessing`/`VideoRender`/`VideoStopProcessing`/`VideoDeactivate`/`VideoGetParams`/`VideoGetParamInfo`/`VideoGetParamValue`/`VideoSetParamValue`）・`Reply` tag 4-7（`Rendered`/`Params`/`ParamInfo`/`ParamValue`）・`VideoProcessConfig`/`PixelFormat`/`VideoFrameDesc`/`ColorInfo`/`PlainParamValue`/`PlainParamInfoOwned` codec・`WIRE_VIDEO_MAX_{DIM,PLANES,STRIDE,FRAME_BYTES,SEGMENT_BYTES}`・`wire::vshm` header 定盤・`HostError::InvalidValue`（tag 10）を additive に実装する |
 | T2 `l1-video-runner-and-erased-surface` | `ErasedVideoPlugin`/`VideoPluginFactory`/`erase_video`（plugin-core `video_plugin.rs` 新設・encode obligations b/c/d の normalize 境界）・`run_video(factories)`/`VideoRunner`/`VideoEntry`・`vshm` attach 2 層検証・stash config → `initialize(&config)` 再生・param `id ∈ parameters()` 先行検査・`BlockIn` 静かに drop・`ruviform-plugin-l1-video-runner` reference bin + MiniHost runner E2E を実装する |
-| T3 `l1-video-host-surface` | `video.rs` 新設（`VideoHostCommand`/`VideoHostReply`/`VideoOutOfProcessSpec`/`VideoPluginHost<'a>`/`descriptor` lookup）・`Route::OutOfProcessVideo`+`VideoSpawnSpec`・`Slot::OutOfProcessVideo` 12 match-site arm・`descriptors` kind-tag + Scan filter・`InstKind` 分離・`create_video_instance`・**`Creating` ゲート拡張（L1914-1915）**・`request_timed`/`render_timeout`・`l1/vshm.rs`・`l1/video.rs` `VideoL1Instance`（render path + façade pre-validate）を実装する |
+| T3 `l1-video-host-surface` | `video.rs` 新設（`VideoHostCommand`/`VideoHostReply`/`VideoOutOfProcessSpec`/`VideoPluginHost<'a>` — `descriptor(handle)` lookup は v1 未提供を doc 明記）・`Route::OutOfProcessVideo`+`VideoSpawnSpec`・`Slot::OutOfProcessVideo` 12 match-site arm・`descriptors` kind-tag + Scan filter・`InstKind` 分離・`create_video_instance`・**`Creating` ゲート拡張（L1914-1915）**・`request_timed`/`render_timeout`・`l1/vshm.rs`・`l1/video.rs` `VideoL1Instance`（render path + façade pre-validate）を実装する |
 | T4 `l1-video-fixture-and-e2e` | `l1-test-video-worker`（hand-rolled video worker + fault flags）と `tests/l1_video_e2e.rs`（`PluginHost::video()` 公開 API のみ・worker lane + real `ruviform-plugin-l1-video-runner` lane）で scan→create→lifecycle→render→param→destroy・frame 内容・`Failed` parity・cross-kind を E2E 検証する |
-| T5 `l1-video-docs-sweep` | crate README×3・親文書 4 本の deferred 行 re-engagement 注記・test-spec×4 の v3 reconcile・残存 v2 literal sweep を更新する |
+| T5 `l1-video-docs-sweep` | crate README×3・親文書 4 本（`plugin-l1-out-of-process` design+spec・`engine-plugin-host-integration` design+spec）の deferred 行 re-engagement 注記・spec×2（`issue-117-bundle-child-process`・`issue-119`）+ ADR×1（`issue-117-bundle-child-failed-granularity`）+ #117 IR の #118 注記・test-spec×7 の v3 reconcile・残存 v2 literal sweep を更新する |
 | T6 `l1-video-l1-final-verification` | Full Gate（fmt-check/check/lint/test/test-rt/bench-smoke/cargo doc/doc-audit + audio real-plugin lane 非退行）・AC1-9/R-V1-6 証拠収集・IR・status 同期で closeout する |
 
-並行 group: `{T1}` → `{T2 ∥ T3}` → `{T4 ∥ T5}` → `{T6}`。T4 と T5 の並行は doc file と code file の非交差に依存 — T5 は T2/T3 の実装事実が確定した時点で開始可能（T4 の E2E 結果を待たず README/親文書を書ける。test-spec reconcile は T4 green を待たない）。
+並行 group: `{T1}` → `{T2 ∥ T3}` → `{T4}` → `{T5}` → `{T6}`。T4 → T5 は直列 — crate README が `[[bin]] l1-test-video-worker`・`tests/l1_video_e2e.rs`（T4 artifact）を記述対象とするため、T4 着地前の sweep は存在しない file を書くことになり honest-docs 原則に反する（`depends-on` edge も T4 を含む）。T5 の前提「T2/T3 の実装事実確定」に加え T4 の fixture/bin 着地が必要。
 
 ## Test Oracles
 
@@ -304,8 +312,8 @@ T1 l1-wire-v3-video-codec                    (plugin-core — AC1/R-V1/R-V6 code
 - [ ] T1 `l1-wire-v3-video-codec` — plugin-core wire v3 additive codec + `vshm` 定盤 + `InvalidValue` + `PlainParamInfoOwned`
 - [ ] T2 `l1-video-runner-and-erased-surface` — `erase_video` + `run_video` + video registry + reference bin + runner E2E（T3 と並行可）
 - [ ] T3 `l1-video-host-surface` — `video()` façade + `Slot`/`Route` video arm + `Creating` ゲート + `vshm::Segment` + `VideoL1Instance`（T2 と並行可）
-- [ ] T4 `l1-video-fixture-and-e2e` — `l1-test-video-worker` + `tests/l1_video_e2e.rs`（T5 と並行可）
-- [ ] T5 `l1-video-docs-sweep` — README・親文書 addenda・test-spec reconcile
+- [ ] T4 `l1-video-fixture-and-e2e` — `l1-test-video-worker` + `tests/l1_video_e2e.rs`
+- [ ] T5 `l1-video-docs-sweep` — README・親文書 addenda・test-spec reconcile（T4 artifact 着地後）
 - [ ] T6 `l1-video-l1-final-verification` — Full Gate + IR + closeout
 
 ## Dependencies and Risks
@@ -338,7 +346,7 @@ T1 l1-wire-v3-video-codec                    (plugin-core — AC1/R-V1/R-V6 code
 ## Open Questions / Gaps
 
 - **`l1-test-video-worker` の descriptor/param fixture 形** — audio worker は単一 descriptor + normalized param を報告する。video worker の mock plugin（deterministic pixel transform・`dev.ruviform.test` 系 id・plain param 集合の形 — choices 持ち 1 件 + `Double` 1 件程度）は T4 で具体化する。E2E が必要とするのは (a) render 出力の pixel 一致 oracle、(b) pts/duration/color pass-through 観測、(c) `ParamInfo(None)`/`Err(InvalidValue)` 透過のための既知 id 集合 — これを満たす最小形
-- **`PluginHost::descriptor(handle)` 新規 surface** — design は「video façade が提供するなら新規 surface」と条件付き。T3 で提供するかは implementation 判断（`descriptors` 登録表からの薄い lookup — 提供しない場合は `VideoPluginHost` の doc に「handle→descriptor lookup は v1 未提供」と明記）
+- **`PluginHost::descriptor(handle)` 新規 surface** — **pinned: v1 未提供**。handle→descriptor lookup API は video view に生えず、descriptor 情報は `Scan`/`register` 時点で呼び出し側が保持する形（`VideoPluginHost` の doc に「handle→descriptor lookup は v1 未提供」と明記 — lookup 要求が出た場合は後続 Issue で追加論点）
 - **`#[doc(hidden)] kill_child` の video handle への適用** — audio `kill_child` は `#[doc(hidden)]` verification knob。design の slot 表は「動く」を pin しているため video facade 経由でも同じ経路を使う（新規 knob は作らない）
 - **test-spec の `verifies` 対象** — 本 plan では spec+design（+Failed parity spec は #117 ADR）に限定。ADR の `Confirmation`/`Verification` 行の一部は test-spec 経由でなく task `## Verification` の runnable command で担保する（compile-time pin 等、test-spec が intent を持たない機械確認）
 
@@ -350,8 +358,8 @@ T1 l1-wire-v3-video-codec                    (plugin-core — AC1/R-V1/R-V6 code
 
 ## Implementation Handoff
 
-- Recommended mode: delegated or subagent-capable implementation — T2/T3・T4/T5 が独立 stream
-- Independent work streams: T2 ∥ T3（crate/file 非交差）・T4 ∥ T5（code file と doc file 非交差）
+- Recommended mode: delegated or subagent-capable implementation — T2 ∥ T3 が唯一の独立 stream（T4/T5/T6 は直列）
+- Independent work streams: T2 ∥ T3（crate/file 非交差）。T4 → T5 は直列（README が T4 artifact を記述するため）
 - User approval required before dispatch: yes
 - If approved: discover available implementation and delegation capabilities in the current environment, then execute task-by-task with review checkpoints.
 - If declined or unavailable: execute inline using the same dependency graph and verification matrix.

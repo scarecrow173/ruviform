@@ -174,7 +174,7 @@ audio 動詞（tag 1-11）と新 video 動詞は**同じ `Command` enum の vari
 
 decode の責務分離の原則（AC4(b) 粒度契約の土台）: **codec 層は bounds のみを検証する**（dims/plane-count/stride の cap・tag/presence 値の範囲・timebase 非零・count/byte 上限）。canonical 配置・region-fit・config 一致は **post-decode semantic 検証**であり codec 層には置かない — `offset+len ≤ region_bytes` 等の region-fit は config 由来の region 容量を codec が知らないため codec check に**なり得ない**。semantic 違反の行き先は受け手で分岐する: child-side `VideoRender.input` → `Err` reply（子は生きる）/ host-side `Rendered.output` → well-formed・instance 一意帰属のため帰属可能 per-instance `Failed`（下記「`Failed` 粒度」の表）。
 
-- **`VideoProcessConfig`**（13 B 固定）: `u8 format` + `u32 width` + `u32 height` + `FrameRate{u32 numerator, u32 denominator}`。decode（codec-bounds）検証: `width/height ∈ [1, WIRE_VIDEO_MAX_DIM]`・`format` tag ∈ 0-5・`frame_rate` の num/den 非零（`FrameRate::new` の不変式）。違反は `Malformed`/`UnsupportedVariant` 系の defined 拒否
+- **`VideoProcessConfig`**（17 B 固定）: `u8 format` + `u32 width` + `u32 height` + `FrameRate{u32 numerator, u32 denominator}`。decode（codec-bounds）検証: `width/height ∈ [1, WIRE_VIDEO_MAX_DIM]`・`format` tag ∈ 0-5・`frame_rate` の num/den 非零（`FrameRate::new` の不変式）。違反は `Malformed`/`UnsupportedVariant` 系の defined 拒否
 - **`PixelFormat` tag**: 宣言順 `0=Yuv420p, 1=Yuv422p, 2=Yuv444p, 3=Rgba8, 4=RgbaF16, 5=RgbaF32`（`#[non_exhaustive]` — 未知 tag は `UnsupportedVariant`/`Malformed` defined 拒否、audio enum codec と同じ規則）
 - **`VideoFrameDesc`**（可変長・≦ 127 B）: `u8 format` + `u32 width` + `u32 height` + `u8 plane_count` + `plane_count × {u32 offset, u32 len, u32 stride}` + `MediaTime pts` + `u8 has_duration` +（present なら）`MediaDuration duration` + `ColorInfo`。decode（codec-bounds）検証: dims/format 上記・`plane_count ∈ [1, WIRE_VIDEO_MAX_PLANES]` かつ `format.plane_count()` と一致・各 `stride ≤ WIRE_VIDEO_MAX_STRIDE`・pts/duration の TimeBase 非零。post-decode semantic 検証: canonical 配置（下記「canonical packing」— `stride == row_bytes`・`offset(p) == Σlen(0..p)`・`offset+len ≤ region_bytes`）・config dims/format 一致。field order/premult/clip-range は `VideoFrame`/`VideoProcessConfig` が model しないため v1 wire にも載せない（追加は v4 論点）
 - **presence tag strictness**: 全ての `u8` presence/Option tag（`has_duration`・`has_hdr`・`has_mastering_display`・`has_content_light_level`・`ParamInfo` の `Option` tag）および `Boolean` の値 byte は **strict `{0,1}`** — それ以外は `Malformed`（`decode_transport` の `{0,1}` 規則と同じ house style、`wire.rs` L1582-1590）
@@ -355,7 +355,7 @@ impl VideoPluginHost<'_> {
 | mid-`VideoRender` 死亡 | render waiter `Err(Ipc)` wake・out 領域は読まれない・影響 instance `Failed` + `InstanceFailed` |
 | mid-`CreateVideoInstance` 死亡 | 通知なし・`Err(Ipc)`・handle 未 mint（#117 AC12 同型） |
 | mid-`DestroyInstance` 死亡 | `Failed` + 通知 + `Destroy` は `Ok`（slot 解放） |
-| 帰属可能違反 — well-formed で live instance 一意帰属（`Rendered` desc の semantic 検証失敗・video reply の `instance`/seq 相関違反等） | **対象 instance のみ `Failed`**・兄弟（Dedicated では存在しないが機構は同一）生存 |
+| 帰属可能違反 — well-formed で live instance 一意帰属（`Rendered` desc の post-delivery semantic 検証失敗） | **対象 instance のみ `Failed`**・兄弟（Dedicated では存在しないが機構は同一）生存 |
 | inert — registered-but-not-live（`Failed` 未 `Destroy`・`Destroying`）宛 frame・post-removal 宛 `Reply`/`Rendered`・post-`Shutdown` frame・video runner 宛 inbound `BlockIn`（direction-legal だが video には帰属不能な foreign doorbell） | **静かに drop** — 違反でも収束でもない |
 | wedge — `render_timeout`/`command_timeout` 超過 | **帰属不能 → 子スコープ `Failed`**（timeout は instance を名指しできない #117 規則） |
 
