@@ -63,6 +63,7 @@ relations:
     - "../designs/issue-118-video-l1.md"
     - "../adr/issue-118-video-l1-host-surface.md"
     - "../adr/issue-118-video-l1-create-path-segment.md"
+    - "../plans/implement-issue-118-video-l1.md"
   verifies: []
   verified-by: []
   references:

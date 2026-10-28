@@ -24,6 +24,9 @@ Directory: `docs/test-specs`
 | TSPEC-034NlQ9qbEN4prlkfCwvdl | L1 bundle E2E tests（Issue #117 — pool lifecycle・隔離 surface・runner registry・dedicated 非回帰） | approved | [issue-117-bundle-e2e-tests.md](./issue-117-bundle-e2e-tests.md) |
 | TSPEC-034NlQ8vmaETbrprsDYNkH | L1 bundle Failed 粒度 tests（Issue #117 — child/instance scope 判定表・fan-out・Destroying doorbell） | approved | [issue-117-bundle-failed-granularity-tests.md](./issue-117-bundle-failed-granularity-tests.md) |
 | TSPEC-034NlQ76ZnpNmAnyT0HgY9 | L1 wire v2 codec tests（Issue #117 — instance envelope・新動詞・scope 判定表・InstanceLimit） | approved | [issue-117-wire-v2-codec-tests.md](./issue-117-wire-v2-codec-tests.md) |
+| TSPEC-034NXpUzrEtLN4lNJSzI77 | L1 video E2E tests（Issue #118 — video() façade・frame 輸送・param・cross-kind・Dedicated pin） | approved | [issue-118-video-e2e-tests.md](./issue-118-video-e2e-tests.md) |
+| TSPEC-034NXpU1IxxAo36yJ3zGbW | L1 video Failed parity tests（Issue #118 — 子スコープ terminal・帰属可能 per-instance・inert・timeout の video 写像） | approved | [issue-118-video-failed-parity-tests.md](./issue-118-video-failed-parity-tests.md) |
+| TSPEC-034NXpKKMs4FptRr5mjttQ | L1 wire v3 video codec tests（Issue #118 — video 動詞・Reply・video 型 codec・WIRE_MAX_VIDEO_*・InvalidValue） | approved | [issue-118-wire-v3-codec-tests.md](./issue-118-wire-v3-codec-tests.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |

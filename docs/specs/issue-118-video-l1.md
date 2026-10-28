@@ -22,7 +22,9 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "../designs/issue-118-video-l1.md"
+    - "../plans/implement-issue-118-video-l1.md"
   depends-on:
     - "issue-119-l1-wire-version-policy.md"
     - "issue-117-bundle-child-process.md"
@@ -62,8 +64,12 @@ relations:
     - "../designs/issue-118-video-l1.md"
     - "../adr/issue-118-video-l1-host-surface.md"
     - "../adr/issue-118-video-l1-create-path-segment.md"
+    - "../plans/implement-issue-118-video-l1.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "../test-specs/issue-118-wire-v3-codec-tests.md"
+    - "../test-specs/issue-118-video-failed-parity-tests.md"
+    - "../test-specs/issue-118-video-e2e-tests.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/98"
     - "https://github.com/scarecrow173/ruviform/issues/115"

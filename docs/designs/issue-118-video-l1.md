@@ -55,9 +55,22 @@ relations:
     - "docs/adr/ofx-video-plugin-scope.md"
     - "docs/adr/issue-118-video-l1-host-surface.md"
     - "docs/adr/issue-118-video-l1-create-path-segment.md"
-  derived-by: []
+  derived-by:
+    - "docs/plans/implement-issue-118-video-l1.md"
+    - "docs/tasks/l1-wire-v3-video-codec.md"
+    - "docs/tasks/l1-video-runner-and-erased-surface.md"
+    - "docs/tasks/l1-video-host-surface.md"
+    - "docs/tasks/l1-video-fixture-and-e2e.md"
+    - "docs/tasks/l1-video-docs-sweep.md"
+    - "docs/tasks/l1-video-l1-final-verification.md"
+    - "docs/test-specs/issue-118-wire-v3-codec-tests.md"
+    - "docs/test-specs/issue-118-video-failed-parity-tests.md"
+    - "docs/test-specs/issue-118-video-e2e-tests.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/issue-118-wire-v3-codec-tests.md"
+    - "docs/test-specs/issue-118-video-failed-parity-tests.md"
+    - "docs/test-specs/issue-118-video-e2e-tests.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/113"
     - "https://github.com/scarecrow173/ruviform/issues/115"

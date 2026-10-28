@@ -81,8 +81,14 @@ Directory: `docs/tasks`
 | TASK-034NOXIS4eJ3G8peEvr6pq | L1 supervisor E2E（実子 restart・bundle burst・crash-loop GaveUp・restore 分類・Send witness） | done | [l1-supervisor-e2e.md](./l1-supervisor-e2e.md) |
 | TASK-034NOXJpTlwWqDQf7WFQFQ | L1 supervisor final verification（Full Gate・AC 証拠・IR・status 同期） | done | [l1-supervisor-final-verification.md](./l1-supervisor-final-verification.md) |
 | TASK-034NOXyYOTNwDoH2c7VhrV | l1-test-worker fault flags（--fail-restore・--state-unsupported・--fail-initialize・--fail-start-processing） | done | [l1-test-worker-fault-flags.md](./l1-test-worker-fault-flags.md) |
+| TASK-034NXuA0ENhlZxgP8zpnqd | L1 video docs sweep（crate README・親文書 re-engagement 注記・test-spec v3 reconcile・literal sweep） | todo | [l1-video-docs-sweep.md](./l1-video-docs-sweep.md) |
+| TASK-034NXuzqcpqV0zLNlPSHUR | L1 video fixture + 公開面 E2E（l1-test-video-worker + tests/l1_video_e2e.rs — Failed parity・frame 内容・cross-kind） | todo | [l1-video-fixture-and-e2e.md](./l1-video-fixture-and-e2e.md) |
+| TASK-034NXuq6kT7i5UmNviPjy6 | L1 video host surface（video() façade・Route/Slot video arm・descriptors kind-tag・create_video_instance・Creating ゲート・vshm::Segment・VideoL1Instance） | todo | [l1-video-host-surface.md](./l1-video-host-surface.md) |
+| TASK-034NXuAACPRKeBy1TSW1EO | L1 video/NONRT final verification（Full Gate・AC/R-V 証拠・IR・status 同期・closeout） | todo | [l1-video-l1-final-verification.md](./l1-video-l1-final-verification.md) |
+| TASK-034NXupvMzQElYkWehw8ln | L1 video runner + erased surface（erase_video・run_video・VideoEntry・vshm attach・reference bin・runner E2E） | todo | [l1-video-runner-and-erased-surface.md](./l1-video-runner-and-erased-surface.md) |
 | TASK-034NlQlfkFL52FRHRjhYmr | L1 wire v2 codec + 全系統 v2 cutover（envelope・新動詞・InstanceLimit・registry・harness） | done | [l1-wire-v2-codec-cutover.md](./l1-wire-v2-codec-cutover.md) |
 | TASK-034NlPHnwYkRTWHq1nvYvo | L1 wire v2 docs/metadata sweep（README・bin doc・test-spec・親文書 addenda・literal sweep） | done | [l1-wire-v2-docs-sweep.md](./l1-wire-v2-docs-sweep.md) |
+| TASK-034NXuhy2LmLb9qDBo7gj6 | L1 wire v3 codec + vshm 定盤 + InvalidValue（video 動詞 tag 12-22・Reply 4-7・video 型 codec・WIRE_MAX_VIDEO_*） | todo | [l1-wire-v3-video-codec.md](./l1-wire-v3-video-codec.md) |
 | TASK-034NhK97jcINkcEKDNbpum | L1 wire バージョン方針の記録と契約検証の補強 | done | [l1-wire-version-policy.md](./l1-wire-version-policy.md) |
 | TASK-034JNwTZ8WalgowFahLc8E | Timecode API の FrameRate 移行（破壊的シグネチャ置換と呼び出し側移行） | done | [migrate-timecode-to-framerate.md](./migrate-timecode-to-framerate.md) |
 | TASK-034KoQ7sXAxjPHQbdWqDVW | Issue #90 文書クローズと全量検証 | done | [music-time-closeout.md](./music-time-closeout.md) |

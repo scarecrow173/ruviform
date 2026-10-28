@@ -4,7 +4,7 @@ type: "spec"
 status: "implemented"
 title: "Issue #119 L1 wire バージョン方針（単一最新バージョン・交渉機構なし）"
 created: "2026-10-27"
-updated: "2026-10-28"
+updated: "2026-10-29"
 owners: []
 relations:
   source:
@@ -60,6 +60,8 @@ relations:
     - "issue-118-video-l1.md"
     - "../designs/issue-118-video-l1.md"
     - "../adr/issue-118-video-l1-create-path-segment.md"
+    - "../plans/implement-issue-118-video-l1.md"
+    - "../tasks/l1-wire-v3-video-codec.md"
   verifies: []
   verified-by:
     - "../test-specs/plugin-l1-wire-codec-tests.md"

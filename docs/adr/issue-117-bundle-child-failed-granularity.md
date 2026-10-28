@@ -49,9 +49,11 @@ relations:
     - "docs/discovery/issue-118-video-l1.md"
     - "docs/tasks/l1-supervisor-e2e.md"
     - "docs/designs/issue-118-video-l1.md"
+    - "docs/test-specs/issue-118-video-failed-parity-tests.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
+    - "docs/test-specs/issue-118-video-failed-parity-tests.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/76"
     - "https://github.com/scarecrow173/ruviform/issues/119"

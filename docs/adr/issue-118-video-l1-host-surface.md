@@ -38,8 +38,12 @@ relations:
     - "docs/adr/plugin-isolation-strategy.md"
   derived-by:
     - "docs/designs/issue-118-video-l1.md"
+    - "docs/plans/implement-issue-118-video-l1.md"
+    - "docs/tasks/l1-video-host-surface.md"
+    - "docs/test-specs/issue-118-video-e2e-tests.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/issue-118-video-e2e-tests.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/117"
     - "https://github.com/scarecrow173/ruviform/issues/119"
