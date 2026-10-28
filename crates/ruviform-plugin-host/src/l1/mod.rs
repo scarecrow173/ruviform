@@ -99,6 +99,7 @@ pub(crate) mod shm;
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
+use std::io::Write;
 use std::process::{Child, ChildStdin, ChildStdout, Command as ProcCommand, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering, fence};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, mpsc};
@@ -1313,7 +1314,7 @@ fn driver_main(
 /// writing a doomed frame.
 fn driver_command(
     shared: &Shared,
-    stdin: &mut ChildStdin,
+    stdin: &mut impl Write,
     seq: u64,
     instance: u32,
     cmd: wire::Command,
@@ -1374,7 +1375,7 @@ fn driver_command(
 /// driver exits with it.
 fn drain_submits(
     shared: &Shared,
-    stdin: &mut ChildStdin,
+    stdin: &mut impl Write,
     submits: &mut HashMap<u32, ruviform_rt::Consumer<data::Submit>>,
     views: &mut HashMap<u32, shm::View>,
     encode_buf: &mut Vec<u8>,
@@ -3028,6 +3029,20 @@ impl L1Child {
     pub(crate) fn test_set_shutdown_initiated(&self) {
         self.shared.lock().shutdown_initiated = true;
     }
+
+    /// Stamps `converge_instance(instance)` — the demux table's
+    /// attributable per-instance failure — on a *live* child.
+    /// The worker fixture has no instance-scope fault vocabulary
+    /// (the shared serve loop cannot break one instance's
+    /// correlation without breaking them all), so the bundle tests
+    /// that need a `Failed` entry beside a live sibling drive the
+    /// same function the reader's demux calls.
+    // The callers live in `tests/l1_proxy_e2e.rs` behind `#[path]` —
+    // the lib-test target never names it.
+    #[allow(dead_code)]
+    pub(crate) fn test_converge_instance(&self, instance: u32) {
+        converge_instance(&self.shared, instance);
+    }
 }
 
 #[cfg(test)]
@@ -3118,6 +3133,15 @@ impl L1Instance {
             activated_sample_rate: activated_frames.map(|_| 48_000),
             segment,
         }
+    }
+
+    /// The minted wire handle — the bundle tests' lowest-free-mint
+    /// and per-instance-attribution oracle.
+    // The callers live in `tests/l1_proxy_e2e.rs` behind `#[path]` —
+    // the lib-test target never names it.
+    #[allow(dead_code)]
+    pub(crate) fn test_wire_instance(&self) -> u32 {
+        self.instance
     }
 }
 
@@ -3836,6 +3860,27 @@ mod tests {
             },
         );
         assert!(matches!(action, Demux::Inert));
+        // The window also answers the *flagged-`Reply`* form of a
+        // `BlockIn` rejection while `Destroying` — `result: None`
+        // completes the doorbell as `mark_failed`.
+        let rejected = data::BLOCK_SEQ_FLAG | 6;
+        inner.block_in_flight.insert((0, rejected));
+        let action = demux(
+            &mut inner,
+            &wire::Message::Reply {
+                seq: rejected,
+                instance: 0,
+                result: Err(HostError::PluginFailed),
+            },
+        );
+        assert!(matches!(
+            action,
+            Demux::Complete {
+                instance: 0,
+                seq: s,
+                result: None
+            } if s == rejected
+        ));
     }
 
     /// Post-`Shutdown` frames are non-events — `shutdown_initiated`
@@ -4159,6 +4204,596 @@ mod tests {
         assert_eq!(verdict, Verdict::Delivered);
         assert!(matches!(rx.try_recv(), Ok(Err(HostError::InstanceLimit))));
         assert!(fixture.shared.lock().terminal.is_none());
+    }
+
+    /// A waiter-less `Reply` stamped outside the live handle space —
+    /// `>= WIRE_MAX_INSTANCES` — is unattributable exactly like the
+    /// `NONE` stamp: a child-scope violation, checked before
+    /// instance resolution (a live entry under a different handle
+    /// cannot legitimize it).
+    #[test]
+    fn demux_waiterless_reply_out_of_range_is_child_scope() {
+        let fixture = DemuxFixture::live(1, LifecycleState::Processing);
+        let verdict = demux_execute(
+            &fixture.shared,
+            &wire::Message::Reply {
+                seq: 9,
+                instance: wire::WIRE_MAX_INSTANCES,
+                result: Ok(wire::Reply::Ok),
+            },
+            &mut HashMap::new(),
+        );
+        assert_eq!(verdict, Verdict::Child);
+        assert!(matches!(
+            fixture.shared.lock().terminal,
+            Some(Terminal::Failed)
+        ));
+    }
+
+    /// Correlation beats registration state: the `CreateInstance`
+    /// reply itself arrives stamped for a `Creating`
+    /// (registered-but-not-live) entry and must still deliver — the
+    /// strict waiter-less rule only applies once no waiter claims
+    /// the seq.
+    #[test]
+    fn demux_delivers_reply_on_creating_entry() {
+        let fixture = DemuxFixture::live(1, LifecycleState::Processing);
+        fixture.shared.lock().instances.get_mut(&0).unwrap().phase = InstPhase::Creating;
+        let (tx, rx) = mpsc::channel();
+        fixture
+            .shared
+            .lock()
+            .waiters
+            .insert(7, Waiter { instance: 0, tx });
+        let verdict = demux_execute(
+            &fixture.shared,
+            &wire::Message::Reply {
+                seq: 7,
+                instance: 0,
+                result: Ok(wire::Reply::Ok),
+            },
+            &mut HashMap::new(),
+        );
+        assert_eq!(verdict, Verdict::Delivered);
+        assert!(matches!(rx.try_recv(), Ok(Ok(wire::Reply::Ok))));
+        assert!(fixture.shared.lock().terminal.is_none());
+    }
+
+    /// The inert rows consolidated: any `Reply`/`BlockDone` stamped
+    /// for a registered-but-not-live entry (`Creating`/`Destroying`/
+    /// `Failed`), an unregistered handle inside the live range, or
+    /// a handle the registry already removed is a silent drop —
+    /// none of them may fail the entry, the child, or mint a
+    /// notification.
+    #[test]
+    fn demux_frames_inert_by_phase_and_removal() {
+        let fixture = DemuxFixture::live(3, LifecycleState::Processing);
+        {
+            let mut inner = fixture.shared.lock();
+            inner.instances.get_mut(&0).unwrap().phase = InstPhase::Creating;
+            inner.instances.get_mut(&1).unwrap().phase = InstPhase::Destroying;
+            inner.instances.get_mut(&2).unwrap().phase = InstPhase::Failed;
+        }
+        let seq = data::BLOCK_SEQ_FLAG | 5;
+        for msg in [
+            // Waiter-less `Reply` on each registered-but-not-live
+            // phase (the live-arm and unregistered-in-range arm are
+            // covered by `demux_waiterless_reply_scope_by_instance_phase`).
+            wire::Message::Reply {
+                seq: 9,
+                instance: 0,
+                result: Ok(wire::Reply::Ok),
+            },
+            wire::Message::Reply {
+                seq: 10,
+                instance: 1,
+                result: Ok(wire::Reply::Ok),
+            },
+            wire::Message::Reply {
+                seq: 11,
+                instance: 2,
+                result: Ok(wire::Reply::Ok),
+            },
+            // `BlockDone` on each non-live phase with nothing in
+            // flight, and on an unregistered in-range handle.
+            wire::Message::BlockDone {
+                seq,
+                instance: 0,
+                result: ProcessResult::CONTINUE,
+            },
+            wire::Message::BlockDone {
+                seq,
+                instance: 1,
+                result: ProcessResult::CONTINUE,
+            },
+            wire::Message::BlockDone {
+                seq,
+                instance: 2,
+                result: ProcessResult::CONTINUE,
+            },
+            wire::Message::BlockDone {
+                seq,
+                instance: 40,
+                result: ProcessResult::CONTINUE,
+            },
+            // A flagged `Reply` (the `BlockIn` rejection form) for
+            // an unregistered handle — also inert.
+            wire::Message::Reply {
+                seq,
+                instance: 40,
+                result: Err(HostError::PluginFailed),
+            },
+        ] {
+            let mut inner = fixture.shared.lock();
+            assert!(
+                matches!(demux(&mut inner, &msg), Demux::Inert),
+                "{msg:?} must demux Inert"
+            );
+        }
+        // Post-removal: a `BlockDone` arriving after
+        // `remove_instance` reclaimed the handle is the
+        // stale-generation frame — inert (this is what makes a
+        // re-minted wire handle safe).
+        {
+            let mut inner = fixture.shared.lock();
+            remove_instance(&mut inner, 2);
+            let action = demux(
+                &mut inner,
+                &wire::Message::BlockDone {
+                    seq,
+                    instance: 2,
+                    result: ProcessResult::CONTINUE,
+                },
+            );
+            assert!(matches!(action, Demux::Inert));
+        }
+        // No false failures anywhere: the child is untouched and
+        // no notification ever went out.
+        {
+            let inner = fixture.shared.lock();
+            assert!(inner.terminal.is_none());
+            assert_eq!(inner.instances[&0].notify, Notify::Idle);
+            assert_eq!(inner.instances[&1].notify, Notify::Idle);
+        }
+        for rx in fixture.notify_rxs.values() {
+            assert!(rx.try_recv().is_err());
+        }
+    }
+
+    /// A converged child takes no more frames — `terminal.is_some()`
+    /// demuxes every kind `NonEvent` before instance resolution,
+    /// the post-convergence twin of the post-`Shutdown` row.
+    #[test]
+    fn demux_post_terminal_frames_are_nonevents() {
+        let fixture = DemuxFixture::live(1, LifecycleState::Processing);
+        converge_child(&fixture.shared, None);
+        let mut inner = fixture.shared.lock();
+        for msg in [
+            wire::Message::Reply {
+                seq: 9,
+                instance: 0,
+                result: Ok(wire::Reply::Ok),
+            },
+            wire::Message::BlockDone {
+                seq: data::BLOCK_SEQ_FLAG | 5,
+                instance: 0,
+                result: ProcessResult::CONTINUE,
+            },
+            wire::Message::Hello {
+                version: wire::WIRE_VERSION,
+                capabilities: 0,
+            },
+        ] {
+            assert!(
+                matches!(demux(&mut inner, &msg), Demux::NonEvent),
+                "{msg:?} must demux NonEvent"
+            );
+        }
+    }
+
+    /// `converge_instance` is granular: it drains only *this*
+    /// instance's waiters (`Err(Ipc)`) and doorbells
+    /// (`mark_failed`), sends exactly one `ChildExit{None, None}`
+    /// (the live child has no exit status to report), and leaves
+    /// `terminal`/`seen_eof`/`shutdown_initiated`, every sibling's
+    /// waiters/doorbells/phase and the entry itself registered.
+    /// Idempotent, and a no-op on non-`Live` entries — the demux
+    /// only routes `live` violations here.
+    #[test]
+    fn converge_instance_resolves_only_that_instance() {
+        let mut fixture = DemuxFixture::live(2, LifecycleState::Processing);
+        let (tx0, rx0) = mpsc::channel();
+        let (tx1, rx1) = mpsc::channel();
+        {
+            let mut inner = fixture.shared.lock();
+            inner.waiters.insert(
+                3,
+                Waiter {
+                    instance: 0,
+                    tx: tx0,
+                },
+            );
+            inner.waiters.insert(
+                4,
+                Waiter {
+                    instance: 1,
+                    tx: tx1,
+                },
+            );
+            inner.block_in_flight.insert((0, data::BLOCK_SEQ_FLAG | 5));
+            inner.block_in_flight.insert((1, data::BLOCK_SEQ_FLAG | 6));
+        }
+        converge_instance(&fixture.shared, 0);
+        {
+            let inner = fixture.shared.lock();
+            // This instance — `Failed`, entry still registered.
+            let inst = &inner.instances[&0];
+            assert_eq!(inst.phase, InstPhase::Failed);
+            assert_eq!(inst.mirror, LifecycleState::Failed);
+            assert_eq!(inst.notify, Notify::Sent);
+            assert_eq!(
+                inst.rt_state.load(Ordering::Acquire),
+                data::mirror_encode(LifecycleState::Failed)
+            );
+            // Its waiter is gone, its doorbell released.
+            assert!(!inner.waiters.contains_key(&3));
+            assert!(
+                !inner
+                    .block_in_flight
+                    .contains(&(0, data::BLOCK_SEQ_FLAG | 5))
+            );
+            // The sibling's bookkeeping + phase — untouched.
+            assert_eq!(inner.instances[&1].phase, InstPhase::Live);
+            assert_eq!(inner.instances[&1].mirror, LifecycleState::Processing);
+            assert!(inner.waiters.contains_key(&4));
+            assert!(
+                inner
+                    .block_in_flight
+                    .contains(&(1, data::BLOCK_SEQ_FLAG | 6))
+            );
+            // The granularity invariant — child state untouched.
+            assert!(inner.terminal.is_none());
+            assert!(!inner.seen_eof);
+            assert!(!inner.shutdown_initiated);
+        }
+        assert!(matches!(rx0.try_recv(), Ok(Err(HostError::Ipc))));
+        assert!(rx1.try_recv().is_err());
+        assert_eq!(
+            fixture.result_rxs.get_mut(&0).unwrap().try_pop().unwrap(),
+            data::mark_failed(data::BLOCK_SEQ_FLAG | 5)
+        );
+        assert!(fixture.result_rxs.get_mut(&1).unwrap().try_pop().is_err());
+        assert_eq!(
+            fixture.notify_rxs[&0].try_recv().unwrap(),
+            ChildExit {
+                code: None,
+                signal: None
+            }
+        );
+        assert!(fixture.notify_rxs[&1].try_recv().is_err());
+        // Idempotent — no second notification, no re-drain.
+        converge_instance(&fixture.shared, 0);
+        assert!(fixture.notify_rxs[&0].try_recv().is_err());
+        // Non-live entries are a no-op — a `Creating` sibling in
+        // particular must not be converged by a violation that
+        // never routed here anyway.
+        fixture.shared.lock().instances.get_mut(&1).unwrap().phase = InstPhase::Creating;
+        converge_instance(&fixture.shared, 1);
+        let inner = fixture.shared.lock();
+        assert_eq!(inner.instances[&1].phase, InstPhase::Creating);
+        assert_eq!(inner.instances[&1].mirror, LifecycleState::Processing);
+        assert!(inner.waiters.contains_key(&4));
+        assert!(inner.terminal.is_none());
+    }
+
+    /// A synchronous `Write` double for `driver_command`/`drain_submits`
+    /// (both take `&mut impl Write` — the real driver passes the
+    /// child's `ChildStdin`): bytes accumulate, and each `flush` —
+    /// `wire::write_message` ends in one — decodes every complete
+    /// frame into `frames`. A fabricated `ChildStdin` would need an
+    /// OS pipe, and `std::io::pipe()` hands Windows overlapped
+    /// handles that a synchronous `WriteFile` blocks on; the generic
+    /// writer is the seam the production code already offers.
+    #[derive(Default)]
+    struct FrameSink {
+        buf: Vec<u8>,
+        frames: std::collections::VecDeque<wire::Message>,
+    }
+
+    impl FrameSink {
+        /// Oldest decoded frame — `None` means the writers pushed
+        /// nothing (the "no doomed frame" half of a gate test).
+        fn take(&mut self) -> Option<wire::Message> {
+            self.frames.pop_front()
+        }
+    }
+
+    impl Write for FrameSink {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.buf.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            loop {
+                let mut cursor = std::io::Cursor::new(&self.buf);
+                let mut frame = Vec::new();
+                match wire::read_frame(&mut cursor, &mut frame) {
+                    Ok(true) => {
+                        let consumed = usize::try_from(cursor.position()).unwrap_or(0);
+                        self.frames
+                            .push_back(wire::decode(&frame).expect("test frame decodes"));
+                        self.buf.drain(..consumed);
+                    }
+                    // `Ok(false)` (clean end) or `Err` (a partial
+                    // frame — impossible from `write_message`) —
+                    // either way there is nothing more to decode.
+                    _ => break,
+                }
+            }
+            Ok(())
+        }
+    }
+
+    /// `take` proof that nothing was written — the gate's
+    /// "no doomed frame" half. The writers are synchronous, so
+    /// anything coming was already decoded by the `flush`.
+    fn assert_no_frame(sink: &mut FrameSink) {
+        assert!(
+            sink.take().is_none(),
+            "a rejected operation must not write a wire frame"
+        );
+    }
+
+    /// The `driver_command` gate: `DestroyInstance` writes the
+    /// `Command` frame and flips the entry to `Destroying` the
+    /// moment it hits the wire (the doorbell-window edge); from
+    /// then on queued commands for that instance are rejected —
+    /// the waiter wakes `Err(Ipc)` and nothing reaches the wire.
+    /// `DestroyInstance` itself stays exempt on a `Failed` entry
+    /// (reclaiming the runner slot is its job); a converged or
+    /// shutting-down child rejects everything.
+    #[test]
+    fn driver_command_destroy_flips_destroying_then_gates() {
+        let fixture = DemuxFixture::live(2, LifecycleState::Processing);
+        let mut sink = FrameSink::default();
+        let mut buf = Vec::new();
+
+        // `DestroyInstance` ships the frame and opens the window.
+        assert!(driver_command(
+            &fixture.shared,
+            &mut sink,
+            1,
+            0,
+            wire::Command::DestroyInstance,
+            &mut buf,
+            false,
+        ));
+        match sink.take() {
+            Some(wire::Message::Command {
+                seq: 1,
+                instance: 0,
+                cmd: wire::Command::DestroyInstance,
+            }) => {}
+            other => panic!("expected DestroyInstance frame, got {other:?}"),
+        }
+        assert_eq!(
+            fixture.shared.lock().instances[&0].phase,
+            InstPhase::Destroying
+        );
+
+        // A queued command for the now-`Destroying` entry is
+        // rejected: the waiter wakes `Err(Ipc)`, no doomed frame.
+        let (tx, rx) = mpsc::channel();
+        fixture
+            .shared
+            .lock()
+            .waiters
+            .insert(2, Waiter { instance: 0, tx });
+        assert!(driver_command(
+            &fixture.shared,
+            &mut sink,
+            2,
+            0,
+            wire::Command::Initialize,
+            &mut buf,
+            false,
+        ));
+        assert!(matches!(rx.try_recv(), Ok(Err(HostError::Ipc))));
+        assert_no_frame(&mut sink);
+
+        // `DestroyInstance` on a `Failed` entry is the exemption —
+        // it must still write (the runner-slot reclaim), and a
+        // `Failed` entry's phase does not become `Destroying`.
+        fixture.shared.lock().instances.get_mut(&1).unwrap().phase = InstPhase::Failed;
+        assert!(driver_command(
+            &fixture.shared,
+            &mut sink,
+            3,
+            1,
+            wire::Command::DestroyInstance,
+            &mut buf,
+            false,
+        ));
+        match sink.take() {
+            Some(wire::Message::Command {
+                seq: 3,
+                instance: 1,
+                cmd: wire::Command::DestroyInstance,
+            }) => {}
+            other => panic!("expected DestroyInstance frame, got {other:?}"),
+        }
+        assert_eq!(fixture.shared.lock().instances[&1].phase, InstPhase::Failed);
+
+        // `shutting_down` rejects every command — the wire takes
+        // nothing after `Shutdown` is initiated.
+        let (tx, rx) = mpsc::channel();
+        fixture
+            .shared
+            .lock()
+            .waiters
+            .insert(4, Waiter { instance: 1, tx });
+        assert!(driver_command(
+            &fixture.shared,
+            &mut sink,
+            4,
+            1,
+            wire::Command::Initialize,
+            &mut buf,
+            true,
+        ));
+        assert!(matches!(rx.try_recv(), Ok(Err(HostError::Ipc))));
+        assert_no_frame(&mut sink);
+
+        // A converged child rejects even `DestroyInstance`.
+        fixture.shared.lock().terminal = Some(Terminal::Failed);
+        let (tx, rx) = mpsc::channel();
+        fixture
+            .shared
+            .lock()
+            .waiters
+            .insert(5, Waiter { instance: 1, tx });
+        assert!(driver_command(
+            &fixture.shared,
+            &mut sink,
+            5,
+            1,
+            wire::Command::DestroyInstance,
+            &mut buf,
+            false,
+        ));
+        assert!(matches!(rx.try_recv(), Ok(Err(HostError::Ipc))));
+        assert_no_frame(&mut sink);
+    }
+
+    /// The `drain_submits` doorbell gates: a live+armed instance's
+    /// submit rings a real doorbell — `(i, seq)` lands in
+    /// `block_in_flight` *before* the `BlockIn` hits the wire so a
+    /// reply can never outrun the bookkeeping — while every gated
+    /// drop (`Destroying`/`Failed`/`Creating` entry, stale
+    /// generation, draining child) still owes the leg its
+    /// completion: `mark_failed(seq)` on the result channel, never
+    /// a frame. An unregistered entry's seq needs no completion —
+    /// its result channel died with the entry.
+    #[test]
+    fn drain_submits_rings_doorbells_and_gates_dead() {
+        let mut fixture = DemuxFixture::live(4, LifecycleState::Processing);
+        let mut sink = FrameSink::default();
+        let mut buf = Vec::new();
+        let seq = |n: u64| data::BLOCK_SEQ_FLAG | n;
+
+        // Instance 0: `Live` + armed staging (generation 7) + a
+        // real segment — the doorbell path (shm in-slot write +
+        // `BlockIn`). 1–3: one entry per non-live phase.
+        let segment = shm::Segment::create(900, 3, 3).expect("test segment");
+        {
+            let mut inner = fixture.shared.lock();
+            let inst = inner.instances.get_mut(&0).unwrap();
+            inst.shm = SegmentInfo {
+                key: segment.key().to_owned(),
+                in_depth: 3,
+                out_depth: 3,
+            };
+            inst.staging = Some(Arc::new(data::Staging::new(3, 64, 7)));
+            inner.instances.get_mut(&1).unwrap().phase = InstPhase::Destroying;
+            inner.instances.get_mut(&2).unwrap().phase = InstPhase::Failed;
+            inner.instances.get_mut(&3).unwrap().phase = InstPhase::Creating;
+        }
+        let mut views = HashMap::new();
+        views.insert(0_u32, shm::View::attach(segment.key()).expect("attach"));
+        let mut submits: HashMap<u32, ruviform_rt::Consumer<data::Submit>> = HashMap::new();
+        let mut producers: HashMap<u32, ruviform_rt::Producer<data::Submit>> = HashMap::new();
+        for instance in [0_u32, 1, 2, 3, 9] {
+            let (tx, rx) = ruviform_rt::channel::<data::Submit>(3);
+            submits.insert(instance, rx);
+            producers.insert(instance, tx);
+        }
+        let submit = |producers: &mut HashMap<u32, ruviform_rt::Producer<data::Submit>>,
+                      instance: u32,
+                      n: u64,
+                      generation: u64| {
+            producers
+                .get_mut(&instance)
+                .unwrap()
+                .try_push(data::Submit {
+                    seq: seq(n),
+                    generation,
+                })
+                .unwrap();
+        };
+        // Armed submit on the live instance → real doorbell.
+        submit(&mut producers, 0, 5, 7);
+        // Stale-generation submit on the live instance → drop.
+        submit(&mut producers, 0, 6, 8);
+        // Non-live entries → drop (the `Destroying` gate).
+        submit(&mut producers, 1, 7, 7);
+        submit(&mut producers, 2, 8, 7);
+        submit(&mut producers, 3, 9, 7);
+        // Unregistered entry → silent drop, no completion owed.
+        submit(&mut producers, 9, 10, 7);
+
+        assert!(drain_submits(
+            &fixture.shared,
+            &mut sink,
+            &mut submits,
+            &mut views,
+            &mut buf
+        ));
+
+        // The real doorbell went in flight BEFORE the `BlockIn`
+        // frame — and it is the only frame written.
+        {
+            let inner = fixture.shared.lock();
+            assert!(inner.block_in_flight.contains(&(0, seq(5))));
+            assert!(!inner.block_in_flight.contains(&(0, seq(6))));
+        }
+        match sink.take() {
+            Some(wire::Message::BlockIn {
+                seq: s,
+                instance: 0,
+            }) if s == seq(5) => {}
+            other => panic!("expected the BlockIn doorbell, got {other:?}"),
+        }
+        assert_no_frame(&mut sink);
+        // Every gated drop completed `mark_failed` on its own
+        // instance's result channel — exactly one completion per seq.
+        for (instance, n) in [(0_u32, 6_u64), (1, 7), (2, 8), (3, 9)] {
+            assert_eq!(
+                fixture
+                    .result_rxs
+                    .get_mut(&instance)
+                    .unwrap()
+                    .try_pop()
+                    .unwrap(),
+                data::mark_failed(seq(n)),
+                "instance {instance}'s gated submit must complete mark_failed"
+            );
+        }
+
+        // A draining child (`shutdown_initiated`) takes no new
+        // doorbells — even an armed `Live` entry's submit is a
+        // gated drop.
+        fixture.shared.lock().shutdown_initiated = true;
+        submit(&mut producers, 0, 11, 7);
+        assert!(drain_submits(
+            &fixture.shared,
+            &mut sink,
+            &mut submits,
+            &mut views,
+            &mut buf
+        ));
+        assert_eq!(
+            fixture.result_rxs.get_mut(&0).unwrap().try_pop().unwrap(),
+            data::mark_failed(seq(11))
+        );
+        assert!(
+            !fixture
+                .shared
+                .lock()
+                .block_in_flight
+                .contains(&(0, seq(11)))
+        );
+        assert_no_frame(&mut sink);
     }
 
     /// The reader's `views` map is insert-only — `RemoveInstance`

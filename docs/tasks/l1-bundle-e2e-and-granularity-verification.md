@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NlQnJQdVWzhM6WxhAM2"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰）"
 created: "2026-10-28"
 updated: "2026-10-28"
@@ -16,6 +16,8 @@ relations:
         path: "crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs"
       - type: "file"
         path: "crates/ruviform-plugin-host/src/l1/mod.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-export/tests/l1_runner_e2e.rs"
     deleted: []
     renamed: []
     moved: []
@@ -99,23 +101,24 @@ T2 機構 + T3 pool 上で bundle の外部観測契約を検証する。instanc
 ## Affected Files
 
 - `crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs` — bundle E2E・dedicated 非回帰・rt_ bundle・real runner bundle
-- `crates/ruviform-plugin-host/src/l1/mod.rs` — demux 判定表 unit test 拡張（合成 frame → demux → state assert）
+- `crates/ruviform-plugin-host/src/l1/mod.rs` — demux 判定表 unit test 拡張（合成 frame → demux → state assert）+ `driver_command`/`drain_submits` の `&mut impl Write` seam + `FrameSink`
+- `crates/ruviform-plugin-export/tests/l1_runner_e2e.rs` — runner registry `UnknownPluginId` rejection + handle remint 行
 
 ## Done When
 
-- [ ] `PluginHost` + `Bundled` route で 1 子 N instance が成立し、各 handle が独立 lifecycle/process を持つ
-- [ ] `kill_child` bundle で全 live instance `Failed` + N `InstanceFailed`（同一 exit）が通知される
-- [ ] `Err(InstanceLimit)` `Instantiate` が `Err(InstanceLimit)` として surface へ伝搬する
-- [ ] 最後の `Destroy` で shutdown-on-empty（`Shutdown`+grace+reap+pool evict）が動く
-- [ ] `Failed`+live child の `Destroy`・mid-`DestroyInstance` 死亡・inert/doorbell/attributable/defined rejection が判定表どおりに動く
-- [ ] `Dedicated` route で既存 `l1_proxy_e2e` suite が非回帰で green
-- [ ] `rt_` bundle テストが `assert_no_alloc` を使い RT 契約を pin する
-- [ ] real runner 子への bundle `CreateInstance` が `composite_e2e` で pass する
+- [x] `PluginHost` + `Bundled` route で 1 子 N instance が成立し、各 handle が独立 lifecycle/process を持つ
+- [x] `kill_child` bundle で全 live instance `Failed` + N `InstanceFailed`（同一 exit）が通知される
+- [x] `Err(InstanceLimit)` `Instantiate` が `Err(InstanceLimit)` として surface へ伝搬する
+- [x] 最後の `Destroy` で shutdown-on-empty（`Shutdown`+grace+reap+pool evict）が動く
+- [x] `Failed`+live child の `Destroy`・mid-`DestroyInstance` 死亡・inert/doorbell/attributable/defined rejection が判定表どおりに動く
+- [x] `Dedicated` route で既存 `l1_proxy_e2e` suite が非回帰で green
+- [x] `rt_` bundle テストが `assert_no_alloc` を使い RT 契約を pin する
+- [x] real runner 子への bundle `CreateInstance` が `composite_e2e` で pass する
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` — bundle + dedicated 全 pass
-- [ ] `cargo test -p ruviform-plugin-host rt_` — `rt_` bundle テストが `assert_no_alloc` で pass
-- [ ] `cargo test -p ruviform-plugin-export --test l1_runner_e2e` — MiniHost bundle E2E が pass
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass
-- [ ] 判定表の全行（子 scope/instance scope/inert/non-event/defined rejection）が unit または E2E で pin されている
+- [x] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` — bundle + dedicated 全 pass（99 tests）
+- [x] `cargo test -p ruviform-plugin-host rt_` — `rt_` bundle テストが `assert_no_alloc` で pass
+- [x] `cargo test -p ruviform-plugin-export --test l1_runner_e2e` — MiniHost bundle E2E が pass（21 tests・`e2e_create_instance_unknown_plugin_id` 追加済み）
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass
+- [x] 判定表の全行（子 scope/instance scope/inert/non-event/defined rejection）が unit または E2E で pin されている（`driver_command`/`drain_submits` は `&mut impl Write` seam 上の `FrameSink` double で合成 frame を pin — Windows の `std::io::pipe` は overlapped handle で同期 `WriteFile` が詰まるため OS pipe fabricate は不可）

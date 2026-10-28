@@ -1193,6 +1193,31 @@ fn e2e_duplicate_instance_is_ipc_rejection() {
     assert_eq!(host.wait_exit().code(), Some(0));
 }
 
+/// `CreateInstance` for a `plugin_id` no registered factory claims
+/// is the defined `Err(UnknownPluginId)` — the lookup runs first in
+/// the dispatch order, so the rejection mints no registry entry:
+/// the child survives and the handle mints cleanly afterwards.
+#[test]
+fn e2e_create_instance_unknown_plugin_id() {
+    let key = unique_key("unknown-plugin");
+    let _segment = create_segment(&key);
+    let mut host = MiniHost::spawn_runner();
+    host.expect_hello();
+
+    assert_eq!(
+        host.create_instance(0, "dev.ruviform.mock.nonexistent", &key),
+        Err(HostError::UnknownPluginId)
+    );
+
+    // The failed mint left no entry — the same handle serves a
+    // claimed id, and the child keeps dispatching.
+    assert_eq!(host.create_instance(0, GAIN_ID, &key), Ok(WireReply::Ok));
+    assert_eq!(host.command(0, WireCommand::Initialize), Ok(WireReply::Ok));
+    assert_alive(&mut host);
+    host.send(&Message::Shutdown);
+    assert_eq!(host.wait_exit().code(), Some(0));
+}
+
 /// A full registry — [`wire::WIRE_MAX_INSTANCES`] live instances —
 /// rejects the next `CreateInstance` with `Err(InstanceLimit)`
 /// regardless of the handle (capacity is checked before the
