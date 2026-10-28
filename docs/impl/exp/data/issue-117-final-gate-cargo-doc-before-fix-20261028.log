@@ -1,0 +1,72 @@
+ Documenting ruviform-plugin-core v0.1.0 (F:\repositry\ruviform-wt-117\crates\ruviform-plugin-core)
+ Documenting ruviform-plugin-export v0.1.0 (F:\repositry\ruviform-wt-117\crates\ruviform-plugin-export)
+ Documenting ruviform-plugin-host v0.1.0 (F:\repositry\ruviform-wt-117\crates\ruviform-plugin-host)
+    Checking ruviform-plugin-host v0.1.0 (F:\repositry\ruviform-wt-117\crates\ruviform-plugin-host)
+error: unresolved link to `HEADER_LEN`
+   --> crates\ruviform-plugin-core\src\wire.rs:156:8
+    |
+156 | /// ([`HEADER_LEN`] bytes); each slot is [`SLOT_BYTES`]:
+    |        ^^^^^^^^^^ no item named `HEADER_LEN` in scope
+    |
+    = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+    = note: `-D rustdoc::broken-intra-doc-links` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(rustdoc::broken_intra_doc_links)]`
+
+error: unresolved link to `SLOT_BYTES`
+   --> crates\ruviform-plugin-core\src\wire.rs:156:44
+    |
+156 | /// ([`HEADER_LEN`] bytes); each slot is [`SLOT_BYTES`]:
+    |                                            ^^^^^^^^^^ no item named `SLOT_BYTES` in scope
+    |
+    = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+error: unresolved link to `FLAG_TRANSPORT`
+   --> crates\ruviform-plugin-core\src\wire.rs:164:39
+    |
+164 | /// | +20 | `flags` | `u32` | bit0 ([`FLAG_TRANSPORT`]) |
+    |                                       ^^^^^^^^^^^^^^ no item named `FLAG_TRANSPORT` in scope
+    |
+    = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+error: unresolved link to `TRANSPORT_LEN`
+   --> crates\ruviform-plugin-core\src\wire.rs:165:29
+    |
+165 | /// | +24 | `transport` | [`TRANSPORT_LEN`] | wire `TransportInfo` when flagged |
+    |                             ^^^^^^^^^^^^^ no item named `TRANSPORT_LEN` in scope
+    |
+    = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+error: unresolved link to `RESULT_LEN`
+   --> crates\ruviform-plugin-core\src\wire.rs:166:27
+    |
+166 | /// | +120 | `result` | [`RESULT_LEN`] | wire `ProcessResult` (out-slots) |
+    |                           ^^^^^^^^^^ no item named `RESULT_LEN` in scope
+    |
+    = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+error: unresolved link to `EVENT_WIRE_SIZE`
+   --> crates\ruviform-plugin-core\src\wire.rs:167:43
+    |
+167 | /// | +128 | `events` | `event_count * `[`EVENT_WIRE_SIZE`] | wire `Event` records |
+    |                                           ^^^^^^^^^^^^^^^ no item named `EVENT_WIRE_SIZE` in scope
+    |
+    = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+error: unresolved link to `SAMPLES_LEN`
+   --> crates\ruviform-plugin-core\src\wire.rs:168:30
+    |
+168 | /// | +33920 | `samples` | [`SAMPLES_LEN`] | planar `f32` LE, channel stride [`SAMPLE_STRIDE`] |
+    |                              ^^^^^^^^^^^ no item named `SAMPLES_LEN` in scope
+    |
+    = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+error: unresolved link to `SAMPLE_STRIDE`
+   --> crates\ruviform-plugin-core\src\wire.rs:168:80
+    |
+168 | /// | +33920 | `samples` | [`SAMPLES_LEN`] | planar `f32` LE, channel stride [`SAMPLE_STRIDE`] |
+    |                                                                                ^^^^^^^^^^^^^ no item named `SAMPLE_STRIDE` in scope
+    |
+    = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+error: could not document `ruviform-plugin-core`
+warning: build failed, waiting for other jobs to finish...

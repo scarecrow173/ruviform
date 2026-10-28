@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034NlJVJxcfEkAxcclU9Zw"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "Issue #117 実施計画 — L1 bundle 子プロセス（1 子プロセス N インスタンス）"
 created: "2026-10-28"
 updated: "2026-10-28"
@@ -140,7 +140,7 @@ relations:
 
 # Issue #117 実施計画 — L1 bundle 子プロセス（1 子プロセス N インスタンス） Implementation Plan
 
-> status: approved — Refs #117。approved design（`docs/designs/issue-117-bundle-child-process.md`）+ accepted ADR（`docs/adr/issue-117-bundle-child-failed-granularity.md`）を正本として、L1 を「1 instance = 1 子」から「1 子 N instance（bundle）」へ移行する 6-task DAG を定める。
+> status: completed — Refs #117。全 6 task 完了。approved design（`docs/designs/issue-117-bundle-child-process.md`）+ accepted ADR（`docs/adr/issue-117-bundle-child-failed-granularity.md`）を正本として、L1 を「1 instance = 1 子」から「1 子 N instance（bundle）」へ移行する 6-task DAG を実装した。T1 wire v2 原子 cutover（`4b5627c`+`6b3797a` — `WIRE_VERSION`=2・instance envelope・`CreateInstance`/`DestroyInstance`・`InstanceLimit` tag 9・registry・argv v2・両 harness）。T2 host 構造再編（`92f31fa`+`468d294` — `L1Child`+`InstShared` split・demux 判定表・converge split・`Destroying` gate）。T3 pool + 隔離面（`13e6cec`+`58bf8e5` — `OutOfProcessIsolation{Dedicated,Bundled}` default Bundled・`Route::OutOfProcess` struct variant + pool）。T4 bundle 検証（`cec29ff`+`4d73ea0` — `l1_proxy_e2e` 100 tests・demux 判定表/inert/doorbell 全行 pin・dedicated 非回帰・rt_ bundle）。T5 docs sweep（`10561d3`）。T6 final verification（Full Gate 12 コマンド全 exit 0・AC1–AC12 証跡・status 同期 — `docs/impl/ir/issue-117-bundle-child-implementation.md`）。GitHub merge は lead の authoritative `gh` のみ — 本計画は PR merged / issue closed の主張を含まない。
 
 ## Goal
 

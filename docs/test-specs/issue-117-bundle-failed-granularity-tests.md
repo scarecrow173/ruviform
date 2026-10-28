@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034NlQ8vmaETbrprsDYNkH"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "L1 bundle Failed 粒度 tests（Issue #117 — child/instance scope 判定表・fan-out・Destroying doorbell）"
 created: "2026-10-28"
 updated: "2026-10-28"

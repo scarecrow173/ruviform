@@ -153,7 +153,7 @@ pub const WIRE_FRAME_HEADER_LEN: usize = 5;
 /// wire contract owner defines it.
 ///
 /// All fields are little-endian. The header is 7 `u32` fields
-/// ([`HEADER_LEN`] bytes); each slot is [`SLOT_BYTES`]:
+/// ([`shm::HEADER_LEN`] bytes); each slot is [`shm::SLOT_BYTES`]:
 ///
 /// | offset | field | size | notes |
 /// | --- | --- | --- | --- |
@@ -161,11 +161,11 @@ pub const WIRE_FRAME_HEADER_LEN: usize = 5;
 /// | +8 | `frames` | `u32` | ≤ [`WIRE_MAX_FRAMES`] |
 /// | +12 | `channels` | `u32` | ≤ [`WIRE_MAX_CHANNELS`] |
 /// | +16 | `event_count` | `u32` | ≤ [`WIRE_MAX_EVENTS`] |
-/// | +20 | `flags` | `u32` | bit0 ([`FLAG_TRANSPORT`]) |
-/// | +24 | `transport` | [`TRANSPORT_LEN`] | wire `TransportInfo` when flagged |
-/// | +120 | `result` | [`RESULT_LEN`] | wire `ProcessResult` (out-slots) |
-/// | +128 | `events` | `event_count * `[`EVENT_WIRE_SIZE`] | wire `Event` records |
-/// | +33920 | `samples` | [`SAMPLES_LEN`] | planar `f32` LE, channel stride [`SAMPLE_STRIDE`] |
+/// | +20 | `flags` | `u32` | bit0 ([`shm::FLAG_TRANSPORT`]) |
+/// | +24 | `transport` | [`shm::TRANSPORT_LEN`] | wire `TransportInfo` when flagged |
+/// | +120 | `result` | [`shm::RESULT_LEN`] | wire `ProcessResult` (out-slots) |
+/// | +128 | `events` | `event_count * `[`shm::EVENT_WIRE_SIZE`] | wire `Event` records |
+/// | +33920 | `samples` | [`shm::SAMPLES_LEN`] | planar `f32` LE, channel stride [`shm::SAMPLE_STRIDE`] |
 ///
 /// The segment holds no shared control state — slot selection is the
 /// doorbell `seq` (`seq % depth`) under strict in/out alternation.

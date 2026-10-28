@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034NiVkp0Q1fpkaBoUGNY0"
 type: "spec"
-status: "draft"
+status: "implemented"
 title: "Issue #117 L1 bundle 子プロセス（1 子プロセス N インスタンス）"
 created: "2026-10-28"
 updated: "2026-10-28"
@@ -68,7 +68,7 @@ relations:
 
 # Issue #117 L1 bundle 子プロセス（1 子プロセス N インスタンス）
 
-> **DRAFT** — 本書は discovery（[issue-117-bundle-child-process-discovery](../discovery/issue-117-bundle-child-process-discovery.md)）を下流として記録する設計前仕様である。**decision point に「OPEN」と印した項目は design/ADR フェーズで確定する** — 本書が確定させるのは Issue が要求する振る舞い・不変条件・受入基準であり、内部構造の確定ではない。`Failed` 粒度と bundle/dedicated 選択面は ADR 記録候補。
+> **IMPLEMENTED** — 本書は discovery（[issue-117-bundle-child-process-discovery](../discovery/issue-117-bundle-child-process-discovery.md)）を下流として記録した設計前仕様である。decision point は design `../designs/issue-117-bundle-child-process.md`（軸 1-14）と ADR `../adr/issue-117-bundle-child-failed-granularity.md` で確定済み — 本書が確定させるのは Issue が要求する振る舞い・不変条件・受入基準であり、内部構造の確定ではない。実装記録: `docs/impl/ir/issue-117-bundle-child-implementation.md`（AC1–AC12 証拠写像を収録）。
 
 ## What Should Be Built
 

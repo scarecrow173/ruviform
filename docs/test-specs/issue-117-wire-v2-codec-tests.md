@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034NlQ76ZnpNmAnyT0HgY9"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "L1 wire v2 codec tests（Issue #117 — instance envelope・新動詞・scope 判定表・InstanceLimit）"
 created: "2026-10-28"
 updated: "2026-10-28"

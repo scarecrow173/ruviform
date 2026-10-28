@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NlPHWwEG0sAKxw5XB88"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout）"
 created: "2026-10-28"
 updated: "2026-10-28"
@@ -15,14 +15,59 @@ relations:
         path: "docs/impl/ir/issue-117-bundle-child-implementation.md"
     modified:
       - type: "file"
+        path: "crates/ruviform-plugin-core/src/wire.rs"
+      - type: "file"
+        path: "docs/specs/issue-117-bundle-child-process.md"
+      - type: "file"
+        path: "docs/plans/implement-issue-117-bundle-child-process.md"
+      - type: "file"
+        path: "docs/test-specs/issue-117-wire-v2-codec-tests.md"
+      - type: "file"
+        path: "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
+      - type: "file"
+        path: "docs/test-specs/issue-117-bundle-e2e-tests.md"
+      - type: "file"
+        path: "docs/tasks/README.md"
+      - type: "file"
+        path: "docs/plans/README.md"
+      - type: "file"
+        path: "docs/specs/README.md"
+      - type: "file"
+        path: "docs/test-specs/README.md"
+      - type: "file"
         path: "docs/impl/ir/README.md"
     deleted: []
     renamed: []
     moved: []
-    generated: []
+    generated:
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-fmt-check-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-check-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-lint-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-test-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-test-rt-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-bench-smoke-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-lint-l1-real-plugin-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-test-l1-real-plugin-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-cargo-doc-before-fix-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-cargo-doc-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-prek-20261028.log"
+      - type: "file"
+        path: "docs/impl/exp/data/issue-117-final-gate-doc-audit-20261028.log"
   implements:
     - "docs/plans/implement-issue-117-bundle-child-process.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-117-bundle-child-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-117-bundle-child-process.md"
     - "docs/tasks/l1-bundle-e2e-and-granularity-verification.md"
@@ -86,19 +131,19 @@ T1-T5 で着地した bundle 実装の Full Gate・AC 証拠収集・IR・status
 
 ## Done When
 
-- [ ] Full Gate（`fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke`/`test-l1-real-plugin`/`lint-l1-real-plugin`/`cargo doc`/doc audit/pre-commit）が全 pass
-- [ ] spec AC1-AC12 の全行が test 名 + 実行結果で証拠化されている
-- [ ] literal sweep（`WIRE_VERSION` `1`・`--ruviform-` 等）が historical record 以外に残存なし
-- [ ] IR が AC 証拠・task 完了・design 差分を収録し、`docs/impl/ir/README.md` index に登録されている
-- [ ] spec/task/plan の status が実装状態へ同期されている
-- [ ] `doc_status.js audit --json` が `blocking:0`・`findings:[]` を返す
+- [x] Full Gate（`fmt-check`/`check`/`lint`/`test`/`test-rt`/`bench-smoke`/`test-l1-real-plugin`/`lint-l1-real-plugin`/`cargo doc`/doc audit/pre-commit）が全 pass（実績: 12 コマンド — `cargo doc` は `wire.rs` `pub mod shm` doc の pre-existing intra-doc link 欠陥で初回 exit 101 → doc-only 補正（`[`X`]`→`[`shm::X`]`）後 exit 0・warning 0。その他 11 は初回から全 exit 0。全 log `docs/impl/exp/data/issue-117-final-gate-*-20261028.log`）
+- [x] spec AC1-AC12 の全行が test 名 + 実行結果で証拠化されている（IR `docs/impl/ir/issue-117-bundle-child-implementation.md` の coverage 表 — 各 AC へ test 名・file:line・pin 内容を記録）
+- [x] literal sweep（`WIRE_VERSION` `1`・`--ruviform-` 等）が historical record 以外に残存なし（実績: `WIRE_VERSION = 2` 単一・`--ruviform-` は退役拒否契約/歴史記述のみ・spawn 側は `spec.args` のみ — 生きた v1 argv 残存ゼロ）
+- [x] IR が AC 証拠・task 完了・design 差分を収録し、`docs/impl/ir/README.md` index に登録されている（行追加済み）
+- [x] spec/task/plan の status が実装状態へ同期されている（spec `draft → implemented`・plan `approved → completed`・3 test-spec `proposed → approved`・T1-T6 task `done`・5 index 行同期）
+- [x] `doc_status.js audit --json` が `blocking:0`・`findings:[]` を返す（実績: 最終編集後に `blocking:0`・`findings:[]` — 初回の `docs/tasks/README.md` T4 index 未同期 warning 1 件は本 task の index 同期で解消）
 
 ## Verification
 
-- [ ] `mise run fmt-check`・`check`・`lint`・`test`・`test-rt`・`bench-smoke` が全 exit 0
-- [ ] `mise run test-l1-real-plugin`・`mise run lint-l1-real-plugin` が pass（opt-in lane — real runner bin が v2 handshake を exercise）
-- [ ] `mise exec -- cargo doc -p ruviform-plugin-core -p ruviform-plugin-host -p ruviform-plugin-export --no-deps` が warning 0
-- [ ] `mise exec -- prek run --all-files` が pass
-- [ ] `node .agents/skills/doc-status/scripts/doc_status.js audit --json` が `blocking:0`・`findings:[]` を返す
-- [ ] focused E2E（`l1_proxy_e2e`・`l1_runner_e2e`・`wire` codec・`rt_` bundle）が全 pass
-- [ ] spec AC1-AC12 の証拠 matrix が完備されている
+- [x] `mise run fmt-check`・`check`・`lint`・`test`・`test-rt`・`bench-smoke` が全 exit 0（実績: `test` 59 binaries・1239 passed・0 failed / `test-rt` 実一致 132・0 failed — 既知負荷依存 flake 未発生）
+- [x] `mise run test-l1-real-plugin`・`mise run lint-l1-real-plugin` が pass（opt-in lane — real runner bin が v2 handshake を exercise。実績: lint exit 0・test 3 段全 green — build（fixture+runner 生成）→ `--lib --bins`（CLAP 63+2/VST3 47+2）→ `--ignored`（CLAP 3+VST3 3・実子プロセス））
+- [x] `mise exec -- cargo doc -p ruviform-plugin-core -p ruviform-plugin-host -p ruviform-plugin-export --no-deps` が warning 0（`RUSTDOCFLAGS="-D warnings"` 下で exit 0 — 機械証明。初回 exit 101 の pre-existing 欠陥は doc-only 補正で解消・before/after 両 log 保存）
+- [x] `mise exec -- prek run --all-files` が pass（exit 0・全 hook pass）
+- [x] `node .agents/skills/doc-status/scripts/doc_status.js audit --json` が `blocking:0`・`findings:[]` を返す（最終編集後に実施）
+- [x] focused E2E（`l1_proxy_e2e`・`l1_runner_e2e`・`wire` codec・`rt_` bundle）が全 pass（実績: `l1_proxy_e2e` 100 tests・`l1_runner_e2e` 21 tests・wire codec mod tests・`rt_l1_bundled_process_no_alloc` 実 pass — `test`/`test-rt` log）
+- [x] spec AC1-AC12 の証拠 matrix が完備されている（IR coverage 表）

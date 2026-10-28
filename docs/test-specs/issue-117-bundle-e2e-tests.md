@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034NlQ9qbEN4prlkfCwvdl"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "L1 bundle E2E tests（Issue #117 — pool lifecycle・隔離 surface・runner registry・dedicated 非回帰）"
 created: "2026-10-28"
 updated: "2026-10-28"

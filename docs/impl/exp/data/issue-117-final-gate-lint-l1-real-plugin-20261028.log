@@ -1,0 +1,5 @@
+[lint-l1-real-plugin] $ cargo clippy -p ruviform-plugin-clap -p ruviform-plugin…
+    Checking ruviform-plugin-host v0.1.0 (F:\repositry\ruviform-wt-117\crates\ruviform-plugin-host)
+    Checking ruviform-plugin-clap v0.1.0 (F:\repositry\ruviform-wt-117\crates\ruviform-plugin-clap)
+    Checking ruviform-plugin-vst3 v0.1.0 (F:\repositry\ruviform-wt-117\crates\ruviform-plugin-vst3)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.91s
