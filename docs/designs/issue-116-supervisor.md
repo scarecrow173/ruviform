@@ -47,9 +47,18 @@ relations:
     - "docs/designs/issue-117-bundle-child-process.md"
     - "docs/adr/issue-117-bundle-child-failed-granularity.md"
     - "docs/adr/issue-116-supervisor-placement.md"
-  derived-by: []
+  derived-by:
+    - "docs/plans/implement-issue-116-supervisor.md"
+    - "docs/tasks/l1-test-worker-fault-flags.md"
+    - "docs/tasks/l1-supervisor-core.md"
+    - "docs/tasks/l1-supervisor-e2e.md"
+    - "docs/tasks/l1-supervisor-final-verification.md"
+    - "docs/test-specs/issue-116-supervisor-core-tests.md"
+    - "docs/test-specs/issue-116-supervisor-e2e-tests.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/issue-116-supervisor-core-tests.md"
+    - "docs/test-specs/issue-116-supervisor-e2e-tests.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/113"
     - "https://github.com/scarecrow173/ruviform/issues/114"

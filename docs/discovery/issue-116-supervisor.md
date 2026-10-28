@@ -4,7 +4,7 @@ type: "discovery"
 status: "active"
 title: "L1 自動再起動・supervisor ポリシーの探索（Issue #116）"
 created: "2026-10-28"
-updated: "2026-10-28"
+updated: "2026-10-29"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -53,6 +53,7 @@ relations:
     - "../specs/issue-116-supervisor.md"
     - "../designs/issue-116-supervisor.md"
     - "../adr/issue-116-supervisor-placement.md"
+    - "../plans/implement-issue-116-supervisor.md"
   verifies: []
   verified-by: []
   references:

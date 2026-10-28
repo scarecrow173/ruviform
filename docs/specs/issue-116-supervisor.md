@@ -4,7 +4,7 @@ type: "spec"
 status: "draft"
 title: "Issue #116 L1 自動再起動・supervisor ポリシー"
 created: "2026-10-28"
-updated: "2026-10-28"
+updated: "2026-10-29"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -22,6 +22,7 @@ relations:
   implements: []
   implemented-by:
     - "../designs/issue-116-supervisor.md"
+    - "../plans/implement-issue-116-supervisor.md"
   depends-on:
     - "issue-117-bundle-child-process.md"
   blocks: []
@@ -53,8 +54,11 @@ relations:
   derived-by:
     - "../designs/issue-116-supervisor.md"
     - "../adr/issue-116-supervisor-placement.md"
+    - "../plans/implement-issue-116-supervisor.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "../test-specs/issue-116-supervisor-core-tests.md"
+    - "../test-specs/issue-116-supervisor-e2e-tests.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/113"
     - "https://github.com/scarecrow173/ruviform/issues/114"
