@@ -44,6 +44,8 @@ relations:
     - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
     - "docs/discovery/issue-116-supervisor.md"
     - "docs/specs/issue-116-supervisor.md"
+    - "docs/designs/issue-116-supervisor.md"
+    - "docs/adr/issue-116-supervisor-placement.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"

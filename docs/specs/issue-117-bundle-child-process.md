@@ -48,6 +48,7 @@ relations:
     - "../plans/implement-issue-117-bundle-child-process.md"
     - "../discovery/issue-116-supervisor.md"
     - "issue-116-supervisor.md"
+    - "../designs/issue-116-supervisor.md"
   verifies: []
   verified-by:
     - "../test-specs/issue-117-wire-v2-codec-tests.md"

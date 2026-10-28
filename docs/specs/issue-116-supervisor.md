@@ -20,7 +20,8 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "../designs/issue-116-supervisor.md"
   depends-on:
     - "issue-117-bundle-child-process.md"
   blocks: []
@@ -49,7 +50,9 @@ relations:
     - "issue-117-bundle-child-process.md"
     - "../designs/issue-117-bundle-child-process.md"
     - "../adr/issue-117-bundle-child-failed-granularity.md"
-  derived-by: []
+  derived-by:
+    - "../designs/issue-116-supervisor.md"
+    - "../adr/issue-116-supervisor-placement.md"
   verifies: []
   verified-by: []
   references:

@@ -61,6 +61,8 @@ relations:
     - "docs/adr/issue-117-bundle-child-failed-granularity.md"
     - "docs/discovery/issue-116-supervisor.md"
     - "docs/specs/issue-116-supervisor.md"
+    - "docs/designs/issue-116-supervisor.md"
+    - "docs/adr/issue-116-supervisor-placement.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -73,6 +75,7 @@ relations:
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
     - "docs/designs/issue-117-bundle-child-process.md"
     - "docs/specs/issue-116-supervisor.md"
+    - "docs/designs/issue-116-supervisor.md"
   deferred-by: []
 ---
 
@@ -301,7 +304,7 @@ spawn 引数の受け渡し・`CARGO_BIN_EXE_*` の利用は各 crate 内に閉�
 ## Deferred Design Concerns
 
 - L1 GUI（プロセス境界越しの親ウィンドウ埋め込み）| 規格・プラットフォーム固有の大課題・本 Issue 範囲外 | L1 インスタンスへの GUI 要求 | `Unsupported` 拒否のままでは GUI 持ちプラグインが L1 で使えない
-- 自動再起動・supervisor ポリシー | 状態復元はプラグイン責務の #31 確定判断 | supervisor 型運用要求 | 手動復旧の運用負荷
+- 自動再起動・supervisor ポリシー | Issue #116 で設計・ADR 策定 — `ruviform-plugin-host` 内 opt-in util 層（`Supervisor`・`PluginHost` 公開 API のみ・caller 駆動 `poll`・bounded exponential retry・core 無変更で AC4 維持 — design `docs/designs/issue-116-supervisor.md`・ADR `docs/adr/issue-116-supervisor-placement.md`、ともに draft/proposed で approval 後に確定へ更新） | route 単位 watch・pull 型 checkpoint・`rebind` API・`lifecycle_state` 走査検出等の残件は同 design の Deferred 表 | —
 - 規格アダプタ（clap/vst3/ofx）の子プロセス組込み・実プラグイン L1 E2E | runner 形態の前提が本書で確定・別 Issue 級の配線 | 実プラグインでの L1 需要 | 検証がモック範囲に留まる
 - bundle 子（1 子 N インスタンス）| Issue #117 で設計確定 — wire v2（envelope `instance`・`CreateInstance`/`DestroyInstance`・`WIRE_MAX_INSTANCES=64`）+ route 単位 pool + 子スコープ基礎の `Failed` 粒度（design `docs/designs/issue-117-bundle-child-process.md`・ADR `docs/adr/issue-117-bundle-child-failed-granularity.md`） | 明示 pool キー・pool keep-alive・`BundleFailed` 相関通知等の残件は同 design の Deferred 表 | —
 - エンジン/利用側への L1 配線 | plugin-host の engine 消費自体が未実装 | engine プラグイン統合 Issue | L1 が consumer から到達不能

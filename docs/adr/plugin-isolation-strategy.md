@@ -44,6 +44,8 @@ relations:
     - "docs/adr/issue-117-bundle-child-failed-granularity.md"
     - "docs/discovery/issue-116-supervisor.md"
     - "docs/specs/issue-116-supervisor.md"
+    - "docs/designs/issue-116-supervisor.md"
+    - "docs/adr/issue-116-supervisor-placement.md"
   verifies: []
   verified-by: []
   references: []

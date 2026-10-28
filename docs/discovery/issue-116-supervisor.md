@@ -51,6 +51,8 @@ relations:
     - "../specs/issue-117-bundle-child-process.md"
   derived-by:
     - "../specs/issue-116-supervisor.md"
+    - "../designs/issue-116-supervisor.md"
+    - "../adr/issue-116-supervisor-placement.md"
   verifies: []
   verified-by: []
   references:
