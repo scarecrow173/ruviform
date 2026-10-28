@@ -238,7 +238,9 @@ enum Route {
         spec: SpawnSpec,
         /// The route's child-process isolation policy.
         isolation: OutOfProcessIsolation,
-        /// The route's live bundled children, in spawn order —
+        /// The route's live bundled children — eviction uses
+        /// `swap_remove`/`retain`, so pool order is not spawn order;
+        /// selection only promises *first eligible*, not oldest.
         /// `Dedicated` routes never insert (the field exists either
         /// way so the variant is uniform), and `Bundled` eviction
         /// runs inside the instantiate scan and the
@@ -317,6 +319,15 @@ pub struct PluginHost {
     /// claims it (`register_out_of_process` reports the collision as
     /// `DuplicatePluginId`, `register_factory` — infallible — keeps
     /// the existing route and shadows its factory, L0-style).
+    ///
+    /// **Field-order is load-bearing on drop:** fields drop in
+    /// declaration order, so `routes` (bundled `Arc<L1Child>` pools)
+    /// must release before `instances` (facades). Each facade's
+    /// last-referrer teardown keys on `Arc::strong_count == 1` —
+    /// dropping pools first leaves the facade the sole owner and it
+    /// runs graceful `Shutdown`+grace; reversed order would degrade
+    /// every host-drop teardown to the driver's `Disconnected`
+    /// kill-path.
     routes: HashMap<String, Route>,
     /// The unified slot table; `None` marks a destroyed slot
     /// available for reuse. Slot/generation rules are identical to

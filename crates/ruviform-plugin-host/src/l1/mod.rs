@@ -1855,12 +1855,13 @@ impl L1Child {
         // Roll the entry back — `RemoveInstance` frees this
         // handle's driver ends for reuse; the runner keeps no
         // residue for a failed `CreateInstance`. The defined
-        // capacity rejection stays distinguishable — a pooled
-        // caller answers `InstanceLimit` by trying another child
-        // (the design pins only `UnknownPluginId` → `Ipc`; every
-        // other outcome — other defined rejections, transport
-        // failures, unexpected reply variants and the
-        // converged-mid-mint fold above — is `Ipc`).
+        // capacity rejection propagates unflattened so a caller can
+        // distinguish it from transport failure (`InstanceLimit` is
+        // unreachable once `pool_eligible` excluded a full child,
+        // but the seam keeps it defined); the design pins only
+        // `UnknownPluginId` → `Ipc` — every other outcome — other
+        // defined rejections, transport failures, unexpected reply
+        // variants and the converged-mid-mint fold above — is `Ipc`.
         let error = match create {
             Err(HostError::InstanceLimit) => HostError::InstanceLimit,
             _ => HostError::Ipc,
