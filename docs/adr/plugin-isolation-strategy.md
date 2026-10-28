@@ -42,6 +42,8 @@ relations:
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
     - "docs/designs/issue-117-bundle-child-process.md"
     - "docs/adr/issue-117-bundle-child-failed-granularity.md"
+    - "docs/discovery/issue-116-supervisor.md"
+    - "docs/specs/issue-116-supervisor.md"
   verifies: []
   verified-by: []
   references: []

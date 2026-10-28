@@ -46,6 +46,8 @@ relations:
     - "../designs/issue-117-bundle-child-process.md"
     - "../adr/issue-117-bundle-child-failed-granularity.md"
     - "../plans/implement-issue-117-bundle-child-process.md"
+    - "../discovery/issue-116-supervisor.md"
+    - "issue-116-supervisor.md"
   verifies: []
   verified-by:
     - "../test-specs/issue-117-wire-v2-codec-tests.md"

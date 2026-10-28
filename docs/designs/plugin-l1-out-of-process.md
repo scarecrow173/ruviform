@@ -59,6 +59,8 @@ relations:
     - "docs/specs/issue-117-bundle-child-process.md"
     - "docs/designs/issue-117-bundle-child-process.md"
     - "docs/adr/issue-117-bundle-child-failed-granularity.md"
+    - "docs/discovery/issue-116-supervisor.md"
+    - "docs/specs/issue-116-supervisor.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -70,6 +72,7 @@ relations:
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
     - "docs/designs/issue-117-bundle-child-process.md"
+    - "docs/specs/issue-116-supervisor.md"
   deferred-by: []
 ---
 

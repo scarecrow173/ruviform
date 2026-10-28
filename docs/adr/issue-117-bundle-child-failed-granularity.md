@@ -42,6 +42,8 @@ relations:
     - "docs/tasks/l1-route-pool-and-isolation-surface.md"
     - "docs/tasks/l1-bundle-e2e-and-granularity-verification.md"
     - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
+    - "docs/discovery/issue-116-supervisor.md"
+    - "docs/specs/issue-116-supervisor.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
