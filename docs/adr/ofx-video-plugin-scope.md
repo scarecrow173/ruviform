@@ -36,6 +36,7 @@ relations:
   derived-by:
     - "ofx-host-video-contract-and-c-abi.md"
     - "../specs/ofx-host-adapter.md"
+    - "../discovery/issue-118-video-l1.md"
   verifies: []
   verified-by: []
   references: []

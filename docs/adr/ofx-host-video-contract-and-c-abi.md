@@ -34,6 +34,7 @@ relations:
     - "../designs/ofx-host-adapter.md"
     - "../plans/implement-issue-98-ofx-host-adapter.md"
     - "../plans/implement-issue-114-real-adapter-l1-e2e.md"
+    - "../discovery/issue-118-video-l1.md"
   verifies: []
   verified-by:
     - "../test-specs/video-plugin-plain-contract-tests.md"

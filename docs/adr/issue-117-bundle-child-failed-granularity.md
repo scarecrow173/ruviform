@@ -46,6 +46,7 @@ relations:
     - "docs/specs/issue-116-supervisor.md"
     - "docs/designs/issue-116-supervisor.md"
     - "docs/adr/issue-116-supervisor-placement.md"
+    - "docs/discovery/issue-118-video-l1.md"
     - "docs/tasks/l1-supervisor-e2e.md"
   verifies: []
   verified-by:

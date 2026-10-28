@@ -49,6 +49,8 @@ relations:
     - "docs/plans/implement-issue-113-engine-plugin-integration.md"
     - "docs/discovery/issue-114-real-adapter-l1-e2e.md"
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/discovery/issue-118-video-l1.md"
+    - "docs/specs/issue-118-video-l1.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-endpoint-contract-tests.md"
