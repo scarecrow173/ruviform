@@ -72,7 +72,7 @@ T2 の `L1Child`/demux/teardown 機構を `composite` の `Route::OutOfProcess` 
 ## Upstream Documents
 
 - [../plans/implement-issue-117-bundle-child-process.md](../plans/implement-issue-117-bundle-child-process.md)（T3 — pool + 公開面）
-- [../designs/issue-117-bundle-child-process.md](../designs/issue-117-bundle-child-process.md) L206-234（Route/isolation/pool lifecycle・instantiate/destroy 写像・shutdown-on-empty・rollback）
+- [../designs/issue-117-bundle-child-process.md](../designs/issue-117-bundle-child-process.md) L249-250（pool lifecycle・選択述語・rollback・dedicated 経路）・L261-302（公開面 — `OutOfProcessSpec.isolation`・`OutOfProcessIsolation` enum・`kill_child` doc）・L173-180（`Instantiate`/`Destroy` → `CreateInstance`/`DestroyInstance` 写像）
 - [../adr/issue-117-bundle-child-failed-granularity.md](../adr/issue-117-bundle-child-failed-granularity.md) L50-78（`Bundled` default・`Dedicated` opt-in・liveness trade の根拠）
 - [../specs/issue-117-bundle-child-process.md](../specs/issue-117-bundle-child-process.md) AC2/AC9/AC11 の surface 側
 - [issue-117-bundle-e2e-tests.md](../test-specs/issue-117-bundle-e2e-tests.md)（pool/isolation oracle — T4 で E2E 接続）

@@ -56,7 +56,7 @@ relations:
 
 ## Work
 
-T2 機構 + T3 pool 上で bundle の外部観測契約を検証する。instance-scoped fault-injection 語彙は design L287 で deferred 済みのため、`converge_instance` は demux 合成 frame unit test + `kill_child` 子 scope E2E で代替する。
+T2 機構 + T3 pool 上で bundle の外部観測契約を検証する。instance-scoped fault-injection 語彙は design L388 で deferred 済みのため、`converge_instance` は demux 合成 frame unit test + `kill_child` 子 scope E2E で代替する。
 
 1. `l1_proxy_e2e.rs` — bundle E2E を追加（`PluginHost` + `Bundled` route 経由、または `#[path]` harness の `pub(crate)` dedicated helper 経由で multi-`CreateInstance`）:
    - 1 子 N instance（2+ `Instantiate` → 同一 `L1Child`・各々独立 `PluginHandle`・独立 lifecycle/process 経路・per-instance segment+`RtLeg`）
@@ -86,7 +86,7 @@ T2 機構 + T3 pool 上で bundle の外部観測契約を検証する。instanc
 ## Upstream Documents
 
 - [../plans/implement-issue-117-bundle-child-process.md](../plans/implement-issue-117-bundle-child-process.md)（T4 — bundle 検証）
-- [../designs/issue-117-bundle-child-process.md](../designs/issue-117-bundle-child-process.md) L180-204（判定表）・L236-289（検証方針・harness seam・deferred fault-injection）
+- [../designs/issue-117-bundle-child-process.md](../designs/issue-117-bundle-child-process.md) L304-320（判定表・notification 粒度）・L250（dedicated spawn・検証 seam）・L388（deferred fault-injection）・L394-408（Verification Notes — 検証方針）
 - [../adr/issue-117-bundle-child-failed-granularity.md](../adr/issue-117-bundle-child-failed-granularity.md)（判定表・notification 粒度の正本）
 - [../specs/issue-117-bundle-child-process.md](../specs/issue-117-bundle-child-process.md) AC2-AC5/AC7/AC8/AC9/AC11/AC12
 - [issue-117-bundle-failed-granularity-tests.md](../test-specs/issue-117-bundle-failed-granularity-tests.md)・[issue-117-bundle-e2e-tests.md](../test-specs/issue-117-bundle-e2e-tests.md)（本 task の oracle）

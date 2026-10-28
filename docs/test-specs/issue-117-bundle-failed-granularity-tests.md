@@ -52,11 +52,11 @@ bundle 形態（1 子 N instance）における `Failed` 粒度・`InstanceFaile
 
 ## Feature
 
-reader demux は着信 frame を `instance` の live/registered-but-not-live/post-removal/範囲外で解決し、design L180-204 の判定表に従って「子 scope 収束」「instance scope 収束」「inert drop」「non-event」「defined rejection」のいずれかへ分岐する。`DestroyInstance` doorbell window は `Destroying` gate で新規 submit を `mark_failed` にし、in-flight doorbell の完了を待ってから entry を撤去する。
+reader demux は着信 frame を `instance` の live/registered-but-not-live/post-removal/範囲外で解決し、design L304-320 の判定表に従って「子 scope 収束」「instance scope 収束」「inert drop」「non-event」「defined rejection」のいずれかへ分岐する。`DestroyInstance` doorbell window は `Destroying` gate で新規 submit を `mark_failed` にし、in-flight doorbell の完了を待ってから entry を撤去する。
 
 ## Rules
 
-- **子 scope 収束**（`converge_child(exit)`）: 子死亡/kill・EOF・write 失敗・decode 不能 frame・unknown kind・2nd Hello・`instance=NONE` の Reply/BlockDone・`i≥64` の着信・帰属不能 seq/違反・command timeout・reader/driver thread panic → `Inner.terminal = true`・全 live instance `Failed`・全 waiter `Err(Ipc)`・in-flight doorbell `mark_failed`・per-instance `InstanceFailed{handle, exit}` 通知（同一 `exit` fan-out）・thread join+reap
+- **子 scope 収束**（`converge_child(exit)`）: 子死亡/kill・EOF・write 失敗・decode 不能 frame・unknown kind・2nd Hello・登録済み child-scope waiter（`Scan` — `instance=NONE`）に解決しない `instance=NONE` の Reply/BlockDone（correlation-first — `Reply{NONE}` が `Scan` waiter に相関するのは正常応答）・`i≥64` の着信・帰属不能 seq/違反・command timeout・reader/driver thread panic → `Inner.terminal = true`・全 live instance `Failed`・全 waiter `Err(Ipc)`・in-flight doorbell `mark_failed`・per-instance `InstanceFailed{handle, exit}` 通知（同一 `exit` fan-out）・thread join+reap
 - **instance scope 収束**（`converge_instance(i)`）: live `i` に対する帰属可能違反のみ — 未登録/未知 `(i,seq)` の `BlockDone`・`i` 宛 flagged `Reply`（waiter なし・seq 不整合）→ `InstShared` のみ `Failed` mirror + waiter/doorbell/result 解放 + `InstanceFailed{handle, exit:{None,None}}` 通知・兄弟 instance は生存継続・`Inner.terminal` 等の子 state は変更しない（invariant）
 - **inert drop**: registered-but-not-live（`CreateInstance` 送信後 reply 未到達）・`i ∉ instances`（撤去済み・未登録）の着信 → 静黙 drop。違反・`Failed`・通知なし
 - **non-event**: `Shutdown` 送信済み後の着信 frame → 正常 teardown として無視（収束不変）
@@ -90,7 +90,7 @@ reader demux は着信 frame を `instance` の live/registered-but-not-live/pos
 
 - codec 形式検証（envelope・scope 判定・bounds — `issue-117-wire-v2-codec-tests` が対象）
 - pool/isolation 公開面・runner registry（`issue-117-bundle-e2e-tests` が対象）
-- instance-scoped fault-injection 語彙の fixture knob（design L287 で deferred — `converge_instance` は合成 demux unit test で代替）
+- instance-scoped fault-injection 語彙の fixture knob（design L388 で deferred — `converge_instance` は合成 demux unit test で代替）
 - `BundleFailed` 相関通知 variant（deferred — per-instance fan-out で現契約維持）
 - `Dedicated` 経路の spawn/pool 機構（`issue-117-bundle-e2e-tests` が対象 — 本 spec は粒度退化のみ pin）
 
