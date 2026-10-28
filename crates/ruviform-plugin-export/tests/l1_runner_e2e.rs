@@ -843,25 +843,52 @@ fn e2e_version_mismatch_is_a_parent_side_handshake_failure() {
 }
 
 /// `PanicPlugin::init` panics → `Err(HostError::PluginFailed)` on the
-/// wire; the child survives and keeps serving commands, then exits
-/// cleanly on `Shutdown`.
+/// wire; the child survives and keeps serving commands — a
+/// co-resident sibling instance's lifecycle and state are
+/// untouched, not merely the process alive — then exits cleanly on
+/// `Shutdown`.
 #[test]
 fn e2e_plugin_panic_is_plugin_failed_and_child_survives() {
     let key = unique_key("panic");
+    let sibling_key = unique_key("panic-sibling");
     let _segment = create_segment(&key);
+    let _sibling_segment = create_segment(&sibling_key);
     let mut host = MiniHost::spawn_runner();
     host.expect_hello();
 
     let instance = 0;
-    // `create()` itself is clean without the env gate — the instance
-    // registers; the panic lives in `init`.
+    let sibling = 1;
+    // `create()` itself is clean without the env gate — both
+    // instances register on the one child; the panic lives in
+    // instance 0's `init` (the gain lookup matches `GainFactory`
+    // first, so the sibling never reaches `PanicFactory`).
     assert_eq!(
         host.create_instance(instance, PANIC_ID, &key),
         Ok(WireReply::Ok)
     );
     assert_eq!(
+        host.create_instance(sibling, GAIN_ID, &sibling_key),
+        Ok(WireReply::Ok)
+    );
+    assert_eq!(
         host.command(instance, WireCommand::Initialize),
         Err(HostError::PluginFailed)
+    );
+
+    // The panic is instance-scoped: the sibling's entry is
+    // untouched — its own lifecycle commits and its own state
+    // blob round-trips on the same child.
+    assert_eq!(
+        host.command(sibling, WireCommand::Initialize),
+        Ok(WireReply::Ok)
+    );
+    let saved = match host.command(sibling, WireCommand::SaveState) {
+        Ok(WireReply::State { bytes }) => bytes,
+        other => panic!("expected State, got {other:?}"),
+    };
+    assert_eq!(
+        host.command(sibling, WireCommand::RestoreState { bytes: saved }),
+        Ok(WireReply::Ok)
     );
 
     // The child is alive and still dispatching.

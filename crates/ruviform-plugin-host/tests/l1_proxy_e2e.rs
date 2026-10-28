@@ -1829,7 +1829,9 @@ mod composite_e2e {
         PluginFactory, PluginHandle, PluginHost,
     };
 
-    use super::{NOTIFY_TIMEOUT, WORKER_DESCRIPTOR, config, sample_eq};
+    use super::{
+        NOTIFY_TIMEOUT, WORKER_DESCRIPTOR, bundled_pair, config, l1::L1Child, sample_eq, spec,
+    };
 
     /// The L0-side fixture: a gain plugin with an adjustable
     /// normalized-gain parameter and a state blob — distinct id and
@@ -2734,12 +2736,15 @@ mod composite_e2e {
     }
 
     /// Shutdown-on-empty through the public route: the first
-    /// `Destroy` reclaims its slot but keeps the shared child
-    /// serving the sibling (`live_count != 0` → no eviction); the
-    /// last `Destroy` evicts the emptied child and runs the
-    /// `Shutdown`+grace+reap teardown — then the next `Instantiate`
-    /// pays a fresh spawn and works normally. A clean teardown
-    /// never notifies.
+    /// `Destroy` reclaims its slot but the shared child keeps
+    /// serving the sibling (`live_count != 0` — observed as `b`
+    /// still answering); after the last `Destroy` the next
+    /// `Instantiate` is served fresh and works normally — the
+    /// emptied child was never re-served. The pool eviction and
+    /// `Shutdown`+grace+reap teardown inside that last `Destroy`
+    /// are the mechanism, pinned at the composite unit level;
+    /// this row observes only the sibling-kept-serving and
+    /// respawn halves. A clean teardown never notifies.
     #[test]
     fn bundled_last_destroy_shuts_down_child_and_respawns() {
         let mut host = mixed_host(&[]);
@@ -2761,10 +2766,10 @@ mod composite_e2e {
             })
         );
 
-        // The last `Destroy` empties the registry → the pool evicts
-        // and tears the child down inside this same call (bounded:
-        // `Shutdown` + grace + reap + join). Clean — nothing to
-        // notify.
+        // The last `Destroy` empties the registry — the
+        // unit-pinned shutdown-on-empty arm evicts and tears the
+        // child down inside this call; what this row observes is
+        // only the clean half: no notification, no residue.
         host.execute(HostCommand::Destroy { handle: b }).unwrap();
         assert_eq!(host.lifecycle_state(b), None);
         assert!(host.try_recv_notification().is_none());
@@ -2825,6 +2830,64 @@ mod composite_e2e {
         );
         assert_eq!(host.lifecycle_state(c), None);
         assert!(host.try_recv_notification().is_none());
+    }
+
+    /// Mid-`CreateInstance` death on a FRESH pooled child — the
+    /// `create_on_fresh` failure arm (composite.rs): with the pool
+    /// empty the first `Instantiate` pays a spawn whose own
+    /// `CreateInstance` is the crash message
+    /// (`--crash-after-msgs=2`: `Scan`, then the `CreateInstance`
+    /// — the crash fires pre-dispatch, so the waiter is woken
+    /// `Err(Ipc)` by convergence). No facade mints (a sibling-free
+    /// death — unlike the reused-child arm there is nothing minted
+    /// to fan a notification out to), and the arm pops and tears
+    /// the child down inside the same bounded call so the pool
+    /// keeps nothing re-servable. The retry pays another fresh
+    /// spawn — the identical death, the knob being per-child — and
+    /// a clean child still mints a co-resident pair and serves
+    /// normally: the failed spawn left nothing wedged behind.
+    #[test]
+    fn bundled_fresh_create_death_leaves_pool_unpoisoned() {
+        use ruviform_plugin_core::wire;
+
+        let mut host = mixed_host(&["--crash-after-msgs=2"]);
+
+        // `Instantiate` → `Err(Ipc)` — no handle, no facade, so
+        // nothing was ever minted and no `InstanceFailed` arrives.
+        assert_eq!(
+            host.execute(HostCommand::Instantiate {
+                plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+            }),
+            Err(HostError::Ipc)
+        );
+        assert!(host.try_recv_notification().is_none());
+
+        // The pool kept nothing re-servable: the retry pays a
+        // fresh spawn that dies at the identical `CreateInstance`
+        // — a retained dead entry would self-evict to the same
+        // `Err(Ipc)`, so the distinguishing oracle for
+        // "popped, not merely evictable" stays at the composite
+        // unit level; this row pins the arm's `Err(Ipc)`
+        // granularity, mint-nothing notification semantics and
+        // that later `Instantiate`s are never wedged.
+        assert_eq!(
+            host.execute(HostCommand::Instantiate {
+                plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+            }),
+            Err(HostError::Ipc)
+        );
+        assert!(host.try_recv_notification().is_none());
+
+        // Nothing leaked into later spawns: a clean child still
+        // mints a co-resident pair and serves (the `bundled_pair`
+        // idiom).
+        let spawn_spec = spec(&[]);
+        let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+        let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+        a.execute(wire::Command::Initialize).unwrap();
+        assert_eq!(b.lifecycle_state(), LifecycleState::Created);
+        a.destroy();
+        b.destroy();
     }
 
     /// Mid-`DestroyInstance` death: `Destroy` is unconditional once
@@ -2911,6 +2974,19 @@ mod composite_e2e {
         host.execute(HostCommand::Destroy { handle: b }).unwrap();
     }
 
+    /// Asserts every sample of one out block is inside `allowed`
+    /// (silence or its delivered value) and reports whether the
+    /// whole block equals `target` — the delivery/persistence
+    /// oracle the runner-pipeline polls.
+    fn out_block_delivered(out: &[f32], allowed: &[f32], target: f32, what: &str) -> bool {
+        assert!(
+            out.iter()
+                .all(|&s| allowed.iter().any(|&v| sample_eq(s, v))),
+            "{what} carried a foreign/undefined sample"
+        );
+        out.iter().all(|&s| sample_eq(s, target))
+    }
+
     /// The real `ruviform-plugin-l1-runner` under the `Bundled`
     /// route: two `Instantiate`s land on one runner child whose
     /// per-instance registry keeps lifecycle, param state and shm
@@ -2970,23 +3046,41 @@ mod composite_e2e {
             // Defined sets are per-instance: `a` yields silence or
             // `0.5 × 1.0`, `b` silence or `0.75 × 2.0` — the wrong
             // multiplier or a foreign input is an undefined sample.
-            assert!(
-                out_a
-                    .iter()
-                    .all(|&s| sample_eq(s, 0.0) || sample_eq(s, 0.5)),
-                "a carried a foreign/undefined sample"
-            );
-            assert!(
-                out_b
-                    .iter()
-                    .all(|&s| sample_eq(s, 0.0) || sample_eq(s, 1.5)),
-                "b carried a foreign/undefined sample"
-            );
-            delivered_a |= out_a.iter().all(|&s| sample_eq(s, 0.5));
-            delivered_b |= out_b.iter().all(|&s| sample_eq(s, 1.5));
+            delivered_a |= out_block_delivered(&out_a, &[0.0, 0.5], 0.5, "a");
+            delivered_b |= out_block_delivered(&out_b, &[0.0, 1.5], 1.5, "b");
         }
         assert!(delivered_a, "a's runner pipeline never delivered");
         assert!(delivered_b, "b's runner pipeline never delivered");
+
+        // Param persistence, no re-send: the events above already
+        // landed (`delivered_*`), so blocks carrying NO param event
+        // still apply each instance's own gain. A child-scoped
+        // last-write-wins store would leave `a` on `b`'s 0.75 —
+        // `a`'s defined set stays {silence, `0.5 × 1.0`} and `b`'s
+        // {silence, `0.75 × 2.0`}; a wrong-gain block is undefined.
+        let mut persisted_a = false;
+        let mut persisted_b = false;
+        for call in 0..16_u32 {
+            thread::sleep(Duration::from_millis(5));
+            assert_eq!(
+                host_block(&mut host, a, &input_a, &mut out_a),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert_eq!(
+                host_block(&mut host, b, &input_b, &mut out_b),
+                Ok(ProcessResult::CONTINUE)
+            );
+            // Call N's output is block N−2 (lookahead): the first
+            // two calls still deliver event-era blocks; calls ≥2
+            // deliver blocks that carried no event — a `0.5`/`1.5`
+            // there is the persisted param, not a re-sent one. The
+            // defined sets keep policing the wrong-gain case on
+            // every call.
+            persisted_a |= out_block_delivered(&out_a, &[0.0, 0.5], 0.5, "a") && call >= 2;
+            persisted_b |= out_block_delivered(&out_b, &[0.0, 1.5], 1.5, "b") && call >= 2;
+        }
+        assert!(persisted_a, "a's gain did not persist without an event");
+        assert!(persisted_b, "b's gain did not persist without an event");
 
         // Child-scoped kill: both instances on the one runner child
         // converge `Failed` — two `InstanceFailed`s, same exit.

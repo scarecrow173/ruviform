@@ -4667,10 +4667,12 @@ mod tests {
     }
 
     /// The `drain_submits` doorbell gates: a live+armed instance's
-    /// submit rings a real doorbell — `(i, seq)` lands in
-    /// `block_in_flight` *before* the `BlockIn` hits the wire so a
-    /// reply can never outrun the bookkeeping — while every gated
-    /// drop (`Destroying`/`Failed`/`Creating` entry, stale
+    /// submit rings a real doorbell — `(i, seq)` is in
+    /// `block_in_flight` with its `BlockIn` on the wire (the code
+    /// orders the insert ahead of the write so a reply can never
+    /// outrun the bookkeeping; this row observes the post-call
+    /// pair, not the intra-call order) — while every gated drop
+    /// (`Destroying`/`Failed`/`Creating` entry, stale
     /// generation, draining child) still owes the leg its
     /// completion: `mark_failed(seq)` on the result channel, never
     /// a frame. An unregistered entry's seq needs no completion —
