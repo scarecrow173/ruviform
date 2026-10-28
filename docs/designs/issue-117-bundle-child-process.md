@@ -53,6 +53,9 @@ relations:
     - "docs/test-specs/issue-117-wire-v2-codec-tests.md"
     - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
     - "docs/test-specs/issue-117-bundle-e2e-tests.md"
+    - "docs/discovery/issue-116-supervisor.md"
+    - "docs/specs/issue-116-supervisor.md"
+    - "docs/designs/issue-116-supervisor.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-117-wire-v2-codec-tests.md"

@@ -4,7 +4,7 @@ type: "adr"
 status: "accepted"
 title: "L1 bundle 子の `Failed` 粒度・`InstanceFailed` fan-out・隔離選択面（Issue #117）"
 created: "2026-10-28"
-updated: "2026-10-28"
+updated: "2026-10-29"
 owners: []
 relations:
   source:
@@ -42,6 +42,11 @@ relations:
     - "docs/tasks/l1-route-pool-and-isolation-surface.md"
     - "docs/tasks/l1-bundle-e2e-and-granularity-verification.md"
     - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
+    - "docs/discovery/issue-116-supervisor.md"
+    - "docs/specs/issue-116-supervisor.md"
+    - "docs/designs/issue-116-supervisor.md"
+    - "docs/adr/issue-116-supervisor-placement.md"
+    - "docs/tasks/l1-supervisor-e2e.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"

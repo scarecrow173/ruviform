@@ -42,6 +42,10 @@ relations:
     - "docs/discovery/issue-114-real-adapter-l1-e2e.md"
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
+    - "docs/discovery/issue-116-supervisor.md"
+    - "docs/specs/issue-116-supervisor.md"
+    - "docs/designs/issue-116-supervisor.md"
+    - "docs/adr/issue-116-supervisor-placement.md"
   verifies: []
   verified-by: []
   references: []

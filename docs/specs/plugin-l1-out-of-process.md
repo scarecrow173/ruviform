@@ -52,6 +52,10 @@ relations:
     - "docs/specs/issue-117-bundle-child-process.md"
     - "docs/designs/issue-117-bundle-child-process.md"
     - "docs/adr/issue-117-bundle-child-failed-granularity.md"
+    - "docs/discovery/issue-116-supervisor.md"
+    - "docs/specs/issue-116-supervisor.md"
+    - "docs/designs/issue-116-supervisor.md"
+    - "docs/adr/issue-116-supervisor-placement.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -62,6 +66,8 @@ relations:
     - "docs/specs/engine-plugin-host-integration.md"
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
     - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
+    - "docs/specs/issue-116-supervisor.md"
+    - "docs/designs/issue-116-supervisor.md"
   deferred-by: []
 ---
 
@@ -138,7 +144,7 @@ Issue #76。#31 分割で L0（#74・CLOSED）の次に位置づけられた実�
 ## Deferred Design Concerns
 
 - L1 GUI（プロセス境界越し親ウィンドウ埋め込み）| 規格・プラットフォーム固有の大課題であり本 Issue 範囲を超える | L1 選択インスタンスでの GUI 要求の発生 | 隔離プラグインが GUI を表示できない（defined rejection 時）
-- 自動再起動・監視ポリシー | 状態復元はプラグイン責務の設計判断（#31）| supervisor 型運用要求の発生 | 手動復旧の運用負荷
+- 自動再起動・監視ポリシー | Issue #116 で設計・ADR 策定 — `ruviform-plugin-host` 内 opt-in util 層（`Supervisor`・`PluginHost` 公開 API のみ・caller 駆動 `poll`・bounded exponential retry・core 無変更で AC4 維持 — design `docs/designs/issue-116-supervisor.md`・ADR `docs/adr/issue-116-supervisor-placement.md`、ともに draft/proposed で approval 後に確定へ更新） | route 単位 watch・pull 型 checkpoint・`rebind` API 等の残件は同 design の Deferred 表 | —
 - 規格アダプタの子プロセス組込み（実 CLAP/VST3 の L1 実行） | runner 形態の設計確定が前提・別 Issue 級の配線 | 実プラグインでの L1 需要 | 検証がモック範囲に留まる
 - エンジン/利用側への L1 選択配線 | plugin-host の engine 消費自体が未実装 | engine プラグイン統合 Issue | L1 が consumer から到達不能
 - 複数 wire バージョン共存・交渉機構 | 初期開発期の単一最新バージョン方針を Issue #119 で確定（交渉機構・互換レイヤーなし — Requirements「ワイヤバージョン方針」参照） | 独立配布のホスト/ランナー間バージョン互換の要求発生 | 独立配布形態で新旧バージョンの混在が扱えない
