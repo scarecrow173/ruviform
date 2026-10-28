@@ -176,10 +176,10 @@ pub(crate) struct SpawnSpec {
     /// depth `D = lookahead_blocks + 1`, both SPSC channel
     /// capacities and the RT leg's result horizon
     /// (`expected = block − lookahead`). `0` is rejected by
-    /// [`L1Instance::spawn`] (`Err(Ipc)`): the just-submitted seq
-    /// could never already have a result, so the leg would pass
-    /// through forever. `D` also travels as `CreateInstance`'s
-    /// `in_depth`/`out_depth`, so the codec's
+    /// [`SpawnSpec::instance_depth`] (`Err(Ipc)`): the
+    /// just-submitted seq could never already have a result, so the
+    /// leg would pass through forever. `D` also travels as
+    /// `CreateInstance`'s `in_depth`/`out_depth`, so the codec's
     /// [`wire::WIRE_MAX_ELEMENTS`] depth cap bounds
     /// `lookahead_blocks` — values `>= WIRE_MAX_ELEMENTS`
     /// (`D > WIRE_MAX_ELEMENTS`) are rejected the same way.
@@ -200,6 +200,29 @@ impl SpawnSpec {
             lookahead_blocks: 2,
             command_timeout: Duration::from_secs(10),
         }
+    }
+
+    /// `lookahead_blocks` legality plus the shm slot depth
+    /// `D = lookahead_blocks + 1` — the spec-level gate the
+    /// dedicated [`L1Instance::spawn`] and the pooled
+    /// [`L1Child::create_instance`] callers both run before any
+    /// segment or child exists. `0` is `Err(Ipc)`: the result
+    /// horizon `expected = block` is the seq the same `process`
+    /// call just submitted, so no result could ever arrive first
+    /// and the leg would pass through forever. `>=
+    /// wire::WIRE_MAX_ELEMENTS` (`D > WIRE_MAX_ELEMENTS`) is the
+    /// same defined rejection — `D` is declared on
+    /// `CreateInstance`'s `in_depth`/`out_depth`, which the codec
+    /// caps at `WIRE_MAX_ELEMENTS`. The spec is rejected like any
+    /// other unusable spawn configuration rather than silently
+    /// degraded.
+    pub(crate) fn instance_depth(&self) -> Result<u32, HostError> {
+        if self.lookahead_blocks == 0 || self.lookahead_blocks >= wire::WIRE_MAX_ELEMENTS {
+            return Err(HostError::Ipc);
+        }
+        // `lookahead_blocks < WIRE_MAX_ELEMENTS` here, so `+ 1`
+        // cannot overflow and `depth` stays inside the codec cap.
+        Ok(self.lookahead_blocks + 1)
     }
 }
 
@@ -1663,6 +1686,43 @@ impl L1Child {
         }
     }
 
+    /// A fresh child for `spec` — the v2 argv wiring (`program` +
+    /// `spec.args` only; `plugin_id`/`shm_key` ride the
+    /// `CreateInstance` payload — plus the piped-stdio layout), then
+    /// [`L1Child::spawn`] (the `Hello` version gate inside) and the
+    /// child-scope [`L1Child::scan_match`]. This is the whole
+    /// per-child half of the handshake: the dedicated route
+    /// ([`L1Instance::spawn`]) and a pooled route's fresh spawn run
+    /// exactly the same sequence before per-instance minting.
+    ///
+    /// Every failure — spawn error, timeout, `Hello`/descriptor
+    /// mismatch — aborts the fresh child (kill + reap + join, no
+    /// `Shutdown` grace: the spawn never answered as a live child)
+    /// and returns the error, the design's fresh-spawn rollback.
+    /// `spec` legality ([`SpawnSpec::instance_depth`]) is the
+    /// caller's precondition — check it before paying the spawn.
+    ///
+    /// **RT contract:** non-RT only — [`L1Child::spawn`]'s bounds
+    /// plus the `Scan` wait.
+    pub(crate) fn spawn_scanned(spec: &SpawnSpec) -> Result<Arc<Self>, HostError> {
+        let mut command = ProcCommand::new(&spec.program);
+        command
+            .args(&spec.args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            // stderr piping is a deferred design concern — inherit
+            // keeps child diagnostics visible without extra plumbing.
+            .stderr(Stdio::inherit());
+        let child = Self::spawn(command, spec.command_timeout)?;
+        if let Err(error) = child.scan_match(spec) {
+            // Fresh-child handshake failure — kill + reap, no
+            // notification: nothing ever went live on it.
+            child.abort();
+            return Err(error);
+        }
+        Ok(child)
+    }
+
     /// Mints a wire handle, registers the `InstShared` (`Creating`),
     /// installs the data-plane ends on the driver and sends
     /// `CreateInstance` — the per-instance half of the v2 handshake.
@@ -1927,11 +1987,33 @@ impl L1Child {
     /// Registered-instance count — the `live_count` the
     /// shutdown-on-empty rule counts (`Creating`/`Failed`/
     /// `Destroying` entries included until `DestroyInstance`
-    /// reclaims them). The T3 pool's child-selection predicate
-    /// reads this; T2's dedicated route never does.
-    #[expect(dead_code)]
+    /// reclaims them). The pooled route reads this at
+    /// `Destroy`-time eviction and inside [`L1Child::pool_eligible`];
+    /// the dedicated route never does.
     pub(crate) fn live_count(&self) -> usize {
         self.shared.lock().instances.len()
+    }
+
+    /// The pooled route's child-selection predicate — `live_count <
+    /// WIRE_MAX_INSTANCES && !terminal && !shutdown_initiated` —
+    /// evaluated atomically under one `inner` lock so the answer is
+    /// never a torn read. A terminal child can never serve again
+    /// (the pool evicts it); a `shutdown_initiated` one is already
+    /// draining toward clean teardown.
+    pub(crate) fn pool_eligible(&self) -> bool {
+        let inner = self.shared.lock();
+        inner.instances.len() < wire::WIRE_MAX_INSTANCES as usize
+            && inner.terminal.is_none()
+            && !inner.shutdown_initiated
+    }
+
+    /// `Inner.terminal.is_some()` — `converge_child` ran, the child
+    /// is dead/converging and can never serve again. The pool's
+    /// dead-entry eviction oracle: removing the pool's `Arc` here
+    /// leaves live facades holding their own references until their
+    /// `destroy`/`Drop` runs the last-referrer teardown.
+    pub(crate) fn is_terminal(&self) -> bool {
+        self.shared.lock().terminal.is_some()
     }
 
     /// Fresh-spawn abort: kill + disconnect + join — no
@@ -2065,11 +2147,12 @@ impl L1Instance {
     /// spawn error, timeout, version/descriptor mismatch — is
     /// `Err(HostError::Ipc)` with the fresh child killed and reaped
     /// (a fresh-spawn failure tears the whole child down — the
-    /// shared-child rollback is the T3 pool path's concern). The
-    /// child's defined `Err(InstanceLimit)` capacity rejection is
-    /// the one exception — it propagates unflattened as
-    /// `Err(HostError::InstanceLimit)` so a pooled caller can
-    /// distinguish capacity from transport failure.
+    /// shared-child rollback lives inside
+    /// [`L1Child::spawn_scanned`]). The child's defined
+    /// `Err(InstanceLimit)` capacity rejection is the one exception
+    /// — it propagates unflattened as `Err(HostError::InstanceLimit)`
+    /// so a pooled caller can distinguish capacity from transport
+    /// failure.
     ///
     /// **RT contract:** non-RT only — blocks up to
     /// `4 × command_timeout` in the worst case (spawn hand-off,
@@ -2086,29 +2169,11 @@ impl L1Instance {
     /// rejected like any other unusable spawn configuration rather
     /// than silently degraded — before any segment or child exists.
     pub(crate) fn spawn(spec: &SpawnSpec) -> Result<Self, HostError> {
-        if spec.lookahead_blocks == 0 || spec.lookahead_blocks >= wire::WIRE_MAX_ELEMENTS {
-            return Err(HostError::Ipc);
-        }
-        // `lookahead_blocks < WIRE_MAX_ELEMENTS` here, so `+ 1`
-        // cannot overflow and `depth` stays inside the codec cap.
-        let depth = spec.lookahead_blocks + 1;
-        // Wire v2: no `--ruviform-*` bootstrap flags — the plugin id
-        // and shm key travel in the `CreateInstance` payload during
-        // `create_instance`. `spec.args` still prepends the runner's
-        // own flags (e.g. the test worker's fault knobs).
-        let mut command = ProcCommand::new(&spec.program);
-        command
-            .args(&spec.args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            // stderr piping is a deferred design concern — inherit
-            // keeps child diagnostics visible without extra plumbing.
-            .stderr(Stdio::inherit());
-        let child = L1Child::spawn(command, spec.command_timeout)?;
-        let result = child
-            .scan_match(spec)
-            .and_then(|()| child.create_instance(spec, depth));
-        let parts = match result {
+        // The spec-legality gate runs before any segment or child
+        // exists — [`SpawnSpec::instance_depth`] holds the rule.
+        let depth = spec.instance_depth()?;
+        let child = L1Child::spawn_scanned(spec)?;
+        let parts = match child.create_instance(spec, depth) {
             Ok(parts) => parts,
             Err(error) => {
                 // Fresh-child failure — kill + reap, no
@@ -2147,6 +2212,17 @@ impl L1Instance {
             activated_sample_rate: None,
             segment: parts.segment,
         }
+    }
+
+    /// The shared child this instance lives on — the pooled route's
+    /// shutdown-on-empty eviction and `kill_child`'s child-scope
+    /// lookup key on it. `Arc::strong_count` on the clone is what
+    /// `destroy`/`Drop`'s last-referrer teardown reads, so callers
+    /// must drop the clone before that check means anything.
+    ///
+    /// **RT contract:** non-RT only — an `Arc` clone.
+    pub(crate) fn child(&self) -> &Arc<L1Child> {
+        &self.child
     }
 
     /// Sends one wire command and waits for its reply — the
@@ -2876,6 +2952,84 @@ fn err_committed_state(cmd: &wire::Command) -> Option<LifecycleState> {
 }
 
 #[cfg(test)]
+impl L1Child {
+    /// Process-free child fixture for the pool tests — a real
+    /// `Shared` state with `live_instances` registered `Live`
+    /// entries (bare `InstShared`s: channel ends, no segments — no
+    /// reader ever attaches), but no spawned child, I/O threads or
+    /// driver channel. `request` fails `Err(Ipc)` past the gates,
+    /// `pool_eligible`/`is_terminal`/`live_count` answer from the
+    /// real `Inner`, and `abort`/`teardown` run their bounded
+    /// pieces (the `Terminal::Clean` stamp still lands — the pool
+    /// eviction tests use it as the teardown oracle).
+    pub(crate) fn test_fixture(live_instances: u32) -> Arc<Self> {
+        let mut instances = HashMap::new();
+        for instance in 0..live_instances {
+            let (notify_tx, _notify_rx) = mpsc::channel();
+            let (result_tx, _result_rx) = ruviform_rt::channel::<u64>(3);
+            instances.insert(
+                instance,
+                InstShared {
+                    rt_state: Arc::new(AtomicU8::new(data::mirror_encode(LifecycleState::Created))),
+                    mirror: LifecycleState::Created,
+                    notify_tx,
+                    notify: Notify::Idle,
+                    staging: None,
+                    shm: SegmentInfo {
+                        key: "l1-pool-fixture".to_owned(),
+                        in_depth: 1,
+                        out_depth: 1,
+                    },
+                    result_tx: Mutex::new(result_tx),
+                    phase: InstPhase::Live,
+                },
+            );
+        }
+        Arc::new(Self {
+            shared: Arc::new(Shared {
+                inner: Mutex::new(Inner {
+                    waiters: HashMap::new(),
+                    instances,
+                    block_in_flight: HashSet::new(),
+                    terminal: None,
+                    shutdown_initiated: false,
+                    seen_eof: false,
+                }),
+                child: OnceLock::new(),
+                next_cmd_seq: AtomicU64::new(0),
+            }),
+            driver_tx: Mutex::new(None),
+            driver_join: Mutex::new(None),
+            reader_join: Mutex::new(None),
+            command_timeout: Duration::from_millis(50),
+        })
+    }
+
+    /// Stamps a `Terminal::Failed` convergence on the fixture —
+    /// the "child died" input the pooled-route tests need without
+    /// a real process (the kill-half of `converge_child` no-ops on
+    /// the missing `Shared.child`). A fixed exit status rides
+    /// along so the per-instance `ChildExit` fan-out completes
+    /// `Sent` immediately instead of staying `Pending` for a reap
+    /// that never comes.
+    pub(crate) fn test_converge(&self) {
+        converge_child(
+            &self.shared,
+            Some(ChildExit {
+                code: Some(1),
+                signal: None,
+            }),
+        );
+    }
+
+    /// Marks the fixture mid-`Shutdown` — the pool's
+    /// skip-but-not-evict predicate input.
+    pub(crate) fn test_set_shutdown_initiated(&self) {
+        self.shared.lock().shutdown_initiated = true;
+    }
+}
+
+#[cfg(test)]
 impl L1Instance {
     /// Child-free fixture for the endpoint-machinery tests — this
     /// module's and `crate::composite`'s. Real `Shared`, a registered
@@ -2893,8 +3047,23 @@ impl L1Instance {
     /// arms a gen-1 staging ring of that capacity and records a
     /// 48 kHz activation.
     pub(crate) fn test_fixture(mirror: LifecycleState, activated_frames: Option<u32>) -> Self {
+        Self::test_fixture_on(&L1Child::test_fixture(0), 0, mirror, activated_frames)
+    }
+
+    /// [`L1Instance::test_fixture`] on a caller-supplied child —
+    /// `crate::composite`'s pool tests mint facades sharing one
+    /// `L1Child` (co-resident siblings) the same way the pooled
+    /// route's `create_instance` + `from_parts` pair does. The
+    /// entry registers on `child.shared` under wire handle
+    /// `instance`; `mirror`/`activated_frames` mean exactly what
+    /// they do on `test_fixture`.
+    pub(crate) fn test_fixture_on(
+        child: &Arc<L1Child>,
+        instance: u32,
+        mirror: LifecycleState,
+        activated_frames: Option<u32>,
+    ) -> Self {
         const DEPTH: u32 = 3;
-        const INSTANCE: u32 = 0;
         let (submit_tx, _submit_rx) = ruviform_rt::channel::<data::Submit>(DEPTH as usize);
         let (result_tx, result_rx) = ruviform_rt::channel::<u64>(DEPTH as usize);
         let (notify_tx, notify_rx) = mpsc::channel();
@@ -2910,9 +3079,8 @@ impl L1Instance {
             DEPTH,
         )
         .expect("fixture segment");
-        let mut instances = HashMap::new();
-        instances.insert(
-            INSTANCE,
+        child.shared.lock().instances.insert(
+            instance,
             InstShared {
                 rt_state: Arc::clone(&rt_state),
                 mirror,
@@ -2932,28 +3100,10 @@ impl L1Instance {
                 },
             },
         );
-        let shared = Arc::new(Shared {
-            inner: Mutex::new(Inner {
-                waiters: HashMap::new(),
-                instances,
-                block_in_flight: HashSet::new(),
-                terminal: None,
-                shutdown_initiated: false,
-                seen_eof: false,
-            }),
-            child: OnceLock::new(),
-            next_cmd_seq: AtomicU64::new(0),
-        });
         Self {
-            shared: Arc::clone(&shared),
-            child: Arc::new(L1Child {
-                shared,
-                driver_tx: Mutex::new(None),
-                driver_join: Mutex::new(None),
-                reader_join: Mutex::new(None),
-                command_timeout: Duration::from_millis(50),
-            }),
-            instance: INSTANCE,
+            shared: Arc::clone(&child.shared),
+            child: Arc::clone(child),
+            instance,
             notify_rx,
             rt_state,
             depth: DEPTH,
@@ -4232,5 +4382,127 @@ mod tests {
                 Ok(DriverCmd::RemoveInstance { instance: 0 })
             ));
         }
+    }
+
+    // ---------------------------------------------------------------
+    // T3 pool seams — `pool_eligible`/`is_terminal`/`live_count`, the
+    // shared spec-legality gate and the full-child `InstanceLimit`
+    // the `Bundled` selection must distinguish. The composite's own
+    // pool tests live in `crate::composite`.
+    // ---------------------------------------------------------------
+
+    /// The child-selection predicate the `Bundled` route scans on:
+    /// `live_count < WIRE_MAX_INSTANCES && !terminal &&
+    /// !shutdown_initiated`, atomically — every ineligible reason
+    /// answered alone.
+    #[test]
+    fn pool_eligible_covers_every_rejection_reason() {
+        // Eligible: registered live entries below capacity.
+        let child = L1Child::test_fixture(2);
+        assert_eq!(child.live_count(), 2);
+        assert!(child.pool_eligible());
+        assert!(!child.is_terminal());
+
+        // Full: at capacity, still alive — ineligible but not
+        // terminal (the pool keeps it, it must just not serve).
+        let child = L1Child::test_fixture(wire::WIRE_MAX_INSTANCES);
+        assert_eq!(child.live_count(), wire::WIRE_MAX_INSTANCES as usize);
+        assert!(!child.pool_eligible());
+        assert!(!child.is_terminal());
+
+        // Terminal: converged — ineligible and the pool's eviction
+        // oracle fires.
+        let child = L1Child::test_fixture(1);
+        child.test_converge();
+        assert!(!child.pool_eligible());
+        assert!(child.is_terminal());
+
+        // `shutdown_initiated` (not yet terminal) — draining toward
+        // clean teardown: ineligible, but not an eviction candidate.
+        let child = L1Child::test_fixture(1);
+        child.shared.lock().shutdown_initiated = true;
+        assert!(!child.pool_eligible());
+        assert!(!child.is_terminal());
+    }
+
+    /// `live_count` counts *registered* entries — `Creating`,
+    /// `Failed` and `Destroying` included — so a converged-but-not-
+    /// reclaimed child still reads full until `DestroyInstance`
+    /// reclaims it; `remove_instance` frees the count.
+    #[test]
+    fn live_count_counts_registered_until_reclaimed() {
+        let child = L1Child::test_fixture(2);
+        child.test_converge();
+        // Both entries converged `Failed` but stay registered —
+        // `live_count` still counts them.
+        assert_eq!(child.live_count(), 2);
+        {
+            let mut inner = child.shared.lock();
+            remove_instance(&mut inner, 0);
+        }
+        assert_eq!(child.live_count(), 1);
+    }
+
+    /// `remove_instance` frees a wire handle for the next
+    /// lowest-free mint — the reuse edge of `live_count` that the
+    /// shutdown-on-empty rule and `pool_eligible` both read.
+    #[test]
+    fn remove_instance_frees_the_lowest_handle() {
+        let child = L1Child::test_fixture(3);
+        {
+            let mut inner = child.shared.lock();
+            remove_instance(&mut inner, 1);
+            assert_eq!(inner.instances.len(), 2);
+            // Lowest-free — handle 1 is minted again, not 3.
+            assert_eq!(mint_instance(&inner), Some(1));
+        }
+    }
+
+    /// A full child's `create_instance` answers `Err(InstanceLimit)`
+    /// — the *capacity* fact the pooled caller must distinguish
+    /// from `Ipc` — before any waiter or driver order ships.
+    #[test]
+    fn create_instance_on_full_child_is_instance_limit() {
+        let child = L1Child::test_fixture(wire::WIRE_MAX_INSTANCES);
+        let spec = SpawnSpec::new(
+            PluginDescriptor {
+                id: "org.ruviform.test.pool-full",
+                name: "pool-full",
+                vendor: "Ruviform",
+                version: "0",
+                features: &[],
+            },
+            OsString::from("unused-runner"),
+        );
+        assert!(matches!(
+            child.create_instance(&spec, 3),
+            Err(HostError::InstanceLimit)
+        ));
+        // Nothing was registered — the count stays at capacity.
+        assert_eq!(child.live_count(), wire::WIRE_MAX_INSTANCES as usize);
+    }
+
+    /// The spec-legality gate both `Instantiate` paths share:
+    /// `lookahead_blocks` 0 and `>= WIRE_MAX_ELEMENTS` are the
+    /// defined `Err(Ipc)`; a legal spec yields `D =
+    /// lookahead_blocks + 1`.
+    #[test]
+    fn instance_depth_gates_the_spec() {
+        let mut spec = SpawnSpec::new(
+            PluginDescriptor {
+                id: "org.ruviform.test.depth",
+                name: "depth",
+                vendor: "Ruviform",
+                version: "0",
+                features: &[],
+            },
+            OsString::from("unused-runner"),
+        );
+        spec.lookahead_blocks = 0;
+        assert!(matches!(spec.instance_depth(), Err(HostError::Ipc)));
+        spec.lookahead_blocks = wire::WIRE_MAX_ELEMENTS;
+        assert!(matches!(spec.instance_depth(), Err(HostError::Ipc)));
+        spec.lookahead_blocks = 2;
+        assert_eq!(spec.instance_depth().unwrap(), 3);
     }
 }

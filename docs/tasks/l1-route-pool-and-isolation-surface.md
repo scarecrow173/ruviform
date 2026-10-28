@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NlQmTAKwSUzU49wWswM"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 route pool + 隔離選択面（OutOfProcessIsolation・Route struct variant・pool lifecycle）"
 created: "2026-10-28"
 updated: "2026-10-28"
@@ -14,6 +14,8 @@ relations:
     modified:
       - type: "file"
         path: "crates/ruviform-plugin-host/src/composite.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/l1/mod.rs"
       - type: "file"
         path: "crates/ruviform-plugin-host/src/lib.rs"
     deleted: []
@@ -85,21 +87,22 @@ T2 の `L1Child`/demux/teardown 機構を `composite` の `Route::OutOfProcess` 
 ## Affected Files
 
 - `crates/ruviform-plugin-host/src/composite.rs` — `OutOfProcessIsolation`・`Route` struct variant + pool・instantiate/destroy/kill_child・pool lifecycle
+- `crates/ruviform-plugin-host/src/l1/mod.rs` — `SpawnSpec::instance_depth`・`L1Child::spawn_scanned`/`pool_eligible`/`is_terminal`・`L1Instance::child` + spawn refactor・test fixture
 - `crates/ruviform-plugin-host/src/lib.rs` — `OutOfProcessIsolation` 再公開 + crate doc
 
 ## Done When
 
-- [ ] `#[non_exhaustive] pub enum OutOfProcessIsolation{Dedicated, Bundled}` が公開され `new()` default が `Bundled`
-- [ ] `Route::OutOfProcess` が `{spec, isolation, pool}` struct variant で、`Bundled` が pool 経由で `live_count<64` の子を再利用・満杯時に新規 spawn する
-- [ ] `Dedicated` が同 v2 機構の capacity-1 経路として動作する（pool 非投入・spawn 毎に新規 `L1Child`）
-- [ ] `destroy` → `DestroyInstance` → live=0 で `Shutdown`+reap + pool evict（shutdown-on-empty）
-- [ ] `Err(UnknownPluginId)`→`Err(Ipc)` fold・`Err(InstanceLimit)` 伝搬が動作する
-- [ ] `kill_child` が子単位で全 live instance を `Failed` にし doc に明記される
-- [ ] pool の fresh-spawn 失敗→子 remove・shared-child 失敗→entry rollback のみが実装される
-- [ ] `lib.rs` が `OutOfProcessIsolation` を再公開し crate doc が bundle 契約を述べる
+- [x] `#[non_exhaustive] pub enum OutOfProcessIsolation{Dedicated, Bundled}` が公開され `new()` default が `Bundled`
+- [x] `Route::OutOfProcess` が `{spec, isolation, pool}` struct variant で、`Bundled` が pool 経由で `live_count<64` の子を再利用・満杯時に新規 spawn する
+- [x] `Dedicated` が同 v2 機構の capacity-1 経路として動作する（pool 非投入・spawn 毎に新規 `L1Child`）
+- [x] `destroy` → `DestroyInstance` → live=0 で `Shutdown`+reap + pool evict（shutdown-on-empty）
+- [x] `Err(UnknownPluginId)`→`Err(Ipc)` fold・`Err(InstanceLimit)` 伝搬が動作する
+- [x] `kill_child` が子単位で全 live instance を `Failed` にし doc に明記される
+- [x] pool の fresh-spawn 失敗→子 remove・shared-child 失敗→entry rollback のみが実装される
+- [x] `lib.rs` が `OutOfProcessIsolation` を再公開し crate doc が bundle 契約を述べる
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-host --lib` — pool/isolation unit test が pass
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass
-- [ ] `cargo doc -p ruviform-plugin-host --no-deps` が warning 0
+- [x] `cargo test -p ruviform-plugin-host --lib` — pool/isolation unit test が pass
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass
+- [x] `cargo doc -p ruviform-plugin-host --no-deps` が warning 0

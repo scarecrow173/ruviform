@@ -22,11 +22,15 @@
 //! - **L0 (default)** — [`InProcessHost`]: factories registered via
 //!   `register_factory` run in-process; `process` is a direct
 //!   [`PluginProcessor`] call.
-//! - **L1 (opt-in, Issue #76)** — one child process per instance:
-//!   a framed stdio control plane, a `shared_memory` data plane and
+//! - **L1 (opt-in, Issue #76)** — child-process hosting behind a
+//!   framed stdio control plane, a `shared_memory` data plane and
 //!   `ruviform-rt` SPSC try-legs so the caller thread never touches
-//!   pipes, shm or blocking I/O. A live-exit child converges the
-//!   instance to `Failed` and reports it once through
+//!   pipes, shm or blocking I/O. Instances are placed per
+//!   [`OutOfProcessSpec::isolation`]: `Bundled` (the default) packs
+//!   them into shared children from the route's pool, `Dedicated`
+//!   gives each its own child — see [`OutOfProcessIsolation`] for
+//!   the crash/liveness trade-off. A live-exit child converges its
+//!   instances to `Failed` and reports each once through
 //!   [`PluginHost::try_recv_notification`] as
 //!   [`HostNotification::InstanceFailed`]; a `Failed` instance
 //!   rejects every command but `Destroy` (`Err(HostError::Failed)`)
@@ -143,7 +147,9 @@ pub(crate) mod l1;
 mod plugin;
 
 pub use command::{GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, PluginHandle};
-pub use composite::{ChildExit, HostNotification, OutOfProcessSpec, PluginHost};
+pub use composite::{
+    ChildExit, HostNotification, OutOfProcessIsolation, OutOfProcessSpec, PluginHost,
+};
 pub use endpoint::{EndpointBounds, PluginEndpoint};
 pub use host::InProcessHost;
 pub use plugin::{

@@ -1,8 +1,12 @@
 //! [`PluginHost`] — the composite host: one public surface that
 //! routes each registered `plugin_id` to the L0 in-process backend
-//! ([`InProcessHost`]) or the opt-in L1 out-of-process backend (one
-//! [`L1Instance`] child process per instance), behind a single
-//! unified [`PluginHandle`] space.
+//! ([`InProcessHost`]) or the opt-in L1 out-of-process backend,
+//! behind a single unified [`PluginHandle`] space. Each L1
+//! `Instantiate` lands on a shared child process
+//! ([`OutOfProcessIsolation::Bundled`] — the route's pool fills one
+//! child up to `wire::WIRE_MAX_INSTANCES` before spawning the next)
+//! or on its own child ([`OutOfProcessIsolation::Dedicated`] — the
+//! capacity-1 route) per the spec's `isolation`.
 //!
 //! Per the L1 design (`docs/designs/plugin-l1-out-of-process.md`,
 //! Issue #76) the layer is chosen at **registration time** —
@@ -37,6 +41,7 @@
 
 use std::collections::HashMap;
 use std::ffi::OsString;
+use std::sync::Arc;
 use std::time::Duration;
 
 use ruviform_audio_core::SampleRate;
@@ -47,11 +52,57 @@ use ruviform_plugin_core::{
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L1Endpoint, PluginEndpoint};
-use crate::l1::{ChildExit as L1ChildExit, L1Instance, SpawnSpec};
+use crate::l1::{ChildExit as L1ChildExit, L1Child, L1Instance, SpawnSpec};
 use crate::{
     ErasedPlugin, HostCommand, HostError, HostInput, HostOutput, HostReply, InProcessHost,
     PluginFactory, PluginHandle,
 };
+
+/// How L1 instances of one out-of-process route map onto child
+/// processes — [`OutOfProcessSpec::isolation`]'s declaration, fixed
+/// at registration.
+///
+/// This is a crash- *and* liveness-isolation trade-off, not merely a
+/// resource one. A bundled child runs a single-threaded serve loop
+/// for every co-resident instance, so one hung plugin wedges the
+/// loop and stalls all of them — the failure surfaces as a
+/// child-scope `command_timeout`, not a per-instance answer. Pick
+/// [`Dedicated`](OutOfProcessIsolation::Dedicated) whenever an
+/// instance must be protected from its neighbours' hangs as well as
+/// their crashes.
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new isolation modes may be added without breaking
+/// downstream `match` arms.
+///
+/// **RT contract:** non-RT only — registration data.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OutOfProcessIsolation {
+    /// Every `Instantiate` spawns its own child process — the
+    /// capacity-1 route: full per-instance crash *and* liveness
+    /// isolation (one hung or crashing plugin touches no other
+    /// instance), at the per-instance process, shm-segment, thread
+    /// and handshake cost.
+    Dedicated,
+    /// Instances of the route share child processes — the route's
+    /// pool fills each child up to
+    /// `wire::WIRE_MAX_INSTANCES` co-resident instances before
+    /// spawning the next. One process, thread pair and handshake
+    /// serves many instances, but failure granularity is
+    /// child-scoped: a crash fans `Failed` out to every co-resident
+    /// instance and one hung plugin wedges the shared serve loop
+    /// for all of them. The shared stdio pipe also serializes
+    /// large frames (e.g. a multi-MB `RestoreState` payload), so
+    /// one instance's bulk transfer can delay its siblings' replies.
+    /// Isolation is state/attribution-granular, not address-space:
+    /// a corrupting plugin could rewrite a co-resident instance's
+    /// shm slots — the host's fail-closed out-slot checks confine
+    /// that to a defined per-instance failure. **The default** for
+    /// this unpublished 0.1.0 API.
+    #[default]
+    Bundled,
+}
 
 /// Spawn parameters for one out-of-process (L1) plugin route —
 /// [`PluginHost::register_out_of_process`]'s declaration of how each
@@ -92,11 +143,19 @@ pub struct OutOfProcessSpec {
     /// wait (default **10 s**); a timed-out command converges the
     /// instance to `Failed`.
     pub command_timeout: Duration,
+    /// Child-process isolation for this route (default
+    /// [`OutOfProcessIsolation::Bundled`]) — see the enum for the
+    /// crash/liveness trade-off. `Bundled` pools instances onto
+    /// shared children; `Dedicated` spawns one child per
+    /// `Instantiate` and never pools it.
+    pub isolation: OutOfProcessIsolation,
 }
 
 impl OutOfProcessSpec {
     /// A spec with the design defaults (`lookahead_blocks` 2,
-    /// `command_timeout` 10 s); adjust the fields as needed.
+    /// `command_timeout` 10 s, `isolation`
+    /// [`OutOfProcessIsolation::Bundled`]); adjust the fields as
+    /// needed.
     ///
     /// **RT contract:** non-RT only.
     #[must_use]
@@ -107,6 +166,7 @@ impl OutOfProcessSpec {
             args: Vec::new(),
             lookahead_blocks: 2,
             command_timeout: Duration::from_secs(10),
+            isolation: OutOfProcessIsolation::Bundled,
         }
     }
 }
@@ -169,9 +229,22 @@ enum Route {
     /// `register_factory` — instances run in this process through
     /// [`InProcessHost`].
     InProcess,
-    /// `register_out_of_process` — every `Instantiate` spawns one
-    /// child process per the spec.
-    OutOfProcess(SpawnSpec),
+    /// `register_out_of_process` — every `Instantiate` either draws
+    /// a child from the route's `Bundled` pool or spawns a
+    /// `Dedicated` one, per `isolation`.
+    OutOfProcess {
+        /// The route's spawn parameters — program, argv, lookahead
+        /// depth and command timeout.
+        spec: SpawnSpec,
+        /// The route's child-process isolation policy.
+        isolation: OutOfProcessIsolation,
+        /// The route's live bundled children, in spawn order —
+        /// `Dedicated` routes never insert (the field exists either
+        /// way so the variant is uniform), and `Bundled` eviction
+        /// runs inside the instantiate scan and the
+        /// shutdown-on-empty destroy path.
+        pool: Vec<Arc<L1Child>>,
+    },
 }
 
 /// One live entry of the unified slot table — the `PluginHandle`
@@ -307,8 +380,10 @@ impl PluginHost {
     }
 
     /// Registers one plugin type for the out-of-process (L1) route:
-    /// every `Instantiate { plugin_id: spec.descriptor.id }` spawns
-    /// one child process running `spec.program`.
+    /// every `Instantiate { plugin_id: spec.descriptor.id }` lands
+    /// on a child running `spec.program` — shared with the route's
+    /// other instances (`Bundled`, the default) or dedicated to it
+    /// (`Dedicated`), per `spec.isolation`.
     ///
     /// **RT contract:** non-RT only.
     ///
@@ -323,6 +398,7 @@ impl PluginHost {
             args,
             lookahead_blocks,
             command_timeout,
+            isolation,
         } = spec;
         if self.routes.contains_key(descriptor.id) {
             return Err(HostError::DuplicatePluginId);
@@ -331,8 +407,14 @@ impl PluginHost {
         spawn.args = args;
         spawn.lookahead_blocks = lookahead_blocks;
         spawn.command_timeout = command_timeout;
-        self.routes
-            .insert(descriptor.id.to_owned(), Route::OutOfProcess(spawn));
+        self.routes.insert(
+            descriptor.id.to_owned(),
+            Route::OutOfProcess {
+                spec: spawn,
+                isolation,
+                pool: Vec::new(),
+            },
+        );
         self.descriptors.push(descriptor);
         Ok(())
     }
@@ -808,6 +890,12 @@ impl PluginHost {
     /// (`Failed` convergence + `HostNotification::InstanceFailed`)
     /// in tests. L0 slots have no child — `Err(HostError::Unsupported)`.
     ///
+    /// The kill is **child-scoped**: on a `Bundled` route the child
+    /// may host co-resident instances, so one kill fans
+    /// `InstanceFailed` out to *every* live instance on it — not
+    /// only the named handle's. `Dedicated` children host exactly
+    /// one instance, so the same call is per-instance there.
+    ///
     /// **RT contract:** non-RT only.
     ///
     /// # Errors
@@ -828,7 +916,7 @@ impl PluginHost {
     /// `Instantiate` — routes by `plugin_id`, then mints the public
     /// handle from the unified slot table regardless of layer.
     fn instantiate(&mut self, plugin_id: &str) -> Result<HostReply, HostError> {
-        let slot = match self.routes.get(plugin_id) {
+        let slot = match self.routes.get_mut(plugin_id) {
             None => return Err(HostError::UnknownPluginId),
             Some(Route::InProcess) => {
                 let HostReply::Instantiated { handle: inner } =
@@ -840,9 +928,20 @@ impl PluginHost {
                 };
                 Slot::InProcess(inner)
             }
-            Some(Route::OutOfProcess(spec)) => {
-                Slot::OutOfProcess(Box::new(L1Instance::spawn(spec)?))
-            }
+            Some(Route::OutOfProcess {
+                spec,
+                isolation,
+                pool,
+            }) => match *isolation {
+                // The capacity-1 route — a fresh child per instance,
+                // never pooled.
+                OutOfProcessIsolation::Dedicated => {
+                    Slot::OutOfProcess(Box::new(L1Instance::spawn(spec)?))
+                }
+                OutOfProcessIsolation::Bundled => {
+                    Slot::OutOfProcess(Box::new(instantiate_bundled(spec, pool)?))
+                }
+            },
         };
         Ok(HostReply::Instantiated {
             handle: self.mint(slot),
@@ -853,10 +952,15 @@ impl PluginHost {
     /// teardown. L0 delegates to `InProcessHost` (which applies the
     /// lifecycle legality rule itself); L1 applies that same rule
     /// here — `L1Instance::destroy` is unconditional, so the
-    /// composite is where `Activated`/`Processing` rejections live —
-    /// then runs `Shutdown` + reap.
+    /// composite is where `Activated`/`Processing` rejections live.
+    /// The teardown is child-scoped: a dedicated child runs its
+    /// `Shutdown`+reap as the facade's last referrer inside
+    /// `destroy`, while a pooled child whose registry just emptied
+    /// is evicted and torn down by the composite — a sibling still
+    /// registered on it keeps the child alive.
     fn destroy(&mut self, handle: PluginHandle) -> Result<HostReply, HostError> {
         let index = handle.slot() as usize;
+        let mut emptied = None;
         match self.slot_mut(handle)? {
             Slot::InProcess(inner) => {
                 let inner = *inner;
@@ -872,11 +976,43 @@ impl PluginHost {
                     .transition(LifecycleEvent::Destroy)
                     .map_err(HostError::Lifecycle)?;
                 instance.destroy();
+                // Cloned *after* `destroy` — the facade's
+                // `Arc::strong_count == 1` last-referrer check must
+                // see no extra references: under `Dedicated` that
+                // count is exactly 1 and the child's own teardown
+                // already ran above.
+                emptied = Some(Arc::clone(instance.child()));
             }
         }
         self.instances[index] = None;
         self.free_slots.push(handle.slot());
+        if let Some(child) = emptied {
+            self.evict_emptied_child(&child);
+        }
         Ok(HostReply::Ok)
+    }
+
+    /// The shutdown-on-empty half of L1 `Destroy`: the child whose
+    /// registry just emptied is evicted from whichever route pool
+    /// holds it — a `Dedicated` child was never pooled, so the scan
+    /// is a no-op for one — then torn down (`Shutdown` + bounded
+    /// grace/reap/join). Runs after the slot's facade dropped, so
+    /// the pool entry plus this clone are the child's last
+    /// referrers; a child with live siblings (`live_count != 0`)
+    /// is left serving them, never torn down under them.
+    fn evict_emptied_child(&mut self, child: &Arc<L1Child>) {
+        if child.live_count() != 0 {
+            return;
+        }
+        for route in self.routes.values_mut() {
+            if let Route::OutOfProcess { pool, .. } = route
+                && let Some(position) = pool.iter().position(|pooled| Arc::ptr_eq(pooled, child))
+            {
+                pool.swap_remove(position);
+                child.teardown();
+                return;
+            }
+        }
     }
 
     /// Dispatches one handle-carrying command (every verb but
@@ -927,6 +1063,91 @@ impl PluginHost {
             self.instances.push(Some(slot));
             self.generations.push(0);
             PluginHandle::new(slot_index, 0)
+        }
+    }
+}
+
+/// The `Bundled` `Instantiate` path: reuse the first pool child
+/// that can still serve — `live_count < WIRE_MAX_INSTANCES &&
+/// !terminal && !shutdown_initiated`, evaluated atomically by
+/// [`L1Child::pool_eligible`] — evicting dead entries as the scan
+/// passes them; spawn a fresh child when none qualifies.
+///
+/// Failure granularity follows the design: a `CreateInstance`
+/// failure on a reused child rolls the just-minted entry back
+/// alone (the child's own rollback — live siblings stay
+/// untouched); on the fresh child it additionally evicts and
+/// tears the child down, so a spawn-time poison can never linger
+/// in `pool`. [`HostError::InstanceLimit`] — the child's defined
+/// capacity rejection — propagates unflattened (unreachable in
+/// the single-threaded scan: the predicate already excluded a
+/// full child, and no sibling mint can interleave).
+///
+/// **RT contract:** non-RT only — child spawns plus `Reply` waits.
+fn instantiate_bundled(
+    spec: &SpawnSpec,
+    pool: &mut Vec<Arc<L1Child>>,
+) -> Result<L1Instance, HostError> {
+    // The spec-legality gate runs before any pool mutation — a
+    // defined rejection must consume nothing.
+    let depth = spec.instance_depth()?;
+    let mut index = 0;
+    let child = loop {
+        // `.cloned()` — the scan must not hold a `pool` borrow
+        // across `create_on_fresh`'s push or `remove`'s shift.
+        let Some(child) = pool.get(index).cloned() else {
+            // No eligible child — pay the spawn.
+            return create_on_fresh(spec, pool, depth);
+        };
+        if child.pool_eligible() {
+            break child;
+        }
+        // Ineligible and dead — it can never serve again, so it
+        // leaves the pool now rather than being re-scanned
+        // forever. A `shutdown_initiated`-but-live child is not
+        // evicted (its draining instances still refer to it).
+        if child.is_terminal() {
+            pool.remove(index);
+        } else {
+            index += 1;
+        }
+    };
+    match child.create_instance(spec, depth) {
+        Ok(parts) => Ok(L1Instance::from_parts(child, parts)),
+        Err(error) => {
+            // Reused-child create failure — the child's rollback
+            // already removed the minted entry; live siblings stay
+            // untouched. A child the failure converged additionally
+            // leaves the pool here.
+            if child.is_terminal() {
+                pool.retain(|pooled| !Arc::ptr_eq(pooled, &child));
+            }
+            Err(error)
+        }
+    }
+}
+
+/// A fresh child for the pool: spawn + `Scan` — the per-child half
+/// of the handshake ([`L1Child::spawn_scanned`] aborts inside on
+/// either failure) — then push and mint. The `create_instance`
+/// failure arm pops and tears the child down so a spawn-time
+/// poison can never linger in `pool`; `Ok` leaves the pushed
+/// `Arc` in place as the pool's reference.
+///
+/// **RT contract:** non-RT only.
+fn create_on_fresh(
+    spec: &SpawnSpec,
+    pool: &mut Vec<Arc<L1Child>>,
+    depth: u32,
+) -> Result<L1Instance, HostError> {
+    let child = L1Child::spawn_scanned(spec)?;
+    pool.push(Arc::clone(&child));
+    match child.create_instance(spec, depth) {
+        Ok(parts) => Ok(L1Instance::from_parts(child, parts)),
+        Err(error) => {
+            pool.pop();
+            child.teardown();
+            Err(error)
         }
     }
 }
@@ -1711,5 +1932,295 @@ mod tests {
         assert!(host.plugin_mut(handle).is_none());
         let (mut host, handle) = l0_instance(Box::new(PlainGainFactory), true);
         assert!(host.plugin_mut(handle).is_some());
+    }
+
+    // ---------------------------------------------------------------
+    // The isolation surface + the `Bundled` pool (Issue #117 task 3):
+    // `OutOfProcessIsolation`, the struct-variant `Route`, the pool
+    // scan/eviction rules and shutdown-on-empty — exercised on the
+    // process-free `L1Child`/`L1Instance` fixtures; real-child
+    // bundling is the T4 e2e task.
+    // ---------------------------------------------------------------
+
+    /// A `SpawnSpec` for the pool tests — legal shape, dead runner,
+    /// short timeouts.
+    fn pool_spec() -> SpawnSpec {
+        let mut spec = SpawnSpec::new(DESCRIPTOR, OsString::from("no-such-runner-binary"));
+        spec.command_timeout = Duration::from_millis(50);
+        spec
+    }
+
+    /// The named route's `Bundled` pool, borrowed for assertions.
+    fn route_pool(host: &PluginHost) -> &[Arc<L1Child>] {
+        let Some(Route::OutOfProcess { pool, .. }) = host.routes.get(DESCRIPTOR.id) else {
+            panic!("route is not the struct-variant OutOfProcess")
+        };
+        pool
+    }
+
+    /// A `Bundled` route on `host` whose pool holds `child`, plus
+    /// two co-resident instance handles minted the way
+    /// `instantiate_bundled`'s `create_instance`+`from_parts` pair
+    /// would mint them.
+    fn pooled_host(child: &Arc<L1Child>) -> (PluginHost, PluginHandle, PluginHandle) {
+        let mut host = PluginHost::new();
+        host.register_out_of_process(OutOfProcessSpec::new(
+            DESCRIPTOR,
+            OsString::from("no-such-runner-binary"),
+        ))
+        .unwrap();
+        let Some(Route::OutOfProcess { pool, .. }) = host.routes.get_mut(DESCRIPTOR.id) else {
+            unreachable!("just registered")
+        };
+        pool.push(Arc::clone(child));
+        let h1 = host.mint(Slot::OutOfProcess(Box::new(L1Instance::test_fixture_on(
+            child,
+            0,
+            LifecycleState::Created,
+            None,
+        ))));
+        let h2 = host.mint(Slot::OutOfProcess(Box::new(L1Instance::test_fixture_on(
+            child,
+            1,
+            LifecycleState::Created,
+            None,
+        ))));
+        (host, h1, h2)
+    }
+
+    /// The unpublished-0.1.0 default is `Bundled` — on the enum's
+    /// own `Default` and on `OutOfProcessSpec::new`'s field — while
+    /// the struct literal forces an explicit choice.
+    #[test]
+    fn isolation_defaults_to_bundled() {
+        assert_eq!(
+            OutOfProcessIsolation::default(),
+            OutOfProcessIsolation::Bundled
+        );
+        let spec = OutOfProcessSpec::new(DESCRIPTOR, OsString::from("runner"));
+        assert_eq!(spec.isolation, OutOfProcessIsolation::Bundled);
+        // The `Dedicated` opt-in through a struct literal.
+        let dedicated = OutOfProcessSpec {
+            isolation: OutOfProcessIsolation::Dedicated,
+            ..OutOfProcessSpec::new(DESCRIPTOR, OsString::from("runner"))
+        };
+        assert_eq!(dedicated.isolation, OutOfProcessIsolation::Dedicated);
+    }
+
+    /// Registration stores the struct-variant route — `spec`,
+    /// `isolation`, an empty `pool` — keyed by `descriptor.id`,
+    /// for both isolation values.
+    #[test]
+    fn register_out_of_process_builds_the_struct_variant() {
+        for isolation in [
+            OutOfProcessIsolation::Dedicated,
+            OutOfProcessIsolation::Bundled,
+        ] {
+            let mut host = PluginHost::new();
+            let mut spec = OutOfProcessSpec::new(DESCRIPTOR, OsString::from("runner"));
+            spec.isolation = isolation;
+            spec.lookahead_blocks = 5;
+            host.register_out_of_process(spec).unwrap();
+            let Some(Route::OutOfProcess {
+                spec,
+                isolation: stored,
+                pool,
+            }) = host.routes.get(DESCRIPTOR.id)
+            else {
+                panic!("route must be the struct-variant OutOfProcess")
+            };
+            assert_eq!(*stored, isolation);
+            assert!(pool.is_empty());
+            assert_eq!(spec.lookahead_blocks, 5);
+            assert_eq!(spec.descriptor, DESCRIPTOR);
+        }
+    }
+
+    /// The `Bundled` scan: the first `pool_eligible` child serves;
+    /// terminal entries are evicted as the scan passes; a full or
+    /// draining child is skipped in place; an empty pool spawns
+    /// fresh — here failing fast on the dead runner — without
+    /// leaving a poisoned entry.
+    #[test]
+    fn bundled_scan_selects_evicts_and_spawns() {
+        // A dead entry at index 0 is evicted on the way to the
+        // eligible child. `create_instance` then answers `Err(Ipc)`
+        // (the fixture has no driver channel) — the rollback frees
+        // only the minted entry: the registered sibling stays, the
+        // child stays live and stays pooled.
+        let terminal = L1Child::test_fixture(1);
+        terminal.test_converge();
+        let live = L1Child::test_fixture(1);
+        let mut pool = vec![Arc::clone(&terminal), Arc::clone(&live)];
+        assert!(matches!(
+            instantiate_bundled(&pool_spec(), &mut pool),
+            Err(HostError::Ipc)
+        ));
+        assert_eq!(pool.len(), 1);
+        assert!(Arc::ptr_eq(&pool[0], &live));
+        assert_eq!(live.live_count(), 1);
+        assert!(live.pool_eligible());
+        assert!(!live.is_terminal());
+
+        // A full child is skipped without eviction — the fresh
+        // spawn's `Err(Ipc)` (dead runner) is the proof the full
+        // child did not serve: had it been selected, `create_instance`
+        // would have answered `Err(InstanceLimit)` instead.
+        let full = L1Child::test_fixture(wire::WIRE_MAX_INSTANCES);
+        let mut pool = vec![Arc::clone(&full)];
+        assert!(matches!(
+            instantiate_bundled(&pool_spec(), &mut pool),
+            Err(HostError::Ipc)
+        ));
+        assert_eq!(pool.len(), 1);
+        assert!(Arc::ptr_eq(&pool[0], &full));
+
+        // A `shutdown_initiated` child is likewise skipped but kept.
+        let draining = L1Child::test_fixture(1);
+        draining.test_set_shutdown_initiated();
+        let mut pool = vec![Arc::clone(&draining)];
+        assert!(matches!(
+            instantiate_bundled(&pool_spec(), &mut pool),
+            Err(HostError::Ipc)
+        ));
+        assert_eq!(pool.len(), 1);
+        assert!(Arc::ptr_eq(&pool[0], &draining));
+
+        // An empty pool pays a fresh spawn — and a spawn failure
+        // leaves no entry behind to poison later scans.
+        let mut pool: Vec<Arc<L1Child>> = Vec::new();
+        assert!(matches!(
+            instantiate_bundled(&pool_spec(), &mut pool),
+            Err(HostError::Ipc)
+        ));
+        assert!(pool.is_empty());
+    }
+
+    /// The shared spec-legality gate rejects before any spawn or
+    /// pool mutation — `Err(Ipc)`, nothing poisoned — on both
+    /// isolations.
+    #[test]
+    fn instantiate_rejects_bad_spec_before_pooling() {
+        for isolation in [
+            OutOfProcessIsolation::Dedicated,
+            OutOfProcessIsolation::Bundled,
+        ] {
+            let mut host = PluginHost::new();
+            let spec = OutOfProcessSpec {
+                lookahead_blocks: 0,
+                isolation,
+                ..OutOfProcessSpec::new(DESCRIPTOR, OsString::from("runner"))
+            };
+            host.register_out_of_process(spec).unwrap();
+            assert!(matches!(
+                host.execute(HostCommand::Instantiate {
+                    plugin_id: DESCRIPTOR.id.to_owned(),
+                }),
+                Err(HostError::Ipc)
+            ));
+            assert!(route_pool(&host).is_empty());
+        }
+    }
+
+    /// `Destroy` evicts and tears the child down only when the
+    /// registry just emptied — a live sibling keeps it pooled and
+    /// serving.
+    #[test]
+    fn bundled_destroy_tears_down_only_when_empty() {
+        let child = L1Child::test_fixture(0);
+        let (mut host, h1, h2) = pooled_host(&child);
+
+        host.execute(HostCommand::Destroy { handle: h1 }).unwrap();
+        // The sibling still registers — the child stays pooled and
+        // un-torn-down.
+        assert_eq!(child.live_count(), 1);
+        assert_eq!(route_pool(&host).len(), 1);
+        assert!(!child.is_terminal());
+
+        host.execute(HostCommand::Destroy { handle: h2 }).unwrap();
+        // Empty now — the route evicted it and bounded teardown ran
+        // (the fixture child stamps `Terminal::Clean` — no process
+        // to `Shutdown`/reap).
+        assert_eq!(child.live_count(), 0);
+        assert!(route_pool(&host).is_empty());
+        assert!(child.is_terminal());
+    }
+
+    /// `kill_child` is child-scoped: on a `Bundled` route the
+    /// driver-observed death converges *every* co-resident instance
+    /// — one `InstanceFailed` notification each — and the pool
+    /// sheds the dead child at the next touch. (The fixture child
+    /// has no process, so `kill` itself is a no-op; the death is
+    /// stamped by `test_converge` — the driver's `try_wait` half is
+    /// the e2e lane's.)
+    #[test]
+    fn bundled_child_death_fans_out_to_siblings() {
+        let child = L1Child::test_fixture(0);
+        let (mut host, h1, h2) = pooled_host(&child);
+
+        // L0 slots have no child; unknown handles miss the table.
+        let (mut l0, l0_handle) = l0_instance(Box::new(SendGainFactory), false);
+        assert!(matches!(
+            l0.kill_child(l0_handle),
+            Err(HostError::Unsupported)
+        ));
+        assert!(matches!(
+            l0.kill_child(PluginHandle::new(77, 0)),
+            Err(HostError::InvalidHandle)
+        ));
+
+        // The kill routes to the child — then the driver-side death
+        // observation converges every co-resident instance.
+        host.kill_child(h1).unwrap();
+        child.test_converge();
+        assert_eq!(host.lifecycle_state(h1), Some(LifecycleState::Failed));
+        assert_eq!(host.lifecycle_state(h2), Some(LifecycleState::Failed));
+        // One `InstanceFailed` per co-resident instance — the
+        // child-scope fan-out.
+        let mut failed = Vec::new();
+        while let Some(HostNotification::InstanceFailed { handle, exit }) =
+            host.try_recv_notification()
+        {
+            assert_eq!(exit.code, Some(1));
+            failed.push(handle);
+        }
+        assert_eq!(failed.len(), 2);
+        assert!(failed.contains(&h1) && failed.contains(&h2));
+
+        // `Failed` instances stay destroyable; the emptied child is
+        // evicted and converged at the last `Destroy`.
+        host.execute(HostCommand::Destroy { handle: h1 }).unwrap();
+        assert_eq!(route_pool(&host).len(), 1);
+        host.execute(HostCommand::Destroy { handle: h2 }).unwrap();
+        assert!(route_pool(&host).is_empty());
+        assert!(child.is_terminal());
+    }
+
+    /// `Dedicated` is the capacity-1 route: the facade is the
+    /// child's only referrer, so `destroy` runs the child's own
+    /// last-referrer teardown — the `Arc` fully releases — and the
+    /// structural `pool` stays empty throughout.
+    #[test]
+    fn dedicated_destroy_is_capacity_1() {
+        let mut host = PluginHost::new();
+        let mut spec = OutOfProcessSpec::new(DESCRIPTOR, OsString::from("runner"));
+        spec.isolation = OutOfProcessIsolation::Dedicated;
+        host.register_out_of_process(spec).unwrap();
+        let child = L1Child::test_fixture(0);
+        let weak = Arc::downgrade(&child);
+        let handle = host.mint(Slot::OutOfProcess(Box::new(L1Instance::test_fixture_on(
+            &child,
+            0,
+            LifecycleState::Created,
+            None,
+        ))));
+        // The facade is now the only strong referrer — the
+        // dedicated shape (no pool slot holding the child).
+        drop(child);
+        host.execute(HostCommand::Destroy { handle }).unwrap();
+        // Teardown ran inside `destroy` at `strong_count == 1`; the
+        // slot drop released the last `Arc<L1Child>`.
+        assert!(weak.upgrade().is_none());
+        assert!(route_pool(&host).is_empty());
     }
 }
