@@ -169,6 +169,17 @@ pub enum HostError {
     /// `UnsupportedVariant` rejection above plus the runner
     /// terminating the child, so the host observes `Ipc`/`Failed`.
     EndpointUnavailable,
+    /// A caller-supplied value fell outside its defined domain — a
+    /// defined rejection distinct from [`HostError::PluginFailed`]
+    /// (no plugin hook declined) and from [`HostError::Prepare`]
+    /// (not an activation-config question). Used by the video
+    /// surface (Issue #118): a `VideoSetParamValue` carrying a
+    /// non-finite `Double`, a `parameter_value`/`set_parameter`
+    /// against an unknown `ParamId`, or a `Render{input}` whose
+    /// dims/format disagree with the instance's
+    /// [`crate::VideoProcessConfig`]. Wire tag `10` under
+    /// [`crate::wire::WIRE_VERSION`] `3`.
+    InvalidValue,
 }
 
 impl fmt::Display for HostError {
@@ -186,6 +197,9 @@ impl fmt::Display for HostError {
             Self::InstanceLimit => f.write_str("child instance registry is full"),
             Self::EndpointUnavailable => {
                 f.write_str("RT endpoint is unavailable for this instance")
+            }
+            Self::InvalidValue => {
+                f.write_str("caller-supplied value is outside its defined domain")
             }
         }
     }

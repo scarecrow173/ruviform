@@ -13,7 +13,8 @@
 //! [`ProcessStatus`], [`PrepareError`]), plus the NONRT video plugin
 //! contract ([`VideoPluginInstance`], [`VideoProcessConfig`]), the
 //! typed plain-parameter channel ([`PlainParamValue`],
-//! [`PlainParamInfo`], borrowed [`PluginDescriptorView`]), the
+//! [`PlainParamInfo`] and its owned twin [`PlainParamInfoOwned`],
+//! borrowed [`PluginDescriptorView`]), the
 //! plugin-side instance contracts ([`Plugin`], [`PluginFactory`],
 //! [`ErasedPlugin`], [`erase`], [`erase_sendable`], [`HostInput`],
 //! [`HostOutput`]), the shared host-boundary vocabulary
@@ -99,7 +100,7 @@ pub use descriptor::{PluginDescriptor, PluginDescriptorView};
 pub use event::{Event, EventKind, EventList, ParamEvent, sort_events_by_frame_offset};
 pub use lifecycle::{Lifecycle, LifecycleError, LifecycleEvent, LifecycleState};
 pub use param::{ParamFlags, ParamId, ParamInfo, ParamValue};
-pub use plain_param::{PlainParamInfo, PlainParamValue};
+pub use plain_param::{PlainParamInfo, PlainParamInfoOwned, PlainParamValue};
 pub use plugin::{
     ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
 };

@@ -87,20 +87,29 @@ use std::io::{self, Read, Write};
 
 use ruviform_audio_core::SampleRate;
 use ruviform_media_core::{
-    MediaDuration, MediaRange, MediaTime, MusicalTimeInfo, TimeBase, TransportStatus,
+    FrameRate, MediaDuration, MediaRange, MediaTime, MusicalTimeInfo, TimeBase, TransportStatus,
+};
+use ruviform_video_core::{
+    Chromaticity, ColorInfo, ColorPrimaries, ColorRange, ContentLightLevel, HdrMetadata,
+    MasteringDisplayInfo, MatrixCoefficients, PixelFormat, TransferCharacteristics,
 };
 
 use crate::{
     Event, EventKind, EventList, GuiHandle, GuiParentToken, HostError, LifecycleError,
-    LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamValue, PluginDescriptor,
-    PluginHandle, PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
+    LifecycleEvent, LifecycleState, ParamEvent, ParamFlags, ParamId, ParamValue,
+    PlainParamInfoOwned, PlainParamValue, PluginDescriptor, PluginHandle, PrepareError,
+    ProcessConfig, ProcessResult, ProcessStatus, TransportInfo, VideoProcessConfig,
 };
 
 /// The protocol version carried by [`Message::Hello`]. A proxy and a
 /// runner must agree on it exactly — a mismatch fails the handshake
 /// (`HostError::Ipc`); payload changes always ride a version bump.
-/// `2` is the Issue #117 instance-envelope revision.
-pub const WIRE_VERSION: u16 = 2;
+/// `2` was the Issue #117 instance-envelope revision; `3` is the
+/// Issue #118 video revision — the video verbs ([`Command`] tags
+/// 12-22), video replies ([`Reply`] tags 4-7), the video type codecs
+/// and the [`vshm`] segment layout are additive on top of the v2
+/// tags, which are unchanged.
+pub const WIRE_VERSION: u16 = 3;
 
 /// Maximum frames per processing block carried on the wire
 /// (`Activate` configs and shm block payloads share this bound).
@@ -127,6 +136,33 @@ pub const WIRE_MAX_ELEMENTS: u32 = 1_024;
 /// Maximum byte length of an opaque plugin-state blob
 /// (`SaveState`/`RestoreState` replies and commands).
 pub const WIRE_MAX_STATE_BYTES: u32 = 16 * 1_024 * 1_024;
+
+/// Maximum frame width/height dimension on the wire (pixels) — the
+/// video bound (wire v3, Issue #118) that keeps hostile dims out of
+/// segment-size math, where they act as multipliers. Covers 8K UHD
+/// (7680×4320).
+pub const WIRE_VIDEO_MAX_DIM: u32 = 8_192;
+
+/// Maximum plane count a [`VideoFrameDesc`] may declare — the
+/// current `PixelFormat` maximum is 3; one more for headroom.
+pub const WIRE_VIDEO_MAX_PLANES: u32 = 4;
+
+/// Maximum per-plane stride a [`VideoFrameDesc`] may declare
+/// (256 KiB — twice the 8K `RgbaF32` row of 131,072 B, so canonical
+/// packing, where stride equals row bytes, always fits).
+pub const WIRE_VIDEO_MAX_STRIDE: u32 = 262_144;
+
+/// Maximum total plane bytes of one frame — the `vshm` in/out
+/// region capacity bound (256 MiB). 4K `RgbaF32` (≈ 126.6 MiB) and
+/// 8K `RgbaF16` (≈ 253.1 MiB) fit; 8K `RgbaF32` (≈ 506 MiB) honestly
+/// exceeds it and is rejected.
+pub const WIRE_VIDEO_MAX_FRAME_BYTES: u64 = 268_435_456;
+
+/// Absolute upper bound of [`vshm::segment_len`] — the largest video
+/// segment a host may create or a child may attach
+/// (`vshm::HEADER_LEN` + in + out regions).
+pub const WIRE_VIDEO_MAX_SEGMENT_BYTES: u64 =
+    vshm::HEADER_LEN as u64 + 2 * WIRE_VIDEO_MAX_FRAME_BYTES;
 
 /// Maximum live plugin-instance handles per child process (wire v2).
 /// The `u32 instance` envelope field is the runner's registry key;
@@ -215,7 +251,7 @@ pub mod shm {
     /// Byte offset of the slot `transport` region.
     pub const TRANSPORT_OFF: usize = 24;
     /// Reserved capacity of the `transport` region — the maximum
-    /// wire size of `TransportInfo` under `WIRE_VERSION` 2 is 91 B.
+    /// wire size of `TransportInfo` under `WIRE_VERSION` 3 is 91 B.
     pub const TRANSPORT_LEN: usize = 96;
     /// Byte offset of the slot `result` region.
     pub const RESULT_OFF: usize = TRANSPORT_OFF + TRANSPORT_LEN;
@@ -225,7 +261,7 @@ pub mod shm {
     /// Byte offset of the slot `events` region.
     pub const EVENTS_OFF: usize = RESULT_OFF + RESULT_LEN;
     /// Byte length of one wire-encoded `Event` record under
-    /// `WIRE_VERSION` 2 (`u32` offset + `u8` kind + `u32` param id +
+    /// `WIRE_VERSION` 3 (`u32` offset + `u8` kind + `u32` param id +
     /// `f64` value + `u64` reserved ×2).
     pub const EVENT_WIRE_SIZE: usize = 33;
     /// Byte offset of the slot `samples` region.
@@ -236,7 +272,7 @@ pub mod shm {
     /// Byte length of the fixed-capacity `samples` region
     /// (`WIRE_MAX_CHANNELS` planes).
     pub const SAMPLES_LEN: usize = WIRE_MAX_CHANNELS as usize * SAMPLE_STRIDE;
-    /// Fixed byte length of one in/out slot under `WIRE_VERSION` 2.
+    /// Fixed byte length of one in/out slot under `WIRE_VERSION` 3.
     pub const SLOT_BYTES: usize = SAMPLES_OFF + SAMPLES_LEN;
 
     /// Byte offset of the in-slot array — always right after the
@@ -262,11 +298,278 @@ pub mod shm {
     }
 }
 
+/// The L1 video shared-memory data-plane layout (wire v3, Issue
+/// #118) — the **authoritative wire-side definition** of the
+/// `[header][in region][out region]` per-instance segment both ends
+/// consume: `ruviform-plugin-host::l1::vshm` (the creating owner) and
+/// `ruviform-plugin-export::vshm` (the attaching runner). The audio
+/// [`shm`] layout is untouched — video uses no slots or doorbells:
+/// one in-place render per request→reply window under a dedicated
+/// `Command`/`Reply` exchange.
+///
+/// All fields are little-endian `u32`. The header is 7 fields
+/// ([`vshm::HEADER_LEN`] bytes):
+///
+/// | offset | field | notes |
+/// | --- | --- | --- |
+/// | +0 | `magic` | [`vshm::MAGIC`] (`"RVLV"`) |
+/// | +4 | `wire_version` | [`WIRE_VERSION`] |
+/// | +8 | `in_off` | `HEADER_LEN` (28) |
+/// | +12 | `in_bytes` | `frame_bytes(config)` |
+/// | +16 | `out_off` | `28 + in_bytes` |
+/// | +20 | `out_bytes` | `frame_bytes(config)` |
+/// | +24 | `reserved` | `0` |
+///
+/// Both regions hold one frame in **canonical packing**: plane `p`
+/// starts at `offset(p) = Σ len(0..p)` with `stride = row_bytes`
+/// (tightly packed — a caller's padded frame is repacked on copy-in)
+/// and `len = stride × plane_height`. [`vshm::plane_layout`] is the
+/// shared computation; plane grid dimensions follow
+/// [`PixelFormat::chroma_subsampling`] with ceil division, exactly as
+/// `VideoFrame` derives them.
+pub mod vshm {
+    use ruviform_video_core::PixelFormat;
+
+    use super::{VideoProcessConfig, WIRE_VERSION};
+
+    /// Segment magic — `"RVLV"` (Ruviform L1 Video) as four LE
+    /// bytes, validated on attach.
+    pub const MAGIC: u32 = u32::from_le_bytes(*b"RVLV");
+
+    /// Byte length of the fixed segment header (7 LE `u32` fields:
+    /// `magic`, `wire_version`, `in_off`, `in_bytes`, `out_off`,
+    /// `out_bytes`, `reserved`).
+    pub const HEADER_LEN: usize = 28;
+
+    /// Header field offsets — every field is one LE `u32`.
+    pub const OFF_MAGIC: usize = 0;
+    /// Header `wire_version` field offset.
+    pub const OFF_WIRE_VERSION: usize = 4;
+    /// Header `in_off` field offset.
+    pub const OFF_IN_OFF: usize = 8;
+    /// Header `in_bytes` field offset.
+    pub const OFF_IN_BYTES: usize = 12;
+    /// Header `out_off` field offset.
+    pub const OFF_OUT_OFF: usize = 16;
+    /// Header `out_bytes` field offset.
+    pub const OFF_OUT_BYTES: usize = 20;
+    /// Header `reserved` field offset — must be `0`.
+    pub const OFF_RESERVED: usize = 24;
+
+    /// The canonical placement of one plane inside an in/out region.
+    ///
+    /// `stride` is always `row_bytes` under canonical packing (v1
+    /// carries no padding); `offset` is the sum of the preceding
+    /// planes' `len`s, so `offset + len` gives the plane's end.
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub struct PlaneLayout {
+        /// Byte offset of the plane within its region
+        /// (`offset(p) = Σ len(0..p)`).
+        pub offset: u64,
+        /// Byte length the plane occupies (`stride × plane_height`).
+        pub len: u64,
+        /// Row pitch in bytes — the canonical `row_bytes`.
+        pub stride: u64,
+        /// Samples per row on this plane's grid (chroma-subsampled
+        /// for non-luma planes).
+        pub width: u32,
+        /// Rows on this plane's grid (chroma-subsampled for non-luma
+        /// planes).
+        pub height: u32,
+    }
+
+    /// The canonical [`PlaneLayout`] of plane `plane` for `format` at
+    /// `width`×`height` — `None` when `plane` is out of range for
+    /// `format`. All byte math is `u64` and saturating: hostile dims
+    /// can only inflate the value, never wrap it below a bound.
+    ///
+    /// **RT contract:** non-RT only — loop over up to `plane`
+    /// predecessors for the offset sum.
+    #[must_use]
+    pub fn plane_layout(
+        format: PixelFormat,
+        width: u32,
+        height: u32,
+        plane: usize,
+    ) -> Option<PlaneLayout> {
+        let (plane_width, plane_height) = plane_dims(format, width, height, plane)?;
+        let stride = u64::from(plane_width).saturating_mul(format.bytes_per_sample(plane) as u64);
+        let len = stride.saturating_mul(u64::from(plane_height));
+        let mut offset = 0_u64;
+        for previous in 0..plane {
+            offset = offset.saturating_add(plane_len(format, width, height, previous).unwrap_or(0));
+        }
+        Some(PlaneLayout {
+            offset,
+            len,
+            stride,
+            width: plane_width,
+            height: plane_height,
+        })
+    }
+
+    /// The total plane bytes of one frame under canonical packing —
+    /// the size each of the `in` and `out` regions needs.
+    ///
+    /// Saturating `u64` math: a pathological config (e.g.
+    /// `u32::MAX` dims, which [`VideoProcessConfig::new`] admits)
+    /// yields a value above [`super::WIRE_VIDEO_MAX_FRAME_BYTES`]
+    /// instead of wrapping, so the callers' bound check still
+    /// rejects it — never a panic, never an underestimate.
+    ///
+    /// **RT contract:** non-RT only — bounded loop over
+    /// `format.plane_count()` planes.
+    #[must_use]
+    pub fn frame_bytes(config: &VideoProcessConfig) -> u64 {
+        let format = config.format();
+        let mut total = 0_u64;
+        for plane in 0..format.plane_count() {
+            total = total.saturating_add(
+                plane_len(format, config.width(), config.height(), plane).unwrap_or(0),
+            );
+        }
+        total
+    }
+
+    /// The declared segment length for `frame_bytes`-sized in and
+    /// out regions: `HEADER_LEN + 2 × frame_bytes` (saturating —
+    /// callers compare against
+    /// [`super::WIRE_VIDEO_MAX_SEGMENT_BYTES`]).
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn segment_len(frame_bytes: u64) -> u64 {
+        (HEADER_LEN as u64).saturating_add(frame_bytes.saturating_mul(2))
+    }
+
+    /// The canonical header bytes for an `in`/`out` region pair —
+    /// `magic`, this revision's `wire_version`, the fixed region
+    /// offsets and a zero `reserved`.
+    ///
+    /// **RT contract:** non-RT only — fixed-size array write.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `in_bytes` is so large that
+    /// `HEADER_LEN + in_bytes` does not fit the `u32` `out_off`
+    /// field — a caller-side bound violation (region sizes are
+    /// bounded by [`super::WIRE_VIDEO_MAX_FRAME_BYTES`] far below
+    /// `u32::MAX`, so reaching it is a bug, not untrusted input).
+    #[must_use]
+    pub fn header_bytes(in_bytes: u32, out_bytes: u32) -> [u8; HEADER_LEN] {
+        let mut header = [0_u8; HEADER_LEN];
+        put_u32(&mut header, OFF_MAGIC, MAGIC);
+        put_u32(&mut header, OFF_WIRE_VERSION, u32::from(WIRE_VERSION));
+        put_u32(
+            &mut header,
+            OFF_IN_OFF,
+            u32::try_from(HEADER_LEN).expect("header length fits u32"),
+        );
+        put_u32(&mut header, OFF_IN_BYTES, in_bytes);
+        put_u32(
+            &mut header,
+            OFF_OUT_OFF,
+            u32::try_from(HEADER_LEN as u64 + u64::from(in_bytes))
+                .expect("out region offset fits u32"),
+        );
+        put_u32(&mut header, OFF_OUT_BYTES, out_bytes);
+        // OFF_RESERVED is already zeroed.
+        header
+    }
+
+    /// Validates a mapped segment's fixed header against this
+    /// revision: `magic`, `wire_version == `[`WIRE_VERSION`],
+    /// `in_off == HEADER_LEN`, `out_off == HEADER_LEN + in_bytes`,
+    /// `reserved == 0` and `bytes.len() >= out_off + out_bytes`
+    /// (`>=`, not `==` — on Windows the mapped length may round up
+    /// to the allocation granularity, so the invariant is "the
+    /// mapping covers the declared layout").
+    ///
+    /// Returns the declared `(in_bytes, out_bytes)` on success —
+    /// this is only the structural half of attach validation;
+    /// callers still compare them against `frame_bytes(config)` and
+    /// [`super::WIRE_VIDEO_MAX_FRAME_BYTES`].
+    ///
+    /// **RT contract:** non-RT only — fixed-offset reads.
+    #[must_use]
+    pub fn validate_header(bytes: &[u8]) -> Option<(u32, u32)> {
+        if bytes.len() < HEADER_LEN {
+            return None;
+        }
+        if get_u32(bytes, OFF_MAGIC) != MAGIC
+            || get_u32(bytes, OFF_WIRE_VERSION) != u32::from(WIRE_VERSION)
+            || get_u32(bytes, OFF_RESERVED) != 0
+        {
+            return None;
+        }
+        let in_off = get_u32(bytes, OFF_IN_OFF) as usize;
+        if in_off != HEADER_LEN {
+            return None;
+        }
+        let in_bytes = get_u32(bytes, OFF_IN_BYTES);
+        let out_off = get_u32(bytes, OFF_OUT_OFF) as usize;
+        if out_off != HEADER_LEN + in_bytes as usize {
+            return None;
+        }
+        let out_bytes = get_u32(bytes, OFF_OUT_BYTES);
+        match out_off.checked_add(out_bytes as usize) {
+            Some(end) if bytes.len() >= end => Some((in_bytes, out_bytes)),
+            _ => None,
+        }
+    }
+
+    /// Grid dimensions `(width, height)` of `plane` of `format` at
+    /// `width`×`height` — plane 0 is the full-resolution grid, the
+    /// rest are chroma-subsampled with ceil division (the same rule
+    /// `VideoFrame` derives its plane grids by).
+    fn plane_dims(
+        format: PixelFormat,
+        width: u32,
+        height: u32,
+        plane: usize,
+    ) -> Option<(u32, u32)> {
+        if plane == 0 {
+            return Some((width, height));
+        }
+        if plane >= format.plane_count() {
+            return None;
+        }
+        let (sub_w, sub_h) = format.chroma_subsampling()?;
+        Some((width.div_ceil(sub_w), height.div_ceil(sub_h)))
+    }
+
+    /// Canonical byte length of `plane` (`stride = row_bytes`, so
+    /// `len = row_bytes × plane_height`).
+    fn plane_len(format: PixelFormat, width: u32, height: u32, plane: usize) -> Option<u64> {
+        let (plane_width, plane_height) = plane_dims(format, width, height, plane)?;
+        let row_bytes =
+            u64::from(plane_width).saturating_mul(format.bytes_per_sample(plane) as u64);
+        Some(row_bytes.saturating_mul(u64::from(plane_height)))
+    }
+
+    /// Reads one LE `u32` header field — callers ensure `bytes`
+    /// covers `HEADER_LEN`, so the slice is never short.
+    fn get_u32(bytes: &[u8], offset: usize) -> u32 {
+        u32::from_le_bytes(
+            bytes[offset..offset + 4]
+                .try_into()
+                .expect("header field is 4 bytes"),
+        )
+    }
+
+    /// Writes one LE `u32` header field.
+    fn put_u32(bytes: &mut [u8], offset: usize, value: u32) {
+        bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+}
+
 /// One frame on the wire — the six message kinds of the L1 protocol.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy; the wire itself is strictly versioned by [`WIRE_VERSION`],
-/// so new messages arrive only with a protocol revision.
+/// so new messages arrive only with a protocol revision. It is
+/// `PartialEq` but not `Eq`: wire-v3 [`Reply`] payloads carry
+/// [`PlainParamValue`], which contains an `f64`.
 ///
 /// **RT contract:** non-RT only — the codec allocates on the
 /// control-plane pipe.
@@ -281,7 +584,7 @@ pub mod shm {
 /// assert_eq!(wire::decode(&frame), Ok(Message::Shutdown));
 /// ```
 #[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Message {
     /// Child → parent: the first frame after spawn. `version` must
     /// equal [`WIRE_VERSION`] or the handshake fails.
@@ -289,7 +592,7 @@ pub enum Message {
         /// Protocol version — [`WIRE_VERSION`] on a live handshake.
         version: u16,
         /// Capability bitmask reserved for protocol extensions;
-        /// must be `0` under [`WIRE_VERSION`] `2` — decode rejects a
+        /// must be `0` under [`WIRE_VERSION`] `3` — decode rejects a
         /// nonzero value as [`WireError::Malformed`], like any other
         /// nonzero reserved field.
         capabilities: u32,
@@ -349,12 +652,19 @@ pub enum Message {
 /// appear in payloads — the envelope `instance` field on
 /// [`Message::Command`] carries the child-local handle instead.
 ///
+/// Tags 12-22 are the wire-v3 (Issue #118) video verbs — the
+/// `VideoPluginInstance` lifecycle and its plain-parameter channel.
+/// They are instance-scoped like every non-`Scan` verb; the frame
+/// bytes they describe travel a per-instance [`vshm`] segment, never
+/// the pipe.
+///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
-/// policy — new verbs arrive only with a [`WIRE_VERSION`] bump.
+/// policy — new verbs arrive only with a [`WIRE_VERSION`] bump. It is
+/// `PartialEq` but not `Eq`: [`PlainParamValue`] contains an `f64`.
 ///
 /// **RT contract:** non-RT only.
 #[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     /// Enumerate the runner's built-in descriptors →
     /// [`Reply::Scanned`]. Child-scoped: the envelope `instance`
@@ -413,16 +723,97 @@ pub enum Command {
     },
     /// Close the plugin GUI.
     CloseGui,
+    /// Register a new video plugin instance in the child under the
+    /// envelope `instance` handle → [`Reply::Ok`] — the
+    /// `VideoPluginInstance` counterpart of
+    /// [`Command::CreateInstance`] (wire tag 12). Carries a
+    /// [`VideoProcessConfig`] in place of slot depths: the
+    /// per-instance [`vshm`] segment (one `in` + one `out` region)
+    /// is sized from it, and the runner stashes it to replay into
+    /// `VideoPluginInstance::initialize` on
+    /// [`Command::VideoInitialize`]. `HostError::UnknownPluginId`
+    /// (unscanned id), `HostError::InstanceLimit` (registry full),
+    /// `HostError::Ipc` (vshm attach failure or a duplicate
+    /// `instance` handle), `HostError::InvalidValue` (an over-bound
+    /// `config`) or `HostError::PluginFailed` (factory panic) are
+    /// the defined rejections — the child stays alive on every one.
+    CreateVideoInstance {
+        /// Registered video plugin id (matched against the video
+        /// adapter's descriptor `id`).
+        plugin_id: String,
+        /// OS shared-memory key of the host-created `vshm` segment
+        /// — the child attaches it.
+        shm_key: String,
+        /// Processing configuration the segment was sized from.
+        config: VideoProcessConfig,
+    },
+    /// `VideoPluginInstance::initialize(config)` → [`Reply::Ok`] —
+    /// wire tag 13. The runner replays the stashed
+    /// `CreateVideoInstance` `config`; `HostError::Prepare` or
+    /// `HostError::PluginFailed` on plugin rejection.
+    VideoInitialize,
+    /// `VideoPluginInstance::activate()` → [`Reply::Ok`] — wire tag
+    /// 14.
+    VideoActivate,
+    /// `VideoPluginInstance::start_processing()` → [`Reply::Ok`] —
+    /// wire tag 15.
+    VideoStartProcessing,
+    /// `VideoPluginInstance::render(&mut frame, at)` →
+    /// [`Reply::Rendered`] — wire tag 16. `input` describes the frame
+    /// the host packed into the segment's `in` region; the plugin
+    /// renders into the `out` region and `Rendered` describes what it
+    /// wrote. `HostError::InvalidValue` when `input`'s dims/format
+    /// disagree with the instance config; `HostError::PluginFailed`
+    /// on a plugin render error.
+    VideoRender {
+        /// Presentation timestamp passed verbatim to `render`.
+        at: MediaTime,
+        /// Byte-placement descriptor of the `in`-region frame.
+        input: VideoFrameDesc,
+    },
+    /// `VideoPluginInstance::stop_processing()` → [`Reply::Ok`] —
+    /// wire tag 17.
+    VideoStopProcessing,
+    /// `VideoPluginInstance::deactivate()` → [`Reply::Ok`] — wire
+    /// tag 18.
+    VideoDeactivate,
+    /// List the instance's parameter ids → [`Reply::Params`] — wire
+    /// tag 19.
+    VideoGetParams,
+    /// `VideoPluginInstance::parameter_info(id)` →
+    /// [`Reply::ParamInfo`] — wire tag 20.
+    VideoGetParamInfo {
+        /// Parameter to describe.
+        id: u32,
+    },
+    /// `VideoPluginInstance::parameter_value(id)` →
+    /// [`Reply::ParamValue`] — wire tag 21.
+    /// `HostError::InvalidValue` on an unknown `id`.
+    VideoGetParamValue {
+        /// Parameter to read.
+        id: u32,
+    },
+    /// `VideoPluginInstance::set_parameter(id, value)` →
+    /// [`Reply::Ok`] — wire tag 22. `HostError::InvalidValue` on an
+    /// unknown `id` or a non-finite [`PlainParamValue::Double`].
+    VideoSetParamValue {
+        /// Parameter to write.
+        id: u32,
+        /// New parameter value.
+        value: PlainParamValue,
+    },
 }
 
 /// The reply payload of a successful wire [`Command`].
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy — new replies arrive only with a [`WIRE_VERSION`] bump.
+/// Tags 4-7 are the wire-v3 (Issue #118) video replies. It is
+/// `PartialEq` but not `Eq`: [`PlainParamValue`] contains an `f64`.
 ///
 /// **RT contract:** non-RT only.
 #[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Reply {
     /// The command completed with no payload.
     Ok,
@@ -437,6 +828,30 @@ pub enum Reply {
     Opened {
         /// Handle of the opened GUI surface.
         gui: GuiHandle,
+    },
+    /// `VideoRender` result — wire tag 4. The byte-placement
+    /// descriptor of the frame the plugin rendered into the `vshm`
+    /// `out` region; the host copies it out into a fresh
+    /// `VideoFrame` to return.
+    Rendered {
+        /// `out`-region frame the plugin produced.
+        output: VideoFrameDesc,
+    },
+    /// `VideoGetParams` result — wire tag 5.
+    Params {
+        /// Parameter ids the instance exposes.
+        ids: Vec<u32>,
+    },
+    /// `VideoGetParamInfo` result — wire tag 6 (`None` is the
+    /// plugin-declared unknown-id reply).
+    ParamInfo {
+        /// Owned parameter metadata, or `None`.
+        info: Option<PlainParamInfoOwned>,
+    },
+    /// `VideoGetParamValue` result — wire tag 7.
+    ParamValue {
+        /// Current parameter value.
+        value: PlainParamValue,
     },
 }
 
@@ -515,6 +930,63 @@ impl From<PluginDescriptor> for Descriptor {
                 .collect(),
         }
     }
+}
+
+/// Byte placement of one frame plane inside a `vshm` region — the
+/// wire form shared by [`VideoFrameDesc`] (wire v3, Issue #118).
+///
+/// Under canonical packing `stride` equals the plane's `row_bytes`
+/// and `offset(p) = Σ len(0..p)` — see [`vshm::plane_layout`]. The
+/// codec bounds every field but does *not* verify canonicality or
+/// region fit: those are the runner/host's semantic layer.
+///
+/// **RT contract:** RT-suitable — `Copy`, allocation-free.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct VideoFramePlane {
+    /// Byte offset of the plane within its region.
+    pub offset: u32,
+    /// Byte length the plane occupies (`stride × plane_height`
+    /// under canonical packing).
+    pub len: u32,
+    /// Row pitch in bytes (`≤` [`WIRE_VIDEO_MAX_STRIDE`] on the
+    /// wire).
+    pub stride: u32,
+}
+
+/// The wire descriptor of one video frame inside a `vshm` region —
+/// the `VideoFrame` metadata that crosses the pipe with
+/// [`Command::VideoRender`]/[`Reply::Rendered`] (wire v3, Issue
+/// #118). Frame *bytes* never travel in this type: they live in the
+/// segment's in/out region the `planes` offsets address.
+///
+/// On the wire (≤ 127 B): `u8` format tag, `u32` width, `u32`
+/// height, `u8` plane count, `{u32 offset, u32 len, u32 stride}`
+/// per plane, [`MediaTime`] `pts`, `u8` presence tag +
+/// [`MediaDuration`], and a bounded [`ColorInfo`].
+///
+/// **RT contract:** non-RT only — owns the `planes` vector.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VideoFrameDesc {
+    /// Pixel format — determines `planes.len()` on the wire
+    /// (`format.plane_count()`; a mismatch is
+    /// [`WireError::Malformed`]).
+    pub format: PixelFormat,
+    /// Frame width on the full-resolution grid (`1..=
+    /// WIRE_VIDEO_MAX_DIM` on the wire).
+    pub width: u32,
+    /// Frame height on the full-resolution grid (`1..=
+    /// WIRE_VIDEO_MAX_DIM`).
+    pub height: u32,
+    /// Per-plane placement inside the region — one entry per
+    /// `format.plane_count()` plane, `1..=WIRE_VIDEO_MAX_PLANES`
+    /// on the wire.
+    pub planes: Vec<VideoFramePlane>,
+    /// Presentation timestamp.
+    pub pts: MediaTime,
+    /// Optional frame duration.
+    pub duration: Option<MediaDuration>,
+    /// Color space and HDR metadata.
+    pub color: ColorInfo,
 }
 
 /// Rejection of a malformed or out-of-bounds wire frame.
@@ -641,6 +1113,11 @@ impl<'a> Reader<'a> {
     /// Reads one little-endian `u64`.
     pub fn read_u64(&mut self) -> Result<u64, WireError> {
         Ok(u64::from_le_bytes(*self.array::<8>()?))
+    }
+
+    /// Reads one little-endian `i32`.
+    pub fn read_i32(&mut self) -> Result<i32, WireError> {
+        Ok(i32::from_le_bytes(*self.array::<4>()?))
     }
 
     /// Reads one little-endian `i64`.
@@ -803,7 +1280,7 @@ fn encode_body(message: &Message, out: &mut Vec<u8>) -> Result<(), WireError> {
             push_u8(out, KIND_COMMAND);
             push_u64(out, *seq);
             push_u32(out, *instance);
-            encode_command(cmd, out);
+            encode_command(cmd, out)?;
         }
         Message::Reply {
             seq,
@@ -816,12 +1293,12 @@ fn encode_body(message: &Message, out: &mut Vec<u8>) -> Result<(), WireError> {
             match result {
                 Ok(reply) => {
                     push_u8(out, REPLY_OK);
-                    encode_reply(reply, out);
+                    encode_reply(reply, out)?;
                 }
                 Err(error) => {
                     push_u8(out, REPLY_ERR);
-                    // The only fallible step today — propagates to
-                    // `encode`, which performs the rollback.
+                    // Propagates to `encode`, which performs the
+                    // rollback.
                     encode_host_error(error, out)?;
                 }
             }
@@ -1010,6 +1487,10 @@ fn push_u64(out: &mut Vec<u8>, value: u64) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
+fn push_i32(out: &mut Vec<u8>, value: i32) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+
 fn push_i64(out: &mut Vec<u8>, value: i64) {
     out.extend_from_slice(&value.to_le_bytes());
 }
@@ -1031,7 +1512,12 @@ fn push_str(out: &mut Vec<u8>, value: &str) {
 
 // --- Command / Reply payloads ------------------------------------------
 
-fn encode_command(command: &Command, out: &mut Vec<u8>) {
+/// Writes `command`'s verb tag plus payload fields. Fallible through
+/// the video verbs' nested codecs (a `#[non_exhaustive]` `PixelFormat`
+/// or color enum added after this revision has no `WIRE_VERSION` 3
+/// representation) — `encode` owns the all-or-nothing rollback for
+/// every `Err` from here.
+fn encode_command(command: &Command, out: &mut Vec<u8>) -> Result<(), WireError> {
     match command {
         Command::Scan => push_u8(out, VERB_SCAN),
         Command::Initialize => push_u8(out, 1),
@@ -1065,7 +1551,42 @@ fn encode_command(command: &Command, out: &mut Vec<u8>) {
             push_u32(out, *out_depth);
         }
         Command::DestroyInstance => push_u8(out, 11),
+        Command::CreateVideoInstance {
+            plugin_id,
+            shm_key,
+            config,
+        } => {
+            push_u8(out, 12);
+            push_str(out, plugin_id);
+            push_str(out, shm_key);
+            encode_video_process_config(config, out)?;
+        }
+        Command::VideoInitialize => push_u8(out, 13),
+        Command::VideoActivate => push_u8(out, 14),
+        Command::VideoStartProcessing => push_u8(out, 15),
+        Command::VideoRender { at, input } => {
+            push_u8(out, 16);
+            encode_media_time(at, out);
+            encode_video_frame_desc(input, out)?;
+        }
+        Command::VideoStopProcessing => push_u8(out, 17),
+        Command::VideoDeactivate => push_u8(out, 18),
+        Command::VideoGetParams => push_u8(out, 19),
+        Command::VideoGetParamInfo { id } => {
+            push_u8(out, 20);
+            push_u32(out, *id);
+        }
+        Command::VideoGetParamValue { id } => {
+            push_u8(out, 21);
+            push_u32(out, *id);
+        }
+        Command::VideoSetParamValue { id, value } => {
+            push_u8(out, 22);
+            push_u32(out, *id);
+            encode_plain_param_value(value, out);
+        }
     }
+    Ok(())
 }
 
 /// Decodes one verb payload; `verb` is the tag byte the caller
@@ -1110,11 +1631,44 @@ fn decode_command(verb: u8, reader: &mut Reader<'_>) -> Result<Command, WireErro
             })
         }
         11 => Ok(Command::DestroyInstance),
+        12 => {
+            let plugin_id = reader.read_string()?;
+            let shm_key = reader.read_string()?;
+            let config = decode_video_process_config(reader)?;
+            Ok(Command::CreateVideoInstance {
+                plugin_id,
+                shm_key,
+                config,
+            })
+        }
+        13 => Ok(Command::VideoInitialize),
+        14 => Ok(Command::VideoActivate),
+        15 => Ok(Command::VideoStartProcessing),
+        16 => Ok(Command::VideoRender {
+            at: decode_media_time(reader)?,
+            input: decode_video_frame_desc(reader)?,
+        }),
+        17 => Ok(Command::VideoStopProcessing),
+        18 => Ok(Command::VideoDeactivate),
+        19 => Ok(Command::VideoGetParams),
+        20 => Ok(Command::VideoGetParamInfo {
+            id: reader.read_u32()?,
+        }),
+        21 => Ok(Command::VideoGetParamValue {
+            id: reader.read_u32()?,
+        }),
+        22 => Ok(Command::VideoSetParamValue {
+            id: reader.read_u32()?,
+            value: decode_plain_param_value(reader)?,
+        }),
         _ => Err(WireError::Malformed),
     }
 }
 
-fn encode_reply(reply: &Reply, out: &mut Vec<u8>) {
+/// Writes `reply`'s tag plus payload fields. Fallible through the
+/// video replies' [`VideoFrameDesc`] codec — `encode` owns the
+/// all-or-nothing rollback for every `Err` from here.
+fn encode_reply(reply: &Reply, out: &mut Vec<u8>) -> Result<(), WireError> {
     match reply {
         Reply::Ok => push_u8(out, 0),
         Reply::Scanned(descriptors) => {
@@ -1132,7 +1686,33 @@ fn encode_reply(reply: &Reply, out: &mut Vec<u8>) {
             push_u8(out, 3);
             encode_gui_handle(gui, out);
         }
+        Reply::Rendered { output } => {
+            push_u8(out, 4);
+            encode_video_frame_desc(output, out)?;
+        }
+        Reply::Params { ids } => {
+            push_u8(out, 5);
+            push_u32(out, len_u32(ids.len()));
+            for id in ids {
+                push_u32(out, *id);
+            }
+        }
+        Reply::ParamInfo { info } => {
+            push_u8(out, 6);
+            match info {
+                None => push_u8(out, 0),
+                Some(info) => {
+                    push_u8(out, 1);
+                    encode_plain_param_info(info, out);
+                }
+            }
+        }
+        Reply::ParamValue { value } => {
+            push_u8(out, 7);
+            encode_plain_param_value(value, out);
+        }
     }
+    Ok(())
 }
 
 fn decode_reply(reader: &mut Reader<'_>) -> Result<Reply, WireError> {
@@ -1151,6 +1731,27 @@ fn decode_reply(reader: &mut Reader<'_>) -> Result<Reply, WireError> {
         }),
         3 => Ok(Reply::Opened {
             gui: decode_gui_handle(reader)?,
+        }),
+        4 => Ok(Reply::Rendered {
+            output: decode_video_frame_desc(reader)?,
+        }),
+        5 => {
+            let count = reader.read_count(WIRE_MAX_ELEMENTS)?;
+            let mut ids = Vec::with_capacity(count as usize);
+            for _ in 0..count {
+                ids.push(reader.read_u32()?);
+            }
+            Ok(Reply::Params { ids })
+        }
+        6 => Ok(Reply::ParamInfo {
+            info: match reader.read_u8()? {
+                0 => None,
+                1 => Some(decode_plain_param_info(reader)?),
+                _ => return Err(WireError::Malformed),
+            },
+        }),
+        7 => Ok(Reply::ParamValue {
+            value: decode_plain_param_value(reader)?,
         }),
         _ => Err(WireError::Malformed),
     }
@@ -1332,6 +1933,10 @@ pub fn encode_host_error(error: &HostError, out: &mut Vec<u8>) -> Result<(), Wir
             push_u8(out, 9);
             Ok(())
         }
+        HostError::InvalidValue => {
+            push_u8(out, 10);
+            Ok(())
+        }
         _ => Err(WireError::UnsupportedVariant),
     };
     if let Err(e) = result {
@@ -1368,6 +1973,7 @@ pub fn decode_host_error(reader: &mut Reader<'_>) -> Result<HostError, WireError
         7 => Ok(HostError::Ipc),
         8 => Ok(HostError::DuplicatePluginId),
         9 => Ok(HostError::InstanceLimit),
+        10 => Ok(HostError::InvalidValue),
         _ => Err(WireError::Malformed),
     }
 }
@@ -1533,7 +2139,7 @@ fn decode_musical_time_info(reader: &mut Reader<'_>) -> Result<MusicalTimeInfo, 
 /// # Errors
 ///
 /// [`WireError::UnsupportedVariant`] when `status` is a
-/// `#[non_exhaustive]` variant added after [`WIRE_VERSION`] `2` — it
+/// `#[non_exhaustive]` variant added after [`WIRE_VERSION`] `3` — it
 /// has no representation under this protocol revision. Nothing is
 /// appended on failure.
 pub fn encode_transport(info: &TransportInfo, out: &mut Vec<u8>) -> Result<(), WireError> {
@@ -1710,6 +2316,570 @@ pub fn decode_descriptor(reader: &mut Reader<'_>) -> Result<Descriptor, WireErro
         vendor,
         version,
         features,
+    })
+}
+
+// --- Video wire types (WIRE_VERSION 3, Issue #118) ------------------------
+//
+// The video domain types are `#[non_exhaustive]` in
+// `ruviform-video-core`, so their tag codecs are fallible on the
+// encode side too: a variant added after this revision has no
+// `WIRE_VERSION` 3 representation (`WireError::UnsupportedVariant`)
+// rather than a silently wrong tag.
+
+/// Appends a [`VideoProcessConfig`] (`u8` format tag, `u32` width,
+/// `u32` height, `u32` `FrameRate` numerator, `u32` denominator — 17 B).
+///
+/// # Errors
+///
+/// [`WireError::UnsupportedVariant`] when `config.format()` is a
+/// `#[non_exhaustive]` [`PixelFormat`] variant added after this
+/// protocol revision. Nothing is appended on failure.
+pub fn encode_video_process_config(
+    config: &VideoProcessConfig,
+    out: &mut Vec<u8>,
+) -> Result<(), WireError> {
+    let format = encode_pixel_format(config.format())?;
+    push_u8(out, format);
+    push_u32(out, config.width());
+    push_u32(out, config.height());
+    push_u32(out, config.frame_rate().numerator());
+    push_u32(out, config.frame_rate().denominator());
+    Ok(())
+}
+
+/// Reads a [`VideoProcessConfig`] — an unassigned format tag, dims
+/// outside `1..=WIRE_VIDEO_MAX_DIM` and a zero `FrameRate` component
+/// are rejected (the ctor re-checks the domain invariants).
+///
+/// # Errors
+///
+/// [`WireError`] — truncated input, [`WireError::LimitExceeded`] for
+/// dims over [`WIRE_VIDEO_MAX_DIM`], or [`WireError::Malformed`] for
+/// a bad tag/zero field.
+pub fn decode_video_process_config(
+    reader: &mut Reader<'_>,
+) -> Result<VideoProcessConfig, WireError> {
+    let format = decode_pixel_format(reader)?;
+    let width = reader.read_u32()?;
+    let height = reader.read_u32()?;
+    if width > WIRE_VIDEO_MAX_DIM || height > WIRE_VIDEO_MAX_DIM {
+        return Err(WireError::LimitExceeded);
+    }
+    let frame_rate =
+        FrameRate::new(reader.read_u32()?, reader.read_u32()?).map_err(|_| WireError::Malformed)?;
+    // `new` rejects the zero dims the wire bound left through —
+    // zero is invalid data, not an over-bound declaration.
+    VideoProcessConfig::new(format, width, height, frame_rate).map_err(|_| WireError::Malformed)
+}
+
+/// The `u8` tag of a [`PixelFormat`] — declaration order on the
+/// enum (0 `Yuv420p` … 5 `RgbaF32`).
+///
+/// # Errors
+///
+/// [`WireError::UnsupportedVariant`] for a variant added after this
+/// revision.
+fn encode_pixel_format(format: PixelFormat) -> Result<u8, WireError> {
+    match format {
+        PixelFormat::Yuv420p => Ok(0),
+        PixelFormat::Yuv422p => Ok(1),
+        PixelFormat::Yuv444p => Ok(2),
+        PixelFormat::Rgba8 => Ok(3),
+        PixelFormat::RgbaF16 => Ok(4),
+        PixelFormat::RgbaF32 => Ok(5),
+        _ => Err(WireError::UnsupportedVariant),
+    }
+}
+
+/// Reads a [`PixelFormat`] tag — an unassigned tag is
+/// [`WireError::Malformed`].
+fn decode_pixel_format(reader: &mut Reader<'_>) -> Result<PixelFormat, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(PixelFormat::Yuv420p),
+        1 => Ok(PixelFormat::Yuv422p),
+        2 => Ok(PixelFormat::Yuv444p),
+        3 => Ok(PixelFormat::Rgba8),
+        4 => Ok(PixelFormat::RgbaF16),
+        5 => Ok(PixelFormat::RgbaF32),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+/// Appends a [`VideoFrameDesc`] — the `≤ 127 B` layout documented on
+/// the type.
+///
+/// # Errors
+///
+/// [`WireError::UnsupportedVariant`] when the format or a color enum
+/// has no representation under this revision — [`encode`]'s
+/// frame-level rollback discards the partial payload.
+///
+/// # Panics
+///
+/// Panics when `desc.planes.len()` exceeds `u8::MAX` — a caller-side
+/// bug (a well-formed desc holds `format.plane_count()` ≤ 4 entries;
+/// untrusted bytes only ever flow through `decode_*`).
+pub fn encode_video_frame_desc(desc: &VideoFrameDesc, out: &mut Vec<u8>) -> Result<(), WireError> {
+    let format = encode_pixel_format(desc.format)?;
+    let plane_count = u8::try_from(desc.planes.len()).expect("plane count fits u8");
+    push_u8(out, format);
+    push_u32(out, desc.width);
+    push_u32(out, desc.height);
+    push_u8(out, plane_count);
+    for plane in &desc.planes {
+        push_u32(out, plane.offset);
+        push_u32(out, plane.len);
+        push_u32(out, plane.stride);
+    }
+    encode_media_time(&desc.pts, out);
+    match desc.duration {
+        None => push_u8(out, 0),
+        Some(duration) => {
+            push_u8(out, 1);
+            encode_media_duration(&duration, out);
+        }
+    }
+    // `encode_color_info` resolves every fallible tag before its
+    // first push, so a `?` here still satisfies "nothing is appended
+    // on failure" *of the color payload*; earlier fields are this
+    // call's own output — encode()'s frame-level rollback covers the
+    // `Err` path.
+    encode_color_info(&desc.color, out)
+}
+
+/// Reads a [`VideoFrameDesc`] — an unassigned format/presence tag,
+/// dims outside `1..=WIRE_VIDEO_MAX_DIM`, a plane count of `0`, over
+/// [`WIRE_VIDEO_MAX_PLANES`] or disagreeing with
+/// `format.plane_count()`, a stride over [`WIRE_VIDEO_MAX_STRIDE`],
+/// or a malformed nested field are all defined rejections.
+///
+/// Bounds only: canonical offsets/region-fit/`len == stride ×
+/// plane_height` are the runner/host's semantic layer, not the
+/// codec's.
+///
+/// # Errors
+///
+/// [`WireError`] — truncated input, [`WireError::LimitExceeded`] for
+/// an over-bound declared value, or [`WireError::Malformed`].
+pub fn decode_video_frame_desc(reader: &mut Reader<'_>) -> Result<VideoFrameDesc, WireError> {
+    let format = decode_pixel_format(reader)?;
+    let width = reader.read_u32()?;
+    let height = reader.read_u32()?;
+    if width > WIRE_VIDEO_MAX_DIM || height > WIRE_VIDEO_MAX_DIM {
+        return Err(WireError::LimitExceeded);
+    }
+    if width == 0 || height == 0 {
+        return Err(WireError::Malformed);
+    }
+    let plane_count = reader.read_u8()?;
+    if u32::from(plane_count) > WIRE_VIDEO_MAX_PLANES {
+        return Err(WireError::LimitExceeded);
+    }
+    if plane_count == 0 {
+        return Err(WireError::Malformed);
+    }
+    if usize::from(plane_count) != format.plane_count() {
+        // The declared plane list must match the format's layout —
+        // e.g. `Rgba8` has exactly one plane.
+        return Err(WireError::Malformed);
+    }
+    let mut planes = Vec::with_capacity(usize::from(plane_count));
+    for _ in 0..plane_count {
+        let offset = reader.read_u32()?;
+        let len = reader.read_u32()?;
+        let stride = reader.read_u32()?;
+        if stride > WIRE_VIDEO_MAX_STRIDE {
+            return Err(WireError::LimitExceeded);
+        }
+        planes.push(VideoFramePlane {
+            offset,
+            len,
+            stride,
+        });
+    }
+    let pts = decode_media_time(reader)?;
+    let duration = match reader.read_u8()? {
+        0 => None,
+        1 => Some(decode_media_duration(reader)?),
+        _ => return Err(WireError::Malformed),
+    };
+    let color = decode_color_info(reader)?;
+    Ok(VideoFrameDesc {
+        format,
+        width,
+        height,
+        planes,
+        pts,
+        duration,
+        color,
+    })
+}
+
+/// Appends a [`ColorInfo`] — `u8` primaries, transfer, matrix and
+/// range tags; then `u8` `has_hdr` and, when set, an [`HdrMetadata`]
+/// (`u8` `has_mastering` + 24 B [`MasteringDisplayInfo`], then
+/// `u8` `has_cll` + `u16` `max_cll` + `u16` `max_fall`).
+///
+/// # Errors
+///
+/// [`WireError::UnsupportedVariant`] when a color enum carries a
+/// `#[non_exhaustive]` variant added after this revision. Nothing is
+/// appended on failure — every fallible tag resolves before the
+/// first push.
+pub fn encode_color_info(color: &ColorInfo, out: &mut Vec<u8>) -> Result<(), WireError> {
+    let primaries = encode_color_primaries(color.primaries)?;
+    let transfer = encode_transfer_characteristics(color.transfer)?;
+    let matrix = encode_matrix_coefficients(color.matrix)?;
+    let range = encode_color_range(color.range)?;
+    push_u8(out, primaries);
+    push_u8(out, transfer);
+    push_u8(out, matrix);
+    push_u8(out, range);
+    match &color.hdr {
+        None => push_u8(out, 0),
+        Some(hdr) => {
+            push_u8(out, 1);
+            match &hdr.mastering_display {
+                None => push_u8(out, 0),
+                Some(mastering) => {
+                    push_u8(out, 1);
+                    encode_mastering_display_info(mastering, out);
+                }
+            }
+            match &hdr.content_light_level {
+                None => push_u8(out, 0),
+                Some(cll) => {
+                    push_u8(out, 1);
+                    push_u16(out, cll.max_cll);
+                    push_u16(out, cll.max_fall);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Reads a [`ColorInfo`] — unassigned enum tags and any presence
+/// byte outside the strict `{0,1}` set are [`WireError::Malformed`].
+///
+/// # Errors
+///
+/// [`WireError`] — truncated or malformed input.
+pub fn decode_color_info(reader: &mut Reader<'_>) -> Result<ColorInfo, WireError> {
+    let primaries = decode_color_primaries(reader)?;
+    let transfer = decode_transfer_characteristics(reader)?;
+    let matrix = decode_matrix_coefficients(reader)?;
+    let range = decode_color_range(reader)?;
+    let hdr = match reader.read_u8()? {
+        0 => None,
+        1 => Some(HdrMetadata {
+            mastering_display: match reader.read_u8()? {
+                0 => None,
+                1 => Some(decode_mastering_display_info(reader)?),
+                _ => return Err(WireError::Malformed),
+            },
+            content_light_level: match reader.read_u8()? {
+                0 => None,
+                1 => Some(ContentLightLevel {
+                    max_cll: reader.read_u16()?,
+                    max_fall: reader.read_u16()?,
+                }),
+                _ => return Err(WireError::Malformed),
+            },
+        }),
+        _ => return Err(WireError::Malformed),
+    };
+    Ok(ColorInfo {
+        primaries,
+        transfer,
+        matrix,
+        range,
+        hdr,
+    })
+}
+
+fn encode_mastering_display_info(info: &MasteringDisplayInfo, out: &mut Vec<u8>) {
+    for chromaticity in &info.primaries {
+        push_u16(out, chromaticity.x);
+        push_u16(out, chromaticity.y);
+    }
+    push_u16(out, info.white_point.x);
+    push_u16(out, info.white_point.y);
+    push_u32(out, info.max_luminance);
+    push_u32(out, info.min_luminance);
+}
+
+fn decode_mastering_display_info(
+    reader: &mut Reader<'_>,
+) -> Result<MasteringDisplayInfo, WireError> {
+    let mut primaries = [Chromaticity { x: 0, y: 0 }; 3];
+    for chromaticity in &mut primaries {
+        chromaticity.x = reader.read_u16()?;
+        chromaticity.y = reader.read_u16()?;
+    }
+    Ok(MasteringDisplayInfo {
+        primaries,
+        white_point: Chromaticity {
+            x: reader.read_u16()?,
+            y: reader.read_u16()?,
+        },
+        max_luminance: reader.read_u32()?,
+        min_luminance: reader.read_u32()?,
+    })
+}
+
+// Color-enum tag codecs — declaration-order tags, `Malformed` on an
+// unassigned value, `UnsupportedVariant` on a variant added after
+// this revision (every enum is `#[non_exhaustive]` in
+// ruviform-video-core).
+
+fn encode_color_primaries(primaries: ColorPrimaries) -> Result<u8, WireError> {
+    match primaries {
+        ColorPrimaries::Unspecified => Ok(0),
+        ColorPrimaries::Bt709 => Ok(1),
+        ColorPrimaries::Smpte170m => Ok(2),
+        ColorPrimaries::Bt470Bg => Ok(3),
+        ColorPrimaries::Bt2020 => Ok(4),
+        ColorPrimaries::P3D65 => Ok(5),
+        _ => Err(WireError::UnsupportedVariant),
+    }
+}
+
+fn decode_color_primaries(reader: &mut Reader<'_>) -> Result<ColorPrimaries, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(ColorPrimaries::Unspecified),
+        1 => Ok(ColorPrimaries::Bt709),
+        2 => Ok(ColorPrimaries::Smpte170m),
+        3 => Ok(ColorPrimaries::Bt470Bg),
+        4 => Ok(ColorPrimaries::Bt2020),
+        5 => Ok(ColorPrimaries::P3D65),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+fn encode_transfer_characteristics(transfer: TransferCharacteristics) -> Result<u8, WireError> {
+    match transfer {
+        TransferCharacteristics::Unspecified => Ok(0),
+        TransferCharacteristics::Bt709 => Ok(1),
+        TransferCharacteristics::Smpte170m => Ok(2),
+        TransferCharacteristics::Linear => Ok(3),
+        TransferCharacteristics::Pq => Ok(4),
+        TransferCharacteristics::Hlg => Ok(5),
+        _ => Err(WireError::UnsupportedVariant),
+    }
+}
+
+fn decode_transfer_characteristics(
+    reader: &mut Reader<'_>,
+) -> Result<TransferCharacteristics, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(TransferCharacteristics::Unspecified),
+        1 => Ok(TransferCharacteristics::Bt709),
+        2 => Ok(TransferCharacteristics::Smpte170m),
+        3 => Ok(TransferCharacteristics::Linear),
+        4 => Ok(TransferCharacteristics::Pq),
+        5 => Ok(TransferCharacteristics::Hlg),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+fn encode_matrix_coefficients(matrix: MatrixCoefficients) -> Result<u8, WireError> {
+    match matrix {
+        MatrixCoefficients::Unspecified => Ok(0),
+        MatrixCoefficients::Identity => Ok(1),
+        MatrixCoefficients::Bt601 => Ok(2),
+        MatrixCoefficients::Bt709 => Ok(3),
+        MatrixCoefficients::Bt2020 => Ok(4),
+        _ => Err(WireError::UnsupportedVariant),
+    }
+}
+
+fn decode_matrix_coefficients(reader: &mut Reader<'_>) -> Result<MatrixCoefficients, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(MatrixCoefficients::Unspecified),
+        1 => Ok(MatrixCoefficients::Identity),
+        2 => Ok(MatrixCoefficients::Bt601),
+        3 => Ok(MatrixCoefficients::Bt709),
+        4 => Ok(MatrixCoefficients::Bt2020),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+fn encode_color_range(range: ColorRange) -> Result<u8, WireError> {
+    match range {
+        ColorRange::Unspecified => Ok(0),
+        ColorRange::Limited => Ok(1),
+        ColorRange::Full => Ok(2),
+        _ => Err(WireError::UnsupportedVariant),
+    }
+}
+
+fn decode_color_range(reader: &mut Reader<'_>) -> Result<ColorRange, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(ColorRange::Unspecified),
+        1 => Ok(ColorRange::Limited),
+        2 => Ok(ColorRange::Full),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+// --- Plain-parameter wire types -------------------------------------------
+
+/// Appends a [`PlainParamValue`] — `u8` kind tag + payload (`f64`
+/// Double, `i32` Integer, `u8` 0/1 Boolean, `u32` Choice index).
+///
+/// # Panics
+///
+/// Never — every variant serializes verbatim.
+pub fn encode_plain_param_value(value: &PlainParamValue, out: &mut Vec<u8>) {
+    match value {
+        PlainParamValue::Double(v) => {
+            push_u8(out, 0);
+            push_f64(out, *v);
+        }
+        PlainParamValue::Integer(v) => {
+            push_u8(out, 1);
+            push_i32(out, *v);
+        }
+        PlainParamValue::Boolean(v) => {
+            push_u8(out, 2);
+            push_u8(out, u8::from(*v));
+        }
+        PlainParamValue::Choice(index) => {
+            push_u8(out, 3);
+            push_u32(out, *index);
+        }
+    }
+}
+
+/// Reads a [`PlainParamValue`] — an unassigned kind tag, a non-finite
+/// `Double` (`NaN`/`±Inf` can never be a parameter value — the same
+/// finiteness rule [`ParamValue`] applies), or a `Boolean` byte
+/// outside the strict `{0,1}` set are [`WireError::Malformed`].
+///
+/// # Errors
+///
+/// [`WireError`] — truncated or malformed input.
+pub fn decode_plain_param_value(reader: &mut Reader<'_>) -> Result<PlainParamValue, WireError> {
+    match reader.read_u8()? {
+        0 => {
+            let value = reader.read_f64()?;
+            if !value.is_finite() {
+                return Err(WireError::Malformed);
+            }
+            Ok(PlainParamValue::Double(value))
+        }
+        1 => Ok(PlainParamValue::Integer(reader.read_i32()?)),
+        2 => Ok(PlainParamValue::Boolean(match reader.read_u8()? {
+            0 => false,
+            1 => true,
+            _ => return Err(WireError::Malformed),
+        })),
+        3 => Ok(PlainParamValue::Choice(reader.read_u32()?)),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+/// Appends a [`PlainParamInfoOwned`] — `u32` id, `name`, `unit`,
+/// `f64` `min_value`/`max_value`/`display_min_value`/
+/// `display_max_value`, [`PlainParamValue`] default, `u32` flags
+/// bits, `u32` choice count + each choice string.
+///
+/// # Panics
+///
+/// Never — every field serializes verbatim.
+pub fn encode_plain_param_info(info: &PlainParamInfoOwned, out: &mut Vec<u8>) {
+    push_u32(out, info.id.0);
+    push_str(out, &info.name);
+    push_str(out, &info.unit);
+    push_f64(out, info.min_value);
+    push_f64(out, info.max_value);
+    push_f64(out, info.display_min_value);
+    push_f64(out, info.display_max_value);
+    encode_plain_param_value(&info.default_value, out);
+    push_u32(out, info.flags.bits());
+    push_u32(out, len_u32(info.choices.len()));
+    for choice in &info.choices {
+        push_str(out, choice);
+    }
+}
+
+/// Reads a [`PlainParamInfoOwned`] — the wire is the trust boundary,
+/// so the full metadata contract is re-validated here:
+///
+/// * strings/choice list bounded before allocation
+///   ([`WIRE_MAX_STRING_BYTES`]/[`WIRE_MAX_ELEMENTS`]);
+/// * `min_value`, `max_value` and the default's scalar must be
+///   finite, with `min_value <= max_value` and the default inside
+///   `[min_value, max_value]` — `display_*` are UI hints and stay
+///   lenient (non-finite accepted);
+/// * `default_value` is `Choice` ⇔ `choices` is non-empty, and a
+///   `Choice` default must index into `choices`;
+/// * `flags` must contain only bits this revision defines
+///   ([`ParamFlags::from_bits`] is strict, like a reserved field).
+///
+/// # Errors
+///
+/// [`WireError`] — truncated input, [`WireError::LimitExceeded`] for
+/// an over-bound declared length/count, or [`WireError::Malformed`]
+/// for a contract violation.
+pub fn decode_plain_param_info(reader: &mut Reader<'_>) -> Result<PlainParamInfoOwned, WireError> {
+    let id = ParamId(reader.read_u32()?);
+    let name = reader.read_string()?;
+    let unit = reader.read_string()?;
+    let min_value = reader.read_f64()?;
+    let max_value = reader.read_f64()?;
+    let display_min_value = reader.read_f64()?;
+    let display_max_value = reader.read_f64()?;
+    if !min_value.is_finite() || !max_value.is_finite() || min_value > max_value {
+        return Err(WireError::Malformed);
+    }
+    let default_value = decode_plain_param_value(reader)?;
+    let default_scalar = match default_value {
+        PlainParamValue::Double(v) => v,
+        PlainParamValue::Integer(v) => f64::from(v),
+        PlainParamValue::Boolean(v) => f64::from(u8::from(v)),
+        // The range check for `Choice` is the in-bounds index check
+        // against `choices` below — its "scalar" is an index.
+        PlainParamValue::Choice(_) => min_value,
+    };
+    if !(min_value..=max_value).contains(&default_scalar) {
+        return Err(WireError::Malformed);
+    }
+    let flags = ParamFlags::from_bits(reader.read_u32()?).ok_or(WireError::Malformed)?;
+    let count = reader.read_count(WIRE_MAX_ELEMENTS)?;
+    let mut choices = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+        choices.push(reader.read_string()?);
+    }
+    match default_value {
+        PlainParamValue::Choice(index) => {
+            if index as usize >= choices.len() {
+                // A Choice default must name a real choice — and
+                // `choices.len() == 0` makes every index out of
+                // range, folding the "empty choice list" rejection
+                // into this one check.
+                return Err(WireError::Malformed);
+            }
+        }
+        _ => {
+            if !choices.is_empty() {
+                return Err(WireError::Malformed);
+            }
+        }
+    }
+    Ok(PlainParamInfoOwned {
+        id,
+        name,
+        unit,
+        min_value,
+        max_value,
+        display_min_value,
+        display_max_value,
+        default_value,
+        flags,
+        choices,
     })
 }
 
@@ -2118,6 +3288,7 @@ mod tests {
             HostError::Ipc,
             HostError::DuplicatePluginId,
             HostError::InstanceLimit,
+            HostError::InvalidValue,
         ];
         for error in errors {
             let message = Message::Reply {
@@ -2687,6 +3858,7 @@ mod tests {
             HostError::Ipc,
             HostError::DuplicatePluginId,
             HostError::InstanceLimit,
+            HostError::InvalidValue,
         ] {
             // `encode_host_error` is fallible like `encode_transport`
             // — exercised directly rather than through the infallible
@@ -2911,6 +4083,900 @@ mod tests {
         assert_eq!(
             read_frame(&mut cursor, &mut buf).unwrap_err().kind(),
             io::ErrorKind::UnexpectedEof,
+        );
+    }
+
+    // --- wire v3: video verbs and replies (Issue #118) -------------------
+
+    fn video_config(format: PixelFormat, width: u32, height: u32) -> VideoProcessConfig {
+        VideoProcessConfig::new(format, width, height, FrameRate::new(30, 1).unwrap()).unwrap()
+    }
+
+    /// A canonical-packed 1920×1080 `Yuv420p` descriptor — luma
+    /// 1920×1080, two 960×540 chroma planes contiguous from offset 0.
+    fn video_desc() -> VideoFrameDesc {
+        VideoFrameDesc {
+            format: PixelFormat::Yuv420p,
+            width: 1_920,
+            height: 1_080,
+            planes: vec![
+                VideoFramePlane {
+                    offset: 0,
+                    len: 2_073_600,
+                    stride: 1_920,
+                },
+                VideoFramePlane {
+                    offset: 2_073_600,
+                    len: 518_400,
+                    stride: 960,
+                },
+                VideoFramePlane {
+                    offset: 2_592_000,
+                    len: 518_400,
+                    stride: 960,
+                },
+            ],
+            pts: MediaTime::new(90_000, TimeBase::COMMON_90K),
+            duration: Some(MediaDuration::new(3_000, TimeBase::COMMON_90K)),
+            color: ColorInfo {
+                primaries: ColorPrimaries::Bt709,
+                transfer: TransferCharacteristics::Bt709,
+                matrix: MatrixCoefficients::Bt709,
+                range: ColorRange::Limited,
+                hdr: None,
+            },
+        }
+    }
+
+    fn param_info() -> PlainParamInfoOwned {
+        PlainParamInfoOwned {
+            id: ParamId(3),
+            name: "Threshold".to_owned(),
+            unit: "dB".to_owned(),
+            min_value: -60.0,
+            max_value: 12.0,
+            display_min_value: -60.0,
+            display_max_value: 12.0,
+            default_value: PlainParamValue::Double(0.0),
+            flags: ParamFlags::AUTOMATABLE.union(ParamFlags::STEPPED),
+            choices: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn wire_version_is_v3() {
+        assert_eq!(WIRE_VERSION, 3);
+    }
+
+    #[test]
+    fn video_verbs_roundtrip() {
+        // Every video verb is instance-scoped — the envelope carries
+        // a live handle for all of them.
+        for cmd in [
+            Command::CreateVideoInstance {
+                plugin_id: "org.ruviform.test.video".to_owned(),
+                shm_key: "rvf-test-video-segment".to_owned(),
+                config: video_config(PixelFormat::Rgba8, 1_920, 1_080),
+            },
+            Command::VideoInitialize,
+            Command::VideoActivate,
+            Command::VideoStartProcessing,
+            Command::VideoRender {
+                at: MediaTime::new(123, TimeBase::COMMON_90K),
+                input: video_desc(),
+            },
+            Command::VideoStopProcessing,
+            Command::VideoDeactivate,
+            Command::VideoGetParams,
+            Command::VideoGetParamInfo { id: 7 },
+            Command::VideoGetParamValue { id: 7 },
+            Command::VideoSetParamValue {
+                id: 7,
+                value: PlainParamValue::Choice(2),
+            },
+        ] {
+            let message = Message::Command {
+                seq: 7,
+                instance: 0,
+                cmd,
+            };
+            assert_eq!(roundtrip(&message), message);
+        }
+    }
+
+    #[test]
+    fn video_replies_roundtrip() {
+        for reply in [
+            Reply::Rendered {
+                output: video_desc(),
+            },
+            Reply::Params {
+                ids: vec![0, 3, u32::MAX],
+            },
+            Reply::ParamInfo { info: None },
+            Reply::ParamInfo {
+                info: Some(param_info()),
+            },
+            Reply::ParamValue {
+                value: PlainParamValue::Double(-12.5),
+            },
+        ] {
+            let message = Message::Reply {
+                seq: 7,
+                instance: 3,
+                result: Ok(reply),
+            };
+            assert_eq!(roundtrip(&message), message);
+        }
+    }
+
+    #[test]
+    fn video_verbs_are_instance_scoped() {
+        // `WIRE_INSTANCE_NONE` is a scope violation for every video
+        // verb — checked before the verb payload is interpreted, so
+        // an empty body still reports the scope error.
+        for tag in 12..=22_u8 {
+            assert_eq!(
+                decode(&raw_frame(
+                    KIND_COMMAND,
+                    &command_payload(1, WIRE_INSTANCE_NONE, tag)
+                )),
+                Err(WireError::Malformed),
+                "video verb {tag} must reject WIRE_INSTANCE_NONE",
+            );
+            // Out-of-range instance values are the same defined
+            // rejection.
+            assert_eq!(
+                decode(&raw_frame(
+                    KIND_COMMAND,
+                    &command_payload(1, WIRE_MAX_INSTANCES, tag)
+                )),
+                Err(WireError::Malformed),
+                "video verb {tag} must reject out-of-range instances",
+            );
+        }
+    }
+
+    // --- wire v3: VideoProcessConfig -------------------------------------
+
+    /// `field_roundtrip` for the fallible encoders — the video codecs
+    /// can report `UnsupportedVariant`.
+    fn fallible_field_roundtrip<T>(
+        value: &T,
+        encode: impl Fn(&T, &mut Vec<u8>) -> Result<(), WireError>,
+        decode: impl Fn(&mut Reader<'_>) -> Result<T, WireError>,
+    ) -> T
+    where
+        T: PartialEq + fmt::Debug,
+    {
+        let mut payload = Vec::new();
+        encode(value, &mut payload).unwrap();
+        let mut reader = Reader::new(&payload);
+        let decoded = decode(&mut reader).unwrap();
+        assert!(reader.is_empty(), "trailing bytes after field decode");
+        decoded
+    }
+
+    /// A `VideoProcessConfig` payload: `u8` format + `u32` width +
+    /// `u32` height + `u32` numerator + `u32` denominator.
+    fn video_config_payload(format: u8, width: u32, height: u32, num: u32, den: u32) -> Vec<u8> {
+        let mut payload = Vec::new();
+        push_u8(&mut payload, format);
+        push_u32(&mut payload, width);
+        push_u32(&mut payload, height);
+        push_u32(&mut payload, num);
+        push_u32(&mut payload, den);
+        payload
+    }
+
+    #[test]
+    fn video_process_config_codec_roundtrip_and_bounds() {
+        // The 17 B fixed layout and per-format tags.
+        let config = video_config(PixelFormat::Yuv420p, 1_920, 1_080);
+        let mut payload = Vec::new();
+        encode_video_process_config(&config, &mut payload).unwrap();
+        assert_eq!(payload.len(), 17);
+        assert_eq!(
+            fallible_field_roundtrip(
+                &config,
+                encode_video_process_config,
+                decode_video_process_config
+            ),
+            config
+        );
+        for format in [
+            PixelFormat::Yuv420p,
+            PixelFormat::Yuv422p,
+            PixelFormat::Yuv444p,
+            PixelFormat::Rgba8,
+            PixelFormat::RgbaF16,
+            PixelFormat::RgbaF32,
+        ] {
+            let config = video_config(format, 320, 240);
+            assert_eq!(
+                fallible_field_roundtrip(
+                    &config,
+                    encode_video_process_config,
+                    decode_video_process_config
+                ),
+                config
+            );
+        }
+
+        // Unassigned format tag → Malformed.
+        let payload = video_config_payload(6, 320, 240, 30, 1);
+        let mut reader = Reader::new(&payload);
+        assert_eq!(
+            decode_video_process_config(&mut reader),
+            Err(WireError::Malformed)
+        );
+        // Zero dims → Malformed (ctor invariant); over
+        // `WIRE_VIDEO_MAX_DIM` → LimitExceeded.
+        for (width, height, error) in [
+            (0, 240, WireError::Malformed),
+            (320, 0, WireError::Malformed),
+            (WIRE_VIDEO_MAX_DIM + 1, 240, WireError::LimitExceeded),
+            (320, WIRE_VIDEO_MAX_DIM + 1, WireError::LimitExceeded),
+        ] {
+            let payload = video_config_payload(3, width, height, 30, 1);
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_video_process_config(&mut reader),
+                Err(error),
+                "dims {width}x{height} must be {error:?}",
+            );
+        }
+        // `WIRE_VIDEO_MAX_DIM` itself is legal.
+        let payload = video_config_payload(3, WIRE_VIDEO_MAX_DIM, WIRE_VIDEO_MAX_DIM, 30, 1);
+        let mut reader = Reader::new(&payload);
+        assert!(decode_video_process_config(&mut reader).is_ok());
+        // Zero FrameRate components → Malformed.
+        for (num, den) in [(0_u32, 1_u32), (30, 0), (0, 0)] {
+            let payload = video_config_payload(3, 320, 240, num, den);
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_video_process_config(&mut reader),
+                Err(WireError::Malformed),
+                "frame rate {num}/{den} must be rejected",
+            );
+        }
+    }
+
+    // --- wire v3: VideoFrameDesc -------------------------------------------
+
+    /// Re-encodes `desc`, splices `edit` into the payload bytes and
+    /// decodes — the rejection tests need encodings the honest
+    /// encoder cannot produce.
+    fn decode_edited_desc(
+        desc: &VideoFrameDesc,
+        edit: impl Fn(&mut Vec<u8>),
+    ) -> Result<VideoFrameDesc, WireError> {
+        let mut payload = Vec::new();
+        encode_video_frame_desc(desc, &mut payload).unwrap();
+        edit(&mut payload);
+        let mut reader = Reader::new(&payload);
+        decode_video_frame_desc(&mut reader)
+    }
+
+    #[test]
+    fn video_frame_desc_codec_roundtrip_and_bounds() {
+        let desc = video_desc();
+        assert_eq!(
+            fallible_field_roundtrip(&desc, encode_video_frame_desc, decode_video_frame_desc),
+            desc
+        );
+        // A one-plane format with `duration: None` round-trips too.
+        let mut single = desc.clone();
+        single.format = PixelFormat::RgbaF32;
+        single.width = 64;
+        single.height = 64;
+        single.planes = vec![VideoFramePlane {
+            offset: 0,
+            len: 64 * 64 * 16,
+            stride: 64 * 16,
+        }];
+        single.duration = None;
+        assert_eq!(
+            fallible_field_roundtrip(&single, encode_video_frame_desc, decode_video_frame_desc),
+            single
+        );
+
+        // Format tag > 5 → Malformed.
+        assert_eq!(
+            decode_edited_desc(&desc, |payload| payload[0] = 6),
+            Err(WireError::Malformed)
+        );
+        // Dims: 0 → Malformed, over `WIRE_VIDEO_MAX_DIM` →
+        // LimitExceeded (width is at bytes 1..5, height at 5..9).
+        assert_eq!(
+            decode_edited_desc(&desc, |payload| payload[1..5]
+                .copy_from_slice(&0_u32.to_le_bytes())),
+            Err(WireError::Malformed)
+        );
+        assert_eq!(
+            decode_edited_desc(&desc, |payload| payload[5..9]
+                .copy_from_slice(&(WIRE_VIDEO_MAX_DIM + 1).to_le_bytes())),
+            Err(WireError::LimitExceeded)
+        );
+        // `plane_count` (byte 9): 0 → Malformed, 5 → LimitExceeded,
+        // mismatch (1 vs Yuv420p's 3) → Malformed.
+        assert_eq!(
+            decode_edited_desc(&desc, |payload| payload[9] = 0),
+            Err(WireError::Malformed)
+        );
+        assert_eq!(
+            decode_edited_desc(&desc, |payload| payload[9] = 5),
+            Err(WireError::LimitExceeded)
+        );
+        assert_eq!(
+            decode_edited_desc(&desc, |payload| payload[9] = 1),
+            Err(WireError::Malformed)
+        );
+        // Stride over `WIRE_VIDEO_MAX_STRIDE` → LimitExceeded (first
+        // plane's stride sits at bytes 10 + 8..12).
+        assert_eq!(
+            decode_edited_desc(&desc, |payload| payload[18..22]
+                .copy_from_slice(&(WIRE_VIDEO_MAX_STRIDE + 1).to_le_bytes())),
+            Err(WireError::LimitExceeded)
+        );
+        // `has_duration` (byte 10 header + 3×12 planes + 16 pts = 62)
+        // is a strict {0,1} presence tag.
+        for tag in [2_u8, 0xFF] {
+            assert_eq!(
+                decode_edited_desc(&desc, |payload| payload[62] = tag),
+                Err(WireError::Malformed),
+                "has_duration {tag} must be rejected",
+            );
+        }
+        // The codec bounds, not semantics: non-canonical offsets are
+        // accepted (the runner/host layer verifies canonicality).
+        assert!(
+            decode_edited_desc(&desc, |payload| payload[10..14]
+                .copy_from_slice(&123_u32.to_le_bytes()))
+            .is_ok()
+        );
+    }
+
+    // --- wire v3: ColorInfo -------------------------------------------------
+
+    #[test]
+    fn color_info_codec_roundtrip_and_strict_presence() {
+        for color in [
+            ColorInfo::default(),
+            video_desc().color,
+            ColorInfo {
+                primaries: ColorPrimaries::Bt2020,
+                transfer: TransferCharacteristics::Pq,
+                matrix: MatrixCoefficients::Bt2020,
+                range: ColorRange::Full,
+                hdr: Some(HdrMetadata {
+                    mastering_display: Some(MasteringDisplayInfo {
+                        primaries: [
+                            Chromaticity {
+                                x: 34_000,
+                                y: 16_000,
+                            },
+                            Chromaticity {
+                                x: 7_500,
+                                y: 30_000,
+                            },
+                            Chromaticity {
+                                x: 15_000,
+                                y: 6_000,
+                            },
+                        ],
+                        white_point: Chromaticity {
+                            x: 15_635,
+                            y: 16_450,
+                        },
+                        max_luminance: 10_000_000,
+                        min_luminance: 50,
+                    }),
+                    content_light_level: Some(ContentLightLevel {
+                        max_cll: 1_000,
+                        max_fall: 400,
+                    }),
+                }),
+            },
+            // `hdr` present with only `content_light_level` set —
+            // the presence flags are independent.
+            ColorInfo {
+                primaries: ColorPrimaries::P3D65,
+                transfer: TransferCharacteristics::Hlg,
+                matrix: MatrixCoefficients::Identity,
+                range: ColorRange::Unspecified,
+                hdr: Some(HdrMetadata {
+                    mastering_display: None,
+                    content_light_level: Some(ContentLightLevel {
+                        max_cll: 400,
+                        max_fall: 100,
+                    }),
+                }),
+            },
+        ] {
+            assert_eq!(
+                fallible_field_roundtrip(&color, encode_color_info, decode_color_info),
+                color
+            );
+        }
+
+        // Every presence byte is strict {0,1} — byte 4 is
+        // `has_hdr`; inside an `hdr: Some` payload byte 5 is
+        // `has_mastering` and byte 30 (after the 24-byte mastering
+        // block) is `has_cll`.
+        let color = ColorInfo {
+            hdr: Some(HdrMetadata {
+                mastering_display: Some(MasteringDisplayInfo {
+                    primaries: [
+                        Chromaticity { x: 1, y: 2 },
+                        Chromaticity { x: 3, y: 4 },
+                        Chromaticity { x: 5, y: 6 },
+                    ],
+                    white_point: Chromaticity { x: 7, y: 8 },
+                    max_luminance: 9,
+                    min_luminance: 10,
+                }),
+                content_light_level: Some(ContentLightLevel {
+                    max_cll: 11,
+                    max_fall: 12,
+                }),
+            }),
+            ..ColorInfo::default()
+        };
+        let mut payload = Vec::new();
+        encode_color_info(&color, &mut payload).unwrap();
+        for (index, name) in [(4_usize, "has_hdr"), (5, "has_mastering"), (30, "has_cll")] {
+            for tag in [2_u8, 0xFF] {
+                let mut corrupted = payload.clone();
+                corrupted[index] = tag;
+                let mut reader = Reader::new(&corrupted);
+                assert_eq!(
+                    decode_color_info(&mut reader),
+                    Err(WireError::Malformed),
+                    "{name} = {tag} must be rejected",
+                );
+            }
+        }
+        // Unassigned color enum tags → Malformed.
+        for index in 0..4_usize {
+            let mut corrupted = payload.clone();
+            corrupted[index] = 9;
+            let mut reader = Reader::new(&corrupted);
+            assert_eq!(
+                decode_color_info(&mut reader),
+                Err(WireError::Malformed),
+                "color enum tag at byte {index} must be bounded",
+            );
+        }
+    }
+
+    // --- wire v3: PlainParamValue / PlainParamInfoOwned ----------------------
+
+    #[test]
+    fn plain_param_value_codec_roundtrip_and_rejections() {
+        for value in [
+            PlainParamValue::Double(-12.5),
+            PlainParamValue::Integer(i32::MIN),
+            PlainParamValue::Boolean(true),
+            PlainParamValue::Boolean(false),
+            PlainParamValue::Choice(u32::MAX),
+        ] {
+            assert_eq!(
+                field_roundtrip(&value, encode_plain_param_value, decode_plain_param_value),
+                value
+            );
+        }
+        // Non-finite `Double` — NaN and both infinities — is
+        // Malformed; a parameter value is always finite.
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut payload = vec![0_u8];
+            push_f64(&mut payload, bad);
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_plain_param_value(&mut reader),
+                Err(WireError::Malformed),
+                "non-finite {bad} must be rejected",
+            );
+        }
+        // `Boolean` is a strict {0,1} byte, not a C-style bool.
+        for tag in [2_u8, 0xFF] {
+            let payload = [2, tag];
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_plain_param_value(&mut reader),
+                Err(WireError::Malformed),
+                "Boolean {tag} must be rejected",
+            );
+        }
+        // Unassigned kind tag.
+        let mut reader = Reader::new(&[4]);
+        assert_eq!(
+            decode_plain_param_value(&mut reader),
+            Err(WireError::Malformed)
+        );
+    }
+
+    /// A `PlainParamInfoOwned` payload built field-by-field — the
+    /// rejection tests need encodings the honest encoder cannot
+    /// produce.
+    fn param_info_payload(info: &PlainParamInfoOwned) -> Vec<u8> {
+        let mut payload = Vec::new();
+        encode_plain_param_info(info, &mut payload);
+        payload
+    }
+
+    #[test]
+    fn plain_param_info_owned_codec_roundtrip_and_contract() {
+        for info in [
+            param_info(),
+            // A `Choice` default with its choice list.
+            PlainParamInfoOwned {
+                id: ParamId(9),
+                name: "Mode".to_owned(),
+                unit: String::new(),
+                min_value: 0.0,
+                max_value: 2.0,
+                display_min_value: 0.0,
+                display_max_value: 2.0,
+                default_value: PlainParamValue::Choice(1),
+                flags: ParamFlags::NONE,
+                choices: vec!["off".to_owned(), "half".to_owned(), "full".to_owned()],
+            },
+            // `display_*` are UI hints: non-finite and inverted
+            // values are legal there even though `min`/`max` are
+            // strict.
+            PlainParamInfoOwned {
+                display_min_value: f64::INFINITY,
+                display_max_value: f64::NEG_INFINITY,
+                ..param_info()
+            },
+        ] {
+            assert_eq!(
+                field_roundtrip(&info, encode_plain_param_info, decode_plain_param_info),
+                info
+            );
+        }
+    }
+
+    #[test]
+    fn plain_param_info_owned_decode_enforces_the_contract() {
+        let base = param_info();
+        // The f64 fields sit after `u32` id + two strings: offset of
+        // `min_value` = 4 + 4 + name.len() + 4 + unit.len().
+        let min_off = 4 + 4 + base.name.len() + 4 + base.unit.len();
+        let offsets = [
+            ("min", min_off),
+            ("max", min_off + 8),
+            ("default", min_off + 8 * 4 + 1), // f64 inside the Double(0) tag+payload
+        ];
+        // Non-finite min/max → Malformed.
+        for (name, offset) in &offsets[..2] {
+            for bad in [f64::NAN, f64::INFINITY] {
+                let mut payload = param_info_payload(&base);
+                payload[*offset..*offset + 8].copy_from_slice(&bad.to_le_bytes());
+                let mut reader = Reader::new(&payload);
+                assert_eq!(
+                    decode_plain_param_info(&mut reader),
+                    Err(WireError::Malformed),
+                    "non-finite {name} must be rejected",
+                );
+            }
+        }
+        // Non-finite default scalar → Malformed (tagged Double at
+        // `default - 1`, f64 at `default`).
+        for bad in [f64::NAN, f64::NEG_INFINITY] {
+            let mut payload = param_info_payload(&base);
+            payload[offsets[2].1..offsets[2].1 + 8].copy_from_slice(&bad.to_le_bytes());
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_plain_param_info(&mut reader),
+                Err(WireError::Malformed),
+                "non-finite default must be rejected",
+            );
+        }
+        // min > max → Malformed.
+        let mut payload = param_info_payload(&base);
+        payload[min_off..min_off + 8].copy_from_slice(&100.0_f64.to_le_bytes());
+        payload[min_off + 8..min_off + 16].copy_from_slice(&(-100.0_f64).to_le_bytes());
+        let mut reader = Reader::new(&payload);
+        assert_eq!(
+            decode_plain_param_info(&mut reader),
+            Err(WireError::Malformed)
+        );
+        // Default outside [min, max] → Malformed.
+        let mut payload = param_info_payload(&base);
+        payload[offsets[2].1..offsets[2].1 + 8].copy_from_slice(&500.0_f64.to_le_bytes());
+        let mut reader = Reader::new(&payload);
+        assert_eq!(
+            decode_plain_param_info(&mut reader),
+            Err(WireError::Malformed)
+        );
+        // Unknown `flags` bit → Malformed (reserved-field strictness).
+        let flags_off = min_off + 8 * 4 + 9; // after default Double(9 B)
+        let mut payload = param_info_payload(&base);
+        payload[flags_off..flags_off + 4].copy_from_slice(&(1_u32 << 31).to_le_bytes());
+        let mut reader = Reader::new(&payload);
+        assert_eq!(
+            decode_plain_param_info(&mut reader),
+            Err(WireError::Malformed)
+        );
+        // Choice-list contract: a `Choice` default must index a
+        // non-empty list; a non-Choice default must have none.
+        let mut empty_choices = PlainParamInfoOwned {
+            default_value: PlainParamValue::Choice(0),
+            choices: Vec::new(),
+            min_value: 0.0,
+            max_value: 1.0,
+            ..param_info()
+        };
+        assert_eq!(
+            decode_plain_param_info(&mut Reader::new(&param_info_payload(&empty_choices))),
+            Err(WireError::Malformed)
+        );
+        empty_choices.choices = vec!["a".to_owned()];
+        empty_choices.default_value = PlainParamValue::Choice(1); // out of range
+        assert_eq!(
+            decode_plain_param_info(&mut Reader::new(&param_info_payload(&empty_choices))),
+            Err(WireError::Malformed)
+        );
+        let stray_choices = PlainParamInfoOwned {
+            default_value: PlainParamValue::Double(0.0),
+            choices: vec!["a".to_owned()],
+            ..param_info()
+        };
+        assert_eq!(
+            decode_plain_param_info(&mut Reader::new(&param_info_payload(&stray_choices))),
+            Err(WireError::Malformed)
+        );
+        // Choice-list count over `WIRE_MAX_ELEMENTS` → LimitExceeded
+        // before any allocation.
+        let mut payload = param_info_payload(&base);
+        let count_off = flags_off + 4;
+        payload.truncate(count_off);
+        push_u32(&mut payload, WIRE_MAX_ELEMENTS + 1);
+        let mut reader = Reader::new(&payload);
+        assert_eq!(
+            decode_plain_param_info(&mut reader),
+            Err(WireError::LimitExceeded)
+        );
+    }
+
+    // --- wire v3: HostError::InvalidValue -----------------------------------
+
+    #[test]
+    fn invalid_value_roundtrips_as_wire_tag_10() {
+        // Field-level: tag 10 both directions — not the
+        // `UnsupportedVariant`/`Malformed` wildcard arms.
+        let mut payload = Vec::new();
+        encode_host_error(&HostError::InvalidValue, &mut payload).unwrap();
+        assert_eq!(payload, [10]);
+        assert_eq!(
+            decode_host_error(&mut Reader::new(&payload)),
+            Ok(HostError::InvalidValue)
+        );
+        // Frame-level: a `Reply{Err(InvalidValue)}` round-trips
+        // through encode→decode unchanged.
+        let message = Message::Reply {
+            seq: 7,
+            instance: 3,
+            result: Err(HostError::InvalidValue),
+        };
+        assert_eq!(roundtrip(&message), message);
+    }
+
+    // --- wire v3: vshm segment -----------------------------------------------
+
+    /// The `vshm` layout constants form one chain — same rule as the
+    /// audio `shm` layout: every offset is derived, so the host-side
+    /// owner and the runner-side attach compute the same segment
+    /// byte-for-byte.
+    #[test]
+    fn vshm_header_layout_is_self_consistent() {
+        assert_eq!(vshm::MAGIC, u32::from_le_bytes(*b"RVLV"));
+        assert_eq!(vshm::OFF_MAGIC + 4, vshm::OFF_WIRE_VERSION);
+        assert_eq!(vshm::OFF_WIRE_VERSION + 4, vshm::OFF_IN_OFF);
+        assert_eq!(vshm::OFF_IN_OFF + 4, vshm::OFF_IN_BYTES);
+        assert_eq!(vshm::OFF_IN_BYTES + 4, vshm::OFF_OUT_OFF);
+        assert_eq!(vshm::OFF_OUT_OFF + 4, vshm::OFF_OUT_BYTES);
+        assert_eq!(vshm::OFF_OUT_BYTES + 4, vshm::OFF_RESERVED);
+        assert_eq!(vshm::OFF_RESERVED + 4, vshm::HEADER_LEN);
+        assert_eq!(vshm::HEADER_LEN, 28);
+        // The segment cap is exactly header + two maximal regions.
+        const {
+            assert!(WIRE_VIDEO_MAX_SEGMENT_BYTES == 28 + 2 * WIRE_VIDEO_MAX_FRAME_BYTES);
+        }
+    }
+
+    #[test]
+    fn vshm_frame_bytes_and_segment_len_math() {
+        // The spec's pinned byte-math examples.
+        assert_eq!(
+            vshm::frame_bytes(&video_config(PixelFormat::Rgba8, 3_840, 2_160)),
+            33_177_600
+        );
+        assert_eq!(
+            vshm::frame_bytes(&video_config(PixelFormat::Yuv420p, 3_840, 2_160)),
+            12_441_600
+        );
+        assert_eq!(
+            vshm::frame_bytes(&video_config(PixelFormat::Rgba8, 1_920, 1_080)),
+            8_294_400
+        );
+        // Odd dims: chroma planes ceil-divide (Yuv420p 3×3 →
+        // luma 3×3 + two 2×2).
+        assert_eq!(
+            vshm::frame_bytes(&video_config(PixelFormat::Yuv420p, 3, 3)),
+            9 + 4 + 4
+        );
+        // 8K `RgbaF16` fits the frame cap; its segment fits the
+        // segment cap. 8K `RgbaF32` honestly exceeds both.
+        let f16 = vshm::frame_bytes(&video_config(PixelFormat::RgbaF16, 7_680, 4_320));
+        assert_eq!(f16, 265_420_800);
+        assert!(f16 <= WIRE_VIDEO_MAX_FRAME_BYTES);
+        assert_eq!(vshm::segment_len(f16), 530_841_628);
+        assert!(vshm::segment_len(f16) <= WIRE_VIDEO_MAX_SEGMENT_BYTES);
+        let f32 = vshm::frame_bytes(&video_config(PixelFormat::RgbaF32, 7_680, 4_320));
+        assert!(f32 > WIRE_VIDEO_MAX_FRAME_BYTES);
+        assert!(vshm::segment_len(f32) > WIRE_VIDEO_MAX_SEGMENT_BYTES);
+        // `segment_len` shape and saturation — never a panic.
+        assert_eq!(vshm::segment_len(100), 28 + 200);
+        assert_eq!(vshm::segment_len(u64::MAX), u64::MAX);
+        // Overflow in `frame_bytes` saturates over the cap instead of
+        // wrapping — `VideoProcessConfig::new` admits huge dims, so
+        // the math must stay honest without a bound.
+        let huge = VideoProcessConfig::new(
+            PixelFormat::RgbaF32,
+            u32::MAX,
+            u32::MAX,
+            FrameRate::new(30, 1).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(vshm::frame_bytes(&huge), u64::MAX);
+        assert!(vshm::frame_bytes(&huge) > WIRE_VIDEO_MAX_FRAME_BYTES);
+
+        // `plane_layout` — canonical packing: `stride = row_bytes`,
+        // `offset(p) = Σ len(0..p)`.
+        assert_eq!(
+            vshm::plane_layout(PixelFormat::Yuv420p, 1_920, 1_080, 99),
+            None
+        );
+        let chroma = vshm::plane_layout(PixelFormat::Yuv420p, 1_920, 1_080, 1).unwrap();
+        assert_eq!(chroma.width, 960);
+        assert_eq!(chroma.height, 540);
+        assert_eq!(chroma.stride, 960);
+        assert_eq!(chroma.len, 518_400);
+        assert_eq!(chroma.offset, 2_073_600);
+        let luma = vshm::plane_layout(PixelFormat::Yuv420p, 1_920, 1_080, 0).unwrap();
+        assert_eq!((luma.offset, luma.stride, luma.len), (0, 1_920, 2_073_600));
+    }
+
+    #[test]
+    fn vshm_header_write_and_validate() {
+        // A canonical header validates and returns the declared
+        // region sizes.
+        let in_bytes = 1_000_u32;
+        let out_bytes = 2_000_u32;
+        let header = vshm::header_bytes(in_bytes, out_bytes);
+        assert_eq!(header.len(), vshm::HEADER_LEN);
+        // A mapped segment = header + regions (possibly longer).
+        let mut segment = vec![0_u8; 28 + 1_000 + 2_000 + 64];
+        segment[..28].copy_from_slice(&header);
+        assert_eq!(vshm::validate_header(&segment), Some((in_bytes, out_bytes)));
+        // Exactly `out_off + out_bytes` long also validates (the
+        // coverage check is `>=`, not `==`).
+        assert_eq!(
+            vshm::validate_header(&segment[..28 + 1_000 + 2_000]),
+            Some((in_bytes, out_bytes))
+        );
+        // A mapping shorter than the header itself, or shorter than
+        // the declared `out` extent.
+        assert_eq!(vshm::validate_header(&header[..27]), None);
+        assert_eq!(
+            vshm::validate_header(&segment[..28 + 1_000 + 2_000 - 1]),
+            None
+        );
+
+        // Every declared header mutation is a defined rejection —
+        // each case rewrites one `u32` field.
+        for (name, offset, field) in [
+            ("bad magic", vshm::OFF_MAGIC, *b"XXXX"),
+            (
+                "stale wire_version",
+                vshm::OFF_WIRE_VERSION,
+                2_u32.to_le_bytes(),
+            ),
+            ("in_off != 28", vshm::OFF_IN_OFF, 32_u32.to_le_bytes()),
+            (
+                "out_off != 28 + in_bytes",
+                vshm::OFF_OUT_OFF,
+                2_000_u32.to_le_bytes(),
+            ),
+            ("nonzero reserved", vshm::OFF_RESERVED, 1_u32.to_le_bytes()),
+            (
+                "declared out exceeds u32",
+                vshm::OFF_OUT_BYTES,
+                u32::MAX.to_le_bytes(),
+            ),
+        ] {
+            let mut segment = vec![0_u8; 28 + 1_000 + 2_000];
+            segment[..28].copy_from_slice(&header);
+            segment[offset..offset + 4].copy_from_slice(&field);
+            assert_eq!(
+                vshm::validate_header(&segment),
+                None,
+                "{name} must reject the header",
+            );
+        }
+    }
+
+    // --- wire v3: Hello ----------------------------------------------------
+
+    #[test]
+    fn hello_v3_keeps_version_verbatim_and_capabilities_reserved() {
+        // `version` is carried verbatim — the handshake, not the
+        // codec, compares it against `WIRE_VERSION`. A v2 hello
+        // decodes as version 2 (≠ 3 → handshake-fails downstream).
+        assert_eq!(
+            roundtrip(&Message::Hello {
+                version: 2,
+                capabilities: 0
+            }),
+            Message::Hello {
+                version: 2,
+                capabilities: 0
+            }
+        );
+        // `capabilities` stays reserved under v3.
+        let mut frame = Vec::new();
+        encode(
+            &Message::Hello {
+                version: WIRE_VERSION,
+                capabilities: 1,
+            },
+            &mut frame,
+        )
+        .unwrap();
+        assert_eq!(decode(&frame), Err(WireError::Malformed));
+    }
+
+    // --- wire v3: bounded decode -----------------------------------------------
+
+    #[test]
+    fn video_decode_is_bounded_against_adversarial_payloads() {
+        // `CreateVideoInstance` with an over-cap `plugin_id` length —
+        // rejected before any allocation.
+        let mut payload = Vec::new();
+        push_u64(&mut payload, 1);
+        push_u32(&mut payload, 0);
+        push_u8(&mut payload, 12);
+        push_u32(&mut payload, WIRE_MAX_STRING_BYTES + 1);
+        assert_eq!(
+            decode(&raw_frame(KIND_COMMAND, &payload)),
+            Err(WireError::LimitExceeded)
+        );
+        // `Params` reply with an id count over `WIRE_MAX_ELEMENTS`.
+        let mut payload = Vec::new();
+        push_u64(&mut payload, 1);
+        push_u32(&mut payload, 0);
+        push_u8(&mut payload, REPLY_OK);
+        push_u8(&mut payload, 5);
+        push_u32(&mut payload, WIRE_MAX_ELEMENTS + 1);
+        assert_eq!(
+            decode(&raw_frame(KIND_REPLY, &payload)),
+            Err(WireError::LimitExceeded)
+        );
+        // A `VideoFrameDesc` truncated mid-planes is `Truncated`,
+        // never a panic or partial decode.
+        let desc = video_desc();
+        let mut command = command_payload(1, 0, 16);
+        encode_media_time(&desc.pts, &mut command);
+        let mut desc_bytes = Vec::new();
+        encode_video_frame_desc(&desc, &mut desc_bytes).unwrap();
+        // Cut inside the second plane record (10 B header + 15 B).
+        command.extend_from_slice(&desc_bytes[..10 + 15]);
+        assert_eq!(
+            decode(&raw_frame(KIND_COMMAND, &command)),
+            Err(WireError::Truncated)
         );
     }
 }
