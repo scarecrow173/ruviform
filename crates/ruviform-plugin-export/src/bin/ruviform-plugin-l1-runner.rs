@@ -16,17 +16,18 @@
 //!   the deterministic fixture for the panic →
 //!   `Err(HostError::PluginFailed)` contract (the child must survive
 //!   and keep serving commands). Its *factory* `descriptor()` also
-//!   panics when `RUVIFORM_PANIC_DESCRIPTOR` is set — the fixture for
-//!   guarded descriptor calls (`argv` resolution → exit 1, `Scan` →
-//!   `PluginFailed`).
+//!   panics when `RUVIFORM_PANIC_DESCRIPTOR` is set, and `create()`
+//!   panics when `RUVIFORM_PANIC_CREATE` is set — the fixtures for
+//!   guarded factory calls (`Scan`/`CreateInstance` →
+//!   `Err(HostError::PluginFailed)` on the wire, child alive).
 //! - `UnderwritePlugin` (`dev.ruviform.mock.underwrite`) — writes
 //!   every output channel on its first `process` call but only
 //!   channel 0 afterwards; the fixture proving the runner re-zeroes
 //!   `staging_out` each block (a legal under-write must not leak the
 //!   previous block's samples into the out-slot).
 //!
-//! Because several factories are embedded, `--ruviform-plugin-id <id>`
-//! is required on spawn; `--ruviform-shm-key <key>` is always required.
+//! Wire v2 takes no spawn arguments — the binary is spawned bare and
+//! the host picks a plugin id per `CreateInstance`.
 
 use std::process::ExitCode;
 
@@ -233,8 +234,8 @@ struct PanicFactory;
 impl PluginFactory for PanicFactory {
     fn descriptor(&self) -> PluginDescriptor {
         // Env-gated fixture for the guarded `descriptor()` paths:
-        // `argv` resolution catches this → exit 1; a `Scan` command
-        // catches this → `Err(HostError::PluginFailed)` on the wire.
+        // `Scan` and the `CreateInstance` factory lookup both catch
+        // this → `Err(HostError::PluginFailed)` on the wire.
         assert!(
             std::env::var_os("RUVIFORM_PANIC_DESCRIPTOR").is_none(),
             "ruviform-plugin-l1-runner: PanicFactory::descriptor (deterministic E2E fixture)"
@@ -243,6 +244,13 @@ impl PluginFactory for PanicFactory {
     }
 
     fn create(&self) -> Box<dyn ruviform_plugin_core::ErasedPlugin> {
+        // Env-gated fixture for the guarded `create()` path inside
+        // `CreateInstance` — same `PluginFailed` normalization as a
+        // hook panic; the registry entry is never inserted.
+        assert!(
+            std::env::var_os("RUVIFORM_PANIC_CREATE").is_none(),
+            "ruviform-plugin-l1-runner: PanicFactory::create (deterministic E2E fixture)"
+        );
         erase(PanicPlugin)
     }
 }

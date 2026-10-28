@@ -148,6 +148,10 @@ pub enum HostError {
     /// A `plugin_id` was registered twice — e.g. the same id claimed
     /// by both an in-process factory and an out-of-process spec.
     DuplicatePluginId,
+    /// The L1 child's instance registry is full —
+    /// [`crate::wire::WIRE_MAX_INSTANCES`] live instances already
+    /// occupy every handle the wire envelope can name.
+    InstanceLimit,
     /// The instance cannot currently provide the requested RT
     /// endpoint — e.g. its factory did not opt into
     /// [`PluginFactory::create_sendable`](crate::PluginFactory::create_sendable),
@@ -179,6 +183,7 @@ impl fmt::Display for HostError {
             Self::Failed => f.write_str("instance is in the terminal failed state"),
             Self::Ipc => f.write_str("inter-process transport failed"),
             Self::DuplicatePluginId => f.write_str("plugin id already registered"),
+            Self::InstanceLimit => f.write_str("child instance registry is full"),
             Self::EndpointUnavailable => {
                 f.write_str("RT endpoint is unavailable for this instance")
             }

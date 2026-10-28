@@ -5,31 +5,41 @@
 //!
 //! It speaks the `ruviform-plugin-core` wire protocol exactly as a
 //! real runner child does: `Hello` on startup, then a single-threaded
-//! frame loop — `Command` → `Reply` (a `Lifecycle` state machine
-//! decides transition legality, matching the child-side semantics of
-//! the design), `Shutdown` → `exit(0)`, stdin EOF → `exit(0)`.
+//! frame loop — `Command` → `Reply` (a registry keyed by the wire-v2
+//! `instance` envelope — `Scan` is child-scoped,
+//! `CreateInstance`/`DestroyInstance` mint and reclaim entries, and
+//! every other verb resolves the handle, `InvalidHandle` on a miss —
+//! with a `Lifecycle` state machine per entry deciding transition
+//! legality, matching the child-side semantics of the design),
+//! `Shutdown` → `exit(0)`, stdin EOF → `exit(0)`.
 //!
 //! ## argv
 //!
 //! | flag | effect |
 //! | --- | --- |
-//! | `--ruviform-plugin-id <id>` | parsed and ignored — the worker serves its single built-in descriptor regardless |
-//! | `--ruviform-shm-key <key>` | the proxy's shm segment `os_id` — attached after `Hello`; `BlockIn` reads the in-slot, applies [`WORKER_GAIN`], writes the out-slot and answers `BlockDone` (a hung worker answers nothing) |
 //! | `--crash-after-msgs=N` | `process::exit` upon *receiving* the Nth parent→child message — before dispatch, so the Nth command's waiter stays pending and is woken by EOF/`try_wait` |
 //! | `--crash-exit-code=C` | exit code used by `--crash-after-msgs` (default 3; `0` simulates a voluntary `exit(0)`, which is still a `Failed` violation) |
 //! | `--hang-after-msgs=N` | after the Nth received message, keep reading but stop answering commands (`0` hangs even the handshake `Scan`); `Shutdown` is still honored so teardown stays deterministic |
-//! | `--reject-blocks-after-msgs=N` | after the Nth parsed `BlockIn` doorbell (a doorbell-only counter — `Command`/`Shutdown` messages do not count), answer every later `BlockIn` with the flagged `Reply{seq, Err(HostError::PluginFailed)}` — the real rejection shape — instead of processing |
+//! | `--reject-blocks-after-msgs=N` | after the Nth parsed `BlockIn` doorbell (a doorbell-only counter — `Command`/`Shutdown` messages do not count), answer every later `BlockIn` with the flagged `Reply{seq, instance, Err(HostError::PluginFailed)}` — the real rejection shape — instead of processing |
 //! | `--stop-reading-after-msgs=N` | after the Nth received message is fully answered, never read stdin again — a wedged child that stays alive but never drains the pipe, so a large parent frame blocks the proxy's `write_all`; only a kill ends it |
 //! | `--leave-heir-after-msgs=N` | after the Nth received message is fully answered, spawn a copy of this binary with `--sleep-ms=15000` (inheriting stdio — the grandchild holds the parent's stdout pipe open) then `exit(0)`; EOF never reaches the proxy's reader thread |
 //! | `--sleep-ms=M` | sleep `M` ms then exit 0 — the heir mode used by `--leave-heir-after-msgs`; not meant to be spawned directly by tests |
 //! | `--hello-version=V` | `Hello.version` override (default [`wire::WIRE_VERSION`]) for the version-mismatch handshake test |
 //! | `--fail-stop-processing` | `StopProcessing` commits `Processing → Activated` then replies `Err(HostError::PluginFailed)` — the real runner's commit-then-advisory shape (a hook error arrives post-commit), exercising the host-side mirror fix |
 //!
+//! Wire v2 retired the `--ruviform-plugin-id`/`--ruviform-shm-key`
+//! bootstrap flags — the `CreateInstance` payload now carries the
+//! plugin id and the shm `os_id` (attached at registration, before
+//! the entry is inserted). A `--ruviform-*` argument is a defined
+//! usage rejection: stderr + `exit(2)`, no `Hello`.
+//!
 //! Message counting covers parent→child frames (`Command`, `BlockIn`,
-//! `Shutdown`) — the handshake `Scan` the proxy sends itself counts
-//! as message 1 — except `--reject-blocks-after-msgs`, which counts
-//! `BlockIn` doorbells only.
+//! `Shutdown`) — the handshake `Scan` the proxy sends counts as
+//! message 1 and its `CreateInstance` as message 2 — except
+//! `--reject-blocks-after-msgs`, which counts `BlockIn` doorbells
+//! only.
 
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
 use std::sync::atomic::{Ordering, fence};
@@ -89,8 +99,6 @@ struct Flags {
     /// `StopProcessing` commits the transition then replies
     /// `Err(PluginFailed)` — the real runner's advisory-error shape.
     fail_stop_processing: bool,
-    /// `--ruviform-shm-key` value — attached after `Hello`.
-    shm_key: Option<String>,
 }
 
 fn parse_flags() -> Flags {
@@ -104,11 +112,15 @@ fn parse_flags() -> Flags {
         sleep_ms: None,
         hello_version: wire::WIRE_VERSION,
         fail_stop_processing: false,
-        shm_key: None,
     };
-    let mut args = std::env::args_os().skip(1);
-    while let Some(arg) = args.next() {
+    for arg in std::env::args_os().skip(1) {
         let arg = arg.to_string_lossy();
+        if arg.starts_with("--ruviform-") {
+            // Wire v2: the retired bootstrap flags are a defined
+            // usage rejection — a real runner answers the same way.
+            eprintln!("l1-test-worker: unexpected argument `{arg}`");
+            std::process::exit(2);
+        }
         if let Some(value) = arg.strip_prefix("--crash-after-msgs=") {
             flags.crash_after_msgs = value.parse().ok();
         } else if let Some(value) = arg.strip_prefix("--crash-exit-code=") {
@@ -127,11 +139,6 @@ fn parse_flags() -> Flags {
             flags.hello_version = value.parse().unwrap_or(wire::WIRE_VERSION);
         } else if arg == "--fail-stop-processing" {
             flags.fail_stop_processing = true;
-        } else if arg == "--ruviform-plugin-id" {
-            // Value-carrying bootstrap flag — consumed and ignored.
-            let _ = args.next();
-        } else if arg == "--ruviform-shm-key" {
-            flags.shm_key = args.next().map(|v| v.to_string_lossy().into_owned());
         }
     }
     flags
@@ -144,12 +151,107 @@ fn transition(lifecycle: &mut Lifecycle, event: LifecycleEvent) -> Result<(), Ho
         .map_err(HostError::Lifecycle)
 }
 
-/// The child-side `Lifecycle` semantics of the design: transition
-/// legality is decided here, plugin-hook failures are reported as
-/// `HostError`s — mirroring what `InProcessHost` does in-process.
+/// One registry slot — the whole per-instance state a `CreateInstance`
+/// mints and a `DestroyInstance` reclaims: lifecycle legality, the
+/// state-blob fixture, the data-plane segment and the activated
+/// `max_frames` bound.
+struct WorkerEntry {
+    /// The instance's `Created → …` legality state machine.
+    lifecycle: Lifecycle,
+    /// The `SaveState`/`RestoreState` blob (seeded with a marker so
+    /// a round-trip is observable).
+    state: Vec<u8>,
+    /// The instance's shared-memory view — `CreateInstance`'s
+    /// `shm_key` attached with its declared depths.
+    segment: Segment,
+    /// The activated `max_frames` bound — set on a successful
+    /// `Activate`, cleared on `Deactivate` (the real runner's
+    /// `activated_max_frames` enforcement).
+    activated_max_frames: Option<u32>,
+}
+
+impl WorkerEntry {
+    /// The child-side `Lifecycle` semantics of the design: transition
+    /// legality is decided here, plugin-hook failures are reported as
+    /// `HostError`s — mirroring what `InProcessHost` does in-process.
+    /// Instance-scoped verbs only; the registry-level dispatch owns
+    /// `Scan`/`CreateInstance`/`DestroyInstance`.
+    fn dispatch(
+        &mut self,
+        cmd: &wire::Command,
+        fail_stop_processing: bool,
+    ) -> Result<wire::Reply, HostError> {
+        match cmd {
+            wire::Command::Initialize => {
+                transition(&mut self.lifecycle, LifecycleEvent::Initialize)
+                    .map(|()| wire::Reply::Ok)
+            }
+            wire::Command::Activate { config } => {
+                // Lifecycle legality before the config bound — the real
+                // runner (`Runner::activate`) and L0 validate the
+                // transition first, so the proxy tests observe production
+                // ordering (an `Activate` from `Created` is `Lifecycle`,
+                // not `Prepare`).
+                self.lifecycle
+                    .state()
+                    .transition(LifecycleEvent::Activate)
+                    .map_err(HostError::Lifecycle)?;
+                if config.max_frames() > wire::WIRE_MAX_FRAMES {
+                    // Defined rejection, same shape the proxy applies:
+                    // reported failure destination stays `Initialized`.
+                    let _ = self.lifecycle.transition(LifecycleEvent::ActivateFailed);
+                    return Err(HostError::Prepare(PrepareError::UnsupportedConfig));
+                }
+                transition(&mut self.lifecycle, LifecycleEvent::Activate).map(|()| {
+                    self.activated_max_frames = Some(config.max_frames());
+                    wire::Reply::Ok
+                })
+            }
+            wire::Command::StartProcessing => {
+                transition(&mut self.lifecycle, LifecycleEvent::StartProcessing)
+                    .map(|()| wire::Reply::Ok)
+            }
+            wire::Command::StopProcessing => {
+                // Commit first, like the real runner
+                // (`Runner::stop_processing` applies the transition
+                // before the hook runs): `--fail-stop-processing` then
+                // reports the advisory `Err` *after* the commit.
+                transition(&mut self.lifecycle, LifecycleEvent::StopProcessing)?;
+                if fail_stop_processing {
+                    Err(HostError::PluginFailed)
+                } else {
+                    Ok(wire::Reply::Ok)
+                }
+            }
+            wire::Command::Deactivate => {
+                transition(&mut self.lifecycle, LifecycleEvent::Deactivate).map(|()| {
+                    self.activated_max_frames = None;
+                    wire::Reply::Ok
+                })
+            }
+            wire::Command::SaveState => Ok(wire::Reply::State {
+                bytes: self.state.clone(),
+            }),
+            wire::Command::RestoreState { bytes } => {
+                self.state.clone_from(bytes);
+                Ok(wire::Reply::Ok)
+            }
+            // GUI is `Unsupported` — the proxy never forwards these, so
+            // reaching them here means the proxy violated the contract;
+            // the reply still matches the documented rejection.
+            _ => Err(HostError::Unsupported),
+        }
+    }
+}
+
+/// The registry-level dispatch: `Scan` is child-scoped (the wire
+/// decoder already required `WIRE_INSTANCE_NONE`),
+/// `CreateInstance`/`DestroyInstance` mint and reclaim slots by the
+/// envelope `instance`, and every other verb resolves the handle —
+/// `InvalidHandle` on a miss, exactly like the real runner.
 fn dispatch(
-    lifecycle: &mut Lifecycle,
-    state: &mut Vec<u8>,
+    instances: &mut HashMap<u32, WorkerEntry>,
+    instance: u32,
     cmd: &wire::Command,
     fail_stop_processing: bool,
 ) -> Result<wire::Reply, HostError> {
@@ -157,64 +259,55 @@ fn dispatch(
         wire::Command::Scan => Ok(wire::Reply::Scanned(vec![wire::Descriptor::from(
             WORKER_DESCRIPTOR,
         )])),
-        wire::Command::Initialize => {
-            transition(lifecycle, LifecycleEvent::Initialize).map(|()| wire::Reply::Ok)
-        }
-        wire::Command::Activate { config } => {
-            // Lifecycle legality before the config bound — the real
-            // runner (`Runner::activate`) and L0 validate the
-            // transition first, so the proxy tests observe production
-            // ordering (an `Activate` from `Created` is `Lifecycle`,
-            // not `Prepare`).
-            lifecycle
-                .state()
-                .transition(LifecycleEvent::Activate)
-                .map_err(HostError::Lifecycle)?;
-            if config.max_frames() > wire::WIRE_MAX_FRAMES {
-                // Defined rejection, same shape the proxy applies:
-                // reported failure destination stays `Initialized`.
-                let _ = lifecycle.transition(LifecycleEvent::ActivateFailed);
-                return Err(HostError::Prepare(PrepareError::UnsupportedConfig));
+        wire::Command::CreateInstance {
+            plugin_id,
+            shm_key,
+            in_depth,
+            out_depth,
+        } => {
+            // The real runner's ordering: plugin selection → slot
+            // budget → duplicate handle → attach → insert (a failed
+            // step leaves the registry untouched).
+            if *plugin_id != WORKER_DESCRIPTOR.id {
+                return Err(HostError::UnknownPluginId);
             }
-            transition(lifecycle, LifecycleEvent::Activate).map(|()| wire::Reply::Ok)
-        }
-        wire::Command::StartProcessing => {
-            transition(lifecycle, LifecycleEvent::StartProcessing).map(|()| wire::Reply::Ok)
-        }
-        wire::Command::StopProcessing => {
-            // Commit first, like the real runner
-            // (`Runner::stop_processing` applies the transition
-            // before the hook runs): `--fail-stop-processing` then
-            // reports the advisory `Err` *after* the commit.
-            transition(lifecycle, LifecycleEvent::StopProcessing)?;
-            if fail_stop_processing {
-                Err(HostError::PluginFailed)
-            } else {
-                Ok(wire::Reply::Ok)
+            if instances.len() >= usize::try_from(wire::WIRE_MAX_INSTANCES).unwrap_or(usize::MAX) {
+                return Err(HostError::InstanceLimit);
             }
-        }
-        wire::Command::Deactivate => {
-            transition(lifecycle, LifecycleEvent::Deactivate).map(|()| wire::Reply::Ok)
-        }
-        wire::Command::SaveState => Ok(wire::Reply::State {
-            bytes: state.clone(),
-        }),
-        wire::Command::RestoreState { bytes } => {
-            state.clone_from(bytes);
+            if instances.contains_key(&instance) {
+                // The host mints handles — a reuse while live is a
+                // protocol violation, not a lifecycle error.
+                return Err(HostError::Ipc);
+            }
+            let segment = Segment::attach(shm_key, *in_depth, *out_depth).ok_or(HostError::Ipc)?;
+            instances.insert(
+                instance,
+                WorkerEntry {
+                    lifecycle: Lifecycle::new(),
+                    state: vec![0x11, 0x22, 0x33, 0x44],
+                    segment,
+                    activated_max_frames: None,
+                },
+            );
             Ok(wire::Reply::Ok)
         }
-        // GUI is `Unsupported` — the proxy never forwards these, so
-        // reaching them here means the proxy violated the contract;
-        // the reply still matches the documented rejection.
-        _ => Err(HostError::Unsupported),
+        wire::Command::DestroyInstance => match instances.remove(&instance) {
+            Some(_) => Ok(wire::Reply::Ok),
+            None => Err(HostError::InvalidHandle),
+        },
+        _ => match instances.get_mut(&instance) {
+            Some(entry) => entry.dispatch(cmd, fail_stop_processing),
+            None => Err(HostError::InvalidHandle),
+        },
     }
 }
 
 /// The worker's data-plane segment: a non-owning attach to the
-/// proxy's `--ruviform-shm-key` object, header-validated exactly like
-/// the real runner's `ruviform_plugin_export::shm::Segment`. Slot
-/// selection is the doorbell `seq % depth` under strict alternation —
-/// no control state lives in the segment.
+/// `CreateInstance` `shm_key` object, header-validated exactly like
+/// the real runner's `ruviform_plugin_export::shm::Segment` —
+/// including the declared input/output depths the header must match.
+/// Slot selection is the doorbell `seq % depth` under strict
+/// alternation — no control state lives in the segment.
 struct Segment {
     mem: Shmem,
     in_depth: u64,
@@ -224,10 +317,12 @@ struct Segment {
 }
 
 impl Segment {
-    /// Attaches to `key` and validates the fixed header — mirrors the
-    /// runner's `attach` byte for byte. `None` on any failure: the
-    /// worker exits non-zero, exactly like the real runner.
-    fn attach(key: &str) -> Option<Self> {
+    /// Attaches to `key` and validates the fixed header plus the
+    /// `CreateInstance`-declared depths — mirrors the runner's
+    /// `attach` byte for byte. `None` on any failure: the
+    /// `CreateInstance` replies `Err(Ipc)`, exactly like the real
+    /// runner.
+    fn attach(key: &str, declared_in_depth: u32, declared_out_depth: u32) -> Option<Self> {
         let mem = ShmemConf::new().os_id(key).open().ok()?;
         let bytes = bytes(&mem);
         if bytes.len() < shm::HEADER_LEN {
@@ -241,6 +336,9 @@ impl Segment {
         let in_depth = get_u32(bytes, shm::OFF_IN_DEPTH);
         let out_depth = get_u32(bytes, shm::OFF_OUT_DEPTH);
         if in_depth == 0 || out_depth == 0 {
+            return None;
+        }
+        if in_depth != declared_in_depth || out_depth != declared_out_depth {
             return None;
         }
         if get_u32(bytes, shm::OFF_SLOT_BYTES) as usize != shm::SLOT_BYTES {
@@ -397,40 +495,44 @@ fn put_u64(bytes: &mut [u8], offset: usize, value: u64) {
 }
 
 /// One `BlockIn` doorbell: a lifecycle rejection answers the runner's
-/// defined flagged `Reply{seq, Err}`; otherwise the shm protocol runs
-/// Acquire → slot read → gain → slot write → Release → `BlockDone`
-/// (a slot-parse failure — including dims over the *activated*
-/// `max_frames`, not just the wire max — answers
-/// `Reply{seq, Err(Ipc)}` instead). The Acquire/Release edges are
-/// real atomic fences (`std::sync::atomic::fence`) — ordering across
-/// the process boundary rests on them plus the pipe syscalls.
+/// defined flagged `Reply{seq, instance, Err}`; otherwise the shm
+/// protocol runs Acquire → slot read → gain → slot write → Release →
+/// `BlockDone` echoing `instance` (a slot-parse failure — including
+/// dims over the *activated* `max_frames`, not just the wire max —
+/// answers `Reply{seq, instance, Err(Ipc)}` instead). The
+/// Acquire/Release edges are real atomic fences
+/// (`std::sync::atomic::fence`) — ordering across the process
+/// boundary rests on them plus the pipe syscalls.
 /// An `Err` means the reply write itself failed — the caller exits.
 fn block_in(
-    lifecycle: &mut Lifecycle,
-    segment: Option<&mut Segment>,
+    entry: &mut WorkerEntry,
     seq: u64,
-    activated_max_frames: Option<u32>,
+    instance: u32,
     stdout: &mut impl Write,
 ) -> io::Result<()> {
-    if let Err(error) = transition(lifecycle, LifecycleEvent::Process) {
+    if let Err(error) = transition(&mut entry.lifecycle, LifecycleEvent::Process) {
         return wire::write_message(
             stdout,
             &wire::Message::Reply {
                 seq,
+                instance,
                 result: Err(error),
             },
             &mut Vec::new(),
         );
     }
     fence(Ordering::Acquire);
-    let outcome = segment.map_or(Err(()), |segment| {
-        segment.process_block(seq, activated_max_frames)
-    });
+    let outcome = entry.segment.process_block(seq, entry.activated_max_frames);
     fence(Ordering::Release);
     let message = match outcome {
-        Ok(result) => wire::Message::BlockDone { seq, result },
+        Ok(result) => wire::Message::BlockDone {
+            seq,
+            instance,
+            result,
+        },
         Err(()) => wire::Message::Reply {
             seq,
+            instance,
             result: Err(HostError::Ipc),
         },
     };
@@ -440,17 +542,17 @@ fn block_in(
 /// One `BlockIn` dispatch — `hung` answers nothing (the wedged data
 /// plane); past `--reject-blocks-after-msgs` doorbells the worker
 /// sends the real block-rejection shape — a flagged `Reply{seq,
-/// Err(PluginFailed)}` instead of `BlockDone`; otherwise the doorbell
-/// runs through [`block_in`]. `Err` means a reply write failed.
-#[allow(clippy::too_many_arguments)]
+/// instance, Err(PluginFailed)}` instead of `BlockDone`; a dead
+/// handle answers `Err(InvalidHandle)` like the real runner;
+/// otherwise the doorbell runs through [`block_in`]. `Err` means a
+/// reply write failed.
 fn block_in_dispatch(
-    lifecycle: &mut Lifecycle,
-    segment: Option<&mut Segment>,
+    instances: &mut HashMap<u32, WorkerEntry>,
+    instance: u32,
     seq: u64,
     blocks_received: u64,
     hung: bool,
     reject_blocks_after_msgs: Option<u64>,
-    activated_max_frames: Option<u32>,
     stdout: &mut impl Write,
 ) -> io::Result<()> {
     if hung {
@@ -463,12 +565,24 @@ fn block_in_dispatch(
             stdout,
             &wire::Message::Reply {
                 seq,
+                instance,
                 result: Err(HostError::PluginFailed),
             },
             &mut Vec::new(),
         );
     }
-    block_in(lifecycle, segment, seq, activated_max_frames, stdout)
+    match instances.get_mut(&instance) {
+        Some(entry) => block_in(entry, seq, instance, stdout),
+        None => wire::write_message(
+            stdout,
+            &wire::Message::Reply {
+                seq,
+                instance,
+                result: Err(HostError::InvalidHandle),
+            },
+            &mut Vec::new(),
+        ),
+    }
 }
 
 // The scripted fixture `main` runs past the pedantic line limit —
@@ -500,28 +614,15 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let mut lifecycle = Lifecycle::new();
-    let mut state: Vec<u8> = vec![0x11, 0x22, 0x33, 0x44];
+    // The wire-v2 registry — `CreateInstance` mints an entry keyed by
+    // the envelope `instance` (its `shm_key` attaches there — no
+    // segment exists before the first `CreateInstance` arrives).
+    let mut instances: HashMap<u32, WorkerEntry> = HashMap::new();
     let mut received: u64 = 0;
     // Doorbells parsed so far — the `--reject-blocks-after-msgs`
     // counter (deliberately separate from `received`, which counts
     // every parent→child message).
     let mut blocks_received: u64 = 0;
-    // The activated `max_frames` — the real runner's
-    // `activated_max_frames` enforcement, set on a successful
-    // `Activate` and cleared on `Deactivate`.
-    let mut activated_max_frames: Option<u32> = None;
-
-    // Attach the proxy's segment the way the real runner does — after
-    // `Hello`. A missing/invalid segment is a hard failure (non-zero
-    // exit) just like `Runner::run`.
-    let mut segment = match flags.shm_key.as_deref() {
-        Some(key) => match Segment::attach(key) {
-            Some(segment) => Some(segment),
-            None => return ExitCode::FAILURE,
-        },
-        None => None,
-    };
 
     loop {
         if flags
@@ -565,25 +666,17 @@ fn main() -> ExitCode {
         }
         let hung = flags.hang_after_msgs.is_some_and(|limit| received > limit);
         match message {
-            wire::Message::Command { seq, cmd } => {
+            wire::Message::Command { seq, instance, cmd } => {
                 if !hung {
                     let result =
-                        dispatch(&mut lifecycle, &mut state, &cmd, flags.fail_stop_processing);
-                    // Track the activated bound like the real runner
-                    // (`Runner::activated_max_frames`): set on a
-                    // successful `Activate`, cleared on `Deactivate`.
-                    if result.is_ok() {
-                        match &cmd {
-                            wire::Command::Activate { config } => {
-                                activated_max_frames = Some(config.max_frames());
-                            }
-                            wire::Command::Deactivate => activated_max_frames = None,
-                            _ => {}
-                        }
-                    }
+                        dispatch(&mut instances, instance, &cmd, flags.fail_stop_processing);
                     if wire::write_message(
                         &mut stdout,
-                        &wire::Message::Reply { seq, result },
+                        &wire::Message::Reply {
+                            seq,
+                            instance,
+                            result,
+                        },
                         &mut Vec::new(),
                     )
                     .is_err()
@@ -592,16 +685,15 @@ fn main() -> ExitCode {
                     }
                 }
             }
-            wire::Message::BlockIn { seq } => {
+            wire::Message::BlockIn { seq, instance } => {
                 blocks_received += 1;
                 if block_in_dispatch(
-                    &mut lifecycle,
-                    segment.as_mut(),
+                    &mut instances,
+                    instance,
                     seq,
                     blocks_received,
                     hung,
                     flags.reject_blocks_after_msgs,
-                    activated_max_frames,
                     &mut stdout,
                 )
                 .is_err()

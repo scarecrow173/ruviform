@@ -72,8 +72,12 @@ pub struct OutOfProcessSpec {
     /// Runner executable (e.g. a binary built on
     /// `ruviform_plugin_export::run`).
     pub program: OsString,
-    /// Extra arguments passed before the `--ruviform-*` bootstrap
-    /// flags.
+    /// Extra arguments prepended to the runner's argv — the runner's
+    /// own flags only. Wire v2 retired the `--ruviform-*` bootstrap
+    /// flags: plugin selection and the shm key ride the
+    /// `CreateInstance` payload at handshake instead, and a
+    /// `ruviform_plugin_export::run`-based runner accepts no argv at
+    /// all (leaving this empty is the production default).
     pub args: Vec<OsString>,
     /// Lookahead depth in blocks (default **2**) — fixes the L1
     /// latency contract `lookahead_blocks × activated max_frames`
@@ -987,8 +991,9 @@ fn retarget(command: HostCommand, handle: PluginHandle) -> HostCommand {
 
 /// The `wire::Command` mirror of a handle-carrying `HostCommand` —
 /// the proxy-side translation the design's vocabulary mapping fixes
-/// (`Destroy` is `Shutdown` + reap, handled by [`PluginHost`]'s
-/// destroy path, not this table).
+/// (`Instantiate`/`Destroy` ride `CreateInstance`/`DestroyInstance`
+/// plus the spawn/`Shutdown` teardown inside `l1`, not this table —
+/// it only sees the per-instance verbs).
 fn to_wire(command: HostCommand) -> wire::Command {
     match command {
         HostCommand::Initialize { .. } => wire::Command::Initialize,
@@ -1021,13 +1026,21 @@ enum ReplyKind {
 }
 
 /// The one legal reply kind for each wire verb — the reply side of
-/// `to_wire`'s mapping. The `#[non_exhaustive]` wildcard defaults a
-/// verb added by a later `WIRE_VERSION` to `Ok`, fail-closed: its
-/// new reply kind pairs with nothing until this table is taught.
+/// `to_wire`'s mapping. `CreateInstance`/`DestroyInstance` answer
+/// `Reply::Ok` too — they never reach `to_wire` (the `l1` layer owns
+/// the handshake and teardown), but the pin keeps this table
+/// honest across the whole verb set. The `#[non_exhaustive]`
+/// wildcard defaults a verb added by a later `WIRE_VERSION` to `Ok`,
+/// fail-closed: its new reply kind pairs with nothing until this
+/// table is taught.
+// The registry verbs share the wildcard's `Ok` — the explicit arm is
+// the required pin, so the identical-bodies lint is expected.
+#[allow(clippy::match_same_arms)]
 fn expected_reply_kind(cmd: &wire::Command) -> ReplyKind {
     match cmd {
         wire::Command::SaveState => ReplyKind::State,
         wire::Command::OpenGui { .. } => ReplyKind::Opened,
+        wire::Command::CreateInstance { .. } | wire::Command::DestroyInstance => ReplyKind::Ok,
         _ => ReplyKind::Ok,
     }
 }

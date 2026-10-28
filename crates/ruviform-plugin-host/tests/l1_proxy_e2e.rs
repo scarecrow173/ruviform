@@ -214,13 +214,14 @@ fn illegal_transitions_match_l0_semantics() {
 }
 
 /// Crash contract (spec AC4, EOF/`try_wait` paths): the worker dies
-/// on the 3rd received message — the handshake `Scan` is message 1 —
-/// so `Activate`'s pending waiter is woken `Err(Ipc)`, the instance
-/// converges `Failed` with exactly one notification, and every later
-/// command except `Destroy` is rejected.
+/// on the 4th received message — the handshake `Scan` is message 1,
+/// `CreateInstance` is 2 — so `Activate`'s pending waiter is woken
+/// `Err(Ipc)`, the instance converges `Failed` with exactly one
+/// notification, and every later command except `Destroy` is
+/// rejected.
 #[test]
 fn crash_transitions_failed_and_notifies() {
-    let mut instance = L1Instance::spawn(&spec(&["--crash-after-msgs=3"])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&["--crash-after-msgs=4"])).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     // The pending command is woken `Ipc` by the convergence.
@@ -263,9 +264,10 @@ fn crash_transitions_failed_and_notifies() {
 #[test]
 fn voluntary_exit_zero_is_failure() {
     let mut instance =
-        L1Instance::spawn(&spec(&["--crash-after-msgs=2", "--crash-exit-code=0"])).unwrap();
+        L1Instance::spawn(&spec(&["--crash-after-msgs=3", "--crash-exit-code=0"])).unwrap();
 
-    // Message 2 (`Initialize`) kills the worker mid-command.
+    // Message 3 (`Initialize` — after `Scan` and `CreateInstance`)
+    // kills the worker mid-command.
     assert_eq!(
         instance.execute(wire::Command::Initialize),
         Err(HostError::Ipc)
@@ -309,9 +311,10 @@ fn kill_transitions_failed_and_notifies() {
 /// rejection table: timeout ⇒ `Ipc` + `Failed`).
 #[test]
 fn hang_converges_on_command_timeout() {
-    let mut instance = L1Instance::spawn(&fast_timeout_spec(&["--hang-after-msgs=1"])).unwrap();
+    let mut instance = L1Instance::spawn(&fast_timeout_spec(&["--hang-after-msgs=2"])).unwrap();
 
-    // `Scan` (handshake) was message 1 — `Initialize` is never answered.
+    // `Scan` and `CreateInstance` (the handshake) were messages 1–2 —
+    // `Initialize` is never answered.
     assert_eq!(
         instance.execute(wire::Command::Initialize),
         Err(HostError::Ipc)
@@ -437,8 +440,9 @@ fn drop_reaps_live_child() {
     // Reaching here at all is the assertion — Drop must not hang.
 }
 
-/// Wedged-child teardown (A1): after `--stop-reading-after-msgs=2`
-/// the child never drains stdin again, so a `RestoreState` frame far
+/// Wedged-child teardown (A1): after `--stop-reading-after-msgs=3`
+/// (`Scan`, `CreateInstance`, `Initialize` all answered) the child
+/// never drains stdin again, so a `RestoreState` frame far
 /// over the pipe capacity leaves the driver blocked in `write_all`.
 /// The `command_timeout` convergence must itself kill the child —
 /// that is what turns the wedged write into EPIPE and lets the
@@ -446,7 +450,7 @@ fn drop_reaps_live_child() {
 #[test]
 fn wedged_child_write_converges_and_teardown_is_bounded() {
     let mut instance =
-        L1Instance::spawn(&fast_timeout_spec(&["--stop-reading-after-msgs=2"])).unwrap();
+        L1Instance::spawn(&fast_timeout_spec(&["--stop-reading-after-msgs=3"])).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     // ~256 KiB — comfortably past every supported platform's pipe
@@ -468,15 +472,16 @@ fn wedged_child_write_converges_and_teardown_is_bounded() {
     );
 }
 
-/// Detached reader (A4): `--leave-heir-after-msgs=1` makes the worker
-/// answer the handshake `Scan`, then spawn a stdio-inheriting
+/// Detached reader (A4): `--leave-heir-after-msgs=2` makes the worker
+/// answer `Scan` and `CreateInstance` (the whole handshake), then
+/// spawn a stdio-inheriting
 /// grandchild and exit — the parent's stdout pipe stays open, so the
 /// reader thread never observes EOF. `try_wait` still converges
 /// `Failed`, and destroy/drop must detach the blocked reader rather
 /// than join it.
 #[test]
 fn destroy_detaches_reader_when_heir_holds_stdout() {
-    let mut instance = L1Instance::spawn(&spec(&["--leave-heir-after-msgs=1"])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&["--leave-heir-after-msgs=2"])).unwrap();
 
     wait_for_failed(&instance);
     let exit = wait_notification(&instance).expect("notification missing");
@@ -813,14 +818,15 @@ fn process_after_crash_passes_through_then_silences() {
     instance.destroy();
 }
 
-/// Wedged data plane: `--hang-after-msgs=4` lets the lifecycle
-/// handshake through but never answers a doorbell — the RT leg must
-/// pass through `Ok(CONTINUE)` forever without blocking (never a
-/// wall-clock wait on the child), and teardown still honors
+/// Wedged data plane: `--hang-after-msgs=5` lets the lifecycle
+/// handshake through (`Scan`, `CreateInstance`, `Initialize`,
+/// `Activate`, `StartProcessing`) but never answers a doorbell — the
+/// RT leg must pass through `Ok(CONTINUE)` forever without blocking
+/// (never a wall-clock wait on the child), and teardown still honors
 /// `Shutdown`.
 #[test]
 fn process_hung_child_passes_through_without_blocking() {
-    let mut instance = processing_instance(&["--hang-after-msgs=4"]);
+    let mut instance = processing_instance(&["--hang-after-msgs=5"]);
     let input = [1.0_f32; 512];
     let mut output = [7.0_f32; 512];
     let started = Instant::now();

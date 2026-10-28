@@ -146,7 +146,8 @@ fn pack_result(result: ProcessResult) -> u64 {
         ProcessStatus::Continue => 0_u64,
         ProcessStatus::Sleep => 1,
         // `#[non_exhaustive]` — anything beyond `Sleep` is the wire
-        // `Error` tag (decode rejects unassigned tags under v1).
+        // `Error` tag (decode rejects unassigned tags under the
+        // current wire revision).
         _ => 2,
     };
     (tag << 32) | u64::from(result.tail_frames)

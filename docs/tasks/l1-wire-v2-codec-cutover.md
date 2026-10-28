@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NlQlfkFL52FRHRjhYmr"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 wire v2 codec + 全系統 v2 cutover（envelope・新動詞・InstanceLimit・registry・harness）"
 created: "2026-10-28"
 updated: "2026-10-28"
@@ -24,6 +24,8 @@ relations:
         path: "crates/ruviform-plugin-export/src/bin/ruviform-plugin-l1-runner.rs"
       - type: "file"
         path: "crates/ruviform-plugin-host/src/l1/mod.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/l1/data.rs"
       - type: "file"
         path: "crates/ruviform-plugin-host/src/composite.rs"
       - type: "file"
@@ -113,19 +115,19 @@ wire v2 の atomic cutover — `Message` の `instance` field 追加は enum bre
 
 ## Done When
 
-- [ ] `WIRE_VERSION == 2`・`WIRE_MAX_INSTANCES == 64`・`WIRE_INSTANCE_NONE == u32::MAX` が codec に存在し、`Command`/`Reply`/`BlockIn`/`BlockDone` payload が `[u64 seq][u32 instance][rest]` を使う
-- [ ] `CreateInstance`(tag 10)・`DestroyInstance`(tag 11) が encode/decode され、scope 判定表（Scan↔NONE・instance 動詞↔non-NONE・境界値）が `Malformed` で拒否される
-- [ ] `HostError::InstanceLimit` が boundary + wire tag 9 の両方向で round-trip し、wildcard arm によって `Malformed` へ潰れない
-- [ ] runner/worker が `instances` registry を持ち、`CreateInstance` 検証 chain（UnknownPluginId・dup→Ipc・InstanceLimit・attach/depth→Ipc）と未登録 `InvalidHandle` flagged reply・verbatim echo が動作し、`CreateInstance` dispatch 内の `factory.descriptor()`/`factory.create()` panic が `Reply{i,seq,Err(PluginFailed)}` で正規化され（process-exit しない）子・sibling instance が生存する
-- [ ] host が argv `--ruviform-*` を送らず、`Hello→Scan→CreateInstance` handshake で v2 子を spawn し、envelope `instance` を全 frame に付ける
-- [ ] MiniHost が per-instance segment + `CreateInstance` を駆動し、runner bundle E2E（multi-instance・InvalidHandle・InstanceLimit・dup）が pass する
-- [ ] 既存 `l1_proxy_e2e` dedicated suite が v2 経路で green に留まる（T1 時点の非回帰証拠）
+- [x] `WIRE_VERSION == 2`・`WIRE_MAX_INSTANCES == 64`・`WIRE_INSTANCE_NONE == u32::MAX` が codec に存在し、`Command`/`Reply`/`BlockIn`/`BlockDone` payload が `[u64 seq][u32 instance][rest]` を使う
+- [x] `CreateInstance`(tag 10)・`DestroyInstance`(tag 11) が encode/decode され、scope 判定表（Scan↔NONE・instance 動詞↔non-NONE・境界値）が `Malformed` で拒否される
+- [x] `HostError::InstanceLimit` が boundary + wire tag 9 の両方向で round-trip し、wildcard arm によって `Malformed` へ潰れない
+- [x] runner/worker が `instances` registry を持ち、`CreateInstance` 検証 chain（UnknownPluginId・dup→Ipc・InstanceLimit・attach/depth→Ipc）と未登録 `InvalidHandle` flagged reply・verbatim echo が動作し、`CreateInstance` dispatch 内の `factory.descriptor()`/`factory.create()` panic が `Reply{i,seq,Err(PluginFailed)}` で正規化され（process-exit しない）子・sibling instance が生存する
+- [x] host が argv `--ruviform-*` を送らず、`Hello→Scan→CreateInstance` handshake で v2 子を spawn し、envelope `instance` を全 frame に付ける
+- [x] MiniHost が per-instance segment + `CreateInstance` を駆動し、runner bundle E2E（multi-instance・InvalidHandle・InstanceLimit・dup）が pass する
+- [x] 既存 `l1_proxy_e2e` dedicated suite が v2 経路で green に留まる（T1 時点の非回帰証拠）
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-core` — wire codec unit test（round-trip・scope 行列・InstanceLimit）が pass
-- [ ] `cargo test -p ruviform-plugin-export --test l1_runner_e2e` — MiniHost v2 + registry bundle E2E が pass
-- [ ] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` — dedicated v2 経路が pass
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass
-- [ ] `--ruviform-` の **code site** が残存しない — `l1/mod.rs` の `.arg("--ruviform-*")` 呼出し（`:994,996`）・`export/lib.rs` の `USAGE` const（`:99`）・`RunnerArgs`/`ArgvReject` argv-parse literal・worker `parse_flags` の bootstrap flag 受理・`MiniHost::spawn_runner` の argv pair が全て除去/書換済み。doc-level の `--ruviform-` 言及（T1 file 内: `export/lib.rs` crate doc・`RunnerArgs`/`run` doc・`export/shm.rs`・runner/worker bin doc・`l1/mod.rs:140,145` SpawnSpec doc・`composite.rs:75` — items 3/4/5/7 で更新）は T1 の範囲で処理し、残る doc 言及（`l1/shm.rs` — T2、`export/Cargo.toml`・adapter bin doc・README×3 — T5、`l1/mod.rs:28`/`l1/data.rs:926` — T2）は本 task の gate 対象外とする（全量 sweep は T5/T6 の gate）
-- [ ] `grep -rn "WIRE_VERSION" crates/` で `1` が historical 注記以外にない
+- [x] `cargo test -p ruviform-plugin-core` — wire codec unit test（round-trip・scope 行列・InstanceLimit）が pass
+- [x] `cargo test -p ruviform-plugin-export --test l1_runner_e2e` — MiniHost v2 + registry bundle E2E が pass
+- [x] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` — dedicated v2 経路が pass
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass
+- [x] `--ruviform-` の **code site** が残存しない — `l1/mod.rs` の `.arg("--ruviform-*")` 呼出し（`:994,996`）・`export/lib.rs` の `USAGE` const（`:99`）・`RunnerArgs`/`ArgvReject` argv-parse literal・worker `parse_flags` の bootstrap flag 受理・`MiniHost::spawn_runner` の argv pair が全て除去/書換済み。doc-level の `--ruviform-` 言及（T1 file 内: `export/lib.rs` crate doc・`RunnerArgs`/`run` doc・`export/shm.rs`・runner/worker bin doc・`l1/mod.rs:140,145` SpawnSpec doc・`composite.rs:75` — items 3/4/5/7 で更新）は T1 の範囲で処理し、残る doc 言及（`l1/shm.rs` — T2、`export/Cargo.toml`・adapter bin doc・README×3 — T5、`l1/mod.rs:28`/`l1/data.rs:926` — T2）は本 task の gate 対象外とする（全量 sweep は T5/T6 の gate）
+- [x] `grep -rn "WIRE_VERSION" crates/` で `1` が historical 注記以外にない

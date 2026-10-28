@@ -106,6 +106,13 @@ const DRIVER_JOIN_MARGIN: Duration = Duration::from_secs(1);
 /// discriminate instances for key uniquing).
 static INSTANCE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// The dedicated route's fixed registry handle: wire-v2 stamps every
+/// instance-scoped envelope of a capacity-1 child with it (`Scan`
+/// bypasses it with `WIRE_INSTANCE_NONE`). T2/T3's route pools mint
+/// per-bundle handles; `L1Instance::instance` then carries the mint
+/// instead of this constant.
+const DEDICATED_INSTANCE: u32 = 0;
+
 /// How the child process ended — reported on the notification queue
 /// inside `HostNotification::InstanceFailed`.
 /// `signal` is `Some` only on unix.
@@ -136,13 +143,15 @@ impl ChildExit {
 /// the public `crate::composite::OutOfProcessSpec`.
 #[derive(Debug)]
 pub(crate) struct SpawnSpec {
-    /// Registration-supplied `'static` descriptor: supplies the argv
-    /// `--ruviform-plugin-id` and the field-equality oracle for the
-    /// child's `Scanned` reply.
+    /// Registration-supplied `'static` descriptor: supplies the
+    /// `CreateInstance` `plugin_id` and the field-equality oracle for
+    /// the child's `Scanned` reply.
     pub(crate) descriptor: PluginDescriptor,
     /// Runner executable.
     pub(crate) program: OsString,
-    /// Extra arguments passed before the `--ruviform-*` bootstrap flags.
+    /// Extra arguments prepended to the runner's argv — the runner's
+    /// own flags only (e.g. the test worker's fault knobs); wire v2
+    /// has no `--ruviform-*` bootstrap flags to precede.
     pub(crate) args: Vec<OsString>,
     /// Lookahead depth in blocks (default 2) — fixes the shm slot
     /// depth `D = lookahead_blocks + 1`, both SPSC channel
@@ -183,9 +192,19 @@ enum Terminal {
     Clean,
 }
 
-/// One pending command: the reader sends the child's reply (or the
-/// converger sends `Err(Ipc)`) onto this unbounded channel.
-type Waiter = mpsc::Sender<Result<wire::Reply, HostError>>;
+/// One pending command: the envelope `instance` the request was
+/// stamped with plus the unbounded channel the reader sends the
+/// child's reply (or the converger sends `Err(Ipc)`) onto. The
+/// reply's `instance` must echo the expected value — a mismatch is
+/// an attribution failure, converged `Failed` like any other
+/// child-scope violation (Issue #117 demux table).
+struct Waiter {
+    /// The `instance` the matching `Reply` must echo — the
+    /// request's stamped envelope value (`WIRE_INSTANCE_NONE` for
+    /// `Scan`, the instance handle for everything else).
+    instance: u32,
+    tx: mpsc::Sender<Result<wire::Reply, HostError>>,
+}
 
 /// Whether the single `Failed` notification has been sent — the
 /// notification carries the reaped `ExitStatus` when available, so a
@@ -343,8 +362,14 @@ fn kill_child(shared: &Shared) {
 /// Orders for the driver thread — it serializes outgoing frames and
 /// runs the process lifecycle operations through this channel.
 enum DriverCmd {
-    /// Serialize and write a `Command` frame.
-    Command { seq: u64, cmd: wire::Command },
+    /// Serialize and write a `Command` frame — `instance` is the
+    /// stamped wire-v2 envelope (`WIRE_INSTANCE_NONE` for `Scan`,
+    /// the dedicated handle `0` for everything else under T1).
+    Command {
+        seq: u64,
+        instance: u32,
+        cmd: wire::Command,
+    },
     /// Write `Shutdown`, then give the child `command_timeout` of
     /// grace before `kill()`.
     Shutdown,
@@ -405,7 +430,7 @@ fn converge(shared: &Shared, exit: Option<ChildExit>) {
         // and keeping them inside the critical section makes
         // "exactly once" trivially atomic.
         for (_, waiter) in inner.waiters.drain() {
-            let _ = waiter.send(Err(HostError::Ipc));
+            let _ = waiter.tx.send(Err(HostError::Ipc));
         }
         if failed {
             inner.notify = match exit {
@@ -452,8 +477,11 @@ fn spawn_child(command: &mut ProcCommand) -> Result<(Child, ChildStdin, ChildStd
 ///
 /// `view` is this thread's own shm mapping (the `Shmem` handle is
 /// `!Send`, so each I/O thread opens the owner `Segment`'s key
-/// locally); `in_depth`/`out_depth` are the spawn-time ring sizes.
-/// Result pushes go through the shared [`Shared::result_tx`]
+/// locally); `in_depth`/`out_depth` are the spawn-time ring sizes;
+/// `self_instance` is the wire-v2 handle this child serves (the only
+/// legal `instance` on block frames — `Scan` replies still echo
+/// `WIRE_INSTANCE_NONE`, attributed by the waiter's stamp). Result
+/// pushes go through the shared [`Shared::result_tx`]
 /// producer — the driver completes dropped seqs on the same
 /// channel.
 fn reader_main(
@@ -463,6 +491,7 @@ fn reader_main(
     view: &shm::View,
     in_depth: u32,
     out_depth: u32,
+    self_instance: u32,
 ) {
     // One scratch allocation reused across frames — the wire layer
     // owns the framing; EOF and protocol violations share the
@@ -481,11 +510,16 @@ fn reader_main(
     }
     loop {
         match wire::read_message(&mut stdout, &mut frame_buf) {
-            Ok(wire::Message::Reply { seq, .. }) if data::is_block_seq(seq) => {
+            Ok(wire::Message::Reply { seq, instance, .. }) if data::is_block_seq(seq) => {
                 // A block rejection: the child answered the flagged
                 // seq with an `Err` `Reply` instead of `BlockDone` —
                 // the block still completes (marked failed) so the
-                // strict alternation can proceed.
+                // strict alternation can proceed. A `BlockIn` was
+                // only ever stamped with this child's `instance`
+                // handle — a foreign echo is inert, not a violation.
+                if instance != self_instance {
+                    continue;
+                }
                 let known = shared.lock().block_in_flight.remove(&seq);
                 if !known {
                     converge(shared, None);
@@ -497,19 +531,44 @@ fn reader_main(
                 // drained past this seq, which is equally harmless.
                 shared.push_result(data::mark_failed(seq));
             }
-            Ok(wire::Message::Reply { seq, result }) => {
+            Ok(wire::Message::Reply {
+                seq,
+                instance,
+                result,
+            }) => {
                 let waiter = shared.lock().waiters.remove(&seq);
                 if let Some(waiter) = waiter {
                     // A stale/unknown seq (timed-out waiter already
                     // removed) is dropped — the reply can no longer
-                    // hurt anyone.
-                    let _ = waiter.send(result);
+                    // hurt anyone. A live waiter attributes the
+                    // reply by `instance`: the echo must match the
+                    // request's stamped envelope — a mismatch is the
+                    // demux table's child-scope violation, so the
+                    // waiter is gone and the instance converges
+                    // `Failed` rather than satisfying the wrong
+                    // command.
+                    if waiter.instance != instance {
+                        converge(shared, None);
+                        return;
+                    }
+                    let _ = waiter.tx.send(result);
                 }
             }
-            Ok(wire::Message::BlockDone { seq, result }) => {
+            Ok(wire::Message::BlockDone {
+                seq,
+                instance,
+                result,
+            }) => {
                 // A doorbell reply must carry a flagged seq this
                 // driver actually rang — an unflagged or unknown one
-                // is a protocol violation.
+                // is a protocol violation. Like the flagged `Reply`
+                // arm, a foreign `instance` echo is inert: the
+                // doorbell was stamped `self_instance` on the way
+                // out, so an off-instance `BlockDone` cannot belong
+                // to this ring and is dropped.
+                if instance != self_instance {
+                    continue;
+                }
                 let known = data::is_block_seq(seq) && shared.lock().block_in_flight.remove(&seq);
                 if !known {
                     converge(shared, None);
@@ -607,8 +666,12 @@ fn reap(shared: &Shared, deadline: Option<Instant>) -> ChildExit {
 /// pipe work; the RT caller only `try_push`es seqs).
 ///
 /// `view` is this thread's own shm mapping (`Shmem` is `!Send` —
-/// each I/O thread opens the owner `Segment`'s key locally) and
-/// `in_depth` sizes the in-slot ring.
+/// each I/O thread opens the owner `Segment`'s key locally),
+/// `in_depth` sizes the in-slot ring and `self_instance` is the
+/// wire-v2 handle every `BlockIn` doorbell is stamped with.
+// Thread-entry plumbing carries the whole per-child context — the
+// same allow `spawn_driver`/`spawn_reader` record.
+#[allow(clippy::too_many_arguments)]
 fn driver_main(
     shared: &Shared,
     mut stdin: ChildStdin,
@@ -617,6 +680,7 @@ fn driver_main(
     submit: &mut ruviform_rt::Consumer<data::Submit>,
     view: &mut shm::View,
     in_depth: u32,
+    self_instance: u32,
 ) {
     let mut shutdown_deadline: Option<Instant> = None;
     // One encode scratch reused for every outbound frame — commands,
@@ -624,7 +688,7 @@ fn driver_main(
     let mut encode_buf = Vec::new();
     loop {
         match rx.recv_timeout(DRIVER_POLL_INTERVAL) {
-            Ok(DriverCmd::Command { seq, cmd }) => {
+            Ok(DriverCmd::Command { seq, instance, cmd }) => {
                 // A converged instance (or teardown in flight) gets no
                 // new wire messages — the spec forbids writes after
                 // `Failed`; wake the waiter `Err(Ipc)` instead of
@@ -633,11 +697,11 @@ fn driver_main(
                 if reject {
                     let waiter = shared.lock().waiters.remove(&seq);
                     if let Some(waiter) = waiter {
-                        let _ = waiter.send(Err(HostError::Ipc));
+                        let _ = waiter.tx.send(Err(HostError::Ipc));
                     }
                 } else if wire::write_message(
                     &mut stdin,
-                    &wire::Message::Command { seq, cmd },
+                    &wire::Message::Command { seq, instance, cmd },
                     &mut encode_buf,
                 )
                 .is_err()
@@ -680,68 +744,17 @@ fn driver_main(
         }
         // Data plane: every seq the RT caller submitted becomes an
         // in-slot write plus a `BlockIn` doorbell — bounded by the
-        // channel capacity, never blocking on the RT side. A seq
-        // that is dropped instead (stale generation, dead or
-        // shutting-down child) still owes the leg a completion —
-        // the synthesized `mark_failed` below.
-        while let Ok(submit) = submit.try_pop() {
-            let seq = submit.seq;
-            let staging = {
-                let mut inner = shared.lock();
-                if inner.terminal.is_some() || inner.shutdown_initiated {
-                    // A dead or shutting-down child takes no new
-                    // doorbells — the seq is consumed here.
-                    None
-                } else {
-                    let staging = data::armed_for(inner.staging.as_ref(), submit);
-                    if staging.is_some() {
-                        // The doorbell goes in flight BEFORE the
-                        // write — the reader's `BlockDone` /
-                        // flagged-`Reply` must always find it here.
-                        inner.block_in_flight.insert(seq);
-                    }
-                    // `None` here is either "no ring armed yet" or a
-                    // stale-generation submit — queued before a
-                    // re-activation swapped `inner.staging`, so
-                    // serializing it would doorbell the new ring's
-                    // zeroed stage under a real seq. Dropped without
-                    // a doorbell: `block_in_flight` never sees it.
-                    staging
-                }
-            };
-            let Some(staging) = staging else {
-                // A dropped seq was never doorbell'd — no shm write
-                // happened, so no out-slot race exists — but the leg
-                // still waits on a completion to clear the slot's
-                // alternation gate (`cleared[i] >= last_pushed[i]`).
-                // Left unanswered it would wedge the slot (then the
-                // whole ring) forever: a fully-synced leg passing
-                // through 100%. Synthesize the `mark_failed`
-                // completion — one seq, exactly one element — so the
-                // normal `drain_to` path frees the slot and resolves
-                // the block as the defined pass-through.
-                shared.push_result(data::mark_failed(seq));
-                continue;
-            };
-            let slot = usize::try_from(seq % u64::from(in_depth)).expect("slot index fits usize");
-            data::write_in_slot(
-                view.in_slot_mut(in_depth, seq),
-                seq,
-                &staging.ins[slot],
-                staging.frame_capacity,
-            );
-            // Release edge — the slot writes above must be visible
-            // to the child before the `BlockIn` it acquires on. A
-            // real atomic fence (not a compiler fence): ordering
-            // across the process boundary rests on this hardware
-            // fence plus the pipe-write syscall.
-            fence(Ordering::Release);
-            if wire::write_message(&mut stdin, &wire::Message::BlockIn { seq }, &mut encode_buf)
-                .is_err()
-            {
-                converge(shared, None);
-                return;
-            }
+        // channel capacity, never blocking on the RT side.
+        if !drain_submits(
+            shared,
+            &mut stdin,
+            submit,
+            view,
+            in_depth,
+            self_instance,
+            &mut encode_buf,
+        ) {
+            return;
         }
         match try_wait_child(shared) {
             Ok(Some(status)) => {
@@ -769,6 +782,91 @@ fn driver_main(
     }
 }
 
+/// One driver poll's worth of `submit` drains: every popped seq
+/// becomes an in-slot shm write plus a `BlockIn` doorbell stamped
+/// with `self_instance`. A seq that is dropped instead (stale
+/// generation, dead or shutting-down child) still owes the leg a
+/// completion — the synthesized `mark_failed` below. Returns `false`
+/// when a doorbell write failed and convergence ran — the driver
+/// exits with it.
+fn drain_submits(
+    shared: &Shared,
+    stdin: &mut ChildStdin,
+    submit: &mut ruviform_rt::Consumer<data::Submit>,
+    view: &mut shm::View,
+    in_depth: u32,
+    self_instance: u32,
+    encode_buf: &mut Vec<u8>,
+) -> bool {
+    while let Ok(submit) = submit.try_pop() {
+        let seq = submit.seq;
+        let staging = {
+            let mut inner = shared.lock();
+            if inner.terminal.is_some() || inner.shutdown_initiated {
+                // A dead or shutting-down child takes no new
+                // doorbells — the seq is consumed here.
+                None
+            } else {
+                let staging = data::armed_for(inner.staging.as_ref(), submit);
+                if staging.is_some() {
+                    // The doorbell goes in flight BEFORE the
+                    // write — the reader's `BlockDone` /
+                    // flagged-`Reply` must always find it here.
+                    inner.block_in_flight.insert(seq);
+                }
+                // `None` here is either "no ring armed yet" or a
+                // stale-generation submit — queued before a
+                // re-activation swapped `inner.staging`, so
+                // serializing it would doorbell the new ring's
+                // zeroed stage under a real seq. Dropped without
+                // a doorbell: `block_in_flight` never sees it.
+                staging
+            }
+        };
+        let Some(staging) = staging else {
+            // A dropped seq was never doorbell'd — no shm write
+            // happened, so no out-slot race exists — but the leg
+            // still waits on a completion to clear the slot's
+            // alternation gate (`cleared[i] >= last_pushed[i]`).
+            // Left unanswered it would wedge the slot (then the
+            // whole ring) forever: a fully-synced leg passing
+            // through 100%. Synthesize the `mark_failed`
+            // completion — one seq, exactly one element — so the
+            // normal `drain_to` path frees the slot and resolves
+            // the block as the defined pass-through.
+            shared.push_result(data::mark_failed(seq));
+            continue;
+        };
+        let slot = usize::try_from(seq % u64::from(in_depth)).expect("slot index fits usize");
+        data::write_in_slot(
+            view.in_slot_mut(in_depth, seq),
+            seq,
+            &staging.ins[slot],
+            staging.frame_capacity,
+        );
+        // Release edge — the slot writes above must be visible
+        // to the child before the `BlockIn` it acquires on. A
+        // real atomic fence (not a compiler fence): ordering
+        // across the process boundary rests on this hardware
+        // fence plus the pipe-write syscall.
+        fence(Ordering::Release);
+        if wire::write_message(
+            stdin,
+            &wire::Message::BlockIn {
+                seq,
+                instance: self_instance,
+            },
+            encode_buf,
+        )
+        .is_err()
+        {
+            converge(shared, None);
+            return false;
+        }
+    }
+    true
+}
+
 /// The driver's spawn hand-off: `Ok(stdout)` carries the child's piped
 /// stdout across to the caller (which hands it to the reader thread);
 /// `Err(())` reports a spawn-time failure.
@@ -794,6 +892,7 @@ fn spawn_driver(
     shm_key: String,
     depth: u32,
     grace: Duration,
+    self_instance: u32,
 ) -> Result<(thread::JoinHandle<()>, SpawnRx), HostError> {
     let (spawn_tx, spawn_rx) = mpsc::channel();
     let driver_shared = Arc::clone(shared);
@@ -847,6 +946,7 @@ fn spawn_driver(
                 &mut submit_rx,
                 &mut view,
                 depth,
+                self_instance,
             );
         })
         .map_err(|_| HostError::Ipc)?;
@@ -862,6 +962,7 @@ fn spawn_reader(
     stdout: ChildStdout,
     shm_key: String,
     depth: u32,
+    self_instance: u32,
 ) -> Result<(thread::JoinHandle<()>, HelloRx), HostError> {
     let (hello_tx, hello_rx) = mpsc::channel();
     let reader_shared = Arc::clone(shared);
@@ -873,7 +974,15 @@ fn spawn_reader(
                 converge(&reader_shared, None);
                 return;
             };
-            reader_main(stdout, &reader_shared, &hello_tx, &view, depth, depth);
+            reader_main(
+                stdout,
+                &reader_shared,
+                &hello_tx,
+                &view,
+                depth,
+                depth,
+                self_instance,
+            );
         })
         .map_err(|_| HostError::Ipc)?;
     Ok((join, hello_rx))
@@ -899,6 +1008,12 @@ pub(crate) struct L1Instance {
     notify_rx: mpsc::Receiver<ChildExit>,
     command_timeout: Duration,
     next_seq: AtomicU64,
+    /// The wire-v2 `instance` envelope handle this child's registry
+    /// entry lives under — `0` under the T1 dedicated route
+    /// (capacity-1: one child serves exactly one instance). T2/T3's
+    /// route pools mint per-bundle handles here; `Scan` bypasses the
+    /// handle with `WIRE_INSTANCE_NONE` instead.
+    instance: u32,
     /// The shm slot count `D` (`lookahead_blocks + 1`) — sizes the
     /// segment, both SPSC channels and the staging ring.
     depth: u32,
@@ -988,13 +1103,13 @@ impl L1Instance {
             ruviform_rt::channel::<data::Submit>(usize::try_from(depth).unwrap_or(usize::MAX));
         let (result_tx, result_rx) =
             ruviform_rt::channel::<u64>(usize::try_from(depth).unwrap_or(usize::MAX));
+        // Wire v2: no `--ruviform-*` bootstrap flags — the plugin id
+        // and shm key travel in the `CreateInstance` payload during
+        // `handshake`. `spec.args` still prepends the runner's own
+        // flags (e.g. the test worker's fault knobs).
         let mut command = ProcCommand::new(&spec.program);
         command
             .args(&spec.args)
-            .arg("--ruviform-plugin-id")
-            .arg(spec.descriptor.id)
-            .arg("--ruviform-shm-key")
-            .arg(segment.key())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             // stderr piping is a deferred design concern — inherit
@@ -1028,6 +1143,7 @@ impl L1Instance {
             segment.key().to_owned(),
             depth,
             spec.command_timeout,
+            DEDICATED_INSTANCE,
         )?;
         let Ok(Ok(stdout)) = spawn_rx.recv_timeout(spec.command_timeout) else {
             // Child spawn failed or timed out: disconnecting the
@@ -1037,7 +1153,13 @@ impl L1Instance {
             let _ = driver_join.join();
             return Err(HostError::Ipc);
         };
-        let reader_spawn = spawn_reader(&shared, stdout, segment.key().to_owned(), depth);
+        let reader_spawn = spawn_reader(
+            &shared,
+            stdout,
+            segment.key().to_owned(),
+            depth,
+            DEDICATED_INSTANCE,
+        );
         let (reader_join, hello_rx) = match reader_spawn {
             Ok(pair) => pair,
             Err(error) => {
@@ -1052,6 +1174,7 @@ impl L1Instance {
             }
         };
 
+        let shm_key = segment.key().to_owned();
         let mut instance = Self {
             shared,
             driver_tx: Some(driver_tx),
@@ -1060,6 +1183,7 @@ impl L1Instance {
             notify_rx,
             command_timeout: spec.command_timeout,
             next_seq: AtomicU64::new(0),
+            instance: DEDICATED_INSTANCE,
             depth,
             rt: Some(data::RtLeg::new(
                 depth,
@@ -1076,7 +1200,7 @@ impl L1Instance {
             activated_sample_rate: None,
             segment,
         };
-        match instance.handshake(spec, &hello_rx) {
+        match instance.handshake(spec, &hello_rx, &shm_key) {
             Ok(()) => Ok(instance),
             Err(error) => {
                 // Handshake failure: kill + reap, no notification —
@@ -1087,9 +1211,17 @@ impl L1Instance {
         }
     }
 
-    /// `Hello` (version check) → `Scan` → descriptor field-match —
-    /// the handshake sequence fixed by the design.
-    fn handshake(&mut self, spec: &SpawnSpec, hello_rx: &HelloRx) -> Result<(), HostError> {
+    /// `Hello` (version check) → `Scan` → descriptor field-match →
+    /// `CreateInstance` — the wire-v2 handshake sequence fixed by the
+    /// Issue #117 design. `shm_key` names the segment this spawn
+    /// already created; `CreateInstance` is the point the child's
+    /// registry learns the handle.
+    fn handshake(
+        &mut self,
+        spec: &SpawnSpec,
+        hello_rx: &HelloRx,
+        shm_key: &str,
+    ) -> Result<(), HostError> {
         match hello_rx.recv_timeout(spec.command_timeout) {
             Ok(Ok(version)) if version == wire::WIRE_VERSION => {}
             _ => return Err(HostError::Ipc),
@@ -1102,12 +1234,30 @@ impl L1Instance {
             .map_err(|_| HostError::Ipc)?
         {
             wire::Reply::Scanned(descriptors) => {
-                if descriptors.iter().any(|d| d.matches(&spec.descriptor)) {
-                    Ok(())
-                } else {
-                    Err(HostError::Ipc)
+                if !descriptors.iter().any(|d| d.matches(&spec.descriptor)) {
+                    return Err(HostError::Ipc);
                 }
             }
+            _ => return Err(HostError::Ipc),
+        }
+        // Registry registration carries the v1 argv bootstrap fields
+        // — plugin selection + shm attachment — as the `CreateInstance`
+        // payload. The reply is `Ok` on success; every defined
+        // failure (`UnknownPluginId` after a field-match Scan means
+        // the child is lying, a duplicate handle the host never
+        // mints, `InstanceLimit` at capacity 1, `Ipc`, `PluginFailed`)
+        // folds into the handshake's uniform `Err(Ipc)` — the spawn
+        // is unusable, never a live-but-empty child.
+        match self
+            .request(wire::Command::CreateInstance {
+                plugin_id: spec.descriptor.id.to_owned(),
+                shm_key: shm_key.to_owned(),
+                in_depth: self.depth,
+                out_depth: self.depth,
+            })
+            .map_err(|_| HostError::Ipc)?
+        {
+            wire::Reply::Ok => Ok(()),
             _ => Err(HostError::Ipc),
         }
     }
@@ -1242,10 +1392,18 @@ impl L1Instance {
     }
 
     /// Registers the waiter, queues the frame and waits — the part of
-    /// `execute` the handshake `Scan` shares.
+    /// `execute` the handshake `Scan`/`CreateInstance` shares. The
+    /// wire-v2 envelope `instance` is derived from the verb scope:
+    /// `Scan` is child-scoped (`WIRE_INSTANCE_NONE`); everything else
+    /// is stamped with this instance's dedicated handle — the same
+    /// value the reader's waiter attribution checks the echo against.
     fn request(&mut self, cmd: wire::Command) -> Result<wire::Reply, HostError> {
+        let instance = match cmd {
+            wire::Command::Scan => wire::WIRE_INSTANCE_NONE,
+            _ => self.instance,
+        };
         let seq = self.next_seq.fetch_add(1, Ordering::Relaxed);
-        let (waiter, reply_rx) = mpsc::channel();
+        let (tx, reply_rx) = mpsc::channel();
         {
             let mut inner = self.shared.lock();
             match inner.terminal {
@@ -1256,13 +1414,16 @@ impl L1Instance {
             if inner.shutdown_initiated {
                 return Err(HostError::Ipc);
             }
-            inner.waiters.insert(seq, waiter);
+            inner.waiters.insert(seq, Waiter { instance, tx });
         }
         let Some(driver_tx) = &self.driver_tx else {
             self.shared.lock().waiters.remove(&seq);
             return Err(HostError::Ipc);
         };
-        if driver_tx.send(DriverCmd::Command { seq, cmd }).is_err() {
+        if driver_tx
+            .send(DriverCmd::Command { seq, instance, cmd })
+            .is_err()
+        {
             self.shared.lock().waiters.remove(&seq);
             return Err(HostError::Ipc);
         }
@@ -1280,12 +1441,13 @@ impl L1Instance {
         }
     }
 
-    /// `Destroy`'s control-plane meaning: `Shutdown` on the wire (not
-    /// sent to a `Failed` instance — it is killed instead), reap and
-    /// join. Always succeeds and is idempotent — the defined
-    /// rejection is `Destroy → Ok` for live, `Failed` and
-    /// already-destroyed instances alike, so there is no `Err` to
-    /// return. This primitive is unconditional: rejecting a
+    /// `Destroy`'s control-plane meaning: wire v2's teardown is
+    /// `DestroyInstance` (reclaims the child's registry slot) followed
+    /// by `Shutdown` — neither is sent to a `Failed` instance (it is
+    /// killed instead), then reap and join. Always succeeds and is
+    /// idempotent — the defined rejection is `Destroy → Ok` for live,
+    /// `Failed` and already-destroyed instances alike, so there is no
+    /// `Err` to return. This primitive is unconditional: rejecting a
     /// `HostCommand::Destroy` from `Activated`/`Processing` (the L0
     /// legality rule) is `crate::composite::PluginHost`'s gate — it
     /// mirrors `lifecycle_state()` through `LifecycleEvent::Destroy`
@@ -1304,12 +1466,21 @@ impl L1Instance {
             let inner = self.shared.lock();
             inner.mirror.is_failed() || matches!(inner.terminal, Some(Terminal::Failed))
         };
+        if failed {
+            // Kill through the shared handle — a channel message
+            // could sit behind a wedged `write_all` forever.
+            kill_child(&self.shared);
+        } else if self.driver_tx.is_some() {
+            // The registry slot is reclaimed before the wire
+            // `Shutdown` — teardown is unconditional, so a dead or
+            // wedged reply path (`Err(Ipc)`/timeout → convergence)
+            // still proceeds to `Shutdown` below. `request` no-ops
+            // to `Err(Ipc)` on a `test_fixture` (no driver channel)
+            // — harmless.
+            let _ = self.request(wire::Command::DestroyInstance);
+        }
         if let Some(driver_tx) = self.driver_tx.take() {
-            if failed {
-                // Kill through the shared handle — a channel message
-                // could sit behind a wedged `write_all` forever.
-                kill_child(&self.shared);
-            } else {
+            if !failed {
                 // `shutdown_initiated` is set only on the driver —
                 // immediately before it writes the wire `Shutdown` —
                 // so a child that crashed before that point still
@@ -1891,6 +2062,7 @@ impl L1Instance {
             notify_rx,
             command_timeout: Duration::from_millis(50),
             next_seq: AtomicU64::new(0),
+            instance: 0,
             depth: DEPTH,
             rt: Some(leg),
             staging_generation: u64::from(activated_frames.is_some()),
