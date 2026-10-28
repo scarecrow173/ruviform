@@ -4211,6 +4211,42 @@ mod tests {
     }
 
     #[test]
+    fn video_reply_tags_and_presence_are_strict() {
+        // `ParamInfo`'s `Option` tag is {0,1}-strict like every other
+        // presence tag — corrupt a live encoding at the tag byte
+        // (len 4 + kind 1 + seq 8 + instance 4 + REPLY_OK 1 + tag 6).
+        let message = Message::Reply {
+            seq: 7,
+            instance: 3,
+            result: Ok(Reply::ParamInfo {
+                info: Some(param_info()),
+            }),
+        };
+        let mut frame = Vec::new();
+        encode(&message, &mut frame).unwrap();
+        let presence_at = 4 + 1 + 8 + 4 + 1 + 1;
+        assert_eq!(frame[presence_at], 1);
+        for tag in [2_u8, 0xFF] {
+            frame[presence_at] = tag;
+            assert_eq!(
+                decode(&frame),
+                Err(WireError::Malformed),
+                "ParamInfo presence tag {tag} must be rejected",
+            );
+        }
+        // Reply tags > 7 are outside the v3 vocabulary.
+        let mut payload = Vec::new();
+        push_u64(&mut payload, 1);
+        push_u32(&mut payload, 0);
+        push_u8(&mut payload, REPLY_OK);
+        push_u8(&mut payload, 8);
+        assert_eq!(
+            decode(&raw_frame(KIND_REPLY, &payload)),
+            Err(WireError::Malformed)
+        );
+    }
+
+    #[test]
     fn video_verbs_are_instance_scoped() {
         // `WIRE_INSTANCE_NONE` is a scope violation for every video
         // verb — checked before the verb payload is interpreted, so
