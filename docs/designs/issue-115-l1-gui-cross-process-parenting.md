@@ -156,7 +156,7 @@ Issue #115 — #76 で L1 インスタンスへの `OpenGui`/`CloseGui` 要求�
 
 - **wire 変更ゼロ**: `OpenGui`/`CloseGui`/`Reply::Opened`/`GuiHandle`/`GuiParentToken` は wire 語彙・公開型として存置。理由は (i) L0 コマンド集合との parity（公開面「L0 と同一」要件）、(ii) 将来の L0 GUI 実装経路・L1 解除時の再利用、(iii) 除去は `WIRE_VERSION` bump を要する破壊的変更で利益なし、の 3 点
 - **新規公開面ゼロ**: `Err(HostError::Unsupported)` は既存 variant で完結し、新 variant・新 enum・`#[non_exhaustive]` 圧力は発生しない。`HostError` は既に `#[non_exhaustive]` 済みで将来 `GuiUnavailable` 系 variant を additive に足せる余地も残る
-- **capability 空間は不触**: 現行 `Hello.capabilities` は `WIRE_VERSION=1` で非 0 を `Malformed` 拒否 — GUI capability を切るなら #119 の capability bit 設計領域であり、本判定はその前提を変えない
+- **capability 空間は不触**: 現行 `Hello.capabilities` は `WIRE_VERSION=2` で非 0 を `Malformed` 拒否（`wire.rs` decode — Issue #117 bump 後も継続） — GUI capability を切るなら #119 の capability bit 設計領域であり、本判定はその前提を変えない
 
 ## Risks and Trade-offs
 

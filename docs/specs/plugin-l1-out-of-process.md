@@ -117,7 +117,7 @@ Issue #76。#31 分割で L0（#74・CLOSED）の次に位置づけられた実�
 - **opt-in**: L0 が既定のまま。L1 はインスタンス単位等で選択できる経路として追加する（選択面の API 形は design）
 - **非 RT `process` 等価**: L1 の `process` 等価経路は非 RT スレッドが駆動し、RT スレッドは結果を `try_recv` で読むのみ — プロセス間通信・ブロッキングを RT パスへ持ち込まない（RT 契約 ADR 整合）。RT 側読取り経路は alloc-free・非ブロッキングとして `rt_` テストで検証する
 - **遅延契約**: L1 へ送ったブロックの遅延は先行ブロック数 × ブロック長。先行ブロック数の既定値・設定面は design で確定し doc に明記する
-- **クラッシュ契約**: 子プロセスの wait/exit status でクラッシュを検出し、対象インスタンスを `Failed` 状態へ遷移・ホストへ通知する。`Failed` 表現の所有（plugin-core 拡張 vs host 側状態）は design で確定。`Failed` 以後の全コマンド・`process` 等価は定義済み拒否とする。自動再起動はしない
+- **クラッシュ契約**: 子プロセスの wait/exit status でクラッシュを検出し、対象インスタンスを `Failed` 状態へ遷移・ホストへ通知する。`Failed` 表現の所有（plugin-core 拡張 vs host 側状態）は design で確定。`Failed` 以後の全コマンド・`process` 等価は定義済み拒否とする。自動再起動はしない。**但書（Issue #117・wire v2）**: bundle 形態（`OutOfProcessIsolation::Bundled`・既定）では子プロセスの死亡は同居する**全** live インスタンスの `Failed` を意味し、通知は影響を受けたインスタンス毎に 1 つずつ届く（N 通知列）。帰属可能な違反のみ instance 単独の `Failed` に留まる — 粒度の正本は `docs/adr/issue-117-bundle-child-failed-granularity.md`
 - **フォールバック**: クラッシュ・応答なし時の出力は pass-through — 直前の既受信データまたは無音。応答タイムアウトの判定面は design
 - **依存方向**: `ruviform-plugin-export` の許可依存はベースライン A.2（Domain foundations + Primitives + 拡張層 `ruviform-plugin-core`）に従う。plugin-host 側の追加依存（IPC/直列化・`ruviform-rt` 等の Primitives）はベースライン層ルール内に限定し、外部依存の採用は暫定規約（メンテナンス状況・ライセンス・依存木サイズの確認と理由記録）に従う — shm IPC 機構の採否は design で確定
 - **`unsafe` 原則禁止**: 共有メモリ・プロセス制御の実装は安全 API を持つ外部クレートを内部依存に閉じ込める方針を優先し、自前 `unsafe` は局所許可が必要な場合のみ（`rtrb` 先例）

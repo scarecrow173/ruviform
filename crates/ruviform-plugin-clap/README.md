@@ -60,10 +60,14 @@ runner bin `ruviform-plugin-clap-l1-runner`（`[[bin]] required-features =
 `{DLL_PREFIX}ruviform_plugin_clap{DLL_SUFFIX}` を `RUVIFORM_L1_REAL_PLUGIN_DIR`
 （任意 env override）→ 未設定時は runner executable sibling
 （`target/<profile>/`）で解決し、スキャン済み factory を
-`ruviform_plugin_export::run(factories)` へ渡す。`run` の argv 規約
-（`--ruviform-shm-key` 必須・`--ruviform-plugin-id`・未知引数 usage reject →
-exit 2）は不変で、plugin path を argv で受け渡す機構はない（load 失敗は
-`eprintln!` + exit 1 pre-Hello → 親 spawn `Err(HostError::Ipc)`）。
+`ruviform_plugin_export::run(factories)` へ渡す。wire v2 の `run` argv 規約は
+`<runner>` のみ（v1 の `--ruviform-shm-key`/`--ruviform-plugin-id` bootstrap
+flag は廃止 — plugin id/shm key は `CreateInstance` payload が運び、
+`--ruviform-*` を含む任意引数は usage reject → exit 2）。`spec.args` は空を
+維持し、plugin path を argv で受け渡す機構はない（load 失敗は `eprintln!` +
+exit 1 pre-Hello → 親 spawn `Err(HostError::Ipc)`）。factory 選択は
+`CreateInstance` の `plugin_id` のみ — 同一 id の factory を 1 binary に 2 つ
+内蔵するのは authoring error。
 
 検証入口は opt-in lane のみ: `mise run test-l1-real-plugin` が
 `cargo build --features host`（fixture + runner 生成）→ `cargo test --lib

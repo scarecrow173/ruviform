@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NlPHnwYkRTWHq1nvYvo"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 wire v2 docs/metadata sweep（README・bin doc・test-spec・親文書 addenda・literal sweep）"
 created: "2026-10-28"
 updated: "2026-10-28"
@@ -46,6 +46,18 @@ relations:
         path: "docs/designs/issue-114-real-adapter-l1-e2e.md"
       - type: "file"
         path: "docs/specs/engine-plugin-host-integration.md"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/README.md"
+      - type: "file"
+        path: "crates/ruviform-plugin-clap/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-vst3/src/lib.rs"
+      - type: "file"
+        path: "docs/test-specs/issue-117-bundle-e2e-tests.md"
+      - type: "file"
+        path: "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
+      - type: "file"
+        path: "docs/tasks/README.md"
     deleted: []
     renamed: []
     moved: []

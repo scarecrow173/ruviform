@@ -132,7 +132,7 @@ Issue #113 — #76 で host API として完成した L1 アウトプロセス�
 - [ ] AC2（所有分離）: `PluginHost` 本体は non-RT 側に残り、グラフ内ノードは `Send` endpoint のみを保持 — ノード/`GraphPlan`/`RtPlan`/コールバック capture が `Send` であることをコンパイル時に示し、`PluginHost`/`L1Instance`/`ErasedPlugin` の参照が RT 側に存在しない
 - [ ] AC3（構成面）: non-RT 構成 API が default L0 と opt-in `OutOfProcessSpec`（`lookahead_blocks`/`command_timeout` を含む）を選択でき、`DuplicatePluginId`・`lookahead_blocks=0` 等の defined rejection が維持される。`ruviform-audio` の公開 API・Cargo.toml に plugin-host 型/依存が露出しない（DAG 監査）
 - [ ] AC4（明示的 prepare + bounded）: ノード投入前に instantiate→activate→start-processing が実行済みであること、activated capacity 超のブロック/未 prepare 状態が defined rejection（panic/UB/alloc なし）であること
-- [ ] AC5（error/fallback）: L1 子強制終了 → `Failed` + `InstanceFailed` 通知 once + 以後 pass-through（直前受信 or 無音）・自動再起動なし。遅延未着/slot busy も pass-through でハングしない。`Failed` 以後コマンドは定義済み拒否
+- [ ] AC5（error/fallback）: L1 子強制終了 → `Failed` + `InstanceFailed` 通知 once + 以後 pass-through（直前受信 or 無音）・自動再起動なし。遅延未着/slot busy も pass-through でハングしない。`Failed` 以後コマンドは定義済み拒否。**但書（Issue #117・wire v2）**: per-handle once semantics は維持するが、bundled route（`OutOfProcessIsolation::Bundled`・既定）の子強制終了は影響を受けた**各** live instance へ `Failed` + `InstanceFailed` を 1 つずつ fan-out する N 通知列となる（`Dedicated`/単一 instance では 1 通知に退化 — 粒度正本は `docs/adr/issue-117-bundle-child-failed-granularity.md`）
 - [ ] AC6（latency 報告）: L1 選択ノードの報告遅延が `latency_frames = lookahead_blocks × activated max_frames`（frames 整数。秒換算は `frames / sample_rate`）と一致することを構成面から照会して観測できる
 - [ ] AC7（RT alloc）: ノード `pull`（L0/L1 endpoint `process` 経路）が `assert_no_alloc` 窓内 0 alloc で `rt_` 命名テストが `mise run test-rt` でグリーン
 - [ ] AC8（退役）: node removal/plan-swap で退役した plugin リソースの Drop/dealloc が RT コールバック経路上で発生しない（retire/drain 観測 or non-RT 最終参照の証明）
