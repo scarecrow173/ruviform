@@ -70,7 +70,7 @@ Directory: `docs/tasks`
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | todo | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | todo | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
-| TASK-034NlQlLZkVZRtEVfF8Sdp | L1 子構造再編（Shared/Inner→L1Child+InstShared split・demux・converge split・Destroying gate） | todo | [l1-child-instance-split.md](./l1-child-instance-split.md) |
+| TASK-034NlQlLZkVZRtEVfF8Sdp | L1 子構造再編（Shared/Inner→L1Child+InstShared split・demux・converge split・Destroying gate） | done | [l1-child-instance-split.md](./l1-child-instance-split.md) |
 | TASK-034LNY736TLX2w3k4RFFZM | plugin-core L1 基盤（契約移設 + Lifecycle Failed + wire codec） | done | [l1-core-contracts-and-wire-codec.md](./l1-core-contracts-and-wire-codec.md) |
 | TASK-034MrsLWkKNHnu7jX1ghp8 | L1 endpoint（leg 移出・arm channel・pending_arm・leg 返却・drain-before-early-return） | done | [l1-endpoint-arm-and-leg-return.md](./l1-endpoint-arm-and-leg-return.md) |
 | TASK-034N3QIPDPFbB37OxHMZLy | Issue #123 L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | done | [l1-internal-cleanup.md](./l1-internal-cleanup.md) |

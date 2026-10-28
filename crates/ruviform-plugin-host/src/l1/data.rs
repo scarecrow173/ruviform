@@ -925,7 +925,7 @@ impl RtLeg {
 /// - `leg`: the checked-out caller-thread data-plane half —
 ///   submit producer, result consumer, armed `Arc<Staging>`,
 ///   seq bookkeeping, `last_output` pass-through buffer.
-/// - `mirror`: a clone of `Shared::rt_state` — the same atomic,
+/// - `mirror`: a clone of `InstShared::rt_state` — the same atomic,
 ///   so `set_mirror` publishes reach the endpoint with the same
 ///   monotonic behavior the host leg observed.
 /// - `arm_rx`: consumer half of the per-attach arm channel
