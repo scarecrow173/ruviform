@@ -1,7 +1,7 @@
 ---
 id: "DESIGN-034NNxNMrrk6OoIGfX18rk"
 type: "design"
-status: "draft"
+status: "approved"
 title: "L1 supervisor（自動再起動 util 層）設計（Issue #116）"
 created: "2026-10-28"
 updated: "2026-10-29"

@@ -1,7 +1,7 @@
 ---
 id: "ADR-034NNxNMDjKssvme4VQnrv"
 type: "adr"
-status: "proposed"
+status: "accepted"
 title: "L1 supervisor 配置 — `ruviform-plugin-host` opt-in util 層と core `PluginHost` 無変更境界（Issue #116）"
 created: "2026-10-28"
 updated: "2026-10-29"
