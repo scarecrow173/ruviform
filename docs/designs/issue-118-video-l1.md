@@ -1,7 +1,7 @@
 ---
 id: "DESIGN-034NVCweXy0wECErcpEcv8"
 type: "design"
-status: "draft"
+status: "approved"
 title: "video/NONRT プラグインの L1 経路設計（Issue #118）"
 created: "2026-10-29"
 updated: "2026-10-29"

@@ -1,7 +1,7 @@
 ---
 id: "ADR-034NVCXBHjsHlfixAwUSHE"
 type: "adr"
-status: "proposed"
+status: "accepted"
 title: "video/NONRT プラグイン L1 の別立て host 表面・plugin_id 名前空間・Dedicated 固定（Issue #118）"
 created: "2026-10-29"
 updated: "2026-10-29"

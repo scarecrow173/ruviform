@@ -1,7 +1,7 @@
 ---
 id: "ADR-034NVCYbbmwSxZnvHYNkAx"
 type: "adr"
-status: "proposed"
+status: "accepted"
 title: "video/NONRT プラグイン L1 の create-path・segment sizing（CreateVideoInstance に VideoProcessConfig を載せる形）（Issue #118）"
 created: "2026-10-29"
 updated: "2026-10-29"
