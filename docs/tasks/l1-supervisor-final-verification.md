@@ -29,6 +29,12 @@ relations:
       - type: "file"
         path: "docs/tasks/l1-supervisor-e2e.md"
       - type: "file"
+        path: "docs/designs/issue-116-supervisor.md"
+      - type: "file"
+        path: "docs/adr/issue-116-supervisor-placement.md"
+      - type: "file"
+        path: "docs/discovery/issue-116-supervisor.md"
+      - type: "file"
         path: "docs/impl/ir/README.md"
       - type: "file"
         path: "docs/specs/README.md"
@@ -103,6 +109,7 @@ T1-T3 で着地した supervisor 実装の Full Gate・AC/R-V 証拠収集・IR�
 - `docs/impl/ir/issue-116-supervisor-implementation.md` — 新規 IR
 - `docs/impl/ir/README.md` — IR の index 行登録（curated index — 全 IR が登録される）
 - `docs/specs/issue-116-supervisor.md`・`docs/plans/implement-issue-116-supervisor.md`・4 task 文書・2 test-spec 文書 — status 同期（実装完了時）
+- `docs/designs/issue-116-supervisor.md`・`docs/adr/issue-116-supervisor-placement.md`・`docs/discovery/issue-116-supervisor.md` — `updated:`-tick 簿記（design Verification Notes の checkbox 証拠化を含む — plan `changes.modified` が既に列挙する範囲）
 - `docs/specs/README.md`・`docs/plans/README.md`・`docs/tasks/README.md`・`docs/test-specs/README.md` — status 列・index 行確認（planning 時点で作成済み）
 
 ## Done When

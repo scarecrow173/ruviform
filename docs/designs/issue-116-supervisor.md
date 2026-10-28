@@ -164,7 +164,10 @@ pub struct RestartRecipe {
     pub plugin_id: String,
     /// `Some` なら replay で `Activate{config}`。`None` は `Initialized` で止める。
     pub config: Option<ProcessConfig>,
-    /// `config` 成功後に `StartProcessing` まで進めるか（`config: None` では無視）。
+    /// `Activate{config}` 成功後に `StartProcessing` まで進めるか — 実効 guard は
+    /// `config.is_some() && start_processing`（`config: None` では `Activate`
+    /// 自体が走らず `Initialized` 止まりのため無視 — `Initialized` への
+    /// `StartProcessing` は `Err(Lifecycle)` の defined rejection）。
     pub start_processing: bool,
     /// `Restarted.bounds` へ echo する呼出側再 attach 用 bounds —
     /// supervisor は `prepare_endpoint` を呼ばない（caller 責務）。
@@ -389,8 +392,11 @@ if let Some(bytes) = &entry.checkpoint:           // bytes は set_checkpoint �
         Err(e)             → attempt 失敗へ（失敗分類表）
 if recipe.config.is_some():
     Activate{new, config}                         // Initialized → Activated
-if recipe.start_processing:
-    StartProcessing{new}                          // Activated → Processing
+if recipe.config.is_some() && recipe.start_processing:
+    StartProcessing{new}                          // Activated → Processing —
+                                                  // config: None では Activate が走らず
+                                                  // Initialized 止まり（start_processing
+                                                  // 単独では StartProcessing を発行しない）
 → Restarted{id, old: entry.failed, new,
             bounds: recipe.endpoint_bounds, restored}
 ```
@@ -403,7 +409,7 @@ if recipe.start_processing:
 | --- | --- | --- |
 | `InstanceFailed{h}`（watched） | — | 回復トリガ — drain 時点で `Destroy{h}` → `Pending`（`failures>=max` なら `GaveUp`） |
 | `InstanceFailed{h}`（unwatched） | — | `Unsupervised{n}` event で pass-through — caller が自分で `Destroy`/復旧する責務 |
-| `Instantiate` | `Err(UnknownPluginId/Ipc/InstanceLimit)` | attempt 失敗（handle 未 mint — cleanup 不要） |
+| `Instantiate` | `Err(UnknownPluginId/Ipc/InstanceLimit)` | attempt 失敗（handle 未 mint — cleanup 不要。`InstanceLimit` は `pool_eligible` が満杯の子を再利用対象から除外するため公開面から到達不能 — `composite.rs` L1092-1095・`Err(Ipc)` と同じ分類 arm で review-covered） |
 | `Instantiate` mid-`CreateInstance` 死亡 | `Err(Ipc)` + 同居 sibling へ fan-out 通知が次 poll に到着 | attempt 失敗（兄弟の通知は通常経路で別 entry として処理） |
 | `Initialize` | `Err(PluginFailed/Ipc/Failed/Unsupported)` | attempt 失敗 → minted（`Created` — `Destroy` 合法）を cleanup |
 | `RestoreState` | `Err(Unsupported)` | **skip — state 非対応として replay 継続**（attempt 消費なし・checkpoint は entry に保持 → 次 attempt で再適用を試みる）。`Restarted.restored = Skipped` で caller が観測できる |
@@ -573,7 +579,7 @@ recovery:    Initialize → RestoreState{new, bytes}（失敗分類は上表）
 - [ ] **spec AC4 / R-V3（checkpoint/restore）**: pre-failure に `set_checkpoint` した blob が `Restarted` 前に `RestoreState{bytes}` で適用される。`Err(Unsupported)` は skip（attempt 消費なし — state 非対応 fixture）で `Restarted.restored = Skipped`、未登録は `RestoreState` を発行せず `restored = NotRequested`。**fixture gap — `l1-test-worker` の `RestoreState` は常に `Ok`（seed blob `0x11,0x22,0x33,0x44` を clone するだけ — l1-test-worker.rs L235-237）で `Err(Unsupported)`/`Err(PluginFailed)` を生起できない**: 実装 task に `l1-test-worker` への flag 追加（`--fail-restore`/`--state-unsupported` 相当 — `RestoreState` を `Err(PluginFailed)`/`Err(Unsupported)` で返す）を含める（AC4/AC7/R-V3 の前提）。bound 超過 blob の `Err(CheckpointTooLarge)` 拒否も検証（子 kill に到達しないこと）
 - [ ] **spec AC5 / R-V4（bounded retry）**: `Instant` 注入で backoff deadline を跨いだ再試行・`max_attempts` 超過で `GaveUp`・attempts が respawn 越しに継承・`stable_window` 経過で `failures` reset を検証。`max_attempts = 0` が即 `GaveUp` になること。**`stable_window` 経過後の crash が drain 時点の pre-check で `failures` reset を先に評価すること**（旧 `failures` のまま即 `GaveUp` しない回帰 pin — `healthy_since + stable_window` を超えた `InstanceFailed` で `failures = 0` → `Pending` へ進む）・`GaveUp.last_error` が episode 直近の attempt 失敗を運ぶこと（attempt 未発行の give up は `None`）・`max_attempts_per_poll = 0` が `Supervisor::new` で `Err(InertPolicy)` になること
 - [ ] **spec AC6（give up 意味）**: `GaveUp` 時に mint 済み instance があれば unwind + `Destroy` 済み・entry は `unwatch` まで保持・`HostError::Failed` 語彙を `GaveUp` に使わないこと（`GaveUp` event は別 enum variant）。lingering 後発死の `GaveUp` 再 emit が `attempts`/`last_error` 不変で届くこと（`(id, attempts)` dedupe で初回 emit と区別できる）
-- [ ] **spec AC7 / R-V2（attempt 中の失敗・mid-create 死）**: `Instantiate` `Err(Ipc)`/`Err(InstanceLimit)` で attempt 失敗・handle 未 mint（cleanup 不要）・同居 sibling への fan-out が次 poll で別 entry として処理される。lifecycle replay 中の `Err` → unwind + `Destroy` で残留リソースなし。unwind 失敗（`--fail-stop-processing` 類の注入）で残った live handle が `lingering` として `current_handle` に露出され、次 poll Phase 2 で retry されること（`Err(InvalidHandle)` で clear）
+- [ ] **spec AC7 / R-V2（attempt 中の失敗・mid-create 死）**: `Instantiate` `Err(Ipc)` で attempt 失敗・handle 未 mint（cleanup 不要）・同居 sibling への fan-out が次 poll で別 entry として処理される。`Err(InstanceLimit)` は公開面から到達不能（`pool_eligible` が満杯の子を再利用対象から除外 — `composite.rs` L1092-1095・single-threaded scan で sibling mint が割り込まない）ため注入検証せず、`Err(Ipc)` と同じ「`Instantiate` `Err` → attempt 失敗・handle 未 mint」分類 arm で review-covered とする。lifecycle replay 中の `Err` → unwind + `Destroy` で残留リソースなし。unwind 失敗で残った live handle が `lingering` として `current_handle` に露出され、次 poll Phase 2 で retry されること（`Err(InvalidHandle)` で clear）— 注入は `--fail-start-processing`（`StartProcessing` 不 commit `Err` → minted `Activated` 残留・unwind は `Deactivate` 起点）+ `--crash-after-msgs`/`--hang-after-msgs` を unwind 段の frame に合わせた子死亡/応答停止（Dedicated fresh 子・checkpoint 未登録 — Scan=1・CreateInstance=2・Initialize=3・Activate=4・StartProcessing=5・unwind `Deactivate`=6 で死亡 → `Err(Ipc)`・minted `Failed` 収束 → retry `Destroy` は `Failed` から合法。`RestoreState` が入れば以降 +1）。`--fail-stop-processing` 類の注入は到達不能 — unwind が `StopProcessing` を発行するには minted mirror `Processing` が必要で、それは `StartProcessing` `Ok` = attempt 成功（cleanup なし）時のみ成立する
 - [ ] **spec AC8（driver 契約）**: `poll(&mut host, now)` で駆動・内部スレッド/タイマー/async なし（型・フィールド検査で `Send`/`Sync` 可能なデータのみ — `bound_host` は `usize`）。`!Send`/`!Sync` の `PluginHost` と同一スレッドで動くこと。**host 束縛の検証**: `watch` 後に異なる host で `watch`/`set_recipe` が `Err(WrongHost)`・`poll` が `WrongHost` event を emit して drain/attempt しないこと（他 host の通知を消費しない）
 - [ ] **spec AC9（event 報告）**: `Restarted{id,old,new,bounds,restored}` が返り、`new` で `prepare_endpoint`/`latency_frames`/`lifecycle_state` が呼べること。`#[non_exhaustive]` enum（struct variant も `#[non_exhaustive]`）。`Unsupervised` が未監視通知を pass-through すること。**`watch` の `Failed` handle adopt**: `lifecycle_state → Some(Failed)` の handle を `watch` → `Destroy` で slot 解放（キュー残通知は落ちる = 二重復旧しない）→ `Pending` で次 poll attempt → `Restarted` で復旧（caller 消費済み通知の系でも同じ復旧を確認）。`unwatch` が `Option<PluginHandle>`（`Live.current` または `lingering`）を返して handle を orphan させないこと
 - [ ] **spec R-V5（AC4 無退行）**: supervisor 未使用の `l1_proxy_e2e` 系全テストが変わらず通ること（`PluginHost` core 無 diff の証明）
