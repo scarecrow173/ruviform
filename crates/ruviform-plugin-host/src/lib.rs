@@ -80,6 +80,17 @@
 //! (a re-`Activate` may change the true latency; the endpoint's
 //! stored integer does not track it).
 //!
+//! ## Supervisor util (Issue #116, opt-in)
+//!
+//! [`Supervisor`] is an opt-in crash-recovery driver layered on the
+//! public surface only — the core host stays restart-free (AC4).
+//! `watch` a handle, then call [`Supervisor::poll`] from the caller's
+//! non-RT loop: `poll` becomes the **sole drain point** for
+//! [`PluginHost::try_recv_notification`], replays the recovery
+//! (`Destroy` → `Instantiate` → lifecycle → optional `RestoreState`)
+//! and reports [`SupervisionEvent`]s for the caller to re-wire
+//! endpoints and handle bookkeeping. All operations are non-RT.
+//!
 //! ## Plugin side
 //!
 //! [`Plugin`] extends [`PluginProcessor`] with the non-RT instance
@@ -145,6 +156,7 @@ mod host;
 // `dead_code` allowances instead of a blanket module-level one.
 pub(crate) mod l1;
 mod plugin;
+mod supervisor;
 
 pub use command::{GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, PluginHandle};
 pub use composite::{
@@ -154,6 +166,10 @@ pub use endpoint::{EndpointBounds, PluginEndpoint};
 pub use host::InProcessHost;
 pub use plugin::{
     ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
+};
+pub use supervisor::{
+    RestartPolicy, RestartRecipe, RestoreOutcome, SupervisedId, SupervisionError, SupervisionEvent,
+    Supervisor,
 };
 
 /// Returns the crate version string.
