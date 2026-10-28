@@ -11,7 +11,9 @@
 //! ([`BufferView`], [`BufferViewMut`]) and support types
 //! ([`ProcessConfig`], [`ProcessContext`], [`ProcessResult`],
 //! [`ProcessStatus`], [`PrepareError`]), plus the NONRT video plugin
-//! contract ([`VideoPluginInstance`], [`VideoProcessConfig`]), the
+//! contract ([`VideoPluginInstance`], [`VideoProcessConfig`]) and its
+//! erased registry mirror ([`ErasedVideoPlugin`],
+//! [`VideoPluginFactory`], [`erase_video`]), the
 //! typed plain-parameter channel ([`PlainParamValue`],
 //! [`PlainParamInfo`] and its owned twin [`PlainParamInfoOwned`],
 //! borrowed [`PluginDescriptorView`]), the
@@ -91,6 +93,7 @@ mod transport;
 
 mod plain_param;
 mod video;
+mod video_plugin;
 
 pub mod wire;
 
@@ -110,6 +113,7 @@ pub use processor::{
 };
 pub use transport::TransportInfo;
 pub use video::{VideoPluginInstance, VideoProcessConfig};
+pub use video_plugin::{ErasedVideoPlugin, VideoPluginFactory, erase_video};
 
 /// Returns the crate version string.
 ///

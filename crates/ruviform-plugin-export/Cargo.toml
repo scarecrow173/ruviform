@@ -8,19 +8,23 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+# The video runner (`run_video`, Issue #118) drives `VideoPluginInstance`
+# frames through `vshm` — both are normal dep edges (media-core promoted
+# out of dev-deps now that lib code names `MediaTime`).
+ruviform-media-core = { path = "../ruviform-media-core" }
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+ruviform-video-core = { path = "../ruviform-video-core" }
 # Child-side shared-memory attach (plan「依存の確定」— the design dep table
 # records plugin-core only, but the per-instance `CreateInstance` `shm_key`
 # attach is impossible without it and hand-rolled unsafe is rejected). Same
 # adoption record / containment condition as plugin-host: MIT OR Apache-2.0,
-# confined to the internal `shm` module, never exposed on the public API or
-# feature names.
+# confined to the internal `shm`/`vshm` modules, never exposed on the public
+# API or feature names.
 shared_memory = "0.12"
 
 [dev-dependencies]
 # The E2E minimal host needs ProcessConfig/TransportInfo value types.
 ruviform-audio-core = { path = "../ruviform-audio-core" }
-ruviform-media-core = { path = "../ruviform-media-core" }
 
 [lints]
 workspace = true
