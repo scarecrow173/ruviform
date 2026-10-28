@@ -26,6 +26,10 @@
 //! | `--sleep-ms=M` | sleep `M` ms then exit 0 — the heir mode used by `--leave-heir-after-msgs`; not meant to be spawned directly by tests |
 //! | `--hello-version=V` | `Hello.version` override (default [`wire::WIRE_VERSION`]) for the version-mismatch handshake test |
 //! | `--fail-stop-processing` | `StopProcessing` commits `Processing → Activated` then replies `Err(HostError::PluginFailed)` — the real runner's commit-then-advisory shape (a hook error arrives post-commit), exercising the host-side mirror fix |
+//! | `--fail-restore` | `RestoreState` replies `Err(HostError::PluginFailed)` without committing — `state` keeps its previous blob (the conservative keep-the-checkpoint attempt failure); loses to `--state-unsupported` when both are set |
+//! | `--state-unsupported` | `RestoreState` replies `Err(HostError::Unsupported)` without committing — a stateless plugin's declaration; evaluated before `--fail-restore` so both flags together deterministically answer `Err(Unsupported)` |
+//! | `--fail-initialize` | `Initialize` replies `Err(HostError::PluginFailed)` without committing — the entry stays `Created` (the real runner's `InitFailed` destination), so `Destroy` stays legal |
+//! | `--fail-start-processing` | `StartProcessing` replies `Err(HostError::PluginFailed)` without committing — the entry stays `Activated` (the real runner's rollback destination), so cleanup unwinds `Deactivate` → `Destroy` |
 //!
 //! Wire v2 retired the `--ruviform-plugin-id`/`--ruviform-shm-key`
 //! bootstrap flags — the `CreateInstance` payload now carries the
@@ -78,6 +82,11 @@ const WORKER_GAIN: f32 = 0.5;
 const ZERO_DIM_RESULT: ProcessResult = ProcessResult::new(ProcessStatus::Sleep, 0xDEAD);
 
 /// Parsed CLI flags.
+///
+/// The injected-failure knobs are flat bools by design — argv is a
+/// flat string list, so a nested state model would only shuffle the
+/// same flags around; `struct_excessive_bools` is expected here.
+#[expect(clippy::struct_excessive_bools)]
 struct Flags {
     /// Die upon receiving message N (before dispatch).
     crash_after_msgs: Option<u64>,
@@ -99,6 +108,23 @@ struct Flags {
     /// `StopProcessing` commits the transition then replies
     /// `Err(PluginFailed)` — the real runner's advisory-error shape.
     fail_stop_processing: bool,
+    /// `RestoreState` replies `Err(PluginFailed)` without committing
+    /// — `self.state` keeps its previous blob.
+    fail_restore: bool,
+    /// `RestoreState` replies `Err(Unsupported)` without committing —
+    /// a stateless plugin's declaration. Evaluated before
+    /// `fail_restore` so both flags together deterministically answer
+    /// `Err(Unsupported)`.
+    state_unsupported: bool,
+    /// `Initialize` replies `Err(PluginFailed)` without committing —
+    /// the entry stays `Created` (the runner's `InitFailed`
+    /// destination), so `Destroy` stays legal.
+    fail_initialize: bool,
+    /// `StartProcessing` replies `Err(PluginFailed)` without
+    /// committing — the entry stays `Activated` (the runner's
+    /// hook-failure rollback destination), so cleanup unwinds via
+    /// `Deactivate`.
+    fail_start_processing: bool,
 }
 
 fn parse_flags() -> Flags {
@@ -112,6 +138,10 @@ fn parse_flags() -> Flags {
         sleep_ms: None,
         hello_version: wire::WIRE_VERSION,
         fail_stop_processing: false,
+        fail_restore: false,
+        state_unsupported: false,
+        fail_initialize: false,
+        fail_start_processing: false,
     };
     for arg in std::env::args_os().skip(1) {
         let arg = arg.to_string_lossy();
@@ -139,6 +169,14 @@ fn parse_flags() -> Flags {
             flags.hello_version = value.parse().unwrap_or(wire::WIRE_VERSION);
         } else if arg == "--fail-stop-processing" {
             flags.fail_stop_processing = true;
+        } else if arg == "--fail-restore" {
+            flags.fail_restore = true;
+        } else if arg == "--state-unsupported" {
+            flags.state_unsupported = true;
+        } else if arg == "--fail-initialize" {
+            flags.fail_initialize = true;
+        } else if arg == "--fail-start-processing" {
+            flags.fail_start_processing = true;
         }
     }
     flags
@@ -176,13 +214,27 @@ impl WorkerEntry {
     /// `HostError`s — mirroring what `InProcessHost` does in-process.
     /// Instance-scoped verbs only; the registry-level dispatch owns
     /// `Scan`/`CreateInstance`/`DestroyInstance`.
-    fn dispatch(
-        &mut self,
-        cmd: &wire::Command,
-        fail_stop_processing: bool,
-    ) -> Result<wire::Reply, HostError> {
+    ///
+    /// `flags` carries the injection knobs the whole child answers
+    /// to — a struct reference, not positional bools, so wiring a new
+    /// knob cannot silently swap two flags.
+    fn dispatch(&mut self, cmd: &wire::Command, flags: &Flags) -> Result<wire::Reply, HostError> {
         match cmd {
             wire::Command::Initialize => {
+                if flags.fail_initialize {
+                    // Legality before the injected hook failure — the
+                    // real runner (`Runner::initialize`) validates the
+                    // transition first, so an illegal `Initialize` is
+                    // `Lifecycle`, not `PluginFailed`. The transition
+                    // is never committed: the entry stays `Created`
+                    // (the runner's `InitFailed` destination) and
+                    // `Destroy` stays legal.
+                    self.lifecycle
+                        .state()
+                        .transition(LifecycleEvent::Initialize)
+                        .map_err(HostError::Lifecycle)?;
+                    return Err(HostError::PluginFailed);
+                }
                 transition(&mut self.lifecycle, LifecycleEvent::Initialize)
                     .map(|()| wire::Reply::Ok)
             }
@@ -208,6 +260,18 @@ impl WorkerEntry {
                 })
             }
             wire::Command::StartProcessing => {
+                if flags.fail_start_processing {
+                    // Same non-commit shape as `--fail-initialize`:
+                    // legality first, then the injected hook failure —
+                    // the entry stays `Activated` (the real runner's
+                    // `start_processing` rollback destination), so the
+                    // unwind path starts at `Deactivate`.
+                    self.lifecycle
+                        .state()
+                        .transition(LifecycleEvent::StartProcessing)
+                        .map_err(HostError::Lifecycle)?;
+                    return Err(HostError::PluginFailed);
+                }
                 transition(&mut self.lifecycle, LifecycleEvent::StartProcessing)
                     .map(|()| wire::Reply::Ok)
             }
@@ -217,7 +281,7 @@ impl WorkerEntry {
                 // before the hook runs): `--fail-stop-processing` then
                 // reports the advisory `Err` *after* the commit.
                 transition(&mut self.lifecycle, LifecycleEvent::StopProcessing)?;
-                if fail_stop_processing {
+                if flags.fail_stop_processing {
                     Err(HostError::PluginFailed)
                 } else {
                     Ok(wire::Reply::Ok)
@@ -233,6 +297,17 @@ impl WorkerEntry {
                 bytes: self.state.clone(),
             }),
             wire::Command::RestoreState { bytes } => {
+                // `--state-unsupported` is evaluated before
+                // `--fail-restore` — both set answers
+                // `Err(Unsupported)` deterministically (a stateless
+                // plugin's declaration outranks an injected hook
+                // failure). Neither flag commits `self.state`.
+                if flags.state_unsupported {
+                    return Err(HostError::Unsupported);
+                }
+                if flags.fail_restore {
+                    return Err(HostError::PluginFailed);
+                }
                 self.state.clone_from(bytes);
                 Ok(wire::Reply::Ok)
             }
@@ -253,7 +328,7 @@ fn dispatch(
     instances: &mut HashMap<u32, WorkerEntry>,
     instance: u32,
     cmd: &wire::Command,
-    fail_stop_processing: bool,
+    flags: &Flags,
 ) -> Result<wire::Reply, HostError> {
     match cmd {
         wire::Command::Scan => Ok(wire::Reply::Scanned(vec![wire::Descriptor::from(
@@ -296,7 +371,7 @@ fn dispatch(
             None => Err(HostError::InvalidHandle),
         },
         _ => match instances.get_mut(&instance) {
-            Some(entry) => entry.dispatch(cmd, fail_stop_processing),
+            Some(entry) => entry.dispatch(cmd, flags),
             None => Err(HostError::InvalidHandle),
         },
     }
@@ -668,8 +743,7 @@ fn main() -> ExitCode {
         match message {
             wire::Message::Command { seq, instance, cmd } => {
                 if !hung {
-                    let result =
-                        dispatch(&mut instances, instance, &cmd, flags.fail_stop_processing);
+                    let result = dispatch(&mut instances, instance, &cmd, &flags);
                     if wire::write_message(
                         &mut stdout,
                         &wire::Message::Reply {
