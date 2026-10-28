@@ -82,7 +82,11 @@ pub struct OutOfProcessSpec {
     /// Lookahead depth in blocks (default **2**) — fixes the L1
     /// latency contract `lookahead_blocks × activated max_frames`
     /// frames. `0` is rejected at spawn (`Err(HostError::Ipc)`)
-    /// because the result horizon could never be met.
+    /// because the result horizon could never be met. Values
+    /// `>= ruviform_plugin_core::wire::WIRE_MAX_ELEMENTS` are
+    /// rejected the same way — `lookahead_blocks + 1` is the shm
+    /// slot depth `CreateInstance` declares on the wire, and the
+    /// codec caps that depth at `WIRE_MAX_ELEMENTS`.
     pub lookahead_blocks: u32,
     /// Defined timeout for the handshake and every later `Reply`
     /// wait (default **10 s**); a timed-out command converges the

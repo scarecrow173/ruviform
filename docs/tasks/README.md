@@ -77,7 +77,7 @@ Directory: `docs/tasks`
 | TASK-034LNYf8Qj1NeGAKmaP7B4 | plugin-host L1 プロキシ制御面（spawn/handshake/コマンド転送/クラッシュ検出） | done | [l1-proxy-control-plane.md](./l1-proxy-control-plane.md) |
 | TASK-034NlQmTAKwSUzU49wWswM | L1 route pool + 隔離選択面（OutOfProcessIsolation・Route struct variant・pool lifecycle） | todo | [l1-route-pool-and-isolation-surface.md](./l1-route-pool-and-isolation-surface.md) |
 | TASK-034LNYmL2ezSeFFgddaeDX | L1 共有メモリデータ面 + RT 脚 + pass-through | done | [l1-shm-data-plane-and-rt-legs.md](./l1-shm-data-plane-and-rt-legs.md) |
-| TASK-034NlQlfkFL52FRHRjhYmr | L1 wire v2 codec + 全系統 v2 cutover（envelope・新動詞・InstanceLimit・registry・harness） | todo | [l1-wire-v2-codec-cutover.md](./l1-wire-v2-codec-cutover.md) |
+| TASK-034NlQlfkFL52FRHRjhYmr | L1 wire v2 codec + 全系統 v2 cutover（envelope・新動詞・InstanceLimit・registry・harness） | done | [l1-wire-v2-codec-cutover.md](./l1-wire-v2-codec-cutover.md) |
 | TASK-034NlPHnwYkRTWHq1nvYvo | L1 wire v2 docs/metadata sweep（README・bin doc・test-spec・親文書 addenda・literal sweep） | todo | [l1-wire-v2-docs-sweep.md](./l1-wire-v2-docs-sweep.md) |
 | TASK-034NhK97jcINkcEKDNbpum | L1 wire バージョン方針の記録と契約検証の補強 | done | [l1-wire-version-policy.md](./l1-wire-version-policy.md) |
 | TASK-034JNwTZ8WalgowFahLc8E | Timecode API の FrameRate 移行（破壊的シグネチャ置換と呼び出し側移行） | done | [migrate-timecode-to-framerate.md](./migrate-timecode-to-framerate.md) |

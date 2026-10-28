@@ -159,7 +159,11 @@ pub(crate) struct SpawnSpec {
     /// (`expected = block − lookahead`). `0` is rejected by
     /// [`L1Instance::spawn`] (`Err(Ipc)`): the just-submitted seq
     /// could never already have a result, so the leg would pass
-    /// through forever.
+    /// through forever. `D` also travels as `CreateInstance`'s
+    /// `in_depth`/`out_depth`, so the codec's
+    /// [`wire::WIRE_MAX_ELEMENTS`] depth cap bounds
+    /// `lookahead_blocks` — values `>= WIRE_MAX_ELEMENTS`
+    /// (`D > WIRE_MAX_ELEMENTS`) are rejected the same way.
     pub(crate) lookahead_blocks: u32,
     /// Defined timeout for the `Hello`, `Scan` and every later
     /// `Reply` wait (default 10 s).
@@ -1086,13 +1090,19 @@ impl L1Instance {
     /// result horizon `expected = block` is the seq the same
     /// `process` call just submitted, so no result can ever arrive
     /// first: the leg would pass through forever (permanent
-    /// silence). The spec is rejected like any other unusable
-    /// spawn configuration rather than silently degraded.
+    /// silence). `lookahead_blocks >= wire::WIRE_MAX_ELEMENTS`
+    /// (`D > WIRE_MAX_ELEMENTS`) is the same defined rejection —
+    /// `D` is declared on `CreateInstance`'s `in_depth`/`out_depth`,
+    /// which the wire codec caps at `WIRE_MAX_ELEMENTS`. The spec is
+    /// rejected like any other unusable spawn configuration rather
+    /// than silently degraded — before any segment or child exists.
     pub(crate) fn spawn(spec: &SpawnSpec) -> Result<Self, HostError> {
-        if spec.lookahead_blocks == 0 {
+        if spec.lookahead_blocks == 0 || spec.lookahead_blocks >= wire::WIRE_MAX_ELEMENTS {
             return Err(HostError::Ipc);
         }
-        let depth = spec.lookahead_blocks.saturating_add(1);
+        // `lookahead_blocks < WIRE_MAX_ELEMENTS` here, so `+ 1`
+        // cannot overflow and `depth` stays inside the codec cap.
+        let depth = spec.lookahead_blocks + 1;
         let slot =
             u32::try_from(INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed)).unwrap_or(u32::MAX);
         let segment = shm::Segment::create(slot, depth, depth).map_err(|()| HostError::Ipc)?;

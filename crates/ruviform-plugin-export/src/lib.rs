@@ -482,7 +482,7 @@ impl InstanceEntry {
                     .and_then(|inner| inner)
                     .map(|()| WireReply::Ok)
             }
-            // `#[non_exhaustive]` — a verb added after WIRE_VERSION 1.
+            // `#[non_exhaustive]` — a verb added after WIRE_VERSION 2.
             _ => Err(HostError::Unsupported),
         }
     }

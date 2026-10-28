@@ -136,6 +136,7 @@ design L336-364 の `WIRE_VERSION` 1→2 bump 棚卸しのうち、T1-T3 の cod
 - [ ] `export/Cargo.toml` L13 コメントが `CreateInstance` 経路を指す
 - [ ] 4 既存 test-spec の v2 oracle（design L354-357 の各行）が実装着地と reconcile 済み — planning 時点の v2 更新を verify し divergence のみ更新した
 - [ ] 5 親文書の addenda 行（`plugin-l1-out-of-process` design L113-210・spec L120・`issue-114` spec L99/L123・design L76/L354・`engine-plugin-host-integration` spec L135）が v2/Failed 粒度但書へ reconcile されている
+- [ ] adapter-facing docs note: runner は `plugin_id` のみで factory を選択する（`export/lib.rs:380` — host は descriptor 全体を field-match するが `CreateInstance` payload は `plugin_id` のみを運ぶ）— 同一 id の factory を 1 binary に 2 つ内蔵するのは authoring error であり、adapter-facing doc（runner bin doc・crate README 等）へ明記する
 - [ ] `grep -rn "WIRE_VERSION" crates/` で `1` が historical 注記以外に残存しない・第 2 grep（`--ruviform-`・`one child`・`1 child`・`per-instance spawn`・`per instance`・`1 子`・`singleton` — case-insensitive）で historical record 以外に残存しない
 - [ ] `cargo doc` 警告なし・doc audit findings ゼロ・`mise run lint-l1-real-plugin` が pass（本 task が触る clap/vst3 bin・test file は `--features host` 時のみ compile — default `lint` では検出不能なため）
 

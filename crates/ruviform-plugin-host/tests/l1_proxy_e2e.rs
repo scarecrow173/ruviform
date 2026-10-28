@@ -1096,6 +1096,20 @@ fn lookahead_zero_is_rejected() {
     assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
 }
 
+/// `D = lookahead_blocks + 1` is declared on `CreateInstance`'s
+/// `in_depth`/`out_depth`, which the wire codec caps at
+/// `WIRE_MAX_ELEMENTS` — an over-cap lookahead is the same defined
+/// `Err(Ipc)` rejection, before any segment or child exists (so the
+/// `u32::MAX` case also proves the `+ 1` cannot overflow).
+#[test]
+fn lookahead_over_wire_depth_cap_is_rejected() {
+    let mut spec = spec(&[]);
+    spec.lookahead_blocks = wire::WIRE_MAX_ELEMENTS;
+    assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
+    spec.lookahead_blocks = u32::MAX;
+    assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
+}
+
 /// Submits carry the armed ring's generation — the driver-side gate
 /// (`armed_for`) then drops a submit queued under a superseded ring
 /// instead of serializing the new ring's zeroed stage under a real

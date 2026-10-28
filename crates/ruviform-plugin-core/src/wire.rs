@@ -1533,7 +1533,7 @@ fn decode_musical_time_info(reader: &mut Reader<'_>) -> Result<MusicalTimeInfo, 
 /// # Errors
 ///
 /// [`WireError::UnsupportedVariant`] when `status` is a
-/// `#[non_exhaustive]` variant added after [`WIRE_VERSION`] `1` — it
+/// `#[non_exhaustive]` variant added after [`WIRE_VERSION`] `2` — it
 /// has no representation under this protocol revision. Nothing is
 /// appended on failure.
 pub fn encode_transport(info: &TransportInfo, out: &mut Vec<u8>) -> Result<(), WireError> {
@@ -1951,6 +1951,13 @@ mod tests {
         }
         const {
             assert!(shm::RESULT_LEN >= 5);
+        }
+        // `WIRE_MAX_INSTANCES` at the default depth (3 slots each
+        // way, `lookahead_blocks` 2 + 1) caps one child's named
+        // mappings at ~204.4 MiB — the Issue #117 capacity rationale
+        // (design L375), pinned so a layout change re-weighs it.
+        const {
+            assert!(shm::segment_len(3, 3) * WIRE_MAX_INSTANCES as usize == 214_353_664);
         }
     }
 
