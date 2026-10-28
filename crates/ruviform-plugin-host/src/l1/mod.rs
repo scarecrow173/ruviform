@@ -96,6 +96,8 @@
 
 pub(crate) mod data;
 pub(crate) mod shm;
+pub(crate) mod video;
+pub(crate) mod vshm;
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
@@ -109,8 +111,13 @@ use std::time::{Duration, Instant};
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
     EventList, HostError, HostInput, HostOutput, LifecycleState, PluginDescriptor, PrepareError,
-    ProcessConfig, ProcessResult, TransportInfo,
+    ProcessConfig, ProcessResult, TransportInfo, VideoProcessConfig,
 };
+
+// `composite.rs` is the only in-crate consumer of the video facade
+// — inside the `#[path]` test include these re-exports are dead.
+#[allow(unused_imports)]
+pub(crate) use video::{VideoL1Instance, VideoSpawnSpec};
 
 /// The driver's crash-watch and command-drain poll interval
 /// (~200 µs per the design; the effective granularity is the OS
@@ -225,6 +232,39 @@ impl SpawnSpec {
         // cannot overflow and `depth` stays inside the codec cap.
         Ok(self.lookahead_blocks + 1)
     }
+
+    /// The shared spawn-parameter view [`L1Child::spawn_scanned`]/
+    /// [`L1Child::scan_match`] consume — the audio spec lends this;
+    /// `lookahead_blocks` stays audio-only behind `create_instance`.
+    pub(crate) fn view(&self) -> SpawnSpecView<'_> {
+        SpawnSpecView {
+            descriptor: &self.descriptor,
+            program: &self.program,
+            args: &self.args,
+            command_timeout: self.command_timeout,
+        }
+    }
+}
+
+/// The borrowed spawn-parameter view [`L1Child::spawn_scanned`] and
+/// [`L1Child::scan_match`] consume — every field both spec kinds
+/// share, and nothing kind-specific (an audio spec's
+/// `lookahead_blocks` never reaches the handshake path, so it is
+/// not part of this view). `SpawnSpec::view` and
+/// `VideoSpawnSpec::view` lend it, so exactly one
+/// spawn/scan/handshake path serves both instance kinds.
+pub(crate) struct SpawnSpecView<'a> {
+    /// Registration-supplied descriptor — the `Scan` field-match
+    /// oracle (`CreateInstance`/`CreateVideoInstance`'s `plugin_id`
+    /// is read from the owning spec, not this view).
+    pub(crate) descriptor: &'a PluginDescriptor,
+    /// Runner executable.
+    pub(crate) program: &'a OsString,
+    /// The runner's own argv prefix.
+    pub(crate) args: &'a [OsString],
+    /// Defined timeout for `Hello`, `Scan` and every later
+    /// non-render `Reply` wait.
+    pub(crate) command_timeout: Duration,
 }
 
 /// The terminal condition the shared state converged to — the bit
@@ -318,6 +358,48 @@ struct SegmentInfo {
     out_depth: u32,
 }
 
+/// The kind-specific half of an [`InstShared`] entry — the fields
+/// that exist only for one instance kind. This is the type-level
+/// pin that a video entry carries **no audio data-plane fields**:
+/// the audio submit/result/staging/shm machinery is behind the
+/// `Audio` variant, so a demux or driver path that needs it can
+/// only ever name an audio entry.
+enum InstKind {
+    /// An audio (`CreateInstance`) entry — the L1 data plane's
+    /// per-instance ends.
+    Audio {
+        /// The armed data-plane staging ring — `Some` after a
+        /// successful `Activate`, replaced on re-activation. `Arc`
+        /// so the I/O threads borrow it under the lock without
+        /// holding the lock across shm work.
+        staging: Option<Arc<data::Staging>>,
+        /// Segment descriptor — the reader's lazy `View` attach and
+        /// both threads' slot indexing read it.
+        shm: SegmentInfo,
+        /// The instance's result-channel producer — `!Sync`, behind
+        /// a **leaf lock** so the bounded `try_push`es run inside
+        /// the `inner` critical section that guards the map through
+        /// an `&InstShared` (both I/O threads complete seqs here:
+        /// the reader pushes real `BlockDone`/rejection
+        /// completions, the driver pushes the synthesized
+        /// `mark_failed` every doorbell-less drop owes the leg).
+        result_tx: Mutex<ruviform_rt::Producer<u64>>,
+    },
+    /// A video (`CreateVideoInstance`) entry — no audio data plane:
+    /// no submit/result channels, no staging ring, no slot-ring
+    /// segment. Its frame transport is the facade-owned
+    /// [`vshm::Segment`], which never enters the registry (it lives
+    /// on `VideoL1Instance`, reachable to the I/O threads never).
+    Video {
+        /// The `CreateVideoInstance` `config` — the instance's
+        /// format/dims/frame-rate contract, pinned at mint so a
+        /// later `VideoRender`'s input-desc check and the
+        /// `Rendered` output gate read the same authority the
+        /// runner stashed.
+        config: VideoProcessConfig,
+    },
+}
+
 /// Per-instance state — the value half of `Inner.instances` (wire
 /// handle → instance). Every field mutates only under the
 /// `Shared.inner` lock; `rt_state` is additionally readable
@@ -338,22 +420,9 @@ struct InstShared {
     notify_tx: mpsc::Sender<ChildExit>,
     /// One-shot `Failed` notification state.
     notify: Notify,
-    /// The armed data-plane staging ring — `Some` after a
-    /// successful `Activate`, replaced on re-activation. `Arc` so
-    /// the I/O threads borrow it under the lock without holding
-    /// the lock across shm work.
-    staging: Option<Arc<data::Staging>>,
-    /// Segment descriptor — the reader's lazy `View` attach and
-    /// both threads' slot indexing read it.
-    shm: SegmentInfo,
-    /// The instance's result-channel producer — `!Sync`, behind a
-    /// **leaf lock** so the bounded `try_push`es run inside the
-    /// `inner` critical section that guards the map through an
-    /// `&InstShared` (both I/O threads complete seqs here: the
-    /// reader pushes real `BlockDone`/rejection completions, the
-    /// driver pushes the synthesized `mark_failed` every
-    /// doorbell-less drop owes the leg).
-    result_tx: Mutex<ruviform_rt::Producer<u64>>,
+    /// The kind-specific payload — audio data-plane ends or the
+    /// video config pin.
+    kind: InstKind,
     /// Demux liveness + the `DestroyInstance` doorbell window.
     phase: InstPhase,
 }
@@ -384,6 +453,38 @@ impl InstShared {
         self.mirror = state;
         self.rt_state
             .store(data::mirror_encode(state), Ordering::Release);
+    }
+
+    /// Pushes one completion element onto this entry's result
+    /// channel — a no-op on a video entry, which carries no result
+    /// channel (every caller names an audio entry in-protocol: doorbell
+    /// seqs only ever exist for `InstKind::Audio`, so the video arm
+    /// is unreachable and deliberately silent).
+    fn push_result(&self, el: u64) {
+        if let InstKind::Audio { result_tx, .. } = &self.kind {
+            let _ = lock_mutex(result_tx).try_push(el);
+        }
+    }
+
+    /// The armed staging ring clone — `None` for a video entry
+    /// (which carries no audio data-plane fields) or an audio entry
+    /// before `Activate` arms it.
+    fn armed_staging(&self) -> Option<Arc<data::Staging>> {
+        match &self.kind {
+            InstKind::Audio { staging, .. } => staging.clone(),
+            InstKind::Video { .. } => None,
+        }
+    }
+
+    /// The audio entry's segment descriptor — `None` for a video
+    /// entry. Only the doorbell paths read it, and they only ever
+    /// name audio entries in-protocol (`block_in_flight` gains seqs
+    /// exclusively under `InstKind::Audio`).
+    fn audio_shm(&self) -> Option<&SegmentInfo> {
+        match &self.kind {
+            InstKind::Audio { shm, .. } => Some(shm),
+            InstKind::Video { .. } => None,
+        }
     }
 }
 
@@ -470,7 +571,7 @@ impl Shared {
     fn push_result(&self, instance: u32, el: u64) {
         let inner = self.lock();
         if let Some(inst) = inner.instances.get(&instance) {
-            let _ = lock_mutex(&inst.result_tx).try_push(el);
+            inst.push_result(el);
         }
     }
 }
@@ -590,7 +691,7 @@ fn remove_instance(inner: &mut Inner, instance: u32) {
     for seq in residuals {
         inner.block_in_flight.remove(&(instance, seq));
         if let Some(inst) = inner.instances.get(&instance) {
-            let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+            inst.push_result(data::mark_failed(seq));
         }
     }
     if let Some(inst) = inner.instances.get_mut(&instance)
@@ -693,7 +794,7 @@ fn converge_child(shared: &Shared, exit: Option<ChildExit>) {
         // gates — one seq, exactly one completion.
         for (instance, seq) in std::mem::take(&mut inner.block_in_flight) {
             if let Some(inst) = inner.instances.get(&instance) {
-                let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+                inst.push_result(data::mark_failed(seq));
             }
         }
         failed
@@ -763,7 +864,7 @@ fn converge_instance(shared: &Shared, instance: u32) {
     for seq in seqs {
         inner.block_in_flight.remove(&(instance, seq));
         if let Some(inst) = inner.instances.get(&instance) {
-            let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+            inst.push_result(data::mark_failed(seq));
         }
     }
 }
@@ -961,10 +1062,16 @@ fn complete_doorbell(
             // it; nothing left to complete.
             return Verdict::Completed;
         };
-        let stale = views
-            .get(&instance)
-            .is_none_or(|rview| rview.shm != inst.shm);
-        (stale.then(|| inst.shm.clone()), inst.staging.clone())
+        let Some(shm) = inst.audio_shm() else {
+            // Unreachable in-protocol — `block_in_flight` only ever
+            // gains seqs for `InstKind::Audio` entries (the submits
+            // map is `AddInstance`-installed, audio-only), so a
+            // video entry never has a doorbell to complete and has
+            // no result channel to push one onto.
+            return Verdict::Completed;
+        };
+        let stale = views.get(&instance).is_none_or(|rview| rview.shm != *shm);
+        (stale.then(|| shm.clone()), inst.armed_staging())
     };
     if let Some(shm) = attach {
         // `View::attach` (the mapping syscall) stays outside the
@@ -1388,9 +1495,19 @@ fn drain_submits(
                 let live_child = inner.terminal.is_none() && !inner.shutdown_initiated;
                 match inner.instances.get_mut(&instance) {
                     Some(inst) if live_child && inst.phase == InstPhase::Live => {
-                        let staging = data::armed_for(inst.staging.as_ref(), submit);
+                        // `armed_staging` is `None` on a video
+                        // entry — unreachable in-protocol (the
+                        // `submits` map is `AddInstance`-installed,
+                        // audio-only), and harmless: the drop arm
+                        // below then pushes a `mark_failed` that is
+                        // a no-op on `InstKind::Video` (no result
+                        // channel exists).
+                        let staging = data::armed_for(inst.armed_staging().as_ref(), submit);
                         if let Some(staging) = staging {
-                            let in_depth = inst.shm.in_depth;
+                            let in_depth = inst
+                                .audio_shm()
+                                .expect("an armed staging implies InstKind::Audio")
+                                .in_depth;
                             // The doorbell goes in flight BEFORE
                             // the write — the reader's `BlockDone` /
                             // flagged-`Reply` must always find it
@@ -1408,7 +1525,7 @@ fn drain_submits(
                             // never sees it — the owed
                             // `mark_failed` completion goes out
                             // here instead.
-                            let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+                            inst.push_result(data::mark_failed(seq));
                             None
                         }
                     }
@@ -1417,7 +1534,7 @@ fn drain_submits(
                     // no doorbell, but the seq still owes the leg
                     // its completion.
                     Some(inst) => {
-                        let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+                        inst.push_result(data::mark_failed(seq));
                         None
                     }
                     // The entry raced removal — the `result_tx`
@@ -1461,7 +1578,7 @@ fn drain_submits(
                 let mut inner = shared.lock();
                 inner.block_in_flight.remove(&(instance, seq));
                 if let Some(inst) = inner.instances.get(&instance) {
-                    let _ = lock_mutex(&inst.result_tx).try_push(data::mark_failed(seq));
+                    inst.push_result(data::mark_failed(seq));
                 }
                 continue;
             };
@@ -1594,6 +1711,25 @@ pub(crate) struct InstanceParts {
     depth: u32,
 }
 
+/// What [`L1Child::create_video_instance`] hands the video facade —
+/// the `CreateVideoInstance` counterpart of [`InstanceParts`]: no
+/// `RtLeg`, no audio segment — the owned [`vshm::Segment`] is the
+/// whole per-instance transport.
+pub(crate) struct VideoInstanceParts {
+    /// The minted wire handle.
+    instance: u32,
+    /// The facade's clone of `InstShared.rt_state` — the lock-free
+    /// mirror snapshot `lifecycle_state` reads; survives entry
+    /// removal (`destroy` writes `Destroyed` onto it).
+    rt_state: Arc<AtomicU8>,
+    /// The instance's own `ChildExit` queue —
+    /// `InstShared.notify_tx`'s pair.
+    notify_rx: mpsc::Receiver<ChildExit>,
+    /// The owner-side `vshm` segment — kept alive on the facade so
+    /// the child's attach stays valid; unlinks on drop (RAII).
+    segment: vshm::Segment,
+}
+
 impl L1Child {
     /// Spawns a fresh child — driver + reader threads, the process
     /// itself, the `Hello` version gate — the shareable unit a
@@ -1671,13 +1807,13 @@ impl L1Child {
     /// (a T3 pooled child is scanned once at mint instead). A
     /// `Failed`-child `Err` surfaces as `Ipc` like every handshake
     /// failure.
-    pub(crate) fn scan_match(&self, spec: &SpawnSpec) -> Result<(), HostError> {
+    pub(crate) fn scan_match(&self, spec: &SpawnSpecView<'_>) -> Result<(), HostError> {
         match self
             .request(wire::WIRE_INSTANCE_NONE, wire::Command::Scan)
             .map_err(|_| HostError::Ipc)?
         {
             wire::Reply::Scanned(descriptors) => {
-                if descriptors.iter().any(|d| d.matches(&spec.descriptor)) {
+                if descriptors.iter().any(|d| d.matches(spec.descriptor)) {
                     Ok(())
                 } else {
                     Err(HostError::Ipc)
@@ -1705,10 +1841,10 @@ impl L1Child {
     ///
     /// **RT contract:** non-RT only — [`L1Child::spawn`]'s bounds
     /// plus the `Scan` wait.
-    pub(crate) fn spawn_scanned(spec: &SpawnSpec) -> Result<Arc<Self>, HostError> {
-        let mut command = ProcCommand::new(&spec.program);
+    pub(crate) fn spawn_scanned(spec: &SpawnSpecView<'_>) -> Result<Arc<Self>, HostError> {
+        let mut command = ProcCommand::new(spec.program);
         command
-            .args(&spec.args)
+            .args(spec.args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             // stderr piping is a deferred design concern — inherit
@@ -1780,13 +1916,15 @@ impl L1Child {
                     mirror: LifecycleState::Created,
                     notify_tx,
                     notify: Notify::Idle,
-                    staging: None,
-                    shm: SegmentInfo {
-                        key: segment.key().to_owned(),
-                        in_depth: depth,
-                        out_depth: depth,
+                    kind: InstKind::Audio {
+                        staging: None,
+                        shm: SegmentInfo {
+                            key: segment.key().to_owned(),
+                            in_depth: depth,
+                            out_depth: depth,
+                        },
+                        result_tx: Mutex::new(result_tx),
                     },
-                    result_tx: Mutex::new(result_tx),
                     phase: InstPhase::Creating,
                 },
             );
@@ -1874,6 +2012,123 @@ impl L1Child {
         Err(error)
     }
 
+    /// The `CreateVideoInstance` counterpart of
+    /// [`L1Child::create_instance`] — same create/reply/rollback
+    /// shape (mint → `Creating` entry → create verb → atomic `Live`
+    /// flip → facade parts), with the video-specific differences
+    /// the design pins:
+    ///
+    /// - the segment is a [`vshm::Segment`] sized from `config`,
+    ///   not a slot-ring `shm::Segment`;
+    /// - the entry registers as `InstKind::Video` — **no**
+    ///   `DriverCmd::AddInstance` (a video entry owns no driver-side
+    ///   data-plane ends: no submit/result channels, no `View`) and
+    ///   rollback likewise sends **no** `RemoveInstance`;
+    /// - `Err(InstanceLimit)` still propagates unflattened — the
+    ///   same capacity fact a pooled caller must distinguish —
+    ///   every other failure is `Err(Ipc)`.
+    ///
+    /// The dedicated video route always calls this on a fresh
+    /// child (`VideoL1Instance::spawn`); the caller decides the
+    /// child's fate on failure exactly like the audio path.
+    ///
+    /// **RT contract:** non-RT only — segment create plus one
+    /// `command_timeout` reply wait.
+    pub(crate) fn create_video_instance(
+        &self,
+        spec: &SpawnSpecView<'_>,
+        config: VideoProcessConfig,
+    ) -> Result<VideoInstanceParts, HostError> {
+        // Mint the per-instance vshm segment before the entry names
+        // its key — `CreateVideoInstance` ships the `os_id`, so the
+        // segment must exist first.
+        let slot =
+            u32::try_from(INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed)).unwrap_or(u32::MAX);
+        let segment = vshm::Segment::create(slot, &config).map_err(|()| HostError::Ipc)?;
+        let (notify_tx, notify_rx) = mpsc::channel();
+        let rt_state = Arc::new(AtomicU8::new(data::mirror_encode(LifecycleState::Created)));
+        let instance = {
+            let mut inner = self.shared.lock();
+            if inner.terminal.is_some() || inner.shutdown_initiated {
+                return Err(HostError::Ipc);
+            }
+            // The lowest-free mint under the lock — handle +
+            // insert are atomic; a full registry is the defined
+            // `InstanceLimit`.
+            let Some(instance) = mint_instance(&inner) else {
+                return Err(HostError::InstanceLimit);
+            };
+            inner.instances.insert(
+                instance,
+                InstShared {
+                    rt_state: Arc::clone(&rt_state),
+                    mirror: LifecycleState::Created,
+                    notify_tx,
+                    notify: Notify::Idle,
+                    kind: InstKind::Video { config },
+                    phase: InstPhase::Creating,
+                },
+            );
+            instance
+        };
+        // No `DriverCmd::AddInstance` — a video entry owns no
+        // driver-side per-instance state (the `submits`/`views`
+        // maps are audio data-plane only); the facade's segment is
+        // host-side, the child attaches it by `shm_key`.
+        let create = self.request(
+            instance,
+            wire::Command::CreateVideoInstance {
+                plugin_id: spec.descriptor.id.to_owned(),
+                shm_key: segment.key().to_owned(),
+                config,
+            },
+        );
+        if let Ok(wire::Reply::Ok) = create {
+            // Same mid-mint race as `create_instance`: the `Ok`
+            // reply may land after a `converge_child` already
+            // flipped the `Creating` entry `Failed` — the `Live`
+            // flip happens only while the entry is provably still
+            // mid-mint, anything else folds into rollback.
+            let went_live = {
+                let mut inner = self.shared.lock();
+                let went_live = inner.terminal.is_none()
+                    && inner
+                        .instances
+                        .get(&instance)
+                        .is_some_and(|inst| inst.phase == InstPhase::Creating);
+                if went_live {
+                    inner
+                        .instances
+                        .get_mut(&instance)
+                        .expect("presence checked above")
+                        .phase = InstPhase::Live;
+                }
+                went_live
+            };
+            if went_live {
+                return Ok(VideoInstanceParts {
+                    instance,
+                    rt_state,
+                    notify_rx,
+                    segment,
+                });
+            }
+        }
+        // Roll the entry back — the runner keeps no residue for a
+        // failed `CreateVideoInstance`, and there are no driver
+        // ends to free (no `RemoveInstance` — nothing was ever
+        // installed). `InstanceLimit` propagates; everything else
+        // is `Err(Ipc)`.
+        let error = match create {
+            Err(HostError::InstanceLimit) => HostError::InstanceLimit,
+            _ => HostError::Ipc,
+        };
+        let mut inner = self.shared.lock();
+        remove_instance(&mut inner, instance);
+        drop(inner);
+        Err(error)
+    }
+
     /// Registers the waiter, queues the frame and waits — the
     /// command channel the handshake (`Scan`/`CreateInstance`) and
     /// [`L1Instance::request`] share. `instance` is the stamped
@@ -1882,11 +2137,12 @@ impl L1Child {
     ///
     /// The instance-scope gate runs **inside** the waiter insert —
     /// atomically: `Scan` needs no entry; ordinary commands require
-    /// `Live`; `CreateInstance` is legal while `Creating` (it IS
-    /// the create); `DestroyInstance` is legal on `Failed`/
-    /// `Destroying` entries (reclaiming their runner slot is its
-    /// job). Everything else on a dead/destroying/removed entry is
-    /// `Err(Ipc)` — `Failed` → `Err(HostError::Failed)`.
+    /// `Live`; `CreateInstance`/`CreateVideoInstance` are legal
+    /// while `Creating` (they ARE the create); `DestroyInstance` is
+    /// legal on `Failed`/`Destroying` entries (reclaiming their
+    /// runner slot is its job). Everything else on a
+    /// dead/destroying/removed entry is `Err(Ipc)` — `Failed` →
+    /// `Err(HostError::Failed)`.
     ///
     /// **RT contract:** non-RT only — waits at most `command_timeout`;
     /// a reply timeout converges the child `Failed` (`Ipc`).
@@ -1894,6 +2150,24 @@ impl L1Child {
         &self,
         instance: u32,
         cmd: wire::Command,
+    ) -> Result<wire::Reply, HostError> {
+        self.request_timed(instance, cmd, self.command_timeout)
+    }
+
+    /// [`L1Child::request`] with an explicit reply wait — the
+    /// timeout-generalized request the video `Render` window needs
+    /// (`render_timeout` is the only verb that outlasts
+    /// `command_timeout`; every other caller takes the wrapper's
+    /// `command_timeout` default). Timeout behavior is identical:
+    /// waiter removal, child-scope `converge_child`,
+    /// `Err(HostError::Ipc)`.
+    ///
+    /// **RT contract:** non-RT only — waits at most `timeout`.
+    pub(crate) fn request_timed(
+        &self,
+        instance: u32,
+        cmd: wire::Command,
+        timeout: Duration,
     ) -> Result<wire::Reply, HostError> {
         let seq = self.shared.next_cmd_seq.fetch_add(1, Ordering::Relaxed);
         let (tx, reply_rx) = mpsc::channel();
@@ -1912,7 +2186,11 @@ impl L1Child {
                     Some(inst) => match inst.phase {
                         InstPhase::Live => {}
                         InstPhase::Creating
-                            if matches!(cmd, wire::Command::CreateInstance { .. }) => {}
+                            if matches!(
+                                cmd,
+                                wire::Command::CreateInstance { .. }
+                                    | wire::Command::CreateVideoInstance { .. }
+                            ) => {}
                         InstPhase::Failed | InstPhase::Destroying
                             if matches!(cmd, wire::Command::DestroyInstance) => {}
                         InstPhase::Failed => return Err(HostError::Failed),
@@ -1935,7 +2213,7 @@ impl L1Child {
             self.shared.lock().waiters.remove(&seq);
             return Err(HostError::Ipc);
         }
-        match reply_rx.recv_timeout(self.command_timeout) {
+        match reply_rx.recv_timeout(timeout) {
             Ok(result) => result,
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 self.shared.lock().waiters.remove(&seq);
@@ -2174,7 +2452,7 @@ impl L1Instance {
         // The spec-legality gate runs before any segment or child
         // exists — [`SpawnSpec::instance_depth`] holds the rule.
         let depth = spec.instance_depth()?;
-        let child = L1Child::spawn_scanned(spec)?;
+        let child = L1Child::spawn_scanned(&spec.view())?;
         let parts = match child.create_instance(spec, depth) {
             Ok(parts) => parts,
             Err(error) => {
@@ -2359,8 +2637,10 @@ impl L1Instance {
     /// latest-wins on `Full`). Also records the activation's
     /// sample rate for endpoint scratch sizing.
     fn arm_staging(&mut self, staging: Arc<data::Staging>, config: ProcessConfig) {
-        if let Some(inst) = self.shared.lock().instances.get_mut(&self.instance) {
-            inst.staging = Some(Arc::clone(&staging));
+        if let Some(inst) = self.shared.lock().instances.get_mut(&self.instance)
+            && let InstKind::Audio { staging: armed, .. } = &mut inst.kind
+        {
+            *armed = Some(Arc::clone(&staging));
         }
         self.activated_sample_rate = Some(config.sample_rate().get());
         match (&mut self.rt, &mut self.arm_tx) {
@@ -2629,7 +2909,7 @@ impl L1Instance {
             .lock()
             .instances
             .get(&self.instance)
-            .and_then(|inst| inst.staging.as_ref())
+            .and_then(InstShared::armed_staging)
             .map_or(0, |staging| staging.frame_capacity);
         if bound_max_frames == 0
             || bound_channels == 0
@@ -2688,7 +2968,7 @@ impl L1Instance {
             .lock()
             .instances
             .get(&self.instance)
-            .and_then(|inst| inst.staging.clone());
+            .and_then(InstShared::armed_staging);
         if let Some(staging) = seed {
             let _ = arm_tx.try_push(staging);
         }
@@ -2753,7 +3033,7 @@ impl L1Instance {
                 .lock()
                 .instances
                 .get(&self.instance)
-                .and_then(|inst| inst.staging.clone());
+                .and_then(InstShared::armed_staging);
             if let (Some(rt), Some(staging)) = (&mut self.rt, staging)
                 && staging.generation > rt.armed_generation()
             {
@@ -2852,7 +3132,7 @@ impl L1Instance {
         inner
             .instances
             .get(&self.instance)
-            .and_then(|inst| inst.staging.as_ref())
+            .and_then(InstShared::armed_staging)
             .map(|staging| {
                 u32::try_from((self.depth - 1) as usize * staging.frame_capacity)
                     .unwrap_or(u32::MAX)
@@ -2917,38 +3197,54 @@ impl Drop for L1Instance {
 /// destination; `Activate` and `StopProcessing` share `Activated`.
 fn post_command_state(cmd: &wire::Command) -> Option<LifecycleState> {
     match cmd {
-        wire::Command::Initialize | wire::Command::Deactivate => Some(LifecycleState::Initialized),
-        wire::Command::Activate { .. } | wire::Command::StopProcessing => {
-            Some(LifecycleState::Activated)
+        wire::Command::Initialize
+        | wire::Command::Deactivate
+        | wire::Command::VideoInitialize
+        | wire::Command::VideoDeactivate => Some(LifecycleState::Initialized),
+        wire::Command::Activate { .. }
+        | wire::Command::StopProcessing
+        | wire::Command::VideoActivate
+        | wire::Command::VideoStopProcessing => Some(LifecycleState::Activated),
+        wire::Command::StartProcessing | wire::Command::VideoStartProcessing => {
+            Some(LifecycleState::Processing)
         }
-        wire::Command::StartProcessing => Some(LifecycleState::Processing),
         _ => None,
     }
 }
 
 /// The lifecycle state an `Err` reply still leaves the instance in —
-/// `Some` only for `StopProcessing`, the one commit-then-advisory
-/// verb in the runner's dispatch: it applies
-/// `Processing → Activated` *before* running the
-/// `stop_processing()` hook (`ruviform_plugin_export::Runner`'s exact
-/// ordering, matching L0's `InProcessHost::stop_processing`), so a
-/// hook/plugin-class `Err` arrives after the transition and the
-/// child stays `Activated`. `Err(Lifecycle)` is always the
-/// pre-commit legality rejection — the caller filters it, not this
-/// table.
+/// `Some` only for the commit-then-advisory verbs in the runner's
+/// dispatch: `stop_processing()`/`deactivate()` apply their
+/// transition *before* running the hook (`ruviform_plugin_export`'s
+/// exact ordering, matching L0's `InProcessHost`), so a hook/plugin
+/// `Err` arrives after the transition and the child stays in the
+/// post-state. `Err(Lifecycle)` is always the pre-commit legality
+/// rejection — the caller filters it, not this table.
 ///
 /// The full-verb audit behind `Some`/`None`: `Initialize` and
 /// `Activate` either reject pre-commit (`Err(Lifecycle)`) or take
 /// the `InitFailed`/`ActivateFailed` loop back to the pre-command
 /// state; `StartProcessing` commits, then rolls a hook failure back
-/// to `Activated` — likewise its pre-command state; `Deactivate`'s
-/// transition *is* its dispatch, so every `Err` it reports is
-/// pre-commit; `SaveState`, `RestoreState` and the GUI verbs carry
-/// no lifecycle transition at all. Every other `Err` therefore
-/// leaves the child — and the mirror — in the pre-command state.
+/// to `Activated` — likewise its pre-command state; `SaveState`,
+/// `RestoreState` and the GUI verbs carry no lifecycle transition
+/// at all. Every other `Err` therefore leaves the child — and the
+/// mirror — in the pre-command state.
+///
+/// The video mapping follows the same rule the design pins for the
+/// runner (`lifecycle.transition()` runs before the hook —
+/// `stop_processing`'s commit-then-advisory ordering, and
+/// `deactivate()`'s fallible-but-committed transition):
+/// `VideoStopProcessing` commits `Activated` and
+/// `VideoDeactivate` commits `Initialized` even on a hook `Err`,
+/// while `VideoInitialize`/`VideoActivate`/`VideoStartProcessing`
+/// `Err`s loop or roll back to the pre-command state and
+/// `VideoRender`/param verbs carry no transition at all.
 fn err_committed_state(cmd: &wire::Command) -> Option<LifecycleState> {
     match cmd {
-        wire::Command::StopProcessing => Some(LifecycleState::Activated),
+        wire::Command::StopProcessing | wire::Command::VideoStopProcessing => {
+            Some(LifecycleState::Activated)
+        }
+        wire::Command::VideoDeactivate => Some(LifecycleState::Initialized),
         _ => None,
     }
 }
@@ -2976,13 +3272,15 @@ impl L1Child {
                     mirror: LifecycleState::Created,
                     notify_tx,
                     notify: Notify::Idle,
-                    staging: None,
-                    shm: SegmentInfo {
-                        key: "l1-pool-fixture".to_owned(),
-                        in_depth: 1,
-                        out_depth: 1,
+                    kind: InstKind::Audio {
+                        staging: None,
+                        shm: SegmentInfo {
+                            key: "l1-pool-fixture".to_owned(),
+                            in_depth: 1,
+                            out_depth: 1,
+                        },
+                        result_tx: Mutex::new(result_tx),
                     },
-                    result_tx: Mutex::new(result_tx),
                     phase: InstPhase::Live,
                 },
             );
@@ -3102,13 +3400,15 @@ impl L1Instance {
                 mirror,
                 notify_tx,
                 notify: Notify::Idle,
-                staging,
-                shm: SegmentInfo {
-                    key: segment.key().to_owned(),
-                    in_depth: DEPTH,
-                    out_depth: DEPTH,
+                kind: InstKind::Audio {
+                    staging,
+                    shm: SegmentInfo {
+                        key: segment.key().to_owned(),
+                        in_depth: DEPTH,
+                        out_depth: DEPTH,
+                    },
+                    result_tx: Mutex::new(result_tx),
                 },
-                result_tx: Mutex::new(result_tx),
                 phase: if mirror.is_failed() || mirror.is_destroyed() {
                     InstPhase::Failed
                 } else {
@@ -3457,8 +3757,16 @@ mod tests {
         let (result_tx, result_rx) = ruviform_rt::channel::<u64>(DEPTH as usize);
         let (inst, _notify_rx, _) = inst_shared(LifecycleState::Processing);
         let mut inst = inst;
-        inst.result_tx = Mutex::new(result_tx);
-        inst.staging = Some(Arc::new(data::Staging::new(DEPTH, 512, 1)));
+        let InstKind::Audio {
+            result_tx: inst_result_tx,
+            staging: inst_staging,
+            ..
+        } = &mut inst.kind
+        else {
+            panic!("inst_shared mints an Audio entry");
+        };
+        *inst_result_tx = Mutex::new(result_tx);
+        *inst_staging = Some(Arc::new(data::Staging::new(DEPTH, 512, 1)));
         let mut instances = HashMap::new();
         instances.insert(INSTANCE, inst);
         let shared = Shared {
@@ -3586,13 +3894,15 @@ mod tests {
                 mirror: state,
                 notify_tx,
                 notify: Notify::Idle,
-                staging: None,
-                shm: SegmentInfo {
-                    key: "demux-test".to_owned(),
-                    in_depth: 3,
-                    out_depth: 3,
+                kind: InstKind::Audio {
+                    staging: None,
+                    shm: SegmentInfo {
+                        key: "demux-test".to_owned(),
+                        in_depth: 3,
+                        out_depth: 3,
+                    },
+                    result_tx: Mutex::new(result_tx),
                 },
-                result_tx: Mutex::new(result_tx),
                 phase: InstPhase::Live,
             },
             notify_rx,
@@ -4666,6 +4976,25 @@ mod tests {
         assert_no_frame(&mut sink);
     }
 
+    /// One producer-side `Submit` doorbell push — the
+    /// `drain_submits_rings_doorbells_and_gates_dead` test's
+    /// per-instance `try_push` spelled once.
+    fn push_submit(
+        producers: &mut HashMap<u32, ruviform_rt::Producer<data::Submit>>,
+        instance: u32,
+        n: u64,
+        generation: u64,
+    ) {
+        producers
+            .get_mut(&instance)
+            .unwrap()
+            .try_push(data::Submit {
+                seq: data::BLOCK_SEQ_FLAG | n,
+                generation,
+            })
+            .unwrap();
+    }
+
     /// The `drain_submits` doorbell gates: a live+armed instance's
     /// submit rings a real doorbell — `(i, seq)` is in
     /// `block_in_flight` with its `BlockIn` on the wire (the code
@@ -4691,12 +5020,15 @@ mod tests {
         {
             let mut inner = fixture.shared.lock();
             let inst = inner.instances.get_mut(&0).unwrap();
-            inst.shm = SegmentInfo {
+            let InstKind::Audio { shm, staging, .. } = &mut inst.kind else {
+                panic!("DemuxFixture mints Audio entries");
+            };
+            *shm = SegmentInfo {
                 key: segment.key().to_owned(),
                 in_depth: 3,
                 out_depth: 3,
             };
-            inst.staging = Some(Arc::new(data::Staging::new(3, 64, 7)));
+            *staging = Some(Arc::new(data::Staging::new(3, 64, 7)));
             inner.instances.get_mut(&1).unwrap().phase = InstPhase::Destroying;
             inner.instances.get_mut(&2).unwrap().phase = InstPhase::Failed;
             inner.instances.get_mut(&3).unwrap().phase = InstPhase::Creating;
@@ -4710,29 +5042,16 @@ mod tests {
             submits.insert(instance, rx);
             producers.insert(instance, tx);
         }
-        let submit = |producers: &mut HashMap<u32, ruviform_rt::Producer<data::Submit>>,
-                      instance: u32,
-                      n: u64,
-                      generation: u64| {
-            producers
-                .get_mut(&instance)
-                .unwrap()
-                .try_push(data::Submit {
-                    seq: seq(n),
-                    generation,
-                })
-                .unwrap();
-        };
         // Armed submit on the live instance → real doorbell.
-        submit(&mut producers, 0, 5, 7);
+        push_submit(&mut producers, 0, 5, 7);
         // Stale-generation submit on the live instance → drop.
-        submit(&mut producers, 0, 6, 8);
+        push_submit(&mut producers, 0, 6, 8);
         // Non-live entries → drop (the `Destroying` gate).
-        submit(&mut producers, 1, 7, 7);
-        submit(&mut producers, 2, 8, 7);
-        submit(&mut producers, 3, 9, 7);
+        push_submit(&mut producers, 1, 7, 7);
+        push_submit(&mut producers, 2, 8, 7);
+        push_submit(&mut producers, 3, 9, 7);
         // Unregistered entry → silent drop, no completion owed.
-        submit(&mut producers, 9, 10, 7);
+        push_submit(&mut producers, 9, 10, 7);
 
         assert!(drain_submits(
             &fixture.shared,
@@ -4760,23 +5079,15 @@ mod tests {
         // Every gated drop completed `mark_failed` on its own
         // instance's result channel — exactly one completion per seq.
         for (instance, n) in [(0_u32, 6_u64), (1, 7), (2, 8), (3, 9)] {
-            assert_eq!(
-                fixture
-                    .result_rxs
-                    .get_mut(&instance)
-                    .unwrap()
-                    .try_pop()
-                    .unwrap(),
-                data::mark_failed(seq(n)),
-                "instance {instance}'s gated submit must complete mark_failed"
-            );
+            let rx = fixture.result_rxs.get_mut(&instance).unwrap();
+            assert_eq!(rx.try_pop().unwrap(), data::mark_failed(seq(n)));
         }
 
         // A draining child (`shutdown_initiated`) takes no new
         // doorbells — even an armed `Live` entry's submit is a
         // gated drop.
         fixture.shared.lock().shutdown_initiated = true;
-        submit(&mut producers, 0, 11, 7);
+        push_submit(&mut producers, 0, 11, 7);
         assert!(drain_submits(
             &fixture.shared,
             &mut sink,
@@ -4813,12 +5124,15 @@ mod tests {
         {
             let mut inner = fixture.shared.lock();
             let inst = inner.instances.get_mut(&0).unwrap();
-            inst.shm = SegmentInfo {
+            let InstKind::Audio { shm, staging, .. } = &mut inst.kind else {
+                panic!("DemuxFixture mints Audio entries");
+            };
+            *shm = SegmentInfo {
                 key: segment_n.key().to_owned(),
                 in_depth: 3,
                 out_depth: 3,
             };
-            inst.staging = Some(Arc::new(data::Staging::new(3, 8, 1)));
+            *staging = Some(Arc::new(data::Staging::new(3, 8, 1)));
             inner.block_in_flight.insert((0, data::BLOCK_SEQ_FLAG | 5));
         }
         let mut views: HashMap<u32, ReaderView> = HashMap::new();
@@ -4838,7 +5152,11 @@ mod tests {
         // it instead of reading gen N's mapping.
         {
             let mut inner = fixture.shared.lock();
-            inner.instances.get_mut(&0).unwrap().shm = SegmentInfo {
+            let inst = inner.instances.get_mut(&0).unwrap();
+            let InstKind::Audio { shm, .. } = &mut inst.kind else {
+                panic!("DemuxFixture mints Audio entries");
+            };
+            *shm = SegmentInfo {
                 key: segment_n1.key().to_owned(),
                 in_depth: 3,
                 out_depth: 3,
@@ -5142,5 +5460,300 @@ mod tests {
         assert!(matches!(spec.instance_depth(), Err(HostError::Ipc)));
         spec.lookahead_blocks = 2;
         assert_eq!(spec.instance_depth().unwrap(), 3);
+    }
+
+    // ---------------------------------------------------------------
+    // Issue #118 T3 — the video side of the shared machinery: the
+    // `Creating` gate's `CreateVideoInstance` arm, the
+    // timeout-generalized `request_timed`, and
+    // `create_video_instance`'s no-data-plane create/rollback pair.
+    // `VideoL1Instance`'s own facade tests live in `l1::video`.
+    // ---------------------------------------------------------------
+
+    use ruviform_media_core::FrameRate;
+    use ruviform_video_core::PixelFormat;
+
+    /// A small legal video config for the machinery tests — dims
+    /// stay tiny so the `vshm::Segment` allocation is trivial.
+    fn video_config(width: u32, height: u32) -> VideoProcessConfig {
+        VideoProcessConfig::new(
+            PixelFormat::Yuv420p,
+            width,
+            height,
+            FrameRate::new(30, 1).unwrap(),
+        )
+        .unwrap()
+    }
+
+    /// The video spec the create-path tests mint on — descriptor id
+    /// is the `CreateVideoInstance` `plugin_id` echo oracle.
+    fn video_spec() -> SpawnSpec {
+        SpawnSpec::new(
+            PluginDescriptor {
+                id: "org.ruviform.test.video-create",
+                name: "video-create",
+                vendor: "Ruviform",
+                version: "0",
+                features: &[],
+            },
+            OsString::from("unused-video-runner"),
+        )
+    }
+
+    /// Registers a `Creating`-phase `InstKind::Video` entry on
+    /// `child` — the registry shape `create_video_instance` leaves
+    /// between the mint and the `Live` flip.
+    fn insert_creating_video(child: &L1Child, instance: u32, config: VideoProcessConfig) {
+        let (notify_tx, _notify_rx) = mpsc::channel();
+        child.shared.lock().instances.insert(
+            instance,
+            InstShared {
+                rt_state: Arc::new(AtomicU8::new(data::mirror_encode(LifecycleState::Created))),
+                mirror: LifecycleState::Created,
+                notify_tx,
+                notify: Notify::Idle,
+                kind: InstKind::Video { config },
+                phase: InstPhase::Creating,
+            },
+        );
+    }
+
+    /// The `Creating` gate accepts `CreateVideoInstance` — it IS
+    /// the create — while rejecting every other verb on a
+    /// mid-mint video entry, the same instance-scope rule
+    /// `CreateInstance` obeys on audio.
+    #[test]
+    fn creating_gate_accepts_create_video_instance() {
+        let (child, driver_rx) = create_harness();
+        let config = video_config(64, 48);
+        insert_creating_video(&child, 0, config);
+        let create = wire::Command::CreateVideoInstance {
+            plugin_id: "org.ruviform.test.video-create".to_owned(),
+            shm_key: "unused-key".to_owned(),
+            config,
+        };
+        // The non-create verb rejects before the wire — no waiter,
+        // no `DriverCmd`.
+        assert!(matches!(
+            child.request(0, wire::Command::VideoGetParams),
+            Err(HostError::Ipc)
+        ));
+        assert!(matches!(
+            driver_rx.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+        // The create verb passes the gate — the `Command` carries
+        // the `CreateVideoInstance` verbatim.
+        let join = thread::spawn({
+            let child = Arc::clone(&child);
+            move || child.request(0, create)
+        });
+        match driver_rx.recv_timeout(Duration::from_secs(30)) {
+            Ok(DriverCmd::Command { seq, instance, cmd }) => {
+                assert_eq!(instance, 0);
+                assert!(matches!(cmd, wire::Command::CreateVideoInstance { .. }));
+                let waiter = child
+                    .shared
+                    .lock()
+                    .waiters
+                    .remove(&seq)
+                    .expect("waiter registered");
+                waiter.tx.send(Ok(wire::Reply::Ok)).expect("waiter open");
+            }
+            Ok(_) => panic!("expected the CreateVideoInstance Command"),
+            Err(error) => panic!("driver channel died before CreateVideoInstance: {error}"),
+        }
+        assert!(matches!(
+            join.join().expect("request joined"),
+            Ok(wire::Reply::Ok)
+        ));
+    }
+
+    /// `request_timed` is the timeout-generalized request: the
+    /// explicit bound, not `command_timeout`, bounds the reply
+    /// wait — a 30 ms render window against the fixture's 30 s
+    /// `command_timeout` answers in milliseconds. Timeout behavior
+    /// is unchanged: waiter removal, child-scope `converge_child`,
+    /// `Err(Ipc)`.
+    #[test]
+    fn request_timed_honors_the_explicit_timeout() {
+        let (child, driver_rx) = create_harness();
+        let config = video_config(64, 48);
+        insert_creating_video(&child, 0, config);
+        child.shared.lock().instances.get_mut(&0).unwrap().phase = InstPhase::Live;
+        let started = Instant::now();
+        let join = thread::spawn({
+            let child = Arc::clone(&child);
+            move || child.request_timed(0, wire::Command::VideoGetParams, Duration::from_millis(30))
+        });
+        assert!(matches!(
+            driver_rx.recv_timeout(Duration::from_secs(30)),
+            Ok(DriverCmd::Command { .. })
+        ));
+        assert!(matches!(
+            join.join().expect("request joined"),
+            Err(HostError::Ipc)
+        ));
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "the explicit 30 ms bound, not the 30 s command_timeout, must pace the wait"
+        );
+        // The reply timeout is unattributable — the whole child
+        // converges `Failed`.
+        assert!(matches!(
+            child.shared.lock().terminal,
+            Some(Terminal::Failed)
+        ));
+    }
+
+    /// Runs `create_video_instance` on a thread — the
+    /// `VideoInstanceParts` success payload holds the `!Send`
+    /// `vshm` segment, so it stays and drops there (these tests
+    /// assert the `Err` half and the registry state). Returns the
+    /// `CreateVideoInstance` waiter's seq plus the join handle;
+    /// asserts the *first* driver order is the `Command` itself —
+    /// the no-`AddInstance` pin the video create differs on.
+    fn spawn_video_create(
+        child: &Arc<L1Child>,
+        driver_rx: &mpsc::Receiver<DriverCmd>,
+        config: VideoProcessConfig,
+    ) -> (u64, thread::JoinHandle<Result<(), HostError>>) {
+        let spec = video_spec();
+        let join = thread::spawn({
+            let child = Arc::clone(child);
+            move || {
+                child
+                    .create_video_instance(&spec.view(), config)
+                    .map(|_| ())
+            }
+        });
+        match driver_rx.recv_timeout(Duration::from_secs(30)) {
+            Ok(DriverCmd::Command {
+                seq,
+                cmd: wire::Command::CreateVideoInstance { .. },
+                ..
+            }) => (seq, join),
+            Ok(_) => panic!("a video create must not order AddInstance — Command comes first"),
+            Err(error) => panic!("driver channel died before CreateVideoInstance: {error}"),
+        }
+    }
+
+    /// The `Ok` half: the `Creating` video entry flips `Live`
+    /// atomically, `InstKind::Video` keeps the stashed config, and
+    /// no driver order beyond the `Command` ever ships (no
+    /// `AddInstance`, no `RemoveInstance`).
+    #[test]
+    fn create_video_instance_ok_flips_live() {
+        let (child, driver_rx) = create_harness();
+        let config = video_config(64, 48);
+        let (seq, join) = spawn_video_create(&child, &driver_rx, config);
+        let waiter = child
+            .shared
+            .lock()
+            .waiters
+            .remove(&seq)
+            .expect("waiter registered");
+        waiter.tx.send(Ok(wire::Reply::Ok)).expect("waiter open");
+        join.join().expect("create_video_instance joined").unwrap();
+        {
+            let inner = child.shared.lock();
+            let inst = inner.instances.get(&0).expect("entry registered");
+            assert!(matches!(inst.phase, InstPhase::Live));
+            assert!(matches!(
+                &inst.kind,
+                InstKind::Video { config: pinned } if *pinned == config
+            ));
+            assert_eq!(inst.mirror, LifecycleState::Created);
+        }
+        // Nothing else was ordered — a video entry installs and
+        // frees no driver ends.
+        assert!(matches!(
+            driver_rx.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+    }
+
+    /// The defined `Err(HostError)` `CreateVideoInstance`
+    /// rejections mirror `create_instance`'s: `InstanceLimit`
+    /// propagates unflattened; every other rejection folds to
+    /// `Err(Ipc)`. The entry rolls back **without** a
+    /// `RemoveInstance` order — a video entry never installed
+    /// driver ends.
+    #[test]
+    fn create_video_instance_reply_error_surfaces() {
+        for (reply, expected) in [
+            (HostError::InstanceLimit, HostError::InstanceLimit),
+            (HostError::UnknownPluginId, HostError::Ipc),
+            (HostError::PluginFailed, HostError::Ipc),
+        ] {
+            let (child, driver_rx) = create_harness();
+            let (seq, join) = spawn_video_create(&child, &driver_rx, video_config(64, 48));
+            let waiter = child
+                .shared
+                .lock()
+                .waiters
+                .remove(&seq)
+                .expect("waiter registered");
+            let _ = waiter.tx.send(Err(reply));
+            assert!(
+                matches!(join.join().expect("create_video_instance joined"), Err(error) if error == expected),
+                "{reply:?} must surface as {expected:?}"
+            );
+            assert!(child.shared.lock().instances.is_empty());
+            // No `RemoveInstance` — nothing was ever installed on
+            // the driver for this video entry.
+            assert!(matches!(
+                driver_rx.try_recv(),
+                Err(mpsc::TryRecvError::Empty)
+            ));
+        }
+    }
+
+    /// The mid-mint race on the video create: `converge_child`
+    /// flips the still-`Creating` entry `Failed` (silently — no
+    /// notification on a `Creating` entry), then the `Ok` reply
+    /// lands. The `Live` flip must not regress the converged
+    /// entry — `create_video_instance` folds into rollback:
+    /// `Err(Ipc)`, entry removed, no `RemoveInstance`.
+    #[test]
+    fn create_video_instance_ok_then_converge_rolls_back() {
+        let (child, driver_rx) = create_harness();
+        let (seq, join) = spawn_video_create(&child, &driver_rx, video_config(64, 48));
+        let waiter = child
+            .shared
+            .lock()
+            .waiters
+            .remove(&seq)
+            .expect("waiter registered");
+        converge_child(&child.shared, None);
+        let _ = waiter.tx.send(Ok(wire::Reply::Ok));
+        assert!(matches!(
+            join.join().expect("create_video_instance joined"),
+            Err(HostError::Ipc)
+        ));
+        {
+            let inner = child.shared.lock();
+            assert!(!inner.instances.contains_key(&0));
+            assert!(matches!(inner.terminal, Some(Terminal::Failed)));
+        }
+        assert!(matches!(
+            driver_rx.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+    }
+
+    /// A full child's `create_video_instance` answers
+    /// `Err(InstanceLimit)` — the same capacity fact
+    /// `create_instance` propagates — before the create verb ever
+    /// reaches the wire.
+    #[test]
+    fn create_video_instance_on_full_child_is_instance_limit() {
+        let child = L1Child::test_fixture(wire::WIRE_MAX_INSTANCES);
+        let spec = video_spec();
+        assert!(matches!(
+            child.create_video_instance(&spec.view(), video_config(64, 48)),
+            Err(HostError::InstanceLimit)
+        ));
+        assert_eq!(child.live_count(), wire::WIRE_MAX_INSTANCES as usize);
     }
 }

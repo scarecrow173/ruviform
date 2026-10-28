@@ -53,6 +53,29 @@
 //! activated sample rate for seconds). Underruns pass through
 //! the last received block (silence before the first), never error.
 //!
+//! ## Video surface (Issue #118)
+//!
+//! [`PluginHost::video`] borrows the host into a
+//! [`VideoPluginHost`] — the NONRT sibling surface for
+//! out-of-process video plugins: [`VideoHostCommand`]/
+//! [`VideoHostReply`] carry `Scan`, `Instantiate` (with a
+//! [`VideoProcessConfig`](ruviform_plugin_core::VideoProcessConfig)),
+//! the lifecycle verbs, `Render` (the video `process` equivalent
+//! — one whole [`VideoFrame`](ruviform_video_core::VideoFrame) per
+//! call) and the plain-parameter verbs over the same unified
+//! [`PluginHandle`] space. Registration takes a
+//! [`VideoOutOfProcessSpec`] — **dedicated-only by construction**
+//! (no `isolation`, no `lookahead_blocks`): every video instance
+//! gets its own child and a host-owned `vshm` shared-memory
+//! segment transports its frames. Audio and video share the
+//! plugin-id namespace (`DuplicatePluginId` fires either
+//! direction) but never cross: a video `Instantiate` on an audio
+//! id is `UnknownPluginId`, an audio `HostCommand` on a video
+//! handle is `Unsupported`, and the audio RT/endpoint surface
+//! (`process`/`prepare_endpoint`) does not exist for video
+//! handles (`Unsupported`/`EndpointUnavailable`). Every video
+//! operation is non-RT.
+//!
 //! ## Endpoint surface (Issue #113)
 //!
 //! [`PluginHost::prepare_endpoint`] detaches one activated
@@ -157,6 +180,7 @@ mod host;
 pub(crate) mod l1;
 mod plugin;
 mod supervisor;
+mod video;
 
 pub use command::{GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, PluginHandle};
 pub use composite::{
@@ -171,6 +195,7 @@ pub use supervisor::{
     RestartPolicy, RestartRecipe, RestoreOutcome, SupervisedId, SupervisionError, SupervisionEvent,
     Supervisor,
 };
+pub use video::{VideoHostCommand, VideoHostReply, VideoOutOfProcessSpec, VideoPluginHost};
 
 /// Returns the crate version string.
 ///
