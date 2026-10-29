@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NXupvMzQElYkWehw8ln"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 video runner + erased surface（erase_video・run_video・VideoEntry・vshm attach・reference bin・runner E2E）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -112,18 +112,18 @@ relations:
 
 ## Done When
 
-- [ ] `erase_video`/`ErasedVideoPlugin`/`VideoPluginFactory` が plugin-core に存在し、全 hook が `Result<_, HostError>` で plugin `Error` → `PluginFailed` 正規化・encode obligations (b)(c)(d) が adapter 境界に集約されている
-- [ ] `run_video(factories)` が `run` と parallel に存在し、`run`/`ErasedPlugin`/audio registry が無変更
-- [ ] `CreateVideoInstance` の検証 chain（`UnknownPluginId` → `InstanceLimit` → dup `Ipc` → attach `Ipc` → create → insert）と stash config の `initialize(&config)` 再生が動作する
-- [ ] `VideoRender` が `transition(Process)` 前置 + desc semantic 検証（非 canonical → `Err(Ipc)`・config 不一致 → `Err(Prepare(UnsupportedConfig))`）+ output metadata seed + commit-on-success で動く
-- [ ] param dispatch が `id ∈ parameters()` 先行検査を行い `ParamInfo(None)`/`Err(InvalidValue)` を返し、audio 動詞宛は `Err(Unsupported)`・未登録は `Err(InvalidHandle)`（cross-kind create 含む — 新規 arm ゼロ）
-- [ ] inbound `BlockIn` が静かに drop され、`BlockDone`/`Reply`/`Hello` が protocol violation で子終了、`Shutdown`/EOF が全 entry normalize + exit 0
-- [ ] reference bin + MiniHost E2E が上記分岐を全て pass する
+- [x] `erase_video`/`ErasedVideoPlugin`/`VideoPluginFactory` が plugin-core に存在し、全 hook が `Result<_, HostError>` で plugin `Error` → `PluginFailed` 正規化・encode obligations (b)(c)(d) が adapter 境界に集約されている
+- [x] `run_video(factories)` が `run` と parallel に存在し、`run`/`ErasedPlugin`/audio registry が無変更
+- [x] `CreateVideoInstance` の検証 chain（`UnknownPluginId` → `InstanceLimit` → dup `Ipc` → attach `Ipc` → create → insert）と stash config の `initialize(&config)` 再生が動作する
+- [x] `VideoRender` が `transition(Process)` 前置 + desc semantic 検証（非 canonical → `Err(Ipc)`・config 不一致 → `Err(Prepare(UnsupportedConfig))`）+ output metadata seed + commit-on-success で動く
+- [x] param dispatch が `id ∈ parameters()` 先行検査を行い `ParamInfo(None)`/`Err(InvalidValue)` を返し、audio 動詞宛は `Err(Unsupported)`・未登録は `Err(InvalidHandle)`（cross-kind create 含む — 新規 arm ゼロ）
+- [x] inbound `BlockIn` が静かに drop され、`BlockDone`/`Reply`/`Hello` が protocol violation で子終了、`Shutdown`/EOF が全 entry normalize + exit 0
+- [x] reference bin + MiniHost E2E が上記分岐を全て pass する
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-export --test l1_video_runner_e2e` — MiniHost video runner E2E が pass
-- [ ] `cargo test -p ruviform-plugin-export` — 既存 audio runner E2E（`l1_runner_e2e`）が無変更で green
-- [ ] `cargo test -p ruviform-plugin-core` — `erase_video` adapter の unit test（正規化・obligation 行列）が pass
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass
-- [ ] `cargo doc -p ruviform-plugin-export -p ruviform-plugin-core --no-deps` が warning 0
+- [x] `cargo test -p ruviform-plugin-export --test l1_video_runner_e2e` — MiniHost video runner E2E が pass
+- [x] `cargo test -p ruviform-plugin-export` — 既存 audio runner E2E（`l1_runner_e2e`）が無変更で green
+- [x] `cargo test -p ruviform-plugin-core` — `erase_video` adapter の unit test（正規化・obligation 行列）が pass
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass
+- [x] `cargo doc -p ruviform-plugin-export -p ruviform-plugin-core --no-deps` が warning 0

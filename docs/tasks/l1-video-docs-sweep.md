@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NXuA0ENhlZxgP8zpnqd"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 video docs sweep（crate README・親文書 re-engagement 注記・test-spec v3 reconcile・literal sweep）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -135,17 +135,17 @@ video L1 が着地した後のドキュメント整合 sweep — `WIRE_VERSION` 
 
 ## Done When
 
-- [ ] `grep -rn "WIRE_VERSION" docs/ crates/*/README.md` の残存記述が v3 現行値を反映し、`"audio wire v2"`・`"run is the"`・`"the L1"` の stale wording がない
-- [ ] `grep -rn "Slot::\|Route::\|descriptors\|HostCommand" docs/ crates/*/README.md` で video arm 追加後の真実（`OutOfProcessVideo`/kind-tag/`VideoHostCommand`）と矛盾する記述がない
-- [ ] 3 crate README に video module/bin/suite/dep edge の責務表行があり、`ruviform-video-core`/`ruviform-media-core` 追加根拠が記述されている
-- [ ] 親文書（`plugin-l1-out-of-process` design+spec・`engine-plugin-host-integration` design+spec）と `issue-117-bundle-child-process`/`issue-119` spec・`issue-117-bundle-child-failed-granularity` ADR に #118 re-engagement 注記がある
-- [ ] 既存 test-spec 7 本（`plugin-l1-*`×3・`real-adapter-l1-e2e`・`issue-117-*`×3）に v3 reconcile 注記があり、`issue-118-*` test-spec は新規 v3 前提で reconcile 不要と明記されている
-- [ ] `issue-117-bundle-child-implementation.md` に #118 差分注記がある
-- [ ] Rust 側 stale comment disposition が記録されている（`export/src/lib.rs` → T2 担当・`l1-test-worker.rs` → R-B6 差分 0 pin で accepted-stale）
+- [x] `grep -rn "WIRE_VERSION" docs/ crates/*/README.md` の残存記述が v3 現行値を反映し、`"audio wire v2"`・`"run is the"`・`"the L1"` の stale wording がない
+- [x] `grep -rn "Slot::\|Route::\|descriptors\|HostCommand" docs/ crates/*/README.md` で video arm 追加後の真実（`OutOfProcessVideo`/kind-tag/`VideoHostCommand`）と矛盾する記述がない
+- [x] 3 crate README に video module/bin/suite/dep edge の責務表行があり、`ruviform-video-core`/`ruviform-media-core` 追加根拠が記述されている
+- [x] 親文書（`plugin-l1-out-of-process` design+spec・`engine-plugin-host-integration` design+spec）と `issue-117-bundle-child-process`/`issue-119` spec・`issue-117-bundle-child-failed-granularity` ADR に #118 re-engagement 注記がある
+- [x] 既存 test-spec 7 本（`plugin-l1-*`×3・`real-adapter-l1-e2e`・`issue-117-*`×3）に v3 reconcile 注記があり、`issue-118-*` test-spec は新規 v3 前提で reconcile 不要と明記されている
+- [x] `issue-117-bundle-child-implementation.md` に #118 差分注記がある
+- [x] Rust 側 stale comment disposition が記録されている（`export/src/lib.rs` → T2 担当・`l1-test-worker.rs` → R-B6 差分 0 pin で accepted-stale）
 
 ## Verification
 
-- [ ] `node .agents/skills/doc-status/scripts/doc_status.js audit --json` — `blocking: 0`・`findings: []`（本 task 自体の front-matter 整合を含む）
-- [ ] `mise run fmt-check` / `check` / `lint` — doc-only 変更でも workspace 全体が clean
-- [ ] `prek run --all-files`（または `mise exec -- prek run --all-files`）が pass — README/docs の markdownlint・link check を含む
-- [ ] stale literal sweep（上記 grep コマンド）の残存が注記で整合している
+- [x] `node .agents/skills/doc-status/scripts/doc_status.js audit --json` — `blocking: 0`・`findings: []`（本 task 自体の front-matter 整合を含む）
+- [x] `mise run fmt-check` / `check` / `lint` — doc-only 変更でも workspace 全体が clean
+- [x] `prek run --all-files`（または `mise exec -- prek run --all-files`）が pass — README/docs の markdownlint・link check を含む
+- [x] stale literal sweep（上記 grep コマンド）の残存が注記で整合している

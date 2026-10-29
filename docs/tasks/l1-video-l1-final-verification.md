@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NXuAACPRKeBy1TSW1EO"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 video/NONRT final verification（Full Gate・AC/R-V 証拠・IR・status 同期・closeout）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -50,7 +50,8 @@ relations:
         path: "docs/impl/exp/data/issue-118-final-gate-doc-audit-*.log"
   implements:
     - "docs/plans/implement-issue-118-video-l1.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-118-video-l1-implementation.md"
   depends-on:
     - "docs/plans/implement-issue-118-video-l1.md"
     - "docs/tasks/l1-video-fixture-and-e2e.md"
@@ -125,22 +126,22 @@ relations:
 
 ## Done When
 
-- [ ] `docs/impl/ir/issue-118-video-l1-implementation.md` が #117 IR スキーマで存在し、AC1-AC9 + R-B1-B8 + R-F1-F6 + R-V1-V6 の全行が検証 task/test/証拠に対応している
-- [ ] `docs/impl/ir/README.md` に IR 行が追加され index と一致している
-- [ ] plan status が `completed`、spec status が `implemented`、6 task status が `done` で index 行と一致し、edge convention が #117 closeout の先例どおり（IR の `implements` → T6 task・T6 task の `implemented-by` → IR・spec/design/ADR/test-spec の relation は無変更）で `doc_status.js` reciprocal が通っている
-- [ ] IR の「実行した検証」と「未実行/対象外」の区別が明示され、AC9 real video adapter lane が v1 対象外と明記されている
-- [ ] `doc_status.js audit --json` が `blocking: 0`・`findings: []`（IR + status 同期後の最終 audit）
-- [ ] `git status`/`git diff --check` が clean で、Rust ソース変更がない
+- [x] `docs/impl/ir/issue-118-video-l1-implementation.md` が #117 IR スキーマで存在し、AC1-AC9 + R-B1-B8 + R-F1-F6 + R-V1-V6 の全行が検証 task/test/証拠に対応している
+- [x] `docs/impl/ir/README.md` に IR 行が追加され index と一致している
+- [x] plan status が `completed`、spec status が `implemented`、6 task status が `done` で index 行と一致し、edge convention が #117 closeout の先例どおり（IR の `implements` → T6 task・T6 task の `implemented-by` → IR・spec/design/ADR/test-spec の relation は無変更）で `doc_status.js` reciprocal が通っている
+- [x] IR の「実行した検証」と「未実行/対象外」の区別が明示され、AC9 real video adapter lane が v1 対象外と明記されている
+- [x] `doc_status.js audit --json` が `blocking: 0`・`findings: []`（IR + status 同期後の最終 audit）
+- [x] `git status`/`git diff --check` が clean で、Rust ソース変更がない
 
 ## Verification
 
-- [ ] `mise run fmt-check` — pass
-- [ ] `mise run check` — pass（`--workspace --all-targets`）
-- [ ] `mise run lint` — pass（`-D warnings`）
-- [ ] `mise run test` — pass（`--workspace` 全 suite — `l1_video_e2e`/`l1_video_runner_e2e`/`l1_proxy_e2e`/`l1_runner_e2e` 含む）
-- [ ] `mise run test-rt` — pass（`rt_` フィルタ — video は NONRT のため audio RT suite が無退行であることの確認）
-- [ ] `mise run bench-smoke` — pass（`--test` 1 回実行 — `ruviform-math`/`ruviform-rt` ベンチの smoke lane が video 変更で壊れていないことの確認）
-- [ ] `cargo doc -p ruviform-plugin-core -p ruviform-plugin-host -p ruviform-plugin-export --no-deps` — warning 0
-- [ ] `node .agents/skills/doc-status/scripts/doc_status.js audit --json` — `blocking: 0`・`findings: []`（最終 audit — IR 着地後）
-- [ ] `prek run --all-files`（または `mise exec -- prek run --all-files`）— pass（README/docs の hook を含む）
-- [ ] `mise run test-l1-real-plugin` / `lint-l1-real-plugin` — video lane は v1 対象外（audio CLAP/VST3 lane のみ — opt-in のため実行は任意。IR に「対象外」と明記）
+- [x] `mise run fmt-check` — pass
+- [x] `mise run check` — pass（`--workspace --all-targets`）
+- [x] `mise run lint` — pass（`-D warnings`）
+- [x] `mise run test` — pass（`--workspace` 全 suite — `l1_video_e2e`/`l1_video_runner_e2e`/`l1_proxy_e2e`/`l1_runner_e2e` 含む）
+- [x] `mise run test-rt` — pass（`rt_` フィルタ — video は NONRT のため audio RT suite が無退行であることの確認）
+- [x] `mise run bench-smoke` — pass（`--test` 1 回実行 — `ruviform-math`/`ruviform-rt` ベンチの smoke lane が video 変更で壊れていないことの確認）
+- [x] `cargo doc -p ruviform-plugin-core -p ruviform-plugin-host -p ruviform-plugin-export --no-deps` — warning 0
+- [x] `node .agents/skills/doc-status/scripts/doc_status.js audit --json` — `blocking: 0`・`findings: []`（最終 audit — IR 着地後）
+- [x] `prek run --all-files`（または `mise exec -- prek run --all-files`）— pass（README/docs の hook を含む）
+- [x] `mise run test-l1-real-plugin` / `lint-l1-real-plugin` — video lane は v1 対象外（audio CLAP/VST3 lane のみ — opt-in のため実行は任意。IR に「対象外」と明記）

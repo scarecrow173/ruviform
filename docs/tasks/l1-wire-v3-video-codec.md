@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NXuhy2LmLb9qDBo7gj6"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 wire v3 codec + vshm 定盤 + InvalidValue（video 動詞 tag 12-22・Reply 4-7・video 型 codec・WIRE_MAX_VIDEO_*）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -100,17 +100,17 @@ wire v3 の **additive** codec — #117 T1（atomic cutover）と違い既存 ta
 
 ## Done When
 
-- [ ] `WIRE_VERSION == 3`・`WIRE_VIDEO_MAX_*` 5 定数・`wire::vshm`（`MAGIC`/`HEADER_LEN`/`frame_bytes`/`segment_len`）が codec に存在する
-- [ ] `Command` tag 12-22・`Reply` tag 4-7 が encode/decode され、video 動詞の instance-scope 判定（`NONE`/`≥64` → `Malformed`）が効く。audio 動詞 0-11・Reply 0-3・`shm` mod は無変更
-- [ ] `VideoProcessConfig`/`PixelFormat`/`VideoFrameDesc`/`ColorInfo`/`PlainParamValue`/`PlainParamInfoOwned` codec が round-trip し、test-spec の拒否行列（bounds・finiteness・presence strictness・`min>max`・`default` out-of-range・`display_*` lenient 受理）が全て defined 拒否（panic・無制限 alloc なし）
-- [ ] `HostError::InvalidValue` が boundary + wire tag 10 の両方向で round-trip し wildcard arm で `Malformed`/`UnsupportedVariant` へ潰れない
-- [ ] `Hello.capabilities` 非零拒否が v3 で維持され、`Hello{version:2}` は handshake 失敗語彙を保持する
-- [ ] `PlainParamInfoOwned` が `From`/`as_view` の一箇所変換を持ち、`#[non_exhaustive]` 公開 enum 規則を維持する
-- [ ] codec 層に canonical/region-fit/config 一致の semantic 検証が入っていない（bounds のみ — 責務分離をコードレビューで確認）
+- [x] `WIRE_VERSION == 3`・`WIRE_VIDEO_MAX_*` 5 定数・`wire::vshm`（`MAGIC`/`HEADER_LEN`/`frame_bytes`/`segment_len`）が codec に存在する
+- [x] `Command` tag 12-22・`Reply` tag 4-7 が encode/decode され、video 動詞の instance-scope 判定（`NONE`/`≥64` → `Malformed`）が効く。audio 動詞 0-11・Reply 0-3・`shm` mod は無変更
+- [x] `VideoProcessConfig`/`PixelFormat`/`VideoFrameDesc`/`ColorInfo`/`PlainParamValue`/`PlainParamInfoOwned` codec が round-trip し、test-spec の拒否行列（bounds・finiteness・presence strictness・`min>max`・`default` out-of-range・`display_*` lenient 受理）が全て defined 拒否（panic・無制限 alloc なし）
+- [x] `HostError::InvalidValue` が boundary + wire tag 10 の両方向で round-trip し wildcard arm で `Malformed`/`UnsupportedVariant` へ潰れない
+- [x] `Hello.capabilities` 非零拒否が v3 で維持され、`Hello{version:2}` は handshake 失敗語彙を保持する
+- [x] `PlainParamInfoOwned` が `From`/`as_view` の一箇所変換を持ち、`#[non_exhaustive]` 公開 enum 規則を維持する
+- [x] codec 層に canonical/region-fit/config 一致の semantic 検証が入っていない（bounds のみ — 責務分離をコードレビューで確認）
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-core` — wire codec unit test（round-trip・scope/拒否行列・`InvalidValue`・`vshm` byte math）が pass
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass（既存 audio suite が `WIRE_VERSION` 3 のまま green — audio 無退行の T1 時点証拠）
-- [ ] `grep -n "WIRE_VERSION" crates/ruviform-plugin-core/src/wire.rs` で `= 3` が定数定義に存在し `= 2` が残らない（doc 内の `WIRE_VERSION` `2` 言及は v3 wording へ更新）
-- [ ] `cargo doc -p ruviform-plugin-core --no-deps` が warning 0
+- [x] `cargo test -p ruviform-plugin-core` — wire codec unit test（round-trip・scope/拒否行列・`InvalidValue`・`vshm` byte math）が pass
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass（既存 audio suite が `WIRE_VERSION` 3 のまま green — audio 無退行の T1 時点証拠）
+- [x] `grep -n "WIRE_VERSION" crates/ruviform-plugin-core/src/wire.rs` で `= 3` が定数定義に存在し `= 2` が残らない（doc 内の `WIRE_VERSION` `2` 言及は v3 wording へ更新）
+- [x] `cargo doc -p ruviform-plugin-core --no-deps` が warning 0

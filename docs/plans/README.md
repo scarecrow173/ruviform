@@ -15,7 +15,7 @@ Directory: `docs/plans`
 | PLAN-034MLRinXTGEtewrMHtDSh | Issue #114 実施計画 — 規格アダプタ host-side bridge（CLAP/VST3）+ 実プラグイン L1 E2E（compile-time runner + opt-in lane） | completed | [implement-issue-114-real-adapter-l1-e2e.md](./implement-issue-114-real-adapter-l1-e2e.md) |
 | PLAN-034NOXmaWmUZjtJxQeNUhL | Issue #116 実施計画 — L1 supervisor（自動再起動 opt-in util 層） | completed | [implement-issue-116-supervisor.md](./implement-issue-116-supervisor.md) |
 | PLAN-034NlJVJxcfEkAxcclU9Zw | Issue #117 実施計画 — L1 bundle 子プロセス（1 子プロセス N インスタンス） | completed | [implement-issue-117-bundle-child-process.md](./implement-issue-117-bundle-child-process.md) |
-| PLAN-034NXq4i4gZXaqNEEwBZpL | Issue #118 実施計画 — video/NONRT プラグインの L1 経路（wire v3・vshm・video runner・video() façade） | approved | [implement-issue-118-video-l1.md](./implement-issue-118-video-l1.md) |
+| PLAN-034NXq4i4gZXaqNEEwBZpL | Issue #118 実施計画 — video/NONRT プラグインの L1 経路（wire v3・vshm・video runner・video() façade） | completed | [implement-issue-118-video-l1.md](./implement-issue-118-video-l1.md) |
 | PLAN-034NhK1lX72CUL3VIU7gOG | Issue #119 実施計画 — L1 wire バージョン方針の記録と契約検証 | completed | [implement-issue-119-l1-wire-version-policy.md](./implement-issue-119-l1-wire-version-policy.md) |
 | PLAN-034N3RoM1d6QGgIGM8VObU | Issue #124 OFX フォローアップ実施計画（catalog_open cross-window h 露出修正 + instance clip props clone） | completed | [implement-issue-124-ofx-window-lease.md](./implement-issue-124-ofx-window-lease.md) |
 | PLAN-034N3OJ2PTwjfEeCLuuvmQ | Issue #125 実装計画 — ICC LUT fixture coverage | completed | [implement-issue-125-icc-lut-fixture-coverage.md](./implement-issue-125-icc-lut-fixture-coverage.md) |

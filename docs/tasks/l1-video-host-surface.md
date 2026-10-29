@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NXuq6kT7i5UmNviPjy6"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 video host surface（video() façade・Route/Slot video arm・descriptors kind-tag・create_video_instance・Creating ゲート・vshm::Segment・VideoL1Instance）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -121,22 +121,22 @@ host 側の video 表面 — `video()` 借用 façade・`Route::OutOfProcessVide
 
 ## Done When
 
-- [ ] `PluginHost::video(&mut self) -> VideoPluginHost<'_>` が存在し、`VideoHostCommand`/`VideoHostReply`/`VideoOutOfProcessSpec`/`VideoPluginHost` が `#[non_exhaustive]` を維持して re-export される
-- [ ] `VideoOutOfProcessSpec` の struct 定義に `isolation`/`lookahead_blocks` 字段が**存在しない**（compile-time pin — ソースレビューで確認）
-- [ ] `Route::OutOfProcessVideo`/`Slot::OutOfProcessVideo` が存在し、**12 match-site 全て**が design 表どおりの答えを返す（`try_recv_notification` の video arm を含む — 静かに skip しない）
-- [ ] `descriptors` kind-tag で audio `Scan` が video route を返さず video `Scan` が audio route を返さない（shadowed 登録の意味論を kind 内に維持）
-- [ ] cross-kind `Instantiate` → `Err(UnknownPluginId)`・登録衝突 → `Err(DuplicatePluginId)`・cross-kind 動詞 → `Err(Unsupported)`・`prepare_endpoint` → `Err(EndpointUnavailable)`・direct `PluginHost` メソッドの video 答え（`process`→`Err(Unsupported)`・`latency_frames`/`plugin_mut`→`None`・`lifecycle_state`→`Some`）
-- [ ] **`InstPhase::Creating` ゲートが `CreateVideoInstance` も受理する**（`matches!` arm 拡張 — L1914-1915）
-- [ ] `request_timed` が一般化され `VideoRender` のみ `render_timeout` を使い、他動詞は `command_timeout` を維持
-- [ ] `create_video_instance` が `vshm::Segment::create` → `Creating` insert → `CreateVideoInstance` request → `Live` flip/rollback を `create_instance` と同型で実行し、`DriverCmd::AddInstance`/`RemoveInstance` を送らない
-- [ ] `Render` が input/config 照合（`Err(InvalidValue)`・wire 非送信）→ mirror `Processing` 検査 → repack → `render_timeout` request → `Rendered` 検証（帰属可能 `Failed`/`Err(Ipc)`）→ out 領域復元 → commit-on-success で動く
-- [ ] `SetParamValue` 非有限 `Double` が wire 非送信 `Err(InvalidValue)`（obligation (a)）
-- [ ] `Err` reply で video instance mirror が不変（`Err(PluginFailed)`/`Err(Lifecycle)`/defined 拒否 — audio doorbell `Err` 収束との意図的 divergence）
+- [x] `PluginHost::video(&mut self) -> VideoPluginHost<'_>` が存在し、`VideoHostCommand`/`VideoHostReply`/`VideoOutOfProcessSpec`/`VideoPluginHost` が `#[non_exhaustive]` を維持して re-export される
+- [x] `VideoOutOfProcessSpec` の struct 定義に `isolation`/`lookahead_blocks` 字段が**存在しない**（compile-time pin — ソースレビューで確認）
+- [x] `Route::OutOfProcessVideo`/`Slot::OutOfProcessVideo` が存在し、**12 match-site 全て**が design 表どおりの答えを返す（`try_recv_notification` の video arm を含む — 静かに skip しない）
+- [x] `descriptors` kind-tag で audio `Scan` が video route を返さず video `Scan` が audio route を返さない（shadowed 登録の意味論を kind 内に維持）
+- [x] cross-kind `Instantiate` → `Err(UnknownPluginId)`・登録衝突 → `Err(DuplicatePluginId)`・cross-kind 動詞 → `Err(Unsupported)`・`prepare_endpoint` → `Err(EndpointUnavailable)`・direct `PluginHost` メソッドの video 答え（`process`→`Err(Unsupported)`・`latency_frames`/`plugin_mut`→`None`・`lifecycle_state`→`Some`）
+- [x] **`InstPhase::Creating` ゲートが `CreateVideoInstance` も受理する**（`matches!` arm 拡張 — L1914-1915）
+- [x] `request_timed` が一般化され `VideoRender` のみ `render_timeout` を使い、他動詞は `command_timeout` を維持
+- [x] `create_video_instance` が `vshm::Segment::create` → `Creating` insert → `CreateVideoInstance` request → `Live` flip/rollback を `create_instance` と同型で実行し、`DriverCmd::AddInstance`/`RemoveInstance` を送らない
+- [x] `Render` が input/config 照合（`Err(InvalidValue)`・wire 非送信）→ mirror `Processing` 検査 → repack → `render_timeout` request → `Rendered` 検証（帰属可能 `Failed`/`Err(Ipc)`）→ out 領域復元 → commit-on-success で動く
+- [x] `SetParamValue` 非有限 `Double` が wire 非送信 `Err(InvalidValue)`（obligation (a)）
+- [x] `Err` reply で video instance mirror が不変（`Err(PluginFailed)`/`Err(Lifecycle)`/defined 拒否 — audio doorbell `Err` 収束との意図的 divergence）
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-host` — kind filter・`DuplicatePluginId`・cross-kind・`EndpointUnavailable`・`Creating` ゲート・`request_timed`・demux 合成 frame・mirror 不変の unit test が pass
-- [ ] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` — 既存 audio suite が無変更で green（audio 無退行）
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass
-- [ ] `cargo doc -p ruviform-plugin-host --no-deps` が warning 0
-- [ ] `grep -n "isolation\|lookahead" crates/ruviform-plugin-host/src/video.rs` で `VideoOutOfProcessSpec` 定義に該当字段がない（compile-time pin のソースレビュー — `isolation` 語は doc 記述のみ）
+- [x] `cargo test -p ruviform-plugin-host` — kind filter・`DuplicatePluginId`・cross-kind・`EndpointUnavailable`・`Creating` ゲート・`request_timed`・demux 合成 frame・mirror 不変の unit test が pass
+- [x] `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` — 既存 audio suite が無変更で green（audio 無退行）
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass
+- [x] `cargo doc -p ruviform-plugin-host --no-deps` が warning 0
+- [x] `grep -n "isolation\|lookahead" crates/ruviform-plugin-host/src/video.rs` で `VideoOutOfProcessSpec` 定義に該当字段がない（compile-time pin のソースレビュー — `isolation` 語は doc 記述のみ）

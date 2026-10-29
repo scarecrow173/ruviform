@@ -1,0 +1,2605 @@
+[bench-smoke] $ cargo bench -p ruviform-math -p ruviform-rt -- --test
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.27
+   Compiling quote v1.0.47
+   Compiling autocfg v1.5.1
+   Compiling serde_core v1.0.229
+   Compiling rustversion v1.0.23
+   Compiling zerocopy v0.8.63
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.15
+   Compiling serde v1.0.229
+   Compiling windows-link v0.2.1
+   Compiling zmij v1.0.23
+   Compiling cfg-if v1.0.5
+   Compiling winapi v0.3.9
+   Compiling serde_json v1.0.154
+   Compiling ciborium-io v0.2.2
+   Compiling windows-sys v0.61.2
+   Compiling clap_lex v1.1.1
+   Compiling anstyle v1.0.14
+   Compiling either v1.19.0
+   Compiling cc v1.9.0
+   Compiling num-traits v0.2.19
+   Compiling memchr v2.8.3
+   Compiling regex-syntax v0.8.11
+   Compiling itoa v1.0.18
+   Compiling itertools v0.13.0
+   Compiling clap_builder v4.6.7
+   Compiling winapi-util v0.1.11
+   Compiling cast v0.3.0
+   Compiling anes v0.1.6
+   Compiling paste v1.0.15
+   Compiling same-file v1.0.6
+   Compiling libm v0.2.16
+   Compiling oorandom v11.1.5
+   Compiling walkdir v2.5.0
+   Compiling version_check v0.9.5
+   Compiling bitflags v2.13.2
+   Compiling bytemuck v1.25.2
+   Compiling arc-swap v1.9.3
+   Compiling syn v3.0.9
+   Compiling syn v2.0.119
+   Compiling pulp v0.22.3
+   Compiling raw-cpuid v11.6.0
+   Compiling page_size v0.6.0
+   Compiling regex-automata v0.4.18
+   Compiling reborrow v0.5.5
+   Compiling rtrb v0.4.0
+   Compiling num-complex v0.4.6
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling fearless_simd v1.1.0
+   Compiling approx v0.5.1
+   Compiling assert_no_alloc v1.1.2
+   Compiling ruviform-rt v0.1.0 (F:\repositry\ruviform-wt-118\crates\ruviform-rt)
+   Compiling criterion-plot v0.8.2
+   Compiling alloca v0.4.0
+   Compiling clap v4.6.7
+   Compiling regex v1.13.1
+   Compiling zerocopy-derive v0.8.63
+   Compiling pulp-macro v0.1.1
+   Compiling serde_derive v1.0.229
+   Compiling multiversion-macros v0.9.1
+   Compiling fearless_simd_macros v0.1.0
+   Compiling multiversion v0.9.1
+   Compiling tinytemplate v1.2.1
+   Compiling half v2.7.1
+   Compiling ciborium-ll v0.2.2
+   Compiling ciborium v0.2.2
+   Compiling ruviform-math v0.1.0 (F:\repositry\ruviform-wt-118\crates\ruviform-math)
+   Compiling criterion v0.8.2
+    Finished `bench` profile [optimized] target(s) in 41.59s
+     Running unittests src\lib.rs (target\release\deps\ruviform_math-c685b0a7c8b9993b.exe)
+
+running 22 tests
+test dsp::tests::add_matches_scalar_reference ... ok
+test dsp::tests::rt_dsp_kernels_no_alloc ... ok
+test simd_poc::tests::add_produces_elementwise_sum ... ok
+test simd_poc::tests::clamp_unit_bounds_and_propagates_nan ... ok
+test simd_poc::tests::biquad_processes_planar_channels_independently ... ok
+test simd_poc::tests::dot_accumulates_products_in_order ... ok
+test simd_poc::tests::biquad_runs_direct_form_two_recurrence ... ok
+test simd_poc::tests::fir_impulse_tap_copies_src ... ok
+test dsp::tests::small_size_routes_scalar_and_matches_reference ... ok
+test simd_poc::tests::denormal_f32_is_subnormal ... ok
+test simd_poc::tests::denormal_mix_replaces_periodically ... ok
+test simd_poc::tests::fade_applies_index_ramp ... ok
+test simd_poc::tests::fir_convolves_with_zero_history ... ok
+test simd_poc::tests::fir_taps_fixture_is_deterministic ... ok
+test simd_poc::tests::scale_multiplies_by_gain ... ok
+test dsp::tests::detect_returns_constructible_level ... ok
+test simd_poc::tests::sine_coeffs_for_omega_builds_undamped_recurrence ... ok
+test simd_poc::tests::sine_recurrence_updates_output_and_state ... ok
+test simd_poc::tests::uniform_f32_is_deterministic_and_in_range ... ok
+test dsp::tests::forced_levels_match_scalar_reference_all_sizes ... ok
+test simd_poc::tests::xorshift64_star_is_deterministic ... ok
+test tests::version_is_not_empty ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches\simd_poc.rs (target\release\deps\simd_poc-38600a96f9b300ae.exe)
+=== simd_poc bench environment ===
+os: windows x86_64
+cpu: Intel(R) Core(TM) i9-9900K CPU @ 3.60GHz
+cores: 16
+rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+criterion: 0.8.2
+fearless_simd Level::new(): Avx2(Avx2 { _private: () })
+pulp::Arch::new(): V3(V3 { sse: Sse, sse2: Sse2, fxsr: Fxsr, sse3: Sse3, ssse3: Ssse3, sse4_1: Sse4_1, sse4_2: Sse4_2, popcnt: Popcnt, avx: Avx, avx2: Avx2, bmi1: Bmi1, bmi2: Bmi2, fma: Fma, lzcnt: Lzcnt })
+fearless_simd forced levels: sse2=true sse4_2=true avx2=true avx512=false
+pulp forced levels: v2=true v3=true v4=false
+skipped columns (level unconstructible): ["fearless_avx512", "pulp_v4"]
+equivalence-only columns (not benched): ["fearless_sse2", "pulp_v2"]
+Testing add/scalar/normal/64
+Success
+Testing add/scalar/normal/256
+Success
+Testing add/scalar/normal/1024
+Success
+Testing add/scalar/normal/4096
+Success
+Testing add/scalar/normal/100
+Success
+Testing add/scalar/normal/1000
+Success
+Testing add/scalar/normal/1023
+Success
+Testing add/fearless_fallback/normal/64
+Success
+Testing add/fearless_fallback/normal/256
+Success
+Testing add/fearless_fallback/normal/1024
+Success
+Testing add/fearless_fallback/normal/4096
+Success
+Testing add/fearless_fallback/normal/100
+Success
+Testing add/fearless_fallback/normal/1000
+Success
+Testing add/fearless_fallback/normal/1023
+Success
+Testing add/fearless_sse4_2/normal/64
+Success
+Testing add/fearless_sse4_2/normal/256
+Success
+Testing add/fearless_sse4_2/normal/1024
+Success
+Testing add/fearless_sse4_2/normal/4096
+Success
+Testing add/fearless_sse4_2/normal/100
+Success
+Testing add/fearless_sse4_2/normal/1000
+Success
+Testing add/fearless_sse4_2/normal/1023
+Success
+Testing add/fearless_avx2/normal/64
+Success
+Testing add/fearless_avx2/normal/256
+Success
+Testing add/fearless_avx2/normal/1024
+Success
+Testing add/fearless_avx2/normal/4096
+Success
+Testing add/fearless_avx2/normal/100
+Success
+Testing add/fearless_avx2/normal/1000
+Success
+Testing add/fearless_avx2/normal/1023
+Success
+Testing add/fearless_dispatched/normal/64
+Success
+Testing add/fearless_dispatched/normal/256
+Success
+Testing add/fearless_dispatched/normal/1024
+Success
+Testing add/fearless_dispatched/normal/4096
+Success
+Testing add/fearless_dispatched/normal/100
+Success
+Testing add/fearless_dispatched/normal/1000
+Success
+Testing add/fearless_dispatched/normal/1023
+Success
+Testing add/pulp_scalar/normal/64
+Success
+Testing add/pulp_scalar/normal/256
+Success
+Testing add/pulp_scalar/normal/1024
+Success
+Testing add/pulp_scalar/normal/4096
+Success
+Testing add/pulp_scalar/normal/100
+Success
+Testing add/pulp_scalar/normal/1000
+Success
+Testing add/pulp_scalar/normal/1023
+Success
+Testing add/pulp_v3/normal/64
+Success
+Testing add/pulp_v3/normal/256
+Success
+Testing add/pulp_v3/normal/1024
+Success
+Testing add/pulp_v3/normal/4096
+Success
+Testing add/pulp_v3/normal/100
+Success
+Testing add/pulp_v3/normal/1000
+Success
+Testing add/pulp_v3/normal/1023
+Success
+Testing add/pulp_dispatched/normal/64
+Success
+Testing add/pulp_dispatched/normal/256
+Success
+Testing add/pulp_dispatched/normal/1024
+Success
+Testing add/pulp_dispatched/normal/4096
+Success
+Testing add/pulp_dispatched/normal/100
+Success
+Testing add/pulp_dispatched/normal/1000
+Success
+Testing add/pulp_dispatched/normal/1023
+Success
+Testing add/multiversion/normal/64
+Success
+Testing add/multiversion/normal/256
+Success
+Testing add/multiversion/normal/1024
+Success
+Testing add/multiversion/normal/4096
+Success
+Testing add/multiversion/normal/100
+Success
+Testing add/multiversion/normal/1000
+Success
+Testing add/multiversion/normal/1023
+Success
+Testing add/prod_detected/normal/64
+Success
+Testing add/prod_detected/normal/256
+Success
+Testing add/prod_detected/normal/1024
+Success
+Testing add/prod_detected/normal/4096
+Success
+Testing add/prod_detected/normal/100
+Success
+Testing add/prod_detected/normal/1000
+Success
+Testing add/prod_detected/normal/1023
+Success
+Testing add/prod_fallback/normal/64
+Success
+Testing add/prod_fallback/normal/256
+Success
+Testing add/prod_fallback/normal/1024
+Success
+Testing add/prod_fallback/normal/4096
+Success
+Testing add/prod_fallback/normal/100
+Success
+Testing add/prod_fallback/normal/1000
+Success
+Testing add/prod_fallback/normal/1023
+Success
+Testing add/prod_sse2/normal/64
+Success
+Testing add/prod_sse2/normal/256
+Success
+Testing add/prod_sse2/normal/1024
+Success
+Testing add/prod_sse2/normal/4096
+Success
+Testing add/prod_sse2/normal/100
+Success
+Testing add/prod_sse2/normal/1000
+Success
+Testing add/prod_sse2/normal/1023
+Success
+Testing add/prod_sse4_2/normal/64
+Success
+Testing add/prod_sse4_2/normal/256
+Success
+Testing add/prod_sse4_2/normal/1024
+Success
+Testing add/prod_sse4_2/normal/4096
+Success
+Testing add/prod_sse4_2/normal/100
+Success
+Testing add/prod_sse4_2/normal/1000
+Success
+Testing add/prod_sse4_2/normal/1023
+Success
+Testing add/prod_avx2/normal/64
+Success
+Testing add/prod_avx2/normal/256
+Success
+Testing add/prod_avx2/normal/1024
+Success
+Testing add/prod_avx2/normal/4096
+Success
+Testing add/prod_avx2/normal/100
+Success
+Testing add/prod_avx2/normal/1000
+Success
+Testing add/prod_avx2/normal/1023
+Success
+
+Testing scale/scalar/normal/64
+Success
+Testing scale/scalar/normal/256
+Success
+Testing scale/scalar/normal/1024
+Success
+Testing scale/scalar/normal/4096
+Success
+Testing scale/scalar/normal/100
+Success
+Testing scale/scalar/normal/1000
+Success
+Testing scale/scalar/normal/1023
+Success
+Testing scale/fearless_fallback/normal/64
+Success
+Testing scale/fearless_fallback/normal/256
+Success
+Testing scale/fearless_fallback/normal/1024
+Success
+Testing scale/fearless_fallback/normal/4096
+Success
+Testing scale/fearless_fallback/normal/100
+Success
+Testing scale/fearless_fallback/normal/1000
+Success
+Testing scale/fearless_fallback/normal/1023
+Success
+Testing scale/fearless_sse4_2/normal/64
+Success
+Testing scale/fearless_sse4_2/normal/256
+Success
+Testing scale/fearless_sse4_2/normal/1024
+Success
+Testing scale/fearless_sse4_2/normal/4096
+Success
+Testing scale/fearless_sse4_2/normal/100
+Success
+Testing scale/fearless_sse4_2/normal/1000
+Success
+Testing scale/fearless_sse4_2/normal/1023
+Success
+Testing scale/fearless_avx2/normal/64
+Success
+Testing scale/fearless_avx2/normal/256
+Success
+Testing scale/fearless_avx2/normal/1024
+Success
+Testing scale/fearless_avx2/normal/4096
+Success
+Testing scale/fearless_avx2/normal/100
+Success
+Testing scale/fearless_avx2/normal/1000
+Success
+Testing scale/fearless_avx2/normal/1023
+Success
+Testing scale/fearless_dispatched/normal/64
+Success
+Testing scale/fearless_dispatched/normal/256
+Success
+Testing scale/fearless_dispatched/normal/1024
+Success
+Testing scale/fearless_dispatched/normal/4096
+Success
+Testing scale/fearless_dispatched/normal/100
+Success
+Testing scale/fearless_dispatched/normal/1000
+Success
+Testing scale/fearless_dispatched/normal/1023
+Success
+Testing scale/pulp_scalar/normal/64
+Success
+Testing scale/pulp_scalar/normal/256
+Success
+Testing scale/pulp_scalar/normal/1024
+Success
+Testing scale/pulp_scalar/normal/4096
+Success
+Testing scale/pulp_scalar/normal/100
+Success
+Testing scale/pulp_scalar/normal/1000
+Success
+Testing scale/pulp_scalar/normal/1023
+Success
+Testing scale/pulp_v3/normal/64
+Success
+Testing scale/pulp_v3/normal/256
+Success
+Testing scale/pulp_v3/normal/1024
+Success
+Testing scale/pulp_v3/normal/4096
+Success
+Testing scale/pulp_v3/normal/100
+Success
+Testing scale/pulp_v3/normal/1000
+Success
+Testing scale/pulp_v3/normal/1023
+Success
+Testing scale/pulp_dispatched/normal/64
+Success
+Testing scale/pulp_dispatched/normal/256
+Success
+Testing scale/pulp_dispatched/normal/1024
+Success
+Testing scale/pulp_dispatched/normal/4096
+Success
+Testing scale/pulp_dispatched/normal/100
+Success
+Testing scale/pulp_dispatched/normal/1000
+Success
+Testing scale/pulp_dispatched/normal/1023
+Success
+Testing scale/multiversion/normal/64
+Success
+Testing scale/multiversion/normal/256
+Success
+Testing scale/multiversion/normal/1024
+Success
+Testing scale/multiversion/normal/4096
+Success
+Testing scale/multiversion/normal/100
+Success
+Testing scale/multiversion/normal/1000
+Success
+Testing scale/multiversion/normal/1023
+Success
+Testing scale/prod_detected/normal/64
+Success
+Testing scale/prod_detected/normal/256
+Success
+Testing scale/prod_detected/normal/1024
+Success
+Testing scale/prod_detected/normal/4096
+Success
+Testing scale/prod_detected/normal/100
+Success
+Testing scale/prod_detected/normal/1000
+Success
+Testing scale/prod_detected/normal/1023
+Success
+Testing scale/prod_fallback/normal/64
+Success
+Testing scale/prod_fallback/normal/256
+Success
+Testing scale/prod_fallback/normal/1024
+Success
+Testing scale/prod_fallback/normal/4096
+Success
+Testing scale/prod_fallback/normal/100
+Success
+Testing scale/prod_fallback/normal/1000
+Success
+Testing scale/prod_fallback/normal/1023
+Success
+Testing scale/prod_sse2/normal/64
+Success
+Testing scale/prod_sse2/normal/256
+Success
+Testing scale/prod_sse2/normal/1024
+Success
+Testing scale/prod_sse2/normal/4096
+Success
+Testing scale/prod_sse2/normal/100
+Success
+Testing scale/prod_sse2/normal/1000
+Success
+Testing scale/prod_sse2/normal/1023
+Success
+Testing scale/prod_sse4_2/normal/64
+Success
+Testing scale/prod_sse4_2/normal/256
+Success
+Testing scale/prod_sse4_2/normal/1024
+Success
+Testing scale/prod_sse4_2/normal/4096
+Success
+Testing scale/prod_sse4_2/normal/100
+Success
+Testing scale/prod_sse4_2/normal/1000
+Success
+Testing scale/prod_sse4_2/normal/1023
+Success
+Testing scale/prod_avx2/normal/64
+Success
+Testing scale/prod_avx2/normal/256
+Success
+Testing scale/prod_avx2/normal/1024
+Success
+Testing scale/prod_avx2/normal/4096
+Success
+Testing scale/prod_avx2/normal/100
+Success
+Testing scale/prod_avx2/normal/1000
+Success
+Testing scale/prod_avx2/normal/1023
+Success
+
+Testing clamp_unit/scalar/normal/64
+Success
+Testing clamp_unit/scalar/normal/256
+Success
+Testing clamp_unit/scalar/normal/1024
+Success
+Testing clamp_unit/scalar/normal/4096
+Success
+Testing clamp_unit/scalar/normal/100
+Success
+Testing clamp_unit/scalar/normal/1000
+Success
+Testing clamp_unit/scalar/normal/1023
+Success
+Testing clamp_unit/fearless_fallback/normal/64
+Success
+Testing clamp_unit/fearless_fallback/normal/256
+Success
+Testing clamp_unit/fearless_fallback/normal/1024
+Success
+Testing clamp_unit/fearless_fallback/normal/4096
+Success
+Testing clamp_unit/fearless_fallback/normal/100
+Success
+Testing clamp_unit/fearless_fallback/normal/1000
+Success
+Testing clamp_unit/fearless_fallback/normal/1023
+Success
+Testing clamp_unit/fearless_sse4_2/normal/64
+Success
+Testing clamp_unit/fearless_sse4_2/normal/256
+Success
+Testing clamp_unit/fearless_sse4_2/normal/1024
+Success
+Testing clamp_unit/fearless_sse4_2/normal/4096
+Success
+Testing clamp_unit/fearless_sse4_2/normal/100
+Success
+Testing clamp_unit/fearless_sse4_2/normal/1000
+Success
+Testing clamp_unit/fearless_sse4_2/normal/1023
+Success
+Testing clamp_unit/fearless_avx2/normal/64
+Success
+Testing clamp_unit/fearless_avx2/normal/256
+Success
+Testing clamp_unit/fearless_avx2/normal/1024
+Success
+Testing clamp_unit/fearless_avx2/normal/4096
+Success
+Testing clamp_unit/fearless_avx2/normal/100
+Success
+Testing clamp_unit/fearless_avx2/normal/1000
+Success
+Testing clamp_unit/fearless_avx2/normal/1023
+Success
+Testing clamp_unit/fearless_dispatched/normal/64
+Success
+Testing clamp_unit/fearless_dispatched/normal/256
+Success
+Testing clamp_unit/fearless_dispatched/normal/1024
+Success
+Testing clamp_unit/fearless_dispatched/normal/4096
+Success
+Testing clamp_unit/fearless_dispatched/normal/100
+Success
+Testing clamp_unit/fearless_dispatched/normal/1000
+Success
+Testing clamp_unit/fearless_dispatched/normal/1023
+Success
+Testing clamp_unit/pulp_scalar/normal/64
+Success
+Testing clamp_unit/pulp_scalar/normal/256
+Success
+Testing clamp_unit/pulp_scalar/normal/1024
+Success
+Testing clamp_unit/pulp_scalar/normal/4096
+Success
+Testing clamp_unit/pulp_scalar/normal/100
+Success
+Testing clamp_unit/pulp_scalar/normal/1000
+Success
+Testing clamp_unit/pulp_scalar/normal/1023
+Success
+Testing clamp_unit/pulp_v3/normal/64
+Success
+Testing clamp_unit/pulp_v3/normal/256
+Success
+Testing clamp_unit/pulp_v3/normal/1024
+Success
+Testing clamp_unit/pulp_v3/normal/4096
+Success
+Testing clamp_unit/pulp_v3/normal/100
+Success
+Testing clamp_unit/pulp_v3/normal/1000
+Success
+Testing clamp_unit/pulp_v3/normal/1023
+Success
+Testing clamp_unit/pulp_dispatched/normal/64
+Success
+Testing clamp_unit/pulp_dispatched/normal/256
+Success
+Testing clamp_unit/pulp_dispatched/normal/1024
+Success
+Testing clamp_unit/pulp_dispatched/normal/4096
+Success
+Testing clamp_unit/pulp_dispatched/normal/100
+Success
+Testing clamp_unit/pulp_dispatched/normal/1000
+Success
+Testing clamp_unit/pulp_dispatched/normal/1023
+Success
+Testing clamp_unit/multiversion/normal/64
+Success
+Testing clamp_unit/multiversion/normal/256
+Success
+Testing clamp_unit/multiversion/normal/1024
+Success
+Testing clamp_unit/multiversion/normal/4096
+Success
+Testing clamp_unit/multiversion/normal/100
+Success
+Testing clamp_unit/multiversion/normal/1000
+Success
+Testing clamp_unit/multiversion/normal/1023
+Success
+Testing clamp_unit/prod_detected/normal/64
+Success
+Testing clamp_unit/prod_detected/normal/256
+Success
+Testing clamp_unit/prod_detected/normal/1024
+Success
+Testing clamp_unit/prod_detected/normal/4096
+Success
+Testing clamp_unit/prod_detected/normal/100
+Success
+Testing clamp_unit/prod_detected/normal/1000
+Success
+Testing clamp_unit/prod_detected/normal/1023
+Success
+Testing clamp_unit/prod_fallback/normal/64
+Success
+Testing clamp_unit/prod_fallback/normal/256
+Success
+Testing clamp_unit/prod_fallback/normal/1024
+Success
+Testing clamp_unit/prod_fallback/normal/4096
+Success
+Testing clamp_unit/prod_fallback/normal/100
+Success
+Testing clamp_unit/prod_fallback/normal/1000
+Success
+Testing clamp_unit/prod_fallback/normal/1023
+Success
+Testing clamp_unit/prod_sse2/normal/64
+Success
+Testing clamp_unit/prod_sse2/normal/256
+Success
+Testing clamp_unit/prod_sse2/normal/1024
+Success
+Testing clamp_unit/prod_sse2/normal/4096
+Success
+Testing clamp_unit/prod_sse2/normal/100
+Success
+Testing clamp_unit/prod_sse2/normal/1000
+Success
+Testing clamp_unit/prod_sse2/normal/1023
+Success
+Testing clamp_unit/prod_sse4_2/normal/64
+Success
+Testing clamp_unit/prod_sse4_2/normal/256
+Success
+Testing clamp_unit/prod_sse4_2/normal/1024
+Success
+Testing clamp_unit/prod_sse4_2/normal/4096
+Success
+Testing clamp_unit/prod_sse4_2/normal/100
+Success
+Testing clamp_unit/prod_sse4_2/normal/1000
+Success
+Testing clamp_unit/prod_sse4_2/normal/1023
+Success
+Testing clamp_unit/prod_avx2/normal/64
+Success
+Testing clamp_unit/prod_avx2/normal/256
+Success
+Testing clamp_unit/prod_avx2/normal/1024
+Success
+Testing clamp_unit/prod_avx2/normal/4096
+Success
+Testing clamp_unit/prod_avx2/normal/100
+Success
+Testing clamp_unit/prod_avx2/normal/1000
+Success
+Testing clamp_unit/prod_avx2/normal/1023
+Success
+
+Testing fade/scalar/normal/64
+Success
+Testing fade/scalar/normal/256
+Success
+Testing fade/scalar/normal/1024
+Success
+Testing fade/scalar/normal/4096
+Success
+Testing fade/scalar/normal/100
+Success
+Testing fade/scalar/normal/1000
+Success
+Testing fade/scalar/normal/1023
+Success
+Testing fade/fearless_fallback/normal/64
+Success
+Testing fade/fearless_fallback/normal/256
+Success
+Testing fade/fearless_fallback/normal/1024
+Success
+Testing fade/fearless_fallback/normal/4096
+Success
+Testing fade/fearless_fallback/normal/100
+Success
+Testing fade/fearless_fallback/normal/1000
+Success
+Testing fade/fearless_fallback/normal/1023
+Success
+Testing fade/fearless_sse4_2/normal/64
+Success
+Testing fade/fearless_sse4_2/normal/256
+Success
+Testing fade/fearless_sse4_2/normal/1024
+Success
+Testing fade/fearless_sse4_2/normal/4096
+Success
+Testing fade/fearless_sse4_2/normal/100
+Success
+Testing fade/fearless_sse4_2/normal/1000
+Success
+Testing fade/fearless_sse4_2/normal/1023
+Success
+Testing fade/fearless_avx2/normal/64
+Success
+Testing fade/fearless_avx2/normal/256
+Success
+Testing fade/fearless_avx2/normal/1024
+Success
+Testing fade/fearless_avx2/normal/4096
+Success
+Testing fade/fearless_avx2/normal/100
+Success
+Testing fade/fearless_avx2/normal/1000
+Success
+Testing fade/fearless_avx2/normal/1023
+Success
+Testing fade/fearless_dispatched/normal/64
+Success
+Testing fade/fearless_dispatched/normal/256
+Success
+Testing fade/fearless_dispatched/normal/1024
+Success
+Testing fade/fearless_dispatched/normal/4096
+Success
+Testing fade/fearless_dispatched/normal/100
+Success
+Testing fade/fearless_dispatched/normal/1000
+Success
+Testing fade/fearless_dispatched/normal/1023
+Success
+Testing fade/pulp_scalar/normal/64
+Success
+Testing fade/pulp_scalar/normal/256
+Success
+Testing fade/pulp_scalar/normal/1024
+Success
+Testing fade/pulp_scalar/normal/4096
+Success
+Testing fade/pulp_scalar/normal/100
+Success
+Testing fade/pulp_scalar/normal/1000
+Success
+Testing fade/pulp_scalar/normal/1023
+Success
+Testing fade/pulp_v3/normal/64
+Success
+Testing fade/pulp_v3/normal/256
+Success
+Testing fade/pulp_v3/normal/1024
+Success
+Testing fade/pulp_v3/normal/4096
+Success
+Testing fade/pulp_v3/normal/100
+Success
+Testing fade/pulp_v3/normal/1000
+Success
+Testing fade/pulp_v3/normal/1023
+Success
+Testing fade/pulp_dispatched/normal/64
+Success
+Testing fade/pulp_dispatched/normal/256
+Success
+Testing fade/pulp_dispatched/normal/1024
+Success
+Testing fade/pulp_dispatched/normal/4096
+Success
+Testing fade/pulp_dispatched/normal/100
+Success
+Testing fade/pulp_dispatched/normal/1000
+Success
+Testing fade/pulp_dispatched/normal/1023
+Success
+Testing fade/multiversion/normal/64
+Success
+Testing fade/multiversion/normal/256
+Success
+Testing fade/multiversion/normal/1024
+Success
+Testing fade/multiversion/normal/4096
+Success
+Testing fade/multiversion/normal/100
+Success
+Testing fade/multiversion/normal/1000
+Success
+Testing fade/multiversion/normal/1023
+Success
+Testing fade/prod_detected/normal/64
+Success
+Testing fade/prod_detected/normal/256
+Success
+Testing fade/prod_detected/normal/1024
+Success
+Testing fade/prod_detected/normal/4096
+Success
+Testing fade/prod_detected/normal/100
+Success
+Testing fade/prod_detected/normal/1000
+Success
+Testing fade/prod_detected/normal/1023
+Success
+Testing fade/prod_fallback/normal/64
+Success
+Testing fade/prod_fallback/normal/256
+Success
+Testing fade/prod_fallback/normal/1024
+Success
+Testing fade/prod_fallback/normal/4096
+Success
+Testing fade/prod_fallback/normal/100
+Success
+Testing fade/prod_fallback/normal/1000
+Success
+Testing fade/prod_fallback/normal/1023
+Success
+Testing fade/prod_sse2/normal/64
+Success
+Testing fade/prod_sse2/normal/256
+Success
+Testing fade/prod_sse2/normal/1024
+Success
+Testing fade/prod_sse2/normal/4096
+Success
+Testing fade/prod_sse2/normal/100
+Success
+Testing fade/prod_sse2/normal/1000
+Success
+Testing fade/prod_sse2/normal/1023
+Success
+Testing fade/prod_sse4_2/normal/64
+Success
+Testing fade/prod_sse4_2/normal/256
+Success
+Testing fade/prod_sse4_2/normal/1024
+Success
+Testing fade/prod_sse4_2/normal/4096
+Success
+Testing fade/prod_sse4_2/normal/100
+Success
+Testing fade/prod_sse4_2/normal/1000
+Success
+Testing fade/prod_sse4_2/normal/1023
+Success
+Testing fade/prod_avx2/normal/64
+Success
+Testing fade/prod_avx2/normal/256
+Success
+Testing fade/prod_avx2/normal/1024
+Success
+Testing fade/prod_avx2/normal/4096
+Success
+Testing fade/prod_avx2/normal/100
+Success
+Testing fade/prod_avx2/normal/1000
+Success
+Testing fade/prod_avx2/normal/1023
+Success
+
+Testing dot/scalar/normal/64
+Success
+Testing dot/scalar/normal/256
+Success
+Testing dot/scalar/normal/1024
+Success
+Testing dot/scalar/normal/4096
+Success
+Testing dot/scalar/normal/100
+Success
+Testing dot/scalar/normal/1000
+Success
+Testing dot/scalar/normal/1023
+Success
+Testing dot/scalar/denormal/64
+Success
+Testing dot/scalar/denormal/256
+Success
+Testing dot/scalar/denormal/1024
+Success
+Testing dot/scalar/denormal/4096
+Success
+Testing dot/scalar/denormal/100
+Success
+Testing dot/scalar/denormal/1000
+Success
+Testing dot/scalar/denormal/1023
+Success
+Testing dot/fearless_fallback/normal/64
+Success
+Testing dot/fearless_fallback/normal/256
+Success
+Testing dot/fearless_fallback/normal/1024
+Success
+Testing dot/fearless_fallback/normal/4096
+Success
+Testing dot/fearless_fallback/normal/100
+Success
+Testing dot/fearless_fallback/normal/1000
+Success
+Testing dot/fearless_fallback/normal/1023
+Success
+Testing dot/fearless_fallback/denormal/64
+Success
+Testing dot/fearless_fallback/denormal/256
+Success
+Testing dot/fearless_fallback/denormal/1024
+Success
+Testing dot/fearless_fallback/denormal/4096
+Success
+Testing dot/fearless_fallback/denormal/100
+Success
+Testing dot/fearless_fallback/denormal/1000
+Success
+Testing dot/fearless_fallback/denormal/1023
+Success
+Testing dot/fearless_sse4_2/normal/64
+Success
+Testing dot/fearless_sse4_2/normal/256
+Success
+Testing dot/fearless_sse4_2/normal/1024
+Success
+Testing dot/fearless_sse4_2/normal/4096
+Success
+Testing dot/fearless_sse4_2/normal/100
+Success
+Testing dot/fearless_sse4_2/normal/1000
+Success
+Testing dot/fearless_sse4_2/normal/1023
+Success
+Testing dot/fearless_sse4_2/denormal/64
+Success
+Testing dot/fearless_sse4_2/denormal/256
+Success
+Testing dot/fearless_sse4_2/denormal/1024
+Success
+Testing dot/fearless_sse4_2/denormal/4096
+Success
+Testing dot/fearless_sse4_2/denormal/100
+Success
+Testing dot/fearless_sse4_2/denormal/1000
+Success
+Testing dot/fearless_sse4_2/denormal/1023
+Success
+Testing dot/fearless_avx2/normal/64
+Success
+Testing dot/fearless_avx2/normal/256
+Success
+Testing dot/fearless_avx2/normal/1024
+Success
+Testing dot/fearless_avx2/normal/4096
+Success
+Testing dot/fearless_avx2/normal/100
+Success
+Testing dot/fearless_avx2/normal/1000
+Success
+Testing dot/fearless_avx2/normal/1023
+Success
+Testing dot/fearless_avx2/denormal/64
+Success
+Testing dot/fearless_avx2/denormal/256
+Success
+Testing dot/fearless_avx2/denormal/1024
+Success
+Testing dot/fearless_avx2/denormal/4096
+Success
+Testing dot/fearless_avx2/denormal/100
+Success
+Testing dot/fearless_avx2/denormal/1000
+Success
+Testing dot/fearless_avx2/denormal/1023
+Success
+Testing dot/fearless_dispatched/normal/64
+Success
+Testing dot/fearless_dispatched/normal/256
+Success
+Testing dot/fearless_dispatched/normal/1024
+Success
+Testing dot/fearless_dispatched/normal/4096
+Success
+Testing dot/fearless_dispatched/normal/100
+Success
+Testing dot/fearless_dispatched/normal/1000
+Success
+Testing dot/fearless_dispatched/normal/1023
+Success
+Testing dot/fearless_dispatched/denormal/64
+Success
+Testing dot/fearless_dispatched/denormal/256
+Success
+Testing dot/fearless_dispatched/denormal/1024
+Success
+Testing dot/fearless_dispatched/denormal/4096
+Success
+Testing dot/fearless_dispatched/denormal/100
+Success
+Testing dot/fearless_dispatched/denormal/1000
+Success
+Testing dot/fearless_dispatched/denormal/1023
+Success
+Testing dot/pulp_scalar/normal/64
+Success
+Testing dot/pulp_scalar/normal/256
+Success
+Testing dot/pulp_scalar/normal/1024
+Success
+Testing dot/pulp_scalar/normal/4096
+Success
+Testing dot/pulp_scalar/normal/100
+Success
+Testing dot/pulp_scalar/normal/1000
+Success
+Testing dot/pulp_scalar/normal/1023
+Success
+Testing dot/pulp_scalar/denormal/64
+Success
+Testing dot/pulp_scalar/denormal/256
+Success
+Testing dot/pulp_scalar/denormal/1024
+Success
+Testing dot/pulp_scalar/denormal/4096
+Success
+Testing dot/pulp_scalar/denormal/100
+Success
+Testing dot/pulp_scalar/denormal/1000
+Success
+Testing dot/pulp_scalar/denormal/1023
+Success
+Testing dot/pulp_v3/normal/64
+Success
+Testing dot/pulp_v3/normal/256
+Success
+Testing dot/pulp_v3/normal/1024
+Success
+Testing dot/pulp_v3/normal/4096
+Success
+Testing dot/pulp_v3/normal/100
+Success
+Testing dot/pulp_v3/normal/1000
+Success
+Testing dot/pulp_v3/normal/1023
+Success
+Testing dot/pulp_v3/denormal/64
+Success
+Testing dot/pulp_v3/denormal/256
+Success
+Testing dot/pulp_v3/denormal/1024
+Success
+Testing dot/pulp_v3/denormal/4096
+Success
+Testing dot/pulp_v3/denormal/100
+Success
+Testing dot/pulp_v3/denormal/1000
+Success
+Testing dot/pulp_v3/denormal/1023
+Success
+Testing dot/pulp_dispatched/normal/64
+Success
+Testing dot/pulp_dispatched/normal/256
+Success
+Testing dot/pulp_dispatched/normal/1024
+Success
+Testing dot/pulp_dispatched/normal/4096
+Success
+Testing dot/pulp_dispatched/normal/100
+Success
+Testing dot/pulp_dispatched/normal/1000
+Success
+Testing dot/pulp_dispatched/normal/1023
+Success
+Testing dot/pulp_dispatched/denormal/64
+Success
+Testing dot/pulp_dispatched/denormal/256
+Success
+Testing dot/pulp_dispatched/denormal/1024
+Success
+Testing dot/pulp_dispatched/denormal/4096
+Success
+Testing dot/pulp_dispatched/denormal/100
+Success
+Testing dot/pulp_dispatched/denormal/1000
+Success
+Testing dot/pulp_dispatched/denormal/1023
+Success
+Testing dot/multiversion/normal/64
+Success
+Testing dot/multiversion/normal/256
+Success
+Testing dot/multiversion/normal/1024
+Success
+Testing dot/multiversion/normal/4096
+Success
+Testing dot/multiversion/normal/100
+Success
+Testing dot/multiversion/normal/1000
+Success
+Testing dot/multiversion/normal/1023
+Success
+Testing dot/multiversion/denormal/64
+Success
+Testing dot/multiversion/denormal/256
+Success
+Testing dot/multiversion/denormal/1024
+Success
+Testing dot/multiversion/denormal/4096
+Success
+Testing dot/multiversion/denormal/100
+Success
+Testing dot/multiversion/denormal/1000
+Success
+Testing dot/multiversion/denormal/1023
+Success
+Testing dot/prod_detected/normal/64
+Success
+Testing dot/prod_detected/normal/256
+Success
+Testing dot/prod_detected/normal/1024
+Success
+Testing dot/prod_detected/normal/4096
+Success
+Testing dot/prod_detected/normal/100
+Success
+Testing dot/prod_detected/normal/1000
+Success
+Testing dot/prod_detected/normal/1023
+Success
+Testing dot/prod_detected/denormal/64
+Success
+Testing dot/prod_detected/denormal/256
+Success
+Testing dot/prod_detected/denormal/1024
+Success
+Testing dot/prod_detected/denormal/4096
+Success
+Testing dot/prod_detected/denormal/100
+Success
+Testing dot/prod_detected/denormal/1000
+Success
+Testing dot/prod_detected/denormal/1023
+Success
+Testing dot/prod_fallback/normal/64
+Success
+Testing dot/prod_fallback/normal/256
+Success
+Testing dot/prod_fallback/normal/1024
+Success
+Testing dot/prod_fallback/normal/4096
+Success
+Testing dot/prod_fallback/normal/100
+Success
+Testing dot/prod_fallback/normal/1000
+Success
+Testing dot/prod_fallback/normal/1023
+Success
+Testing dot/prod_fallback/denormal/64
+Success
+Testing dot/prod_fallback/denormal/256
+Success
+Testing dot/prod_fallback/denormal/1024
+Success
+Testing dot/prod_fallback/denormal/4096
+Success
+Testing dot/prod_fallback/denormal/100
+Success
+Testing dot/prod_fallback/denormal/1000
+Success
+Testing dot/prod_fallback/denormal/1023
+Success
+Testing dot/prod_sse2/normal/64
+Success
+Testing dot/prod_sse2/normal/256
+Success
+Testing dot/prod_sse2/normal/1024
+Success
+Testing dot/prod_sse2/normal/4096
+Success
+Testing dot/prod_sse2/normal/100
+Success
+Testing dot/prod_sse2/normal/1000
+Success
+Testing dot/prod_sse2/normal/1023
+Success
+Testing dot/prod_sse2/denormal/64
+Success
+Testing dot/prod_sse2/denormal/256
+Success
+Testing dot/prod_sse2/denormal/1024
+Success
+Testing dot/prod_sse2/denormal/4096
+Success
+Testing dot/prod_sse2/denormal/100
+Success
+Testing dot/prod_sse2/denormal/1000
+Success
+Testing dot/prod_sse2/denormal/1023
+Success
+Testing dot/prod_sse4_2/normal/64
+Success
+Testing dot/prod_sse4_2/normal/256
+Success
+Testing dot/prod_sse4_2/normal/1024
+Success
+Testing dot/prod_sse4_2/normal/4096
+Success
+Testing dot/prod_sse4_2/normal/100
+Success
+Testing dot/prod_sse4_2/normal/1000
+Success
+Testing dot/prod_sse4_2/normal/1023
+Success
+Testing dot/prod_sse4_2/denormal/64
+Success
+Testing dot/prod_sse4_2/denormal/256
+Success
+Testing dot/prod_sse4_2/denormal/1024
+Success
+Testing dot/prod_sse4_2/denormal/4096
+Success
+Testing dot/prod_sse4_2/denormal/100
+Success
+Testing dot/prod_sse4_2/denormal/1000
+Success
+Testing dot/prod_sse4_2/denormal/1023
+Success
+Testing dot/prod_avx2/normal/64
+Success
+Testing dot/prod_avx2/normal/256
+Success
+Testing dot/prod_avx2/normal/1024
+Success
+Testing dot/prod_avx2/normal/4096
+Success
+Testing dot/prod_avx2/normal/100
+Success
+Testing dot/prod_avx2/normal/1000
+Success
+Testing dot/prod_avx2/normal/1023
+Success
+Testing dot/prod_avx2/denormal/64
+Success
+Testing dot/prod_avx2/denormal/256
+Success
+Testing dot/prod_avx2/denormal/1024
+Success
+Testing dot/prod_avx2/denormal/4096
+Success
+Testing dot/prod_avx2/denormal/100
+Success
+Testing dot/prod_avx2/denormal/1000
+Success
+Testing dot/prod_avx2/denormal/1023
+Success
+
+Testing fir/scalar/normal/64
+Success
+Testing fir/scalar/normal/256
+Success
+Testing fir/scalar/normal/1024
+Success
+Testing fir/scalar/normal/4096
+Success
+Testing fir/scalar/normal/100
+Success
+Testing fir/scalar/normal/1000
+Success
+Testing fir/scalar/normal/1023
+Success
+Testing fir/scalar/denormal/64
+Success
+Testing fir/scalar/denormal/256
+Success
+Testing fir/scalar/denormal/1024
+Success
+Testing fir/scalar/denormal/4096
+Success
+Testing fir/scalar/denormal/100
+Success
+Testing fir/scalar/denormal/1000
+Success
+Testing fir/scalar/denormal/1023
+Success
+Testing fir/fearless_fallback/normal/64
+Success
+Testing fir/fearless_fallback/normal/256
+Success
+Testing fir/fearless_fallback/normal/1024
+Success
+Testing fir/fearless_fallback/normal/4096
+Success
+Testing fir/fearless_fallback/normal/100
+Success
+Testing fir/fearless_fallback/normal/1000
+Success
+Testing fir/fearless_fallback/normal/1023
+Success
+Testing fir/fearless_fallback/denormal/64
+Success
+Testing fir/fearless_fallback/denormal/256
+Success
+Testing fir/fearless_fallback/denormal/1024
+Success
+Testing fir/fearless_fallback/denormal/4096
+Success
+Testing fir/fearless_fallback/denormal/100
+Success
+Testing fir/fearless_fallback/denormal/1000
+Success
+Testing fir/fearless_fallback/denormal/1023
+Success
+Testing fir/fearless_sse4_2/normal/64
+Success
+Testing fir/fearless_sse4_2/normal/256
+Success
+Testing fir/fearless_sse4_2/normal/1024
+Success
+Testing fir/fearless_sse4_2/normal/4096
+Success
+Testing fir/fearless_sse4_2/normal/100
+Success
+Testing fir/fearless_sse4_2/normal/1000
+Success
+Testing fir/fearless_sse4_2/normal/1023
+Success
+Testing fir/fearless_sse4_2/denormal/64
+Success
+Testing fir/fearless_sse4_2/denormal/256
+Success
+Testing fir/fearless_sse4_2/denormal/1024
+Success
+Testing fir/fearless_sse4_2/denormal/4096
+Success
+Testing fir/fearless_sse4_2/denormal/100
+Success
+Testing fir/fearless_sse4_2/denormal/1000
+Success
+Testing fir/fearless_sse4_2/denormal/1023
+Success
+Testing fir/fearless_avx2/normal/64
+Success
+Testing fir/fearless_avx2/normal/256
+Success
+Testing fir/fearless_avx2/normal/1024
+Success
+Testing fir/fearless_avx2/normal/4096
+Success
+Testing fir/fearless_avx2/normal/100
+Success
+Testing fir/fearless_avx2/normal/1000
+Success
+Testing fir/fearless_avx2/normal/1023
+Success
+Testing fir/fearless_avx2/denormal/64
+Success
+Testing fir/fearless_avx2/denormal/256
+Success
+Testing fir/fearless_avx2/denormal/1024
+Success
+Testing fir/fearless_avx2/denormal/4096
+Success
+Testing fir/fearless_avx2/denormal/100
+Success
+Testing fir/fearless_avx2/denormal/1000
+Success
+Testing fir/fearless_avx2/denormal/1023
+Success
+Testing fir/fearless_dispatched/normal/64
+Success
+Testing fir/fearless_dispatched/normal/256
+Success
+Testing fir/fearless_dispatched/normal/1024
+Success
+Testing fir/fearless_dispatched/normal/4096
+Success
+Testing fir/fearless_dispatched/normal/100
+Success
+Testing fir/fearless_dispatched/normal/1000
+Success
+Testing fir/fearless_dispatched/normal/1023
+Success
+Testing fir/fearless_dispatched/denormal/64
+Success
+Testing fir/fearless_dispatched/denormal/256
+Success
+Testing fir/fearless_dispatched/denormal/1024
+Success
+Testing fir/fearless_dispatched/denormal/4096
+Success
+Testing fir/fearless_dispatched/denormal/100
+Success
+Testing fir/fearless_dispatched/denormal/1000
+Success
+Testing fir/fearless_dispatched/denormal/1023
+Success
+Testing fir/pulp_scalar/normal/64
+Success
+Testing fir/pulp_scalar/normal/256
+Success
+Testing fir/pulp_scalar/normal/1024
+Success
+Testing fir/pulp_scalar/normal/4096
+Success
+Testing fir/pulp_scalar/normal/100
+Success
+Testing fir/pulp_scalar/normal/1000
+Success
+Testing fir/pulp_scalar/normal/1023
+Success
+Testing fir/pulp_scalar/denormal/64
+Success
+Testing fir/pulp_scalar/denormal/256
+Success
+Testing fir/pulp_scalar/denormal/1024
+Success
+Testing fir/pulp_scalar/denormal/4096
+Success
+Testing fir/pulp_scalar/denormal/100
+Success
+Testing fir/pulp_scalar/denormal/1000
+Success
+Testing fir/pulp_scalar/denormal/1023
+Success
+Testing fir/pulp_v3/normal/64
+Success
+Testing fir/pulp_v3/normal/256
+Success
+Testing fir/pulp_v3/normal/1024
+Success
+Testing fir/pulp_v3/normal/4096
+Success
+Testing fir/pulp_v3/normal/100
+Success
+Testing fir/pulp_v3/normal/1000
+Success
+Testing fir/pulp_v3/normal/1023
+Success
+Testing fir/pulp_v3/denormal/64
+Success
+Testing fir/pulp_v3/denormal/256
+Success
+Testing fir/pulp_v3/denormal/1024
+Success
+Testing fir/pulp_v3/denormal/4096
+Success
+Testing fir/pulp_v3/denormal/100
+Success
+Testing fir/pulp_v3/denormal/1000
+Success
+Testing fir/pulp_v3/denormal/1023
+Success
+Testing fir/pulp_dispatched/normal/64
+Success
+Testing fir/pulp_dispatched/normal/256
+Success
+Testing fir/pulp_dispatched/normal/1024
+Success
+Testing fir/pulp_dispatched/normal/4096
+Success
+Testing fir/pulp_dispatched/normal/100
+Success
+Testing fir/pulp_dispatched/normal/1000
+Success
+Testing fir/pulp_dispatched/normal/1023
+Success
+Testing fir/pulp_dispatched/denormal/64
+Success
+Testing fir/pulp_dispatched/denormal/256
+Success
+Testing fir/pulp_dispatched/denormal/1024
+Success
+Testing fir/pulp_dispatched/denormal/4096
+Success
+Testing fir/pulp_dispatched/denormal/100
+Success
+Testing fir/pulp_dispatched/denormal/1000
+Success
+Testing fir/pulp_dispatched/denormal/1023
+Success
+Testing fir/multiversion/normal/64
+Success
+Testing fir/multiversion/normal/256
+Success
+Testing fir/multiversion/normal/1024
+Success
+Testing fir/multiversion/normal/4096
+Success
+Testing fir/multiversion/normal/100
+Success
+Testing fir/multiversion/normal/1000
+Success
+Testing fir/multiversion/normal/1023
+Success
+Testing fir/multiversion/denormal/64
+Success
+Testing fir/multiversion/denormal/256
+Success
+Testing fir/multiversion/denormal/1024
+Success
+Testing fir/multiversion/denormal/4096
+Success
+Testing fir/multiversion/denormal/100
+Success
+Testing fir/multiversion/denormal/1000
+Success
+Testing fir/multiversion/denormal/1023
+Success
+Testing fir/prod_detected/normal/64
+Success
+Testing fir/prod_detected/normal/256
+Success
+Testing fir/prod_detected/normal/1024
+Success
+Testing fir/prod_detected/normal/4096
+Success
+Testing fir/prod_detected/normal/100
+Success
+Testing fir/prod_detected/normal/1000
+Success
+Testing fir/prod_detected/normal/1023
+Success
+Testing fir/prod_detected/denormal/64
+Success
+Testing fir/prod_detected/denormal/256
+Success
+Testing fir/prod_detected/denormal/1024
+Success
+Testing fir/prod_detected/denormal/4096
+Success
+Testing fir/prod_detected/denormal/100
+Success
+Testing fir/prod_detected/denormal/1000
+Success
+Testing fir/prod_detected/denormal/1023
+Success
+Testing fir/prod_fallback/normal/64
+Success
+Testing fir/prod_fallback/normal/256
+Success
+Testing fir/prod_fallback/normal/1024
+Success
+Testing fir/prod_fallback/normal/4096
+Success
+Testing fir/prod_fallback/normal/100
+Success
+Testing fir/prod_fallback/normal/1000
+Success
+Testing fir/prod_fallback/normal/1023
+Success
+Testing fir/prod_fallback/denormal/64
+Success
+Testing fir/prod_fallback/denormal/256
+Success
+Testing fir/prod_fallback/denormal/1024
+Success
+Testing fir/prod_fallback/denormal/4096
+Success
+Testing fir/prod_fallback/denormal/100
+Success
+Testing fir/prod_fallback/denormal/1000
+Success
+Testing fir/prod_fallback/denormal/1023
+Success
+Testing fir/prod_sse2/normal/64
+Success
+Testing fir/prod_sse2/normal/256
+Success
+Testing fir/prod_sse2/normal/1024
+Success
+Testing fir/prod_sse2/normal/4096
+Success
+Testing fir/prod_sse2/normal/100
+Success
+Testing fir/prod_sse2/normal/1000
+Success
+Testing fir/prod_sse2/normal/1023
+Success
+Testing fir/prod_sse2/denormal/64
+Success
+Testing fir/prod_sse2/denormal/256
+Success
+Testing fir/prod_sse2/denormal/1024
+Success
+Testing fir/prod_sse2/denormal/4096
+Success
+Testing fir/prod_sse2/denormal/100
+Success
+Testing fir/prod_sse2/denormal/1000
+Success
+Testing fir/prod_sse2/denormal/1023
+Success
+Testing fir/prod_sse4_2/normal/64
+Success
+Testing fir/prod_sse4_2/normal/256
+Success
+Testing fir/prod_sse4_2/normal/1024
+Success
+Testing fir/prod_sse4_2/normal/4096
+Success
+Testing fir/prod_sse4_2/normal/100
+Success
+Testing fir/prod_sse4_2/normal/1000
+Success
+Testing fir/prod_sse4_2/normal/1023
+Success
+Testing fir/prod_sse4_2/denormal/64
+Success
+Testing fir/prod_sse4_2/denormal/256
+Success
+Testing fir/prod_sse4_2/denormal/1024
+Success
+Testing fir/prod_sse4_2/denormal/4096
+Success
+Testing fir/prod_sse4_2/denormal/100
+Success
+Testing fir/prod_sse4_2/denormal/1000
+Success
+Testing fir/prod_sse4_2/denormal/1023
+Success
+Testing fir/prod_avx2/normal/64
+Success
+Testing fir/prod_avx2/normal/256
+Success
+Testing fir/prod_avx2/normal/1024
+Success
+Testing fir/prod_avx2/normal/4096
+Success
+Testing fir/prod_avx2/normal/100
+Success
+Testing fir/prod_avx2/normal/1000
+Success
+Testing fir/prod_avx2/normal/1023
+Success
+Testing fir/prod_avx2/denormal/64
+Success
+Testing fir/prod_avx2/denormal/256
+Success
+Testing fir/prod_avx2/denormal/1024
+Success
+Testing fir/prod_avx2/denormal/4096
+Success
+Testing fir/prod_avx2/denormal/100
+Success
+Testing fir/prod_avx2/denormal/1000
+Success
+Testing fir/prod_avx2/denormal/1023
+Success
+
+Testing biquad/scalar/normal/64
+Success
+Testing biquad/scalar/normal/256
+Success
+Testing biquad/scalar/normal/1024
+Success
+Testing biquad/scalar/normal/4096
+Success
+Testing biquad/scalar/normal/100
+Success
+Testing biquad/scalar/normal/1000
+Success
+Testing biquad/scalar/normal/1023
+Success
+Testing biquad/scalar/denormal/64
+Success
+Testing biquad/scalar/denormal/256
+Success
+Testing biquad/scalar/denormal/1024
+Success
+Testing biquad/scalar/denormal/4096
+Success
+Testing biquad/scalar/denormal/100
+Success
+Testing biquad/scalar/denormal/1000
+Success
+Testing biquad/scalar/denormal/1023
+Success
+Testing biquad/fearless_fallback/normal/64
+Success
+Testing biquad/fearless_fallback/normal/256
+Success
+Testing biquad/fearless_fallback/normal/1024
+Success
+Testing biquad/fearless_fallback/normal/4096
+Success
+Testing biquad/fearless_fallback/normal/100
+Success
+Testing biquad/fearless_fallback/normal/1000
+Success
+Testing biquad/fearless_fallback/normal/1023
+Success
+Testing biquad/fearless_fallback/denormal/64
+Success
+Testing biquad/fearless_fallback/denormal/256
+Success
+Testing biquad/fearless_fallback/denormal/1024
+Success
+Testing biquad/fearless_fallback/denormal/4096
+Success
+Testing biquad/fearless_fallback/denormal/100
+Success
+Testing biquad/fearless_fallback/denormal/1000
+Success
+Testing biquad/fearless_fallback/denormal/1023
+Success
+Testing biquad/fearless_sse4_2/normal/64
+Success
+Testing biquad/fearless_sse4_2/normal/256
+Success
+Testing biquad/fearless_sse4_2/normal/1024
+Success
+Testing biquad/fearless_sse4_2/normal/4096
+Success
+Testing biquad/fearless_sse4_2/normal/100
+Success
+Testing biquad/fearless_sse4_2/normal/1000
+Success
+Testing biquad/fearless_sse4_2/normal/1023
+Success
+Testing biquad/fearless_sse4_2/denormal/64
+Success
+Testing biquad/fearless_sse4_2/denormal/256
+Success
+Testing biquad/fearless_sse4_2/denormal/1024
+Success
+Testing biquad/fearless_sse4_2/denormal/4096
+Success
+Testing biquad/fearless_sse4_2/denormal/100
+Success
+Testing biquad/fearless_sse4_2/denormal/1000
+Success
+Testing biquad/fearless_sse4_2/denormal/1023
+Success
+Testing biquad/fearless_avx2/normal/64
+Success
+Testing biquad/fearless_avx2/normal/256
+Success
+Testing biquad/fearless_avx2/normal/1024
+Success
+Testing biquad/fearless_avx2/normal/4096
+Success
+Testing biquad/fearless_avx2/normal/100
+Success
+Testing biquad/fearless_avx2/normal/1000
+Success
+Testing biquad/fearless_avx2/normal/1023
+Success
+Testing biquad/fearless_avx2/denormal/64
+Success
+Testing biquad/fearless_avx2/denormal/256
+Success
+Testing biquad/fearless_avx2/denormal/1024
+Success
+Testing biquad/fearless_avx2/denormal/4096
+Success
+Testing biquad/fearless_avx2/denormal/100
+Success
+Testing biquad/fearless_avx2/denormal/1000
+Success
+Testing biquad/fearless_avx2/denormal/1023
+Success
+Testing biquad/fearless_dispatched/normal/64
+Success
+Testing biquad/fearless_dispatched/normal/256
+Success
+Testing biquad/fearless_dispatched/normal/1024
+Success
+Testing biquad/fearless_dispatched/normal/4096
+Success
+Testing biquad/fearless_dispatched/normal/100
+Success
+Testing biquad/fearless_dispatched/normal/1000
+Success
+Testing biquad/fearless_dispatched/normal/1023
+Success
+Testing biquad/fearless_dispatched/denormal/64
+Success
+Testing biquad/fearless_dispatched/denormal/256
+Success
+Testing biquad/fearless_dispatched/denormal/1024
+Success
+Testing biquad/fearless_dispatched/denormal/4096
+Success
+Testing biquad/fearless_dispatched/denormal/100
+Success
+Testing biquad/fearless_dispatched/denormal/1000
+Success
+Testing biquad/fearless_dispatched/denormal/1023
+Success
+Testing biquad/pulp_scalar/normal/64
+Success
+Testing biquad/pulp_scalar/normal/256
+Success
+Testing biquad/pulp_scalar/normal/1024
+Success
+Testing biquad/pulp_scalar/normal/4096
+Success
+Testing biquad/pulp_scalar/normal/100
+Success
+Testing biquad/pulp_scalar/normal/1000
+Success
+Testing biquad/pulp_scalar/normal/1023
+Success
+Testing biquad/pulp_scalar/denormal/64
+Success
+Testing biquad/pulp_scalar/denormal/256
+Success
+Testing biquad/pulp_scalar/denormal/1024
+Success
+Testing biquad/pulp_scalar/denormal/4096
+Success
+Testing biquad/pulp_scalar/denormal/100
+Success
+Testing biquad/pulp_scalar/denormal/1000
+Success
+Testing biquad/pulp_scalar/denormal/1023
+Success
+Testing biquad/pulp_v3/normal/64
+Success
+Testing biquad/pulp_v3/normal/256
+Success
+Testing biquad/pulp_v3/normal/1024
+Success
+Testing biquad/pulp_v3/normal/4096
+Success
+Testing biquad/pulp_v3/normal/100
+Success
+Testing biquad/pulp_v3/normal/1000
+Success
+Testing biquad/pulp_v3/normal/1023
+Success
+Testing biquad/pulp_v3/denormal/64
+Success
+Testing biquad/pulp_v3/denormal/256
+Success
+Testing biquad/pulp_v3/denormal/1024
+Success
+Testing biquad/pulp_v3/denormal/4096
+Success
+Testing biquad/pulp_v3/denormal/100
+Success
+Testing biquad/pulp_v3/denormal/1000
+Success
+Testing biquad/pulp_v3/denormal/1023
+Success
+Testing biquad/pulp_dispatched/normal/64
+Success
+Testing biquad/pulp_dispatched/normal/256
+Success
+Testing biquad/pulp_dispatched/normal/1024
+Success
+Testing biquad/pulp_dispatched/normal/4096
+Success
+Testing biquad/pulp_dispatched/normal/100
+Success
+Testing biquad/pulp_dispatched/normal/1000
+Success
+Testing biquad/pulp_dispatched/normal/1023
+Success
+Testing biquad/pulp_dispatched/denormal/64
+Success
+Testing biquad/pulp_dispatched/denormal/256
+Success
+Testing biquad/pulp_dispatched/denormal/1024
+Success
+Testing biquad/pulp_dispatched/denormal/4096
+Success
+Testing biquad/pulp_dispatched/denormal/100
+Success
+Testing biquad/pulp_dispatched/denormal/1000
+Success
+Testing biquad/pulp_dispatched/denormal/1023
+Success
+Testing biquad/multiversion/normal/64
+Success
+Testing biquad/multiversion/normal/256
+Success
+Testing biquad/multiversion/normal/1024
+Success
+Testing biquad/multiversion/normal/4096
+Success
+Testing biquad/multiversion/normal/100
+Success
+Testing biquad/multiversion/normal/1000
+Success
+Testing biquad/multiversion/normal/1023
+Success
+Testing biquad/multiversion/denormal/64
+Success
+Testing biquad/multiversion/denormal/256
+Success
+Testing biquad/multiversion/denormal/1024
+Success
+Testing biquad/multiversion/denormal/4096
+Success
+Testing biquad/multiversion/denormal/100
+Success
+Testing biquad/multiversion/denormal/1000
+Success
+Testing biquad/multiversion/denormal/1023
+Success
+Testing biquad/prod_detected/normal/64
+Success
+Testing biquad/prod_detected/normal/256
+Success
+Testing biquad/prod_detected/normal/1024
+Success
+Testing biquad/prod_detected/normal/4096
+Success
+Testing biquad/prod_detected/normal/100
+Success
+Testing biquad/prod_detected/normal/1000
+Success
+Testing biquad/prod_detected/normal/1023
+Success
+Testing biquad/prod_detected/denormal/64
+Success
+Testing biquad/prod_detected/denormal/256
+Success
+Testing biquad/prod_detected/denormal/1024
+Success
+Testing biquad/prod_detected/denormal/4096
+Success
+Testing biquad/prod_detected/denormal/100
+Success
+Testing biquad/prod_detected/denormal/1000
+Success
+Testing biquad/prod_detected/denormal/1023
+Success
+Testing biquad/prod_fallback/normal/64
+Success
+Testing biquad/prod_fallback/normal/256
+Success
+Testing biquad/prod_fallback/normal/1024
+Success
+Testing biquad/prod_fallback/normal/4096
+Success
+Testing biquad/prod_fallback/normal/100
+Success
+Testing biquad/prod_fallback/normal/1000
+Success
+Testing biquad/prod_fallback/normal/1023
+Success
+Testing biquad/prod_fallback/denormal/64
+Success
+Testing biquad/prod_fallback/denormal/256
+Success
+Testing biquad/prod_fallback/denormal/1024
+Success
+Testing biquad/prod_fallback/denormal/4096
+Success
+Testing biquad/prod_fallback/denormal/100
+Success
+Testing biquad/prod_fallback/denormal/1000
+Success
+Testing biquad/prod_fallback/denormal/1023
+Success
+Testing biquad/prod_sse2/normal/64
+Success
+Testing biquad/prod_sse2/normal/256
+Success
+Testing biquad/prod_sse2/normal/1024
+Success
+Testing biquad/prod_sse2/normal/4096
+Success
+Testing biquad/prod_sse2/normal/100
+Success
+Testing biquad/prod_sse2/normal/1000
+Success
+Testing biquad/prod_sse2/normal/1023
+Success
+Testing biquad/prod_sse2/denormal/64
+Success
+Testing biquad/prod_sse2/denormal/256
+Success
+Testing biquad/prod_sse2/denormal/1024
+Success
+Testing biquad/prod_sse2/denormal/4096
+Success
+Testing biquad/prod_sse2/denormal/100
+Success
+Testing biquad/prod_sse2/denormal/1000
+Success
+Testing biquad/prod_sse2/denormal/1023
+Success
+Testing biquad/prod_sse4_2/normal/64
+Success
+Testing biquad/prod_sse4_2/normal/256
+Success
+Testing biquad/prod_sse4_2/normal/1024
+Success
+Testing biquad/prod_sse4_2/normal/4096
+Success
+Testing biquad/prod_sse4_2/normal/100
+Success
+Testing biquad/prod_sse4_2/normal/1000
+Success
+Testing biquad/prod_sse4_2/normal/1023
+Success
+Testing biquad/prod_sse4_2/denormal/64
+Success
+Testing biquad/prod_sse4_2/denormal/256
+Success
+Testing biquad/prod_sse4_2/denormal/1024
+Success
+Testing biquad/prod_sse4_2/denormal/4096
+Success
+Testing biquad/prod_sse4_2/denormal/100
+Success
+Testing biquad/prod_sse4_2/denormal/1000
+Success
+Testing biquad/prod_sse4_2/denormal/1023
+Success
+Testing biquad/prod_avx2/normal/64
+Success
+Testing biquad/prod_avx2/normal/256
+Success
+Testing biquad/prod_avx2/normal/1024
+Success
+Testing biquad/prod_avx2/normal/4096
+Success
+Testing biquad/prod_avx2/normal/100
+Success
+Testing biquad/prod_avx2/normal/1000
+Success
+Testing biquad/prod_avx2/normal/1023
+Success
+Testing biquad/prod_avx2/denormal/64
+Success
+Testing biquad/prod_avx2/denormal/256
+Success
+Testing biquad/prod_avx2/denormal/1024
+Success
+Testing biquad/prod_avx2/denormal/4096
+Success
+Testing biquad/prod_avx2/denormal/100
+Success
+Testing biquad/prod_avx2/denormal/1000
+Success
+Testing biquad/prod_avx2/denormal/1023
+Success
+
+Testing sine/scalar/normal/64
+Success
+Testing sine/scalar/normal/256
+Success
+Testing sine/scalar/normal/1024
+Success
+Testing sine/scalar/normal/4096
+Success
+Testing sine/scalar/normal/100
+Success
+Testing sine/scalar/normal/1000
+Success
+Testing sine/scalar/normal/1023
+Success
+Testing sine/scalar/denormal/64
+Success
+Testing sine/scalar/denormal/256
+Success
+Testing sine/scalar/denormal/1024
+Success
+Testing sine/scalar/denormal/4096
+Success
+Testing sine/scalar/denormal/100
+Success
+Testing sine/scalar/denormal/1000
+Success
+Testing sine/scalar/denormal/1023
+Success
+Testing sine/fearless_fallback/normal/64
+Success
+Testing sine/fearless_fallback/normal/256
+Success
+Testing sine/fearless_fallback/normal/1024
+Success
+Testing sine/fearless_fallback/normal/4096
+Success
+Testing sine/fearless_fallback/normal/100
+Success
+Testing sine/fearless_fallback/normal/1000
+Success
+Testing sine/fearless_fallback/normal/1023
+Success
+Testing sine/fearless_fallback/denormal/64
+Success
+Testing sine/fearless_fallback/denormal/256
+Success
+Testing sine/fearless_fallback/denormal/1024
+Success
+Testing sine/fearless_fallback/denormal/4096
+Success
+Testing sine/fearless_fallback/denormal/100
+Success
+Testing sine/fearless_fallback/denormal/1000
+Success
+Testing sine/fearless_fallback/denormal/1023
+Success
+Testing sine/fearless_sse4_2/normal/64
+Success
+Testing sine/fearless_sse4_2/normal/256
+Success
+Testing sine/fearless_sse4_2/normal/1024
+Success
+Testing sine/fearless_sse4_2/normal/4096
+Success
+Testing sine/fearless_sse4_2/normal/100
+Success
+Testing sine/fearless_sse4_2/normal/1000
+Success
+Testing sine/fearless_sse4_2/normal/1023
+Success
+Testing sine/fearless_sse4_2/denormal/64
+Success
+Testing sine/fearless_sse4_2/denormal/256
+Success
+Testing sine/fearless_sse4_2/denormal/1024
+Success
+Testing sine/fearless_sse4_2/denormal/4096
+Success
+Testing sine/fearless_sse4_2/denormal/100
+Success
+Testing sine/fearless_sse4_2/denormal/1000
+Success
+Testing sine/fearless_sse4_2/denormal/1023
+Success
+Testing sine/fearless_avx2/normal/64
+Success
+Testing sine/fearless_avx2/normal/256
+Success
+Testing sine/fearless_avx2/normal/1024
+Success
+Testing sine/fearless_avx2/normal/4096
+Success
+Testing sine/fearless_avx2/normal/100
+Success
+Testing sine/fearless_avx2/normal/1000
+Success
+Testing sine/fearless_avx2/normal/1023
+Success
+Testing sine/fearless_avx2/denormal/64
+Success
+Testing sine/fearless_avx2/denormal/256
+Success
+Testing sine/fearless_avx2/denormal/1024
+Success
+Testing sine/fearless_avx2/denormal/4096
+Success
+Testing sine/fearless_avx2/denormal/100
+Success
+Testing sine/fearless_avx2/denormal/1000
+Success
+Testing sine/fearless_avx2/denormal/1023
+Success
+Testing sine/fearless_dispatched/normal/64
+Success
+Testing sine/fearless_dispatched/normal/256
+Success
+Testing sine/fearless_dispatched/normal/1024
+Success
+Testing sine/fearless_dispatched/normal/4096
+Success
+Testing sine/fearless_dispatched/normal/100
+Success
+Testing sine/fearless_dispatched/normal/1000
+Success
+Testing sine/fearless_dispatched/normal/1023
+Success
+Testing sine/fearless_dispatched/denormal/64
+Success
+Testing sine/fearless_dispatched/denormal/256
+Success
+Testing sine/fearless_dispatched/denormal/1024
+Success
+Testing sine/fearless_dispatched/denormal/4096
+Success
+Testing sine/fearless_dispatched/denormal/100
+Success
+Testing sine/fearless_dispatched/denormal/1000
+Success
+Testing sine/fearless_dispatched/denormal/1023
+Success
+Testing sine/pulp_scalar/normal/64
+Success
+Testing sine/pulp_scalar/normal/256
+Success
+Testing sine/pulp_scalar/normal/1024
+Success
+Testing sine/pulp_scalar/normal/4096
+Success
+Testing sine/pulp_scalar/normal/100
+Success
+Testing sine/pulp_scalar/normal/1000
+Success
+Testing sine/pulp_scalar/normal/1023
+Success
+Testing sine/pulp_scalar/denormal/64
+Success
+Testing sine/pulp_scalar/denormal/256
+Success
+Testing sine/pulp_scalar/denormal/1024
+Success
+Testing sine/pulp_scalar/denormal/4096
+Success
+Testing sine/pulp_scalar/denormal/100
+Success
+Testing sine/pulp_scalar/denormal/1000
+Success
+Testing sine/pulp_scalar/denormal/1023
+Success
+Testing sine/pulp_v3/normal/64
+Success
+Testing sine/pulp_v3/normal/256
+Success
+Testing sine/pulp_v3/normal/1024
+Success
+Testing sine/pulp_v3/normal/4096
+Success
+Testing sine/pulp_v3/normal/100
+Success
+Testing sine/pulp_v3/normal/1000
+Success
+Testing sine/pulp_v3/normal/1023
+Success
+Testing sine/pulp_v3/denormal/64
+Success
+Testing sine/pulp_v3/denormal/256
+Success
+Testing sine/pulp_v3/denormal/1024
+Success
+Testing sine/pulp_v3/denormal/4096
+Success
+Testing sine/pulp_v3/denormal/100
+Success
+Testing sine/pulp_v3/denormal/1000
+Success
+Testing sine/pulp_v3/denormal/1023
+Success
+Testing sine/pulp_dispatched/normal/64
+Success
+Testing sine/pulp_dispatched/normal/256
+Success
+Testing sine/pulp_dispatched/normal/1024
+Success
+Testing sine/pulp_dispatched/normal/4096
+Success
+Testing sine/pulp_dispatched/normal/100
+Success
+Testing sine/pulp_dispatched/normal/1000
+Success
+Testing sine/pulp_dispatched/normal/1023
+Success
+Testing sine/pulp_dispatched/denormal/64
+Success
+Testing sine/pulp_dispatched/denormal/256
+Success
+Testing sine/pulp_dispatched/denormal/1024
+Success
+Testing sine/pulp_dispatched/denormal/4096
+Success
+Testing sine/pulp_dispatched/denormal/100
+Success
+Testing sine/pulp_dispatched/denormal/1000
+Success
+Testing sine/pulp_dispatched/denormal/1023
+Success
+Testing sine/multiversion/normal/64
+Success
+Testing sine/multiversion/normal/256
+Success
+Testing sine/multiversion/normal/1024
+Success
+Testing sine/multiversion/normal/4096
+Success
+Testing sine/multiversion/normal/100
+Success
+Testing sine/multiversion/normal/1000
+Success
+Testing sine/multiversion/normal/1023
+Success
+Testing sine/multiversion/denormal/64
+Success
+Testing sine/multiversion/denormal/256
+Success
+Testing sine/multiversion/denormal/1024
+Success
+Testing sine/multiversion/denormal/4096
+Success
+Testing sine/multiversion/denormal/100
+Success
+Testing sine/multiversion/denormal/1000
+Success
+Testing sine/multiversion/denormal/1023
+Success
+Testing sine/prod_detected/normal/64
+Success
+Testing sine/prod_detected/normal/256
+Success
+Testing sine/prod_detected/normal/1024
+Success
+Testing sine/prod_detected/normal/4096
+Success
+Testing sine/prod_detected/normal/100
+Success
+Testing sine/prod_detected/normal/1000
+Success
+Testing sine/prod_detected/normal/1023
+Success
+Testing sine/prod_detected/denormal/64
+Success
+Testing sine/prod_detected/denormal/256
+Success
+Testing sine/prod_detected/denormal/1024
+Success
+Testing sine/prod_detected/denormal/4096
+Success
+Testing sine/prod_detected/denormal/100
+Success
+Testing sine/prod_detected/denormal/1000
+Success
+Testing sine/prod_detected/denormal/1023
+Success
+Testing sine/prod_fallback/normal/64
+Success
+Testing sine/prod_fallback/normal/256
+Success
+Testing sine/prod_fallback/normal/1024
+Success
+Testing sine/prod_fallback/normal/4096
+Success
+Testing sine/prod_fallback/normal/100
+Success
+Testing sine/prod_fallback/normal/1000
+Success
+Testing sine/prod_fallback/normal/1023
+Success
+Testing sine/prod_fallback/denormal/64
+Success
+Testing sine/prod_fallback/denormal/256
+Success
+Testing sine/prod_fallback/denormal/1024
+Success
+Testing sine/prod_fallback/denormal/4096
+Success
+Testing sine/prod_fallback/denormal/100
+Success
+Testing sine/prod_fallback/denormal/1000
+Success
+Testing sine/prod_fallback/denormal/1023
+Success
+Testing sine/prod_sse2/normal/64
+Success
+Testing sine/prod_sse2/normal/256
+Success
+Testing sine/prod_sse2/normal/1024
+Success
+Testing sine/prod_sse2/normal/4096
+Success
+Testing sine/prod_sse2/normal/100
+Success
+Testing sine/prod_sse2/normal/1000
+Success
+Testing sine/prod_sse2/normal/1023
+Success
+Testing sine/prod_sse2/denormal/64
+Success
+Testing sine/prod_sse2/denormal/256
+Success
+Testing sine/prod_sse2/denormal/1024
+Success
+Testing sine/prod_sse2/denormal/4096
+Success
+Testing sine/prod_sse2/denormal/100
+Success
+Testing sine/prod_sse2/denormal/1000
+Success
+Testing sine/prod_sse2/denormal/1023
+Success
+Testing sine/prod_sse4_2/normal/64
+Success
+Testing sine/prod_sse4_2/normal/256
+Success
+Testing sine/prod_sse4_2/normal/1024
+Success
+Testing sine/prod_sse4_2/normal/4096
+Success
+Testing sine/prod_sse4_2/normal/100
+Success
+Testing sine/prod_sse4_2/normal/1000
+Success
+Testing sine/prod_sse4_2/normal/1023
+Success
+Testing sine/prod_sse4_2/denormal/64
+Success
+Testing sine/prod_sse4_2/denormal/256
+Success
+Testing sine/prod_sse4_2/denormal/1024
+Success
+Testing sine/prod_sse4_2/denormal/4096
+Success
+Testing sine/prod_sse4_2/denormal/100
+Success
+Testing sine/prod_sse4_2/denormal/1000
+Success
+Testing sine/prod_sse4_2/denormal/1023
+Success
+Testing sine/prod_avx2/normal/64
+Success
+Testing sine/prod_avx2/normal/256
+Success
+Testing sine/prod_avx2/normal/1024
+Success
+Testing sine/prod_avx2/normal/4096
+Success
+Testing sine/prod_avx2/normal/100
+Success
+Testing sine/prod_avx2/normal/1000
+Success
+Testing sine/prod_avx2/normal/1023
+Success
+Testing sine/prod_avx2/denormal/64
+Success
+Testing sine/prod_avx2/denormal/256
+Success
+Testing sine/prod_avx2/denormal/1024
+Success
+Testing sine/prod_avx2/denormal/4096
+Success
+Testing sine/prod_avx2/denormal/100
+Success
+Testing sine/prod_avx2/denormal/1000
+Success
+Testing sine/prod_avx2/denormal/1023
+Success
+
+Testing dispatch_probe/level_new
+Success
+Testing dispatch_probe/token_avx2
+Success
+Testing dispatch_probe/dispatch_noop
+Success
+Testing dispatch_probe/add_scalar/16
+Success
+Testing dispatch_probe/add_scalar/32
+Success
+Testing dispatch_probe/add_fearless_avx2/16
+Success
+Testing dispatch_probe/add_fearless_avx2/32
+Success
+Testing dispatch_probe/add_fearless_dispatched/16
+Success
+Testing dispatch_probe/add_fearless_dispatched/32
+Success
+
+     Running unittests src\lib.rs (target\release\deps\ruviform_rt-e75ae940c1a1cfea.exe)
+
+running 44 tests
+test error::tests::display_covers_every_variant ... ok
+test observability_poc::tests::bridge_records_and_drains_fifo ... ok
+test observability_poc::tests::counter_pair_increments_and_reads ... ok
+test observability_poc::tests::timestamp_helpers_fill_record ... ok
+test observability_poc::tests::endpoint_send_bounds ... ok
+test observability_poc::tests::bridge_drop_on_full_counts ... ok
+test observability_poc::tests::scaffolding_paths_alloc_free_in_window ... ok
+test observability_poc::tests::bridge_drain_bounded_by_capacity ... ok
+test observability_poc::tests::overflow_policy_variants ... ok
+test observability_poc::tests::zero_capacity_rejected - should panic ... ok
+test retire::tests::local_pending_drops_on_drain ... ok
+test retire::tests::rt_retire_repeated_saturation_accumulates ... ok
+test retire::tests::rt_retire_full_forgets_not_drops ... ok
+test retire::tests::rt_retire_overflow_counted_and_shared ... ok
+test retire::tests::rt_endpoint_send_bounds ... ok
+test retire::tests::rt_retire_no_alloc ... ok
+test retire::tests::zero_capacity_rejected - should panic ... ok
+test observability_poc::tests::alloc_window_covers_only_owning_thread ... ok
+test retire::tests::rt_retire_then_drain_drops ... ok
+test snapshot::tests::guard_drop_full_channel_leaks ... ok
+test retire::tests::rt_retire_teardown_collector_outlives ... ok
+test snapshot::tests::rt_endpoint_send_bounds ... ok
+test snapshot::tests::multiple_guards_coexist ... ok
+test snapshot::tests::rt_snapshot_displaced_arc_freed_on_collect ... ok
+test snapshot::tests::rt_snapshot_guard_drop_routes_to_retire ... ok
+test snapshot::tests::rt_snapshot_publish_visibility ... ok
+test snapshot::tests::rt_snapshot_read_no_alloc ... ok
+test snapshot::tests::rt_snapshot_reader_outlives_writer ... ok
+test snapshot::tests::rt_snapshot_retire_overflows_observable ... ok
+test snapshot::tests::zero_retire_capacity_rejected - should panic ... ok
+test spsc::tests::counting_alloc_records_when_enabled ... ok
+test spsc::tests::display_covers_every_variant ... ok
+test spsc::tests::rt_endpoint_send_bounds ... ok
+test spsc::tests::rt_full_try_push_returns_value ... ok
+test spsc::tests::rt_pop_latest_returns_newest ... ok
+test spsc::tests::rt_push_pop_fifo ... ok
+test spsc::tests::rt_try_push_pop_no_alloc ... ok
+test spsc::tests::zero_capacity_rejected - should panic ... ok
+test tests::rt_clock_timebase_fixed ... ok
+test tests::rt_clock_tick_visibility ... ok
+test tests::rt_endpoint_thread_bounds ... ok
+test tests::rt_mint_token_usable ... ok
+test tests::rt_prepare_then_process ... ok
+test tests::version_is_not_empty ... ok
+
+test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches\rt_observability_poc.rs (target\release\deps\rt_observability_poc-6470deabf787383f.exe)
+=== rt_observability_poc bench environment ===
+os: windows x86_64
+cpu: Intel(R) Core(TM) i9-9900K CPU @ 3.60GHz
+cores: 16
+rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+criterion: 0.8.2
+ruviform-rt: 0.1.0
+Testing counter_equal_work/disabled
+Success
+Testing counter_equal_work/flag/off
+Success
+Testing counter_equal_work/flag/on
+Success
+Testing counter_equal_work/always
+Success
+
+Testing rt_bridge/record/not_full
+Success
+Testing rt_bridge/record/full
+Success
+Testing rt_bridge/drain/empty
+Success
+Testing rt_bridge/drain/half
+Success
+Testing rt_bridge/drain/full
+Success
+Testing rt_bridge/overflows/read
+Success
+
+Testing overflow_policy_nonzero/drop
+Success
+Testing overflow_policy_nonzero/count
+Success
+Testing overflow_policy_nonzero/aggregate
+Success
+Testing overflow_policy_nonzero/retire_leak
+Success
+
+Testing rt_primitives/channel/try_push
+Success
+Testing rt_primitives/channel/try_pop
+Success
+Testing rt_primitives/retire/retire
+Success
+Testing rt_primitives/retire/overflows
+Success
+Testing rt_primitives/clock/tick
+Success
+Testing rt_primitives/clock/publish_tick
+Success
+Testing rt_primitives/slot/publish
+Success
+Testing rt_primitives/slot/read
+Success
+
+Testing timestamp/instant_now
+Success
+Testing timestamp/instant_to_epoch_nanos
+Success
+Testing timestamp/timestamped_record
+Success
+Testing timestamp/systemtime_now
+Success

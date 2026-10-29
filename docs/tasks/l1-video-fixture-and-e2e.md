@@ -1,7 +1,7 @@
 ---
 id: "TASK-034NXuzqcpqV0zLNlPSHUR"
 type: "task"
-status: "todo"
+status: "done"
 title: "L1 video fixture + 公開面 E2E（l1-test-video-worker + tests/l1_video_e2e.rs — Failed parity・frame 内容・cross-kind）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -111,15 +111,15 @@ host 公開面（`PluginHost::video()`）のみを打つ E2E — `l1-test-video-
 
 ## Done When
 
-- [ ] `l1-test-video-worker` が hand-rolled wire loop（`Hello`→`Scan`/`Scanned`→`Command`→`Reply`→`Shutdown`）で起動し、`spec.args` 経由の argv flag で `--fail-render`/`--fail-initialize`/`--fail-deactivate`/`--fail-start-processing`/`--fail-stop-processing`/`--fail-param-value`/`--overlimit-params`/`--noncanonical-output`/`--crash-after-msgs`/`--hang-after-msgs` 等を制御できる
-- [ ] `tests/l1_video_e2e.rs` が `PluginHost::video()` のみで happy-path（lifecycle・render 内容・pts/duration/color pass-through・params round-trip・`ParamInfo(None)`）を pass する
-- [ ] cross-kind suite（kind filter Scan・`DuplicatePluginId`・`Unsupported`/`EndpointUnavailable`・direct `PluginHost` メソッドの video 答え）が pass する
-- [ ] Failed parity（子死亡/`InstanceFailed`/create 中死亡/`Err` reply mirror 不変/semantic violation → `Err(Ipc)`/inert `BlockIn`/post-`Shutdown`/obligation (a)(c)）が pass する
-- [ ] bound 拒否（`Instantiate` → `Err(Prepare(UnsupportedConfig))`・子未 spawn）と `render_timeout` 分離が pass する
-- [ ] 実 runner lane（`ruviform-plugin-l1-video-runner`）が同一 wire 規約で happy + 代表 fault を pass する
+- [x] `l1-test-video-worker` が hand-rolled wire loop（`Hello`→`Scan`/`Scanned`→`Command`→`Reply`→`Shutdown`）で起動し、`spec.args` 経由の argv flag で `--fail-render`/`--fail-initialize`/`--fail-deactivate`/`--fail-start-processing`/`--fail-stop-processing`/`--fail-param-value`/`--overlimit-params`/`--noncanonical-output`/`--crash-after-msgs`/`--hang-after-msgs` 等を制御できる
+- [x] `tests/l1_video_e2e.rs` が `PluginHost::video()` のみで happy-path（lifecycle・render 内容・pts/duration/color pass-through・params round-trip・`ParamInfo(None)`）を pass する
+- [x] cross-kind suite（kind filter Scan・`DuplicatePluginId`・`Unsupported`/`EndpointUnavailable`・direct `PluginHost` メソッドの video 答え）が pass する
+- [x] Failed parity（子死亡/`InstanceFailed`/create 中死亡/`Err` reply mirror 不変/semantic violation → `Err(Ipc)`/inert `BlockIn`/post-`Shutdown`/obligation (a)(c)）が pass する
+- [x] bound 拒否（`Instantiate` → `Err(Prepare(UnsupportedConfig))`・子未 spawn）と `render_timeout` 分離が pass する
+- [x] 実 runner lane（`ruviform-plugin-l1-video-runner`）が同一 wire 規約で happy + 代表 fault を pass する
 
 ## Verification
 
-- [ ] `cargo test -p ruviform-plugin-host --test l1_video_e2e` — 公開面 E2E 全 pass
-- [ ] `cargo test -p ruviform-plugin-export --test l1_video_runner_e2e` — export runner lane 全 pass
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass（audio suite 無退行を含む）
+- [x] `cargo test -p ruviform-plugin-host --test l1_video_e2e` — 公開面 E2E 全 pass
+- [x] `cargo test -p ruviform-plugin-export --test l1_video_runner_e2e` — export runner lane 全 pass
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` が全 pass（audio suite 無退行を含む）

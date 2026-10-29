@@ -1,0 +1,4 @@
+[lint] $ cargo clippy --workspace --all-targets -- -D warnings
+    Checking ruviform-plugin-export v0.1.0 (F:\repositry\ruviform-wt-118\crates\ruviform-plugin-export)
+    Checking ruviform-plugin-host v0.1.0 (F:\repositry\ruviform-wt-118\crates\ruviform-plugin-host)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.93s

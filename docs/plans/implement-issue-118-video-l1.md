@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034NXq4i4gZXaqNEEwBZpL"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "Issue #118 実施計画 — video/NONRT プラグインの L1 経路（wire v3・vshm・video runner・video() façade）"
 created: "2026-10-28"
 updated: "2026-10-29"
@@ -57,6 +57,8 @@ relations:
       - type: "file"
         path: "crates/ruviform-plugin-core/src/plain_param.rs"
       - type: "file"
+        path: "crates/ruviform-plugin-core/src/param.rs"
+      - type: "file"
         path: "crates/ruviform-plugin-core/src/lib.rs"
       - type: "file"
         path: "crates/ruviform-plugin-export/src/lib.rs"
@@ -74,6 +76,10 @@ relations:
         path: "crates/ruviform-plugin-host/Cargo.toml"
       - type: "file"
         path: "crates/ruviform-plugin-host/README.md"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs"
+      - type: "file"
+        path: "crates/README.md"
       - type: "file"
         path: "crates/ruviform-plugin-core/README.md"
       - type: "file"
@@ -110,6 +116,8 @@ relations:
         path: "docs/impl/ir/issue-117-bundle-child-implementation.md"
       - type: "file"
         path: "docs/tasks/README.md"
+      - type: "file"
+        path: "docs/test-specs/README.md"
       - type: "file"
         path: "docs/plans/README.md"
       - type: "file"
@@ -176,7 +184,7 @@ relations:
 
 # Issue #118 実施計画 — video/NONRT プラグインの L1 経路（wire v3・vshm・video runner・video() façade） Implementation Plan
 
-> status: approved — Refs #118。approved design（`docs/designs/issue-118-video-l1.md`）+ 2 本の accepted ADR（`issue-118-video-l1-host-surface`・`issue-118-video-l1-create-path-segment`）を正本として、`VideoPluginInstance` を L1 子プロセスで spawn・lifecycle・render できるようにする 6-task DAG。GitHub merge は lead の authoritative `gh` のみ — 本計画は PR merged / issue closed の主張を含まない。
+> status: completed — Refs #118。全 6 task 完了。approved design（`docs/designs/issue-118-video-l1.md`）+ 2 本の accepted ADR（`issue-118-video-l1-host-surface`・`issue-118-video-l1-create-path-segment`）を正本として、`VideoPluginInstance` を L1 子プロセスで spawn・lifecycle・render できるようにする 6-task DAG を実装した。T1 wire v3 codec + vshm 定盤（`7ccad3b`+`7360fb9` — `WIRE_VERSION`=3・video `Command` tag 12-22・`Reply` tag 4-7・`HostError::InvalidValue` tag 10・`WIRE_VIDEO_MAX_*`・`wire::vshm`・`PlainParamInfoOwned`・`ParamFlags::from_bits`）。T2 erased surface + video runner（`353db29` — `erase_video`/`ErasedVideoPlugin`/`VideoPluginFactory`・`run_video`/`VideoRunner`/`VideoEntry`・`export/vshm.rs` attach 2 層検証・`ruviform-plugin-l1-video-runner`・`l1_video_runner_e2e` 20 tests）。T3 host surface（`d4c6cfd`+`9f42a51` — `PluginHost::video()` 借用 façade・`VideoHostCommand`/`VideoHostReply`/`VideoOutOfProcessSpec`・`Route::OutOfProcessVideo`/`Slot::OutOfProcessVideo`・`descriptors` kind-tag・`InstKind` 分離・`Creating` ゲート拡張・`request_timed`・`l1/vshm.rs`・`l1/video.rs` `VideoL1Instance`）。T4 fixture + E2E（`37417a3`+`d793a18` — `l1-test-video-worker` hand-rolled・`l1_video_e2e` 33 tests・`Failed` parity・frame 内容 oracle・cross-kind）。T5 docs sweep（`cfbbb33` — README・親文書 addenda・test-spec v3 reconcile・literal sweep）。T6 final verification（Full Gate 12 コマンド + focused 4 本 — `test` は既知 flake 切り分け後 exit 0・AC1–AC9 + R-B/R-F/R-V 証跡・status 同期 — `docs/impl/ir/issue-118-video-l1-implementation.md`）。GitHub merge は lead の authoritative `gh` のみ — 本計画は PR merged / issue closed の主張を含まない。
 
 ## Goal
 

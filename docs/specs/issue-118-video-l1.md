@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034NV8AWA7qua5MfPc7q6i"
 type: "spec"
-status: "approved"
+status: "implemented"
 title: "Issue #118 video/NONRT プラグインの L1 経路"
 created: "2026-10-29"
 updated: "2026-10-29"

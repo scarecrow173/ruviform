@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running tests\l1_proxy_e2e.rs (target\debug\deps\l1_proxy_e2e-0b9384b580265b9f.exe)
+
+running 2 tests
+test hang_converges_on_command_timeout ... ok
+test wedged_child_write_converges_and_teardown_is_bounded ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 118 filtered out; finished in 0.55s

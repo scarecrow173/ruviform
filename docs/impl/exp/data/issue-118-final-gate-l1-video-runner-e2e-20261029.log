@@ -1,0 +1,27 @@
+   Compiling ruviform-plugin-export v0.1.0 (F:\repositry\ruviform-wt-118\crates\ruviform-plugin-export)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.26s
+     Running tests\l1_video_runner_e2e.rs (target\debug\deps\l1_video_runner_e2e-3678102d205da83c.exe)
+
+running 20 tests
+test argv_is_a_usage_rejection ... ok
+test deactivate_error_is_commit_then_advisory ... ok
+test duplicate_handle_is_ipc ... ok
+test panic_initialize_is_plugin_failed_and_child_survives ... ok
+test inbound_block_in_is_dropped_silently ... ok
+test parameter_dispatch_prechecks_membership ... ok
+test missing_segment_is_ipc_and_leaves_no_entry ... ok
+test lifecycle_transitions_and_stash_replay ... ok
+test happy_path_scan_create_render_destroy ... ok
+test attach_rejections_are_ipc_and_keep_the_child_alive ... ok
+test over_limit_and_non_finite_reports_are_normalized ... ok
+test render_descriptor_semantics_are_checked ... ok
+test cross_kind_create_is_a_defined_rejection ... ok
+test unregistered_handles_are_invalid_handle ... ok
+test unknown_plugin_id_is_a_defined_rejection ... ok
+test direction_illegal_inbound_messages_kill_the_child ... ok
+test factory_panics_are_plugin_failed ... ok
+test render_failures_leave_output_uncommitted_and_the_child_alive ... ok
+test shutdown_and_eof_exit_cleanly ... ok
+test instance_limit_is_a_defined_rejection ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
