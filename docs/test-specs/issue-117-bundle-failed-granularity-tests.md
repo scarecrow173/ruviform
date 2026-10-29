@@ -50,6 +50,8 @@ relations:
 
 bundle 形態（1 子 N instance）における `Failed` 粒度・`InstanceFailed` fan-out・demux 判定表の oracle。子死亡/帰属不能違反 → 全 live instance 収束、帰属可能違反 → 対象 instance のみ収束、registered-but-not-live/post-removal/post-`Shutdown` frame → inert/non-event、per-command `Err(HostError)` → defined rejection の各行を、`converge_child(exit)` vs `converge_instance(i)` の split・notification 意味論・`Destroying` doorbell window と共に pin する。`Dedicated` 経路では本表が 1:1 写像へ退化することも確定事項。`Failed` 粒度の公開契約正本は `docs/adr/issue-117-bundle-child-failed-granularity.md`。
 
+**re-engagement 注記（Issue #118・wire v3）**: 本表の粒度規則は video instance（`InstKind::Video`・`VideoL1Instance`）にも同機構で適用される — 子スコープ収束・inert/post-`Shutdown` non-event・`InstanceFailed` exactly-once fan-out は video でも同じ `L1Child`/demux/converge 機構が担う（video 子は Dedicated 固定のため実効 1:1）。差分は 2 点のみ — (i) video の `Err` reply は `HostError` が読めるため **mirror 不変**（audio の `BlockDone` opaque `Err`→`mark_failed` 収束とは意図的 divergence — `docs/designs/issue-118-video-l1.md`）、(ii) 帰属可能な per-instance 収束の video 側相当は **`Rendered.output` の semantic violation**（config dims/format 不一致・非 canonical・`out_bytes` 超過）のみ。video 側の parity pin は `issue-118-video-failed-parity-tests` が oracle。
+
 ## Feature
 
 reader demux は着信 frame を `instance` の live/registered-but-not-live/post-removal/範囲外で解決し、design L304-320 の判定表に従って「子 scope 収束」「instance scope 収束」「inert drop」「non-event」「defined rejection」のいずれかへ分岐する。`DestroyInstance` doorbell window は `Destroying` gate で新規 submit を `mark_failed` にし、in-flight doorbell の完了を待ってから entry を撤去する。

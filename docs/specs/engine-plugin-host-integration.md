@@ -76,7 +76,7 @@ Issue #113 — #76 で host API として完成した L1 アウトプロセス�
 4. **error/fallback** — L1 クラッシュ → `Failed` + `HostNotification::InstanceFailed` + 定義済み pass-through（直前受信 or 無音）。遅延未着時も pass-through。自動再起動なし
 5. **L1 遅延報告** — `latency_frames = lookahead_blocks × activated max_frames`（frames 整数・秒換算は `frames / sample_rate`）を構成面で報告
 6. **退役の非 RT 保証** — node removal/plan-swap で退役した plugin リソースを RT コールバック経路上で drop/dealloc しない
-7. **video NONRT 境界の明文化 + 延期** — video plugin（`VideoPluginInstance`/OFX NONRT ノード）の境界を本 Issue 内で明文化し、後続 Issue へ trigger 付き延期。L1 video wire は確立しない
+7. **video NONRT 境界の明文化 + 延期** — video plugin（`VideoPluginInstance`/OFX NONRT ノード）の境界を本 Issue 内で明文化し、後続 Issue へ trigger 付き延期。L1 video wire は確立しない（**但書 — Issue #118 で再エンゲージ済み**: video 専用 L1 経路は `VideoHostCommand`/`VideoPluginHost`/`run_video`/`wire::vshm` として wire v3 で確立 — 本項の「engine 側 RT 経路は作らない」という境界と延期 trigger の記録は #113 時点の記述として維持）
 
 ## Why Now
 
@@ -100,13 +100,13 @@ Issue #113 — #76 で host API として完成した L1 アウトプロセス�
 - L1 遅延報告 — `latency_frames = lookahead_blocks × activated max_frames`（frames 整数）を構成面で露出
 - 退役保証 — node removal/plan-swap の退役 plugin リソースが RT コールバック上で drop/dealloc しない（`ruviform-rt` の機構または non-RT 最終参照保持）
 - mock/device-independent 検証 — `rt_` RT 契約テスト + L0/L1 graph E2E（`l1-test-worker`/参照 runner・mock device）
-- video NONRT 境界の明文化 — video plugin 操作が NONRT であり RT パスに置かないこと・L1 video wire 非確立の明記
+- video NONRT 境界の明文化 — video plugin 操作が NONRT であり RT パスに置かないこと・L1 video wire 非確立の明記（**但書 — Issue #118 で video L1 経路は確立済み**（`VideoPluginHost`/`run_video`/wire v3 tag 12-22・4-7・`wire::vshm`）— 「RT パスに置かない」境界は不変）
 - crate doc・README・索引の更新
 
 ### Out of Scope
 
 - 実規格アダプタ（CLAP/VST3/OFX）経由の実プラグイン動作 — Issue #114（real-adapter work）
-- L1 video wire・video plugin の RT/アウトプロセス経路 — deferred（trigger: NONRT video port の分離要求）
+- L1 video wire・video plugin の RT/アウトプロセス経路 — deferred（trigger: NONRT video port の分離要求 — **Issue #118 で消費済み**: video L1 wire・`run_video`・`PluginHost::video()` は実装着地。残 deferred は video plugin の RT/engine 統合のみ）
 - 自動再起動・supervisor ポリシー（#31 確定: 再起動判断は呼出し側/プラグイン責務）
 - `ErasedPlugin`/`Plugin` への全域 `Send` bound — opt-in capability のみ（全域化は ADR で rejected）
 - `ruviform-audio` → plugin-host 依存・plugin-host → engine 依存（baseline 禁止・相互に型非露出）
@@ -139,12 +139,12 @@ Issue #113 — #76 で host API として完成した L1 アウトプロセス�
 - [ ] AC7（RT alloc）: ノード `pull`（L0/L1 endpoint `process` 経路）が `assert_no_alloc` 窓内 0 alloc で `rt_` 命名テストが `mise run test-rt` でグリーン
 - [ ] AC8（退役）: node removal/plan-swap で退役した plugin リソースの Drop/dealloc が RT コールバック経路上で発生しない（retire/drain 観測 or non-RT 最終参照の証明）
 - [ ] AC9（E2E）: L0 と L1 の graph E2E が mock device / device-independent に成立（L1 は `l1-test-worker` または参照 runner で spawn→lifecycle→process→destroy）
-- [ ] AC10（video 境界）: video plugin（`VideoPluginInstance`/OFX NONRT）の NONRT 境界が本 Issue 産物で明文化され、延期 trigger（NONRT video port の分離要求）が記録され、L1 video wire が確立されていない
+- [ ] AC10（video 境界）: video plugin（`VideoPluginInstance`/OFX NONRT）の NONRT 境界が本 Issue 産物で明文化され、延期 trigger（NONRT video port の分離要求）が記録され、L1 video wire が確立されていない（**但書 — AC は #113 時点の受入**: 延期 trigger は Issue #118 で消費され video L1 wire は確立済み — 本 AC の「RT パス不接続」という boundary 部分は今も成立）
 - [ ] AC11（quality gate）: `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` パス・doc 監査で本チェーン起因 findings 0
 
 ## Deferred Design Concerns
 
-- video plugin の RT/アウトプロセス経路・L1 video wire | 本 Issue は audio `process` 経路のみ・video port は全操作 NONRT | NONRT video port の分離要求（L1 design L271 と整合） | video plugin は L1/RT 経路を使えない
+- video plugin の RT/アウトプロセス経路・L1 video wire | 本 Issue は audio `process` 経路のみ・video port は全操作 NONRT — **L1 video 側は trigger 消費済み（Issue #118 で `VideoPluginHost`/`run_video`/`wire::vshm` の専用経路として実装着地）** | NONRT video port の RT/engine 統合要求 | video plugin は RT 経路・engine グラフを使えない（L1 NONRT 経路は #118 で利用可）
 - OFX NONRT ノードの engine/video 側接続形 | 本 Issue は境界明文化まで | 第 2 ターゲット video engine 統合 | video plugin が engine から到達不能のまま
 - 実規格アダプタ・実プラグイン E2E（Issue #114） | runner 形態・実バイナリ依存の別 Issue 級 | 実プラグインでの統合需要 | 検証が mock/test-plugin 範囲に留まる
 - graph-attached handle への non-RT verb（state/GUI）の到達経路 | endpoint 分離の形が前提 | 実用上の verb 要求 | graph 内 plugin への一部制御が不可のまま

@@ -93,6 +93,8 @@ Issue #119 は新しいプロトコル機構の実装ではなく、**既に実�
 - `WIRE_MAX_*` は安全上限として維持 — 変更時は送受信受理範囲・SHM 容量・既存拒否動作への影響をレビューし、相互運用を壊す変更は bump 対象とする。上限交渉機構は設けない。
 - 複数バージョン対応は、独立配布されるホスト/ランナー間の互換が必要になった段階でのみ再検討する。
 
+**re-engagement 注記（Issue #118 — 本方針の 2 度目の適用例）**: Issue #118 の video L1 で `WIRE_VERSION` が **2 → 3** へ着地した — video `Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10 `InvalidValue`・video 型 codec・`WIRE_VIDEO_MAX_*`・`wire::vshm` 定盤の additive 追加を非互換 bump として扱い、ホスト/ランナーは同一版で更新された（`Hello.version` 厳密一致・`capabilities` reserved・shm/vshm header `wire_version` 検証は video verb 系統・video segment にも同じ規則で適用）。audio tag/envelope/scope 規則は不変 — 「最新の単一バージョンのみ」方針どおり v2 の decode は残っていない。
+
 ## Why Now
 
 - `wire.rs` は strict-equality の version 照合・reserved 拒否・上限チェックを **実装として** 既に持つが、「なぜ単一バージョンのみか」「いつ bump するか」「交渉を入れないのはなぜか」が設計判断としてどの文書にも記録されていなかった。design の Deferred Design Concerns 行は「初版 `WIRE_VERSION=1` で十分」とだけ述べ、方針の不在を示していた。

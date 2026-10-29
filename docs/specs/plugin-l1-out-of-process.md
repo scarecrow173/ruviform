@@ -133,6 +133,7 @@ Issue #76。#31 分割で L0（#74・CLOSED）の次に位置づけられた実�
 - **ワイヤ境界**: コマンド直列化・共有メモリレイアウトはワイヤ仕様として定義し、所有境界（plugin-core / host / export のどこが持つか）は design で確定（ベースライン層順序との整合が課題 — discovery 記録済み）
 - **ワイヤバージョン方針（Issue #119 で確定）**: サポートする wire プロトコルは常に最新の単一バージョンのみ — `Hello.version` は厳密一致で不一致は handshake 失敗（kill + `HostError::Ipc`）、shm header の `wire_version` も同一の厳密一致検証とする。バージョン交渉・上限交渉機構・旧バージョンの decode/変換/共存は実装しない。`WIRE_VERSION` は非互換なプロトコル変更時のみ更新する通信契約の世代番号（SemVer/Cargo バージョン非連動）で、bump 時はホスト/ランナーを同一版で更新する。`Hello.capabilities` は予約領域のまま非ゼロ `Malformed` 拒否を維持、`WIRE_MAX_*` は固定安全上限として維持する。複数バージョン対応は独立配布のホスト/ランナー互換が必要になった段階で再検討する
 - `rt_` 命名の RT 契約テストを持ち `mise run test-rt` で選択可能。非 RT 系テスト名に `rt_` を含めない
+- **但書（Issue #118・wire v3 — re-engagement 注記）**: 上記要件は audio `process` 経路の正本のまま維持する。Issue #118 で video/NONRT の L1 経路が別 surface として確立済み — `VideoHostCommand`/`VideoHostReply`/`VideoPluginHost`（`PluginHost::video()` 借用 façade）・`VideoOutOfProcessSpec`（Dedicated 固定）・`Route::OutOfProcessVideo`/`Slot::OutOfProcessVideo`・per-instance `wire::vshm` segment・`run_video` runner（`Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10 `InvalidValue` の additive bump で `WIRE_VERSION` は 3）。video surface の要件・受入基準は `docs/specs/issue-118-video-l1.md` が担い、本 spec の AC は audio 経路のみを対象とする（status は `proposed` のまま — status flip は #118 の範囲外）
 
 ## Acceptance Criteria
 

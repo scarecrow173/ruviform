@@ -52,10 +52,12 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed）・approved design `d
 
 `ruviform-plugin-host` の L1 バックエンド: `PluginHost` コンポジット（`register_factory` L0・`register_out_of_process(OutOfProcessSpec)` L1・`execute`/`process`/`lifecycle_state`/`plugin_mut`/`try_recv_notification`/`kill_child`）・per-child L1 プロキシ（`pub(crate)` — 1 子プロセス + `driver`/`reader` 2 スレッドが N instance を host する bundle 形態・`Dedicated` は同一機構の capacity-1 経路）・stdio パイプ制御面 + `shared_memory` named segment データ面 + `ruviform-rt` SPSC の RT 脚。fixture は `src/bin/l1-test-worker`（wire 適合 worker・`--crash-after-msgs=N`/`--hang-after-msgs=N`）。
 
+**re-engagement 注記（Issue #118・wire v3 — 本 spec の対象は audio L1 のまま）**: Issue #118 で video/NONRT の L1 経路が別 surface として追加された — `PluginHost::video()` 借用 façade（`VideoPluginHost`）・`register_out_of_process_video(VideoOutOfProcessSpec)`（Dedicated 固定 — `isolation`/`lookahead_blocks` なし）・`VideoHostCommand`/`VideoHostReply`・`Route::OutOfProcessVideo`/`Slot::OutOfProcessVideo`/`InstKind::Video`・per-instance `wire::vshm`・wire tag 12-22/4-7・`WIRE_VERSION` = 3。audio 側の route/slot・`HostCommand`/wire verb・shm/`RtLeg`・`Failed` 機構は不変（`Failed` 粒度・`InstanceFailed` fan-out は video にも同機構で適用）。video handle を audio API（`process`/`prepare_endpoint`/`plugin_mut`/`latency_frames`）へ渡した場合の defined 応答・video surface の pin は `issue-118-video-e2e-tests`/`issue-118-video-failed-parity-tests` が oracle。
+
 ## Rules
 
 - **`PluginHost` 選択面**: `register_factory`（L0 ルート）・`register_out_of_process(OutOfProcessSpec) -> Result<(), HostError>`（L1 ルート — plugin_id → L1 route を登録時に宣言）・`Instantiate{plugin_id}` の形は不変で呼出し側は層を意識しない。統一ハンドル空間 — `PluginHandle` の slot/generation 規則は L0 と同一（generation で破棄済みスロット検出）。同一 plugin_id の L0/L1 重複登録 → `Err(HostError::DuplicatePluginId)`
-- **`OutOfProcessSpec`**: `descriptor: PluginDescriptor`（'static — `Scan`/`Instantiate` の公開面を担う）・`program: OsString`・`args: Vec<OsString>`・`lookahead_blocks: u32`（既定 **2**）・`command_timeout: Duration`（既定 **10s** — Reply 待ちの defined timeout）・`isolation: OutOfProcessIsolation`（`#[non_exhaustive]` enum `{Dedicated, Bundled}`・`new()` default `Bundled` — bundle 形態では 1 子が N instance を host・`Dedicated` は同 v2 機構の capacity-1 opt-in 経路）
+- **`OutOfProcessSpec`**: `descriptor: PluginDescriptor`（'static — `Scan`/`Instantiate` の公開面を担う）・`program: OsString`・`args: Vec<OsString>`・`lookahead_blocks: u32`（既定 **2**）・`command_timeout: Duration`（既定 **10s** — Reply 待ちの defined timeout）・`isolation: OutOfProcessIsolation`（`#[non_exhaustive]` enum `{Dedicated, Bundled}`・`new()` default `Bundled` — bundle 形態では 1 子が N instance を host・`Dedicated` は同 wire 機構（#117 v2 由来・現行 v3）の capacity-1 opt-in 経路）
 - **公開通知面**: `HostNotification::InstanceFailed { handle: PluginHandle, exit: ChildExit }`（`#[non_exhaustive]`）・`ChildExit { code: Option<i32>, signal: Option<i32> }`（`signal` は unix のみ）・`try_recv_notification() -> Option<HostNotification>`（std mpsc キュー・非 RT）
 - **handshake**: spawn → argv `<runner>` + `spec.args`（v2 — `--ruviform-plugin-id`/`--ruviform-shm-key` は除去・id/key は `CreateInstance` payload で渡す）→ 子 `Hello` → 親 `Scan`（`instance: WIRE_INSTANCE_NONE`・child-scope）→ 子 `Scanned`（`wire::Descriptor` を `OutOfProcessSpec.descriptor` とフィールド等価照合 — 不一致 → kill + `HostError::Ipc`）→ `CreateInstance{i, plugin_id, shm_key, in_depth, out_depth}` → `Instantiated{handle}`。いずれかの失敗・`command_timeout` → `Err(HostError::Ipc)` + child kill/reap
 - **コマンド parity（spec AC1）**: L1 バックエンドが L0 と同一コマンド系列（scan → instantiate → initialize → activate → start/stop processing → deactivate → save/restore state → destroy）を子プロセス側で実行し同一リプライ/エラー意味で返す — 違法遷移は子側 `Lifecycle` が判定し `Err(HostError::Lifecycle(_))` が wire で返る（L0 と同一の意味）
@@ -78,7 +80,7 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed）・approved design `d
 - **コマンド parity**: `PluginHost` に `OutOfProcessSpec`（`program` = `l1-test-worker`）を登録 → `Instantiate` → `Initialize` → `Activate` → `StartProcessing` → `SaveState` → `RestoreState` → `StopProcessing` → `Deactivate` → `Destroy` が L0 と同一の `HostReply`/`HostError` 意味で返る（`Err(HostError::Lifecycle(_))` の違法遷移を含む）
 - **kill→Failed**: `kill_child`（または子の自発 kill/`--crash-after-msgs`）→ `try_wait`/EOF で `Failed` → `try_recv_notification()` が `InstanceFailed { handle, exit }` を返す → 以後 `Initialize`/`Activate`/`SaveState` → `Err(HostError::Failed)`・`Destroy` → `Ok`・`process` → `Ok(CONTINUE)` + 無音・自動再起動なし（新規 spawn が観測されない）
 - **descriptor 不一致**: `OutOfProcessSpec.descriptor` と子が `Scanned` で報告した `wire::Descriptor` が不一致 → handshake 失敗 → `Err(HostError::Ipc)` + child kill/reap
-- **version 不一致**: `Hello.version != WIRE_VERSION`（`!= 2`）→ handshake 失敗 → `Err(HostError::Ipc)`
+- **version 不一致**: `Hello.version != WIRE_VERSION`（本 spec 確定時 `!= 2` — 現行 `!= 3`）→ handshake 失敗 → `Err(HostError::Ipc)`
 - **応答なし pass-through**: `--hang-after-msgs` worker で process 経路が応答なし → underrun → `Ok(CONTINUE)` + 直前受信 or 無音・ハングしない
 - **GUI defined rejection**: L1 インスタンスへの `OpenGui`/`CloseGui` → `Err(HostError::Unsupported)`（子へ転送しない）
 - **`Activate` 上限超**: `max_frames > WIRE_MAX_FRAMES`（または channels/events 超過）→ `Err(HostError::Prepare(PrepareError::UnsupportedConfig))`
@@ -102,7 +104,7 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed）・approved design `d
 - bundle 子の v2 増分契約 — `CreateInstance`/envelope・pool/isolation surface・Failed 粒度判定表・notification fan-out は `issue-117-wire-v2-codec-tests`・`issue-117-bundle-e2e-tests`・`issue-117-bundle-failed-granularity-tests` が oracle（v2 で改訂済み — 本 spec は handshake/クラッシュ/parity/pass-through/RT 脚の引き継ぎ契約を v2 で保持する baseline）
 - L1 GUI（`OpenGui`/`CloseGui` は `Unsupported` で拒否 — design deferred）
 - 実プラグイン（CLAP/VST3/OFX）の L1 E2E — fixture（`l1-test-worker`・`ruviform-plugin-l1-runner`）で検証
-- `process` 経路の RT 化・video/NONRT プラグインの L1 経路
+- `process` 経路の RT 化・video/NONRT プラグインの L1 経路（**Issue #118 で別 surface として実装済み** — `PluginHost::video()`/`VideoOutOfProcessSpec`/`wire::vshm`/wire tag 12-22 — 本 spec の pin 対象は audio L1 のまま・video 側は `issue-118-video-e2e-tests`/`issue-118-video-failed-parity-tests` が oracle）
 - wire codec 自体の契約（`plugin-l1-wire-codec-tests.md` が担当）・runner 側の結合（`plugin-l1-runner-e2e-tests.md` が担当）
 - stderr ログ配管・shm 通知機構の多重化（doorbell はパイプ多重化で十分）
 - macOS/Linux でのローカル実証 — Windows ローカルのみ実証・3 OS matrix は CI `verify` ジョブに委譲（design 採用条件・platform notes 下記）

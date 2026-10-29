@@ -49,7 +49,8 @@
 //!
 //! The runner accepts **no arguments**. Wire v2 retired the
 //! `--ruviform-plugin-id` / `--ruviform-shm-key` bootstrap flags —
-//! their values now arrive per instance in `CreateInstance`. Any argv
+//! their values now arrive per instance in `CreateInstance` (or
+//! `CreateVideoInstance` for `run_video`). Any argv
 //! entry, including a `--ruviform-*` flag, is a defined usage
 //! rejection: a stderr diagnostic plus exit 2 without a `Hello` (the
 //! parent observes spawn → EOF and converges to `HostError::Ipc`

@@ -155,6 +155,7 @@ Issue 要求範囲:
 - **R-W3**: seq/correlation — **推奨: コマンド seq は子ワイド単一空間・block seq は per-instance**（`RtLeg::next_block` 独立・`BLOCK_SEQ_FLAG` 分割維持）。OPEN: `Reply` に instance echo を載せるか・flagged `Reply{seq,Err}`（BlockIn 拒否）の demux 規則
 - **R-W4**: `WIRE_VERSION` = **2** — Issue #119 方針どおり厳密一致・bump で host/runner 同時更新・交渉機構なし
 - **R-W5**: 上限 — **推奨: `WIRE_MAX_INSTANCES`（仮称）** 相当の子あたりインスタンス上限を wire/子側 registry 上限として導入し、超過 `CreateInstance` は defined `Err`。既存 `WIRE_MAX_*` はメッセージ単位のまま維持。OPEN: 上限値・handle 空間の reuse 規則（単調のみ推奨）
+- **re-engagement 注記（Issue #118・wire v3 — 本 spec は v2 時点の記録として維持）**: Issue #118 で `WIRE_VERSION` は **3** へ着地した（video `Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10 `InvalidValue` の additive 追加 — 本 spec が確定した `instance` envelope・scope 判定表・`WIRE_MAX_INSTANCES`/`WIRE_INSTANCE_NONE`・`InstanceLimit` は audio 側で不変）。本 spec の `Failed` 規則・`InstanceFailed` exactly-once fan-out は video instance にもそのまま適用され、`Err` reply は video では mirror 不変（audio doorbell `Err`→`Failed` 収束とは意図的 divergence — `docs/designs/issue-118-video-l1.md`）。`Hello` strict version・`capabilities` reserved 規則も video verb 系統へ同様に適用される。
 
 ### bundle/dedicated 選択面（OPEN → ADR/design 確定）
 
