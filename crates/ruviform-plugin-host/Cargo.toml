@@ -39,6 +39,16 @@ shared_memory = "0.12"
 name = "l1-test-worker"
 path = "src/bin/l1-test-worker.rs"
 
+# Issue #118 (T4): the hand-rolled wire-faithful video child fixture
+# for `tests/l1_video_e2e.rs`. Deliberately not `run_video` — the E2E
+# needs wire-level fault injection (noncanonical `Rendered.output`,
+# crash/hang/over-limit argv matrix) the runner's erased surface
+# cannot produce. Depends only on the core wire/video/shared-memory
+# layers — no `ruviform-plugin-export` edge is introduced.
+[[bin]]
+name = "l1-test-video-worker"
+path = "src/bin/l1-test-video-worker.rs"
+
 [dev-dependencies]
 assert_no_alloc = "1.1"
 # Issue #113 graph E2E (`tests/plugin_graph_e2e.rs`): the endpoint →
