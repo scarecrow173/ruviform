@@ -4,7 +4,7 @@ type: "spec"
 status: "proposed"
 title: "プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）"
 created: "2026-10-25"
-updated: "2026-10-28"
+updated: "2026-10-29"
 owners: []
 relations:
   source:
@@ -59,6 +59,7 @@ relations:
     - "docs/discovery/issue-118-video-l1.md"
     - "docs/specs/issue-118-video-l1.md"
     - "docs/designs/issue-118-video-l1.md"
+    - "docs/specs/issue-121-diagnostics.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"

@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "L1 bundle 子プロセス（1 子プロセス N インスタンス）設計（Issue #117）"
 created: "2026-10-28"
-updated: "2026-10-28"
+updated: "2026-10-29"
 owners: []
 relations:
   source:
@@ -61,6 +61,7 @@ relations:
     - "docs/designs/issue-118-video-l1.md"
     - "docs/adr/issue-118-video-l1-host-surface.md"
     - "docs/adr/issue-118-video-l1-create-path-segment.md"
+    - "docs/discovery/issue-121-diagnostics.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-117-wire-v2-codec-tests.md"

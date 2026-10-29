@@ -62,6 +62,7 @@ relations:
     - "../adr/issue-118-video-l1-create-path-segment.md"
     - "../plans/implement-issue-118-video-l1.md"
     - "../tasks/l1-wire-v3-video-codec.md"
+    - "issue-121-diagnostics.md"
   verifies: []
   verified-by:
     - "../test-specs/plugin-l1-wire-codec-tests.md"

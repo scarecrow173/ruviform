@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Foundation/Observability 候補モジュールの最小 API・依存 DAG・新設時期の設計"
 created: "2026-10-23"
-updated: "2026-10-24"
+updated: "2026-10-29"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -40,6 +40,8 @@ relations:
   derived-by:
     - "../plans/implement-issue-104-rt-observability-poc.md"
     - "../test-specs/rt-observability-poc-tests.md"
+    - "../discovery/issue-121-diagnostics.md"
+    - "../specs/issue-121-diagnostics.md"
   verifies: []
   verified-by: []
   references:
