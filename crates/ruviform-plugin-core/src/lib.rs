@@ -11,9 +11,12 @@
 //! ([`BufferView`], [`BufferViewMut`]) and support types
 //! ([`ProcessConfig`], [`ProcessContext`], [`ProcessResult`],
 //! [`ProcessStatus`], [`PrepareError`]), plus the NONRT video plugin
-//! contract ([`VideoPluginInstance`], [`VideoProcessConfig`]), the
+//! contract ([`VideoPluginInstance`], [`VideoProcessConfig`]) and its
+//! erased registry mirror ([`ErasedVideoPlugin`],
+//! [`VideoPluginFactory`], [`erase_video`]), the
 //! typed plain-parameter channel ([`PlainParamValue`],
-//! [`PlainParamInfo`], borrowed [`PluginDescriptorView`]), the
+//! [`PlainParamInfo`] and its owned twin [`PlainParamInfoOwned`],
+//! borrowed [`PluginDescriptorView`]), the
 //! plugin-side instance contracts ([`Plugin`], [`PluginFactory`],
 //! [`ErasedPlugin`], [`erase`], [`erase_sendable`], [`HostInput`],
 //! [`HostOutput`]), the shared host-boundary vocabulary
@@ -90,6 +93,7 @@ mod transport;
 
 mod plain_param;
 mod video;
+mod video_plugin;
 
 pub mod wire;
 
@@ -99,7 +103,7 @@ pub use descriptor::{PluginDescriptor, PluginDescriptorView};
 pub use event::{Event, EventKind, EventList, ParamEvent, sort_events_by_frame_offset};
 pub use lifecycle::{Lifecycle, LifecycleError, LifecycleEvent, LifecycleState};
 pub use param::{ParamFlags, ParamId, ParamInfo, ParamValue};
-pub use plain_param::{PlainParamInfo, PlainParamValue};
+pub use plain_param::{PlainParamInfo, PlainParamInfoOwned, PlainParamValue};
 pub use plugin::{
     ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
 };
@@ -109,6 +113,7 @@ pub use processor::{
 };
 pub use transport::TransportInfo;
 pub use video::{VideoPluginInstance, VideoProcessConfig};
+pub use video_plugin::{ErasedVideoPlugin, VideoPluginFactory, erase_video};
 
 /// Returns the crate version string.
 ///

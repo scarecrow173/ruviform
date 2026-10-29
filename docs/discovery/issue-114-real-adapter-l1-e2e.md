@@ -49,6 +49,7 @@ relations:
   derived-by:
     - "../specs/issue-114-real-adapter-l1-e2e.md"
     - "../designs/issue-114-real-adapter-l1-e2e.md"
+    - "issue-118-video-l1.md"
   verifies: []
   verified-by: []
   references: []

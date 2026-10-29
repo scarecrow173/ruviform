@@ -17,10 +17,23 @@ CLAP・VST3・binding クレート（`clack`, `vst3`, `clap-sys` 等）由来の
   `BufferViewMut`）、支援型（`ProcessConfig`, `ProcessContext`,
   `ProcessResult`, `ProcessStatus`, `PrepareError`）
 - 借用記述ビュー: `PluginDescriptorView`（owner より長生きしない pure borrow）
-- typed plain パラメータチャネル: `PlainParamValue`, `PlainParamInfo` —
-  規格中立の typed 制御（normalized wire 経路ではない）
+- typed plain パラメータチャネル: `PlainParamValue`, `PlainParamInfo`,
+  `PlainParamInfoOwned` — 規格中立の typed 制御（normalized wire 経路ではない。
+  `PlainParamInfoOwned` は `String`/`Vec` ストレージを持つ所有形 — video L1
+  wire 経路（`GetParamInfo`/`ParamInfo`）がそのまま運ぶ返り値型）
 - 動画プラグイン契約: `VideoProcessConfig`, `VideoPluginInstance` —
-  **全操作 NONRT**（`render` 含む、audio `process` の RT 契約とは別経路）
+  **全操作 NONRT**（`render` 含む、audio `process` の RT 契約とは別経路）。
+  adapter が登録する object-safe erased 面は `video_plugin` モジュール —
+  `VideoPluginInstance` ↔ `ErasedVideoPlugin`/`VideoPluginFactory`/`erase_video`
+  （audio 側の `Plugin` ↔ `ErasedPlugin`/`PluginFactory`/`erase` と同型の対応）
+- L1 wire プロトコル（`wire` モジュール — アウトプロセス経路の codec 正本）:
+  手書き LE codec・`Message`/`Command`/`Reply`/`Descriptor` 型・`WIRE_VERSION`
+  （現行 **3** — Issue #117 が v2 で `instance` envelope・`CreateInstance`/
+  `DestroyInstance` を、Issue #118 が v3 で video `Command` tag 12-22・
+  `Reply` tag 4-7・`HostError` tag 10 `InvalidValue`・`VideoFrameDesc`/
+  `PlainParamInfoOwned` codec・`WIRE_VIDEO_MAX_*` 上限を additive 追加。
+  audio tag/envelope/scope 規則は不変）・`WIRE_MAX_*` 安全上限・shm 定盤
+  2 系（audio `wire::shm` / video `wire::vshm` — 別レイアウト・別マジック）
 
 規格アダプタ（`ruviform-plugin-clap` / `ruviform-plugin-vst3`）は規格 ABI
 データをこれらの型へ翻訳して `PluginProcessor` を実装・駆動する —

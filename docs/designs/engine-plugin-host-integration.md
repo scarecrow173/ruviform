@@ -52,6 +52,8 @@ relations:
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
     - "docs/designs/issue-114-real-adapter-l1-e2e.md"
     - "docs/plans/implement-issue-114-real-adapter-l1-e2e.md"
+    - "docs/discovery/issue-118-video-l1.md"
+    - "docs/specs/issue-118-video-l1.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-endpoint-contract-tests.md"
@@ -60,6 +62,7 @@ relations:
   references: []
   defers:
     - "docs/specs/issue-114-real-adapter-l1-e2e.md"
+    - "docs/designs/issue-118-video-l1.md"
   deferred-by: []
 ---
 
@@ -85,7 +88,7 @@ Issue #113 — #76 で host API として完成した L1 アウトプロセス�
 | h | non-RT verb 到達（graph-attached） | L0 共有セル経由で **全 verb が到達可能のまま**（`lock()` は non-RT 側のみ・RT 側は `try_lock` → busy は defined bypass）。L1 は wire verb 不変・`process` は detached → `Err(EndpointUnavailable)` |
 | i | 遅延報告 API | **`latency_frames() -> u32`（frames 整数）**を `PluginHost`（handle 経由・`Option`）と `PluginEndpoint` の双方に露出。秒変換は `frames / sample_rate` を doc に明記 |
 | j | graph E2E 配置 | **`crates/ruviform-plugin-host/tests/` に dev-dep `ruviform-audio`**（循環なし — audio の prod dep は不変で AC3 の Cargo.toml 非露出を厳格に満たす） |
-| k | video 境界 | audio `process` 経路のみ。`VideoPluginInstance` 全操作 NONRT・`prepare_endpoint` は audio instance のみを対象とし、L1 video wire 非確立・trigger 付き延期を Deferred に明記 |
+| k | video 境界 | audio `process` 経路のみ。`VideoPluginInstance` 全操作 NONRT・`prepare_endpoint` は audio instance のみを対象とし、L1 video wire 非確立（**#118 で再エンゲージ済み — video 専用 wire/tag 12-22・`vshm`・`run_video` が別経路として確立。下記「video NONRT 境界」節の注記参照**）・trigger 付き延期を Deferred に明記 |
 
 ### spec 修正記録（本書レビューで確定した spec 差分）
 
@@ -285,8 +288,8 @@ graph.push(Box::new(move |out: &mut AudioBufferViewMut<'_, f32>, ctx: &RtContext
 ### video NONRT 境界（k の確定）
 
 - `VideoPluginInstance`/`VideoProcessConfig`（plugin-core `video` モジュール）は **全操作 NONRT** — `prepare_endpoint`/`PluginEndpoint` の対象は audio `process` ライフサイクルを持つインスタンスのみであり、video plugin を RT パスへ接続する経路は**持たない**。
-- OFX ホストアダプタ（`ruviform-plugin-ofx`）は NONRT L0 adapter であり、本 Issue で engine 接続経路は作らない。video engine 側への接続形は第 2 ターゲット統合の論点として deferred（trigger: NONRT video port の分離要求 — L1 design の deferred 行と整合）。
-- **L1 video wire は確立しない** — wire プロトコル・shm スロット・runner は audio `process` 専用のまま。
+- OFX ホストアダプタ（`ruviform-plugin-ofx`）は NONRT L0 adapter であり、本 Issue で engine 接続経路は作らない。video engine 側への接続形は第 2 ターゲット統合の論点として deferred（trigger: NONRT video port の engine/RT 統合要求 — L1 design の deferred 行と整合。**但書**: L1 側の分離要求は Issue #118 で消費済み — `PluginHost::video()`/`run_video`/`wire::vshm` の専用 NONRT 経路が確立し、残 deferred は本行の engine 側接続のみ）。
+- ~~**L1 video wire は確立しない**~~ — wire プロトコル・shm スロット・runner は audio `process` 専用のまま。**re-engagement 注記（Issue #118・wire v3 — trigger 消費済み）**: 「NONRT video port の分離要求」は #118 で再エンゲージされ、video 専用経路が**別 surface として**確立済み — wire `Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10 の additive bump（`WIRE_VERSION` = 3）、per-instance `wire::vshm` segment、`run_video` runner、`PluginHost::video()`/`VideoPluginHost`/`VideoOutOfProcessSpec`（Dedicated 固定）の host 面（正本 `docs/designs/issue-118-video-l1.md`・`docs/adr/issue-118-video-l1-host-surface.md`）。本節の「audio `process` 経路の wire・shm・runner 自体は video を運ばない」という意味の記述は今も真実 — video wire は audio `process` の動詞・slot を拡張するのでなく並行する別系統として着地形した。`prepare_endpoint`/`PluginEndpoint` の対象は変わらず audio instance のみ（video handle は `Err(EndpointUnavailable)`）。
 
 ### 依存追加の判断（暫定規約の理由記録）
 
@@ -323,7 +326,7 @@ spawn 引数・`CARGO_BIN_EXE_*` の利用は crate 内に閉じる（cross-pack
 
 ## Deferred Design Concerns
 
-- video plugin の RT/アウトプロセス経路・L1 video wire | 本 Issue は audio `process` 経路のみ・video port は全操作 NONRT | NONRT video port の分離要求（L1 design deferred 行と整合） | video plugin は L1/RT 経路を使えない
+- video plugin の RT/アウトプロセス経路・L1 video wire | 本 Issue は audio `process` 経路のみ・video port は全操作 NONRT — **L1 video 側は trigger 消費済み（Issue #118 で `VideoPluginHost`/`run_video`/`wire::vshm` の専用経路として実装着地）**。残 deferred は video plugin の **RT 経路**と engine/video 側接続のみ | NONRT video port の RT/engine 統合要求 | video plugin は RT 経路・engine グラフを使えない（L1 NONRT 経路は #118 で利用可）
 - OFX NONRT ノードの engine/video 側接続形 | 本 Issue は境界明文化まで | 第 2 ターゲット video engine 統合 | video plugin が engine から到達不能のまま
 - 実規格アダプタ（CLAP/VST3/OFX）経由の実プラグイン動作 | runner 形態・実バイナリ依存の別 Issue 級 | 実プラグインでの統合需要（Issue #114） | 検証が mock/test-plugin 範囲に留まる
 - イベント・transport のグラフ配線 | v1 グラフは `EventList::empty`/`None` transport | music-time/transport 源の engine 統合 | sample-accurate event が plugin へ届かない

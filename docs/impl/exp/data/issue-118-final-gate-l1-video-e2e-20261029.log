@@ -1,0 +1,44 @@
+   Compiling ruviform-plugin-host v0.1.0 (F:\repositry\ruviform-wt-118\crates\ruviform-plugin-host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.70s
+     Running tests\l1_video_e2e.rs (target\debug\deps\l1_video_e2e-58e3cb83a1f4b3bd.exe)
+
+running 33 tests
+test cross_kind_scan_and_instantiate ... ok
+test duplicate_plugin_id_both_directions ... ok
+test fail_deactivate_commits_initialized ... ok
+test cross_kind_verbs_unsupported_and_shared_destroy ... ok
+test fail_stop_processing_commits_activated ... ok
+test fail_start_processing_stays_activated ... ok
+test instantiate_config_bound_rejections ... ok
+test param_values_round_trip_and_unknown_ids ... ok
+test direct_plugin_host_methods_on_video_handle ... ok
+test params_ids_and_metadata ... ok
+test render_content_and_metadata_passthrough ... ok
+test fail_initialize_keeps_created ... ok
+test kill_child_converges_failed_and_notifies_once ... ok
+test render_gates_and_config_match ... ok
+test hello_version_mismatch_fails_instantiate ... ok
+test happy_path_lifecycle_and_scan ... ok
+test fail_param_value_known_id_only ... ok
+test fail_render_mirror_invariant ... ok
+test mid_create_child_death_no_handle_no_notification ... ok
+test mid_destroy_child_death_frees_slot ... ok
+test mid_render_child_death ... ok
+test mid_verb_child_death_notifies ... ok
+test overlimit_params_plugin_failed_child_alive ... ok
+test noncanonical_output_converges_that_instance_only ... ok
+test runner_lane_fail_deactivate_commits_initialized ... ok
+test runner_lane_fail_render_via_param ... ok
+
+thread 'main' (52136) panicked at crates\ruviform-plugin-export\src\bin\ruviform-plugin-l1-video-runner.rs:354:9:
+ruviform-plugin-l1-video-runner: PanicVideo initialize (deterministic E2E fixture)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test set_param_value_non_finite_rejected_without_wire ... ok
+test runner_lane_invert_happy_path ... ok
+test runner_lane_overlimit_params_plugin_failed_child_alive ... ok
+test runner_lane_panic_initialize_plugin_failed ... ok
+test command_wedge_uses_command_timeout ... ok
+test handshake_wedge_uses_command_timeout ... ok
+test render_wedge_uses_render_timeout ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.66s

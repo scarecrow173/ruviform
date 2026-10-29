@@ -47,12 +47,13 @@ use std::time::Duration;
 use ruviform_audio_core::SampleRate;
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    EventList, LifecycleEvent, LifecycleState, PluginDescriptor, PrepareError, ProcessResult,
-    TransportInfo,
+    EventList, LifecycleEvent, LifecycleState, ParamId, PlainParamValue, PluginDescriptor,
+    PrepareError, ProcessResult, TransportInfo, VideoProcessConfig,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L1Endpoint, PluginEndpoint};
-use crate::l1::{ChildExit as L1ChildExit, L1Child, L1Instance, SpawnSpec};
+use crate::l1::{ChildExit as L1ChildExit, L1Child, L1Instance, SpawnSpec, VideoL1Instance};
+use crate::video::{VideoHostCommand, VideoHostReply, VideoOutOfProcessSpec, VideoPluginHost};
 use crate::{
     ErasedPlugin, HostCommand, HostError, HostInput, HostOutput, HostReply, InProcessHost,
     PluginFactory, PluginHandle,
@@ -247,6 +248,16 @@ enum Route {
         /// shutdown-on-empty destroy path.
         pool: Vec<Arc<L1Child>>,
     },
+    /// `VideoPluginHost::register_out_of_process` — a
+    /// dedicated-only video route: every `Video` `Instantiate`
+    /// spawns a fresh child, no `isolation`, no pool (the variant
+    /// carries neither field — a bundled video route cannot be
+    /// expressed).
+    OutOfProcessVideo {
+        /// The route's spawn parameters — program, argv and the
+        /// command/render timeouts.
+        spec: crate::l1::VideoSpawnSpec,
+    },
 }
 
 /// One live entry of the unified slot table — the `PluginHandle`
@@ -255,9 +266,45 @@ enum Slot {
     /// L0 instance — the *inner* handle [`InProcessHost`] minted;
     /// commands are retargeted onto it.
     InProcess(PluginHandle),
-    /// L1 instance — the child-process proxy owns it end to end.
-    /// Boxed: `L1Instance` is ~500 B; the slot table stays compact.
+    /// L1 audio instance — the child-process proxy owns it end to
+    /// end. Boxed: `L1Instance` is ~500 B; the slot table stays
+    /// compact.
     OutOfProcess(Box<L1Instance>),
+    /// L1 video instance — the NONRT counterpart: no RT leg, no
+    /// endpoint surface — the whole facade is `execute`/`render`
+    /// plus the shared lifecycle mirror. Boxed: the `vshm`
+    /// segment keeps the facade non-`Send`/non-`Copy` like the
+    /// audio sibling.
+    OutOfProcessVideo(Box<VideoL1Instance>),
+}
+
+/// Which kind of plugin a registration serves — the `Scan` kind
+/// filter's axis. A route is one kind end to end: `Scan` reports
+/// the matching entries only, and cross-kind `Instantiate` —
+/// audio `Instantiate` naming a video route, or `Video`
+/// `Instantiate` naming an audio route — is the defined
+/// [`HostError::UnknownPluginId`]. Crate-internal: callers never
+/// name a kind — the two `Scan` surfaces do.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DescriptorKind {
+    /// `register_factory` / `register_out_of_process` — audio
+    /// `Scan` and audio `Instantiate` see it.
+    Audio,
+    /// `VideoPluginHost::register_out_of_process` — video `Scan`
+    /// and `Video` `Instantiate` see it.
+    Video,
+}
+
+/// One `Scan`-listed registration — the descriptor plus its kind
+/// tag. Kinds never interleave into each other's scans: audio and
+/// video share the registration-order listing but each `Scan`
+/// surface filters to its own.
+struct DescriptorEntry {
+    /// Which `Scan`/`Instantiate` surface owns the entry.
+    kind: DescriptorKind,
+    /// The registration-supplied `'static` descriptor — `Scan`'s
+    /// payload and the child's handshake `matches` oracle.
+    descriptor: PluginDescriptor,
 }
 
 /// The composite host: a single [`HostCommand`]/[`HostReply`]/
@@ -314,7 +361,11 @@ pub struct PluginHost {
     /// registration-supplied `spec.descriptor`; a shadowed id still
     /// lists (matching `InProcessHost` reporting every registered
     /// factory) while `Instantiate` honours only the first claimant.
-    descriptors: Vec<PluginDescriptor>,
+    /// The `DescriptorEntry` kind tag is the `Scan` kind filter's
+    /// axis: audio `Scan` reports `Audio` entries only, video `Scan`
+    /// `Video` entries only — an audio registration can never leak
+    /// into a video scan (and vice versa).
+    descriptors: Vec<DescriptorEntry>,
     /// `plugin_id` → serving route; the first registration of an id
     /// claims it (`register_out_of_process` reports the collision as
     /// `DuplicatePluginId`, `register_factory` — infallible — keeps
@@ -386,7 +437,10 @@ impl PluginHost {
         self.routes
             .entry(descriptor.id.to_owned())
             .or_insert(Route::InProcess);
-        self.descriptors.push(descriptor);
+        self.descriptors.push(DescriptorEntry {
+            kind: DescriptorKind::Audio,
+            descriptor,
+        });
         self.l0.register_factory(factory);
     }
 
@@ -426,8 +480,200 @@ impl PluginHost {
                 pool: Vec::new(),
             },
         );
-        self.descriptors.push(descriptor);
+        self.descriptors.push(DescriptorEntry {
+            kind: DescriptorKind::Audio,
+            descriptor,
+        });
         Ok(())
+    }
+
+    /// The video hosting surface — a borrowed view on `self`
+    /// sharing the registration set, the plugin-id namespace and
+    /// the unified slot/generation table. [`PluginHost::video`]
+    /// hands out a [`VideoPluginHost`] for a `&mut` window; every
+    /// video registration, scan and instance command runs through
+    /// it — the audio surface stays untouched and cannot see or
+    /// reach video routes/slots (cross-kind `Instantiate` is
+    /// [`HostError::UnknownPluginId`], cross-kind handle verbs are
+    /// [`HostError::Unsupported`]).
+    ///
+    /// ```
+    /// use ruviform_plugin_host::{PluginHost, VideoOutOfProcessSpec};
+    /// use std::ffi::OsString;
+    ///
+    /// let mut host = PluginHost::new();
+    /// // … register video routes through `host.video()` …
+    /// host.video()
+    ///     .register_out_of_process(VideoOutOfProcessSpec::new(
+    ///         ruviform_plugin_core::PluginDescriptor {
+    ///             id: "org.example.vfx",
+    ///             name: "Vfx",
+    ///             vendor: "Example",
+    ///             version: "1.0.0",
+    ///             features: &[],
+    ///         },
+    ///         OsString::from("vfx-runner"),
+    ///     ))
+    ///     .unwrap();
+    /// ```
+    ///
+    /// **RT contract:** non-RT only — the returned facade's methods
+    /// spawn child processes and wait on replies.
+    pub fn video(&mut self) -> VideoPluginHost<'_> {
+        VideoPluginHost::new(self)
+    }
+
+    /// Registers one video plugin type for the dedicated L1
+    /// route — the `VideoPluginHost::register_out_of_process`
+    /// implementation body. A video route is structurally
+    /// dedicated-only (no pool, no `isolation` field exists), and
+    /// the shared `routes` map enforces the unified plugin-id
+    /// namespace: an id claimed by either kind is claimed for
+    /// both.
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::DuplicatePluginId`] when `spec.descriptor.id`
+    /// was already registered by an audio or video route.
+    pub(crate) fn video_register_out_of_process(
+        &mut self,
+        spec: VideoOutOfProcessSpec,
+    ) -> Result<(), HostError> {
+        let VideoOutOfProcessSpec {
+            descriptor,
+            program,
+            args,
+            command_timeout,
+            render_timeout,
+        } = spec;
+        if self.routes.contains_key(descriptor.id) {
+            return Err(HostError::DuplicatePluginId);
+        }
+        let mut spawn = crate::l1::VideoSpawnSpec::new(descriptor, program);
+        spawn.args = args;
+        spawn.command_timeout = command_timeout;
+        spawn.render_timeout = render_timeout;
+        self.routes.insert(
+            descriptor.id.to_owned(),
+            Route::OutOfProcessVideo { spec: spawn },
+        );
+        self.descriptors.push(DescriptorEntry {
+            kind: DescriptorKind::Video,
+            descriptor,
+        });
+        Ok(())
+    }
+
+    /// Executes one video command — the
+    /// [`VideoPluginHost::execute`] implementation body. `Scan`
+    /// reports `Video`-kind registrations only, `Instantiate`
+    /// routes by `plugin_id` (audio routes are
+    /// `UnknownPluginId` — a cross-kind instantiation can never
+    /// mint a handle), and every handle-carrying verb is
+    /// dispatched through the unified slot table exactly like the
+    /// audio leg.
+    ///
+    /// **RT contract:** non-RT only.
+    pub(crate) fn video_execute(
+        &mut self,
+        command: VideoHostCommand,
+    ) -> Result<VideoHostReply, HostError> {
+        match command {
+            VideoHostCommand::Scan => Ok(VideoHostReply::Scanned(
+                self.descriptors
+                    .iter()
+                    .filter(|entry| entry.kind == DescriptorKind::Video)
+                    .map(|entry| entry.descriptor)
+                    .collect(),
+            )),
+            VideoHostCommand::Instantiate { plugin_id, config } => {
+                self.video_instantiate(&plugin_id, config)
+            }
+            VideoHostCommand::Destroy { handle } => {
+                self.destroy(handle).map(|_| VideoHostReply::Ok)
+            }
+            // `Render` carries a `VideoFrame`, not a wire payload —
+            // it routes through `video_render` (the shm pack /
+            // reply-desc validate leg), never `video_dispatch`'s
+            // `video_to_wire` map.
+            VideoHostCommand::Render { handle, input, at } => self
+                .video_render(handle, &input, at)
+                .map(|frame| VideoHostReply::Rendered { frame }),
+            command => self.video_dispatch(&command),
+        }
+    }
+
+    /// The `Render` leg — resolves the slot, then hands the input
+    /// frame to the video facade's shm-copy + `VideoRender`
+    /// round-trip. Non-video slots are the cross-kind
+    /// `Unsupported`; the frame's host-side desc validation and
+    /// the render timeout live inside `VideoL1Instance::render`.
+    fn video_render(
+        &mut self,
+        handle: PluginHandle,
+        input: &ruviform_video_core::VideoFrame,
+        at: ruviform_media_core::MediaTime,
+    ) -> Result<ruviform_video_core::VideoFrame, HostError> {
+        match self.slot_mut(handle)? {
+            Slot::InProcess(_) | Slot::OutOfProcess(_) => Err(HostError::Unsupported),
+            Slot::OutOfProcessVideo(instance) => instance.render(input, at),
+        }
+    }
+
+    /// `Video` `Instantiate` — resolves the route by `plugin_id`,
+    /// bounds-checks the config (before any allocation or spawn),
+    /// then mints the handle from the same unified slot table the
+    /// audio path uses.
+    fn video_instantiate(
+        &mut self,
+        plugin_id: &str,
+        config: VideoProcessConfig,
+    ) -> Result<VideoHostReply, HostError> {
+        // No such registration at all — the shared namespace — or
+        // an *audio* route under that id: either is the defined
+        // `UnknownPluginId` (a video `Instantiate` never names an
+        // audio route's id).
+        let Some(Route::OutOfProcessVideo { spec }) = self.routes.get(plugin_id) else {
+            return Err(HostError::UnknownPluginId);
+        };
+        check_video_bounds(&config)?;
+        let slot = Slot::OutOfProcessVideo(Box::new(VideoL1Instance::spawn(spec, config)?));
+        Ok(VideoHostReply::Instantiated {
+            handle: self.mint(slot),
+        })
+    }
+
+    /// Dispatches one handle-carrying video command through the
+    /// unified slot table — video slots run the wire verb; L0 or
+    /// audio-L1 slots are the defined cross-kind `Unsupported`.
+    fn video_dispatch(&mut self, command: &VideoHostCommand) -> Result<VideoHostReply, HostError> {
+        let handle = video_command_handle(command);
+        match self.slot_mut(handle)? {
+            Slot::InProcess(_) | Slot::OutOfProcess(_) => Err(HostError::Unsupported),
+            Slot::OutOfProcessVideo(instance) => {
+                // Encode obligation (a): a non-finite
+                // `PlainParamValue::Double` is the defined
+                // `Err(InvalidValue)` *before* the wire — the codec
+                // would reject it too, but the value domain is the
+                // host's to guard (same class as the `frame_bytes`
+                // early checks).
+                if let VideoHostCommand::SetParamValue {
+                    value: PlainParamValue::Double(value),
+                    ..
+                } = command
+                    && !value.is_finite()
+                {
+                    return Err(HostError::InvalidValue);
+                }
+                let command = video_to_wire(command);
+                let expected = video_expected_reply(&command);
+                instance
+                    .execute(command)
+                    .and_then(|reply| video_host_reply(expected, reply))
+            }
+        }
     }
 
     /// Executes one non-RT command against the registry and the
@@ -453,7 +699,13 @@ impl PluginHost {
     /// `DuplicatePluginId` is the registration-time rejection.
     pub fn execute(&mut self, command: HostCommand) -> Result<HostReply, HostError> {
         match command {
-            HostCommand::Scan => Ok(HostReply::Scanned(self.descriptors.clone())),
+            HostCommand::Scan => Ok(HostReply::Scanned(
+                self.descriptors
+                    .iter()
+                    .filter(|entry| entry.kind == DescriptorKind::Audio)
+                    .map(|entry| entry.descriptor)
+                    .collect(),
+            )),
             HostCommand::Instantiate { plugin_id } => self.instantiate(&plugin_id),
             HostCommand::Destroy { handle } => self.destroy(handle),
             command => self.dispatch(command),
@@ -475,6 +727,7 @@ impl PluginHost {
         match self.instances.get(index)?.as_ref()? {
             Slot::InProcess(inner) => self.l0.lifecycle_state(*inner),
             Slot::OutOfProcess(instance) => Some(instance.lifecycle_state()),
+            Slot::OutOfProcessVideo(instance) => Some(instance.lifecycle_state()),
         }
     }
 
@@ -506,6 +759,9 @@ impl PluginHost {
                 _ => None,
             },
             Slot::OutOfProcess(instance) => instance.latency_frames(),
+            // A video slot has no pipeline latency — the concept
+            // does not exist on the NONRT surface.
+            Slot::OutOfProcessVideo(_) => None,
         }
     }
 
@@ -529,7 +785,7 @@ impl PluginHost {
                 let inner = *inner;
                 self.l0.plugin_mut(inner)
             }
-            Slot::OutOfProcess(_) => None,
+            Slot::OutOfProcess(_) | Slot::OutOfProcessVideo(_) => None,
         }
     }
 
@@ -571,6 +827,10 @@ impl PluginHost {
                 self.l0.process(inner, inputs, outputs, events, transport)
             }
             Slot::OutOfProcess(instance) => instance.process(inputs, outputs, events, transport),
+            // The RT processing surface does not exist for a video
+            // slot — `Render` rides the command façade, not
+            // `process`.
+            Slot::OutOfProcessVideo(_) => Err(HostError::Unsupported),
         }
     }
 
@@ -766,6 +1026,10 @@ impl PluginHost {
                     return Err(HostError::EndpointUnavailable);
                 }
             }
+            // A video slot has no RT leg — there is nothing to
+            // attach (the design's video-surface answer is
+            // `EndpointUnavailable`, never `Lifecycle`).
+            Slot::OutOfProcessVideo(_) => return Err(HostError::EndpointUnavailable),
         }
         // The uniform bounds half — the layer-independent rules
         // only; `max_frames ≥ activated max_frames` stays with the
@@ -808,6 +1072,11 @@ impl PluginHost {
                 let inner = *inner;
                 self.l0.attach_endpoint(inner, bounds)
             }
+            // A video slot cannot reach an inner attach — the
+            // `prepare_endpoint` prelude rejects it
+            // (`EndpointUnavailable`) before this point; the arm
+            // repeats the defined answer as defense-in-depth.
+            Slot::OutOfProcessVideo(_) => Err(HostError::EndpointUnavailable),
             Slot::OutOfProcess(instance) => {
                 // `prepare_endpoint` runs the drain, the state/bounds
                 // rejections and the take/restore contract itself.
@@ -871,15 +1140,21 @@ impl PluginHost {
     #[must_use]
     pub fn try_recv_notification(&mut self) -> Option<HostNotification> {
         for (index, slot) in self.instances.iter_mut().enumerate() {
-            let Some(Slot::OutOfProcess(instance)) = slot else {
-                continue;
+            // Audio slots run the `&mut` entry-point drain —
+            // restores a returned leg and re-sends/drains the arm
+            // channels before the notification check (`&self`
+            // queries such as `lifecycle_state` stay deliberately
+            // non-draining). Video slots have no endpoint channels
+            // — they go straight to the notification try-recv.
+            let exit = match slot {
+                Some(Slot::OutOfProcess(instance)) => {
+                    instance.drain_endpoint_channels();
+                    instance.try_recv_notification()
+                }
+                Some(Slot::OutOfProcessVideo(instance)) => instance.try_recv_notification(),
+                Some(Slot::InProcess(_)) | None => continue,
             };
-            // The `&mut` entry-point drain — restores a returned leg
-            // and re-sends/drains the arm channels before the
-            // notification check (`&self` queries such as
-            // `lifecycle_state` stay deliberately non-draining).
-            instance.drain_endpoint_channels();
-            if let Some(exit) = instance.try_recv_notification() {
+            if let Some(exit) = exit {
                 // The slot is still live (freed slots never carry an
                 // instance), so the current generation is the minted
                 // handle's.
@@ -921,6 +1196,10 @@ impl PluginHost {
                 instance.kill();
                 Ok(())
             }
+            Slot::OutOfProcessVideo(instance) => {
+                instance.kill();
+                Ok(())
+            }
         }
     }
 
@@ -929,6 +1208,13 @@ impl PluginHost {
     fn instantiate(&mut self, plugin_id: &str) -> Result<HostReply, HostError> {
         let slot = match self.routes.get_mut(plugin_id) {
             None => return Err(HostError::UnknownPluginId),
+            // An audio `Instantiate` naming a video route's id is
+            // the cross-kind rejection — `UnknownPluginId`, not
+            // `Unsupported` — so an audio caller can never mint a
+            // video handle it has no verbs for.
+            Some(Route::OutOfProcessVideo { .. }) => {
+                return Err(HostError::UnknownPluginId);
+            }
             Some(Route::InProcess) => {
                 let HostReply::Instantiated { handle: inner } =
                     self.l0.execute(HostCommand::Instantiate {
@@ -994,6 +1280,18 @@ impl PluginHost {
                 // already ran above.
                 emptied = Some(Arc::clone(instance.child()));
             }
+            Slot::OutOfProcessVideo(instance) => {
+                // The same mirrored legality rule. The dedicated
+                // video child tears itself down inside `destroy`
+                // (its only `Arc` is the facade's) — there is no
+                // pool, so `emptied`/`evict_emptied_child` has no
+                // work here.
+                instance
+                    .lifecycle_state()
+                    .transition(LifecycleEvent::Destroy)
+                    .map_err(HostError::Lifecycle)?;
+                instance.destroy();
+            }
         }
         self.instances[index] = None;
         self.free_slots.push(handle.slot());
@@ -1043,6 +1341,10 @@ impl PluginHost {
                     .execute(command)
                     .and_then(|reply| host_reply(expected, reply))
             }
+            // An audio verb against a video slot — the defined
+            // cross-kind `Unsupported` (the handle is valid; the
+            // vocabulary is not).
+            Slot::OutOfProcessVideo(_) => Err(HostError::Unsupported),
         }
     }
 
@@ -1151,7 +1453,7 @@ fn create_on_fresh(
     pool: &mut Vec<Arc<L1Child>>,
     depth: u32,
 ) -> Result<L1Instance, HostError> {
-    let child = L1Child::spawn_scanned(spec)?;
+    let child = L1Child::spawn_scanned(&spec.view())?;
     pool.push(Arc::clone(&child));
     match child.create_instance(spec, depth) {
         Ok(parts) => Ok(L1Instance::from_parts(child, parts)),
@@ -1296,6 +1598,157 @@ fn host_reply(expected: ReplyKind, reply: wire::Reply) -> Result<HostReply, Host
         (ReplyKind::Opened, wire::Reply::Opened { gui }) => Ok(HostReply::Opened { gui }),
         // Every other pairing — a kind mismatch, `Scanned`, or a
         // future reply kind — is a protocol anomaly.
+        _ => Err(HostError::Ipc),
+    }
+}
+
+/// The `Instantiate` config bounds — the host-local gate that runs
+/// before any allocation, shm segment or child spawn (design's
+/// `Instantiate` bound 拒否 row): dims non-zero and inside
+/// [`wire::WIRE_VIDEO_MAX_DIM`], `frame_bytes(config)` inside
+/// [`wire::WIRE_VIDEO_MAX_FRAME_BYTES`], the derived
+/// `segment_len` inside [`wire::WIRE_VIDEO_MAX_SEGMENT_BYTES`],
+/// and a non-zero `frame_rate`. Every violation is the defined
+/// `Err(HostError::Prepare(PrepareError::UnsupportedConfig))` —
+/// `check_uniform_bounds`'s exact vocabulary: a wild config can
+/// never reach the `vshm` create or the wire. (`format` known-ness
+/// is the type's own guarantee — `PixelFormat` is a closed value
+/// domain; `VideoProcessConfig::new`/`FrameRate::new` already
+/// reject the zero legs, so the checks below are the wire-side
+/// caps, not ctor invariants.)
+fn check_video_bounds(config: &VideoProcessConfig) -> Result<(), HostError> {
+    let frame_bytes = wire::vshm::frame_bytes(config);
+    if config.width() == 0
+        || config.height() == 0
+        || config.width() > wire::WIRE_VIDEO_MAX_DIM
+        || config.height() > wire::WIRE_VIDEO_MAX_DIM
+        || config.frame_rate().numerator() == 0
+        || config.frame_rate().denominator() == 0
+        || frame_bytes > wire::WIRE_VIDEO_MAX_FRAME_BYTES
+        || wire::vshm::segment_len(frame_bytes) > wire::WIRE_VIDEO_MAX_SEGMENT_BYTES
+    {
+        return Err(HostError::Prepare(PrepareError::UnsupportedConfig));
+    }
+    Ok(())
+}
+
+/// The `handle` every dispatchable video command carries —
+/// `video_dispatch` is only reached by the handle verbs.
+fn video_command_handle(command: &VideoHostCommand) -> PluginHandle {
+    match *command {
+        VideoHostCommand::Initialize { handle }
+        | VideoHostCommand::Activate { handle }
+        | VideoHostCommand::StartProcessing { handle }
+        | VideoHostCommand::StopProcessing { handle }
+        | VideoHostCommand::Deactivate { handle }
+        | VideoHostCommand::Destroy { handle }
+        | VideoHostCommand::GetParamInfo { handle, .. }
+        | VideoHostCommand::GetParams { handle, .. }
+        | VideoHostCommand::GetParamValue { handle, .. }
+        | VideoHostCommand::SetParamValue { handle, .. }
+        | VideoHostCommand::Render { handle, .. } => handle,
+        VideoHostCommand::Scan | VideoHostCommand::Instantiate { .. } => {
+            unreachable!("Scan/Instantiate never reach video_dispatch")
+        }
+    }
+}
+
+/// The `wire::Command` mirror of a handle-carrying
+/// `VideoHostCommand` — the public-to-wire verb map the video
+/// dispatch arm runs. `Render` is not here: its payload is a
+/// `VideoFrame` (frame bytes, not the wire's descriptor), so the
+/// render arm in [`VideoPluginHost::render`] builds
+/// `wire::Command::VideoRender` itself from the `vshm` descriptor.
+fn video_to_wire(command: &VideoHostCommand) -> wire::Command {
+    match *command {
+        VideoHostCommand::Initialize { .. } => wire::Command::VideoInitialize,
+        VideoHostCommand::Activate { .. } => wire::Command::VideoActivate,
+        VideoHostCommand::StartProcessing { .. } => wire::Command::VideoStartProcessing,
+        VideoHostCommand::StopProcessing { .. } => wire::Command::VideoStopProcessing,
+        VideoHostCommand::Deactivate { .. } => wire::Command::VideoDeactivate,
+        VideoHostCommand::GetParamInfo { id, .. } => wire::Command::VideoGetParamInfo { id: id.0 },
+        VideoHostCommand::GetParams { .. } => wire::Command::VideoGetParams,
+        VideoHostCommand::GetParamValue { id, .. } => {
+            wire::Command::VideoGetParamValue { id: id.0 }
+        }
+        VideoHostCommand::SetParamValue { id, value, .. } => {
+            wire::Command::VideoSetParamValue { id: id.0, value }
+        }
+        VideoHostCommand::Scan
+        | VideoHostCommand::Instantiate { .. }
+        | VideoHostCommand::Destroy { .. }
+        | VideoHostCommand::Render { .. } => {
+            unreachable!("Scan/Instantiate/Destroy/Render are not wire verbs here")
+        }
+    }
+}
+
+/// The wire reply payload kind a video verb must answer — the
+/// video leg's pairing oracle (the audio `ReplyKind` stays
+/// audio-shaped: `State`/`Opened` can never pair here).
+#[derive(Clone, Copy)]
+enum VideoReplyKind {
+    /// Lifecycle verbs and `SetParamValue` answer `Ok`.
+    Ok,
+    /// `GetParams` answers `Params`.
+    Params,
+    /// `GetParamInfo` answers `ParamInfo`.
+    ParamInfo,
+    /// `GetParamValue` answers `ParamValue`.
+    ParamValue,
+}
+
+/// The one legal reply kind per video wire verb — the pairing
+/// `video_host_reply` enforces. Video verbs `Render` covers are
+/// absent: `video_to_wire` never emits `VideoRender` (the render
+/// path builds it directly), so it lands on the fail-closed
+/// wildcard with the registry verbs — unreachable today, pinned
+/// `Ok` so a future caller pairing gets a defined answer.
+// `match_same_arms`: the pinned `Ok` arms share the wildcard's body
+// by design — the explicit arms are the required pin, not dead
+// repeats.
+#[allow(clippy::match_same_arms)]
+fn video_expected_reply(cmd: &wire::Command) -> VideoReplyKind {
+    match cmd {
+        wire::Command::VideoGetParams => VideoReplyKind::Params,
+        wire::Command::VideoGetParamInfo { .. } => VideoReplyKind::ParamInfo,
+        wire::Command::VideoGetParamValue { .. } => VideoReplyKind::ParamValue,
+        wire::Command::CreateVideoInstance { .. }
+        | wire::Command::VideoInitialize
+        | wire::Command::VideoActivate
+        | wire::Command::VideoStartProcessing
+        | wire::Command::VideoRender { .. }
+        | wire::Command::VideoStopProcessing
+        | wire::Command::VideoDeactivate
+        | wire::Command::VideoSetParamValue { .. }
+        | wire::Command::DestroyInstance => VideoReplyKind::Ok,
+        _ => VideoReplyKind::Ok,
+    }
+}
+
+/// Maps a wire reply onto the public [`VideoHostReply`], paired
+/// against the verb's one legal answer exactly as `host_reply`
+/// does on the audio leg. A mismatched kind — `Ok` where `Params`
+/// was asked — or a kind no video verb produces (`State`,
+/// `Opened`, `Scanned`, `Rendered` as a `GetParams` answer) is the
+/// protocol anomaly `Err(HostError::Ipc)`.
+fn video_host_reply(
+    expected: VideoReplyKind,
+    reply: wire::Reply,
+) -> Result<VideoHostReply, HostError> {
+    match (expected, reply) {
+        (VideoReplyKind::Ok, wire::Reply::Ok) => Ok(VideoHostReply::Ok),
+        (VideoReplyKind::Params, wire::Reply::Params { ids }) => Ok(VideoHostReply::ParamIds(
+            ids.iter().map(|&id| ParamId(id)).collect(),
+        )),
+        (VideoReplyKind::ParamInfo, wire::Reply::ParamInfo { info }) => {
+            Ok(VideoHostReply::ParamInfo(info))
+        }
+        (VideoReplyKind::ParamValue, wire::Reply::ParamValue { value }) => {
+            Ok(VideoHostReply::ParamValue(value))
+        }
+        // Every other pairing — a kind mismatch or a reply kind no
+        // video verb produces — is a protocol anomaly.
         _ => Err(HostError::Ipc),
     }
 }
@@ -2233,5 +2686,397 @@ mod tests {
         // slot drop released the last `Arc<L1Child>`.
         assert!(weak.upgrade().is_none());
         assert!(route_pool(&host).is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // Issue #118 T3 — the video surface on the composite: the
+    // kind-filtered `Scan`s, the shared plugin-id namespace, the
+    // cross-kind `UnknownPluginId`/`Unsupported` answers, the
+    // video slot's no-RT-surface replies, the `Instantiate` bounds
+    // gate and the host-local `SetParamValue` finiteness check.
+    // `VideoL1Instance` fixtures carry no spawned child — the wire
+    // legs answer `Err(Ipc)` past the defined local rejections.
+    // ---------------------------------------------------------------
+
+    use ruviform_media_core::{FrameRate, MediaTime, TimeBase};
+    use ruviform_video_core::{PixelFormat, VideoFrame};
+
+    const VIDEO_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
+        id: "org.ruviform.test.composite-vfx",
+        name: "Test Composite Vfx",
+        vendor: "Ruviform",
+        version: "0.1.0",
+        features: &[],
+    };
+
+    fn video_config(width: u32, height: u32) -> VideoProcessConfig {
+        VideoProcessConfig::new(
+            PixelFormat::Yuv420p,
+            width,
+            height,
+            FrameRate::new(30, 1).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn video_spec(descriptor: PluginDescriptor) -> VideoOutOfProcessSpec {
+        VideoOutOfProcessSpec::new(descriptor, OsString::from("unused-video-runner"))
+    }
+
+    /// Mints a video slot on a fixture instance — the unified
+    /// table's `Slot::OutOfProcessVideo` seat every cross-kind
+    /// probe needs.
+    fn mint_video(host: &mut PluginHost, mirror: LifecycleState) -> PluginHandle {
+        host.mint(Slot::OutOfProcessVideo(Box::new(
+            VideoL1Instance::test_fixture(mirror, video_config(64, 48)),
+        )))
+    }
+
+    /// `Scan` reports only its own kind's registrations — audio
+    /// (factory + L1) on the audio surface, video on the video
+    /// surface, each in registration order.
+    #[test]
+    fn scans_filter_by_registration_kind() {
+        const AUDIO_L1: PluginDescriptor = PluginDescriptor {
+            id: "org.ruviform.test.composite-audio-l1",
+            name: "Test Composite Audio L1",
+            vendor: "Ruviform",
+            version: "0.1.0",
+            features: &[],
+        };
+        let mut host = PluginHost::new();
+        host.register_factory(Box::new(SendGainFactory));
+        host.register_out_of_process(OutOfProcessSpec::new(
+            AUDIO_L1,
+            OsString::from("unused-runner"),
+        ))
+        .unwrap();
+        host.video()
+            .register_out_of_process(video_spec(VIDEO_DESCRIPTOR))
+            .unwrap();
+        let HostReply::Scanned(audio) = host.execute(HostCommand::Scan).unwrap() else {
+            panic!("Scan replies only Scanned")
+        };
+        assert_eq!(
+            audio.iter().map(|d| d.id).collect::<Vec<_>>(),
+            [DESCRIPTOR.id, AUDIO_L1.id]
+        );
+        let VideoHostReply::Scanned(video) = host.video().execute(VideoHostCommand::Scan).unwrap()
+        else {
+            panic!("video Scan replies only Scanned")
+        };
+        assert_eq!(
+            video.iter().map(|d| d.id).collect::<Vec<_>>(),
+            [VIDEO_DESCRIPTOR.id]
+        );
+    }
+
+    /// The plugin-id namespace is one across both surfaces —
+    /// `DuplicatePluginId` fires whether the first claim was audio
+    /// or video, factory or L1.
+    #[test]
+    fn duplicate_plugin_id_rejected_across_kinds() {
+        // Audio L1 first → video claim rejected.
+        let mut host = PluginHost::new();
+        host.register_out_of_process(OutOfProcessSpec::new(
+            VIDEO_DESCRIPTOR,
+            OsString::from("unused-runner"),
+        ))
+        .unwrap();
+        assert_eq!(
+            host.video()
+                .register_out_of_process(video_spec(VIDEO_DESCRIPTOR)),
+            Err(HostError::DuplicatePluginId)
+        );
+        // Video first → audio L1 claim rejected.
+        let mut host = PluginHost::new();
+        host.video()
+            .register_out_of_process(video_spec(VIDEO_DESCRIPTOR))
+            .unwrap();
+        assert_eq!(
+            host.register_out_of_process(OutOfProcessSpec::new(
+                VIDEO_DESCRIPTOR,
+                OsString::from("unused-runner"),
+            )),
+            Err(HostError::DuplicatePluginId)
+        );
+        // L0 factory first → video claim rejected (the routes map
+        // holds every kind's claim).
+        let mut host = PluginHost::new();
+        host.register_factory(Box::new(SendGainFactory));
+        assert_eq!(
+            host.video().register_out_of_process(video_spec(DESCRIPTOR)),
+            Err(HostError::DuplicatePluginId)
+        );
+    }
+
+    /// `Instantiate` can never cross kinds — an audio
+    /// `Instantiate` naming a video route, or a video
+    /// `Instantiate` naming an audio route, is
+    /// `Err(UnknownPluginId)`: a handle the caller has no verbs
+    /// for must never be minted.
+    #[test]
+    fn cross_kind_instantiate_is_unknown_plugin_id() {
+        let mut host = PluginHost::new();
+        host.register_factory(Box::new(SendGainFactory));
+        host.video()
+            .register_out_of_process(video_spec(VIDEO_DESCRIPTOR))
+            .unwrap();
+        assert_eq!(
+            host.execute(HostCommand::Instantiate {
+                plugin_id: VIDEO_DESCRIPTOR.id.to_owned(),
+            }),
+            Err(HostError::UnknownPluginId)
+        );
+        assert!(matches!(
+            host.video().execute(VideoHostCommand::Instantiate {
+                plugin_id: DESCRIPTOR.id.to_owned(),
+                config: video_config(64, 48),
+            }),
+            Err(HostError::UnknownPluginId)
+        ));
+    }
+
+    /// Every handle-carrying verb rejects cross-kind with
+    /// `Err(Unsupported)`: audio commands on a video slot, video
+    /// commands (dispatch and `Render` legs alike) on an L0 slot.
+    #[test]
+    fn cross_kind_commands_are_unsupported() {
+        let mut host = PluginHost::new();
+        host.register_factory(Box::new(SendGainFactory));
+        let HostReply::Instantiated {
+            handle: audio_handle,
+        } = host
+            .execute(HostCommand::Instantiate {
+                plugin_id: DESCRIPTOR.id.to_owned(),
+            })
+            .unwrap()
+        else {
+            panic!("unexpected reply")
+        };
+        let video_handle = mint_video(&mut host, LifecycleState::Processing);
+        // Audio verbs against the video slot.
+        assert_eq!(
+            host.execute(HostCommand::Initialize {
+                handle: video_handle,
+            }),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            host.execute(HostCommand::SaveState {
+                handle: video_handle,
+            }),
+            Err(HostError::Unsupported)
+        );
+        // Video verbs against the L0 slot — both dispatch legs.
+        assert!(matches!(
+            host.video().execute(VideoHostCommand::GetParams {
+                handle: audio_handle,
+            }),
+            Err(HostError::Unsupported)
+        ));
+        assert!(matches!(
+            host.video().execute(VideoHostCommand::Initialize {
+                handle: audio_handle,
+            }),
+            Err(HostError::Unsupported)
+        ));
+        let frame = VideoFrame::new_owned(
+            PixelFormat::Yuv420p,
+            64,
+            48,
+            MediaTime::new(0, TimeBase::COMMON_90K),
+        )
+        .unwrap();
+        assert!(matches!(
+            host.video().execute(VideoHostCommand::Render {
+                handle: audio_handle,
+                input: frame,
+                at: MediaTime::new(0, TimeBase::COMMON_90K),
+            }),
+            Err(HostError::Unsupported)
+        ));
+    }
+
+    /// A video slot's answers on the audio-only surfaces: `process`
+    /// is `Err(Unsupported)`, `latency_frames`/`plugin_mut` are
+    /// `None`, both endpoint entry points are
+    /// `Err(EndpointUnavailable)`, while the shared
+    /// `lifecycle_state`/`kill_child`/`Destroy` semantics still
+    /// apply.
+    #[test]
+    fn video_slot_answers_the_audio_only_surfaces() {
+        let mut host = PluginHost::new();
+        let handle = mint_video(&mut host, LifecycleState::Processing);
+        assert_eq!(
+            host.lifecycle_state(handle),
+            Some(LifecycleState::Processing)
+        );
+        assert_eq!(host.latency_frames(handle), None);
+        assert!(host.plugin_mut(handle).is_none());
+        assert!(matches!(
+            run_block(&mut host, handle),
+            Err(HostError::Unsupported)
+        ));
+        assert!(matches!(
+            host.prepare_endpoint(handle, bounds(512, 2)),
+            Err(HostError::EndpointUnavailable)
+        ));
+        assert!(matches!(
+            host.attach_endpoint(handle, bounds(512, 2)),
+            Err(HostError::EndpointUnavailable)
+        ));
+        // `kill_child` routes the video arm — `Ok`, and the kill
+        // no-ops on the fixture's process-free shared child.
+        assert_eq!(host.kill_child(handle), Ok(()));
+        // `Processing`-mirrored `Destroy` keeps the L0 legality
+        // rule on the video arm too.
+        assert!(matches!(
+            host.execute(HostCommand::Destroy { handle }),
+            Err(HostError::Lifecycle(_))
+        ));
+    }
+
+    /// `Destroy` reaches the video slot through both surfaces —
+    /// the audio `HostCommand::Destroy` and the video
+    /// `VideoHostCommand::Destroy` are the same legality rule and
+    /// the same slot free.
+    #[test]
+    fn video_destroy_works_through_both_surfaces() {
+        let mut host = PluginHost::new();
+        let audio_surface = mint_video(&mut host, LifecycleState::Created);
+        assert_eq!(
+            host.execute(HostCommand::Destroy {
+                handle: audio_surface,
+            }),
+            Ok(HostReply::Ok)
+        );
+        assert_eq!(host.lifecycle_state(audio_surface), None);
+        let video_surface = mint_video(&mut host, LifecycleState::Created);
+        assert!(matches!(
+            host.video().execute(VideoHostCommand::Destroy {
+                handle: video_surface,
+            }),
+            Ok(VideoHostReply::Ok)
+        ));
+        assert_eq!(host.lifecycle_state(video_surface), None);
+    }
+
+    /// A converged video instance's `ChildExit` lands on the shared
+    /// notification queue as `InstanceFailed{handle}` — same payload
+    /// as the audio leg, handle from the unified table.
+    #[test]
+    fn video_failure_notification_uses_the_unified_handle() {
+        let mut host = PluginHost::new();
+        let child = L1Child::test_fixture(0);
+        let handle = host.mint(Slot::OutOfProcessVideo(Box::new(
+            VideoL1Instance::test_fixture_on(
+                &child,
+                0,
+                LifecycleState::Processing,
+                video_config(64, 48),
+            ),
+        )));
+        child.test_converge();
+        assert_eq!(host.lifecycle_state(handle), Some(LifecycleState::Failed));
+        match host.try_recv_notification() {
+            Some(HostNotification::InstanceFailed {
+                handle: reported, ..
+            }) => assert_eq!(reported, handle),
+            other => panic!("expected InstanceFailed, got {other:?}"),
+        }
+        // The one-shot queue — nothing further lands.
+        assert!(host.try_recv_notification().is_none());
+        // `Failed` stays destroyable — the slot frees normally.
+        assert_eq!(
+            host.execute(HostCommand::Destroy { handle }),
+            Ok(HostReply::Ok)
+        );
+    }
+
+    /// The `Instantiate` bounds gate runs before any allocation,
+    /// segment or spawn: dims over `WIRE_VIDEO_MAX_DIM` and a
+    /// `frame_bytes`/`segment_len` over the wire caps are all the
+    /// defined `Err(Prepare(UnsupportedConfig))`.
+    #[test]
+    fn video_instantiate_rejects_out_of_bounds_configs() {
+        let mut host = PluginHost::new();
+        host.video()
+            .register_out_of_process(video_spec(VIDEO_DESCRIPTOR))
+            .unwrap();
+        let rate = FrameRate::new(30, 1).unwrap();
+        for config in [
+            // Dims over the wire cap.
+            VideoProcessConfig::new(PixelFormat::Yuv420p, wire::WIRE_VIDEO_MAX_DIM + 1, 4, rate)
+                .unwrap(),
+            VideoProcessConfig::new(PixelFormat::Yuv420p, 4, wire::WIRE_VIDEO_MAX_DIM + 1, rate)
+                .unwrap(),
+            // In-dims but `frame_bytes`/`segment_len` over the caps
+            // (8K `RgbaF32` honestly exceeds both).
+            VideoProcessConfig::new(PixelFormat::RgbaF32, 7_680, 4_320, rate).unwrap(),
+            // Saturating math — `u32::MAX` dims can never wrap below
+            // the bound.
+            VideoProcessConfig::new(PixelFormat::RgbaF32, u32::MAX, u32::MAX, rate).unwrap(),
+        ] {
+            assert!(
+                matches!(
+                    host.video().execute(VideoHostCommand::Instantiate {
+                        plugin_id: VIDEO_DESCRIPTOR.id.to_owned(),
+                        config,
+                    }),
+                    Err(HostError::Prepare(PrepareError::UnsupportedConfig))
+                ),
+                "{config:?} must reject before any spawn"
+            );
+        }
+    }
+
+    /// Encode obligation (a): a non-finite
+    /// `PlainParamValue::Double` is `Err(InvalidValue)` *before* the
+    /// wire — the fixture's dead driver is never consulted — while
+    /// a finite `Double` and the other value kinds pass the local
+    /// gate and reach the wire (the fixture's `Err(Ipc)`).
+    #[test]
+    fn video_set_param_rejects_non_finite_values() {
+        let mut host = PluginHost::new();
+        let handle = mint_video(&mut host, LifecycleState::Processing);
+        for value in [
+            PlainParamValue::Double(f64::NAN),
+            PlainParamValue::Double(f64::INFINITY),
+            PlainParamValue::Double(f64::NEG_INFINITY),
+        ] {
+            assert!(
+                matches!(
+                    host.video().execute(VideoHostCommand::SetParamValue {
+                        handle,
+                        id: ParamId(0),
+                        value,
+                    }),
+                    Err(HostError::InvalidValue)
+                ),
+                "{value:?} must reject host-locally"
+            );
+        }
+        // Finite `Double` and the non-`Double` kinds pass the gate
+        // — the fixture's dead wire answers `Err(Ipc)`, proving the
+        // value left the host.
+        for value in [
+            PlainParamValue::Double(0.5),
+            PlainParamValue::Integer(3),
+            PlainParamValue::Boolean(true),
+            PlainParamValue::Choice(1),
+        ] {
+            assert!(
+                matches!(
+                    host.video().execute(VideoHostCommand::SetParamValue {
+                        handle,
+                        id: ParamId(0),
+                        value,
+                    }),
+                    Err(HostError::Ipc)
+                ),
+                "{value:?} must reach the wire"
+            );
+        }
     }
 }

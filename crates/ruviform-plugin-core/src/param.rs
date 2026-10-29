@@ -104,6 +104,41 @@ impl ParamFlags {
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
     }
+
+    /// Every bit this revision defines — the union of all named flags.
+    const KNOWN_BITS: u32 = Self::AUTOMATABLE.0
+        | Self::MODULATABLE.0
+        | Self::STEPPED.0
+        | Self::HIDDEN.0
+        | Self::READONLY.0
+        | Self::BYPASS.0;
+
+    /// Rebuilds a flag set from its raw bitmask — `None` when `bits`
+    /// sets a flag this revision does not define. The wire codec uses
+    /// this strict reading so an unknown bit is rejected like any other
+    /// reserved field rather than silently carried.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_plugin_core::ParamFlags;
+    ///
+    /// assert_eq!(
+    ///     ParamFlags::from_bits(ParamFlags::AUTOMATABLE.bits()),
+    ///     Some(ParamFlags::AUTOMATABLE),
+    /// );
+    /// assert_eq!(ParamFlags::from_bits(1 << 31), None);
+    /// ```
+    #[must_use]
+    pub const fn from_bits(bits: u32) -> Option<Self> {
+        if bits & !Self::KNOWN_BITS == 0 {
+            Some(Self(bits))
+        } else {
+            None
+        }
+    }
 }
 
 /// Normalized parameter value in `[0.0, 1.0]` — the wire-canonical

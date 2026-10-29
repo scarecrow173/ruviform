@@ -51,20 +51,22 @@ relations:
 
 wire v2（`WIRE_VERSION` 1→2 一括 bump・Issue #119 の「単一最新版のみ」方針に従う wholesale 改訂）で導入される **増分**契約の oracle。envelope の `instance` field・新動詞 `CreateInstance`/`DestroyInstance`・verb↔scope 判定表・`HostError::InstanceLimit` wire tag 9・`WIRE_MAX_INSTANCES`/`WIRE_INSTANCE_NONE` 定数・adversarial 入力への bounded 拒否を pin する。frame ヘッダ・kind 表・shm レイアウト等の**引き継ぎ**契約は `plugin-l1-wire-codec-tests.md`（v2 修正済みの baseline oracle）が引き続き所有する — 本 spec は #117 が追加する面のみを対象とする。wire v2 が supersede された後は本 spec は引き継ぎ oracle へ統合され得る。
 
+**re-engagement 注記（Issue #118・wire v3）**: Issue #118 で `WIRE_VERSION` は 2→3 へ再改訂された — video `Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10 `InvalidValue`・video 型 codec・`WIRE_VIDEO_MAX_*`・`wire::vshm` 定盤の additive 追加。本 spec が pin した v2 増分契約（`instance` envelope・scope 判定表・`WIRE_MAX_INSTANCES`/`WIRE_INSTANCE_NONE`・`InstanceLimit` tag 9・`CreateInstance`/`DestroyInstance` tag 10/11）は audio 経路で**不変のまま v3 下でも成立**する — 下記 `WIRE_VERSION == 2` のリテラル記述は #117 時点の pin として維持し、現行値への言及は 3 と読み替える。video 面の codec pin は `issue-118-wire-v3-codec-tests` が oracle。
+
 ## Feature
 
 wire v2 codec は `Message`/`Command`/`Reply`/`BlockIn`/`BlockDone` を instance 付き envelope で符号化し、`instance` の値域・動詞との scope 整合・宣言長/count を `Malformed` で拒否する。`HostError::InstanceLimit` は encode/decode の両方向で tag 9 と round-trip する。
 
 ## Rules
 
-- `WIRE_VERSION == 2`・`WIRE_MAX_INSTANCES == 64`・`WIRE_INSTANCE_NONE == u32::MAX` が codec 定数として存在する
+- `WIRE_VERSION == 2`（**#117 時点の pin — Issue #118 で現行値は 3**。v2 で導入された下記定数・envelope 規則は v3 でも不変）・`WIRE_MAX_INSTANCES == 64`・`WIRE_INSTANCE_NONE == u32::MAX` が codec 定数として存在する
 - `Command`/`Reply`/`BlockIn`/`BlockDone` payload は `[u64 seq][u32 instance][rest]` envelope を使う。`Hello`/`Shutdown` は `instance` を持たない
 - `Command` に `CreateInstance{plugin_id: String, shm_key: String, in_depth: u32, out_depth: u32}`（tag 10）・`DestroyInstance`（tag 11）が追加される。既存 tag 0-9 の payload 意味論は変わらない。`plugin_id`/`shm_key` は `WIRE_MAX_STRING_BYTES`・`in_depth`/`out_depth` は `1..=WIRE_MAX_ELEMENTS` の bound 検査を受ける
 - decode の scope 判定表: `Scan` は `instance == WIRE_INSTANCE_NONE` 必須。instance-scope 動詞（11 個）は non-NONE 必須。`BlockIn`/`BlockDone`/`Reply` の `instance` は動詞に応じた必須条件（`i < WIRE_MAX_INSTANCES` または `NONE` のみ）を満たす。違反は `WireError::Malformed`
 - `encode_host_error(HostError::InstanceLimit) → tag 9`・`decode_host_error(9) → HostError::InstanceLimit` が両方向で round-trip する（wildcard arm が `UnsupportedVariant`/`Malformed` へ潰さない — 「定義済み拒否が子死亡に化ける」退行防止）
 - decode は untrusted 入力の検証境界 — 範囲外 `instance`（`>63` かつ `!= NONE`）・scope 不整合・宣言長超過を panic・無制限 alloc なしで `Malformed` 拒否する
 - 公開 enum（`Command`/`Reply`/`HostError`）は `#[non_exhaustive]` を維持する
-- v1 Hello（`version != 2`）は handshake 失敗（version 一致は shm header `wire_version`・Hello `version` の双方で厳密一致 — #119 方針どおり交渉機構なし）
+- v1 Hello（`version != WIRE_VERSION` — #117 時点 `!= 2`・現行 `!= 3`）は handshake 失敗（version 一致は shm header `wire_version`・Hello `version` の双方で厳密一致 — #119 方針どおり交渉機構なし。`wire::vshm` header の `wire_version` も同規則）
 
 ## Examples
 
@@ -87,6 +89,7 @@ wire v2 codec は `Message`/`Command`/`Reply`/`BlockIn`/`BlockDone` を instance
 - frame ヘッダ・kind 表・shm レイアウト・`Hello`/`Shutdown` 等の引き継ぎ契約（`plugin-l1-wire-codec-tests.md` が所有）
 - handshake の spawn/argv 契約（`plugin-l1-proxy-contract-tests`・`plugin-l1-runner-e2e-tests` が対象）
 - `InstanceLimit` の発生条件（pool/registry 上限 — `issue-117-bundle-e2e-tests` が対象）
+- video 系統の codec（`Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10・`VideoFrameDesc`/`PlainParamInfoOwned`・`WIRE_VIDEO_MAX_*`・`wire::vshm`）— Issue #118 で追加・`issue-118-wire-v3-codec-tests` が oracle
 
 ## Risk
 

@@ -58,11 +58,13 @@ bundle 制御面の E2E oracle — `OutOfProcessIsolation` 公開面・pool 選�
 
 ## Feature
 
-`PluginHost` は `Route::OutOfProcess{spec, isolation, pool}` で、`Bundled`（default）が `live_count < WIRE_MAX_INSTANCES && !terminal && !shutdown_initiated` を満たす最初の子を pool から再利用・満杯時に新規 spawn し、`CreateInstance` で N instance を 1 子へ mint する。`Dedicated` は同 v2 機構の capacity-1 経路。runner は `instances` registry で per-instance dispatch・defined rejection（`InvalidHandle`/`InstanceLimit`/dup/`UnknownPluginId`）を行う。pool/子 lifecycle は shutdown-on-empty・rollback・last-ref teardown・eviction で完結する。
+`PluginHost` は `Route::OutOfProcess{spec, isolation, pool}` で、`Bundled`（default）が `live_count < WIRE_MAX_INSTANCES && !terminal && !shutdown_initiated` を満たす最初の子を pool から再利用・満杯時に新規 spawn し、`CreateInstance` で N instance を 1 子へ mint する。`Dedicated` は同 wire 機構（v2 由来・現行 v3）の capacity-1 経路。runner は `instances` registry で per-instance dispatch・defined rejection（`InvalidHandle`/`InstanceLimit`/dup/`UnknownPluginId`）を行う。pool/子 lifecycle は shutdown-on-empty・rollback・last-ref teardown・eviction で完結する。
+
+**re-engagement 注記（Issue #118・wire v3 — 本 spec の対象は audio bundle のまま）**: Issue #118 で video L1 経路が実装されたが、video は `VideoOutOfProcessSpec` の構造 pin で **Dedicated 固定**（`isolation`/`lookahead_blocks` なし — pool/bundle は video に適用されない）かつ `Route::OutOfProcessVideo`/`Slot::OutOfProcessVideo`/`InstKind::Video` の別 variant で共存する。audio の `Bundled`/`Dedicated` 選択面・pool predicate・runner registry は不変 — `WIRE_VERSION` は v3（video tag 12-22/4-7 の additive bump）。video instance の E2E pin は `issue-118-video-e2e-tests` が oracle。
 
 ## Rules
 
-- **隔離 surface**: `#[non_exhaustive] pub enum OutOfProcessIsolation{Dedicated, Bundled}` が公開され `new()` default が `Bundled`。`Dedicated` は同 v2 機構の capacity-1 経路（`L1Child`/demux/converge を通る・pool 非投入）
+- **隔離 surface**: `#[non_exhaustive] pub enum OutOfProcessIsolation{Dedicated, Bundled}` が公開され `new()` default が `Bundled`。`Dedicated` は同 wire 機構（v2 由来・現行 v3）の capacity-1 経路（`L1Child`/demux/converge を通る・pool 非投入。video は `VideoOutOfProcessSpec` 構造上 Dedicated 固定で本 enum を持たない — #118）
 - **pool 選択・reuse**: `Bundled` の 2 回目 `Instantiate` が `live_count < 64 && !terminal && !shutdown_initiated` を満たす既存子へ `CreateInstance` で mint され、新 spawn しない。`i` は host が mint する lowest-free wire handle
 - **per-instance 資源**: 各 instance は独立 `PluginHandle`/`LifecycleState`/`process` 経路・per-instance segment + `RtLeg`・per-instance notification channel を持つ（兄弟と資源を共有しない）
 - **`(instance, seq)` 相関**: `Reply`/`BlockDone` が `(instance, seq)` で waiter/`block_in_flight` と相関し、instance 間で混線しない
@@ -91,7 +93,7 @@ bundle 制御面の E2E oracle — `OutOfProcessIsolation` 公開面・pool 選�
 
 ## Guarantees
 
-- `Bundled`（default）で 1 子 N instance・`Dedicated`（opt-in）で capacity-1 — 両方とも同 v2 機構を通る
+- `Bundled`（default）で 1 子 N instance・`Dedicated`（opt-in）で capacity-1 — 両方とも同 wire 機構（v2 由来・現行 v3）を通る
 - pool は `live_count < WIRE_MAX_INSTANCES && !terminal && !shutdown_initiated` の predicate で選択・reuse・eviction・shutdown-on-empty・rollback・last-ref teardown で完結する
 - runner registry は per-instance dispatch・`CreateInstance` 検証 chain・`InvalidHandle`/`InstanceLimit`/dup/`UnknownPluginId` の defined rejection を行い、echo は verbatim
 - `kill_child` は子単位 — bundle 時は影響各 live instance へ `InstanceFailed` が fan-out する
@@ -103,7 +105,7 @@ bundle 制御面の E2E oracle — `OutOfProcessIsolation` 公開面・pool 選�
 - codec 形式検証・`InstanceLimit` wire tag・scope 判定表（`issue-117-wire-v2-codec-tests` が対象）
 - demux 判定表・`Failed` 粒度・notification 意味論の詳細（`issue-117-bundle-failed-granularity-tests` が対象 — 本 spec はその結果の外部観測（kill → N 通知・`Failed`+live child の `Destroy`）のみ検証）
 - `MiniHost` fixture の内部機構（`l1_runner_e2e` が所有 — 本 spec は runner E2E の bundle 行のみ）
-- shared shm layout / video NONRT / shared reaper / shared IPC（Issue #118/#120/#122 — out of scope）
+- shared shm layout / video NONRT / shared reaper / shared IPC — **video NONRT は Issue #118 で別経路（Dedicated 固定・`wire::vshm`・audio bundle 機構と非共有データ面）として実装済み**（`issue-118-video-e2e-tests` が oracle — 本 spec の対象は audio bundle のまま）。shared reaper/IPC は #120/#122 が追跡
 - `BundleFailed` 相関通知 variant・pool key 跨ぎ bundle・keep-alive（deferred）
 
 ## Risk

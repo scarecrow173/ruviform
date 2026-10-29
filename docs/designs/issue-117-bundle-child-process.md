@@ -56,6 +56,11 @@ relations:
     - "docs/discovery/issue-116-supervisor.md"
     - "docs/specs/issue-116-supervisor.md"
     - "docs/designs/issue-116-supervisor.md"
+    - "docs/discovery/issue-118-video-l1.md"
+    - "docs/specs/issue-118-video-l1.md"
+    - "docs/designs/issue-118-video-l1.md"
+    - "docs/adr/issue-118-video-l1-host-surface.md"
+    - "docs/adr/issue-118-video-l1-create-path-segment.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-117-wire-v2-codec-tests.md"

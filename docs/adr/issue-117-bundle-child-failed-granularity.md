@@ -46,10 +46,14 @@ relations:
     - "docs/specs/issue-116-supervisor.md"
     - "docs/designs/issue-116-supervisor.md"
     - "docs/adr/issue-116-supervisor-placement.md"
+    - "docs/discovery/issue-118-video-l1.md"
     - "docs/tasks/l1-supervisor-e2e.md"
+    - "docs/designs/issue-118-video-l1.md"
+    - "docs/test-specs/issue-118-video-failed-parity-tests.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-117-bundle-failed-granularity-tests.md"
+    - "docs/test-specs/issue-118-video-failed-parity-tests.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/76"
     - "https://github.com/scarecrow173/ruviform/issues/119"
@@ -111,6 +115,7 @@ bundle crash では**影響を受けた各 live インスタンスへ `InstanceF
 - inert 規則の副作用: registered-but-not-live・post-removal 宛の frame を違反扱いしないため、dishonest/破損した子が drain 済み領域へ frame を撃ち続けても検出されない（無害だが監査痕跡は残らない — 診断用の debug counter/log は実装詳細として許容、契約上の拒否にはしない）
 - `OutOfProcessSpec` に pub field が 1 つ増え公開 API は additive に拡張（`#[non_exhaustive]` enum）。`InstanceLimit` の `HostError` 追加も同方針
 - dedicated 経路の `Failed` 粒度は不変（1 子 = 1 instance で子スコープ収束がそのインスタンスのみに帰着するため、実装上同じコードパスで自然に 1:1 になる）
+- **re-engagement 注記（Issue #118・wire v3）**: 本 ADR の粒度規則は video instance にも verbatim 適用された — 子スコープ terminal 基礎（video 子は Dedicated 固定のため実効上 per-instance 帰着）・inert・post-`Shutdown` non-event・`InstanceFailed` exactly-once fan-out は `VideoL1Instance`/`InstKind::Video` でも同じ機構が担う。帰属可能な per-instance 収束の video 側相当は **`Rendered.output` の semantic violation**（config dims/format 不一致・非 canonical・`out_bytes` 超過）のみ — video の `Err` reply は `HostError` が読めるため mirror を変えない規則と対になる（audio doorbell の opaque `Err`→`mark_failed` 収束とは意図的 divergence — `docs/designs/issue-118-video-l1.md`）
 
 ## Verification
 

@@ -242,7 +242,7 @@ approved plan `docs/plans/implement-issue-117-bundle-child-process.md`（PLAN-03
 
 ## Follow-ups
 
-- Issue #118 — video/NONRT データ面・`wire::shm` 第 2 レイアウト（out of scope 確定の追跡先）。
+- Issue #118 — video/NONRT データ面・`wire::shm` 第 2 レイアウト（out of scope 確定の追跡先）。**re-engagement 注記（#118 着地後 — 差分記録）**: Issue #118 で video L1 経路が実装され、本 IR が記録した v2 機構の上に video 面が additive に追加された — `WIRE_VERSION` 2→3（video `Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10 `InvalidValue`）、`VideoHostCommand`/`VideoHostReply`/`PluginHost::video()`/`VideoPluginHost`/`VideoOutOfProcessSpec`（Dedicated 固定）、`Route::OutOfProcessVideo`/`Slot::OutOfProcessVideo`/`InstKind::Video`、`run_video`/`VideoRunner`/`VideoEntry`、per-instance `wire::vshm`（audio `shm` とは別定盤）。audio 経路は tag 0-11/0-3・envelope・scope 判定表・pool/`Failed` 機構とも不変 — 本 IR の AC 写像は引き続き v3 下で成立する（`Failed` 粒度・`InstanceFailed` exactly-once は video にも同機構で適用 — `docs/adr/issue-117-bundle-child-failed-granularity.md` の re-engagement 注記参照）。
 - Issue #120 — 共有リーパー/io 多重化（bundle 後の子単位 I/O スレッド集約先）。
 - Issue #122 — platform/process/ipc 共通クレート抽出評価（#117 着地を前提とした延期の再評価）。
 - Issue #123 — `runner_program()` 解決・frame-I/O dedup 残件。

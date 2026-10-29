@@ -47,13 +47,13 @@ Ruviform ワークスペースのメンバークレート索引（計21クレー
 | [`ruviform-plugin-ofx`](ruviform-plugin-ofx/README.md) | OpenFX Image Effect ホストアダプタ（実 foreign ABI・NONRT L0） |
 | [`ruviform-plugin-clap`](ruviform-plugin-clap/README.md) | CLAP 薄アダプタ + feature `host` で規格 host-side bridge・L1 runner bin（Issue #114・opt-in lane `mise run test-l1-real-plugin`） |
 | [`ruviform-plugin-vst3`](ruviform-plugin-vst3/README.md) | VST3 アダプタ（ABI-only）+ feature `host` で規格 host-side bridge・L1 runner bin（Issue #114・opt-in lane `mise run test-l1-real-plugin`） |
-| [`ruviform-plugin-export`](ruviform-plugin-export/README.md) | プラグイン側 L1 薄ランナー（子プロセスエントリ `run(factories)` + 参照 runner bin `ruviform-plugin-l1-runner`） |
+| [`ruviform-plugin-export`](ruviform-plugin-export/README.md) | プラグイン側 L1 薄ランナー（子プロセスエントリ `run(factories)`/`run_video(factories)` + 参照 runner bin `ruviform-plugin-l1-runner`/`-l1-video-runner`） |
 
 ## Host 層
 
 | クレート | 責務 |
 | --- | --- |
-| [`ruviform-plugin-host`](ruviform-plugin-host/README.md) | 規格中立プラグインホスト境界（L0 インプロセス + L1 アウトプロセス — `PluginHost` コンポジットが登録時ルーティング） |
+| [`ruviform-plugin-host`](ruviform-plugin-host/README.md) | 規格中立プラグインホスト境界（L0 インプロセス + L1 アウトプロセス — `PluginHost` コンポジットが登録時ルーティング・`PluginHost::video()` が NONRT video L1 別面を貸す — Issue #118） |
 
 ## Engines
 

@@ -881,7 +881,7 @@ fn bundled_pair(child: &Arc<L1Child>, spawn_spec: &SpawnSpec) -> (L1Instance, L1
 #[test]
 fn bundled_child_hosts_independent_instances() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
     let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
     // One child, two wire handles — the lowest-free mint.
     assert_eq!(a.test_wire_instance(), 0);
@@ -1002,7 +1002,7 @@ fn bundled_child_hosts_independent_instances() {
 #[test]
 fn bundled_failed_instance_destroy_recovers_handle() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
     let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
 
     // Fail `a` alone — the attributable instance-scope violation
@@ -1060,7 +1060,7 @@ fn bundled_failed_instance_destroy_recovers_handle() {
 #[test]
 fn bundled_last_facade_teardown_keeps_siblings_alive() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
     let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
     a.execute(wire::Command::Initialize).unwrap();
     b.execute(wire::Command::Initialize).unwrap();
@@ -1107,7 +1107,7 @@ fn bundled_last_facade_teardown_keeps_siblings_alive() {
 #[test]
 fn bundled_mid_destroy_death_keeps_notification() {
     let spawn_spec = spec(&["--crash-after-msgs=4"]);
-    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
     let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
 
     // `DestroyInstance` is the crashing message — the request
@@ -1139,7 +1139,7 @@ fn bundled_mid_destroy_death_keeps_notification() {
 fn bundled_create_past_capacity_is_instance_limit() {
     let spawn_spec = spec(&[]);
     let depth = spawn_spec.instance_depth().unwrap();
-    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
     let mut parts = Vec::new();
     for _ in 0..wire::WIRE_MAX_INSTANCES {
         parts.push(child.create_instance(&spawn_spec, depth).unwrap());
@@ -1405,7 +1405,7 @@ fn rt_l1_result_leg_try_ops() {
 #[test]
 fn rt_l1_bundled_process_no_alloc() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
     let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
     for instance in [&mut a, &mut b] {
         instance.execute(wire::Command::Initialize).unwrap();
@@ -2882,7 +2882,7 @@ mod composite_e2e {
         // mints a co-resident pair and serves (the `bundled_pair`
         // idiom).
         let spawn_spec = spec(&[]);
-        let child = L1Child::spawn_scanned(&spawn_spec).unwrap();
+        let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
         let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
         a.execute(wire::Command::Initialize).unwrap();
         assert_eq!(b.lifecycle_state(), LifecycleState::Created);

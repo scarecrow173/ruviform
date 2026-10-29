@@ -4,7 +4,7 @@ type: "spec"
 status: "implemented"
 title: "Issue #119 L1 wire バージョン方針（単一最新バージョン・交渉機構なし）"
 created: "2026-10-27"
-updated: "2026-10-28"
+updated: "2026-10-29"
 owners: []
 relations:
   source:
@@ -57,6 +57,11 @@ relations:
     - "../plans/implement-issue-117-bundle-child-process.md"
     - "../tasks/l1-wire-v2-codec-cutover.md"
     - "../test-specs/issue-117-wire-v2-codec-tests.md"
+    - "issue-118-video-l1.md"
+    - "../designs/issue-118-video-l1.md"
+    - "../adr/issue-118-video-l1-create-path-segment.md"
+    - "../plans/implement-issue-118-video-l1.md"
+    - "../tasks/l1-wire-v3-video-codec.md"
   verifies: []
   verified-by:
     - "../test-specs/plugin-l1-wire-codec-tests.md"
@@ -87,6 +92,8 @@ Issue #119 は新しいプロトコル機構の実装ではなく、**既に実�
 - `Hello.capabilities` は予約領域のまま非ゼロ `Malformed` 拒否を維持 — capability bit の割当はそれ自体がプロトコル変更であり現時点では行わない。
 - `WIRE_MAX_*` は安全上限として維持 — 変更時は送受信受理範囲・SHM 容量・既存拒否動作への影響をレビューし、相互運用を壊す変更は bump 対象とする。上限交渉機構は設けない。
 - 複数バージョン対応は、独立配布されるホスト/ランナー間の互換が必要になった段階でのみ再検討する。
+
+**re-engagement 注記（Issue #118 — 本方針の 2 度目の適用例）**: Issue #118 の video L1 で `WIRE_VERSION` が **2 → 3** へ着地した — video `Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10 `InvalidValue`・video 型 codec・`WIRE_VIDEO_MAX_*`・`wire::vshm` 定盤の additive 追加を非互換 bump として扱い、ホスト/ランナーは同一版で更新された（`Hello.version` 厳密一致・`capabilities` reserved・shm/vshm header `wire_version` 検証は video verb 系統・video segment にも同じ規則で適用）。audio tag/envelope/scope 規則は不変 — 「最新の単一バージョンのみ」方針どおり v2 の decode は残っていない。
 
 ## Why Now
 

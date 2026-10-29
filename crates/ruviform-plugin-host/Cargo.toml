@@ -14,20 +14,40 @@ publish.workspace = true
 # A.2 allowed layers; it was already a transitive dep via plugin-core, so
 # the dependency tree is unchanged.
 ruviform-audio-core = { path = "../ruviform-audio-core" }
+# Promoted from dev-dependency for Issue #118 (same path as the #113
+# promotion): `video.rs` names `MediaTime` on the public `Render{at}` verb
+# and `l1/video.rs` builds `VideoFrame` timestamps from it.
+ruviform-media-core = { path = "../ruviform-media-core" }
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 ruviform-rt = { path = "../ruviform-rt" }
+# Issue #118 video host surface: `VideoFrame` appears on the public
+# `VideoHostCommand::Render{input}`/`VideoHostReply::Rendered` vocabulary
+# and `l1/video.rs` repacks/restores planes through it. Domain-foundations
+# crate — already a transitive dep via plugin-core.
+ruviform-video-core = { path = "../ruviform-video-core" }
 # L1 named shared-memory segment (design「依存追加の判断」— MIT OR
 # Apache-2.0, small dependency tree, Windows+POSIX named objects). Confined
-# to the internal `l1::shm` module — never exposed on the public API or
-# feature names. Note: 0.12.4's `as_slice`/`as_slice_mut` are `unsafe fn`
-# (the design recorded them as safe); the only scoped `#[expect(unsafe_code)]`
-# call sites live in `l1::shm` and the `l1-test-worker` bin (the child-side
-# attach mirrors the same segment protocol), each with SAFETY comments.
+# to the internal `l1::shm`/`l1::vshm` modules — never exposed on the public
+# API or feature names. Note: 0.12.4's `as_slice`/`as_slice_mut` are
+# `unsafe fn` (the design recorded them as safe); the only scoped
+# `#[expect(unsafe_code)]` call sites live in `l1::shm`, `l1::vshm` (Issue
+# #118 video segment) and the `l1-test-worker` bin (the child-side attach
+# mirrors the same segment protocol), each with SAFETY comments.
 shared_memory = "0.12"
 
 [[bin]]
 name = "l1-test-worker"
 path = "src/bin/l1-test-worker.rs"
+
+# Issue #118 (T4): the hand-rolled wire-faithful video child fixture
+# for `tests/l1_video_e2e.rs`. Deliberately not `run_video` — the E2E
+# needs wire-level fault injection (noncanonical `Rendered.output`,
+# crash/hang/over-limit argv matrix) the runner's erased surface
+# cannot produce. Depends only on the core wire/video/shared-memory
+# layers — no `ruviform-plugin-export` edge is introduced.
+[[bin]]
+name = "l1-test-video-worker"
+path = "src/bin/l1-test-video-worker.rs"
 
 [dev-dependencies]
 assert_no_alloc = "1.1"
@@ -36,7 +56,6 @@ assert_no_alloc = "1.1"
 # side only — the engine never gains a plugin dependency (AC3; the
 # dev-dep direction keeps the dependency DAG acyclic).
 ruviform-audio = { path = "../ruviform-audio" }
-ruviform-media-core = { path = "../ruviform-media-core" }
 # Issue #113 Send evidence: `docs/test-specs/plugin-endpoint-contract-tests.md`
 # pins `assert_not_impl_any!` for the `!Send` negative side (`Rc`/`RefCell`/
 # `Box<dyn ErasedPlugin>`/`L1Instance`/`PluginHost`) that an `expect_send`

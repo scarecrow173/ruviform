@@ -1,0 +1,29 @@
+   Compiling ruviform-plugin-host v0.1.0 (F:\repositry\ruviform-wt-118\crates\ruviform-plugin-host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.46s
+     Running tests\l1_supervisor_e2e.rs (target\debug\deps\l1_supervisor_e2e-f0b5566c552e9e66.exe)
+
+running 22 tests
+test inert_policy_rejected ... ok
+test lingering_residue_external_destroy_clears ... ok
+test plain_host_reports_failed_no_autorestart ... ok
+test lingering_residue_unwatch_returns_handle ... ok
+test activate_over_limit_attempt_fails_prepare ... ok
+test checkpoint_unsupported_skips_without_attempt ... ok
+test adopt_failed_handle_recovers ... ok
+test checkpoint_applied_roundtrips_state ... ok
+test gaveup_lingering_late_death_reemits ... ok
+test restarted_bundled_reaches_each_recipe_state ... ok
+test lingering_residue_retry_destroy_clears ... ok
+test fail_initialize_attempt_cleans_created ... ok
+test zero_max_attempts_adopt_gives_up_immediately ... ok
+test fail_start_processing_attempt_unwinds_activated ... ok
+test restarted_dedicated_replays_recipe_and_rewires ... ok
+test rt_l1_supervised_process_no_alloc ... ok
+test bundle_burst_cap_defers_and_unsupervised ... ok
+test checkpoint_pluginfailed_burns_attempts_to_gaveup ... ok
+test crash_loop_bounded_gaveup ... ok
+test wrong_host_rejected_without_drain ... ok
+test mid_create_death_attempt_failed_without_mint ... ok
+test stable_window_crash_starts_fresh_episode ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.01s

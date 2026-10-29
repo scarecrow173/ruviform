@@ -27,6 +27,7 @@ Directory: `docs/specs`
 | SPEC-034MHDt79C7KINncq66sE3 | L1 規格アダプタの子プロセス組込み・実プラグイン E2E（CLAP/VST3） | implemented | [issue-114-real-adapter-l1-e2e.md](./issue-114-real-adapter-l1-e2e.md) |
 | SPEC-034NMZAKKGWufQ5vWwZNYe | Issue #116 L1 自動再起動・supervisor ポリシー | implemented | [issue-116-supervisor.md](./issue-116-supervisor.md) |
 | SPEC-034NiVkp0Q1fpkaBoUGNY0 | Issue #117 L1 bundle 子プロセス（1 子プロセス N インスタンス） | implemented | [issue-117-bundle-child-process.md](./issue-117-bundle-child-process.md) |
+| SPEC-034NV8AWA7qua5MfPc7q6i | Issue #118 video/NONRT プラグインの L1 経路 | implemented | [issue-118-video-l1.md](./issue-118-video-l1.md) |
 | SPEC-034NhJTrJ1kCCldVF5XZKB | Issue #119 L1 wire バージョン方針（単一最新バージョン・交渉機構なし） | implemented | [issue-119-l1-wire-version-policy.md](./issue-119-l1-wire-version-policy.md) |
 | SPEC-034N3QmyfzJRPM3AVpKQTn | Issue #124 OFX フォローアップ（catalog_open cross-window h 露出修正 + instance clip props clone） | approved | [issue-124-ofx-cross-window-h-exposure.md](./issue-124-ofx-cross-window-h-exposure.md) |
 | SPEC-034N3OBemoWwFEpqzWlf7r | Issue #125 ICC LUT fixture coverage（intent 区別 pair + mft1/mft2/mAB 経路） | implemented | [issue-125-icc-lut-fixture-coverage.md](./issue-125-icc-lut-fixture-coverage.md) |

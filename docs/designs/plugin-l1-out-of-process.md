@@ -63,6 +63,10 @@ relations:
     - "docs/specs/issue-116-supervisor.md"
     - "docs/designs/issue-116-supervisor.md"
     - "docs/adr/issue-116-supervisor-placement.md"
+    - "docs/discovery/issue-118-video-l1.md"
+    - "docs/specs/issue-118-video-l1.md"
+    - "docs/designs/issue-118-video-l1.md"
+    - "docs/adr/issue-118-video-l1-create-path-segment.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -76,6 +80,7 @@ relations:
     - "docs/designs/issue-117-bundle-child-process.md"
     - "docs/specs/issue-116-supervisor.md"
     - "docs/designs/issue-116-supervisor.md"
+    - "docs/designs/issue-118-video-l1.md"
   deferred-by: []
 ---
 
@@ -116,7 +121,7 @@ Issue #76 — #74（L0・CLOSED）で確定したハンドル + 直列化コマ�
 
 ### 子プロセスモデル
 
-**1 子プロセス = N プラグインインスタンス**（Issue #117 wire v2 で確定・実装済み）。`OutOfProcessSpec::isolation` が形態を選ぶ: `Bundled`（既定）は route の pool が共有子へ最大 `WIRE_MAX_INSTANCES`（64）個のインスタンスを詰め、`Dedicated` は `Instantiate` 毎の専用 spawn（capacity-1 経路 — 従来の per-instance spawn 形で強隔離 opt-in）。子の死亡は同居する**全** live インスタンスの `Failed`（通知は影響各インスタンスへ 1 つずつ）— `Failed` 粒度契約の正本は `docs/adr/issue-117-bundle-child-failed-granularity.md`。runner が複数 factory を内蔵する場合は `CreateInstance` payload の `plugin_id` で選択する（v1 の argv `--ruviform-plugin-id` は wire v2 で廃止）。
+**1 子プロセス = N プラグインインスタンス**（Issue #117 wire v2 で確定・実装済み）。`OutOfProcessSpec::isolation` が形態を選ぶ: `Bundled`（既定）は route の pool が共有子へ最大 `WIRE_MAX_INSTANCES`（64）個のインスタンスを詰め、`Dedicated` は `Instantiate` 毎の専用 spawn（capacity-1 経路 — 従来の per-instance spawn 形で強隔離 opt-in）。子の死亡は同居する**全** live インスタンスの `Failed`（通知は影響各インスタンスへ 1 つずつ）— `Failed` 粒度契約の正本は `docs/adr/issue-117-bundle-child-failed-granularity.md`。runner が複数 factory を内蔵する場合は `CreateInstance` payload の `plugin_id` で選択する（v1 の argv `--ruviform-plugin-id` は wire v2 で廃止）。**但書（Issue #118）**: video route は `VideoOutOfProcessSpec` の構造 pin で **Dedicated 固定**（pool なし — video instance は 1 `Instantiate` = 1 専用子、video registry/dispatch は `CreateVideoInstance` が担う）。bundled pool 記述は audio route のモデル。
 
 ### スレッド構成（per L1 子プロセス = 子プロセス 1 + スレッド 2 — N インスタンスで共有）
 
@@ -145,7 +150,7 @@ RT caller <──staging out[seq%D]──try_pop─────── result ch 
 
 ワイヤ型・codec は plugin-core の `wire` モジュールに単一定義する — discovery 案 (iii)「双方個別定義」は同一プロトコルの実装二重化で相互運用不良の温床となり、規約（同一責務の authoritative 実装は一箇所）に反するため棄却。core は codec を**手書きリトルエンディアン**とし serde 系を持ち込まない（serde を core に入れると全 adapter の依存木に流れる）。
 
-フレーム: `[u32 LE payload_len][u8 kind][payload]`。バージョンは `Hello` のみが運ぶ（`WIRE_VERSION = 2` — Issue #117 の `instance` envelope 化・新動詞で bump。不一致は handshake 失敗として kill + `HostError::Ipc`）。
+フレーム: `[u32 LE payload_len][u8 kind][payload]`。バージョンは `Hello` のみが運ぶ（`WIRE_VERSION = 3` — Issue #117 の `instance` envelope 化・新動詞で 2 へ、Issue #118 の video 動詞（`Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10 `InvalidValue`）で 3 へ bump — audio tag/envelope/scope 規則は不変。不一致は handshake 失敗として kill + `HostError::Ipc`）。
 
 | メッセージ | 方向 | 内容 |
 | --- | --- | --- |
@@ -187,8 +192,9 @@ pub struct Descriptor {                 // PluginDescriptor の所有 wire 形
 
 - **語彙写像**: `HostCommand::Instantiate` ↔ spawn + handshake（`Hello`→`Scan`→`Scanned` 照合）+ `CreateInstance`、`Destroy` ↔ `DestroyInstance`（+ 子の live=0 で `Shutdown` + reap）。残り 10 動詞は `wire::Command` に 1:1 で写し、handle は envelope `instance` が担う — **Issue #117 で `WIRE_VERSION` 2 の `instance` envelope + `CreateInstance`/`DestroyInstance` として確定・実装済み**（`docs/designs/issue-117-bundle-child-process.md`）。
 - **`PluginDescriptor` の `&'static` 問題**: 公開 `HostReply::Scanned(Vec<PluginDescriptor>)` は L1 ルートでも **registration 供給の 'static 値**を返す（下記 `OutOfProcessSpec.descriptor`）。child は `Hello` 後の `Scan` 応答で内蔵 descriptor を `wire::Descriptor` として報告し、proxy が spec の descriptor とフィールド等価で照合する（不一致 → kill + `HostError::Ipc`）。**所有文字列→`&'static` への変換は設計上発生せず、`Box::leak` は使わない**。
-- handshake: spawn → argv `<runner>` + `spec.args`（wire v2 — `--ruviform-plugin-id`/`--ruviform-shm-key` は `CreateInstance` payload へ移転・任意引数は usage reject）→ 子 `Hello` → 親 `Scan`（child-scope・envelope `instance = WIRE_INSTANCE_NONE`）→ 子 `Scanned`（照合）→ `CreateInstance{i, plugin_id, shm_key, in_depth, out_depth}` → `Reply::Ok` で `Instantiated{handle}`。いずれか失敗・タイムアウト（`command_timeout`）で `Err(HostError::Ipc)` — fresh spawn は kill/reap（bundled pool 経由の `CreateInstance` 失敗は対象 instance のみ rollback・同居 sibling は生存）。
+- handshake: spawn → argv `<runner>` + `spec.args`（wire v2 で確立・v3 でも不変 — `--ruviform-plugin-id`/`--ruviform-shm-key` は `CreateInstance` payload へ移転・任意引数は usage reject）→ 子 `Hello` → 親 `Scan`（child-scope・envelope `instance = WIRE_INSTANCE_NONE`）→ 子 `Scanned`（照合）→ `CreateInstance{i, plugin_id, shm_key, in_depth, out_depth}` → `Reply::Ok` で `Instantiated{handle}`。いずれか失敗・タイムアウト（`command_timeout`）で `Err(HostError::Ipc)` — fresh spawn は kill/reap（bundled pool 経由の `CreateInstance` 失敗は対象 instance のみ rollback・同居 sibling は生存）。
 - データ型写像: `ProcessConfig`/`ProcessResult`/`GuiHandle`/`GuiParentToken`/`HostError` は core 共有型を codec が直接 encode/decode。`TransportInfo`/`Event`/`EventList`/`MediaTime` 系は **repr 固定の wire レイアウト**（accessor 経由で encode、ctor で decode — `repr(Rust)` の memcpy 横断はしない）。
+- **wire v3（Issue #118 で確定・実装済み — 正本 `docs/designs/issue-118-video-l1.md`）**: `Command` に video 動詞 tag 12-22（`CreateVideoInstance`/`VideoInitialize`/`VideoActivate`/`VideoStartProcessing`/`VideoRender`/`VideoStopProcessing`/`VideoDeactivate`/`VideoGetParams`/`VideoGetParamInfo`/`VideoGetParamValue`/`VideoSetParamValue`）・`Reply` に tag 4-7（`Rendered`/`Params`/`ParamInfo`/`ParamValue`）・`HostError` に tag 10 `InvalidValue` が additive 追加 — audio tag 0-11/0-3・envelope `{seq,instance}`・scope 判定表（`Scan` のみ child-scope `WIRE_INSTANCE_NONE`）・`Hello.capabilities` reserved・`WIRE_MAX_*` 上限は不変（#119 additive bump 規則と整合）。video instance は doorbell を持たない — `VideoRender` が frame descriptor（`VideoFrameDesc`）をコマンド内に運ぶ message-driven request→reply で、frame bytes は per-instance の **`wire::vshm` segment**（audio `wire::shm` とは別レイアウト・別マジック `"RVLV"` — header の `wire_version` 厳密一致規則は同じ）が運ぶ。video 型 codec（`VideoProcessConfig`/`VideoFrameDesc`/`ColorInfo`/`PlainParamInfoOwned` 等）と `WIRE_VIDEO_MAX_*` 上限も同 v3 で追加。
 
 **ワイヤバージョン方針（Issue #119 で確定 — 初期開発期の単一バージョンポリシー）**:
 
@@ -218,6 +224,8 @@ pub fn run(factories: Vec<Box<dyn PluginFactory>>) -> std::process::ExitCode;
 ```
 
 責務: `Hello` 送信 → シングルスレッドのメッセージループ（stdin フレーム読取り → `wire::Command{seq, instance, cmd}` を instance で解決 — `Scan` → factory 列挙・`CreateInstance` → 検証 chain（plugin id → capacity → dup → shm attach + header 検証）後に `instances` registry へ insert・`DestroyInstance` → 撤去・他動詞 → `instances[instance]` の `ErasedPlugin` へ dispatch（未登録 handle → flagged `Err(InvalidHandle)` reply・子は継続）。`BlockIn{instance, seq}` → その entry の `Lifecycle` が `Processing` を確認後 `process_host` を shm スロット上の `BufferView`/`BufferViewMut` adapter 経由で呼出し → `BlockDone`）→ `Shutdown`/stdin EOF で全 entry の lifecycle 正規化して終了。runner は panic を catch して `HostError::PluginFailed` に変換（プラグインパニックで子を殺さない — ホスト検出手段と区別するため）。shm 上の in/out スロットは固定レイアウトの planar `f32` — core の `BufferView`/`BufferViewMut` を実装する軽量 view で wrap する（runner 内 unsafe なし）。factory 選択は `CreateInstance` の `plugin_id` のみ（host は `Scanned` を descriptor 全体で field-match するが payload が運ぶのは id のみ）— 同一 id の factory を 1 binary に 2 つ内蔵するのは authoring error。
+
+**video runner（Issue #118 で追加 — 正本 `docs/designs/issue-118-video-l1.md`）**: 上記 `run`/`serve`/`Runner`/`InstanceEntry` は **audio 限定**のまま — video は同クレート内の別立て面 `run_video(Vec<Box<dyn VideoPluginFactory>>)`/`VideoRunner`/`VideoEntry` が担う。framed pipe・`Hello`/`Scan`/`Shutdown` handshake・argv 拒否・exit 規約・panic 正規化・teardown は `run` と verbatim で共有し、差分は動詞系統（`CreateVideoInstance` + video tag 12-22）と doorbell データ面の不在のみ — video 子は `BlockIn`/`BlockDone` を持たず、inbound `BlockIn` は direction-legal な foreign traffic として静かに drop する（`BlockDone`/`Hello`/`Reply` の inbound は従来どおり direction-illegal で exit 1）。`CreateVideoInstance` payload の `VideoProcessConfig` は registry entry が stash し `VideoInitialize` で `ErasedVideoPlugin::initialize` へ replay する。video データ面は per-instance の `vshm` segment（`wire::vshm` 定盤 — audio `shm` とは別モジュール・別レイアウト）で、`shared_memory` は `shm`/`vshm` 両内部モジュールに閉じ込める。参照 bin は `src/bin/ruviform-plugin-l1-video-runner.rs`。
 
 ## 公開面（plugin-host 追加）
 
@@ -255,6 +263,7 @@ pub struct ChildExit { pub code: Option<i32>, pub signal: Option<i32> } // signa
 
 - **選択面の形**: 共通 trait・enum dispatch・並存具象の 3 案のうち、**コンポジット + 登録時ルーティング**を採る。呼出し側のコマンド系列は L0 と完全に同一で、層の選択は登録（管理操作）時のみに局所化される。`Instantiate{plugin_id}` の形を変えないため呼出し側変更ゼロ — spec の「呼出し側は層を意識しない」に最も忠実。`PluginHost` は plugin_id → ルート表を持ち、スロット表が `PluginHandle` を `(L0 inner handle | L1 instance)` に写す（ハンドル空間は統一・generation 規則は L0 と同一）。同一 plugin_id の L0/L1 重複登録は `Err(HostError::DuplicatePluginId)` で defined rejection。
 - `InProcessHost` は公開のまま無変更 — 純 L0 利用者は従来どおり使う（`PluginHost` 内部の L0 ルートにもそのまま使う）。
+- **video arm（Issue #118 で追加 — 正本 `docs/designs/issue-118-video-l1.md`・`docs/adr/issue-118-video-l1-host-surface.md`）**: 上記の選択面・スロットモデルに video 経路が生えた — `PluginHost::video() -> VideoPluginHost<'_>` の `&mut` 借用 façade が別コマンド面 `VideoHostCommand`/`VideoHostReply`（`#[non_exhaustive]`）を担い、`video().register_out_of_process(VideoOutOfProcessSpec)` が `Route::OutOfProcessVideo`/`Slot::OutOfProcessVideo` を登録・生成する。`VideoOutOfProcessSpec` は `isolation`/`lookahead_blocks` 字段を持たない構造 pin（Dedicated 固定・pool なし — video instance は `Instantiate` 毎の専用子）。`plugin_id` は audio/video で単一名前空間のまま、`DescriptorEntry` の kind-tag が `Scan` の kind filter を担う（cross-kind `Instantiate` → `Err(UnknownPluginId)`・登録衝突 → `Err(DuplicatePluginId)`・cross-kind 動詞 → `Err(Unsupported)`）。`InstShared` は `InstKind::{Audio, Video}` へ分離（video entry は staging/RT leg/shm を持たず host 所有 `vshm` segment が frame 輸送）、`request` の `Creating` ゲートは `CreateVideoInstance` も受理し、reply wait は `request_timed` へ一般化（audio は `command_timeout` 既定のまま・video `Render` のみ `render_timeout` 既定 60 s）。`PluginHost::process`/`prepare_endpoint`/`plugin_mut`/`latency_frames` への video handle は `Err(Unsupported)`/`Err(EndpointUnavailable)`/`None`/`None` の defined 答え。
 
 ## エラー・拒否面（定義済み拒否の一覧）
 
@@ -295,6 +304,8 @@ pub struct ChildExit { pub code: Option<i32>, pub signal: Option<i32> } // signa
 | 層 | fixture | 検証 |
 | --- | --- | --- |
 | `ruviform-plugin-export` tests | `src/bin/ruviform-plugin-l1-runner`（`CARGO_BIN_EXE_*`）— 参照 runner。内蔵モック `GainPlugin`（core `Plugin` 実装・state 往復・param event 反映） | 実プロセス spawn → `Hello` → `Scan`/lifecycle コマンド往復 → shm ブロック処理（gain 正当性）→ `Shutdown` で exit(0) を test 側の最小 host 実装で確認 |
+| `ruviform-plugin-export` tests（video — Issue #118） | `src/bin/ruviform-plugin-l1-video-runner`（`CARGO_BIN_EXE_*`）— video 参照 runner。`InvertVideo`/`PanicVideo`/`OverLimitVideo`/`OverLimitInfoVideo` の 4 fixture | `Hello` → `Scan` → `CreateVideoInstance` → video lifecycle → `VideoRender`（vshm frame 正当性・stash/replay）→ `Shutdown` exit(0) を `tests/l1_video_runner_e2e.rs` で確認 |
+| `ruviform-plugin-host` tests（video — Issue #118） | `src/bin/l1-test-video-worker`（`CARGO_BIN_EXE_*`）— hand-rolled wire v3 最小 video worker（`run_video` と別物 — wire-level fault 注入用） | `tests/l1_video_e2e.rs`（33 tests — spawn/handshake/lifecycle/render/param・`Failed`/notification parity・cross-kind defined 応答） |
 | `ruviform-plugin-host` tests | `src/bin/l1-test-worker`（`CARGO_BIN_EXE_*`）— wire 適合の最小 worker。`--crash-after-msgs=N`/`--hang-after-msgs=N` で確定的異常系 | proxy E2E: scan→instantiate→lifecycle→state→process 経路・`kill`/クラッシュ→`Failed`+通知+以後拒否・pass-through・違法遷移の `Lifecycle` エラー意味一致 |
 | 単体 | codec 往復・wire↔public 写像・スロット index 計算・`Failed` 遷移表・重複登録拒否・descriptor 不一致 kill | crate 内 test |
 | RT レーン | `rt_` 命名テスト（host tests）: `rt_l1_process_path_no_alloc`（assert_no_alloc 窓で `process` try 経路 0 alloc）・`rt_l1_result_leg_try_ops` | `mise run test-rt` で選択 |
@@ -306,11 +317,11 @@ spawn 引数の受け渡し・`CARGO_BIN_EXE_*` の利用は各 crate 内に閉�
 - L1 GUI（プロセス境界越しの親ウィンドウ埋め込み）| 規格・プラットフォーム固有の大課題・本 Issue 範囲外 | L1 インスタンスへの GUI 要求 | `Unsupported` 拒否のままでは GUI 持ちプラグインが L1 で使えない
 - 自動再起動・supervisor ポリシー | Issue #116 で設計・ADR 策定 — `ruviform-plugin-host` 内 opt-in util 層（`Supervisor`・`PluginHost` 公開 API のみ・caller 駆動 `poll`・bounded exponential retry・core 無変更で AC4 維持 — design `docs/designs/issue-116-supervisor.md`・ADR `docs/adr/issue-116-supervisor-placement.md`、ともに draft/proposed で approval 後に確定へ更新） | route 単位 watch・pull 型 checkpoint・`rebind` API・`lifecycle_state` 走査検出等の残件は同 design の Deferred 表 | —
 - 規格アダプタ（clap/vst3/ofx）の子プロセス組込み・実プラグイン L1 E2E | runner 形態の前提が本書で確定・別 Issue 級の配線 | 実プラグインでの L1 需要 | 検証がモック範囲に留まる
-- bundle 子（1 子 N インスタンス）| Issue #117 で設計確定 — wire v2（envelope `instance`・`CreateInstance`/`DestroyInstance`・`WIRE_MAX_INSTANCES=64`）+ route 単位 pool + 子スコープ基礎の `Failed` 粒度（design `docs/designs/issue-117-bundle-child-process.md`・ADR `docs/adr/issue-117-bundle-child-failed-granularity.md`） | 明示 pool キー・pool keep-alive・`BundleFailed` 相関通知等の残件は同 design の Deferred 表 | —
+- bundle 子（1 子 N インスタンス）| Issue #117 で設計確定 — wire v2（envelope `instance`・`CreateInstance`/`DestroyInstance`・`WIRE_MAX_INSTANCES=64`）+ route 単位 pool + 子スコープ基礎の `Failed` 粒度（design `docs/designs/issue-117-bundle-child-process.md`・ADR `docs/adr/issue-117-bundle-child-failed-granularity.md`）— **但書: 共有 wire 世代は #118 で v3 へ着地済み**（audio bundle 規則は不変・video は Dedicated 固定のため本表の pool 記述は audio route のみに適用） | 明示 pool キー・pool keep-alive・`BundleFailed` 相関通知等の残件は同 design の Deferred 表 | —
 - エンジン/利用側への L1 配線 | plugin-host の engine 消費自体が未実装 | engine プラグイン統合 Issue | L1 が consumer から到達不能
 - 複数 wire バージョン共存・交渉機構 | Issue #119 で単一最新バージョン方針を確定（交渉機構・互換レイヤーなし・bump 判断基準は上記「ワイヤバージョン方針」に記録） | 独立配布されるホスト/ランナー間のバージョン互換が要求される段階 | 独立配布形態で新旧バージョンの混在が扱えない
 - stderr ログ配管 | inherit で運用可能・診断価値は副次的 | 子プロセスのログ解析要求 | クラッシュ時の手がかりが stderr 依存
-- video/NONRT プラグインの L1 経路 | 本 Issue は audio `process` 経路のみ | NONRT video port の分離要求 | video plugin は L1 不可
+- video/NONRT プラグインの L1 経路 | ~~本 Issue は audio `process` 経路のみ~~ **trigger 消費済み — Issue #118 で再エンゲージ・実装着地**: video 専用 wire（`Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10）・`wire::vshm` segment・`run_video`/`VideoRunner` runner・`PluginHost::video()`/`VideoPluginHost`/`VideoOutOfProcessSpec` host 面・`Route::OutOfProcessVideo`/`Slot::OutOfProcessVideo` が確立（正本 `docs/designs/issue-118-video-l1.md`・`docs/specs/issue-118-video-l1.md`・ADR `docs/adr/issue-118-video-l1-host-surface.md`/`issue-118-video-l1-create-path-segment.md`）。audio `process` 経路は本書の記述どおり不変 — video は audio wire を拡張するのでなく別経路として確立された | — | —（残件は同 design の Deferred 表）
 - ドライバの共有リーパー/io 多重化 | **Issue #120 deferred（post-#117 再評価）** — #117 で Bundled 既定により管理単位が per-instance → per-child に移行し「スレッド線形増」の前提は構造解消（2 スレッド/≤64 instance）。reader は既にブロッキング read→EOF で即時検出、`DRIVER_POLL_INTERVAL` は `recv_timeout` hybrid（idle ≈ ≤1-2% core/child）。フル io-mux は 3 バックエンド + Windows named-pipe 再構成 + wedged-kill 契約の非ブロッキング化が必要で現状は不釣合い | 再トリガ: 実測 >16-32 子 / 200µs wake 起因の実測 idle-CPU・電力問題 / #121 stderr 配管導入（3 スレッド目）/ sub-poll 検出や doorbell レイテンシ厳格化の新契約 / 単一 reader スループット上限実測 | スレッド数 = 2×子プロセスのコスト（Dedicated 経路では per-instance に退化）。縮小案: R1 submit wake（std のみ・doorbell 即時化）+ R2 共有プラットフォーム reaper（生 pid FFI）で poll 除去は可能 |
 
 ## Verification Notes
