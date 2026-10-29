@@ -1446,6 +1446,7 @@ dependencies = [
  "ruviform-media-core",
  "ruviform-plugin-core",
  "ruviform-rt",
+ "ruviform-video-core",
  "shared_memory",
  "static_assertions",
 ]

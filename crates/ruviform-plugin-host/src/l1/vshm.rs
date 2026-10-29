@@ -136,7 +136,14 @@ impl Segment {
         // rather than panic inside `header_bytes`.
         let declared_len =
             usize::try_from(vshm::segment_len(frame_bytes)).map_err(|_| CreateFail::Other)?;
-        let in_bytes = u32::try_from(frame_bytes).map_err(|_| CreateFail::Other)?;
+        // `out_off = HEADER_LEN + in_bytes` must still fit `u32`:
+        // values in `(u32::MAX - HEADER_LEN, u32::MAX]` pass the
+        // `try_from` but panic inside `header_bytes` — refuse here.
+        let header_len = u32::try_from(vshm::HEADER_LEN).map_err(|_| CreateFail::Other)?;
+        let in_bytes = u32::try_from(frame_bytes)
+            .ok()
+            .filter(|&value| value <= u32::MAX - header_len)
+            .ok_or(CreateFail::Other)?;
         let mut mem = ShmemConf::new()
             .os_id(key)
             .size(declared_len)

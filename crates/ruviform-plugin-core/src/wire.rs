@@ -733,10 +733,12 @@ pub enum Command {
     /// `VideoPluginInstance::initialize` on
     /// [`Command::VideoInitialize`]. `HostError::UnknownPluginId`
     /// (unscanned id), `HostError::InstanceLimit` (registry full),
-    /// `HostError::Ipc` (vshm attach failure or a duplicate
-    /// `instance` handle), `HostError::InvalidValue` (an over-bound
-    /// `config`) or `HostError::PluginFailed` (factory panic) are
-    /// the defined rejections — the child stays alive on every one.
+    /// `HostError::Ipc` (vshm attach failure, the child's symmetric
+    /// `frame_bytes` bound re-check, or a duplicate `instance`
+    /// handle) or `HostError::PluginFailed` (factory panic) are the
+    /// defined rejections — the child stays alive on every one. An
+    /// over-bound `config` never reaches the wire: the host rejects
+    /// it earlier as `Err(Prepare(UnsupportedConfig))`.
     CreateVideoInstance {
         /// Registered video plugin id (matched against the video
         /// adapter's descriptor `id`).
@@ -762,8 +764,10 @@ pub enum Command {
     /// [`Reply::Rendered`] — wire tag 16. `input` describes the frame
     /// the host packed into the segment's `in` region; the plugin
     /// renders into the `out` region and `Rendered` describes what it
-    /// wrote. `HostError::InvalidValue` when `input`'s dims/format
-    /// disagree with the instance config; `HostError::PluginFailed`
+    /// wrote. A dims/format disagreement with the instance config
+    /// answers `HostError::InvalidValue` host-side (no wire send)
+    /// or `HostError::Prepare(UnsupportedConfig)` when the child
+    /// receives a non-canonical `input`; `HostError::PluginFailed`
     /// on a plugin render error.
     VideoRender {
         /// Presentation timestamp passed verbatim to `render`.
@@ -795,7 +799,10 @@ pub enum Command {
     },
     /// `VideoPluginInstance::set_parameter(id, value)` →
     /// [`Reply::Ok`] — wire tag 22. `HostError::InvalidValue` on an
-    /// unknown `id` or a non-finite [`PlainParamValue::Double`].
+    /// unknown `id`. A non-finite [`PlainParamValue::Double`] is a
+    /// host-side `Err(InvalidValue)` (no wire send); on the wire
+    /// itself it fails `decode_plain_param_value` as `Malformed` —
+    /// a protocol violation, not a reply.
     VideoSetParamValue {
         /// Parameter to write.
         id: u32,

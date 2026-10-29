@@ -68,9 +68,10 @@ pub enum VideoHostCommand {
         /// Processing configuration — format, dims, frame rate.
         config: VideoProcessConfig,
     },
-    /// Destroy the instance and reclaim its runner registry slot →
-    /// [`VideoHostReply::Ok`]. Always defined — live, `Failed` and
-    /// already-destroyed instances all answer `Ok`.
+    /// Terminal transition → [`VideoHostReply::Ok`]; frees the
+    /// instance slot. `Err(Lifecycle)` on `Activated`/`Processing`
+    /// (unwind first); `Err(InvalidHandle)` on an already-freed
+    /// slot.
     Destroy {
         /// Instance handle.
         handle: PluginHandle,
@@ -235,6 +236,10 @@ impl VideoOutOfProcessSpec {
 /// through here while `Destroy`, `lifecycle_state`, `kill_child`
 /// and `try_recv_notification` delegate back to the shared
 /// composite semantics.
+///
+/// `descriptor(handle)` is **v1 未提供** — the audio host has no
+/// per-handle descriptor accessor, so the video surface does not
+/// expose one either; `Scan` is the descriptor source.
 ///
 /// All operations are **non-RT only**.
 #[non_exhaustive]
