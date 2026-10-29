@@ -1617,7 +1617,7 @@ fn overlimit_params_plugin_failed_child_alive() {
 /// `Render` waits on `render_timeout`, not `command_timeout`: the
 /// worker hangs after `StartProcessing` (message 5) so the
 /// `VideoRender` request (message 6) is never answered — the
-/// injected 500 ms render timeout fires `Err(Ipc)` well inside the
+/// injected 2 s render timeout fires `Err(Ipc)` well inside the
 /// default 10 s command timeout, then converges child-scope
 /// `Failed`.
 #[test]
@@ -1641,7 +1641,7 @@ fn render_wedge_uses_render_timeout() {
         ),
         HostError::Ipc,
     );
-    // The 500 ms render timeout fired — never the 10 s default
+    // The 2 s render timeout fired — never the 10 s default
     // command timeout.
     assert!(
         start.elapsed() < Duration::from_secs(8),
@@ -1658,7 +1658,7 @@ fn render_wedge_uses_render_timeout() {
 
 /// `command_timeout` covers every non-`Render` verb: the worker
 /// hangs after `Activate` (message 4) so `StartProcessing`
-/// (message 5) is never answered — the injected 500 ms command
+/// (message 5) is never answered — the injected 2 s command
 /// timeout fires `Err(Ipc)` and converges child-scope `Failed`.
 #[test]
 fn command_wedge_uses_command_timeout() {
