@@ -88,7 +88,13 @@ Ruviform メディア基盤のプラグインホスト層: ホストアプリケ
   `l1::video`/`l1::vshm` が plane を repack/復元。Domain foundations で
   plugin-core 経由の推移依存を直接化するのみ）+ `shared_memory`（L1 named
   共有メモリ — 内部 `l1::shm`・
-  `l1::vshm` モジュールに封じ込め、公開 API・feature 名に露出しない）。
+  `l1::vshm` モジュールに封じ込め、公開 API・feature 名に露出しない）+
+  `ruviform-observability`（Issue #121 追加 — L1 diagnostics のデータ面
+  counter が `Counter`/`CounterReader` pair を消費。Primitives 層）+
+  platform-gated `libc`（unix `poll`）/`windows-sys`（win `PeekNamedPipe`）
+  — Issue #121 の stderr drain が pipe readiness を要し std に等価 API が
+  存在しない。両方とも `l1::diag` 内の局所 `#[expect(unsafe_code)]` +
+  SAFETY コメントに封じ込め、公開 API・feature 名に露出しない。
   規格固有・binding クレートの型はここに現れない —
   `ruviform-plugin-clap` / `-vst3` が `Plugin`/`PluginFactory` へ適合する。
 - `l1` モジュールは `pub(crate)` — L1 の spawn/handshake・データ面・通知は

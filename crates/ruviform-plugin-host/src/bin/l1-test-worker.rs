@@ -30,6 +30,8 @@
 //! | `--state-unsupported` | `RestoreState` replies `Err(HostError::Unsupported)` without committing — a stateless plugin's declaration; evaluated before `--fail-restore` so both flags together deterministically answer `Err(Unsupported)` |
 //! | `--fail-initialize` | `Initialize` replies `Err(HostError::PluginFailed)` without committing — the entry stays `Created` (the real runner's `InitFailed` destination), so `Destroy` stays legal |
 //! | `--fail-start-processing` | `StartProcessing` replies `Err(HostError::PluginFailed)` without committing — the entry stays `Activated` (the real runner's rollback destination), so cleanup unwinds `Deactivate` → `Destroy` |
+//! | `--stderr-bytes=N` | emit `N` stderr bytes at startup, before `Hello` — the drain's pre-handshake capture oracle |
+//! | `--heir-stderr-bytes=N` / `--heir-stderr-delay-ms=M` | heir mode: emit `N` stderr bytes after `M` ms — forwarded into the heir's argv by the parent's `--leave-heir-after-msgs` spawn, exercising the drain's deadline flags |
 //!
 //! Wire v2 retired the `--ruviform-plugin-id`/`--ruviform-shm-key`
 //! bootstrap flags — the `CreateInstance` payload now carries the
@@ -125,6 +127,31 @@ struct Flags {
     /// hook-failure rollback destination), so cleanup unwinds via
     /// `Deactivate`.
     fail_start_processing: bool,
+    /// Emit this many stderr bytes immediately at startup — before
+    /// `Hello` — so the host's drain captures pre-handshake output.
+    stderr_bytes: Option<u64>,
+    /// Heir mode: emit this many stderr bytes after
+    /// `heir_stderr_delay_ms`. The parent's `--leave-heir-after-msgs`
+    /// spawn forwards both `--heir-stderr-*` values into the heir's
+    /// argv — the heir parses the same flag names.
+    heir_stderr_bytes: Option<u64>,
+    /// Heir mode: delay before `heir_stderr_bytes` is emitted.
+    heir_stderr_delay_ms: Option<u64>,
+}
+
+/// Writes `n` bytes to stderr in bounded chunks — the drain-capture
+/// oracle for `--stderr-bytes`/`--heir-stderr-bytes`.
+fn emit_stderr(mut n: u64) {
+    use std::io::Write as _;
+    let chunk = [b'!'; 4096];
+    let mut stderr = io::stderr();
+    while n > 0 {
+        let take = usize::try_from(n).unwrap_or(usize::MAX).min(chunk.len());
+        if stderr.write_all(&chunk[..take]).is_err() {
+            return;
+        }
+        n -= take as u64;
+    }
 }
 
 fn parse_flags() -> Flags {
@@ -142,6 +169,9 @@ fn parse_flags() -> Flags {
         state_unsupported: false,
         fail_initialize: false,
         fail_start_processing: false,
+        stderr_bytes: None,
+        heir_stderr_bytes: None,
+        heir_stderr_delay_ms: None,
     };
     for arg in std::env::args_os().skip(1) {
         let arg = arg.to_string_lossy();
@@ -177,6 +207,12 @@ fn parse_flags() -> Flags {
             flags.fail_initialize = true;
         } else if arg == "--fail-start-processing" {
             flags.fail_start_processing = true;
+        } else if let Some(value) = arg.strip_prefix("--stderr-bytes=") {
+            flags.stderr_bytes = value.parse().ok();
+        } else if let Some(value) = arg.strip_prefix("--heir-stderr-bytes=") {
+            flags.heir_stderr_bytes = value.parse().ok();
+        } else if let Some(value) = arg.strip_prefix("--heir-stderr-delay-ms=") {
+            flags.heir_stderr_delay_ms = value.parse().ok();
         }
     }
     flags
@@ -667,9 +703,21 @@ fn block_in_dispatch(
 #[allow(clippy::too_many_lines)]
 fn main() -> ExitCode {
     let flags = parse_flags();
+    if let Some(n) = flags.stderr_bytes {
+        // Startup stderr — emitted before `Hello` so the host drain
+        // captures pre-handshake output.
+        emit_stderr(n);
+    }
     if let Some(ms) = flags.sleep_ms {
         // Heir mode — a spawned grandchild that just holds the
-        // inherited pipes open, then exits cleanly.
+        // inherited pipes open, then exits cleanly. The optional
+        // delayed stderr write exercises the drain's deadline flags.
+        if let Some(delay) = flags.heir_stderr_delay_ms {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+        }
+        if let Some(n) = flags.heir_stderr_bytes {
+            emit_stderr(n);
+        }
         std::thread::sleep(std::time::Duration::from_millis(ms));
         return ExitCode::SUCCESS;
     }
@@ -722,10 +770,19 @@ fn main() -> ExitCode {
             // (The running heir briefly locks this exe image on
             // Windows — its lifetime stays short so rebuilds are not
             // blocked for long.)
-            let _ =
-                std::process::Command::new(std::env::current_exe().expect("heir needs this exe"))
-                    .arg("--sleep-ms=15000")
-                    .spawn();
+            let mut heir =
+                std::process::Command::new(std::env::current_exe().expect("heir needs this exe"));
+            heir.arg("--sleep-ms=15000");
+            // Forward the heir's own stderr knobs — the heir parses
+            // the same flag names, so without this wiring the parsed
+            // values would never reach it.
+            if let Some(n) = flags.heir_stderr_bytes {
+                heir.arg(format!("--heir-stderr-bytes={n}"));
+            }
+            if let Some(m) = flags.heir_stderr_delay_ms {
+                heir.arg(format!("--heir-stderr-delay-ms={m}"));
+            }
+            let _ = heir.spawn();
             std::process::exit(0);
         }
         let Ok(message) = wire::read_message(&mut stdin, &mut Vec::new()) else {

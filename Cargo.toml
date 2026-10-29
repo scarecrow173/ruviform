@@ -17,6 +17,8 @@ members = [
     "crates/ruviform-math",
     "crates/ruviform-rt",
     "crates/ruviform-exec",
+    # 共有観測プリミティブ（Issue #101 候補・Issue #121 新設 — counter pair・L1 diagnostics が初消費者）
+    "crates/ruviform-observability",
     "crates/ruviform-media-core",
     "crates/ruviform-audio-core",
     "crates/ruviform-video-core",

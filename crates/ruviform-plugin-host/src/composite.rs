@@ -47,12 +47,15 @@ use std::time::Duration;
 use ruviform_audio_core::SampleRate;
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    EventList, LifecycleEvent, LifecycleState, ParamId, PlainParamValue, PluginDescriptor,
-    PrepareError, ProcessResult, TransportInfo, VideoProcessConfig,
+    EventList, FailureCause, LifecycleEvent, LifecycleState, ParamId, PlainParamValue,
+    PluginDescriptor, PrepareError, ProcessResult, TransportInfo, VideoProcessConfig,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L1Endpoint, PluginEndpoint};
-use crate::l1::{ChildExit as L1ChildExit, L1Child, L1Instance, SpawnSpec, VideoL1Instance};
+use crate::l1::diag::{DiagRegistry, DiagnosticQuery, DiagnosticRecord};
+use crate::l1::{
+    AudioCounterReaders, ChildExit as L1ChildExit, L1Child, L1Instance, SpawnSpec, VideoL1Instance,
+};
 use crate::video::{VideoHostCommand, VideoHostReply, VideoOutOfProcessSpec, VideoPluginHost};
 use crate::{
     ErasedPlugin, HostCommand, HostError, HostInput, HostOutput, HostReply, InProcessHost,
@@ -215,13 +218,60 @@ impl From<L1ChildExit> for ChildExit {
 pub enum HostNotification {
     /// An L1 instance's child process died (or broke the protocol)
     /// while live — the instance is now `LifecycleState::Failed`.
+    #[non_exhaustive]
     InstanceFailed {
         /// The failed instance's handle — the same unified
         /// [`PluginHandle`] `Instantiate` returned.
         handle: PluginHandle,
         /// How the child exited.
         exit: ChildExit,
+        /// Why the instance failed — the first-observed
+        /// [`FailureCause`] classified by the L1 convergence (Issue
+        /// #121). `exit` keeps carrying the raw status.
+        cause: FailureCause,
     },
+}
+
+/// A point-in-time read of an L1 audio instance's observability
+/// counters (Issue #121) — the `PluginHost::audio_counters` result.
+///
+/// **The four fields are independent `Relaxed` reads — they do not
+/// form an atomic multi-counter snapshot** (each counter is
+/// individually monotone non-decreasing).
+///
+/// Semantics:
+/// - `dropped_submits`: blocks whose submit was dropped — a busy
+///   slot or a full submit channel, at most +1 per block.
+/// - `passthrough_submits`: blocks that produced substituted
+///   output — warmup included.
+/// - `results_failed_observed`: `RESULT_FAILED` elements observed
+///   on the result channel.
+/// - `results_dropped`: reader-side result `try_push` failures
+///   only — **it is invalid to infer total result loss as
+///   `results_dropped - results_failed_observed`** (enqueue
+///   failure and observed failure are different windows).
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AudioCounterSnapshot {
+    /// Submits dropped (busy slot or full submit channel).
+    pub dropped_submits: u64,
+    /// Blocks that produced substituted output — warmup included.
+    pub passthrough_submits: u64,
+    /// `RESULT_FAILED` elements observed on the result channel.
+    pub results_failed_observed: u64,
+    /// Reader-side result enqueue failures.
+    pub results_dropped: u64,
+}
+
+impl From<AudioCounterReaders> for AudioCounterSnapshot {
+    fn from(readers: AudioCounterReaders) -> Self {
+        Self {
+            dropped_submits: readers.dropped_submits.read(),
+            passthrough_submits: readers.passthrough_submits.read(),
+            results_failed_observed: readers.results_failed_observed.read(),
+            results_dropped: readers.results_dropped.read(),
+        }
+    }
 }
 
 /// How a registered `plugin_id` is served — decided at registration
@@ -389,6 +439,12 @@ pub struct PluginHost {
     generations: Vec<u16>,
     /// Indices of reusable `None` slots.
     free_slots: Vec<u32>,
+    /// The host's bounded diagnostics retention — spawn/create
+    /// paths take `&DiagRegistry` and register their failed attempt
+    /// records into it; minted failures register at
+    /// `try_recv_notification` consumption, keyed by the public
+    /// handle's slot (`record_for_handle` correlation).
+    diag: Arc<DiagRegistry>,
 }
 
 impl Default for PluginHost {
@@ -410,6 +466,7 @@ impl PluginHost {
             instances: Vec::new(),
             generations: Vec::new(),
             free_slots: Vec::new(),
+            diag: Arc::new(DiagRegistry::new()),
         }
     }
 
@@ -639,7 +696,8 @@ impl PluginHost {
             return Err(HostError::UnknownPluginId);
         };
         check_video_bounds(&config)?;
-        let slot = Slot::OutOfProcessVideo(Box::new(VideoL1Instance::spawn(spec, config)?));
+        let slot =
+            Slot::OutOfProcessVideo(Box::new(VideoL1Instance::spawn(spec, config, &self.diag)?));
         Ok(VideoHostReply::Instantiated {
             handle: self.mint(slot),
         })
@@ -762,6 +820,29 @@ impl PluginHost {
             // A video slot has no pipeline latency — the concept
             // does not exist on the NONRT surface.
             Slot::OutOfProcessVideo(_) => None,
+        }
+    }
+
+    /// The audio instance's observability counters (Issue #121) —
+    /// `None` for an invalid handle, an L0 instance, or a video
+    /// instance (which carries no counters by construction). The
+    /// values survive leg swaps, endpoint checkout and `arm`; a
+    /// destroyed handle is `None`, a re-minted one reads fresh
+    /// pairs starting at zero.
+    ///
+    /// **RT contract:** non-RT only — takes the instance's shared
+    /// control mutex, exactly like [`PluginHost::lifecycle_state`].
+    #[must_use]
+    pub fn audio_counters(&self, handle: PluginHandle) -> Option<AudioCounterSnapshot> {
+        let index = handle.slot() as usize;
+        if self.generations.get(index).copied() != Some(handle.generation()) {
+            return None;
+        }
+        match self.instances.get(index)?.as_ref()? {
+            Slot::OutOfProcess(instance) => {
+                instance.audio_counters().map(AudioCounterSnapshot::from)
+            }
+            Slot::InProcess(_) | Slot::OutOfProcessVideo(_) => None,
         }
     }
 
@@ -1146,7 +1227,7 @@ impl PluginHost {
             // queries such as `lifecycle_state` stay deliberately
             // non-draining). Video slots have no endpoint channels
             // — they go straight to the notification try-recv.
-            let exit = match slot {
+            let notice = match slot {
                 Some(Slot::OutOfProcess(instance)) => {
                     instance.drain_endpoint_channels();
                     instance.try_recv_notification()
@@ -1154,7 +1235,7 @@ impl PluginHost {
                 Some(Slot::OutOfProcessVideo(instance)) => instance.try_recv_notification(),
                 Some(Slot::InProcess(_)) | None => continue,
             };
-            if let Some(exit) = exit {
+            if let Some(notice) = notice {
                 // The slot is still live (freed slots never carry an
                 // instance), so the current generation is the minted
                 // handle's.
@@ -1162,13 +1243,61 @@ impl PluginHost {
                     u32::try_from(index).expect("slot index fits u32"),
                     self.generations[index],
                 );
+                // Minted-failure record — the notification carries
+                // no diagnostics id, so the public handle's slot is
+                // the `record_for_handle` correlation key; the
+                // instance's first-observed cause is stamped (the
+                // frozen capture's own cause is child-scope). The
+                // freeze runs only on a confirmed failure — the
+                // snapshot copies the retained tail, so it is not a
+                // per-poll cost.
+                let mut pending = match slot {
+                    Some(Slot::OutOfProcess(instance)) => instance.diagnostics_pending(),
+                    Some(Slot::OutOfProcessVideo(instance)) => instance.diagnostics_pending(),
+                    Some(Slot::InProcess(_)) | None => {
+                        unreachable!("a notification only comes from an L1 slot")
+                    }
+                };
+                pending.handle = Some(handle.slot());
+                pending.cause = Some(notice.cause);
+                self.diag.register(pending);
                 return Some(HostNotification::InstanceFailed {
                     handle,
-                    exit: ChildExit::from(exit),
+                    exit: ChildExit::from(notice.exit),
+                    cause: notice.cause,
                 });
             }
         }
         None
+    }
+
+    /// Resolves a `diagnostics_id` — the id an
+    /// `Err(HostError::SpawnFailed{cause, diagnostics_id})` carried
+    /// — against the host's bounded diagnostics retention:
+    /// [`DiagnosticQuery::Found`] while the record is retained,
+    /// [`DiagnosticQuery::Evicted`] once FIFO eviction passed it
+    /// (ids are minted contiguously and eviction is id-ordered, so
+    /// the watermark distinguishes evicted from never-minted),
+    /// [`DiagnosticQuery::NotFound`] for an id never minted.
+    ///
+    /// **RT contract:** non-RT only — takes the registry mutex.
+    #[must_use]
+    pub fn diagnostics_query(&self, diagnostics_id: u64) -> DiagnosticQuery {
+        self.diag.query(diagnostics_id)
+    }
+
+    /// The retained diagnostics record for a *minted* failure,
+    /// correlated by the public handle [`HostNotification::
+    /// InstanceFailed`] carried — `None` while no record exists for
+    /// the handle's slot. The index keys on the slot alone: a
+    /// reused slot's newest record wins, so a stale-generation
+    /// handle may resolve a later mint's record (the record's own
+    /// `handle` field is the same slot key).
+    ///
+    /// **RT contract:** non-RT only — takes the registry mutex.
+    #[must_use]
+    pub fn diagnostics_for_handle(&self, handle: PluginHandle) -> Option<Arc<DiagnosticRecord>> {
+        self.diag.record_for_handle(handle.slot())
     }
 
     /// Force-kills an L1 instance's child process — **verification
@@ -1233,10 +1362,10 @@ impl PluginHost {
                 // The capacity-1 route — a fresh child per instance,
                 // never pooled.
                 OutOfProcessIsolation::Dedicated => {
-                    Slot::OutOfProcess(Box::new(L1Instance::spawn(spec)?))
+                    Slot::OutOfProcess(Box::new(L1Instance::spawn(spec, &self.diag)?))
                 }
                 OutOfProcessIsolation::Bundled => {
-                    Slot::OutOfProcess(Box::new(instantiate_bundled(spec, pool)?))
+                    Slot::OutOfProcess(Box::new(instantiate_bundled(spec, pool, &self.diag)?))
                 }
             },
         };
@@ -1400,6 +1529,7 @@ impl PluginHost {
 fn instantiate_bundled(
     spec: &SpawnSpec,
     pool: &mut Vec<Arc<L1Child>>,
+    diag: &DiagRegistry,
 ) -> Result<L1Instance, HostError> {
     // The spec-legality gate runs before any pool mutation — a
     // defined rejection must consume nothing.
@@ -1410,7 +1540,7 @@ fn instantiate_bundled(
         // across `create_on_fresh`'s push or `remove`'s shift.
         let Some(child) = pool.get(index).cloned() else {
             // No eligible child — pay the spawn.
-            return create_on_fresh(spec, pool, depth);
+            return create_on_fresh(spec, pool, depth, diag);
         };
         if child.pool_eligible() {
             break child;
@@ -1425,7 +1555,7 @@ fn instantiate_bundled(
             index += 1;
         }
     };
-    match child.create_instance(spec, depth) {
+    match child.create_instance(spec, depth, diag) {
         Ok(parts) => Ok(L1Instance::from_parts(child, parts)),
         Err(error) => {
             // Reused-child create failure — the child's rollback
@@ -1452,10 +1582,11 @@ fn create_on_fresh(
     spec: &SpawnSpec,
     pool: &mut Vec<Arc<L1Child>>,
     depth: u32,
+    diag: &DiagRegistry,
 ) -> Result<L1Instance, HostError> {
-    let child = L1Child::spawn_scanned(&spec.view())?;
+    let child = L1Child::spawn_scanned(&spec.view(), diag)?;
     pool.push(Arc::clone(&child));
-    match child.create_instance(spec, depth) {
+    match child.create_instance(spec, depth, diag) {
         Ok(parts) => Ok(L1Instance::from_parts(child, parts)),
         Err(error) => {
             pool.pop();
@@ -2507,18 +2638,24 @@ mod tests {
     /// leaving a poisoned entry.
     #[test]
     fn bundled_scan_selects_evicts_and_spawns() {
+        let diag = DiagRegistry::new();
         // A dead entry at index 0 is evicted on the way to the
-        // eligible child. `create_instance` then answers `Err(Ipc)`
-        // (the fixture has no driver channel) — the rollback frees
-        // only the minted entry: the registered sibling stays, the
-        // child stays live and stays pooled.
+        // eligible child. `create_instance` then answers
+        // `SpawnFailed` (the fixture has no driver channel — the
+        // request never leaves, so no cause was recorded and the
+        // `Err(Ipc)` arm classifies `Handshake`) — the rollback
+        // frees only the minted entry: the registered sibling
+        // stays, the child stays live and stays pooled.
         let terminal = L1Child::test_fixture(1);
         terminal.test_converge();
         let live = L1Child::test_fixture(1);
         let mut pool = vec![Arc::clone(&terminal), Arc::clone(&live)];
         assert!(matches!(
-            instantiate_bundled(&pool_spec(), &mut pool),
-            Err(HostError::Ipc)
+            instantiate_bundled(&pool_spec(), &mut pool, &diag),
+            Err(HostError::SpawnFailed {
+                cause: FailureCause::Handshake,
+                ..
+            })
         ));
         assert_eq!(pool.len(), 1);
         assert!(Arc::ptr_eq(&pool[0], &live));
@@ -2527,14 +2664,14 @@ mod tests {
         assert!(!live.is_terminal());
 
         // A full child is skipped without eviction — the fresh
-        // spawn's `Err(Ipc)` (dead runner) is the proof the full
+        // spawn's `SpawnFailed` (dead runner) is the proof the full
         // child did not serve: had it been selected, `create_instance`
         // would have answered `Err(InstanceLimit)` instead.
         let full = L1Child::test_fixture(wire::WIRE_MAX_INSTANCES);
         let mut pool = vec![Arc::clone(&full)];
         assert!(matches!(
-            instantiate_bundled(&pool_spec(), &mut pool),
-            Err(HostError::Ipc)
+            instantiate_bundled(&pool_spec(), &mut pool, &diag),
+            Err(HostError::SpawnFailed { .. })
         ));
         assert_eq!(pool.len(), 1);
         assert!(Arc::ptr_eq(&pool[0], &full));
@@ -2544,8 +2681,8 @@ mod tests {
         draining.test_set_shutdown_initiated();
         let mut pool = vec![Arc::clone(&draining)];
         assert!(matches!(
-            instantiate_bundled(&pool_spec(), &mut pool),
-            Err(HostError::Ipc)
+            instantiate_bundled(&pool_spec(), &mut pool, &diag),
+            Err(HostError::SpawnFailed { .. })
         ));
         assert_eq!(pool.len(), 1);
         assert!(Arc::ptr_eq(&pool[0], &draining));
@@ -2554,8 +2691,8 @@ mod tests {
         // leaves no entry behind to poison later scans.
         let mut pool: Vec<Arc<L1Child>> = Vec::new();
         assert!(matches!(
-            instantiate_bundled(&pool_spec(), &mut pool),
-            Err(HostError::Ipc)
+            instantiate_bundled(&pool_spec(), &mut pool, &diag),
+            Err(HostError::SpawnFailed { .. })
         ));
         assert!(pool.is_empty());
     }
@@ -2642,7 +2779,7 @@ mod tests {
         // One `InstanceFailed` per co-resident instance — the
         // child-scope fan-out.
         let mut failed = Vec::new();
-        while let Some(HostNotification::InstanceFailed { handle, exit }) =
+        while let Some(HostNotification::InstanceFailed { handle, exit, .. }) =
             host.try_recv_notification()
         {
             assert_eq!(exit.code, Some(1));

@@ -704,7 +704,7 @@ mod tests {
     use ruviform_rt::DropCollector;
 
     use super::*;
-    use crate::l1::data::Submit;
+    use crate::l1::data::{RtLegCounters, Submit};
 
     /// Compile-time `Send` witnesses — the endpoint must cross into
     /// RT-side ownership without an `unsafe impl`, so every cell
@@ -774,10 +774,22 @@ mod tests {
     /// `armed_frames` arms the gen-1 ring; `bound` is the attach
     /// bound the drain checks arms against.
     fn l1_leg(mirror: LifecycleState, armed_frames: u32) -> (L1Endpoint, L1HostEnds) {
+        let (endpoint, ends, _counters) = l1_leg_counted(mirror, armed_frames);
+        (endpoint, ends)
+    }
+
+    /// [`l1_leg`] plus the leg's `RtLegCounters` handle — the
+    /// writer half whose cells the query surface's readers share;
+    /// `Counter::read` asserts what `audio_counters` would report.
+    fn l1_leg_counted(
+        mirror: LifecycleState,
+        armed_frames: u32,
+    ) -> (L1Endpoint, L1HostEnds, RtLegCounters) {
         const DEPTH: u32 = 3;
         let (submit_tx, submit_rx) = ruviform_rt::channel::<Submit>(DEPTH as usize);
         let (result_tx, result_rx) = ruviform_rt::channel::<u64>(DEPTH as usize);
-        let mut leg = RtLeg::new(DEPTH, DEPTH - 1, submit_tx, result_rx);
+        let counters = RtLegCounters::fresh();
+        let mut leg = RtLeg::new(DEPTH, DEPTH - 1, submit_tx, result_rx, counters.clone());
         let staging = Arc::new(Staging::new(DEPTH, armed_frames, 1));
         leg.arm(Arc::clone(&staging));
         // `prepare_endpoint` reserves `last_output` to the bound —
@@ -804,6 +816,7 @@ mod tests {
                 result_tx,
                 staging,
             },
+            counters,
         )
     }
 
@@ -1054,6 +1067,32 @@ mod tests {
         assert_eq!(endpoint.leg.as_ref().unwrap().armed_generation(), 1);
     }
 
+    /// Issue #121 counter pin: the over-bound arm backstop is not a
+    /// `process` call site, yet the substituted block still counts —
+    /// instrumentation lives inside `RtLeg::pass_through` so every
+    /// converged path (endpoint anomaly included) is observed.
+    #[test]
+    fn l1_endpoint_arm_anomaly_passthrough_counts() {
+        let bound = EndpointBounds {
+            max_frames: 512,
+            channels: 1,
+        };
+        let (mut endpoint, mut ends, counters) = l1_leg_counted(LifecycleState::Processing, 512);
+        let oversized = Arc::new(Staging::new(3, 1024, 2));
+        assert!(ends.arm_tx.try_push(oversized).is_ok());
+        let mut output = [7.0_f32; 8];
+        assert_eq!(
+            run_l1(&mut endpoint, bound, &INPUT, &mut output).unwrap(),
+            ProcessResult::CONTINUE
+        );
+        assert_eq!(counters.passthrough_submits.read(), 1);
+        // The anomalous arm was retired; nothing was submitted,
+        // dropped or observed-failed.
+        assert_eq!(ends.collector.drain(), 1);
+        assert_eq!(counters.dropped_submits.read(), 0);
+        assert_eq!(counters.results_failed_observed.read(), 0);
+    }
+
     /// `Drop` returns the checked-out leg through the capacity-1
     /// channel — the next host-side drain would restore it.
     #[test]
@@ -1080,7 +1119,13 @@ mod tests {
         // test can tell the two apart.
         let (submit_tx, _submit_rx) = ruviform_rt::channel::<Submit>(DEPTH as usize);
         let (_result_tx, result_rx) = ruviform_rt::channel::<u64>(DEPTH as usize);
-        let mut spare = RtLeg::new(DEPTH, DEPTH - 1, submit_tx, result_rx);
+        let mut spare = RtLeg::new(
+            DEPTH,
+            DEPTH - 1,
+            submit_tx,
+            result_rx,
+            RtLegCounters::fresh(),
+        );
         spare.arm(Arc::new(Staging::new(DEPTH, 64, 5)));
         assert!(endpoint.return_tx.try_push(spare).is_ok());
         drop(endpoint);

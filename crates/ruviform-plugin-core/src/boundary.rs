@@ -110,6 +110,53 @@ impl GuiParentToken {
     }
 }
 
+/// Why an L1 child process or a spawn/create attempt failed — the
+/// causal vocabulary carried by [`HostError::SpawnFailed`] and by the
+/// host-side `HostNotification::InstanceFailed.cause` payload.
+///
+/// Classification is by **error meaning, not implementation
+/// location** — the first observed failure wins: the cause is fixed
+/// under the same lock that converges the failure and later
+/// observations never overwrite it.
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
+/// **RT contract:** RT-suitable — `Copy`, allocation-free.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FailureCause {
+    /// The OS process spawn failed — `pre-mint` only; no child ever
+    /// existed.
+    Spawn,
+    /// A defined handshake rejection: `Hello` version mismatch, a
+    /// decodable non-`Hello` first frame, `Scan`/descriptor mismatch,
+    /// or a `CreateInstance`/`CreateVideoInstance` error reply.
+    Handshake,
+    /// A host deadline decision: `Hello` wait, `CreateInstance` reply
+    /// wait, command waiter timeout, or the watchdog kill — recorded
+    /// *before* the kill is issued, so a subsequent EOF does not
+    /// overwrite it with `Transport`.
+    Timeout,
+    /// A stream violation: an undecodable frame (any phase), a stream
+    /// violation after `Hello` acceptance, a second `Hello`, an
+    /// unknown or parent-to-child kind, a scope/instance violation, a
+    /// waiter-less `Reply`, or an instance-attribution violation.
+    Protocol,
+    /// A pipe-level transport observation — child stdout EOF/read
+    /// error or stdin write failure, regardless of phase (a
+    /// handshake-time EOF is `Transport`, not `Handshake`).
+    Transport,
+    /// Child termination observed via `try_wait`/reap — the exit
+    /// status itself travels separately (`ChildExit`).
+    ExitObserved,
+    /// Internal machinery failure — channel disconnect, unreachable
+    /// state, or a `try_wait`/`wait` syscall error. A reap error
+    /// observed first still lands here: the cause is always defined.
+    Internal,
+}
+
 /// Why a host command or RT accessor failed.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
@@ -142,8 +189,13 @@ pub enum HostError {
     /// [`HostError::PluginFailed`]: no plugin hook declined — the
     /// execution context itself (e.g. an L1 child process) is gone.
     Failed,
-    /// Inter-process (L1) transport failure: spawn, handshake,
-    /// version mismatch, transport I/O or a command-reply timeout.
+    /// Inter-process (L1) transport failure: transport I/O or a
+    /// command-reply timeout on a live child — the post-mint
+    /// surface. A *pre-mint* spawn/create-instance attempt failure
+    /// carries its classified cause and diagnostics id in
+    /// [`HostError::SpawnFailed`] instead; `Ipc` also remains the
+    /// host's defined rejection for spec-validation failures (e.g.
+    /// an illegal `lookahead_blocks`), which register no record.
     Ipc,
     /// A `plugin_id` was registered twice — e.g. the same id claimed
     /// by both an in-process factory and an out-of-process spec.
@@ -180,6 +232,26 @@ pub enum HostError {
     /// [`crate::VideoProcessConfig`]. Wire tag `10` under
     /// [`crate::wire::WIRE_VERSION`] `3`.
     InvalidValue,
+    /// An out-of-process (L1) spawn or create-instance attempt failed
+    /// before the handle was minted — carries the classified
+    /// [`FailureCause`] and a `diagnostics_id` naming the retained
+    /// diagnostics record in the host's registry (Issue #121).
+    ///
+    /// Defined rejections are *not* wrapped: `InstanceLimit` and
+    /// spec-validation `Ipc` keep their own variants and register no
+    /// record.
+    ///
+    /// **Local-only** — like [`HostError::EndpointUnavailable`], it
+    /// carries no wire encoding: [`crate::wire::encode_host_error`]
+    /// rejects it with `Err(WireError::UnsupportedVariant)`.
+    SpawnFailed {
+        /// Why the attempt failed — the first-observed cause.
+        cause: FailureCause,
+        /// The retained diagnostics record id — contiguous, never
+        /// reused; resolvable to `Found`/`Evicted`/`NotFound` through
+        /// the host's diagnostics query.
+        diagnostics_id: u64,
+    },
 }
 
 impl fmt::Display for HostError {
@@ -201,6 +273,14 @@ impl fmt::Display for HostError {
             Self::InvalidValue => {
                 f.write_str("caller-supplied value is outside its defined domain")
             }
+            Self::SpawnFailed {
+                cause,
+                diagnostics_id,
+            } => write!(
+                f,
+                "out-of-process spawn or create-instance failed \
+                 ({cause:?}, diagnostics {diagnostics_id})"
+            ),
         }
     }
 }

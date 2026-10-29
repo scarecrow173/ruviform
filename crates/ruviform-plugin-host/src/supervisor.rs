@@ -1154,8 +1154,8 @@ impl Supervisor {
 mod tests {
     use ruviform_audio_core::SampleRate;
     use ruviform_plugin_core::{
-        BufferView, BufferViewMut, EventList, ParamInfo, PluginDescriptor, PluginProcessor,
-        PrepareError, ProcessContext, ProcessResult, TransportInfo,
+        BufferView, BufferViewMut, EventList, FailureCause, ParamInfo, PluginDescriptor,
+        PluginProcessor, PrepareError, ProcessContext, ProcessResult, TransportInfo,
     };
     use static_assertions::{assert_impl_all, assert_not_impl_any};
 
@@ -1331,6 +1331,8 @@ mod tests {
                 code: Some(1),
                 signal: None,
             },
+            // Interim until T7 wires the classified cause through.
+            cause: FailureCause::Internal,
         }
     }
 

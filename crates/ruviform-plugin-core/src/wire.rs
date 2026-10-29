@@ -3076,6 +3076,7 @@ pub fn write_message(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::FailureCause;
     use ruviform_media_core::TransportStatus;
 
     const GAIN: PluginDescriptor = PluginDescriptor {
@@ -3915,6 +3916,41 @@ mod tests {
         encode(&ok, &mut out).unwrap();
         assert_eq!(out[..before.len()], before[..]);
         assert_eq!(decode(&out[before.len()..]), Ok(ok));
+    }
+
+    #[test]
+    fn encode_rejects_spawn_failed_and_restores_out() {
+        // `SpawnFailed` (Issue #121) is a local-only diagnostics
+        // payload — like `EndpointUnavailable` it has no wire
+        // encoding and is never collapsed into `Ipc`/`Unsupported`.
+        // `FailureCause`/`diagnostics_id` ride the host-side
+        // `HostError` only, so `WIRE_VERSION` stays unchanged.
+        let spawn_failed = HostError::SpawnFailed {
+            cause: FailureCause::Handshake,
+            diagnostics_id: 42,
+        };
+        let mut payload = Vec::new();
+        assert_eq!(
+            encode_host_error(&spawn_failed, &mut payload),
+            Err(WireError::UnsupportedVariant)
+        );
+        assert!(payload.is_empty(), "nothing is appended on failure");
+
+        // Same all-or-nothing append contract through `encode` — no
+        // partial `REPLY_ERR` frame, no wire-version change.
+        let mut out = vec![0xAA, 0xBB];
+        let before = out.clone();
+        let message = Message::Reply {
+            seq: 9,
+            instance: 0,
+            result: Err(spawn_failed),
+        };
+        assert_eq!(
+            encode(&message, &mut out),
+            Err(WireError::UnsupportedVariant)
+        );
+        assert_eq!(out, before);
+        assert_eq!(WIRE_VERSION, 3);
     }
 
     #[test]

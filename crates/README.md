@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計21クレート）。
+Ruviform ワークスペースのメンバークレート索引（計22クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -15,6 +15,7 @@ Ruviform ワークスペースのメンバークレート索引（計21クレー
 | [`ruviform-rt`](ruviform-rt/README.md) | RT 基盤（`Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換） |
 | [`ruviform-media-core`](ruviform-media-core/README.md) | 規格中立メディアデータモデル（時間・transport・音楽時間・`Error`） |
 | [`ruviform-exec`](ruviform-exec/README.md) | 非 RT 実行基盤（スレッド優先度機構・`OfflineDriver`） |
+| [`ruviform-observability`](ruviform-observability/README.md) | 共有観測プリミティブ（`Counter`/`CounterReader` counter pair — Issue #101 候補・#121 で L1 diagnostics が初消費者） |
 
 ## Domain foundations
 

@@ -107,3 +107,4 @@ Optional platform adapters（opt-in・基礎層への依存は下向きのみ）
 - [ofx-host-adapter.md](ofx-host-adapter.md) — OFX ホストアダプタ詳細設計（video 契約境界・C ABI バインディング・セッション/lifecycle・image/time/param 意味論、Issue #98）(approved)
 - [engine-plugin-host-integration.md](engine-plugin-host-integration.md) — エンジン/利用側へのプラグイン統合設計（non-RT 制御/RT 処理所有分離・`Send` endpoint + `FnMut` ノード接着・plan 退役シーム、Issue #113）(draft)
 - [issue-115-l1-gui-cross-process-parenting.md](issue-115-l1-gui-cross-process-parenting.md) — L1 GUI 採否設計（プロセス境界越し親ウィンドウ埋め込みの OS 別調査・`Unsupported` 維持判定と境界 pin・`gui_open` keep-for-future、Issue #115）(draft)
+- [issue-121-l1-diagnostics.md](issue-121-l1-diagnostics.md) — L1 診断の counter・子 stderr・失敗原因通知の設計（Issue #121。終了・通知・計数の詳細は未確定）(draft)

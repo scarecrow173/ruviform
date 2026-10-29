@@ -105,7 +105,7 @@ RT 候補形状の前提（事前確保・bounded/non-blocking 通信・retire �
 | `memory` | 汎用 Pool/Arena/Storage は非存在 | **保留**（現時点では不要。「移動」ではなく新規設計の要否判断） | 汎用利用者・実装の実在（#101 延期行と同一トリガ） |
 | `sync` | `channel`/`retire_channel`/`slot` は外部プロダクション利用者ゼロ・内部依存連鎖あり | **保留**（移動は延期維持） | 2 番目のプロダクション利用者の出現（3 プリミティブ同時判断） |
 | `identity` | 世代付きハンドルは `PluginHandle` のみ | **保留**（現時点では不要。ドメイン型の統合はしない） | 2 つ目の世代付きハンドル需要の出現 |
-| `telemetry` | 飽和・取りこぼし観測カウンタの先例（retire 系共有 `Arc<AtomicUsize>`）と将来消費者（xrun 等）が存在 | **構成候補として維持・要 PoC** | Issue #104 PoC 結果 + 2 つ目のドメイン計測点需要 |
+| `telemetry` | 飽和・取りこぼし観測カウンタの先例（retire 系共有 `Arc<AtomicUsize>`）と将来消費者（xrun 等）が存在。**Issue #121 で「observability 最初の実需要」を記録**: `ruviform-observability` クレート新設（writer/reader pair `Counter`/`CounterReader` — 共有 `AtomicU64` cell の writer-owned increment・reader-side read）が L1 diagnostics のデータ面 counter（`RtLeg` の underrun/pass-through/dropped-submit/`RESULT_FAILED` 計数）に初消費された（正本 `docs/designs/issue-121-l1-diagnostics.md`） | **構成候補として維持・要 PoC** | Issue #104 PoC 結果 + 2 つ目のドメイン計測点需要（**#121 L1 diagnostics が第1の実消費者として着地 — 第2ドメイン計測点は残りのトリガ**） |
 
 ### `collections`（保留）
 

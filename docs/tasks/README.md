@@ -7,9 +7,15 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034Jf1Cl3xf8K9wcSuvFYK | ベンチハーネス骨格と dev-dependencies | done | [add-bench-harness-and-dev-deps.md](./add-bench-harness-and-dev-deps.md) |
+| TASK-034OpsgIJWNistmrGfoPXD | T3. InstanceFailed に cause field + variant 非排他（全呼出サイト更新） | done | [add-cause-to-instance-failed.md](./add-cause-to-instance-failed.md) |
 | TASK-034JOulyBprt7B3tRAzkKZ | chunk timestamp 単体テストと Issue #59 完了確認 | done | [add-chunk-timestamp-tests.md](./add-chunk-timestamp-tests.md) |
 | TASK-034JPwYfiOnSaZJgGJQQyY | dispatch_probe ベンチ追加 | done | [add-dispatch-probe-bench.md](./add-dispatch-probe-bench.md) |
+| TASK-034OpsfP4ZxOuDqHZhEILm | T2. FailureCause + HostError::SpawnFailed 型追加（boundary.rs・codec 互換テスト） | done | [add-failure-cause-and-spawn-failed.md](./add-failure-cause-and-spawn-failed.md) |
+| TASK-034Opsj1KiLPMYmnY6yGmq | T5. l1::diag 診断レコード・DiagRegistry（ring・snapshot・retention・watermark） | done | [add-l1-diag-record-and-registry.md](./add-l1-diag-record-and-registry.md) |
+| TASK-034OpsFegc9YAYfop3MYbp | T10. L1 diagnostics E2E（counter・stderr・cause・bundled・supervisor・pre-mint） | done | [add-l1-diagnostics-e2e.md](./add-l1-diagnostics-e2e.md) |
+| TASK-034OpsEs0zbbjn0dDTnIIj | T9. 単体テスト拡充（counter 9 ケース・ring 不変・分類写像・watermark） | done | [add-l1-diagnostics-unit-tests.md](./add-l1-diagnostics-unit-tests.md) |
 | TASK-034IdQtDnY6ZKHFhFhXKmW | 手動 CI ワークフローの追加 | done | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
+| TASK-034OpsDG34f3LJc5NmwGNX | T8. pre-mint 診断（phase・retention 登録・SpawnFailed 境界・query 面） | done | [add-pre-mint-diagnostics.md](./add-pre-mint-diagnostics.md) |
 | TASK-034JOukDzGSLe1s0mtlzeg | DataCallbackState への sample_rate 配線 | done | [add-sample-rate-to-callback-state.md](./add-sample-rate-to-callback-state.md) |
 | TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | done | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034JNwUoAfb2TnY7nw07XH | 時間変換精度テストの追加（音声×映像行列・往復/連鎖誤差上界） | done | [add-time-precision-tests.md](./add-time-precision-tests.md) |
@@ -33,6 +39,7 @@ Directory: `docs/tasks`
 | TASK-034KSVlq4M72vjrxvDRQbP | コンポジットカーネル実装（CompositeOver + Crossfade + 共有 f16 コーデック格上げ） | done | [composite-kernels.md](./composite-kernels.md) |
 | TASK-034IdQmBa6UdauVn9IG59X | 最小ワークスペースと smoke test の構築 | done | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | TASK-034JgsFV6CWAjSnPuekBgs | ruviform-plugin-core 共通基盤クレートの作成 | done | [create-plugin-core-foundation.md](./create-plugin-core-foundation.md) |
+| TASK-034OpseKB70K4vR6W46RMi | T1. ruviform-observability クレート新設（counter pair・workspace 登録） | done | [create-ruviform-observability-crate.md](./create-ruviform-observability-crate.md) |
 | TASK-034JcCRLsFJ7j8zPBi8mXY | ruviform-video-proc クレート骨格の新設 | done | [create-video-proc-crate-skeleton.md](./create-video-proc-crate-skeleton.md) |
 | TASK-034JgsHEkIUa3P4jzOizoM | PoC 実測に基づく binding 方式 ADR の決定 | done | [decide-plugin-binding-method-adr.md](./decide-plugin-binding-method-adr.md) |
 | TASK-034IdQqbjQcZ0Ztsy5IPpm | mise 開発・CI 検証タスクの定義 | done | [define-mise-dev-and-ci-tasks.md](./define-mise-dev-and-ci-tasks.md) |
@@ -72,6 +79,7 @@ Directory: `docs/tasks`
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
 | TASK-034NlQlLZkVZRtEVfF8Sdp | L1 子構造再編（Shared/Inner→L1Child+InstShared split・demux・converge split・Destroying gate） | done | [l1-child-instance-split.md](./l1-child-instance-split.md) |
 | TASK-034LNY736TLX2w3k4RFFZM | plugin-core L1 基盤（契約移設 + Lifecycle Failed + wire codec） | done | [l1-core-contracts-and-wire-codec.md](./l1-core-contracts-and-wire-codec.md) |
+| TASK-034OpsGOwquB9NPINeMKyz | T12. docs/ledger・最終検証（#120/#101 trigger・index・mise 全量・audit） | done | [l1-diagnostics-ledger-and-verify.md](./l1-diagnostics-ledger-and-verify.md) |
 | TASK-034MrsLWkKNHnu7jX1ghp8 | L1 endpoint（leg 移出・arm channel・pending_arm・leg 返却・drain-before-early-return） | done | [l1-endpoint-arm-and-leg-return.md](./l1-endpoint-arm-and-leg-return.md) |
 | TASK-034N3QIPDPFbB37OxHMZLy | Issue #123 L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | done | [l1-internal-cleanup.md](./l1-internal-cleanup.md) |
 | TASK-034LNYf8Qj1NeGAKmaP7B4 | plugin-host L1 プロキシ制御面（spawn/handshake/コマンド転送/クラッシュ検出） | done | [l1-proxy-control-plane.md](./l1-proxy-control-plane.md) |
@@ -107,6 +115,7 @@ Directory: `docs/tasks`
 | TASK-034L6yh0fBmRabh1TMLv2F | Implement OFX video rendering | done | [ofx-render-implementation.md](./ofx-render-implementation.md) |
 | TASK-034N9p1bBWmE7AioxpndKq | OFX UAF residuals — non-catalog window lease + lifecycle hardening | done | [ofx-uaf-residuals-non-catalog-window-lease-lifecycle-hardening.md](./ofx-uaf-residuals-non-catalog-window-lease-lifecycle-hardening.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
+| TASK-034OpskKobU4qEsX7F7IYc | T6. stderr piped + drain thread（案A・FFI 局所化・fixture knob） | done | [pipe-and-drain-l1-stderr.md](./pipe-and-drain-l1-stderr.md) |
 | TASK-034MrsDzlHRpUHHLtYkZdN | plugin-core endpoint 前提面（EndpointUnavailable・fallible encode・Send capability・view impl） | done | [plugin-core-endpoint-primitives.md](./plugin-core-endpoint-primitives.md) |
 | TASK-034LNYeFTd7EgCwbDA0GWD | ruviform-plugin-export 新設 + run() ランナー + l1-runner bin | done | [plugin-export-crate-and-l1-runner.md](./plugin-export-crate-and-l1-runner.md) |
 | TASK-034Mrt1HhkO2vVKksdYxgA | endpoint process/process_audio shell + グラフ E2E + rt_ レーン（bound clip・in-bus-first・source-position 慣行） | done | [plugin-graph-e2e-and-rt-lane.md](./plugin-graph-e2e-and-rt-lane.md) |
@@ -162,6 +171,7 @@ Directory: `docs/tasks`
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
 | TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | done | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |
 | TASK-034IRZFUgbTZlBX2kH7psN | Issue #1 リポジトリ反映の総合検証と spec/design バックリンク | done | [verify-issue-1-repo-reflection.md](./verify-issue-1-repo-reflection.md) |
+| TASK-034OpsG2QXJ66gdCKuXWSJ | T11. video parity（stderr・cause・counter 非混入・fixture 同条件） | done | [verify-l1-video-diagnostics-parity.md](./verify-l1-video-diagnostics-parity.md) |
 | TASK-034JO3XBRTT20ZNbIBDPRM | MSRV 1.89 実測検証と Issue #52 完了確認 | done | [verify-msrv-1-89-build.md](./verify-msrv-1-89-build.md) |
 | TASK-034IdQxdPQUxXweHBN1ZxT | 再現インストール検証と #3 転記用作業メモ | done | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |
 | TASK-034JZVID00000000000070 | Issue #27 文書クローズと全量検証 | done | [video-engine-closeout.md](./video-engine-closeout.md) |
@@ -169,6 +179,8 @@ Directory: `docs/tasks`
 | TASK-034N3MMigFuy0YOIHJFklc | video-proc rt_process_* への assert_no_alloc 測定窓適用 + OFX 評価 | done | [video-proc-assert-no-alloc-lane.md](./video-proc-assert-no-alloc-lane.md) |
 | TASK-034MLSxnXfu3lnbTX3LQzI | VST3 host bridge（host feature・Vst3Library/dlopen+class scan・COM host objects・lifecycle 写像・Vst3PluginFactory） | done | [vst3-host-bridge.md](./vst3-host-bridge.md) |
 | TASK-034JP1sJ8ZJThe3Fj9w0mr | clack thread-check の有効化と process での is_audio_thread 照会 | done | [wire-clap-thread-check.md](./wire-clap-thread-check.md) |
+| TASK-034OpsCV3XA7dtr4iHd2sg | T7. FailureCause 分類配線（first-observed・timeout-before-kill・通知伝搬） | done | [wire-failure-cause-classification.md](./wire-failure-cause-classification.md) |
+| TASK-034OpshwEw34KxMBdhQ5mw | T4. audio counters 計装・query 面（InstShared・RtLeg::pass_through 内部） | done | [wire-l1-audio-counters.md](./wire-l1-audio-counters.md) |
 | TASK-034LFHddlrfvXu5Jlmwdr0 | working space カーネル実装（ToWorking + FromWorking） | done | [working-space-kernels.md](./working-space-kernels.md) |
 | TASK-034JPwZ8htMzYNPNgOceEI | 分析・レポート記述・文書整合 | done | [write-dispatch-analysis-report.md](./write-dispatch-analysis-report.md) |
 | TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | done | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |

@@ -50,6 +50,9 @@ relations:
     - "../designs/issue-117-bundle-child-process.md"
   derived-by:
     - "../specs/issue-121-diagnostics.md"
+    - "../designs/issue-121-l1-diagnostics.md"
+    - "../adr/issue-121-l1-diagnostics-policy.md"
+    - "../plans/implement-issue-121-l1-diagnostics.md"
   verifies: []
   verified-by: []
   references:
@@ -251,6 +254,8 @@ pass-through / dropped submit / `RESULT_FAILED` は全て **`l1/data.rs` の `Rt
 
 ## Tentative Conclusions and Hypotheses
 
+後続のユーザー判断により、Q1 は `ruviform-observability` を本 Issue で新設して L1 diagnostics を初消費者とし、Q4 は常時 piped + per-child drain とする。以下の探索時点の既定案や未確定扱いはこの判断に優先しない。stderr 導入と #120 再トリガ条件の関係は、実装後に記録する。
+
 1. **（hypothesis）メトリクス面は pull 型 snapshot + 共有 atomic カウンタ** — `HostNotification` 拡張ではなく、`PluginHost`/`L1Instance` 経由の `diagnostics` 系 query（`&self`/`&mut self` 非 RT）+ leg と共有状態の間で `Arc<AtomicU64>` カウンタセット（`rt_state` 先例・#104 counter pair 形状）。writer 側計装は `Relaxed fetch_add` 1 回（実測 ~4 ns/op）で RT 契約に適合。
 2. **（hypothesis）計数の意味づけは「RT leg の pass-through 分岐点」で分類する** — `pass_through`/`silence`/`slot busy`/`channel full`/`RESULT_FAILED` は全て `RtLeg::process` 内の分岐として数えるのが最も単一な計装点（`drain_to` で RESULT_FAILED を見ると「観測された回数」、driver/reader の合成点で見ると「発生した回数」 — 一致はするが分類の意味が変わるので設計で選択）。
 3. **（hypothesis）stderr は常時 piped + per-child drain スレッド + bounded ring（drop+count）+ 子スコープの読み出し面** — 3 スレッド目の追加と #120 再トリガの記録を伴う。drain は detach・EOF 未到達を許容（heir 問題）。opt-in flag は代替案として残す。
@@ -270,6 +275,7 @@ pass-through / dropped submit / `RESULT_FAILED` は全て **`l1/data.rs` の `Rt
 - **Q8**: `BundleFailed` 等の bundle 相関通知（#117 deferred）を本 Issue に取り込むか別 Issue のままか — 子スコープの原因 payload があれば相関の一部は payload で表現可能。
 - **Q9**: supervisor への影響 — 新 payload/variant が `Unsupervised` pass-through で素通しするか、`InstanceFailed` の形が変わると `Supervisor` の `else` arm（`supervisor.rs` L924-933）に波及するか。
 - **Q10**: drain スレッドの teardown 契約 — join bound・detach・heir grandchild で pipe が閉じない場合の drain thread の寿命。
+- **Q11**: spawn/初期 handshake 失敗時は live instance と handle が存在せず、現行コードは通知せずに `Err` を返す。この失敗を観測可能にしつつ `InstanceFailed` の既存契約を保つ通知経路と、公開 API の互換性をどう設計するか。
 
 ## Promotion Candidates
 

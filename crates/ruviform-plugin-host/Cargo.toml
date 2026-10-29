@@ -19,6 +19,11 @@ ruviform-audio-core = { path = "../ruviform-audio-core" }
 # and `l1/video.rs` builds `VideoFrame` timestamps from it.
 ruviform-media-core = { path = "../ruviform-media-core" }
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+# Issue #121 (T4): the audio data plane's four observability counters
+# are the `Counter`/`CounterReader` pair crate's first real consumer —
+# RT writers perform `Relaxed` `fetch_add` only, the non-RT query
+# surface reads `Relaxed` loads.
+ruviform-observability = { path = "../ruviform-observability" }
 ruviform-rt = { path = "../ruviform-rt" }
 # Issue #118 video host surface: `VideoFrame` appears on the public
 # `VideoHostCommand::Render{input}`/`VideoHostReply::Rendered` vocabulary
@@ -34,6 +39,17 @@ ruviform-video-core = { path = "../ruviform-video-core" }
 # #118 video segment) and the `l1-test-worker` bin (the child-side attach
 # mirrors the same segment protocol), each with SAFETY comments.
 shared_memory = "0.12"
+
+# Issue #121 (T6): the stderr drain's pipe-readiness primitive has no
+# std equivalent — POSIX `poll` via libc, Windows `PeekNamedPipe` via
+# windows-sys. Both stay inside `l1::diag`'s scoped
+# `#[expect(unsafe_code)]` with SAFETY comments; never on the public
+# API. `poll`/`PeekNamedPipe` are stable decades-old APIs.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Pipes", "Win32_Foundation"] }
 
 [[bin]]
 name = "l1-test-worker"

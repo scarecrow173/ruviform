@@ -17,6 +17,7 @@ Directory: `docs/adr`
 | ADR-034Qb8Lg3MqZx1SuVcEj6k | L1 bundle 子の `Failed` 粒度・`InstanceFailed` fan-out・隔離選択面（Issue #117） | accepted | [issue-117-bundle-child-failed-granularity.md](./issue-117-bundle-child-failed-granularity.md) |
 | ADR-034NVCYbbmwSxZnvHYNkAx | video/NONRT プラグイン L1 の create-path・segment sizing（CreateVideoInstance に VideoProcessConfig を載せる形）（Issue #118） | accepted | [issue-118-video-l1-create-path-segment.md](./issue-118-video-l1-create-path-segment.md) |
 | ADR-034NVCXBHjsHlfixAwUSHE | video/NONRT プラグイン L1 の別立て host 表面・plugin_id 名前空間・Dedicated 固定（Issue #118） | accepted | [issue-118-video-l1-host-surface.md](./issue-118-video-l1-host-surface.md) |
+| ADR-034O9Rrn3iBoq4HxT07eVQ | issue-121-l1-diagnostics-policy | accepted | [issue-121-l1-diagnostics-policy.md](./issue-121-l1-diagnostics-policy.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |
 | ADR-2iNuZm3ymoyzRUmpgnKr0x | 音楽時間モデル（PPQN 960 tick 中核・piecewise-constant テンポマップ） | accepted | [musical-time-model.md](./musical-time-model.md) |
