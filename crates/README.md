@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計22クレート）。
+Ruviform ワークスペースのメンバークレート索引（計24クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -68,3 +68,5 @@ Ruviform ワークスペースのメンバークレート索引（計22クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-edit`](ruviform-edit/README.md) | NLE 非破壊編集データモデル + 評価射影（全 API 非 RT） |
+| [`ruviform-ui`](ruviform-ui/README.md) | WebView 非依存の GUI 基盤コア（host 抽象・IPC v1・service/job ランタイム・bounded data・assets・描画責務契約 — Issue #156） |
+| [`ruviform-ui-webview`](ruviform-ui-webview/README.md) | `wry`+`tao` のオプション GUI adapter（feature `webview` でホスト実装・`rvf://` スキーム・組込みアセット — Issue #156） |

@@ -1,0 +1,44 @@
+[package]
+name = "ruviform-ui-webview"
+description = "wry/tao WebView adapter implementing the ruviform-ui host boundary (rvf:// scheme, eval push, backend detection)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# `webview` is off by default: enabling it pulls wry/tao and the OS
+# webview stack (WebView2 / WKWebView / WebKitGTK) into the build.
+# Keeping it non-default preserves `cargo check --workspace` as a
+# headless verification path — GUI deps stay opt-in per the Issue #156
+# dependency-isolation contract and the baseline's adapter rule
+# (backend crates may gate their own backend feature).
+default = []
+webview = ["dep:wry", "dep:tao", "dep:http", "dep:dpi", "dep:rust-embed"]
+
+[dependencies]
+# - ruviform-ui: the port-defining crate this adapter implements.
+ruviform-ui = { path = "../ruviform-ui" }
+# - wry: WebView abstraction over WebView2/WKWebView/WebKitGTK — the
+#   accepted UI PoC ADR selection (Issue #156 reaffirms it). Optional:
+#   only under `webview`.
+wry = { version = "0.57", optional = true }
+# - tao: window/event loop underneath wry. Optional: only under `webview`.
+tao = { version = "0.37", optional = true }
+# - http: request/response types for wry's custom-protocol handler API.
+#   Optional: only under `webview`.
+http = { version = "1", optional = true }
+# - dpi: wry/tao Rect/Position/Size types for webview bounds tracking.
+#   Optional: only under `webview`.
+dpi = { version = "0.1", optional = true }
+# - rust-embed: production asset source (release embeds, debug reads the
+#   filesystem — the poc/ui model). Optional: only under `webview`.
+rust-embed = { version = "8", optional = true }
+
+[lints]
+workspace = true
+
+[[example]]
+name = "demo_app"
+required-features = ["webview"]
