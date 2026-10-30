@@ -1,0 +1,20 @@
+[package]
+name = "ruviform-numeric"
+description = "High-precision f64 offline numeric and DSP primitives (FFT, real FFT, vector ops, windows, resampling, convolution, least squares) for Ruviform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# Issue #150: f64 オフライン数値・DSP プリミティブ。依存は std のみ
+# （ruviform-math と同じ Primitives 最下位ルール）。安全 SIMD バックエンドを
+# 将来導入する場合も ruviform-math と同じく実装詳細として閉じ込める。
+[dependencies]
+
+[dev-dependencies]
+# rt_ テスト用のアロケーション検知（test-rt レーン）。lib 依存には昇格しない。
+assert_no_alloc = "1.1"
