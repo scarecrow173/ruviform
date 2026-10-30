@@ -32,7 +32,8 @@ Ruviform ワークスペースのメンバークレート索引（計22クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-media-io`](ruviform-media-io/README.md) | メディア I/O 抽象境界（demux/mux・decode/encode の4系統 trait） |
-| [`ruviform-io-symphonia`](ruviform-io-symphonia/README.md) | symphonia バックエンド PoC（demux + decode のみ） |
+| [`ruviform-io-symphonia`](ruviform-io-symphonia/README.md) | symphonia バックエンド（demux + decode。feature `mp4`/`aac` で ISOBMFF/AAC を opt-in） |
+| [`ruviform-io-avi`](ruviform-io-avi/README.md) | pure-Rust AVI バックエンド（RIFF/AVI demux + PCM audio + DIB video decode） |
 
 ## Optional platform adapters
 
