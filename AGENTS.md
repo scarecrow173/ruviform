@@ -112,7 +112,7 @@ mise exec -- apm install --frozen
 ### ワークスペース構成
 
 - ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`version = "0.1.0"` は仮置き。`edition = "2024"` は Issue #34 で確定。`rust-version = "1.89"` は Issue #34 で 1.85 確定後、Issue #52 / docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md で 1.89 に引上げ（fearless_simd 本番昇格前提）。`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
-- メンバー構成（層別の計19クレート一覧と各クレート README へのリンク）は [crates/README.md](crates/README.md) を索引とする。各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は `crates/<name>/README.md` と crate-level doc に転記しており、そちらを参照。層構造と `path` 依存方向・クレート DAG の正本は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）であり、`members` は実装 Phase に応じて段階追加される。残りの `path` 依存は API 確定に伴い追加する。上記以外の公開 API は引き続き未確定であり、実装 Issue で確定する。
+- メンバー構成（層別の計24クレート一覧と各クレート README へのリンク）は [crates/README.md](crates/README.md) を索引とする。各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は `crates/<name>/README.md` と crate-level doc に転記しており、そちらを参照。層構造と `path` 依存方向・クレート DAG の正本は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）であり、`members` は実装 Phase に応じて段階追加される。残りの `path` 依存は API 確定に伴い追加する。上記以外の公開 API は引き続き未確定であり、実装 Issue で確定する。
 - Adapter クレートとして `crates/ruviform-audio-device` を Issue #23（cpal 条件付き採用・[docs/adr/select-audio-device-backend.md](docs/adr/select-audio-device-backend.md)・accepted）で新設済み。adapter 層はドメイン基盤の外側（engine と同じ利用側層）で、foundations/Primitives への下向き依存のみを持つ。`ruviform-audio-device` は cpal を内部依存に閉じ込め、`ruviform_audio_core::device` のポート trait（`DeviceEnumerator`/`Device`/`OutputStream`）を `Box<dyn>` 経由で実装する。cpal の型・エラー・feature 名を公開 API に露出せず、コアクレートからの強制依存・adapter→adapter 依存は作らない。手動検証 example（`list_devices`・`play_sine`）は実機依存で CI 対象外。
 
 ### 検証入口
@@ -135,9 +135,12 @@ mise exec -- apm install --frozen
 | `verify-ci` | `fmt-check` → `check-ci` → `lint-ci` → `test-ci` を順次実行 | CI 同等の検証列 |
 | `test-l1-real-plugin` | `cargo build -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host` → `cargo test -p ... --features host --lib --bins` → `cargo test -p ... --features host --test l1_real_adapter_e2e -- --ignored` | 実規格プラグイン L1 E2E opt-in lane（Issue #114。fixture cdylib + `host` feature runner bin を要し `#[ignore]` + `#![cfg]` + `required-features` で既定経路から分離。CI `l1-real-verify` ジョブが呼ぶ入口） |
 | `lint-l1-real-plugin` | `cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 --all-targets --features host -- -D warnings` | `host` feature 配下の bridge/runner/E2E ターゲット lint（既定 `lint` の feature 集合外） |
+| `check-ui-webview` | `cargo check -p ruviform-ui-webview --features webview --all-targets` | UI webview adapter の feature 有効型チェック（Issue #156。既定 `check` は headless のまま） |
+| `lint-ui-webview` | `cargo clippy -p ruviform-ui-webview --all-targets --features webview -- -D warnings` | `webview` feature 配下の host/example ターゲット lint（既定 `lint` の feature 集合外） |
+| `test-ui-webview` | `cargo test -p ruviform-ui-webview --features webview` | `webview` feature 配下テスト（`rvf://` スキーム/data 面は headless 検証可能、窓付き実動作は手動検証。CI `ui-verify` ジョブが呼ぶ入口） |
 
 - `*-ci` タスクと `verify-ci` は CI 用途限定。成果物が `target/ci/` に `target/debug/` と並存して容量を消費するため常用しない。
-- `.github/workflows/ci.yml` は `workflow_dispatch` 専用の手動検証ワークフロー（push / pull_request / schedule 等の自動トリガーは設けない）。`verify` と `l1-real-verify`（`mise run test-l1-real-plugin` + `mise run lint-l1-real-plugin`・Issue #114 の実規格プラグイン lane）ジョブは `ubuntu-latest` / `windows-latest` / `macos-latest` の 3 OS matrix（`verify` のディスク計測ステップは ubuntu のみ）、`rt-verify`（`mise run test-rt`）・`icc-verify`（`test-video-proc-icc`/`lint-video-proc-icc`）・`bench`（`mise run bench-smoke`）ジョブは `ubuntu-latest` 単独。
+- `.github/workflows/ci.yml` は `workflow_dispatch` 専用の手動検証ワークフロー（push / pull_request / schedule 等の自動トリガーは設けない）。`verify` と `l1-real-verify`（`mise run test-l1-real-plugin` + `mise run lint-l1-real-plugin`・Issue #114 の実規格プラグイン lane）ジョブは `ubuntu-latest` / `windows-latest` / `macos-latest` の 3 OS matrix（`verify` のディスク計測ステップは ubuntu のみ）、`ui-verify`（`check-ui-webview`/`lint-ui-webview`/`test-ui-webview`・Issue #156 の webview feature lane。Linux はジョブ内で WebKitGTK 開発パッケージを導入）ジョブは `ubuntu-latest` / `windows-latest` / `macos-latest` の 3 OS matrix、`rt-verify`（`mise run test-rt`）・`icc-verify`（`test-video-proc-icc`/`lint-video-proc-icc`）・`bench`（`mise run bench-smoke`）ジョブは `ubuntu-latest` 単独。
 
 ### 暫定規約
 
