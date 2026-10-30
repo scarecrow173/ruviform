@@ -476,6 +476,7 @@ impl DiagRegistry {
 
 /// One drain-poll outcome — the platform FFI's answer to "is there
 /// stderr to read right now".
+#[derive(Debug, PartialEq, Eq)]
 enum Poll {
     /// At least one byte can be read without blocking.
     Data,
@@ -486,6 +487,34 @@ enum Poll {
     /// The poll/peek itself failed — the drain ends quietly (the
     /// convergence path owns the failure's classification).
     Error,
+}
+
+/// POSIX result mapping — separated from the FFI call so the
+/// classification is unit-testable without injecting signals.
+/// `EINTR` maps to `Idle` (the drain retries on its next cycle),
+/// matching the read side's `ErrorKind::Interrupted` retry —
+/// a caught-and-resumed signal must not kill the capture.
+#[cfg(unix)]
+fn classify_poll(rc: i32, errno: i32, revents: i16) -> Poll {
+    if rc < 0 {
+        return if errno == libc::EINTR {
+            Poll::Idle
+        } else {
+            Poll::Error
+        };
+    }
+    if rc == 0 {
+        return Poll::Idle;
+    }
+    if revents & libc::POLLIN != 0 {
+        return Poll::Data;
+    }
+    if revents & libc::POLLHUP != 0 {
+        return Poll::Eof;
+    }
+    // POLLERR/POLLNVAL (or an unrecognised set) — the descriptor is
+    // unusable either way.
+    Poll::Error
 }
 
 /// POSIX wait: `poll` on the pipe read end for `POLLIN`, with
@@ -510,18 +539,9 @@ fn poll_stderr(stderr: &ChildStderr, wait: Duration) -> Poll {
     };
     let timeout = i32::try_from(wait.as_millis().min(i32::MAX as u128)).unwrap_or(i32::MAX);
     let rc = unsafe { libc::poll(&mut pfd, 1, timeout) };
-    if rc <= 0 {
-        return if rc == 0 { Poll::Idle } else { Poll::Error };
-    }
-    if pfd.revents & libc::POLLIN != 0 {
-        return Poll::Data;
-    }
-    if pfd.revents & libc::POLLHUP != 0 {
-        return Poll::Eof;
-    }
-    // POLLERR/POLLNVAL (or an unrecognised set) — the descriptor is
-    // unusable either way.
-    Poll::Error
+    // `last_os_error` must be read before any other fallible call.
+    let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+    classify_poll(rc, errno, pfd.revents)
 }
 
 /// Windows check: pipes have no waitable readiness primitive in
@@ -662,6 +682,21 @@ mod tests {
             drain_deadline_exceeded: false,
             unread_bytes_observed: false,
         }
+    }
+
+    /// Issue #147: a `poll` returning EINTR must classify as `Idle`
+    /// (retry on the next cycle — the read side's
+    /// `ErrorKind::Interrupted` semantics), not `Error` (drain death
+    /// → `ChildStderr` drop → child stderr writes hit EPIPE).
+    #[cfg(unix)]
+    #[test]
+    fn poll_eintr_is_idle_not_error() {
+        assert_eq!(classify_poll(-1, libc::EINTR, 0), Poll::Idle);
+        assert_eq!(classify_poll(-1, libc::EIO, 0), Poll::Error);
+        assert_eq!(classify_poll(0, 0, 0), Poll::Idle);
+        assert_eq!(classify_poll(1, 0, libc::POLLIN), Poll::Data);
+        assert_eq!(classify_poll(1, 0, libc::POLLHUP), Poll::Eof);
+        assert_eq!(classify_poll(1, 0, libc::POLLERR), Poll::Error);
     }
 
     #[test]
