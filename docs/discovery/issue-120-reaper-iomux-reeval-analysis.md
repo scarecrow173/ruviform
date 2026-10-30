@@ -123,3 +123,14 @@ Issue #120「L1 ドライバの共有リーパー/io 多重化」は post-#117 �
 
 - **latent bug**: `libc::poll` の EINTR が `Poll::Error` → drain 即死（`diag.rs:513-514`→`drain_stderr` return :606）。`read` 側 EINTR は retry される非対称（`:599`）。caught signal（SIGPROF 等）を使うホストプロセスで **stderr capture が静かに停止**する。さらに drain 死亡で `ChildStderr` が drop され read end が閉じるため、子の以後の stderr write は **EPIPE/SIGPIPE** となりブロックではなく失敗する — Rust 子は `SIGPIPE=IGN` 継承で `eprintln!` が **panic**（`plugin-export/lib.rs` の serve loop 内 `eprintln!` サイト）→ 子死亡 → reader EOF → `Failed` 収束。capture 喪失 + 子の誤死という、記述より重い既存問題。merged #121 コードの問題 — #120 とは独立して報告・修正対象
 - stale doc: `l1/mod.rs:5`・`:713` が依然 "two per-child I/O threads" / "its two I/O threads" と記述（実際は 3 — #121 で更新漏れ）
+
+## Post-#147 追記（EINTR 修正後のトリガエッジ評価）
+
+refined 再トリガ条件の一つ「stderr drain の EINTR latent bug 修正時に drain 構造を触る場合 — C への統合を同時評価」のエッジケースを #147 修正（PR #148・`a14f0db`）後に明示評価した。
+
+- **トリガ前提は不成立**: #147 の修正は `poll_stderr` の戻り値写像を `classify_poll` に抽出したのみで、drain の構造（per-child スレッドが `ChildStderr` を所有・`DRAIN_IDLE_WAIT` ポーリング・exit-observation deadline・自己終了）は不変。条件文の「drain 構造を触る場合」という前提に該当しない
+- **メリット側の再評価（実施）**: 仮に同時評価した場合でも結論は不変と判断 —
+  - `classify_poll` は純粋関数として C（共有 drain）でも再利用可能だが、シグネチャが call 単位結果（`rc`/`errno`）と fd 単位結果（`revents`）を結合しており、fd 配列 `poll` では分割が必要 — 再利用の価値は限定的
+  - C の支配的コスト（crate 初グローバル worker・fd→状態 registry・fairness・lifecycle・EOF/deadline 契約複製・テスト隔離）は #147 で一切低下していない
+  - 利益側ゲート（実測 N>1・2N+H < 3N が効く領域）も依然未発火 — N=1 では 2N+H=3N で削減効果ゼロ
+- **結論**: re-defer 継続。副次発見の latent bug は #147 で修正・merged 済み、stale doc は本コミット群で修正済み — 副次発見 2 件ともクローズ
