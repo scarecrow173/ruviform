@@ -22,17 +22,18 @@ use std::time::Duration;
 
 use ruviform_media_core::MediaTime;
 use ruviform_plugin_core::{
-    HostError, LifecycleEvent, LifecycleState, PluginDescriptor, VideoProcessConfig, wire,
+    FailureCause, HostError, LifecycleEvent, LifecycleState, PluginDescriptor, VideoProcessConfig,
+    wire,
 };
 use ruviform_video_core::VideoFrame;
 
 use super::{
-    ChildExit, InstKind, L1Child, SpawnSpecView, Terminal, VideoInstanceParts, converge_instance,
-    data, err_committed_state, post_command_state, remove_instance, vshm,
+    FailedNotice, InstKind, L1Child, SpawnSpecView, Terminal, VideoInstanceParts,
+    converge_instance, data, diag, err_committed_state, post_command_state, remove_instance, vshm,
 };
 
 #[cfg(test)]
-use super::{InstPhase, InstShared, Notify};
+use super::{ChildExit, InstPhase, InstShared, Notify};
 
 /// Spawn parameters for one L1 video instance — the `pub(crate)`
 /// mirror of the public `crate::video::VideoOutOfProcessSpec`.
@@ -111,9 +112,9 @@ pub(crate) struct VideoL1Instance {
     child: Arc<L1Child>,
     /// The minted wire handle — stamps every command's envelope.
     instance: u32,
-    /// This instance's own `ChildExit` notification queue —
+    /// This instance's own `FailedNotice` notification queue —
     /// `InstShared.notify_tx`'s pair.
-    notify_rx: mpsc::Receiver<ChildExit>,
+    notify_rx: mpsc::Receiver<FailedNotice>,
     /// The facade's clone of `InstShared.rt_state` — the lock-free
     /// mirror snapshot `lifecycle_state` reads; survives entry
     /// removal (`destroy` writes `Destroyed` onto it).
@@ -136,10 +137,12 @@ impl VideoL1Instance {
     /// [`L1Child::spawn_scanned`] (`Hello` version gate + `Scan` →
     /// descriptor field-match) then
     /// [`L1Child::create_video_instance`]. Every failure — spawn
-    /// error, timeout, version/descriptor mismatch — aborts the
-    /// fresh child (kill + reap, no `Shutdown` grace) and returns
-    /// the error; `Err(InstanceLimit)` is the one reply that
-    /// propagates unflattened.
+    /// error, timeout, version/descriptor mismatch, a
+    /// `CreateVideoInstance` rejection — registers the attempt
+    /// record into `diag`, aborts the fresh child (kill + reap, no
+    /// `Shutdown` grace) and returns `Err(HostError::SpawnFailed)`;
+    /// `Err(InstanceLimit)` is the one reply that propagates
+    /// unflattened with no record.
     ///
     /// **RT contract:** non-RT only — blocks up to
     /// `4 × command_timeout` in the worst case.
@@ -150,9 +153,10 @@ impl VideoL1Instance {
     pub(crate) fn spawn(
         spec: &VideoSpawnSpec,
         config: VideoProcessConfig,
+        diag: &diag::DiagRegistry,
     ) -> Result<Self, HostError> {
-        let child = L1Child::spawn_scanned(&spec.view())?;
-        let parts = match child.create_video_instance(&spec.view(), config) {
+        let child = L1Child::spawn_scanned(&spec.view(), diag)?;
+        let parts = match child.create_video_instance(&spec.view(), config, diag) {
             Ok(parts) => parts,
             Err(error) => {
                 // Fresh-child failure — kill + reap, no
@@ -392,15 +396,18 @@ impl VideoL1Instance {
         let wire::Reply::Rendered { output } = reply else {
             // A well-formed reply of the wrong kind is a protocol
             // anomaly — `Err(Ipc)`, no convergence (the same answer
-            // a reply-kind mismatch gives on the audio path).
+            // a reply-kind mismatch gives on the audio path); the
+            // observation still records `Protocol` on the capture.
+            self.shared.diag.record_cause(FailureCause::Protocol);
             return Err(HostError::Ipc);
         };
         if !validate_rendered_desc(&self.config, &output, self.segment.region_bytes()) {
             // Well-formed but lies — the desc disagrees with the
             // instance's own config or violates canonicality/bounds.
             // Instance-attributable: converge this instance `Failed`
-            // (siblings stay live) and answer `Err(Ipc)`.
-            converge_instance(&self.shared, self.instance);
+            // (siblings stay live) and answer `Err(Ipc)` — a
+            // well-formed frame that lies is `Protocol`.
+            converge_instance(&self.shared, self.instance, FailureCause::Protocol);
             return Err(HostError::Ipc);
         }
         // Acquire edge — pairs the child's `fence(Release)` before
@@ -501,8 +508,19 @@ impl VideoL1Instance {
     /// per convergence, `None` on clean teardown or before failure.
     ///
     /// **RT contract:** non-RT only — `try_recv`, never blocks.
-    pub(crate) fn try_recv_notification(&self) -> Option<ChildExit> {
+    pub(crate) fn try_recv_notification(&self) -> Option<FailedNotice> {
         self.notify_rx.try_recv().ok()
+    }
+
+    /// Freezes the child's live capture into a registerable record —
+    /// the composite's notification path mints the public record for
+    /// a minted failure (the caller stamps `handle` and `cause`; the
+    /// child's capture keeps mutating afterwards).
+    ///
+    /// **RT contract:** non-RT only — takes the capture mutex and
+    /// clones the retained stderr tail.
+    pub(crate) fn diagnostics_pending(&self) -> diag::PendingRecord {
+        self.shared.diag.freeze(None)
     }
 }
 
@@ -594,6 +612,7 @@ impl VideoL1Instance {
                 } else {
                     InstPhase::Live
                 },
+                cause: None,
             },
         );
         Self {
@@ -667,6 +686,7 @@ mod tests {
                 }),
                 child: std::sync::OnceLock::new(),
                 next_cmd_seq: AtomicU64::new(0),
+                diag: Arc::new(diag::ActiveDiagnostics::new(diag::SpawnPhase::PreSpawn)),
             }),
             driver_tx: Mutex::new(Some(driver_tx)),
             driver_join: Mutex::new(None),
@@ -886,7 +906,21 @@ mod tests {
         let inst = inner.instances.get(&0).expect("entry still registered");
         assert!(inst.mirror.is_failed());
         assert!(matches!(inst.phase, InstPhase::Failed));
+        // The instance-attributable cause is what both the entry
+        // and the one-shot notice carry — `Protocol`, with the
+        // synthesized `{None, None}` exit (the child is alive, so
+        // there is no status to report).
+        assert_eq!(inst.cause, Some(FailureCause::Protocol));
         drop(inner);
+        assert_eq!(
+            instance.notify_rx.try_recv(),
+            Ok(FailedNotice {
+                exit: ChildExit::default(),
+                cause: FailureCause::Protocol,
+            })
+        );
+        // One-shot — the queue is drained after the single notice.
+        assert!(instance.notify_rx.try_recv().is_err());
     }
 
     /// A well-formed `Rendered{output}` round-trips: the `out`
@@ -982,5 +1016,92 @@ mod tests {
         feeder.join().unwrap();
         assert!(matches!(result, Err(HostError::Lifecycle(_))));
         assert_eq!(instance.lifecycle_state(), LifecycleState::Processing);
+    }
+
+    // --- diagnostics parity (Issue #121 T11) ---------------------
+
+    /// The `InstKind::Video` arm owns no audio data plane — every
+    /// audio-only accessor on its `InstShared` answers `None` and
+    /// the audio completion enqueue is a defined no-op. This is the
+    /// accessor-level half of `InstKind`'s type-level pin; the
+    /// public `audio_counters(handle) -> None` query is its E2E
+    /// mirror in `l1_video_e2e.rs`.
+    #[test]
+    fn video_entry_carries_no_audio_data_plane() {
+        let cfg = config(64, 48);
+        let instance = VideoL1Instance::test_fixture(LifecycleState::Processing, cfg);
+        let inner = instance.shared.lock();
+        let inst = inner.instances.get(&0).expect("video entry registered");
+        assert!(matches!(inst.kind, InstKind::Video { .. }));
+        assert!(inst.armed_staging().is_none());
+        assert!(inst.audio_shm().is_none());
+        assert!(inst.audio_leg_counters().is_none());
+        assert!(inst.audio_counter_readers().is_none());
+        // The audio completion enqueue is a defined no-op — the
+        // `InstKind::Video` arm carries no result channel to push
+        // onto and no `results_dropped` counter to bump.
+        inst.push_result(42);
+        drop(inner);
+    }
+
+    /// The video child's diagnostics freeze carries the same
+    /// record shape the audio route mints: `freeze` copies
+    /// `phase`/`cause`/stderr verbatim under one lock, `handle` is
+    /// what the caller stamps — `None` for a pre-mint attempt
+    /// record (`create_rollback_error`'s call), `Some(slot)` for a
+    /// minted failure (`diagnostics_pending`'s) — and the registry
+    /// correlates only the latter. The live capture is untouched.
+    #[test]
+    fn diagnostics_pending_freezes_the_shared_capture() {
+        const MSG: &[u8] = b"video worker says hi";
+        let (child, _driver_rx) = driver_harness();
+        // Stand where a mid-create failure stands: the child is
+        // `Live` (past `Hello`), a first-observed cause is on the
+        // record and the worker's stderr sits in the ring.
+        child.shared.diag.set_phase(diag::SpawnPhase::Live);
+        child.shared.diag.record_cause(FailureCause::Transport);
+        child.shared.diag.record_bytes(MSG);
+
+        // Pre-mint shape — no handle, the phase/cause/stderr
+        // snapshot carried verbatim.
+        let registry = diag::DiagRegistry::new();
+        let attempt = registry.register(child.shared.diag.freeze(None));
+        assert_eq!(attempt.handle, None);
+        assert_eq!(attempt.phase, diag::SpawnPhase::Live);
+        assert_eq!(attempt.cause, Some(FailureCause::Transport));
+        assert_eq!(attempt.stderr.bytes, MSG);
+        assert_eq!(attempt.stderr.total_read_bytes, MSG.len() as u64);
+        assert_eq!(attempt.stderr.dropped_bytes, 0);
+
+        // Minted shape — `freeze(Some(slot))` is the
+        // handle-correlated record `record_for_handle` resolves.
+        let minted = registry.register(child.shared.diag.freeze(Some(3)));
+        assert_eq!(minted.handle, Some(3));
+        assert_eq!(minted.cause, Some(FailureCause::Transport));
+        assert_eq!(minted.diagnostics_id, attempt.diagnostics_id + 1);
+        assert_eq!(
+            registry
+                .record_for_handle(3)
+                .map(|record| record.diagnostics_id),
+            Some(minted.diagnostics_id)
+        );
+        // A `None`-handle record never enters the handle index, and
+        // both records stay `Found` by id.
+        assert!(registry.record_for_handle(0).is_none());
+        assert!(matches!(
+            registry.query(attempt.diagnostics_id),
+            diag::DiagnosticQuery::Found(_)
+        ));
+        assert!(matches!(
+            registry.query(minted.diagnostics_id),
+            diag::DiagnosticQuery::Found(_)
+        ));
+
+        // The live capture keeps accumulating past the freeze.
+        child.shared.diag.record_bytes(b"!");
+        assert_eq!(
+            child.shared.diag.stderr_snapshot().total_read_bytes,
+            MSG.len() as u64 + 1
+        );
     }
 }

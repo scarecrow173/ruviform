@@ -27,6 +27,11 @@ Directory: `docs/test-specs`
 | TSPEC-034NXpUzrEtLN4lNJSzI77 | L1 video E2E tests（Issue #118 — video() façade・frame 輸送・param・cross-kind・Dedicated pin） | approved | [issue-118-video-e2e-tests.md](./issue-118-video-e2e-tests.md) |
 | TSPEC-034NXpU1IxxAo36yJ3zGbW | L1 video Failed parity tests（Issue #118 — 子スコープ terminal・帰属可能 per-instance・inert・timeout の video 写像） | approved | [issue-118-video-failed-parity-tests.md](./issue-118-video-failed-parity-tests.md) |
 | TSPEC-034NXpKKMs4FptRr5mjttQ | L1 wire v3 video codec tests（Issue #118 — video 動詞・Reply・video 型 codec・WIRE_MAX_VIDEO_*・InvalidValue） | approved | [issue-118-wire-v3-codec-tests.md](./issue-118-wire-v3-codec-tests.md) |
+| TSPEC-034OpmKTAHuW8dcRI9Rv2Y | L1 audio diagnostics counters（Issue #121 — dropped/passthrough/failed/dropped-results 計数・寿命・RT 制約） | approved | [issue-121-l1-audio-counters-tests.md](./issue-121-l1-audio-counters-tests.md) |
+| TSPEC-034OpmMkivhvwJxelIXIxZ | L1 diagnostics retention・diagnostics ID（Issue #121 — bounded retention・登録時採番・found/evicted/not-found・pre-mint phase） | approved | [issue-121-l1-diagnostics-retention-tests.md](./issue-121-l1-diagnostics-retention-tests.md) |
+| TSPEC-034OpmNe3vUnEprFdOIHb6 | L1 FailureCause・通知互換（Issue #121 — 7 variant 分類・first-observed・InstanceFailed.cause・wire 不変） | approved | [issue-121-l1-failure-cause-notification-tests.md](./issue-121-l1-failure-cause-notification-tests.md) |
+| TSPEC-034OpmNQsPNOBT99IHbrQz | L1 diagnostics parity・無退行（Issue #121 — video parity・supervisor pass-through・L0/wire/supervisor 契約維持） | approved | [issue-121-l1-parity-nonregression-tests.md](./issue-121-l1-parity-nonregression-tests.md) |
+| TSPEC-034OpmLKqqBA5YuKQkRrIU | L1 child stderr drain（Issue #121 — piped stderr・64KiB tail ring・snapshot 不変・500ms grace・heir bounded teardown） | approved | [issue-121-l1-stderr-drain-tests.md](./issue-121-l1-stderr-drain-tests.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |

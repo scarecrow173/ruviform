@@ -27,12 +27,13 @@ use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_media_core::{MediaTime, TransportStatus};
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    Event, EventKind, EventList, GuiParentToken, HostError, HostInput, HostOutput, LifecycleError,
-    LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamValue, PluginDescriptor,
-    PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
+    Event, EventKind, EventList, FailureCause, GuiParentToken, HostError, HostInput, HostOutput,
+    LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamValue,
+    PluginDescriptor, PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
 };
 
-use l1::{ChildExit, L1Child, L1Instance, SpawnSpec};
+use l1::diag::DiagRegistry;
+use l1::{ChildExit, FailedNotice, L1Child, L1Instance, SpawnSpec};
 
 /// `assert_no_alloc` arms a thread-local forbid flag through the
 /// global allocator — required exactly once per test binary (the
@@ -79,11 +80,11 @@ fn config() -> ProcessConfig {
 
 /// Polls `try_recv_notification` until the `Failed` notification
 /// arrives or `NOTIFY_TIMEOUT` elapses.
-fn wait_notification(instance: &L1Instance) -> Option<ChildExit> {
+fn wait_notification(instance: &L1Instance) -> Option<FailedNotice> {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     loop {
-        if let Some(exit) = instance.try_recv_notification() {
-            return Some(exit);
+        if let Some(notice) = instance.try_recv_notification() {
+            return Some(notice);
         }
         assert!(
             Instant::now() < deadline,
@@ -105,7 +106,7 @@ fn wait_for_failed(instance: &L1Instance) {
 /// child-side and returns identical reply/error semantics.
 #[test]
 fn command_parity_lifecycle_and_state() {
-    let mut instance = L1Instance::spawn(&spec(&[])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
     assert_eq!(instance.lifecycle_state(), LifecycleState::Created);
 
     assert_eq!(
@@ -181,7 +182,7 @@ fn command_parity_lifecycle_and_state() {
 /// `Err(HostError::Lifecycle(_))` — identical semantics to L0.
 #[test]
 fn illegal_transitions_match_l0_semantics() {
-    let mut instance = L1Instance::spawn(&spec(&[])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
 
     // Activate before Initialize.
     assert!(matches!(
@@ -221,7 +222,8 @@ fn illegal_transitions_match_l0_semantics() {
 /// rejected.
 #[test]
 fn crash_transitions_failed_and_notifies() {
-    let mut instance = L1Instance::spawn(&spec(&["--crash-after-msgs=4"])).unwrap();
+    let mut instance =
+        L1Instance::spawn(&spec(&["--crash-after-msgs=4"]), &DiagRegistry::new()).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     // The pending command is woken `Ipc` by the convergence.
@@ -231,8 +233,8 @@ fn crash_transitions_failed_and_notifies() {
     );
 
     wait_for_failed(&instance);
-    let exit = wait_notification(&instance).expect("notification missing");
-    assert_eq!(exit.code, Some(3));
+    let notice = wait_notification(&instance).expect("notification missing");
+    assert_eq!(notice.exit.code, Some(3));
 
     assert_eq!(
         instance.execute(wire::Command::Initialize),
@@ -263,8 +265,11 @@ fn crash_transitions_failed_and_notifies() {
 /// `Failed`, not clean teardown.
 #[test]
 fn voluntary_exit_zero_is_failure() {
-    let mut instance =
-        L1Instance::spawn(&spec(&["--crash-after-msgs=3", "--crash-exit-code=0"])).unwrap();
+    let mut instance = L1Instance::spawn(
+        &spec(&["--crash-after-msgs=3", "--crash-exit-code=0"]),
+        &DiagRegistry::new(),
+    )
+    .unwrap();
 
     // Message 3 (`Initialize` — after `Scan` and `CreateInstance`)
     // kills the worker mid-command.
@@ -274,8 +279,8 @@ fn voluntary_exit_zero_is_failure() {
     );
 
     wait_for_failed(&instance);
-    let exit = wait_notification(&instance).expect("notification missing");
-    assert_eq!(exit.code, Some(0));
+    let notice = wait_notification(&instance).expect("notification missing");
+    assert_eq!(notice.exit.code, Some(0));
     assert_eq!(
         instance.execute(wire::Command::Initialize),
         Err(HostError::Failed)
@@ -287,7 +292,7 @@ fn voluntary_exit_zero_is_failure() {
 /// convergence as a spontaneous crash.
 #[test]
 fn kill_transitions_failed_and_notifies() {
-    let mut instance = L1Instance::spawn(&spec(&[])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     instance.kill();
@@ -311,7 +316,11 @@ fn kill_transitions_failed_and_notifies() {
 /// rejection table: timeout ⇒ `Ipc` + `Failed`).
 #[test]
 fn hang_converges_on_command_timeout() {
-    let mut instance = L1Instance::spawn(&fast_timeout_spec(&["--hang-after-msgs=2"])).unwrap();
+    let mut instance = L1Instance::spawn(
+        &fast_timeout_spec(&["--hang-after-msgs=2"]),
+        &DiagRegistry::new(),
+    )
+    .unwrap();
 
     // `Scan` and `CreateInstance` (the handshake) were messages 1–2 —
     // `Initialize` is never answered.
@@ -329,7 +338,8 @@ fn hang_converges_on_command_timeout() {
 }
 
 /// Descriptor mismatch at handshake: the child's `Scanned` does not
-/// field-match `spec.descriptor` → `Err(Ipc)` + kill/reap.
+/// field-match `spec.descriptor` → `SpawnFailed{cause: Handshake}` +
+/// kill/reap.
 #[test]
 fn handshake_descriptor_mismatch() {
     let mut spec = spec(&[]);
@@ -337,41 +347,66 @@ fn handshake_descriptor_mismatch() {
         name: "Not The Worker",
         ..WORKER_DESCRIPTOR
     };
-    assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
+    assert!(matches!(
+        L1Instance::spawn(&spec, &DiagRegistry::new()).map(|_| ()),
+        Err(HostError::SpawnFailed {
+            cause: FailureCause::Handshake,
+            ..
+        })
+    ));
 }
 
-/// `Hello.version != WIRE_VERSION` → handshake failure → `Err(Ipc)`.
+/// `Hello.version != WIRE_VERSION` → handshake failure →
+/// `SpawnFailed{cause: Handshake}`.
 #[test]
 fn handshake_version_mismatch() {
-    assert_eq!(
-        L1Instance::spawn(&spec(&["--hello-version=99"])).map(|_| ()),
-        Err(HostError::Ipc)
-    );
+    assert!(matches!(
+        L1Instance::spawn(&spec(&["--hello-version=99"]), &DiagRegistry::new()).map(|_| ()),
+        Err(HostError::SpawnFailed {
+            cause: FailureCause::Handshake,
+            ..
+        })
+    ));
 }
 
 /// `Hello` arrives but `Scan` is never answered — the handshake
-/// `command_timeout` path → `Err(Ipc)` + kill/reap.
+/// `command_timeout` path → `SpawnFailed{cause: Timeout}` +
+/// kill/reap.
 #[test]
 fn handshake_scan_timeout() {
-    assert_eq!(
-        L1Instance::spawn(&fast_timeout_spec(&["--hang-after-msgs=0"])).map(|_| ()),
-        Err(HostError::Ipc)
-    );
+    assert!(matches!(
+        L1Instance::spawn(
+            &fast_timeout_spec(&["--hang-after-msgs=0"]),
+            &DiagRegistry::new()
+        )
+        .map(|_| ()),
+        Err(HostError::SpawnFailed {
+            cause: FailureCause::Timeout,
+            ..
+        })
+    ));
 }
 
-/// The executable itself failing to spawn is `Err(Ipc)`.
+/// The executable itself failing to spawn is
+/// `SpawnFailed{cause: Spawn}` — pre-mint, no child ever existed.
 #[test]
-fn spawn_failure_is_ipc() {
+fn spawn_failure_is_spawn_failed() {
     let mut spec = spec(&[]);
     spec.program = OsString::from("ruviform-l1-definitely-not-a-binary-xyz");
-    assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
+    assert!(matches!(
+        L1Instance::spawn(&spec, &DiagRegistry::new()).map(|_| ()),
+        Err(HostError::SpawnFailed {
+            cause: FailureCause::Spawn,
+            ..
+        })
+    ));
 }
 
 /// `OpenGui`/`CloseGui` are rejected `Unsupported` without touching
 /// the wire — the child stays alive and keeps serving commands.
 #[test]
 fn gui_defined_rejection() {
-    let mut instance = L1Instance::spawn(&spec(&[])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     assert_eq!(
@@ -398,7 +433,7 @@ fn gui_defined_rejection() {
 /// `Prepare(UnsupportedConfig)`, mirror unchanged.
 #[test]
 fn activate_over_wire_limit_rejected() {
-    let mut instance = L1Instance::spawn(&spec(&[])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     let over = ProcessConfig::new(
@@ -420,7 +455,7 @@ fn activate_over_wire_limit_rejected() {
 /// no `Failed`, no notification, idempotent `Destroy`.
 #[test]
 fn destroy_is_clean_teardown() {
-    let mut instance = L1Instance::spawn(&spec(&[])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     instance.destroy();
@@ -434,7 +469,7 @@ fn destroy_is_clean_teardown() {
 /// fallback teardown path (owner gone → driver `Disconnected` arm).
 #[test]
 fn drop_reaps_live_child() {
-    let mut instance = L1Instance::spawn(&spec(&[])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
     drop(instance);
     // Reaching here at all is the assertion — Drop must not hang.
@@ -449,8 +484,11 @@ fn drop_reaps_live_child() {
 /// driver unwind — and destroy/drop afterwards stay bounded.
 #[test]
 fn wedged_child_write_converges_and_teardown_is_bounded() {
-    let mut instance =
-        L1Instance::spawn(&fast_timeout_spec(&["--stop-reading-after-msgs=3"])).unwrap();
+    let mut instance = L1Instance::spawn(
+        &fast_timeout_spec(&["--stop-reading-after-msgs=3"]),
+        &DiagRegistry::new(),
+    )
+    .unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     // ~256 KiB — comfortably past every supported platform's pipe
@@ -481,13 +519,14 @@ fn wedged_child_write_converges_and_teardown_is_bounded() {
 /// than join it.
 #[test]
 fn destroy_detaches_reader_when_heir_holds_stdout() {
-    let mut instance = L1Instance::spawn(&spec(&["--leave-heir-after-msgs=2"])).unwrap();
+    let mut instance =
+        L1Instance::spawn(&spec(&["--leave-heir-after-msgs=2"]), &DiagRegistry::new()).unwrap();
 
     wait_for_failed(&instance);
-    let exit = wait_notification(&instance).expect("notification missing");
+    let notice = wait_notification(&instance).expect("notification missing");
     // The worker exited cleanly — still `Failed` (live exit is a
     // violation) — with the real exit code reported.
-    assert_eq!(exit.code, Some(0));
+    assert_eq!(notice.exit.code, Some(0));
 
     let started = Instant::now();
     instance.destroy();
@@ -576,7 +615,7 @@ fn shm_unique_keys_never_repeat() {
 /// A spawned instance driven to `Processing` — Initialize → Activate
 /// (512-frame cap) → `StartProcessing`.
 fn processing_instance(args: &[&str]) -> L1Instance {
-    let mut instance = L1Instance::spawn(&spec(args)).unwrap();
+    let mut instance = L1Instance::spawn(&spec(args), &DiagRegistry::new()).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
     instance
         .execute(wire::Command::Activate { config: config() })
@@ -716,7 +755,7 @@ fn process_roundtrip_gain_and_lookahead_delay() {
 /// L0 returns — before any buffer is touched.
 #[test]
 fn process_requires_processing_state() {
-    let mut instance = L1Instance::spawn(&spec(&[])).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
     instance
         .execute(wire::Command::Activate { config: config() })
@@ -859,11 +898,15 @@ fn bundled_pair(child: &Arc<L1Child>, spawn_spec: &SpawnSpec) -> (L1Instance, L1
     let depth = spawn_spec.instance_depth().unwrap();
     let a = L1Instance::from_parts(
         Arc::clone(child),
-        child.create_instance(spawn_spec, depth).unwrap(),
+        child
+            .create_instance(spawn_spec, depth, &DiagRegistry::new())
+            .unwrap(),
     );
     let b = L1Instance::from_parts(
         Arc::clone(child),
-        child.create_instance(spawn_spec, depth).unwrap(),
+        child
+            .create_instance(spawn_spec, depth, &DiagRegistry::new())
+            .unwrap(),
     );
     (a, b)
 }
@@ -881,7 +924,7 @@ fn bundled_pair(child: &Arc<L1Child>, spawn_spec: &SpawnSpec) -> (L1Instance, L1
 #[test]
 fn bundled_child_hosts_independent_instances() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
     let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
     // One child, two wire handles — the lowest-free mint.
     assert_eq!(a.test_wire_instance(), 0);
@@ -972,14 +1015,14 @@ fn bundled_child_hosts_independent_instances() {
 
     // The kill is child-scoped: one `kill()` fans `Failed` out to
     // every live facade on the shared child — each instance's own
-    // notification channel carries the same `ChildExit`.
+    // notification channel carries the same `FailedNotice`.
     a.kill();
     wait_for_failed(&a);
     wait_for_failed(&b);
-    let exit_a = wait_notification(&a).expect("a's notification missing");
-    let exit_b = wait_notification(&b).expect("b's notification missing");
-    assert_eq!(exit_a, exit_b);
-    assert!(exit_a.code.is_some() || exit_a.signal.is_some());
+    let notice_a = wait_notification(&a).expect("a's notification missing");
+    let notice_b = wait_notification(&b).expect("b's notification missing");
+    assert_eq!(notice_a, notice_b);
+    assert!(notice_a.exit.code.is_some() || notice_a.exit.signal.is_some());
     assert!(a.try_recv_notification().is_none());
     assert!(b.try_recv_notification().is_none());
     // Converged entries stay registered until `Destroy` reclaims
@@ -1002,19 +1045,22 @@ fn bundled_child_hosts_independent_instances() {
 #[test]
 fn bundled_failed_instance_destroy_recovers_handle() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
     let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
 
     // Fail `a` alone — the attributable instance-scope violation
-    // (`ChildExit{None, None}`: the child is alive, there is no
-    // exit status to report).
+    // (`exit{None, None}`: the child is alive, there is no exit
+    // status to report; the stamp's cause is `Protocol`).
     child.test_converge_instance(0);
     assert_eq!(a.lifecycle_state(), LifecycleState::Failed);
     assert_eq!(
         a.try_recv_notification(),
-        Some(ChildExit {
-            code: None,
-            signal: None
+        Some(FailedNotice {
+            exit: ChildExit {
+                code: None,
+                signal: None
+            },
+            cause: FailureCause::Protocol,
         })
     );
     assert!(a.try_recv_notification().is_none());
@@ -1040,7 +1086,11 @@ fn bundled_failed_instance_destroy_recovers_handle() {
     let mut c = L1Instance::from_parts(
         Arc::clone(&child),
         child
-            .create_instance(&spawn_spec, spawn_spec.instance_depth().unwrap())
+            .create_instance(
+                &spawn_spec,
+                spawn_spec.instance_depth().unwrap(),
+                &DiagRegistry::new(),
+            )
             .unwrap(),
     );
     assert_eq!(c.test_wire_instance(), 0);
@@ -1060,7 +1110,7 @@ fn bundled_failed_instance_destroy_recovers_handle() {
 #[test]
 fn bundled_last_facade_teardown_keeps_siblings_alive() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
     let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
     a.execute(wire::Command::Initialize).unwrap();
     b.execute(wire::Command::Initialize).unwrap();
@@ -1107,7 +1157,7 @@ fn bundled_last_facade_teardown_keeps_siblings_alive() {
 #[test]
 fn bundled_mid_destroy_death_keeps_notification() {
     let spawn_spec = spec(&["--crash-after-msgs=4"]);
-    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
     let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
 
     // `DestroyInstance` is the crashing message — the request
@@ -1122,8 +1172,8 @@ fn bundled_mid_destroy_death_keeps_notification() {
 
     // `b` is the child-scope sibling: `Failed`, notified once.
     wait_for_failed(&b);
-    let exit_b = wait_notification(&b).expect("b's notification missing");
-    assert!(exit_b.code.is_some() || exit_b.signal.is_some());
+    let notice_b = wait_notification(&b).expect("b's notification missing");
+    assert!(notice_b.exit.code.is_some() || notice_b.exit.signal.is_some());
     assert!(b.try_recv_notification().is_none());
     b.destroy();
     assert!(child.is_terminal());
@@ -1139,16 +1189,22 @@ fn bundled_mid_destroy_death_keeps_notification() {
 fn bundled_create_past_capacity_is_instance_limit() {
     let spawn_spec = spec(&[]);
     let depth = spawn_spec.instance_depth().unwrap();
-    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
     let mut parts = Vec::new();
     for _ in 0..wire::WIRE_MAX_INSTANCES {
-        parts.push(child.create_instance(&spawn_spec, depth).unwrap());
+        parts.push(
+            child
+                .create_instance(&spawn_spec, depth, &DiagRegistry::new())
+                .unwrap(),
+        );
     }
     assert_eq!(child.live_count(), wire::WIRE_MAX_INSTANCES as usize);
     assert!(!child.pool_eligible());
     assert!(!child.is_terminal());
     assert_eq!(
-        child.create_instance(&spawn_spec, depth).map(|_| ()),
+        child
+            .create_instance(&spawn_spec, depth, &DiagRegistry::new())
+            .map(|_| ()),
         Err(HostError::InstanceLimit)
     );
     // The child stayed healthy — the rejection minted nothing.
@@ -1182,7 +1238,7 @@ fn rt_l1_process_path_no_alloc() {
     const FRAMES: usize = 512;
     let (submit_tx, _submit_rx) = ruviform_rt::channel::<Submit>(3);
     let (mut result_tx, result_rx) = ruviform_rt::channel::<u64>(3);
-    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx);
+    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx, l1::data::RtLegCounters::fresh());
     let staging = Arc::new(Staging::new(3, u32::try_from(FRAMES).unwrap(), 0));
     leg.arm(Arc::clone(&staging));
 
@@ -1302,7 +1358,7 @@ fn rt_l1_result_leg_try_ops() {
     let staging = Arc::new(Staging::new(3, u32::try_from(FRAMES).unwrap(), 0));
     let (submit_tx, mut submit_rx) = ruviform_rt::channel::<Submit>(3);
     let (mut result_tx, result_rx) = ruviform_rt::channel::<u64>(3);
-    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx);
+    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx, l1::data::RtLegCounters::fresh());
     leg.arm(Arc::clone(&staging));
 
     let input = [1.0_f32; FRAMES];
@@ -1405,7 +1461,7 @@ fn rt_l1_result_leg_try_ops() {
 #[test]
 fn rt_l1_bundled_process_no_alloc() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
+    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
     let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
     for instance in [&mut a, &mut b] {
         instance.execute(wire::Command::Initialize).unwrap();
@@ -1464,7 +1520,10 @@ fn rt_l1_bundled_process_no_alloc() {
 fn lookahead_zero_is_rejected() {
     let mut spec = spec(&[]);
     spec.lookahead_blocks = 0;
-    assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
+    assert_eq!(
+        L1Instance::spawn(&spec, &DiagRegistry::new()).map(|_| ()),
+        Err(HostError::Ipc)
+    );
 }
 
 /// `D = lookahead_blocks + 1` is declared on `CreateInstance`'s
@@ -1476,9 +1535,15 @@ fn lookahead_zero_is_rejected() {
 fn lookahead_over_wire_depth_cap_is_rejected() {
     let mut spec = spec(&[]);
     spec.lookahead_blocks = wire::WIRE_MAX_ELEMENTS;
-    assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
+    assert_eq!(
+        L1Instance::spawn(&spec, &DiagRegistry::new()).map(|_| ()),
+        Err(HostError::Ipc)
+    );
     spec.lookahead_blocks = u32::MAX;
-    assert_eq!(L1Instance::spawn(&spec).map(|_| ()), Err(HostError::Ipc));
+    assert_eq!(
+        L1Instance::spawn(&spec, &DiagRegistry::new()).map(|_| ()),
+        Err(HostError::Ipc)
+    );
 }
 
 /// Submits carry the armed ring's generation — the driver-side gate
@@ -1494,7 +1559,7 @@ fn submit_carries_staging_generation_and_stale_is_dropped() {
 
     let (submit_tx, mut submit_rx) = ruviform_rt::channel::<Submit>(3);
     let (_result_tx, result_rx) = ruviform_rt::channel::<u64>(3);
-    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx);
+    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx, l1::data::RtLegCounters::fresh());
     leg.arm(Arc::new(Staging::new(3, 512, 7)));
 
     let input = [1.0_f32; 512];
@@ -1688,7 +1753,7 @@ fn stage_in_zero_fills_planes_without_a_source() {
     const FRAMES: usize = 512;
     let (submit_tx, _submit_rx) = ruviform_rt::channel::<Submit>(3);
     let (mut result_tx, result_rx) = ruviform_rt::channel::<u64>(3);
-    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx);
+    let mut leg = RtLeg::new(3, 2, submit_tx, result_rx, l1::data::RtLegCounters::fresh());
     let staging = Arc::new(Staging::new(3, u32::try_from(FRAMES).unwrap(), 0));
     leg.arm(Arc::clone(&staging));
 
@@ -1815,22 +1880,26 @@ fn rejected_block_replies_resolve_pass_through() {
 mod composite_e2e {
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
+    use std::sync::Arc;
     use std::thread;
     use std::time::{Duration, Instant};
 
-    use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut};
+    use ruviform_audio_core::{AudioBufferViewMut, PlanarBufferView, PlanarBufferViewMut};
     use ruviform_plugin_core::{
-        ErasedPlugin, Event, EventKind, EventList, GuiParentToken, HostError, HostInput,
-        HostOutput, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamInfo,
-        ParamValue, PluginDescriptor, ProcessConfig, ProcessResult, TransportInfo,
+        ErasedPlugin, Event, EventKind, EventList, FailureCause, GuiParentToken, HostError,
+        HostInput, HostOutput, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId,
+        ParamInfo, ParamValue, PluginDescriptor, ProcessConfig, ProcessResult, TransportInfo,
     };
     use ruviform_plugin_host::{
+        AudioCounterSnapshot, ChildExit, DiagnosticQuery, DiagnosticRecord, EndpointBounds,
         HostCommand, HostNotification, HostReply, OutOfProcessIsolation, OutOfProcessSpec, Plugin,
-        PluginFactory, PluginHandle, PluginHost,
+        PluginFactory, PluginHandle, PluginHost, SpawnPhase,
     };
+    use ruviform_rt::RtContext;
 
     use super::{
-        NOTIFY_TIMEOUT, WORKER_DESCRIPTOR, bundled_pair, config, l1::L1Child, sample_eq, spec,
+        NOTIFY_TIMEOUT, WORKER_DESCRIPTOR, bundled_pair, config, l1::L1Child,
+        l1::diag::DiagRegistry, sample_eq, spec,
     };
 
     /// The L0-side fixture: a gain plugin with an adjustable
@@ -2093,16 +2162,21 @@ mod composite_e2e {
     }
 
     /// Polls `try_recv_notification` until the `InstanceFailed`
-    /// notification arrives or `NOTIFY_TIMEOUT` elapses.
-    fn wait_host_notification(
-        host: &mut PluginHost,
-    ) -> (PluginHandle, ruviform_plugin_host::ChildExit) {
+    /// notification arrives or `NOTIFY_TIMEOUT` elapses — the full
+    /// `{handle, exit, cause}` payload so the diagnostics tests can
+    /// pin the first-observed `FailureCause` beside the reaped
+    /// status (mirroring `l1_video_e2e`'s `wait_notification`).
+    fn wait_host_notification(host: &mut PluginHost) -> (PluginHandle, ChildExit, FailureCause) {
         let deadline = Instant::now() + NOTIFY_TIMEOUT;
         loop {
-            if let Some(HostNotification::InstanceFailed { handle, exit }) =
-                host.try_recv_notification()
+            if let Some(HostNotification::InstanceFailed {
+                handle,
+                exit,
+                cause,
+                ..
+            }) = host.try_recv_notification()
             {
-                return (handle, exit);
+                return (handle, exit, cause);
             }
             assert!(
                 Instant::now() < deadline,
@@ -2110,6 +2184,118 @@ mod composite_e2e {
             );
             thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    /// Grace window for a *negative* notification assertion — a
+    /// `try_recv_notification().is_none()` read is only meaningful
+    /// after a would-be notification had time to land (mirrors
+    /// `l1_video_e2e`'s `NO_NOTIFY_GRACE`).
+    const NO_NOTIFY_GRACE: Duration = Duration::from_millis(500);
+
+    /// Asserts `try_recv_notification` stays empty for the grace
+    /// window — a negative answer is only meaningful after the
+    /// child had time to produce one.
+    fn assert_no_notification(host: &mut PluginHost) {
+        let deadline = Instant::now() + NO_NOTIFY_GRACE;
+        while Instant::now() < deadline {
+            assert!(
+                host.try_recv_notification().is_none(),
+                "unexpected failure notification"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// `Instantiate` the worker route expecting
+    /// `Err(HostError::SpawnFailed{cause, diagnostics_id})` — the
+    /// pre-mint failure surface — and returns the payload pair for
+    /// the caller's per-scenario assertions.
+    fn expect_spawn_failed(host: &mut PluginHost) -> (FailureCause, u64) {
+        let Err(HostError::SpawnFailed {
+            cause,
+            diagnostics_id,
+        }) = host.execute(HostCommand::Instantiate {
+            plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+        })
+        else {
+            panic!("a failed spawn must surface as SpawnFailed")
+        };
+        (cause, diagnostics_id)
+    }
+
+    /// The minted-failure record oracle: `diagnostics_for_handle`
+    /// resolves the retained record keyed by the handle's slot —
+    /// `handle` is the slot, `phase` is `Live` (the mint reached
+    /// live state before failing) and `cause` is the
+    /// notification's own first-observed cause verbatim. Returns
+    /// the record for the caller's scenario-specific assertions.
+    fn expect_live_failure_record(
+        host: &PluginHost,
+        handle: PluginHandle,
+        cause: FailureCause,
+    ) -> Arc<DiagnosticRecord> {
+        let record = host
+            .diagnostics_for_handle(handle)
+            .expect("minted failure must register a record");
+        assert_eq!(record.handle, Some(handle.slot()));
+        assert_eq!(record.cause, Some(cause));
+        assert_eq!(record.phase, SpawnPhase::Live);
+        record
+    }
+
+    /// Interleaved `process` calls on two co-resident instances
+    /// over disjoint input ranges — the `(instance, seq)`
+    /// correlation oracle at the data plane: any reply or shm
+    /// segment crossing instances lands an undefined sample, and
+    /// both pipelines must have delivered a processed block.
+    fn interleave_disjoint_blocks(host: &mut PluginHost, a: PluginHandle, b: PluginHandle) {
+        let mut a_inputs: Vec<f32> = Vec::new();
+        let mut b_inputs: Vec<f32> = Vec::new();
+        let mut delivered_a = false;
+        let mut delivered_b = false;
+        for call in 0..24_u32 {
+            let va = 0.2 + 0.01 * f32::from(u8::try_from(call).unwrap() + 1);
+            let vb = 5.0 + 0.01 * f32::from(u8::try_from(call).unwrap() + 1);
+            let input_a = vec![va; 512];
+            let input_b = vec![vb; 512];
+            let mut out_a = vec![0.0_f32; 512];
+            let mut out_b = vec![0.0_f32; 512];
+            thread::sleep(Duration::from_millis(5));
+            assert_eq!(
+                host_block(host, a, &input_a, &mut out_a),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert_eq!(
+                host_block(host, b, &input_b, &mut out_b),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert!(
+                out_a
+                    .iter()
+                    .all(|&s| super::is_defined_sample(s, &a_inputs)),
+                "call {call}: a carried a foreign/undefined sample {}",
+                out_a[0]
+            );
+            assert!(
+                out_b
+                    .iter()
+                    .all(|&s| super::is_defined_sample(s, &b_inputs)),
+                "call {call}: b carried a foreign/undefined sample {}",
+                out_b[0]
+            );
+            delivered_a |= call >= 2
+                && out_a
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.5 * a_inputs[call as usize - 2]));
+            delivered_b |= call >= 2
+                && out_b
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.5 * b_inputs[call as usize - 2]));
+            a_inputs.push(va);
+            b_inputs.push(vb);
+        }
+        assert!(delivered_a, "a's pipeline never delivered");
+        assert!(delivered_b, "b's pipeline never delivered");
     }
 
     /// The mixed-route E2E (spec AC1 parity through the composite):
@@ -2338,15 +2524,21 @@ mod composite_e2e {
         host.kill_child(l1).unwrap();
         wait_host_failed(&host, l1);
 
-        let (notified, exit) = wait_host_notification(&mut host);
+        let (notified, exit, cause) = wait_host_notification(&mut host);
         assert_eq!(notified, l1);
 
         // A reaped status always carries something: Windows reports
-        // the kill as an exit code, unix as a signal.
+        // the kill as an exit code, unix as a signal. The cause is
+        // the driver's first observation — the reaped exit or the
+        // pipe EOF that raced it first; both are defined.
         assert!(
             exit.code.is_some() || exit.signal.is_some(),
             "notification carried no exit status"
         );
+        assert!(matches!(
+            cause,
+            FailureCause::ExitObserved | FailureCause::Transport
+        ));
         // Exactly once — the queue is already drained.
         assert!(host.try_recv_notification().is_none());
 
@@ -2381,6 +2573,66 @@ mod composite_e2e {
         host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
         assert_eq!(host.lifecycle_state(l1), None);
         assert!(host.try_recv_notification().is_none());
+    }
+
+    /// The minted-failure correlation: a `Failed` notification's
+    /// arrival registers the frozen diagnostic record keyed by the
+    /// public handle's slot — `diagnostics_for_handle` resolves it,
+    /// carrying the notification's own first-observed `cause`
+    /// verbatim, the `Live` phase and the retained stderr tail
+    /// (`--stderr-bytes` emitted pre-`Hello`, so the drain captured
+    /// it before the handshake even started). A never-minted id
+    /// stays `NotFound`; a live handle resolves `None` until its
+    /// own failure lands.
+    #[test]
+    fn minted_failure_registers_handle_correlated_record() {
+        const STDERR_BYTES: usize = 256;
+        let mut host = mixed_host(&["--stderr-bytes=256"]);
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        drive_to_processing(&mut host, l1);
+
+        // No record exists for a live handle's slot.
+        assert!(host.diagnostics_for_handle(l1).is_none());
+
+        host.kill_child(l1).unwrap();
+        wait_host_failed(&host, l1);
+        let (notified, exit, cause) = wait_host_notification(&mut host);
+        assert_eq!(notified, l1);
+        assert!(exit.code.is_some() || exit.signal.is_some());
+        assert!(matches!(
+            cause,
+            FailureCause::ExitObserved | FailureCause::Transport
+        ));
+
+        // The handle correlates the retained record — slot key, the
+        // notification's own cause verbatim, `Live` phase, frozen
+        // capture.
+        let record = expect_live_failure_record(&host, l1, cause);
+        // The pre-`Hello` emission survived in the retained tail —
+        // 256 bytes sit far under the ring capacity, so nothing
+        // dropped and the drain's post-exit deadline never armed
+        // (the record froze at notification-pop, before the 500 ms
+        // grace could expire; `eof` itself races the freeze and
+        // stays deliberately unasserted, like the video lane).
+        assert_eq!(record.stderr.bytes, vec![b'!'; STDERR_BYTES]);
+        assert_eq!(record.stderr.total_read_bytes, STDERR_BYTES as u64);
+        assert_eq!(record.stderr.dropped_bytes, 0);
+        assert!(!record.stderr.drain_deadline_exceeded);
+        assert!(!record.stderr.unread_bytes_observed);
+        // The same record is `Found` by id; a never-minted id is
+        // `NotFound` (not `Evicted` — ids below the watermark mint
+        // contiguously).
+        assert!(matches!(
+            host.diagnostics_query(record.diagnostics_id),
+            DiagnosticQuery::Found(found)
+                if found.diagnostics_id == record.diagnostics_id
+        ));
+        assert!(matches!(
+            host.diagnostics_query(record.diagnostics_id + 1000),
+            DiagnosticQuery::NotFound
+        ));
+
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
     }
 
     /// The L0 legality rule is enforced at the composite for L1 too:
@@ -2658,59 +2910,12 @@ mod composite_e2e {
         // `(instance, seq)` correlation oracle at the data plane:
         // any reply or shm segment crossing instances lands an
         // undefined sample.
-        let mut a_inputs: Vec<f32> = Vec::new();
-        let mut b_inputs: Vec<f32> = Vec::new();
-        let mut delivered_a = false;
-        let mut delivered_b = false;
-        for call in 0..24_u32 {
-            let va = 0.2 + 0.01 * f32::from(u8::try_from(call).unwrap() + 1);
-            let vb = 5.0 + 0.01 * f32::from(u8::try_from(call).unwrap() + 1);
-            let input_a = vec![va; 512];
-            let input_b = vec![vb; 512];
-            let mut out_a = vec![0.0_f32; 512];
-            let mut out_b = vec![0.0_f32; 512];
-            thread::sleep(Duration::from_millis(5));
-            assert_eq!(
-                host_block(&mut host, a, &input_a, &mut out_a),
-                Ok(ProcessResult::CONTINUE)
-            );
-            assert_eq!(
-                host_block(&mut host, b, &input_b, &mut out_b),
-                Ok(ProcessResult::CONTINUE)
-            );
-            assert!(
-                out_a
-                    .iter()
-                    .all(|&s| super::is_defined_sample(s, &a_inputs)),
-                "call {call}: a carried a foreign/undefined sample {}",
-                out_a[0]
-            );
-            assert!(
-                out_b
-                    .iter()
-                    .all(|&s| super::is_defined_sample(s, &b_inputs)),
-                "call {call}: b carried a foreign/undefined sample {}",
-                out_b[0]
-            );
-            delivered_a |= call >= 2
-                && out_a
-                    .iter()
-                    .all(|&s| sample_eq(s, 0.5 * a_inputs[call as usize - 2]));
-            delivered_b |= call >= 2
-                && out_b
-                    .iter()
-                    .all(|&s| sample_eq(s, 0.5 * b_inputs[call as usize - 2]));
-            a_inputs.push(va);
-            b_inputs.push(vb);
-        }
-        assert!(delivered_a, "a's pipeline never delivered");
-        assert!(delivered_b, "b's pipeline never delivered");
+        interleave_disjoint_blocks(&mut host, a, b);
 
         // The child-scope oracle: one `kill_child` converges every
-        // co-resident instance — under `Bundled` both handles are on
-        // the same child, so both go `Failed` and each minted
-        // handle gets exactly one `InstanceFailed` with the same
-        // exit status.
+        // co-resident instance — under `Bundled` both go `Failed`
+        // and each minted handle gets exactly one `InstanceFailed`
+        // carrying the same exit status and first-observed `cause`.
         host.kill_child(a).unwrap();
         wait_host_failed(&host, a);
         wait_host_failed(&host, b);
@@ -2718,11 +2923,24 @@ mod composite_e2e {
             wait_host_notification(&mut host),
             wait_host_notification(&mut host),
         ];
-        notified.sort_by_key(|(handle, _)| handle.slot());
-        assert_eq!(notified[0].0, a);
-        assert_eq!(notified[1].0, b);
-        assert_eq!(notified[0].1, notified[1].1);
+        notified.sort_by_key(|(handle, ..)| handle.slot());
+        assert_eq!([notified[0].0, notified[1].0], [a, b]);
+        assert_eq!(
+            (notified[0].1, notified[0].2),
+            (notified[1].1, notified[1].2)
+        );
+        assert!(matches!(
+            notified[0].2,
+            FailureCause::ExitObserved | FailureCause::Transport
+        ));
         assert!(host.try_recv_notification().is_none());
+
+        // The child-scope diagnostics are retained per minted
+        // handle — each record carries its notification's verbatim
+        // cause.
+        for (handle, cause) in [(a, notified[0].2), (b, notified[1].2)] {
+            expect_live_failure_record(&host, handle, cause);
+        }
 
         // Both stay `Failed` until `Destroy` — no restart.
         for handle in [a, b] {
@@ -2799,21 +3017,43 @@ mod composite_e2e {
         let a = instantiate(&mut host, WORKER_DESCRIPTOR.id);
 
         // The reused child's `CreateInstance` is the crash
-        // message — `Instantiate` surfaces `Err(Ipc)`, no handle.
-        assert_eq!(
-            host.execute(HostCommand::Instantiate {
-                plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
-            }),
-            Err(HostError::Ipc)
-        );
+        // message — `Instantiate` surfaces `SpawnFailed` with a
+        // registered attempt record, no handle.
+        let Err(HostError::SpawnFailed {
+            cause,
+            diagnostics_id,
+        }) = host.execute(HostCommand::Instantiate {
+            plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+        })
+        else {
+            panic!("a dead pooled create must surface as SpawnFailed")
+        };
+        // Exit or broken pipe — whichever the driver observed first.
+        assert!(matches!(
+            cause,
+            FailureCause::ExitObserved | FailureCause::Transport
+        ));
+        // The attempt record: pre-mint `handle: None`, the child's
+        // `Live` phase (it passed `Hello`; the *instance* mint is
+        // what died) and the same cause the `Err` carried.
+        let DiagnosticQuery::Found(attempt) = host.diagnostics_query(diagnostics_id) else {
+            panic!("the registered attempt record must resolve")
+        };
+        assert_eq!(attempt.diagnostics_id, diagnostics_id);
+        assert_eq!(attempt.handle, None);
+        assert_eq!(attempt.phase, SpawnPhase::Live);
+        assert_eq!(attempt.cause, Some(cause));
 
         // The minted instance converged `Failed` by the child-scope
         // fan-out — exactly one `InstanceFailed`, carrying `a`'s
         // handle. The never-minted `B` emits nothing.
         wait_host_failed(&host, a);
-        let (notified, exit) = wait_host_notification(&mut host);
+        let (notified, exit, notified_cause) = wait_host_notification(&mut host);
         assert_eq!(notified, a);
         assert!(exit.code.is_some() || exit.signal.is_some());
+        // Minted and pre-mint failures on the same child converge
+        // through the same first observation — the causes agree.
+        assert_eq!(notified_cause, cause);
         assert!(host.try_recv_notification().is_none());
 
         host.execute(HostCommand::Destroy { handle: a }).unwrap();
@@ -2852,37 +3092,37 @@ mod composite_e2e {
 
         let mut host = mixed_host(&["--crash-after-msgs=2"]);
 
-        // `Instantiate` → `Err(Ipc)` — no handle, no facade, so
+        // `Instantiate` → `SpawnFailed` — no handle, no facade, so
         // nothing was ever minted and no `InstanceFailed` arrives.
-        assert_eq!(
+        assert!(matches!(
             host.execute(HostCommand::Instantiate {
                 plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
             }),
-            Err(HostError::Ipc)
-        );
+            Err(HostError::SpawnFailed { .. })
+        ));
         assert!(host.try_recv_notification().is_none());
 
         // The pool kept nothing re-servable: the retry pays a
         // fresh spawn that dies at the identical `CreateInstance`
         // — a retained dead entry would self-evict to the same
-        // `Err(Ipc)`, so the distinguishing oracle for
+        // `SpawnFailed`, so the distinguishing oracle for
         // "popped, not merely evictable" stays at the composite
-        // unit level; this row pins the arm's `Err(Ipc)`
+        // unit level; this row pins the arm's `SpawnFailed`
         // granularity, mint-nothing notification semantics and
         // that later `Instantiate`s are never wedged.
-        assert_eq!(
+        assert!(matches!(
             host.execute(HostCommand::Instantiate {
                 plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
             }),
-            Err(HostError::Ipc)
-        );
+            Err(HostError::SpawnFailed { .. })
+        ));
         assert!(host.try_recv_notification().is_none());
 
         // Nothing leaked into later spawns: a clean child still
         // mints a co-resident pair and serves (the `bundled_pair`
         // idiom).
         let spawn_spec = spec(&[]);
-        let child = L1Child::spawn_scanned(&spawn_spec.view()).unwrap();
+        let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
         let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
         a.execute(wire::Command::Initialize).unwrap();
         assert_eq!(b.lifecycle_state(), LifecycleState::Created);
@@ -2912,11 +3152,17 @@ mod composite_e2e {
         assert_eq!(host.lifecycle_state(a), None);
 
         // `b` converged `Failed` on the same child's death — one
-        // notification carrying `b`'s handle and the real exit.
+        // notification carrying `b`'s handle, the real exit and the
+        // driver-observed cause (`ExitObserved` or the EOF that
+        // raced it first).
         wait_host_failed(&host, b);
-        let (notified, exit) = wait_host_notification(&mut host);
+        let (notified, exit, cause) = wait_host_notification(&mut host);
         assert_eq!(notified, b);
         assert!(exit.code.is_some() || exit.signal.is_some());
+        assert!(matches!(
+            cause,
+            FailureCause::ExitObserved | FailureCause::Transport
+        ));
         assert!(host.try_recv_notification().is_none());
         host.execute(HostCommand::Destroy { handle: b }).unwrap();
     }
@@ -2941,9 +3187,13 @@ mod composite_e2e {
 
         host.kill_child(a).unwrap();
         wait_host_failed(&host, a);
-        let (notified, exit) = wait_host_notification(&mut host);
+        let (notified, exit, cause) = wait_host_notification(&mut host);
         assert_eq!(notified, a);
         assert!(exit.code.is_some() || exit.signal.is_some());
+        assert!(matches!(
+            cause,
+            FailureCause::ExitObserved | FailureCause::Transport
+        ));
         assert!(host.try_recv_notification().is_none());
 
         // `b`'s child is a different process — untouched.
@@ -3083,7 +3333,8 @@ mod composite_e2e {
         assert!(persisted_b, "b's gain did not persist without an event");
 
         // Child-scoped kill: both instances on the one runner child
-        // converge `Failed` — two `InstanceFailed`s, same exit.
+        // converge `Failed` — two `InstanceFailed`s, same exit and
+        // same first-observed cause.
         host.kill_child(a).unwrap();
         wait_host_failed(&host, a);
         wait_host_failed(&host, b);
@@ -3091,12 +3342,700 @@ mod composite_e2e {
             wait_host_notification(&mut host),
             wait_host_notification(&mut host),
         ];
-        notified.sort_by_key(|(handle, _)| handle.slot());
+        notified.sort_by_key(|(handle, ..)| handle.slot());
         assert_eq!(notified[0].0, a);
         assert_eq!(notified[1].0, b);
         assert_eq!(notified[0].1, notified[1].1);
+        assert_eq!(notified[0].2, notified[1].2);
+        assert!(matches!(
+            notified[0].2,
+            FailureCause::ExitObserved | FailureCause::Transport
+        ));
         assert!(host.try_recv_notification().is_none());
         host.execute(HostCommand::Destroy { handle: a }).unwrap();
         host.execute(HostCommand::Destroy { handle: b }).unwrap();
+    }
+
+    // --------------------------------------------------------------
+    // Issue #121 diagnostics — the audio L1 route's public contract
+    // through `PluginHost`: `audio_counters`, `diagnostics_query`,
+    // `diagnostics_for_handle`, the `InstanceFailed{.., cause}`
+    // payload and the `SpawnFailed{cause, diagnostics_id}` surface.
+    // `l1_video_e2e` pins the same rows on the video route; these
+    // are the audio-side oracles that own the counters and the
+    // stderr-drain flag semantics.
+    // --------------------------------------------------------------
+
+    /// The audio counters on the in-place `PluginHost::process`
+    /// path: a fresh pair reads zero at mint, warmup/underrun calls
+    /// count as `passthrough_submits`, and once every slot of the
+    /// hung data plane stays busy each further block drops on the
+    /// submit side (`dropped_submits`) — exactly the leg-local
+    /// accounting, no results ever arrive so `results_failed` and
+    /// `results_dropped` stay zero. The pair survives `Failed` and
+    /// dies with `Destroy`; a re-minted slot reads a fresh zero
+    /// pair. `L0` slots have the defined `None` throughout.
+    #[test]
+    fn audio_counters_track_the_in_place_leg() {
+        const CALLS: u64 = 8;
+
+        // Hang after `StartProcessing` (message 5): commands were
+        // answered so the drive reaches `Processing`, then every
+        // `BlockIn` doorbell goes unanswered — the data plane
+        // starves while the child stays alive.
+        let mut host = mixed_host(&["--hang-after-msgs=5"]);
+        let l0 = instantiate(&mut host, L0_GAIN_DESCRIPTOR.id);
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        assert_eq!(
+            host.audio_counters(l1),
+            Some(AudioCounterSnapshot::default())
+        );
+        // The defined absence — an L0 slot owns no counter pair.
+        assert_eq!(host.audio_counters(l0), None);
+
+        drive_to_processing(&mut host, l1);
+        assert_eq!(
+            host.audio_counters(l1),
+            Some(AudioCounterSnapshot::default())
+        );
+
+        // `depth = lookahead + 1 = 3`: calls 0..3 submit into free
+        // slots; every later call finds its slot still busy and
+        // drops. Every call resolves the defined pass-through —
+        // warmup underflow first, then underruns — so both
+        // counters advance deterministically.
+        let input = [1.0_f32; 512];
+        let mut output = [0.0_f32; 512];
+        for _ in 0..CALLS {
+            // Let the driver doorbell each submitted seq — the
+            // leg-side drops need no reply, but the child must be
+            // given the reads or its stdin would eventually block.
+            thread::sleep(Duration::from_millis(5));
+            assert_eq!(
+                host_block(&mut host, l1, &input, &mut output),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert!(output.iter().all(|&s| sample_eq(s, 0.0)));
+        }
+        let counters = host.audio_counters(l1).unwrap();
+        assert_eq!(counters.passthrough_submits, CALLS);
+        assert_eq!(counters.dropped_submits, CALLS - 3);
+        assert_eq!(counters.results_failed_observed, 0);
+        assert_eq!(counters.results_dropped, 0);
+
+        // The pair survives convergence — a `Failed` entry is still
+        // registered (the counters freeze, not disappear).
+        host.kill_child(l1).unwrap();
+        wait_host_failed(&host, l1);
+        let (notified, _exit, cause) = wait_host_notification(&mut host);
+        assert_eq!(notified, l1);
+        assert!(matches!(
+            cause,
+            FailureCause::ExitObserved | FailureCause::Transport
+        ));
+        assert_eq!(host.audio_counters(l1), Some(counters));
+
+        // `Destroy` frees the pair; the stale generation never
+        // resolves again and a re-mint on the slot reads fresh
+        // zeroes.
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+        assert_eq!(host.audio_counters(l1), None);
+        let l1b = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        assert_eq!(l1b.slot(), l1.slot());
+        assert_eq!(host.audio_counters(l1), None);
+        assert_eq!(
+            host.audio_counters(l1b),
+            Some(AudioCounterSnapshot::default())
+        );
+        host.execute(HostCommand::Destroy { handle: l1b }).unwrap();
+        host.execute(HostCommand::Destroy { handle: l0 }).unwrap();
+    }
+
+    /// `results_failed_observed` on the in-place path: block
+    /// rejections are the real wire rejection shape — the child
+    /// answers `BlockIn` with a flagged `Err` reply, the reader
+    /// synthesizes a `RESULT_FAILED` completion and the leg counts
+    /// it on first drain. With `--reject-blocks-after-msgs=2`
+    /// (a doorbell-only counter) doorbells 1–2 process normally and
+    /// every later one is rejected, so the settled snapshot counts
+    /// exactly the rejected seqs the leg has drained. A deep
+    /// lookahead (depth 9) gives every reply ~9 call-times to land
+    /// before its slot is needed again, so no submit drops and the
+    /// observed count is exact rather than latency-raced.
+    /// `results_dropped` stays zero — the result channel's
+    /// capacity-`D` invariant makes an enqueue failure unreachable
+    /// in-protocol.
+    #[test]
+    fn audio_counters_track_rejected_blocks() {
+        let mut host = PluginHost::new();
+        let mut spawn_spec = OutOfProcessSpec::new(WORKER_DESCRIPTOR, worker_program());
+        spawn_spec.args = vec![OsString::from("--reject-blocks-after-msgs=2")];
+        spawn_spec.lookahead_blocks = 8;
+        host.register_out_of_process(spawn_spec).unwrap();
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        drive_to_processing(&mut host, l1);
+
+        let input = [1.0_f32; 512];
+        let mut output = [0.0_f32; 512];
+        // Twelve calls submit seqs 0..12 — doorbells 1..12. Seqs
+        // 0,1 process; 2..11 reject. Every output stays in the
+        // defined set: silence (warmup/underrun/rejection pass-
+        // through) or `0.5 ×` an earlier input (the two processed
+        // seqs).
+        for _ in 0..12 {
+            thread::sleep(Duration::from_millis(10));
+            assert_eq!(
+                host_block(&mut host, l1, &input, &mut output),
+                Ok(ProcessResult::CONTINUE)
+            );
+            assert!(
+                output
+                    .iter()
+                    .all(|&s| sample_eq(s, 0.0) || sample_eq(s, 0.5)),
+                "undefined output sample {}",
+                output[0]
+            );
+        }
+        // Every rejection through seq 11 has now landed; calls
+        // 12..20 advance `expected` past them, so the drain pops
+        // all ten `RESULT_FAILED` completions (seqs 12..20 also
+        // reject, but their completions race the same drain —
+        // the count asserts only what it must observe).
+        thread::sleep(Duration::from_millis(50));
+        for _ in 12..20 {
+            thread::sleep(Duration::from_millis(5));
+            assert_eq!(
+                host_block(&mut host, l1, &input, &mut output),
+                Ok(ProcessResult::CONTINUE)
+            );
+        }
+
+        let counters = host.audio_counters(l1).unwrap();
+        // At least the ten settled rejections, at most every
+        // rejection ever sent (18 seqs past the two processed).
+        assert!(
+            (10..=18).contains(&counters.results_failed_observed),
+            "unexpected results_failed_observed: {counters:?}"
+        );
+        // Deep lookahead freed every slot before reuse — nothing
+        // dropped on the submit side, and nothing ever dropped on
+        // the reader's enqueue.
+        assert_eq!(counters.dropped_submits, 0);
+        assert_eq!(counters.results_dropped, 0);
+        // The first `lookahead` calls always underflow (no expected
+        // seq exists yet) — the deterministic pass-through floor.
+        assert!(counters.passthrough_submits >= 8);
+
+        // The child stayed live — a defined `Err` reply is no
+        // failure: clean unwind, no notification.
+        host.execute(HostCommand::StopProcessing { handle: l1 })
+            .unwrap();
+        host.execute(HostCommand::Deactivate { handle: l1 })
+            .unwrap();
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+        assert!(host.try_recv_notification().is_none());
+    }
+
+    /// The same counter cells behind a detached endpoint:
+    /// `prepare_endpoint` checks the `RtLeg` out, `process_audio`
+    /// drives it, and `audio_counters` keeps reading the shared
+    /// pair — the writes land on the same cells the non-RT query
+    /// surface owns (leg checkout is a move, not a new pair).
+    /// While checked out, `PluginHost::process` is the defined
+    /// `EndpointUnavailable`; dropping the endpoint returns the leg
+    /// and in-place processing resumes on the same counters.
+    #[test]
+    fn audio_counters_track_the_detached_endpoint() {
+        const CALLS: u64 = 8;
+
+        let mut host = mixed_host(&["--hang-after-msgs=5"]);
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        drive_to_processing(&mut host, l1);
+
+        let bounds = EndpointBounds {
+            max_frames: 512,
+            channels: 2,
+        };
+        let mut endpoint = host.prepare_endpoint(l1, bounds).unwrap();
+        let ctx = RtContext::mint();
+        let mut slab = [0.0_f32; 1024];
+
+        for _ in 0..CALLS {
+            thread::sleep(Duration::from_millis(5));
+            slab.fill(1.0);
+            assert_eq!(
+                endpoint.process_audio(
+                    &mut AudioBufferViewMut::try_new(&mut slab, 2, 512).unwrap(),
+                    EventList::empty(512),
+                    None,
+                    &ctx,
+                ),
+                Ok(ProcessResult::CONTINUE)
+            );
+        }
+        // The detached leg wrote the instance's own counters.
+        let counters = host.audio_counters(l1).unwrap();
+        assert_eq!(counters.passthrough_submits, CALLS);
+        assert_eq!(counters.dropped_submits, CALLS - 3);
+        assert_eq!(counters.results_failed_observed, 0);
+        assert_eq!(counters.results_dropped, 0);
+        // `process` on the checked-out slot is the defined
+        // `EndpointUnavailable` — the processing surface moved.
+        let input = [1.0_f32; 512];
+        let mut output = [0.0_f32; 512];
+        assert_eq!(
+            host_block(&mut host, l1, &input, &mut output),
+            Err(HostError::EndpointUnavailable)
+        );
+
+        // The leg's return lands it home — in-place processing
+        // resumes and keeps counting on the same pair.
+        drop(endpoint);
+        assert_eq!(
+            host_block(&mut host, l1, &input, &mut output),
+            Ok(ProcessResult::CONTINUE)
+        );
+        let counters = host.audio_counters(l1).unwrap();
+        assert_eq!(counters.passthrough_submits, CALLS + 1);
+        assert_eq!(counters.dropped_submits, CALLS - 2);
+
+        host.kill_child(l1).unwrap();
+        wait_host_failed(&host, l1);
+        let (notified, _exit, _cause) = wait_host_notification(&mut host);
+        assert_eq!(notified, l1);
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+    }
+
+    /// The pre-mint attempt record's stderr capture — the audio
+    /// twin of `l1_video_e2e`'s `spawn_failed_attempt_record_
+    /// captures_stderr`: `--stderr-bytes` is emitted before
+    /// `Hello`, the drain (started ahead of the `Hello` wait)
+    /// retains it, and the mid-`CreateInstance` wedge freezes it
+    /// into the registered record. A *hang*, not a crash — the
+    /// `command_timeout` window gives the detached drain a
+    /// deterministic slice to read the emission before
+    /// `create_rollback_error` freezes. `handle` stays `None`
+    /// (nothing minted) while `phase` is `Live` — the child's
+    /// spawn phase passed `Hello` before its create wedged.
+    #[test]
+    fn spawn_failed_attempt_record_captures_stderr() {
+        const STDERR_BYTES: usize = 128;
+        let mut host = PluginHost::new();
+        let mut spawn_spec = OutOfProcessSpec::new(WORKER_DESCRIPTOR, worker_program());
+        spawn_spec.args = vec![
+            OsString::from("--stderr-bytes=128"),
+            OsString::from("--hang-after-msgs=1"),
+        ];
+        spawn_spec.command_timeout = Duration::from_millis(500);
+        host.register_out_of_process(spawn_spec).unwrap();
+
+        let start = Instant::now();
+        let (cause, diagnostics_id) = expect_spawn_failed(&mut host);
+        assert!(
+            start.elapsed() < Duration::from_secs(8),
+            "a create wedge must fire command_timeout"
+        );
+        // The request wait fired `command_timeout` — the cause was
+        // recorded before the wedge-kill issued.
+        assert_eq!(cause, FailureCause::Timeout);
+        let DiagnosticQuery::Found(record) = host.diagnostics_query(diagnostics_id) else {
+            panic!("the registered attempt record must resolve")
+        };
+        assert_eq!(record.diagnostics_id, diagnostics_id);
+        // Pre-mint: no handle — and `Live` is the child's phase (it
+        // passed `Hello`; the instance mint is what wedged).
+        assert_eq!(record.handle, None);
+        assert_eq!(record.phase, SpawnPhase::Live);
+        assert_eq!(record.cause, Some(FailureCause::Timeout));
+        // The whole pre-`Hello` emission survived in the retained
+        // tail — 128 bytes are far under the ring cap (`eof` races
+        // the freeze; deliberately unasserted).
+        assert_eq!(record.stderr.bytes, vec![b'!'; STDERR_BYTES]);
+        assert_eq!(record.stderr.total_read_bytes, STDERR_BYTES as u64);
+        assert_eq!(record.stderr.dropped_bytes, 0);
+        assert!(!record.stderr.drain_deadline_exceeded);
+        assert!(!record.stderr.unread_bytes_observed);
+        // The unminted instance converges silently.
+        assert_no_notification(&mut host);
+    }
+
+    /// A `Hello.version` mismatch is a handshake violation — the
+    /// audio twin of the video lane's oracle: `Instantiate` fails
+    /// `SpawnFailed{cause: Handshake}` with the record frozen at
+    /// `SpawnPhase::Handshake` (`Live` is only set after a matched
+    /// `Hello`), no handle minted and nothing to notify.
+    #[test]
+    fn hello_version_mismatch_fails_instantiate() {
+        let mut host = mixed_host(&["--hello-version=99"]);
+        let (cause, diagnostics_id) = expect_spawn_failed(&mut host);
+        assert_eq!(cause, FailureCause::Handshake);
+        let DiagnosticQuery::Found(record) = host.diagnostics_query(diagnostics_id) else {
+            panic!("the registered attempt record must resolve")
+        };
+        assert_eq!(record.diagnostics_id, diagnostics_id);
+        assert_eq!(record.handle, None);
+        assert_eq!(record.phase, SpawnPhase::Handshake);
+        assert_eq!(record.cause, Some(FailureCause::Handshake));
+        assert_no_notification(&mut host);
+    }
+
+    /// An OS spawn failure is `SpawnFailed{cause: Spawn}` frozen
+    /// at `SpawnPhase::Spawn` — the drain/handshake phases are
+    /// never reached when `Command::spawn` itself fails. The
+    /// attempt record registers identically to a wire-observed
+    /// failure: `handle: None`, classified cause, empty capture.
+    #[test]
+    fn spawn_os_failure_registers_spawn_phase() {
+        let mut host = PluginHost::new();
+        let mut spawn_spec = OutOfProcessSpec::new(
+            WORKER_DESCRIPTOR,
+            OsString::from("ruviform-nonexistent-runner-binary"),
+        );
+        spawn_spec.command_timeout = Duration::from_millis(500);
+        host.register_out_of_process(spawn_spec).unwrap();
+
+        let (cause, diagnostics_id) = expect_spawn_failed(&mut host);
+        assert_eq!(cause, FailureCause::Spawn);
+        let DiagnosticQuery::Found(record) = host.diagnostics_query(diagnostics_id) else {
+            panic!("the registered attempt record must resolve")
+        };
+        assert_eq!(record.diagnostics_id, diagnostics_id);
+        assert_eq!(record.handle, None);
+        assert_eq!(record.phase, SpawnPhase::Spawn);
+        assert_eq!(record.cause, Some(FailureCause::Spawn));
+        assert_no_notification(&mut host);
+    }
+
+    /// The defined spec rejection is `Err(Ipc)`, never
+    /// `SpawnFailed`: `lookahead_blocks == 0` fails
+    /// `SpawnSpec::instance_depth` before any pool mutation — no
+    /// child spawns, no record registers, no notification can
+    /// follow. The `InstanceLimit` twin cannot surface through
+    /// `Instantiate` at all (the pool's `pool_eligible` scan only
+    /// ever hands `create_instance` a child below
+    /// `WIRE_MAX_INSTANCES`; `bundled_pool_overflow_spawns_a_second_
+    /// child` pins the boundary's public shape).
+    #[test]
+    fn invalid_lookahead_is_ipc_not_spawn_failed() {
+        let mut host = PluginHost::new();
+        let mut spawn_spec = OutOfProcessSpec::new(WORKER_DESCRIPTOR, worker_program());
+        spawn_spec.lookahead_blocks = 0;
+        host.register_out_of_process(spawn_spec).unwrap();
+
+        assert_eq!(
+            host.execute(HostCommand::Instantiate {
+                plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+            }),
+            Err(HostError::Ipc)
+        );
+        // No record registered — id 1 was never minted.
+        assert!(matches!(
+            host.diagnostics_query(1),
+            DiagnosticQuery::NotFound
+        ));
+        assert!(host.try_recv_notification().is_none());
+        // The route is untouched — a legal-depth retry would have
+        // to re-register; the rejection consumed nothing.
+    }
+
+    /// A minted child's command wedge stamps `Timeout` before the
+    /// kill issues: `StartProcessing` (message 5) hangs after
+    /// `Activate`, the `command_timeout` reply wait fires
+    /// `Err(Ipc)` and converges `Failed` — the notification's cause
+    /// is the *timeout*, not the `ExitObserved`/`Transport` the
+    /// subsequent kill produces. The handle-correlated record
+    /// carries the same cause verbatim.
+    #[test]
+    fn command_timeout_converges_failed_with_timeout_cause() {
+        let mut host = PluginHost::new();
+        let mut spawn_spec = OutOfProcessSpec::new(WORKER_DESCRIPTOR, worker_program());
+        spawn_spec.args = vec![OsString::from("--hang-after-msgs=4")];
+        spawn_spec.command_timeout = Duration::from_millis(500);
+        host.register_out_of_process(spawn_spec).unwrap();
+
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        host.execute(HostCommand::Initialize { handle: l1 })
+            .unwrap();
+        host.execute(HostCommand::Activate {
+            handle: l1,
+            config: config(),
+        })
+        .unwrap();
+
+        let start = Instant::now();
+        assert_eq!(
+            host.execute(HostCommand::StartProcessing { handle: l1 }),
+            Err(HostError::Ipc)
+        );
+        assert!(
+            start.elapsed() < Duration::from_secs(8),
+            "command wedge must fire command_timeout"
+        );
+        wait_host_failed(&host, l1);
+        let (notified, exit, cause) = wait_host_notification(&mut host);
+        assert_eq!(notified, l1);
+        // The kill after the timeout stamp still completes the
+        // notification's exit — the cause stays the first
+        // observation (`Timeout`), exactly like the video lane.
+        assert!(exit.code.is_some() || exit.signal.is_some());
+        assert_eq!(cause, FailureCause::Timeout);
+
+        expect_live_failure_record(&host, l1, FailureCause::Timeout);
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+    }
+
+    /// `--leave-heir-after-msgs` makes `ExitObserved` deterministic:
+    /// the child exits `0` mid-life but its stdio-inheriting heir
+    /// keeps the parent's stdout pipe open, so the reader can never
+    /// see EOF first — `try_wait`'s reaped exit is the only
+    /// observation. The stderr pipe the heir also holds open runs
+    /// the drain out on the fixed deadline, so a record frozen
+    /// after the grace shows `drain_deadline_exceeded` with `eof`
+    /// never reached — and teardown stays bounded because the
+    /// drain stops itself rather than joining a 15 s grandchild.
+    #[test]
+    fn leave_heir_yields_exit_observed_and_bounded_drain() {
+        let mut host = mixed_host(&["--leave-heir-after-msgs=2"]);
+        // `Scan` and `CreateInstance` are messages 1 and 2 — the
+        // heir fires *after* the create reply, so mint succeeds
+        // before the parent exits.
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        wait_host_failed(&host, l1);
+        // The record freezes at notification-pop — let the drain's
+        // post-exit deadline (500 ms) fully expire first so the
+        // flag assertions read the settled state.
+        thread::sleep(Duration::from_millis(700));
+        let (notified, exit, cause) = wait_host_notification(&mut host);
+        assert_eq!(notified, l1);
+        // A voluntary `exit(0)` is still a `Failed` violation — the
+        // child died before `Shutdown`.
+        assert_eq!(exit.code, Some(0));
+        assert_eq!(cause, FailureCause::ExitObserved);
+
+        let record = expect_live_failure_record(&host, l1, FailureCause::ExitObserved);
+        // The heir holds stderr open: no EOF inside the grace, the
+        // drain stopped at its deadline having observed nothing
+        // unread (the heir writes nothing without
+        // `--heir-stderr-bytes`). `unread_bytes_observed` stays
+        // `false` — asserting `true` would require bytes in flight
+        // inside the deadline-check window, which the fixture
+        // cannot stage deterministically.
+        assert!(!record.stderr.eof);
+        assert!(record.stderr.drain_deadline_exceeded);
+        assert!(!record.stderr.unread_bytes_observed);
+        assert_eq!(record.stderr.total_read_bytes, 0);
+
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+    }
+
+    /// Heir stderr *inside* the drain's post-exit grace lands in
+    /// the record: the parent exits with the pipes held open, the
+    /// heir emits its bytes well inside the 500 ms deadline, and
+    /// the drain reads them before stopping. The capture shows the
+    /// emission as fully read-and-retained — the deadline still
+    /// expires (the heir keeps the pipe open past it) without
+    /// unread bytes at the final check.
+    #[test]
+    fn heir_stderr_inside_grace_lands_in_record() {
+        let mut host = mixed_host(&[
+            "--leave-heir-after-msgs=2",
+            "--heir-stderr-bytes=4096",
+            "--heir-stderr-delay-ms=100",
+        ]);
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        wait_host_failed(&host, l1);
+        thread::sleep(Duration::from_millis(700));
+        let (notified, _exit, cause) = wait_host_notification(&mut host);
+        assert_eq!(notified, l1);
+        assert_eq!(cause, FailureCause::ExitObserved);
+
+        let record = host
+            .diagnostics_for_handle(l1)
+            .expect("minted failure must register a record");
+        // The heir's mid-grace emission was read and retained in
+        // full — the parent emitted nothing itself.
+        assert_eq!(record.stderr.bytes, vec![b'!'; 4096]);
+        assert_eq!(record.stderr.total_read_bytes, 4096);
+        assert_eq!(record.stderr.dropped_bytes, 0);
+        assert!(!record.stderr.eof);
+        assert!(record.stderr.drain_deadline_exceeded);
+        // The emission finished long before the deadline — nothing
+        // was still in flight at the final check.
+        assert!(!record.stderr.unread_bytes_observed);
+
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+    }
+
+    /// Heir stderr *past* the drain's deadline is never read: the
+    /// heir emits after the drain already stopped, so the capture
+    /// shows zero bytes read — "produced after the drain stopped"
+    /// is not counted, the snapshot's own invariant boundary. The
+    /// same deadline/`eof` flags as the other heir rows settle the
+    /// post-grace freeze.
+    #[test]
+    fn heir_stderr_after_drain_stop_is_never_read() {
+        let mut host = mixed_host(&[
+            "--leave-heir-after-msgs=2",
+            "--heir-stderr-bytes=4096",
+            "--heir-stderr-delay-ms=1200",
+        ]);
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        wait_host_failed(&host, l1);
+        // Pop after the 500 ms drain deadline but before the heir's
+        // delayed emission (~1.2 s) — the freeze reads the settled
+        // pre-emission state.
+        thread::sleep(Duration::from_millis(700));
+        let (notified, _exit, cause) = wait_host_notification(&mut host);
+        assert_eq!(notified, l1);
+        assert_eq!(cause, FailureCause::ExitObserved);
+
+        let record = host
+            .diagnostics_for_handle(l1)
+            .expect("minted failure must register a record");
+        // Nothing was ever read — the drain was gone before the
+        // emission started. The pipe stayed open, so the final
+        // check still saw no data pending.
+        assert_eq!(record.stderr.bytes, Vec::<u8>::new());
+        assert_eq!(record.stderr.total_read_bytes, 0);
+        assert_eq!(record.stderr.dropped_bytes, 0);
+        assert!(!record.stderr.eof);
+        assert!(record.stderr.drain_deadline_exceeded);
+        assert!(!record.stderr.unread_bytes_observed);
+
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+    }
+
+    /// An emission larger than the 64 KiB retention ring keeps the
+    /// newest tail exactly: `bytes` is the last 64 KiB,
+    /// `dropped_bytes` accounts for every byte read-but-not-
+    /// retained, and the snapshot invariant `total_read_bytes ==
+    /// bytes.len() + dropped_bytes` holds on the frozen record.
+    /// The spawn succeeding is itself the drain-keeps-draining
+    /// oracle — the child blocks on the full stderr pipe mid-
+    /// emission and only `Hello` follows a drained emission.
+    #[test]
+    fn stderr_overflow_retains_exact_tail() {
+        const EMITTED: usize = 200_000;
+        const RING: usize = 64 * 1024;
+        let mut host = mixed_host(&["--stderr-bytes=200000"]);
+        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        drive_to_processing(&mut host, l1);
+
+        host.kill_child(l1).unwrap();
+        wait_host_failed(&host, l1);
+        let (notified, _exit, _cause) = wait_host_notification(&mut host);
+        assert_eq!(notified, l1);
+
+        let record = host
+            .diagnostics_for_handle(l1)
+            .expect("minted failure must register a record");
+        // The whole emission was read (it precedes `Hello`, which
+        // `Instantiate` already waited on); the ring kept the
+        // newest tail — every byte is `!`, so the tail content is
+        // exact, not approximate.
+        assert_eq!(record.stderr.total_read_bytes, EMITTED as u64);
+        assert_eq!(record.stderr.bytes.len(), RING);
+        assert_eq!(record.stderr.bytes, vec![b'!'; RING]);
+        assert_eq!(record.stderr.dropped_bytes, (EMITTED - RING) as u64);
+        assert_eq!(
+            record.stderr.total_read_bytes,
+            record.stderr.bytes.len() as u64 + record.stderr.dropped_bytes
+        );
+
+        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+    }
+
+    /// The bounded retention mints contiguous ids and evicts FIFO:
+    /// nine consecutive pre-mint failures register nine records —
+    /// at eight retained the oldest leaves, so id 1 resolves
+    /// `Evicted`, the retained window resolves `Found` and an
+    /// id past `issued_max` resolves `NotFound` (never `Evicted` —
+    /// the watermark is monotone).
+    #[test]
+    fn diagnostics_retention_evicts_oldest_records() {
+        // Mid-`CreateInstance` death — a per-child crash knob, so
+        // every `Instantiate` pays a fresh spawn and registers one
+        // attempt record.
+        let mut host = mixed_host(&["--crash-after-msgs=2"]);
+        let mut ids = Vec::new();
+        for _ in 0..9 {
+            let (cause, diagnostics_id) = expect_spawn_failed(&mut host);
+            assert!(matches!(
+                cause,
+                FailureCause::ExitObserved | FailureCause::Transport
+            ));
+            ids.push(diagnostics_id);
+        }
+        // Contiguous mint — ids are issued in registration order.
+        for (index, &id) in ids.iter().enumerate() {
+            assert_eq!(id, ids[0] + index as u64);
+        }
+        // `RETAINED_RECORDS_MAX = 8`: the ninth registration evicts
+        // the oldest; below the watermark is `Evicted`, inside the
+        // window `Found`, above `issued_max` `NotFound`.
+        assert!(matches!(
+            host.diagnostics_query(ids[0]),
+            DiagnosticQuery::Evicted
+        ));
+        for &id in &ids[1..] {
+            assert!(matches!(
+                host.diagnostics_query(id),
+                DiagnosticQuery::Found(_)
+            ));
+        }
+        assert!(matches!(
+            host.diagnostics_query(ids[8] + 1),
+            DiagnosticQuery::NotFound
+        ));
+        assert_no_notification(&mut host);
+    }
+
+    /// `WIRE_MAX_INSTANCES` is the bundled child's capacity: the
+    /// first 64 `Instantiate`s pool onto one child and the 65th
+    /// cannot mint there — the pool's `pool_eligible` scan already
+    /// excluded the full child, so the public answer is a *fresh
+    /// child*, not `Err(InstanceLimit)` (the unflattened
+    /// `InstanceLimit` exists for the pool's internal retry seam
+    /// and stays unreachable through `Instantiate`, as
+    /// `instantiate_bundled`'s own comment documents). The kill
+    /// fan-out is the oracle: killing the 65th's child converges
+    /// only the 65th — a shared placement would have taken all 65
+    /// `Failed` together.
+    #[test]
+    fn bundled_pool_overflow_spawns_a_second_child() {
+        use ruviform_plugin_core::wire;
+
+        let mut host = mixed_host(&[]);
+        let mut handles = Vec::new();
+        for _ in 0..=wire::WIRE_MAX_INSTANCES {
+            handles.push(instantiate(&mut host, WORKER_DESCRIPTOR.id));
+        }
+        let overflow = *handles.last().unwrap();
+        assert_eq!(handles.len(), 65);
+
+        // The 65th lives on its own child — killing it converges
+        // only itself.
+        host.kill_child(overflow).unwrap();
+        wait_host_failed(&host, overflow);
+        let (notified, _exit, cause) = wait_host_notification(&mut host);
+        assert_eq!(notified, overflow);
+        assert!(matches!(
+            cause,
+            FailureCause::ExitObserved | FailureCause::Transport
+        ));
+        assert!(host.try_recv_notification().is_none());
+        for &handle in &handles[..64] {
+            assert_eq!(
+                host.lifecycle_state(handle),
+                Some(LifecycleState::Created),
+                "a pooled sibling converged — the overflow was not alone"
+            );
+        }
+        host.execute(HostCommand::Destroy { handle: overflow })
+            .unwrap();
+        for &handle in &handles[..64] {
+            host.execute(HostCommand::Destroy { handle }).unwrap();
+        }
+        assert_no_notification(&mut host);
     }
 }

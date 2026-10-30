@@ -22,8 +22,9 @@ use std::time::{Duration, Instant};
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
-    Event, EventKind, EventList, GuiParentToken, HostError, HostInput, HostOutput, LifecycleState,
-    ParamEvent, ParamId, ParamValue, PluginDescriptor, ProcessConfig, ProcessResult,
+    Event, EventKind, EventList, FailureCause, GuiParentToken, HostError, HostInput, HostOutput,
+    LifecycleState, ParamEvent, ParamId, ParamValue, PluginDescriptor, ProcessConfig,
+    ProcessResult,
 };
 use ruviform_plugin_host::{
     ChildExit, HostCommand, HostNotification, HostReply, OutOfProcessSpec, PluginHandle, PluginHost,
@@ -220,7 +221,7 @@ fn wait_host_failed(host: &PluginHost, handle: PluginHandle) {
 fn wait_host_notification(host: &mut PluginHost) -> (PluginHandle, ChildExit) {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     loop {
-        if let Some(HostNotification::InstanceFailed { handle, exit }) =
+        if let Some(HostNotification::InstanceFailed { handle, exit, .. }) =
             host.try_recv_notification()
         {
             return (handle, exit);
@@ -470,13 +471,13 @@ fn real_adapter_l1_kill_reports_failed_once() {
 }
 
 /// A `spec.program` that does not exist fails the spawn at
-/// `Instantiate` with `Err(HostError::Ipc)` — the pre-Hello path: no
-/// instance is minted, `Failed` is never reached, no notification,
-/// no hang (the runner's missing-fixture `exit(1)` converges the
-/// same way — both are pre-Hello defined rejections).
+/// `Instantiate` with `SpawnFailed{cause: Spawn}` — the pre-Hello
+/// path: no instance is minted, `Failed` is never reached, no
+/// notification, no hang (the runner's missing-fixture `exit(1)`
+/// converges the same way — both are pre-mint failures).
 #[test]
 #[ignore = "requires the `host`-feature build for the spec descriptor pin — `mise run test-l1-real-plugin` selects this test"]
-fn real_adapter_l1_missing_runner_is_ipc_rejection() {
+fn real_adapter_l1_missing_runner_is_spawn_failed() {
     let expected = expected_descriptor();
     let mut host = PluginHost::new();
     host.register_out_of_process(OutOfProcessSpec::new(
@@ -485,12 +486,15 @@ fn real_adapter_l1_missing_runner_is_ipc_rejection() {
     ))
     .unwrap();
 
-    assert_eq!(
+    assert!(matches!(
         host.execute(HostCommand::Instantiate {
             plugin_id: expected.id.to_owned(),
         }),
-        Err(HostError::Ipc)
-    );
+        Err(HostError::SpawnFailed {
+            cause: FailureCause::Spawn,
+            ..
+        })
+    ));
     // The route itself stays registered — only the spawn failed.
     assert_eq!(
         host.execute(HostCommand::Scan),

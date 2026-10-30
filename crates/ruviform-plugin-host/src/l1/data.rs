@@ -70,6 +70,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
 
+use ruviform_observability::Counter;
 use ruviform_plugin_core::wire::{self, shm};
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, EventList, HostError, HostInput, HostOutput, LifecycleError,
@@ -412,6 +413,50 @@ const SCRATCH_CAP: usize = if shm::TRANSPORT_LEN > shm::EVENT_WIRE_SIZE {
     shm::EVENT_WIRE_SIZE
 };
 
+/// The leg-side writer halves of an audio instance's observability
+/// counters (Issue #121) — `Clone` shares the cells the
+/// `InstKind::Audio` arm owns, so a leg checked out to an endpoint
+/// or restored after a ring swap keeps writing into the same
+/// counters the non-RT query surface reads. The fourth counter
+/// (`results_dropped`, the reader-side `push_result` `try_push`
+/// failure) is not leg-side — the `InstShared` arm owns it.
+///
+/// **RT contract:** `increment` is a `Relaxed` `fetch_add` —
+/// wait-free, no-alloc, bounded.
+#[derive(Clone, Debug)]
+pub(crate) struct RtLegCounters {
+    /// Blocks whose submit was dropped — a still-busy slot or a full
+    /// submit channel (`try_push` failure); at most +1 per block
+    /// because a busy slot never reaches `try_push`.
+    pub(crate) dropped_submits: Counter,
+    /// Blocks that produced substituted output — incremented inside
+    /// [`RtLeg::pass_through`] so every caller (underrun, dropped
+    /// submit, missing/failed result, endpoint arm anomaly) counts,
+    /// warmup included.
+    pub(crate) passthrough_submits: Counter,
+    /// `RESULT_FAILED` elements first popped off the result channel
+    /// — stale/held-bound elements count once at `try_pop`; a
+    /// re-extraction from `held` adds nothing.
+    pub(crate) results_failed_observed: Counter,
+}
+
+impl RtLegCounters {
+    /// Fresh, unshared pairs — for test/harness legs with no
+    /// `InstShared` owner to clone from. **Non-RT** (allocates the
+    /// cells).
+    #[cfg(test)]
+    pub(crate) fn fresh() -> Self {
+        let (dropped_submits, _) = ruviform_observability::counter();
+        let (passthrough_submits, _) = ruviform_observability::counter();
+        let (results_failed_observed, _) = ruviform_observability::counter();
+        Self {
+            dropped_submits,
+            passthrough_submits,
+            results_failed_observed,
+        }
+    }
+}
+
 /// The RT leg: the caller-thread end of the data plane. Holds the
 /// `submit` producer / `result` consumer endpoints, the staging
 /// `Arc`, the strict-alternation bookkeeping (`last_pushed`,
@@ -453,6 +498,10 @@ pub(crate) struct RtLeg {
     /// [`SCRATCH_CAP`] — ≥ the largest encode the wire format can
     /// emit — and never regrown on the RT path (see the constant).
     scratch: Vec<u8>,
+    /// The leg-side counter writers — `Relaxed` increments only, so
+    /// `process`/`pass_through`/`drain_to` stay wait-free and
+    /// allocation-free.
+    counters: RtLegCounters,
 }
 
 impl RtLeg {
@@ -465,6 +514,7 @@ impl RtLeg {
         lookahead: u32,
         submit: Producer<Submit>,
         result: Consumer<u64>,
+        counters: RtLegCounters,
     ) -> Self {
         let depth = depth.max(1);
         let leg = Self {
@@ -484,6 +534,7 @@ impl RtLeg {
             last_channels: 0,
             have_output: false,
             scratch: Vec::with_capacity(SCRATCH_CAP),
+            counters,
         };
         // The encode bound the whole RT path relies on: every codec
         // output stays inside the preallocated capacity, so
@@ -650,11 +701,15 @@ impl RtLeg {
             {
                 self.last_pushed[slot] = Some(seq);
                 self.submit_dims[slot] = (block_data.frames, block_data.channels);
+            } else {
+                // Channel full → submission abandoned → pass-through
+                // (the seq is consumed but never doorbell'd).
+                self.counters.dropped_submits.increment();
             }
-            // Channel full → submission abandoned → pass-through
-            // (the seq is consumed but never doorbell'd).
+        } else {
+            // Slot still busy → this block is dropped → pass-through.
+            self.counters.dropped_submits.increment();
         }
-        // Slot still busy → this block is dropped → pass-through.
 
         // (3) The block this call may output is `block - lookahead`
         // — underflow means none exists yet (defined silence), but
@@ -806,6 +861,11 @@ impl RtLeg {
             match self.result.try_pop() {
                 Err(_) => break,
                 Ok(el) => {
+                    // First-pop observation only — an element stashed
+                    // into `held` and re-extracted later adds +0.
+                    if el & RESULT_FAILED != 0 {
+                        self.counters.results_failed_observed.increment();
+                    }
                     let seq = el & SEQ_MASK;
                     let slot = usize::try_from(seq % u64::from(self.depth))
                         .expect("slot index always fits usize");
@@ -880,6 +940,7 @@ impl RtLeg {
     /// the arm drain flagged unrepresentable onto the same defined
     /// output.
     pub(crate) fn pass_through(&mut self, outputs: &mut [HostOutput<'_>]) {
+        self.counters.passthrough_submits.increment();
         for output in outputs.iter_mut() {
             for channel in 0..output.channels() {
                 if let Some(dst) = output.channel_mut(channel) {
@@ -965,7 +1026,13 @@ mod tests {
     fn armed_leg(depth: u32, frames: u32) -> (RtLeg, Arc<Staging>) {
         let (submit_tx, _submit_rx) = ruviform_rt::channel::<Submit>(depth as usize);
         let (_result_tx, result_rx) = ruviform_rt::channel::<u64>(depth as usize);
-        let mut leg = RtLeg::new(depth, depth - 1, submit_tx, result_rx);
+        let mut leg = RtLeg::new(
+            depth,
+            depth - 1,
+            submit_tx,
+            result_rx,
+            RtLegCounters::fresh(),
+        );
         let staging = Arc::new(Staging::new(depth, frames, 1));
         leg.arm(Arc::clone(&staging));
         (leg, staging)
@@ -1044,5 +1111,168 @@ mod tests {
         // design's leak-on-full signal, not an allocation).
         assert!(collector.drain() > 0);
         assert_eq!(leg.armed_generation(), 3);
+    }
+
+    // ---------------------------------------------------------------
+    // Issue #121 counter pins — the design's approved nine-case
+    // table. The `RtLegCounters` handle is the writer half; the
+    // query surface's reader halves share the same cells, so
+    // `Counter::read` asserts what `audio_counters` would report.
+    // ---------------------------------------------------------------
+
+    /// The shared 8-frame mono block `run_block` drives.
+    const INPUT: [f32; 8] = [0.5_f32; 8];
+
+    /// A leg + the live channel ends, with the counter cells kept
+    /// by the caller — `lookahead` is `depth - 1` like every
+    /// production mint. Keeps `submit_rx`/`result_tx` alive and
+    /// returned so `try_push`/`try_pop` stay honest.
+    fn counted_leg(
+        depth: u32,
+        counters: RtLegCounters,
+    ) -> (RtLeg, Consumer<Submit>, Producer<u64>) {
+        let (submit_tx, submit_rx) = ruviform_rt::channel::<Submit>(depth as usize);
+        let (result_tx, result_rx) = ruviform_rt::channel::<u64>(depth as usize);
+        let mut leg = RtLeg::new(depth, depth - 1, submit_tx, result_rx, counters);
+        leg.arm(Arc::new(Staging::new(depth, 8, 1)));
+        (leg, submit_rx, result_tx)
+    }
+
+    /// One `RtLeg::process` block under a `Processing` mirror over
+    /// mono planar views — `endpoint.rs`'s `run_l1` shape.
+    fn run_block(
+        leg: &mut RtLeg,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> Result<ProcessResult, HostError> {
+        use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut};
+        let in_list = [input];
+        let input_view = PlanarBufferView::new(&in_list).unwrap();
+        let inputs = [HostInput(&input_view)];
+        let mut out_list = [&mut *output];
+        let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+        let mut outputs = [HostOutput(&mut output_view)];
+        leg.process(
+            LifecycleState::Processing,
+            &inputs,
+            &mut outputs,
+            EventList::empty(u32::try_from(input.len()).unwrap()),
+            None,
+        )
+    }
+
+    /// Warmup pass-through counts: the first `lookahead` blocks
+    /// underflow `block - lookahead` and resolve substituted
+    /// output — each is a real pass-through (+1) per the design's
+    /// "output actually produced" semantics, submits intact (+0
+    /// dropped).
+    #[test]
+    fn warmup_passthrough_blocks_each_count() {
+        // depth 4 → lookahead 3: blocks 0..2 take the underflow arm.
+        let counters = RtLegCounters::fresh();
+        let (mut leg, _submit_rx, _result_tx) = counted_leg(4, counters.clone());
+        let mut output = [0.0_f32; 8];
+        for _ in 0..3 {
+            run_block(&mut leg, &INPUT, &mut output).unwrap();
+        }
+        assert_eq!(counters.passthrough_submits.read(), 3);
+        assert_eq!(counters.dropped_submits.read(), 0);
+        assert_eq!(counters.results_failed_observed.read(), 0);
+    }
+
+    /// A still-busy slot drops the block's submit — one counted
+    /// drop per block (the alternation gate returns before
+    /// `try_push` is ever reached).
+    #[test]
+    fn slot_busy_drops_count_once_per_block() {
+        // depth 2 → lookahead 1: block 0 fills slot 0, block 1
+        // fills slot 1; block 2's slot is still busy → one drop.
+        let counters = RtLegCounters::fresh();
+        let (mut leg, _submit_rx, _result_tx) = counted_leg(2, counters.clone());
+        let mut output = [0.0_f32; 8];
+        for _ in 0..3 {
+            run_block(&mut leg, &INPUT, &mut output).unwrap();
+        }
+        assert_eq!(counters.dropped_submits.read(), 1);
+        // Every block produced substituted output.
+        assert_eq!(counters.passthrough_submits.read(), 3);
+    }
+
+    /// Multiple failure causes on ONE block count at most once —
+    /// a busy slot never reaches `try_push`, so "slot busy" and
+    /// "channel full" cannot co-increment (the design's structural
+    /// invariant, not a coincidence of this fixture).
+    #[test]
+    fn same_block_multiple_failures_count_max_once() {
+        // depth 1 → lookahead 0, capacity 1: block 0's submit fills
+        // the channel; block 1's slot is busy AND its `try_push`
+        // would have failed — still exactly one count.
+        let counters = RtLegCounters::fresh();
+        let (mut leg, _submit_rx, _result_tx) = counted_leg(1, counters.clone());
+        let mut output = [0.0_f32; 8];
+        for _ in 0..2 {
+            run_block(&mut leg, &INPUT, &mut output).unwrap();
+        }
+        assert_eq!(counters.dropped_submits.read(), 1);
+        assert_eq!(counters.passthrough_submits.read(), 2);
+    }
+
+    /// A `RESULT_FAILED` element counts at its first `try_pop` —
+    /// the block then resolves as the defined pass-through.
+    #[test]
+    fn result_failed_first_pop_counts() {
+        let counters = RtLegCounters::fresh();
+        let (mut leg, _submit_rx, mut result_tx) = counted_leg(2, counters.clone());
+        let mut output = [0.0_f32; 8];
+        run_block(&mut leg, &INPUT, &mut output).unwrap();
+        // The child's rejection lands before block 1's drain — the
+        // block-0 doorbell's `Reply{seq, Err}` shape.
+        result_tx.try_push(mark_failed(BLOCK_SEQ_FLAG)).unwrap();
+        run_block(&mut leg, &INPUT, &mut output).unwrap();
+        assert_eq!(counters.results_failed_observed.read(), 1);
+        assert_eq!(counters.passthrough_submits.read(), 2);
+    }
+
+    /// A `RESULT_FAILED` element stashed into `held` counts once
+    /// at first pop — re-extracting it for its own block adds
+    /// nothing (no double-count across the stash boundary).
+    #[test]
+    fn held_result_failed_reextraction_adds_nothing() {
+        // depth 3 → lookahead 2: block 2's rejection arrives early
+        // and is stashed during block 0's warmup drain.
+        let counters = RtLegCounters::fresh();
+        let (mut leg, mut submit_rx, mut result_tx) = counted_leg(3, counters.clone());
+        let mut output = [0.0_f32; 8];
+        result_tx.try_push(BLOCK_SEQ_FLAG).unwrap();
+        result_tx.try_push(BLOCK_SEQ_FLAG | 1).unwrap();
+        result_tx.try_push(mark_failed(BLOCK_SEQ_FLAG | 2)).unwrap();
+        // Blocks 0..=4: block 4's drain resolves expected seq 2 out
+        // of `held`. Draining the submit channel keeps every push
+        // landing — no drops expected.
+        for _ in 0..5 {
+            run_block(&mut leg, &INPUT, &mut output).unwrap();
+            while submit_rx.try_pop().is_ok() {}
+        }
+        assert_eq!(counters.results_failed_observed.read(), 1);
+        assert_eq!(counters.dropped_submits.read(), 0);
+        assert_eq!(counters.passthrough_submits.read(), 5);
+    }
+
+    /// The counter cells live outside the leg — a checked-out,
+    /// swapped or restored leg keeps writing into the same pairs
+    /// the query surface reads; accumulation never resets.
+    #[test]
+    fn counters_accumulate_across_leg_instances() {
+        let counters = RtLegCounters::fresh();
+        let mut output = [0.0_f32; 8];
+        {
+            let (mut leg, _submit_rx, _result_tx) = counted_leg(3, counters.clone());
+            run_block(&mut leg, &INPUT, &mut output).unwrap();
+        }
+        // A second leg minted from the same cells — the endpoint
+        // checkout/restore shape — continues the totals.
+        let (mut leg, _submit_rx, _result_tx) = counted_leg(3, counters.clone());
+        run_block(&mut leg, &INPUT, &mut output).unwrap();
+        assert_eq!(counters.passthrough_submits.read(), 2);
     }
 }

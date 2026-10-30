@@ -1,7 +1,9 @@
 //! Public-surface E2E for the video L1 path (Issue #118 T4 —
 //! `docs/tasks/l1-video-fixture-and-e2e.md`; oracles
 //! `docs/test-specs/issue-118-video-e2e-tests.md` and
-//! `docs/test-specs/issue-118-video-failed-parity-tests.md`).
+//! `docs/test-specs/issue-118-video-failed-parity-tests.md`; Issue
+//! #121 T11 — `docs/tasks/verify-l1-video-diagnostics-parity.md`,
+//! oracle `docs/test-specs/issue-121-l1-parity-nonregression-tests.md`).
 //!
 //! [`PluginHost::video`] is the only surface under test — the
 //! `#[path]` harness `l1_proxy_e2e.rs` needs is deliberately absent:
@@ -31,14 +33,14 @@ use std::time::{Duration, Instant};
 use ruviform_audio_core::SampleRate;
 use ruviform_media_core::{FrameRate, MediaDuration, MediaTime, TimeBase};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventList, HostError, LifecycleState, ParamId, ParamInfo,
-    PlainParamValue, PluginDescriptor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
-    ProcessStatus, TransportInfo, VideoProcessConfig,
+    BufferView, BufferViewMut, EventList, FailureCause, HostError, LifecycleState, ParamId,
+    ParamInfo, PlainParamValue, PluginDescriptor, PrepareError, ProcessConfig, ProcessContext,
+    ProcessResult, ProcessStatus, TransportInfo, VideoProcessConfig,
 };
 use ruviform_plugin_host::{
-    ChildExit, EndpointBounds, ErasedPlugin, HostCommand, HostNotification, HostReply,
-    OutOfProcessSpec, Plugin, PluginFactory, PluginHandle, PluginHost, VideoHostCommand,
-    VideoHostReply, VideoOutOfProcessSpec, erase,
+    AudioCounterSnapshot, ChildExit, DiagnosticQuery, EndpointBounds, ErasedPlugin, HostCommand,
+    HostNotification, HostReply, OutOfProcessSpec, Plugin, PluginFactory, PluginHandle, PluginHost,
+    SpawnPhase, VideoHostCommand, VideoHostReply, VideoOutOfProcessSpec, erase,
 };
 use ruviform_video_core::{
     ColorInfo, ColorPrimaries, ColorRange, MatrixCoefficients, PixelFormat,
@@ -56,8 +58,8 @@ const WORKER_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
 };
 
 /// The descriptor `l1-test-worker` (audio) reports — the audio L1
-/// route's registration oracle for the cross-kind suite. Its
-/// registration is enough; no audio child is ever spawned here.
+/// route's registration oracle for the cross-kind suite, and the
+/// contrast handle the counter-isolation test instantiates.
 const AUDIO_WORKER_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
     id: "org.ruviform.test.l1-test-worker",
     name: "L1 Test Worker",
@@ -145,9 +147,9 @@ fn worker_program() -> OsString {
     OsString::from(env!("CARGO_BIN_EXE_l1-test-video-worker"))
 }
 
-/// The `l1-test-worker` (audio) executable — used only as the
-/// registration payload for the cross-kind audio L1 route (no audio
-/// child is spawned in this file).
+/// The `l1-test-worker` (audio) executable — the cross-kind audio
+/// L1 route's payload; only the counter-isolation test spawns it
+/// (one live audio child as the `audio_counters` contrast oracle).
 fn audio_worker_program() -> OsString {
     OsString::from(env!("CARGO_BIN_EXE_l1-test-worker"))
 }
@@ -221,7 +223,8 @@ fn video_host(args: &[&str]) -> PluginHost {
 
 /// A `PluginHost` carrying the video worker route plus both audio
 /// route kinds — an L0 factory and an L1 `l1-test-worker` route —
-/// for the cross-kind suite (no audio child is ever spawned).
+/// for the cross-kind suite (the counter-isolation test also
+/// instantiates the audio L1 route as its `Some` contrast).
 fn mixed_host(args: &[&str]) -> PluginHost {
     let mut host = PluginHost::new();
     host.register_factory(Box::new(GainFactory));
@@ -410,14 +413,21 @@ fn wait_failed(host: &PluginHost, handle: PluginHandle) {
 }
 
 /// Polls `try_recv_notification` until the `InstanceFailed`
-/// notification arrives or `NOTIFY_TIMEOUT` elapses.
-fn wait_notification(host: &mut PluginHost) -> (PluginHandle, ChildExit) {
+/// notification arrives or `NOTIFY_TIMEOUT` elapses — the full
+/// `{handle, exit, cause}` payload so the diagnostics-parity
+/// asserts can pin the first-observed `FailureCause` beside the
+/// reaped status.
+fn wait_notification(host: &mut PluginHost) -> (PluginHandle, ChildExit, FailureCause) {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     loop {
-        if let Some(HostNotification::InstanceFailed { handle, exit }) =
-            host.try_recv_notification()
+        if let Some(HostNotification::InstanceFailed {
+            handle,
+            exit,
+            cause,
+            ..
+        }) = host.try_recv_notification()
         {
-            return (handle, exit);
+            return (handle, exit, cause);
         }
         assert!(
             Instant::now() < deadline,
@@ -1148,12 +1158,18 @@ fn direct_plugin_host_methods_on_video_handle() {
 
     // `kill_child` works on the video slot — `Failed` convergence
     // plus its one `InstanceFailed` land asynchronously, carrying
-    // the real exit status.
+    // the real exit status and the first-observed cause.
     host.kill_child(handle).unwrap();
     wait_failed(&host, handle);
-    let (failed_handle, exit) = wait_notification(&mut host);
+    let (failed_handle, exit, cause) = wait_notification(&mut host);
     assert_eq!(failed_handle, handle);
     assert!(exit.code.is_some() || exit.signal.is_some());
+    // Reaped exit or stdout EOF — whichever the driver observed
+    // first (the `ExitObserved`/`Transport` race).
+    assert!(matches!(
+        cause,
+        FailureCause::ExitObserved | FailureCause::Transport
+    ));
     assert_no_notification(&mut host);
 }
 
@@ -1173,11 +1189,16 @@ fn kill_child_converges_failed_and_notifies_once() {
 
     host.kill_child(handle).unwrap();
     wait_failed(&host, handle);
-    let (failed_handle, exit) = wait_notification(&mut host);
+    let (failed_handle, exit, cause) = wait_notification(&mut host);
     assert_eq!(failed_handle, handle);
     // A real OS kill — the notification carries the reaped status
-    // (signal on unix, code on Windows).
+    // (signal on unix, code on Windows) and the first-observed
+    // cause (`ExitObserved`/`Transport` — the observation race).
     assert!(exit.code.is_some() || exit.signal.is_some());
+    assert!(matches!(
+        cause,
+        FailureCause::ExitObserved | FailureCause::Transport
+    ));
 
     // Every verb but `Destroy` is `Err(Failed)` on the converged
     // instance — the same vocabulary the audio route uses.
@@ -1251,11 +1272,16 @@ fn mid_render_child_death() {
         HostError::Ipc,
     );
     wait_failed(&host, handle);
-    let (failed_handle, exit) = wait_notification(&mut host);
+    let (failed_handle, exit, cause) = wait_notification(&mut host);
     assert_eq!(failed_handle, handle);
     // `--crash-after-msgs` exits with the default code 3 — the
-    // reaped status reaches the notification.
+    // reaped status reaches the notification; the cause is
+    // `try_wait` or the racing stdout EOF.
     assert_eq!(exit.code, Some(3));
+    assert!(matches!(
+        cause,
+        FailureCause::ExitObserved | FailureCause::Transport
+    ));
 
     expect_ok(vex(&mut host, VideoHostCommand::Destroy { handle }));
     assert_no_notification(&mut host);
@@ -1275,9 +1301,13 @@ fn mid_verb_child_death_notifies() {
         HostError::Ipc,
     );
     wait_failed(&host, handle);
-    let (failed_handle, exit) = wait_notification(&mut host);
+    let (failed_handle, exit, cause) = wait_notification(&mut host);
     assert_eq!(failed_handle, handle);
     assert_eq!(exit.code, Some(3));
+    assert!(matches!(
+        cause,
+        FailureCause::ExitObserved | FailureCause::Transport
+    ));
     expect_ok(vex(&mut host, VideoHostCommand::Destroy { handle }));
     assert_no_notification(&mut host);
 }
@@ -1303,21 +1333,35 @@ fn mid_destroy_child_death_frees_slot() {
 
 /// Mid-`CreateVideoInstance` death: the create request itself is
 /// message 2 — the child exits before dispatch, `Instantiate` is
-/// `Err(Ipc)`, no handle is minted and (the `minted() == false`
-/// silent-converge rule) no `InstanceFailed` ever arrives.
+/// `SpawnFailed` carrying the convergence's cause plus a
+/// registered attempt record, no handle is minted and (the
+/// `minted() == false` silent-converge rule) no `InstanceFailed`
+/// ever arrives.
 #[test]
 fn mid_create_child_death_no_handle_no_notification() {
     let mut host = video_host(&["--crash-after-msgs=2"]);
-    expect_err(
-        vex(
-            &mut host,
-            VideoHostCommand::Instantiate {
-                plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
-                config: config(),
-            },
-        ),
-        HostError::Ipc,
-    );
+    let Err(HostError::SpawnFailed {
+        cause,
+        diagnostics_id,
+    }) = vex(
+        &mut host,
+        VideoHostCommand::Instantiate {
+            plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+            config: config(),
+        },
+    )
+    else {
+        panic!("a dead create must surface as SpawnFailed")
+    };
+    // Exit or broken pipe — whichever the driver observed first.
+    assert!(matches!(
+        cause,
+        FailureCause::ExitObserved | FailureCause::Transport
+    ));
+    assert!(matches!(
+        host.diagnostics_query(diagnostics_id),
+        DiagnosticQuery::Found(_)
+    ));
     // The unminted instance converges silently — the queue stays
     // empty through the grace window.
     assert_no_notification(&mut host);
@@ -1352,11 +1396,13 @@ fn noncanonical_output_converges_that_instance_only() {
         HostError::Ipc,
     );
     wait_failed(&host, violating);
-    let (failed_handle, exit) = wait_notification(&mut host);
+    let (failed_handle, exit, cause) = wait_notification(&mut host);
     assert_eq!(failed_handle, violating);
     // `converge_instance`'s synthesized exit — the child is alive,
-    // so there is no status to report (`{code: None, signal: None}`).
+    // so there is no status to report (`{code: None, signal: None}`)
+    // — and the attributable violation's `Protocol` cause.
     assert_eq!(exit, ChildExit::default());
+    assert_eq!(cause, FailureCause::Protocol);
 
     // The sibling survived — the violation was attributable to one
     // instance only: its mirror is still `Processing` and its
@@ -1648,12 +1694,15 @@ fn render_wedge_uses_render_timeout() {
         "render wedge must fire render_timeout, not command_timeout"
     );
     wait_failed(&host, handle);
-    let (failed_handle, exit) = wait_notification(&mut host);
+    let (failed_handle, exit, cause) = wait_notification(&mut host);
     assert_eq!(failed_handle, handle);
     // The timeout path converges `Failed` then kills the wedged
     // child — the `Pending` notification completes with the reaped
-    // kill status.
+    // kill status while the recorded `Timeout` stands (the cause
+    // is stamped before the kill issues, so the reaped exit never
+    // overwrites it).
     assert!(exit.code.is_some() || exit.signal.is_some());
+    assert_eq!(cause, FailureCause::Timeout);
 }
 
 /// `command_timeout` covers every non-`Render` verb: the worker
@@ -1680,34 +1729,45 @@ fn command_wedge_uses_command_timeout() {
         "command wedge must fire command_timeout"
     );
     wait_failed(&host, handle);
-    let (failed_handle, exit) = wait_notification(&mut host);
+    let (failed_handle, exit, cause) = wait_notification(&mut host);
     assert_eq!(failed_handle, handle);
     assert!(exit.code.is_some() || exit.signal.is_some());
+    assert_eq!(cause, FailureCause::Timeout);
 }
 
 /// A `Hello.version` mismatch is a handshake violation —
-/// `Instantiate` fails `Err(Ipc)` before any `Scan`/`Create`
-/// traffic, no handle is minted and nothing can notify.
+/// `Instantiate` fails `SpawnFailed{cause: Handshake}` before any
+/// `Scan`/`Create` traffic, no handle is minted and nothing can
+/// notify.
 #[test]
 fn hello_version_mismatch_fails_instantiate() {
     let mut host = video_host(&["--hello-version=99"]);
-    expect_err(
-        vex(
-            &mut host,
-            VideoHostCommand::Instantiate {
-                plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
-                config: config(),
-            },
-        ),
-        HostError::Ipc,
-    );
+    let Err(HostError::SpawnFailed {
+        cause,
+        diagnostics_id,
+    }) = vex(
+        &mut host,
+        VideoHostCommand::Instantiate {
+            plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+            config: config(),
+        },
+    )
+    else {
+        panic!("a handshake violation must surface as SpawnFailed")
+    };
+    assert_eq!(cause, FailureCause::Handshake);
+    assert!(matches!(
+        host.diagnostics_query(diagnostics_id),
+        DiagnosticQuery::Found(_)
+    ));
     assert_no_notification(&mut host);
 }
 
 /// A handshake wedge is also `command_timeout`:
 /// `--hang-after-msgs=0` stops the child answering even the
-/// handshake `Scan`, so `Instantiate` fails `Err(Ipc)` inside the
-/// injected timeout — no handle, no notification.
+/// handshake `Scan`, so `Instantiate` fails
+/// `SpawnFailed{cause: Timeout}` inside the injected timeout — no
+/// handle, no notification.
 #[test]
 fn handshake_wedge_uses_command_timeout() {
     let mut host = PluginHost::new();
@@ -1716,21 +1776,208 @@ fn handshake_wedge_uses_command_timeout() {
     host.video().register_out_of_process(spec).unwrap();
 
     let start = Instant::now();
-    expect_err(
-        vex(
-            &mut host,
-            VideoHostCommand::Instantiate {
-                plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
-                config: config(),
-            },
-        ),
-        HostError::Ipc,
-    );
+    let Err(HostError::SpawnFailed {
+        cause,
+        diagnostics_id,
+    }) = vex(
+        &mut host,
+        VideoHostCommand::Instantiate {
+            plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+            config: config(),
+        },
+    )
+    else {
+        panic!("a handshake wedge must surface as SpawnFailed")
+    };
     assert!(
         start.elapsed() < Duration::from_secs(8),
         "handshake wedge must fire command_timeout"
     );
+    assert_eq!(cause, FailureCause::Timeout);
+    assert!(matches!(
+        host.diagnostics_query(diagnostics_id),
+        DiagnosticQuery::Found(_)
+    ));
     assert_no_notification(&mut host);
+}
+
+// ------------------------------------------------------------------
+// Diagnostics parity (Issue #121 T11) — stderr capture, the
+// attempt/minted record pair, and the audio-counter boundary the
+// `InstKind::Video` arm owns nothing of
+// ------------------------------------------------------------------
+
+/// The pre-mint attempt record's stderr capture: the worker emits
+/// `--stderr-bytes` before `Hello`, the drain — started ahead of
+/// the `Hello` wait, the same machinery the audio route uses —
+/// retains them, and the mid-`CreateVideoInstance` wedge freezes
+/// them into the registered record. The wedge is a *hang*, not a
+/// crash, deliberately: the `command_timeout` window gives the
+/// detached drain a deterministic slice to read the pre-`Hello`
+/// emission before `create_rollback_error` freezes (a mid-create
+/// *crash* would race the drain — the freeze can precede the
+/// first read). `handle` stays `None` (nothing minted) while
+/// `phase` is `Live` — the *child's* spawn phase, which passed
+/// `Hello` before its create wedged — the same shape the audio
+/// mid-create record carries.
+#[test]
+fn spawn_failed_attempt_record_captures_stderr() {
+    const STDERR_BYTES: usize = 128;
+    let mut host = PluginHost::new();
+    let mut spec = video_spec(&["--stderr-bytes=128", "--hang-after-msgs=1"]);
+    spec.command_timeout = SHORT_TIMEOUT;
+    host.video().register_out_of_process(spec).unwrap();
+
+    let start = Instant::now();
+    let Err(HostError::SpawnFailed {
+        cause,
+        diagnostics_id,
+    }) = vex(
+        &mut host,
+        VideoHostCommand::Instantiate {
+            plugin_id: WORKER_DESCRIPTOR.id.to_owned(),
+            config: config(),
+        },
+    )
+    else {
+        panic!("a wedged create must surface as SpawnFailed")
+    };
+    assert!(
+        start.elapsed() < Duration::from_secs(8),
+        "a create wedge must fire command_timeout"
+    );
+    // The request wait fired `command_timeout` — the cause was
+    // recorded before the wedge-kill issued.
+    assert_eq!(cause, FailureCause::Timeout);
+    let DiagnosticQuery::Found(record) = host.diagnostics_query(diagnostics_id) else {
+        panic!("the registered attempt record must resolve")
+    };
+    assert_eq!(record.diagnostics_id, diagnostics_id);
+    // Pre-mint: no handle — and `Live` is the child's phase (it
+    // passed `Hello`; the instance mint is what wedged).
+    assert_eq!(record.handle, None);
+    assert_eq!(record.phase, SpawnPhase::Live);
+    // The record carries the same first-observation the error did.
+    assert_eq!(record.cause, Some(FailureCause::Timeout));
+    // The whole pre-`Hello` emission survived in the retained
+    // tail — 128 bytes are far under the ring cap, so nothing
+    // dropped (`eof` itself is the drain's post-exit state —
+    // racing the freeze, deliberately unasserted).
+    assert_eq!(record.stderr.bytes, vec![b'!'; STDERR_BYTES]);
+    assert_eq!(record.stderr.total_read_bytes, STDERR_BYTES as u64);
+    assert_eq!(record.stderr.dropped_bytes, 0);
+    assert!(!record.stderr.drain_deadline_exceeded);
+    assert!(!record.stderr.unread_bytes_observed);
+    // The unminted instance converges silently — no notification.
+    assert_no_notification(&mut host);
+}
+
+/// The minted-failure correlation on the video route — the same
+/// handle→record contract the audio L1 route pins: a live handle
+/// resolves `None`, the `InstanceFailed` pop mints a record keyed
+/// by the slot carrying the notification's own first-observed
+/// cause verbatim plus the child's retained stderr tail.
+#[test]
+fn minted_failure_registers_handle_correlated_record() {
+    const STDERR_BYTES: usize = 256;
+    let mut host = video_host(&["--stderr-bytes=256"]);
+    let handle = instantiate(&mut host, WORKER_DESCRIPTOR.id, config());
+    drive_to_processing(&mut host, handle);
+
+    // No record exists for a live handle's slot.
+    assert!(host.diagnostics_for_handle(handle).is_none());
+
+    host.kill_child(handle).unwrap();
+    wait_failed(&host, handle);
+    let (notified, exit, cause) = wait_notification(&mut host);
+    assert_eq!(notified, handle);
+    assert!(exit.code.is_some() || exit.signal.is_some());
+    assert!(matches!(
+        cause,
+        FailureCause::ExitObserved | FailureCause::Transport
+    ));
+
+    // The handle correlates the retained record — slot key, the
+    // notification's own cause, the `Live` phase and the frozen
+    // capture.
+    let record = host
+        .diagnostics_for_handle(handle)
+        .expect("minted failure must register a record");
+    assert_eq!(record.handle, Some(handle.slot()));
+    assert_eq!(record.cause, Some(cause));
+    assert_eq!(record.phase, SpawnPhase::Live);
+    // The pre-`Hello` stderr emission survived in the frozen tail.
+    assert_eq!(record.stderr.bytes, vec![b'!'; STDERR_BYTES]);
+    assert_eq!(record.stderr.total_read_bytes, STDERR_BYTES as u64);
+    assert_eq!(record.stderr.dropped_bytes, 0);
+    // The same record is `Found` by id; a never-minted id is
+    // `NotFound`.
+    assert!(matches!(
+        host.diagnostics_query(record.diagnostics_id),
+        DiagnosticQuery::Found(found)
+            if found.diagnostics_id == record.diagnostics_id
+    ));
+    assert!(matches!(
+        host.diagnostics_query(record.diagnostics_id + 1_000),
+        DiagnosticQuery::NotFound
+    ));
+
+    expect_ok(vex(&mut host, VideoHostCommand::Destroy { handle }));
+    assert_no_notification(&mut host);
+}
+
+/// The counter query surface is audio-only — the
+/// non-contamination pin: `audio_counters` on a video handle is
+/// `None` in every state (live, converged, freed), while an L1
+/// audio instance on the same host reads its fresh pair. The
+/// `InstKind::Video` arm owns no counter pair, so nothing can leak
+/// onto the video route.
+#[test]
+fn audio_counters_absent_on_the_video_route() {
+    let mut host = mixed_host(&[]);
+    let video_handle = instantiate(&mut host, WORKER_DESCRIPTOR.id, config());
+    let audio_handle = match host
+        .execute(HostCommand::Instantiate {
+            plugin_id: AUDIO_WORKER_DESCRIPTOR.id.to_owned(),
+        })
+        .unwrap()
+    {
+        HostReply::Instantiated { handle } => handle,
+        other => panic!("unexpected reply: {other:?}"),
+    };
+
+    // Contrast oracle: the L1 audio slot carries a fresh counter
+    // pair — zero until the first block runs.
+    assert_eq!(
+        host.audio_counters(audio_handle),
+        Some(AudioCounterSnapshot::default())
+    );
+    // The video slot's defined answer is the not-found `None`.
+    assert_eq!(host.audio_counters(video_handle), None);
+
+    drive_to_processing(&mut host, video_handle);
+    assert_eq!(host.audio_counters(video_handle), None);
+
+    host.kill_child(video_handle).unwrap();
+    wait_failed(&host, video_handle);
+    let (notified, _exit, _cause) = wait_notification(&mut host);
+    assert_eq!(notified, video_handle);
+    // A `Failed` video entry still owns no counters.
+    assert_eq!(host.audio_counters(video_handle), None);
+
+    expect_ok(vex(
+        &mut host,
+        VideoHostCommand::Destroy {
+            handle: video_handle,
+        },
+    ));
+    assert_eq!(host.audio_counters(video_handle), None);
+    assert_eq!(
+        host.execute(HostCommand::Destroy {
+            handle: audio_handle,
+        }),
+        Ok(HostReply::Ok)
+    );
 }
 
 // ------------------------------------------------------------------

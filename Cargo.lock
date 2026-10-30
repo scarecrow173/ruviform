@@ -1401,6 +1401,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-observability"
+version = "0.1.0"
+
+[[package]]
 name = "ruviform-plugin-clap"
 version = "0.1.0"
 dependencies = [
@@ -1441,14 +1445,17 @@ name = "ruviform-plugin-host"
 version = "0.1.0"
 dependencies = [
  "assert_no_alloc",
+ "libc",
  "ruviform-audio",
  "ruviform-audio-core",
  "ruviform-media-core",
+ "ruviform-observability",
  "ruviform-plugin-core",
  "ruviform-rt",
  "ruviform-video-core",
  "shared_memory",
  "static_assertions",
+ "windows-sys",
 ]
 
 [[package]]

@@ -29,6 +29,7 @@ Directory: `docs/specs`
 | SPEC-034NiVkp0Q1fpkaBoUGNY0 | Issue #117 L1 bundle 子プロセス（1 子プロセス N インスタンス） | implemented | [issue-117-bundle-child-process.md](./issue-117-bundle-child-process.md) |
 | SPEC-034NV8AWA7qua5MfPc7q6i | Issue #118 video/NONRT プラグインの L1 経路 | implemented | [issue-118-video-l1.md](./issue-118-video-l1.md) |
 | SPEC-034NhJTrJ1kCCldVF5XZKB | Issue #119 L1 wire バージョン方針（単一最新バージョン・交渉機構なし） | implemented | [issue-119-l1-wire-version-policy.md](./issue-119-l1-wire-version-policy.md) |
+| SPEC-034O7hTzfdwtNrUQom8ISw | Issue #121 L1 診断・可観測性（underrun メトリクス・子 stderr 配管・失敗原因 payload） | approved | [issue-121-diagnostics.md](./issue-121-diagnostics.md) |
 | SPEC-034N3QmyfzJRPM3AVpKQTn | Issue #124 OFX フォローアップ（catalog_open cross-window h 露出修正 + instance clip props clone） | approved | [issue-124-ofx-cross-window-h-exposure.md](./issue-124-ofx-cross-window-h-exposure.md) |
 | SPEC-034N3OBemoWwFEpqzWlf7r | Issue #125 ICC LUT fixture coverage（intent 区別 pair + mft1/mft2/mAB 経路） | implemented | [issue-125-icc-lut-fixture-coverage.md](./issue-125-icc-lut-fixture-coverage.md) |
 | SPEC-034N9j2YKqyKxZZZyUPKFe | Issue #130 media-core/dsp/audio-analysis assert_no_alloc レーン武装（AllocDisabler 宣言） | implemented | [issue-130-arm-assert-no-alloc-lane.md](./issue-130-arm-assert-no-alloc-lane.md) |

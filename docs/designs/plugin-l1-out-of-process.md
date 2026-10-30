@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）"
 created: "2026-10-25"
-updated: "2026-10-28"
+updated: "2026-10-29"
 owners: []
 relations:
   source: []
@@ -67,6 +67,8 @@ relations:
     - "docs/specs/issue-118-video-l1.md"
     - "docs/designs/issue-118-video-l1.md"
     - "docs/adr/issue-118-video-l1-create-path-segment.md"
+    - "docs/discovery/issue-121-diagnostics.md"
+    - "docs/specs/issue-121-diagnostics.md"
   verifies: []
   verified-by:
     - "docs/test-specs/plugin-l1-wire-codec-tests.md"
@@ -320,9 +322,9 @@ spawn 引数の受け渡し・`CARGO_BIN_EXE_*` の利用は各 crate 内に閉�
 - bundle 子（1 子 N インスタンス）| Issue #117 で設計確定 — wire v2（envelope `instance`・`CreateInstance`/`DestroyInstance`・`WIRE_MAX_INSTANCES=64`）+ route 単位 pool + 子スコープ基礎の `Failed` 粒度（design `docs/designs/issue-117-bundle-child-process.md`・ADR `docs/adr/issue-117-bundle-child-failed-granularity.md`）— **但書: 共有 wire 世代は #118 で v3 へ着地済み**（audio bundle 規則は不変・video は Dedicated 固定のため本表の pool 記述は audio route のみに適用） | 明示 pool キー・pool keep-alive・`BundleFailed` 相関通知等の残件は同 design の Deferred 表 | —
 - エンジン/利用側への L1 配線 | plugin-host の engine 消費自体が未実装 | engine プラグイン統合 Issue | L1 が consumer から到達不能
 - 複数 wire バージョン共存・交渉機構 | Issue #119 で単一最新バージョン方針を確定（交渉機構・互換レイヤーなし・bump 判断基準は上記「ワイヤバージョン方針」に記録） | 独立配布されるホスト/ランナー間のバージョン互換が要求される段階 | 独立配布形態で新旧バージョンの混在が扱えない
-- stderr ログ配管 | inherit で運用可能・診断価値は副次的 | 子プロセスのログ解析要求 | クラッシュ時の手がかりが stderr 依存
+- stderr ログ配管 | ~~inherit で運用可能・診断価値は副次的~~ **trigger 消費済み — Issue #121 で再エンゲージ・実装着地**: 子 stderr は spawn 時に piped 化され、bounded drain thread が 64 KiB tail ring へ収集（post-exit 500 ms grace・案A 承認済み）— 診断レコードが `SpawnFailed`/`InstanceFailed` 時に frozen snapshot として retention 登録される（正本 `docs/designs/issue-121-l1-diagnostics.md`） | — | —（残件は #121 design の Deferred 表）
 - video/NONRT プラグインの L1 経路 | ~~本 Issue は audio `process` 経路のみ~~ **trigger 消費済み — Issue #118 で再エンゲージ・実装着地**: video 専用 wire（`Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10）・`wire::vshm` segment・`run_video`/`VideoRunner` runner・`PluginHost::video()`/`VideoPluginHost`/`VideoOutOfProcessSpec` host 面・`Route::OutOfProcessVideo`/`Slot::OutOfProcessVideo` が確立（正本 `docs/designs/issue-118-video-l1.md`・`docs/specs/issue-118-video-l1.md`・ADR `docs/adr/issue-118-video-l1-host-surface.md`/`issue-118-video-l1-create-path-segment.md`）。audio `process` 経路は本書の記述どおり不変 — video は audio wire を拡張するのでなく別経路として確立された | — | —（残件は同 design の Deferred 表）
-- ドライバの共有リーパー/io 多重化 | **Issue #120 deferred（post-#117 再評価）** — #117 で Bundled 既定により管理単位が per-instance → per-child に移行し「スレッド線形増」の前提は構造解消（2 スレッド/≤64 instance）。reader は既にブロッキング read→EOF で即時検出、`DRIVER_POLL_INTERVAL` は `recv_timeout` hybrid（idle ≈ ≤1-2% core/child）。フル io-mux は 3 バックエンド + Windows named-pipe 再構成 + wedged-kill 契約の非ブロッキング化が必要で現状は不釣合い | 再トリガ: 実測 >16-32 子 / 200µs wake 起因の実測 idle-CPU・電力問題 / #121 stderr 配管導入（3 スレッド目）/ sub-poll 検出や doorbell レイテンシ厳格化の新契約 / 単一 reader スループット上限実測 | スレッド数 = 2×子プロセスのコスト（Dedicated 経路では per-instance に退化）。縮小案: R1 submit wake（std のみ・doorbell 即時化）+ R2 共有プラットフォーム reaper（生 pid FFI）で poll 除去は可能 |
+- ドライバの共有リーパー/io 多重化 | **Issue #120 deferred（post-#117 再評価）** — #117 で Bundled 既定により管理単位が per-instance → per-child に移行し「スレッド線形増」の前提は構造解消（2 スレッド/≤64 instance）。reader は既にブロッキング read→EOF で即時検出、`DRIVER_POLL_INTERVAL` は `recv_timeout` hybrid（idle ≈ ≤1-2% core/child）。フル io-mux は 3 バックエンド + Windows named-pipe 再構成 + wedged-kill 契約の非ブロッキング化が必要で現状は不釣合い。**#121 で再トリガ発火を記録**: stderr drain が per-child 3 スレッド目として実装着地（driver + stdout reader + stderr drain — スレッド構成は 3×子プロセスへ変化。io-mux 再評価の判断は Issue #120 側の残件） | 再トリガ: 実測 >16-32 子 / 200µs wake 起因の実測 idle-CPU・電力問題 / ~~#121 stderr 配管導入（3 スレッド目）~~ **発火済み（#121 着地）** / sub-poll 検出や doorbell レイテンシ厳格化の新契約 / 単一 reader スループット上限実測 | スレッド数 = 2×子プロセスのコスト（Dedicated 経路では per-instance に退化）。縮小案: R1 submit wake（std のみ・doorbell 即時化）+ R2 共有プラットフォーム reaper（生 pid FFI）で poll 除去は可能 |
 
 ## Verification Notes
 

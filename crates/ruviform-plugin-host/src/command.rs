@@ -19,7 +19,7 @@
 
 use ruviform_plugin_core::{PluginDescriptor, ProcessConfig};
 
-pub use ruviform_plugin_core::{GuiHandle, GuiParentToken, HostError, PluginHandle};
+pub use ruviform_plugin_core::{FailureCause, GuiHandle, GuiParentToken, HostError, PluginHandle};
 
 /// A non-RT host operation expressed as serializable plain data.
 ///

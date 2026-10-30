@@ -4,7 +4,7 @@ type: "spec"
 status: "implemented"
 title: "Issue #117 L1 bundle 子プロセス（1 子プロセス N インスタンス）"
 created: "2026-10-28"
-updated: "2026-10-28"
+updated: "2026-10-29"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -52,6 +52,7 @@ relations:
     - "../discovery/issue-118-video-l1.md"
     - "issue-118-video-l1.md"
     - "../designs/issue-118-video-l1.md"
+    - "issue-121-diagnostics.md"
   verifies: []
   verified-by:
     - "../test-specs/issue-117-wire-v2-codec-tests.md"

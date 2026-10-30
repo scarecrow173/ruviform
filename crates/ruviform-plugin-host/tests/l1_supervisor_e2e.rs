@@ -27,13 +27,13 @@ use std::time::{Duration, Instant};
 use ruviform_audio_core::{AudioBufferViewMut, SampleRate};
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    EventList, HostError, LifecycleState, PluginDescriptor, PrepareError, ProcessConfig,
-    ProcessResult,
+    EventList, FailureCause, HostError, LifecycleState, PluginDescriptor, PrepareError,
+    ProcessConfig, ProcessResult,
 };
 use ruviform_plugin_host::{
-    ChildExit, EndpointBounds, HostCommand, HostNotification, HostReply, OutOfProcessIsolation,
-    OutOfProcessSpec, PluginHandle, PluginHost, RestartPolicy, RestartRecipe, RestoreOutcome,
-    SupervisedId, SupervisionError, SupervisionEvent, Supervisor,
+    ChildExit, DiagnosticQuery, EndpointBounds, HostCommand, HostNotification, HostReply,
+    OutOfProcessIsolation, OutOfProcessSpec, PluginHandle, PluginHost, RestartPolicy,
+    RestartRecipe, RestoreOutcome, SupervisedId, SupervisionError, SupervisionEvent, Supervisor,
 };
 use ruviform_rt::RtContext;
 use static_assertions::{assert_impl_all, assert_not_impl_any};
@@ -299,6 +299,28 @@ fn attempt_faileds(events: &[SupervisionEvent], id: SupervisedId) -> Vec<(u32, H
         .collect()
 }
 
+/// A pre-mint attempt error is `SpawnFailed` — the cause is the
+/// driver-observed convergence (exit or broken pipe, whichever
+/// raced first) — with a `diagnostics_id` queryable `Found` on the
+/// host's registry.
+fn expect_spawn_failed(host: &PluginHost, error: HostError) {
+    let HostError::SpawnFailed {
+        cause,
+        diagnostics_id,
+    } = error
+    else {
+        panic!("expected SpawnFailed, got {error:?}")
+    };
+    assert!(matches!(
+        cause,
+        FailureCause::ExitObserved | FailureCause::Transport
+    ));
+    assert!(matches!(
+        host.diagnostics_query(diagnostics_id),
+        DiagnosticQuery::Found(_)
+    ));
+}
+
 fn gave_ups(events: &[SupervisionEvent], id: SupervisedId) -> Vec<(u32, Option<HostError>)> {
     events
         .iter()
@@ -314,16 +336,25 @@ fn gave_ups(events: &[SupervisionEvent], id: SupervisedId) -> Vec<(u32, Option<H
         .collect()
 }
 
-/// The `(handle, exit)` of every `Unsupervised` pass-through —
-/// verbatim `HostNotification` payloads.
-fn unsupervised_failures(events: &[SupervisionEvent]) -> Vec<(PluginHandle, ChildExit)> {
+/// The `(handle, exit, cause)` of every `Unsupervised`
+/// pass-through — verbatim `HostNotification` payloads, cause
+/// included.
+fn unsupervised_failures(
+    events: &[SupervisionEvent],
+) -> Vec<(PluginHandle, ChildExit, FailureCause)> {
     events
         .iter()
         .filter_map(|event| match event {
             SupervisionEvent::Unsupervised {
-                notification: HostNotification::InstanceFailed { handle, exit },
+                notification:
+                    HostNotification::InstanceFailed {
+                        handle,
+                        exit,
+                        cause,
+                        ..
+                    },
                 ..
-            } => Some((*handle, *exit)),
+            } => Some((*handle, *exit, *cause)),
             _ => None,
         })
         .collect()
@@ -389,6 +420,54 @@ fn restarted_dedicated_replays_recipe_and_rewires() {
     let endpoint = host.prepare_endpoint(new, bounds()).unwrap();
     assert_eq!(endpoint.latency_frames(), 1024);
     drop(endpoint);
+
+    assert_eq!(sup.unwatch(id), Some(new));
+    destroy(&mut host, new);
+}
+
+/// The watched `InstanceFailed{cause}` consumption keeps the
+/// diagnostics half of the contract: `poll`'s drain runs the same
+/// `try_recv_notification` that registers the minted-failure
+/// record, so even though the supervisor never echoes the
+/// notification (the `Restarted` event carries no cause), the
+/// record is queryable by handle afterwards — the documented
+/// "cause lives on the registry" path (spec R-B8). `new` re-mints
+/// on `old`'s freed slot, so `diagnostics_for_handle(new)`
+/// resolves the just-failed record keyed by that slot.
+#[test]
+fn supervised_drain_registers_handle_correlated_record() {
+    let mut host = dedicated_host(&[]);
+    let mut sup = Supervisor::new(RestartPolicy::default()).unwrap();
+    let h = instantiate(&mut host);
+    drive(&mut host, h, Some(config()), true);
+    let id = sup.watch(&mut host, h, processing_recipe()).unwrap();
+
+    host.kill_child(h).unwrap();
+    wait_for_failed(&host, h);
+    let events = poll_until_event(&mut sup, &mut host, Instant::now(), |evs| {
+        restarted(evs, id).is_some()
+    });
+    let (old, new, ..) = restarted(&events, id).unwrap();
+    assert_eq!(old, h);
+
+    // The drain minted the failure record keyed by `h`'s slot —
+    // `new` shares it, so the record resolves through the fresh
+    // handle and carries the consumed notification's cause
+    // verbatim (a kill's `{ExitObserved, Transport}` first-
+    // observation set — see `l1_proxy_e2e`).
+    let record = host
+        .diagnostics_for_handle(new)
+        .expect("the drained watched failure registered a record");
+    assert_eq!(record.handle, Some(h.slot()));
+    assert!(matches!(
+        record.cause,
+        Some(FailureCause::ExitObserved | FailureCause::Transport)
+    ));
+    assert!(matches!(
+        host.diagnostics_query(record.diagnostics_id),
+        DiagnosticQuery::Found(found)
+            if found.diagnostics_id == record.diagnostics_id
+    ));
 
     assert_eq!(sup.unwatch(id), Some(new));
     destroy(&mut host, new);
@@ -717,7 +796,7 @@ fn activate_over_limit_attempt_fails_prepare() {
 /// restart spawns a fresh child (Scan, `CreateInstance`,
 /// `Initialize` = 3 msgs — the knob stays armed); the second
 /// entry's `Instantiate` reuses that pooled child, whose
-/// `CreateInstance` is the 4th received message — `Err(Ipc)`
+/// `CreateInstance` is the 4th received message — `SpawnFailed`
 /// *before* a handle mints (`minted: None` — nothing owed, and the
 /// never-minted victim emits no notification). The fresh handle's
 /// own collateral death is a separate watched entry's recovery.
@@ -743,7 +822,10 @@ fn mid_create_death_attempt_failed_without_mint() {
         !attempt_faileds(evs, id_b).is_empty()
     });
     assert_eq!(count_restarted(&events, id_a), 1);
-    assert_eq!(attempt_faileds(&events, id_b), [(1, HostError::Ipc)]);
+    let failures = attempt_faileds(&events, id_b);
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].0, 1);
+    expect_spawn_failed(&host, failures[0].1);
     // No mint, no cleanup owed — and no `Unsupervised`: the
     // never-minted victim emits no notification.
     assert_eq!(sup.current_handle(id_b), None);
@@ -764,7 +846,10 @@ fn mid_create_death_attempt_failed_without_mint() {
         t0 + Duration::from_millis(250),
         |evs| !attempt_faileds(evs, id_b).is_empty(),
     );
-    assert_eq!(attempt_faileds(&events, id_b), [(2, HostError::Ipc)]);
+    let failures = attempt_faileds(&events, id_b);
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].0, 2);
+    expect_spawn_failed(&host, failures[0].1);
     let events = poll_until_event(
         &mut sup,
         &mut host,
@@ -780,7 +865,10 @@ fn mid_create_death_attempt_failed_without_mint() {
         t0 + Duration::from_millis(750),
         |evs| !gave_ups(evs, id_b).is_empty(),
     );
-    assert_eq!(gave_ups(&events, id_b), [(3, Some(HostError::Ipc))]);
+    let gave_ups = gave_ups(&events, id_b);
+    assert_eq!(gave_ups.len(), 1);
+    assert_eq!(gave_ups[0].0, 3);
+    expect_spawn_failed(&host, gave_ups[0].1.expect("last_error recorded"));
     let events = poll_until_event(
         &mut sup,
         &mut host,
@@ -1164,11 +1252,16 @@ fn bundle_burst_cap_defers_and_unsupervised() {
     let events = poll_until_event(&mut sup, &mut host, t0, |evs| {
         count_restarted(evs, ids[0]) + count_restarted(evs, ids[1]) >= 2
     });
-    // The unwatched handle passes through with the real exit.
+    // The unwatched handle passes through with the real exit and
+    // the first-observed cause — the pass-through is verbatim.
     let fails = unsupervised_failures(&events);
     assert_eq!(fails.len(), 1);
     assert_eq!(fails[0].0, unwatched);
     assert!(fails[0].1.code.is_some() || fails[0].1.signal.is_some());
+    assert!(matches!(
+        fails[0].2,
+        FailureCause::ExitObserved | FailureCause::Transport
+    ));
     // Cap met: two `Restarted`, two deferred — the deferral is
     // silent, so `current_handle` is the observable.
     assert_eq!(count_restarted(&events, ids[0]), 1);
