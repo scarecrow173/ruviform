@@ -15,6 +15,7 @@
 //! via [`CodecFormat`]).
 
 use ruviform_audio_core::AudioFormat;
+use ruviform_media_core::Fact;
 use ruviform_video_core::VideoFormat;
 
 /// Ruviform-managed codec identifier.
@@ -166,6 +167,7 @@ pub enum CodecFormat {
 ///
 /// ```
 /// use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
+/// use ruviform_media_core::Fact;
 /// use ruviform_media_io::{CodecDescriptor, CodecFormat, CodecId};
 ///
 /// let descriptor = CodecDescriptor {
@@ -176,6 +178,7 @@ pub enum CodecFormat {
 ///         layout: ChannelLayout::Stereo,
 ///         sample_format: SampleFormat::F32,
 ///     }),
+///     native_format: Fact::Unsupported,
 /// };
 /// assert_eq!(descriptor.codec, CodecId::Aac);
 /// assert_eq!(descriptor.codec_private, [0x11, 0x90]);
@@ -189,8 +192,17 @@ pub struct CodecDescriptor {
     /// container — opaque to this crate; empty when the codec needs
     /// none.
     pub codec_private: Vec<u8>,
-    /// The decoded stream-format mapping.
+    /// The decoded stream-format mapping — the canonical decode
+    /// *target* (`CodecFormat::Audio` describes planar `f32` output).
     pub format: CodecFormat,
+    /// The format the codec natively decodes to — e.g.
+    /// `CodecFormat::Audio` with `SampleFormat::S16` for a 16-bit PCM
+    /// source, where the canonical `format` reports `F32`. This is the
+    /// fact a [`NativeAudioFrame`](crate::NativeAudioFrame) preserves.
+    /// `Fact` because a backend may be unable to state a native format
+    /// (it decodes through an opaque intermediate, or the container's
+    /// declared encoding does not map onto the domain formats).
+    pub native_format: Fact<CodecFormat>,
 }
 
 impl CodecDescriptor {
@@ -203,6 +215,7 @@ impl CodecDescriptor {
     ///
     /// ```
     /// use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
+    /// use ruviform_media_core::Fact;
     /// use ruviform_media_io::{CodecDescriptor, CodecFormat, CodecId};
     ///
     /// let format = AudioFormat {
@@ -214,6 +227,7 @@ impl CodecDescriptor {
     ///     codec: CodecId::Flac,
     ///     codec_private: Vec::new(),
     ///     format: CodecFormat::Audio(format),
+    ///     native_format: Fact::known(CodecFormat::Audio(format)),
     /// };
     /// assert_eq!(descriptor.audio_format(), Some(format));
     /// assert_eq!(descriptor.video_format(), None);
@@ -243,6 +257,7 @@ impl CodecDescriptor {
 mod tests {
     use super::*;
     use ruviform_audio_core::{ChannelLayout, SampleFormat, SampleRate};
+    use ruviform_media_core::Fact;
     use ruviform_video_core::{ColorInfo, PixelFormat};
 
     fn check_send<T: Send>() {}
@@ -256,6 +271,7 @@ mod tests {
                 layout: ChannelLayout::Stereo,
                 sample_format: SampleFormat::F32,
             }),
+            native_format: Fact::Unsupported,
         }
     }
 
@@ -312,9 +328,14 @@ mod tests {
             codec: CodecId::Opus,
             codec_private: vec![0x01],
             format: CodecFormat::Audio(audio),
+            native_format: Fact::known(CodecFormat::Audio(audio)),
         };
         assert_eq!(audio_side.audio_format(), Some(audio));
         assert_eq!(audio_side.video_format(), None);
+        assert_eq!(
+            audio_side.native_format.value(),
+            Some(CodecFormat::Audio(audio))
+        );
 
         let video = VideoFormat {
             width: 1_920,
@@ -326,6 +347,7 @@ mod tests {
             codec: CodecId::Av1,
             codec_private: Vec::new(),
             format: CodecFormat::Video(video),
+            native_format: Fact::NotDeclared,
         };
         assert_eq!(video_side.video_format(), Some(video));
         assert_eq!(video_side.audio_format(), None);
@@ -334,6 +356,7 @@ mod tests {
             codec: CodecId::Other,
             codec_private: Vec::new(),
             format: CodecFormat::Data,
+            native_format: Fact::NotDeclared,
         };
         assert_eq!(data_side.audio_format(), None);
         assert_eq!(data_side.video_format(), None);

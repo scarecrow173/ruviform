@@ -71,8 +71,9 @@ pub trait Muxer: Send {
 mod tests {
     use super::*;
     use crate::codec::{CodecDescriptor, CodecFormat, CodecId};
+    use crate::demux::StreamFacts;
     use crate::packet::PacketFlags;
-    use ruviform_media_core::{StreamDescriptor, StreamId, StreamKind, TimeBase};
+    use ruviform_media_core::{Fact, StreamDescriptor, StreamId, StreamKind, TimeBase};
 
     fn check_send<T: Send>() {}
 
@@ -89,14 +90,16 @@ mod tests {
                     stream: StreamDescriptor {
                         id: StreamId(0),
                         kind: StreamKind::Audio,
-                        time_base: TimeBase::COMMON_90K,
+                        time_base: Fact::known(TimeBase::COMMON_90K),
                         duration: None,
                     },
                     codec: CodecDescriptor {
                         codec: CodecId::Pcm,
                         codec_private: Vec::new(),
                         format: CodecFormat::Data,
+                        native_format: Fact::NotDeclared,
                     },
+                    facts: StreamFacts::default(),
                 }],
                 written: Vec::new(),
                 finished: false,
@@ -128,9 +131,12 @@ mod tests {
         muxer
             .write_packet(Packet {
                 stream: StreamId(0),
+                index: 0,
                 pts: None,
                 dts: None,
                 duration: None,
+                trim_start: 0,
+                trim_end: 0,
                 flags: PacketFlags::KEYFRAME,
                 data: vec![0xAB],
             })

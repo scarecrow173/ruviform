@@ -13,11 +13,32 @@
 //! - [`Encoder`] — [`Frame`] → [`Packet`] (unverified: no implementor yet)
 //!
 //! Around them sit the boundary value types — [`Packet`] /
-//! [`PacketFlags`], [`AudioFrame`] / [`Frame`], [`StreamInfo`] with the
-//! codec-level [`CodecDescriptor`] / [`CodecId`] / [`CodecFormat`],
-//! the [`MediaSource`] input port, [`Capabilities`] / [`Features`]
-//! (capability negotiation, query side) and the normalized [`Error`] /
-//! [`Result`] / [`ErrorKind`] model.
+//! [`PacketFlags`], [`AudioFrame`] / [`NativeAudioFrame`] / [`Frame`],
+//! [`StreamInfo`] with the codec-level [`CodecDescriptor`] /
+//! [`CodecId`] / [`CodecFormat`], the [`MediaSource`] input port,
+//! [`Capabilities`] / [`Features`] (capability negotiation, query
+//! side) and the normalized [`Error`] / [`Result`] / [`ErrorKind`]
+//! model.
+//!
+//! ## Observation contract
+//!
+//! Everything the boundary reports is a *classified fact about the
+//! input* — never a fabricated default:
+//!
+//! - Packet timestamps are raw [`TickTimestamp`] ticks + provenance
+//!   (`Carried` / `Derived` / `Estimated`) resolved against
+//!   `StreamDescriptor::time_base` — itself a `Fact` that can report
+//!   `NotDeclared`/`Unsupported`/`Malformed` instead of a guessed base.
+//! - [`StreamFacts`] carries container-native identity (`container_id`,
+//!   `codec_tag`, `language`), the declared clock origin (`start`),
+//!   declared unit counts and per-stream decode capability
+//!   (`decodable`); [`ContainerInfo`] identifies the container family
+//!   (`ContainerDetail` carries verbatim per-family facts such as
+//!   ISOBMFF brands); [`BackendInfo`] names the reporting backend.
+//! - [`NativeAudioFrame`] is the non-destructive PCM path: interleaved
+//!   `f64` in the decoder's native scale with an explicit
+//!   [`PcmTransform`] conversion history — parallel to, never a
+//!   replacement for, the canonical `f32` [`AudioFrame`].
 //!
 //! This crate holds **no backend implementation**: every trait is
 //! implemented by separate `ruviform-io-*` crates selected as opt-in
@@ -75,10 +96,13 @@ mod source;
 pub use capability::{Capabilities, Features};
 pub use codec::{CodecDescriptor, CodecFormat, CodecId};
 pub use decode::Decoder;
-pub use demux::{Demuxer, StreamInfo};
+pub use demux::{
+    BackendInfo, CodecTag, ContainerDetail, ContainerFormat, ContainerInfo, Demuxer, StreamFacts,
+    StreamInfo, VideoStreamFacts,
+};
 pub use encode::Encoder;
 pub use error::{Error, ErrorKind, Result};
-pub use frame::{AudioFrame, Frame};
+pub use frame::{AudioFrame, Frame, NativeAudioFrame, PcmTransform};
 pub use mux::Muxer;
 pub use packet::{Packet, PacketFlags};
 pub use source::MediaSource;
@@ -116,8 +140,15 @@ mod tests {
         check_send::<Packet>();
         check_send::<PacketFlags>();
         check_send::<AudioFrame>();
+        check_send::<NativeAudioFrame>();
+        check_send::<PcmTransform>();
         check_send::<Frame>();
         check_send::<StreamInfo>();
+        check_send::<StreamFacts>();
+        check_send::<ContainerInfo>();
+        check_send::<CodecTag>();
+        check_send::<BackendInfo>();
+        check_send::<VideoStreamFacts>();
         check_send::<CodecId>();
         check_send::<CodecFormat>();
         check_send::<CodecDescriptor>();
