@@ -7,6 +7,7 @@
 //! later `ruviform-media-io` concern and are intentionally not defined
 //! here.
 
+use crate::fact::Fact;
 use crate::time::{MediaDuration, TimeBase};
 
 /// Identifier of a stream inside a container.
@@ -53,12 +54,12 @@ pub enum StreamKind {
 /// # Examples
 ///
 /// ```
-/// use ruviform_media_core::{MediaDuration, StreamDescriptor, StreamId, StreamKind, TimeBase};
+/// use ruviform_media_core::{Fact, MediaDuration, StreamDescriptor, StreamId, StreamKind, TimeBase};
 ///
 /// let stream = StreamDescriptor {
 ///     id: StreamId(0),
 ///     kind: StreamKind::Audio,
-///     time_base: TimeBase::COMMON_90K,
+///     time_base: Fact::known(TimeBase::COMMON_90K),
 ///     duration: Some(MediaDuration::new(90_000, TimeBase::COMMON_90K)),
 /// };
 /// assert_eq!(stream.duration.unwrap().value(), 90_000);
@@ -70,7 +71,14 @@ pub struct StreamDescriptor {
     /// Media kind.
     pub kind: StreamKind,
     /// Time base of the stream's PTS units as carried by the container.
-    pub time_base: TimeBase,
+    ///
+    /// `Fact` rather than a bare `TimeBase`: when the container does not
+    /// declare a base or the backend cannot supply one, the fact is
+    /// reported as unavailable — never replaced with a fabricated
+    /// default. Per-unit timestamps are carried as raw ticks
+    /// ([`TickTimestamp`](crate::TickTimestamp)) precisely so they stay
+    /// observable when this fact is unavailable.
+    pub time_base: Fact<TimeBase>,
     /// Declared stream duration, when the container provides one.
     pub duration: Option<MediaDuration>,
 }
@@ -84,14 +92,14 @@ mod tests {
         let descriptor = StreamDescriptor {
             id: StreamId(7),
             kind: StreamKind::Audio,
-            time_base: TimeBase::COMMON_90K,
+            time_base: Fact::known(TimeBase::COMMON_90K),
             duration: Some(MediaDuration::new(90_000, TimeBase::COMMON_90K)),
         };
         let copy = descriptor; // `Copy` — the original stays usable.
         assert_eq!(descriptor, copy);
         assert_eq!(descriptor.id, StreamId(7));
         assert_eq!(descriptor.kind, StreamKind::Audio);
-        assert_eq!(descriptor.time_base, TimeBase::COMMON_90K);
+        assert_eq!(descriptor.time_base, Fact::Known(TimeBase::COMMON_90K));
         assert!(descriptor.duration.is_some());
     }
 
@@ -100,9 +108,24 @@ mod tests {
         let descriptor = StreamDescriptor {
             id: StreamId(1),
             kind: StreamKind::Data,
-            time_base: TimeBase::new(1, 1_000).unwrap(),
+            time_base: Fact::known(TimeBase::new(1, 1_000).unwrap()),
             duration: None,
         };
         assert_eq!(descriptor.duration, None);
+    }
+
+    /// An unavailable time base is represented, never fabricated: a
+    /// stream without a declared base reports `Fact::NotDeclared` rather
+    /// than a guessed value such as `COMMON_90K`.
+    #[test]
+    fn descriptor_reports_unavailable_time_base() {
+        let descriptor = StreamDescriptor {
+            id: StreamId(2),
+            kind: StreamKind::Audio,
+            time_base: Fact::NotDeclared,
+            duration: None,
+        };
+        assert!(descriptor.time_base.is_unavailable());
+        assert_eq!(descriptor.time_base.value(), None);
     }
 }
