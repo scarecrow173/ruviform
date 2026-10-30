@@ -18,6 +18,7 @@ Directory: `docs/discovery`
 | DISC-034NMZseZM94vtNrYx24rM | L1 自動再起動・supervisor ポリシーの探索（Issue #116） | active | [issue-116-supervisor.md](./issue-116-supervisor.md) |
 | DISC-034NiVjJSeI0gfYX87KMjH | L1 bundle 子プロセス（1 子プロセス N インスタンス）の探索（Issue #117） | active | [issue-117-bundle-child-process-discovery.md](./issue-117-bundle-child-process-discovery.md) |
 | DISC-034NV8A2eMJbUhGFvQgL3W | Issue #118 video/NONRT プラグインの L1 経路 | active | [issue-118-video-l1.md](./issue-118-video-l1.md) |
+| DISC-fqJPHPj2JQlpssrbP4erm6 | Issue #120 re-evaluation analysis — trigger #3 fired (per-child 3rd thread) | resolved | [issue-120-reaper-iomux-reeval-analysis.md](./issue-120-reaper-iomux-reeval-analysis.md) |
 | DISC-034O7hCIm5rGi3tA4rmxuc | Issue #121 L1 診断・可観測性（underrun メトリクス・子 stderr 配管・失敗原因 payload） | active | [issue-121-diagnostics.md](./issue-121-diagnostics.md) |
 | DISC-034JbXZSba3SvOavRFfs66 | Issue #28 UI 技術検証 PoC の事前調査 | draft | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
