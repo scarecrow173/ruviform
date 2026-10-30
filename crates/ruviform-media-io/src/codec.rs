@@ -72,6 +72,15 @@ pub enum CodecId {
     Vp9,
     /// AV1.
     Av1,
+    /// Uncompressed (raw) video frame data — e.g. an AVI `BI_RGB` DIB
+    /// stream or an MP4 raw-video sample entry. The pixel layout is
+    /// container-declared and carried by
+    /// [`CodecDescriptor::codec_private`] plus the stream's
+    /// [`CodecFormat::Video`] mapping.
+    Uncompressed,
+    /// Motion JPEG (a sequence of independently coded JPEG frames —
+    /// the `MJPG`/`MJPA` family of AVI fourCCs).
+    Mjpeg,
 }
 
 impl CodecId {
@@ -103,6 +112,8 @@ impl CodecId {
             Self::Hevc => "hevc",
             Self::Vp9 => "vp9",
             Self::Av1 => "av1",
+            Self::Uncompressed => "uncompressed",
+            Self::Mjpeg => "mjpeg",
         }
     }
 }
@@ -298,6 +309,8 @@ mod tests {
             CodecId::Hevc,
             CodecId::Vp9,
             CodecId::Av1,
+            CodecId::Uncompressed,
+            CodecId::Mjpeg,
         ] {
             assert_ne!(codec.name(), "");
         }
