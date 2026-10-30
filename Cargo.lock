@@ -2794,6 +2794,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-numeric"
+version = "0.1.0"
+dependencies = [
+ "assert_no_alloc",
+]
+
+[[package]]
 name = "ruviform-observability"
 version = "0.1.0"
 

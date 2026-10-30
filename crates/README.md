@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計24クレート）。
+Ruviform ワークスペースのメンバークレート索引（計25クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -12,6 +12,7 @@ Ruviform ワークスペースのメンバークレート索引（計24クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-math`](ruviform-math/README.md) | SIMD dispatch カーネル層（`math::dsp`） |
+| [`ruviform-numeric`](ruviform-numeric/README.md) | 高精度 `f64` オフライン数値・DSP プリミティブ（`fft`/`window`/`vec`/`resample`/`conv`/`linalg`、Issue #150） |
 | [`ruviform-rt`](ruviform-rt/README.md) | RT 基盤（`Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換） |
 | [`ruviform-media-core`](ruviform-media-core/README.md) | 規格中立メディアデータモデル（時間・transport・音楽時間・`Error`） |
 | [`ruviform-exec`](ruviform-exec/README.md) | 非 RT 実行基盤（スレッド優先度機構・`OfflineDriver`） |
