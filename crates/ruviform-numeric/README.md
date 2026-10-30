@@ -1,8 +1,9 @@
 # ruviform-numeric
 
-Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150）。
+Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150・#152）。
 用途非依存の FFT / Real FFT / 数値ベクトル / 窓関数 / polyphase リサンプラ /
-overlap-save 畳込み / 最小二乗を提供する。メディア固有概念・I/O・スレッドは持たない。
+overlap-save 畳込み / 最小二乗 / 相関カーネルを提供する。
+メディア固有概念・I/O・スレッドは持たない。
 
 ## 責務
 
@@ -16,6 +17,11 @@ overlap-save 畳込み / 最小二乗を提供する。メディア固有概念�
 - `conv` — 実数 FFT による overlap-save 畳込み（`ConvPlan`/`ConvWorkspace`/`conv`）。
 - `linalg` — Householder QR による ridge 付き最小二乗（`LeastSquares`・
   `least_squares`・`condition_number`）。
+- `corr` — template-in-signal の符号付き NCC・生相互相関・GCC-PHAT
+  （`CorrelationPlan`/`CorrelationWorkspace`/`NccCurve`、Full・
+  NccValid・NccDirect の 3 mode）と、等長窓の両側 lag overlap 相関
+  （`OverlapCorrPlan`/`OverlapCorrWorkspace`/`OverlapCurve`、Issue #152）。
+  有効ラグ域のクランプ・正規化エネルギー証拠の返却を契約化する。
 - `error` — 検証エラー型 `Error`（`InvalidValue(&'static str)`、Copy）。
 
 ## 層・許可依存
@@ -37,6 +43,9 @@ overlap-save 畳込み / 最小二乗を提供する。メディア固有概念�
 ## 関連
 
 - 設計ベースライン: docs/designs/ruviform-architecture-design-baseline.md（クレート表 A.2）
+- 設計書: docs/designs/issue-150-f64-offline-numeric.md、
+  docs/designs/issue-152-f64-correlation.md（相関カーネルの lag 域・
+  正規化・証拠返却・direct/FFT ルーティング契約）
 - RT 契約・検証ポリシー: docs/adr/realtime-contract-and-verification-policy.md
 - Issue #150 設計: docs/designs/issue-150-f64-offline-numeric.md
 - 参照実装（移植元）: AudioLens `crates/al-math`（別リポジトリ・読み取り専用）
