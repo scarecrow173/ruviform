@@ -134,7 +134,16 @@ pub fn capabilities() -> Capabilities {
         functions: Features::DEMUX
             .union(Features::DECODE)
             .union(Features::NATIVE_AUDIO),
-        decode_codecs: vec![CodecId::Pcm, CodecId::Flac, CodecId::Vorbis],
+        decode_codecs: {
+            let codecs = vec![CodecId::Pcm, CodecId::Flac, CodecId::Vorbis];
+            #[cfg(feature = "aac")]
+            let codecs = {
+                let mut codecs = codecs;
+                codecs.push(CodecId::Aac);
+                codecs
+            };
+            codecs
+        },
         encode_codecs: Vec::new(),
     }
 }

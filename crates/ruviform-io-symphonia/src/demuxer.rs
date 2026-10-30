@@ -19,7 +19,7 @@ use ruviform_media_core::{
 };
 use ruviform_media_io::{
     BackendInfo, CodecDescriptor, CodecFormat, ContainerInfo, Demuxer, Error, ErrorKind, Packet,
-    PacketFlags, Result, StreamFacts, StreamInfo,
+    PacketFlags, Result, StreamFacts, StreamInfo, VideoStreamFacts,
 };
 use symphonia::core::codecs::CodecParameters;
 use symphonia::core::formats::{FormatReader, SeekMode, SeekTo, Track};
@@ -282,6 +282,18 @@ fn stream_info(track: &Track, index: u32) -> StreamInfo {
     } else {
         Fact::Unsupported
     };
+    // ISOBMFF video tracks declare pixel dimensions on the codec
+    // parameters — honest declared facts. `nominal_frame_rate` stays
+    // `None`: MP4 stores per-sample durations (`stts`), not a declared
+    // frame rate — VFR survives via packet ticks instead.
+    let video = match params {
+        Some(CodecParameters::Video(params)) => Some(VideoStreamFacts {
+            width: params.width.map(u32::from),
+            height: params.height.map(u32::from),
+            nominal_frame_rate: None,
+        }),
+        _ => None,
+    };
     StreamInfo {
         stream: StreamDescriptor {
             id: StreamId(track.id),
@@ -311,7 +323,7 @@ fn stream_info(track: &Track, index: u32) -> StreamInfo {
             declared_units: Fact::from_option(track.num_frames),
             leading_trim: track.delay,
             trailing_trim: track.padding,
-            video: None,
+            video,
             decodable,
         },
     }

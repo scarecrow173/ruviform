@@ -251,8 +251,9 @@ fn make_decoder_rejects_unknown_streams_and_capabilities_split() {
     assert!(caps.can_decode(CodecId::Vorbis));
     assert!(!caps.can_mux());
     assert!(!caps.can_encode(CodecId::Pcm));
-    // Default-build codecs the boundary does not advertise.
-    assert!(!caps.can_decode(CodecId::Aac));
+    // Default-build codecs the boundary does not advertise. `aac` is an
+    // opt-in feature (Issue #154), so its capability follows the build.
+    assert_eq!(caps.can_decode(CodecId::Aac), cfg!(feature = "aac"));
     assert!(!caps.can_decode(CodecId::Opus));
     assert!(!caps.can_decode(CodecId::Mp3));
 

@@ -22,6 +22,21 @@ demux + decode のみの実装。
   `capabilities()` は意図的に控えめに申告し、boundary `CodecId` レジストリが
   名付け *かつ* default ビルドが実際に登録する codec のみを挙げる
   （`Pcm`, `Flac`, `Vorbis`）。
+- opt-in feature（Issue #154）:
+  - `mp4` → `symphonia/isomp4`。ISOBMFF コンテナ demux（PCM-in-MP4
+    audio・AAC・video track の sample table / 宣言 facts を含む）。
+    feature なしで MP4 を probe すると `ErrorKind::Unsupported`。
+  - `aac` → `mp4` + `symphonia/aac`。AAC decode を
+    `capabilities()` の decode codec へ追加する（特許係属 codec は
+    配布者判断で切替えるため `mp4` 単体では有効化しない — ライセンス ADR）。
+    AAC ビットストリーム実体の decode 検証は実 fixture が必要で、
+    本クレートの generated fixture 範囲外（capability/demux 経路のみ
+    検証済み）。
+- video facts（Issue #154）: video track は `StreamFacts.video` に
+  宣言された pixel 寸法を運び、`decodable: Fact::Unsupported`。
+  `nominal_frame_rate` は MP4 が宣言 frame rate を持たない（`stts`
+  の per-sample duration のみ）ため `None` のまま — VFR は packet
+  tick 列で観測される。
 - 観測事実（Issue #151）: `Track`/`AudioCodecParameters` の実フィールドを
   `StreamFacts`/`CodecDescriptor`/`ContainerInfo`/`BackendInfo` へ写像し、
   位置付き sniffing でコンテナ家族を同定。`Packet` は index・生 tick
