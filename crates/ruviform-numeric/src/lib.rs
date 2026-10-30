@@ -1,7 +1,8 @@
 //! 高精度 `f64` オフライン数値・DSP プリミティブ（Issue #150）。
 //!
 //! 用途非依存の FFT / Real FFT / 数値ベクトル / 窓関数 / polyphase リサンプラ /
-//! overlap-save 畳込み / 最小二乗を提供する。メディア固有概念・I/O・スレッドは
+//! overlap-save 畳込み / 最小二乗 / 複素 STFT / 帯域フィルタ / スペクトル統計
+//! （Issue #153）を提供する。メディア固有概念・I/O・スレッドは
 //! 持たず、依存は std のみ（Primitives 最下位）。
 //!
 //! # 精度契約
@@ -38,13 +39,16 @@
 //! non-RT（確保を伴う）API は関数単位で明記する。plan・workspace・係数表の
 //! 構築はすべて non-RT であり、呼び出し側が事前に確保する。
 
+pub mod bands;
 pub mod conv;
 mod error;
 pub mod fft;
 pub mod linalg;
 pub mod resample;
+pub mod stft;
 pub mod vec;
 pub mod window;
+pub mod xspec;
 
 pub use error::Error;
 
@@ -53,7 +57,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[cfg(test)]
 mod rt_tests {
-    use crate::{conv, fft, resample, vec, window};
+    use crate::{bands, conv, fft, resample, stft, vec, window, xspec};
     use assert_no_alloc::assert_no_alloc;
 
     /// Issue #150 RT-verification lane: `AllocDisabler` swaps the lib
@@ -108,6 +112,56 @@ mod rt_tests {
             rplan.inverse(&mut rws, &sre, &sim, &mut time).unwrap();
             rs.resample_into(&rin, &mut rout).unwrap();
             cp.convolve(&mut cws, &cin, &mut cout).unwrap();
+        });
+    }
+
+    /// Issue #153 RT-verification lane: STFT・帯域・スペクトル統計の
+    /// RT-suitable パスが確保しないことを検証する。
+    #[test]
+    fn rt_spectral_paths_do_not_allocate() {
+        // 準備（確保を伴う non-RT フェーズ）。
+        let plan = stft::StftPlan::new(512, 256, window::Window::Hann, 48000).unwrap();
+        let mut ws = stft::StftWorkspace::new(&plan);
+        let signal = vec![0.5; 1024];
+        let frames = plan.frame_count(signal.len());
+        let mut sre = vec![0.0; frames * plan.fft_size()];
+        let mut sim = vec![0.0; frames * plan.fft_size()];
+        let mut fre = vec![0.0; plan.fft_size()];
+        let mut fim = vec![0.0; plan.fft_size()];
+        let mut derived = vec![0.0; frames * plan.fft_size()];
+
+        let mut filter = bands::BandFilter::new(&signal, 48000).unwrap();
+        let mut bout = vec![0.0; signal.len()];
+        let mut bp = [0.0; 4];
+        let row = vec![0.0; 64];
+
+        let mut xs = xspec::CrossSpectrum::new(8);
+        let xs_re = vec![0.0; 8];
+        let mut out_re = vec![0.0; 8];
+        let mut out_im = vec![0.0; 8];
+        let m = plan.stft(&mut ws, &signal).unwrap();
+
+        assert_no_alloc(|| {
+            plan.stft_into(&mut ws, &signal, &mut sre, &mut sim)
+                .unwrap();
+            plan.frame_into(&mut ws, &signal, 0, &mut fre, &mut fim)
+                .unwrap();
+            std::hint::black_box(plan.frame_count(signal.len()));
+            m.power_into(&mut derived).unwrap();
+            m.magnitude_into(&mut derived).unwrap();
+            m.psd_into(&mut derived).unwrap();
+            std::hint::black_box(&m);
+
+            filter.band_into(100.0, 1000.0, &mut bout).unwrap();
+            bands::band_power_into(&row, 1.0, &[(0.0, 4.0); 4], &mut bp).unwrap();
+
+            xs.accumulate(&xs_re, &xs_re, &xs_re, &xs_re).unwrap();
+            xs.coherence_into(&mut out_re, &mut out_im).unwrap();
+            xs.transfer_h1_into(&mut out_re, &mut out_im).unwrap();
+            xspec::csd_into(&xs_re, &xs_re, &xs_re, &xs_re, &mut out_re, &mut out_im).unwrap();
+            xspec::complex_coherence_into(&xs_re, &xs_re, &xs_re, &xs_re, &mut out_re, &mut out_im)
+                .unwrap();
+            xspec::transfer_h1_into(&xs_re, &xs_re, &xs_re, &mut out_re, &mut out_im).unwrap();
         });
     }
 }

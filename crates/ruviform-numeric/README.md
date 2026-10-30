@@ -2,7 +2,8 @@
 
 Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150）。
 用途非依存の FFT / Real FFT / 数値ベクトル / 窓関数 / polyphase リサンプラ /
-overlap-save 畳込み / 最小二乗を提供する。メディア固有概念・I/O・スレッドは持たない。
+overlap-save 畳込み / 最小二乗 / 複素 STFT / 帯域フィルタ / スペクトル統計
+（Issue #153）を提供する。メディア固有概念・I/O・スレッドは持たない。
 
 ## 責務
 
@@ -16,6 +17,13 @@ overlap-save 畳込み / 最小二乗を提供する。メディア固有概念�
 - `conv` — 実数 FFT による overlap-save 畳込み（`ConvPlan`/`ConvWorkspace`/`conv`）。
 - `linalg` — Householder QR による ridge 付き最小二乗（`LeastSquares`・
   `least_squares`・`condition_number`）。
+- `stft` — 複素 STFT（`StftPlan`/`StftWorkspace`/`Stft`/`StftMatrix`）と
+  派生行列（`power`/`magnitude`/two-sided `psd`）、移動平均 `envelope`（#153）。
+- `bands` — 1/3-octave 帯域エッジ（`third_octave_bands`）、帯域積分
+  （`band_power`）、spectral mask 帯域フィルタ（`BandFilter`/
+  `bandpass`/`bandpass_many`）、`spectral_envelope`（#153）。
+- `xspec` — per-bin スペクトル統計（`csd`/`complex_coherence`/
+  `transfer_h1`）と Welch 型蓄積器 `CrossSpectrum`（#153）。
 - `error` — 検証エラー型 `Error`（`InvalidValue(&'static str)`、Copy）。
 
 ## 層・許可依存
@@ -39,4 +47,5 @@ overlap-save 畳込み / 最小二乗を提供する。メディア固有概念�
 - 設計ベースライン: docs/designs/ruviform-architecture-design-baseline.md（クレート表 A.2）
 - RT 契約・検証ポリシー: docs/adr/realtime-contract-and-verification-policy.md
 - Issue #150 設計: docs/designs/issue-150-f64-offline-numeric.md
-- 参照実装（移植元）: AudioLens `crates/al-math`（別リポジトリ・読み取り専用）
+- Issue #153 設計: docs/designs/issue-153-f64-stft-bands-spectral.md
+- 参照実装（移植元）: AudioLens `crates/al-math`・`crates/al-analysis`（別リポジトリ・読み取り専用）
