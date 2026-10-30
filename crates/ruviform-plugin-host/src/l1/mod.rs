@@ -2,7 +2,7 @@
 //! shared-child bundle model of Issue #117: one child process hosts
 //! N plugin instances (the dedicated route is the capacity-1 case,
 //! built over exactly the same machinery), a framed stdio control
-//! plane, two per-child I/O threads and the scope-split `Failed`
+//! plane, three per-child I/O threads and the scope-split `Failed`
 //! convergence the `docs/designs/issue-117-bundle-child-process.md`
 //! demux table fixes.
 //!
@@ -710,13 +710,14 @@ fn lock_mutex<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// One child process and its two I/O threads — the shareable unit
-/// N `L1Instance`s live on (the dedicated route is the capacity-1
-/// case, built through exactly the same machinery). `L1Child`
-/// carries what the last referrer's bounded teardown needs — the
-/// driver channel endpoint and both join handles — plus the
-/// `Arc<Shared>` every facade clones; the process handle itself
-/// stays inside `Shared` so a converging I/O thread can `kill` it.
+/// One child process and its three I/O threads — the shareable
+/// unit N `L1Instance`s live on (the dedicated route is the
+/// capacity-1 case, built through exactly the same machinery).
+/// `L1Child` carries what the last referrer's bounded teardown
+/// needs — the driver channel endpoint and both join handles —
+/// plus the `Arc<Shared>` every facade clones; the process handle
+/// itself stays inside `Shared` so a converging I/O thread can
+/// `kill` it.
 ///
 /// The I/O threads hold `Arc<Shared>` only — never `Arc<L1Child>`
 /// — so `Arc::strong_count` on a facade's `child` counts exactly
