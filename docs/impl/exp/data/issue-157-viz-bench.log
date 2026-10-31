@@ -1,0 +1,162 @@
+   Compiling num-traits v0.2.19
+   Compiling syn v3.0.9
+   Compiling serde_derive v1.0.229
+   Compiling serde v1.0.229
+   Compiling ciborium v0.2.2
+   Compiling tinytemplate v1.2.1
+   Compiling criterion v0.8.2
+   Compiling ruviform-viz v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r157-viz-primitives\crates\ruviform-viz)
+    Finished `bench` profile [optimized] target(s) in 10.89s
+     Running unittests src\lib.rs (target\release\deps\ruviform_viz-dd1ccbeab64120b4.exe)
+
+running 35 tests
+test cache::tests::evicts_lru_within_budget ... ignored
+test cache::tests::oversized_entries_are_never_stored ... ignored
+test cache::tests::replace_refunds_old_cost ... ignored
+test demo::tests::gap_reports_nan ... ignored
+test demo::tests::synthesizes_deterministically ... ignored
+test display::tests::colormap_endpoints_and_nan ... ignored
+test display::tests::db_range_maps_full_scale_and_silence ... ignored
+test display::tests::freq_axis_row_specs_linear_and_log ... ignored
+test display::tests::freq_axis_validates ... ignored
+test display::tests::linear_range_normalizes ... ignored
+test display::tests::quantization_rounds_at_display_only ... ignored
+test encode::tests::encode_buckets_layout ... ignored
+test encode::tests::encode_tile_dtypes_and_nan ... ignored
+test encode::tests::paged_bytes_reads_bounded_ranges ... ignored
+test error::tests::display_covers_every_variant ... ignored
+test error::tests::numeric_error_maps_to_invalid ... ignored
+test source::tests::complex_tile_reports_magnitudes ... ignored
+test source::tests::slice_waveform_bounds_reads ... ignored
+test source::tests::slice_waveform_validates_shape ... ignored
+test source::tests::vec_spectrum_reads_subrect ... ignored
+test spectrogram::tests::stft_finds_a_sine_bin ... ignored
+test spectrogram::tests::stft_nan_input_makes_nan_column ... ignored
+test spectrogram::tests::tile_aggregates_frames_and_bins ... ignored
+test spectrogram::tests::tile_clamps_and_marks_empty ... ignored
+test timeline::tests::frame_grid_counts_and_positions ... ignored
+test timeline::tests::lanes_pack_overlapping_items ... ignored
+test timeline::tests::selection_and_hits ... ignored
+test timeline::tests::timebase_converts_samples_and_seconds ... ignored
+test timeline::tests::viewport_maps_and_transforms ... ignored
+test waveform::tests::build_cancels_at_chunk_boundary ... ignored
+test waveform::tests::build_small_input_matches_direct_stats ... ignored
+test waveform::tests::lod_bucket_nan_is_skipped_and_empty_is_nan ... ignored
+test waveform::tests::lod_buckets_aggregate_and_merge ... ignored
+test waveform::tests::on_demand_and_pan_past_end ... ignored
+test waveform::tests::view_coarse_uses_pyramid_and_zoom_reads_source ... ignored
+
+test result: ok. 0 passed; 0 failed; 35 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches\viz.rs (target\release\deps\viz-dab3b5c60934b402.exe)
+Benchmarking viz/lod_build/frames/1048576
+Benchmarking viz/lod_build/frames/1048576: Warming up for 3.0000 s
+Benchmarking viz/lod_build/frames/1048576: Collecting 100 samples in estimated 9.6767 s (200 iterations)
+Benchmarking viz/lod_build/frames/1048576: Analyzing
+viz/lod_build/frames/1048576
+                        time:   [48.185 ms 48.416 ms 48.663 ms]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+Benchmarking viz/lod_build/frames/4194304
+Benchmarking viz/lod_build/frames/4194304: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 19.2s, or reduce sample count to 20.
+Benchmarking viz/lod_build/frames/4194304: Collecting 100 samples in estimated 19.197 s (100 iterations)
+Benchmarking viz/lod_build/frames/4194304: Analyzing
+viz/lod_build/frames/4194304
+                        time:   [191.24 ms 191.99 ms 192.84 ms]
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+
+Benchmarking viz/view/zoom_out_1024px
+Benchmarking viz/view/zoom_out_1024px: Warming up for 3.0000 s
+Benchmarking viz/view/zoom_out_1024px: Collecting 100 samples in estimated 5.0094 s (359k iterations)
+Benchmarking viz/view/zoom_out_1024px: Analyzing
+viz/view/zoom_out_1024px
+                        time:   [14.062 µs 14.189 µs 14.328 µs]
+Found 11 outliers among 100 measurements (11.00%)
+  1 (1.00%) low mild
+  6 (6.00%) high mild
+  4 (4.00%) high severe
+Benchmarking viz/view/zoom_in_8s_1024px
+Benchmarking viz/view/zoom_in_8s_1024px: Warming up for 3.0000 s
+Benchmarking viz/view/zoom_in_8s_1024px: Collecting 100 samples in estimated 5.0879 s (252k iterations)
+Benchmarking viz/view/zoom_in_8s_1024px: Analyzing
+viz/view/zoom_in_8s_1024px
+                        time:   [19.818 µs 19.919 µs 20.033 µs]
+Found 16 outliers among 100 measurements (16.00%)
+  8 (8.00%) high mild
+  8 (8.00%) high severe
+Benchmarking viz/view/zoom_extreme_256samples
+Benchmarking viz/view/zoom_extreme_256samples: Warming up for 3.0000 s
+Benchmarking viz/view/zoom_extreme_256samples: Collecting 100 samples in estimated 5.0251 s (500k iterations)
+Benchmarking viz/view/zoom_extreme_256samples: Analyzing
+viz/view/zoom_extreme_256samples
+                        time:   [9.9010 µs 9.9479 µs 10.001 µs]
+Found 10 outliers among 100 measurements (10.00%)
+  1 (1.00%) low mild
+  4 (4.00%) high mild
+  5 (5.00%) high severe
+
+Benchmarking viz/stft/fft/1024
+Benchmarking viz/stft/fft/1024: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 20.9s, or reduce sample count to 20.
+Benchmarking viz/stft/fft/1024: Collecting 100 samples in estimated 20.946 s (100 iterations)
+Benchmarking viz/stft/fft/1024: Analyzing
+viz/stft/fft/1024       time:   [209.94 ms 210.77 ms 211.67 ms]
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+Benchmarking viz/stft/fft/4096
+Benchmarking viz/stft/fft/4096: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 21.3s, or reduce sample count to 20.
+Benchmarking viz/stft/fft/4096: Collecting 100 samples in estimated 21.256 s (100 iterations)
+Benchmarking viz/stft/fft/4096: Analyzing
+viz/stft/fft/4096       time:   [213.39 ms 213.98 ms 214.60 ms]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+
+Benchmarking viz/tile/cols/512
+Benchmarking viz/tile/cols/512: Warming up for 3.0000 s
+Benchmarking viz/tile/cols/512: Collecting 100 samples in estimated 5.4411 s (300 iterations)
+Benchmarking viz/tile/cols/512: Analyzing
+viz/tile/cols/512       time:   [18.098 ms 18.216 ms 18.355 ms]
+Found 13 outliers among 100 measurements (13.00%)
+  7 (7.00%) high mild
+  6 (6.00%) high severe
+Benchmarking viz/tile/cols/2048
+Benchmarking viz/tile/cols/2048: Warming up for 3.0000 s
+Benchmarking viz/tile/cols/2048: Collecting 100 samples in estimated 6.7999 s (300 iterations)
+Benchmarking viz/tile/cols/2048: Analyzing
+viz/tile/cols/2048      time:   [22.461 ms 22.562 ms 22.680 ms]
+Found 10 outliers among 100 measurements (10.00%)
+  7 (7.00%) high mild
+  3 (3.00%) high severe
+
+Benchmarking viz/encode_tile/dtype/8
+Benchmarking viz/encode_tile/dtype/8: Warming up for 3.0000 s
+Benchmarking viz/encode_tile/dtype/8: Collecting 100 samples in estimated 5.7141 s (20k iterations)
+Benchmarking viz/encode_tile/dtype/8: Analyzing
+viz/encode_tile/dtype/8 time:   [282.52 µs 283.63 µs 284.87 µs]
+Found 9 outliers among 100 measurements (9.00%)
+  5 (5.00%) high mild
+  4 (4.00%) high severe
+Benchmarking viz/encode_tile/dtype/4
+Benchmarking viz/encode_tile/dtype/4: Warming up for 3.0000 s
+Benchmarking viz/encode_tile/dtype/4: Collecting 100 samples in estimated 5.3566 s (56k iterations)
+Benchmarking viz/encode_tile/dtype/4: Analyzing
+viz/encode_tile/dtype/4 time:   [95.545 µs 96.022 µs 96.685 µs]
+Found 12 outliers among 100 measurements (12.00%)
+  6 (6.00%) high mild
+  6 (6.00%) high severe
+Benchmarking viz/encode_tile/dtype/1
+Benchmarking viz/encode_tile/dtype/1: Warming up for 3.0000 s
+Benchmarking viz/encode_tile/dtype/1: Collecting 100 samples in estimated 5.8930 s (15k iterations)
+Benchmarking viz/encode_tile/dtype/1: Analyzing
+viz/encode_tile/dtype/1 time:   [389.81 µs 392.08 µs 394.70 µs]
+Found 9 outliers among 100 measurements (9.00%)
+  4 (4.00%) high mild
+  5 (5.00%) high severe

@@ -53,6 +53,10 @@ members = [
     "crates/ruviform-ui-webview",
     # 利用側層サンプル（Issue #155 — GUI 非依存 CLI/headless 利用例。共有 headless サービスの外側アダプタ）
     "crates/ruviform-cli-sample",
+    # 利用側層 可視化基盤（Issue #157 — 波形 LOD・スペクトログラム STFT・
+    # タイムラインの汎用インタラクティブ表示プリミティブ。GUI/WebView 非依存で
+    # headless 検証経路を維持。ruviform-ui との結合は adapter 側の責務）
+    "crates/ruviform-viz",
 ]
 
 [workspace.package]

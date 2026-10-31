@@ -29,6 +29,8 @@ Directory: `docs/designs`
 | DESIGN-034N3EYKKosV8OzCP7Y9tY | 共通 platform/process/ipc 基盤の抽出評価（Issue #122） | approved | [issue-122-shared-platform-process-ipc-eval.md](./issue-122-shared-platform-process-ipc-eval.md) |
 | DESIGN-WVN475nNdieOE0fyOxkhf | GUI 非依存 CLI/headless 実行基盤設計（Issue #155） | approved | [issue-155-headless-cli-foundation.md](./issue-155-headless-cli-foundation.md) |
 | DESIGN-034P8EHh2IlZd14yNSOreO | Issue #156 再利用可能デスクトップ GUI ホスト基盤 | draft | [issue-156-gui-host-foundation.md](./issue-156-gui-host-foundation.md) |
+| DESIGN-034R150f64Num3r1cKxVb2zQ | Issue #150 f64 高精度オフライン数値・DSP API（ruviform-numeric 新設） | approved | [issue-150-f64-offline-numeric.md](./issue-150-f64-offline-numeric.md) |
+| DESIGN-034R157VizPrimitivesWk4 | Issue #157 波形・スペクトログラム・タイムラインの汎用インタラクティブ表示基盤 | draft | [issue-157-viz-primitives.md](./issue-157-viz-primitives.md) |
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | approved | [music-time-model.md](./music-time-model.md) |

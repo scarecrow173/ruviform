@@ -20,6 +20,7 @@ Directory: `docs/impl/exp`
 
 ## Reports and raw data
 
+- [issue-157-viz-bench-20261031.md](issue-157-viz-bench-20261031.md) — Issue #157 ruviform-viz criterion bench measurement report（波形 LOD 構築・ビューポート応答・STFT・スペクトログラムタイル・binary encode。生ログ: `data/issue-157-viz-bench.log`）
 - [dsp-simd-poc-20261021.md](dsp-simd-poc-20261021.md) — Issue #19 DSP/SIMD PoC bench measurement report
 - [rt-observability-poc-20261023.md](rt-observability-poc-20261023.md) — Issue #104 RT observability cost PoC measurement report (counter instrumentation, rt_bridge record/drain/overflow policies, RT primitive baselines, timestamp acquisition, backend evaluation, alloc coverage-gap demo, #103 verdict mapping)
 - `data/` — raw per-run measurement JSONL (`dsp-simd-poc-20261021-01.jsonl`, `-02.jsonl`; `rt-observability-poc-20261023-01.jsonl`, `-02.jsonl`, `-03.jsonl`; `rt-observability-poc-20261024-corrected-01.jsonl`, `-02.jsonl`, `-03.jsonl`; 1 line = 1 measurement point) plus corrected-run summary `rt-observability-poc-20261024-summary.json`, backend dependency snapshot `rt-observability-backend-metadata-20261024.json`, and capture script `rt-observability-capture.cjs`. Not an impl-doc event log, so it lives in a subdirectory outside the flat `*.jsonl` event-log audit scope

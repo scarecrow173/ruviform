@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計27クレート）。
+Ruviform ワークスペースのメンバークレート索引（計28クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -73,3 +73,4 @@ Ruviform ワークスペースのメンバークレート索引（計27クレー
 | [`ruviform-ui`](ruviform-ui/README.md) | WebView 非依存の GUI 基盤コア（host 抽象・IPC v1・service/job ランタイム・bounded data・assets・描画責務契約 — Issue #156） |
 | [`ruviform-ui-webview`](ruviform-ui-webview/README.md) | `wry`+`tao` のオプション GUI adapter（feature `webview` でホスト実装・`rvf://` スキーム・組込みアセット — Issue #156） |
 | [`ruviform-cli-sample`](ruviform-cli-sample/README.md) | Issue #155 headless CLI 利用例 — 共有実行サービスの外側アダプタ（probe + オフライン run・JSON/JSONL・Ctrl-C cancel） |
+| [`ruviform-viz`](ruviform-viz/README.md) | 汎用インタラクティブ可視化プリミティブ（波形 LOD・STFT スペクトログラム・タイムライン座標変換・表示 quantization・RVBW/RVST binary transfer — Issue #157。GUI/WebView 非依存） |
