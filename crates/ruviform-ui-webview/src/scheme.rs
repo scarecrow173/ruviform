@@ -204,6 +204,26 @@ mod tests {
     }
 
     #[test]
+    fn data_unregister_and_eviction_yield_404() {
+        let (a, d) = fixture();
+        // Explicit release: the name stops resolving on the wire.
+        assert_eq!(
+            serve(&a, &d, &get("rvf://data/demo/peaks?offset=0&len=1")).status(),
+            200
+        );
+        assert!(d.unregister("demo/peaks"));
+        let r = serve(&a, &d, &get("rvf://data/demo/peaks?offset=0&len=1"));
+        assert_eq!(r.status(), 404);
+
+        // Bounded registry: an evicted name yields the same 404.
+        let bounded = DataRegistry::with_max_sources(1);
+        bounded.register("a", Arc::new(VecDataSource::new(vec![1u8; 4])));
+        bounded.register("b", Arc::new(VecDataSource::new(vec![2u8; 4])));
+        assert_eq!(serve(&a, &bounded, &get("rvf://data/a")).status(), 404);
+        assert_eq!(serve(&a, &bounded, &get("rvf://data/b")).status(), 200);
+    }
+
+    #[test]
     fn data_rejects_bad_requests() {
         let (a, d) = fixture();
         for url in [
