@@ -47,13 +47,13 @@ fn unregister_releases_then_reregisters() {
 #[test]
 fn clear_removes_all_sources() {
     let registry = DataRegistry::new();
-    for i in 0..4 {
-        registry.register(&format!("view/{i}"), source(i as u8, 8));
+    for i in 0..4u8 {
+        registry.register(&format!("view/{i}"), source(i, 8));
     }
     assert_eq!(registry.len(), 4);
     registry.clear();
     assert!(registry.is_empty());
-    assert!(registry.names().is_empty());
+    assert_eq!(registry.names(), Vec::<String>::new());
     assert!(matches!(
         pull(&registry, "view/0"),
         Err(DataError::NotFound { .. })
