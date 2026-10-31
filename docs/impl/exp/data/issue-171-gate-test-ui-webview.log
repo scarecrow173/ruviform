@@ -1,0 +1,35 @@
+[test-ui-webview] $ cargo test -p ruviform-ui-webview --features webview
+   Compiling smallvec v1.16.4
+   Compiling audio_thread_priority v0.38.0
+   Compiling icu_normalizer v2.4.0
+   Compiling parking_lot_core v0.9.12
+   Compiling ruviform-exec v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-exec)
+   Compiling parking_lot v0.12.5
+   Compiling ruviform-ui v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-ui)
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+   Compiling tao v0.37.2
+   Compiling ruviform-ui-webview v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-ui-webview)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.71s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_ui_webview-cfb9783c6c8ac6fd.exe)
+
+running 7 tests
+test scheme::tests::windows_rewritten_host_resolves ... ok
+test scheme::tests::app_serves_index_and_mime ... ok
+test scheme::tests::data_rejects_bad_requests ... ok
+test scheme::tests::cors_header_present ... ok
+test scheme::tests::app_rejects_traversal_and_missing ... ok
+test scheme::tests::data_serves_bounded_ranges ... ok
+test scheme::tests::data_unregister_and_eviction_yield_404 ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_ui_webview
+
+running 1 test
+test crates\ruviform-ui-webview\src\embed.rs - embed (line 7) ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.34s; merged doctests compilation took 0.28s
