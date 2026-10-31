@@ -27,6 +27,7 @@ Directory: `docs/designs`
 | DESIGN-034NVCweXy0wECErcpEcv8 | video/NONRT プラグインの L1 経路設計（Issue #118） | approved | [issue-118-video-l1.md](./issue-118-video-l1.md) |
 | DESIGN-034O9RrQutLFWyaHJGOF3G | Issue 121 L1 diagnostics | approved | [issue-121-l1-diagnostics.md](./issue-121-l1-diagnostics.md) |
 | DESIGN-034N3EYKKosV8OzCP7Y9tY | 共通 platform/process/ipc 基盤の抽出評価（Issue #122） | approved | [issue-122-shared-platform-process-ipc-eval.md](./issue-122-shared-platform-process-ipc-eval.md) |
+| DESIGN-WVN475nNdieOE0fyOxkhf | GUI 非依存 CLI/headless 実行基盤設計（Issue #155） | approved | [issue-155-headless-cli-foundation.md](./issue-155-headless-cli-foundation.md) |
 | DESIGN-034P8EHh2IlZd14yNSOreO | Issue #156 再利用可能デスクトップ GUI ホスト基盤 | draft | [issue-156-gui-host-foundation.md](./issue-156-gui-host-foundation.md) |
 | DESIGN-034R150f64Num3r1cKxVb2zQ | Issue #150 f64 高精度オフライン数値・DSP API（ruviform-numeric 新設） | approved | [issue-150-f64-offline-numeric.md](./issue-150-f64-offline-numeric.md) |
 | DESIGN-034R157VizPrimitivesWk4 | Issue #157 波形・スペクトログラム・タイムラインの汎用インタラクティブ表示基盤 | draft | [issue-157-viz-primitives.md](./issue-157-viz-primitives.md) |

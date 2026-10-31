@@ -10,6 +10,15 @@
 //! coordinate system convertible to [`MediaTime`] via a compiled tempo
 //! map).
 //!
+//! Observation vocabulary for media-I/O consumers also lives here:
+//! [`Fact`] (a value or the classified reason it is unavailable),
+//! [`TimestampProvenance`]/[`TickTimestamp`]/[`MediaTimestamp`]
+//! (carried-vs-derived-vs-estimated timestamp annotations) and
+//! [`observe_timing`] (frame-rate-agnostic interval/drift/discontinuity
+//! observation over raw tick sequences). These types report facts only;
+//! interpreting them as validity, confidence or anomaly judgments is the
+//! consumer's responsibility.
+//!
 //! Holds no processing or I/O.
 //!
 //! ## Allowed dependency layers
@@ -26,7 +35,8 @@
 //! intermediates, exact rational math — `f64` is never a stored or core
 //! representation). Per-API guarantees are documented as
 //! `**RT contract:**` lines on each item, mirroring the RT ADR rule that
-//! the guaranteed scope is defined per API.
+//! the guaranteed scope is defined per API. The [`observe_timing`]
+//! analysis path is explicitly non-RT (it allocates).
 //!
 //! Contract source: `docs/designs/ruviform-architecture-design-baseline.md`
 //! (crate table A.2, "時間モデル") and
@@ -45,16 +55,23 @@
 #![allow(clippy::exhaustive_structs)]
 
 mod error;
+mod fact;
 mod music;
+mod observe;
 mod stream;
 mod time;
 mod timecode;
 mod transport;
 
 pub use error::{Error, Result};
+pub use fact::Fact;
 pub use music::{
     MusicalPosition, MusicalTimeInfo, PPQN, Ppqn, TempoEvent, TempoMap, TempoMapBuilder, Tick,
     TickDuration, TimeSignatureEvent,
+};
+pub use observe::{
+    Discontinuity, IntervalStats, MediaTimestamp, TickTimestamp, TimestampProvenance,
+    TimingObservation, observe_timing,
 };
 pub use stream::{StreamDescriptor, StreamId, StreamKind};
 pub use time::{FrameRate, MediaDuration, MediaRange, MediaTime, Rounding, TimeBase};

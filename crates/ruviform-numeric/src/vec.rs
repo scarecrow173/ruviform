@@ -26,6 +26,15 @@ pub(crate) fn sum_sq_seq(x: &[f64]) -> f64 {
     x.iter().map(|&v| v * v).sum()
 }
 
+/// `y[i] += a·x[i]`（無検証）。
+#[inline]
+pub(crate) fn axpy_seq(y: &mut [f64], a: f64, x: &[f64]) {
+    debug_assert_eq!(y.len(), x.len());
+    for (y, &x) in y.iter_mut().zip(x) {
+        *y += a * x;
+    }
+}
+
 /// `y[i] -= a·x[i]`（無検証）。
 #[inline]
 pub(crate) fn sub_scaled_seq(y: &mut [f64], a: f64, x: &[f64]) {
@@ -33,6 +42,22 @@ pub(crate) fn sub_scaled_seq(y: &mut [f64], a: f64, x: &[f64]) {
     for (y, &x) in y.iter_mut().zip(x) {
         *y -= a * x;
     }
+}
+
+/// `corr0` の分解形（無検証）。`(Σxy, Σx², Σy²)` を同じ一走査で返す。
+/// correlation カーネルが分子・分母を別々に使う際に演算順を共有する。
+#[inline]
+pub(crate) fn corr0_parts_seq(x: &[f64], y: &[f64]) -> (f64, f64, f64) {
+    debug_assert_eq!(x.len(), y.len());
+    let mut sxy = 0.0;
+    let mut ex = 0.0;
+    let mut ey = 0.0;
+    for (&x, &y) in x.iter().zip(y) {
+        sxy += x * y;
+        ex += x * x;
+        ey += y * y;
+    }
+    (sxy, ex, ey)
 }
 
 /// `a·b` の内積。逐次和で `Σ a[i]·b[i]`。2 スライスは等長であること。
@@ -74,14 +99,7 @@ pub fn corr0(x: &[f64], y: &[f64]) -> Result<f64> {
     if x.len() != y.len() {
         return Err(Error::InvalidValue("length"));
     }
-    let mut sxy = 0.0;
-    let mut ex = 0.0;
-    let mut ey = 0.0;
-    for (&x, &y) in x.iter().zip(y) {
-        sxy += x * y;
-        ex += x * x;
-        ey += y * y;
-    }
+    let (sxy, ex, ey) = corr0_parts_seq(x, y);
     Ok(if ex > 0.0 && ey > 0.0 {
         sxy / (ex * ey).sqrt()
     } else {
@@ -133,9 +151,7 @@ pub fn axpy(y: &mut [f64], a: f64, x: &[f64]) -> Result<()> {
     if y.len() != x.len() {
         return Err(Error::InvalidValue("length"));
     }
-    for (y, &x) in y.iter_mut().zip(x) {
-        *y += a * x;
-    }
+    axpy_seq(y, a, x);
     Ok(())
 }
 

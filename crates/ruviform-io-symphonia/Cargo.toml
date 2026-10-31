@@ -35,5 +35,14 @@ ruviform-audio-core = { path = "../ruviform-audio-core" }
 #     enabled (licensing ADR feature restriction).
 symphonia = { version = "0.6", default-features = true }
 
+[features]
+# Issue #154 feature split — codec vs container stays separable per the
+# licensing ADR: `mp4` adds the ISOBMFF demuxer (container; needed for
+# both PCM-in-MP4 audio and AAC). `aac` adds the AAC decoder — a
+# patent-encumbered codec kept opt-in, never implied by `mp4` alone.
+# Default build scope is unchanged.
+mp4 = ["symphonia/isomp4"]
+aac = ["mp4", "symphonia/aac"]
+
 [lints]
 workspace = true

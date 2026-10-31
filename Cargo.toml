@@ -31,6 +31,8 @@ members = [
     "crates/ruviform-audio-analysis",
     "crates/ruviform-media-io",
     "crates/ruviform-io-symphonia",
+    # メディア I/O バックエンド（Issue #154 — AudioLens が消費する AVI/DIB・WAVEFORMATEX 入力を所有する pure-Rust demux/decode adapter）
+    "crates/ruviform-io-avi",
     # Adapters（ドメイン基盤の外側・engine と同じ利用側層。Issue #23 PoC で新設）
     "crates/ruviform-audio-device",
     # 拡張層（規格中立のプラグイン基盤。Issue #29 PoC で新設）
@@ -49,6 +51,8 @@ members = [
     # adapter 実装は非既定 `webview` feature ゲートで headless 検証経路を壊さない）
     "crates/ruviform-ui",
     "crates/ruviform-ui-webview",
+    # 利用側層サンプル（Issue #155 — GUI 非依存 CLI/headless 利用例。共有 headless サービスの外側アダプタ）
+    "crates/ruviform-cli-sample",
     # 利用側層 可視化基盤（Issue #157 — 波形 LOD・スペクトログラム STFT・
     # タイムラインの汎用インタラクティブ表示プリミティブ。GUI/WebView 非依存で
     # headless 検証経路を維持。ruviform-ui との結合は adapter 側の責務）

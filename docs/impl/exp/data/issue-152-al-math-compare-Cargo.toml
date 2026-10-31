@@ -1,0 +1,12 @@
+[package]
+name = "r152-compare"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+al-math = { path = "C:/Users/akiyoshi/orca/workspaces/audio-lens/al98-baseline/crates/al-math" }
+ruviform-numeric = { path = "C:/Users/akiyoshi/orca/workspaces/ruviform/r152-correlation/crates/ruviform-numeric" }
+
+[profile.release]
+debug = true
