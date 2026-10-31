@@ -64,7 +64,8 @@ pub mod service;
 pub use assets::{Asset, AssetSource, MapAssetSource, mime_for, resolve_path};
 pub use bridge::{BRIDGE_JS, dispatch_script};
 pub use data::{
-    DEFAULT_MAX_CHUNK, DataChunk, DataError, DataRegistry, DataRequest, DataSource, VecDataSource,
+    DEFAULT_MAX_CHUNK, DataChunk, DataError, DataRegistry, DataRegistryLimits, DataRequest,
+    DataSource, VecDataSource,
 };
 pub use demo::DemoService;
 pub use detect::{BackendReport, BackendState};
