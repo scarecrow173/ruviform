@@ -150,7 +150,7 @@ Issue #20・media-io ADR「Verification」節・設計ベースラインの決�
 | ADR Verification 第 3 項（複数バックエンド間の同一境界・透過切替） | 第一バックエンドのみの本 spec では検証不能 | 第 2 バックエンド実装 Issue で検証 | 複数バックエンドでの透過切替が未検証のまま境界契約が固定化する |
 | `Packet` のバイト列表現（所有 vs 借用/zero-copy） | 所有バイト列を持つ値型とする | demux 側の借用/zero-copy backing は将来評価（非 RT 層の後続設計・Issue #26 系と併せて） | コピー前提の契約が性能要件とずれた場合に API 改訂が必要になる |
 | `Muxer` / `Encoder` の契約実証 | 実装者ゼロの未検証契約（抽象 trait と「非対応」表現のみ確定） | 第一 encode 対応バックエンド実装 Issue で実証（0.x / `publish=false` 下で改訂可能） | 未検証契約のまま利用者が増えると、契約欠陥の修正が破壊的変更になる |
-| gapless 情報（encoder delay / padding trim）の運搬先 | 本 spec では運搬先を定めない | 後続論点（codec 記述型・`AudioFrame`・能力交渉のいずれに載せるかを含めて検討） | 運搬先未確定のまま codec 対応を増やすと gapless 再生契約が後付けになる |
+| gapless 情報（encoder delay / padding trim）の運搬先 | Issue #151 で確定: `Packet::trim_start`/`trim_end`（パケット単位）と `StreamFacts::leading_trim`/`trailing_trim`（宣言値）の 2 経路で運搬 | 本論点は [issue-151-media-observation-contract.md](issue-151-media-observation-contract.md) で解決済み | 運搬先未確定のまま codec 対応を増やすと gapless 再生契約が後付けになる |
 
 ## Sources and Relations
 

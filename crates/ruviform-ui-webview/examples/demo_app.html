@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ruviform demo_app</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font: 13px/1.5 system-ui, sans-serif; background: #14161a; color: #d7dce2;
+         display: grid; grid-template-rows: auto auto 1fr auto; height: 100vh; }
+  header { padding: 10px 14px; border-bottom: 1px solid #2a2f36; display: flex; gap: 10px; align-items: baseline; }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  #status { color: #8a94a0; }
+  .row { padding: 8px 14px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #23272d; flex-wrap: wrap; }
+  button { background: #2b3138; color: inherit; border: 1px solid #3a414a; border-radius: 5px; padding: 5px 12px; cursor: pointer; }
+  button:hover { background: #363d46; }
+  button:disabled { opacity: .45; cursor: default; }
+  input[type=number] { width: 70px; background: #1c2025; color: inherit; border: 1px solid #3a414a; border-radius: 4px; padding: 4px 6px; }
+  #progress { flex: 1; height: 6px; background: #23272d; border-radius: 3px; overflow: hidden; min-width: 120px; }
+  #progress > div { height: 100%; width: 0%; background: #4f8fe8; transition: width .1s; }
+  #canvas { display: block; width: 100%; height: 100%; background: #101216; }
+  #log { height: 110px; overflow-y: auto; border-top: 1px solid #2a2f36; padding: 6px 14px; font: 11px/1.45 ui-monospace, monospace; color: #8a94a0; white-space: pre-wrap; }
+  #log .err { color: #e06c75; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ruviform demo_app</h1>
+  <span id="status">connecting…</span>
+</header>
+<div class="row">
+  <button id="bCaps">sys.capabilities</button>
+  <button id="bEcho">demo.echo</button>
+  <button id="bSynth">synthesize</button>
+  <input id="seconds" type="number" value="30" min="1" max="600" /> s
+  <button id="bSleep">sleep 60s</button>
+  <button id="bCancel" disabled>cancel job</button>
+  <button id="bFail">demo.fail</button>
+  <button id="bPanic">demo.panic</button>
+  <div id="progress"><div></div></div>
+</div>
+<div style="display:grid; min-height:0;"><canvas id="canvas"></canvas></div>
+<div id="log"></div>
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const log = (m, err) => {
+  const el = document.createElement('div');
+  if (err) el.className = 'err';
+  el.textContent = m;
+  $('#log').appendChild(el);
+  $('#log').scrollTop = $('#log').scrollHeight;
+};
+const bar = $('#progress > div');
+const setProgress = (d, t) => { bar.style.width = (t ? Math.min(100, d / t * 100) : 0) + '%'; };
+let runningJob = null;
+
+// Environment / regression probes (focus, DPI, resize) → visible in log.
+const env = () => `dpr=${devicePixelRatio} ${innerWidth}x${innerHeight} focus=${document.hasFocus()} vis=${document.visibilityState}`;
+log('env: ' + env());
+addEventListener('focus', () => log('window focus  ' + env()));
+addEventListener('blur',  () => log('window blur   ' + env()));
+new ResizeObserver(() => log('viewport resize ' + env())).observe(document.body);
+document.addEventListener('visibilitychange', () => log('visibility ' + env()));
+
+// rvf.ipc.v1 event stream (job / notify / lifecycle / error).
+__rvf.onEvent((m) => {
+  if (m.kind === 'job') {
+    if (m.state === 'progress') { setProgress(m.done, m.total); }
+    else if (m.state === 'finished') {
+      setProgress(1, 1); runningJob = null; $('#bCancel').disabled = true;
+      log(`job ${m.job} finished: ${JSON.stringify(m.data)}`);
+      if (m.data && m.data.source) pullPeaks(m.data);
+    } else {
+      runningJob = null; $('#bCancel').disabled = true;
+      log(`job ${m.job} ${m.state}: ${m.error ? m.error.message : ''}`, true);
+    }
+  } else {
+    log('event: ' + JSON.stringify(m));
+  }
+});
+
+async function pullPeaks(data) {
+  // Bounded pull loop — same shape any app uses for large display data.
+  const CHUNK = 4 * 1024 * 1024;
+  const buf = new Uint8Array(data.bytes);
+  for (let off = 0; off < data.bytes; off += CHUNK) {
+    const r = await fetch(__rvf.dataUrl(data.source, off, CHUNK));
+    if (!r.ok) { log('pull failed: ' + r.status, true); return; }
+    buf.set(new Uint8Array(await r.arrayBuffer()), off);
+  }
+  log(`pull: ${buf.byteLength}B in ${Math.ceil(data.bytes / CHUNK)} chunk(s)`);
+  draw(new Float32Array(buf.buffer), data.points);
+}
+
+function draw(peaks, points) {
+  const c = $('#canvas'), g = c.getContext('2d');
+  const dpr = devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr; g.scale(dpr, dpr);
+  g.fillStyle = '#101216'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#4f8fe8';
+  const mid = h / 2, amp = h / 2 - 8;
+  for (let x = 0; x < w; x++) {
+    const i = Math.floor(x / w * points) * 2;
+    const lo = peaks[i], hi = peaks[i + 1];
+    g.fillRect(x, mid - hi * amp, 1, Math.max(1, (hi - lo) * amp));
+  }
+  log(`draw: ${points} peak pairs`);
+}
+
+$('#bCaps').onclick = async () => {
+  try { log('capabilities: ' + JSON.stringify(await __rvf.call('sys.capabilities'))); }
+  catch (e) { log('capabilities failed: ' + e.message, true); }
+};
+$('#bEcho').onclick = async () => {
+  try { log('echo: ' + JSON.stringify(await __rvf.call('demo.echo', { hello: 'rvf', at: Date.now() }))); }
+  catch (e) { log('echo failed: ' + e.message, true); }
+};
+$('#bSynth').onclick = async () => {
+  try {
+    const r = await __rvf.call('demo.synthesize', { seconds: Number($('#seconds').value) });
+    runningJob = r.job; $('#bCancel').disabled = false;
+    log('job started: ' + r.job);
+  } catch (e) { log('synthesize failed: ' + (e.code || '') + ' ' + e.message, true); }
+};
+$('#bSleep').onclick = async () => {
+  try {
+    const r = await __rvf.call('demo.sleep', { ms: 60000 });
+    runningJob = r.job; $('#bCancel').disabled = false;
+    log('job started: ' + r.job);
+  } catch (e) { log('sleep failed: ' + e.message, true); }
+};
+$('#bCancel').onclick = async () => {
+  if (runningJob == null) return;
+  try { await __rvf.call('job.cancel', { job: runningJob }); log('cancel requested'); }
+  catch (e) { log('cancel failed: ' + e.message, true); }
+};
+$('#bFail').onclick = async () => {
+  try { await __rvf.call('demo.fail'); }
+  catch (e) { log('demo.fail → ' + (e.code || '') + ': ' + e.message); }
+};
+$('#bPanic').onclick = async () => {
+  try {
+    const r = await __rvf.call('demo.panic');
+    log('panic job started: ' + r.job);
+  } catch (e) { log('panic failed: ' + e.message, true); }
+};
+
+$('#status').textContent = 'ready — ' + env();
+</script>
+</body>
+</html>

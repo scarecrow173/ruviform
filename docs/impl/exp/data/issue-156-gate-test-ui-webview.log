@@ -1,0 +1,22 @@
+[test-ui-webview] $ cargo test -p ruviform-ui-webview --features webview
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_ui_webview-5d5ebe3e30d1c6c8.exe)
+
+running 6 tests
+test scheme::tests::app_serves_index_and_mime ... ok
+test scheme::tests::app_rejects_traversal_and_missing ... ok
+test scheme::tests::data_rejects_bad_requests ... ok
+test scheme::tests::data_serves_bounded_ranges ... ok
+test scheme::tests::cors_header_present ... ok
+test scheme::tests::windows_rewritten_host_resolves ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_ui_webview
+
+running 1 test
+test crates\ruviform-ui-webview\src\embed.rs - embed (line 7) ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.34s; merged doctests compilation took 0.27s

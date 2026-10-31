@@ -1,0 +1,29 @@
+[package]
+name = "ruviform-ui"
+description = "WebView-independent GUI host foundation for Ruviform (host port, IPC schema, service/job model, bounded data transfer)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Dependency addition records (暫定規約「依存追加は理由を記録」):
+# - serde + serde_json: `rvf.ipc.v1` メッセージスキーマ（Intent/Event/
+#   ErrorBody）のシリアライズ。ui ADR の「typed messages（初期は JSON
+#   系）」に従う契約型の表現に必須。MIT OR Apache-2.0。serde_json は
+#   本クレートの公開 API 面（`params`/`data` の payload 型）として
+#   露出する（サービス実装が serde 型を引くため）。
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# - ruviform-exec: Job のキャンセル・進捗契約として
+#   `CancellationToken`/`Progress`/`OfflineDriver` を再利用する
+#   （GUI ↔ 非 UI 処理境界を既存の非 RT 実行基盤と同一契約にする。
+#   同等型の複製を避ける DRY 適用）。Primitives 層への下向き依存。
+# - ruviform-rt: `demo` 参照実装が `OfflineDriver` 駆動に必要とする
+#   `Processor`/`RtProcessor` 契約型。Primitives 層への下向き依存。
+ruviform-exec = { path = "../ruviform-exec" }
+ruviform-rt = { path = "../ruviform-rt" }
+
+[lints]
+workspace = true

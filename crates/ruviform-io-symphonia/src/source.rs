@@ -109,6 +109,103 @@ impl BackendSource for SourceAdapter {
     }
 }
 
+/// How many leading bytes of a stream to capture for container magic
+/// identification — enough for every signature `container_info` checks
+/// (RIFF + form type, `ftyp` + brand list head, EBML, `OggS`, `fLaC`).
+pub(crate) const SNIFF_LEN: usize = 64;
+
+/// The shared capture state a [`SniffingSource`] writes into — the
+/// probe consumes the boxed source, so the captured prefix must live
+/// in a cell the caller can still reach after construction.
+///
+/// `bytes` is position-indexed (not append-order): a probe that seeks
+/// to the end for a trailing-metadata scan before reading the header
+/// still records the *file's* leading bytes — `written` is the bitmap
+/// of captured positions (`SNIFF_LEN` ≤ 64).
+#[derive(Debug)]
+pub(crate) struct Sniffed {
+    /// Captured head bytes, indexed by file position.
+    bytes: [u8; SNIFF_LEN],
+    /// Bitmap of which positions have been captured.
+    written: u64,
+}
+
+impl Sniffed {
+    /// An empty capture buffer.
+    pub(crate) fn new() -> Self {
+        Self {
+            bytes: [0; SNIFF_LEN],
+            written: 0,
+        }
+    }
+
+    /// The captured leading prefix — the longest run of recorded bytes
+    /// starting at offset 0 (shorter than [`SNIFF_LEN`] when the probe
+    /// never read that far).
+    pub(crate) fn prefix(&self) -> &[u8] {
+        let len = self.written.trailing_ones() as usize;
+        &self.bytes[..len]
+    }
+}
+
+/// A [`BackendSource`] wrapper that records bytes read at file offsets
+/// below [`SNIFF_LEN`], so the container family can be identified from
+/// real magic bytes after probing — the backend's `FormatReader` does
+/// not expose which format won the probe.
+pub(crate) struct SniffingSource {
+    inner: SourceAdapter,
+    /// Current file position — tracked so captures stay positional.
+    position: u64,
+    sniffed: std::sync::Arc<Mutex<Sniffed>>,
+}
+
+impl SniffingSource {
+    /// Wraps an adapted source, writing captured bytes into `sniffed`.
+    pub(crate) fn new(inner: SourceAdapter, sniffed: std::sync::Arc<Mutex<Sniffed>>) -> Self {
+        Self {
+            inner,
+            position: 0,
+            sniffed,
+        }
+    }
+}
+
+impl Read for SniffingSource {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        if let Ok(mut sniffed) = self.sniffed.lock() {
+            for (offset, &byte) in buf[..read].iter().enumerate() {
+                let position = self.position + offset as u64;
+                if position < SNIFF_LEN as u64
+                    && let Ok(bit) = usize::try_from(position)
+                {
+                    sniffed.bytes[bit] = byte;
+                    sniffed.written |= 1 << bit;
+                }
+            }
+        }
+        self.position += read as u64;
+        Ok(read)
+    }
+}
+
+impl Seek for SniffingSource {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        self.position = self.inner.seek(pos)?;
+        Ok(self.position)
+    }
+}
+
+impl BackendSource for SniffingSource {
+    fn is_seekable(&self) -> bool {
+        self.inner.is_seekable()
+    }
+
+    fn byte_len(&self) -> Option<u64> {
+        self.inner.byte_len()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

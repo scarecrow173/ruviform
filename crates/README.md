@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計23クレート）。
+Ruviform ワークスペースのメンバークレート索引（計26クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -12,7 +12,7 @@ Ruviform ワークスペースのメンバークレート索引（計23クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-math`](ruviform-math/README.md) | SIMD dispatch カーネル層（`math::dsp`） |
-| [`ruviform-numeric`](ruviform-numeric/README.md) | 高精度 `f64` オフライン数値・DSP プリミティブ（`fft`/`window`/`vec`/`resample`/`conv`/`linalg`/`stft`/`bands`/`xspec`、Issue #150・#153） |
+| [`ruviform-numeric`](ruviform-numeric/README.md) | 高精度 `f64` オフライン数値・DSP プリミティブ（`fft`/`window`/`vec`/`resample`/`conv`/`linalg`/`corr`/`stft`/`bands`/`xspec`、Issue #150・#152・#153） |
 | [`ruviform-rt`](ruviform-rt/README.md) | RT 基盤（`Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換） |
 | [`ruviform-media-core`](ruviform-media-core/README.md) | 規格中立メディアデータモデル（時間・transport・音楽時間・`Error`） |
 | [`ruviform-exec`](ruviform-exec/README.md) | 非 RT 実行基盤（スレッド優先度機構・`OfflineDriver`） |
@@ -33,7 +33,8 @@ Ruviform ワークスペースのメンバークレート索引（計23クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-media-io`](ruviform-media-io/README.md) | メディア I/O 抽象境界（demux/mux・decode/encode の4系統 trait） |
-| [`ruviform-io-symphonia`](ruviform-io-symphonia/README.md) | symphonia バックエンド PoC（demux + decode のみ） |
+| [`ruviform-io-symphonia`](ruviform-io-symphonia/README.md) | symphonia バックエンド（demux + decode。feature `mp4`/`aac` で ISOBMFF/AAC を opt-in） |
+| [`ruviform-io-avi`](ruviform-io-avi/README.md) | pure-Rust AVI バックエンド（RIFF/AVI demux + PCM audio + DIB video decode） |
 
 ## Optional platform adapters
 
@@ -69,3 +70,5 @@ Ruviform ワークスペースのメンバークレート索引（計23クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-edit`](ruviform-edit/README.md) | NLE 非破壊編集データモデル + 評価射影（全 API 非 RT） |
+| [`ruviform-ui`](ruviform-ui/README.md) | WebView 非依存の GUI 基盤コア（host 抽象・IPC v1・service/job ランタイム・bounded data・assets・描画責務契約 — Issue #156） |
+| [`ruviform-ui-webview`](ruviform-ui-webview/README.md) | `wry`+`tao` のオプション GUI adapter（feature `webview` でホスト実装・`rvf://` スキーム・組込みアセット — Issue #156） |

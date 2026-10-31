@@ -91,7 +91,7 @@ mod tests {
     use crate::frame::AudioFrame;
     use crate::packet::PacketFlags;
     use ruviform_audio_core::{AudioBuffer, BufferSpec, ChannelLayout, SampleRate};
-    use ruviform_media_core::{MediaTime, StreamId, TimeBase};
+    use ruviform_media_core::{MediaTime, MediaTimestamp, StreamId, TickTimestamp, TimeBase};
 
     fn check_send<T: Send>() {}
 
@@ -115,11 +115,18 @@ mod tests {
                     crate::error::ErrorKind::InvalidData,
                 ));
             };
+            let pts = audio.pts();
             self.pending.push(Packet {
                 stream: StreamId(0),
-                pts: Some(audio.pts()),
+                index: 0,
+                pts: Some(TickTimestamp {
+                    ticks: pts.time.value(),
+                    provenance: pts.provenance,
+                }),
                 dts: None,
-                duration: audio.duration(),
+                duration: audio.duration().and_then(|d| u64::try_from(d.value()).ok()),
+                trim_start: 0,
+                trim_end: 0,
                 flags: PacketFlags::NONE,
                 data: vec![0u8; audio.buffer().frames()],
             });
@@ -140,7 +147,7 @@ mod tests {
                 frames,
                 sample_rate: SampleRate::new(48_000).unwrap(),
             }),
-            MediaTime::new(0, TimeBase::COMMON_90K),
+            MediaTimestamp::carried(MediaTime::new(0, TimeBase::COMMON_90K)),
         ))
     }
 

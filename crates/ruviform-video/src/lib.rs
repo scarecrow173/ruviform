@@ -21,8 +21,11 @@ mod tests {
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
 
-    use ruviform_media_core::{MediaTime, StreamId, TimeBase};
-    use ruviform_media_io::{Decoder, Demuxer, Frame, Packet, PacketFlags, Result, StreamInfo};
+    use ruviform_media_core::{MediaTime, MediaTimestamp, StreamId, TimeBase};
+    use ruviform_media_io::{
+        BackendInfo, ContainerInfo, Decoder, Demuxer, Frame, Packet, PacketFlags, Result,
+        StreamInfo,
+    };
     use ruviform_rt::MasterClock;
     use ruviform_video_core::{PixelFormat, VideoFrame};
 
@@ -37,9 +40,12 @@ mod tests {
     fn packet() -> Packet {
         Packet {
             stream: StreamId(0),
+            index: 0,
             pts: None,
             dts: None,
             duration: None,
+            trim_start: 0,
+            trim_end: 0,
             flags: PacketFlags::empty(),
             data: Vec::new(),
         }
@@ -47,9 +53,19 @@ mod tests {
 
     struct MockDemuxer {
         packets: VecDeque<Packet>,
+        container: ContainerInfo,
         events: Arc<Mutex<Vec<&'static str>>>,
     }
     impl Demuxer for MockDemuxer {
+        fn container(&self) -> &ContainerInfo {
+            &self.container
+        }
+        fn backend_info(&self) -> BackendInfo {
+            BackendInfo {
+                name: "mock",
+                version: "0",
+            }
+        }
         fn streams(&self) -> &[StreamInfo] {
             &[]
         }
@@ -91,6 +107,7 @@ mod tests {
         let s = VideoSession::new(
             MockDemuxer {
                 packets,
+                container: ContainerInfo::default(),
                 events: Arc::clone(&events),
             },
             MockDecoder {
@@ -190,7 +207,10 @@ mod tests {
             sample_rate: SampleRate::new(48_000).unwrap(),
         });
         let mut queue = VecDeque::new();
-        queue.push_back(Frame::Audio(AudioFrame::new(buffer, MediaTime::new(0, TB))));
+        queue.push_back(Frame::Audio(AudioFrame::new(
+            buffer,
+            MediaTimestamp::carried(MediaTime::new(0, TB)),
+        )));
         queue.push_back(Frame::Video(frame_at(90_000)));
         let (mut s, _ev) = session(VecDeque::new(), queue);
         let got = s.next_frame().unwrap();

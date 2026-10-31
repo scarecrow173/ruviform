@@ -41,6 +41,7 @@
 
 pub mod bands;
 pub mod conv;
+pub mod corr;
 mod error;
 pub mod fft;
 pub mod linalg;
@@ -57,7 +58,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[cfg(test)]
 mod rt_tests {
-    use crate::{bands, conv, fft, resample, stft, vec, window, xspec};
+    use crate::{bands, conv, corr, fft, resample, stft, vec, window, xspec};
     use assert_no_alloc::assert_no_alloc;
 
     /// Issue #150 RT-verification lane: `AllocDisabler` swaps the lib
@@ -92,6 +93,18 @@ mod rt_tests {
         let cin = vec![1.0; 3000];
         let mut cout = vec![0.0; 3000];
 
+        let corr_full = corr::CorrelationPlan::new(64, 300).unwrap();
+        let mut corr_ws = corr::CorrelationWorkspace::new(&corr_full);
+        let corr_tmpl = vec![0.5; 64];
+        let corr_sig = vec![0.25; 300];
+        let corr_valid = corr::CorrelationPlan::new_ncc(64, 300).unwrap();
+        let mut corr_valid_ws = corr::CorrelationWorkspace::new(&corr_valid);
+
+        let op = corr::OverlapCorrPlan::new(64).unwrap();
+        let mut ows = corr::OverlapCorrWorkspace::with_max_lag(&op, 10);
+        let ox = vec![0.5; 64];
+        let oy = vec![0.25; 64];
+
         let mut coeffs = [0.0; 16];
         let mut y = vec![1.0; 64];
         let x = vec![2.0; 64];
@@ -112,6 +125,26 @@ mod rt_tests {
             rplan.inverse(&mut rws, &sre, &sim, &mut time).unwrap();
             rs.resample_into(&rin, &mut rout).unwrap();
             cp.convolve(&mut cws, &cin, &mut cout).unwrap();
+            let ncc = corr_full
+                .ncc(&mut corr_ws, &corr_tmpl, &corr_sig, 8)
+                .unwrap();
+            std::hint::black_box((ncc.values, ncc.window_energy, ncc.template_energy));
+            std::hint::black_box(
+                corr_full
+                    .gcc_phat(&mut corr_ws, &corr_tmpl, &corr_sig, 8)
+                    .unwrap(),
+            );
+            std::hint::black_box(
+                corr_full
+                    .cross_correlation(&mut corr_ws, &corr_tmpl, &corr_sig, 8)
+                    .unwrap(),
+            );
+            let valid_ncc = corr_valid
+                .ncc(&mut corr_valid_ws, &corr_tmpl, &corr_sig, 8)
+                .unwrap();
+            std::hint::black_box(valid_ncc.values);
+            let oc = op.curve(&mut ows, &ox, &oy, 10).unwrap();
+            std::hint::black_box((oc.values, oc.overlap_energy));
         });
     }
 

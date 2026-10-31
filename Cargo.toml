@@ -31,6 +31,8 @@ members = [
     "crates/ruviform-audio-analysis",
     "crates/ruviform-media-io",
     "crates/ruviform-io-symphonia",
+    # メディア I/O バックエンド（Issue #154 — AudioLens が消費する AVI/DIB・WAVEFORMATEX 入力を所有する pure-Rust demux/decode adapter）
+    "crates/ruviform-io-avi",
     # Adapters（ドメイン基盤の外側・engine と同じ利用側層。Issue #23 PoC で新設）
     "crates/ruviform-audio-device",
     # 拡張層（規格中立のプラグイン基盤。Issue #29 PoC で新設）
@@ -45,6 +47,10 @@ members = [
     "crates/ruviform-audio",
     # 利用側層（Issue #96 — NLE 非破壊編集データモデル + 評価射影。engine 同順位・全 API 非 RT）
     "crates/ruviform-edit",
+    # 拡張層 GUI 基盤（Issue #156 — WebView 非依存の UI ホスト基盤 + wry/tao adapter。
+    # adapter 実装は非既定 `webview` feature ゲートで headless 検証経路を壊さない）
+    "crates/ruviform-ui",
+    "crates/ruviform-ui-webview",
 ]
 
 [workspace.package]
