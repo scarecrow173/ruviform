@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-numeric"
-description = "High-precision f64 offline numeric and DSP primitives (FFT, real FFT, vector ops, windows, resampling, convolution, least squares) for Ruviform"
+description = "High-precision f64 offline numeric and DSP primitives (FFT, real FFT, vector ops, windows, resampling, convolution, least squares, complex linear solver) for Ruviform"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

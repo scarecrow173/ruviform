@@ -1,6 +1,6 @@
 # ruviform-numeric
 
-Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150・#152・#153）。
+Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150・#152・#153・#167）。
 用途非依存の FFT / Real FFT / 数値ベクトル / 窓関数 / polyphase リサンプラ /
 overlap-save 畳込み / 最小二乗 / 相関カーネル / 複素 STFT / 帯域フィルタ /
 スペクトル統計（Issue #152・#153）を提供する。メディア固有概念・I/O・スレッドは持たない。
@@ -16,7 +16,9 @@ overlap-save 畳込み / 最小二乗 / 相関カーネル / 複素 STFT / 帯�
 - `resample` — polyphase Blackman-sinc リサンプラ（`ResamplePlan`）。
 - `conv` — 実数 FFT による overlap-save 畳込み（`ConvPlan`/`ConvWorkspace`/`conv`）。
 - `linalg` — Householder QR による ridge 付き最小二乗（`LeastSquares`・
-  `least_squares`・`condition_number`）。
+  `least_squares`・`condition_number`）と、部分 pivot 選択付き Gaussian
+  消去による複素連立一次方程式ソルバ（`complex_solve`、Issue #167、
+  AudioLens `csolve` 移植）。
 - `corr` — template-in-signal の符号付き NCC・生相互相関・GCC-PHAT
   （`CorrelationPlan`/`CorrelationWorkspace`/`NccCurve`、Full・
   NccValid・NccDirect の 3 mode）と、等長窓の両側 lag overlap 相関
