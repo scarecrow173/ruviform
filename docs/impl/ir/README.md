@@ -99,3 +99,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034Nm7kRxQvTyHwPzSdGfJb` | Issue #117 L1 bundle 子プロセス（1 子 N インスタンス）— implementation | completed | [issue-117-bundle-child-implementation.md](./issue-117-bundle-child-implementation.md) |
 | `IMPL-034NU3jXjckCIx8sPNr1Wz` | Issue #116 L1 自動再起動・supervisor ポリシー — implementation | completed | [issue-116-supervisor-implementation.md](./issue-116-supervisor-implementation.md) |
 | `IMPL-034O4mVSR9nSSp2IH0H53q` | Issue #118 video/NONRT L1 経路（wire v3・vshm・video runner・video() façade）— implementation | completed | [issue-118-video-l1-implementation.md](./issue-118-video-l1-implementation.md) |
+| `IMPL-034R167CmplxSlvImp1XyZ9` | Issue #167 complex_solve (複素線形ソルバ) implementation | completed | [issue-167-complex-solver-implementation.md](./issue-167-complex-solver-implementation.md) |
