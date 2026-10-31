@@ -20,6 +20,7 @@ Directory: `docs/adr`
 | ADR-034O9Rrn3iBoq4HxT07eVQ | issue-121-l1-diagnostics-policy | accepted | [issue-121-l1-diagnostics-policy.md](./issue-121-l1-diagnostics-policy.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |
+| ADR-034TRn2qP9wXkLmVcYbJdE | メディア観測事実の分類モデルと非破壊 PCM 取得経路（Issue #151） | accepted | [media-observation-non-destructive-pcm.md](./media-observation-non-destructive-pcm.md) |
 | ADR-2iNuZm3ymoyzRUmpgnKr0x | 音楽時間モデル（PPQN 960 tick 中核・piecewise-constant テンポマップ） | accepted | [musical-time-model.md](./musical-time-model.md) |
 | ADR-034JRK9VFJbrUPAvy3FJ94 | オフライン実行の決定論保証範囲（逐次参照等価） | accepted | [offline-determinism-scope.md](./offline-determinism-scope.md) |
 | ADR-034L2CiSoCLplTQvNluQfY | OFX ホストの video 契約境界と C ABI バインディング（Issue #98） | accepted | [ofx-host-video-contract-and-c-abi.md](./ofx-host-video-contract-and-c-abi.md) |

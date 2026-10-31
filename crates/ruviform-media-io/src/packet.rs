@@ -3,12 +3,12 @@
 //!
 //! A `Packet` is an owned value type: it references its container stream
 //! via [`StreamId`], carries the timestamps the container supplied
-//! ([`MediaTime`] presentation and decode timestamps, optional
-//! [`MediaDuration`]) and owns its encoded payload bytes. Borrowed /
-//! zero-copy packet backing is deliberately deferred (spec Deferred
-//! Design Concerns; Issue #26 family).
+//! (raw [`TickTimestamp`] presentation/decode ticks plus their
+//! provenance, an optional tick `duration`) and owns its encoded payload
+//! bytes. Borrowed / zero-copy packet backing is deliberately deferred
+//! (spec Deferred Design Concerns; Issue #26 family).
 
-use ruviform_media_core::{MediaDuration, MediaTime, StreamId};
+use ruviform_media_core::{StreamId, TickTimestamp};
 
 /// Encoded-unit attribute flags of a [`Packet`] — a `Copy` bit set.
 ///
@@ -123,11 +123,25 @@ impl PacketFlags {
 /// the intended construction, mirroring the domain crates' descriptor
 /// types.
 ///
-/// Timestamps are `Option` because containers are not required to carry
-/// them on every unit; `pts`/`dts`/`duration` use the *stream's* time
-/// base (see [`StreamDescriptor::time_base`] — engines pair each
-/// `Packet` with its [`StreamInfo`](crate::StreamInfo) via
-/// [`Packet::stream`]).
+/// ## Raw timestamps
+///
+/// `pts`/`dts`/`duration` are **raw tick counts** in the containing
+/// stream's time base — not [`MediaTime`]. They pair with
+/// `StreamDescriptor::time_base` (keyed via [`Packet::stream`]) when a
+/// base is known, but stay observable when the base is unavailable —
+/// a packet never fabricates a base to make its timestamps expressible.
+/// [`TickTimestamp::provenance`](ruviform_media_core::TickTimestamp::provenance)
+/// records whether each value was container-carried, derived from
+/// container structure, or estimated by the backend.
+///
+/// `index` is the zero-based ordinal of this unit within its stream in
+/// demux (decode) order — combined with `pts` it yields both the decode
+/// sequence and the presentation sequence a container carried, which is
+/// the raw input timestamp-gap/duplicate/VFR observation needs.
+///
+/// `trim_start`/`trim_end` carry codec-level trim (encoder delay /
+/// padding) in decoded-frame units as declared for this unit; they are
+/// `0` when the container declares none.
 ///
 /// **Send contract:** `Packet` is `Send` — it is designed to cross the
 /// I/O/decode-thread → bounded-queue boundary to the processing side
@@ -136,41 +150,60 @@ impl PacketFlags {
 /// **RT contract:** non-RT only — the boundary it crosses is non-RT;
 /// `Packet` itself is a plain data value.
 ///
+/// [`MediaTime`]: ruviform_media_core::MediaTime
 /// [`StreamDescriptor::time_base`]: ruviform_media_core::StreamDescriptor::time_base
 ///
 /// # Examples
 ///
 /// ```
-/// use ruviform_media_core::{MediaDuration, MediaTime, StreamId, TimeBase};
+/// use ruviform_media_core::{StreamId, TickTimestamp};
 /// use ruviform_media_io::{Packet, PacketFlags};
 ///
 /// let packet = Packet {
 ///     stream: StreamId(0),
-///     pts: Some(MediaTime::new(3_000, TimeBase::COMMON_90K)),
-///     dts: Some(MediaTime::new(2_970, TimeBase::COMMON_90K)),
-///     duration: Some(MediaDuration::new(30, TimeBase::COMMON_90K)),
+///     index: 0,
+///     pts: Some(TickTimestamp::carried(3_000)),
+///     dts: Some(TickTimestamp::carried(2_970)),
+///     duration: Some(30),
+///     trim_start: 0,
+///     trim_end: 0,
 ///     flags: PacketFlags::KEYFRAME,
 ///     data: vec![0xDE, 0xAD, 0xBE, 0xEF],
 /// };
 /// assert_eq!(packet.stream, StreamId(0));
 /// assert!(packet.flags.is_keyframe());
-/// assert_eq!(packet.pts.unwrap().value(), 3_000);
+/// assert_eq!(packet.pts.unwrap().ticks, 3_000);
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Packet {
     /// Container stream this unit belongs to — keys into the demuxer's
     /// [`StreamInfo`](crate::StreamInfo) list.
     pub stream: StreamId,
-    /// Presentation timestamp when the container carries one — the
-    /// authoritative ordering key for presentation.
-    pub pts: Option<MediaTime>,
-    /// Decode timestamp when the container carries one — meaningful for
-    /// reordered codecs (e.g. B-frames); usually `None` or equal to
-    /// `pts` for audio and non-reordered video.
-    pub dts: Option<MediaTime>,
-    /// Duration of this encoded unit when carried — engines may derive
-    /// it from the next unit's `pts` when absent.
-    pub duration: Option<MediaDuration>,
+    /// Zero-based ordinal of this unit within its stream in demux
+    /// (decode) order. Combined with `pts` it reconstructs both the
+    /// decode sequence and the presentation sequence. Encoder-produced
+    /// packets use their own emission order.
+    pub index: u64,
+    /// Presentation timestamp (ticks in the stream's time base) when
+    /// the container carries one — the authoritative ordering key for
+    /// presentation.
+    pub pts: Option<TickTimestamp>,
+    /// Decode timestamp (ticks in the stream's time base) when the
+    /// container carries one — meaningful for reordered codecs
+    /// (e.g. B-frames); usually `None` or equal to `pts` for audio and
+    /// non-reordered video.
+    pub dts: Option<TickTimestamp>,
+    /// Duration of this encoded unit in stream-base ticks when carried
+    /// — engines may derive it from the next unit's `pts` when absent.
+    /// For reordered codecs this is the duration of the *valid* decoded
+    /// frames the unit produces (i.e. excluding `trim_start`/`trim_end`).
+    pub duration: Option<u64>,
+    /// Decoded frames the decoder should drop from the start of this
+    /// unit's decoded output (encoder delay). `0` when undeclared.
+    pub trim_start: u64,
+    /// Decoded frames the decoder should drop from the end of this
+    /// unit's decoded output (encoder padding). `0` when undeclared.
+    pub trim_end: u64,
     /// Encoded-unit attribute flags (keyframe, corruption marks, …).
     pub flags: PacketFlags,
     /// The encoded payload — owned bytes.
@@ -180,16 +213,19 @@ pub struct Packet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ruviform_media_core::TimeBase;
+    use ruviform_media_core::TimestampProvenance;
 
     fn check_send<T: Send>() {}
 
     fn sample_packet() -> Packet {
         Packet {
             stream: StreamId(3),
-            pts: Some(MediaTime::new(1_024, TimeBase::COMMON_90K)),
-            dts: Some(MediaTime::new(1_000, TimeBase::COMMON_90K)),
-            duration: Some(MediaDuration::new(24, TimeBase::COMMON_90K)),
+            index: 7,
+            pts: Some(TickTimestamp::carried(1_024)),
+            dts: Some(TickTimestamp::derived(1_000)),
+            duration: Some(24),
+            trim_start: 0,
+            trim_end: 0,
             flags: PacketFlags::KEYFRAME,
             data: vec![1, 2, 3, 4],
         }
@@ -199,9 +235,13 @@ mod tests {
     fn packet_holds_every_field_verbatim() {
         let packet = sample_packet();
         assert_eq!(packet.stream, StreamId(3));
-        assert_eq!(packet.pts.unwrap().value(), 1_024);
-        assert_eq!(packet.dts.unwrap().value(), 1_000);
-        assert_eq!(packet.duration.unwrap().value(), 24);
+        assert_eq!(packet.index, 7);
+        assert_eq!(packet.pts.unwrap().ticks, 1_024);
+        assert_eq!(packet.pts.unwrap().provenance, TimestampProvenance::Carried);
+        assert_eq!(packet.dts.unwrap().ticks, 1_000);
+        assert_eq!(packet.dts.unwrap().provenance, TimestampProvenance::Derived);
+        assert_eq!(packet.duration, Some(24));
+        assert_eq!((packet.trim_start, packet.trim_end), (0, 0));
         assert_eq!(packet.flags, PacketFlags::KEYFRAME);
         assert_eq!(packet.data, [1, 2, 3, 4]);
     }

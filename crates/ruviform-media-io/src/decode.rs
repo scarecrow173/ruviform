@@ -116,7 +116,7 @@ mod tests {
     use crate::frame::AudioFrame;
     use crate::packet::PacketFlags;
     use ruviform_audio_core::{AudioBuffer, BufferSpec, ChannelLayout, SampleRate};
-    use ruviform_media_core::{MediaTime, StreamId, TimeBase};
+    use ruviform_media_core::{MediaTime, MediaTimestamp, StreamId, TickTimestamp, TimeBase};
 
     fn check_send<T: Send>() {}
 
@@ -143,7 +143,14 @@ mod tests {
                 frames: packet.data.len(),
                 sample_rate: SampleRate::new(48_000).unwrap(),
             });
-            let pts = packet.pts.unwrap_or(MediaTime::ZERO);
+            let pts = packet
+                .pts
+                .map_or(MediaTimestamp::estimated(MediaTime::ZERO), |ts| {
+                    MediaTimestamp {
+                        time: ts.at(TimeBase::COMMON_90K),
+                        provenance: ts.provenance,
+                    }
+                });
             self.pending
                 .push(Frame::Audio(AudioFrame::new(buffer, pts)));
             Ok(())
@@ -167,9 +174,12 @@ mod tests {
     fn data_packet(data: &[u8]) -> Packet {
         Packet {
             stream: StreamId(0),
-            pts: Some(MediaTime::new(0, TimeBase::COMMON_90K)),
+            index: 0,
+            pts: Some(TickTimestamp::carried(0)),
             dts: None,
             duration: None,
+            trim_start: 0,
+            trim_end: 0,
             flags: PacketFlags::NONE,
             data: data.to_vec(),
         }
@@ -182,7 +192,7 @@ mod tests {
         decoder.send_packet(data_packet(&[4])).unwrap();
 
         let frame = decoder.receive_frame().unwrap().unwrap();
-        assert_eq!(frame.pts(), MediaTime::ZERO);
+        assert_eq!(frame.pts(), Some(MediaTime::ZERO));
         assert!(decoder.receive_frame().unwrap().is_some());
         // Queue drained → Ok(None), the non-error EOS convention.
         assert!(decoder.receive_frame().unwrap().is_none());

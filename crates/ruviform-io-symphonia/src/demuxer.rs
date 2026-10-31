@@ -5,19 +5,39 @@
 //! enumerated once at construction into boundary [`StreamInfo`] values —
 //! [`Demuxer::streams`] then answers from the snapshot (the trait
 //! contract returns `&[StreamInfo]`, not a `Result`).
+//!
+//! Every reported value is a classified fact about the input: a missing
+//! backend time base is `Fact::NotDeclared` (never a substituted
+//! default), packet timestamps stay as raw ticks in the stream's own
+//! base with `Carried` provenance, and container identification comes
+//! from real magic bytes captured while probing.
 
-use ruviform_media_core::{MediaDuration, MediaTime, StreamDescriptor, StreamId, TimeBase};
+use std::collections::HashMap;
+
+use ruviform_media_core::{
+    Fact, MediaDuration, MediaTime, StreamDescriptor, StreamId, TickTimestamp, TimeBase,
+};
 use ruviform_media_io::{
-    CodecDescriptor, CodecFormat, Demuxer, Error, ErrorKind, Packet, PacketFlags, Result,
-    StreamInfo,
+    BackendInfo, CodecDescriptor, CodecFormat, ContainerInfo, Demuxer, Error, ErrorKind, Packet,
+    PacketFlags, Result, StreamFacts, StreamInfo, VideoStreamFacts,
 };
 use symphonia::core::codecs::CodecParameters;
 use symphonia::core::formats::{FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::units::Time;
 
-use crate::decoder::SymphoniaDecoder;
+use crate::decoder::{Mode, SymphoniaDecoder};
 use crate::error::map_error;
 use crate::map;
+
+/// Provenance of everything this backend reports through the boundary.
+///
+/// The version label is the backend library version pinned by this
+/// crate's dependency declaration — backend version reporting is
+/// recorded as a follow-up (the backend exposes no runtime query).
+pub(crate) const BACKEND_INFO: BackendInfo = BackendInfo {
+    name: "symphonia",
+    version: "0.6.1",
+};
 
 /// Media-I/O [`Demuxer`] backed by the backend's `FormatReader`.
 ///
@@ -29,14 +49,29 @@ pub struct SymphoniaDemuxer {
     reader: Box<dyn FormatReader>,
     /// Stream snapshot taken at probe time; `streams()` answers from it.
     streams: Vec<StreamInfo>,
+    /// Container identification from the probed header bytes.
+    container: ContainerInfo,
+    /// Next packet index per stream (decode order) — `Packet::index`.
+    indices: HashMap<u32, u64>,
 }
 
 impl SymphoniaDemuxer {
     /// Takes ownership of a probed backend reader and snapshots its
-    /// stream metadata.
-    pub(crate) fn new(reader: Box<dyn FormatReader>) -> Self {
-        let streams = reader.tracks().iter().map(stream_info).collect();
-        Self { reader, streams }
+    /// stream metadata; `container` was classified from the bytes the
+    /// probe itself read.
+    pub(crate) fn new(reader: Box<dyn FormatReader>, container: ContainerInfo) -> Self {
+        let streams = reader
+            .tracks()
+            .iter()
+            .enumerate()
+            .map(|(index, track)| stream_info(track, u32::try_from(index).unwrap_or(u32::MAX)))
+            .collect();
+        Self {
+            reader,
+            streams,
+            container,
+            indices: HashMap::new(),
+        }
     }
 
     /// Builds a decoder for the stream `id`, using the codec parameters
@@ -58,6 +93,31 @@ impl SymphoniaDemuxer {
     ///   error half of capability negotiation, alongside
     ///   [`crate::capabilities`]' `decode_codecs` query.
     pub fn make_decoder(&self, id: StreamId) -> Result<SymphoniaDecoder> {
+        self.make_decoder_in(id, Mode::Canonical)
+    }
+
+    /// Builds a *native-mode* decoder for the stream `id`: same pump
+    /// contract as [`make_decoder`](Self::make_decoder), but
+    /// `receive_frame` yields [`Frame::NativeAudio`] frames carrying
+    /// the decoder's native-scale samples (no `f32` normalization).
+    ///
+    /// This is the request half of the [`Features::NATIVE_AUDIO`]
+    /// capability.
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// [`Frame::NativeAudio`]: ruviform_media_io::Frame::NativeAudio
+    /// [`Features::NATIVE_AUDIO`]: ruviform_media_io::Features::NATIVE_AUDIO
+    ///
+    /// # Errors
+    ///
+    /// Same as [`make_decoder`](Self::make_decoder).
+    pub fn make_native_decoder(&self, id: StreamId) -> Result<SymphoniaDecoder> {
+        self.make_decoder_in(id, Mode::Native)
+    }
+
+    /// Shared decoder construction for both output modes.
+    fn make_decoder_in(&self, id: StreamId, mode: Mode) -> Result<SymphoniaDecoder> {
         let track = self
             .reader
             .tracks()
@@ -69,21 +129,37 @@ impl SymphoniaDemuxer {
             .as_ref()
             .and_then(CodecParameters::audio)
             .ok_or_else(|| Error::from_kind(ErrorKind::Unsupported))?;
-        SymphoniaDecoder::new(id, self.time_base_for(id), params)
+        SymphoniaDecoder::new(id, self.time_base_for(id), params, mode)
     }
 
-    /// The stream's time base as recorded at probe time — falls back to
-    /// the canonical 90 kHz base when the container carried none (the
-    /// same fallback `stream_info` applies).
-    fn time_base_for(&self, id: StreamId) -> TimeBase {
+    /// The stream's time base as recorded at probe time — `None` when
+    /// the container declared none. No fallback is applied: packets and
+    /// frames keep raw ticks, and the decoder marks timestamp output
+    /// `Estimated` instead of resolving against an invented base.
+    fn time_base_for(&self, id: StreamId) -> Option<TimeBase> {
         self.streams
             .iter()
             .find(|info| info.stream.id == id)
-            .map_or(TimeBase::COMMON_90K, |info| info.stream.time_base)
+            .and_then(|info| info.stream.time_base.value())
     }
 }
 
 impl Demuxer for SymphoniaDemuxer {
+    /// The container family identified from the header bytes the probe
+    /// read (see [`crate`]'s sniffing adapter).
+    ///
+    /// **RT contract:** non-RT only.
+    fn container(&self) -> &ContainerInfo {
+        &self.container
+    }
+
+    /// The backend identity behind every reported fact.
+    ///
+    /// **RT contract:** non-RT only.
+    fn backend_info(&self) -> BackendInfo {
+        BACKEND_INFO
+    }
+
     /// The streams enumerated at probe time.
     ///
     /// **RT contract:** non-RT only.
@@ -105,7 +181,7 @@ impl Demuxer for SymphoniaDemuxer {
     /// allocation.
     fn read_packet(&mut self) -> Result<Option<Packet>> {
         match self.reader.next_packet() {
-            Ok(Some(packet)) => Ok(Some(self.to_packet(packet))),
+            Ok(Some(packet)) => Ok(Some(self.boundary_packet(packet))),
             Ok(None) => Ok(None),
             Err(error) => Err(map_error(error)),
         }
@@ -145,19 +221,24 @@ impl Demuxer for SymphoniaDemuxer {
 impl SymphoniaDemuxer {
     /// Converts a backend packet into an owned boundary [`Packet`].
     ///
-    /// Timestamps land on the emitting track's time base as recorded at
-    /// probe time. `dur > i64::MAX` (unrepresentable in `MediaDuration`)
-    /// degrades to `None` — the field is optional by contract.
-    fn to_packet(&self, packet: symphonia::core::packet::Packet) -> Packet {
-        let stream = StreamId(packet.track_id);
-        let base = self.time_base_for(stream);
+    /// Timestamps stay as raw ticks in the emitting stream's time base
+    /// with `Carried` provenance — the backend hands demuxed values to
+    /// us unchanged. `dur == 0` means "not supplied" for the readers in
+    /// the default build and reports `None`; `trim_start`/`trim_end`
+    /// carry codec trim verbatim.
+    fn boundary_packet(&mut self, packet: symphonia::core::packet::Packet) -> Packet {
+        let stream = packet.track_id;
+        let counter = self.indices.entry(stream).or_insert(0);
+        let index = *counter;
+        *counter += 1;
         Packet {
-            stream,
-            pts: Some(MediaTime::new(packet.pts.get(), base)),
-            dts: Some(MediaTime::new(packet.dts.get(), base)),
-            duration: i64::try_from(packet.dur.get())
-                .ok()
-                .map(|value| MediaDuration::new(value, base)),
+            stream: StreamId(stream),
+            index,
+            pts: Some(TickTimestamp::carried(packet.pts.get())),
+            dts: Some(TickTimestamp::carried(packet.dts.get())),
+            duration: (packet.dur.get() != 0).then(|| packet.dur.get()),
+            trim_start: packet.trim_start.get(),
+            trim_end: packet.trim_end.get(),
             flags: PacketFlags::NONE,
             data: packet.data.into_vec(),
         }
@@ -168,15 +249,12 @@ impl SymphoniaDemuxer {
 ///
 /// The mapping is deliberately total — probe-time enumeration never
 /// fails. Unknown codecs → [`CodecId::Other`], non-audio or
-/// unrepresentable formats → `CodecFormat::Data`, missing time bases →
-/// the canonical 90 kHz fallback (packets without a container time base
-/// carry meaningless timestamps anyway), and unrepresentable durations
-/// → `None`.
-fn stream_info(track: &Track) -> StreamInfo {
+/// unrepresentable formats → `CodecFormat::Data`, a missing time base →
+/// `Fact::NotDeclared` (never a substituted default), and an
+/// unrepresentable duration → `None`.
+fn stream_info(track: &Track, index: u32) -> StreamInfo {
     let params = track.codec_params.as_ref();
-    let time_base = track
-        .time_base
-        .map_or(TimeBase::COMMON_90K, map::to_time_base);
+    let time_base = Fact::from_option(track.time_base.map(map::to_time_base));
     let format = match params {
         Some(CodecParameters::Audio(params)) => {
             map::audio_format(params).map_or(CodecFormat::Data, CodecFormat::Audio)
@@ -192,6 +270,30 @@ fn stream_info(track: &Track) -> StreamInfo {
             .map_or_else(Vec::new, <[u8]>::to_vec),
         _ => Vec::new(),
     };
+    let native_format = match params {
+        Some(CodecParameters::Audio(params)) => {
+            Fact::from_option(map::native_audio_format(params).map(CodecFormat::Audio))
+        }
+        _ => Fact::NotDeclared,
+    };
+    let codec = map::codec_id(params);
+    let decodable = if crate::capabilities().can_decode(codec) {
+        Fact::known(())
+    } else {
+        Fact::Unsupported
+    };
+    // ISOBMFF video tracks declare pixel dimensions on the codec
+    // parameters — honest declared facts. `nominal_frame_rate` stays
+    // `None`: MP4 stores per-sample durations (`stts`), not a declared
+    // frame rate — VFR survives via packet ticks instead.
+    let video = match params {
+        Some(CodecParameters::Video(params)) => Some(VideoStreamFacts {
+            width: params.width.map(u32::from),
+            height: params.height.map(u32::from),
+            nominal_frame_rate: None,
+        }),
+        _ => None,
+    };
     StreamInfo {
         stream: StreamDescriptor {
             id: StreamId(track.id),
@@ -200,12 +302,29 @@ fn stream_info(track: &Track) -> StreamInfo {
             duration: track
                 .duration
                 .and_then(|dur| i64::try_from(dur.get()).ok())
-                .map(|value| MediaDuration::new(value, time_base)),
+                .zip(time_base.value())
+                .map(|(value, base)| MediaDuration::new(value, base)),
         },
         codec: CodecDescriptor {
-            codec: map::codec_id(params),
+            codec,
             codec_private,
             format,
+            native_format,
+        },
+        facts: StreamFacts {
+            index,
+            // For this backend the track id *is* the container's own
+            // identifier — reported as the same value, not left empty.
+            container_id: Some(u64::from(track.id)),
+            // The backend does not expose a container codec tag.
+            codec_tag: None,
+            language: track.language.clone(),
+            start: Fact::known(track.start_ts.get()),
+            declared_units: Fact::from_option(track.num_frames),
+            leading_trim: track.delay,
+            trailing_trim: track.padding,
+            video,
+            decodable,
         },
     }
 }

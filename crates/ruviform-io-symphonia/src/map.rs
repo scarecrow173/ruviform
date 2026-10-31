@@ -11,7 +11,8 @@
 
 use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate, SpeakerMask};
 use ruviform_media_core::{StreamKind, TimeBase};
-use ruviform_media_io::CodecId;
+use ruviform_media_io::{CodecId, ContainerDetail, ContainerFormat, ContainerInfo};
+use symphonia::core::audio::sample::SampleFormat as BackendSampleFormat;
 use symphonia::core::audio::{Channels, Position};
 use symphonia::core::codecs::CodecParameters;
 use symphonia::core::codecs::audio::well_known as audio_id;
@@ -277,6 +278,150 @@ fn custom_layout_for_count(count: usize) -> Option<ChannelLayout> {
     }
     let mask = SpeakerMask::from_bits(((1u32 << count) - 1) << 8);
     ChannelLayout::custom(mask).ok()
+}
+
+/// Maps a backend [`SampleFormat`] to the boundary [`SampleFormat`].
+///
+/// The mapping is total: the boundary registry names every encoding the
+/// backend can decode to, so a declared backend format always yields a
+/// boundary value (an *absent* declaration is `Option<SampleFormat>` at
+/// the call site, not `None` here).
+pub(crate) fn sample_format(format: BackendSampleFormat) -> SampleFormat {
+    match format {
+        BackendSampleFormat::U8 => SampleFormat::U8,
+        BackendSampleFormat::U16 => SampleFormat::U16,
+        BackendSampleFormat::U24 => SampleFormat::U24,
+        BackendSampleFormat::U32 => SampleFormat::U32,
+        BackendSampleFormat::S8 => SampleFormat::S8,
+        BackendSampleFormat::S16 => SampleFormat::S16,
+        BackendSampleFormat::S24 => SampleFormat::S24,
+        BackendSampleFormat::S32 => SampleFormat::S32,
+        BackendSampleFormat::F32 => SampleFormat::F32,
+        BackendSampleFormat::F64 => SampleFormat::F64,
+    }
+}
+
+/// The backend's native audio decode format for a track's codec
+/// parameters — what the decoder emits before any canonical conversion.
+///
+/// `None` when the parameters do not declare all of rate/layout/format —
+/// the caller reports `Fact::NotDeclared` rather than guessing (e.g. a
+/// codec whose decoded format is not fixed at parameter level).
+pub(crate) fn native_audio_format(params: &AudioCodecParameters) -> Option<AudioFormat> {
+    let rate = params.sample_rate?;
+    let layout = channel_layout(params.channels.as_ref()?)?.0;
+    let sample_format = declared_sample_format(params)?;
+    Some(AudioFormat {
+        sample_rate: SampleRate::new(rate).ok()?,
+        layout,
+        sample_format,
+    })
+}
+
+/// The declared decoded-sample encoding for an audio track.
+///
+/// The explicit `sample_format` parameter wins; when the container does
+/// not declare one, PCM-family codec IDs carry the wire encoding in
+/// their identity (`CODEC_ID_PCM_S16LE` decodes to `S16`, planar and
+/// endian variants alike). Non-PCM codecs without a declared format —
+/// and the A-law/µ-law companded encodings, whose decoded width the ID
+/// does not state — return `None`, never a guess.
+fn declared_sample_format(params: &AudioCodecParameters) -> Option<SampleFormat> {
+    if let Some(format) = params.sample_format {
+        return Some(sample_format(format));
+    }
+    let format = match params.codec {
+        audio_id::CODEC_ID_PCM_S8 | audio_id::CODEC_ID_PCM_S8_PLANAR => SampleFormat::S8,
+        audio_id::CODEC_ID_PCM_U8 | audio_id::CODEC_ID_PCM_U8_PLANAR => SampleFormat::U8,
+        audio_id::CODEC_ID_PCM_S16LE
+        | audio_id::CODEC_ID_PCM_S16LE_PLANAR
+        | audio_id::CODEC_ID_PCM_S16BE
+        | audio_id::CODEC_ID_PCM_S16BE_PLANAR => SampleFormat::S16,
+        audio_id::CODEC_ID_PCM_U16LE
+        | audio_id::CODEC_ID_PCM_U16LE_PLANAR
+        | audio_id::CODEC_ID_PCM_U16BE
+        | audio_id::CODEC_ID_PCM_U16BE_PLANAR => SampleFormat::U16,
+        audio_id::CODEC_ID_PCM_S24LE
+        | audio_id::CODEC_ID_PCM_S24LE_PLANAR
+        | audio_id::CODEC_ID_PCM_S24BE
+        | audio_id::CODEC_ID_PCM_S24BE_PLANAR => SampleFormat::S24,
+        audio_id::CODEC_ID_PCM_U24LE
+        | audio_id::CODEC_ID_PCM_U24LE_PLANAR
+        | audio_id::CODEC_ID_PCM_U24BE
+        | audio_id::CODEC_ID_PCM_U24BE_PLANAR => SampleFormat::U24,
+        audio_id::CODEC_ID_PCM_S32LE
+        | audio_id::CODEC_ID_PCM_S32LE_PLANAR
+        | audio_id::CODEC_ID_PCM_S32BE
+        | audio_id::CODEC_ID_PCM_S32BE_PLANAR => SampleFormat::S32,
+        audio_id::CODEC_ID_PCM_U32LE
+        | audio_id::CODEC_ID_PCM_U32LE_PLANAR
+        | audio_id::CODEC_ID_PCM_U32BE
+        | audio_id::CODEC_ID_PCM_U32BE_PLANAR => SampleFormat::U32,
+        audio_id::CODEC_ID_PCM_F32LE
+        | audio_id::CODEC_ID_PCM_F32LE_PLANAR
+        | audio_id::CODEC_ID_PCM_F32BE
+        | audio_id::CODEC_ID_PCM_F32BE_PLANAR => SampleFormat::F32,
+        audio_id::CODEC_ID_PCM_F64LE
+        | audio_id::CODEC_ID_PCM_F64LE_PLANAR
+        | audio_id::CODEC_ID_PCM_F64BE
+        | audio_id::CODEC_ID_PCM_F64BE_PLANAR => SampleFormat::F64,
+        _ => return None,
+    };
+    Some(format)
+}
+
+/// Classifies the container family from the stream's leading bytes.
+///
+/// The backend's `FormatReader` does not expose which format won its
+/// probe, so identification happens here over the captured prefix:
+/// RIFF + form type, `ftyp` + brand list, EBML magic, `OggS` capture
+/// pattern and `fLaC` stream marker. A successful probe with an
+/// unrecognized prefix reports [`ContainerFormat::Other`].
+pub(crate) fn container_info(sniffed: &[u8]) -> ContainerInfo {
+    if sniffed.len() >= 12 && sniffed[..4] == *b"RIFF" {
+        let format = match &sniffed[8..12] {
+            b"WAVE" => ContainerFormat::Wav,
+            b"AVI " => ContainerFormat::Avi,
+            _ => ContainerFormat::Other,
+        };
+        return ContainerInfo {
+            format,
+            detail: None,
+        };
+    }
+    if sniffed.len() >= 4 && sniffed[..4] == *b"OggS" {
+        return ContainerInfo {
+            format: ContainerFormat::Ogg,
+            detail: None,
+        };
+    }
+    if sniffed.len() >= 4 && sniffed[..4] == *b"fLaC" {
+        return ContainerInfo {
+            format: ContainerFormat::Flac,
+            detail: None,
+        };
+    }
+    if sniffed.len() >= 4 && sniffed[..4] == [0x1A, 0x45, 0xDF, 0xA3] {
+        return ContainerInfo {
+            format: ContainerFormat::Matroska,
+            detail: None,
+        };
+    }
+    if sniffed.len() >= 16 && sniffed[4..8] == *b"ftyp" {
+        let major_brand = sniffed[8..12].try_into().unwrap_or([0; 4]);
+        let minor_version = u32::from_be_bytes(sniffed[12..16].try_into().unwrap_or([0; 4]));
+        let (brands, _) = sniffed[16..].as_chunks::<4>();
+        let compatible_brands = brands.to_vec();
+        return ContainerInfo {
+            format: ContainerFormat::Isobmff,
+            detail: Some(ContainerDetail::Isobmff {
+                major_brand,
+                minor_version,
+                compatible_brands,
+            }),
+        };
+    }
+    ContainerInfo::default()
 }
 
 #[cfg(test)]

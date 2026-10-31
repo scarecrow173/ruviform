@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
-# Phase 1 基盤クレート群（Issue #17 で仮置き ruviform-core を分割置換）+ video-proc（Issue #26 新設）+ media-io / io-symphonia（Issue #20 新設）+ audio-device adapter（Issue #23 新設）+ plugin-core / plugin-clap / plugin-vst3（Issue #29 新設）+ plugin-export（Issue #76 新設）+ edit（Issue #96 新設）。層内
-# 順序: Primitives 最下位（math・rt）→ Primitives（media-core・exec）→
+# Phase 1 基盤クレート群（Issue #17 で仮置き ruviform-core を分割置換）+ video-proc（Issue #26 新設）+ media-io / io-symphonia（Issue #20 新設）+ audio-device adapter（Issue #23 新設）+ plugin-core / plugin-clap / plugin-vst3（Issue #29 新設）+ plugin-export（Issue #76 新設）+ edit（Issue #96 新設）+ numeric（Issue #150 新設 — f64 オフライン数値・DSP）。層内
+# 順序: Primitives 最下位（math・numeric・rt）→ Primitives（media-core・exec）→
 # Domain foundations（audio-core・video-core → video-proc）→ メディア I/O 抽象境界（media-io）
 # → バックエンド PoC（io-symphonia）→ Adapters（audio-device）→ 拡張層（plugin-*）。実装状態: Issue #18 で
 # media-core・audio-core・video-core のデータモデル API、Issue #21 で rt・
@@ -15,6 +15,8 @@ resolver = "2"
 members = [
     "crates/ruviform-plugin-ofx",
     "crates/ruviform-math",
+    # f64 高精度オフライン数値・DSP プリミティブ（Issue #150 新設 — Primitives 最下位・std のみ）
+    "crates/ruviform-numeric",
     "crates/ruviform-rt",
     "crates/ruviform-exec",
     # 共有観測プリミティブ（Issue #101 候補・Issue #121 新設 — counter pair・L1 diagnostics が初消費者）
@@ -29,6 +31,8 @@ members = [
     "crates/ruviform-audio-analysis",
     "crates/ruviform-media-io",
     "crates/ruviform-io-symphonia",
+    # メディア I/O バックエンド（Issue #154 — AudioLens が消費する AVI/DIB・WAVEFORMATEX 入力を所有する pure-Rust demux/decode adapter）
+    "crates/ruviform-io-avi",
     # Adapters（ドメイン基盤の外側・engine と同じ利用側層。Issue #23 PoC で新設）
     "crates/ruviform-audio-device",
     # 拡張層（規格中立のプラグイン基盤。Issue #29 PoC で新設）

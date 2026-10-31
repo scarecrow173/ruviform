@@ -235,7 +235,7 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
 
 層内順序（同層依存はこの順序で下位 → 上位方向のみ許容）:
 
-- Primitives: `ruviform-math`・`ruviform-rt`（最下位・相互依存なし）→ `ruviform-media-core`・`ruviform-exec`（`ruviform-exec` ↔ `ruviform-media-core` は相互依存禁止）。
+- Primitives: `ruviform-math`・`ruviform-numeric`・`ruviform-rt`（最下位・相互依存なし）→ `ruviform-media-core`・`ruviform-exec`（`ruviform-exec` ↔ `ruviform-media-core` は相互依存禁止）。
 - Domain foundations: `ruviform-audio-core`・`ruviform-video-core`（データ型）→ `ruviform-dsp`・`ruviform-video-proc`・`ruviform-media-io`（処理・境界。同順位同士の相互依存は禁止）→ `ruviform-audio-analysis`（`ruviform-audio-core`・`ruviform-dsp` に依存可）。
 - Engines: `ruviform-audio` ↔ `ruviform-video` の相互依存は禁止。A/V 同期は `ruviform-rt`・`ruviform-media-core` の共有時刻型経由で行う。
 - 拡張層: `ruviform-plugin-core` → `ruviform-plugin-host`・`ruviform-plugin-export` → `ruviform-plugin-clap`・`ruviform-plugin-vst3`。`ruviform-ui` → `ruviform-ui-webview`（ポート定義元への adapter 依存）。plugin 系と ui 系の相互依存は禁止（プラグイン GUI 統合は利用側で配線する）。
@@ -257,6 +257,7 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
 | クレート | 責務／非責務 | 公開 API の境界 | 依存可能なレイヤー | RT 制約 |
 | --- | --- | --- | --- | --- |
 | `ruviform-math` | 数値演算・ベクトル・SIMD カーネル、CPU feature detection、数値ユーティリティ。メディア固有概念・I/O・スレッドを持たない | プリミティブな数値型・カーネル関数のみ。SIMD バックエンドクレートの型は公開 API に出さない | なし（std のみ。安全 SIMD クレート等の外部依存は実装詳細） | 全公開関数を alloc なし・有界の RT 適合設計とする（RT 契約の適用対象） |
+| `ruviform-numeric` | 高精度 `f64` オフライン数値・DSP プリミティブ（FFT・Real FFT・窓・ベクトル・polyphase リサンプラ・畳込み・最小二乗、Issue #150）。メディア固有概念・I/O・スレッドを持たず、`f32` への暗黙ダウングレードを持たない | `f64` 専用の plan/workspace 分離カーネル API・`Result` 検証付きプリミティブのみ。SIMD バックエンドクレートの型は公開 API に出さない | なし（std のみ。安全 SIMD クレート等の外部依存は実装詳細） | plan・係数表構築は非 RT（確保あり）。明示した処理 API（transform/forward/inverse/resample_into/convolve/vec/fill）は alloc なし・有界の RT 適合、それ以外は非 RT 専用を関数単位で明記 |
 | `ruviform-rt` | RT 契約の定義（`Processor` trait・`RtContext` capability・契約文書化の型）、RT-safe プリミティブ（SPSC リング、ドロップ退避、不変スナップショット交換、`MasterClock` 時刻共有、事前確保型の受け渡し構造）。スケジューリング・I/O は持たない | RT 契約型・lock-free/待機なしプリミティブのみ。外部同期クレート（rtrb 等）の型は露出しない | なし | 契約定義元。公開 API はすべて RT 適合（no-alloc・ノンブロッキング）または「非 RT 専用」の明示ラベル |
 | `ruviform-exec` | 非 RT 実行基盤：スレッドプール、ジョブ並列化、進捗・キャンセルトークン、バッチ駆動。RT プリミティブは持たない | スレッドプール・ジョブ・キャンセル API。OS スレッドの詳細は隠蔽 | Primitives（ruviform-math・ruviform-rt） | 非 RT 専用。RT パスからの呼び出しは契約違反 |
 | `ruviform-media-core` | 有理数時刻・タイムベース・PTS、ストリーム/フォーマット記述、メディア共通エラー型、タイムコード等の表示用変換、トランスポート状態の値型（再生状態・位置のスナップショット）。処理・I/O は持たない | 値型中心（コピー可能・alloc なし）の時刻・記述・エラー型 | Primitives（ruviform-math・ruviform-rt） | 値型のみ・RT 適合（変換は純粋関数） |
