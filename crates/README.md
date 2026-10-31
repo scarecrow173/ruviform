@@ -12,7 +12,7 @@ Ruviform ワークスペースのメンバークレート索引（計26クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-math`](ruviform-math/README.md) | SIMD dispatch カーネル層（`math::dsp`） |
-| [`ruviform-numeric`](ruviform-numeric/README.md) | 高精度 `f64` オフライン数値・DSP プリミティブ（`fft`/`window`/`vec`/`resample`/`conv`/`linalg`/`corr`、Issue #150・#152） |
+| [`ruviform-numeric`](ruviform-numeric/README.md) | 高精度 `f64` オフライン数値・DSP プリミティブ（`fft`/`window`/`vec`/`resample`/`conv`/`linalg`/`corr`/`stft`/`bands`/`xspec`、Issue #150・#152・#153） |
 | [`ruviform-rt`](ruviform-rt/README.md) | RT 基盤（`Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換） |
 | [`ruviform-media-core`](ruviform-media-core/README.md) | 規格中立メディアデータモデル（時間・transport・音楽時間・`Error`） |
 | [`ruviform-exec`](ruviform-exec/README.md) | 非 RT 実行基盤（スレッド優先度機構・`OfflineDriver`） |
