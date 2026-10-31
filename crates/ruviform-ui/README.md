@@ -20,7 +20,10 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
 - 有界バイナリ(`data` モジュール): 名前付き不変 `DataSource` を
   `DataRegistry` 経由で range pull。1 読出上限 `max_chunk`(既定 16 MiB)、
   未登録名・不正オフセット・traversal 名は拒否。大容量データを
-  JSON IPC に乗せないための境界。
+  JSON IPC に乗せないための境界。`rvf://data` の wire 契約
+  (`offset`/`len`・`X-Rvf-Total`・status 対応・paging loop 手順)は
+  [`ruviform-ui-webview` README](../ruviform-ui-webview/README.md)
+  の paging 契約節を参照。
   - 解放契約(Issue #171): `unregister(name)` で個別解放、
     `clear()` で全解放、`max_sources` 上限(LRU 追い出し)で
     連番名が増殖する長時間 session でも登録数を有界化できる
