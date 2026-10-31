@@ -17,6 +17,13 @@ Ruviform メディア基盤の非 RT 実行基盤: スレッド優先度機構�
   `Progress`・`CancellationToken`・有界キューのバックプレッシャを提供する。
   ベースラインの発行規則が許す `RtContext` mint サイトでもある
   （決定性保証は `offline` モジュールのドキュメント参照）。
+- 非同期ジョブ駆動（`job` モジュール、Issue #155）: `OfflineJob` が
+  1 ワーカースレッド上で操作本体を駆動し、`JobScope`（共有トークン +
+  `Progress`）・`JobState`/`JobEvent`（ポーリング + 有界イベントチャネルの
+  二系統観測）・`cancel`/`wait`/`detach` のライフサイクル制御を提供する
+  薄い接着層。`Progress` の同期リスナー（push 進捗）も本モジュールが
+  利用する。ジョブレジストリ・永続化・executor・exit code は持たない
+  （利用アプリ所有）。
 
 ## 層・許可依存
 
@@ -40,3 +47,4 @@ Ruviform メディア基盤の非 RT 実行基盤: スレッド優先度機構�
 - 設計ベースライン: docs/designs/ruviform-architecture-design-baseline.md（クレート表 A.2、「RT／非 RT の分離方式」）
 - RT 基盤実装 ADR: docs/adr/rt-foundation-primitives-implementation.md
 - Issue #24 オフライン実行ドライバ: docs/designs/offline-execution-driver.md, docs/adr/offline-determinism-scope.md
+- Issue #155 非同期ジョブ面・headless 利用境界: docs/designs/issue-155-headless-cli-foundation.md

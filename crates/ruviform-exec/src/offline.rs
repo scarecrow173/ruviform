@@ -57,13 +57,37 @@ impl CancellationToken {
     }
 }
 
-/// Shared progress counters updated by the driver per completed chunk.
+/// Shared progress counters updated per completed unit of work.
+///
+/// The counters are plain `Arc` atomics: the side that drives the work
+/// (an [`OfflineDriver`] run, or an arbitrary operation body running
+/// under an [`crate::job::OfflineJob`]) writes them, and any number of
+/// observers — a CLI progress printer, a GUI progress bar, a status
+/// poller — reads them concurrently through shared clones.
+///
+/// An optional [`listener`](Self::set_listener) is invoked synchronously
+/// after every counter mutation — from whichever thread performed the
+/// update (parallel driver workers included). It is the push-based half
+/// of progress delivery for event-stream consumers; listeners must be
+/// cheap and non-blocking because they run inside the driving thread's
+/// chunk loop.
 ///
 /// **RT contract:** non-RT only.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Progress {
     completed: Arc<AtomicU64>,
     total: Arc<AtomicU64>,
+    listener: Option<Arc<dyn Fn(u64, u64) + Send + Sync>>,
+}
+
+impl std::fmt::Debug for Progress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Progress")
+            .field("completed", &self.completed())
+            .field("total", &self.total())
+            .field("listener", &self.listener.is_some())
+            .finish()
+    }
 }
 
 impl Progress {
@@ -101,13 +125,63 @@ impl Progress {
         }
     }
 
-    fn reset(&self, total: u64) {
-        self.completed.store(0, Ordering::Relaxed);
-        self.total.store(total, Ordering::Relaxed);
+    /// Registers a listener invoked `(completed, total)` synchronously
+    /// after every counter mutation — [`bump`](Self::bump) and
+    /// [`reset`](Self::reset) included — on the thread that performed
+    /// the update.
+    ///
+    /// The listener is a field of this `Progress` value: setting one
+    /// replaces this copy's listener, and clones made afterwards share
+    /// it (the `Arc` is copied); clones made earlier are unaffected.
+    /// Listeners run inside the driving thread's work loop: they must
+    /// be cheap, non-blocking and must not re-enter the counters.
+    ///
+    /// **RT contract:** non-RT only.
+    pub fn set_listener(&mut self, listener: impl Fn(u64, u64) + Send + Sync + 'static) {
+        self.listener = Some(Arc::new(listener));
     }
 
-    fn bump(&self) {
+    /// Removes a listener installed by [`set_listener`](Self::set_listener).
+    ///
+    /// Only this handle's view is cleared: clones made earlier keep the
+    /// listener they already shared.
+    ///
+    /// **RT contract:** non-RT only.
+    pub fn clear_listener(&mut self) {
+        self.listener = None;
+    }
+
+    /// Resets the counters for a new phase of work: `completed` returns
+    /// to `0` and `total` becomes `total`. Called by the driver when a
+    /// run starts; also the public entry point for operation bodies
+    /// tracking their own phases (e.g. a decode phase inside an
+    /// [`crate::job::OfflineJob`] before handing chunks to the driver).
+    ///
+    /// `total == 0` is the honest indeterminate marker: `completed`
+    /// still accumulates while [`fraction`](Self::fraction) reports
+    /// `0.0`.
+    ///
+    /// **RT contract:** non-RT only.
+    pub fn reset(&self, total: u64) {
+        self.completed.store(0, Ordering::Relaxed);
+        self.total.store(total, Ordering::Relaxed);
+        self.emit();
+    }
+
+    /// Increments the completed counter by one finished unit of work.
+    ///
+    /// **RT contract:** non-RT only.
+    pub fn bump(&self) {
         self.completed.fetch_add(1, Ordering::Relaxed);
+        self.emit();
+    }
+
+    /// Invokes the listener with the current counters, when one is
+    /// installed.
+    fn emit(&self) {
+        if let Some(listener) = &self.listener {
+            listener(self.completed(), self.total());
+        }
     }
 }
 

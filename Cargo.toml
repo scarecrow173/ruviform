@@ -51,6 +51,8 @@ members = [
     # adapter 実装は非既定 `webview` feature ゲートで headless 検証経路を壊さない）
     "crates/ruviform-ui",
     "crates/ruviform-ui-webview",
+    # 利用側層サンプル（Issue #155 — GUI 非依存 CLI/headless 利用例。共有 headless サービスの外側アダプタ）
+    "crates/ruviform-cli-sample",
 ]
 
 [workspace.package]

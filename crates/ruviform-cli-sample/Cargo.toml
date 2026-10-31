@@ -1,0 +1,39 @@
+[package]
+name = "ruviform-cli-sample"
+description = "Issue #155 headless CLI usage sample — a minimal application adapter over the shared ruviform execution/media services (probe + offline run with JSON output, progress events and cancellation)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Shared headless service surface the sample adapts. The same set a GUI
+# adapter would call: non-RT execution (OfflineJob/OfflineDriver),
+# media-I/O boundary + the pure-Rust backends, and the kernel contract.
+ruviform-exec = { path = "../ruviform-exec" }
+ruviform-rt = { path = "../ruviform-rt" }
+ruviform-media-io = { path = "../ruviform-media-io" }
+ruviform-media-core = { path = "../ruviform-media-core" }
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+ruviform-io-avi = { path = "../ruviform-io-avi" }
+ruviform-io-symphonia = { path = "../ruviform-io-symphonia" }
+#
+# Application-owned adapter dependencies (Issue #155 decision: stdout /
+# stderr / exit codes / argument parsing belong to the consuming app —
+# these live in this crate only, never in the ruviform-* foundations).
+#   - clap: CLI argument parsing (derive API). Already in the workspace
+#     dependency tree via criterion; this is its first direct use.
+#   - serde_json: machine-readable report/error documents on stdout and
+#     JSONL progress events on stderr. No serde derive — the sample
+#     builds the document shape explicitly so the output schema is
+#     visible in code.
+#   - ctrlc: maps SIGINT/SIGBREAK onto job.cancellation — the optional
+#     Ctrl-C demonstration. Handlers run on a dedicated OS thread and
+#     only flip the token; process exit stays with main.
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+ctrlc = "3.4"
+
+[lints]
+workspace = true
