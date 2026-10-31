@@ -1,6 +1,6 @@
 # ruviform-numeric
 
-Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150・#152・#153・#167・#168）。
+Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150・#152・#153・#167・#168・#169）。
 用途非依存の FFT / Real FFT / 数値ベクトル / 窓関数 / polyphase リサンプラ /
 overlap-save 畳込み / 最小二乗 / 相関カーネル / 複素 STFT / 帯域フィルタ /
 スペクトル統計（Issue #152・#153）を提供する。メディア固有概念・I/O・スレッドは持たない。
@@ -34,6 +34,9 @@ overlap-save 畳込み / 最小二乗 / 相関カーネル / 複素 STFT / 帯�
   `bandpass`/`bandpass_many`）、`spectral_envelope`（#153）。
 - `xspec` — per-bin スペクトル統計（`csd`/`complex_coherence`/
   `transfer_h1`）と Welch 型蓄積器 `CrossSpectrum`（#153）。
+- `spec` — 単信号スペクトル形状統計（`centroid`/`bandwidth`/`rolloff`/
+  `flatness`/`entropy`/`flux`）と汎用統計（`ols_slope`/`median`/`argmax`、
+  #169）。`median` 以外は RT-suitable。
 - `error` — 検証エラー型 `Error`（`InvalidValue(&'static str)`、Copy）。
 
 ## 層・許可依存
