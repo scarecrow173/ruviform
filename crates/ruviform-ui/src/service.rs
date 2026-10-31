@@ -85,7 +85,11 @@ impl JobSpec {
 /// Progress is latest-wins: reports travel a bounded mailbox and may
 /// be dropped/coalesced under backpressure (mirroring the eval-push
 /// coalescing measured in `poc/ui`). Terminal outcomes are never
-/// dropped — return them from the job body.
+/// dropped — return them from the job body. Each report may carry an
+/// optional `detail` label (a stage name or the item being
+/// processed) via [`progress_detail`](Self::progress_detail), which
+/// the emitted `job` progress event exposes to the frontend
+/// (Issue #172).
 ///
 /// **RT contract:** non-RT only — worker threads.
 pub struct JobContext {
@@ -137,11 +141,38 @@ impl JobContext {
 
     /// Reports progress; latest-wins under backpressure (dropped, not
     /// queued, when the mailbox is full).
+    ///
+    /// The report carries no detail label — use
+    /// [`progress_detail`](Self::progress_detail) to attach one.
     pub fn progress(&self, done: u64, total: u64) {
+        self.report(done, total, None);
+    }
+
+    /// Reports progress with a per-update `detail` label — a stage
+    /// name, the item being processed, or any short human-readable
+    /// string the frontend can show next to the counters (Issue #172).
+    ///
+    /// The detail rides this single report: it is attached to the
+    /// emitted `job` progress event's optional `detail` field and
+    /// does not carry over to later reports. A job that wants a
+    /// persistent stage display passes the current stage name on
+    /// every report; a frontend showing "which stage is running"
+    /// keeps the detail from the most recent progress event that
+    /// carried one until a terminal `job` event arrives.
+    ///
+    /// Under backpressure the same latest-wins coalescing as
+    /// [`progress`](Self::progress) applies — the newest queued
+    /// report (and its detail) wins.
+    pub fn progress_detail(&self, done: u64, total: u64, detail: impl Into<String>) {
+        self.report(done, total, Some(detail.into()));
+    }
+
+    fn report(&self, done: u64, total: u64, detail: Option<String>) {
         let _ = self.progress_tx.try_send(JobSignal::Progress {
             job: self.job,
             done,
             total,
+            detail,
         });
     }
 
@@ -156,8 +187,17 @@ impl JobContext {
 /// Internal job→runtime signal.
 #[derive(Debug)]
 pub(crate) enum JobSignal {
-    Progress { job: u64, done: u64, total: u64 },
-    Finished { job: u64, result: JobResult },
+    Progress {
+        job: u64,
+        done: u64,
+        total: u64,
+        /// Per-report detail label (`None` for `progress()` reports).
+        detail: Option<String>,
+    },
+    Finished {
+        job: u64,
+        result: JobResult,
+    },
 }
 
 /// Terminal outcome of a job worker.

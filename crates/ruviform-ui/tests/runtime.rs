@@ -8,8 +8,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ruviform_ui::{
-    AssetSource, DataRegistry, DataRequest, DemoService, Event, HostEvent, JobState,
-    MapAssetSource, UiRuntime, VecDataSource, codes, dispatch_script, parse_intent, resolve_path,
+    AssetSource, CallOutcome, DataRegistry, DataRequest, DemoService, ErrorBody, Event, HostEvent,
+    JobSpec, JobState, MapAssetSource, OpInfo, Service, ServiceContext, UiRuntime, VecDataSource,
+    codes, dispatch_script, parse_intent, resolve_path,
 };
 use serde_json::{Value, json};
 
@@ -181,6 +182,132 @@ fn job_progress_finished_and_data_source_registered() {
     assert_eq!(chunk.total, bytes);
 }
 
+/// Minimal service exercising both progress report shapes
+/// (Issue #172): a job that ends on a detail-labelled report and a
+/// job that only sends detail-less reports.
+struct StageService;
+
+impl Service for StageService {
+    fn ops(&self) -> &'static [OpInfo] {
+        &[
+            OpInfo {
+                name: "test.stages",
+                summary: "Progress reports carrying a detail label",
+            },
+            OpInfo {
+                name: "test.plain",
+                summary: "Progress reports without a detail label",
+            },
+        ]
+    }
+
+    fn call(
+        &mut self,
+        op: &str,
+        _params: &Value,
+        _ctx: &mut ServiceContext<'_>,
+    ) -> Result<CallOutcome, ErrorBody> {
+        let spec = match op {
+            "test.stages" => JobSpec::new("test.stages", |ctx| {
+                ctx.progress(1, 2);
+                // The last progress report carries the stage label —
+                // latest-wins coalescing can never supersede it.
+                ctx.progress_detail(2, 2, "peaks");
+                Ok(json!({ "stages": 2 }))
+            }),
+            "test.plain" => JobSpec::new("test.plain", |ctx| {
+                ctx.progress(1, 1);
+                Ok(json!({ "plain": true }))
+            }),
+            _ => unreachable!("StageService registers only test.stages/test.plain"),
+        };
+        Ok(CallOutcome::Job(spec))
+    }
+}
+
+#[test]
+fn job_progress_detail_reaches_the_wire() {
+    let (mut rt, _) = rt();
+    rt.register_service(StageService)
+        .expect("stage service registration");
+
+    // The detail'd report is the job's last progress signal, so the
+    // drain emits it either standalone or in the terminal batch —
+    // deterministically observable.
+    let events = rt.dispatch_op("j", "test.stages", json!({}));
+    assert!(matches!(
+        events.as_slice(),
+        [Event::Result { ok: true, .. }]
+    ));
+    let all = wait_terminal(&mut rt, Duration::from_secs(10));
+    let detailed = all
+        .iter()
+        .filter_map(|e| match e {
+            Event::Job {
+                state: JobState::Progress,
+                detail,
+                ..
+            } => Some(detail.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        detailed.contains(&Some("peaks".to_string())),
+        "detail label did not reach a job progress event: {detailed:?}"
+    );
+    // The detail'd progress event precedes the terminal event.
+    let last_progress = all
+        .iter()
+        .rposition(|e| {
+            matches!(
+                e,
+                Event::Job {
+                    state: JobState::Progress,
+                    ..
+                }
+            )
+        })
+        .expect("no progress event");
+    let finished = all
+        .iter()
+        .position(|e| {
+            matches!(
+                e,
+                Event::Job {
+                    state: JobState::Finished,
+                    ..
+                }
+            )
+        })
+        .expect("job did not finish");
+    assert!(last_progress < finished);
+
+    // Detail-less reports keep emitting progress events with no
+    // detail — the pre-Issue-172 shape.
+    rt.dispatch_op("j2", "test.plain", json!({}));
+    let all = wait_terminal(&mut rt, Duration::from_secs(10));
+    let plain = all.iter().find_map(|e| match e {
+        Event::Job {
+            state: JobState::Progress,
+            detail,
+            ..
+        } => Some(detail.clone()),
+        _ => None,
+    });
+    assert_eq!(plain, Some(None), "plain reports must not carry detail");
+
+    // Wire shape: `detail` serializes when present and is absent
+    // (not null) for detail-less reports — additive rvf.ipc.v1 field.
+    let with: Value =
+        serde_json::from_str(&Event::job_progress_detail(7, 2, 2, Some("peaks")).to_json())
+            .unwrap();
+    assert_eq!(with["kind"], "job");
+    assert_eq!(with["state"], "progress");
+    assert_eq!(with["detail"], "peaks");
+    let without: Value = serde_json::from_str(&Event::job_progress(7, 2, 2).to_json()).unwrap();
+    assert!(without.get("detail").is_none());
+}
+
 #[test]
 fn job_cancel_reaches_terminal_state() {
     let (mut rt, _) = rt();
@@ -259,9 +386,9 @@ fn service_error_is_in_band() {
 #[test]
 fn reserved_ops_cannot_be_registered() {
     struct Bad;
-    impl ruviform_ui::Service for Bad {
-        fn ops(&self) -> &'static [ruviform_ui::OpInfo] {
-            &[ruviform_ui::OpInfo {
+    impl Service for Bad {
+        fn ops(&self) -> &'static [OpInfo] {
+            &[OpInfo {
                 name: "sys.evil",
                 summary: "x",
             }]
@@ -270,8 +397,8 @@ fn reserved_ops_cannot_be_registered() {
             &mut self,
             _op: &str,
             _params: &Value,
-            _ctx: &mut ruviform_ui::ServiceContext<'_>,
-        ) -> Result<ruviform_ui::CallOutcome, ruviform_ui::ErrorBody> {
+            _ctx: &mut ServiceContext<'_>,
+        ) -> Result<CallOutcome, ErrorBody> {
             unreachable!()
         }
     }
