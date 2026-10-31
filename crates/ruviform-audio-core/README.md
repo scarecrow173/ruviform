@@ -10,6 +10,9 @@ Issue #18 で確定・実装済みのデータモデル API とデバイス境�
 - 音声時間契約: `SampleRate`, `SampleIndex`
 - チャネルレイアウト・スピーカーマスク: `ChannelLayout`, `SpeakerMask`, `SpeakerMaskSet`
 - ストリームレベルフォーマット記述: `AudioFormat`, `SampleFormat`
+  （canonical `F32`/`F64` に加え、Issue #151 で native エンコーディング
+  `U8`/`U16`/`U24`/`U32`/`S8`/`S16`/`S24`/`S32` を追加 — codec が native に
+  デコードする実線フォーマットを同一 enum で表現）
 - チャネルメジャー連続プレーナ `AudioBuffer` と借用ビュー:
   `AudioBufferView`, `AudioBufferViewMut`, `BufferSpec`
 - チャネル独立プレーナ借用ビュー `PlanarBufferView` / `PlanarBufferViewMut` —
@@ -46,3 +49,4 @@ RT-suitable。アロケートするコンストラクタ（`AudioBuffer::new`,
 - 設計ベースライン: docs/designs/ruviform-architecture-design-baseline.md（クレート表 A.2、「音声データモデル」）
 - RT 契約 ADR: docs/adr/realtime-contract-and-verification-policy.md
 - デバイス境界ポート設計（Issue #23 PoC）: docs/designs/audio-device-boundary-and-poc.md
+- 観測事実・非破壊 PCM 契約（Issue #151）: docs/adr/media-observation-non-destructive-pcm.md

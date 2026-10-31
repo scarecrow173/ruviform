@@ -50,9 +50,9 @@
 //!   `ResetRequired`, which normalizes to [`ErrorKind::InvalidData`].
 //!   Re-enumerating streams mid-stream conflicts with the snapshot
 //!   `streams()` model and is deferred.
-//! - Gapless trim metadata (`trim_start`/`trim_end`) does not cross the
-//!   boundary yet, so the final Ogg/Vorbis frame may include encoder
-//!   padding samples (transport deferred by the spec).
+//! - Codec-level trim (`trim_start`/`trim_end`) crosses the boundary
+//!   on packets and stream facts, but applying it to canonical decoded
+//!   output is caller-side work — the decoder does not drop samples.
 //! - Unseekable sources are reported honestly via the adapter's
 //!   construction-time probe; `Demuxer::seek` then surfaces
 //!   [`ErrorKind::Unsupported`] per contract.
@@ -89,7 +89,7 @@ use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::meta::MetadataOptions;
 
 use crate::error::map_error;
-use crate::source::SourceAdapter;
+use crate::source::{Sniffed, SniffingSource, SourceAdapter};
 
 /// The crate version — for diagnostics and support matrices.
 ///
@@ -131,7 +131,9 @@ pub fn version() -> &'static str {
 #[must_use]
 pub fn capabilities() -> Capabilities {
     Capabilities {
-        functions: Features::DEMUX.union(Features::DECODE),
+        functions: Features::DEMUX
+            .union(Features::DECODE)
+            .union(Features::NATIVE_AUDIO),
         decode_codecs: vec![CodecId::Pcm, CodecId::Flac, CodecId::Vorbis],
         encode_codecs: Vec::new(),
     }
@@ -170,8 +172,12 @@ pub fn capabilities() -> Capabilities {
 /// assert!(result.is_err());
 /// ```
 pub fn open_demuxer(source: impl MediaSource + 'static) -> Result<SymphoniaDemuxer> {
+    let sniffed = std::sync::Arc::new(std::sync::Mutex::new(Sniffed::new()));
     let mss = MediaSourceStream::new(
-        Box::new(SourceAdapter::new(Box::new(source))),
+        Box::new(SniffingSource::new(
+            SourceAdapter::new(Box::new(source)),
+            sniffed.clone(),
+        )),
         MediaSourceStreamOptions::default(),
     );
     let reader = symphonia::default::get_probe()
@@ -182,7 +188,11 @@ pub fn open_demuxer(source: impl MediaSource + 'static) -> Result<SymphoniaDemux
             MetadataOptions::default(),
         )
         .map_err(map_error)?;
-    Ok(SymphoniaDemuxer::new(reader))
+    let container = sniffed
+        .lock()
+        .map(|sniffed| map::container_info(sniffed.prefix()))
+        .unwrap_or_default();
+    Ok(SymphoniaDemuxer::new(reader, container))
 }
 
 /// Requests a [`Muxer`] from this backend — always reports unsupported.

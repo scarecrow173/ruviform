@@ -52,6 +52,14 @@ impl Features {
     /// Frame → packet encoding — [`Encoder`](crate::Encoder) is
     /// provided.
     pub const ENCODE: Self = Self(0x8);
+    /// Native (non-canonical) audio decode — the backend can build
+    /// decoders that emit [`Frame::NativeAudio`](crate::Frame)
+    /// carrying [`NativeAudioFrame`](crate::NativeAudioFrame) values
+    /// instead of the canonical planar `f32` [`AudioFrame`]. Meaningful
+    /// only together with [`Features::DECODE`].
+    ///
+    /// [`AudioFrame`]: crate::AudioFrame
+    pub const NATIVE_AUDIO: Self = Self(0x10);
 
     /// The empty flag set — same value as [`Features::NONE`].
     ///
