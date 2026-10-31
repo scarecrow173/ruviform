@@ -1,6 +1,6 @@
 # ruviform-numeric
 
-Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150・#152・#153・#167）。
+Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150・#152・#153・#167・#168）。
 用途非依存の FFT / Real FFT / 数値ベクトル / 窓関数 / polyphase リサンプラ /
 overlap-save 畳込み / 最小二乗 / 相関カーネル / 複素 STFT / 帯域フィルタ /
 スペクトル統計（Issue #152・#153）を提供する。メディア固有概念・I/O・スレッドは持たない。
@@ -24,6 +24,9 @@ overlap-save 畳込み / 最小二乗 / 相関カーネル / 複素 STFT / 帯�
   NccValid・NccDirect の 3 mode）と、等長窓の両側 lag overlap 相関
   （`OverlapCorrPlan`/`OverlapCorrWorkspace`/`OverlapCurve`、Issue #152）。
   有効ラグ域のクランプ・正規化エネルギー証拠の返却を契約化する。
+  plan・コストモデルを介さない scalar 直算曲線 API
+  （`ncc_direct`/`overlap_ncc_direct` + `_into` 版、Issue #168）は
+  各ラグ値を `vec::corr0` と bit-exact に返す。
 - `stft` — 複素 STFT（`StftPlan`/`StftWorkspace`/`Stft`/`StftMatrix`）と
   派生行列（`power`/`magnitude`/two-sided `psd`）、移動平均 `envelope`（#153）。
 - `bands` — 1/3-octave 帯域エッジ（`third_octave_bands`）、帯域積分
