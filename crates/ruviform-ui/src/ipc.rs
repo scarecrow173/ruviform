@@ -116,7 +116,8 @@ pub struct Intent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobState {
-    /// Progress update (`done`/`total` fields present).
+    /// Progress update (`done`/`total` fields present; optional
+    /// per-report `detail` label may be attached).
     Progress,
     /// Completed successfully (`data` present).
     Finished,
@@ -180,6 +181,11 @@ pub enum Event {
         /// Total units (`state == Progress`).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         total: Option<u64>,
+        /// Per-report detail label (`state == Progress`; absent when
+        /// the report carried none — see
+        /// [`JobContext::progress_detail`](crate::service::JobContext::progress_detail)).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
         /// Result payload (`state == Finished`).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         data: Option<Value>,
@@ -240,11 +246,27 @@ impl Event {
     /// `job` progress event.
     #[must_use]
     pub fn job_progress(job: u64, done: u64, total: u64) -> Self {
+        Self::job_progress_detail(job, done, total, None::<String>)
+    }
+
+    /// `job` progress event carrying a per-report `detail` label.
+    ///
+    /// `detail` is serialized only when `Some` — the field is an
+    /// additive `rvf.ipc.v1` extension (Issue #172), so consumers
+    /// that predate it keep parsing detail-less events unchanged.
+    #[must_use]
+    pub fn job_progress_detail(
+        job: u64,
+        done: u64,
+        total: u64,
+        detail: Option<impl Into<String>>,
+    ) -> Self {
         Self::Job {
             job,
             state: JobState::Progress,
             done: Some(done),
             total: Some(total),
+            detail: detail.map(Into::into),
             data: None,
             error: None,
         }
@@ -258,6 +280,7 @@ impl Event {
             state: JobState::Finished,
             done: None,
             total: None,
+            detail: None,
             data: Some(data),
             error: None,
         }
@@ -271,6 +294,7 @@ impl Event {
             state: JobState::Failed,
             done: None,
             total: None,
+            detail: None,
             data: None,
             error: Some(error),
         }
@@ -284,6 +308,7 @@ impl Event {
             state: JobState::Cancelled,
             done: None,
             total: None,
+            detail: None,
             data: None,
             error: None,
         }

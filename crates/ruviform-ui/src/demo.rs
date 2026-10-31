@@ -144,11 +144,11 @@ fn sleep_job(ms: u64) -> JobSpec {
         let mut elapsed = 0u64;
         while elapsed < ms {
             ctx.check_cancel()?;
-            ctx.progress(elapsed, ms);
+            ctx.progress_detail(elapsed, ms, "sleeping");
             thread::sleep(Duration::from_millis(STEP_MS));
             elapsed += STEP_MS;
         }
-        ctx.progress(ms, ms);
+        ctx.progress_detail(ms, ms, "sleeping");
         Ok(json!({ "slept_ms": ms }))
     })
 }
@@ -183,11 +183,11 @@ fn synthesize_job(seconds: u64, rate: u64, frames: usize) -> JobSpec {
         while !worker.is_finished() {
             let total = progress.total();
             if total > 0 {
-                ctx.progress(progress.completed(), total);
+                ctx.progress_detail(progress.completed(), total, "peaks");
             }
             thread::sleep(Duration::from_millis(20));
         }
-        ctx.progress(progress.completed(), progress.total());
+        ctx.progress_detail(progress.completed(), progress.total(), "peaks");
         let chunks = worker
             .join()
             .map_err(|_| ErrorBody::new(codes::WORKER_FAILED, "peak worker panicked"))?

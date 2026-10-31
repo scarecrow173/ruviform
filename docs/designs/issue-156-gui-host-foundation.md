@@ -226,6 +226,12 @@ Rust → Frontend（Event。`evaluate_script` で `__rvf.dispatch` 呼び出し�
   安定した文字列集合（`malformed_message`/`message_too_large`/
   `unknown_op`/`invalid_params`/`service_error`/`worker_failed`/
   `cancelled`/`unavailable`）。非公開 detail を露出しない。
+- `job` の `state:"progress"` は optional の `detail` 文字列
+  （stage 名・処理中項目名）を添付できる（Issue #172）。worker は
+  `JobContext::progress_detail(done,total,detail)` で report 単位に
+  付与し、detail を持たない report ではキー自体を emit しない
+  （additive 拡張 — detail 非対応 consumer は従来どおり動作）。
+  latest-progress 合体では最新 report の detail が残る。
 - `notify` は seq 付き latest-wins の状態 push。PoC 実測どおり
   evaluate_script は高頻度で合体されるため、高頻度状態は
   「最新だけ意味を持つ差分」として設計し、大きな描画データは
