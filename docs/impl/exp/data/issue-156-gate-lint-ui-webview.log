@@ -1,0 +1,2 @@
+[lint-ui-webview] $ cargo clippy -p ruviform-ui-webview --all-targets --features webview -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s

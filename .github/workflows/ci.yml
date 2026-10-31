@@ -150,6 +150,55 @@ jobs:
       - name: Lint video-proc icc feature (mise run lint-video-proc-icc)
         run: mise run lint-video-proc-icc
 
+  # UI webview lane (Issue #156): the adapter's `webview` feature is
+  # non-default so the main workspace lanes stay headless; this job
+  # type-checks, lints and tests the feature-enabled surface
+  # (rvf:// scheme/data handlers are headless-testable — actual
+  # windowed runs are manual verification, like audio-device examples).
+  ui-verify:
+    name: ui-verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+
+      - name: Restore tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked
+
+      - name: Install WebKitGTK development headers (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-ui-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-ui-
+
+      - name: Type-check UI webview feature (mise run check-ui-webview)
+        run: mise run check-ui-webview
+
+      - name: Lint UI webview feature (mise run lint-ui-webview)
+        run: mise run lint-ui-webview
+
+      - name: Test UI webview feature (mise run test-ui-webview)
+        run: mise run test-ui-webview
+
   bench:
     name: bench
     runs-on: ubuntu-latest

@@ -129,6 +129,21 @@ run = "cargo test -p ruviform-video-proc --features icc"
 description = "Lint video-proc and its test targets with the icc feature enabled"
 run = "cargo clippy -p ruviform-video-proc --all-targets --features icc -- -D warnings"
 
+# UI webview lane (Issue #156): the adapter's implementation lives behind
+# the non-default `webview` feature so `cargo check --workspace` stays
+# headless; these tasks are the feature-enabled verification entry points.
+# On Linux they require `libwebkit2gtk-4.1-dev` + `libgtk-3-dev` system
+# packages (the `ui-verify` CI job installs them).
+[tasks.check-ui-webview]
+description = "Type-check the UI webview adapter and its examples with the webview feature enabled"
+run = "cargo check -p ruviform-ui-webview --features webview --all-targets"
+[tasks.lint-ui-webview]
+description = "Lint the UI webview adapter and its test/example targets with the webview feature enabled"
+run = "cargo clippy -p ruviform-ui-webview --all-targets --features webview -- -D warnings"
+[tasks.test-ui-webview]
+description = "Run webview-feature tests for the UI adapter (rvf:// scheme/data surface; windowed paths are manual verification)"
+run = "cargo test -p ruviform-ui-webview --features webview"
+
 [tasks.test-ofx]
 description = "Run OFX native host and fixture contract tests"
 run = "cargo test -p ruviform-plugin-ofx"
