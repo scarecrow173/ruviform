@@ -2,7 +2,7 @@
 //!
 //! 用途非依存の FFT / Real FFT / 数値ベクトル / 窓関数 / polyphase リサンプラ /
 //! overlap-save 畳込み / 最小二乗 / 複素 STFT / 帯域フィルタ / スペクトル統計
-//! （Issue #153）を提供する。メディア固有概念・I/O・スレッドは
+//! （Issue #153・#169）を提供する。メディア固有概念・I/O・スレッドは
 //! 持たず、依存は std のみ（Primitives 最下位）。
 //!
 //! # 精度契約
@@ -48,6 +48,7 @@ mod error;
 pub mod fft;
 pub mod linalg;
 pub mod resample;
+pub mod spec;
 pub mod stft;
 pub mod vec;
 pub mod window;
@@ -60,7 +61,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[cfg(test)]
 mod rt_tests {
-    use crate::{bands, conv, corr, fft, resample, stft, vec, window, xspec};
+    use crate::{bands, conv, corr, fft, resample, spec, stft, vec, window, xspec};
     use assert_no_alloc::assert_no_alloc;
 
     /// Issue #150 RT-verification lane: `AllocDisabler` swaps the lib
@@ -204,6 +205,16 @@ mod rt_tests {
             xspec::complex_coherence_into(&xs_re, &xs_re, &xs_re, &xs_re, &mut out_re, &mut out_im)
                 .unwrap();
             xspec::transfer_h1_into(&xs_re, &xs_re, &xs_re, &mut out_re, &mut out_im).unwrap();
+            // Issue #169 単信号スペクトル統計は alloc-free（`median` は
+            // 確保するため RT-suitable 群から除外）。
+            std::hint::black_box(spec::centroid(&xs_re, 1.0));
+            std::hint::black_box(spec::bandwidth(&xs_re, 1.0));
+            std::hint::black_box(spec::rolloff(&xs_re, 1.0, 0.85));
+            std::hint::black_box(spec::flatness(&xs_re));
+            std::hint::black_box(spec::entropy(&xs_re));
+            std::hint::black_box(spec::flux(&xs_re, &xs_re).unwrap());
+            std::hint::black_box(spec::ols_slope(&xs_re, &xs_re).unwrap());
+            std::hint::black_box(spec::argmax(&xs_re));
         });
     }
 }
