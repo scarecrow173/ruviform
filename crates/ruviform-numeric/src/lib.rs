@@ -12,7 +12,9 @@
 //!   `a*b+c` 形で統一する。結果は全プラットフォーム・全 ISA で bit-exact。
 //! - denormal は flush しない（FTZ/DAZ はエンジン側責務）。
 //! - NaN / Inf は IEEE どおり伝播させる。`corr0` は NaN を含むエネルギー縮退を
-//!   `0.0` へ写像する。`linalg` は非有限入力を `None` で拒否する。
+//!   `0.0` へ写像する。`linalg` は非有限入力を `None` で拒否するが、
+//!   `complex_solve` のみ移植元 `csolve` の失敗判定を維持するため非有限を
+//!   拒否せず IEEE 伝播させる。
 //!
 //! # FFT 規約
 //!
