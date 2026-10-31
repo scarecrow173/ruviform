@@ -298,8 +298,9 @@ impl UiRuntime {
     fn collect(&mut self, first: Option<JobSignal>) -> Vec<Event> {
         let mut events = Vec::new();
         // Latest progress per job within this drain batch (BTreeMap for
-        // deterministic ordering across drains).
-        let mut latest: BTreeMap<u64, (u64, u64)> = BTreeMap::new();
+        // deterministic ordering across drains). The per-report detail
+        // rides the same coalescing slot as its counters.
+        let mut latest: BTreeMap<u64, (u64, u64, Option<String>)> = BTreeMap::new();
         let mut pending = first;
         loop {
             let sig = match pending.take() {
@@ -308,12 +309,17 @@ impl UiRuntime {
             };
             let Some(sig) = sig else { break };
             match sig {
-                JobSignal::Progress { job, done, total } => {
-                    latest.insert(job, (done, total));
+                JobSignal::Progress {
+                    job,
+                    done,
+                    total,
+                    detail,
+                } => {
+                    latest.insert(job, (done, total, detail));
                 }
                 JobSignal::Finished { job, result } => {
-                    if let Some((d, t)) = latest.remove(&job) {
-                        events.push(Event::job_progress(job, d, t));
+                    if let Some((d, t, detail)) = latest.remove(&job) {
+                        events.push(Event::job_progress_detail(job, d, t, detail));
                     }
                     self.jobs.remove(&job);
                     events.push(match result {
@@ -328,8 +334,8 @@ impl UiRuntime {
                 }
             }
         }
-        for (job, (done, total)) in latest {
-            events.push(Event::job_progress(job, done, total));
+        for (job, (done, total, detail)) in latest {
+            events.push(Event::job_progress_detail(job, done, total, detail));
         }
         events
     }

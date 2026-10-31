@@ -13,6 +13,14 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
 - IPC v1(`ipc` モジュール): `rvf.ipc.v1` 版付き JSON エンベロープ。
   Intent(呼出)/即時 Result/Job 開始/進捗 Event/cancel/終端 Error/
   notification を `id` 相関で扱う。`sys.*` はランタイム組込み op 予約域。
+  - `state:"progress"` の `job` Event は optional の `detail`
+    文字列(stage 名・処理中項目名)を添付できる(Issue #172)。
+    `Service` job は `JobContext::progress_detail(done,total,detail)`
+    で report 単位に付与する。detail は per-report で後続 report に
+    持ち越されず、detail を持たない report は `detail` キー自体を
+    emit しない(additive 拡張 — detail 非対応の consumer は
+    従来どおり動作する)。latest-wins 合体では最新 report の
+    detail が残る。
 - サービス/ジョブ(`service`・`runtime` モジュール): `Service` trait +
   `UiRuntime` が intent 振り分け・ワーカースレッド実行・有界 job
   メールボックス(進捗は輻輳時 drop、終端信号は必達)・
