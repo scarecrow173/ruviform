@@ -1,0 +1,12 @@
+[lint] $ cargo clippy --workspace --all-targets -- -D warnings
+    Checking ruviform-plugin-ofx v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-plugin-ofx)
+    Checking ruviform-plugin-host v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-plugin-host)
+    Checking ruviform-plugin-vst3 v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-plugin-vst3)
+    Checking ruviform-plugin-export v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-plugin-export)
+    Checking ruviform-plugin-clap v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-plugin-clap)
+    Checking ruviform-cli-sample v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-cli-sample)
+    Checking ruviform-ui v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-ui)
+    Checking ruviform-audio v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-audio)
+    Checking ruviform-plugin-core v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-plugin-core)
+    Checking ruviform-media-io v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-media-io)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.34s

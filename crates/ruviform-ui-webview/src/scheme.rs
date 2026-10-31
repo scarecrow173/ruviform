@@ -7,8 +7,23 @@
 //! - `rvf://app/<path>` → [`AssetSource`] (`index.html` default,
 //!   extension MIME, path safety via `ruviform_ui::resolve_path`).
 //! - `rvf://data/<name>?offset=N&len=M` → [`DataRegistry`] bounded
-//!   read (`len` capped at `DataRegistry::max_chunk`,
-//!   `X-Rvf-Total` echoes the full length for paging).
+//!   read. Wire contract (the crate README carries the canonical
+//!   paging contract; the shape below is normative):
+//!   - `offset` defaults to 0; omitted `len` means "up to the cap".
+//!     Both must parse as `u64`; unknown query keys are ignored and
+//!     a pair without `=` is rejected.
+//!   - Body length = `min(len, total - offset, max_chunk)` — always
+//!     ≤ `DataRegistry::max_chunk` (default
+//!     [`ruviform_ui::DEFAULT_MAX_CHUNK`], 16 MiB). Oversized `len`
+//!     is silently truncated, so callers page by the *returned* byte
+//!     count, not the requested `len`.
+//!   - Success headers: `Content-Type: application/octet-stream`,
+//!     `Access-Control-Allow-Origin: *`, `Cache-Control: no-store`,
+//!     `X-Rvf-Total: <total>` (decimal full source length on every
+//!     200 — the paging loop's terminator).
+//!   - `offset == total` → 200 with an empty body (boundary-valid);
+//!     `offset > total` → 400. Malformed name/params → 400,
+//!     unregistered name → 404, source read failure → 500.
 //!
 //! Windows note: `WebView2` rewrites custom schemes to
 //! `http://rvf.app/...` — the handler strips an `rvf.` host prefix so
@@ -21,7 +36,7 @@ use std::sync::Arc;
 
 use http::{Request, Response};
 
-use ruviform_ui::{AssetSource, DataRegistry, DataRequest, mime_for, resolve_path};
+use ruviform_ui::{AssetSource, DataError, DataRegistry, DataRequest, mime_for, resolve_path};
 
 type CowBody = Cow<'static, [u8]>;
 
@@ -82,7 +97,17 @@ fn serve_data(data: &DataRegistry, raw_name: &str, query: Option<&str>) -> Respo
             .header("X-Rvf-Total", chunk.total.to_string())
             .body(Cow::Owned(chunk.bytes))
             .unwrap_or_else(|_| plain(500, "response build failed")),
-        Err(e) => plain(404, &e.to_string()),
+        Err(e) => {
+            // Status contract (design issue-156): client faults → 4xx,
+            // source failures → 500. `offset == total` is not an error
+            // — it returns 200 with an empty body.
+            let status = match e {
+                DataError::NotFound { .. } => 404,
+                DataError::OutOfRange { .. } => 400,
+                _ => 500,
+            };
+            plain(status, &e.to_string())
+        }
     }
 }
 
@@ -201,22 +226,53 @@ mod tests {
         assert_eq!(r.body().len(), 8);
         let r = serve(&a, &d, &get("rvf://data/demo/peaks?offset=60&len=100"));
         assert_eq!(r.body().len(), 4);
+
+        // offset == total is boundary-valid: 200 with an empty body.
+        let r = serve(&a, &d, &get("rvf://data/demo/peaks?offset=64"));
+        assert_eq!(r.status(), 200);
+        assert_eq!(r.body().len(), 0);
+        assert_eq!(r.headers()["X-Rvf-Total"], "64");
+    }
+
+    #[test]
+    fn data_unregister_and_eviction_yield_404() {
+        let (a, d) = fixture();
+        // Explicit release: the name stops resolving on the wire.
+        assert_eq!(
+            serve(&a, &d, &get("rvf://data/demo/peaks?offset=0&len=1")).status(),
+            200
+        );
+        assert!(d.unregister("demo/peaks"));
+        let r = serve(&a, &d, &get("rvf://data/demo/peaks?offset=0&len=1"));
+        assert_eq!(r.status(), 404);
+
+        // Bounded registry: an evicted name yields the same 404.
+        let bounded = DataRegistry::with_max_sources(1);
+        bounded.register("a", Arc::new(VecDataSource::new(vec![1u8; 4])));
+        bounded.register("b", Arc::new(VecDataSource::new(vec![2u8; 4])));
+        assert_eq!(serve(&a, &bounded, &get("rvf://data/a")).status(), 404);
+        assert_eq!(serve(&a, &bounded, &get("rvf://data/b")).status(), 200);
     }
 
     #[test]
     fn data_rejects_bad_requests() {
         let (a, d) = fixture();
+        // Client faults → 400: malformed params and out-of-range offset.
         for url in [
             "rvf://data/demo/peaks?offset=abc",
             "rvf://data/demo/peaks?offset=-1",
             "rvf://data/demo/peaks?offset=65", // beyond end
-            "rvf://data/missing?offset=0",
+            "rvf://data/demo/peaks?len=xyz",
+            "rvf://data/demo/peaks?boguspair",
             "rvf://data/a//b?offset=0",
             "rvf://data/../peaks?offset=0",
         ] {
             let r = serve(&a, &d, &get(url));
-            assert!(r.status().is_client_error(), "{url} must fail");
+            assert_eq!(r.status(), 400, "{url} must be a client error");
         }
+        // Unregistered name → 404.
+        let r = serve(&a, &d, &get("rvf://data/missing?offset=0"));
+        assert_eq!(r.status(), 404);
     }
 
     #[test]
