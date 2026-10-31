@@ -24,6 +24,12 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
   (`offset`/`len`・`X-Rvf-Total`・status 対応・paging loop 手順)は
   [`ruviform-ui-webview` README](../ruviform-ui-webview/README.md)
   の paging 契約節を参照。
+  - 解放契約(Issue #171): `unregister(name)` で個別解放、
+    `clear()` で全解放、`max_sources` 上限(LRU 追い出し)で
+    連番名が増殖する長時間 session でも登録数を有界化できる
+    (`with_max_sources`/`with_limits`)。解放・追い出し後の pull は
+    `NotFound`(wire 上は 404)。メモリは最後の `Arc` clone が
+    drop した時点で解放されるため、進行中の pull は完了する。
 - アセット(`assets` モジュール): `AssetSource` 抽象 +
   `MapAssetSource`。パストラバーサル・バックスラッシュ・制御文字を拒否。
 - JS ブリッジ(`bridge` モジュール): `BRIDGE_JS`(フロント側薄ラッパ)と

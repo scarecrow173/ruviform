@@ -351,6 +351,7 @@ impl UiRuntime {
             "ops": ops,
             "data": {
                 "max_chunk": self.data.max_chunk(),
+                "max_sources": self.data.max_sources(),
                 "sources": self.data.names(),
             },
             "jobs": { "running": self.jobs.len() },

@@ -1,0 +1,57 @@
+[build] $ cargo build --workspace
+   Compiling windows-sys v0.61.2
+   Compiling bytemuck v1.25.2
+   Compiling zerocopy v0.8.63
+   Compiling num-complex v0.4.6
+   Compiling syn v3.0.9
+   Compiling syn v2.0.119
+   Compiling clack-extensions v0.2.0
+   Compiling rustfft v6.4.1
+   Compiling ruviform-plugin-clap v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-plugin-clap)
+   Compiling anstyle-query v1.1.5
+   Compiling anstyle-wincon v3.0.11
+   Compiling ctrlc v3.5.2
+   Compiling anstream v1.0.0
+   Compiling audio_thread_priority v0.38.0
+   Compiling clap_builder v4.6.7
+   Compiling ruviform-exec v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-exec)
+   Compiling ruviform-viz v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-viz)
+   Compiling windows-interface v0.59.3
+   Compiling windows-implement v0.60.2
+   Compiling serde_derive v1.0.229
+   Compiling fearless_simd_macros v0.1.0
+   Compiling clap_derive v4.6.7
+   Compiling windows-core v0.62.2
+   Compiling ruviform-math v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-math)
+   Compiling windows-collections v0.3.2
+   Compiling windows-numerics v0.3.1
+   Compiling windows-future v0.3.2
+   Compiling ruviform-dsp v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-dsp)
+   Compiling ppv-lite86 v0.2.21
+   Compiling ruviform-audio-analysis v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-audio-analysis)
+   Compiling windows v0.62.2
+   Compiling clap v4.6.7
+   Compiling rand_chacha v0.3.1
+   Compiling symphonia-core v0.6.1
+   Compiling rand v0.8.8
+   Compiling serde v1.0.229
+   Compiling shared_memory v0.12.4
+   Compiling ruviform-plugin-host v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-plugin-host)
+   Compiling ruviform-plugin-export v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-plugin-export)
+   Compiling ruviform-ui v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-ui)
+   Compiling ruviform-ui-webview v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-ui-webview)
+   Compiling symphonia-metadata v0.6.1
+   Compiling symphonia-codec-pcm v0.6.1
+   Compiling symphonia-codec-adpcm v0.6.1
+   Compiling symphonia-common v0.6.1
+   Compiling symphonia-format-riff v0.6.1
+   Compiling symphonia-format-mkv v0.6.1
+   Compiling symphonia-codec-vorbis v0.6.1
+   Compiling symphonia-bundle-flac v0.6.1
+   Compiling symphonia-format-ogg v0.6.1
+   Compiling symphonia v0.6.1
+   Compiling ruviform-io-symphonia v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-io-symphonia)
+   Compiling ruviform-cli-sample v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-cli-sample)
+   Compiling cpal v0.18.2
+   Compiling ruviform-audio-device v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r171-registry-eviction\crates\ruviform-audio-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 22.44s

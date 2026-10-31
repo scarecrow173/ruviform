@@ -101,3 +101,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034O4mVSR9nSSp2IH0H53q` | Issue #118 video/NONRT L1 経路（wire v3・vshm・video runner・video() façade）— implementation | completed | [issue-118-video-l1-implementation.md](./issue-118-video-l1-implementation.md) |
 | `IMPL-034R167CmplxSlvImp1XyZ9` | Issue #167 complex_solve (複素線形ソルバ) implementation | completed | [issue-167-complex-solver-implementation.md](./issue-167-complex-solver-implementation.md) |
 | IMPL-034PqMkXQjnEVxWEUQBwFb | Issue #173 rvf://data paging contract documentation | completed | [issue-173-rvf-data-paging-contract-documentation.md](./issue-173-rvf-data-paging-contract-documentation.md) |
+| `IMPL-034R171DataRegEvct9XyZq` | Issue #171 DataRegistry eviction/unregister 契約の実装 | completed | [issue-171-data-registry-eviction-contract.md](./issue-171-data-registry-eviction-contract.md) |
