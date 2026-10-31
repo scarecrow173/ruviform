@@ -1,0 +1,41 @@
+=== 精度比較 (max |diff|) ===
+stft w=4096 h=2048: re 2.274e-13 im 2.274e-13
+stft w=4096 derived: power 3.492e-10 mag 2.274e-13 psd 2.429e-17
+stft w=2048 h=1024: re 1.137e-13 im 1.137e-13
+stft w=2048 derived: power 8.731e-11 mag 1.137e-13 psd 6.072e-18
+stft w=1500 h=500: re 1.137e-13 im 1.137e-13
+stft w=1500 derived: power 7.276e-11 mag 1.137e-13 psd 6.072e-18
+third_octave_bands: 0.000e0 (26 bands)
+band_power: 0.000e0
+csd: 0.000e0
+welch sums (vs mean*frames): 3.725e-9
+coherence (mean vs sum): 3.331e-16
+transfer_h1 (mean vs sum): 2.220e-16
+complex_coherence fn (mean): 0.000e0
+envelope: 0.000e0
+bandpass_many (26 bands): 8.882e-16
+BandFilter.band vs band_into: 8.882e-16
+spectral_envelope len=8192 fft=1024: 1.332e-15
+spectral_envelope len=4096 fft=1024: 1.332e-15
+
+=== 性能比較 (median us/call, release) ===
+stft 4096/2048 4s one-shot: al 5259.1 vs rf 5625.7 (x0.93)
+stft_into (plan reuse): rf 4519.0 (vs al x1.16)
+bandpass_many 2ch 26 bands 4s: al 125541.1 vs rf 163370.7 (x0.77)
+BandFilter 2ch band_into loop: al 140852.2 vs rf 152140.9 (x0.93)
+welch+h1+coh 92f: al 1295.0 vs rf 526.9 (x2.46)
+spectral_envelope 8k/1024/32: al 205.6 vs rf 208.8 (x0.98)
+band_gain shape 2ch 4s: al 14018.5 vs rf 13558.6 (x1.03)
+
+=== メモリ / alloc 比較 (count, bytes) ===
+al stft() call: +129 allocs, 3154400 B
+rf stft() call (plan+ws+matrix): +31 allocs, 3148448 B
+rf stft_into call (buffers prealloc): +0 allocs, 0 B
+rf StftPlan 77984 B / ws 0 B / matrix 2949120 B (memory_bytes)
+al BandFilter::new: +46 allocs, 20011456 B
+rf BandFilter::new: +46 allocs, 20011456 B
+rf BandFilter memory_bytes: 13984176 B
+al band() call: +1 allocs, 1536000 B
+rf band_into call: +0 allocs, 0 B
+rf CrossSpectrum::new(4096): +4 allocs, 131072 B
+rf accumulate call: +0 allocs, 0 B

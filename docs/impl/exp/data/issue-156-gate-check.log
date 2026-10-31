@@ -1,0 +1,3 @@
+[check] $ cargo check --workspace --all-targets
+    Checking ruviform-ui v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\r156-gui-host\crates\ruviform-ui)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.58s

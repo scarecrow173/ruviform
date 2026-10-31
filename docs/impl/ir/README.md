@@ -43,6 +43,7 @@ Directory: `docs/impl/ir`
 | IMPL-034IwXvs801LZXZlip1tZ6 | Rewrite README for Ruviform | completed | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
 | IMPL-034JywI99DQ33dDEZVnnqC | Run device PoC examples and record experiment log | completed | [run-device-poc-examples-and-record-experiment-log.md](./run-device-poc-examples-and-record-experiment-log.md) |
 | IMPL-034Ixn011MsolyFpmBB87l | Run placeholder sweep and verification | completed | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
+| IMPL-034PAk9mR2sNqT8vWxYz5dEhJb | Issue #156 GUI foundation implementation + real-machine verification | completed | [issue-156-gui-foundation-verification.md](./issue-156-gui-foundation-verification.md) |
 | IMPL-034Jy2QPH4SUwoep9wQBW2 | ruviform-rt 中核型の実装 | completed | [ruviform-rt.md](./ruviform-rt.md) |
 | IMPL-034J7u3ZaCkeiCc8zzuQwd | Small fixes from followup triage | completed | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | IMPL-034JyiwDR1vV3SDIxU8Ng3 | SPSC チャネルの実装 | completed | [spsc.md](./spsc.md) |

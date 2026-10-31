@@ -1,0 +1,2 @@
+[check-ui-webview] $ cargo check -p ruviform-ui-webview --features webview --all-targets
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.29s

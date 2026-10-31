@@ -1,0 +1,44 @@
+=== 精度比較: NCC (al-math vs ruviform, max |diff|) ===
+ncc L=4410 S=7938 (band_gain window 44.1k): max|d|=3.144e-17 argmax al=2865 rf=2865 rf_fft_len=8192
+ncc L=4800 S=8640 (band_gain window 48k): max|d|=2.776e-17 argmax al=3454 rf=3454 rf_fft_len=16384
+ncc L=4410 S=66150 (narrow anchor mid): max|d|=2.949e-17 argmax al=39281 rf=39281 rf_fft_len=131072
+ncc L=96000 S=100800 (narrow anchor big): max|d|=6.939e-18 argmax al=2326 rf=2326 rf_fft_len=131072
+ncc L=2205000 S=2205236 (band_ncc/full_ncc (direct)): max|d|=6.505e-18 argmax al=185 rf=185 rf_fft_len=0
+ncc L=551250 S=551309 (coarse_ncc (direct)): max|d|=5.638e-18 argmax al=37 rf=37 rf_fft_len=0
+ncc L=800 S=1438 (tiny 8kHz): max|d|=4.510e-17 argmax al=89 rf=89 rf_fft_len=2048
+
+=== 精度比較: GCC-PHAT ===
+phat L=4410 S=7938 (band_gain window): max|d|=3.816e-17 argmax al=1764 rf=1764 (true=1764)
+phat L=4800 S=8640 (48k): max|d|=1.110e-16 argmax al=1920 rf=1920 (true=1920)
+phat L=4410 S=66150 (narrow anchor mid): max|d|=1.887e-17 argmax al=30870 rf=30870 (true=30870)
+
+=== 精度比較: overlap_corr_curve ===
+overlap L=8192 max_lag=512 (reference lag_window/lag_max): max|d|=1.388e-17 argmax al=808 rf=808
+overlap L=1024 max_lag=128 (small window): max|d|=3.123e-17 argmax al=182 rf=182
+overlap L=300 max_lag=130 (non-pow2 window): max|d|=6.939e-17 argmax al=6 rf=6
+
+=== 性能比較: per-call 中央値 [us]（plan+ws は再利用）===
+ncc L=4410 S=7938: al 125.1 rf 165.6 ratio 1.32x (rf_fft_len=8192)
+ncc L=4800 S=8640: al 274.3 rf 357.3 ratio 1.30x (rf_fft_len=16384)
+ncc L=4410 S=66150: al 2869.8 rf 3694.4 ratio 1.29x (rf_fft_len=131072)
+ncc L=96000 S=100800: al 3050.8 rf 4025.6 ratio 1.32x (rf_fft_len=131072)
+ncc L=2205000 S=2205236: al 74128.1 rf 154565.9 ratio 2.09x (rf_fft_len=0)
+ncc L=551250 S=551309: al 7253.7 rf 10975.1 ratio 1.51x (rf_fft_len=0)
+ncc L=800 S=1438: al 28.5 rf 38.9 ratio 1.36x (rf_fft_len=2048)
+phat L=4410 S=7938: al 259.5 rf 380.9 ratio 1.47x
+phat L=4800 S=8640: al 263.2 rf 380.5 ratio 1.45x
+phat L=4410 S=66150: al 2704.4 rf 3748.1 ratio 1.39x
+overlap L=8192 max_lag=512: al 284.9 rf 352.8 ratio 1.24x
+overlap L=1024 max_lag=128: al 26.3 rf 38.7 ratio 1.47x
+overlap L=300 max_lag=130: al 12.2 rf 17.0 ratio 1.39x
+
+=== メモリ/alloc ===
+ws L=4410 S=7938: al 42allocs/783720B rf 39allocs/652160B | call-alloc al=0 rf=0 (rf_ws_bytes=354432)
+ws L=96000 S=100800: al 51allocs/12949816B rf 48allocs/10851120B | call-alloc al=0 rf=0 (rf_ws_bytes=6088752)
+ws L=2205000 S=2205236: al 5allocs/52927576B rf 3allocs/17645688B | call-alloc al=0 rf=0 (rf_ws_bytes=17645688)
+
+=== ルーティング検証: direct 実測 vs FFT 経路 ===
+L=800 S=840 K=41 n=1024: C_eff=3.2 t_direct=7.2us t_fft=53.1us chosen_fft_len=0
+L=800 S=1025 K=226 n=2048: C_eff=8.0 t_direct=35.6us t_fft=36.9us chosen_fft_len=2048
+L=800 S=1438 K=639 n=2048: C_eff=22.7 t_direct=105.1us t_fft=72.8us chosen_fft_len=2048
+L=2000 S=2040 K=41 n=2048: C_eff=3.6 t_direct=17.9us t_fft=72.2us chosen_fft_len=0

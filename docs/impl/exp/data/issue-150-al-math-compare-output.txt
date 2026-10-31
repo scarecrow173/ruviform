@@ -1,0 +1,49 @@
+=== 精度比較 (max |diff|) ===
+cfft fwd n=1024: re 5.684e-14 im 5.684e-14
+cfft roundtrip n=1024: re 1.110e-15 im 1.055e-15
+cfft fwd n=8192: re 2.676e-13 im 2.558e-13
+cfft roundtrip n=8192: re 1.110e-15 im 1.110e-15
+cfft fwd n=65536: re 3.638e-12 im 3.013e-12
+cfft roundtrip n=65536: re 1.554e-15 im 1.554e-15
+rfft fwd n=1024: re 5.684e-14 im 5.684e-14
+rfft inv n=1024: 6.661e-16
+rfft fwd n=8192: re 2.274e-13 im 1.705e-13
+rfft inv n=8192: 8.882e-16
+rfft fwd n=65536: re 3.638e-12 im 3.638e-12
+rfft inv n=65536: 9.992e-16
+dot: 4.846e-12
+sum_sq: 1.153e-8
+corr0: 1.068e-17
+rms: 6.994e-15
+scale: 0.000e0
+axpy: 2.220e-16
+sub_scaled: 4.441e-16
+mag_sq: 4.441e-16
+resample 48000->96000: 0.000e0
+resample 48000->44100: 0.000e0
+lstsq: x 1.110e-16 rms 8.674e-18
+conv: 1.865e-14
+
+=== 性能比較 (median us/call, release) ===
+cfft n=1024: al 5.8 vs rf 9.3 (x0.62)
+cfft n=16384: al 115.0 vs rf 201.3 (x0.57)
+cfft n=131072: al 1226.5 vs rf 1867.1 (x0.66)
+rfft fwd n=8192: al 30.5 vs rf 43.9 (x0.69)
+rfft fwd n=65536: al 331.7 vs rf 459.4 (x0.72)
+dot n=1048576: al 682.5 vs rf 1107.8 (x0.62)
+sum_sq n=1048576: al 250.5 vs rf 940.1 (x0.27)
+resample 48000->96000 48000f: al 10527.1 vs rf 5762.5 (x1.83)
+resample 48000->44100 48000f: al 5858.5 vs rf 3045.6 (x1.92)
+conv n=1M m=256: al 11561.3 vs rf 14399.3 (x0.80)
+lstsq m=256 n=4: al 28.0 vs rf 16.7 (x1.68)
+
+=== メモリ / alloc 比較 (count, bytes) ===
+al Fft::new(16384): +32 allocs, 666272 B
+rf FftPlan::new(16384): +32 allocs, 666272 B
+rf FftWorkspace::new: +1 allocs, 262656 B
+al transform 1st call (fresh thread): +1 allocs, 262656 B (TLS work)
+al transform 2nd call (same thread): +0 allocs, 0 B
+rf transform 1st call: +0 allocs, 0 B
+al resample 2nd call: +6 allocs, 770228 B
+rf resample_into call: +0 allocs, 0 B
+rf ResamplePlan table: 1040 B (memory_bytes)
