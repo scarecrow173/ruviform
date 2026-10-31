@@ -126,6 +126,16 @@ mod rt_tests {
             rplan.forward(&mut rws, &input, &mut sre, &mut sim).unwrap();
             rplan.inverse(&mut rws, &sre, &sim, &mut time).unwrap();
             rs.resample_into(&rin, &mut rout).unwrap();
+            // Issue #170: 正準パラメータ・stable ID の alloc-free 経路。
+            std::hint::black_box(rs.params());
+            std::hint::black_box(rs.params().output_len(100).unwrap());
+            std::hint::black_box(resample::ResampleParams::new(48000, 44100).unwrap());
+            std::hint::black_box(
+                resample::ResampleParams::from_stable_id(
+                    "rvf-resample/1/48000/96000/2/1/32/3fee147ae147ae14",
+                )
+                .unwrap(),
+            );
             cp.convolve(&mut cws, &cin, &mut cout).unwrap();
             let ncc = corr_full
                 .ncc(&mut corr_ws, &corr_tmpl, &corr_sig, 8)

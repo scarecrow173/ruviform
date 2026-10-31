@@ -13,7 +13,10 @@ overlap-save 畳込み / 最小二乗 / 相関カーネル / 複素 STFT / 帯�
   （`RealFftPlan`/`RealFftWorkspace`/`RealFft`）。plan + 呼び出し側所有
   workspace 方式で変換 API を RT-suitable にする。
 - `window` — `f64` 窓係数（`Window::{Rectangular,Hann,Hamming,Blackman}`）。
-- `resample` — polyphase Blackman-sinc リサンプラ（`ResamplePlan`）。
+- `resample` — polyphase Blackman-sinc リサンプラ（`ResamplePlan`）と、
+  変換の意味的同一性を表す正準パラメータ・stable ID（`ResampleParams`、
+  Issue #170・audio-lens #102 R4。永続スキーマ・cache 鍵向けの
+  バージョン化正準直列化）。
 - `conv` — 実数 FFT による overlap-save 畳込み（`ConvPlan`/`ConvWorkspace`/`conv`）。
 - `linalg` — Householder QR による ridge 付き最小二乗（`LeastSquares`・
   `least_squares`・`condition_number`）と、部分 pivot 選択付き Gaussian
