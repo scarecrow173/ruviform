@@ -40,6 +40,98 @@ composition でネイティブ面が常に最背面にならない制限があ�
 `wgpu` 面は別 adapter、小さな pull(~64 KiB)は JSON RTT より遅い
 (閾値以上のバルクのみ pull を使う)。
 
+## `rvf://data` paging 契約
+
+`DataRegistry` 登録済みの名前付きバイナリを frontend が範囲 pull
+する wire 契約(Issue #173)。大容量データを JSON IPC に乗せない
+3-path 境界の pull 側であり、以下は `scheme` モジュールの実装と
+1:1 に対応する(docs/designs/issue-156-gui-host-foundation.md の
+プロトコル節が上位仕様)。
+
+### リクエスト
+
+`rvf://data/<name>?offset=N&len=M`(Windows の WebView2 書換え形
+`http://rvf.data/<name>?...` も同じ解約を受ける)。
+
+| 要素 | 契約 |
+| --- | --- |
+| `<name>` | Rust 側が `DataRegistry::register` で発行した URI-safe slug。`/` 区切りの多セグメント可(`demo/peaks` 等)。handler は percent-decode しないため slug をそのまま使う。空セグメント・`..` セグメントは拒否。frontend から新規ソースは開けない |
+| `offset` | 省略時 `0`。`u64` の非負整数でなければ 400 |
+| `len` | 省略時「cap まで」。`u64` の非負整数でなければ 400。実返却長は `min(len, total - offset, max_chunk)` で**要求より短くなり得る** |
+| その他 query key | 無視。`=` を含まない pair は malformed で 400 |
+
+### レスポンス
+
+成功(200)の header:
+
+| header | 値 |
+| --- | --- |
+| `Content-Type` | `application/octet-stream` |
+| `Access-Control-Allow-Origin` | `*` |
+| `Cache-Control` | `no-store` |
+| `X-Rvf-Total` | ソース全長(バイト・10 進文字列)。**全 200 応答に付く — 全長はこの header で取得する** |
+
+エラー(status):
+
+| status | 条件 |
+| --- | --- |
+| 400 | name 検証拒否・`offset`/`len` の非数・負数・`=` なし pair・`offset > total` |
+| 404 | `<name>` が未登録(`DataError::NotFound`) |
+| 500 | 登録済みソースの read 失敗(`DataError::Read` 等) |
+
+`offset == total` は範囲外ではなく境界値 — 200 で空 body
+(`X-Rvf-Total` 付き)を返す。paging loop の正常終端到達点として
+扱える。
+
+### per-request cap
+
+1 リクエストの返却上限は `DataRegistry::max_chunk`。既定値は
+`ruviform_ui::DEFAULT_MAX_CHUNK` = **16 MiB**(16 × 1024 × 1024)で、
+アプリ側が `DataRegistry::with_max_chunk` で変更する。根拠は
+「webview 境界をまたぐ単発転送の応答・メモリ常駐を抑え、進捗可
+観測なチャンク列に分割する」pull 設計(PoC 実測 pull ~94–146
+MB/s)であり、全量一括レスポンスを意図的に提供しない。
+
+cap を超える `len` はエラーではなく黙って切詰められる — 実際に
+届いた量は常に返却 body 長で判断すること。cap の実値と登録済
+みソース一覧は `sys.capabilities` の `data.max_chunk` /
+`data.sources` で実行時に取得できる(frontend がハードコード
+せず済む)。
+
+### paging loop(frontend)
+
+全量が `max_chunk` を超える場合は `X-Rvf-Total` まで繰返し pull
+する。`offset` は要求した `len` ではなく**実返却バイト数**で進
+め、累積が `X-Rvf-Total` に達したら終了する。
+
+```js
+// __rvf.dataUrl(name, offset, len) は bridge が注入する URL 生成。
+async function pullAll(name) {
+  const caps = await __rvf.call('sys.capabilities');
+  const CHUNK = caps.data.max_chunk; // 実行時の実 cap(既定 16 MiB)
+  const parts = [];
+  let total = 0, offset = 0;
+  do {
+    const r = await fetch(__rvf.dataUrl(name, offset, CHUNK));
+    if (!r.ok) throw new Error(`rvf://data ${name}: HTTP ${r.status}`);
+    total = Number(r.headers.get('X-Rvf-Total'));
+    const chunk = new Uint8Array(await r.arrayBuffer());
+    parts.push(chunk);
+    offset += chunk.byteLength; // 実返却長で進める
+  } while (offset < total);
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of parts) { out.set(c, at); at += c.byteLength; }
+  return out;
+}
+```
+
+- `X-Rvf-Total` は全 200 応答に付くため、1 回目で全長を確定できる。
+- `DataSource` は登録後不変 — 同一 `<name>` の `total` は pull 途中
+  で変わらない(更新は別 name で公開される)。
+- 結果 event が既に byte 数を返す場合は `X-Rvf-Total` 確認を省略
+  できる — `examples/demo_app.html` の `pullPeaks` がその形。
+
 ## 層・許可依存
 
 - 層: Optional platform adapter(利用側層)。

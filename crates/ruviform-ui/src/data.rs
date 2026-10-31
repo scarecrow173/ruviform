@@ -11,6 +11,11 @@
 //! Names are URI-safe slugs chosen by Rust; the frontend cannot mint
 //! new sources — it can only read registered ones, within
 //! [`DataRegistry::max_chunk`].
+//!
+//! The wire-level paging contract (`offset`/`len` semantics, the
+//! `X-Rvf-Total` header, status mapping, and the frontend paging
+//! loop) lives in the serving adapter — see the `rvf://data` paging
+//! 契約 section of the `ruviform-ui-webview` README.
 
 use std::collections::BTreeMap;
 use std::error::Error;

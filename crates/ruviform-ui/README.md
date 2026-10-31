@@ -20,7 +20,10 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
 - 有界バイナリ(`data` モジュール): 名前付き不変 `DataSource` を
   `DataRegistry` 経由で range pull。1 読出上限 `max_chunk`(既定 16 MiB)、
   未登録名・不正オフセット・traversal 名は拒否。大容量データを
-  JSON IPC に乗せないための境界。
+  JSON IPC に乗せないための境界。`rvf://data` の wire 契約
+  (`offset`/`len`・`X-Rvf-Total`・status 対応・paging loop 手順)は
+  [`ruviform-ui-webview` README](../ruviform-ui-webview/README.md)
+  の paging 契約節を参照。
 - アセット(`assets` モジュール): `AssetSource` 抽象 +
   `MapAssetSource`。パストラバーサル・バックスラッシュ・制御文字を拒否。
 - JS ブリッジ(`bridge` モジュール): `BRIDGE_JS`(フロント側薄ラッパ)と
