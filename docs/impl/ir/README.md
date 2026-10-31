@@ -45,6 +45,7 @@ Directory: `docs/impl/ir`
 | IMPL-034Ixn011MsolyFpmBB87l | Run placeholder sweep and verification | completed | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
 | IMPL-034PAk9mR2sNqT8vWxYz5dEhJb | Issue #156 GUI foundation implementation + real-machine verification | completed | [issue-156-gui-foundation-verification.md](./issue-156-gui-foundation-verification.md) |
 | IMPL-034R157VizVerif1cat10nXyZ | Issue #157 viz primitives implementation + verification | completed | [issue-157-viz-primitives-verification.md](./issue-157-viz-primitives-verification.md) |
+| `IMPL-034Priac0A8rL49rDsjzUM` | Issue #168 scalar direct overlap-NCC curve API | in-progress | [issue-168-scalar-direct-overlap-ncc-curve-api.md](./issue-168-scalar-direct-overlap-ncc-curve-api.md) |
 | IMPL-034Jy2QPH4SUwoep9wQBW2 | ruviform-rt 中核型の実装 | completed | [ruviform-rt.md](./ruviform-rt.md) |
 | IMPL-034J7u3ZaCkeiCc8zzuQwd | Small fixes from followup triage | completed | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | IMPL-034JyiwDR1vV3SDIxU8Ng3 | SPSC チャネルの実装 | completed | [spsc.md](./spsc.md) |
