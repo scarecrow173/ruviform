@@ -48,6 +48,7 @@ Directory: `docs/impl/ir`
 | `IMPL-034Priac0A8rL49rDsjzUM` | Issue #168 scalar direct overlap-NCC curve API | completed | [issue-168-scalar-direct-overlap-ncc-curve-api.md](./issue-168-scalar-direct-overlap-ncc-curve-api.md) |
 | `IMPL-034PrGKUBVdoCZyyNagkd2` | Issue #172 job progress detail channel | completed | [issue-172-job-progress-detail-channel.md](./issue-172-job-progress-detail-channel.md) |
 | `IMPL-034R169SpecStatsPrimXy` | Issue #169 basic spectral statistics primitives | completed | [issue-169-spectral-statistics-primitives.md](./issue-169-spectral-statistics-primitives.md) |
+| IMPL-034PrM2BjKBhjGVsAarWhT | Issue #170 ResamplePlan stable parameter representation and ID | completed | [issue-170-resampleplan-stable-parameter-representation-and-id.md](./issue-170-resampleplan-stable-parameter-representation-and-id.md) |
 | IMPL-034Jy2QPH4SUwoep9wQBW2 | ruviform-rt 中核型の実装 | completed | [ruviform-rt.md](./ruviform-rt.md) |
 | IMPL-034J7u3ZaCkeiCc8zzuQwd | Small fixes from followup triage | completed | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | IMPL-034JyiwDR1vV3SDIxU8Ng3 | SPSC チャネルの実装 | completed | [spsc.md](./spsc.md) |
