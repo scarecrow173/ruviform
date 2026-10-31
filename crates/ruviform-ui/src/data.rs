@@ -416,7 +416,11 @@ impl DataRegistry {
             });
         }
         let avail = total - req.offset;
-        let want = req.len.unwrap_or(avail).min(avail).min(self.limits.max_chunk);
+        let want = req
+            .len
+            .unwrap_or(avail)
+            .min(avail)
+            .min(self.limits.max_chunk);
         let mut buf = vec![
             0u8;
             usize::try_from(want).map_err(|_| DataError::Read {

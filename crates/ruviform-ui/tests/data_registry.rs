@@ -93,7 +93,10 @@ fn max_sources_evicts_least_recently_used() {
     registry.register("view/2", source(2, 8));
     registry.register("view/3", source(3, 8));
     // Oldest registration is evicted past the bound.
-    assert_eq!(registry.names(), vec!["view/2".to_string(), "view/3".to_string()]);
+    assert_eq!(
+        registry.names(),
+        vec!["view/2".to_string(), "view/3".to_string()]
+    );
     assert!(matches!(
         pull(&registry, "view/1"),
         Err(DataError::NotFound { .. })
@@ -103,7 +106,10 @@ fn max_sources_evicts_least_recently_used() {
     // "view/3" instead.
     pull(&registry, "view/2").unwrap();
     registry.register("view/4", source(4, 8));
-    assert_eq!(registry.names(), vec!["view/2".to_string(), "view/4".to_string()]);
+    assert_eq!(
+        registry.names(),
+        vec!["view/2".to_string(), "view/4".to_string()]
+    );
 }
 
 #[test]
@@ -114,7 +120,10 @@ fn reregister_counts_as_recent_use() {
     // Re-publishing "view/1" refreshes it, so "view/2" is evicted next.
     registry.register("view/1", source(9, 8));
     registry.register("view/3", source(3, 8));
-    assert_eq!(registry.names(), vec!["view/1".to_string(), "view/3".to_string()]);
+    assert_eq!(
+        registry.names(),
+        vec!["view/1".to_string(), "view/3".to_string()]
+    );
     // Replacement also serves the new payload.
     assert_eq!(pull(&registry, "view/1").unwrap(), vec![9u8; 8]);
 }
@@ -158,7 +167,11 @@ fn eviction_and_unregister_drop_the_registry_arc() {
     let held = registry.get("view/1").unwrap();
     assert_eq!(Arc::strong_count(&held), 2);
     registry.register("view/2", source(2, 8));
-    assert_eq!(Arc::strong_count(&held), 1, "evicted name's registry Arc is dropped");
+    assert_eq!(
+        Arc::strong_count(&held),
+        1,
+        "evicted name's registry Arc is dropped"
+    );
     let mut buf = [0u8; 8];
     assert_eq!(held.read(0, &mut buf).unwrap(), 8);
 
