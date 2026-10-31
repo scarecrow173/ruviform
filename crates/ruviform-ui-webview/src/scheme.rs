@@ -7,8 +7,23 @@
 //! - `rvf://app/<path>` → [`AssetSource`] (`index.html` default,
 //!   extension MIME, path safety via `ruviform_ui::resolve_path`).
 //! - `rvf://data/<name>?offset=N&len=M` → [`DataRegistry`] bounded
-//!   read (`len` capped at `DataRegistry::max_chunk`,
-//!   `X-Rvf-Total` echoes the full length for paging).
+//!   read. Wire contract (the crate README carries the canonical
+//!   paging contract; the shape below is normative):
+//!   - `offset` defaults to 0; omitted `len` means "up to the cap".
+//!     Both must parse as `u64`; unknown query keys are ignored and
+//!     a pair without `=` is rejected.
+//!   - Body length = `min(len, total - offset, max_chunk)` — always
+//!     ≤ `DataRegistry::max_chunk` (default
+//!     [`ruviform_ui::DEFAULT_MAX_CHUNK`], 16 MiB). Oversized `len`
+//!     is silently truncated, so callers page by the *returned* byte
+//!     count, not the requested `len`.
+//!   - Success headers: `Content-Type: application/octet-stream`,
+//!     `Access-Control-Allow-Origin: *`, `Cache-Control: no-store`,
+//!     `X-Rvf-Total: <total>` (decimal full source length on every
+//!     200 — the paging loop's terminator).
+//!   - `offset == total` → 200 with an empty body (boundary-valid);
+//!     `offset > total` → 400. Malformed name/params → 400,
+//!     unregistered name → 404, source read failure → 500.
 //!
 //! Windows note: `WebView2` rewrites custom schemes to
 //! `http://rvf.app/...` — the handler strips an `rvf.` host prefix so
