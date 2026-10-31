@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計22クレート）。
+Ruviform ワークスペースのメンバークレート索引（計23クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -69,3 +69,4 @@ Ruviform ワークスペースのメンバークレート索引（計22クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-edit`](ruviform-edit/README.md) | NLE 非破壊編集データモデル + 評価射影（全 API 非 RT） |
+| [`ruviform-cli-sample`](ruviform-cli-sample/README.md) | Issue #155 headless CLI 利用例 — 共有実行サービスの外側アダプタ（probe + オフライン run・JSON/JSONL・Ctrl-C cancel） |

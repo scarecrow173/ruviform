@@ -45,6 +45,8 @@ members = [
     "crates/ruviform-audio",
     # 利用側層（Issue #96 — NLE 非破壊編集データモデル + 評価射影。engine 同順位・全 API 非 RT）
     "crates/ruviform-edit",
+    # 利用側層サンプル（Issue #155 — GUI 非依存 CLI/headless 利用例。共有 headless サービスの外側アダプタ）
+    "crates/ruviform-cli-sample",
 ]
 
 [workspace.package]
