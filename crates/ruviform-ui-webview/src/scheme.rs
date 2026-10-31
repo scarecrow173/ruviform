@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use http::{Request, Response};
 
-use ruviform_ui::{AssetSource, DataRegistry, DataRequest, mime_for, resolve_path};
+use ruviform_ui::{AssetSource, DataError, DataRegistry, DataRequest, mime_for, resolve_path};
 
 type CowBody = Cow<'static, [u8]>;
 
@@ -82,7 +82,17 @@ fn serve_data(data: &DataRegistry, raw_name: &str, query: Option<&str>) -> Respo
             .header("X-Rvf-Total", chunk.total.to_string())
             .body(Cow::Owned(chunk.bytes))
             .unwrap_or_else(|_| plain(500, "response build failed")),
-        Err(e) => plain(404, &e.to_string()),
+        Err(e) => {
+            // Status contract (design issue-156): client faults → 4xx,
+            // source failures → 500. `offset == total` is not an error
+            // — it returns 200 with an empty body.
+            let status = match e {
+                DataError::NotFound { .. } => 404,
+                DataError::OutOfRange { .. } => 400,
+                _ => 500,
+            };
+            plain(status, &e.to_string())
+        }
     }
 }
 
@@ -201,22 +211,33 @@ mod tests {
         assert_eq!(r.body().len(), 8);
         let r = serve(&a, &d, &get("rvf://data/demo/peaks?offset=60&len=100"));
         assert_eq!(r.body().len(), 4);
+
+        // offset == total is boundary-valid: 200 with an empty body.
+        let r = serve(&a, &d, &get("rvf://data/demo/peaks?offset=64"));
+        assert_eq!(r.status(), 200);
+        assert_eq!(r.body().len(), 0);
+        assert_eq!(r.headers()["X-Rvf-Total"], "64");
     }
 
     #[test]
     fn data_rejects_bad_requests() {
         let (a, d) = fixture();
+        // Client faults → 400: malformed params and out-of-range offset.
         for url in [
             "rvf://data/demo/peaks?offset=abc",
             "rvf://data/demo/peaks?offset=-1",
             "rvf://data/demo/peaks?offset=65", // beyond end
-            "rvf://data/missing?offset=0",
+            "rvf://data/demo/peaks?len=xyz",
+            "rvf://data/demo/peaks?boguspair",
             "rvf://data/a//b?offset=0",
             "rvf://data/../peaks?offset=0",
         ] {
             let r = serve(&a, &d, &get(url));
-            assert!(r.status().is_client_error(), "{url} must fail");
+            assert_eq!(r.status(), 400, "{url} must be a client error");
         }
+        // Unregistered name → 404.
+        let r = serve(&a, &d, &get("rvf://data/missing?offset=0"));
+        assert_eq!(r.status(), 404);
     }
 
     #[test]
