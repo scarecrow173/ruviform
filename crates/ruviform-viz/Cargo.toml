@@ -1,0 +1,34 @@
+[package]
+name = "ruviform-viz"
+description = "Generic interactive visualization primitives (waveform LOD, spectrogram/STFT, timeline axes) for Ruviform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# Dependency addition records (暫定規約「依存追加は理由を記録」):
+# - ruviform-media-core: 時間座標変換の共有語彙 `TimeBase`/`MediaTime`/
+#   `Rounding`（Primitives。sample↔seconds の正確な変換を既存契約で再利用。
+#   同等型の複製を避ける DRY 適用）。
+# - ruviform-numeric: f64 Real FFT / Window — スペクトログラム STFT の
+#   数値カーネル（Issue #150）。Issue #153 完成形に依存しない要件に従い
+#   Primitives 層の数値プリミティブを直接使う。
+# - ruviform-exec: `CancellationToken` — キャンセル可能なデータロードの
+#   取消し語彙（`ruviform-ui` の Job モデルと同一契約を再利用）。
+[dependencies]
+ruviform-media-core = { path = "../ruviform-media-core" }
+ruviform-numeric = { path = "../ruviform-numeric" }
+ruviform-exec = { path = "../ruviform-exec" }
+
+[dev-dependencies]
+# ベンチ計測（既存 ruviform-math / ruviform-rt と同じ criterion 構成。
+# lib 依存には昇格しない）。
+criterion = { version = "0.8.2", default-features = false }
+
+[[bench]]
+name = "viz"
+harness = false

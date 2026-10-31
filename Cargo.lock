@@ -2943,6 +2943,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-viz"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "ruviform-exec",
+ "ruviform-media-core",
+ "ruviform-numeric",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
