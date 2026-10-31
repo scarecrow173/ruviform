@@ -145,6 +145,13 @@ mod rt_tests {
             std::hint::black_box(valid_ncc.values);
             let oc = op.curve(&mut ows, &ox, &oy, 10).unwrap();
             std::hint::black_box((oc.values, oc.overlap_energy));
+            // Issue #168 直算曲線は workspace を持たない alloc-free API。
+            let mut direct_ncc = [0.0; 9];
+            corr::ncc_direct_into(&corr_tmpl[..8], &corr_sig[..16], 8, &mut direct_ncc).unwrap();
+            std::hint::black_box(direct_ncc);
+            let mut direct_overlap = [0.0; 9];
+            corr::overlap_ncc_direct_into(&ox, &oy, 4, &mut direct_overlap).unwrap();
+            std::hint::black_box(direct_overlap);
         });
     }
 

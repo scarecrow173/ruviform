@@ -8,12 +8,23 @@
 //! [`OverlapCorrPlan`] は等長窓の両側ラグ `−max_lag..=+max_lag` で
 //! overlap 区間の非中心化正規化相関（区間内 `corr0` と同一式）を返す。
 //!
+//! [`ncc_direct`] / [`overlap_ncc_direct`]（+ `_into` 版）は plan・
+//! workspace・コストモデルを介さない scalar 直算曲線 API（Issue #168）。
+//! 各ラグ値を `vec::corr0` と同一の逐次評価・同一式で求めるため、
+//! 呼出側の直算 `corr0` sweep と bit-exact に置換できる。plan 系 API は
+//! 形状・呼出ごとの仕事量で FFT 経路（FFT 分子・prefix 二乗和分母）を
+//! 選び得て、直算経路と FP 丸めが異なる — 数学的には同じ相関だが、
+//! 直算との bit-exact を契約する用途ではこちらを使う。
+//!
 //! # 規約
 //!
 //! - plan（不変・`&` 共有可能）/ workspace（`&mut` 排他・全バッファ事前確保）/
 //!   one-shot free fn の三層。カーブ系 API（`ncc`/`gcc_phat`/
 //!   `cross_correlation`/`curve`）は事前確保済み workspace のみで動く
 //!   **RT-suitable**。plan・workspace 構築と free fn は **non-RT**。
+//! - 直算曲線の `_into` 形（`ncc_direct_into`/`overlap_ncc_direct_into`）は
+//!   workspace を持たない **RT-suitable**（alloc なし・有界）。`Vec` 返却の
+//!   one-shot 版は **non-RT**。
 //! - カーブは workspace 内バッファへの借用として返し、借用中は
 //!   `&mut workspace` が排他になる（再呼出しは型で禁止）。
 //! - `max_lag` は呼出時に plan の無汚染ラグ上限へクランプされる
@@ -943,6 +954,145 @@ pub fn overlap_corr_curve(x: &[f64], y: &[f64], max_lag: usize) -> Result<Vec<f6
     Ok(plan.curve(&mut workspace, x, y, max_lag)?.values.to_vec())
 }
 
+/// `ncc_direct(_into)` の出力長 `min(max_lag, S−L) + 1`。
+/// 退化 shape（`template_len == 0` または `signal_len < template_len`）では `0`。
+fn ncc_direct_len(template_len: usize, signal_len: usize, max_lag: usize) -> usize {
+    if template_len == 0 || signal_len < template_len {
+        0
+    } else {
+        (signal_len - template_len).min(max_lag) + 1
+    }
+}
+
+/// `signal[k..k + template.len()]` との直算 NCC カーブを `out` に書き込む
+/// （Issue #168）。`out[k]` は `vec::corr0(template, &signal[k..k + L])` と
+/// bit-exact に等しい: 分子・分母とも `corr0` の `corr0_parts_seq` と同一の
+/// 逐次評価順（i 昇順に `sxy += t·w`、`ey += w²`）で累積し、正規化は
+/// `Σx² > 0 かつ Σy² > 0` のときのみ `sxy / (Σx²·Σy²).sqrt()` を適用する
+/// （中心化なし・縮退エネルギーは `corr0` と同じく `0.0`）。
+///
+/// [`CorrelationPlan`] 系は形状に応じて FFT 分子・prefix 二乗和分母の経路を
+/// 選び得るため、`corr0` との bit-exact を契約する用途（audio-lens #102 の
+/// 直算 `corr0` sweep 置換）では plan を介さない本 API を使う。
+///
+/// `out.len()` は `min(max_lag, S−L) + 1`（[`CorrelationPlan::ncc`] と同じ
+/// クランプ規約。退化 shape では `0`）でなければならない。
+///
+/// **RT 契約:** RT-suitable — alloc なし・有界。plan・workspace を持たない。
+///
+/// # Errors
+///
+/// `out.len()` が `min(max_lag, S−L) + 1` と異なれば
+/// `Error::InvalidValue("length")`。
+pub fn ncc_direct_into(
+    template: &[f64],
+    signal: &[f64],
+    max_lag: usize,
+    out: &mut [f64],
+) -> Result<()> {
+    if out.len() != ncc_direct_len(template.len(), signal.len(), max_lag) {
+        return Err(Error::InvalidValue("length"));
+    }
+    let len = template.len();
+    // Σ template² は全ラグで同一値。`corr0_parts_seq` の `ex` 累積と同一の
+    // 逐次評価（i 昇順の `+= t²`）なのでホイストしても bit-exact。
+    let template_energy = sum_sq_seq(template);
+    for (k, out) in out.iter_mut().enumerate() {
+        // 各累積子の評価順は `corr0_parts_seq` と同一（`sxy` は `t[i]·w[i]`、
+        // `ey` は `w[i]²` を i 昇順に加算）のため、戻り値は
+        // `vec::corr0(template, &signal[k..k + len])` と bit-exact。
+        let mut sxy = 0.0;
+        let mut window_energy = 0.0;
+        for (&t, &w) in template.iter().zip(&signal[k..k + len]) {
+            sxy += t * w;
+            window_energy += w * w;
+        }
+        *out = if template_energy > 0.0 && window_energy > 0.0 {
+            sxy / (template_energy * window_energy).sqrt()
+        } else {
+            0.0
+        };
+    }
+    Ok(())
+}
+
+/// [`ncc_direct_into`] の one-shot 版。`min(max_lag, S−L) + 1` の直算
+/// NCC カーブを返す（退化 shape では空）。
+///
+/// **RT 契約:** non-RT only — 出力を確保する。
+///
+/// # Errors
+///
+/// なし（`out` を内部で正しい長さに確保する）。
+pub fn ncc_direct(template: &[f64], signal: &[f64], max_lag: usize) -> Result<Vec<f64>> {
+    let mut out = vec![0.0; ncc_direct_len(template.len(), signal.len(), max_lag)];
+    ncc_direct_into(template, signal, max_lag, &mut out)?;
+    Ok(out)
+}
+
+/// 等長窓 `x`/`y` の両側 lag 直算 NCC カーブを `out` に書き込む
+/// （Issue #168）。`out[i]` は `lag = i − max_lag` の overlap 区間
+/// `L−|lag|` 上の `vec::corr0` と bit-exact に等しい（`lag ≥ 0` は
+/// `corr0(x[..L−lag], y[lag..])`、`lag < 0` は `corr0(x[|lag|..], y[..L−|lag|])`、
+/// `|lag| ≥ L` は `0.0`）。評価は [`OverlapCorrPlan`] の direct 経路カーネル
+/// `overlap_direct` と同一だが、本 API はコストモデルで FFT 経路へ
+/// 切り替わらず常に直算で評価する。
+///
+/// `out.len()` は `2·max_lag + 1` でなければならない。
+///
+/// **RT 契約:** RT-suitable — alloc なし・有界。plan・workspace を持たない。
+///
+/// # Errors
+///
+/// `x`/`y` が等長でなければ `Error::InvalidValue("y")`、
+/// `2·max_lag + 1` が overflow すれば `Error::InvalidValue("max_lag")`、
+/// `out.len()` が `2·max_lag + 1` と異なれば `Error::InvalidValue("length")`。
+pub fn overlap_ncc_direct_into(
+    x: &[f64],
+    y: &[f64],
+    max_lag: usize,
+    out: &mut [f64],
+) -> Result<()> {
+    if x.len() != y.len() {
+        return Err(Error::InvalidValue("y"));
+    }
+    let out_len = max_lag
+        .checked_mul(2)
+        .and_then(|v| v.checked_add(1))
+        .ok_or(Error::InvalidValue("max_lag"))?;
+    if out.len() != out_len {
+        return Err(Error::InvalidValue("length"));
+    }
+    let len = x.len();
+    for (i, out) in out.iter_mut().enumerate() {
+        let lag = i.cast_signed() - max_lag.cast_signed();
+        *out = overlap_direct(x, y, lag, len).0;
+    }
+    Ok(())
+}
+
+/// [`overlap_ncc_direct_into`] の one-shot 版。`2·max_lag + 1` の両側 lag
+/// 直算 NCC カーブを返す。
+///
+/// **RT 契約:** non-RT only — 出力を確保する。
+///
+/// # Errors
+///
+/// `x`/`y` が等長でなければ `Error::InvalidValue("y")`、
+/// `2·max_lag + 1` が overflow すれば `Error::InvalidValue("max_lag")`。
+pub fn overlap_ncc_direct(x: &[f64], y: &[f64], max_lag: usize) -> Result<Vec<f64>> {
+    if x.len() != y.len() {
+        return Err(Error::InvalidValue("y"));
+    }
+    let out_len = max_lag
+        .checked_mul(2)
+        .and_then(|v| v.checked_add(1))
+        .ok_or(Error::InvalidValue("max_lag"))?;
+    let mut out = vec![0.0; out_len];
+    overlap_ncc_direct_into(x, y, max_lag, &mut out)?;
+    Ok(out)
+}
+
 #[cfg(test)]
 // テストはインデックス→値の変換を多用するため usize→f64 キャストを許容する。
 #[expect(clippy::cast_precision_loss)]
@@ -1598,5 +1748,304 @@ mod tests {
         assert!((curve[60] - 1.0).abs() < 1e-12);
         // 両方が最大値として並存する（同率最大の検証は利用側の tie-break）。
         assert_eq!(curve[10], curve[60]);
+    }
+
+    // --- Issue #168: scalar 直算曲線 API ---
+
+    /// `ncc_direct` は全有効ラグで `ncc_at` oracle（`vec::corr0` と同一式）と
+    /// bit-exact に一致する。部分 `max_lag`・退化 shape も含む。
+    #[test]
+    fn ncc_direct_matches_corr0_per_lag_exactly() {
+        for (tl, sl, max_lag) in [
+            (4usize, 4usize, usize::MAX), // 等長（K=1）
+            (16, 64, usize::MAX),
+            (100, 1000, usize::MAX),
+            (16, 64, 10), // max_lag < S−L
+            (16, 64, 0),  // lag 0 のみ
+            (3, 200, 7),
+            (4410, 7938, usize::MAX), // FFT 経路を選ぶ実形状でも直算
+        ] {
+            let template = noise(tl, 7);
+            let signal = noise(sl, 11);
+            let curve = ncc_direct(&template, &signal, max_lag).unwrap();
+            let n = (sl - tl).min(max_lag) + 1;
+            assert_eq!(curve.len(), n);
+            for (k, &v) in curve.iter().enumerate() {
+                // ncc_at oracle と exact equality（同一評価順のため）。
+                assert_eq!(v, ncc_at(&template, &signal, k), "lag {k}");
+                // vec::corr0 そのものとも exact equality。
+                assert_eq!(
+                    v,
+                    crate::vec::corr0(&template, &signal[k..k + tl]).unwrap(),
+                    "corr0 lag {k}"
+                );
+            }
+            // _into 版は同じ値を同じ位置へ書く。
+            let mut out = vec![0.0; n];
+            ncc_direct_into(&template, &signal, max_lag, &mut out).unwrap();
+            assert_eq!(out, curve);
+        }
+    }
+
+    /// 既知オフセットを埋め込んだ信号で、直算曲線の argmax が埋込み位置を
+    /// 返し、ピーク値は `corr0` と一致する。
+    #[test]
+    fn ncc_direct_finds_known_offset() {
+        let signal = noise(300, 5);
+        let template = signal[120..160].to_vec();
+        let curve = ncc_direct(&template, &signal, usize::MAX).unwrap();
+        assert_eq!(argmax_abs(&curve), 120);
+        assert_eq!(curve[120], 1.0);
+        // 反転埋込みは負ピーク（符号契約は corr0 と同一）。
+        let mut inv = noise(200, 9);
+        for (i, &v) in template.iter().enumerate() {
+            inv[50 + i] = -v;
+        }
+        let curve = ncc_direct(&template, &inv, usize::MAX).unwrap();
+        assert_eq!(argmax_abs(&curve), 50);
+        assert_eq!(curve[50], -1.0);
+    }
+
+    /// ゼロ template・無音窓・NaN 混入の縮退意味論は `corr0` と同一
+    /// （`0.0` へ写像）。`_into` の長さ契約違反は `Err("length")`。
+    #[test]
+    fn ncc_direct_degenerate_and_out_length_contract() {
+        let template = noise(8, 3);
+        let signal = noise(64, 4);
+        // ゼロ template → 全ラグ 0.0（corr0 の ex>0 ガードと同一）。
+        let zeros = vec![0.0; 8];
+        assert!(
+            ncc_direct(&zeros, &signal, usize::MAX)
+                .unwrap()
+                .iter()
+                .all(|&v| v == 0.0)
+        );
+        // 無音窓を含む signal: その lag だけ 0.0。
+        let mut s2 = signal.clone();
+        s2[10..18].fill(0.0);
+        let curve = ncc_direct(&template, &s2, usize::MAX).unwrap();
+        assert_eq!(curve[10], 0.0);
+        assert_ne!(curve[9], 0.0);
+        // NaN template → 全ラグ 0.0。NaN 窓 → そのラグのみ 0.0。
+        let mut nan_t = template.clone();
+        nan_t[0] = f64::NAN;
+        assert!(
+            ncc_direct(&nan_t, &signal, usize::MAX)
+                .unwrap()
+                .iter()
+                .all(|&v| v == 0.0)
+        );
+        let mut nan_s = signal.clone();
+        nan_s[12] = f64::NAN; // lag 5..=12 の窓に混入（L=8）
+        let curve = ncc_direct(&template, &nan_s, usize::MAX).unwrap();
+        for (k, &v) in curve.iter().enumerate() {
+            assert_eq!(v == 0.0, (5..=12).contains(&k), "lag {k}");
+        }
+        // 退化 shape は空カーブ（plan 系と同じ規約）。
+        assert_eq!(ncc_direct(&[], &signal, usize::MAX).unwrap().len(), 0);
+        assert_eq!(
+            ncc_direct(&template, &signal[..4], usize::MAX)
+                .unwrap()
+                .len(),
+            0
+        );
+        // _into: out 長が `min(max_lag, S−L)+1` と違えば Err（退化は 0 要求）。
+        let mut out = vec![0.0; 5];
+        assert_eq!(ncc_direct_into(&template, &signal, 4, &mut out), Ok(()));
+        assert_eq!(
+            ncc_direct_into(&template, &signal, 4, &mut out[..3]),
+            Err(Error::InvalidValue("length"))
+        );
+        assert_eq!(
+            ncc_direct_into(&[], &signal, usize::MAX, &mut out[..0]),
+            Ok(())
+        );
+        assert_eq!(
+            ncc_direct_into(&[], &signal, usize::MAX, &mut out[..1]),
+            Err(Error::InvalidValue("length"))
+        );
+        assert_eq!(
+            ncc_direct_into(&template, &signal[..4], usize::MAX, &mut out[..1]),
+            Err(Error::InvalidValue("length"))
+        );
+    }
+
+    /// `overlap_ncc_direct` は全ラグで `corr_at` oracle（al-math と同じ
+    /// `corr0` 直算定義）と bit-exact に一致し、AL `direct_scan` とも等価。
+    #[test]
+    fn overlap_ncc_direct_matches_corr_at_exactly() {
+        for (len, max_lag) in [(16usize, 4usize), (300, 130), (1024, 96), (64, 70)] {
+            let x = noise(len, 5);
+            let y = noise(len, 7);
+            let curve = overlap_ncc_direct(&x, &y, max_lag).unwrap();
+            assert_eq!(curve.len(), 2 * max_lag + 1);
+            for (i, &v) in curve.iter().enumerate() {
+                let lag = i.cast_signed() - max_lag.cast_signed();
+                if lag.unsigned_abs() >= len {
+                    // oracle の slice 域外。契約上の値は 0.0。
+                    assert_eq!(v, 0.0, "out-of-range lag {lag}");
+                } else {
+                    assert_eq!(v, corr_at(&x, &y, lag), "lag {lag}");
+                }
+            }
+            // AL direct_scan（bench_overlap_corr.rs）と同値:
+            // `|lag| >= L → 0.0`、正 lag は `corr0(x[..L−a], y[a..])`。
+            let direct_scan: Vec<f64> = (-(max_lag.cast_signed())..=max_lag.cast_signed())
+                .map(|lag| {
+                    let a = lag.unsigned_abs();
+                    if a >= len {
+                        return 0.0;
+                    }
+                    let (xs, ys) = if lag >= 0 {
+                        (&x[..len - a], &y[a..])
+                    } else {
+                        (&x[a..], &y[..len - a])
+                    };
+                    crate::vec::corr0(xs, ys).unwrap()
+                })
+                .collect();
+            assert_eq!(curve, direct_scan);
+            // _into 版は同じ値を同じ位置へ書く。
+            let mut out = vec![0.0; 2 * max_lag + 1];
+            overlap_ncc_direct_into(&x, &y, max_lag, &mut out).unwrap();
+            assert_eq!(out, curve);
+        }
+    }
+
+    /// AL `cheap.rs` の IPD sweep は x を後方へずらす向き（正 lag:
+    /// `corr0(x[lag..], y[..n−lag])`）で、`overlap_ncc_direct` とは
+    /// lag 符号が逆。`corr0` の引数対称性から `overlap_ncc_direct(y, x)` の
+    /// 反転 index で同値になることを固定する。
+    #[test]
+    fn overlap_ncc_direct_ipd_sweep_sign_mapping() {
+        let n = 128;
+        let max_lag: usize = 20;
+        let xs = noise(n, 13);
+        let ys = noise(n, 17);
+        // AL IPD sweep の複製（引数順そのまま）。
+        let ipd: Vec<f64> = (-(max_lag.cast_signed())..=max_lag.cast_signed())
+            .map(|lag| {
+                let (xa, ya) = if lag >= 0 {
+                    (&xs[lag.cast_unsigned()..], &ys[..n - lag.cast_unsigned()])
+                } else {
+                    (&xs[..n - lag.unsigned_abs()], &ys[lag.unsigned_abs()..])
+                };
+                crate::vec::corr0(xa, ya).unwrap()
+            })
+            .collect();
+        // 本 API は `overlap_ncc_direct(y, x)` で同じ向きを再現できる。
+        let swapped = overlap_ncc_direct(&ys, &xs, max_lag).unwrap();
+        assert_eq!(swapped, ipd);
+        // 同一引数順なら lag 符号が反転した曲線になる。
+        let same_order = overlap_ncc_direct(&xs, &ys, max_lag).unwrap();
+        for (i, &v) in same_order.iter().enumerate() {
+            assert_eq!(v, ipd[2 * max_lag - i], "mirror lag");
+        }
+    }
+
+    /// 直算カーブと plan 系 API の関係: direct 経路を選ぶ小形状では
+    /// `OverlapCorrPlan::curve` と bit-exact。FFT 経路の大形状でも
+    /// 値は一致するが FP 丸め差を許容する（別経路である契約）。
+    #[test]
+    fn overlap_ncc_direct_vs_plan_routes() {
+        let len = 16;
+        let x = noise(len, 21);
+        let y = noise(len, 23);
+        let plan = OverlapCorrPlan::new(len).unwrap();
+        let mut ws = OverlapCorrWorkspace::with_max_lag(&plan, 4);
+        // direct 経路（direct_ops < fft_ops）→ bit-exact。
+        let curve = plan.curve(&mut ws, &x, &y, 4).unwrap().values.to_vec();
+        assert_eq!(curve, overlap_ncc_direct(&x, &y, 4).unwrap());
+        // FFT 経路（1024 窓・max_lag 大）→ 数学的には同値・丸めは別。
+        let len = 1024;
+        let x = noise(len, 25);
+        let y = noise(len, 27);
+        let plan = OverlapCorrPlan::new(len).unwrap();
+        let mut ws = OverlapCorrWorkspace::with_max_lag(&plan, 200);
+        let fft_curve = plan.curve(&mut ws, &x, &y, 200).unwrap().values.to_vec();
+        let direct = overlap_ncc_direct(&x, &y, 200).unwrap();
+        for (i, (&f, &d)) in fft_curve.iter().zip(&direct).enumerate() {
+            assert!((f - d).abs() < 1e-9, "lag {}", i.cast_signed() - 200);
+        }
+    }
+
+    /// `overlap_ncc_direct` のガード: 片側無音・`|lag| ≥ L`・空窓・
+    /// 長さ契約違反・`2·max_lag+1` overflow。
+    #[test]
+    fn overlap_ncc_direct_guards_and_errors() {
+        let x = noise(64, 31);
+        let zeros = vec![0.0; 64];
+        // 片側無音 → 全ラグ 0.0。
+        assert!(
+            overlap_ncc_direct(&x, &zeros, 10)
+                .unwrap()
+                .iter()
+                .all(|&v| v == 0.0)
+        );
+        // max_lag ≥ L: |lag| ≥ L の要素は 0.0、中央は実値。
+        let curve = overlap_ncc_direct(&x, &x, 70).unwrap();
+        assert_eq!(curve.len(), 141);
+        assert_eq!(curve[0], 0.0); // lag −70
+        assert_eq!(curve[70], 1.0); // lag 0 自己相関
+        // 空窓は全 0.0。
+        assert!(
+            overlap_ncc_direct(&[], &[], 3)
+                .unwrap()
+                .iter()
+                .all(|&v| v == 0.0)
+        );
+        // x/y 不等長 → Err("y")。
+        assert_eq!(
+            overlap_ncc_direct(&x, &x[..32], 4),
+            Err(Error::InvalidValue("y"))
+        );
+        // `2·max_lag+1` overflow → Err("max_lag")。
+        assert_eq!(
+            overlap_ncc_direct(&x, &x, usize::MAX),
+            Err(Error::InvalidValue("max_lag"))
+        );
+        // _into: out 長が `2·max_lag+1` と違えば Err("length")。
+        let mut out = vec![0.0; 9];
+        assert_eq!(overlap_ncc_direct_into(&x, &x, 4, &mut out), Ok(()));
+        assert_eq!(
+            overlap_ncc_direct_into(&x, &x, 4, &mut out[..8]),
+            Err(Error::InvalidValue("length"))
+        );
+        assert_eq!(
+            overlap_ncc_direct_into(&x, &x[..32], 4, &mut out),
+            Err(Error::InvalidValue("y"))
+        );
+        assert_eq!(
+            overlap_ncc_direct_into(&x, &x, usize::MAX, &mut out),
+            Err(Error::InvalidValue("max_lag"))
+        );
+    }
+
+    /// `ncc_direct` と plan 系 `ncc` の関係: `NccDirect` 経路を選ぶ形状でも
+    /// plan 側の分母は prefix 二乗和差分 + `√Ex·√e` で、直算契約とは
+    /// 別経路（数学的には同値・丸め差を許容）。
+    #[test]
+    fn ncc_direct_vs_plan_ncc_route() {
+        // NccDirect 経路形状（K 小・コストモデルが direct を選ぶ）。
+        let template = noise(16, 33);
+        let signal = noise(64, 35);
+        let plan = CorrelationPlan::new_ncc(16, 64).unwrap();
+        let mut ws = CorrelationWorkspace::new(&plan);
+        let plan_curve = plan.ncc(&mut ws, &template, &signal, usize::MAX).unwrap();
+        let direct = ncc_direct(&template, &signal, usize::MAX).unwrap();
+        assert_eq!(plan_curve.values.len(), direct.len());
+        for (k, (&p, &d)) in plan_curve.values.iter().zip(&direct).enumerate() {
+            assert!((p - d).abs() < 1e-12, "lag {k}");
+        }
+        // FFT 経路形状（NccValid）でも同値・丸め差許容。
+        let template = noise(4410, 37);
+        let signal = noise(7938, 39);
+        let plan = CorrelationPlan::new_ncc(4410, 7938).unwrap();
+        let mut ws = CorrelationWorkspace::new(&plan);
+        let plan_curve = plan.ncc(&mut ws, &template, &signal, usize::MAX).unwrap();
+        let direct = ncc_direct(&template, &signal, usize::MAX).unwrap();
+        for (k, (&p, &d)) in plan_curve.values.iter().zip(&direct).enumerate() {
+            assert!((p - d).abs() < 1e-9, "lag {k}");
+        }
     }
 }
