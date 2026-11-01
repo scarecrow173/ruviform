@@ -6,6 +6,9 @@ Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| TASK-034QfdkD1MggWcolouiYsy | issue-189 T-1 BeatPosition/Ppqn/TickPosition canonical types | todo | [issue-189-t-1-beat-canonical-types.md](./issue-189-t-1-beat-canonical-types.md) |
+| TASK-034QfdpefNAIoQr57VQZlb | issue-189 T-2 TempoMap Beat basis + event/position/ABI migration | todo | [issue-189-t-2-tempomap-beat-basis.md](./issue-189-t-2-tempomap-beat-basis.md) |
+| TASK-034QfdqgoGMqtqJ2HHFDdG | issue-189 T-3 golden/RT verification + impl record + output contract | todo | [issue-189-t-3-golden-verification-impl-record.md](./issue-189-t-3-golden-verification-impl-record.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
