@@ -68,13 +68,13 @@ relations:
 
 Ruviformには28 crateのAudio/Video/Plugin/Media I/O/RT/UI基盤があり、これを汎用フレームワークとして維持する。Synvelisのv0.3〜v0.6要件ではTyped Multi-Port Graph、PDC、Timed Events、Variable PPQN、Stateful Plugin Plan切替、録音安全性、実WAV出力とStateful Offline Render、Window/Job寿命分離、Node/Port Probeが必要。
 
-既存\`ruviform-audio\`のGraphは順序実行リストであり、GraphDefinition/Compiler/ExecutionStateの境界を持つ目標Runtimeへ移行する必要がある。一方、Plugin Host/Audio Engineがすでに本番依存循環を形成しているわけではない。現行Plugin Host→Audio Engineの参照はCargo \`dev-dependencies\`であり、過大なHost解体を前提としてはいけない。
+既存`ruviform-audio`のGraphは順序実行リストであり、GraphDefinition/Compiler/ExecutionStateの境界を持つ目標Runtimeへ移行する必要がある。一方、Plugin Host/Audio Engineがすでに本番依存循環を形成しているわけではない。現行Plugin Host→Audio Engineの参照はCargo `dev-dependencies`であり、過大なHost解体を前提としてはいけない。
 
 ## Decision
 
 1. **Generic Owner:** RuviformはMedia/Time/Graph/Event/Plugin/Device/Offline/UI/Probeの汎用処理契約を所有。Project/Track/Clip/Take/Comp、Automation Write Mode/Undo、Remote Asset Provider/Import Commit、Stem/Freeze Recipe、Inspectorの診断解釈などDAWの制作意味論はSynvelisに置く。他ConsumerもRuviform基盤を単独利用できる。
 2. **Semantic lowering boundary:** Synvelis Project Snapshot等からRuntime Graph/Timed Event/Media Sourceへ非RTでLoweringする。Ruviform GraphにSynvelis TrackIdやDAW-specific Stateを埋め込まない。
-3. **Graph separation:** 非RT Graph IR/Port/Edge/Capability ValidationとAudio専用Execution Compiler/Buffer/PDC/Prepared Runtimeを異なる責務として設計する。Graph IRがHost/DeviceをInstantiateせず単独検証可能であること。独立\`ruviform-graph\` crate抽出の採否とAPIはPoCに委ねる。
+3. **Graph separation:** 非RT Graph IR/Port/Edge/Capability ValidationとAudio専用Execution Compiler/Buffer/PDC/Prepared Runtimeを異なる責務として設計する。Graph IRがHost/DeviceをInstantiateせず単独検証可能であること。独立`ruviform-graph` crate抽出の採否とAPIはPoCに委ねる。
 4. **Single-stateful RT owner:** Immutable Schedule/Plan/GenerationとStateful Processor/Plugin Instanceの所有権・寿命を分離して考える。旧/新Planから同一Stateful Processorが並行実行されず、NonRT RetirementやTarget Generation検証を保つ。Plan-owned vs Stable Runtime Slotの最終選択はPoC。
 5. **Plugin composition:** 非RT Plugin Host/RT Endpointを分離する既存Accepted ADRを維持。Plugin HostをAudio Engineへ通常依存させず、Audio EngineにもHost/特定Plugin ABIを直接依存させない。Port-level Adapter/Compositionを接続責務とし、Bridge専用crateの設置は条件付き。
 6. **Prepared execution vs DAW state:** RuviformはGeneric Beat/PPQN/Tempo/Clock/Span/Timed Eventの処理、Codec/Prefetch/Output、RT Probe/Offline Driverを提供。Project Store/Recording Take/Job Registryや製品固有FeedbackのOwnerはSynvelis。Window CloseでProject Jobが暗黙に消滅しない。
@@ -94,11 +94,11 @@ Ruviformには28 crateのAudio/Video/Plugin/Media I/O/RT/UI基盤があり、こ
 
 ## Compatibility and Consequences
 
-- 現行[Audio Engine Snapshot Swap ADR](audio-engine-snapshot-swap.md)は依然Accepted。 \`RwLock<Arc<Plan>>\`/\`try_read\`を実際に置換するときには、PoC結果・互換影響・代替方式を示す**新しい後継ADR**が必要。本ADRを既存の同期方式を変更する許可と解釈しない。
+- 現行[Audio Engine Snapshot Swap ADR](audio-engine-snapshot-swap.md)は依然Accepted。 `RwLock<Arc<Plan>>`/`try_read`を実際に置換するときには、PoC結果・互換影響・代替方式を示す**新しい後継ADR**が必要。本ADRを既存の同期方式を変更する許可と解釈しない。
 - [Plugin RT Ownership Split ADR](plugin-rt-ownership-split.md)、[Realtime Contract ADR](realtime-contract-and-verification-policy.md)、[Media I/O Boundary ADR](media-io-backend-abstraction.md)、[UI Hybrid ADR](ui-architecture-webview-hybrid.md)は原則維持。
 - [Variable PPQN successor ADR](configurable-ppqn-resolution-independent-musical-time.md)はAcceptedだが既存Codeは移行前。BeatPosition/APIの具体RangeはPoC対象。
-- \`ruviform-edit\`はNLE汎用モデルとして維持し、SynvelisのDAW Track/Take/Compを強制統合しない。
-- Stateful DSP OfflineのChunk並列は独立性の証明が必要。既存\`ruviform-exec::OfflineDriver\`の独立Chunk保証を無条件に拡大しない。
+- `ruviform-edit`はNLE汎用モデルとして維持し、SynvelisのDAW Track/Take/Compを強制統合しない。
+- Stateful DSP OfflineのChunk並列は独立性の証明が必要。既存`ruviform-exec::OfflineDriver`の独立Chunk保証を無条件に拡大しない。
 - RTでalloc/dealloc/無期限Lock・I/O/危険Dropをしない。不足Capacity/退役Overflow/NoteOff Lossを明示的にFault扱いし、実行しない実装を正常完了と表示しない。
 - 段階移行・別Consumer互換のTest Suiteを先行し、必要なAPI Deprecation/Re-export/Migration Adapterを導入する。具体移動は#192を追跡。
 
