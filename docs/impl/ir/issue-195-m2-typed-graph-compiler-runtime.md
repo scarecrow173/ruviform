@@ -73,11 +73,8 @@ relations:
   deferred-by: []
 metadata:
   experiments:
-    adopted:
-      - "Stable Runtime Slot ownership (processor instance persists across plan generations in a stable registry slot)"
-    rejected:
-      - "Plan-owned state (instance rebuilt per plan → state reset; measured reset confirmed, rejected for state continuity)"
-      - "Separate plan-retire channel (SnapshotGuard already retires its Arc; dropped the duplicate path)"
+    adopted: []
+    rejected: []
 ---
 
 # Issue #195 M2 typed graph compiler/runtime implementation
@@ -159,6 +156,24 @@ no-destructor。旧 `AudioNode`/`Graph`/`GraphPlan`/`PlanSwap` path は
   自体を拒否（stale data を返さない）。boundary 未 feed でも安全。
 - **`use std::sync::Mutex` は test/mock のみ**: RT 側は SPSC + atomics
   + `RefCell` のみ。`RtContext` capability 契約を全 RT API で保持。
+
+## Related Experiments
+
+Stateful Ownership PoC は exp log 化せず、同一 `MockDsp`/`MockFactory`
+の integration test として実測し、採否を ADR に記録した（詳細は
+Validation の G2-04 証拠と ADR 本文）。
+
+- **採用: Stable Runtime Slot 所有** — processor instance が registry
+  の stable slot に残り plan generation を跨いで state 継続
+  （`g2_04_stable_slot_preserves_state`: reuse で state 1→3・install
+  1 回のみ）。
+- **不採用: Plan-owned state** — plan 更新ごとに instance 再構築で
+  state reset を実測確認（`g2_04_plan_owned_replaces_state`）。
+  state 継続要件を満たせないため却下（比較用経路として
+  `PrepareOutcome::New` は残置）。
+- **不採用: runtime 独自 plan-retire channel** —
+  `SnapshotGuard::drop` が `Retirer` 経由で `Arc` を退避済みのため
+  二重経路は廃止し `SnapshotWriter::collect` に一本化。
 
 ## Validation
 
