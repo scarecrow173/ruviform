@@ -20,6 +20,7 @@ Directory: `docs/adr`
 | ADR-034NVCYbbmwSxZnvHYNkAx | video/NONRT プラグイン L1 の create-path・segment sizing（CreateVideoInstance に VideoProcessConfig を載せる形）（Issue #118） | accepted | [issue-118-video-l1-create-path-segment.md](./issue-118-video-l1-create-path-segment.md) |
 | ADR-034NVCXBHjsHlfixAwUSHE | video/NONRT プラグイン L1 の別立て host 表面・plugin_id 名前空間・Dedicated 固定（Issue #118） | accepted | [issue-118-video-l1-host-surface.md](./issue-118-video-l1-host-surface.md) |
 | ADR-034O9Rrn3iBoq4HxT07eVQ | issue-121-l1-diagnostics-policy | accepted | [issue-121-l1-diagnostics-policy.md](./issue-121-l1-diagnostics-policy.md) |
+| ADR-034QhrQYpNhSfuTeq7hyfp | Issue #191 PCM WAV output backend: ruviform-io-wav crate, MediaSink port, staged publish, conversion policy | accepted | [issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md](./issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034QfjWFfUXvgvaObuCUwS | M2 typed graph audio runtime placement, stateful RT ownership, and activation/retirement for Issue #195 | proposed | [m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md](./m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |
