@@ -503,53 +503,89 @@ static RvPropsObj *po_of_props(OfxPropertySetHandle h) {
 #define PO(h) po_of_props(h)
 
 static OfxStatus ps_ptr(OfxPropertySetHandle h, const char *n, int i, void *v) {
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_set(PO(h), n, RV_PT_POINTER, i, 0, 0, NULL, v); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_set(PO(h), n, RV_PT_POINTER, i, 0, 0, NULL, v); rv_unlock(); return s; }
+}
 static OfxStatus ps_dbl(OfxPropertySetHandle h, const char *n, int i, double v) {
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_set(PO(h), n, RV_PT_DOUBLE, i, 0, v, NULL, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_set(PO(h), n, RV_PT_DOUBLE, i, 0, v, NULL, NULL); rv_unlock(); return s; }
+}
 static OfxStatus ps_str(OfxPropertySetHandle h, const char *n, int i, const char *v) {
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_set(PO(h), n, RV_PT_STRING, i, 0, 0, v, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_set(PO(h), n, RV_PT_STRING, i, 0, 0, v, NULL); rv_unlock(); return s; }
+}
 static OfxStatus ps_int(OfxPropertySetHandle h, const char *n, int i, int v) {
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_set(PO(h), n, RV_PT_INT, i, v, 0, NULL, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_set(PO(h), n, RV_PT_INT, i, v, 0, NULL, NULL); rv_unlock(); return s; }
+}
 
 static OfxStatus ps_ptrn(OfxPropertySetHandle h, const char *n, int c, void *const *v) {
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_setn(PO(h), n, RV_PT_POINTER, c, NULL, NULL, NULL, v); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_setn(PO(h), n, RV_PT_POINTER, c, NULL, NULL, NULL, v); rv_unlock(); return s; }
+}
 static OfxStatus ps_dbln(OfxPropertySetHandle h, const char *n, int c, const double *v) {
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_setn(PO(h), n, RV_PT_DOUBLE, c, NULL, v, NULL, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_setn(PO(h), n, RV_PT_DOUBLE, c, NULL, v, NULL, NULL); rv_unlock(); return s; }
+}
 static OfxStatus ps_strn(OfxPropertySetHandle h, const char *n, int c, const char *const *v) {
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_setn(PO(h), n, RV_PT_STRING, c, NULL, NULL, v, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_setn(PO(h), n, RV_PT_STRING, c, NULL, NULL, v, NULL); rv_unlock(); return s; }
+}
 static OfxStatus ps_intn(OfxPropertySetHandle h, const char *n, int c, const int *v) {
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_setn(PO(h), n, RV_PT_INT, c, v, NULL, NULL, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_setn(PO(h), n, RV_PT_INT, c, v, NULL, NULL, NULL); rv_unlock(); return s; }
+}
 
 static OfxStatus pg_ptr(OfxPropertySetHandle h, const char *n, int i, void **v) {
     if (!v) return kOfxStatErrBadHandle;
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_get(PO(h), n, RV_PT_POINTER, i, NULL, NULL, NULL, v); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_get(PO(h), n, RV_PT_POINTER, i, NULL, NULL, NULL, v); rv_unlock(); return s; }
+}
 static OfxStatus pg_dbl(OfxPropertySetHandle h, const char *n, int i, double *v) {
     if (!v) return kOfxStatErrBadHandle;
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_get(PO(h), n, RV_PT_DOUBLE, i, NULL, v, NULL, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_get(PO(h), n, RV_PT_DOUBLE, i, NULL, v, NULL, NULL); rv_unlock(); return s; }
+}
 static OfxStatus pg_str(OfxPropertySetHandle h, const char *n, int i, char **v) {
     if (!v) return kOfxStatErrBadHandle;
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_get(PO(h), n, RV_PT_STRING, i, NULL, NULL, v, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_get(PO(h), n, RV_PT_STRING, i, NULL, NULL, v, NULL); rv_unlock(); return s; }
+}
 static OfxStatus pg_int(OfxPropertySetHandle h, const char *n, int i, int *v) {
     if (!v) return kOfxStatErrBadHandle;
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_get(PO(h), n, RV_PT_INT, i, v, NULL, NULL, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_get(PO(h), n, RV_PT_INT, i, v, NULL, NULL, NULL); rv_unlock(); return s; }
+}
 
 static OfxStatus pg_ptrn(OfxPropertySetHandle h, const char *n, int c, void **v) {
     if (!v || c < 0) return kOfxStatErrBadHandle;
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_getn(PO(h), n, RV_PT_POINTER, c, NULL, NULL, NULL, v); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_getn(PO(h), n, RV_PT_POINTER, c, NULL, NULL, NULL, v); rv_unlock(); return s; }
+}
 static OfxStatus pg_dbln(OfxPropertySetHandle h, const char *n, int c, double *v) {
     if (!v || c < 0) return kOfxStatErrBadHandle;
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_getn(PO(h), n, RV_PT_DOUBLE, c, NULL, v, NULL, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_getn(PO(h), n, RV_PT_DOUBLE, c, NULL, v, NULL, NULL); rv_unlock(); return s; }
+}
 static OfxStatus pg_strn(OfxPropertySetHandle h, const char *n, int c, char **v) {
     if (!v || c < 0) return kOfxStatErrBadHandle;
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_getn(PO(h), n, RV_PT_STRING, c, NULL, NULL, v, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_getn(PO(h), n, RV_PT_STRING, c, NULL, NULL, v, NULL); rv_unlock(); return s; }
+}
 static OfxStatus pg_intn(OfxPropertySetHandle h, const char *n, int c, int *v) {
     if (!v || c < 0) return kOfxStatErrBadHandle;
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_getn(PO(h), n, RV_PT_INT, c, v, NULL, NULL, NULL); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_getn(PO(h), n, RV_PT_INT, c, v, NULL, NULL, NULL); rv_unlock(); return s; }
+}
 
 static OfxStatus p_reset(OfxPropertySetHandle h, const char *n) {
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_reset(PO(h), n); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_reset(PO(h), n); rv_unlock(); return s; }
+}
 static OfxStatus p_dim(OfxPropertySetHandle h, const char *n, int *c) {
-    if (rv_lock()) return kOfxStatFailed; { OfxStatus s = rv_po_dim(PO(h), n, c); rv_unlock(); return s; } }
+    if (rv_lock()) return kOfxStatFailed;
+    { OfxStatus s = rv_po_dim(PO(h), n, c); rv_unlock(); return s; }
+}
 
 static OfxPropertySuiteV1 g_prop_suite = {
     .propSetPointer = ps_ptr,

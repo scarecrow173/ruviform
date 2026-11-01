@@ -399,10 +399,10 @@ static OfxPlugin g_gain = { kOfxImageEffectPluginApi, 1, "org.ruviform.gain",
 static OfxPlugin g_gen  = { kOfxImageEffectPluginApi, 1, "org.ruviform.generator",
                             0, 1, gen_set_host, gen_main };
 
-OfxExport OfxStatus OfxSetHost(OfxHost *host) {
+OfxExport OfxStatus OfxSetHost(const OfxHost *host) {
     emit(FX_DLL_SET_HOST, -1);
     if (g_mode & FX_REFUSE_SET_HOST) return kOfxStatFailed;
-    g_host = host;
+    g_host = (OfxHost *)host;
     return kOfxStatOK;
 }
 
