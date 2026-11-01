@@ -33,6 +33,7 @@ mod graph;
 mod mixer;
 mod plan;
 mod session;
+pub mod typed;
 
 pub use denormal::DenormalFlush;
 pub use graph::{AudioNode, Graph};

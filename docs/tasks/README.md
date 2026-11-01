@@ -6,6 +6,10 @@ Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| TASK-034Qfs0cxlLQ9xk1dN3NJM | T-1 typed buffer arena + io views + compiler (schedule/slots/PDC) | done | [m2-t1-typed-compiler-buffer-io.md](./m2-t1-typed-compiler-buffer-io.md) |
+| TASK-034Qfs3QuOMXdVC8ZnuKz6 | T-2 typed RT runtime: GraphProcessor, GraphRuntime/RtRuntime, activation, faults | done | [m2-t2-typed-rt-runtime-activation.md](./m2-t2-typed-rt-runtime-activation.md) |
+| TASK-034Qfs4U6jKNPhfoasgTFI | T-3 acceptance tests + ownership PoC + fault injection | done | [m2-t3-tests-ownership-poc-faults.md](./m2-t3-tests-ownership-poc-faults.md) |
+| TASK-034Qfs62FTCiTj3vNuOwAz | T-4 golden legacy, EX/TA traceability, merge+lockfile+verification, impl record | done | [m2-t4-golden-traceability-verification.md](./m2-t4-golden-traceability-verification.md) |
 | TASK-034QfdkD1MggWcolouiYsy | issue-189 T-1 BeatPosition/Ppqn/TickPosition canonical types | todo | [issue-189-t-1-beat-canonical-types.md](./issue-189-t-1-beat-canonical-types.md) |
 | TASK-034QfdpefNAIoQr57VQZlb | issue-189 T-2 TempoMap Beat basis + event/position/ABI migration | todo | [issue-189-t-2-tempomap-beat-basis.md](./issue-189-t-2-tempomap-beat-basis.md) |
 | TASK-034QfdqgoGMqtqJ2HHFDdG | issue-189 T-3 golden/RT verification + impl record + output contract | todo | [issue-189-t-3-golden-verification-impl-record.md](./issue-189-t-3-golden-verification-impl-record.md) |
