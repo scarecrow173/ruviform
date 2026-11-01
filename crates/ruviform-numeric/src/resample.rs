@@ -337,6 +337,10 @@ impl ResamplePlan {
     /// [`ResampleParams`] の再構築入口。
     ///
     /// **RT 契約:** non-RT only — 全位相の係数表を確保する。
+    ///
+    /// # Panics
+    ///
+    /// `params.up()` がプラットフォームの `usize` に収まらない場合。
     #[must_use]
     pub fn from_params(params: ResampleParams) -> Self {
         // u32 -> usize を明示的に検証し、狭いポインタ幅での切り捨てを防ぐ。
