@@ -17,7 +17,8 @@ relations:
     generated: []
   implements:
     - "docs/plans/implement-issue-189-m3-rational-beat-variable-ppqn.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-189-m3-rational-beat-ppqn.md"
   depends-on:
     - "docs/plans/implement-issue-189-m3-rational-beat-variable-ppqn.md"
   blocks: []
