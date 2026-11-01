@@ -92,6 +92,7 @@ mod processor;
 mod transport;
 
 mod plain_param;
+mod transport_bridge;
 mod video;
 mod video_plugin;
 
@@ -112,6 +113,9 @@ pub use processor::{
     ProcessResult, ProcessStatus,
 };
 pub use transport::TransportInfo;
+pub use transport_bridge::{
+    build_call_event_list, call_transport_info, calls_for_span, contract_from_process_config,
+};
 pub use video::{VideoPluginInstance, VideoProcessConfig};
 pub use video_plugin::{ErasedVideoPlugin, VideoPluginFactory, erase_video};
 

@@ -1,5 +1,6 @@
 # TASK Documents
 
+
 <!-- doc-suite:generated-index -->
 
 Directory: `docs/tasks`
@@ -88,7 +89,9 @@ Directory: `docs/tasks`
 | TASK-034QfdkD1MggWcolouiYsy | issue-189 T-1 BeatPosition/Ppqn/TickPosition canonical types | done | [issue-189-t-1-beat-canonical-types.md](./issue-189-t-1-beat-canonical-types.md) |
 | TASK-034QfdpefNAIoQr57VQZlb | issue-189 T-2 TempoMap Beat basis + event/position/ABI migration | done | [issue-189-t-2-tempomap-beat-basis.md](./issue-189-t-2-tempomap-beat-basis.md) |
 | TASK-034QfdqgoGMqtqJ2HHFDdG | issue-189 T-3 golden/RT verification + impl record + output contract | done | [issue-189-t-3-golden-verification-impl-record.md](./issue-189-t-3-golden-verification-impl-record.md) |
-| TASK-034QdV8LJ4ZnIRqDUSRakb | T1 Consumer影響判定・証拠テンプレート（PR/Issue template群） | done | [issue-219-t1-impact-templates.md](./issue-219-t1-impact-templates.md) |
+| TASK-034Qh5tYhNjMkLoPqRs | Issue #190 T-1: canonical transport contract types (media-core) | done | [issue-190-t-1-canonical-contract-types.md](./issue-190-t-1-canonical-contract-types.md) |
+| TASK-034Qh6uIoPqWsErTyU | Issue #190 T-2: transport controller + RT span scheduler | done | [issue-190-t-2-span-scheduler-apply.md](./issue-190-t-2-span-scheduler-apply.md) |
+| TASK-034Qh7vBnMxZaSdFgH | Issue #190 T-3: plugin transport bridge + Mock Driver PoC | done | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) || TASK-034QdV8LJ4ZnIRqDUSRakb | T1 Consumer影響判定・証拠テンプレート（PR/Issue template群） | done | [issue-219-t1-impact-templates.md](./issue-219-t1-impact-templates.md) |
 | TASK-034QdV9z3ctYdM4HMD0MsZ | T2 consumer-verify.yml Cross-Repo CI lane（preflight/verify×2/summary） | done | [issue-219-t2-consumer-verify-workflow.md](./issue-219-t2-consumer-verify-workflow.md) |
 | TASK-034QdVap6IcvMjOYnaWzCR | T3 AGENTS.md の ci.yml 記述 drift 修正 | done | [issue-219-t3-agents-ci-drift.md](./issue-219-t3-agents-ci-drift.md) |
 | TASK-034QdVbbaa7jKsLfhGKepC | T4 検証・IR 記録（actionlint・doc audit・実装記録） | done | [issue-219-t4-verify-ir.md](./issue-219-t4-verify-ir.md) |
