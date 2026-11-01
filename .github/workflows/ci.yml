@@ -34,11 +34,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       # cpal's ALSA backend links via alsa-sys, whose build script
       # requires the ALSA development headers (pkg-config).
@@ -89,11 +91,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       # cpal's ALSA backend links via alsa-sys, whose build script
       # requires the ALSA development headers (pkg-config).
@@ -134,11 +138,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       - name: Restore cargo registry/git index cache
         uses: actions/cache@v6.1.0
@@ -179,11 +185,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       - name: Install WebKitGTK development headers (Linux)
         if: runner.os == 'Linux'
@@ -217,11 +225,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       # cpal's ALSA backend links via alsa-sys, whose build script
       # requires the ALSA development headers (pkg-config).
@@ -265,11 +275,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       - name: Restore cargo registry/git index cache
         uses: actions/cache@v6.1.0
