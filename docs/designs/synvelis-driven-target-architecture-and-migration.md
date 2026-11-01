@@ -270,3 +270,18 @@ Graph IRは構造/論理Stable Idを持つが、Synvelis TrackIdなどのDAW型�
 - 互換APIのdeprecationはConsumerの採用と実テスト後。Video/CLI/既存Audio Consumerの後方互換を破壊してまで未検証の設計を強制しない。
 
 **結論:** 全28 crateの総作り直しは不要。Graph IR/Audio Runtimeの責務分離、Stateful Processor Owner、Time/Event/Media/Jobの横断接続を合意済みの目標とし、具体APIやcrate抽出はPoCで最終化する。
+
+## 10. Architecture Audit Clarifications: Two Initial E2E Gates（2026-11-01）
+
+本書の「最初のProduction-oriented E2E = Local WAV→Playback→Export」は**E2E-L（Playback/Export）**を指す。[Synvelis Recording #13〜#16](https://github.com/scarecrow173/synvelis/issues/12)のMock Input→RT Capture→Staging Journal→Project Commitである**E2E-R（Recording）**と競合せず、片方がもう片方の完了を待つ必要はない。両者の共有正本はProject ID/Controller、Source/Asset/Clip区別、Time/Frame、Verified Mediaの状態遷移であり、個別の暫定Modelを重複導入しない。
+
+| Gate | Ruviform capability dependencies | Synvelis owner / acceptance |
+| --- | --- | --- |
+| **F0 shared foundation** | Media Core Rational Beat/Clock型、RT Primitive、非RT Media Integrity/Container基盤 | Project Controller/Stable ID/Save/Reload / [VS-A #13](https://github.com/scarecrow173/synvelis/issues/13) |
+| **E2E-L** | Generic Decode/Reader/Prefetch + Audio Graph Runtime（#184） + WAV Output/Finalize [#191](https://github.com/scarecrow173/ruviform/issues/191) + OfflineDriver | Local WAV Import/Playback/Export/Reopen、[Synvelis #21](https://github.com/scarecrow173/synvelis/issues/21) |
+| **E2E-R** | RT SPSC（既存）、Mock Clock/RT Capture、NonRT Writer/Journal/Recovery | [VS-B #14](https://github.com/scarecrow173/synvelis/issues/14) → [VS-C #15](https://github.com/scarecrow173/synvelis/issues/15) → [VS-D #16](https://github.com/scarecrow173/synvelis/issues/16)。初期はRaw PCM+Metadata候補でWAV Export Encoderを必須としない |
+| **E2E-X cross-integration** | 両E2Eが完了した後の共通Media/Graph/Time | Recording SourceをProject Playback・Offline Renderへ通し、Identity/Time Mapping/Content Integrityを照合 |
+
+**Dependencies:** [Input/Duplex #187](https://github.com/scarecrow173/ruviform/issues/187)の実Device機能はMock Recording E2E-Rの前提にしない。[WAV Output #191](https://github.com/scarecrow173/ruviform/issues/191)はE2E-Lに必要だがE2E-RのStaging Formatに無条件依存させない。E2E-LもE2E-Rも初期段階では完全なPlugin Instrument/Routing/Automation対応を必須としない。**M0〜M7はRuviform Capability Migration単位であり、2系統のE2Eを直列化する作業順序ではない。**
+
+Time/TransportのPlugin min_frames/Offset問題は[Synvelis v0.5 §14](https://github.com/scarecrow173/synvelis/blob/main/docs/designs/time-transport-midi-automation-plugin-integration-architecture.md)、[Ruviform #190](https://github.com/scarecrow173/ruviform/issues/190)に分離して受入を管理する。新PlanSwapやPlugin Real-time安全性をE2E初期段階で検証済みとみなさない。
