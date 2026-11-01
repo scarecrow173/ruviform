@@ -1679,6 +1679,48 @@ mod tests {
         );
     }
 
+    /// Golden verification of the CLAP `BeatTime` → PPQN-960 tick
+    /// projection against the official representation: `BeatTime` is an
+    /// `i64` fixed-point value scaled by `CLAP_BEATTIME_FACTOR = 1<<31`.
+    /// (Issue #189 — the adapter formula `bits × 960 / 2³¹` with
+    /// half-away-from-zero rounding and `i64` saturation.)
+    #[test]
+    fn beats_to_ticks_clap_factor_golden() {
+        // The adapter's factor *is* the spec factor 2³¹.
+        assert_eq!(BeatTime::FACTOR, 1_i64 << 31);
+
+        // Whole beats convert exactly — 1 beat = 960 ticks.
+        assert_eq!(beats_to_ticks(BeatTime::from_int(1)), 960);
+        assert_eq!(beats_to_ticks(BeatTime::from_int(4)), 3_840);
+        assert_eq!(beats_to_ticks(BeatTime::from_int(-1)), -960);
+        assert_eq!(beats_to_ticks(BeatTime::from_int(-4)), -3_840);
+
+        // The exact inverse: `tick × 2³¹ / 960` round-trips whole
+        // ticks through bits losslessly.
+        for &tick in &[0i64, 1, 480, 960, 9_600, -960, -30] {
+            let bits =
+                i64::try_from(i128::from(tick) * i128::from(BeatTime::FACTOR) / 960).unwrap();
+            assert_eq!(beats_to_ticks(BeatTime::from_bits(bits)), tick);
+        }
+
+        // Negative half-away rounding is symmetric: one bit below the
+        // -0.5-tick boundary rounds to 0, at/above to -1.
+        assert_eq!(beats_to_ticks(BeatTime::from_bits(-1_118_481)), 0);
+        assert_eq!(beats_to_ticks(BeatTime::from_bits(-1_118_482)), -1);
+
+        // The full `i64` input range maps to ≈±4.12×10¹² ticks — the
+        // `i64` clamp is a defensive bound that cannot saturate on real
+        // input, and the ends stay symmetric (no wrap).
+        assert_eq!(
+            beats_to_ticks(BeatTime::from_bits(i64::MAX)),
+            4_123_168_604_160
+        );
+        assert_eq!(
+            beats_to_ticks(BeatTime::from_bits(i64::MIN)),
+            -4_123_168_604_160
+        );
+    }
+
     #[test]
     fn adapt_transport_musical_gates_and_unset_forms() {
         let rate = SampleRate::new(RATE).unwrap();

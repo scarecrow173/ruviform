@@ -66,8 +66,8 @@ mod transport;
 pub use error::{Error, Result};
 pub use fact::Fact;
 pub use music::{
-    MusicalPosition, MusicalTimeInfo, PPQN, Ppqn, TempoEvent, TempoMap, TempoMapBuilder, Tick,
-    TickDuration, TimeSignatureEvent,
+    BeatPosition, MusicalPosition, MusicalTimeInfo, PPQN, Ppqn, TempoEvent, TempoMap,
+    TempoMapBuilder, Tick, TickDuration, TickPosition, TimeSignatureEvent,
 };
 pub use observe::{
     Discontinuity, IntervalStats, MediaTimestamp, TickTimestamp, TimestampProvenance,
