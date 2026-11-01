@@ -11,6 +11,7 @@ Directory: `docs/plans`
 | PLAN-034JgkWCimxdvr81k6b0ow | オーディオデバイス境界ポートと ruviform-audio-device PoC の実装（Issue #23） | approved | [implement-audio-device-port-and-cpal-poc.md](./implement-audio-device-port-and-cpal-poc.md) |
 | PLAN-034OnRCESpswfHetayj7CH | Issue #121 実施計画 — L1 diagnostics（observability crate・audio counters・stderr drain・FailureCause・pre-mint diagnostics） | approved | [implement-issue-121-l1-diagnostics.md](./implement-issue-121-l1-diagnostics.md) |
 | PLAN-034QedYKnRFb63F40E0Mb6 | Implement Issue #184 M1 ruviform-graph crate: typed IR + validator + PoC | approved | [implement-issue-184-m1-ruviform-graph-crate-typed-ir-validator-poc.md](./implement-issue-184-m1-ruviform-graph-crate-typed-ir-validator-poc.md) |
+| PLAN-034QfbOOAnZw32cmX1H46E | Implement Issue #189 M3 Rational Beat + Variable PPQN in media-core | approved | [implement-issue-189-m3-rational-beat-variable-ppqn.md](./implement-issue-189-m3-rational-beat-variable-ppqn.md) |
 | PLAN-034JP0n5QlXSj34GK30GBz | Issue #22 RT 検証基盤の実施（assert_no_alloc 適用・thread-check 統合・検証文書） | approved | [implement-issue-22-rt-verification.md](./implement-issue-22-rt-verification.md) |
 | PLAN-034JRcspAdty0HzWF0KzIr | Issue #24 オフライン実行ドライバ実装 | approved | [implement-issue-24-offline-execution-driver.md](./implement-issue-24-offline-execution-driver.md) |
 | PLAN-034JRQoIQSe5Sh13CkKfjN | Issue #25 音声エンジン実装 | approved | [implement-issue-25-audio-engine.md](./implement-issue-25-audio-engine.md) |
