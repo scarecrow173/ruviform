@@ -254,7 +254,16 @@ fn assert_alive(host: &mut MiniHost) {
 // --- minimal host vshm side -------------------------------------------
 
 fn unique_key(tag: &str) -> String {
-    format!("/ruviform-l1-video-e2e-{}-{tag}", std::process::id())
+    // macOS `shm_open` caps the name at `PSHMNAMLEN` (~30 bytes
+    // including the leading `/`; the production key hit the same
+    // limit in Issue #207). Keep the test key ≤ 30 under any pid
+    // width — `ENAMETOOLONG` then can never fire (Issue #220).
+    let key = format!("/rvpe-{}-{tag}", std::process::id());
+    assert!(
+        key.len() <= 30,
+        "shm test key exceeds macOS name limit: {key}"
+    );
+    key
 }
 
 /// The test config — 64×64 RGBA8 at 30 fps, 16 KiB per frame.

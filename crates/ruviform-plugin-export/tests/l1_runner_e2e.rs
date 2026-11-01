@@ -281,7 +281,16 @@ fn expect_block_done(
 // --- minimal host shm side -------------------------------------------
 
 fn unique_key(tag: &str) -> String {
-    format!("/ruviform-l1-e2e-{}-{tag}", std::process::id())
+    // macOS `shm_open` caps the name at `PSHMNAMLEN` (~30 bytes
+    // including the leading `/`; the production key hit the same
+    // limit in Issue #207). Keep the test key ≤ 30 under any pid
+    // width — `ENAMETOOLONG` then can never fire (Issue #220).
+    let key = format!("/rvpe-{}-{tag}", std::process::id());
+    assert!(
+        key.len() <= 30,
+        "shm test key exceeds macOS name limit: {key}"
+    );
+    key
 }
 
 /// Creates the segment at the standard depths and writes the
@@ -714,7 +723,7 @@ fn e2e_shm_attach_failure_is_ipc_reply_and_child_survives() {
     );
     // The registry entry was never inserted — the same handle is
     // mintable again, and the child keeps serving.
-    let key = unique_key("after-attach-failure");
+    let key = unique_key("attach-fail");
     let _segment = create_segment(&key);
     assert_eq!(host.create_instance(0, GAIN_ID, &key), Ok(WireReply::Ok));
     assert_alive(&mut host);
@@ -905,7 +914,7 @@ fn e2e_plugin_panic_is_plugin_failed_and_child_survives() {
 /// would die with it). The handle stays free.
 #[test]
 fn e2e_descriptor_panic_at_create_is_plugin_failed_and_child_survives() {
-    let key = unique_key("create-desc-panic");
+    let key = unique_key("desc-panic");
     let _segment = create_segment(&key);
     let mut host = MiniHost::spawn_with_env(&[], &[("RUVIFORM_PANIC_DESCRIPTOR", "1")]);
     host.expect_hello();
