@@ -91,7 +91,9 @@ mod error;
 mod frame;
 mod mux;
 mod packet;
+mod sink;
 mod source;
+mod staged;
 
 pub use capability::{Capabilities, Features};
 pub use codec::{CodecDescriptor, CodecFormat, CodecId};
@@ -105,7 +107,9 @@ pub use error::{Error, ErrorKind, Result};
 pub use frame::{AudioFrame, Frame, NativeAudioFrame, PcmTransform};
 pub use mux::Muxer;
 pub use packet::{Packet, PacketFlags};
+pub use sink::MediaSink;
 pub use source::MediaSource;
+pub use staged::{PublishOptions, StagedOutput};
 
 /// Returns the crate version string.
 ///
