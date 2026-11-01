@@ -13,8 +13,8 @@ use ruviform_audio::typed::{
 use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
 use ruviform_graph::{
     Activation, Availability, ChannelMap, ConnDef, Direction, EdgeDelay, GraphBuilder, GraphSpec,
-    Multiplicity, NodeDef, NodeId, NodeKind, NodeSpec, PortDef, PortFormat, PortId, PortRef,
-    PortRole, ValidatedGraph, Validator,
+    Multiplicity, NodeDef, NodeId, NodeKind, NodeSpec, PortCapability, PortDef, PortFormat, PortId,
+    PortRef, PortRole, ValidatedGraph, Validator,
 };
 use ruviform_rt::RtContext;
 
@@ -39,6 +39,15 @@ pub fn port(direction: Direction, role: PortRole, format: PortFormat) -> PortDef
         capabilities: Vec::new(),
         availability: Availability::Always,
         activation: Activation::Enabled,
+    }
+}
+
+/// Same as [`port`] but declaring `PortCapability::ProbePoint` —
+/// the `Configured` capability fixture (Issue #185).
+pub fn port_probe(direction: Direction, role: PortRole, format: PortFormat) -> PortDef {
+    PortDef {
+        capabilities: vec![PortCapability::ProbePoint],
+        ..port(direction, role, format)
     }
 }
 
