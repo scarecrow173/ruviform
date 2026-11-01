@@ -66,6 +66,19 @@ use crate::factory::GainFactory;
 use vst3::ComWrapper;
 use vst3::Steinberg::IPluginFactory;
 
+/// Converts a VST3 SDK enum constant to the `int32` domain the
+/// generated bindings use for struct fields and trait parameters.
+/// The bindings declare enum constants as `DefaultEnumType` — `c_int`
+/// on Windows, `c_uint` elsewhere — so routing through `i64` keeps the
+/// range check meaningful on every platform and no `as` cast is
+/// needed. Every constant the SDK ships fits `i32`, so `try_from`
+/// cannot fail in practice; the `unwrap_or` arm exists only to keep
+/// the path defined for a hypothetical out-of-range future constant
+/// (the same fallback the host bridge uses for bounded counts).
+fn sdk_enum_i32(value: impl Into<i64>) -> i32 {
+    i32::try_from(value.into()).unwrap_or(i32::MAX)
+}
+
 /// `GetPluginFactory` — the universal VST3 module entry point.
 /// Returns a new `IPluginFactory` COM pointer whose ownership is
 /// transferred to the caller per the VST3 contract.
@@ -152,4 +165,22 @@ extern "system" fn ModuleEntry(_module: *mut c_void) -> bool {
 #[unsafe(no_mangle)]
 extern "system" fn ModuleExit() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sdk_enum_i32;
+
+    /// `int32` values pass through unchanged; `DefaultEnumType` values
+    /// past the `i32` ceiling clamp to `i32::MAX` — never the sign-wrap
+    /// `as` would produce (`0x8000_0000` → `i32::MIN`).
+    #[test]
+    fn sdk_enum_i32_boundaries() {
+        assert_eq!(sdk_enum_i32(0u32), 0);
+        assert_eq!(sdk_enum_i32(0x7FFF_FFFFu32), i32::MAX);
+        assert_eq!(sdk_enum_i32(0x8000_0000u32), i32::MAX);
+        assert_eq!(sdk_enum_i32(u32::MAX), i32::MAX);
+        assert_eq!(sdk_enum_i32(-1i32), -1);
+        assert_eq!(sdk_enum_i32(i32::MIN), i32::MIN);
+    }
 }
