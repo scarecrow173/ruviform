@@ -6,6 +6,7 @@ Directory: `docs/discovery`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| DSC-154-al-media-matrix | AudioLens al-media サポートマトリクス抽出と Ruviform 境界との差分 | final | [al-media-support-matrix.md](./al-media-support-matrix.md) |
 | DISC-034JcqEc2b3EHNgH9CRLaC | RT 基盤プリミティブの実装方式評価（SPSC・退避ドロップ・スナップショット交換・スレッド優先度） | draft | [evaluate-rt-foundation-primitives.md](./evaluate-rt-foundation-primitives.md) |
 | DISC-034IO8gG0n5xCqh66w8KUp | Issue #1 詳細設計に向けた要求確定とエコシステム調査 | draft | [explore-architecture-design-baseline.md](./explore-architecture-design-baseline.md) |
 | DISC-034JcicdqiAQzbUKFHiCbc | Issue #26 に向けた動画基盤 API・色変換/HDR 対応範囲の調査 | draft | [explore-video-foundation-api-scope.md](./explore-video-foundation-api-scope.md) |
@@ -13,7 +14,7 @@ Directory: `docs/discovery`
 | DISC-034NiVjJSeI0gfYX87KMjH | L1 bundle 子プロセス（1 子プロセス N インスタンス）の探索（Issue #117） | active | [issue-117-bundle-child-process-discovery.md](./issue-117-bundle-child-process-discovery.md) |
 | DISC-034NV8A2eMJbUhGFvQgL3W | Issue #118 video/NONRT プラグインの L1 経路 | active | [issue-118-video-l1.md](./issue-118-video-l1.md) |
 | DISC-034O7hCIm5rGi3tA4rmxuc | Issue #121 L1 診断・可観測性（underrun メトリクス・子 stderr 配管・失敗原因 payload） | active | [issue-121-diagnostics.md](./issue-121-diagnostics.md) |
-| DISC-034P8EGzRky80ILbGeYdKp | Issue #156 GUI ホスト基盤: PoC 棚卸しと本番化ギャップ | draft | [issue-156-gui-host-foundation-inventory.md](./issue-156-gui-host-foundation-inventory.md) |
+| DISC-034Q6prdW5pMq5zW9uTb3z | Issue #194 M0 互換性・依存・検証 Baseline 実測監査 | active | [issue-194-m0-baseline-audit.md](./issue-194-m0-baseline-audit.md) |
 | DISC-034JbXZSba3SvOavRFfs66 | Issue #28 UI 技術検証 PoC の事前調査 | draft | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
@@ -27,5 +28,6 @@ Directory: `docs/discovery`
 | DISC-034JccH31pBpKOSW5fst0g | プラグイン基盤 binding 方式の評価（Issue #29） | resolved | [evaluate-plugin-binding-options.md](./evaluate-plugin-binding-options.md) |
 | DISC-034MHDcCcgTMOTFraQb90l | L1 規格アダプタの子プロセス組込み・実プラグイン E2E（CLAP/VST3/OFX）の探索（Issue #114） | resolved | [issue-114-real-adapter-l1-e2e.md](./issue-114-real-adapter-l1-e2e.md) |
 | DISC-fqJPHPj2JQlpssrbP4erm6 | Issue #120 re-evaluation analysis — trigger #3 fired (per-child 3rd thread) | resolved | [issue-120-reaper-iomux-reeval-analysis.md](./issue-120-reaper-iomux-reeval-analysis.md) |
+| DISC-034P8EGzRky80ILbGeYdKp | Issue #156 GUI ホスト基盤: PoC 棚卸しと本番化ギャップ | resolved | [issue-156-gui-host-foundation-inventory.md](./issue-156-gui-host-foundation-inventory.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
