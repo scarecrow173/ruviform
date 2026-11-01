@@ -405,6 +405,7 @@ macro_rules! dispatch_column {
 
 /// Forced-`Option`-token column (`pulp::x86::V*::try_new()`): the token's
 /// `Simd::vectorize` enters its `#[target_feature]` context, then runs the op.
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 macro_rules! forced_column {
     ($col:ident, $name:literal, $level:literal, $token:expr) => {
         /// Registry column — forced `x86` level (`Option` token, probe-gated).
