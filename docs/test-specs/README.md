@@ -15,6 +15,8 @@ Directory: `docs/test-specs`
 | TSPEC-034IdHsItEuo0TZWTPOJUu | ci プロファイルのビルド挙動と成果物分離 | proposed | [ci-profile-build-behavior.md](./ci-profile-build-behavior.md) |
 | TSPEC-034LFChh51ZlHnSWXsKqDw | video-proc 色変換・working space カーネル テスト仕様 | approved | [color-working-space-kernel-tests.md](./color-working-space-kernel-tests.md) |
 | TSPEC-034KSVh4JNdOEJMzGYbZic | video-proc コンポジット/遷移カーネル テスト仕様 | approved | [composite-transition-kernels-tests.md](./composite-transition-kernels-tests.md) |
+| TSPEC-034QdTKuBv9EDEBUuGxUT9 | Consumer 影響判定・証拠テンプレート必須欄（PR/Issue template） | draft | [consumer-pr-issue-template.md](./consumer-pr-issue-template.md) |
+| TSPEC-034QdTJK0E2ZE5tkSjRLwr | consumer-verify workflow の gate 意味論（not run≠pass・preflight gating・単一SHA guard・秘密非露出） | draft | [consumer-verify-workflow-gate-not-run-pass-preflight-gating-sha-guard.md](./consumer-verify-workflow-gate-not-run-pass-preflight-gating-sha-guard.md) |
 | TSPEC-034JZDNRML000000000005 | denormal flush テスト仕様 | approved | [denormal-flush-tests.md](./denormal-flush-tests.md) |
 | TSPEC-034KPgCJjA5nOIvEtscQj8 | ruviform-edit 編集データモデル テスト仕様 | approved | [edit-data-model-tests.md](./edit-data-model-tests.md) |
 | TSPEC-034J6OIFK83GJIsST60Jck | 公開 enum 拡張性と時間演算精度の契約保証 | approved | [followup-enum-compat-and-time-arithmetic.md](./followup-enum-compat-and-time-arithmetic.md) |
