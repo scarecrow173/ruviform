@@ -1,7 +1,7 @@
 ---
 id: "TASK-034Qfs4U6jKNPhfoasgTFI"
 type: "task"
-status: "todo"
+status: "done"
 title: "T-3 acceptance tests + ownership PoC + fault injection"
 created: "2026-11-01"
 updated: "2026-11-01"
@@ -17,7 +17,8 @@ relations:
     generated: []
   implements:
     - "docs/plans/implement-issue-195-m2-typed-graph-audio-runtime.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-195-m2-typed-graph-compiler-runtime.md"
   depends-on:
     - "docs/plans/implement-issue-195-m2-typed-graph-audio-runtime.md"
     - "docs/tasks/m2-t2-typed-rt-runtime-activation.md"

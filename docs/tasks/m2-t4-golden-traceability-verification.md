@@ -1,7 +1,7 @@
 ---
 id: "TASK-034Qfs62FTCiTj3vNuOwAz"
 type: "task"
-status: "todo"
+status: "done"
 title: "T-4 golden legacy, EX/TA traceability, merge+lockfile+verification, impl record"
 created: "2026-11-01"
 updated: "2026-11-01"
@@ -17,7 +17,8 @@ relations:
     generated: []
   implements:
     - "docs/plans/implement-issue-195-m2-typed-graph-audio-runtime.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-195-m2-typed-graph-compiler-runtime.md"
   depends-on:
     - "docs/plans/implement-issue-195-m2-typed-graph-audio-runtime.md"
     - "docs/tasks/m2-t3-tests-ownership-poc-faults.md"

@@ -50,6 +50,7 @@ Directory: `docs/impl/ir`
 | `IMPL-034R169SpecStatsPrimXy` | Issue #169 basic spectral statistics primitives | completed | [issue-169-spectral-statistics-primitives.md](./issue-169-spectral-statistics-primitives.md) |
 | IMPL-034PrM2BjKBhjGVsAarWhT | Issue #170 ResamplePlan stable parameter representation and ID | completed | [issue-170-resampleplan-stable-parameter-representation-and-id.md](./issue-170-resampleplan-stable-parameter-representation-and-id.md) |
 | IMPL-034Qe184TypedGraphIrPoC | Issue #184 M1 ruviform-graph crate: typed Graph IR + Validator + PoC | completed | [issue-184-typed-graph-ir-poc.md](./issue-184-typed-graph-ir-poc.md) |
+| IMPL-034QgTkRw195m2audIoRtXwQ | Issue #195 M2 typed graph audio compiler/runtime: schedule, bounded buffers, PDC, stateful RT ownership, plan activation | completed | [issue-195-m2-typed-graph-compiler-runtime.md](./issue-195-m2-typed-graph-compiler-runtime.md) |
 | IMPL-034Jy2QPH4SUwoep9wQBW2 | ruviform-rt 中核型の実装 | completed | [ruviform-rt.md](./ruviform-rt.md) |
 | IMPL-034J7u3ZaCkeiCc8zzuQwd | Small fixes from followup triage | completed | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | IMPL-034JyiwDR1vV3SDIxU8Ng3 | SPSC チャネルの実装 | completed | [spsc.md](./spsc.md) |

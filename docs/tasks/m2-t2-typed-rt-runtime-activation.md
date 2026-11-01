@@ -1,7 +1,7 @@
 ---
 id: "TASK-034Qfs3QuOMXdVC8ZnuKz6"
 type: "task"
-status: "todo"
+status: "done"
 title: "T-2 typed RT runtime: GraphProcessor, GraphRuntime/RtRuntime, activation, faults"
 created: "2026-11-01"
 updated: "2026-11-01"
@@ -17,7 +17,8 @@ relations:
     generated: []
   implements:
     - "docs/plans/implement-issue-195-m2-typed-graph-audio-runtime.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-195-m2-typed-graph-compiler-runtime.md"
   depends-on:
     - "docs/plans/implement-issue-195-m2-typed-graph-audio-runtime.md"
     - "docs/tasks/m2-t1-typed-compiler-buffer-io.md"
