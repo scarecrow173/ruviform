@@ -332,7 +332,10 @@ mod tests {
     }
 
     /// Issue #22 lane: the RT callback path (plan lookup + mint + drive)
-    /// must run with zero allocations.
+    /// must run with zero allocations — on a *cold* plan, so the first
+    /// `drive` after construction is covered as well (Issue #214:
+    /// platforms whose `Mutex` allocates at first lock rely on
+    /// `GraphPlan::new` having materialized it).
     #[test]
     fn rt_callback_path_no_alloc() {
         let (device, _slot) = MockDevice::new();
