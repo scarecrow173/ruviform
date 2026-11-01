@@ -3,8 +3,8 @@ id: "DESIGN-iwcBlHQ0lcdHJGucocxHOo"
 type: "design"
 status: "superseded"
 title: "音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合）"
-created: "2026-11-03"
-updated: "2026-10-23"
+created: "2026-10-22"
+updated: "2026-11-01"
 owners: []
 relations:
   source: []
@@ -24,7 +24,8 @@ relations:
     - "docs/designs/time-model-extension.md"
   blocks: []
   supersedes: []
-  superseded-by: []
+  superseded-by:
+    - "docs/adr/configurable-ppqn-resolution-independent-musical-time.md"
   related: []
   refines: []
   refined-by: []
