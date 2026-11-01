@@ -1,7 +1,7 @@
 ---
 id: "TASK-034QidaAEbNmHe5Q6M5sRI"
 type: "task"
-status: "todo"
+status: "done"
 title: "T-1 ChannelLevel::measure extraction + deps + compile binding centralization"
 created: "2026-11-01"
 updated: "2026-11-01"

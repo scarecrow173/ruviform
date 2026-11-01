@@ -1,7 +1,7 @@
 ---
 id: "TASK-034QidcTgfNesKcwIF1aZ7"
 type: "task"
-status: "todo"
+status: "done"
 title: "T-4 PoC acceptance tests, rt alloc, perf evidence, impl record, merge+verify"
 created: "2026-11-01"
 updated: "2026-11-01"

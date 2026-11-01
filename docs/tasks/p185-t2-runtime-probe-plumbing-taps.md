@@ -1,7 +1,7 @@
 ---
 id: "TASK-034QidbvzKgQyKTfniAhWG"
 type: "task"
-status: "todo"
+status: "done"
 title: "T-2 RtRuntime probe plumbing: frame_cursor, published_plan, command drains, tap sites, deck channels"
 created: "2026-11-01"
 updated: "2026-11-01"

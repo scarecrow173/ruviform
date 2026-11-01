@@ -1,7 +1,7 @@
 ---
 id: "TASK-034Qidce7Pq9AxEezYMaNE"
 type: "task"
-status: "todo"
+status: "done"
 title: "T-3 typed::probe contract: capability resolver, ProbeBroker, ProbeDeck/RtProbe, ProbeCollector"
 created: "2026-11-01"
 updated: "2026-11-01"
