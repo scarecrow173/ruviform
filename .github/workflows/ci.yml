@@ -118,7 +118,12 @@ jobs:
         shell: bash
         run: |
           test_list="$(mise exec -- cargo test --workspace --locked rt_ -- --list)"
-          strict_count="$(printf '%s\\n' "$test_list" | grep -Ec '(^|::)rt_[^[:space:]]+: test
+          strict_count="$(printf '%s\n' "$test_list" | grep -Ec '(^|::)rt_[^[:space:]]+: test$' || true)"
+          echo "Strict rt_ contract tests: $strict_count"
+          test "$strict_count" -gt 0
+
+      - name: Run RT contract tests (mise run test-rt)
+        run: mise run test-rt
 
   icc-verify:
     name: icc-verify
