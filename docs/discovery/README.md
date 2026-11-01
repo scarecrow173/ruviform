@@ -16,6 +16,7 @@ Directory: `docs/discovery`
 | DISC-034O7hCIm5rGi3tA4rmxuc | Issue #121 L1 診断・可観測性（underrun メトリクス・子 stderr 配管・失敗原因 payload） | active | [issue-121-diagnostics.md](./issue-121-diagnostics.md) |
 | DISC-034QdFl4ZIWzDfKWh0Cg90 | Issue #184 型付き複数Bus/Port・Graph IRの現行実装棚卸しとcrate配置比較 | active | [issue-184-bus-port-graph-ir-crate.md](./issue-184-bus-port-graph-ir-crate.md) |
 | DISC-034Q6prdW5pMq5zW9uTb3z | Issue #194 M0 互換性・依存・検証 Baseline 実測監査 | active | [issue-194-m0-baseline-audit.md](./issue-194-m0-baseline-audit.md) |
+| DISC-034QfjLwjBVqddpxivwOTg | Issue #195 M2 Typed Graph Audio Compiler・Buffer/PDC・Stateful RT Ownership・Plan Activation の現行棚卸し | draft | [issue-195-m2-typed-graph-compiler-runtime-audit.md](./issue-195-m2-typed-graph-compiler-runtime-audit.md) |
 | DISC-034QdBDFXQ7CpGCCYpN94k | Issue #219 両 Consumer 依存形態・検証基盤棚卸しと Cross-Repo CI 前提実測 | draft | [issue-219-consumer-cross-repo-ci.md](./issue-219-consumer-cross-repo-ci.md) |
 | DISC-034JbXZSba3SvOavRFfs66 | Issue #28 UI 技術検証 PoC の事前調査 | draft | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 
