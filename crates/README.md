@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計29クレート）。
+Ruviform ワークスペースのメンバークレート索引（計30クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -35,6 +35,7 @@ Ruviform ワークスペースのメンバークレート索引（計29クレー
 | [`ruviform-media-io`](ruviform-media-io/README.md) | メディア I/O 抽象境界（demux/mux・decode/encode の4系統 trait） |
 | [`ruviform-io-symphonia`](ruviform-io-symphonia/README.md) | symphonia バックエンド（demux + decode。feature `mp4`/`aac` で ISOBMFF/AAC を opt-in） |
 | [`ruviform-io-avi`](ruviform-io-avi/README.md) | pure-Rust AVI バックエンド（RIFF/AVI demux + PCM audio + DIB video decode） |
+| [`ruviform-io-wav`](ruviform-io-wav/README.md) | pure-Rust PCM WAV バックエンド（RIFF/WAVE encode + mux。Issue #191） |
 
 ## Optional platform adapters
 

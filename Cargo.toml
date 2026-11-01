@@ -33,6 +33,8 @@ members = [
     "crates/ruviform-io-symphonia",
     # メディア I/O バックエンド（Issue #154 — AudioLens が消費する AVI/DIB・WAVEFORMATEX 入力を所有する pure-Rust demux/decode adapter）
     "crates/ruviform-io-avi",
+    # メディア I/O バックエンド（Issue #191 — PCM WAV encode/mux を所有する pure-Rust RIFF/WAVE 出力 adapter。初の実装済み Encoder/Muxer）
+    "crates/ruviform-io-wav",
     # Adapters（ドメイン基盤の外側・engine と同じ利用側層。Issue #23 PoC で新設）
     "crates/ruviform-audio-device",
     # 拡張層（規格中立のプラグイン基盤。Issue #29 PoC で新設）

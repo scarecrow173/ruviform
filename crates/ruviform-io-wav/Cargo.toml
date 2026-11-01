@@ -1,0 +1,25 @@
+[package]
+name = "ruviform-io-wav"
+description = "Pure-Rust PCM WAV backend for the ruviform-media-io abstraction boundary — RIFF/WAVE encode + mux with honest capability and a checked finalize contract"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-media-io = { path = "../ruviform-media-io" }
+# Direct domain-crate path dependencies (media-io deliberately does not
+# re-export domain types; the architecture baseline allows backend
+# crates to depend on the domain crates directly).
+ruviform-media-core = { path = "../ruviform-media-core" }
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+
+[dev-dependencies]
+# Round-trip verification only: the backend itself contains no
+# Symphonia code — WAV decode is exercised through the existing
+# demux/decode backend.
+ruviform-io-symphonia = { path = "../ruviform-io-symphonia" }
+
+[lints]
+workspace = true

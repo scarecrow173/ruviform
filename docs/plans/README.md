@@ -11,8 +11,8 @@ Directory: `docs/plans`
 | PLAN-034JgkWCimxdvr81k6b0ow | オーディオデバイス境界ポートと ruviform-audio-device PoC の実装（Issue #23） | approved | [implement-audio-device-port-and-cpal-poc.md](./implement-audio-device-port-and-cpal-poc.md) |
 | PLAN-034OnRCESpswfHetayj7CH | Issue #121 実施計画 — L1 diagnostics（observability crate・audio counters・stderr drain・FailureCause・pre-mint diagnostics） | approved | [implement-issue-121-l1-diagnostics.md](./implement-issue-121-l1-diagnostics.md) |
 | PLAN-034QedYKnRFb63F40E0Mb6 | Implement Issue #184 M1 ruviform-graph crate: typed IR + validator + PoC | approved | [implement-issue-184-m1-ruviform-graph-crate-typed-ir-validator-poc.md](./implement-issue-184-m1-ruviform-graph-crate-typed-ir-validator-poc.md) |
-| PLAN-034QfqzG1cwHntPLBtSz9L | Implement Issue #195 M2 Typed Graph Audio Compiler・Prepared Plan・RT Runtime | approved | [implement-issue-195-m2-typed-graph-audio-runtime.md](./implement-issue-195-m2-typed-graph-audio-runtime.md) |
 | PLAN-034QfbOOAnZw32cmX1H46E | Implement Issue #189 M3 Rational Beat + Variable PPQN in media-core | approved | [implement-issue-189-m3-rational-beat-variable-ppqn.md](./implement-issue-189-m3-rational-beat-variable-ppqn.md) |
+| PLAN-034QfqzG1cwHntPLBtSz9L | Implement Issue #195 M2 Typed Graph Audio Compiler・Prepared Plan・RT Runtime | approved | [implement-issue-195-m2-typed-graph-audio-runtime.md](./implement-issue-195-m2-typed-graph-audio-runtime.md) |
 | PLAN-034JP0n5QlXSj34GK30GBz | Issue #22 RT 検証基盤の実施（assert_no_alloc 適用・thread-check 統合・検証文書） | approved | [implement-issue-22-rt-verification.md](./implement-issue-22-rt-verification.md) |
 | PLAN-034JRcspAdty0HzWF0KzIr | Issue #24 オフライン実行ドライバ実装 | approved | [implement-issue-24-offline-execution-driver.md](./implement-issue-24-offline-execution-driver.md) |
 | PLAN-034JRQoIQSe5Sh13CkKfjN | Issue #25 音声エンジン実装 | approved | [implement-issue-25-audio-engine.md](./implement-issue-25-audio-engine.md) |
@@ -35,6 +35,7 @@ Directory: `docs/plans`
 | PLAN-034KPgI4Qmc4o0yAzYskID | Issue #96 実施計画 — ruviform-edit 新設 | approved | [implement-issue-96-edit-model.md](./implement-issue-96-edit-model.md) |
 | PLAN-034KSVb6BAzhMH2cZgxnSy | Issue #97 実施計画 — video-proc コンポジット/遷移カーネル追加 | approved | [implement-issue-97-composite-kernels.md](./implement-issue-97-composite-kernels.md) |
 | PLAN-034N9piQHt6Evb7QShnGx8 | Issue #131 OFX UAF residuals 実施計画 | approved | [issue-131-ofx-uaf-residuals.md](./issue-131-ofx-uaf-residuals.md) |
+| PLAN-034Qhwlp4j8Gy5S5uG46Qr | Issue #191 PCM WAV output backend implementation plan | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 
