@@ -34,7 +34,7 @@
 //! | --- | --- | --- |
 //! | `driver` | `Shared.child` (`Mutex<Child>` — operated only here, but shared so a converging thread can `kill` a wedged child even while this thread is blocked in `write_all`) · child stdin | serializes outgoing frames · installs/uninstalls per-instance data-plane ends on `DriverCmd::AddInstance`/`RemoveInstance` (the `submits`/`views` maps are keyed by instance) · drains every instance's submit channel (a seq dropped without a doorbell — stale generation, `Destroying` gate, dead or shutting-down child — still gets exactly one synthesized `mark_failed` completion so its leg's alternation gate never wedges): each doorbell'd seq becomes a shm in-slot write + `BlockIn{instance, seq}` · `try_wait` crash watch every [`DRIVER_POLL_INTERVAL`] · shutdown watchdog (grace → `child.kill()`) |
 //! | `reader` | child stdout | demuxes child→parent frames by the Issue #117 decision table — unflagged `Reply` → `(instance, seq)` waiter correlation · flagged `Reply`/`BlockDone` → `(instance, seq)` block completion + lazy per-instance `View` attach · first frame must be `Hello` · EOF → `seen_eof` convergence path |
-//! | `stderr drain` | child stderr · `Shared.diag` | pushes stderr bytes into the capture's bounded ring — started before the `Hello` wait so pre-handshake output is captured · ends on pipe EOF, or [`diag::STDERR_DRAIN_GRACE`] after the child's exit is observed (`Inner.terminal` set — never extended) · closes the read end on exit, so an inheriting grandchild's later writes fail instead of being read silently · detached, never joined — self-bounded |
+//! | `stderr drain` | child stderr · `Shared.diag` | pushes stderr bytes into the capture's bounded ring — started before the `Hello` wait so pre-handshake output is captured · ends on pipe EOF, or [`diag::STDERR_DRAIN_GRACE`] after the child's exit is observed (`Inner.terminal` set — never extended) · closes the read end on exit, so an inheriting grandchild's later writes fail instead of being read silently · detached, never joined — self-bounded · posts `Done` on exit; once `terminal` bounds its life a `freeze` waits on that flag instead of racing the drain |
 //!
 //! The caller thread never performs blocking pipe I/O except the
 //! bounded waits documented on [`L1Instance::execute`] /
@@ -874,6 +874,11 @@ fn converge_child(shared: &Shared, exit: Option<ChildExit>, cause: FailureCause)
     // capture's own lock makes this idempotent across competing
     // observers.
     shared.diag.record_cause(cause);
+    // The terminal flag lands inside the critical section below —
+    // arming `drain_bounded` now (before it) means a `freeze` that
+    // races this convergence already waits for the drain's own
+    // bounded end instead of freezing pre-drain state.
+    shared.diag.mark_drain_bounded();
     let failed = {
         let mut inner = shared.lock();
         if inner.terminal.is_some() {
@@ -2108,7 +2113,7 @@ impl L1Child {
         // failure rolls back through the same kill/reap path as a
         // reader-start failure (detached: its `JoinHandle` drops).
         shared.diag.set_phase(diag::SpawnPhase::DrainInit);
-        if diag::spawn_drain(io.stderr, Arc::clone(&shared.diag), Arc::clone(&shared)).is_err() {
+        if diag::spawn_drain(io.stderr, &shared.diag, Arc::clone(&shared)).is_err() {
             // Host-side thread start failure — `Internal`.
             shared.diag.record_cause(FailureCause::Internal);
             kill_child(&shared);
@@ -2717,7 +2722,11 @@ impl L1Child {
         self.join_driver();
         drop(lock_mutex(&self.reader_join).take());
         // The driver's `Disconnected` arm converges before it exits
-        // — `get_or_insert` covers the defensive remainder only.
+        // — `get_or_insert` covers the defensive remainder only. If
+        // this stamp is what lands `terminal`, the drain's exit is
+        // bounded from here — arm it before the flag so a racing
+        // `freeze` waits.
+        self.shared.diag.mark_drain_bounded();
         self.shared.lock().terminal.get_or_insert(Terminal::Clean);
     }
 }
@@ -3519,7 +3528,10 @@ impl L1Instance {
     /// child's capture keeps mutating afterwards).
     ///
     /// **RT contract:** non-RT only — takes the capture mutex and
-    /// clones the retained stderr tail.
+    /// clones the retained stderr tail; post-convergence the freeze
+    /// also waits out the drain's own bounded end (see
+    /// [`diag::ActiveDiagnostics::freeze`]), never parked on a live
+    /// child.
     pub(crate) fn diagnostics_pending(&self) -> diag::PendingRecord {
         self.shared.diag.freeze(None)
     }
