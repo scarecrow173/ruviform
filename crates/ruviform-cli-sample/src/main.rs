@@ -31,7 +31,7 @@ use ruviform_cli_sample::{
     AnalyzeOptions, PipelineError, error_json, event_json, probe, probe_json, report_json,
     spawn_analyze,
 };
-use ruviform_exec::{JobError, JobEvent};
+use ruviform_exec::JobError;
 
 /// Issue #155 headless-CLI sample: probe and offline-analyze media
 /// files through the shared Ruviform service surface.
@@ -76,9 +76,10 @@ enum Commands {
         /// normalized f32.
         #[arg(long)]
         native: bool,
-        /// Deterministic cancellation hook for tests and demos: after
-        /// N progress events, request job cancellation — the same path
-        /// Ctrl-C takes.
+        /// Deterministic cancellation hook for tests and demos: once N
+        /// units of progress (decoded frames, then processed chunks)
+        /// complete, request job cancellation — the same path Ctrl-C
+        /// takes, delivered worker-side so a fast run cannot outrun it.
         #[arg(long)]
         cancel_after: Option<u64>,
     },
@@ -157,10 +158,16 @@ fn run_analyze(
         }
     };
 
+    // `cancel_after` rides into the job options: the trigger is armed
+    // inside `OfflineJob::spawn_with_cancel_after`, so it fires
+    // worker-side at the progress emit — deterministic even when the
+    // run finishes faster than this consumer could observe the event
+    // and call `job.cancel()` back.
     let options = AnalyzeOptions {
         stream,
         workers,
         native,
+        cancel_after,
     };
     let job = spawn_analyze(source, options);
 
@@ -176,16 +183,8 @@ fn run_analyze(
     // Event consumer: every JobEvent becomes one stderr JSONL line.
     // `recv` ends when the channel closes on worker exit — the
     // reliable terminal signal (events themselves are best-effort).
-    let mut cancelled_after = false;
     while let Ok(event) = job.events().recv() {
         eprintln!("{}", event_json(&event));
-        if let JobEvent::Progress { completed, .. } = event
-            && !cancelled_after
-            && cancel_after.is_some_and(|n| completed >= n)
-        {
-            job.cancel();
-            cancelled_after = true;
-        }
     }
 
     match job.wait() {

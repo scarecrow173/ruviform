@@ -351,6 +351,14 @@ pub struct AnalyzeOptions {
     /// `Frame::NativeAudio`, `f64` samples in the source PCM scale
     /// (`--native`).
     pub native: bool,
+    /// Deterministic cancellation hook (`--cancel-after`): `Some(n)`
+    /// cancels the job once `n` units of progress have completed —
+    /// decoded frames in the decode phase, then processed chunks. The
+    /// trigger is armed inside the job itself
+    /// ([`OfflineJob::spawn_with_cancel_after`]), so the request lands
+    /// worker-side even when the run finishes faster than an `events()`
+    /// consumer could observe it.
+    pub cancel_after: Option<u64>,
 }
 
 impl Default for AnalyzeOptions {
@@ -359,6 +367,7 @@ impl Default for AnalyzeOptions {
             stream: None,
             workers: 1,
             native: false,
+            cancel_after: None,
         }
     }
 }
@@ -522,6 +531,8 @@ impl RtProcessor for Meter {
 /// **Cancellation:** [`OfflineJob::cancel`] (or a cloned
 /// [`CancellationToken`]) stops the decode loop at the next packet and
 /// the driver at the next chunk boundary.
+/// [`AnalyzeOptions::cancel_after`] arms the same path at spawn, via
+/// [`OfflineJob::spawn_with_cancel_after`].
 ///
 /// **RT contract:** non-RT only — spawns a thread.
 #[must_use]
@@ -529,7 +540,11 @@ pub fn spawn_analyze(
     source: impl MediaSource + 'static,
     options: AnalyzeOptions,
 ) -> OfflineJob<AnalysisReport, PipelineError> {
-    OfflineJob::spawn(move |scope| analyze(source, options, scope))
+    let body = move |scope: &JobScope| analyze(source, options, scope);
+    match options.cancel_after {
+        Some(n) => OfflineJob::spawn_with_cancel_after(body, n),
+        None => OfflineJob::spawn(body),
+    }
 }
 
 /// The synchronous body of `run` — executes entirely inside the job's

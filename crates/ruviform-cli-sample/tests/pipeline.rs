@@ -309,6 +309,31 @@ fn cancellation_through_the_job_token_stops_the_run() {
 }
 
 #[test]
+fn cancel_after_arms_the_deterministic_worker_side_trigger() {
+    // `AnalyzeOptions::cancel_after` cancels inside the job's own
+    // progress emit, so even this small input cannot outrun the
+    // request — the outcome is deterministic, not a consumer race.
+    let options = AnalyzeOptions {
+        cancel_after: Some(2),
+        ..AnalyzeOptions::default()
+    };
+    let job = spawn_analyze(Cursor::new(wav_bytes(4_800)), options);
+    let outcomes: Vec<JobOutcome> = job
+        .events()
+        .iter()
+        .filter_map(|e| match e {
+            JobEvent::Finished { outcome } => Some(outcome),
+            _ => None,
+        })
+        .collect();
+    match job.wait() {
+        Err(JobError::Operation(PipelineError::Cancelled)) => {}
+        other => panic!("expected cancelled, got {other:?}"),
+    }
+    assert_eq!(outcomes, vec![JobOutcome::Cancelled]);
+}
+
+#[test]
 fn progress_events_cover_decode_and_process_phases() {
     let job = spawn_analyze(Cursor::new(wav_bytes(4_800)), AnalyzeOptions::default());
     let events: Vec<JobEvent> = job.events().iter().collect();

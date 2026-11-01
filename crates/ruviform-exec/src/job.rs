@@ -277,10 +277,16 @@ impl<T, E> OfflineJob<T, E> {
     ///
     /// **RT contract:** non-RT only.
     pub fn cancel(&self) {
-        self.cancel.cancel();
+        Self::request_cancel(&self.cancel, &self.state);
+    }
+
+    /// Shared [`cancel`](Self::cancel) body — also invoked by the
+    /// `spawn_with_cancel_after` progress trigger inside the worker.
+    fn request_cancel(cancel: &CancellationToken, state: &AtomicU8) {
+        cancel.cancel();
         // Only the Running state can become Cancelling; Finished and an
         // already-set Cancelling are left alone.
-        let _ = self.state.compare_exchange(
+        let _ = state.compare_exchange(
             STATE_RUNNING,
             STATE_CANCELLING,
             Ordering::AcqRel,
@@ -357,6 +363,45 @@ impl<T: Send + 'static, E: Send + 'static> OfflineJob<T, E> {
     where
         F: FnOnce(&JobScope) -> Result<T, E> + Send + 'static,
     {
+        Self::spawn_impl(operation, None)
+    }
+
+    /// [`spawn`](Self::spawn) plus a deterministic cancellation
+    /// trigger: the job behaves as if [`cancel`](Self::cancel) were
+    /// invoked at the first progress emit reporting
+    /// `completed >= cancel_after`. `0` fires at the very first emit —
+    /// including a phase `reset` — so the run stops as early as its
+    /// first cooperative check.
+    ///
+    /// The trigger runs on the worker thread inside the progress emit
+    /// itself: delivery does not depend on an [`events`](Self::events)
+    /// consumer observing the update and racing [`cancel`](Self::cancel)
+    /// back, so a fast body cannot outrun it. The body observes the
+    /// token at its next cooperative check (decode loop, driver chunk
+    /// boundary) and unwinds as `Cancelled`; when no check remains
+    /// after the triggering unit (e.g. `cancel_after` lands on the
+    /// final unit of the last phase) the run completes normally.
+    ///
+    /// **RT contract:** non-RT only — allocates and spawns a thread.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the OS fails to spawn the worker thread (same
+    /// contract as [`std::thread::spawn`]).
+    #[must_use]
+    pub fn spawn_with_cancel_after<F>(operation: F, cancel_after: u64) -> Self
+    where
+        F: FnOnce(&JobScope) -> Result<T, E> + Send + 'static,
+    {
+        Self::spawn_impl(operation, Some(cancel_after))
+    }
+
+    /// Shared spawn body; `cancel_after` arms the worker-side trigger
+    /// described on [`spawn_with_cancel_after`](Self::spawn_with_cancel_after).
+    fn spawn_impl<F>(operation: F, cancel_after: Option<u64>) -> Self
+    where
+        F: FnOnce(&JobScope) -> Result<T, E> + Send + 'static,
+    {
         let (events_tx, events_rx) = sync_channel::<JobEvent>(EVENT_CAPACITY);
         let cancel = CancellationToken::new();
         let state = Arc::new(AtomicU8::new(STATE_RUNNING));
@@ -370,10 +415,19 @@ impl<T: Send + 'static, E: Send + 'static> OfflineJob<T, E> {
         let progress = Progress::new();
         let mut scope_progress = progress.clone();
         let progress_tx = events_tx.clone();
+        let trigger_cancel = cancel.clone();
+        let trigger_state = Arc::clone(&state);
         scope_progress.set_listener(move |completed, total| {
             // Coalesce: an absolute snapshot supersedes any queued one;
             // dropping updates under back-pressure never loses position.
             let _ = progress_tx.try_send(JobEvent::Progress { completed, total });
+            // The spawn-armed trigger applies the same
+            // `completed >= n` comparison an events() consumer would
+            // make before calling `cancel()` — but on the emitting
+            // thread, so the next cooperative check always observes it.
+            if cancel_after.is_some_and(|n| completed >= n) {
+                Self::request_cancel(&trigger_cancel, &trigger_state);
+            }
         });
 
         // Guaranteed-delivery start marker: the channel is empty and the
@@ -609,6 +663,67 @@ mod tests {
             })
             .collect();
         assert_eq!(outcomes, vec![JobOutcome::Cancelled]);
+    }
+
+    /// A cooperative body with no suspension points: bumps, checks the
+    /// token each unit, returns `Err` once cancelled.
+    fn counted_body(scope: &JobScope, units: u64) -> Result<&'static str, &'static str> {
+        scope.progress().reset(units);
+        for _ in 0..units {
+            if scope.is_cancelled() {
+                return Err("stopped");
+            }
+            scope.progress().bump();
+        }
+        Ok("done")
+    }
+
+    #[test]
+    fn cancel_after_fires_worker_side_without_a_consumer() {
+        // The trigger fires inside the worker's emit, so a body that
+        // never yields is still cancelled deterministically — an
+        // events() consumer racing `cancel()` back could lose this.
+        let job = OfflineJob::<&'static str, &'static str>::spawn_with_cancel_after(
+            |scope| counted_body(scope, 5),
+            2,
+        );
+        let outcomes: Vec<JobOutcome> = job
+            .events()
+            .iter()
+            .filter_map(|e| match e {
+                JobEvent::Finished { outcome } => Some(outcome),
+                _ => None,
+            })
+            .collect();
+        match job.wait() {
+            Err(JobError::Operation("stopped")) => {}
+            other => panic!("expected operation error, got {other:?}"),
+        }
+        assert_eq!(outcomes, vec![JobOutcome::Cancelled]);
+    }
+
+    #[test]
+    fn cancel_after_zero_cancels_at_the_first_progress_emit() {
+        // `0` trips on the phase `reset` emit itself — the body's first
+        // cooperative check already sees the token.
+        let job = OfflineJob::<&'static str, &'static str>::spawn_with_cancel_after(
+            |scope| counted_body(scope, 3),
+            0,
+        );
+        match job.wait() {
+            Err(JobError::Operation("stopped")) => {}
+            other => panic!("expected operation error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cancel_after_leaves_unreached_threshold_runs_completed() {
+        // Threshold above the total never trips: the run completes.
+        let job = OfflineJob::<&'static str, &'static str>::spawn_with_cancel_after(
+            |scope| counted_body(scope, 3),
+            4,
+        );
+        assert_eq!(job.wait().unwrap(), "done");
     }
 
     #[test]
