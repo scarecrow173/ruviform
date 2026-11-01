@@ -81,6 +81,9 @@
 
 ```sh
 # ツール復元（mise.lock に記録済みの固定バージョンを復元）
+# ただし pipx:serena-agent は lazy = true のため対象外。エージェント用途の
+# オプションツールであり、初回の mise exec 経由利用時に自動インストールされる
+# （明示的に復元する場合は mise install --include-lazy）
 mise install
 # global mise config でリポジトリ管理外のツールを設定している環境では
 # それらも併せて解決・インストールされます

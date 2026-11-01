@@ -14,7 +14,7 @@ uv = "0.13.5"
 prek = "0.5.7"
 git-lfs = "3.8.0"
 "github:microsoft/apm" = "0.33.0"
-"pipx:serena-agent" = "1.7.0"
+"pipx:serena-agent" = { version = "1.7.0", lazy = true }
 rust = { version = "1.99.0", components = ["rustfmt", "clippy"] }
 actionlint = "1.7.12"
 # UI PoC（poc/ui/frontend）の npm workspaces ビルド用。Issue #83:
