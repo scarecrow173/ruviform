@@ -11,6 +11,9 @@ publish.workspace = true
 ruviform-rt = { path = "../ruviform-rt" }
 ruviform-audio-core = { path = "../ruviform-audio-core" }
 ruviform-media-core = { path = "../ruviform-media-core" }
+# M2 (Issue #195): typed Graph IR is the compile input — the engine
+# depends downward on the IR crate, never the reverse.
+ruviform-graph = { path = "../ruviform-graph" }
 
 [dev-dependencies]
 assert_no_alloc = "1.1"
