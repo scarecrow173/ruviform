@@ -131,7 +131,16 @@ mod tests {
     }
 
     fn unique_key(tag: &str) -> String {
-        format!("/ruviform-vshm-test-{}-{tag}", std::process::id())
+        // macOS `shm_open` caps the name at `PSHMNAMLEN` (~30 bytes
+        // including the leading `/`; the production key hit the same
+        // limit in Issue #207). Keep the test key ≤ 30 under any pid
+        // width — `ENAMETOOLONG` then can never fire (Issue #220).
+        let key = format!("/rvpe-{}-{tag}", std::process::id());
+        assert!(
+            key.len() <= 30,
+            "shm test key exceeds macOS name limit: {key}"
+        );
+        key
     }
 
     /// `vshm::segment_len` as a usize — always fits (bounded by
