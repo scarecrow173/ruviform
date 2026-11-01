@@ -70,7 +70,7 @@ impl ResampleParams {
     /// provenance 記録用のアルゴリズム識別子（固定トークン）。
     ///
     /// 永続スキーマへアルゴリズム名を記録する用途向け。
-    /// AudioLens `normalized_pcm` が記録してきた値と同一。
+    /// `AudioLens` の `normalized_pcm` が記録してきた値と同一。
     pub const ALGORITHM_ID: &str = "polyphase-blackman-sinc";
 
     /// stable ID の先頭タグ（直列化契約名）。
@@ -337,10 +337,15 @@ impl ResamplePlan {
     /// [`ResampleParams`] の再構築入口。
     ///
     /// **RT 契約:** non-RT only — 全位相の係数表を確保する。
-    #[expect(clippy::cast_possible_truncation)]
+    ///
+    /// # Panics
+    ///
+    /// `params.up()` がプラットフォームの `usize` に収まらない場合。
     #[must_use]
     pub fn from_params(params: ResampleParams) -> Self {
-        let mut phases = Vec::with_capacity(params.up() as usize * params.taps());
+        // u32 -> usize を明示的に検証し、狭いポインタ幅での切り捨てを防ぐ。
+        let phase_count = usize::try_from(params.up()).expect("resample phase count exceeds usize");
+        let mut phases = Vec::with_capacity(phase_count * params.taps());
         for p in 0..params.up() {
             phases.extend(params.phase_coefficients(p));
         }
