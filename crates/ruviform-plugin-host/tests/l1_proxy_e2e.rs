@@ -608,6 +608,28 @@ fn shm_unique_keys_never_repeat() {
     }
 }
 
+/// POSIX `shm_open` names are length-bounded — macOS's `PSHMNAMLEN`
+/// admits only ~30 bytes including the leading `/`, and the verbose
+/// pre-#207 key form overflowed it (`ENAMETOOLONG` on every macOS
+/// `CreateInstance`). The bound is a property of the generated
+/// name, so it is pinned here on every platform — even a huge
+/// `slot` must not push the key past the strictest OS limit.
+#[test]
+fn shm_unique_keys_fit_the_macos_name_limit() {
+    use l1::shm::unique_key;
+
+    // `PSHMNAMLEN` (31) includes the terminator — 30 usable bytes.
+    const MACOS_SHM_NAME_MAX: usize = 30;
+    for slot in [0_u32, 7, u32::MAX] {
+        let key = unique_key(slot);
+        assert!(
+            key.len() <= MACOS_SHM_NAME_MAX,
+            "shm key {key:?} ({} bytes) exceeds the macOS POSIX shm name limit",
+            key.len()
+        );
+    }
+}
+
 // ------------------------------------------------------------------
 // Data plane (Issue #76 task 4): shm slots, doorbells, the RT legs.
 // ------------------------------------------------------------------
