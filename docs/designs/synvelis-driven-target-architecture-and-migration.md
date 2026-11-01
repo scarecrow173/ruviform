@@ -71,10 +71,10 @@ relations:
 
 **訂正済みの依存事実:**
 
-- [plugin-host/Cargo.toml](../../crates/ruviform-plugin-host/Cargo.toml)の \`ruviform-audio\` は**\`dev-dependencies\`**にのみ存在し、通常の\`[dependencies]\`にはない。現状すでに通常依存のHost→Audio結合があると誤認しない。
-- [plugin-host/endpoint.rs](../../crates/ruviform-plugin-host/src/endpoint.rs)の\`PluginEndpoint::process_audio\`が直接使うのは\`ruviform-audio-core\`のBuffer等の型で、\`ruviform-audio\` Engineの具象型を必要とするわけではない。
-- [audio/graph.rs](../../crates/ruviform-audio/src/graph.rs)は現在\`AudioNode::pull\`の順序リストで、型付き複数Port/BusのGraph IR・Compilerの完成実装ではない。
-- [audio/plan.rs](../../crates/ruviform-audio/src/plan.rs)は\`RwLock<Arc<GraphPlan>>\`/\`try_read\`とRTのlast-good cache、非RTの\`retire_channel\`/collectorを利用。退役OverflowでRT Destructorを避けるためリークするFail-safeと計数がある。新実行系では容量・Admission・Reclamationの明示検証が必要。
+- [plugin-host/Cargo.toml](../../crates/ruviform-plugin-host/Cargo.toml)の `ruviform-audio` は**`dev-dependencies`**にのみ存在し、通常の`[dependencies]`にはない。現状すでに通常依存のHost→Audio結合があると誤認しない。
+- [plugin-host/endpoint.rs](../../crates/ruviform-plugin-host/src/endpoint.rs)の`PluginEndpoint::process_audio`が直接使うのは`ruviform-audio-core`のBuffer等の型で、`ruviform-audio` Engineの具象型を必要とするわけではない。
+- [audio/graph.rs](../../crates/ruviform-audio/src/graph.rs)は現在`AudioNode::pull`の順序リストで、型付き複数Port/BusのGraph IR・Compilerの完成実装ではない。
+- [audio/plan.rs](../../crates/ruviform-audio/src/plan.rs)は`RwLock<Arc<GraphPlan>>`/`try_read`とRTのlast-good cache、非RTの`retire_channel`/collectorを利用。退役OverflowでRT Destructorを避けるためリークするFail-safeと計数がある。新実行系では容量・Admission・Reclamationの明示検証が必要。
 - [plugin-core/event.rs](../../crates/ruviform-plugin-core/src/event.rs)のEventListはFrame Offset昇順と同Offset順序を保証するが、現行EventKindはParamValue中心。Timed MIDI/Note Ledger/Target Generationの完成実装ではない。
 - [media-core](../../crates/ruviform-media-core/src/lib.rs)の現在のMusical Timeは旧固定960実装。後継[可変PPQN ADR](../adr/configurable-ppqn-resolution-independent-musical-time.md)はAcceptedだが移行未了。
 - [exec/offline.rs](../../crates/ruviform-exec/src/offline.rs)は独立Chunkの場合にのみ並列決定性を保証。Stateful DSPを任意時点から並列実行できることは保証しない。
@@ -135,7 +135,7 @@ flowchart TB
 
 矢印=production crate「利用側→依存先」。これは**主要DAGの設計概念**であり、全28 crateの完全なCargo edge列ではない。将来のM0では通常/Build/Dev/Optional/Feature別にCargo metadataから完全DAGを生成し、実API/feature/ターゲット別に確認する。
 
-禁止する**通常依存**: Foundation→Synvelis、Graph IR→Audio Engine/Plugin Host/GUI、Audio Engine→Plugin Host、Plugin Host→Audio Engine、Observability Primitive→重いPlugin/Graph/UI依存。既存テスト用\`dev-dependencies\`の上位参照を同じ意味の循環と扱わない。FFmpeg/CPAL/CLAP/VST3固有型はAdapterに閉じる。
+禁止する**通常依存**: Foundation→Synvelis、Graph IR→Audio Engine/Plugin Host/GUI、Audio Engine→Plugin Host、Plugin Host→Audio Engine、Observability Primitive→重いPlugin/Graph/UI依存。既存テスト用`dev-dependencies`の上位参照を同じ意味の循環と扱わない。FFmpeg/CPAL/CLAP/VST3固有型はAdapterに閉じる。
 
 ## 4. 既存crateの維持・拡張・条件付き抽出
 
@@ -164,12 +164,12 @@ flowchart TB
 
 | Candidate | Decision status | Validation |
 | --- | --- | --- |
-| \`ruviform-graph\` | 抽出有力、未確定 | Graph IRがDevice/Hostと独立・異なるConsumerが必要 |
-| \`ruviform-io-wav\`相当 | 実Backend新設推奨、命名未確定 | 実PCM WAV Encode/Finalize/Reopen、Capability/Test |
-| \`ruviform-audio-plugin-bridge\` | **条件付き・即新設しない** | Consumer内Glueや既存port adapterより独立性の利益が大きいか |
-| \`ruviform-time\` | 当面新設しない | media-core内で型/Ownerを先に安定 |
-| \`ruviform-audio-render\` | 当面新設しない | Audio Engine/ExecへのCompositionでPoC |
-| \`ruviform-job\` | 当面新設しない | exec＋Application/Project Job RegistryでPoC |
+| `ruviform-graph` | 抽出有力、未確定 | Graph IRがDevice/Hostと独立・異なるConsumerが必要 |
+| `ruviform-io-wav`相当 | 実Backend新設推奨、命名未確定 | 実PCM WAV Encode/Finalize/Reopen、Capability/Test |
+| `ruviform-audio-plugin-bridge` | **条件付き・即新設しない** | Consumer内Glueや既存port adapterより独立性の利益が大きいか |
+| `ruviform-time` | 当面新設しない | media-core内で型/Ownerを先に安定 |
+| `ruviform-audio-render` | 当面新設しない | Audio Engine/ExecへのCompositionでPoC |
+| `ruviform-job` | 当面新設しない | exec＋Application/Project Job RegistryでPoC |
 
 ## 5. Core API Contract（概念モデル）
 
@@ -187,7 +187,7 @@ Graph IRは構造/論理Stable Idを持つが、Synvelis TrackIdなどのDAW型�
 
 ### 5.3 PlanSwap Migration
 
-現行[Audio Snapshot Swap ADR](../adr/audio-engine-snapshot-swap.md)は\`RwLock<Arc<Plan>>\`/\`try_read\`をAcceptedとして採用。これを設計合意だけで置換しない。新Typed Runtimeは互換Pathと並行PoC:
+現行[Audio Snapshot Swap ADR](../adr/audio-engine-snapshot-swap.md)は`RwLock<Arc<Plan>>`/`try_read`をAcceptedとして採用。これを設計合意だけで置換しない。新Typed Runtimeは互換Pathと並行PoC:
 
 1. 現行PlanがProcessorを所有。
 2. 旧/新Scheduleから独立したStable Runtime Slot Registry（推奨候補）。
@@ -196,7 +196,7 @@ Graph IRは構造/論理Stable Idを持つが、Synvelis TrackIdなどのDAW型�
 
 ### 5.4 Transport / Event / Plugin
 
-- \`media-core\`: Canonical Rational Beat、validated variable PPQN（Synvelis default=960はアプリPolicy）、immutable TempoMap、explicit rounding、Frame/MediaTime converter。
+- `media-core`: Canonical Rational Beat、validated variable PPQN（Synvelis default=960はアプリPolicy）、immutable TempoMap、explicit rounding、Frame/MediaTime converter。
 - RT Transport Span: Command/Prepared/Applied Receipt、Half-open [start,end)、ClockEpoch vs TransportGenerationを区別。
 - Timed Event: target/plan/transport generation、frame_offset、Stable Same-frame Source Order、Loop Occurrence、EventKind別Fault Policy。旧Plugin EventListのOffset/Zero-frame flush互換を守る。
 - MIDI: Raw Native Source Timestamp保全、NoteLedger/CC64/NoteOff Lossの安全対応。全Plugin内部Voiceの完全保証を謳わない。
