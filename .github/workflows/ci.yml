@@ -9,6 +9,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# CI only needs the pinned Rust toolchain and prek. Do not activate
+# optional developer tools such as pipx:serena-agent during mise exec/run.
+env:
+  MISE_ENABLE_TOOLS: rust,prek
+
 permissions:
   contents: read
 
