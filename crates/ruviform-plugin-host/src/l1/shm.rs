@@ -81,26 +81,42 @@ fn process_salt() -> u128 {
     })
 }
 
-/// A fresh named-segment key:
-/// `/rvl1-shm-<pid>-<slot>-<salt>-<counter>` — the design's
-/// `pid + slot + counter` form plus a per-process salt (the counter
-/// restarts at 0 every process, so `pid + slot + counter` alone can
-/// regenerate a key abandoned by a crashed host after PID reuse).
+/// A fresh named-segment key: `/rvl1-shm-<pid>-<folded>` — the
+/// design's `pid + slot + counter` form plus a per-process salt
+/// (the counter restarts at 0 every process, so `pid + slot +
+/// counter` alone can regenerate a key abandoned by a crashed host
+/// after PID reuse), with `slot`/`salt`/`counter` folded into one
+/// fixed-width field.
 ///
 /// The leading `/` is the POSIX `shm_open` name form (`shared_memory`
 /// passes `os_id` through verbatim); Windows accepts any name without
-/// a backslash. `slot` is the caller's instance/slot discriminator,
-/// `salt` keeps this process's keys disjoint from a dead
-/// predecessor's, `counter` makes every key unique within this
-/// process. Collisions remain *possible* — a named segment is a
-/// global resource — so [`Segment::create`] retries on
-/// `MappingIdExists` rather than promising uniqueness.
+/// a backslash. POSIX `shm_open` also bounds the name length —
+/// macOS's `PSHMNAMLEN` allows only ~30 bytes *including* the
+/// leading `/`, which the earlier verbose
+/// `<pid>-<slot>-<salt128:x>-<counter>` form exceeded (~36 chars,
+/// `ENAMETOOLONG`, Issue #207). `pid` stays a readable field for
+/// `/dev/shm` forensics while `slot`, the 128-bit nanos salt and the
+/// counter fold into 12 hex digits (48 bits), pinning the name to
+/// `23 + pid` chars — inside the limit on every platform (≤ 28 on
+/// macOS, whose pids cap at 99999).
+///
+/// Uniqueness is preserved: within a process the counter multiplies
+/// into the fold by an odd constant — bijective mod 2^48, so every
+/// call still yields a fresh name; across processes the folded salt
+/// keeps key spaces disjoint after PID reuse. Collisions remain
+/// *possible* — a named segment is a global resource — so
+/// [`Segment::create`] retries on `MappingIdExists` rather than
+/// promising uniqueness.
 pub(crate) fn unique_key(slot: u32) -> String {
     let counter = SEGMENT_COUNTER.fetch_add(1, Ordering::Relaxed);
+    // Nanos-since-epoch fits u64 today (`try_from` saturating in the
+    // unreachable overflow case keeps a defined value either way).
+    let salt = u64::try_from(process_salt()).unwrap_or(u64::MAX);
+    let folded = salt ^ u64::from(slot) ^ counter.wrapping_mul(0x9E37_79B9_7F4A_7C15);
     format!(
-        "/rvl1-shm-{}-{slot}-{:x}-{counter}",
+        "/rvl1-shm-{}-{:012x}",
         process::id(),
-        process_salt()
+        folded & 0xFFFF_FFFF_FFFF
     )
 }
 
