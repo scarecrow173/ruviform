@@ -21,7 +21,8 @@ Directory: `docs/specs`
 | SPEC-034O7hTzfdwtNrUQom8ISw | Issue #121 L1 診断・可観測性（underrun メトリクス・子 stderr 配管・失敗原因 payload） | approved | [issue-121-diagnostics.md](./issue-121-diagnostics.md) |
 | SPEC-034N3QmyfzJRPM3AVpKQTn | Issue #124 OFX フォローアップ（catalog_open cross-window h 露出修正 + instance clip props clone） | approved | [issue-124-ofx-cross-window-h-exposure.md](./issue-124-ofx-cross-window-h-exposure.md) |
 | SPEC-034N9oLnrGISolGjoiaTx2 | Issue #131 OFX UAF residuals — non-catalog window leases + lifecycle hardening | approved | [issue-131-ofx-uaf-residuals-non-catalog-window-leases-lifecycle-hardening.md](./issue-131-ofx-uaf-residuals-non-catalog-window-leases-lifecycle-hardening.md) |
-| SPEC-034QdDDqIQgpFoBr9E1Z1T | Issue #219 両 Consumer 互換契約・影響判定・証拠要件と Cross-Repo CI Gate 仕様 | draft | [issue-219-consumer-compat-contract.md](./issue-219-consumer-compat-contract.md) |
+| SPEC-034QdNpdBY3gkeQraIPKwP | Issue #184 Typed multi-bus Port/Connection Graph IR contract (Migration M1) | approved | [issue-184-typed-multi-bus-port-connection-graph-ir-contract-migration-m1.md](./issue-184-typed-multi-bus-port-connection-graph-ir-contract-migration-m1.md) |
+| SPEC-034QdDDqIQgpFoBr9E1Z1T | Issue #219 両 Consumer 互換契約・影響判定・証拠要件と Cross-Repo CI Gate 仕様 | proposed | [issue-219-consumer-compat-contract.md](./issue-219-consumer-compat-contract.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |

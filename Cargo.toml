@@ -43,6 +43,8 @@ members = [
     "crates/ruviform-plugin-export",
     # Host 層（Issue #74 — L0 インプロセス・ハンドル/コマンド境界。Issue #76 で L1 アウトプロセス + `PluginHost` コンポジット追加）
     "crates/ruviform-plugin-host",
+    # 構造層（Issue #184 — 型付き複数 Bus・Port 接続の Graph IR + 非 RT Validator。engine 消費者の直前の構造層）
+    "crates/ruviform-graph",
     # Engines（Issue #25 で新設）
     "crates/ruviform-audio",
     # 利用側層（Issue #96 — NLE 非破壊編集データモデル + 評価射影。engine 同順位・全 API 非 RT）
