@@ -344,8 +344,7 @@ impl ResamplePlan {
     #[must_use]
     pub fn from_params(params: ResampleParams) -> Self {
         // u32 -> usize を明示的に検証し、狭いポインタ幅での切り捨てを防ぐ。
-        let phase_count = usize::try_from(params.up())
-            .expect("resample phase count exceeds usize");
+        let phase_count = usize::try_from(params.up()).expect("resample phase count exceeds usize");
         let mut phases = Vec::with_capacity(phase_count * params.taps());
         for p in 0..params.up() {
             phases.extend(params.phase_coefficients(p));
