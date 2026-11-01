@@ -101,7 +101,7 @@ char *rv_str_own(RvHost *h, const char *s);      /* pool-owned stable copy */
 OfxStatus rv_mem_alloc(RvHost *h, size_t n, void **out);
 OfxStatus rv_mem_free(RvHost *h, void *ptr);
 
-const void *rv_fetch_suite(void *self, const char *name, int ver);
+const void *rv_fetch_suite(OfxPropertySetHandle self, const char *name, int ver);
 const void *rv_prop_suite_ptr(void);
 const void *rv_param_suite_ptr(void);
 const void *rv_mem_suite_ptr(void);

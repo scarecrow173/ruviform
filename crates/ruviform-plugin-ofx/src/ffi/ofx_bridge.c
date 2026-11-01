@@ -12,7 +12,7 @@ int32_t ofx_bridge_image_effect_api_version(void) {
     return kOfxImageEffectPluginApiVersion;
 }
 
-const void *rv_fetch_suite(void *self, const char *name, int ver) {
+const void *rv_fetch_suite(OfxPropertySetHandle self, const char *name, int ver) {
     (void)self;
     if (!name || ver != 1) return NULL;
     if (!strcmp(name, kOfxPropertySuite)) return rv_prop_suite_ptr();
