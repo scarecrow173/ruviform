@@ -518,7 +518,10 @@ impl VideoL1Instance {
     /// child's capture keeps mutating afterwards).
     ///
     /// **RT contract:** non-RT only — takes the capture mutex and
-    /// clones the retained stderr tail.
+    /// clones the retained stderr tail; post-convergence the freeze
+    /// also waits out the drain's own bounded end (see
+    /// [`diag::ActiveDiagnostics::freeze`]), never parked on a live
+    /// child.
     pub(crate) fn diagnostics_pending(&self) -> diag::PendingRecord {
         self.shared.diag.freeze(None)
     }

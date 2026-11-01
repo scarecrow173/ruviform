@@ -36,7 +36,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::io::Read;
 use std::process::ChildStderr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -159,12 +159,50 @@ impl StderrRing {
     }
 }
 
-#[derive(Debug)]
-struct ActiveInner {
-    ring: StderrRing,
+/// The drain thread's lifecycle on this capture — tracked so a
+/// `freeze` can tell whether waiting for the drain is meaningful
+/// and, once bounded, required.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DrainState {
+    /// No drain thread was (successfully) spawned for this
+    /// capture — nothing can ever mark `Done`, so `freeze` must
+    /// not wait on it.
+    NotSpawned,
+    /// The drain thread is alive: polling, reading, or inside its
+    /// post-exit grace.
+    Running,
+    /// The drain thread returned on any exit path (EOF, read/poll
+    /// error, deadline) or panicked — posted by its drop guard, so
+    /// the flag is unreachable only if the thread never started.
+    Done,
+}
+
+/// The snapshot flag trio — copied verbatim into
+/// `StderrSnapshot` by `stderr_snapshot()`.
+#[derive(Debug, Default)]
+struct DrainFlags {
     eof: bool,
     drain_deadline_exceeded: bool,
     unread_bytes_observed: bool,
+}
+
+#[derive(Debug)]
+struct ActiveInner {
+    ring: StderrRing,
+    /// Post-exit drain facts — verbatim snapshot fields.
+    flags: DrainFlags,
+    /// Drain lifecycle — see [`DrainState`].
+    drain: DrainState,
+    /// `Shared.inner.terminal` landed on the child's convergence
+    /// path (monotone — set independently of `drain`, so an
+    /// early-before-spawn landing is not lost): the drain's
+    /// remaining life is bounded by its own contract (EOF,
+    /// read/poll error, or first-observed-exit +
+    /// [`STDERR_DRAIN_GRACE`] — a live grandchild holding the pipe
+    /// only stretches it to the deadline), so a `freeze` may wait
+    /// for [`DrainState::Done`]. A live child's drain has no such
+    /// bound and a mid-life freeze must not wait.
+    drain_bounded: bool,
     phase: SpawnPhase,
     /// First-observed failure cause — fixed under this lock; later
     /// observations never overwrite it.
@@ -181,9 +219,9 @@ impl ActiveInner {
             bytes: self.ring.bytes.clone(),
             total_read_bytes: self.ring.total_read_bytes,
             dropped_bytes: self.ring.dropped_bytes,
-            eof: self.eof,
-            drain_deadline_exceeded: self.drain_deadline_exceeded,
-            unread_bytes_observed: self.unread_bytes_observed,
+            eof: self.flags.eof,
+            drain_deadline_exceeded: self.flags.drain_deadline_exceeded,
+            unread_bytes_observed: self.flags.unread_bytes_observed,
         }
     }
 }
@@ -195,6 +233,9 @@ impl ActiveInner {
 #[derive(Debug)]
 pub(crate) struct ActiveDiagnostics {
     inner: Mutex<ActiveInner>,
+    /// Signalled by [`ActiveDiagnostics::mark_drain_done`] — the
+    /// `freeze` side of the freeze/drain synchronization boundary.
+    drain_cv: Condvar,
 }
 
 impl ActiveDiagnostics {
@@ -204,13 +245,14 @@ impl ActiveDiagnostics {
         Self {
             inner: Mutex::new(ActiveInner {
                 ring: StderrRing::new(),
-                eof: false,
-                drain_deadline_exceeded: false,
-                unread_bytes_observed: false,
+                flags: DrainFlags::default(),
+                drain: DrainState::NotSpawned,
+                drain_bounded: false,
                 phase,
                 cause: None,
                 cleanup_error: None,
             }),
+            drain_cv: Condvar::new(),
         }
     }
 
@@ -221,19 +263,53 @@ impl ActiveDiagnostics {
 
     /// Drain thread: pipe EOF observed.
     pub(crate) fn mark_eof(&self) {
-        super::lock_mutex(&self.inner).eof = true;
+        super::lock_mutex(&self.inner).flags.eof = true;
     }
 
     /// Drain thread: the drain deadline was reached without EOF and
     /// the drain is stopping voluntarily.
     pub(crate) fn mark_deadline_exceeded(&self) {
-        super::lock_mutex(&self.inner).drain_deadline_exceeded = true;
+        super::lock_mutex(&self.inner).flags.drain_deadline_exceeded = true;
     }
 
     /// Drain thread: unread pipe data was actually observed at the
     /// deadline/final check.
     pub(crate) fn mark_unread_observed(&self) {
-        super::lock_mutex(&self.inner).unread_bytes_observed = true;
+        super::lock_mutex(&self.inner).flags.unread_bytes_observed = true;
+    }
+
+    /// Spawn path: the drain thread is starting — `Running` until
+    /// its drop guard posts `Done`.
+    fn mark_drain_spawned(&self) {
+        super::lock_mutex(&self.inner).drain = DrainState::Running;
+    }
+
+    /// Spawn path: the drain thread failed to start — back to
+    /// `NotSpawned`, since no thread exists to post `Done` and a
+    /// parked `freeze` would wait forever.
+    fn mark_drain_spawn_failed(&self) {
+        let mut inner = super::lock_mutex(&self.inner);
+        inner.drain = DrainState::NotSpawned;
+        self.drain_cv.notify_all();
+    }
+
+    /// Converge/teardown path: `Inner.terminal` is being set — the
+    /// drain's remaining life is now bounded by its own contract,
+    /// so a freeze may wait for [`DrainState::Done`]. Idempotent
+    /// and monotone — armed independently of `drain`, so a landing
+    /// before `mark_drain_spawned` still bounds the drain once it
+    /// starts. Called *before* the terminal flag lands so a freeze
+    /// that races convergence already waits.
+    pub(crate) fn mark_drain_bounded(&self) {
+        super::lock_mutex(&self.inner).drain_bounded = true;
+    }
+
+    /// Drain thread's drop guard: the thread ended on any path —
+    /// wakes every `freeze` parked on [`ActiveDiagnostics::drain_cv`].
+    fn mark_drain_done(&self) {
+        let mut inner = super::lock_mutex(&self.inner);
+        inner.drain = DrainState::Done;
+        self.drain_cv.notify_all();
     }
 
     /// Spawn/converge path: advance the lifecycle phase.
@@ -281,8 +357,26 @@ impl ActiveDiagnostics {
     /// record keeps mutating afterwards (a pooled live child's
     /// attempt record is a snapshot copy of this instant, separate
     /// from the child's continuing capture).
+    ///
+    /// Once the drain's exit is bounded (`drain_bounded` — the
+    /// child's convergence set `Inner.terminal`), the freeze waits
+    /// for the drain to finish first: a snapshot taken while the
+    /// bounded drain still runs could freeze *pre-drain* state —
+    /// bytes already in the pipe not yet read, post-exit flags not
+    /// yet posted. The wait is bounded by the drain's own contract
+    /// (it exits at EOF, a read/poll error, or
+    /// [`STDERR_DRAIN_GRACE`] after the first observed exit — never
+    /// extended) plus scheduling latency. A live child's drain has
+    /// no bound, so a mid-life freeze keeps the instant-snapshot
+    /// contract and never parks.
     pub(crate) fn freeze(&self, handle: Option<u32>) -> PendingRecord {
-        let inner = super::lock_mutex(&self.inner);
+        let mut inner = super::lock_mutex(&self.inner);
+        while inner.drain == DrainState::Running && inner.drain_bounded {
+            inner = self
+                .drain_cv
+                .wait(inner)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
         PendingRecord {
             handle,
             phase: inner.phase,
@@ -604,6 +698,7 @@ fn poll_stderr(stderr: &ChildStderr, wait: Duration) -> Poll {
 /// Dropping `stderr` on return closes the read end, so a
 /// stdio-inheriting grandchild's later writes fail.
 fn drain_stderr(mut stderr: ChildStderr, diag: &ActiveDiagnostics, shared: &Shared) {
+    let _drain_done = DrainDoneGuard(diag);
     let mut buf = [0u8; DRAIN_READ_CHUNK];
     // `Some(at)` from the first observed child exit — the deadline
     // `at + STDERR_DRAIN_GRACE` never moves afterwards.
@@ -641,22 +736,41 @@ fn drain_stderr(mut stderr: ChildStderr, diag: &ActiveDiagnostics, shared: &Shar
     }
 }
 
+/// Posts [`ActiveDiagnostics::mark_drain_done`] on thread exit —
+/// every `return` path *and* a panic unwind — so a bounded `freeze`
+/// never waits on a drain that already ended.
+struct DrainDoneGuard<'a>(&'a ActiveDiagnostics);
+
+impl Drop for DrainDoneGuard<'_> {
+    fn drop(&mut self) {
+        self.0.mark_drain_done();
+    }
+}
+
 /// Spawns the `l1-stderr-drain` thread — detached by convention: the
 /// caller drops the `JoinHandle` and never joins (the drain bounds
 /// its own life; an stdio-inheriting grandchild could otherwise
 /// stretch a join past the teardown bound). `Err` mirrors
 /// [`thread::Builder::spawn`] — the caller rolls the spawn back
-/// through the existing kill/reap abort path.
+/// through the existing kill/reap abort path. The capture's
+/// [`DrainState`] tracks the spawn so a bounded `freeze` can wait
+/// for the drain's own convergence instead of racing it.
 ///
 /// `pub(super)` — only `l1`'s spawn path names `Shared`.
 pub(super) fn spawn_drain(
     stderr: ChildStderr,
-    diag: Arc<ActiveDiagnostics>,
+    diag: &Arc<ActiveDiagnostics>,
     shared: Arc<Shared>,
 ) -> std::io::Result<thread::JoinHandle<()>> {
-    thread::Builder::new()
+    diag.mark_drain_spawned();
+    let thread_diag = Arc::clone(diag);
+    let spawned = thread::Builder::new()
         .name("l1-stderr-drain".to_owned())
-        .spawn(move || drain_stderr(stderr, &diag, &shared))
+        .spawn(move || drain_stderr(stderr, &thread_diag, &shared));
+    if spawned.is_err() {
+        diag.mark_drain_spawn_failed();
+    }
+    spawned
 }
 
 #[cfg(test)]
@@ -776,6 +890,78 @@ mod tests {
         assert_eq!(active.cause(), Some(FailureCause::Transport));
         let frozen = active.freeze(None);
         assert_eq!(frozen.cause, Some(FailureCause::Transport));
+    }
+
+    /// Issue #216: a freeze that runs after the child's convergence
+    /// (`drain_bounded` armed) must not outrun the drain — the
+    /// parked freeze wakes on `Done` and the snapshot carries the
+    /// drain's *final* capture, bytes included. Before the
+    /// freeze/drain synchronization this froze `[]` while the
+    /// in-flight bytes were still on the pipe.
+    #[test]
+    fn freeze_waits_for_bounded_drain_done() {
+        let active = Arc::new(ActiveDiagnostics::new(SpawnPhase::Live));
+        active.record_bytes(b"early");
+        active.mark_drain_spawned();
+        active.mark_drain_bounded();
+        let clone = Arc::clone(&active);
+        let frozen = thread::spawn(move || clone.freeze(None));
+        // The drain finishes later — its last bytes still land in
+        // the record because the freeze parks until `Done`.
+        active.record_bytes(b"late");
+        active.mark_eof();
+        active.mark_drain_done();
+        let frozen = frozen.join().expect("freeze thread joins");
+        let mut expected = b"early".to_vec();
+        expected.extend_from_slice(b"late");
+        assert_eq!(frozen.stderr.bytes, expected);
+        assert_eq!(frozen.stderr.total_read_bytes, expected.len() as u64);
+        assert!(frozen.stderr.eof);
+    }
+
+    /// The same bound on the other side of the contract: a live
+    /// child's drain is *unbounded* — `drain_bounded` never armed —
+    /// so a mid-life freeze keeps the instant-snapshot contract and
+    /// returns rather than parking on a drain that may run forever.
+    #[test]
+    fn freeze_unbounded_drain_does_not_wait() {
+        let active = ActiveDiagnostics::new(SpawnPhase::Live);
+        active.mark_drain_spawned();
+        active.record_bytes(b"live");
+        // No `mark_drain_done` — returning at all proves the freeze
+        // did not park on the still-`Running` drain.
+        let frozen = active.freeze(None);
+        assert_eq!(frozen.stderr.bytes, b"live");
+        assert!(!frozen.stderr.eof);
+    }
+
+    /// `drain_bounded` is monotone and independent of the spawn
+    /// marker: a convergence landing *before* `mark_drain_spawned`
+    /// must not be lost — the later-started drain is bounded all
+    /// the same.
+    #[test]
+    fn bounded_landing_before_spawn_still_bounds_drain() {
+        let active = Arc::new(ActiveDiagnostics::new(SpawnPhase::DrainInit));
+        // Convergence raced ahead of the drain thread's start.
+        active.mark_drain_bounded();
+        active.mark_drain_spawned();
+        let clone = Arc::clone(&active);
+        let frozen = thread::spawn(move || clone.freeze(None));
+        active.record_bytes(b"pre-exit");
+        active.mark_drain_done();
+        let frozen = frozen.join().expect("freeze thread joins");
+        assert_eq!(frozen.stderr.bytes, b"pre-exit");
+    }
+
+    /// Boundedness with no drain thread — the `spawn_drain` error
+    /// path rolls the spawn back to `NotSpawned` — must never park:
+    /// no thread exists to post `Done`.
+    #[test]
+    fn freeze_bounded_without_drain_does_not_wait() {
+        let active = ActiveDiagnostics::new(SpawnPhase::DrainInit);
+        active.mark_drain_bounded();
+        let frozen = active.freeze(None);
+        assert_eq!(frozen.stderr.total_read_bytes, 0);
     }
 
     #[test]

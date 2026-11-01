@@ -1212,7 +1212,12 @@ impl PluginHost {
     /// drops with the slot), `None` when nothing has failed. L0
     /// instances never notify.
     ///
-    /// **RT contract:** non-RT only — `try_recv`, never blocks.
+    /// **RT contract:** non-RT only — `try_recv`, never blocks on
+    /// an empty queue. A confirmed-failure pop freezes the child's
+    /// diagnostics record, which waits for the stderr drain's own
+    /// bounded end (pipe EOF/error, or its post-exit deadline —
+    /// see `diag::STDERR_DRAIN_GRACE`) so the record carries the
+    /// full capture rather than a pre-drain snapshot.
     ///
     /// # Panics
     ///
