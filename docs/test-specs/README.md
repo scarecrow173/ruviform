@@ -15,6 +15,8 @@ Directory: `docs/test-specs`
 | TSPEC-034IdHsItEuo0TZWTPOJUu | ci プロファイルのビルド挙動と成果物分離 | proposed | [ci-profile-build-behavior.md](./ci-profile-build-behavior.md) |
 | TSPEC-034LFChh51ZlHnSWXsKqDw | video-proc 色変換・working space カーネル テスト仕様 | approved | [color-working-space-kernel-tests.md](./color-working-space-kernel-tests.md) |
 | TSPEC-034KSVh4JNdOEJMzGYbZic | video-proc コンポジット/遷移カーネル テスト仕様 | approved | [composite-transition-kernels-tests.md](./composite-transition-kernels-tests.md) |
+| TSPEC-034QdTKuBv9EDEBUuGxUT9 | Consumer 影響判定・証拠テンプレート必須欄（PR/Issue template） | draft | [consumer-pr-issue-template.md](./consumer-pr-issue-template.md) |
+| TSPEC-034QdTJK0E2ZE5tkSjRLwr | consumer-verify workflow の gate 意味論（not run≠pass・preflight gating・単一SHA guard・秘密非露出） | draft | [consumer-verify-workflow-gate-not-run-pass-preflight-gating-sha-guard.md](./consumer-verify-workflow-gate-not-run-pass-preflight-gating-sha-guard.md) |
 | TSPEC-034JZDNRML000000000005 | denormal flush テスト仕様 | approved | [denormal-flush-tests.md](./denormal-flush-tests.md) |
 | TSPEC-034KPgCJjA5nOIvEtscQj8 | ruviform-edit 編集データモデル テスト仕様 | approved | [edit-data-model-tests.md](./edit-data-model-tests.md) |
 | TSPEC-034J6OIFK83GJIsST60Jck | 公開 enum 拡張性と時間演算精度の契約保証 | approved | [followup-enum-compat-and-time-arithmetic.md](./followup-enum-compat-and-time-arithmetic.md) |
@@ -32,7 +34,7 @@ Directory: `docs/test-specs`
 | TSPEC-034OpmNe3vUnEprFdOIHb6 | L1 FailureCause・通知互換（Issue #121 — 7 variant 分類・first-observed・InstanceFailed.cause・wire 不変） | approved | [issue-121-l1-failure-cause-notification-tests.md](./issue-121-l1-failure-cause-notification-tests.md) |
 | TSPEC-034OpmNQsPNOBT99IHbrQz | L1 diagnostics parity・無退行（Issue #121 — video parity・supervisor pass-through・L0/wire/supervisor 契約維持） | approved | [issue-121-l1-parity-nonregression-tests.md](./issue-121-l1-parity-nonregression-tests.md) |
 | TSPEC-034OpmLKqqBA5YuKQkRrIU | L1 child stderr drain（Issue #121 — piped stderr・64KiB tail ring・snapshot 不変・500ms grace・heir bounded teardown） | approved | [issue-121-l1-stderr-drain-tests.md](./issue-121-l1-stderr-drain-tests.md) |
-| TSPEC-034QeeLKxXQyMBzA6HNOW6 | Issue #184 M1 typed graph IR: representation, multi-bus topology, validation failures, revisions, legacy coexistence | draft | [issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md](./issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md) |
+| TSPEC-034QeeLKxXQyMBzA6HNOW6 | Issue #184 M1 typed graph IR: representation, multi-bus topology, validation failures, revisions, legacy coexistence | approved | [issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md](./issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |

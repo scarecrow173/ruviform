@@ -106,3 +106,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034R167CmplxSlvImp1XyZ9` | Issue #167 complex_solve (複素線形ソルバ) implementation | completed | [issue-167-complex-solver-implementation.md](./issue-167-complex-solver-implementation.md) |
 | IMPL-034PqMkXQjnEVxWEUQBwFb | Issue #173 rvf://data paging contract documentation | completed | [issue-173-rvf-data-paging-contract-documentation.md](./issue-173-rvf-data-paging-contract-documentation.md) |
 | `IMPL-034R171DataRegEvct9XyZq` | Issue #171 DataRegistry eviction/unregister 契約の実装 | completed | [issue-171-data-registry-eviction-contract.md](./issue-171-data-registry-eviction-contract.md) |
+| `IMPL-034Qe219CrossRepoCiGateX7k` | Issue #219 Consumer 影響判定テンプレート・consumer-verify workflow・AGENTS.md CI drift 修正 | completed | [issue-219-consumer-verify-gate.md](./issue-219-consumer-verify-gate.md) |

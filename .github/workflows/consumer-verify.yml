@@ -1,0 +1,350 @@
+name: consumer-verify
+
+# Issue #219 Cross-Repo CI Gate: ruviform 候補 revision に対する
+# Synvelis / AudioLens の互換検証を workflow_dispatch で実行する情報 lane。
+# required checks には含めず、片 Consumer の失敗・未検証が他 Consumer の
+# 実行や ruviform の merge を止めない。全 lane が not run の run は
+# 「証拠ゼロ」として失敗にし、unknown を pass に見せない。
+#
+# 前提: ruviform repo の Actions secret CROSS_REPO_DEPLOY_KEY に、
+# 3 repo（ruviform/audio-lens/synvelis）へ read-only Deploy Key として
+# 登録した秘密鍵を投入する一次設定が必要（未設定時は全 lane が not run）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      ruviform_rev:
+        description: "検証対象の ruviform commit SHA（空なら dispatch 対象 ref の SHA）"
+        required: false
+        type: string
+      audiolens_ref:
+        description: "audio-lens の checkout ref（branch/tag 名のみ）"
+        required: false
+        default: "main"
+        type: string
+      synvelis_ref:
+        description: "synvelis の checkout ref（branch/tag 名のみ）"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RUVIFORM_REV: ${{ inputs.ruviform_rev || github.sha }}
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      credential_configured: ${{ steps.probe.outputs.credential_configured }}
+    steps:
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          if ! echo "$RUVIFORM_REV" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error::ruviform_rev must be a 40-hex commit SHA (got: $RUVIFORM_REV)"
+            exit 1
+          fi
+          for ref in "${{ inputs.audiolens_ref }}" "${{ inputs.synvelis_ref }}"; do
+            if ! echo "$ref" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/-]*$' || echo "$ref" | grep -qE '\.\.|^/|/$|\.lock$'; then
+              echo "::error::consumer ref must be a branch/tag name (got: $ref)"
+              exit 1
+            fi
+          done
+          echo "candidate revision: $RUVIFORM_REV"
+      - name: Probe credential presence
+        id: probe
+        env:
+          KEY: ${{ secrets.CROSS_REPO_DEPLOY_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "credential_configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "credential_configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::CROSS_REPO_DEPLOY_KEY is not configured — consumer lanes will report 'not run'"
+          fi
+
+  verify-audiolens:
+    needs: [preflight]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.result.outputs.status }}
+    steps:
+      - name: Gate on preflight result
+        id: gate
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.preflight.result }}" != "success" ]; then
+            echo "| lane | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|---|---|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| preflight | ubuntu-latest | - | $RUVIFORM_REV | fail (preflight failed) | - | - |" >> "$GITHUB_STEP_SUMMARY"
+            echo "status=fail" >> "$GITHUB_OUTPUT"
+            echo "gate=blocked" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "status=not_run" >> "$GITHUB_OUTPUT"
+          if [ "${{ needs.preflight.outputs.credential_configured }}" != "true" ]; then
+            echo "gate=not_run" >> "$GITHUB_OUTPUT"
+            echo "## AudioLens: not run (credential not configured)" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "CROSS_REPO_DEPLOY_KEY secret と 3 repo への read-only Deploy Key 登録が必要（runbook 参照）。" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "gate=run" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install SSH credential
+        if: steps.gate.outputs.gate == 'run'
+        env:
+          KEY: ${{ secrets.CROSS_REPO_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          keyfile="$RUNNER_TEMP/cross-repo-deploy-key"
+          printf '%s\n' "$KEY" > "$keyfile"
+          chmod 600 "$keyfile"
+          # GitHub 公表 SSH fingerprint（docs.github.com）と照合して pin する。
+          # /meta 応答の fingerprint と鍵を同時に信頼しない（circular 回避）。
+          kh="$RUNNER_TEMP/known_hosts"
+          ssh-keyscan -t rsa,ecdsa,ed25519 github.com > "$kh" 2>/dev/null
+          ok=0
+          for want in \
+            "SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2s" \
+            "SHA256:p2QAMXNIC1TJYWeIOttrVc98/R1BUFWuNC/Ldsl8C8I" \
+            "SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU"; do
+            if ssh-keygen -lf "$kh" | grep -q "$want"; then ok=$((ok+1)); fi
+          done
+          if [ "$ok" -lt 3 ]; then
+            echo "::error::github.com host key fingerprints do not match published constants — check for GitHub host key rotation and update the workflow constants"
+            exit 1
+          fi
+          echo "GIT_SSH_COMMAND=ssh -i $keyfile -o IdentitiesOnly=yes -o UserKnownHostsFile=$kh -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+      - name: Set up mise
+        if: steps.gate.outputs.gate == 'run'
+        uses: jdx/mise-action@v5.2.0
+      - name: Clone audio-lens
+        if: steps.gate.outputs.gate == 'run'
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "${{ inputs.audiolens_ref }}" \
+            git@github.com:scarecrow173/audio-lens.git "$RUNNER_TEMP/audio-lens"
+      - name: Configure private dep access + probe
+        if: steps.gate.outputs.gate == 'run'
+        run: |
+          set -euo pipefail
+          git config --global url."git@github.com:scarecrow173/ruviform.git".insteadOf \
+            "https://github.com/scarecrow173/ruviform.git"
+          git ls-remote git@github.com:scarecrow173/ruviform.git HEAD >/dev/null
+          echo "private dep access OK"
+      - name: Override ruviform rev in manifest
+        if: steps.gate.outputs.gate == 'run'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: |
+          set -euo pipefail
+          sed -i -E "/scarecrow173\/ruviform\.git/ s/rev = \"[0-9a-f]{40}\"/rev = \"$RUVIFORM_REV\"/" Cargo.toml
+          git diff Cargo.toml >> "$GITHUB_STEP_SUMMARY" || true
+      - name: cargo fetch + single-SHA lockfile guard
+        id: fetch
+        if: steps.gate.outputs.gate == 'run'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: |
+          set -euo pipefail
+          mise trust
+          mise install --locked
+          mise exec -- cargo fetch
+          total=$(grep -c 'scarecrow173/ruviform\.git' Cargo.lock || true)
+          if [ "$total" -eq 0 ]; then
+            echo "::error::no ruviform git sources in Cargo.lock — manifest rewrite had no effect"
+            exit 1
+          fi
+          bad=$(grep 'scarecrow173/ruviform\.git' Cargo.lock | grep -vc "?rev=$RUVIFORM_REV#$RUVIFORM_REV" || true)
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::$bad ruviform source line(s) are not resolved to $RUVIFORM_REV"
+            grep 'scarecrow173/ruviform\.git' Cargo.lock | grep -v "?rev=$RUVIFORM_REV#$RUVIFORM_REV"
+            exit 1
+          fi
+          echo "all $total ruviform sources resolved to $RUVIFORM_REV"
+          git diff Cargo.lock >> "$GITHUB_STEP_SUMMARY" || true
+      - name: check-ci lane
+        id: check
+        if: steps.gate.outputs.gate == 'run'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: mise run check-ci
+      - name: smoke lane (check-cli-headless)
+        id: smoke
+        if: steps.gate.outputs.gate == 'run' && steps.check.outcome == 'success'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: mise run check-cli-headless
+      - name: test-ci lane (with LFS fixtures)
+        id: test
+        if: steps.gate.outputs.gate == 'run' && steps.check.outcome == 'success'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: |
+          set -euo pipefail
+          git lfs pull
+          mise run test-ci
+      - name: Record evidence + status
+        id: result
+        if: always()
+        run: |
+          set -uo pipefail
+          gate="${{ steps.gate.outputs.gate }}"
+          if [ "${{ needs.preflight.result }}" != "success" ]; then
+            exit 0  # gate step already emitted fail evidence
+          fi
+          {
+            echo "## AudioLens — ruviform $RUVIFORM_REV"
+            echo ""
+            echo "| lane | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |"
+            echo "|---|---|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$gate" = "not_run" ]; then
+            echo "| all | ubuntu-latest | - | $RUVIFORM_REV | not run (credential not configured) | - | - |" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          row() { echo "| $1 | ubuntu-latest | $2 | $RUVIFORM_REV | $3 | - | pin を旧 SHA へ revert |" >> "$GITHUB_STEP_SUMMARY"; }
+          row "manifest rev override + cargo fetch (lockfile re-resolve)" "workspace" "${{ steps.fetch.outcome }}"
+          row "mise run check-ci" "workspace" "${{ steps.check.outcome }}"
+          row "mise run check-cli-headless (smoke)" "al-cli headless" "${{ steps.smoke.outcome || 'not run' }}"
+          row "mise run test-ci (LFS fixtures)" "workspace" "${{ steps.test.outcome || 'not run' }}"
+          if [ "${{ steps.check.outcome }}" = "success" ] && [ "${{ steps.smoke.outcome }}" = "success" ] && [ "${{ steps.test.outcome }}" = "success" ]; then
+            echo "status=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=fail" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Cleanup credential
+        if: always() && steps.gate.outputs.gate == 'run'
+        run: |
+          git config --global --unset-all url."git@github.com:scarecrow173/ruviform.git".insteadOf || true
+          rm -f "$RUNNER_TEMP/cross-repo-deploy-key" "$RUNNER_TEMP/known_hosts"
+          # 注: 本 step 以降に git/ssh を使う step を追加しないこと
+          # （GIT_SSH_COMMAND が削除済み鍵を指すため）
+
+  verify-synvelis:
+    needs: [preflight]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.result.outputs.status }}
+    steps:
+      - name: Gate on preflight result
+        id: gate
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.preflight.result }}" != "success" ]; then
+            echo "| lane | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|---|---|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| preflight | ubuntu-latest | - | $RUVIFORM_REV | fail (preflight failed) | - | - |" >> "$GITHUB_STEP_SUMMARY"
+            echo "status=fail" >> "$GITHUB_OUTPUT"
+            echo "gate=blocked" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "status=not_run" >> "$GITHUB_OUTPUT"
+          if [ "${{ needs.preflight.outputs.credential_configured }}" != "true" ]; then
+            echo "gate=not_run" >> "$GITHUB_OUTPUT"
+            echo "## Synvelis: not run (credential not configured)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "gate=run" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install SSH credential
+        if: steps.gate.outputs.gate == 'run'
+        env:
+          KEY: ${{ secrets.CROSS_REPO_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          keyfile="$RUNNER_TEMP/cross-repo-deploy-key"
+          printf '%s\n' "$KEY" > "$keyfile"
+          chmod 600 "$keyfile"
+          kh="$RUNNER_TEMP/known_hosts"
+          ssh-keyscan -t rsa,ecdsa,ed25519 github.com > "$kh" 2>/dev/null
+          ok=0
+          for want in \
+            "SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2s" \
+            "SHA256:p2QAMXNIC1TJYWeIOttrVc98/R1BUFWuNC/Ldsl8C8I" \
+            "SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU"; do
+            if ssh-keygen -lf "$kh" | grep -q "$want"; then ok=$((ok+1)); fi
+          done
+          if [ "$ok" -lt 3 ]; then
+            echo "::error::github.com host key fingerprints do not match published constants"
+            exit 1
+          fi
+          echo "GIT_SSH_COMMAND=ssh -i $keyfile -o IdentitiesOnly=yes -o UserKnownHostsFile=$kh -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+      - name: Clone synvelis + workspace presence check
+        id: presence
+        if: steps.gate.outputs.gate == 'run'
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "${{ inputs.synvelis_ref }}" \
+            git@github.com:scarecrow173/synvelis.git "$RUNNER_TEMP/synvelis"
+          if [ ! -f "$RUNNER_TEMP/synvelis/Cargo.toml" ]; then
+            echo "presence=absent" >> "$GITHUB_OUTPUT"
+          else
+            echo "presence=present" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Record evidence + status
+        id: result
+        if: always()
+        run: |
+          set -uo pipefail
+          if [ "${{ needs.preflight.result }}" != "success" ]; then
+            exit 0
+          fi
+          gate="${{ steps.gate.outputs.gate }}"
+          {
+            echo "## Synvelis — ruviform $RUVIFORM_REV"
+            echo ""
+            echo "| lane | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |"
+            echo "|---|---|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$gate" = "not_run" ]; then
+            echo "| all | ubuntu-latest | - | $RUVIFORM_REV | not run (credential not configured) | - | - |" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.presence.outputs.presence }}" = "absent" ]; then
+            echo "| workspace presence | ubuntu-latest | - | $RUVIFORM_REV | not run (no buildable workspace) | Synvelis は設計段階（#28） | - |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| workspace presence | ubuntu-latest | - | $RUVIFORM_REV | pass (Cargo.toml present; lanes TBD) | - | - |" >> "$GITHUB_STEP_SUMMARY"
+            echo "status=pass" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Cleanup credential
+        if: always() && steps.gate.outputs.gate == 'run'
+        run: |
+          git config --global --unset-all url."git@github.com:scarecrow173/ruviform.git".insteadOf || true
+          rm -f "$RUNNER_TEMP/cross-repo-deploy-key" "$RUNNER_TEMP/known_hosts"
+
+  summary:
+    needs: [preflight, verify-audiolens, verify-synvelis]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate evidence table
+        run: |
+          set -euo pipefail
+          {
+            echo "# Cross-Repo Consumer Verify — $RUVIFORM_REV"
+            echo ""
+            echo "| Consumer | job result | status |"
+            echo "|---|---|---|"
+            echo "| AudioLens | ${{ needs.verify-audiolens.result }} | ${{ needs.verify-audiolens.outputs.status || 'unknown' }} |"
+            echo "| Synvelis | ${{ needs.verify-synvelis.result }} | ${{ needs.verify-synvelis.outputs.status || 'unknown' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Enforce not-run-is-not-pass
+        run: |
+          set -euo pipefail
+          al_res="${{ needs.verify-audiolens.result }}"
+          sv_res="${{ needs.verify-synvelis.result }}"
+          al_st="${{ needs.verify-audiolens.outputs.status || 'unknown' }}"
+          sv_st="${{ needs.verify-synvelis.outputs.status || 'unknown' }}"
+          if [ "$al_res" = "failure" ] || [ "$sv_res" = "failure" ] || [ "$al_res" = "cancelled" ] || [ "$sv_res" = "cancelled" ] || [ "${{ needs.preflight.result }}" != "success" ]; then
+            echo "::error::one or more consumer lanes failed or were cancelled — see per-job summaries"
+            exit 1
+          fi
+          if [ "$al_st" != "pass" ] && [ "$sv_st" != "pass" ]; then
+            echo "::error::no consumer lane produced evidence (all not run) — a green run requires at least one executed lane"
+            exit 1
+          fi
+          if [ "$al_st" != "pass" ] && [ "$al_st" != "not_run" ]; then exit 1; fi
+          if [ "$sv_st" != "pass" ] && [ "$sv_st" != "not_run" ]; then exit 1; fi
+          echo "at least one consumer lane passed; all other lanes are not_run (recorded, not counted as pass)"

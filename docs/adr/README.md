@@ -10,6 +10,7 @@ Directory: `docs/adr`
 | ADR-lg9vK3EAHePSiJf7YHThrm | 広範色管理の段階的範囲 | accepted | [broad-color-management.md](./broad-color-management.md) |
 | ADR-034JOpkx5tdDPVGzdlb0bb | chunk 分割時の OutputCallbackInfo timestamp 合成 | accepted | [chunk-outputcallbackinfo-timestamp.md](./chunk-outputcallbackinfo-timestamp.md) |
 | ADR-20261101-variable-ppqn-rational-beat | 可変PPQN・分解能非依存の音楽時間・Native MIDI時刻保持 | accepted | [configurable-ppqn-resolution-independent-musical-time.md](./configurable-ppqn-resolution-independent-musical-time.md) |
+| ADR-034QdDEaffrclLniNBLhQe | Cross-Repo CI アクセス認証と候補revision検証方式 | proposed | [cross-repo-ci-revision.md](./cross-repo-ci-revision.md) |
 | ADR-034JZDNRML000000000002 | denormal 崖対策の実装方針（エンジン層ソフトウェア flush ノード） | accepted | [denormal-mitigation-policy.md](./denormal-mitigation-policy.md) |
 | ADR-034JEe7SAbksaycyrum16R | DSP/SIMD 二層構造とバックエンドの採否 | accepted | [dsp-simd-backend-adoption.md](./dsp-simd-backend-adoption.md) |
 | ADR-034JcihlNe8WCZVpp9RBCq | DSP/SIMD PoC 評価アプローチ | accepted | [dsp-simd-poc.md](./dsp-simd-poc.md) |
@@ -42,7 +43,7 @@ Directory: `docs/adr`
 | ADR-154-media-backends | AVI/MP4/AAC 入力バックエンドの配置: AVI は専用 pure-Rust クレート、MP4/AAC は symphonia opt-in feature | accepted | [select-media-backends-avi-and-mp4.md](./select-media-backends-avi-and-mp4.md) |
 | ADR-034JQvAkxQaMfRbMHDRLoM | 本番 SIMD カーネルの精度契約形（ulp 固定 + 有限入力前提） | accepted | [simd-ulp.md](./simd-ulp.md) |
 | ADR-20261101-synvelis-driven-generic-execution-boundaries | Ruviformの汎用Graph/Audio Execution/Stateful Processorとアプリ意味論の責務境界 | accepted | [synvelis-driven-generic-execution-boundaries.md](./synvelis-driven-generic-execution-boundaries.md) |
-| ADR-034QdPgLCqwTPQ4FHtjLsj | Typed multi-bus Graph IR placement and Port/Connection validation model (Issue #184 M1) | proposed | [typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md](./typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md) |
+| ADR-034QdPgLCqwTPQ4FHtjLsj | Typed multi-bus Graph IR placement and Port/Connection validation model (Issue #184 M1) | accepted | [typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md](./typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md) |
 | ADR-034IO01BpGWCl1DcEbcTQI | UIアーキテクチャ方針（WebViewファースト・ハイブリッド） | accepted | [ui-architecture-webview-hybrid.md](./ui-architecture-webview-hybrid.md) |
 | ADR-034Jc9Cguud7nZ2Tt88Ptu | UI 技術選定（wry・描画バックエンド・フロントエンド FW・配布）— PoC 採否 | accepted | [ui-tech-selection-poc.md](./ui-tech-selection-poc.md) |
 | ADR-034JZVID00000000000002 | A/V 同期判定ポリシー（audio master + PTS 追従） | accepted | [video-av-sync-policy.md](./video-av-sync-policy.md) |

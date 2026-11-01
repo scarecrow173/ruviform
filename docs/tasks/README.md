@@ -6,9 +6,9 @@ Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
-| TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | todo | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
-| TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | todo | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
-| TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | todo | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
+| TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
+| TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
+| TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -82,6 +82,10 @@ Directory: `docs/tasks`
 | TASK-034Jf3FazZdLzFAFTDXUa3 | スカラー参照カーネルと共通型 | done | [implement-simd-poc-scalar-kernels.md](./implement-simd-poc-scalar-kernels.md) |
 | TASK-034J5KR5ueilYgXdyyF4ZU | ruviform-video-core のデータモデル実装 | done | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | TASK-034JcD1UTgLlW1lRoWI1Ng | video-proc カーネル API 形状と YUV→RGB 変換カーネルの実装 | done | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
+| TASK-034QdV8LJ4ZnIRqDUSRakb | T1 Consumer影響判定・証拠テンプレート（PR/Issue template群） | done | [issue-219-t1-impact-templates.md](./issue-219-t1-impact-templates.md) |
+| TASK-034QdV9z3ctYdM4HMD0MsZ | T2 consumer-verify.yml Cross-Repo CI lane（preflight/verify×2/summary） | done | [issue-219-t2-consumer-verify-workflow.md](./issue-219-t2-consumer-verify-workflow.md) |
+| TASK-034QdVap6IcvMjOYnaWzCR | T3 AGENTS.md の ci.yml 記述 drift 修正 | done | [issue-219-t3-agents-ci-drift.md](./issue-219-t3-agents-ci-drift.md) |
+| TASK-034QdVbbaa7jKsLfhGKepC | T4 検証・IR 記録（actionlint・doc audit・実装記録） | done | [issue-219-t4-verify-ir.md](./issue-219-t4-verify-ir.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
