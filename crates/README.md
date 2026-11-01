@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計28クレート）。
+Ruviform ワークスペースのメンバークレート索引（計29クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -57,6 +57,12 @@ Ruviform ワークスペースのメンバークレート索引（計28クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-plugin-host`](ruviform-plugin-host/README.md) | 規格中立プラグインホスト境界（L0 インプロセス + L1 アウトプロセス — `PluginHost` コンポジットが登録時ルーティング・`PluginHost::video()` が NONRT video L1 別面を貸す — Issue #118） |
+
+## 構造層（engine 消費者に先立つ Graph IR）
+
+| クレート | 責務 |
+| --- | --- |
+| [`ruviform-graph`](ruviform-graph/README.md) | 型付き複数 Bus・Port 接続の Graph IR + 非 RT Validator + `GraphProject`/`StableHandleMap`（全 API 非 RT — Issue #184 / Migration M1） |
 
 ## Engines
 

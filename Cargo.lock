@@ -2877,6 +2877,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-graph"
+version = "0.1.0"
+dependencies = [
+ "ruviform-audio-core",
+]
+
+[[package]]
 name = "ruviform-io-avi"
 version = "0.1.0"
 dependencies = [

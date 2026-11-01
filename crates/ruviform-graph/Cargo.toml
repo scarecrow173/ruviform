@@ -1,0 +1,22 @@
+[package]
+name = "ruviform-graph"
+description = "Typed multi-bus Graph IR (ports, buses, connections) and non-RT validation for the Ruviform media foundation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# ruviform-audio-core のみ: PortFormat::Audio が AudioFormat を再利用するため。
+# media-core は M1 では crate-local error 型を使い直接依存しない（推移的にのみ到達）。
+# ruviform-rt / engine / plugin / adapter への依存は層規約で禁止（crates/README.md 参照）。
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+
+# PoC 受入テスト (tests/poc_ex.rs) が AudioFormat を直接組み立てるための
+# dev-dep。通常依存 DAG には影響しない。
+[dev-dependencies]
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+
+[lints]
+workspace = true
