@@ -1,18 +1,12 @@
 # TASK Documents
 
+
 <!-- doc-suite:generated-index -->
 
 Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
-| TASK-034Qfs0cxlLQ9xk1dN3NJM | T-1 typed buffer arena + io views + compiler (schedule/slots/PDC) | done | [m2-t1-typed-compiler-buffer-io.md](./m2-t1-typed-compiler-buffer-io.md) |
-| TASK-034Qfs3QuOMXdVC8ZnuKz6 | T-2 typed RT runtime: GraphProcessor, GraphRuntime/RtRuntime, activation, faults | done | [m2-t2-typed-rt-runtime-activation.md](./m2-t2-typed-rt-runtime-activation.md) |
-| TASK-034Qfs4U6jKNPhfoasgTFI | T-3 acceptance tests + ownership PoC + fault injection | done | [m2-t3-tests-ownership-poc-faults.md](./m2-t3-tests-ownership-poc-faults.md) |
-| TASK-034Qfs62FTCiTj3vNuOwAz | T-4 golden legacy, EX/TA traceability, merge+lockfile+verification, impl record | done | [m2-t4-golden-traceability-verification.md](./m2-t4-golden-traceability-verification.md) |
-| TASK-034QfdkD1MggWcolouiYsy | issue-189 T-1 BeatPosition/Ppqn/TickPosition canonical types | todo | [issue-189-t-1-beat-canonical-types.md](./issue-189-t-1-beat-canonical-types.md) |
-| TASK-034QfdpefNAIoQr57VQZlb | issue-189 T-2 TempoMap Beat basis + event/position/ABI migration | todo | [issue-189-t-2-tempomap-beat-basis.md](./issue-189-t-2-tempomap-beat-basis.md) |
-| TASK-034QfdqgoGMqtqJ2HHFDdG | issue-189 T-3 golden/RT verification + impl record + output contract | todo | [issue-189-t-3-golden-verification-impl-record.md](./issue-189-t-3-golden-verification-impl-record.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -123,6 +117,10 @@ Directory: `docs/tasks`
 | TASK-034NlPHnwYkRTWHq1nvYvo | L1 wire v2 docs/metadata sweep（README・bin doc・test-spec・親文書 addenda・literal sweep） | done | [l1-wire-v2-docs-sweep.md](./l1-wire-v2-docs-sweep.md) |
 | TASK-034NXuhy2LmLb9qDBo7gj6 | L1 wire v3 codec + vshm 定盤 + InvalidValue（video 動詞 tag 12-22・Reply 4-7・video 型 codec・WIRE_MAX_VIDEO_*） | done | [l1-wire-v3-video-codec.md](./l1-wire-v3-video-codec.md) |
 | TASK-034NhK97jcINkcEKDNbpum | L1 wire バージョン方針の記録と契約検証の補強 | done | [l1-wire-version-policy.md](./l1-wire-version-policy.md) |
+| TASK-034Qfs0cxlLQ9xk1dN3NJM | T-1 typed buffer arena + io views + compiler (schedule/slots/PDC) | done | [m2-t1-typed-compiler-buffer-io.md](./m2-t1-typed-compiler-buffer-io.md) |
+| TASK-034Qfs3QuOMXdVC8ZnuKz6 | T-2 typed RT runtime: GraphProcessor, GraphRuntime/RtRuntime, activation, faults | done | [m2-t2-typed-rt-runtime-activation.md](./m2-t2-typed-rt-runtime-activation.md) |
+| TASK-034Qfs4U6jKNPhfoasgTFI | T-3 acceptance tests + ownership PoC + fault injection | done | [m2-t3-tests-ownership-poc-faults.md](./m2-t3-tests-ownership-poc-faults.md) |
+| TASK-034Qfs62FTCiTj3vNuOwAz | T-4 golden legacy, EX/TA traceability, merge+lockfile+verification, impl record | done | [m2-t4-golden-traceability-verification.md](./m2-t4-golden-traceability-verification.md) |
 | TASK-034JNwTZ8WalgowFahLc8E | Timecode API の FrameRate 移行（破壊的シグネチャ置換と呼び出し側移行） | done | [migrate-timecode-to-framerate.md](./migrate-timecode-to-framerate.md) |
 | TASK-034KoQ7sXAxjPHQbdWqDVW | Issue #90 文書クローズと全量検証 | done | [music-time-closeout.md](./music-time-closeout.md) |
 | TASK-gJ0wsCnJrG8Wo0JQSENFtz | 音楽時間 ABI 整合検証 + Issue #33 クローズ | done | [music-time-design-verify.md](./music-time-design-verify.md) |
