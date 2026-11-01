@@ -1,7 +1,7 @@
 ---
 id: "DESIGN-iwcBlHQ0lcdHJGucocxHOo"
 type: "design"
-status: "approved"
+status: "superseded"
 title: "音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合）"
 created: "2026-11-03"
 updated: "2026-10-23"
@@ -48,6 +48,9 @@ relations:
 ---
 
 # 音楽時間モデル設計
+
+> **旧固定PPQN=960設計の位置付け（2026-11-01）:** 本文はRuviform #90/#91に実装された固定960音楽時間モデルの歴史的な設計である。新しいアーキテクチャ方針として[可変PPQN・分解能非依存Beat Positionの後継ADR](../adr/configurable-ppqn-resolution-independent-musical-time.md)を採用し、[移行Issue #189](https://github.com/scarecrow173/ruviform/issues/189)で今後のコード・Spec・互換性変更を管理する。現在の実装はまだ固定960であり、本文の960ハードコード・型契約を「新しい目標」と誤認しない。
+
 
 Issue #33 — 設計ベースライン保留項（音楽時間設計）の再着手。ADR `docs/adr/musical-time-model.md`（accepted）の決定を実装可能な型・アルゴリズム・ABI 写像規則へ具体化する。**本 Issue は設計のみ — コード実装は後続 Issue。**
 
