@@ -6,6 +6,14 @@ Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | todo | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
+| TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | todo | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
+| TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | todo | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
+
+## Settled <!-- doc-suite:settled-index -->
+
+| ID | Title | Status | File |
+| --- | --- | --- | --- |
 | TASK-034Jf1Cl3xf8K9wcSuvFYK | ベンチハーネス骨格と dev-dependencies | done | [add-bench-harness-and-dev-deps.md](./add-bench-harness-and-dev-deps.md) |
 | TASK-034OpsgIJWNistmrGfoPXD | T3. InstanceFailed に cause field + variant 非排他（全呼出サイト更新） | done | [add-cause-to-instance-failed.md](./add-cause-to-instance-failed.md) |
 | TASK-034JOulyBprt7B3tRAzkKZ | chunk timestamp 単体テストと Issue #59 完了確認 | done | [add-chunk-timestamp-tests.md](./add-chunk-timestamp-tests.md) |

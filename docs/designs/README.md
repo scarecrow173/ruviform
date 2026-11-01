@@ -27,13 +27,15 @@ Directory: `docs/designs`
 | DESIGN-034NVCweXy0wECErcpEcv8 | video/NONRT プラグインの L1 経路設計（Issue #118） | approved | [issue-118-video-l1.md](./issue-118-video-l1.md) |
 | DESIGN-034O9RrQutLFWyaHJGOF3G | Issue 121 L1 diagnostics | approved | [issue-121-l1-diagnostics.md](./issue-121-l1-diagnostics.md) |
 | DESIGN-034N3EYKKosV8OzCP7Y9tY | 共通 platform/process/ipc 基盤の抽出評価（Issue #122） | approved | [issue-122-shared-platform-process-ipc-eval.md](./issue-122-shared-platform-process-ipc-eval.md) |
+| DESIGN-034R150f64Num3r1cKxVb2zQ | Issue #150 f64 高精度オフライン数値・DSP API（ruviform-numeric 新設） | approved | [issue-150-f64-offline-numeric.md](./issue-150-f64-offline-numeric.md) |
+| DESIGN-034R152f64Corr3l4t10nXy | Issue #152 f64 相互相関・NCC・GCC-PHAT・overlap 相関 API（ruviform-numeric `corr` モジュール） | approved | [issue-152-f64-correlation.md](./issue-152-f64-correlation.md) |
+| DESIGN-034R153StftBand5Xq9wPzLm | Issue #153 汎用 f64 帯域演算・STFT・スペクトル統計（ruviform-numeric 拡張） | approved | [issue-153-f64-stft-bands-spectral.md](./issue-153-f64-stft-bands-spectral.md) |
 | DESIGN-WVN475nNdieOE0fyOxkhf | GUI 非依存 CLI/headless 実行基盤設計（Issue #155） | approved | [issue-155-headless-cli-foundation.md](./issue-155-headless-cli-foundation.md) |
 | DESIGN-034P8EHh2IlZd14yNSOreO | Issue #156 再利用可能デスクトップ GUI ホスト基盤 | draft | [issue-156-gui-host-foundation.md](./issue-156-gui-host-foundation.md) |
-| DESIGN-034R150f64Num3r1cKxVb2zQ | Issue #150 f64 高精度オフライン数値・DSP API（ruviform-numeric 新設） | approved | [issue-150-f64-offline-numeric.md](./issue-150-f64-offline-numeric.md) |
 | DESIGN-034R157VizPrimitivesWk4 | Issue #157 波形・スペクトログラム・タイムラインの汎用インタラクティブ表示基盤 | draft | [issue-157-viz-primitives.md](./issue-157-viz-primitives.md) |
+| DESIGN-034QdReVJaFxlQTjmr5oy5 | Issue #184 Typed Graph IR: Ports, Buses, Connections, Validation, Revisions (M1) | draft | [issue-184-typed-graph-ir-ports-buses-connections-validation-revisions-m1.md](./issue-184-typed-graph-ir-ports-buses-connections-validation-revisions-m1.md) |
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
-| DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | approved | [music-time-model.md](./music-time-model.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |
 | DESIGN-034JZPGUI0000000000002 | プラグイン GUI PoC 設計（外部親 HWND + 外部メッセージループへの wry attach） | approved | [plugin-gui-poc.md](./plugin-gui-poc.md) |
@@ -48,5 +50,12 @@ Directory: `docs/designs`
 | DESIGN-Tl9CIdfNfmIADLgFIeaTOq | 第 2 ターゲット設計（NLE 編集モデル・OFX 範囲・色管理） | approved | [second-target-design.md](./second-target-design.md) |
 | DESIGN-034Kx6CVMPDNgzKhJwfgSp | 共通基盤・Observability・Diagnostics・Debug とクレート分割の設計方針 | approved | [shared-foundations-and-modularization-policy.md](./shared-foundations-and-modularization-policy.md) |
 | DESIGN-034JQxPUJjVzr5aekaU1B8 | SIMD dispatch 層設計（トークン繰り上げ + ルーティング + 公開 API 形） | approved | [simd-dispatch-layer.md](./simd-dispatch-layer.md) |
+| DESIGN-20261101-synvelis-driven-ruviform-target-architecture | Synvelis要件を基準としたRuviform目標アーキテクチャと段階的Migration v0.7.1 | approved | [synvelis-driven-target-architecture-and-migration.md](./synvelis-driven-target-architecture-and-migration.md) |
 | DESIGN-034JcePtzKFix4IuxyE5mD | 時間モデル拡張の設計（FrameRate/TimeBase 分離・Timecode 拡張・丸め誤差累積方針） | approved | [time-model-extension.md](./time-model-extension.md) |
 | DESIGN-034JZVID00000000000030 | 動画エンジン設計（パイプライン・スケジューラ・セッション） | approved | [video-engine.md](./video-engine.md) |
+
+## Settled <!-- doc-suite:settled-index -->
+
+| ID | Title | Status | File |
+| --- | --- | --- | --- |
+| DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | superseded | [music-time-model.md](./music-time-model.md) |

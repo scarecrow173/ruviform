@@ -9,6 +9,7 @@ Directory: `docs/adr`
 | ADR-034JROe7Y5kwFgAkp9Q0bu | 音声エンジンのグラフ再構成方式（不変スナップショット交換） | accepted | [audio-engine-snapshot-swap.md](./audio-engine-snapshot-swap.md) |
 | ADR-lg9vK3EAHePSiJf7YHThrm | 広範色管理の段階的範囲 | accepted | [broad-color-management.md](./broad-color-management.md) |
 | ADR-034JOpkx5tdDPVGzdlb0bb | chunk 分割時の OutputCallbackInfo timestamp 合成 | accepted | [chunk-outputcallbackinfo-timestamp.md](./chunk-outputcallbackinfo-timestamp.md) |
+| ADR-20261101-variable-ppqn-rational-beat | 可変PPQN・分解能非依存の音楽時間・Native MIDI時刻保持 | accepted | [configurable-ppqn-resolution-independent-musical-time.md](./configurable-ppqn-resolution-independent-musical-time.md) |
 | ADR-034JZDNRML000000000002 | denormal 崖対策の実装方針（エンジン層ソフトウェア flush ノード） | accepted | [denormal-mitigation-policy.md](./denormal-mitigation-policy.md) |
 | ADR-034JEe7SAbksaycyrum16R | DSP/SIMD 二層構造とバックエンドの採否 | accepted | [dsp-simd-backend-adoption.md](./dsp-simd-backend-adoption.md) |
 | ADR-034JcihlNe8WCZVpp9RBCq | DSP/SIMD PoC 評価アプローチ | accepted | [dsp-simd-poc.md](./dsp-simd-poc.md) |
@@ -21,7 +22,6 @@ Directory: `docs/adr`
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |
 | ADR-034TRn2qP9wXkLmVcYbJdE | メディア観測事実の分類モデルと非破壊 PCM 取得経路（Issue #151） | accepted | [media-observation-non-destructive-pcm.md](./media-observation-non-destructive-pcm.md) |
-| ADR-2iNuZm3ymoyzRUmpgnKr0x | 音楽時間モデル（PPQN 960 tick 中核・piecewise-constant テンポマップ） | accepted | [musical-time-model.md](./musical-time-model.md) |
 | ADR-034JRK9VFJbrUPAvy3FJ94 | オフライン実行の決定論保証範囲（逐次参照等価） | accepted | [offline-determinism-scope.md](./offline-determinism-scope.md) |
 | ADR-034L2CiSoCLplTQvNluQfY | OFX ホストの video 契約境界と C ABI バインディング（Issue #98） | accepted | [ofx-host-video-contract-and-c-abi.md](./ofx-host-video-contract-and-c-abi.md) |
 | ADR-Lhe1Psi2bhfA35B3FABi6q | OFX 等映像プラグイン規格の対応範囲 | accepted | [ofx-video-plugin-scope.md](./ofx-video-plugin-scope.md) |
@@ -39,9 +39,18 @@ Directory: `docs/adr`
 | ADR-034IcJdtqm6TP6MylyP5J7 | 開発基盤の toolchain・Cargoプロファイル・CI方針 | accepted | [rust-dev-foundation-toolchain-and-ci-profile.md](./rust-dev-foundation-toolchain-and-ci-profile.md) |
 | ADR-R2GFzIbod68oHGdQZTuyJW | 第 2 ターゲット NLE 編集モデル | accepted | [second-target-editing-model.md](./second-target-editing-model.md) |
 | ADR-034Jc9RslnH7QSQ1nZEEHL | オーディオデバイスバックエンドの選定（cpal 条件付き採用） | accepted | [select-audio-device-backend.md](./select-audio-device-backend.md) |
+| ADR-154-media-backends | AVI/MP4/AAC 入力バックエンドの配置: AVI は専用 pure-Rust クレート、MP4/AAC は symphonia opt-in feature | accepted | [select-media-backends-avi-and-mp4.md](./select-media-backends-avi-and-mp4.md) |
 | ADR-034JQvAkxQaMfRbMHDRLoM | 本番 SIMD カーネルの精度契約形（ulp 固定 + 有限入力前提） | accepted | [simd-ulp.md](./simd-ulp.md) |
+| ADR-20261101-synvelis-driven-generic-execution-boundaries | Ruviformの汎用Graph/Audio Execution/Stateful Processorとアプリ意味論の責務境界 | accepted | [synvelis-driven-generic-execution-boundaries.md](./synvelis-driven-generic-execution-boundaries.md) |
+| ADR-034QdPgLCqwTPQ4FHtjLsj | Typed multi-bus Graph IR placement and Port/Connection validation model (Issue #184 M1) | proposed | [typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md](./typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md) |
 | ADR-034IO01BpGWCl1DcEbcTQI | UIアーキテクチャ方針（WebViewファースト・ハイブリッド） | accepted | [ui-architecture-webview-hybrid.md](./ui-architecture-webview-hybrid.md) |
 | ADR-034Jc9Cguud7nZ2Tt88Ptu | UI 技術選定（wry・描画バックエンド・フロントエンド FW・配布）— PoC 採否 | accepted | [ui-tech-selection-poc.md](./ui-tech-selection-poc.md) |
 | ADR-034JZVID00000000000002 | A/V 同期判定ポリシー（audio master + PTS 追従） | accepted | [video-av-sync-policy.md](./video-av-sync-policy.md) |
 | ADR-034JcidaiOOip5EhNPOnDI | video-proc カーネル API 形状と色変換・HDR 対応範囲 | accepted | [video-proc-kernel-api-and-color-hdr-scope.md](./video-proc-kernel-api-and-color-hdr-scope.md) |
 | ADR-034JNYt58J8NlUkn6RfJMs | workspace MSRV 引上げ（1.85 → 1.89）と fearless_simd 本番昇格の解禁 | accepted | [workspace-msrv-1-85-1-89-fearless-simd.md](./workspace-msrv-1-85-1-89-fearless-simd.md) |
+
+## Settled <!-- doc-suite:settled-index -->
+
+| ID | Title | Status | File |
+| --- | --- | --- | --- |
+| ADR-2iNuZm3ymoyzRUmpgnKr0x | 音楽時間モデル（PPQN 960 tick 中核・piecewise-constant テンポマップ） | superseded | [musical-time-model.md](./musical-time-model.md) |
