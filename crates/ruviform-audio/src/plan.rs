@@ -42,17 +42,27 @@ pub struct GraphPlan {
 
 impl GraphPlan {
     /// Wraps a fully-constructed graph.
+    ///
+    /// The lock is touched once here so the platform primitive is
+    /// materialized on this non-RT side: on targets where
+    /// `std::sync::Mutex` lazily allocates its OS primitive at the
+    /// first `lock`/`try_lock` (the pthread `OnceBox` backing —
+    /// 64 bytes on macOS), a cold first [`drive`](Self::drive) would
+    /// otherwise allocate on the RT callback (Issue #214).
     #[must_use]
     pub fn new(graph: Graph) -> Self {
-        Self {
+        let this = Self {
             graph: Mutex::new(graph),
-        }
+        };
+        drop(this.graph.try_lock());
+        this
     }
 
     /// Drives the plan's graph over `out`. RT-suitable: `try_lock` never
-    /// blocks; any `Err` — `WouldBlock` (contention, impossible in
-    /// practice with a single driver) *or* `Poisoned` — makes the
-    /// block a silent no-op leaving `out` as handed in.
+    /// blocks and never allocates (the platform lock is materialized by
+    /// [`new`](Self::new)); any `Err` — `WouldBlock` (contention,
+    /// impossible in practice with a single driver) *or* `Poisoned` —
+    /// makes the block a silent no-op leaving `out` as handed in.
     ///
     /// `Poisoned` is the load-bearing case: a panicking node unwinds
     /// through the guard and poisons the mutex, so *every* subsequent
