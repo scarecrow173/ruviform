@@ -1,9 +1,12 @@
 name: ci
 
-# Manual verification workflow. Intentionally dispatch-only: run it from the
-# Actions tab after this file is merged into the default branch.
-
+# Automatically verify pull requests against main and changes merged to main.
+# Keep manual dispatch for targeted diagnosis and reruns.
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -107,10 +110,188 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # Selects the `rt_*`-prefixed RT contract tests by name filter
-      # (e.g. `rt_output_callback_path_allocates_nothing`); a zero-match
-      # filter still exits successfully, so the job stays meaningful as
-      # RT tests grow.
+      # Cargo's `rt_` filter also matches non-RT test names such as
+      # `sort_` and returns success with zero matches. Require at least
+      # one actual test function with an `rt_` prefix (module-qualified
+      # names are accepted) before executing the existing RT task.
+      - name: Require non-empty RT contract test selection
+        shell: bash
+        run: |
+          test_list="$(mise exec -- cargo test --workspace --locked rt_ -- --list)"
+          strict_count="$(printf '%s\\n' "$test_list" | grep -Ec '(^|::)rt_[^[:space:]]+: test
+
+  icc-verify:
+    name: icc-verify
+    runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+
+      - name: Restore tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # `cargo test --workspace` covers default features only — the
+      # feature-gated ICC path (`ruviform-video-proc --features icc`)
+      # gets its own lane so it cannot silently regress.
+      - name: Test video-proc icc feature (mise run test-video-proc-icc)
+        run: mise run test-video-proc-icc
+
+      - name: Lint video-proc icc feature (mise run lint-video-proc-icc)
+        run: mise run lint-video-proc-icc
+
+  # UI webview lane (Issue #156): the adapter's `webview` feature is
+  # non-default so the main workspace lanes stay headless; this job
+  # type-checks, lints and tests the feature-enabled surface
+  # (rvf:// scheme/data handlers are headless-testable — actual
+  # windowed runs are manual verification, like audio-device examples).
+  ui-verify:
+    name: ui-verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+
+      - name: Restore tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked
+
+      - name: Install WebKitGTK development headers (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-ui-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-ui-
+
+      - name: Type-check UI webview feature (mise run check-ui-webview)
+        run: mise run check-ui-webview
+
+      - name: Lint UI webview feature (mise run lint-ui-webview)
+        run: mise run lint-ui-webview
+
+      - name: Test UI webview feature (mise run test-ui-webview)
+        run: mise run test-ui-webview
+
+  bench:
+    name: bench
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+
+      - name: Restore tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked
+
+      # cpal's ALSA backend links via alsa-sys, whose build script
+      # requires the ALSA development headers (pkg-config).
+      - name: Install ALSA development headers (Linux)
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # Smoke only: `--test` runs each benchmark once without measurement.
+      # Full measurement (mise run bench) stays a local manual run.
+      - name: Smoke-test benchmarks (mise run bench-smoke)
+        run: mise run bench-smoke
+
+  l1-real-verify:
+    name: l1-real-verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Keep sibling OS jobs running so a manual verification run reports
+      # the result for every platform even if one of them fails — the
+      # dlopen/spawn/COM paths this lane exercises are platform-shaped.
+      # First exercise on macOS: the raw-.dylib (non-bundle) CLAP
+      # resolution and the VST3 bundleEntry paths run here for the
+      # first time — a red macOS leg is a platform finding, not a
+      # regression.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+
+      - name: Restore tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # The real-plugin L1 lane (Issue #114) is the only execution entry
+      # for the `#[ignore]`-gated adapter E2E: it builds the fixture
+      # cdylibs + `host`-feature runner bins, runs the in-process bridge
+      # + runner-bin unit tests, then the out-of-process E2E. No ALSA
+      # step — the adapter dependency tree contains no cpal.
+      - name: Run real-plugin L1 lane (mise run test-l1-real-plugin)
+        run: mise run test-l1-real-plugin
+
+      - name: Lint host feature (mise run lint-l1-real-plugin)
+        run: mise run lint-l1-real-plugin
+ || true)"
+          echo "Strict rt_ contract tests: $strict_count"
+          test "$strict_count" -gt 0
+
       - name: Run RT contract tests (mise run test-rt)
         run: mise run test-rt
 
