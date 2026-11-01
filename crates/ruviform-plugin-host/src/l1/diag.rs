@@ -530,15 +530,15 @@ fn poll_stderr(stderr: &ChildStderr, wait: Duration) -> Poll {
 
     // SAFETY: `stderr` is a live pipe read end owned by this thread
     // for the whole call; `poll` only inspects the descriptor and
-    // the `pollfd` outlives the call. Timeout clamps to the API's
-    // `c_int` range.
+    // `pfd` — an exclusively-owned local borrowed as `&raw mut` —
+    // outlives the call. Timeout clamps to the API's `c_int` range.
     let mut pfd = libc::pollfd {
         fd: stderr.as_raw_fd(),
         events: libc::POLLIN,
         revents: 0,
     };
     let timeout = i32::try_from(wait.as_millis().min(i32::MAX as u128)).unwrap_or(i32::MAX);
-    let rc = unsafe { libc::poll(&mut pfd, 1, timeout) };
+    let rc = unsafe { libc::poll(&raw mut pfd, 1, timeout) };
     // `last_os_error` must be read before any other fallible call.
     let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
     classify_poll(rc, errno, pfd.revents)
