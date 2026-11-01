@@ -1,30 +1,31 @@
 # Ruviform
 
-Ruviform は、Rust を中心とした再利用可能なマルチメディア基盤です。現在は設計・初期セットアップ段階であり、開発環境と Phase 1 基盤クレート群を持つ Rust ワークスペースが整っています（media-core / audio-core / video-core はデータモデル API、rt / exec は RT 基盤 API、video-proc は色変換カーネル、media-io はメディア I/O 抽象境界 API を実装済み。io-symphonia はその第一バックエンド PoC です）。
+Ruviform はRustを中心とした再利用可能なマルチメディア基盤です。**現行ワークスペースは28 crate**を含み、Audio/Video、Media I/O、DSP、Plugin Host、UI/Visualizationなどの基盤実装が存在します。ただし、全ての高度な実行契約が実装済みという意味ではありません。Synvelisの合意済み要件に基づく目標構造と移行計画は[Target Architecture / Migration #192](https://github.com/scarecrow173/ruviform/issues/192)、[詳細設計](docs/designs/synvelis-driven-target-architecture-and-migration.md)、[責務境界ADR](docs/adr/synvelis-driven-generic-execution-boundaries.md)を参照してください。
 
 音声処理と動画処理、およびその下位の計算基盤（DSP・解析・codec・container・SIMD）を、同じ基盤の上で再利用可能な形で提供する方向性を構想しています。対象読者は、リポジトリの訪問者と将来の利用者、コントリビューター、および AI エージェントです。クレート DAG・データモデル・実行モデルなどのアーキテクチャ設計は Issue [#1](https://github.com/scarecrow173/ruviform/issues/1) 由来の設計ベースライン（[docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)、approved）に記録済みです。残りの公開 API などの詳細とコード実装は後続 Issue で確定・実施します。
 
 ## Status
 
-開発ステータス: **設計・初期セットアップ段階**
+開発ステータス: **既存基盤の実装＋Synvelis駆動の拡張設計・Migration PoC準備段階**（目標Runtimeの完成やRT実機保証を意味しない）
 
-### 実在・検証済み
+### Phase 1 基盤の実装・検証履歴
 
-以下は実在し、Windows 11 x64（Git Bash）で検証済みです。
+以下は初期段階の実装・検証記録です。**「7 crate」はPhase 1当時の区分**で、現行Workspace全体のクレート数ではありません。Windows 11の検証記録は記録時点の結果であり、このREADME更新時に全28 crateのBuild/RT Testを再実行したという意味ではありません。
 
 - Rust 1.99.0 ツールチェーン（`mise.toml` で pin、`mise.lock` で固定復元）
 - Rust ワークスペース: ルート `Cargo.toml` と Phase 1 基盤7クレート `crates/ruviform-math` / `crates/ruviform-rt` / `crates/ruviform-exec` / `crates/ruviform-media-core` / `crates/ruviform-audio-core` / `crates/ruviform-video-core` / `crates/ruviform-video-proc`（Issue #17 で仮置き `crates/ruviform-core` を分割置換。media-core / audio-core / video-core は Issue #18 でデータモデル API を、rt / exec は Issue #21 で RT 基盤 API（rt: `Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換。exec: スレッド優先度機構）を、video-proc は Issue #26 で色変換カーネルを確定・実装済み。math は引き続きスケルトン）に加え、Issue #20 で `crates/ruviform-media-io`（非 RT 専用のメディア I/O 抽象境界クレート: demux/mux と decode/encode を分離した 4 系統 trait・`Packet`・`AudioFrame`・能力交渉・正規化エラー）と `crates/ruviform-io-symphonia`（symphonia による第一バックエンド PoC・分離クレート + opt-in・demux + decode のみ）を、Issue #23 で adapter クレート `crates/ruviform-audio-device`（cpal を内部依存に閉じ込め、`ruviform_audio_core::device` のポート trait を実装するオーディオデバイスバックエンド adapter）を、Issue #29 で拡張層 `crates/ruviform-plugin-core` / `crates/ruviform-plugin-clap` / `crates/ruviform-plugin-vst3`（規格中立プラグイン基盤と CLAP/VST3 薄アダプタ — binding 方式は `clack`/`vst3` クレートを方式 ADR で決定）を実装済み
 - `mise.toml` の検証タスク群（`setup` / `fmt-check` / `check` / `lint` / `test` / `build` / `test-rt` / `bench` / `bench-smoke` / `*-ci` / `verify-ci`）
 - `workflow_dispatch` 専用 CI（`.github/workflows/ci.yml`）— 旧単一構成は ubuntu-latest で実ディスパッチ済み（fmt-check / check-ci / lint-ci / test-ci 全て pass）。現行構成は verify の 3-OS matrix＋`rt-verify`・`bench` レーンで、マージ後に初回ディスパッチして動作確認する
 
-### 構想（未実装）
+### 目標設計として未完成・PoCが必要な能力
 
-- 音声・動画クレート `ruviform-audio` / `ruviform-video`
-- 下位計算基盤: DSP・解析・codec・container・SIMD
+- Typed Multi-port Graph IR、Audio Compiler/PDC、Transport SpanとPlugin Block能力の整合、Stateful RT Processor Ownership。
+- Rational Beat・可変PPQNの既存960依存コードからの移行（[Issue #189](https://github.com/scarecrow173/ruviform/issues/189)）。
+- PCM WAV実Encode/Mux/Finalize（[#191](https://github.com/scarecrow173/ruviform/issues/191)）、Stateful-safe Offline Render、Node/Port ProbeとMultiwindow/Docking。
 
 ### 検討中（要 PoC）
 
-- WebView UI: UI ADR で WebView ファースト・ハイブリッドが方針決定済み。実装技術・描画バックエンドの採否は要 PoC
+- WebView UI: 基礎Host/IPC等の実装は存在する。Multiwindow/Docking/Job Scope、描画Backendの最終採否・OS実機検証は要PoC（[#181](https://github.com/scarecrow173/ruviform/issues/181)/[#182](https://github.com/scarecrow173/ruviform/issues/182)）。
 - `wgpu` 等のネイティブ GPU 描画: エンジン層の opt-in adapter として設計済み。採否は要 PoC
 - ネイティブ UI: 採否は要 PoC
 
@@ -79,7 +80,7 @@ mise run verify-ci                # CI 同等: fmt-check -> check-ci -> lint-ci 
 | パス | 役割 |
 | --- | --- |
 | `Cargo.toml` / `Cargo.lock` | Rust ワークスペース定義（共通 lint・`[profile.dev]` / `[profile.ci]`）と依存 lockfile |
-| `crates/` | Phase 1 基盤クレート群: `ruviform-math` / `ruviform-rt` / `ruviform-exec` / `ruviform-media-core`（Primitives）と `ruviform-audio-core` / `ruviform-video-core` / `ruviform-video-proc`（Domain foundations）に加え、`ruviform-media-io`（非 RT 専用メディア I/O 抽象境界）、`ruviform-io-symphonia`（第一バックエンド PoC・分離クレート + opt-in・demux + decode のみ）、adapter クレート `ruviform-audio-device`（Issue #23・cpal バックエンド adapter）、拡張層の `ruviform-plugin-core` / `ruviform-plugin-clap` / `ruviform-plugin-vst3`（Issue #29・規格中立基盤＋規格アダプタ）。media-core / audio-core / video-core は Issue #18 でデータモデル API、rt / exec は Issue #21 で RT 基盤 API、video-proc は Issue #26 で色変換カーネル、media-io / io-symphonia は Issue #20 で抽象境界と PoC、plugin 系3クレートは Issue #29 で規格中立基盤＋規格アダプタを実装済み。math は smoke test のみのスケルトン |
+| `crates/` | 現行28 crate（基盤、Audio/Video、Media I/O、Plugin、UI/Vizなど）。最新のcrate一覧は[crates/README.md](crates/README.md)とワークスペースの[Cargo.toml](Cargo.toml)。旧Phase 1の7 crateは初期の実装履歴であり、全体一覧ではない |
 | `mise.toml` / `mise.lock` | 開発ツール・検証タスクの正本と固定復元用 lockfile |
 | `apm.yml` / `apm.lock.yaml` | APM 依存パッケージ・対象エージェント・MCP の定義と lockfile |
 | `.pre-commit-config.yaml` | prek による言語非依存の Git フック |
