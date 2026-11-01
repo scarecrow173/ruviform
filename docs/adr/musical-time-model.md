@@ -1,10 +1,10 @@
 ---
 id: "ADR-2iNuZm3ymoyzRUmpgnKr0x"
 type: "adr"
-status: "accepted"
+status: "superseded"
 title: "音楽時間モデル（PPQN 960 tick 中核・piecewise-constant テンポマップ）"
 created: "2026-11-03"
-updated: "2026-11-03"
+updated: "2026-11-01"
 owners: []
 relations:
   source: []
@@ -21,7 +21,8 @@ relations:
     - "docs/specs/music-time-design.md"
   blocks: []
   supersedes: []
-  superseded-by: []
+  superseded-by:
+    - "docs/adr/configurable-ppqn-resolution-independent-musical-time.md"
   related: []
   refines: []
   refined-by: []
@@ -38,6 +39,8 @@ relations:
 ---
 
 # 音楽時間モデル
+
+> **Superseded（設計上）:** 2026-11-01に[可変PPQN・分解能非依存音楽時間の後継ADR](configurable-ppqn-resolution-independent-musical-time.md)を採用。本文は固定960が採用された時点の**歴史的判断**を保存している。既存コード（`Ppqn`/`TempoMap`等）は移行が完了するまで依然として固定960で動作する。[移行Issue #189](https://github.com/scarecrow173/ruviform/issues/189)で追跡。
 
 ## Context
 
