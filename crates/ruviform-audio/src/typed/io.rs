@@ -111,9 +111,7 @@ impl<'a> NodeIo<'a> {
     #[must_use]
     pub fn input(&self, i: usize) -> Option<InputView<'a>> {
         let binding = self.node.inputs.get(i)?;
-        let slot_idx = if let Some(scratch) = binding.scratch {
-            scratch
-        } else {
+        if binding.scratch.is_none() {
             let edge = binding.edges.first()?;
             // Uninitialized-read audit: a direct edge to a slot the
             // producer has not written this callback is rejected.
@@ -122,8 +120,8 @@ impl<'a> NodeIo<'a> {
                 self.status.record_uninit_read();
                 return None;
             }
-            edge.slot
-        };
+        }
+        let slot_idx = binding.effective_slot()?;
         let slot = self.arena.get(slot_idx)?.borrow();
         Some(InputView {
             slot,
@@ -134,7 +132,7 @@ impl<'a> NodeIo<'a> {
     /// Output port `i`'s writable view. `None` when out of range.
     #[must_use]
     pub fn output(&self, i: usize) -> Option<OutputView<'a>> {
-        let slot_idx = *self.node.outputs.get(i)?;
+        let slot_idx = self.node.outputs.get(i).map(|&(_, slot)| slot)?;
         let slot = self.arena.get(slot_idx)?.borrow_mut();
         Some(OutputView {
             slot,

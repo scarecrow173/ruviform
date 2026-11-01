@@ -27,6 +27,7 @@ use super::compile::{
     SlotAllocator,
 };
 use super::io::NodeIo;
+use super::probe::{ProbeDeck, TapKind};
 
 /// RT-suitable per-node processor — the object-safe counterpart of
 /// `ruviform_rt::RtProcessor` for borrowed multi-port I/O (its `type
@@ -171,7 +172,7 @@ impl SharedStatus {
         self.fault_flags.fetch_or(fault as u64, Ordering::Relaxed);
     }
 
-    fn record_stale_commands(&self) {
+    pub(crate) fn record_stale_commands(&self) {
         self.stale_commands.fetch_add(1, Ordering::Relaxed);
         self.flag(RuntimeFault::StaleDiscarded);
     }
@@ -270,6 +271,9 @@ struct RtState {
     active_generation: u64,
     /// Callback counter — the slot write-stamp clock.
     seq: u64,
+    /// Absolute frame position of the *next* block's first frame —
+    /// the probe `sample_position` clock (Issue #185).
+    frame_cursor: u64,
 }
 
 impl RtState {
@@ -370,6 +374,10 @@ pub struct GraphRuntime {
     alloc: SlotAllocator,
     status: Arc<SharedStatus>,
     generation: u64,
+    /// The last successfully published plan — retained so probe
+    /// resolution (Issue #185) and other non-RT observers can read
+    /// the active wiring without touching the snapshot slot.
+    last_plan: Arc<PreparedPlan>,
 }
 
 /// The single RT owner — moves to the callback thread once. `Send`
@@ -389,6 +397,10 @@ pub struct RtRuntime {
     arena: Vec<RefCell<Slot>>,
     /// PDC delay-line arena.
     delays: Vec<RefCell<DelayLine>>,
+    /// Observation probe deck (Issue #185) — a direct field so tap
+    /// sites borrow it disjointly from `state`/`arena` inside the
+    /// schedule loop. `None` = no probe wiring at all.
+    probes: Option<ProbeDeck>,
     status: Arc<SharedStatus>,
     max_frames: usize,
 }
@@ -406,7 +418,7 @@ impl GraphRuntime {
         command_capacity: usize,
         event_capacity: usize,
     ) -> (Self, RtRuntime) {
-        let empty = PreparedPlan {
+        let empty = Arc::new(PreparedPlan {
             generation: 0,
             max_frames: config.max_frames,
             slots: Vec::new(),
@@ -415,8 +427,8 @@ impl GraphRuntime {
             inputs: Vec::new(),
             outputs: Vec::new(),
             total_latency: 0,
-        };
-        let (writer, reader) = ruviform_rt::slot(Arc::new(empty), 4);
+        });
+        let (writer, reader) = ruviform_rt::slot(Arc::clone(&empty), 4);
         let (commands, cmd_consumer) = ruviform_rt::channel(command_capacity.max(1));
         let (events, ev_consumer) = ruviform_rt::channel(event_capacity.max(1));
         let (retirer, collector) =
@@ -436,6 +448,7 @@ impl GraphRuntime {
                 },
                 status: Arc::clone(&status),
                 generation: 0,
+                last_plan: empty,
             },
             RtRuntime {
                 reader,
@@ -446,6 +459,7 @@ impl GraphRuntime {
                     procs_retirer: retirer,
                     active_generation: 0,
                     seq: 0,
+                    frame_cursor: 0,
                 }),
                 arena: (0..config.max_slots)
                     .map(|_| {
@@ -466,6 +480,7 @@ impl GraphRuntime {
                         ))
                     })
                     .collect(),
+                probes: None,
                 status,
                 max_frames: config.max_frames,
             },
@@ -546,9 +561,18 @@ impl GraphRuntime {
             self.registry.insert(node, InstalledInfo { pslot, latency });
         }
         self.alloc = compiled.alloc_after;
-        self.writer.publish(Arc::new(compiled.plan));
+        let plan = Arc::new(compiled.plan);
+        self.writer.publish(Arc::clone(&plan));
+        self.last_plan = plan;
         self.generation = generation;
         Ok(())
+    }
+
+    /// The last successfully published plan — the wiring probe
+    /// resolution and other non-RT observers read.
+    #[must_use]
+    pub fn published_plan(&self) -> &Arc<PreparedPlan> {
+        &self.last_plan
     }
 
     /// Sends a control event. `ev.generation` must equal the target
@@ -589,6 +613,13 @@ impl GraphRuntime {
 }
 
 impl RtRuntime {
+    /// Installs the observation probe deck (Issue #185). Call before
+    /// handing the runtime to the RT side — `&mut self`, non-RT only.
+    /// Replaces any previously installed deck.
+    pub fn set_probe_deck(&mut self, deck: ProbeDeck) {
+        self.probes = Some(deck);
+    }
+
     /// Boundary input writer — stamps the slot for the *next*
     /// `process` call (`seq + 1`) and declares `frames` valid so the
     /// caller-fed slot always satisfies the uninitialized-read audit
@@ -663,6 +694,19 @@ impl RtRuntime {
             st.activate_generation(&plan, &self.arena, &self.delays, &self.status, ctx);
         }
 
+        // Probe wiring (Issue #185): block's absolute position, then
+        // generation-checked command drain and graph-input taps.
+        let ctx_tap = super::probe::TapCtx {
+            seq: st.seq,
+            frames,
+            generation: plan.generation,
+            base: st.frame_cursor,
+        };
+        if let Some(deck) = self.probes.as_mut() {
+            deck.drain_commands(plan.generation, ctx_tap.base, &self.status);
+            deck.run_site(TapKind::GraphInput, None, &self.arena, &ctx_tap);
+        }
+
         // Deliver generation-checked events.
         while let Ok(ev) = st.events.try_pop() {
             if ev.generation == st.active_generation {
@@ -688,6 +732,11 @@ impl RtRuntime {
                 node,
                 frames,
             );
+            // Node-input taps observe the materialized (post-merge/
+            // post-delay) input — the same slot the processor reads.
+            if let Some(deck) = self.probes.as_mut() {
+                deck.run_site(TapKind::NodeInput, Some(node.node), &self.arena, &ctx_tap);
+            }
             if let Some(pslot) = node.pslot {
                 let seq = st.seq;
                 if let Some(processor) = st.processors.get_mut(pslot).and_then(Option::as_mut) {
@@ -699,17 +748,28 @@ impl RtRuntime {
                         status: &self.status,
                     };
                     processor.process(&mut io, ctx);
-                    for &slot_idx in &node.outputs {
+                    for &(_, slot_idx) in &node.outputs {
                         if let Some(cell) = self.arena.get(slot_idx) {
                             cell.borrow_mut()
                                 .mark_written(seq, u32::try_from(frames).unwrap_or(u32::MAX));
                         }
+                    }
+                    // Node-output taps observe the freshly stamped
+                    // producer slot (post-process).
+                    if let Some(deck) = self.probes.as_mut() {
+                        deck.run_site(TapKind::NodeOutput, Some(node.node), &self.arena, &ctx_tap);
                     }
                 } else {
                     self.status.record_missing_processor();
                 }
             }
         }
+        // Graph-output taps observe boundary sink slots after the
+        // whole schedule ran.
+        if let Some(deck) = self.probes.as_mut() {
+            deck.run_site(TapKind::GraphOutput, None, &self.arena, &ctx_tap);
+        }
+        st.frame_cursor = ctx_tap.base.wrapping_add(frames as u64);
         Ok(())
         // `plan` (SnapshotGuard) drops here → retires the `Arc`.
     }
