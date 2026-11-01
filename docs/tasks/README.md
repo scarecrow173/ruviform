@@ -1,6 +1,5 @@
 # TASK Documents
 
-
 <!-- doc-suite:generated-index -->
 
 Directory: `docs/tasks`
@@ -10,9 +9,6 @@ Directory: `docs/tasks`
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
-| TASK-034Qhxbnndd80h2whxhIG4 | Issue 191 T1: MediaSink port + StagedOutput in ruviform-media-io | todo | [task-191-t1-media-io-sink-staged.md](./task-191-t1-media-io-sink-staged.md) |
-| TASK-034Qhxc5D3P3En9XfxxPSm | Issue 191 T2: ruviform-io-wav crate (encoder, muxer, capabilities) | todo | [task-191-t2-wav-backend.md](./task-191-t2-wav-backend.md) |
-| TASK-034QhxcLDQJmQx1cut9ge3 | Issue 191 T3: integration tests + verification lanes + impl record inputs | todo | [task-191-t3-tests-verification.md](./task-191-t3-tests-verification.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -91,7 +87,8 @@ Directory: `docs/tasks`
 | TASK-034QfdqgoGMqtqJ2HHFDdG | issue-189 T-3 golden/RT verification + impl record + output contract | done | [issue-189-t-3-golden-verification-impl-record.md](./issue-189-t-3-golden-verification-impl-record.md) |
 | TASK-034Qh5tYhNjMkLoPqRs | Issue #190 T-1: canonical transport contract types (media-core) | done | [issue-190-t-1-canonical-contract-types.md](./issue-190-t-1-canonical-contract-types.md) |
 | TASK-034Qh6uIoPqWsErTyU | Issue #190 T-2: transport controller + RT span scheduler | done | [issue-190-t-2-span-scheduler-apply.md](./issue-190-t-2-span-scheduler-apply.md) |
-| TASK-034Qh7vBnMxZaSdFgH | Issue #190 T-3: plugin transport bridge + Mock Driver PoC | done | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) || TASK-034QdV8LJ4ZnIRqDUSRakb | T1 Consumer影響判定・証拠テンプレート（PR/Issue template群） | done | [issue-219-t1-impact-templates.md](./issue-219-t1-impact-templates.md) |
+| TASK-034Qh7vBnMxZaSdFgH | Issue #190 T-3: plugin transport bridge + Mock Driver PoC | done | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
+| TASK-034QdV8LJ4ZnIRqDUSRakb | T1 Consumer影響判定・証拠テンプレート（PR/Issue template群） | done | [issue-219-t1-impact-templates.md](./issue-219-t1-impact-templates.md) |
 | TASK-034QdV9z3ctYdM4HMD0MsZ | T2 consumer-verify.yml Cross-Repo CI lane（preflight/verify×2/summary） | done | [issue-219-t2-consumer-verify-workflow.md](./issue-219-t2-consumer-verify-workflow.md) |
 | TASK-034QdVap6IcvMjOYnaWzCR | T3 AGENTS.md の ci.yml 記述 drift 修正 | done | [issue-219-t3-agents-ci-drift.md](./issue-219-t3-agents-ci-drift.md) |
 | TASK-034QdVbbaa7jKsLfhGKepC | T4 検証・IR 記録（actionlint・doc audit・実装記録） | done | [issue-219-t4-verify-ir.md](./issue-219-t4-verify-ir.md) |
@@ -139,6 +136,10 @@ Directory: `docs/tasks`
 | TASK-034L6yeVFSaiVUoV4RiRtm | Implement native OFX runtime | done | [ofx-native-runtime-implementation.md](./ofx-native-runtime-implementation.md) |
 | TASK-034L6yh0fBmRabh1TMLv2F | Implement OFX video rendering | done | [ofx-render-implementation.md](./ofx-render-implementation.md) |
 | TASK-034N9p1bBWmE7AioxpndKq | OFX UAF residuals — non-catalog window lease + lifecycle hardening | done | [ofx-uaf-residuals-non-catalog-window-lease-lifecycle-hardening.md](./ofx-uaf-residuals-non-catalog-window-lease-lifecycle-hardening.md) |
+| TASK-034QidaAEbNmHe5Q6M5sRI | T-1 ChannelLevel::measure extraction + deps + compile binding centralization | done | [p185-t1-level-extract-and-binding-centralization.md](./p185-t1-level-extract-and-binding-centralization.md) |
+| TASK-034QidbvzKgQyKTfniAhWG | T-2 RtRuntime probe plumbing: frame_cursor, published_plan, command drains, tap sites, deck channels | done | [p185-t2-runtime-probe-plumbing-taps.md](./p185-t2-runtime-probe-plumbing-taps.md) |
+| TASK-034Qidce7Pq9AxEezYMaNE | T-3 typed::probe contract: capability resolver, ProbeBroker, ProbeDeck/RtProbe, ProbeCollector | done | [p185-t3-probe-contract-broker-collector.md](./p185-t3-probe-contract-broker-collector.md) |
+| TASK-034QidcTgfNesKcwIF1aZ7 | T-4 PoC acceptance tests, rt alloc, perf evidence, impl record, merge+verify | done | [p185-t4-probe-poc-tests-verification.md](./p185-t4-probe-poc-tests-verification.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | TASK-034OpskKobU4qEsX7F7IYc | T6. stderr piped + drain thread（案A・FFI 局所化・fixture knob） | done | [pipe-and-drain-l1-stderr.md](./pipe-and-drain-l1-stderr.md) |
 | TASK-034MrsDzlHRpUHHLtYkZdN | plugin-core endpoint 前提面（EndpointUnavailable・fallible encode・Send capability・view impl） | done | [plugin-core-endpoint-primitives.md](./plugin-core-endpoint-primitives.md) |
@@ -191,6 +192,9 @@ Directory: `docs/tasks`
 | TASK-034JcD43sDKFAlPxYuAWmj | Issue #26 ドキュメント同期（baseline 採否表・AGENTS・README）と総合検証 | done | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
 | TASK-034JxObKHc0v3kUhnQiePv | RT 基盤ドキュメント同期と総合検証 | done | [sync-rt-foundation-docs-and-verify.md](./sync-rt-foundation-docs-and-verify.md) |
 | TASK-034JOul8zCtHMR49d9c78V | write_interleaved の per-chunk timestamp 合成 | done | [synthesize-per-chunk-timestamps.md](./synthesize-per-chunk-timestamps.md) |
+| TASK-034Qhxbnndd80h2whxhIG4 | Issue 191 T1: MediaSink port + StagedOutput in ruviform-media-io | done | [task-191-t1-media-io-sink-staged.md](./task-191-t1-media-io-sink-staged.md) |
+| TASK-034Qhxc5D3P3En9XfxxPSm | Issue 191 T2: ruviform-io-wav crate (encoder, muxer, capabilities) | done | [task-191-t2-wav-backend.md](./task-191-t2-wav-backend.md) |
+| TASK-034QhxcLDQJmQx1cut9ge3 | Issue 191 T3: integration tests + verification lanes + impl record inputs | done | [task-191-t3-tests-verification.md](./task-191-t3-tests-verification.md) |
 | TASK-034LFHdEfDbppnNeuh0u48 | ToneMapSdr カーネル実装（BT.2390 EETF） | done | [tone-map-sdr-kernel.md](./tone-map-sdr-kernel.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |

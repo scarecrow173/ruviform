@@ -189,6 +189,20 @@ pub struct InputBinding {
     pub scratch: Option<usize>,
 }
 
+impl InputBinding {
+    /// The slot a consumer (or probe tap) actually observes for this
+    /// input: the materialized scratch slot when bound, else the
+    /// single producer's slot. `None` for an unconnected input.
+    ///
+    /// This is the single authoritative observation rule — `NodeIo`,
+    /// boundary collection, and probe resolution all derive from it.
+    #[must_use]
+    pub fn effective_slot(&self) -> Option<usize> {
+        self.scratch
+            .or_else(|| self.edges.first().map(|edge| edge.slot))
+    }
+}
+
 /// One node in schedule order.
 #[derive(Clone, Debug)]
 pub struct ScheduledNode {
@@ -198,8 +212,17 @@ pub struct ScheduledNode {
     pub pslot: Option<usize>,
     /// Audio input port bindings (declaration order).
     pub inputs: Vec<InputBinding>,
-    /// Arena slot per audio output port (declaration order).
-    pub outputs: Vec<usize>,
+    /// Arena slot per audio output port, paired with the port —
+    /// declaration order, resolved at compile so observation never
+    /// guesses port↔slot correspondence.
+    pub outputs: Vec<(PortId, usize)>,
+    /// Node's own reported latency in frames (pre-accumulation).
+    pub own_latency: u32,
+    /// Accumulated latency up to and including this node — the
+    /// per-node entry of the compile's `accum` map, retained so
+    /// observation metadata can report per-tap path latency without
+    /// recomputing PDC.
+    pub latency_accum: u32,
 }
 
 /// PDC ring spec — one per compensated edge.
@@ -604,7 +627,7 @@ impl Compiler {
                         let idx = slot_specs.len();
                         slot_specs.push(SlotSpec { channels });
                         port_slot.insert(port.id(), idx);
-                        outputs.push(idx);
+                        outputs.push((port.id(), idx));
                     }
                     Direction::Input => {
                         let edges: Vec<EdgeBinding> = spec
@@ -655,6 +678,8 @@ impl Compiler {
                 pslot: pslots[node_id],
                 inputs,
                 outputs,
+                own_latency: 0,
+                latency_accum: 0,
             });
         }
         Ok(PortBindings {
@@ -693,6 +718,10 @@ impl Compiler {
                 snode.node,
                 own_latency[&snode.node].saturating_add(parent_max),
             );
+        }
+        for snode in schedule.iter_mut() {
+            snode.latency_accum = accum[&snode.node];
+            snode.own_latency = own_latency[&snode.node];
         }
         let total_latency = *accum.values().max().unwrap_or(&0);
         if total_latency > self.config.max_delay_frames {
@@ -818,7 +847,7 @@ fn audit_aliasing(schedule: &[ScheduledNode]) -> Result<(), CompileError> {
                 read_slots.insert(edge.slot);
             }
         }
-        if snode.outputs.iter().any(|o| read_slots.contains(o)) {
+        if snode.outputs.iter().any(|o| read_slots.contains(&o.1)) {
             return Err(CompileError::BufferAlias { node: snode.node });
         }
     }
@@ -843,7 +872,7 @@ fn collect_boundaries(
                 for port in node.ports() {
                     if port.direction() == Direction::Output
                         && matches!(port.format(), PortFormat::Audio(_))
-                        && let Some(&slot) = audio_outs.next()
+                        && let Some(&(_, slot)) = audio_outs.next()
                     {
                         inputs_b.push((port.id(), slot));
                     }
@@ -851,10 +880,7 @@ fn collect_boundaries(
             }
             (NodeKind::Sink, false) => {
                 for input in &snode.inputs {
-                    if let Some(slot) = input
-                        .scratch
-                        .or_else(|| input.edges.first().map(|e| e.slot))
-                    {
+                    if let Some(slot) = input.effective_slot() {
                         outputs_b.push((input.port, slot));
                     }
                 }

@@ -14,6 +14,10 @@ ruviform-media-core = { path = "../ruviform-media-core" }
 # M2 (Issue #195): typed Graph IR is the compile input — the engine
 # depends downward on the IR crate, never the reverse.
 ruviform-graph = { path = "../ruviform-graph" }
+# Issue #185 generic probe: shared channel-level measurement (downward
+# dependency into the analysis layer) and shared status counters.
+ruviform-audio-analysis = { path = "../ruviform-audio-analysis" }
+ruviform-observability = { path = "../ruviform-observability" }
 
 [dev-dependencies]
 assert_no_alloc = "1.1"

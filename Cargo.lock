@@ -2802,9 +2802,11 @@ name = "ruviform-audio"
 version = "0.1.0"
 dependencies = [
  "assert_no_alloc",
+ "ruviform-audio-analysis",
  "ruviform-audio-core",
  "ruviform-graph",
  "ruviform-media-core",
+ "ruviform-observability",
  "ruviform-rt",
  "static_assertions",
 ]

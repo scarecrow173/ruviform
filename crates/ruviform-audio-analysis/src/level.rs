@@ -16,6 +16,37 @@ pub struct ChannelLevel {
     pub rms: f32,
 }
 
+impl ChannelLevel {
+    /// Measures one channel's peak/RMS over `samples` — `peak = max
+    /// |x|`, `rms = sqrt(Σx² / n)` (`0`/`0` for an empty slice).
+    /// Extracted so other observers (e.g. the typed-graph probe) can
+    /// share the identical measurement contract without owning a
+    /// [`LevelMeter`].
+    ///
+    /// **RT contract:** RT-suitable — pure arithmetic over the slice.
+    #[must_use]
+    pub fn measure(samples: &[f32]) -> Self {
+        let mut peak = 0.0_f32;
+        let mut sum_sq = 0.0_f32;
+        for &x in samples {
+            let a = x.abs();
+            if a > peak {
+                peak = a;
+            }
+            sum_sq += x * x;
+        }
+        let n = u32::try_from(samples.len()).unwrap_or(u32::MAX);
+        let rms = if n == 0 {
+            0.0
+        } else {
+            #[expect(clippy::cast_precision_loss)]
+            let mean = sum_sq / n as f32;
+            mean.sqrt()
+        };
+        Self { peak, rms }
+    }
+}
+
 /// Per-channel level meter: prepared with a channel count, then
 /// `process` rewrites the internal snapshot every block and
 /// `levels()` exposes it.
@@ -89,24 +120,7 @@ impl LevelMeter {
         }
         for (i, level) in self.levels.iter_mut().enumerate() {
             let samples = view.channel(i).unwrap_or(&[]);
-            let mut peak = 0.0_f32;
-            let mut sum_sq = 0.0_f32;
-            for &x in samples {
-                let a = x.abs();
-                if a > peak {
-                    peak = a;
-                }
-                sum_sq += x * x;
-            }
-            let n = u32::try_from(samples.len()).unwrap_or(u32::MAX);
-            level.peak = peak;
-            level.rms = if n == 0 {
-                0.0
-            } else {
-                #[expect(clippy::cast_precision_loss)]
-                let mean = sum_sq / n as f32;
-                mean.sqrt()
-            };
+            *level = ChannelLevel::measure(samples);
         }
         Ok(())
     }

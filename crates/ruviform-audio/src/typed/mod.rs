@@ -16,6 +16,7 @@
 mod buffer;
 mod compile;
 mod io;
+pub mod probe;
 mod runtime;
 
 pub use buffer::{AlignedSamples, DEFAULT_ALIGNMENT, DelayLine, Slot, SlotSpec};

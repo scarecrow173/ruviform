@@ -15,7 +15,7 @@ Directory: `docs/discovery`
 | DISC-034NV8A2eMJbUhGFvQgL3W | Issue #118 video/NONRT プラグインの L1 経路 | active | [issue-118-video-l1.md](./issue-118-video-l1.md) |
 | DISC-034O7hCIm5rGi3tA4rmxuc | Issue #121 L1 診断・可観測性（underrun メトリクス・子 stderr 配管・失敗原因 payload） | active | [issue-121-diagnostics.md](./issue-121-diagnostics.md) |
 | DISC-034QdFl4ZIWzDfKWh0Cg90 | Issue #184 型付き複数Bus/Port・Graph IRの現行実装棚卸しとcrate配置比較 | active | [issue-184-bus-port-graph-ir-crate.md](./issue-184-bus-port-graph-ir-crate.md) |
-| DISC-034QhqgG9EF5ipLnFJv0Ka | Issue #191 PCM WAV encode/mux backend — crate placement, output contract, safe publish | resolved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
+| DISC-034QhIlaOBN3t7jVxA4sW7 | Issue #185 Generic Probe: Node/Port observation capability, selective monitoring, RT-safe bounded PCM capture — existing-surface inventory and design option survey | active | [issue-185-generic-probe-observation-inventory.md](./issue-185-generic-probe-observation-inventory.md) |
 | DISC-034Q6prdW5pMq5zW9uTb3z | Issue #194 M0 互換性・依存・検証 Baseline 実測監査 | active | [issue-194-m0-baseline-audit.md](./issue-194-m0-baseline-audit.md) |
 | DISC-034QfjLwjBVqddpxivwOTg | Issue #195 M2 Typed Graph Audio Compiler・Buffer/PDC・Stateful RT Ownership・Plan Activation の現行棚卸し | active | [issue-195-m2-typed-graph-compiler-runtime-audit.md](./issue-195-m2-typed-graph-compiler-runtime-audit.md) |
 | DISC-034QdBDFXQ7CpGCCYpN94k | Issue #219 両 Consumer 依存形態・検証基盤棚卸しと Cross-Repo CI 前提実測 | draft | [issue-219-consumer-cross-repo-ci.md](./issue-219-consumer-cross-repo-ci.md) |
@@ -34,5 +34,6 @@ Directory: `docs/discovery`
 | DISC-fqJPHPj2JQlpssrbP4erm6 | Issue #120 re-evaluation analysis — trigger #3 fired (per-child 3rd thread) | resolved | [issue-120-reaper-iomux-reeval-analysis.md](./issue-120-reaper-iomux-reeval-analysis.md) |
 | DISC-034P8EGzRky80ILbGeYdKp | Issue #156 GUI ホスト基盤: PoC 棚卸しと本番化ギャップ | resolved | [issue-156-gui-host-foundation-inventory.md](./issue-156-gui-host-foundation-inventory.md) |
 | DISC-034Qg9A5RpGIykEqJYBwFA | Issue #190 Generic Transport Span Scheduler / Applied Receipt / Clock-Plan Generation contract | resolved | [issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md](./issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md) |
+| DISC-034QhqgG9EF5ipLnFJv0Ka | Issue #191 PCM WAV encode/mux backend — crate placement, output contract, safe publish | resolved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
