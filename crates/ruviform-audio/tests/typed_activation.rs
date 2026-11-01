@@ -455,7 +455,7 @@ fn g2_05_retirement_deferred_and_collector_drain_observed() {
 /// Retirement-queue saturation: more retirements than the retire
 /// channel can hold are leaked (never dropped on RT) and surfaced
 /// through `retire_overflows` + the `RetireOverflow` fault flag.
-/// command_capacity = 1 → retire capacity = 4; five replaced
+/// `command_capacity` = 1 → retire capacity = 4; five replaced
 /// instances overflow it without ever running `collect`.
 #[test]
 fn g2_05_retire_queue_saturation_flagged_leak_safe() {
@@ -531,8 +531,10 @@ fn g2_05_event_channel_full_rejected() {
         opcode: 0,
         value: v,
     };
-    for i in 0..8 {
-        runtime.send_event(ev(i as f32)).expect("within capacity");
+    for i in 0..8u16 {
+        runtime
+            .send_event(ev(f32::from(i)))
+            .expect("within capacity");
     }
     let err = runtime.send_event(ev(9.0)).unwrap_err();
     assert!(matches!(err, ActivationError::EventChannelFull));
