@@ -28,7 +28,8 @@ use ruviform_plugin_core::{
     ProcessResult,
 };
 use ruviform_plugin_host::{
-    ChildExit, HostCommand, HostNotification, HostReply, OutOfProcessSpec, PluginHandle, PluginHost,
+    ChildExit, DiagnosticQuery, HostCommand, HostNotification, HostReply, OutOfProcessSpec,
+    PluginHandle, PluginHost,
 };
 
 /// The descriptor the child synthesizes from a real
@@ -116,14 +117,33 @@ fn sample_eq(actual: f32, expected: f32) -> bool {
 }
 
 fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
-    match host
-        .execute(HostCommand::Instantiate {
-            plugin_id: plugin_id.to_owned(),
-        })
-        .unwrap()
-    {
-        HostReply::Instantiated { handle } => handle,
-        other => panic!("unexpected reply: {other:?}"),
+    match host.execute(HostCommand::Instantiate {
+        plugin_id: plugin_id.to_owned(),
+    }) {
+        Ok(HostReply::Instantiated { handle }) => handle,
+        // A pre-mint failure carries a retained diagnostics record —
+        // print it so CI logs show the frozen phase/cause/stderr at
+        // the failure point (Issue #207 diagnosis aid; harmless on
+        // the success path since this arm never runs there).
+        Err(HostError::SpawnFailed {
+            cause,
+            diagnostics_id,
+        }) => {
+            eprintln!("SpawnFailed: cause={cause:?} diagnostics_id={diagnostics_id}");
+            match host.diagnostics_query(diagnostics_id) {
+                DiagnosticQuery::Found(record) => {
+                    eprintln!("diagnostics record: {record:#?}");
+                    eprintln!(
+                        "child stderr (lossy): {}",
+                        String::from_utf8_lossy(&record.stderr.bytes)
+                    );
+                }
+                other => eprintln!("diagnostics query result: {other:?}"),
+            }
+            panic!("instantiate failed: SpawnFailed {cause:?}");
+        }
+        Ok(other) => panic!("unexpected reply: {other:?}"),
+        Err(error) => panic!("instantiate failed: {error:?}"),
     }
 }
 
