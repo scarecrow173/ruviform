@@ -188,7 +188,7 @@ fn print_forced_levels() {
 fn print_forced_levels() {
     println!(
         "fearless_simd forced levels: neon={}",
-        fearless_simd::Level::new().as_neon().is_some()
+        Level::new().as_neon().is_some()
     );
 }
 
