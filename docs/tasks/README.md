@@ -6,6 +6,15 @@ Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| TASK-034QdV8LJ4ZnIRqDUSRakb | T1 Consumer影響判定・証拠テンプレート（PR/Issue template群） | todo | [issue-219-t1-impact-templates.md](./issue-219-t1-impact-templates.md) |
+| TASK-034QdV9z3ctYdM4HMD0MsZ | T2 consumer-verify.yml Cross-Repo CI lane（preflight/verify×2/summary） | todo | [issue-219-t2-consumer-verify-workflow.md](./issue-219-t2-consumer-verify-workflow.md) |
+| TASK-034QdVap6IcvMjOYnaWzCR | T3 AGENTS.md の ci.yml 記述 drift 修正 | todo | [issue-219-t3-agents-ci-drift.md](./issue-219-t3-agents-ci-drift.md) |
+| TASK-034QdVbbaa7jKsLfhGKepC | T4 検証・IR 記録（actionlint・doc audit・実装記録） | todo | [issue-219-t4-verify-ir.md](./issue-219-t4-verify-ir.md) |
+
+## Settled <!-- doc-suite:settled-index -->
+
+| ID | Title | Status | File |
+| --- | --- | --- | --- |
 | TASK-034Jf1Cl3xf8K9wcSuvFYK | ベンチハーネス骨格と dev-dependencies | done | [add-bench-harness-and-dev-deps.md](./add-bench-harness-and-dev-deps.md) |
 | TASK-034OpsgIJWNistmrGfoPXD | T3. InstanceFailed に cause field + variant 非排他（全呼出サイト更新） | done | [add-cause-to-instance-failed.md](./add-cause-to-instance-failed.md) |
 | TASK-034JOulyBprt7B3tRAzkKZ | chunk timestamp 単体テストと Issue #59 完了確認 | done | [add-chunk-timestamp-tests.md](./add-chunk-timestamp-tests.md) |

@@ -1,0 +1,55 @@
+name: Consumer 追従（Issue #219）
+description: Ruviform 候補 revision への Consumer 追従・不適合対応の起票
+title: "[consumer-followup] "
+labels: ["integration", "consumers"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Consumer（Synvelis / AudioLens）の Ruviform 追従 PR・不適合対応を起票するための
+        フォームです。共有契約の破壊が疑われる場合は Ruviform 側 Issue として記録し、
+        Consumer 側 Adapter 対応は該当 Consumer repo の Issue と相互リンクします。
+  - type: dropdown
+    id: target-consumer
+    attributes:
+      label: 対象 Consumer
+      options:
+        - AudioLens
+        - Synvelis
+        - 両方
+    validations:
+      required: true
+  - type: input
+    id: ruviform-rev
+    attributes:
+      label: 対象 ruviform revision
+      description: 追従先の commit SHA（40 桁）。manifest pin・Cargo.lock resolved SHA を含めて記録する。
+    validations:
+      required: true
+  - type: textarea
+    id: lanes
+    attributes:
+      label: 検証 lane / 結果
+      description: |
+        consumer-verify workflow の run リンク、または Consumer 側 CI の run リンク。
+        lane ごとに pass/fail/not run を明記する。`unknown` 残置は互換性確認済みではない。
+      placeholder: |
+        | lane | OS | feature | 結果 | 例外 | リンク |
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: 例外・Rollback
+      description: |
+        失敗時の戻し方（pin の旧 SHA への revert 等）と許容する例外条件。
+        Git 依存 SHA の恒久固定は Rollback 手段としても扱わない。
+    validations:
+      required: false
+  - type: textarea
+    id: links
+    attributes:
+      label: 相互リンク
+      description: Consumer repo 側 Issue / PR（synvelis/audio-lens repo）と Ruviform 側 Issue / PR。
+    validations:
+      required: true

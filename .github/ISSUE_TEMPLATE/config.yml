@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Synvelis（Consumer）側 Issue
+    url: https://github.com/scarecrow173/synvelis/issues
+    about: DAW 固有の Adapter・移行・回帰対応は Synvelis repo に起票（相互リンク必須）
+  - name: AudioLens（Consumer）側 Issue
+    url: https://github.com/scarecrow173/audio-lens/issues
+    about: AudioLens 固有の Adapter・移行・回帰対応は audio-lens repo に起票（相互リンク必須）
