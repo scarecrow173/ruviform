@@ -163,10 +163,9 @@ use vst3::Steinberg::Vst::{
     FrameRate, IAudioProcessor, IAudioProcessorTrait, IComponent, IComponentHandler,
     IComponentHandlerTrait, IComponentTrait, IEditController, IEditControllerTrait,
     IHostApplication, IHostApplicationTrait, IParamValueQueue, IParamValueQueueTrait,
-    IParameterChanges, IParameterChangesTrait, MediaType, MediaTypes_, ParamID, ParamValue,
-    ParameterInfo, ParameterInfo_::ParameterFlags_, ProcessContext as VstProcessContext,
-    ProcessContext_, ProcessData, ProcessModes_, ProcessSetup, String128, SymbolicSampleSizes_,
-    TChar,
+    IParameterChanges, IParameterChangesTrait, MediaTypes_, ParamID, ParamValue, ParameterInfo,
+    ParameterInfo_::ParameterFlags_, ProcessContext as VstProcessContext, ProcessContext_,
+    ProcessData, ProcessModes_, ProcessSetup, String128, SymbolicSampleSizes_, TChar,
 };
 use vst3::Steinberg::{
     FUnknown, IPluginBaseTrait, IPluginFactory, IPluginFactory2, IPluginFactory2Trait,
@@ -176,6 +175,7 @@ use vst3::Steinberg::{
 };
 use vst3::{Class, ComPtr, ComWrapper, Interface};
 
+use crate::sdk_enum_i32;
 use crate::strings::copy_wstring;
 
 /// Upper bound of param events forwarded per block — the same bound
@@ -1243,7 +1243,7 @@ impl Vst3Plugin {
         // SAFETY: `component` is a live `IComponent`; `info` is a
         // valid `BusInfo` out-param.
         unsafe {
-            if component.getBusCount(MediaTypes_::kAudio as MediaType, dir) < 1 {
+            if component.getBusCount(sdk_enum_i32(MediaTypes_::kAudio), dir) < 1 {
                 return None;
             }
             let mut info = BusInfo {
@@ -1254,7 +1254,7 @@ impl Vst3Plugin {
                 busType: 0,
                 flags: 0,
             };
-            if component.getBusInfo(MediaTypes_::kAudio as MediaType, dir, 0, &raw mut info)
+            if component.getBusInfo(sdk_enum_i32(MediaTypes_::kAudio), dir, 0, &raw mut info)
                 != kResultOk
             {
                 return None;
@@ -1502,8 +1502,8 @@ impl PluginProcessor for Vst3Plugin {
                 return Err(PrepareError::ActivationFailed);
             }
             let mut setup = ProcessSetup {
-                processMode: ProcessModes_::kRealtime as i32,
-                symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
+                processMode: sdk_enum_i32(ProcessModes_::kRealtime),
+                symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample32),
                 maxSamplesPerBlock: max_samples,
                 sampleRate: f64::from(config.sample_rate().get()),
             };
@@ -1518,10 +1518,10 @@ impl PluginProcessor for Vst3Plugin {
         self.max_frames = usize::try_from(config.max_frames()).unwrap_or(usize::MAX);
         self.sample_rate = config.sample_rate().get();
         let in_channels = self
-            .bus_channels(BusDirections_::kInput as BusDirection)
+            .bus_channels(sdk_enum_i32(BusDirections_::kInput))
             .unwrap_or(CHANNELS_PER_BUS);
         let out_channels = self
-            .bus_channels(BusDirections_::kOutput as BusDirection)
+            .bus_channels(sdk_enum_i32(BusDirections_::kOutput))
             .unwrap_or(CHANNELS_PER_BUS);
         self.in_channels = in_channels;
         self.out_channels = out_channels;
@@ -1647,8 +1647,8 @@ impl PluginProcessor for Vst3Plugin {
             },
         };
         let mut data = ProcessData {
-            processMode: ProcessModes_::kRealtime as i32,
-            symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
+            processMode: sdk_enum_i32(ProcessModes_::kRealtime),
+            symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample32),
             numSamples: i32::try_from(frames).unwrap_or(i32::MAX),
             numInputs: 1,
             numOutputs: 1,

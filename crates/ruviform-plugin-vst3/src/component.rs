@@ -40,10 +40,12 @@
 //! scoped `unsafe {}` blocks with SAFETY comments. The per-block
 //! validation/view building lives in [`crate::block`].
 
-// The generated bindings declare enum constants as `DefaultEnumType`
-// (`c_int` on Windows, `c_uint` elsewhere) while struct fields use
-// `int32`; the `as` casts below are required on non-Windows platforms
-// and a no-op on Windows — suppress `unnecessary_cast` for this file.
+// The generated bindings declare flag enum constants as
+// `DefaultEnumType` (`c_int` on Windows, `c_uint` elsewhere) while the
+// bitfields they write are `uint32`; the remaining `as` casts below are
+// required on Windows and a no-op elsewhere — suppress
+// `unnecessary_cast` for this file. Enum constants feeding `int32`
+// fields or params go through `crate::sdk_enum_i32` instead.
 #![allow(clippy::unnecessary_cast)]
 
 use std::cell::RefCell;
@@ -57,11 +59,11 @@ use ruviform_plugin_core::{
     ParamValue, PluginProcessor, ProcessConfig, ProcessContext, ProcessStatus, TransportInfo,
 };
 use vst3::Steinberg::Vst::{
-    BusDirection, BusDirections, BusDirections_, BusInfo, BusInfo_::BusFlags_, BusType, BusTypes_,
-    IAudioProcessor, IAudioProcessorTrait, IComponent, IComponentTrait, IParamValueQueueTrait,
-    IParameterChanges, IParameterChangesTrait, IProcessContextRequirements,
-    IProcessContextRequirementsTrait, IoMode, MediaType, MediaTypes, MediaTypes_, ProcessContext_,
-    ProcessData, ProcessSetup, RoutingInfo, SpeakerArr, SpeakerArrangement, SymbolicSampleSizes_,
+    BusDirection, BusDirections_, BusInfo, BusInfo_::BusFlags_, BusTypes_, IAudioProcessor,
+    IAudioProcessorTrait, IComponent, IComponentTrait, IParamValueQueueTrait, IParameterChanges,
+    IParameterChangesTrait, IProcessContextRequirements, IProcessContextRequirementsTrait, IoMode,
+    MediaType, MediaTypes_, ProcessContext_, ProcessData, ProcessSetup, RoutingInfo, SpeakerArr,
+    SpeakerArrangement, SymbolicSampleSizes_,
 };
 use vst3::Steinberg::{
     FUnknown, IBStream, IPluginBaseTrait, TBool, TUID, kInvalidArgument, kNotImplemented,
@@ -72,6 +74,7 @@ use vst3::{Class, ComRef, uid};
 use crate::block::{self, ChannelScratch, EventScratch, MAX_BLOCK_EVENTS, PreparedBlock};
 use crate::controller::GainController;
 use crate::gain::{GAIN_PARAM, GainProcessor};
+use crate::sdk_enum_i32;
 use crate::strings::copy_wstring;
 
 /// The VST3 `ProcessContext` — aliased to keep it distinct from the
@@ -414,13 +417,10 @@ impl IComponentTrait for GainComponent {
     /// One audio input bus, one audio output bus, no event buses.
     #[expect(unsafe_code)]
     unsafe fn getBusCount(&self, media_type: MediaType, dir: BusDirection) -> i32 {
-        match media_type as MediaTypes {
-            MediaTypes_::kAudio => match dir as BusDirections {
-                BusDirections_::kInput | BusDirections_::kOutput => 1,
-                _ => 0,
-            },
-            _ => 0,
-        }
+        let is_audio = media_type == sdk_enum_i32(MediaTypes_::kAudio);
+        let is_known_dir = dir == sdk_enum_i32(BusDirections_::kInput)
+            || dir == sdk_enum_i32(BusDirections_::kOutput);
+        i32::from(is_audio && is_known_dir)
     }
 
     /// Describes the single stereo `kMain` bus on each side.
@@ -435,30 +435,30 @@ impl IComponentTrait for GainComponent {
         if bus.is_null() {
             return kInvalidArgument;
         }
-        let is_audio = media_type == MediaTypes_::kAudio as MediaType;
-        let is_known_dir = dir == BusDirections_::kInput as BusDirection
-            || dir == BusDirections_::kOutput as BusDirection;
+        let is_audio = media_type == sdk_enum_i32(MediaTypes_::kAudio);
+        let is_known_dir = dir == sdk_enum_i32(BusDirections_::kInput)
+            || dir == sdk_enum_i32(BusDirections_::kOutput);
         if !is_audio || !is_known_dir || index != 0 {
             return kInvalidArgument;
         }
         // SAFETY: caller-provided out-param, checked non-null; only
         // fields of `BusInfo` are written.
         let bus = unsafe { &mut *bus };
-        bus.mediaType = MediaTypes_::kAudio as MediaType;
+        bus.mediaType = sdk_enum_i32(MediaTypes_::kAudio);
         bus.direction = dir;
         #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         {
             bus.channelCount = CHANNELS_PER_BUS as i32;
         }
         copy_wstring(
-            if dir == BusDirections_::kInput as BusDirection {
+            if dir == sdk_enum_i32(BusDirections_::kInput) {
                 "Input"
             } else {
                 "Output"
             },
             &mut bus.name,
         );
-        bus.busType = BusTypes_::kMain as BusType;
+        bus.busType = sdk_enum_i32(BusTypes_::kMain);
         bus.flags = BusFlags_::kDefaultActive as u32;
         kResultOk
     }
@@ -550,8 +550,8 @@ impl IAudioProcessorTrait for GainComponent {
         if arr.is_null() {
             return kInvalidArgument;
         }
-        let is_known_dir = dir == BusDirections_::kInput as BusDirection
-            || dir == BusDirections_::kOutput as BusDirection;
+        let is_known_dir = dir == sdk_enum_i32(BusDirections_::kInput)
+            || dir == sdk_enum_i32(BusDirections_::kOutput);
         if !is_known_dir || index != 0 {
             return kInvalidArgument;
         }
@@ -565,9 +565,9 @@ impl IAudioProcessorTrait for GainComponent {
     /// rule — 64-bit input is rejected, never reinterpreted).
     #[expect(unsafe_code)]
     unsafe fn canProcessSampleSize(&self, symbolic_sample_size: i32) -> tresult {
-        if symbolic_sample_size == SymbolicSampleSizes_::kSample32 as i32 {
+        if symbolic_sample_size == sdk_enum_i32(SymbolicSampleSizes_::kSample32) {
             kResultOk
-        } else if symbolic_sample_size == SymbolicSampleSizes_::kSample64 as i32 {
+        } else if symbolic_sample_size == sdk_enum_i32(SymbolicSampleSizes_::kSample64) {
             kNotImplemented
         } else {
             kInvalidArgument
@@ -597,7 +597,7 @@ impl IAudioProcessorTrait for GainComponent {
         if state.lifecycle.state() != LifecycleState::Activated {
             return kResultFalse;
         }
-        if setup.symbolicSampleSize != SymbolicSampleSizes_::kSample32 as i32 {
+        if setup.symbolicSampleSize != sdk_enum_i32(SymbolicSampleSizes_::kSample32) {
             return kResultFalse;
         }
         if setup.maxSamplesPerBlock <= 0 || setup.maxSamplesPerBlock > MAX_NEGOTIATED_FRAMES {
@@ -693,7 +693,7 @@ impl IAudioProcessorTrait for GainComponent {
         // The spec's 64-bit rule: never reinterpret f64 channels as
         // f32 — reject the block instead (`canProcessSampleSize`
         // already declines kSample64; this is the boundary re-check).
-        if data.symbolicSampleSize != SymbolicSampleSizes_::kSample32 as i32 {
+        if data.symbolicSampleSize != sdk_enum_i32(SymbolicSampleSizes_::kSample32) {
             return kResultFalse;
         }
         if data.numSamples < 0 {
@@ -950,7 +950,7 @@ mod tests {
         fn data(&mut self, frames: i32) -> ProcessData {
             ProcessData {
                 processMode: 0,
-                symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
+                symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample32),
                 numSamples: frames,
                 numInputs: 1,
                 numOutputs: 1,
@@ -984,7 +984,7 @@ mod tests {
             assert_eq!(component.setActive(1), kResultOk);
             let mut setup = ProcessSetup {
                 processMode: 0,
-                symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
+                symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample32),
                 maxSamplesPerBlock: max_frames,
                 sampleRate: 48_000.0,
             };
@@ -1056,7 +1056,7 @@ mod tests {
             assert_eq!(component.setActive(1), kResultOk);
             let mut setup = ProcessSetup {
                 processMode: 0,
-                symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
+                symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample32),
                 maxSamplesPerBlock: 32,
                 sampleRate: 48_000.0,
             };
@@ -1080,7 +1080,7 @@ mod tests {
         let component = GainComponent::new();
         let mut data = ProcessData {
             processMode: 0,
-            symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
+            symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample32),
             numSamples: 64,
             numInputs: 0,
             numOutputs: 0,
@@ -1121,7 +1121,7 @@ mod tests {
 
             let mut setup = ProcessSetup {
                 processMode: 0,
-                symbolicSampleSize: SymbolicSampleSizes_::kSample64 as i32,
+                symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample64),
                 maxSamplesPerBlock: 64,
                 sampleRate: 48_000.0,
             };
@@ -1152,10 +1152,10 @@ mod tests {
         // SAFETY: each mutation keeps `data` itself valid; the adapter
         // must reject the bad shape without touching buffers.
         unsafe {
-            data.symbolicSampleSize = SymbolicSampleSizes_::kSample64 as i32;
+            data.symbolicSampleSize = sdk_enum_i32(SymbolicSampleSizes_::kSample64);
             assert_eq!(processor.process(&raw mut data), kResultFalse);
 
-            data.symbolicSampleSize = SymbolicSampleSizes_::kSample32 as i32;
+            data.symbolicSampleSize = sdk_enum_i32(SymbolicSampleSizes_::kSample32);
             data.numSamples = -1;
             assert_eq!(processor.process(&raw mut data), kResultFalse);
 
@@ -1259,7 +1259,7 @@ mod tests {
         // is due immediately and still applies to the NEXT block.
         let mut data = ProcessData {
             processMode: 0,
-            symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
+            symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample32),
             numSamples: 0,
             numInputs: 0,
             numOutputs: 0,
@@ -1589,7 +1589,7 @@ mod tests {
             assert_eq!(component.setActive(1), kResultOk);
             let mut setup = ProcessSetup {
                 processMode: 0,
-                symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
+                symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample32),
                 maxSamplesPerBlock: i32::MAX,
                 sampleRate: 48_000.0,
             };
@@ -1612,6 +1612,53 @@ mod tests {
         unsafe {
             assert_eq!(component.setState(std::ptr::null_mut()), kNotImplemented);
             assert_eq!(component.getState(std::ptr::null_mut()), kNotImplemented);
+        }
+    }
+
+    /// Out-of-domain enum values are defined rejects, never wrapped
+    /// matches: the `int32` query params compare against the constants
+    /// in the `int32` domain, so a negative `MediaType`/`BusDirection`
+    /// can never alias `kAudio`/`kInput` the way a sign-losing `as`
+    /// cast could.
+    #[expect(unsafe_code)]
+    #[test]
+    fn enum_queries_reject_out_of_range_values() {
+        let component = GainComponent::new();
+        let mut bus = BusInfo {
+            mediaType: 0,
+            direction: 0,
+            channelCount: 0,
+            name: [0; 128],
+            busType: 0,
+            flags: 0,
+        };
+        // SAFETY: `bus` is a valid `BusInfo` out-param for the calls.
+        unsafe {
+            assert_eq!(component.getBusCount(-1, -1), 0);
+            assert_eq!(component.getBusCount(0, -1), 0);
+            assert_eq!(component.getBusCount(-1, 0), 0);
+            assert_eq!(component.getBusCount(0, 2), 0);
+            // The legal pairs still resolve in the `int32` domain.
+            assert_eq!(component.getBusCount(0, 0), 1);
+            assert_eq!(component.getBusCount(0, 1), 1);
+            assert_eq!(
+                component.getBusInfo(-1, 0, 0, &raw mut bus),
+                kInvalidArgument
+            );
+            assert_eq!(
+                component.getBusInfo(0, -1, 0, &raw mut bus),
+                kInvalidArgument
+            );
+            assert_eq!(component.canProcessSampleSize(-1), kInvalidArgument);
+            assert_eq!(component.canProcessSampleSize(i32::MAX), kInvalidArgument);
+            assert_eq!(
+                component.canProcessSampleSize(sdk_enum_i32(SymbolicSampleSizes_::kSample32)),
+                kResultOk
+            );
+            assert_eq!(
+                component.canProcessSampleSize(sdk_enum_i32(SymbolicSampleSizes_::kSample64)),
+                kNotImplemented
+            );
         }
     }
 
