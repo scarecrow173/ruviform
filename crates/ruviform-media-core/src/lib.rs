@@ -62,6 +62,7 @@ mod stream;
 mod time;
 mod timecode;
 mod transport;
+mod transport_schedule;
 
 pub use error::{Error, Result};
 pub use fact::Fact;
@@ -77,6 +78,14 @@ pub use stream::{StreamDescriptor, StreamId, StreamKind};
 pub use time::{FrameRate, MediaDuration, MediaRange, MediaTime, Rounding, TimeBase};
 pub use timecode::Timecode;
 pub use transport::{TransportSnapshot, TransportStatus};
+pub use transport_schedule::{
+    AppliedReceipt, ApplyDegradation, ApplyStatus, BlockContract, CallPartition, ClockEpochId,
+    CommandId, DeliveryPolicy, EngineFrame, FaultKind, InBlockTransportSupport, LoopOccurrence,
+    PlanGeneration, RejectReason, ScheduleBudget, ScheduleFault, ScheduledEvent, SpanContext,
+    SpanSink, TempoMapRevision, TransportCommand, TransportGeneration, TransportPlan,
+    TransportPlanBuilder, TransportScheduler, TransportSpan, event_engine_frame, media_time_ticks,
+    span_event_window,
+};
 
 /// Returns the crate version string.
 ///

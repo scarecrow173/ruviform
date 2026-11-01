@@ -55,6 +55,7 @@ Directory: `docs/plans`
 | PLAN-034N3LoOmZbouSRhtfuEy4 | Issue #126 video-proc assert_no_alloc RT 検証レーン適用 | completed | [implement-issue-126-video-proc-rt-lane.md](./implement-issue-126-video-proc-rt-lane.md) |
 | PLAN-034N9jeOhQNLPoHfcaUcqZ | Issue #130 実施計画 — media-core/dsp/audio-analysis assert_no_alloc レーン武装 | completed | [implement-issue-130-arm-assert-no-alloc.md](./implement-issue-130-arm-assert-no-alloc.md) |
 | PLAN-034J5K603qXDNmT82wI9v7 | Issue #18 データモデル API の実装（media-core / audio-core / video-core） | completed | [implement-issue-18-data-model.md](./implement-issue-18-data-model.md) |
+| PLAN-034Qh3xYzAbCdEfGhIjK | Issue #190 Transport Span Scheduler 実装計画 | completed | [implement-issue-190-transport-span-scheduler.md](./implement-issue-190-transport-span-scheduler.md) |
 | PLAN-034JNstCXHhzzwOvo9iiCv | Issue #58 時間型拡張の実装（FrameRate 導入・Timecode シグネチャ移行・丸め誤差テスト） | completed | [implement-issue-58-time-type-extension.md](./implement-issue-58-time-type-extension.md) |
 | PLAN-034LNXQmQvHjRBD57FCPBw | Issue #76 実施計画 — プラグイン L1 アウトプロセス分離（plugin-export 新設 + plugin-host L1 プロキシ） | completed | [implement-issue-76-plugin-l1-out-of-process.md](./implement-issue-76-plugin-l1-out-of-process.md) |
 | PLAN-034L5BRUxRuns9cuoAdq8n | Implement Issue 98 OFX Host Adapter | completed | [implement-issue-98-ofx-host-adapter.md](./implement-issue-98-ofx-host-adapter.md) |
