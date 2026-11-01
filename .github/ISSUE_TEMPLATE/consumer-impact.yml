@@ -1,0 +1,80 @@
+name: Consumer 影響・互換契約（Issue #219）
+description: Ruviform の変更が Synvelis / AudioLens に与える影響の分類・追跡
+title: "[consumer-impact] "
+labels: ["integration", "consumers"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ruviform の公開 API / feature / behavior / dependency / CI 基盤の変更について、
+        Synvelis・AudioLens を独立した Consumer として `impacted` / `no impact` / `unknown`
+        に分類し、根拠を記録します。`unknown` は互換性確認済みを意味しません。
+  - type: dropdown
+    id: change-kind
+    attributes:
+      label: 変更種別
+      options:
+        - 公開 API
+        - feature / crate 構成
+        - behavior / 契約
+        - dependency / toolchain
+        - CI 基盤
+        - その他
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: 変更の要約
+      description: 何がどう変わるか。関連 PR / 設計 doc へのリンク。
+    validations:
+      required: true
+  - type: dropdown
+    id: synvelis-impact
+    attributes:
+      label: Synvelis への影響分類
+      options:
+        - impacted
+        - no impact
+        - unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: audiolens-impact
+    attributes:
+      label: AudioLens への影響分類
+      options:
+        - impacted
+        - no impact
+        - unknown
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: 分類の根拠
+      description: |
+        impacted → 対応する Ruviform Issue と Consumer 側 Issue（synvelis/audio-lens repo）への相互リンク。
+        no impact → 影響が及ばない根拠（不要 Issue は立てない）。
+        unknown → 未検証の理由と解消先（起票 Issue / consumer-verify dispatch 予定）。
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 検証証拠
+      description: |
+        Consumer 別に「検証対象(lane/test)・対象 OS/feature・ruviform revision・
+        結果(pass/fail/not run)・許容例外・Rollback」を記録する。
+        実行していない lane は not run と明記する。
+      placeholder: |
+        | 対象 | lane/test | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |
+    validations:
+      required: false
+  - type: textarea
+    id: links
+    attributes:
+      label: 関連リンク
+      description: Ruviform ↔ Consumer の相互参照（Issue / PR / CI run / 設計 doc）。
+    validations:
+      required: false
