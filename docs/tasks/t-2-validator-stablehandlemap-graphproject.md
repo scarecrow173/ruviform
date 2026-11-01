@@ -17,7 +17,8 @@ relations:
     generated: []
   implements:
     - "docs/plans/implement-issue-184-m1-ruviform-graph-crate-typed-ir-validator-poc.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/issue-184-typed-graph-ir-poc.md"
   depends-on:
     - "docs/tasks/t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md"
   blocks:
