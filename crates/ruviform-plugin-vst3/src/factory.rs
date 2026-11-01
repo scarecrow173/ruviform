@@ -2,12 +2,6 @@
 //! `IPluginFactory3` describing and instantiating the two classes the
 //! module ships (component + controller).
 
-// The generated bindings declare enum constants as `DefaultEnumType`
-// (`c_int` on Windows, `c_uint` elsewhere) while struct fields use
-// `int32`; the `as` casts below are required on non-Windows platforms
-// and a no-op on Windows — suppress `unnecessary_cast` for this file.
-#![allow(clippy::unnecessary_cast)]
-
 use std::ffi::c_void;
 
 use vst3::Steinberg::{
@@ -19,6 +13,7 @@ use vst3::{Class, ComWrapper};
 
 use crate::component::GainComponent;
 use crate::controller::GainController;
+use crate::sdk_enum_i32;
 use crate::strings::{copy_cstring, copy_wstring};
 
 /// The VST3 plugin factory for the `PoC` gain module.
@@ -46,7 +41,7 @@ impl IPluginFactoryTrait for GainFactory {
         copy_cstring("Ruviform", &mut info.vendor);
         copy_cstring("https://github.com/scarecrow173/ruviform", &mut info.url);
         copy_cstring("ruviform@example.invalid", &mut info.email);
-        info.flags = PFactoryInfo_::FactoryFlags_::kUnicode as i32;
+        info.flags = sdk_enum_i32(PFactoryInfo_::FactoryFlags_::kUnicode);
         kResultOk
     }
 
@@ -66,13 +61,13 @@ impl IPluginFactoryTrait for GainFactory {
         match index {
             0 => {
                 info.cid = GainComponent::CID;
-                info.cardinality = PClassInfo_::ClassCardinality_::kManyInstances as i32;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Audio Module Class", &mut info.category);
                 copy_cstring("Gain", &mut info.name);
             }
             1 => {
                 info.cid = GainController::CID;
-                info.cardinality = PClassInfo_::ClassCardinality_::kManyInstances as i32;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Component Controller Class", &mut info.category);
                 copy_cstring("Gain Controller", &mut info.name);
             }
@@ -126,7 +121,7 @@ impl IPluginFactory2Trait for GainFactory {
         match index {
             0 => {
                 info.cid = GainComponent::CID;
-                info.cardinality = PClassInfo_::ClassCardinality_::kManyInstances as i32;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Audio Module Class", &mut info.category);
                 copy_cstring("Gain", &mut info.name);
                 info.classFlags = 0;
@@ -137,7 +132,7 @@ impl IPluginFactory2Trait for GainFactory {
             }
             1 => {
                 info.cid = GainController::CID;
-                info.cardinality = PClassInfo_::ClassCardinality_::kManyInstances as i32;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Component Controller Class", &mut info.category);
                 copy_cstring("Gain Controller", &mut info.name);
                 info.classFlags = 0;
@@ -165,7 +160,7 @@ impl IPluginFactory3Trait for GainFactory {
         match index {
             0 => {
                 info.cid = GainComponent::CID;
-                info.cardinality = PClassInfo_::ClassCardinality_::kManyInstances as i32;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Audio Module Class", &mut info.category);
                 copy_wstring("Gain", &mut info.name);
                 info.classFlags = 0;
@@ -176,7 +171,7 @@ impl IPluginFactory3Trait for GainFactory {
             }
             1 => {
                 info.cid = GainController::CID;
-                info.cardinality = PClassInfo_::ClassCardinality_::kManyInstances as i32;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Component Controller Class", &mut info.category);
                 copy_wstring("Gain Controller", &mut info.name);
                 info.classFlags = 0;
