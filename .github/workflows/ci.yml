@@ -1,10 +1,18 @@
 name: ci
 
-# Manual verification workflow. Intentionally dispatch-only: run it from the
-# Actions tab after this file is merged into the default branch.
-
+# Automatically verify pull requests against main and changes merged to main.
+# Keep manual dispatch for targeted diagnosis and reruns.
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
+
+# CI only needs the pinned Rust toolchain and prek. Do not activate
+# optional developer tools such as pipx:serena-agent during mise exec/run.
+env:
+  MISE_ENABLE_TOOLS: rust,prek
 
 permissions:
   contents: read
@@ -31,11 +39,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       # cpal's ALSA backend links via alsa-sys, whose build script
       # requires the ALSA development headers (pkg-config).
@@ -86,11 +96,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       # cpal's ALSA backend links via alsa-sys, whose build script
       # requires the ALSA development headers (pkg-config).
@@ -107,10 +119,16 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # Selects the `rt_*`-prefixed RT contract tests by name filter
-      # (e.g. `rt_output_callback_path_allocates_nothing`); a zero-match
-      # filter still exits successfully, so the job stays meaningful as
-      # RT tests grow.
+      # The `rt_` filter matches substrings and succeeds even with zero tests.
+      # Reject empty strict-prefix selections before running the existing RT suite.
+      - name: Require non-empty RT contract test selection
+        shell: bash
+        run: |
+          test_list="$(mise exec -- cargo test --workspace --locked rt_ -- --list)"
+          strict_count="$(printf '%s\n' "$test_list" | grep -Ec '(^|::)rt_[^[:space:]]+: test$' || true)"
+          echo "Strict rt_ contract tests: $strict_count"
+          test "$strict_count" -gt 0
+
       - name: Run RT contract tests (mise run test-rt)
         run: mise run test-rt
 
@@ -125,11 +143,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       - name: Restore cargo registry/git index cache
         uses: actions/cache@v6.1.0
@@ -170,11 +190,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       - name: Install WebKitGTK development headers (Linux)
         if: runner.os == 'Linux'
@@ -208,11 +230,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       # cpal's ALSA backend links via alsa-sys, whose build script
       # requires the ALSA development headers (pkg-config).
@@ -256,11 +280,13 @@ jobs:
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
 
-      - name: Restore tools from mise.lock
+      - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked
+          mise install --locked rust prek
 
       - name: Restore cargo registry/git index cache
         uses: actions/cache@v6.1.0
