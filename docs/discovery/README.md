@@ -31,5 +31,6 @@ Directory: `docs/discovery`
 | DISC-034MHDcCcgTMOTFraQb90l | L1 規格アダプタの子プロセス組込み・実プラグイン E2E（CLAP/VST3/OFX）の探索（Issue #114） | resolved | [issue-114-real-adapter-l1-e2e.md](./issue-114-real-adapter-l1-e2e.md) |
 | DISC-fqJPHPj2JQlpssrbP4erm6 | Issue #120 re-evaluation analysis — trigger #3 fired (per-child 3rd thread) | resolved | [issue-120-reaper-iomux-reeval-analysis.md](./issue-120-reaper-iomux-reeval-analysis.md) |
 | DISC-034P8EGzRky80ILbGeYdKp | Issue #156 GUI ホスト基盤: PoC 棚卸しと本番化ギャップ | resolved | [issue-156-gui-host-foundation-inventory.md](./issue-156-gui-host-foundation-inventory.md) |
+| DISC-034Qg9A5RpGIykEqJYBwFA | Issue #190 Generic Transport Span Scheduler / Applied Receipt / Clock-Plan Generation contract | resolved | [issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md](./issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
