@@ -53,6 +53,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QgS3HSwmt1pYqzqoBhg | Issue #190 T-1: canonical transport contract types | completed | [issue-190-t-1-canonical-transport-contract-types.md](./issue-190-t-1-canonical-transport-contract-types.md) |
 | IMPL-034QgS4TFyEN937G8j8DKR | Issue #190 T-2: span scheduler apply | completed | [issue-190-t-2-span-scheduler-apply.md](./issue-190-t-2-span-scheduler-apply.md) |
 | IMPL-034QgS61F2OZZNh6JVUeV3 | Issue #190 T-3: plugin bridge + mock PoC | completed | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
+| IMPL-034QgTkRw195m2audIoRtXwQ | Issue #195 M2 typed graph audio compiler/runtime: schedule, bounded buffers, PDC, stateful RT ownership, plan activation | completed | [issue-195-m2-typed-graph-compiler-runtime.md](./issue-195-m2-typed-graph-compiler-runtime.md) |
 | IMPL-034Jy2QPH4SUwoep9wQBW2 | ruviform-rt 中核型の実装 | completed | [ruviform-rt.md](./ruviform-rt.md) |
 | IMPL-034J7u3ZaCkeiCc8zzuQwd | Small fixes from followup triage | completed | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
 | IMPL-034JyiwDR1vV3SDIxU8Ng3 | SPSC チャネルの実装 | completed | [spsc.md](./spsc.md) |
