@@ -32,6 +32,7 @@ mod denormal;
 mod graph;
 mod mixer;
 mod plan;
+pub mod render;
 mod session;
 pub mod typed;
 

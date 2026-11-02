@@ -27,6 +27,6 @@ pub use compile::{
 };
 pub use io::{InputView, NodeIo, OutputView};
 pub use runtime::{
-    ActivationError, GraphProcessor, GraphRuntime, NodeEvent, ProcessError, RtRuntime,
-    RuntimeCommand, RuntimeFault, SharedStatus, SharedStatusSnapshot,
+    ActivationError, GraphProcessor, GraphRuntime, NodeEvent, OfflineRenderSupport, ProcessError,
+    RtRuntime, RuntimeCommand, RuntimeFault, SharedStatus, SharedStatusSnapshot,
 };
