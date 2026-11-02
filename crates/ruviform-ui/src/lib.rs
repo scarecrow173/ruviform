@@ -59,6 +59,7 @@ pub mod bridge;
 pub mod data;
 pub mod demo;
 pub mod detect;
+pub mod dock;
 pub mod error;
 pub mod event;
 pub mod ipc;
@@ -75,6 +76,12 @@ pub use data::{
 };
 pub use demo::DemoService;
 pub use detect::{BackendReport, BackendState};
+pub use dock::{
+    Axis, DockError, DockEvent, DockNode, DockPath, DockTarget, DockTree, DockWorkspace, DropZone,
+    LAYOUT_SCHEMA_VERSION, LayoutSnapshot, MonitorHint, MoveReport, MoveToken, RestoredLayout,
+    ViewInstanceId, ViewLocation, WindowCloseDisposition, WindowGeometry, WindowPlacement,
+    WindowSnapshot,
+};
 pub use error::UiError;
 pub use event::{HostEvent, HostHandle};
 pub use ipc::{

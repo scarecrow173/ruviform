@@ -150,6 +150,10 @@ pub struct WindowConfig {
     pub width: u32,
     /// Initial logical height.
     pub height: u32,
+    /// Initial logical position in virtual-desktop coordinates, or
+    /// `None` for the platform default placement — used by layout
+    /// restore (Issue #182).
+    pub position: Option<(i32, i32)>,
     /// Initial URL — normally inside the `rvf://app` namespace.
     pub url: String,
     /// Enable backend devtools for this window's webview.
@@ -162,6 +166,7 @@ impl Default for WindowConfig {
             title: "ruviform".to_string(),
             width: 1280,
             height: 800,
+            position: None,
             url: "rvf://app/index.html".to_string(),
             devtools: cfg!(debug_assertions),
         }
