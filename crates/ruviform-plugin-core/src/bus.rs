@@ -24,12 +24,38 @@ pub enum BusDirection {
     Output,
 }
 
+/// The role a bus plays in the plugin's routing topology.
+///
+/// Maps onto the standard-neutral roles a plugin standard exposes:
+/// CLAP's main/aux audio-ports and note-ports, VST3's `kMain`/`kAux`
+/// bus categories, and the generic send/return concept. `#[non_exhaustive]`
+/// per the unified public-enum API policy.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum BusRole {
+    /// The plugin's primary bus of its direction (CLAP `is_main`,
+    /// VST3 `kMain`).
+    Main,
+    /// A secondary auxiliary bus (additional input or output path).
+    Aux,
+    /// A sidechain input bus — audio that modulates processing
+    /// without being the primary material.
+    Sidechain,
+    /// A send bus (output that feeds an external chain).
+    Send,
+    /// A return bus (input fed back from an external chain).
+    Return,
+}
+
 /// Standard-neutral audio bus descriptor.
 ///
 /// `layout` both fixes the channel count ([`BusDescriptor::channels`])
-/// and describes speaker placement. `main` marks the standard-neutral
-/// "main" bus each standard defines (CLAP `is_main`, VST3 `kMain`).
-/// `enabled` declares host-visible availability: a bus the host leaves
+/// and describes speaker placement. `role` names the standard-neutral
+/// bus role each standard defines (CLAP main/aux, VST3 `kMain`/`kAux`);
+/// [`BusRole::Main`] is the main bus of its direction. `enabled`
+/// declares host-visible availability: a bus the host leaves
 /// disabled is *not* presented to processing — adapters build empty
 /// views for it instead of touching its pointers.
 ///
@@ -39,16 +65,17 @@ pub enum BusDirection {
 ///
 /// ```
 /// use ruviform_audio_core::ChannelLayout;
-/// use ruviform_plugin_core::{BusDescriptor, BusDirection};
+/// use ruviform_plugin_core::{BusDescriptor, BusDirection, BusRole};
 ///
 /// const MAIN_OUT: BusDescriptor = BusDescriptor {
 ///     direction: BusDirection::Output,
 ///     layout: ChannelLayout::Stereo,
 ///     name: "Main Out",
-///     main: true,
+///     role: BusRole::Main,
 ///     enabled: true,
 /// };
 /// assert_eq!(MAIN_OUT.channels(), 2);
+/// assert!(MAIN_OUT.is_main());
 /// ```
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BusDescriptor {
@@ -58,8 +85,9 @@ pub struct BusDescriptor {
     pub layout: ChannelLayout,
     /// Human-readable bus name.
     pub name: &'static str,
-    /// Whether this is the plugin's main bus of its direction.
-    pub main: bool,
+    /// The routing role of this bus ([`BusRole::Main`] marks the
+    /// plugin's main bus of its direction).
+    pub role: BusRole,
     /// Whether the bus is available for the host to activate.
     pub enabled: bool,
 }
@@ -71,6 +99,15 @@ impl BusDescriptor {
     #[must_use]
     pub const fn channels(self) -> u32 {
         self.layout.channels()
+    }
+
+    /// Whether this is the plugin's main bus of its direction
+    /// ([`BusRole::Main`]).
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn is_main(self) -> bool {
+        matches!(self.role, BusRole::Main)
     }
 }
 
@@ -84,10 +121,16 @@ mod tests {
             direction: BusDirection::Input,
             layout: ChannelLayout::FivePointOne,
             name: "in",
-            main: true,
+            role: BusRole::Main,
             enabled: true,
         };
         assert_eq!(BUS.channels(), 6);
+        assert!(BUS.is_main());
+        let aux = BusDescriptor {
+            role: BusRole::Aux,
+            ..BUS
+        };
+        assert!(!aux.is_main());
         let off = BusDescriptor {
             enabled: false,
             ..BUS

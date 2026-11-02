@@ -12,8 +12,8 @@
 
 use crate::boundary::{GuiHandle, GuiParentToken, HostError};
 use crate::{
-    BufferView, BufferViewMut, EventList, ParamInfo, PluginDescriptor, PluginProcessor,
-    PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
+    BufferView, BufferViewMut, BusDescriptor, EventList, ParamInfo, PluginDescriptor,
+    PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
 };
 
 /// An erased input-bus view: one `&dyn BufferView` per bus, passed to
@@ -90,6 +90,21 @@ pub trait Plugin: PluginProcessor {
     ///
     /// **RT contract:** non-RT only.
     fn params(&self) -> &[ParamInfo];
+
+    /// The plugin's declared buses, in the order the plugin presents
+    /// them to processing (input buses first, in the standard's port
+    /// order, then output buses in the same convention — or whichever
+    /// stable order the adapter declares; the bridge maps each
+    /// declared bus onto a typed-graph port by index).
+    ///
+    /// The default returns an empty slice, meaning "not declared":
+    /// callers that cannot enumerate buses report that capability as
+    /// unavailable rather than inferring a single stereo bus.
+    ///
+    /// **RT contract:** non-RT only.
+    fn buses(&self) -> &[BusDescriptor] {
+        &[]
+    }
 
     /// The dyn-safe processing entry point the host invokes per
     /// block. The default forwards the erased views into
@@ -250,6 +265,8 @@ pub trait ErasedPlugin {
     fn descriptor(&self) -> PluginDescriptor;
     /// [`Plugin::params`].
     fn params(&self) -> &[ParamInfo];
+    /// [`Plugin::buses`].
+    fn buses(&self) -> &[BusDescriptor];
     /// [`PluginProcessor::prepare`] — the activation hook.
     fn prepare(
         &mut self,
@@ -297,6 +314,9 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
     }
     fn params(&self) -> &[ParamInfo] {
         self.0.params()
+    }
+    fn buses(&self) -> &[BusDescriptor] {
+        self.0.buses()
     }
     fn process_host(
         &mut self,

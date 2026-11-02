@@ -16,8 +16,8 @@ use std::sync::{Arc, Mutex, TryLockError};
 
 use ruviform_plugin_core::wire::{WIRE_MAX_CHANNELS, WIRE_MAX_FRAMES};
 use ruviform_plugin_core::{
-    EventList, Lifecycle, LifecycleError, LifecycleEvent, LifecycleState, PrepareError,
-    ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
+    BusDescriptor, EventList, Lifecycle, LifecycleError, LifecycleEvent, LifecycleState,
+    PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L0Endpoint, PluginEndpoint};
@@ -146,6 +146,28 @@ fn converge_failed(lifecycle: &mut Lifecycle) -> HostError {
         let _ = lifecycle.transition(LifecycleEvent::Failed);
     }
     HostError::Failed
+}
+
+/// The bus-enumeration result [`InProcessHost::buses`] and
+/// [`crate::PluginHost::buses`] return — an honest "reported" vs
+/// "unavailable" distinction.
+///
+/// `Reported` carries the plugin's declared [`BusDescriptor`]s in
+/// the adapter's declared order. `Unavailable` means the layer
+/// cannot enumerate buses (an out-of-process L1 instance has no
+/// wire verb for it yet) — callers must not infer a bus layout
+/// from it.
+///
+/// **RT contract:** non-RT only — `Reported` owns a vec.
+#[derive(Debug, PartialEq)]
+#[non_exhaustive]
+pub enum BusReport {
+    /// The plugin's declared bus table (possibly empty when the
+    /// plugin does not declare one — an empty report is "declared
+    /// none", distinct from `Unavailable`).
+    Reported(Vec<BusDescriptor>),
+    /// Bus enumeration is unavailable at this layer.
+    Unavailable,
 }
 
 /// The L0 host: executes [`HostCommand`]s in-process against
@@ -917,6 +939,31 @@ impl InProcessHost {
                         .save_state()
                         .map(|bytes| HostReply::State { bytes })
                 })
+            }
+        }
+    }
+
+    /// The instance's declared bus table — `Plain` slots read it
+    /// directly; `Shared` slots take the verb lock so the report is a
+    /// committed-state observation.
+    ///
+    /// **RT contract:** non-RT only — allocates the report vec; the
+    /// `Shared` arm takes the `core` mutex.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle and
+    /// [`HostError::Failed`] when the instance has already converged
+    /// (same gate every `Shared` verb runs).
+    pub fn buses(&mut self, handle: PluginHandle) -> Result<BusReport, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => Ok(BusReport::Reported(plugin.buses().to_vec())),
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    Ok(core.plugin.buses().to_vec())
+                })
+                .map(BusReport::Reported)
             }
         }
     }

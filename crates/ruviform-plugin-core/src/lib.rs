@@ -99,7 +99,7 @@ mod video_plugin;
 pub mod wire;
 
 pub use boundary::{FailureCause, GuiHandle, GuiParentToken, HostError, PluginHandle};
-pub use bus::{BusDescriptor, BusDirection};
+pub use bus::{BusDescriptor, BusDirection, BusRole};
 pub use descriptor::{PluginDescriptor, PluginDescriptorView};
 pub use event::{Event, EventKind, EventList, ParamEvent, sort_events_by_frame_offset};
 pub use lifecycle::{Lifecycle, LifecycleError, LifecycleEvent, LifecycleState};
