@@ -38,3 +38,4 @@ Directory: `docs/discovery`
 | DISC-uYfaNCLgYERA7zX0pHelL0 | Issue #197 Generic Media Reader / Decoder・Prefetch・RT Playback Consumer 境界 — inventory, crate placement, contract shape | resolved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
+| DISC-ubO5TxPGQDZSaLVHth3jpg | Issue #198 Stateful Sequential Offline Render・Frame/Preroll/PDC/Tail・Safe Output Receipt — inventory, placement, contract shape | resolved | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |
