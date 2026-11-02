@@ -23,7 +23,8 @@
 use ruviform_media_core::{Fact, FrameRate, MediaTime, StreamDescriptor, StreamId};
 
 use crate::codec::CodecDescriptor;
-use crate::error::Result;
+use crate::decode::{DecodeMode, Decoder};
+use crate::error::{Error, ErrorKind, Result};
 use crate::packet::Packet;
 
 /// Which container family a [`Demuxer`] is reading.
@@ -365,6 +366,59 @@ pub trait Demuxer: Send {
     /// provided; [`ErrorKind::Io`](crate::ErrorKind) on underlying
     /// source failure.
     fn seek(&mut self, position: MediaTime) -> Result<()>;
+
+    /// The declared capability fact for [`seek`](Self::seek), as probed
+    /// at construction time.
+    ///
+    /// This is the *declaration* half of the seek contract — a caller
+    /// learns whether seeking is possible before committing to a seek
+    /// plan, rather than discovering it as a `seek` failure:
+    ///
+    /// * [`Fact::Known`](()) — `seek` requests are accepted.
+    /// * `Fact::Unsupported` — the backend or the source cannot seek
+    ///   (e.g. a container without a seek index, or an unseekable
+    ///   `MediaSource`); `seek` will report
+    ///   [`ErrorKind::Unsupported`].
+    /// * `Fact::NotDeclared` — the backend did not classify the
+    ///   capability; the default. It is *not* a claim of seekability.
+    ///
+    /// **RT contract:** non-RT only — `Copy` fact access over probed
+    /// state.
+    fn seekable(&self) -> Fact<()> {
+        Fact::NotDeclared
+    }
+
+    /// Builds a [`Decoder`] for the stream `id`, in the requested
+    /// output [`DecodeMode`].
+    ///
+    /// This is the trait-level construction port for decoders — the
+    /// boundary-owned alternative to backend-specific entry points, so
+    /// consumers (readers, playback engines, observation tools) can
+    /// build a decoder without naming the backend. Backends implement
+    /// it by dispatching to their own construction paths; mode
+    /// `Canonical` builds the `f32` playback representation and mode
+    /// `Native` builds the lossless native observation representation.
+    ///
+    /// The default reports [`ErrorKind::Unsupported`] — an honest "no
+    /// decoder construction through this port", matching
+    /// `StreamFacts::decodable`. When a stream cannot be decoded the
+    /// stream's [`StreamFacts::decodable`] fact carries the classified
+    /// reason; a `NotDeclared`/`Unsupported` fact there is a stronger
+    /// claim than this default and callers should prefer it.
+    ///
+    /// **RT contract:** non-RT only — decoder construction may allocate
+    /// codec state.
+    ///
+    /// # Errors
+    ///
+    /// * [`ErrorKind::InvalidValue`] — `id` does not name one of this
+    ///   demuxer's streams.
+    /// * [`ErrorKind::Unsupported`] — the backend cannot decode this
+    ///   stream/codec or does not provide this mode.
+    fn make_decoder(&self, id: StreamId, mode: DecodeMode) -> Result<Box<dyn Decoder>> {
+        let _ = (id, mode);
+        Err(Error::from_kind(ErrorKind::Unsupported))
+    }
 }
 
 #[cfg(test)]

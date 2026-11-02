@@ -97,7 +97,7 @@ mod staged;
 
 pub use capability::{Capabilities, Features};
 pub use codec::{CodecDescriptor, CodecFormat, CodecId};
-pub use decode::Decoder;
+pub use decode::{DecodeMode, Decoder};
 pub use demux::{
     BackendInfo, CodecTag, ContainerDetail, ContainerFormat, ContainerInfo, Demuxer, StreamFacts,
     StreamInfo, VideoStreamFacts,

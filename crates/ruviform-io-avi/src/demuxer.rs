@@ -24,8 +24,9 @@ use ruviform_media_core::{
     TickTimestamp, TimeBase, TimestampProvenance,
 };
 use ruviform_media_io::{
-    CodecDescriptor, CodecFormat, CodecId, CodecTag, ContainerFormat, ContainerInfo, Demuxer,
-    Error, ErrorKind, MediaSource, Packet, PacketFlags, StreamFacts, StreamInfo, VideoStreamFacts,
+    CodecDescriptor, CodecFormat, CodecId, CodecTag, ContainerFormat, ContainerInfo, DecodeMode,
+    Decoder, Demuxer, Error, ErrorKind, MediaSource, Packet, PacketFlags, StreamFacts, StreamInfo,
+    VideoStreamFacts,
 };
 use ruviform_video_core::{ColorInfo, PixelFormat, VideoFormat};
 
@@ -383,6 +384,23 @@ impl Demuxer for AviDemuxer {
             ErrorKind::Unsupported,
             "avi: seeking is not implemented",
         ))
+    }
+
+    /// Seek is declared `Unsupported` up front — the same capability
+    /// `seek` reports, as a construction-time fact.
+    fn seekable(&self) -> Fact<()> {
+        Fact::Unsupported
+    }
+
+    /// Builds a boundary [`Decoder`] for stream `id` in `mode` —
+    /// `Canonical` dispatches to [`make_decoder`](Self::make_decoder)
+    /// and `Native` to [`make_native_decoder`](Self::make_native_decoder).
+    fn make_decoder(&self, id: StreamId, mode: DecodeMode) -> Result<Box<dyn Decoder>, Error> {
+        match mode {
+            DecodeMode::Canonical => Ok(Box::new(self.make_decoder(id)?)),
+            DecodeMode::Native => Ok(Box::new(self.make_native_decoder(id)?)),
+            _ => Err(err(ErrorKind::Unsupported, "avi: unknown decode mode")),
+        }
     }
 }
 

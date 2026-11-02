@@ -30,6 +30,8 @@ members = [
     "crates/ruviform-dsp",
     "crates/ruviform-audio-analysis",
     "crates/ruviform-media-io",
+    # メディア Reader/Prefetch 基盤（Issue #197 — source-frame sequential decode + bounded prefetch → RT consumer。media-io 非 RT 境界を保ったまま mixed-RT を分離）
+    "crates/ruviform-media-reader",
     "crates/ruviform-io-symphonia",
     # メディア I/O バックエンド（Issue #154 — AudioLens が消費する AVI/DIB・WAVEFORMATEX 入力を所有する pure-Rust demux/decode adapter）
     "crates/ruviform-io-avi",

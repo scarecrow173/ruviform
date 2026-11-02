@@ -497,3 +497,72 @@ fn native_decode_is_exact_for_float_encodings() {
         offset += frame.frames();
     }
 }
+
+// ---------- Issue #197 boundary additions ----------
+
+/// Non-seekable source wrapper — `Seek::seek` always fails.
+struct NoSeek(Cursor<Vec<u8>>);
+
+impl std::io::Read for NoSeek {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl std::io::Seek for NoSeek {
+    fn seek(&mut self, _pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "no seek",
+        ))
+    }
+}
+
+#[test]
+fn boundary_seekable_fact_mirrors_source_capability() {
+    let demuxer = ruviform_io_symphonia::open_demuxer(Cursor::new(wav_bytes(FRAMES))).unwrap();
+    assert_eq!(demuxer.seekable(), Fact::known(()));
+
+    let unseekable =
+        ruviform_io_symphonia::open_demuxer(NoSeek(Cursor::new(wav_bytes(FRAMES)))).unwrap();
+    assert_eq!(unseekable.seekable(), Fact::Unsupported);
+}
+
+#[test]
+fn boundary_make_decoder_dispatches_both_modes() {
+    use ruviform_media_io::DecodeMode;
+
+    let demuxer = ruviform_io_symphonia::open_demuxer(Cursor::new(wav_bytes(FRAMES))).unwrap();
+    let stream = demuxer.streams()[0].stream.id;
+
+    // The generic port builds a canonical decoder — the same object
+    // the inherent `make_decoder` constructor produces.
+    let mut decoder = Demuxer::make_decoder(&demuxer, stream, DecodeMode::Canonical).unwrap();
+    let mut demuxer = ruviform_io_symphonia::open_demuxer(Cursor::new(wav_bytes(FRAMES))).unwrap();
+    let packet = demuxer.read_packet().unwrap().unwrap();
+    decoder.send_packet(packet).unwrap();
+    match decoder.receive_frame().unwrap() {
+        Some(Frame::Audio(_)) => {}
+        other => unreachable!("expected canonical audio, got {other:?}"),
+    }
+
+    // Native mode yields the observation representation.
+    let mut decoder = Demuxer::make_decoder(&demuxer, stream, DecodeMode::Native).unwrap();
+    let packet = demuxer.read_packet().unwrap().unwrap();
+    decoder.send_packet(packet).unwrap();
+    match decoder.receive_frame().unwrap() {
+        Some(Frame::NativeAudio(_)) => {}
+        other => unreachable!("expected native audio, got {other:?}"),
+    }
+}
+
+#[test]
+fn boundary_make_decoder_reports_unknown_stream() {
+    use ruviform_media_io::DecodeMode;
+
+    let demuxer = ruviform_io_symphonia::open_demuxer(Cursor::new(wav_bytes(FRAMES))).unwrap();
+    let err = Demuxer::make_decoder(&demuxer, StreamId(99), DecodeMode::Canonical)
+        .err()
+        .unwrap();
+    assert_eq!(err.kind(), ErrorKind::InvalidValue);
+}

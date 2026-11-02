@@ -40,6 +40,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Qh4wErTyUiOpAsD | Issue #190 Transport Span Scheduler テスト仕様 | approved | [issue-190-transport-span-scheduler-tests.md](./issue-190-transport-span-scheduler-tests.md) |
 | TSPEC-034Qhwm0HeEmVIU2j6ttxT | Issue #191 PCM WAV output test specification | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | TSPEC-034QfqUJnhyPPfGZsl7kXW | Issue #195 M2 typed graph compiler/runtime: schedule, buffers, PDC, ownership, activation, faults, legacy coexistence | approved | [issue-195-m2-typed-graph-compiler-runtime-tests.md](./issue-195-m2-typed-graph-compiler-runtime-tests.md) |
+| TSPEC-JSe276zDPhy5bjOFWJMtgn | Issue #197 media reader / prefetch / RT consumer test specification | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |

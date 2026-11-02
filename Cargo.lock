@@ -2946,6 +2946,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-media-reader"
+version = "0.1.0"
+dependencies = [
+ "assert_no_alloc",
+ "ruviform-audio-core",
+ "ruviform-io-symphonia",
+ "ruviform-media-core",
+ "ruviform-media-io",
+ "ruviform-rt",
+]
+
+[[package]]
 name = "ruviform-numeric"
 version = "0.1.0"
 dependencies = [

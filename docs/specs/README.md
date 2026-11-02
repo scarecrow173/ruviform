@@ -27,6 +27,7 @@ Directory: `docs/specs`
 | SPEC-034Qg9hT0w1z3B9vJkLmNo | Issue #190 Generic Transport Span Scheduler / Applied Receipt / Clock-Plan Generation contract | approved | [issue-190-transport-span-scheduler.md](./issue-190-transport-span-scheduler.md) |
 | SPEC-034QhrD80l0ZtpqNTqFvHa | Issue #191 PCM WAV encode/mux output backend | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | SPEC-034QfjN7Wt7AJBbhXeK60o | Issue #195 Typed Graph Audio Compiler・Prepared Plan・Buffer/PDC・Stateful RT Ownership・Plan Activation (Migration M2) | approved | [issue-195-typed-graph-audio-compiler-buffer-pdc-stateful-ownership-activation-m2.md](./issue-195-typed-graph-audio-compiler-buffer-pdc-stateful-ownership-activation-m2.md) |
+| SPEC-jhXBM8Vy5edyp0fsJ6Nqbb | Issue #197 Generic Media Reader / Decoder・Prefetch・RT Playback Consumer 境界 | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
 | SPEC-034QdDDqIQgpFoBr9E1Z1T | Issue #219 両 Consumer 互換契約・影響判定・証拠要件と Cross-Repo CI Gate 仕様 | proposed | [issue-219-consumer-compat-contract.md](./issue-219-consumer-compat-contract.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |

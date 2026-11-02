@@ -195,6 +195,9 @@ Directory: `docs/tasks`
 | TASK-034Qhxbnndd80h2whxhIG4 | Issue 191 T1: MediaSink port + StagedOutput in ruviform-media-io | done | [task-191-t1-media-io-sink-staged.md](./task-191-t1-media-io-sink-staged.md) |
 | TASK-034Qhxc5D3P3En9XfxxPSm | Issue 191 T2: ruviform-io-wav crate (encoder, muxer, capabilities) | done | [task-191-t2-wav-backend.md](./task-191-t2-wav-backend.md) |
 | TASK-034QhxcLDQJmQx1cut9ge3 | Issue 191 T3: integration tests + verification lanes + impl record inputs | done | [task-191-t3-tests-verification.md](./task-191-t3-tests-verification.md) |
+| TASK-voSb34RCLdA14Lc1kTfNlD | Issue 197 T1: Demuxer::seekable + make_decoder + DecodeMode boundary additions | done | [task-197-t1-demuxer-seekable-make-decoder.md](./task-197-t1-demuxer-seekable-make-decoder.md) |
+| TASK-e5oaEOXS8FGE9PrXrLwkGi | Issue 197 T2: ruviform-media-reader crate — metadata, SourceReader, prefetch pipeline | done | [task-197-t2-media-reader-crate.md](./task-197-t2-media-reader-crate.md) |
+| TASK-02vjFSak80ajcQNqOMIF0s | Issue 197 T3: RD-01..RD-10 acceptance tests + verification record | done | [task-197-t3-tests-verification.md](./task-197-t3-tests-verification.md) |
 | TASK-034LFHdEfDbppnNeuh0u48 | ToneMapSdr カーネル実装（BT.2390 EETF） | done | [tone-map-sdr-kernel.md](./tone-map-sdr-kernel.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |

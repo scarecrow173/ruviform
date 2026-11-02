@@ -37,6 +37,12 @@ Ruviform ワークスペースのメンバークレート索引（計30クレー
 | [`ruviform-io-avi`](ruviform-io-avi/README.md) | pure-Rust AVI バックエンド（RIFF/AVI demux + PCM audio + DIB video decode） |
 | [`ruviform-io-wav`](ruviform-io-wav/README.md) | pure-Rust PCM WAV バックエンド（RIFF/WAVE encode + mux。Issue #191） |
 
+## メディア Reader / Prefetch（mixed-RT）
+
+| クレート | 責務 |
+| --- | --- |
+| [`ruviform-media-reader`](ruviform-media-reader/README.md) | 汎用メディア Reader・source-frame decode・bounded prefetch・RT 消費境界（Issue #197） |
+
 ## Optional platform adapters
 
 | クレート | 責務 |

@@ -18,8 +18,8 @@ use ruviform_media_core::{
     Fact, MediaDuration, MediaTime, StreamDescriptor, StreamId, TickTimestamp, TimeBase,
 };
 use ruviform_media_io::{
-    BackendInfo, CodecDescriptor, CodecFormat, ContainerInfo, Demuxer, Error, ErrorKind, Packet,
-    PacketFlags, Result, StreamFacts, StreamInfo, VideoStreamFacts,
+    BackendInfo, CodecDescriptor, CodecFormat, ContainerInfo, DecodeMode, Decoder, Demuxer, Error,
+    ErrorKind, Packet, PacketFlags, Result, StreamFacts, StreamInfo, VideoStreamFacts,
 };
 use symphonia::core::codecs::CodecParameters;
 use symphonia::core::formats::{FormatReader, SeekMode, SeekTo, Track};
@@ -51,6 +51,9 @@ pub struct SymphoniaDemuxer {
     streams: Vec<StreamInfo>,
     /// Container identification from the probed header bytes.
     container: ContainerInfo,
+    /// The construction-time seekability probe of the adapted source —
+    /// the declaration behind [`Demuxer::seekable`].
+    seekable: bool,
     /// Next packet index per stream (decode order) — `Packet::index`.
     indices: HashMap<u32, u64>,
 }
@@ -58,8 +61,13 @@ pub struct SymphoniaDemuxer {
 impl SymphoniaDemuxer {
     /// Takes ownership of a probed backend reader and snapshots its
     /// stream metadata; `container` was classified from the bytes the
-    /// probe itself read.
-    pub(crate) fn new(reader: Box<dyn FormatReader>, container: ContainerInfo) -> Self {
+    /// probe itself read and `seekable` is the adapter's
+    /// construction-time probe result.
+    pub(crate) fn new(
+        reader: Box<dyn FormatReader>,
+        container: ContainerInfo,
+        seekable: bool,
+    ) -> Self {
         let streams = reader
             .tracks()
             .iter()
@@ -70,6 +78,7 @@ impl SymphoniaDemuxer {
             reader,
             streams,
             container,
+            seekable,
             indices: HashMap::new(),
         }
     }
@@ -215,6 +224,38 @@ impl Demuxer for SymphoniaDemuxer {
             )
             .map_err(map_error)?;
         Ok(())
+    }
+
+    /// The declaration half of the seek contract: the adapter's
+    /// construction-time probe result — `Fact::Known` for a seekable
+    /// source, `Fact::Unsupported` for one whose `Seek` fails.
+    ///
+    /// **RT contract:** non-RT only — `Copy` fact access.
+    fn seekable(&self) -> Fact<()> {
+        if self.seekable {
+            Fact::known(())
+        } else {
+            Fact::Unsupported
+        }
+    }
+
+    /// Builds a [`Decoder`] for the stream `id` in `mode`, dispatching
+    /// to the crate's own canonical/native construction paths.
+    ///
+    /// **RT contract:** non-RT only — decoder construction allocates
+    /// codec state.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`SymphoniaDemuxer::make_decoder`].
+    fn make_decoder(&self, id: StreamId, mode: DecodeMode) -> Result<Box<dyn Decoder>> {
+        match mode {
+            DecodeMode::Canonical => Ok(Box::new(self.make_decoder(id)?)),
+            DecodeMode::Native => Ok(Box::new(self.make_native_decoder(id)?)),
+            // `DecodeMode` is `#[non_exhaustive]`; an unrecognised mode
+            // is an honest capability gap, not a panic.
+            _ => Err(Error::from_kind(ErrorKind::Unsupported)),
+        }
     }
 }
 

@@ -35,5 +35,6 @@ Directory: `docs/discovery`
 | DISC-034P8EGzRky80ILbGeYdKp | Issue #156 GUI ホスト基盤: PoC 棚卸しと本番化ギャップ | resolved | [issue-156-gui-host-foundation-inventory.md](./issue-156-gui-host-foundation-inventory.md) |
 | DISC-034Qg9A5RpGIykEqJYBwFA | Issue #190 Generic Transport Span Scheduler / Applied Receipt / Clock-Plan Generation contract | resolved | [issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md](./issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md) |
 | DISC-034QhqgG9EF5ipLnFJv0Ka | Issue #191 PCM WAV encode/mux backend — crate placement, output contract, safe publish | resolved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
+| DISC-uYfaNCLgYERA7zX0pHelL0 | Issue #197 Generic Media Reader / Decoder・Prefetch・RT Playback Consumer 境界 — inventory, crate placement, contract shape | resolved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
