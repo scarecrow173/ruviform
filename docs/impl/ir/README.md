@@ -123,3 +123,4 @@ Directory: `docs/impl/ir`
 | IMPL-034QoBjMxcoddobxwYw9Tj | Issue 233 media-reader prefetch contract improvements | completed | [issue-233-media-reader-prefetch-contract-improvements.md](./issue-233-media-reader-prefetch-contract-improvements.md) |
 | IMPL-034QsKJh8joRi3VcMuhrPP | Issue #183 BandFilter shared spectrum and per-call scratch API | completed | [issue-183-bandfilter-shared-spectrum-and-per-call-scratch-api.md](./issue-183-bandfilter-shared-spectrum-and-per-call-scratch-api.md) |
 | IMPL-034QsY0hYnbSJXS8DBOdDa | Issue #223 MSRV 1.89 限定 pedantic clippy 失敗の整理 | completed | [issue-223-msrv-clippy-triage.md](./issue-223-msrv-clippy-triage.md) |
+| IMPL-034R255MixedRadixFftXy | Issue #255 CorrelationPlan 変換長の非2冪高速サイズ化（混合基数 FFT + smooth 長選択） | completed | [issue-255-nonpow2-fft-transform-length.md](./issue-255-nonpow2-fft-transform-length.md) |

@@ -60,12 +60,15 @@ use crate::vec::{axpy_seq, corr0_parts_seq, sum_sq_seq};
 use crate::{Error, Result};
 
 /// plan が保証する演算範囲。`Full` は線形相関全域をカバーする FFT 長
-/// `nextpow2(S+L−1)` で NCC/PHAT/生相互相関のすべてを実行できる。
-/// `NccValid` は有効ラグ域 `0..=S−L` だけを対象に FFT 長を `nextpow2(S)`
+/// `n ≥ S+2L−2` で NCC/PHAT/生相互相関のすべてを実行できる。
+/// `NccValid` は有効ラグ域 `0..=S−L` だけを対象に FFT 長を `n ≥ S`
 /// へ短縮する（返却 index `k ≤ S−L` は `c[k−n]`・`c[k+n]` の wraparound 項が
 /// いずれも定義域外のため `n ≥ S` で無汚染）。`NccDirect` は同じ有効ラグ域を
 /// FFT なしの直接計算で求める。PHAT の bin 正規化は FFT 長依存なので
 /// `NccValid`/`NccDirect` plan での `gcc_phat` は契約違反。
+/// `n` は境界以上の最小の高速サイズ（偶数・`n/2` が `{2,3,5}`-smooth、
+/// Issue #255）から選ぶ。radix-7 を含む長さは `FftPlan` が受理するが、
+/// 汎用小 DFT の要素あたりコストが高いため相関層では選択対象外とする。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PlanMode {
     Full,
@@ -103,6 +106,47 @@ fn prefers_direct(template_len: usize, signal_len: usize, n: usize) -> bool {
     let k = (signal_len - template_len + 1) as f64;
     k <= DIRECT_NCC_MAX_LAGS as f64
         && (template_len as f64 * k) <= DIRECT_NCC_COST_RATIO * (n as f64) * (n as f64).log2()
+}
+
+/// `v` 以上で最小の高速変換長（`n/2` が `{2,3,5}`-smooth な偶数 `n`）を
+/// 返す（Issue #255）。変換量 ∝ n·log n は n 単調だが、実時間は radix
+/// 構成に依存し、汎用小 DFT の radix-7 は 1 要素あたり radix-4/5 の数倍
+/// のコスト（実測で n=2,401,000=2³·5³·7⁴ が nextpow2 より ~49% 遅延）を
+/// 持つため、選択集合は `{2,3,5}` に限定する。radix-7 を含む長さは
+/// `FftPlan` が引き続き受理するが相関層では選ばない。
+/// `t = 3^b·5^c ≤ v` を走査し、`a = max(1, ⌈log2(v/t)⌉)` の候補 `2^a·t`
+/// の最小を取る。`t > v` の候補は `n > 2v` で 2 冪候補に劣るため除外
+/// できる（`t = 1` が必ず 2 冪候補を生成する）。`usize` 範囲を溢れる
+/// とき `None`。
+fn fast_len_above(v: usize) -> Option<usize> {
+    let mut best: Option<usize> = None;
+    let mut t5 = 1usize;
+    loop {
+        let mut t = t5;
+        loop {
+            let q = v.div_ceil(t);
+            let a = (usize::BITS - q.saturating_sub(1).leading_zeros()).max(1);
+            if let Some(cand) = 1usize
+                .checked_shl(a)
+                .and_then(|p2| t.checked_mul(p2))
+                .filter(|&cand| cand >= v)
+                && best.is_none_or(|b| cand < b)
+            {
+                best = Some(cand);
+            }
+            let Some(next) = t.checked_mul(3) else { break };
+            if next > v {
+                break;
+            }
+            t = next;
+        }
+        let Some(next) = t5.checked_mul(5) else { break };
+        if next > v {
+            break;
+        }
+        t5 = next;
+    }
+    best
 }
 
 /// `conj(a)·b` を `a` へ書き戻す。`phat` なら bin ごとの
@@ -198,10 +242,10 @@ fn normalize(values: &mut [f64], energy: &[f64], template_norm: f64) {
 
 /// 固定入力形状の不変相関 plan。NCC・GCC-PHAT・生相互相関は実行時に選ぶ。
 ///
-/// - [`CorrelationPlan::new`]: Full mode。FFT 長 `nextpow2(S+L−1)` で
-///   全 API（`ncc`/`gcc_phat`/`cross_correlation`）を提供する。
-/// - [`CorrelationPlan::new_ncc`]: `NccValid`（FFT 長 `nextpow2(S)`）または
-///   `NccDirect`（小さい有効ラグ域で FFT を持たない直接計算）。
+/// - [`CorrelationPlan::new`]: Full mode。FFT 長 `n ≥ S+2L−2` の最小高速
+///   サイズで全 API（`ncc`/`gcc_phat`/`cross_correlation`）を提供する。
+/// - [`CorrelationPlan::new_ncc`]: `NccValid`（FFT 長 `n ≥ S` の最小高速
+///   サイズ）または `NccDirect`（小さい有効ラグ域で FFT を持たない直接計算）。
 ///   `ncc`/`cross_correlation` のみ（`gcc_phat` は `Err`）。
 ///
 /// `template_len == 0` または `signal_len < template_len` は `n = 0` の
@@ -293,8 +337,10 @@ pub struct OverlapCorrWorkspace {
 impl CorrelationPlan {
     /// `template_len`/`signal_len` の固定形状 plan（Full mode）。
     /// NCC・GCC-PHAT・生相互相関のすべてを実行できる（FFT 長
-    /// `nextpow2(S+L−1)` は線形相関全域をカバーする）。NCC・生相互相関
-    /// しか使わない経路は [`Self::new_ncc`] の方が FFT 長を短縮できる。
+    /// `n ≥ S+2L−2` の最小高速サイズは全ラグ `k ≤ S+L−2` の
+    /// 線形相関を wraparound なしでカバーする）。
+    /// NCC・生相互相関しか使わない経路は [`Self::new_ncc`] の方が
+    /// FFT 長を短縮できる。
     ///
     /// `template_len == 0` または `signal_len < template_len` では
     /// `n = 0` の退化 plan になり、全カーブ API は空カーブを返す。
@@ -305,12 +351,18 @@ impl CorrelationPlan {
     ///
     /// FFT 長の算術が overflow すれば `Error::InvalidValue("length")`。
     pub fn new(template_len: usize, signal_len: usize) -> Result<Self> {
+        // `c[k] = Σᵢ t[i]·s[(k+i) mod n]` が全ラグ k ≤ S+L−2 で線形値を返す
+        // には、最大アクセス index `k+i ≤ (S+L−2)+(L−1) < n` が必要（Issue #255
+        // で発覚した従来 `n ≥ S+L−1` の暗黙不足を修正。`S ≤ k` のラグ域では
+        // wrap 項 `s[k+i−n]` が `i−1 < L ≤ S` の実データを指し、`n ≥ S+2L−2`
+        // でないと trailing zero lag が混入する）。
         let n = if template_len == 0 || signal_len < template_len {
             0
         } else {
-            signal_len
-                .checked_add(template_len - 1)
-                .and_then(usize::checked_next_power_of_two)
+            (template_len - 1)
+                .checked_mul(2)
+                .and_then(|d| signal_len.checked_add(d))
+                .and_then(fast_len_above)
                 .ok_or(Error::InvalidValue("length"))?
         };
         Ok(Self {
@@ -323,7 +375,7 @@ impl CorrelationPlan {
     }
 
     /// 有効ラグ域 `0..=signal_len − template_len` の NCC・生相互相関専用 plan。
-    /// FFT 長は `nextpow2(signal_len)` で、返却される有効ラグ値は
+    /// FFT 長は `n ≥ signal_len` の最小高速サイズで、返却される有効ラグ値は
     /// [`Self::new`] と同一契約。有効ラグ数 `K = S−L+1` が小さい形状では
     /// FFT を持たない直接計算 plan（`NccDirect`）を選ぶ
     /// （係数は al-math 校正値、選び損ねても出力契約は不変）。
@@ -339,9 +391,7 @@ impl CorrelationPlan {
         let (n, mode) = if template_len == 0 || signal_len < template_len {
             (0, PlanMode::NccValid)
         } else {
-            let n = signal_len
-                .checked_next_power_of_two()
-                .ok_or(Error::InvalidValue("length"))?;
+            let n = fast_len_above(signal_len).ok_or(Error::InvalidValue("length"))?;
             let mode = if prefers_direct(template_len, signal_len, n) {
                 PlanMode::NccDirect
             } else {
@@ -473,7 +523,7 @@ impl CorrelationPlan {
     /// 正規化なしの線形相互相関 `c[k] = Σᵢ template[i]·signal[k+i]` の
     /// `0..=min(max_lag, linear_lag_max)` のカーブを workspace から借用する。
     /// Full mode plan では `S−L < k ≤ S+L−2` の部分 overlap ラグも
-    /// 無汚染（`n ≥ S+L−1` で wraparound が混入しない）。
+    /// 無汚染（`n ≥ S+2L−2` で wraparound が混入しない）。
     ///
     /// 借用結果を保持したまま workspace を再使用できない。
     ///
@@ -660,7 +710,8 @@ impl CorrelationWorkspace {
 }
 
 impl OverlapCorrPlan {
-    /// 窓長 `window_len` を shape に取る。内部 FFT 長は `nextpow2(2L−1)`。
+    /// 窓長 `window_len` を shape に取る。内部 FFT 長は `n ≥ 2L−1` の
+    /// 最小高速サイズ（Issue #255）。
     /// `window_len == 0` は `n = 0` の退化 plan で、`curve` は全 `0.0`。
     ///
     /// **RT 契約:** non-RT only — FFT plan を確保する。
@@ -675,7 +726,7 @@ impl OverlapCorrPlan {
             window_len
                 .checked_mul(2)
                 .and_then(|v| v.checked_sub(1))
-                .and_then(usize::checked_next_power_of_two)
+                .and_then(fast_len_above)
                 .ok_or(Error::InvalidValue("length"))?
         };
         Ok(Self {
@@ -769,9 +820,13 @@ impl OverlapCorrPlan {
         // FFT 法は ~15·n·log2(n) flop（3 変換 + 合成）。実測の交差に合わせた
         // 仕事量比較（al-math 校正値を継承、#152 比較記録で再確認）。
         let direct_ops = out_len.saturating_mul(len).saturating_mul(3);
+        // 非2冪長では trailing_zeros でなく ⌈log2 n⌉ を段数見積りに使う
+        // （Issue #255。実段数は radix 加重でやや小さいが、交差判定の
+        // 係数誤差として吸収できる近似）。
+        let log2n = (usize::BITS - (n - 1).leading_zeros()) as usize;
         let fft_ops = OVERLAP_FFT_COST_FACTOR
             .saturating_mul(n)
-            .saturating_mul(n.trailing_zeros() as usize);
+            .saturating_mul(log2n);
         if direct_ops < fft_ops {
             for (i, out) in curve.iter_mut().enumerate().take(out_len) {
                 let lag = i.cast_signed() - max_lag.cast_signed();
@@ -1163,12 +1218,14 @@ mod tests {
     #[test]
     fn ncc_plan_mode_pins_benchmarked_shapes() {
         for (template_len, signal_len, expected) in [
-            (2_205_000usize, 2_205_236usize, PlanMode::NccDirect), // band_ncc/full_ncc
-            (551_250, 551_309, PlanMode::NccDirect),               // coarse_ncc
-            (4_410, 7_938, PlanMode::NccValid),                    // band_gain window
-            (4_410, 13_230, PlanMode::NccValid),                   // narrow anchor 小
-            (4_410, 66_150, PlanMode::NccValid),                   // narrow anchor 中
-            (800, 1_438, PlanMode::NccValid),                      // tiny 8kHz
+            // Issue #255 で FFT 長が 4.19M→2.21M に半減し、ラグ域 K=237 では
+            // FFT 経路が直接経路を下回る（選択反転は意図された効果）。
+            (2_205_000usize, 2_205_236usize, PlanMode::NccValid), // band_ncc/full_ncc
+            (551_250, 551_309, PlanMode::NccDirect),              // coarse_ncc
+            (4_410, 7_938, PlanMode::NccValid),                   // band_gain window
+            (4_410, 13_230, PlanMode::NccValid),                  // narrow anchor 小
+            (4_410, 66_150, PlanMode::NccValid),                  // narrow anchor 中
+            (800, 1_438, PlanMode::NccValid),                     // tiny 8kHz
         ] {
             let plan = CorrelationPlan::new_ncc(template_len, signal_len).unwrap();
             assert_eq!(plan.mode, expected, "shape=({template_len},{signal_len})");
@@ -1199,8 +1256,8 @@ mod tests {
         assert_eq!(ws.norms.len(), 45);
     }
 
-    /// NCC-valid plan（FFT `nextpow2(S)`）は返却される全有効ラグで
-    /// Full plan（`nextpow2(S+L−1)`）と同一契約の値を返す。
+    /// NCC-valid plan（FFT `n ≥ S`）は返却される全有効ラグで
+    /// Full plan（`n ≥ S+2L−2`）と同一契約の値を返す。
     /// wraparound 汚染は index `> S−L` にのみ発生する。
     /// 形状はコストモデルが `NccValid` を選ぶものに限る
     /// （`NccDirect` ルートは別テストで検証する）。
@@ -1508,6 +1565,93 @@ mod tests {
             .unwrap()
             .to_vec();
         assert_eq!(curve.len(), 8 - 4 + 1);
+    }
+
+    /// Full mode の無汚染契約は `n ≥ S+2L−2` を要する。`L = S` では
+    /// `nextpow2(S+L−1) = 2S` が `S+2L−2 = 3S−2` を下回り、旧実装でも
+    /// trailing lag が wraparound で混入し得た回帰領域を pin する
+    /// （Issue #255 で発覚した暗黙不足の修正）。
+    #[test]
+    fn cross_correlation_full_mode_trailing_lags_are_unaliased() {
+        for (template_len, signal_len) in [(8usize, 8usize), (7, 8), (100, 100), (60, 100)] {
+            let template = noise(template_len, 41);
+            let signal = noise(signal_len, 43);
+            let plan = CorrelationPlan::new(template_len, signal_len).unwrap();
+            // 不変条件: n ≥ S+2L−2（全出力ラグの最大 index アクセスをカバー）。
+            assert!(
+                plan.n >= signal_len + 2 * template_len - 2,
+                "shape=({template_len},{signal_len}): n={} < {}",
+                plan.n,
+                signal_len + 2 * template_len - 2
+            );
+            let mut ws = CorrelationWorkspace::new(&plan);
+            let curve = plan
+                .cross_correlation(&mut ws, &template, &signal, usize::MAX)
+                .unwrap()
+                .to_vec();
+            for (k, &v) in curve.iter().enumerate() {
+                // oracle: c[k] = Σᵢ template[i]·signal[k+i]（範囲外はゼロ拡張）。
+                let oracle: f64 = template
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &t)| {
+                        if k + i < signal.len() {
+                            t * signal[k + i]
+                        } else {
+                            0.0
+                        }
+                    })
+                    .sum();
+                assert!(
+                    (v - oracle).abs() < 1e-9 * (1.0 + oracle.abs()),
+                    "shape=({template_len},{signal_len}) lag={k}: {v} vs oracle {oracle}"
+                );
+            }
+        }
+    }
+
+    /// `fast_len_above` の契約: `v` 以上で最小の偶数 smooth 長を返し、
+    /// `nextpow2` 以下を保証する（変換量削減の定量的不変条件）。
+    #[test]
+    fn fast_len_above_selects_minimal_smooth_even_length() {
+        for (v, expected) in [
+            (1usize, 2usize),
+            (2, 2),
+            (3, 4),
+            (11, 12),
+            (13, 16),     // 14=2·7 は {2,3,5} 非対象 → 16
+            (7938, 8000), // 7938=2·3⁴·7² は非対象 → 2⁶·5³
+            (7940, 8000),
+            (8640, 8640),           // 2⁶·3³·5
+            (8641, 8748),           // 2²·3⁷
+            (2_205_236, 2_211_840), // Issue #255 の headline 形状
+            (2_400_240, 2_430_000), // anchor/full NCC 例（2⁴·3⁵·5⁴）
+        ] {
+            assert_eq!(fast_len_above(v), Some(expected), "v={v}");
+        }
+        // 最小性と 2 冪上限を広い範囲で検証: `[v, n)` に選択可能な
+        // 実数 FFT 長（偶数かつ n/2 が {2,3,5}-smooth）が他に存在しない
+        // ことを軽量 oracle で走査する。
+        let supported = |m: usize| {
+            m.is_multiple_of(2) && {
+                let mut q = m / 2;
+                for p in [2usize, 3, 5] {
+                    while q.is_multiple_of(p) {
+                        q /= p;
+                    }
+                }
+                q == 1
+            }
+        };
+        for v in [129usize, 1000, 4097, 65537, 1_000_001] {
+            let n = fast_len_above(v).unwrap();
+            assert!(n >= v && supported(n), "v={v} n={n}");
+            assert!(n <= v.checked_next_power_of_two().unwrap(), "v={v} n={n}");
+            assert!(RealFftPlan::new(n).is_ok(), "v={v} n={n}");
+            for lower in v..n {
+                assert!(!supported(lower), "v={v}: smaller {lower}");
+            }
+        }
     }
 
     /// 形状・workspace・mode の検証は panic ではなく Err。

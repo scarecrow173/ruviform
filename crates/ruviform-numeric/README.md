@@ -10,8 +10,10 @@ overlap-save 畳込み / 最小二乗 / 相関カーネル / 複素 STFT / 帯�
 - `vec` — `f64` スライスの逐次和ベクトル演算（`dot`/`sum_sq`/`corr0`/`rms`/
   `scale`/`axpy`/`sub_scaled`/`mag_sq`）。全関数 RT-suitable。
 - `fft` — `f64` 複素 FFT（`FftPlan`/`FftWorkspace`/`Fft`）と実数 FFT
-  （`RealFftPlan`/`RealFftWorkspace`/`RealFft`）。plan + 呼び出し側所有
-  workspace 方式で変換 API を RT-suitable にする。
+  （`RealFftPlan`/`RealFftWorkspace`/`RealFft`）。`FftPlan` は
+  `{2,3,5,7}`-smooth 長を、`RealFftPlan` は `n/2` が smooth な偶数長を
+  受け入れる（Issue #255。2 冪は radix-4 専用経路、非2冪は混合基数経路）。
+  plan + 呼び出し側所有 workspace 方式で変換 API を RT-suitable にする。
 - `window` — `f64` 窓係数（`Window::{Rectangular,Hann,Hamming,Blackman}`）。
 - `resample` — polyphase Blackman-sinc リサンプラ（`ResamplePlan`）と、
   変換の意味的同一性を表す正準パラメータ・stable ID（`ResampleParams`、

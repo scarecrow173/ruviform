@@ -1,7 +1,12 @@
-//! 2 のべき乗長の `f64` 複素 FFT と実数 FFT。
+//! `f64` 複素 FFT と実数 FFT。
 //!
-//! アルゴリズムは `AudioLens` `al-math::fft` の移植（radix-4 DIF 融合段 +
-//! 終端 radix-2）。scalar 版は全要素を逐次評価し、al-math の `pulp::Scalar`
+//! 変換長は `{2,3,5,7}`-smooth（素因数が 2・3・5・7 のみ）を受け付ける。
+//! 2 冪は radix-4 DIF（`AudioLens` `al-math::fft` 移植の融合段 + 終端
+//! radix-2）、それ以外の smooth 長は Issue #255 の混合基数 DIF（radix
+//! 2/3/4/5 専用段 + radix 7 汎用段、混合基数 digit-reversal 置換表）で
+//! 処理する。実数 FFT は偶数/奇数 index 分割により `m = n/2` の複素 FFT
+//! で求めるため、偶数長のみ受け付ける（`n = 1` を除く）。
+//! scalar 版は全要素を逐次評価し、al-math の `pulp::Scalar`
 //! 経路と同じ演算順（非融合 `a*b ± c*d`）で全プラットフォーム bit-exact。
 //!
 //! # 規約
@@ -77,13 +82,17 @@ fn roots(n: usize, count: usize) -> (Vec<f64>, Vec<f64>) {
 pub struct FftPlan {
     n: usize,
     twiddles: Vec<f64>,
+    // 非2冪 smooth 長のみ使う混合基数記述（2 冪では空）。
+    stages: Vec<MixedStage>,
+    perm: Vec<usize>,
 }
 
 /// 複素 FFT の排他的作業領域。
 ///
-/// `n < WS_MIN` では in-place 変換のため `stage` は空。`n >= WS_MIN` では
-/// `2n + WS_SKEW` 要素の skew 付き領域を持ち、呼び出し側配列と独立した
-/// 4K 境界回避配置で stage を回す。構築は確保を伴うため **non-RT**。
+/// 2 冪の `n < WS_MIN` では in-place 変換のため `stage` は空。
+/// `n >= WS_MIN` または混合基数 plan（Issue #255）では `2n + WS_SKEW`
+/// 要素の skew 付き領域を持ち、呼び出し側配列と独立した 4K 境界回避配置で
+/// stage を回す。構築は確保を伴うため **non-RT**。
 pub struct FftWorkspace {
     n: usize,
     stage: Vec<f64>,
@@ -96,32 +105,83 @@ pub struct Fft {
 }
 
 impl FftPlan {
-    /// `n` 点複素 FFT の plan を構築する。`n` は非ゼロの 2 のべき乗
-    /// （`n = 1` を含む）。
+    /// `n` 点複素 FFT の plan を構築する。`n` は非ゼロの
+    /// `{2,3,5,7}`-smooth 数（素因数が 2・3・5・7 のみ。`n = 1` と 2 冪を含む）。
+    /// 2 冪は radix-4 DIF 経路、それ以外の smooth 長は混合基数 DIF 経路で
+    /// 処理する（Issue #255）。
     ///
     /// **RT 契約:** non-RT only — 確保する。
     ///
     /// # Errors
     ///
-    /// `n` が 2 のべき乗でなければ `Error::InvalidValue("n")`。
+    /// `n` が 0 または `{2,3,5,7}`-smooth でなければ `Error::InvalidValue("n")`。
     pub fn new(n: usize) -> Result<Self> {
-        if !n.is_power_of_two() {
-            return Err(Error::InvalidValue("n"));
+        if n.is_power_of_two() {
+            let mut twiddles = Vec::new();
+            let mut len = n;
+            while len > 2 {
+                let q = len / 4;
+                // w1 = roots(len)[0..q]、w2 = roots(len/2)[0..q] (= w_len^{2k})。
+                let (w1r, w1i) = roots(len, q);
+                let (w2r, w2i) = roots(len / 2, q);
+                for part in [&w1r, &w1i, &w2r, &w2i] {
+                    twiddles.extend(part.iter().copied());
+                    twiddles.resize(twiddles.len() + TW_PAD, 0.0);
+                }
+                len /= 4;
+            }
+            return Ok(Self {
+                n,
+                twiddles,
+                stages: Vec::new(),
+                perm: Vec::new(),
+            });
         }
+        let Some(radices) = smooth_factors(n) else {
+            return Err(Error::InvalidValue("n"));
+        };
+        // 段ごとに [w_1 re | pad | w_1 im | pad | ... | w_{r-1} im | pad | W_r]
+        // を並べる。w_j[k] = w_len^{j·k} は roots(len) の stride j 参照。
+        // W_r は r 点 DFT の回転因子表（re/im 交互）。
         let mut twiddles = Vec::new();
+        let mut stages = Vec::new();
         let mut len = n;
-        while len > 2 {
-            let q = len / 4;
-            // w1 = roots(len)[0..q]、w2 = roots(len/2)[0..q] (= w_len^{2k})。
-            let (w1r, w1i) = roots(len, q);
-            let (w2r, w2i) = roots(len / 2, q);
-            for part in [&w1r, &w1i, &w2r, &w2i] {
-                twiddles.extend(part.iter().copied());
+        for &r in &radices {
+            let q = len / r;
+            let tw_start = twiddles.len();
+            let (wr, wi) = roots(len, (r - 1) * q);
+            for j in 1..r {
+                twiddles.extend((0..q).map(|k| wr[j * k]));
+                twiddles.resize(twiddles.len() + TW_PAD, 0.0);
+                twiddles.extend((0..q).map(|k| wi[j * k]));
                 twiddles.resize(twiddles.len() + TW_PAD, 0.0);
             }
-            len /= 4;
+            if r != 5 {
+                // W_r 表は一般小 DFT（radix-7）のみが使う。radix-5 は
+                // 専用 butterfly（mixed_r5）で表不要。
+                let (rwr, rwi) = roots(r, r);
+                for j in 0..r {
+                    for jp in 0..r {
+                        let idx = (j * jp) % r;
+                        twiddles.push(rwr[idx]);
+                        twiddles.push(rwi[idx]);
+                    }
+                }
+            }
+            stages.push(MixedStage {
+                radix: r,
+                len,
+                tw: tw_start,
+            });
+            len /= r;
         }
-        Ok(Self { n, twiddles })
+        debug_assert_eq!(len, 1);
+        Ok(Self {
+            n,
+            twiddles,
+            stages,
+            perm: digit_perm(n, &radices),
+        })
     }
 
     /// 変換長 `n`。
@@ -134,6 +194,8 @@ impl FftPlan {
     #[must_use]
     pub fn memory_bytes(&self) -> usize {
         self.twiddles.len() * size_of::<f64>()
+            + self.perm.len() * size_of::<usize>()
+            + self.stages.len() * size_of::<MixedStage>()
     }
 
     /// 自然順序の in-place 変換。`re`/`im` は長さ `n` の等長スライス。
@@ -143,7 +205,6 @@ impl FftPlan {
     /// 構築したものを渡す。
     ///
     /// # Errors
-    ///
     /// `re`/`im` の長さが `n` と異なれば `Error::InvalidValue("length")`。
     /// `workspace` が本 plan 用でなければ `Error::InvalidValue("workspace")`。
     #[expect(clippy::cast_precision_loss)]
@@ -162,6 +223,34 @@ impl FftPlan {
         }
         let n = self.n;
         let tw = &self.twiddles;
+        if !self.stages.is_empty() {
+            // 混合基数経路（Issue #255）: workspace へ複写し全段を in-place で
+            // 回し、digit-reversal 置換表で gather 書き戻す（inverse スケール込み）。
+            if workspace.stage.len() != 2 * n + WS_SKEW {
+                return Err(Error::InvalidValue("workspace"));
+            }
+            let (wre, rest) = workspace.stage.split_at_mut(n + WS_SKEW);
+            let wre = &mut wre[..n];
+            let wim = &mut rest[..n];
+            wre.copy_from_slice(re);
+            wim.copy_from_slice(im);
+            if inverse {
+                for st in &self.stages {
+                    mixed_stage::<true>(wre, wim, &tw[st.tw..], st.len, st.radix);
+                }
+            } else {
+                for st in &self.stages {
+                    mixed_stage::<false>(wre, wim, &tw[st.tw..], st.len, st.radix);
+                }
+            }
+            let scale = if inverse { 1.0 / n as f64 } else { 1.0 };
+            for k in 0..n {
+                let p = self.perm[k];
+                re[k] = wre[p] * scale;
+                im[k] = wim[p] * scale;
+            }
+            return Ok(());
+        }
         if n < WS_MIN {
             if inverse {
                 transform_inplace::<true>(tw, re, im);
@@ -194,15 +283,15 @@ impl FftPlan {
 impl FftWorkspace {
     /// `plan` に対応する作業領域を全確保する。
     ///
-    /// **RT 契約:** non-RT only — `n >= WS_MIN` で `2n + WS_SKEW` 要素を確保
-    /// （小さな `n` では確保しない）。
+    /// **RT 契約:** non-RT only — `n >= WS_MIN` または混合基数 plan では
+    /// `2n + WS_SKEW` 要素を確保する（小さな 2 冪では確保しない）。
     #[must_use]
     pub fn new(plan: &FftPlan) -> Self {
         Self {
             n: plan.n,
             stage: vec![
                 0.0;
-                if plan.n >= WS_MIN {
+                if plan.n >= WS_MIN || !plan.stages.is_empty() {
                     2 * plan.n + WS_SKEW
                 } else {
                     0
@@ -220,7 +309,7 @@ impl FftWorkspace {
 
 impl Fft {
     /// `n` 点複素 FFT を構築する（plan + workspace の内蔵）。`n` は非ゼロの
-    /// 2 のべき乗。
+    /// `{2,3,5,7}`-smooth 数。
     ///
     /// **RT 契約:** non-RT only — 確保する。
     ///
@@ -509,6 +598,354 @@ fn gather_permute(wre: &[f64], wim: &[f64], re: &mut [f64], im: &mut [f64], scal
     }
 }
 
+// radix-3 butterfly の係数 √3/2。
+const SQRT3_2: f64 = 0.866_025_403_784_438_6;
+// radix-5 段の定数（cos/sin 72°・144° = 2π/5・4π/5）。
+const COS72: f64 = 0.309_016_994_374_947_4;
+const SIN72: f64 = 0.951_056_516_295_153_5;
+const COS144: f64 = -0.809_016_994_374_947_5;
+const SIN144: f64 = 0.587_785_252_292_473_1;
+
+// 非2冪 smooth 長の混合基数段記述。`len` は段入口の部分変換長、`tw` は
+// `twiddles` 内の段ブロック先頭オフセット。
+struct MixedStage {
+    radix: usize,
+    len: usize,
+    tw: usize,
+}
+
+// `n` が {2,3,5,7}-smooth なら DIF 適用順の radix 列を返す。2 冪・非
+// smooth は None。奇素因数（7,5,3）を先に、残り 2 冪部を radix-4 列と
+// 端数の radix-2 で処理する。
+fn smooth_factors(n: usize) -> Option<Vec<usize>> {
+    if n == 0 || n.is_power_of_two() {
+        return None;
+    }
+    let mut m = n;
+    let mut radices = Vec::new();
+    for r in [7usize, 5, 3] {
+        while m.is_multiple_of(r) {
+            radices.push(r);
+            m /= r;
+        }
+    }
+    while m.is_multiple_of(4) {
+        radices.push(4);
+        m /= 4;
+    }
+    if m == 2 {
+        radices.push(2);
+        m = 1;
+    }
+    (m == 1).then_some(radices)
+}
+
+// `n/2` が {2,3,5,7}-smooth か（実数 FFT が受け入れる偶数長の判定）。
+fn is_smooth(m: usize) -> bool {
+    if m == 0 {
+        return false;
+    }
+    let mut m = m;
+    for r in [2usize, 3, 5, 7] {
+        while m.is_multiple_of(r) {
+            m /= r;
+        }
+    }
+    m == 1
+}
+
+// 段ブロック内の第 j（1 始まり）twiddle 副表（re/im 対）。副表は
+// `[w_j re(q) pad w_j im(q) pad]` を j=1..r で並べたもの。
+fn tw_pair(tw: &[f64], j: usize, q: usize) -> (&[f64], &[f64]) {
+    let re = &tw[tw_offset(2 * j - 2, q)..tw_offset(2 * j - 2, q) + q];
+    let im = &tw[tw_offset(2 * j - 1, q)..tw_offset(2 * j - 1, q) + q];
+    (re, im)
+}
+
+// 混合基数 digit-reversal 置換表。radix 列 R=[r1..rs]（DIF 適用順）に対し
+// `out[k] = work[perm[k]]`。k を混合基数桁 j_t = (k/prefix_{t-1}) mod r_t
+// に分解し、格納位置 p = Σ_t j_t·(n/prefix_t) を求める。
+fn digit_perm(n: usize, radices: &[usize]) -> Vec<usize> {
+    let mut perm = vec![0usize; n];
+    let mut prefix = 1usize;
+    for &r in radices {
+        let stride = n / (prefix * r);
+        for (k, p) in perm.iter_mut().enumerate() {
+            *p += (k / prefix % r) * stride;
+        }
+        prefix *= r;
+    }
+    perm
+}
+
+// 混合基数段のディスパッチ。
+fn mixed_stage<const INVERSE: bool>(
+    re: &mut [f64],
+    im: &mut [f64],
+    tw: &[f64],
+    len: usize,
+    radix: usize,
+) {
+    match radix {
+        2 => mixed_r2::<INVERSE>(re, im, tw, len),
+        3 => mixed_r3::<INVERSE>(re, im, tw, len),
+        4 => mixed_r4::<INVERSE>(re, im, tw, len),
+        5 => mixed_r5::<INVERSE>(re, im, tw, len),
+        7 => mixed_rn::<7, INVERSE>(re, im, tw, len),
+        _ => debug_assert!(false, "unsupported radix"),
+    }
+}
+
+// radix-2 DIF 段（canonical 出力配置）。y0 = a+b、y1 = (a−b)·w^k。
+fn mixed_r2<const INVERSE: bool>(re: &mut [f64], im: &mut [f64], tw: &[f64], len: usize) {
+    let q = len / 2;
+    let (w1r, w1i) = tw_pair(tw, 1, q);
+    for (block_re, block_im) in re.chunks_exact_mut(len).zip(im.chunks_exact_mut(len)) {
+        for k in 0..q {
+            let (wkr, wki) = if INVERSE {
+                (w1r[k], -w1i[k])
+            } else {
+                (w1r[k], w1i[k])
+            };
+            let (ar, ai) = (block_re[k], block_im[k]);
+            let (br, bi) = (block_re[k + q], block_im[k + q]);
+            block_re[k] = ar + br;
+            block_im[k] = ai + bi;
+            let (vr, vi) = cmul1(ar - br, ai - bi, wkr, wki);
+            block_re[k + q] = vr;
+            block_im[k + q] = vi;
+        }
+    }
+}
+
+// radix-3 DIF 段。y0 = x0+x1+x2、y1 = m + s·i·(√3/2)·d、y2 = m − s·i·(√3/2)·d
+// （m = x0 − (x1+x2)/2、d = x1−x2、s = +1 inverse / −1 forward）。
+#[expect(clippy::similar_names)]
+fn mixed_r3<const INVERSE: bool>(re: &mut [f64], im: &mut [f64], tw: &[f64], len: usize) {
+    let q = len / 3;
+    let (w1r, w1i) = tw_pair(tw, 1, q);
+    let (w2r, w2i) = tw_pair(tw, 2, q);
+    let sign = if INVERSE { 1.0 } else { -1.0 };
+    for (block_re, block_im) in re.chunks_exact_mut(len).zip(im.chunks_exact_mut(len)) {
+        for k in 0..q {
+            let (x0r, x0i) = (block_re[k], block_im[k]);
+            let (x1r, x1i) = (block_re[k + q], block_im[k + q]);
+            let (x2r, x2i) = (block_re[k + 2 * q], block_im[k + 2 * q]);
+            block_re[k] = x0r + (x1r + x2r);
+            block_im[k] = x0i + (x1i + x2i);
+            let mr = x0r - x1r.midpoint(x2r);
+            let mi = x0i - x1i.midpoint(x2i);
+            let dr = x1r - x2r;
+            let di = x1i - x2i;
+            // s·i·(√3/2)·d → (−s·c·di, s·c·dr)
+            let er = sign * SQRT3_2 * di;
+            let ei = sign * SQRT3_2 * dr;
+            let (w1kr, w1ki) = if INVERSE {
+                (w1r[k], -w1i[k])
+            } else {
+                (w1r[k], w1i[k])
+            };
+            let (vr, vi) = cmul1(mr - er, mi + ei, w1kr, w1ki);
+            block_re[k + q] = vr;
+            block_im[k + q] = vi;
+            let (w2kr, w2ki) = if INVERSE {
+                (w2r[k], -w2i[k])
+            } else {
+                (w2r[k], w2i[k])
+            };
+            let (vr, vi) = cmul1(mr + er, mi - ei, w2kr, w2ki);
+            block_re[k + 2 * q] = vr;
+            block_im[k + 2 * q] = vi;
+        }
+    }
+}
+
+// radix-5 DIF 段。Winograd 型: s1 = x1+x4, d1 = x1−x4, s2 = x2+x3,
+// d2 = x2−x3 で y0 = x0+s1+s2。a = x0+cos72°·s1+cos144°·s2、
+// b = x0+cos144°·s1+cos72°·s2、c1 = s·i·(sin72°·d1+sin144°·d2)、
+// c2 = s·i·(sin144°·d1−sin72°·d2) として y1 = a+c1, y4 = a−c1,
+// y2 = b+c2, y3 = b−c2（s = +1 inverse / −1 forward）。
+// 一般 radix 表の 25 complex MAC/group を ~8 実乗算へ削減する（Issue #255）。
+#[expect(clippy::similar_names)]
+fn mixed_r5<const INVERSE: bool>(re: &mut [f64], im: &mut [f64], tw: &[f64], len: usize) {
+    let q = len / 5;
+    let (w1r, w1i) = tw_pair(tw, 1, q);
+    let (w2r, w2i) = tw_pair(tw, 2, q);
+    let (w3r, w3i) = tw_pair(tw, 3, q);
+    let (w4r, w4i) = tw_pair(tw, 4, q);
+    let sign = if INVERSE { 1.0 } else { -1.0 };
+    for (block_re, block_im) in re.chunks_exact_mut(len).zip(im.chunks_exact_mut(len)) {
+        for k in 0..q {
+            let (x0r, x0i) = (block_re[k], block_im[k]);
+            let (x1r, x1i) = (block_re[k + q], block_im[k + q]);
+            let (x2r, x2i) = (block_re[k + 2 * q], block_im[k + 2 * q]);
+            let (x3r, x3i) = (block_re[k + 3 * q], block_im[k + 3 * q]);
+            let (x4r, x4i) = (block_re[k + 4 * q], block_im[k + 4 * q]);
+            let (s1r, s1i) = (x1r + x4r, x1i + x4i);
+            let (d1r, d1i) = (x1r - x4r, x1i - x4i);
+            let (s2r, s2i) = (x2r + x3r, x2i + x3i);
+            let (d2r, d2i) = (x2r - x3r, x2i - x3i);
+            block_re[k] = x0r + s1r + s2r;
+            block_im[k] = x0i + s1i + s2i;
+            let ar = x0r + COS72 * s1r + COS144 * s2r;
+            let ai = x0i + COS72 * s1i + COS144 * s2i;
+            let br = x0r + COS144 * s1r + COS72 * s2r;
+            let bi = x0i + COS144 * s1i + COS72 * s2i;
+            // s·i·(σr + i·σi) = (−s·σi, s·σr)
+            let c1r = -sign * (SIN72 * d1i + SIN144 * d2i);
+            let c1i = sign * (SIN72 * d1r + SIN144 * d2r);
+            let c2r = -sign * (SIN144 * d1i - SIN72 * d2i);
+            let c2i = sign * (SIN144 * d1r - SIN72 * d2r);
+            let (w1kr, w1ki) = if INVERSE {
+                (w1r[k], -w1i[k])
+            } else {
+                (w1r[k], w1i[k])
+            };
+            let (vr, vi) = cmul1(ar + c1r, ai + c1i, w1kr, w1ki);
+            block_re[k + q] = vr;
+            block_im[k + q] = vi;
+            let (w4kr, w4ki) = if INVERSE {
+                (w4r[k], -w4i[k])
+            } else {
+                (w4r[k], w4i[k])
+            };
+            let (vr, vi) = cmul1(ar - c1r, ai - c1i, w4kr, w4ki);
+            block_re[k + 4 * q] = vr;
+            block_im[k + 4 * q] = vi;
+            let (w2kr, w2ki) = if INVERSE {
+                (w2r[k], -w2i[k])
+            } else {
+                (w2r[k], w2i[k])
+            };
+            let (vr, vi) = cmul1(br + c2r, bi + c2i, w2kr, w2ki);
+            block_re[k + 2 * q] = vr;
+            block_im[k + 2 * q] = vi;
+            let (w3kr, w3ki) = if INVERSE {
+                (w3r[k], -w3i[k])
+            } else {
+                (w3r[k], w3i[k])
+            };
+            let (vr, vi) = cmul1(br - c2r, bi - c2i, w3kr, w3ki);
+            block_re[k + 3 * q] = vr;
+            block_im[k + 3 * q] = vi;
+        }
+    }
+}
+
+// radix-4 DIF 段（canonical 出力配置 — stage_inplace の組順 0,2,1,3 とは
+// 異なり j 番出力を第 j ブロックへ置く）。y0=(a+c)+(b+d)、y1=(d0+s·i·e1)·w^k、
+// y2=(s0−s1)·w^2k、y3=(d0−s·i·e1)·w^3k。
+#[expect(clippy::similar_names)]
+fn mixed_r4<const INVERSE: bool>(re: &mut [f64], im: &mut [f64], tw: &[f64], len: usize) {
+    let q = len / 4;
+    let (w1r, w1i) = tw_pair(tw, 1, q);
+    let (w2r, w2i) = tw_pair(tw, 2, q);
+    let (w3r, w3i) = tw_pair(tw, 3, q);
+    let sign = if INVERSE { 1.0 } else { -1.0 };
+    for (block_re, block_im) in re.chunks_exact_mut(len).zip(im.chunks_exact_mut(len)) {
+        let (a_re, tail) = block_re.split_at_mut(q);
+        let (b_re, tail) = tail.split_at_mut(q);
+        let (c_re, d_re) = tail.split_at_mut(q);
+        let (a_im, tail) = block_im.split_at_mut(q);
+        let (b_im, tail) = tail.split_at_mut(q);
+        let (c_im, d_im) = tail.split_at_mut(q);
+        for k in 0..q {
+            let (w1kr, w1ki) = if INVERSE {
+                (w1r[k], -w1i[k])
+            } else {
+                (w1r[k], w1i[k])
+            };
+            let (w2kr, w2ki) = if INVERSE {
+                (w2r[k], -w2i[k])
+            } else {
+                (w2r[k], w2i[k])
+            };
+            let (w3kr, w3ki) = if INVERSE {
+                (w3r[k], -w3i[k])
+            } else {
+                (w3r[k], w3i[k])
+            };
+            let s0r = a_re[k] + c_re[k];
+            let s0i = a_im[k] + c_im[k];
+            let s1r = b_re[k] + d_re[k];
+            let s1i = b_im[k] + d_im[k];
+            let d0r = a_re[k] - c_re[k];
+            let d0i = a_im[k] - c_im[k];
+            let e1r = b_re[k] - d_re[k];
+            let e1i = b_im[k] - d_im[k];
+            // s·i·e1: forward は (e1i, −e1r)、inverse は (−e1i, e1r)。
+            let d1r = -sign * e1i;
+            let d1i = sign * e1r;
+            a_re[k] = s0r + s1r;
+            a_im[k] = s0i + s1i;
+            let (vr, vi) = cmul1(d0r + d1r, d0i + d1i, w1kr, w1ki);
+            b_re[k] = vr;
+            b_im[k] = vi;
+            let (vr, vi) = cmul1(s0r - s1r, s0i - s1i, w2kr, w2ki);
+            c_re[k] = vr;
+            c_im[k] = vi;
+            let (vr, vi) = cmul1(d0r - d1r, d0i - d1i, w3kr, w3ki);
+            d_re[k] = vr;
+            d_im[k] = vi;
+        }
+    }
+}
+
+// 一般 radix（5・7）の DIF 段。段ブロック末尾の `2·R·R` 要素は r 点 DFT
+// 表 W_r（`W[j·r+j'] = w_r^{j·j'}` の re/im 交互配置）。出力 j ≥ 1 に
+// w_len^{j·k} の twiddle を掛ける。
+fn mixed_rn<const R: usize, const INVERSE: bool>(
+    re: &mut [f64],
+    im: &mut [f64],
+    tw: &[f64],
+    len: usize,
+) {
+    let q = len / R;
+    let wtabs: [(&[f64], &[f64]); R] = std::array::from_fn(|j| {
+        if j == 0 {
+            (&[] as &[f64], &[] as &[f64])
+        } else {
+            tw_pair(tw, j, q)
+        }
+    });
+    let wr_start = tw_offset(2 * R - 2, q);
+    let wr = &tw[wr_start..wr_start + 2 * R * R];
+    for (block_re, block_im) in re.chunks_exact_mut(len).zip(im.chunks_exact_mut(len)) {
+        for k in 0..q {
+            let mut xr = [0.0; R];
+            let mut xi = [0.0; R];
+            for j in 0..R {
+                xr[j] = block_re[k + j * q];
+                xi[j] = block_im[k + j * q];
+            }
+            for j in 0..R {
+                let mut sr = xr[0];
+                let mut si = xi[0];
+                for (jp, (&xjr, &xji)) in xr.iter().zip(xi.iter()).enumerate().skip(1) {
+                    let (wr_, wi_) = (wr[2 * (j * R + jp)], wr[2 * (j * R + jp) + 1]);
+                    let (wr_, wi_) = if INVERSE { (wr_, -wi_) } else { (wr_, wi_) };
+                    let (pr, pi) = cmul1(xjr, xji, wr_, wi_);
+                    sr += pr;
+                    si += pi;
+                }
+                let (vr, vi) = if j == 0 {
+                    (sr, si)
+                } else {
+                    let (w1r, w1i) = wtabs[j];
+                    let (wkr, wki) = if INVERSE {
+                        (w1r[k], -w1i[k])
+                    } else {
+                        (w1r[k], w1i[k])
+                    };
+                    cmul1(sr, si, wkr, wki)
+                };
+                block_re[k + j * q] = vr;
+                block_im[k + j * q] = vi;
+            }
+        }
+    }
+}
+
 // 小変換（n < WS_MIN）の in-place 経路: butterfly + 置換 + inverse スケール。
 #[expect(clippy::cast_precision_loss)]
 fn transform_inplace<const INVERSE: bool>(tw: &[f64], re: &mut [f64], im: &mut [f64]) {
@@ -553,16 +990,18 @@ pub struct RealFft {
 }
 
 impl RealFftPlan {
-    /// `n` 点実数 FFT の plan を構築する。`n` は非ゼロの 2 のべき乗
-    /// （`n = 1` を含む）。
+    /// `n` 点実数 FFT の plan を構築する。`n` は `n = 1` または `n/2` が
+    /// `{2,3,5,7}`-smooth な偶数（偶数/奇数 index 分割が `m = n/2` の
+    /// 複素 FFT を要求するため）。2 冪はその部分集合（Issue #255）。
     ///
     /// **RT 契約:** non-RT only — 確保する。
     ///
     /// # Errors
     ///
-    /// `n` が 2 のべき乗でなければ `Error::InvalidValue("n")`。
+    /// `n` が `1` でも `n/2` が `{2,3,5,7}`-smooth な偶数でもなければ
+    /// `Error::InvalidValue("n")`。
     pub fn new(n: usize) -> Result<Self> {
-        if !n.is_power_of_two() {
+        if n != 1 && !(n.is_multiple_of(2) && is_smooth(n / 2)) {
             return Err(Error::InvalidValue("n"));
         }
         let (re, im) = roots(n, n / 2 + 1);
@@ -647,12 +1086,17 @@ impl RealFftPlan {
         out_im[m] = 0.0;
         if m > 1 {
             let mid = m / 2;
-            // 自己共役 bin は回転しない。
-            out_re[mid] = sre[mid];
-            out_im[mid] = -sim_[mid];
-            // low bin (1..mid) に鏡像共役 Z[m−k] を先行充填し、
+            // (k, m−k) 対の個数。偶数 m では bin mid が自己共役で対を成さず、
+            // 奇数 m では自己共役 bin が存在せず bin 1..=mid が全て対を成す。
+            let pairs = (m - 1) / 2;
+            if m.is_multiple_of(2) {
+                // 自己共役 bin は回転しない。
+                out_re[mid] = sre[mid];
+                out_im[mid] = -sim_[mid];
+            }
+            // low bin (1..=pairs) に鏡像共役 Z[m−k] を先行充填し、
             // recombine_pair で上書きする。
-            for k in 1..mid {
+            for k in 1..=pairs {
                 out_re[k] = sre[m - k];
                 out_im[k] = -sim_[m - k];
             }
@@ -660,13 +1104,13 @@ impl RealFftPlan {
             let roots_im = &self.roots[m + 1 + TW_PAD..=m + 1 + TW_PAD + m];
             let (low_re, high_re) = out_re[1..m].split_at_mut(mid);
             let (low_im, high_im) = out_im[1..m].split_at_mut(mid);
-            let low_re = &mut low_re[..mid - 1];
-            let low_im = &mut low_im[..mid - 1];
+            let low_re = &mut low_re[..pairs];
+            let low_im = &mut low_im[..pairs];
             recombine_pair(
-                &sre[1..mid],
-                &sim_[1..mid],
-                &roots_re[1..mid],
-                &roots_im[1..mid],
+                &sre[1..=pairs],
+                &sim_[1..=pairs],
+                &roots_re[1..=pairs],
+                &roots_im[1..=pairs],
                 low_re,
                 low_im,
                 high_re,
@@ -768,8 +1212,8 @@ impl RealFftWorkspace {
 }
 
 impl RealFft {
-    /// `n` 点実数 FFT を構築する（plan + workspace の内蔵）。`n` は非ゼロの
-    /// 2 のべき乗。
+    /// `n` 点実数 FFT を構築する（plan + workspace の内蔵）。`n` は `n = 1`
+    /// または `n/2` が `{2,3,5,7}`-smooth な偶数。
     ///
     /// **RT 契約:** non-RT only — 確保する。
     ///
@@ -899,6 +1343,159 @@ mod tests {
             oim[k] = si * scale;
         }
         (ore, oim)
+    }
+
+    // Issue #255: 非2冪 smooth 長の混合基数経路が naive DFT oracle と一致する。
+    // radix 3/4/5/7 と 2 冪尾部の各組合せを小〜中サイズで網羅する。
+    #[test]
+    fn complex_mixed_radix_matches_naive_dft() {
+        for n in [
+            6usize, 10, 12, 14, 18, 20, 24, 28, 30, 36, 40, 42, 48, 50, 54, 56, 60, 63, 70, 72, 80,
+            84, 90, 96, 98, 100, 108, 112, 120, 126, 140, 144, 150, 162, 168, 180, 192, 200, 210,
+            216, 240, 250, 252, 270, 280, 288, 300, 320, 336, 350, 360, 384, 400, 420, 432, 450,
+            480, 486, 500, 504, 540, 560, 576, 600, 630, 640, 648, 672, 700, 720, 768, 810, 840,
+            864, 900, 960, 1000, 1024, 1080, 1152, 1200, 1260, 1280, 1344, 1440, 1500, 1536, 1600,
+            1680, 1728, 1800, 1920, 2000, 2048, 2160, 2250, 2304, 2400, 2520, 2592, 2700, 2880,
+            3000, 3072, 3150, 3200, 3360, 3456, 3600, 3840, 3969, 4000, 4096, 4320,
+        ] {
+            let plan = FftPlan::new(n).unwrap();
+            let mut ws = FftWorkspace::new(&plan);
+            let (re, im) = test_signal(n);
+            let (ere, eim) = naive_dft(&re, &im, false);
+            let mut are = re.clone();
+            let mut aim = im.clone();
+            plan.transform(&mut ws, &mut are, &mut aim, false).unwrap();
+            // O(n²) oracle 側の加算累積も含め、長大サイズで許容差を緩める。
+            for (i, (&a, &b)) in are.iter().zip(&ere).enumerate() {
+                let tol = 1e-10 * (1.0 + n as f64 / 1024.0) * (1.0 + a.abs() + b.abs());
+                assert!((a - b).abs() <= tol, "mixed fwd re n={n}[{i}]: {a} vs {b}");
+            }
+            for (i, (&a, &b)) in aim.iter().zip(&eim).enumerate() {
+                let tol = 1e-10 * (1.0 + n as f64 / 1024.0) * (1.0 + a.abs() + b.abs());
+                assert!((a - b).abs() <= tol, "mixed fwd im n={n}[{i}]: {a} vs {b}");
+            }
+        }
+    }
+
+    // 非2冪でも inverse が 1/N 共役逆変換として forward を元に戻す。
+    #[test]
+    fn complex_mixed_radix_round_trip_recovers_input() {
+        for n in [
+            6usize, 12, 18, 30, 36, 48, 60, 72, 90, 120, 150, 180, 210, 240, 300, 360, 420, 480,
+            600, 720, 840, 1080, 1260, 1440, 1680, 2160, 2520, 2880, 4320, 5040, 5760, 6480, 7938,
+            8640, 9216, 12348, 18432, 24576, 46080, 49152,
+        ] {
+            let plan = FftPlan::new(n).unwrap();
+            let mut ws = FftWorkspace::new(&plan);
+            let (re, im) = test_signal(n);
+            let (mut fre, mut fim) = (re.clone(), im.clone());
+            plan.transform(&mut ws, &mut fre, &mut fim, false).unwrap();
+            plan.transform(&mut ws, &mut fre, &mut fim, true).unwrap();
+            assert_equiv_slices(&fre, &re, &format!("mixed rt re n={n}"));
+            assert_equiv_slices(&fim, &im, &format!("mixed rt im n={n}"));
+        }
+    }
+
+    // impulse 応答が厳密な回転因子列になる性質で、naive 二重ループが
+    // 非現実的な大変換長でも各 bin を検証する。
+    #[test]
+    fn complex_mixed_radix_impulse_bins_are_roots() {
+        for n in [3969usize, 7938, 12348, 24576, 27648, 36000, 46656, 49152] {
+            let plan = FftPlan::new(n).unwrap();
+            let mut ws = FftWorkspace::new(&plan);
+            for p in [0usize, 1, n / 7, n / 3, n - 1] {
+                let mut re = vec![0.0; n];
+                let mut im = vec![0.0; n];
+                re[p] = 1.0;
+                plan.transform(&mut ws, &mut re, &mut im, false).unwrap();
+                for k in (0..n).step_by(n / 97 + 1) {
+                    let ang = -2.0 * PI * (p * k) as f64 / n as f64;
+                    assert!(
+                        (re[k] - ang.cos()).abs() < 1e-10 && (im[k] - ang.sin()).abs() < 1e-10,
+                        "n={n} p={p} k={k}: ({}, {}) vs ({}, {})",
+                        re[k],
+                        im[k],
+                        ang.cos(),
+                        ang.sin()
+                    );
+                }
+            }
+        }
+    }
+
+    // 実数 FFT: n/2 が smooth な偶数長が naive 実数 DFT と一致する。
+    #[test]
+    fn real_mixed_radix_matches_naive_rdft() {
+        for n in [
+            6usize, 10, 12, 14, 18, 20, 24, 30, 36, 42, 48, 60, 72, 90, 96, 120, 144, 150, 180,
+            210, 240, 270, 300, 360, 420, 480, 540, 600, 720, 840, 900, 960, 1080, 1260, 1440,
+            1680, 1800, 2160, 2520, 2880, 3000, 3360, 3600, 4320,
+        ] {
+            let plan = RealFftPlan::new(n).unwrap();
+            let mut ws = RealFftWorkspace::new(&plan);
+            let input = test_signal(n).0;
+            let bins = n / 2 + 1;
+            let (ere, eim) = naive_rdft(&input);
+            let mut are = vec![0.0; bins];
+            let mut aim = vec![0.0; bins];
+            plan.forward(&mut ws, &input, &mut are, &mut aim).unwrap();
+            // O(n²) oracle 側の加算累積も含め、長大サイズで許容差を緩める。
+            for (i, (&a, &b)) in are.iter().zip(&ere).enumerate() {
+                let tol = 1e-10 * (1.0 + n as f64 / 1024.0) * (1.0 + a.abs() + b.abs());
+                assert!((a - b).abs() <= tol, "real fwd re n={n}[{i}]: {a} vs {b}");
+            }
+            for (i, (&a, &b)) in aim.iter().zip(&eim).enumerate() {
+                let tol = 1e-10 * (1.0 + n as f64 / 1024.0) * (1.0 + a.abs() + b.abs());
+                assert!((a - b).abs() <= tol, "real fwd im n={n}[{i}]: {a} vs {b}");
+            }
+        }
+    }
+
+    // 実数 FFT の forward→inverse 往復が非2冪でも入力を復元する。
+    #[test]
+    fn real_mixed_radix_round_trip_recovers_input() {
+        for n in [
+            6usize, 18, 36, 72, 150, 300, 600, 1260, 2160, 4320, 8640, 12348, 27648,
+        ] {
+            let plan = RealFftPlan::new(n).unwrap();
+            let mut ws = RealFftWorkspace::new(&plan);
+            let input = test_signal(n).0;
+            let bins = n / 2 + 1;
+            let mut fre = vec![0.0; bins];
+            let mut fim = vec![0.0; bins];
+            let mut out = vec![0.0; n];
+            plan.forward(&mut ws, &input, &mut fre, &mut fim).unwrap();
+            plan.inverse(&mut ws, &fre, &fim, &mut out).unwrap();
+            assert_equiv_slices(&out, &input, &format!("real rt n={n}"));
+        }
+    }
+
+    // `FftPlan`/`RealFftPlan` が拒否すべき長さの網羅（Issue #255 の領域拡大で
+    // 0・非 smooth・実数の奇数長を確実に Err にする）。
+    #[test]
+    fn non_smooth_lengths_are_errors() {
+        for n in [
+            0usize, 11, 13, 22, 26, 34, 44, 46, 52, 62, 68, 76, 88, 92, 110, 130, 143, 154, 187,
+            209,
+        ] {
+            assert!(FftPlan::new(n).is_err(), "FftPlan::new({n}) should fail");
+        }
+        for n in [
+            0usize, 3, 5, 7, 9, 11, 15, 21, 25, 27, 33, 45, 49, 55, 63, 75, 77, 81, 99, 105,
+        ] {
+            assert!(
+                RealFftPlan::new(n).is_err(),
+                "RealFftPlan::new({n}) should fail"
+            );
+        }
+        for n in [
+            2usize, 4, 6, 8, 10, 18, 24, 36, 48, 60, 90, 120, 180, 240, 360, 720,
+        ] {
+            assert!(
+                RealFftPlan::new(n).is_ok(),
+                "RealFftPlan::new({n}) should pass"
+            );
+        }
     }
 
     // 実数 DFT oracle（非負周波数 n/2+1 bin）。
@@ -1191,7 +1788,7 @@ mod tests {
 
     #[test]
     fn invalid_lengths_and_shapes_are_errors() {
-        for n in [0, 3, 6, 100] {
+        for n in [0, 11, 22, 46] {
             assert_eq!(FftPlan::new(n).err(), Some(Error::InvalidValue("n")));
             assert_eq!(RealFftPlan::new(n).err(), Some(Error::InvalidValue("n")));
         }
