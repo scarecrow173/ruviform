@@ -21,6 +21,14 @@
 //!   offsets at all, so the bound degenerates to `offset == 0`: every
 //!   listed event is due *now* and is applied immediately (flushed).
 //!   Non-zero offsets in a zero-frame list are rejected.
+//! - **Same-offset conflicts** — stable sorting preserves the source
+//!   order of events that share a `frame_offset`. For two
+//!   [`ParamEvent`]s that target the *same* [`ParamId`] at the same
+//!   offset, the neutral application semantics are **last-wins**: the
+//!   later event in list order is the effective value (processors
+//!   apply changes in list order without interpolation). Events for
+//!   *different* `ParamId`s at the same offset are independent and
+//!   both apply.
 //! - **Process status / tail** — the neutral [`ProcessResult`] mapping
 //!   lives in [`crate::processor`]; adapters translate it to each
 //!   standard's own status codes.
