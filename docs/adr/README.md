@@ -22,6 +22,7 @@ Directory: `docs/adr`
 | ADR-034O9Rrn3iBoq4HxT07eVQ | issue-121-l1-diagnostics-policy | accepted | [issue-121-l1-diagnostics-policy.md](./issue-121-l1-diagnostics-policy.md) |
 | ADR-034QhNYvqRm2YZ7nXzOiMb | issue-185 generic probe contract placement and RT handoff model | accepted | [issue-185-generic-probe-contract-placement-and-rt-handoff-model.md](./issue-185-generic-probe-contract-placement-and-rt-handoff-model.md) |
 | ADR-034QhrQYpNhSfuTeq7hyfp | Issue #191 PCM WAV output backend: ruviform-io-wav crate, MediaSink port, staged publish, conversion policy | accepted | [issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md](./issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md) |
+| ADR-Tm4TW9CWQgvmIkMzROw0ei | M4 plugin adapter: bridge crate placement, node-internal scheduler ownership, bus role enumeration, plan retire model | accepted | [issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md](./issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md) |
 | ADR-I20b5KtQfHowI9YL4J5I0u | Issue #197 Media Reader / Prefetch — crate placement, boundary additions, prefetch ownership/generation contract | accepted | [issue-197-media-reader-boundary-additions.md](./issue-197-media-reader-boundary-additions.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034QfjWFfUXvgvaObuCUwS | M2 typed graph audio runtime placement, stateful RT ownership, and activation/retirement for Issue #195 | proposed | [m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md](./m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md) |
@@ -30,6 +31,7 @@ Directory: `docs/adr`
 | ADR-034JRK9VFJbrUPAvy3FJ94 | オフライン実行の決定論保証範囲（逐次参照等価） | accepted | [offline-determinism-scope.md](./offline-determinism-scope.md) |
 | ADR-034L2CiSoCLplTQvNluQfY | OFX ホストの video 契約境界と C ABI バインディング（Issue #98） | accepted | [ofx-host-video-contract-and-c-abi.md](./ofx-host-video-contract-and-c-abi.md) |
 | ADR-Lhe1Psi2bhfA35B3FABi6q | OFX 等映像プラグイン規格の対応範囲 | accepted | [ofx-video-plugin-scope.md](./ofx-video-plugin-scope.md) |
+| ADR-034Qkwzty3hORnIr3aDMO7 | Parameter control events contract placement and deferral of generic Control Graph crate | proposed | [parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md](./parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md) |
 | ADR-034IO01ZSFQcu2jEt2p0Tb | 対象プラットフォーム・CPUアーキテクチャ・ツールチェーン方針 | accepted | [platform-and-toolchain-targets.md](./platform-and-toolchain-targets.md) |
 | ADR-034IO01bG8AyjIJWxHeL77 | プラグインアーキテクチャ方針（ホスト・制作双方とCLAP/VST3同格） | accepted | [plugin-architecture-clap-vst3.md](./plugin-architecture-clap-vst3.md) |
 | ADR-034JDzseXORnckswW1oYKh | Plugin binding method: clack for CLAP, coupler-rs vst3 for VST3 | accepted | [plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md](./plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md) |
