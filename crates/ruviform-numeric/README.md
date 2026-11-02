@@ -1,6 +1,6 @@
 # ruviform-numeric
 
-Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150・#152・#153・#167・#168・#169）。
+Ruviform の高精度 `f64` オフライン数値・DSP プリミティブを担うクレート（Issue #150・#152・#153・#167・#168・#169・#183）。
 用途非依存の FFT / Real FFT / 数値ベクトル / 窓関数 / polyphase リサンプラ /
 overlap-save 畳込み / 最小二乗 / 相関カーネル / 複素 STFT / 帯域フィルタ /
 スペクトル統計（Issue #152・#153）を提供する。メディア固有概念・I/O・スレッドは持たない。
@@ -35,6 +35,9 @@ overlap-save 畳込み / 最小二乗 / 相関カーネル / 複素 STFT / 帯�
 - `bands` — 1/3-octave 帯域エッジ（`third_octave_bands`）、帯域積分
   （`band_power`）、spectral mask 帯域フィルタ（`BandFilter`/
   `bandpass`/`bandpass_many`）、`spectral_envelope`（#153）。
+  共有スペクトル `BandSpectrum`（`Send + Sync`、forward FFT 1 回を
+  共有）と呼出ごとの排他 `BandScratch` の分離 API で、(channel, band)
+  タスク単位の帯域抽出並列化に対応（#183、audio-lens#71 需要）。
 - `xspec` — per-bin スペクトル統計（`csd`/`complex_coherence`/
   `transfer_h1`）と Welch 型蓄積器 `CrossSpectrum`（#153）。
 - `spec` — 単信号スペクトル形状統計（`centroid`/`bandwidth`/`rolloff`/
