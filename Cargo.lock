@@ -2846,6 +2846,7 @@ dependencies = [
 name = "ruviform-audio-plugin-bridge"
 version = "0.1.0"
 dependencies = [
+ "assert_no_alloc",
  "ruviform-audio",
  "ruviform-audio-core",
  "ruviform-graph",

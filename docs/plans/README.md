@@ -14,6 +14,7 @@ Directory: `docs/plans`
 | PLAN-034QibwCtM7qkntuVsjcKR | Implement Issue #185 Generic Probe PoC: typed::probe contract, chunk-pool RT capture, broker/collector | approved | [implement-issue-185-generic-probe-poc.md](./implement-issue-185-generic-probe-poc.md) |
 | PLAN-034QfbOOAnZw32cmX1H46E | Implement Issue #189 M3 Rational Beat + Variable PPQN in media-core | approved | [implement-issue-189-m3-rational-beat-variable-ppqn.md](./implement-issue-189-m3-rational-beat-variable-ppqn.md) |
 | PLAN-034QfqzG1cwHntPLBtSz9L | Implement Issue #195 M2 Typed Graph Audio Compiler・Prepared Plan・RT Runtime | approved | [implement-issue-195-m2-typed-graph-audio-runtime.md](./implement-issue-195-m2-typed-graph-audio-runtime.md) |
+| PLAN-AAoMPoJ2iWazZqcu0pX2XQ | Issue #196 M4 Typed Graph Plugin Adapter 実装計画 | in-progress | [implement-issue-196-typed-graph-plugin-adapter.md](./implement-issue-196-typed-graph-plugin-adapter.md) |
 | PLAN-034JP0n5QlXSj34GK30GBz | Issue #22 RT 検証基盤の実施（assert_no_alloc 適用・thread-check 統合・検証文書） | approved | [implement-issue-22-rt-verification.md](./implement-issue-22-rt-verification.md) |
 | PLAN-034JRcspAdty0HzWF0KzIr | Issue #24 オフライン実行ドライバ実装 | approved | [implement-issue-24-offline-execution-driver.md](./implement-issue-24-offline-execution-driver.md) |
 | PLAN-034JRQoIQSe5Sh13CkKfjN | Issue #25 音声エンジン実装 | approved | [implement-issue-25-audio-engine.md](./implement-issue-25-audio-engine.md) |
@@ -66,6 +67,7 @@ Directory: `docs/plans`
 | PLAN-034JcvpHIlt5JmqvgOquvI | プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding PoC） | completed | [implement-plugin-foundation.md](./implement-plugin-foundation.md) |
 | PLAN-034JxNegJktSAJZ2LuO0N8 | Issue #21 RT 基盤の実装（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | completed | [implement-rt-foundation.md](./implement-rt-foundation.md) |
 | PLAN-034J6OTwge4rS96WZWkZgd | Issue #18 フォローアップの実装（公開 enum 方針適用・時間演算修正・改善トリアージ） | completed | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
+| PLAN-034QkFry8lZR9PeeXNpx09 | Issue #186 Parameter Control Events — implementation plan | completed | [issue-186-param-control-events.md](./issue-186-param-control-events.md) |
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |

@@ -87,6 +87,7 @@ mod descriptor;
 mod event;
 mod lifecycle;
 mod param;
+mod param_write;
 mod plugin;
 mod processor;
 mod transport;
@@ -104,6 +105,10 @@ pub use descriptor::{PluginDescriptor, PluginDescriptorView};
 pub use event::{Event, EventKind, EventList, ParamEvent, sort_events_by_frame_offset};
 pub use lifecycle::{Lifecycle, LifecycleError, LifecycleEvent, LifecycleState};
 pub use param::{ParamFlags, ParamId, ParamInfo, ParamValue};
+pub use param_write::{
+    ParamWriteMeans, ParamWriteRejection, TimedParamEvent, check_param_write,
+    check_param_write_for, coalesce_param_events_latest,
+};
 pub use plain_param::{PlainParamInfo, PlainParamInfoOwned, PlainParamValue};
 pub use plugin::{
     ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
