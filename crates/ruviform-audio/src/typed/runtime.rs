@@ -54,6 +54,37 @@ pub trait GraphProcessor: Send {
 
     /// Called once before removal. RT-suitable — bounded.
     fn deactivate(&mut self, _ctx: &RtContext) {}
+
+    /// Offline (non-realtime) sequential render support for this
+    /// instance — the capability gate of the Issue #198 sequential
+    /// driver. `Unknown` (the default) is *never* treated as
+    /// supported: an Exact Render preflight rejects every processor
+    /// that does not report [`OfflineRenderSupport::Verified`].
+    /// Non-RT only (consulted at prepare time).
+    fn offline_support(&self) -> OfflineRenderSupport {
+        OfflineRenderSupport::Unknown
+    }
+}
+
+/// Whether a processor instance can reproduce its real-time behavior
+/// under a sequential offline render. The tri-state mirrors
+/// [`ruviform_media_core::transport_schedule::InBlockTransportSupport`]:
+/// only end-to-end *verified* support authorizes an Exact Render —
+/// declared-but-unverified and unknown both reject at preflight.
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API policy.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum OfflineRenderSupport {
+    /// Support not established — never treated as supported.
+    Unknown,
+    /// Declared by the implementation but not verified — never treated
+    /// as supported.
+    Declared,
+    /// Verified stateful-offline equivalence for this instance.
+    Verified,
 }
 
 impl<F> GraphProcessor for F
@@ -626,14 +657,22 @@ impl RtRuntime {
     /// of the callback it is written for. The caller then fills
     /// `slot.data.channel_mut(c)[..frames]` per channel.
     ///
+    /// The slot's logical `channels` is configured from the pending
+    /// plan here (not only inside `activate_generation`), so a feed
+    /// written before the first `process` call is not silently
+    /// dropped on a `channels == 0` slot.
+    ///
     /// `port` must be one of `PreparedPlan::inputs`.
     ///
     /// **RT contract:** RT-suitable — one guard read + bounded
     /// `RefCell` borrows, no allocation.
     pub fn input_writer(&self, port: PortId, frames: usize) -> Option<RefMut<'_, Slot>> {
-        let idx = self.boundary_slot(port, true)?;
+        let plan = self.reader.read();
+        let idx = plan.input_slot(port)?;
+        let channels = plan.slots.get(idx)?.channels;
         let seq = self.state.borrow().seq;
         let mut cell = self.arena.get(idx)?.borrow_mut();
+        cell.configure(channels);
         cell.mark_written(
             seq.wrapping_add(1),
             u32::try_from(frames).unwrap_or(u32::MAX),

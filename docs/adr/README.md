@@ -62,3 +62,4 @@ Directory: `docs/adr`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | ADR-2iNuZm3ymoyzRUmpgnKr0x | 音楽時間モデル（PPQN 960 tick 中核・piecewise-constant テンポマップ） | superseded | [musical-time-model.md](./musical-time-model.md) |
+| ADR-YPgjjmV3ZLSeoH45bD5llz | Issue #198 sequential offline render placement (ruviform-audio::render) + capability/staging contracts | accepted | [issue-198-sequential-offline-render-placement-and-contracts.md](./issue-198-sequential-offline-render-placement-and-contracts.md) |

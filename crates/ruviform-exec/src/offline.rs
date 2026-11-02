@@ -176,6 +176,16 @@ impl Progress {
         self.emit();
     }
 
+    /// Increments the completed counter by `n` finished units of work —
+    /// the multi-frame variant of [`bump`](Self::bump) for drivers whose
+    /// work quantum is a frame count rather than a single chunk.
+    ///
+    /// **RT contract:** non-RT only.
+    pub fn bump_by(&self, n: u64) {
+        self.completed.fetch_add(n, Ordering::Relaxed);
+        self.emit();
+    }
+
     /// Invokes the listener with the current counters, when one is
     /// installed.
     fn emit(&self) {

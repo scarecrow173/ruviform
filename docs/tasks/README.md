@@ -224,3 +224,6 @@ Directory: `docs/tasks`
 | TASK-034LFHddlrfvXu5Jlmwdr0 | working space カーネル実装（ToWorking + FromWorking） | done | [working-space-kernels.md](./working-space-kernels.md) |
 | TASK-034JPwZ8htMzYNPNgOceEI | 分析・レポート記述・文書整合 | done | [write-dispatch-analysis-report.md](./write-dispatch-analysis-report.md) |
 | TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | done | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |
+| TASK-eM0HvOCV03pTzfSqyt3jgm | Issue 198 T1: render core — OfflineRenderSupport, PreparedRender, Progress::bump_by, deps | done | [task-198-t1-render-core.md](./task-198-t1-render-core.md) |
+| TASK-K54oAzr1E0TFOYRxcMd30t | Issue 198 T2: sequential driver + staged output lifecycle | done | [task-198-t2-driver-output.md](./task-198-t2-driver-output.md) |
+| TASK-ubO5TxPGQDZSaLVHth3aaa | Issue 198 T3: OF-01..OF-07 acceptance tests + verification + merge + impl record | done | [task-198-t3-tests-verification.md](./task-198-t3-tests-verification.md) |

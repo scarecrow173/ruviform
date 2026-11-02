@@ -18,9 +18,18 @@ ruviform-graph = { path = "../ruviform-graph" }
 # dependency into the analysis layer) and shared status counters.
 ruviform-audio-analysis = { path = "../ruviform-audio-analysis" }
 ruviform-observability = { path = "../ruviform-observability" }
+# Issue #198 sequential offline render: staged output lifecycle
+# (`MediaSink`/`Encoder`/`Muxer`/`StagedOutput`) and non-RT job
+# primitives (`CancellationToken`/`Progress`).
+ruviform-media-io = { path = "../ruviform-media-io" }
+ruviform-exec = { path = "../ruviform-exec" }
 
 [dev-dependencies]
 assert_no_alloc = "1.1"
+# Issue #198 end-to-end render tests: WAV encode/mux backend and an
+# independent reopen/verify reader.
+ruviform-io-wav = { path = "../ruviform-io-wav" }
+ruviform-io-symphonia = { path = "../ruviform-io-symphonia" }
 # Compile-time Send/Sync evidence for the FnMut blanket impl and the
 # plan/swap handle types — plain `expect_send` functions cannot express
 # the negative (!Send) side; `static_assertions` is the published
