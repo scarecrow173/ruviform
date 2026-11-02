@@ -409,3 +409,238 @@ fn rd04_fault_counts_have_a_slot_per_class() {
     let _ = SourceFault::Corrupt;
     let _ = SourceFault::InvalidSample;
 }
+
+// ---- Issue #233: discard/drain + reopen-at contract tests ----
+
+#[test]
+fn rd02_seek_default_keeps_play_through() {
+    // Existing `seek` contract: queued pre-seek items still play
+    // before the boundary; nothing is purged.
+    let reader = open_reader(FRAMES);
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    for _ in 0..16 {
+        if producer.pump().unwrap() != PumpOutcome::Pushed {
+            break;
+        }
+    }
+    handle.seek(SourceFrame(2000)).unwrap();
+    producer.pump().ok(); // boundary queues behind pre-seek items
+    let mut dst = [vec![0.0f32; 64], vec![0.0f32; 64]];
+    let mut slices: Vec<&mut [f32]> = dst.iter_mut().map(Vec::as_mut_slice).collect();
+    let report = consumer.fill(&mut slices, consumer.position(), &ctx);
+    assert!(report.written > 0, "pre-seek content plays through");
+    assert_eq!(slices[0][0], expected(0), "pre-seek stream content");
+}
+
+#[test]
+fn rd02_discard_pending_drains_to_seek_boundary() {
+    let reader = open_reader(FRAMES);
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    for _ in 0..16 {
+        if producer.pump().unwrap() != PumpOutcome::Pushed {
+            break;
+        }
+    }
+    handle.seek_discard_pending(SourceFrame(2000)).unwrap();
+    for _ in 0..16 {
+        if producer.pump().unwrap() != PumpOutcome::Pushed {
+            break;
+        }
+    }
+    let report = consumer.discard_pending(&ctx);
+    assert_eq!(report.boundary, Some(2000));
+    assert_eq!(consumer.position(), SourceFrame(2000));
+    // After the boundary the pipeline serves only post-seek content.
+    for _ in 0..4 {
+        producer.pump().ok();
+    }
+    let mut dst = [vec![0.0f32; 64], vec![0.0f32; 64]];
+    let mut slices: Vec<&mut [f32]> = dst.iter_mut().map(Vec::as_mut_slice).collect();
+    let fill = consumer.fill(&mut slices, consumer.position(), &ctx);
+    assert!(fill.written > 0);
+    assert_eq!(slices[0][0], expected(2000), "re-anchored content");
+}
+
+#[test]
+fn rd02_discard_pending_without_boundary_reports_none() {
+    let reader = open_reader(FRAMES);
+    let (_handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    for _ in 0..8 {
+        producer.pump().ok();
+    }
+    let report = consumer.discard_pending(&ctx);
+    assert_eq!(report.boundary, None);
+    assert!(report.items > 0, "queued items were processed");
+    assert!(report.blocks > 0, "blocks were returned to the pool");
+}
+
+#[test]
+fn rd02_seek_discard_pending_purges_stale_markers() {
+    // Two seeks in one command batch: the second's discard flag
+    // clears the first's queued boundary, so only the later target
+    // is ever observed.
+    let reader = open_reader(FRAMES);
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    let g0 = consumer.generation();
+    handle.seek(SourceFrame(100)).unwrap();
+    handle.seek_discard_pending(SourceFrame(500)).unwrap();
+    for _ in 0..16 {
+        if producer.pump().unwrap() != PumpOutcome::Pushed {
+            break;
+        }
+    }
+    let report = consumer.discard_pending(&ctx);
+    assert_eq!(report.boundary, Some(500), "first seek marker was purged");
+    assert_eq!(consumer.position(), SourceFrame(500));
+    assert_eq!(consumer.generation(), g0 + 2);
+}
+
+#[test]
+fn rd02_reopen_at_lands_on_seek_target() {
+    let reader = open_reader(1024);
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    let g0 = consumer.generation();
+    handle
+        .reopen_at(
+            Box::new(Cursor::new(wav_bytes(CHANNELS, 2048))),
+            Box::new(|source| {
+                ruviform_io_symphonia::open_demuxer(source).map(|d| Box::new(d) as Box<dyn Demuxer>)
+            }),
+            SourceFrame(500),
+        )
+        .unwrap();
+    let mut landed = None;
+    for _ in 0..64 {
+        producer.pump().ok();
+        let report = consumer.discard_pending(&ctx);
+        if report.boundary.is_some() {
+            landed = report.boundary;
+            break;
+        }
+    }
+    assert_eq!(landed, Some(500), "boundary reports landed position");
+    assert_eq!(consumer.position(), SourceFrame(500));
+    assert!(consumer.generation() > g0);
+    for _ in 0..8 {
+        producer.pump().ok();
+    }
+    let mut dst = [vec![0.0f32; 64], vec![0.0f32; 64]];
+    let mut slices: Vec<&mut [f32]> = dst.iter_mut().map(Vec::as_mut_slice).collect();
+    let fill = consumer.fill(&mut slices, consumer.position(), &ctx);
+    assert!(fill.written > 0);
+    assert_eq!(slices[0][0], expected(500), "reopened source at target");
+}
+
+#[test]
+fn rd02_reopen_at_seek_failure_faults_then_reanchors() {
+    use std::io::{Read, Seek, SeekFrom};
+    struct NoSeek(Cursor<Vec<u8>>);
+    impl Read for NoSeek {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.0.read(buf)
+        }
+    }
+    impl Seek for NoSeek {
+        fn seek(&mut self, _pos: SeekFrom) -> std::io::Result<u64> {
+            Err(std::io::Error::other("unseekable"))
+        }
+    }
+    let reader = open_reader(1024);
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    handle
+        .reopen_at(
+            Box::new(NoSeek(Cursor::new(wav_bytes(CHANNELS, 2048)))),
+            Box::new(|source| {
+                ruviform_io_symphonia::open_demuxer(source).map(|d| Box::new(d) as Box<dyn Demuxer>)
+            }),
+            SourceFrame(500),
+        )
+        .unwrap();
+    let mut landed = None;
+    for _ in 0..64 {
+        producer.pump().ok();
+        let report = consumer.discard_pending(&ctx);
+        if report.boundary.is_some() {
+            landed = report.boundary;
+            break;
+        }
+    }
+    // The seek failed: an Unseekable fault precedes a boundary that
+    // re-anchors at the reopened position (frame 0). The fault is
+    // tagged with the new generation, so the consumer drops it as
+    // generation-stale ahead of the boundary — the observable report
+    // is a stale drop plus the frame-0 re-anchor.
+    assert_eq!(landed, Some(0));
+    assert_eq!(consumer.position(), SourceFrame(0));
+    assert!(handle.telemetry().stale_drops() >= 1);
+}
+
+#[test]
+fn rd05_reopen_still_anchors_at_frame_zero() {
+    // Existing `reopen` regression: unchanged frame-0 anchoring.
+    let reader = open_reader(1024);
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    handle
+        .reopen(
+            Box::new(Cursor::new(wav_bytes(CHANNELS, 2048))),
+            Box::new(|source| {
+                ruviform_io_symphonia::open_demuxer(source).map(|d| Box::new(d) as Box<dyn Demuxer>)
+            }),
+        )
+        .unwrap();
+    let mut landed = None;
+    for _ in 0..64 {
+        producer.pump().ok();
+        let report = consumer.discard_pending(&ctx);
+        if report.boundary.is_some() {
+            landed = report.boundary;
+            break;
+        }
+    }
+    assert_eq!(landed, Some(0));
+    assert_eq!(consumer.position(), SourceFrame(0));
+}
+
+#[test]
+fn rd02_discard_pending_returns_inflight_block() {
+    // Partially consume a block, then drain to a seek boundary:
+    // the in-flight `current` is returned to the pool and counted.
+    let reader = open_reader(FRAMES);
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    for _ in 0..8 {
+        if producer.pump().unwrap() != PumpOutcome::Pushed {
+            break;
+        }
+    }
+    let mut dst = [vec![0.0f32; 32], vec![0.0f32; 32]];
+    {
+        let mut slices: Vec<&mut [f32]> = dst.iter_mut().map(Vec::as_mut_slice).collect();
+        let fill = consumer.fill(&mut slices, consumer.position(), &ctx);
+        assert!(
+            fill.written > 0 && fill.written < 256,
+            "block left in-flight"
+        );
+    }
+    handle.seek_discard_pending(SourceFrame(2000)).unwrap();
+    for _ in 0..16 {
+        if producer.pump().unwrap() != PumpOutcome::Pushed {
+            break;
+        }
+    }
+    let report = consumer.discard_pending(&ctx);
+    assert_eq!(report.boundary, Some(2000));
+    assert_eq!(consumer.position(), SourceFrame(2000));
+    assert!(
+        report.blocks >= 2,
+        "in-flight + queued blocks returned, got {}",
+        report.blocks
+    );
+}

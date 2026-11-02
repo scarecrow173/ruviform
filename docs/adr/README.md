@@ -25,6 +25,8 @@ Directory: `docs/adr`
 | ADR-034QhrQYpNhSfuTeq7hyfp | Issue #191 PCM WAV output backend: ruviform-io-wav crate, MediaSink port, staged publish, conversion policy | accepted | [issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md](./issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md) |
 | ADR-Tm4TW9CWQgvmIkMzROw0ei | M4 plugin adapter: bridge crate placement, node-internal scheduler ownership, bus role enumeration, plan retire model | accepted | [issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md](./issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md) |
 | ADR-I20b5KtQfHowI9YL4J5I0u | Issue #197 Media Reader / Prefetch — crate placement, boundary additions, prefetch ownership/generation contract | accepted | [issue-197-media-reader-boundary-additions.md](./issue-197-media-reader-boundary-additions.md) |
+| ADR-YPgjjmV3ZLSeoH45bD5llz | Issue #198 sequential offline render placement (ruviform-audio::render) + capability/staging contracts | accepted | [issue-198-sequential-offline-render-placement-and-contracts.md](./issue-198-sequential-offline-render-placement-and-contracts.md) |
+| ADR-034Qoirxpj2Nt7TtjWeDgk | Issue #233 prefetch contract improvements — doc-only clarifications, consumer drain assist + seek discard flag, fused reopen-at-position | accepted | [issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md](./issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034QfjWFfUXvgvaObuCUwS | M2 typed graph audio runtime placement, stateful RT ownership, and activation/retirement for Issue #195 | proposed | [m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md](./m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |
@@ -63,4 +65,3 @@ Directory: `docs/adr`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | ADR-2iNuZm3ymoyzRUmpgnKr0x | 音楽時間モデル（PPQN 960 tick 中核・piecewise-constant テンポマップ） | superseded | [musical-time-model.md](./musical-time-model.md) |
-| ADR-YPgjjmV3ZLSeoH45bD5llz | Issue #198 sequential offline render placement (ruviform-audio::render) + capability/staging contracts | accepted | [issue-198-sequential-offline-render-placement-and-contracts.md](./issue-198-sequential-offline-render-placement-and-contracts.md) |

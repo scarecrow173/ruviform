@@ -44,6 +44,8 @@ Directory: `docs/test-specs`
 | TSPEC-034QfqUJnhyPPfGZsl7kXW | Issue #195 M2 typed graph compiler/runtime: schedule, buffers, PDC, ownership, activation, faults, legacy coexistence | approved | [issue-195-m2-typed-graph-compiler-runtime-tests.md](./issue-195-m2-typed-graph-compiler-runtime-tests.md) |
 | TSPEC-7zOboSetinQdiV2b3AD6Yq | Issue #196 M4 Typed Graph Plugin Adapter テスト仕様 | approved | [issue-196-typed-graph-plugin-adapter-tests.md](./issue-196-typed-graph-plugin-adapter-tests.md) |
 | TSPEC-JSe276zDPhy5bjOFWJMtgn | Issue #197 media reader / prefetch / RT consumer test specification | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
+| TSPEC-NstsDZYKTSF6CL9kQDoyXC | Issue #198 sequential offline render — OF-01..OF-07 test specification | approved | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |
+| TSPEC-034Qonw7qg8hdeWBuDqEqQ | Issue #233 prefetch discard/drain/reopen_at + contract-doc test specification | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
@@ -77,4 +79,3 @@ Directory: `docs/test-specs`
 | TSPEC-034JZVID00000000000050 | 動画エンジン テスト仕様 | approved | [video-engine-tests.md](./video-engine-tests.md) |
 | TSPEC-034JcCwISRw7E9Q8XoNvD8 | 動画基盤 API の契約保証（所有権・RT・色変換カーネル） | approved | [video-foundation-api.md](./video-foundation-api.md) |
 | TSPEC-034L6w5zHELr4fPxPNpBsk | Video Plugin Plain Contract Tests | proposed | [video-plugin-plain-contract-tests.md](./video-plugin-plain-contract-tests.md) |
-| TSPEC-NstsDZYKTSF6CL9kQDoyXC | Issue #198 sequential offline render — OF-01..OF-07 test specification | approved | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |

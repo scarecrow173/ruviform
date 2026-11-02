@@ -27,11 +27,24 @@
 //!   deterministically: a `Block` covers `[first_frame, +valid)`,
 //!   a `Fault` covers `[first_frame, +frames)`, `Boundary` resets it,
 //!   `End` marks exhaustion. Gaps are structural, never guessed.
+//!   `fill`'s `expected_first` is a *stream-position assertion* in
+//!   source frames: the caller declares which `next_frame` it
+//!   believes the stream is at, and the fill is refused as a
+//!   `mismatch` when the assertion is wrong. It is not an
+//!   engine-frame or output-frame expectation — engine-side mapping
+//!   stays with the caller.
 //! * **Faults.** A span that cannot be served as decoded content is
 //!   fault-marked and zero-filled — the declared bounded fallback,
 //!   always counted in `FillReport`/`PrefetchTelemetry`, never
 //!   reported as content. `End` (EOF) is distinct from underrun: past
 //!   the end there is nothing left to produce.
+//! * **Drive.** One `pump()` call drains every queued command, then
+//!   performs at most one sequenced item of work — push one pending
+//!   marker, emit `End`, or fill and push one block. `Backpressured`
+//!   means work exists but a ring has no slot: markers may wait in
+//!   the producer `pending` queue, so a manual driver iterates
+//!   `pump()` until `Idle`/`Ended` rather than assuming one call
+//!   drains the pipeline.
 //! * **Single owner.** Exactly `block_count` `PcmBlock`s exist. Pool →
 //!   free ring → producer → data ring → consumer → free ring. The
 //!   free ring's capacity equals the pool size, so the consumer's
@@ -135,9 +148,10 @@ impl FaultCounts {
 /// producer had not delivered in time. `faulted` is frames covered by
 /// fault markers (zeroed). `eof` means the stream's `End` marker was
 /// consumed — the destination tail beyond delivered content is
-/// silence by *exhaustion*, not underrun. `mismatch` means
-/// `expected_first` did not match the stream position — nothing was
-/// consumed and the destination was zero-filled.
+/// silence by *exhaustion*, not underrun. `mismatch` means the
+/// caller's `expected_first` assertion disagreed with the stream's
+/// `next_frame` — nothing was consumed and the destination was
+/// zero-filled.
 ///
 /// Every non-`written` span is zero-filled: the declared bounded
 /// fallback, visible here and in [`PrefetchTelemetry`] — never
@@ -156,8 +170,9 @@ pub struct FillReport {
     pub faulted: usize,
     /// The stream's end was reached inside this fill.
     pub eof: bool,
-    /// `expected_first` mismatched the stream position — nothing was
-    /// consumed; the caller must seek or resynchronize.
+    /// The caller's `expected_first` stream-position assertion
+    /// mismatched `next_frame` — nothing was consumed; the caller
+    /// must seek or resynchronize.
     pub mismatch: bool,
     /// Per-kind fault events consumed in this fill.
     pub faults: FaultCounts,
@@ -379,11 +394,16 @@ enum PrefetchCmd {
     Seek {
         generation: u64,
         first: u64,
+        /// Purge queued markers ahead of the new boundary.
+        discard_pending: bool,
     },
     Reopen {
         generation: u64,
         source: Box<dyn MediaSource>,
         open: OpenFn,
+        /// Seek target applied after the reopen; `None` anchors at
+        /// frame 0.
+        first: Option<u64>,
     },
     Quit,
 }
@@ -395,15 +415,25 @@ type OpenFn = Box<dyn FnOnce(Box<dyn MediaSource>) -> Result<Box<dyn Demuxer>> +
 /// What one [`PrefetchProducer::pump`] did — the drive loop's
 /// observable step result.
 ///
+/// One `pump()` call drains every queued command and then performs at
+/// most one sequenced item of work, so a single call never drains the
+/// pipeline: [`Pushed`](Self::Pushed) covers exactly one item reaching
+/// the data ring, [`Backpressured`](Self::Backpressured) means work
+/// exists but a ring had no slot — the item stays queued (markers in
+/// `pending`, the block re-parked) and the caller must iterate.
+/// [`Idle`](Self::Idle)/[`Ended`](Self::Ended) are the terminal
+/// outcomes a manual drive loop iterates towards.
+///
 /// **RT contract:** non-RT only — produced by the non-RT pump.
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum PumpOutcome {
     /// Nothing to do (ended, waiting for commands).
     Idle,
-    /// An item was pushed into the data ring.
+    /// An item was pushed into the data ring — at most one per call.
     Pushed,
-    /// Work exists but a ring has no slot right now — bounded wait.
+    /// Work exists but a ring has no slot right now — bounded wait,
+    /// retry; the item was re-queued, not dropped.
     Backpressured,
     /// The stream's `End` marker was emitted; the producer idles until
     /// a seek/reopen arrives.
@@ -453,8 +483,19 @@ pub struct ProducerClose {
 }
 
 impl PrefetchProducer {
-    /// One non-blocking work step: drain pending commands, emit a
-    /// queued marker, or fill one block.
+    /// One non-blocking work step: drain every queued command, then
+    /// perform at most one sequenced item — emit one queued marker,
+    /// emit `End`, or fill and push one block.
+    ///
+    /// Command execution is unbounded per call (every queued command
+    /// is applied); item production is not — [`PumpOutcome::Pushed`]
+    /// covers exactly one item. [`PumpOutcome::Backpressured`] means
+    /// work exists but a ring has no slot: the marker is re-queued to
+    /// `pending` or the block re-parked, so `Boundary`/`Fault`/`End`
+    /// markers may remain in `pending` under backpressure. A manual
+    /// driver iterates `pump()` until [`PumpOutcome::Idle`]/
+    /// [`PumpOutcome::Ended`] rather than assuming one call drains
+    /// the pipeline.
     ///
     /// **RT contract:** non-RT only.
     ///
@@ -544,10 +585,19 @@ impl PrefetchProducer {
     fn exec_cmd(&mut self, cmd: PrefetchCmd) {
         match cmd {
             PrefetchCmd::Quit => self.quit = true,
-            PrefetchCmd::Seek { generation, first } => {
+            PrefetchCmd::Seek {
+                generation,
+                first,
+                discard_pending,
+            } => {
                 self.generation = generation;
                 self.stream_ended = false;
                 self.end_emitted = false;
+                if discard_pending {
+                    // Opt-in purge: stale queued markers never reach
+                    // the ring behind the new boundary.
+                    self.pending.clear();
+                }
                 match self.reader.seek_source_frame(SourceFrame(first)) {
                     Ok(_) => {
                         self.pending.push_back(PrefetchItem::Boundary {
@@ -576,16 +626,43 @@ impl PrefetchProducer {
                 generation,
                 source,
                 open,
+                first,
             } => {
                 self.generation = generation;
                 self.end_emitted = false;
                 match open(source).and_then(|demuxer| self.reader.reopen(demuxer)) {
                     Ok(()) => {
                         self.stream_ended = false;
-                        self.pending.push_back(PrefetchItem::Boundary {
-                            generation,
-                            first_frame: 0,
-                        });
+                        match first {
+                            None => {
+                                self.pending.push_back(PrefetchItem::Boundary {
+                                    generation,
+                                    first_frame: 0,
+                                });
+                            }
+                            Some(target) => {
+                                match self.reader.seek_source_frame(SourceFrame(target)) {
+                                    Ok(_) => {
+                                        self.pending.push_back(PrefetchItem::Boundary {
+                                            generation,
+                                            first_frame: self.reader.position().0,
+                                        });
+                                    }
+                                    Err(_error) => {
+                                        self.pending.push_back(PrefetchItem::Fault {
+                                            generation,
+                                            kind: SourceFault::Unseekable,
+                                            first_frame: target,
+                                            frames: 0,
+                                        });
+                                        self.pending.push_back(PrefetchItem::Boundary {
+                                            generation,
+                                            first_frame: self.reader.position().0,
+                                        });
+                                    }
+                                }
+                            }
+                        }
                     }
                     Err(error) => {
                         self.pending.push_back(PrefetchItem::Fault {
@@ -742,15 +819,45 @@ pub struct ConsumerClose {
     pub dropped: usize,
 }
 
+/// What one [`PrefetchConsumer::discard_pending`] call drained — the
+/// bounded discard's accounting.
+///
+/// `items` counts ring items processed (blocks and markers).
+/// `blocks` counts `PcmBlock`s returned to the free ring, including
+/// a partially-consumed in-flight block. `boundary` is the landed
+/// `first_frame` of the first `Boundary` consumed: the consumer
+/// adopted that generation and re-anchored `next_frame` there, and
+/// items behind the boundary stayed queued. `None` means no
+/// boundary was reached — the drain consumed the backlog only.
+///
+/// **RT contract:** RT-suitable — `Copy` plain data.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct DiscardReport {
+    /// Ring items processed (blocks and markers).
+    pub items: usize,
+    /// Pool blocks returned to the free ring, including an in-flight
+    /// block.
+    pub blocks: usize,
+    /// Landed boundary frame when a `Boundary` was consumed.
+    pub boundary: Option<u64>,
+}
+
 impl PrefetchConsumer {
     /// Fills `dst` with up to `dst.len()`-per-channel frames starting
     /// at `expected_first`, classifying every span per the fault
     /// contract.
     ///
-    /// `expected_first` is the caller's own position — the engine-side
-    /// contract. When it does not match the stream's `next_frame` the
-    /// call is a `mismatch`: nothing is consumed and the destination
-    /// is zero-filled (a stale-plan read is refused, not served).
+    /// `expected_first` is a *stream-position assertion* in source
+    /// frames: the caller declares the `next_frame` it believes the
+    /// stream is at — typically the position it last observed plus
+    /// the frames it has since consumed. It is not an engine-frame
+    /// or output-frame expectation; engine-side mapping stays with
+    /// the caller. When the assertion does not match the stream's
+    /// `next_frame` the call is a `mismatch`: nothing is consumed
+    /// and the destination is zero-filled (a stale-plan read is
+    /// refused, not served); the caller resynchronizes via
+    /// `seek`/`discard_pending` or drops the call.
     ///
     /// `dst` must have exactly the configured channel count; every
     /// slice's length is the requested frame count. Violating the
@@ -859,6 +966,110 @@ impl PrefetchConsumer {
             }
         }
         close
+    }
+
+    /// Discards queued stream elements up to and including the first
+    /// `Boundary` — the RT-safe drain half of sample-exact
+    /// re-anchoring, paired with
+    /// [`PrefetchHandle::seek_discard_pending`].
+    ///
+    /// Every popped item is processed by the same sequencing rules
+    /// [`fill`](Self::fill) applies: blocks return to the free ring
+    /// (generation-mismatched ones count as stale drops), matching
+    /// `Fault`/`End` markers update fault/end state, and the first
+    /// `Boundary` is *consumed* — the consumer adopts its generation
+    /// and `first_frame`, clears fault/end state, and stops. Items
+    /// behind that boundary stay queued for the next `fill`.
+    ///
+    /// A partially-consumed in-flight block is discarded too. Every
+    /// iteration is bounded O(1) with no allocation, locks or
+    /// blocking; the work per call is bounded by ring occupancy —
+    /// data-ring capacity plus one in-flight block, plus any items a
+    /// running producer feeds during the drain itself.
+    ///
+    /// Residual limit: elements that arrive *after* this call but
+    /// *before* the producer's boundary still play through — the
+    /// generation model is boundary-driven, so a drain cannot
+    /// discard items it has not seen. For strict re-anchoring call
+    /// it once the boundary is known queued (e.g. after
+    /// `seek_discard_pending` has been pumped).
+    ///
+    /// **RT contract:** RT-suitable.
+    #[must_use]
+    pub fn discard_pending(&mut self, _ctx: &RtContext) -> DiscardReport {
+        let mut report = DiscardReport::default();
+        if let Some(block) = self.current.take() {
+            if block.generation != self.generation {
+                self.stale();
+            }
+            self.return_block(block);
+            report.blocks += 1;
+        }
+        loop {
+            let Ok(item) = self.data_rx.try_pop() else {
+                return report;
+            };
+            report.items += 1;
+            match item {
+                PrefetchItem::Block(block) => {
+                    if block.generation != self.generation {
+                        self.stale();
+                    }
+                    self.return_block(block);
+                    report.blocks += 1;
+                }
+                PrefetchItem::Boundary {
+                    generation,
+                    first_frame,
+                } => {
+                    self.generation = generation;
+                    self.next_frame = first_frame;
+                    self.fault_remaining = 0;
+                    self.ended = false;
+                    self.cursor = 0;
+                    report.boundary = Some(first_frame);
+                    self.telemetry
+                        .inner
+                        .position
+                        .store(self.next_frame, Ordering::Relaxed);
+                    self.telemetry
+                        .inner
+                        .generation
+                        .store(self.generation, Ordering::Relaxed);
+                    return report;
+                }
+                PrefetchItem::Fault {
+                    generation,
+                    kind: _,
+                    first_frame,
+                    frames,
+                } => {
+                    if generation != self.generation {
+                        self.stale();
+                        continue;
+                    }
+                    self.telemetry
+                        .inner
+                        .fault_events
+                        .fetch_add(1, Ordering::Relaxed);
+                    if frames > 0 {
+                        if first_frame == self.next_frame {
+                            self.fault_remaining += frames;
+                        } else {
+                            self.stale();
+                        }
+                    }
+                }
+                PrefetchItem::End { generation } => {
+                    if generation == self.generation {
+                        self.ended = true;
+                        self.telemetry.inner.eof_seen.store(1, Ordering::Relaxed);
+                    } else {
+                        self.stale();
+                    }
+                }
+            }
+        }
     }
 
     /// The current stream position — the next source frame a
@@ -1250,6 +1461,39 @@ impl PrefetchHandle {
     /// [`ErrorKind::Io`] — the control channel is gone (producer
     /// stopped).
     pub fn seek(&mut self, first: SourceFrame) -> Result<()> {
+        self.seek_cmd(first, false)
+    }
+
+    /// Requests a source-frame seek that also purges the producer's
+    /// queued markers: the seek boundary sequences out without stale
+    /// `Boundary`/`Fault`/`End` markers from earlier commands
+    /// preceding it.
+    ///
+    /// Only the producer `pending` queue is purged — items already
+    /// pushed into the data ring (blocks *and* markers from earlier
+    /// commands) still sequence ahead of the boundary: blocks play
+    /// through, ring-resident markers are consumed or stale-dropped
+    /// per the usual rules. Pair this with
+    /// [`PrefetchConsumer::discard_pending`] to drain the consumer's
+    /// backlog when sample-exact re-anchoring must not wait for
+    /// play-through.
+    ///
+    /// A `Fact::Unsupported` seekable reports
+    /// [`ErrorKind::Unsupported`] immediately, without consuming a
+    /// generation.
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// [`ErrorKind::Unsupported`] — the source cannot seek.
+    /// [`ErrorKind::Io`] — the control channel is gone (producer
+    /// stopped).
+    pub fn seek_discard_pending(&mut self, first: SourceFrame) -> Result<()> {
+        self.seek_cmd(first, true)
+    }
+
+    fn seek_cmd(&mut self, first: SourceFrame, discard_pending: bool) -> Result<()> {
         if matches!(self.seekable, Fact::Unsupported) {
             return Err(Error::from_kind(ErrorKind::Unsupported));
         }
@@ -1258,6 +1502,7 @@ impl PrefetchHandle {
             .send(PrefetchCmd::Seek {
                 generation: self.next_gen,
                 first: first.0,
+                discard_pending,
             })
             .map_err(|_| Error::from_kind(ErrorKind::Io))
     }
@@ -1275,12 +1520,55 @@ impl PrefetchHandle {
     ///
     /// [`ErrorKind::Io`] — the control channel is gone.
     pub fn reopen(&mut self, source: Box<dyn MediaSource>, open: OpenFn) -> Result<()> {
+        self.reopen_cmd(source, open, None)
+    }
+
+    /// Requests a source reopen that lands directly on `first`: the
+    /// producer reopens, seeks to `first`, and emits a single
+    /// `Boundary` at the actual landed position — the fused form of
+    /// `reopen` + `seek` for mid-stream source replacement.
+    ///
+    /// If the post-reopen seek fails, an [`SourceFault::Unseekable`]
+    /// fault is queued ahead of a `Boundary` at the reopened
+    /// position; per the generation-adoption model the consumer
+    /// drops the new-generation fault ahead of that boundary as
+    /// stale, so the observable outcome is the re-anchor plus a
+    /// stale-drop count — the same reporting shape as `seek` on a
+    /// rejected seek. Whether the replacement source is seekable is
+    /// not pre-checked.
+    ///
+    /// If `open`/`reopen` itself fails, the existing `reopen`
+    /// failure path applies unchanged: a `Fault` marker and stream
+    /// end — no `Boundary` is emitted, so the generation is never
+    /// adopted.
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// [`ErrorKind::Io`] — the control channel is gone.
+    pub fn reopen_at(
+        &mut self,
+        source: Box<dyn MediaSource>,
+        open: OpenFn,
+        first: SourceFrame,
+    ) -> Result<()> {
+        self.reopen_cmd(source, open, Some(first.0))
+    }
+
+    fn reopen_cmd(
+        &mut self,
+        source: Box<dyn MediaSource>,
+        open: OpenFn,
+        first: Option<u64>,
+    ) -> Result<()> {
         self.next_gen += 1;
         self.cmd_tx
             .send(PrefetchCmd::Reopen {
                 generation: self.next_gen,
                 source,
                 open,
+                first,
             })
             .map_err(|_| Error::from_kind(ErrorKind::Io))
     }

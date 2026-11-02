@@ -15,6 +15,18 @@ Ruviform メディア基盤の汎用 Reader・Decoder/Prefetch・RT 消費境界
 - `Prefetch` — 非 RT producer（`PrefetchProducer` pump / spawn thread）→ 固定 `PcmBlock`
   pool → 2 本の bounded SPSC ring（data / free-return）→ generation 付き `PrefetchItem`
   列（`Block`/`Boundary`/`Fault`/`End`）→ RT `PrefetchConsumer::fill`。
+  - `fill` の `expected_first` は source frame 基準の *ストリーム位置 assertion* —
+    caller が想定する `next_frame` を宣言し、不一致なら何も消費せず `mismatch` を
+    返す。engine frame の期待値ではなく、engine 側の写像は caller 責務。
+  - `pump()` は呼び出しごとに queued command を全て処理したうえで、sequenced な
+    item を高々 1 つだけ進める（`Pushed`）。`Backpressured` は ring 空き待ちの
+    retry シグナルで、marker は producer `pending` に残る — manual driver は
+    `Idle`/`Ended` に到達するまで `pump()` を反復する契約。
+  - `PrefetchHandle::seek` は play-through を既定とし、`seek_discard_pending` が
+    opt-in の producer pending purge を追加する。consumer 側の `discard_pending` は
+    RT-safe な有界 drain で、次の `Boundary` で generation を adopt して停止する。
+  - `PrefetchHandle::reopen` は frame 0 anchor を維持し、`reopen_at` が
+    reopen→seek の fused 版を追加する（boundary は実際に landed した位置を報告）。
 - Fault 契約 — `SourceFault`（truncated/corrupt/io/invalid-sample/unsupported/unseekable）と
   `FillReport`（written/underrun/faulted/eof/mismatch）で、真の無音・short-read・corrupt・
   EOF・prefetch underrun・invalid sample・unsupported layout を識別する。欠落を
@@ -34,8 +46,8 @@ Ruviform メディア基盤の汎用 Reader・Decoder/Prefetch・RT 消費境界
 mixed-RT クレート — API ごとの `**RT contract:**` ラベルが正本。
 
 - **non-RT only**: `SourceReader` 全メソッド、`PrefetchHandle`、`PrefetchProducer`、
-  `Prefetch::manual`/`spawn`、metadata — alloc・I/O・unbounded codec work を行い得る。
-- **RT-suitable**: `PrefetchConsumer::fill`/`close`/`position`/`generation` — 事前確保された
+  `Prefetch::manual`/`spawn`、`PrefetchConsumer::close`、metadata — alloc・I/O・unbounded codec work を行い得る。
+- **RT-suitable**: `PrefetchConsumer::fill`/`discard_pending`/`position`/`generation` — 事前確保された
   pool と bounded ring の上で no-alloc・no-lock・no-blocking・no-OS-I/O。
 
 ## 関連

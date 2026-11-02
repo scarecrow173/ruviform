@@ -15,6 +15,7 @@ Directory: `docs/plans`
 | PLAN-034QfbOOAnZw32cmX1H46E | Implement Issue #189 M3 Rational Beat + Variable PPQN in media-core | approved | [implement-issue-189-m3-rational-beat-variable-ppqn.md](./implement-issue-189-m3-rational-beat-variable-ppqn.md) |
 | PLAN-034QfqzG1cwHntPLBtSz9L | Implement Issue #195 M2 Typed Graph Audio Compiler・Prepared Plan・RT Runtime | approved | [implement-issue-195-m2-typed-graph-audio-runtime.md](./implement-issue-195-m2-typed-graph-audio-runtime.md) |
 | PLAN-AAoMPoJ2iWazZqcu0pX2XQ | Issue #196 M4 Typed Graph Plugin Adapter 実装計画 | in-progress | [implement-issue-196-typed-graph-plugin-adapter.md](./implement-issue-196-typed-graph-plugin-adapter.md) |
+| PLAN-TH7W8rd4PbQx5UHmtKkzs0 | Issue #198 sequential offline render implementation plan | approved | [implement-issue-198-sequential-offline-render.md](./implement-issue-198-sequential-offline-render.md) |
 | PLAN-034JP0n5QlXSj34GK30GBz | Issue #22 RT 検証基盤の実施（assert_no_alloc 適用・thread-check 統合・検証文書） | approved | [implement-issue-22-rt-verification.md](./implement-issue-22-rt-verification.md) |
 | PLAN-034JRcspAdty0HzWF0KzIr | Issue #24 オフライン実行ドライバ実装 | approved | [implement-issue-24-offline-execution-driver.md](./implement-issue-24-offline-execution-driver.md) |
 | PLAN-034JRQoIQSe5Sh13CkKfjN | Issue #25 音声エンジン実装 | approved | [implement-issue-25-audio-engine.md](./implement-issue-25-audio-engine.md) |
@@ -40,6 +41,7 @@ Directory: `docs/plans`
 | PLAN-ayJ9gag4RycXPJ01POnAkp | Issue #188 Timed MIDI — implementation plan | approved | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | PLAN-034Qhwlp4j8Gy5S5uG46Qr | Issue #191 PCM WAV output backend implementation plan | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | PLAN-YNOz2WL10n4v4Avi6qlRE9 | Issue #197 media reader / prefetch / RT consumer implementation plan | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
+| PLAN-034Qonvu2E5YQaWUHEcTeL | Issue #233 media-reader prefetch contract improvements implementation plan | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 
@@ -72,4 +74,3 @@ Directory: `docs/plans`
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
-| PLAN-TH7W8rd4PbQx5UHmtKkzs0 | Issue #198 sequential offline render implementation plan | approved | [implement-issue-198-sequential-offline-render.md](./implement-issue-198-sequential-offline-render.md) |

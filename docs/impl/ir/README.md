@@ -116,3 +116,4 @@ Directory: `docs/impl/ir`
 | IMPL-034QlaADDFHTb4n47aDNfW | Issue 186 parameter control events contract | completed | [issue-186-parameter-control-events-contract.md](./issue-186-parameter-control-events-contract.md) |
 | IMPL-fGB1DM0VeWj7PjZgDkJ4th | Issue #188 timed MIDI input PoC | completed | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | IMPL-issue198-sequential-offline-render | Issue #198 sequential offline render — prepared instance, sequential driver, PDC/preroll/tail, staged output | completed | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |
+| IMPL-034QoBjMxcoddobxwYw9Tj | Issue 233 media-reader prefetch contract improvements | completed | [issue-233-media-reader-prefetch-contract-improvements.md](./issue-233-media-reader-prefetch-contract-improvements.md) |
