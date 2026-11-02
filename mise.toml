@@ -144,6 +144,25 @@ run = "cargo clippy -p ruviform-ui-webview --all-targets --features webview -- -
 description = "Run webview-feature tests for the UI adapter (rvf:// scheme/data surface; windowed paths are manual verification)"
 run = "cargo test -p ruviform-ui-webview --features webview"
 
+# UI headless lane (Issue #258): the framework-neutral plain-TypeScript
+# contract package under ui/core (value mapping + gesture state machine).
+# `npm ci` restores the committed package-lock first so the lane is
+# deterministic from a fresh checkout; node comes from the pinned mise
+# toolchain. No UI framework/runtime is or may be introduced as a
+# dependency of this lane (Issue #257 §13).
+[tasks.check-ui-headless]
+description = "Install ui/core deps from package-lock and type-check the headless contract package (tsc --noEmit, no DOM lib)"
+run = [
+  "npm --prefix ui/core ci --no-audit --no-fund",
+  "npm --prefix ui/core run typecheck",
+]
+[tasks.test-ui-headless]
+description = "Install ui/core deps from package-lock and run headless contract tests via node --test (no UI framework)"
+run = [
+  "npm --prefix ui/core ci --no-audit --no-fund",
+  "npm --prefix ui/core test",
+]
+
 [tasks.test-ofx]
 description = "Run OFX native host and fixture contract tests"
 run = "cargo test -p ruviform-plugin-ofx"

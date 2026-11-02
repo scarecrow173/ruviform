@@ -197,6 +197,7 @@ jobs:
         run: |
           mise trust
           mise install --locked rust prek
+          mise install node@26.12.1
 
       - name: Install WebKitGTK development headers (Linux)
         if: runner.os == 'Linux'
@@ -220,6 +221,12 @@ jobs:
 
       - name: Test UI webview feature (mise run test-ui-webview)
         run: mise run test-ui-webview
+
+      - name: Type-check headless UI contract (mise run check-ui-headless)
+        run: mise run check-ui-headless
+
+      - name: Test headless UI contract (mise run test-ui-headless)
+        run: mise run test-ui-headless
 
   bench:
     name: bench
