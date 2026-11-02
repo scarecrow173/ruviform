@@ -11,6 +11,15 @@ WebView ホスト・`rvf://` カスタムプロトコル・組込みアセット
   wry WebView を構築し、`HostEvent` へ変換して `UiRuntime` へ流す。
   `EventLoopProxy` による WebView2 コールバックの wakeup、resize /
   scale-factor での WebView bounds 再適用、Close/Focus/Tick 転送を担う。
+- マルチウィンドウ(`session` モジュール・feature `webview`・Issue #181):
+  `run_multi` が 1 本のイベントループで複数 window/webview を管理する。
+  各 window に安定 `WindowId` を発行し、`WindowEvent::Windowed` で起点を
+  明示。`CloseRequested` は veto 可能な要求(既定は対象 window のみ
+  `Approve`)で、破棄は `Destroyed` で通知。未 `Ready` WebView への
+  `eval` は有界 backlog(古い順 drop)、既破棄宛ては黙って捨てる。
+  全 window で 1 つの `WebContext`(user-data dir)を共有し、
+  last-window / app-exit 判断は consumer 側の `WindowHandle::exit`
+  呼出しに委ねる。
 - スキーム(`scheme` モジュール・feature 非依存): `rvf://app` アセット配信と
   `rvf://data/<name>` 有界 range pull。WebView2 が書き換える
   `http://rvf.app` / `http://rvf.data` ホスト形も受理する。
@@ -148,6 +157,8 @@ RT パスからは呼ばない。
 ```sh
 # GUI デモ(ruviform-ui の demo_cli と同一 DemoService)
 cargo run -p ruviform-ui-webview --features webview --example demo_app
+# マルチウィンドウ デモ(Issue #181・実 OS webview backend が必要)
+cargo run -p ruviform-ui-webview --features webview --example demo_multi
 ```
 
 検証タスク(feature 有効 lane):

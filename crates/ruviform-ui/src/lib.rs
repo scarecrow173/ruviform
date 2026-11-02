@@ -19,6 +19,11 @@
 //! - [`bridge`]: the `window.__rvf` JS contract and push helper.
 //! - [`render`]: the DOM / `Canvas2D` / `WebGL2` / native-surface
 //!   split — type-level port only, implementations live in adapters.
+//! - [`window`]: the multi-window contract (Issue #181) —
+//!   [`WindowId`], [`WindowEvent`], [`RoutedEvent`], [`CloseDecision`],
+//!   [`WindowConfig`], [`MonitorInfo`] and the [`WindowHandle`] port,
+//!   so one native event loop can drive many windows/webviews behind
+//!   the same backend-free boundary.
 //! - [`detect`]: backend detection report types.
 //! - [`demo`]: a reference [`Service`] proving the shared GUI/CLI
 //!   boundary end to end.
@@ -60,6 +65,7 @@ pub mod ipc;
 pub mod render;
 pub mod runtime;
 pub mod service;
+pub mod window;
 
 pub use assets::{Asset, AssetSource, MapAssetSource, mime_for, resolve_path};
 pub use bridge::{BRIDGE_JS, dispatch_script};
@@ -78,6 +84,9 @@ pub use ipc::{
 pub use render::{NativeSurfaceHost, RenderTier, SurfaceId, SurfaceRegion};
 pub use runtime::UiRuntime;
 pub use service::{CallOutcome, JobContext, JobSpec, OpInfo, Service, ServiceContext};
+pub use window::{
+    CloseDecision, MonitorInfo, RoutedEvent, WindowConfig, WindowEvent, WindowHandle, WindowId,
+};
 
 /// Returns the crate version string.
 ///

@@ -42,3 +42,7 @@ workspace = true
 [[example]]
 name = "demo_app"
 required-features = ["webview"]
+
+[[example]]
+name = "demo_multi"
+required-features = ["webview"]

@@ -40,6 +40,11 @@ pub struct ServiceContext<'a> {
     /// Shared data registry — services may publish [`crate::data::DataSource`]s
     /// for the pull path.
     pub data: &'a DataRegistry,
+    /// Window that issued the intent (Issue #181): `Some(w)` when the
+    /// call arrived via [`UiRuntime::handle_window`](crate::UiRuntime::handle_window),
+    /// `None` for headless/legacy dispatch. Lets a service observe the
+    /// calling window without backend types.
+    pub origin: Option<crate::window::WindowId>,
 }
 
 /// Worker body type of a [`JobSpec`].

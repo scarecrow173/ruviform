@@ -43,9 +43,29 @@ pub enum HostEvent {
         /// New scale factor (for example `1.5` at 150%).
         factor: f64,
     },
-    /// The user or OS requested the window to close. The host exits
-    /// its run loop after delivering this event (v1: no veto).
+    /// The window moved; physical position in virtual-desktop
+    /// coordinates (Issue #181).
+    Moved {
+        /// Physical x position.
+        x: i32,
+        /// Physical y position.
+        y: i32,
+    },
+    /// The user or OS requested the window to close.
+    ///
+    /// Single-window path (`host::run` + `UiRuntime::handle`): the
+    /// host exits its run loop after delivering this event (v1: no
+    /// veto). Multi-window path
+    /// ([`crate::window`]): this is a veto-able request answered via
+    /// `WindowHandle::respond_close` — it neither destroys the window
+    /// by itself nor cancels jobs nor exits the loop.
     CloseRequested,
+    /// The window/webview was destroyed (Issue #181) — after an
+    /// approved close, a programmatic `destroy_window`, or abnormal
+    /// backend teardown. This is the terminal event for a
+    /// [`crate::window::WindowId`]; the id is retired and never
+    /// reused, and further deliveries to it are dropped.
+    Destroyed,
     /// Periodic wakeup requested via `HostConfig::tick` — the drain
     /// point for job progress mailboxes.
     Tick,

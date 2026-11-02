@@ -47,11 +47,15 @@ mod embed;
 mod host;
 #[cfg(feature = "webview")]
 mod scheme;
+#[cfg(feature = "webview")]
+mod session;
 
 #[cfg(feature = "webview")]
 pub use embed::EmbedAssets;
 #[cfg(feature = "webview")]
 pub use host::{HostConfig, run};
+#[cfg(feature = "webview")]
+pub use session::{SessionConfig, run_multi};
 
 pub use detect::{backend_name, detect_backend, webview_available};
 
