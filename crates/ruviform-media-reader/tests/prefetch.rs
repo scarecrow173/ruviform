@@ -2,7 +2,9 @@
 //! RD-03 (variable callbacks + dual sources + single-owner pool),
 //! RD-04 (fault classes), RD-05 (cache pressure, close/reopen, leaks).
 
-use std::io::Cursor;
+use std::io::{Cursor, Read, Seek};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use ruviform_media_io::{DecodeMode, Demuxer, ErrorKind};
@@ -64,6 +66,48 @@ fn config() -> PrefetchConfig {
 fn open_reader(frames: usize) -> SourceReader {
     let demuxer =
         ruviform_io_symphonia::open_demuxer(Cursor::new(wav_bytes(CHANNELS, frames))).unwrap();
+    let stream = demuxer.streams()[0].stream.id;
+    SourceReader::open(Box::new(demuxer), stream, DecodeMode::Canonical).unwrap()
+}
+
+/// A `MediaSource` whose `read`/`seek` fail once `fail` is armed —
+/// the demuxer probe runs unarmed (seekable `Fact::known`), then a
+/// test arms the fault to fail the first post-open operation
+/// atomically.
+struct SeededSource {
+    inner: Cursor<Vec<u8>>,
+    fail: Arc<AtomicBool>,
+}
+
+impl SeededSource {
+    fn new(frames: usize, fail: Arc<AtomicBool>) -> Self {
+        Self {
+            inner: Cursor::new(wav_bytes(CHANNELS, frames)),
+            fail,
+        }
+    }
+}
+
+impl Read for SeededSource {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.fail.load(Ordering::Relaxed) {
+            return Err(std::io::Error::other("seeded read failure"));
+        }
+        self.inner.read(buf)
+    }
+}
+
+impl Seek for SeededSource {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        if self.fail.load(Ordering::Relaxed) {
+            return Err(std::io::Error::other("seeded seek failure"));
+        }
+        self.inner.seek(pos)
+    }
+}
+
+fn open_seeded_reader(frames: usize, fail: Arc<AtomicBool>) -> SourceReader {
+    let demuxer = ruviform_io_symphonia::open_demuxer(SeededSource::new(frames, fail)).unwrap();
     let stream = demuxer.streams()[0].stream.id;
     SourceReader::open(Box::new(demuxer), stream, DecodeMode::Canonical).unwrap()
 }
@@ -571,14 +615,37 @@ fn rd02_reopen_at_seek_failure_faults_then_reanchors() {
             break;
         }
     }
-    // The seek failed: an Unseekable fault precedes a boundary that
-    // re-anchors at the reopened position (frame 0). The fault is
-    // tagged with the new generation, so the consumer drops it as
-    // generation-stale ahead of the boundary — the observable report
-    // is a stale drop plus the frame-0 re-anchor.
+    // The seek failed: the boundary re-anchoring at the reopened
+    // position (frame 0) lands first, then the Unseekable fault —
+    // the consumer adopts the new generation before consuming the
+    // fault, so it is counted as a fault event, never stale-dropped.
     assert_eq!(landed, Some(0));
     assert_eq!(consumer.position(), SourceFrame(0));
-    assert!(handle.telemetry().stale_drops() >= 1);
+    for _ in 0..8 {
+        producer.pump().ok();
+    }
+    // The Unseekable fault (not a reopen-failure fault) is consumed
+    // after the boundary — kind-specific, not just a counted event.
+    let mut unseekable = 0u64;
+    let mut dst = [vec![0.0f32; 64], vec![0.0f32; 64]];
+    for _ in 0..8 {
+        let mut slices: Vec<&mut [f32]> = dst.iter_mut().map(Vec::as_mut_slice).collect();
+        let report = consumer.fill(&mut slices, consumer.position(), &ctx);
+        unseekable += report.faults.unseekable;
+        if unseekable > 0 {
+            break;
+        }
+    }
+    assert_eq!(
+        unseekable, 1,
+        "post-reopen seek failure surfaces as unseekable, got {unseekable}"
+    );
+    assert!(handle.telemetry().fault_events() >= 1);
+    assert_eq!(
+        handle.telemetry().stale_drops(),
+        0,
+        "no stale drops: the fault followed its boundary"
+    );
 }
 
 #[test]
@@ -642,5 +709,197 @@ fn rd02_discard_pending_returns_inflight_block() {
         report.blocks >= 2,
         "in-flight + queued blocks returned, got {}",
         report.blocks
+    );
+}
+
+// ---- Issue #244: boundary-first faults, dead-generation sequence,
+// ---- End commit-once, seeded-fault discard coverage ----
+
+#[test]
+fn rd02_seek_failure_reports_fault_after_boundary() {
+    // A seek the producer cannot honour lands `Boundary` at the
+    // unchanged position first, then the `Unseekable` fault — the
+    // consumer adopts the generation before consuming the fault, so
+    // it is counted and surfaced, never stale-dropped.
+    let fail = Arc::new(AtomicBool::new(false));
+    let reader = open_seeded_reader(FRAMES, fail.clone());
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    fail.store(true, Ordering::Relaxed);
+    handle.seek(SourceFrame(100)).unwrap();
+    for _ in 0..8 {
+        producer.pump().ok();
+    }
+    let mut unseekable = 0u64;
+    let mut dst = [vec![0.0f32; 64], vec![0.0f32; 64]];
+    for _ in 0..8 {
+        let mut slices: Vec<&mut [f32]> = dst.iter_mut().map(Vec::as_mut_slice).collect();
+        let report = consumer.fill(&mut slices, consumer.position(), &ctx);
+        unseekable += report.faults.unseekable;
+        if unseekable > 0 {
+            break;
+        }
+    }
+    assert_eq!(unseekable, 1, "boundary-first fault surfaces in fill");
+    assert!(handle.telemetry().fault_events() >= 1);
+    assert_eq!(
+        handle.telemetry().stale_drops(),
+        0,
+        "the fault follows its boundary — never stale"
+    );
+    assert_eq!(
+        consumer.position(),
+        SourceFrame(0),
+        "rejected seek re-anchored at the unchanged position"
+    );
+}
+
+#[test]
+fn rd02_reopen_failure_adopts_dead_generation() {
+    // `open` failing still emits `Boundary` → `Fault` → `End`: the
+    // dead generation is adopted, the fault counted, and the stream
+    // terminates as `eof` instead of starving.
+    let reader = open_reader(1024);
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    let g0 = consumer.generation();
+    handle
+        .reopen(
+            Box::new(Cursor::new(wav_bytes(CHANNELS, 2048))),
+            Box::new(|_source| Err(ruviform_media_io::Error::from_kind(ErrorKind::Io))),
+        )
+        .unwrap();
+    let mut landed = None;
+    for _ in 0..64 {
+        producer.pump().ok();
+        let report = consumer.discard_pending(&ctx);
+        if report.boundary.is_some() {
+            landed = report.boundary;
+            break;
+        }
+    }
+    assert_eq!(landed, Some(0), "dead generation still lands a boundary");
+    assert_eq!(consumer.generation(), g0 + 1);
+    assert_eq!(consumer.position(), SourceFrame(0));
+    let mut dst = [vec![0.0f32; 64], vec![0.0f32; 64]];
+    let mut io_faults = 0u64;
+    let mut saw_eof = false;
+    for _ in 0..16 {
+        producer.pump().ok();
+        let mut slices: Vec<&mut [f32]> = dst.iter_mut().map(Vec::as_mut_slice).collect();
+        let report = consumer.fill(&mut slices, consumer.position(), &ctx);
+        io_faults += report.faults.io;
+        if report.eof {
+            saw_eof = true;
+            break;
+        }
+    }
+    assert_eq!(io_faults, 1, "the reopen fault is counted");
+    assert!(saw_eof, "dead generation terminates as eof, not starvation");
+    assert_eq!(handle.telemetry().stale_drops(), 0);
+    assert_eq!(handle.telemetry().generation(), g0 + 1);
+}
+
+#[test]
+fn rd02_end_committed_once_under_backpressure() {
+    // `block_count: 1` → data ring holds 9 items. One block plus the
+    // 8 markers four failed reopens queue saturate it exactly, so the
+    // synthesized `End` must requeue through `pending`; once it lands
+    // the producer idles — it is never synthesized a second time.
+    let mut cfg = config();
+    cfg.block_count = 1;
+    let reader = open_reader(FRAMES);
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, cfg).unwrap();
+    let ctx = RtContext::mint();
+    assert_eq!(
+        producer.pump().unwrap(),
+        PumpOutcome::Pushed,
+        "one block in the ring"
+    );
+    for _ in 0..4 {
+        handle
+            .reopen(
+                Box::new(Cursor::new(wav_bytes(CHANNELS, 64))),
+                Box::new(|_source| Err(ruviform_media_io::Error::from_kind(ErrorKind::Io))),
+            )
+            .unwrap();
+    }
+    for _ in 0..8 {
+        assert_eq!(producer.pump().unwrap(), PumpOutcome::Pushed);
+    }
+    assert_eq!(
+        producer.pump().unwrap(),
+        PumpOutcome::Backpressured,
+        "ring saturated — End must requeue"
+    );
+    let mut landed = false;
+    for _ in 0..16 {
+        let _ = consumer.discard_pending(&ctx);
+        match producer.pump().unwrap() {
+            PumpOutcome::Pushed => {
+                landed = true;
+                break;
+            }
+            PumpOutcome::Backpressured => {}
+            other => panic!("unexpected outcome {other:?} while draining"),
+        }
+    }
+    assert!(landed, "the requeued End marker eventually pushed");
+    assert_eq!(
+        producer.pump().unwrap(),
+        PumpOutcome::Idle,
+        "the committed End is never synthesized again"
+    );
+}
+
+#[test]
+fn rd02_discard_pending_applies_matching_fault_and_end_then_boundary() {
+    // Seeded mid-stream read failure: `Fault{gen}` + `End{gen}` sit in
+    // the ring ahead of a later seek `Boundary`. `discard_pending`
+    // counts the matching-generation fault, applies `End` (`ended`),
+    // and the boundary adoption clears `ended` — proven by post-drain
+    // content flowing again.
+    let fail = Arc::new(AtomicBool::new(false));
+    let reader = open_seeded_reader(FRAMES, fail.clone());
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    for _ in 0..4 {
+        if producer.pump().unwrap() != PumpOutcome::Pushed {
+            break;
+        }
+    }
+    fail.store(true, Ordering::Relaxed);
+    for _ in 0..8 {
+        producer.pump().ok();
+    }
+    let faults_before = handle.telemetry().fault_events();
+    fail.store(false, Ordering::Relaxed);
+    handle.seek_discard_pending(SourceFrame(2000)).unwrap();
+    for _ in 0..8 {
+        producer.pump().ok();
+    }
+    let report = consumer.discard_pending(&ctx);
+    assert_eq!(report.boundary, Some(2000));
+    assert!(
+        handle.telemetry().fault_events() > faults_before,
+        "matching-generation fault counted during the drain"
+    );
+    assert!(
+        handle.telemetry().eof_seen(),
+        "the queued End marker was applied mid-drain"
+    );
+    // Boundary adoption cleared `ended`: new content flows.
+    for _ in 0..8 {
+        producer.pump().ok();
+    }
+    let mut dst = [vec![0.0f32; 64], vec![0.0f32; 64]];
+    let mut slices: Vec<&mut [f32]> = dst.iter_mut().map(Vec::as_mut_slice).collect();
+    let fill = consumer.fill(&mut slices, consumer.position(), &ctx);
+    assert!(fill.written > 0, "boundary cleared ended — content flows");
+    assert!(!fill.eof);
+    assert_eq!(
+        slices[0][0],
+        expected(2000),
+        "re-anchored post-seek content"
     );
 }
