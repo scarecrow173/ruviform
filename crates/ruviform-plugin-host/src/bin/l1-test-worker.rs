@@ -23,7 +23,8 @@
 //! | `--reject-blocks-after-msgs=N` | after the Nth parsed `BlockIn` doorbell (a doorbell-only counter — `Command`/`Shutdown` messages do not count), answer every later `BlockIn` with the flagged `Reply{seq, instance, Err(HostError::PluginFailed)}` — the real rejection shape — instead of processing |
 //! | `--stop-reading-after-msgs=N` | after the Nth received message is fully answered, never read stdin again — a wedged child that stays alive but never drains the pipe, so a large parent frame blocks the proxy's `write_all`; only a kill ends it |
 //! | `--leave-heir-after-msgs=N` | after the Nth received message is fully answered, spawn a copy of this binary with `--sleep-ms=15000` (inheriting stdio — the grandchild holds the parent's stdout pipe open) then `exit(0)`; EOF never reaches the proxy's reader thread |
-//! | `--sleep-ms=M` | sleep `M` ms then exit 0 — the heir mode used by `--leave-heir-after-msgs`; not meant to be spawned directly by tests |
+//! | `--spawn-heir` | spawn the same stdio-inheriting heir at startup then keep serving — a later external death (`kill`/crash knob) also leaves no stdout EOF, so the L1 driver's `try_wait` is the sole `Failed` convergence and `InstanceFailed` lands `Sent` atomically with the lifecycle mirror |
+//! | `--sleep-ms=M` | sleep `M` ms then exit 0 — the heir mode used by `--leave-heir-after-msgs`/`--spawn-heir`; not meant to be spawned directly by tests |
 //! | `--hello-version=V` | `Hello.version` override (default [`wire::WIRE_VERSION`]) for the version-mismatch handshake test |
 //! | `--fail-stop-processing` | `StopProcessing` commits `Processing → Activated` then replies `Err(HostError::PluginFailed)` — the real runner's commit-then-advisory shape (a hook error arrives post-commit), exercising the host-side mirror fix |
 //! | `--fail-restore` | `RestoreState` replies `Err(HostError::PluginFailed)` without committing — `state` keeps its previous blob (the conservative keep-the-checkpoint attempt failure); loses to `--state-unsupported` when both are set |
@@ -103,6 +104,14 @@ struct Flags {
     stop_reading_after_msgs: Option<u64>,
     /// Spawn a stdio-inheriting heir then exit after message N.
     leave_heir_after_msgs: Option<u64>,
+    /// Spawn the same stdio-inheriting heir at startup, then keep
+    /// serving — the heir's held stdout means a later external
+    /// death (`kill` or a crash knob) never reaches EOF on the
+    /// parent's reader, so the L1 driver's `try_wait` owns the
+    /// `Failed` convergence and every `InstanceFailed` lands `Sent`
+    /// atomically with the lifecycle mirror (`Pending` is never
+    /// observable from the test side).
+    spawn_heir: bool,
     /// Heir mode: sleep this many ms then exit (`None` = normal serve).
     sleep_ms: Option<u64>,
     /// `Hello.version` override.
@@ -162,6 +171,7 @@ fn parse_flags() -> Flags {
         reject_blocks_after_msgs: None,
         stop_reading_after_msgs: None,
         leave_heir_after_msgs: None,
+        spawn_heir: false,
         sleep_ms: None,
         hello_version: wire::WIRE_VERSION,
         fail_stop_processing: false,
@@ -193,6 +203,8 @@ fn parse_flags() -> Flags {
             flags.stop_reading_after_msgs = value.parse().ok();
         } else if let Some(value) = arg.strip_prefix("--leave-heir-after-msgs=") {
             flags.leave_heir_after_msgs = value.parse().ok();
+        } else if arg == "--spawn-heir" {
+            flags.spawn_heir = true;
         } else if let Some(value) = arg.strip_prefix("--sleep-ms=") {
             flags.sleep_ms = value.parse().ok();
         } else if let Some(value) = arg.strip_prefix("--hello-version=") {
@@ -696,6 +708,27 @@ fn block_in_dispatch(
     }
 }
 
+/// Spawns a stdio-inheriting heir (`--sleep-ms=15000`): the
+/// grandchild holds this process's pipes open after this process is
+/// reaped, so the parent's reader thread never sees EOF. (The
+/// running heir briefly locks this exe image on Windows — its
+/// lifetime stays short so rebuilds are not blocked for long.)
+fn spawn_heir(flags: &Flags) {
+    let mut heir =
+        std::process::Command::new(std::env::current_exe().expect("heir needs this exe"));
+    heir.arg("--sleep-ms=15000");
+    // Forward the heir's own stderr knobs — the heir parses
+    // the same flag names, so without this wiring the parsed
+    // values would never reach it.
+    if let Some(n) = flags.heir_stderr_bytes {
+        heir.arg(format!("--heir-stderr-bytes={n}"));
+    }
+    if let Some(m) = flags.heir_stderr_delay_ms {
+        heir.arg(format!("--heir-stderr-delay-ms={m}"));
+    }
+    let _ = heir.spawn();
+}
+
 // The scripted fixture `main` runs past the pedantic line limit —
 // the multi-line `wire::write_message` call sites pushed it over.
 // Splitting the dispatch is out of this change's causal scope, so
@@ -720,6 +753,13 @@ fn main() -> ExitCode {
         }
         std::thread::sleep(std::time::Duration::from_millis(ms));
         return ExitCode::SUCCESS;
+    }
+    if flags.spawn_heir {
+        // Hold-stdio heir now — a later external death still leaves
+        // the parent's reader without EOF, so the L1 driver's
+        // `try_wait` owns `Failed` convergence and the
+        // `InstanceFailed` send lands atomically with the mirror.
+        spawn_heir(&flags);
     }
     let mut stdin = io::stdin().lock();
     let mut stdout = io::stdout().lock();
@@ -767,22 +807,7 @@ fn main() -> ExitCode {
             // Spawn a stdio-inheriting heir then exit: the heir keeps
             // the parent's stdout pipe open after this process is
             // reaped, so the proxy's reader thread never sees EOF.
-            // (The running heir briefly locks this exe image on
-            // Windows — its lifetime stays short so rebuilds are not
-            // blocked for long.)
-            let mut heir =
-                std::process::Command::new(std::env::current_exe().expect("heir needs this exe"));
-            heir.arg("--sleep-ms=15000");
-            // Forward the heir's own stderr knobs — the heir parses
-            // the same flag names, so without this wiring the parsed
-            // values would never reach it.
-            if let Some(n) = flags.heir_stderr_bytes {
-                heir.arg(format!("--heir-stderr-bytes={n}"));
-            }
-            if let Some(m) = flags.heir_stderr_delay_ms {
-                heir.arg(format!("--heir-stderr-delay-ms={m}"));
-            }
-            let _ = heir.spawn();
+            spawn_heir(&flags);
             std::process::exit(0);
         }
         let Ok(message) = wire::read_message(&mut stdin, &mut Vec::new()) else {
