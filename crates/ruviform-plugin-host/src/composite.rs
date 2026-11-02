@@ -58,8 +58,8 @@ use crate::l1::{
 };
 use crate::video::{VideoHostCommand, VideoHostReply, VideoOutOfProcessSpec, VideoPluginHost};
 use crate::{
-    ErasedPlugin, HostCommand, HostError, HostInput, HostOutput, HostReply, InProcessHost,
-    PluginFactory, PluginHandle,
+    BusReport, ErasedPlugin, HostCommand, HostError, HostInput, HostOutput, HostReply,
+    InProcessHost, PluginFactory, PluginHandle,
 };
 
 /// How L1 instances of one out-of-process route map onto child
@@ -867,6 +867,31 @@ impl PluginHost {
                 self.l0.plugin_mut(inner)
             }
             Slot::OutOfProcess(_) | Slot::OutOfProcessVideo(_) => None,
+        }
+    }
+
+    /// The instance's declared bus table — the honest
+    /// `Reported`/`Unavailable` split the capability matrix needs.
+    /// L0 slots reach the plugin through [`InProcessHost::buses`];
+    /// L1 slots (audio and video) report [`BusReport::Unavailable`]
+    /// — the wire protocol has no bus verb yet, and callers must not
+    /// infer a layout from that answer.
+    ///
+    /// **RT contract:** non-RT only — allocates the report vec; the
+    /// L0 `Shared` arm takes the instance's `core` mutex.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle and
+    /// [`HostError::Failed`] when an L0 instance has already
+    /// converged.
+    pub fn buses(&mut self, handle: PluginHandle) -> Result<BusReport, HostError> {
+        match self.slot_mut(handle)? {
+            Slot::InProcess(inner) => {
+                let inner = *inner;
+                self.l0.buses(inner)
+            }
+            Slot::OutOfProcess(_) | Slot::OutOfProcessVideo(_) => Ok(BusReport::Unavailable),
         }
     }
 

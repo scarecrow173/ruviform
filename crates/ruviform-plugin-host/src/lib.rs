@@ -194,7 +194,7 @@ pub use composite::{
 // `mod l1` is `pub(crate)` (public consumers must be able to name
 // the result types).
 pub use endpoint::{EndpointBounds, PluginEndpoint};
-pub use host::InProcessHost;
+pub use host::{BusReport, InProcessHost};
 pub use l1::diag::{DiagRegistry, DiagnosticQuery, DiagnosticRecord, SpawnPhase, StderrSnapshot};
 pub use plugin::{
     ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,

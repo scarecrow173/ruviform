@@ -1472,6 +1472,33 @@ impl<P> TransportScheduler<P> {
         std::mem::take(&mut self.faults)
     }
 
+    /// Removes and returns the oldest recorded receipt, or `None`.
+    ///
+    /// **RT contract:** RT-suitable — `receipts` has a fixed capacity
+    /// derived from [`ScheduleBudget::max_pending_applies`]; a
+    /// `remove(0)` shift stays within that bound and performs no
+    /// allocation.
+    pub fn pop_receipt(&mut self) -> Option<AppliedReceipt> {
+        if self.receipts.is_empty() {
+            None
+        } else {
+            Some(self.receipts.remove(0))
+        }
+    }
+
+    /// Removes and returns the oldest recorded fault, or `None`.
+    ///
+    /// **RT contract:** RT-suitable — `faults` has a fixed capacity of
+    /// 64; a `remove(0)` shift stays within that bound and performs no
+    /// allocation.
+    pub fn pop_fault(&mut self) -> Option<ScheduleFault> {
+        if self.faults.is_empty() {
+            None
+        } else {
+            Some(self.faults.remove(0))
+        }
+    }
+
     fn apply(&mut self, p: PendingApply<P>, frame: u64, degradation: Option<ApplyDegradation>) {
         match p.kind {
             PendingKind::Command(cmd) => {
