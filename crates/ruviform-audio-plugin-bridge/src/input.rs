@@ -39,6 +39,7 @@ use ruviform_media_core::{
     NoteKey, NoteLedger, TimeBase, map_stamp_to_frame,
 };
 use ruviform_plugin_core::{Event, EventKind};
+use ruviform_rt::{Consumer, Producer};
 
 /// Fixed capacity of the `pending` drain buffer — events beyond it
 /// are dropped and counted.
@@ -166,6 +167,30 @@ impl InputStage {
         self.counters.dropped_capacity += n;
     }
 
+    /// Move queued events from the RT-side SPSC channel into
+    /// `pending` — bounded by remaining capacity. Events that do not
+    /// fit stay in the channel (backpressure toward the producer,
+    /// never silently dropped); they are pumped on a later block.
+    ///
+    /// Returns the number of events moved.
+    ///
+    /// **RT contract:** RT-suitable — bounded `try_pop` loop, no
+    /// allocation (`pending` was pre-allocated to
+    /// [`INPUT_STAGE_CAPACITY`]).
+    pub fn pump(&mut self, rx: &mut Consumer<TimedMidiInput>) -> u32 {
+        let mut moved = 0u32;
+        while self.pending.len() < INPUT_STAGE_CAPACITY {
+            match rx.try_pop() {
+                Ok(event) => {
+                    self.pending.push(event);
+                    moved += 1;
+                }
+                Err(_) => break,
+            }
+        }
+        moved
+    }
+
     /// Emit this block's live events into `scratch`, returning the
     /// written slice and per-block stats.
     ///
@@ -232,7 +257,8 @@ impl InputStage {
                             scratch[emitted] = Event::new(0, EventKind::Midi(input.event));
                             emitted += 1;
                             consumed += 1;
-                            if !self.ledger.feed(&input.event) && self.ledger.take_overflow() {
+                            self.ledger.feed(&input.event);
+                            if self.ledger.take_overflow() {
                                 self.counters.ledger_overflows += 1;
                             }
                             false
@@ -245,7 +271,8 @@ impl InputStage {
                             );
                             emitted += 1;
                             consumed += 1;
-                            if !self.ledger.feed(&input.event) && self.ledger.take_overflow() {
+                            self.ledger.feed(&input.event);
+                            if self.ledger.take_overflow() {
                                 self.counters.ledger_overflows += 1;
                             }
                             false
@@ -333,5 +360,139 @@ impl core::fmt::Debug for InputStage {
             .field("active_notes", &self.ledger.active_count())
             .field("counters", &self.counters)
             .finish_non_exhaustive()
+    }
+}
+
+/// Configuration for a node's live-MIDI input leg
+/// ([`crate::AttachConfig::input`]). `channel_capacity` is the
+/// non-RT→RT handoff depth; it is capped at [`INPUT_STAGE_CAPACITY`],
+/// the stage's `pending` bound — deeper buys nothing.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct InputConfig {
+    /// Events the handoff channel may hold before backpressure defers
+    /// the pump. `0` or `> INPUT_STAGE_CAPACITY` is a defined
+    /// [`crate::AttachError::InputConfig`] rejection.
+    pub channel_capacity: usize,
+}
+
+impl InputConfig {
+    /// A channel capacity equal to the stage's pending bound.
+    ///
+    /// **RT contract:** non-RT — declarative.
+    #[must_use]
+    pub const fn new(channel_capacity: usize) -> Self {
+        Self { channel_capacity }
+    }
+}
+
+/// Per-call observation returned by [`InputTx::pump`].
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct PumpStats {
+    /// Events `read` appended to the staging buffer this call.
+    pub received: usize,
+    /// Events pushed into the RT channel this call.
+    pub pushed: usize,
+    /// Events still staged afterwards (channel full — delivered on a
+    /// later `pump`; not lost).
+    pub deferred: usize,
+    /// Events the backend reported dropping inside `read` this call.
+    pub backend_dropped: u64,
+}
+
+/// The non-RT producer half of a node's live-input leg: drains a
+/// [`MidiInput`] subscription into a bounded staging buffer and pushes
+/// staged events into the node's SPSC channel. Obtained from
+/// [`crate::Attached::input_tx`].
+///
+/// The pump never drops events itself: a full channel defers staged
+/// events to the next `pump` (backpressure), and a full staging buffer
+/// stops `read` early — loss happens only inside the backend's own
+/// bounded queue, observable via [`PumpStats::backend_dropped`] and
+/// the cumulative [`Self::dropped_backend`].
+///
+/// **RT contract:** non-RT only — owns the producer endpoint and a
+/// staging `Vec` pre-allocated to [`INPUT_STAGE_CAPACITY`]; `pump` may
+/// lock the adapter's internal queue.
+pub struct InputTx {
+    tx: Producer<TimedMidiInput>,
+    staging: Vec<TimedMidiInput>,
+    dropped_backend: u64,
+}
+
+impl InputTx {
+    /// Pairs with the node's channel consumer — `attach` constructs.
+    ///
+    /// **RT contract:** non-RT — allocates the staging buffer.
+    pub(crate) fn new(tx: Producer<TimedMidiInput>) -> Self {
+        Self {
+            tx,
+            staging: Vec::with_capacity(INPUT_STAGE_CAPACITY),
+            dropped_backend: 0,
+        }
+    }
+
+    /// Flush staged events into the channel, top up the staging buffer
+    /// from `input`, then flush again — preserving arrival order
+    /// end-to-end.
+    ///
+    /// Bounded by [`INPUT_STAGE_CAPACITY`] on both sides; excess input
+    /// stays in the backend queue (its own drop counter reports it),
+    /// excess staged events wait for channel space.
+    ///
+    /// **RT contract:** non-RT — may lock the adapter queue.
+    ///
+    /// # Errors
+    ///
+    /// [`ruviform_audio_core::device::DeviceError`] from the input's
+    /// `read`; already-pushed events remain delivered.
+    pub fn pump(&mut self, input: &mut dyn MidiInput) -> DeviceResult<PumpStats> {
+        let mut pushed = 0usize;
+        let mut kept = self.flush(&mut pushed);
+        let spare = INPUT_STAGE_CAPACITY - kept;
+        let stats = input.read(&mut self.staging, spare)?;
+        let received = self.staging.len() - kept;
+        self.dropped_backend += stats.dropped;
+        kept = self.flush(&mut pushed);
+        Ok(PumpStats {
+            received,
+            pushed,
+            deferred: kept,
+            backend_dropped: stats.dropped,
+        })
+    }
+
+    /// Push staged events into the channel until it fills; returns the
+    /// number still staged afterwards.
+    fn flush(&mut self, pushed: &mut usize) -> usize {
+        let mut kept = 0usize;
+        for r in 0..self.staging.len() {
+            match self.tx.try_push(self.staging[r]) {
+                Ok(()) => *pushed += 1,
+                Err(full) => {
+                    self.staging[kept] = full.into_inner();
+                    kept += 1;
+                }
+            }
+        }
+        self.staging.truncate(kept);
+        kept
+    }
+
+    /// Backend drops observed so far — cumulative observability for
+    /// the control surface.
+    ///
+    /// **RT contract:** non-RT — read-only.
+    #[must_use]
+    pub const fn dropped_backend(&self) -> u64 {
+        self.dropped_backend
+    }
+
+    /// Events currently staged waiting on channel space.
+    ///
+    /// **RT contract:** non-RT — read-only.
+    #[must_use]
+    pub fn deferred(&self) -> usize {
+        self.staging.len()
     }
 }

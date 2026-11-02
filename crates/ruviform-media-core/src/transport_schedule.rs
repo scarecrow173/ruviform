@@ -621,6 +621,16 @@ impl<P> ScheduledEvent<P> {
             ..self
         }
     }
+
+    /// `position` expressed in the plan's `frame_base` ticks — the
+    /// value span windows and chase scans compare against
+    /// `SpanContext::position_ticks`.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn position_ticks(&self) -> i64 {
+        self.position_ticks
+    }
 }
 
 /// An immutable compiled plan: tempo map + scheduled events, installed
@@ -845,6 +855,30 @@ impl TransportSpan {
     }
 }
 
+/// The generation-tag half of [`event_engine_frame`]: `true` when the
+/// event's `plan_generation` matches the span context's live plan
+/// generation and its optional `transport_generation` binding matches
+/// the live transport generation (`None` = absolute, always matches).
+///
+/// Span-chase / replay code that scans plan events *outside* the
+/// current window uses this to apply the same staleness rule — an
+/// event whose tags do not match can never fire and must not count
+/// toward reconstructed note state.
+///
+/// **RT contract:** RT-suitable — pure comparisons.
+#[must_use]
+pub fn event_generation_matches<P>(ctx: &SpanContext, event: &ScheduledEvent<P>) -> bool {
+    if event.plan_generation != ctx.plan_generation {
+        return false;
+    }
+    if let Some(tg) = event.transport_generation
+        && tg != ctx.transport_generation
+    {
+        return false;
+    }
+    true
+}
+
 /// The single authority mapping a scheduled event to its engine frame
 /// inside a span: `Some(frame)` when the event's generation tags match
 /// the span's live generations and its position falls inside the span's
@@ -857,12 +891,7 @@ pub fn event_engine_frame<P>(
     span: &TransportSpan,
     event: &ScheduledEvent<P>,
 ) -> Option<EngineFrame> {
-    if event.plan_generation != span.ctx.plan_generation {
-        return None;
-    }
-    if let Some(tg) = event.transport_generation
-        && tg != span.ctx.transport_generation
-    {
+    if !event_generation_matches(&span.ctx, event) {
         return None;
     }
     if span.ctx.status != TransportStatus::Playing {
@@ -1052,6 +1081,18 @@ impl<P> TransportScheduler<P> {
     #[must_use]
     pub const fn frame_base(&self) -> TimeBase {
         self.frame_base
+    }
+
+    /// The active plan, if one is installed — shared so an RT sink can
+    /// consult it (e.g. span-chase prefix scans) without a heavier
+    /// accessor. Cloning the returned `Arc` is a refcount bump only;
+    /// the caller's plan-lifetime discipline (e.g. a vault) must still
+    /// ensure the last `Arc` never drops on the RT path.
+    ///
+    /// **RT contract:** RT-suitable — read-only borrow.
+    #[must_use]
+    pub const fn plan(&self) -> Option<&Arc<TransportPlan<P>>> {
+        self.plan.as_ref()
     }
 
     /// Mints the next plan generation for a [`TransportPlanBuilder`].
@@ -1437,18 +1478,21 @@ impl<P> TransportScheduler<P> {
     /// Distinct from a seek (which bumps transport generation inside the
     /// same epoch).
     ///
-    /// **RT contract:** non-RT.
+    /// **RT contract:** RT-suitable — pending applies are rejected in
+    /// place and `pending` cleared without releasing its reserved
+    /// capacity (reachable from the audio callback via node controls).
     pub fn device_restart(&mut self, base_frame: u64) -> ClockEpochId {
         self.epoch = ClockEpochId::new(self.epoch.get() + 1);
         let at = EngineFrame::new(self.epoch, base_frame);
-        let drained: Vec<PendingApply<P>> = std::mem::take(&mut self.pending);
-        for p in drained {
+        for i in 0..self.pending.len() {
+            let (id, due) = (self.pending[i].id, self.pending[i].due);
             self.reject(
-                p.id,
-                EngineFrame::new(self.epoch, p.due),
+                id,
+                EngineFrame::new(self.epoch, due),
                 RejectReason::StaleGeneration,
             );
         }
+        self.pending.clear();
         self.status = TransportStatus::Stopped;
         self.anchor_frame = base_frame;
         self.anchor_pos = 0;
@@ -1460,16 +1504,22 @@ impl<P> TransportScheduler<P> {
     /// Drains all recorded receipts (Requested/Pending/Applied/Rejected
     /// lifecycle entries, in order).
     ///
-    /// **RT contract:** non-RT — allocates the returned vec.
+    /// **RT contract:** non-RT — allocates the returned vec. `drain`
+    /// keeps the ledger's reserved capacity so recording continues
+    /// (`mem::take` would drop it, permanently shrinking the ring).
+    #[allow(clippy::drain_collect)] // reason: drain preserves reserved capacity
     pub fn drain_receipts(&mut self) -> Vec<AppliedReceipt> {
-        std::mem::take(&mut self.receipts)
+        self.receipts.drain(..).collect()
     }
 
     /// Drains all recorded faults.
     ///
-    /// **RT contract:** non-RT — allocates the returned vec.
+    /// **RT contract:** non-RT — allocates the returned vec. `drain`
+    /// keeps the ledger's reserved capacity so recording continues
+    /// (`mem::take` would drop it, permanently shrinking the ring).
+    #[allow(clippy::drain_collect)] // reason: drain preserves reserved capacity
     pub fn drain_faults(&mut self) -> Vec<ScheduleFault> {
-        std::mem::take(&mut self.faults)
+        self.faults.drain(..).collect()
     }
 
     /// Removes and returns the oldest recorded receipt, or `None`.
@@ -1546,6 +1596,23 @@ impl<P> TransportScheduler<P> {
                 }
             }
             PendingKind::InstallPlan(plan) => {
+                // A same-generation install of a *different* plan leaves
+                // the span-context identity unchanged: consumers never
+                // see a discontinuity and sounding notes are never
+                // released. Plan generation is plan identity — reject
+                // the collision. Reinstalling the identical plan
+                // (same `Arc`) is a benign no-op.
+                let collision = self.plan.as_ref().is_some_and(|live| {
+                    live.generation == plan.generation && !Arc::ptr_eq(live, &plan)
+                });
+                if collision {
+                    self.reject(
+                        p.id,
+                        EngineFrame::new(self.epoch, p.due),
+                        RejectReason::StaleGeneration,
+                    );
+                    return;
+                }
                 self.pg = plan.generation;
                 self.tempo_rev = plan.tempo_revision;
                 self.plan = Some(plan);
@@ -2356,5 +2423,100 @@ mod tests {
         });
         assert!(sink.spans > 0);
         let _ = s.drain_receipts();
+    }
+
+    #[test]
+    fn install_rejects_same_generation_different_plan() {
+        // Plan generation is plan identity: a *different* plan minted
+        // under a colliding generation would leave the span-context
+        // key unchanged — note state would never be released.
+        let mut s: TransportScheduler<u32> = scheduler(1, 512, DeliveryPolicy::Exact);
+        let e0 = s.epoch();
+        s.request(TransportCommand::Play, EngineFrame::new(e0, 0))
+            .unwrap();
+        let mut a = TransportPlanBuilder::<u32>::new(base(), PlanGeneration::new(1));
+        a.event(t(10), 0, 1).unwrap();
+        let mut b = TransportPlanBuilder::<u32>::new(base(), PlanGeneration::new(1));
+        b.event(t(20), 0, 2).unwrap();
+        let id_a = s
+            .install_plan(Arc::new(a.build()), EngineFrame::new(e0, 0))
+            .unwrap();
+        let id_b = s
+            .install_plan(Arc::new(b.build()), EngineFrame::new(e0, 0))
+            .unwrap();
+        let mut sink = collect();
+        s.run_callback(EngineFrame::new(e0, 0), 64, &mut sink);
+        let receipts = s.drain_receipts();
+        assert!(
+            receipts
+                .iter()
+                .any(|r| r.id == id_a && r.status == ApplyStatus::Applied),
+            "first install applies: {receipts:?}"
+        );
+        assert!(
+            receipts.iter().any(|r| r.id == id_b
+                && r.status == ApplyStatus::Rejected
+                && r.reason == Some(RejectReason::StaleGeneration)),
+            "colliding generation must be rejected: {receipts:?}"
+        );
+        // The surviving plan is A — its event at pos 10 delivered,
+        // B's event at pos 20 did not.
+        let all: Vec<u64> = sink.events.iter().flatten().copied().collect();
+        assert_eq!(all, vec![10]);
+    }
+
+    #[test]
+    fn identical_plan_reinstall_is_a_noop() {
+        // Reinstalling the *same* plan (`Arc`-identical) under its own
+        // generation is a benign re-request, not a collision.
+        let mut s: TransportScheduler<u32> = scheduler(1, 512, DeliveryPolicy::Exact);
+        let e0 = s.epoch();
+        let mut a = TransportPlanBuilder::<u32>::new(base(), PlanGeneration::new(1));
+        a.event(t(10), 0, 1).unwrap();
+        let plan = Arc::new(a.build());
+        let id_a = s
+            .install_plan(Arc::clone(&plan), EngineFrame::new(e0, 0))
+            .unwrap();
+        let id_b = s.install_plan(plan, EngineFrame::new(e0, 0)).unwrap();
+        let mut sink = collect();
+        s.run_callback(EngineFrame::new(e0, 0), 64, &mut sink);
+        let receipts = s.drain_receipts();
+        for id in [id_a, id_b] {
+            assert!(
+                receipts
+                    .iter()
+                    .any(|r| r.id == id && r.status == ApplyStatus::Applied),
+                "identical reinstall applies: {receipts:?}"
+            );
+        }
+    }
+
+    /// RT contract: `device_restart` is reachable from the audio
+    /// callback via node controls — it must not free or allocate the
+    /// pending-apply buffer.
+    #[test]
+    fn rt_device_restart_no_alloc() {
+        let mut s: TransportScheduler<u32> = scheduler(1, 512, DeliveryPolicy::Exact);
+        let e0 = s.epoch();
+        s.request(TransportCommand::Play, EngineFrame::new(e0, 100))
+            .unwrap();
+        s.request(
+            TransportCommand::SetLoop(range(0, 256)),
+            EngineFrame::new(e0, 200),
+        )
+        .unwrap();
+        s.drain_receipts();
+        assert_no_alloc::assert_no_alloc(|| {
+            s.device_restart(64);
+        });
+        // Pending applies were rejected in place; capacity survives.
+        assert!(s.epoch().get() > e0.get());
+        let receipts = s.drain_receipts();
+        assert!(
+            receipts.iter().all(|r| r.status == ApplyStatus::Rejected
+                && r.reason == Some(RejectReason::StaleGeneration))
+                && receipts.len() == 2,
+            "both pending applies rejected: {receipts:?}"
+        );
     }
 }

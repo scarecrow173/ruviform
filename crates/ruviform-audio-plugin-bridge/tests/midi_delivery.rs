@@ -190,9 +190,13 @@ fn midi_delivery_note_cc_bend_with_frame_offsets() {
     // Note-On at the same offset.
     let plan = [param(96, 0.5)];
     let mut merge_scratch = [param(0, 0.0); 16];
-    let merged =
-        ruviform_plugin_core::merge_call_events(&[&plan[..], &live[..]], &mut merge_scratch)
-            .unwrap();
+    let mut src_scratch = [0u8; 16];
+    let merged = ruviform_plugin_core::merge_call_events(
+        &[&plan[..], &live[..]],
+        &mut merge_scratch,
+        &mut src_scratch,
+    )
+    .unwrap();
     assert_eq!(merged.len(), 5);
     // plan wins the offset-96 tie over live.
     assert!(matches!(merged[1].kind(), EventKind::ParamValue(_)));
@@ -314,6 +318,7 @@ fn rt_midi_delivery_collect_and_merge_no_alloc() {
 
     let mut scratch = [param(0, 0.0); 8];
     let mut merge_scratch = [param(0, 0.0); 16];
+    let mut src_scratch = [0u8; 16];
     let plan = [param(96, 0.5)];
     assert_no_alloc::assert_no_alloc(|| {
         let (live, stats) = stage.collect_block(
@@ -323,9 +328,12 @@ fn rt_midi_delivery_collect_and_merge_no_alloc() {
             &mut scratch,
         );
         assert_eq!(stats.emitted, 2);
-        let merged =
-            ruviform_plugin_core::merge_call_events(&[&plan[..], &live[..]], &mut merge_scratch)
-                .unwrap();
+        let merged = ruviform_plugin_core::merge_call_events(
+            &[&plan[..], &live[..]],
+            &mut merge_scratch,
+            &mut src_scratch,
+        )
+        .unwrap();
         core::hint::black_box(merged)
     });
 }
