@@ -181,6 +181,18 @@ fn destroy(host: &mut PluginHost, handle: PluginHandle) {
 
 /// Polls `lifecycle_state` until the instance converges `Failed`
 /// (the L1 driver's asynchronous detection).
+///
+/// On a child spawned with the worker's `--spawn-heir` flag the
+/// wait is also a *notification barrier*: the heir holds the
+/// child's stdout open, so the reader thread's EOF convergence can
+/// never run and the driver's `try_wait` reap is the sole
+/// `Failed` convergence — `converge_child` then lands
+/// `notify = Sent` and the `InstanceFailed` send inside the same
+/// critical section that flips the mirror. Observing
+/// `Failed` here therefore implies the notification is already
+/// queued, with no `Pending → Sent` window to settle. (Without
+/// the flag the reader's EOF usually converges first and a later
+/// reap completes `Pending → Sent` out-of-band.)
 fn wait_for_failed(host: &PluginHost, handle: PluginHandle) {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     while host.lifecycle_state(handle) != Some(LifecycleState::Failed) {
@@ -204,16 +216,6 @@ fn wait_notification(host: &mut PluginHost) -> HostNotification {
         );
         thread::sleep(Duration::from_millis(5));
     }
-}
-
-/// Lets the driver's reap complete a `Pending → Sent` notification:
-/// `wait_for_failed` only observes the mirror, which converges one
-/// driver poll (~200 µs) before the exit status completes the
-/// notification. Only needed where a later `poll` phase could
-/// preempt the drain — multi-notification fan-outs and the
-/// lingering `GaveUp` re-emit.
-fn settle_notification() {
-    thread::sleep(Duration::from_millis(50));
 }
 
 /// Calls `sup.poll(host, now)` until `want` holds on the
@@ -802,7 +804,7 @@ fn activate_over_limit_attempt_fails_prepare() {
 /// own collateral death is a separate watched entry's recovery.
 #[test]
 fn mid_create_death_attempt_failed_without_mint() {
-    let mut host = bundled_host(&["--crash-after-msgs=4"]);
+    let mut host = bundled_host(&["--crash-after-msgs=4", "--spawn-heir"]);
     let mut sup = Supervisor::new(RestartPolicy::default()).unwrap();
     let a = instantiate(&mut host);
     let b = instantiate(&mut host);
@@ -815,9 +817,9 @@ fn mid_create_death_attempt_failed_without_mint() {
     host.kill_child(a).unwrap();
     wait_for_failed(&host, a);
     wait_for_failed(&host, b);
-    // Both fan-out sends must land before the first drain — a torn
-    // drain would invert the `(next_attempt_at, id)` attempt order.
-    settle_notification();
+    // `--spawn-heir` makes the driver's reap the sole convergence —
+    // both fan-out sends are already `Sent`/queued, so the first
+    // drain can't tear the `(next_attempt_at, id)` attempt order.
     let events = poll_until_event(&mut sup, &mut host, t0, |evs| {
         !attempt_faileds(evs, id_b).is_empty()
     });
@@ -954,7 +956,12 @@ fn lingering_residue_retry_destroy_clears() {
     // not leaked.
     let lingering = sup.current_handle(id).expect("lingering residue exposed");
     wait_for_failed(&host, lingering);
-    settle_notification();
+    // No barrier needed — either defined clear resolves
+    // `current_handle` identically: a drained late-death
+    // notification matches `lingering`, or Phase-2's retry
+    // `Destroy` frees the slot first (the residue's flushed
+    // notification then dies with the slot). `poll_until_cleared`
+    // retries either way.
     poll_until_cleared(&mut sup, &mut host, t0, id);
     assert_eq!(sup.current_handle(id), None);
     // Nothing surfaced for the residue — it stayed tracked to the
@@ -1034,7 +1041,11 @@ fn lingering_residue_unwatch_returns_handle() {
 /// `(id, attempts)` against the first emit).
 #[test]
 fn gaveup_lingering_late_death_reemits() {
-    let mut host = dedicated_host(&["--fail-start-processing", "--crash-after-msgs=6"]);
+    let mut host = dedicated_host(&[
+        "--fail-start-processing",
+        "--crash-after-msgs=6",
+        "--spawn-heir",
+    ]);
     let policy = RestartPolicy {
         max_attempts: 1,
         ..RestartPolicy::default()
@@ -1052,10 +1063,11 @@ fn gaveup_lingering_late_death_reemits() {
     assert_eq!(gave_ups(&events, id), [(1, Some(HostError::PluginFailed))]);
     let lingering = sup.current_handle(id).expect("lingering residue exposed");
     wait_for_failed(&host, lingering);
-    // The notification's `Pending → Sent` completion must land
-    // before the drain — otherwise the Phase-2 retry `Destroy` can
-    // preempt the lingering match and the re-emit never surfaces.
-    settle_notification();
+    // `--spawn-heir` makes the driver's reap the sole convergence —
+    // the late-death notification is already `Sent`/queued, so the
+    // first drain's lingering match beats the Phase-2 retry
+    // `Destroy` that would otherwise preempt it and lose the
+    // re-emit.
     let events = poll_until_event(&mut sup, &mut host, Instant::now(), |evs| {
         !gave_ups(evs, id).is_empty()
     });
@@ -1072,7 +1084,7 @@ fn gaveup_lingering_late_death_reemits() {
 /// already consumed the notification or it stayed queued.
 #[test]
 fn adopt_failed_handle_recovers() {
-    let mut host = bundled_host(&[]);
+    let mut host = bundled_host(&["--spawn-heir"]);
     let mut sup = Supervisor::new(RestartPolicy::default()).unwrap();
     let a = instantiate(&mut host);
     let b = instantiate(&mut host);
@@ -1080,9 +1092,9 @@ fn adopt_failed_handle_recovers() {
     host.kill_child(a).unwrap();
     wait_for_failed(&host, a);
     wait_for_failed(&host, b);
-    // Both fan-out sends must land before `wait_notification` —
-    // otherwise it could pop `b`'s notification first (slot order).
-    settle_notification();
+    // `--spawn-heir` makes the driver's reap the sole convergence —
+    // both sends are already `Sent`/queued, so the slot-order pop
+    // below takes `a`'s notification first deterministically.
     // Variant A: the caller already consumed the notification.
     let notified = wait_notification(&mut host);
     assert!(matches!(
@@ -1150,7 +1162,7 @@ fn zero_max_attempts_adopt_gives_up_immediately() {
 /// `Instant`s — no real-time dependence.
 #[test]
 fn stable_window_crash_starts_fresh_episode() {
-    let mut host = dedicated_host(&["--fail-restore"]);
+    let mut host = dedicated_host(&["--fail-restore", "--spawn-heir"]);
     let mut sup = Supervisor::new(RestartPolicy::default()).unwrap();
     let h = instantiate(&mut host);
     let id = sup.watch(&mut host, h, minimal_recipe()).unwrap();
@@ -1184,10 +1196,10 @@ fn stable_window_crash_starts_fresh_episode() {
     sup.set_checkpoint(id, vec![0xBB]).unwrap();
     host.kill_child(new).unwrap();
     wait_for_failed(&host, new);
-    // The notification must be queued before the `later` poll —
-    // otherwise Phase-2's `Live` sweep resets `failures` first and
-    // the pinned Phase-1 drain reset is never exercised.
-    settle_notification();
+    // `--spawn-heir` makes the driver's reap the sole convergence —
+    // the notification is already `Sent`/queued for the `later`
+    // poll, so the pinned Phase-1 drain reset runs before
+    // Phase-2's `Live` sweep can.
     let later = recovered_at + Duration::from_secs(61);
     let events = poll_until_event(&mut sup, &mut host, later, |evs| !evs.is_empty());
     assert_eq!(events.len(), 1);
@@ -1228,7 +1240,7 @@ fn stable_window_crash_starts_fresh_episode() {
 /// repeats the cycle.
 #[test]
 fn bundle_burst_cap_defers_and_unsupervised() {
-    let mut host = bundled_host(&[]);
+    let mut host = bundled_host(&["--spawn-heir"]);
     let policy = RestartPolicy {
         max_attempts_per_poll: 2,
         ..RestartPolicy::default()
@@ -1246,9 +1258,10 @@ fn bundle_burst_cap_defers_and_unsupervised() {
     for &h in watched.iter().chain(std::iter::once(&unwatched)) {
         wait_for_failed(&host, h);
     }
-    // All five fan-out sends must land before the first drain — a
-    // torn drain would leave entries `Live` or drop `Unsupervised`.
-    settle_notification();
+    // `--spawn-heir` makes the driver's reap the sole convergence —
+    // all five fan-out sends are `Sent`/queued inside one critical
+    // section, so the first drain can't tear (entries stuck `Live`
+    // or a dropped `Unsupervised`).
     let events = poll_until_event(&mut sup, &mut host, t0, |evs| {
         count_restarted(evs, ids[0]) + count_restarted(evs, ids[1]) >= 2
     });
@@ -1298,7 +1311,8 @@ fn bundle_burst_cap_defers_and_unsupervised() {
     for &h in &current {
         wait_for_failed(&host, h);
     }
-    settle_notification();
+    // Same `--spawn-heir` barrier: the fresh child's four sends are
+    // queued before the first drain.
     let events = poll_until_event(&mut sup, &mut host, t0, |evs| {
         count_restarted(evs, ids[0]) + count_restarted(evs, ids[1]) >= 2
     });
