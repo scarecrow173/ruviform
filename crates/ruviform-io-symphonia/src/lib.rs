@@ -85,7 +85,9 @@ use ruviform_media_io::{
 };
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::formats::probe::Hint;
-use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
+use symphonia::core::io::{
+    MediaSource as BackendSource, MediaSourceStream, MediaSourceStreamOptions,
+};
 use symphonia::core::meta::MetadataOptions;
 
 use crate::error::map_error;
@@ -182,11 +184,13 @@ pub fn capabilities() -> Capabilities {
 /// ```
 pub fn open_demuxer(source: impl MediaSource + 'static) -> Result<SymphoniaDemuxer> {
     let sniffed = std::sync::Arc::new(std::sync::Mutex::new(Sniffed::new()));
+    let adapter = SourceAdapter::new(Box::new(source));
+    // Capture the construction-time seekability probe before the
+    // adapter moves into the stream chain — the demuxer declares it
+    // through `Demuxer::seekable`.
+    let seekable = adapter.is_seekable();
     let mss = MediaSourceStream::new(
-        Box::new(SniffingSource::new(
-            SourceAdapter::new(Box::new(source)),
-            sniffed.clone(),
-        )),
+        Box::new(SniffingSource::new(adapter, sniffed.clone())),
         MediaSourceStreamOptions::default(),
     );
     let reader = symphonia::default::get_probe()
@@ -201,7 +205,7 @@ pub fn open_demuxer(source: impl MediaSource + 'static) -> Result<SymphoniaDemux
         .lock()
         .map(|sniffed| map::container_info(sniffed.prefix()))
         .unwrap_or_default();
-    Ok(SymphoniaDemuxer::new(reader, container))
+    Ok(SymphoniaDemuxer::new(reader, container, seekable))
 }
 
 /// Requests a [`Muxer`] from this backend — always reports unsupported.

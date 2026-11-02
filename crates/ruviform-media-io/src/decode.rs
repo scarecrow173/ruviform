@@ -13,6 +13,40 @@ use crate::error::Result;
 use crate::frame::Frame;
 use crate::packet::Packet;
 
+/// Which decoded representation a decoder is built to emit.
+///
+/// Decoders constructed through
+/// [`Demuxer::make_decoder`](crate::Demuxer::make_decoder) take this
+/// choice explicitly so the canonical playback path and the lossless
+/// native observation path share one construction port — neither is
+/// implied by the other, and choosing one never suppresses the other
+/// at the boundary.
+///
+/// * [`Canonical`](Self::Canonical) — [`Frame::Audio`](crate::Frame)
+///   output: planar normalized `f32` in the stream's declared rate and
+///   channel layout. This is the playback representation.
+/// * [`Native`](Self::Native) — [`Frame::NativeAudio`](crate::Frame)
+///   output: interleaved `f64` samples on the source's native scale
+///   with the recorded [`PcmTransform`](crate::PcmTransform) history.
+///   This is the high-fidelity observation representation — requesting
+///   it must not be treated as a request for `f32` normalization.
+///
+/// A backend that cannot honour a mode reports
+/// [`ErrorKind::Unsupported`](crate::ErrorKind) from
+/// [`Demuxer::make_decoder`](crate::Demuxer::make_decoder) — the error
+/// half of capability negotiation.
+///
+/// **RT contract:** non-RT only — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub enum DecodeMode {
+    /// Canonical `f32` planar decoded output.
+    #[default]
+    Canonical,
+    /// Native-scale `f64` interleaved decoded output.
+    Native,
+}
+
 /// Packet → frame boundary: sends encoded units in, receives decoded
 /// frames out, and resets residual codec state on request.
 ///

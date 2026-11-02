@@ -489,3 +489,29 @@ fn non_seekable_source_still_demuxes() {
     let packets = packets(&mut demuxer);
     assert_eq!(packets.len(), 5);
 }
+
+// ---------- Issue #197 boundary additions ----------
+
+#[test]
+fn boundary_seekable_fact_declares_unsupported() {
+    let demuxer = open_demuxer(std::io::Cursor::new(av_audio_video())).unwrap();
+    // AVI seek is not implemented — declared honestly at construction.
+    assert_eq!(demuxer.seekable(), Fact::Unsupported);
+}
+
+#[test]
+fn boundary_make_decoder_dispatches_both_modes() {
+    use ruviform_media_io::DecodeMode;
+
+    let demuxer = open_demuxer(std::io::Cursor::new(av_audio_video())).unwrap();
+    let streams = demuxer.streams();
+    let audio = streams
+        .iter()
+        .find(|s| s.stream.kind == StreamKind::Audio)
+        .unwrap()
+        .stream
+        .id;
+
+    let _canonical = Demuxer::make_decoder(&demuxer, audio, DecodeMode::Canonical).unwrap();
+    let _native = Demuxer::make_decoder(&demuxer, audio, DecodeMode::Native).unwrap();
+}
