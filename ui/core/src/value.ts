@@ -640,13 +640,25 @@ export class ValueMapper {
 
   /**
    * Parse text input into a plain value (finite-validated, un-snapped).
-   * A throwing parser port reports a non-finite result.
+   * The default parser mirrors the default formatter: a trailing unit
+   * suffix is stripped so the displayed `"45 %"` round-trips, and empty
+   * input is a non-finite failure — `Number("") === 0` would silently
+   * commit zero for a cleared field. A throwing parser port reports a
+   * non-finite result.
    */
   parse(text: string): ScalarResult {
     let parsed: number;
     try {
-      parsed =
-        this.parseFn !== undefined ? this.parseFn(text) : Number(text.trim());
+      if (this.parseFn !== undefined) {
+        parsed = this.parseFn(text);
+      } else {
+        let t = text.trim();
+        const { unit } = this.descriptor;
+        if (unit !== undefined && t.endsWith(unit)) {
+          t = t.slice(0, t.length - unit.length).trim();
+        }
+        parsed = t === "" ? Number.NaN : Number(t);
+      }
     } catch {
       return this.fail(
         "non-finite",
