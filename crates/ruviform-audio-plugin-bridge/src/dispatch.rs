@@ -282,7 +282,8 @@ impl ParamDispatchLedger {
     /// errors drop the entries dispatched into the *most recently
     /// projected call*; a scheduler `Fault` drops every still-pending
     /// entry (`Scheduled`/`Dispatched`) as `ScheduleFault`. Receipts
-    /// affect no entries.
+    /// and the MIDI-side faults (`LedgerOverflow`/`ChaseOverflow` —
+    /// they carry no dispatch attribution) affect no entries.
     ///
     /// **RT contract:** non-RT — bounded scans, no allocation.
     pub fn apply_report(&mut self, report: &NodeReport) -> usize {
@@ -349,7 +350,10 @@ impl ParamDispatchLedger {
                 }
                 dropped
             }
-            NodeReport::Receipt(_) => 0,
+            NodeReport::Receipt(_)
+            | NodeReport::LedgerOverflow
+            | NodeReport::ChaseOverflow { .. }
+            | NodeReport::StaleEpochControl => 0,
         }
     }
 

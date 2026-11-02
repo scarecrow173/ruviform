@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use ruviform_media_core::{
-    AppliedReceipt, ClockEpochId, ScheduleFault, TransportCommand, TransportPlan,
+    AppliedReceipt, ClockAnchor, ClockEpochId, ScheduleFault, TransportCommand, TransportPlan,
 };
 use ruviform_plugin_core::EventKind;
 use ruviform_rt::{Consumer, Producer};
@@ -54,6 +54,15 @@ pub enum NodeControl {
         /// Frame the new epoch starts at.
         base_frame: u64,
     },
+    /// Publish (or clear) the live-input stamp→frame anchor — the
+    /// node's [`crate::InputStage`] maps backend stamps against it at
+    /// the next callback's `collect_block`. A defined no-op on nodes
+    /// attached without an input leg (`AttachConfig::input == None`).
+    SetClockAnchor {
+        /// The anchor, or `None` to suspend input mapping until the
+        /// next anchor lands.
+        anchor: Option<ClockAnchor>,
+    },
 }
 
 /// A report the RT node emits toward the non-RT control side. Kept
@@ -86,6 +95,21 @@ pub enum NodeReport {
     /// A plan install was rejected because the [`crate::PlanVault`]
     /// is full — the scheduler never saw it.
     VaultExceeded,
+    /// The delivered-note ledger force-released an entry on overflow —
+    /// an active note was cut early (bounded-table defined loss).
+    LedgerOverflow,
+    /// Chase could not re-fire every key sounding at a span's start —
+    /// `dropped` keys stayed silent (scratch or tracker-table bound).
+    ChaseOverflow {
+        /// Sounding-or-unknown keys not re-fired.
+        dropped: u64,
+    },
+    /// A `SetClock` control named a different clock epoch than the
+    /// scheduler's — the move was ignored. Moving the frame cursor to
+    /// a foreign epoch makes every callback boundary unrepresentable
+    /// (a hard output stall); epoch rebases go through
+    /// `DeviceRestart`, which bumps the scheduler epoch itself.
+    StaleEpochControl,
 }
 
 /// The bounded control queue was full — the message was dropped, the
@@ -170,6 +194,18 @@ impl PluginNodeControl {
     pub fn device_restart(&mut self, base_frame: u64) -> Result<(), QueueFull> {
         self.tx
             .try_push(NodeControl::DeviceRestart { base_frame })
+            .map_err(|_| self.queue_full())
+    }
+
+    /// Publishes the live-input stamp→frame anchor (or clears it with
+    /// `None`) — applied at the node's next callback head.
+    ///
+    /// # Errors
+    ///
+    /// [`QueueFull`] when the control queue is full.
+    pub fn set_clock_anchor(&mut self, anchor: Option<ClockAnchor>) -> Result<(), QueueFull> {
+        self.tx
+            .try_push(NodeControl::SetClockAnchor { anchor })
             .map_err(|_| self.queue_full())
     }
 

@@ -6,16 +6,23 @@
 //!
 //! 1. drain ≤ [`CTRL_DRAIN_MAX`] control messages — `request` /
 //!    `install_plan` (vault-cloned first) / `set_clock` /
-//!    `device_restart` are applied at callback head, `due_frames`
-//!    relative to the node's own cursor.
-//! 2. materialize `NodeIo` input/output port views (stack arrays — no
+//!    `device_restart` / `set_clock_anchor` are applied at callback
+//!    head, `due_frames` relative to the node's own cursor.
+//! 2. pump the live-input channel into the [`InputStage`] (bounded
+//!    `try_pop`s — a full `pending` leaves events in the channel).
+//! 3. materialize `NodeIo` input/output port views (stack arrays — no
 //!    allocation).
-//! 3. `scheduler.run_callback(cursor, frames, sink)` — every
+//! 4. `scheduler.run_callback(cursor, frames, sink)` — every
 //!    `deliverable` span becomes a `BlockContract` partition of
-//!    physical calls with process-start-relative `EventList`s and a
+//!    physical calls; each call merges `release ++ chase ++ plan ++
+//!    live` into one process-start-relative `EventList` plus a
 //!    `TransportInfo` snapshot; every undeliverable span becomes
-//!    silence plus a [`NodeReport::UndeliverableSpan`].
-//! 4. `pop_receipt`/`pop_fault` drain into the bounded report channel
+//!    silence plus a [`NodeReport::UndeliverableSpan`]. A changed span
+//!    context (epoch / generations / loop occurrence) marks a
+//!    discontinuity: the delivered-note ledger releases at the span's
+//!    first call and [`chase_span_events`] re-fires notes spanning the
+//!    new position.
+//! 5. `pop_receipt`/`pop_fault` drain into the bounded report channel
 //!    (full → [`NodeStatus::snapshot`]'s `report_overflows`).
 //!
 //! No allocation, no blocking, no `unsafe` on any of this.
@@ -23,21 +30,27 @@
 use core::array;
 
 use ruviform_audio::typed::{GraphProcessor, InputView, NodeIo, OutputView};
+use ruviform_audio_core::midi_input::TimedMidiInput;
 use ruviform_graph::{Direction, NodeSpec, PortFormat, PortRole};
 use ruviform_media_core::{
-    BlockContract, ClockEpochId, DeliveryPolicy, EngineFrame, ScheduleBudget, ScheduledEvent,
-    SpanSink, TransportScheduler, TransportSpan,
+    BlockContract, ClockEpochId, DeliveryPolicy, EngineFrame, LoopOccurrence, MidiEvent,
+    NOTE_LEDGER_CAPACITY, NoteLedger, PlanGeneration, ScheduleBudget, ScheduledEvent, SpanSink,
+    TransportGeneration, TransportPlan, TransportScheduler, TransportSpan,
 };
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, BusDescriptor, BusDirection, BusRole, Event, EventKind, EventList,
     HostInput, HostOutput, ParamEvent, ParamId, ParamValue,
 };
-use ruviform_plugin_core::{build_call_event_list, call_transport_info, calls_for_span};
+use ruviform_plugin_core::{
+    build_call_event_list, call_transport_info, calls_for_span, chase_span_events,
+    merge_call_events, sort_events_by_frame_offset,
+};
 use ruviform_plugin_host::{HostError, PluginEndpoint};
 use ruviform_rt::RtContext;
 use ruviform_rt::{Consumer, Producer};
 
 use crate::control::{NodeControl, NodeReport};
+use crate::input::InputStage;
 use crate::status::{Counter, NodeStatus};
 use crate::vault::PlanVault;
 
@@ -183,6 +196,17 @@ pub fn buses_from_specs(spec: &NodeSpec) -> Vec<BusDescriptor> {
     out
 }
 
+/// The span-context identity whose change marks a transport
+/// discontinuity — clock epoch, live transport/plan generations and
+/// loop occurrence. Position is deliberately excluded: continuous
+/// playback advances it every span without discontinuing note state.
+type SpanCtxKey = (
+    ClockEpochId,
+    TransportGeneration,
+    PlanGeneration,
+    LoopOccurrence,
+);
+
 /// The sink `run_callback` feeds — holds disjoint borrows of the
 /// node's fields so `PluginNode::process` satisfies the borrow checker
 /// while staying allocation-free.
@@ -192,7 +216,46 @@ struct CallSink<'a, 'io> {
     endpoint: &'a mut PluginEndpoint,
     report: &'a mut Producer<NodeReport>,
     status: &'a NodeStatus,
+    /// Merge output — the merged list becomes the call's `EventList`.
     scratch: &'a mut [Event],
+    /// Per-call plan-window scratch (`build_call_event_list` output).
+    plan_scratch: &'a mut [Event],
+    /// Per-call live-input scratch (`collect_block` output).
+    live_scratch: &'a mut [Event],
+    /// Stable-sort scratch for the live list.
+    sort_scratch: &'a mut [Event],
+    /// `NoteLedger::release_all` emission scratch (`MidiEvent`s).
+    release_midi: &'a mut [MidiEvent],
+    /// Released note-offs wrapped as offset-0 `Event`s.
+    release_events: &'a mut [Event],
+    /// Chase emission scratch (`chase_span_events` output).
+    chase_scratch: &'a mut [Event],
+    /// Merge-output provenance scratch — each emitted event's source
+    /// index (the note-off-priority collision pass's input).
+    src_scratch: &'a mut [u8],
+    /// `NoteLedger::drain_evicted` emission scratch (`MidiEvent`s) —
+    /// synthetic offs owed by capacity-evicted keys.
+    evict_midi: &'a mut [MidiEvent],
+    /// Evicted-key offs wrapped as offset-0 `Event`s.
+    evict_events: &'a mut [Event],
+    /// The node's live-input stage, when attached with input.
+    input: Option<&'a mut InputStage>,
+    /// Delivered-note tracker — fed from the merged list each call,
+    /// released on transport discontinuity.
+    ledger: &'a mut NoteLedger,
+    /// The active plan for span chase — snapshotted before
+    /// `run_callback`; a mid-callback install leaves it conservatively
+    /// stale (generation gating then yields an empty chase set).
+    plan: Option<&'a TransportPlan<EventKind>>,
+    /// Last *deliverable* span's context identity plus the position
+    /// its successor was expected to start at — the discontinuity
+    /// detector's memory, persisted across callbacks. Identity alone
+    /// misses same-generation position jumps (`SetClock` rebases the
+    /// frame cursor without touching a generation), so continuity
+    /// also requires the derived position to match the expected
+    /// advance. Undeliverable spans leave it alone so the change
+    /// still registers at the next deliverable span.
+    last_ctx: &'a mut Option<(SpanCtxKey, i64)>,
     in_views: &'a mut [Option<InputView<'io>>],
     out_views: &'a mut [Option<OutputView<'io>>],
     silent: &'a [Vec<f32>],
@@ -337,6 +400,12 @@ impl SpanSink<EventKind> for CallSink<'_, '_> {
             });
             return;
         };
+        // Transport discontinuity: a changed context identity means
+        // note state delivered so far no longer describes the new
+        // position — release every tracked note at the span's first
+        // call, then chase the plan prefix for notes spanning the new
+        // position so a seek/loop entry mid-note re-fires it.
+        let (release_n, chase_n) = self.prepare_discontinuity(&span.ctx, span.frames());
         for chunk in 0..partition.chunks() {
             let (rel, len_u32) = partition.chunk(chunk);
             let buf_off = span_start + usize::try_from(rel).unwrap_or(usize::MAX);
@@ -355,65 +424,242 @@ impl SpanSink<EventKind> for CallSink<'_, '_> {
                 });
                 continue;
             }
-            let wins =
-                Self::build_inputs(self.bus_in, &mut *self.in_views, self.silent, buf_off, len);
-            let mut wouts = Self::build_outputs(self.bus_out, &mut *self.out_views, buf_off, len);
-            // `iter()`/`iter_mut()` hand out disjoint element borrows;
-            // both iterators yield exactly `MAX_BUSES` items.
-            let mut in_it = wins.iter();
-            let hins: [HostInput<'_>; MAX_BUSES] = array::from_fn(|_| {
-                let Some(w) = in_it.next() else {
-                    unreachable!("iter len equals array len")
-                };
-                HostInput(w as &dyn BufferView)
-            });
-            let mut out_it = wouts.iter_mut();
-            let mut houts: [HostOutput<'_>; MAX_BUSES] = array::from_fn(|_| {
-                let Some(w) = out_it.next() else {
-                    unreachable!("iter len equals array len")
-                };
-                HostOutput(w as &mut dyn BufferViewMut)
-            });
-            let call_start = span.start.advance(u64::from(rel));
-            let (events, overflow) = match build_call_event_list(
-                span,
-                events,
-                call_start,
-                len_u32,
-                &mut *self.scratch,
-                |k| *k,
-            ) {
-                Some(list) => (list, false),
-                // Defined fail-safe: the call runs with an empty list
-                // and the drop is reported, never silently lost.
-                None => (EventList::empty(len_u32), true),
+            let (rel_n, ch_n) = if chunk == 0 {
+                (release_n, chase_n)
+            } else {
+                (0, 0)
             };
-            let transport = call_transport_info(&span.ctx, rel, None, None);
-            self.status.bump(Counter::PhysicalCall);
-            let result = self.endpoint.process(
-                &hins[..self.bus_in.len()],
-                &mut houts[..self.bus_out.len()],
-                events,
-                Some(transport),
-            );
-            // The `self.in_views`/`out_views` window borrows end with
-            // `hins`/`houts` above — self is free again for reports.
-            if overflow {
-                self.status.bump(Counter::EventScratchOverflow);
-                self.emit(NodeReport::EventScratchOverflow);
+            self.run_call(span, events, rel, len_u32, buf_off, len, rel_n, ch_n);
+        }
+    }
+}
+
+impl CallSink<'_, '_> {
+    /// The transport-discontinuity pre-pass for a deliverable span:
+    /// detects a changed [`SpanCtxKey`] or a position jump the key
+    /// cannot see (`SetClock` rebase), releases every ledger-tracked
+    /// note into `release_events` and chases the plan prefix into
+    /// `chase_scratch`. Returns the emitted counts — the caller merges
+    /// them as offset-0 sources at the span's first call.
+    ///
+    /// **RT contract:** RT-suitable — bounded writes, no allocation.
+    fn prepare_discontinuity(
+        &mut self,
+        ctx: &ruviform_media_core::SpanContext,
+        span_frames: u32,
+    ) -> (usize, usize) {
+        let ctx_key: SpanCtxKey = (
+            ctx.clock_epoch,
+            ctx.transport_generation,
+            ctx.plan_generation,
+            ctx.occurrence,
+        );
+        // The next continuous span must start where this span's
+        // position ends — `position_at_offset` freezes for non-Playing
+        // spans, so a paused run chains `position_ticks` unchanged.
+        let expected = ctx.position_at_offset(span_frames).value();
+        let continuous = matches!(
+            *self.last_ctx,
+            Some((key, pos)) if key == ctx_key && pos == ctx.position_ticks
+        );
+        *self.last_ctx = Some((ctx_key, expected));
+        if continuous {
+            return (0, 0);
+        }
+        let emitted = self.ledger.release_all(&mut *self.release_midi);
+        let release_n = emitted.min(self.release_events.len());
+        for (dst, midi) in self
+            .release_events
+            .iter_mut()
+            .zip(&self.release_midi[..release_n])
+        {
+            *dst = Event::new(0, EventKind::Midi(*midi));
+        }
+        self.status
+            .bump_by(Counter::NotesReleased, release_n as u64);
+        // Emissions the release scratch could not hold are lost — the
+        // ledger was still cleared (the fail-safe must not retain
+        // phantom notes); count with chase loss.
+        let mut overflow = emitted - release_n;
+        let mut chase_n = 0usize;
+        // Chase only when the snapshot IS the live plan — a
+        // mid-callback install leaves the snapshot stale, and chasing
+        // it would re-fire a retired plan's notes.
+        if let Some(plan) = self.plan
+            && plan.generation == ctx.plan_generation
+        {
+            let (chased, stats) = chase_span_events(plan, ctx, &mut *self.chase_scratch);
+            chase_n = chased.len();
+            overflow += stats.truncated + stats.untracked + usize::from(stats.incomplete);
+            self.status
+                .bump_by(Counter::NotesChased, stats.chased as u64);
+        }
+        if overflow > 0 {
+            self.status.bump(Counter::ChaseOverflow);
+            self.emit(NodeReport::ChaseOverflow {
+                dropped: u64::try_from(overflow).unwrap_or(u64::MAX),
+            });
+        }
+        (release_n, chase_n)
+    }
+
+    /// Drains the ledger's pending evicted-key synthetic offs into
+    /// `evict_events` as offset-0 events — owed releases delivered
+    /// ahead of every other source so a same-call re-attack lands
+    /// after the release. Returns the emitted count.
+    ///
+    /// **RT contract:** RT-suitable — bounded writes, no allocation.
+    fn drain_evicted(
+        ledger: &mut NoteLedger,
+        evict_midi: &mut [MidiEvent],
+        evict_events: &mut [Event],
+    ) -> usize {
+        let written = ledger.drain_evicted(evict_midi);
+        let n = written.min(evict_events.len());
+        for (dst, midi) in evict_events.iter_mut().zip(&evict_midi[..n]) {
+            *dst = Event::new(0, EventKind::Midi(*midi));
+        }
+        n
+    }
+
+    /// One physical `process` call: merges
+    /// `evict ++ release ++ chase ++ plan ++ live` into the call's `EventList`
+    /// (each source already offset-sorted; release/chase ride only the
+    /// span's first call), feeds the delivered-note ledger with
+    /// exactly what the plugin receives, then runs the endpoint.
+    /// Every defined failure stays bounded, counted and reported.
+    ///
+    /// **RT contract:** RT-suitable — bounded work, no allocation.
+    #[allow(clippy::too_many_arguments)]
+    fn run_call(
+        &mut self,
+        span: &TransportSpan,
+        events: &[ScheduledEvent<EventKind>],
+        rel: u32,
+        len_u32: u32,
+        buf_off: usize,
+        len: usize,
+        release_n: usize,
+        chase_n: usize,
+    ) {
+        let wins = Self::build_inputs(self.bus_in, &mut *self.in_views, self.silent, buf_off, len);
+        let mut wouts = Self::build_outputs(self.bus_out, &mut *self.out_views, buf_off, len);
+        // `iter()`/`iter_mut()` hand out disjoint element borrows;
+        // both iterators yield exactly `MAX_BUSES` items.
+        let mut in_it = wins.iter();
+        let hins: [HostInput<'_>; MAX_BUSES] = array::from_fn(|_| {
+            let Some(w) = in_it.next() else {
+                unreachable!("iter len equals array len")
+            };
+            HostInput(w as &dyn BufferView)
+        });
+        let mut out_it = wouts.iter_mut();
+        let mut houts: [HostOutput<'_>; MAX_BUSES] = array::from_fn(|_| {
+            let Some(w) = out_it.next() else {
+                unreachable!("iter len equals array len")
+            };
+            HostOutput(w as &mut dyn BufferViewMut)
+        });
+        let call_start = span.start.advance(u64::from(rel));
+        let evict_n = Self::drain_evicted(
+            self.ledger,
+            &mut *self.evict_midi,
+            &mut *self.evict_events,
+        );
+        // Merge sources, each already sorted by `frame_offset`:
+        // `[evict, release, chase, plan, live]` — owed teardown first
+        // (ledger evictions, then the old context's release), then the
+        // chase re-fires, the scheduled window, and live input.
+        // Same-key same-offset collisions are normalized by the
+        // merge's cross-source note-off priority.
+        let (plan_list, mut overflow) = match build_call_event_list(
+            span,
+            events,
+            call_start,
+            len_u32,
+            &mut *self.plan_scratch,
+            |k| *k,
+        ) {
+            Some(list) => (list, false),
+            // Defined fail-safe: the call runs with an empty list
+            // and the drop is reported, never silently lost.
+            None => (EventList::empty(len_u32), true),
+        };
+        let live: &[Event] = match self.input.as_deref_mut() {
+            Some(stage) => {
+                let (collected, _stats) =
+                    stage.collect_block(call_start, len_u32, call_start, &mut *self.live_scratch);
+                sort_events_by_frame_offset(collected, &mut *self.sort_scratch);
+                collected
             }
-            if let Err(err) = result {
-                self.silence_outputs(buf_off, len);
-                self.status.bump(Counter::EndpointError);
-                self.emit(NodeReport::EndpointError {
-                    kind: match err {
-                        HostError::Lifecycle(_) => 0,
-                        HostError::Prepare(_) => 1,
-                        HostError::EndpointUnavailable => 2,
-                        _ => 3,
-                    },
-                });
+            None => &[],
+        };
+        let sources = [
+            &self.evict_events[..evict_n],
+            &self.release_events[..release_n],
+            &self.chase_scratch[..chase_n],
+            plan_list.as_slice(),
+            live,
+        ];
+        let merged = if let Ok(merged) =
+            merge_call_events(&sources, &mut *self.scratch, &mut *self.src_scratch)
+        {
+            merged
+        } else {
+            // Bounded-scratch loss — report, deliver an empty list
+            // rather than a partial merge.
+            overflow = true;
+            &mut self.scratch[..0]
+        };
+        let events = if let Ok(list) = EventList::new(merged, len_u32) {
+            list
+        } else {
+            // The merge's sources were all validated sorted — treat a
+            // rejection here as the same defined fail-safe.
+            overflow = true;
+            EventList::empty(len_u32)
+        };
+        // Feed the delivered-note ledger exactly what the plugin is
+        // about to receive — a fall-back empty list feeds nothing, so
+        // the ledger never claims undelivered notes.
+        let mut ledger_overflow = false;
+        for ev in events.iter() {
+            if let EventKind::Midi(midi) = ev.kind() {
+                self.ledger.feed(&midi);
+                if self.ledger.take_overflow() {
+                    ledger_overflow = true;
+                }
             }
+        }
+        let transport = call_transport_info(&span.ctx, rel, None, None);
+        self.status.bump(Counter::PhysicalCall);
+        let result = self.endpoint.process(
+            &hins[..self.bus_in.len()],
+            &mut houts[..self.bus_out.len()],
+            events,
+            Some(transport),
+        );
+        // The `self.in_views`/`out_views` window borrows end with
+        // `hins`/`houts` above — self is free again for reports.
+        if overflow {
+            self.status.bump(Counter::EventScratchOverflow);
+            self.emit(NodeReport::EventScratchOverflow);
+        }
+        if ledger_overflow {
+            self.status.bump(Counter::LedgerOverflow);
+            self.emit(NodeReport::LedgerOverflow);
+        }
+        if let Err(err) = result {
+            self.silence_outputs(buf_off, len);
+            self.status.bump(Counter::EndpointError);
+            self.emit(NodeReport::EndpointError {
+                kind: match err {
+                    HostError::Lifecycle(_) => 0,
+                    HostError::Prepare(_) => 1,
+                    HostError::EndpointUnavailable => 2,
+                    _ => 3,
+                },
+            });
         }
     }
 }
@@ -434,6 +680,29 @@ pub struct PluginNode {
     bus_in: Vec<BusMeta>,
     bus_out: Vec<BusMeta>,
     event_scratch: Vec<Event>,
+    event_src_scratch: Vec<u8>,
+    plan_scratch: Vec<Event>,
+    live_scratch: Vec<Event>,
+    sort_scratch: Vec<Event>,
+    release_midi: Vec<MidiEvent>,
+    release_events: Vec<Event>,
+    evict_midi: Vec<MidiEvent>,
+    evict_events: Vec<Event>,
+    chase_scratch: Vec<Event>,
+    /// Live-input stage — `Some` when attached with
+    /// `AttachConfig::input`; pumped at callback head and merged into
+    /// every physical call.
+    input_stage: Option<InputStage>,
+    /// The RT side of the input handoff channel, drained into
+    /// `input_stage` by [`InputStage::pump`].
+    input_rx: Option<Consumer<TimedMidiInput>>,
+    /// Delivered-note tracker across every event source (plan, live,
+    /// chase) — the release authority on transport discontinuity.
+    ledger: NoteLedger,
+    /// Last deliverable span's context identity and expected successor
+    /// position (discontinuity detection memory, carried across
+    /// callbacks).
+    last_ctx: Option<(SpanCtxKey, i64)>,
     silent: Vec<Vec<f32>>,
     vault: PlanVault,
 }
@@ -459,6 +728,8 @@ impl PluginNode {
         report_tx: Producer<NodeReport>,
         status: std::sync::Arc<NodeStatus>,
         scratch_frames: usize,
+        input_stage: Option<InputStage>,
+        input_rx: Option<Consumer<TimedMidiInput>>,
     ) -> Self {
         let (bus_in, bus_out) = split_buses(buses);
         let silent_channels = bus_in
@@ -468,6 +739,27 @@ impl PluginNode {
             .unwrap_or(1)
             .min(u32::try_from(MAX_CHANNELS).unwrap_or(u32::MAX))
             as usize;
+        let event_seed = Event::new(
+            0,
+            EventKind::ParamValue(ParamEvent {
+                param_id: ParamId(0),
+                value: ParamValue::new(0.0).unwrap(),
+            }),
+        );
+        let midi_seed = MidiEvent {
+            group: ruviform_media_core::MidiGroup::ZERO,
+            channel: ruviform_media_core::MidiChannel::new(0).unwrap(),
+            kind: ruviform_media_core::MidiKind::NoteOff {
+                key: ruviform_media_core::NoteKey::new(60).unwrap(),
+                velocity: 0,
+            },
+        };
+        let per_span = budget.max_events_per_span as usize;
+        // The merge output holds the worst-case union of every
+        // bounded source: plan window + live input (each
+        // `max_events_per_span`) plus evict + release + chase (each
+        // `NOTE_LEDGER_CAPACITY`).
+        let merge_capacity = 2 * per_span + 3 * NOTE_LEDGER_CAPACITY;
         Self {
             endpoint,
             scheduler: TransportScheduler::new(frame_base, contract, policy, budget),
@@ -478,16 +770,20 @@ impl PluginNode {
             contract,
             bus_in,
             bus_out,
-            event_scratch: vec![
-                Event::new(
-                    0,
-                    EventKind::ParamValue(ParamEvent {
-                        param_id: ParamId(0),
-                        value: ParamValue::new(0.0).unwrap(),
-                    }),
-                );
-                budget.max_events_per_span as usize
-            ],
+            event_scratch: vec![event_seed; merge_capacity],
+            event_src_scratch: vec![0; merge_capacity],
+            plan_scratch: vec![event_seed; per_span],
+            live_scratch: vec![event_seed; per_span],
+            sort_scratch: vec![event_seed; per_span],
+            release_midi: vec![midi_seed; NOTE_LEDGER_CAPACITY],
+            release_events: vec![event_seed; NOTE_LEDGER_CAPACITY],
+            evict_midi: vec![midi_seed; NOTE_LEDGER_CAPACITY],
+            evict_events: vec![event_seed; NOTE_LEDGER_CAPACITY],
+            chase_scratch: vec![event_seed; NOTE_LEDGER_CAPACITY],
+            input_stage,
+            input_rx,
+            ledger: NoteLedger::new(),
+            last_ctx: None,
             silent: (0..silent_channels.max(1))
                 .map(|_| vec![0.0; scratch_frames])
                 .collect(),
@@ -520,11 +816,34 @@ impl PluginNode {
                     }
                 }
                 NodeControl::SetClock { epoch, frame } => {
-                    self.cursor = EngineFrame::new(epoch, frame);
+                    // The scheduler rejects every callback whose start
+                    // epoch differs from its own — a foreign-epoch
+                    // cursor move would stall output indefinitely.
+                    // Same-epoch moves stay legal (the position
+                    // discontinuity is caught by span-ctx tracking);
+                    // epoch rebases go through `DeviceRestart`.
+                    if epoch == self.scheduler.epoch() {
+                        self.cursor = EngineFrame::new(epoch, frame);
+                    } else {
+                        self.status.bump(Counter::StaleEpochControl);
+                        if self
+                            .report_tx
+                            .try_push(NodeReport::StaleEpochControl)
+                            .is_err()
+                        {
+                            self.status.bump(Counter::ReportOverflow);
+                        }
+                    }
                 }
                 NodeControl::DeviceRestart { base_frame } => {
                     let epoch = self.scheduler.device_restart(base_frame);
                     self.cursor = EngineFrame::new(epoch, base_frame);
+                }
+                NodeControl::SetClockAnchor { anchor } => {
+                    // Defined no-op when the node has no input leg.
+                    if let Some(stage) = &mut self.input_stage {
+                        stage.publish_anchor(anchor);
+                    }
                 }
             }
         }
@@ -563,9 +882,20 @@ impl GraphProcessor for PluginNode {
             return;
         };
         self.apply_controls();
+        // Move queued live events into the stage before spans run —
+        // anything that arrives during the callback waits for the
+        // next one (channel backpressure, bounded).
+        if let (Some(stage), Some(rx)) = (&mut self.input_stage, &mut self.input_rx) {
+            stage.pump(rx);
+        }
         let mut in_views: [Option<InputView<'_>>; MAX_BUSES] = array::from_fn(|i| io.input(i));
         let mut out_views: [Option<OutputView<'_>>; MAX_BUSES] = array::from_fn(|i| io.output(i));
         let start = self.cursor;
+        // Snapshot the active plan for span chase — an `Arc` refcount
+        // bump only. The vault already holds a reference, so this
+        // clone's drop at callback end can never run the plan
+        // destructor on the RT path.
+        let plan = self.scheduler.plan().cloned();
         {
             let mut sink = CallSink {
                 callback_start: start,
@@ -574,6 +904,19 @@ impl GraphProcessor for PluginNode {
                 report: &mut self.report_tx,
                 status: &self.status,
                 scratch: &mut self.event_scratch,
+                plan_scratch: &mut self.plan_scratch,
+                live_scratch: &mut self.live_scratch,
+                sort_scratch: &mut self.sort_scratch,
+                release_midi: &mut self.release_midi,
+                release_events: &mut self.release_events,
+                src_scratch: &mut self.event_src_scratch,
+                evict_midi: &mut self.evict_midi,
+                evict_events: &mut self.evict_events,
+                chase_scratch: &mut self.chase_scratch,
+                input: self.input_stage.as_mut(),
+                ledger: &mut self.ledger,
+                plan: plan.as_deref(),
+                last_ctx: &mut self.last_ctx,
                 in_views: &mut in_views,
                 out_views: &mut out_views,
                 silent: &self.silent,
@@ -582,6 +925,10 @@ impl GraphProcessor for PluginNode {
                 buffer_frames: usize::try_from(frames).unwrap_or(usize::MAX),
             };
             self.scheduler.run_callback(start, frames, &mut sink);
+        }
+        // Mirror live-input counters for the control surface.
+        if let Some(stage) = &self.input_stage {
+            self.status.set_input(stage.counters());
         }
         self.cursor = start.advance(u64::from(frames));
         self.flush_reports();

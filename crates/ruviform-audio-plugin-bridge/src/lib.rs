@@ -43,7 +43,10 @@ pub use cap::{AdapterCapability, Backend, CapabilityLevel, capability_for};
 pub use control::{NodeControl, NodeReport, PluginNodeControl, QueueFull};
 pub use dispatch::{DispatchStage, DropReason, ParamDispatchLedger, ParamValueObservation};
 pub use factory::PluginNodeFactory;
-pub use input::{BlockInputStats, INPUT_STAGE_CAPACITY, InputStage, InputStageCounters};
+pub use input::{
+    BlockInputStats, INPUT_STAGE_CAPACITY, InputConfig, InputStage, InputStageCounters, InputTx,
+    PumpStats,
+};
 pub use node::{MAX_BUSES, MAX_CHANNELS, PluginNode, WindowedIn, WindowedOut, buses_from_specs};
 pub use status::{NodeStatus, NodeStatusSnapshot};
 pub use target::{BindingGeneration, ParamBinding, ParamTargetTable, TargetId, TargetResolution};

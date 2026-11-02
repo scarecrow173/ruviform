@@ -122,7 +122,8 @@ pub use processor::{
 };
 pub use transport::TransportInfo;
 pub use transport_bridge::{
-    build_call_event_list, call_transport_info, calls_for_span, contract_from_process_config,
+    ChaseStats, build_call_event_list, call_transport_info, calls_for_span, chase_span_events,
+    contract_from_process_config,
 };
 pub use video::{VideoPluginInstance, VideoProcessConfig};
 pub use video_plugin::{ErasedVideoPlugin, VideoPluginFactory, erase_video};

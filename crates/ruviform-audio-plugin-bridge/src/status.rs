@@ -4,6 +4,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::input::InputStageCounters;
+
 /// Atomic counters the RT node bumps on defined failure paths; the
 /// non-RT side snapshots them. `Relaxed` everywhere — counters are
 /// observational, never ordering carriers.
@@ -16,6 +18,26 @@ pub struct NodeStatus {
     report_overflows: AtomicU64,
     vault_overflows: AtomicU64,
     physical_calls: AtomicU64,
+    /// `NoteOff`s emitted by the delivered-note ledger on transport
+    /// discontinuity.
+    notes_released: AtomicU64,
+    /// Note-on re-fires the chase emitted at span starts.
+    notes_chased: AtomicU64,
+    /// Keys the chase could not re-fire (scratch/tracker bound).
+    chase_overflows: AtomicU64,
+    /// Delivered-note ledger force-releases on overflow.
+    ledger_overflows: AtomicU64,
+    /// Mirrored [`InputStage`] counters — stored whole, never
+    /// incremented (the stage is the authority).
+    input_mapped: AtomicU64,
+    input_delivered: AtomicU64,
+    input_late: AtomicU64,
+    input_rejected: AtomicU64,
+    input_dropped_backend: AtomicU64,
+    input_dropped_capacity: AtomicU64,
+    input_released: AtomicU64,
+    input_ledger_overflows: AtomicU64,
+    stale_epoch_controls: AtomicU64,
 }
 
 /// A point-in-time copy of [`NodeStatus`].
@@ -35,12 +57,51 @@ pub struct NodeStatusSnapshot {
     pub vault_overflows: u64,
     /// Physical `process` calls issued.
     pub physical_calls: u64,
+    /// `NoteOff`s emitted on transport discontinuity by the
+    /// delivered-note ledger.
+    pub notes_released: u64,
+    /// Note-on re-fires emitted by span chase.
+    pub notes_chased: u64,
+    /// Keys the chase could not re-fire.
+    pub chase_overflows: u64,
+    /// Delivered-note ledger force-releases.
+    pub ledger_overflows: u64,
+    /// `SetClock` controls ignored for naming a foreign clock epoch.
+    pub stale_epoch_controls: u64,
+    /// Live-input stage counters mirrored at the last callback —
+    /// zeros when the node has no input leg.
+    pub input: InputStageCounters,
 }
 
 impl NodeStatus {
     /// **RT-suitable** — `Relaxed` `fetch_add(1)`.
     pub(crate) fn bump(&self, c: Counter) {
         self.field(c).fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// **RT-suitable** — `Relaxed` `fetch_add(n)`.
+    pub(crate) fn bump_by(&self, c: Counter, n: u64) {
+        if n > 0 {
+            self.field(c).fetch_add(n, Ordering::Relaxed);
+        }
+    }
+
+    /// Mirrors the stage's counters into the node status surface —
+    /// absolute stores, not deltas (the stage is the authority).
+    ///
+    /// **RT-suitable** — `Relaxed` stores.
+    pub(crate) fn set_input(&self, c: InputStageCounters) {
+        self.input_mapped.store(c.mapped, Ordering::Relaxed);
+        self.input_delivered.store(c.delivered, Ordering::Relaxed);
+        self.input_late.store(c.late, Ordering::Relaxed);
+        self.input_rejected.store(c.rejected, Ordering::Relaxed);
+        self.input_dropped_backend
+            .store(c.dropped_backend, Ordering::Relaxed);
+        self.input_dropped_capacity
+            .store(c.dropped_capacity, Ordering::Relaxed);
+        self.input_released.store(c.released, Ordering::Relaxed);
+        self.input_ledger_overflows
+            .store(c.ledger_overflows, Ordering::Relaxed);
     }
 
     fn field(&self, c: Counter) -> &AtomicU64 {
@@ -52,6 +113,11 @@ impl NodeStatus {
             Counter::ReportOverflow => &self.report_overflows,
             Counter::VaultOverflow => &self.vault_overflows,
             Counter::PhysicalCall => &self.physical_calls,
+            Counter::NotesReleased => &self.notes_released,
+            Counter::NotesChased => &self.notes_chased,
+            Counter::ChaseOverflow => &self.chase_overflows,
+            Counter::LedgerOverflow => &self.ledger_overflows,
+            Counter::StaleEpochControl => &self.stale_epoch_controls,
         }
     }
 
@@ -67,6 +133,21 @@ impl NodeStatus {
             report_overflows: load(&self.report_overflows),
             vault_overflows: load(&self.vault_overflows),
             physical_calls: load(&self.physical_calls),
+            notes_released: load(&self.notes_released),
+            notes_chased: load(&self.notes_chased),
+            chase_overflows: load(&self.chase_overflows),
+            ledger_overflows: load(&self.ledger_overflows),
+            stale_epoch_controls: load(&self.stale_epoch_controls),
+            input: InputStageCounters {
+                mapped: load(&self.input_mapped),
+                delivered: load(&self.input_delivered),
+                late: load(&self.input_late),
+                rejected: load(&self.input_rejected),
+                dropped_backend: load(&self.input_dropped_backend),
+                dropped_capacity: load(&self.input_dropped_capacity),
+                released: load(&self.input_released),
+                ledger_overflows: load(&self.input_ledger_overflows),
+            },
         }
     }
 }
@@ -80,4 +161,9 @@ pub(crate) enum Counter {
     ReportOverflow,
     VaultOverflow,
     PhysicalCall,
+    NotesReleased,
+    NotesChased,
+    ChaseOverflow,
+    LedgerOverflow,
+    StaleEpochControl,
 }
