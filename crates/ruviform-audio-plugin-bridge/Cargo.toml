@@ -16,5 +16,10 @@ ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 ruviform-plugin-host = { path = "../ruviform-plugin-host" }
 ruviform-rt = { path = "../ruviform-rt" }
 
+[dev-dependencies]
+# Issue #186: `assert_no_alloc` 測定窓 — param 配送経路の RT 検証
+# （Issue #22/#97/#98 と同一方式）。
+assert_no_alloc = "1.1"
+
 [lints]
 workspace = true

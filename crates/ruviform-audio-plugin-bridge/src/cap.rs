@@ -58,6 +58,21 @@ pub struct AdapterCapability {
     /// Crash isolation (panic/failure converges to `Failed`, host and
     /// other instances continue).
     pub crash_isolation: CapabilityLevel,
+    /// Timed `ParamEvent` delivery precision (`frame_offset` inside
+    /// `EventList`). `Verified` = sample-accurate path proven on this
+    /// layer; `Declared` = offset preserved but block capacity caps
+    /// apply (CLAP 256/block, VST3 1024/queue).
+    pub param_event_precision: CapabilityLevel,
+    /// Per-note/per-voice parameter targeting — `Unsupported` on every
+    /// backend: `EventKind` carries no note identity and adapter
+    /// note-targeting (e.g. CLAP `pckn`) collapses to global.
+    pub per_note_param: CapabilityLevel,
+    /// Plugin→host parameter value reporting (gestures, rescan,
+    /// output parameter queues) — `Unavailable` on every backend:
+    /// CLAP output events are discarded and VST3
+    /// `outputParameterChanges`/`IComponentHandler` are acked and
+    /// dropped.
+    pub param_reporting: CapabilityLevel,
     /// Free-text caveat attached to the row.
     pub notes: &'static str,
 }
@@ -78,6 +93,9 @@ pub const fn capability_for(backend: Backend) -> AdapterCapability {
             min_frames_enforced: Verified,
             state_save_restore: Verified,
             crash_isolation: Verified,
+            param_event_precision: Verified,
+            per_note_param: Unsupported,
+            param_reporting: Unavailable,
             notes: "in-block transport gated on adapter evidence; none exists",
         },
         Backend::L1 => AdapterCapability {
@@ -89,6 +107,9 @@ pub const fn capability_for(backend: Backend) -> AdapterCapability {
             min_frames_enforced: Declared,
             state_save_restore: Verified,
             crash_isolation: Verified,
+            param_event_precision: Verified,
+            per_note_param: Unsupported,
+            param_reporting: Unavailable,
             notes: "bus enumeration has no wire verb yet; min_frames is the child contract's responsibility",
         },
         Backend::Clap => AdapterCapability {
@@ -100,7 +121,10 @@ pub const fn capability_for(backend: Backend) -> AdapterCapability {
             min_frames_enforced: Declared,
             state_save_restore: Verified,
             crash_isolation: Verified,
-            notes: "adapter exposes a single stereo main bus; audio-ports scanning is generalized but not exposed via Plugin::buses; CLAP_EVENT_TRANSPORT is discarded by translate_param_event",
+            param_event_precision: Declared,
+            per_note_param: Unsupported,
+            param_reporting: Unavailable,
+            notes: "adapter exposes a single stereo main bus; audio-ports scanning is generalized but not exposed via Plugin::buses; CLAP_EVENT_TRANSPORT is discarded by translate_param_event; param events capped at 256/block; pckn collapses to global; output events discarded",
         },
         Backend::Vst3 => AdapterCapability {
             bus_enumeration: Unavailable,
@@ -111,7 +135,10 @@ pub const fn capability_for(backend: Backend) -> AdapterCapability {
             min_frames_enforced: Declared,
             state_save_restore: Verified,
             crash_isolation: Verified,
-            notes: "single stereo main bus; no in-block transport event vocabulary adopted — CLAP behavior is not generalized",
+            param_event_precision: Declared,
+            per_note_param: Unsupported,
+            param_reporting: Unavailable,
+            notes: "single stereo main bus; no in-block transport event vocabulary adopted — CLAP behavior is not generalized; param queues capped at 1024 points with a scan bound; outputParameterChanges/handler edits are acked and dropped",
         },
     }
 }
@@ -144,5 +171,26 @@ mod tests {
         );
         let _ = CapabilityLevel::Unknown;
         let _ = CapabilityLevel::Declared;
+        for backend in [Backend::L0, Backend::L1, Backend::Clap, Backend::Vst3] {
+            let row = capability_for(backend);
+            assert_eq!(
+                row.per_note_param,
+                CapabilityLevel::Unsupported,
+                "no backend may claim per-note param targeting yet"
+            );
+            assert_eq!(
+                row.param_reporting,
+                CapabilityLevel::Unavailable,
+                "no plugin→host param reporting channel exists yet"
+            );
+        }
+        assert_eq!(
+            capability_for(Backend::L0).param_event_precision,
+            CapabilityLevel::Verified
+        );
+        assert_eq!(
+            capability_for(Backend::Clap).param_event_precision,
+            CapabilityLevel::Declared
+        );
     }
 }
