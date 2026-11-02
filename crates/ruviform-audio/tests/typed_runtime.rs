@@ -111,6 +111,31 @@ fn g2_06_frames_above_max_rejected_and_zero_is_noop() {
 }
 
 #[test]
+fn g2_06_channels_gated_feed_before_first_process_lands() {
+    // `input_writer` hands out a slot whose logical `channels` is
+    // configured from the pending plan — feeds that iterate
+    // `slot.channels` (the pattern the API documents) must reach the
+    // graph even on the very first callback, before
+    // `activate_generation` has run inside `process`.
+    let (_runtime, mut rt, c, _log) = build_chain_runtime(256);
+    let ctx = RtContext::mint();
+    {
+        let mut slot = rt.input_writer(c.src_out, 64).expect("bound");
+        assert_eq!(slot.channels, 2, "planned channels before activation");
+        for ch in 0..usize::from(slot.channels) {
+            slot.data.channel_mut(ch).unwrap()[..64].fill(0.5);
+        }
+    }
+    rt.process(64, &ctx).expect("process");
+    let out = common::drain(&mut rt, c.sink_in);
+    for plane in &out {
+        for v in &plane[..64] {
+            assert!(*v > 0.0, "first-callback feed reached the graph");
+        }
+    }
+}
+
+#[test]
 fn g2_06_unwritten_input_triggers_uninitialized_read_fault() {
     let (runtime, mut rt, c, _log) = build_chain_runtime(256);
     let ctx = RtContext::mint();

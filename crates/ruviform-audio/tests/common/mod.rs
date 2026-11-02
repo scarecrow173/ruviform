@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use ruviform_audio::typed::{
     CompilerConfig, DEFAULT_ALIGNMENT, FactoryError, GraphProcessor, InstalledInfo, NodeEvent,
-    NodeFactory, NodeIo, PrepareOutcome,
+    NodeFactory, NodeIo, OfflineRenderSupport, PrepareOutcome,
 };
 use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
 use ruviform_graph::{
@@ -226,6 +226,7 @@ pub fn mapped() -> Mapped {
 pub struct MockDsp {
     latency: u32,
     gain: f32,
+    support: OfflineRenderSupport,
     /// +1 per `process` call — the state-continuity witness.
     pub state: f32,
     /// `process` call count.
@@ -239,10 +240,19 @@ impl MockDsp {
         Self {
             latency,
             gain,
+            support: OfflineRenderSupport::Unknown,
             state: 0.0,
             calls: 0,
             log,
         }
+    }
+
+    /// Issue #198 capability-gate fixture: overrides the reported
+    /// `offline_support` level.
+    #[must_use]
+    pub fn with_support(mut self, support: OfflineRenderSupport) -> Self {
+        self.support = support;
+        self
     }
 }
 
@@ -297,6 +307,10 @@ impl GraphProcessor for MockDsp {
             .lock()
             .unwrap()
             .push(format!("deactivate:state={}", self.state));
+    }
+
+    fn offline_support(&self) -> OfflineRenderSupport {
+        self.support
     }
 }
 
