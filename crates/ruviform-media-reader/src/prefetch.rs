@@ -53,7 +53,10 @@
 //!   means work exists but a ring has no slot: markers may wait in
 //!   the producer `pending` queue, so a manual driver iterates
 //!   `pump()` until `Idle`/`Ended` rather than assuming one call
-//!   drains the pipeline.
+//!   drains the pipeline. `Ended` reports the `End` marker reaching
+//!   the ring on that call — EOF detection emits it in the same step,
+//!   so stopping at the first `Ended` can never strand the terminal
+//!   marker.
 //! * **Single owner.** Exactly `block_count` `PcmBlock`s exist. Pool →
 //!   free ring → producer → data ring → consumer → free ring. The
 //!   free ring's capacity equals the pool size, so the consumer's
@@ -444,8 +447,9 @@ pub enum PumpOutcome {
     /// Work exists but a ring has no slot right now — bounded wait,
     /// retry; the item was re-queued, not dropped.
     Backpressured,
-    /// The stream's `End` marker was emitted; the producer idles until
-    /// a seek/reopen arrives.
+    /// The stream's `End` marker reached the data ring on this call —
+    /// a full ring defers it through `pending` as `Backpressured`
+    /// instead. The producer idles until a seek/reopen arrives.
     Ended,
     /// `Quit` was received — the drive loop must stop.
     Quit,
@@ -475,6 +479,9 @@ pub struct PrefetchProducer {
     /// generation — the producer owns it so it never has to drop a
     /// pool block.
     parked: Option<PcmBlock>,
+    /// EOF was detected (or a fatal fault / failed reopen ended the
+    /// stream) — the `End` marker still owes emission unless
+    /// `end_emitted` already latched.
     stream_ended: bool,
     /// The `End` marker for the current generation was committed at
     /// synthesis — it may still await a ring slot in `pending`, but
@@ -507,7 +514,11 @@ impl PrefetchProducer {
     /// markers may remain in `pending` under backpressure. A manual
     /// driver iterates `pump()` until [`PumpOutcome::Idle`]/
     /// [`PumpOutcome::Ended`] rather than assuming one call drains
-    /// the pipeline.
+    /// the pipeline. `Ended` is returned only by the call that lands
+    /// `End` on the ring — EOF detection emits the marker in the same
+    /// step — so stopping at the first `Ended` can never strand it
+    /// (a full ring reports `Backpressured` with the marker committed
+    /// to `pending` instead).
     ///
     /// **RT contract:** non-RT only.
     ///
@@ -535,21 +546,7 @@ impl PrefetchProducer {
         }
         // 2. Stream ended → emit End once, then idle.
         if self.stream_ended && !self.end_emitted {
-            let end = PrefetchItem::End {
-                generation: self.generation,
-            };
-            // Committed once synthesized: a full ring requeues the
-            // marker through `pending`, where it still emits exactly
-            // once — it must not be synthesized again on the next
-            // pump.
-            self.end_emitted = true;
-            match self.data_tx.try_push(end) {
-                Ok(()) => return Ok(PumpOutcome::Ended),
-                Err(full) => {
-                    self.pending.push_front(full.into_inner());
-                    return Ok(PumpOutcome::Backpressured);
-                }
-            }
+            return Ok(self.emit_end());
         }
         if self.end_emitted {
             return Ok(PumpOutcome::Idle);
@@ -703,6 +700,30 @@ impl PrefetchProducer {
         }
     }
 
+    /// Commits the current generation's `End` marker exactly once:
+    /// pushes it to the data ring, or — under backpressure —
+    /// requeues it through `pending` for a later pump. `end_emitted`
+    /// latches at synthesis so the marker is never synthesized again
+    /// while it awaits a ring slot, and the outcome stays honest:
+    /// `Ended` only when the marker reached the ring on this call.
+    fn emit_end(&mut self) -> PumpOutcome {
+        let end = PrefetchItem::End {
+            generation: self.generation,
+        };
+        // Committed once synthesized: a full ring requeues the
+        // marker through `pending`, where it still emits exactly
+        // once — it must not be synthesized again on the next
+        // pump.
+        self.end_emitted = true;
+        match self.data_tx.try_push(end) {
+            Ok(()) => PumpOutcome::Ended,
+            Err(full) => {
+                self.pending.push_front(full.into_inner());
+                PumpOutcome::Backpressured
+            }
+        }
+    }
+
     /// Pops a free block, fills it through the reader, audits it and
     /// pushes it — or records why it could not.
     fn fill_block(&mut self) -> PumpOutcome {
@@ -725,11 +746,13 @@ impl PrefetchProducer {
             Ok(read) => {
                 block.valid_frames = read.frames;
                 if read.frames == 0 {
-                    // End of stream — park the unused block and let
-                    // the End marker sequence out next pump.
+                    // End of stream — park the unused block and emit
+                    // `End` in the same step: `Ended` is reported
+                    // only once the marker is sequenced, so a driver
+                    // that stops at `Ended` can never strand it.
                     self.parked = Some(block);
                     self.stream_ended = true;
-                    return PumpOutcome::Ended;
+                    return self.emit_end();
                 }
                 audit_block(&mut block);
                 self.telemetry
