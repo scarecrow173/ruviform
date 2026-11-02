@@ -6,7 +6,8 @@
 //! feature names never appear on this crate's public surface — [`Host`]
 //! and [`HostId`] wrap the backend handles privately, devices and
 //! streams reach the caller only as the port's `Box<dyn Device>` /
-//! `Box<dyn OutputStream>` trait objects, and every backend error is
+//! `Box<dyn OutputStream>` / `Box<dyn InputStream>` trait objects, and
+//! every backend error is
 //! normalized onto the port's `DeviceError`. A second backend (cubeb
 //! etc.) would be a *separate* adapter crate, not a feature switch
 //! here.

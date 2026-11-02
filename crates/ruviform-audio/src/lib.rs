@@ -168,6 +168,25 @@ mod tests {
                 format: config.format,
             }))
         }
+
+        fn default_input_format(&self) -> DeviceResult<AudioFormat> {
+            Err(ruviform_audio_core::device::DeviceError::Unsupported)
+        }
+
+        fn supported_input_formats(
+            &self,
+        ) -> DeviceResult<Vec<ruviform_audio_core::device::SupportedInputFormat>> {
+            Ok(Vec::new())
+        }
+
+        fn open_input_stream(
+            &self,
+            _config: &ruviform_audio_core::device::InputStreamConfig,
+            _data_callback: ruviform_audio_core::device::InputDataCallback,
+            _error_callback: ruviform_audio_core::device::InputErrorCallback,
+        ) -> DeviceResult<Box<dyn ruviform_audio_core::device::InputStream>> {
+            Err(ruviform_audio_core::device::DeviceError::Unsupported)
+        }
     }
 
     fn config() -> OutputStreamConfig {

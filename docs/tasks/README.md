@@ -95,6 +95,9 @@ Directory: `docs/tasks`
 | TASK-034QkFzCiPKInh3jrWFr9b | bridge: TargetId binding + dispatch ledger + cap matrix param fields | done | [issue-186-02-bridge-target-dispatch.md](./issue-186-02-bridge-target-dispatch.md) |
 | TASK-034QkFAipKgHjxJRSBAYXt | tests: delivery E2E + rejection + time conversion + observability | done | [issue-186-03-delivery-observability-tests.md](./issue-186-03-delivery-observability-tests.md) |
 | TASK-034QkFB3oVWTfZxG7hGYMc | rt lane: bounded dispatch no-alloc + plan vault keep/retire + verification | done | [issue-186-04-rt-verification.md](./issue-186-04-rt-verification.md) |
+| TASK-034Qx4QQvbZvxt6cuQGGid | Issue #187-T1: ruviform-audio-core input port contract | done | [issue-187-t1-input-port-contract.md](./issue-187-t1-input-port-contract.md) |
+| TASK-034Qx4SABRy9cBHiKXWlcL | Issue #187-T2: cpal adapter input surface | done | [issue-187-t2-cpal-input-surface.md](./issue-187-t2-cpal-input-surface.md) |
+| TASK-034Qx4ThH8UjhQhXw4woIO | Issue #187-T3: mock input backend + RT handoff PoC | done | [issue-187-t3-mock-input-poc.md](./issue-187-t3-mock-input-poc.md) |
 | TASK-5dlmLfhxOjW0IccOc3xUBO | media-core: midi + timed_input vocabulary, mapper and NoteLedger | done | [issue-188-01-media-core-midi-vocabulary.md](./issue-188-01-media-core-midi-vocabulary.md) |
 | TASK-CKJ1IaOWUc0aUcraqOPD3q | plugin-core: EventKind::Midi + wire tag + merge_call_events | done | [issue-188-02-plugin-core-eventkind-midi-merge.md](./issue-188-02-plugin-core-eventkind-midi-merge.md) |
 | TASK-gOmhMICXSl8m4R5UD5kRf5 | audio-core: midi input port trait + mock | done | [issue-188-03-audio-core-midi-input-port.md](./issue-188-03-audio-core-midi-input-port.md) |

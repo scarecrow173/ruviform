@@ -22,7 +22,7 @@
 
 use ruviform_audio_core::device::{
     BufferSize, DEVICE_CLOCK_TIMEBASE, OutputCallbackInfo, OutputDataCallback, OutputStreamConfig,
-    SupportedBufferSize, SupportedOutputFormat,
+    SupportedBufferSize, SupportedInputFormat, SupportedOutputFormat,
 };
 use ruviform_audio_core::{
     AudioBufferViewMut, AudioFormat, ChannelLayout, SampleFormat, SampleRate,
@@ -106,21 +106,73 @@ pub(crate) fn synthesize_default_format(
     default_channels: u32,
     default_rate: u32,
 ) -> Option<AudioFormat> {
-    supported
-        .iter()
-        .filter(|range| valid_sample_rate_bounds(range))
-        .filter(|range| layout_for_channels(range.channels).is_some())
-        .max_by_key(|range| {
+    pick_synthesized_format(
+        supported.iter().map(range_fields),
+        default_channels,
+        default_rate,
+    )
+}
+
+/// The input-direction mirror of [`synthesize_default_format`] — same
+/// selection rules over [`SupportedInputFormat`].
+pub(crate) fn synthesize_default_input_format(
+    supported: &[SupportedInputFormat],
+    default_channels: u32,
+    default_rate: u32,
+) -> Option<AudioFormat> {
+    pick_synthesized_format(
+        supported.iter().map(range_fields),
+        default_channels,
+        default_rate,
+    )
+}
+
+/// The `(channels, min_rate, max_rate)` triple the shared selection
+/// core consumes — one shape for both direction-specific range types.
+fn range_fields<T: RangeFields>(range: &T) -> (u32, u32, u32) {
+    range.range_fields()
+}
+
+/// The direction-specific supported-range structs share identical
+/// rate/channel fields; this trait lets the selection core consume
+/// either without a direction-neutral public type.
+trait RangeFields {
+    fn range_fields(&self) -> (u32, u32, u32);
+}
+
+impl RangeFields for SupportedOutputFormat {
+    fn range_fields(&self) -> (u32, u32, u32) {
+        (self.channels, self.min_sample_rate, self.max_sample_rate)
+    }
+}
+
+impl RangeFields for SupportedInputFormat {
+    fn range_fields(&self) -> (u32, u32, u32) {
+        (self.channels, self.min_sample_rate, self.max_sample_rate)
+    }
+}
+
+/// The selection core of `synthesize_default_*_format`: prefers a range
+/// matching the backend default's channel count, then one containing
+/// 48 kHz, then one containing the backend default rate; the chosen
+/// rate clamps the default rate into the picked range. Ranges with
+/// malformed rate bounds are skipped before any selection.
+fn pick_synthesized_format(
+    ranges: impl Iterator<Item = (u32, u32, u32)>,
+    default_channels: u32,
+    default_rate: u32,
+) -> Option<AudioFormat> {
+    ranges
+        .filter(|(_, min, max)| min <= max && *max != 0)
+        .filter(|(channels, _, _)| layout_for_channels(*channels).is_some())
+        .max_by_key(|(channels, min, max)| {
             (
-                range.channels == default_channels,
-                range.min_sample_rate <= 48_000 && 48_000 <= range.max_sample_rate,
-                range.min_sample_rate <= default_rate && default_rate <= range.max_sample_rate,
+                *channels == default_channels,
+                *min <= 48_000 && 48_000 <= *max,
+                *min <= default_rate && default_rate <= *max,
             )
         })
-        .and_then(|range| {
-            let rate = default_rate.clamp(range.min_sample_rate, range.max_sample_rate);
-            f32_format(rate, range.channels)
-        })
+        .and_then(|(channels, min, max)| f32_format(default_rate.clamp(min, max), channels))
 }
 
 /// Maps a cpal [`cpal::SupportedBufferSize`] onto the port type:
@@ -166,9 +218,13 @@ pub(crate) fn map_supported_buffer_size(
 /// A genuine "unreported" bound — cpal `Unknown`, or `PipeWire`'s
 /// unpublished-quanta `Range { min: 0, max: 0 }` — maps through as
 /// [`SupportedBufferSize::Unknown`].
-pub(crate) fn map_supported_range(
+///
+/// Shared by [`map_supported_range`] (output) and
+/// [`map_supported_input_range`]: the untrusted-report validation is
+/// direction-independent, only the port type differs.
+fn validated_range_fields(
     range: &cpal::SupportedStreamConfigRange,
-) -> Option<SupportedOutputFormat> {
+) -> Option<(u32, u32, u32, SupportedBufferSize)> {
     if map_sample_format(range.sample_format()) != Some(SampleFormat::F32) {
         return None;
     }
@@ -178,11 +234,38 @@ pub(crate) fn map_supported_range(
     {
         return None;
     }
+    Some((
+        u32::from(range.channels()),
+        range.min_sample_rate(),
+        range.max_sample_rate(),
+        map_supported_buffer_size(range.buffer_size())?,
+    ))
+}
+
+pub(crate) fn map_supported_range(
+    range: &cpal::SupportedStreamConfigRange,
+) -> Option<SupportedOutputFormat> {
+    let (channels, min_sample_rate, max_sample_rate, buffer_size) = validated_range_fields(range)?;
     Some(SupportedOutputFormat {
-        channels: u32::from(range.channels()),
-        min_sample_rate: range.min_sample_rate(),
-        max_sample_rate: range.max_sample_rate(),
-        buffer_size: map_supported_buffer_size(range.buffer_size())?,
+        channels,
+        min_sample_rate,
+        max_sample_rate,
+        buffer_size,
+        sample_format: SampleFormat::F32,
+    })
+}
+
+/// The input-direction mirror of [`map_supported_range`] — same
+/// untrusted-report validation, producing [`SupportedInputFormat`].
+pub(crate) fn map_supported_input_range(
+    range: &cpal::SupportedStreamConfigRange,
+) -> Option<SupportedInputFormat> {
+    let (channels, min_sample_rate, max_sample_rate, buffer_size) = validated_range_fields(range)?;
+    Some(SupportedInputFormat {
+        channels,
+        min_sample_rate,
+        max_sample_rate,
+        buffer_size,
         sample_format: SampleFormat::F32,
     })
 }

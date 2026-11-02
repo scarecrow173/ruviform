@@ -412,8 +412,10 @@ impl<S: Sample> AudioBuffer<S> {
 
 /// Borrowed read-only view over planar buffer storage.
 ///
-/// Obtained from [`AudioBuffer::view`]. `Copy` — channel slices borrow
-/// the underlying data for `'a`, outliving the view itself.
+/// Obtained from [`AudioBuffer::view`] or [`AudioBufferView::try_new`]
+/// (the constructor input adapters use to frame a capture scratch
+/// slab). `Copy` — channel slices borrow the underlying data for `'a`,
+/// outliving the view itself.
 ///
 /// **RT contract:** RT-suitable — all operations are allocation-free
 /// borrows or bounded copies.
@@ -425,6 +427,50 @@ pub struct AudioBufferView<'a, S: Sample = f32> {
 }
 
 impl<'a, S: Sample> AudioBufferView<'a, S> {
+    /// Builds a read-only view over `data`, a channel-major slab with
+    /// `data.len() == channels * frames`. Borrow only — no allocation.
+    ///
+    /// The read-side counterpart of [`AudioBufferViewMut::try_new`]:
+    /// the constructor input adapters use to frame a pre-allocated
+    /// capture scratch slab with each device callback's actual frame
+    /// count. `channels` is a plain count because views deliberately
+    /// carry no [`ChannelLayout`].
+    ///
+    /// **RT contract:** RT-suitable — borrow only, no allocation.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidValue`] when `channels == 0`, when
+    /// `channels * frames` overflows `usize`, or when
+    /// `data.len() != channels * frames`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_audio_core::AudioBufferView;
+    ///
+    /// let slab = [0.5_f32; 6]; // 2 channels × 3 frames
+    /// let view = AudioBufferView::try_new(&slab, 2, 3).unwrap();
+    /// assert_eq!(view.channel(1).unwrap(), &[0.5, 0.5, 0.5]);
+    /// ```
+    pub fn try_new(data: &'a [S], channels: usize, frames: usize) -> Result<Self> {
+        if channels == 0 {
+            return Err(Error::InvalidValue("channels"));
+        }
+        // An overflowing shape can never equal the slice length.
+        let expected = channels
+            .checked_mul(frames)
+            .ok_or(Error::InvalidValue("frames"))?;
+        if data.len() != expected {
+            return Err(Error::InvalidValue("data"));
+        }
+        Ok(Self {
+            data,
+            channels,
+            frames,
+        })
+    }
+
     /// Channel count of the viewed buffer.
     ///
     /// **RT contract:** RT-suitable — pure, allocation-free.
@@ -753,6 +799,28 @@ mod tests {
         // Zero frames stays legal — a zero-length slab.
         let mut empty = [0.0_f32; 0];
         assert!(AudioBufferViewMut::try_new(&mut empty, 2, 0).is_ok());
+    }
+
+    #[test]
+    fn view_try_new_rejects_invalid_shapes() {
+        let slab = [0.0_f32; 6];
+        // Same validation as the mutable view: zero channels,
+        // exact-length match, overflow rejected before the slice check.
+        assert_eq!(
+            AudioBufferView::try_new(&slab, 0, 3).map(|_| ()),
+            Err(Error::InvalidValue("channels"))
+        );
+        assert_eq!(
+            AudioBufferView::try_new(&slab, 2, 2).map(|_| ()),
+            Err(Error::InvalidValue("data"))
+        );
+        assert_eq!(
+            AudioBufferView::try_new(&slab, usize::MAX, usize::MAX).map(|_| ()),
+            Err(Error::InvalidValue("frames"))
+        );
+        // Zero frames stays legal — a zero-length slab.
+        let empty = [0.0_f32; 0];
+        assert!(AudioBufferView::try_new(&empty, 2, 0).is_ok());
     }
 
     #[test]

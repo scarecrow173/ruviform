@@ -39,6 +39,53 @@ Directory: `docs/test-specs`
 | TSPEC-034QeeLKxXQyMBzA6HNOW6 | Issue #184 M1 typed graph IR: representation, multi-bus topology, validation failures, revisions, legacy coexistence | approved | [issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md](./issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md) |
 | TSPEC-034QibxcrYUagyZX3rtGKj | Issue #185 generic probe: capability, modes, metrics, bounded capture, metadata, RT safety, faults | approved | [issue-185-generic-probe-tests.md](./issue-185-generic-probe-tests.md) |
 | TSPEC-034QkFscAwaBuZWB5aEeBy | Issue #186 Parameter Control Events — test spec | approved | [issue-186-param-control-events.md](./issue-186-param-control-events.md) |
+| TSPEC-034Qx4POsptkCvTP9Kdtxr | Issue #187 Input Port contract tests | approved | [issue-187-input-port-tests.md](./issue-187-input-port-tests.md) |
+| TSPEC-7XFD0mdqRqdtKwGpmWUa66 | Issue #188 Timed MIDI — test spec | approved | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
+| TSPEC-034QfbY0KiEUPgYkq50kJl | Issue #189 M3 Rational Beat/PPQN golden + RT tests | approved | [issue-189-m3-rational-beat-ppqn-tests.md](./issue-189-m3-rational-beat-ppqn-tests.md) |
+| TSPEC-034Qh4wErTyUiOpAsD | Issue #190 Transport Span Scheduler テスト仕様 | approved | [issue-190-transport-span-scheduler-tests.md](./issue-190-transport-span-scheduler-tests.md) |
+| TSPEC-034Qhwm0HeEmVIU2j6ttxT | Issue #191 PCM WAV output test specification | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
+| TSPEC-034QfqUJnhyPPfGZsl7kXW | Issue #195 M2 typed graph compiler/runtime: schedule, buffers, PDC, ownership, activation, faults, legacy coexistence | approved | [issue-195-m2-typed-graph-compiler-runtime-tests.md](./issue-195-m2-typed-graph-compiler-runtime-tests.md) |
+| TSPEC-7zOboSetinQdiV2b3AD6Yq | Issue #196 M4 Typed Graph Plugin Adapter テスト仕様 | approved | [issue-196-typed-graph-plugin-adapter-tests.md](./issue-196-typed-graph-plugin-adapter-tests.md) |
+| TSPEC-JSe276zDPhy5bjOFWJMtgn | Issue #197 media reader / prefetch / RT consumer test specification | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
+| TSPEC-NstsDZYKTSF6CL9kQDoyXC | Issue #198 sequential offline render — OF-01..OF-07 test specification | approved | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |
+| TSPEC-034Qonw7qg8hdeWBuDqEqQ | Issue #233 prefetch discard/drain/reopen_at + contract-doc test specification | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
+| TSPEC-Jm8jpNK8kjkyBaizXBqwQo | Issue #238 テスト仕様 — l1_proxy_e2e 同期機構の不変条件 | approved | [issue-238-l1-proxy-e2e-sync.md](./issue-238-l1-proxy-e2e-sync.md) |
+| TSPEC-034QxdOanEeX8da72nWdYo | Issue #244 prefetch boundary-first/dead-generation/End commit-once test specification | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
+| TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
+| TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
+| TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
+| TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |
+| TSPEC-034J5K0lC6EBv1PrsliYd2 | メディアデータモデル API の契約保証 | approved | [media-data-model-api.md](./media-data-model-api.md) |
+| TSPEC-034Jg7SJdGz3QogvORe8QT | メディア I/O 抽象境界とバックエンド PoC の契約保証 | approved | [media-io-abstraction-and-backend-poc.md](./media-io-abstraction-and-backend-poc.md) |
+| TSPEC-034IdHshzpNiPTqyyvwL6J | mise タスクによるローカル・CI 共通検証 | proposed | [mise-verification-tasks.md](./mise-verification-tasks.md) |
+| TSPEC-034KoNprsmdPREx6TtcMB6 | 音楽時間モデル（media-core::music）テスト仕様 | approved | [music-time-media-core-tests.md](./music-time-media-core-tests.md) |
+| TSPEC-034KpKr9gVqJJNxYSJVaQF | 音楽時間 ABI 拡張テスト仕様 | approved | [musical-transport-abi-tests.md](./musical-transport-abi-tests.md) |
+| TSPEC-034JRcGrYYZnirStTwM7Z9 | オフライン実行ドライバ テスト仕様 | draft | [offline-execution-driver-tests.md](./offline-execution-driver-tests.md) |
+| TSPEC-034L6w60ZWfGC89xBPgw4L | OFX Host Native Contract Tests | proposed | [ofx-host-native-contract-tests.md](./ofx-host-native-contract-tests.md) |
+| TSPEC-034MrsawZsMkT7wzC5cbuK | plugin endpoint 契約（prepare/bounds・Shared セル・arm 経路・leg 返却・Send 証拠）テスト仕様 | approved | [plugin-endpoint-contract-tests.md](./plugin-endpoint-contract-tests.md) |
+| TSPEC-034Jg6YSP6CLjJHnFGG5oL | プラグイン基盤 API の契約保証 | approved | [plugin-foundation.md](./plugin-foundation.md) |
+| TSPEC-034MrshMb3JSLSRiyAbWcK | plugin グラフ E2E（L0/L1 endpoint → FnMut AudioNode → pull グラフ → mock device）テスト仕様 | approved | [plugin-graph-e2e-tests.md](./plugin-graph-e2e-tests.md) |
+| TSPEC-034JZPGUI0000000000004 | プラグイン GUI PoC 判定規則 | approved | [plugin-gui-poc.md](./plugin-gui-poc.md) |
+| TSPEC-5ibPChaXqhbfYjL713aqKw | plugin-host L0 テスト仕様 | approved | [plugin-host-l0-tests.md](./plugin-host-l0-tests.md) |
+| TSPEC-034LNXHpBkMIVTg6nAQUVh | plugin L1 プロキシ契約（コマンド parity・クラッシュ Failed・pass-through・RT 脚）テスト仕様 | approved | [plugin-l1-proxy-contract-tests.md](./plugin-l1-proxy-contract-tests.md) |
+| TSPEC-034LNXHUv8qjXSdWNUU2Ps | plugin L1 runner（ruviform-plugin-export）E2E テスト仕様 | approved | [plugin-l1-runner-e2e-tests.md](./plugin-l1-runner-e2e-tests.md) |
+| TSPEC-034LNXxXa2vencBWSvgemD | plugin L1 ワイヤ codec・ライフサイクル Failed 拡張 テスト仕様 | approved | [plugin-l1-wire-codec-tests.md](./plugin-l1-wire-codec-tests.md) |
+| TSPEC-034Mrsijk0b3tEOMrMG0MN | plugin/audio RT 契約 + 退役（assert_no_alloc・arm_apply・leg 返却・plan 退役 drain）テスト仕様 | approved | [plugin-rt-retirement-tests.md](./plugin-rt-retirement-tests.md) |
+| TSPEC-034MLRBDZVBiSYnXZ5dTrr | 実規格アダプタ L1 E2E（spawn/handshake/lifecycle/shm block/state defined 応答/destroy + 異常系継承）テスト仕様 | approved | [real-adapter-l1-e2e-tests.md](./real-adapter-l1-e2e-tests.md) |
+| TSPEC-034JxNwt3ReMphshEaeFVe | SPSC・退役・スナップショット交換の RT 契約保証 | approved | [rt-channel-and-snapshot-contracts.md](./rt-channel-and-snapshot-contracts.md) |
+| TSPEC-034JxNxcYxa29rPklpknWh | RtContext・Processor 契約・MasterClock の RT 契約保証 | approved | [rt-context-and-processor-contract.md](./rt-context-and-processor-contract.md) |
+| TSPEC-034KV6hs4k3mZ6jVBgDaKf | RT 観測コスト計測 PoC ハーネスの計測保証 | approved | [rt-observability-poc-tests.md](./rt-observability-poc-tests.md) |
+| TSPEC-034JP1iphLdAZkyRbPkol1 | RT 検証レーン契約 | approved | [rt-verification-contracts.md](./rt-verification-contracts.md) |
+| TSPEC-Sn3LD1xCxNBxTN3FHLJUFa | ruviform-dsp テスト仕様 | approved | [ruviform-dsp-tests.md](./ruviform-dsp-tests.md) |
+| TSPEC-034JQFftbYwM1JhPvmCvI1 | SIMD dispatch 層の等価性・RT 検証 | approved | [simd-dispatch-layer-tests.md](./simd-dispatch-layer-tests.md) |
+| TSPEC-034JenWCuRngWvxWm00Ls3 | SIMD 等価性 matrix の契約保証 | approved | [simd-equivalence-matrix-contract.md](./simd-equivalence-matrix-contract.md) |
+| TSPEC-034JxNxYK4O6s8NA8gnaah | スレッド優先度ライフサイクルの契約保証 | approved | [thread-priority-lifecycle.md](./thread-priority-lifecycle.md) |
+| TSPEC-034JNskaqcN34Ki4layRNK | FrameRate 型・Timecode シグネチャ・時間変換精度の契約保証 | approved | [time-type-extension-contracts.md](./time-type-extension-contracts.md) |
+| TSPEC-034JZVID00000000000050 | 動画エンジン テスト仕様 | approved | [video-engine-tests.md](./video-engine-tests.md) |
+| TSPEC-034JcCwISRw7E9Q8XoNvD8 | 動画基盤 API の契約保証（所有権・RT・色変換カーネル） | approved | [video-foundation-api.md](./video-foundation-api.md) |
+| TSPEC-034L6w5zHELr4fPxPNpBsk | Video Plugin Plain Contract Tests | proposed | [video-plugin-plain-contract-tests.md](./video-plugin-plain-contract-tests.md) |
+
+| TSPEC-034Qx4POsptkCvTP9Kdtxr | Issue #187 Input Port contract tests: object safety, deterministic mock capture, bounded SPSC handoff, clock-domain/latency/error contracts | approved | [issue-187-input-port-tests.md](./issue-187-input-port-tests.md) |
 | TSPEC-7XFD0mdqRqdtKwGpmWUa66 | Issue #188 Timed MIDI — test spec | approved | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | TSPEC-034QfbY0KiEUPgYkq50kJl | Issue #189 M3 Rational Beat/PPQN golden + RT tests | approved | [issue-189-m3-rational-beat-ppqn-tests.md](./issue-189-m3-rational-beat-ppqn-tests.md) |
 | TSPEC-034Qh4wErTyUiOpAsD | Issue #190 Transport Span Scheduler テスト仕様 | approved | [issue-190-transport-span-scheduler-tests.md](./issue-190-transport-span-scheduler-tests.md) |

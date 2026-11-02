@@ -3,29 +3,35 @@
 //! (`ruviform-audio-device`), plus the value types, callback types and
 //! the normalized [`DeviceError`] they exchange.
 //!
-//! The port is three object-safe traits mirroring the lifecycle split of
+//! The port is four object-safe traits mirroring the lifecycle split of
 //! real backends: [`DeviceEnumerator`] (one-shot enumeration), [`Device`]
-//! (a lightweight live handle that describes and opens) and
-//! [`OutputStream`] (owns OS resources and the running callback). The
-//! engine exchanges them as `Box<dyn …>` so backends can be substituted
-//! without API breakage.
+//! (a lightweight live handle that describes and opens), [`OutputStream`]
+//! and [`InputStream`] (each owns OS resources and the running callback).
+//! The engine exchanges them as `Box<dyn …>` so backends can be
+//! substituted without API breakage. Input and output are direction-
+//! specific methods on one `Device` handle: a device that cannot drive a
+//! direction reports it through `Ok(vec![])`/`Err(Unsupported)` — never
+//! by faking a capability.
 //!
 //! Thread model: enumeration, description, `open`, `start`/`stop` are
-//! control-thread operations — non-RT. The data callback
-//! ([`OutputDataCallback`]) runs on the backend's real-time thread under
-//! the RT contract documented on the type. Adapter implementations and
-//! backend types never appear on this surface: an adapter maps its
-//! backend errors onto [`DeviceError`].
+//! control-thread operations — non-RT. The data callbacks
+//! ([`OutputDataCallback`], [`InputDataCallback`]) run on the backend's
+//! real-time thread under the RT contract documented on each type.
+//! Adapter implementations and backend types never appear on this
+//! surface: an adapter maps its backend errors onto [`DeviceError`].
 //!
 //! Contract source:
 //! `docs/designs/audio-device-boundary-and-poc.md` — "ruviform-audio-core
-//! の `device` モジュール（ポート定義）".
+//! の `device` モジュール（ポート定義）"; `docs/designs/
+//! issue-187-audio-input-port-capture-clock.md` (input direction).
 
 use core::fmt;
 
-use ruviform_media_core::{MediaTime, TimeBase};
+use ruviform_media_core::{
+    ClockDomainId, InputStamp, MediaTime, MediaTimestamp, TimeBase, TimestampProvenance,
+};
 
-use crate::buffer::AudioBufferViewMut;
+use crate::buffer::{AudioBufferView, AudioBufferViewMut};
 use crate::format::{AudioFormat, SampleFormat};
 
 /// Device enumeration and default-device entry point — non-RT.
@@ -58,9 +64,39 @@ pub trait DeviceEnumerator {
     ///
     /// [`DeviceError`] when the default-device query itself fails.
     fn default_output_device(&self) -> DeviceResult<Option<Box<dyn Device>>>;
+
+    /// Handles to the input-capable devices currently present — an
+    /// empty `Vec` when none exist (including hosts with no input
+    /// capability at all: "none" is not an error).
+    ///
+    /// **RT contract:** non-RT only — calls OS APIs and allocates.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError`] when the backend fails to enumerate (host API
+    /// unavailable, permission denied, …). An empty set of devices is
+    /// `Ok(vec![])`, not an error.
+    fn input_devices(&self) -> DeviceResult<Vec<Box<dyn Device>>>;
+
+    /// The system default input device — `Ok(None)` when unset or
+    /// absent ("none" is expressed in the type; it is not an error).
+    ///
+    /// **RT contract:** non-RT only — calls OS APIs and allocates.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError`] when the default-device query itself fails.
+    fn default_input_device(&self) -> DeviceResult<Option<Box<dyn Device>>>;
 }
 
-/// A live handle to one output device — non-RT.
+/// A live handle to one device — non-RT.
+///
+/// The handle is direction-neutral (`name`/`id` describe the device
+/// itself); describe/open are direction-specific methods. A device that
+/// cannot drive a direction reports it through the direction's query
+/// (`Ok(vec![])` for `supported_*_formats`) and through
+/// [`DeviceError::Unsupported`]/[`DeviceError::UnsupportedConfig`] at
+/// `open_*` — the adapter never fakes a capability.
 ///
 /// `Send` so the handle can be handed off the control thread; `Sync` is
 /// not required.
@@ -151,6 +187,58 @@ pub trait Device: Send {
         data_callback: OutputDataCallback,
         error_callback: OutputErrorCallback,
     ) -> DeviceResult<Box<dyn OutputStream>>;
+
+    /// The device's preferred input format — the same negotiation
+    /// duties as [`Device::default_output_format`], mirrored for the
+    /// input direction.
+    ///
+    /// **RT contract:** non-RT only — calls OS APIs.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError::UnsupportedConfig`] only when no F32-capable
+    /// range with a mappable [`ChannelLayout`](crate::ChannelLayout)
+    /// exists. [`DeviceError::Unsupported`] when the device has no
+    /// input capability at all.
+    fn default_input_format(&self) -> DeviceResult<AudioFormat>;
+
+    /// The supported input-format space as a list of range
+    /// descriptions — the same F32-capable filtering as
+    /// [`Device::supported_output_formats`], mirrored for input. An
+    /// empty `Vec` means "no usable F32-capable input range" (which
+    /// includes devices with no input capability) — distinct from a
+    /// failed query, which is `Err`.
+    ///
+    /// **RT contract:** non-RT only — calls OS APIs and allocates.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError`] when the supported-format query itself fails.
+    fn supported_input_formats(&self) -> DeviceResult<Vec<SupportedInputFormat>>;
+
+    /// Opens an input stream with the negotiated concrete `config`.
+    ///
+    /// The callbacks fire on the backend's real-time thread after
+    /// [`InputStream::start`]. As with output, there is deliberately no
+    /// `open_timeout` parameter — opening delegates to the backend
+    /// default, which may block the calling thread while the device is
+    /// acquired.
+    ///
+    /// **RT contract:** non-RT only — acquires OS resources and spawns
+    /// threads.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError::UnsupportedConfig`] for a configuration outside
+    /// the supported space, [`DeviceError::Unsupported`] when the
+    /// device or backend cannot drive input at all,
+    /// [`DeviceError::DeviceBusy`] when the device is exclusively held.
+    fn open_input_stream(
+        &self,
+        config: &InputStreamConfig,
+        data_callback: InputDataCallback,
+        error_callback: InputErrorCallback,
+    ) -> DeviceResult<Box<dyn InputStream>>;
 }
 
 /// An opened output stream. Dropping the stream stops output
@@ -225,6 +313,137 @@ pub trait OutputStream: Send {
     /// [`DeviceError`] when the backend cannot report a clock or the
     /// value overflows.
     fn now(&self) -> DeviceResult<MediaTime>;
+
+    /// The clock domain this stream's timestamps belong to.
+    ///
+    /// Two streams (input or output) may be treated as driven by one
+    /// capture/playback clock **only** when their `clock_domain()`
+    /// values are equal *and* not [`ClockDomainId::UNKNOWN`]: `UNKNOWN`
+    /// means the backend cannot identify its clock, so `UNKNOWN` ==
+    /// `UNKNOWN` is *not* a same-clock claim. Default `UNKNOWN` keeps
+    /// the addition source-compatible — an adapter that cannot prove
+    /// its domain must not override it with a guess.
+    ///
+    /// **RT contract:** RT-suitable — returns a stored value.
+    #[must_use]
+    fn clock_domain(&self) -> ClockDomainId {
+        ClockDomainId::UNKNOWN
+    }
+
+    /// The backend-reported output latency of this stream —
+    /// `Ok(None)` when the backend cannot report it ("unsupported"
+    /// expressed in the type, never `Ok(0)`).
+    ///
+    /// Do not add this to placement math when
+    /// [`OutputTimestamp::playback`] already reports a
+    /// hardware-inclusive instant: the playback instant includes
+    /// hardware latency, so adding `StreamLatency` again double-counts
+    /// (Synvelis §16.5). When
+    /// `coverage` is [`LatencyCoverage::Unknown`], which components the
+    /// frame count contains is unspecified — do not add it to other
+    /// latency components unconditionally.
+    ///
+    /// **RT contract:** non-RT — a backend query may be involved.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError`] when the latency query fails.
+    fn output_latency(&self) -> DeviceResult<Option<StreamLatency>> {
+        Ok(None)
+    }
+}
+
+/// An opened input stream. Dropping the stream stops input
+/// (backend-defined — the contract is that `Drop` stops delivery).
+/// `Send` so the stream can be controlled from another thread.
+///
+/// **RT contract:** mixed — [`InputStream::format`] and
+/// [`InputStream::clock_domain`] are RT-suitable; `start`/`stop`/
+/// `buffer_size`/`now`/`input_latency` are non-RT control-path
+/// operations.
+pub trait InputStream: Send {
+    /// Starts or resumes input delivery.
+    ///
+    /// **RT contract:** non-RT only — calls OS APIs and may block
+    /// briefly.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError`] when the backend refuses or the stream was
+    /// invalidated.
+    fn start(&self) -> DeviceResult<()>;
+
+    /// Stops input delivery.
+    ///
+    /// **RT contract:** non-RT only — calls OS APIs and may block
+    /// briefly.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError`] when the backend refuses or the stream was
+    /// invalidated.
+    fn stop(&self) -> DeviceResult<()>;
+
+    /// The format the stream was opened with — the negotiated intent
+    /// (same backend-defined caveat as [`OutputStream::format`]).
+    ///
+    /// **RT contract:** RT-suitable — returns a stored value.
+    #[must_use]
+    fn format(&self) -> AudioFormat;
+
+    /// Queries the backend for the actual callback buffer size (same
+    /// fallible-query contract as [`OutputStream::buffer_size`]).
+    ///
+    /// **RT contract:** non-RT — a backend query may be involved.
+    /// Control-path API; prefer [`InputCallbackInfo`] inside callbacks.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError`] when the backend cannot report a size.
+    fn buffer_size(&self) -> DeviceResult<BufferSize>;
+
+    /// The current capture-clock value, expressed as a [`MediaTime`]
+    /// at [`DEVICE_CLOCK_TIMEBASE`] (nanoseconds — same clock basis as
+    /// [`InputTimestamp`] and [`OutputTimestamp`]).
+    ///
+    /// **RT contract:** non-RT — whether the query is RT-suitable is
+    /// backend-dependent, so this is a control-path API. Inside
+    /// callbacks, prefer [`InputTimestamp`], which is always
+    /// RT-suitable.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError`] when the backend cannot report a clock or the
+    /// value overflows.
+    fn now(&self) -> DeviceResult<MediaTime>;
+
+    /// The clock domain this stream's timestamps belong to — the same
+    /// same-clock rule as [`OutputStream::clock_domain`]: equal and
+    /// non-[`ClockDomainId::UNKNOWN`] only, implemented by
+    /// [`same_clock_domain`].
+    ///
+    /// **RT contract:** RT-suitable — returns a stored value.
+    #[must_use]
+    fn clock_domain(&self) -> ClockDomainId;
+
+    /// The backend-reported input latency of this stream —
+    /// `Ok(None)` when the backend cannot report it ("unsupported"
+    /// expressed in the type, never `Ok(0)`).
+    ///
+    /// Do not add this to placement math when
+    /// [`InputTimestamp::capture`] is already a `Carried`/`Derived`
+    /// fact: the capture instant includes hardware latency, so adding
+    /// `StreamLatency` again double-counts (Synvelis §16.5). When
+    /// `coverage` is [`LatencyCoverage::Unknown`], which components the
+    /// frame count contains is unspecified — do not add it to other
+    /// latency components unconditionally.
+    ///
+    /// **RT contract:** non-RT — a backend query may be involved.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceError`] when the latency query fails.
+    fn input_latency(&self) -> DeviceResult<Option<StreamLatency>>;
 }
 
 /// Open configuration for an output stream — negotiated concrete
@@ -349,6 +568,58 @@ pub struct SupportedOutputFormat {
     pub sample_format: SampleFormat,
 }
 
+/// Open configuration for an input stream — negotiated concrete
+/// values (the input-direction mirror of [`OutputStreamConfig`]).
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_audio_core::device::{BufferSize, InputStreamConfig};
+/// use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
+///
+/// let config = InputStreamConfig {
+///     format: AudioFormat {
+///         sample_rate: SampleRate::new(48_000).unwrap(),
+///         layout: ChannelLayout::Stereo,
+///         sample_format: SampleFormat::F32,
+///     },
+///     buffer_size: BufferSize::Default,
+/// };
+/// assert_eq!(config.buffer_size, BufferSize::Default);
+/// ```
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct InputStreamConfig {
+    /// Stream format (rate + layout + sample encoding).
+    pub format: AudioFormat,
+    /// Requested frames-per-callback.
+    pub buffer_size: BufferSize,
+}
+
+/// One entry of a device's supported input-format space — the
+/// input-direction mirror of [`SupportedOutputFormat`] (a separate
+/// type so future direction-specific fields stay non-breaking).
+///
+/// Deliberately `Clone` but not `Copy` — same headroom reasoning as
+/// [`SupportedOutputFormat`].
+///
+/// **RT contract:** non-RT — a description value built on the control
+/// path.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SupportedInputFormat {
+    /// Channel count.
+    pub channels: u32,
+    /// Minimum supported sample rate in Hz (inclusive).
+    pub min_sample_rate: u32,
+    /// Maximum supported sample rate in Hz (inclusive).
+    pub max_sample_rate: u32,
+    /// Buffer-size capability.
+    pub buffer_size: SupportedBufferSize,
+    /// PCM sample encoding.
+    pub sample_format: SampleFormat,
+}
+
 /// Opaque backend-specific device identifier.
 ///
 /// The string representation is an implementation detail: adapters
@@ -387,8 +658,42 @@ impl From<String> for DeviceId {
     }
 }
 
+/// Whether two [`ClockDomainId`] values identify one shared
+/// capture/playback clock.
+///
+/// Equal **and** non-[`ClockDomainId::UNKNOWN`]: `UNKNOWN` means the
+/// backend cannot identify its clock, so `UNKNOWN` == `UNKNOWN` is
+/// *not* a same-clock claim — the only honest answer for an
+/// unverifiable domain is `false`. This is the single authoritative
+/// implementation of the rule stated on [`InputStream::clock_domain`]
+/// and [`OutputStream::clock_domain`]; consumers must call it rather
+/// than comparing raw values.
+///
+/// **RT contract:** RT-suitable — pure value comparison.
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_audio_core::device::same_clock_domain;
+/// use ruviform_media_core::ClockDomainId;
+///
+/// assert!(same_clock_domain(
+///     ClockDomainId::MONOTONIC,
+///     ClockDomainId::MONOTONIC
+/// ));
+/// assert!(!same_clock_domain(
+///     ClockDomainId::UNKNOWN,
+///     ClockDomainId::UNKNOWN
+/// ));
+/// ```
+#[must_use]
+pub fn same_clock_domain(a: ClockDomainId, b: ClockDomainId) -> bool {
+    a != ClockDomainId::UNKNOWN && a == b
+}
+
 /// Timebase convention for device-clock instants carried by
-/// [`OutputTimestamp`] and [`OutputStream::now`]:
+/// [`OutputTimestamp`], [`OutputStream::now`], [`InputTimestamp`] and
+/// [`InputStream::now`]:
 /// `TimeBase(1, 1_000_000_000)` — a nanosecond monotonic clock whose
 /// epoch is backend-defined; only differences between instants are
 /// meaningful.
@@ -447,6 +752,175 @@ pub struct OutputTimestamp {
 pub struct OutputCallbackInfo {
     /// This callback's device-clock timestamp.
     pub timestamp: OutputTimestamp,
+}
+
+/// Which latency components a [`StreamLatency`] frame count covers.
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LatencyCoverage {
+    /// Converter path only (ADC/DAC and the backend's reported
+    /// hardware latency) — no buffering/scheduler component.
+    HardwareOnly,
+    /// The full path the backend reports: converter latency plus the
+    /// backend buffer/scheduler latency.
+    HardwareAndBuffering,
+    /// The backend reports a frame count but does not say which
+    /// components it includes. Do not add a `Unknown`-coverage latency
+    /// to other latency components unconditionally — its composition
+    /// is unspecified (double-counting hazard).
+    Unknown,
+}
+
+/// A latency report for one stream direction.
+///
+/// `frames` is denominated in the stream's own sample rate. `coverage`
+/// records which path components the count includes; `provenance`
+/// records where the value came from ([`TimestampProvenance::Carried`]
+/// = backend-reported fact, [`TimestampProvenance::Derived`] = computed
+/// from declared parameters, [`TimestampProvenance::Estimated`] =
+/// adapter/backend estimate — an estimate must not be presented as a
+/// measured fact).
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct StreamLatency {
+    /// The latency in frames at the stream's sample rate.
+    pub frames: u64,
+    /// Which path components `frames` covers.
+    pub coverage: LatencyCoverage,
+    /// Where the value came from.
+    pub provenance: TimestampProvenance,
+}
+
+/// The device-clock timestamps attached to one input callback.
+///
+/// **RT contract:** RT-suitable — `Copy` value type; the adapter builds
+/// it on the stack inside the callback (no allocation).
+#[derive(Copy, Clone, Debug)]
+pub struct InputTimestamp {
+    /// The device-clock instant at which the callback fired —
+    /// [`MediaTime`] at [`DEVICE_CLOCK_TIMEBASE`] (nanoseconds). This is
+    /// the *host-observed delivery* instant, not the ADC capture
+    /// instant — do not use it for recorded-sample placement.
+    pub callback: MediaTime,
+    /// The device-clock instant at which the buffer read in this
+    /// callback was captured at the ADC (frame 0 of the block,
+    /// backend-reported and including hardware latency) plus its
+    /// provenance — `None` when the backend cannot report it
+    /// ("unsupported" expressed in the type).
+    ///
+    /// The adapter must not substitute `callback` here when the backend
+    /// reports no capture instant: the callback instant is later by the
+    /// buffering latency, and conflating the two shifts placement.
+    /// When `capture` is `Some` with `Carried`/`Derived` provenance,
+    /// `callback - capture` *is* the effective input latency — do not
+    /// additionally add [`InputStream::input_latency`]
+    /// (double-counting).
+    pub capture: Option<MediaTimestamp>,
+}
+
+/// Runtime information container passed to the input data callback.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+///
+/// Same extensibility reasoning as [`OutputCallbackInfo`]: a struct, so
+/// future per-callback information is absorbed as field additions —
+/// fields added here must remain RT-contract value types.
+#[derive(Copy, Clone, Debug)]
+pub struct InputCallbackInfo {
+    /// This callback's device-clock timestamp.
+    pub timestamp: InputTimestamp,
+    /// The clock domain `timestamp` belongs to. Carried per-callback
+    /// (mirroring [`ruviform_media_core::TimedInputEvent`]'s stamp
+    /// domain) so the callback consumer can validate domain identity
+    /// without holding the stream handle; [`InputStream::clock_domain`]
+    /// reports the same value for post-open inspection.
+    pub clock_domain: ClockDomainId,
+    /// The capture-clock frame position of frame 0 of this block —
+    /// non-decreasing within the stream's epoch, advancing by `frames`
+    /// per callback while no loss occurs. `None` when the backend does
+    /// not report a position ("unsupported" expressed in the type) —
+    /// the adapter must not synthesize one from callback counts, which
+    /// would hide a real discontinuity. A break in position or epoch
+    /// (device restart, backend-reported discontinuity, an unverifiable
+    /// jump) is notified as [`DeviceError::ClockDiscontinuity`] on the
+    /// error callback; consumers must not join positions or timestamps
+    /// across that boundary.
+    pub frame_position: Option<u64>,
+}
+
+impl InputCallbackInfo {
+    /// The [`InputStamp`] form of the capture timestamp — the
+    /// single place the port's `MediaTime` instant is re-expressed in
+    /// `timed_input` vocabulary, so `ticks`/`base`/`domain`/`provenance`
+    /// stay consistent for every adapter.
+    ///
+    /// `Some` only when [`InputTimestamp::capture`] is `Some`, its
+    /// [`MediaTime`] base is [`DEVICE_CLOCK_TIMEBASE`] (a foreign-base
+    /// value is rejected, not silently relabeled), *and* its tick
+    /// count fits `u64` (device-clock ticks are non-negative by
+    /// contract; a negative or overflowing value yields `None`, not a
+    /// wrapped stamp). `None` from this method means "no carried stamp"
+    /// — consumers fall back to `frame_position`-only placement, they
+    /// do not fabricate a stamp from `callback`.
+    ///
+    /// The stamp maps to an engine frame via
+    /// [`ruviform_media_core::ClockAnchor`] +
+    /// [`ruviform_media_core::map_stamp_to_frame`] (the sole authority
+    /// for the conversion); the anchor is calibrated outside the RT
+    /// path at stream start.
+    ///
+    /// **RT contract:** RT-suitable — pure integer math, no allocation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ruviform_audio_core::device::{
+    ///     DEVICE_CLOCK_TIMEBASE, InputCallbackInfo, InputTimestamp,
+    /// };
+    /// use ruviform_media_core::{
+    ///     ClockDomainId, MediaTime, MediaTimestamp, TimestampProvenance,
+    /// };
+    ///
+    /// let info = InputCallbackInfo {
+    ///     timestamp: InputTimestamp {
+    ///         callback: MediaTime::new(10_000, DEVICE_CLOCK_TIMEBASE),
+    ///         capture: Some(MediaTimestamp {
+    ///             time: MediaTime::new(8_000, DEVICE_CLOCK_TIMEBASE),
+    ///             provenance: TimestampProvenance::Carried,
+    ///         }),
+    ///     },
+    ///     clock_domain: ClockDomainId::MONOTONIC,
+    ///     frame_position: Some(512),
+    /// };
+    /// let stamp = info.capture_stamp().unwrap();
+    /// assert_eq!(stamp.ticks, 8_000);
+    /// assert_eq!(stamp.base, DEVICE_CLOCK_TIMEBASE);
+    /// assert_eq!(stamp.domain, ClockDomainId::MONOTONIC);
+    /// assert_eq!(stamp.provenance, TimestampProvenance::Carried);
+    /// ```
+    #[must_use]
+    pub fn capture_stamp(&self) -> Option<InputStamp> {
+        let capture = self.timestamp.capture?;
+        // An adapter that built `capture` in a foreign timebase must
+        // not have its ticks silently relabeled as
+        // `DEVICE_CLOCK_TIMEBASE` — report "no carried stamp" instead.
+        if capture.time.base() != DEVICE_CLOCK_TIMEBASE {
+            return None;
+        }
+        let ticks = u64::try_from(capture.time.value()).ok()?;
+        Some(InputStamp {
+            ticks,
+            base: DEVICE_CLOCK_TIMEBASE,
+            domain: self.clock_domain,
+            provenance: capture.provenance,
+        })
+    }
 }
 
 /// The output data callback, registered at
@@ -528,6 +1002,74 @@ pub type OutputDataCallback =
 /// **RT contract:** RT-adjacent — no allocation, no blocking.
 pub type OutputErrorCallback = Box<dyn FnMut(DeviceError) + Send + 'static>;
 
+/// The input data callback, registered at
+/// [`Device::open_input_stream`] and driven by the backend's real-time
+/// thread after [`InputStream::start`].
+///
+/// **RT contract:** inside the callback is an RT-contract section —
+/// no alloc/dealloc; blocking, file/network I/O, unbounded waits and
+/// unbounded processing are restricted (realtime ADR). `input` is a
+/// bounded read-only view built on a slab the adapter pre-allocated —
+/// it borrows the slab and is valid only for the call; read the actual
+/// frame count via `input.frames()` (it may vary under
+/// [`BufferSize::Default`]). `Send`: the closure is transferred to the
+/// backend thread.
+///
+/// # Lifecycle and usage contract (implementation duties)
+///
+/// - The callback must not hold `input` or its channel slices past the
+///   call — the scratch is reused. Copy into a pre-allocated handoff
+///   block for delivery to a non-RT consumer (bounded copy —
+///   RT-suitable); a full handoff queue must surface as an observable
+///   drop/overflow, never a block or silent loss.
+/// - Where the callback object is dropped is backend-defined and may
+///   be on the RT thread: keep captured values free of allocating or
+///   blocking `Drop`s (drop-offload engine-side).
+/// - The callback must not panic — a panic on the backend RT thread
+///   can lead to undefined behavior or abnormal process termination.
+/// - Re-entering the stream control APIs ([`InputStream::start`],
+///   [`InputStream::stop`], `Drop`) from inside the callback is
+///   undefined — prohibited.
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_audio_core::device::{InputCallbackInfo, InputDataCallback};
+/// use ruviform_audio_core::AudioBufferView;
+///
+/// let mut cb: InputDataCallback =
+///     Box::new(|input: AudioBufferView<'_, f32>, _info: InputCallbackInfo| {
+///         // Bounded read — e.g. copy `input.channel(0)` into a
+///         // pre-allocated handoff block.
+///         assert_eq!(input.channels(), 2);
+///     });
+///
+/// use ruviform_audio_core::device::{DEVICE_CLOCK_TIMEBASE, InputTimestamp};
+/// use ruviform_media_core::{ClockDomainId, MediaTime};
+///
+/// let slab = [0.5_f32; 8];
+/// let info = InputCallbackInfo {
+///     timestamp: InputTimestamp {
+///         callback: MediaTime::new(0, DEVICE_CLOCK_TIMEBASE),
+///         capture: None,
+///     },
+///     clock_domain: ClockDomainId::MONOTONIC,
+///     frame_position: Some(0),
+/// };
+/// cb(AudioBufferView::try_new(&slab, 2, 4).unwrap(), info);
+/// ```
+pub type InputDataCallback =
+    Box<dyn for<'a> FnMut(AudioBufferView<'a, f32>, InputCallbackInfo) + Send + 'static>;
+
+/// Stream-error notification callback for an input stream (xrun,
+/// invalidation, [`DeviceError::ClockDiscontinuity`], advisory).
+///
+/// Same RT-adjacent rules as [`OutputErrorCallback`]: may run on the
+/// backend's stream thread — no allocation, no blocking, no panic.
+///
+/// **RT contract:** RT-adjacent — no allocation, no blocking.
+pub type InputErrorCallback = Box<dyn FnMut(DeviceError) + Send + 'static>;
+
 /// The normalized error type of the device boundary.
 ///
 /// Adapters map backend-specific errors onto this type; no external
@@ -570,6 +1112,12 @@ pub enum DeviceError {
     RealtimeDenied,
     /// The stream was invalidated backend-side (device removal etc.).
     StreamInvalidated,
+    /// The stream's clock/frame position is discontinuous — the
+    /// backend reported or detected a device restart, clock reset, or
+    /// a timestamp/`frame_position` jump it cannot verify as
+    /// loss-free. Timestamps and positions before and after the
+    /// notification must not be joined (consumer-side epoch split).
+    ClockDiscontinuity,
     /// A backend failure not mappable to the variants above. Carries
     /// only a non-allocating `&'static str` classification name — the
     /// backend's message string is deliberately not captured.
@@ -598,6 +1146,9 @@ impl fmt::Display for DeviceError {
             Self::Xrun => f.write_str("buffer under/overrun (xrun)"),
             Self::RealtimeDenied => f.write_str("real-time thread priority promotion was denied"),
             Self::StreamInvalidated => f.write_str("the stream was invalidated by the backend"),
+            Self::ClockDiscontinuity => f.write_str(
+                "clock/frame position is discontinuous; do not join values across the boundary",
+            ),
             // The classification name is emitted as-is — the only
             // payload carried.
             Self::Backend(name) => f.write_str(name),
