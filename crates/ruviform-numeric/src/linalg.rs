@@ -195,7 +195,6 @@ pub fn condition_number(a: &[Vec<f64>]) -> f64 {
 }
 
 /// Gauss-Jordan による正方行列の逆行列。特異行列は `None`。
-#[expect(clippy::needless_range_loop)]
 fn invert(a: &[Vec<f64>]) -> Option<Vec<Vec<f64>>> {
     let n = a.len();
     if n == 0 || a.iter().any(|r| r.len() != n) {
@@ -215,17 +214,17 @@ fn invert(a: &[Vec<f64>]) -> Option<Vec<Vec<f64>>> {
             return None;
         }
         m.swap(col, pivot);
-        let inv = 1.0 / m[col][col];
-        for c in 0..2 * n {
-            m[col][c] *= inv;
+        let (upper, rest) = m.split_at_mut(col);
+        let (pivot_row, lower) = rest.split_at_mut(1);
+        let pivot_row = &mut pivot_row[0];
+        let inv = 1.0 / pivot_row[col];
+        for v in pivot_row.iter_mut() {
+            *v *= inv;
         }
-        for row in 0..n {
-            if row == col {
-                continue;
-            }
-            let f = m[row][col];
-            for c in 0..2 * n {
-                m[row][c] -= f * m[col][c];
+        for row_m in upper.iter_mut().chain(lower.iter_mut()) {
+            let f = row_m[col];
+            for (rc, &pc) in row_m.iter_mut().zip(pivot_row.iter()) {
+                *rc -= f * pc;
             }
         }
     }

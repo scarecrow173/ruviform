@@ -68,9 +68,10 @@ pub(crate) fn fade(dst: &mut [f32], src: &[f32], g0: f32, step: f32) {
 /// `Σ a[i]·b[i]` — finite inputs only.
 #[multiversion(
     targets("x86_64+avx2+fma", "x86_64+sse4.2", "aarch64+neon"),
-    attrs(expect(
+    attrs(allow(
         clippy::suboptimal_flops,
-        reason = "sequential multiply-then-add accumulation is the reference rounding"
+        reason = "sequential multiply-then-add accumulation is the reference rounding; \
+              allow not expect — undetected by MSRV clippy 1.89"
     ))
 )]
 pub(crate) fn dot(a: &[f32], b: &[f32]) -> f32 {
@@ -85,9 +86,10 @@ pub(crate) fn dot(a: &[f32], b: &[f32]) -> f32 {
 /// Direct-form FIR; `taps.len() == FIR_TAPS`; zero history.
 #[multiversion(
     targets("x86_64+avx2+fma", "x86_64+sse4.2", "aarch64+neon"),
-    attrs(expect(
+    attrs(allow(
         clippy::suboptimal_flops,
-        reason = "sequential multiply-then-add accumulation is the reference rounding"
+        reason = "sequential multiply-then-add accumulation is the reference rounding; \
+              allow not expect — undetected by MSRV clippy 1.89"
     ))
 )]
 pub(crate) fn fir(dst: &mut [f32], src: &[f32], taps: &[f32]) {
