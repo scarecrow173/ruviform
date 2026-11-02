@@ -96,3 +96,23 @@ fn rt_consumer_underrun_fill_no_alloc() {
         assert_eq!(report.underrun, 64);
     });
 }
+
+#[test]
+fn rt_consumer_discard_pending_no_alloc() {
+    let (_handle, mut producer, mut consumer) = build();
+    for _ in 0..16 {
+        if producer.pump().unwrap() == PumpOutcome::Ended {
+            break;
+        }
+    }
+    let ctx = RtContext::mint();
+    let _ = consumer.discard_pending(&ctx); // warm-up: first call may bind state
+    for _ in 0..8 {
+        producer.pump().ok();
+    }
+    assert_no_alloc::assert_no_alloc(|| {
+        // No seek was issued: the drain consumes block backlog only.
+        let report = consumer.discard_pending(&ctx);
+        assert!(report.boundary.is_none());
+    });
+}

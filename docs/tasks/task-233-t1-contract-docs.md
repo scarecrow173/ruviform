@@ -1,7 +1,7 @@
 ---
 id: "TASK-034Qooz8UlxyXeGHTFwHXk"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue 233 T1: prefetch contract doc rewrites — expected_first stream-position assertion + pump iteration contract"
 created: "2026-11-02"
 updated: "2026-11-02"
@@ -64,14 +64,14 @@ Doc-only contract rewrites for candidates 1 and 3. In `crates/ruviform-media-rea
 
 ## Done When
 
-- [ ] `expected_first` contract is derivable from `fill`/`FillReport` rustdoc + module Contract section without reading tests.
-- [ ] `pump()`/`PumpOutcome` docs state ≤1 item per call, command-first order, `Backpressured` retry semantics, and `pending` marker retention.
-- [ ] README mirrors both contract paragraphs.
-- [ ] No code behavior change (doc-only diff).
+- [x] `expected_first` contract is derivable from `fill`/`FillReport` rustdoc + module Contract section without reading tests.
+- [x] `pump()`/`PumpOutcome` docs state ≤1 item per call, command-first order, `Backpressured` retry semantics, and `pending` marker retention.
+- [x] README mirrors both contract paragraphs.
+- [x] No code behavior change (doc-only diff).
 
 ## Verification
 
-- [ ] `mise run fmt-check`
-- [ ] `mise run check`
-- [ ] `mise run lint`
-- [ ] `mise run test` — all pre-existing tests pass unmodified.
+- [x] `mise run fmt-check`
+- [x] `mise run check`
+- [x] `mise run lint`
+- [x] `mise run test` — all pre-existing tests pass unmodified.

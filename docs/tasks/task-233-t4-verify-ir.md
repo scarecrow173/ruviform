@@ -1,7 +1,7 @@
 ---
 id: "TASK-034QooB7rhCVhK4sqW6lzZ"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue 233 T4: verification sweep + implementation record"
 created: "2026-11-02"
 updated: "2026-11-02"
@@ -62,14 +62,14 @@ Closeout for Issue #233. Run the full verification sweep (`mise run fmt-check`, 
 
 ## Done When
 
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` all green.
-- [ ] Implementation record written with per-candidate outcomes, verification evidence, and declined alternatives; front matter + audit clean.
+- [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` all green.
+- [x] Implementation record written with per-candidate outcomes, verification evidence, and declined alternatives; front matter + audit clean.
 
 ## Verification
 
-- [ ] `mise run fmt-check`
-- [ ] `mise run check`
-- [ ] `mise run lint`
-- [ ] `mise run test`
-- [ ] `mise run test-rt`
-- [ ] `node .agents/skills/impl-doc/scripts/audit_impl_record.js` on the new record — clean.
+- [x] `mise run fmt-check`
+- [x] `mise run check`
+- [x] `mise run lint`
+- [x] `mise run test`
+- [x] `mise run test-rt`
+- [x] `node .agents/skills/impl-doc/scripts/audit_impl_record.js` on the new record — clean.

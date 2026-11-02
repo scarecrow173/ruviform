@@ -1,7 +1,7 @@
 ---
 id: "TASK-034QoozSINn40AO2e1Ke1k"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue 233 T2: discard surface — PrefetchConsumer::discard_pending + DiscardReport + seek_discard_pending pending purge"
 created: "2026-11-02"
 updated: "2026-11-02"
@@ -67,16 +67,16 @@ Feature candidate 2 (TDD — failing contract tests first). In `crates/ruviform-
 
 ## Done When
 
-- [ ] `discard_pending` drain test: backlog + Boundary → `boundary: Some(landed)`, position re-anchored, blocks returned to free ring, no pre-boundary content served by `fill`.
-- [ ] `boundary: None` path and stop-at-Boundary semantics tested.
-- [ ] `seek_discard_pending` purges producer `pending`; stale Fault/End markers never emit; `seek` default unchanged.
-- [ ] `rt_` test proves zero allocation and bounded pops under `assert_no_alloc`.
-- [ ] Existing tests unmodified and green.
+- [x] `discard_pending` drain test: backlog + Boundary → `boundary: Some(landed)`, position re-anchored, blocks returned to free ring, no pre-boundary content served by `fill`.
+- [x] `boundary: None` path and stop-at-Boundary semantics tested.
+- [x] `seek_discard_pending` purges producer `pending`; stale Fault/End markers never emit; `seek` default unchanged.
+- [x] `rt_` test proves zero allocation and bounded pops under `assert_no_alloc`.
+- [x] Existing tests unmodified and green.
 
 ## Verification
 
-- [ ] `mise run test`
-- [ ] `mise run lint`
-- [ ] `mise run check`
-- [ ] `mise run fmt-check`
-- [ ] `mise run test-rt`
+- [x] `mise run test`
+- [x] `mise run lint`
+- [x] `mise run check`
+- [x] `mise run fmt-check`
+- [x] `mise run test-rt`

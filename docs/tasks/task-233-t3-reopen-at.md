@@ -1,7 +1,7 @@
 ---
 id: "TASK-034QooAu3EbKEEhgcUSJnv"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue 233 T3: reopen_at fused reopen-to-seek-target"
 created: "2026-11-02"
 updated: "2026-11-02"
@@ -65,14 +65,14 @@ Feature candidate 4 (TDD — failing contract tests first). In `crates/ruviform-
 
 ## Done When
 
-- [ ] `reopen_at` emits exactly one `Boundary` reporting `reader.position()` after the fused seek.
-- [ ] Post-reopen seek failure → `Fault{Unseekable}` + `Boundary` at reopened position.
-- [ ] `reopen` keeps frame-0 anchor and signature; regression test unmodified.
-- [ ] All tests green.
+- [x] `reopen_at` emits exactly one `Boundary` reporting `reader.position()` after the fused seek.
+- [x] Post-reopen seek failure → `Fault{Unseekable}` + `Boundary` at reopened position.
+- [x] `reopen` keeps frame-0 anchor and signature; regression test unmodified.
+- [x] All tests green.
 
 ## Verification
 
-- [ ] `mise run test`
-- [ ] `mise run lint`
-- [ ] `mise run check`
-- [ ] `mise run fmt-check`
+- [x] `mise run test`
+- [x] `mise run lint`
+- [x] `mise run check`
+- [x] `mise run fmt-check`

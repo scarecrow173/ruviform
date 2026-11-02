@@ -46,12 +46,15 @@
 //! per-method:
 //!
 //! - **non-RT only**: [`SourceReader`], [`PrefetchHandle`],
-//!   [`PrefetchProducer`], `Prefetch::new`, stream metadata — all may
-//!   allocate, block on I/O and run unbounded codec work.
-//! - **RT-suitable**: [`PrefetchConsumer::fill`] and its report types
-//!   — no allocation, no locks, no blocking, no OS I/O, when used
-//!   under the documented preconditions (pre-allocated pool, no
-//!   concurrent access).
+//!   [`PrefetchProducer`], `Prefetch::manual`/`spawn`, stream
+//!   metadata — all may allocate, block on I/O and run unbounded
+//!   codec work.
+//! - **RT-suitable**: [`PrefetchConsumer::fill`],
+//!   [`PrefetchConsumer::discard_pending`],
+//!   [`PrefetchConsumer::position`], [`PrefetchConsumer::generation`]
+//!   and their report types — no allocation, no locks, no blocking,
+//!   no OS I/O, when used under the documented preconditions
+//!   (pre-allocated pool, no concurrent access).
 //!
 //! [`Demuxer`]: ruviform_media_io::Demuxer
 //! [`Decoder`]: ruviform_media_io::Decoder
@@ -64,7 +67,8 @@ mod reader;
 pub use mapping::{EngineFrame, FrameMap, RequestedRange, SourceFrame};
 pub use metadata::{SourceMetadata, stream_metadata};
 pub use prefetch::{
-    FaultCounts, FillReport, PcmBlock, Prefetch, PrefetchAudit, PrefetchConfig, PrefetchConsumer,
-    PrefetchHandle, PrefetchItem, PrefetchProducer, PrefetchTelemetry, PumpOutcome, SourceFault,
+    DiscardReport, FaultCounts, FillReport, PcmBlock, Prefetch, PrefetchAudit, PrefetchConfig,
+    PrefetchConsumer, PrefetchHandle, PrefetchItem, PrefetchProducer, PrefetchTelemetry,
+    PumpOutcome, SourceFault,
 };
 pub use reader::{ReadOutcome, SeekReceipt, SourceReader};
