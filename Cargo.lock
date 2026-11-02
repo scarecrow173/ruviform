@@ -2981,6 +2981,7 @@ name = "ruviform-numeric"
 version = "0.1.0"
 dependencies = [
  "assert_no_alloc",
+ "criterion",
 ]
 
 [[package]]

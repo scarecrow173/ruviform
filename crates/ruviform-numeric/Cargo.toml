@@ -18,3 +18,10 @@ workspace = true
 [dev-dependencies]
 # rt_ テスト用のアロケーション検知（test-rt レーン）。lib 依存には昇格しない。
 assert_no_alloc = "1.1"
+# corr コストモデル校正ベンチ（Issue #265）。ruviform-math と同じく
+# default-features 無効で rayon/plotters を外す。
+criterion = { version = "0.8.2", default-features = false }
+
+[[bench]]
+name = "corr"
+harness = false

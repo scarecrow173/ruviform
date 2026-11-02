@@ -66,8 +66,9 @@ use crate::{Error, Result};
 /// いずれも定義域外のため `n ≥ S` で無汚染）。`NccDirect` は同じ有効ラグ域を
 /// FFT なしの直接計算で求める。PHAT の bin 正規化は FFT 長依存なので
 /// `NccValid`/`NccDirect` plan での `gcc_phat` は契約違反。
-/// `n` は境界以上の最小の高速サイズ（偶数・`n/2` が `{2,3,5}`-smooth、
-/// Issue #255）から選ぶ。radix-7 を含む長さは `FftPlan` が受理するが、
+/// `n` は境界以上で推定変換コストが最小の高速サイズ（偶数・`n/2` が
+/// `{2,3,5}`-smooth、Issue #255/#265）から選ぶ。radix-7 を含む長さは
+/// `FftPlan` が受理するが、
 /// 汎用小 DFT の要素あたりコストが高いため相関層では選択対象外とする。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PlanMode {
@@ -88,38 +89,101 @@ enum Kernel {
 }
 
 /// `NccDirect` を選ぶ形状判定パラメータ。有効ラグ数 `K = S−L+1` が
-/// 小さいほど分子の直接計算 `L·K` MAC が 3 回 FFT の `n·log2(n)` より安い。
-/// `K ≤ 2048` の上限は acc ベクトルを ~16KB（L1）に留め、大 K 形状での
-/// キャッシュ劣化を構造的に排除する。係数は al-math 校正値を継承し、
-/// scalar 実装での再測定を #152 比較記録で確認する。
+/// 小さいほど分子の直接計算 `L·K` MAC が 3 回 FFT の
+/// `n·fft_cost_units(n)` より安い。`K ≤ 2048` の上限は acc ベクトルを
+/// ~16KB（L1）に留め、大 K 形状でのキャッシュ劣化を構造的に排除する
+/// （axpy 形の直接カーネルは acc が L1 に乗る間は per-MAC コストが
+/// 非常に低い）。係数は al-math 校正値を継承し、scalar 実装での
+/// 再測定を #152 比較記録で確認する。
 const DIRECT_NCC_MAX_LAGS: usize = 2048;
 const DIRECT_NCC_COST_RATIO: f64 = 8.0;
 
 /// `OverlapCorrPlan` の direct/FFT ルーティング係数。直接法は
 /// `~3·out_len·L` flop（`corr0` の 3 累積）、FFT 法は
-/// `~15·n·log2(n)` flop（3 変換 + 合成）として仕事量を比較する。
+/// `~15·n·fft_cost_units(n)` flop（3 変換 + 合成）として仕事量を比較する。
 const OVERLAP_FFT_COST_FACTOR: usize = 15;
+
+/// 1 要素あたりの radix-3 専用 butterfly 段の推定コスト（radix-2 段
+/// 等価ユニット）。実測フィット ~2.8–3.1（Issue #265 校正、
+/// `benches/corr.rs` の `fft_len` 群で再計測可能）。
+const RADIX3_STAGE_UNITS: f64 = 3.0;
+/// radix-5 専用 butterfly 段の同様の推定コスト。実測フィット ~2.3–3.5。
+const RADIX5_STAGE_UNITS: f64 = 3.0;
+/// `{2,3,5}` 以外の素因数を含む長さへの防御的重み（相関層の選択集合は
+/// `{2,3,5}` のため通常到達しない。radix-7 汎用小 DFT 段の実測数倍
+/// コストを反映した安全側の値）。
+const OTHER_RADIX_STAGE_UNITS: f64 = 6.0;
+/// 非 2 冪の混合基数経路が大きな `n` で観測された追加 per-element
+/// ユニット（入力複写・digit-reversal gather・大きな twiddle/置換表の
+/// キャッシュ外トラフィック。`n/2^20 ∈ [1,2]` で 0→最大まで線形に
+/// 飽和させる。実測の超過分は ~+5–12 ユニットで 2M 要素付近にピーク）。
+const MIXED_BIG_N_LO: usize = 1 << 20;
+const MIXED_BIG_N_HI: usize = 2 << 20;
+const MIXED_BIG_N_UNITS: f64 = 10.0;
+
+/// FFT 変換の 1 要素あたり推定コストを radix-2 段等価ユニットで返す
+/// （Issue #265）。段構成は `FftPlan` の混合基数 DIF と同一（奇素因数
+/// `{5,3}` を先に、残り 2 冪部は radix-4 列＋終端 radix-2）として数え、
+/// 各段に `radix − 1` ではなく実測校正値の重みを置く。
+///
+/// 2 冪 `n` ではちょうど `log2(n)` を返す（radix-4 段 = 2 ユニット、
+/// radix-2 段 = 1 ユニットとみなすため）。すなわち Issue #255 以前の
+/// `n·log2(n)` コストモデルは 2 冪入力で本関数と厳密に一致し、旧
+/// pow2 経路の判定は不変に保たれる。非 2 冪では radix-3/5 段の
+/// 実コスト増と、大きな `n` での複写・gather・表参照トラフィック分を
+/// 加算する。`n == 0` では `0` を返す。
+#[expect(clippy::cast_precision_loss)]
+fn fft_cost_units(n: usize) -> f64 {
+    let mut m = n;
+    let a = m.trailing_zeros();
+    m >>= a;
+    let mut units = f64::from(a);
+    let mut composite = false;
+    for (p, w) in [(3usize, RADIX3_STAGE_UNITS), (5, RADIX5_STAGE_UNITS)] {
+        while m.is_multiple_of(p) {
+            m /= p;
+            units += w;
+            composite = true;
+        }
+    }
+    if m != 1 {
+        units += OTHER_RADIX_STAGE_UNITS * (m as f64).log2();
+        composite = true;
+    }
+    if composite && n > MIXED_BIG_N_LO {
+        let ramp =
+            ((n - MIXED_BIG_N_LO) as f64 / (MIXED_BIG_N_HI - MIXED_BIG_N_LO) as f64).min(1.0);
+        units += MIXED_BIG_N_UNITS * ramp;
+    }
+    units
+}
 
 /// `NccDirect` を選ぶ形状判定。
 #[expect(clippy::cast_precision_loss)]
 fn prefers_direct(template_len: usize, signal_len: usize, n: usize) -> bool {
     let k = (signal_len - template_len + 1) as f64;
     k <= DIRECT_NCC_MAX_LAGS as f64
-        && (template_len as f64 * k) <= DIRECT_NCC_COST_RATIO * (n as f64) * (n as f64).log2()
+        && (template_len as f64 * k) <= DIRECT_NCC_COST_RATIO * (n as f64) * fft_cost_units(n)
 }
 
-/// `v` 以上で最小の高速変換長（`n/2` が `{2,3,5}`-smooth な偶数 `n`）を
-/// 返す（Issue #255）。変換量 ∝ n·log n は n 単調だが、実時間は radix
-/// 構成に依存し、汎用小 DFT の radix-7 は 1 要素あたり radix-4/5 の数倍
-/// のコスト（実測で n=2,401,000=2³·5³·7⁴ が nextpow2 より ~49% 遅延）を
-/// 持つため、選択集合は `{2,3,5}` に限定する。radix-7 を含む長さは
-/// `FftPlan` が引き続き受理するが相関層では選ばない。
+/// `v` 以上で推定変換コストが最小の高速変換長（`n/2` が `{2,3,5}`-smooth
+/// な偶数 `n`）を返す（Issue #255 で最小長選択を導入、Issue #265 で
+/// 最小長から推定コスト最小選択へ校正）。
+/// 変換量 ∝ n·log n は n 単調だが、実時間は radix 構成に依存し、
+/// 汎用小 DFT の radix-7 は 1 要素あたり radix-4/5 の数倍のコスト
+/// （実測で n=2,401,000=2³·5³·7⁴ が nextpow2 より ~49% 遅延）を持つため
+/// 選択集合は `{2,3,5}` に限定する。radix-7 を含む長さは `FftPlan` が
+/// 引き続き受理するが相関層では選ばない。
 /// `t = 3^b·5^c ≤ v` を走査し、`a = max(1, ⌈log2(v/t)⌉)` の候補 `2^a·t`
-/// の最小を取る。`t > v` の候補は `n > 2v` で 2 冪候補に劣るため除外
-/// できる（`t = 1` が必ず 2 冪候補を生成する）。`usize` 範囲を溢れる
-/// とき `None`。
+/// のうち `n·fft_cost_units(n)` が最小のものを取る（同コストでは小さい
+/// `n` を優先）。`t = 1` が必ず nextpow2 候補を生成し、非 2 冪では
+/// `fft_cost_units(n) > log2(n)` が成り立つため、`n` が nextpow2 を
+/// 超える候補は 2 冪候補に推定コストで必ず負け、`n ≤ nextpow2(v)` は
+/// 構造的に保たれる。`t > v` の候補は `n > 2v` で同様に 2 冪候補に
+/// 劣るため除外できる。`usize` 範囲を溢れるとき `None`。
+#[expect(clippy::cast_precision_loss)]
 fn fast_len_above(v: usize) -> Option<usize> {
-    let mut best: Option<usize> = None;
+    let mut best: Option<(usize, f64)> = None;
     let mut t5 = 1usize;
     loop {
         let mut t = t5;
@@ -130,9 +194,12 @@ fn fast_len_above(v: usize) -> Option<usize> {
                 .checked_shl(a)
                 .and_then(|p2| t.checked_mul(p2))
                 .filter(|&cand| cand >= v)
-                && best.is_none_or(|b| cand < b)
             {
-                best = Some(cand);
+                let cost = cand as f64 * fft_cost_units(cand);
+                if best.is_none_or(|(b, bc)| cost.total_cmp(&bc).then_with(|| cand.cmp(&b)).is_lt())
+                {
+                    best = Some((cand, cost));
+                }
             }
             let Some(next) = t.checked_mul(3) else { break };
             if next > v {
@@ -146,7 +213,7 @@ fn fast_len_above(v: usize) -> Option<usize> {
         }
         t5 = next;
     }
-    best
+    best.map(|(n, _)| n)
 }
 
 /// `conj(a)·b` を `a` へ書き戻す。`phat` なら bin ごとの
@@ -336,9 +403,9 @@ pub struct OverlapCorrWorkspace {
 
 impl CorrelationPlan {
     /// `template_len`/`signal_len` の固定形状 plan（Full mode）。
-    /// NCC・GCC-PHAT・生相互相関のすべてを実行できる（FFT 長
-    /// `n ≥ S+2L−2` の最小高速サイズは全ラグ `k ≤ S+L−2` の
-    /// 線形相関を wraparound なしでカバーする）。
+    /// NCC・GCC-PHAT・生相互相関のすべてを実行できる（FFT 長は
+    /// `n ≥ S+2L−2` の範囲で推定コスト最小の高速サイズを選び、
+    /// 全ラグ `k ≤ S+L−2` の線形相関を wraparound なしでカバーする）。
     /// NCC・生相互相関しか使わない経路は [`Self::new_ncc`] の方が
     /// FFT 長を短縮できる。
     ///
@@ -375,7 +442,8 @@ impl CorrelationPlan {
     }
 
     /// 有効ラグ域 `0..=signal_len − template_len` の NCC・生相互相関専用 plan。
-    /// FFT 長は `n ≥ signal_len` の最小高速サイズで、返却される有効ラグ値は
+    /// FFT 長は `n ≥ signal_len` の範囲で推定コスト最小の高速サイズで、
+    /// 返却される有効ラグ値は
     /// [`Self::new`] と同一契約。有効ラグ数 `K = S−L+1` が小さい形状では
     /// FFT を持たない直接計算 plan（`NccDirect`）を選ぶ
     /// （係数は al-math 校正値、選び損ねても出力契約は不変）。
@@ -711,7 +779,7 @@ impl CorrelationWorkspace {
 
 impl OverlapCorrPlan {
     /// 窓長 `window_len` を shape に取る。内部 FFT 長は `n ≥ 2L−1` の
-    /// 最小高速サイズ（Issue #255）。
+    /// 範囲で推定コスト最小の高速サイズ（Issue #255/#265）。
     /// `window_len == 0` は `n = 0` の退化 plan で、`curve` は全 `0.0`。
     ///
     /// **RT 契約:** non-RT only — FFT plan を確保する。
@@ -817,16 +885,15 @@ impl OverlapCorrPlan {
             ..
         } = workspace;
         // 直接法は ~3·(2·max_lag+1)·L flop（corr0 の 3 累積）、
-        // FFT 法は ~15·n·log2(n) flop（3 変換 + 合成）。実測の交差に合わせた
-        // 仕事量比較（al-math 校正値を継承、#152 比較記録で再確認）。
-        let direct_ops = out_len.saturating_mul(len).saturating_mul(3);
-        // 非2冪長では trailing_zeros でなく ⌈log2 n⌉ を段数見積りに使う
-        // （Issue #255。実段数は radix 加重でやや小さいが、交差判定の
-        // 係数誤差として吸収できる近似）。
-        let log2n = (usize::BITS - (n - 1).leading_zeros()) as usize;
-        let fft_ops = OVERLAP_FFT_COST_FACTOR
-            .saturating_mul(n)
-            .saturating_mul(log2n);
+        // FFT 法は ~15·n·fft_cost_units(n) flop（3 変換 + 合成）。実測の
+        // 交差に合わせた仕事量比較（al-math 校正値を継承、#152 比較記録で
+        // 再確認）。Issue #265 で段数見積りを ⌈log2 n⌉ から radix 構成・
+        // 大 n トラフィックを反映する fft_cost_units へ校正（2 冪では
+        // 従来と同値）。
+        #[expect(clippy::cast_precision_loss)]
+        let direct_ops = out_len.saturating_mul(len).saturating_mul(3) as f64;
+        #[expect(clippy::cast_precision_loss)]
+        let fft_ops = OVERLAP_FFT_COST_FACTOR as f64 * n as f64 * fft_cost_units(n);
         if direct_ops < fft_ops {
             for (i, out) in curve.iter_mut().enumerate().take(out_len) {
                 let lag = i.cast_signed() - max_lag.cast_signed();
@@ -1213,19 +1280,29 @@ mod tests {
 
     // --- CorrelationPlan: plan モードと形状 ---
 
-    /// 形状ベンチの 6 代表形状で、コストモデルが al-math と同じ mode を
-    /// 選ぶことを固定する（係数回帰で FFT/direct が逆転しないよう pin）。
+    /// 形状ベンチの代表形状で、コストモデルが意図した mode を選ぶことを
+    /// 固定する（係数回帰で FFT/direct が逆転しないよう pin）。
+    /// tpl≈sig 形状群は Issue #265 の回帰形状: `n·log2(n)` モデルでは
+    /// smooth 変換長で direct→FFT に反転していたが、axpy 直接カーネルの
+    /// 実測では direct が 1.5–3x 速く、mixed-radix 実コストを反映した
+    /// `fft_cost_units` 校正後は direct を維持する。
     #[test]
     fn ncc_plan_mode_pins_benchmarked_shapes() {
         for (template_len, signal_len, expected) in [
-            // Issue #255 で FFT 長が 4.19M→2.21M に半減し、ラグ域 K=237 では
-            // FFT 経路が直接経路を下回る（選択反転は意図された効果）。
-            (2_205_000usize, 2_205_236usize, PlanMode::NccValid), // band_ncc/full_ncc
-            (551_250, 551_309, PlanMode::NccDirect),              // coarse_ncc
-            (4_410, 7_938, PlanMode::NccValid),                   // band_gain window
-            (4_410, 13_230, PlanMode::NccValid),                  // narrow anchor 小
-            (4_410, 66_150, PlanMode::NccValid),                  // narrow anchor 中
-            (800, 1_438, PlanMode::NccValid),                     // tiny 8kHz
+            // Issue #265: audio-lens method 形状（K=237/241）では直接
+            // カーネルが FFT smooth 経路を実測で上回り、NccDirect を維持
+            // するのが正しい（#255 時点では NccValid へ誤反転していた）。
+            (2_205_000usize, 2_205_236usize, PlanMode::NccDirect), // band_ncc/full_ncc
+            (2_400_000, 2_400_240, PlanMode::NccDirect),           // method/anchor full
+            (551_250, 551_309, PlanMode::NccDirect),               // coarse_ncc
+            (1_000_000, 1_000_120, PlanMode::NccDirect),           // tpl≈sig 中規模
+            (100_000, 100_101, PlanMode::NccDirect),               // tpl≈sig 小規模
+            (4_410, 7_938, PlanMode::NccValid),                    // band_gain window
+            (4_410, 13_230, PlanMode::NccValid),                   // narrow anchor 小
+            (4_410, 66_150, PlanMode::NccValid),                   // narrow anchor 中
+            (800, 1_438, PlanMode::NccValid),                      // tiny 8kHz
+            // K 小・L 小で FFT が実測でも優位な形状は NccValid を維持する。
+            (8_192, 8_400, PlanMode::NccValid),
         ] {
             let plan = CorrelationPlan::new_ncc(template_len, signal_len).unwrap();
             assert_eq!(plan.mode, expected, "shape=({template_len},{signal_len})");
@@ -1610,27 +1687,37 @@ mod tests {
         }
     }
 
-    /// `fast_len_above` の契約: `v` 以上で最小の偶数 smooth 長を返し、
-    /// `nextpow2` 以下を保証する（変換量削減の定量的不変条件）。
+    /// `fast_len_above` の契約: `v` 以上で `n·fft_cost_units(n)` が最小の
+    /// 偶数 smooth 長を返す（Issue #265）。nextpow2 候補は常に列挙される
+    /// ため、選択の推定コストは旧 pow2 選択の推定コストを超えない —
+    /// 「新選択が旧選択を推定で下回る」ことを保証する回帰ガード。
+    /// `n ≤ nextpow2(v)` も構造的に保たれる（非 2 冪で
+    /// `fft_cost_units(n) > log2(n)` より nextpow2 超過候補は必敗）。
     #[test]
-    fn fast_len_above_selects_minimal_smooth_even_length() {
+    fn fast_len_above_selects_min_cost_smooth_length() {
         for (v, expected) in [
             (1usize, 2usize),
             (2, 2),
             (3, 4),
             (11, 12),
-            (13, 16),     // 14=2·7 は {2,3,5} 非対象 → 16
-            (7938, 8000), // 7938=2·3⁴·7² は非対象 → 2⁶·5³
-            (7940, 8000),
-            (8640, 8640),           // 2⁶·3³·5
-            (8641, 8748),           // 2²·3⁷
-            (2_205_236, 2_211_840), // Issue #255 の headline 形状
-            (2_400_240, 2_430_000), // anchor/full NCC 例（2⁴·3⁵·5⁴）
+            (13, 16),
+            // 7938=2·3⁴·7² は非対象。最小長 8000=2⁶·5³（u=15）より
+            // nextpow2 8192（u=13）の推定コストが低い → pow2 選択。
+            (7938, 8192),
+            (7940, 8192),
+            // 8640=2⁶·3³·5 は u=18 と重く、10240=2¹¹·5（u=14）が推定最安。
+            (8640, 10240),
+            (8641, 10240),
+            (2_205_236, 2_211_840), // Issue #255 headline（u=38、pow2 より低コスト）
+            // anchor/full NCC 形状: 最小長 2,430,000（u=41）も pow2
+            // 4,194,304（u=22）も 2,457,600=2¹⁵·3·5²（u=34）に負ける。
+            (2_400_240, 2_457_600),
         ] {
             assert_eq!(fast_len_above(v), Some(expected), "v={v}");
         }
-        // 最小性と 2 冪上限を広い範囲で検証: `[v, n)` に選択可能な
-        // 実数 FFT 長（偶数かつ n/2 が {2,3,5}-smooth）が他に存在しない
+        // 選択が列挙候補の推定コスト最小であること・2 冪上限を広い範囲で
+        // 検証する: `[v, n)` に選択可能な実数 FFT 長（偶数かつ n/2 が
+        // {2,3,5}-smooth）で推定コストが選択より低いものが存在しない
         // ことを軽量 oracle で走査する。
         let supported = |m: usize| {
             m.is_multiple_of(2) && {
@@ -1643,14 +1730,25 @@ mod tests {
                 q == 1
             }
         };
+        #[expect(clippy::cast_precision_loss)]
         for v in [129usize, 1000, 4097, 65537, 1_000_001] {
             let n = fast_len_above(v).unwrap();
             assert!(n >= v && supported(n), "v={v} n={n}");
             assert!(n <= v.checked_next_power_of_two().unwrap(), "v={v} n={n}");
             assert!(RealFftPlan::new(n).is_ok(), "v={v} n={n}");
+            let n_cost = n as f64 * fft_cost_units(n);
             for lower in v..n {
-                assert!(!supported(lower), "v={v}: smaller {lower}");
+                assert!(
+                    !supported(lower) || lower as f64 * fft_cost_units(lower) >= n_cost,
+                    "v={v}: cheaper {lower}"
+                );
             }
+            // ガード不変条件: 選択の推定コストは旧 pow2 選択以下。
+            let pow2 = v.checked_next_power_of_two().unwrap();
+            assert!(
+                n_cost <= pow2 as f64 * fft_cost_units(pow2),
+                "v={v}: selected {n} cost {n_cost} exceeds pow2 {pow2}"
+            );
         }
     }
 
