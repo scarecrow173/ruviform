@@ -1,4 +1,4 @@
-//! 周波数帯域の分割・積分・spectral mask フィルタ（Issue #153）。
+//! 周波数帯域の分割・積分・spectral mask フィルタ（Issue #153・#183）。
 //!
 //! `AudioLens` `al-analysis::stft` の `band_power`/`third_octave_bands` と
 //! `al-math::filter` の `bandpass`/`bandpass_many`/`BandFilter`/
@@ -9,17 +9,31 @@
 //!
 //! - [`band_power`]/[`band_power_into`]: `[floor(lo/B), min(ceil(hi/B), len))`
 //!   の bin を積分（端 bin を含む寛い規則。AL `band_power` verbatim）。
-//! - [`BandFilter`]/[`bandpass`]/[`bandpass_many`]: `{k : lo ≤ k·B < hi}` の
-//!   bin のみ通す spectral mask（`lo=NaN → 0`、`hi=NaN → 末尾まで`）。
-//!   AL `FilterCore` verbatim。両者は端の丸めが異なる別規約であり、
-//!   相互に置き換えない。
+//! - [`BandSpectrum`]/[`BandFilter`]/[`bandpass`]/[`bandpass_many`]:
+//!   `{k : lo ≤ k·B < hi}` の bin のみ通す spectral mask
+//!   （`lo=NaN → 0`、`hi=NaN → 末尾まで`）。AL `FilterCore` verbatim。
+//!   両者は端の丸めが異なる別規約であり、相互に置き換えない。
+//!
+//! # 共有スペクトルと並列化（Issue #183）
+//!
+//! - [`BandSpectrum`] は forward FFT 済みスペクトルの不変共有体であり、
+//!   `Send + Sync` を自動実装する（全フィールドが値型）。`&`/`Arc` で
+//!   複数スレッドから共有できる。
+//! - [`BandSpectrum::band_into`] は `&self` と呼出ごとの
+//!   [`BandScratch`]（`&mut` 排他）を取る。scratch をスレッド/タスク
+//!   ごとに分離すれば、同一スペクトルへの帯域抽出をデータ競合なく
+//!   並列実行できる。`fft_size` が同じ `BandSpectrum` 同士では
+//!   scratch を使い回せる。
+//! - [`BandFilter`] は `BandSpectrum` + `BandScratch` の逐次実行向け
+//!   便宜型であり、出力規則は `BandSpectrum` と同一。
 //!
 //! # その他の規約
 //!
-//! - `BandFilter` は信号全体を `next_pow2(len)` へゼロ埋めして forward、
-//!   帯域ごとに mask→IFFT→元長切戻し。spectral mask の端点影響
-//!   （巡回畳込み由来）は呼出し側の guard 責務。
-//! - [`band_into`](BandFilter::band_into)/[`band_power_into`] は
+//! - `BandSpectrum`/`BandFilter` は信号全体を `next_pow2(len)` へ
+//!   ゼロ埋めして forward、帯域ごとに mask→IFFT→元長切戻し。
+//!   spectral mask の端点影響（巡回畳込み由来）は呼出し側の guard 責務。
+//! - [`band_into`](BandFilter::band_into)・
+//!   [`BandSpectrum::band_into`]/[`band_power_into`] は
 //!   **RT-suitable**（alloc なし・有界）。所有版・構築・
 //!   [`third_octave_bands`]/[`spectral_envelope`] は non-RT。
 
@@ -151,18 +165,53 @@ pub fn bandpass_many(
     Ok(bands.iter().map(|&(lo, hi)| filter.band(lo, hi)).collect())
 }
 
-/// 1 回の forward FFT で保持した全スペクトルから帯域波形を逐次生成する
-/// フィルタ（AL `BandFilter` の移植）。帯域を 1 本ずつ消費する呼出側で
-/// 全帯域波形の同時保持を避ける。帯域ごとの出力規則は
-/// [`bandpass_many`] と同一。
+/// 1 回の forward FFT で保持した全スペクトルの不変共有体（Issue #183）。
+/// 帯域ごとの出力規則は [`bandpass_many`] と同一。
 ///
-/// メモリ量は [`memory_bytes`](Self::memory_bytes)（plan + スペクトル +
-/// スクラッチの構造見積もり）。
-pub struct BandFilter {
+/// 全フィールドが値型のため `Send + Sync` を自動実装し、`&`/`Arc` で
+/// 複数スレッドから共有できる。帯域抽出は [`band_into`](Self::band_into)
+/// が呼出ごとの [`BandScratch`] を `&mut` で排他借用するため、
+/// スレッド/タスクごとの scratch で同一スペクトルへの並列抽出が
+/// データ競合なく行える（audio-lens#71 の (channel, band) タスク並列化
+/// で入力 1 本あたり forward FFT を 1 回に抑える用途）。
+///
+/// メモリ量は [`memory_bytes`](Self::memory_bytes)（plan + スペクトルの
+/// 構造見積もり。scratch は [`BandScratch::memory_bytes`]）。
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_numeric::bands::{BandScratch, BandSpectrum};
+///
+/// let rate = 256;
+/// let sig: Vec<f64> = (0..256).map(|i| (i as f64 * 0.713).sin()).collect();
+/// let spectrum = BandSpectrum::new(&sig, rate).unwrap();
+///
+/// // 不変スペクトルを複数スレッドで共有し、scratch はスレッドごとに分離。
+/// let bands = [(5.0, 20.0), (80.0, 120.0)];
+/// let spectrum = &spectrum;
+/// let out = std::thread::scope(|s| {
+///     let handles: Vec<_> = bands
+///         .iter()
+///         .map(|&(lo, hi)| {
+///             s.spawn(move || {
+///                 let mut scratch = BandScratch::new(spectrum);
+///                 let mut out = vec![0.0; spectrum.len()];
+///                 spectrum
+///                     .band_into(&mut scratch, lo, hi, &mut out)
+///                     .unwrap();
+///                 out
+///             })
+///         })
+///         .collect();
+///     handles.into_iter().map(|h| h.join().unwrap()).collect::<Vec<_>>()
+/// });
+/// assert_eq!(out.len(), 2);
+/// assert_eq!(out[0].len(), sig.len());
+/// ```
+pub struct BandSpectrum {
     /// 変換長 `n` の実数 FFT plan。
     plan: RealFftPlan,
-    /// IFFT 用 workspace。
-    ws: RealFftWorkspace,
     /// bin 幅（Hz）`sample_rate / n`。
     bin_hz: f64,
     /// 元信号長。
@@ -171,19 +220,12 @@ pub struct BandFilter {
     spectrum_re: Vec<f64>,
     /// 全信号スペクトル虚部（`n/2+1`）。
     spectrum_im: Vec<f64>,
-    /// mask 適用後スペクトルのスクラッチ（`n/2+1`）。
-    masked_re: Vec<f64>,
-    /// 同上・虚部。
-    masked_im: Vec<f64>,
-    /// 逆変換出力スクラッチ（`n`）。
-    real: Vec<f64>,
 }
 
-impl BandFilter {
+impl BandSpectrum {
     /// `samples` の forward FFT を 1 回だけ行い、スペクトルを保持する。
     ///
-    /// **RT 契約:** non-RT only — plan・workspace・スペクトル・スクラッチを
-    /// 確保する。
+    /// **RT 契約:** non-RT only — plan・スペクトルを確保する。
     ///
     /// # Errors
     ///
@@ -209,14 +251,10 @@ impl BandFilter {
         plan.forward(&mut ws, &real, &mut spectrum_re, &mut spectrum_im)?;
         Ok(Self {
             plan,
-            ws,
             bin_hz: f64::from(sample_rate) / n as f64,
             len: samples.len(),
             spectrum_re,
             spectrum_im,
-            masked_re: vec![0.0; bins],
-            masked_im: vec![0.0; bins],
-            real,
         })
     }
 
@@ -247,7 +285,11 @@ impl BandFilter {
     /// `[lo_hz, hi_hz)` の帯域波形を `out`（長さ `len`）に書き込む。
     /// passband bin 規則: `{k : lo ≤ k·bin_hz < hi}`。`hi = NaN` は
     /// Nyquist まで通し、`lo = NaN` は 0 から通す（AL verbatim）。
-    /// 出力は元長に切り戻される zero-phase 波形。
+    /// 出力は元長に切り戻される zero-phase 波形で、
+    /// [`BandFilter::band_into`] と同一実装・同一結果（bit-exact）。
+    ///
+    /// `scratch` は [`BandScratch::new`] で構築した呼出ごとの排他領域。
+    /// `fft_size` が同じ `BandSpectrum` 同士では使い回せる。
     ///
     /// **RT 契約:** RT-suitable — 事前確保済みスクラッチのみ使用し
     /// alloc なし・有界。
@@ -255,10 +297,21 @@ impl BandFilter {
     /// # Errors
     ///
     /// `out.len()` が `len` と異なれば `Error::InvalidValue("length")`。
+    /// `scratch` が異なる変換長の `BandSpectrum` 用に構築されていれば
+    /// `Error::InvalidValue("scratch")`。
     #[expect(clippy::cast_precision_loss)]
-    pub fn band_into(&mut self, lo_hz: f64, hi_hz: f64, out: &mut [f64]) -> Result<()> {
+    pub fn band_into(
+        &self,
+        scratch: &mut BandScratch,
+        lo_hz: f64,
+        hi_hz: f64,
+        out: &mut [f64],
+    ) -> Result<()> {
         if out.len() != self.len {
             return Err(Error::InvalidValue("length"));
+        }
+        if scratch.n != self.plan.n() {
+            return Err(Error::InvalidValue("scratch"));
         }
         if self.len == 0 {
             return Ok(());
@@ -268,20 +321,150 @@ impl BandFilter {
         let hi_bin = lower_bin(self.spectrum_re.len(), |k| {
             hi_hz.is_nan() || self.bin_hz * (k as f64) < hi_hz
         });
-        self.masked_re.fill(0.0);
-        self.masked_im.fill(0.0);
+        scratch.masked_re.fill(0.0);
+        scratch.masked_im.fill(0.0);
         if lo_bin < hi_bin {
-            self.masked_re[lo_bin..hi_bin].copy_from_slice(&self.spectrum_re[lo_bin..hi_bin]);
-            self.masked_im[lo_bin..hi_bin].copy_from_slice(&self.spectrum_im[lo_bin..hi_bin]);
+            scratch.masked_re[lo_bin..hi_bin].copy_from_slice(&self.spectrum_re[lo_bin..hi_bin]);
+            scratch.masked_im[lo_bin..hi_bin].copy_from_slice(&self.spectrum_im[lo_bin..hi_bin]);
         }
         self.plan.inverse(
-            &mut self.ws,
-            &self.masked_re,
-            &self.masked_im,
-            &mut self.real,
+            &mut scratch.ws,
+            &scratch.masked_re,
+            &scratch.masked_im,
+            &mut scratch.real,
         )?;
-        out.copy_from_slice(&self.real[..self.len]);
+        out.copy_from_slice(&scratch.real[..self.len]);
         Ok(())
+    }
+
+    /// 保持バッファのメモリ量（バイト、構造見積もり）。
+    #[must_use]
+    pub fn memory_bytes(&self) -> usize {
+        (self.spectrum_re.len() + self.spectrum_im.len()) * size_of::<f64>()
+            + self.plan.memory_bytes()
+    }
+}
+
+/// [`BandSpectrum::band_into`] が消費する呼出ごとの排他スクラッチ
+/// （Issue #183）。IFFT 用 workspace・mask 適用後スペクトル・逆変換出力
+/// を事前確保する。1 つの `BandScratch` を同時に使う呼出は 1 つ
+/// （`&mut` 借用で静的に保証）なので、並列化する場合はスレッド/タスク
+/// ごとに構築して使い回す。
+///
+/// `Send + Sync` は自動実装されるが、並列契約は「共有スペクトル
+/// `&BandSpectrum` × 排他 `&mut BandScratch`」であり、scratch 自体の
+/// 共有は想定しない。
+///
+/// メモリ量は [`memory_bytes`](Self::memory_bytes)（構造見積もり）。
+pub struct BandScratch {
+    /// IFFT 用 workspace。
+    ws: RealFftWorkspace,
+    /// mask 適用後スペクトルのスクラッチ（`n/2+1`）。
+    masked_re: Vec<f64>,
+    /// 同上・虚部。
+    masked_im: Vec<f64>,
+    /// 逆変換出力スクラッチ（`n`）。
+    real: Vec<f64>,
+    /// 構築元 plan の変換長（`band_into` の整合検証用）。
+    n: usize,
+}
+
+impl BandScratch {
+    /// `spectrum` と同じ変換長のスクラッチを確保する。
+    /// この scratch は `fft_size` が `spectrum` と同じ全ての
+    /// [`BandSpectrum`] で使い回せる。
+    ///
+    /// **RT 契約:** non-RT only — workspace・スクラッチを確保する。
+    #[must_use]
+    pub fn new(spectrum: &BandSpectrum) -> Self {
+        Self {
+            ws: RealFftWorkspace::new(&spectrum.plan),
+            masked_re: vec![0.0; spectrum.plan.spectrum_len()],
+            masked_im: vec![0.0; spectrum.plan.spectrum_len()],
+            real: vec![0.0; spectrum.plan.n()],
+            n: spectrum.plan.n(),
+        }
+    }
+
+    /// 保持バッファのメモリ量（バイト、構造見積もり）。
+    #[must_use]
+    pub fn memory_bytes(&self) -> usize {
+        (self.masked_re.len() + self.masked_im.len() + self.real.len()) * size_of::<f64>()
+            + self.ws.memory_bytes()
+    }
+}
+
+/// 1 回の forward FFT で保持した全スペクトルから帯域波形を逐次生成する
+/// フィルタ（AL `BandFilter` の移植）。帯域を 1 本ずつ消費する呼出側で
+/// 全帯域波形の同時保持を避ける。帯域ごとの出力規則は
+/// [`bandpass_many`] と同一。
+///
+/// 内部は共有スペクトル [`BandSpectrum`] + スクラッチ [`BandScratch`]
+/// の逐次実行向け便宜型（Issue #183）。同一スペクトルを複数スレッドで
+/// 共有して帯域抽出を並列化する場合は `BandSpectrum` を直接使う。
+///
+/// メモリ量は [`memory_bytes`](Self::memory_bytes)（plan + スペクトル +
+/// スクラッチの構造見積もり）。
+pub struct BandFilter {
+    /// 共有スペクトル（不変部）。
+    spectrum: BandSpectrum,
+    /// 帯域抽出スクラッチ（排他部）。
+    scratch: BandScratch,
+}
+
+impl BandFilter {
+    /// `samples` の forward FFT を 1 回だけ行い、スペクトルを保持する。
+    ///
+    /// **RT 契約:** non-RT only — plan・workspace・スペクトル・スクラッチを
+    /// 確保する。
+    ///
+    /// # Errors
+    ///
+    /// [`BandSpectrum::new`] と同じ。
+    pub fn new(samples: &[f64], sample_rate: u32) -> Result<Self> {
+        let spectrum = BandSpectrum::new(samples, sample_rate)?;
+        let scratch = BandScratch::new(&spectrum);
+        Ok(Self { spectrum, scratch })
+    }
+
+    /// 元信号長。
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.spectrum.len()
+    }
+
+    /// 元信号が空か。
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.spectrum.is_empty()
+    }
+
+    /// 内部 FFT 変換長（`next_pow2(len)`、ゼロ埋め後）。
+    #[must_use]
+    pub fn fft_size(&self) -> usize {
+        self.spectrum.fft_size()
+    }
+
+    /// bin 幅（Hz）。
+    #[must_use]
+    pub fn bin_hz(&self) -> f64 {
+        self.spectrum.bin_hz()
+    }
+
+    /// `[lo_hz, hi_hz)` の帯域波形を `out`（長さ `len`）に書き込む。
+    /// passband bin 規則: `{k : lo ≤ k·bin_hz < hi}`。`hi = NaN` は
+    /// Nyquist まで通し、`lo = NaN` は 0 から通す（AL verbatim）。
+    /// 出力は元長に切り戻される zero-phase 波形。
+    ///
+    /// **RT 契約:** RT-suitable — 事前確保済みスクラッチのみ使用し
+    /// alloc なし・有界。
+    ///
+    /// # Errors
+    ///
+    /// `out.len()` が `len` と異なれば `Error::InvalidValue("length")`。
+    pub fn band_into(&mut self, lo_hz: f64, hi_hz: f64, out: &mut [f64]) -> Result<()> {
+        self.spectrum
+            .band_into(&mut self.scratch, lo_hz, hi_hz, out)
     }
 
     /// `[lo_hz, hi_hz)` の帯域波形を確保して返す。
@@ -290,7 +473,7 @@ impl BandFilter {
     /// **RT 契約:** non-RT only — 出力を確保する。
     #[must_use]
     pub fn band(&mut self, lo_hz: f64, hi_hz: f64) -> Vec<f64> {
-        let mut out = vec![0.0; self.len];
+        let mut out = vec![0.0; self.spectrum.len];
         // out は len に構築済みのため失敗しない。
         let _ = self.band_into(lo_hz, hi_hz, &mut out);
         out
@@ -299,14 +482,7 @@ impl BandFilter {
     /// 保持バッファのメモリ量（バイト、構造見積もり）。
     #[must_use]
     pub fn memory_bytes(&self) -> usize {
-        (self.spectrum_re.len()
-            + self.spectrum_im.len()
-            + self.masked_re.len()
-            + self.masked_im.len()
-            + self.real.len())
-            * size_of::<f64>()
-            + self.plan.memory_bytes()
-            + self.ws.memory_bytes()
+        self.spectrum.memory_bytes() + self.scratch.memory_bytes()
     }
 }
 
@@ -579,5 +755,138 @@ mod tests {
         // 空入力 → 全区間 ln(1e-12)（AL verbatim）。
         let out = spectral_envelope(&[], 256, 4).unwrap();
         assert!(out.iter().all(|&v| (v - 1e-12_f64.ln()).abs() < 1e-20));
+    }
+
+    /// Issue #183: `BandSpectrum::band_into` は同一入力・同一帯域で
+    /// `BandFilter::band`/`band_into` の出力と bit-exact に一致する
+    ///（同一実装を共有する）。
+    #[test]
+    fn band_spectrum_matches_band_filter_bit_exact() {
+        for len in [0usize, 1, 3, 33, 256, 1027] {
+            let input: Vec<_> = (0..len).map(|i| (i as f64 * 0.713).sin()).collect();
+            let bands = [
+                (0.0, 100.0),
+                (100.0, 250.0),
+                (0.0, 1025.0),
+                (250.0, 250.0),
+                (500.0, f64::NAN),
+                (0.0, f64::INFINITY),
+                (f64::NAN, 300.0),
+            ];
+            let spectrum = BandSpectrum::new(&input, 2048).unwrap();
+            let mut scratch = BandScratch::new(&spectrum);
+            let mut filter = BandFilter::new(&input, 2048).unwrap();
+            for &(lo, hi) in &bands {
+                let mut out_a = vec![1.0; len];
+                let mut out_b = vec![2.0; len];
+                spectrum
+                    .band_into(&mut scratch, lo, hi, &mut out_a)
+                    .unwrap();
+                filter.band_into(lo, hi, &mut out_b).unwrap();
+                assert_eq!(out_a, out_b, "len={len} band=({lo},{hi})");
+                assert_eq!(out_a, filter.band(lo, hi), "len={len} band=({lo},{hi})");
+            }
+        }
+    }
+
+    /// Issue #183: 不変 `BandSpectrum` を `&` で複数スレッドから共有し、
+    /// スレッドごとの `BandScratch` で帯域抽出しても逐次実行と一致する。
+    /// `Send + Sync` 契約はコンパイル自体が保証する（`&spectrum` を
+    /// scoped thread に渡せる）。
+    #[test]
+    fn band_spectrum_shared_across_threads() {
+        // Send + Sync の静的保証（auto impl の退行防止）。
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<BandSpectrum>();
+        assert_send_sync::<BandScratch>();
+        let input = noise(1024, 11);
+        let spectrum = BandSpectrum::new(&input, 48000).unwrap();
+        let bands = [
+            (0.0, 100.0),
+            (100.0, 250.0),
+            (500.0, f64::NAN),
+            (20.0, 5000.0),
+            (f64::NAN, 40.0),
+        ];
+        let mut seq_scratch = BandScratch::new(&spectrum);
+        let expected: Vec<Vec<f64>> = bands
+            .iter()
+            .map(|&(lo, hi)| {
+                let mut out = vec![0.0; spectrum.len()];
+                spectrum
+                    .band_into(&mut seq_scratch, lo, hi, &mut out)
+                    .unwrap();
+                out
+            })
+            .collect();
+        let spectrum = &spectrum;
+        let got = std::thread::scope(|s| {
+            let handles: Vec<_> = bands
+                .iter()
+                .map(|&(lo, hi)| {
+                    s.spawn(move || {
+                        let mut scratch = BandScratch::new(spectrum);
+                        let mut out = vec![0.0; spectrum.len()];
+                        spectrum.band_into(&mut scratch, lo, hi, &mut out).unwrap();
+                        out
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(got, expected);
+    }
+
+    /// Issue #183: scratch の整合契約 — 異なる変換長の scratch は
+    /// `Error::InvalidValue("scratch")` で拒否し、同じ変換長の
+    /// `BandSpectrum` 同士では使い回せる。
+    #[test]
+    fn band_scratch_contract() {
+        let input_a = noise(512, 5);
+        let input_b = noise(700, 9);
+        let spec_a = BandSpectrum::new(&input_a, 48000).unwrap();
+        // 512 → n=512、700 → n=1024。変換長の異なる scratch は拒否。
+        let spec_b = BandSpectrum::new(&input_b, 48000).unwrap();
+        let mut scratch_a = BandScratch::new(&spec_a);
+        let mut out_b = vec![0.0; spec_b.len()];
+        assert_eq!(
+            spec_b.band_into(&mut scratch_a, 0.0, 1000.0, &mut out_b),
+            Err(Error::InvalidValue("scratch"))
+        );
+        // 同じ n=512 だが len が異なる別スペクトルでは使い回せる。
+        let input_c = noise(400, 13);
+        let spec_c = BandSpectrum::new(&input_c, 48000).unwrap();
+        assert_eq!(spec_c.fft_size(), spec_a.fft_size());
+        let mut out_c = vec![0.0; spec_c.len()];
+        spec_c
+            .band_into(&mut scratch_a, 0.0, 1000.0, &mut out_c)
+            .unwrap();
+        let mut own = BandScratch::new(&spec_c);
+        let mut expected = vec![0.0; spec_c.len()];
+        spec_c
+            .band_into(&mut own, 0.0, 1000.0, &mut expected)
+            .unwrap();
+        assert_eq!(out_c, expected);
+        // 空スペクトル（n=1）と非空 scratch の組合せも拒否。
+        let spec_empty = BandSpectrum::new(&[], 48000).unwrap();
+        assert_eq!(
+            spec_empty.band_into(&mut scratch_a, 0.0, 1.0, &mut []),
+            Err(Error::InvalidValue("scratch"))
+        );
+        // out 長不一致は scratch 検証より先に "length" を返す。
+        assert_eq!(
+            spec_b.band_into(&mut scratch_a, 0.0, 1000.0, &mut [0.0; 1]),
+            Err(Error::InvalidValue("length"))
+        );
+        assert!(spec_a.memory_bytes() > 0 && scratch_a.memory_bytes() > 0);
+        // BandFilter::memory_bytes は spectrum + scratch の合計と一致。
+        let filter = BandFilter::new(&input_a, 48000).unwrap();
+        assert_eq!(
+            filter.memory_bytes(),
+            spec_a.memory_bytes() + BandScratch::new(&spec_a).memory_bytes()
+        );
     }
 }

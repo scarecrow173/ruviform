@@ -184,6 +184,9 @@ mod rt_tests {
         let mut derived = vec![0.0; frames * plan.fft_size()];
 
         let mut filter = bands::BandFilter::new(&signal, 48000).unwrap();
+        // Issue #183: 共有スペクトル + 呼出 scratch の分離形も同一契約。
+        let spectrum = bands::BandSpectrum::new(&signal, 48000).unwrap();
+        let mut bscratch = bands::BandScratch::new(&spectrum);
         let mut bout = vec![0.0; signal.len()];
         let mut bp = [0.0; 4];
         let row = vec![0.0; 64];
@@ -206,6 +209,9 @@ mod rt_tests {
             std::hint::black_box(&m);
 
             filter.band_into(100.0, 1000.0, &mut bout).unwrap();
+            spectrum
+                .band_into(&mut bscratch, 100.0, 1000.0, &mut bout)
+                .unwrap();
             bands::band_power_into(&row, 1.0, &[(0.0, 4.0); 4], &mut bp).unwrap();
 
             xs.accumulate(&xs_re, &xs_re, &xs_re, &xs_re).unwrap();
