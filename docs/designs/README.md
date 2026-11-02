@@ -51,6 +51,7 @@ Directory: `docs/designs`
 | DESIGN-aRsJILdLBlEulHcYpfH4eb | Issue #198 stateful sequential offline render — PreparedRender, sequential driver, staged output lifecycle | approved | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |
 | DESIGN-034QdHuPP1Uvvlkvbh5awX | Issue #219 Cross-Repo CI Gate 設計・credential 一次設定・証拠記録 runbook | approved | [issue-219-cross-repo-ci-gate-credential-runbook.md](./issue-219-cross-repo-ci-gate-credential-runbook.md) |
 | DESIGN-034QolOnuF7kf2drxSsvvH | Issue #233 prefetch contract improvements — discard_pending drain, seek discard flag, reopen_at structural design | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
+| DESIGN-034QxcnAfFWswZmwSKPbKH | Issue #244 prefetch contract wart fixes — boundary-first emission, dead-generation sequence, End commit-once, seeded-fault coverage | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
