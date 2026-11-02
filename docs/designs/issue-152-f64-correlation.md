@@ -120,6 +120,9 @@ reliability/Validity・ジョブ書き出し・ピーク選定ポリシー）は
 | モジュール | API | RT 契約 |
 | --- | --- | --- |
 | `corr` | `CorrelationPlan::new`（Full mode: n = `nextpow2(S+L−1)`）/ `CorrelationPlan::new_ncc`（`NccValid`: n = `nextpow2(S)` または `NccDirect`: FFT なし直接計算） | non-RT only（確保） |
+
+> 変換長選択は Issue #255 で `{2,3,5}`-smooth 最小長 `fast_len_above(bound)` に更新済み
+> （Full mode の無汚染境界も `n ≥ S+2L−2` に修正。`docs/adr/issue-255-nonpow2-fft-transform-length.md` 参照）。
 | `corr` | `CorrelationWorkspace::new(&plan)` | non-RT only（全バッファ事前確保） |
 | `corr` | `CorrelationPlan::ncc(&mut ws, template, signal, max_lag) -> Result<NccCurve<'_>>` | **RT-suitable** — alloc なし・有界 |
 | `corr` | `CorrelationPlan::gcc_phat(...) -> Result<&[f64]>` | **RT-suitable**（Full mode plan のみ） |
@@ -160,6 +163,8 @@ reliability/Validity・ジョブ書き出し・ピーク選定ポリシー）は
   `c[k] = Σᵢ template[i]·signal[k+i]` を `0..=min(max_lag, linear_lag_max)`
   で返す。Full mode では `S−L < k ≤ S+L−2` の部分 overlap ラグも
   無汚染（n ≥ S+L−1 で wraparound なし）。
+  ※ 2026-11 追記: この境界は `c[k] = Σᵢ t[i]·s[(k+i) mod n]` の非負ラグ
+  方向では不十分であり、Issue #255 で `n ≥ S+2L−2` に修正済み。
 - **NccValid の有効性**: FFT 長 `n = nextpow2(S)` でも返却域 `k ≤ S−L` は
   wraparound 項 `c[k−n]`・`c[k+n]` がいずれも定義域外のため無汚染
   （al-math と同一証明）。`new_ncc` plan の `ncc`/`cross_correlation` は
