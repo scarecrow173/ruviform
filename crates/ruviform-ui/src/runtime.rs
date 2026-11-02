@@ -33,6 +33,7 @@ use crate::ipc::{
 use crate::service::{
     CallOutcome, JobContext, JobResult, JobSignal, JobSpec, OpInfo, Service, ServiceContext,
 };
+use crate::window::{RoutedEvent, WindowId};
 
 /// Bounded job→UI mailbox capacity. Progress is try-sent (dropped
 /// under pressure); terminal signals block-send — bounded because a
@@ -59,6 +60,9 @@ const RESERVED_OPS: &[&str] = &["job.cancel"];
 
 struct JobRecord {
     cancel: CancellationToken,
+    /// Window that spawned the job (multi-window routing only — never
+    /// used for lifetime control, Issue #181).
+    owner: Option<WindowId>,
 }
 
 /// The shared GUI/CLI dispatcher. See module docs.
@@ -137,16 +141,22 @@ impl UiRuntime {
 
     /// Consumes one normalized host event; returns the events to push.
     ///
+    /// Single-window entry point (Issue #156 baseline — unchanged):
+    ///
     /// - `Message` → parse + dispatch (malformed bodies yield an
     ///   uncorrelated `error` event).
     /// - `Tick` → drain the job mailbox.
     /// - `CloseRequested` → cancels running jobs and emits a
     ///   `lifecycle` `closing` event.
     /// - Everything else → no IPC traffic.
+    ///
+    /// Multi-window callers use [`handle_window`](Self::handle_window)
+    /// instead; the two entry points must not be mixed — this one
+    /// ignores window ownership entirely.
     pub fn handle(&mut self, ev: HostEvent) -> Vec<Event> {
         match ev {
             HostEvent::Message(body) => match parse_intent(&body) {
-                Ok(intent) => self.dispatch(intent),
+                Ok(intent) => self.dispatch_for(None, intent),
                 Err(e) => vec![Event::error(e)],
             },
             HostEvent::Tick => self.drain_jobs(),
@@ -156,6 +166,45 @@ impl UiRuntime {
                 }
                 vec![Event::lifecycle(LifecycleState::Closing)]
             }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Multi-window entry point (Issue #181). Returns [`RoutedEvent`]s
+    /// whose `window` identifies the destination — every event this
+    /// call produces belongs to `window`.
+    ///
+    /// Differences from [`handle`](Self::handle):
+    ///
+    /// - `Message` results are routed to the origin window; jobs
+    ///   spawned by the intent record `window` as their owner (for
+    ///   event routing only — job lifetime never follows the window).
+    /// - `CloseRequested` emits `lifecycle` `closing` to that window
+    ///   but never cancels jobs — window close is not job
+    ///   cancellation (see [`cancel_window_jobs`](Self::cancel_window_jobs)).
+    /// - `Tick` is loop-global: it behaves exactly like
+    ///   [`drain_jobs_routed`](Self::drain_jobs_routed).
+    pub fn handle_window(&mut self, window: WindowId, ev: HostEvent) -> Vec<RoutedEvent> {
+        match ev {
+            HostEvent::Message(body) => match parse_intent(&body) {
+                Ok(intent) => self
+                    .dispatch_for(Some(window), intent)
+                    .into_iter()
+                    .map(|event| RoutedEvent {
+                        window: Some(window),
+                        event,
+                    })
+                    .collect(),
+                Err(e) => vec![RoutedEvent {
+                    window: Some(window),
+                    event: Event::error(e),
+                }],
+            },
+            HostEvent::Tick => self.drain_jobs_routed(),
+            HostEvent::CloseRequested => vec![RoutedEvent {
+                window: Some(window),
+                event: Event::lifecycle(LifecycleState::Closing),
+            }],
             _ => Vec::new(),
         }
     }
@@ -171,19 +220,62 @@ impl UiRuntime {
                 ErrorBody::new(codes::MALFORMED_MESSAGE, format!("invalid op name {op:?}")),
             )];
         }
-        self.dispatch(Intent {
-            v: SCHEMA_VERSION,
-            kind: "intent".to_string(),
-            id,
-            op: op.to_string(),
-            params,
-        })
+        self.dispatch_for(
+            None,
+            Intent {
+                v: SCHEMA_VERSION,
+                kind: "intent".to_string(),
+                id,
+                op: op.to_string(),
+                params,
+            },
+        )
     }
 
     /// Drains pending job signals into events (GUI path: call on every
     /// [`HostEvent::Tick`]).
+    ///
+    /// Single-window form: ignores job owner windows entirely —
+    /// multi-window callers use
+    /// [`drain_jobs_routed`](Self::drain_jobs_routed).
     pub fn drain_jobs(&mut self) -> Vec<Event> {
-        self.collect(None)
+        self.collect_unrouted(None)
+    }
+
+    fn collect_unrouted(&mut self, first: Option<JobSignal>) -> Vec<Event> {
+        self.collect_routed(first)
+            .into_iter()
+            .map(|re| re.event)
+            .collect()
+    }
+
+    /// Multi-window job drain (Issue #181): each job's events are
+    /// routed to the window that spawned it (`Some(owner)`); jobs
+    /// without an owner (headless/legacy dispatch) yield `None`
+    /// unrouted events. Events whose owner window was destroyed are
+    /// still produced — the delivery layer drops them safely.
+    pub fn drain_jobs_routed(&mut self) -> Vec<RoutedEvent> {
+        self.collect_routed(None)
+    }
+
+    /// Cancels every job owned by `window` — the opt-in vocabulary for
+    /// "window-owned jobs" (Issue #181).
+    ///
+    /// This is never invoked automatically: a window's
+    /// `CloseRequested`/`Destroyed` does not imply job cancellation.
+    /// Consumers wanting window-scoped job cleanup call this from
+    /// their close policy. Returns the number of jobs newly signalled
+    /// (already-cancelled jobs awaiting their terminal drain are not
+    /// recounted).
+    pub fn cancel_window_jobs(&mut self, window: WindowId) -> usize {
+        let mut cancelled = 0;
+        for rec in self.jobs.values() {
+            if rec.owner == Some(window) && !rec.cancel.is_cancelled() {
+                rec.cancel.cancel();
+                cancelled += 1;
+            }
+        }
+        cancelled
     }
 
     /// Headless wait loop: returns immediately with pending events, or
@@ -192,7 +284,7 @@ impl UiRuntime {
     #[must_use]
     pub fn poll(&mut self, wait: Option<Duration>) -> Vec<Event> {
         match self.job_rx.try_recv() {
-            Ok(sig) => return self.collect(Some(sig)),
+            Ok(sig) => return self.collect_unrouted(Some(sig)),
             Err(TryRecvError::Empty | TryRecvError::Disconnected) => {}
         }
         let Some(d) = wait else { return Vec::new() };
@@ -200,22 +292,28 @@ impl UiRuntime {
             return Vec::new();
         }
         match self.job_rx.recv_timeout(d) {
-            Ok(sig) => self.collect(Some(sig)),
+            Ok(sig) => self.collect_unrouted(Some(sig)),
             Err(_) => Vec::new(),
         }
     }
 
-    fn dispatch(&mut self, intent: Intent) -> Vec<Event> {
+    fn dispatch_for(&mut self, owner: Option<WindowId>, intent: Intent) -> Vec<Event> {
         let Intent { id, op, params, .. } = intent;
         match op.as_str() {
             "sys.ping" => vec![Event::result_ok(id, json!({ "pong": true }))],
             "sys.capabilities" => vec![Event::result_ok(id, self.capabilities())],
             "job.cancel" => self.cancel_job(id, &params),
-            _ => self.dispatch_service(id, &op, &params),
+            _ => self.dispatch_service(id, &op, &params, owner),
         }
     }
 
-    fn dispatch_service(&mut self, id: String, op: &str, params: &Value) -> Vec<Event> {
+    fn dispatch_service(
+        &mut self,
+        id: String,
+        op: &str,
+        params: &Value,
+        owner: Option<WindowId>,
+    ) -> Vec<Event> {
         let Some(svc) = self
             .services
             .iter_mut()
@@ -226,15 +324,18 @@ impl UiRuntime {
                 ErrorBody::new(codes::UNKNOWN_OP, format!("unregistered op {op:?}")),
             )];
         };
-        let mut ctx = ServiceContext { data: &self.data };
+        let mut ctx = ServiceContext {
+            data: &self.data,
+            origin: owner,
+        };
         match svc.call(op, params, &mut ctx) {
             Ok(CallOutcome::Result(data)) => vec![Event::result_ok(id, data)],
-            Ok(CallOutcome::Job(spec)) => vec![self.spawn_job(id, spec)],
+            Ok(CallOutcome::Job(spec)) => vec![self.spawn_job(id, owner, spec)],
             Err(e) => vec![Event::result_err(id, e)],
         }
     }
 
-    fn spawn_job(&mut self, id: String, spec: JobSpec) -> Event {
+    fn spawn_job(&mut self, id: String, owner: Option<WindowId>, spec: JobSpec) -> Event {
         let job = self.next_job;
         self.next_job += 1;
         let cancel = CancellationToken::new();
@@ -257,7 +358,7 @@ impl UiRuntime {
             });
         match spawn {
             Ok(_) => {
-                self.jobs.insert(job, JobRecord { cancel });
+                self.jobs.insert(job, JobRecord { cancel, owner });
                 Event::result_ok(id, json!({ "job": job, "label": label }))
             }
             Err(e) => Event::result_err(
@@ -295,7 +396,7 @@ impl UiRuntime {
         }
     }
 
-    fn collect(&mut self, first: Option<JobSignal>) -> Vec<Event> {
+    fn collect_routed(&mut self, first: Option<JobSignal>) -> Vec<RoutedEvent> {
         let mut events = Vec::new();
         // Latest progress per job within this drain batch (BTreeMap for
         // deterministic ordering across drains). The per-report detail
@@ -318,24 +419,34 @@ impl UiRuntime {
                     latest.insert(job, (done, total, detail));
                 }
                 JobSignal::Finished { job, result } => {
+                    let window = self.jobs.get(&job).and_then(|rec| rec.owner);
                     if let Some((d, t, detail)) = latest.remove(&job) {
-                        events.push(Event::job_progress_detail(job, d, t, detail));
+                        events.push(RoutedEvent {
+                            window,
+                            event: Event::job_progress_detail(job, d, t, detail),
+                        });
                     }
                     self.jobs.remove(&job);
-                    events.push(match result {
-                        JobResult::Ok(v) => Event::job_finished(job, v),
-                        JobResult::Err(e) if e.is_cancelled() => Event::job_cancelled(job),
-                        JobResult::Err(e) => Event::job_failed(job, e),
-                        JobResult::Panic => Event::job_failed(
-                            job,
-                            ErrorBody::new(codes::WORKER_FAILED, "job worker panicked"),
-                        ),
+                    events.push(RoutedEvent {
+                        window,
+                        event: match result {
+                            JobResult::Ok(v) => Event::job_finished(job, v),
+                            JobResult::Err(e) if e.is_cancelled() => Event::job_cancelled(job),
+                            JobResult::Err(e) => Event::job_failed(job, e),
+                            JobResult::Panic => Event::job_failed(
+                                job,
+                                ErrorBody::new(codes::WORKER_FAILED, "job worker panicked"),
+                            ),
+                        },
                     });
                 }
             }
         }
         for (job, (done, total, detail)) in latest {
-            events.push(Event::job_progress_detail(job, done, total, detail));
+            events.push(RoutedEvent {
+                window: self.jobs.get(&job).and_then(|rec| rec.owner),
+                event: Event::job_progress_detail(job, done, total, detail),
+            });
         }
         events
     }

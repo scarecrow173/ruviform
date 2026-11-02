@@ -115,7 +115,15 @@ where
         }
     };
 
-    let webview = build_webview(&window, &mut web_context, config, assets, data, enqueue)?;
+    let webview = build_webview(
+        &window,
+        &mut web_context,
+        &config.url,
+        config.devtools,
+        assets,
+        data,
+        enqueue,
+    )?;
 
     let want_exit = Cell::new(false);
     let mut next_tick = config.tick.map(|d| Instant::now() + d);
@@ -187,10 +195,15 @@ where
 
 /// Wires the `rvf` scheme, IPC handler, page-load handler, navigation
 /// policy, bridge script and initial bounds into a webview build.
-fn build_webview(
+///
+/// Shared by the single-window [`run`] and the multi-window
+/// [`crate::session::run_multi`]: `enqueue` is the per-window event
+/// sink each caller wraps with its own routing.
+pub(crate) fn build_webview(
     window: &tao::window::Window,
     web_context: &mut WebContext,
-    config: &HostConfig,
+    url: &str,
+    devtools: bool,
     assets: Arc<dyn AssetSource>,
     data: DataRegistry,
     enqueue: impl Fn(HostEvent) + Clone + 'static,
@@ -198,7 +211,7 @@ fn build_webview(
     let ipc_enqueue = enqueue.clone();
     let load_enqueue = enqueue;
     WebViewBuilder::new_with_web_context(web_context)
-        .with_url(config.url.clone())
+        .with_url(url.to_string())
         .with_initialization_script(ruviform_ui::BRIDGE_JS)
         .with_custom_protocol("rvf".to_string(), move |_id, request| {
             crate::scheme::serve(&assets, &data, &request)
@@ -218,7 +231,7 @@ fn build_webview(
                 || url.starts_with("http://rvf.app")
                 || url == "about:blank"
         })
-        .with_devtools(config.devtools)
+        .with_devtools(devtools)
         .with_bounds(full_bounds(window))
         .build(window)
         .map_err(|e| UiError::backend_unavailable(format!("webview init failed: {e}")))
@@ -257,11 +270,11 @@ impl HostHandle for WebHost<'_> {
     }
 }
 
-fn full_bounds(window: &tao::window::Window) -> Rect {
+pub(crate) fn full_bounds(window: &tao::window::Window) -> Rect {
     bounds_for(window.inner_size())
 }
 
-fn bounds_for(size: PhysicalSize<u32>) -> Rect {
+pub(crate) fn bounds_for(size: PhysicalSize<u32>) -> Rect {
     Rect {
         position: Position::Physical(PhysicalPosition::new(0, 0)),
         size: Size::Physical(size),
