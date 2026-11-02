@@ -19,6 +19,7 @@ Directory: `docs/discovery`
 | DISC-034Q6prdW5pMq5zW9uTb3z | Issue #194 M0 互換性・依存・検証 Baseline 実測監査 | active | [issue-194-m0-baseline-audit.md](./issue-194-m0-baseline-audit.md) |
 | DISC-034QfjLwjBVqddpxivwOTg | Issue #195 M2 Typed Graph Audio Compiler・Buffer/PDC・Stateful RT Ownership・Plan Activation の現行棚卸し | active | [issue-195-m2-typed-graph-compiler-runtime-audit.md](./issue-195-m2-typed-graph-compiler-runtime-audit.md) |
 | DISC-034QdBDFXQ7CpGCCYpN94k | Issue #219 両 Consumer 依存形態・検証基盤棚卸しと Cross-Repo CI 前提実測 | draft | [issue-219-consumer-cross-repo-ci.md](./issue-219-consumer-cross-repo-ci.md) |
+| DISC-034Qohljm0FMrizvY86YLe | Issue #233 media-reader Prefetch/Seek/Pump contract doc & feature improvement candidates — inventory, option analysis | draft | [issue-233-media-reader-prefetch-contract-improvements.md](./issue-233-media-reader-prefetch-contract-improvements.md) |
 | DISC-034JbXZSba3SvOavRFfs66 | Issue #28 UI 技術検証 PoC の事前調査 | draft | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
@@ -39,6 +40,6 @@ Directory: `docs/discovery`
 | DISC-034QhqgG9EF5ipLnFJv0Ka | Issue #191 PCM WAV encode/mux backend — crate placement, output contract, safe publish | resolved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | DISC-U91vIxxv8vbdgKjs4t9moz | Issue #196 M4 Typed Graph Plugin Adapter — multi-bus/stateful lifecycle/process offset precision | resolved | [issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md](./issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md) |
 | DISC-uYfaNCLgYERA7zX0pHelL0 | Issue #197 Generic Media Reader / Decoder・Prefetch・RT Playback Consumer 境界 — inventory, crate placement, contract shape | resolved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
+| DISC-ubO5TxPGQDZSaLVHth3jpg | Issue #198 Stateful Sequential Offline Render・Frame/Preroll/PDC/Tail・Safe Output Receipt — inventory, placement, contract shape | resolved | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
-| DISC-ubO5TxPGQDZSaLVHth3jpg | Issue #198 Stateful Sequential Offline Render・Frame/Preroll/PDC/Tail・Safe Output Receipt — inventory, placement, contract shape | resolved | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |

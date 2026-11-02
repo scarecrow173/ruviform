@@ -9,6 +9,10 @@ Directory: `docs/tasks`
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
+| TASK-034Qooz8UlxyXeGHTFwHXk | Issue 233 T1: prefetch contract doc rewrites — expected_first stream-position assertion + pump iteration contract | todo | [task-233-t1-contract-docs.md](./task-233-t1-contract-docs.md) |
+| TASK-034QoozSINn40AO2e1Ke1k | Issue 233 T2: discard surface — PrefetchConsumer::discard_pending + DiscardReport + seek_discard_pending pending purge | todo | [task-233-t2-discard-pending.md](./task-233-t2-discard-pending.md) |
+| TASK-034QooAu3EbKEEhgcUSJnv | Issue 233 T3: reopen_at fused reopen-to-seek-target | todo | [task-233-t3-reopen-at.md](./task-233-t3-reopen-at.md) |
+| TASK-034QooB7rhCVhK4sqW6lzZ | Issue 233 T4: verification sweep + implementation record | todo | [task-233-t4-verify-ir.md](./task-233-t4-verify-ir.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -212,6 +216,9 @@ Directory: `docs/tasks`
 | TASK-voSb34RCLdA14Lc1kTfNlD | Issue 197 T1: Demuxer::seekable + make_decoder + DecodeMode boundary additions | done | [task-197-t1-demuxer-seekable-make-decoder.md](./task-197-t1-demuxer-seekable-make-decoder.md) |
 | TASK-e5oaEOXS8FGE9PrXrLwkGi | Issue 197 T2: ruviform-media-reader crate — metadata, SourceReader, prefetch pipeline | done | [task-197-t2-media-reader-crate.md](./task-197-t2-media-reader-crate.md) |
 | TASK-02vjFSak80ajcQNqOMIF0s | Issue 197 T3: RD-01..RD-10 acceptance tests + verification record | done | [task-197-t3-tests-verification.md](./task-197-t3-tests-verification.md) |
+| TASK-eM0HvOCV03pTzfSqyt3jgm | Issue 198 T1: render core — OfflineRenderSupport, PreparedRender, Progress::bump_by, deps | done | [task-198-t1-render-core.md](./task-198-t1-render-core.md) |
+| TASK-K54oAzr1E0TFOYRxcMd30t | Issue 198 T2: sequential driver + staged output lifecycle | done | [task-198-t2-driver-output.md](./task-198-t2-driver-output.md) |
+| TASK-ubO5TxPGQDZSaLVHth3aaa | Issue 198 T3: OF-01..OF-07 acceptance tests + verification + merge + impl record | done | [task-198-t3-tests-verification.md](./task-198-t3-tests-verification.md) |
 | TASK-034LFHdEfDbppnNeuh0u48 | ToneMapSdr カーネル実装（BT.2390 EETF） | done | [tone-map-sdr-kernel.md](./tone-map-sdr-kernel.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
@@ -230,6 +237,3 @@ Directory: `docs/tasks`
 | TASK-034LFHddlrfvXu5Jlmwdr0 | working space カーネル実装（ToWorking + FromWorking） | done | [working-space-kernels.md](./working-space-kernels.md) |
 | TASK-034JPwZ8htMzYNPNgOceEI | 分析・レポート記述・文書整合 | done | [write-dispatch-analysis-report.md](./write-dispatch-analysis-report.md) |
 | TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | done | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |
-| TASK-eM0HvOCV03pTzfSqyt3jgm | Issue 198 T1: render core — OfflineRenderSupport, PreparedRender, Progress::bump_by, deps | done | [task-198-t1-render-core.md](./task-198-t1-render-core.md) |
-| TASK-K54oAzr1E0TFOYRxcMd30t | Issue 198 T2: sequential driver + staged output lifecycle | done | [task-198-t2-driver-output.md](./task-198-t2-driver-output.md) |
-| TASK-ubO5TxPGQDZSaLVHth3aaa | Issue 198 T3: OF-01..OF-07 acceptance tests + verification + merge + impl record | done | [task-198-t3-tests-verification.md](./task-198-t3-tests-verification.md) |
