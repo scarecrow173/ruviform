@@ -21,6 +21,9 @@ cpal = "0.18" # 統一 Error/ErrorKind・StreamTrait::now()・HW レイテンシ
 # alloc の検証」をコードレビュー証跡だけでなく機械検証で補強するため。設計書
 # 「コールバック内非 alloc の検証方針」節）。
 assert_no_alloc = "1.1"
+# mock input backend の capture→handoff 契約 PoC で使う SPSC（dev-dep のみ。
+# adapter 本体の依存にはしない — tests/mock_input_backend.rs 専用）。
+ruviform-rt = { path = "../ruviform-rt" }
 
 [features]
 default = []

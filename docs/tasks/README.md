@@ -6,7 +6,9 @@ Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
-| TASK-034QsXMp7VDgLZ2W5FaZxq | Issue #223 MSRV 1.89 限定 pedantic clippy 失敗の整理 | done | [issue-223-msrv-clippy-triage.md](./issue-223-msrv-clippy-triage.md) |
+| TASK-034Qx4QQvbZvxt6cuQGGid | Issue #187-T1: ruviform-audio-core input port contract (device.rs input surface, AudioBufferView::try_new, latency/clock-domain/discontinuity types) | done | [issue-187-t1-input-port-contract.md](./issue-187-t1-input-port-contract.md) |
+| TASK-034Qx4SABRy9cBHiKXWlcL | Issue #187-T2: cpal adapter input surface (enumeration/format mapping, open_input_stream Unsupported) | done | [issue-187-t2-cpal-input-surface.md](./issue-187-t2-cpal-input-surface.md) |
+| TASK-034Qx4ThH8UjhQhXw4woIO | Issue #187-T3: mock input backend + deterministic capture->handoff RT contract tests | done | [issue-187-t3-mock-input-poc.md](./issue-187-t3-mock-input-poc.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -116,6 +118,7 @@ Directory: `docs/tasks`
 | TASK-034QdV9z3ctYdM4HMD0MsZ | T2 consumer-verify.yml Cross-Repo CI lane（preflight/verify×2/summary） | done | [issue-219-t2-consumer-verify-workflow.md](./issue-219-t2-consumer-verify-workflow.md) |
 | TASK-034QdVap6IcvMjOYnaWzCR | T3 AGENTS.md の ci.yml 記述 drift 修正 | done | [issue-219-t3-agents-ci-drift.md](./issue-219-t3-agents-ci-drift.md) |
 | TASK-034QdVbbaa7jKsLfhGKepC | T4 検証・IR 記録（actionlint・doc audit・実装記録） | done | [issue-219-t4-verify-ir.md](./issue-219-t4-verify-ir.md) |
+| TASK-034QsXMp7VDgLZ2W5FaZxq | Issue #223 MSRV 1.89 限定 pedantic clippy 失敗の整理 | done | [issue-223-msrv-clippy-triage.md](./issue-223-msrv-clippy-triage.md) |
 | TASK-M5TTFmL3gjHvlBOb7sPDjF | Issue #238 l1_proxy_e2e 壁時計 sleep 同期を barrier/有界 poll へ置換 | done | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |

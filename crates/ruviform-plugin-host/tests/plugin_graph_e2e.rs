@@ -23,9 +23,10 @@ use std::time::{Duration, Instant};
 
 use ruviform_audio::{AudioNode, Graph, GraphPlan, PlanSwap, Session};
 use ruviform_audio_core::device::{
-    BufferSize, DEVICE_CLOCK_TIMEBASE, Device, DeviceEnumerator, DeviceId, DeviceResult,
+    BufferSize, DEVICE_CLOCK_TIMEBASE, Device, DeviceEnumerator, DeviceError, DeviceId,
+    DeviceResult, InputDataCallback, InputErrorCallback, InputStream, InputStreamConfig,
     OutputCallbackInfo, OutputDataCallback, OutputStream, OutputStreamConfig, OutputTimestamp,
-    SupportedOutputFormat,
+    SupportedInputFormat, SupportedOutputFormat,
 };
 use ruviform_audio_core::{
     AudioBufferViewMut, AudioFormat, ChannelLayout, SampleFormat, SampleRate,
@@ -122,6 +123,23 @@ impl Device for MockDevice {
             format: config.format,
         }))
     }
+
+    fn default_input_format(&self) -> DeviceResult<AudioFormat> {
+        Err(DeviceError::Unsupported)
+    }
+
+    fn supported_input_formats(&self) -> DeviceResult<Vec<SupportedInputFormat>> {
+        Ok(Vec::new())
+    }
+
+    fn open_input_stream(
+        &self,
+        _config: &InputStreamConfig,
+        _data_callback: InputDataCallback,
+        _error_callback: InputErrorCallback,
+    ) -> DeviceResult<Box<dyn InputStream>> {
+        Err(DeviceError::Unsupported)
+    }
 }
 
 /// The enumerator half — hands out `MockDevice`s that all share the
@@ -164,6 +182,14 @@ impl DeviceEnumerator for MockEnumerator {
 
     fn default_output_device(&self) -> DeviceResult<Option<Box<dyn Device>>> {
         Ok(Some(self.device()))
+    }
+
+    fn input_devices(&self) -> DeviceResult<Vec<Box<dyn Device>>> {
+        Ok(Vec::new())
+    }
+
+    fn default_input_device(&self) -> DeviceResult<Option<Box<dyn Device>>> {
+        Ok(None)
     }
 }
 

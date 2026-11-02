@@ -31,6 +31,10 @@
 //! Actually used: `ruviform-media-core`
 //! ([`TimeBase`](ruviform_media_core::TimeBase),
 //! [`MediaTime`](ruviform_media_core::MediaTime),
+//! [`MediaTimestamp`](ruviform_media_core::MediaTimestamp),
+//! [`TimestampProvenance`](ruviform_media_core::TimestampProvenance),
+//! [`ClockDomainId`](ruviform_media_core::ClockDomainId),
+//! [`InputStamp`](ruviform_media_core::InputStamp),
 //! [`Rounding`](ruviform_media_core::Rounding),
 //! [`Error`](ruviform_media_core::Error)/[`Result`](ruviform_media_core::Result)).
 //! `ruviform-audio-core` must not
@@ -181,8 +185,10 @@ mod tests {
         use super::*;
         use crate::device::{
             BufferSize, DEVICE_CLOCK_TIMEBASE, Device, DeviceEnumerator, DeviceError, DeviceId,
-            DeviceResult, OutputCallbackInfo, OutputDataCallback, OutputErrorCallback,
-            OutputStream, OutputStreamConfig, OutputTimestamp, SupportedBufferSize,
+            DeviceResult, InputCallbackInfo, InputDataCallback, InputErrorCallback, InputStream,
+            InputStreamConfig, InputTimestamp, LatencyCoverage, OutputCallbackInfo,
+            OutputDataCallback, OutputErrorCallback, OutputStream, OutputStreamConfig,
+            OutputTimestamp, StreamLatency, SupportedBufferSize, SupportedInputFormat,
             SupportedOutputFormat,
         };
         use ruviform_media_core::MediaTime;
@@ -278,6 +284,23 @@ mod tests {
                     format: config.format,
                 }))
             }
+
+            fn default_input_format(&self) -> DeviceResult<AudioFormat> {
+                Err(DeviceError::Unsupported)
+            }
+
+            fn supported_input_formats(&self) -> DeviceResult<Vec<SupportedInputFormat>> {
+                Ok(Vec::new())
+            }
+
+            fn open_input_stream(
+                &self,
+                _config: &InputStreamConfig,
+                _data_callback: InputDataCallback,
+                _error_callback: InputErrorCallback,
+            ) -> DeviceResult<Box<dyn InputStream>> {
+                Err(DeviceError::Unsupported)
+            }
         }
 
         struct StubEnumerator;
@@ -293,6 +316,14 @@ mod tests {
                 Ok(Some(Box::new(StubDevice {
                     format: stub_format(),
                 })))
+            }
+
+            fn input_devices(&self) -> DeviceResult<Vec<Box<dyn Device>>> {
+                Ok(Vec::new())
+            }
+
+            fn default_input_device(&self) -> DeviceResult<Option<Box<dyn Device>>> {
+                Ok(None)
             }
         }
 
@@ -313,14 +344,22 @@ mod tests {
             requires_send::<Box<dyn OutputStream>>();
             requires_send::<OutputDataCallback>();
             requires_send::<OutputErrorCallback>();
+            requires_send::<Box<dyn InputStream>>();
+            requires_send::<InputDataCallback>();
+            requires_send::<InputErrorCallback>();
             requires_send::<DeviceError>();
             requires_send::<OutputStreamConfig>();
+            requires_send::<InputStreamConfig>();
             requires_send::<BufferSize>();
             requires_send::<SupportedBufferSize>();
             requires_send::<SupportedOutputFormat>();
+            requires_send::<SupportedInputFormat>();
             requires_send::<DeviceId>();
             requires_send::<OutputTimestamp>();
             requires_send::<OutputCallbackInfo>();
+            requires_send::<InputTimestamp>();
+            requires_send::<InputCallbackInfo>();
+            requires_send::<StreamLatency>();
 
             let enumerator: Box<dyn DeviceEnumerator> = Box::new(StubEnumerator);
             let devices = enumerator.output_devices().unwrap();
@@ -381,12 +420,18 @@ mod tests {
             requires_copy::<DeviceError>();
             requires_copy::<OutputTimestamp>();
             requires_copy::<OutputCallbackInfo>();
+            requires_copy::<InputTimestamp>();
+            requires_copy::<InputCallbackInfo>();
+            requires_copy::<StreamLatency>();
+            requires_copy::<LatencyCoverage>();
             requires_copy::<OutputStreamConfig>();
+            requires_copy::<InputStreamConfig>();
             requires_copy::<BufferSize>();
             requires_copy::<SupportedBufferSize>();
             // `Clone`-only value types (growth headroom).
             requires_clone::<DeviceId>();
             requires_clone::<SupportedOutputFormat>();
+            requires_clone::<SupportedInputFormat>();
 
             // Standard error contract — usable as `&dyn Error`.
             requires_std_error::<DeviceError>();
@@ -408,6 +453,7 @@ mod tests {
                 DeviceError::Xrun,
                 DeviceError::RealtimeDenied,
                 DeviceError::StreamInvalidated,
+                DeviceError::ClockDiscontinuity,
                 DeviceError::Backend("backend_failure"),
             ] {
                 assert_ne!(error.to_string(), "");

@@ -2840,6 +2840,7 @@ dependencies = [
  "cpal",
  "ruviform-audio-core",
  "ruviform-media-core",
+ "ruviform-rt",
 ]
 
 [[package]]
