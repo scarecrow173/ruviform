@@ -196,7 +196,8 @@ jobs:
       - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked rust prek node
+          mise install --locked rust prek
+          mise install node@26.12.1
 
       - name: Install WebKitGTK development headers (Linux)
         if: runner.os == 'Linux'
