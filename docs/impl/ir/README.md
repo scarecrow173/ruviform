@@ -114,4 +114,5 @@ Directory: `docs/impl/ir`
 | `IMPL-034Qe219CrossRepoCiGateX7k` | Issue #219 Consumer 影響判定テンプレート・consumer-verify workflow・AGENTS.md CI drift 修正 | completed | [issue-219-consumer-verify-gate.md](./issue-219-consumer-verify-gate.md) |
 | IMPL-034QiCAnjapH74RQucPXy1 | Issue #185 Generic Probe PoC implementation record | completed | [issue-185-generic-probe-poc-implementation-record.md](./issue-185-generic-probe-poc-implementation-record.md) |
 | IMPL-034QlaADDFHTb4n47aDNfW | Issue 186 parameter control events contract | completed | [issue-186-parameter-control-events-contract.md](./issue-186-parameter-control-events-contract.md) |
+| IMPL-fGB1DM0VeWj7PjZgDkJ4th | Issue #188 timed MIDI input PoC | completed | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | IMPL-issue198-sequential-offline-render | Issue #198 sequential offline render — prepared instance, sequential driver, PDC/preroll/tail, staged output | completed | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |

@@ -102,7 +102,10 @@ pub mod wire;
 pub use boundary::{FailureCause, GuiHandle, GuiParentToken, HostError, PluginHandle};
 pub use bus::{BusDescriptor, BusDirection, BusRole};
 pub use descriptor::{PluginDescriptor, PluginDescriptorView};
-pub use event::{Event, EventKind, EventList, ParamEvent, sort_events_by_frame_offset};
+pub use event::{
+    Event, EventKind, EventList, MAX_MERGE_SOURCES, MergeError, ParamEvent, merge_call_events,
+    sort_events_by_frame_offset,
+};
 pub use lifecycle::{Lifecycle, LifecycleError, LifecycleEvent, LifecycleState};
 pub use param::{ParamFlags, ParamId, ParamInfo, ParamValue};
 pub use param_write::{
@@ -143,6 +146,12 @@ mod tests {
     use super::*;
     use ruviform_audio_core::SampleRate;
     use ruviform_media_core::{MediaTime, TimeBase, TransportStatus};
+
+    /// `rt_` contract tests in this crate's lib test binary measure
+    /// against this allocator (`assert_no_alloc::assert_no_alloc`).
+    #[cfg(debug_assertions)]
+    #[global_allocator]
+    static ALLOC: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
 
     #[test]
     fn version_is_not_empty() {

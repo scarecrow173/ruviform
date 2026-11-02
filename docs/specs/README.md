@@ -24,6 +24,7 @@ Directory: `docs/specs`
 | SPEC-034QdNpdBY3gkeQraIPKwP | Issue #184 Typed multi-bus Port/Connection Graph IR contract (Migration M1) | approved | [issue-184-typed-multi-bus-port-connection-graph-ir-contract-migration-m1.md](./issue-184-typed-multi-bus-port-connection-graph-ir-contract-migration-m1.md) |
 | SPEC-034QhNRt6XTihijW6B8pOy | Issue #185 Generic Probe: Node/Port observation capability, Off/Monitor/Capture states, bounded RT-safe PCM capture, time/identity metadata, non-RT delivery contract | approved | [issue-185-generic-probe-rt-capture.md](./issue-185-generic-probe-rt-capture.md) |
 | SPEC-034QkwrLNvylpSOCZVs2bC | Issue #186 Parameter Control Events — capability, delivery and observability contract | proposed | [issue-186-param-control-events.md](./issue-186-param-control-events.md) |
+| SPEC-bg9fb3WGAfULNZMmr9jTMc | Issue #188 Timed MIDI — input, timestamp and plugin delivery contract | proposed | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | SPEC-034Qf9Ze8jsyjHppvPkQup | Issue #189 Rational Beat Position + Variable PPQN (Migration M3) | approved | [issue-189-rational-beat-variable-ppqn-m3.md](./issue-189-rational-beat-variable-ppqn-m3.md) |
 | SPEC-034Qg9hT0w1z3B9vJkLmNo | Issue #190 Generic Transport Span Scheduler / Applied Receipt / Clock-Plan Generation contract | approved | [issue-190-transport-span-scheduler.md](./issue-190-transport-span-scheduler.md) |
 | SPEC-034QhrD80l0ZtpqNTqFvHa | Issue #191 PCM WAV encode/mux output backend | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |

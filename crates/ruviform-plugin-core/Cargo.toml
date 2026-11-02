@@ -12,5 +12,8 @@ ruviform-audio-core = { path = "../ruviform-audio-core" }
 ruviform-media-core = { path = "../ruviform-media-core" }
 ruviform-video-core = { path = "../ruviform-video-core" }
 
+[dev-dependencies]
+assert_no_alloc = "1.1"
+
 [lints]
 workspace = true

@@ -575,7 +575,9 @@ mod tests {
             O: BufferViewMut,
         {
             for event in events.iter() {
-                let EventKind::ParamValue(ParamEvent { value, .. }) = event.kind();
+                let EventKind::ParamValue(ParamEvent { value, .. }) = event.kind() else {
+                    continue;
+                };
                 // Test processor: normalized [0,1] `ParamValue` → f32 is a
                 // defined narrowing within the normalized range.
                 #[expect(clippy::cast_possible_truncation)]

@@ -48,7 +48,8 @@ use clack_plugin::process::{PluginAudioConfiguration, ProcessStatus as ClapProce
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_media_core::{
-    MediaDuration, MediaRange, MediaTime, MusicalTimeInfo, PPQN, TimeBase, TransportStatus,
+    MediaDuration, MediaRange, MediaTime, MidiChannel, MidiController, MidiEvent, MidiGroup,
+    MidiKind, MidiProgram, MidiValue, MusicalTimeInfo, NoteKey, PPQN, TimeBase, TransportStatus,
 };
 use ruviform_plugin_core::{
     Event, EventKind, EventList, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent,
@@ -620,6 +621,114 @@ pub(crate) fn translate_param_event(unknown: &UnknownEvent, param: &ParamInfo) -
     ))
 }
 
+/// Decodes a MIDI 1.0 channel-voice triplet (`status`, `d1`, `d2`)
+/// into a [`MidiKind`]. System messages (`0xF0`..) and malformed
+/// ranges are a defined skip (`None`), never a silent conversion.
+///
+/// **RT contract:** RT-suitable — pure, allocation-free.
+fn midi1_channel_voice(status: u8, d1: u8, d2: u8) -> Option<MidiKind> {
+    Some(match status & 0xF0 {
+        0x80 => MidiKind::NoteOff {
+            key: NoteKey::new(d1).ok()?,
+            velocity: MidiValue::from_u7(d2),
+        },
+        0x90 => MidiKind::NoteOn {
+            key: NoteKey::new(d1).ok()?,
+            velocity: MidiValue::from_u7(d2),
+        },
+        0xA0 => MidiKind::PolyPressure {
+            key: NoteKey::new(d1).ok()?,
+            pressure: MidiValue::from_u7(d2),
+        },
+        0xB0 => MidiKind::ControlChange {
+            controller: MidiController::new(d1).ok()?,
+            value: MidiValue::from_u7(d2),
+        },
+        0xC0 => MidiKind::ProgramChange {
+            program: MidiProgram::new(d1).ok()?,
+        },
+        0xD0 => MidiKind::ChannelPressure {
+            pressure: MidiValue::from_u7(d1),
+        },
+        0xE0 => MidiKind::PitchBend {
+            value: MidiValue::bend_from_u14(u16::from(d1) | u16::from(d2) << 7),
+        },
+        _ => return None,
+    })
+}
+
+/// Translates `CoreEventSpace::Midi` (MIDI 1.0 bytes) and
+/// `CoreEventSpace::Midi2` (UMP) into [`EventKind::Midi`] —
+/// channel-voice messages only. Defined skips (`None`): system/SysEx
+/// bytes, UMP message types other than `2`/`4`, and MIDI 2.0 opcodes
+/// outside the channel-voice vocabulary — the capability matrix
+/// (`midi_sysex`, `note_expression`) documents them as unsupported.
+/// Note events with attribute fields carry no neutral payload yet;
+/// the attribute data is a defined narrowing (dropped bytes are not
+/// modeled, not silently reinterpreted).
+///
+/// **RT contract:** RT-suitable — pure, allocation-free.
+fn translate_midi_event(unknown: &UnknownEvent) -> Option<Event> {
+    let time = unknown.header().time();
+    let (group, channel, kind) = match unknown.as_core_event() {
+        Some(CoreEventSpace::Midi(event)) => {
+            let [status, d1, d2] = event.data();
+            (0_u8, status & 0x0F, midi1_channel_voice(status, d1, d2)?)
+        }
+        Some(CoreEventSpace::Midi2(event)) => {
+            let [w0, w1, _, _] = event.data();
+            let group = ((w0 >> 24) & 0xF) as u8;
+            let status = ((w0 >> 16) & 0xFF) as u8;
+            let index = ((w0 >> 8) & 0xFF) as u8;
+            let channel = status & 0x0F;
+            let kind = match w0 >> 28 {
+                // UMP MIDI 1.0 channel-voice: index/data bytes are the
+                // MIDI 1.0 payload verbatim.
+                2 => midi1_channel_voice(status, index, (w0 & 0xFF) as u8)?,
+                // UMP MIDI 2.0 channel-voice: `index` is key/controller,
+                // `w1` carries the widened payload.
+                4 => match status & 0xF0 {
+                    0x80 => MidiKind::NoteOff {
+                        key: NoteKey::new(index).ok()?,
+                        velocity: MidiValue::from_u16((w1 >> 16) as u16),
+                    },
+                    0x90 => MidiKind::NoteOn {
+                        key: NoteKey::new(index).ok()?,
+                        velocity: MidiValue::from_u16((w1 >> 16) as u16),
+                    },
+                    0xA0 => MidiKind::PolyPressure {
+                        key: NoteKey::new(index).ok()?,
+                        pressure: w1,
+                    },
+                    0xB0 => MidiKind::ControlChange {
+                        controller: MidiController::new(index).ok()?,
+                        value: w1,
+                    },
+                    0xC0 => MidiKind::ProgramChange {
+                        program: MidiProgram::new(((w1 >> 24) & 0x7F) as u8).ok()?,
+                    },
+                    0xD0 => MidiKind::ChannelPressure { pressure: w1 },
+                    0xE0 => MidiKind::PitchBend {
+                        value: MidiValue::bend_from_u32(w1),
+                    },
+                    _ => return None,
+                },
+                _ => return None,
+            };
+            (group, channel, kind)
+        }
+        _ => return None,
+    };
+    Some(Event::new(
+        time,
+        EventKind::Midi(MidiEvent {
+            group: MidiGroup::new(group).ok()?,
+            channel: MidiChannel::new(channel).ok()?,
+            kind,
+        }),
+    ))
+}
+
 /// Translates the input event list into a validated neutral
 /// [`EventList`] borrowing `scratch.events` — allocation-free (pushes
 /// stay within the pre-allocated capacity; bounds are checked first).
@@ -654,7 +763,9 @@ pub(crate) fn translate_events<'a>(
     let mut sorted = true;
     let mut previous = 0_u32;
     for unknown in input.iter() {
-        let Some(event) = translate_param_event(unknown, param) else {
+        let Some(event) =
+            translate_param_event(unknown, param).or_else(|| translate_midi_event(unknown))
+        else {
             continue;
         };
         // Defined skip: an out-of-block offset drops just that event —
@@ -1483,12 +1594,13 @@ mod tests {
         let list = translate_events(&input, &mut scratch, &GAIN_PARAM, block_frames)?;
         Ok(list
             .iter()
-            .map(|event| {
-                let value = match event.kind() {
-                    EventKind::ParamValue(param_event) => param_event.value.get(),
-                    _ => unreachable!("only ParamValue events are translated"),
-                };
-                (event.frame_offset(), value)
+            .filter_map(|event| match event.kind() {
+                EventKind::ParamValue(param_event) => {
+                    Some((event.frame_offset(), param_event.value.get()))
+                }
+                // Issue #188: `EventKind::Midi` also translates now —
+                // this helper asserts param sequences only.
+                _ => None,
             })
             .collect())
     }
@@ -1512,7 +1624,10 @@ mod tests {
     #[test]
     fn translate_events_skips_non_param_and_foreign_events() {
         let mut buffer = EventBuffer::new();
-        buffer.push(&MidiEvent::new(0, 0, [0x90, 60, 100])); // non-param kind
+        // A system byte (`0xF0`) is outside the channel-voice
+        // vocabulary — still a defined skip (see `midi_sysex` in the
+        // capability matrix); a Note-On would now *translate*.
+        buffer.push(&MidiEvent::new(0, 0, [0xF0, 0, 0])); // non-param kind
         buffer.push(&gain_event(0, f64::NAN)); // non-finite value
         buffer.push(&ParamValueEvent::new(
             4,
@@ -1530,6 +1645,35 @@ mod tests {
         buffer.push(&gain_event(8, 0.5));
         let translated = translated_sequence(&buffer, FRAMES).unwrap();
         assert_eq!(translated, [(8, 0.25)]);
+    }
+
+    /// Issue #188 — CLAP `Midi`/`Midi2` events translate into
+    /// `EventKind::Midi` with channel-voice payloads preserved.
+    #[test]
+    fn translate_events_translates_midi_channel_voice() {
+        use ruviform_media_core::{MidiKind as K, NoteKey};
+
+        let mut buffer = EventBuffer::new();
+        buffer.push(&MidiEvent::new(3, 0, [0x90, 60, 100])); // note-on
+        buffer.push(&MidiEvent::new(5, 0, [0xB0, 64, 127])); // CC sustain
+        buffer.push(&MidiEvent::new(7, 0, [0xE0, 0x00, 0x40])); // bend center
+        let input = buffer.as_input();
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
+        let list = translate_events(&input, &mut scratch, &GAIN_PARAM, FRAMES).unwrap();
+        let kinds: Vec<(u32, K)> = list
+            .iter()
+            .filter_map(|e| match e.kind() {
+                EventKind::Midi(m) => Some((e.frame_offset(), m.kind)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(kinds.len(), 3);
+        assert!(matches!(
+            kinds[0],
+            (3, K::NoteOn { key, .. }) if key == NoteKey::new(60).unwrap()
+        ));
+        assert!(matches!(kinds[1], (5, K::ControlChange { .. })));
+        assert!(matches!(kinds[2], (7, K::PitchBend { value: 0 })));
     }
 
     #[test]

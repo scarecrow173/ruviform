@@ -86,6 +86,12 @@ Directory: `docs/tasks`
 | TASK-034QkFzCiPKInh3jrWFr9b | bridge: TargetId binding + dispatch ledger + cap matrix param fields | done | [issue-186-02-bridge-target-dispatch.md](./issue-186-02-bridge-target-dispatch.md) |
 | TASK-034QkFAipKgHjxJRSBAYXt | tests: delivery E2E + rejection + time conversion + observability | done | [issue-186-03-delivery-observability-tests.md](./issue-186-03-delivery-observability-tests.md) |
 | TASK-034QkFB3oVWTfZxG7hGYMc | rt lane: bounded dispatch no-alloc + plan vault keep/retire + verification | done | [issue-186-04-rt-verification.md](./issue-186-04-rt-verification.md) |
+| TASK-5dlmLfhxOjW0IccOc3xUBO | media-core: midi + timed_input vocabulary, mapper and NoteLedger | done | [issue-188-01-media-core-midi-vocabulary.md](./issue-188-01-media-core-midi-vocabulary.md) |
+| TASK-CKJ1IaOWUc0aUcraqOPD3q | plugin-core: EventKind::Midi + wire tag + merge_call_events | done | [issue-188-02-plugin-core-eventkind-midi-merge.md](./issue-188-02-plugin-core-eventkind-midi-merge.md) |
+| TASK-gOmhMICXSl8m4R5UD5kRf5 | audio-core: midi input port trait + mock | done | [issue-188-03-audio-core-midi-input-port.md](./issue-188-03-audio-core-midi-input-port.md) |
+| TASK-54RLlHRS4QloXdmLEZEM8L | bridge: InputStage + merge + NoteLedger wiring + control/status/attach | done | [issue-188-04-bridge-input-stage-merge.md](./issue-188-04-bridge-input-stage-merge.md) |
+| TASK-RjMEQhLpvbKbkrKJQvqsz8 | adapters: cap.rs note/channel-event fields + CLAP translation + VST3 honesty | done | [issue-188-05-adapter-capability-honesty.md](./issue-188-05-adapter-capability-honesty.md) |
+| TASK-lzn8pZrsr6ThLMc0iKw8bN | tests: midi_delivery E2E + rt_ no-alloc + full verification | done | [issue-188-06-midi-delivery-tests.md](./issue-188-06-midi-delivery-tests.md) |
 | TASK-034QfdkD1MggWcolouiYsy | issue-189 T-1 BeatPosition/Ppqn/TickPosition canonical types | done | [issue-189-t-1-beat-canonical-types.md](./issue-189-t-1-beat-canonical-types.md) |
 | TASK-034QfdpefNAIoQr57VQZlb | issue-189 T-2 TempoMap Beat basis + event/position/ABI migration | done | [issue-189-t-2-tempomap-beat-basis.md](./issue-189-t-2-tempomap-beat-basis.md) |
 | TASK-034QfdqgoGMqtqJ2HHFDdG | issue-189 T-3 golden/RT verification + impl record + output contract | done | [issue-189-t-3-golden-verification-impl-record.md](./issue-189-t-3-golden-verification-impl-record.md) |

@@ -87,7 +87,8 @@ use std::io::{self, Read, Write};
 
 use ruviform_audio_core::SampleRate;
 use ruviform_media_core::{
-    FrameRate, MediaDuration, MediaRange, MediaTime, MusicalTimeInfo, TimeBase, TransportStatus,
+    FrameRate, MediaDuration, MediaRange, MediaTime, MidiChannel, MidiController, MidiEvent,
+    MidiGroup, MidiKind, MidiProgram, MusicalTimeInfo, NoteKey, TimeBase, TransportStatus,
 };
 use ruviform_video_core::{
     Chromaticity, ColorInfo, ColorPrimaries, ColorRange, ContentLightLevel, HdrMetadata,
@@ -2218,7 +2219,9 @@ pub fn decode_transport(reader: &mut Reader<'_>) -> Result<TransportInfo, WireEr
 
 /// Appends an [`Event`] (`u32` frame offset, `u8` kind tag +
 /// payload, `u64` reserved ×2). `ParamValue` events carry `u32`
-/// param id + `f64` normalized value.
+/// param id + `f64` normalized value. `Midi` events carry
+/// `u8 group<<4|channel`, a `u8` message sub-tag and the message's
+/// canonical value fields.
 pub fn encode_event(event: &Event, out: &mut Vec<u8>) {
     push_u32(out, event.frame_offset());
     match event.kind() {
@@ -2227,15 +2230,107 @@ pub fn encode_event(event: &Event, out: &mut Vec<u8>) {
             push_u32(out, param.param_id.0);
             push_f64(out, param.value.get());
         }
+        EventKind::Midi(midi) => {
+            push_u8(out, 1);
+            encode_midi_event(&midi, out);
+        }
     }
     for reserved in event.reserved() {
         push_u64(out, reserved);
     }
 }
 
+/// Appends a [`MidiEvent`] body: routing byte, message sub-tag and
+/// canonical value fields. Sub-tags: 0=NoteOn, 1=NoteOff, 2=CC,
+/// 3=PitchBend, 4=PolyPressure, 5=ChannelPressure, 6=ProgramChange.
+fn encode_midi_event(midi: &MidiEvent, out: &mut Vec<u8>) {
+    push_u8(out, midi.group.get() << 4 | midi.channel.get());
+    match midi.kind {
+        MidiKind::NoteOn { key, velocity } => {
+            push_u8(out, 0);
+            push_u8(out, key.get());
+            push_u32(out, velocity);
+        }
+        MidiKind::NoteOff { key, velocity } => {
+            push_u8(out, 1);
+            push_u8(out, key.get());
+            push_u32(out, velocity);
+        }
+        MidiKind::ControlChange { controller, value } => {
+            push_u8(out, 2);
+            push_u8(out, controller.get());
+            push_u32(out, value);
+        }
+        MidiKind::PitchBend { value } => {
+            push_u8(out, 3);
+            push_i32(out, value);
+        }
+        MidiKind::PolyPressure { key, pressure } => {
+            push_u8(out, 4);
+            push_u8(out, key.get());
+            push_u32(out, pressure);
+        }
+        MidiKind::ChannelPressure { pressure } => {
+            push_u8(out, 5);
+            push_u32(out, pressure);
+        }
+        MidiKind::ProgramChange { program } => {
+            push_u8(out, 6);
+            push_u8(out, program.get());
+        }
+        _ => {
+            // Future MidiKind variants have no assigned sub-tag:
+            // encode the reject tag so a peer fails Malformed instead
+            // of silently dropping or mis-reading the event.
+            push_u8(out, 0xFF);
+        }
+    }
+}
+
+/// Reads a [`MidiEvent`] body — unassigned sub-tags and out-of-range
+/// group/channel/key/controller/program values are rejected.
+fn decode_midi_event(reader: &mut Reader<'_>) -> Result<MidiEvent, WireError> {
+    let routing = reader.read_u8()?;
+    let group = MidiGroup::new(routing >> 4).map_err(|_| WireError::Malformed)?;
+    let channel = MidiChannel::new(routing & 0x0F).map_err(|_| WireError::Malformed)?;
+    let kind = match reader.read_u8()? {
+        0 => MidiKind::NoteOn {
+            key: NoteKey::new(reader.read_u8()?).map_err(|_| WireError::Malformed)?,
+            velocity: reader.read_u32()?,
+        },
+        1 => MidiKind::NoteOff {
+            key: NoteKey::new(reader.read_u8()?).map_err(|_| WireError::Malformed)?,
+            velocity: reader.read_u32()?,
+        },
+        2 => MidiKind::ControlChange {
+            controller: MidiController::new(reader.read_u8()?).map_err(|_| WireError::Malformed)?,
+            value: reader.read_u32()?,
+        },
+        3 => MidiKind::PitchBend {
+            value: reader.read_i32()?,
+        },
+        4 => MidiKind::PolyPressure {
+            key: NoteKey::new(reader.read_u8()?).map_err(|_| WireError::Malformed)?,
+            pressure: reader.read_u32()?,
+        },
+        5 => MidiKind::ChannelPressure {
+            pressure: reader.read_u32()?,
+        },
+        6 => MidiKind::ProgramChange {
+            program: MidiProgram::new(reader.read_u8()?).map_err(|_| WireError::Malformed)?,
+        },
+        _ => return Err(WireError::Malformed),
+    };
+    Ok(MidiEvent {
+        group,
+        channel,
+        kind,
+    })
+}
+
 /// Reads an [`Event`] — an unassigned kind tag, a non-finite or
-/// unrepresentable parameter value and non-zero reserved words are
-/// rejected.
+/// unrepresentable parameter value, malformed MIDI fields and
+/// non-zero reserved words are rejected.
 ///
 /// # Errors
 ///
@@ -2247,6 +2342,7 @@ pub fn decode_event(reader: &mut Reader<'_>) -> Result<Event, WireError> {
             param_id: ParamId(reader.read_u32()?),
             value: ParamValue::new(reader.read_f64()?).map_err(|_| WireError::Malformed)?,
         }),
+        1 => EventKind::Midi(decode_midi_event(reader)?),
         _ => return Err(WireError::Malformed),
     };
     let reserved = [reader.read_u64()?, reader.read_u64()?];
@@ -4053,6 +4149,86 @@ mod tests {
         assert_eq!(decode_event(&mut reader), Err(WireError::Malformed));
         // Unknown event kind tag.
         let mut reader = Reader::new(&[0, 0, 0, 0, 9]);
+        assert_eq!(decode_event(&mut reader), Err(WireError::Malformed));
+    }
+
+    /// Issue #188 — `EventKind::Midi` wire coverage: every `MidiKind`
+    /// sub-tag round-trips; out-of-range routing/value fields and
+    /// unknown sub-tags are defined rejections.
+    #[test]
+    fn midi_event_wire_roundtrip_and_rejections() {
+        use ruviform_media_core::{MidiValue, NoteKey};
+
+        let group = MidiGroup::new(3).unwrap();
+        let channel = MidiChannel::new(9).unwrap();
+        let kinds = [
+            MidiKind::NoteOn {
+                key: NoteKey::new(60).unwrap(),
+                velocity: MidiValue::from_u7(0x7F),
+            },
+            MidiKind::NoteOff {
+                key: NoteKey::new(127).unwrap(),
+                velocity: 0,
+            },
+            MidiKind::ControlChange {
+                controller: MidiController::new(64).unwrap(),
+                value: MidiValue::from_u7(1),
+            },
+            MidiKind::PitchBend {
+                value: MidiValue::bend_from_u14(0x2000),
+            },
+            MidiKind::PolyPressure {
+                key: NoteKey::new(0).unwrap(),
+                pressure: MidiValue::from_u7(1),
+            },
+            MidiKind::ChannelPressure {
+                pressure: MidiValue::from_u7(0x7F),
+            },
+            MidiKind::ProgramChange {
+                program: MidiProgram::new(0).unwrap(),
+            },
+        ];
+        for kind in kinds {
+            let event = Event::new(
+                96,
+                EventKind::Midi(MidiEvent {
+                    group,
+                    channel,
+                    kind,
+                }),
+            );
+            assert_eq!(field_roundtrip(&event, encode_event, decode_event), event);
+        }
+
+        // Unknown MIDI sub-tag.
+        let mut payload = Vec::new();
+        push_u32(&mut payload, 0);
+        push_u8(&mut payload, 1);
+        push_u8(&mut payload, 0); // routing byte
+        push_u8(&mut payload, 99); // unassigned sub-tag
+        let mut reader = Reader::new(&payload);
+        assert_eq!(decode_event(&mut reader), Err(WireError::Malformed));
+
+        // Out-of-range controller number.
+        let mut payload = Vec::new();
+        push_u32(&mut payload, 0);
+        push_u8(&mut payload, 1);
+        push_u8(&mut payload, 0xFF); // group 15, channel 15 — both in range
+        push_u8(&mut payload, 2); // ControlChange
+        push_u8(&mut payload, 0x80); // controller 128 > 127
+        push_u32(&mut payload, 0);
+        let mut reader = Reader::new(&payload);
+        assert_eq!(decode_event(&mut reader), Err(WireError::Malformed));
+
+        // Out-of-range key.
+        let mut payload = Vec::new();
+        push_u32(&mut payload, 0);
+        push_u8(&mut payload, 1);
+        push_u8(&mut payload, 0);
+        push_u8(&mut payload, 0); // NoteOn
+        push_u8(&mut payload, 0x80); // key 128 > 127
+        push_u32(&mut payload, 0);
+        let mut reader = Reader::new(&payload);
         assert_eq!(decode_event(&mut reader), Err(WireError::Malformed));
     }
 

@@ -37,6 +37,7 @@ Directory: `docs/test-specs`
 | TSPEC-034QeeLKxXQyMBzA6HNOW6 | Issue #184 M1 typed graph IR: representation, multi-bus topology, validation failures, revisions, legacy coexistence | approved | [issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md](./issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md) |
 | TSPEC-034QibxcrYUagyZX3rtGKj | Issue #185 generic probe: capability, modes, metrics, bounded capture, metadata, RT safety, faults | approved | [issue-185-generic-probe-tests.md](./issue-185-generic-probe-tests.md) |
 | TSPEC-034QkFscAwaBuZWB5aEeBy | Issue #186 Parameter Control Events — test spec | approved | [issue-186-param-control-events.md](./issue-186-param-control-events.md) |
+| TSPEC-7XFD0mdqRqdtKwGpmWUa66 | Issue #188 Timed MIDI — test spec | approved | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | TSPEC-034QfbY0KiEUPgYkq50kJl | Issue #189 M3 Rational Beat/PPQN golden + RT tests | approved | [issue-189-m3-rational-beat-ppqn-tests.md](./issue-189-m3-rational-beat-ppqn-tests.md) |
 | TSPEC-034Qh4wErTyUiOpAsD | Issue #190 Transport Span Scheduler テスト仕様 | approved | [issue-190-transport-span-scheduler-tests.md](./issue-190-transport-span-scheduler-tests.md) |
 | TSPEC-034Qhwm0HeEmVIU2j6ttxT | Issue #191 PCM WAV output test specification | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
