@@ -37,6 +37,7 @@ Directory: `docs/plans`
 | PLAN-034KPgI4Qmc4o0yAzYskID | Issue #96 実施計画 — ruviform-edit 新設 | approved | [implement-issue-96-edit-model.md](./implement-issue-96-edit-model.md) |
 | PLAN-034KSVb6BAzhMH2cZgxnSy | Issue #97 実施計画 — video-proc コンポジット/遷移カーネル追加 | approved | [implement-issue-97-composite-kernels.md](./implement-issue-97-composite-kernels.md) |
 | PLAN-034N9piQHt6Evb7QShnGx8 | Issue #131 OFX UAF residuals 実施計画 | approved | [issue-131-ofx-uaf-residuals.md](./issue-131-ofx-uaf-residuals.md) |
+| PLAN-ayJ9gag4RycXPJ01POnAkp | Issue #188 Timed MIDI — implementation plan | approved | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | PLAN-034Qhwlp4j8Gy5S5uG46Qr | Issue #191 PCM WAV output backend implementation plan | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | PLAN-YNOz2WL10n4v4Avi6qlRE9 | Issue #197 media reader / prefetch / RT consumer implementation plan | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |

@@ -37,6 +37,8 @@ Directory: `docs/designs`
 | DESIGN-034QhWjbVG7vgYciUpfE2b | Issue #185 Generic Probe: typed-runtime observation points, Off/Monitor/Capture execution, chunk-pool RT handoff, non-RT probe broker/collector | approved | [issue-185-generic-probe-typed-runtime-observation-rt-capture.md](./issue-185-generic-probe-typed-runtime-observation-rt-capture.md) |
 | DESIGN-034QkB2r7d3Qh9nZ3zJ3rP | Issue #186 Parameter Control Events — detailed contract design | approved | [issue-186-param-control-events-detailed.md](./issue-186-param-control-events-detailed.md) |
 | DESIGN-034QkAdKcICxz0yVcZ8PPZ | Issue #186 Parameter Control Events — overview | approved | [issue-186-param-control-events.md](./issue-186-param-control-events.md) |
+| DESIGN-Gy2lun1o6N1NDRI7tfSArM | Issue #188 Timed MIDI — detailed API and contracts | approved | [issue-188-timed-midi-detailed.md](./issue-188-timed-midi-detailed.md) |
+| DESIGN-lnTibw26AboiFgtq2O9IsE | Issue #188 Timed MIDI — overview | approved | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | DESIGN-034QfaKklvNoBLtP5JVkOj | Issue #189 M3 Rational Beat / Variable PPQN media-core design | approved | [issue-189-rational-beat-variable-ppqn-tempomap.md](./issue-189-rational-beat-variable-ppqn-tempomap.md) |
 | DESIGN-034Qh2kLmNoPqRsTuVwX | Issue #190 Transport Span Scheduler — 実装設計 | approved | [issue-190-transport-span-scheduler.md](./issue-190-transport-span-scheduler.md) |
 | DESIGN-034Qhua2OtuBq26hwS8LpX | Issue #191 PCM WAV output backend design | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |

@@ -56,16 +56,22 @@
 
 mod error;
 mod fact;
+mod midi;
 mod music;
 mod observe;
 mod stream;
 mod time;
 mod timecode;
+mod timed_input;
 mod transport;
 mod transport_schedule;
 
 pub use error::{Error, Result};
 pub use fact::Fact;
+pub use midi::{
+    LedgerKey, MidiChannel, MidiController, MidiEvent, MidiGroup, MidiKind, MidiProgram,
+    MidiRangeError, MidiValue, NOTE_LEDGER_CAPACITY, NoteKey, NoteLedger,
+};
 pub use music::{
     BeatPosition, MusicalPosition, MusicalTimeInfo, PPQN, Ppqn, TempoEvent, TempoMap,
     TempoMapBuilder, Tick, TickDuration, TickPosition, TimeSignatureEvent,
@@ -77,6 +83,10 @@ pub use observe::{
 pub use stream::{StreamDescriptor, StreamId, StreamKind};
 pub use time::{FrameRate, MediaDuration, MediaRange, MediaTime, Rounding, TimeBase};
 pub use timecode::Timecode;
+pub use timed_input::{
+    ClockAnchor, ClockDomainId, InputStamp, MapRejection, MappedStamp, TimedInputEvent,
+    map_stamp_to_frame, weaker_provenance,
+};
 pub use transport::{TransportSnapshot, TransportStatus};
 pub use transport_schedule::{
     AppliedReceipt, ApplyDegradation, ApplyStatus, BlockContract, CallPartition, ClockEpochId,

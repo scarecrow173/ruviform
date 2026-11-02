@@ -73,6 +73,23 @@ pub struct AdapterCapability {
     /// `outputParameterChanges`/`IComponentHandler` are acked and
     /// dropped.
     pub param_reporting: CapabilityLevel,
+    /// Channel-voice MIDI delivery (`EventKind::Midi` → adapter event
+    /// vocabulary). `Verified` = proven on this layer; `Declared` =
+    /// translated with documented narrowing; `Unsupported` = the
+    /// adapter drops or never receives them — never silently.
+    pub midi_channel_voice: CapabilityLevel,
+    /// UMP/MIDI 2.0 channel-voice input (16-bit velocity, 32-bit bend,
+    /// group routing). `Declared` = accepted with explicit narrowing
+    /// into the canonical representation; `Unsupported` = rejected.
+    pub midi_ump: CapabilityLevel,
+    /// Per-note expression vocabulary (CLAP `NoteExpression`/`NoteChoke`
+    /// /`NoteEnd`, VST3 note-expression/legacy CC events). The neutral
+    /// `MidiKind` has no note-expression payload yet — `Unsupported`
+    /// is the honest level: adoption is a defined skip, not a collapse.
+    pub note_expression: CapabilityLevel,
+    /// System/SysEx transport. `Unsupported` on every backend — the
+    /// wire vocabulary has no variant and events are defined-skipped.
+    pub midi_sysex: CapabilityLevel,
     /// Free-text caveat attached to the row.
     pub notes: &'static str,
 }
@@ -96,6 +113,10 @@ pub const fn capability_for(backend: Backend) -> AdapterCapability {
             param_event_precision: Verified,
             per_note_param: Unsupported,
             param_reporting: Unavailable,
+            midi_channel_voice: Verified,
+            midi_ump: Verified,
+            note_expression: Unsupported,
+            midi_sysex: Unsupported,
             notes: "in-block transport gated on adapter evidence; none exists",
         },
         Backend::L1 => AdapterCapability {
@@ -110,6 +131,10 @@ pub const fn capability_for(backend: Backend) -> AdapterCapability {
             param_event_precision: Verified,
             per_note_param: Unsupported,
             param_reporting: Unavailable,
+            midi_channel_voice: Verified,
+            midi_ump: Verified,
+            note_expression: Unsupported,
+            midi_sysex: Unsupported,
             notes: "bus enumeration has no wire verb yet; min_frames is the child contract's responsibility",
         },
         Backend::Clap => AdapterCapability {
@@ -124,7 +149,11 @@ pub const fn capability_for(backend: Backend) -> AdapterCapability {
             param_event_precision: Declared,
             per_note_param: Unsupported,
             param_reporting: Unavailable,
-            notes: "adapter exposes a single stereo main bus; audio-ports scanning is generalized but not exposed via Plugin::buses; CLAP_EVENT_TRANSPORT is discarded by translate_param_event; param events capped at 256/block; pckn collapses to global; output events discarded",
+            midi_channel_voice: Declared,
+            midi_ump: Declared,
+            note_expression: Unsupported,
+            midi_sysex: Unsupported,
+            notes: "adapter exposes a single stereo main bus; audio-ports scanning is generalized but not exposed via Plugin::buses; CLAP_EVENT_TRANSPORT is discarded; param events capped at 256/block; pckn collapses to global; output events discarded; NoteOn/NoteOff/NoteExpression/NoteChoke/NoteEnd and MidiSysEx are defined-skipped (no neutral payload) — CLAP Midi/Midi2 channel-voice bytes narrow into EventKind::Midi",
         },
         Backend::Vst3 => AdapterCapability {
             bus_enumeration: Unavailable,
@@ -138,7 +167,11 @@ pub const fn capability_for(backend: Backend) -> AdapterCapability {
             param_event_precision: Declared,
             per_note_param: Unsupported,
             param_reporting: Unavailable,
-            notes: "single stereo main bus; no in-block transport event vocabulary adopted — CLAP behavior is not generalized; param queues capped at 1024 points with a scan bound; outputParameterChanges/handler edits are acked and dropped",
+            midi_channel_voice: Unsupported,
+            midi_ump: Unsupported,
+            note_expression: Unsupported,
+            midi_sysex: Unsupported,
+            notes: "single stereo main bus; no in-block transport event vocabulary adopted — CLAP behavior is not generalized; param queues capped at 1024 points with a scan bound; outputParameterChanges/handler edits are acked and dropped; Vst::Event noteOn/noteOff/legacy-MIDI-CC are not yet translated — EventKind::Midi never reaches this adapter (defined skip)",
         },
     }
 }

@@ -35,7 +35,7 @@
 //!
 //! [`MediaTime`]: ruviform_media_core::MediaTime
 
-use ruviform_media_core::{Error, Result};
+use ruviform_media_core::{Error, LedgerKey, MidiEvent, Result};
 
 use crate::param::{ParamId, ParamValue};
 
@@ -76,6 +76,11 @@ pub struct ParamEvent {
 pub enum EventKind {
     /// A normalized parameter change ([`ParamEvent`]).
     ParamValue(ParamEvent),
+    /// A channel-voice MIDI message ([`MidiEvent`] from
+    /// `ruviform-media-core`). Native timestamps do not ride on the
+    /// wire event — the frame offset *is* the delivery time; the
+    /// source stamp lives in `TimedInputEvent` upstream.
+    Midi(MidiEvent),
 }
 
 /// One sample-accurate event: a within-block frame offset plus its
@@ -423,9 +428,253 @@ fn merge_runs(left: &[Event], right: &[Event], dst: &mut [Event]) {
     dst[out + left_rest..].copy_from_slice(&right[right_index..]);
 }
 
+/// Maximum number of ordered sources [`merge_call_events`] combines
+/// in one call (release + plan + live uses three).
+pub const MAX_MERGE_SOURCES: usize = 8;
+
+/// The reason [`merge_call_events`] rejected its input — a defined
+/// rejection, never a partial or silent drop.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum MergeError {
+    /// The merged event count exceeded the caller-provided scratch.
+    Overflow {
+        /// Elements the merge needed.
+        needed: usize,
+        /// Elements the scratch could hold.
+        capacity: usize,
+    },
+    /// More sources than [`MAX_MERGE_SOURCES`] were supplied.
+    TooManySources {
+        /// The supplied source count.
+        count: usize,
+    },
+}
+
+impl core::fmt::Display for MergeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match *self {
+            Self::Overflow { needed, capacity } => write!(
+                f,
+                "event merge scratch overflow: needed {needed} > capacity {capacity}"
+            ),
+            Self::TooManySources { count } => {
+                write!(
+                    f,
+                    "event merge source count {count} exceeds {MAX_MERGE_SOURCES}"
+                )
+            }
+        }
+    }
+}
+
+impl core::error::Error for MergeError {}
+
+/// The [`LedgerKey`] a [`EventKind::Midi`] event tracks, or `None` for
+/// non-note events.
+fn event_ledger_key(event: Event) -> Option<LedgerKey> {
+    match event.kind() {
+        EventKind::Midi(midi) => midi.ledger_key(),
+        _ => None,
+    }
+}
+
+/// Whether `event` is a MIDI note-off for ordering purposes
+/// (including the velocity-zero Note-On convention).
+fn event_is_note_off(event: Event) -> bool {
+    match event.kind() {
+        EventKind::Midi(midi) => midi.is_note_off(),
+        _ => false,
+    }
+}
+
+/// Whether `event` is a MIDI note-on for ordering purposes
+/// (a velocity-zero Note-On resolves to note-off).
+fn event_is_note_on(event: Event) -> bool {
+    match event.kind() {
+        EventKind::Midi(midi) => matches!(midi.effective_note_state(), Some(true)),
+        _ => false,
+    }
+}
+
+/// Merges ordered event sources into one [`EventList`]-legal run —
+/// the single authority for combining scheduled (plan) events with
+/// live input events inside one processing block.
+///
+/// Every source slice must already be sorted by `frame_offset`
+/// (non-decreasing) — the [`EventList`] wire invariant the merge
+/// preserves. Sources are merged by a stable `k`-way selection; on
+/// equal offsets the **earlier source index wins**, so callers
+/// ordering their sources `[release, plan, live]` get a deterministic
+/// plan-before-live tie-break while each source's own causal order is
+/// always preserved.
+///
+/// ## Note-Off priority
+///
+/// Within a same-offset run, a MIDI note-off that shares its
+/// `(group, channel, key)` with a note-on in the same run is emitted
+/// **before** that note-on — the stuck-note fail-safe and retrigger
+/// convention: a generated release must land before a new attack on
+/// the same key. This is a *delivery-order convention* applied
+/// uniformly (it can reorder an explicit play-then-release pair
+/// written at one frame; such same-frame pairs are outside the
+/// convention's intended envelope and must be authored at different
+/// offsets when both semantics are needed). Velocity-zero Note-Ons
+/// count as note-offs per the MIDI 1.0 running-status convention.
+///
+/// `scratch` must hold `Σ sources[i].len()`; a smaller scratch is a
+/// defined [`MergeOverflow`], never a partial merge.
+///
+/// **RT contract:** RT-suitable — `O(total · k + run²)` bounded work
+/// on `Copy` elements (`k = sources.len()`, run = same-offset group);
+/// no allocation.
+///
+/// # Examples
+///
+/// ```
+/// use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
+/// use ruviform_plugin_core::{
+///     merge_call_events, Event, EventKind, ParamEvent, ParamId, ParamValue,
+/// };
+///
+/// let plan = [Event::new(64, EventKind::ParamValue(ParamEvent {
+///     param_id: ParamId(0), value: ParamValue::new(0.5).unwrap() }))];
+/// let note = |kind| Event::new(64, EventKind::Midi(MidiEvent {
+///     group: MidiGroup::ZERO, channel: MidiChannel::new(0).unwrap(), kind }));
+/// let live = [
+///     note(MidiKind::NoteOn { key: NoteKey::new(60).unwrap(), velocity: 1 }),
+///     note(MidiKind::NoteOff { key: NoteKey::new(60).unwrap(), velocity: 0 }),
+/// ];
+/// let mut scratch = [plan[0]; 8];
+/// let merged = merge_call_events(&[&plan, &live], &mut scratch).unwrap();
+/// // plan wins the offset tie; the colliding Note-Off precedes the Note-On.
+/// let offs: Vec<u32> = merged.iter().map(|e| e.frame_offset()).collect();
+/// assert_eq!(offs, [64, 64, 64]);
+/// ```
+pub fn merge_call_events<'a>(
+    sources: &[&[Event]],
+    scratch: &'a mut [Event],
+) -> core::result::Result<&'a mut [Event], MergeError> {
+    if sources.len() > MAX_MERGE_SOURCES {
+        return Err(MergeError::TooManySources {
+            count: sources.len(),
+        });
+    }
+    let needed: usize = sources.iter().map(|s| s.len()).sum();
+    if scratch.len() < needed {
+        return Err(MergeError::Overflow {
+            needed,
+            capacity: scratch.len(),
+        });
+    }
+    let out = &mut scratch[..needed];
+    // Stable k-way merge: pick the smallest offset; on ties prefer the
+    // earlier source, preserving that source's own arrival order.
+    let mut heads = [0usize; MAX_MERGE_SOURCES];
+    let mut w = 0usize;
+    loop {
+        let mut best: Option<usize> = None;
+        let mut best_off = u32::MAX;
+        for (s, source) in sources.iter().enumerate() {
+            if let Some(event) = source.get(heads[s])
+                && event.frame_offset() < best_off
+            {
+                best = Some(s);
+                best_off = event.frame_offset();
+            }
+        }
+        let Some(s) = best else { break };
+        out[w] = sources[s][heads[s]];
+        heads[s] += 1;
+        w += 1;
+    }
+    debug_assert_eq!(w, needed);
+    apply_note_off_priority(out);
+    Ok(out)
+}
+
+/// Applies the same-offset Note-Off-priority convention in place:
+/// inside each maximal same-offset run, every note-off that collides
+/// with a same-key note-on is stably moved before that note-on. Other
+/// events keep their relative order.
+fn apply_note_off_priority(events: &mut [Event]) {
+    let mut start = 0usize;
+    while start < events.len() {
+        let offset = events[start].frame_offset();
+        let mut end = start + 1;
+        while end < events.len() && events[end].frame_offset() == offset {
+            end += 1;
+        }
+        note_off_priority_run(&mut events[start..end]);
+        start = end;
+    }
+}
+
+/// Within one same-offset run, stably emit colliding note-offs first.
+/// A note-off "collides" when a note-on with the same [`LedgerKey`]
+/// exists anywhere in the run. Non-colliding events — including
+/// note-offs with no same-key note-on — keep their relative order.
+fn note_off_priority_run(run: &mut [Event]) {
+    if run.len() < 2 {
+        return;
+    }
+    if run.len() <= 64 {
+        // Flag which positions hold a colliding note-off (a same-key
+        // note-on exists in the run), then insertion-style stable
+        // partition: colliding offs first, everything else in order.
+        let mut colliding = [false; 64];
+        for (i, event) in run.iter().enumerate() {
+            if !event_is_note_off(*event) {
+                continue;
+            }
+            let Some(off_key) = event_ledger_key(*event) else {
+                continue;
+            };
+            colliding[i] = run
+                .iter()
+                .any(|other| event_is_note_on(*other) && event_ledger_key(*other) == Some(off_key));
+        }
+        let mut placed = 0usize;
+        for i in 0..run.len() {
+            if !colliding[i] {
+                continue;
+            }
+            let event = run[i];
+            run.copy_within(placed..i, placed + 1);
+            colliding.copy_within(placed..i, placed + 1);
+            run[placed] = event;
+            colliding[placed] = true;
+            placed += 1;
+        }
+    } else {
+        // Pathological run beyond the marker array: per note-on, pull
+        // the first later colliding note-off forward (bounded rotate,
+        // same outcome as the partition).
+        for i in 0..run.len() {
+            if !event_is_note_on(run[i]) {
+                continue;
+            }
+            let Some(on_key) = event_ledger_key(run[i]) else {
+                continue;
+            };
+            for j in i + 1..run.len() {
+                if event_is_note_off(run[j]) && event_ledger_key(run[j]) == Some(on_key) {
+                    let off = run[j];
+                    run.copy_within(i..j, i + 1);
+                    run[i] = off;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruviform_media_core::{MidiChannel, MidiGroup, MidiKind, MidiProgram, MidiValue, NoteKey};
 
     fn param_event(offset: u32, value: f64) -> Event {
         Event::new(
@@ -435,6 +684,21 @@ mod tests {
                 value: ParamValue::new(value).unwrap(),
             }),
         )
+    }
+
+    fn midi_event(offset: u32, kind: MidiKind) -> Event {
+        Event::new(
+            offset,
+            EventKind::Midi(MidiEvent {
+                group: MidiGroup::ZERO,
+                channel: MidiChannel::new(0).unwrap(),
+                kind,
+            }),
+        )
+    }
+
+    fn key(v: u8) -> NoteKey {
+        NoteKey::new(v).unwrap()
     }
 
     #[test]
@@ -513,6 +777,7 @@ mod tests {
                     event.frame_offset(),
                     match event.kind() {
                         EventKind::ParamValue(param) => param.value.get(),
+                        _ => f64::NAN,
                     },
                 )
             })
@@ -572,5 +837,114 @@ mod tests {
                 .collect::<Vec<_>>(),
             [0, 5, 10]
         );
+    }
+
+    #[test]
+    fn merge_call_events_stable_plan_before_live() {
+        let plan = [param_event(32, 0.1), param_event(64, 0.2)];
+        let live = [
+            midi_event(
+                64,
+                MidiKind::ProgramChange {
+                    program: MidiProgram::new(5).unwrap(),
+                },
+            ),
+            midi_event(
+                96,
+                MidiKind::PitchBend {
+                    value: MidiValue::bend_from_u14(0x2000),
+                },
+            ),
+        ];
+        let mut scratch = [param_event(0, 0.0); 8];
+        let merged = merge_call_events(&[&plan, &live], &mut scratch).unwrap();
+        // plan wins the offset-64 tie.
+        assert!(matches!(merged[1].kind(), EventKind::ParamValue(_)));
+        assert!(matches!(merged[2].kind(), EventKind::Midi(_)));
+        assert!(EventList::new(merged, 128).is_ok());
+    }
+
+    #[test]
+    fn merge_call_events_note_off_priority_same_key() {
+        // Live NoteOn then generated release NoteOff at the same offset
+        // and key: the off must be emitted first.
+        let on = midi_event(
+            0,
+            MidiKind::NoteOn {
+                key: key(60),
+                velocity: MidiValue::from_u7(100),
+            },
+        );
+        let off = midi_event(
+            0,
+            MidiKind::NoteOff {
+                key: key(60),
+                velocity: 0,
+            },
+        );
+        let live = [on];
+        let release = [off];
+        let mut scratch = [param_event(0, 0.0); 8];
+        let merged = merge_call_events(&[&release, &live], &mut scratch).unwrap();
+        assert!(matches!(
+            merged[0].kind(),
+            EventKind::Midi(m) if m.is_note_off()
+        ));
+        assert!(matches!(
+            merged[1].kind(),
+            EventKind::Midi(m) if matches!(m.effective_note_state(), Some(true))
+        ));
+        // Unrelated key: order untouched.
+        let on_other = midi_event(
+            0,
+            MidiKind::NoteOn {
+                key: key(64),
+                velocity: MidiValue::from_u7(100),
+            },
+        );
+        let live2 = [on_other, on];
+        let mut scratch2 = [param_event(0, 0.0); 8];
+        let merged2 = merge_call_events(&[&live2], &mut scratch2).unwrap();
+        assert_eq!(merged2.len(), 2);
+        assert!(matches!(
+            merged2[0].kind(),
+            EventKind::Midi(m) if matches!(m.kind, MidiKind::NoteOn{key: k,..} if k == key(64))
+        ));
+    }
+
+    #[test]
+    fn merge_call_events_rejects_overflow_and_too_many_sources() {
+        let one = [param_event(0, 0.1)];
+        let mut small = [param_event(0, 0.0); 1];
+        assert_eq!(
+            merge_call_events(&[&one, &one], &mut small),
+            Err(MergeError::Overflow {
+                needed: 2,
+                capacity: 1,
+            })
+        );
+        let sources = [&one[..]; 9];
+        let mut big = [param_event(0, 0.0); 16];
+        assert_eq!(
+            merge_call_events(&sources, &mut big),
+            Err(MergeError::TooManySources { count: 9 })
+        );
+    }
+
+    /// RT contract: merge is bounded copy/compare work — no allocation.
+    #[test]
+    fn rt_merge_call_events_no_alloc() {
+        let plan = [param_event(32, 0.1), param_event(64, 0.2)];
+        let live = [midi_event(
+            64,
+            MidiKind::NoteOff {
+                key: key(60),
+                velocity: 0,
+            },
+        )];
+        let mut scratch = [param_event(0, 0.0); 8];
+        let _ = assert_no_alloc::assert_no_alloc(|| {
+            core::hint::black_box(merge_call_events(&[&plan, &live], &mut scratch)).unwrap()
+        });
     }
 }

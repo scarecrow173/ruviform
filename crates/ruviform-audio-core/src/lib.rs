@@ -67,6 +67,7 @@ mod buffer;
 pub mod device;
 mod format;
 mod layout;
+pub mod midi_input;
 mod planar;
 mod sample;
 mod time;
