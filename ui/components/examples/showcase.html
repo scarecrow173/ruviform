@@ -1,0 +1,110 @@
+<!doctype html>
+<!--
+  Ruviform Reference Skin showcase (Issue #259).
+
+  Thin composition examples ONLY: ChannelStrip / TransportBar /
+  ParameterControl group existing controls — they hold no DAW, analysis,
+  playback, or project state. Every intent still travels as `rvf-gesture`
+  / `rvf-transport` CustomEvents; this page only logs them.
+
+  Run `npm --prefix ui/components run build` first, then serve this file
+  over HTTP (any static server) — plain ESM, no bundler, no framework.
+  Verified headless via happy-dom; real WebView/browser rendering is
+  manual verification (see README → Verification boundary).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Ruviform Components — Reference Skin showcase</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 24px;
+        display: grid;
+        gap: 32px;
+      }
+      .row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+      .strip {
+        display: flex; flex-direction: column; gap: 8px;
+        align-items: center; padding: 12px;
+        border: 1px solid #ccc; border-radius: 6px;
+      }
+      pre { background: #f0f0f0; padding: 8px; max-height: 160px; overflow: auto; }
+      h2 { font-size: 14px; margin: 0 0 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Ruviform Components — Reference Skin</h1>
+
+    <!-- Two independent consumer themes, no logic forks (§12.3) -->
+    <rvf-theme base="light">
+      <section>
+        <h2>Light theme</h2>
+        <div class="row">
+          <!-- ChannelStrip: thin composition — label + fader + toggle + knob -->
+          <div class="strip">
+            <rvf-knob id="gain-knob" label="Gain" control-id="strip.gain"></rvf-knob>
+            <rvf-fader id="vol-fader" label="Vol" control-id="strip.vol"></rvf-fader>
+            <rvf-toggle id="mute" label="Mute" control-id="strip.mute"></rvf-toggle>
+            <rvf-numeric-input id="gain-num" label="dB" control-id="strip.gain.db"></rvf-numeric-input>
+          </div>
+          <!-- ParameterControl: thin composition — knob + numeric readout pair -->
+          <div class="strip">
+            <rvf-knob id="pan" label="Pan" control-id="param.pan"></rvf-knob>
+            <rvf-seekbar id="pos" label="Position" control-id="param.pos"></rvf-seekbar>
+            <rvf-range-selector id="sel" label="Select" control-id="param.sel"></rvf-range-selector>
+          </div>
+        </div>
+      </section>
+    </rvf-theme>
+
+    <rvf-theme base="dark">
+      <section>
+        <h2>Dark theme — same controls, no logic fork</h2>
+        <div class="row">
+          <div class="strip">
+            <rvf-knob label="Gain" control-id="dark.gain"></rvf-knob>
+            <rvf-fader orientation="horizontal" label="Vol" control-id="dark.vol"></rvf-fader>
+            <rvf-toggle label="Solo" control-id="dark.solo"></rvf-toggle>
+          </div>
+          <div class="strip">
+            <rvf-knob variant="compact" label="Compact" control-id="dark.c"></rvf-knob>
+            <rvf-numeric-input label="Hz" control-id="dark.hz"></rvf-numeric-input>
+          </div>
+        </div>
+      </section>
+    </rvf-theme>
+
+    <!-- TransportBar: transport is intent + display only -->
+    <rvf-theme>
+      <section>
+        <h2>TransportBar — emits intents, holds no transport state</h2>
+        <rvf-transport id="tp" state="stopped" control-id="transport"></rvf-transport>
+      </section>
+    </rvf-theme>
+
+    <pre id="log" aria-label="event log"></pre>
+
+    <script type="module">
+      import { registerRvfElements } from "../dist/components/src/index.js";
+
+      registerRvfElements();
+
+      // Descriptors are typed properties — never JSON-in-attribute.
+      for (const el of document.querySelectorAll(
+        "rvf-knob, rvf-fader, rvf-seekbar, rvf-numeric-input",
+      )) {
+        el.descriptor = { min: 0, max: 100, defaultValue: 30, unit: "%" };
+      }
+      document.getElementById("sel").descriptor = { min: 0, max: 1 };
+      document.getElementById("tp").capabilities = { resume: false };
+
+      const log = document.getElementById("log");
+      const write = (kind, detail) => {
+        log.textContent = `${kind} ${JSON.stringify(detail)}\n` + log.textContent;
+      };
+      document.addEventListener("rvf-gesture", (e) => write("rvf-gesture", e.detail));
+      document.addEventListener("rvf-transport", (e) => write("rvf-transport", e.detail));
+    </script>
+  </body>
+</html>

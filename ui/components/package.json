@@ -1,0 +1,20 @@
+{
+  "name": "@ruviform/ui-components",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Issue #259: framework-neutral Web Components — plain TypeScript Custom Elements (Knob/Fader/NumericInput/Toggle/Transport/Seekbar/RangeSelector) with Reference Skin, theme tokens, variants and slots/parts on top of @ruviform/ui-core. No UI framework, runtime, or renderer dependency.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --test --import=./test/env.ts test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "~24.10",
+    "happy-dom": "~21.0.4",
+    "typescript": "~5.9.3"
+  }
+}

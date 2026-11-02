@@ -163,6 +163,31 @@ run = [
   "npm --prefix ui/core test",
 ]
 
+# UI components lane (Issue #259): the framework-neutral Web Components
+# package under ui/components (Reference Skin controls, tokens/themes,
+# Custom Elements on the ui/core contract). Same discipline as the
+# headless lane: `npm ci` restores the committed package-lock, node is
+# the pinned mise toolchain, and no UI framework/runtime may be added as
+# a dependency (happy-dom is a test-only devDependency supplying the DOM).
+[tasks.check-ui-components]
+description = "Install ui/components deps from package-lock and type-check the components package (tsc --noEmit)"
+run = [
+  "npm --prefix ui/components ci --no-audit --no-fund",
+  "npm --prefix ui/components run typecheck",
+]
+[tasks.test-ui-components]
+description = "Install ui/components deps from package-lock and run component tests via node --test (happy-dom DOM, no UI framework)"
+run = [
+  "npm --prefix ui/components ci --no-audit --no-fund",
+  "npm --prefix ui/components test",
+]
+[tasks.build-ui-components]
+description = "Install ui/components deps from package-lock and emit the distributable dist/ build (tsc)"
+run = [
+  "npm --prefix ui/components ci --no-audit --no-fund",
+  "npm --prefix ui/components run build",
+]
+
 [tasks.test-ofx]
 description = "Run OFX native host and fixture contract tests"
 run = "cargo test -p ruviform-plugin-ofx"

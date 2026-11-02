@@ -228,6 +228,15 @@ jobs:
       - name: Test headless UI contract (mise run test-ui-headless)
         run: mise run test-ui-headless
 
+      - name: Type-check UI components (mise run check-ui-components)
+        run: mise run check-ui-components
+
+      - name: Test UI components (mise run test-ui-components)
+        run: mise run test-ui-components
+
+      - name: Build UI components dist (mise run build-ui-components)
+        run: mise run build-ui-components
+
   bench:
     name: bench
     runs-on: ubuntu-latest
