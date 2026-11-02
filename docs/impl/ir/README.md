@@ -14,6 +14,9 @@ Directory: `docs/impl/ir`
 | IMPL-jvB1bonFvoIksy2Ruk6Oui | Decide plugin binding method ADR | completed | [decide-plugin-binding-method-adr.md](./decide-plugin-binding-method-adr.md) |
 | IMPL-034IedmXdoFo5aI22WR8m8 | Define mise dev and CI tasks | completed | [define-mise-dev-and-ci-tasks.md](./define-mise-dev-and-ci-tasks.md) |
 | IMPL-034JftzSzGUrGW76DpIyVM | Document video-core ownership contract | completed | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
+| IMPL-034QqISfp1gxWFA4cmeeA0 | Dock model layer | completed | [dock-model-layer.md](./dock-model-layer.md) |
+| IMPL-034QqITVZVkBse5tdUFJVQ | Dock tests, demo, and verification | completed | [dock-tests-demo-and-verification.md](./dock-tests-demo-and-verification.md) |
+| IMPL-034QqISOcHeC4rS84Z3V0d | Dock workspace and two-phase move | completed | [dock-workspace-and-two-phase-move.md](./dock-workspace-and-two-phase-move.md) |
 | IMPL-034JEzb6zrstxQuNrV0fmM | DSP/SIMD PoC benchmark | completed | [dsp-simd-poc-benchmark.md](./dsp-simd-poc-benchmark.md) |
 | IMPL-034J7bMHds4IPYPvoxiMZR | Fix time arithmetic saturation | completed | [fix-time-arithmetic-saturation.md](./fix-time-arithmetic-saturation.md) |
 | IMPL-034JFAMvBdMrd7hd9RAr4j | Harden plugin adapters from implementation review | completed | [harden-plugin-adapters-from-implementation-review.md](./harden-plugin-adapters-from-implementation-review.md) |
@@ -28,6 +31,7 @@ Directory: `docs/impl/ir`
 | IMPL-034JgwwQXOaYpCHRnN2X1e | Implement rgb to yuv and f16 kernels | completed | [implement-rgb-to-yuv-and-f16-kernels.md](./implement-rgb-to-yuv-and-f16-kernels.md) |
 | IMPL-034J5L4LL7z9gp1QZKqwa9 | Implement video-core data model | completed | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | IMPL-034JfTIFdaBP0PDUkO9yLm | Implement yuv to rgb kernel | completed | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
+| IMPL-034QqITmjWC8LcEQVGkeAe | Layout persistence and window position | completed | [layout-persistence-and-window-position.md](./layout-persistence-and-window-position.md) |
 | IMPL-034ISfioxP51rGFoHh8MX3 | issue-1 architecture baseline repo reflection | completed | [issue-1-architecture-baseline-repo-reflection.md](./issue-1-architecture-baseline-repo-reflection.md) |
 | IMPL-034IdUNIqDaqtMaA6rRfEx | Pin Rust toolchain and lockfile | completed | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | IMPL-3hbuFUHk736RlMIuzIoXne | CLAP binding PoC with clack | completed | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |

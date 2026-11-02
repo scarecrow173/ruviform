@@ -1,7 +1,7 @@
 ---
 id: "TASK-341XTt270miIp3zJjTK07P"
 type: "task"
-status: "todo"
+status: "done"
 title: "ruviform-ui: DockWorkspace + two-phase view move + close policy + ops + DockEvent"
 created: "2026-11-02"
 updated: "2026-11-02"

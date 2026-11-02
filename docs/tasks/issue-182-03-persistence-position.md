@@ -1,7 +1,7 @@
 ---
 id: "TASK-yUcTer6Jz05I9eBkeM4mQX"
 type: "task"
-status: "todo"
+status: "done"
 title: "ruviform-ui: layout persistence schema + geometry correction + WindowConfig.position plumbing"
 created: "2026-11-02"
 updated: "2026-11-02"

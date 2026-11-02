@@ -33,7 +33,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use dpi::LogicalSize;
+use dpi::{LogicalPosition, LogicalSize};
 use ruviform_ui::{
     AssetSource, CloseDecision, DataRegistry, HostEvent, MonitorInfo, UiError, WindowConfig,
     WindowEvent, WindowHandle, WindowId,
@@ -84,6 +84,7 @@ impl SessionConfig {
                 title: config.title.clone(),
                 width: config.width,
                 height: config.height,
+                position: None,
                 url: config.url.clone(),
                 devtools: config.devtools,
             }],
@@ -136,9 +137,13 @@ impl Session {
         target: &EventLoopWindowTarget<()>,
         config: &WindowConfig,
     ) -> Result<WindowId, UiError> {
-        let window = WindowBuilder::new()
+        let mut attrs = WindowBuilder::new()
             .with_title(&config.title)
-            .with_inner_size(LogicalSize::new(config.width, config.height))
+            .with_inner_size(LogicalSize::new(config.width, config.height));
+        if let Some((x, y)) = config.position {
+            attrs = attrs.with_position(LogicalPosition::new(x, y));
+        }
+        let window = attrs
             .build(target)
             .map_err(|e| UiError::host(format!("window creation failed: {e}")))?;
 

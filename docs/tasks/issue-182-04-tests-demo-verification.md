@@ -1,7 +1,7 @@
 ---
 id: "TASK-AirSKtHS1TtcoQZnYr9s9U"
 type: "task"
-status: "todo"
+status: "done"
 title: "ruviform-ui: dock integration tests + demo_dock example + docs/index consistency + verification"
 created: "2026-11-02"
 updated: "2026-11-02"

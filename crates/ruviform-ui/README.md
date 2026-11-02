@@ -48,6 +48,16 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
   WebGL2=高頻度、wgpu ネイティブ面は測定要請時の別 adapter。
 - バックエンド報告(`detect` モジュール): `BackendReport`/`BackendState`
   の型のみ。検出は adapter が行う。
+- Dock 基盤(`dock` モジュール, Issue #182): ウィンドウ毎の Dock Tree
+  (`Split(axis,ratio,children)` + `Tabs(views,active)`)、論理
+  `ViewInstanceId` の全ウィンドウ横断で唯一の owner 検証、2 相 move
+  (`begin_move` で view を transfer ロック → 宛先 window/webview 準備 →
+  `commit_move` で atomic に owner 切替、失敗は元 dock へ rollback)、
+  detached pool、consumer 選択の window-close disposition
+  (`DetachViews`/`RelocateTo`/`ReleaseViews`)、versioned
+  `LayoutSnapshot`(geometry + monitor signature + trees + detached pool)
+  の保存/復元と off-screen・monitor 消失の補正。view state の
+  save/restore は consumer 側 — WebView 間の DOM 転送は保証しない。
 - デモ(`demo` モジュール): `DemoService` — synthesize/sleep/fail/panic/
   peaks を提供し、`demo_cli` example(headless)と
   `ruviform-ui-webview` の `demo_app` example(GUI)で共有する。
@@ -69,6 +79,9 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
 ```sh
 # headless デモ(同一 DemoService を GUI 側 example と共有)
 cargo run -p ruviform-ui --example demo_cli
+
+# headless Dock デモ(dock/move/rollback/detach/restore のナレーション)
+cargo run -p ruviform-ui --example demo_dock
 ```
 
 ## 関連
@@ -77,4 +90,7 @@ cargo run -p ruviform-ui --example demo_cli
 - 棚卸し: docs/discovery/issue-156-gui-host-foundation-inventory.md
 - UI ADR: docs/adr/ui-architecture-webview-hybrid.md,
   docs/adr/ui-tech-selection-poc.md
+- Dock 基盤(Issue #182): docs/specs/issue-182-dock-tree.md,
+  docs/designs/issue-182-dock-tree.md,
+  docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md
 - adapter: [`ruviform-ui-webview`](../ruviform-ui-webview/README.md)

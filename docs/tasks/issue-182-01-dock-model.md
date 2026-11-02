@@ -1,7 +1,7 @@
 ---
 id: "TASK-J9cxFOsGKSoiMZKmpXRMOp"
 type: "task"
-status: "todo"
+status: "done"
 title: "ruviform-ui: dock model layer (ViewInstanceId/Axis/DockNode/DockTree/DockPath/DockError)"
 created: "2026-11-02"
 updated: "2026-11-02"
