@@ -21,7 +21,10 @@ Ruviform メディア基盤の汎用 Reader・Decoder/Prefetch・RT 消費境界
   - `pump()` は呼び出しごとに queued command を全て処理したうえで、sequenced な
     item を高々 1 つだけ進める（`Pushed`）。`Backpressured` は ring 空き待ちの
     retry シグナルで、marker は producer `pending` に残る — manual driver は
-    `Idle`/`Ended` に到達するまで `pump()` を反復する契約。
+    `Idle`/`Ended` に到達するまで `pump()` を反復する契約。`Ended` はその call で
+    `End` marker が ring に載った場合にのみ返る（EOF 検出と emit は同一 step —
+    ring full 時は `pending` commit 済みの `Backpressured` が返る）ため、最初の
+    `Ended` で停止しても terminal marker は strand しない。
   - `PrefetchHandle::seek` は play-through を既定とし、`seek_discard_pending` が
     opt-in の producer pending purge を追加する。consumer 側の `discard_pending` は
     RT-safe な有界 drain で、次の `Boundary` で generation を adopt して停止する。

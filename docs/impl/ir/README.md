@@ -126,3 +126,4 @@ Directory: `docs/impl/ir`
 | IMPL-034QsY0hYnbSJXS8DBOdDa | Issue #223 MSRV 1.89 限定 pedantic clippy 失敗の整理 | completed | [issue-223-msrv-clippy-triage.md](./issue-223-msrv-clippy-triage.md) |
 | IMPL-034Qx80dtG1QqpllKScvin | Issue #187 Audio Input Port: additive input contract + cpal input surface + mock capture->handoff RT PoC | completed | [issue-187-audio-input-port-additive-input-contract-cpal-input-surface-mock-captu.md](./issue-187-audio-input-port-additive-input-contract-cpal-input-surface-mock-captu.md) |
 | IMPL-034QxLzTwkgQnhtvv7jXvB | Issue 244 media-reader prefetch contract residual warts | completed | [issue-244-media-reader-prefetch-contract-residual-warts.md](./issue-244-media-reader-prefetch-contract-residual-warts.md) |
+| IMPL-034QAt6Gd3zLwrqmsnq9CK | Issue 249 prefetch detection-Ended strands End marker | completed | [issue-249-prefetch-detection-ended-strands-end-marker.md](./issue-249-prefetch-detection-ended-strands-end-marker.md) |

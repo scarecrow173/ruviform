@@ -903,3 +903,65 @@ fn rd02_discard_pending_applies_matching_fault_and_end_then_boundary() {
         "re-anchored post-seek content"
     );
 }
+
+#[test]
+fn rd02_detection_ended_leaves_end_marker_on_ring() {
+    // #249: `Ended` is only reported by the pump that sequences the
+    // `End` marker itself. A manual driver iterating `pump()` until
+    // the first `Ended` — the documented terminal outcome — and
+    // stopping must leave `End{gen}` on the ring, so the consumer
+    // reaches `eof` with zero further producer work.
+    let reader = open_reader(512); // two 256-frame blocks — ring never fills
+    let (handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    loop {
+        match producer.pump().unwrap() {
+            PumpOutcome::Pushed | PumpOutcome::Backpressured => {}
+            PumpOutcome::Ended => break,
+            other => panic!("unexpected outcome {other:?}"),
+        }
+    }
+    // The driver stopped at the first `Ended` — no more producer
+    // work. The consumer must still terminate on the queued marker.
+    let mut dst = [vec![0.0f32; 256], vec![0.0f32; 256]];
+    let mut saw_eof = false;
+    for _ in 0..8 {
+        let mut slices: Vec<&mut [f32]> = dst.iter_mut().map(Vec::as_mut_slice).collect();
+        if consumer.fill(&mut slices, consumer.position(), &ctx).eof {
+            saw_eof = true;
+            break;
+        }
+    }
+    assert!(
+        saw_eof && handle.telemetry().eof_seen(),
+        "the End marker must already be sequenced when Ended is reported"
+    );
+    assert_eq!(
+        producer.pump().unwrap(),
+        PumpOutcome::Idle,
+        "the committed End is never synthesized again"
+    );
+}
+
+#[test]
+fn rd02_end_committed_at_eof_survives_a_later_seek() {
+    // A seek issued after `Ended` must not swallow the committed
+    // `End{gen}`: it sequences ahead of the new `Boundary`, so the
+    // old generation still terminates observably mid-drain.
+    let reader = open_reader(512);
+    let (mut handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    loop {
+        if producer.pump().unwrap() == PumpOutcome::Ended {
+            break;
+        }
+    }
+    handle.seek(SourceFrame(100)).unwrap();
+    producer.pump().unwrap();
+    let report = consumer.discard_pending(&ctx);
+    assert_eq!(report.boundary, Some(100));
+    assert!(
+        handle.telemetry().eof_seen(),
+        "the committed End still reached the consumer ahead of the boundary"
+    );
+}
