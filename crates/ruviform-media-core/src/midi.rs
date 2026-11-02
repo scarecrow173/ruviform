@@ -950,9 +950,11 @@ mod tests {
         // Two evictions, 128 actives: release_all emits all 130 offs.
         let mut scratch = [off(0); NOTE_LEDGER_CAPACITY + 8];
         assert_eq!(l.release_all(&mut scratch), NOTE_LEDGER_CAPACITY + 2);
-        assert!(scratch[..NOTE_LEDGER_CAPACITY + 2]
-            .iter()
-            .all(MidiEvent::is_note_off));
+        assert!(
+            scratch[..NOTE_LEDGER_CAPACITY + 2]
+                .iter()
+                .all(MidiEvent::is_note_off)
+        );
     }
 
     /// RT contract: ledger feed/release scans are bounded and

@@ -1505,7 +1505,9 @@ impl<P> TransportScheduler<P> {
     /// lifecycle entries, in order).
     ///
     /// **RT contract:** non-RT — allocates the returned vec. `drain`
-    /// keeps the ledger's reserved capacity so recording continues.
+    /// keeps the ledger's reserved capacity so recording continues
+    /// (`mem::take` would drop it, permanently shrinking the ring).
+    #[allow(clippy::drain_collect)] // reason: drain preserves reserved capacity
     pub fn drain_receipts(&mut self) -> Vec<AppliedReceipt> {
         self.receipts.drain(..).collect()
     }
@@ -1513,7 +1515,9 @@ impl<P> TransportScheduler<P> {
     /// Drains all recorded faults.
     ///
     /// **RT contract:** non-RT — allocates the returned vec. `drain`
-    /// keeps the ledger's reserved capacity so recording continues.
+    /// keeps the ledger's reserved capacity so recording continues
+    /// (`mem::take` would drop it, permanently shrinking the ring).
+    #[allow(clippy::drain_collect)] // reason: drain preserves reserved capacity
     pub fn drain_faults(&mut self) -> Vec<ScheduleFault> {
         self.faults.drain(..).collect()
     }
@@ -2509,10 +2513,8 @@ mod tests {
         assert!(s.epoch().get() > e0.get());
         let receipts = s.drain_receipts();
         assert!(
-            receipts
-                .iter()
-                .all(|r| r.status == ApplyStatus::Rejected
-                    && r.reason == Some(RejectReason::StaleGeneration))
+            receipts.iter().all(|r| r.status == ApplyStatus::Rejected
+                && r.reason == Some(RejectReason::StaleGeneration))
                 && receipts.len() == 2,
             "both pending applies rejected: {receipts:?}"
         );

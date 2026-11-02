@@ -561,11 +561,8 @@ impl CallSink<'_, '_> {
             HostOutput(w as &mut dyn BufferViewMut)
         });
         let call_start = span.start.advance(u64::from(rel));
-        let evict_n = Self::drain_evicted(
-            self.ledger,
-            &mut *self.evict_midi,
-            &mut *self.evict_events,
-        );
+        let evict_n =
+            Self::drain_evicted(self.ledger, &mut *self.evict_midi, &mut *self.evict_events);
         // Merge sources, each already sorted by `frame_offset`:
         // `[evict, release, chase, plan, live]` — owed teardown first
         // (ledger evictions, then the old context's release), then the

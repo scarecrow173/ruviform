@@ -480,7 +480,11 @@ mod tests {
         let mut entries = Vec::with_capacity(CHASE_SCAN_BUDGET + 128);
         for i in 0..(CHASE_SCAN_BUDGET + 128) {
             let pos = i64::try_from(i).unwrap();
-            entries.push((pos, u64::try_from(i).unwrap(), on(60 + (i % 4) as u8)));
+            entries.push((
+                pos,
+                u64::try_from(i).unwrap(),
+                on(60 + u8::try_from(i % 4).unwrap()),
+            ));
         }
         let plan = midi_plan_of(&entries);
         let mut scratch: [Event; NOTE_LEDGER_CAPACITY] =

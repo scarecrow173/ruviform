@@ -861,8 +861,7 @@ mod tests {
         ];
         let mut scratch = [param_event(0, 0.0); 8];
         let mut src_scratch = [0u8; 8];
-        let merged =
-            merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap();
+        let merged = merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap();
         // plan wins the offset-64 tie.
         assert!(matches!(merged[1].kind(), EventKind::ParamValue(_)));
         assert!(matches!(merged[2].kind(), EventKind::Midi(_)));
@@ -891,8 +890,7 @@ mod tests {
         let release = [off];
         let mut scratch = [param_event(0, 0.0); 8];
         let mut src_scratch = [0u8; 8];
-        let merged =
-            merge_call_events(&[&release, &live], &mut scratch, &mut src_scratch).unwrap();
+        let merged = merge_call_events(&[&release, &live], &mut scratch, &mut src_scratch).unwrap();
         assert!(matches!(
             merged[0].kind(),
             EventKind::Midi(m) if m.is_note_off()
@@ -912,8 +910,7 @@ mod tests {
         let live2 = [on_other, on];
         let mut scratch2 = [param_event(0, 0.0); 8];
         let mut src_scratch2 = [0u8; 8];
-        let merged2 =
-            merge_call_events(&[&live2], &mut scratch2, &mut src_scratch2).unwrap();
+        let merged2 = merge_call_events(&[&live2], &mut scratch2, &mut src_scratch2).unwrap();
         assert_eq!(merged2.len(), 2);
         assert!(matches!(
             merged2[0].kind(),
@@ -943,8 +940,7 @@ mod tests {
         let live = [on, off];
         let mut scratch = [param_event(0, 0.0); 8];
         let mut src_scratch = [0u8; 8];
-        let merged =
-            merge_call_events(&[&live], &mut scratch, &mut src_scratch).unwrap();
+        let merged = merge_call_events(&[&live], &mut scratch, &mut src_scratch).unwrap();
         assert!(matches!(
             merged[0].kind(),
             EventKind::Midi(m) if matches!(m.effective_note_state(), Some(true))
@@ -978,8 +974,7 @@ mod tests {
         let live = [off];
         let mut scratch = [param_event(0, 0.0); 8];
         let mut src_scratch = [0u8; 8];
-        let merged =
-            merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap();
+        let merged = merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap();
         assert!(matches!(
             merged[0].kind(),
             EventKind::Midi(m) if m.is_note_off()
