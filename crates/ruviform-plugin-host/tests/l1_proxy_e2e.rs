@@ -102,6 +102,46 @@ fn wait_for_failed(instance: &L1Instance) {
     }
 }
 
+/// Pipeline barrier (Issue #238): two back-to-back `SaveState`
+/// round-trips flush every earlier submit through the child. The
+/// driver writes the first command mid-iteration then drains the
+/// submit queue, so the pending doorbells land behind it on the
+/// child's stdin; the serial child answers the second command only
+/// after the matching completions were pushed to the result
+/// channel — when the second `execute` returns, every seq this
+/// thread submitted before the barrier is in the channel before
+/// the next `process` drain. On a `Bundled` child one barrier
+/// covers every co-resident instance's queue (shared stdin).
+///
+/// Bounded by `command_timeout`: a child that cannot answer turns
+/// the barrier into `Err` instead of a hang; the panic carries the
+/// lifecycle mirror and the counter snapshot as diagnostics.
+///
+/// Each barrier adds two wire `Command`s to the child's received
+/// message counter — never combine it with message-count fault
+/// flags (`--hang-after-msgs`, `--crash-after-msgs`,
+/// `--stop-reading-after-msgs`, `--leave-heir-after-msgs`), and
+/// never on a child that has stopped answering.
+fn pipeline_barrier(instance: &mut L1Instance) {
+    for _ in 0..2 {
+        if let Err(err) = instance.execute(wire::Command::SaveState) {
+            let counters = instance.audio_counters().map(|r| {
+                format!(
+                    "dropped={} passthrough={} results_failed={} results_dropped={}",
+                    r.dropped_submits.read(),
+                    r.passthrough_submits.read(),
+                    r.results_failed_observed.read(),
+                    r.results_dropped.read()
+                )
+            });
+            panic!(
+                "pipeline barrier failed: {err:?} — lifecycle {:?}, counters {counters:?}",
+                instance.lifecycle_state()
+            );
+        }
+    }
+}
+
 /// Command parity (spec AC1): the L0 command series runs
 /// child-side and returns identical reply/error semantics.
 #[test]
@@ -736,10 +776,11 @@ fn process_roundtrip_gain_and_lookahead_delay() {
         let value = 0.2 + 0.01 * f32::from(u8::try_from(call).unwrap() + 1);
         let input = vec![value; frames];
         let mut output = vec![0.0_f32; frames];
-        // A real-time-scale budget between calls — a 512-frame block
-        // at 48 kHz is ~10.7 ms; 5 ms keeps the worker comfortably
-        // ahead of the 2-block lookahead without racing it.
-        thread::sleep(Duration::from_millis(5));
+        // Barrier, not pacing (Issue #238): the two round-trips
+        // land every earlier submit's completion in the result
+        // channel, so this call's drain observes the `call−2` seq
+        // deterministically instead of racing the worker.
+        pipeline_barrier(&mut instance);
         let result = run_block(&mut instance, &input, &mut output);
         assert_eq!(result, Ok(ProcessResult::CONTINUE));
         if call >= 2 {
@@ -835,11 +876,13 @@ fn process_underrun_passes_through_defined_output() {
             "underrun emitted an undefined sample"
         );
     }
-    // Real-time pacing fills the pipeline — a completed block must
-    // land, and `last_output` keeps it alive through later gaps.
-    thread::sleep(Duration::from_millis(20));
+    // Barrier-paced calls refill the pipeline (Issue #238): each
+    // barrier lands the prior submits' completions in the result
+    // channel, so the drain publishes the gained block
+    // deterministically — the same "paced pipeline fills"
+    // invariant, without the wall clock.
     for _ in 0..8 {
-        thread::sleep(Duration::from_millis(5));
+        pipeline_barrier(&mut instance);
         run_block(&mut instance, &input, &mut output).unwrap();
     }
     assert!(
@@ -1000,9 +1043,10 @@ fn bundled_child_hosts_independent_instances() {
         let input_b = vec![vb; frames];
         let mut out_a = vec![0.0_f32; frames];
         let mut out_b = vec![0.0_f32; frames];
-        // A real-time-scale pace so most doorbells complete inside
-        // the lookahead window on the shared serve loop.
-        thread::sleep(Duration::from_millis(5));
+        // One barrier on `a` covers both pipelines — the bundled
+        // child drains every instance's submit queue per driver
+        // iteration on the shared stdin (Issue #238).
+        pipeline_barrier(&mut a);
         assert_eq!(
             run_block(&mut a, &input_a, &mut out_a),
             Ok(ProcessResult::CONTINUE)
@@ -1854,7 +1898,11 @@ fn rejected_block_replies_resolve_pass_through() {
         let value = 0.2 + 0.1 * f32::from(u8::try_from(call).unwrap());
         let input = vec![value; 512];
         let mut output = vec![7.0_f32; 512];
-        thread::sleep(Duration::from_millis(5));
+        // Barrier, not pacing (Issue #238): seqs 0/1 land in the
+        // result channel before calls 2/3 drain them, so
+        // `processed` is deterministic; the flagged rejections are
+        // observed the same way.
+        pipeline_barrier(&mut instance);
         let result = run_block(&mut instance, &input, &mut output);
         assert_eq!(result, Ok(ProcessResult::CONTINUE));
         assert!(
@@ -2228,6 +2276,41 @@ mod composite_e2e {
         }
     }
 
+    /// Pipeline barrier (Issue #238) through the composite command
+    /// surface — the same ordering guarantee as the top-level
+    /// `pipeline_barrier`: the driver's iteration writes the first
+    /// `SaveState` then drains every queued submit behind it on the
+    /// child's stdin, and the serial child answers the second
+    /// `SaveState` only after the matching completions were pushed
+    /// to the result channel — when the second `execute` returns,
+    /// every seq this thread submitted before the barrier is in the
+    /// channel before the next `process` drain. On a `Bundled`
+    /// child one barrier covers every co-resident instance's queue
+    /// (shared stdin); a `Dedicated` instance's barrier covers its
+    /// own child only.
+    ///
+    /// Bounded by `command_timeout`: an unanswerable child turns
+    /// the barrier into `Err`; the panic carries the lifecycle
+    /// mirror and the public counter snapshot as diagnostics.
+    ///
+    /// Each barrier adds two wire `Command`s to the child's
+    /// received message counter — never combine it with
+    /// message-count fault flags (`--hang-after-msgs`,
+    /// `--crash-after-msgs`, `--stop-reading-after-msgs`,
+    /// `--leave-heir-after-msgs`), and never on a child that has
+    /// stopped answering.
+    fn pipeline_barrier(host: &mut PluginHost, handle: PluginHandle) {
+        for _ in 0..2 {
+            if let Err(err) = host.execute(HostCommand::SaveState { handle }) {
+                panic!(
+                    "pipeline barrier failed: {err:?} — lifecycle {:?}, counters {:?}",
+                    host.lifecycle_state(handle),
+                    host.audio_counters(handle)
+                );
+            }
+        }
+    }
+
     /// `Instantiate` the worker route expecting
     /// `Err(HostError::SpawnFailed{cause, diagnostics_id})` — the
     /// pre-mint failure surface — and returns the payload pair for
@@ -2282,7 +2365,11 @@ mod composite_e2e {
             let input_b = vec![vb; 512];
             let mut out_a = vec![0.0_f32; 512];
             let mut out_b = vec![0.0_f32; 512];
-            thread::sleep(Duration::from_millis(5));
+            // Barriers, not pacing (Issue #238): each flush lands
+            // every prior submit's completion in the result
+            // channels — both queues on the bundled child.
+            pipeline_barrier(host, a);
+            pipeline_barrier(host, b);
             assert_eq!(
                 host_block(host, a, &input_a, &mut out_a),
                 Ok(ProcessResult::CONTINUE)
@@ -2367,7 +2454,9 @@ mod composite_e2e {
         let mut out_l1 = [-1.0_f32; 512];
         let mut delivered = false;
         for _ in 0..16 {
-            thread::sleep(Duration::from_millis(5));
+            // Barrier, not pacing (Issue #238) — delivery into the
+            // result channel is flushed before each call's drain.
+            pipeline_barrier(&mut host, l1);
             assert_eq!(
                 host_block(&mut host, l1, &input, &mut out_l1),
                 Ok(ProcessResult::CONTINUE)
@@ -2831,7 +2920,9 @@ mod composite_e2e {
             let value = 0.2 + 0.01 * f32::from(u8::try_from(call % 16).unwrap() + 1);
             let input = vec![value; 512];
             let mut output = vec![0.0_f32; 512];
-            thread::sleep(Duration::from_millis(5));
+            // Barrier, not pacing (Issue #238) — the runner child is
+            // a serial stdin→stdout loop like the fixture worker.
+            pipeline_barrier(&mut host, handle);
             assert_eq!(
                 host_block_with_events(&mut host, handle, &input, &mut output, event_list),
                 Ok(ProcessResult::CONTINUE)
@@ -3224,7 +3315,9 @@ mod composite_e2e {
         let mut output = [0.0_f32; 512];
         let mut delivered = false;
         for _ in 0..16 {
-            thread::sleep(Duration::from_millis(5));
+            // Barrier on `b` — its own dedicated child, untouched
+            // by `a`'s death (Issue #238).
+            pipeline_barrier(&mut host, b);
             assert_eq!(
                 host_block(&mut host, b, &input, &mut output),
                 Ok(ProcessResult::CONTINUE)
@@ -3306,7 +3399,10 @@ mod composite_e2e {
         let mut delivered_a = false;
         let mut delivered_b = false;
         for _ in 0..24 {
-            thread::sleep(Duration::from_millis(5));
+            // Barrier on `a` covers both queues — the bundled
+            // runner drains every instance's submits on the shared
+            // stdin (Issue #238).
+            pipeline_barrier(&mut host, a);
             assert_eq!(
                 host_block_with_events(&mut host, a, &input_a, &mut out_a, events_a),
                 Ok(ProcessResult::CONTINUE)
@@ -3333,7 +3429,8 @@ mod composite_e2e {
         let mut persisted_a = false;
         let mut persisted_b = false;
         for call in 0..16_u32 {
-            thread::sleep(Duration::from_millis(5));
+            // Same barrier coverage as the delivery loop above.
+            pipeline_barrier(&mut host, a);
             assert_eq!(
                 host_block(&mut host, a, &input_a, &mut out_a),
                 Ok(ProcessResult::CONTINUE)
@@ -3429,10 +3526,11 @@ mod composite_e2e {
         let input = [1.0_f32; 512];
         let mut output = [0.0_f32; 512];
         for _ in 0..CALLS {
-            // Let the driver doorbell each submitted seq — the
-            // leg-side drops need no reply, but the child must be
-            // given the reads or its stdin would eventually block.
-            thread::sleep(Duration::from_millis(5));
+            // No pacing needed (Issue #238): the counts are
+            // structural — the hung child still reads stdin so its
+            // pipe never blocks, the three slots fill with the
+            // first three submits, and nothing ever drains to free
+            // one, so every later call drops on the leg side.
             assert_eq!(
                 host_block(&mut host, l1, &input, &mut output),
                 Ok(ProcessResult::CONTINUE)
@@ -3505,7 +3603,12 @@ mod composite_e2e {
         // through) or `0.5 ×` an earlier input (the two processed
         // seqs).
         for _ in 0..12 {
-            thread::sleep(Duration::from_millis(10));
+            // Barrier per call (Issue #238): each prior seq's
+            // completion is in the result channel before this call
+            // drains it — the reply landing and the slot freeing
+            // both stop racing the wall clock, so `dropped_submits`
+            // stays 0 by construction, not by scheduler luck.
+            pipeline_barrier(&mut host, l1);
             assert_eq!(
                 host_block(&mut host, l1, &input, &mut output),
                 Ok(ProcessResult::CONTINUE)
@@ -3523,9 +3626,8 @@ mod composite_e2e {
         // all ten `RESULT_FAILED` completions (seqs 12..20 also
         // reject, but their completions race the same drain —
         // the count asserts only what it must observe).
-        thread::sleep(Duration::from_millis(50));
         for _ in 12..20 {
-            thread::sleep(Duration::from_millis(5));
+            pipeline_barrier(&mut host, l1);
             assert_eq!(
                 host_block(&mut host, l1, &input, &mut output),
                 Ok(ProcessResult::CONTINUE)
@@ -3583,7 +3685,9 @@ mod composite_e2e {
         let mut slab = [0.0_f32; 1024];
 
         for _ in 0..CALLS {
-            thread::sleep(Duration::from_millis(5));
+            // Same structural bound as the in-place leg — the hung
+            // child never frees a slot, so calls 3.. drop on the
+            // submit side deterministically (Issue #238).
             slab.fill(1.0);
             assert_eq!(
                 endpoint.process_audio(
@@ -3823,10 +3927,11 @@ mod composite_e2e {
         // before the parent exits.
         let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
         wait_host_failed(&host, l1);
-        // The record freezes at notification-pop — let the drain's
-        // post-exit deadline (500 ms) fully expire first so the
-        // flag assertions read the settled state.
-        thread::sleep(Duration::from_millis(700));
+        // The record freezes at notification-pop — `freeze` itself
+        // waits on the drain condvar for `DrainState::Done` once
+        // convergence bounded the drain (Issue #238), so the flag
+        // assertions read the settled post-deadline state with no
+        // wall-clock sleep.
         let (notified, exit, cause) = wait_host_notification(&mut host);
         assert_eq!(notified, l1);
         // A voluntary `exit(0)` is still a `Failed` violation — the
@@ -3866,7 +3971,9 @@ mod composite_e2e {
         ]);
         let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
         wait_host_failed(&host, l1);
-        thread::sleep(Duration::from_millis(700));
+        // The notification pop's `freeze` waits for
+        // `DrainState::Done` — the mid-grace emission is read
+        // before the drain's own deadline stops it (Issue #238).
         let (notified, _exit, cause) = wait_host_notification(&mut host);
         assert_eq!(notified, l1);
         assert_eq!(cause, FailureCause::ExitObserved);
@@ -3903,10 +4010,10 @@ mod composite_e2e {
         ]);
         let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
         wait_host_failed(&host, l1);
-        // Pop after the 500 ms drain deadline but before the heir's
-        // delayed emission (~1.2 s) — the freeze reads the settled
-        // pre-emission state.
-        thread::sleep(Duration::from_millis(700));
+        // The notification pop's `freeze` returns only once the
+        // drain posts `DrainState::Done` at its own deadline —
+        // still before the heir's ~1.2 s emission — so the freeze
+        // reads the settled pre-emission state (Issue #238).
         let (notified, _exit, cause) = wait_host_notification(&mut host);
         assert_eq!(notified, l1);
         assert_eq!(cause, FailureCause::ExitObserved);
