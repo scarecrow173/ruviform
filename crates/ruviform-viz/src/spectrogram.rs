@@ -448,6 +448,9 @@ mod tests {
         let info = spec.info();
         assert_eq!(info.bins, fft / 2 + 1);
         // Peak bin of frame 0 must be k.
+        // `b..b + 1` stays exclusive — `RowSpec.bins` is `Vec<Range<usize>>`,
+        // so the `b..=b` suggestion does not typecheck (1.89-only false positive).
+        #[allow(clippy::range_plus_one)]
         let tile = spec
             .tile(&TileRequest {
                 frames: 0..1,

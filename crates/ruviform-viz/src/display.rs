@@ -204,6 +204,10 @@ impl FreqAxis {
             let lo = self.row_edge_hz(r, rows);
             let hi = self.row_edge_hz(r + 1, rows);
             let mut range = bins_covering(axis, lo, hi);
+            // range_plus_one suggests `k..=k`, but `bins` is `Vec<Range<usize>>`
+            // and `RangeInclusive` does not typecheck — single-element `k..k + 1`
+            // is the canonical exclusive form (1.89-only false positive).
+            #[allow(clippy::range_plus_one)]
             if range.is_empty() {
                 // No bin inside the span: take the bin nearest its center.
                 let mid = f64::midpoint(lo, hi);

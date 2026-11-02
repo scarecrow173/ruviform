@@ -123,9 +123,10 @@ fn fade_impl<S: Simd>(simd: S, dst: &mut [f32], src: &[f32], g0: f32, step: f32)
 
 /// `Σ a[i]·b[i]` — lane-wise FMA accumulation, ordered tail (ulp ≤ 8).
 #[simd]
-#[expect(
+#[allow(
     clippy::suboptimal_flops,
-    reason = "the tail loop mirrors the scalar reference's sequential multiply-then-add"
+    reason = "the tail loop mirrors the scalar reference's sequential multiply-then-add; \
+              allow not expect — undetected by MSRV clippy 1.89"
 )]
 fn dot_impl<S: Simd>(simd: S, a: &[f32], b: &[f32]) -> f32 {
     let n = S::f32s::LEN;
@@ -147,9 +148,10 @@ fn dot_impl<S: Simd>(simd: S, a: &[f32], b: &[f32]) -> f32 {
 /// the accumulated drift exceeded the ulp ≤ 8 contract under cancellation —
 /// see the file header). The zero-history head and the tail run sequentially.
 #[simd]
-#[expect(
+#[allow(
     clippy::suboptimal_flops,
-    reason = "unfused multiply-then-add mirrors the scalar reference's exact rounding"
+    reason = "unfused multiply-then-add mirrors the scalar reference's exact rounding; \
+              allow not expect — undetected by MSRV clippy 1.89"
 )]
 fn fir_impl<S: Simd>(simd: S, dst: &mut [f32], src: &[f32], taps: &[f32]) {
     let n = S::f32s::LEN;

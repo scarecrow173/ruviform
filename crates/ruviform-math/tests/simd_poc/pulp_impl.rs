@@ -181,9 +181,10 @@ impl WithSimd for Dot<'_> {
     type Output = f32;
 
     #[inline(always)]
-    #[expect(
+    #[allow(
         clippy::suboptimal_flops,
-        reason = "the tail loop mirrors the scalar reference's sequential multiply-then-add"
+        reason = "the tail loop mirrors the scalar reference's sequential multiply-then-add; \
+              allow not expect — undetected by MSRV clippy 1.89"
     )]
     fn with_simd<S: Simd>(self, simd: S) -> Self::Output {
         let Self { a, b } = self;
@@ -216,9 +217,10 @@ impl WithSimd for Fir<'_> {
     type Output = ();
 
     #[inline(always)]
-    #[expect(
+    #[allow(
         clippy::suboptimal_flops,
-        reason = "the head/tail loops mirror the scalar reference's sequential multiply-then-add"
+        reason = "the head/tail loops mirror the scalar reference's sequential multiply-then-add; \
+              allow not expect — undetected by MSRV clippy 1.89"
     )]
     fn with_simd<S: Simd>(self, simd: S) -> Self::Output {
         let Self { dst, src, taps } = self;

@@ -199,10 +199,11 @@ pub fn fade(dst: &mut [f32], src: &[f32], g0: f32, step: f32) {
 /// `debug_assert` on contract violation (debug builds); release builds
 /// accumulate over the shorter input.
 #[must_use]
-#[expect(
+#[allow(
     clippy::suboptimal_flops,
     reason = "sequential multiply-then-add accumulation is the reference rounding; \
-              FMA on backends is a measured difference, not the reference"
+              FMA on backends is a measured difference, not the reference; \
+              allow not expect — undetected by MSRV clippy 1.89"
 )]
 pub fn dot(a: &[f32], b: &[f32]) -> f32 {
     debug_assert_eq!(a.len(), b.len());
@@ -225,10 +226,11 @@ pub fn dot(a: &[f32], b: &[f32]) -> f32 {
 ///
 /// `debug_assert` on contract violation (debug builds); in release builds a
 /// `dst` longer than `src` panics via slicing.
-#[expect(
+#[allow(
     clippy::suboptimal_flops,
     reason = "sequential multiply-then-add accumulation is the reference rounding; \
-              FMA on backends is a measured difference, not the reference"
+              FMA on backends is a measured difference, not the reference; \
+              allow not expect — undetected by MSRV clippy 1.89"
 )]
 pub fn fir(dst: &mut [f32], src: &[f32], taps: &[f32]) {
     debug_assert_eq!(dst.len(), src.len());

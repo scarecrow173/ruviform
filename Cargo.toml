@@ -85,6 +85,11 @@ missing_errors_doc = "allow"  # pedantic の過剰適用を初期段階で緩和
 # 強制する（docs/adr/public-enum-non-exhaustive-policy.md）。`lint`/`lint-ci` の
 # `-D warnings` ゲートで実質 deny として機能する。
 exhaustive_enums = "warn"
+# MSRV 1.89 の clippy 検査では、1.89 検出器のみが発火する `float_cmp` /
+# `similar_names` を `-A` フラグで除外して実施する（Issue #223・AGENTS.md
+# 「MSRV clippy 検証」参照）。両 lint は pin toolchain でも pedantic に含ま
+# れるため、ここで `allow` すると lint gate が弱まる — 除外は MSRV 側
+# コマンドラインの責務とする。
 
 # Local development: retain full debug information.
 [profile.dev]

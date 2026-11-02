@@ -283,6 +283,10 @@ impl<'a> EventList<'a> {
     /// Iterates events in offset order by value.
     ///
     /// **RT contract:** RT-suitable — bounded iteration, no allocation.
+    // must_use_candidate: the return `impl ExactSizeIterator` is already
+    // must_use via the `Iterator` trait; `#[must_use]` would be double_must_use
+    // (1.89-only suggestion, wrong direction).
+    #[allow(clippy::must_use_candidate)]
     pub fn iter(self) -> impl ExactSizeIterator<Item = Event> + 'a {
         self.events.iter().copied()
     }
