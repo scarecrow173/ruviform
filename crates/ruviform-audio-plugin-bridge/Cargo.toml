@@ -1,0 +1,20 @@
+[package]
+name = "ruviform-audio-plugin-bridge"
+description = "Typed-graph plugin adapter for Ruviform: binds a plugin endpoint (multi-bus/stateful lifecycle) into the typed audio graph with transport-span delivery and physical process-call partitioning"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-audio = { path = "../ruviform-audio" }
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+ruviform-graph = { path = "../ruviform-graph" }
+ruviform-media-core = { path = "../ruviform-media-core" }
+ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+ruviform-plugin-host = { path = "../ruviform-plugin-host" }
+ruviform-rt = { path = "../ruviform-rt" }
+
+[lints]
+workspace = true

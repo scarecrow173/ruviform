@@ -2839,6 +2839,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-audio-plugin-bridge"
+version = "0.1.0"
+dependencies = [
+ "ruviform-audio",
+ "ruviform-audio-core",
+ "ruviform-graph",
+ "ruviform-media-core",
+ "ruviform-plugin-core",
+ "ruviform-plugin-host",
+ "ruviform-rt",
+]
+
+[[package]]
 name = "ruviform-cli-sample"
 version = "0.1.0"
 dependencies = [

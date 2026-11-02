@@ -51,6 +51,8 @@ members = [
     "crates/ruviform-graph",
     # Engines（Issue #25 で新設）
     "crates/ruviform-audio",
+    # 利用側層（Issue #196 — typed graph plugin adapter。multi-bus/stateful lifecycle/process offset。誰も bridge に依存しない・循環なし）
+    "crates/ruviform-audio-plugin-bridge",
     # 利用側層（Issue #96 — NLE 非破壊編集データモデル + 評価射影。engine 同順位・全 API 非 RT）
     "crates/ruviform-edit",
     # 拡張層 GUI 基盤（Issue #156 — WebView 非依存の UI ホスト基盤 + wry/tao adapter。
