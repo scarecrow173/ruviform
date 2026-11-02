@@ -1,0 +1,18 @@
+{
+  "name": "@ruviform/ui-core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Issue #258: framework-neutral headless UI interaction contract — typed value mapping (normalized/plain/display), gesture state machine (Begin/Preview/Commit/Cancel), and the event port shared by Knob/Fader/Slider/NumericInput/Seekbar/Range controls. No DOM, UI framework, WebView, or renderer dependencies.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "@types/node": "~24.10",
+    "typescript": "~5.9.3"
+  }
+}

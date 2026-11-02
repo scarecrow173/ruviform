@@ -1,0 +1,6 @@
+# Keep ignore rules self-contained inside the ui workspace (same convention
+# as poc/ui/.gitignore). The Rust target/ pattern is already covered by the
+# repository-root .gitignore.
+node_modules/
+dist/
+out/
