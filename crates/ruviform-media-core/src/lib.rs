@@ -93,8 +93,8 @@ pub use transport_schedule::{
     CommandId, DeliveryPolicy, EngineFrame, FaultKind, InBlockTransportSupport, LoopOccurrence,
     PlanGeneration, RejectReason, ScheduleBudget, ScheduleFault, ScheduledEvent, SpanContext,
     SpanSink, TempoMapRevision, TransportCommand, TransportGeneration, TransportPlan,
-    TransportPlanBuilder, TransportScheduler, TransportSpan, event_engine_frame, media_time_ticks,
-    span_event_window,
+    TransportPlanBuilder, TransportScheduler, TransportSpan, event_engine_frame,
+    event_generation_matches, media_time_ticks, span_event_window,
 };
 
 /// Returns the crate version string.

@@ -22,7 +22,12 @@
 //! * **Generation.** `u64`, bumps on every seek/reopen; every item is
 //!   tagged. The consumer adopts the newest `Boundary`'s generation and
 //!   returns any item tagged otherwise to the free ring — stale
-//!   prefetch results can never cross a seek.
+//!   prefetch results can never cross a seek. Every generation after
+//!   the bootstrap emits its `Boundary` as its first item: rejected
+//!   seeks and failed reopens still land `Boundary` first (a dead
+//!   generation emits `Boundary` → `Fault` → `End` unless a newer
+//!   command supersedes it first), so every `Fault`/`End` is adopted
+//!   and counted rather than dropped as stale.
 //! * **Position.** Every stream element advances `next_frame`
 //!   deterministically: a `Block` covers `[first_frame, +valid)`,
 //!   a `Fault` covers `[first_frame, +frames)`, `Boundary` resets it,
@@ -37,14 +42,21 @@
 //!   fault-marked and zero-filled — the declared bounded fallback,
 //!   always counted in `FillReport`/`PrefetchTelemetry`, never
 //!   reported as content. `End` (EOF) is distinct from underrun: past
-//!   the end there is nothing left to produce.
+//!   the end there is nothing left to produce. `End` is committed the
+//!   moment it is synthesized — a marker requeued through `pending`
+//!   under backpressure still emits exactly once per generation
+//!   (`seek_discard_pending` may deliberately purge it with the rest
+//!   of the abandoned generation's queued markers).
 //! * **Drive.** One `pump()` call drains every queued command, then
 //!   performs at most one sequenced item of work — push one pending
 //!   marker, emit `End`, or fill and push one block. `Backpressured`
 //!   means work exists but a ring has no slot: markers may wait in
 //!   the producer `pending` queue, so a manual driver iterates
 //!   `pump()` until `Idle`/`Ended` rather than assuming one call
-//!   drains the pipeline.
+//!   drains the pipeline. `Ended` reports the `End` marker reaching
+//!   the ring on that call — EOF detection emits it in the same step,
+//!   so stopping at the first `Ended` can never strand the terminal
+//!   marker.
 //! * **Single owner.** Exactly `block_count` `PcmBlock`s exist. Pool →
 //!   free ring → producer → data ring → consumer → free ring. The
 //!   free ring's capacity equals the pool size, so the consumer's
@@ -435,8 +447,9 @@ pub enum PumpOutcome {
     /// Work exists but a ring has no slot right now — bounded wait,
     /// retry; the item was re-queued, not dropped.
     Backpressured,
-    /// The stream's `End` marker was emitted; the producer idles until
-    /// a seek/reopen arrives.
+    /// The stream's `End` marker reached the data ring on this call —
+    /// a full ring defers it through `pending` as `Backpressured`
+    /// instead. The producer idles until a seek/reopen arrives.
     Ended,
     /// `Quit` was received — the drive loop must stop.
     Quit,
@@ -459,15 +472,21 @@ pub struct PrefetchProducer {
     telemetry: PrefetchTelemetry,
     generation: u64,
     /// Markers awaiting a data-ring slot (full-ring retry queue —
-    /// bounded by construction: at most a few markers ever queue).
+    /// grows only with queued commands: ≤2 markers per seek, ≤3 per
+    /// failed reopen, plus one requeued `End`).
     pending: VecDeque<PrefetchItem>,
     /// A popped-but-unfilled block kept between EOF and the next
     /// generation — the producer owns it so it never has to drop a
     /// pool block.
     parked: Option<PcmBlock>,
+    /// EOF was detected (or a fatal fault / failed reopen ended the
+    /// stream) — the `End` marker still owes emission unless
+    /// `end_emitted` already latched.
     stream_ended: bool,
-    /// The `End` marker for the current generation was emitted —
-    /// the producer idles until a new generation arrives.
+    /// The `End` marker for the current generation was committed at
+    /// synthesis — it may still await a ring slot in `pending`, but
+    /// it is never synthesized again. The producer idles until a new
+    /// generation arrives.
     end_emitted: bool,
     quit: bool,
 }
@@ -495,7 +514,11 @@ impl PrefetchProducer {
     /// markers may remain in `pending` under backpressure. A manual
     /// driver iterates `pump()` until [`PumpOutcome::Idle`]/
     /// [`PumpOutcome::Ended`] rather than assuming one call drains
-    /// the pipeline.
+    /// the pipeline. `Ended` is returned only by the call that lands
+    /// `End` on the ring — EOF detection emits the marker in the same
+    /// step — so stopping at the first `Ended` can never strand it
+    /// (a full ring reports `Backpressured` with the marker committed
+    /// to `pending` instead).
     ///
     /// **RT contract:** non-RT only.
     ///
@@ -523,19 +546,7 @@ impl PrefetchProducer {
         }
         // 2. Stream ended → emit End once, then idle.
         if self.stream_ended && !self.end_emitted {
-            let end = PrefetchItem::End {
-                generation: self.generation,
-            };
-            match self.data_tx.try_push(end) {
-                Ok(()) => {
-                    self.end_emitted = true;
-                    return Ok(PumpOutcome::Ended);
-                }
-                Err(full) => {
-                    self.pending.push_front(full.into_inner());
-                    return Ok(PumpOutcome::Backpressured);
-                }
-            }
+            return Ok(self.emit_end());
         }
         if self.end_emitted {
             return Ok(PumpOutcome::Idle);
@@ -607,17 +618,19 @@ impl PrefetchProducer {
                     }
                     Err(_error) => {
                         // A rejected seek keeps the old position; the
-                        // new generation still re-anchors the stream so
-                        // stale items die and the fault is reported.
+                        // boundary still lands first so the consumer
+                        // adopts the generation, then reports the
+                        // fault — never a stale drop ahead of the
+                        // boundary.
+                        self.pending.push_back(PrefetchItem::Boundary {
+                            generation,
+                            first_frame: self.reader.position().0,
+                        });
                         self.pending.push_back(PrefetchItem::Fault {
                             generation,
                             kind: SourceFault::Unseekable,
                             first_frame: first,
                             frames: 0,
-                        });
-                        self.pending.push_back(PrefetchItem::Boundary {
-                            generation,
-                            first_frame: self.reader.position().0,
                         });
                     }
                 }
@@ -649,15 +662,15 @@ impl PrefetchProducer {
                                         });
                                     }
                                     Err(_error) => {
+                                        self.pending.push_back(PrefetchItem::Boundary {
+                                            generation,
+                                            first_frame: self.reader.position().0,
+                                        });
                                         self.pending.push_back(PrefetchItem::Fault {
                                             generation,
                                             kind: SourceFault::Unseekable,
                                             first_frame: target,
                                             frames: 0,
-                                        });
-                                        self.pending.push_back(PrefetchItem::Boundary {
-                                            generation,
-                                            first_frame: self.reader.position().0,
                                         });
                                     }
                                 }
@@ -665,6 +678,15 @@ impl PrefetchProducer {
                         }
                     }
                     Err(error) => {
+                        // A failed reopen still lands its boundary so
+                        // the consumer adopts the dead generation —
+                        // `Boundary` → `Fault` → `End` terminates it
+                        // observably instead of starving behind a
+                        // generation the consumer never adopted.
+                        self.pending.push_back(PrefetchItem::Boundary {
+                            generation,
+                            first_frame: 0,
+                        });
                         self.pending.push_back(PrefetchItem::Fault {
                             generation,
                             kind: SourceFault::of_kind(error.kind()),
@@ -674,6 +696,30 @@ impl PrefetchProducer {
                         self.stream_ended = true;
                     }
                 }
+            }
+        }
+    }
+
+    /// Commits the current generation's `End` marker exactly once:
+    /// pushes it to the data ring, or — under backpressure —
+    /// requeues it through `pending` for a later pump. `end_emitted`
+    /// latches at synthesis so the marker is never synthesized again
+    /// while it awaits a ring slot, and the outcome stays honest:
+    /// `Ended` only when the marker reached the ring on this call.
+    fn emit_end(&mut self) -> PumpOutcome {
+        let end = PrefetchItem::End {
+            generation: self.generation,
+        };
+        // Committed once synthesized: a full ring requeues the
+        // marker through `pending`, where it still emits exactly
+        // once — it must not be synthesized again on the next
+        // pump.
+        self.end_emitted = true;
+        match self.data_tx.try_push(end) {
+            Ok(()) => PumpOutcome::Ended,
+            Err(full) => {
+                self.pending.push_front(full.into_inner());
+                PumpOutcome::Backpressured
             }
         }
     }
@@ -700,11 +746,13 @@ impl PrefetchProducer {
             Ok(read) => {
                 block.valid_frames = read.frames;
                 if read.frames == 0 {
-                    // End of stream — park the unused block and let
-                    // the End marker sequence out next pump.
+                    // End of stream — park the unused block and emit
+                    // `End` in the same step: `Ended` is reported
+                    // only once the marker is sequenced, so a driver
+                    // that stops at `Ended` can never strand it.
                     self.parked = Some(block);
                     self.stream_ended = true;
-                    return PumpOutcome::Ended;
+                    return self.emit_end();
                 }
                 audit_block(&mut block);
                 self.telemetry
@@ -1451,7 +1499,10 @@ impl PrefetchHandle {
     ///
     /// A `Fact::Unsupported` seekable reports
     /// [`ErrorKind::Unsupported`] immediately, without consuming a
-    /// generation.
+    /// generation. A seek the producer cannot honour lands its
+    /// `Boundary` at the unchanged position first, then reports an
+    /// [`SourceFault::Unseekable`] fault — the consumer adopts the
+    /// generation, counts the fault, and never stale-drops it.
     ///
     /// **RT contract:** non-RT only.
     ///
@@ -1480,7 +1531,9 @@ impl PrefetchHandle {
     ///
     /// A `Fact::Unsupported` seekable reports
     /// [`ErrorKind::Unsupported`] immediately, without consuming a
-    /// generation.
+    /// generation. A rejected seek emits `Boundary` first, then the
+    /// [`SourceFault::Unseekable`] fault — same observable shape as
+    /// [`seek`](Self::seek).
     ///
     /// **RT contract:** non-RT only.
     ///
@@ -1514,6 +1567,11 @@ impl PrefetchHandle {
     /// MediaSource>` in, a probed `Box<dyn Demuxer>` out; the API
     /// never names files, paths or providers.
     ///
+    /// If `open`/`reopen` fails, the dead generation still terminates
+    /// observably: `Boundary{gen, 0}` → `Fault{gen, of_kind}` →
+    /// `End{gen}` — the consumer adopts the generation, counts the
+    /// fault, and reports `eof` instead of starving.
+    ///
     /// **RT contract:** non-RT only.
     ///
     /// # Errors
@@ -1528,19 +1586,16 @@ impl PrefetchHandle {
     /// `Boundary` at the actual landed position — the fused form of
     /// `reopen` + `seek` for mid-stream source replacement.
     ///
-    /// If the post-reopen seek fails, an [`SourceFault::Unseekable`]
-    /// fault is queued ahead of a `Boundary` at the reopened
-    /// position; per the generation-adoption model the consumer
-    /// drops the new-generation fault ahead of that boundary as
-    /// stale, so the observable outcome is the re-anchor plus a
-    /// stale-drop count — the same reporting shape as `seek` on a
-    /// rejected seek. Whether the replacement source is seekable is
-    /// not pre-checked.
+    /// If the post-reopen seek fails, the `Boundary` at the reopened
+    /// position lands first, then the [`SourceFault::Unseekable`]
+    /// fault — the consumer adopts the generation, counts the fault,
+    /// and re-anchors at the reopened position; the same observable
+    /// shape as `seek` on a rejected seek. Whether the replacement
+    /// source is seekable is not pre-checked.
     ///
-    /// If `open`/`reopen` itself fails, the existing `reopen`
-    /// failure path applies unchanged: a `Fault` marker and stream
-    /// end — no `Boundary` is emitted, so the generation is never
-    /// adopted.
+    /// If `open`/`reopen` itself fails, the `reopen` failure path
+    /// applies: `Boundary{gen, 0}` → `Fault{gen, of_kind}` →
+    /// `End{gen}` — the dead generation terminates observably.
     ///
     /// **RT contract:** non-RT only.
     ///

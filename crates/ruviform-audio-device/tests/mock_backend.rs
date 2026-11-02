@@ -17,8 +17,9 @@ use std::sync::{Arc, Mutex};
 
 use ruviform_audio_core::device::{
     BufferSize, DEVICE_CLOCK_TIMEBASE, Device, DeviceEnumerator, DeviceError, DeviceId,
-    DeviceResult, OutputCallbackInfo, OutputDataCallback, OutputErrorCallback, OutputStream,
-    OutputStreamConfig, OutputTimestamp, SupportedBufferSize, SupportedOutputFormat,
+    DeviceResult, InputDataCallback, InputErrorCallback, InputStream, InputStreamConfig,
+    OutputCallbackInfo, OutputDataCallback, OutputErrorCallback, OutputStream, OutputStreamConfig,
+    OutputTimestamp, SupportedBufferSize, SupportedInputFormat, SupportedOutputFormat,
 };
 use ruviform_audio_core::{
     AudioBufferViewMut, AudioFormat, ChannelLayout, SampleFormat, SampleRate,
@@ -189,6 +190,24 @@ impl Device for FakeDevice {
             shared: Arc::clone(&self.shared),
         }))
     }
+
+    fn default_input_format(&self) -> DeviceResult<AudioFormat> {
+        // Output-only fake — no input capability, reported honestly.
+        Err(DeviceError::Unsupported)
+    }
+
+    fn supported_input_formats(&self) -> DeviceResult<Vec<SupportedInputFormat>> {
+        Ok(Vec::new())
+    }
+
+    fn open_input_stream(
+        &self,
+        _config: &InputStreamConfig,
+        _data_callback: InputDataCallback,
+        _error_callback: InputErrorCallback,
+    ) -> DeviceResult<Box<dyn InputStream>> {
+        Err(DeviceError::Unsupported)
+    }
 }
 
 /// A fake enumerator handing out fresh `FakeDevice`s that share the
@@ -207,6 +226,14 @@ impl DeviceEnumerator for FakeEnumerator {
 
     fn default_output_device(&self) -> DeviceResult<Option<Box<dyn Device>>> {
         Ok(self.output_devices()?.into_iter().next())
+    }
+
+    fn input_devices(&self) -> DeviceResult<Vec<Box<dyn Device>>> {
+        Ok(Vec::new())
+    }
+
+    fn default_input_device(&self) -> DeviceResult<Option<Box<dyn Device>>> {
+        Ok(None)
     }
 }
 

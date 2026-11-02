@@ -9,6 +9,7 @@
 
 use std::sync::Arc;
 
+use ruviform_audio_core::midi_input::TimedMidiInput;
 use ruviform_media_core::{DeliveryPolicy, InBlockTransportSupport, ScheduleBudget, TimeBase};
 use ruviform_plugin_core::{BusDescriptor, ProcessConfig, contract_from_process_config};
 use ruviform_plugin_host::{BusReport, EndpointBounds, HostError, PluginHandle, PluginHost};
@@ -16,6 +17,7 @@ use ruviform_rt::channel;
 
 use crate::bus::{BusError, bus_to_port_def, validate_buses};
 use crate::control::{NodeControl, NodeReport, PluginNodeControl};
+use crate::input::{INPUT_STAGE_CAPACITY, InputConfig, InputStage, InputTx};
 use crate::node::{CONTROL_CHANNEL_CAPACITY, PluginNode, REPORT_CHANNEL_CAPACITY};
 use crate::status::NodeStatus;
 use ruviform_graph::PortDef;
@@ -44,6 +46,11 @@ pub struct AttachConfig {
     pub policy: DeliveryPolicy,
     /// Bounded-work budgets.
     pub budget: ScheduleBudget,
+    /// Enables the live-MIDI input leg: the node gains an
+    /// [`InputStage`] fed through a bounded channel whose non-RT
+    /// producer half comes back as [`Attached::input_tx`].
+    /// `None` — no input path (plan/chase/release still run).
+    pub input: Option<InputConfig>,
 }
 
 /// What `attach` returns: the RT node, its non-RT control twin and the
@@ -56,6 +63,11 @@ pub struct Attached {
     /// `PortDef`s in `buses` declaration order — build the graph node
     /// spec with exactly these (index = same-direction bus ordinal).
     pub ports: Vec<PortDef>,
+    /// The non-RT pump half of the input leg — `Some` only when
+    /// [`AttachConfig::input`] enabled it. Drive it once per engine
+    /// block (or faster) with [`InputTx::pump`] against an open
+    /// `MidiInput`.
+    pub input_tx: Option<InputTx>,
 }
 
 /// Defined attach failure.
@@ -67,6 +79,9 @@ pub enum AttachError {
     /// A declared bus's channel count exceeds `bounds.channels`, or
     /// `bounds.max_frames < process_config.max_frames`.
     BoundsMismatch,
+    /// `AttachConfig::input.channel_capacity` is `0` or exceeds
+    /// [`INPUT_STAGE_CAPACITY`].
+    InputConfig,
     /// The host rejected (`prepare_endpoint` / `buses`).
     Host(HostError),
 }
@@ -76,6 +91,7 @@ impl core::fmt::Display for AttachError {
         match self {
             Self::Bus(e) => write!(f, "bus table invalid: {e}"),
             Self::BoundsMismatch => f.write_str("endpoint bounds incompatible with config/buses"),
+            Self::InputConfig => f.write_str("input channel capacity out of range"),
             Self::Host(e) => write!(f, "host error: {e}"),
         }
     }
@@ -129,6 +145,20 @@ pub fn attach(
     let (report_tx, report_rx) = channel::<NodeReport>(REPORT_CHANNEL_CAPACITY);
     let status = Arc::new(NodeStatus::default());
     let epoch = ruviform_media_core::ClockEpochId::new(0);
+    let (input_stage, input_rx, input_tx) = match cfg.input {
+        Some(config) => {
+            if config.channel_capacity == 0 || config.channel_capacity > INPUT_STAGE_CAPACITY {
+                return Err(AttachError::InputConfig);
+            }
+            let (tx, rx) = channel::<TimedMidiInput>(config.channel_capacity);
+            (
+                Some(InputStage::new(cfg.frame_base)),
+                Some(rx),
+                Some(InputTx::new(tx)),
+            )
+        }
+        None => (None, None, None),
+    };
     let node = PluginNode::new(
         endpoint,
         &cfg.buses,
@@ -141,11 +171,14 @@ pub fn attach(
         report_tx,
         Arc::clone(&status),
         cfg.bounds.max_frames as usize,
+        input_stage,
+        input_rx,
     );
     let control = PluginNodeControl::new(ctrl_tx, report_rx, status);
     Ok(Attached {
         node,
         control,
         ports,
+        input_tx,
     })
 }

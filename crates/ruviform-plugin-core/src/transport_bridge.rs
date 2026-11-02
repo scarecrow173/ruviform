@@ -19,8 +19,9 @@
 //! I/O.
 
 use ruviform_media_core::{
-    EngineFrame, InBlockTransportSupport, Ppqn, ScheduledEvent, TempoMap, TransportSpan,
-    event_engine_frame,
+    EngineFrame, InBlockTransportSupport, LedgerKey, MidiEvent, NOTE_LEDGER_CAPACITY, Ppqn,
+    ScheduledEvent, SpanContext, TempoMap, TransportPlan, TransportSpan, TransportStatus,
+    event_engine_frame, event_generation_matches,
 };
 
 use crate::{Event, EventKind, EventList, ProcessConfig, TransportInfo};
@@ -70,7 +71,7 @@ pub fn calls_for_span(
 /// **RT contract:** RT-suitable — pure integer math.
 #[must_use]
 pub fn call_transport_info(
-    ctx: &ruviform_media_core::SpanContext,
+    ctx: &SpanContext,
     call_offset_frames: u32,
     tempo_map: Option<&TempoMap>,
     ppqn: Option<Ppqn>,
@@ -140,6 +141,165 @@ pub fn build_call_event_list<'a, P>(
     EventList::new(&scratch[..n], call_frames).ok()
 }
 
+/// Observation counters for one [`chase_span_events`] scan — the
+/// honesty surface for bounded-table loss.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct ChaseStats {
+    /// Plan-prefix events examined (`position <=` the chase position),
+    /// capped by [`CHASE_SCAN_BUDGET`].
+    pub scanned: usize,
+    /// Sounding keys re-fired into `scratch`.
+    pub chased: usize,
+    /// Note events that could not be tracked because the fixed chase
+    /// table filled — they *may* include notes sounding at the
+    /// position.
+    pub untracked: usize,
+    /// Keys confirmed sounding that did not fit `scratch` — definitely
+    /// not re-fired.
+    pub truncated: usize,
+    /// The scan budget cut the prefix walk short: sounding state
+    /// deeper than [`CHASE_SCAN_BUDGET`] events is unknown — some
+    /// sounding notes may not be re-fired.
+    pub incomplete: bool,
+}
+
+/// Maximum plan-prefix events examined by one [`chase_span_events`]
+/// call. The scan walks *backward* from the chase position — nearest
+/// events decide sounding state — so the bound keeps the RT cost
+/// proportional to the budget, not the (unbounded) plan length.
+pub const CHASE_SCAN_BUDGET: usize = 2048;
+
+/// Per-key chase state tracked backward through the plan prefix.
+/// `excess_offs` counts note-offs not yet paired with an earlier
+/// note-on; `uncovered` marks a note-on no later off consumed — the
+/// exact `NoteLedger` "ons minus offs" sounding semantics evaluated
+/// in reverse. `latest_on` is the most recent note-on (first seen
+/// walking backward), the event re-fired on chase.
+struct ChaseEntry {
+    latest_on: Option<(MidiEvent, i64)>,
+    uncovered: bool,
+    excess_offs: u32,
+}
+
+/// Reconstructs note state at `ctx.position_ticks` from the plan
+/// prefix and writes the chase set — offset-0 re-fires of the latest
+/// `NoteOn` for every key still sounding — into `scratch`.
+///
+/// "Still sounding" follows `NoteLedger` semantics over plan events at
+/// `position <= ctx.position_ticks` whose generation tags match `ctx`
+/// ([`event_generation_matches`]): effective note-ons (including
+/// re-triggers, which bump the count) minus note-offs. A key whose
+/// latest on sits *at* the span position is not chased — the normal
+/// event window already delivers it at offset 0. Chased events are
+/// `Event::new(0, EventKind::Midi(..))` emitted in chase-table order,
+/// deterministic for a given plan and position.
+///
+/// Non-note payloads are ignored: controller/parameter state chase is
+/// a deliberately deferred contract — this chase set covers the
+/// stuck-note domain only. An empty list is returned when
+/// `ctx.status` is not `Playing`.
+///
+/// When the bounded [`NOTE_LEDGER_CAPACITY`] table fills, further
+/// note events for unseen keys are skipped and counted in
+/// [`ChaseStats::untracked`]. When the prefix exceeds
+/// [`CHASE_SCAN_BUDGET`], the walk stops and sets
+/// [`ChaseStats::incomplete`] — both are defined loss, surfaced
+/// through the stats for the caller to report.
+///
+/// **RT contract:** RT-suitable — bounded `O(min(prefix,
+/// CHASE_SCAN_BUDGET) · NOTE_LEDGER_CAPACITY)` scan, writes only into
+/// `scratch`, no allocation.
+pub fn chase_span_events<'a>(
+    plan: &TransportPlan<EventKind>,
+    ctx: &SpanContext,
+    scratch: &'a mut [Event],
+) -> (&'a mut [Event], ChaseStats) {
+    let mut stats = ChaseStats::default();
+    if ctx.status != TransportStatus::Playing {
+        return (&mut scratch[..0], stats);
+    }
+    let prefix_end = plan
+        .events
+        .partition_point(|e| e.position_ticks() <= ctx.position_ticks);
+    let mut table: [Option<(LedgerKey, ChaseEntry)>; NOTE_LEDGER_CAPACITY] =
+        [const { None }; NOTE_LEDGER_CAPACITY];
+    // Walk the prefix backward — the events nearest the position
+    // dominate sounding state, so a budgeted scan loses the least
+    // relevant history first.
+    for ev in plan.events[..prefix_end].iter().rev() {
+        if stats.scanned >= CHASE_SCAN_BUDGET {
+            stats.incomplete = true;
+            break;
+        }
+        stats.scanned += 1;
+        if !event_generation_matches(ctx, ev) {
+            continue;
+        }
+        let EventKind::Midi(midi) = ev.payload else {
+            continue;
+        };
+        let (Some(key), Some(on)) = (midi.ledger_key(), midi.effective_note_state()) else {
+            continue;
+        };
+        let tracked = table
+            .iter_mut()
+            .find_map(|slot| slot.as_mut().filter(|(k, _)| *k == key).map(|(_, e)| e));
+        let entry = if let Some(entry) = tracked {
+            entry
+        } else {
+            let Some(slot) = table.iter_mut().find(|slot| slot.is_none()) else {
+                // Table full — the key's sounding state is unknowable
+                // within the bound; defined loss.
+                stats.untracked += 1;
+                continue;
+            };
+            *slot = Some((
+                key,
+                ChaseEntry {
+                    latest_on: None,
+                    uncovered: false,
+                    excess_offs: 0,
+                },
+            ));
+            let Some((_, new_entry)) = slot else {
+                continue;
+            };
+            new_entry
+        };
+        if on {
+            if entry.latest_on.is_none() {
+                entry.latest_on = Some((midi, ev.position_ticks()));
+            }
+            if entry.excess_offs > 0 {
+                entry.excess_offs -= 1;
+            } else {
+                entry.uncovered = true;
+            }
+        } else {
+            entry.excess_offs = entry.excess_offs.saturating_add(1);
+        }
+    }
+    let mut n = 0usize;
+    for slot in table.iter().flatten() {
+        let (_, entry) = slot;
+        let Some((last_on, last_on_ticks)) = entry.latest_on else {
+            continue;
+        };
+        if !entry.uncovered || last_on_ticks >= ctx.position_ticks {
+            continue;
+        }
+        if n < scratch.len() {
+            scratch[n] = Event::new(0, EventKind::Midi(last_on));
+            n += 1;
+            stats.chased += 1;
+        } else {
+            stats.truncated += 1;
+        }
+    }
+    (&mut scratch[..n], stats)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,12 +351,150 @@ mod tests {
 
     /// Builds events through the real plan builder (position → ticks
     /// conversion + generation stamping are its job).
-    fn plan_of(entries: &[(i64, u64, u32)]) -> ruviform_media_core::TransportPlan<u32> {
+    fn plan_of(entries: &[(i64, u64, u32)]) -> TransportPlan<u32> {
         let mut b = ruviform_media_core::TransportPlanBuilder::new(base(), PlanGeneration::new(1));
         for &(pos, seq, p) in entries {
             b.event(MediaTime::new(pos, base()), seq, p).unwrap();
         }
         b.build()
+    }
+
+    // ------------------------------------------------------------------
+    // chase_span_events
+    // ------------------------------------------------------------------
+
+    use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, MidiValue, NoteKey};
+
+    fn on(key: u8) -> EventKind {
+        EventKind::Midi(MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::NoteOn {
+                key: NoteKey::new(key).unwrap(),
+                velocity: MidiValue::from_u7(100),
+            },
+        })
+    }
+
+    fn off(key: u8) -> EventKind {
+        EventKind::Midi(MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::NoteOff {
+                key: NoteKey::new(key).unwrap(),
+                velocity: 0,
+            },
+        })
+    }
+
+    fn midi_plan_of(entries: &[(i64, u64, EventKind)]) -> TransportPlan<EventKind> {
+        let mut b = ruviform_media_core::TransportPlanBuilder::new(base(), PlanGeneration::new(1));
+        for (pos, seq, k) in entries {
+            b.event(MediaTime::new(*pos, base()), *seq, *k).unwrap();
+        }
+        b.build()
+    }
+
+    fn chased_keys(chased: &[Event]) -> Vec<u8> {
+        chased
+            .iter()
+            .filter_map(|e| match e.kind() {
+                EventKind::Midi(m) => match m.kind {
+                    MidiKind::NoteOn { key, .. } => Some(key.get()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn chase_refires_only_still_sounding_keys() {
+        // key 60: on@0 off@100 → sounding across pos 50 only.
+        // key 64: on@20, never off → sounding at 80.
+        let plan = midi_plan_of(&[(0, 0, on(60)), (20, 1, on(64)), (100, 2, off(60))]);
+        let mut scratch = scratch();
+        let (chased, stats) = chase_span_events(&plan, &ctx(80), &mut scratch);
+        // Backward scan emits nearest-position keys first — deterministic
+        // for a given plan and position.
+        assert_eq!(chased_keys(chased), vec![64, 60]);
+        assert_eq!(stats.scanned, 2);
+        assert_eq!(stats.chased, 2);
+        assert!(chased.iter().all(|e| e.frame_offset() == 0));
+    }
+
+    #[test]
+    fn chase_skips_completed_notes_and_uses_latest_retrigger() {
+        let plan = midi_plan_of(&[(0, 0, on(60)), (50, 1, off(60)), (60, 2, on(61))]);
+        let mut scratch = scratch();
+        let (chased, _) = chase_span_events(&plan, &ctx(80), &mut scratch);
+        assert_eq!(chased_keys(chased), vec![61]);
+    }
+
+    #[test]
+    fn chase_excludes_on_at_exact_position() {
+        // The NoteOn at pos == position is delivered by the normal
+        // span window — chasing it too would double-fire.
+        let plan = midi_plan_of(&[(50, 0, on(60))]);
+        let mut scratch = scratch();
+        let (chased, stats) = chase_span_events(&plan, &ctx(50), &mut scratch);
+        assert_eq!(chased, []);
+        assert_eq!(stats.chased, 0);
+    }
+
+    #[test]
+    fn chase_empty_when_not_playing() {
+        let plan = midi_plan_of(&[(0, 0, on(60))]);
+        let mut c = ctx(80);
+        c.status = TransportStatus::Paused;
+        let mut scratch = scratch();
+        let (chased, _) = chase_span_events(&plan, &c, &mut scratch);
+        assert_eq!(chased, []);
+    }
+
+    #[test]
+    fn chase_ignores_stale_plan_generation() {
+        let mut plan = midi_plan_of(&[(0, 0, on(60))]);
+        plan.events[0].plan_generation = PlanGeneration::new(99);
+        let mut scratch = scratch();
+        let (chased, stats) = chase_span_events(&plan, &ctx(80), &mut scratch);
+        assert_eq!(chased, []);
+        assert_eq!(stats.scanned, 1);
+        assert_eq!(stats.chased, 0);
+    }
+
+    #[test]
+    fn chase_reports_scratch_truncation() {
+        let plan = midi_plan_of(&[(0, 0, on(60)), (10, 1, on(64))]);
+        let mut scratch = scratch();
+        let (chased, stats) = chase_span_events(&plan, &ctx(80), &mut scratch[..1]);
+        assert_eq!(chased.len(), 1);
+        assert_eq!(stats.truncated, 1);
+    }
+
+    #[test]
+    fn chase_respects_scan_budget() {
+        // Prefix longer than CHASE_SCAN_BUDGET — the backward walk
+        // stops at the bound, flags the loss, and still chases the
+        // keys nearest the position.
+        let mut entries = Vec::with_capacity(CHASE_SCAN_BUDGET + 128);
+        for i in 0..(CHASE_SCAN_BUDGET + 128) {
+            let pos = i64::try_from(i).unwrap();
+            entries.push((
+                pos,
+                u64::try_from(i).unwrap(),
+                on(60 + u8::try_from(i % 4).unwrap()),
+            ));
+        }
+        let plan = midi_plan_of(&entries);
+        let mut scratch: [Event; NOTE_LEDGER_CAPACITY] =
+            [Event::new(0, kind(&0)); NOTE_LEDGER_CAPACITY];
+        let (chased, stats) = chase_span_events(&plan, &ctx(99_000), &mut scratch);
+        assert_eq!(stats.scanned, CHASE_SCAN_BUDGET);
+        assert!(stats.incomplete);
+        // The four keys' latest ons are all within the scanned tail.
+        assert_eq!(stats.chased, 4);
+        assert_eq!(chased.len(), 4);
     }
 
     #[test]

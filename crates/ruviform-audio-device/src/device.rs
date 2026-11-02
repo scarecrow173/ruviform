@@ -19,13 +19,15 @@
 
 use cpal::traits::{DeviceTrait, StreamTrait};
 use ruviform_audio_core::device::{
-    Device, DeviceError, DeviceId, DeviceResult, OutputDataCallback, OutputErrorCallback,
-    OutputStream, OutputStreamConfig, SupportedOutputFormat,
+    Device, DeviceError, DeviceId, DeviceResult, InputDataCallback, InputErrorCallback,
+    InputStream, InputStreamConfig, OutputDataCallback, OutputErrorCallback, OutputStream,
+    OutputStreamConfig, SupportedInputFormat, SupportedOutputFormat,
 };
 use ruviform_audio_core::{AudioFormat, SampleFormat};
 
 use crate::convert::{
-    f32_format, map_sample_format, map_supported_range, negotiate, synthesize_default_format,
+    f32_format, map_sample_format, map_supported_input_range, map_supported_range, negotiate,
+    synthesize_default_format, synthesize_default_input_format,
 };
 use crate::error::{ErrorCtx, map_error};
 use crate::stream::{CpalOutputStream, DataCallbackState, FRAMES_CAPACITY_HARD_CAP};
@@ -88,10 +90,16 @@ impl Device for CpalDevice {
     }
 
     fn supported_output_formats(&self) -> DeviceResult<Vec<SupportedOutputFormat>> {
-        let ranges = self
-            .inner
-            .supported_output_configs()
-            .map_err(|e| map_error(&e, ErrorCtx::Control))?;
+        let ranges = match self.inner.supported_output_configs() {
+            Ok(ranges) => ranges,
+            // `UnsupportedOperation` is the backend's "this device has
+            // no output capability" — that is the contract's
+            // `Ok(vec![])`, not a failed query.
+            Err(e) if e.kind() == cpal::ErrorKind::UnsupportedOperation => {
+                return Ok(Vec::new());
+            }
+            Err(e) => return Err(map_error(&e, ErrorCtx::Control)),
+        };
         // Report usable F32-capable ranges only — malformed reports
         // (non-F32, inverted/zero rate bounds, contradictory buffer
         // bounds) are dropped at this untrusted-data boundary, so an
@@ -172,5 +180,61 @@ impl Device for CpalDevice {
             config.format,
             epoch,
         )))
+    }
+
+    fn default_input_format(&self) -> DeviceResult<AudioFormat> {
+        let default = self
+            .inner
+            .default_input_config()
+            .map_err(|e| map_error(&e, ErrorCtx::Control))?;
+        // Same rules as `default_output_format`: fast path when the
+        // backend default is itself an openable F32 form, else
+        // synthesize from the supported space.
+        if map_sample_format(default.sample_format()) == Some(SampleFormat::F32)
+            && let Some(format) = f32_format(default.sample_rate(), u32::from(default.channels()))
+        {
+            return Ok(format);
+        }
+        let supported = self.supported_input_formats()?;
+        synthesize_default_input_format(
+            &supported,
+            u32::from(default.channels()),
+            default.sample_rate(),
+        )
+        .ok_or(DeviceError::UnsupportedConfig)
+    }
+
+    fn supported_input_formats(&self) -> DeviceResult<Vec<SupportedInputFormat>> {
+        let ranges = match self.inner.supported_input_configs() {
+            Ok(ranges) => ranges,
+            // `UnsupportedOperation` is the backend's "this device has
+            // no input capability" — that is the contract's
+            // `Ok(vec![])`, not a failed query.
+            Err(e) if e.kind() == cpal::ErrorKind::UnsupportedOperation => {
+                return Ok(Vec::new());
+            }
+            Err(e) => return Err(map_error(&e, ErrorCtx::Control)),
+        };
+        // Same untrusted-report validation as output — empty `Vec`
+        // means "no usable F32-capable input range" (including devices
+        // with no input capability), distinct from a failed query.
+        Ok(ranges
+            .filter_map(|range| map_supported_input_range(&range))
+            .collect())
+    }
+
+    fn open_input_stream(
+        &self,
+        _config: &InputStreamConfig,
+        _data_callback: InputDataCallback,
+        _error_callback: InputErrorCallback,
+    ) -> DeviceResult<Box<dyn InputStream>> {
+        // Real input plumbing (cpal `build_input_stream`, interleaved→
+        // planar unpack, capture-timestamp mapping, discontinuity
+        // detection) is not implemented yet — `Unsupported` states the
+        // fact rather than faking a capture path (issue #187 scope:
+        // headless contract PoC only; the mock backend in
+        // `tests/mock_input_backend.rs` exercises the port).
+        Err(DeviceError::Unsupported)
     }
 }

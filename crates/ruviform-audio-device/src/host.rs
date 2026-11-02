@@ -182,6 +182,26 @@ impl DeviceEnumerator for Host {
             .default_output_device()
             .map(|device| Box::new(CpalDevice::new(device)) as Box<dyn Device>))
     }
+
+    fn input_devices(&self) -> DeviceResult<Vec<Box<dyn Device>>> {
+        self.inner
+            .input_devices()
+            .map(|devices| {
+                devices
+                    .map(|device| Box::new(CpalDevice::new(device)) as Box<dyn Device>)
+                    .collect()
+            })
+            .map_err(|e| map_error(&e, ErrorCtx::Control))
+    }
+
+    fn default_input_device(&self) -> DeviceResult<Option<Box<dyn Device>>> {
+        // Same shape as `default_output_device`: cpal `None` is the
+        // port's `Ok(None)` ("no default"), not an error.
+        Ok(self
+            .inner
+            .default_input_device()
+            .map(|device| Box::new(CpalDevice::new(device)) as Box<dyn Device>))
+    }
 }
 
 #[cfg(test)]

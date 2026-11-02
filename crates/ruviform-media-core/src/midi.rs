@@ -470,16 +470,25 @@ struct LedgerEntry {
 /// reconstructed from MIDI 1.0 traffic — that ambiguity is a protocol
 /// fact, not a ledger deficiency.
 ///
-/// On capacity exhaustion the **oldest** entry is force-released (a
-/// synthetic Note Off is emitted on the next [`Self::release_all`] drain
-/// and recorded via [`Self::take_overflow`]) — releasing is the safe
+/// On capacity exhaustion the **oldest** entry is force-released: its
+/// key is queued in `evicted` so a synthetic Note Off is emitted on the
+/// next [`Self::drain_evicted`]/[`Self::release_all`] drain and the loss
+/// is recorded via [`Self::take_overflow`] — releasing is the safe
 /// failure mode; dropping the new note or silently forgetting the old
-/// one would both risk stuck notes.
+/// one would both risk stuck notes. A key whose state has since been
+/// re-authored (a delivered on/off for it reached the plugin) is dropped
+/// from the queue — its pending synthetic off would otherwise kill the
+/// newer state.
 ///
 /// **RT contract:** RT-suitable — fixed-size, no allocation, bounded
 /// scans (`O(NOTE_LEDGER_CAPACITY)`).
 pub struct NoteLedger {
     entries: [Option<LedgerEntry>; NOTE_LEDGER_CAPACITY],
+    /// Keys force-released on capacity exhaustion, owed a synthetic
+    /// Note Off at the next drain. Bounded like `entries`; a full
+    /// queue is defined loss covered by the overflow flag.
+    evicted: [Option<LedgerKey>; NOTE_LEDGER_CAPACITY],
+    evicted_len: usize,
     order: u32,
     overflow: bool,
 }
@@ -499,6 +508,8 @@ impl NoteLedger {
     pub const fn new() -> Self {
         Self {
             entries: [None; NOTE_LEDGER_CAPACITY],
+            evicted: [None; NOTE_LEDGER_CAPACITY],
+            evicted_len: 0,
             order: 0,
             overflow: false,
         }
@@ -538,6 +549,10 @@ impl NoteLedger {
         let Some(key) = event.ledger_key() else {
             return false;
         };
+        // A delivered note-state event is newer authority than a
+        // pending synthetic off for the same key — cancel the debt so
+        // it cannot kill the fresh state.
+        self.forget_evicted(key);
         match event.effective_note_state() {
             Some(true) => self.note_on(key),
             Some(false) => self.note_off(key),
@@ -564,9 +579,10 @@ impl NoteLedger {
             self.order = self.order.wrapping_add(1);
             return true;
         }
-        // Capacity exhausted: force-release the oldest entry, flag it,
-        // and still register the incoming note. Releasing is the safe
-        // failure mode (silent drop would stick the note).
+        // Capacity exhausted: force-release the oldest entry, queue its
+        // key for a synthetic Note Off, flag it, and still register the
+        // incoming note. Releasing is the safe failure mode (silent
+        // drop would stick the note).
         let oldest = self
             .entries
             .iter()
@@ -574,11 +590,43 @@ impl NoteLedger {
             .filter_map(|(i, s)| s.map(|e| (i, e.order)))
             .min_by_key(|&(_, order)| order)
             .map(|(i, _)| i);
-        if let Some(i) = oldest {
-            self.entries[i] = None;
+        if let Some(i) = oldest
+            && let Some(entry) = self.entries[i].take()
+        {
+            self.queue_evicted(entry.key);
         }
         self.overflow = true;
         self.note_on(key)
+    }
+
+    /// Queues a force-released key for its synthetic Note Off. A
+    /// duplicate key is not re-queued (one owed off per key); a full
+    /// queue is defined loss already covered by the overflow flag.
+    fn queue_evicted(&mut self, key: LedgerKey) {
+        if self.evicted[..self.evicted_len]
+            .iter()
+            .flatten()
+            .any(|k| *k == key)
+        {
+            return;
+        }
+        if let Some(slot) = self.evicted.get_mut(self.evicted_len) {
+            *slot = Some(key);
+            self.evicted_len += 1;
+        }
+    }
+
+    /// Drops a pending synthetic-off debt — a delivered event just
+    /// re-authored the key's state at the plugin.
+    fn forget_evicted(&mut self, key: LedgerKey) {
+        if let Some(i) = self.evicted[..self.evicted_len]
+            .iter()
+            .position(|slot| *slot == Some(key))
+        {
+            self.evicted[i] = self.evicted[self.evicted_len - 1];
+            self.evicted[self.evicted_len - 1] = None;
+            self.evicted_len -= 1;
+        }
     }
 
     fn note_off(&mut self, key: LedgerKey) -> bool {
@@ -605,10 +653,11 @@ impl NoteLedger {
     }
 
     /// Emits a release `MidiEvent` (Note Off, canonical zero velocity)
-    /// for every active entry into `scratch`, clears the ledger, and
-    /// returns the number written. Callers deliver these at block offset
-    /// `0` on transport discontinuity (stop/seek/generation change/
-    /// device restart) — the stuck-note fail-safe.
+    /// for every pending evicted-key debt and every active entry into
+    /// `scratch`, clears both, and returns the number written. Callers
+    /// deliver these at block offset `0` on transport discontinuity
+    /// (stop/seek/generation change/device restart) — the stuck-note
+    /// fail-safe.
     ///
     /// Releases beyond `scratch.len()` are still cleared from the
     /// ledger (the fail-safe must not retain phantom notes); the caller
@@ -616,23 +665,51 @@ impl NoteLedger {
     ///
     /// **RT contract:** RT-suitable — bounded write, no allocation.
     pub fn release_all(&mut self, scratch: &mut [MidiEvent]) -> usize {
-        let mut written = 0usize;
+        let mut written = self.drain_evicted(scratch);
         for slot in &mut self.entries {
             if let Some(entry) = slot.take() {
                 if let Some(out) = scratch.get_mut(written) {
-                    *out = MidiEvent {
-                        group: entry.key.group,
-                        channel: entry.key.channel,
-                        kind: MidiKind::NoteOff {
-                            key: entry.key.key,
-                            velocity: 0,
-                        },
-                    };
+                    *out = Self::release_off(entry.key);
                 }
                 written += 1;
             }
         }
         written
+    }
+
+    /// Emits the pending synthetic Note Offs for capacity-evicted keys
+    /// into `scratch`, clears the queue, and returns the number
+    /// written. Callers drain this every call so an evicted note's
+    /// release reaches the plugin promptly instead of waiting for the
+    /// next [`Self::release_all`] discontinuity.
+    ///
+    /// Emissions beyond `scratch.len()` are still cleared; the caller
+    /// detects the shortfall via the return count.
+    ///
+    /// **RT contract:** RT-suitable — bounded write, no allocation.
+    pub fn drain_evicted(&mut self, scratch: &mut [MidiEvent]) -> usize {
+        let mut written = 0usize;
+        for i in 0..self.evicted_len {
+            if let Some(key) = self.evicted[i].take()
+                && let Some(out) = scratch.get_mut(written)
+            {
+                *out = Self::release_off(key);
+            }
+            written += 1;
+        }
+        self.evicted_len = 0;
+        written
+    }
+
+    const fn release_off(key: LedgerKey) -> MidiEvent {
+        MidiEvent {
+            group: key.group,
+            channel: key.channel,
+            kind: MidiKind::NoteOff {
+                key: key.key,
+                velocity: 0,
+            },
+        }
     }
 }
 
@@ -802,6 +879,82 @@ mod tests {
             channel: ch(1),
             key: key(0),
         }));
+    }
+
+    #[test]
+    fn ledger_evicted_key_drains_as_synthetic_off() {
+        let mut l = NoteLedger::new();
+        let on_key = |c: u8, k: u8| MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: ch(c),
+            kind: MidiKind::NoteOn {
+                key: key(k),
+                velocity: 1,
+            },
+        };
+        for i in 0..NOTE_LEDGER_CAPACITY {
+            l.feed(&on_key(0, u8::try_from(i).unwrap()));
+        }
+        // Overflow → oldest (ch0 k0) evicted, debt queued.
+        l.feed(&on_key(1, 0));
+        let mut scratch = [off(0); NOTE_LEDGER_CAPACITY];
+        let n = l.drain_evicted(&mut scratch);
+        assert_eq!(n, 1, "the evicted key owes a synthetic Note Off");
+        assert!(matches!(
+            scratch[0].kind,
+            MidiKind::NoteOff { key: k, .. } if k == key(0)
+        ));
+        assert_eq!(scratch[0].channel, ch(0));
+        // Queue cleared — the next drain is empty.
+        assert_eq!(l.drain_evicted(&mut scratch), 0);
+    }
+
+    #[test]
+    fn ledger_evicted_debt_forgotten_on_delivered_state() {
+        let mut l = NoteLedger::new();
+        let on_key = |c: u8, k: u8| MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: ch(c),
+            kind: MidiKind::NoteOn {
+                key: key(k),
+                velocity: 1,
+            },
+        };
+        for i in 0..NOTE_LEDGER_CAPACITY {
+            l.feed(&on_key(0, u8::try_from(i).unwrap()));
+        }
+        l.feed(&on_key(1, 0));
+        // A delivered off re-authored key (0,0)'s state at the plugin —
+        // the owed synthetic off must not kill the fresh state.
+        l.feed(&off(0));
+        let mut scratch = [off(0); NOTE_LEDGER_CAPACITY];
+        assert_eq!(l.drain_evicted(&mut scratch), 0);
+    }
+
+    #[test]
+    fn ledger_release_all_includes_evicted_keys() {
+        let mut l = NoteLedger::new();
+        let on_key = |c: u8, k: u8| MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: ch(c),
+            kind: MidiKind::NoteOn {
+                key: key(k),
+                velocity: 1,
+            },
+        };
+        for i in 0..NOTE_LEDGER_CAPACITY {
+            l.feed(&on_key(0, u8::try_from(i).unwrap()));
+        }
+        l.feed(&on_key(1, 0));
+        l.feed(&on_key(1, 1));
+        // Two evictions, 128 actives: release_all emits all 130 offs.
+        let mut scratch = [off(0); NOTE_LEDGER_CAPACITY + 8];
+        assert_eq!(l.release_all(&mut scratch), NOTE_LEDGER_CAPACITY + 2);
+        assert!(
+            scratch[..NOTE_LEDGER_CAPACITY + 2]
+                .iter()
+                .all(MidiEvent::is_note_off)
+        );
     }
 
     /// RT contract: ledger feed/release scans are bounded and

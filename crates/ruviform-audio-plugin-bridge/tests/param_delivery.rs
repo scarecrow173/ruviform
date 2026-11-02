@@ -292,6 +292,7 @@ fn build_rig(min_frames: u32, max_frames: u32) -> Rig {
             frame_base: TimeBase::sample_rate(48_000).unwrap(),
             policy: DeliveryPolicy::Exact,
             budget: ScheduleBudget::default(),
+            input: None,
         },
     )
     .expect("attach");

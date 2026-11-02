@@ -518,18 +518,19 @@ fn event_is_note_on(event: Event) -> bool {
 /// ## Note-Off priority
 ///
 /// Within a same-offset run, a MIDI note-off that shares its
-/// `(group, channel, key)` with a note-on in the same run is emitted
-/// **before** that note-on — the stuck-note fail-safe and retrigger
-/// convention: a generated release must land before a new attack on
-/// the same key. This is a *delivery-order convention* applied
-/// uniformly (it can reorder an explicit play-then-release pair
-/// written at one frame; such same-frame pairs are outside the
-/// convention's intended envelope and must be authored at different
-/// offsets when both semantics are needed). Velocity-zero Note-Ons
-/// count as note-offs per the MIDI 1.0 running-status convention.
+/// `(group, channel, key)` with a note-on from a **different** source
+/// is emitted **before** that note-on — the stuck-note fail-safe and
+/// retrigger convention: a generated release must land before a new
+/// attack on the same key. The convention applies only across sources;
+/// authored order *within* one source is always preserved, so an
+/// explicit same-frame play-then-release pair keeps its dead-note
+/// semantics. Velocity-zero Note-Ons count as note-offs per the
+/// MIDI 1.0 running-status convention.
 ///
 /// `scratch` must hold `Σ sources[i].len()`; a smaller scratch is a
-/// defined [`MergeOverflow`], never a partial merge.
+/// defined [`MergeOverflow`], never a partial merge. `src_scratch`
+/// must be at least that long too — it receives each emitted event's
+/// source index (transient provenance used by the collision pass).
 ///
 /// **RT contract:** RT-suitable — `O(total · k + run²)` bounded work
 /// on `Copy` elements (`k = sources.len()`, run = same-offset group);
@@ -552,14 +553,17 @@ fn event_is_note_on(event: Event) -> bool {
 ///     note(MidiKind::NoteOff { key: NoteKey::new(60).unwrap(), velocity: 0 }),
 /// ];
 /// let mut scratch = [plan[0]; 8];
-/// let merged = merge_call_events(&[&plan, &live], &mut scratch).unwrap();
-/// // plan wins the offset tie; the colliding Note-Off precedes the Note-On.
+/// let mut src_scratch = [0u8; 8];
+/// let merged =
+///     merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap();
+/// // plan wins the offset tie; the authored live order is preserved.
 /// let offs: Vec<u32> = merged.iter().map(|e| e.frame_offset()).collect();
 /// assert_eq!(offs, [64, 64, 64]);
 /// ```
 pub fn merge_call_events<'a>(
     sources: &[&[Event]],
     scratch: &'a mut [Event],
+    src_scratch: &mut [u8],
 ) -> core::result::Result<&'a mut [Event], MergeError> {
     if sources.len() > MAX_MERGE_SOURCES {
         return Err(MergeError::TooManySources {
@@ -567,13 +571,14 @@ pub fn merge_call_events<'a>(
         });
     }
     let needed: usize = sources.iter().map(|s| s.len()).sum();
-    if scratch.len() < needed {
+    if scratch.len() < needed || src_scratch.len() < needed {
         return Err(MergeError::Overflow {
             needed,
-            capacity: scratch.len(),
+            capacity: scratch.len().min(src_scratch.len()),
         });
     }
     let out = &mut scratch[..needed];
+    let out_src = &mut src_scratch[..needed];
     // Stable k-way merge: pick the smallest offset; on ties prefer the
     // earlier source, preserving that source's own arrival order.
     let mut heads = [0usize; MAX_MERGE_SOURCES];
@@ -591,19 +596,21 @@ pub fn merge_call_events<'a>(
         }
         let Some(s) = best else { break };
         out[w] = sources[s][heads[s]];
+        out_src[w] = u8::try_from(s).unwrap_or_default();
         heads[s] += 1;
         w += 1;
     }
     debug_assert_eq!(w, needed);
-    apply_note_off_priority(out);
+    apply_note_off_priority(out, out_src);
     Ok(out)
 }
 
 /// Applies the same-offset Note-Off-priority convention in place:
 /// inside each maximal same-offset run, every note-off that collides
-/// with a same-key note-on is stably moved before that note-on. Other
-/// events keep their relative order.
-fn apply_note_off_priority(events: &mut [Event]) {
+/// with a same-key note-on from a different source is moved before
+/// that note-on. Other events keep their relative order; authored
+/// order within a single source is never disturbed.
+fn apply_note_off_priority(events: &mut [Event], event_src: &mut [u8]) {
     let mut start = 0usize;
     while start < events.len() {
         let offset = events[start].frame_offset();
@@ -611,65 +618,57 @@ fn apply_note_off_priority(events: &mut [Event]) {
         while end < events.len() && events[end].frame_offset() == offset {
             end += 1;
         }
-        note_off_priority_run(&mut events[start..end]);
+        note_off_priority_run(&mut events[start..end], &mut event_src[start..end]);
         start = end;
     }
 }
 
-/// Within one same-offset run, stably emit colliding note-offs first.
+/// Within one same-offset run, move a colliding note-off left past
+/// cross-source events until it precedes the first colliding note-on.
 /// A note-off "collides" when a note-on with the same [`LedgerKey`]
-/// exists anywhere in the run. Non-colliding events — including
-/// note-offs with no same-key note-on — keep their relative order.
-fn note_off_priority_run(run: &mut [Event]) {
-    if run.len() < 2 {
-        return;
-    }
-    if run.len() <= 64 {
-        // Flag which positions hold a colliding note-off (a same-key
-        // note-on exists in the run), then insertion-style stable
-        // partition: colliding offs first, everything else in order.
-        let mut colliding = [false; 64];
-        for (i, event) in run.iter().enumerate() {
-            if !event_is_note_off(*event) {
-                continue;
-            }
-            let Some(off_key) = event_ledger_key(*event) else {
-                continue;
-            };
-            colliding[i] = run
-                .iter()
-                .any(|other| event_is_note_on(*other) && event_ledger_key(*other) == Some(off_key));
+/// from a **different** source precedes it in the run. The off never
+/// crosses an event from its own source: same-source authored order
+/// encodes intent (a same-frame `[on, off]` pair is a legitimate
+/// dead note, not a collision to normalize).
+///
+/// `run` and `run_src` are parallel views (event plus its source
+/// index); both are rotated together so provenance stays aligned.
+fn note_off_priority_run(run: &mut [Event], run_src: &mut [u8]) {
+    // Position after the last off moved by this pass — later moved
+    // offs land after it so moved offs keep their relative order.
+    let mut frontier = 0usize;
+    for i in 0..run.len() {
+        if !event_is_note_off(run[i]) {
+            continue;
         }
-        let mut placed = 0usize;
-        for i in 0..run.len() {
-            if !colliding[i] {
-                continue;
+        let Some(off_key) = event_ledger_key(run[i]) else {
+            continue;
+        };
+        // Earliest colliding on: different source, same key, before
+        // the off. Same-source events before the off bound how far
+        // left it may travel.
+        let mut target = 0usize;
+        let mut collides = false;
+        for (j, event) in run.iter().enumerate().take(i) {
+            if run_src[j] == run_src[i] {
+                target = j + 1;
+            } else if !collides
+                && event_is_note_on(*event)
+                && event_ledger_key(*event) == Some(off_key)
+            {
+                collides = true;
             }
-            let event = run[i];
-            run.copy_within(placed..i, placed + 1);
-            colliding.copy_within(placed..i, placed + 1);
-            run[placed] = event;
-            colliding[placed] = true;
-            placed += 1;
         }
-    } else {
-        // Pathological run beyond the marker array: per note-on, pull
-        // the first later colliding note-off forward (bounded rotate,
-        // same outcome as the partition).
-        for i in 0..run.len() {
-            if !event_is_note_on(run[i]) {
-                continue;
-            }
-            let Some(on_key) = event_ledger_key(run[i]) else {
-                continue;
-            };
-            for j in i + 1..run.len() {
-                if event_is_note_off(run[j]) && event_ledger_key(run[j]) == Some(on_key) {
-                    let off = run[j];
-                    run.copy_within(i..j, i + 1);
-                    run[i] = off;
-                    break;
-                }
+        if collides {
+            target = target.max(frontier);
+            if target < i {
+                let off = run[i];
+                let src = run_src[i];
+                run.copy_within(target..i, target + 1);
+                run_src.copy_within(target..i, target + 1);
+                run[target] = off;
+                run_src[target] = src;
+                frontier = target + 1;
             }
         }
     }
@@ -861,7 +860,8 @@ mod tests {
             ),
         ];
         let mut scratch = [param_event(0, 0.0); 8];
-        let merged = merge_call_events(&[&plan, &live], &mut scratch).unwrap();
+        let mut src_scratch = [0u8; 8];
+        let merged = merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap();
         // plan wins the offset-64 tie.
         assert!(matches!(merged[1].kind(), EventKind::ParamValue(_)));
         assert!(matches!(merged[2].kind(), EventKind::Midi(_)));
@@ -889,7 +889,8 @@ mod tests {
         let live = [on];
         let release = [off];
         let mut scratch = [param_event(0, 0.0); 8];
-        let merged = merge_call_events(&[&release, &live], &mut scratch).unwrap();
+        let mut src_scratch = [0u8; 8];
+        let merged = merge_call_events(&[&release, &live], &mut scratch, &mut src_scratch).unwrap();
         assert!(matches!(
             merged[0].kind(),
             EventKind::Midi(m) if m.is_note_off()
@@ -908,7 +909,8 @@ mod tests {
         );
         let live2 = [on_other, on];
         let mut scratch2 = [param_event(0, 0.0); 8];
-        let merged2 = merge_call_events(&[&live2], &mut scratch2).unwrap();
+        let mut src_scratch2 = [0u8; 8];
+        let merged2 = merge_call_events(&[&live2], &mut scratch2, &mut src_scratch2).unwrap();
         assert_eq!(merged2.len(), 2);
         assert!(matches!(
             merged2[0].kind(),
@@ -917,11 +919,79 @@ mod tests {
     }
 
     #[test]
+    fn merge_preserves_authored_same_source_on_off_order() {
+        // A same-offset `[on, off]` pair authored inside ONE source —
+        // a legitimate zero-length note — must keep its order: inverting
+        // it to `[off, on]` would leave the note sounding forever.
+        let on = midi_event(
+            0,
+            MidiKind::NoteOn {
+                key: key(60),
+                velocity: MidiValue::from_u7(100),
+            },
+        );
+        let off = midi_event(
+            0,
+            MidiKind::NoteOff {
+                key: key(60),
+                velocity: 0,
+            },
+        );
+        let live = [on, off];
+        let mut scratch = [param_event(0, 0.0); 8];
+        let mut src_scratch = [0u8; 8];
+        let merged = merge_call_events(&[&live], &mut scratch, &mut src_scratch).unwrap();
+        assert!(matches!(
+            merged[0].kind(),
+            EventKind::Midi(m) if matches!(m.effective_note_state(), Some(true))
+        ));
+        assert!(matches!(
+            merged[1].kind(),
+            EventKind::Midi(m) if m.is_note_off()
+        ));
+    }
+
+    #[test]
+    fn merge_off_priority_still_normalizes_cross_source() {
+        // On from an earlier source, off from a later source at the
+        // same offset/key — the convention still lifts the off before
+        // the on.
+        let on = midi_event(
+            0,
+            MidiKind::NoteOn {
+                key: key(60),
+                velocity: MidiValue::from_u7(100),
+            },
+        );
+        let off = midi_event(
+            0,
+            MidiKind::NoteOff {
+                key: key(60),
+                velocity: 0,
+            },
+        );
+        let plan = [on];
+        let live = [off];
+        let mut scratch = [param_event(0, 0.0); 8];
+        let mut src_scratch = [0u8; 8];
+        let merged = merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap();
+        assert!(matches!(
+            merged[0].kind(),
+            EventKind::Midi(m) if m.is_note_off()
+        ));
+        assert!(matches!(
+            merged[1].kind(),
+            EventKind::Midi(m) if matches!(m.effective_note_state(), Some(true))
+        ));
+    }
+
+    #[test]
     fn merge_call_events_rejects_overflow_and_too_many_sources() {
         let one = [param_event(0, 0.1)];
         let mut small = [param_event(0, 0.0); 1];
+        let mut small_src = [0u8; 1];
         assert_eq!(
-            merge_call_events(&[&one, &one], &mut small),
+            merge_call_events(&[&one, &one], &mut small, &mut small_src),
             Err(MergeError::Overflow {
                 needed: 2,
                 capacity: 1,
@@ -929,8 +999,9 @@ mod tests {
         );
         let sources = [&one[..]; 9];
         let mut big = [param_event(0, 0.0); 16];
+        let mut big_src = [0u8; 16];
         assert_eq!(
-            merge_call_events(&sources, &mut big),
+            merge_call_events(&sources, &mut big, &mut big_src),
             Err(MergeError::TooManySources { count: 9 })
         );
     }
@@ -947,8 +1018,14 @@ mod tests {
             },
         )];
         let mut scratch = [param_event(0, 0.0); 8];
+        let mut src_scratch = [0u8; 8];
         let _ = assert_no_alloc::assert_no_alloc(|| {
-            core::hint::black_box(merge_call_events(&[&plan, &live], &mut scratch)).unwrap()
+            core::hint::black_box(merge_call_events(
+                &[&plan, &live],
+                &mut scratch,
+                &mut src_scratch,
+            ))
+            .unwrap()
         });
     }
 }

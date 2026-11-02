@@ -21,12 +21,21 @@ Ruviform メディア基盤の汎用 Reader・Decoder/Prefetch・RT 消費境界
   - `pump()` は呼び出しごとに queued command を全て処理したうえで、sequenced な
     item を高々 1 つだけ進める（`Pushed`）。`Backpressured` は ring 空き待ちの
     retry シグナルで、marker は producer `pending` に残る — manual driver は
-    `Idle`/`Ended` に到達するまで `pump()` を反復する契約。
+    `Idle`/`Ended` に到達するまで `pump()` を反復する契約。`Ended` はその call で
+    `End` marker が ring に載った場合にのみ返る（EOF 検出と emit は同一 step —
+    ring full 時は `pending` commit 済みの `Backpressured` が返る）ため、最初の
+    `Ended` で停止しても terminal marker は strand しない。
   - `PrefetchHandle::seek` は play-through を既定とし、`seek_discard_pending` が
     opt-in の producer pending purge を追加する。consumer 側の `discard_pending` は
     RT-safe な有界 drain で、次の `Boundary` で generation を adopt して停止する。
   - `PrefetchHandle::reopen` は frame 0 anchor を維持し、`reopen_at` が
     reopen→seek の fused 版を追加する（boundary は実際に landed した位置を報告）。
+  - 各 generation の `Boundary` は常にその generation 先頭 item として emit される。
+    reject された seek / 失敗した reopen でも `Boundary` が先行するため、全ての
+    `Fault`/`End` は adopt 後に観測され stale drop にならない。reopen 失敗の
+    dead generation は `Boundary{gen,0}` → `Fault{gen,of_kind}` → `End{gen}` で
+    observably に終端し、`eof` を返す。`End` は合成時点で commit され、ring full で
+    `pending` へ requeue されても generation あたり 1 回だけ emit される。
 - Fault 契約 — `SourceFault`（truncated/corrupt/io/invalid-sample/unsupported/unseekable）と
   `FillReport`（written/underrun/faulted/eof/mismatch）で、真の無音・short-read・corrupt・
   EOF・prefetch underrun・invalid sample・unsupported layout を識別する。欠落を
