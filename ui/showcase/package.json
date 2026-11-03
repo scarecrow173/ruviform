@@ -1,0 +1,20 @@
+{
+  "name": "@ruviform/ui-showcase",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Issue #263: design system showcase + verification fixtures — the theme matrix (Reference Light/Dark + product-shape exemplars + custom skin), ruviform-owned demo data and gateways, the standalone showcase page, and headless regression/a11y/cross-consumer tests over @ruviform/ui-components + @ruviform/ui-viz + @ruviform/ui-binding. Plain TypeScript; no UI framework, runtime, or renderer dependency (happy-dom is a test-only devDependency).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --test --import=./test/env.ts test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "~24.10",
+    "happy-dom": "~21.0.4",
+    "typescript": "~5.9.3"
+  }
+}

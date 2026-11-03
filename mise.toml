@@ -245,6 +245,37 @@ run = [
   "npm --prefix ui/binding run build",
 ]
 
+# UI showcase lane (Issue #263): the design-system showcase +
+# verification fixtures under ui/showcase — the theme matrix (Reference
+# Light/Dark + DAW/analysis exemplars + custom skin), ruviform-owned
+# deterministic demo data and generic BindingPort gateways, the
+# standalone vanilla-WebComponents page, and the headless regression /
+# a11y / cross-consumer / dependency-audit tests over the public
+# ui/components + ui/viz + ui/binding surfaces. Same discipline:
+# `npm ci` restores the committed package-lock, node is the pinned mise
+# toolchain, and no UI framework/runtime or renderer dependency may be
+# added (happy-dom plus fake 2D/GL contexts are test-only
+# devDependencies). Real WebView/GPU/pixel/multiwindow evidence is out
+# of scope for this lane — it stays on the #243 manual gates.
+[tasks.check-ui-showcase]
+description = "Install ui/showcase deps from package-lock and type-check the showcase + verification fixtures (tsc --noEmit)"
+run = [
+  "npm --prefix ui/showcase ci --no-audit --no-fund",
+  "npm --prefix ui/showcase run typecheck",
+]
+[tasks.test-ui-showcase]
+description = "Install ui/showcase deps from package-lock and run showcase tests via node --test (happy-dom + fake canvas/GL, no real GPU/WebView)"
+run = [
+  "npm --prefix ui/showcase ci --no-audit --no-fund",
+  "npm --prefix ui/showcase test",
+]
+[tasks.build-ui-showcase]
+description = "Install ui/showcase deps from package-lock and emit the distributable dist/ build for the static showcase page (tsc)"
+run = [
+  "npm --prefix ui/showcase ci --no-audit --no-fund",
+  "npm --prefix ui/showcase run build",
+]
+
 [tasks.test-ofx]
 description = "Run OFX native host and fixture contract tests"
 run = "cargo test -p ruviform-plugin-ofx"
