@@ -4,22 +4,28 @@ type: "impl"
 status: "completed"
 title: "Issue #265 CorrelationPlan prefers_direct コストモデル校正（mixed-radix 実コスト反映と direct 維持ガード）"
 created: "2026-11-02"
-updated: "2026-11-02"
+updated: "2026-11-03"
 owners: []
 relations:
-  source: []
+  source:
+    - "https://github.com/scarecrow173/ruviform/issues/265"
   changes:
     added:
-      - "crates/ruviform-numeric/benches/corr.rs"
+      - type: "file"
+        path: "crates/ruviform-numeric/benches/corr.rs"
     modified:
-      - "crates/ruviform-numeric/Cargo.toml"
-      - "crates/ruviform-numeric/src/corr.rs"
+      - type: "file"
+        path: "crates/ruviform-numeric/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-numeric/src/corr.rs"
     deleted: []
     renamed: []
     moved: []
     generated:
-      - "docs/impl/ir/README.md"
-      - "Cargo.lock"
+      - type: "file"
+        path: "docs/impl/ir/README.md"
+      - type: "file"
+        path: "Cargo.lock"
   implements: []
   implemented-by: []
   depends-on: []
@@ -35,8 +41,10 @@ relations:
   verifies: []
   verified-by: []
   references:
-    - "Issue #255 PR で導入した mixed-radix smooth 変換長選択"
-    - "audio-lens Issue #133 / PR #134 の e2e +10.2%・locate +17.1% 回帰計測"
+    - "https://github.com/scarecrow173/ruviform/issues/255"
+    - "https://github.com/scarecrow173/ruviform/pull/256"
+    - "https://github.com/scarecrow173/audio-lens/issues/133"
+    - "https://github.com/scarecrow173/audio-lens/pull/134"
   defers: []
   deferred-by: []
 metadata:

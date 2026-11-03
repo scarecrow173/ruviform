@@ -147,7 +147,7 @@ jobs（Consumer 同士は互いに独立 — `needs` は全 job が `preflight` 
 
 ## References
 
-- Spec: [issue-219-consumer-compat-contract.md](../specs/issue-219-consumer-compat-contract.md)（R1–R9・AC1–AC7）
+- Spec: [issue-219-consumer-compat-contract.md](../specs/issue-219-consumer-compat-contract.md)（R1–R10・AC1–AC11）
 - ADR: [cross-repo-ci-revision.md](../adr/cross-repo-ci-revision.md)（Option A/1/i の根拠と却下案）
 - Discovery: [issue-219-consumer-cross-repo-ci.md](../discovery/issue-219-consumer-cross-repo-ci.md)（棚卸し・M0–M7 初期証拠表・ローカル実測 Evidence）
 - audio-lens 側同型設計: `docs/designs/ruviform-dependency-ci.md`・`docs/guides/ruviform-private-access-ci.md`（Deploy Key 手順の正本）
