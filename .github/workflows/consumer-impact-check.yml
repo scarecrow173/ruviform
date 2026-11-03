@@ -1,0 +1,84 @@
+name: consumer-impact-check
+
+# Issue #219: PR 本文の Consumer 影響分類（PULL_REQUEST_TEMPLATE.md の
+# 「## Consumer 影響分類」表）を機械的に検査する lane。
+#
+# この lane は「分類欄が記入されているか」「unknown に解消先が記されて
+# いるか」のみを検査し、分類内容の正しさは機械判定しない。required
+# checks には含めない（昇格判断は両 Consumer lane の稼働実績後の別
+# 判断・spec R9）。分類内容の最終確認は merge 前のレビュアー human
+# gate（AGENTS.md 運用）のまま。
+#
+# 検査ルール:
+# - `## Consumer 影響分類` セクションが存在する
+# - Synvelis / AudioLens 両行の分類セルが impacted / no impact /
+#   unknown のいずれかに記入されている（未記入・語彙外は fail）
+# - unknown が 1 行でもあれば `### unknown の解消先` に
+#   HTML コメント・空白以外の記述がある（なければ fail）
+# - draft PR は対象外
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  classification:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate consumer impact classification in PR body
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -uo pipefail
+          fail=0
+          err() { echo "::error::$1"; fail=1; }
+          {
+            echo "# Consumer 影響分類 check"
+            echo ""
+            echo "| Consumer | 分類 | 判定 |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # テンプレートの説明用 HTML コメントは「記入」とみなさないため先に除去する
+          body=$(printf '%s' "$PR_BODY" | perl -0777 -pe 's/<!--.*?-->//gs')
+
+          unknown_used=0
+          if ! printf '%s' "$body" | grep -qE '^## +Consumer 影響分類'; then
+            err "PR 本文に '## Consumer 影響分類' セクションがありません（PULL_REQUEST_TEMPLATE.md の表を残してください）"
+          else
+            for consumer in Synvelis AudioLens; do
+              cell=$(printf '%s' "$body" | grep -E "^\|[[:space:]]*${consumer}[[:space:]]*\|" | head -1 | awk -F'|' '{print $3}' | tr -d '[:space:]*' | tr '[:upper:]' '[:lower:]')
+              case "$cell" in
+                impacted|noimpact|unknown)
+                  echo "| ${consumer} | ${cell} | 記入あり |" >> "$GITHUB_STEP_SUMMARY"
+                  if [ "$cell" = "unknown" ]; then unknown_used=1; fi
+                  ;;
+                *)
+                  echo "| ${consumer} | ${cell:-（空）} | 未記入/語彙外 |" >> "$GITHUB_STEP_SUMMARY"
+                  err "${consumer} 行の分類が未記入または語彙外です（impacted / no impact / unknown のいずれかを記入）"
+                  ;;
+              esac
+            done
+          fi
+
+          if [ "$unknown_used" = "1" ]; then
+            res=$(printf '%s' "$body" \
+              | sed -n '/^### *unknown の解消先/,/^##[^#]/p' \
+              | grep -vE '^#{2,3} ' \
+              | tr -d '[:space:]')
+            if [ -z "$res" ]; then
+              err "unknown の解消先が未記入です（未検証理由と解消を追跡する Issue / consumer-verify dispatch 予定 / 別 PR へのリンクを記してください）"
+            else
+              echo "| unknown の解消先 | - | 記入あり |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+          echo "consumer impact classification recorded (情報 lane — 分類内容の妥当性はレビュアー確認)"

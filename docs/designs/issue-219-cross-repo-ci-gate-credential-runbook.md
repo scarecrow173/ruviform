@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #219 Cross-Repo CI Gate 設計・credential 一次設定・証拠記録 runbook"
 created: "2026-11-02"
-updated: "2026-11-02"
+updated: "2026-11-03"
 owners: []
 relations:
   source:
@@ -77,7 +77,7 @@ jobs（Consumer 同士は互いに独立 — `needs` は全 job が `preflight` 
    5. `cargo fetch` → 単一 SHA guard: `Cargo.lock` の `source = "git+…scarecrow173/ruviform.git…"` 行を抽出し、(a) 1 行以上存在、(b) 全行が `?rev=<RUVIFORM_REV>` かつ `#<RUVIFORM_REV>` 末尾を含むことを assert。**crate 名ではなく repo URL を照合キーにする**（crate rename・transitive `ruviform-rt`・`rev`→`branch` 形態変更でも誤判定しない）。不変条件違反・0 行（書換 no-op）は fail。
    6. `mise install` → `mise run check-ci` → `mise run check-cli-headless`（smoke 相当）→ `mise run test-ci`（Consumer 自身の CI と同一の mise task・`--profile ci`・toolchain pin = audio-lens `mise.toml`）。test lane の直前に `git lfs pull` で `crates/*/tests/fixtures/`・`samples/` の LFS 実体を materialize — `al-media` の mp4 fixture テストは実体必須（check/headless lane は LFS 不要）。
    7. `git diff`（manifest+lockfile）・resolved SHA・各 lane 結果を `GITHUB_STEP_SUMMARY` に Consumer 証拠表として出力（この step は `if: always()` — 失敗 lane こそ証拠を出す）。job `outputs` に `status`（`pass`/`fail`/`not_run`）を書き出し、lane 実行状況を `result` だけでなく status で後続に伝える。
-3. **`verify-synvelis`**（同様に `needs: [preflight]`、`if: always()`、同一 gating 構造）: credential 未設定 → `not run`。checkout 後に workspace root `Cargo.toml` が存在しなければ `not run (no buildable workspace)` を summary に出力し exit 0。存在する場合は将来の lane 定義に従う（v1 は presence check のみ — Synvelis 未 buildable を fail にしない）。job `outputs.status` も同じく出力。
+3. **`verify-synvelis`**（同様に `needs: [preflight]`、`if: always()`、同一 gating 構造）: credential 未設定 → `not run`。checkout 後に workspace root `Cargo.toml` が存在しなければ `not run (no buildable workspace)` を summary に出力し exit 0。存在する場合は lane を実行する（v1 は presence check のみだったが、synvelis main が buildable workspace 化したため 2026-11-03 追記のとおり実 lane へ拡張済み — Synvelis 未 buildable を fail にしない方針は presence 判定の `not run` で維持）。job `outputs.status` も同じく出力。
 4. **`summary`**（`if: always()`、`needs: [preflight, verify-audiolens, verify-synvelis]`）: 各 job の `outputs.status` と `result` を集約して workflow レベルの証拠表を出力。真偽表: いずれか `fail` または `cancelled` → workflow **失敗**（明示 `exit 1`）。**全 lane が `not run` の場合も失敗** — 証拠ゼロの run を緑にしない（ADR「成功扱いにしない」の実装。credential 未設定期の初回 dispatch は赤で「未検証」を正直に示す）。1 lane 以上が実行済み（pass）かつ fail 無し → 成功（表に `not run` 行も明記）。
 
 ### `.github/PULL_REQUEST_TEMPLATE.md`
@@ -118,7 +118,7 @@ jobs（Consumer 同士は互いに独立 — `needs` は全 job が `preflight` 
 - **scratch checkout 内のみ manifest を編集**: Consumer repo に一切の恒久的変更を残さない。diff は証拠として summary に出力。
 - **fetch → check → test の段階実行**: fetch/lockfile 再解決の失敗（依存割れ・認証・存在しない SHA）は build 失敗と分離して報告する。
 - **`not run` の first-class 化**: credential 未設定・workspace 未存在は job 成功かつ `not run` 表記（unknown≠pass）。実行されなかった lane も表に `not run` で列挙する。
-- **v1 スコープ**: ubuntu-latest 単独・audio-lens は check+test、synvelis は presence check。3 OS matrix・golden/baseline lane・自動 trigger は Deferred（spec 参照）。
+- **v1 スコープ**: ubuntu-latest 単独。3 OS matrix・golden/baseline lane・自動 trigger は Deferred（spec 参照）。（当初の「synvelis は presence check」は synvelis workspace 化を受けて 2026-11-03 追記で実 lane へ拡張）
 
 ## Security and Privacy
 
@@ -135,7 +135,7 @@ jobs（Consumer 同士は互いに独立 — `needs` は全 job が `preflight` 
 - credential 未設定での dispatch（初回実走時）: 各 Consumer job が `not run` を出力し、summary が「全 lane `not run` = 証拠ゼロ」で workflow を**失敗**にすることを確認（`unknown` ≠ `pass` の実装確認）。
 - 不正 `ruviform_rev` での dispatch: preflight が fail し、各 Consumer job が `fail (preflight failed)` を報告することを確認（credential 未設定への偽装を防止）。
 - credential 設定後の初回実走: audio-lens job が単一候補 SHA に lockfile 再解決し、check-ci / check-cli-headless / test-ci の証拠表（lane・OS・feature・resolved SHA・pass/fail/not run・許容例外・Rollback）が出ることを確認（ローカル実測の再現）。
-- synvelis job が `not run (no buildable workspace)` を正しく出力することを確認。
+- synvelis job が workspace 非存在 ref に対して `not run (no buildable workspace)` を正しく出力し、buildable ref では manifest rev 注入 → fetch → 単一 SHA guard → `mise run check` → `git lfs pull` → `mise run test` の証拠表が出ることを確認（2026-11-03 追記 lane・ローカル scratch 実測済み）。
 - 秘密漏洩の確認: run ログに鍵・token 文字列が出力されないこと、`git config --list` 差分に token 系 URL が残らないこと。
 - 単一 SHA guard の検証: `Cargo.lock` の `scarecrow173/ruviform.git` source 行が 0 行または複数 SHA の場合に fail することを確認。
 
@@ -161,3 +161,16 @@ jobs（Consumer 同士は互いに独立 — `needs` は全 job が `preflight` 
 4. 生成した鍵ファイルをローカルから削除（clip 等に残さない）。
 5. `consumer-verify` を dispatch して初回実走。`not run` → `pass/fail` への遷移を証拠リンクとして Issue #219 に記録。
 6. 失効手順: 3 repo の Deploy Key 登録を削除 → secret を削除/差替。
+
+## 2026-11-03 追記: gate 本体実装（synvelis 実 lane・PR 分類機械検査）
+
+synvelis main `f7aadd0` の buildable workspace 化（5 member・ruviform git dep ×10・lock `322a661` 単一解決）を受け、設計 §Components 3 の presence check stub を実 lane へ拡張した。変更点:
+
+- **`verify-synvelis` 実 lane**: workspace `Cargo.toml` 存在時に audio-lens lane と同じ流れ（private dep probe → manifest rev 正規化 → `cargo fetch` → 単一 SHA guard → `mise run check` → `git lfs pull` → `mise run test`）を実行する。`Cargo.toml` 不在 ref は従来どおり `not run (no buildable workspace)`（後方互換ガードとして presence 判定を残す）。
+- **依存形態差異の吸収**: synvelis は ruviform 依存を `rev` 未指定の既定ブランチ追従で宣言する（synvelis AGENTS.md「SHA の恒久的ハードコード禁止」規約）。そのため manifest 書換を「`rev` pin 置換・`branch` 追従除去・`rev` 未指定への注入」の 3 形態を同一ルールで `rev = "$RUVIFORM_REV"` へ正規化する sed に両 lane で統一した（audio-lens 側の `rev`→`branch` 移行が起きても同じ lane で動く）。scratch checkout 内のみの変更で consumer repo の追従形態は変えない。
+- **`.cargo/config.toml` 非存在の補完**: synvelis には audio-lens の `net.git-fetch-with-cli` / `GIT_LFS_SKIP_SMUDGE` 宣言が無いため、job env で `CARGO_NET_GIT_FETCH_WITH_CLI=true`・`GIT_LFS_SKIP_SMUDGE=1` を供給する（同 env は `1` ではなく `true`/`false` 文字列を要求する点に注意）。
+- **toolchain 復元の scope**: synvelis lane の `mise install` は lane が使う `rust` と `git-lfs` のみに絞る（`--locked`）。
+- **`test` lane は `--locked` 付き**: synvelis の `mise run test` = `cargo test --workspace --locked` であり、fetch 後の lockfile 整合を追加で検証する。
+- **audio-lens smoke を spec R5 に整合**: `cargo build -p al-cli --profile ci`（audio-lens 側 ci.yml と同一入口）を `check-cli-headless` に先行する smoke step として追加。
+- **`.github/workflows/consumer-impact-check.yml` 新設**: `pull_request`（`opened`/`edited`/`synchronize`/`reopened`/`ready_for_review`・main 向け・draft 除外）で PR 本文の `## Consumer 影響分類` 表を機械検査する lane。検査は「分類欄の記入有無（impacted/no impact/unknown 語彙）」と「`unknown` 使用時の `### unknown の解消先` 記入有無」のみで、分類内容の正しさは機械判定しない。HTML コメントは記入とみなさない（テンプレートの説明文を素通しさせないため除去してから検査）。未記入・語彙外・解消先なしは job fail。required checks には含めず、分類の最終確認は引き続きレビュアー human gate。
+- **ローカル実測（credential 非依存区間）**: synvelis `f7aadd0` の scratch clone で候補 `a014b3f9`（ruviform main 当時 HEAD）に対し、manifest 正規化 → `cargo fetch` で 15 crate が `?rev=a014b3f9#a014b3f9` に単一解決（guard bad=0）→ `mise run check` exit 0（10.66s）→ `git lfs pull` → `mise run test` exit 0（23 suite・0 failed）を確認済み。SSH/credential 経路と実 dispatch は引き続き未実走（Appendix runbook の一次設定待ち）。

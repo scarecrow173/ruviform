@@ -34,7 +34,9 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/219"
   derived-by: []
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/consumer-impact-check-pr-classification.md"
+    - "docs/test-specs/consumer-pr-issue-template.md"
   references:
     - "https://github.com/scarecrow173/synvelis/issues/28"
     - "https://github.com/scarecrow173/audio-lens/issues/127"
@@ -78,6 +80,7 @@ Ruviform を Synvelis（設計段階 DAW）と AudioLens（高精度オフライ
 - `.github/PULL_REQUEST_TEMPLATE.md`（全 PR 必須の Consumer 影響分類欄）
 - `.github/ISSUE_TEMPLATE/`（Consumer 影響・追従用の Issue テンプレートと contact link 設定）
 - `.github/workflows/consumer-verify.yml`（`workflow_dispatch` の Cross-Repo 検証 lane・証拠 summary 出力）
+- `.github/workflows/consumer-impact-check.yml`（`pull_request` で PR 本文の Consumer 影響分類欄を機械検査する lane・非 required）
 - 上記の設計・credential 一次設定手順・証拠記録形式を定める canonical 文書（本 spec・ADR・design・plan・task）
 - M0〜M7 Consumer 別証拠の初期状態記録（discovery 済み）と、運用中の追跡形
 - AGENTS.md の stale な CI 記述の修正（#199/#201 後の実態に合わせる）
@@ -119,6 +122,7 @@ Ruviform を Synvelis（設計段階 DAW）と AudioLens（高精度オフライ
 - [ ] AC9: M0〜M7 Consumer 別証拠 tracker の正本置き場（discovery `## Evidence` への dated snapshot 追記運用）が文書で指定されている（R8）。
 - [ ] AC10: `AGENTS.md` の stale な `ci.yml` 記述（「`workflow_dispatch` 専用」）が現行の pull_request/push trigger・required checks 構成に修正されている。
 - [ ] AC11: Issue 追記（2026-11-03）後の運用として、直近 merged 変更（`ui/*` 系 #258〜#263 のうち merged PR #267〜#271・numeric FFT #255/#265 系、および随伴する reader EOF 修正 #254・#219 CI 基盤 #224）の両 Consumer 分類・根拠・追跡 Issue リンクが canonical 文書（discovery `## Evidence` の dated snapshot）に記録され、検証済み/情報 lane/未実測の区別が明示されている（R10）。
+- [ ] AC12: `.github/workflows/consumer-impact-check.yml` が `pull_request`（main 向け・draft 除外）で PR 本文の `## Consumer 影響分類` 表を機械検査し、分類未記入・語彙外・`unknown` の解消先なしを fail とする。分類内容の正しさは機械判定せず、required checks には含めない（R1 の機械的運用補助・昇格判断は R9 に従う）。
 
 ## Deferred Design Concerns
 

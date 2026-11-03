@@ -6,6 +6,14 @@ name: consumer-verify
 # 実行や ruviform の merge を止めない。全 lane が not run の run は
 # 「証拠ゼロ」として失敗にし、unknown を pass に見せない。
 #
+# 両 lane とも scratch checkout 内で ruviform git 依存を候補 rev に
+# 正規化（rev pin 置換・branch 追従/rev 未指定への rev 注入を同一
+# ルールで処理）し、cargo fetch で lockfile を単一 SHA へ再解決してから
+# consumer 側の mise task（check/test/smoke）を実行する。manifest/lockfile
+# の diff は証拠として job summary に出力し、consumer repo には残さない。
+# synvelis lane は workspace Cargo.toml 不在時のみ not run を報告する
+# （workspace 化前の ref を検証対象にした場合の後方互換ガード）。
+#
 # 前提: ruviform repo の Actions secret CROSS_REPO_DEPLOY_KEY に、
 # 3 repo（ruviform/audio-lens/synvelis）へ read-only Deploy Key として
 # 登録した秘密鍵を投入する一次設定が必要（未設定時は全 lane が not run）。
@@ -138,12 +146,20 @@ jobs:
             "https://github.com/scarecrow173/ruviform.git"
           git ls-remote git@github.com:scarecrow173/ruviform.git HEAD >/dev/null
           echo "private dep access OK"
-      - name: Override ruviform rev in manifest
+      - name: Pin ruviform rev in manifest
         if: steps.gate.outputs.gate == 'run'
         working-directory: ${{ runner.temp }}/audio-lens
         run: |
           set -euo pipefail
-          sed -i -E "/scarecrow173\/ruviform\.git/ s/rev = \"[0-9a-f]{40}\"/rev = \"$RUVIFORM_REV\"/" Cargo.toml
+          # ruviform git 依存を候補 rev に正規化する。rev pin・branch 追従・
+          # rev 未指定（既定ブランチ追従）の 3 形態を同一ルールで `rev = "$RUVIFORM_REV"` へ揃える。
+          sed -i -E "/scarecrow173\/ruviform\.git/ {
+            s/\{ *rev = \"[0-9a-f]{40}\", */{ /;
+            s/, *rev = \"[0-9a-f]{40}\"//;
+            s/\{ *branch = \"[^\"]+\", */{ /;
+            s/, *branch = \"[^\"]+\"//;
+            s/ *\}/, rev = \"$RUVIFORM_REV\" }/
+          }" Cargo.toml
           git diff Cargo.toml >> "$GITHUB_STEP_SUMMARY" || true
       - name: cargo fetch + single-SHA lockfile guard
         id: fetch
@@ -172,6 +188,13 @@ jobs:
         if: steps.gate.outputs.gate == 'run'
         working-directory: ${{ runner.temp }}/audio-lens
         run: mise run check-ci
+      - name: smoke lane (al-cli ci profile build)
+        id: smoke_build
+        if: steps.gate.outputs.gate == 'run' && steps.check.outcome == 'success'
+        working-directory: ${{ runner.temp }}/audio-lens
+        # spec R5 の smoke 定義（headless 境界検証 = al-cli ci build +
+        # check-cli-headless）の build 側。audio-lens 側 ci.yml と同じ入口。
+        run: mise exec -- cargo build -p al-cli --profile ci
       - name: smoke lane (check-cli-headless)
         id: smoke
         if: steps.gate.outputs.gate == 'run' && steps.check.outcome == 'success'
@@ -205,11 +228,12 @@ jobs:
             exit 0
           fi
           row() { echo "| $1 | ubuntu-latest | $2 | $RUVIFORM_REV | $3 | - | pin を旧 SHA へ revert |" >> "$GITHUB_STEP_SUMMARY"; }
-          row "manifest rev override + cargo fetch (lockfile re-resolve)" "workspace" "${{ steps.fetch.outcome }}"
+          row "manifest rev pin + cargo fetch (lockfile re-resolve)" "workspace" "${{ steps.fetch.outcome }}"
           row "mise run check-ci" "workspace" "${{ steps.check.outcome }}"
+          row "cargo build -p al-cli --profile ci (smoke)" "al-cli headless" "${{ steps.smoke_build.outcome || 'not run' }}"
           row "mise run check-cli-headless (smoke)" "al-cli headless" "${{ steps.smoke.outcome || 'not run' }}"
           row "mise run test-ci (LFS fixtures)" "workspace" "${{ steps.test.outcome || 'not run' }}"
-          if [ "${{ steps.check.outcome }}" = "success" ] && [ "${{ steps.smoke.outcome }}" = "success" ] && [ "${{ steps.test.outcome }}" = "success" ]; then
+          if [ "${{ steps.check.outcome }}" = "success" ] && [ "${{ steps.smoke_build.outcome }}" = "success" ] && [ "${{ steps.smoke.outcome }}" = "success" ] && [ "${{ steps.test.outcome }}" = "success" ]; then
             echo "status=pass" >> "$GITHUB_OUTPUT"
           else
             echo "status=fail" >> "$GITHUB_OUTPUT"
@@ -226,6 +250,13 @@ jobs:
     needs: [preflight]
     if: always()
     runs-on: ubuntu-latest
+    env:
+      # synvelis には .cargo/config.toml が無い（audio-lens は同 config で
+      # net.git-fetch-with-cli / GIT_LFS_SKIP_SMUDGE を宣言済み）ため、
+      # cargo の git 取得を system git（SSH + url.insteadOf）へ委譲し、
+      # 依存 checkout の LFS smudge を skip する設定を job env で供給する。
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      GIT_LFS_SKIP_SMUDGE: "1"
     outputs:
       status: ${{ steps.result.outputs.status }}
     steps:
@@ -245,6 +276,8 @@ jobs:
           if [ "${{ needs.preflight.outputs.credential_configured }}" != "true" ]; then
             echo "gate=not_run" >> "$GITHUB_OUTPUT"
             echo "## Synvelis: not run (credential not configured)" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "CROSS_REPO_DEPLOY_KEY secret と 3 repo への read-only Deploy Key 登録が必要（runbook 参照）。" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "gate=run" >> "$GITHUB_OUTPUT"
           fi
@@ -257,6 +290,7 @@ jobs:
           keyfile="$RUNNER_TEMP/cross-repo-deploy-key"
           printf '%s\n' "$KEY" > "$keyfile"
           chmod 600 "$keyfile"
+          # GitHub 公表 SSH fingerprint（docs.github.com）と照合して pin する。
           kh="$RUNNER_TEMP/known_hosts"
           ssh-keyscan -t rsa,ecdsa,ed25519 github.com > "$kh" 2>/dev/null
           ok=0
@@ -267,24 +301,85 @@ jobs:
             if ssh-keygen -lf "$kh" | grep -q "$want"; then ok=$((ok+1)); fi
           done
           if [ "$ok" -lt 3 ]; then
-            echo "::error::github.com host key fingerprints do not match published constants"
+            echo "::error::github.com host key fingerprints do not match published constants — check for GitHub host key rotation and update the workflow constants"
             exit 1
           fi
           echo "GIT_SSH_COMMAND=ssh -i $keyfile -o IdentitiesOnly=yes -o UserKnownHostsFile=$kh -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+      - name: Set up mise
+        if: steps.gate.outputs.gate == 'run'
+        uses: jdx/mise-action@v5.2.0
       - name: Clone synvelis + workspace presence check
         id: presence
         if: steps.gate.outputs.gate == 'run'
-        env:
-          GIT_LFS_SKIP_SMUDGE: "1"
         run: |
           set -euo pipefail
           git clone --depth 1 --branch "${{ inputs.synvelis_ref }}" \
             git@github.com:scarecrow173/synvelis.git "$RUNNER_TEMP/synvelis"
+          # Cargo.toml 不在（workspace 化前の ref）なら以降の lane は not run。
           if [ ! -f "$RUNNER_TEMP/synvelis/Cargo.toml" ]; then
             echo "presence=absent" >> "$GITHUB_OUTPUT"
           else
             echo "presence=present" >> "$GITHUB_OUTPUT"
           fi
+      - name: Configure private dep access + probe
+        if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present'
+        run: |
+          set -euo pipefail
+          git config --global url."git@github.com:scarecrow173/ruviform.git".insteadOf \
+            "https://github.com/scarecrow173/ruviform.git"
+          git ls-remote git@github.com:scarecrow173/ruviform.git HEAD >/dev/null
+          echo "private dep access OK"
+      - name: Pin ruviform rev in manifest
+        if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: |
+          set -euo pipefail
+          # synvelis は ruviform 依存を既定ブランチ追従（rev 未指定）で宣言する
+          # ため、verify-audiolens と同一の正規化で `rev = "$RUVIFORM_REV"` を
+          # 注入する。scratch checkout 内のみの変更（consumer repo には残さない）。
+          sed -i -E "/scarecrow173\/ruviform\.git/ {
+            s/\{ *rev = \"[0-9a-f]{40}\", */{ /;
+            s/, *rev = \"[0-9a-f]{40}\"//;
+            s/\{ *branch = \"[^\"]+\", */{ /;
+            s/, *branch = \"[^\"]+\"//;
+            s/ *\}/, rev = \"$RUVIFORM_REV\" }/
+          }" Cargo.toml
+          git diff Cargo.toml >> "$GITHUB_STEP_SUMMARY" || true
+      - name: cargo fetch + single-SHA lockfile guard
+        id: fetch
+        if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: |
+          set -euo pipefail
+          mise trust
+          mise install --locked rust git-lfs
+          mise exec -- cargo fetch
+          total=$(grep -c 'scarecrow173/ruviform\.git' Cargo.lock || true)
+          if [ "$total" -eq 0 ]; then
+            echo "::error::no ruviform git sources in Cargo.lock — manifest rewrite had no effect"
+            exit 1
+          fi
+          bad=$(grep 'scarecrow173/ruviform\.git' Cargo.lock | grep -vc "?rev=$RUVIFORM_REV#$RUVIFORM_REV" || true)
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::$bad ruviform source line(s) are not resolved to $RUVIFORM_REV"
+            grep 'scarecrow173/ruviform\.git' Cargo.lock | grep -v "?rev=$RUVIFORM_REV#$RUVIFORM_REV"
+            exit 1
+          fi
+          echo "all $total ruviform sources resolved to $RUVIFORM_REV"
+          git diff Cargo.lock >> "$GITHUB_STEP_SUMMARY" || true
+      - name: check lane
+        id: check
+        if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: mise run check
+      - name: test lane (with LFS fixtures)
+        id: test
+        if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present' && steps.check.outcome == 'success'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: |
+          set -euo pipefail
+          git lfs pull
+          mise run test
       - name: Record evidence + status
         id: result
         if: always()
@@ -303,16 +398,25 @@ jobs:
           if [ "$gate" = "not_run" ]; then
             echo "| all | ubuntu-latest | - | $RUVIFORM_REV | not run (credential not configured) | - | - |" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ steps.presence.outputs.presence }}" = "absent" ]; then
-            echo "| workspace presence | ubuntu-latest | - | $RUVIFORM_REV | not run (no buildable workspace) | Synvelis は設計段階（#28） | - |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| workspace presence | ubuntu-latest | - | $RUVIFORM_REV | not run (no buildable workspace) | - | - |" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "| workspace presence | ubuntu-latest | - | $RUVIFORM_REV | pass (Cargo.toml present; lanes TBD) | - | - |" >> "$GITHUB_STEP_SUMMARY"
-            echo "status=pass" >> "$GITHUB_OUTPUT"
+            row() { echo "| $1 | ubuntu-latest | $2 | $RUVIFORM_REV | $3 | - | 追従 PR で manifest/lock を revert |" >> "$GITHUB_STEP_SUMMARY"; }
+            row "manifest rev pin + cargo fetch (lockfile re-resolve)" "workspace" "${{ steps.fetch.outcome }}"
+            row "mise run check" "workspace" "${{ steps.check.outcome || 'not run' }}"
+            row "mise run test (--locked・git lfs pull 後)" "workspace" "${{ steps.test.outcome || 'not run' }}"
+            if [ "${{ steps.fetch.outcome }}" = "success" ] && [ "${{ steps.check.outcome }}" = "success" ] && [ "${{ steps.test.outcome }}" = "success" ]; then
+              echo "status=pass" >> "$GITHUB_OUTPUT"
+            else
+              echo "status=fail" >> "$GITHUB_OUTPUT"
+            fi
           fi
       - name: Cleanup credential
         if: always() && steps.gate.outputs.gate == 'run'
         run: |
           git config --global --unset-all url."git@github.com:scarecrow173/ruviform.git".insteadOf || true
           rm -f "$RUNNER_TEMP/cross-repo-deploy-key" "$RUNNER_TEMP/known_hosts"
+          # 注: 本 step 以降に git/ssh を使う step を追加しないこと
+          # （GIT_SSH_COMMAND が削除済み鍵を指すため）
 
   summary:
     needs: [preflight, verify-audiolens, verify-synvelis]
