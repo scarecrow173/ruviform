@@ -1,0 +1,20 @@
+{
+  "name": "@ruviform/ui-binding",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Issue #261: generic Command/Query binding port — consumer-supplied dispatch/subscribe/query/cancel ports, state receipts (preview/pending/accepted/applied/rejected/unsupported/timeout/observed), bounded preview coalescing, multiwindow view links, and a thin DOM binding adapter. No UI framework, DOM, WebView, or renderer dependency in src/.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --test --import=./test/env.ts test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "~24.10",
+    "happy-dom": "~21.0.4",
+    "typescript": "~5.9.3"
+  }
+}

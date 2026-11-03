@@ -215,6 +215,36 @@ run = [
   "npm --prefix ui/viz run build",
 ]
 
+# UI binding lane (Issue #261): the generic Command/Query binding
+# package under ui/binding — consumer-supplied dispatch/subscribe/query
+# ports, state receipts (preview/pending/accepted/applied/rejected/
+# unsupported/timeout/observed), bounded preview coalescing,
+# multiwindow view links, and a thin DOM adapter over the ui/components
+# event contract. Same discipline: `npm ci` restores the committed
+# package-lock, node is the pinned mise toolchain, and no UI
+# framework/DOM/renderer dependency may be added to src/ (happy-dom is
+# a test-only devDependency). Domain state ownership — authorization,
+# undo, job lifecycle — stays inside consumer gateways; this lane must
+# not pull domain crates in.
+[tasks.check-ui-binding]
+description = "Install ui/binding deps from package-lock and type-check the binding package (tsc --noEmit)"
+run = [
+  "npm --prefix ui/binding ci --no-audit --no-fund",
+  "npm --prefix ui/binding run typecheck",
+]
+[tasks.test-ui-binding]
+description = "Install ui/binding deps from package-lock and run binding tests via node --test (happy-dom for the DOM adapter lane, no UI framework)"
+run = [
+  "npm --prefix ui/binding ci --no-audit --no-fund",
+  "npm --prefix ui/binding test",
+]
+[tasks.build-ui-binding]
+description = "Install ui/binding deps from package-lock and emit the distributable dist/ build (tsc)"
+run = [
+  "npm --prefix ui/binding ci --no-audit --no-fund",
+  "npm --prefix ui/binding run build",
+]
+
 [tasks.test-ofx]
 description = "Run OFX native host and fixture contract tests"
 run = "cargo test -p ruviform-plugin-ofx"

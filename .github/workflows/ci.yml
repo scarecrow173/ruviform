@@ -246,6 +246,15 @@ jobs:
       - name: Build UI viz dist (mise run build-ui-viz)
         run: mise run build-ui-viz
 
+      - name: Type-check UI binding (mise run check-ui-binding)
+        run: mise run check-ui-binding
+
+      - name: Test UI binding (mise run test-ui-binding)
+        run: mise run test-ui-binding
+
+      - name: Build UI binding dist (mise run build-ui-binding)
+        run: mise run build-ui-binding
+
   bench:
     name: bench
     runs-on: ubuntu-latest
