@@ -318,10 +318,19 @@ mise exec -- cargo check --workspace --all-targets   # exit 0・25.78s
 
 ローカル再現の差分（runner 条件との明示的な違い）: audio-lens の `mise install` は runner では repo `mise.toml` のみを見るが本ローカルは global mise config に lockfile 未収録 tool があり `--locked` が失敗したため `rust git-lfs node` へ scope。lane 手順そのものは workflow と同一。
 
+**実 dispatch 証拠（anonymous mode・PR #274 ブランチ ref・候補 `e9e6abe`）:**
+
+- run [41604118237](https://github.com/scarecrow173/ruviform/actions/runs/41604118237): verify-synvelis 全緑（1m42s）・verify-audiolens が fetch step で `mise install --locked` 失敗（audio-lens `mise.lock` の `actionlint`/`pipx:serena-agent` が platform entry を持たず `--locked` は全 OS で復元不可 — consumer 側 lockfile gap）。証拠表は fetch=failure・下流 lane=skipped を正しく記録。audio-lens lane の install を lane 必要 tool（rust/git-lfs/node）へ scope して修正（synvelis lane と同型）。
+- run [41604498852](https://github.com/scarecrow173/ruviform/actions/runs/41604498852): verify-synvelis 全緑（1m14s・anonymous HTTPS clone/probe/pin/fetch+guard/check/test 全 step）。verify-audiolens は check-ci・smoke 2 lane（`al-cli` ci build + `check-cli-headless`）を通過し `test-ci` で **3 test fail** を検出（detection は gate の意図どおり・workflow は fail を正直に報告し summary も fail）。
+- **AudioLens 検出事項（起票案）**: `al-cli --test cli` の export 3 test（`full_pipeline_reaches_export`・`export_command_packages_a_job_without_export_in_its_plan`・`compressed_only_mp4_runs_the_default_pipeline_end_to_end`）が ubuntu-latest で `export file analysis/inputs/IN-*.metadata.json still embeds absolute path /tmp/…` で fail。機序: `al-job` が input path を `std::path::absolute` で manifest `source_path`/`source_path_abs` に書き込み（job.rs:60・manifest.rs:90-91）、export portability gate（al-dataset `export/package.rs`）は forbidden 側のみ `\`→`/` 正規化するため Windows では JSON 内の `\\` 区切りと一致せず blind、Linux で初めて検出可能になった潜在 portibility 欠陥。ruviform 起因ではない（pin は既に候補 SHA と一致・consumer 側テスト資産自身の問題）。consumer 側対応（package 内 metadata の source path 相対化/除去・gate の両 separator 照合）が必要 — audio-lens #127 系の追従 Issue として起票案を提示。
+- **consumer-impact-check**: PR #274 で初回実トリガー・`classification` check pass（3s）— PR 本文分類欄の機械検査が実稼働することを確認。
+- **runner 実測タイミング補足**: `ubuntu-latest` で synvelis lane は ~1.2-1.7 分（cargo cache 温間時）。audio-lens lane は mise install scoped 化で fetch+guard+check-ci+smoke まで ~2.5 分で到達（test-ci fail まで 2m34s・全緑想定でも数分台と見込まれる）。
+
 **検証状態の正直な区分（本追記時点）:**
 
 - **verified（lane 手順・anonymous 経路相当）**: 両 consumer 現行 main で clone → 正規化 → fetch → guard → check/test/smoke まで全手順をローカル完走（上表）。`consumer-verify.yml` 変更後の actionlint pass。manifest 正規化が audio-lens 現行 16 dep 形態（features 付き行を含む）でも guard まで到達することを実測。
-- **informational**: `deploy_key` mode の SSH 経路（credential 未設定・構造は維持）、runner 上での実 dispatch（anonymous mode の runner 証拠は PR 連動の dispatch で取得予定）、全 lane not run → 失敗の実 dispatch 観測、audio-lens `RUVIFORM_DEPLOY_KEY` 依存の consumer 側 ci.yml（private 前提記述が残存・consumer 側の責務）。
-- **not verified**: Golden/`baseline` 系 lane（v1 スコープ外・引き続き Deferred）、3 OS matrix、synvelis `gw10` lane の cross-repo 接続。
+- **verified（runner・anonymous mode）**: 実 dispatch 2 run で synvelis lane 連続 green、audio-lens lane が fetch scope 修正後に test-ci まで到達（fail は consumer 側潜在欠陥の検出であり gate の誤検出ではない）。全 lane not run → 失敗の真偽表は run 41604118237（片 lane fail → summary fail）で一部観測。証拠表の `access:` 記録・skipped/failure 区分を runner で確認。
+- **informational**: `deploy_key` mode の SSH 経路（credential 未設定・構造は維持）、全 lane not run → 失敗の実 dispatch 観測（片 lane fail 済み・全 not run ケースは未観測）、audio-lens `RUVIFORM_DEPLOY_KEY` 依存の consumer 側 ci.yml（private 前提記述が残存・consumer 側の責務）。
+- **not verified**: Golden/`baseline` 系 lane（v1 スコープ外・引き続き Deferred）、3 OS matrix、synvelis `gw10` lane の cross-repo 接続、audio-lens export 3 test の修正後再検証（consumer 側対応待ち）。
 
 **分類（本変更自身）:** Synvelis = no impact・AudioLens = no impact（ruviform 側 CI 基盤のみの変更。consumer repo への変更なし・依存 pin・API・行為規約は不変。#224 の基盤整備と同じ分類根拠）。実測 worker: Orca dispatched `task_91078cf22169`/`ctx_9a2208a14504`。
