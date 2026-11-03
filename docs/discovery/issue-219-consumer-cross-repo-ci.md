@@ -261,3 +261,27 @@ mise exec -- cargo check --workspace --all-targets   # exit 0・25.78s
 | M5 / G5 | Device/Reader/Prefetch | 未着手 | `synvelis-player` が `ruviform-media-reader`/`Prefetch` を実利用（IR `issue-249-…` が #254 semantics を検証・positive）— consumer 側回帰 lane 未接続 | `ruviform-media-reader` 非依存のため #254 は no impact 確定（issue-249 IR・#244 `unknown` 解消済み） |
 | M6 / G6 | WAV/Offline/Export | 未着手 | `synvelis-render` が sequential offline WAV export を実装（`f7aadd0`・PR #34/#35・`ruviform-io-wav`/`ruviform-exec` 利用）— ruviform 側との互換 lane 未接続 | not run |
 | M7 / G7 | Multiwindow/Cutover | ui/* merged（#258〜#263・TS パッケージ） | 採用評価 Issue 起票済み・未実測（#47/#48） | 採用評価 Issue 起票済み・未実測（#131/#132） |
+
+### 2026-11-03（追記 2 件目）: Cross-Repo Gate 本体実装 — synvelis 実 lane・PR 分類機械検査・smoke 整合
+
+**実施内容:** `consumer-verify.yml` の `verify-synvelis` を presence check stub から実 lane へ拡張（synvelis `f7aadd0` の workspace 化を受けた設計追記の実装）。manifest 正規化を `rev` pin・`branch` 追従・`rev` 未指定の 3 形態対応へ一般化して両 lane 統一、audio-lens smoke に `cargo build -p al-cli --profile ci` を追加（spec R5 整合）、`.github/workflows/consumer-impact-check.yml` を新設（PR 本文の分類欄を機械検査する非 required lane）。
+
+**ローカル実測（credential 非依存区間・2026-11-03）:** synvelis `f7aadd0` の scratch clone（`git clone --depth 1`）で候補 `a014b3f941dfc21cb349504c1383b65548730381`（ruviform `origin/main`）に対し lane 手順を再現実行:
+
+| 手順 | 結果 |
+| --- | --- |
+| manifest 正規化（`rev` 未指定 10 dep → `rev` 注入） | 全 10 行が `rev = "a014b3f9…"` に書換・`git diff` で可視化 |
+| `CARGO_NET_GIT_FETCH_WITH_CLI=true` + `GIT_LFS_SKIP_SMUDGE=1` で `cargo fetch` | 15 ruviform crate が `?rev=a014b3f9…#a014b3f9` に単一解決 |
+| 単一 SHA guard（repo URL キー） | total=15・bad=0 |
+| `mise run check` | exit 0（dev profile・10.66s） |
+| `git lfs pull` + `mise run test`（`--locked`） | exit 0・23 test suite・0 failed |
+| audio-lens `987f236` scratch での manifest 正規化 + `cargo metadata` 再解決 | 14 dep の `rev` が候補へ置換（`features` 保持）・lock 15 source 全て `?rev=<候補>#<候補>`（total=15・bad=0） |
+| consumer-impact-check 検査スクリプト | 5 case（未記入・記入済み・unknown+解消先なし・unknown+解消先あり・セクション欠落）をローカル実行し pass/fail が全て意図どおり |
+
+**検証状態の正直な区分（本追記時点）:**
+
+- **verified**: synvelis lane の credential 非依存区間（manifest 正規化・fetch・guard・check・test）をローカル実測。audio-lens lane の manifest 正規化 + lockfile 再解決も実測。両 workflow の actionlint 合格。
+- **informational（未稼働）**: dispatch 実走は `CROSS_REPO_DEPLOY_KEY` 一次設定待ちで 0 件（SSH/known_hosts pin・`url.insteadOf`・証拠表出力の runner 経路は未実走）。consumer-impact-check は PR への初回起動が未発生（次回 PR で観測）。
+- **not verified**: audio-lens 側 `check-ci`/`test-ci`/`check-cli-headless`/`git lfs pull` の lane 実行（初回 dispatch で検証）、synvelis lane の runner 上実行、全 lane not run → 失敗の真偽表の実 dispatch 観測。
+
+**分類（本変更自身）:** Synvelis = impacted（本 lane の検証対象として実 lane 化・consumer 側変更なし・追従運用は synvelis#28）/ AudioLens = impacted（smoke lane に al-cli build 追加・同・audio-lens#127）。両者とも consumer repo への恒久的変更を含まない scratch 検証経路の拡張であり、依存 pin・API・行為規約は不変。

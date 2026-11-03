@@ -4,7 +4,7 @@ type: "test-spec"
 status: "draft"
 title: "consumer-verify workflow の gate 意味論（not run≠pass・preflight gating・単一SHA guard・秘密非露出）"
 created: "2026-11-01"
-updated: "2026-11-01"
+updated: "2026-11-03"
 owners: []
 relations:
   source: []
@@ -50,15 +50,20 @@ Cross-Repo 候補 revision の Consumer 互換検証 lane。
 - credential 未設定時、各 Consumer job は `not run` を job summary に出力して exit 0 する
 - 全 lane が `not run` の run は summary job が workflow を失敗にする（証拠ゼロを緑にしない）
 - 不正 `ruviform_rev`（非 40hex）は preflight fail → Consumer job は `fail (preflight failed)` を報告し credential 未設定とは区別する
-- `Cargo.lock` の `scarecrow173/ruviform.git` source 行は (a) 1 行以上 (b) 全行 `?rev=<候補>` + `#<候補>` でなければ fail
+- `Cargo.lock` の `scarecrow173/ruviform.git` source 行は (a) 1 行以上 (b) 全行 `?rev=<候補>` + `#<候補>` でなければ fail（両 lane 同一 guard）
 - 秘密（Deploy Key）がログ・artifact・`git config` に出力・残留しない
 - test lane 実行前に `git lfs pull` で LFS fixture が materialize される
+- manifest 正規化は `rev` pin 置換・`branch` 追従除去・`rev` 未指定への注入を同一ルールで `rev = "$RUVIFORM_REV"` へ揃える（依存形態差異を guard 前に吸収し、書換 no-op は 0 行 guard で fail）
+- `verify-synvelis` は workspace `Cargo.toml` 不在 ref のみ `not run (no buildable workspace)` を報告し、存在時は fetch→check→test の実 lane を実行する（presence は後方互換ガードであり lane の代替ではない）
+- `verify-synvelis` は consumer 側に `.cargo/config.toml` が無いため、`CARGO_NET_GIT_FETCH_WITH_CLI`/`GIT_LFS_SKIP_SMUDGE` を job env で供給する（値は `true`/`false` 文字列）
 
 ## Examples
 
 - Given credential 未設定、When dispatch、Then verify-audiolens/synvelis は `not run (credential not configured)`、summary は workflow 失敗
 - Given `ruviform_rev=abc`、When dispatch、Then preflight fail、両 verify job は `fail (preflight failed)`
 - Given 候補 SHA `41772a7…`、When audio-lens lane、Then Cargo.lock の ruviform.git source は全て同 SHA
+- Given synvelis が `rev` 未指定の既定ブランチ追従 dep、When 候補 SHA `a014b3f…`、Then manifest に `rev` が注入され lock の全 15 source が `?rev=<候補>#<候補>` に解決し `mise run check`/`test` が実行される（ローカル scratch 実測済み）
+- Given workspace `Cargo.toml` を持たない `synvelis_ref`、When dispatch、Then `not run (no buildable workspace)` で他 lane は走らない
 
 ## Guarantees
 
