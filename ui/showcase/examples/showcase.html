@@ -1,0 +1,134 @@
+<!doctype html>
+<!--
+  Ruviform Design System Showcase (Issue #263)
+  ─────────────────────────────────────────────
+  Standalone vanilla-TS/Web-Components page — no framework, no bundler.
+  Serve `ui/` as a static root and open
+  `/showcase/examples/showcase.html`; the page imports TS source
+  modules directly through `verbatimModuleSyntax`-safe `.ts` specifiers
+  when served with ts transpilation, or transpile once via
+  `mise run build-ui-showcase` and point the module map at `dist/`.
+
+  Evidence:
+  - Theme matrix: Reference Light/Dark + DAW/analysis exemplars +
+    compact custom skin (SHOWCASE_THEMES).
+  - The same demo gateway command path drives every column — themes
+    are data, not API forks.
+  - Deferred viz (Spectrogram/TimeSeries) render as honest placeholders.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ruviform UI Showcase</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #202428;
+        color: #e8eaed;
+      }
+      #app {
+        padding: 16px;
+      }
+      /* mount.ts emits data-showcase > rvf-theme > .sc-col > .sc-row-*
+       * — style those, not invented class names. */
+      [data-showcase] {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        overflow-x: auto;
+      }
+      rvf-theme {
+        display: block;
+        flex: 0 0 auto;
+      }
+      .sc-col {
+        min-width: 340px;
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .sc-col-title {
+        margin: 0 0 8px;
+        font: 600 13px/1.4 system-ui, sans-serif;
+        letter-spacing: 0.02em;
+      }
+      .sc-row {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin: 12px 0;
+      }
+      .sc-row-deferred {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+      .sc-deferred {
+        border: 1px dashed currentColor;
+        border-radius: 6px;
+        padding: 8px;
+        opacity: 0.6;
+        font: 400 11px/1.4 system-ui, sans-serif;
+      }
+      rvf-knob, rvf-fader, rvf-seekbar, rvf-numeric-input, rvf-toggle,
+      rvf-range-selector, rvf-transport {
+        display: block;
+      }
+      rvf-waveform, rvf-meter, rvf-spectrum {
+        display: block;
+        width: 300px;
+        height: 120px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import {
+        mountShowcase,
+        pumpDemoOnce,
+      } from "../src/index.ts";
+
+      // Mount the full matrix against the live demo gateways — the
+      // same object the headless tests drive. flushWith dispatches
+      // intents synchronously so a gesture event's command is already
+      // in `gateway.received` when the document-level listener drains
+      // it during bubbling (the default microtask flush would always
+      // drain one event late and never apply the final commit).
+      const h = mountShowcase(document.getElementById("app"), {
+        flushWith: (fn) => fn(),
+      });
+
+      // Feed the viz rows one deterministic frame each and settle the
+      // initial bounded waveform query.
+      for (const col of h.columns) {
+        for (const el of col.viz.values()) {
+          el.setSize(300, 120);
+          el.autopump = false;
+        }
+        pumpDemoOnce(col.sources, 1, 0.2);
+      }
+      requestAnimationFrame(() => {
+        for (const col of h.columns) {
+          for (const el of col.viz.values()) {
+            el.pumpNow?.();
+            el.drawNow();
+          }
+        }
+      });
+
+      // Receipts for every command the user issues — commits apply to
+      // the store, begin/preview/cancel are acked "accepted". With the
+      // synchronous flush above, each gesture event's command is in
+      // `received` by the time this listener runs.
+      const drain = () => {
+        for (const rec of h.gateway.received.splice(0)) {
+          if (rec.intent.kind === "commit") h.apply(rec);
+          else h.accept(rec);
+        }
+      };
+      document.addEventListener("rvf-gesture", drain);
+      document.addEventListener("rvf-transport", drain);
+    </script>
+  </body>
+</html>

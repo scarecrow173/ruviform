@@ -255,6 +255,15 @@ jobs:
       - name: Build UI binding dist (mise run build-ui-binding)
         run: mise run build-ui-binding
 
+      - name: Type-check UI showcase (mise run check-ui-showcase)
+        run: mise run check-ui-showcase
+
+      - name: Test UI showcase (mise run test-ui-showcase)
+        run: mise run test-ui-showcase
+
+      - name: Build UI showcase dist (mise run build-ui-showcase)
+        run: mise run build-ui-showcase
+
   bench:
     name: bench
     runs-on: ubuntu-latest
