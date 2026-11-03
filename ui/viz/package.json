@@ -1,0 +1,20 @@
+{
+  "name": "@ruviform/ui-viz",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Issue #260: framework-neutral Reference Viz renderers — Waveform/Meter/Spectrum scene builders, VizStyle paint contract, Canvas2D/WebGL2 backends with declared capabilities and fallback, and Custom Element surfaces (rvf-waveform/rvf-meter/rvf-spectrum). Plain TypeScript + Web Platform APIs; no UI framework, renderer, or data-processing dependency (LOD/FFT stay in ruviform-viz).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --test --import=./test/env.ts test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "~24.10",
+    "happy-dom": "~21.0.4",
+    "typescript": "~5.9.3"
+  }
+}

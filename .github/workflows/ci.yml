@@ -237,6 +237,15 @@ jobs:
       - name: Build UI components dist (mise run build-ui-components)
         run: mise run build-ui-components
 
+      - name: Type-check UI viz renderers (mise run check-ui-viz)
+        run: mise run check-ui-viz
+
+      - name: Test UI viz renderers (mise run test-ui-viz)
+        run: mise run test-ui-viz
+
+      - name: Build UI viz dist (mise run build-ui-viz)
+        run: mise run build-ui-viz
+
   bench:
     name: bench
     runs-on: ubuntu-latest
