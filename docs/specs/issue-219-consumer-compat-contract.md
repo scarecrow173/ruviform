@@ -127,6 +127,7 @@ Ruviform を Synvelis（設計段階 DAW）と AudioLens（高精度オフライ
 ## Deferred Design Concerns
 
 - Cross-Repo lane の pull_request/schedule 自動 trigger | credential 稼働実績と頻度・コスト実測が必要 | 初回実走の証拠確認後 | 自動化しないままだと手動忘れで未検証が滞留する。
+- R6 credential 前提の再評価（2026-11-03 追記） | 設計時は 3 repo とも private 前提だったが、実測で全 repo public 化を確認。design 追記で access mode fallback（deploy_key 優先・anonymous HTTPS は public 期間の補完・not_run 維持）を追加済み。repo が再 private 化されれば R6 記載どおりの Deploy Key 経路へ自動的に戻る | repo visibility 方針の確定時 | private 前提の一次設定手順と実運用経路の乖離が固定化する。
 - Cross-Repo 検証の 3 OS matrix 化 | audio-lens 側 CI と同じ対象 OS 網羅が望ましい | v1 の実走が安定し消費時間が見えてから | OS 依存の不整合を単一 OS で見逃す。
 - Consumer Golden/`baseline` 計測 lane（audio-lens `mise run baseline` 系） | 実行時間と fixture（LFS）要件が未測 | v1 smoke/check 実走後 | 性能・Golden 退行を check/test だけでは拾えない。
 - GitHub App / fine-grained PAT への credential 移行 | Deploy Key で現要件を満たす | 監査・期限管理要件の変化 | 長期の鍵管理負債。

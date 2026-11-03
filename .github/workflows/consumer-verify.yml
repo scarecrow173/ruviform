@@ -14,9 +14,15 @@ name: consumer-verify
 # synvelis lane は workspace Cargo.toml 不在時のみ not run を報告する
 # （workspace 化前の ref を検証対象にした場合の後方互換ガード）。
 #
-# 前提: ruviform repo の Actions secret CROSS_REPO_DEPLOY_KEY に、
-# 3 repo（ruviform/audio-lens/synvelis）へ read-only Deploy Key として
-# 登録した秘密鍵を投入する一次設定が必要（未設定時は全 lane が not run）。
+# access mode（preflight が lane ごとに解決）:
+# - deploy_key: secret CROSS_REPO_DEPLOY_KEY 設定済み → 既存の SSH
+#   経路（known_hosts pin・url.insteadOf・cleanup）をそのまま使用。
+#   3 repo private 前提の canonical 経路であり、private 復帰時もこちら。
+# - anonymous: secret 未設定かつ対象 consumer repo + ruviform repo が匿名
+#   HTTPS で read 可能（public）→ 秘密を一切使わず HTTPS clone/fetch で
+#   lane を実行する（最小権限 = 秘密を持たない）。
+# - not_run: どちらも不可 → not run を明示して終了（unknown を pass に
+#   見せない既定は不変）。
 
 on:
   workflow_dispatch:
@@ -47,6 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       credential_configured: ${{ steps.probe.outputs.credential_configured }}
+      anon_audiolens: ${{ steps.probe.outputs.anon_audiolens }}
+      anon_synvelis: ${{ steps.probe.outputs.anon_synvelis }}
     steps:
       - name: Validate inputs
         run: |
@@ -62,17 +70,31 @@ jobs:
             fi
           done
           echo "candidate revision: $RUVIFORM_REV"
-      - name: Probe credential presence
+      - name: Probe credential presence + anonymous access
         id: probe
         env:
           KEY: ${{ secrets.CROSS_REPO_DEPLOY_KEY }}
         run: |
+          set -uo pipefail
           if [ -n "$KEY" ]; then
             echo "credential_configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "credential_configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::CROSS_REPO_DEPLOY_KEY is not configured — consumer lanes will report 'not run'"
+            echo "::warning::CROSS_REPO_DEPLOY_KEY is not configured — probing anonymous HTTPS access for public repos"
           fi
+          # anonymous mode は consumer repo と依存先 ruviform repo の両方が
+          # 匿名 read 可能なときだけ有効。repo ごとに判定し、片 consumer の
+          # アクセス可否が他 lane を止めないようにする。
+          probe() { git ls-remote "https://github.com/scarecrow173/$1.git" HEAD >/dev/null 2>&1; }
+          ruv_ok=0; probe ruviform && ruv_ok=1
+          for pair in audiolens:audio-lens synvelis:synvelis; do
+            key="${pair%%:*}"; repo="${pair##*:}"
+            if [ "$ruv_ok" = "1" ] && probe "$repo"; then
+              echo "anon_${key}=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "anon_${key}=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
 
   verify-audiolens:
     needs: [preflight]
@@ -91,19 +113,25 @@ jobs:
             echo "| preflight | ubuntu-latest | - | $RUVIFORM_REV | fail (preflight failed) | - | - |" >> "$GITHUB_STEP_SUMMARY"
             echo "status=fail" >> "$GITHUB_OUTPUT"
             echo "gate=blocked" >> "$GITHUB_OUTPUT"
+            echo "mode=blocked" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           echo "status=not_run" >> "$GITHUB_OUTPUT"
-          if [ "${{ needs.preflight.outputs.credential_configured }}" != "true" ]; then
-            echo "gate=not_run" >> "$GITHUB_OUTPUT"
-            echo "## AudioLens: not run (credential not configured)" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "CROSS_REPO_DEPLOY_KEY secret と 3 repo への read-only Deploy Key 登録が必要（runbook 参照）。" >> "$GITHUB_STEP_SUMMARY"
-          else
+          if [ "${{ needs.preflight.outputs.credential_configured }}" = "true" ]; then
             echo "gate=run" >> "$GITHUB_OUTPUT"
+            echo "mode=deploy_key" >> "$GITHUB_OUTPUT"
+          elif [ "${{ needs.preflight.outputs.anon_audiolens }}" = "true" ]; then
+            echo "gate=run" >> "$GITHUB_OUTPUT"
+            echo "mode=anonymous" >> "$GITHUB_OUTPUT"
+          else
+            echo "gate=not_run" >> "$GITHUB_OUTPUT"
+            echo "mode=not_run" >> "$GITHUB_OUTPUT"
+            echo "## AudioLens: not run (no access path)" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "CROSS_REPO_DEPLOY_KEY secret 未設定、かつ匿名 HTTPS でも audio-lens/ruviform に到達不可（repo public 化または Deploy Key 一次設定を確認、runbook 参照）。" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Install SSH credential
-        if: steps.gate.outputs.gate == 'run'
+        if: steps.gate.outputs.mode == 'deploy_key'
         env:
           KEY: ${{ secrets.CROSS_REPO_DEPLOY_KEY }}
         run: |
@@ -136,16 +164,26 @@ jobs:
           GIT_LFS_SKIP_SMUDGE: "1"
         run: |
           set -euo pipefail
+          if [ "${{ steps.gate.outputs.mode }}" = "deploy_key" ]; then
+            url="git@github.com:scarecrow173/audio-lens.git"
+          else
+            url="https://github.com/scarecrow173/audio-lens.git"
+          fi
           git clone --depth 1 --branch "${{ inputs.audiolens_ref }}" \
-            git@github.com:scarecrow173/audio-lens.git "$RUNNER_TEMP/audio-lens"
-      - name: Configure private dep access + probe
+            "$url" "$RUNNER_TEMP/audio-lens"
+      - name: Configure dep access + probe
         if: steps.gate.outputs.gate == 'run'
         run: |
           set -euo pipefail
-          git config --global url."git@github.com:scarecrow173/ruviform.git".insteadOf \
-            "https://github.com/scarecrow173/ruviform.git"
-          git ls-remote git@github.com:scarecrow173/ruviform.git HEAD >/dev/null
-          echo "private dep access OK"
+          if [ "${{ steps.gate.outputs.mode }}" = "deploy_key" ]; then
+            git config --global url."git@github.com:scarecrow173/ruviform.git".insteadOf \
+              "https://github.com/scarecrow173/ruviform.git"
+            git ls-remote git@github.com:scarecrow173/ruviform.git HEAD >/dev/null
+            echo "private dep access OK (deploy_key)"
+          else
+            git ls-remote https://github.com/scarecrow173/ruviform.git HEAD >/dev/null
+            echo "dep access OK (anonymous https)"
+          fi
       - name: Pin ruviform rev in manifest
         if: steps.gate.outputs.gate == 'run'
         working-directory: ${{ runner.temp }}/audio-lens
@@ -168,7 +206,12 @@ jobs:
         run: |
           set -euo pipefail
           mise trust
-          mise install --locked
+          # lane が使う tool のみに scope（rust=cargo、git-lfs=test lane の
+          # lfs pull、node=check-cli-headless）。audio-lens mise.lock の
+          # actionlint/pipx:serena-agent は platform entry を持たず
+          # --locked が全 platform で失敗するため全量 install しない
+          # （consumer 側の lockfile gap・追従 Issue 起票案として報告）。
+          mise install --locked rust git-lfs node
           mise exec -- cargo fetch
           total=$(grep -c 'scarecrow173/ruviform\.git' Cargo.lock || true)
           if [ "$total" -eq 0 ]; then
@@ -218,13 +261,13 @@ jobs:
             exit 0  # gate step already emitted fail evidence
           fi
           {
-            echo "## AudioLens — ruviform $RUVIFORM_REV"
+            echo "## AudioLens — ruviform $RUVIFORM_REV (access: ${{ steps.gate.outputs.mode }})"
             echo ""
             echo "| lane | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |"
             echo "|---|---|---|---|---|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$gate" = "not_run" ]; then
-            echo "| all | ubuntu-latest | - | $RUVIFORM_REV | not run (credential not configured) | - | - |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| all | ubuntu-latest | - | $RUVIFORM_REV | not run (no access path) | - | - |" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           row() { echo "| $1 | ubuntu-latest | $2 | $RUVIFORM_REV | $3 | - | pin を旧 SHA へ revert |" >> "$GITHUB_STEP_SUMMARY"; }
@@ -239,7 +282,7 @@ jobs:
             echo "status=fail" >> "$GITHUB_OUTPUT"
           fi
       - name: Cleanup credential
-        if: always() && steps.gate.outputs.gate == 'run'
+        if: always() && steps.gate.outputs.mode == 'deploy_key'
         run: |
           git config --global --unset-all url."git@github.com:scarecrow173/ruviform.git".insteadOf || true
           rm -f "$RUNNER_TEMP/cross-repo-deploy-key" "$RUNNER_TEMP/known_hosts"
@@ -270,19 +313,25 @@ jobs:
             echo "| preflight | ubuntu-latest | - | $RUVIFORM_REV | fail (preflight failed) | - | - |" >> "$GITHUB_STEP_SUMMARY"
             echo "status=fail" >> "$GITHUB_OUTPUT"
             echo "gate=blocked" >> "$GITHUB_OUTPUT"
+            echo "mode=blocked" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           echo "status=not_run" >> "$GITHUB_OUTPUT"
-          if [ "${{ needs.preflight.outputs.credential_configured }}" != "true" ]; then
-            echo "gate=not_run" >> "$GITHUB_OUTPUT"
-            echo "## Synvelis: not run (credential not configured)" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "CROSS_REPO_DEPLOY_KEY secret と 3 repo への read-only Deploy Key 登録が必要（runbook 参照）。" >> "$GITHUB_STEP_SUMMARY"
-          else
+          if [ "${{ needs.preflight.outputs.credential_configured }}" = "true" ]; then
             echo "gate=run" >> "$GITHUB_OUTPUT"
+            echo "mode=deploy_key" >> "$GITHUB_OUTPUT"
+          elif [ "${{ needs.preflight.outputs.anon_synvelis }}" = "true" ]; then
+            echo "gate=run" >> "$GITHUB_OUTPUT"
+            echo "mode=anonymous" >> "$GITHUB_OUTPUT"
+          else
+            echo "gate=not_run" >> "$GITHUB_OUTPUT"
+            echo "mode=not_run" >> "$GITHUB_OUTPUT"
+            echo "## Synvelis: not run (no access path)" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "CROSS_REPO_DEPLOY_KEY secret 未設定、かつ匿名 HTTPS でも synvelis/ruviform に到達不可（repo public 化または Deploy Key 一次設定を確認、runbook 参照）。" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Install SSH credential
-        if: steps.gate.outputs.gate == 'run'
+        if: steps.gate.outputs.mode == 'deploy_key'
         env:
           KEY: ${{ secrets.CROSS_REPO_DEPLOY_KEY }}
         run: |
@@ -313,22 +362,32 @@ jobs:
         if: steps.gate.outputs.gate == 'run'
         run: |
           set -euo pipefail
+          if [ "${{ steps.gate.outputs.mode }}" = "deploy_key" ]; then
+            url="git@github.com:scarecrow173/synvelis.git"
+          else
+            url="https://github.com/scarecrow173/synvelis.git"
+          fi
           git clone --depth 1 --branch "${{ inputs.synvelis_ref }}" \
-            git@github.com:scarecrow173/synvelis.git "$RUNNER_TEMP/synvelis"
+            "$url" "$RUNNER_TEMP/synvelis"
           # Cargo.toml 不在（workspace 化前の ref）なら以降の lane は not run。
           if [ ! -f "$RUNNER_TEMP/synvelis/Cargo.toml" ]; then
             echo "presence=absent" >> "$GITHUB_OUTPUT"
           else
             echo "presence=present" >> "$GITHUB_OUTPUT"
           fi
-      - name: Configure private dep access + probe
+      - name: Configure dep access + probe
         if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present'
         run: |
           set -euo pipefail
-          git config --global url."git@github.com:scarecrow173/ruviform.git".insteadOf \
-            "https://github.com/scarecrow173/ruviform.git"
-          git ls-remote git@github.com:scarecrow173/ruviform.git HEAD >/dev/null
-          echo "private dep access OK"
+          if [ "${{ steps.gate.outputs.mode }}" = "deploy_key" ]; then
+            git config --global url."git@github.com:scarecrow173/ruviform.git".insteadOf \
+              "https://github.com/scarecrow173/ruviform.git"
+            git ls-remote git@github.com:scarecrow173/ruviform.git HEAD >/dev/null
+            echo "private dep access OK (deploy_key)"
+          else
+            git ls-remote https://github.com/scarecrow173/ruviform.git HEAD >/dev/null
+            echo "dep access OK (anonymous https)"
+          fi
       - name: Pin ruviform rev in manifest
         if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present'
         working-directory: ${{ runner.temp }}/synvelis
@@ -390,13 +449,13 @@ jobs:
           fi
           gate="${{ steps.gate.outputs.gate }}"
           {
-            echo "## Synvelis — ruviform $RUVIFORM_REV"
+            echo "## Synvelis — ruviform $RUVIFORM_REV (access: ${{ steps.gate.outputs.mode }})"
             echo ""
             echo "| lane | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |"
             echo "|---|---|---|---|---|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$gate" = "not_run" ]; then
-            echo "| all | ubuntu-latest | - | $RUVIFORM_REV | not run (credential not configured) | - | - |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| all | ubuntu-latest | - | $RUVIFORM_REV | not run (no access path) | - | - |" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ steps.presence.outputs.presence }}" = "absent" ]; then
             echo "| workspace presence | ubuntu-latest | - | $RUVIFORM_REV | not run (no buildable workspace) | - | - |" >> "$GITHUB_STEP_SUMMARY"
           else
@@ -411,7 +470,7 @@ jobs:
             fi
           fi
       - name: Cleanup credential
-        if: always() && steps.gate.outputs.gate == 'run'
+        if: always() && steps.gate.outputs.mode == 'deploy_key'
         run: |
           git config --global --unset-all url."git@github.com:scarecrow173/ruviform.git".insteadOf || true
           rm -f "$RUNNER_TEMP/cross-repo-deploy-key" "$RUNNER_TEMP/known_hosts"

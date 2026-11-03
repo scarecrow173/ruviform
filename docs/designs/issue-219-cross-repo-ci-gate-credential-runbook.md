@@ -174,3 +174,40 @@ synvelis main `f7aadd0` の buildable workspace 化（5 member・ruviform git de
 - **audio-lens smoke を spec R5 に整合**: `cargo build -p al-cli --profile ci`（audio-lens 側 ci.yml と同一入口）を `check-cli-headless` に先行する smoke step として追加。
 - **`.github/workflows/consumer-impact-check.yml` 新設**: `pull_request`（`opened`/`edited`/`synchronize`/`reopened`/`ready_for_review`・main 向け・draft 除外）で PR 本文の `## Consumer 影響分類` 表を機械検査する lane。検査は「分類欄の記入有無（impacted/no impact/unknown 語彙）」と「`unknown` 使用時の `### unknown の解消先` 記入有無」のみで、分類内容の正しさは機械判定しない。HTML コメントは記入とみなさない（テンプレートの説明文を素通しさせないため除去してから検査）。未記入・語彙外・解消先なしは job fail。required checks には含めず、分類の最終確認は引き続きレビュアー human gate。
 - **ローカル実測（credential 非依存区間）**: synvelis `f7aadd0` の scratch clone で候補 `a014b3f9`（ruviform main 当時 HEAD）に対し、manifest 正規化 → `cargo fetch` で 15 crate が `?rev=a014b3f9#a014b3f9` に単一解決（guard bad=0）→ `mise run check` exit 0（10.66s）→ `git lfs pull` → `mise run test` exit 0（23 suite・0 failed）を確認済み。SSH/credential 経路と実 dispatch は引き続き未実走（Appendix runbook の一次設定待ち）。
+
+## 2026-11-03 追記（2 件目）: access mode fallback（repo public 化対応）と trigger/cadence・rollback の明記
+
+### 前提変化
+
+設計時の前提「3 repo（ruviform・audio-lens・synvelis）とも private」が変化した。2026-11-03 実測で 3 repo すべて `visibility: public`、匿名 `git ls-remote`（HTTPS）が全 repo で成功を確認（discovery 同日 snapshot 参照）。この状態では `CROSS_REPO_DEPLOY_KEY` 未設定のまま全 lane が `not run` で滞留し、証拠を一生産しないままになるため、access mode fallback を gate に追加した。
+
+### access mode（`preflight` が lane ごとに解決）
+
+| mode | 条件 | 経路 |
+| --- | --- | --- |
+| `deploy_key` | `CROSS_REPO_DEPLOY_KEY` secret 設定済み | 従来どおり SSH clone + `url.insteadOf` + pinned known_hosts + cleanup（private 前提の canonical 経路・private 復帰時もこちら） |
+| `anonymous` | secret 未設定 かつ 対象 consumer repo + ruviform repo が匿名 `git ls-remote`（HTTPS）で read 可能 | 秘密を一切使わず HTTPS clone / cargo fetch（audio-lens は tracked `.cargo/config.toml` の `git-fetch-with-cli`、synvelis は job env の `CARGO_NET_GIT_FETCH_WITH_CLI` で system git 経由） |
+| `not_run` | 上記どちらも不可 | 従来どおり `not run` を明示して終了（`unknown` を `pass` に見せない既定・全 lane not run → workflow 失敗は不変） |
+
+- anonymous probe は **consumer repo 単位**（`audio-lens` + `ruviform` / `synvelis` + `ruviform`）に行い、片 consumer の private 化が他 lane を止めない（spec R7 の per-consumer 独立性を維持）。
+- mode は各 verify job の証拠表 header（`access: deploy_key|anonymous|not_run`）に記録し、どの経路で検証したかを追跡可能にする。
+- 秘密の取り扱いは不変: anonymous mode は秘密を一切扱わない（最小権限の下限 = 秘密不保持）。`deploy_key` mode の既存の鍵取り扱い・known_hosts pin・cleanup 構造は変更しない。
+- `GITHUB_TOKEN` 等の Actions 標準 credential も使わない — public repo の匿名 HTTPS read のみに依存する（workflow `permissions: contents: read` は自 repo の checkout 用で、cross-repo アクセスには関与しない）。
+
+### Trigger / cadence（運用記録・spec R9 の運用面）
+
+- **trigger**: `workflow_dispatch` 手動起動のみ。`pull_request`/`schedule`/`repository_dispatch` の自動化は spec R9/Deferred どおり初回実測と credential 稼働確認の後に判断する（本追記でも未昇格）。
+- **運用上の dispatch 契機**（実測に基づき今後更新）: (a) `impacted` 分類の ruviform merge 後の確認 dispatch、(b) M-gate 受入判定前の証拠収集 dispatch、(c) `unknown` 分類の解消 dispatch（PR 本文 `### unknown の解消先` に dispatch 予定を記した場合の履行）、(d) consumer 追従 PR 前の事前互換確認、(e) 定期健全性確認 — 自動 trigger 無しの間は手動忘れによる未検証滞留を防ぐため、上記いずれも発生しない場合でも月次 1 回の dispatch を運用目安とする。
+- **required 化の現状**: 情報 lane のまま。昇格は両 consumer lane の稼働実績（連続 green・消費時間・false positive 率）の後に別判断。
+
+### Rollback 経路（統合記録）
+
+- **candidate revision が consumer を壊した場合**: consumer 側は manifest pin / lockfile を旧 SHA へ revert（audio-lens は `rev` pin 追従 PR の revert、synvelis は lockfile 更新 PR の revert — 追従 PR と同一経路）。本 workflow は情報 lane のため ruviform merge 自体を遮断しない — ruviform 側の復旧は該当 change の revert または修正 Issue 起票（spec R2 の責務切り分け・相互リンク）。
+- **workflow 自身の不具合**: 情報 lane かつ non-required のため ruviform 開発は止まらない。`workflow_dispatch` のみのため schedule 停止等の運用 rollback は不要 — 修正 PR で直す。
+- **credential rollback**: Deploy Key 失効は runbook Appendix 6（3 repo の key 削除 → secret 削除/差替）。anonymous mode は secret を持たないため失効対象なし — repo 再 private 化で自動的に `not_run` へ戻る。
+
+### Testing Strategy 追記
+
+- anonymous mode の実走検証: `workflow_dispatch` で secret 未設定 + public repo に対し、両 lane が `anonymous` mode で clone → fetch → check/test/smoke まで到達し証拠表に `access: anonymous` が出ることを確認する。
+- `deploy_key` mode の回帰: secret 設定後の dispatch で SSH 経路が従来どおり動くこと（本変更で SSH 経路の条件は `mode == 'deploy_key'` に絞り込み、anonymous では一切の秘密・`url.insteadOf`・`GIT_SSH_COMMAND` を作らない）。
+- blocked 系: preflight の anonymous probe が両 consumer で false のとき全 lane `not run` → workflow 失敗の既存真偽表が維持されること。
