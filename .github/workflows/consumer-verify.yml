@@ -206,7 +206,12 @@ jobs:
         run: |
           set -euo pipefail
           mise trust
-          mise install --locked
+          # lane が使う tool のみに scope（rust=cargo、git-lfs=test lane の
+          # lfs pull、node=check-cli-headless）。audio-lens mise.lock の
+          # actionlint/pipx:serena-agent は platform entry を持たず
+          # --locked が全 platform で失敗するため全量 install しない
+          # （consumer 側の lockfile gap・追従 Issue 起票案として報告）。
+          mise install --locked rust git-lfs node
           mise exec -- cargo fetch
           total=$(grep -c 'scarecrow173/ruviform\.git' Cargo.lock || true)
           if [ "$total" -eq 0 ]; then
