@@ -285,3 +285,43 @@ mise exec -- cargo check --workspace --all-targets   # exit 0・25.78s
 - **not verified**: audio-lens 側 `check-ci`/`test-ci`/`check-cli-headless`/`git lfs pull` の lane 実行（初回 dispatch で検証）、synvelis lane の runner 上実行、全 lane not run → 失敗の真偽表の実 dispatch 観測。
 
 **分類（本変更自身）:** Synvelis = impacted（本 lane の検証対象として実 lane 化・consumer 側変更なし・追従運用は synvelis#28）/ AudioLens = impacted（smoke lane に al-cli build 追加・同・audio-lens#127）。両者とも consumer repo への恒久的変更を含まない scratch 検証経路の拡張であり、依存 pin・API・行為規約は不変。
+
+### 2026-11-03（追記 3 件目）: repo public 化の観測・棚卸し refresh・access mode fallback 実装と lane ローカル実走
+
+**前提変化（visibility）:** 設計時の「3 repo とも private」前提が変化した。`gh api` 実測で `scarecrow173/ruviform`・`scarecrow173/audio-lens`・`scarecrow173/synvelis` すべて `visibility: public`、匿名 `git ls-remote`（HTTPS・credential なし）が 3 repo で成功。audio-lens `Cargo.toml` コメントは「公開方針確定前の暫定」と記すため再 private 化の可能性は残る。`gh secret list`（ruviform/audio-lens）は引き続き空、`gh api repos/ruviform/keys` = 0 件で Deploy Key 一次設定は未実施のまま。
+
+**access mode fallback（consumer-verify.yml への実装・本 PR の中核）:** secret 未設定 + 匿名 HTTPS read 可能な repo に対し `anonymous` mode で lane を実行する fallback を追加（design 2026-11-03 追記 2 件目・task `issue-219-t5-anonymous-access.md`）。`deploy_key` mode は private 前提の canonical 経路として維持し secret 設定時は優先。anonymous mode は秘密を一切持たず（最小権限の下限）、probe は consumer repo 単位（R7 の独立性維持）、mode は証拠表 `access:` に記録。全 lane `not run` → workflow 失敗の既定は不変。
+
+**Consumer 棚卸し差分（2026-11-03 再実測・前回 snapshot からの drift）:**
+
+| 対象 | 観測値 |
+| --- | --- |
+| audio-lens HEAD | `10c4fc797e9d44b5475a61fbbc89afb2cd8dbc5b` |
+| audio-lens ruviform dep | `git` + `rev = "e9e6abe514b8f3f0bfff2d976b8ca6551955ca09"` ×**16** entry（#128/#134 以後も pin は前進し現行は ruviform HEAD と一致。追加された dep: `ruviform-ui`/`ruviform-ui-webview`/`ruviform-viz`/`ruviform-numeric`/`ruviform-io-avi` — ui 採用が lockfile 上の依存面にも反映）。`rev` pin 形態は維持（#127 の branch 追従移行は未実施） |
+| audio-lens lockfile | 15 ruviform crate が `?rev=e9e6abe…#e9e6abe` に単一解決（前回 `b9f2a10` から前進・12 commit 遅れは解消） |
+| audio-lens 非 default feature | 不変（`ruviform-io-symphonia` `["mp4","aac"]` のみ） |
+| audio-lens CI | `ci.yml` は `workflow_dispatch` 専用・3 OS のまま。`RUVIFORM_DEPLOY_KEY` 必須 step は private 前提の記述のまま残存（repo は public — consumer 側対応候補として指摘） |
+| audio-lens mise tasks | `check-ci`/`test-ci`/`check-cli-headless`/`verify-toolchain`/`baseline` のほか `check-ui`/`test-ui`/`check-ui-webview` 等の ui lane が追加 |
+| synvelis HEAD | `5adc4d24578d94aa845a08cc623d79b5f669fcbf` |
+| synvelis workspace | 5 → **8 member**（+ `synvelis-workspace`/`synvelis-gateway`/`mcp-poc`。gw10 ゲートハーネス task 群あり） |
+| synvelis ruviform dep | `git`（rev 未指定）×**13** crate（+ `ruviform-ui`/`ruviform-plugin-core`/`ruviform-plugin-host`/`ruviform-audio-plugin-bridge`） |
+| synvelis lockfile | 19 ruviform crate が `258df5ae255f812f54461eb1aef30fce608e8c6d` に単一解決（branch 追従・rev param なし）。`258df5a` は audio-lens #134 で回帰を検出した pre-#265 revision — synvelis の lock が ruviform main から遅れている既知状態として記録 |
+| synvelis toolchain | mise.toml に `rust = "1.99.0"` pin 追加済み（前回「未 pin」から解消）・`check`/`test`/`build`/`lint`/`fmt`/`gw10` task。`.cargo/config.toml`・`.github/` は依然非存在 |
+| 両 repo LFS | `git lfs pull` は匿名 HTTPS で public repo から実体取得可能（audio-lens lane 実走で確認） |
+
+**lane ローカル実走（anonymous 経路と同一の HTTPS・候補 `e9e6abe514b8f3f0bfff2d976b8ca6551955ca09` = ruviform main HEAD・scratch clone・Windows 11 Git Bash）:** workflow の lane 手順を両 consumer 現行 main で再現実行。
+
+| lane | 手順 | 結果 |
+| --- | --- | --- |
+| synvelis | manifest 正規化（13 dep rev 注入）→ `cargo fetch` → 単一 SHA guard → `mise run check` → `git lfs pull` → `mise run test` | guard total=19・bad=0。check exit 0（dev profile 18.08s）。test exit 0（test profile 1m07s・63 result line 全て 0 failed） |
+| audio-lens | manifest 正規化 → `cargo fetch` → guard → `mise run check-ci` → `cargo build -p al-cli --profile ci` → `check-cli-headless` → `git lfs pull` → `mise run test-ci` | guard total=15・bad=0（pin が既に候補 SHA のため manifest diff は io-symphonia 行の rev 位置正規化のみ）。check-ci exit 0（36.98s）。smoke build exit 0（23.19s）。`check-cli-headless`: no GUI framework deps in 10 headless crates。LFS 実体取得後 test-ci exit 0（46 result line 全て 0 failed） |
+
+ローカル再現の差分（runner 条件との明示的な違い）: audio-lens の `mise install` は runner では repo `mise.toml` のみを見るが本ローカルは global mise config に lockfile 未収録 tool があり `--locked` が失敗したため `rust git-lfs node` へ scope。lane 手順そのものは workflow と同一。
+
+**検証状態の正直な区分（本追記時点）:**
+
+- **verified（lane 手順・anonymous 経路相当）**: 両 consumer 現行 main で clone → 正規化 → fetch → guard → check/test/smoke まで全手順をローカル完走（上表）。`consumer-verify.yml` 変更後の actionlint pass。manifest 正規化が audio-lens 現行 16 dep 形態（features 付き行を含む）でも guard まで到達することを実測。
+- **informational**: `deploy_key` mode の SSH 経路（credential 未設定・構造は維持）、runner 上での実 dispatch（anonymous mode の runner 証拠は PR 連動の dispatch で取得予定）、全 lane not run → 失敗の実 dispatch 観測、audio-lens `RUVIFORM_DEPLOY_KEY` 依存の consumer 側 ci.yml（private 前提記述が残存・consumer 側の責務）。
+- **not verified**: Golden/`baseline` 系 lane（v1 スコープ外・引き続き Deferred）、3 OS matrix、synvelis `gw10` lane の cross-repo 接続。
+
+**分類（本変更自身）:** Synvelis = no impact・AudioLens = no impact（ruviform 側 CI 基盤のみの変更。consumer repo への変更なし・依存 pin・API・行為規約は不変。#224 の基盤整備と同じ分類根拠）。実測 worker: Orca dispatched `task_91078cf22169`/`ctx_9a2208a14504`。
