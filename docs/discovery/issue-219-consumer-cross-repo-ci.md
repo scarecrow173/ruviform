@@ -4,7 +4,7 @@ type: "discovery"
 status: "draft"
 title: "Issue #219 両 Consumer 依存形態・検証基盤棚卸しと Cross-Repo CI 前提実測"
 created: "2026-11-02"
-updated: "2026-11-02"
+updated: "2026-11-03"
 owners: []
 relations:
   source:
@@ -209,3 +209,55 @@ mise exec -- cargo check --workspace --all-targets   # exit 0・25.78s
 #### 実機証跡の保管と検証限界
 
 生の `cargo fetch` ログ・gh API 応答はローカルユーザー名パス等を含み得るため公開成果物には含めない。本稿の集計値は当該環境での 1 回の実測記録であり、再検証は同一手順の再実行で行う。実測 worker: Orca dispatched `task_8d72b0eeb9f6`/`ctx_cc43040cc288`。
+
+### 2026-11-03: Issue 追記（UI 横断ゲート）反映と merged 変更の Consumer 影響分類
+
+**追記対応:** Issue #219 本体の 2026-11-03 追記（UI Component System 横断ゲート）を spec `issue-219-consumer-compat-contract.md` に R10/AC11 として反映。追記の Consumer 側受入 Issue は全て OPEN を確認: [Synvelis #47 controls](https://github.com/scarecrow173/synvelis/issues/47)・[#48 viz](https://github.com/scarecrow173/synvelis/issues/48)・[AudioLens #131 controls](https://github.com/scarecrow173/audio-lens/issues/131)・[#132 viz](https://github.com/scarecrow173/audio-lens/issues/132)。`consumer-verify` 情報レーンは追記どおり required check に昇格していない（`workflow_dispatch` 専用のまま・required checks 12 件は不変）。
+
+**Consumer 棚卸し差分（2026-11-03 実測）:** 2026-11-02 棚卸し以後に synvelis main が workspace 化へ前進（`041f9b7` → `f7aadd09cf55ecbe4ca6f3cc73cb2d80459769e7`、2026-11-02 12:56 JST・E2E-X PR #35 merge）。分類根拠を実測値へ更新する。
+
+| 対象 | 観測値 |
+| --- | --- |
+| synvelis workspace | `f7aadd0` で 5 member workspace（synvelis-project / synvelis-recording / recording-poc / synvelis-player / synvelis-render）。synvelis AGENTS.md は ruviform 依存を「既定ブランチ追従の git 依存・rev pin なし・解決 revision は Cargo.lock に記録」と規約化 |
+| synvelis ruviform dep | `[workspace.dependencies]` に `git`（rev 指定なし）×10 crate: media-core / media-io / media-reader / io-symphonia / graph / audio / audio-core / rt / io-wav / exec |
+| synvelis lockfile | 15 ruviform crate（直 10 + transitive dsp / math / audio-analysis / observability / video-core）が `322a661ac0177fc98f799b07ae591c98eb2ec845`（PR #235 merge・2026-11-02 11:01 JST）に単一解決 — ruviform HEAD `ced77f0` 比 **39 commit 遅れ**・`ruviform-numeric`・`ruviform-ui` 系は非含有 |
+| synvelis 分類への含意 | branch 追従依存のため「次回 lockfile re-resolve で ruviform main の変更を取り込む」。「workspace 未存在」による一律 `no impact` は本日時点で成立しない — lockfile の crate 含有・ソース利用面で個別判定する |
+
+**直近 merged 変更の Consumer 影響分類（post-merge 記録）:** PR 本文への分類記入がなかった merged 変更について、Issue ルール2/R1/R10 に基づき分類・根拠・追跡先を記録する。`unknown` 残置は互換性確認済みではない。
+
+| PR / Issue | 変更種別 | Synvelis | AudioLens | 根拠・追跡先 |
+| --- | --- | --- | --- | --- |
+| #256（#255 mixed-radix FFT 変換長選択） | behavior / 性能差分 | no impact（lock に `ruviform-numeric` 非含有・ソースに numeric/corr/fft 利用なし） | **impacted** — audio-lens [#133](https://github.com/scarecrow173/audio-lens/issues/133) で e2e +10.2%・locate +17.1% 回帰を実観測（当時 pin）。ruviform#265 で修正、現行 pin `b9f2a10` に #256・#266 の双方を同梱。consumer 側再検証は PR [#134](https://github.com/scarecrow173/audio-lens/pull/134)・追従運用は [#127](https://github.com/scarecrow173/audio-lens/issues/127) |
+| #266（#265 CorrelationPlan コストモデル校正） | behavior / 性能差分 | no impact（同上 — `CorrelationPlan` は `ruviform-numeric` にのみ存在） | **impacted** — #133 回帰の upstream 修正。ruviform 側ベンチで consumer baseline と一致（回帰形状 134.95ms vs consumer 実測 134.38ms・IR `issue-265-correlationplan-prefers-direct-mixed-radix-direct.md`）。consumer pin `b9f2a10`（本 PR merge commit）へ更新済み |
+| #267（#258 `ui/core` headless 契約） | feature / crate 構成 | **impacted** — UI 共通基盤の新規採用面（変更は `ui/` TS パッケージのみ・pin 中 Rust crate は無変更）。制御/Transport/RT 非阻害の consumer 側評価は [#47](https://github.com/scarecrow173/synvelis/issues/47) で追跡（未実測） | **impacted** — 同上。f64・NaN 欠測・Validity/Provenance の評価は [#131](https://github.com/scarecrow173/audio-lens/issues/131) で追跡（未実測） |
+| #268（#259 `ui/components`） | feature / crate 構成 | **impacted** — #47 で追跡（未実測） | **impacted** — #131 で追跡（未実測） |
+| #269（#260 `ui/viz`） | feature / crate 構成 | **impacted** — viz 系受入は [#48](https://github.com/scarecrow173/synvelis/issues/48) で追跡（未実測） | **impacted** — bounded Dataset 可視化の受入は [#132](https://github.com/scarecrow173/audio-lens/issues/132) で追跡（未実測） |
+| #270（#261 `ui/binding`） | feature / crate 構成 | **impacted** — #47 で追跡（未実測）。IR 未作成は別途フォローアップ | **impacted** — #131 で追跡（未実測） |
+| #271（#263 `ui/showcase`） | feature / crate 構成 | **impacted** — IR `issue-263-…` が Consumer A shape `impacted` を記録済み。consumer 側評価は #47/#48 で追跡（未実測） | **impacted** — IR が Consumer B shape `impacted` を記録済み。#131/#132 で追跡（未実測） |
+| #254（#249 reader End at EOF） | behavior / 契約 | **impacted（positive・対応不要）** — `synvelis-player/src/driver.rs` の manual `Prefetch` driver を IR `issue-249-prefetch-detection-ended-strands-end-marker.md` が実在利用として検証済み（現 main workspace 同梱）。lock `322a661` は #254 前のため次回 re-resolve で取込。回帰追跡は [#28](https://github.com/scarecrow173/synvelis/issues/28) | no impact — `ruviform-media-reader` 非依存（直 14 crate + transitive `ruviform-rt` のみ・issue-249 IR が local worktree で検証し #244 の `unknown` を解消）。pin `b9f2a10` に #254 は同梱されるが依存面に及ばない |
+| #224（#219 本 Issue の基盤整備: workflow + テンプレート） | CI 基盤 | no impact（ruviform 側情報 lane・テンプレート追加のみ。Consumer 依存・API 不変） | no impact（同上） |
+
+分類語彙: `impacted` = 消費中 dependency surface（consumer lockfile に含まれる crate）に変更が及ぶ、または採用・受入評価の対象となる新規契約面が追加された（後者の consumer 側実測は #47/#48/#131/#132 の未実測項目として残る）。`no impact` = 依存面にも採用評価にも及ばない。`unknown` = 未検証であり互換性確認済みとはしない。
+
+**追従更新 PR ループの実績（Issue チェックリスト 4 項の初回実績）:** audio-lens 側で pin 追従 PR が手動運用で 2 回実走している。PR [#128](https://github.com/scarecrow173/audio-lens/pull/128)（pin → `7c430212`・consumer 回帰検証付き）と PR [#134](https://github.com/scarecrow173/audio-lens/pull/134)（pin → `258df5a` → 回帰検出で merge 保留 → ruviform#265 修正後 `b9f2a10` へ再 bump・golden 再生成して 2026-11-02 merge）。#134 は「manifest/lockfile 更新 + golden 5 run 0-diff + 回帰検出 → upstream 修正待ち → 修正後再検証」の不適合切り分け〜解消ループを 1 回完走しており、Issue ルール5/チェックリスト5項の実績として記録する。現行 pin `b9f2a10` は ruviform main `ced77f0` から **12 commit 遅れ**（`git rev-list --count b9f2a10..main` 実測 — 未取込は ui/* merge 5 件 #267〜#271 と配下 feature commit。`b9f2a10` より前に merge された #254・#256・#266 は pin に同梱済み）。
+
+**検証状態の正直な区分（2026-11-03 時点）:**
+
+- **verified（ruviform 側）**: `consumer-verify.yml` の actionlint 合格・構造上の gating/guard/真偽表（設計実装済み）。ui/* headless lane（`check/test-ui-*`）は required check `ui-verify` 経由で green。#265 修正は ruviform bench + consumer baseline 一致で確認。
+- **verified（consumer 側・手動経路）**: audio-lens の pin 追従 PR #128/#134 が golden + perf 検証で実走済み（cross-repo workflow 経由ではない）。Synvelis は `f7aadd0` で buildable workspace 化済みだが、本 dispatch では consumer repo 非変更のため build/test 実測は未実施（cross-repo lane も未 dispatch）。
+- **informational（未稼働）**: `consumer-verify.yml` は `CROSS_REPO_DEPLOY_KEY`・3 repo への read-only Deploy Key 登録が未設定のため dispatch 実走 0 件。dispatch 時は全 lane `not run` → workflow 失敗（証拠ゼロを緑にしない設計）。
+- **not-yet-required（意図的に未昇格）**: consumer-verify の required check 化・自動 trigger は spec R9/Deferred と Issue 追記どおり未実施・未要求。
+- **not verified（既知の欠落）**: audio-lens `test-ci`/`check-cli-headless`/`git lfs pull` の CI 経路実走、Synvelis 側の全 consumer 検証（workspace は存在・未実測）、ui/* の consumer 側受入評価（#47/#48/#131/#132）、Golden/baseline 計測 lane の cross-repo 化。
+
+**M0〜M7 Consumer 別受入証拠（2026-11-03 更新）:** append-only 運用のため 2026-11-02 表は改変せず、本 snapshot に差分後の表を追記する。
+
+| Gate | 主対象 | Ruviform 単体証拠 | Synvelis 証拠 | AudioLens 証拠 |
+| --- | --- | --- | --- | --- |
+| M0 / G0 | 28 crate baseline | 済（#194/#200・本稿が Consumer 側補完） | workspace 化済み（`f7aadd0`・lock `322a661`・main 追従依存）— consumer 側 build/test は未実施 | 移行 baseline 資産（#98・`baseline/`）に加え、pin 追従 PR [#128](https://github.com/scarecrow173/audio-lens/pull/128)/[#134](https://github.com/scarecrow173/audio-lens/pull/134) で consumer 回帰検証ループ完走（golden 5 run 0-diff・#133 回帰検出→ruviform#265 修正→`b9f2a10` 再 bump）。現行 pin `b9f2a10` |
+| M1 / G1 | Typed Graph IR | 未着手 | not run（`ruviform-graph` を dep に含む・未実測） | not run |
+| M2 / G2 | Audio Runtime/RT 所有 | 未着手 | not run（`ruviform-rt`/`ruviform-audio` を dep に含む・未実測） | not run |
+| M3 / G3 | Time/PPQN/Transport | 未着手 | not run | not run |
+| M4 / G4 | Plugin | 未着手 | not run | not run |
+| M5 / G5 | Device/Reader/Prefetch | 未着手 | `synvelis-player` が `ruviform-media-reader`/`Prefetch` を実利用（IR `issue-249-…` が #254 semantics を検証・positive）— consumer 側回帰 lane 未接続 | `ruviform-media-reader` 非依存のため #254 は no impact 確定（issue-249 IR・#244 `unknown` 解消済み） |
+| M6 / G6 | WAV/Offline/Export | 未着手 | `synvelis-render` が sequential offline WAV export を実装（`f7aadd0`・PR #34/#35・`ruviform-io-wav`/`ruviform-exec` 利用）— ruviform 側との互換 lane 未接続 | not run |
+| M7 / G7 | Multiwindow/Cutover | ui/* merged（#258〜#263・TS パッケージ） | 採用評価 Issue 起票済み・未実測（#47/#48） | 採用評価 Issue 起票済み・未実測（#131/#132） |

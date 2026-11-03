@@ -4,7 +4,7 @@ type: "spec"
 status: "proposed"
 title: "Issue #219 両 Consumer 互換契約・影響判定・証拠要件と Cross-Repo CI Gate 仕様"
 created: "2026-11-02"
-updated: "2026-11-02"
+updated: "2026-11-03"
 owners: []
 relations:
   source:
@@ -39,6 +39,11 @@ relations:
     - "https://github.com/scarecrow173/synvelis/issues/28"
     - "https://github.com/scarecrow173/audio-lens/issues/127"
     - "https://github.com/scarecrow173/audio-lens/blob/main/docs/designs/ruviform-dependency-ci.md"
+    - "https://github.com/scarecrow173/ruviform/issues/257"
+    - "https://github.com/scarecrow173/synvelis/issues/47"
+    - "https://github.com/scarecrow173/synvelis/issues/48"
+    - "https://github.com/scarecrow173/audio-lens/issues/131"
+    - "https://github.com/scarecrow173/audio-lens/issues/132"
   defers: []
   deferred-by: []
 ---
@@ -76,6 +81,7 @@ Ruviform を Synvelis（設計段階 DAW）と AudioLens（高精度オフライ
 - 上記の設計・credential 一次設定手順・証拠記録形式を定める canonical 文書（本 spec・ADR・design・plan・task）
 - M0〜M7 Consumer 別証拠の初期状態記録（discovery 済み）と、運用中の追跡形
 - AGENTS.md の stale な CI 記述の修正（#199/#201 後の実態に合わせる）
+- Issue 追記（2026-11-03・UI Component System 横断ゲート）の契約反映と、直近 merged 変更（`ui/*`・numeric FFT・reader EOF 修正・#219 CI 基盤）の Consumer 影響分類記録
 
 ### Out of Scope
 
@@ -98,6 +104,7 @@ Ruviform を Synvelis（設計段階 DAW）と AudioLens（高精度オフライ
 - **R7 非一律停止**: Consumer 別 job は独立し、片 Consumer の失敗/未検証が他 Consumer の検証・合否を止めない。共有契約の破壊/未検証が該当経路を止める場合は `not run (blocked: <理由>)` の注記形で記録する（結果語彙は R4 の `pass`/`fail`/`not run` に統一）。全 lane が `not run` の run は証拠ゼロとして workflow 失敗にし、緑表示で `unknown` を `pass` に見せない。
 - **R8 M0〜M7 追跡**: 各 Gate の Consumer 別受入証拠リンクと未実測事項が一箇所で見える記録を持ち、M1 着手 Gate（#199/#201）の状態を飛ばさない。
 - **R9 自動化は実測後**: Cross-Repo lane の自動 trigger・required check 化は初回実測と credential 稼働確認の後に判断する。
+- **R10 UI 横断ゲート（Issue 追記 2026-11-03）**: `ui/*` 共通基盤を含む API/behavior/schema/renderer/性能差分の PR でも両 Consumer を独立評価する。評価軸は Consumer 固有: Synvelis は制御/Transport/RT 非阻害、AudioLens は f64・NaN 欠測・Validity/Provenance・bounded Dataset 可視化。Consumer 側未検証は追跡 Issue（Synvelis #47 controls・#48 viz、AudioLens #131 controls・#132 viz）へリンクする。本追記だけで consumer-verify 情報レーンを required check に昇格しない。
 
 ## Acceptance Criteria
 
@@ -111,6 +118,7 @@ Ruviform を Synvelis（設計段階 DAW）と AudioLens（高精度オフライ
 - [ ] AC8: Consumer 依存追従方針（追従先既定ブランチ・更新頻度・SHA 非恒久固定）が design/runbook に明文化され、manifest pin が更新停止策でないことが記録されている（R3）。
 - [ ] AC9: M0〜M7 Consumer 別証拠 tracker の正本置き場（discovery `## Evidence` への dated snapshot 追記運用）が文書で指定されている（R8）。
 - [ ] AC10: `AGENTS.md` の stale な `ci.yml` 記述（「`workflow_dispatch` 専用」）が現行の pull_request/push trigger・required checks 構成に修正されている。
+- [ ] AC11: Issue 追記（2026-11-03）後の運用として、直近 merged 変更（`ui/*` 系 #258〜#263 のうち merged PR #267〜#271・numeric FFT #255/#265 系、および随伴する reader EOF 修正 #254・#219 CI 基盤 #224）の両 Consumer 分類・根拠・追跡 Issue リンクが canonical 文書（discovery `## Evidence` の dated snapshot）に記録され、検証済み/情報 lane/未実測の区別が明示されている（R10）。
 
 ## Deferred Design Concerns
 
@@ -127,3 +135,4 @@ Ruviform を Synvelis（設計段階 DAW）と AudioLens（高精度オフライ
 - 棚卸し・実測の正本: [docs/discovery/issue-219-consumer-cross-repo-ci.md](../discovery/issue-219-consumer-cross-repo-ci.md)。
 - 方式決定の記録: [docs/adr/cross-repo-ci-revision.md](../adr/cross-repo-ci-revision.md)。
 - 保護する契約（Issue 本文）: [#197 Reader/Prefetch](https://github.com/scarecrow173/ruviform/issues/197)、[#189 Time](https://github.com/scarecrow173/ruviform/issues/189)、[#191 WAV](https://github.com/scarecrow173/ruviform/issues/191)、[#198 Offline](https://github.com/scarecrow173/ruviform/issues/198)、[#181 UI/Job](https://github.com/scarecrow173/ruviform/issues/181)。これら Capability 契約の実装 Owner は変更しない。
+- UI 横断ゲート（Issue 追記 2026-11-03）: 設計正本 [ruviform#257](https://github.com/scarecrow173/ruviform/issues/257)・実装 #258〜#263（merged PR #267〜#271・#262 は deferred lane のため対象外）。Consumer 側受入: [Synvelis #47 controls](https://github.com/scarecrow173/synvelis/issues/47)・[#48 viz](https://github.com/scarecrow173/synvelis/issues/48)、[AudioLens #131 controls](https://github.com/scarecrow173/audio-lens/issues/131)・[#132 viz](https://github.com/scarecrow173/audio-lens/issues/132)。
