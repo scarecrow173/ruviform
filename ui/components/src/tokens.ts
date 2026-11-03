@@ -284,6 +284,139 @@ export const TOKEN_SPECS = {
     kind: "length", layer: R, cssVar: "--rvf-transport-size", default: 28,
     densityScalable: true, doc: "Transport button size (px, square).",
   },
+
+  // ── viz roles (Issue #260 — Canvas/WebGL paint roles, §12.5) ─────
+  // These roles are consumed by the `@ruviform/ui-viz` renderers, not
+  // by the DOM control skin. Resolving them here keeps CSS surfaces and
+  // GPU paint on one resolved value set.
+  "viz.background": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-background",
+    default: { ref: "surface" }, doc: "Viz plot-area background.",
+  },
+  "viz.grid": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-grid",
+    default: "#e2e6ec", doc: "Viz grid line color.",
+  },
+  "viz.grid.width": {
+    kind: "length", layer: R, cssVar: "--rvf-viz-grid-width", default: 1,
+    doc: "Viz grid line width (px).",
+  },
+  "viz.axis": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-axis",
+    default: { ref: "border" }, doc: "Viz axis rule color.",
+  },
+  "viz.tick": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-tick",
+    default: { ref: "text.dim" }, doc: "Viz tick/legend label color.",
+  },
+  "viz.series.0": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-series-0",
+    default: { ref: "interactive" }, doc: "Series palette slot 0 (wraps).",
+  },
+  "viz.series.1": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-series-1",
+    default: "#2ea37c", doc: "Series palette slot 1.",
+  },
+  "viz.series.2": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-series-2",
+    default: "#d9822b", doc: "Series palette slot 2.",
+  },
+  "viz.series.3": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-series-3",
+    default: "#b050b8", doc: "Series palette slot 3.",
+  },
+  "viz.series.4": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-series-4",
+    default: "#c64f4f", doc: "Series palette slot 4.",
+  },
+  "viz.series.5": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-series-5",
+    default: "#5a6fb8", doc: "Series palette slot 5.",
+  },
+  "viz.series.6": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-series-6",
+    default: "#7d8a1e", doc: "Series palette slot 6.",
+  },
+  "viz.series.7": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-series-7",
+    default: "#3d8fa8", doc: "Series palette slot 7.",
+  },
+  "viz.waveform.stroke": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-waveform-stroke",
+    default: { ref: "viz.series.0" }, doc: "Waveform center/peak stroke.",
+  },
+  "viz.waveform.fill": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-waveform-fill",
+    default: "#2f6fd04d", doc: "Waveform min/max envelope fill.",
+  },
+  "viz.waveform.rms": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-waveform-rms",
+    default: "#2f6fd066", doc: "Waveform RMS band fill.",
+  },
+  "viz.meter.low": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-meter-low",
+    default: "#3da35f", doc: "Meter fill, low segment.",
+  },
+  "viz.meter.mid": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-meter-mid",
+    default: "#d9a32e", doc: "Meter fill, mid segment.",
+  },
+  "viz.meter.high": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-meter-high",
+    default: "#d94f3d", doc: "Meter fill, top segment.",
+  },
+  "viz.meter.peak": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-meter-peak",
+    default: { ref: "text" }, doc: "Meter held-peak tick color.",
+  },
+  "viz.meter.clip": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-meter-clip",
+    default: { ref: "status.error" }, doc: "Meter clip indicator color.",
+  },
+  "viz.meter.track": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-meter-track",
+    default: "#e6e9ee", doc: "Meter unfilled track color.",
+  },
+  "viz.spectrum.stroke": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-spectrum-stroke",
+    default: { ref: "viz.series.0" }, doc: "Spectrum curve stroke.",
+  },
+  "viz.spectrum.fill": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-spectrum-fill",
+    default: "#2f6fd033", doc: "Spectrum under-curve fill.",
+  },
+  "viz.selection.fill": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-selection-fill",
+    default: "#2f6fd026", doc: "Range-selection band fill.",
+  },
+  "viz.selection.stroke": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-selection-stroke",
+    default: { ref: "interactive" }, doc: "Range-selection edge stroke.",
+  },
+  "viz.playhead": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-playhead",
+    default: { ref: "status.error" }, doc: "Playhead/cursor line color.",
+  },
+  "viz.marker": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-marker",
+    default: { ref: "text.dim" }, doc: "Generic marker line/label color.",
+  },
+  "viz.gap": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-gap",
+    default: { ref: "text.dim" }, doc: "Missing-data hatch line color.",
+  },
+  "viz.gap.fill": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-gap-fill",
+    default: "#59616e14", doc: "Missing-data region wash fill.",
+  },
+  "viz.stale": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-stale",
+    default: { ref: "status.warning" }, doc: "Stale-data hatch/badge color.",
+  },
+  "viz.unsupported": {
+    kind: "color", layer: R, cssVar: "--rvf-viz-unsupported",
+    default: { ref: "status.warning" }, doc: "Unsupported-capability cue color.",
+  },
 } as const satisfies Record<string, TokenSpec>;
 
 /** Public token key union (the declared role list). */
@@ -340,6 +473,23 @@ export const REFERENCE_DARK_TOKENS: Readonly<Record<string, TokenInput>> = {
   "seekbar.track": "#3d434d",
   "seekbar.buffered": "#59616e",
   "range.track": "#3d434d",
+  "viz.grid": "#363d48",
+  "viz.series.1": "#4fbf95",
+  "viz.series.2": "#e0a04f",
+  "viz.series.3": "#c97ed0",
+  "viz.series.4": "#e06a6a",
+  "viz.series.5": "#8a9ae0",
+  "viz.series.6": "#a8b545",
+  "viz.series.7": "#5fb0c9",
+  "viz.waveform.fill": "#5a93e04d",
+  "viz.waveform.rms": "#5a93e066",
+  "viz.meter.low": "#4fbf80",
+  "viz.meter.mid": "#e0b44f",
+  "viz.meter.high": "#e07060",
+  "viz.meter.track": "#363d48",
+  "viz.spectrum.fill": "#5a93e033",
+  "viz.selection.fill": "#5a93e02e",
+  "viz.gap.fill": "#9aa3af1a",
 };
 
 /** Map a token key to its CSS custom-property name. */

@@ -1,0 +1,163 @@
+<!doctype html>
+<!--
+  Ruviform Reference Viz showcase (Issue #260).
+
+  Synthetic in-page data sources ONLY — this page demonstrates the
+  element/property surface. All analysis (LOD/FFT/measurement) belongs
+  to the consumer's *DataSource implementation, never to this package.
+
+  Run `npm --prefix ui/viz run build` first, then serve this file over
+  HTTP (any static server) — plain ESM, no bundler, no framework.
+  Verified headless via happy-dom + fake contexts; real WebView/browser
+  rendering and WebGL2 raster are manual verification (see README →
+  Verification boundary).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Ruviform Viz — Reference renderers showcase</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 24px;
+        display: grid;
+        gap: 32px;
+      }
+      .row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+      .cell { display: flex; flex-direction: column; gap: 8px; }
+      rvf-waveform, rvf-spectrum { width: 640px; height: 220px; }
+      rvf-meter { width: 48px; height: 220px; }
+      pre { background: #f0f0f0; padding: 8px; max-height: 120px; overflow: auto; }
+      h2 { font-size: 14px; margin: 0 0 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Ruviform Viz — Reference renderers</h1>
+
+    <rvf-theme base="light">
+      <div class="row">
+        <div class="cell">
+          <h2>&lt;rvf-waveform&gt; — drag pans, wheel zooms, shift-drag selects</h2>
+          <rvf-waveform id="wf" label="Waveform" backend="auto"></rvf-waveform>
+        </div>
+        <div class="cell">
+          <h2>&lt;rvf-meter&gt;</h2>
+          <rvf-meter id="m" label="Level" orientation="vertical"></rvf-meter>
+        </div>
+      </div>
+      <div class="row">
+        <div class="cell">
+          <h2>&lt;rvf-spectrum&gt; — log frequency</h2>
+          <rvf-spectrum id="sp" label="Spectrum"></rvf-spectrum>
+        </div>
+      </div>
+    </rvf-theme>
+
+    <pre id="log"></pre>
+
+    <script type="module">
+      import { registerRvfElements } from "../../components/dist/components/src/index.js";
+      import {
+        registerRvfVizElements,
+        MemoryWaveformSource,
+        ManualSnapshotSource,
+      } from "../dist/viz/src/index.js";
+      registerRvfElements(); // <rvf-theme> (ui/components — run its build too)
+      registerRvfVizElements();
+
+      const log = (m) =>
+        (document.getElementById("log").textContent =
+          `${m}\n` + document.getElementById("log").textContent);
+
+      // Synthetic stereo waveform, ~8s @ 48k interleaved — with a NaN
+      // dropout in ch0 (gap semantics are data, not paint).
+      const SR = 48000, N = 8 * SR;
+      const sig = (f, drop, chan) => {
+        const out = new Float64Array(N * 2);
+        for (let i = 0; i < N; i++) {
+          const v =
+            drop && i > N / 2 - 8000 && i < N / 2 + 8000
+              ? NaN
+              : 0.6 * Math.sin((2 * Math.PI * f * i) / SR) * Math.exp(-i / N / 2);
+          out[i * 2 + chan] = v;
+        }
+        return out;
+      };
+      const ch0 = sig(220, true, 0), ch1 = sig(330, false, 1);
+      const interleaved = new Float64Array(N * 2);
+      for (let i = 0; i < N * 2; i += 2) {
+        interleaved[i] = ch0[i];
+        interleaved[i + 1] = ch1[i + 1];
+      }
+      const wfSrc = new MemoryWaveformSource(
+        interleaved, 2, { axis: "seconds", sampleRate: SR }, "demo",
+      );
+      const wf = document.getElementById("wf");
+      wf.channelLabels = ["L", "R"];
+      wf.source = wfSrc;
+      for (const ev of ["rvf-viewport", "rvf-select", "rvf-backend"]) {
+        wf.addEventListener(ev, (e) => log(`${ev} ${JSON.stringify(e.detail)}`));
+      }
+
+      // Snapshot sources: meta() adds the port info fields the meter/
+      // spectrum contracts require (channels / bins+axis).
+      class DemoMeterSource extends ManualSnapshotSource {
+        meta() { return { ...super.meta(), channels: 2 }; }
+      }
+      const BINS = 240, MINHZ = 20, MAXHZ = 20000;
+      class DemoSpectrumSource extends ManualSnapshotSource {
+        meta() {
+          return {
+            ...super.meta(),
+            bins: BINS,
+            axis: { kind: "uniform", firstHz: 0, stepHz: MAXHZ / BINS },
+            sampleRate: SR,
+          };
+        }
+      }
+      const meterSrc = new DemoMeterSource({ id: "m", revision: "r1" });
+      const spSrc = new DemoSpectrumSource({ id: "sp", revision: "r1" });
+      document.getElementById("m").source = meterSrc;
+      const sp = document.getElementById("sp");
+      sp.freq = { scale: "log", minHz: MINHZ, maxHz: MAXHZ };
+      sp.db = { minDb: -90, maxDb: 0, reference: 1 };
+      sp.source = spSrc;
+
+      // rAF pump → ~60 fps snapshots (linear amplitudes + dB-mapped
+      // magnitudes; NaN bins render as gap ticks).
+      let seq = 0;
+      const pump = (now) => {
+        seq += 1;
+        const t = now / 1000;
+        const env = 0.5 + 0.4 * Math.sin(2 * Math.PI * 0.4 * t);
+        meterSrc.push({
+          sequence: seq,
+          channels: [
+            { peak: Math.min(1.2, env * 1.1), rms: env * 0.7, clip: env > 0.98 },
+            { peak: env * 0.85, rms: env * 0.55 },
+          ],
+          timestamp: now,
+        });
+        spSrc.push({
+          sequence: seq,
+          magnitudes: Float64Array.from({ length: BINS }, (_, i) =>
+            i % 37 === 0
+              ? NaN
+              : Math.max(
+                  0,
+                  Math.min(
+                    1,
+                    Math.exp(-Math.pow(Math.log2(((i + 1) / BINS) * 40), 2)) *
+                      env +
+                      0.05 * Math.abs(Math.sin(i / 7 + t * 3)),
+                  ),
+                ),
+          ),
+          timestamp: now,
+        });
+        requestAnimationFrame(pump);
+      };
+      requestAnimationFrame(pump);
+    </script>
+  </body>
+</html>

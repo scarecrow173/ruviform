@@ -188,6 +188,33 @@ run = [
   "npm --prefix ui/components run build",
 ]
 
+# UI viz lane (Issue #260): the framework-neutral Reference Viz renderer
+# package under ui/viz (Waveform/Meter/Spectrum scene builders, VizStyle
+# paint contract, Canvas2D/WebGL2 backends, Custom Elements on the
+# ui/components contract). Same discipline: `npm ci` restores the
+# committed package-lock, node is the pinned mise toolchain, and no UI
+# framework/runtime or renderer dependency may be added (happy-dom plus
+# fake 2D/GL contexts are test-only devDependencies). LOD/FFT/data
+# reduction stay in ruviform-viz — this lane must not pull them in.
+[tasks.check-ui-viz]
+description = "Install ui/viz deps from package-lock and type-check the viz renderer package (tsc --noEmit)"
+run = [
+  "npm --prefix ui/viz ci --no-audit --no-fund",
+  "npm --prefix ui/viz run typecheck",
+]
+[tasks.test-ui-viz]
+description = "Install ui/viz deps from package-lock and run viz tests via node --test (happy-dom + fake canvas/GL, no real GPU)"
+run = [
+  "npm --prefix ui/viz ci --no-audit --no-fund",
+  "npm --prefix ui/viz test",
+]
+[tasks.build-ui-viz]
+description = "Install ui/viz deps from package-lock and emit the distributable dist/ build (tsc)"
+run = [
+  "npm --prefix ui/viz ci --no-audit --no-fund",
+  "npm --prefix ui/viz run build",
+]
+
 [tasks.test-ofx]
 description = "Run OFX native host and fixture contract tests"
 run = "cargo test -p ruviform-plugin-ofx"
