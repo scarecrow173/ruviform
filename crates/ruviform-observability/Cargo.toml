@@ -42,6 +42,10 @@ tracing-appender = { version = "0.2.3", optional = true }
 # `logging` are already visible to test/example targets via `required-features`.
 serde_json = "1"
 tempfile = "3"
+# Issue #277: `assert_no_alloc` 測定窓 — core primitive の RT 許可操作
+# （counter/gauge/histogram の no-alloc 実証）を `rt_` レーンで検証する。
+# dev-dependency のみで公開 API・依存 DAG は std のみを維持する。
+assert_no_alloc = "1.1"
 
 [[test]]
 name = "logging"
