@@ -57,11 +57,11 @@ design(`docs/designs/issue-329-sccache-compile-cache.md`)の snippet を `verify
 - [x] `git diff` で job 名・job 数・trigger・permissions・既存 step が非変更(INV-1)
 - [x] `mise exec -- actionlint .github/workflows/ci.yml` が exit 0
 - [x] `mise exec -- prek run --all-files` green(check-yaml 等)
-- [ ] AGENTS.md の ci.yml 記述 bullet に sccache の一文を追加
-- [ ] doc index 再生成(`doc_maintenance.js apply`)→ 新規 blocking finding なし
-- [ ] CI cold run: 3 OS verify/ui-verify green + `sccache --show-stats` 記録(run URL)
+- [x] AGENTS.md の ci.yml 記述 bullet に sccache の一文を追加
+- [x] doc index 再生成(`doc_maintenance.js apply`)→ 新規 blocking finding なし
+- [x] CI cold run: 3 OS verify/ui-verify green + `sccache --show-stats` 記録(run 41816075282。write errors 観測・要分析)
 - [ ] CI warm run(2 連続 push): hit 率・wall/runner 時間を cold/#327 baseline と比較
 - [ ] repo variable `CI_SCCACHE_DISABLE=1` で無効化 run 検証(権限あれば)
-- [ ] ローカル実験: Cargo.lock 更新・feature 切替・破損・無効(非破壊に実施、lockfile は復元)
+- [x] ローカル実験: Cargo.lock 更新・feature 切替・破損・無効(非破壊に実施、lockfile は復元)
 - [ ] `collect-ci-metrics.mjs` で対象 run 収集 → `docs/impl/exp/data/issue-329-sccache-runs.jsonl`
 - [ ] IR(`docs/impl/ir/issue-329-sccache-compile-cache-implementation.md`)+ exp(`docs/impl/exp/issue-329-sccache-compile-cache.md`)に検証・実測・NotRun 記録
