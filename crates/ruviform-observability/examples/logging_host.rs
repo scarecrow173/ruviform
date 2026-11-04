@@ -44,6 +44,9 @@ fn main() {
                 destination: SinkDestination::RollingFile {
                     directory: std::env::temp_dir().join("ruviform-observability-example-logs"),
                     filename_prefix: "example".to_owned(),
+                    // `example.YYYY-MM-DD.log` — the `.{date}.{suffix}`
+                    // naming AudioLens `al.YYYY-MM-DD.log` relies on.
+                    filename_suffix: Some("log".to_owned()),
                     rotation: RotationPeriod::Daily,
                     max_files: NonZeroUsize::new(7).unwrap(),
                     queue_capacity: NonZeroUsize::new(1024).unwrap(),

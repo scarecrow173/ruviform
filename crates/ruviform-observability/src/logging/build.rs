@@ -278,6 +278,7 @@ fn init_destination(
         SinkDestination::RollingFile {
             directory,
             filename_prefix,
+            filename_suffix,
             rotation,
             max_files,
             queue_capacity,
@@ -289,12 +290,14 @@ fn init_destination(
             // stderr clean and surfaces a plain io error for invalid or
             // readonly directories.
             std::fs::create_dir_all(directory)?;
-            let appender = RollingFileAppender::builder()
+            let mut builder = RollingFileAppender::builder()
                 .rotation(rotation_period(*rotation))
                 .filename_prefix(filename_prefix)
-                .max_log_files(max_files.get())
-                .build(directory)
-                .map_err(io::Error::other)?;
+                .max_log_files(max_files.get());
+            if let Some(suffix) = filename_suffix {
+                builder = builder.filename_suffix(suffix);
+            }
+            let appender = builder.build(directory).map_err(io::Error::other)?;
             Ok((SinkKind::RollingFile, Box::new(appender), *queue_capacity))
         }
     }
