@@ -67,6 +67,7 @@ Directory: `docs/test-specs`
 | TSPEC-034RBIMbJjTnaygGjWGrGx | Issue #330 CI-OPT-03 test specification — install 重複排除・dist 依存順・互換性 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
 | TSPEC-034RJ01zO4VjU2gWOLQXgi | Issue #331 テスト仕様 — check/ci 統合の不変条件・注入実験・実測 | approved | [issue-331-check-clippy-test-dedup.md](./issue-331-check-clippy-test-dedup.md) |
 | TSPEC-EXjezAr9qVRhcJq18LPw8U | Issue #332 CI-OPT-05 test specification — browser cache・fallback・分離計測 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
+| TSPEC-zbT71fmv3NCZBzB3xof25n | Issue #333 CI-OPT-06 test specification — classifier 分類契約・gate 判定規則 | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |

@@ -5,6 +5,11 @@ name: ci
 on:
   pull_request:
     branches: [main]
+    # `edited` catches base-branch retargets (a new base needs fresh impact
+    # classification; title/body edits also fire it — the per-PR concurrency
+    # group cancels the superseded run, accepted cost). `ready_for_review`
+    # ensures a fresh run when a draft is promoted.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   push:
     branches: [main]
   workflow_dispatch:
@@ -27,6 +32,78 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Issue #333 (CI-OPT-06): impact classifier. Shadow mode — the lane jobs
+  # below still run unconditionally; this job only emits the expected-lane
+  # decision that `ci-gate` audits and that the later enforcement stage will
+  # feed into lane `if:` conditions. Kill switch: repo variable
+  # CI_IMPACT_DISABLE=1 forces the expected set to all lanes.
+  impact:
+    name: impact-classify
+    runs-on: ubuntu-latest
+    env:
+      # The workflow-level MISE_ENABLE_TOOLS omits node; this job needs the
+      # pinned node for ci/impact and cargo for `cargo metadata`.
+      MISE_ENABLE_TOOLS: rust,node
+    outputs:
+      decision: ${{ steps.classify.outputs.decision }}
+      expected: ${{ steps.classify.outputs.expected }}
+      lane_verify: ${{ steps.classify.outputs.lane_verify }}
+      lane_rt_verify: ${{ steps.classify.outputs.lane_rt_verify }}
+      lane_icc_verify: ${{ steps.classify.outputs.lane_icc_verify }}
+      lane_ui_verify: ${{ steps.classify.outputs.lane_ui_verify }}
+      lane_l1_real_verify: ${{ steps.classify.outputs.lane_l1_real_verify }}
+      lane_bench: ${{ steps.classify.outputs.lane_bench }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      # The classifier diff needs the base commit object locally (checkout
+      # already holds the merge head). depth=1 suffices — a two-dot tree diff
+      # needs no merge base. workflow_dispatch has no diff: classifier runs
+      # with --all instead.
+      - name: Fetch diff base commit
+        if: github.event_name != 'workflow_dispatch'
+        shell: bash
+        env:
+          DIFF_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: git fetch --depth=1 origin "$DIFF_BASE"
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust node
+
+      # A broken classifier must not emit a decision — run its contract
+      # tests first so the gate sees a job failure rather than a bad map.
+      - name: Self-test classifier (mise run test-ci-impact)
+        run: mise run test-ci-impact
+
+      - name: Classify changed files
+        id: classify
+        shell: bash
+        env:
+          DIFF_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          CI_IMPACT_DISABLE: ${{ vars.CI_IMPACT_DISABLE }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            mise exec -- node ci/impact/classify.mjs --event "${{ github.event_name }}" --all --out impact-decision.json
+          else
+            mise exec -- node ci/impact/classify.mjs --event "${{ github.event_name }}" --base "$DIFF_BASE" --head "${{ github.sha }}" --out impact-decision.json
+          fi
+
+      - name: Upload impact decision
+        uses: actions/upload-artifact@v4
+        with:
+          name: impact-decision
+          path: impact-decision.json
+          if-no-files-found: error
+
   verify:
     name: verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -540,3 +617,52 @@ jobs:
 
       - name: Lint host feature (mise run lint-l1-real-plugin)
         run: mise run lint-l1-real-plugin
+
+  # Issue #333 (CI-OPT-06): aggregated fail-closed gate. Compares the lane
+  # set `impact` expects against the actual `needs` results. An expected
+  # lane that was skipped, a not-expected lane that ran and failed (the
+  # shadow-mode false-negative detector), and a classification failure all
+  # turn the gate red — skipped jobs are never a pass. Non-required until
+  # the ruleset-migration stage (design runbook); after that it becomes the
+  # single required context replacing the 12 per-lane contexts.
+  ci-gate:
+    name: ci-gate
+    needs: [impact, verify, rt-verify, icc-verify, ui-verify, bench, l1-real-verify]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: node
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked node
+
+      - name: Evaluate aggregated gate
+        shell: bash
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+          GATE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          mise exec -- node ci/impact/gate.mjs \
+            --event "${{ github.event_name }}" \
+            --base "$GATE_BASE" \
+            --head "${{ github.sha }}" \
+            --report gate-report.json
+
+      - name: Upload gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-gate-report
+          path: gate-report.json
+          if-no-files-found: warn

@@ -50,5 +50,6 @@ Directory: `docs/discovery`
 | DISC-034RC37YxqeDsq3Kad550u | Issue #330 CI-OPT-03 UI npm ci 重複・dist 依存 DAG 棚卸し | resolved | [issue-330-ui-npm-ci-inventory.md](./issue-330-ui-npm-ci-inventory.md) |
 | DISC-034RIZZ08rxXFAvXxiesKc | Issue #331 check/clippy/test 重複評価の調査・実測 | resolved | [issue-331-check-clippy-test-dedup.md](./issue-331-check-clippy-test-dedup.md) |
 | DISC-k7Pjkn8XoebpncwaTSISdf | Issue #332 CI-OPT-05 Playwright Chromium 準備・計測分離の棚卸し | resolved | [issue-332-playwright-browser-prep-inventory.md](./issue-332-playwright-browser-prep-inventory.md) |
+| DISC-3qnA5E8SxxIxxEfA9LSI1k | Issue #333 CI-OPT-06 変更影響ベース検証 DAG・Fail-Closed Required Gate の棚卸し | resolved | [issue-333-impact-classifier-inventory.md](./issue-333-impact-classifier-inventory.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |

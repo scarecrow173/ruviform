@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "event": "pull_request",
+  "base": "f880c79707ac30c663ab4d0aca6b7593ba2c4f2c",
+  "head": "8306080aec5bd5d0788789a043251a6104a3d8b6",
+  "decision": "full",
+  "decisionReasons": [
+    "ci-config:.github/workflows/ci.yml",
+    "ci-config:ci/impact/classify.mjs",
+    "ci-config:ci/impact/gate.mjs",
+    "ci-config:ci/impact/lib.mjs",
+    "ci-config:ci/impact/map.mjs",
+    "ci-config:ci/impact/tests/classify.test.mjs",
+    "ci-config:ci/impact/tests/gate.test.mjs",
+    "shared-config:mise.toml"
+  ],
+  "impactDisabled": false,
+  "fileSource": "git-diff",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "classes": [
+        "ci-config"
+      ]
+    },
+    {
+      "path": "AGENTS.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "ci/impact/classify.mjs",
+      "classes": [
+        "ci-config"
+      ]
+    },
+    {
+      "path": "ci/impact/gate.mjs",
+      "classes": [
+        "ci-config"
+      ]
+    },
+    {
+      "path": "ci/impact/lib.mjs",
+      "classes": [
+        "ci-config"
+      ]
+    },
+    {
+      "path": "ci/impact/map.mjs",
+      "classes": [
+        "ci-config"
+      ]
+    },
+    {
+      "path": "ci/impact/tests/classify.test.mjs",
+      "classes": [
+        "ci-config"
+      ]
+    },
+    {
+      "path": "ci/impact/tests/gate.test.mjs",
+      "classes": [
+        "ci-config"
+      ]
+    },
+    {
+      "path": "docs/designs/README.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/designs/issue-333-impact-based-ci.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/discovery/README.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/discovery/issue-333-impact-classifier-inventory.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/plans/README.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/plans/issue-333-impact-based-ci.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/specs/README.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/specs/issue-333-impact-based-ci.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/tasks/README.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/tasks/issue-333-t1-impact-classifier.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/tasks/issue-333-t2-ci-gate-shadow-wiring.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/test-specs/README.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "docs/test-specs/issue-333-impact-based-ci.md",
+      "classes": [
+        "docs"
+      ]
+    },
+    {
+      "path": "mise.toml",
+      "classes": [
+        "shared-config"
+      ]
+    }
+  ],
+  "cratesTouched": [],
+  "cratesImpacted": [],
+  "uiPackagesTouched": [],
+  "lanes": {
+    "verify": {
+      "expected": true,
+      "oses": [
+        "ubuntu-latest",
+        "windows-latest",
+        "macos-latest"
+      ],
+      "contexts": [
+        "verify (ubuntu-latest)",
+        "verify (windows-latest)",
+        "verify (macos-latest)"
+      ],
+      "features": [],
+      "reasons": []
+    },
+    "rt-verify": {
+      "expected": true,
+      "oses": [
+        "ubuntu-latest"
+      ],
+      "contexts": [
+        "rt-verify"
+      ],
+      "features": [],
+      "reasons": []
+    },
+    "icc-verify": {
+      "expected": true,
+      "oses": [
+        "ubuntu-latest"
+      ],
+      "contexts": [
+        "icc-verify"
+      ],
+      "features": [
+        "icc"
+      ],
+      "reasons": []
+    },
+    "ui-verify": {
+      "expected": true,
+      "oses": [
+        "ubuntu-latest",
+        "windows-latest",
+        "macos-latest"
+      ],
+      "contexts": [
+        "ui-verify (ubuntu-latest)",
+        "ui-verify (windows-latest)",
+        "ui-verify (macos-latest)"
+      ],
+      "features": [
+        "webview"
+      ],
+      "reasons": []
+    },
+    "l1-real-verify": {
+      "expected": true,
+      "oses": [
+        "ubuntu-latest",
+        "windows-latest",
+        "macos-latest"
+      ],
+      "contexts": [
+        "l1-real-verify (ubuntu-latest)",
+        "l1-real-verify (windows-latest)",
+        "l1-real-verify (macos-latest)"
+      ],
+      "features": [
+        "host"
+      ],
+      "reasons": []
+    },
+    "bench": {
+      "expected": true,
+      "oses": [
+        "ubuntu-latest"
+      ],
+      "contexts": [
+        "bench"
+      ],
+      "features": [],
+      "reasons": []
+    }
+  }
+}

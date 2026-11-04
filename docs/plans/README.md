@@ -61,6 +61,7 @@ Directory: `docs/plans`
 | PLAN-034RBIEnfNn4DeMAPw27Ii | Issue #330 CI-OPT-03 実装計画 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
 | PLAN-034RJ00WCv4AQYVaqvjlEz | Issue #331 実施計画 — verify lane check-ci 統合と等価性実証 | approved | [issue-331-check-clippy-test-dedup.md](./issue-331-check-clippy-test-dedup.md) |
 | PLAN-xLvFbRwmfJj1P2olT3eT9q | Issue #332 CI-OPT-05 実装計画 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
+| PLAN-zwAUuudwYKnZuLsOviWhpU | Issue #333 CI-OPT-06 実装計画（Shadow Mode + 集約 gate） | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 
