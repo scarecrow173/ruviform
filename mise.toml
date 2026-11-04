@@ -187,6 +187,18 @@ sources = ["ui/browser-test/package-lock.json", "ui/browser-test/package.json"]
 outputs = ["ui/browser-test/node_modules/.package-lock.json"]
 run = "npm --prefix ui/browser-test ci --no-audit --no-fund"
 
+# Issue #332 (CI-OPT-05): browser binary install is a dedicated task so the
+# download is a separately measurable step in CI. `playwright install` is
+# revision-idempotent — existing binaries make it a fast no-op (~1-3s), so no
+# mise sources/outputs freshness: the browser path is PLAYWRIGHT_BROWSERS_PATH
+# dependent and playwright's own per-revision presence check is the
+# authoritative skip. OS system libraries stay out of this task (Linux CI
+# runs `playwright install-deps` separately; local runs stay non-privileged).
+[tasks.install-ui-browser-chromium]
+description = "Install the pinned Playwright Chromium (+headless shell, ffmpeg) browsers — idempotent per-revision check, downloads only what is missing (deps via install-ui-browser-test)"
+depends = ["install-ui-browser-test"]
+run = "npm --prefix ui/browser-test exec -- playwright install chromium"
+
 # Aggregate install entry point (Issue #330): the ui-verify CI job runs this
 # once so each package-lock gets a single `npm ci` per job; the verify tasks
 # below reuse the prepared node_modules via freshness-skipped depends.
@@ -366,7 +378,10 @@ run = "npm --prefix ui/showcase run build"
 # Chromium DOM over hermetic fixture pages served straight from workspace
 # dist/ (no server process, deterministic clock/seed/viewport). Depends on
 # the showcase dist the same way the import map serves it, so the showcase
-# build is pinned via `depends`. Linux runners additionally need the
+# build is pinned via `depends`. The Chromium browser install lives in
+# `install-ui-browser-chromium` (Issue #332) so CI can cache/measure it
+# separately; `test-ui-browser` resolves it via `depends` so local runs
+# stay self-sufficient. Linux runners additionally need the
 # browser system libraries once (`playwright install-deps chromium`,
 # requires sudo) — CI performs that step; it is deliberately not inside
 # this task so local runs stay non-privileged. Browser PASS here is
@@ -377,11 +392,14 @@ description = "Type-check the browser-test harness (tsc --noEmit; typechecks aga
 depends = ["install-ui-browser-test", "build-ui-showcase"]
 run = "npm --prefix ui/browser-test run typecheck"
 [tasks.test-ui-browser]
-description = "Build fixture page modules, install the pinned Chromium (+headless shell), and run the Playwright browser suite (real browser DOM; writes test-results/evidence.json with env/revision/seed/outcomes; deps via install-ui-browser-test + build-ui-showcase)"
-depends = ["install-ui-browser-test", "build-ui-showcase"]
+description = "Build fixture page modules and run the Playwright browser suite (real browser DOM; writes test-results/evidence.json with env/revision/seed/outcomes; Chromium install resolved via install-ui-browser-chromium + showcase dist via build-ui-showcase deps)"
+depends = [
+  "install-ui-browser-test",
+  "build-ui-showcase",
+  "install-ui-browser-chromium",
+]
 run = [
   "npm --prefix ui/browser-test run build",
-  "npm --prefix ui/browser-test exec -- playwright install chromium",
   "npm --prefix ui/browser-test test",
 ]
 
