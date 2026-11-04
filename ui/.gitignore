@@ -4,3 +4,8 @@
 node_modules/
 dist/
 out/
+
+# Playwright run artifacts (evidence.json, traces, failure screenshots)
+# — evidence is uploaded as CI artifacts, never committed.
+test-results/
+playwright-report/

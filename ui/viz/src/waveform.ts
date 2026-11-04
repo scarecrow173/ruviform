@@ -102,9 +102,22 @@ export function waveformScene(
       let runTop: number[] = [];
       let runBottom: number[] = [];
       let runStart = 0;
-      const rmsTop: number[] = [];
-      const rmsBottom: number[] = [];
-      const rmsXs: number[] = [];
+      // RMS runs mirror the envelope's split-at-missing semantics: one
+      // `xs`-spanned band per contiguous run — never a phantom band
+      // interpolated across a dropout.
+      const rmsRuns: { xs: number[]; top: number[]; bottom: number[] }[] =
+        [];
+      let rmsTop: number[] = [];
+      let rmsBottom: number[] = [];
+      let rmsXs: number[] = [];
+      const flushRms = () => {
+        if (rmsXs.length > 0) {
+          rmsRuns.push({ xs: rmsXs, top: rmsTop, bottom: rmsBottom });
+          rmsXs = [];
+          rmsTop = [];
+          rmsBottom = [];
+        }
+      };
       const flush = () => {
         if (runTop.length > 0) {
           ops.push({
@@ -126,6 +139,7 @@ export function waveformScene(
         const b = buckets[i];
         if (b === undefined || b.count === 0) {
           flush();
+          flushRms();
           const a = view.start + i * upb;
           mergeGap(gapRanges, a, a + upb);
           continue;
@@ -140,18 +154,23 @@ export function waveformScene(
           rmsXs.push(px0 + vpToPx(viewport, view.start + (i + 0.5) * upb));
           rmsTop.push(laneY(lane, b.rms));
           rmsBottom.push(laneY(lane, -b.rms));
+        } else {
+          flushRms();
         }
       }
       flush();
-      if (style.waveform.showRms && rmsXs.length > 0) {
-        ops.push({
-          kind: "band",
-          layer: P,
-          span: { xs: rmsXs },
-          top: rmsTop,
-          bottom: rmsBottom,
-          fill: style.waveform.rms,
-        });
+      flushRms();
+      if (style.waveform.showRms) {
+        for (const run of rmsRuns) {
+          ops.push({
+            kind: "band",
+            layer: P,
+            span: { xs: run.xs },
+            top: run.top,
+            bottom: run.bottom,
+            fill: style.waveform.rms,
+          });
+        }
       }
     } else {
       // Raw-sample view: polyline runs split at non-finite values.
