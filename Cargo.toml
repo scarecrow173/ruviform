@@ -29,6 +29,9 @@ members = [
     # Foundations (audio DSP kernels + 解析。Issue #75 / #92 で新設)
     "crates/ruviform-dsp",
     "crates/ruviform-audio-analysis",
+    # 汎用ファイル I/O 基盤（Issue #295 新設 — StagedFile/SealedFile 型状態 + 分類済み publish 契約。
+    # OS 非依存の非 RT 基盤で media-io / io バックエンドより下位。実 OS backend は IO-IMP-02 #296）
+    "crates/ruviform-io-file",
     "crates/ruviform-media-io",
     # メディア Reader/Prefetch 基盤（Issue #197 — source-frame sequential decode + bounded prefetch → RT consumer。media-io 非 RT 境界を保ったまま mixed-RT を分離）
     "crates/ruviform-media-reader",

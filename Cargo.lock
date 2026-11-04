@@ -2916,6 +2916,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-io-file"
+version = "0.1.0"
+
+[[package]]
 name = "ruviform-io-symphonia"
 version = "0.1.0"
 dependencies = [
@@ -2987,6 +2991,9 @@ dependencies = [
 [[package]]
 name = "ruviform-observability"
 version = "0.1.0"
+dependencies = [
+ "assert_no_alloc",
+]
 
 [[package]]
 name = "ruviform-plugin-clap"

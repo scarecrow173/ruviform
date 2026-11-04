@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計31クレート）。
+Ruviform ワークスペースのメンバークレート索引（計33クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -16,7 +16,7 @@ Ruviform ワークスペースのメンバークレート索引（計31クレー
 | [`ruviform-rt`](ruviform-rt/README.md) | RT 基盤（`Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換） |
 | [`ruviform-media-core`](ruviform-media-core/README.md) | 規格中立メディアデータモデル（時間・transport・音楽時間・`Error`） |
 | [`ruviform-exec`](ruviform-exec/README.md) | 非 RT 実行基盤（スレッド優先度機構・`OfflineDriver`） |
-| [`ruviform-observability`](ruviform-observability/README.md) | 共有観測プリミティブ（`Counter`/`CounterReader` counter pair — Issue #101 候補・#121 で L1 diagnostics が初消費者） |
+| [`ruviform-observability`](ruviform-observability/README.md) | 共有観測基盤（core: `Counter`/`Gauge`/`Histogram` writer-reader ペア + source: 登録ポート・Descriptor・`SourceId`/Generation・寿命契約 — Issue #101 候補・#121 初消費者・#277 OBS-02） |
 
 ## Domain foundations
 
@@ -27,6 +27,12 @@ Ruviform ワークスペースのメンバークレート索引（計31クレー
 | [`ruviform-video-proc`](ruviform-video-proc/README.md) | ビデオ処理カーネル（色変換・`RgbaF32` linear working space 色管理・コンポジット/遷移・feature `icc` で ICC 変換） |
 | [`ruviform-dsp`](ruviform-dsp/README.md) | ドメイン型付き audio DSP カーネル（`Window`・`Biquad`・`FirFilter`・`Fft`・`LinearResampler`） |
 | [`ruviform-audio-analysis`](ruviform-audio-analysis/README.md) | 解析層（`LevelMeter`・`SpectrumAnalyzer`・`WaveformPeaks`） |
+
+## 汎用ファイル I/O（非 RT 専用）
+
+| クレート | 責務 |
+| --- | --- |
+| [`ruviform-io-file`](ruviform-io-file/README.md) | staged file publish 型状態・分類済み publish 契約（`StagedFile`/`SealedFile`・`PublishReceipt`/`PublishFailure`・recovery handle — Issue #295。実 OS backend は IO-IMP-02） |
 
 ## メディア I/O（非 RT 専用）
 
