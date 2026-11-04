@@ -36,6 +36,12 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// Generic host-owned logging adapter on the standard `tracing` stack —
+/// Issue #276 (OBS-01). Only available with the `logging` feature, which is
+/// off by default so the counter pair keeps zero external dependencies.
+#[cfg(feature = "logging")]
+pub mod logging;
+
 /// Builds a shared counter pair — a [`Counter`] for the writing
 /// (instrumented) side and a [`CounterReader`] for the non-RT
 /// observing side.
