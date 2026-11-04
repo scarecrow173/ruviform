@@ -118,10 +118,12 @@ jobs:
       - name: Check formatting (mise run fmt-check)
         run: mise run fmt-check
 
-      - name: Type-check workspace (mise run check-ci)
-        run: mise run check-ci
-
-      - name: Lint workspace (mise run lint-ci)
+      # Issue #331 (CI-OPT-04): `cargo clippy` compiles workspace members with
+      # clippy-driver in check mode and emits every rustc diagnostic plus
+      # clippy lints, so a separate `cargo check` step only re-evaluated the
+      # same unit set a second time. This step owns type-checking and warning
+      # detection for the whole workspace (--all-targets).
+      - name: Type-check & lint workspace (mise run lint-ci)
         run: mise run lint-ci
 
       - name: Test workspace (mise run test-ci)
