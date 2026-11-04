@@ -65,6 +65,7 @@ Directory: `docs/designs`
 | DESIGN-yMdXfkOVFpXfZGKfVH7LjG | Issue #328 CI PR concurrency 設計 — group 解決・cancel 意味論・required checks 保護 | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
 | DESIGN-mcItTpQPSlr7FZ7BBqChaW | Issue #329 sccache 設計 — step 構成・env 解決・cache 正しさ・監査・無効化 | approved | [issue-329-sccache-compile-cache.md](./issue-329-sccache-compile-cache.md) |
 | DESIGN-034RBIy0yxPWYhXdXUlsLi | Issue #330 CI-OPT-03 UI npm install 集約・mise task freshness 設計 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
+| DESIGN-034RJ00iyqN3oWCf99pDXu | Issue #331 設計 — check-ci を lint-ci へ統合する等価性証明と適用 | approved | [issue-331-check-clippy-test-dedup.md](./issue-331-check-clippy-test-dedup.md) |
 | DESIGN-EJ86GHTwsKgyexnCdTpSJ5 | Issue #332 CI-OPT-05 Playwright Chromium cache・準備分離設計 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |

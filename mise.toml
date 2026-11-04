@@ -82,14 +82,20 @@ run = "cargo bench -p ruviform-math -p ruviform-rt -p ruviform-viz -- --test"
 # CI-only tasks: identical checks under `--profile ci` with incremental
 # compilation disabled. Artifacts go to target/ci/, separate from dev's
 # target/debug/. Not for routine local use (disk usage).
+#
+# Issue #331 (CI-OPT-04): `cargo clippy` compiles workspace members with
+# clippy-driver in check mode and emits all rustc diagnostics plus clippy
+# lints, so the CI verify lane runs lint-ci only (no separate check-ci).
+# `check-ci` stays available as a rustc-only type-check for local triage
+# (e.g. isolating a clippy-driver issue); it is not part of the CI lane.
 
 [tasks.check-ci]
-description = "CI profile type-check: `cargo check --workspace --all-targets --profile ci` (non-destructive; writes only target/ci/)"
+description = "CI profile type-check: `cargo check --workspace --all-targets --profile ci` (standalone rustc-only check for local triage — not in the CI verify lane since Issue #331; lint-ci subsumes it. Non-destructive; writes only target/ci/)"
 run = "cargo check --workspace --all-targets --profile ci"
 env = { CARGO_INCREMENTAL = "0" }
 
 [tasks.lint-ci]
-description = "CI profile lint: `cargo clippy --workspace --all-targets --profile ci -- -D warnings` (non-destructive; writes only target/ci/)"
+description = "CI profile lint + type-check: `cargo clippy --workspace --all-targets --profile ci -- -D warnings` (clippy-driver emits all rustc diagnostics plus clippy lints — owns type-checking in the CI verify lane since Issue #331; non-destructive; writes only target/ci/)"
 run = "cargo clippy --workspace --all-targets --profile ci -- -D warnings"
 env = { CARGO_INCREMENTAL = "0" }
 
@@ -104,10 +110,9 @@ run = "cargo build --workspace --profile ci"
 env = { CARGO_INCREMENTAL = "0" }
 
 [tasks.verify-ci]
-description = "Run the CI-equivalent verification sequence: fmt-check -> check-ci -> lint-ci -> test-ci (non-destructive; writes only target/)"
+description = "Run the CI-equivalent verification sequence: fmt-check -> lint-ci -> test-ci (lint-ci owns type-checking since Issue #331; non-destructive; writes only target/)"
 run = [
   "mise run fmt-check",
-  "mise run check-ci",
   "mise run lint-ci",
   "mise run test-ci",
 ]
