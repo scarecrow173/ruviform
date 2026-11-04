@@ -138,8 +138,14 @@ pub fn build_zip(entries: &[EntrySpec], eocd: &EocdSpec) -> Vec<u8> {
         put_u32(&mut out, spec.crc32);
         put_u32(&mut out, spec.compressed_declared());
         put_u32(&mut out, spec.declared_uncompressed);
-        put_u16(&mut out, u16::try_from(local_name.len()).unwrap_or(u16::MAX));
-        put_u16(&mut out, u16::try_from(spec.local_extra.len()).unwrap_or(u16::MAX));
+        put_u16(
+            &mut out,
+            u16::try_from(local_name.len()).unwrap_or(u16::MAX),
+        );
+        put_u16(
+            &mut out,
+            u16::try_from(spec.local_extra.len()).unwrap_or(u16::MAX),
+        );
         out.extend_from_slice(local_name);
         out.extend_from_slice(&spec.local_extra);
         out.extend_from_slice(&spec.data);
@@ -157,8 +163,14 @@ pub fn build_zip(entries: &[EntrySpec], eocd: &EocdSpec) -> Vec<u8> {
         put_u32(&mut out, spec.compressed_declared());
         put_u32(&mut out, spec.declared_uncompressed);
         put_u16(&mut out, u16::try_from(spec.name.len()).unwrap_or(u16::MAX));
-        put_u16(&mut out, u16::try_from(spec.cd_extra.len()).unwrap_or(u16::MAX));
-        put_u16(&mut out, u16::try_from(spec.cd_comment.len()).unwrap_or(u16::MAX));
+        put_u16(
+            &mut out,
+            u16::try_from(spec.cd_extra.len()).unwrap_or(u16::MAX),
+        );
+        put_u16(
+            &mut out,
+            u16::try_from(spec.cd_comment.len()).unwrap_or(u16::MAX),
+        );
         put_u16(&mut out, spec.disk_start);
         put_u16(&mut out, 0);
         put_u32(&mut out, spec.external_attrs);
@@ -167,7 +179,8 @@ pub fn build_zip(entries: &[EntrySpec], eocd: &EocdSpec) -> Vec<u8> {
         out.extend_from_slice(&spec.cd_extra);
         out.extend_from_slice(&spec.cd_comment);
     }
-    let cd_size = u32::try_from(out.len() - usize::try_from(cd_offset).unwrap_or(usize::MAX)).unwrap_or(u32::MAX);
+    let cd_size = u32::try_from(out.len() - usize::try_from(cd_offset).unwrap_or(usize::MAX))
+        .unwrap_or(u32::MAX);
     let count = u16::try_from(entries.len()).unwrap_or(u16::MAX);
     put_u32(&mut out, EOCD_SIG);
     put_u16(&mut out, eocd.disk_no);
@@ -177,7 +190,10 @@ pub fn build_zip(entries: &[EntrySpec], eocd: &EocdSpec) -> Vec<u8> {
     let cd_size = u64::from(cd_size).saturating_add_signed(eocd.cd_size_delta);
     put_u32(&mut out, u32::try_from(cd_size).unwrap_or(u32::MAX));
     put_u32(&mut out, eocd.cd_offset_override.unwrap_or(cd_offset));
-    put_u16(&mut out, u16::try_from(eocd.comment.len()).unwrap_or(u16::MAX));
+    put_u16(
+        &mut out,
+        u16::try_from(eocd.comment.len()).unwrap_or(u16::MAX),
+    );
     out.extend_from_slice(&eocd.comment);
     out
 }
