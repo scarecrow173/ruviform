@@ -57,6 +57,7 @@ Directory: `docs/plans`
 | PLAN-034S312gtUiTestPlnEE55 | Issue #312 ruviform-ui-test implementation plan | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | PLAN-034RBML1CjEEPA4ApRK8R9 | Issue #327 CI計測Baseline 実施計画 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | PLAN-SIZd1oW7Pd1d5Vi3BzCMFc | Issue #328 実施計画 — CI PR concurrency(cancel stale PR runs) | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
+| PLAN-LudiYAd9xs8POLyXSwAL4P | Issue #329 実施計画 — sccache 先行導入(verify/ui-verify)と Cold/Warm 実測 | approved | [issue-329-sccache-compile-cache.md](./issue-329-sccache-compile-cache.md) |
 | PLAN-034RBIEnfNn4DeMAPw27Ii | Issue #330 CI-OPT-03 実装計画 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
 | PLAN-xLvFbRwmfJj1P2olT3eT9q | Issue #332 CI-OPT-05 実装計画 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |

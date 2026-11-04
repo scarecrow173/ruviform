@@ -49,6 +49,7 @@ Directory: `docs/specs`
 | SPEC-034S312gtUiTestSpecBB22 | Issue #312 test-only GUI host lifecycle・secure control adapter・fixture/clock/observation 仕様 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | SPEC-034RBJKNinKQbKocpnqqM9 | Issue #327 3リポジトリ横断CI計測Baseline・非回帰基準 仕様 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | SPEC-BbANBkZi3v9ZHthJOmnDCy | Issue #328 CI-OPT-01 PR Concurrency 制御・旧 revision CI キャンセル | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
+| SPEC-FuYJCOjgHlGKlqRskoLQGq | Issue #329 CI-OPT-02 sccache 先行導入・3OS Rustコンパイルキャッシュ効果検証 | approved | [issue-329-sccache-compile-cache.md](./issue-329-sccache-compile-cache.md) |
 | SPEC-034RBIrH4H2hFNw7gfmgDa | Issue #330 CI-OPT-03 UI npm ci 重複排除・TypeScript検証パイプライン集約 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
 | SPEC-x9aakFSwqMZzdqGoq2uyc3 | Issue #332 CI-OPT-05 Playwright Chromium 準備・ブラウザキャッシュと実行時間の最適化 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |

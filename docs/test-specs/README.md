@@ -63,6 +63,7 @@ Directory: `docs/test-specs`
 | TSPEC-034S312gtUiTestTspFF66 | Issue #312 ruviform-ui-test — lifecycle/control/fixture/clock/observation/fail-closed test specification | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | TSPEC-034RBMKdNX5HX6vExF2WlS | Issue #327 CI計測Baseline 検証仕様 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | TSPEC-oHAlZzKO4OjFLCg0SpIiws | Issue #328 テスト仕様 — CI concurrency の不変条件と証拠 | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
+| TSPEC-8FPRKgybhQfr9n7cWGNJoz | Issue #329 テスト仕様 — sccache 導入の不変条件・ケース・証拠 | approved | [issue-329-sccache-compile-cache.md](./issue-329-sccache-compile-cache.md) |
 | TSPEC-034RBIMbJjTnaygGjWGrGx | Issue #330 CI-OPT-03 test specification — install 重複排除・dist 依存順・互換性 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
 | TSPEC-EXjezAr9qVRhcJq18LPw8U | Issue #332 CI-OPT-05 test specification — browser cache・fallback・分離計測 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |

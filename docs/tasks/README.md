@@ -7,6 +7,7 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
+| TASK-yFczRmBPJEUZkKyX3bngmg | Issue #329 T1 — ci.yml verify/ui-verify へ sccache 導入 + Cold/Warm 実測 + IR | in-progress | [issue-329-t1-sccache-verify-ui-lanes.md](./issue-329-t1-sccache-verify-ui-lanes.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |

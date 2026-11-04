@@ -63,6 +63,7 @@ Directory: `docs/designs`
 | DESIGN-034S312gtUiTestDsnDD44 | Issue #312 ruviform-ui-test — test-only GUI host lifecycle・secure control adapter 設計 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | DESIGN-034RBJLryk98hb4Yyq5wYG | Issue #327 CI計測Baseline 計測契約・分類・比較手順 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | DESIGN-yMdXfkOVFpXfZGKfVH7LjG | Issue #328 CI PR concurrency 設計 — group 解決・cancel 意味論・required checks 保護 | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
+| DESIGN-mcItTpQPSlr7FZ7BBqChaW | Issue #329 sccache 設計 — step 構成・env 解決・cache 正しさ・監査・無効化 | approved | [issue-329-sccache-compile-cache.md](./issue-329-sccache-compile-cache.md) |
 | DESIGN-034RBIy0yxPWYhXdXUlsLi | Issue #330 CI-OPT-03 UI npm install 集約・mise task freshness 設計 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
 | DESIGN-EJ86GHTwsKgyexnCdTpSJ5 | Issue #332 CI-OPT-05 Playwright Chromium cache・準備分離設計 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
