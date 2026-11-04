@@ -53,6 +53,7 @@ Directory: `docs/specs`
 | SPEC-034RBIrH4H2hFNw7gfmgDa | Issue #330 CI-OPT-03 UI npm ci 重複排除・TypeScript検証パイプライン集約 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
 | SPEC-034RIZZEiovcu0sAxuAPkX | Issue #331 CI-OPT-04 check/clippy/test 重複評価・再コンパイル削減 | approved | [issue-331-check-clippy-test-dedup.md](./issue-331-check-clippy-test-dedup.md) |
 | SPEC-x9aakFSwqMZzdqGoq2uyc3 | Issue #332 CI-OPT-05 Playwright Chromium 準備・ブラウザキャッシュと実行時間の最適化 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
+| SPEC-nZdlFyflADPeFBthK8sEBB | Issue #333 CI-OPT-06 変更影響ベース検証 DAG・Fail-Closed Required Gate | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |
