@@ -128,6 +128,25 @@ test("expected map missing a lane -> lane treated as expected (fail-closed)", ()
   assert.equal(rowOf(r, "bench").expected, true);
 });
 
+test("Issue #333/#326 rev: *-macos observe legs never affect the gate (scenarios a/b pass)", () => {
+  for (const bad of ["cancelled", "failure", "skipped"]) {
+    const needs = needsWith("success");
+    needs["verify-macos"] = { result: bad };
+    needs["ui-verify-macos"] = { result: bad };
+    needs["l1-real-verify-macos"] = { result: bad };
+    const r = evaluate({ needs, expected: ALL_TRUE });
+    assert.equal(r.verdict, "pass", `macOS leg ${bad} must not fail the required gate`);
+    assert.ok(r.rows.every((row) => !row.lane.endsWith("-macos")), "observe legs must not appear in gate rows");
+  }
+});
+
+test("required Linux/Windows leg failure still fails the gate (scenario c)", () => {
+  const needs = needsWith("success");
+  needs["verify"] = { result: "failure" };
+  const r = evaluate({ needs, expected: ALL_TRUE });
+  assert.equal(r.verdict, "fail");
+});
+
 test("CLI: reads NEEDS_JSON env, writes report+summary, exit code mirrors verdict", () => {
   const dir = mkdtempSync(join(tmpdir(), "gate-"));
   const reportPath = join(dir, "gate-report.json");

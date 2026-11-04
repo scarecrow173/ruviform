@@ -112,6 +112,13 @@ jobs:
   # half lives in `ci-gate`, where an expected-but-skipped or absent lane is
   # a Fail, a not-expected skipped lane is NotApplicable, and a failed
   # classification degrades to all-expected.
+  #
+  # Issue #333/#326 rev 2026-11-05: macOS legs are NOT PR-required — the
+  # required matrices below carry ubuntu+windows only and each macOS leg
+  # lives in a physically separate `*-macos` job consumed by `macos-report`
+  # (non-blocking) instead of `ci-gate`. The ruleset requires the nine
+  # Linux/Windows contexts; macOS starvation can no longer queue-cancel a
+  # required context.
   verify:
     name: verify (${{ matrix.os }})
     needs: [impact]
@@ -122,7 +129,7 @@ jobs:
       # the result for every platform even if one of them fails.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
     env:
       CARGO_INCREMENTAL: "0"
     steps:
@@ -228,6 +235,91 @@ jobs:
           du -sh target
           du -sh target/ci/deps target/ci/build 2>/dev/null || true
 
+  # Non-blocking macOS leg of `verify` (Issue #333/#326 rev 2026-11-05):
+  # identical lane steps, physically separate job so `ci-gate` never waits
+  # on macOS runner availability. `macos-report` records its result.
+  verify-macos:
+    name: verify-macos
+    needs: [impact]
+    if: always() && needs.impact.outputs.lane_verify != 'false'
+    runs-on: macos-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust prek
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Set up sccache
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: "v0.19.0"
+
+      - name: Export sccache GHA backend env
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const token = process.env.ACTIONS_RUNTIME_TOKEN || '';
+            const url = process.env.ACTIONS_RESULTS_URL || '';
+            const gha = token !== '' && url !== '';
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', token);
+            core.exportVariable('ACTIONS_RESULTS_URL', url);
+            core.exportVariable('SCCACHE_GHA_ENABLED', gha ? 'true' : 'false');
+            core.exportVariable('SCCACHE_GHA_VERSION', `ruviform-v1-${process.env.RUNNER_OS || 'unknown'}`);
+            core.exportVariable('RUSTC_WRAPPER', 'sccache');
+            core.info(`sccache GHA backend: ${gha ? 'enabled' : 'disabled (cache credentials absent)'}`);
+
+      - name: Verify sccache environment
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v sccache
+          sccache --version
+          echo "RUSTC_WRAPPER=$RUSTC_WRAPPER"
+          echo "SCCACHE_GHA_ENABLED=$SCCACHE_GHA_ENABLED"
+          echo "SCCACHE_GHA_VERSION=$SCCACHE_GHA_VERSION"
+          if [ -n "${ACTIONS_RESULTS_URL:-}" ]; then echo "ACTIONS_RESULTS_URL: set"; else echo "::warning::ACTIONS_RESULTS_URL missing — sccache GHA backend disabled (local disk fallback)"; fi
+          if [ -n "${ACTIONS_RUNTIME_TOKEN:-}" ]; then echo "ACTIONS_RUNTIME_TOKEN: set"; else echo "::warning::ACTIONS_RUNTIME_TOKEN missing — sccache GHA backend disabled (local disk fallback)"; fi
+
+      - name: Check config files with prek
+        run: mise exec -- prek run --all-files
+
+      - name: Check formatting (mise run fmt-check)
+        run: mise run fmt-check
+
+      - name: Type-check & lint workspace (mise run lint-ci)
+        run: mise run lint-ci
+
+      - name: Test workspace (mise run test-ci)
+        run: mise run test-ci
+
+      - name: sccache statistics
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        shell: bash
+        run: sccache --show-stats || true
+
   rt-verify:
     name: rt-verify
     needs: [impact]
@@ -330,7 +422,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
     env:
       CARGO_INCREMENTAL: "0"
       # Issue #332 (CI-OPT-05): pin the Playwright browser directory inside the
@@ -546,6 +638,189 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  # Non-blocking macOS leg of `ui-verify` (Issue #333/#326 rev 2026-11-05):
+  # identical lane steps minus the Linux-only WebKitGTK/system-deps steps,
+  # physically separate job so `ci-gate` never waits on macOS runner
+  # availability. `macos-report` records its result.
+  ui-verify-macos:
+    name: ui-verify-macos
+    needs: [impact]
+    if: always() && needs.impact.outputs.lane_ui_verify != 'false'
+    runs-on: macos-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust prek
+          mise install node@26.12.1
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-ui-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-ui-
+
+      - name: Set up sccache
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: "v0.19.0"
+
+      - name: Export sccache GHA backend env
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const token = process.env.ACTIONS_RUNTIME_TOKEN || '';
+            const url = process.env.ACTIONS_RESULTS_URL || '';
+            const gha = token !== '' && url !== '';
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', token);
+            core.exportVariable('ACTIONS_RESULTS_URL', url);
+            core.exportVariable('SCCACHE_GHA_ENABLED', gha ? 'true' : 'false');
+            core.exportVariable('SCCACHE_GHA_VERSION', `ruviform-v1-${process.env.RUNNER_OS || 'unknown'}`);
+            core.exportVariable('RUSTC_WRAPPER', 'sccache');
+            core.info(`sccache GHA backend: ${gha ? 'enabled' : 'disabled (cache credentials absent)'}`);
+
+      - name: Verify sccache environment
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v sccache
+          sccache --version
+          echo "RUSTC_WRAPPER=$RUSTC_WRAPPER"
+          echo "SCCACHE_GHA_ENABLED=$SCCACHE_GHA_ENABLED"
+          echo "SCCACHE_GHA_VERSION=$SCCACHE_GHA_VERSION"
+          if [ -n "${ACTIONS_RESULTS_URL:-}" ]; then echo "ACTIONS_RESULTS_URL: set"; else echo "::warning::ACTIONS_RESULTS_URL missing — sccache GHA backend disabled (local disk fallback)"; fi
+          if [ -n "${ACTIONS_RUNTIME_TOKEN:-}" ]; then echo "ACTIONS_RUNTIME_TOKEN: set"; else echo "::warning::ACTIONS_RUNTIME_TOKEN missing — sccache GHA backend disabled (local disk fallback)"; fi
+
+      - name: Install UI npm dependencies (mise run setup-ui)
+        run: mise run setup-ui
+
+      - name: Type-check UI webview feature (mise run check-ui-webview)
+        run: mise run check-ui-webview
+
+      - name: Lint UI webview feature (mise run lint-ui-webview)
+        run: mise run lint-ui-webview
+
+      - name: Test UI webview feature (mise run test-ui-webview)
+        run: mise run test-ui-webview
+
+      - name: Type-check headless UI contract (mise run check-ui-headless)
+        run: mise run check-ui-headless
+
+      - name: Test headless UI contract (mise run test-ui-headless)
+        run: mise run test-ui-headless
+
+      - name: Type-check UI components (mise run check-ui-components)
+        run: mise run check-ui-components
+
+      - name: Test UI components (mise run test-ui-components)
+        run: mise run test-ui-components
+
+      - name: Build UI components dist (mise run build-ui-components)
+        run: mise run build-ui-components
+
+      - name: Type-check UI viz renderers (mise run check-ui-viz)
+        run: mise run check-ui-viz
+
+      - name: Test UI viz renderers (mise run test-ui-viz)
+        run: mise run test-ui-viz
+
+      - name: Build UI viz dist (mise run build-ui-viz)
+        run: mise run build-ui-viz
+
+      - name: Type-check UI binding (mise run check-ui-binding)
+        run: mise run check-ui-binding
+
+      - name: Test UI binding (mise run test-ui-binding)
+        run: mise run test-ui-binding
+
+      - name: Build UI binding dist (mise run build-ui-binding)
+        run: mise run build-ui-binding
+
+      - name: Type-check UI guitest (mise run check-ui-guitest)
+        run: mise run check-ui-guitest
+
+      - name: Test UI guitest (mise run test-ui-guitest)
+        run: mise run test-ui-guitest
+
+      - name: Type-check UI showcase (mise run check-ui-showcase)
+        run: mise run check-ui-showcase
+
+      - name: Test UI showcase (mise run test-ui-showcase)
+        run: mise run test-ui-showcase
+
+      - name: Build UI showcase dist (mise run build-ui-showcase)
+        run: mise run build-ui-showcase
+
+      - name: Type-check UI browser-test harness (mise run check-ui-browser-test)
+        run: mise run check-ui-browser-test
+
+      - name: Read Playwright browser version/revision
+        id: pw-meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(mise exec -- node -p "require('./ui/browser-test/node_modules/@playwright/test/package.json').version")"
+          revision="$(mise exec -- node -p "require('./ui/browser-test/node_modules/playwright-core/browsers.json').browsers.find(b=>b.name==='chromium').revision")"
+          test -n "$version" && test -n "$revision"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Playwright Chromium cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: .cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-pw${{ steps.pw-meta.outputs.version }}-chromium${{ steps.pw-meta.outputs.revision }}
+
+      - name: Prepare Playwright Chromium (mise run install-ui-browser-chromium)
+        run: mise run install-ui-browser-chromium
+
+      - name: Validate Playwright Chromium launch
+        shell: bash
+        run: |
+          set -u
+          probe="${RUNNER_TEMP:-$(mktemp -d)}/chromium-launch-probe.png"
+          if ! npm --prefix ui/browser-test exec -- playwright screenshot --browser chromium about:blank "$probe"; then
+            echo "::warning::cached Chromium failed launch validation; wiping ${PLAYWRIGHT_BROWSERS_PATH} and reinstalling"
+            rm -rf "${PLAYWRIGHT_BROWSERS_PATH:?must be a non-empty workspace path}"
+            mise run install-ui-browser-chromium
+            npm --prefix ui/browser-test exec -- playwright screenshot --browser chromium about:blank "$probe"
+          fi
+
+      - name: Run UI browser tests (mise run test-ui-browser)
+        run: mise run test-ui-browser
+
+      - name: sccache statistics
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        shell: bash
+        run: sccache --show-stats || true
+
+      - name: Upload UI browser evidence (browser lane)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-browser-evidence-macos
+          path: ui/browser-test/test-results/
+          if-no-files-found: warn
+          retention-days: 30
+
   bench:
     name: bench
     needs: [impact]
@@ -594,13 +869,9 @@ jobs:
       # Keep sibling OS jobs running so a manual verification run reports
       # the result for every platform even if one of them fails — the
       # dlopen/spawn/COM paths this lane exercises are platform-shaped.
-      # First exercise on macOS: the raw-.dylib (non-bundle) CLAP
-      # resolution and the VST3 bundleEntry paths run here for the
-      # first time — a red macOS leg is a platform finding, not a
-      # regression.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
     env:
       CARGO_INCREMENTAL: "0"
     steps:
@@ -638,16 +909,111 @@ jobs:
       - name: Lint host feature (mise run lint-l1-real-plugin)
         run: mise run lint-l1-real-plugin
 
+  # Non-blocking macOS leg of `l1-real-verify` (Issue #333/#326 rev
+  # 2026-11-05): physically separate job so `ci-gate` never waits on macOS
+  # runner availability. First exercise on macOS: the raw-.dylib
+  # (non-bundle) CLAP resolution and the VST3 bundleEntry paths run here
+  # for the first time — a red macOS leg is a platform finding recorded by
+  # `macos-report`, not a merge blocker.
+  l1-real-verify-macos:
+    name: l1-real-verify-macos
+    needs: [impact]
+    if: always() && needs.impact.outputs.lane_l1_real_verify != 'false'
+    runs-on: macos-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust prek
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run real-plugin L1 lane (mise run test-l1-real-plugin)
+        run: mise run test-l1-real-plugin
+
+      - name: Lint host feature (mise run lint-l1-real-plugin)
+        run: mise run lint-l1-real-plugin
+
+  # Issue #346 (rev 2026-11-05): non-blocking macOS observe report. Compares
+  # the classifier's expected lanes against the `*-macos` leg results and
+  # records a per-OS status row (Pass / Fail / NotRun / NotApplicable /
+  # Pending / Unsupported) into the step summary + a JSON artifact consumed
+  # by release/Consumer acceptance gating. Runner starvation (cancelled)
+  # is NotRun — never NotApplicable, which is reserved for
+  # classifier-proven-unaffected skips. The check itself stays green:
+  # verdict data lives in the report, it does not block the merge.
+  macos-report:
+    name: macos-report
+    needs: [impact, verify-macos, ui-verify-macos, l1-real-verify-macos]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: node
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked node
+
+      - name: Evaluate macOS observe report
+        shell: bash
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+          GATE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          mise exec -- node ci/impact/observe.mjs \
+            --event "${{ github.event_name }}" \
+            --base "$GATE_BASE" \
+            --head "${{ github.sha }}" \
+            --report macos-observe-report.json
+
+      - name: Upload macOS observe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-observe-report
+          path: macos-observe-report.json
+          if-no-files-found: warn
+
   # Issue #333 (CI-OPT-06) + #346 enforcement: aggregated fail-closed gate.
   # Compares the lane set `impact` expects against the actual `needs`
   # results. An expected lane that was skipped, a not-expected lane that ran
   # and failed, and a classification failure all turn the gate red — skipped
   # jobs are never a pass, and a lane skipped by its `if:` is honored only
   # when the classifier proved it unaffected (NotApplicable). `if: always()`
-  # keeps the gate running on skipped/failed needs. This job is the single
-  # stable required context that replaces the 12 per-lane contexts — the
-  # ruleset migration itself is performed out-of-band per
-  # docs/designs/issue-346-ruleset-migration-runbook.md.
+  # keeps the gate running on skipped/failed needs. The gate needs only the
+  # PR-required legs — the `*-macos` observe jobs are intentionally absent
+  # from `needs` (Issue #333/#326 rev 2026-11-05: macOS never blocks a PR).
+  # This job is the single stable required context that replaces the nine
+  # per-lane contexts — the ruleset migration itself is performed
+  # out-of-band per docs/designs/issue-346-ruleset-migration-runbook.md.
   ci-gate:
     name: ci-gate
     needs: [impact, verify, rt-verify, icc-verify, ui-verify, bench, l1-real-verify]
