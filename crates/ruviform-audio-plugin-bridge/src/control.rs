@@ -9,7 +9,8 @@
 use std::sync::Arc;
 
 use ruviform_media_core::{
-    AppliedReceipt, ClockAnchor, ClockEpochId, ScheduleFault, TransportCommand, TransportPlan,
+    AppliedReceipt, ClockAnchor, ClockEpochId, PlanGeneration, ScheduleFault, TimeBase,
+    TransportCommand, TransportPlan, TransportPlanBuilder,
 };
 use ruviform_plugin_core::EventKind;
 use ruviform_rt::{Consumer, Producer};
@@ -125,6 +126,65 @@ impl core::fmt::Display for QueueFull {
 
 impl core::error::Error for QueueFull {}
 
+/// A supplied `TimeBase` differs from the node's attach-time frame
+/// base — the verified context minted by [`crate::attach`] from
+/// `AttachConfig::frame_base`.
+///
+/// A `TransportPlan` compiled in a different tick base would have its
+/// `position_ticks` misread in the scheduler's frame space;
+/// `TimedParamEvent`/Seek/Plan-Receipt alignment and offline accuracy
+/// all depend on the bases being substantively equal.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct FrameBaseMismatch {
+    /// The node's attach-time frame base (the verified context).
+    pub expected: TimeBase,
+    /// The foreign frame base that was supplied.
+    pub actual: TimeBase,
+}
+
+impl core::fmt::Display for FrameBaseMismatch {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "frame base mismatch: expected {}/{}, got {}/{}",
+            self.expected.numerator(),
+            self.expected.denominator(),
+            self.actual.numerator(),
+            self.actual.denominator(),
+        )
+    }
+}
+
+impl core::error::Error for FrameBaseMismatch {}
+
+/// `install_plan` failure — the plan was *not* staged.
+///
+/// [`FrameBaseMismatch`](InstallPlanError::FrameBaseMismatch) means the
+/// plan was compiled in a foreign frame base and was rejected before
+/// any queue interaction: nothing was pushed, `control_overflows` was
+/// not bumped, and the previously installed plan/graph/node state is
+/// untouched.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum InstallPlanError {
+    /// The bounded control queue was full — the message was dropped
+    /// and `control_overflows` bumped (unchanged `QueueFull` semantics).
+    QueueFull(QueueFull),
+    /// `plan.frame_base` differs from the attach-time frame base.
+    FrameBaseMismatch(FrameBaseMismatch),
+}
+
+impl core::fmt::Display for InstallPlanError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::QueueFull(e) => write!(f, "{e}"),
+            Self::FrameBaseMismatch(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl core::error::Error for InstallPlanError {}
+
 /// The non-RT handle of a [`crate::PluginNode`]: stage transport
 /// control, drain reports, read fault counters.
 ///
@@ -135,6 +195,7 @@ pub struct PluginNodeControl {
     tx: Producer<NodeControl>,
     rx: Consumer<NodeReport>,
     status: Arc<NodeStatus>,
+    frame_base: TimeBase,
 }
 
 impl PluginNodeControl {
@@ -142,8 +203,67 @@ impl PluginNodeControl {
         tx: Producer<NodeControl>,
         rx: Consumer<NodeReport>,
         status: Arc<NodeStatus>,
+        frame_base: TimeBase,
     ) -> Self {
-        Self { tx, rx, status }
+        Self {
+            tx,
+            rx,
+            status,
+            frame_base,
+        }
+    }
+
+    /// The attach-time frame base — the same `AttachConfig::frame_base`
+    /// the node's `TransportScheduler` runs on (one tick = one engine
+    /// frame). This is the verified clock context for plan/dispatcher
+    /// construction: values obtained anywhere else must be validated
+    /// with [`Self::check_frame_base`] before use.
+    ///
+    /// Invariant: fixed at `attach` and never mutated — clock-epoch
+    /// identity (`SetClock`/`DeviceRestart`), transport position
+    /// (Play/Seek/Stop) and plan generations are independent and do
+    /// not change it.
+    ///
+    /// **RT contract:** non-RT.
+    #[must_use]
+    pub const fn frame_base(&self) -> TimeBase {
+        self.frame_base
+    }
+
+    /// Verifies `base` against the attach-time frame base using the
+    /// contract's substantive equality (gcd-normalized `TimeBase`
+    /// `PartialEq`). Returns [`FrameBaseMismatch`] carrying
+    /// `expected`/`actual` so consumer constructors (e.g. a param
+    /// dispatcher taking an external `frame_base`) can propagate the
+    /// typed rejection with `?`.
+    ///
+    /// **RT contract:** non-RT.
+    ///
+    /// # Errors
+    ///
+    /// [`FrameBaseMismatch`] when `base` differs from
+    /// [`Self::frame_base`].
+    pub fn check_frame_base(&self, base: TimeBase) -> Result<(), FrameBaseMismatch> {
+        if base == self.frame_base {
+            Ok(())
+        } else {
+            Err(FrameBaseMismatch {
+                expected: self.frame_base,
+                actual: base,
+            })
+        }
+    }
+
+    /// Mints a [`TransportPlanBuilder`] bound to this node's verified
+    /// attach-time frame base. Plans built through it always satisfy
+    /// [`Self::install_plan`]'s base check — the correct-construction
+    /// path for consumers (plan generation stays the caller's choice,
+    /// matching the scheduler's `PlanGeneration` adoption contract).
+    ///
+    /// **RT contract:** non-RT.
+    #[must_use]
+    pub fn plan_builder(&self, generation: PlanGeneration) -> TransportPlanBuilder<EventKind> {
+        TransportPlanBuilder::new(self.frame_base, generation)
     }
 
     /// Stages a transport command `due_frames` ahead of the next
@@ -162,17 +282,27 @@ impl PluginNodeControl {
     /// Stages a plan install `due_frames` ahead of the next callback.
     /// The node vault-clones the `Arc` before staging.
     ///
+    /// `plan.frame_base` is verified against the attach-time frame base
+    /// *before* any queue interaction — a mismatched plan is rejected
+    /// with [`InstallPlanError::FrameBaseMismatch`] and nothing is
+    /// staged, queued, or counted; the installed plan and node state
+    /// are untouched.
+    ///
     /// # Errors
     ///
-    /// [`QueueFull`] when the control queue is full.
+    /// [`InstallPlanError::FrameBaseMismatch`] when `plan.frame_base`
+    /// differs from [`Self::frame_base`];
+    /// [`InstallPlanError::QueueFull`] when the control queue is full.
     pub fn install_plan(
         &mut self,
         plan: Arc<TransportPlan<EventKind>>,
         due_frames: u64,
-    ) -> Result<(), QueueFull> {
+    ) -> Result<(), InstallPlanError> {
+        self.check_frame_base(plan.frame_base)
+            .map_err(InstallPlanError::FrameBaseMismatch)?;
         self.tx
             .try_push(NodeControl::InstallPlan { plan, due_frames })
-            .map_err(|_| self.queue_full())
+            .map_err(|_| InstallPlanError::QueueFull(self.queue_full()))
     }
 
     /// Rebases the node's frame cursor.

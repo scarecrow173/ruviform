@@ -40,7 +40,9 @@ mod vault;
 pub use attach::{AttachConfig, AttachError, Attached, attach};
 pub use bus::{BusError, bus_to_port_def, role_to_port_role, validate_buses};
 pub use cap::{AdapterCapability, Backend, CapabilityLevel, capability_for};
-pub use control::{NodeControl, NodeReport, PluginNodeControl, QueueFull};
+pub use control::{
+    FrameBaseMismatch, InstallPlanError, NodeControl, NodeReport, PluginNodeControl, QueueFull,
+};
 pub use dispatch::{DispatchStage, DropReason, ParamDispatchLedger, ParamValueObservation};
 pub use factory::PluginNodeFactory;
 pub use input::{

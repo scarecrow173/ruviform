@@ -788,6 +788,18 @@ impl PluginNode {
         }
     }
 
+    /// The attach-time frame base — the same `AttachConfig::frame_base`
+    /// [`crate::attach`] minted this node with (one tick = one engine
+    /// frame), delegated from the embedded `TransportScheduler`. Clock
+    /// epochs (`SetClock`/`DeviceRestart`), transport position and plan
+    /// generations are independent identities and never change it.
+    ///
+    /// **RT contract:** RT-suitable — read-only field access.
+    #[must_use]
+    pub const fn frame_base(&self) -> ruviform_media_core::TimeBase {
+        self.scheduler.frame_base()
+    }
+
     /// Bounded control drain at callback head — `due_frames` are
     /// relative to the cursor *as it was before this callback*;
     /// `install_plan` vault-clones the `Arc` before staging.
