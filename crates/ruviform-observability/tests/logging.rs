@@ -491,6 +491,35 @@ fn best_effort_sink_failure_is_degraded_and_rest_works() {
     assert!(read_sink_files(dir.path(), "live").contains("still routed"));
 }
 
+// E4c (Issue #336): degraded record は Clone 可能 — Host がスナップショット
+// として複製保持できる(借用経路の workaround 不要)。
+#[test]
+fn sink_degraded_record_is_cloneable() {
+    let dir = tempfile::tempdir().unwrap();
+    let not_a_dir = dir.path().join("occupied");
+    fs::write(&not_a_dir, b"i am a file").unwrap();
+
+    let result = build_logging(&LoggingConfig {
+        sinks: vec![
+            file_sink_with_mode(
+                &not_a_dir,
+                "app",
+                "info",
+                LogFormat::Text,
+                SinkFailureMode::BestEffort,
+            ),
+            file_sink(dir.path(), "live", "info", LogFormat::Text),
+        ],
+    })
+    .unwrap();
+
+    let snapshot = result.degraded.clone();
+    assert_eq!(snapshot.len(), 1);
+    assert_eq!(snapshot[0].sink_index, 0);
+    assert_eq!(snapshot[0].kind, SinkKind::RollingFile);
+    assert_eq!(snapshot[0].reason, result.degraded[0].reason);
+}
+
 // E5: 全 sink BestEffort 全滅 → AllSinksFailed(黙って成功扱いしない)。
 #[test]
 fn all_best_effort_failures_error() {
