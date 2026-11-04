@@ -334,6 +334,8 @@ export function resolveLanes(classifiedFiles, ctx) {
       expected: false,
       oses: LANES[id].oses,
       contexts: LANES[id].contexts,
+      requiredContexts: LANES[id].requiredContexts,
+      observeJob: LANES[id].observeJob,
       features: LANES[id].features,
       reasons: [],
     };
