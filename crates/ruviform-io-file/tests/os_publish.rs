@@ -358,14 +358,6 @@ fn replace_dest_held_exclusively_fails() {
 #[test]
 fn replace_in_readonly_dir_is_definite_failure() {
     use std::os::unix::fs::PermissionsExt;
-    let dir = workdir("rodir");
-    let _g = DirGuard::new(dir.clone());
-    let dest = dir.join("ro.bin");
-    fs::write(&dest, b"keep").expect("seed");
-    let staged = staged_at(&dest, b"new");
-    let mut perms = fs::metadata(&dir).unwrap().permissions();
-    perms.set_mode(0o555);
-    fs::set_permissions(&dir, perms).unwrap();
     struct PermGuard(PathBuf);
     impl Drop for PermGuard {
         fn drop(&mut self) {
@@ -374,6 +366,14 @@ fn replace_in_readonly_dir_is_definite_failure() {
             let _ = fs::set_permissions(&self.0, p);
         }
     }
+    let dir = workdir("rodir");
+    let _g = DirGuard::new(dir.clone());
+    let dest = dir.join("ro.bin");
+    fs::write(&dest, b"keep").expect("seed");
+    let staged = staged_at(&dest, b"new");
+    let mut perms = fs::metadata(&dir).unwrap().permissions();
+    perms.set_mode(0o555);
+    fs::set_permissions(&dir, perms).unwrap();
     let pg = PermGuard(dir.clone());
     // Root bypasses directory permissions — verify the restriction
     // actually holds before relying on the failure.
