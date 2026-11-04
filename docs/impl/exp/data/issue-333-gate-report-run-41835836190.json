@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "event": "pull_request",
+  "base": "f880c79707ac30c663ab4d0aca6b7593ba2c4f2c",
+  "head": "8306080aec5bd5d0788789a043251a6104a3d8b6",
+  "verdict": "pass",
+  "classificationOk": true,
+  "classificationProblems": [],
+  "lanes": [
+    {
+      "lane": "verify",
+      "oses": [
+        "ubuntu-latest",
+        "windows-latest",
+        "macos-latest"
+      ],
+      "contexts": [
+        "verify (ubuntu-latest)",
+        "verify (windows-latest)",
+        "verify (macos-latest)"
+      ],
+      "expected": true,
+      "result": "success",
+      "verdict": "Pass",
+      "note": ""
+    },
+    {
+      "lane": "rt-verify",
+      "oses": [
+        "ubuntu-latest"
+      ],
+      "contexts": [
+        "rt-verify"
+      ],
+      "expected": true,
+      "result": "success",
+      "verdict": "Pass",
+      "note": ""
+    },
+    {
+      "lane": "icc-verify",
+      "oses": [
+        "ubuntu-latest"
+      ],
+      "contexts": [
+        "icc-verify"
+      ],
+      "expected": true,
+      "result": "success",
+      "verdict": "Pass",
+      "note": ""
+    },
+    {
+      "lane": "ui-verify",
+      "oses": [
+        "ubuntu-latest",
+        "windows-latest",
+        "macos-latest"
+      ],
+      "contexts": [
+        "ui-verify (ubuntu-latest)",
+        "ui-verify (windows-latest)",
+        "ui-verify (macos-latest)"
+      ],
+      "expected": true,
+      "result": "success",
+      "verdict": "Pass",
+      "note": ""
+    },
+    {
+      "lane": "l1-real-verify",
+      "oses": [
+        "ubuntu-latest",
+        "windows-latest",
+        "macos-latest"
+      ],
+      "contexts": [
+        "l1-real-verify (ubuntu-latest)",
+        "l1-real-verify (windows-latest)",
+        "l1-real-verify (macos-latest)"
+      ],
+      "expected": true,
+      "result": "success",
+      "verdict": "Pass",
+      "note": ""
+    },
+    {
+      "lane": "bench",
+      "oses": [
+        "ubuntu-latest"
+      ],
+      "contexts": [
+        "bench"
+      ],
+      "expected": true,
+      "result": "success",
+      "verdict": "Pass",
+      "note": ""
+    }
+  ]
+}

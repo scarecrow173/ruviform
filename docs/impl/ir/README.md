@@ -148,3 +148,4 @@ Directory: `docs/impl/ir`
 | IMPL-034RBOeR2Hzlia9YIM8Rky | Issue #327 (CI-OPT-00) 3リポジトリ横断 CI 計測 Baseline（collect-ci-metrics.mjs・代表 run 実測・required contexts/coverage matrix・cache Cold/Warm） | completed | [issue-327-ci-baseline.md](./issue-327-ci-baseline.md) |
 | IMPL-034RBWydgCTGFLeFHqAEQp | Issue #330 CI-OPT-03 mise task install/freshness 分離 + ui-verify setup ステップ | completed | [issue-330-ci-opt-03-mise-task-install-freshness-ui-verify-setup.md](./issue-330-ci-opt-03-mise-task-install-freshness-ui-verify-setup.md) |
 | IMPL-OVLf8tC84aP8OgMOOCOMve | Issue #332 CI-OPT-05 Playwright Chromium binary cache + 準備 step 分離 | completed | [issue-332-ci-opt-05-playwright-chromium-cache.md](./issue-332-ci-opt-05-playwright-chromium-cache.md) |
+| IMPL-ngz9RSZGnlsfJnmktd0EGE | Issue #333 CI-OPT-06 変更影響ベース検証 DAG・fail-closed 集約 gate（Shadow Mode） | completed | [issue-333-ci-opt-06-impact-gate.md](./issue-333-ci-opt-06-impact-gate.md) |
