@@ -32,6 +32,10 @@ members = [
     # 汎用ファイル I/O 基盤（Issue #295 新設 — StagedFile/SealedFile 型状態 + 分類済み publish 契約。
     # OS 非依存の非 RT 基盤で media-io / io バックエンドより下位。実 OS backend は IO-IMP-02 #296）
     "crates/ruviform-io-file",
+    # 汎用圧縮 I/O 基盤（Issue #300 新設 — gzip / raw deflate の借用ストリーム
+    # Encoder/Decoder・明示 finish・VerifiedEnd・累積 budget。OS 非依存の非 RT
+    # 基盤で archive / file 消費者より下位。zstd は IO-IMP-07 / Issue #301）
+    "crates/ruviform-io-compression",
     "crates/ruviform-media-io",
     # メディア Reader/Prefetch 基盤（Issue #197 — source-frame sequential decode + bounded prefetch → RT consumer。media-io 非 RT 境界を保ったまま mixed-RT を分離）
     "crates/ruviform-media-reader",
