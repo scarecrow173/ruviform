@@ -42,14 +42,15 @@ Directory: `docs/specs`
 | SPEC-034RoXidyTvNC4Cd998l35 | Issue #276 汎用 Logging Adapter(observability::logging) | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | SPEC-034Rp1Lwq5BGjy5ucoWJ4s | Issue #277 OBS-02 軽量Primitive・Observation Source型・登録/寿命契約 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
 | SPEC-034RoR8tcezgggBLlNk7od | Issue #295 ruviform-io-file — StagedFile 型状態・公開契約・Mock Publish (IO-IMP-01) | approved | [issue-295-io-file-staged-publish-contract.md](./issue-295-io-file-staged-publish-contract.md) |
-| SPEC-034RBEkXlCcpgzIaiikzso | Issue #296 ruviform-io-file — 実 OS Atomic Publish・Durability・Recovery (IO-IMP-02) | draft | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
+| SPEC-034RBEkXlCcpgzIaiikzso | Issue #296 ruviform-io-file — 実 OS Atomic Publish・Durability・Recovery (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | SPEC-P7W4Dz6p2EQIQNPclAQG2U | Issue #307 PluginNode attach 時 frame_base の非 RT 型付き検証（verified clock context） | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | SPEC-034Rp1AEJDKiDTpPq3H4Yz | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | SPEC-3S6R25rgxNv9VL9etjWsH9 | Issue #311 RF-GT-02 Rust↔TypeScript IPC Schema Conformance・Deterministic Record/Replay・Fault Matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | SPEC-034S312gtUiTestSpecBB22 | Issue #312 test-only GUI host lifecycle・secure control adapter・fixture/clock/observation 仕様 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
-| SPEC-BbANBkZi3v9ZHthJOmnDCy | Issue #328 CI-OPT-01 PR Concurrency 制御・旧 revision CI キャンセル | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
 | SPEC-034RBJKNinKQbKocpnqqM9 | Issue #327 3リポジトリ横断CI計測Baseline・非回帰基準 仕様 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
+| SPEC-BbANBkZi3v9ZHthJOmnDCy | Issue #328 CI-OPT-01 PR Concurrency 制御・旧 revision CI キャンセル | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
 | SPEC-034RBIrH4H2hFNw7gfmgDa | Issue #330 CI-OPT-03 UI npm ci 重複排除・TypeScript検証パイプライン集約 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
+| SPEC-x9aakFSwqMZzdqGoq2uyc3 | Issue #332 CI-OPT-05 Playwright Chromium 準備・ブラウザキャッシュと実行時間の最適化 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |
