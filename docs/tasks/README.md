@@ -143,6 +143,7 @@ Directory: `docs/tasks`
 | TASK-034RBNKfGF6WS4OfHfW1of | Issue #327 CI計測Baseline 計測実施・文書化 | done | [issue-327-t1-baseline-measurement.md](./issue-327-t1-baseline-measurement.md) |
 | TASK-uRQkJW5851dqMXehrKNZkI | Issue #328 T1 — ci.yml / consumer-impact-check.yml へ PR concurrency block 適用 | done | [issue-328-t1-ci-pr-concurrency.md](./issue-328-t1-ci-pr-concurrency.md) |
 | TASK-034RBIMQzuYAewg2JXTXOk | T1 mise task install/freshness 分離 + ui-verify setup ステップ（Issue #330） | done | [issue-330-t1-mise-ui-install-dedup.md](./issue-330-t1-mise-ui-install-dedup.md) |
+| TASK-O3Q2a0lPvct9PFKBgBig2j | T1 Playwright Chromium cache・準備 step 分離（Issue #332） | done | [issue-332-t1-playwright-browser-cache.md](./issue-332-t1-playwright-browser-cache.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

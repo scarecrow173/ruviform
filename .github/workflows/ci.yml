@@ -238,6 +238,11 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     env:
       CARGO_INCREMENTAL: "0"
+      # Issue #332 (CI-OPT-05): pin the Playwright browser directory inside the
+      # workspace so `actions/cache` can use one relative path on all three
+      # OSes (defaults differ per OS). Install and test steps resolve the
+      # same directory; local runs keep the OS-default path.
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
@@ -375,9 +380,55 @@ jobs:
       # Chromium system libraries for the Playwright-managed browser; needed
       # once on Linux only. Requires the ui/browser-test node_modules that
       # the check step above (via install-ui-browser-test) already installed.
+      # Issue #332: OS system libraries are a separate layer from the browser
+      # binary cache below — they always run, cached browser or not.
       - name: Install Playwright browser system deps (Linux)
         if: runner.os == 'Linux'
         run: npm --prefix ui/browser-test exec -- playwright install-deps chromium
+
+      # Browser binary cache (Issue #332): the key is pinned to the Playwright
+      # version and the Chromium revision the lockfile resolves to — a bump
+      # changes the key and falls back to a plain install. No restore-keys:
+      # restoring a stale-version cache only carries unused revisions.
+      - name: Read Playwright browser version/revision
+        id: pw-meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(mise exec -- node -p "require('./ui/browser-test/node_modules/@playwright/test/package.json').version")"
+          revision="$(mise exec -- node -p "require('./ui/browser-test/node_modules/playwright-core/browsers.json').browsers.find(b=>b.name==='chromium').revision")"
+          test -n "$version" && test -n "$revision"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Playwright Chromium cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: .cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-pw${{ steps.pw-meta.outputs.version }}-chromium${{ steps.pw-meta.outputs.revision }}
+
+      # `playwright install` is revision-idempotent: a cache hit makes this a
+      # ~1-3s presence check, a miss downloads the pinned revision. This step
+      # is the browser-download measurement point (kept out of the test step).
+      - name: Prepare Playwright Chromium (mise run install-ui-browser-chromium)
+        run: mise run install-ui-browser-chromium
+
+      # A restored directory whose binaries are corrupt can still satisfy
+      # playwright's presence check, so validate with a real headless launch
+      # (the same headless-shell path the test suite uses). On failure, wipe
+      # the directory and reinstall — never proceed to tests on an
+      # unvalidated browser. Linux needs the system deps installed above.
+      - name: Validate Playwright Chromium launch
+        shell: bash
+        run: |
+          set -u
+          probe="${RUNNER_TEMP:-$(mktemp -d)}/chromium-launch-probe.png"
+          if ! npm --prefix ui/browser-test exec -- playwright screenshot --browser chromium about:blank "$probe"; then
+            echo "::warning::cached Chromium failed launch validation; wiping ${PLAYWRIGHT_BROWSERS_PATH} and reinstalling"
+            rm -rf "${PLAYWRIGHT_BROWSERS_PATH:?must be a non-empty workspace path}"
+            mise run install-ui-browser-chromium
+            npm --prefix ui/browser-test exec -- playwright screenshot --browser chromium about:blank "$probe"
+          fi
 
       - name: Run UI browser tests (mise run test-ui-browser)
         run: mise run test-ui-browser

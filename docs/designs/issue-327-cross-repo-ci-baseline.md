@@ -230,7 +230,7 @@ step→lane（job 内の時間分解。正規表現・先勝ち。実装: `colle
 
 ## Deferred Design Concerns
 
-- Playwright lane の cache 分類 — 現行 workflow に Playwright step が無い（ui は node --test）。#332 着手時に lane 表へ追加。
+- ~~Playwright lane の cache 分類~~ — **#332（CI-OPT-05）で解決済み**: `playwright` step lane は既存行で browser 準備 step（install-deps/prepare/validate）を分類し、browser binary cache の restore/save step は `cache-restore` lane・cache verdict は既存 CACHE_PATTERNS（`Cache hit for restore-key`/`Cache not found`/`Cache saved`）が汎用に拾う。収集器の変更なしに Cold/Warm・download 有無・実テスト時間の分離記録が成立（設計: `docs/designs/issue-332-playwright-browser-cache.md`）。
 - runner プロビジョニング内訳 — GitHub 側未公開。待機は `job_wait_s` 近似のまま。
 - billing multiplier（Windows/macOS の倍率）— 最適化のコスト評価が必要になった時点で拡張。
 

@@ -146,3 +146,4 @@ Directory: `docs/impl/ir`
 | IR-mfG5TUv6nTb9bSBIpPKVbE | Issue #328 実装記録 — CI PR concurrency(cancel stale PR runs) | completed | [issue-328-ci-pr-concurrency-implementation.md](./issue-328-ci-pr-concurrency-implementation.md) |
 | IMPL-034RBOeR2Hzlia9YIM8Rky | Issue #327 (CI-OPT-00) 3リポジトリ横断 CI 計測 Baseline（collect-ci-metrics.mjs・代表 run 実測・required contexts/coverage matrix・cache Cold/Warm） | completed | [issue-327-ci-baseline.md](./issue-327-ci-baseline.md) |
 | IMPL-034RBWydgCTGFLeFHqAEQp | Issue #330 CI-OPT-03 mise task install/freshness 分離 + ui-verify setup ステップ | completed | [issue-330-ci-opt-03-mise-task-install-freshness-ui-verify-setup.md](./issue-330-ci-opt-03-mise-task-install-freshness-ui-verify-setup.md) |
+| IMPL-OVLf8tC84aP8OgMOOCOMve | Issue #332 CI-OPT-05 Playwright Chromium binary cache + 準備 step 分離 | completed | [issue-332-ci-opt-05-playwright-chromium-cache.md](./issue-332-ci-opt-05-playwright-chromium-cache.md) |
