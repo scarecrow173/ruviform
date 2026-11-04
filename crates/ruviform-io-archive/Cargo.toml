@@ -1,0 +1,25 @@
+[package]
+name = "ruviform-io-archive"
+description = "Archive entry management — shared entry/error/limit contract plus ZIP indexed reader/writer with central-directory, CRC, and budget verification (non-RT)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+# CRC32 for ZIP entry verification. Small, actively maintained, MIT OR
+# Apache-2.0. Internal implementation detail — never exposed in the public API.
+crc32fast = "1"
+# DEFLATE decode/encode for ZIP method 8 via the pure-Rust miniz_oxide
+# backend (`rust_backend`; no C dependency). Internal implementation detail —
+# never exposed in the public API.
+flate2 = { version = "1", default-features = false, features = [
+    "rust_backend",
+] }
+
+[lints]
+workspace = true
