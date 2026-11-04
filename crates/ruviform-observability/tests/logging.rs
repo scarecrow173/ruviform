@@ -34,6 +34,7 @@ fn file_sink_with_mode(
         destination: SinkDestination::RollingFile {
             directory: dir.to_path_buf(),
             filename_prefix: prefix.to_owned(),
+            filename_suffix: None,
             rotation: RotationPeriod::Never,
             max_files: nz(4),
             queue_capacity: nz(64),
@@ -78,6 +79,38 @@ fn matching_file_count(dir: &Path, prefix: &str) -> usize {
                     .starts_with(prefix)
         })
         .count()
+}
+
+/// Sorted names of the regular files directly under `dir`.
+fn file_names(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|entry| {
+            let path = entry.unwrap().path();
+            path.is_file()
+                .then(|| path.file_name().unwrap().to_string_lossy().into_owned())
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// Asserts `part` has the exact `YYYY-MM-DD` shape daily rotation emits
+/// (ten chars, dashes at 4/7, digits elsewhere).
+fn assert_daily_date_shape(part: &str, full_name: &str) {
+    let bytes = part.as_bytes();
+    assert_eq!(bytes.len(), 10, "not a daily date in {full_name}");
+    assert_eq!(bytes[4], b'-', "not a daily date in {full_name}");
+    assert_eq!(bytes[7], b'-', "not a daily date in {full_name}");
+    for (index, byte) in bytes.iter().enumerate() {
+        if index == 4 || index == 7 {
+            continue;
+        }
+        assert!(
+            byte.is_ascii_digit(),
+            "non-digit date character in {full_name}"
+        );
+    }
 }
 
 // E1: sink 別 filter — 同一イベントが独立にルーティングされる。
@@ -196,6 +229,7 @@ fn rolling_file_retention_deletes_oldest_at_build() {
             destination: SinkDestination::RollingFile {
                 directory: dir.path().to_path_buf(),
                 filename_prefix: "app".to_owned(),
+                filename_suffix: None,
                 rotation: RotationPeriod::Daily,
                 max_files: nz(3),
                 queue_capacity: nz(64),
@@ -222,6 +256,164 @@ fn rolling_file_retention_deletes_oldest_at_build() {
         !dir.path().join("app.2026-01-01").exists() && !dir.path().join("app.2026-01-02").exists(),
         "oldest files must be deleted first"
     );
+}
+
+// Issue #334: `filename_suffix` — `{prefix}.{rotation-date}.{suffix}` 契約。
+// AudioLens AL-OBS-01 互換確認: daily + prefix "al" + suffix "log" で
+// `al.YYYY-MM-DD.log` が生成される。
+#[test]
+fn rolling_file_with_suffix_produces_dated_suffixed_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let result = build_logging(&LoggingConfig {
+        sinks: vec![SinkConfig {
+            destination: SinkDestination::RollingFile {
+                directory: dir.path().to_path_buf(),
+                filename_prefix: "al".to_owned(),
+                filename_suffix: Some("log".to_owned()),
+                rotation: RotationPeriod::Daily,
+                max_files: nz(7),
+                queue_capacity: nz(64),
+            },
+            format: LogFormat::Text,
+            filter: "info".to_owned(),
+            failure_mode: SinkFailureMode::Required,
+        }],
+    })
+    .unwrap();
+
+    tracing::dispatcher::with_default(&result.dispatch, || {
+        tracing::info!("suffix event");
+    });
+    drop(result);
+
+    // 唯一のファイルが `al.YYYY-MM-DD.log` の形であること。
+    let names = file_names(dir.path());
+    assert_eq!(names.len(), 1, "expected exactly one log file: {names:?}");
+    let name = &names[0];
+    let date_part = name
+        .strip_prefix("al.")
+        .and_then(|n| n.strip_suffix(".log"))
+        .unwrap_or_else(|| panic!("expected `al.YYYY-MM-DD.log`, got: {name}"));
+    assert_daily_date_shape(date_part, name);
+    assert!(read_sink_files(dir.path(), "al.").contains("suffix event"));
+}
+
+// Issue #334 補強: retention は prefix+suffix 双方に整合 — suffix 付き
+// ファイル群だけが max_files の対象になり、suffix 不一致は残る。
+#[test]
+fn rolling_file_retention_matches_prefixed_and_suffixed_files() {
+    let dir = tempfile::tempdir().unwrap();
+    for day in 1..=5 {
+        fs::write(
+            dir.path().join(format!("app.2026-01-0{day}.log")),
+            format!("day {day}\n"),
+        )
+        .unwrap();
+    }
+    // prefix 一致・suffix 不一致は retention 対象外に残るはず。
+    fs::write(dir.path().join("app.2020-01-01.txt"), "not a log\n").unwrap();
+
+    let result = build_logging(&LoggingConfig {
+        sinks: vec![SinkConfig {
+            destination: SinkDestination::RollingFile {
+                directory: dir.path().to_path_buf(),
+                filename_prefix: "app".to_owned(),
+                filename_suffix: Some("log".to_owned()),
+                rotation: RotationPeriod::Daily,
+                max_files: nz(3),
+                queue_capacity: nz(64),
+            },
+            format: LogFormat::Text,
+            filter: "info".to_owned(),
+            failure_mode: SinkFailureMode::Required,
+        }],
+    })
+    .unwrap();
+    drop(result);
+
+    // seed 5 件から 2 件残り + 当日ファイル = 3 件が上限。
+    let log_count = file_names(dir.path())
+        .iter()
+        .filter(|name| Path::new(name).extension().is_some_and(|ext| ext == "log"))
+        .count();
+    assert!(
+        log_count <= 3,
+        "expected <= 3 retained .log files, found {log_count}"
+    );
+    assert!(
+        !dir.path().join("app.2026-01-01.log").exists()
+            && !dir.path().join("app.2026-01-02.log").exists(),
+        "oldest suffixed files must be deleted first"
+    );
+    assert!(
+        dir.path().join("app.2020-01-01.txt").exists(),
+        "suffix-mismatched file must be left alone"
+    );
+}
+
+// Issue #334 後方互換: suffix 未指定(`None`)は `{prefix}.{rotation-date}`
+// を維持する。
+#[test]
+fn rolling_file_without_suffix_keeps_plain_dated_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let result = build_logging(&LoggingConfig {
+        sinks: vec![SinkConfig {
+            destination: SinkDestination::RollingFile {
+                directory: dir.path().to_path_buf(),
+                filename_prefix: "app".to_owned(),
+                filename_suffix: None,
+                rotation: RotationPeriod::Daily,
+                max_files: nz(7),
+                queue_capacity: nz(64),
+            },
+            format: LogFormat::Text,
+            filter: "info".to_owned(),
+            failure_mode: SinkFailureMode::Required,
+        }],
+    })
+    .unwrap();
+
+    tracing::dispatcher::with_default(&result.dispatch, || {
+        tracing::info!("no suffix event");
+    });
+    drop(result);
+
+    let names = file_names(dir.path());
+    assert_eq!(names.len(), 1, "expected exactly one log file: {names:?}");
+    let date_part = names[0]
+        .strip_prefix("app.")
+        .unwrap_or_else(|| panic!("expected `app.YYYY-MM-DD`, got: {}", names[0]));
+    assert_daily_date_shape(date_part, &names[0]);
+}
+
+// RotationPeriod::Never + suffix — date 成分なしで `{prefix}.{suffix}`。
+#[test]
+fn rolling_file_suffix_with_never_rotation_is_prefix_dot_suffix() {
+    let dir = tempfile::tempdir().unwrap();
+    let result = build_logging(&LoggingConfig {
+        sinks: vec![SinkConfig {
+            destination: SinkDestination::RollingFile {
+                directory: dir.path().to_path_buf(),
+                filename_prefix: "app".to_owned(),
+                filename_suffix: Some("log".to_owned()),
+                rotation: RotationPeriod::Never,
+                max_files: nz(4),
+                queue_capacity: nz(64),
+            },
+            format: LogFormat::Text,
+            filter: "info".to_owned(),
+            failure_mode: SinkFailureMode::Required,
+        }],
+    })
+    .unwrap();
+
+    tracing::dispatcher::with_default(&result.dispatch, || {
+        tracing::info!("never-rotated suffix event");
+    });
+    drop(result);
+
+    assert_eq!(file_names(dir.path()), ["app.log"]);
+    assert!(read_sink_files(dir.path(), "app.").contains("never-rotated suffix event"));
 }
 
 // E4: Required sink の初期化失敗は型付き error。

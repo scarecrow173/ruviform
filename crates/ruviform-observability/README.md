@@ -164,12 +164,15 @@ filter/format/rolling 実装を再利用するため。
   event を各 sink が独自にルーティングする。
 - `LogFormat::{Text, JsonLines}` — Text は ANSI off の人間可読 1 行、
   JsonLines は event ごと 1 JSON object。
-- `SinkDestination::RollingFile { directory, filename_prefix, rotation,
-  max_files, queue_capacity }` — ファイル名は
-  `{prefix}.{rotation-date}`（daily なら `app.2026-11-04`）。retention は
-  `tracing-appender` の `max_log_files` に委譲し、構築時・rotation 時に
-  prefix 一致ファイルを古い順に削除する（AudioLens の 7 daily 世代は
-  `Daily` + `max_files=7`）。
+- `SinkDestination::RollingFile { directory, filename_prefix,
+  filename_suffix, rotation, max_files, queue_capacity }` — ファイル名は
+  `{prefix}.{rotation-date}`（daily なら `app.2026-11-04`）。
+  `filename_suffix: Some("log")` 指定時は
+  `{prefix}.{rotation-date}.{suffix}`（`app.2026-11-04.log`）、`None` は
+  従来どおり。retention は `tracing-appender` の `max_log_files` に委譲し、
+  構築時・rotation 時に prefix+suffix 一致ファイルを古い順に削除する
+  （AudioLens の `al.YYYY-MM-DD.log`・7 daily 世代は `Daily` +
+  `Some("log")` + `max_files=7` — Issue #334）。
 - `filter` が不正なら `LoggingBuildError::InvalidFilter` で build 失敗。
 - `RotationPeriod::{Daily, Hourly, Minutely, Never}`。
 

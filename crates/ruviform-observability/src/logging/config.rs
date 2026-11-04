@@ -78,14 +78,19 @@ pub enum SinkDestination {
     /// kept to at most `max_files` matching files.
     ///
     /// File names are `{filename_prefix}.{rotation-date}` (e.g.
-    /// `myapp.2026-11-04` for daily rotation).
+    /// `myapp.2026-11-04` for daily rotation), or
+    /// `{filename_prefix}.{rotation-date}.{filename_suffix}` when
+    /// `filename_suffix` is `Some` (e.g. `myapp.2026-11-04.log`). With
+    /// [`RotationPeriod::Never`] there is no date component, so the names
+    /// are `{filename_prefix}` / `{filename_prefix}.{filename_suffix}`.
     ///
     /// Retention is delegated to the appender's built-in `max_log_files`
     /// mechanism: when the appender is constructed and at each rotation,
-    /// files matching the prefix (non-directory, non-symlink) are deleted
-    /// oldest-first until at most `max_files` remain. Note the upstream
-    /// caveat that the retained count can occasionally dip *below* the
-    /// maximum; `max_files` is a cap, not a guaranteed minimum.
+    /// files matching the prefix *and* the suffix (non-directory,
+    /// non-symlink) are deleted oldest-first until at most `max_files`
+    /// remain. Note the upstream caveat that the retained count can
+    /// occasionally dip *below* the maximum; `max_files` is a cap, not a
+    /// guaranteed minimum.
     ///
     /// `queue_capacity` bounds how many formatted events may wait in memory
     /// for the sink's background worker; events arriving beyond that bound
@@ -98,6 +103,13 @@ pub enum SinkDestination {
         directory: PathBuf,
         /// Prefix prepended to the rotation date in the file name.
         filename_prefix: String,
+        /// Optional extension-like suffix appended after the rotation
+        /// date, producing `{prefix}.{rotation-date}.{suffix}` file names
+        /// (e.g. `Some("log")` → `app.2026-11-04.log`). `None` keeps the
+        /// original `{prefix}.{rotation-date}` naming. The value is passed
+        /// verbatim to `tracing_appender`'s `filename_suffix` — supply the
+        /// bare extension without a leading dot.
+        filename_suffix: Option<String>,
         /// How often a new file is started (daily / hourly / minutely /
         /// never).
         rotation: RotationPeriod,
