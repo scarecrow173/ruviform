@@ -69,6 +69,7 @@ Directory: `docs/designs`
 | DESIGN-034RJ00iyqN3oWCf99pDXu | Issue #331 設計 — check-ci を lint-ci へ統合する等価性証明と適用 | approved | [issue-331-check-clippy-test-dedup.md](./issue-331-check-clippy-test-dedup.md) |
 | DESIGN-EJ86GHTwsKgyexnCdTpSJ5 | Issue #332 CI-OPT-05 Playwright Chromium cache・準備分離設計 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | DESIGN-oq5cpmBZrL3fUcNnuUzPxg | Issue #333 CI-OPT-06 Impact Classifier・集約 Required Gate・段階移行設計 | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
+| DESIGN-elUvrfyRcsMrmrESYqsxDn | Issue #336 SinkDegraded Clone 設計 | approved | [issue-336-sink-degraded-clone.md](./issue-336-sink-degraded-clone.md) |
 | DESIGN-034RP4B7OViSh6O4YCu1rz | Issue #346 CI-OPT-06 選択実行有効化・ruleset required context 移行 runbook | approved | [issue-346-ruleset-migration-runbook.md](./issue-346-ruleset-migration-runbook.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |

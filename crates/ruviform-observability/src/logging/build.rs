@@ -32,7 +32,11 @@ pub type LoggingLayers = Vec<Box<dyn Layer<Registry> + Send + Sync>>;
 
 /// A `BestEffort` sink that failed to initialize: build continued without
 /// it and this record is the explicit notification — never silent.
-#[derive(Debug)]
+///
+/// `Clone` is derived so hosts can retain snapshot copies of the degraded
+/// record (issue #336); the health snapshot types in `health` are `Clone`
+/// for the same reason.
+#[derive(Debug, Clone)]
 pub struct SinkDegraded {
     /// Index of the failed sink in the `sinks` list of the supplied
     /// `LoggingConfig`.

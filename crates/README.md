@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計33クレート）。
+Ruviform ワークスペースのメンバークレート索引（計34クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
