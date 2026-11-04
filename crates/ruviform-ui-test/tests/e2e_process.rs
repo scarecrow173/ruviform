@@ -420,6 +420,9 @@ fn e2e_tcp_wrong_secret_is_unauthenticated() {
         }
         other => panic!("expected result, got {other:?}"),
     }
+    // Unread buffered data makes a bare drop() send RST on some
+    // platforms; shutdown() guarantees the FIN the server reads as EOF.
+    let _ = stream.shutdown(std::net::Shutdown::Both);
     drop(stream);
     drop(reader);
     let status = child.wait().expect("wait");
