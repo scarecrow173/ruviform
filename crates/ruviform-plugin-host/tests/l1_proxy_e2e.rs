@@ -146,7 +146,7 @@ fn pipeline_barrier(instance: &mut L1Instance) {
 /// child-side and returns identical reply/error semantics.
 #[test]
 fn command_parity_lifecycle_and_state() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
     assert_eq!(instance.lifecycle_state(), LifecycleState::Created);
 
     assert_eq!(
@@ -222,7 +222,7 @@ fn command_parity_lifecycle_and_state() {
 /// `Err(HostError::Lifecycle(_))` — identical semantics to L0.
 #[test]
 fn illegal_transitions_match_l0_semantics() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
 
     // Activate before Initialize.
     assert!(matches!(
@@ -263,7 +263,7 @@ fn illegal_transitions_match_l0_semantics() {
 #[test]
 fn crash_transitions_failed_and_notifies() {
     let mut instance =
-        L1Instance::spawn(&spec(&["--crash-after-msgs=4"]), &DiagRegistry::new()).unwrap();
+        L1Instance::spawn(&spec(&["--crash-after-msgs=4"]), &DiagRegistry::new(), None).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     // The pending command is woken `Ipc` by the convergence.
@@ -308,6 +308,7 @@ fn voluntary_exit_zero_is_failure() {
     let mut instance = L1Instance::spawn(
         &spec(&["--crash-after-msgs=3", "--crash-exit-code=0"]),
         &DiagRegistry::new(),
+        None,
     )
     .unwrap();
 
@@ -332,7 +333,7 @@ fn voluntary_exit_zero_is_failure() {
 /// convergence as a spontaneous crash.
 #[test]
 fn kill_transitions_failed_and_notifies() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     instance.kill();
@@ -359,6 +360,7 @@ fn hang_converges_on_command_timeout() {
     let mut instance = L1Instance::spawn(
         &fast_timeout_spec(&["--hang-after-msgs=2"]),
         &DiagRegistry::new(),
+        None,
     )
     .unwrap();
 
@@ -388,7 +390,7 @@ fn handshake_descriptor_mismatch() {
         ..WORKER_DESCRIPTOR
     };
     assert!(matches!(
-        L1Instance::spawn(&spec, &DiagRegistry::new()).map(|_| ()),
+        L1Instance::spawn(&spec, &DiagRegistry::new(), None).map(|_| ()),
         Err(HostError::SpawnFailed {
             cause: FailureCause::Handshake,
             ..
@@ -401,7 +403,7 @@ fn handshake_descriptor_mismatch() {
 #[test]
 fn handshake_version_mismatch() {
     assert!(matches!(
-        L1Instance::spawn(&spec(&["--hello-version=99"]), &DiagRegistry::new()).map(|_| ()),
+        L1Instance::spawn(&spec(&["--hello-version=99"]), &DiagRegistry::new(), None).map(|_| ()),
         Err(HostError::SpawnFailed {
             cause: FailureCause::Handshake,
             ..
@@ -417,7 +419,8 @@ fn handshake_scan_timeout() {
     assert!(matches!(
         L1Instance::spawn(
             &fast_timeout_spec(&["--hang-after-msgs=0"]),
-            &DiagRegistry::new()
+            &DiagRegistry::new(),
+            None
         )
         .map(|_| ()),
         Err(HostError::SpawnFailed {
@@ -434,7 +437,7 @@ fn spawn_failure_is_spawn_failed() {
     let mut spec = spec(&[]);
     spec.program = OsString::from("ruviform-l1-definitely-not-a-binary-xyz");
     assert!(matches!(
-        L1Instance::spawn(&spec, &DiagRegistry::new()).map(|_| ()),
+        L1Instance::spawn(&spec, &DiagRegistry::new(), None).map(|_| ()),
         Err(HostError::SpawnFailed {
             cause: FailureCause::Spawn,
             ..
@@ -446,7 +449,7 @@ fn spawn_failure_is_spawn_failed() {
 /// the wire — the child stays alive and keeps serving commands.
 #[test]
 fn gui_defined_rejection() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     assert_eq!(
@@ -473,7 +476,7 @@ fn gui_defined_rejection() {
 /// `Prepare(UnsupportedConfig)`, mirror unchanged.
 #[test]
 fn activate_over_wire_limit_rejected() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     let over = ProcessConfig::new(
@@ -495,7 +498,7 @@ fn activate_over_wire_limit_rejected() {
 /// no `Failed`, no notification, idempotent `Destroy`.
 #[test]
 fn destroy_is_clean_teardown() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
     instance.destroy();
@@ -509,7 +512,7 @@ fn destroy_is_clean_teardown() {
 /// fallback teardown path (owner gone → driver `Disconnected` arm).
 #[test]
 fn drop_reaps_live_child() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
     drop(instance);
     // Reaching here at all is the assertion — Drop must not hang.
@@ -527,6 +530,7 @@ fn wedged_child_write_converges_and_teardown_is_bounded() {
     let mut instance = L1Instance::spawn(
         &fast_timeout_spec(&["--stop-reading-after-msgs=3"]),
         &DiagRegistry::new(),
+        None,
     )
     .unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
@@ -559,8 +563,12 @@ fn wedged_child_write_converges_and_teardown_is_bounded() {
 /// than join it.
 #[test]
 fn destroy_detaches_reader_when_heir_holds_stdout() {
-    let mut instance =
-        L1Instance::spawn(&spec(&["--leave-heir-after-msgs=2"]), &DiagRegistry::new()).unwrap();
+    let mut instance = L1Instance::spawn(
+        &spec(&["--leave-heir-after-msgs=2"]),
+        &DiagRegistry::new(),
+        None,
+    )
+    .unwrap();
 
     wait_for_failed(&instance);
     let notice = wait_notification(&instance).expect("notification missing");
@@ -677,7 +685,7 @@ fn shm_unique_keys_fit_the_macos_name_limit() {
 /// A spawned instance driven to `Processing` — Initialize → Activate
 /// (512-frame cap) → `StartProcessing`.
 fn processing_instance(args: &[&str]) -> L1Instance {
-    let mut instance = L1Instance::spawn(&spec(args), &DiagRegistry::new()).unwrap();
+    let mut instance = L1Instance::spawn(&spec(args), &DiagRegistry::new(), None).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
     instance
         .execute(wire::Command::Activate { config: config() })
@@ -818,7 +826,7 @@ fn process_roundtrip_gain_and_lookahead_delay() {
 /// L0 returns — before any buffer is touched.
 #[test]
 fn process_requires_processing_state() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new()).unwrap();
+    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
     instance
         .execute(wire::Command::Activate { config: config() })
@@ -964,13 +972,13 @@ fn bundled_pair(child: &Arc<L1Child>, spawn_spec: &SpawnSpec) -> (L1Instance, L1
     let a = L1Instance::from_parts(
         Arc::clone(child),
         child
-            .create_instance(spawn_spec, depth, &DiagRegistry::new())
+            .create_instance(spawn_spec, depth, &DiagRegistry::new(), None)
             .unwrap(),
     );
     let b = L1Instance::from_parts(
         Arc::clone(child),
         child
-            .create_instance(spawn_spec, depth, &DiagRegistry::new())
+            .create_instance(spawn_spec, depth, &DiagRegistry::new(), None)
             .unwrap(),
     );
     (a, b)
@@ -1156,6 +1164,7 @@ fn bundled_failed_instance_destroy_recovers_handle() {
                 &spawn_spec,
                 spawn_spec.instance_depth().unwrap(),
                 &DiagRegistry::new(),
+                None,
             )
             .unwrap(),
     );
@@ -1260,7 +1269,7 @@ fn bundled_create_past_capacity_is_instance_limit() {
     for _ in 0..wire::WIRE_MAX_INSTANCES {
         parts.push(
             child
-                .create_instance(&spawn_spec, depth, &DiagRegistry::new())
+                .create_instance(&spawn_spec, depth, &DiagRegistry::new(), None)
                 .unwrap(),
         );
     }
@@ -1269,7 +1278,7 @@ fn bundled_create_past_capacity_is_instance_limit() {
     assert!(!child.is_terminal());
     assert_eq!(
         child
-            .create_instance(&spawn_spec, depth, &DiagRegistry::new())
+            .create_instance(&spawn_spec, depth, &DiagRegistry::new(), None)
             .map(|_| ()),
         Err(HostError::InstanceLimit)
     );
@@ -1587,7 +1596,7 @@ fn lookahead_zero_is_rejected() {
     let mut spec = spec(&[]);
     spec.lookahead_blocks = 0;
     assert_eq!(
-        L1Instance::spawn(&spec, &DiagRegistry::new()).map(|_| ()),
+        L1Instance::spawn(&spec, &DiagRegistry::new(), None).map(|_| ()),
         Err(HostError::Ipc)
     );
 }
@@ -1602,12 +1611,12 @@ fn lookahead_over_wire_depth_cap_is_rejected() {
     let mut spec = spec(&[]);
     spec.lookahead_blocks = wire::WIRE_MAX_ELEMENTS;
     assert_eq!(
-        L1Instance::spawn(&spec, &DiagRegistry::new()).map(|_| ()),
+        L1Instance::spawn(&spec, &DiagRegistry::new(), None).map(|_| ()),
         Err(HostError::Ipc)
     );
     spec.lookahead_blocks = u32::MAX;
     assert_eq!(
-        L1Instance::spawn(&spec, &DiagRegistry::new()).map(|_| ()),
+        L1Instance::spawn(&spec, &DiagRegistry::new(), None).map(|_| ()),
         Err(HostError::Ipc)
     );
 }

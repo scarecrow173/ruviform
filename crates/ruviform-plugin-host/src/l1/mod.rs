@@ -98,6 +98,7 @@
 pub(crate) mod data;
 pub(crate) mod diag;
 pub(crate) mod shm;
+pub(crate) mod sources;
 pub(crate) mod video;
 pub(crate) mod vshm;
 
@@ -112,6 +113,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use ruviform_observability::source::ObservationRegistrar;
 use ruviform_observability::{Counter, CounterReader};
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
@@ -2017,6 +2019,11 @@ pub(crate) struct InstanceParts {
     /// The shm slot count `D` (`lookahead_blocks + 1`) this
     /// instance's segment/channels/staging were sized with.
     depth: u32,
+    /// The OBS-04 source leases this mint registered (Issue #279) —
+    /// every slot `Unattached` when no registrar was attached. The
+    /// facade owns them: `destroy` retires each `Registered` lease
+    /// after the owner-side writers are gone.
+    source_leases: sources::AudioSourceLeases,
 }
 
 /// What [`L1Child::create_video_instance`] hands the video facade —
@@ -2261,12 +2268,20 @@ impl L1Child {
     /// pool path).
     ///
     /// `depth` is `D = lookahead_blocks + 1` — segment, channels
-    /// and `RtLeg` sizing in one.
+    /// and `RtLeg` sizing in one. `registrar` is the host-attached
+    /// [`ObservationRegistrar`] (Issue #279): a `Some` registers the
+    /// four audio counters' sources on a successful `Live` flip —
+    /// per-source typed degradations, never mint failures — while
+    /// `None` leaves every lease slot `Unattached`. Registration
+    /// runs only on a mint that goes live: a rolled-back mint
+    /// (rejection, transport failure, converged-mid-mint) never
+    /// registers a source.
     pub(crate) fn create_instance(
         &self,
         spec: &SpawnSpec,
         depth: u32,
         diag: &diag::DiagRegistry,
+        registrar: Option<&dyn ObservationRegistrar>,
     ) -> Result<InstanceParts, HostError> {
         // Segment + SPSC legs are per-instance from birth — minted
         // here so the entry's `SegmentInfo` names the key before
@@ -2338,43 +2353,17 @@ impl L1Child {
             },
         );
         if let Ok(wire::Reply::Ok) = create {
-            // The `Ok` reply correlated its waiter before it was
-            // removed — a `converge_child` that ran between the
-            // delivery and this lock already set `terminal` and
-            // flipped the still-`Creating` entry `Failed` *without*
-            // queuing a notification (`minted()` was false, so the
-            // `Creating` entry converged silently). An
-            // unconditional `Live` flip here would regress the
-            // phase and mint a facade whose `ChildExit` never
-            // arrives — the exactly-once-per-minted-instance
-            // guarantee lost. The flip therefore happens under
-            // the same lock that proves the entry is still
-            // mid-mint; anything else folds into the
-            // mid-create-death rollback below (`SpawnFailed`, no
-            // notification, no facade — the same path a defined
-            // `Err` reply takes).
-            let (went_live, leg_counters) = {
-                let mut inner = self.shared.lock();
-                let went_live = inner.terminal.is_none()
-                    && inner
-                        .instances
-                        .get(&instance)
-                        .is_some_and(|inst| inst.phase == InstPhase::Creating);
-                let mut leg_counters = None;
-                if went_live {
-                    let inst = inner
-                        .instances
-                        .get_mut(&instance)
-                        .expect("presence checked above");
-                    inst.phase = InstPhase::Live;
-                    // The entry just minted is `InstKind::Audio` —
-                    // the leg writers clone the same cells the
-                    // query surface reads.
-                    leg_counters = inst.audio_leg_counters();
-                }
-                (went_live, leg_counters)
-            };
+            let (went_live, leg_counters, source_readers) = self.flip_live(instance);
             if went_live {
+                // OBS-04: the mint went live, so its four counters
+                // become observation sources — outside the `inner`
+                // lock (a collector may hold its own locks). A
+                // per-source typed refusal degrades only that slot;
+                // nothing here can fail the mint.
+                let source_leases = sources::AudioSourceLeases::mint(
+                    registrar,
+                    source_readers.expect("a live audio entry carries counters"),
+                );
                 return Ok(InstanceParts {
                     instance,
                     rt_state,
@@ -2388,6 +2377,7 @@ impl L1Child {
                     ),
                     segment,
                     depth,
+                    source_leases,
                 });
             }
         }
@@ -2407,6 +2397,56 @@ impl L1Child {
         drop(inner);
         self.send_driver(DriverCmd::RemoveInstance { instance });
         Err(error)
+    }
+
+    /// The `Creating → Live` flip a landed `CreateInstance` earns,
+    /// under the `inner` lock that proves the entry is still
+    /// mid-mint. The `Ok` reply correlated its waiter before it
+    /// was removed — a `converge_child` that ran between the
+    /// delivery and this lock already set `terminal` and flipped
+    /// the still-`Creating` entry `Failed` *without* queuing a
+    /// notification (`minted()` was false, so the `Creating` entry
+    /// converged silently). An unconditional `Live` flip here
+    /// would regress the phase and mint a facade whose `ChildExit`
+    /// never arrives — the exactly-once-per-minted-instance
+    /// guarantee lost. Anything else folds into the
+    /// mid-create-death rollback in `create_instance`
+    /// (`SpawnFailed`, no notification, no facade — the same path
+    /// a defined `Err` reply takes).
+    ///
+    /// Returns `(went_live, leg_counters, source_readers)`: the
+    /// leg writers and source readers clone the same cells the
+    /// query surface reads, and the clones leave the lock before
+    /// `register` runs.
+    fn flip_live(
+        &self,
+        instance: u32,
+    ) -> (
+        bool,
+        Option<data::RtLegCounters>,
+        Option<AudioCounterReaders>,
+    ) {
+        let mut inner = self.shared.lock();
+        let went_live = inner.terminal.is_none()
+            && inner
+                .instances
+                .get(&instance)
+                .is_some_and(|inst| inst.phase == InstPhase::Creating);
+        let mut leg_counters = None;
+        let mut source_readers = None;
+        if went_live {
+            let inst = inner
+                .instances
+                .get_mut(&instance)
+                .expect("presence checked above");
+            inst.phase = InstPhase::Live;
+            // The entry just minted is `InstKind::Audio` — the leg
+            // writers and source readers clone the same cells the
+            // query surface reads.
+            leg_counters = inst.audio_leg_counters();
+            source_readers = inst.audio_counter_readers();
+        }
+        (went_live, leg_counters, source_readers)
     }
 
     /// The `CreateVideoInstance` counterpart of
@@ -2819,6 +2859,11 @@ pub(crate) struct L1Instance {
     /// it unlinks when the instance drops). RAII-only — never read.
     #[allow(dead_code)]
     segment: shm::Segment,
+    /// The OBS-04 source leases this mint registered (Issue #279) —
+    /// all `Unattached` when the host has no registrar attached.
+    /// `destroy` retires each `Registered` lease once the
+    /// owner-side writers are gone and parks the tickets inside.
+    source_leases: sources::AudioSourceLeases,
 }
 
 impl L1Instance {
@@ -2853,12 +2898,16 @@ impl L1Instance {
     /// which the wire codec caps at `WIRE_MAX_ELEMENTS`. The spec is
     /// rejected like any other unusable spawn configuration rather
     /// than silently degraded — before any segment or child exists.
-    pub(crate) fn spawn(spec: &SpawnSpec, diag: &diag::DiagRegistry) -> Result<Self, HostError> {
+    pub(crate) fn spawn(
+        spec: &SpawnSpec,
+        diag: &diag::DiagRegistry,
+        registrar: Option<&dyn ObservationRegistrar>,
+    ) -> Result<Self, HostError> {
         // The spec-legality gate runs before any segment or child
         // exists — [`SpawnSpec::instance_depth`] holds the rule.
         let depth = spec.instance_depth()?;
         let child = L1Child::spawn_scanned(&spec.view(), diag)?;
-        let parts = match child.create_instance(spec, depth, diag) {
+        let parts = match child.create_instance(spec, depth, diag, registrar) {
             Ok(parts) => parts,
             Err(error) => {
                 // Fresh-child failure — kill + reap, no
@@ -2896,6 +2945,7 @@ impl L1Instance {
             endpoint_bound: None,
             activated_sample_rate: None,
             segment: parts.segment,
+            source_leases: parts.source_leases,
         }
     }
 
@@ -3137,6 +3187,16 @@ impl L1Instance {
                 instance: self.instance,
             });
         }
+        // OBS-04 (Issue #279): writer quiescence is now declared —
+        // the facade leg came home in `drain_endpoint_channels`,
+        // and `remove_instance` (or an earlier convergence) dropped
+        // `InstShared`, so the driver-side submit consumer and
+        // `push_result`'s `results_dropped` writer are gone. Only
+        // then may each `Registered` lease retire (`Active →
+        // Retiring`); a detached endpoint leg writing after this
+        // point is the collector's `Partial`-drain business, not
+        // the domain's to hide.
+        self.source_leases.retire();
         // The mirror outlives the entry — `lifecycle_state` keeps
         // answering `Destroyed` post-removal through the facade's
         // own `rt_state` copy (the `Release`/`Acquire` pair the
@@ -3882,6 +3942,9 @@ impl L1Instance {
             endpoint_bound: None,
             activated_sample_rate: activated_frames.map(|_| 48_000),
             segment,
+            // Fixture instances minted no sources — the registrar
+            // path never ran.
+            source_leases: sources::AudioSourceLeases::unattached(),
         }
     }
 
@@ -5751,21 +5814,17 @@ mod tests {
         child: &Arc<L1Child>,
         driver_rx: &mpsc::Receiver<DriverCmd>,
         diag: &Arc<diag::DiagRegistry>,
+        registrar: Option<Arc<dyn ObservationRegistrar>>,
     ) -> (u64, thread::JoinHandle<Result<(), HostError>>) {
-        let spec = SpawnSpec::new(
-            PluginDescriptor {
-                id: "org.ruviform.test.create-seam",
-                name: "create-seam",
-                vendor: "Ruviform",
-                version: "0",
-                features: &[],
-            },
-            OsString::from("unused-runner"),
-        );
+        let spec = create_spec();
         let join = thread::spawn({
             let child = Arc::clone(child);
             let diag = Arc::clone(diag);
-            move || child.create_instance(&spec, 3, &diag).map(|_| ())
+            move || {
+                child
+                    .create_instance(&spec, 3, &diag, registrar.as_deref())
+                    .map(|_| ())
+            }
         });
         // `AddInstance` (data-plane ends) precedes the
         // `CreateInstance` `Command` carrying the waiter seq.
@@ -5780,7 +5839,218 @@ mod tests {
         (seq.expect("checked above"), join)
     }
 
-    /// The mid-mint race, sequenced deterministically: the
+    /// The `SpawnSpec` every create-harness mint shares — the
+    /// runner program is unused by the fixture (no exec happens).
+    fn create_spec() -> SpawnSpec {
+        SpawnSpec::new(
+            PluginDescriptor {
+                id: "org.ruviform.test.create-seam",
+                name: "create-seam",
+                vendor: "Ruviform",
+                version: "0",
+                features: &[],
+            },
+            OsString::from("unused-runner"),
+        )
+    }
+
+    /// Answers `expected` `DriverCmd::Command`s by popping each
+    /// waiter's seq and delivering `Ok(wire::Reply::Ok)` — the
+    /// servicing half of a live-mint test that runs
+    /// `create_instance`/`destroy` on the *test* thread (their
+    /// `InstanceParts`/`&mut` surfaces are `!Send`, so the replies
+    /// ride the side thread). `AddInstance`/`RemoveInstance`
+    /// orders pass through uncounted. The receiver comes back so
+    /// a second pump can service a re-mint on the same child.
+    fn reply_pump(
+        child: &Arc<L1Child>,
+        driver_rx: mpsc::Receiver<DriverCmd>,
+        expected: usize,
+    ) -> thread::JoinHandle<mpsc::Receiver<DriverCmd>> {
+        let child = Arc::clone(child);
+        thread::spawn(move || {
+            let mut answered = 0;
+            while answered < expected {
+                match driver_rx.recv_timeout(Duration::from_secs(30)) {
+                    Ok(DriverCmd::Command { seq, .. }) => {
+                        let waiter = child
+                            .shared
+                            .lock()
+                            .waiters
+                            .remove(&seq)
+                            .expect("waiter registered");
+                        let _ = waiter.tx.send(Ok(wire::Reply::Ok));
+                        answered += 1;
+                    }
+                    Ok(_) => {}
+                    Err(error) => panic!("driver channel died mid-pump: {error}"),
+                }
+            }
+            driver_rx
+        })
+    }
+
+    /// OBS-04 (Issue #279): a `CreateInstance` that lands `Ok` and
+    /// clears the mid-mint gate registers the mint's four counter
+    /// readers with the attached registrar — after the Live flip,
+    /// outside the `inner` lock — and hands their leases to the
+    /// minted facade. Every accepted source is `Instance`-scoped
+    /// and shares the entry's cells: a leg-side writer bump reads
+    /// back through the registrar's own reader copy.
+    #[test]
+    fn create_instance_registers_counter_sources_after_live_flip() {
+        let (child, driver_rx) = create_harness();
+        let diag = diag::DiagRegistry::new();
+        let registrar = sources::test_support::RecordingRegistrar::accepting(4);
+        let pump = reply_pump(&child, driver_rx, 1);
+        let parts = child
+            .create_instance(&create_spec(), 3, &diag, Some(&registrar))
+            .expect("the live flip minted parts");
+        pump.join().expect("reply pump joined");
+        assert_eq!(registrar.accepted(), 4);
+        assert_eq!(parts.source_leases.registered_count(), 4);
+        // Four distinct identities — same keys, separate sources;
+        // the registrar, not the domain, names each series.
+        let identities = parts.source_leases.registered_identities();
+        assert_eq!(identities.len(), 4);
+        for window in identities.windows(2) {
+            assert_ne!(window[0], window[1]);
+        }
+        assert!(registrar.scopes().iter().all(|scope| matches!(
+            scope,
+            ruviform_observability::source::ObservationScope::Instance
+        )));
+        // The registered readers share the mint's cells — bump a
+        // writer through the entry's leg counters and read it back
+        // through the registrar's copy.
+        child
+            .shared
+            .lock()
+            .instances
+            .get(&0)
+            .and_then(InstShared::audio_leg_counters)
+            .expect("a live audio entry")
+            .passthrough_submits
+            .increment();
+        assert_eq!(registrar.counter_values()[1], 1);
+    }
+
+    /// No registrar attached — the mint proceeds identically and
+    /// leaves every slot `Unattached`: pre-OBS behaviour is a
+    /// no-op, not a refusal.
+    #[test]
+    fn create_instance_without_registrar_leaves_slots_unattached() {
+        let (child, driver_rx) = create_harness();
+        let diag = diag::DiagRegistry::new();
+        let pump = reply_pump(&child, driver_rx, 1);
+        let parts = child
+            .create_instance(&create_spec(), 3, &diag, None)
+            .expect("the live flip minted parts");
+        pump.join().expect("reply pump joined");
+        assert!(parts.source_leases.is_unattached());
+        assert_eq!(parts.source_leases.registered_count(), 0);
+    }
+
+    /// A per-source typed refusal degrades only its own slot — the
+    /// mint still succeeds (observability loss is not a plugin
+    /// failure) and the remaining counters register.
+    #[test]
+    fn create_instance_registration_refusal_degrades_only_its_slot() {
+        let (child, driver_rx) = create_harness();
+        let diag = diag::DiagRegistry::new();
+        let registrar = sources::test_support::RecordingRegistrar::accepting(4);
+        registrar.fail_next(
+            ruviform_observability::source::RegistrationError::CapacityExceeded { limit: 4 },
+        );
+        let pump = reply_pump(&child, driver_rx, 1);
+        let parts = child
+            .create_instance(&create_spec(), 3, &diag, Some(&registrar))
+            .expect("a refused source must not fail the mint");
+        pump.join().expect("reply pump joined");
+        assert_eq!(registrar.accepted(), 3);
+        assert_eq!(parts.source_leases.registered_count(), 3);
+        assert!(matches!(
+            parts.source_leases.slots()[0],
+            sources::AudioSourceSlot::Refused(
+                ruviform_observability::source::RegistrationError::CapacityExceeded { limit: 4 }
+            )
+        ));
+        for slot in &parts.source_leases.slots()[1..] {
+            assert!(matches!(slot, sources::AudioSourceSlot::Registered(_)));
+        }
+    }
+
+    /// A `CreateInstance` rejection never registers: the mint
+    /// rolls back before the Live flip, so `register` was never
+    /// reached — no lease, no source, no residue.
+    #[test]
+    fn create_instance_failure_registers_nothing() {
+        let (child, driver_rx) = create_harness();
+        let diag = Arc::new(diag::DiagRegistry::new());
+        let registrar = Arc::new(sources::test_support::RecordingRegistrar::accepting(4));
+        let (seq, join) = spawn_create(&child, &driver_rx, &diag, Some(registrar.clone()));
+        let waiter = child
+            .shared
+            .lock()
+            .waiters
+            .remove(&seq)
+            .expect("waiter registered");
+        let _ = waiter.tx.send(Err(HostError::PluginFailed));
+        assert!(join.join().expect("create_instance joined").is_err());
+        assert_eq!(registrar.accepted(), 0);
+        assert!(child.shared.lock().instances.is_empty());
+    }
+
+    /// `destroy` retires every registered lease — and only after
+    /// `remove_instance` has reclaimed the entry (residual
+    /// `push_result` increments of `results_dropped` must still
+    /// land on an `Active` source). The retired tickets move to
+    /// `Retiring`; the collector's `FinalDrain → Removed` drive is
+    /// not the domain's to perform.
+    #[test]
+    fn destroy_retires_source_leases_after_removal() {
+        let (child, driver_rx) = create_harness();
+        let diag = diag::DiagRegistry::new();
+        let registrar = sources::test_support::RecordingRegistrar::accepting(8);
+        // One reply each for `CreateInstance` and `DestroyInstance`.
+        let pump = reply_pump(&child, driver_rx, 2);
+        let parts = child
+            .create_instance(&create_spec(), 3, &diag, Some(&registrar))
+            .expect("the live flip minted parts");
+        let first_identities = parts.source_leases.registered_identities();
+        let mut instance = L1Instance::from_parts(Arc::clone(&child), parts);
+        instance.destroy();
+        let driver_rx = pump.join().expect("reply pump joined");
+        // Every lease retired `Active → Retiring`; the
+        // `FinalDrain → Removed` drive stays the collector's.
+        for state in registrar.states() {
+            assert_eq!(
+                state.lifecycle(),
+                ruviform_observability::source::SourceLifecycle::Retiring
+            );
+        }
+        // `RemoveInstance` reached the driver channel before
+        // `destroy` returned — residual `push_result` writes still
+        // landed on `Active` sources while the entry reclaimed.
+        assert!(matches!(
+            driver_rx.try_recv(),
+            Ok(DriverCmd::RemoveInstance { instance: 0 })
+        ));
+        drop(instance);
+        // A re-mint on the same registrar registers fresh
+        // identities — a new series epoch per counter-cell epoch,
+        // never a resumed one.
+        let pump = reply_pump(&child, driver_rx, 1);
+        let parts = child
+            .create_instance(&create_spec(), 3, &diag, Some(&registrar))
+            .expect("the re-mint landed");
+        pump.join().expect("reply pump joined");
+        assert_eq!(registrar.accepted(), 8);
+        for identity in parts.source_leases.registered_identities() {
+            assert!(!first_identities.contains(&identity));
+        }
+    }
+
     /// `CreateInstance` `Ok` reply correlates its waiter, then
     /// `converge_child` flips the still-`Creating` entry `Failed`
     /// *without* queuing a notification (`minted()` is false — the
@@ -5794,7 +6064,7 @@ mod tests {
     fn create_instance_ok_then_converge_rolls_back() {
         let (child, driver_rx) = create_harness();
         let diag = Arc::new(diag::DiagRegistry::new());
-        let (seq, join) = spawn_create(&child, &driver_rx, &diag);
+        let (seq, join) = spawn_create(&child, &driver_rx, &diag, None);
         let waiter = child
             .shared
             .lock()
@@ -5849,7 +6119,7 @@ mod tests {
         ] {
             let (child, driver_rx) = create_harness();
             let diag = Arc::new(diag::DiagRegistry::new());
-            let (seq, join) = spawn_create(&child, &driver_rx, &diag);
+            let (seq, join) = spawn_create(&child, &driver_rx, &diag, None);
             let waiter = child
                 .shared
                 .lock()
@@ -5980,7 +6250,7 @@ mod tests {
             OsString::from("unused-runner"),
         );
         assert!(matches!(
-            child.create_instance(&spec, 3, &diag::DiagRegistry::new()),
+            child.create_instance(&spec, 3, &diag::DiagRegistry::new(), None),
             Err(HostError::InstanceLimit)
         ));
         // Nothing was registered — the count stays at capacity.

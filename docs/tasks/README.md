@@ -201,6 +201,8 @@ Directory: `docs/tasks`
 | TASK-034QidcTgfNesKcwIF1aZ7 | T-4 PoC acceptance tests, rt alloc, perf evidence, impl record, merge+verify | done | [p185-t4-probe-poc-tests-verification.md](./p185-t4-probe-poc-tests-verification.md) |
 | TASK-034Rp2aMrgIhyU5ZATHDQz | T-1 core primitives: Gauge/Histogram + RT-lane tests | done | [p277-t1-core-primitives-gauge-histogram.md](./p277-t1-core-primitives-gauge-histogram.md) |
 | TASK-034Rp2bMkXB7Xa0FKSWPw9 | T-2 source contract: descriptors/SourceId/Registrar/Lease/lifecycle + tests + README | done | [p277-t2-source-contract-registration-lifecycle.md](./p277-t2-source-contract-registration-lifecycle.md) |
+| TASK-034RTukbgTWDcKGHBdKYYN | P279-T1 l1/sources.rs 4 Descriptor + AudioSourceLeases + slot state + mod tests | done | [p279-t1-l1-sources-descriptors-leases.md](./p279-t1-l1-sources-descriptors-leases.md) |
+| TASK-034RTukTevxIOK0EVaR8A3 | P279-T2 create_instance/destroy registrar wiring + PluginHost注入面 + tests | done | [p279-t2-create-destroy-registrar-wiring.md](./p279-t2-create-destroy-registrar-wiring.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | TASK-034OpskKobU4qEsX7F7IYc | T6. stderr piped + drain thread（案A・FFI 局所化・fixture knob） | done | [pipe-and-drain-l1-stderr.md](./pipe-and-drain-l1-stderr.md) |
 | TASK-034MrsDzlHRpUHHLtYkZdN | plugin-core endpoint 前提面（EndpointUnavailable・fallible encode・Send capability・view impl） | done | [plugin-core-endpoint-primitives.md](./plugin-core-endpoint-primitives.md) |
