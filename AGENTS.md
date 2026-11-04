@@ -52,7 +52,8 @@ mise exec -- apm install --frozen
 
 - cargo / npm / node 等の検証コマンドは直接実行せず、`mise.toml` のタスクを `mise run <task>` 経由で呼ぶ。ローカル開発と CI で同じ入口を使う。タスク一覧・実行内容・feature 条件・依存チェーンは `mise tasks` と `mise.toml` が正本。
 - `*-ci` タスクと `verify-ci` は CI 用途限定。成果物が `target/ci/` に `target/debug/` と並存して容量を消費するため常用しない。
-- CI の lane 構成（required jobs・OS matrix・cache・Shadow Mode）と Consumer 影響分類の運用詳細は [docs/development-environment.md](docs/development-environment.md) を参照。
+- CI の lane 構成（required context・OS matrix・cache・影響ベース選択実行）と Consumer 影響分類の運用詳細は [docs/development-environment.md](docs/development-environment.md) を参照。
+
 
 ### 暫定規約
 

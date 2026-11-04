@@ -86,7 +86,7 @@ export function evaluate({ needs, expected, laneIds = LANE_IDS }) {
     return {
       lane,
       oses: LANES[lane]?.oses ?? [],
-      contexts: LANES[lane]?.contexts ?? [lane],
+      contexts: LANES[lane]?.requiredContexts ?? LANES[lane]?.contexts ?? [lane],
       expected: expectedLane,
       result,
       verdict,

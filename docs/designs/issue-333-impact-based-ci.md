@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #333 CI-OPT-06 Impact Classifier・集約 Required Gate・段階移行設計"
 created: "2026-11-04"
-updated: "2026-11-04"
+updated: "2026-11-05"
 owners: []
 relations:
   source:
@@ -29,6 +29,7 @@ relations:
     - "docs/specs/issue-333-impact-based-ci.md"
   implemented-by:
     - "docs/plans/issue-333-impact-based-ci.md"
+    - "docs/designs/issue-346-ruleset-migration-runbook.md"
   depends-on:
     - "docs/discovery/issue-333-impact-classifier-inventory.md"
     - "docs/specs/issue-333-impact-based-ci.md"
@@ -48,6 +49,7 @@ relations:
   derived-by:
     - "docs/plans/issue-333-impact-based-ci.md"
     - "docs/test-specs/issue-333-impact-based-ci.md"
+    - "docs/designs/issue-346-ruleset-migration-runbook.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-333-impact-based-ci.md"
@@ -62,6 +64,17 @@ metadata: {}
 ---
 
 # Issue #333 設計 — 変更影響ベース検証 DAG・Fail-Closed Required Gate
+
+> **改訂 2026-11-05（Issue #333/#326 合意・[issue-346 runbook](./issue-346-ruleset-migration-runbook.md) に詳細）**:
+> macOS legs（`verify`/`ui-verify`/`l1-real-verify`）は PR Required から
+> 物理分離され、非ブロッキング `*-macos` observe job + `macos-report`
+> 記録へ移行した。ruleset required contexts は 12 → 9（Linux/Windows
+> legs のみ）へ改訂済みで、`ci-gate` の `needs` に macOS job は含まない。
+> 本文書の「3OS required」「12 contexts」記述は分類契約の文脈では
+> lane 全体の実行対象 OS を指すものとして読む（macOS leg は実行継続・
+> 記録のみ）。runner 逼迫（cancelled）は observe 側で `NotRun` 記録し
+> `NotApplicable` にしない。Release/正式 Consumer 受入では候補 SHA
+> 紐づけ macOS 実測（`macos-observe-report`）を別途要求する。
 
 ## Overview
 

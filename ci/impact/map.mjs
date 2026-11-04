@@ -8,8 +8,11 @@
 // classes, lane verdict vocabulary, full-CI fallback — with their own map.
 
 // Lane ids are the job ids in .github/workflows/ci.yml. `contexts` are the
-// required-status-check context names the jobs emit (kept for audit output;
-// the aggregated `ci-gate` job is the future single required context).
+// check context names the lane emits across its legs (kept for audit
+// output; the aggregated `ci-gate` job is the future single required
+// context). `requiredContexts` is the PR-required subset — Issue #333/#326
+// rev 2026-11-05: the macOS legs are physically separate non-blocking
+// `*-macos` jobs (see OBSERVE_LANES) and never appear in `ci-gate` needs.
 export const LANE_IDS = [
   "verify",
   "rt-verify",
@@ -25,18 +28,27 @@ export const LANES = {
     contexts: [
       "verify (ubuntu-latest)",
       "verify (windows-latest)",
-      "verify (macos-latest)",
+      "verify-macos",
     ],
+    requiredContexts: [
+      "verify (ubuntu-latest)",
+      "verify (windows-latest)",
+    ],
+    observeJob: "verify-macos",
     features: [],
   },
   "rt-verify": {
     oses: ["ubuntu-latest"],
     contexts: ["rt-verify"],
+    requiredContexts: ["rt-verify"],
+    observeJob: null,
     features: [],
   },
   "icc-verify": {
     oses: ["ubuntu-latest"],
     contexts: ["icc-verify"],
+    requiredContexts: ["icc-verify"],
+    observeJob: null,
     features: ["icc"],
   },
   "ui-verify": {
@@ -44,8 +56,13 @@ export const LANES = {
     contexts: [
       "ui-verify (ubuntu-latest)",
       "ui-verify (windows-latest)",
-      "ui-verify (macos-latest)",
+      "ui-verify-macos",
     ],
+    requiredContexts: [
+      "ui-verify (ubuntu-latest)",
+      "ui-verify (windows-latest)",
+    ],
+    observeJob: "ui-verify-macos",
     features: ["webview"],
   },
   "l1-real-verify": {
@@ -53,16 +70,35 @@ export const LANES = {
     contexts: [
       "l1-real-verify (ubuntu-latest)",
       "l1-real-verify (windows-latest)",
-      "l1-real-verify (macos-latest)",
+      "l1-real-verify-macos",
     ],
+    requiredContexts: [
+      "l1-real-verify (ubuntu-latest)",
+      "l1-real-verify (windows-latest)",
+    ],
+    observeJob: "l1-real-verify-macos",
     features: ["host"],
   },
   bench: {
     oses: ["ubuntu-latest"],
     contexts: ["bench"],
+    requiredContexts: ["bench"],
+    observeJob: null,
     features: [],
   },
 };
+
+// Non-blocking observe legs: macOS job id -> parent classifier lane + OS.
+// These jobs run on PR/main like the required lanes but are consumed by
+// `macos-report` (ci/impact/observe.mjs), never by `ci-gate`. Their results
+// feed release/Consumer acceptance gating, not PR merge protection.
+export const OBSERVE_LANES = {
+  "verify-macos": { lane: "verify", os: "macos-latest" },
+  "ui-verify-macos": { lane: "ui-verify", os: "macos-latest" },
+  "l1-real-verify-macos": { lane: "l1-real-verify", os: "macos-latest" },
+};
+
+export const OBSERVE_LANE_IDS = Object.keys(OBSERVE_LANES);
 
 // Path classes evaluated against repo-relative forward-slash paths.
 // `lanes: "full"` means: a single matching file forces Full CI — the class
