@@ -1,0 +1,24 @@
+[package]
+name = "ruviform-ui-test"
+description = "Test-only GUI host lifecycle + secure control adapter (RF-GT-03): rvf.uitest.v1 control protocol, fake host, fixture/clock/fault/observation ports, stdio/TCP transports, driver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Dependency addition records (暫定規約「依存追加は理由を記録」):
+# - ruviform-ui: the port-defining crate — WindowEvent/WindowHandle/
+#   HostEvent/UiRuntime-facing contract types and the rvf.ipc.v1
+#   envelope reused by rvf.uitest.v1. Only public API is consumed;
+#   production crates never depend on this crate (isolation by DAG).
+ruviform-ui = { path = "../ruviform-ui" }
+# - serde + serde_json: rvf.uitest.v1 contract types (Welcome/
+#   Capabilities/receipts) are serialized inside the reused ipc
+#   envelope payloads — same dependency set ruviform-ui already uses.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true

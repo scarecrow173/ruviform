@@ -59,6 +59,10 @@ members = [
     # adapter 実装は非既定 `webview` feature ゲートで headless 検証経路を壊さない）
     "crates/ruviform-ui",
     "crates/ruviform-ui-webview",
+    # 利用側層 テスト共有基盤（Issue #312 / RF-GT-03 — test-only GUI host
+    # lifecycle・secure control adapter・fixture/clock/observation。
+    # ruviform-ui 公開 API のみに依存し、本番クレートからは誰も依存しない）
+    "crates/ruviform-ui-test",
     # 利用側層サンプル（Issue #155 — GUI 非依存 CLI/headless 利用例。共有 headless サービスの外側アダプタ）
     "crates/ruviform-cli-sample",
     # 利用側層 可視化基盤（Issue #157 — 波形 LOD・スペクトログラム STFT・
