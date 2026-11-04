@@ -46,5 +46,6 @@ Directory: `docs/discovery`
 | DISC-034Qx5mnsXSbsrFmJqSCM1 | Issue #244 media-reader prefetch contract residual warts — boundary-first fault emission, reopen-failure dead generation, End commit-once | resolved | [issue-244-media-reader-prefetch-contract-warts.md](./issue-244-media-reader-prefetch-contract-warts.md) |
 | DISC-UsHnmyyijB53IvR586RquN | Issue #311 RF-GT-02 IPC schema conformance / deterministic record-replay / fault matrix — contract inventory | resolved | [issue-311-ipc-conformance-inventory.md](./issue-311-ipc-conformance-inventory.md) |
 | DISC-034S312gtUiTestDiscAA11 | Issue #312 test-only GUI host lifecycle / secure control adapter — inventory and option survey | resolved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| DISC-034RC37YxqeDsq3Kad550u | Issue #330 CI-OPT-03 UI npm ci 重複・dist 依存 DAG 棚卸し | resolved | [issue-330-ui-npm-ci-inventory.md](./issue-330-ui-npm-ci-inventory.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
