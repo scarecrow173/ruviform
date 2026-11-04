@@ -160,21 +160,19 @@ impl StagedFile {
     /// Creates a staged file for `destination` by opening a temp
     /// sibling in the destination's directory.
     ///
-    /// # Backend status
-    ///
-    /// The real OS backend lands in IO-IMP-02 (Issue #296); until
-    /// then this always fails with
-    /// [`FileErrorKind::Unsupported`]. The signature, ownership and
-    /// documented contract are the stable API.
+    /// The real OS backend (IO-IMP-02, Issue #296) stages an
+    /// exclusively-created temp sibling on unix and Windows; other
+    /// targets report [`FileErrorKind::Unsupported`]. The temp path
+    /// is recorded in the [`RecoveryInfo`] as a diagnostic.
     ///
     /// **RT contract:** non-RT only — filesystem I/O.
     ///
     /// # Errors
     ///
     /// [`FileErrorKind::InvalidInput`] when `destination` has no file
-    /// name; [`FileErrorKind::Unsupported`] while the OS backend is
-    /// unimplemented; [`FileErrorKind::Io`] when the temp file cannot
-    /// be created.
+    /// name; [`FileErrorKind::Unsupported`] on targets with no OS
+    /// backend; [`FileErrorKind::Io`] when the temp file cannot be
+    /// created (e.g. missing parent directory, permissions).
     pub fn create(destination: impl AsRef<Path>) -> Result<Self, FileError> {
         let destination = destination.as_ref();
         if destination.file_name().is_none() {
@@ -190,7 +188,7 @@ impl StagedFile {
         let info = RecoveryInfo::new(
             OperationId::next(),
             destination.to_path_buf(),
-            None,
+            ops.temp_path().map(Path::to_path_buf),
             TempState::Retained,
         );
         Ok(Self {
@@ -687,11 +685,24 @@ mod tests {
     // ---------- create ----------
 
     #[test]
-    fn create_reports_unsupported_until_os_backend_lands() {
-        // The default factory has no OS backend yet (IO-IMP-02) —
-        // `create` must fail `Unsupported` rather than pretend.
-        let err = StagedFile::create("real.bin").unwrap_err();
-        assert_eq!(err.kind(), FileErrorKind::Unsupported);
+    fn create_stages_real_temp_via_os_backend() {
+        // The real OS backend (IO-IMP-02) stages an exclusive temp
+        // sibling; `abort` removes it. Full real-FS coverage lives in
+        // `tests/os_publish.rs`.
+        let dir = std::env::temp_dir().join(format!(
+            "rvf-staged-create-{}-{:x}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos())
+        ));
+        std::fs::create_dir_all(&dir).expect("workdir");
+        let staged = StagedFile::create(dir.join("real.bin")).expect("create");
+        let temp = staged.temp_path().expect("temp path").to_path_buf();
+        assert!(temp.exists(), "temp sibling must exist on disk");
+        staged.abort().expect("abort");
+        assert!(!temp.exists(), "abort removes the temp");
+        std::fs::remove_dir(&dir).expect("cleanup");
     }
 
     #[test]

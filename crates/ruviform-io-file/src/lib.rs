@@ -22,16 +22,20 @@
 //! `PlatformFileOps` boundary so platform backends are interchangeable
 //! implementation details.
 //!
-//! # Backend status — IO-IMP-01 scope
+//! # OS backend — IO-IMP-02 scope
 //!
-//! This crate currently ships the **public contract and the
-//! fault-injection test rig only**: [`StagedFile::create`] returns
-//! [`FileErrorKind::Unsupported`] because the real OS backend
-//! (atomic `CreateNew`/`Replace`, file/directory sync, temp identity)
-//! lands in IO-IMP-02 (Issue #296). Until then no atomicity or
-//! durability guarantee is claimed on any platform, and
-//! `exists()`-then-`rename()` is never presented as an atomic
-//! `CreateNew`.
+//! On unix and Windows targets [`StagedFile::create`] stages a real
+//! temp sibling and `publish` performs the real atomic primitives:
+//! `renameat2(RENAME_NOREPLACE)` / `renamex_np(RENAME_EXCL)` /
+//! `link()`+`unlink()` on unix and `MoveFileExW` on Windows for
+//! [`PublishMode::CreateNew`]; `fs::rename` for
+//! [`PublishMode::Replace`]; `File::sync_all` for file sync; and a
+//! directory-handle sync for
+//! [`Durability::FileAndDirectorySync`]. A platform or filesystem that
+//! cannot provide a requested guarantee reports `Unsupported`/failure
+//! — `exists()`-then-`rename()` is never presented as an atomic
+//! `CreateNew`, and no silent weaker fallback is used. See the crate
+//! README for the OS/FS capability matrix and trust boundaries.
 //!
 //! # Guarantees vs. requests
 //!
@@ -55,8 +59,7 @@
 //!
 //! # Examples
 //!
-//! Typical usage once the OS backend lands (currently `create`
-//! returns `Unsupported`):
+//! Typical usage (real OS backend on unix/Windows):
 //!
 //! ```no_run
 //! use ruviform_io_file::{Durability, PublishMode, PublishOptions, StagedFile};
@@ -99,6 +102,8 @@ mod error;
 #[cfg(test)]
 mod mock;
 mod options;
+#[cfg(any(unix, windows))]
+mod os;
 mod outcome;
 mod platform;
 mod receipt;
