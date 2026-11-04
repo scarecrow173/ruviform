@@ -47,6 +47,7 @@ Directory: `docs/plans`
 | PLAN-034Qonvu2E5YQaWUHEcTeL | Issue #233 media-reader prefetch contract improvements implementation plan | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | PLAN-cNIlZseMNfbfI0D3uYpFLK | Issue #238 実施計画 — l1_proxy_e2e 壁時計 sleep 同期を有界 barrier/poll 待機へ置換 | approved | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
 | PLAN-034QxdNzPfzn5oye9cCzne | Issue #244 media-reader prefetch contract wart fixes implementation plan | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
+| PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 

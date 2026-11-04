@@ -133,3 +133,4 @@ Directory: `docs/impl/ir`
 | IMPL-034QTOFbpeDKVZDoNfrXP5 | Issue #263 design system showcase theme matrix a11y regression cross-consumer gates | completed | [issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md](./issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md) |
 | IMPL-034QVA0eue5vkEk1WKOcRA | Issue #219 UI 横断ゲート追記反映・merged 変更の Consumer 影響分類・証拠状況記録 | completed | [issue-219-ui-merged-consumer.md](./issue-219-ui-merged-consumer.md) |
 | IMPL-034WjH8pQrT5vXyZkBcDeF | Issue #219 Cross-Repo Consumer-Verify CI Gate 本体実装（synvelis 実 lane・PR 分類機械検査・smoke 整合） | completed | [issue-219-consumer-verify-gate-body.md](./issue-219-consumer-verify-gate-body.md) |
+| IMPL-RrIh5XTCXgmjRS7m6giD6V | Issue #307: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | completed | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
