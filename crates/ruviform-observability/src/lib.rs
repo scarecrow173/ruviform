@@ -50,12 +50,17 @@
 //!
 //! # Dependency policy
 //!
-//! This crate has **no dependencies** (`std` only): no `tracing`, no
-//! `tracing-subscriber`, no external I/O or GUI types. The
-//! core/source contract must remain usable without any subscriber or
-//! logging backend — feature separation alone does not make code
+//! The default build has **no dependencies** (`std` only): no
+//! `tracing`, no `tracing-subscriber`, no external I/O or GUI types.
+//! The core/source contract must remain usable without any subscriber
+//! or logging backend — feature separation alone does not make code
 //! RT-safe, so RT suitability is declared per operation, not per
 //! module.
+//!
+//! The opt-in `logging` feature (Issue #276) adds `tracing` /
+//! `tracing-subscriber` / `tracing-appender` for host-owned
+//! subscriber construction only; it is off by default and never
+//! installs a global dispatcher itself.
 
 // Domain vocabulary intentionally repeats module names at the crate
 // root re-export surface (`Counter`, `MetricDescriptor`,
@@ -65,6 +70,13 @@
 // per `docs/adr/public-enum-non-exhaustive-policy.md`.
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::exhaustive_structs)]
+
+/// Generic host-owned logging adapter on the standard `tracing` stack —
+/// Issue #276 (OBS-01). Only available with the `logging` feature, which is
+/// off by default so the core/source contract keeps zero external
+/// dependencies.
+#[cfg(feature = "logging")]
+pub mod logging;
 
 pub mod core;
 pub mod source;

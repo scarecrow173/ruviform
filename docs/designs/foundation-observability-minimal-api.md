@@ -42,6 +42,7 @@ relations:
     - "../test-specs/rt-observability-poc-tests.md"
     - "../discovery/issue-121-diagnostics.md"
     - "../specs/issue-121-diagnostics.md"
+    - "../specs/issue-276-generic-logging-adapter.md"
   verifies: []
   verified-by: []
   references:

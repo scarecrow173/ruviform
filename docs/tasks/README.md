@@ -247,6 +247,9 @@ Directory: `docs/tasks`
 | TASK-034QoozSINn40AO2e1Ke1k | Issue 233 T2: discard surface — PrefetchConsumer::discard_pending + DiscardReport + seek_discard_pending pending purge | done | [task-233-t2-discard-pending.md](./task-233-t2-discard-pending.md) |
 | TASK-034QooAu3EbKEEhgcUSJnv | Issue 233 T3: reopen_at fused reopen-to-seek-target | done | [task-233-t3-reopen-at.md](./task-233-t3-reopen-at.md) |
 | TASK-034QooB7rhCVhK4sqW6lzZ | Issue 233 T4: verification sweep + implementation record | done | [task-233-t4-verify-ir.md](./task-233-t4-verify-ir.md) |
+| TASK-034RoYsOdygNXYa3BanrU1 | Issue 276 T1: logging config/API types + feature wiring | done | [task-276-t1-config-and-wiring.md](./task-276-t1-config-and-wiring.md) |
+| TASK-034RoYu0iSpPIN9pnjyhDU | Issue 276 T2: bounded writer + sinks + build result | done | [task-276-t2-writer-sinks-build.md](./task-276-t2-writer-sinks-build.md) |
+| TASK-034RoYvGpykxcXUHa5X8VR | Issue 276 T3: contract tests + host example + docs + verification | done | [task-276-t3-tests-docs-verify.md](./task-276-t3-tests-docs-verify.md) |
 | TASK-034LFHdEfDbppnNeuh0u48 | ToneMapSdr カーネル実装（BT.2390 EETF） | done | [tone-map-sdr-kernel.md](./tone-map-sdr-kernel.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
