@@ -25,7 +25,7 @@ use std::num::NonZeroUsize;
 
 use ruviform_observability::logging::{
     LogFormat, LoggingConfig, RotationPeriod, SinkConfig, SinkDestination, SinkFailureMode,
-    build_logging,
+    SpanEvents, build_logging,
 };
 
 fn main() {
@@ -37,6 +37,7 @@ fn main() {
             SinkConfig {
                 destination: SinkDestination::Stderr,
                 format: LogFormat::Text,
+                span_events: SpanEvents::NONE,
                 filter: "info".to_owned(),
                 failure_mode: SinkFailureMode::Required,
             },
@@ -52,6 +53,11 @@ fn main() {
                     queue_capacity: NonZeroUsize::new(1024).unwrap(),
                 },
                 format: LogFormat::JsonLines,
+                // Leaf spans land as `close` records here — the AudioLens
+                // AL-OBS-01 leaf-span observation contract (Issue #335).
+                // The stderr sink keeps `NONE`, so per-sink selection is
+                // visible in this sample too.
+                span_events: SpanEvents::CLOSE,
                 filter: "ruviform=debug,info".to_owned(),
                 failure_mode: SinkFailureMode::BestEffort,
             },
@@ -82,6 +88,9 @@ fn main() {
     //    once at startup.
     tracing::dispatcher::with_default(&result.dispatch, || {
         tracing::info!(target: "ruviform", answer = 42, "host started");
+        // A leaf span with no inner events — invisible on stderr, recorded
+        // as a `close` record (with time.busy/time.idle) on the file sink.
+        tracing::info_span!(target: "ruviform", "leaf_span").in_scope(|| {});
         tracing::debug!(target: "ruviform", "debug detail the stderr filter drops");
         tracing::warn!(target: "ruviform", "something worth noting");
     });

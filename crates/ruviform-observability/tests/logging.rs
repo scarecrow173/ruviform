@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use ruviform_observability::logging::{
     LogFormat, LoggingBuildError, LoggingConfig, RotationPeriod, SinkConfig, SinkDestination,
-    SinkFailureMode, SinkKind, SinkState, build_logging, build_logging_layers,
+    SinkFailureMode, SinkKind, SinkState, SpanEvents, build_logging, build_logging_layers,
 };
 
 fn nz(n: usize) -> NonZeroUsize {
@@ -40,8 +40,22 @@ fn file_sink_with_mode(
             queue_capacity: nz(64),
         },
         format,
+        span_events: SpanEvents::NONE,
         filter: filter.to_owned(),
         failure_mode,
+    }
+}
+
+fn file_sink_with_span_events(
+    dir: &Path,
+    prefix: &str,
+    filter: &str,
+    format: LogFormat,
+    span_events: SpanEvents,
+) -> SinkConfig {
+    SinkConfig {
+        span_events,
+        ..file_sink(dir, prefix, filter, format)
     }
 }
 
@@ -235,6 +249,7 @@ fn rolling_file_retention_deletes_oldest_at_build() {
                 queue_capacity: nz(64),
             },
             format: LogFormat::Text,
+            span_events: SpanEvents::NONE,
             filter: "info".to_owned(),
             failure_mode: SinkFailureMode::Required,
         }],
@@ -275,6 +290,7 @@ fn rolling_file_with_suffix_produces_dated_suffixed_name() {
                 queue_capacity: nz(64),
             },
             format: LogFormat::Text,
+            span_events: SpanEvents::NONE,
             filter: "info".to_owned(),
             failure_mode: SinkFailureMode::Required,
         }],
@@ -324,6 +340,7 @@ fn rolling_file_retention_matches_prefixed_and_suffixed_files() {
                 queue_capacity: nz(64),
             },
             format: LogFormat::Text,
+            span_events: SpanEvents::NONE,
             filter: "info".to_owned(),
             failure_mode: SinkFailureMode::Required,
         }],
@@ -367,6 +384,7 @@ fn rolling_file_without_suffix_keeps_plain_dated_name() {
                 queue_capacity: nz(64),
             },
             format: LogFormat::Text,
+            span_events: SpanEvents::NONE,
             filter: "info".to_owned(),
             failure_mode: SinkFailureMode::Required,
         }],
@@ -401,6 +419,7 @@ fn rolling_file_suffix_with_never_rotation_is_prefix_dot_suffix() {
                 queue_capacity: nz(64),
             },
             format: LogFormat::Text,
+            span_events: SpanEvents::NONE,
             filter: "info".to_owned(),
             failure_mode: SinkFailureMode::Required,
         }],
@@ -613,6 +632,7 @@ fn stderr_sink_works_through_bounded_writer() {
         sinks: vec![SinkConfig {
             destination: SinkDestination::Stderr,
             format: LogFormat::Text,
+            span_events: SpanEvents::NONE,
             filter: "info".to_owned(),
             failure_mode: SinkFailureMode::Required,
         }],
@@ -752,4 +772,146 @@ fn one_sink_shutdown_does_not_stop_the_other() {
     drop(result);
 
     assert!(read_sink_files(dir.path(), "surviving").contains("post-shutdown event"));
+}
+
+// Issue #335: `SpanEvents::CLOSE` — 内部 event を持たない leaf span が
+// close record として sink に残る(text)。AudioLens AL-OBS-01 の leaf
+// span 観測が要求する契約。
+#[test]
+fn close_span_events_record_leaf_spans_in_text_sink() {
+    let dir = tempfile::tempdir().unwrap();
+    let result = build_logging(&LoggingConfig {
+        sinks: vec![file_sink_with_span_events(
+            dir.path(),
+            "spans",
+            "info",
+            LogFormat::Text,
+            SpanEvents::CLOSE,
+        )],
+    })
+    .unwrap();
+
+    tracing::dispatcher::with_default(&result.dispatch, || {
+        // Leaf span: entered, then dropped without any inner event —
+        // only the synthesized close record can carry it to the sink.
+        tracing::info_span!("leaf_span", component = "ncc").in_scope(|| {});
+    });
+    drop(result);
+
+    let content = read_sink_files(dir.path(), "spans");
+    assert!(
+        content.contains("leaf_span"),
+        "close record lost the span name: {content}"
+    );
+    assert!(content.contains("close"), "no close record: {content}");
+    assert!(
+        content.contains("time.busy"),
+        "close record lost its timing fields: {content}"
+    );
+}
+
+// Issue #335 同契約の JSONL 形 — close record は span 名・span field・
+// time.busy/time.idle を保持する 1 JSON object。
+#[test]
+fn close_span_events_record_leaf_spans_in_jsonl_sink() {
+    let dir = tempfile::tempdir().unwrap();
+    let result = build_logging(&LoggingConfig {
+        sinks: vec![file_sink_with_span_events(
+            dir.path(),
+            "spans",
+            "info",
+            LogFormat::JsonLines,
+            SpanEvents::CLOSE,
+        )],
+    })
+    .unwrap();
+
+    tracing::dispatcher::with_default(&result.dispatch, || {
+        tracing::info_span!("leaf_span", component = "ncc").in_scope(|| {});
+    });
+    drop(result);
+
+    let content = read_sink_files(dir.path(), "spans");
+    let close = content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .find_map(|line| {
+            let value: serde_json::Value = serde_json::from_str(line).unwrap();
+            (value["fields"]["message"] == "close").then_some(value)
+        })
+        .unwrap_or_else(|| panic!("no close record in: {content}"));
+    assert_eq!(close["span"]["name"], "leaf_span", "got: {close}");
+    assert_eq!(close["span"]["component"], "ncc", "got: {close}");
+    assert!(
+        close["fields"]["time.busy"].is_string() && close["fields"]["time.idle"].is_string(),
+        "close record lost its timing fields: {close}"
+    );
+}
+
+// Issue #335: span_events は per-sink — CLOSE sink だけが leaf span の
+// record を持ち、既定 sink は出さない。
+#[test]
+fn span_events_are_configured_per_sink() {
+    let dir = tempfile::tempdir().unwrap();
+    let result = build_logging(&LoggingConfig {
+        sinks: vec![
+            file_sink_with_span_events(
+                dir.path(),
+                "lifecycle",
+                "info",
+                LogFormat::Text,
+                SpanEvents::CLOSE,
+            ),
+            file_sink(dir.path(), "events-only", "info", LogFormat::Text),
+        ],
+    })
+    .unwrap();
+
+    tracing::dispatcher::with_default(&result.dispatch, || {
+        tracing::info_span!("leaf_span").in_scope(|| {
+            tracing::info!("inside the span");
+        });
+    });
+    drop(result);
+
+    let lifecycle = read_sink_files(dir.path(), "lifecycle");
+    let events_only = read_sink_files(dir.path(), "events-only");
+    assert!(lifecycle.contains("close"), "got: {lifecycle}");
+    assert!(
+        events_only.contains("inside the span"),
+        "got: {events_only}"
+    );
+    assert!(
+        !events_only.contains("close"),
+        "default sink leaked a lifecycle record: {events_only}"
+    );
+}
+
+// Issue #335 後方互換: 既定 `SpanEvents::NONE` では leaf span は
+// record を残さない(現行挙動維持)。
+#[test]
+fn default_span_events_emit_no_lifecycle_records() {
+    // The declared default is the pre-#335 behaviour.
+    assert_eq!(SpanEvents::default(), SpanEvents::NONE);
+
+    let dir = tempfile::tempdir().unwrap();
+    let result = build_logging(&LoggingConfig {
+        sinks: vec![file_sink(dir.path(), "quiet", "info", LogFormat::Text)],
+    })
+    .unwrap();
+
+    tracing::dispatcher::with_default(&result.dispatch, || {
+        tracing::info_span!("leaf_span", component = "ncc").in_scope(|| {});
+        tracing::info!("plain event");
+    });
+    drop(result);
+
+    let content = read_sink_files(dir.path(), "quiet");
+    let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert_eq!(
+        lines.len(),
+        1,
+        "leaf span must leave no record by default: {content}"
+    );
+    assert!(lines[0].contains("plain event"), "got: {content}");
 }

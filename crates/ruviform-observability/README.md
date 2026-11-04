@@ -159,11 +159,19 @@ filter/format/rolling 実装を再利用するため。
 
 ### Sink 構成
 
-- `SinkConfig { destination, format, filter, failure_mode }` — sink ごとに
-  独立。filter は `Layer::with_filter` で sink 個別に適用され、同一
-  event を各 sink が独自にルーティングする。
+- `SinkConfig { destination, format, span_events, filter, failure_mode }`
+  — sink ごとに独立。filter は `Layer::with_filter` で sink 個別に
+  適用され、同一 event を各 sink が独自にルーティングする。
 - `LogFormat::{Text, JsonLines}` — Text は ANSI off の人間可読 1 行、
   JsonLines は event ごと 1 JSON object。
+- `SpanEvents::{NONE, NEW, ENTER, EXIT, CLOSE, ACTIVE, FULL}` — sink ごとの
+  span lifecycle record 出力（`tracing_subscriber::FmtSpan` の crate 固有
+  対応物。`|` で合成可能）。既定 `NONE` は pre-#335 の record なし挙動を
+  維持。`CLOSE` は内部 event を持たない leaf span を、span field と
+  `time.busy`/`time.idle` を持つ `close` record として残す — AudioLens
+  AL-OBS-01 の leaf span 観測が要求する契約（Issue #335）。lifecycle
+  record は span 自身の level/target を継承するため sink の `filter` を
+  通常 event と同様に通る。
 - `SinkDestination::RollingFile { directory, filename_prefix,
   filename_suffix, rotation, max_files, queue_capacity }` — ファイル名は
   `{prefix}.{rotation-date}`（daily なら `app.2026-11-04`）。

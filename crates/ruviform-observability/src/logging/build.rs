@@ -17,7 +17,7 @@ use tracing_subscriber::{Registry, fmt, registry};
 
 use super::config::{
     DEFAULT_STDERR_QUEUE_CAPACITY, LogFormat, LoggingConfig, RotationPeriod, SinkConfig,
-    SinkDestination, SinkFailureMode,
+    SinkDestination, SinkFailureMode, SpanEvents,
 };
 use super::error::{LoggingBuildError, SinkFailure};
 use super::health::{HealthBuilder, LoggingHealth, SinkKind, SinkMetrics};
@@ -116,6 +116,7 @@ impl std::fmt::Debug for LoggingLayersResult {
 ///     sinks: vec![SinkConfig {
 ///         destination: SinkDestination::Stderr,
 ///         format: LogFormat::Text,
+///         span_events: SpanEvents::NONE,
 ///         filter: "info".to_owned(),
 ///         failure_mode: SinkFailureMode::Required,
 ///     }],
@@ -258,7 +259,7 @@ fn init_sink(sink_index: usize, sink: &SinkConfig, filter: EnvFilter) -> io::Res
     let metrics = Arc::new(SinkMetrics::new(sink_index, kind));
     let (sender, guard) = writer::spawn(inner, queue_capacity, Arc::clone(&metrics));
     Ok(BuiltSink {
-        layer: make_layer(sink.format, sender, filter),
+        layer: make_layer(sink.format, sink.span_events, sender, filter),
         guard,
         metrics,
     })
@@ -312,18 +313,40 @@ fn rotation_period(period: RotationPeriod) -> Rotation {
     }
 }
 
-/// Builds one sink's `fmt` layer: per-sink format + per-sink `EnvFilter`
-/// applied via `Layer::with_filter`, writing through the bounded writer.
-/// ANSI is disabled so text output stays deterministic.
+/// Maps the crate-owned [`SpanEvents`] flags onto `FmtSpan`. The mapping
+/// is explicit rather than bit-punning so the public API never depends on
+/// the upstream flag layout.
+fn fmt_span(events: SpanEvents) -> fmt::format::FmtSpan {
+    let mut kind = fmt::format::FmtSpan::NONE;
+    for (flag, upstream) in [
+        (SpanEvents::NEW, fmt::format::FmtSpan::NEW),
+        (SpanEvents::ENTER, fmt::format::FmtSpan::ENTER),
+        (SpanEvents::EXIT, fmt::format::FmtSpan::EXIT),
+        (SpanEvents::CLOSE, fmt::format::FmtSpan::CLOSE),
+    ] {
+        if events.contains(flag) {
+            kind |= upstream;
+        }
+    }
+    kind
+}
+
+/// Builds one sink's `fmt` layer: per-sink format + per-sink span lifecycle
+/// records + per-sink `EnvFilter` applied via `Layer::with_filter`, writing
+/// through the bounded writer. ANSI is disabled so text output stays
+/// deterministic.
 fn make_layer(
     format: LogFormat,
+    span_events: SpanEvents,
     sender: BoundedSender,
     filter: EnvFilter,
 ) -> Box<dyn Layer<Registry> + Send + Sync> {
+    let span_events = fmt_span(span_events);
     match format {
         LogFormat::Text => Box::new(
             fmt::layer::<Registry>()
                 .with_ansi(false)
+                .with_span_events(span_events)
                 .with_writer(move || sender.event_writer())
                 .with_filter(filter),
         ),
@@ -331,6 +354,7 @@ fn make_layer(
             fmt::layer::<Registry>()
                 .json()
                 .with_ansi(false)
+                .with_span_events(span_events)
                 .with_writer(move || sender.event_writer())
                 .with_filter(filter),
         ),
