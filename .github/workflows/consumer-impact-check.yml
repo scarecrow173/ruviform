@@ -25,6 +25,13 @@ on:
 permissions:
   contents: read
 
+# Same-PR runs supersede each other (see ci.yml): only the latest run for a
+# PR reports the classification result, so a stale run cannot overwrite a
+# newer one — e.g. an `edited` re-run that still sees the previous body.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   classification:
     if: github.event.pull_request.draft == false

@@ -61,6 +61,7 @@ Directory: `docs/designs`
 | DESIGN-034Rp1KqXNzTDTKRXTbqHx | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | DESIGN-wrF61tPcejIc31wMBYJHok | Issue #311 RF-GT-02 ui/guitest — IPC conformance fixture・deterministic record/replay・fault matrix 設計 | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | DESIGN-034S312gtUiTestDsnDD44 | Issue #312 ruviform-ui-test — test-only GUI host lifecycle・secure control adapter 設計 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| DESIGN-yMdXfkOVFpXfZGKfVH7LjG | Issue #328 CI PR concurrency 設計 — group 解決・cancel 意味論・required checks 保護 | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
 | DESIGN-034RBJLryk98hb4Yyq5wYG | Issue #327 CI計測Baseline 計測契約・分類・比較手順 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | DESIGN-034RBIy0yxPWYhXdXUlsLi | Issue #330 CI-OPT-03 UI npm install 集約・mise task freshness 設計 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |

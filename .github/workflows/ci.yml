@@ -17,6 +17,15 @@ env:
 permissions:
   contents: read
 
+# Same-PR runs supersede each other: a new pull_request run resolves to a
+# per-PR group (refs/pull/<N>/merge) and cancels the in-progress/pending
+# run for that PR. Other triggers (push to main, workflow_dispatch)
+# resolve to a unique run_id group, so they are never cancelled — and
+# different PRs or workflows never share a group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   verify:
     name: verify (${{ matrix.os }})

@@ -10,6 +10,7 @@ Directory: `docs/tasks`
 | TASK-034RBIWkzzcEXV0X3v5ySr | T1 OsFileOps 実 OS アダプタ + factory 接続 (Issue #296) | todo | [issue-296-t1-os-adapter.md](./issue-296-t1-os-adapter.md) |
 | TASK-034RBIX9gn32W8GMyhNMqw | T2 実 FS 結合試験・複数プロセス競合 (Issue #296) | todo | [issue-296-t2-real-fs-tests.md](./issue-296-t2-real-fs-tests.md) |
 | TASK-034RBIYghnEBLw9llcomyd | T3 保証範囲文書化・impl record・最終検証 (Issue #296) | todo | [issue-296-t3-docs-verify.md](./issue-296-t3-docs-verify.md) |
+| TASK-uRQkJW5851dqMXehrKNZkI | Issue #328 T1 — ci.yml / consumer-impact-check.yml へ PR concurrency block 適用 | in-progress | [issue-328-t1-ci-pr-concurrency.md](./issue-328-t1-ci-pr-concurrency.md) |
 | TASK-034RBIMQzuYAewg2JXTXOk | T1 mise task install/freshness 分離 + ui-verify setup ステップ（Issue #330） | done | [issue-330-t1-mise-ui-install-dedup.md](./issue-330-t1-mise-ui-install-dedup.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |

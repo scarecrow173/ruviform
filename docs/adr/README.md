@@ -34,6 +34,7 @@ Directory: `docs/adr`
 | ADR-rgzm45MqKPlpzqO7Uhbqeq | Issue #255 CorrelationPlan 変換長の非2冪高速サイズ化 — 既定選択の変更と混合基数 FFT の採用 | accepted | [issue-255-nonpow2-fft-transform-length.md](./issue-255-nonpow2-fft-transform-length.md) |
 | ADR-034RoY92ThOb7k8jYxuEQy | Issue #276 logging adapter: bounded writer ownership and build-time sink resilience | accepted | [issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md](./issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md) |
 | ADR-034S312gtUiTestAdrCC33 | Issue #312 テスト制御ポートの分離クレート・transport・fail-closed 認証・capability 宣言 | accepted | [issue-312-test-control-transport-security.md](./issue-312-test-control-transport-security.md) |
+| ADR-ieVahO2wRjuTcKd43fT59I | Issue #328 CI concurrency — group キーと cancel-in-progress の event 条件化 | accepted | [issue-328-ci-concurrency-grouping.md](./issue-328-ci-concurrency-grouping.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034QfjWFfUXvgvaObuCUwS | M2 typed graph audio runtime placement, stateful RT ownership, and activation/retirement for Issue #195 | proposed | [m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md](./m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |
