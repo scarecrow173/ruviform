@@ -174,7 +174,9 @@ pub fn attach(
         input_stage,
         input_rx,
     );
-    let control = PluginNodeControl::new(ctrl_tx, report_rx, status);
+    // Single origin: `cfg.frame_base` feeds both halves, so
+    // `control.frame_base()` and `node.frame_base()` can never diverge.
+    let control = PluginNodeControl::new(ctrl_tx, report_rx, status, cfg.frame_base);
     Ok(Attached {
         node,
         control,
