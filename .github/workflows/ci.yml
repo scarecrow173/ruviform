@@ -51,6 +51,7 @@ jobs:
       lane_verify: ${{ steps.classify.outputs.lane_verify }}
       lane_rt_verify: ${{ steps.classify.outputs.lane_rt_verify }}
       lane_icc_verify: ${{ steps.classify.outputs.lane_icc_verify }}
+      lane_compression_verify: ${{ steps.classify.outputs.lane_compression_verify }}
       lane_ui_verify: ${{ steps.classify.outputs.lane_ui_verify }}
       lane_l1_real_verify: ${{ steps.classify.outputs.lane_l1_real_verify }}
       lane_bench: ${{ steps.classify.outputs.lane_bench }}
@@ -408,6 +409,51 @@ jobs:
 
       - name: Lint video-proc icc feature (mise run lint-video-proc-icc)
         run: mise run lint-video-proc-icc
+
+  # IO compression lane (Issue #300): gzip/deflate are non-default features so
+  # `cargo test --workspace` never compiles their code paths; this job runs
+  # the full feature matrix (default + each format + combined) because dead
+  # code under a reduced feature set only fails `-D warnings` at that exact
+  # combination.
+  compression-verify:
+    name: compression-verify
+    needs: [impact]
+    if: always() && needs.impact.outputs.lane_compression_verify != 'false'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust prek
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Check io-compression feature matrix (mise run check-io-compression)
+        run: mise run check-io-compression
+
+      - name: Test io-compression feature matrix (mise run test-io-compression)
+        run: mise run test-io-compression
+
+      - name: Lint io-compression feature matrix (mise run lint-io-compression)
+        run: mise run lint-io-compression
 
   # UI webview lane (Issue #156): the adapter's `webview` feature is
   # non-default so the main workspace lanes stay headless; this job
@@ -1016,7 +1062,7 @@ jobs:
   # out-of-band per docs/designs/issue-346-ruleset-migration-runbook.md.
   ci-gate:
     name: ci-gate
-    needs: [impact, verify, rt-verify, icc-verify, ui-verify, bench, l1-real-verify]
+    needs: [impact, verify, rt-verify, icc-verify, compression-verify, ui-verify, bench, l1-real-verify]
     if: always()
     runs-on: ubuntu-latest
     env:

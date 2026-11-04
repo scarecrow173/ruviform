@@ -65,6 +65,14 @@ test("video-proc change -> verify + rt-verify + icc-verify", () => {
   );
 });
 
+test("io-compression change -> verify + compression-verify", () => {
+  const res = lanesFor(["crates/ruviform-io-compression/src/lib.rs"]);
+  assert.deepEqual(
+    expectedSet(res),
+    new Set(["verify", "compression-verify"]),
+  );
+});
+
 test("ruviform-ui crate change -> verify + ui-verify", () => {
   const res = lanesFor(["crates/ruviform-ui/src/lib.rs"]);
   assert.deepEqual(expectedSet(res), new Set(["verify", "ui-verify"]));

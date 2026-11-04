@@ -3062,6 +3062,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-io-compression"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+]
+
+[[package]]
 name = "ruviform-io-file"
 version = "0.1.0"
 dependencies = [

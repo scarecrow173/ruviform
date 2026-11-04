@@ -41,9 +41,11 @@ Directory: `docs/specs`
 | SPEC-034Qx7sstYyddu4xbj5Q7d | Issue #244 media-reader prefetch contract residual wart fixes — boundary-first fault emission, reopen-failure dead generation, End commit-once | approved | [issue-244-media-reader-prefetch-contract-warts.md](./issue-244-media-reader-prefetch-contract-warts.md) |
 | SPEC-034RoXidyTvNC4Cd998l35 | Issue #276 汎用 Logging Adapter(observability::logging) | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | SPEC-034Rp1Lwq5BGjy5ucoWJ4s | Issue #277 OBS-02 軽量Primitive・Observation Source型・登録/寿命契約 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
+| SPEC-034RToefGzxcXIANSfMf7U | Issue #279 OBS-04 Plugin Host既存4 CounterのSource登録・統合 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | SPEC-034RoR8tcezgggBLlNk7od | Issue #295 ruviform-io-file — StagedFile 型状態・公開契約・Mock Publish (IO-IMP-01) | approved | [issue-295-io-file-staged-publish-contract.md](./issue-295-io-file-staged-publish-contract.md) |
 | SPEC-034RBEkXlCcpgzIaiikzso | Issue #296 ruviform-io-file — 実 OS Atomic Publish・Durability・Recovery (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | SPEC-034RTbxCxbL7YmxxkxrMmt | Issue #297 ruviform-io-structured — JSON/YAML/TOML Serde型付き Reader/Writer・Strict EOF (IO-IMP-03) | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
+| SPEC-iRf6rX6sS5vJpc9b5uOxEk | Issue #300 ruviform-io-compression — Gzip・Raw Deflate Stream 変換・Finish・Checksum (IO-IMP-06) | approved | [issue-300-io-compression-gzip-deflate.md](./issue-300-io-compression-gzip-deflate.md) |
 | SPEC-034RT7qvjzmpx6kytmM8O0 | Issue #302 ruviform-io-archive — ZIP Indexed Entry Reader/Writer・CRC/中央Directory検証 (IO-IMP-08) | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | SPEC-P7W4Dz6p2EQIQNPclAQG2U | Issue #307 PluginNode attach 時 frame_base の非 RT 型付き検証（verified clock context） | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | SPEC-034Rp1AEJDKiDTpPq3H4Yz | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
@@ -77,6 +79,7 @@ Directory: `docs/specs`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| SPEC-R6DgKRt3JJqwgUhZfDMOhr | AGENTS.md の #350 過剰縮小の是正 — `### 検証入口` 等の参照詳細を Progressive Disclosure で docs/ へ分離 | implemented | [agents-verification-entry-split.md](./agents-verification-entry-split.md) |
 | SPEC-034Jc9QEqYLVfg1CXXTiPV | オーディオデバイス境界 trait と ruviform-audio-device PoC（バックエンド評価・採否） | implemented | [audio-device-backend-evaluation-poc.md](./audio-device-backend-evaluation-poc.md) |
 | SPEC-034Jci19siJZexLs53Xh5d | DSP/SIMD 比較ベンチマーク PoC と採否 ADR | implemented | [dsp-simd-poc-adr.md](./dsp-simd-poc-adr.md) |
 | SPEC-034J5FYaYfeL5zkzb4sIV4 | メディアデータモデル API の実装（media-core / audio-core / video-core） | implemented | [implement-media-data-model-api.md](./implement-media-data-model-api.md) |

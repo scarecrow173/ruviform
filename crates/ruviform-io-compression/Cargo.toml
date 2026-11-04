@@ -1,0 +1,46 @@
+[package]
+name = "ruviform-io-compression"
+description = "Byte-stream compression — borrowed-writer/bufread Encoder/Decoder with explicit finish, verified end and cumulative budgets (non-RT; gzip + raw deflate, IO-IMP-06)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# Per-format gates (Issue #300): `gzip` adds RFC 1952 member
+# encode/decode, `deflate` adds raw RFC 1951 stream encode/decode.
+# Both share the optional `flate2` backend dep. `zstd` is IO-IMP-07
+# (Issue #301) and intentionally not declared here.
+gzip = ["dep:flate2"]
+deflate = ["dep:flate2"]
+
+[dependencies]
+# Dependency addition record (provisional convention + licensing ADR
+# per-dependency investigation duty):
+#   - Why: flate2's low-level `Compress`/`Decompress`/`Crc` is the
+#     pure-Rust DEFLATE backend candidate from IO-03 design. We use only
+#     the streaming primitives and own the gzip member framing ourselves,
+#     so member-boundary byte accounting and Drop behavior do not depend
+#     on flate2's high-level GzEncoder/GzDecoder (which prefetch BufRead
+#     input and attempt trailer writes on Drop).
+#   - License: MIT OR Apache-2.0 — compatible with the workspace
+#     licensing policy. Pre-publish license review remains a follow-up.
+#   - Version: 1.1.10 (published 2026-08-28 — satisfies the
+#     minimum-release-age convention). rust-version 1.67 <= MSRV 1.89.
+#   - Features: `rust_backend` only (miniz_oxide + crc32fast, both pure
+#     Rust). `default-features = false` keeps `runtime_detection` /
+#     `zlib-rs` / C backends out of the dependency tree.
+#   - Public exposure: none — no flate2 type, error or version appears
+#     in the public API (backend-hiding contract of IO-03).
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"], optional = true }
+
+[dev-dependencies]
+# Test-only backend cross-check: reference gzip/deflate/zlib streams
+# are produced and consumed with flate2's high-level adapters to prove
+# wire-format interop independent of our own framing code.
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+
+[lints]
+workspace = true

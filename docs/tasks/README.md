@@ -37,6 +37,7 @@ Directory: `docs/tasks`
 | TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | done | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034JNwUoAfb2TnY7nw07XH | 時間変換精度テストの追加（音声×映像行列・往復/連鎖誤差上界） | done | [add-time-precision-tests.md](./add-time-precision-tests.md) |
 | TASK-034KSVq7PFSELAOY00SIZG | AffineTransform カーネル + 文書クローズ | done | [affine-kernel-and-closeout.md](./affine-kernel-and-closeout.md) |
+| TASK-pqoGspxihdop2tZDptYxW6 | T1 AGENTS.md 旧版復元 + `### 検証入口` 分離（PR #350 フォローアップ） | done | [agents-verification-entry-split.md](./agents-verification-entry-split.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
 | TASK-034JP1tb1wQI9ac2cEwBq4 | プラグイン境界 RT 契約テストへの assert_no_alloc 適用 | done | [apply-assert-no-alloc-to-plugin-boundary.md](./apply-assert-no-alloc-to-plugin-boundary.md) |
 | TASK-034JO3X9ZpAvMoWiRIiMU4 | MSRV 1.89 適用とドキュメント同期（Cargo.toml・AGENTS.md） | done | [apply-msrv-1-89-and-sync-docs.md](./apply-msrv-1-89-and-sync-docs.md) |
@@ -139,6 +140,9 @@ Directory: `docs/tasks`
 | TASK-034RBIWkzzcEXV0X3v5ySr | T1 OsFileOps 実 OS アダプタ + factory 接続 (Issue #296) | done | [issue-296-t1-os-adapter.md](./issue-296-t1-os-adapter.md) |
 | TASK-034RBIX9gn32W8GMyhNMqw | T2 実 FS 結合試験・複数プロセス競合 (Issue #296) | done | [issue-296-t2-real-fs-tests.md](./issue-296-t2-real-fs-tests.md) |
 | TASK-034RBIYghnEBLw9llcomyd | T3 保証範囲文書化・impl record・最終検証 (Issue #296) | done | [issue-296-t3-docs-verify.md](./issue-296-t3-docs-verify.md) |
+| TASK-GONrZ5DneYV2H4ryIMA4EK | T1 クレート scaffold + 共有型 + Gzip/Deflate 両 module (Issue #300) | done | [issue-300-t1-crate-core.md](./issue-300-t1-crate-core.md) |
+| TASK-2v8sucBEWaF0frYXFmed85 | T2 AC1-AC6 試験群 + rustdoc/crate README (Issue #300) | done | [issue-300-t2-tests.md](./issue-300-t2-tests.md) |
+| TASK-OjT0wWawFEmwEe6bibhaMq | T3 compression-verify CI lane + classifier + impl record (Issue #300) | done | [issue-300-t3-ci-lane.md](./issue-300-t3-ci-lane.md) |
 | TASK-QNzC22ZqitcqDhco1hHMKj | Issue #307 T1: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | done | [issue-307-t1-attach-frame-base-verified-context.md](./issue-307-t1-attach-frame-base-verified-context.md) |
 | TASK-034Rp7jV966SX0fG78cOBL | Issue #310-T1 browser-test パッケージ骨格・serve・page protocol | done | [issue-310-01-browser-harness-package.md](./issue-310-01-browser-harness-package.md) |
 | TASK-034Rp7kQsMmyk0At2QYrwX | Issue #310-T2 共有 Fixture/Driver/Assertion (gesture/receipt/state/theme/canvas/a11y) | done | [issue-310-02-shared-fixtures-and-drivers.md](./issue-310-02-shared-fixtures-and-drivers.md) |
@@ -204,6 +208,8 @@ Directory: `docs/tasks`
 | TASK-034QidcTgfNesKcwIF1aZ7 | T-4 PoC acceptance tests, rt alloc, perf evidence, impl record, merge+verify | done | [p185-t4-probe-poc-tests-verification.md](./p185-t4-probe-poc-tests-verification.md) |
 | TASK-034Rp2aMrgIhyU5ZATHDQz | T-1 core primitives: Gauge/Histogram + RT-lane tests | done | [p277-t1-core-primitives-gauge-histogram.md](./p277-t1-core-primitives-gauge-histogram.md) |
 | TASK-034Rp2bMkXB7Xa0FKSWPw9 | T-2 source contract: descriptors/SourceId/Registrar/Lease/lifecycle + tests + README | done | [p277-t2-source-contract-registration-lifecycle.md](./p277-t2-source-contract-registration-lifecycle.md) |
+| TASK-034RTukbgTWDcKGHBdKYYN | P279-T1 l1/sources.rs 4 Descriptor + AudioSourceLeases + slot state + mod tests | done | [p279-t1-l1-sources-descriptors-leases.md](./p279-t1-l1-sources-descriptors-leases.md) |
+| TASK-034RTukTevxIOK0EVaR8A3 | P279-T2 create_instance/destroy registrar wiring + PluginHost注入面 + tests | done | [p279-t2-create-destroy-registrar-wiring.md](./p279-t2-create-destroy-registrar-wiring.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | TASK-034OpskKobU4qEsX7F7IYc | T6. stderr piped + drain thread（案A・FFI 局所化・fixture knob） | done | [pipe-and-drain-l1-stderr.md](./pipe-and-drain-l1-stderr.md) |
 | TASK-034MrsDzlHRpUHHLtYkZdN | plugin-core endpoint 前提面（EndpointUnavailable・fallible encode・Send capability・view impl） | done | [plugin-core-endpoint-primitives.md](./plugin-core-endpoint-primitives.md) |
