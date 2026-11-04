@@ -1,0 +1,182 @@
+{
+  "v": 1,
+  "suite": "binding-messages",
+  "id": "ui/binding contract message acceptance/rejection (Issue #311)",
+  "cases": [
+    {
+      "id": "intent-begin",
+      "message": { "kind": "begin", "target": "mixer.ch1.fader", "controlId": "fader-1", "sequence": 1, "gestureId": "g-1", "value": { "plain": 0.5, "normalized": 0.5 } },
+      "expect": { "accept": true, "class": "intent", "commandKind": "begin" }
+    },
+    {
+      "id": "intent-preview-coalescible",
+      "message": { "kind": "preview", "target": "mixer.ch1.fader", "controlId": "fader-1", "sequence": 2, "gestureId": "g-1", "value": { "plain": 0.6, "normalized": 0.6 }, "coalescible": true },
+      "expect": { "accept": true, "class": "intent", "commandKind": "preview" }
+    },
+    {
+      "id": "intent-commit",
+      "message": { "kind": "commit", "target": "mixer.ch1.fader", "controlId": "fader-1", "sequence": 3, "gestureId": "g-1", "value": { "plain": 0.7, "normalized": 0.7 } },
+      "expect": { "accept": true, "class": "intent", "commandKind": "commit" }
+    },
+    {
+      "id": "intent-cancel",
+      "message": { "kind": "cancel", "target": "mixer.ch1.fader", "controlId": "fader-1", "sequence": 4, "gestureId": "g-1", "reason": "escape" },
+      "expect": { "accept": true, "class": "intent", "commandKind": "cancel" }
+    },
+    {
+      "id": "intent-action",
+      "message": { "kind": "action", "target": "transport", "controlId": "btn-play", "sequence": 5, "action": "transport.play", "source": "button" },
+      "expect": { "accept": true, "class": "intent", "commandKind": "action" }
+    },
+    {
+      "id": "intent-with-origin-view",
+      "message": { "kind": "begin", "target": "mixer.ch1.fader", "controlId": "fader-1", "sequence": 6, "gestureId": "g-2", "value": { "plain": 0.1, "normalized": 0.1 }, "originView": "view-mixer", "atomic": true },
+      "expect": { "accept": true, "class": "intent", "commandKind": "begin" }
+    },
+    {
+      "id": "intent-reject-bad-kind",
+      "message": { "kind": "poke", "target": "t", "controlId": "c", "sequence": 1 },
+      "expect": { "accept": false, "reason": "bad-kind" }
+    },
+    {
+      "id": "intent-reject-missing-target",
+      "message": { "kind": "commit", "controlId": "fader-1", "sequence": 3, "gestureId": "g-1", "value": { "plain": 0.7, "normalized": 0.7 } },
+      "expect": { "accept": false, "reason": "missing-field" }
+    },
+    {
+      "id": "intent-reject-commit-missing-value",
+      "message": { "kind": "commit", "target": "t", "controlId": "fader-1", "sequence": 3, "gestureId": "g-1" },
+      "expect": { "accept": false, "reason": "missing-field" }
+    },
+    {
+      "id": "intent-reject-commit-missing-gesture",
+      "message": { "kind": "commit", "target": "t", "controlId": "fader-1", "sequence": 3, "value": { "plain": 0.7, "normalized": 0.7 } },
+      "expect": { "accept": false, "reason": "missing-field" }
+    },
+    {
+      "id": "intent-reject-cancel-missing-reason",
+      "message": { "kind": "cancel", "target": "t", "controlId": "fader-1", "sequence": 4, "gestureId": "g-1" },
+      "expect": { "accept": false, "reason": "missing-field" }
+    },
+    {
+      "id": "intent-reject-preview-not-coalescible",
+      "message": { "kind": "preview", "target": "t", "controlId": "fader-1", "sequence": 2, "gestureId": "g-1", "value": { "plain": 0.6, "normalized": 0.6 }, "coalescible": false },
+      "expect": { "accept": false, "reason": "bad-type" }
+    },
+    {
+      "id": "intent-reject-sequence-type",
+      "message": { "kind": "begin", "target": "t", "controlId": "fader-1", "sequence": "3", "gestureId": "g-1", "value": { "plain": 0.5, "normalized": 0.5 } },
+      "expect": { "accept": false, "reason": "bad-type" }
+    },
+    {
+      "id": "intent-reject-sequence-negative",
+      "message": { "kind": "begin", "target": "t", "controlId": "fader-1", "sequence": -1, "gestureId": "g-1", "value": { "plain": 0.5, "normalized": 0.5 } },
+      "expect": { "accept": false, "reason": "out-of-range" }
+    },
+    {
+      "id": "intent-reject-value-shape",
+      "message": { "kind": "begin", "target": "t", "controlId": "fader-1", "sequence": 1, "gestureId": "g-1", "value": { "plain": "high" } },
+      "expect": { "accept": false, "reason": "bad-type" }
+    },
+    {
+      "id": "receipt-accepted",
+      "message": { "commandId": "cmd-1", "status": "accepted" },
+      "expect": { "accept": true, "class": "receipt" }
+    },
+    {
+      "id": "receipt-applied-with-revision",
+      "message": { "commandId": "cmd-2", "status": "applied", "revision": 12, "detail": "done" },
+      "expect": { "accept": true, "class": "receipt" }
+    },
+    {
+      "id": "receipt-rejected",
+      "message": { "commandId": "cmd-3", "status": "rejected", "detail": "target busy" },
+      "expect": { "accept": true, "class": "receipt" }
+    },
+    {
+      "id": "receipt-unsupported",
+      "message": { "commandId": "cmd-4", "status": "unsupported" },
+      "expect": { "accept": true, "class": "receipt" }
+    },
+    {
+      "id": "receipt-queued",
+      "message": { "commandId": "cmd-5", "status": "queued" },
+      "expect": { "accept": true, "class": "receipt" }
+    },
+    {
+      "id": "receipt-reject-bad-status",
+      "message": { "commandId": "cmd-6", "status": "maybe" },
+      "expect": { "accept": false, "reason": "bad-kind" }
+    },
+    {
+      "id": "receipt-reject-missing-command-id",
+      "message": { "status": "applied" },
+      "expect": { "accept": false, "reason": "missing-field" }
+    },
+    {
+      "id": "receipt-reject-revision-shape",
+      "message": { "commandId": "cmd-7", "status": "applied", "revision": { "n": 1 } },
+      "expect": { "accept": false, "reason": "bad-type" }
+    },
+    {
+      "id": "projection-basic",
+      "message": { "revision": 7, "value": { "plain": 0.5, "normalized": 0.5 }, "provenance": "gateway" },
+      "expect": { "accept": true, "class": "projection" }
+    },
+    {
+      "id": "projection-string-revision",
+      "message": { "revision": "rev-9", "value": {} },
+      "expect": { "accept": true, "class": "projection" }
+    },
+    {
+      "id": "projection-reject-missing-revision",
+      "message": { "value": {} },
+      "expect": { "accept": false, "reason": "missing-field" }
+    },
+    {
+      "id": "projection-reject-revision-type",
+      "message": { "revision": true, "value": {} },
+      "expect": { "accept": false, "reason": "bad-type" }
+    },
+    {
+      "id": "viewport-query-basic",
+      "message": { "queryId": "q-v-1", "sourceId": "peaks-1", "sourceRevision": 3, "viewId": "view-1", "generation": 0, "start": 0, "end": 44100, "buckets": 512, "channels": [0, 1], "maxBytes": 1048576, "encoding": ["rvbw"] },
+      "expect": { "accept": true, "class": "viewportQuery" }
+    },
+    {
+      "id": "viewport-query-minimal",
+      "message": { "queryId": "q-v-2", "sourceId": "peaks-1", "sourceRevision": "r3", "viewId": "view-1", "generation": 1, "start": 0, "end": 100 },
+      "expect": { "accept": true, "class": "viewportQuery" }
+    },
+    {
+      "id": "viewport-query-reject-missing-generation",
+      "message": { "queryId": "q-v-3", "sourceId": "peaks-1", "sourceRevision": 3, "viewId": "view-1", "start": 0, "end": 100 },
+      "expect": { "accept": false, "reason": "missing-field" }
+    },
+    {
+      "id": "viewport-query-reject-negative-maxbytes",
+      "message": { "queryId": "q-v-4", "sourceId": "peaks-1", "sourceRevision": 3, "viewId": "view-1", "generation": 0, "start": 0, "end": 100, "maxBytes": -5 },
+      "expect": { "accept": false, "reason": "out-of-range" }
+    },
+    {
+      "id": "viewport-query-reject-start-after-end",
+      "message": { "queryId": "q-v-5", "sourceId": "peaks-1", "sourceRevision": 3, "viewId": "view-1", "generation": 0, "start": 200, "end": 100 },
+      "expect": { "accept": false, "reason": "out-of-range" }
+    },
+    {
+      "id": "query-reply-basic",
+      "message": { "generation": 0, "sourceRevision": 3, "payload": {}, "bytes": 4096 },
+      "expect": { "accept": true, "class": "queryReply" }
+    },
+    {
+      "id": "query-reply-reject-missing-generation",
+      "message": { "sourceRevision": 3, "payload": {} },
+      "expect": { "accept": false, "reason": "missing-field" }
+    },
+    {
+      "id": "query-reply-reject-negative-bytes",
+      "message": { "generation": 0, "sourceRevision": 3, "payload": {}, "bytes": -1 },
+      "expect": { "accept": false, "reason": "out-of-range" }
+    }
+  ]
+}

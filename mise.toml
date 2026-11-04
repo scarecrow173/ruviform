@@ -245,6 +245,30 @@ run = [
   "npm --prefix ui/binding run build",
 ]
 
+# UI guitest lane (Issue #311): the deterministic GUI-test shared
+# foundation under ui/guitest — the versioned fixture corpus shared
+# with the Rust lanes (rvf.ipc.v1 / rvf://data / Binding contract),
+# fail-closed wire validators, opt-in bounded JSONL recorder, seeded
+# fault matrix, and the deterministic record/replay driver that
+# injects inputs into the real InteractionControl/CommandBinding/
+# QueryBinding/ViewLink path and judges the trace against an
+# independent contract oracle. Test-only package: `npm ci` restores
+# the committed package-lock, node is the pinned mise toolchain, and
+# no UI framework/DOM/WebView/renderer dependency may be added — the
+# lane replays through real binding objects headlessly.
+[tasks.check-ui-guitest]
+description = "Install ui/guitest deps from package-lock and type-check the GUI-test foundation (tsc --noEmit)"
+run = [
+  "npm --prefix ui/guitest ci --no-audit --no-fund",
+  "npm --prefix ui/guitest run typecheck",
+]
+[tasks.test-ui-guitest]
+description = "Install ui/guitest deps from package-lock and run fixture conformance + replay/oracle tests via node --test (headless, deterministic)"
+run = [
+  "npm --prefix ui/guitest ci --no-audit --no-fund",
+  "npm --prefix ui/guitest test",
+]
+
 # UI showcase lane (Issue #263): the design-system showcase +
 # verification fixtures under ui/showcase — the theme matrix (Reference
 # Light/Dark + DAW/analysis exemplars + custom skin), ruviform-owned

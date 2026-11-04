@@ -3151,6 +3151,7 @@ dependencies = [
  "http",
  "rust-embed",
  "ruviform-ui",
+ "serde_json",
  "tao",
  "wry",
 ]

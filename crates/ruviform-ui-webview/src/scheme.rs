@@ -291,4 +291,87 @@ mod tests {
         let r = serve(&a, &d, &get("rvf://data/demo/peaks?offset=0&len=1"));
         assert_eq!(r.headers()["Access-Control-Allow-Origin"], "*");
     }
+
+    // ── Issue #311 shared fixture lane ────────────────────────────────
+    //
+    // `ui/guitest/fixtures/ipc/data.v1.json` is the single versioned
+    // corpus shared with the TypeScript lane (`ui/guitest`): identical
+    // URL/name/query/range/status semantics on both sides. `call`
+    // cases exercise the JS bridge's URL builder — no Rust surface.
+    // Registry-level range reads additionally run in ruviform-ui's
+    // `ipc_conformance` suite; here the full `serve` path adds the
+    // scheme-layer name/param validation and status mapping.
+
+    #[test]
+    fn data_fixture_cases() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../ui/guitest/fixtures/ipc/data.v1.json");
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("cannot read fixture {path:?}: {e}"));
+        let doc: serde_json::Value =
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("fixture is not JSON: {e}"));
+
+        let assets: Arc<dyn ruviform_ui::AssetSource> =
+            Arc::new(MapAssetSource::new().with_asset("index.html", None, "<html/>".as_bytes()));
+
+        for case in doc["cases"].as_array().expect("cases") {
+            let id = case["id"].as_str().unwrap();
+            let Some(reg) = case.get("registry") else {
+                continue;
+            };
+            let data = DataRegistry::with_max_chunk(reg["maxChunk"].as_u64().unwrap());
+            for s in reg["sources"].as_array().unwrap() {
+                data.register(
+                    s["name"].as_str().unwrap(),
+                    Arc::new(VecDataSource::new(vec![
+                        u8::try_from(
+                            s["byte"].as_u64().unwrap()
+                        )
+                        .unwrap();
+                        usize::try_from(
+                            s["size"].as_u64().unwrap()
+                        )
+                        .unwrap()
+                    ])),
+                );
+            }
+
+            let req = &case["request"];
+            let query = req["rawQuery"].as_str().map_or_else(
+                || {
+                    use std::fmt::Write;
+                    let mut q = format!("offset={}", req["offset"].as_u64().unwrap_or(0));
+                    if let Some(len) = req["len"].as_u64() {
+                        write!(q, "&len={len}").unwrap();
+                    }
+                    q
+                },
+                str::to_string,
+            );
+            // `request.host` pins the WebView2-rewritten form
+            // (`http://rvf.<ns>/...`); otherwise the canonical scheme.
+            let url = match req["host"].as_str() {
+                Some(host) => format!("http://{host}/{}?{query}", req["name"].as_str().unwrap()),
+                None => format!("rvf://data/{}?{query}", req["name"].as_str().unwrap()),
+            };
+            let r = serve(&assets, &data, &get(&url));
+
+            let expect = &case["expect"];
+            assert_eq!(
+                r.status().as_u16(),
+                u16::try_from(expect["status"].as_u64().unwrap()).unwrap(),
+                "{id}: status"
+            );
+            if let Some(body_len) = expect["bodyLen"].as_u64() {
+                assert_eq!(r.body().len() as u64, body_len, "{id}: bodyLen");
+            }
+            if let Some(total) = expect["total"].as_u64() {
+                assert_eq!(
+                    r.headers()["X-Rvf-Total"].to_str().unwrap(),
+                    total.to_string(),
+                    "{id}: X-Rvf-Total"
+                );
+            }
+        }
+    }
 }

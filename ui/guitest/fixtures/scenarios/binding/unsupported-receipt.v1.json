@@ -1,0 +1,34 @@
+{
+  "v": 1,
+  "suite": "scenario-binding",
+  "id": "unsupported-receipt",
+  "seed": null,
+  "setup": {
+    "consumer": "daw",
+    "viewId": "view-1",
+    "windowId": "win-1",
+    "ackTimeoutMs": 1000,
+    "targets": [
+      { "control": "fader-1", "target": "mixer.ch1.fader", "initial": 0.0 }
+    ]
+  },
+  "in": [
+    { "op": "action", "name": "transport.scrub" },
+    { "op": "flush" },
+    { "op": "receipt", "status": "unsupported", "ref": "last" },
+    { "op": "gesture", "control": "fader-1", "inputs": [
+      { "type": "begin", "gestureId": "g-1", "source": "pointer" },
+      { "type": "cancel", "gestureId": "g-1", "reason": "escape" }
+    ] },
+    { "op": "flush" }
+  ],
+  "expect": {
+    "phases": ["pending", "unsupported"],
+    "dispatched": [
+      { "kind": "action", "action": "transport.scrub", "expectReceipt": true },
+      { "kind": "begin", "gestureId": "g-1" },
+      { "kind": "cancel", "gestureId": "g-1" }
+    ],
+    "finalState": { "phase": "unsupported" }
+  }
+}

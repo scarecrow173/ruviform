@@ -1,0 +1,39 @@
+{
+  "v": 1,
+  "suite": "scenario-binding",
+  "id": "ack-matrix",
+  "seed": null,
+  "setup": {
+    "consumer": "daw",
+    "viewId": "view-1",
+    "windowId": "win-1",
+    "ackTimeoutMs": 5000,
+    "targets": [
+      { "control": "fader-1", "target": "mixer.ch1.fader", "initial": 0.0 }
+    ]
+  },
+  "in": [
+    { "op": "gesture", "control": "fader-1", "inputs": [
+      { "type": "begin", "gestureId": "g-1", "source": "pointer" },
+      { "type": "commit", "gestureId": "g-1", "value": { "normalized": 0.5 } }
+    ] },
+    { "op": "flush" },
+    { "op": "receipt", "status": "applied", "ref": "last" },
+    { "op": "receipt", "status": "accepted", "ref": "last" },
+    { "op": "receipt", "status": "applied", "ref": "last" },
+    { "op": "receipt", "status": "rejected", "ref": "last" },
+    { "op": "receipt", "status": "applied", "ref": "unknown", "commandId": "cmd-999" },
+    { "op": "action", "name": "transport.stop" },
+    { "op": "flush" },
+    { "op": "receipt", "status": "queued", "ref": "last" },
+    { "op": "receipt", "status": "rejected", "ref": "last", "detail": "busy" }
+  ],
+  "expect": {
+    "phases": ["applied", "accepted", "rejected"],
+    "diagnostics": {
+      "staleReceipts": 1,
+      "outOfOrderReceipts": 2
+    },
+    "finalState": { "phase": "rejected" }
+  }
+}

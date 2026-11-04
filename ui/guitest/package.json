@@ -1,0 +1,18 @@
+{
+  "name": "@ruviform/ui-guitest",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Issue #311: deterministic GUI-test shared foundation — rvf.ipc.v1 / rvf://data / Binding contract conformance against one versioned fixture corpus, opt-in bounded JSONL recorder, deterministic record/replay with an independent contract oracle, and the fault-matrix helpers. Test-only package: no runtime/product code lives here, no UI framework, DOM, WebView, or renderer dependency in src/.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "~24.10",
+    "typescript": "~5.9.3"
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "v": 1,
+  "suite": "ipc-intents",
+  "id": "rvf.ipc.v1 intent acceptance/rejection (Issue #311)",
+  "cases": [
+    {
+      "id": "valid-sys-ping",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-1\",\"op\":\"sys.ping\",\"params\":{}}",
+      "expect": { "accept": true, "id": "i-1", "op": "sys.ping", "params": {} }
+    },
+    {
+      "id": "valid-params-omitted",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-2\",\"op\":\"sys.capabilities\"}",
+      "expect": { "accept": true, "id": "i-2", "op": "sys.capabilities", "params": null }
+    },
+    {
+      "id": "valid-unknown-field-tolerated",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-3\",\"op\":\"sys.ping\",\"params\":{},\"futureField\":42}",
+      "expect": { "accept": true, "id": "i-3", "op": "sys.ping", "params": {} }
+    },
+    {
+      "id": "valid-op-with-dash-underscore",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-4\",\"op\":\"proj.peak-data_v2\",\"params\":{}}",
+      "expect": { "accept": true, "id": "i-4", "op": "proj.peak-data_v2", "params": {} }
+    },
+    {
+      "id": "reject-unsupported-version",
+      "body": "{\"v\":2,\"kind\":\"intent\",\"id\":\"i-5\",\"op\":\"sys.ping\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-version-zero",
+      "body": "{\"v\":0,\"kind\":\"intent\",\"id\":\"i-6\",\"op\":\"sys.ping\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-wrong-kind",
+      "body": "{\"v\":1,\"kind\":\"event\",\"id\":\"i-7\",\"op\":\"sys.ping\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-kind-number",
+      "body": "{\"v\":1,\"kind\":1,\"id\":\"i-8\",\"op\":\"sys.ping\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-v-string",
+      "body": "{\"v\":\"1\",\"kind\":\"intent\",\"id\":\"i-9\",\"op\":\"sys.ping\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-missing-id",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"op\":\"sys.ping\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-id-number",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"id\":42,\"op\":\"sys.ping\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-missing-op",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-10\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-op-no-namespace",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-11\",\"op\":\"ping\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-op-empty-segment",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-12\",\"op\":\"proj..ping\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-op-uppercase",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-13\",\"op\":\"Sys.Ping\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-op-trailing-dot",
+      "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-14\",\"op\":\"sys.\",\"params\":{}}",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-not-json",
+      "body": "not json{",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-json-array",
+      "body": "[1,2,3]",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-empty-body",
+      "body": "",
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-body-over-max",
+      "bodyGen": { "kind": "pad-intent", "padTo": 1048577 },
+      "expect": { "accept": false, "code": "message_too_large" }
+    },
+    {
+      "id": "valid-body-at-max",
+      "bodyGen": { "kind": "pad-intent", "padTo": 1048576 },
+      "expect": { "accept": true, "id": "i-pad", "op": "sys.ping" }
+    }
+  ]
+}

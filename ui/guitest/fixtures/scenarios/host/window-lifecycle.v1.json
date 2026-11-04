@@ -1,0 +1,40 @@
+{
+  "v": 1,
+  "suite": "scenario-host",
+  "id": "window-lifecycle",
+  "windows": ["w1", "w2"],
+  "setup": {
+    "services": [
+      { "name": "echo.svc", "ops": ["proj.echo"], "behavior": "echo" },
+      { "name": "job.svc", "ops": ["proj.job"], "behavior": "job-slow" }
+    ]
+  },
+  "in": [
+    { "op": "ready", "window": "w1" },
+    { "op": "message", "window": "w1", "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-1\",\"op\":\"sys.ping\",\"params\":{}}" },
+    { "op": "message", "window": "w2", "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-2\",\"op\":\"proj.echo\",\"params\":{\"x\":1}}" },
+    { "op": "message", "window": "w2", "body": "not-json" },
+    { "op": "message", "window": "w1", "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-3\",\"op\":\"no.such\",\"params\":{}}" },
+    { "op": "message", "window": "w1", "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-4\",\"op\":\"proj.job\",\"params\":{}}" },
+    { "op": "tick" },
+    { "op": "close", "window": "w2" },
+    { "op": "destroy", "window": "w2" },
+    { "op": "message", "window": "w2", "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-5\",\"op\":\"sys.ping\",\"params\":{}}" },
+    { "op": "message", "window": "w1", "body": "{\"v\":1,\"kind\":\"intent\",\"id\":\"i-6\",\"op\":\"job.cancel\",\"params\":{\"job\":1}}" },
+    { "op": "waitJobs", "timeoutMs": 5000 },
+    { "op": "close", "window": "w1" }
+  ],
+  "expect": {
+    "events": [
+      { "window": "w1", "kind": "result", "id": "i-1", "ok": true },
+      { "window": "w2", "kind": "result", "id": "i-2", "ok": true },
+      { "window": "w2", "kind": "error", "code": "malformed_message" },
+      { "window": "w1", "kind": "result", "id": "i-3", "ok": false, "code": "unknown_op" },
+      { "window": "w1", "kind": "result", "id": "i-4", "ok": true },
+      { "window": "w2", "kind": "lifecycle", "state": "closing" },
+      { "window": "w1", "kind": "result", "id": "i-6", "ok": true },
+      { "window": "w1", "kind": "job", "state": "cancelled" },
+      { "window": "w1", "kind": "lifecycle", "state": "closing" }
+    ]
+  }
+}

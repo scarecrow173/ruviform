@@ -88,6 +88,7 @@ const ALLOWED_IMPORTS: Record<string, readonly string[]> = {
   components: ["core"],
   viz: ["core", "components"],
   binding: ["core"],
+  guitest: ["core", "binding"],
   showcase: ["core", "components", "viz", "binding"],
 };
 

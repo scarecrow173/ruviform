@@ -1,0 +1,28 @@
+{
+  "v": 1,
+  "suite": "scenario-binding",
+  "id": "late-applied-after-timeout",
+  "seed": null,
+  "setup": {
+    "consumer": "daw",
+    "viewId": "view-1",
+    "windowId": "win-1",
+    "ackTimeoutMs": 1000,
+    "targets": [
+      { "control": "fader-1", "target": "mixer.ch1.fader", "initial": 0.0 }
+    ]
+  },
+  "in": [
+    { "op": "gesture", "control": "fader-1", "inputs": [
+      { "type": "begin", "gestureId": "g-1", "source": "pointer" },
+      { "type": "commit", "gestureId": "g-1", "value": { "normalized": 0.5 } }
+    ] },
+    { "op": "flush" },
+    { "op": "advance", "ms": 1100 },
+    { "op": "receipt", "status": "applied", "ref": "last" }
+  ],
+  "expect": {
+    "phases": ["pending", "timeout", "applied"],
+    "finalState": { "phase": "applied", "timedOut": true }
+  }
+}
