@@ -1,0 +1,39 @@
+{
+  "v": 1,
+  "suite": "scenario-binding",
+  "id": "commit-applied-observed",
+  "seed": null,
+  "setup": {
+    "consumer": "daw",
+    "viewId": "view-1",
+    "windowId": "win-1",
+    "ackTimeoutMs": 1000,
+    "targets": [
+      { "control": "fader-1", "target": "mixer.ch1.fader", "initial": 0.0 }
+    ]
+  },
+  "in": [
+    { "op": "gesture", "control": "fader-1", "inputs": [
+      { "type": "begin", "gestureId": "g-1", "source": "pointer" },
+      { "type": "preview", "gestureId": "g-1", "value": { "normalized": 0.4 } },
+      { "type": "commit", "gestureId": "g-1", "value": { "normalized": 0.5 } }
+    ] },
+    { "op": "flush" },
+    { "op": "receipt", "status": "accepted" },
+    { "op": "receipt", "status": "applied" },
+    { "op": "projection", "target": "mixer.ch1.fader", "revision": 1, "value": { "plain": 0.5, "normalized": 0.5 } }
+  ],
+  "expect": {
+    "dispatched": [
+      { "kind": "begin", "gestureId": "g-1" },
+      { "kind": "commit", "gestureId": "g-1", "expectReceipt": true }
+    ],
+    "phases": ["preview", "pending", "accepted", "applied", "observed"],
+    "diagnostics": {
+      "staleReceipts": 0,
+      "outOfOrderReceipts": 0,
+      "staleProjections": 0,
+      "supersededPreviews": 1
+    }
+  }
+}

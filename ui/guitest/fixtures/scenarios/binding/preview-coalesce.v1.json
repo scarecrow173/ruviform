@@ -1,0 +1,38 @@
+{
+  "v": 1,
+  "suite": "scenario-binding",
+  "id": "preview-coalesce",
+  "seed": null,
+  "setup": {
+    "consumer": "daw",
+    "viewId": "view-1",
+    "windowId": "win-1",
+    "ackTimeoutMs": 1000,
+    "targets": [
+      { "control": "fader-1", "target": "mixer.ch1.fader", "initial": 0.0 }
+    ]
+  },
+  "in": [
+    { "op": "gesture", "control": "fader-1", "inputs": [
+      { "type": "begin", "gestureId": "g-1", "source": "pointer" },
+      { "type": "preview", "gestureId": "g-1", "value": { "normalized": 0.1 } },
+      { "type": "preview", "gestureId": "g-1", "value": { "normalized": 0.2 } },
+      { "type": "preview", "gestureId": "g-1", "value": { "normalized": 0.3 } }
+    ] },
+    { "op": "flush" },
+    { "op": "gesture", "control": "fader-1", "inputs": [
+      { "type": "preview", "gestureId": "g-1", "value": { "normalized": 0.4 } },
+      { "type": "commit", "gestureId": "g-1", "value": { "normalized": 0.5 } }
+    ] },
+    { "op": "flush" },
+    { "op": "receipt", "status": "applied" }
+  ],
+  "expect": {
+    "dispatched": [
+      { "kind": "begin", "gestureId": "g-1" },
+      { "kind": "preview", "gestureId": "g-1" },
+      { "kind": "commit", "gestureId": "g-1", "expectReceipt": true }
+    ],
+    "diagnostics": { "coalesced": 2, "supersededPreviews": 1 }
+  }
+}

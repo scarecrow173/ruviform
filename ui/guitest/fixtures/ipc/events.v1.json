@@ -1,0 +1,102 @@
+{
+  "v": 1,
+  "suite": "ipc-events",
+  "id": "rvf.ipc.v1 event envelope wire shapes (Issue #311)",
+  "cases": [
+    {
+      "id": "result-ok",
+      "wire": { "v": 1, "kind": "result", "id": "i-1", "ok": true, "data": { "pong": true } },
+      "expect": { "accept": true, "class": "result", "correlation": "i-1", "ok": true }
+    },
+    {
+      "id": "result-err",
+      "wire": { "v": 1, "kind": "result", "id": "i-2", "ok": false, "error": { "code": "unknown_op", "message": "unregistered op \"x.y\"" } },
+      "expect": { "accept": true, "class": "result", "correlation": "i-2", "ok": false, "code": "unknown_op" }
+    },
+    {
+      "id": "result-err-with-details",
+      "wire": { "v": 1, "kind": "result", "id": "i-3", "ok": false, "error": { "code": "invalid_params", "message": "bad range", "details": { "field": "len" } } },
+      "expect": { "accept": true, "class": "result", "correlation": "i-3", "ok": false, "code": "invalid_params" }
+    },
+    {
+      "id": "job-progress",
+      "wire": { "v": 1, "kind": "job", "job": 7, "state": "progress", "done": 3, "total": 10 },
+      "expect": { "accept": true, "class": "job", "correlation": 7, "state": "progress" }
+    },
+    {
+      "id": "job-progress-detail",
+      "wire": { "v": 1, "kind": "job", "job": 7, "state": "progress", "done": 4, "total": 10, "detail": "peaks" },
+      "expect": { "accept": true, "class": "job", "correlation": 7, "state": "progress" }
+    },
+    {
+      "id": "job-finished",
+      "wire": { "v": 1, "kind": "job", "job": 7, "state": "finished", "data": { "path": "peaks.rvbw" } },
+      "expect": { "accept": true, "class": "job", "correlation": 7, "state": "finished" }
+    },
+    {
+      "id": "job-cancelled",
+      "wire": { "v": 1, "kind": "job", "job": 7, "state": "cancelled" },
+      "expect": { "accept": true, "class": "job", "correlation": 7, "state": "cancelled" }
+    },
+    {
+      "id": "job-failed",
+      "wire": { "v": 1, "kind": "job", "job": 7, "state": "failed", "error": { "code": "worker_failed", "message": "job worker panicked" } },
+      "expect": { "accept": true, "class": "job", "correlation": 7, "state": "failed", "code": "worker_failed" }
+    },
+    {
+      "id": "notify",
+      "wire": { "v": 1, "kind": "notify", "seq": 41, "data": { "transport": "play" } },
+      "expect": { "accept": true, "class": "notify", "correlation": 41 }
+    },
+    {
+      "id": "lifecycle-closing",
+      "wire": { "v": 1, "kind": "lifecycle", "state": "closing" },
+      "expect": { "accept": true, "class": "lifecycle", "correlation": "closing" }
+    },
+    {
+      "id": "error-uncorrelated",
+      "wire": { "v": 1, "kind": "error", "error": { "code": "malformed_message", "message": "invalid intent" } },
+      "expect": { "accept": true, "class": "error", "code": "malformed_message" }
+    },
+    {
+      "id": "tolerate-unknown-field",
+      "wire": { "v": 1, "kind": "notify", "seq": 42, "data": {}, "futureField": { "x": 1 } },
+      "expect": { "accept": true, "class": "notify", "correlation": 42 }
+    },
+    {
+      "id": "reject-unsupported-version",
+      "wire": { "v": 2, "kind": "notify", "seq": 1, "data": {} },
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-unknown-kind",
+      "wire": { "v": 1, "kind": "telemetry", "seq": 1 },
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-missing-kind",
+      "wire": { "v": 1, "id": "i-9", "ok": true },
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-result-missing-id",
+      "wire": { "v": 1, "kind": "result", "ok": true, "data": {} },
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-job-missing-state",
+      "wire": { "v": 1, "kind": "job", "job": 1 },
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-notify-missing-seq",
+      "wire": { "v": 1, "kind": "notify", "data": {} },
+      "expect": { "accept": false, "code": "malformed_message" }
+    },
+    {
+      "id": "reject-error-missing-body",
+      "wire": { "v": 1, "kind": "error" },
+      "expect": { "accept": false, "code": "malformed_message" }
+    }
+  ]
+}
