@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- Ruviform browser-test page: lifecycle (Issue #310).
+     Modules resolve through the import map — dist builds only,
+     matching what a consumer WebView actually loads. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ruviform Browser Test — lifecycle</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@rvf/showcase": "/showcase/dist/showcase/src/index.js",
+          "@rvf/browser-test-page": "/browser-test/dist/page/rvf-page.js"
+        }
+      }
+    </script>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      #app { padding: 16px; }
+      [data-showcase] { display: flex; gap: 16px; align-items: flex-start; }
+      rvf-theme { display: block; }
+      .sc-col { min-width: 340px; }
+      .sc-row { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+      .sc-row-deferred { flex-direction: row; flex-wrap: wrap; }
+      rvf-knob, rvf-fader, rvf-seekbar, rvf-numeric-input, rvf-toggle,
+      rvf-range-selector, rvf-transport { display: block; }
+      rvf-waveform, rvf-meter, rvf-spectrum { display: block; width: 300px; height: 120px; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/browser-test/dist/page/lifecycle.js"></script>
+  </body>
+</html>
