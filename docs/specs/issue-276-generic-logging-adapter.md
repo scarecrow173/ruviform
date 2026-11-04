@@ -18,7 +18,8 @@ relations:
     moved: []
     generated: []
   implements: []
-  implemented-by: []
+  implemented-by:
+    - "docs/plans/issue-276-generic-logging-adapter.md"
   depends-on: []
   blocks: []
   supersedes: []
@@ -32,6 +33,7 @@ relations:
     - "docs/designs/foundation-observability-minimal-api.md"
   derived-by:
     - "docs/designs/issue-276-generic-logging-adapter.md"
+    - "docs/plans/issue-276-generic-logging-adapter.md"
     - "docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md"
     - "docs/test-specs/issue-276-generic-logging-adapter.md"
   verifies: []

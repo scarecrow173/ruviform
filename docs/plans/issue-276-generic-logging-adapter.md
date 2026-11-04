@@ -18,7 +18,10 @@ relations:
     generated: []
   implements:
     - "docs/specs/issue-276-generic-logging-adapter.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/tasks/task-276-t1-config-and-wiring.md"
+    - "docs/tasks/task-276-t2-writer-sinks-build.md"
+    - "docs/tasks/task-276-t3-tests-docs-verify.md"
   depends-on: []
   blocks: []
   supersedes: []
