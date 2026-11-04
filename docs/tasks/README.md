@@ -7,6 +7,9 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
+| TASK-034RTggRy4UgfgaFSfQY4f | T1 ruviform-io-structured scaffold・共通契約・JSON Format (Issue #297) | todo | [issue-297-t1-crate-and-contract.md](./issue-297-t1-crate-and-contract.md) |
+| TASK-034RTghO8nOg3ZiYGau2pe | T2 YAML/TOML Format module・Budget 写像・2相分類 (Issue #297) | todo | [issue-297-t2-yaml-toml.md](./issue-297-t2-yaml-toml.md) |
+| TASK-034RTgiDjrTlcheIw55nAn | T3 file feature・workspace 台帳・総合検証 (Issue #297) | todo | [issue-297-t3-file-feature.md](./issue-297-t3-file-feature.md) |
 | TASK-yFczRmBPJEUZkKyX3bngmg | Issue #329 T1 — ci.yml verify/ui-verify へ sccache 導入 + Cold/Warm 実測 + IR | in-progress | [issue-329-t1-sccache-verify-ui-lanes.md](./issue-329-t1-sccache-verify-ui-lanes.md) |
 | TASK-034RJ02dFTbxsMkC5rKofw | Issue #331 T1 — verify lane の check-ci を lint-ci に統合 + 等価性・実測記録 | in-progress | [issue-331-t1-check-step-dedup.md](./issue-331-t1-check-step-dedup.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
