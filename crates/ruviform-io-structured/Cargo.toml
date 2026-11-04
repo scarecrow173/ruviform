@@ -1,0 +1,44 @@
+[package]
+name = "ruviform-io-structured"
+description = "Serde-typed structured document I/O — JSON/YAML/TOML from_reader/to_writer with strict EOF, input byte budgets, normalized DocumentError, and optional StagedFile publish convenience (non-RT)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+json = ["dep:serde_json"]
+yaml = ["dep:serde-saphyr"]
+toml = ["dep:toml"]
+file = ["dep:ruviform-io-file"]
+
+[dependencies]
+# Serde traits are the only third-party types allowed in the public API
+# (IO-02 design agreement): `Serialize`/`DeserializeOwned` bounds.
+serde = "1"
+
+# Backends are private implementation details: their types, errors and
+# feature names never appear in the public API (source() chain only).
+# Pinned with `=`: newer releases inside the caret range violate the
+# 7-day release-age policy (serde-saphyr 2.1.0 / toml 1.2.0 were cut in
+# the last week).
+serde_json = { version = "=1.0.154", optional = true }
+serde-saphyr = { version = "=2.0.0", default-features = false, features = [
+    "serialize",
+    "deserialize",
+], optional = true }
+toml = { version = "=1.1.8", default-features = false, features = [
+    "std",
+    "serde",
+    "parse",
+    "display",
+], optional = true }
+ruviform-io-file = { path = "../ruviform-io-file", optional = true }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[lints]
+workspace = true
