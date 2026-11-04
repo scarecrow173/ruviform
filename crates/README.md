@@ -16,7 +16,7 @@ Ruviform ワークスペースのメンバークレート索引（計31クレー
 | [`ruviform-rt`](ruviform-rt/README.md) | RT 基盤（`Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換） |
 | [`ruviform-media-core`](ruviform-media-core/README.md) | 規格中立メディアデータモデル（時間・transport・音楽時間・`Error`） |
 | [`ruviform-exec`](ruviform-exec/README.md) | 非 RT 実行基盤（スレッド優先度機構・`OfflineDriver`） |
-| [`ruviform-observability`](ruviform-observability/README.md) | 共有観測プリミティブ（`Counter`/`CounterReader` counter pair — Issue #101 候補・#121 で L1 diagnostics が初消費者） |
+| [`ruviform-observability`](ruviform-observability/README.md) | 共有観測基盤（core: `Counter`/`Gauge`/`Histogram` writer-reader ペア + source: 登録ポート・Descriptor・`SourceId`/Generation・寿命契約 — Issue #101 候補・#121 初消費者・#277 OBS-02） |
 
 ## Domain foundations
 

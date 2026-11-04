@@ -175,6 +175,8 @@ Directory: `docs/tasks`
 | TASK-034QidbvzKgQyKTfniAhWG | T-2 RtRuntime probe plumbing: frame_cursor, published_plan, command drains, tap sites, deck channels | done | [p185-t2-runtime-probe-plumbing-taps.md](./p185-t2-runtime-probe-plumbing-taps.md) |
 | TASK-034Qidce7Pq9AxEezYMaNE | T-3 typed::probe contract: capability resolver, ProbeBroker, ProbeDeck/RtProbe, ProbeCollector | done | [p185-t3-probe-contract-broker-collector.md](./p185-t3-probe-contract-broker-collector.md) |
 | TASK-034QidcTgfNesKcwIF1aZ7 | T-4 PoC acceptance tests, rt alloc, perf evidence, impl record, merge+verify | done | [p185-t4-probe-poc-tests-verification.md](./p185-t4-probe-poc-tests-verification.md) |
+| TASK-034Rp2aMrgIhyU5ZATHDQz | T-1 core primitives: Gauge/Histogram + RT-lane tests | done | [p277-t1-core-primitives-gauge-histogram.md](./p277-t1-core-primitives-gauge-histogram.md) |
+| TASK-034Rp2bMkXB7Xa0FKSWPw9 | T-2 source contract: descriptors/SourceId/Registrar/Lease/lifecycle + tests + README | done | [p277-t2-source-contract-registration-lifecycle.md](./p277-t2-source-contract-registration-lifecycle.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | TASK-034OpskKobU4qEsX7F7IYc | T6. stderr piped + drain thread（案A・FFI 局所化・fixture knob） | done | [pipe-and-drain-l1-stderr.md](./pipe-and-drain-l1-stderr.md) |
 | TASK-034MrsDzlHRpUHHLtYkZdN | plugin-core endpoint 前提面（EndpointUnavailable・fallible encode・Send capability・view impl） | done | [plugin-core-endpoint-primitives.md](./plugin-core-endpoint-primitives.md) |
