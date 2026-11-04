@@ -151,3 +151,4 @@ Directory: `docs/impl/ir`
 | IMPL-ngz9RSZGnlsfJnmktd0EGE | Issue #333 CI-OPT-06 変更影響ベース検証 DAG・fail-closed 集約 gate（Shadow Mode） | completed | [issue-333-ci-opt-06-impact-gate.md](./issue-333-ci-opt-06-impact-gate.md) |
 | IMPL-034RP8X0bpYtK5In9i3F00 | Issue #346 CI-OPT-06 選択実行有効化（lane if 配線）・ci-gate 単一 required 移行 runbook | completed | [issue-346-ci-opt-06-lane-if-ci-gate-required-runbook.md](./issue-346-ci-opt-06-lane-if-ci-gate-required-runbook.md) |
 | IMPL-034RUlcumqbCyTpQ93jXxC | Issue #300 ruviform-io-compression gzip・raw deflate Compression Core（借用 Encoder/Decoder・finish 冪等・verified end・累積 budget・compression-verify lane） | completed | [issue-300-ruviform-io-compression-gzip-raw-deflate-compression-core.md](./issue-300-ruviform-io-compression-gzip-raw-deflate-compression-core.md) |
+| IMPL-yMfm4VQypUJDoAtkXVsGna | SinkDegraded Clone derive 追加（Issue #336） | completed | [implement-issue-336-sink-degraded-clone.md](./implement-issue-336-sink-degraded-clone.md) |

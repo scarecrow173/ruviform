@@ -7,6 +7,7 @@ Directory: `docs/designs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | DESIGN-OVERVIEW | System Design Overview | draft | [overview.md](./overview.md) |
+| DESIGN-L8xeY9I5pmnb61GPOcn3D0 | AGENTS.md 旧版復元 + 参照詳細の Progressive Disclosure 分離方式 | approved | [agents-verification-entry-split.md](./agents-verification-entry-split.md) |
 | DESIGN-034Kq7iQj2mt7VuR8YP2vq | ruviform-audio-analysis 設計（レベル/スペクトル/波形ピーク） | approved | [audio-analysis.md](./audio-analysis.md) |
 | DESIGN-034JcC9QK924kDbu4WhibC | オーディオデバイス境界 trait と ruviform-audio-device PoC の詳細設計 | approved | [audio-device-boundary-and-poc.md](./audio-device-boundary-and-poc.md) |
 | DESIGN-034JROdBjynllTNAVDZwaI | 音声エンジン設計 | approved | [audio-engine.md](./audio-engine.md) |
@@ -69,6 +70,7 @@ Directory: `docs/designs`
 | DESIGN-034RJ00iyqN3oWCf99pDXu | Issue #331 設計 — check-ci を lint-ci へ統合する等価性証明と適用 | approved | [issue-331-check-clippy-test-dedup.md](./issue-331-check-clippy-test-dedup.md) |
 | DESIGN-EJ86GHTwsKgyexnCdTpSJ5 | Issue #332 CI-OPT-05 Playwright Chromium cache・準備分離設計 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | DESIGN-oq5cpmBZrL3fUcNnuUzPxg | Issue #333 CI-OPT-06 Impact Classifier・集約 Required Gate・段階移行設計 | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
+| DESIGN-elUvrfyRcsMrmrESYqsxDn | Issue #336 SinkDegraded Clone 設計 | approved | [issue-336-sink-degraded-clone.md](./issue-336-sink-degraded-clone.md) |
 | DESIGN-034RP4B7OViSh6O4YCu1rz | Issue #346 CI-OPT-06 選択実行有効化・ruleset required context 移行 runbook | approved | [issue-346-ruleset-migration-runbook.md](./issue-346-ruleset-migration-runbook.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |

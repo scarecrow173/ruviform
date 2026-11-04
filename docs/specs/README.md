@@ -55,6 +55,7 @@ Directory: `docs/specs`
 | SPEC-034RIZZEiovcu0sAxuAPkX | Issue #331 CI-OPT-04 check/clippy/test 重複評価・再コンパイル削減 | approved | [issue-331-check-clippy-test-dedup.md](./issue-331-check-clippy-test-dedup.md) |
 | SPEC-x9aakFSwqMZzdqGoq2uyc3 | Issue #332 CI-OPT-05 Playwright Chromium 準備・ブラウザキャッシュと実行時間の最適化 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | SPEC-nZdlFyflADPeFBthK8sEBB | Issue #333 CI-OPT-06 変更影響ベース検証 DAG・Fail-Closed Required Gate | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
+| SPEC-AJKrUcOGJ76vbIWIZ065rr | Issue #336 SinkDegraded への Clone derive 追加 | approved | [issue-336-sink-degraded-clone.md](./issue-336-sink-degraded-clone.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |
@@ -75,6 +76,7 @@ Directory: `docs/specs`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| SPEC-R6DgKRt3JJqwgUhZfDMOhr | AGENTS.md の #350 過剰縮小の是正 — `### 検証入口` 等の参照詳細を Progressive Disclosure で docs/ へ分離 | implemented | [agents-verification-entry-split.md](./agents-verification-entry-split.md) |
 | SPEC-034Jc9QEqYLVfg1CXXTiPV | オーディオデバイス境界 trait と ruviform-audio-device PoC（バックエンド評価・採否） | implemented | [audio-device-backend-evaluation-poc.md](./audio-device-backend-evaluation-poc.md) |
 | SPEC-034Jci19siJZexLs53Xh5d | DSP/SIMD 比較ベンチマーク PoC と採否 ADR | implemented | [dsp-simd-poc-adr.md](./dsp-simd-poc-adr.md) |
 | SPEC-034J5FYaYfeL5zkzb4sIV4 | メディアデータモデル API の実装（media-core / audio-core / video-core） | implemented | [implement-media-data-model-api.md](./implement-media-data-model-api.md) |

@@ -31,6 +31,7 @@ Directory: `docs/tasks`
 | TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | done | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034JNwUoAfb2TnY7nw07XH | 時間変換精度テストの追加（音声×映像行列・往復/連鎖誤差上界） | done | [add-time-precision-tests.md](./add-time-precision-tests.md) |
 | TASK-034KSVq7PFSELAOY00SIZG | AffineTransform カーネル + 文書クローズ | done | [affine-kernel-and-closeout.md](./affine-kernel-and-closeout.md) |
+| TASK-pqoGspxihdop2tZDptYxW6 | T1 AGENTS.md 旧版復元 + `### 検証入口` 分離（PR #350 フォローアップ） | done | [agents-verification-entry-split.md](./agents-verification-entry-split.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
 | TASK-034JP1tb1wQI9ac2cEwBq4 | プラグイン境界 RT 契約テストへの assert_no_alloc 適用 | done | [apply-assert-no-alloc-to-plugin-boundary.md](./apply-assert-no-alloc-to-plugin-boundary.md) |
 | TASK-034JO3X9ZpAvMoWiRIiMU4 | MSRV 1.89 適用とドキュメント同期（Cargo.toml・AGENTS.md） | done | [apply-msrv-1-89-and-sync-docs.md](./apply-msrv-1-89-and-sync-docs.md) |
@@ -150,6 +151,7 @@ Directory: `docs/tasks`
 | TASK-O3Q2a0lPvct9PFKBgBig2j | T1 Playwright Chromium cache・準備 step 分離（Issue #332） | done | [issue-332-t1-playwright-browser-cache.md](./issue-332-t1-playwright-browser-cache.md) |
 | TASK-69XeSXbqn9bazeVEgD0LzH | T1 ci/impact classifier + gate 実装（Issue #333） | done | [issue-333-t1-impact-classifier.md](./issue-333-t1-impact-classifier.md) |
 | TASK-auXqAVyXzCi31qldUWzY6t | T2 ci.yml Shadow wiring（impact/ci-gate job・trigger types・mise task・AGENTS.md）（Issue #333） | done | [issue-333-t2-ci-gate-shadow-wiring.md](./issue-333-t2-ci-gate-shadow-wiring.md) |
+| TASK-AacpjXZ02dbHUiacENEOSZ | T1 SinkDegraded Clone derive 追加（Issue #336） | done | [issue-336-t1-sink-degraded-clone.md](./issue-336-t1-sink-degraded-clone.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
