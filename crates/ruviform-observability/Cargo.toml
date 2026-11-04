@@ -9,5 +9,11 @@ publish.workspace = true
 
 [dependencies]
 
+# Issue #277: `assert_no_alloc` 測定窓 — core primitive の RT 許可操作
+# （counter/gauge/histogram の no-alloc 実証）を `rt_` レーンで検証する。
+# dev-dependency のみで公開 API・依存 DAG は std のみを維持する。
+[dev-dependencies]
+assert_no_alloc = "1.1"
+
 [lints]
 workspace = true
