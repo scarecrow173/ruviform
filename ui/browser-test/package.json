@@ -1,0 +1,21 @@
+{
+  "name": "@ruviform/ui-browser-test",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Issue #310 (RF-GT-01): framework-neutral browser GUI test harness — Playwright fixtures/drivers/assertions over the real-DOM showcase + consumer-shaped fixtures. Test-only package: @playwright/test stays a dev/peer dependency and never enters the production runtime or the standard UI distribution. Plain TypeScript, no UI framework.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test:browser": "playwright test",
+    "test": "npm run test:browser"
+  },
+  "devDependencies": {
+    "@playwright/test": "~1.64.1",
+    "@types/node": "~24.10",
+    "typescript": "~5.9.3"
+  }
+}

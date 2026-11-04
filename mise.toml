@@ -300,6 +300,34 @@ run = [
   "npm --prefix ui/showcase run build",
 ]
 
+# UI browser-test lane (Issue #310): framework-neutral real-browser GUI
+# verification — Playwright drives the actual Web Components in a real
+# Chromium DOM over hermetic fixture pages served straight from workspace
+# dist/ (no server process, deterministic clock/seed/viewport). Depends on
+# the showcase dist the same way the import map serves it, so the showcase
+# build is pinned via `depends`. Linux runners additionally need the
+# browser system libraries once (`playwright install-deps chromium`,
+# requires sudo) — CI performs that step; it is deliberately not inside
+# this task so local runs stay non-privileged. Browser PASS here is
+# browser-lane evidence only: it is NOT OS WebView, native GPU, or
+# product E2E evidence (those stay RF-GT-04 #313 / RF-GT-05 #314).
+[tasks.check-ui-browser-test]
+description = "Install ui/browser-test deps from package-lock and type-check the browser-test harness (tsc --noEmit; typechecks against ui/showcase dist declarations)"
+depends = ["build-ui-showcase"]
+run = [
+  "npm --prefix ui/browser-test ci --no-audit --no-fund",
+  "npm --prefix ui/browser-test run typecheck",
+]
+[tasks.test-ui-browser]
+description = "Build fixture page modules, install the pinned Chromium (+headless shell), and run the Playwright browser suite (real browser DOM; writes test-results/evidence.json with env/revision/seed/outcomes)"
+depends = ["build-ui-showcase"]
+run = [
+  "npm --prefix ui/browser-test ci --no-audit --no-fund",
+  "npm --prefix ui/browser-test run build",
+  "npm --prefix ui/browser-test exec -- playwright install chromium",
+  "npm --prefix ui/browser-test test",
+]
+
 [tasks.test-ofx]
 description = "Run OFX native host and fixture contract tests"
 run = "cargo test -p ruviform-plugin-ofx"
