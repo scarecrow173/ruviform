@@ -10,6 +10,7 @@ Directory: `docs/tasks`
 | TASK-034RBIWkzzcEXV0X3v5ySr | T1 OsFileOps 実 OS アダプタ + factory 接続 (Issue #296) | todo | [issue-296-t1-os-adapter.md](./issue-296-t1-os-adapter.md) |
 | TASK-034RBIX9gn32W8GMyhNMqw | T2 実 FS 結合試験・複数プロセス競合 (Issue #296) | todo | [issue-296-t2-real-fs-tests.md](./issue-296-t2-real-fs-tests.md) |
 | TASK-034RBIYghnEBLw9llcomyd | T3 保証範囲文書化・impl record・最終検証 (Issue #296) | todo | [issue-296-t3-docs-verify.md](./issue-296-t3-docs-verify.md) |
+| TASK-034RBIMQzuYAewg2JXTXOk | T1 mise task install/freshness 分離 + ui-verify setup ステップ（Issue #330） | done | [issue-330-t1-mise-ui-install-dedup.md](./issue-330-t1-mise-ui-install-dedup.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -139,6 +140,7 @@ Directory: `docs/tasks`
 | TASK-jXU3ZGuh6DP2FfCSvkx5FC | T2 TS wire validators — ipcwire/bindingwire + conformance テスト（Issue #311） | done | [issue-311-t2-ts-wire-validators.md](./issue-311-t2-ts-wire-validators.md) |
 | TASK-KayYlp12EsEWZZKk2pMZgF | T3 recorder/replay/oracle + consumer mocks + seeded シナリオ（Issue #311） | done | [issue-311-t3-recorder-replay-oracle.md](./issue-311-t3-recorder-replay-oracle.md) |
 | TASK-uyCbW614DqUYmATBzUrQxz | T4 fault matrix + Rust conformance lanes + mise/CI/AGENTS 同期 + IR（Issue #311） | done | [issue-311-t4-fault-matrix-lanes.md](./issue-311-t4-fault-matrix-lanes.md) |
+| TASK-034RBNKfGF6WS4OfHfW1of | Issue #327 CI計測Baseline 計測実施・文書化 | done | [issue-327-t1-baseline-measurement.md](./issue-327-t1-baseline-measurement.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
