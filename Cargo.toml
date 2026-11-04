@@ -39,6 +39,10 @@ members = [
     # Encoder/Decoder・明示 finish・VerifiedEnd・累積 budget。OS 非依存の非 RT
     # 基盤で archive / file 消費者より下位。zstd は IO-IMP-07 / Issue #301）
     "crates/ruviform-io-compression",
+    # 汎用 Archive 基盤（Issue #302 新設 — IO-04 scaffold Owner。共通 Entry/Error/Limits 型 +
+    # ZIP Indexed Reader/Writer（CRC・中央 Directory 検証・Budget）。非 RT 専用・media-io と同層。
+    # TAR は IO-IMP-09 #303、Secure Extraction は IO-IMP-10 #304）
+    "crates/ruviform-io-archive",
     "crates/ruviform-media-io",
     # メディア Reader/Prefetch 基盤（Issue #197 — source-frame sequential decode + bounded prefetch → RT consumer。media-io 非 RT 境界を保ったまま mixed-RT を分離）
     "crates/ruviform-media-reader",

@@ -3044,6 +3044,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-io-archive"
+version = "0.1.0"
+dependencies = [
+ "crc32fast",
+ "flate2",
+]
+
+[[package]]
 name = "ruviform-io-avi"
 version = "0.1.0"
 dependencies = [
