@@ -28,6 +28,7 @@ pub const DEFAULT_STDERR_QUEUE_CAPACITY: usize = 4096;
 ///     sinks: vec![SinkConfig {
 ///         destination: SinkDestination::Stderr,
 ///         format: LogFormat::Text,
+///         span_events: SpanEvents::NONE,
 ///         filter: "info".to_owned(),
 ///         failure_mode: SinkFailureMode::Required,
 ///     }],
@@ -38,11 +39,11 @@ pub const DEFAULT_STDERR_QUEUE_CAPACITY: usize = 4096;
 #[derive(Debug)]
 pub struct LoggingConfig {
     /// The sinks to build. Each entry is independent: own destination,
-    /// format, filter, and failure mode.
+    /// format, span events, filter, and failure mode.
     pub sinks: Vec<SinkConfig>,
 }
 
-/// One sink: destination + format + filter + failure mode.
+/// One sink: destination + format + span events + filter + failure mode.
 ///
 /// `filter` uses [`tracing_subscriber::filter::EnvFilter`] directive syntax
 /// (e.g. `"info"`, `"my_crate=debug,warn"`, `"off"`). It is applied
@@ -57,6 +58,16 @@ pub struct SinkConfig {
     pub destination: SinkDestination,
     /// How records are rendered before reaching the destination.
     pub format: LogFormat,
+    /// Which span lifecycle records this sink emits.
+    ///
+    /// [`SpanEvents::NONE`] (the [`Default`]) emits no span lifecycle
+    /// records — the pre-#335 behaviour. [`SpanEvents::CLOSE`] makes a span
+    /// with no inner events still leave a `close` record carrying its
+    /// fields plus `time.busy`/`time.idle`, which is what makes leaf-span
+    /// observation possible (the `AudioLens` AL-OBS-01 requirement). The
+    /// records are synthesized by this sink's layer at the *span's* level
+    /// and target, so they pass through `filter` like ordinary events.
+    pub span_events: SpanEvents,
     /// `EnvFilter` directive string applied to this sink only.
     pub filter: String,
     /// Whether a build-time failure of this sink aborts the whole build
@@ -131,6 +142,86 @@ pub enum LogFormat {
     Text,
     /// One JSON object per line (JSON Lines / JSONL).
     JsonLines,
+}
+
+/// Which span lifecycle records a sink emits — the adapter-owned
+/// equivalent of tracing-subscriber's `FmtSpan`, kept crate-specific so
+/// no upstream flag type appears in the public API (the same policy that
+/// wraps `Rotation` as [`RotationPeriod`] and the formatter choice as
+/// [`LogFormat`]).
+///
+/// Combine flags with `|`: `SpanEvents::NEW | SpanEvents::CLOSE`. The
+/// composite presets [`SpanEvents::ACTIVE`] (`ENTER | EXIT`) and
+/// [`SpanEvents::FULL`] (every lifecycle point) cover the common cases.
+///
+/// [`SpanEvents::CLOSE`] records carry the closing span's fields plus
+/// `time.busy`/`time.idle` durations — the leaf-span observation path.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub struct SpanEvents(u8);
+
+impl SpanEvents {
+    /// One record when a span is created.
+    pub const NEW: Self = Self(1 << 0);
+    /// One record per span enter.
+    pub const ENTER: Self = Self(1 << 1);
+    /// One record per span exit.
+    pub const EXIT: Self = Self(1 << 2);
+    /// One record when a span closes — the flag that makes a leaf span
+    /// with no inner events observable.
+    pub const CLOSE: Self = Self(1 << 3);
+    /// No span lifecycle records — the default, matching upstream
+    /// `FmtSpan::NONE`.
+    pub const NONE: Self = Self(0);
+    /// `ENTER | EXIT` — one record per span enter/exit.
+    pub const ACTIVE: Self = Self(Self::ENTER.0 | Self::EXIT.0);
+    /// `NEW | ENTER | EXIT | CLOSE` — a record at every lifecycle point.
+    pub const FULL: Self = Self(Self::NEW.0 | Self::ENTER.0 | Self::EXIT.0 | Self::CLOSE.0);
+
+    /// Whether all of `other`'s flags are set in `self`.
+    #[must_use]
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+}
+
+impl std::ops::BitOr for SpanEvents {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl std::ops::BitOrAssign for SpanEvents {
+    fn bitor_assign(&mut self, rhs: Self) {
+        *self = Self(self.0 | rhs.0);
+    }
+}
+
+impl std::fmt::Debug for SpanEvents {
+    // Same flag-name rendering as upstream `FmtSpan`'s `Debug`, so config
+    // dumps read `SpanEvents::NEW | SpanEvents::CLOSE` rather than a raw
+    // bit pattern.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut wrote = false;
+        for (flag, name) in [
+            (Self::NEW, "SpanEvents::NEW"),
+            (Self::ENTER, "SpanEvents::ENTER"),
+            (Self::EXIT, "SpanEvents::EXIT"),
+            (Self::CLOSE, "SpanEvents::CLOSE"),
+        ] {
+            if self.contains(flag) {
+                if wrote {
+                    f.write_str(" | ")?;
+                }
+                f.write_str(name)?;
+                wrote = true;
+            }
+        }
+        if !wrote {
+            f.write_str("SpanEvents::NONE")?;
+        }
+        Ok(())
+    }
 }
 
 /// Rolling-file rotation period, mapped onto `tracing_appender`'s

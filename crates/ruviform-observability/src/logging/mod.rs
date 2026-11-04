@@ -5,7 +5,8 @@
 //! directly; this module does **not** introduce a Ruviform-specific logger or
 //! span-emit API. It only builds the receiving side: per-sink `stderr` /
 //! rolling-file destinations, per-sink [`EnvFilter`]-syntax filters and
-//! text/JSON-lines formats, a bounded non-blocking writer path with
+//! text/JSON-lines formats, opt-in per-sink span lifecycle records
+//! ([`SpanEvents`]), a bounded non-blocking writer path with
 //! distinguished failure counters, and a health handle for observing them.
 //!
 //! # Ownership contract
@@ -35,8 +36,9 @@
 //! **Never emit ordinary `tracing` events from real-time (RT) contexts.**
 //! Subscriber layers run synchronously on the emitting thread, and this
 //! adapter's writer path allocates (each event is buffered into a `Vec<u8>`
-//! before entering the bounded channel). RT-side observation must use
-//! dedicated RT-safe mechanisms instead.
+//! before entering the bounded channel — and so are the synthesized span
+//! lifecycle records enabled via [`SpanEvents`]). RT-side observation must
+//! use dedicated RT-safe mechanisms instead.
 //!
 //! # Failure model
 //!
@@ -82,7 +84,7 @@ pub use build::{
 };
 pub use config::{
     DEFAULT_STDERR_QUEUE_CAPACITY, LogFormat, LoggingConfig, RotationPeriod, SinkConfig,
-    SinkDestination, SinkFailureMode,
+    SinkDestination, SinkFailureMode, SpanEvents,
 };
 pub use error::{LoggingBuildError, SinkFailure};
 pub use health::{HealthSnapshot, LoggingHealth, SinkHealthSnapshot, SinkKind, SinkState};
