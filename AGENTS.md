@@ -1,68 +1,17 @@
 # AGENTS.md
 
 このリポジトリは Ruviform — Rust を中心とした再利用可能なマルチメディア基盤（設計・初期セットアップ段階）です。
-以下はこのリポジトリで作業するエージェント共通の作業契約であり、開発・設計原則、リポジトリ固有の作業契約、Rust ワークスペースの暫定開発規約、mise / APM の運用、Git と安全性の方針を定めます。
+以下はエージェント共通の作業契約（規約）です。タスク・クレート構成・CI 等の詳細リファレンスは各節のポインタ先が正本です。
 
 ## 開発・設計原則
 
-### 変更前に診断する
+- 変更前に対象挙動を診断し、症状と原因・破られた不変条件・契約・責務を特定してから修正方法を選ぶ。下流の補正より、不正な状態を生む源を、その責務を所有するレイヤーで修正する（呼び出し元での補正重複より authoritative な実装一箇所を優先）。
+- 最小テキスト差分ではなく根本問題を正しく解決する最小の整合的変更を選び、欠陥設計を温存しない。複数呼出元の同種補正・同一ルール分散・多箇所協調・workaround 重積・責務分散が原因なら、局所例外より抽象化・責務境界の修復を優先する。
+- KISS / YAGNI / DRY / SOLID は意図的に適用し、巧妙さより明示的で理解しやすいコードを優先する。
+- 破られた契約・不変条件を検証するテストを優先し、変更の規模とリスクに比例した検証を行い、未実行の検証を成功と報告しない。
+- 契約・責務の所在特定に必要な範囲まで依存先・呼び出し元を追う。管理下の根本原因は修正し、境界外は封じ込め・適応・隔離明示した workaround を用いる。非因果の構造問題は変更せず別途報告する。
 
-- 変更する前に、対象となる挙動を理解する。
-- 観測された症状と、その背後にある原因を区別する。
-- 期待する挙動が最初に崩れる地点を特定できるまで、必要な制御フロー、データフロー、状態遷移を追う。
-- 修正方法を選ぶ前に、破られた不変条件、契約、または責務を特定する。
-- 下流で補正するより、不正な状態を生み出している源を修正することを優先する。
-
-### 正しい境界で修正する
-
-- 安全に変更できるなら、破られた不変条件や責務を所有するレイヤーで問題を修正する。
-- 複数の呼び出し元で同じ補正を重複させるより、ルールやポリシーの authoritative な実装を一箇所に置く。
-- 信頼できない入力や外部データの検証は、適切なシステム境界で行う。
-- 必要性を示す根拠がないまま、信頼された内部コード全体へ防御的チェックを拡散させない。
-- 呼び出し側が実装詳細を知らなければ正しく振る舞えないなら、抽象化境界を見直す。
-
-### 最小diffより整合した変更を優先する
-
-- 最小のテキスト差分ではなく、根本の問題を正しく解決する最小の整合的変更を選ぶ。
-- 「最小」とは、意図された挙動、不変条件、責務、契約を回復するために必要な範囲を超えないことを意味する。
-- 既存構造自体が問題の原因である、または正しい修正を不自然に難しくしている場合は、局所的なリファクタリングを行ってよい。
-- diffを小さく保つためだけに、欠陥のある設計を温存しない。
-- 周辺コードを綺麗にできるという理由だけで、無関係なリファクタリングを行わない。
-
-### 構造的な問題の兆候を認識する
-
-- 複数の呼び出し元が同じ不正状態を補正しているなら、設計を見直す。
-- 同じドメインルールやポリシーが複数箇所に存在するなら、設計を見直す。
-- 一つの挙動変更のために、多数の無関係な場所を協調して変更する必要があるなら、設計を見直す。
-- 既存のworkaroundの上にさらにworkaroundを追加しようとしているなら、設計を見直す。
-- 責務の分散によって正しい実装が不自然に難しくなっているなら、設計を見直す。
-- これらの構造的問題が現在のタスクの原因なら、局所的な例外を増やすより、抽象化または責務境界の修復を優先する。
-
-### 実装原則は意図的に適用する
-
-- KISS: 必要な挙動と不変条件を正しく保てる中で、最も単純な設計を選ぶ。
-- YAGNI: 仮想的な将来要件のためだけに、柔軟性、抽象化、基盤を追加しない。
-- DRY: 同じ責務に属する知識やポリシーの重複は集約するが、表面的に似ているだけのコードを誤った抽象化で統合しない。
-- SOLID: 責務境界、依存方向、代替可能性、保守性を改善する場合に用い、機械的には適用しない。
-- 巧妙なコードより、明示的で理解しやすいコードを優先する。
-
-### 実際の解決を検証する
-
-- テストは正しさを検証するものであり、実装方法を定義するものではない。
-- 観測されたテストを通すためだけのハードコードや特殊ケースを追加しない。
-- 不具合修正では、表面的な症状だけでなく、破られた契約や不変条件を検証するテストを優先する。
-- 適切な場合は、意味のある最下位レイヤーと外部から観測できる挙動の両方で検証する。
-- 検証の範囲は、変更の規模とリスクに比例させる。
-- 実際に実行して成功していない検証を、成功したと報告しない。
-
-### スコープと比例性を守る
-
-- 問題を理解するのに十分な関連コードを調べるが、理由のない網羅的探索は行わない。
-- 関連する契約、不変条件、責務の所在を特定するのに必要な範囲まで依存先や呼び出し元を追う。
-- 原因となる箇所が管理下にあり安全に変更できるなら、根本原因の修正を優先する。
-- 根本原因が変更境界の外にある、または安全に修正できない場合は、封じ込め、適応、フォールバック、workaroundを用いる。
-- 意図的なworkaroundは、適切な境界へ隔離し、その存在を明確にする。
-- より深い構造問題を発見しても、現在の変更の原因でなければ変更せず、別途報告する。
+各原則の詳細な説明は [docs/development-environment.md](docs/development-environment.md)「附録: 開発・設計原則（詳細版）」を参照。
 
 ## リポジトリの作業契約
 
@@ -75,124 +24,59 @@
 
 ## 開発環境（mise）
 
-- 開発ツールとタスクの正本は `mise.toml` とする。
-- `mise.toml` は uv / prek / git-lfs / pipx 系の共通基盤ツールに加え、このリポジトリで pin した Rust ツールチェーン（`rust = "1.99.0"`）と actionlint、UI PoC ビルド用の Node.js（`node = "26.12.1"`、Issue #83 のセキュリティ修正版）を管理する。`fmt` / `check` / `lint` / `test` / `build` 等の検証タスクも同ファイルが正本（対応表は `## Rust ワークスペースと暫定開発規約` 節を参照）。
-- 初回セットアップでは、miseをインストールした後に以下を実行する（Windows 11 x64・Git Bash で検証済み。macOS / Linux は未検証）。
+- 開発ツールとタスクの正本は `mise.toml`。uv / prek / git-lfs / apm / pipx 系共通基盤ツールと、pin 済み Rust（`rust = "1.99.0"`）・actionlint・`node = "26.12.1"`（Issue #83 修正版）を管理する。タスク一覧と説明は `mise tasks` で確認できる。
+- 初回セットアップ（Windows 11 x64・Git Bash で検証済み）:
 
 ```sh
-# ツール復元（mise.lock に記録済みの固定バージョンを復元）
-# ただし pipx:serena-agent は lazy = true のため対象外。エージェント用途の
-# オプションツールであり、初回の mise exec 経由利用時に自動インストールされる
-# （明示的に復元する場合は mise install --include-lazy）
-mise install
-# global mise config でリポジトリ管理外のツールを設定している環境では
-# それらも併せて解決・インストールされます
-
-# APM 依存・prek フック・リポジトリローカル Git LFS のセットアップ
-mise run setup
-
-# lockfile の厳格検証が必要な場合（apm.yml と apm.lock.yaml が非同期なら失敗）
+mise install      # mise.lock 記録の固定バージョンを復元
+mise run setup    # apm install + prek install + git lfs install --local
+# lockfile 厳格検証が必要な場合（apm.yml と apm.lock.yaml の非同期を検出）
 mise exec -- apm install --frozen
 ```
 
-- 管理対象ツールを直接起動する必要がある場合は、原則 `mise exec -- <command>` を使用する。
-- `mise run setup` は `apm install` で依存関係を復元し、`prek install` でコミットフックを、`git lfs install --local` でリポジトリローカルの Git LFS フィルターとフックを有効化する。prekのフック定義は `.pre-commit-config.yaml` を正本とする。
-- Gitフックでは言語非依存の軽量チェックのみ実行し、Lint・テスト・ビルド等の言語別検証は `mise.toml` のタスクで管理する。
-- 設定済みフックを全ファイルに実行する場合は `mise exec -- prek run --all-files` を使用する。
-- Git LFS は `mise.toml` でバージョン管理し、`.gitattributes` で対象を定義する。LFSを必要とするGitコマンドはmise管理のツールがPATH上にある環境で実行する（例: `mise exec -- git push`）。初回cloneでLFSオブジェクトが未取得なら、セットアップ後に `mise exec -- git lfs pull` を実行する。
-- lockfile の再生成条件は以下のとおり。
-
-| lockfile | 再生成トリガ | 手順 |
-| --- | --- | --- |
-| `mise.lock` | `mise.toml` の `[tools]` 変更・バージョン更新時 | `mise install` → `mise lock`（現行ツールは github / aqua 系バックエンドのため `.mise/locks/` sidecar は生成されない。PyPI・npm 解決の pipx / npm 系ツールを追加して sidecar が生成された場合は `.gitignore` の `!.mise/locks/` 例外によりそのままコミット対象になる） |
-| `apm.lock.yaml` | `apm.yml` の dependencies / targets / MCP 変更時 | `apm install`（lock 自動更新）→ `apm lock` で整合確認 |
-| `Cargo.lock` | ワークスペースの `[dependencies]` 変更時 | `cargo build` / `cargo generate-lockfile` で自動更新 |
-
-- いずれかの lockfile が不整合となった場合は `git checkout -- <lockfile>` で戻し、上記の手順で再生成する。
+- 管理対象ツールの直接起動は原則 `mise exec -- <command>`。
+- Git フックは言語非依存の軽量チェックのみ（正本 `.pre-commit-config.yaml`、prek で管理）。lint・テスト・ビルド等の言語別検証は mise タスクで管理する。全ファイルへのフック適用は `mise exec -- prek run --all-files`。
+- Git LFS は mise でバージョン管理し `.gitattributes` で対象を定義する。LFS を要する git コマンドは mise 管理ツールが PATH 上にある環境で実行（例: `mise exec -- git push`）。初回 clone で LFS オブジェクト未取得なら `mise exec -- git lfs pull`。
+- lockfile は再現性のため追跡し、生成条件の変更時に再生成する: `mise.lock` は `mise.toml` `[tools]` 変更時に `mise install` → `mise lock`、`apm.lock.yaml` は `apm.yml` 変更時に `apm install` → `apm lock`、`Cargo.lock` は `[dependencies]` 変更時に `cargo build` / `cargo generate-lockfile` で自動更新。不整合時は `git checkout -- <lockfile>` で戻して再生成する。
+- lazy ツール・freshness 機構・lockfile 内部の詳細は [docs/development-environment.md](docs/development-environment.md) を参照。
 
 ## Rust ワークスペースと暫定開発規約
 
 ### ワークスペース構成
 
-- ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`version = "0.1.0"` は仮置き。`edition = "2024"` は Issue #34 で確定。`rust-version = "1.89"` は Issue #34 で 1.85 確定後、Issue #52 / docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md で 1.89 に引上げ（fearless_simd 本番昇格前提）。`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
-- メンバー構成（層別の計33クレート一覧と各クレート README へのリンク）は [crates/README.md](crates/README.md) を索引とする。各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は `crates/<name>/README.md` と crate-level doc に転記しており、そちらを参照。層構造と `path` 依存方向・クレート DAG の正本は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）であり、`members` は実装 Phase に応じて段階追加される。残りの `path` 依存は API 確定に伴い追加する。上記以外の公開 API は引き続き未確定であり、実装 Issue で確定する。
-- Adapter クレートとして `crates/ruviform-audio-device` を Issue #23（cpal 条件付き採用・[docs/adr/select-audio-device-backend.md](docs/adr/select-audio-device-backend.md)・accepted）で新設済み。adapter 層はドメイン基盤の外側（engine と同じ利用側層）で、foundations/Primitives への下向き依存のみを持つ。`ruviform-audio-device` は cpal を内部依存に閉じ込め、`ruviform_audio_core::device` のポート trait（`DeviceEnumerator`/`Device`/`OutputStream`）を `Box<dyn>` 経由で実装する。cpal の型・エラー・feature 名を公開 API に露出せず、コアクレートからの強制依存・adapter→adapter 依存は作らない。手動検証 example（`list_devices`・`play_sine`）は実機依存で CI 対象外。
+- ルート `Cargo.toml` がワークスペースの正本（`resolver = "2"`・`edition = "2024"`・`rust-version = "1.89"`・`[workspace.lints]`・`[profile.dev]`/`[profile.ci]`。`version`・`license` は仮置き。`publish = false` はメンバーが `publish.workspace = true` で継承）。
+- メンバー構成は [crates/README.md](crates/README.md) が索引。各クレートの責務・許可依存層・RT 制約は `crates/<name>/README.md` と crate-level doc が正本。層構造・`path` 依存方向・クレート DAG の正本は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1・approved）。`members`・`path` 依存は実装 Issue で段階追加。上記以外の公開 API は実装 Issue で確定する。
+- adapter 層（例: `crates/ruviform-audio-device`、Issue #23・[docs/adr/select-audio-device-backend.md](docs/adr/select-audio-device-backend.md)）は engine と同じ利用側層で、foundations/Primitives への下向き依存のみを持つ。バックエンド（cpal 等）を内部依存に閉じ込め、その型・エラー・feature 名を公開 API に露出せず、コアクレートからの強制依存・adapter→adapter 依存は作らない。
 
 ### 検証入口
 
-- cargo コマンドは直接実行せず、`mise.toml` のタスクを `mise run <task>` 経由で呼ぶ。ローカル開発と CI で同じ入口を使う。
-
-| mise タスク | 実行内容 | 用途 |
-| --- | --- | --- |
-| `setup` | `apm install` + `prek install` + `git lfs install --local` | 初回セットアップ |
-| `fmt` | `cargo fmt --all` | 整形（ソースを書き換える） |
-| `fmt-check` | `cargo fmt --all -- --check` | 整形チェック（非破壊） |
-| `check` | `cargo check --workspace --all-targets` | 型チェック（dev プロファイル） |
-| `lint` | `cargo clippy --workspace --all-targets -- -D warnings` | lint（dev プロファイル） |
-| `test` | `cargo test --workspace` | テスト（dev プロファイル） |
-| `build` | `cargo build --workspace` | ビルド（dev プロファイル） |
-| `test-rt` | `cargo test --workspace rt_`（`rt_` プレフィックス命名の RT テストを名前フィルタで選択。0 件一致でも成功するため RT テスト未存在時はスキップ相当） | RT 契約テスト（Issue #18・#21・#26 で導入後、media-core・dsp・audio-analysis・plugin 系・math::dsp・audio-device 等の RT-suitable API を持つ各クレートへ順次拡大済み） |
-| `bench` | `cargo bench --workspace` | ベンチマーク全量計測入口（現在は `ruviform-math` の SIMD PoC ベンチと `ruviform-rt` の RT 観測 PoC ベンチが対象。計測時間が長いためローカル手動実行向け） |
-| `bench-smoke` | `cargo bench -p ruviform-math -p ruviform-rt -p ruviform-viz -- --test` | ベンチスモーク（各ベンチを計測なしで 1 回実行。CI `bench` ジョブが呼ぶ入口） |
-| `lint-ci` / `test-ci` / `build-ci` | `lint`・`test`・`build` 各コマンドを `--profile ci`・`CARGO_INCREMENTAL=0` で実行 | CI 用途限定（`lint-ci` は clippy-driver が rustc 全診断 + clippy lint を発行するため CI verify lane の型検査も兼ねる。Issue #331） |
-| `check-ci` | `cargo check --workspace --all-targets --profile ci`（`CARGO_INCREMENTAL=0`） | CI verify lane には含まれない単独タスク（Issue #331 で `lint-ci` に統合済み。clippy-driver 差分の切り分け等、素の rustc にだけ通したいローカルトリアージ向け） |
-| `verify-ci` | `fmt-check` → `lint-ci` → `test-ci` を順次実行 | CI 同等の検証列 |
-| `test-ci-impact` | `node --test ci/impact/` | ci/impact の分類契約 + `ci-gate` 判定表の contract test（Issue #333。CI `impact` ジョブが decision 出力前の自己検証として呼ぶ入口。node toolchain 必須） |
-| `test-l1-real-plugin` | `cargo build -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host` → `cargo test -p ... --features host --lib --bins` → `cargo test -p ... --features host --test l1_real_adapter_e2e -- --ignored` | 実規格プラグイン L1 E2E opt-in lane（Issue #114。fixture cdylib + `host` feature runner bin を要し `#[ignore]` + `#![cfg]` + `required-features` で既定経路から分離。CI `l1-real-verify` ジョブが呼ぶ入口） |
-| `lint-l1-real-plugin` | `cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 --all-targets --features host -- -D warnings` | `host` feature 配下の bridge/runner/E2E ターゲット lint（既定 `lint` の feature 集合外） |
-| `check-ui-webview` | `cargo check -p ruviform-ui-webview --features webview --all-targets` | UI webview adapter の feature 有効型チェック（Issue #156。既定 `check` は headless のまま） |
-| `lint-ui-webview` | `cargo clippy -p ruviform-ui-webview --all-targets --features webview -- -D warnings` | `webview` feature 配下の host/example ターゲット lint（既定 `lint` の feature 集合外） |
-| `test-ui-webview` | `cargo test -p ruviform-ui-webview --features webview` | `webview` feature 配下テスト（`rvf://` スキーム/data 面は headless 検証可能、窓付き実動作は手動検証。CI `ui-verify` ジョブが呼ぶ入口） |
-| `install-ui-core` / `install-ui-components` / `install-ui-viz` / `install-ui-binding` / `install-ui-guitest` / `install-ui-showcase` / `install-ui-browser-test` | `npm --prefix ui/<pkg> ci --no-audit --no-fund`（`sources` = package-lock+package.json、`outputs` = `node_modules/.package-lock.json` の mise freshness 付き。inputs 不変なら skip） | 各 `ui/*` パッケージの lockfile 固定依存インストール（Issue #330。verify タスクは `depends` 経由でこれを再利用し、fresh なら install・不変なら skip） |
-| `setup-ui` | 上記 `install-ui-*` 7 本を `depends` で集約（run なし） | `ui-verify` CI ジョブの準備ステップ。lockfile ごとに `npm ci` を 1 回だけ実行（Issue #330） |
-| `check-ui-headless` | `install-ui-core` → `npm --prefix ui/core run typecheck` | headless UI 契約パッケージ `ui/core` の `tsc --noEmit` 型検査（Issue #258。DOM lib 非含有の vanilla TS） |
-| `test-ui-headless` | `install-ui-core` → `npm --prefix ui/core test` | `ui/core` の `node --test` headless テスト（Issue #258。UI framework / renderer 非依存） |
-| `check-ui-components` | `install-ui-components` → `npm --prefix ui/components run typecheck` | Web Components パッケージ `ui/components` の `tsc --noEmit` 型検査（Issue #259。plain TS + DOM lib、framework 非依存） |
-| `test-ui-components` | `install-ui-components` → `npm --prefix ui/components test` | `ui/components` の `node --test` コンポーネントテスト（Issue #259。DOM は test-only devDependency の happy-dom が供給。UI framework / renderer 非依存） |
-| `build-ui-components` | `install-ui-components` → `npm --prefix ui/components run build`（sources/outputs freshness 付き） | `ui/components` の `tsc` dist 出力（`rewriteRelativeImportExtensions` で `.ts` → `.js` specifier 書換。Issue #259） |
-| `check-ui-viz` | `install-ui-viz` → `npm --prefix ui/viz run typecheck` | Reference Viz レンダラパッケージ `ui/viz` の `tsc --noEmit` 型検査（Issue #260。plain TS + DOM lib、framework / renderer 非依存） |
-| `test-ui-viz` | `install-ui-viz` → `npm --prefix ui/viz test` | `ui/viz` の `node --test` レンダラテスト（Issue #260。DOM は test-only devDependency の happy-dom、2D/GL コンテキストはテスト内 fake。実 GPU / 実ブラウザ検証は含まない） |
-| `build-ui-viz` | `install-ui-viz` → `npm --prefix ui/viz run build`（sources/outputs freshness 付き） | `ui/viz` の `tsc` dist 出力（`rewriteRelativeImportExtensions` で `.ts` → `.js` specifier 書換。Issue #260） |
-| `check-ui-binding` | `install-ui-binding` → `npm --prefix ui/binding run typecheck` | Command/Query binding パッケージ `ui/binding` の `tsc --noEmit` 型検査（Issue #261。plain TS、src/ は DOM lib 非含有・framework 非依存） |
-| `test-ui-binding` | `install-ui-binding` → `npm --prefix ui/binding test` | `ui/binding` の `node --test` テスト（Issue #261。DOM adapter lane は test-only devDependency の happy-dom、受入ゲートは DAW 風 / 解析風 Mock Consumer 両形） |
-| `build-ui-binding` | `install-ui-binding` → `npm --prefix ui/binding run build`（sources/outputs freshness 付き） | `ui/binding` の `tsc` dist 出力（`rewriteRelativeImportExtensions` で `.ts` → `.js` specifier 書換。Issue #261） |
-| `check-ui-guitest` | `install-ui-guitest` → `npm --prefix ui/guitest run typecheck` | 決定的 GUI テスト共有基盤 `ui/guitest` の `tsc --noEmit` 型検査（Issue #311。versioned fixture corpus を Rust 側 lane と共有する test-only パッケージ、src/ は DOM/WebView/renderer 非依存） |
-| `test-ui-guitest` | `install-ui-guitest` → `npm --prefix ui/guitest test` | `ui/guitest` の `node --test` テスト（Issue #311。fixture conformance・独立 oracle 照合 replay・recorder/fault matrix を headless・決定的に検証） |
-| `check-ui-showcase` | `install-ui-showcase` → `npm --prefix ui/showcase run typecheck` | デザインシステムショーケース + 検証 fixture パッケージ `ui/showcase` の `tsc --noEmit` 型検査（Issue #263。plain TS + DOM lib、framework 非依存） |
-| `test-ui-showcase` | `install-ui-showcase` → `npm --prefix ui/showcase test` | `ui/showcase` の `node --test` テスト（Issue #263。テーマ行列・gesture/command 同一性・a11y/state・cross-consumer fixture・依存 audit を happy-dom + fake canvas で検証。実 WebView / GPU / pixel / multiwindow 証跡は #243 手動ゲート側に残す） |
-| `build-ui-showcase` | `install-ui-showcase` → `npm --prefix ui/showcase run build`（sources/outputs freshness 付き。sources は showcase + core + components + viz + binding の src 横断） | `ui/showcase` の複合 `tsc` dist 出力（静的 ESM ページ `examples/showcase.html` 用。`rewriteRelativeImportExtensions` で `.ts` → `.js` specifier 書換。Issue #263） |
-| `check-ui-browser-test` | `install-ui-browser-test` + `build-ui-showcase` → `npm --prefix ui/browser-test run typecheck` | 実ブラウザ GUI 検証ハーネス `ui/browser-test` の `tsc --noEmit` 型検査（Issue #310。`@rvf/showcase` paths で `ui/showcase/dist` 宣言へ typecheck） |
-| `install-ui-browser-chromium` | `install-ui-browser-test` → `npm --prefix ui/browser-test exec -- playwright install chromium` | pin 済み Playwright Chromium（+headless shell・ffmpeg）の browser binary インストール（Issue #332。revision 単位の冪等確認で既存なら no-op。browser path は `PLAYWRIGHT_BROWSERS_PATH` 依存のため mise freshness は付けず playwright 自身の確認を authoritative skip とする。CI `ui-verify` ジョブが cache 復元後に別 step で呼ぶ） |
-| `test-ui-browser` | `install-ui-browser-test` + `build-ui-showcase` + `install-ui-browser-chromium` → `npm --prefix ui/browser-test run build` → `npm --prefix ui/browser-test test` | Playwright + 実 Chromium で showcase dist を serve する実ブラウザ suite（Issue #310。`test-results/evidence.json` に env/revision/seed/outcomes を記録。実 WebView / native GPU / 製品 E2E 証拠ではない） |
-
+- cargo / npm / node 等の検証コマンドは直接実行せず、`mise.toml` のタスクを `mise run <task>` 経由で呼ぶ。ローカル開発と CI で同じ入口を使う。タスク一覧・実行内容・feature 条件・依存チェーンは `mise tasks` と `mise.toml` が正本。
 - `*-ci` タスクと `verify-ci` は CI 用途限定。成果物が `target/ci/` に `target/debug/` と並存して容量を消費するため常用しない。
-- `.github/workflows/ci.yml` は `pull_request`（types: opened/synchronize/reopened/ready_for_review/edited — `edited` は base retarget の再分類に必要）・`push`（`main`）・`workflow_dispatch` で実行され、`main` の required checks として 12 job が稼働する。同一 PR の run は concurrency group（`pull_request` では `${{ github.workflow }}` + `refs/pull/<N>/merge`・`cancel-in-progress: true`）で新 run 開始時に cancel され、`push` to main・`workflow_dispatch`・別 PR の run は run ごと一意の group のため cancel されない（Issue #328。`consumer-impact-check.yml` も同じ方針）。`verify`（`fmt-check` → `lint-ci` → `test-ci` の step 列。Issue #331 で `check-ci` は `lint-ci` に統合済み — clippy-driver が rustc 全診断 + clippy lint を発行するため独立 `cargo check` step は同一ユニット集合の二重 frontend 評価だった。`mise run verify-ci` も同一列）と `l1-real-verify`（`mise run test-l1-real-plugin` + `mise run lint-l1-real-plugin`・Issue #114 の実規格プラグイン lane）と `ui-verify`（`check-ui-webview`/`lint-ui-webview`/`test-ui-webview`・Issue #156 の webview feature lane、および `check-ui-headless`/`test-ui-headless`・Issue #258 の `ui/core` headless 契約 lane、`check-ui-components`/`test-ui-components`/`build-ui-components`・Issue #259 の `ui/components` Web Components lane、`check-ui-viz`/`test-ui-viz`/`build-ui-viz`・Issue #260 の `ui/viz` Reference Viz lane、`check-ui-binding`/`test-ui-binding`/`build-ui-binding`・Issue #261 の `ui/binding` Command/Query binding lane、`check-ui-guitest`/`test-ui-guitest`・Issue #311 の `ui/guitest` 決定的 GUI テスト基盤 lane、`check-ui-showcase`/`test-ui-showcase`/`build-ui-showcase`・Issue #263 の `ui/showcase` ショーケース/検証 fixture lane、`check-ui-browser-test`/`test-ui-browser`・Issue #310 の `ui/browser-test` 実ブラウザ lane で `test-results/` を artifact upload。Linux はジョブ内で WebKitGTK 開発パッケージと Playwright browser system deps を導入（browser binary とは別レイヤーで毎 run 実行）。browser binary は `PLAYWRIGHT_BROWSERS_PATH`（workspace 内 `.cache/ms-playwright` に pin）を `actions/cache` で Playwright version・Chromium revision・OS/arch 紐づけ key で復元し、準備 step（`install-ui-browser-chromium`）と launch 検証 step（破損復元時は wipe+reinstall fallback）を挟んで `test-ui-browser` を実行する（Issue #332）。ジョブは検証 lane の前に `mise run setup-ui` を 1 ステップ実行し、各 `ui/*` package-lock の `npm ci` を 1 回に集約する（Issue #330。verify タスクは freshness 付き `install-ui-*` を `depends` で再利用））は `ubuntu-latest` / `windows-latest` / `macos-latest` の 3 OS matrix（`verify` のディスク計測ステップは ubuntu のみ）。`verify`・`ui-verify` では sccache を `RUSTC_WRAPPER` として GitHub Actions cache backend で先行導入しており（Issue #329。`rt-verify`・`icc-verify`・`l1-real-verify`・`bench` は効果確認後の段階展開のため未適用）、repo variable `CI_SCCACHE_DISABLE=1` で全 sccache step を skip して即時無効化できる。`rt-verify`（`mise run test-rt`）・`icc-verify`（`test-video-proc-icc`/`lint-video-proc-icc`）・`bench`（`mise run bench-smoke`）は `ubuntu-latest` 単独。さらに Issue #333（CI-OPT-06）で **Shadow Mode** の 2 job を追加: `impact`（変更ファイル → 期待 lane 集合の分類。`ci/impact/` の stdlib-only classifier が `cargo metadata` 逆依存伝播・rt_ 保持クレート scan・mise task `-p` 引数・ui/* DAG から lane 集合を決定し、decision JSON を artifact + job outputs へ出力。`push`/`workflow_dispatch` は常に Full CI）と `ci-gate`（全 lane `needs` 結果 × impact 期待集合を照合する集約 fail-closed gate。期待 lane の skipped・実行 lane の failure/cancelled・分類不能は全て Fail — skipped job を成功扱いしない。現時点は非 required で、偽陰性なし確認後の ruleset 移行で単一 required context 化する設計。分類契約と移行 runbook は `docs/designs/issue-333-impact-based-ci.md` が正本）。緊急停止は repo variable `CI_IMPACT_DISABLE=1`（expected=ALL に退化）。両 job は non-required で既存 12 contexts に影響しない。別 workflow の `.github/workflows/consumer-verify.yml`（Issue #219 Cross-Repo 検証 lane）は `workflow_dispatch` 専用の情報 lane で required checks に含めず、片 Consumer の失敗・未検証が他 Consumer や merge を止めない。両 Consumer lane は scratch checkout 内で ruviform git 依存を候補 rev に正規化（rev pin・branch 追従・rev 未指定を同一ルールで処理）し、単一 SHA lockfile guard 後に consumer 側 mise task（audio-lens: `check-ci`/`al-cli` ci build/`check-cli-headless`/`test-ci`、synvelis: `check`/`test`）を実行する。実行は access mode で分岐する（design 2026-11-03 追記）: `CROSS_REPO_DEPLOY_KEY` secret 設定済みなら SSH Deploy Key 経路（private 前提の canonical 経路）、未設定でも対象 repo が public で匿名 HTTPS read 可能なら secret 不使用の anonymous 経路で lane を実行、どちらも不可なら `not run`。全 lane `not run` → workflow 失敗（証拠ゼロを緑にしない）。さらに `.github/workflows/consumer-impact-check.yml` が `pull_request`（draft 除外）で PR 本文の Consumer 影響分類欄の記入を機械検査する非 required lane として存在する。
-- Consumer 影響分類の運用（Issue #219）: 公開 API / feature / behavior / dependency / CI 基盤の変更 PR は本文の Consumer 影響欄で Synvelis・AudioLens を独立して `impacted` / `no impact` / `unknown` に分類する。`unknown` 残置は互換性未確認であり、merge 前にレビュアーが分類欄の記入と `unknown` 解消先リンクを確認する（required check 化していないため human gate）。`.github/workflows/consumer-impact-check.yml` は記入有無と `unknown` 解消先の記述有無のみを検査する補助 lane で、分類内容の妥当性はレビュアーが確認する。
+- CI の lane 構成（required jobs・OS matrix・cache・Shadow Mode）と Consumer 影響分類の運用詳細は [docs/development-environment.md](docs/development-environment.md) を参照。
 
 ### 暫定規約
 
-- `unsafe` は原則禁止。必要な場合のみ SAFETY コメント付きの局所許可（`#[expect(unsafe_code)]`、未対応なら `#[allow(unsafe_code)]`）で例外的に認める。`workspace.lints.rust.unsafe_code = "warn"` は `lint` / `lint-ci` の `-D warnings` ゲートで実質 deny として機能し、局所許可のない `unsafe` は検証を通過しない。
+- `unsafe` は原則禁止。必要な場合のみ SAFETY コメント付きの局所許可（`#[expect(unsafe_code)]`、未対応なら `#[allow(unsafe_code)]`）で例外的に認める。`lint` / `lint-ci` の `-D warnings` ゲートで局所許可のない `unsafe` は検証を通過しない。
 - feature: default feature は最小限とする。新規 feature・optional 依存は追加理由を PR に記録する。
 - 依存追加: メンテナンス状況・ライセンス・依存木サイズを確認し理由を記録する。`Cargo.lock` は追跡を継続する。
 - lint: `workspace.lints` が正本。CI は `clippy -- -D warnings` を必須ゲートとする。rustfmt は標準設定（`rustfmt.toml` は必要時に追加）。
-- MSRV clippy 検証（Issue #223）: lint gate の対象は pin toolchain のみで、MSRV 1.89 上の clippy は情報 lane として扱う。1.89 検出器のみが発火する `float_cmp` / `similar_names` は toolchain 版差の既知ノイズであり、MSRV 上で検査する場合は `-A` フラグで除外する: `cargo +1.89.0 clippy --workspace --all-targets -- -D warnings -A clippy::float_cmp -A clippy::similar_names`。これら 2 lint は pin toolchain でも pedantic に残るため `workspace.lints` で `allow` しない（pin gate を弱めない）。MSRV でこれら以外の失敗が残る場合は除外リストへ機械追加せず、個別に判定する。
-- 公開 enum: クレート外から到達可能な全公開 enum に enum レベルの `#[non_exhaustive]` を付与する（クレート内部限定 enum は対象外）。`#![allow(clippy::exhaustive_enums)]` は置かず、`workspace.lints.clippy` で restriction lint `exhaustive_enums = "warn"` を有効化し `-D warnings` ゲートで強制する。正本: [docs/adr/public-enum-non-exhaustive-policy.md](docs/adr/public-enum-non-exhaustive-policy.md)。
+- MSRV clippy 検証（Issue #223）: lint gate の対象は pin toolchain のみで、MSRV 1.89 上の clippy は情報 lane。1.89 検出器のみが発火する `float_cmp` / `similar_names` は toolchain 版差の既知ノイズで、MSRV 上で検査する場合は `-A` フラグで除外する（コマンドは [docs/development-environment.md](docs/development-environment.md) 参照）。pin gate を弱めないため `workspace.lints` で `allow` せず、これら以外の失敗は機械追加せず個別に判定する。
+- 公開 enum: クレート外から到達可能な全公開 enum に enum レベルの `#[non_exhaustive]` を付与する（クレート内部限定 enum は対象外）。`#![allow(clippy::exhaustive_enums)]` は置かず、`workspace.lints.clippy` の `exhaustive_enums = "warn"` を `-D warnings` ゲートで強制する。正本: [docs/adr/public-enum-non-exhaustive-policy.md](docs/adr/public-enum-non-exhaustive-policy.md)。
 - doc test: 公開 API の例は doctest に書き、`cargo test` で検証する。
-- RT 検証レーン（Issue #22）: `rt_` プレフィックスの RT 契約テストは `assert_no_alloc` 測定窓内で処理経路を実行し、窓内の alloc/dealloc はテストバイナリを abort させて CI で検出する。fixture・warm-up の確保は窓外に置く。ruviform-rt 既存の `alloc_counter`（API セマンティクスの実装機能）は変更せず併存し、新規の検証用途には `assert_no_alloc` を使う。CLAP アダプタは CLAP `thread-check` 拡張を `plugin.init` で一度照会し、ホストが非オーディオスレッドと応答した `process` を defined rejection する（拡張未提供・応答不定は従来経路）。機械検出の対象は alloc/dealloc と当該スレッド契約のみ — ブロッキング操作・ファイル/ネットワーク I/O・無制限待機/リトライ・実行時間無界・ロック保持時間等の静的検証不能な制約はドキュメント契約 + コードレビュー観点であり、CI 成功は RT 安全性の完全証明ではない。
+- RT 検証レーン（Issue #22）: `rt_` プレフィックスの RT 契約テストは `assert_no_alloc` 測定窓内で処理経路を実行し、窓内の alloc/dealloc はテストバイナリを abort させて CI で検出する（fixture・warm-up は窓外）。ruviform-rt 既存の `alloc_counter` は変更せず併存し、新規の検証用途には `assert_no_alloc` を使う。CLAP アダプタは `thread-check` 拡張を `plugin.init` で一度照会し、非オーディオスレッド応答の `process` を defined rejection する（未提供・応答不定は従来経路）。機械検出の対象は alloc/dealloc と当該スレッド契約のみ — その他の静的検証不能な制約はドキュメント契約 + コードレビュー観点であり、CI 成功は RT 安全性の完全証明ではない。
 
 ### アーキテクチャ確定契約（設計ベースライン）
 
-以下は Issue [#1](https://github.com/scarecrow173/ruviform/issues/1) 由来の設計ベースライン（[docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)、approved）で確定した契約の要約。詳細な定義・根拠は同書の各節が正本であり、本節と齟齬がある場合は同書を優先する。
+Issue #1 由来の設計ベースライン（[docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)、approved）で確定した契約の要点。詳細な定義・根拠は同書が正本であり、齟齬時は同書を優先する。
 
-- RT/オフライン分離: リアルタイム（RT）経路と非 RT を API・ライフサイクルで分離する。処理契約は `Processor`（`prepare`/`process` 分離）と `RtContext` capability が定義する。RT クリティカルパスでは alloc/dealloc を禁止し、ブロッキング操作・I/O・無制限の待機/リトライ・非有界処理を制限する。「RT-safe」等の保証範囲は API 単位で定義・明示し、未確定の API を RT-safe と断定しない。検証可能な違反は CI で検出するが、CI 成功は完全証明ではない。OS レベルのハードリアルタイム保証は提供しない。正本: 同書「RT／非 RT の分離方式」「RT 契約（API 単位の保証定義）」節。
-- SIMD: スカラー参照実装を必須とし、カーネルごとに「ビット完全一致」または「ulp 上限内」の等価性契約を定義してスカラーを参照として検証する。stable Rust のみを使用し、`unsafe` は暫定規約どおり SAFETY コメント付きの局所許可のみで例外的に認める。SIMD 二層構造（ランタイム分岐＋フォールバック、dispatch 層の `ruviform-math` 集約を含む構造仮説）とバックエンド選定の採否は要 PoC。正本: 同書「DSP／SIMD 設計」採否。
-- クレート依存方向: 依存は上位 → 下位のみとし、循環依存は禁止。基礎クレートから GUI・オーディオデバイス・GPU への強制依存を作らない。詳細な層内順序・adapter ルール・契約型の所有は同書「レイヤー構造と依存方向ルール」節が正本。
+- RT/オフライン分離: RT 経路と非 RT を API・ライフサイクルで分離（`Processor` の `prepare`/`process` 分離と `RtContext` capability）。RT クリティカルパスでは alloc/dealloc 禁止、ブロッキング操作・I/O・無制限の待機/リトライ・非有界処理を制限。「RT-safe」等の保証範囲は API 単位で定義・明示し、未確定 API を RT-safe と断定しない。CI 成功は完全証明ではなく、OS レベルのハードリアルタイム保証は提供しない。
+- SIMD: スカラー参照実装を必須とし、カーネルごとに「ビット完全一致」または「ulp 上限内」の等価性契約でスカラー参照検証。stable Rust のみ使用し、`unsafe` は暫定規約どおり局所許可のみ。
+- クレート依存方向: 依存は上位 → 下位のみ、循環依存は禁止。基礎クレートから GUI・オーディオデバイス・GPU への強制依存を作らない。
 
 ### 共通基盤・Observability・Diagnostics・Debug の設計方針（必要時参照）
 
-- 共通基盤の責務境界、段階的なモジュール→クレート分割、Memory / Collections / Sync / Identity / Telemetry、Logging / Profiling / Metrics / Diagnostics / Debug、OS / IPC との境界は [docs/designs/shared-foundations-and-modularization-policy.md](docs/designs/shared-foundations-and-modularization-policy.md)（Issue #101）を設計方針の参照先とする。
-- これらの機能や RT 計測経路、クレート・依存 DAG・公開 API の所有者・feature 境界を新設・変更・レビューする際は、必要に応じて同書の該当節を参照する。無関係な変更に同書の全読は要求しない。
-- `ruviform-foundation` / `ruviform-observability` / `ruviform-debug` / `ruviform-platform` 等は現時点では構成候補であり、クレート・API が実装されたことを意味しない。具体的な実装・既存 API の移動は別途設計・検証する。既存 accepted ADR（特に RT 契約・RT プリミティブ方式）と矛盾する変更は、必要な ADR 改訂を経て行う。
+- 設計方針の参照先は [docs/designs/shared-foundations-and-modularization-policy.md](docs/designs/shared-foundations-and-modularization-policy.md)（Issue #101）。該当機能や RT 計測経路・feature 境界を新設・変更・レビューする際に同書の該当節を参照する（無関係な変更に全読は要求しない）。
+- `ruviform-foundation` / `ruviform-observability` / `ruviform-debug` / `ruviform-platform` 等は現時点では構成候補であり実装済みを意味しない。既存 accepted ADR と矛盾する変更は、必要な ADR 改訂を経て行う。
 
 ### ライセンス注記
 
@@ -215,3 +99,4 @@ mise exec -- apm install --frozen
 - `.gitattributes` と `.gitignore` は共通ルールを保持し、言語別・製品固有の例外は必要になったときに追加する。
 - テストフィクスチャは非メディア形式（JSON / YAML 等）で Git に置き、CI はフィクスチャが必要になるまで LFS オブジェクトを取得しない（`.gitattributes` の音声・動画・大型編集ソース拡張子の LFS ルールは維持。現行 `.github/workflows/ci.yml` も LFS 取得なし）。
 - `mise.lock`・`apm.lock.yaml`・`Cargo.lock` は生成物であっても再現性のため追跡する。これらを他の一時生成物と混同しない。
+- 公開 API / feature / behavior / dependency / CI 基盤を変更する PR は、本文の Consumer 影響欄で Synvelis・AudioLens を独立して `impacted` / `no impact` / `unknown` に分類する（Issue #219・記入形式は `.github/PULL_REQUEST_TEMPLATE.md` が正本）。`unknown` 残置は互換性未確認であり、merge 前にレビュアーが分類欄の記入と `unknown` 解消先リンクを確認する。運用詳細は [docs/development-environment.md](docs/development-environment.md) を参照。
