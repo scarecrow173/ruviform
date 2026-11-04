@@ -135,13 +135,16 @@ task `TASK-O3Q2a0lPvct9PFKBgBig2j`（plan `PLAN-xLvFbRwmfJj1P2olT3eT9q`、spec `
 | 破損 browser fallback | binary 破壊 → probe fail → wipe → reinstall → probe | Pass — `PROBE-OK` |
 | doc_status lint（issue-332 docs 全 6 種） | lint --type each | Pass — 新規 finding 0 |
 
-CI（PR #341、run 41815446750 — cold・cache miss、2026-11-04）:
+CI（PR #341、2026-11-04）:
 
-- ui-verify (ubuntu-latest): pass 4m19s — cache miss → download 8s → probe 3s → suite 10s・Evidence upload 済
-- ui-verify (windows-latest): pass 4m49s — cache miss → download 16s → probe 2s → suite 20s
-- ui-verify (macos-latest): pass 3m6s — cache miss → download 16s → probe 2s → suite 23s
-- 他 9 required contexts（verify/l1-real-verify 各 3 OS・rt-verify・icc-verify・bench）+ consumer-impact classification: 全 pass・変更なし
-- ubuntu log で `Cache not found for input keys: playwright-Linux-X64-pw1.64.1-chromium1248` → `Downloading Chrome for Testing 156.0.8078.4 (playwright chromium v1248)` → `.cache/ms-playwright` 配置 → post step で save を確認（cold=download 発生の証跡）
+- run 41815446750（cold・cache miss）: 12 job + classification 全 pass
+  - ui-verify (ubuntu-latest): 4m19s — miss → download 8s → probe 3s → suite 10s・Evidence upload 済
+  - ui-verify (windows-latest): 4m49s — miss → download 16s → probe 2s → suite 20s
+  - ui-verify (macos-latest): 3m6s — miss → download 16s → probe 2s → suite 23s
+  - ubuntu log: `Cache not found for input keys: playwright-Linux-X64-pw1.64.1-chromium1248` → `Downloading Chrome for Testing 156.0.8078.4 (playwright chromium v1248)` → `.cache/ms-playwright` 配置 → save 確認
+- run 41816549243（warm・cache hit）: 12 job + classification 全 pass
+  - 全 OS で `Cache hit for: playwright-<OS>-X64-pw1.64.1-chromium1248` → install 1s no-op → download ゼロ → post save skip（`Cache hit occurred on the primary key ..., not saving cache`）
+  - ui-verify: ubuntu 4m49s / windows 3m11s / macos 2m26s
 
 ## Before / After
 
@@ -173,7 +176,22 @@ CI（PR #341、run 41815446750 — cold・cache miss、2026-11-04）:
 
 - cold でも test step 単体は Before より短い（ubuntu 28→10s / windows 40→20s / macos 44→23s）— download が install step へ分離され実 test 時間が可視化された。
 - browser 準備合計（deps+meta+restore+install+validate）: ubuntu 28s / windows 20s / macos 20s。cold では Before の埋め込み準備とほぼ同等（差は download を cache save が相殺）。
-- warm（cache hit）実測は次回 push run で採取 → `docs/impl/exp/issue-332-playwright-browser-cache.md` へ記録。期待値: install step が Playwright revision check で ~1-2s に短縮、download なし。
+
+### After（PR #341 run 41816549243 — warm・cache hit）
+
+| step | ubuntu | windows | macos |
+| --- | --- | --- | --- |
+| Install Playwright browser system deps (Linux) | 18s | 0s(skip) | 0s(skip) |
+| Read Playwright browser version/revision | 0s | 1s | 0s |
+| Restore Playwright Chromium cache | 6s(hit) | 4s(hit) | 8s(hit) |
+| Prepare Playwright Chromium (install task) | 1s(no-op) | 1s(no-op) | 1s(no-op) |
+| Validate Playwright Chromium launch | 2s | 2s | 2s |
+| Run UI browser tests | 14s | 12s | 20s |
+| Post restore | 0s(save skip) | 0s(save skip) | 0s(save skip) |
+
+- 全 OS で `Cache hit for: playwright-<OS>-X64-pw1.64.1-chromium1248` → install 1s no-op（download ゼロ）→ post save skip を log 確認。
+- browser 関連 work 合計（restore+install+validate+test）: ubuntu 23s / windows 19s / macos 31s（Before 同居 step 28s/40s/44s 比で全 OS 減・download 完全消滅）。
+- 12 required contexts + classification: 全 pass（cold/warm 両 run）。
 
 ## Rollback
 
@@ -191,5 +209,5 @@ CI（PR #341、run 41815446750 — cold・cache miss、2026-11-04）:
 
 ## Follow-ups
 
-- PR #341 の CI 3 OS で cold（cache miss→download）と warm（cache hit→install no-op）の実測を採取し exp 記録へ反映（本 record の After 節も同時更新）。
 - Playwright version 更新 PR では key の revision 部分が自動で切り替わるため、初回 run は cold になる（設計どおり）。warm 時間の再計測は不要。
+- ubuntu の `playwright install-deps`（16-18s/run）は cache 対象外のまま。system deps 短縮は runner image 層の話であり別 issue のスコープ。

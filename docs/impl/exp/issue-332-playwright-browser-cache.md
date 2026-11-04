@@ -2,7 +2,7 @@
 
 - 正本の計測契約: `docs/designs/issue-327-cross-repo-ci-baseline.md`（指標定義・lane 分類・Cold/Warm・Before/After テンプレート）
 - 計測ツール: `ci/metrics/collect-ci-metrics.mjs`（Before）+ `gh api` step timing 抽出（After、同一 schema）
-- Raw 証拠: `docs/impl/exp/data/issue-332-playwright-browser-runs.jsonl`（229 行: before run 41780346388 の ui-verify step 全量 + after-cold run 41815446750 の 12 job / ui-verify step 全量）
+- Raw 証拠: `docs/impl/exp/data/issue-332-playwright-browser-runs.jsonl`（358 行: before run 41780346388 の ui-verify step 全量 + after-cold run 41815446750 / after-warm run 41816549243 の各 12 job / ui-verify step 全量）
 - 実装記録: `docs/impl/ir/issue-332-ci-opt-05-playwright-chromium-cache.md`
 - PR: https://github.com/scarecrow173/ruviform/pull/341
 
@@ -54,18 +54,22 @@
 - cold でも実 test step は Before より短い — download が install step へ移り実計測が可視化。download 有無が step 単位で直接観測可能になったのが本変更の主効果。
 - browser 準備合計（cold）は Before の埋め込み準備と概ね同等。cold では install-deps（ubuntu）と download が依然支配的 — cache による短縮効果は warm で発現。
 
-### After(warm) — cache hit 予定 run
+### After(warm) — run 41816549243（同 PR の次 commit push、cache hit）
 
 | step | ubuntu | windows | macos |
 | --- | --- | --- | --- |
-| Install Playwright browser system deps (Linux) | TBD | TBD | TBD |
-| Read Playwright browser version/revision | TBD | TBD | TBD |
-| Restore Playwright Chromium cache | TBD(hit) | TBD(hit) | TBD(hit) |
-| Prepare Playwright Chromium | TBD(no-op期待) | TBD | TBD |
-| Validate Playwright Chromium launch | TBD | TBD | TBD |
-| Run UI browser tests | TBD | TBD | TBD |
+| Install Playwright browser system deps (Linux) | 18 | 0(skip) | 0(skip) |
+| Read Playwright browser version/revision | 0 | 1 | 0 |
+| Restore Playwright Chromium cache | 6(hit) | 4(hit) | 8(hit) |
+| Prepare Playwright Chromium (`install-ui-browser-chromium`) | 1(no-op) | 1(no-op) | 1(no-op) |
+| Validate Playwright Chromium launch | 2 | 2 | 2 |
+| Run UI browser tests（page build + 30 tests のみ） | 14 | 12 | 20 |
+| Upload UI browser evidence | 2 | 1 | 2 |
+| Post restore | 0(save skip) | 0(save skip) | 0(save skip) |
 
-（次 push run 確定後に実測値で更新）
+- 全 OS で `Cache hit for: playwright-<OS>-X64-pw1.64.1-chromium1248` → install task が revision check で 1s no-op（download ゼロ）→ probe 成功 → post save skip（`Cache hit occurred on the primary key ..., not saving cache`）を log で確認。
+- warm browser 準備合計（deps+meta+restore+install+validate）: ubuntu 27s（うち system deps 18s が支配）/ windows 8s / macos 11s。download コストは完全消滅。
+- Before 同居 step（download 込み）との対比: ubuntu 28→（restore+install+validate=9s＋test 14s）、windows 40→19s、macos 44→31s。browser 関連 work はどの OS でも減少。
 
 ## 3. fallback / 検証能力の確認
 
@@ -80,16 +84,17 @@
 
 ## 4. workflow 単位の Before/After
 
-| 指標 | Before(p50、n=16成功run) | After(cold、1 run) |
-| --- | --- | --- |
-| workflow wall_time_s | 308 | ~290（ui-verify windows 4m49s が critical path） |
-| ui-verify job 時間 | ubuntu ~223s級 / windows ~284s級 / macos ~207s級（代表 run） | 4m19s / 4m49s / 3m6s |
-| runner_total_s | ~1475-1823 | （1 run のみ・参考） |
+| 指標 | Before(p50、n=16成功run) | After(cold run 41815446750) | After(warm run 41816549243) |
+| --- | --- | --- | --- |
+| workflow wall_time_s | 308 | ~290（ui-verify windows 4m49s critical path） | ~294（ui-verify ubuntu 4m49s critical path） |
+| ui-verify job 時間 | ubuntu ~223s / windows ~284s / macos ~207s（代表 run 41780346388） | 259s / 289s / 186s | 289s / 191s / 146s |
+| browser 準備（download 等） | test step 内に同居・分離不能 | ubuntu 28s / windows 20s / macos 20s | ubuntu 27s（内 deps 18s）/ windows 8s / macos 11s |
+| download 発生 | 毎 run（全 OS） | あり（cold のみ正しい動作） | **なし**（cache hit・no-op） |
 
-注: After は 1 run の冷 data のみ。warm 反復で browser install の ~8-16s が消え、post save ~4-6s も消える（key 一致で save skip）ため、warm の ui-verify は cold 比で数秒〜十数秒短い見込み。
+注: ui-verify job 全体の変動には mise/cargo/npm 等の他 step の揺らぎも含まれ、browser 分以外を本変更の効果とは計算しない。browser lane として確実な効果は「warm では download ゼロ・install step 1s」「browser 関連 work の合計が windows 40→19s・macos 44→31s・ubuntu 28→23s（restore+install+validate+test）」に限定して読む。ubuntu の install-deps 18s と macos の test step（page build 主因・20s）は別レイヤーの支配項。大幅な構造的最適化は #333 側。
 
 ## 5. 残課題
 
-- warm 実測の反映（本 doc §2 After(warm)・impl record）。
 - Playwright bump 時の cold 再計測は不要（key が自動切替・設計どおり miss→install）。
 - runner 全体時間への寄与は数秒級 — #333 の change-impact DAG 側で大きい構造的最適化が別途進行中。
+- ubuntu の `playwright install-deps` は cache 対象外（設計どおり毎 run 実行・16-18s）。system deps を更に短縮するには runner image 層の話になりスコープ外。
