@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "types": ["node"],
+    "paths": {
+      // The page modules consume the *built* package — the same
+      // `ui/showcase/dist` the browser import map serves — so page
+      // code typechecks against the published declarations, never
+      // against sources. `@rvf/browser-test-page` stays source-side:
+      // it IS this package's own emitted module.
+      "@rvf/showcase": ["../showcase/dist/showcase/src/index.d.ts"],
+      "@rvf/showcase/*": ["../showcase/dist/showcase/src/*"],
+      "@rvf/browser-test-page": ["./page/rvf-page.ts"]
+    }
+  },
+  "include": ["src", "page", "test", "playwright.config.ts"]
+}

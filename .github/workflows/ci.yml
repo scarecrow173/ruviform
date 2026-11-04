@@ -264,6 +264,31 @@ jobs:
       - name: Build UI showcase dist (mise run build-ui-showcase)
         run: mise run build-ui-showcase
 
+      - name: Type-check UI browser-test harness (mise run check-ui-browser-test)
+        run: mise run check-ui-browser-test
+
+      # Chromium system libraries for the Playwright-managed browser; needed
+      # once on Linux only. Requires npm ci from the check step above.
+      - name: Install Playwright browser system deps (Linux)
+        if: runner.os == 'Linux'
+        run: npm --prefix ui/browser-test exec -- playwright install-deps chromium
+
+      - name: Run UI browser tests (mise run test-ui-browser)
+        run: mise run test-ui-browser
+
+      # Browser-lane evidence only (Issue #294 gate input): evidence.json
+      # records env/revision/seed and pass/fail/skipped per spec; failure
+      # traces and screenshots land here too. Never an OS WebView / native
+      # GPU / product E2E signal.
+      - name: Upload UI browser evidence (browser lane)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-browser-evidence-${{ matrix.os }}
+          path: ui/browser-test/test-results/
+          if-no-files-found: warn
+          retention-days: 30
+
   bench:
     name: bench
     runs-on: ubuntu-latest
