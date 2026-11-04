@@ -1,19 +1,59 @@
 [package]
 name = "ruviform-observability"
-description = "Shared observability primitives (counter pair) for the Ruviform media foundation"
+description = "Shared observability primitives (counter pair) and generic logging adapter for the Ruviform media foundation"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
-[dependencies]
+[features]
+default = []
+# `logging` — Issue #276 (OBS-01) generic logging adapter on the standard
+# `tracing`/`tracing-subscriber`/`tracing-appender` stack. Off by default so
+# the core counter pair keeps zero external dependencies; enabling it is the
+# only thing that pulls the tracing stack into the build.
+logging = [
+    "dep:tracing",
+    "dep:tracing-subscriber",
+    "dep:tracing-appender",
+]
 
+[dependencies]
+# `tracing` — public API surface (`Dispatch`) for the `logging` feature.
+tracing = { version = "0.1", optional = true }
+# `tracing-subscriber` — `Registry`, `fmt` layers, `EnvFilter`, JSON output.
+tracing-subscriber = { version = "0.3", optional = true, features = [
+    "env-filter",
+    "fmt",
+    "json",
+    "std",
+] }
+# `tracing-appender` — `RollingFileAppender` rotation + `max_log_files`
+# retention (0.2.3+). The bounded writer itself is implemented in-crate (ADR
+# `issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc`)
+# because `non_blocking` exposes no drop/failure observability.
+tracing-appender = { version = "0.2.3", optional = true }
+
+[dev-dependencies]
+# Contract tests for the `logging` feature (`tests/logging.rs`): parse JSONL
+# output (serde_json) and create throwaway log dirs (tempfile). `tracing` /
+# `tracing-subscriber` need no dev-dep duplication — the optional deps under
+# `logging` are already visible to test/example targets via `required-features`.
+serde_json = "1"
+tempfile = "3"
 # Issue #277: `assert_no_alloc` 測定窓 — core primitive の RT 許可操作
 # （counter/gauge/histogram の no-alloc 実証）を `rt_` レーンで検証する。
 # dev-dependency のみで公開 API・依存 DAG は std のみを維持する。
-[dev-dependencies]
 assert_no_alloc = "1.1"
+
+[[test]]
+name = "logging"
+required-features = ["logging"]
+
+[[example]]
+name = "logging_host"
+required-features = ["logging"]
 
 [lints]
 workspace = true

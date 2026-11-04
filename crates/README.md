@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計31クレート）。
+Ruviform ワークスペースのメンバークレート索引（計33クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -27,6 +27,12 @@ Ruviform ワークスペースのメンバークレート索引（計31クレー
 | [`ruviform-video-proc`](ruviform-video-proc/README.md) | ビデオ処理カーネル（色変換・`RgbaF32` linear working space 色管理・コンポジット/遷移・feature `icc` で ICC 変換） |
 | [`ruviform-dsp`](ruviform-dsp/README.md) | ドメイン型付き audio DSP カーネル（`Window`・`Biquad`・`FirFilter`・`Fft`・`LinearResampler`） |
 | [`ruviform-audio-analysis`](ruviform-audio-analysis/README.md) | 解析層（`LevelMeter`・`SpectrumAnalyzer`・`WaveformPeaks`） |
+
+## 汎用ファイル I/O（非 RT 専用）
+
+| クレート | 責務 |
+| --- | --- |
+| [`ruviform-io-file`](ruviform-io-file/README.md) | staged file publish 型状態・分類済み publish 契約（`StagedFile`/`SealedFile`・`PublishReceipt`/`PublishFailure`・recovery handle — Issue #295。実 OS backend は IO-IMP-02） |
 
 ## メディア I/O（非 RT 専用）
 

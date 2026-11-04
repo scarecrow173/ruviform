@@ -127,6 +127,8 @@ Directory: `docs/tasks`
 | TASK-034QxfiWo8R8kkqMasIoQm | T4 verification + review-protocol + impl record (Issue #244) | done | [issue-244-t4-verification-record.md](./issue-244-t4-verification-record.md) |
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
 | TASK-QNzC22ZqitcqDhco1hHMKj | Issue #307 T1: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | done | [issue-307-t1-attach-frame-base-verified-context.md](./issue-307-t1-attach-frame-base-verified-context.md) |
+| TASK-034RoWzXiLur2zHG5iHl7u | T1 ruviform-io-file クレート新設・公開契約・Mock Publish (Issue #295) | done | [issue-295-t1-crate-and-contract.md](./issue-295-t1-crate-and-contract.md) |
+| TASK-034RoWAHTxefOCVrz2FVL4 | T2 共有台帳更新・main 取込・最終検証・IR (Issue #295) | done | [issue-295-t2-ledger-verify.md](./issue-295-t2-ledger-verify.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
@@ -242,6 +244,9 @@ Directory: `docs/tasks`
 | TASK-034QoozSINn40AO2e1Ke1k | Issue 233 T2: discard surface — PrefetchConsumer::discard_pending + DiscardReport + seek_discard_pending pending purge | done | [task-233-t2-discard-pending.md](./task-233-t2-discard-pending.md) |
 | TASK-034QooAu3EbKEEhgcUSJnv | Issue 233 T3: reopen_at fused reopen-to-seek-target | done | [task-233-t3-reopen-at.md](./task-233-t3-reopen-at.md) |
 | TASK-034QooB7rhCVhK4sqW6lzZ | Issue 233 T4: verification sweep + implementation record | done | [task-233-t4-verify-ir.md](./task-233-t4-verify-ir.md) |
+| TASK-034RoYsOdygNXYa3BanrU1 | Issue 276 T1: logging config/API types + feature wiring | done | [task-276-t1-config-and-wiring.md](./task-276-t1-config-and-wiring.md) |
+| TASK-034RoYu0iSpPIN9pnjyhDU | Issue 276 T2: bounded writer + sinks + build result | done | [task-276-t2-writer-sinks-build.md](./task-276-t2-writer-sinks-build.md) |
+| TASK-034RoYvGpykxcXUHa5X8VR | Issue 276 T3: contract tests + host example + docs + verification | done | [task-276-t3-tests-docs-verify.md](./task-276-t3-tests-docs-verify.md) |
 | TASK-034LFHdEfDbppnNeuh0u48 | ToneMapSdr カーネル実装（BT.2390 EETF） | done | [tone-map-sdr-kernel.md](./tone-map-sdr-kernel.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
