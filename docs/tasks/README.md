@@ -138,6 +138,7 @@ Directory: `docs/tasks`
 | TASK-jXU3ZGuh6DP2FfCSvkx5FC | T2 TS wire validators — ipcwire/bindingwire + conformance テスト（Issue #311） | done | [issue-311-t2-ts-wire-validators.md](./issue-311-t2-ts-wire-validators.md) |
 | TASK-KayYlp12EsEWZZKk2pMZgF | T3 recorder/replay/oracle + consumer mocks + seeded シナリオ（Issue #311） | done | [issue-311-t3-recorder-replay-oracle.md](./issue-311-t3-recorder-replay-oracle.md) |
 | TASK-uyCbW614DqUYmATBzUrQxz | T4 fault matrix + Rust conformance lanes + mise/CI/AGENTS 同期 + IR（Issue #311） | done | [issue-311-t4-fault-matrix-lanes.md](./issue-311-t4-fault-matrix-lanes.md) |
+| TASK-034RBNKfGF6WS4OfHfW1of | Issue #327 CI計測Baseline 計測実施・文書化 | done | [issue-327-t1-baseline-measurement.md](./issue-327-t1-baseline-measurement.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
