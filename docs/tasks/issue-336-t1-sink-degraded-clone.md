@@ -1,7 +1,7 @@
 ---
 id: "TASK-AacpjXZ02dbHUiacENEOSZ"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "T1 SinkDegraded Clone derive 追加（Issue #336）"
 created: "2026-11-05"
 updated: "2026-11-05"
@@ -22,7 +22,8 @@ relations:
     generated: []
   implements:
     - "docs/plans/issue-336-sink-degraded-clone.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/implement-issue-336-sink-degraded-clone.md"
   depends-on:
     - "docs/plans/issue-336-sink-degraded-clone.md"
   blocks: []

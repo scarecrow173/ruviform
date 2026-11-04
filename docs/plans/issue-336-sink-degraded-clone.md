@@ -2,6 +2,7 @@
 id: "PLAN-psvzdxaW4MHzk7mhctaYxG"
 type: "plan"
 status: "approved"
+test-spec-skip: "derive 追加のみの additive 変更 — test-spec は作らず、clone 正当性を tests/logging.rs の sink_degraded_record_is_cloneable で直接検証する"
 title: "Issue #336 SinkDegraded Clone 実装計画"
 created: "2026-11-05"
 updated: "2026-11-05"
@@ -89,4 +90,7 @@ T1 のみ（依存なし）。
 | --- | --- | --- |
 | Clone 正当性 | `tests/logging.rs` の clone アサーション | clone 複製が sink_index/kind/reason を保持 |
 | 静的検証 | `mise run fmt` / `check` / `lint` | 全緑 |
-| 回帰 | `mise run test` | 全緑 |
+| 回帰 | `mise run test` + `cargo test -p ruviform-observability --features logging` | 全緑 |
+
+（derive 追加のみの additive 変更のため test-spec は作成しない —
+`test-spec-skip` 記録どおり、clone 正当性を直接テストで検証する）
