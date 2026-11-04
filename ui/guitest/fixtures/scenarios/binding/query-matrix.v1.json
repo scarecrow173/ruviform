@@ -1,0 +1,37 @@
+{
+  "v": 1,
+  "suite": "scenario-binding",
+  "id": "query-matrix",
+  "seed": null,
+  "setup": {
+    "consumer": "analysis",
+    "viewId": "view-2",
+    "windowId": "win-1",
+    "maxInflight": 2,
+    "targets": []
+  },
+  "in": [
+    { "op": "query", "as": "q1", "sourceId": "peaks-1", "sourceRevision": 3, "start": 0, "end": 100 },
+    { "op": "query", "as": "q2", "sourceId": "peaks-1", "sourceRevision": 3, "start": 100, "end": 200 },
+    { "op": "query", "as": "q3", "sourceId": "peaks-1", "sourceRevision": 3, "start": 200, "end": 300 },
+    { "op": "resolveQuery", "as": "q2", "reply": { "bytes": 4096 } },
+    { "op": "query", "as": "q4", "sourceId": "peaks-1", "sourceRevision": 3, "start": 300, "end": 400 },
+    { "op": "resolveQuery", "as": "q4", "reply": { "bytes": 99999999 } },
+    { "op": "setSourceRevision", "sourceId": "peaks-1", "revision": 4 },
+    { "op": "query", "as": "q5", "sourceId": "peaks-1", "sourceRevision": 3, "start": 400, "end": 500 },
+    { "op": "resolveQuery", "as": "q5", "reply": { "bytes": 1024 } },
+    { "op": "detach" },
+    { "op": "query", "as": "q6", "sourceId": "peaks-1", "sourceRevision": 4, "start": 0, "end": 10 },
+    { "op": "resolveQuery", "as": "q6", "reply": { "bytes": 128, "generation": 0 } }
+  ],
+  "expect": {
+    "queryOutcomes": {
+      "q1": "cancelled",
+      "q2": "ok",
+      "q3": "cancelled",
+      "q4": "over-budget",
+      "q5": "stale",
+      "q6": "stale"
+    }
+  }
+}

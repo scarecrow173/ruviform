@@ -1,0 +1,38 @@
+{
+  "v": 1,
+  "suite": "scenario-binding",
+  "id": "close-view",
+  "seed": null,
+  "setup": {
+    "consumer": "daw",
+    "viewId": "view-1",
+    "windowId": "win-1",
+    "ackTimeoutMs": 1000,
+    "targets": [
+      { "control": "fader-1", "target": "mixer.ch1.fader", "initial": 0.0 }
+    ]
+  },
+  "in": [
+    { "op": "gesture", "control": "fader-1", "inputs": [
+      { "type": "begin", "gestureId": "g-1", "source": "pointer" },
+      { "type": "commit", "gestureId": "g-1", "value": { "normalized": 0.5 } }
+    ] },
+    { "op": "flush" },
+    { "op": "gesture", "control": "fader-1", "inputs": [
+      { "type": "begin", "gestureId": "g-2", "source": "pointer" }
+    ] },
+    { "op": "closeView" },
+    { "op": "receipt", "status": "applied", "ref": "dead-epoch" },
+    { "op": "receipt", "status": "applied", "ref": "first" }
+  ],
+  "expect": {
+    "dispatched": [
+      { "kind": "begin", "gestureId": "g-1" },
+      { "kind": "commit", "gestureId": "g-1", "expectReceipt": true },
+      { "kind": "cancel", "gestureId": "g-2" }
+    ],
+    "diagnostics": { "staleReceipts": 2 },
+    "finalState": { "attached": false },
+    "linkAttached": false
+  }
+}

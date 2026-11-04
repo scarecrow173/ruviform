@@ -1,0 +1,117 @@
+{
+  "v": 1,
+  "suite": "ipc-data",
+  "id": "rvf://data paging + url contract (Issue #311)",
+  "cases": [
+    {
+      "id": "url-build-basic",
+      "call": { "name": "demo/peaks", "offset": 10, "len": 4 },
+      "expect": { "url": "rvf://data/demo/peaks?offset=10&len=4" }
+    },
+    {
+      "id": "url-build-defaults",
+      "call": { "name": "demo/peaks" },
+      "expect": { "url": "rvf://data/demo/peaks?offset=0" }
+    },
+    {
+      "id": "url-build-len-only",
+      "call": { "name": "demo/peaks", "len": 16 },
+      "expect": { "url": "rvf://data/demo/peaks?offset=0&len=16" }
+    },
+    {
+      "id": "url-build-encodes-segments",
+      "call": { "name": "a b/c+d", "offset": 0, "len": 1 },
+      "expect": { "url": "rvf://data/a%20b/c%2Bd?offset=0&len=1" }
+    },
+    {
+      "id": "range-mid",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "offset": 10, "len": 4 },
+      "expect": { "status": 200, "bodyLen": 4, "total": 64 }
+    },
+    {
+      "id": "range-capped-by-max-chunk",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "offset": 0 },
+      "expect": { "status": 200, "bodyLen": 8, "total": 64 }
+    },
+    {
+      "id": "range-clamped-to-remainder",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "offset": 60, "len": 100 },
+      "expect": { "status": 200, "bodyLen": 4, "total": 64 }
+    },
+    {
+      "id": "range-offset-at-end-empty-ok",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "offset": 64 },
+      "expect": { "status": 200, "bodyLen": 0, "total": 64 }
+    },
+    {
+      "id": "range-offset-beyond-end",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "offset": 65 },
+      "expect": { "status": 400, "class": "out_of_range" }
+    },
+    {
+      "id": "range-not-found",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/missing", "offset": 0, "len": 1 },
+      "expect": { "status": 404, "class": "not_found" }
+    },
+    {
+      "id": "name-multi-segment-ok",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "a/b/c", "size": 4, "byte": 7 }] },
+      "request": { "name": "a/b/c", "offset": 0, "len": 2 },
+      "expect": { "status": 200, "bodyLen": 2, "total": 4 }
+    },
+    {
+      "id": "name-empty-segment-rejected",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "a//b", "offset": 0 },
+      "expect": { "status": 400, "class": "bad_name" }
+    },
+    {
+      "id": "name-traversal-rejected",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "../peaks", "offset": 0 },
+      "expect": { "status": 400, "class": "bad_name" }
+    },
+    {
+      "id": "params-offset-nan",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "rawQuery": "offset=abc" },
+      "expect": { "status": 400, "class": "bad_params" }
+    },
+    {
+      "id": "params-offset-negative",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "rawQuery": "offset=-1" },
+      "expect": { "status": 400, "class": "bad_params" }
+    },
+    {
+      "id": "params-len-nan",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "rawQuery": "len=xyz" },
+      "expect": { "status": 400, "class": "bad_params" }
+    },
+    {
+      "id": "params-pair-without-equals",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "rawQuery": "boguspair" },
+      "expect": { "status": 400, "class": "bad_params" }
+    },
+    {
+      "id": "params-unknown-key-ignored",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "rawQuery": "offset=10&len=4&future=x" },
+      "expect": { "status": 200, "bodyLen": 4, "total": 64 }
+    },
+    {
+      "id": "windows-rewritten-host",
+      "registry": { "maxChunk": 8, "sources": [{ "name": "demo/peaks", "size": 64, "byte": 1 }] },
+      "request": { "name": "demo/peaks", "offset": 0, "len": 2, "host": "rvf.data" },
+      "expect": { "status": 200, "bodyLen": 2, "total": 64 }
+    }
+  ]
+}

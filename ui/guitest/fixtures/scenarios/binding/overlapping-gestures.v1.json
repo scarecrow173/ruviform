@@ -1,0 +1,43 @@
+{
+  "v": 1,
+  "suite": "scenario-binding",
+  "id": "overlapping-gestures",
+  "seed": null,
+  "setup": {
+    "consumer": "daw",
+    "viewId": "view-1",
+    "windowId": "win-1",
+    "ackTimeoutMs": 1000,
+    "targets": [
+      { "control": "fader-1", "target": "mixer.ch1.fader", "initial": 0.0 },
+      { "control": "fader-2", "target": "mixer.ch2.fader", "initial": 0.5 }
+    ]
+  },
+  "in": [
+    { "op": "gesture", "control": "fader-1", "inputs": [
+      { "type": "begin", "gestureId": "g-1", "source": "pointer" }
+    ] },
+    { "op": "gesture", "control": "fader-2", "inputs": [
+      { "type": "begin", "gestureId": "g-2", "source": "pointer" },
+      { "type": "preview", "gestureId": "g-2", "value": { "normalized": 0.9 } }
+    ] },
+    { "op": "gesture", "control": "fader-1", "inputs": [
+      { "type": "begin", "gestureId": "g-3", "source": "keyboard" },
+      { "type": "preview", "gestureId": "g-1", "value": { "normalized": 0.2 } },
+      { "type": "commit", "gestureId": "g-1", "value": { "normalized": 0.3 } }
+    ] },
+    { "op": "gesture", "control": "fader-2", "inputs": [
+      { "type": "cancel", "gestureId": "g-2", "reason": "escape" }
+    ] },
+    { "op": "flush" }
+  ],
+  "expect": {
+    "dispatched": [
+      { "kind": "begin", "controlId": "fader-1", "gestureId": "g-1" },
+      { "kind": "commit", "controlId": "fader-1", "gestureId": "g-1", "expectReceipt": true },
+      { "kind": "begin", "controlId": "fader-2", "gestureId": "g-2" },
+      { "kind": "cancel", "controlId": "fader-2", "gestureId": "g-2" }
+    ],
+    "diagnostics": { "supersededPreviews": 2 }
+  }
+}
