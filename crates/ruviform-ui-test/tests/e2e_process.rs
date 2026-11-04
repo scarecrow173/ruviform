@@ -420,12 +420,14 @@ fn e2e_tcp_wrong_secret_is_unauthenticated() {
         }
         other => panic!("expected result, got {other:?}"),
     }
-    // Unread buffered data makes a bare drop() send RST on some
-    // platforms; shutdown() guarantees the FIN the server reads as EOF.
-    let _ = stream.shutdown(std::net::Shutdown::Both);
+    // Send FIN for the write direction so the server reads a clean EOF;
+    // keep the sockets alive until the child exits — dropping them with
+    // data in flight can race into an RST on Windows and turn the
+    // server's EOF into a hard read error.
+    let _ = stream.shutdown(std::net::Shutdown::Write);
+    let status = child.wait().expect("wait");
     drop(stream);
     drop(reader);
-    let status = child.wait().expect("wait");
     assert!(status.success(), "unauthenticated then EOF exits cleanly");
 }
 
