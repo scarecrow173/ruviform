@@ -144,106 +144,163 @@ run = "cargo clippy -p ruviform-ui-webview --all-targets --features webview -- -
 description = "Run webview-feature tests for the UI adapter (rvf:// scheme/data surface; windowed paths are manual verification)"
 run = "cargo test -p ruviform-ui-webview --features webview"
 
+# UI npm dependency install tasks (Issue #330): each ui/* package's
+# lockfile-driven `npm ci` lives in exactly one task. `sources` (lockfile +
+# manifest) and `outputs` (the hidden lockfile npm always writes into
+# node_modules) make the task freshness-checked: mise skips it while its
+# inputs are unchanged, so verify tasks can `depends` on it without
+# reinstalling on every invocation. node comes from the pinned mise
+# toolchain on every supported OS.
+[tasks.install-ui-core]
+description = "Install ui/core deps via npm ci from package-lock (skipped while lockfile/manifest and node_modules marker are unchanged)"
+sources = ["ui/core/package-lock.json", "ui/core/package.json"]
+outputs = ["ui/core/node_modules/.package-lock.json"]
+run = "npm --prefix ui/core ci --no-audit --no-fund"
+[tasks.install-ui-components]
+description = "Install ui/components deps via npm ci from package-lock (skipped while lockfile/manifest and node_modules marker are unchanged)"
+sources = ["ui/components/package-lock.json", "ui/components/package.json"]
+outputs = ["ui/components/node_modules/.package-lock.json"]
+run = "npm --prefix ui/components ci --no-audit --no-fund"
+[tasks.install-ui-viz]
+description = "Install ui/viz deps via npm ci from package-lock (skipped while lockfile/manifest and node_modules marker are unchanged)"
+sources = ["ui/viz/package-lock.json", "ui/viz/package.json"]
+outputs = ["ui/viz/node_modules/.package-lock.json"]
+run = "npm --prefix ui/viz ci --no-audit --no-fund"
+[tasks.install-ui-binding]
+description = "Install ui/binding deps via npm ci from package-lock (skipped while lockfile/manifest and node_modules marker are unchanged)"
+sources = ["ui/binding/package-lock.json", "ui/binding/package.json"]
+outputs = ["ui/binding/node_modules/.package-lock.json"]
+run = "npm --prefix ui/binding ci --no-audit --no-fund"
+[tasks.install-ui-guitest]
+description = "Install ui/guitest deps via npm ci from package-lock (skipped while lockfile/manifest and node_modules marker are unchanged)"
+sources = ["ui/guitest/package-lock.json", "ui/guitest/package.json"]
+outputs = ["ui/guitest/node_modules/.package-lock.json"]
+run = "npm --prefix ui/guitest ci --no-audit --no-fund"
+[tasks.install-ui-showcase]
+description = "Install ui/showcase deps via npm ci from package-lock (skipped while lockfile/manifest and node_modules marker are unchanged)"
+sources = ["ui/showcase/package-lock.json", "ui/showcase/package.json"]
+outputs = ["ui/showcase/node_modules/.package-lock.json"]
+run = "npm --prefix ui/showcase ci --no-audit --no-fund"
+[tasks.install-ui-browser-test]
+description = "Install ui/browser-test deps via npm ci from package-lock (skipped while lockfile/manifest and node_modules marker are unchanged)"
+sources = ["ui/browser-test/package-lock.json", "ui/browser-test/package.json"]
+outputs = ["ui/browser-test/node_modules/.package-lock.json"]
+run = "npm --prefix ui/browser-test ci --no-audit --no-fund"
+
+# Aggregate install entry point (Issue #330): the ui-verify CI job runs this
+# once so each package-lock gets a single `npm ci` per job; the verify tasks
+# below reuse the prepared node_modules via freshness-skipped depends.
+[tasks.setup-ui]
+description = "Install all seven ui/* npm deps once per lockfile (CI ui-verify preparation step; verify tasks reuse the result via freshness-skipped depends)"
+depends = [
+  "install-ui-core",
+  "install-ui-components",
+  "install-ui-viz",
+  "install-ui-binding",
+  "install-ui-guitest",
+  "install-ui-showcase",
+  "install-ui-browser-test",
+]
+
 # UI headless lane (Issue #258): the framework-neutral plain-TypeScript
 # contract package under ui/core (value mapping + gesture state machine).
-# `npm ci` restores the committed package-lock first so the lane is
-# deterministic from a fresh checkout; node comes from the pinned mise
-# toolchain. No UI framework/runtime is or may be introduced as a
-# dependency of this lane (Issue #257 §13).
+# Deps come from install-ui-core (freshness-skipped when already current);
+# node comes from the pinned mise toolchain. No UI framework/runtime is or
+# may be introduced as a dependency of this lane (Issue #257 §13).
 [tasks.check-ui-headless]
-description = "Install ui/core deps from package-lock and type-check the headless contract package (tsc --noEmit, no DOM lib)"
-run = [
-  "npm --prefix ui/core ci --no-audit --no-fund",
-  "npm --prefix ui/core run typecheck",
-]
+description = "Type-check the headless contract package (tsc --noEmit, no DOM lib; deps via install-ui-core)"
+depends = ["install-ui-core"]
+run = "npm --prefix ui/core run typecheck"
 [tasks.test-ui-headless]
-description = "Install ui/core deps from package-lock and run headless contract tests via node --test (no UI framework)"
-run = [
-  "npm --prefix ui/core ci --no-audit --no-fund",
-  "npm --prefix ui/core test",
-]
+description = "Run headless contract tests via node --test (no UI framework; deps via install-ui-core)"
+depends = ["install-ui-core"]
+run = "npm --prefix ui/core test"
 
 # UI components lane (Issue #259): the framework-neutral Web Components
 # package under ui/components (Reference Skin controls, tokens/themes,
 # Custom Elements on the ui/core contract). Same discipline as the
-# headless lane: `npm ci` restores the committed package-lock, node is
+# headless lane: deps come from install-ui-components, node is
 # the pinned mise toolchain, and no UI framework/runtime may be added as
 # a dependency (happy-dom is a test-only devDependency supplying the DOM).
 [tasks.check-ui-components]
-description = "Install ui/components deps from package-lock and type-check the components package (tsc --noEmit)"
-run = [
-  "npm --prefix ui/components ci --no-audit --no-fund",
-  "npm --prefix ui/components run typecheck",
-]
+description = "Type-check the components package (tsc --noEmit; deps via install-ui-components)"
+depends = ["install-ui-components"]
+run = "npm --prefix ui/components run typecheck"
 [tasks.test-ui-components]
-description = "Install ui/components deps from package-lock and run component tests via node --test (happy-dom DOM, no UI framework)"
-run = [
-  "npm --prefix ui/components ci --no-audit --no-fund",
-  "npm --prefix ui/components test",
-]
+description = "Run component tests via node --test (happy-dom DOM, no UI framework; deps via install-ui-components)"
+depends = ["install-ui-components"]
+run = "npm --prefix ui/components test"
 [tasks.build-ui-components]
-description = "Install ui/components deps from package-lock and emit the distributable dist/ build (tsc)"
-run = [
-  "npm --prefix ui/components ci --no-audit --no-fund",
-  "npm --prefix ui/components run build",
+description = "Emit the distributable dist/ build (tsc; deps via install-ui-components; skipped while sources and dist are unchanged)"
+depends = ["install-ui-components"]
+sources = [
+  "ui/components/src/**/*.ts",
+  "ui/components/tsconfig*.json",
+  "ui/components/package.json",
+  "ui/core/src/**/*.ts",
 ]
+outputs = ["ui/components/dist/**/*"]
+run = "npm --prefix ui/components run build"
 
 # UI viz lane (Issue #260): the framework-neutral Reference Viz renderer
 # package under ui/viz (Waveform/Meter/Spectrum scene builders, VizStyle
 # paint contract, Canvas2D/WebGL2 backends, Custom Elements on the
-# ui/components contract). Same discipline: `npm ci` restores the
-# committed package-lock, node is the pinned mise toolchain, and no UI
+# ui/components contract). Same discipline: deps come from install-ui-viz,
+# node is the pinned mise toolchain, and no UI
 # framework/runtime or renderer dependency may be added (happy-dom plus
 # fake 2D/GL contexts are test-only devDependencies). LOD/FFT/data
 # reduction stay in ruviform-viz — this lane must not pull them in.
 [tasks.check-ui-viz]
-description = "Install ui/viz deps from package-lock and type-check the viz renderer package (tsc --noEmit)"
-run = [
-  "npm --prefix ui/viz ci --no-audit --no-fund",
-  "npm --prefix ui/viz run typecheck",
-]
+description = "Type-check the viz renderer package (tsc --noEmit; deps via install-ui-viz)"
+depends = ["install-ui-viz"]
+run = "npm --prefix ui/viz run typecheck"
 [tasks.test-ui-viz]
-description = "Install ui/viz deps from package-lock and run viz tests via node --test (happy-dom + fake canvas/GL, no real GPU)"
-run = [
-  "npm --prefix ui/viz ci --no-audit --no-fund",
-  "npm --prefix ui/viz test",
-]
+description = "Run viz tests via node --test (happy-dom + fake canvas/GL, no real GPU; deps via install-ui-viz)"
+depends = ["install-ui-viz"]
+run = "npm --prefix ui/viz test"
 [tasks.build-ui-viz]
-description = "Install ui/viz deps from package-lock and emit the distributable dist/ build (tsc)"
-run = [
-  "npm --prefix ui/viz ci --no-audit --no-fund",
-  "npm --prefix ui/viz run build",
+description = "Emit the distributable dist/ build (tsc; deps via install-ui-viz; skipped while sources and dist are unchanged)"
+depends = ["install-ui-viz"]
+sources = [
+  "ui/viz/src/**/*.ts",
+  "ui/viz/tsconfig*.json",
+  "ui/viz/package.json",
+  "ui/components/src/**/*.ts",
+  "ui/core/src/**/*.ts",
 ]
+outputs = ["ui/viz/dist/**/*"]
+run = "npm --prefix ui/viz run build"
 
 # UI binding lane (Issue #261): the generic Command/Query binding
 # package under ui/binding — consumer-supplied dispatch/subscribe/query
 # ports, state receipts (preview/pending/accepted/applied/rejected/
 # unsupported/timeout/observed), bounded preview coalescing,
 # multiwindow view links, and a thin DOM adapter over the ui/components
-# event contract. Same discipline: `npm ci` restores the committed
-# package-lock, node is the pinned mise toolchain, and no UI
+# event contract. Same discipline: deps come from install-ui-binding,
+# node is the pinned mise toolchain, and no UI
 # framework/DOM/renderer dependency may be added to src/ (happy-dom is
 # a test-only devDependency). Domain state ownership — authorization,
 # undo, job lifecycle — stays inside consumer gateways; this lane must
 # not pull domain crates in.
 [tasks.check-ui-binding]
-description = "Install ui/binding deps from package-lock and type-check the binding package (tsc --noEmit)"
-run = [
-  "npm --prefix ui/binding ci --no-audit --no-fund",
-  "npm --prefix ui/binding run typecheck",
-]
+description = "Type-check the binding package (tsc --noEmit; deps via install-ui-binding)"
+depends = ["install-ui-binding"]
+run = "npm --prefix ui/binding run typecheck"
 [tasks.test-ui-binding]
-description = "Install ui/binding deps from package-lock and run binding tests via node --test (happy-dom for the DOM adapter lane, no UI framework)"
-run = [
-  "npm --prefix ui/binding ci --no-audit --no-fund",
-  "npm --prefix ui/binding test",
-]
+description = "Run binding tests via node --test (happy-dom for the DOM adapter lane, no UI framework; deps via install-ui-binding)"
+depends = ["install-ui-binding"]
+run = "npm --prefix ui/binding test"
 [tasks.build-ui-binding]
-description = "Install ui/binding deps from package-lock and emit the distributable dist/ build (tsc)"
-run = [
-  "npm --prefix ui/binding ci --no-audit --no-fund",
-  "npm --prefix ui/binding run build",
+description = "Emit the distributable dist/ build (tsc; deps via install-ui-binding; skipped while sources and dist are unchanged)"
+depends = ["install-ui-binding"]
+sources = [
+  "ui/binding/src/**/*.ts",
+  "ui/binding/tsconfig*.json",
+  "ui/binding/package.json",
+  "ui/core/src/**/*.ts",
 ]
+outputs = ["ui/binding/dist/**/*"]
+run = "npm --prefix ui/binding run build"
 
 # UI guitest lane (Issue #311): the deterministic GUI-test shared
 # foundation under ui/guitest — the versioned fixture corpus shared
@@ -252,22 +309,18 @@ run = [
 # fault matrix, and the deterministic record/replay driver that
 # injects inputs into the real InteractionControl/CommandBinding/
 # QueryBinding/ViewLink path and judges the trace against an
-# independent contract oracle. Test-only package: `npm ci` restores
-# the committed package-lock, node is the pinned mise toolchain, and
+# independent contract oracle. Test-only package: deps come from
+# install-ui-guitest, node is the pinned mise toolchain, and
 # no UI framework/DOM/WebView/renderer dependency may be added — the
 # lane replays through real binding objects headlessly.
 [tasks.check-ui-guitest]
-description = "Install ui/guitest deps from package-lock and type-check the GUI-test foundation (tsc --noEmit)"
-run = [
-  "npm --prefix ui/guitest ci --no-audit --no-fund",
-  "npm --prefix ui/guitest run typecheck",
-]
+description = "Type-check the GUI-test foundation (tsc --noEmit; deps via install-ui-guitest)"
+depends = ["install-ui-guitest"]
+run = "npm --prefix ui/guitest run typecheck"
 [tasks.test-ui-guitest]
-description = "Install ui/guitest deps from package-lock and run fixture conformance + replay/oracle tests via node --test (headless, deterministic)"
-run = [
-  "npm --prefix ui/guitest ci --no-audit --no-fund",
-  "npm --prefix ui/guitest test",
-]
+description = "Run fixture conformance + replay/oracle tests via node --test (headless, deterministic; deps via install-ui-guitest)"
+depends = ["install-ui-guitest"]
+run = "npm --prefix ui/guitest test"
 
 # UI showcase lane (Issue #263): the design-system showcase +
 # verification fixtures under ui/showcase — the theme matrix (Reference
@@ -276,29 +329,37 @@ run = [
 # standalone vanilla-WebComponents page, and the headless regression /
 # a11y / cross-consumer / dependency-audit tests over the public
 # ui/components + ui/viz + ui/binding surfaces. Same discipline:
-# `npm ci` restores the committed package-lock, node is the pinned mise
+# deps come from install-ui-showcase, node is the pinned mise
 # toolchain, and no UI framework/runtime or renderer dependency may be
 # added (happy-dom plus fake 2D/GL contexts are test-only
 # devDependencies). Real WebView/GPU/pixel/multiwindow evidence is out
 # of scope for this lane — it stays on the #243 manual gates.
 [tasks.check-ui-showcase]
-description = "Install ui/showcase deps from package-lock and type-check the showcase + verification fixtures (tsc --noEmit)"
-run = [
-  "npm --prefix ui/showcase ci --no-audit --no-fund",
-  "npm --prefix ui/showcase run typecheck",
-]
+description = "Type-check the showcase + verification fixtures (tsc --noEmit; deps via install-ui-showcase)"
+depends = ["install-ui-showcase"]
+run = "npm --prefix ui/showcase run typecheck"
 [tasks.test-ui-showcase]
-description = "Install ui/showcase deps from package-lock and run showcase tests via node --test (happy-dom + fake canvas/GL, no real GPU/WebView)"
-run = [
-  "npm --prefix ui/showcase ci --no-audit --no-fund",
-  "npm --prefix ui/showcase test",
-]
+description = "Run showcase tests via node --test (happy-dom + fake canvas/GL, no real GPU/WebView; deps via install-ui-showcase)"
+depends = ["install-ui-showcase"]
+run = "npm --prefix ui/showcase test"
+# The showcase build emits one composite dist (tsconfig.build.json compiles
+# showcase + core + components + viz + binding src with rootDir ".."), so its
+# sources span all five package trees — ui/browser-test typechecks/tests
+# against this dist via `depends` (Issue #310/#330).
 [tasks.build-ui-showcase]
-description = "Install ui/showcase deps from package-lock and emit the distributable dist/ build for the static showcase page (tsc)"
-run = [
-  "npm --prefix ui/showcase ci --no-audit --no-fund",
-  "npm --prefix ui/showcase run build",
+description = "Emit the composite dist/ build for the static showcase page (tsc over showcase+core+components+viz+binding src; deps via install-ui-showcase; skipped while sources and dist are unchanged)"
+depends = ["install-ui-showcase"]
+sources = [
+  "ui/showcase/src/**/*.ts",
+  "ui/showcase/tsconfig*.json",
+  "ui/showcase/package.json",
+  "ui/core/src/**/*.ts",
+  "ui/components/src/**/*.ts",
+  "ui/viz/src/**/*.ts",
+  "ui/binding/src/**/*.ts",
 ]
+outputs = ["ui/showcase/dist/**/*"]
+run = "npm --prefix ui/showcase run build"
 
 # UI browser-test lane (Issue #310): framework-neutral real-browser GUI
 # verification — Playwright drives the actual Web Components in a real
@@ -312,17 +373,13 @@ run = [
 # browser-lane evidence only: it is NOT OS WebView, native GPU, or
 # product E2E evidence (those stay RF-GT-04 #313 / RF-GT-05 #314).
 [tasks.check-ui-browser-test]
-description = "Install ui/browser-test deps from package-lock and type-check the browser-test harness (tsc --noEmit; typechecks against ui/showcase dist declarations)"
-depends = ["build-ui-showcase"]
-run = [
-  "npm --prefix ui/browser-test ci --no-audit --no-fund",
-  "npm --prefix ui/browser-test run typecheck",
-]
+description = "Type-check the browser-test harness (tsc --noEmit; typechecks against ui/showcase dist declarations; deps via install-ui-browser-test + build-ui-showcase)"
+depends = ["install-ui-browser-test", "build-ui-showcase"]
+run = "npm --prefix ui/browser-test run typecheck"
 [tasks.test-ui-browser]
-description = "Build fixture page modules, install the pinned Chromium (+headless shell), and run the Playwright browser suite (real browser DOM; writes test-results/evidence.json with env/revision/seed/outcomes)"
-depends = ["build-ui-showcase"]
+description = "Build fixture page modules, install the pinned Chromium (+headless shell), and run the Playwright browser suite (real browser DOM; writes test-results/evidence.json with env/revision/seed/outcomes; deps via install-ui-browser-test + build-ui-showcase)"
+depends = ["install-ui-browser-test", "build-ui-showcase"]
 run = [
-  "npm --prefix ui/browser-test ci --no-audit --no-fund",
   "npm --prefix ui/browser-test run build",
   "npm --prefix ui/browser-test exec -- playwright install chromium",
   "npm --prefix ui/browser-test test",
