@@ -7,6 +7,9 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
+| TASK-034RTggRy4UgfgaFSfQY4f | T1 ruviform-io-structured scaffold・共通契約・JSON Format (Issue #297) | todo | [issue-297-t1-crate-and-contract.md](./issue-297-t1-crate-and-contract.md) |
+| TASK-034RTghO8nOg3ZiYGau2pe | T2 YAML/TOML Format module・Budget 写像・2相分類 (Issue #297) | todo | [issue-297-t2-yaml-toml.md](./issue-297-t2-yaml-toml.md) |
+| TASK-034RTgiDjrTlcheIw55nAn | T3 file feature・workspace 台帳・総合検証 (Issue #297) | todo | [issue-297-t3-file-feature.md](./issue-297-t3-file-feature.md) |
 | TASK-034RT89xVtZ6NMuRh08JQg | T1 ruviform-io-archive クレート新設・Archive共通型・ZIP Indexed Reader (Issue #302) | in-progress | [issue-302-t1-scaffold-reader.md](./issue-302-t1-scaffold-reader.md) |
 | TASK-034RT8aupBUW6NpSHSrRWq | T2 ZIP Writer・Entry finish→Archive finish・否定fixture (Issue #302) | in-progress | [issue-302-t2-zip-writer.md](./issue-302-t2-zip-writer.md) |
 | TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | in-progress | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
@@ -150,6 +153,7 @@ Directory: `docs/tasks`
 | TASK-O3Q2a0lPvct9PFKBgBig2j | T1 Playwright Chromium cache・準備 step 分離（Issue #332） | done | [issue-332-t1-playwright-browser-cache.md](./issue-332-t1-playwright-browser-cache.md) |
 | TASK-69XeSXbqn9bazeVEgD0LzH | T1 ci/impact classifier + gate 実装（Issue #333） | done | [issue-333-t1-impact-classifier.md](./issue-333-t1-impact-classifier.md) |
 | TASK-auXqAVyXzCi31qldUWzY6t | T2 ci.yml Shadow wiring（impact/ci-gate job・trigger types・mise task・AGENTS.md）（Issue #333） | done | [issue-333-t2-ci-gate-shadow-wiring.md](./issue-333-t2-ci-gate-shadow-wiring.md) |
+| TASK-AacpjXZ02dbHUiacENEOSZ | T1 SinkDegraded Clone derive 追加（Issue #336） | done | [issue-336-t1-sink-degraded-clone.md](./issue-336-t1-sink-degraded-clone.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

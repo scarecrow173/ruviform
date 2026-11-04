@@ -36,6 +36,7 @@ Directory: `docs/adr`
 | ADR-034S312gtUiTestAdrCC33 | Issue #312 テスト制御ポートの分離クレート・transport・fail-closed 認証・capability 宣言 | accepted | [issue-312-test-control-transport-security.md](./issue-312-test-control-transport-security.md) |
 | ADR-ieVahO2wRjuTcKd43fT59I | Issue #328 CI concurrency — group キーと cancel-in-progress の event 条件化 | accepted | [issue-328-ci-concurrency-grouping.md](./issue-328-ci-concurrency-grouping.md) |
 | ADR-SG8Lf0sCLiCM8ziAFqCNZ7 | Issue #329 sccache 導入方式 — sccache-action + GHA cache backend + repo-variable kill switch | accepted | [issue-329-sccache-gha-backend.md](./issue-329-sccache-gha-backend.md) |
+| ADR-jD7nl5tHt9wQ3G5Xm5YSyC | Issue #336 SinkDegraded Clone 方針 — snapshot record は Clone 可能に揃える | accepted | [issue-336-sink-degraded-clone-derive.md](./issue-336-sink-degraded-clone-derive.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034QfjWFfUXvgvaObuCUwS | M2 typed graph audio runtime placement, stateful RT ownership, and activation/retirement for Issue #195 | proposed | [m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md](./m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |
