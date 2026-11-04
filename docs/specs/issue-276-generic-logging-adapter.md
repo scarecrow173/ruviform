@@ -36,6 +36,7 @@ relations:
     - "docs/plans/issue-276-generic-logging-adapter.md"
     - "docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md"
     - "docs/test-specs/issue-276-generic-logging-adapter.md"
+    - "docs/specs/issue-336-sink-degraded-clone.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-276-generic-logging-adapter.md"
