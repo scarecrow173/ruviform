@@ -54,6 +54,7 @@ Directory: `docs/plans`
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | PLAN-034S312gtUiTestPlnEE55 | Issue #312 ruviform-ui-test implementation plan | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| PLAN-034RBML1CjEEPA4ApRK8R9 | Issue #327 CI計測Baseline 実施計画 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | PLAN-034RBIEnfNn4DeMAPw27Ii | Issue #330 CI-OPT-03 実装計画 | approved | [issue-330-ui-npm-ci-dedup.md](./issue-330-ui-npm-ci-dedup.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
