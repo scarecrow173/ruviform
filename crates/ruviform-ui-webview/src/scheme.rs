@@ -324,26 +324,30 @@ mod tests {
                 data.register(
                     s["name"].as_str().unwrap(),
                     Arc::new(VecDataSource::new(vec![
-                        u8::try_from(s["byte"].as_u64().unwrap()).unwrap();
-                        usize::try_from(s["size"].as_u64().unwrap()).unwrap()
+                        u8::try_from(
+                            s["byte"].as_u64().unwrap()
+                        )
+                        .unwrap();
+                        usize::try_from(
+                            s["size"].as_u64().unwrap()
+                        )
+                        .unwrap()
                     ])),
                 );
             }
 
             let req = &case["request"];
-            let query = req["rawQuery"]
-                .as_str()
-                .map_or_else(
-                    || {
-                        use std::fmt::Write;
-                        let mut q = format!("offset={}", req["offset"].as_u64().unwrap_or(0));
-                        if let Some(len) = req["len"].as_u64() {
-                            write!(q, "&len={len}").unwrap();
-                        }
-                        q
-                    },
-                    str::to_string,
-                );
+            let query = req["rawQuery"].as_str().map_or_else(
+                || {
+                    use std::fmt::Write;
+                    let mut q = format!("offset={}", req["offset"].as_u64().unwrap_or(0));
+                    if let Some(len) = req["len"].as_u64() {
+                        write!(q, "&len={len}").unwrap();
+                    }
+                    q
+                },
+                str::to_string,
+            );
             // `request.host` pins the WebView2-rewritten form
             // (`http://rvf.<ns>/...`); otherwise the canonical scheme.
             let url = match req["host"].as_str() {

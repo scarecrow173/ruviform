@@ -50,9 +50,9 @@ fn ipc_intents_fixture_cases() {
     for case in doc["cases"].as_array().expect("cases") {
         let id = case["id"].as_str().unwrap();
         let body = match case["bodyGen"]["kind"].as_str() {
-            Some("pad-intent") => pad_intent(
-                usize::try_from(case["bodyGen"]["padTo"].as_u64().unwrap()).unwrap(),
-            ),
+            Some("pad-intent") => {
+                pad_intent(usize::try_from(case["bodyGen"]["padTo"].as_u64().unwrap()).unwrap())
+            }
             _ => case["body"].as_str().expect("case body").to_string(),
         };
         let expect = &case["expect"];
