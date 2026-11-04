@@ -76,6 +76,7 @@ const ALLOWED_IMPORTS: Record<string, readonly string[]> = {
   components: ["core"],
   viz: ["core", "components"],
   binding: ["core"],
+  guitest: ["core", "binding"],
   showcase: ["core", "components", "viz", "binding"],
 };
 
@@ -170,8 +171,8 @@ describe("dependency audit — ui/* manifests", () => {
         const rel = relative(UI_DIR, file);
         for (const spec of specifiersOf(readFileSync(file, "utf8"))) {
           assert.ok(
-            spec.startsWith("."),
-            `${rel} imports bare specifier "${spec}" — all ui imports must be source-relative`,
+            spec.startsWith(".") || spec.startsWith("node:"),
+            `${rel} imports bare specifier "${spec}" — all ui imports must be source-relative (node: builtins allowed for harness packages)`,
           );
         }
       }
