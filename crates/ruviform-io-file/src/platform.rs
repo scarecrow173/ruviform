@@ -11,8 +11,8 @@
 //! bare `Result`, so an ambiguous OS outcome normalizes to
 //! `Indeterminate` instead of a false `NotPublished`.
 //!
-//! The real OS backend lands in IO-IMP-02 (Issue #296);
-//! [`staged_file`] currently returns `io::ErrorKind::Unsupported`.
+//! The real OS backend is [`crate::os::OsFileOps`] (IO-IMP-02,
+//! Issue #296), wired in by [`staged_file`].
 
 use crate::options::{PublishMode, PublishOptions};
 use crate::outcome::TempState;
@@ -33,8 +33,9 @@ impl<T: Read + Seek> ReadSeek for T {}
 /// report.
 ///
 /// `cfg_attr(not(test), allow(dead_code))`: variants are constructed
-/// by platform adapters; the only in-crate adapter is the test mock
-/// until the OS backend lands in IO-IMP-02 (Issue #296).
+/// by platform adapters; on targets without an OS backend
+/// (`cfg(not(any(unix, windows)))`) only the test mock constructs
+/// them.
 #[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApplyOutcome {
@@ -153,18 +154,32 @@ pub(crate) trait PlatformFileOps: Send {
     /// Reports the temp's current state for
     /// [`crate::RecoveryHandle::inspect`].
     fn inspect_temp(&self) -> io::Result<TempDisposition>;
+
+    /// The staged temp's path, if the adapter tracks one —
+    /// *diagnostic* identity only (recorded in [`crate::RecoveryInfo`]
+    /// for `inspect`/`cleanup`), never an identity proof or lock.
+    fn temp_path(&self) -> Option<&Path>;
 }
 
 /// The default platform backend factory.
 ///
-/// The real OS implementation (atomic `CreateNew`/`Replace`, file and
-/// directory sync, temp identity) is IO-IMP-02 (Issue #296); until it
-/// lands, `create` reports `Unsupported` instead of pretending a
+/// Wires `StagedFile::create` to the real OS backend
+/// ([`crate::os::OsFileOps`], IO-IMP-02 / Issue #296) on unix and
+/// Windows. Other targets report `Unsupported` rather than pretend a
 /// backend exists.
-pub(crate) fn staged_file(_destination: &Path) -> io::Result<Box<dyn PlatformFileOps>> {
+pub(crate) fn staged_file(destination: &Path) -> io::Result<Box<dyn PlatformFileOps>> {
+    os_staged_file(destination)
+}
+
+#[cfg(any(unix, windows))]
+fn os_staged_file(destination: &Path) -> io::Result<Box<dyn PlatformFileOps>> {
+    Ok(Box::new(crate::os::OsFileOps::create(destination)?))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn os_staged_file(_destination: &Path) -> io::Result<Box<dyn PlatformFileOps>> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
-        "ruviform-io-file: OS file backend is not implemented yet \
-         (lands in IO-IMP-02 / Issue #296)",
+        "ruviform-io-file: no OS file backend for this target",
     ))
 }

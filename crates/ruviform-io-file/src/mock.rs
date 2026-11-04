@@ -16,6 +16,7 @@ use crate::platform::{
     ApplyOutcome, CleanupAttempt, PlatformFileOps, PublishAttempt, ReadSeek, TempDisposition,
 };
 use std::io::{self, Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 /// The mock's observable filesystem: temp contents, destination
@@ -77,6 +78,8 @@ pub(crate) struct MockFileOps {
     wpos: u64,
     /// Read cursor (the `ReadSeek` readback surface).
     rpos: u64,
+    /// Diagnostic temp path reported through `PlatformFileOps::temp_path`.
+    temp_path: PathBuf,
     script: Mutex<MockScript>,
 }
 
@@ -86,6 +89,7 @@ impl MockFileOps {
             fs,
             wpos: 0,
             rpos: 0,
+            temp_path: PathBuf::from("dest.bin.rvf-tmp"),
             script: Mutex::new(script),
         }
     }
@@ -246,5 +250,9 @@ impl PlatformFileOps for MockFileOps {
         } else {
             TempDisposition::Removed
         })
+    }
+
+    fn temp_path(&self) -> Option<&Path> {
+        Some(&self.temp_path)
     }
 }

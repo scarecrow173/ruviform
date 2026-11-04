@@ -12,5 +12,16 @@ default = []
 
 [dependencies]
 
+# Real OS backend (IO-IMP-02): raw `renameat2`/`renamex_np` FFI on
+# unix, `MoveFileExW` + `FILE_FLAG_BACKUP_SEMANTICS` on Windows.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+] }
+
 [lints]
 workspace = true
