@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034Rp62M5XwHUCClhVcEPk"
 type: "test-spec"
-status: "draft"
+status: "approved"
 title: "Issue #310 Browser GUI Test Harness 検証仕様"
 created: "2026-11-03"
 updated: "2026-11-03"

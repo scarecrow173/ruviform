@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034Rp5NNiOYZYrwCt2kHQ7"
 type: "plan"
-status: "in-progress"
+status: "implemented"
 title: "Issue #310 Browser GUI Test Harness 実装計画"
 created: "2026-11-03"
 updated: "2026-11-04"
