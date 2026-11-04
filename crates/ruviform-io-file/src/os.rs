@@ -364,7 +364,7 @@ fn noreplace(temp: &Path, dest: &Path) -> Noreplace {
             continue;
         }
         return match e.raw_os_error() {
-            Some(libc::ENOTSUP) | Some(libc::ENOSYS) => link_then_unlink(temp, dest),
+            Some(libc::ENOTSUP | libc::ENOSYS) => link_then_unlink(temp, dest),
             _ => Noreplace::Failed(e),
         };
     }
