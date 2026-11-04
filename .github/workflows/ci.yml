@@ -255,6 +255,12 @@ jobs:
       - name: Build UI binding dist (mise run build-ui-binding)
         run: mise run build-ui-binding
 
+      - name: Type-check UI guitest (mise run check-ui-guitest)
+        run: mise run check-ui-guitest
+
+      - name: Test UI guitest (mise run test-ui-guitest)
+        run: mise run test-ui-guitest
+
       - name: Type-check UI showcase (mise run check-ui-showcase)
         run: mise run check-ui-showcase
 
