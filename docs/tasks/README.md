@@ -7,9 +7,9 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
-| TASK-034Rp7jV966SX0fG78cOBL | Issue #310-T1 browser-test パッケージ骨格・serve・page protocol | todo | [issue-310-01-browser-harness-package.md](./issue-310-01-browser-harness-package.md) |
-| TASK-034Rp7kQsMmyk0At2QYrwX | Issue #310-T2 共有 Fixture/Driver/Assertion (gesture/receipt/state/theme/canvas/a11y) | todo | [issue-310-02-shared-fixtures-and-drivers.md](./issue-310-02-shared-fixtures-and-drivers.md) |
-| TASK-034Rp7lRJbB15NEGHdCXpU | Issue #310-T3 実ブラウザ spec・Consumer-shaped fixture・CI/evidence 接続 | todo | [issue-310-03-specs-ci-evidence.md](./issue-310-03-specs-ci-evidence.md) |
+| TASK-034RBIWkzzcEXV0X3v5ySr | T1 OsFileOps 実 OS アダプタ + factory 接続 (Issue #296) | todo | [issue-296-t1-os-adapter.md](./issue-296-t1-os-adapter.md) |
+| TASK-034RBIX9gn32W8GMyhNMqw | T2 実 FS 結合試験・複数プロセス競合 (Issue #296) | todo | [issue-296-t2-real-fs-tests.md](./issue-296-t2-real-fs-tests.md) |
+| TASK-034RBIYghnEBLw9llcomyd | T3 保証範囲文書化・impl record・最終検証 (Issue #296) | todo | [issue-296-t3-docs-verify.md](./issue-296-t3-docs-verify.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -129,9 +129,12 @@ Directory: `docs/tasks`
 | TASK-034Qxfiiwcs7VUi4SIArot | T3 seeded fault fixture + discard_pending coverage (Issue #244) | done | [issue-244-t3-seeded-coverage.md](./issue-244-t3-seeded-coverage.md) |
 | TASK-034QxfiWo8R8kkqMasIoQm | T4 verification + review-protocol + impl record (Issue #244) | done | [issue-244-t4-verification-record.md](./issue-244-t4-verification-record.md) |
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
-| TASK-QNzC22ZqitcqDhco1hHMKj | Issue #307 T1: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | done | [issue-307-t1-attach-frame-base-verified-context.md](./issue-307-t1-attach-frame-base-verified-context.md) |
 | TASK-034RoWzXiLur2zHG5iHl7u | T1 ruviform-io-file クレート新設・公開契約・Mock Publish (Issue #295) | done | [issue-295-t1-crate-and-contract.md](./issue-295-t1-crate-and-contract.md) |
 | TASK-034RoWAHTxefOCVrz2FVL4 | T2 共有台帳更新・main 取込・最終検証・IR (Issue #295) | done | [issue-295-t2-ledger-verify.md](./issue-295-t2-ledger-verify.md) |
+| TASK-QNzC22ZqitcqDhco1hHMKj | Issue #307 T1: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | done | [issue-307-t1-attach-frame-base-verified-context.md](./issue-307-t1-attach-frame-base-verified-context.md) |
+| TASK-034Rp7jV966SX0fG78cOBL | Issue #310-T1 browser-test パッケージ骨格・serve・page protocol | done | [issue-310-01-browser-harness-package.md](./issue-310-01-browser-harness-package.md) |
+| TASK-034Rp7kQsMmyk0At2QYrwX | Issue #310-T2 共有 Fixture/Driver/Assertion (gesture/receipt/state/theme/canvas/a11y) | done | [issue-310-02-shared-fixtures-and-drivers.md](./issue-310-02-shared-fixtures-and-drivers.md) |
+| TASK-034Rp7lRJbB15NEGHdCXpU | Issue #310-T3 実ブラウザ spec・Consumer-shaped fixture・CI/evidence 接続 | done | [issue-310-03-specs-ci-evidence.md](./issue-310-03-specs-ci-evidence.md) |
 | TASK-8hTQjGqBYDGbC2jTMks1j8 | T1 versioned fixture corpus + ui/guitest package 骨格（Issue #311） | done | [issue-311-t1-fixture-corpus.md](./issue-311-t1-fixture-corpus.md) |
 | TASK-jXU3ZGuh6DP2FfCSvkx5FC | T2 TS wire validators — ipcwire/bindingwire + conformance テスト（Issue #311） | done | [issue-311-t2-ts-wire-validators.md](./issue-311-t2-ts-wire-validators.md) |
 | TASK-KayYlp12EsEWZZKk2pMZgF | T3 recorder/replay/oracle + consumer mocks + seeded シナリオ（Issue #311） | done | [issue-311-t3-recorder-replay-oracle.md](./issue-311-t3-recorder-replay-oracle.md) |
@@ -254,6 +257,9 @@ Directory: `docs/tasks`
 | TASK-034RoYsOdygNXYa3BanrU1 | Issue 276 T1: logging config/API types + feature wiring | done | [task-276-t1-config-and-wiring.md](./task-276-t1-config-and-wiring.md) |
 | TASK-034RoYu0iSpPIN9pnjyhDU | Issue 276 T2: bounded writer + sinks + build result | done | [task-276-t2-writer-sinks-build.md](./task-276-t2-writer-sinks-build.md) |
 | TASK-034RoYvGpykxcXUHa5X8VR | Issue 276 T3: contract tests + host example + docs + verification | done | [task-276-t3-tests-docs-verify.md](./task-276-t3-tests-docs-verify.md) |
+| TASK-034S312gtUiTestT1GG77 | Issue 312 T1: ruviform-ui-test skeleton — proto types + journal + FakeHost + fixture/TestApp + HeadlessIo | done | [task-312-t1-contract-headless-core.md](./task-312-t1-contract-headless-core.md) |
+| TASK-034S312gtUiTestT2HH88 | Issue 312 T2: control plane — TestAgent + transport frames/env + TestDriver + dummy_app bin | done | [task-312-t2-control-plane.md](./task-312-t2-control-plane.md) |
+| TASK-034S312gtUiTestT3II99 | Issue 312 T3: agent gate unit tests + cross-process E2E + README/crates index | done | [task-312-t3-tests-docs.md](./task-312-t3-tests-docs.md) |
 | TASK-034LFHdEfDbppnNeuh0u48 | ToneMapSdr カーネル実装（BT.2390 EETF） | done | [tone-map-sdr-kernel.md](./tone-map-sdr-kernel.md) |
 | TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
 | TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
