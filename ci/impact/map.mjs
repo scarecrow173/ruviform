@@ -17,6 +17,7 @@ export const LANE_IDS = [
   "verify",
   "rt-verify",
   "icc-verify",
+  "compression-verify",
   "ui-verify",
   "l1-real-verify",
   "bench",
@@ -50,6 +51,13 @@ export const LANES = {
     requiredContexts: ["icc-verify"],
     observeJob: null,
     features: ["icc"],
+  },
+  "compression-verify": {
+    oses: ["ubuntu-latest"],
+    contexts: ["compression-verify"],
+    requiredContexts: ["compression-verify"],
+    observeJob: null,
+    features: ["gzip", "deflate"],
   },
   "ui-verify": {
     oses: ["ubuntu-latest", "windows-latest", "macos-latest"],
@@ -174,6 +182,14 @@ export const OWNER_RULES = {
   "icc-verify": {
     kind: "mise-task-pkgs",
     tasks: ["test-video-proc-icc", "lint-video-proc-icc"],
+  },
+  "compression-verify": {
+    kind: "mise-task-pkgs",
+    tasks: [
+      "check-io-compression",
+      "lint-io-compression",
+      "test-io-compression",
+    ],
   },
   "l1-real-verify": {
     kind: "mise-task-pkgs",

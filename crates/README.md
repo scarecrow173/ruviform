@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計34クレート）。
+Ruviform ワークスペースのメンバークレート索引（計35クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -39,6 +39,12 @@ Ruviform ワークスペースのメンバークレート索引（計34クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-io-structured`](ruviform-io-structured/README.md) | Serde 型付き構造化ドキュメント I/O（JSON/YAML/TOML `from_reader`/`to_writer`・Strict EOF・byte budget・正規化 `DocumentError`・`file` feature で StagedFile publish — Issue #297。IO-IMP-04 CSV / IO-IMP-05 XML の基底 scaffold） |
+
+## 汎用圧縮 I/O（非 RT 専用）
+
+| クレート | 責務 |
+| --- | --- |
+| [`ruviform-io-compression`](ruviform-io-compression/README.md) | バイトストリーム圧縮（借用 `Encoder`/`Decoder`・明示 `finish`・VerifiedEnd・累積 budget。feature `gzip`/`deflate` — Issue #300。zstd は IO-IMP-07 / Issue #301） |
 
 ## メディア I/O（非 RT 専用）
 

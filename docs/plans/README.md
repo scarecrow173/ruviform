@@ -53,6 +53,7 @@ Directory: `docs/plans`
 | PLAN-034RoUNsT1SND8BxtMWhXC | Issue #295 ruviform-io-file 実装計画 (IO-IMP-01) | approved | [issue-295-io-file-staged-publish.md](./issue-295-io-file-staged-publish.md) |
 | PLAN-034RBIiZIxCPVB11km1utN | Issue #296 ruviform-io-file 実 OS バックエンド実装計画 (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | PLAN-034RTeQAV1efnZZIhQamnc | Issue #297 ruviform-io-structured 実装計画 (IO-IMP-03) | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
+| PLAN-oa5MzrXRL7vzdL68cwsGhf | Issue #300 ruviform-io-compression Gzip・Raw Deflate 実装計画 (IO-IMP-06) | approved | [issue-300-io-compression-gzip-deflate.md](./issue-300-io-compression-gzip-deflate.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
@@ -72,6 +73,7 @@ Directory: `docs/plans`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| PLAN-uOugbb81hnEukjX8l6iekf | AGENTS.md 旧版復元 + `### 検証入口` 分離の実施計画 | completed | [agents-verification-entry-split.md](./agents-verification-entry-split.md) |
 | PLAN-034JdOWI3vblJW11kIueY0 | DSP/SIMD 比較ベンチマーク PoC 実装 | completed | [dsp-simd-poc.md](./dsp-simd-poc.md) |
 | PLAN-034KV6r7RDBR7CSvMSIB8e | Issue #104 RT 観測経路コスト計測 PoC の実施計画 | completed | [implement-issue-104-rt-observability-poc.md](./implement-issue-104-rt-observability-poc.md) |
 | PLAN-034MrrISpCH4LObubGof0Q | Issue #113 実施計画 — エンジン/利用側へのプラグイン統合（RT endpoint 所有分離 + グラフ接着） | completed | [implement-issue-113-engine-plugin-integration.md](./implement-issue-113-engine-plugin-integration.md) |
