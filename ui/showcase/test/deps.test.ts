@@ -69,6 +69,18 @@ const FORBIDDEN = [
 /** Allowed devDependencies (test/build toolchain only). */
 const ALLOWED_DEV = new Set(["typescript", "@types/node", "happy-dom"]);
 
+/** Node-side test-harness packages inside ui/: they are not browser
+ *  code, so they may declare extra devDependencies and import the
+ *  declared bare specifiers in src/. Entries are the complete,
+ *  reviewed exception surface — adding a package here is a design
+ *  decision, not a workaround. */
+const HARNESS_DEV_DEPS: Record<string, readonly string[]> = {
+  "browser-test": ["@playwright/test"],
+};
+const HARNESS_BARE_SPECS: Record<string, readonly string[]> = {
+  "browser-test": ["@playwright/test"],
+};
+
 /** Direction of permitted source-level imports between ui packages.
  *  A package absent from this map may not import any ui sibling. */
 const ALLOWED_IMPORTS: Record<string, readonly string[]> = {
@@ -157,7 +169,8 @@ describe("dependency audit — ui/* manifests", () => {
       );
       for (const dev of Object.keys(mf.devDependencies ?? {})) {
         assert.ok(
-          ALLOWED_DEV.has(dev),
+          ALLOWED_DEV.has(dev) ||
+            (HARNESS_DEV_DEPS[pkg] ?? []).includes(dev),
           `ui/${pkg} declares unexpected devDependency: ${dev}`,
         );
       }
@@ -169,9 +182,12 @@ describe("dependency audit — ui/* manifests", () => {
       for (const file of listSrc(join(UI_DIR, pkg, "src"))) {
         const rel = relative(UI_DIR, file);
         for (const spec of specifiersOf(readFileSync(file, "utf8"))) {
+          const harnessOk = (HARNESS_BARE_SPECS[pkg] ?? []).some(
+            (allowed) => spec === allowed || spec.startsWith(`${allowed}/`),
+          );
           assert.ok(
-            spec.startsWith("."),
-            `${rel} imports bare specifier "${spec}" — all ui imports must be source-relative`,
+            spec.startsWith(".") || spec.startsWith("node:") || harnessOk,
+            `${rel} imports bare specifier "${spec}" — all ui imports must be source-relative (node: builtins and declared harness specs allowed)`,
           );
         }
       }
