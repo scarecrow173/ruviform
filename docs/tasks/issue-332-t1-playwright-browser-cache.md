@@ -1,7 +1,7 @@
 ---
 id: "TASK-O3Q2a0lPvct9PFKBgBig2j"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "T1 Playwright Chromium cache・準備 step 分離（Issue #332）"
 created: "2026-11-04"
 updated: "2026-11-04"
