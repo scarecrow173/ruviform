@@ -57,6 +57,7 @@ Directory: `docs/test-specs`
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-034RoRhmlBaEa2BqB4gYX1 | Issue #295 ruviform-io-file Mock-driven publish 契約テスト仕様 | approved | [issue-295-io-file-staged-publish.md](./issue-295-io-file-staged-publish.md) |
 | TSPEC-034RBIVDSp1VYbb5Tt3x9B | Issue #296 ruviform-io-file 実 OS backend テスト仕様 | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
+| TSPEC-c6xrG6sZjlJbmoJEzBYzJG | Issue #300 ruviform-io-compression Gzip・Raw Deflate テスト仕様 | approved | [issue-300-io-compression-gzip-deflate.md](./issue-300-io-compression-gzip-deflate.md) |
 | TSPEC-XQ6Q9VkNnBlPRcMf4cqLFu | Issue #307 attach 時 frame_base 検証 context — テスト仕様 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | TSPEC-034Rp62M5XwHUCClhVcEPk | Issue #310 Browser GUI Test Harness 検証仕様 | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | TSPEC-e0XfO8Zf3a26iGOk1UyquR | Issue #311 RF-GT-02 test specification — fixture conformance・record/replay determinism・fault matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
