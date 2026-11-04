@@ -19,8 +19,8 @@ use crate::io::TestIo;
 use crate::journal::{Journal, JournalHandle};
 use crate::proto::{
     BackendMeta, Capabilities, CleanupReport, ClockDomain, DeniedCapabilities, FaultKind,
-    FixtureReceipt, FixtureSpec,
-    Notice, ReadyState, ReceiptPage, Screenshot, ShutdownMode, WindowMeta,
+    FixtureReceipt, FixtureSpec, Notice, ReadyState, ReceiptPage, Screenshot, ShutdownMode,
+    WindowMeta,
 };
 
 /// `TestIo` backed by [`FakeHost`] — the headless path every CI lane
