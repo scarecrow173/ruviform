@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #333 CI-OPT-06 Impact Classifier・集約 Required Gate・段階移行設計"
 created: "2026-11-04"
-updated: "2026-11-04"
+updated: "2026-11-05"
 owners: []
 relations:
   source:
@@ -29,6 +29,7 @@ relations:
     - "docs/specs/issue-333-impact-based-ci.md"
   implemented-by:
     - "docs/plans/issue-333-impact-based-ci.md"
+    - "docs/designs/issue-346-ruleset-migration-runbook.md"
   depends-on:
     - "docs/discovery/issue-333-impact-classifier-inventory.md"
     - "docs/specs/issue-333-impact-based-ci.md"
@@ -48,6 +49,7 @@ relations:
   derived-by:
     - "docs/plans/issue-333-impact-based-ci.md"
     - "docs/test-specs/issue-333-impact-based-ci.md"
+    - "docs/designs/issue-346-ruleset-migration-runbook.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-333-impact-based-ci.md"

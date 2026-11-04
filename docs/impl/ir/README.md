@@ -149,3 +149,4 @@ Directory: `docs/impl/ir`
 | IMPL-034RBWydgCTGFLeFHqAEQp | Issue #330 CI-OPT-03 mise task install/freshness 分離 + ui-verify setup ステップ | completed | [issue-330-ci-opt-03-mise-task-install-freshness-ui-verify-setup.md](./issue-330-ci-opt-03-mise-task-install-freshness-ui-verify-setup.md) |
 | IMPL-OVLf8tC84aP8OgMOOCOMve | Issue #332 CI-OPT-05 Playwright Chromium binary cache + 準備 step 分離 | completed | [issue-332-ci-opt-05-playwright-chromium-cache.md](./issue-332-ci-opt-05-playwright-chromium-cache.md) |
 | IMPL-ngz9RSZGnlsfJnmktd0EGE | Issue #333 CI-OPT-06 変更影響ベース検証 DAG・fail-closed 集約 gate（Shadow Mode） | completed | [issue-333-ci-opt-06-impact-gate.md](./issue-333-ci-opt-06-impact-gate.md) |
+| IMPL-034RP8X0bpYtK5In9i3F00 | Issue #346 CI-OPT-06 選択実行有効化（lane if 配線）・ci-gate 単一 required 移行 runbook | completed | [issue-346-ci-opt-06-lane-if-ci-gate-required-runbook.md](./issue-346-ci-opt-06-lane-if-ci-gate-required-runbook.md) |

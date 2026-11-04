@@ -32,11 +32,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Issue #333 (CI-OPT-06): impact classifier. Shadow mode — the lane jobs
-  # below still run unconditionally; this job only emits the expected-lane
-  # decision that `ci-gate` audits and that the later enforcement stage will
-  # feed into lane `if:` conditions. Kill switch: repo variable
-  # CI_IMPACT_DISABLE=1 forces the expected set to all lanes.
+  # Issue #333 (CI-OPT-06) + #346 enforcement: impact classifier. Emits the
+  # expected-lane decision that the lane jobs' `if:` conditions consume and
+  # that `ci-gate` audits fail-closed. `push`/`workflow_dispatch` classify as
+  # full (all lanes run). Kill switch: repo variable CI_IMPACT_DISABLE=1
+  # forces the expected set to all lanes, restoring unconditional Full CI
+  # without a code revert.
   impact:
     name: impact-classify
     runs-on: ubuntu-latest
@@ -104,8 +105,17 @@ jobs:
           path: impact-decision.json
           if-no-files-found: error
 
+  # Issue #346 selective execution: every lane job `needs: [impact]` and runs
+  # unless the classifier proved the lane unaffected (`!= 'false'`). The
+  # `always() && ... != 'false'` shape keeps the lane running when `impact`
+  # fails or its output is absent — coverage fails open; the fail-closed
+  # half lives in `ci-gate`, where an expected-but-skipped or absent lane is
+  # a Fail, a not-expected skipped lane is NotApplicable, and a failed
+  # classification degrades to all-expected.
   verify:
     name: verify (${{ matrix.os }})
+    needs: [impact]
+    if: always() && needs.impact.outputs.lane_verify != 'false'
     runs-on: ${{ matrix.os }}
     strategy:
       # Keep sibling OS jobs running so a manual verification run reports
@@ -220,6 +230,8 @@ jobs:
 
   rt-verify:
     name: rt-verify
+    needs: [impact]
+    if: always() && needs.impact.outputs.lane_rt_verify != 'false'
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "0"
@@ -267,6 +279,8 @@ jobs:
 
   icc-verify:
     name: icc-verify
+    needs: [impact]
+    if: always() && needs.impact.outputs.lane_icc_verify != 'false'
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "0"
@@ -310,6 +324,8 @@ jobs:
   # windowed runs are manual verification, like audio-device examples).
   ui-verify:
     name: ui-verify (${{ matrix.os }})
+    needs: [impact]
+    if: always() && needs.impact.outputs.lane_ui_verify != 'false'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -532,6 +548,8 @@ jobs:
 
   bench:
     name: bench
+    needs: [impact]
+    if: always() && needs.impact.outputs.lane_bench != 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -569,6 +587,8 @@ jobs:
 
   l1-real-verify:
     name: l1-real-verify (${{ matrix.os }})
+    needs: [impact]
+    if: always() && needs.impact.outputs.lane_l1_real_verify != 'false'
     runs-on: ${{ matrix.os }}
     strategy:
       # Keep sibling OS jobs running so a manual verification run reports
@@ -618,13 +638,16 @@ jobs:
       - name: Lint host feature (mise run lint-l1-real-plugin)
         run: mise run lint-l1-real-plugin
 
-  # Issue #333 (CI-OPT-06): aggregated fail-closed gate. Compares the lane
-  # set `impact` expects against the actual `needs` results. An expected
-  # lane that was skipped, a not-expected lane that ran and failed (the
-  # shadow-mode false-negative detector), and a classification failure all
-  # turn the gate red — skipped jobs are never a pass. Non-required until
-  # the ruleset-migration stage (design runbook); after that it becomes the
-  # single required context replacing the 12 per-lane contexts.
+  # Issue #333 (CI-OPT-06) + #346 enforcement: aggregated fail-closed gate.
+  # Compares the lane set `impact` expects against the actual `needs`
+  # results. An expected lane that was skipped, a not-expected lane that ran
+  # and failed, and a classification failure all turn the gate red — skipped
+  # jobs are never a pass, and a lane skipped by its `if:` is honored only
+  # when the classifier proved it unaffected (NotApplicable). `if: always()`
+  # keeps the gate running on skipped/failed needs. This job is the single
+  # stable required context that replaces the 12 per-lane contexts — the
+  # ruleset migration itself is performed out-of-band per
+  # docs/designs/issue-346-ruleset-migration-runbook.md.
   ci-gate:
     name: ci-gate
     needs: [impact, verify, rt-verify, icc-verify, ui-verify, bench, l1-real-verify]
