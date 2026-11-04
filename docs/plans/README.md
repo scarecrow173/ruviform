@@ -49,6 +49,7 @@ Directory: `docs/plans`
 | PLAN-cNIlZseMNfbfI0D3uYpFLK | Issue #238 実施計画 — l1_proxy_e2e 壁時計 sleep 同期を有界 barrier/poll 待機へ置換 | approved | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
 | PLAN-034QxdNzPfzn5oye9cCzne | Issue #244 media-reader prefetch contract wart fixes implementation plan | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | PLAN-034RoUNsT1SND8BxtMWhXC | Issue #295 ruviform-io-file 実装計画 (IO-IMP-01) | approved | [issue-295-io-file-staged-publish.md](./issue-295-io-file-staged-publish.md) |
+| PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 
