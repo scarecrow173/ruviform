@@ -92,8 +92,8 @@ CI `verify` job から独立 `Type-check workspace (mise run check-ci)` step を
 | `mise run verify-ci`(新列 `fmt-check`→`lint-ci`→`test-ci`、ローカル Windows) | 実行 | Pass |
 | 注入実験 8 ケース(詳細は exp 記録) | 実行 | Pass — 全注入を期待 lane が検出 |
 | doc index 再生成 | 実行 | Pass — 新規 blocking finding なし(#331 由来の reciprocal relation は plan 側で解消) |
-| 3OS `verify` CI run(PR run) | 実行予定 | NotRun — PR 作成後に `gh pr checks --watch` で観測 |
-| `collect-ci-metrics.mjs` 対象 run 追記 | 実行予定 | NotRun — PR run 完了後に jsonl へ追記 |
+| 3OS `verify` CI run(PR #343・run 41825566750) | 実行 | Pass — 全 13 check 緑・required 集合不変 |
+| `collect-ci-metrics.mjs` 対象 run 追記 | 実行 | Pass — `data/issue-331-verify-step-runs.jsonl` に run 41825566750 を追記 |
 
 ### 等価性証拠(注入実験サマリ)
 

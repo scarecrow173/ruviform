@@ -63,6 +63,6 @@ design(`docs/designs/issue-331-check-clippy-test-dedup.md`)に従い、`ci.yml` 
 - [x] doc index 再生成(`doc_maintenance.js apply`)→ 新規 blocking finding なし
 - [x] 等価性証明: 注入実験 8 ケース記録済み(型エラー lib/cfg(test)/example/bench・rustc 警告・clippy lint・失敗テスト・check 対称確認)
 - [x] ユニット集合同一: check/clippy 292 ユニット・kind 内訳一致(JSONL 集計・discovery/exp 記録)
-- [ ] CI run 観測: 3OS verify green + required 集合不変 + step 時間差分
-- [ ] `collect-ci-metrics.mjs` で対象 run 収集 → `docs/impl/exp/data/issue-331-verify-step-runs.jsonl`
-- [ ] IR(`docs/impl/ir/issue-331-*.md`)+ exp(`docs/impl/exp/issue-331-*.md`)に検証・実測・NotRun 記録
+- [x] CI run 観測: 3OS verify green + required 集合不変 + step 時間差分(PR #343・run 41825566750、check+lint 合計比 −28〜−37s)
+- [x] `collect-ci-metrics.mjs` で対象 run 収集 → `docs/impl/exp/data/issue-331-verify-step-runs.jsonl`
+- [x] IR(`docs/impl/ir/t1-check-step-dedup-issue-331.md`)+ exp(`docs/impl/exp/issue-331-check-clippy-test-dedup.md`)に検証・実測・NotRun 記録

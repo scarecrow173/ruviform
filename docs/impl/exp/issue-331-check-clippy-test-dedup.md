@@ -62,9 +62,19 @@ updated: "2026-11-04"
 - #329 で verify/ui-verify に sccache 導入済み。warm run で ws メンバーは cache hit するが、check→clippy の rustc→clippy-driver 切替は compiler identity が異なり artifact を共有しないため、独立 check step は依然として 140 ws ユニット分の frontend 評価(または cache 問い合わせ)を要求する。
 - sccache hit rate(warm verify: ubuntu 47.3% / windows 62.5% / macos 51.6%)は本変更後も dep 側で維持される見込み。統合による hit rate 悪化要因なし(check と clippy で dep 側 cache key は同一)。
 
-## 5. 変更後 CI run(PR run)
+## 5. 変更後 CI run(PR #343 run 41825566750)
 
-- NotRun — PR 作成・`gh pr checks --watch` 完了後に `collect-ci-metrics.mjs` で対象 run を収集し `issue-331-verify-step-runs.jsonl` へ追記・本節を更新する。
+`Type-check & lint workspace (mise run lint-ci)` / `Test workspace (mise run test-ci)`(check step 消滅を確認):
+
+| OS | lint-ci | test-ci | before 直近 run(41820870299) check+lint | 差分 |
+| --- | --- | --- | --- | --- |
+| ubuntu-latest | 27 | 76 | 47 + 10 = 57 | −30 s |
+| windows-latest | 82 | 116 | 92 + 18 = 110 | −28 s |
+| macos-latest | 56 | 107 | 78 + 15 = 93 | −37 s |
+
+- dep metadata 処理は予想どおり lint step 側へ移動したが、同一ユニット集合の二重 ws-frontend 評価(140 ユニット)+ step overhead が消え check+lint 合計比で 3OS とも −28〜−37 s。
+- job 合計でも ubuntu 2m10s / windows 4m11s / macos 3m10s で全 OS 緑。required checks 集合不変(verify ×3・l1-real-verify ×3・ui-verify ×3・rt-verify・icc-verify・bench + classification 全 pass)。
+- raw rows は `data/issue-331-verify-step-runs.jsonl` に run 41825566750 分を追記済み。
 
 ## 6. ローカル検証結果
 
