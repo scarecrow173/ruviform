@@ -25,7 +25,7 @@ use flate2::read::DeflateDecoder;
 use crate::entry::{ArchiveEntryInfo, ArchiveName, EntryKind};
 use crate::error::{ArchiveError, ArchiveErrorKind};
 use crate::limits::ArchiveReadLimits;
-use crate::receipt::{ArchiveReadReceipt, EntryChecksum, EntryReadReceipt};
+use crate::receipt::{ArchiveReadReceipt, EntryChecksum, EntryDisposition, EntryReadReceipt};
 use crate::zip::record::{
     CD_RECORD_LEN, CD_SIG, CdRecord, EOCD_LEN, EOCD_SEARCH_SPAN, EOCD_SIG, Eocd,
     FLAG_DATA_DESCRIPTOR, FLAG_ENCRYPTED, LFH_LEN, LFH_SIG, METHOD_DEFLATE, METHOD_STORED, u16le,
@@ -451,6 +451,7 @@ fn entry_info(index: usize, record: &CdRecord) -> ArchiveEntryInfo {
         index,
         ArchiveName::new(record.name.clone()),
         kind,
+        None,
         Some(u64::from(record.uncompressed_size)),
         Some(u64::from(record.compressed_size)),
     )
@@ -804,6 +805,7 @@ impl<R: Read + Seek> ZipEntryReader<'_, R> {
             self.info.clone(),
             self.produced,
             EntryChecksum::Verified,
+            EntryDisposition::ReadToEnd,
         ))
     }
 }

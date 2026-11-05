@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-io-archive"
-description = "Archive entry management — shared entry/error/limit contract plus ZIP indexed reader/writer with central-directory, CRC, and budget verification (non-RT)"
+description = "Archive entry management — shared entry/error/limit contract plus ZIP indexed reader/writer and TAR streaming reader/writer with declared-size, padding, and end-of-archive verification (non-RT)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -20,6 +20,11 @@ crc32fast = "1"
 flate2 = { version = "1", default-features = false, features = [
     "rust_backend",
 ] }
+
+[dev-dependencies]
+# tar.gz composition tests: the TAR layer's finish must be separable
+# from the compression layer's trailer verification.
+ruviform-io-compression = { path = "../ruviform-io-compression", features = ["gzip"] }
 
 [lints]
 workspace = true
