@@ -36,8 +36,8 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use super::fs::{
-    MAX_NAME_ATTEMPTS, NodeIdentity, PlatformExtractOps, StagingDir, StagingFile, StagingRoot,
-    staging_name,
+    MAX_NAME_ATTEMPTS, NodeHandle, NodeIdentity, NodeTypeTag, PlatformExtractOps, StagingDir,
+    StagingFile, StagingRoot, staging_name,
 };
 
 const DIR_MODE: libc::mode_t = 0o700;
@@ -358,8 +358,251 @@ fn dev_id(dev: libc::dev_t) -> u64 {
     u64::try_from(dev).unwrap_or(u64::MAX)
 }
 
-#[expect(unsafe_code, reason = "fstat(2) is libc FFI; see SAFETY comment")]
+fn secs_nanos(sec: i64, nsec: i64) -> u64 {
+    u64::try_from(sec)
+        .unwrap_or(0)
+        .saturating_mul(1_000_000_000)
+        .saturating_add(u64::try_from(nsec).unwrap_or(0))
+}
+
+/// Birth-time (inode creation time) → ns discriminator. A
+/// delete+recreate at a recycled inode always gets a fresh birth
+/// time, so it discriminates objects that even share (dev, ino).
+/// Apple targets expose `st_birthtimespec` in `stat`.
+#[cfg(target_vendor = "apple")]
+fn birth_ns(st: &libc::stat) -> u64 {
+    secs_nanos(st.st_birthtimespec.tv_sec, st.st_birthtimespec.tv_nsec)
+}
+
+/// Change-time → ns discriminator (`st_ctime`/`st_ctime_nsec`; the
+/// timespec spelling `st_ctimespec` on Apple). ctime cannot be set
+/// by a caller and mutates on every write — usable for files only,
+/// and only when the record is refreshed post-write.
+#[cfg(target_vendor = "apple")]
+fn ctime_ns(st: &libc::stat) -> u64 {
+    secs_nanos(st.st_ctimespec.tv_sec, st.st_ctimespec.tv_nsec)
+}
+
+#[cfg(not(target_vendor = "apple"))]
+fn ctime_ns(st: &libc::stat) -> u64 {
+    secs_nanos(st.st_ctime, st.st_ctime_nsec)
+}
+
+/// Discriminator for directories: birth time where the platform
+/// reports it through `stat` (Apple), else `0`. A directory's ctime
+/// mutates under child writes so it can never discriminate.
+#[cfg(target_vendor = "apple")]
+fn dir_discriminator(st: &libc::stat) -> u64 {
+    birth_ns(st)
+}
+
+#[cfg(not(target_vendor = "apple"))]
+fn dir_discriminator(_st: &libc::stat) -> u64 {
+    0
+}
+
+/// Discriminator for non-directory objects: birth time on Apple,
+/// change time elsewhere. The session refreshes file identities
+/// post-write so a ctime-based discriminator still reflects the
+/// post-write state.
+#[cfg(target_vendor = "apple")]
+fn object_discriminator(st: &libc::stat) -> u64 {
+    birth_ns(st)
+}
+
+#[cfg(not(target_vendor = "apple"))]
+fn object_discriminator(st: &libc::stat) -> u64 {
+    ctime_ns(st)
+}
+
+/// Builds the [`NodeIdentity`] for a `stat` result: type tag from
+/// `S_IFMT`; discriminator per the platform rules above.
+fn node_identity(st: &libc::stat) -> NodeIdentity {
+    let mode = st.st_mode & libc::S_IFMT;
+    let (tag, discriminator) = if mode == libc::S_IFDIR {
+        (NodeTypeTag::Dir, dir_discriminator(st))
+    } else if mode == libc::S_IFREG {
+        (NodeTypeTag::File, object_discriminator(st))
+    } else {
+        (NodeTypeTag::Other, object_discriminator(st))
+    };
+    NodeIdentity {
+        volume: dev_id(st.st_dev),
+        index: u128::from(st.st_ino),
+        tag,
+        discriminator,
+        handle: None,
+    }
+}
+
+/// `statx(2)`-backed identity (Linux/glibc). Reports `stx_btime`
+/// birth time — the strongest discriminator — for every object type
+/// when the filesystem provides `STATX_BTIME`; falls back to
+/// `stx_ctime` for non-directories otherwise.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod gnu_statx {
+    use super::{NodeHandle, NodeIdentity, NodeTypeTag, OsStr, RawFd, cstring, io, secs_nanos};
+
+    pub(super) fn statx_fd(fd: RawFd) -> io::Result<NodeIdentity> {
+        let mut id = statx_at(fd, c"".as_ptr(), libc::AT_EMPTY_PATH)?;
+        id.handle = handle_at(fd, c"".as_ptr(), libc::AT_EMPTY_PATH).ok();
+        Ok(id)
+    }
+
+    pub(super) fn statx_child(dirfd: RawFd, name: &OsStr) -> io::Result<NodeIdentity> {
+        let c = cstring(name)?;
+        let mut id = statx_at(dirfd, c.as_ptr(), libc::AT_SYMLINK_NOFOLLOW)?;
+        // name_to_handle_at never follows the leaf link unless
+        // AT_SYMLINK_FOLLOW is passed — flags=0 gives the leaf
+        // object's own handle, link or otherwise.
+        id.handle = handle_at(dirfd, c.as_ptr(), 0).ok();
+        Ok(id)
+    }
+
+    /// `statx(dirfd, pathname, flags, STATX_ALL)` with EINTR retry.
+    /// `AT_EMPTY_PATH` + `""` describes `dirfd` itself;
+    /// `AT_SYMLINK_NOFOLLOW` describes the leaf object, never a link
+    /// target.
+    #[expect(unsafe_code, reason = "statx(2) is libc FFI; see SAFETY comment")]
+    fn statx_at(
+        dirfd: RawFd,
+        pathname: *const std::ffi::c_char,
+        flags: std::ffi::c_int,
+    ) -> io::Result<NodeIdentity> {
+        let mut stx = std::mem::MaybeUninit::<libc::statx>::uninit();
+        loop {
+            // SAFETY: `dirfd` is a valid open descriptor; `pathname`
+            // is a valid NUL-terminated C string that outlives the
+            // call; `stx` is valid for `size_of::<statx>()` bytes of
+            // write.
+            let rc =
+                unsafe { libc::statx(dirfd, pathname, flags, libc::STATX_ALL, stx.as_mut_ptr()) };
+            if rc == 0 {
+                // SAFETY: `stx` was fully initialized by the call.
+                let stx = unsafe { stx.assume_init() };
+                return Ok(identity_from_statx(&stx));
+            }
+            let e = io::Error::last_os_error();
+            if e.kind() != io::ErrorKind::Interrupted {
+                return Err(e);
+            }
+        }
+    }
+
+    fn ts_ns(ts: &libc::statx_timestamp) -> u64 {
+        secs_nanos(ts.tv_sec, i64::from(ts.tv_nsec))
+    }
+
+    fn identity_from_statx(stx: &libc::statx) -> NodeIdentity {
+        let mode = u32::from(stx.stx_mode) & libc::S_IFMT;
+        let birth = (stx.stx_mask & libc::STATX_BTIME != 0).then(|| ts_ns(&stx.stx_btime));
+        let (tag, discriminator) = if mode == libc::S_IFDIR {
+            // Directory ctime mutates under child writes — birth
+            // time only, else none.
+            (NodeTypeTag::Dir, birth.unwrap_or(0))
+        } else if mode == libc::S_IFREG {
+            (
+                NodeTypeTag::File,
+                birth.unwrap_or_else(|| ts_ns(&stx.stx_ctime)),
+            )
+        } else {
+            (
+                NodeTypeTag::Other,
+                birth.unwrap_or_else(|| ts_ns(&stx.stx_ctime)),
+            )
+        };
+        NodeIdentity {
+            // Compose the device id from statx major/minor the same
+            // way makedev() does — opaque equality key only.
+            volume: (u64::from(stx.stx_dev_major) << 32) | u64::from(stx.stx_dev_minor),
+            index: u128::from(stx.stx_ino),
+            tag,
+            discriminator,
+            handle: None,
+        }
+    }
+
+    const MAX_HANDLE_SZ: usize = 128;
+
+    /// Buffer for `name_to_handle_at(2)`: the libc crate does not
+    /// export `struct file_handle` for gnu targets, so the fixed
+    /// layout (header + `MAX_HANDLE_SZ` payload) is spelled out here.
+    #[repr(C)]
+    struct HandleBuf {
+        handle_bytes: libc::c_uint,
+        handle_type: libc::c_int,
+        f_handle: [u8; MAX_HANDLE_SZ],
+    }
+
+    /// `name_to_handle_at(dirfd, pathname, flags)` — the exported
+    /// file handle embeds the inode generation, discriminating a
+    /// delete+recreate that reuses the inode within one timestamp
+    /// tick. No-follow is the default leaf behavior; valid flags
+    /// are `AT_EMPTY_PATH` (describe `dirfd` itself) and
+    /// `AT_SYMLINK_FOLLOW` (never passed — a link reports its own
+    /// handle). Best-effort: callers degrade to `handle: None` on
+    /// EOPNOTSUPP/ENOSYS (filesystems without export support).
+    #[expect(
+        unsafe_code,
+        reason = "name_to_handle_at(2) via libc::syscall; see SAFETY comment"
+    )]
+    fn handle_at(
+        dirfd: RawFd,
+        pathname: *const std::ffi::c_char,
+        flags: std::ffi::c_int,
+    ) -> io::Result<NodeHandle> {
+        let mut buf = HandleBuf {
+            handle_bytes: u32::try_from(MAX_HANDLE_SZ).unwrap_or(u32::MAX),
+            handle_type: 0,
+            f_handle: [0; MAX_HANDLE_SZ],
+        };
+        let mut mnt_id: libc::c_int = 0;
+        loop {
+            // SAFETY: `dirfd` is a valid open descriptor; `pathname`
+            // is a valid NUL-terminated C string that outlives the
+            // call; `buf` is a valid `file_handle` buffer of
+            // MAX_HANDLE_SZ bytes capacity; `mnt_id` is valid for
+            // write.
+            let rc = unsafe {
+                libc::syscall(
+                    libc::SYS_name_to_handle_at,
+                    dirfd,
+                    pathname,
+                    &raw mut buf,
+                    &raw mut mnt_id,
+                    flags,
+                )
+            };
+            if rc == 0 {
+                let cap = u32::try_from(MAX_HANDLE_SZ).unwrap_or(u32::MAX);
+                let len = u8::try_from(buf.handle_bytes.min(cap)).unwrap_or(u8::MAX);
+                return Ok(NodeHandle {
+                    kind: buf.handle_type,
+                    len,
+                    bytes: buf.f_handle,
+                });
+            }
+            let e = io::Error::last_os_error();
+            if e.kind() != io::ErrorKind::Interrupted {
+                return Err(e);
+            }
+        }
+    }
+}
 fn stat_fd(fd: RawFd) -> io::Result<NodeIdentity> {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    match gnu_statx::statx_fd(fd) {
+        Ok(id) => return Ok(id),
+        // statx(2) requires Linux 4.11+; ENOSYS means an ancient
+        // kernel where plain stat is the graceful fallback.
+        Err(e) if e.raw_os_error() == Some(libc::ENOSYS) => {}
+        Err(e) => return Err(e),
+    }
+    stat_fd_stat(fd)
+}
+
+#[expect(unsafe_code, reason = "fstat(2) is libc FFI; see SAFETY comment")]
+fn stat_fd_stat(fd: RawFd) -> io::Result<NodeIdentity> {
     let mut st = std::mem::MaybeUninit::<libc::stat>::uninit();
     loop {
         // SAFETY: `st` is valid for writes of `size_of::<stat>()` and
@@ -368,10 +611,7 @@ fn stat_fd(fd: RawFd) -> io::Result<NodeIdentity> {
         if rc == 0 {
             // SAFETY: `st` was fully initialized by the successful call.
             let st = unsafe { st.assume_init() };
-            return Ok(NodeIdentity {
-                volume: dev_id(st.st_dev),
-                index: u128::from(st.st_ino),
-            });
+            return Ok(node_identity(&st));
         }
         let e = io::Error::last_os_error();
         if e.kind() != io::ErrorKind::Interrupted {
@@ -384,10 +624,20 @@ fn stat_child(dirfd: RawFd, name: &str) -> io::Result<NodeIdentity> {
     stat_child_os(dirfd, OsStr::new(name))
 }
 
+fn stat_child_os(dirfd: RawFd, name: &OsStr) -> io::Result<NodeIdentity> {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    match gnu_statx::statx_child(dirfd, name) {
+        Ok(id) => return Ok(id),
+        Err(e) if e.raw_os_error() == Some(libc::ENOSYS) => {}
+        Err(e) => return Err(e),
+    }
+    stat_child_stat(dirfd, name)
+}
+
 /// `fstatat(dirfd, name, AT_SYMLINK_NOFOLLOW)` — identity of the child
 /// object at `name` *itself* (a link reports the link's identity).
 #[expect(unsafe_code, reason = "fstatat(2) is libc FFI; see SAFETY comment")]
-fn stat_child_os(dirfd: RawFd, name: &OsStr) -> io::Result<NodeIdentity> {
+fn stat_child_stat(dirfd: RawFd, name: &OsStr) -> io::Result<NodeIdentity> {
     let c = cstring(name)?;
     let mut st = std::mem::MaybeUninit::<libc::stat>::uninit();
     loop {
@@ -404,10 +654,7 @@ fn stat_child_os(dirfd: RawFd, name: &OsStr) -> io::Result<NodeIdentity> {
         if rc == 0 {
             // SAFETY: `st` was fully initialized by the successful call.
             let st = unsafe { st.assume_init() };
-            return Ok(NodeIdentity {
-                volume: dev_id(st.st_dev),
-                index: u128::from(st.st_ino),
-            });
+            return Ok(node_identity(&st));
         }
         let e = io::Error::last_os_error();
         if e.kind() != io::ErrorKind::Interrupted {

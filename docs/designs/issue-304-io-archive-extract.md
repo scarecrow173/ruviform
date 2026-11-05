@@ -101,8 +101,13 @@ Issue #304（IO-IMP-10）は IO-04（#286）v0.2 D/E/F で合意済みの
 2. **削除は「作成したものを identity 照合して消す」**。
    無条件の再帰削除は差し替えられた tree の中身や foreign object
    を巻き込み得る。cleanup は作成時に記録した node identity
-   （unix `st_dev`+`st_ino`・windows `FILE_ID_INFO`）と照合しながら
+   （unix `stx_dev`+`stx_ino`+object kind+inode generation/
+   birth-time discriminator、windows `FILE_ID_INFO`+attributes+
+   `FileBasicInfo` timestamp discriminator）と照合しながら
    handle 相対に降下し、不一致は削除せず残留として報告する。
+   (volume, index) だけでは delete+recreate が同一 timestamp tick
+   で inode/FileId を再利用した場合に衝突し得るため、kind tag と
+   再作成に耐える discriminator を identity に含める。
 3. **`ExtractedTree` は不変 snapshot ではない**。検証した時点の
    staging tree 所有権のみを表し、同権限の外部変更は可能。
    正式公開は Consumer の別契約（本 Issue 対象外）として明記し、
@@ -248,16 +253,24 @@ trait StagingFile: Write + Send + fmt::Debug {
 }
 ```
 
-`NodeIdentity { volume: u64, index: u128 }`（unix `st_dev`+`st_ino`・
-windows `FILE_ID_INFO` の `VolumeSerialNumber`+`FileId.0`）。
+`NodeIdentity { volume, index, tag, discriminator, handle }`
+（unix `stx_dev`+`stx_ino`+`S_IFMT` kind tag+`stx_btime`/`st_ctime`
+discriminator+`name_to_handle_at` file handle、windows
+`VolumeSerialNumber`+`FileId`+attribute-derived tag+
+`FileBasicInfo` timestamp）。`handle` は inode generation を含み、
+同一 timestamp tick 内の inode 再利用も区別する。
 
 - **unix backend**（`extract/unix.rs`）: parent を
   `open(O_RDONLY|O_DIRECTORY|O_CLOEXEC)`、root は
   `mkdirat(parentfd, unique, 0700)` + `openat(O_RDONLY|O_DIRECTORY|
   O_NOFOLLOW|O_CLOEXEC)`。create_dir=`mkdirat`+`openat`、open_dir=
   `openat`、create_file=`openat(O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW)`
-  → `File::from_raw_fd`、identity=`fstat`、probe=`fstatat(
-  AT_SYMLINK_NOFOLLOW)`、remove=`unlinkat`/`unlinkat(AT_REMOVEDIR)`。
+  → `File::from_raw_fd`、identity=linux-gnu では `statx(
+  STATX_ALL)`+`name_to_handle_at`（inode generation を含む export
+  handle。不対応 fs では timestamp discriminator のみに縮退）、
+  その他 unix では `fstat`/`fstatat(AT_SYMLINK_NOFOLLOW)`+birth/
+  change-time discriminator、remove=`unlinkat`/
+  `unlinkat(AT_REMOVEDIR)`。
 - **windows backend**（`extract/windows.rs`）: `NtOpenFile`（open）
   `NtCreateFile`（create・`FILE_CREATE` disposition）に
   `OBJECT_ATTRIBUTES{ RootDirectory: parent handle, ObjectName:
@@ -266,8 +279,10 @@ windows `FILE_ID_INFO` の `VolumeSerialNumber`+`FileId.0`）。
   =`FILE_NON_DIRECTORY_FILE`、共に `FILE_OPEN_REPARSE_POINT` +
   `FILE_SYNCHRONOUS_IO_NONALERT`。削除=`NtDeleteFile`（同一
   ObjAttr・`OBJ_DONT_REPARSE` で link 自体に作用）。identity=
-  `GetFileInformationByHandleEx(FileIdInfo)`。NTSTATUS→`io::Error`
-  は `RtlNtStatusToDosErrorNoTeb`。
+  `GetFileInformationByHandleEx(FileIdInfo)`+`FileBasicInfo`
+  （FileId の MFT sequence に加え、file/other は `ChangeTime`・
+  dir は `CreationTime` を discriminator として付与）。
+  NTSTATUS→`io::Error` は `RtlNtStatusToDosErrorNoTeb`。
 - **その他 target**: `create_staging_root` が `ErrorKind::Unsupported`
   を返すのみ（弱化して動かさない）。
 - **`#[cfg(test)]` mock**: `extract/fs.rs` 内に scripted backend

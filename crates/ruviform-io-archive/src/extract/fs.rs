@@ -35,15 +35,68 @@ use std::fmt;
 use std::io::{self, Write};
 use std::path::Path;
 
-/// Stable filesystem identity of a node: (volume, index).
+/// The object-type the identity was captured for. Cross-type swaps
+/// never compare equal — a link at a recorded file name mismatches
+/// even if the underlying index were somehow reused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NodeTypeTag {
+    /// Unidentifiable — never matches a real object tag.
+    Unknown = 0,
+    /// A regular file.
+    File,
+    /// A real directory.
+    Dir,
+    /// Links, sockets, devices, reparse points — never equals a
+    /// recorded File/Dir tag.
+    Other,
+}
+
+/// Stable filesystem identity of a node.
 ///
-/// unix: (`st_dev`, `st_ino`). Windows: `FILE_ID_INFO`
-/// (`VolumeSerialNumber`, `FileId`). Compared for equality only —
-/// the values are opaque and never interpreted.
+/// unix: (`st_dev`/`stx_dev`, `st_ino`/`stx_ino`, `S_IFMT`-derived
+/// tag, birth-time or change-time discriminator). Windows:
+/// (`VolumeSerialNumber`, `FileId`, attribute-derived tag,
+/// `FileBasicInfo` time discriminator).
+///
+/// The `handle` is the kernel-exported file handle
+/// (`name_to_handle_at` on Linux): it embeds the inode generation,
+/// so a delete+recreate that lands on the same inode in the same
+/// timestamp tick still produces a different identity. `None` where
+/// the platform or filesystem does not export handles.
+///
+/// The `discriminator` is a secondary timestamp key — birth time
+/// where the platform reports it, else change time — closing most
+/// of the index-reuse window even without handles. A directory's
+/// change time mutates when the session adds children, so
+/// directories without birth time carry `0`.
+///
+/// Compared for equality only — the values are opaque and never
+/// interpreted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct NodeIdentity {
     pub volume: u64,
     pub index: u128,
+    /// Object type at capture time.
+    pub tag: NodeTypeTag,
+    /// Timestamp discriminator; `0` for directories without birth
+    /// time.
+    pub discriminator: u64,
+    /// Kernel file-handle discriminator where available.
+    pub handle: Option<NodeHandle>,
+}
+
+/// Opaque kernel file handle — the `name_to_handle_at` result
+/// (`handle_type` + bytes). Equality covers the full buffer; the
+/// unused tail is always zeroed so same-length handles compare by
+/// content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct NodeHandle {
+    /// `handle_type` reported by the kernel (e.g. `FILEID_INO32_GEN`).
+    pub kind: i32,
+    /// Kernel-reported byte length of the handle.
+    pub len: u8,
+    /// Handle bytes, zero-padded to the fixed capacity.
+    pub bytes: [u8; 128],
 }
 
 /// The default platform backend factory.
@@ -97,11 +150,12 @@ pub(crate) trait PlatformExtractOps: Send + Sync + fmt::Debug {
 pub(crate) trait StagingDir: Send + fmt::Debug {
     /// Diagnostic path for messages — never an identity proof.
     fn path(&self) -> &Path;
-    /// Identity of this directory (its own handle).
+    /// Identity of this directory (its own handle; `tag` = `Dir`,
+    /// `discriminator` = 0).
     fn identity(&self) -> io::Result<NodeIdentity>;
     /// Identity of the child object named `name` without following
     /// links (`AT_SYMLINK_NOFOLLOW` / `FILE_OPEN_REPARSE_POINT`) —
-    /// for a link this reports the *link's* identity.
+    /// for a link this reports the *link's* identity (`tag` = `Other`).
     fn probe_identity(&self, name: &str) -> io::Result<NodeIdentity>;
     /// Creates a child directory exclusively; `AlreadyExists` when
     /// taken (including by a link).
@@ -197,6 +251,19 @@ pub(crate) mod mock {
     pub(crate) const ROOT_ID: NodeIdentity = NodeIdentity {
         volume: 7,
         index: 1,
+        tag: NodeTypeTag::Dir,
+        discriminator: 0,
+        handle: None,
+    };
+
+    /// What `ForeignIdentity` scripts report — never equal to any
+    /// recorded identity.
+    const FOREIGN_ID: NodeIdentity = NodeIdentity {
+        volume: 99,
+        index: 99,
+        tag: NodeTypeTag::Other,
+        discriminator: 99,
+        handle: None,
     };
 
     #[derive(Debug, Default)]
@@ -290,10 +357,7 @@ pub(crate) mod mock {
             let mut s = self.state.lock().unwrap();
             match s.pop("identity") {
                 MockStep::Ok => Ok(self.id),
-                MockStep::ForeignIdentity => Ok(NodeIdentity {
-                    volume: 99,
-                    index: 99,
-                }),
+                MockStep::ForeignIdentity => Ok(FOREIGN_ID),
                 MockStep::Fail(kind, msg) => Err(io::Error::new(kind, msg)),
             }
         }
@@ -307,10 +371,7 @@ pub(crate) mod mock {
                         "mock: no such child",
                     )),
                 },
-                MockStep::ForeignIdentity => Ok(NodeIdentity {
-                    volume: 99,
-                    index: 99,
-                }),
+                MockStep::ForeignIdentity => Ok(FOREIGN_ID),
                 MockStep::Fail(kind, msg) => Err(io::Error::new(kind, msg)),
             }
         }
@@ -322,6 +383,9 @@ pub(crate) mod mock {
                     let id = NodeIdentity {
                         volume: 7,
                         index: u128::from(s.next_id),
+                        tag: NodeTypeTag::Dir,
+                        discriminator: 0,
+                        handle: None,
                     };
                     let path = self.path.join(name);
                     s.nodes.insert(path.clone(), id);
@@ -361,6 +425,9 @@ pub(crate) mod mock {
                     let id = NodeIdentity {
                         volume: 7,
                         index: u128::from(s.next_id),
+                        tag: NodeTypeTag::File,
+                        discriminator: s.next_id,
+                        handle: None,
                     };
                     s.nodes.insert(self.path.join(name), id);
                     Ok(Box::new(MockFile {

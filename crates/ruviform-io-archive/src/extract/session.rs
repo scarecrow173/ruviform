@@ -34,7 +34,8 @@ use crate::tar::TarArchiveReader;
 use crate::zip::ZipArchiveReader;
 
 use super::fs::{
-    NodeIdentity, PlatformExtractOps, StagingDir, StagingFile, StagingRoot, platform_extract_ops,
+    NodeIdentity, NodeTypeTag, PlatformExtractOps, StagingDir, StagingFile, StagingRoot,
+    platform_extract_ops,
 };
 use super::path::SafeRelativePath;
 
@@ -858,6 +859,16 @@ impl ExtractionSession {
             identity,
         });
         let written = self.copy_payload(&mut entry, &mut *file, declared)?;
+        // Refresh the recorded identity post-write: backends whose
+        // discriminator tracks change time (rather than immutable
+        // birth time) must see the value the final write produced,
+        // or cleanup would retain our own files as "foreign".
+        let identity = file.identity().map_err(|e| {
+            map_backend_error(e, format!("re-reading staged file `{leaf}` identity"))
+        })?;
+        if let Some(rec) = self.records.last_mut() {
+            rec.identity = identity;
+        }
         drop(file);
         entry
             .finish_entry()
@@ -1095,6 +1106,9 @@ impl Drop for ExtractedTree {
 const EMPTY_ID: NodeIdentity = NodeIdentity {
     volume: 0,
     index: 0,
+    tag: NodeTypeTag::Unknown,
+    discriminator: 0,
+    handle: None,
 };
 
 #[derive(Debug)]

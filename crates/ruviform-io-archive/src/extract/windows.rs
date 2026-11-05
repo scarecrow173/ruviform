@@ -49,16 +49,17 @@ use windows_sys::Win32::Foundation::{
     HANDLE, NTSTATUS, OBJ_CASE_INSENSITIVE, OBJ_DONT_REPARSE, UNICODE_STRING,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    FILE_ACCESS_RIGHTS, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_WRITE,
-    FILE_ID_128, FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS, FILE_LIST_DIRECTORY,
-    FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_MODE, FILE_SHARE_READ, FILE_SHARE_WRITE,
-    FILE_TRAVERSE, FileIdInfo, GetFileInformationByHandleEx, SYNCHRONIZE,
+    FILE_ACCESS_RIGHTS, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL,
+    FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO, FILE_GENERIC_WRITE, FILE_ID_128, FILE_ID_INFO,
+    FILE_INFO_BY_HANDLE_CLASS, FILE_LIST_DIRECTORY, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE,
+    FILE_SHARE_MODE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TRAVERSE, FileBasicInfo, FileIdInfo,
+    GetFileInformationByHandleEx, SYNCHRONIZE,
 };
 use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
 
 use super::fs::{
-    MAX_NAME_ATTEMPTS, NodeIdentity, PlatformExtractOps, StagingDir, StagingFile, StagingRoot,
-    staging_name,
+    MAX_NAME_ATTEMPTS, NodeIdentity, NodeTypeTag, PlatformExtractOps, StagingDir, StagingFile,
+    StagingRoot, staging_name,
 };
 
 const OBJ_ATTRS: u32 = OBJ_DONT_REPARSE | OBJ_CASE_INSENSITIVE;
@@ -524,8 +525,45 @@ fn identity_of(handle: RawHandle) -> io::Result<NodeIdentity> {
     // SAFETY: `info` was fully initialized by the successful call.
     let info = unsafe { info.assume_init() };
     let FILE_ID_128 { Identifier } = info.FileId;
+    let mut basic = MaybeUninit::<FILE_BASIC_INFO>::uninit();
+    // SAFETY: `handle` is a valid open HANDLE; `basic` is valid for
+    // `size_of::<FILE_BASIC_INFO>()` bytes of write.
+    let ok = unsafe {
+        GetFileInformationByHandleEx(
+            handle.cast(),
+            FileBasicInfo as FILE_INFO_BY_HANDLE_CLASS,
+            basic.as_mut_ptr().cast(),
+            u32::try_from(size_of::<FILE_BASIC_INFO>()).unwrap_or(u32::MAX),
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: `basic` was fully initialized by the successful call.
+    let basic = unsafe { basic.assume_init() };
+    let attrs = basic.FileAttributes;
+    let (tag, discriminator) = if attrs & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        (NodeTypeTag::Other, basic.ChangeTime)
+    } else if attrs & FILE_ATTRIBUTE_DIRECTORY != 0 {
+        // Directory ChangeTime mutates when children are added, so
+        // only CreationTime can discriminate. It is caller-settable
+        // in principle, but colliding with us additionally requires
+        // FileId reuse — out of reach for a racing adversary.
+        (NodeTypeTag::Dir, basic.CreationTime)
+    } else {
+        // `ChangeTime` cannot be set by a caller — a delete+recreate
+        // at a recycled FileId always produces a different value.
+        // The session refreshes file identities post-write so the
+        // recorded value reflects the final write.
+        (NodeTypeTag::File, basic.ChangeTime)
+    };
     Ok(NodeIdentity {
         volume: info.VolumeSerialNumber,
         index: u128::from_le_bytes(Identifier),
+        tag,
+        discriminator: u64::try_from(discriminator).unwrap_or(0),
+        // The 128-bit FileId already embeds the MFT sequence number,
+        // so the index itself discriminates recreation.
+        handle: None,
     })
 }
