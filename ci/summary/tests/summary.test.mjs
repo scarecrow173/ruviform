@@ -99,13 +99,17 @@ test("all lanes success + consistent checkout evidence -> pass", () => {
   for (const row of r.shaRows) assert.equal(row.verdict, "Pass");
 });
 
-test("lane failure/cancelled/skipped -> fail (never pass)", () => {
-  for (const bad of ["failure", "cancelled", "skipped"]) {
+test("lane failure/cancelled/skipped/abandoned -> fail (never pass)", () => {
+  // `abandoned` is what needs.*.result reports for a job cancelled while
+  // queued (observed on run 42066107006: verify-macos hit the hosted
+  // macOS runner-acquisition timeout and never started).
+  for (const bad of ["failure", "cancelled", "skipped", "abandoned"]) {
     const needs = needsWith("success");
     needs["ui-verify"] = { result: bad };
     const r = evaluate(passingInput({ needs }));
     assert.equal(r.verdict, "fail", bad);
     assert.equal(rowOf(r, "ui-verify").verdict, "Fail");
+    assert.equal(rowOf(r, "ui-verify").note, `job-${bad}`);
   }
 });
 

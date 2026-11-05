@@ -79,7 +79,10 @@ export const REQUIRED_CHECKOUT_LEGS = [
   "l1-real-verify-macos",
 ];
 
-const HONORED_RESULTS = ["success", "failure", "cancelled", "skipped"];
+// `abandoned` is emitted for jobs cancelled while queued (observed: macOS
+// runner-acquisition timeout) — a real result distinct from the documented
+// `cancelled`, and still never a pass.
+const HONORED_RESULTS = ["success", "failure", "cancelled", "skipped", "abandoned"];
 const SHA_RE = /^[0-9a-f]{40}$/;
 const CHECKOUT_FILE_RE = /^checkout-sha-(.+)-attempt-(\d+)\.txt$/;
 

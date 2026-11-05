@@ -101,7 +101,7 @@ relations:
 
 - R1: 既存 PR/push trigger・既存 required context（`verify`/`l1-real-verify`/`ui-verify` の Linux・Windows leg + `rt-verify`/`icc-verify`/`bench` の 9 context）を維持し、dead required context を作らない。
 - R2: 全 lane が選択分類なしで常時実行される。利用不可環境は skip ではなく Fail/Cancelled として run が正しく終了する。
-- R3: `ci-summary` は全必要 job の `needs` 結果を `if: always()` で待ち、`success` 以外（failure/cancelled/skipped/not_run/unknown）を成功にしない。
+- R3: `ci-summary` は全必要 job の `needs` 結果を `if: always()` で待ち、`success` 以外（failure/cancelled/skipped/abandoned/not_run/unknown）を成功にしない。
 - R4: `io-structured-verify` が `check`/`lint`/`test-io-structured` の feature matrix（default・xml・xml,file・all-features）を実行する。
 - R5: `expected_sha` 非空かつ全 lane leg の実測 checkout（`git rev-parse HEAD`）共通値と不一致・または実測不能なら `ci-summary` を Fail にする（異なる revision を検証済みにしない — `github.sha` は期待値の代理にしない）。実際の検証 SHA・event・job/OS・結果・leg 別 checkout SHA・workflow revision・Run URL を Job Summary と JSON artifact に記録する。
 - R6: 選択実行だけに使う script/tests/docs を削除し、別用途（診断・配布・metrics）の関数を誤削除しない。
