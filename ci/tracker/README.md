@@ -122,6 +122,10 @@ Full CI 実行**だけを対象に、`main × ci` の未解決障害 Issue を�
   （`consumer-verify` 追跡は #294 の別ステップ）。
 - 依存は GitHub-hosted runner 標準の `gh` CLI + Node のみ。Ruviform の
   Cargo/frontend artifact への依存は一切ない。
+- Consumer repo 側の Actions 設定（`GITHUB_TOKEN` の default permission が
+  permissive/read-only のどちらか）を確認する — workflow/job の
+  `permissions` は明示済みだが、org/repo の default が `issues: write`
+  を遮断する構成だと tracker job が 403 で失敗する。
 
 ## 検証
 

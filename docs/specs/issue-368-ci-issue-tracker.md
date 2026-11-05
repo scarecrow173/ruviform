@@ -39,12 +39,14 @@ relations:
     - "docs/designs/issue-366-full-ci-stage1.md"
   refines: []
   refined-by: []
-  derives-from: []
+  derives-from:
+    - "docs/discovery/issue-327-cross-repo-ci-baseline.md"
   derived-by:
     - "docs/designs/issue-368-ci-issue-tracker.md"
     - "docs/plans/issue-368-ci-issue-tracker.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/issue-368-ci-issue-tracker.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/367"
     - "https://github.com/scarecrow173/ruviform/issues/294"

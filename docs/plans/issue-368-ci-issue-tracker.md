@@ -46,8 +46,10 @@ relations:
   derived-by:
     - "docs/tasks/issue-368-t1-tracker-evaluator.md"
     - "docs/tasks/issue-368-t2-tracker-workflow.md"
+    - "docs/test-specs/issue-368-ci-issue-tracker.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/issue-368-ci-issue-tracker.md"
   references: []
   defers: []
   deferred-by: []

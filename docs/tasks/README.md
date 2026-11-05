@@ -481,3 +481,5 @@ Directory: `docs/tasks`
 | TASK-034LFHddlrfvXu5Jlmwdr0 | working space カーネル実装（ToWorking + FromWorking） | done | [working-space-kernels.md](./working-space-kernels.md) |
 | TASK-034JPwZ8htMzYNPNgOceEI | 分析・レポート記述・文書整合 | done | [write-dispatch-analysis-report.md](./write-dispatch-analysis-report.md) |
 | TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | done | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |
+| TASK-r4Ta2OILbKEFuFRjAfBMAM | T1 ci/tracker/tracker.mjs 判定器 + contract tests（Issue #368） | done | [issue-368-t1-tracker-evaluator.md](./issue-368-t1-tracker-evaluator.md) |
+| TASK-Peb0C7F4qBHb9sZP8wXZnR | T2 ci-issue-tracker.yml workflow + 運用 README + dev-env 同期（Issue #368） | done | [issue-368-t2-tracker-workflow.md](./issue-368-t2-tracker-workflow.md) |

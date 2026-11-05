@@ -29,7 +29,8 @@ relations:
   refines: []
   refined-by: []
   derives-from: []
-  derived-by: []
+  derived-by:
+    - "docs/specs/issue-368-ci-issue-tracker.md"
   verifies: []
   verified-by: []
   references:

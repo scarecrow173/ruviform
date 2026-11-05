@@ -38,6 +38,7 @@ Directory: `docs/adr`
 | ADR-SG8Lf0sCLiCM8ziAFqCNZ7 | Issue #329 sccache 導入方式 — sccache-action + GHA cache backend + repo-variable kill switch | accepted | [issue-329-sccache-gha-backend.md](./issue-329-sccache-gha-backend.md) |
 | ADR-jD7nl5tHt9wQ3G5Xm5YSyC | Issue #336 SinkDegraded Clone 方針 — snapshot record は Clone 可能に揃える | accepted | [issue-336-sink-degraded-clone-derive.md](./issue-336-sink-degraded-clone-derive.md) |
 | ADR-034SmAdWeS6quuMM29Wgfx | Issue #360 mint 窓内 child exit の責務境界 — 順序付けは test scenario 側に置く | accepted | [issue-360-mint-child-exit-test-scenario.md](./issue-360-mint-child-exit-test-scenario.md) |
+| ADR-034SraR8CrkZ0SSa7tQEwh | Issue #368 CI failure Issue Tracker — workflow_run 監視・Issue 集約・(run id, attempt) 順序と compare 2 重 guard | accepted | [issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md](./issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034QfjWFfUXvgvaObuCUwS | M2 typed graph audio runtime placement, stateful RT ownership, and activation/retirement for Issue #195 | proposed | [m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md](./m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |

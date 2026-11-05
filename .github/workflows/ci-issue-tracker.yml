@@ -4,7 +4,7 @@ name: ci-issue-tracker
 # keep at most ONE open failure issue for repo × workflow × main. On the
 # failure side (`failure`/`timed_out`/`startup_failure`) it creates or
 # updates the tracked issue; it auto-closes only when a NEWER `ci` run
-# succeeds at a revision covering the failed one (run-id ordering +
+# succeeds at a revision covering the failed one ((run id, attempt) ordering +
 # compare API guard — an old or divergent success never closes a newer
 # failure). `cancelled`/`skipped`/unknown conclusions are neither success
 # nor failure — they update the operational note only.

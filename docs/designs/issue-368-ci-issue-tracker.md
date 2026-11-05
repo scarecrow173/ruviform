@@ -28,6 +28,7 @@ relations:
     generated: []
   implements:
     - "docs/specs/issue-368-ci-issue-tracker.md"
+    - "docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md"
   implemented-by:
     - "docs/plans/issue-368-ci-issue-tracker.md"
   depends-on:
@@ -42,10 +43,13 @@ relations:
   refined-by: []
   derives-from:
     - "docs/specs/issue-368-ci-issue-tracker.md"
+    - "docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md"
   derived-by:
     - "docs/plans/issue-368-ci-issue-tracker.md"
+    - "docs/test-specs/issue-368-ci-issue-tracker.md"
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/issue-368-ci-issue-tracker.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/367"
     - "https://github.com/scarecrow173/ruviform/issues/294"
