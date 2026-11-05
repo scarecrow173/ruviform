@@ -28,6 +28,30 @@ pub enum EntryChecksum {
     NotPresent,
 }
 
+/// How an entry's payload was consumed before its receipt was issued.
+///
+/// This distinguishes "the caller read every byte" from "the reader
+/// discarded the rest within budget" — for formats without a payload
+/// checksum (TAR) a discarded entry was structurally verified but its
+/// content was never delivered to the caller.
+///
+/// `#[non_exhaustive]` per the public-enum policy — additional
+/// dispositions may be added in the future.
+///
+/// **RT contract:** non-RT only.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EntryDisposition {
+    /// The caller consumed the full payload through `Read` and the
+    /// entry's `finish` confirmed the declared end.
+    ReadToEnd,
+    /// The reader drained the remaining payload within budget
+    /// (`discard_remaining`/`discard_pending` or an archive-level
+    /// finish drain): structure was verified, content was not consumed
+    /// by the caller.
+    Discarded,
+}
+
 /// Result of finishing one entry reader via `finish`.
 ///
 /// `uncompressed_bytes` is the **measured** output (verified against the
@@ -39,6 +63,7 @@ pub struct EntryReadReceipt {
     info: ArchiveEntryInfo,
     uncompressed_bytes: u64,
     checksum: EntryChecksum,
+    disposition: EntryDisposition,
 }
 
 impl EntryReadReceipt {
@@ -47,11 +72,13 @@ impl EntryReadReceipt {
         info: ArchiveEntryInfo,
         uncompressed_bytes: u64,
         checksum: EntryChecksum,
+        disposition: EntryDisposition,
     ) -> Self {
         Self {
             info,
             uncompressed_bytes,
             checksum,
+            disposition,
         }
     }
 
@@ -77,6 +104,14 @@ impl EntryReadReceipt {
     #[must_use]
     pub const fn checksum(&self) -> EntryChecksum {
         self.checksum
+    }
+
+    /// How the payload was consumed before this receipt was issued.
+    ///
+    /// **RT contract:** non-RT only.
+    #[must_use]
+    pub const fn disposition(&self) -> EntryDisposition {
+        self.disposition
     }
 }
 
