@@ -1376,3 +1376,663 @@ mod csv_file_tests {
         assert_eq!(fs::read(&dest).expect("read dest"), b"existing");
     }
 }
+
+#[cfg(feature = "xml")]
+mod xml_tests {
+    use ruviform_io_structured::xml::{
+        XmlEvent, XmlEventBuffer, XmlEventReader, XmlEventRef, XmlReadOptions, XmlReferenceValue,
+    };
+    use ruviform_io_structured::{DocumentError, DocumentErrorKind, DocumentFormat, InputLimits};
+    use std::error::Error;
+    use std::io::{self, BufRead, Read};
+
+    fn options() -> XmlReadOptions {
+        XmlReadOptions::default()
+    }
+
+    /// Drives a document to owned events for assertion convenience.
+    fn read_all(doc: &[u8]) -> Result<Vec<XmlEvent>, DocumentError> {
+        read_all_with(doc, &options())
+    }
+
+    fn read_all_with(doc: &[u8], options: &XmlReadOptions) -> Result<Vec<XmlEvent>, DocumentError> {
+        let mut input = doc;
+        let mut reader = XmlEventReader::new(&mut input, options);
+        let mut buffer = XmlEventBuffer::new();
+        let mut events = Vec::new();
+        while let Some(event) = reader.read_event(&mut buffer)? {
+            events.push(event.to_owned());
+        }
+        Ok(events)
+    }
+
+    /// First error of a document stream, or panic if it parses cleanly.
+    fn read_err(doc: &[u8], options: &XmlReadOptions) -> DocumentError {
+        let mut input = doc;
+        let mut reader = XmlEventReader::new(&mut input, options);
+        let mut buffer = XmlEventBuffer::new();
+        loop {
+            match reader.read_event(&mut buffer) {
+                Ok(Some(_)) => {}
+                Ok(None) => panic!("document parsed without error"),
+                Err(error) => return error,
+            }
+        }
+    }
+
+    fn start(event: &XmlEvent) -> &ruviform_io_structured::xml::XmlElement {
+        match event {
+            XmlEvent::Start(e) | XmlEvent::Empty(e) => e,
+            other => panic!("expected Start/Empty, got {other:?}"),
+        }
+    }
+
+    // G1 — basic nested Start/Text/End order.
+    #[test]
+    fn nested_elements_stream_in_document_order() {
+        let events = read_all(b"<root><a>hi</a><b/></root>").expect("parse");
+        assert!(matches!(events[0], XmlEvent::Start(_)));
+        assert!(matches!(events[1], XmlEvent::Start(_)));
+        assert!(matches!(&events[2], XmlEvent::Text(t) if t == "hi"));
+        assert!(matches!(&events[3], XmlEvent::End(n) if n.local_name() == "a"));
+        assert!(matches!(events[4], XmlEvent::Empty(_)));
+        assert!(matches!(&events[5], XmlEvent::End(n) if n.local_name() == "root"));
+        assert_eq!(events.len(), 6);
+    }
+
+    // G2 — default and prefixed namespace resolution on elements.
+    #[test]
+    fn default_and_prefixed_namespaces_resolve_on_elements() {
+        let events = read_all(br#"<root xmlns="urn:d" xmlns:p="urn:p"><p:c/><plain/></root>"#)
+            .expect("parse");
+        assert_eq!(start(&events[0]).name().namespace(), Some("urn:d"));
+        let prefixed = start(&events[1]);
+        assert_eq!(prefixed.name().prefix(), Some("p"));
+        assert_eq!(prefixed.name().local_name(), "c");
+        assert_eq!(prefixed.name().namespace(), Some("urn:p"));
+        assert_eq!(start(&events[2]).name().namespace(), Some("urn:d"));
+    }
+
+    // G3 — default namespace does NOT apply to unprefixed attributes.
+    #[test]
+    fn default_namespace_does_not_apply_to_unprefixed_attributes() {
+        let events = read_all(br#"<e xmlns="urn:d" a="1"/>"#).expect("parse");
+        let element = start(&events[0]);
+        assert_eq!(element.name().namespace(), Some("urn:d"));
+        let attr = element
+            .attributes()
+            .iter()
+            .find(|a| a.name().qualified_name() == "a")
+            .expect("attribute a");
+        assert_eq!(attr.name().namespace(), None);
+        assert_eq!(attr.value(), "1");
+    }
+
+    // G4 — prefixed attributes and the reserved `xml` prefix resolve.
+    #[test]
+    fn prefixed_and_reserved_xml_attributes_resolve() {
+        let events = read_all(br#"<e xmlns:p="urn:p" p:b="2" xml:lang="en"/>"#).expect("parse");
+        let element = start(&events[0]);
+        let attrs = element.attributes();
+        let p_attr = attrs
+            .iter()
+            .find(|a| a.name().qualified_name() == "p:b")
+            .expect("p:b attribute");
+        assert_eq!(p_attr.name().namespace(), Some("urn:p"));
+        let lang = attrs
+            .iter()
+            .find(|a| a.name().qualified_name() == "xml:lang")
+            .expect("xml:lang attribute");
+        assert_eq!(
+            lang.name().namespace(),
+            Some("http://www.w3.org/XML/1998/namespace")
+        );
+        // xmlns declarations stay visible in the attribute stream.
+        assert!(attrs.iter().any(|a| a.name().qualified_name() == "xmlns:p"));
+    }
+
+    // G5 — `xmlns=""` resets the default namespace.
+    #[test]
+    fn empty_default_namespace_resets_binding() {
+        let events = read_all(br#"<e xmlns="urn:d"><f xmlns=""><g/></f></e>"#).expect("parse");
+        assert_eq!(start(&events[0]).name().namespace(), Some("urn:d"));
+        assert_eq!(start(&events[1]).name().namespace(), None);
+        assert_eq!(start(&events[2]).name().namespace(), None);
+    }
+
+    // G6 — borrowed events and owned conversions agree.
+    #[test]
+    fn borrowed_and_owned_events_are_equivalent() {
+        let owned = read_all(br#"<e a="1">text</e>"#).expect("parse");
+        assert!(matches!(&owned[0], XmlEvent::Start(_)));
+        let element = start(&owned[0]);
+        assert_eq!(element.name().qualified_name(), "e");
+        assert_eq!(element.attributes()[0].value(), "1");
+        assert!(matches!(&owned[1], XmlEvent::Text(t) if t == "text"));
+        assert!(matches!(&owned[2], XmlEvent::End(n) if n.qualified_name() == "e"));
+    }
+
+    // G7 — raw CDATA content.
+    #[test]
+    fn cdata_content_is_preserved_raw() {
+        let events = read_all(b"<e><![CDATA[raw <>& ]]></e>").expect("parse");
+        assert!(matches!(&events[1], XmlEvent::CData(t) if t == "raw <>& "));
+    }
+
+    // G8 — text interleaved with predefined and numeric references.
+    #[test]
+    fn references_are_explicit_events_never_expanded() {
+        let events = read_all(b"<e>a&lt;b&#65;c</e>").expect("parse");
+        assert!(matches!(&events[1], XmlEvent::Text(t) if t == "a"));
+        assert!(matches!(
+            &events[2],
+            XmlEvent::Reference(r) if r.value() == XmlReferenceValue::Entity("<")
+        ));
+        assert!(matches!(&events[3], XmlEvent::Text(t) if t == "b"));
+        assert!(matches!(
+            &events[4],
+            XmlEvent::Reference(r) if r.value() == XmlReferenceValue::Char('A')
+        ));
+        assert!(matches!(&events[5], XmlEvent::Text(t) if t == "c"));
+    }
+
+    // G9 — declaration version/encoding/standalone.
+    #[test]
+    fn declaration_carries_version_encoding_standalone() {
+        let events = read_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><e/>"#)
+            .expect("parse");
+        match &events[0] {
+            XmlEvent::Declaration(decl) => {
+                assert_eq!(decl.version(), "1.0");
+                assert_eq!(decl.encoding(), Some("UTF-8"));
+                assert_eq!(decl.standalone(), Some(true));
+            }
+            other => panic!("expected Declaration, got {other:?}"),
+        }
+    }
+
+    // G10 — processing instructions and comments.
+    #[test]
+    fn pi_and_comment_events_preserve_content() {
+        let events = read_all(b"<?pi data?><!-- c --><e/>").expect("parse");
+        match &events[0] {
+            XmlEvent::ProcessingInstruction(pi) => {
+                assert_eq!(pi.target(), "pi");
+                assert_eq!(pi.content(), " data");
+            }
+            other => panic!("expected PI, got {other:?}"),
+        }
+        assert!(matches!(&events[1], XmlEvent::Comment(t) if t == " c "));
+        assert!(matches!(events[2], XmlEvent::Empty(_)));
+    }
+
+    // G11 — empty and whitespace-only input.
+    #[test]
+    fn empty_and_whitespace_inputs() {
+        let events = read_all(b"").expect("empty parses");
+        assert!(matches!(events.as_slice(), []));
+        let events = read_all(b"   \n").expect("whitespace parses");
+        assert!(
+            events
+                .iter()
+                .all(|e| matches!(e, XmlEvent::Text(t) if t.trim().is_empty())),
+            "whitespace-only input must yield at most whitespace text: {events:?}"
+        );
+    }
+
+    // G12 — End names resolve inside the element's scope before pop.
+    #[test]
+    fn end_names_resolve_before_scope_pop() {
+        let events = read_all(br#"<p:e xmlns:p="urn:p"></p:e>"#).expect("parse");
+        match &events[1] {
+            XmlEvent::End(name) => {
+                assert_eq!(name.qualified_name(), "p:e");
+                assert_eq!(name.namespace(), Some("urn:p"));
+            }
+            other => panic!("expected End, got {other:?}"),
+        }
+    }
+
+    // G13 — normalized attribute values (references + whitespace rules).
+    #[test]
+    fn attribute_normalized_value_unescapes_and_folds() {
+        let mut input = br#"<e a="x&#9;y" b="p  q"/>"#.as_slice();
+        let mut reader = XmlEventReader::new(&mut input, &options());
+        let mut buffer = XmlEventBuffer::new();
+        let event = reader
+            .read_event(&mut buffer)
+            .expect("read")
+            .expect("event");
+        let XmlEventRef::Empty(element) = event else {
+            panic!("expected Empty, got {event:?}");
+        };
+        let attrs = element.attributes();
+        // &#9; resolves to a tab which attribute normalization keeps.
+        assert_eq!(
+            attrs[0].normalized_value().expect("normalized").as_ref(),
+            "x\ty"
+        );
+        // Literal whitespace stays (CDATA-type normalization only maps
+        // each whitespace char to a space, it does not collapse runs).
+        assert_eq!(
+            attrs[1].normalized_value().expect("normalized").as_ref(),
+            "p  q"
+        );
+    }
+
+    // G14 — reader position/depth observability.
+    #[test]
+    fn position_and_depth_track_the_stream() {
+        let mut input = b"<a><b/></a>".as_slice();
+        let mut reader = XmlEventReader::new(&mut input, &options());
+        let mut buffer = XmlEventBuffer::new();
+        assert_eq!(reader.position().byte, Some(0));
+        assert_eq!(reader.depth(), 0);
+        let event = reader
+            .read_event(&mut buffer)
+            .expect("read")
+            .expect("event");
+        assert!(matches!(event, XmlEventRef::Start(_)));
+        assert_eq!(reader.depth(), 1);
+        assert_eq!(reader.position().byte, Some(3));
+        let event = reader
+            .read_event(&mut buffer)
+            .expect("read")
+            .expect("event");
+        assert!(matches!(event, XmlEventRef::Empty(_)));
+        assert_eq!(reader.depth(), 2);
+        let event = reader
+            .read_event(&mut buffer)
+            .expect("read")
+            .expect("event");
+        assert!(matches!(event, XmlEventRef::End(_)));
+        assert_eq!(reader.depth(), 1, "end element still open until next read");
+    }
+
+    // N1 — input byte budget.
+    #[test]
+    fn byte_budget_is_limit_exceeded() {
+        let mut options = options();
+        options.limits = InputLimits::new(8);
+        let error = read_err(b"<root>long document</root>", &options);
+        assert_eq!(error.kind(), DocumentErrorKind::LimitExceeded);
+        assert_eq!(error.limit().expect("limit").name, "max_bytes");
+        assert_eq!(error.format(), DocumentFormat::Xml);
+    }
+
+    // N2 — depth limit.
+    #[test]
+    fn depth_limit_is_limit_exceeded() {
+        let mut options = options();
+        options.max_depth = Some(1);
+        let error = read_err(b"<a><b/></a>", &options);
+        assert_eq!(error.kind(), DocumentErrorKind::LimitExceeded);
+        assert_eq!(error.limit().expect("limit").name, "max_depth");
+        assert_eq!(error.limit().expect("limit").max, 1);
+    }
+
+    // N3 — attribute limit.
+    #[test]
+    fn attribute_limit_is_limit_exceeded() {
+        let mut options = options();
+        options.max_attributes = Some(1);
+        let error = read_err(br#"<e a="1" b="2"/>"#, &options);
+        assert_eq!(error.kind(), DocumentErrorKind::LimitExceeded);
+        assert_eq!(error.limit().expect("limit").name, "max_attributes");
+    }
+
+    // N4 — event byte limit.
+    #[test]
+    fn event_byte_limit_is_limit_exceeded() {
+        let mut options = options();
+        options.max_event_bytes = Some(5);
+        let error = read_err(b"<e>hello world</e>", &options);
+        assert_eq!(error.kind(), DocumentErrorKind::LimitExceeded);
+        assert_eq!(error.limit().expect("limit").name, "max_event_bytes");
+    }
+
+    // N5 — event count limit.
+    #[test]
+    fn event_count_limit_is_limit_exceeded() {
+        let mut options = options();
+        options.max_events = Some(1);
+        let error = read_err(b"<a><b/></a>", &options);
+        assert_eq!(error.kind(), DocumentErrorKind::LimitExceeded);
+        assert_eq!(error.limit().expect("limit").name, "max_events");
+    }
+
+    // N6 — namespace binding limit.
+    #[test]
+    fn namespace_binding_limit_is_limit_exceeded() {
+        let mut options = options();
+        options.max_namespace_bindings = Some(1);
+        let error = read_err(br#"<e xmlns:a="u:a" xmlns:b="u:b"/>"#, &options);
+        assert_eq!(error.kind(), DocumentErrorKind::LimitExceeded);
+        assert_eq!(error.limit().expect("limit").name, "max_namespace_bindings");
+    }
+
+    // N7/N8 — internal and external DTD rejected.
+    #[test]
+    fn doctype_is_rejected_as_unsupported() {
+        for doc in [
+            &b"<!DOCTYPE e [<!ENTITY x \"y\">]><e/>"[..],
+            &b"<!DOCTYPE e SYSTEM \"x.dtd\"><e/>"[..],
+        ] {
+            let error = read_err(doc, &options());
+            assert_eq!(error.kind(), DocumentErrorKind::Unsupported);
+            assert_eq!(error.format(), DocumentFormat::Xml);
+        }
+    }
+
+    // N9 — undefined general entity rejected.
+    #[test]
+    fn undefined_entity_is_unsupported() {
+        let error = read_err(b"<e>&foo;</e>", &options());
+        assert_eq!(error.kind(), DocumentErrorKind::Unsupported);
+    }
+
+    // N10 — invalid UTF-8.
+    #[test]
+    fn invalid_utf8_is_invalid_encoding() {
+        let error = read_err(b"<e>\xff\xfe</e>", &options());
+        assert_eq!(error.kind(), DocumentErrorKind::InvalidEncoding);
+    }
+
+    // N11 — mismatched end tag.
+    #[test]
+    fn mismatched_end_tag_is_syntax() {
+        let error = read_err(b"<a></b>", &options());
+        assert_eq!(error.kind(), DocumentErrorKind::Syntax);
+    }
+
+    // N12 — duplicate attributes.
+    #[test]
+    fn duplicate_attributes_are_syntax() {
+        let error = read_err(br#"<e a="1" a="2"/>"#, &options());
+        assert_eq!(error.kind(), DocumentErrorKind::Syntax);
+        assert!(error.source().is_some(), "backend diagnostic preserved");
+    }
+
+    // N13 — invalid comment (`--` inside).
+    #[test]
+    fn double_hyphen_in_comment_is_syntax() {
+        let error = read_err(b"<e><!-- a -- b --></e>", &options());
+        assert_eq!(error.kind(), DocumentErrorKind::Syntax);
+    }
+
+    // N14 — unclosed reference.
+    #[test]
+    fn unclosed_reference_is_syntax() {
+        let error = read_err(b"<e>&amp</e>", &options());
+        assert_eq!(error.kind(), DocumentErrorKind::Syntax);
+    }
+
+    // N15 — undeclared prefix.
+    #[test]
+    fn undeclared_prefix_is_syntax() {
+        let error = read_err(b"<p:e/>", &options());
+        assert_eq!(error.kind(), DocumentErrorKind::Syntax);
+    }
+
+    // N16 — invalid `xml` prefix binding.
+    #[test]
+    fn invalid_xml_prefix_bind_is_syntax() {
+        let error = read_err(br#"<e xmlns:xml="http://wrong"/>"#, &options());
+        assert_eq!(error.kind(), DocumentErrorKind::Syntax);
+    }
+
+    // N17 — non-UTF-8 declared encoding.
+    #[test]
+    fn non_utf8_declared_encoding_is_unsupported() {
+        let error = read_err(
+            br#"<?xml version="1.0" encoding="Shift_JIS"?><e/>"#,
+            &options(),
+        );
+        assert_eq!(error.kind(), DocumentErrorKind::Unsupported);
+    }
+
+    // N18 — malformed character reference.
+    #[test]
+    fn malformed_char_ref_is_syntax() {
+        let error = read_err(b"<e>&#xZZ;</e>", &options());
+        assert_eq!(error.kind(), DocumentErrorKind::Syntax);
+    }
+
+    // N19 — lower-level I/O failure.
+    #[test]
+    fn io_failure_is_io() {
+        struct Fail;
+        impl Read for Fail {
+            fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+                Err(io::Error::other("boom"))
+            }
+        }
+        impl BufRead for Fail {
+            fn fill_buf(&mut self) -> io::Result<&[u8]> {
+                Err(io::Error::other("boom"))
+            }
+            fn consume(&mut self, _amount: usize) {}
+        }
+        let mut fail = Fail;
+        let mut reader = XmlEventReader::new(&mut fail, &options());
+        let mut buffer = XmlEventBuffer::new();
+        let error = reader.read_event(&mut buffer).expect_err("io failure");
+        assert_eq!(error.kind(), DocumentErrorKind::Io);
+    }
+
+    // S1 — streaming consumption: lookahead stays bounded.
+    #[test]
+    fn lookahead_is_bounded() {
+        let mut doc = b"<root>".to_vec();
+        doc.extend(std::iter::repeat_n(b"<i>x</i>".as_slice(), 20_000).flatten());
+        doc.extend_from_slice(b"</root>");
+        let mut cursor = io::Cursor::new(doc);
+        let mut reader = XmlEventReader::new(&mut cursor, &options());
+        let mut buffer = XmlEventBuffer::new();
+        assert!(reader.read_event(&mut buffer).expect("read").is_some());
+        assert!(
+            cursor.position() <= 16 * 1024,
+            "reader must not drain the input: position {}",
+            cursor.position()
+        );
+    }
+
+    // S2 — buffer capacity is reused across reads.
+    #[test]
+    fn buffer_capacity_is_reused() {
+        let mut input = b"<a><big>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</big><b/></a>".as_slice();
+        let mut reader = XmlEventReader::new(&mut input, &options());
+        let mut buffer = XmlEventBuffer::new();
+        // Read past the large text event, then reuse the buffer.
+        for _ in 0..3 {
+            assert!(reader.read_event(&mut buffer).expect("read").is_some());
+        }
+        let capacity = buffer.capacity();
+        assert!(capacity >= 40, "buffer should hold the largest event");
+        assert!(reader.read_event(&mut buffer).expect("read").is_some());
+        assert!(
+            buffer.capacity() >= capacity,
+            "capacity is reused, never shrunk"
+        );
+    }
+
+    // S3 — owned events survive buffer reuse.
+    #[test]
+    fn owned_event_survives_buffer_reuse() {
+        let mut input = b"<a><b>first</b><c>second</c></a>".as_slice();
+        let mut reader = XmlEventReader::new(&mut input, &options());
+        let mut buffer = XmlEventBuffer::new();
+        assert!(reader.read_event(&mut buffer).expect("read").is_some());
+        let mut owned = None;
+        while let Some(event) = reader.read_event(&mut buffer).expect("read") {
+            if matches!(&event, XmlEventRef::Text(t) if t == "first") {
+                owned = Some(event.to_owned());
+            }
+        }
+        assert!(matches!(&owned, Some(XmlEvent::Text(t)) if t == "first"));
+    }
+
+    // S4 — reader methods stay callable while an event is borrowed.
+    #[test]
+    fn reader_usable_while_event_borrowed() {
+        let mut input = b"<a><b/></a>".as_slice();
+        let mut reader = XmlEventReader::new(&mut input, &options());
+        let mut buffer = XmlEventBuffer::new();
+        let event = reader
+            .read_event(&mut buffer)
+            .expect("read")
+            .expect("event");
+        assert!(matches!(event, XmlEventRef::Start(_)));
+        // position/depth usable while `event` borrows the buffer.
+        assert_eq!(reader.depth(), 1);
+        assert!(reader.position().byte.is_some());
+        assert_eq!(reader.events_emitted(), 1);
+    }
+
+    // S6 — deterministic seeded fuzz: arbitrary bytes never panic.
+    #[test]
+    fn seeded_fuzz_never_panics() {
+        // xorshift64 — deterministic across runs/platforms.
+        let mut state = 0x9E37_79B9_7F4A_7C15_u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let fragments: &[&[u8]] = &[
+            b"<a>",
+            b"</a>",
+            b"<b",
+            b"/>",
+            b"&amp;",
+            b"&#65;",
+            b"&x;",
+            b"<!--",
+            b"-->",
+            b"<![CDATA[",
+            b"]]>",
+            b"<?p ",
+            b"?>",
+            b"<!DOCTYPE",
+            b"\"",
+            b"'",
+            b"=",
+            b"xmlns",
+            b":",
+            b" ",
+            b"<",
+            b">",
+            b"&",
+            b";",
+            b"text",
+            b"\x00",
+            b"\xff",
+            b"<?xml version=\"1.0\"?>",
+        ];
+        for _ in 0..200 {
+            let len = usize::try_from(next() % 40).expect("len fits usize");
+            let mut doc = Vec::new();
+            for _ in 0..len {
+                let index = usize::try_from(next() % fragments.len() as u64).expect("index fits");
+                doc.extend_from_slice(fragments[index]);
+            }
+            let mut input = doc.as_slice();
+            let mut reader = XmlEventReader::new(&mut input, &options());
+            let mut buffer = XmlEventBuffer::new();
+            while let Ok(Some(_)) = reader.read_event(&mut buffer) {}
+        }
+    }
+
+    // S8 — repeated reads after EOF keep returning Ok(None).
+    #[test]
+    fn reads_after_eof_stay_none() {
+        let mut input = b"<a/>".as_slice();
+        let mut reader = XmlEventReader::new(&mut input, &options());
+        let mut buffer = XmlEventBuffer::new();
+        assert!(reader.read_event(&mut buffer).expect("read").is_some());
+        for _ in 0..3 {
+            assert!(reader.read_event(&mut buffer).expect("read").is_none());
+        }
+    }
+
+    // S9 — buffer clear/reuse and poisoned readers keep failing.
+    #[test]
+    fn buffer_clear_and_error_poisoning() {
+        let mut input = b"<a>text</a><b/>".as_slice();
+        let mut reader = XmlEventReader::new(&mut input, &options());
+        let mut buffer = XmlEventBuffer::new();
+        assert!(reader.read_event(&mut buffer).expect("read").is_some());
+        buffer.clear();
+        assert!(reader.read_event(&mut buffer).expect("read").is_some());
+
+        // After an error the reader stays poisoned.
+        let mut input = b"<a></b>".as_slice();
+        let mut reader = XmlEventReader::new(&mut input, &options());
+        assert!(reader.read_event(&mut buffer).expect("read").is_some());
+        let first = reader.read_event(&mut buffer).expect_err("syntax");
+        assert_eq!(first.kind(), DocumentErrorKind::Syntax);
+        let second = reader.read_event(&mut buffer).expect_err("still poisoned");
+        assert_eq!(second.kind(), DocumentErrorKind::Syntax);
+    }
+}
+
+#[cfg(all(feature = "xml", feature = "file"))]
+mod xml_file_tests {
+    use ruviform_io_structured::xml::{self, XmlEvent, XmlReadOptions};
+    use ruviform_io_structured::{DocumentErrorKind, DocumentFileReadError};
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn workdir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "ruviform-io-structured-xml-file-{tag}-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).expect("create workdir");
+        dir
+    }
+
+    struct DirGuard(PathBuf);
+    impl Drop for DirGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    // S5 — `xml + file` composition and error-axis separation.
+    #[test]
+    fn read_file_round_trip_and_error_axes() {
+        let dir = workdir("read");
+        let _guard = DirGuard(dir.clone());
+        let dest = dir.join("doc.xml");
+        fs::write(&dest, br#"<root xmlns="urn:x"><item a="1">t</item></root>"#)
+            .expect("write fixture");
+
+        let events = xml::read_file(&dest, &XmlReadOptions::default()).expect("read");
+        assert!(matches!(events[0], XmlEvent::Start(_)));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, XmlEvent::Text(t) if t == "t"))
+        );
+
+        // Missing file → Open axis.
+        let missing = dir.join("missing.xml");
+        let err = xml::read_file(&missing, &XmlReadOptions::default())
+            .expect_err("missing file must fail");
+        assert!(matches!(err, DocumentFileReadError::Open(_)));
+
+        // Malformed content → Decode axis with normalized kind.
+        let bad = dir.join("bad.xml");
+        fs::write(&bad, b"<a></b>").expect("write bad fixture");
+        let err =
+            xml::read_file(&bad, &XmlReadOptions::default()).expect_err("malformed must fail");
+        match err {
+            DocumentFileReadError::Decode(e) => {
+                assert_eq!(e.kind(), DocumentErrorKind::Syntax);
+            }
+            other => panic!("expected Decode, got {other:?}"),
+        }
+    }
+}
