@@ -82,6 +82,7 @@ Directory: `docs/designs`
 | DESIGN-elUvrfyRcsMrmrESYqsxDn | Issue #336 SinkDegraded Clone 設計 | approved | [issue-336-sink-degraded-clone.md](./issue-336-sink-degraded-clone.md) |
 | DESIGN-034RP4B7OViSh6O4YCu1rz | Issue #346 CI-OPT-06 選択実行有効化・ruleset required context 移行 runbook | approved | [issue-346-ruleset-migration-runbook.md](./issue-346-ruleset-migration-runbook.md) |
 | DESIGN-034SmuehTqDxp5K68M5dSG | Issue #366+#364 Full CI Stage 1 設計 — 選択実行撤去・3OS 常時実行・ci-summary fail-closed・expected_sha 契約 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
+| DESIGN-034SmBuqxSVw74rlBganJD | Issue #360 設計 — heir 系テストの exit を post-mint へ message 順序で固定 | approved | [issue-360-heir-exit-post-mint-ordering.md](./issue-360-heir-exit-post-mint-ordering.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |

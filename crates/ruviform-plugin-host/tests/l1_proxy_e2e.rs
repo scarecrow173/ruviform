@@ -554,21 +554,33 @@ fn wedged_child_write_converges_and_teardown_is_bounded() {
     );
 }
 
-/// Detached reader (A4): `--leave-heir-after-msgs=2` makes the worker
-/// answer `Scan` and `CreateInstance` (the whole handshake), then
-/// spawn a stdio-inheriting
-/// grandchild and exit — the parent's stdout pipe stays open, so the
-/// reader thread never observes EOF. `try_wait` still converges
+/// Detached reader (A4): `--leave-heir-after-msgs=3` makes the worker
+/// answer `Scan`, `CreateInstance`, and one post-mint `Initialize`
+/// (the handshake plus the trigger message), then spawn a
+/// stdio-inheriting grandchild and exit — the parent's stdout pipe
+/// stays open, so the reader thread never observes EOF. `try_wait` still converges
 /// `Failed`, and destroy/drop must detach the blocked reader rather
 /// than join it.
 #[test]
 fn destroy_detaches_reader_when_heir_holds_stdout() {
     let mut instance = L1Instance::spawn(
-        &spec(&["--leave-heir-after-msgs=2"]),
+        &spec(&["--leave-heir-after-msgs=3"]),
         &DiagRegistry::new(),
         None,
     )
     .unwrap();
+
+    // `Scan`/`CreateInstance` are messages 1-2 — this 3rd message
+    // can only be sent after `spawn` returned (mint committed), so
+    // the exit it triggers is causally post-mint and the
+    // `SpawnFailed{ExitObserved}` fold can never fire (Issue #360).
+    // The reply may still lose the demux race to the exit's
+    // convergence — `Err(Ipc)` is the defined outcome.
+    let replied = instance.execute(wire::Command::Initialize);
+    assert!(
+        matches!(replied, Ok(_) | Err(HostError::Ipc)),
+        "leave trigger must be answered or raced: {replied:?}"
+    );
 
     wait_for_failed(&instance);
     let notice = wait_notification(&instance).expect("notification missing");
@@ -3930,11 +3942,20 @@ mod composite_e2e {
     /// drain stops itself rather than joining a 15 s grandchild.
     #[test]
     fn leave_heir_yields_exit_observed_and_bounded_drain() {
-        let mut host = mixed_host(&["--leave-heir-after-msgs=2"]);
-        // `Scan` and `CreateInstance` are messages 1 and 2 — the
-        // heir fires *after* the create reply, so mint succeeds
-        // before the parent exits.
+        let mut host = mixed_host(&["--leave-heir-after-msgs=3"]);
         let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        // `Scan`/`CreateInstance` are messages 1-2 — this 3rd
+        // message can only be sent after `instantiate` returned
+        // (mint committed), so the exit it triggers is causally
+        // post-mint and the `SpawnFailed{ExitObserved}` fold can
+        // never fire (Issue #360). The reply may still lose the
+        // demux race to the exit's convergence — `Err(Ipc)` is the
+        // defined outcome.
+        let replied = host.execute(HostCommand::Initialize { handle: l1 });
+        assert!(
+            matches!(replied, Ok(_) | Err(HostError::Ipc)),
+            "leave trigger must be answered or raced: {replied:?}"
+        );
         wait_host_failed(&host, l1);
         // The record freezes at notification-pop — `freeze` itself
         // waits on the drain condvar for `DrainState::Done` once
@@ -3974,11 +3995,23 @@ mod composite_e2e {
     #[test]
     fn heir_stderr_inside_grace_lands_in_record() {
         let mut host = mixed_host(&[
-            "--leave-heir-after-msgs=2",
+            "--leave-heir-after-msgs=3",
             "--heir-stderr-bytes=4096",
             "--heir-stderr-delay-ms=100",
         ]);
         let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        // `Scan`/`CreateInstance` are messages 1-2 — this 3rd
+        // message can only be sent after `instantiate` returned
+        // (mint committed), so the exit it triggers is causally
+        // post-mint and the `SpawnFailed{ExitObserved}` fold can
+        // never fire (Issue #360). The reply may still lose the
+        // demux race to the exit's convergence — `Err(Ipc)` is the
+        // defined outcome.
+        let replied = host.execute(HostCommand::Initialize { handle: l1 });
+        assert!(
+            matches!(replied, Ok(_) | Err(HostError::Ipc)),
+            "leave trigger must be answered or raced: {replied:?}"
+        );
         wait_host_failed(&host, l1);
         // The notification pop's `freeze` waits for
         // `DrainState::Done` — the mid-grace emission is read
@@ -4013,11 +4046,23 @@ mod composite_e2e {
     #[test]
     fn heir_stderr_after_drain_stop_is_never_read() {
         let mut host = mixed_host(&[
-            "--leave-heir-after-msgs=2",
+            "--leave-heir-after-msgs=3",
             "--heir-stderr-bytes=4096",
             "--heir-stderr-delay-ms=1200",
         ]);
         let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+        // `Scan`/`CreateInstance` are messages 1-2 — this 3rd
+        // message can only be sent after `instantiate` returned
+        // (mint committed), so the exit it triggers is causally
+        // post-mint and the `SpawnFailed{ExitObserved}` fold can
+        // never fire (Issue #360). The reply may still lose the
+        // demux race to the exit's convergence — `Err(Ipc)` is the
+        // defined outcome.
+        let replied = host.execute(HostCommand::Initialize { handle: l1 });
+        assert!(
+            matches!(replied, Ok(_) | Err(HostError::Ipc)),
+            "leave trigger must be answered or raced: {replied:?}"
+        );
         wait_host_failed(&host, l1);
         // The notification pop's `freeze` returns only once the
         // drain posts `DrainState::Done` at its own deadline —
