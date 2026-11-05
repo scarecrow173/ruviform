@@ -129,12 +129,52 @@ test("decide: unrecognised conclusion on latest run -> hold-unknown, never dispa
   }
 });
 
+test("decide: unidentifiable history records hold every verdict", () => {
+  // Records lacking the identification metadata needed to prove them
+  // on-target OR off-target may hide an attempt on this SHA in any
+  // state — no dispatch, no skip-verified, whatever else is visible.
+  const variants = [
+    [{}], // completely empty record
+    [{ head_branch: "main", event: "push" }], // branch+event match but no head_sha — could be our SHA
+    [{ head_sha: SHA_A, event: "push" }], // on-SHA event run but no branch — could be on main
+    [{ head_sha: "notasha", head_branch: "main", event: "push" }], // corrupt sha — cannot prove non-target
+    [{ event: "schedule" }], // in-allowlist event, nothing else
+    [null], // non-object record reaching the pure core
+    [run({ event: "pull_request", head_branch: "main" }), {}], // mixed: one excluded, one unidentifiable
+  ];
+  for (const runs of variants) {
+    const d = decideOn(runs);
+    assert.equal(d.decision, "hold-unknown", JSON.stringify(runs));
+    assert.ok(d.unidentifiable.length >= 1, JSON.stringify(runs));
+  }
+});
+
+test("decide: unidentifiable record cannot hide behind a visible success", () => {
+  // A provable success run plus a record we cannot place — the success
+  // claim must not be recorded while the unverified state may be hidden.
+  const d = decideOn([run({ conclusion: "success" }), {}]);
+  assert.equal(d.decision, "hold-unknown");
+});
+
+test("decide: clearly non-target records are still excluded normally", () => {
+  // Only records that PROVE exclusion drop out — pull_request event,
+  // other branch, other valid sha.
+  const d = decideOn([
+    run({ event: "pull_request", head_branch: "main" }),
+    run({ head_branch: "feature" }),
+    run({ head_sha: SHA_B }),
+    run({ head_sha: "0123456789abcdef0123456789abcdef01234599" }),
+  ]);
+  assert.equal(d.unidentifiable.length, 0);
+  assert.equal(d.decision, "dispatch");
+});
+
 test("decide: pull_request / other branch / other sha runs are ignored", () => {
   const d = decideOn([
     run({ event: "pull_request", head_branch: "main" }),
     run({ event: "push", head_branch: "feature/x" }),
     run({ event: "push", head_sha: SHA_B }),
-    run({ event: "workflow_dispatch", head_sha: "notasha" }),
+    run({ event: "workflow_dispatch", head_sha: SHA_B }),
   ]);
   assert.equal(d.attempts.length, 0);
   assert.equal(d.decision, "dispatch");
@@ -197,6 +237,39 @@ test("decide: unidentifiable-actor dispatch counts toward the budget", () => {
   ]);
   assert.equal(d.autoDispatches.length, 2);
   assert.equal(d.decision, "budget-exhausted");
+});
+
+test("decide: one-sided or malformed actor provenance still counts toward the budget", () => {
+  // Only BOTH sides identifying as non-auto actors proves a manual
+  // origin. An unidentifiable side — null, empty login, non-object —
+  // cannot disprove automation, so the dispatch still counts.
+  const variants = [
+    { actor: null, triggering_actor: { login: "maintainer" } }, // the coordinator's rerun case
+    { actor: { login: "maintainer" }, triggering_actor: null },
+    { actor: {}, triggering_actor: { login: "maintainer" } },
+    { actor: { login: "" }, triggering_actor: { login: "maintainer" } },
+    { actor: "weird", triggering_actor: { login: "maintainer" } },
+    { actor: null }, // triggering_actor left at human default
+    { actor: undefined, triggering_actor: undefined }, // both fields absent entirely
+  ];
+  for (const provenance of variants) {
+    const runs = [
+      run({ event: "workflow_dispatch", conclusion: "failure", ...provenance }),
+      run({ event: "workflow_dispatch", conclusion: "failure", ...provenance }),
+    ];
+    const d = decideOn(runs);
+    assert.equal(d.autoDispatches.length, 2, JSON.stringify(provenance));
+    assert.equal(d.decision, "budget-exhausted", JSON.stringify(provenance));
+  }
+});
+
+test("decide: both-sides-human dispatch stays manual", () => {
+  const d = decideOn([
+    run({ event: "workflow_dispatch", conclusion: "failure", actor: { login: "alice" }, triggering_actor: { login: "bob" } }),
+    run({ event: "workflow_dispatch", conclusion: "failure", actor: { login: "alice" }, triggering_actor: { login: "bob" } }),
+  ]);
+  assert.equal(d.autoDispatches.length, 0);
+  assert.equal(d.decision, "dispatch");
 });
 
 test("decide: push runs never consume the dispatch budget", () => {
@@ -452,6 +525,93 @@ test("execute: malformed runs-list response -> error, no dispatch", async () => 
   });
   assert.equal(outcome, "error");
   assert.equal(exitCode, 1);
+});
+
+test("execute: malformed workflow_runs entries -> error, no dispatch", async () => {
+  // Records missing the identification/state fields every real run
+  // carries fail the list-response schema — malformed response, never
+  // "ignorable run" and never empty history.
+  const malformedEntries = [
+    [{}],
+    [{ id: 1 }],
+    [{ id: 1, head_sha: SHA_A, head_branch: "main", event: "push" }], // status missing
+    [{ id: 1, head_sha: SHA_A, head_branch: "main", status: "completed" }], // event missing
+    [null],
+  ];
+  for (const entries of malformedEntries) {
+    let dispatches = 0;
+    const client = createGitHubClient({
+      token: "t",
+      repo: "o/r",
+      apiBase: "https://api.invalid",
+      fetchImpl: async (url, init) => {
+        if (init.method === "POST") { dispatches += 1; return new Response(null, { status: 204 }); }
+        if (url.includes("/git/ref/")) {
+          return new Response(JSON.stringify({ object: { sha: SHA_A } }));
+        }
+        return new Response(JSON.stringify({ workflow_runs: entries }));
+      },
+    });
+    const { outcome, exitCode } = await execute({
+      client,
+      repo: "o/r",
+      workflow: "ci.yml",
+      mainRef: "main",
+      autoActors: [BOT],
+      maxAutoDispatches: 2,
+      maxPages: 10,
+      maxRechecks: 2,
+      confirmTimeoutMs: 100,
+      confirmIntervalMs: 10,
+      dryRun: false,
+      sleep: async () => {},
+      now: () => "2026-11-06T00:00:00.000Z",
+    });
+    assert.equal(outcome, "error", JSON.stringify(entries));
+    assert.equal(exitCode, 1);
+    assert.equal(dispatches, 0);
+  }
+});
+
+test("execute: schema-valid but unidentifiable entries -> hold, no dispatch", async () => {
+  // Fields exist but carry no provable identity: a record that passes
+  // the wire schema yet cannot be proven on-target or off-target.
+  // The decision core must hold rather than dispatch or skip.
+  const client = createGitHubClient({
+    token: "t",
+    repo: "o/r",
+    apiBase: "https://api.invalid",
+    fetchImpl: async (url, init) => {
+      if (init.method === "POST") return new Response(null, { status: 204 });
+      if (url.includes("/git/ref/")) {
+        return new Response(JSON.stringify({ object: { sha: SHA_A } }));
+      }
+      return new Response(
+        JSON.stringify({
+          workflow_runs: [
+            { id: 1, head_sha: "notasha", head_branch: "main", event: "push", status: "completed" },
+          ],
+        }),
+      );
+    },
+  });
+  const { outcome, report } = await execute({
+    client,
+    repo: "o/r",
+    workflow: "ci.yml",
+    mainRef: "main",
+    autoActors: [BOT],
+    maxAutoDispatches: 2,
+    maxPages: 10,
+    maxRechecks: 2,
+    confirmTimeoutMs: 100,
+    confirmIntervalMs: 10,
+    dryRun: false,
+    sleep: async () => {},
+    now: () => "2026-11-06T00:00:00.000Z",
+  });
+  assert.equal(outcome, "hold-unknown");
+  assert.equal(report.unidentifiableCount, 1);
 });
 
 test("execute: human dispatch racing ours is reported, not hidden", async () => {

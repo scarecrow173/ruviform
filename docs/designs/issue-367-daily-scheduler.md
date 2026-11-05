@@ -105,6 +105,8 @@ Issue #367 はこの「起動側」を実装する。GitHub Actions run 履歴�
 
 **有効 Full CI run の同定**（`attemptsOn(sha)`）: `head_sha === sha` **かつ** `head_branch === mainRef` **かつ** `event ∈ FULL_CI_EVENTS`。`FULL_CI_EVENTS = {push, workflow_dispatch, schedule}`（移行中の push run も同一 lane 集合を走るため有効な検証。`pull_request` run は merge commit ではなく PR head を指し `head_branch` も main でないため構造的に除外される。未知 event は allowlist 外として無視 — 誤って検証済みに寄与しない）。`status`/`conclusion`/`run_attempt` は各 run の**最新 attempt** を表す（list API 契約）。
 
+**非対象除外は positive proof 制**: run を attemptsOn から外せるのは、いずれかのフィールドが「対象でない」ことを立証できる場合のみ — 有効 40-hex `head_sha` ≠ sha・非空 `head_branch` ≠ mainRef・非空 `event` ∉ FULL_CI_EVENTS。`{}`・`head_sha` 欠落・破損 sha（"notasha"）など、on-target 立証も off-target 立証もできない record は **unidentifiable** — 任意の状態の attempt を隠しうるため、1 件でも存在すれば全 verdict を `hold-unknown` に倒す（dispatch でも skip-verified でもない）。これは listRuns の wire schema 検証（`id`/`head_sha`/`head_branch`/`event`/`status` 必須 → 欠落は malformed `error`）とは別層の防御: schema を通るが意味的に識別不能な record と、fixture 等 client を介さない経路を守る。
+
 **attempt の時系列順序**（fail-closed）: `attemptTime(r) = max(created_at, run_started_at)` — `created_at` は run の作成時刻で動かず、`run_started_at` は**最新 attempt の開始時刻**なので rerun すると前に進む（実 API 実測: run 41958976200 attempt 2, created 03:01 / started 03:07 / updated 03:10）。`updated_at` は attempt 外の bookkeeping でも動きうるため順序キーには使わず、**曖昧性プローブ**として使う（後述 #3'）。タイムスタンプ tie は run id 降順、解釈不能な時刻の run は unorderable として最後尾（「最新」ではない）。
 
 **decision 列**（この順で評価）:
@@ -112,17 +114,18 @@ Issue #367 はこの「起動側」を実装する。GitHub Actions run 履歴�
 | # | 条件 | decision | dispatch |
 |---|---|---|---|
 | 1 | attemptsOn(S) に in-flight（`status ∈ {queued, waiting, in_progress, pending, requested}`）あり | `suppress-in-flight` | × |
+| 1' | 履歴内に target/non-target いずれとも立証できない record（unidentifiable、上記 positive-proof 制）が 1 件でも | `hold-unknown` | × |
 | 2 | 最新 attempt の `status` が上記でも `completed` でもない、または `completed` で `conclusion` が既知集合（`success`/`failure`/`neutral`/`cancelled`/`skipped`/`timed_out`/`action_required`/`startup_failure`/`stale`）外 | `hold-unknown` | × |
 | 3 | 最新 attempt が `completed` + `conclusion === 'success'` | → 3' |
 | 3' | 3 の直前チェック — 他 run が (a) attemptTime 同一・(b) unorderable・(c) `updated_at` が最新 attemptTime より新しい（attempt 化していない不可解な活動、例: rerun 記録の反映遅延）のいずれかで「最新」の一意性を争う | `hold-unknown` | × |
 | 3'' | 3' で争いなし | `skip-verified` | × |
 | 4 | 最新 attempt が `completed` 非 success、または attempts 空（履歴なし・保持期間外） | candidate | → 5 |
-| 5 | `autoDispatches(S) = attemptsOn(S) ∩ {event === workflow_dispatch ∧ (actor.login ∈ autoActors ∨ triggering_actor.login ∈ autoActors ∨ 両者未識別)}` が `maxAutoDispatches` 以上 | `budget-exhausted` | × |
+| 5 | `autoDispatches(S) = attemptsOn(S) ∩ {event === workflow_dispatch ∧ ¬(actor.login と triggering_actor.login が両方とも非 auto actor と識別可能)}` が `maxAutoDispatches` 以上 | `budget-exhausted` | × |
 | 6 | 上記以外 | `dispatch` | ○ |
 
 - 優先度: in-flight > unknown > verified(曖昧性チェック付き) > retry/budget。実行中 run があれば結論を待つ（重複 dispatch 抑止）。未知状態は「分類不能 → 動かない」が安全側。success 主張は「最新が一意に立証できる」場合のみ許可 — tie・順序不能・説明のつかない新規活動があると `hold-unknown`（偽 success を絶対に記録しない）。tie で非 success が最新側なら `dispatch`（bounded retry は検証主張ではないため安全側解決）。
 - `conclusion` の既知非 success 値は retry 候補。未知・null の conclusion は retry 候補にしない — 「分類不能」は #2 の `hold-unknown`（POST しない）。
-- `autoDispatches` の provenance: `actor` = run の最初の発火者、`triggering_actor` = 最新 (re)run の発火者（API 契約）。bot が dispatch した run を人間が rerun すると `actor` は bot のまま `triggering_actor` が人になるため、**いずれかが auto actor なら計上**（人の rerun で budget が払い戻されない）。両 actor が識別不能な workflow_dispatch run も計上する — 過少計上は retry 暴走（unsafe）、過大計上は dispatch 減少（safe）のため安全側。list API は run の `inputs` を返さない（実測確認）ため「scheduler が作った dispatch」を inputs マーカーで識別できず、actor provenance で代替する。人力の dispatch（ユーザ actor のみ）は budget を消費しない。
+- `autoDispatches` の provenance: `actor` = run の最初の発火者、`triggering_actor` = 最新 (re)run の発火者（API 契約）。manual origin を立証できるのは**両側が識別可能な非 auto actor**の場合のみ — `actor` が null/空/非 object（元 dispatch 元を否定できない）や `triggering_actor` が欠落の片側未識別 variant も計上する。例: `actor=null` + `triggering_actor=maintainer` + `run_attempt=2` は「人の rerun」に見えるが初回発火者が不明なため自動発火を否定できず計上（再現済み blocking candidate）。bot が dispatch した run を人間が rerun するケース（`actor`=bot, `triggering_actor`=人）も計上 — 人の rerun で budget が払い戻されない。過少計上は retry 暴走（unsafe）、過大計上は dispatch 減少（safe）のため安全側。list API は run の `inputs` を返さない（実測確認）ため「scheduler が作った dispatch」を inputs マーカーで識別できず、actor provenance で代替する。
 - `latestVerified`: 全 runs（sha 不問・上記の branch/event 条件は同じ）から `completed`+`success` の最新を選び `{head_sha, updated_at, html_url}` を報告用に保持 — 「最終成功検証時刻」（#367 項目 8）の材料。順序は attemptTime ベース。
 
 #### API client `createGitHubClient({ token, repo, apiBase })`
@@ -151,7 +154,7 @@ Issue #367 はこの「起動側」を実装する。GitHub Actions run 履歴�
 #### 出力
 
 - Job Summary（`GITHUB_STEP_SUMMARY`、または `--summary <file>`）: outcome・理由・判定 SHA・最新成功 SHA+時刻・対象 attempt 表（run id/event/status/conclusion/attempt/created_at/actor/url）・auto dispatch 回数/上限・dispatch 詳細（Run URL・着地 SHA・確認結果）・warnings
-- `daily-ci-report.json` artifact（`--report`）: `{schemaVersion: 1, kind: "daily-ci-decision", repository, workflow, mainRef, observedShas: [...], decisionSha, outcome, reason, latestVerified, attemptsOnDecisionSha, autoDispatchCount, maxAutoDispatches, historyTruncated, dispatch: {...}, warnings: [], generatedAt}`
+- `daily-ci-report.json` artifact（`--report`）: `{schemaVersion: 1, kind: "daily-ci-decision", repository, workflow, mainRef, observedShas: [...], decisionSha, outcome, reason, latestVerified, attemptsOnDecisionSha, autoDispatchCount, unidentifiableCount, maxAutoDispatches, historyTruncated, dispatch: {...}, warnings: [], generatedAt}`
 
 ### `.github/workflows/daily-ci.yml`
 
@@ -232,7 +235,7 @@ schedule(UTC 06:17 JST) / workflow_dispatch
 
 ## Risks and Trade-offs
 
-- **bot actor 識別の近似**: `actor`/`triggering_actor` のどちらかが `github-actions[bot]`（または両者未識別）の `workflow_dispatch` run を自動 dispatch として計上する。他 automation が `ci.yml` を dispatch すれば同一 budget に計上され、上限を早く使い切り得る — 安全側だが、`ci.yml` を dispatch する自動化を増やす場合は budget 計上に注意が必要（運用 note）。人の rerun は budget を払い戻さない（`actor` が bot のまま残る）。
+- **bot actor 識別の近似**: `workflow_dispatch` run は「`actor.login` と `triggering_actor.login` が両方とも識別可能な非 auto actor」でのみ手動扱いとし、それ以外（bot が片側、null/空/破損の片側未識別）を自動 dispatch として計上する。他 automation が `ci.yml` を dispatch すれば同一 budget に計上され、上限を早く使い切り得る — 安全側だが、`ci.yml` を dispatch する自動化を増やす場合は budget 計上に注意が必要（運用 note）。人の rerun は budget を払い戻さない（`actor` が bot のまま残る）。
 - **判定〜dispatch 間の手動 dispatch race（残存・限界を保証と書かない）**: 初回 `listRuns` と POST の間に誰かが `ci.yml` を手動 dispatch した場合、本 scheduler は検出できず dispatch を送る — `dispatches` API に条件付き dispatch（idempotency key 相当）は存在せず、これは抑止不能な窓。結果は「同一 SHA に並行 run が 2 つ」であり誤検証にはならない（各自の `expected_sha`/checkout 実測で `ci-summary` が評価する）。軽減: scheduler 自身は `concurrency` で直列化済み、並行 run が queued 化すれば次回判定が `suppress-in-flight` で抑止、本 scheduler の dispatch も auto 計上されるため bounded retry が暴走を止める。
 - **未観測 run の race（限界）**: 手動 dispatch が `listRuns` 取得直前に作成されても、run が list に反映されるまでの可視化遅延で見えないことがある — 履歴そのものが状態正本である以上、作成〜可視化の窓は原理的に残る。同様に、unknown な古い run が API 側で後から更新されても取得時点では検出不能。これらは「取得時点の履歴に基づく判定」という本方式の限界であり、誤検証を防ぐ方向（in-flight なら suppress、着地 SHA 報告、ci-summary の expected_sha 照合）で受け止める。保証できないものを保証とは書かない。
 - **確認 poll の残存 race**: `preDispatchIds` 差分で新規 dispatch を同定するが、同時刻の手動 dispatch は区別できない（「我々の run が着地した」ことの保証ではなく「ある新規 dispatch を観測した」の意味）。着地 SHA・actor は report で可視化される。

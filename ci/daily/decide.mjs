@@ -91,6 +91,21 @@ function isFullCiRun(run, mainRef) {
   );
 }
 
+// A record may only be EXCLUDED from the SHA's attempt set when some
+// field positively proves it cannot be a Full CI run on that SHA:
+//   valid head_sha !== sha | non-empty head_branch !== mainRef
+//   | non-empty event outside FULL_CI_EVENTS.
+// Anything else — {}, missing/shapeless identification fields — is
+// UNIDENTIFIABLE: it cannot be proven on-target, but cannot be proven
+// off-target either, so it may hide an attempt in any state.
+function provenNonTarget(run, mainSha, mainRef) {
+  if (run == null || typeof run !== "object") return false;
+  if (typeof run.head_sha === "string" && SHA_RE.test(run.head_sha) && run.head_sha !== mainSha) return true;
+  if (typeof run.head_branch === "string" && run.head_branch !== "" && run.head_branch !== mainRef) return true;
+  if (typeof run.event === "string" && run.event !== "" && !FULL_CI_EVENTS.includes(run.event)) return true;
+  return false;
+}
+
 // Latest-attempt recency. `created_at` never moves (original creation);
 // `run_started_at` is the start of the run's LATEST attempt, so a rerun
 // moves it forward even though created_at stays old (verified on the
@@ -148,14 +163,18 @@ function classifyRun(r) {
 // Retry-budget accounting (see header): automation-origin dispatches.
 // actor = original initiator, triggering_actor = latest attempt's
 // triggerer — a human rerun of a bot dispatch does not refund budget.
-// A workflow_dispatch run with no identifiable actor counts too
-// (undercounting the budget is the unsafe direction).
+// A dispatch counts as auto unless BOTH provenance fields identify as
+// non-auto actors: one side that is null/empty/malformed cannot disprove
+// an automated origin (undercounting retries forever — the unsafe side).
 function isAutoDispatch(run, autoActors) {
   if (run?.event !== "workflow_dispatch") return false;
-  const actor = run.actor?.login ?? null;
-  const triggerer = run.triggering_actor?.login ?? null;
-  if (actor == null && triggerer == null) return true;
-  return autoActors.includes(actor) || autoActors.includes(triggerer);
+  const ident = (u) => (typeof u?.login === "string" && u.login !== "" ? u.login : null);
+  const actor = ident(run.actor);
+  const triggerer = ident(run.triggering_actor);
+  if (actor != null && triggerer != null) {
+    return autoActors.includes(actor) || autoActors.includes(triggerer);
+  }
+  return true;
 }
 
 // Evaluates the current main SHA against the run history.
@@ -164,14 +183,23 @@ function isAutoDispatch(run, autoActors) {
 // decision ∈ skip-verified | suppress-in-flight | hold-unknown |
 //            budget-exhausted | dispatch
 export function decide({ mainSha, runs, mainRef = "main", autoActors = ["github-actions[bot]"], maxAutoDispatches = 2 }) {
-  const attempts = (runs ?? [])
+  const all = runs ?? [];
+  const attempts = all
     .filter((r) => isFullCiRun(r, mainRef) && r.head_sha === mainSha)
     .sort(newestFirst);
+  // Records that can neither be proven on-target nor proven off-target.
+  // They may hide an attempt on this SHA in ANY state — in-flight,
+  // success, or a consumed auto dispatch — so no verdict is safe while
+  // they are present: not dispatch (could double-fire), not skip-verified
+  // (an unverified attempt could hide behind a visible success).
+  const unidentifiable = all.filter(
+    (r) => !(isFullCiRun(r, mainRef) && r.head_sha === mainSha) && !provenNonTarget(r, mainSha, mainRef),
+  );
   const latest = attempts[0] ?? null;
   const inFlight = attempts.filter((r) => classifyRun(r) === "in-flight");
   const autoDispatches = attempts.filter((r) => isAutoDispatch(r, autoActors));
 
-  const verifiedPool = (runs ?? [])
+  const verifiedPool = all
     .filter((r) => isFullCiRun(r, mainRef) && isSuccess(r))
     .sort(newestFirst);
   const latestVerified = verifiedPool[0] ?? null;
@@ -182,6 +210,9 @@ export function decide({ mainSha, runs, mainRef = "main", autoActors = ["github-
     // Something is still running for this SHA — never double-dispatch.
     decision = "suppress-in-flight";
     reason = `${inFlight.length} in-flight run(s) on ${mainSha.slice(0, 12)}`;
+  } else if (unidentifiable.length > 0) {
+    decision = "hold-unknown";
+    reason = `${unidentifiable.length} history record(s) cannot be proven target or non-target — cannot certify the verification state`;
   } else if (latest != null && classifyRun(latest) === "unknown") {
     // The newest attempt reports a status or conclusion we cannot
     // classify — hold rather than guess success or dispatch a duplicate.
@@ -220,7 +251,7 @@ export function decide({ mainSha, runs, mainRef = "main", autoActors = ["github-
     }
   }
 
-  return { decision, reason, attempts, latest, inFlight, autoDispatches, latestVerified };
+  return { decision, reason, attempts, latest, inFlight, autoDispatches, latestVerified, unidentifiable };
 }
 
 // ---------------------------------------------------------------------------
@@ -281,8 +312,22 @@ export function createGitHubClient({ token, repo, apiBase = "https://api.github.
         if (data == null || !Array.isArray(data.workflow_runs)) {
           throw new ApiError(`runs list page ${page} malformed: missing workflow_runs array`);
         }
-        if (data.workflow_runs.some((r) => r == null || typeof r !== "object")) {
-          throw new ApiError(`runs list page ${page} malformed: non-object run entry`);
+        // Minimum schema: the identification + state fields every real
+        // run record carries. A record missing them cannot even be
+        // proven target or non-target — malformed response, not
+        // "a run we can ignore".
+        const badEntry = data.workflow_runs.some(
+          (r) =>
+            r == null ||
+            typeof r !== "object" ||
+            typeof r.id !== "number" ||
+            typeof r.head_sha !== "string" ||
+            typeof r.head_branch !== "string" ||
+            typeof r.event !== "string" ||
+            typeof r.status !== "string",
+        );
+        if (badEntry) {
+          throw new ApiError(`runs list page ${page} malformed: run entry missing required identification/state fields`);
         }
         const pageRuns = data.workflow_runs;
         all.push(...pageRuns);
@@ -406,6 +451,7 @@ export async function execute(cfg) {
       }
       report.attemptsOnDecisionSha = (d.attempts ?? []).slice(0, MAX_ATTEMPTS_IN_REPORT).map(attemptRow);
       report.autoDispatchCount = d.autoDispatches.length;
+      report.unidentifiableCount = (d.unidentifiable ?? []).length;
     };
     // Truncated history is fail-closed on BOTH sides: unseen older pages
     // could hide auto dispatches (retry-budget undercount) or a rerun on
