@@ -1,18 +1,31 @@
 name: ci
 
-# Automatically verify pull requests against main and changes merged to main.
-# Keep manual dispatch for targeted diagnosis and reruns.
+# Full CI: every trigger runs the complete lane set unconditionally — the
+# retired impact classifier / selective `if:` machinery (Issue #333/#346)
+# is gone per Issue #366 Stage 1. PRs and pushes to main verify the merged
+# result; workflow_dispatch stays for targeted diagnosis, reruns, and the
+# daily scheduler contract.
 on:
   pull_request:
     branches: [main]
-    # `edited` catches base-branch retargets (a new base needs fresh impact
-    # classification; title/body edits also fire it — the per-PR concurrency
-    # group cancels the superseded run, accepted cost). `ready_for_review`
-    # ensures a fresh run when a draft is promoted.
+    # `edited` catches base-branch retargets (a new base needs a fresh run;
+    # title/body edits also fire it — the per-PR concurrency group cancels
+    # the superseded run, accepted cost). `ready_for_review` ensures a fresh
+    # run when a draft is promoted.
     types: [opened, synchronize, reopened, ready_for_review, edited]
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      # Issue #366/#367 dispatch contract: the daily scheduler passes the
+      # main HEAD it intends to verify. `ci-summary` fails when the run
+      # actually checked out a different revision — a different SHA is never
+      # recorded as the expected one. Empty disables the check (manual
+      # dispatch, pull_request, push).
+      expected_sha:
+        description: "Expected main HEAD SHA this run verifies (daily-ci dispatch contract; empty = no check)"
+        required: false
+        type: string
 
 # CI only needs the pinned Rust toolchain and prek. Do not activate
 # optional developer tools such as pipx:serena-agent during mise exec/run.
@@ -32,98 +45,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Issue #333 (CI-OPT-06) + #346 enforcement: impact classifier. Emits the
-  # expected-lane decision that the lane jobs' `if:` conditions consume and
-  # that `ci-gate` audits fail-closed. `push`/`workflow_dispatch` classify as
-  # full (all lanes run). Kill switch: repo variable CI_IMPACT_DISABLE=1
-  # forces the expected set to all lanes, restoring unconditional Full CI
-  # without a code revert.
-  impact:
-    name: impact-classify
-    runs-on: ubuntu-latest
-    env:
-      # The workflow-level MISE_ENABLE_TOOLS omits node; this job needs the
-      # pinned node for ci/impact and cargo for `cargo metadata`.
-      MISE_ENABLE_TOOLS: rust,node
-    outputs:
-      decision: ${{ steps.classify.outputs.decision }}
-      expected: ${{ steps.classify.outputs.expected }}
-      lane_verify: ${{ steps.classify.outputs.lane_verify }}
-      lane_rt_verify: ${{ steps.classify.outputs.lane_rt_verify }}
-      lane_icc_verify: ${{ steps.classify.outputs.lane_icc_verify }}
-      lane_compression_verify: ${{ steps.classify.outputs.lane_compression_verify }}
-      lane_ui_verify: ${{ steps.classify.outputs.lane_ui_verify }}
-      lane_l1_real_verify: ${{ steps.classify.outputs.lane_l1_real_verify }}
-      lane_bench: ${{ steps.classify.outputs.lane_bench }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7.0.1
-
-      # The classifier diff needs the base commit object locally (checkout
-      # already holds the merge head). depth=1 suffices — a two-dot tree diff
-      # needs no merge base. workflow_dispatch has no diff: classifier runs
-      # with --all instead.
-      - name: Fetch diff base commit
-        if: github.event_name != 'workflow_dispatch'
-        shell: bash
-        env:
-          DIFF_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: git fetch --depth=1 origin "$DIFF_BASE"
-
-      - name: Set up mise
-        uses: jdx/mise-action@v5.2.0
-        with:
-          install: false
-
-      - name: Restore CI-required tools from mise.lock
-        run: |
-          mise trust
-          mise install --locked rust node
-
-      # A broken classifier must not emit a decision — run its contract
-      # tests first so the gate sees a job failure rather than a bad map.
-      - name: Self-test classifier (mise run test-ci-impact)
-        run: mise run test-ci-impact
-
-      - name: Classify changed files
-        id: classify
-        shell: bash
-        env:
-          DIFF_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          CI_IMPACT_DISABLE: ${{ vars.CI_IMPACT_DISABLE }}
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            mise exec -- node ci/impact/classify.mjs --event "${{ github.event_name }}" --all --out impact-decision.json
-          else
-            mise exec -- node ci/impact/classify.mjs --event "${{ github.event_name }}" --base "$DIFF_BASE" --head "${{ github.sha }}" --out impact-decision.json
-          fi
-
-      - name: Upload impact decision
-        uses: actions/upload-artifact@v4
-        with:
-          name: impact-decision
-          path: impact-decision.json
-          if-no-files-found: error
-
-  # Issue #346 selective execution: every lane job `needs: [impact]` and runs
-  # unless the classifier proved the lane unaffected (`!= 'false'`). The
-  # `always() && ... != 'false'` shape keeps the lane running when `impact`
-  # fails or its output is absent — coverage fails open; the fail-closed
-  # half lives in `ci-gate`, where an expected-but-skipped or absent lane is
-  # a Fail, a not-expected skipped lane is NotApplicable, and a failed
-  # classification degrades to all-expected.
+  # Issue #366 (Full CI Stage 1): every lane job runs unconditionally — no
+  # classifier, no `needs: [impact]`, no lane `if:`. The fail-closed half
+  # lives in the terminal `ci-summary` job, where any lane that did not end
+  # in `success` (failure / cancelled / skipped / not-run / unknown) fails
+  # the whole run.
   #
-  # Issue #333/#326 rev 2026-11-05: macOS legs are NOT PR-required — the
-  # required matrices below carry ubuntu+windows only and each macOS leg
-  # lives in a physically separate `*-macos` job consumed by `macos-report`
-  # (non-blocking) instead of `ci-gate`. The ruleset requires the nine
-  # Linux/Windows contexts; macOS starvation can no longer queue-cancel a
-  # required context.
+  # Issue #333/#326 rev 2026-11-05, kept in Stage 1: macOS legs are NOT
+  # PR-required — the required matrices below carry ubuntu+windows only and
+  # each macOS leg lives in a physically separate `*-macos` job consumed by
+  # `ci-summary`. The ruleset requires the nine Linux/Windows contexts;
+  # macOS starvation can no longer queue-cancel a required context. Keeping
+  # the separate jobs also gives `ci-summary` per-OS `needs` rows directly;
+  # folding them into the matrices is a deferred Stage-2 simplification
+  # (docs/designs/issue-366-full-ci-stage1.md).
   verify:
     name: verify (${{ matrix.os }})
-    needs: [impact]
-    if: always() && needs.impact.outputs.lane_verify != 'false'
     runs-on: ${{ matrix.os }}
     strategy:
       # Keep sibling OS jobs running so a manual verification run reports
@@ -133,9 +70,41 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: verify-${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Measure disk usage (before build)
         if: matrix.os == 'ubuntu-latest'
@@ -236,19 +205,49 @@ jobs:
           du -sh target
           du -sh target/ci/deps target/ci/build 2>/dev/null || true
 
-  # Non-blocking macOS leg of `verify` (Issue #333/#326 rev 2026-11-05):
-  # identical lane steps, physically separate job so `ci-gate` never waits
-  # on macOS runner availability. `macos-report` records its result.
+  # Non-required macOS leg of `verify` (Issue #333/#326 rev 2026-11-05,
+  # kept in #366 Stage 1): identical lane steps, physically separate job —
+  # `ci-summary` consumes its per-OS result from `needs` directly.
   verify-macos:
     name: verify-macos
-    needs: [impact]
-    if: always() && needs.impact.outputs.lane_verify != 'false'
     runs-on: macos-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: verify-macos
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -323,14 +322,44 @@ jobs:
 
   rt-verify:
     name: rt-verify
-    needs: [impact]
-    if: always() && needs.impact.outputs.lane_rt_verify != 'false'
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: rt-verify
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -372,14 +401,44 @@ jobs:
 
   icc-verify:
     name: icc-verify
-    needs: [impact]
-    if: always() && needs.impact.outputs.lane_icc_verify != 'false'
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: icc-verify
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -418,14 +477,44 @@ jobs:
   # (gcc present on ubuntu-latest).
   compression-verify:
     name: compression-verify
-    needs: [impact]
-    if: always() && needs.impact.outputs.lane_compression_verify != 'false'
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: compression-verify
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -456,6 +545,83 @@ jobs:
       - name: Lint io-compression feature matrix (mise run lint-io-compression)
         run: mise run lint-io-compression
 
+  # IO structured lane (Issue #364): json/yaml/toml/csv/file/xml are
+  # non-default features so `cargo test --workspace` never compiles their
+  # code paths; this job runs the spec-required feature matrix (default,
+  # xml, xml+file, all-features) via the Issue #299 mise tasks — same
+  # `&&`-chained single-string task shape as io-compression because dead
+  # code under a reduced feature set only fails `-D warnings` at that
+  # exact combination.
+  io-structured-verify:
+    name: io-structured-verify
+    runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: io-structured-verify
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust prek
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Check io-structured feature matrix (mise run check-io-structured)
+        run: mise run check-io-structured
+
+      - name: Test io-structured feature matrix (mise run test-io-structured)
+        run: mise run test-io-structured
+
+      - name: Lint io-structured feature matrix (mise run lint-io-structured)
+        run: mise run lint-io-structured
+
   # UI webview lane (Issue #156): the adapter's `webview` feature is
   # non-default so the main workspace lanes stay headless; this job
   # type-checks, lints and tests the feature-enabled surface
@@ -463,8 +629,6 @@ jobs:
   # windowed runs are manual verification, like audio-device examples).
   ui-verify:
     name: ui-verify (${{ matrix.os }})
-    needs: [impact]
-    if: always() && needs.impact.outputs.lane_ui_verify != 'false'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -472,6 +636,8 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: ui-verify-${{ matrix.os }}
       # Issue #332 (CI-OPT-05): pin the Playwright browser directory inside the
       # workspace so `actions/cache` can use one relative path on all three
       # OSes (defaults differ per OS). Install and test steps resolve the
@@ -480,6 +646,36 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -680,26 +876,56 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ui-browser-evidence-${{ matrix.os }}
+          name: ui-browser-evidence-${{ matrix.os }}-attempt-${{ github.run_attempt }}
           path: ui/browser-test/test-results/
           if-no-files-found: warn
           retention-days: 30
 
-  # Non-blocking macOS leg of `ui-verify` (Issue #333/#326 rev 2026-11-05):
-  # identical lane steps minus the Linux-only WebKitGTK/system-deps steps,
-  # physically separate job so `ci-gate` never waits on macOS runner
-  # availability. `macos-report` records its result.
+  # Non-required macOS leg of `ui-verify` (Issue #333/#326 rev 2026-11-05,
+  # kept in #366 Stage 1): identical lane steps minus the Linux-only
+  # WebKitGTK/system-deps steps, physically separate job — `ci-summary`
+  # consumes its per-OS result from `needs` directly.
   ui-verify-macos:
     name: ui-verify-macos
-    needs: [impact]
-    if: always() && needs.impact.outputs.lane_ui_verify != 'false'
     runs-on: macos-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: ui-verify-macos
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -863,19 +1089,50 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ui-browser-evidence-macos
+          name: ui-browser-evidence-macos-attempt-${{ github.run_attempt }}
           path: ui/browser-test/test-results/
           if-no-files-found: warn
           retention-days: 30
 
   bench:
     name: bench
-    needs: [impact]
-    if: always() && needs.impact.outputs.lane_bench != 'false'
     runs-on: ubuntu-latest
+    env:
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: bench
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -909,8 +1166,6 @@ jobs:
 
   l1-real-verify:
     name: l1-real-verify (${{ matrix.os }})
-    needs: [impact]
-    if: always() && needs.impact.outputs.lane_l1_real_verify != 'false'
     runs-on: ${{ matrix.os }}
     strategy:
       # Keep sibling OS jobs running so a manual verification run reports
@@ -921,9 +1176,41 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: l1-real-verify-${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -956,22 +1243,51 @@ jobs:
       - name: Lint host feature (mise run lint-l1-real-plugin)
         run: mise run lint-l1-real-plugin
 
-  # Non-blocking macOS leg of `l1-real-verify` (Issue #333/#326 rev
-  # 2026-11-05): physically separate job so `ci-gate` never waits on macOS
-  # runner availability. First exercise on macOS: the raw-.dylib
-  # (non-bundle) CLAP resolution and the VST3 bundleEntry paths run here
-  # for the first time — a red macOS leg is a platform finding recorded by
-  # `macos-report`, not a merge blocker.
+  # Non-required macOS leg of `l1-real-verify` (Issue #333/#326 rev
+  # 2026-11-05, kept in #366 Stage 1): physically separate job —
+  # `ci-summary` consumes its per-OS result from `needs` directly. First
+  # exercise on macOS: the raw-.dylib (non-bundle) CLAP resolution and the
+  # VST3 bundleEntry paths run here for the first time.
   l1-real-verify-macos:
     name: l1-real-verify-macos
-    needs: [impact]
-    if: always() && needs.impact.outputs.lane_l1_real_verify != 'false'
     runs-on: macos-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: l1-real-verify-macos
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -999,17 +1315,28 @@ jobs:
       - name: Lint host feature (mise run lint-l1-real-plugin)
         run: mise run lint-l1-real-plugin
 
-  # Issue #346 (rev 2026-11-05): non-blocking macOS observe report. Compares
-  # the classifier's expected lanes against the `*-macos` leg results and
-  # records a per-OS status row (Pass / Fail / NotRun / NotApplicable /
-  # Pending / Unsupported) into the step summary + a JSON artifact consumed
-  # by release/Consumer acceptance gating. Runner starvation (cancelled)
-  # is NotRun — never NotApplicable, which is reserved for
-  # classifier-proven-unaffected skips. The check itself stays green:
-  # verdict data lives in the report, it does not block the merge.
-  macos-report:
-    name: macos-report
-    needs: [impact, verify-macos, ui-verify-macos, l1-real-verify-macos]
+  # Issue #366 (Full CI Stage 1): aggregated fail-closed summary — the
+  # single terminal job every lane feeds. `if: always()` keeps it running
+  # on skipped/failed needs; the verdict is a pure function of the `needs`
+  # context evaluated by ci/summary/summary.mjs: every lane must end in
+  # `success`, and a failure / cancelled / skipped / not-run / unknown lane
+  # result fails the whole run. Replaces the retired `ci-gate` +
+  # `macos-report`: the `*-macos` jobs stay physically separate in Stage 1
+  # so their per-OS results reach `needs` directly (no API, no extra
+  # permission; matrix consolidation is a deferred Stage-2 simplification).
+  # Records head/expected SHA, event, per-job result, per-leg measured
+  # checkout SHA, workflow revision, and run URL into the step summary +
+  # `ci-summary-report` JSON artifact, and enforces the `expected_sha`
+  # dispatch contract (Issue #367 daily-ci input) against the measured
+  # common checkout — never `github.sha` alone.
+  #
+  # Transition note: this job is NOT yet a required context — the ruleset
+  # keeps the nine Linux/Windows lane contexts until the Owner migrates to
+  # `ci-summary` (docs/designs/issue-366-full-ci-stage1.md). Renaming
+  # `ci-gate` is safe because the old name was never required.
+  ci-summary:
+    name: ci-summary
+    needs: [verify, verify-macos, rt-verify, icc-verify, compression-verify, io-structured-verify, ui-verify, ui-verify-macos, bench, l1-real-verify, l1-real-verify-macos]
     if: always()
     runs-on: ubuntu-latest
     env:
@@ -1017,6 +1344,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -1028,77 +1361,48 @@ jobs:
           mise trust
           mise install --locked node
 
-      - name: Evaluate macOS observe report
+      # A broken evaluator must not emit a verdict — run its contract
+      # tests first so the summary sees a job failure rather than a wrong
+      # pass/fail (same self-test pattern the retired impact job used).
+      - name: Self-test ci-summary evaluator (mise run test-ci-summary)
+        run: mise run test-ci-summary
+
+      # Fetch every lane's measured `git rev-parse HEAD` file
+      # (checkout-sha-<leg>-attempt-<n>.txt from every attempt, merged into
+      # one dir). A lane that ran green but did not ship its measured sha
+      # is an evidence gap and fails closed in the evaluator — never
+      # silently absent.
+      - name: Download checkout SHA evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: checkout-sha-*
+          path: checkout-shas/
+          merge-multiple: true
+
+      - name: Evaluate ci-summary verdict
         shell: bash
         env:
           NEEDS_JSON: ${{ toJson(needs) }}
-          GATE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EVENT_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          CHECKOUT_DIR: checkout-shas
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          mise exec -- node ci/impact/observe.mjs \
-            --event "${{ github.event_name }}" \
-            --base "$GATE_BASE" \
-            --head "${{ github.sha }}" \
-            --report macos-observe-report.json
+          # Measure THIS job's actual checkout — never `github.sha` — so the
+          # summary records what was really on disk. The evaluator requires
+          # it to agree with every lane's measured sha and `expected_sha`.
+          export HEAD_SHA="$(git rev-parse HEAD)"
+          mise exec -- node ci/summary/summary.mjs --report ci-summary-report.json
 
-      - name: Upload macOS observe report
+      - name: Upload ci-summary report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: macos-observe-report
-          path: macos-observe-report.json
-          if-no-files-found: warn
-
-  # Issue #333 (CI-OPT-06) + #346 enforcement: aggregated fail-closed gate.
-  # Compares the lane set `impact` expects against the actual `needs`
-  # results. An expected lane that was skipped, a not-expected lane that ran
-  # and failed, and a classification failure all turn the gate red — skipped
-  # jobs are never a pass, and a lane skipped by its `if:` is honored only
-  # when the classifier proved it unaffected (NotApplicable). `if: always()`
-  # keeps the gate running on skipped/failed needs. The gate needs only the
-  # PR-required legs — the `*-macos` observe jobs are intentionally absent
-  # from `needs` (Issue #333/#326 rev 2026-11-05: macOS never blocks a PR).
-  # This job is the single stable required context that replaces the nine
-  # per-lane contexts — the ruleset migration itself is performed
-  # out-of-band per docs/designs/issue-346-ruleset-migration-runbook.md.
-  ci-gate:
-    name: ci-gate
-    needs: [impact, verify, rt-verify, icc-verify, compression-verify, ui-verify, bench, l1-real-verify]
-    if: always()
-    runs-on: ubuntu-latest
-    env:
-      MISE_ENABLE_TOOLS: node
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7.0.1
-
-      - name: Set up mise
-        uses: jdx/mise-action@v5.2.0
-        with:
-          install: false
-
-      - name: Restore CI-required tools from mise.lock
-        run: |
-          mise trust
-          mise install --locked node
-
-      - name: Evaluate aggregated gate
-        shell: bash
-        env:
-          NEEDS_JSON: ${{ toJson(needs) }}
-          GATE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          set -euo pipefail
-          mise exec -- node ci/impact/gate.mjs \
-            --event "${{ github.event_name }}" \
-            --base "$GATE_BASE" \
-            --head "${{ github.sha }}" \
-            --report gate-report.json
-
-      - name: Upload gate report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-gate-report
-          path: gate-report.json
+          # Unique-per-run names (upload-artifact v4): keep every
+          # attempt's report instead of conflicting on rerun.
+          name: ci-summary-report-attempt-${{ github.run_attempt }}
+          path: ci-summary-report.json
           if-no-files-found: warn

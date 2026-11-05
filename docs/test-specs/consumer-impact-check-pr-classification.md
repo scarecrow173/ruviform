@@ -1,10 +1,10 @@
 ---
 id: "TSPEC-034WvK9mNqR2sTxYcAbEfG"
 type: "test-spec"
-status: "draft"
+status: "superseded"
 title: "consumer-impact-check workflow の PR 分類機械検査（記入検査・unknown 解消先・draft 除外）"
 created: "2026-11-03"
-updated: "2026-11-03"
+updated: "2026-11-05"
 owners: []
 relations:
   source: []
@@ -20,7 +20,8 @@ relations:
   depends-on: []
   blocks: []
   supersedes: []
-  superseded-by: []
+  superseded-by:
+    - "docs/specs/issue-366-full-ci-stage1.md"
   related:
     - "docs/test-specs/consumer-verify-workflow-gate-not-run-pass-preflight-gating-sha-guard.md"
     - "docs/test-specs/consumer-pr-issue-template.md"
@@ -38,6 +39,8 @@ relations:
 ---
 
 # consumer-impact-check workflow の PR 分類機械検査（記入検査・unknown 解消先・draft 除外）
+
+> status: superseded — Issue #366 Stage 1 で `consumer-impact-check.yml` は撤去された。分類欄の記入検査は `PULL_REQUEST_TEMPLATE.md` + レビュアー human gate に戻る（正本: `docs/specs/issue-366-full-ci-stage1.md`）。本書は撤去済み lane の契約記録として残す。
 
 ## Purpose
 

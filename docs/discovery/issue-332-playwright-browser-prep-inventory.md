@@ -43,7 +43,6 @@ relations:
     - "ui/browser-test/package.json"
     - "ui/browser-test/package-lock.json"
     - "ui/browser-test/playwright.config.ts"
-    - "ui/browser-test/node_modules/playwright-core/browsers.json"
     - "ci/metrics/collect-ci-metrics.mjs"
   defers: []
   deferred-by: []

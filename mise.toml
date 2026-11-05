@@ -118,13 +118,12 @@ run = [
 ]
 env = { CARGO_INCREMENTAL = "0" }
 
-# Issue #333 (CI-OPT-06): contract tests for the ci/impact classifier and
-# the aggregated ci-gate verdict table. The `impact` CI job runs this before
-# emitting a decision so a broken classifier fails the job instead of
-# publishing a bad lane map.
-[tasks.test-ci-impact]
-description = "Run ci/impact classifier + ci-gate contract tests via `node --test ci/impact/` (decision JSON schema, full-CI fallback rules, expected x actual verdict matrix; requires node from the pinned toolchain)"
-run = "node --test ci/impact/"
+# Issue #366 (Full CI Stage 1): contract tests for the ci/summary aggregated
+# fail-closed verdict. The `ci-summary` CI job runs this before evaluating so
+# a broken evaluator fails the job instead of publishing a wrong verdict.
+[tasks.test-ci-summary]
+description = "Run ci/summary verdict contract tests via `node --test ci/summary/` (needs result matrix, per-leg checkout-sha evidence, expected_sha dispatch contract, report JSON shape; requires node from the pinned toolchain)"
+run = "node --test ci/summary/"
 
 [tasks.test-plugin-core]
 description = "Run plugin-core contract tests"
@@ -147,8 +146,8 @@ run = "cargo clippy -p ruviform-video-proc --all-targets --features icc -- -D wa
 # full feature matrix because reduced feature sets gate different code —
 # dead code under `default = []` or a single format only fails under
 # `-D warnings` at that exact combination. `&&` chains keep the `-p` args
-# inside the task body (ci/impact lane-owner derivation regex-parses them
-# and stops at the first `[` — array-form `run` would break derivation).
+# inside the task body (established convention from the retired ci/impact
+# lane-owner derivation; kept so the feature matrix stays grep-able).
 [tasks.check-io-compression]
 description = "Type-check io-compression across its feature matrix (default=[] plus each format and combined)"
 run = "cargo check -p ruviform-io-compression --all-targets && cargo check -p ruviform-io-compression --all-targets --features gzip && cargo check -p ruviform-io-compression --all-targets --features deflate && cargo check -p ruviform-io-compression --all-targets --features zstd && cargo check -p ruviform-io-compression --all-targets --features gzip,deflate,zstd"
