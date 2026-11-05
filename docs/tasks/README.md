@@ -7,9 +7,8 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
-| TASK-034RTggRy4UgfgaFSfQY4f | T1 ruviform-io-structured scaffold・共通契約・JSON Format (Issue #297) | todo | [issue-297-t1-crate-and-contract.md](./issue-297-t1-crate-and-contract.md) |
-| TASK-034RTghO8nOg3ZiYGau2pe | T2 YAML/TOML Format module・Budget 写像・2相分類 (Issue #297) | todo | [issue-297-t2-yaml-toml.md](./issue-297-t2-yaml-toml.md) |
-| TASK-034RTgiDjrTlcheIw55nAn | T3 file feature・workspace 台帳・総合検証 (Issue #297) | todo | [issue-297-t3-file-feature.md](./issue-297-t3-file-feature.md) |
+| TASK-034TKw7zfSgzOzI8oNY79D | Issue #298 T1 — csv module 本体と共有拡張 | in-progress | [issue-298-t1-csv-module.md](./issue-298-t1-csv-module.md) |
+| TASK-034DgWopBD0NzsxoZGVxdm | Issue #298 T2 — file feature 合成・試験仕上げ・README・impl record | todo | [issue-298-t2-file-docs.md](./issue-298-t2-file-docs.md) |
 | TASK-yFczRmBPJEUZkKyX3bngmg | Issue #329 T1 — ci.yml verify/ui-verify へ sccache 導入 + Cold/Warm 実測 + IR | in-progress | [issue-329-t1-sccache-verify-ui-lanes.md](./issue-329-t1-sccache-verify-ui-lanes.md) |
 | TASK-034RJ02dFTbxsMkC5rKofw | Issue #331 T1 — verify lane の check-ci を lint-ci に統合 + 等価性・実測記録 | in-progress | [issue-331-t1-check-step-dedup.md](./issue-331-t1-check-step-dedup.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
@@ -34,6 +33,7 @@ Directory: `docs/tasks`
 | TASK-034Jf41t2KGVmA9hbvyDVz | 等価性 matrix テスト | done | [add-simd-equivalence-matrix-tests.md](./add-simd-equivalence-matrix-tests.md) |
 | TASK-034JNwUoAfb2TnY7nw07XH | 時間変換精度テストの追加（音声×映像行列・往復/連鎖誤差上界） | done | [add-time-precision-tests.md](./add-time-precision-tests.md) |
 | TASK-034KSVq7PFSELAOY00SIZG | AffineTransform カーネル + 文書クローズ | done | [affine-kernel-and-closeout.md](./affine-kernel-and-closeout.md) |
+| TASK-pqoGspxihdop2tZDptYxW6 | T1 AGENTS.md 旧版復元 + `### 検証入口` 分離（PR #350 フォローアップ） | done | [agents-verification-entry-split.md](./agents-verification-entry-split.md) |
 | TASK-034IRZAn8ce6BYjOG6KhrZ | docs/designs/overview.md の status 注記整合 | done | [align-designs-overview-status-annotations.md](./align-designs-overview-status-annotations.md) |
 | TASK-034JP1tb1wQI9ac2cEwBq4 | プラグイン境界 RT 契約テストへの assert_no_alloc 適用 | done | [apply-assert-no-alloc-to-plugin-boundary.md](./apply-assert-no-alloc-to-plugin-boundary.md) |
 | TASK-034JO3X9ZpAvMoWiRIiMU4 | MSRV 1.89 適用とドキュメント同期（Cargo.toml・AGENTS.md） | done | [apply-msrv-1-89-and-sync-docs.md](./apply-msrv-1-89-and-sync-docs.md) |
@@ -136,6 +136,9 @@ Directory: `docs/tasks`
 | TASK-034RBIWkzzcEXV0X3v5ySr | T1 OsFileOps 実 OS アダプタ + factory 接続 (Issue #296) | done | [issue-296-t1-os-adapter.md](./issue-296-t1-os-adapter.md) |
 | TASK-034RBIX9gn32W8GMyhNMqw | T2 実 FS 結合試験・複数プロセス競合 (Issue #296) | done | [issue-296-t2-real-fs-tests.md](./issue-296-t2-real-fs-tests.md) |
 | TASK-034RBIYghnEBLw9llcomyd | T3 保証範囲文書化・impl record・最終検証 (Issue #296) | done | [issue-296-t3-docs-verify.md](./issue-296-t3-docs-verify.md) |
+| TASK-034RTggRy4UgfgaFSfQY4f | T1 ruviform-io-structured scaffold・共通契約・JSON Format (Issue #297) | done | [issue-297-t1-crate-and-contract.md](./issue-297-t1-crate-and-contract.md) |
+| TASK-034RTghO8nOg3ZiYGau2pe | T2 YAML/TOML Format module・Budget 写像・2相分類 (Issue #297) | done | [issue-297-t2-yaml-toml.md](./issue-297-t2-yaml-toml.md) |
+| TASK-034RTgiDjrTlcheIw55nAn | T3 file feature・workspace 台帳・総合検証 (Issue #297) | done | [issue-297-t3-file-feature.md](./issue-297-t3-file-feature.md) |
 | TASK-QNzC22ZqitcqDhco1hHMKj | Issue #307 T1: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | done | [issue-307-t1-attach-frame-base-verified-context.md](./issue-307-t1-attach-frame-base-verified-context.md) |
 | TASK-034Rp7jV966SX0fG78cOBL | Issue #310-T1 browser-test パッケージ骨格・serve・page protocol | done | [issue-310-01-browser-harness-package.md](./issue-310-01-browser-harness-package.md) |
 | TASK-034Rp7kQsMmyk0At2QYrwX | Issue #310-T2 共有 Fixture/Driver/Assertion (gesture/receipt/state/theme/canvas/a11y) | done | [issue-310-02-shared-fixtures-and-drivers.md](./issue-310-02-shared-fixtures-and-drivers.md) |
