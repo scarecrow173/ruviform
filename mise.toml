@@ -142,7 +142,7 @@ run = "cargo test -p ruviform-video-proc --features icc"
 description = "Lint video-proc and its test targets with the icc feature enabled"
 run = "cargo clippy -p ruviform-video-proc --all-targets --features icc -- -D warnings"
 
-# IO compression lane (Issue #300): gzip/deflate are non-default features and
+# IO compression lane (Issues #300/#301): gzip/deflate/zstd are non-default features and
 # `cargo test --workspace` covers default features only. The lane runs the
 # full feature matrix because reduced feature sets gate different code —
 # dead code under `default = []` or a single format only fails under
@@ -151,13 +151,13 @@ run = "cargo clippy -p ruviform-video-proc --all-targets --features icc -- -D wa
 # and stops at the first `[` — array-form `run` would break derivation).
 [tasks.check-io-compression]
 description = "Type-check io-compression across its feature matrix (default=[] plus each format and combined)"
-run = "cargo check -p ruviform-io-compression --all-targets && cargo check -p ruviform-io-compression --all-targets --features gzip && cargo check -p ruviform-io-compression --all-targets --features deflate && cargo check -p ruviform-io-compression --all-targets --features gzip,deflate"
+run = "cargo check -p ruviform-io-compression --all-targets && cargo check -p ruviform-io-compression --all-targets --features gzip && cargo check -p ruviform-io-compression --all-targets --features deflate && cargo check -p ruviform-io-compression --all-targets --features zstd && cargo check -p ruviform-io-compression --all-targets --features gzip,deflate,zstd"
 [tasks.lint-io-compression]
 description = "Lint io-compression and its test targets across the full feature matrix"
-run = "cargo clippy -p ruviform-io-compression --all-targets -- -D warnings && cargo clippy -p ruviform-io-compression --all-targets --features gzip -- -D warnings && cargo clippy -p ruviform-io-compression --all-targets --features deflate -- -D warnings && cargo clippy -p ruviform-io-compression --all-targets --features gzip,deflate -- -D warnings"
+run = "cargo clippy -p ruviform-io-compression --all-targets -- -D warnings && cargo clippy -p ruviform-io-compression --all-targets --features gzip -- -D warnings && cargo clippy -p ruviform-io-compression --all-targets --features deflate -- -D warnings && cargo clippy -p ruviform-io-compression --all-targets --features zstd -- -D warnings && cargo clippy -p ruviform-io-compression --all-targets --features gzip,deflate,zstd -- -D warnings"
 [tasks.test-io-compression]
 description = "Run io-compression tests across its feature matrix (unit/integration/doc tests per combination)"
-run = "cargo test -p ruviform-io-compression && cargo test -p ruviform-io-compression --features gzip && cargo test -p ruviform-io-compression --features deflate && cargo test -p ruviform-io-compression --features gzip,deflate"
+run = "cargo test -p ruviform-io-compression && cargo test -p ruviform-io-compression --features gzip && cargo test -p ruviform-io-compression --features deflate && cargo test -p ruviform-io-compression --features zstd && cargo test -p ruviform-io-compression --features gzip,deflate,zstd"
 
 # UI webview lane (Issue #156): the adapter's implementation lives behind
 # the non-default `webview` feature so `cargo check --workspace` stays

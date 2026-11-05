@@ -1,10 +1,11 @@
 # ruviform-io-compression
 
 Ruviform の汎用バイトストリーム圧縮基盤 — IO-03（Issue #285）の設計に
-基づく非 RT 専用クレート。IO-IMP-06（Issue #300）で gzip・raw deflate の
-Compression Core を実装した。`Encoder<'w, W: Write + ?Sized>` /
-`Decoder<'r, R: BufRead + ?Sized>` の借用ストリーム型で、TAR → Gzip →
-staged file のような `std::io` 経由の合成を消費者側に持ち込まずに提供する。
+基づく非 RT 専用クレート。IO-IMP-06（Issue #300）で gzip・raw deflate、
+IO-IMP-07（Issue #301）で zstd の Compression Core を実装した。
+`Encoder<'w, W: Write + ?Sized>` / `Decoder<'r, R: BufRead + ?Sized>`
+の借用ストリーム型で、TAR → Gzip → staged file のような `std::io`
+経由の合成を消費者側に持ち込まずに提供する。
 
 ## 責務
 
@@ -17,9 +18,17 @@ staged file のような `std::io` 経由の合成を消費者側に持ち込ま
 - `deflate` — RFC 1951 raw DEFLATE stream（zlib/gzip の container では
   ない）。checksum を持たないため integrity は「stream end の検証」のみ。
   単一 stream として扱い、`WholeInput` では stream 後の byte を拒否する。
+- `zstd` — RFC 8878 frame の encode/decode。frame header（magic・FHD・
+  Window_Descriptor・Dictionary_ID・Frame_Content_Size）はクレート側で
+  byte 精密に parse し、reserved bit・辞書参照 frame（`Unsupported`）・
+  window 上限超過（`LimitExceeded`、既定 `max_window_log = 27`）を
+  backend 到達前に拒否する。`WholeInput` scope では連結 frame を単一
+  stream として復号し末尾を厳密に検証、`SingleUnit` は先頭 frame のみ。
+  skippable frame（metadata）は `SkippableFramePolicy` で accept（skip・
+  unit 非計上）/ reject（`Unsupported`）。checksum 有無が混在する frame
+  列は `IntegritySummary` の checked/unchecked に正確に分離される。
 - `EncodeOptions` / `DecodeOptions`（format 別）+ 共有語彙
-  `EncodeLimits` / `DecodeLimits` / `DecodeScope` — 後続の IO-IMP-07
-  （zstd・Issue #301）が同じ語彙を再利用できる汎用設計。
+  `EncodeLimits` / `DecodeLimits` / `DecodeScope`。
 - `EncodeReceipt` / `DecodeReceipt` — `finish()` のみが返す観測済みの
   証跡（入力/出力/単位数・integrity 内訳）。
 - `CompressionError` / `CompressionErrorKind` — backend・I/O の失敗を
@@ -53,11 +62,14 @@ limit は宣言しない（呼び出し側/プラットフォームの責務）�
 
 - 層: 汎用圧縮 I/O 基盤（archive / file / media-io 消費者より下位・
   Primitives 同様の相互依存なし位置）。
-- 許可依存: `flate2`（optional・`rust_backend` のみ）。`Compress`/
-  `Decompress`/`Crc` の低層 primitive のみ使用し、gzip の member
-  framing はクレート側で所有する — flate2 の型・エラー・version は
-  公開 API に一切露出しない（backend-hiding 契約）。
-- `default = []`・feature `gzip`/`deflate` で format 選択・
+- 許可依存: `flate2`（optional・`rust_backend` のみ）と `zstd-safe`
+  （optional・`default-features = false`）。`flate2` の `Compress`/
+  `Decompress`/`Crc`、`zstd-safe` の `CCtx`/`DCtx` 低層 primitive のみ
+  使用し、gzip の member framing・zstd の frame boundary はクレート側で
+  所有する — backend の型・エラー・version は公開 API に一切露出しない
+  （backend-hiding 契約）。`zstd-safe` は vendored C source を `cc` で
+  ビルドする（cmake 不要・`zstd` feature 有効時のみ）。
+- `default = []`・feature `gzip`/`deflate`/`zstd` で format 選択・
   `publish = false` 継承・MSRV 1.89。
 - AudioLens Job/Dataset・Synvelis Project/Revision の意味論は持ち込まない
   — 消費者固有の契約は消費者側の責務。
@@ -74,4 +86,5 @@ limit は宣言しない（呼び出し側/プラットフォームの責務）�
   （IO-IMP-06）
 - Issue #282: File/Structured/Archive/Compression 横断設計（親 Issue）
 - Issue #288: IO-06 横断消費者検証・OS/FS・セキュリティ・互換ゲート
-- Issue #301: IO-IMP-07 — 後続の zstd 実装 Issue（共有語彙の再利用先）
+- Issue #301: zstd feature/module 追加 — Frame 境界・Window/Skippable・
+  Verification Receipt（IO-IMP-07）
