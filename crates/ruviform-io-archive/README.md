@@ -4,8 +4,8 @@ Ruviform のアーカイブ基盤 — IO-04（Issue #286）設計に基づく
 IO-IMP-08（Issue #302）の scaffold owner クレート。
 アーカイブ形式中立の公開契約（Entry / Errors / Limits / Receipts）を確立し、
 ZIP（Stored/Deflate）の indexed Reader/Writer と
-TAR（ustar/GNU/PAX）の streaming Reader/Writer を提供する。
-後続の IO-IMP-10 Secure Extraction（Issue #304）は本クレートの公開型に乗る。
+TAR（ustar/GNU/PAX）の streaming Reader/Writer、および
+IO-IMP-10（Issue #304）の secure `extract` モジュールを提供する。
 
 ## 責務
 
@@ -74,7 +74,35 @@ TAR（ustar/GNU/PAX）の streaming Reader/Writer を提供する。
 - TAR payload には checksum が存在しない — entry receipt は常に
   `EntryChecksum::NotPresent`。payload の破損/真正性は一切証明しない。
 
-## 脅威境界（契約 — 実装は IO-IMP-10）
+## Secure Extraction 実装（`extract` module）
+
+- `SafeRelativePath` — `ArchiveName` を展開用に検証した相対パス。
+  UTF-8 必須・`..`/`.`/空・絶対パス・`\`・ドライブ・UNC・Windows
+  予約名・ADS（`:`）・repeated separator を拒否。NFC + case-fold の
+  canonical key で Unicode/大小文字・file/dir 衝突を検出する。
+- `ExtractionSession` — 信頼済み parent の下に排他的な隔離 staging
+  root を作り、`extract_zip` / `extract_tar` で検証済み
+  `ExtractedTree` を返す。受け付けるのは通常 File/Directory のみ
+  （symlink/hardlink/special・上書きは拒否）。entry `finish()` の
+  payload 検証は維持される。
+- Budget — entry 数・metadata bytes・path bytes/depth・per-entry /
+  total uncompressed を書込前に強制し、宣言サイズに嘘がある zip
+  bomb は実測で遮断する。
+- `ExtractedTree` — `path()`/`into_path()`/`cleanup()`・Drop で
+  ベストエフォート片付け。cleanup は記録済み node を最深優先で
+  identity 検証してから削除し、外部差し替え物は決して消さない。
+- `ExtractionRecoveryHandle` — cleanup 未完時の回復ハンドル。
+  `inspect()` は present/absent/identity-mismatch/unknown を区別し、
+  `cleanup()` 再試行でも記録 root と identity が一致しない限り
+  削除しない。
+- Platform backend — Windows は `NtCreateFile`/`NtOpenFile`/
+  `NtDeleteFile` を RootDirectory 相対 + `OBJ_DONT_REPARSE` +
+  `FILE_OPEN_REPARSE_POINT` で実行。Unix は `openat`/`mkdirat`/
+  `unlinkat` + `O_NOFOLLOW` の dirfd 相対。保証を確立できない
+  環境では `Unsupported` を返し、unsafe な path-string 走査には
+  フォールバックしない。
+
+## 脅威境界
 
 - **Zip-slip**: `ArchiveName` は生の格納 bytes を返すのみ。
   `..` / 絶対パス / ドライブ / UNC / 予約名の拒否は抽出層の責務。

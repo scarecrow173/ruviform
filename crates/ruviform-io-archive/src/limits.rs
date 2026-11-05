@@ -44,6 +44,11 @@ pub struct ArchiveReadLimits {
     pub max_metadata_bytes: u64,
     /// Maximum byte length of a single stored entry name.
     pub max_path_bytes: u32,
+    /// Maximum number of path components an entry name may resolve to
+    /// under extraction (`IO-IMP-10` `SafeRelativePath` depth). Readers
+    /// do not use this budget — it is enforced by the extraction layer
+    /// against the *validated* component count.
+    pub max_path_depth: u32,
     /// Maximum uncompressed bytes a single entry may produce. Declared
     /// sizes above this are rejected at entry-open time; measured output
     /// is also cut off mid-read.
@@ -60,6 +65,7 @@ impl Default for ArchiveReadLimits {
             max_entries: 10_000,
             max_metadata_bytes: 16 * 1024 * 1024,
             max_path_bytes: 4 * 1024,
+            max_path_depth: 32,
             max_entry_uncompressed_bytes: 4 * 1024 * 1024 * 1024,
             max_total_uncompressed_bytes: 16 * 1024 * 1024 * 1024,
         }

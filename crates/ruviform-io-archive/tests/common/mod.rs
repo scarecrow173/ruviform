@@ -8,6 +8,7 @@
 //! all used by each one.
 #![allow(dead_code)]
 
+pub mod extract;
 pub mod tar;
 
 use std::io::{Cursor, Write};
