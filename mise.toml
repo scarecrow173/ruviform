@@ -133,6 +133,13 @@ run = "node --test ci/summary/"
 description = "Run ci/tracker contract tests via `node --test ci/tracker/` (valid-run filter and conclusion matrices, plan action matrix incl. run-id ordering and compare close-guard, marker roundtrip, sanitize, API failure propagation; mock client only, no network; requires node from the pinned toolchain)"
 run = "node --test ci/tracker/"
 
+# Issue #367 (daily scheduler): contract tests for the ci/daily decision
+# evaluator. The `daily-ci` job runs this before the real dispatch path so
+# a broken evaluator fails the job instead of deciding wrongly.
+[tasks.test-ci-daily]
+description = "Run ci/daily scheduler decision contract tests via `node --test ci/daily/` (decision matrix, in-flight/unknown hold, bounded retry budget, dispatch confirm + landed-sha, report JSON shape; requires node from the pinned toolchain)"
+run = "node --test ci/daily/"
+
 [tasks.test-plugin-core]
 description = "Run plugin-core contract tests"
 run = "cargo test -p ruviform-plugin-core"

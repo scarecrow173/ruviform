@@ -65,8 +65,10 @@ Directory: `docs/specs`
 | SPEC-x9aakFSwqMZzdqGoq2uyc3 | Issue #332 CI-OPT-05 Playwright Chromium 準備・ブラウザキャッシュと実行時間の最適化 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | SPEC-nZdlFyflADPeFBthK8sEBB | Issue #333 CI-OPT-06 変更影響ベース検証 DAG・Fail-Closed Required Gate | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
 | SPEC-AJKrUcOGJ76vbIWIZ065rr | Issue #336 SinkDegraded への Clone derive 追加 | approved | [issue-336-sink-degraded-clone.md](./issue-336-sink-degraded-clone.md) |
-| SPEC-034Smu6fnzDQaoN4box3qk | Issue #366+#364 Full CI 化 Stage 1 — 常時全 lane 実行・ci-summary fail-closed 集約・io-structured lane 新設 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
 | SPEC-034SmylRtM9crIdjdInbvd | Issue #360 l1_proxy_e2e heir flake — mint 窓内 exit を post-mint へ因果順序付け | approved | [issue-360-l1-proxy-e2e-heir-flake.md](./issue-360-l1-proxy-e2e-heir-flake.md) |
+| SPEC-034Smu6fnzDQaoN4box3qk | Issue #366+#364 Full CI 化 Stage 1 — 常時全 lane 実行・ci-summary fail-closed 集約・io-structured lane 新設 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
+| SPEC-ElrrvM1k7RbACtLgfzKaxs | Issue #367 共通 Daily Scheduler — `daily-ci.yml` 軽量判定 + `ci.yml` 条件付き dispatch | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
+| SPEC-4KMssIOpNuvh9jGgKKfp7R | Issue #368 CI failure Issue Tracker — workflow_run 完了監視で main×ci の未解決障害を 1 Issue に集約 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |
@@ -106,4 +108,3 @@ Directory: `docs/specs`
 | SPEC-034Jc9BJlI7ULEBWoIlMP2 | Issue #28 UI 技術検証 PoC（wry・描画バックエンド・フロントエンド FW・配布） | implemented | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | SPEC-034JceNZQvAawWwMH4ct91 | 時間型拡張（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針） | implemented | [time-type-extension-framerate-timecode-rounding.md](./time-type-extension-framerate-timecode-rounding.md) |
 | SPEC-034N3JBtBP4dPi8ob9HwDV | video-proc RT 検証レーンへの assert_no_alloc 適用（Issue #126） | implemented | [video-proc-rt-verification-lane.md](./video-proc-rt-verification-lane.md) |
-| SPEC-4KMssIOpNuvh9jGgKKfp7R | Issue #368 CI failure Issue Tracker — workflow_run 完了監視で main×ci の未解決障害を 1 Issue に集約 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |

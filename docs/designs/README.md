@@ -81,8 +81,10 @@ Directory: `docs/designs`
 | DESIGN-oq5cpmBZrL3fUcNnuUzPxg | Issue #333 CI-OPT-06 Impact Classifier・集約 Required Gate・段階移行設計 | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
 | DESIGN-elUvrfyRcsMrmrESYqsxDn | Issue #336 SinkDegraded Clone 設計 | approved | [issue-336-sink-degraded-clone.md](./issue-336-sink-degraded-clone.md) |
 | DESIGN-034RP4B7OViSh6O4YCu1rz | Issue #346 CI-OPT-06 選択実行有効化・ruleset required context 移行 runbook | approved | [issue-346-ruleset-migration-runbook.md](./issue-346-ruleset-migration-runbook.md) |
-| DESIGN-034SmuehTqDxp5K68M5dSG | Issue #366+#364 Full CI Stage 1 設計 — 選択実行撤去・3OS 常時実行・ci-summary fail-closed・expected_sha 契約 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
 | DESIGN-034SmBuqxSVw74rlBganJD | Issue #360 設計 — heir 系テストの exit を post-mint へ message 順序で固定 | approved | [issue-360-heir-exit-post-mint-ordering.md](./issue-360-heir-exit-post-mint-ordering.md) |
+| DESIGN-034SmuehTqDxp5K68M5dSG | Issue #366+#364 Full CI Stage 1 設計 — 選択実行撤去・3OS 常時実行・ci-summary fail-closed・expected_sha 契約 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
+| DESIGN-LKKyu5XTONFK84RN45ZdM2 | Issue #367 共通 Daily Scheduler 設計 — 履歴駆動判定・重複抑止・bounded retry・dispatch SHA race 対策 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
+| DESIGN-UGm4KjCwx7pEetENeTzIwB | Issue #368 CI failure Issue Tracker 設計 — 有効 run 判定・1 Issue 集約・完了順逆転・coverage close 条件 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |
@@ -107,4 +109,3 @@ Directory: `docs/designs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | superseded | [music-time-model.md](./music-time-model.md) |
-| DESIGN-UGm4KjCwx7pEetENeTzIwB | Issue #368 CI failure Issue Tracker 設計 — 有効 run 判定・1 Issue 集約・完了順逆転・coverage close 条件 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |

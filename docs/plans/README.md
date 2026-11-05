@@ -73,8 +73,10 @@ Directory: `docs/plans`
 | PLAN-xLvFbRwmfJj1P2olT3eT9q | Issue #332 CI-OPT-05 実装計画 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | PLAN-zwAUuudwYKnZuLsOviWhpU | Issue #333 CI-OPT-06 実装計画（Shadow Mode + 集約 gate） | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
 | PLAN-psvzdxaW4MHzk7mhctaYxG | Issue #336 SinkDegraded Clone 実装計画 | approved | [issue-336-sink-degraded-clone.md](./issue-336-sink-degraded-clone.md) |
-| PLAN-034Smuf3EM4rzdHln1pYaz | Issue #366+#364 Full CI Stage 1 実装計画 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
 | PLAN-034SmCWRZx5srJB6yelbn6 | Issue #360 実施計画 — heir 系 4 サイトの exit を post-mint へ固定 | approved | [issue-360-heir-exit-post-mint-ordering.md](./issue-360-heir-exit-post-mint-ordering.md) |
+| PLAN-034Smuf3EM4rzdHln1pYaz | Issue #366+#364 Full CI Stage 1 実装計画 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
+| PLAN-r5yBO16zsFa4LSjxB9grp1 | Issue #367 共通 Daily Scheduler 実装計画 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
+| PLAN-s8XS22tWJoekwN7HhRH9hj | Issue #368 CI failure Issue Tracker 実装計画 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 
@@ -108,4 +110,3 @@ Directory: `docs/plans`
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
-| PLAN-s8XS22tWJoekwN7HhRH9hj | Issue #368 CI failure Issue Tracker 実装計画 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
