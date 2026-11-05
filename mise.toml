@@ -125,6 +125,10 @@ env = { CARGO_INCREMENTAL = "0" }
 description = "Run ci/summary verdict contract tests via `node --test ci/summary/` (needs result matrix, per-leg checkout-sha evidence, expected_sha dispatch contract, report JSON shape; requires node from the pinned toolchain)"
 run = "node --test ci/summary/"
 
+[tasks.test-ci-daily]
+description = "Run ci/daily scheduler decision contract tests via `node --test ci/daily/` (decision matrix, in-flight/unknown hold, bounded retry budget, dispatch confirm + landed-sha, report JSON shape; requires node from the pinned toolchain)"
+run = "node --test ci/daily/"
+
 [tasks.test-plugin-core]
 description = "Run plugin-core contract tests"
 run = "cargo test -p ruviform-plugin-core"

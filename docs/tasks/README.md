@@ -15,10 +15,6 @@ Directory: `docs/tasks`
 | TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | completed | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
 | TASK-yFczRmBPJEUZkKyX3bngmg | Issue #329 T1 — ci.yml verify/ui-verify へ sccache 導入 + Cold/Warm 実測 + IR | in-progress | [issue-329-t1-sccache-verify-ui-lanes.md](./issue-329-t1-sccache-verify-ui-lanes.md) |
 | TASK-034RJ02dFTbxsMkC5rKofw | Issue #331 T1 — verify lane の check-ci を lint-ci に統合 + 等価性・実測記録 | in-progress | [issue-331-t1-check-step-dedup.md](./issue-331-t1-check-step-dedup.md) |
-| TASK-034Smunkp1KgV6Pfg3HUvX | T1 ci/summary.mjs fail-closed 評価器 + contract tests（Issue #366 Stage 1） | done | [issue-366-t1-ci-summary-evaluator.md](./issue-366-t1-ci-summary-evaluator.md) |
-| TASK-034SmuoocFyRqTmasB818H | T2 ci.yml Full CI 化 + io-structured-verify lane + 選択実行機構撤去（Issue #366/#364 Stage 1） | done | [issue-366-t2-ci-yml-full-ci.md](./issue-366-t2-ci-yml-full-ci.md) |
-| TASK-034SmupEbAlO5LQee4I04v | T3 consumer-impact-check PR 自動起動廃止 + living docs 同期（Issue #366 Stage 1） | done | [issue-366-t3-consumer-impact-removal.md](./issue-366-t3-consumer-impact-removal.md) |
-| TASK-034SmDZDujSnKDIPh6c8CJ | Issue #360 t1 — heir 系 4 サイトの exit を post-mint へ message 順序で固定 | done | [issue-360-t1-heir-exit-post-mint-ordering.md](./issue-360-t1-heir-exit-post-mint-ordering.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -175,6 +171,13 @@ Directory: `docs/tasks`
 | TASK-69XeSXbqn9bazeVEgD0LzH | T1 ci/impact classifier + gate 実装（Issue #333） | done | [issue-333-t1-impact-classifier.md](./issue-333-t1-impact-classifier.md) |
 | TASK-auXqAVyXzCi31qldUWzY6t | T2 ci.yml Shadow wiring（impact/ci-gate job・trigger types・mise task・AGENTS.md）（Issue #333） | done | [issue-333-t2-ci-gate-shadow-wiring.md](./issue-333-t2-ci-gate-shadow-wiring.md) |
 | TASK-AacpjXZ02dbHUiacENEOSZ | T1 SinkDegraded Clone derive 追加（Issue #336） | done | [issue-336-t1-sink-degraded-clone.md](./issue-336-t1-sink-degraded-clone.md) |
+| TASK-034SmDZDujSnKDIPh6c8CJ | Issue #360 t1 — heir 系 4 サイトの exit を post-mint へ message 順序で固定 | done | [issue-360-t1-heir-exit-post-mint-ordering.md](./issue-360-t1-heir-exit-post-mint-ordering.md) |
+| TASK-034Smunkp1KgV6Pfg3HUvX | T1 ci/summary.mjs fail-closed 評価器 + contract tests（Issue #366 Stage 1） | done | [issue-366-t1-ci-summary-evaluator.md](./issue-366-t1-ci-summary-evaluator.md) |
+| TASK-034SmuoocFyRqTmasB818H | T2 ci.yml Full CI 化 + io-structured-verify lane + 選択実行機構撤去（Issue #366/#364 Stage 1） | done | [issue-366-t2-ci-yml-full-ci.md](./issue-366-t2-ci-yml-full-ci.md) |
+| TASK-034SmupEbAlO5LQee4I04v | T3 consumer-impact-check PR 自動起動廃止 + living docs 同期（Issue #366 Stage 1） | done | [issue-366-t3-consumer-impact-removal.md](./issue-366-t3-consumer-impact-removal.md) |
+| TASK-OMt1jAp3OOLOSc40FVZTD0 | T1 ci/daily/decide.mjs 判定器 + fixture contract tests + test-ci-daily task（Issue #367） | done | [issue-367-t1-decide-evaluator.md](./issue-367-t1-decide-evaluator.md) |
+| TASK-6BTRFSnTERjkzGCwtaEgAs | T2 `.github/workflows/daily-ci.yml` 新設（Issue #367） | done | [issue-367-t2-daily-ci-workflow.md](./issue-367-t2-daily-ci-workflow.md) |
+| TASK-xJy29ZBdKUklv4RDyz58A3 | T3 Consumer 採用契約・運用手順の docs 同期（Issue #367） | done | [issue-367-t3-consumer-contract-docs.md](./issue-367-t3-consumer-contract-docs.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

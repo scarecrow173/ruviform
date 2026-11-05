@@ -1,0 +1,96 @@
+name: daily-ci
+
+# Issue #367 common daily scheduler: once a day (UTC), a single lightweight
+# job decides whether the current main HEAD already has a valid Full CI
+# result in this repo's `ci.yml` run history, and dispatches `ci.yml` on
+# `ref: main` with `expected_sha` only when it does not. The run history is
+# the only state authority — no dedicated DB, no repository variables.
+#
+# Decision contract (ci/daily/decide.mjs, docs/designs/issue-367-daily-scheduler.md):
+#   latest completed success on the sha -> skip (no heavy runner starts)
+#   any in-flight run on the sha         -> suppress (no double dispatch)
+#   failure/cancelled/timeout/no history -> retry, bounded to 2 auto
+#                                           dispatches per sha
+#   API failure / unknown state          -> error/hold, never false success
+#
+# The scheduler's green run only means "the decision completed" — the
+# verification state lives in the decision outcome, ::warning annotations,
+# and the daily-ci-report artifact. Failure Issue aggregation is the
+# ci-issue-tracker workflow's job (Issue #368), not this one's.
+
+on:
+  schedule:
+    # 06:17 JST daily (UTC). Minute deliberately non-zero to avoid the
+    # top-of-the-hour GitHub Actions schedule congestion window.
+    - cron: "17 21 * * *"
+  workflow_dispatch:
+    inputs:
+      # Manual re-evaluation path. dry_run runs the same decision pipeline
+      # but never POSTs a dispatch — for diagnosing "would it dispatch?".
+      dry_run:
+        description: "判定のみ実行し ci.yml を dispatch しない（診断用）"
+        required: false
+        type: boolean
+        default: false
+
+# Everything is denied by default; the single decision job re-grants only
+# what it needs.
+permissions: {}
+
+# Serialise scheduler runs — a second run starting mid-decision could
+# double-dispatch. Never cancel mid-run: a dispatched-but-unreported run
+# would lose its evidence.
+concurrency:
+  group: ${{ github.workflow }}-decision
+  cancel-in-progress: false
+
+env:
+  MISE_ENABLE_TOOLS: node
+
+jobs:
+  decide:
+    name: decide
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout the in-repo script and mise.lock
+      actions: write # read ci.yml run history + POST workflow_dispatch
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore node toolchain from mise.lock
+        run: |
+          mise trust
+          mise install --locked node
+
+      # A broken evaluator must not emit a decision — run its contract
+      # tests first so the job fails rather than emitting a wrong
+      # skip/dispatch (same self-test pattern ci-summary uses).
+      - name: Self-test daily-ci evaluator (mise run test-ci-daily)
+        run: mise run test-ci-daily
+
+      - name: Evaluate main verification state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          DAILY_TARGET_WORKFLOW: ci.yml
+          DAILY_MAIN_REF: main
+          DAILY_MAX_AUTO_DISPATCHES: "2"
+        run: mise exec -- node ci/daily/decide.mjs --report daily-ci-report.json
+
+      - name: Upload daily-ci report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # Unique-per-run names (upload-artifact v4): keep every
+          # attempt's report instead of conflicting on rerun.
+          name: daily-ci-report-attempt-${{ github.run_attempt }}
+          path: daily-ci-report.json
+          if-no-files-found: warn
