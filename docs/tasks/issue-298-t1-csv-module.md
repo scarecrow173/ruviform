@@ -1,7 +1,7 @@
 ---
 id: "TASK-034TKw7zfSgzOzI8oNY79D"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #298 T1 — csv module 本体と共有拡張"
 created: "2026-11-05"
 updated: "2026-11-05"

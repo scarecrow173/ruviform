@@ -1,7 +1,7 @@
 ---
 id: "TASK-034DgWopBD0NzsxoZGVxdm"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue #298 T2 — file feature 合成・試験仕上げ・README・impl record"
 created: "2026-11-05"
 updated: "2026-11-05"
