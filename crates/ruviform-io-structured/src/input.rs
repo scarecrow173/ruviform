@@ -31,6 +31,7 @@ impl std::error::Error for BudgetExceeded {}
 /// remaining byte trips `exceeded` and returns an error — so "document
 /// exactly at the budget" can succeed and nothing beyond it is silently
 /// treated as EOF.
+#[derive(Debug)]
 pub(crate) struct BoundedRead<R> {
     inner: R,
     remaining: u64,
@@ -131,6 +132,7 @@ pub(crate) fn read_to_string(
                 byte: Some(e.utf8_error().valid_up_to() as u64),
                 line: None,
                 column: None,
+                record: None,
             }),
             None,
             Some(Box::new(e)),

@@ -39,7 +39,7 @@ Ruviform ワークスペースのメンバークレート索引（計35クレー
 
 | クレート | 責務 |
 | --- | --- |
-| [`ruviform-io-structured`](ruviform-io-structured/README.md) | Serde 型付き構造化ドキュメント I/O（JSON/YAML/TOML `from_reader`/`to_writer`・Strict EOF・byte budget・正規化 `DocumentError`・`file` feature で StagedFile publish — Issue #297。IO-IMP-04 CSV / IO-IMP-05 XML の基底 scaffold） |
+| [`ruviform-io-structured`](ruviform-io-structured/README.md) | Serde 型付き構造化ドキュメント I/O（JSON/YAML/TOML `from_reader`/`to_writer`・CSV streaming `CsvReader`/`CsvWriter`・Strict EOF・byte budget・正規化 `DocumentError`・`file` feature で StagedFile publish — Issue #297/#298。IO-IMP-05 XML の基底 scaffold） |
 
 ## 汎用圧縮 I/O（非 RT 専用）
 

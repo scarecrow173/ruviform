@@ -12,6 +12,7 @@ default = []
 json = ["dep:serde_json"]
 yaml = ["dep:serde-saphyr"]
 toml = ["dep:toml"]
+csv = ["dep:csv", "dep:csv-core"]
 file = ["dep:ruviform-io-file"]
 
 [dependencies]
@@ -35,6 +36,12 @@ toml = { version = "=1.1.8", default-features = false, features = [
     "parse",
     "display",
 ], optional = true }
+# CSV: `csv-core` is the pull-based parser whose caller-owned buffers let
+# this adapter enforce field/record limits *before* allocation; `csv`
+# supplies the record container, Serde glue and writer. Both are
+# Unlicense/MIT, actively maintained and pinned with `=` per policy.
+csv = { version = "=1.4.0", default-features = false, optional = true }
+csv-core = { version = "=0.1.13", default-features = false, optional = true }
 ruviform-io-file = { path = "../ruviform-io-file", optional = true }
 
 [dev-dependencies]

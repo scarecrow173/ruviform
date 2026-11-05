@@ -261,6 +261,7 @@ fn map_error(
         byte: loc.span().byte_offset(),
         line: Some(loc.line()),
         column: Some(loc.column()),
+        record: None,
     });
     let (kind, limit) = classify(&e, caps);
     DocumentError::with_parts(kind, FORMAT, position, limit, Some(Box::new(e)))

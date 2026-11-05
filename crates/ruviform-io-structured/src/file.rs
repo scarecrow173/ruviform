@@ -15,12 +15,12 @@
 
 use crate::DocumentError;
 use ruviform_io_file::{FileError, PublishFailure};
-#[cfg(any(feature = "json", feature = "yaml", feature = "toml"))]
+#[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
 use ruviform_io_file::{PublishOptions, PublishReceipt, StagedFile};
 use std::fmt;
-#[cfg(any(feature = "json", feature = "yaml", feature = "toml"))]
+#[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
 use std::io::BufReader;
-#[cfg(any(feature = "json", feature = "yaml", feature = "toml"))]
+#[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
 use std::path::Path;
 
 /// Failure of a format module's `read_file`.
@@ -106,7 +106,7 @@ impl std::error::Error for DocumentFileWriteError {
 }
 
 /// Shared `read_file` implementation: open + buffered decode.
-#[cfg(any(feature = "json", feature = "yaml", feature = "toml"))]
+#[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
 pub(crate) fn open_document<T>(
     path: impl AsRef<Path>,
     decode: impl FnOnce(&mut BufReader<std::fs::File>) -> Result<T, DocumentError>,
@@ -120,7 +120,7 @@ pub(crate) fn open_document<T>(
 /// seal → publish. An encode failure drops the unsealed staged file,
 /// which performs best-effort temp cleanup without touching the
 /// destination.
-#[cfg(any(feature = "json", feature = "yaml", feature = "toml"))]
+#[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
 pub(crate) fn write_document(
     path: impl AsRef<Path>,
     publish: PublishOptions,
