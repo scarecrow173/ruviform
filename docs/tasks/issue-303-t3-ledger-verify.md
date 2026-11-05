@@ -1,7 +1,7 @@
 ---
 id: "TASK-9zUBxcJWsJbiJzI8S143vV"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "T3 crate doc/README・台帳・main 取込・最終検証 (Issue #303)"
 created: "2026-11-05"
 updated: "2026-11-05"
