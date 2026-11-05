@@ -164,7 +164,7 @@ impl CompressionError {
 
     /// Wraps an underlying `io::Error` preserving its diagnostic as
     /// [`std::error::Error::source`].
-    #[cfg(any(feature = "gzip", feature = "deflate"))]
+    #[cfg(any(feature = "gzip", feature = "deflate", feature = "zstd"))]
     pub(crate) fn io(source: io::Error) -> Self {
         Self::with_source(CompressionErrorKind::Io, source)
     }

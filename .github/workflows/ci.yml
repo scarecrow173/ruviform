@@ -410,11 +410,12 @@ jobs:
       - name: Lint video-proc icc feature (mise run lint-video-proc-icc)
         run: mise run lint-video-proc-icc
 
-  # IO compression lane (Issue #300): gzip/deflate are non-default features so
-  # `cargo test --workspace` never compiles their code paths; this job runs
-  # the full feature matrix (default + each format + combined) because dead
-  # code under a reduced feature set only fails `-D warnings` at that exact
-  # combination.
+  # IO compression lane (Issues #300/#301): gzip/deflate/zstd are non-default
+  # features so `cargo test --workspace` never compiles their code paths; this
+  # job runs the full feature matrix (default + each format + combined)
+  # because dead code under a reduced feature set only fails `-D warnings` at
+  # that exact combination. The zstd backend compiles vendored C via `cc`
+  # (gcc present on ubuntu-latest).
   compression-verify:
     name: compression-verify
     needs: [impact]

@@ -7,12 +7,12 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
-| TASK-034RTggRy4UgfgaFSfQY4f | T1 ruviform-io-structured scaffold・共通契約・JSON Format (Issue #297) | todo | [issue-297-t1-crate-and-contract.md](./issue-297-t1-crate-and-contract.md) |
-| TASK-034RTghO8nOg3ZiYGau2pe | T2 YAML/TOML Format module・Budget 写像・2相分類 (Issue #297) | todo | [issue-297-t2-yaml-toml.md](./issue-297-t2-yaml-toml.md) |
-| TASK-034RTgiDjrTlcheIw55nAn | T3 file feature・workspace 台帳・総合検証 (Issue #297) | todo | [issue-297-t3-file-feature.md](./issue-297-t3-file-feature.md) |
-| TASK-034RT89xVtZ6NMuRh08JQg | T1 ruviform-io-archive クレート新設・Archive共通型・ZIP Indexed Reader (Issue #302) | in-progress | [issue-302-t1-scaffold-reader.md](./issue-302-t1-scaffold-reader.md) |
-| TASK-034RT8aupBUW6NpSHSrRWq | T2 ZIP Writer・Entry finish→Archive finish・否定fixture (Issue #302) | in-progress | [issue-302-t2-zip-writer.md](./issue-302-t2-zip-writer.md) |
-| TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | in-progress | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
+| TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | approved | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
+| TASK-AsjkeCFskQSQZMsB5Tgl5H | Issue #301 T2 — zstd format/contract/API 試験 | approved | [issue-301-t2-zstd-tests.md](./issue-301-t2-zstd-tests.md) |
+| TASK-nnP07tqKBoCJML7LH9xWsQ | Issue #301 T3 — compression-verify lane matrix・crate 文書 | approved | [issue-301-t3-ci-docs.md](./issue-301-t3-ci-docs.md) |
+| TASK-034RT89xVtZ6NMuRh08JQg | T1 ruviform-io-archive クレート新設・Archive共通型・ZIP Indexed Reader (Issue #302) | completed | [issue-302-t1-scaffold-reader.md](./issue-302-t1-scaffold-reader.md) |
+| TASK-034RT8aupBUW6NpSHSrRWq | T2 ZIP Writer・Entry finish→Archive finish・否定fixture (Issue #302) | completed | [issue-302-t2-zip-writer.md](./issue-302-t2-zip-writer.md) |
+| TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | completed | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
 | TASK-yFczRmBPJEUZkKyX3bngmg | Issue #329 T1 — ci.yml verify/ui-verify へ sccache 導入 + Cold/Warm 実測 + IR | in-progress | [issue-329-t1-sccache-verify-ui-lanes.md](./issue-329-t1-sccache-verify-ui-lanes.md) |
 | TASK-034RJ02dFTbxsMkC5rKofw | Issue #331 T1 — verify lane の check-ci を lint-ci に統合 + 等価性・実測記録 | in-progress | [issue-331-t1-check-step-dedup.md](./issue-331-t1-check-step-dedup.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
@@ -140,6 +140,9 @@ Directory: `docs/tasks`
 | TASK-034RBIWkzzcEXV0X3v5ySr | T1 OsFileOps 実 OS アダプタ + factory 接続 (Issue #296) | done | [issue-296-t1-os-adapter.md](./issue-296-t1-os-adapter.md) |
 | TASK-034RBIX9gn32W8GMyhNMqw | T2 実 FS 結合試験・複数プロセス競合 (Issue #296) | done | [issue-296-t2-real-fs-tests.md](./issue-296-t2-real-fs-tests.md) |
 | TASK-034RBIYghnEBLw9llcomyd | T3 保証範囲文書化・impl record・最終検証 (Issue #296) | done | [issue-296-t3-docs-verify.md](./issue-296-t3-docs-verify.md) |
+| TASK-034RTggRy4UgfgaFSfQY4f | T1 ruviform-io-structured scaffold・共通契約・JSON Format (Issue #297) | done | [issue-297-t1-crate-and-contract.md](./issue-297-t1-crate-and-contract.md) |
+| TASK-034RTghO8nOg3ZiYGau2pe | T2 YAML/TOML Format module・Budget 写像・2相分類 (Issue #297) | done | [issue-297-t2-yaml-toml.md](./issue-297-t2-yaml-toml.md) |
+| TASK-034RTgiDjrTlcheIw55nAn | T3 file feature・workspace 台帳・総合検証 (Issue #297) | done | [issue-297-t3-file-feature.md](./issue-297-t3-file-feature.md) |
 | TASK-GONrZ5DneYV2H4ryIMA4EK | T1 クレート scaffold + 共有型 + Gzip/Deflate 両 module (Issue #300) | done | [issue-300-t1-crate-core.md](./issue-300-t1-crate-core.md) |
 | TASK-2v8sucBEWaF0frYXFmed85 | T2 AC1-AC6 試験群 + rustdoc/crate README (Issue #300) | done | [issue-300-t2-tests.md](./issue-300-t2-tests.md) |
 | TASK-OjT0wWawFEmwEe6bibhaMq | T3 compression-verify CI lane + classifier + impl record (Issue #300) | done | [issue-300-t3-ci-lane.md](./issue-300-t3-ci-lane.md) |

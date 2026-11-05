@@ -16,7 +16,7 @@ use std::io::{self, BufRead, Write};
 use crate::error::{CompressionError, CompressionErrorKind};
 use crate::options::{DecodeLimits, DecodeScope, EncodeLimits};
 use crate::receipt::{DecodeReceipt, EncodeReceipt, IntegritySummary};
-use crate::stream::{DeflateIn, EncoderCore, invalid_state_io};
+use crate::stream::{DeflateIn, DeflateOut, EncoderCore, invalid_state_io};
 
 /// Encode options for [`Encoder`]: DEFLATE compression level plus the
 /// shared [`EncodeLimits`] byte budgets.
@@ -119,7 +119,7 @@ impl Default for DecodeOptions {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct Encoder<'w, W: Write + ?Sized> {
-    core: EncoderCore<'w, W>,
+    core: EncoderCore<'w, W, DeflateOut>,
 }
 
 impl<'w, W: Write + ?Sized> Encoder<'w, W> {
@@ -127,7 +127,7 @@ impl<'w, W: Write + ?Sized> Encoder<'w, W> {
     /// on `write`/`flush`/`finish`.
     pub fn new(writer: &'w mut W, options: EncodeOptions) -> Result<Self, CompressionError> {
         Ok(Self {
-            core: EncoderCore::new(writer, options.level(), options.limits())?,
+            core: EncoderCore::new(writer, DeflateOut::new(options.level())?, options.limits()),
         })
     }
 

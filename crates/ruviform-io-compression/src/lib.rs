@@ -1,5 +1,5 @@
 //! `ruviform-io-compression` — byte-stream compression for Ruviform IO
-//! (IO-IMP-06 / Issue #300).
+//! (IO-IMP-06 / Issue #300, IO-IMP-07 / Issue #301).
 //!
 //! One crate, one format module per container format:
 //!
@@ -7,12 +7,10 @@
 //! |-----------|-----------------------|------------|
 //! | [`gzip`]  | Gzip (RFC 1952)       | `gzip`     |
 //! | [`deflate`]| raw DEFLATE (RFC 1951) | `deflate`  |
+//! | [`zstd`]  | Zstd frame (RFC 8878) | `zstd`     |
 //!
 //! `default = []` — each format is an opt-in feature so downstream
-//! crates compile only what they use. A `zstd` module is planned as
-//! IO-IMP-07 (Issue #301) and will reuse the same
-//! [`DecodeScope`]/[`DecodeLimits`]/receipt vocabulary; it is
-//! intentionally not declared here.
+//! crates compile only what they use.
 //!
 //! # Borrowed stream types
 //!
@@ -64,6 +62,12 @@
 //!   inside the caller's `BufRead`.
 //! - **Raw deflate**: no checksum is claimed; a single stream whose
 //!   end-boundary is verified.
+//! - **Zstd**: frame headers parsed and window limits enforced before
+//!   the backend sees a frame; content checksums verified per frame and
+//!   split into [`IntegritySummary`]'s checked/unchecked counts;
+//!   concatenated frames under `WholeInput`; skippable frames follow
+//!   `zstd::SkippableFramePolicy`; dictionary-referencing frames are
+//!   rejected as `Unsupported`.
 //!
 //! # Limits
 //!
@@ -92,13 +96,15 @@ mod error;
 mod options;
 mod receipt;
 
-#[cfg(any(feature = "gzip", feature = "deflate"))]
+#[cfg(any(feature = "gzip", feature = "deflate", feature = "zstd"))]
 mod stream;
 
 #[cfg(feature = "deflate")]
 pub mod deflate;
 #[cfg(feature = "gzip")]
 pub mod gzip;
+#[cfg(feature = "zstd")]
+pub mod zstd;
 
 pub use error::{CompressionError, CompressionErrorKind};
 pub use options::{DecodeLimits, DecodeScope, EncodeLimits};

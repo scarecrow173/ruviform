@@ -61,6 +61,7 @@ Directory: `docs/designs`
 | DESIGN-034RBFdth7UW7A6IS10Ha3 | Issue #296 ruviform-io-file — 実 OS PlatformFileOps アダプタ設計 (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | DESIGN-034RTd0bYqWgcxXWa7uVPE | Issue #297 ruviform-io-structured — 共通契約・Format別API・Backend選定設計 (IO-IMP-03) | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
 | DESIGN-eGBdnzbpDjWwMwTEldA9gI | Issue #300 ruviform-io-compression — Gzip・Raw Deflate 借用 Stream 設計 (IO-IMP-06) | approved | [issue-300-io-compression-gzip-deflate.md](./issue-300-io-compression-gzip-deflate.md) |
+| DESIGN-K3VAKLOqVu5SxMRUaZCAso | Issue #301 ruviform-io-compression — Zstd Frame 借用 Stream 設計 (IO-IMP-07) | approved | [issue-301-io-compression-zstd.md](./issue-301-io-compression-zstd.md) |
 | DESIGN-034RT7CvRTe3b8jPTFBHtq | Issue #302 ruviform-io-archive — Archive 共通型・ZIP Indexed Reader/Writer・検証パイプライン設計 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | DESIGN-dHUQ40Hk50tvziqjx7Kewj | Issue #307 attach 時 frame_base 検証 context — 実装設計 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | DESIGN-034Rp1KqXNzTDTKRXTbqHx | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |

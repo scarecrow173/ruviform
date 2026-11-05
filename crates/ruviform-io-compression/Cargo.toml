@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-io-compression"
-description = "Byte-stream compression — borrowed-writer/bufread Encoder/Decoder with explicit finish, verified end and cumulative budgets (non-RT; gzip + raw deflate, IO-IMP-06)"
+description = "Byte-stream compression — borrowed-writer/bufread Encoder/Decoder with explicit finish, verified end and cumulative budgets (non-RT; gzip + raw deflate + zstd, IO-IMP-06/07)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,12 +9,13 @@ publish.workspace = true
 
 [features]
 default = []
-# Per-format gates (Issue #300): `gzip` adds RFC 1952 member
-# encode/decode, `deflate` adds raw RFC 1951 stream encode/decode.
-# Both share the optional `flate2` backend dep. `zstd` is IO-IMP-07
-# (Issue #301) and intentionally not declared here.
+# Per-format gates (Issues #300/#301): `gzip` adds RFC 1952 member
+# encode/decode, `deflate` adds raw RFC 1951 stream encode/decode
+# (shared `flate2` backend), `zstd` adds RFC 8878 frame encode/decode
+# (`zstd-safe` backend).
 gzip = ["dep:flate2"]
 deflate = ["dep:flate2"]
+zstd = ["dep:zstd-safe"]
 
 [dependencies]
 # Dependency addition record (provisional convention + licensing ADR
@@ -35,12 +36,39 @@ deflate = ["dep:flate2"]
 #   - Public exposure: none — no flate2 type, error or version appears
 #     in the public API (backend-hiding contract of IO-03).
 flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"], optional = true }
+# Dependency addition record (Issue #301):
+#   - Why: zstd-safe's low-level `CCtx`/`DCtx` streaming primitives
+#     (`compress_stream2`/`decompress_stream` over `InBuffer`/`OutBuffer`
+#     position tracking) give byte-exact consumption accounting,
+#     frame-end signalling (return == 0) and `DParameter::WindowLogMax`
+#     enforcement without prefetching the caller's BufRead. Frame
+#     header/boundary parsing stays Ruviform-owned, so Drop behavior,
+#     skippable-frame policy and receipt accuracy do not depend on the
+#     high-level `zstd` adapters (which buffer input and write on Drop).
+#   - License: BSD-3-Clause — compatible with the workspace licensing
+#     policy. Pre-publish license review remains a follow-up.
+#   - Version: 8.2.0 (published 2026-10-16 — satisfies the
+#     minimum-release-age convention). rust-version 1.64 <= MSRV 1.89.
+#   - Features: `default-features = false`; no `std`/`experimental`
+#     feature is required — the used API is stable surface.
+#   - Native build: `zstd-sys` compiles the vendored zstd C sources via
+#     `cc` (no cmake/bindgen). Required only where the `zstd` feature is
+#     enabled (compression-verify lane: ubuntu-latest/gcc; local dev:
+#     MSVC/clang).
+#   - Public exposure: none — no zstd_safe/zstd_sys type, error or
+#     version appears in the public API (backend-hiding contract of
+#     IO-03).
+zstd-safe = { version = "8.2.0", default-features = false, optional = true }
 
 [dev-dependencies]
 # Test-only backend cross-check: reference gzip/deflate/zlib streams
 # are produced and consumed with flate2's high-level adapters to prove
 # wire-format interop independent of our own framing code.
 flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+# Test-only interop: the high-level `zstd` crate produces reference
+# frames (checksum on/off, levels) and independently decodes our
+# encoder's output, proving wire-format compatibility.
+zstd = { version = "0.14.0", default-features = false }
 
 [lints]
 workspace = true
