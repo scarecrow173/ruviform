@@ -31,6 +31,8 @@ pub enum DocumentFormat {
     Yaml,
     /// TOML (`feature = "toml"`, backend: `toml`).
     Toml,
+    /// CSV (`feature = "csv"`, backends: `csv-core` + `csv`).
+    Csv,
 }
 
 impl fmt::Display for DocumentFormat {
@@ -39,6 +41,7 @@ impl fmt::Display for DocumentFormat {
             Self::Json => "json",
             Self::Yaml => "yaml",
             Self::Toml => "toml",
+            Self::Csv => "csv",
         };
         f.write_str(message)
     }
@@ -144,6 +147,8 @@ pub struct DocumentPosition {
     pub line: Option<u64>,
     /// 1-based column number, when known.
     pub column: Option<u64>,
+    /// 0-based record index, when the format is record-oriented (CSV).
+    pub record: Option<u64>,
 }
 
 impl fmt::Display for DocumentPosition {
@@ -153,6 +158,7 @@ impl fmt::Display for DocumentPosition {
             ("line", self.line),
             ("column", self.column),
             ("byte", self.byte),
+            ("record", self.record),
         ] {
             if let Some(v) = value {
                 write!(f, "{sep}{label} {v}")?;
@@ -234,7 +240,7 @@ impl DocumentError {
     }
 
     /// Full-detail constructor used by the format modules.
-    #[cfg(any(feature = "json", feature = "yaml", feature = "toml"))]
+    #[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
     pub(crate) fn with_parts(
         kind: DocumentErrorKind,
         format: DocumentFormat,

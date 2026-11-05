@@ -1,18 +1,19 @@
 # ruviform-io-structured
 
 Ruviform の構造化ドキュメント I/O 基盤 — IO-02（Issue #284）設計の
-実装（IO-IMP-03 / Issue #297）。Serde 型付きの JSON/YAML/TOML
-`from_reader<T>` / `to_writer<T>` を提供し、単一文書の Strict EOF・
-入力 byte budget・正規化 `DocumentError`・format 固有制約の正直な
-文書化を担う。後続の IO-IMP-04 CSV（Issue #298）・IO-IMP-05 XML
-（Issue #299）は本クレートの scaffold 上に format module を追加する。
+実装（IO-IMP-03 / Issue #297、IO-IMP-04 / Issue #298）。Serde 型付きの
+JSON/YAML/TOML `from_reader<T>` / `to_writer<T>` と、CSV の順次
+record streaming API を提供し、単一文書の Strict EOF・入力 byte
+budget・正規化 `DocumentError`・format 固有制約の正直な文書化を担う。
+後続の IO-IMP-05 XML（Issue #299）は本クレートの scaffold 上に
+format module を追加する。
 
 ## 責務
 
-- Format 別 `json` / `yaml` / `toml` module の借用 `Read`/`Write`
-  ベース API。公開する外部型は Serde の `Serialize` /
-  `DeserializeOwned` のみ — backend（serde_json・serde-saphyr・toml）
-  の型・エラー・feature 名は公開 API に一切出さず、診断は
+- Format 別 `json` / `yaml` / `toml` / `csv` module の借用
+  `Read`/`Write` ベース API。公開する外部型は Serde の `Serialize` /
+  `DeserializeOwned` のみ — backend（serde_json・serde-saphyr・toml・
+  csv）の型・エラー・feature 名は公開 API に一切出さず、診断は
   `Error::source()` の `dyn Error` 経由のみ。
 - Strict EOF: JSON は文書後の非空白を `TrailingData` で拒否、YAML は
   複数文書を `TrailingData` で拒否。TOML は有限文書全体を parse する
@@ -54,6 +55,7 @@ Ruviform の構造化ドキュメント I/O 基盤 — IO-02（Issue #284）設�
 | `json` | JSON `from_reader`/`to_writer`・strict EOF・depth は backend 固定 | `serde_json =1.0.154` |
 | `yaml` | YAML `from_reader`/`to_writer`・depth/alias budget | `serde-saphyr =2.0.0` |
 | `toml` | TOML `from_reader`/`to_writer`・有限 buffer parse | `toml =1.1.8+spec-1.1.0` |
+| `csv` | CSV streaming `CsvReader`/`CsvWriter`・再利用 `CsvRecord`・`read_typed`・dialect/BOM/limit 制御 | `csv =1.4.0`（`csv-core =0.1.13`） |
 | `file` | `read_file`/`write_file`（`StagedFile` publish 合成） | `ruviform-io-file`（path） |
 
 `default = []`。format feature と `file` は独立に組合せ可能
@@ -91,6 +93,39 @@ depth は serde_json の固定内部上限に従い、超過は `Syntax` —
 `InputLimits` 上の調整可能制限としては露出しない（虚偽の
 `LimitExceeded` 分類を行わない）。
 
+### CSV の制約（正直な保証範囲）
+
+JSON/YAML/TOML と異なり CSV は有限文書ではなく record 列であるため、
+`csv` module は buffer 全読みの `from_reader`/`to_writer` に加えて
+`CsvReader` / `CsvRecord` / `CsvWriter` の順次 streaming API を持つ:
+
+- `CsvReader<R>` は借用 `&mut R` の上で 8 KiB chunk + 最大 4 byte の
+  BOM probe だけを先読みする（lookahead は bound 済み）。
+  `read_record(&mut CsvRecord)` は caller 提供バッファを再利用し、
+  `CsvRecord` の data/ends 両方の成長は `max_record_bytes` /
+  `max_field_bytes` / `max_fields` に先立って監査される —
+  上限超過は `LimitExceeded`（`limit()` で上限名を報告）で、
+  silent な truncation はしない。record 数は `max_records`、入力総量は
+  共通 `InputLimits::max_bytes` で bound。
+- `read_typed::<T>` は header 名（`has_headers`）または位置で
+  Serde deserialize する。失敗は `DataModel`、field の非 UTF-8 は
+  `InvalidEncoding` — どちらも record 全体の失敗であり部分値は返さない。
+- `CsvDialect`（delimiter・quote・terminator・comment・double_quote・
+  escape・quoting）は構築時に検証し、`delimiter == quote` のような
+  矛盾設定は `Unsupported` で即座に拒否する（backend に渡せない制約を
+  黙って無視しない）。
+- Grammar は permissive: 未閉鎖 quote・quote 後の余剰文字は寛容に
+  受理される（backend の契約であり、モジュール文書に明記）。
+  非方形 record は `flexible == false` で `DataModel`。
+- Encoding: UTF-8 BOM は `CsvBomPolicy` で strip（既定）/ preserve を
+  選択 — preserve は field データとして残る。UTF-16 系 BOM は
+  `InvalidEncoding` で拒否。record 内の非 UTF-8 field は raw bytes
+  として読め、`field_str`/`read_typed` の UTF-8 要求点で
+  `InvalidEncoding` となる。
+- Formula injection（`=`-leading field 等）はデータとしてそのまま
+  読み書きする — 本クレートは spreadsheet 向け sanitizer ではない。
+  注入対策が必要な consumer は自前で field を前処理する。
+
 ## 層・許可依存
 
 - 層: 構造化ドキュメント I/O 基盤。`ruviform-io-file`（`file`
@@ -98,7 +133,7 @@ depth は serde_json の固定内部上限に従い、超過は `Syntax` —
   engine 層への依存は持たない。io-file 側から本クレートへの依存は
   禁止（循環を作らない）。
 - 許可依存: `serde`（公開 API・trait 境界のみ）、optional な
-  `serde_json` / `serde-saphyr` / `toml`（backend・private）、
+  `serde_json` / `serde-saphyr` / `toml` / `csv`（backend・private）、
   optional な `ruviform-io-file`（path）。GUI・audio・GPU への
   強制依存なし。
 - `default = []`・MSRV 1.89・`publish = false` 継承。
@@ -114,5 +149,6 @@ depth は serde_json の固定内部上限に従い、超過は `Syntax` —
   error 正規化・backend 非公開の原則）
 - Issue #297: 本クレートの新設・公開契約・format adapter・
   file feature（IO-IMP-03）
-- Issue #298/#299: 後続の CSV / XML format module（本 scaffold 上）
+- Issue #298: CSV format module（IO-IMP-04・本 scaffold 上）
+- Issue #299: 後続の XML format module（本 scaffold 上）
 - Issue #288: IO-06 共通 gate（統合・consumer 受入の上流 gate）

@@ -209,6 +209,7 @@ fn map_de_error(e: &toml::de::Error, kind: DocumentErrorKind) -> DocumentError {
         byte: Some(span.start as u64),
         line: None,
         column: None,
+        record: None,
     });
     // The backend `Display` renders the offending input line; keep the
     // source diagnostic to the bare message so snippets never travel
