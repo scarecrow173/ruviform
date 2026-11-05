@@ -1,6 +1,7 @@
 //! `ruviform-io-archive` — shared archive entry contract + ZIP/TAR
-//! reader/writer (IO-04 / Issue #286, IO-IMP-08 / Issue #302,
-//! IO-IMP-09 / Issue #303).
+//! reader/writer + secure extraction (IO-04 / Issue #286,
+//! IO-IMP-08 / Issue #302, IO-IMP-09 / Issue #303,
+//! IO-IMP-10 / Issue #304).
 //!
 //! This crate is the **scaffold owner** for Ruviform's archive
 //! foundation. It establishes the format-agnostic public types that
@@ -35,12 +36,20 @@
 //! TAR payloads carry no checksum — entry receipts always report
 //! `EntryChecksum::NotPresent` (never a corruption/authenticity proof).
 //!
-//! # Threat boundary (contract — implementation is IO-IMP-10)
+//! The [`extract`] module (IO-IMP-10) turns a verified-parse archive
+//! into a verified on-disk tree under an exclusive isolated staging
+//! root: [`extract::SafeRelativePath`] enforces the path policy
+//! (`..`/absolute/drive/UNC/reserved-name rejection), canonical
+//! collisions and links/special entries are refused, budgets bind
+//! before writes, and cleanup is identity-checked. The result is a
+//! verified *tree* — not an immutable snapshot; consumer-level
+//! publication (commit/CAS/directory replace) is out of scope.
+//!
+//! # Threat boundary
 //!
 //! - *Zip-slip paths:* [`ArchiveName`] hands raw stored bytes to the
-//!   caller. `..`/absolute/drive/UNC/reserved-name rejection is the
-//!   extraction layer's contract, not this crate's — nothing here
-//!   claims a name is a safe filesystem path.
+//!   caller; [`extract::SafeRelativePath`] is the boundary that decides
+//!   whether a stored name may name a staged file.
 //! - *Expansion bombs:* declared sizes are early-rejection hints only.
 //!   Actual output is measured while it streams and cut off at the
 //!   configured caps, so excess bytes never reach the caller.
@@ -94,6 +103,7 @@
 
 mod entry;
 mod error;
+pub mod extract;
 mod limits;
 mod receipt;
 pub mod tar;
@@ -116,4 +126,8 @@ const _: () = {
     assert_send::<zip::ZipArchiveWriter<std::io::Cursor<Vec<u8>>>>();
     assert_send::<tar::TarArchiveReader<std::io::Cursor<Vec<u8>>>>();
     assert_send::<tar::TarArchiveWriter<std::io::Cursor<Vec<u8>>>>();
+    assert_send::<extract::ExtractionSession>();
+    assert_send::<extract::ExtractedTree>();
+    assert_send::<extract::ExtractionRecoveryHandle>();
+    assert_send::<extract::ExtractionFailure>();
 };
