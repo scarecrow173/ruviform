@@ -72,7 +72,7 @@ relations:
 ## Done When
 
 - `classifyRun` が有効 run フィルタ（repo・branch・event allowlist・fork 除外・`action: completed`）と conclusion 分類（`success`→success・`failure`/`timed_out`/`startup_failure`→failure・`cancelled`/`skipped`/`neutral`/`stale`/`action_required`/null/未知→operational）を返す。
-- `plan` が Issue 一覧+compare+run メタから action list（`create`/`update`/`close`/`noop`）を返し、完了順逆転（run id 順の stale 判定）・複数 open canonical 集約（最小番号・duplicate close）・close 2 重 guard（`run.id > failure.runId` ∧ `compare ∈ {identical,ahead}`）・foreign Issue 非接触を判定する。
+- `plan` が Issue 一覧+compare+run メタから action list（`create`/`update`/`close`/`noop`）を返し、完了順逆転（同 run は `run_attempt`・run 間は `updated_at` の順序付けで stale 判定・同 id 失敗 a1→成功 a2 rerun は正当な回復）・複数 open canonical 集約（最小番号・duplicate close）・close guard（最新証拠が記録最新失敗より曖昧なく新しい成功 ∧ `compare(失敗 sha→成功 sha)`・`compare(現在 main head→成功 sha)` がともに `{identical,ahead}` ∧ pending/unknown 履歴なし）・foreign Issue 非接触を判定する。
 - `renderBody`/`parseMarker` が scope marker（`<!-- ci-issue-tracker:{json} -->`）を往復し、sha/URL/job 名/conclusion を sanitize する。
 - `run(event, client)` orchestrator が ensureLabel→list→jobs→compare（close 判定時のみ）→apply の順で注入 client を呼び、API 失敗がそのまま伝播する。
 - `makeGhClient` が `gh api` で label/list/jobs/compare/create/update/comment/close を実装する（実呼出しは workflow のみ。テストは mock client）。

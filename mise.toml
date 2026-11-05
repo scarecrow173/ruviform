@@ -130,7 +130,7 @@ run = "node --test ci/summary/"
 # GitHub API call so a broken evaluator fails the job instead of creating/
 # updating/closing the wrong issue. All tests use a mock client — offline.
 [tasks.test-ci-tracker]
-description = "Run ci/tracker contract tests via `node --test ci/tracker/` (valid-run filter and conclusion matrices, plan action matrix incl. run-id ordering and compare close-guard, marker roundtrip, sanitize, API failure propagation; mock client only, no network; requires node from the pinned toolchain)"
+description = "Run ci/tracker contract tests via `node --test ci/tracker/` (valid-run filter and conclusion matrices, plan action matrix incl. run-id/attempt + updated_at ordering and compare close-guard, marker roundtrip, sanitize, API failure propagation; mock client only, no network; requires node from the pinned toolchain)"
 run = "node --test ci/tracker/"
 
 # Issue #367 (daily scheduler): contract tests for the ci/daily decision
