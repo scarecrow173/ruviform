@@ -12,8 +12,9 @@ Full CI 実行**だけを対象に、`main × ci` の未解決障害 Issue を�
   `contents: read` / `actions: read` / `issues: write`。
   `concurrency` で repo 単位に直列化（`cancel-in-progress: false`）。
 - `ci/tracker/tracker.mjs` — stdlib-only。`classifyRun`（有効 run +
-  conclusion 分類）→ `plan`（action list）→ `apply`（`gh api` client
-  注入）。GitHub API は全て client 経由で、テストは mock client。
+  conclusion 分類）→ run-history reconciliation（権威ある run 一覧と
+  marker 状態の突き合わせ）→ `plan`（action list）→ `apply`（`gh api`
+  client 注入）。GitHub API は全て client 経由で、テストは mock client。
 - `ci/tracker/tests/tracker.test.mjs` — `node --test` contract tests。
   実 GitHub API・実 Issue・実 dispatch を一切起こさない。
 
@@ -46,23 +47,65 @@ Full CI 実行**だけを対象に、`main × ci` の未解決障害 Issue を�
   endpoint — 検索 index 遅延を受けない）。label のみで marker の無い
   Issue・marker 破損・scope 不一致の Issue は foreign として一切触れない。
 - managed open が複数ある場合、最小 Issue 番号を canonical とし、残りは
-  「superseded by #N」comment + close で 1 件に集約する。
-- 失敗更新は run が `(run.id, run_attempt)` 辞書順で記録済み失敗 run
-  より新しい場合のみ — 完了順逆転で古い run が新しい状態を上書きし
-  ない。同一 run の rerun は attempt で新旧を区別する（失敗 run の
-  rerun 成功は正しく回復として扱える）。
+  「superseded by #N」comment + close で 1 件に集約する。**重複を閉じる
+  前に全 marker の最新状態を保全**し、最も新しい失敗記録を持つ marker
+  の状態を canonical Issue に引き継ぐ — duplicate が最新障害を握って
+  いても失われない。
+- 失敗更新はその run が記録済み失敗 run より新しい場合のみ — 完了順
+  逆転で古い run が新しい状態を上書きしない（ordering は後述）。
 
-## 自動 close の条件（2 重 guard）
+## Evidence reconciliation（通知の喪失・逆転への対策）
 
-両方を満たす時のみ close（回復 SHA・Run URL を comment に記録）:
+イベント payload は「トリガ」であり真実ではない。GitHub Actions の
+concurrency group は running 1 + pending 1 に制約され、**新しい pending
+run はキュー中の pending を置き換える**ため、`cancel-in-progress: false`
+でも tracker 側の workflow_run 通知が間に落ち得る（out-of-order 配送・
+eventual consistency も同様）。そこで非 skip イベントごとに
+`GET /actions/workflows/{workflow-file}/runs?branch=main&exclude_pull_requests=true`
+でこの workflow ・ branch ・有効 event の最新 run 一覧を取得し、payload
+と marker 状態と突き合わせてから判断する。
 
-1. 成功 run が `(run.id, run_attempt)` 順で記録失敗 run より新しい
-   （より新しい証拠であること。rerun 成功は同 id・高 attempt で該当）
-2. `compare(失敗 sha → 成功 sha) ∈ {identical, ahead}`（失敗 revision を
-   履歴に含む成功であること）
+- 履歴により新しい失敗 run が見つかれば、その通知が落ちていても新しい
+  失敗で状態を更新する（dropped notification の自己修復）。
+- 履歴の最新が成功（coverage 充足）なら、遅延到着した古い失敗通知は
+  Issue を起票しない — 到着順が事実にならない。
+- 履歴 API 自体の失敗は伝播して job を落とす — 証跡欠損で黙って成功・
+  close しない（fail-closed）。
+- 対象外（他 repo・他 branch・許可外 event・未 completed）の履歴 run は
+  evidence にしない。
+
+## Ordering（順序キーは一つの atomic tuple）
+
+- 同一 run id: `run_attempt` で順序づく（attempt は厳密に逐次）。rerun
+  は同 id・高 attempt なので失敗 run の rerun 成功は正しく回復になる。
+- 異なる run id: `updated_at`（最終更新＝完了時刻）で順序づく。**古い
+  run の新しい attempt が新しい run より後に完了し得る**ため、
+  `(run.id, run_attempt)` だけでは過小評価する。
+- `run_started_at` は attempt の「開始」時刻で完了順の証跡にならず使わ
+  ない。`actor`/`triggering_actor` は「誰が」であって順序証跡ではない。
+- `updated_at` が欠損、または異なる run で同一値 → `ambiguous`。**曖昧な
+  まま成功・close には使わない**（記録は残し、issue は open のまま保持）。
+  状態更新のみ run id 単調性で保守的に解決する。
+- `latest`/`failure` の run 参照は `{runId, attempt, updatedAt}` の
+  tuple をまるごと採用する — 別 run の値を Math.max で混ぜて実在しない
+  順序キーを捏造しない。
+
+## 自動 close の条件（多重 guard）
+
+以下を **全て** 満たす時のみ close（回復 SHA・Run URL を comment に記録）:
+
+1. 最新 evidence が成功であること（最新が cancelled/unknown 等の
+   operational なら close しない — main は未検証）
+2. その成功が記録済み最新失敗より**曖昧でなく新しい**こと
+3. `compare(失敗 sha → 成功 sha) ∈ {identical, ahead}`（失敗 revision を
+   履歴に含む）
+4. `compare(現在の main head → 成功 sha) ∈ {identical, ahead}`（**現在の
+   main tip をカバー** — 古い失敗 revision の検証だけでは閉じない）
 
 `behind`（古い revision の成功）・`diverged`（main 履歴書換えで失敗 sha
-が残っていない）・compare 不能は **close しない**。
+が残っていない）・順序 ambiguous・branch head 取得不能・compare 不能は
+**close しない**。close 候補で branch head が取れない場合は job を失敗
+させて誤 close を防ぐ。
 
 ## 運用ポリシー
 

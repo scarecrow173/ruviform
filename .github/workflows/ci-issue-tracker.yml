@@ -1,19 +1,22 @@
 name: ci-issue-tracker
 
 # Issue #368 (CI-DAILY-03): watch every completed `ci` (Full CI) run and
-# keep at most ONE open failure issue for repo × workflow × main. On the
-# failure side (`failure`/`timed_out`/`startup_failure`) it creates or
-# updates the tracked issue; it auto-closes only when a NEWER `ci` run
-# succeeds at a revision covering the failed one ((run id, attempt) ordering +
-# compare API guard — an old or divergent success never closes a newer
-# failure). `cancelled`/`skipped`/unknown conclusions are neither success
-# nor failure — they update the operational note only.
+# keep at most ONE open failure issue for repo × workflow × main. Each event
+# is a TRIGGER, not the truth: the evaluator reconciles the authoritative
+# `ci`-workflow run list for main against the payload and marker state, so
+# dropped or out-of-order notifications self-heal instead of deciding on
+# arrival order. It auto-closes only when the NEWEST evidence is a success
+# that is unambiguously newer than the newest recorded failure AND covers
+# both the failed revision and the current main tip (updated_at-aware
+# ordering + compare API guards — an old, ambiguous, or divergent success
+# never closes a newer failure). `cancelled`/`skipped`/unknown conclusions
+# are neither success nor failure — they update the operational note only.
 #
 # Trust model: workflow_run jobs always execute THIS file and
 # ci/tracker/tracker.mjs from the default branch — never the completed
 # run's head, PR code, or artifacts. The job touches GitHub REST metadata
-# only (issues, jobs, compare); untrusted values are sanitized before they
-# land in issue bodies or logs.
+# only (issues, jobs, run history, compare, branch head); untrusted values
+# are sanitized before they land in issue bodies or logs.
 #
 # Deliberately NO pull_request/push/schedule/workflow_dispatch triggers:
 # the tracker reacts to ci completions and nothing else (manual ops are
@@ -28,8 +31,11 @@ permissions:
   contents: read
 
 # Serialize tracker runs repo-wide: completed ci runs queue up instead of
-# racing each other, so the list→create/update cycle can never double-file
-# an issue. Never cancel an in-flight tracker mid-write.
+# racing each other. Never cancel an in-flight tracker mid-write. NOTE:
+# this group holds at most running-1 + pending-1 and a NEWER pending run
+# replaces the queued one — completion notifications CAN be dropped, so
+# ordering/dedup is not guaranteed here; the evaluator's run-history
+# reconciliation is what makes a dropped notification safe.
 concurrency:
   group: ci-issue-tracker-${{ github.repository }}
   cancel-in-progress: false

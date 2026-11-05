@@ -6,30 +6,52 @@
 // Issue-side counterpart of `ci/summary/summary.mjs`: where ci-summary
 // fail-closes the run, the tracker records that a main Full CI failure
 // exists and closes the issue only when a NEWER success covers the failed
-// revision.
+// revision AND the current main tip.
 //
 // Trust model (Issue #368 implementation 2): this script runs from the
 // default branch inside a privileged `workflow_run` job. It never checks
 // out, downloads, or executes the completed run's code or artifacts — the
 // only inputs are the workflow_run event payload and GitHub REST metadata
-// (issues, jobs, compare). Every externally-sourced value written into an
-// issue body, comment, or the job summary is sanitized/allowlisted.
+// (issues, jobs, run history, compare). Every externally-sourced value
+// written into an issue body, comment, or the job summary is
+// sanitized/allowlisted.
 //
-// Ordering: GitHub run ids increase monotonically, so "the latest valid
-// Full CI run" is ordered by (run id, run attempt) — completion-order
-// inversions cannot let an older run overwrite newer state, and a rerun
-// (same run id, higher attempt) still counts as newer evidence. Closing
-// additionally requires the compare API to prove the failed sha is
-// identical to or an ancestor of the success sha, so an old or divergent
-// success can never close a newer failure.
+// Evidence model (post-review hardening): the incoming event is a TRIGGER,
+// not the truth. GitHub Actions concurrency groups keep at most one running
+// + one pending workflow per group, and a new pending replaces the queued
+// one — notifications can be silently dropped between "run finished" and
+// "tracker processed". So on every non-skip event the tracker fetches the
+// authoritative run list for (workflow, branch, allowed events) and
+// reconciles it with the incoming run and the marker state. Decisions are
+// made against the NEWEST evidence, which heals dropped/out-of-order
+// notifications without ever trusting them blindly.
+//
+// Ordering: a rerun keeps the same run.id with run_attempt incremented, and
+// an OLD run's new attempt can complete AFTER a newer run. So (id, attempt)
+// alone cannot order evidence across runs. `updated_at` is the completion
+// order signal (`run_started_at` is attempt START time and unusable for
+// completion ordering; actor/triggering_actor attribute who ran it, not
+// when it finished). compareRunOrder: same id → attempt; different ids →
+// updated_at; equal/missing timestamps on different ids → "ambiguous" and
+// the caller decides (state advancement falls back to run.id; CLOSING
+// never does — ambiguity holds the issue open).
+//
+// Close rule: only when the newest evidence is a success that is
+// unambiguously newer than the newest recorded failure, `compare(failed
+// sha → success sha)` is identical/ahead, AND `compare(current main head →
+// success sha)` is identical/ahead (the success must cover the CURRENT
+// main tip — main is verified, not merely the old failed revision). A
+// cancelled/unknown/operational newest run, an ambiguous order, an
+// unreachable main head, or a compare/API failure always keeps the issue
+// open; API failures propagate and fail the job.
 //
 // The GitHub client is injectable: `run()` and `plan()` are fully
 // deterministic under a mock client, and all tests are offline.
 //
 // Usage:
 //   TRACKER_EVENT_PATH=event.json GH_TOKEN=*** node ci/tracker/tracker.mjs \
-//       [--repo owner/name] [--branch main] [--workflow ci] \
-//       [--label ci-failure] [--report out.json] [--summary out.md]
+//       [--repo owner/name] [--branch main] [--workflow ci] [--label ci-failure] \
+//       [--workflow-file ci.yml] [--report out.json] [--summary out.md]
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
@@ -42,6 +64,7 @@ export const LABEL_COLOR = "d93f0b";
 export const ISSUE_TITLE = "[CI failure][main] Full CI failed";
 export const MARKER_TAG = "ci-issue-tracker";
 export const HISTORY_LIMIT = 10;
+export const HISTORY_PAGE_SIZE = 30;
 
 // Events whose completed `ci` runs count as valid main Full CI executions:
 // `push` (main) and `workflow_dispatch` (manual + the Issue #367 daily
@@ -112,10 +135,52 @@ export function defaultScope(repo) {
   return {
     repo,
     workflow: "ci",
+    workflowFile: "ci.yml",
     branch: "main",
     allowedEvents: [...ALLOWED_EVENTS],
     label: TRACKER_LABEL,
   };
+}
+
+// success | failure | operational for any conclusion value.
+export function kindOfConclusion(conclusion) {
+  const c = sanitizeConclusion(conclusion);
+  if (c === "success") return "success";
+  if (FAILURE_CONCLUSIONS.includes(c)) return "failure";
+  return "operational";
+}
+
+// Normalize a raw workflow_run-shaped record (event payload or runs-list
+// item) into the internal run shape. Returns null on malformed metadata.
+function normalizeRun(wr, scope) {
+  if (wr == null || typeof wr !== "object") return null;
+  const id = sanitizeRunId(wr.id);
+  const sha = sanitizeSha(wr.head_sha);
+  if (id == null || sha == null) return null;
+  return {
+    id,
+    sha,
+    url: sanitizeUrl(wr.html_url),
+    conclusion: typeof wr.conclusion === "string" ? wr.conclusion : null,
+    event: wr.event,
+    attempt: sanitizeRunId(wr.run_attempt) ?? 1,
+    updatedAt: sanitizeIso(wr.updated_at),
+    startedAt: sanitizeIso(wr.run_started_at),
+    branch: wr.head_branch,
+    repo: wr.head_repository?.full_name ?? null,
+    status: wr.status ?? null,
+  };
+}
+
+// A runs-list entry is valid tracker evidence only when it ran on this
+// repository's `main` branch via an allowed event and is completed.
+function isScopedHistoryRun(run, scope) {
+  return (
+    run.repo === scope.repo &&
+    run.branch === scope.branch &&
+    scope.allowedEvents.includes(run.event) &&
+    (run.status == null || run.status === "completed")
+  );
 }
 
 // A completed run is a valid Full CI target only when it ran on this
@@ -136,24 +201,9 @@ export function classifyRun(payload, scope) {
   if (!scope.allowedEvents.includes(wr.event)) {
     return skip(`event:${sanitizeText(wr.event) || "unknown"}`);
   }
-  const id = sanitizeRunId(wr.id);
-  const sha = sanitizeSha(wr.head_sha);
-  if (id == null || sha == null) return skip("malformed-run-metadata");
-
-  const raw = typeof wr.conclusion === "string" ? wr.conclusion : null;
-  const conclusion = sanitizeConclusion(raw);
-  const run = {
-    id,
-    sha,
-    url: sanitizeUrl(wr.html_url),
-    conclusion: raw,
-    event: wr.event,
-    attempt: sanitizeRunId(wr.run_attempt) ?? 1,
-    updatedAt: sanitizeIso(wr.updated_at),
-  };
-  if (conclusion === "success") return { kind: "success", run };
-  if (FAILURE_CONCLUSIONS.includes(conclusion)) return { kind: "failure", run };
-  return { kind: "operational", run };
+  const run = normalizeRun(wr, scope);
+  if (run == null) return skip("malformed-run-metadata");
+  return { kind: kindOfConclusion(run.conclusion), run };
 }
 
 // ------------------------------------------------------------- marker ----
@@ -178,6 +228,46 @@ export function renderMarker(scope, state) {
   return `<!-- ${MARKER_TAG}:${json} -->`;
 }
 
+// A run reference is one atomic ordering tuple — never assembled by
+// field-wise max (mixing fields from different runs fabricates a run that
+// never existed).
+function refOf(run) {
+  if (run == null) return null;
+  return {
+    runId: run.id ?? run.runId,
+    attempt: run.attempt ?? 1,
+    updatedAt: run.updatedAt ?? null,
+  };
+}
+
+// Backward-compatible marker state: `latest` is the canonical tuple form;
+// legacy `latestRunId`/`latestAttempt` flat fields are mapped in (their
+// updatedAt is unknown → cross-run order becomes ambiguous → conservative).
+function normalizeState(state) {
+  if (state == null || typeof state !== "object") return null;
+  const failure = state.failure;
+  if (
+    failure == null ||
+    !Number.isSafeInteger(failure.runId) ||
+    !SHA_RE.test(failure.sha ?? "")
+  ) {
+    return null;
+  }
+  let latest = state.latest;
+  if (!Number.isSafeInteger(latest?.runId)) {
+    latest = Number.isSafeInteger(state.latestRunId)
+      ? { runId: state.latestRunId, attempt: state.latestAttempt ?? 1, updatedAt: null }
+      : null;
+  }
+  if (latest == null) return null;
+  return {
+    latest,
+    failure: { ...failure, attempt: failure.attempt ?? 1, updatedAt: failure.updatedAt ?? null },
+    history: Array.isArray(state.history) ? state.history : [],
+    operationalNote: state.operationalNote ?? null,
+  };
+}
+
 export function parseMarker(body) {
   if (typeof body !== "string") return null;
   const m = MARKER_RE.exec(body);
@@ -197,23 +287,57 @@ export function parseMarker(body) {
   ) {
     return null;
   }
-  const failure = state.failure;
-  if (
-    !Number.isSafeInteger(state.latestRunId) ||
-    failure == null ||
-    !Number.isSafeInteger(failure.runId) ||
-    !SHA_RE.test(failure.sha ?? "")
-  ) {
-    return null;
-  }
-  return { scope, state };
+  const normalized = normalizeState(state);
+  if (normalized == null) return null;
+  return { scope, state: normalized };
 }
 
-// Run ordering key: (id, attempt). A rerun keeps the same id with a higher
-// attempt, so lexicographic comparison treats "re-run failed jobs" as
-// newer evidence than the attempt that failed.
+// ---------------------------------------------------------- ordering -----
+
+// Ordering between a candidate run and a stored reference.
+//   "newer"     — the candidate is provably later evidence
+//   "stale"     — the candidate is provably older evidence
+//   "same"      — identical (id, attempt)
+//   "ambiguous" — different runs whose completion order cannot be proven
+//                 (equal or missing updated_at): never treated as success.
+//
+// run: {id, attempt, updatedAt}; ref: {runId, attempt, updatedAt}.
+// Same id → attempt is authoritative (attempts are strictly sequential).
+// Different ids → updated_at is the completion-order signal; a rerun of an
+// old run can land after a newer run, which (id, attempt) alone misses.
+export function compareRunOrder(run, ref) {
+  if (ref == null) return "newer";
+  const rid = run.id ?? run.runId;
+  const ra = run.attempt ?? 1;
+  const refAttempt = ref.attempt ?? 1;
+  if (rid === ref.runId) {
+    if (ra > refAttempt) return "newer";
+    if (ra < refAttempt) return "stale";
+    return "same";
+  }
+  const a = run.updatedAt ?? null;
+  const b = ref.updatedAt ?? null;
+  if (a != null && b != null) {
+    if (a > b) return "newer";
+    if (a < b) return "stale";
+    return "ambiguous"; // same-second completion on different runs
+  }
+  return "ambiguous";
+}
+
+// State advancement tolerates ambiguity by falling back to run-id
+// monotonicity (a higher id was created later). CLOSE decisions never use
+// this — they require strict "newer".
+function orderForState(run, ref) {
+  const o = compareRunOrder(run, ref);
+  if (o !== "ambiguous") return o;
+  const rid = run.id ?? run.runId;
+  return rid > ref.runId ? "newer" : rid < ref.runId ? "stale" : "same";
+}
+
+// Strict close-order predicate: ambiguity is not newer.
 export function isNewerRun(run, ref) {
-  return run.id > ref.runId || (run.id === ref.runId && run.attempt > (ref.attempt ?? 1));
+  return compareRunOrder(run, ref) === "newer";
 }
 
 export function scopeMatches(markerScope, scope) {
@@ -222,6 +346,81 @@ export function scopeMatches(markerScope, scope) {
     markerScope.workflow === scope.workflow &&
     markerScope.branch === scope.branch
   );
+}
+
+// ---------------------------------------------------------- evidence -----
+
+// Deterministic argmax key — picks a representative; NOT an ordering proof.
+// Ordering proofs go through compareRunOrder and may answer "ambiguous".
+function runSortKey(run) {
+  return [run.updatedAt ?? "", run.id ?? run.runId, run.attempt ?? 1];
+}
+
+function compareSortKey(a, b) {
+  const ka = runSortKey(a);
+  const kb = runSortKey(b);
+  for (let i = 0; i < 3; i++) {
+    if (ka[i] < kb[i]) return -1;
+    if (ka[i] > kb[i]) return 1;
+  }
+  return 0;
+}
+
+// Newest candidate by deterministic argmax, plus an `ambiguous` flag set
+// when any same-rank competitor is a different run whose order vs the top
+// cannot be proven. `ambiguous` never permits a success decision.
+function pickNewest(candidates) {
+  const list = candidates.filter((c) => c?.run != null);
+  if (list.length === 0) return null;
+  const sorted = [...list].sort((x, y) => compareSortKey(y.run, x.run));
+  const top = sorted[0];
+  const ambiguous = sorted
+    .slice(1)
+    .some((c) => c.run.id !== top.run.id && compareRunOrder(top.run, refOf(c.run)) === "ambiguous");
+  return { kind: top.kind, run: top.run, ambiguous };
+}
+
+// Merge per-run latest-attempt records by run id: for each id keep the
+// record with the highest attempt; for equal attempts prefer `preferred`
+// (the incoming event — authoritative for the attempt it reports).
+function mergeRunRecords(records, preferred = null) {
+  const byId = new Map();
+  for (const r of records) {
+    if (r == null) continue;
+    const cur = byId.get(r.id);
+    if (cur == null || r.attempt > cur.attempt || (r.attempt === cur.attempt && r === preferred)) {
+      byId.set(r.id, r);
+    }
+  }
+  return [...byId.values()];
+}
+
+// Merge marker states across duplicate managed issues: adopt the marker
+// whose `failure` is the newest wholesale (never field-wise mixed), take
+// the newest `latest` the same way, and union histories by
+// (kind, runId, attempt) sorted by `at`, capped.
+export function mergeMarkerStates(states) {
+  const normalized = states.map((s) => normalizeState(s)).filter(Boolean);
+  if (normalized.length === 0) return null;
+  const newestFailure = normalized
+    .map((s) => s.failure)
+    .sort((a, b) => compareSortKey(refOf(b), refOf(a)))[0];
+  const newestLatest = normalized
+    .map((s) => s.latest)
+    .sort((a, b) => compareSortKey(b, a))[0];
+  const owner = normalized.find((s) => s.failure === newestFailure);
+  const seen = new Set();
+  const history = normalized
+    .flatMap((s) => s.history)
+    .filter((h) => {
+      const k = `${h.kind}:${h.runId}:${h.attempt ?? 1}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .sort((a, b) => (a.at ?? "") < (b.at ?? "") ? -1 : (a.at ?? "") > (b.at ?? "") ? 1 : 0)
+    .slice(-HISTORY_LIMIT);
+  return { ...owner, latest: newestLatest, history };
 }
 
 // ------------------------------------------------------------ body -------
@@ -236,7 +435,7 @@ function jobRows(jobs) {
 function historyRows(history) {
   return (history ?? []).map(
     (h) =>
-      `| ${h.runId} | \`${sanitizeSha(h.sha) ?? "?"}\` | ${sanitizeConclusion(h.conclusion)} | ${sanitizeText(h.kind)} | ${sanitizeIso(h.at) ?? "?"} |`,
+      `| ${h.runId}a${h.attempt ?? 1} | \`${sanitizeSha(h.sha) ?? "?"}\` | ${sanitizeConclusion(h.conclusion)} | ${sanitizeText(h.kind)} | ${sanitizeIso(h.at) ?? "?"} |`,
   );
 }
 
@@ -256,7 +455,7 @@ export function renderBody(scope, state) {
     "",
     "| field | value |",
     "| --- | --- |",
-    `| latest failure run | ${sanitizeUrl(f.runUrl) ?? `run id ${f.runId}`} (run id ${f.runId}) |`,
+    `| latest failure run | ${sanitizeUrl(f.runUrl) ?? `run id ${f.runId}`} (run id ${f.runId}a${f.attempt ?? 1}) |`,
     `| failed revision | \`${sanitizeSha(f.sha) ?? "?"}\` |`,
     `| conclusion | \`${sanitizeConclusion(f.conclusion)}\` |`,
     `| first detected | ${sanitizeIso(f.firstAt) ?? "?"} (revision \`${sanitizeSha(f.firstSha) ?? "?"}\`) |`,
@@ -275,7 +474,7 @@ export function renderBody(scope, state) {
     "",
     "#### Recent observed runs",
     "",
-    "| run id | sha | conclusion | kind | at |",
+    "| run | sha | conclusion | kind | at |",
     "| --- | --- | --- | --- | --- |",
     ...historyRows(state.history),
     "",
@@ -284,8 +483,8 @@ export function renderBody(scope, state) {
     "1. Open the latest failing run and inspect the failing jobs.",
     "2. Land a fix on `main` or re-run `ci` via `workflow_dispatch`.",
     "3. This issue closes automatically only when a **newer** `ci` run succeeds",
-    "   at a revision covering the failed one. Old-run or divergent successes",
-    "   do not close it.",
+    "   at a revision covering the failed one AND the current `main` tip. Old-run,",
+    "   ambiguous-order, or divergent successes do not close it.",
     "",
     "#### Operational policy",
     "",
@@ -303,147 +502,264 @@ export function renderBody(scope, state) {
 // --------------------------------------------------------------- plan ----
 
 function historyPush(state, entry) {
-  const history = [...(state.history ?? []), entry];
+  const history = [...(state?.history ?? []), entry];
   return history.slice(-HISTORY_LIMIT);
 }
 
-function baseState(run, jobs) {
+function runHistoryEntry(kind, run, src) {
   return {
-    latestRunId: run.id,
-    latestAttempt: run.attempt,
-    failure: {
-      sha: run.sha,
-      runId: run.id,
-      attempt: run.attempt,
-      runUrl: run.url,
-      conclusion: run.conclusion,
-      firstSha: run.sha,
-      firstAt: run.updatedAt,
-      lastAt: run.updatedAt,
-      jobs: jobs ?? [],
-    },
-    history: [
-      { kind: "failure", runId: run.id, attempt: run.attempt, sha: run.sha, conclusion: run.conclusion, at: run.updatedAt },
-    ],
-    operationalNote: null,
+    kind,
+    runId: run.id,
+    attempt: run.attempt,
+    updatedAt: run.updatedAt ?? null,
+    sha: run.sha,
+    conclusion: run.conclusion,
+    at: run.updatedAt,
+    src: src ?? "event",
   };
 }
 
-// `plan` returns the action list for one classified run against the managed
-// issues that already exist. `compareStatus` is consulted only for the
-// success path and is null otherwise — the caller must not fetch it eagerly
-// (an unused compare call is a wasted API request on every failure event).
-export function plan(classified, { canonical, duplicates, jobs = null, compareStatus = null }) {
-  const actions = duplicates.map((d) => ({
+function failureFrom(run, jobs, firstSha, firstAt) {
+  return {
+    sha: run.sha,
+    runId: run.id,
+    attempt: run.attempt,
+    updatedAt: run.updatedAt ?? null,
+    runUrl: run.url,
+    conclusion: run.conclusion,
+    firstSha: firstSha ?? run.sha,
+    firstAt: firstAt ?? run.updatedAt,
+    lastAt: run.updatedAt,
+    jobs: jobs ?? [],
+  };
+}
+
+function baseState(run, jobs, note = null) {
+  return {
+    latest: refOf(run),
+    failure: failureFrom(run, jobs),
+    history: [runHistoryEntry("failure", run)],
+    operationalNote: note,
+  };
+}
+
+// `plan` is pure: it receives the reconciled evidence (already merged from
+// the incoming event + authoritative run history + marker states) and the
+// coverage verdicts fetched by the caller, and returns the action list.
+//   newest          — {kind, run, ambiguous}: newest overall evidence run
+//   newestFailure   — {kind:"failure", run}: newest failure-typed evidence
+//   coveringSuccess — {kind:"success", run}: newest success strictly newer
+//                     than newestFailure (ordering proven, not ambiguous)
+//   coverage        — compare(newestFailure.sha → coveringSuccess.sha)
+//   mainCoverage    — compare(current main head → newest.run.sha); fetched
+//                     only when a close is otherwise a candidate
+//   resolved        — coveringSuccess != null && coverage covers: the
+//                     newest failure evidence is already verified fixed
+export function plan({
+  classified,
+  canonical,
+  duplicates = [],
+  mergedState = null,
+  newest = null,
+  newestFailure = null,
+  coveringSuccess = null,
+  coverage = null,
+  mainCoverage = null,
+  jobs = null,
+}) {
+  const actions = [];
+  const stored = mergedState ?? canonical?.marker?.state ?? null;
+  const resolved =
+    coveringSuccess != null && (coverage === "identical" || coverage === "ahead");
+
+  // Duplicate consolidation first: merge-state (only when a duplicate
+  // actually held newer state — otherwise the decision's own update covers
+  // it), then close-duplicate per extra managed issue.
+  const stateChanged =
+    canonical != null &&
+    mergedState != null &&
+    canonical.marker != null &&
+    JSON.stringify(canonical.marker.state) !== JSON.stringify(mergedState);
+  const dupActions = duplicates.map((d) => ({
     type: "close-duplicate",
     issue: d.number,
     canonical: canonical?.number ?? null,
   }));
-  const run = classified.run;
-  const state = canonical?.marker?.state ?? null;
 
-  if (classified.kind === "failure") {
-    if (canonical == null) {
-      actions.push({ type: "create", state: baseState(run, jobs) });
-    } else if (isNewerRun(run, state.failure)) {
-      const next = {
-        latestRunId: Math.max(state.latestRunId, run.id),
-        latestAttempt: Math.max(state.latestAttempt ?? 1, run.attempt),
-        failure: {
-          sha: run.sha,
-          runId: run.id,
-          attempt: run.attempt,
-          runUrl: run.url,
-          conclusion: run.conclusion,
-          firstSha: state.failure.firstSha,
-          firstAt: state.failure.firstAt,
-          lastAt: run.updatedAt,
-          jobs: jobs ?? [],
-        },
-        history: historyPush(state, {
-          kind: "failure",
-          runId: run.id,
-          attempt: run.attempt,
-          sha: run.sha,
-          conclusion: run.conclusion,
-          at: run.updatedAt,
-        }),
-        operationalNote: null,
-      };
-      actions.push({ type: "update", issue: canonical.number, state: next });
-    } else {
-      actions.push({
-        type: "noop",
-        reason: `stale-failure:run-${run.id}a${run.attempt}<=failure-${state.failure.runId}a${state.failure.attempt ?? 1}`,
-      });
+  const pushDecision = (decision) => {
+    // merge-state is skipped when the decision itself updates the canonical
+    // issue — that update already carries the merged/newest state.
+    const decisionUpdatesCanonical =
+      decision.type === "update" && decision.issue === canonical?.number;
+    if (stateChanged && !decisionUpdatesCanonical) {
+      actions.push({ type: "merge-state", issue: canonical.number, state: mergedState });
     }
+    actions.push(...dupActions, decision);
     return actions;
+  };
+
+  if (newest == null || newest.run == null) {
+    return pushDecision({ type: "noop", reason: "no-evidence" });
   }
 
-  if (classified.kind === "success") {
-    if (canonical == null) {
-      actions.push({ type: "noop", reason: "success:no-open-tracker-issue" });
-      return actions;
+  // ------------------------------------------------- no managed issue ----
+  // A new issue is opened only on UNRESOLVED failure evidence: the newest
+  // failure run not covered by a strictly-newer covering success. A stale
+  // failure whose successor already verified a fix never files — event
+  // delivery order cannot resurrect it. Operational/ambiguous evidence
+  // alone never files.
+  if (canonical == null) {
+    if (newestFailure != null && !resolved) {
+      const note =
+        newest.kind === "failure"
+          ? null
+          : `Latest observed run ${newest.run.id} concluded \`${sanitizeConclusion(newest.run.conclusion)}\` (${newest.kind}); issue opened on the newest failure evidence, reconciled from run history.`;
+      const state = baseState(newestFailure.run, jobs);
+      if (orderForState(newest.run, refOf(newestFailure.run)) === "newer") {
+        state.latest = refOf(newest.run);
+      }
+      state.operationalNote = note;
+      return pushDecision({ type: "create", state });
     }
-    if (!isNewerRun(run, state.failure)) {
-      actions.push({
-        type: "noop",
-        reason: `stale-success:run-${run.id}a${run.attempt}<=failure-${state.failure.runId}a${state.failure.attempt ?? 1}`,
-      });
-      return actions;
+    return pushDecision({
+      type: "noop",
+      reason:
+        newest.kind === "success"
+          ? "success:no-unresolved-failure"
+          : `operational:${newest.run.conclusion ?? "null"}`,
+    });
+  }
+
+  // ------------------------------------------------------------- success -
+  if (newest.kind === "success") {
+    if (newest.ambiguous) {
+      // A success that cannot be ordered against the rest of the evidence
+      // is never a recovery — record it and keep everything open.
+      if (stored != null && orderForState(newest.run, stored.latest) === "newer") {
+        return pushDecision({
+          type: "update",
+          issue: canonical.number,
+          state: {
+            ...stored,
+            latest: refOf(newest.run),
+            history: historyPush(stored, { ...runHistoryEntry("success-ambiguous", newest.run) }),
+            operationalNote: `Success run ${newest.run.id} has ambiguous ordering vs recorded evidence — held open pending a verifiable recovery.`,
+          },
+        });
+      }
+      return pushDecision({ type: "noop", reason: "success-ambiguous:held" });
     }
-    if (compareStatus === "identical" || compareStatus === "ahead") {
-      actions.push({
+    // Close guard — every condition is required:
+    //  1. strictly newer than the newest recorded failure (never ambiguous)
+    //  2. not stale/ambiguous vs the newest observed run
+    //  3. compare(failed sha → success sha) covers the failed revision
+    //  4. compare(current main head → success sha) covers the CURRENT tip
+    const ordFailure = newestFailure != null
+      ? compareRunOrder(newest.run, refOf(newestFailure.run))
+      : "newer";
+    const ordLatest = stored?.latest != null
+      ? compareRunOrder(newest.run, stored.latest)
+      : "newer";
+    const coveredFailure = coverage === "identical" || coverage === "ahead";
+    const coveredMain = mainCoverage === "identical" || mainCoverage === "ahead";
+    if (
+      ordFailure === "newer" &&
+      (ordLatest === "newer" || ordLatest === "same") &&
+      coveredFailure &&
+      coveredMain
+    ) {
+      return pushDecision({
         type: "close-recovered",
         issue: canonical.number,
-        recovery: { sha: run.sha, runId: run.id, runUrl: run.url },
+        recovery: { sha: newest.run.sha, runId: newest.run.id, attempt: newest.run.attempt, runUrl: newest.run.url },
       });
-    } else if (isNewerRun(run, { runId: state.latestRunId, attempt: state.latestAttempt })) {
-      const next = {
-        ...state,
-        latestRunId: run.id,
-        latestAttempt: run.attempt,
-        history: historyPush(state, {
-          kind: "success-not-covering",
-          runId: run.id,
-          attempt: run.attempt,
-          sha: run.sha,
-          conclusion: run.conclusion,
-          at: run.updatedAt,
-        }),
-        operationalNote: `Newer success run ${run.id} does not cover the failed revision (compare:${compareStatus ?? "unavailable"}) — issue stays open.`,
-      };
-      actions.push({ type: "update", issue: canonical.number, state: next });
-    } else {
-      actions.push({ type: "noop", reason: `success-not-covering:${compareStatus}` });
     }
-    return actions;
+    const why = [];
+    if (ordFailure !== "newer") why.push(`vs-failure:${ordFailure}`);
+    if (ordLatest !== "newer" && ordLatest !== "same") why.push(`vs-latest:${ordLatest}`);
+    if (!coveredFailure) why.push(`compare-failure:${coverage ?? "unavailable"}`);
+    if (!coveredMain) why.push(`compare-main:${mainCoverage ?? "unavailable"}`);
+    if (ordLatest === "stale" && ordFailure !== "newer") {
+      return pushDecision({ type: "noop", reason: `stale-success:${why.join(",")}` });
+    }
+    // Even when the success does not close, a newer failure in evidence
+    // (dropped notification, merged duplicate state) is still recorded.
+    const failureAlsoNewer =
+      newestFailure != null && orderForState(newestFailure.run, stored?.failure) === "newer";
+    const next = {
+      ...stored,
+      latest: refOf(newest.run),
+      operationalNote: `Newest success run ${newest.run.id} did not close this issue (${why.join("; ")}) — held open.`,
+    };
+    if (failureAlsoNewer) {
+      next.failure = failureFrom(
+        newestFailure.run,
+        jobs,
+        stored?.failure?.firstSha,
+        stored?.failure?.firstAt,
+      );
+      next.history = historyPush(
+        historyPush(next, { ...runHistoryEntry("failure", newestFailure.run, "history") }),
+        { ...runHistoryEntry("success-not-covering", newest.run) },
+      );
+    } else {
+      next.history = historyPush(next, { ...runHistoryEntry("success-not-covering", newest.run) });
+    }
+    return pushDecision({ type: "update", issue: canonical.number, state: next });
   }
 
-  // operational — cancelled/skipped/neutral/stale/action_required/unknown:
-  // never a success (no close) and never a failure (no new issue).
-  if (canonical == null) {
-    actions.push({ type: "noop", reason: `operational:${classified.run.conclusion ?? "null"}` });
-  } else if (isNewerRun(run, { runId: state.latestRunId, attempt: state.latestAttempt })) {
-    const next = {
-      ...state,
-      latestRunId: run.id,
-      latestAttempt: run.attempt,
-      history: historyPush(state, {
-        kind: "operational",
-        runId: run.id,
-        attempt: run.attempt,
-        sha: run.sha,
-        conclusion: run.conclusion,
-        at: run.updatedAt,
-      }),
-      operationalNote: `Latest observed run ${run.id} concluded \`${sanitizeConclusion(run.conclusion)}\` — verification pending retry; counted as neither failure nor success.`,
-    };
-    actions.push({ type: "update", issue: canonical.number, state: next });
-  } else {
-    actions.push({ type: "noop", reason: `operational-stale:run-${run.id}` });
+  // ------------------------------------------------------------- failure -
+  if (newest.kind === "failure") {
+    const f = newestFailure?.run ?? newest.run;
+    if (orderForState(f, stored?.failure) === "newer") {
+      return pushDecision({
+        type: "update",
+        issue: canonical.number,
+        state: {
+          latest: refOf(f),
+          failure: failureFrom(f, jobs, stored?.failure?.firstSha, stored?.failure?.firstAt),
+          history: historyPush(stored ?? {}, { ...runHistoryEntry("failure", f) }),
+          operationalNote: null,
+        },
+      });
+    }
+    return pushDecision({
+      type: "noop",
+      reason: `stale-failure:run-${f.id}a${f.attempt}<=failure-${stored?.failure?.runId ?? "?"}a${stored?.failure?.attempt ?? 1}`,
+    });
   }
-  return actions;
+
+  // ----------------------------------------------- operational/observed --
+  // cancelled/skipped/neutral/stale/action_required/unknown (and marker
+  // "observed" refs): never a success (no close) and never by itself a
+  // reason for a new issue. A newer failure in evidence (e.g. one whose
+  // notification was dropped) still updates the stored failure.
+  const failureIsNewer =
+    newestFailure != null && orderForState(newestFailure.run, stored?.failure) === "newer";
+  const latestOrder = orderForState(newest.run, stored?.latest);
+  if (failureIsNewer || latestOrder === "newer") {
+    const next = {
+      ...stored,
+      latest: latestOrder === "newer" ? refOf(newest.run) : stored?.latest,
+      operationalNote: `Latest observed run ${newest.run.id} concluded \`${sanitizeConclusion(newest.run.conclusion)}\` — verification pending retry; counted as neither failure nor success.`,
+    };
+    if (failureIsNewer) {
+      next.failure = failureFrom(
+        newestFailure.run,
+        jobs,
+        stored?.failure?.firstSha,
+        stored?.failure?.firstAt,
+      );
+      next.history = historyPush(
+        historyPush(next, { ...runHistoryEntry("failure", newestFailure.run, "history") }),
+        { ...runHistoryEntry("operational", newest.run) },
+      );
+    } else {
+      next.history = historyPush(next, { ...runHistoryEntry("operational", newest.run) });
+    }
+    return pushDecision({ type: "update", issue: canonical.number, state: next });
+  }
+  return pushDecision({ type: "noop", reason: `operational-stale:run-${newest.run.id}` });
 }
 
 // --------------------------------------------------------------- apply ---
@@ -458,7 +774,8 @@ async function applyActions(actions, scope, client) {
     if (a.type === "close-duplicate") {
       await client.addComment(
         a.issue,
-        `Superseded by #${a.canonical} — one open CI failure issue per scope. Closing as duplicate.`,
+        `Superseded by #${a.canonical} — one open CI failure issue per scope. ` +
+          "Newest recorded failure state was merged into the canonical issue before closing.",
       );
       await client.closeIssue(a.issue);
       applied.push({ ...a });
@@ -473,7 +790,7 @@ async function applyActions(actions, scope, client) {
       applied.push({ ...a, issue: created?.number ?? null });
       continue;
     }
-    if (a.type === "update") {
+    if (a.type === "update" || a.type === "merge-state") {
       await client.updateIssue(a.issue, {
         title: ISSUE_TITLE,
         body: renderBody(scope, a.state),
@@ -485,8 +802,8 @@ async function applyActions(actions, scope, client) {
       await client.addComment(
         a.issue,
         [
-          `Recovered: newer \`ci\` run ${a.recovery.runId} succeeded at revision`,
-          `\`${a.recovery.sha}\` covering the failed revision.`,
+          `Recovered: newer \`ci\` run ${a.recovery.runId}a${a.recovery.attempt ?? 1} succeeded at revision`,
+          `\`${a.recovery.sha}\` covering the failed revision and the current main tip.`,
           a.recovery.runUrl ? `Run: ${a.recovery.runUrl}` : null,
         ]
           .filter(Boolean)
@@ -503,13 +820,24 @@ async function applyActions(actions, scope, client) {
 
 // ----------------------------------------------------------------- run ---
 
-// Orchestrator: classify → ensure label → list managed issues → fetch what
-// the plan needs (jobs for failures, compare only for a closing candidate)
-// → apply. Every API error propagates — the tracker job must fail and stay
-// diagnosable rather than swallow a permission or outage problem.
+// Orchestrator: classify the trigger → ensure label → list managed issues →
+// fetch authoritative run history and reconcile it with the event and all
+// marker states → fetch only what the decision needs (jobs for failures,
+// compares for coverage candidates) → apply. Every API error propagates —
+// the tracker job must fail and stay diagnosable rather than swallow a
+// permission or outage problem, and incomplete evidence must never produce
+// a close or a silent success.
 export async function run({ payload, client, scope }) {
   const classified = classifyRun(payload, scope);
-  const result = { scope, classified, canonical: null, actions: [], applied: [], mainHead: null };
+  const result = {
+    scope,
+    classified,
+    effective: null,
+    canonical: null,
+    actions: [],
+    applied: [],
+    mainHead: null,
+  };
   if (classified.kind === "skip") {
     result.actions = [{ type: "noop", reason: classified.reason }];
     result.applied = result.actions;
@@ -531,32 +859,149 @@ export async function run({ payload, client, scope }) {
   const duplicates = managed.slice(1);
   result.canonical = canonical?.number ?? null;
 
+  // Merge marker states across duplicates BEFORE any decision — closing a
+  // duplicate that holds the newest failure must never lose it.
+  const mergedState = mergeMarkerStates(managed.map((m) => m.marker.state));
+
+  // Authoritative run history for this workflow/branch — the notification
+  // may be a dropped-event replay, so the truth is the run list, not the
+  // incoming payload alone. Failure propagates (history is required
+  // evidence, and missing evidence is fail-closed).
+  const historyRaw = await client.getRunHistory({
+    workflowFile: scope.workflowFile,
+    branch: scope.branch,
+  });
+  const historyRuns = mergeRunRecords(
+    [
+      ...(historyRaw ?? [])
+        .map((r) => normalizeRun(r, scope))
+        .filter((r) => r != null && isScopedHistoryRun(r, scope)),
+      // The incoming run may not be listed yet (eventual consistency), or
+      // the list may lag on its latest attempt — it is still authoritative
+      // for itself, so it always participates in the per-id merge.
+      classified.run,
+    ].filter(Boolean),
+    classified.run,
+  );
+
+  // Evidence: stored refs + incoming + history. A marker ref is added only
+  // when the real record for that run id is absent — the authoritative
+  // record carries the actual conclusion, so it always outranks the marker
+  // ref for the same run.
+  const toCand = (run, src) =>
+    run == null ? null : { kind: kindOfConclusion(run.conclusion), run: { ...run, src } };
+  const realIds = new Set(historyRuns.map((r) => r.id));
+  const storedCandidates = [];
+  if (mergedState != null) {
+    if (!realIds.has(mergedState.latest.runId)) {
+      storedCandidates.push({
+        kind: "observed",
+        run: { ...mergedState.latest, id: mergedState.latest.runId, src: "marker" },
+      });
+    }
+    if (!realIds.has(mergedState.failure.runId)) {
+      storedCandidates.push({
+        kind: "failure",
+        run: { ...mergedState.failure, id: mergedState.failure.runId, src: "marker" },
+      });
+    }
+  }
+  const evidence = [
+    ...storedCandidates,
+    toCand(classified.run, "event"),
+    ...historyRuns.map((r) => toCand(r, "history")),
+  ].filter(Boolean);
+  const newest = pickNewest(evidence);
+  const newestFailure = pickNewest(evidence.filter((c) => c.kind === "failure"));
+  result.effective = newest;
+
+  // main head is diagnostic on most paths but REQUIRED evidence for a
+  // close: its absence must never produce a close.
+  let headError = null;
   try {
     result.mainHead = sanitizeSha((await client.getBranchHead(scope.branch))?.sha ?? null);
-  } catch {
-    // Diagnostic-only — absence of the branch tip must not block tracking.
+  } catch (e) {
+    headError = e;
     result.mainHead = null;
   }
 
-  const needsJobs = classified.kind === "failure";
-  const jobs = needsJobs
-    ? (await client.getRunJobs(classified.run.id)).map((j) => ({
-        // sanitize at the input boundary: these values end up both in the
-        // rendered table and inside the marker JSON state.
-        name: sanitizeText(j?.name),
-        conclusion: sanitizeConclusion(j?.conclusion),
-      }))
-    : null;
+  // coveringSuccess: the newest success evidence that is STRICTLY newer
+  // than the newest failure (ordering proven — "ambiguous" never counts).
+  // It feeds both the close path (when it is the newest overall run) and
+  // the create-suppression path (a resolved stale failure must not file).
+  // When the newest overall run is an ambiguous success it is excluded —
+  // an unproven success never resolves anything.
+  const stored = mergedState;
+  let coveringSuccess = null;
+  let coverage = null;
+  if (newestFailure != null) {
+    coveringSuccess = pickNewest(
+      evidence.filter(
+        (c) =>
+          c.kind === "success" &&
+          compareRunOrder(c.run, refOf(newestFailure.run)) === "newer" &&
+          !(newest?.kind === "success" && newest.ambiguous && c.run.id === newest.run.id),
+      ),
+    );
+    if (coveringSuccess != null) {
+      coverage = await client.compareCommits(newestFailure.run.sha, coveringSuccess.run.sha);
+    }
+  }
+  const resolved = coveringSuccess != null && (coverage === "identical" || coverage === "ahead");
 
-  const needCompare =
-    classified.kind === "success" &&
+  // A close is a candidate only when every ordering/coverage precondition
+  // already holds; only then is the main-head compare fetched. Its absence
+  // is fatal to the job — propagate rather than silently close.
+  let mainCoverage = null;
+  const maybeClose =
     canonical != null &&
-    isNewerRun(classified.run, canonical.marker.state.failure);
-  const compareStatus = needCompare
-    ? await client.compareCommits(canonical.marker.state.failure.sha, classified.run.sha)
-    : null;
+    newest != null &&
+    !newest.ambiguous &&
+    newest.kind === "success" &&
+    coveringSuccess != null &&
+    coveringSuccess.run.id === newest.run.id &&
+    (stored?.latest == null ||
+      ["newer", "same"].includes(compareRunOrder(newest.run, stored.latest))) &&
+    resolved;
+  if (maybeClose) {
+    if (headError) throw headError;
+    if (result.mainHead == null) {
+      throw new Error("branch head unavailable — cannot prove main-tip coverage for close");
+    }
+    mainCoverage = await client.compareCommits(result.mainHead, newest.run.sha);
+  }
 
-  result.actions = plan(classified, { canonical, duplicates, jobs, compareStatus });
+  // Jobs are needed only when failure state will be written: a create on
+  // unresolved failure evidence, or an update where the newest failure
+  // evidence is newer than the stored one (any newest-run kind — a
+  // not-covering success still merges the newer failure into the issue).
+  const willWriteFailure =
+    newestFailure != null &&
+    (canonical == null
+      ? !resolved
+      : orderForState(newestFailure.run, stored?.failure) === "newer");
+  let jobs = null;
+  if (willWriteFailure) {
+    jobs = (await client.getRunJobs(newestFailure.run.id)).map((j) => ({
+      // sanitize at the input boundary: these values end up both in the
+      // rendered table and inside the marker JSON state.
+      name: sanitizeText(j?.name),
+      conclusion: sanitizeConclusion(j?.conclusion),
+    }));
+  }
+
+  result.actions = plan({
+    classified,
+    canonical,
+    duplicates,
+    mergedState,
+    newest,
+    newestFailure,
+    coveringSuccess,
+    coverage,
+    mainCoverage,
+    jobs,
+  });
   result.applied = await applyActions(result.actions, scope, client);
   return result;
 }
@@ -595,6 +1040,18 @@ export function makeGhClient({ repo, gh = "gh", execFile = execFileSync } = {}) 
         "--paginate",
         "--jq",
         ".[]",
+      ]);
+    },
+    async getRunHistory({ workflowFile, branch }) {
+      // Latest-attempt state per run for this workflow+branch. The file
+      // name form of workflow_id is used so consumers keep a declarative
+      // workflow mapping. `exclude_pull_requests` drops PR-triggered runs
+      // at the API level; event/branch/repo are still re-checked locally.
+      return apiJsonLines([
+        `repos/${repo}/actions/workflows/${encodeURIComponent(workflowFile)}/runs?branch=${encodeURIComponent(branch)}&exclude_pull_requests=true&per_page=${HISTORY_PAGE_SIZE}`,
+        "--paginate",
+        "--jq",
+        ".workflow_runs[]",
       ]);
     },
     async getRunJobs(runId) {
@@ -646,12 +1103,14 @@ export function makeGhClient({ repo, gh = "gh", execFile = execFileSync } = {}) 
 
 function summaryLines(result) {
   const c = result.classified;
+  const e = result.effective;
   const lines = [
     `## ci-issue-tracker`,
     "",
     `- scope: \`${result.scope.repo}\` × \`${result.scope.workflow}\` × \`${result.scope.branch}\``,
-    `- run: ${c.run ? `id ${c.run.id} · sha \`${c.run.sha}\` · conclusion \`${c.run.conclusion}\` · ${c.run.url ?? "?"}` : "-"}`,
+    `- trigger run: ${c.run ? `id ${c.run.id}a${c.run.attempt} · sha \`${c.run.sha}\` · conclusion \`${c.run.conclusion}\` · ${c.run.url ?? "?"}` : "-"}`,
     `- classified: \`${c.kind}\`${c.reason ? ` (${c.reason})` : ""}`,
+    `- newest evidence: ${e?.run ? `id ${e.run.id}a${e.run.attempt} · \`${e.kind}\`${e.ambiguous ? " (ambiguous ordering)" : ""}` : "-"}`,
     `- current main head: \`${result.mainHead ?? "?"}\``,
     `- canonical issue: ${result.canonical != null ? `#${result.canonical}` : "none"}`,
     "",
@@ -672,6 +1131,7 @@ export async function main(argv = process.argv, env = process.env) {
     repo: env.GITHUB_REPOSITORY ?? null,
     branch: "main",
     workflow: "ci",
+    workflowFile: null,
     label: TRACKER_LABEL,
     report: null,
     summary: null,
@@ -683,12 +1143,13 @@ export async function main(argv = process.argv, env = process.env) {
     else if (a === "--repo") args.repo = next();
     else if (a === "--branch") args.branch = next();
     else if (a === "--workflow") args.workflow = next();
+    else if (a === "--workflow-file") args.workflowFile = next();
     else if (a === "--label") args.label = next();
     else if (a === "--report") args.report = next();
     else if (a === "--summary") args.summary = next();
     else if (a === "--help" || a === "-h") {
       console.log(
-        "Usage: node ci/tracker/tracker.mjs [--event <file>] [--repo <owner/name>] [--branch <b>] [--workflow <name>] [--label <l>] [--report <file>] [--summary <file>]  (event path also read from $TRACKER_EVENT_PATH/$GITHUB_EVENT_PATH)",
+        "Usage: node ci/tracker/tracker.mjs [--event <file>] [--repo <owner/name>] [--branch <b>] [--workflow <name>] [--workflow-file <f.yml>] [--label <l>] [--report <file>] [--summary <file>]  (event path also read from $TRACKER_EVENT_PATH/$GITHUB_EVENT_PATH)",
       );
       process.exit(0);
     } else {
@@ -709,6 +1170,7 @@ export async function main(argv = process.argv, env = process.env) {
     ...defaultScope(args.repo),
     branch: args.branch,
     workflow: args.workflow,
+    workflowFile: args.workflowFile ?? `${args.workflow}.yml`,
     label: args.label,
   };
   const client = makeGhClient({ repo: args.repo });
@@ -720,6 +1182,7 @@ export async function main(argv = process.argv, env = process.env) {
     repo: args.repo,
     scope: { workflow: scope.workflow, branch: scope.branch, label: scope.label },
     classified: result.classified,
+    effective: result.effective,
     canonical: result.canonical,
     mainHead: result.mainHead,
     actions: result.applied,
