@@ -110,32 +110,55 @@ rerun は同じ run.id で run_attempt を増やすため「run.id が大きい 
   Issue と tracker 管理 Issue を区別できない。採用案は
   `issues?labels=…&state=open` の**列挙 endpoint** + body 先頭の安定
   marker JSON（scope/repo/workflow/branch + version）の 2 重同定。
-- **Option E**: run 新旧を `run.id` 単独または `updated_at`/完了時刻で
-  判定。**却下** — run.id 単独では同一 run の rerun（attempt 増加）が
-  「同じ run」と見えて失敗 run の成功 rerun が close 不能になる。
-  完了時刻は ordering 逆転の原因そのもの。採用案は `(run.id,
-  run_attempt)` の辞書順。
+- **Option E**: run 新旧を `run.id` 単独、`(run.id, run_attempt)` 辞書順、
+  または `run_started_at` で判定。**却下** — run.id 単独では同一 run の
+  rerun（attempt 増加）が「同じ run」と見える。`(id, attempt)` 辞書順は
+  **旧 run の新しい attempt が新しい run より後に完了する**ケースを過小
+  評価する（完了順で言えば後者が新しい証拠）。`run_started_at` は
+  attempt の開始時刻で完了順の証跡にならず、`actor`/`triggering_actor`
+  は「誰が」であって順序証跡ではない。採用案は **同 id → attempt、
+  異 id → `updated_at`**（レコード最終更新 ≈ 完了時刻）。`updated_at`
+  欠損・異 run 同一時刻は `ambiguous` とし、close/成功判定には使わない
+  （状態更新のみ run id で保守解決）。`latest`/`failure` 参照は
+  `{runId, attempt, updatedAt}` の atomic tuple — field 別 Math.max で
+  実在しない順序キーを捏造しない。
 - **Option F**: 「新しい成功 = close」。**却下** — main が force-push/
   rebase されると新しい成功が失敗 revision を履歴に含まない場合が
-  ある。採用案は ordering guard と `compare(失敗 sha → 成功 sha) ∈
-  {identical, ahead}` の **2 重 guard**（behind/diverged/compare 失敗は
-  close しない）。
+  ある。さらに最新実行が cancelled/unknown の間は main 未検証であり、
+  古い成功は回復ではない。採用案は **多重 guard**: 最新証拠がその成功・
+  記録最新失敗より曖昧なく新しい・`compare(失敗 sha → 成功 sha) ∈
+  {identical, ahead}`・`compare(現在 main head → 成功 sha) ∈
+  {identical, ahead}`（main tip カバー）。
+- **Option G（新規・採用）**: イベント payload を真実とせず、非 skip
+  イベントごとに `actions/workflows/{file}/runs?branch=main` の権威一覧を
+  取得し payload/marker と突き合わせる **reconciliation**。**採用** —
+  tracker workflow の concurrency pending 置き換え・通知逆転・eventual
+  consistency で完了通知が落ちても、一覧を事実として自己修復できる
+  （遅延した古い失敗の誤起票・新しい失敗の見落としを両方防ぐ）。
+  concurrency 直列化だけでは全通知の順序処理を保証できない。
 
 ## Decision Outcome
 
-Chosen option: **Option A**（+ D/E/F の採用側を構成要素として統合）。
+Chosen option: **Option A**（+ D/E/F/G の採用側を構成要素として統合）。
 
 - `.github/workflows/ci-issue-tracker.yml`: `workflow_run` のみ、
   `concurrency: ci-issue-tracker-<repo>` + `cancel-in-progress: false`
-  で repo 単位直列化。track job のみ contents:read/actions:read/
-  issues:write。
+  で repo 単位直列化（pending 置き換えの限界をコメントに明記）。
+  track job のみ contents:read/actions:read/issues:write。
 - `ci/tracker/tracker.mjs`: classify（scope 一致 + event allowlist
   {push,workflow_dispatch}）→ label 冪等確保 → open Issue 列挙 →
-  marker+scope で managed 同定（canonical = 最小番号、重複は superseded
-  close）→ plan（create/update/close-recovered/noop）→ apply。
-- ordering: `(run.id, run_attempt)` 辞書順。失敗 run の rerun 成功は
-  正しく「新しい証拠」として close に進める。
-- close: 新しい success かつ compare ∈ {identical, ahead} のみ。
+  marker+scope で managed 同定・**全 marker 状態 merge**（canonical =
+  最小番号、重複は merge 後に superseded close）→ **run-history
+  reconciliation**（権威一覧・payload・marker の突き合わせ）→ plan
+  （create/update/merge-state/close-duplicate/close-recovered/noop）→
+  apply。
+- ordering: 同 id → `run_attempt`、異 id → `updated_at`。欠損・同一
+  時刻は `ambiguous`（close 不使用・状態更新は run id で保守解決）。
+  run 参照は `{runId, attempt, updatedAt}` atomic tuple。
+- close: 最新証拠が成功・記録最新失敗より曖昧なく新しい・
+  `compare(失敗→成功)` と `compare(現在 main head→成功)` がともに
+  {identical, ahead} の時のみ。close 候補で branch head が取れない
+  場合は job 失敗。
 - cancelled/skipped/unknown → operational（Issue 新規作成も close も
   しない、canonical があれば note 更新のみ）。API 失敗は propagate し
   tracker job を失敗させる。
@@ -156,11 +179,14 @@ Chosen option: **Option A**（+ D/E/F の採用側を構成要素として統合
 
 ### Confirmation
 
-`ci/tracker/tests/tracker.test.mjs` の 34 件の mock-client contract
+`ci/tracker/tests/tracker.test.mjs` の 45 件の mock-client contract
 test が全判定経路を網羅（scope 分類・dedup・stale 拒否・rerun・
-compare guard・operational・API 失敗 propagate）。`mise run
-test-ci-tracker` で CI/ローカル共通に実行可能。実 GitHub API・実
-Issue・実 dispatch はテストで発生させない。
+compare/main-tip guard・operational・API 失敗 propagate に加え、
+reconciliation 系: stale 成功の誤 close 拒否・遅延失敗の誤起票拒否・
+duplicate 最新状態 merge・旧 run rerun の updated_at 順序・ambiguous
+ordering の hold・dropped notification 復元・atomic tuple 採用）。
+`mise run test-ci-tracker` で CI/ローカル共通に実行可能。実 GitHub
+API・実 Issue・実 dispatch はテストで発生させない。
 
 ## Implementation Plan
 
@@ -173,15 +199,17 @@ Issue・実 dispatch はテストで発生させない。
   `ci-summary` の `test-ci-summary` パターンに倣う。
 - Patterns to avoid: PR/fork head の checkout・artifact download・
   `pull_request`/`push`/`schedule`/`workflow_dispatch` trigger の追加・
-  search API による Issue 同定・run.id 単独の新旧比較・compare なしの
-  close。
+  search API による Issue 同定・`(run.id, run_attempt)` 辞書順のみの
+  異 run 比較・compare/main tip guard なしの close・field 別 max に
+  よる順序キー合成・最新 operational の存在下での古い成功 close・
+  marker merge 前の duplicate close。
 - Dependencies or configuration: GitHub-hosted runner 標準の `gh` CLI、
   mise pin の Node。新規パッケージ依存なし。権限は workflow/job
   YAML のみ。
 
 ## Verification
 
-- [x] `mise run test-ci-tracker` → 34/34 pass。
+- [x] `mise run test-ci-tracker` → 45/45 pass（hardening 前は 34/34）。
 - [x] `mise exec -- actionlint .github/workflows/ci-issue-tracker.yml` → OK。
 - [x] `mise exec -- actionlint .github/workflows/ci.yml` → OK（ci.yml 無変更）。
 - [x] `mise exec -- prek run --all-files` → 全 hook pass。

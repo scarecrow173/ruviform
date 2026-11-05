@@ -69,34 +69,53 @@ metadata: {}
 
 ## Feature: Issue plan 判定（`plan`）
 
-### Rule: failure — 未解決障害を 1 Issue に集約
+## Feature: run-history reconciliation（`run`）
 
-- Example: managed open Issue 無し + failure → `create`（初回起票・label `ci-failure`・marker 付き）。
-- Example: canonical open あり + run が `(id, attempt)` 順で state.failure より新しい → `update`（失敗状態・history・job 表を新 run で更新。同一 id の rerun も新しい証拠として扱う）。
-- Example: canonical open あり + run が新しくない → `noop`（完了順逆転の stale — 古い完了が新しい状態を上書きしない。同 id 同 attempt の再配信も stale で冪等）。
-- Example: managed open が 2 件 → 最小番号 canonical に update/create 相当、残りを duplicate close（comment + `state: closed`）。
+### Rule: イベントはトリガであり、判断は権威ある run 一覧に対して行う
+
+- Example: 非 skip イベントで `GET /actions/workflows/{file}/runs?branch=main&exclude_pull_requests=true` を取得し、payload・marker 状態と突き合わせる。
+- Example: history に payload 未収載の新しい失敗 run がある → その失敗で状態更新（dropped notification の自己修復）。
+- Example: history が payload の attempt より新しい attempt を示す → 大きい attempt を採用（逆方向も同様 — 一覧遅延では payload が勝つ）。
+- Example: 対象外（他 repo・他 branch・許可外 event・未 completed）の history run は evidence にしない。
+- Example: history API 失敗 → 例外伝播・job 失敗（証跡欠損で黙って処理しない）。
+
+### Rule: ordering は `updated_at` を優先し、曖昧は成功にしない
+
+- Example: 同 run id → `run_attempt` 比較（rerun は新しい attempt）。
+- Example: 異なる run id → `updated_at` 比較（旧 run の遅い rerun を過小評価しない）。
+- Example: `updated_at` 欠損・異 run 同一時刻 → `ambiguous` — close には使わない（issue open 維持）。状態更新のみ run id で保守解決。
+- Example: `latest`/`failure` の `{runId, attempt, updatedAt}` は tuple をまるごと採用 — run 間で field 別 Math.max しない。
+
+### Rule: 失敗 — 未解決の最新失敗証拠を 1 Issue に集約
+
+- Example: managed open Issue 無し + 未解決の最新失敗証拠あり → `create`（初回起票・label `ci-failure`・marker 付き）。
+- Example: 最新失敗証拠が記録失敗より新しい → `update`（失敗状態・history・job 表を更新。rerun ・duplicate marker・履歴由来の新失敗も同様）。
+- Example: 証拠が記録失敗より新しくない → `noop`（完了順逆転の stale — 古い完了が新しい状態を上書きしない）。
+- Example: managed open が 2 件 → 全 marker の最新状態を最小番号 canonical に merge してから残りを duplicate close — duplicate が持つ最新失敗を失わない。
 - Example: label はあるが marker 無し/parse 不可の Issue（foreign）→ 一切触れず、managed 無しとして `create`。
 
-### Rule: success — coverage を満たす新しい完全成功だけが close する
+### Rule: 成功 — 全 guard を満たす最新成功だけが close する
 
-- Example: open あり + run が failure より新しい + `compare(failure.sha→run.sha)=identical` → `close`（回復 SHA・Run URL を comment）。
-- Example: 同条件で `compare=ahead` → `close`（失敗 sha を履歴に含む新しい成功）。
-- Example: `compare=behind` → `noop`（古い revision の成功で新しい失敗を閉じない）。
-- Example: `compare=diverged` → `noop`（履歴書換え等・手動確認を Job Summary に記録）。
-- Example: run が failure より新しくない（古い id・同 id の低 attempt）→ `noop`（古い run の成功で閉じない）。
-- Example: rerun 成功（同 id・高 attempt・同 sha）→ `identical` coverage で `close`（再検証は新しい証拠）。
-- Example: managed open 無し → `noop`。
+- Example: open あり + 最新証拠が成功 + 最新失敗より曖昧なく新しい + `compare(失敗→成功)∈{identical,ahead}` + `compare(現在main head→成功)∈{identical,ahead}` → `close`（回復 SHA・Run URL を comment）。
+- Example: 最新証拠が operational（cancelled/unknown 等）→ close しない（古い成功で閉じない — main 未検証）。
+- Example: `compare=behind` → close しない（古い revision の成功で新しい失敗を閉じない）。
+- Example: `compare=diverged` → close しない（履歴書換え等・手動確認を記録）。
+- Example: 成功が現在 main tip をカバーしない（`compare(main→成功)=behind`）→ close しない。
+- Example: 順序 ambiguous → close しない（記録して open 維持）。
+- Example: 失敗 sha→成功 sha の compare は通るが main tip をカバーしない → 更新して open 維持。
+- Example: managed open 無し + 失敗証拠をカバーする新しい成功 → `noop`（遅延した古い失敗通知は起票しない — 到着順が事実にならない）。
 
 ### Rule: operational — 成功でも失敗でもない観測
 
-- Example: canonical open あり + run が `(id, attempt)` 順で最新より新しい → `update`（operational note「retry 待ち/運用状態」のみ。失敗状態は変えない）。
-- Example: open 無し → `noop`（cancelled で障害 Issue は作らない）。
+- Example: canonical open あり + 最新 run が operational 且つ記録最新より新しい → `update`（operational note のみ。失敗状態は変えない）。
+- Example: open 無し + 未解決失敗証拠無し → `noop`（cancelled で障害 Issue は作らない）。
+- Example: open 無し + 未解決失敗証拠あり（最新 run は operational）→ `create`（最新の検証は pending — 最新失敗で起票）。
 - Example: run が新しくない → `noop`。
 
 ### Rule: API 失敗は成功にしない
 
-- label 確保・Issue 一覧・jobs・compare・create/update/close の失敗は例外として伝播し、`main` は非 0 exit（tracker job 失敗・診断可能）。
-- `compare` は close 判定が必要な時だけ呼ぶ（failure/operational/open 無しでは呼ばない）。
+- label 確保・Issue 一覧・run history・jobs・compare・branch head・create/update/close の失敗は例外として伝播し、`main` は非 0 exit（tracker job 失敗・診断可能）。
+- `compare` は失敗をカバーし得る成功証跡がある時だけ呼ぶ。close 候補でのみ main head compare を呼び、branch head 取得不能なら close せず job を失敗させる。
 
 ## Feature: marker と sanitize
 

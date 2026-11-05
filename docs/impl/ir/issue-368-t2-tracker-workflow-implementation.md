@@ -75,6 +75,10 @@ Issue #365 の「失敗の見逃し防止・Issue 管理を別 workflow の監�
     workflow_dispatch trigger は付けない）。
   - `concurrency: group: ci-issue-tracker-${{ github.repository }},
     cancel-in-progress: false` — 同時完了をキャンセルせず直列処理。
+    **post-review hardening**: pending 枠 1 件・新 pending が既存 pending
+    を置き換える限界をコメントに明記 — 直列化だけでは全通知の順序処理を
+    保証できないため、evaluator 側の run-history reconciliation で補う
+    設計を workflow コメントと README に同期。
   - workflow レベル `permissions: {contents: read}` を fail-closed な
     baseline として置き、`track` job だけに
     `{contents: read, actions: read, issues: write}` を限定付与
@@ -85,10 +89,13 @@ Issue #365 の「失敗の見逃し防止・Issue 管理を別 workflow の監�
     `TRACKER_EVENT_PATH=$GITHUB_EVENT_PATH` で `tracker.mjs` を起動し
     report JSON + Job Summary を出力。
 - `ci/tracker/README.md` — 運用正本: 有効 run scope、marker/Issue 同定、
-  dedup、（run.id, run_attempt）順序、自動 close の 2 重 guard、
-  cancelled/unknown/API 失敗の扱い、権限不足・GH 障害・Actions 自体の
-  障害・manual close・diverged の手動対応、Consumer（AudioLens/
-  Synvelis）への adoption contract。
+  dedup・全 marker merge、evidence reconciliation（pending 置き換え・
+  通知逆転・eventual consistency の限界）、atomic tuple ordering（同 id
+  → attempt・異 id → updated_at・ambiguous → close 不使用）、自動
+  close の多重 guard（最新成功・曖昧なく新しい・失敗 coverage・現在
+  main tip coverage）、cancelled/unknown/API 失敗の扱い、権限不足・GH
+  障害・Actions 自体の障害・manual close・diverged の手動対応、
+  Consumer（AudioLens/Synvelis）への adoption contract。
 - `docs/development-environment.md` — `test-ci-tracker` タスクと
   ci-issue-tracker workflow を検証入口表に追記。
 

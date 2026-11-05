@@ -77,9 +77,10 @@ relations:
 ### In Scope
 
 - `ci-issue-tracker.yml` 新設: `workflow_run`（workflows: `[ci]`・types: `[completed]`・branches: `[main]`）・tracker job のみ `actions: read`/`issues: write`/`contents: read`・`concurrency` 直列化（`cancel-in-progress: false`）。`pull_request`/`push`/`schedule`/`workflow_dispatch` trigger は持たない。
-- `ci/tracker/tracker.mjs`: 有効 run 判定（repo・branch・event allowlist・fork 除外）→ conclusion 分類（success/failure/operational）→ Issue 一覧（label+scope marker の強い同定・`search` API ではなく `issues?labels=` list endpoint）→ create/update/close の plan → `gh api` 経由の apply。完了順逆転は run id 順で「最新の有効 run」のみ現在状態に反映。
-- close 条件: `成功 run.id > 記録失敗 run.id` かつ `compare(失敗sha → 成功sha) ∈ {identical, ahead}` の両方を満たす時のみ。`behind`（古い成功）・`diverged`（履歴書換え等）は close しない。
-- 失敗時 Issue 内容: 失敗 SHA・Run URL・job 結果表・初回検出/最終検出・対応手順。連続失敗は同一 Issue 更新、Issue 無しは新規作成、複数 open tracker Issue は最小番号を canonical として残りを duplicate close。
+- `ci/tracker/tracker.mjs`: 有効 run 判定（repo・branch・event allowlist・fork 除外）→ conclusion 分類（success/failure/operational）→ **権威ある run 一覧（`actions/workflows/{file}/runs?branch=main&exclude_pull_requests=true`）の reconciliation**（payload はトリガであり真実ではない — concurrency pending 置き換え・逆転配送・eventual consistency で落ちた通知を到着順に依存せず復元する）→ Issue 一覧（label+scope marker の強い同定・`search` API ではなく `issues?labels=` list endpoint）→ create/update/close の plan → `gh api` 経由の apply。
+- ordering: 同一 run id は `run_attempt`、異なる run id は `updated_at` で順序づく（旧 run の遅い rerun を過小評価しない）。`updated_at` 欠損・異 run 同一時刻は `ambiguous` として close/成功判定に使わない。`latest`/`failure` run 参照は `{runId, attempt, updatedAt}` tuple をまるごと採用（field 別 Math.max で実在しない順序キーを捏造しない）。
+- close 条件（全て必須）: 最新証拠が成功・記録最新失敗より曖昧なく新しい・`compare(失敗sha → 成功sha) ∈ {identical, ahead}`・`compare(現在 main head → 成功sha) ∈ {identical, ahead}`（現在の main tip をカバー — main は検証済みでなければならない）。`behind`・`diverged`・順序 ambiguous・最新が operational・branch head 取得不能は close しない。close 候補で branch head が取れない場合は tracker job を失敗させる。
+- 失敗時 Issue 内容: 失敗 SHA・Run URL・job 結果表・初回検出/最終検出・対応手順。連続失敗は同一 Issue 更新、Issue 無しは新規作成（最新失敗をカバーする新しい成功が履歴にある古い失敗通知は起票しない）、複数 open tracker Issue は**全 marker の最新状態を最小番号 canonical に merge してから**残りを duplicate close（duplicate が最新失敗を握っていても失わない）。
 - `cancelled`/`skipped`/`neutral`/`stale`/`action_required`/未知・null conclusion: 成功でも失敗起票でもなく operational として記録（open Issue があれば operational note 更新、無ければ Job Summary のみ）。
 - 出力 sanitize: SHA 形式検証・URL は `https://github.com/` prefix のみ・job 名は制御文字/`| `/改行除去+長さ上限・conclusion allowlist。
 - mise task `test-ci-tracker`・`ci/tracker/README.md`（権限不足・label 未作成・GitHub Actions 障害・手動対応・Consumer 再利用契約の文書化）・`docs/development-environment.md` 同期。
@@ -100,10 +101,10 @@ relations:
 - R2: 権限は tracker job のみ `contents: read`/`actions: read`/`issues: write`。workflow 全体・他 job に権限を広げない。失敗 run のコード・artifact・PR head を checkout/実行/ダウンロードしない（実行コードは default branch のもの・API メタデータのみ使用）。
 - R3: 障害 Issue は label `ci-failure` + 機械可読 scope marker（repo・workflow・branch・バージョン）で同定し、marker を持たない Issue（label だけの人間 Issue 含む）を変更しない。一覧は Issue list endpoint（検索インデックス遅延の影響を受けない）を使う。
 - R4: `failure`/`timed_out`/`startup_failure` を失敗系、`success` を成功、それ以外（`cancelled`/`skipped`/`neutral`/`stale`/`action_required`/null/未知）を operational として分類し、cancelled/unknown/API 失敗/履歴欠落を成功扱いしない。
-- R5: 失敗時は open tracker Issue が無ければ作成・あれば `(run.id, run_attempt)` 順で新しいイベントのみ現在状態を更新（完了順逆転で古い run が新しい状態を上書きしない。同一 run の rerun は attempt で新旧を区別）。同時完了の二重起票は `concurrency` 直列化 + list endpoint 再確認で防ぐ。複数 open は最小番号 canonical + 他を duplicate close。
-- R6: 成功時は `(id, attempt)` 順で失敗 run より新しく、かつ `compare` が `identical`/`ahead` の時のみ close し、回復 SHA・Run URL を記録。`behind`/`diverged`/古い run の成功では閉じない。compare API 失敗時は close せず tracker を失敗終了させる。
+- R5: 失敗時は open tracker Issue が無ければ作成・あれば**最新証拠が新しい場合のみ**現在状態を更新。順序キーは同一 run id → `run_attempt`、異なる run id → `updated_at` で、`updated_at` 欠損・異 run 同一時刻は `ambiguous` とし close/成功判定に使わない。`latest`/`failure` 参照は `{runId, attempt, updatedAt}` の atomic tuple として採用し、field 別 max で混ぜない。非 skip イベントごとに対象 workflow の権威ある run 一覧を取得して payload/marker と突き合わせる — `concurrency` の pending 置換・通知逆転・eventual consistency は直列化だけでは防げないため、一覧を事実として dropped notification を復元する。複数 open は全 marker 状態を merge した上で最小番号 canonical + 他を duplicate close。
+- R6: 成功時の close は、最新証拠がその成功で、記録最新失敗より曖昧なく新しく、`compare(失敗sha→成功sha)` と `compare(現在 main head→成功sha)` がともに `identical`/`ahead` の時のみとし、回復 SHA・Run URL を記録。`behind`/`diverged`/ambiguous ordering/最新 operational/main tip 未カバー/branch head 取得不能では close しない。compare・branch head・history API 失敗時は close せず tracker を失敗終了させる。
 - R7: Issue 本文・Job Summary・ログへ出す外部由来値（SHA・URL・job 名・OS・conclusion・branch 名）は全て sanitize/allowlist 検証する。
-- R8: API 呼出し（label 確保・Issue 一覧/作成/更新/close・jobs 取得・compare）の失敗は握り潰さず tracker job を失敗終了させ、Job Summary に診断可能な情報を残す。label 未作成は起動時に冪等確保する。
+- R8: API 呼出し（label 確保・Issue 一覧/作成/更新/close・run history・jobs・compare・branch head）の失敗は握り潰さず tracker job を失敗終了させ、Job Summary に診断可能な情報を残す。label 未作成は起動時に冪等確保する。証跡が不完全（history 取得不能・close 候補で branch head 不在・順序 ambiguous）な場合は成功・close にしない。
 - R9: GitHub API は注入 client 経由とし、全判定経路を `node --test` の fixture/mock で検証する。実 Issue/実 dispatch/外部通信を伴うテストは作らない。
 - R10: `ci.yml` の既存 trigger・job・required context・fail-closed `ci-summary` 契約に変更を加えない（`ci-issue-tracker.yml` は独立ファイル）。
 - R11: Consumer 再利用契約 — scope（repo/workflow/branch/label/title prefix）を script 定数・workflow env で差し替えれば AudioLens/Synvelis が同一 script で運用できる形を README に明記する。
