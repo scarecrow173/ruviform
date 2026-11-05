@@ -35,13 +35,15 @@ use std::os::fd::{AsRawFd, FromRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+use super::fs::NodeHandle;
 use super::fs::{
-    MAX_NAME_ATTEMPTS, NodeHandle, NodeIdentity, NodeTypeTag, PlatformExtractOps, StagingDir,
-    StagingFile, StagingRoot, staging_name,
+    MAX_NAME_ATTEMPTS, NodeIdentity, NodeTypeTag, PlatformExtractOps, StagingDir, StagingFile,
+    StagingRoot, staging_name,
 };
 
 const DIR_MODE: libc::mode_t = 0o700;
-const FILE_MODE: libc::mode_t = 0o600;
+const FILE_MODE: libc::c_uint = 0o600;
 
 /// The unix [`PlatformExtractOps`] implementation.
 #[derive(Debug)]
@@ -371,18 +373,14 @@ fn secs_nanos(sec: i64, nsec: i64) -> u64 {
 /// Apple targets expose `st_birthtimespec` in `stat`.
 #[cfg(target_vendor = "apple")]
 fn birth_ns(st: &libc::stat) -> u64 {
-    secs_nanos(st.st_birthtimespec.tv_sec, st.st_birthtimespec.tv_nsec)
+    secs_nanos(st.st_birthtime, st.st_birthtime_nsec)
 }
 
-/// Change-time → ns discriminator (`st_ctime`/`st_ctime_nsec`; the
-/// timespec spelling `st_ctimespec` on Apple). ctime cannot be set
-/// by a caller and mutates on every write — usable for files only,
-/// and only when the record is refreshed post-write.
-#[cfg(target_vendor = "apple")]
-fn ctime_ns(st: &libc::stat) -> u64 {
-    secs_nanos(st.st_ctimespec.tv_sec, st.st_ctimespec.tv_nsec)
-}
-
+/// Change-time → ns discriminator (`st_ctime`/`st_ctime_nsec`).
+/// ctime cannot be set by a caller and mutates on every write —
+/// usable for files only, and only when the record is refreshed
+/// post-write. Unused on Apple, where birth time covers all
+/// discriminators.
 #[cfg(not(target_vendor = "apple"))]
 fn ctime_ns(st: &libc::stat) -> u64 {
     secs_nanos(st.st_ctime, st.st_ctime_nsec)
