@@ -33,6 +33,8 @@ pub enum DocumentFormat {
     Toml,
     /// CSV (`feature = "csv"`, backends: `csv-core` + `csv`).
     Csv,
+    /// XML (`feature = "xml"`, backend: `quick-xml`).
+    Xml,
 }
 
 impl fmt::Display for DocumentFormat {
@@ -42,6 +44,7 @@ impl fmt::Display for DocumentFormat {
             Self::Yaml => "yaml",
             Self::Toml => "toml",
             Self::Csv => "csv",
+            Self::Xml => "xml",
         };
         f.write_str(message)
     }
@@ -240,7 +243,13 @@ impl DocumentError {
     }
 
     /// Full-detail constructor used by the format modules.
-    #[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
+    #[cfg(any(
+        feature = "json",
+        feature = "yaml",
+        feature = "toml",
+        feature = "csv",
+        feature = "xml"
+    ))]
     pub(crate) fn with_parts(
         kind: DocumentErrorKind,
         format: DocumentFormat,

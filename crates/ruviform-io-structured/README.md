@@ -1,20 +1,20 @@
 # ruviform-io-structured
 
 Ruviform の構造化ドキュメント I/O 基盤 — IO-02（Issue #284）設計の
-実装（IO-IMP-03 / Issue #297、IO-IMP-04 / Issue #298）。Serde 型付きの
-JSON/YAML/TOML `from_reader<T>` / `to_writer<T>` と、CSV の順次
-record streaming API を提供し、単一文書の Strict EOF・入力 byte
-budget・正規化 `DocumentError`・format 固有制約の正直な文書化を担う。
-後続の IO-IMP-05 XML（Issue #299）は本クレートの scaffold 上に
-format module を追加する。
+実装（IO-IMP-03 / Issue #297、IO-IMP-04 / Issue #298、IO-IMP-05 /
+Issue #299）。Serde 型付きの JSON/YAML/TOML `from_reader<T>` /
+`to_writer<T>`、CSV の順次 record streaming API、XML の借用 event
+streaming API を提供し、単一文書の Strict EOF・入力 byte budget・
+正規化 `DocumentError`・format 固有制約の正直な文書化を担う。
 
 ## 責務
 
-- Format 別 `json` / `yaml` / `toml` / `csv` module の借用
-  `Read`/`Write` ベース API。公開する外部型は Serde の `Serialize` /
-  `DeserializeOwned` のみ — backend（serde_json・serde-saphyr・toml・
-  csv）の型・エラー・feature 名は公開 API に一切出さず、診断は
-  `Error::source()` の `dyn Error` 経由のみ。
+- Format 別 `json` / `yaml` / `toml` / `csv` / `xml` module の借用
+  `Read`/`Write`/`BufRead` ベース API。公開する外部型は Serde の
+  `Serialize` / `DeserializeOwned` のみ — backend（serde_json・
+  serde-saphyr・toml・csv・quick-xml）の型・エラー・feature 名は
+  公開 API に一切出さず、診断は `Error::source()` の `dyn Error`
+  経由のみ。
 - Strict EOF: JSON は文書後の非空白を `TrailingData` で拒否、YAML は
   複数文書を `TrailingData` で拒否。TOML は有限文書全体を parse する
   ため「文書後の余剰」と「文法違反」を区別できず `Syntax` とする
@@ -56,6 +56,7 @@ format module を追加する。
 | `yaml` | YAML `from_reader`/`to_writer`・depth/alias budget | `serde-saphyr =2.0.0` |
 | `toml` | TOML `from_reader`/`to_writer`・有限 buffer parse | `toml =1.1.8+spec-1.1.0` |
 | `csv` | CSV streaming `CsvReader`/`CsvWriter`・再利用 `CsvRecord`・`read_typed`・dialect/BOM/limit 制御 | `csv =1.4.0`（`csv-core =0.1.13`） |
+| `xml` | XML event streaming `XmlEventReader`・再利用 `XmlEventBuffer`・借用 `XmlEventRef`+`to_owned`・namespace 解決・DTD/entity 拒否・limit 制御 | `quick-xml =0.42.0` |
 | `file` | `read_file`/`write_file`（`StagedFile` publish 合成） | `ruviform-io-file`（path） |
 
 `default = []`。format feature と `file` は独立に組合せ可能
@@ -126,6 +127,49 @@ JSON/YAML/TOML と異なり CSV は有限文書ではなく record 列である�
   読み書きする — 本クレートは spreadsheet 向け sanitizer ではない。
   注入対策が必要な consumer は自前で field を前処理する。
 
+### XML の制約（正直な保証範囲）
+
+`xml` module は DOM を作らない pull 型 event streaming で、
+`XmlEventReader<R: BufRead>` が caller 所有の `XmlEventBuffer` へ
+借用 event（`XmlEventRef<'_>`）を供給する。`to_owned()` で buffer
+から切り離した所有 event を得る。`Start`/`End`/`Empty`/`Text`/
+`CData`/`Comment`/`Declaration`/`ProcessingInstruction`/`Reference`
+の区別を保持し、EOF は `Ok(None)`（EOF 後の繰返し呼出しも
+`Ok(None)`）で、エラー後の reader は poison され後続 read も失敗を
+返し続ける。
+
+- Namespace: `NsReader` 相当の resolver が event ごとに即時解決する。
+  default namespace は prefix 無し element 名にのみ適用し、prefix 無し
+  attribute 名には適用しない（XML Namespaces 勧告どおり）。`xml` /
+  `xmlns` の reserved binding を保持し、`xmlns` 宣言は raw attribute
+  stream にも残る。`End` 名は scope pop 前の自 scope で解決し、未宣言
+  prefix は `Syntax`。
+- Secure defaults: いかなる `<!DOCTYPE>`（internal subset / external
+  ID とも）も `Unsupported` で拒否し、DTD の取得・展開は行わない。
+  定義済み 5 entity と数値文字参照のみ `Reference` event として明示
+  報告し、未定義 general entity は `Unsupported` で拒否 — entity
+  展開は一切しない。宣言された非 UTF-8 encoding は `Unsupported`、
+  入力の非 UTF-8 byte 列は `InvalidEncoding`。
+- Limits: `InputLimits::max_bytes` の共有 byte budget に加え
+  `max_depth`（既定 512）・`max_attributes`（既定 512）・
+  `max_event_bytes`（既定 16 MiB・単一 event の source byte 幅）・
+  `max_events`（既定 1_000_000）・`max_namespace_bindings`（既定は
+  backend の 128）を `XmlReadOptions` で制御し、超過は
+  `LimitExceeded`（`limit()` に上限名）。`max_event_bytes` は event
+  公開時の検査であり、backend がその byte 数を内部 buffer 済みの
+  可能性は正直に文書化する（事前確保 cap ではない）。
+- Encoding / text: 入力は UTF-8 のみ受理。`Text` payload は宣言
+  version（1.0/1.1）の行末正規化を backend から受け、`CData`/
+  `Comment` は raw のまま借用公開する。
+- Borrow 契約: `Text`/`CData`/`Comment` payload は buffer を直接借用
+  し、element/attribute 名・属性値・namespace URI・宣言/PI 文字列は
+  backend 都合で所有コピーとなる（`max_event_bytes` で bound）。
+  event を保持したまま `position()`/`depth()` は呼べる。
+- Writer / serde typed deserialize / schema validation（XSD・
+  RelaxNG・XInclude）は非対象。XML 1.0/1.1 grammar 上妥当でも複数
+  root・top-level text のような document 構造検査は本 module の
+  責務外（backend 忠実な streaming 契約）。
+
 ## 層・許可依存
 
 - 層: 構造化ドキュメント I/O 基盤。`ruviform-io-file`（`file`
@@ -133,9 +177,9 @@ JSON/YAML/TOML と異なり CSV は有限文書ではなく record 列である�
   engine 層への依存は持たない。io-file 側から本クレートへの依存は
   禁止（循環を作らない）。
 - 許可依存: `serde`（公開 API・trait 境界のみ）、optional な
-  `serde_json` / `serde-saphyr` / `toml` / `csv`（backend・private）、
-  optional な `ruviform-io-file`（path）。GUI・audio・GPU への
-  強制依存なし。
+  `serde_json` / `serde-saphyr` / `toml` / `csv` / `quick-xml`
+  （backend・private）、optional な `ruviform-io-file`（path）。
+  GUI・audio・GPU への強制依存なし。
 - `default = []`・MSRV 1.89・`publish = false` 継承。
 
 ## RT 契約
@@ -150,5 +194,5 @@ JSON/YAML/TOML と異なり CSV は有限文書ではなく record 列である�
 - Issue #297: 本クレートの新設・公開契約・format adapter・
   file feature（IO-IMP-03）
 - Issue #298: CSV format module（IO-IMP-04・本 scaffold 上）
-- Issue #299: 後続の XML format module（本 scaffold 上）
+- Issue #299: XML format module（IO-IMP-05・本 scaffold 上）
 - Issue #288: IO-06 共通 gate（統合・consumer 受入の上流 gate）

@@ -9,6 +9,7 @@
 //! | [`yaml`] | `yaml` | `serde-saphyr` |
 //! | [`toml`] | `toml` | `toml` |
 //! | [`csv`] | `csv` | `csv-core` + `csv` |
+//! | [`xml`] | `xml` | `quick-xml` |
 //!
 //! Every format exposes the same shape:
 //!
@@ -51,7 +52,13 @@
 #![allow(clippy::module_name_repetitions)]
 
 mod error;
-#[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
+#[cfg(any(
+    feature = "json",
+    feature = "yaml",
+    feature = "toml",
+    feature = "csv",
+    feature = "xml"
+))]
 mod input;
 mod limits;
 
@@ -66,6 +73,8 @@ pub mod csv;
 pub mod json;
 #[cfg(feature = "toml")]
 pub mod toml;
+#[cfg(feature = "xml")]
+pub mod xml;
 #[cfg(feature = "yaml")]
 pub mod yaml;
 
