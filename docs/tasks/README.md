@@ -311,7 +311,6 @@ Directory: `docs/tasks`
 | TASK-034RTggRy4UgfgaFSfQY4f | T1 ruviform-io-structured scaffold・共通契約・JSON Format (Issue #297) | done | [issue-297-t1-crate-and-contract.md](./issue-297-t1-crate-and-contract.md) |
 | TASK-034RTghO8nOg3ZiYGau2pe | T2 YAML/TOML Format module・Budget 写像・2相分類 (Issue #297) | done | [issue-297-t2-yaml-toml.md](./issue-297-t2-yaml-toml.md) |
 | TASK-034RTgiDjrTlcheIw55nAn | T3 file feature・workspace 台帳・総合検証 (Issue #297) | done | [issue-297-t3-file-feature.md](./issue-297-t3-file-feature.md) |
->>>>>>> origin/main
 | TASK-GONrZ5DneYV2H4ryIMA4EK | T1 クレート scaffold + 共有型 + Gzip/Deflate 両 module (Issue #300) | done | [issue-300-t1-crate-core.md](./issue-300-t1-crate-core.md) |
 | TASK-2v8sucBEWaF0frYXFmed85 | T2 AC1-AC6 試験群 + rustdoc/crate README (Issue #300) | done | [issue-300-t2-tests.md](./issue-300-t2-tests.md) |
 | TASK-OjT0wWawFEmwEe6bibhaMq | T3 compression-verify CI lane + classifier + impl record (Issue #300) | done | [issue-300-t3-ci-lane.md](./issue-300-t3-ci-lane.md) |
