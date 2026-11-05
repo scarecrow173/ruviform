@@ -1,0 +1,93 @@
+name: ci-issue-tracker
+
+# Issue #368 (CI-DAILY-03): watch every completed `ci` (Full CI) run and
+# keep at most ONE open failure issue for repo × workflow × main. Each event
+# is a TRIGGER, not the truth: the evaluator reconciles the authoritative
+# `ci`-workflow run list for main against the payload and marker state, so
+# dropped or out-of-order notifications self-heal instead of deciding on
+# arrival order. It auto-closes only when the NEWEST evidence is a success
+# that is unambiguously newer than the newest recorded failure AND covers
+# both the failed revision and the current main tip (updated_at-aware
+# ordering + compare API guards — an old, ambiguous, or divergent success
+# never closes a newer failure). `cancelled`/`skipped`/unknown conclusions
+# are neither success nor failure — they update the operational note only.
+#
+# Trust model: workflow_run jobs always execute THIS file and
+# ci/tracker/tracker.mjs from the default branch — never the completed
+# run's head, PR code, or artifacts. The job touches GitHub REST metadata
+# only (issues, jobs, run history, compare, branch head); untrusted values
+# are sanitized before they land in issue bodies or logs.
+#
+# Deliberately NO pull_request/push/schedule/workflow_dispatch triggers:
+# the tracker reacts to ci completions and nothing else (manual ops are
+# documented in ci/tracker/README.md).
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Serialize tracker runs repo-wide: completed ci runs queue up instead of
+# racing each other. Never cancel an in-flight tracker mid-write. NOTE:
+# this group holds at most running-1 + pending-1 and a NEWER pending run
+# replaces the queued one — completion notifications CAN be dropped, so
+# ordering/dedup is not guaranteed here; the evaluator's run-history
+# reconciliation is what makes a dropped notification safe.
+concurrency:
+  group: ci-issue-tracker-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  MISE_ENABLE_TOOLS: node
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    # Least privilege for the only job that exists: issues:write to manage
+    # the failure issue, actions:read for run/job metadata, contents:read
+    # for the compare API and default-branch checkout.
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - name: Checkout repository (default branch tracker code)
+        uses: actions/checkout@v7.0.1
+        with:
+          # workflow_run resolves github.sha to the default branch head —
+          # pin it explicitly so the checkout can only ever be trusted
+          # mainline code, never the completed run's revision.
+          ref: ${{ github.sha }}
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked node
+
+      # Same self-test pattern as the ci-summary job: a broken evaluator
+      # must fail this job rather than create/update/close the wrong
+      # issue. All tests run against a mock client — no API calls.
+      - name: Self-test tracker evaluator (mise run test-ci-tracker)
+        run: mise run test-ci-tracker
+
+      - name: Evaluate completed run and update failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRACKER_EVENT_PATH: ${{ github.event_path }}
+        run: mise exec -- node ci/tracker/tracker.mjs --report ci-issue-tracker-report.json
+
+      - name: Upload tracker report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-issue-tracker-report-attempt-${{ github.run_attempt }}
+          path: ci-issue-tracker-report.json
+          if-no-files-found: warn

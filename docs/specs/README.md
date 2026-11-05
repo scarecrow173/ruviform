@@ -68,6 +68,7 @@ Directory: `docs/specs`
 | SPEC-034SmylRtM9crIdjdInbvd | Issue #360 l1_proxy_e2e heir flake — mint 窓内 exit を post-mint へ因果順序付け | approved | [issue-360-l1-proxy-e2e-heir-flake.md](./issue-360-l1-proxy-e2e-heir-flake.md) |
 | SPEC-034Smu6fnzDQaoN4box3qk | Issue #366+#364 Full CI 化 Stage 1 — 常時全 lane 実行・ci-summary fail-closed 集約・io-structured lane 新設 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
 | SPEC-ElrrvM1k7RbACtLgfzKaxs | Issue #367 共通 Daily Scheduler — `daily-ci.yml` 軽量判定 + `ci.yml` 条件付き dispatch | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
+| SPEC-4KMssIOpNuvh9jGgKKfp7R | Issue #368 CI failure Issue Tracker — workflow_run 完了監視で main×ci の未解決障害を 1 Issue に集約 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |

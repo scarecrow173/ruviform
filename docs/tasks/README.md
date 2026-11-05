@@ -178,6 +178,8 @@ Directory: `docs/tasks`
 | TASK-OMt1jAp3OOLOSc40FVZTD0 | T1 ci/daily/decide.mjs 判定器 + fixture contract tests + test-ci-daily task（Issue #367） | done | [issue-367-t1-decide-evaluator.md](./issue-367-t1-decide-evaluator.md) |
 | TASK-6BTRFSnTERjkzGCwtaEgAs | T2 `.github/workflows/daily-ci.yml` 新設（Issue #367） | done | [issue-367-t2-daily-ci-workflow.md](./issue-367-t2-daily-ci-workflow.md) |
 | TASK-xJy29ZBdKUklv4RDyz58A3 | T3 Consumer 採用契約・運用手順の docs 同期（Issue #367） | done | [issue-367-t3-consumer-contract-docs.md](./issue-367-t3-consumer-contract-docs.md) |
+| TASK-r4Ta2OILbKEFuFRjAfBMAM | T1 ci/tracker/tracker.mjs 判定器 + contract tests（Issue #368） | done | [issue-368-t1-tracker-evaluator.md](./issue-368-t1-tracker-evaluator.md) |
+| TASK-Peb0C7F4qBHb9sZP8wXZnR | T2 ci-issue-tracker.yml workflow + 運用 README + dev-env 同期（Issue #368） | done | [issue-368-t2-tracker-workflow.md](./issue-368-t2-tracker-workflow.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

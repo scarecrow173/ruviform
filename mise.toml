@@ -125,6 +125,17 @@ env = { CARGO_INCREMENTAL = "0" }
 description = "Run ci/summary verdict contract tests via `node --test ci/summary/` (needs result matrix, per-leg checkout-sha evidence, expected_sha dispatch contract, report JSON shape; requires node from the pinned toolchain)"
 run = "node --test ci/summary/"
 
+# Issue #368 (CI failure Issue Tracker): contract tests for the ci/tracker
+# evaluator. The `track` job in ci-issue-tracker.yml runs this before any
+# GitHub API call so a broken evaluator fails the job instead of creating/
+# updating/closing the wrong issue. All tests use a mock client — offline.
+[tasks.test-ci-tracker]
+description = "Run ci/tracker contract tests via `node --test ci/tracker/` (valid-run filter and conclusion matrices, plan action matrix incl. run-id/attempt + updated_at ordering and compare close-guard, marker roundtrip, sanitize, API failure propagation; mock client only, no network; requires node from the pinned toolchain)"
+run = "node --test ci/tracker/"
+
+# Issue #367 (daily scheduler): contract tests for the ci/daily decision
+# evaluator. The `daily-ci` job runs this before the real dispatch path so
+# a broken evaluator fails the job instead of deciding wrongly.
 [tasks.test-ci-daily]
 description = "Run ci/daily scheduler decision contract tests via `node --test ci/daily/` (decision matrix, in-flight/unknown hold, bounded retry budget, dispatch confirm + landed-sha, report JSON shape; requires node from the pinned toolchain)"
 run = "node --test ci/daily/"
