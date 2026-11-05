@@ -1196,7 +1196,7 @@ export function makeGhClient({ repo, gh = "gh", execFile = execFileSync } = {}) 
       ]);
     },
     async compareCommits(base, head) {
-      const out = apiJson([`repos/${repo}/compare/${base}...${head}`]);
+      const out = apiJson([`repos/${repo}/compare/${base}...${head}`, "--jq", "{status: .status}"]);
       const status = out?.status;
       if (!["identical", "ahead", "behind", "diverged"].includes(status)) {
         throw new Error(`compare returned unexpected status: ${status}`);
