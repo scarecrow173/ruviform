@@ -1080,3 +1080,159 @@ test("run: definite out-of-scope records do not block a valid close", async () =
   assert.ok(res.applied.some((a) => a.type === "close-recovered"), "excluded records leave the close intact");
   assert.ok(client.calls.includes("closeIssue:#42"));
 });
+
+// (9) Attempt-level evidence: the runs list carries only each run's LATEST
+// attempt, so per-id merging + per-id marker suppression can erase the
+// recorded failure attempt (newestFailure = null → compare-failure:
+// unavailable → the issue can never auto-close). The recorded failure
+// attempt must survive as distinct evidence so a same-id rerun success
+// can close its own failed attempt (R6 rerun recovery).
+test("run: same-id rerun success closes the recorded failure attempt", async () => {
+  const issue = managedIssue(42, failureState()); // failure run 100 attempt 1 @ SHA_A
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [histRun(100, SHA_A, "success", T4, { attempt: 2 })], // list shows latest attempt only
+    compareMap: { [`${SHA_A}...${SHA_A}`]: "identical" },
+    branchSha: SHA_A,
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 100, run_attempt: 2, conclusion: "success", head_sha: SHA_A, updated_at: T4 } }),
+    client,
+    scope,
+  });
+  assert.ok(res.applied.some((a) => a.type === "close-recovered"), "rerun success closes its own failed attempt");
+  assert.ok(client.calls.includes("closeIssue:#42"));
+});
+
+// A rerun on a different sha still requires commit coverage of the failed
+// revision — different-sha close is allowed only when compare covers.
+test("run: same-id rerun on a different sha closes only with coverage", async () => {
+  const issue = managedIssue(42, failureState());
+  const covered = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [histRun(100, SHA_D, "success", T4, { attempt: 2 })],
+    compareMap: { [`${SHA_A}...${SHA_D}`]: "ahead", [`${SHA_D}...${SHA_D}`]: "identical" },
+    branchSha: SHA_D,
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 100, run_attempt: 2, conclusion: "success", head_sha: SHA_D, updated_at: T4 } }),
+    client: covered,
+    scope,
+  });
+  assert.ok(res.applied.some((a) => a.type === "close-recovered"), "covered different-sha rerun closes");
+
+  const uncovered = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [histRun(100, SHA_D, "success", T4, { attempt: 2 })],
+    compareMap: { [`${SHA_A}...${SHA_D}`]: "diverged" },
+    branchSha: SHA_D,
+  });
+  const res2 = await run({
+    payload: payload({ workflow_run: { id: 100, run_attempt: 2, conclusion: "success", head_sha: SHA_D, updated_at: T4 } }),
+    client: uncovered,
+    scope,
+  });
+  assert.ok(!res2.applied.some((a) => a.type === "close-recovered"), "diverged sha never closes");
+  assert.ok(!uncovered.calls.includes("closeIssue:#42"));
+});
+
+// Same-id rerun that fails again updates the recorded attempt; cancelled /
+// in-progress reruns hold — the recorded failure attempt is never closed
+// by them and never lost.
+test("run: same-id rerun failure updates the recorded attempt", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [histRun(100, SHA_A, "failure", T4, { attempt: 2 })],
+    jobs: [{ name: "verify", conclusion: "failure" }],
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 100, run_attempt: 2, conclusion: "failure", head_sha: SHA_A, updated_at: T4 } }),
+    client,
+    scope,
+  });
+  const update = res.applied.find((a) => a.type === "update" && a.issue === 42);
+  assert.ok(update);
+  assert.equal(update.state.failure.runId, 100);
+  assert.equal(update.state.failure.attempt, 2);
+});
+
+test("run: same-id rerun cancelled holds the recorded failure attempt", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [histRun(100, SHA_A, "cancelled", T4, { attempt: 2 })],
+    compare: "identical",
+    branchSha: SHA_A,
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 100, run_attempt: 2, conclusion: "cancelled", head_sha: SHA_A, updated_at: T4 } }),
+    client,
+    scope,
+  });
+  assert.ok(!res.applied.some((a) => a.type === "close-recovered"));
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+  const update = res.applied.find((a) => a.type === "update" && a.issue === 42);
+  assert.ok(update);
+  assert.equal(update.state.failure.runId, 100, "failure attempt preserved");
+});
+
+test("run: same-id rerun in progress holds the recorded failure attempt", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [histRun(100, SHA_A, null, T4, { attempt: 2, status: "in_progress" })],
+    compare: "identical",
+    branchSha: SHA_A,
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 200, conclusion: "success", head_sha: SHA_B, updated_at: T2 } }),
+    client,
+    scope,
+  });
+  assert.ok(!res.applied.some((a) => a.type === "close-recovered"));
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+});
+
+// A success on a DIFFERENT, older run can never close the recorded
+// failure attempt — attempt-level preservation must not weaken ordering.
+test("run: older different-run success does not close the recorded attempt", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [histRun(50, SHA_B, "success", "2026-11-04T00:00:00Z")],
+    compare: "ahead",
+    branchSha: SHA_C,
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 50, conclusion: "success", head_sha: SHA_B, updated_at: "2026-11-04T00:00:00Z" } }),
+    client,
+    scope,
+  });
+  assert.ok(!res.applied.some((a) => a.type === "close-recovered"));
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+});
+
+// Attempt preservation is per (id, attempt) — an unrelated newer failure
+// run still dominates a same-id success.
+test("run: same-id success does not close while a newer different-run failure exists", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [
+      histRun(100, SHA_A, "success", T4, { attempt: 2 }),
+      histRun(300, SHA_B, "failure", T3),
+    ],
+    compareMap: { [`${SHA_B}...${SHA_A}`]: "behind" },
+    branchSha: SHA_B,
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 100, run_attempt: 2, conclusion: "success", head_sha: SHA_A, updated_at: T4 } }),
+    client,
+    scope,
+  });
+  assert.ok(!res.applied.some((a) => a.type === "close-recovered"));
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+  const update = res.applied.find((a) => a.type === "update" && a.issue === 42);
+  assert.equal(update?.state.failure.runId, 300, "newest failure is the unrelated run");
+});

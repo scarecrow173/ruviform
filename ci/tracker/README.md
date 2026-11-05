@@ -90,6 +90,12 @@ eventual consistency も同様）。そこで非 skip イベントごとに
 
 - 同一 run id: `run_attempt` で順序づく（attempt は厳密に逐次）。rerun
   は同 id・高 attempt なので失敗 run の rerun 成功は正しく回復になる。
+  runs 一覧は各 run の**最新 attempt の状態**だけを返すため、marker に
+  記録された失敗 attempt は `(runId, attempt)` 単位の独立した証拠とし
+  て保持する — 同 id の新しい attempt（成功・operational・in_progress）
+  が一覧に現れても記録済み失敗 attempt は消えず、rerun 成功は自分の
+  失敗 attempt を `identical` coverage で close できる（attempt 別の
+  実 record が存在する時だけ marker 参照を実 record で上書きする）。
 - 異なる run id: `updated_at`（最終更新＝完了時刻）で順序づく。**古い
   run の新しい attempt が新しい run より後に完了し得る**ため、
   `(run.id, run_attempt)` だけでは過小評価する。
@@ -153,6 +159,13 @@ pending/unknown 証跡の残存は**close しない**。close 候補で branch h
 - **tracker job 自身の失敗**: Actions UI の `ci-issue-tracker` run が
   赤くなる。自動通知は持たない — daily 運用での Job Summary 確認を
   運用手順とする。
+- **同名 workflow の混入（既知の限界・P2 として別途管理）**:
+  `workflow_run.workflows: [ci]` は workflow **name** でマッチするため、
+  `name: ci` を持つ**別ファイル**の workflow が存在するとその run でも
+  tracker が起動する。history 側は `path`/`name` で排除するが、event
+  payload 側は workflow file/`workflow_id` を照合していない。現時点で
+  同名 workflow は存在せず対応は別タスク — consumer 導入時は `name` の
+  衝突がないことを確認すること。
 
 ## セキュリティ
 

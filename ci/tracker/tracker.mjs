@@ -990,16 +990,28 @@ export async function run({ payload, client, scope }) {
     run == null
       ? null
       : { kind: run.pending ? "pending" : kindOfConclusion(run.conclusion), run: { ...run, src } };
-  const realIds = new Set(historyRuns.map((r) => r.id));
+  // Marker refs are suppressed per (run id, attempt): the authoritative
+  // record outranks the marker for the exact attempt it describes. A
+  // recorded FAILURE attempt is NOT dropped when the same run id now
+  // shows a newer attempt — attempts are distinct evidence, and a rerun
+  // success must still be able to close its own failed attempt.
+  const realAttempts = new Set(historyRuns.map((r) => `${r.id}:${r.attempt ?? 1}`));
+  // The `latest` observation is superseded whenever real history carries
+  // the same run id at an equal-or-newer attempt.
+  const latestIsCovered =
+    mergedState != null &&
+    historyRuns.some(
+      (r) => r.id === mergedState.latest.runId && (r.attempt ?? 1) >= (mergedState.latest.attempt ?? 1),
+    );
   const storedCandidates = [];
   if (mergedState != null) {
-    if (!realIds.has(mergedState.latest.runId)) {
+    if (!latestIsCovered) {
       storedCandidates.push({
         kind: "observed",
         run: { ...mergedState.latest, id: mergedState.latest.runId, src: "marker" },
       });
     }
-    if (!realIds.has(mergedState.failure.runId)) {
+    if (!realAttempts.has(`${mergedState.failure.runId}:${mergedState.failure.attempt ?? 1}`)) {
       storedCandidates.push({
         kind: "failure",
         run: { ...mergedState.failure, id: mergedState.failure.runId, src: "marker" },
