@@ -58,7 +58,7 @@ scope（repo × workflow `ci` × branch `main` × event ∈
 {push, workflow_dispatch}）で分類し、GitHub Issue 一覧・job メタ・
 compare の注入 client 経由で create/update/close-recovered/
 close-duplicate/noop の action plan を組み立てて適用する。
-34 件の mock-client contract test を `ci/tracker/tests/` に追加し、
+56 件の mock-client contract test を `ci/tracker/tests/` に追加し、
 `mise.toml` に `test-ci-tracker` タスクを定義した。
 
 ## Context
@@ -107,7 +107,7 @@ close-duplicate/noop の action plan を組み立てて適用する。
     compact JSONL を行単位 parse。
   - `main`: TRACKER_EVENT_PATH/GITHUB_EVENT_PATH から payload 読込み、
     report JSON + Job Summary 出力。API 失敗は propagate して exit 1。
-- `ci/tracker/tests/tracker.test.mjs`: 45 tests。scope 分類・sanitize・
+- `ci/tracker/tests/tracker.test.mjs`: 56 tests。scope 分類・sanitize・
   marker parse/create（legacy flat latestRunId marker の正規化含む）・
   初回 create・連続失敗 update・dedup・stale 拒否・rerun（同 id 高
   attempt・旧 run の遅い rerun）success close/failure update・
@@ -117,7 +117,12 @@ close-duplicate/noop の action plan を組み立てて適用する。
   成功の close 拒否・branch head 不能時の job 失敗・遅延失敗の誤起票
   拒否（coverage あり/なし両経路）・duplicate 最新失敗 merge 保全・
   ambiguous ordering hold・dropped notification 復元・atomic tuple
-  採用・対象外 history run 除外** — 全て mock client、外部副作用なし。
+  採用・対象外 history run 除外**、さらに **非 completed/未知 status
+  の pending hold・失敗 run 自身の in_progress rerun・識別不能 record
+  （必須 field 欠落・`{}`・非 object・非配列 history）の fail-closed
+  停止・out-of-scope の過剰除外なし・unknown conclusion の
+  operational 化・pending が resolved stale failure を復活させない**
+  — 全て mock client、外部副作用なし。
 - `mise.toml`: `[tasks.test-ci-tracker] run = "node --test ci/tracker/"`。
 
 ### Decisions During Implementation
@@ -161,8 +166,21 @@ close-duplicate/noop の action plan を組み立てて適用する。
 - **fork/PR run の扱い**: `workflow_run` は default branch 側のコンテキスト
   で実行されるため head_repository が fork の run も到達し得る。
   `head_repository.full_name !== scope.repo` で hard skip し、fork 由来
-  run は issue を一切触らない。対象外（他 repo・他 branch・許可外 event・
-  未 completed）の history run も evidence にしない。
+  run は issue を一切触らない。
+- **履歴 record の 3 分類（post-review hardening 2）**: 後続 review で
+  「履歴に非 completed run（in_progress/conclusion=null）や不正 record
+  （`{}`）があると、`completed` 以外を黙って捨てる実装が stale success
+  で誤 close する」ことが mock replay で実証された。`classifyHistoryRecord`
+  で **out**（提示 field が scope と矛盾するものだけ — 過剰除外しない）/
+  **in**（必須 field 全て検証可能: repo・branch・event・workflow `path`/
+  `name`・`id`・`head_sha`・`run_attempt`・`updated_at`・`status`）/
+  **unknown**（必須 field 欠落・record 不正で証明不能）に分類。in・非
+  completed は `pending` 証拠（live run の完了は未来 → success 昇格・
+  close を許さない）、unknown は close と resolved-suppression（stale
+  failure 起票抑止）を両方止める。`status=null` を completed と仮定する
+  経路を排除し、event payload 側も `status === "completed"` と
+  `run_attempt` 存在を必須化。履歴レスポンスが配列でない場合は証跡
+  欠損として job を失敗させる。
 
 ## Related Experiments
 
@@ -176,7 +194,7 @@ close-duplicate/noop の action plan を組み立てて適用する。
 
 ## Validation
 
-- `mise run test-ci-tracker` → 45/45 pass（hardening 前は 34/34）。
+- `mise run test-ci-tracker` → 56/56 pass（初版 34→45→56）。
 - `mise exec -- actionlint .github/workflows/ci-issue-tracker.yml` → OK。
 - `mise exec -- actionlint .github/workflows/ci.yml` → OK（無変更確認）。
 - `mise exec -- prek run --all-files` → 全 hook pass。

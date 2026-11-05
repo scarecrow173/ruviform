@@ -81,13 +81,18 @@ Issue #366 Stage 1（merged）で `ci.yml`（`name: ci`）は全 lane 無条件�
 3 層に分離し、判定は純関数・副作用は注入 client のみ:
 
 1. `classifyRun(payload, scope)` → `{kind: "skip"|"failure"|"success"|"operational", run}`:
-   - **有効 run フィルタ**（いずれか非一致なら `skip`・Issue に一切触れない）: `payload.action == "completed"`、`workflow_run.head_repository.full_name == scope.repo`、`head_branch == scope.branch`、`workflow_run.event ∈ scope.allowedEvents`（既定 `["push","workflow_dispatch"]` — `pull_request`/`merge_group`/未知 event は skip。fork run は repo 一致で除外済みだが二重に確認）、`workflow_run.conclusion` 存在。
+   - **有効 run フィルタ**（いずれか非一致なら `skip`・Issue に一切触れない）: `payload.action == "completed"`、`workflow_run.status == "completed"`（action と矛盾・欠落する status は skip — null を completed と仮定しない）、`workflow_run.head_repository.full_name == scope.repo`、`head_branch == scope.branch`、`workflow_run.event ∈ scope.allowedEvents`（既定 `["push","workflow_dispatch"]` — `pull_request`/`merge_group`/未知 event は skip。fork run は repo 一致で除外済みだが二重に確認）、`workflow_run.conclusion` 存在。
    - **conclusion 分類**: `success`→success。`failure`/`timed_out`/`startup_failure`→failure（検証未完了のまま終了した run — 原因の自動分類はしない）。`cancelled`/`skipped`/`neutral`/`stale`/`action_required`/null/未知値→operational（**成功でも失敗起票でもない**。retry 待ち運用状態）。
    - run メタ: `id`（整数必須）・`head_sha`（40 hex 検証）・`html_url`（`https://github.com/` prefix 検証）・`run_attempt`・`updated_at`。
 
-2. **evidence reconciliation**（`run` 内部・`plan` 前段）: 非 skip イベントで権威ある run 一覧を取得し、payload・全 managed marker 状態と突き合わせる。一覧が payload より新しい attempt/run を示せばそちらを採用（一覧遅延では payload が勝つ）。一覧 API 失敗は伝播して job を落とす — 証跡欠損で黙って処理しない。
+2. **evidence reconciliation**（`run` 内部・`plan` 前段）: 非 skip イベントで権威ある run 一覧を取得し、payload・全 managed marker 状態と突き合わせる。一覧が payload より新しい attempt/run を示せばそちらを採用（一覧遅延では payload が勝つ）。一覧 API 失敗・非配列レスポンスは伝播して job を落とす — 証跡欠損で黙って処理しない。
 
-3. `plan({classified, canonical, duplicates, mergedState, newest, newestFailure, coveringSuccess, coverage, mainCoverage, jobs})` → action list。全判定はここで純粋に決まる:
+   履歴 record は `classifyHistoryRecord` で 3 分類する:
+   - **out**: 提示 field が scope と矛盾（他 repo・fork head・他 branch・許可外 event・他 workflow `path`/`name`）→ 証拠から除外。
+   - **in**: repo/branch/event/workflow 同一性と `id`/`head_sha`/`run_attempt`/`updated_at`/`status` が全て検証可能。`completed` → conclusion 分類で証拠化、非 completed（`queued`/`in_progress`/`requested`/`waiting`/`pending`/未知 status）→ **`pending` 証拠**（live run — 完了は未来にあるため常に「より新しい可能性」を持ち、success 昇格も close もさせない）。
+   - **unknown**: 対象性または順序が証明不能（上記必須 field 欠落・record 自体不正）→ **`unknown` 証拠** — 黙って捨てず、close 抑制と stale-failure 起票抑止の両方を止める。success/failure には決してならない。
+
+3. `plan({classified, canonical, duplicates, mergedState, newest, newestFailure, coveringSuccess, coverage, mainCoverage, jobs, evidencePending, evidenceUnknown})` → action list。全判定はここで純粋に決まる:
 
    | 状況 | action |
    |---|---|
@@ -104,7 +109,7 @@ Issue #366 Stage 1（merged）で `ci.yml`（`name: ci`）は全 lane 無条件�
 
    - **canonical 選定**: label `ci-failure` を持つ open Issue のうち、body 先頭の `<!-- ci-issue-tracker:{json} -->` marker が parse 可能で `scope` が一致するもののみ managed。managed が複数なら最小 Issue 番号を canonical。残りの managed open は **duplicate として close**（comment「superseded by #N」+ `state: closed`）— `search` API の index 遅延を避けるため `GET /issues?labels=…&state=open`（list endpoint・非検索）で同定する。label だけで marker の無い Issue（人間が label を付けた等）は foreign として一切触れない。**duplicate close 前に全 marker の最新状態を merge して canonical に反映する**（duplicate が最新失敗を握っていても消えない）。
    - **run 順序キー（atomic tuple）**: 同一 run id は `run_attempt` で比較（attempt は厳密に逐次）。異なる run id は `updated_at` で比較 — **旧 run の新しい attempt が新しい run より後に完了し得る**ため `(run.id, run_attempt)` 辞書順では過小評価する。`updated_at` が欠損・異 run で同一値なら `ambiguous` とし、**close/成功判定には一切使わない**（記録は残し Issue は open 維持）。状態更新のみ run id 単調性で保守的に解決する。`run_started_at` は attempt の開始時刻で完了順の証跡にならず、`actor`/`triggering_actor` は順序証跡でないため使わない。`latest`/`failure` の run 参照は `{runId, attempt, updatedAt}` tuple をまるごと採用 — 別 run の値を Math.max で混ぜて実在しない順序キーを捏造しない。
-   - **close 条件の多重 guard**: 以下を全て満たす時のみ `close-recovered`。(a) 最新証拠がその成功（最新が operational/ambiguous なら close しない — main は未検証）、(b) その成功が記録最新失敗より**曖昧なく新しい**、(c) `compare(失敗 sha → 成功 sha) ∈ {identical, ahead}`（失敗 revision を履歴に含む）、(d) `compare(現在 main head → 成功 sha) ∈ {identical, ahead}`（**現在の main tip をカバー** — 古い失敗 revision の検証だけでは閉じない）。`behind`/`diverged`/ambiguous/main tip 未カバーは全て close しない。close 候補で branch head が取れない場合は job を失敗させて誤 close を防ぐ。rerun 成功（同 id・高 attempt）は `updated_at` で新しい証拠と証明され `identical` coverage で close できる。
+   - **close 条件の多重 guard**: 以下を全て満たす時のみ `close-recovered`。(a) 最新証拠がその成功（最新が operational/ambiguous なら close しない — main は未検証）、(b) その成功が記録最新失敗より**曖昧なく新しい**、(c) `compare(失敗 sha → 成功 sha) ∈ {identical, ahead}`（失敗 revision を履歴に含む）、(d) `compare(現在 main head → 成功 sha) ∈ {identical, ahead}`（**現在の main tip をカバー** — 古い失敗 revision の検証だけでは閉じない）、(e) **証跡が完全**（live `pending` run・`unknown` 識別不能 record が履歴に残っていない）。`behind`/`diverged`/ambiguous/main tip 未カバー/pending・unknown 残存は全て close しない。close 候補で branch head が取れない場合は job を失敗させて誤 close を防ぐ。rerun 成功（同 id・高 attempt）は `updated_at` で新しい証拠と証明され `identical` coverage で close できる。
    - **同 sha で failure+success が混在**する場合: 失敗 attempt より新しい成功は close 可能だが、逆（failure が新しい）なら open のまま — flaky と確定できない以上 open 側が安全。
 
 3. `renderBody(state)` / `parseMarker(body)` / `apply(actions, client)`:

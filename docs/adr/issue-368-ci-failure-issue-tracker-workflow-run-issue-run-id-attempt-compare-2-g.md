@@ -146,12 +146,22 @@ Chosen option: **Option A**（+ D/E/F/G の採用側を構成要素として統�
   で repo 単位直列化（pending 置き換えの限界をコメントに明記）。
   track job のみ contents:read/actions:read/issues:write。
 - `ci/tracker/tracker.mjs`: classify（scope 一致 + event allowlist
-  {push,workflow_dispatch}）→ label 冪等確保 → open Issue 列挙 →
+  {push,workflow_dispatch} + `status=="completed"` 必須 — null を
+  completed と仮定しない）→ label 冪等確保 → open Issue 列挙 →
   marker+scope で managed 同定・**全 marker 状態 merge**（canonical =
   最小番号、重複は merge 後に superseded close）→ **run-history
   reconciliation**（権威一覧・payload・marker の突き合わせ）→ plan
   （create/update/merge-state/close-duplicate/close-recovered/noop）→
   apply。
+- 履歴 record は `classifyHistoryRecord` で 3 分類。**out**（提示
+  field が scope と矛盾するものだけ — 他 repo・fork head・他
+  branch・許可外 event・他 workflow `path`/`name`）を除外し、
+  **in**（必須 field 全て検証可能）は `completed`→conclusion 分類、
+  非 completed（queued/in_progress/requested/waiting/pending/未知
+  status）→ `pending` 証拠（live run の完了は未来にあるため success
+  昇格・close を許さない）。**unknown**（必須 field 欠落・record
+  不正で対象性・順序が証明不能）は黙って捨てず、close と
+  resolved-suppression（stale failure 起票抑止）を両方止める。
 - ordering: 同 id → `run_attempt`、異 id → `updated_at`。欠損・同一
   時刻は `ambiguous`（close 不使用・状態更新は run id で保守解決）。
   run 参照は `{runId, attempt, updatedAt}` atomic tuple。
@@ -179,12 +189,16 @@ Chosen option: **Option A**（+ D/E/F/G の採用側を構成要素として統�
 
 ### Confirmation
 
-`ci/tracker/tests/tracker.test.mjs` の 45 件の mock-client contract
+`ci/tracker/tests/tracker.test.mjs` の 56 件の mock-client contract
 test が全判定経路を網羅（scope 分類・dedup・stale 拒否・rerun・
 compare/main-tip guard・operational・API 失敗 propagate に加え、
 reconciliation 系: stale 成功の誤 close 拒否・遅延失敗の誤起票拒否・
 duplicate 最新状態 merge・旧 run rerun の updated_at 順序・ambiguous
-ordering の hold・dropped notification 復元・atomic tuple 採用）。
+ordering の hold・dropped notification 復元・atomic tuple 採用・
+非 completed/未知 status の pending hold・失敗 run 自身の in_progress
+rerun・識別不能 record（必須 field 欠落・`{}`・非 object・非配列
+history）の fail-closed 停止・out-of-scope の過剰除外なし・unknown
+conclusion の operational 化）。
 `mise run test-ci-tracker` で CI/ローカル共通に実行可能。実 GitHub
 API・実 Issue・実 dispatch はテストで発生させない。
 
@@ -202,14 +216,16 @@ API・実 Issue・実 dispatch はテストで発生させない。
   search API による Issue 同定・`(run.id, run_attempt)` 辞書順のみの
   異 run 比較・compare/main tip guard なしの close・field 別 max に
   よる順序キー合成・最新 operational の存在下での古い成功 close・
-  marker merge 前の duplicate close。
+  marker merge 前の duplicate close・履歴の非 completed run を drop
+  して古い成功を新規扱いする・識別不能 record を黙って捨てる・
+  `status=null` を completed と仮定する。
 - Dependencies or configuration: GitHub-hosted runner 標準の `gh` CLI、
   mise pin の Node。新規パッケージ依存なし。権限は workflow/job
   YAML のみ。
 
 ## Verification
 
-- [x] `mise run test-ci-tracker` → 45/45 pass（hardening 前は 34/34）。
+- [x] `mise run test-ci-tracker` → 56/56 pass（初版 34→45→56）。
 - [x] `mise exec -- actionlint .github/workflows/ci-issue-tracker.yml` → OK。
 - [x] `mise exec -- actionlint .github/workflows/ci.yml` → OK（ci.yml 無変更）。
 - [x] `mise exec -- prek run --all-files` → 全 hook pass。

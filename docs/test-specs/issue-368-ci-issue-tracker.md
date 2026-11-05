@@ -60,6 +60,7 @@ metadata: {}
 - Example: `event=pull_request`・`event=merge_group`・未知 event → `skip`（allowlist `push`/`workflow_dispatch` 以外）。
 - Example: `action=requested`/`in_progress` → `skip`（completed 以外）。
 - Example: `head_sha` が 40-hex でない・`id` が整数でない → `skip`（不完全な payload を有効 run にしない）。
+- Example: `action=completed` だが `status` が非 completed・null・欠落 → `skip`（status=null を completed と仮定しない）。`run_attempt` 欠落も `skip`。
 
 ### Rule: conclusion 分類
 
@@ -76,8 +77,10 @@ metadata: {}
 - Example: 非 skip イベントで `GET /actions/workflows/{file}/runs?branch=main&exclude_pull_requests=true` を取得し、payload・marker 状態と突き合わせる。
 - Example: history に payload 未収載の新しい失敗 run がある → その失敗で状態更新（dropped notification の自己修復）。
 - Example: history が payload の attempt より新しい attempt を示す → 大きい attempt を採用（逆方向も同様 — 一覧遅延では payload が勝つ）。
-- Example: 対象外（他 repo・他 branch・許可外 event・未 completed）の history run は evidence にしない。
-- Example: history API 失敗 → 例外伝播・job 失敗（証跡欠損で黙って処理しない）。
+- Example: 対象外（他 repo・fork head・他 branch・許可外 event・他 workflow `path`/`name`）の history run は evidence にしない — 併存しても有効な close を妨げない。
+- Example: 対象内・非 completed（`queued`/`in_progress`/`requested`/`waiting`/`pending`/未知 status）の history run は `pending` evidence — 完了が未来にあるためどんな順序でも close を止める。
+- Example: 対象性・順序が証明不能な record（必須 field 欠落・`{}`・非 object）は `unknown` evidence — close も stale-failure 抑止（resolved）も止め、success/failure にならない。
+- Example: history API 失敗・非配列レスポンス → 例外伝播・job 失敗（証跡欠損で黙って処理しない）。
 
 ### Rule: ordering は `updated_at` を優先し、曖昧は成功にしない
 
@@ -102,6 +105,7 @@ metadata: {}
 - Example: `compare=diverged` → close しない（履歴書換え等・手動確認を記録）。
 - Example: 成功が現在 main tip をカバーしない（`compare(main→成功)=behind`）→ close しない。
 - Example: 順序 ambiguous → close しない（記録して open 維持）。
+- Example: 履歴に live `pending` run（新しい in_progress/queued）・識別不能 `unknown` record が残る → close しない（証跡不完全）。失敗 run 自身の in_progress rerun でも同様。
 - Example: 失敗 sha→成功 sha の compare は通るが main tip をカバーしない → 更新して open 維持。
 - Example: managed open 無し + 失敗証拠をカバーする新しい成功 → `noop`（遅延した古い失敗通知は起票しない — 到着順が事実にならない）。
 
