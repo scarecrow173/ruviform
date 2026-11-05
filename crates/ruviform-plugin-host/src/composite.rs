@@ -45,6 +45,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ruviform_audio_core::SampleRate;
+use ruviform_observability::source::ObservationRegistrar;
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
     EventList, FailureCause, LifecycleEvent, LifecycleState, ParamId, PlainParamValue,
@@ -445,6 +446,13 @@ pub struct PluginHost {
     /// `try_recv_notification` consumption, keyed by the public
     /// handle's slot (`record_for_handle` correlation).
     diag: Arc<DiagRegistry>,
+    /// The attached observation registrar (Issue #279, OBS-04) —
+    /// `None` leaves every L1 audio mint's four diagnostic counters
+    /// unregistered (the default); `Some` makes each successful mint
+    /// register `Instance`-scoped sources and each `Destroy` retire
+    /// their leases. Passed to the mint paths as `&dyn` — it never
+    /// reaches an RT leg.
+    observation_registrar: Option<Arc<dyn ObservationRegistrar>>,
 }
 
 impl Default for PluginHost {
@@ -467,6 +475,7 @@ impl PluginHost {
             generations: Vec::new(),
             free_slots: Vec::new(),
             diag: Arc::new(DiagRegistry::new()),
+            observation_registrar: None,
         }
     }
 
@@ -844,6 +853,33 @@ impl PluginHost {
             }
             Slot::InProcess(_) | Slot::OutOfProcessVideo(_) => None,
         }
+    }
+
+    /// Attaches (or clears, `None`) the [`ObservationRegistrar`]
+    /// every subsequent L1 audio `Instantiate` registers its four
+    /// diagnostic counter sources against — Issue #279's OBS-04
+    /// wiring to the OBS-02 source contract (the Issue #289
+    /// collector plugs in here once it lands). `None` is the
+    /// default and reproduces the pre-attach behavior exactly: no
+    /// source is ever registered and `audio_counters`/
+    /// [`AudioCounterSnapshot`] stay identical.
+    ///
+    /// The registrar applies to the *next* mint — instances already
+    /// minted keep the leases they minted with, and an attached
+    /// registrar covers every route (`Dedicated` and `Bundled`,
+    /// including supervisor restarts through [`HostCommand::Instantiate`]).
+    /// Registration is best-effort: a typed `RegistrationError`
+    /// degrades only that counter's slot and never fails
+    /// `Instantiate` or the plugin. Source lifetimes follow the
+    /// instance — `Destroy` (or facade drop) retires each lease
+    /// once the owner-side counter writers are gone, and a re-mint
+    /// registers a fresh `SourceIdentity`.
+    ///
+    /// **RT contract:** non-RT only — stores the handle; all
+    /// registration and retirement work runs on the non-RT mint/
+    /// destroy paths, never inside `process`.
+    pub fn set_observation_registrar(&mut self, registrar: Option<Arc<dyn ObservationRegistrar>>) {
+        self.observation_registrar = registrar;
     }
 
     /// Direct access to an L0 instance for the L0 RT path (e.g.
@@ -1391,11 +1427,16 @@ impl PluginHost {
             }) => match *isolation {
                 // The capacity-1 route — a fresh child per instance,
                 // never pooled.
-                OutOfProcessIsolation::Dedicated => {
-                    Slot::OutOfProcess(Box::new(L1Instance::spawn(spec, &self.diag)?))
-                }
+                OutOfProcessIsolation::Dedicated => Slot::OutOfProcess(Box::new(
+                    L1Instance::spawn(spec, &self.diag, self.observation_registrar.as_deref())?,
+                )),
                 OutOfProcessIsolation::Bundled => {
-                    Slot::OutOfProcess(Box::new(instantiate_bundled(spec, pool, &self.diag)?))
+                    Slot::OutOfProcess(Box::new(instantiate_bundled(
+                        spec,
+                        pool,
+                        &self.diag,
+                        self.observation_registrar.as_deref(),
+                    )?))
                 }
             },
         };
@@ -1560,6 +1601,7 @@ fn instantiate_bundled(
     spec: &SpawnSpec,
     pool: &mut Vec<Arc<L1Child>>,
     diag: &DiagRegistry,
+    registrar: Option<&dyn ObservationRegistrar>,
 ) -> Result<L1Instance, HostError> {
     // The spec-legality gate runs before any pool mutation — a
     // defined rejection must consume nothing.
@@ -1570,7 +1612,7 @@ fn instantiate_bundled(
         // across `create_on_fresh`'s push or `remove`'s shift.
         let Some(child) = pool.get(index).cloned() else {
             // No eligible child — pay the spawn.
-            return create_on_fresh(spec, pool, depth, diag);
+            return create_on_fresh(spec, pool, depth, diag, registrar);
         };
         if child.pool_eligible() {
             break child;
@@ -1585,7 +1627,7 @@ fn instantiate_bundled(
             index += 1;
         }
     };
-    match child.create_instance(spec, depth, diag) {
+    match child.create_instance(spec, depth, diag, registrar) {
         Ok(parts) => Ok(L1Instance::from_parts(child, parts)),
         Err(error) => {
             // Reused-child create failure — the child's rollback
@@ -1613,10 +1655,11 @@ fn create_on_fresh(
     pool: &mut Vec<Arc<L1Child>>,
     depth: u32,
     diag: &DiagRegistry,
+    registrar: Option<&dyn ObservationRegistrar>,
 ) -> Result<L1Instance, HostError> {
     let child = L1Child::spawn_scanned(&spec.view(), diag)?;
     pool.push(Arc::clone(&child));
-    match child.create_instance(spec, depth, diag) {
+    match child.create_instance(spec, depth, diag, registrar) {
         Ok(parts) => Ok(L1Instance::from_parts(child, parts)),
         Err(error) => {
             pool.pop();
@@ -2681,7 +2724,7 @@ mod tests {
         let live = L1Child::test_fixture(1);
         let mut pool = vec![Arc::clone(&terminal), Arc::clone(&live)];
         assert!(matches!(
-            instantiate_bundled(&pool_spec(), &mut pool, &diag),
+            instantiate_bundled(&pool_spec(), &mut pool, &diag, None),
             Err(HostError::SpawnFailed {
                 cause: FailureCause::Handshake,
                 ..
@@ -2700,7 +2743,7 @@ mod tests {
         let full = L1Child::test_fixture(wire::WIRE_MAX_INSTANCES);
         let mut pool = vec![Arc::clone(&full)];
         assert!(matches!(
-            instantiate_bundled(&pool_spec(), &mut pool, &diag),
+            instantiate_bundled(&pool_spec(), &mut pool, &diag, None),
             Err(HostError::SpawnFailed { .. })
         ));
         assert_eq!(pool.len(), 1);
@@ -2711,7 +2754,7 @@ mod tests {
         draining.test_set_shutdown_initiated();
         let mut pool = vec![Arc::clone(&draining)];
         assert!(matches!(
-            instantiate_bundled(&pool_spec(), &mut pool, &diag),
+            instantiate_bundled(&pool_spec(), &mut pool, &diag, None),
             Err(HostError::SpawnFailed { .. })
         ));
         assert_eq!(pool.len(), 1);
@@ -2721,7 +2764,7 @@ mod tests {
         // leaves no entry behind to poison later scans.
         let mut pool: Vec<Arc<L1Child>> = Vec::new();
         assert!(matches!(
-            instantiate_bundled(&pool_spec(), &mut pool, &diag),
+            instantiate_bundled(&pool_spec(), &mut pool, &diag, None),
             Err(HostError::SpawnFailed { .. })
         ));
         assert!(pool.is_empty());
@@ -2751,6 +2794,54 @@ mod tests {
             ));
             assert!(route_pool(&host).is_empty());
         }
+    }
+
+    /// OBS-04 (Issue #279): `set_observation_registrar` flips the
+    /// attach state (`None` default keeps pre-OBS behaviour), and
+    /// `instantiate_bundled` threads it to `create_instance` —
+    /// where a mint that never lands `Ok` (the fixture child owns
+    /// no driver channel, so `request` fails fast and folds to
+    /// `SpawnFailed`) registers nothing: the rollback runs before
+    /// the Live flip the registration waits on.
+    #[test]
+    fn registrar_attach_state_and_failed_mint_registers_nothing() {
+        let mut host = PluginHost::new();
+        assert!(host.observation_registrar.is_none());
+        let registrar =
+            Arc::new(crate::l1::sources::test_support::RecordingRegistrar::accepting(4));
+        let as_registrar = || -> Arc<dyn ObservationRegistrar> { registrar.clone() };
+        host.set_observation_registrar(Some(as_registrar()));
+        assert!(host.observation_registrar.is_some());
+        host.set_observation_registrar(None);
+        assert!(host.observation_registrar.is_none());
+        host.set_observation_registrar(Some(as_registrar()));
+
+        let spec = SpawnSpec::new(
+            PluginDescriptor {
+                id: "org.ruviform.test.bundled-registrar",
+                name: "bundled-registrar",
+                vendor: "Ruviform",
+                version: "0",
+                features: &[],
+            },
+            OsString::from("unused-runner"),
+        );
+        let diag = DiagRegistry::new();
+        let mut pool = vec![L1Child::test_fixture(0)];
+        let result = instantiate_bundled(
+            &spec,
+            &mut pool,
+            &diag,
+            host.observation_registrar.as_deref(),
+        );
+        assert!(matches!(
+            result,
+            Err(HostError::SpawnFailed {
+                cause: FailureCause::Handshake,
+                ..
+            })
+        ));
+        assert_eq!(registrar.accepted(), 0);
     }
 
     /// `Destroy` evicts and tears the child down only when the

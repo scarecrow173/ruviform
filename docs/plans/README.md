@@ -23,6 +23,7 @@ Directory: `docs/plans`
 | PLAN-034JcCFGe6ILSTWLgUIjAn | Issue #26 動画基盤 API の実装（video-core 所有権契約・video-proc 新設・色変換カーネル） | approved | [implement-issue-26-video-foundation.md](./implement-issue-26-video-foundation.md) |
 | PLAN-034JZVID00000000000040 | Issue #27 実装計画 — 動画エンジン | approved | [implement-issue-27-video-engine.md](./implement-issue-27-video-engine.md) |
 | PLAN-034Rp216xT1c4Dc6YM6xqa | Implement Issue #277 OBS-02 observability core/source contract | approved | [implement-issue-277-observability-core-source.md](./implement-issue-277-observability-core-source.md) |
+| PLAN-034RTsBYMsfKWtQaNUpvnl | Implement Issue #279 OBS-04 plugin-host counter source registration | approved | [implement-issue-279-plugin-host-counter-source.md](./implement-issue-279-plugin-host-counter-source.md) |
 | PLAN-034JZPGUI0000000000003 | Issue #30 実施計画 — プラグイン GUI PoC | approved | [implement-issue-30-plugin-gui-poc.md](./implement-issue-30-plugin-gui-poc.md) |
 | PLAN-034JZLISO0000000000004 | Issue #31 実施計画 — プラグイン分離設計確定 | approved | [implement-issue-31-plugin-isolation.md](./implement-issue-31-plugin-isolation.md) |
 | PLAN-XyRGyqOXQg05BHSeuQmtEC | Issue #32 実施計画 — 第 2 ターゲット設計 | approved | [implement-issue-32-second-target-design.md](./implement-issue-32-second-target-design.md) |
@@ -53,6 +54,8 @@ Directory: `docs/plans`
 | PLAN-034RBIiZIxCPVB11km1utN | Issue #296 ruviform-io-file 実 OS バックエンド実装計画 (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | PLAN-034RTeQAV1efnZZIhQamnc | Issue #297 ruviform-io-structured 実装計画 (IO-IMP-03) | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
 | PLAN-034MOVaPAnnuuoKzGdYDxq | Issue #298 ruviform-io-structured — CSV Module 実装計画（IO-IMP-04） | approved | [issue-298-io-structured-csv.md](./issue-298-io-structured-csv.md) |
+| PLAN-oa5MzrXRL7vzdL68cwsGhf | Issue #300 ruviform-io-compression Gzip・Raw Deflate 実装計画 (IO-IMP-06) | approved | [issue-300-io-compression-gzip-deflate.md](./issue-300-io-compression-gzip-deflate.md) |
+| PLAN-034RT7NR5zMcrEqmbWbWy3 | Issue #302 ruviform-io-archive 実装計画 (IO-IMP-08) | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |

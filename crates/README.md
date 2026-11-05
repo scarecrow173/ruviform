@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計34クレート）。
+Ruviform ワークスペースのメンバークレート索引（計35クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -33,12 +33,19 @@ Ruviform ワークスペースのメンバークレート索引（計34クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-io-file`](ruviform-io-file/README.md) | staged file publish 型状態・分類済み publish 契約（`StagedFile`/`SealedFile`・`PublishReceipt`/`PublishFailure`・recovery handle — Issue #295。実 OS backend は IO-IMP-02 / Issue #296 で実装済み） |
+| [`ruviform-io-archive`](ruviform-io-archive/README.md) | アーカイブ基盤 scaffold（共通 Entry/Errors/Limits/Receipts）+ ZIP indexed Reader/Writer・CRC/中央 Directory 検証 + TAR streaming Reader/Writer・USTAR/GNU/PAX・Pending 回復（IO-IMP-08 / #302・IO-IMP-09 / #303。Secure Extraction は #304） |
 
 ## 構造化ドキュメント I/O（非 RT 専用）
 
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-io-structured`](ruviform-io-structured/README.md) | Serde 型付き構造化ドキュメント I/O（JSON/YAML/TOML `from_reader`/`to_writer`・CSV streaming `CsvReader`/`CsvWriter`・Strict EOF・byte budget・正規化 `DocumentError`・`file` feature で StagedFile publish — Issue #297/#298。IO-IMP-05 XML の基底 scaffold） |
+
+## 汎用圧縮 I/O（非 RT 専用）
+
+| クレート | 責務 |
+| --- | --- |
+| [`ruviform-io-compression`](ruviform-io-compression/README.md) | バイトストリーム圧縮（借用 `Encoder`/`Decoder`・明示 `finish`・VerifiedEnd・累積 budget。feature `gzip`/`deflate` — Issue #300。zstd は IO-IMP-07 / Issue #301） |
 
 ## メディア I/O（非 RT 専用）
 

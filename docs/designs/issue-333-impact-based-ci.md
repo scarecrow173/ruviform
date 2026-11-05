@@ -112,6 +112,7 @@ metadata: {}
 | `verify` | `verify (<os>)` | ubuntu/windows/macos | `prek run --all-files` + `fmt-check` + `lint-ci` + `test-ci`。workspace 全 member・default feature・全 target 種の compile/lint/test と言語非依存 hook（docs の whitespace/EOF を含む） |
 | `rt-verify` | `rt-verify` | ubuntu | `test-rt` = `cargo test --workspace rt_`（rt_ プレフィックス RT 契約テスト + 空選択 reject） |
 | `icc-verify` | `icc-verify` | ubuntu | `test-video-proc-icc` + `lint-video-proc-icc`（`ruviform-video-proc --features icc`） |
+| `compression-verify` | `compression-verify` | ubuntu | `check-io-compression` + `lint-io-compression` + `test-io-compression`（`ruviform-io-compression` の default/`gzip`/`deflate`/`gzip,deflate` 全 feature matrix。Issue #300 で追加） |
 | `ui-verify` | `ui-verify (<os>)` | ubuntu/windows/macos | `check/lint/test-ui-webview`（Rust feature lane）+ `check/test/build-ui-{components,viz,binding,showcase}` + `check/test-ui-{headless,guitest}` + `check-ui-browser-test` + `test-ui-browser`（実 Chromium） |
 | `l1-real-verify` | `l1-real-verify (<os>)` | ubuntu/windows/macos | `test-l1-real-plugin` + `lint-l1-real-plugin`（plugin-clap/vst3 `--features host` + `#[ignore]` E2E） |
 | `bench` | `bench` | ubuntu | `bench-smoke` = `cargo bench -p ruviform-math -p ruviform-rt -p ruviform-viz -- --test` |
@@ -160,6 +161,9 @@ metadata: {}
      スキャンで導出 — rt 契約テスト追加時に静かに追従）。
    - `icc-verify`: `test-video-proc-icc`/`lint-video-proc-icc` task の
      `-p`/`--features` 引数から導出（現行 `ruviform-video-proc`）。
+   - `compression-verify`: `check-io-compression`/`lint-io-compression`/
+     `test-io-compression` task の `-p` 引数から導出（現行
+     `ruviform-io-compression`、Issue #300 で追加）。
    - `l1-real-verify`: `test-l1-real-plugin`/`lint-l1-real-plugin` task の
      `-p` 引数から導出（現行 clap/vst3）。
    - `ui-verify`（Rust 側）: `check/lint/test-ui-webview` task の `-p`
@@ -184,8 +188,8 @@ metadata: {}
 
 lane 選択単位は **job 粒度**（matrix leg 分割は行わない）。各 lane は
 `{expected: bool, oses: [...], features: [...], reasons: [...]}` を持つ。
-`features` は lane が検証する feature（`icc`/`webview`/`host`）を監査用に
-保持する情報フィールドで、選択性には使わない。
+`features` は lane が検証する feature（`icc`/`gzip`/`deflate`/`webview`/
+`host`）を監査用に保持する情報フィールドで、選択性には使わない。
 
 ## `decision` JSON 出力契約
 
@@ -206,6 +210,7 @@ lane 選択単位は **job 粒度**（matrix leg 分割は行わない）。各 
     "verify":         {"expected": true,  "oses": ["ubuntu-latest","windows-latest","macos-latest"], "features": [], "reasons": ["crate:ruviform-math"]},
     "rt-verify":      {"expected": true,  "oses": ["ubuntu-latest"], "features": [], "reasons": ["rt-tests:ruviform-math"]},
     "icc-verify":     {"expected": false, "oses": ["ubuntu-latest"], "features": ["icc"], "reasons": []},
+    "compression-verify": {"expected": false, "oses": ["ubuntu-latest"], "features": ["gzip","deflate"], "reasons": []},
     "ui-verify":      {"expected": false, "oses": ["ubuntu-latest","windows-latest","macos-latest"], "features": ["webview"], "reasons": []},
     "l1-real-verify": {"expected": false, "oses": ["ubuntu-latest","windows-latest","macos-latest"], "features": ["host"], "reasons": []},
     "bench":          {"expected": true,  "oses": ["ubuntu-latest"], "features": [], "reasons": ["bench:ruviform-math"]}
@@ -219,8 +224,9 @@ lane 選択単位は **job 粒度**（matrix leg 分割は行わない）。各 
 
 ## 集約ゲート `ci-gate` 判定規則
 
-`ci-gate` は `needs: [impact, verify, rt-verify, icc-verify, ui-verify,
-bench, l1-real-verify]` + `if: always()` で常に実行し、以下の純粋判定を
+`ci-gate` は `needs: [impact, verify, rt-verify, icc-verify,
+compression-verify, ui-verify, bench, l1-real-verify]` + `if: always()` で
+常に実行し、以下の純粋判定を
 行う（`expected` は `needs.impact.outputs.expected`、無ければ
 classification-error 扱い）:
 
