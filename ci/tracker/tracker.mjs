@@ -1175,12 +1175,17 @@ export function makeGhClient({ repo, gh = "gh", execFile = execFileSync } = {}) 
       // name form of workflow_id is used so consumers keep a declarative
       // workflow mapping. `exclude_pull_requests` drops PR-triggered runs
       // at the API level; event/branch/repo are still re-checked locally.
-      return apiJsonLines([
-        `repos/${repo}/actions/workflows/${encodeURIComponent(workflowFile)}/runs?branch=${encodeURIComponent(branch)}&exclude_pull_requests=true&per_page=${HISTORY_PAGE_SIZE}`,
-        "--paginate",
-        "--jq",
-        ".workflow_runs[]",
-      ]);
+      const runs = [];
+      for (let page = 1; ; page += 1) {
+        const out = apiJson([
+          `repos/${repo}/actions/workflows/${encodeURIComponent(workflowFile)}/runs?branch=${encodeURIComponent(branch)}&exclude_pull_requests=true&per_page=${HISTORY_PAGE_SIZE}&page=${page}`,
+        ]);
+        if (!Array.isArray(out?.workflow_runs)) {
+          throw new Error(`run history page ${page} returned a response without a workflow_runs array`);
+        }
+        runs.push(...out.workflow_runs);
+        if (out.workflow_runs.length < HISTORY_PAGE_SIZE) return runs;
+      }
     },
     async getRunJobs(runId) {
       return apiJsonLines([
