@@ -122,7 +122,7 @@ env = { CARGO_INCREMENTAL = "0" }
 # fail-closed verdict. The `ci-summary` CI job runs this before evaluating so
 # a broken evaluator fails the job instead of publishing a wrong verdict.
 [tasks.test-ci-summary]
-description = "Run ci/summary verdict contract tests via `node --test ci/summary/` (needs result matrix, expected_sha dispatch contract, report JSON shape; requires node from the pinned toolchain)"
+description = "Run ci/summary verdict contract tests via `node --test ci/summary/` (needs result matrix, per-leg checkout-sha evidence, expected_sha dispatch contract, report JSON shape; requires node from the pinned toolchain)"
 run = "node --test ci/summary/"
 
 [tasks.test-plugin-core]

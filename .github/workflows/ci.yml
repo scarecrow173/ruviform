@@ -70,9 +70,35 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: verify-${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Measure disk usage (before build)
         if: matrix.os == 'ubuntu-latest'
@@ -181,9 +207,35 @@ jobs:
     runs-on: macos-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: verify-macos
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -261,9 +313,35 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: rt-verify
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -308,9 +386,35 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: icc-verify
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -352,9 +456,35 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: compression-verify
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -397,9 +527,35 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: io-structured-verify
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -444,6 +600,8 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: ui-verify-${{ matrix.os }}
       # Issue #332 (CI-OPT-05): pin the Playwright browser directory inside the
       # workspace so `actions/cache` can use one relative path on all three
       # OSes (defaults differ per OS). Install and test steps resolve the
@@ -452,6 +610,30 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -666,10 +848,36 @@ jobs:
     runs-on: macos-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: ui-verify-macos
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -841,9 +1049,36 @@ jobs:
   bench:
     name: bench
     runs-on: ubuntu-latest
+    env:
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: bench
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -887,9 +1122,35 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: l1-real-verify-${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -932,9 +1193,35 @@ jobs:
     runs-on: macos-latest
     env:
       CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: l1-real-verify-macos
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -971,9 +1258,11 @@ jobs:
   # `macos-report`: the `*-macos` jobs stay physically separate in Stage 1
   # so their per-OS results reach `needs` directly (no API, no extra
   # permission; matrix consolidation is a deferred Stage-2 simplification).
-  # Records head/expected SHA, event, per-job result, and run URL into the
-  # step summary + `ci-summary-report` JSON artifact, and enforces the
-  # `expected_sha` dispatch contract (Issue #367 daily-ci input).
+  # Records head/expected SHA, event, per-job result, per-leg measured
+  # checkout SHA, workflow revision, and run URL into the step summary +
+  # `ci-summary-report` JSON artifact, and enforces the `expected_sha`
+  # dispatch contract (Issue #367 daily-ci input) against the measured
+  # common checkout — never `github.sha` alone.
   #
   # Transition note: this job is NOT yet a required context — the ruleset
   # keeps the nine Linux/Windows lane contexts until the Owner migrates to
@@ -989,6 +1278,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot
+          # (no-op for pull_request/push where checkout already resolves to
+          # github.sha; stops workflow_dispatch legs floating to a newer ref
+          # head between lane job starts).
+          ref: ${{ github.sha }}
 
       - name: Set up mise
         uses: jdx/mise-action@v5.2.0
@@ -1006,15 +1301,33 @@ jobs:
       - name: Self-test ci-summary evaluator (mise run test-ci-summary)
         run: mise run test-ci-summary
 
+      # Fetch every lane's measured `git rev-parse HEAD` file
+      # (checkout-sha-<job>[-<os>].txt, merged into one dir). A lane that
+      # ran green but did not ship its measured sha is an evidence gap and
+      # fails closed in the evaluator — never silently absent.
+      - name: Download checkout SHA evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: checkout-sha-*
+          path: checkout-shas/
+          merge-multiple: true
+
       - name: Evaluate ci-summary verdict
         shell: bash
         env:
           NEEDS_JSON: ${{ toJson(needs) }}
-          HEAD_SHA: ${{ github.sha }}
           EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EVENT_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          CHECKOUT_DIR: checkout-shas
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          # Measure THIS job's actual checkout — never `github.sha` — so the
+          # summary records what was really on disk. The evaluator requires
+          # it to agree with every lane's measured sha and `expected_sha`.
+          export HEAD_SHA="$(git rev-parse HEAD)"
           mise exec -- node ci/summary/summary.mjs --report ci-summary-report.json
 
       - name: Upload ci-summary report

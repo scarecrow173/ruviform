@@ -107,22 +107,24 @@ Stage 1 の制約: PR/push trigger と 9 required context を維持しつつ、F
 
 ### `ci-summary` 判定器（`ci/summary/summary.mjs`）
 
-- 入力: `NEEDS_JSON`（`toJson(needs)`）、`EXPECTED_SHA`（`inputs.expected_sha`・空可）、`HEAD_SHA`（`github.sha`）、`EVENT_NAME`、`RUN_URL`、`GITHUB_STEP_SUMMARY`。
-- verdict は `needs` context の純関数: 全 needs job の `result === 'success'` なら `pass`。`failure`/`cancelled`/`skipped`/未知値/`needs` に存在しない必要 job は `fail`。expected_sha 非空かつ HEAD_SHA と不一致も `fail`（`sha-mismatch`）。
-- **API 非依存**: 旧 `ci-gate` と同じ job 粒度判定（issue-333 IR「権限追加（checks API）を避ける」方針を継承）。`*-macos` を別 job のまま `needs` に含めるため、macOS leg の per-OS 結果は needs から直接得られる。per-leg（ubuntu/windows matrix 内訳）は各 leg 自身の check run が担う。
-- 出力: Job Summary（event・head sha・expected sha・run URL・job 別結果表・verdict）+ `ci-summary-report.json` artifact（`kind: "ci-summary"`・jobs 配列・reasons・verdict）。
+- 入力: `NEEDS_JSON`（`toJson(needs)`）、`EXPECTED_SHA`（`inputs.expected_sha`・空可）、`HEAD_SHA`（**summary job 自身の実 checkout を `git rev-parse HEAD` で測定** — `github.sha` ではない）、`EVENT_SHA`（`github.sha`）、`CHECKOUT_DIR`（全 lane leg の `checkout-sha-*` artifact を `download-artifact` `pattern`+`merge-multiple` で集約した dir）、`WORKFLOW_REF`/`WORKFLOW_SHA`（`github.workflow_ref`/`workflow_sha` — 実行された workflow revision の証跡）、`EVENT_NAME`、`RUN_URL`、`GITHUB_STEP_SUMMARY`。
+- verdict は `needs` context + 実測 checkout 証跡の純関数: 全 needs job の `result === 'success'` なら `pass`。`failure`/`cancelled`/`skipped`/未知値/`needs` に存在しない必要 job は `fail`。SHA 証跡も fail-closed: 宣言 leg の `checkout-sha` 未取得・不正値・leg 間不一致（`lane-checkout-mismatch`）、summary 自身 checkout（`summary-checkout-mismatch`）・event sha（`event-checkout-mismatch`）の lane 共通値との不一致、および expected_sha 非空時の実測共通値との不一致（`expected-sha-mismatch`）/ 実測不能（`expected-sha-unverifiable`）は全て `fail`。
+- **3 概念の分離**: workflow revision（`github.workflow_sha`/`workflow_ref` — どの ci.yml が実行されたか）は証跡記録のみ・event sha（`github.sha` — run が dispatch/push された commit）は裏付け anchor・**実 checkout sha（各 lane で `git rev-parse HEAD` を実測）こそが「検証した revision」**。expected_sha は実測共通値（laneCommon）と照合し、`github.sha` を期待値の代理にしない。全 checkout step は `ref: ${{ github.sha }}` で trigger snapshot に pin（pull_request/push では既定と同義、workflow_dispatch で lane ごとの ref 浮動を排除）。
+- **API 非依存**: 旧 `ci-gate` と同じ job 粒度判定（issue-333 IR「権限追加（checks API）を避ける」方針を継承）。`*-macos` を別 job のまま `needs` に含めるため、macOS leg の per-OS 結果は needs から直接得られる。per-leg（ubuntu/windows matrix 内訳）は各 leg 自身の check run が担う。checkout 実測値の集約も API ではなく artifact（`checkout-sha-<leg>` upload → `pattern`+`merge-multiple` download）で完結する。
+- 出力: Job Summary（event・実測共通 sha・expected sha・event sha・summary checkout・workflow ref/sha・run URL・job 別結果表・leg 別 checkout 表・verdict）+ `ci-summary-report.json` artifact（`kind: "ci-summary"`・jobs 配列・checkoutShas 配列・reasons・verdict）。
 - 入口検証: `ci-summary` job は `mise run test-ci-summary`（`node --test ci/summary/`）を判定前に実行。評価器の契約が壊れているなら job 自体が失敗し、誤 verdict を発行しない（旧 `impact` job の `test-ci-impact` 先行パターン踏襲）。
 
 ### `expected_sha` 契約
 
 - `workflow_dispatch.inputs.expected_sha`（string・optional）。Daily scheduler（#367）が dispatch 時の main HEAD を渡す契約。
-- `ci-summary` は `EXPECTED_SHA` 非空かつ `github.sha` と不一致なら fail。`pull_request`/`push` では inputs context が空のため照合なし。
-- SHA 不一致でも lane は実 SHA（`github.sha`）で完走する — run は「実 SHA の検証」として証拠を残し、期待 revision の検証済みとは記録しない。
+- `ci-summary` は `EXPECTED_SHA` 非空かつ**全 lane leg の実測 checkout 共通値**と不一致なら fail（実測不能・証跡欠落も fail）。`pull_request`/`push` では inputs context が空のため照合なし。
+- SHA 不一致でも lane は実 SHA で完走する — run は「実 SHA の検証」として証拠を残し、期待 revision の検証済みとは記録しない。
+- lane 証跡: 各 lane job は checkout（`ref: github.sha` pin）直後に `git rev-parse HEAD > checkout-sha-<leg>.txt` を記録し artifact upload（matrix leg は `CHECKOUT_LEG` job env で `<job>-<os>` を一意化）。`ci-summary` が宣言 14 leg 分を必須証跡として収集・照合する — lane が緑でも実測値を出せない run は証跡欠落として fail。
 
 ## Data and Control Flow
 
-- PR/push/dispatch → 全 11 lane job が分類なしで並列起動 → `ci-summary`（`if: always()`・11 needs）が全終了を待機 → NEEDS_JSON を評価 → verdict + 証拠出力。
-- 失敗伝播: lane 失敗 → `needs.<lane>.result = failure` → `ci-summary` fail。needs 自体の job 削除/rename で key 欠落 → `missing` → fail（fail-closed）。
+- PR/push/dispatch → 全 11 lane job が分類なしで並列起動（checkout は `ref: github.sha` に pin・直後に実測 sha を `checkout-sha-<leg>` artifact として出力） → `ci-summary`（`if: always()`・11 needs）が全終了を待機 → lane 実測 sha を download → NEEDS_JSON + 実測 sha を評価 → verdict + 証拠出力。
+- 失敗伝播: lane 失敗 → `needs.<lane>.result = failure` → `ci-summary` fail。needs 自体の job 削除/rename で key 欠落 → `missing` → fail（fail-closed）。checkout 実測 artifact 欠落・値不正・leg 間不一致・expected_sha 不一致も fail（証跡の無い run を「期待 revision 検証済み」にしない）。
 - `consumer-impact-check.yml` 削除後、PR 本文の Consumer 影響分類要件は `PULL_REQUEST_TEMPLATE.md` の表とレビュアー確認（docs/development-environment.md 記載の human gate）で維持。
 
 ## Non-Functional Constraints

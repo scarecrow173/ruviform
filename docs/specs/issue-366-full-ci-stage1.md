@@ -103,7 +103,7 @@ relations:
 - R2: 全 lane が選択分類なしで常時実行される。利用不可環境は skip ではなく Fail/Cancelled として run が正しく終了する。
 - R3: `ci-summary` は全必要 job の `needs` 結果を `if: always()` で待ち、`success` 以外（failure/cancelled/skipped/not_run/unknown）を成功にしない。
 - R4: `io-structured-verify` が `check`/`lint`/`test-io-structured` の feature matrix（default・xml・xml,file・all-features）を実行する。
-- R5: `expected_sha` 非空かつ `github.sha` と不一致なら `ci-summary` を Fail にする（異なる revision を検証済みにしない）。実際の検証 SHA・event・job/OS・結果・Run URL を Job Summary と JSON artifact に記録する。
+- R5: `expected_sha` 非空かつ全 lane leg の実測 checkout（`git rev-parse HEAD`）共通値と不一致・または実測不能なら `ci-summary` を Fail にする（異なる revision を検証済みにしない — `github.sha` は期待値の代理にしない）。実際の検証 SHA・event・job/OS・結果・leg 別 checkout SHA・workflow revision・Run URL を Job Summary と JSON artifact に記録する。
 - R6: 選択実行だけに使う script/tests/docs を削除し、別用途（診断・配布・metrics）の関数を誤削除しない。
 - R7: 必要テストを削減しない。差分・失敗を隠すテスト無効化・警告抑制・`-D warnings` 解除を行わない。
 - R8: `consumer-impact-check.yml` の PR 自動起動を廃止し、Consumer 影響分類要件を `PULL_REQUEST_TEMPLATE.md` + レビュアー確認で維持する。
