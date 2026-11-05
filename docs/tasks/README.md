@@ -145,6 +145,8 @@ Directory: `docs/tasks`
 | TASK-034RTgiDjrTlcheIw55nAn | T3 file feature・workspace 台帳・総合検証 (Issue #297) | done | [issue-297-t3-file-feature.md](./issue-297-t3-file-feature.md) |
 | TASK-034TKw7zfSgzOzI8oNY79D | Issue #298 T1 — csv module 本体と共有拡張 | done | [issue-298-t1-csv-module.md](./issue-298-t1-csv-module.md) |
 | TASK-034DgWopBD0NzsxoZGVxdm | Issue #298 T2 — file feature 合成・試験仕上げ・README・impl record | done | [issue-298-t2-file-docs.md](./issue-298-t2-file-docs.md) |
+| TASK-034S6MooKs5lp0V92HyYuw | Issue #299 T1 — xml module 本体と共有拡張 | done | [issue-299-t1-xml-module.md](./issue-299-t1-xml-module.md) |
+| TASK-034S6MrEVaXtCjdoGQxnHP | Issue #299 T2 — file feature 合成・試験仕上げ・README | done | [issue-299-t2-file-docs.md](./issue-299-t2-file-docs.md) |
 | TASK-GONrZ5DneYV2H4ryIMA4EK | T1 クレート scaffold + 共有型 + Gzip/Deflate 両 module (Issue #300) | done | [issue-300-t1-crate-core.md](./issue-300-t1-crate-core.md) |
 | TASK-2v8sucBEWaF0frYXFmed85 | T2 AC1-AC6 試験群 + rustdoc/crate README (Issue #300) | done | [issue-300-t2-tests.md](./issue-300-t2-tests.md) |
 | TASK-OjT0wWawFEmwEe6bibhaMq | T3 compression-verify CI lane + classifier + impl record (Issue #300) | done | [issue-300-t3-ci-lane.md](./issue-300-t3-ci-lane.md) |
@@ -218,6 +220,8 @@ Directory: `docs/tasks`
 | TASK-034Rp2bMkXB7Xa0FKSWPw9 | T-2 source contract: descriptors/SourceId/Registrar/Lease/lifecycle + tests + README | done | [p277-t2-source-contract-registration-lifecycle.md](./p277-t2-source-contract-registration-lifecycle.md) |
 | TASK-034RTukbgTWDcKGHBdKYYN | P279-T1 l1/sources.rs 4 Descriptor + AudioSourceLeases + slot state + mod tests | done | [p279-t1-l1-sources-descriptors-leases.md](./p279-t1-l1-sources-descriptors-leases.md) |
 | TASK-034RTukTevxIOK0EVaR8A3 | P279-T2 create_instance/destroy registrar wiring + PluginHost注入面 + tests | done | [p279-t2-create-destroy-registrar-wiring.md](./p279-t2-create-destroy-registrar-wiring.md) |
+| TASK-nZDg5tn3BVGCSd5dBIm3Tv | T-1 record vocabulary: ClockContext/CorrelationBook/EventRecord + tests | done | [p280-t1-record-vocabulary-clock-correlation-event.md](./p280-t1-record-vocabulary-clock-correlation-event.md) |
+| TASK-cE5wGhv6Qap0q8kw6DiFoR | T-2 rt_bridge transport + drop/loss/lag + OBS-02 lifecycle integration + README | done | [p280-t2-rt-bridge-transport-drop-loss-lifecycle.md](./p280-t2-rt-bridge-transport-drop-loss-lifecycle.md) |
 | TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | TASK-034OpskKobU4qEsX7F7IYc | T6. stderr piped + drain thread（案A・FFI 局所化・fixture knob） | done | [pipe-and-drain-l1-stderr.md](./pipe-and-drain-l1-stderr.md) |
 | TASK-034MrsDzlHRpUHHLtYkZdN | plugin-core endpoint 前提面（EndpointUnavailable・fallible encode・Send capability・view impl） | done | [plugin-core-endpoint-primitives.md](./plugin-core-endpoint-primitives.md) |

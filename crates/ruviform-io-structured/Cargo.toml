@@ -13,6 +13,7 @@ json = ["dep:serde_json"]
 yaml = ["dep:serde-saphyr"]
 toml = ["dep:toml"]
 csv = ["dep:csv", "dep:csv-core"]
+xml = ["dep:quick-xml"]
 file = ["dep:ruviform-io-file"]
 
 [dependencies]
@@ -42,6 +43,10 @@ toml = { version = "=1.1.8", default-features = false, features = [
 # Unlicense/MIT, actively maintained and pinned with `=` per policy.
 csv = { version = "=1.4.0", default-features = false, optional = true }
 csv-core = { version = "=0.1.13", default-features = false, optional = true }
+# XML: `quick-xml` supplies borrowed events over caller-owned buffers
+# plus the NsReader namespace resolver; both stay private. MIT, MSRV
+# 1.86 (< 1.89), pinned with `=` per policy.
+quick-xml = { version = "=0.42.0", default-features = false, optional = true }
 ruviform-io-file = { path = "../ruviform-io-file", optional = true }
 
 [dev-dependencies]

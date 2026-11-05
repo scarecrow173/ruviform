@@ -18,9 +18,21 @@ use ruviform_io_file::{FileError, PublishFailure};
 #[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
 use ruviform_io_file::{PublishOptions, PublishReceipt, StagedFile};
 use std::fmt;
-#[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
+#[cfg(any(
+    feature = "json",
+    feature = "yaml",
+    feature = "toml",
+    feature = "csv",
+    feature = "xml"
+))]
 use std::io::BufReader;
-#[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
+#[cfg(any(
+    feature = "json",
+    feature = "yaml",
+    feature = "toml",
+    feature = "csv",
+    feature = "xml"
+))]
 use std::path::Path;
 
 /// Failure of a format module's `read_file`.
@@ -106,7 +118,13 @@ impl std::error::Error for DocumentFileWriteError {
 }
 
 /// Shared `read_file` implementation: open + buffered decode.
-#[cfg(any(feature = "json", feature = "yaml", feature = "toml", feature = "csv"))]
+#[cfg(any(
+    feature = "json",
+    feature = "yaml",
+    feature = "toml",
+    feature = "csv",
+    feature = "xml"
+))]
 pub(crate) fn open_document<T>(
     path: impl AsRef<Path>,
     decode: impl FnOnce(&mut BufReader<std::fs::File>) -> Result<T, DocumentError>,
