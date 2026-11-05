@@ -20,6 +20,13 @@ logging = [
 ]
 
 [dependencies]
+# Issue #280 (OBS-05): leaf-primitive deps for `rt_bridge`/`record`
+# (ADR `docs/adr/obs-05-observability-leaf-primitive-deps.md`).
+# One-directional only — `ruviform-rt` supplies the bounded SPSC ring and
+# `ruviform-media-core` supplies the clock-domain vocabulary; the reverse
+# direction (`rt`/`media-core` -> `observability`) must never exist.
+ruviform-rt = { path = "../ruviform-rt" }
+ruviform-media-core = { path = "../ruviform-media-core" }
 # `tracing` — public API surface (`Dispatch`) for the `logging` feature.
 tracing = { version = "0.1", optional = true }
 # `tracing-subscriber` — `Registry`, `fmt` layers, `EnvFilter`, JSON output.
