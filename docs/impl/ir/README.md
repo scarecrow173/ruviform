@@ -157,3 +157,4 @@ Directory: `docs/impl/ir`
 | IMPL-yMfm4VQypUJDoAtkXVsGna | SinkDegraded Clone derive 追加（Issue #336） | completed | [implement-issue-336-sink-degraded-clone.md](./implement-issue-336-sink-degraded-clone.md) |
 | `IMPL-034RTVShL0YrAoiEgYJyNu` | Issue #297 ruviform-io-structured 新設（Serde 型付き JSON/YAML/TOML `from_reader`/`to_writer`・Strict EOF・byte budget・正規化 `DocumentError`・`file` feature で StagedFile publish 合成 — IO-IMP-03） | completed | [issue-297-ruviform-io-structured-serde-json-yaml-toml.md](./issue-297-ruviform-io-structured-serde-json-yaml-toml.md) |
 | IMPL-034S7hWIC3uXInNg52Jtzp | issue-299-io-structured-xml | approved | [issue-299-io-structured-xml.md](./issue-299-io-structured-xml.md) |
+| IMPL-st6t53cVR6Tr904Vm2Obxj | Issue #301 ruviform-io-compression zstd feature/module（RFC 8878 frame・skippable/window limit・checksum 混在 IntegritySummary・zstd-safe backend — IO-IMP-07） | completed | [issue-301-io-compression-zstd.md](./issue-301-io-compression-zstd.md) |

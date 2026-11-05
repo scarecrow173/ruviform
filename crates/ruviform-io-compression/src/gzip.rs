@@ -18,7 +18,7 @@ use flate2::Crc;
 use crate::error::{CompressionError, CompressionErrorKind};
 use crate::options::{DecodeLimits, DecodeScope, EncodeLimits};
 use crate::receipt::{DecodeReceipt, EncodeReceipt, IntegritySummary};
-use crate::stream::{DeflateIn, EncoderCore, invalid_state_io, take_exact};
+use crate::stream::{DeflateIn, DeflateOut, EncoderCore, invalid_state_io, take_exact};
 
 /// Fixed gzip header length (magic + method + flags + mtime + xfl + os).
 const HEADER_LEN: usize = 10;
@@ -145,7 +145,7 @@ impl Default for DecodeOptions {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct Encoder<'w, W: Write + ?Sized> {
-    core: EncoderCore<'w, W>,
+    core: EncoderCore<'w, W, DeflateOut>,
     crc: Crc,
 }
 
@@ -155,7 +155,7 @@ impl<'w, W: Write + ?Sized> Encoder<'w, W> {
     /// `writer` remains owned by the caller either way).
     pub fn new(writer: &'w mut W, options: EncodeOptions) -> Result<Self, CompressionError> {
         let mut encoder = Self {
-            core: EncoderCore::new(writer, options.level(), options.limits())?,
+            core: EncoderCore::new(writer, DeflateOut::new(options.level())?, options.limits()),
             crc: Crc::new(),
         };
         encoder.core.emit(&header_bytes(options.level()))?;

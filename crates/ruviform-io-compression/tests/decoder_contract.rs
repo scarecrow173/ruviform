@@ -2,7 +2,7 @@
 //! zero-length reads that prove nothing, `NotExhausted` for
 //! undelivered output, terminal `Failed`, and cumulative budgets.
 
-#![cfg(any(feature = "gzip", feature = "deflate"))]
+#![cfg(any(feature = "gzip", feature = "deflate", feature = "zstd"))]
 
 mod common;
 
@@ -292,5 +292,126 @@ mod deflate {
         assert_eq!(n, payload.len() - 1);
         let err = dec.read(&mut buf).expect_err("over budget");
         assert_io_kind(&err, CompressionErrorKind::LimitExceeded);
+    }
+}
+
+#[cfg(feature = "zstd")]
+mod zstd {
+    use super::*;
+    use ruviform_io_compression::EncodeLimits;
+    use ruviform_io_compression::zstd::{DecodeOptions, Decoder, EncodeOptions, Encoder};
+
+    fn encoded(payload: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        {
+            let mut enc = Encoder::new(&mut out, EncodeOptions::new(0, false, EncodeLimits::new()))
+                .expect("encoder");
+            enc.write_all(payload).expect("write");
+            enc.finish().expect("finish");
+        }
+        out
+    }
+
+    #[test]
+    fn zero_length_read_never_proves_eof() {
+        let data = encoded(b"payload");
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        assert_eq!(dec.read(&mut []).expect("empty read"), 0);
+        assert_eq!(dec.read(&mut []).expect("empty read"), 0);
+        let mut buf = [0u8; 16];
+        let n = dec.read(&mut buf).expect("read");
+        assert_eq!(&buf[..n], b"payload");
+    }
+
+    #[test]
+    fn finish_before_drain_is_not_exhausted_and_preserves_state() {
+        let data = encoded(b"payload");
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        assert_kind(dec.finish(), CompressionErrorKind::NotExhausted);
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("decode");
+        assert_eq!(out, b"payload");
+        dec.finish().expect("verified end now reachable");
+    }
+
+    #[test]
+    fn short_fill_bufread_roundtrip() {
+        let data = encoded(b"abcdef");
+        let mut source = ShortFill::new(&data[..], 1);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("decode");
+        assert_eq!(out, b"abcdef");
+        dec.finish().expect("finish");
+    }
+
+    #[test]
+    fn failed_decoder_rejects_reuse() {
+        // Corrupt the checksum-flagged frame tail to force a terminal
+        // failure, then prove the latch.
+        let mut data = Vec::new();
+        {
+            let mut enc = Encoder::new(&mut data, EncodeOptions::new(0, true, EncodeLimits::new()))
+                .expect("encoder");
+            enc.write_all(b"payload").expect("write");
+            enc.finish().expect("finish");
+        }
+        let last = data.len() - 1;
+        data[last] ^= 0xFF;
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect_err("corrupt frame");
+        let mut buf = [0u8; 8];
+        assert_io_kind(
+            &dec.read(&mut buf).expect_err("reuse rejected"),
+            CompressionErrorKind::InvalidState,
+        );
+        assert_kind(dec.finish(), CompressionErrorKind::InvalidState);
+    }
+
+    #[test]
+    fn decoded_budget_exact_and_one_over() {
+        let payload = b"budget-check";
+        let data = encoded(payload);
+        let exact = DecodeOptions::new(
+            DecodeScope::WholeInput,
+            DecodeLimits::new().with_max_decoded_bytes(payload.len() as u64),
+        );
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, exact);
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("exact budget");
+        assert_eq!(out, payload);
+
+        let under = DecodeOptions::new(
+            DecodeScope::WholeInput,
+            DecodeLimits::new().with_max_decoded_bytes(payload.len() as u64 - 1),
+        );
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, under);
+        let mut buf = [0u8; 64];
+        let n = dec.read(&mut buf).expect("at-limit bytes still deliver");
+        assert_eq!(n, payload.len() - 1);
+        let err = dec.read(&mut buf).expect_err("over budget");
+        assert_io_kind(&err, CompressionErrorKind::LimitExceeded);
+    }
+
+    #[test]
+    fn decoded_budget_is_cumulative_across_frames() {
+        let mut data = encoded(b"aaa");
+        data.extend_from_slice(&encoded(b"bbb"));
+        let options = DecodeOptions::new(
+            DecodeScope::WholeInput,
+            DecodeLimits::new().with_max_decoded_bytes(4),
+        );
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, options);
+        let mut out = Vec::new();
+        let err = dec.read_to_end(&mut out).expect_err("cumulative cap");
+        assert_io_kind(&err, CompressionErrorKind::LimitExceeded);
+        assert_eq!(out, b"aaab");
     }
 }

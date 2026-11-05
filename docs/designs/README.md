@@ -64,6 +64,7 @@ Directory: `docs/designs`
 | DESIGN-034k6xAsDaYM7wuYe0CKOF | Issue #298 ruviform-io-structured — CSV Module 設計（IO-IMP-04） | approved | [issue-298-io-structured-csv.md](./issue-298-io-structured-csv.md) |
 | DESIGN-034S6K6h23VjXK8NquLQMx | Issue #299 ruviform-io-structured — XML Module 設計（IO-IMP-05） | approved | [issue-299-io-structured-xml.md](./issue-299-io-structured-xml.md) |
 | DESIGN-eGBdnzbpDjWwMwTEldA9gI | Issue #300 ruviform-io-compression — Gzip・Raw Deflate 借用 Stream 設計 (IO-IMP-06) | approved | [issue-300-io-compression-gzip-deflate.md](./issue-300-io-compression-gzip-deflate.md) |
+| DESIGN-K3VAKLOqVu5SxMRUaZCAso | Issue #301 ruviform-io-compression — Zstd Frame 借用 Stream 設計 (IO-IMP-07) | approved | [issue-301-io-compression-zstd.md](./issue-301-io-compression-zstd.md) |
 | DESIGN-034RT7CvRTe3b8jPTFBHtq | Issue #302 ruviform-io-archive — Archive 共通型・ZIP Indexed Reader/Writer・検証パイプライン設計 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | DESIGN-HR0Ud1VXoIpQCfUcosM6ib | Issue #303 ruviform-io-archive — TAR Streaming Reader/Pending・PAX/GNU・Writer 設計 | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | DESIGN-dHUQ40Hk50tvziqjx7Kewj | Issue #307 attach 時 frame_base 検証 context — 実装設計 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |

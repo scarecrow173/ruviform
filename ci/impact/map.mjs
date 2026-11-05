@@ -57,7 +57,7 @@ export const LANES = {
     contexts: ["compression-verify"],
     requiredContexts: ["compression-verify"],
     observeJob: null,
-    features: ["gzip", "deflate"],
+    features: ["gzip", "deflate", "zstd"],
   },
   "ui-verify": {
     oses: ["ubuntu-latest", "windows-latest", "macos-latest"],

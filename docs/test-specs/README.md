@@ -63,6 +63,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Mm7FbtxkfxmQCgVk1m4 | Issue #298 ruviform-io-structured — CSV Module 試験仕様（IO-IMP-04） | approved | [issue-298-io-structured-csv.md](./issue-298-io-structured-csv.md) |
 | TSPEC-034S6M7jOVNgIiAWwNm2J6 | Issue #299 ruviform-io-structured — XML Module 試験仕様（IO-IMP-05） | approved | [issue-299-io-structured-xml.md](./issue-299-io-structured-xml.md) |
 | TSPEC-c6xrG6sZjlJbmoJEzBYzJG | Issue #300 ruviform-io-compression Gzip・Raw Deflate テスト仕様 | approved | [issue-300-io-compression-gzip-deflate.md](./issue-300-io-compression-gzip-deflate.md) |
+| TSPEC-9sy40kbL7d1xqwhmY2sDLw | Issue #301 ruviform-io-compression Zstd Frame 試験仕様 | approved | [issue-301-io-compression-zstd.md](./issue-301-io-compression-zstd.md) |
 | TSPEC-034RT7OuFi1aZ0rhvdSFEt | Issue #302 ruviform-io-archive ZIP 検証・Budget・Writer テスト仕様 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | TSPEC-EtHC4HLHJhXDwgG6UbrccI | Issue #303 ruviform-io-archive TAR 検証・Pending・Writer テスト仕様 | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | TSPEC-XQ6Q9VkNnBlPRcMf4cqLFu | Issue #307 attach 時 frame_base 検証 context — テスト仕様 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
