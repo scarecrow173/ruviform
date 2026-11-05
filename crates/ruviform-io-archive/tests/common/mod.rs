@@ -1,8 +1,14 @@
-//! Byte-level ZIP crafting helpers for malformed-structure tests.
+//! Byte-level archive crafting helpers for malformed-structure tests.
 //!
-//! Valid baseline fixtures come from the crate's own
-//! [`ZipArchiveWriter`]; corrupted structures are assembled
-//! record-by-record so every declared field can be controlled.
+//! Valid baseline fixtures come from the crate's own writers;
+//! corrupted structures are assembled record-by-record so every
+//! declared field can be controlled.
+//!
+//! Shared across the archive test binaries; individual helpers are not
+//! all used by each one.
+#![allow(dead_code)]
+
+pub mod tar;
 
 use std::io::{Cursor, Write};
 
