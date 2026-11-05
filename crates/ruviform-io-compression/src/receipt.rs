@@ -21,7 +21,7 @@ pub struct EncodeReceipt {
 }
 
 impl EncodeReceipt {
-    #[cfg(any(feature = "gzip", feature = "deflate"))]
+    #[cfg(any(feature = "gzip", feature = "deflate", feature = "zstd"))]
     pub(crate) const fn new(input_bytes: u64, output_bytes: u64, units_encoded: u64) -> Self {
         Self {
             input_bytes,
@@ -67,7 +67,7 @@ pub struct IntegritySummary {
 }
 
 impl IntegritySummary {
-    #[cfg(any(feature = "gzip", feature = "deflate"))]
+    #[cfg(any(feature = "gzip", feature = "deflate", feature = "zstd"))]
     pub(crate) const fn new(checked_units: u64, unchecked_units: u64) -> Self {
         Self {
             checked_units,
@@ -111,7 +111,7 @@ pub struct DecodeReceipt {
 }
 
 impl DecodeReceipt {
-    #[cfg(any(feature = "gzip", feature = "deflate"))]
+    #[cfg(any(feature = "gzip", feature = "deflate", feature = "zstd"))]
     pub(crate) const fn new(
         compressed_bytes_consumed: u64,
         decoded_bytes_delivered: u64,

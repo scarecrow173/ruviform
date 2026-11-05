@@ -55,6 +55,7 @@ Directory: `docs/plans`
 | PLAN-034RTeQAV1efnZZIhQamnc | Issue #297 ruviform-io-structured 実装計画 (IO-IMP-03) | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
 | PLAN-034MOVaPAnnuuoKzGdYDxq | Issue #298 ruviform-io-structured — CSV Module 実装計画（IO-IMP-04） | approved | [issue-298-io-structured-csv.md](./issue-298-io-structured-csv.md) |
 | PLAN-oa5MzrXRL7vzdL68cwsGhf | Issue #300 ruviform-io-compression Gzip・Raw Deflate 実装計画 (IO-IMP-06) | approved | [issue-300-io-compression-gzip-deflate.md](./issue-300-io-compression-gzip-deflate.md) |
+| PLAN-41sS0eh4UmdvUPmw1c99BS | Issue #301 ruviform-io-compression Zstd Frame 実装計画 (IO-IMP-07) | approved | [issue-301-io-compression-zstd.md](./issue-301-io-compression-zstd.md) |
 | PLAN-034RT7NR5zMcrEqmbWbWy3 | Issue #302 ruviform-io-archive 実装計画 (IO-IMP-08) | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |

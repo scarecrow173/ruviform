@@ -45,7 +45,7 @@ Ruviform ワークスペースのメンバークレート索引（計35クレー
 
 | クレート | 責務 |
 | --- | --- |
-| [`ruviform-io-compression`](ruviform-io-compression/README.md) | バイトストリーム圧縮（借用 `Encoder`/`Decoder`・明示 `finish`・VerifiedEnd・累積 budget。feature `gzip`/`deflate` — Issue #300。zstd は IO-IMP-07 / Issue #301） |
+| [`ruviform-io-compression`](ruviform-io-compression/README.md) | バイトストリーム圧縮（借用 `Encoder`/`Decoder`・明示 `finish`・VerifiedEnd・累積 budget。feature `gzip`/`deflate`/`zstd` — Issues #300/#301） |
 
 ## メディア I/O（非 RT 専用）
 

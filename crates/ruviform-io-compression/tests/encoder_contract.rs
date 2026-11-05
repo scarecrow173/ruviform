@@ -2,7 +2,7 @@
 //! completion proof, idempotence, terminal `Failed`, `Drop` writes
 //! nothing, writer-borrow recovery, and byte budgets.
 
-#![cfg(any(feature = "gzip", feature = "deflate"))]
+#![cfg(any(feature = "gzip", feature = "deflate", feature = "zstd"))]
 
 mod common;
 
@@ -250,5 +250,156 @@ mod deflate {
             CompressionErrorKind::InvalidState,
         );
         assert_kind(enc.finish(), CompressionErrorKind::InvalidState);
+    }
+}
+
+#[cfg(feature = "zstd")]
+mod zstd {
+    use super::*;
+    use std::io::Read;
+
+    use ruviform_io_compression::EncodeLimits;
+    use ruviform_io_compression::zstd::{DecodeOptions, Decoder, EncodeOptions, Encoder};
+
+    #[test]
+    fn finish_returns_receipt_and_is_idempotent() {
+        let mut out = Vec::new();
+        let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+        enc.write_all(b"payload").expect("write");
+        let first = enc.finish().expect("finish");
+        let second = enc.finish().expect("finish again");
+        assert_eq!(first, second);
+        assert_eq!(first.input_bytes(), 7);
+        assert_eq!(first.units_encoded(), 1);
+        let len_after = first.output_bytes();
+        drop(enc);
+        assert_eq!(out.len() as u64, len_after);
+    }
+
+    #[test]
+    fn writer_borrow_recovered_after_scope() {
+        let mut out = Vec::new();
+        {
+            let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+            enc.write_all(b"x").expect("write");
+            enc.finish().expect("finish");
+        }
+        out.extend_from_slice(b"tail");
+        assert!(out.ends_with(b"tail"));
+    }
+
+    #[test]
+    fn byte_at_a_time_writes_roundtrip() {
+        let mut out = Vec::new();
+        {
+            let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+            for byte in b"abcdef" {
+                enc.write_all(&[*byte]).expect("write");
+            }
+            enc.finish().expect("finish");
+        }
+        let mut source = std::io::BufReader::new(&out[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut decoded = Vec::new();
+        dec.read_to_end(&mut decoded).expect("decode");
+        assert_eq!(decoded, b"abcdef");
+    }
+
+    #[test]
+    fn drop_writes_no_frame_epilogue() {
+        let mut out = Vec::new();
+        {
+            let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+            enc.write_all(b"unfinished").expect("write");
+        }
+        // Whatever the backend buffered, the frame was never ended —
+        // the decoder must not reach a verified end.
+        let mut source = std::io::BufReader::new(&out[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut decoded = Vec::new();
+        let result = dec.read_to_end(&mut decoded);
+        assert!(
+            result.is_err() || dec.finish().is_err(),
+            "an unfinished frame must not verify"
+        );
+    }
+
+    #[test]
+    fn failed_encoder_rejects_reuse() {
+        // A `write` buffers inside the zstd context without touching
+        // the writer, so drive the failure through `finish` — the
+        // first call guaranteed to emit at the writer.
+        let mut sink = FailAfter::new(0);
+        let mut enc = Encoder::new(&mut sink, EncodeOptions::default()).expect("encoder");
+        enc.write_all(b"abcdef").expect("write");
+        assert_kind(enc.finish(), CompressionErrorKind::Io);
+        assert_io_kind(
+            &enc.write_all(b"more").expect_err("reuse rejected"),
+            CompressionErrorKind::InvalidState,
+        );
+        assert_kind(enc.finish(), CompressionErrorKind::InvalidState);
+    }
+
+    #[test]
+    fn flush_emits_block_but_is_not_completion() {
+        let mut flushed = Vec::new();
+        {
+            let mut enc = Encoder::new(&mut flushed, EncodeOptions::default()).expect("encoder");
+            enc.write_all(b"data").expect("write");
+            enc.flush().expect("flush");
+        } // dropped without finish
+        assert!(!flushed.is_empty(), "block flush emits the pending block");
+        // The flushed block is real output yet not a complete frame —
+        // `flush` is not a completion proof.
+        let mut source = std::io::BufReader::new(&flushed[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut decoded = Vec::new();
+        let result = dec.read_to_end(&mut decoded);
+        assert!(
+            result.is_err() || dec.finish().is_err(),
+            "a flushed-but-unfinished frame must not verify"
+        );
+    }
+
+    #[test]
+    fn input_budget_rejects_writes() {
+        let mut out = Vec::new();
+        let limits = EncodeLimits::new().with_max_input_bytes(4);
+        let mut enc =
+            Encoder::new(&mut out, EncodeOptions::new(0, false, limits)).expect("encoder");
+        assert_io_kind(
+            &enc.write_all(b"12345").expect_err("over budget"),
+            CompressionErrorKind::LimitExceeded,
+        );
+    }
+
+    #[test]
+    fn output_budget_caps_physical_writes() {
+        // The frame epilogue cannot fit a near-zero output cap.
+        let mut out = Vec::new();
+        let limits = EncodeLimits::new().with_max_output_bytes(12);
+        let mut enc =
+            Encoder::new(&mut out, EncodeOptions::new(0, false, limits)).expect("encoder");
+        enc.write_all(b"data").expect("write");
+        assert_kind(enc.finish(), CompressionErrorKind::LimitExceeded);
+        assert!(out.len() <= 12, "no write may cross the budget");
+    }
+
+    #[test]
+    fn output_budget_exact_boundary_succeeds() {
+        let probe = {
+            let mut out = Vec::new();
+            let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("enc");
+            enc.write_all(b"data").expect("write");
+            enc.finish().expect("finish");
+            out.len() as u64
+        };
+        let mut out = Vec::new();
+        let limits = EncodeLimits::new().with_max_output_bytes(probe);
+        let mut enc =
+            Encoder::new(&mut out, EncodeOptions::new(0, false, limits)).expect("encoder");
+        enc.write_all(b"data").expect("write");
+        let receipt = enc.finish().expect("exact output budget");
+        assert_eq!(receipt.output_bytes(), probe);
     }
 }

@@ -3,7 +3,7 @@
 //! structurally (no backend type is importable through this crate);
 //! these tests pin the properties that *are* observable.
 
-#![cfg(any(feature = "gzip", feature = "deflate"))]
+#![cfg(any(feature = "gzip", feature = "deflate", feature = "zstd"))]
 
 mod common;
 
@@ -54,5 +54,14 @@ fn public_types_are_send_when_borrowed_stream_is_send() {
         fn bounds<T: Send>() {}
         bounds::<ruviform_io_compression::deflate::Encoder<'_, Vec<u8>>>();
         bounds::<ruviform_io_compression::deflate::Decoder<'_, std::io::BufReader<&[u8]>>>();
+    }
+    #[cfg(feature = "zstd")]
+    {
+        fn bounds<T: Send>() {}
+        bounds::<ruviform_io_compression::zstd::Encoder<'_, Vec<u8>>>();
+        bounds::<ruviform_io_compression::zstd::Decoder<'_, std::io::BufReader<&[u8]>>>();
+        bounds::<ruviform_io_compression::zstd::EncodeOptions>();
+        bounds::<ruviform_io_compression::zstd::DecodeOptions>();
+        bounds::<ruviform_io_compression::zstd::SkippableFramePolicy>();
     }
 }

@@ -61,6 +61,7 @@ Directory: `docs/test-specs`
 | TSPEC-034RTeRrELQYdXaCBD66Jy | Issue #297 ruviform-io-structured テスト仕様 | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
 | TSPEC-034Mm7FbtxkfxmQCgVk1m4 | Issue #298 ruviform-io-structured — CSV Module 試験仕様（IO-IMP-04） | approved | [issue-298-io-structured-csv.md](./issue-298-io-structured-csv.md) |
 | TSPEC-c6xrG6sZjlJbmoJEzBYzJG | Issue #300 ruviform-io-compression Gzip・Raw Deflate テスト仕様 | approved | [issue-300-io-compression-gzip-deflate.md](./issue-300-io-compression-gzip-deflate.md) |
+| TSPEC-9sy40kbL7d1xqwhmY2sDLw | Issue #301 ruviform-io-compression Zstd Frame 試験仕様 | approved | [issue-301-io-compression-zstd.md](./issue-301-io-compression-zstd.md) |
 | TSPEC-034RT7OuFi1aZ0rhvdSFEt | Issue #302 ruviform-io-archive ZIP 検証・Budget・Writer テスト仕様 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | TSPEC-XQ6Q9VkNnBlPRcMf4cqLFu | Issue #307 attach 時 frame_base 検証 context — テスト仕様 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | TSPEC-034Rp62M5XwHUCClhVcEPk | Issue #310 Browser GUI Test Harness 検証仕様 | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |

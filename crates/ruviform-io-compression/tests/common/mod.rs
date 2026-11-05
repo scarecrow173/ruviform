@@ -1,6 +1,6 @@
 //! Shared test fixtures for the compression contract tests.
 
-#![cfg(any(feature = "gzip", feature = "deflate"))]
+#![cfg(any(feature = "gzip", feature = "deflate", feature = "zstd"))]
 #![allow(dead_code)]
 
 use std::io::{self, BufRead, Read, Write};
