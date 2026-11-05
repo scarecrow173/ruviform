@@ -15,6 +15,7 @@ Directory: `docs/tasks`
 | TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | completed | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
 | TASK-yFczRmBPJEUZkKyX3bngmg | Issue #329 T1 — ci.yml verify/ui-verify へ sccache 導入 + Cold/Warm 実測 + IR | in-progress | [issue-329-t1-sccache-verify-ui-lanes.md](./issue-329-t1-sccache-verify-ui-lanes.md) |
 | TASK-034RJ02dFTbxsMkC5rKofw | Issue #331 T1 — verify lane の check-ci を lint-ci に統合 + 等価性・実測記録 | in-progress | [issue-331-t1-check-step-dedup.md](./issue-331-t1-check-step-dedup.md) |
+| TASK-034SmDZDujSnKDIPh6c8CJ | Issue #360 t1 — heir 系 4 サイトの exit を post-mint へ message 順序で固定 | todo | [issue-360-t1-heir-exit-post-mint-ordering.md](./issue-360-t1-heir-exit-post-mint-ordering.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -153,6 +154,9 @@ Directory: `docs/tasks`
 | TASK-emXL9hZuOAzbTa1mAxJSN3 | T1 TAR header Parser・共通型拡張・Streaming Reader/Pending (Issue #303) | done | [issue-303-t1-tar-reader.md](./issue-303-t1-tar-reader.md) |
 | TASK-klizn5ZWBc8d4fBskVs3or | T2 TAR Writer・宣言 size cap・finish 型分離・PAX x 出力 (Issue #303) | done | [issue-303-t2-tar-writer.md](./issue-303-t2-tar-writer.md) |
 | TASK-9zUBxcJWsJbiJzI8S143vV | T3 crate doc/README・台帳・main 取込・最終検証 (Issue #303) | done | [issue-303-t3-ledger-verify.md](./issue-303-t3-ledger-verify.md) |
+| TASK-PGN5ItjVgMoSpqmL4YJtjn | T1 Path Policy・canonical 衝突・FS trait 骨格 (Issue #304) | done | [issue-304-t1-path-policy.md](./issue-304-t1-path-policy.md) |
+| TASK-KfnrekDg0F7pVPV37olgXQ | T2 Staging backend・Session/Tree・identity cleanup (Issue #304) | done | [issue-304-t2-staging-backend.md](./issue-304-t2-staging-backend.md) |
+| TASK-PUEIOL8kRSg2p5kKdPYMUK | T3 end-to-end 否定行列・doc/台帳・最終検証 (Issue #304) | done | [issue-304-t3-secure-verify.md](./issue-304-t3-secure-verify.md) |
 | TASK-QNzC22ZqitcqDhco1hHMKj | Issue #307 T1: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | done | [issue-307-t1-attach-frame-base-verified-context.md](./issue-307-t1-attach-frame-base-verified-context.md) |
 | TASK-034Rp7jV966SX0fG78cOBL | Issue #310-T1 browser-test パッケージ骨格・serve・page protocol | done | [issue-310-01-browser-harness-package.md](./issue-310-01-browser-harness-package.md) |
 | TASK-034Rp7kQsMmyk0At2QYrwX | Issue #310-T2 共有 Fixture/Driver/Assertion (gesture/receipt/state/theme/canvas/a11y) | done | [issue-310-02-shared-fixtures-and-drivers.md](./issue-310-02-shared-fixtures-and-drivers.md) |
