@@ -3061,6 +3061,7 @@ version = "0.1.0"
 dependencies = [
  "crc32fast",
  "flate2",
+ "ruviform-io-compression",
 ]
 
 [[package]]
@@ -3175,6 +3176,8 @@ name = "ruviform-observability"
 version = "0.1.0"
 dependencies = [
  "assert_no_alloc",
+ "ruviform-media-core",
+ "ruviform-rt",
  "serde_json",
  "tempfile",
  "tracing",

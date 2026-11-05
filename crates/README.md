@@ -16,7 +16,7 @@ Ruviform ワークスペースのメンバークレート索引（計35クレー
 | [`ruviform-rt`](ruviform-rt/README.md) | RT 基盤（`Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換） |
 | [`ruviform-media-core`](ruviform-media-core/README.md) | 規格中立メディアデータモデル（時間・transport・音楽時間・`Error`） |
 | [`ruviform-exec`](ruviform-exec/README.md) | 非 RT 実行基盤（スレッド優先度機構・`OfflineDriver`） |
-| [`ruviform-observability`](ruviform-observability/README.md) | 共有観測基盤（core: `Counter`/`Gauge`/`Histogram` writer-reader ペア + source: 登録ポート・Descriptor・`SourceId`/Generation・寿命契約 — Issue #101 候補・#121 初消費者・#277 OBS-02） |
+| [`ruviform-observability`](ruviform-observability/README.md) | 共有観測基盤（core: `Counter`/`Gauge`/`Histogram` writer-reader ペア + source: 登録ポート・Descriptor・`SourceId`/Generation・寿命契約 + record: `ClockContext`/`Correlation`/`EventRecord` + `rt_bridge`: RT→非RT 固定長 Record Bridge — Issue #101 候補・#121 初消費者・#277 OBS-02・#280 OBS-05。`ruviform-rt`/`ruviform-media-core` への一方向依存） |
 
 ## Domain foundations
 
@@ -33,7 +33,7 @@ Ruviform ワークスペースのメンバークレート索引（計35クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-io-file`](ruviform-io-file/README.md) | staged file publish 型状態・分類済み publish 契約（`StagedFile`/`SealedFile`・`PublishReceipt`/`PublishFailure`・recovery handle — Issue #295。実 OS backend は IO-IMP-02 / Issue #296 で実装済み） |
-| [`ruviform-io-archive`](ruviform-io-archive/README.md) | アーカイブ基盤 scaffold（共通 Entry/Errors/Limits/Receipts）+ ZIP indexed Reader/Writer・CRC/中央 Directory 検証・Budget（IO-IMP-08 / Issue #302。TAR は #303、Secure Extraction は #304） |
+| [`ruviform-io-archive`](ruviform-io-archive/README.md) | アーカイブ基盤 scaffold（共通 Entry/Errors/Limits/Receipts）+ ZIP indexed Reader/Writer・CRC/中央 Directory 検証 + TAR streaming Reader/Writer・USTAR/GNU/PAX・Pending 回復（IO-IMP-08 / #302・IO-IMP-09 / #303。Secure Extraction は #304） |
 
 ## 構造化ドキュメント I/O（非 RT 専用）
 

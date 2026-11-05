@@ -3,11 +3,15 @@
 Ruviform の共有観測基盤 — Issue #101 `foundation-observability-minimal-api`
 スケッチ起点で Issue #121 の L1 diagnostics が初消費者となった **counter pair**
 に加え、Issue #277（OBS-02）で **core 軽量 Primitive**（Gauge/Histogram）と
-**Observation Source の登録・寿命契約**を収める最小クレート。
+**Observation Source の登録・寿命契約**、Issue #280（OBS-05）で
+**固定長 record 語彙**（ClockContext・Correlation・EventRecord）と
+**RT → 非 RT Record Bridge**（`rt_bridge`）を収めるクレート。
 
 実 Registry・Poll・Metrics 集約・History・Snapshot は OBS-07（Issue #289）の
 責務であり、本クレートはその実装可能な**コンパイル済み契約**のみを提供する。
-`tracing`/`tracing-subscriber`/外部 IO/GUI への依存は持たない（std のみ）。
+`tracing`/`tracing-subscriber`/外部 IO/GUI への依存は持たない（default build は
+外部依存ゼロ — `ruviform-rt`・`ruviform-media-core` の葉 primitive への
+一方向依存のみ、ADR `docs/adr/obs-05-observability-leaf-primitive-deps.md`）。
 
 ## 責務
 
@@ -48,15 +52,54 @@ Ruviform の共有観測基盤 — Issue #101 `foundation-observability-minimal-
     は Registry 側所有のため、未出力 Delta が Lease Drop で消えることは
     **構造的にない**。
 
+### record（固定長 record 語彙 — Issue #280 / OBS-05）
+
+- `ClockContext` — record が運ぶ clock-domain stamp。
+  `ruviform_media_core::InputStamp`（domain + `ticks` + `TimeBase` +
+  `TimestampProvenance`）+ `ClockEpochId` の構成で、device stamp・
+  `EngineFrame` と同一 identity 空間。wall/monotonic への変換 API は
+  **持たない**（変換 authority は `map_stamp_to_frame` のみ）。
+- `CorrelationToken`（`NonZeroU64`）・`CorrelationLink{token, epoch}`・
+  `CorrelationBook`（非 RT issuer/registry — `issue`/`remint`/`expire`/
+  `classify`）。link は `Linked`/`Unlinked(UnknownToken|SupersededEpoch|
+  Expired)` に分類され、Trace ID・Grant ID・`SourceId`/`SourceGeneration`
+  とは別軸。`correlation: None` は「意図的に link しない」で、unlinked と
+  混同しない。
+- `EventId`・`RecordHeader`（event/version/`SourceIdentity`/domain generation/
+  correlation/clock/`Confidentiality`/`ReportingImpact`）・`EventRecord`
+  （header + `value: u64` + `reserved: [u64; 2]`）。固定長 `Copy` —
+  raw PCM/signal buffer は構造的に入らない。
+
+### rt_bridge（RT → 非 RT Record Bridge — Issue #280 / OBS-05）
+
+- `bridge(capacity) -> (RtRecorder<R>, RecordSink<R>)` — 既存
+  `ruviform_rt::channel` の有界 SPSC ring を再利用（第 2 の ring 実装なし）。
+  構築が唯一の確保点。`capacity == 0` は panic。
+- `RtRecorder::try_record` — bounded・non-blocking・no-alloc（`try_push` 1 回 +
+  `Relaxed` counter 高々 2 回）。満杯時は **drop-on-full**: record は回復
+  不能に捨てられ、`dropped` counter と次に受理された record の
+  `dropped_before` envelope で欠落を可視化する。
+- `RecordSink::{drain, drain_final}` — FIFO で `ReceivedRecord{record,
+  dropped_before}` を delivery（bounded by capacity）。`drain_final` は
+  writer quiescence（recorder が RT パスを離れた/破棄された）後に限る。
+- 計測: `recorded`（受理総数）・`dropped`（欠落総数）・`drained_total`・
+  `lag() = recorded - drained_total`（consumer lag = 遅延であり欠落ではない）。
+  `recorded_reader`/`dropped_reader` は `CounterReader` clone で OBS-02 の
+  `CounterSource` 登録にそのまま使える。
+- セッション境界: `Prepare`(bridge) → `Publish`(recorder を RT へ move) →
+  `ON`(RT 実行中は `try_record`/counter 読みのみ) → `OFF`(move 戻し) →
+  `Retire`(recorder drop + `drain_final`) → `FinalDestroy`(sink drop で
+  ring 解放)。両 endpoint の Drop は非 RT のみ。
+
 ## 層・許可依存
 
-- 層: Primitives（最下位・相互依存なし）
-- 許可依存: なし（std のみ）。依存なしの最小構成を維持する。
-  `assert_no_alloc` は dev-dependency のみ（`rt_` 検証レーン用）。
+- 層: Primitives
+- 許可依存: `ruviform-rt`・`ruviform-media-core`（葉 primitive への
+  **一方向**依存 — Issue #280 ADR）。外部 crates.io 依存はなし（default
+  build）。`assert_no_alloc` は dev-dependency のみ（`rt_` 検証レーン用）。
 - 消費方向: `ruviform-plugin-host → ruviform-observability`（Issue #121）、
   `ruviform-audio → ruviform-observability`（Issue #185）。
-  `ruviform-rt` からの逆依存は追加しない（foundation DAG/ADR 問題は
-  別 Issue — `docs/designs/foundation-observability-minimal-api.md`）。
+  `ruviform-rt → ruviform-observability` 等の逆依存は作らない。
 
 ## RT 契約（operation ごと）
 
@@ -66,7 +109,9 @@ Ruviform の共有観測基盤 — Issue #101 `foundation-observability-minimal-
 | `Gauge::{set, read, reader}`・`GaugeReader::read` | wait-free・no-alloc・有界（`rt_` レーン実証済み） |
 | `Histogram::{boundaries, bucket_count, reader}`・`HistogramReader::{boundaries, bucket_count}` | wait-free・no-alloc・有界 |
 | `Histogram::observe` | `rt_` レーンで no-alloc・有界を実証済みだが **正式 RT-safe 宣言は保留**（実機証跡待ち） |
-| `counter()`/`gauge()`/`histogram()`・`Clone`・`Drop`・`HistogramReader::snapshot`・`source::*` 全操作（登録・retire・遷移・Lease Drop） | 非 RT のみ（alloc/registry 制御） |
+| `RtRecorder::{try_record, dropped, recorded}` | 有界・non-blocking・no-alloc（`rt_` レーン実証済み） |
+| `record::*` の `Copy` 値型・`const` アクセサ | RT 適合（pure） |
+| `counter()`/`gauge()`/`histogram()`・`Clone`・`Drop`・`HistogramReader::snapshot`・`bridge`・`RecordSink` 全操作（`drain`/`drain_final`/readers・sink Drop）・`CorrelationBook` 全操作・`source::*` 全操作（登録・retire・遷移・Lease Drop）・両 endpoint の Drop | 非 RT のみ（alloc/registry 制御） |
 
 - RT Writer は Registry Lock・登録ポートを持たない。必要な Reader/metadata は
   RT 稼働前に準備する。最後の Drop を RT で実行しない。
@@ -122,6 +167,7 @@ Consumer はこの `impact`/`meaning`/`confidentiality` を**読むだけ**で�
 - Issue #275: Observability 統合設計正本（単一クレート構成）
 - **Issue #277（OBS-02）**: core Primitive・Source 登録/寿命契約
 - **Issue #276（OBS-01）**: `logging` feature — 汎用 Logging Adapter
+- **Issue #280（OBS-05）**: `record` 語彙・`rt_bridge` RT Record Bridge
 - Issue #289（OBS-07）: Collector/Registry 実装（本契約の実装先）
 
 ## `logging` feature（Issue #276 / OBS-01）
