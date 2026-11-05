@@ -70,7 +70,7 @@ relations:
 
 ## Done When
 
-- `summary.mjs` が以下を判定する: 全 needs job `result === 'success'` → pass・`failure`/`cancelled`/`skipped`/未知値/`needs` key 欠落 → fail・宣言 14 leg の `checkout-sha` 実測証跡の欠落/不正/不一致 → fail・`EXPECTED_SHA` 非空かつ実測共通値と不一致/実測不能 → fail・NEEDS_JSON parse 失敗 → fail。`HEAD_SHA` は summary job 自身の `git rev-parse HEAD` 実測値（`github.sha` は `EVENT_SHA` として別途裏付け記録）。
+- `summary.mjs` が以下を判定する: 全 needs job `result === 'success'` → pass・`failure`/`cancelled`/`skipped`/未知値/`needs` key 欠落 → fail・宣言 14 leg の `checkout-sha-<leg>-attempt-<n>` 実測証跡の欠落/不正/命名規約外/attempt 間乖離 → fail・`EXPECTED_SHA` 非空かつ実測共通値と不一致/実測不能 → fail・NEEDS_JSON parse 失敗 → fail。leg の実測値は最大 run attempt を採用（`needs` 結果の最新 attempt 基準と整合）。`HEAD_SHA` は summary job 自身の `git rev-parse HEAD` 実測値（`github.sha` は `EVENT_SHA` として別途裏付け記録）。
 - Job Summary（`GITHUB_STEP_SUMMARY`）へ event・head sha・expected sha・run URL・job 別結果表・verdict を書く。`--summary <file>` でファイル出力も可能。
 - `ci-summary-report.json` を `--report <file>` で出力（`kind: "ci-summary"`・event・headSha・expectedSha・runUrl・verdict・reasons・jobs[]）。
 - contract tests が verdict 行列・expected_sha 3 態・report 形状をカバーし、`mise run test-ci-summary` が exit 0。

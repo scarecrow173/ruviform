@@ -13,8 +13,11 @@
 //     version executed — recorded as evidence only.
 //   * event sha (`github.sha`): the commit the run was triggered for.
 //   * actual checkout sha (`git rev-parse HEAD`): what each lane really
-//     checked out — measured per lane leg and shipped as `checkout-sha-*`
-//     artifacts, plus the summary job's own measurement.
+//     checked out — measured per lane leg and shipped as
+//     `checkout-sha-<leg>-attempt-<n>` artifacts (run_attempt is in the
+//     name because upload-artifact v4 names are unique per run and rerun
+//     artifacts must not collide or overwrite earlier-attempt evidence),
+//     plus the summary job's own measurement.
 // Every checkout step pins `ref: github.sha` so all of these agree by
 // construction; the evaluator still fails closed when any measured leg is
 // missing/invalid or disagrees, because evidence must prove the run
@@ -54,10 +57,11 @@ export const REQUIRED_JOBS = [
   "l1-real-verify-macos",
 ];
 
-// Declared checkout-sha evidence legs. One artifact per matrix leg, named
-// `checkout-sha-<name>.txt` in ci.yml; kept in sync with the workflow so a
-// lane that ran green but failed to ship its measured sha is an evidence
-// gap that fails closed — never silently absent.
+// Declared checkout-sha evidence legs. One artifact per matrix leg and
+// run attempt, named `checkout-sha-<leg>-attempt-<n>` in ci.yml; kept in
+// sync with the workflow so a lane that ran green but failed to ship its
+// measured sha is an evidence gap that fails closed — never silently
+// absent.
 export const REQUIRED_CHECKOUT_LEGS = [
   "verify-ubuntu-latest",
   "verify-windows-latest",
@@ -77,6 +81,7 @@ export const REQUIRED_CHECKOUT_LEGS = [
 
 const HONORED_RESULTS = ["success", "failure", "cancelled", "skipped"];
 const SHA_RE = /^[0-9a-f]{40}$/;
+const CHECKOUT_FILE_RE = /^checkout-sha-(.+)-attempt-(\d+)\.txt$/;
 
 function rowFor(name, need, declared) {
   if (need == null) {
@@ -98,17 +103,25 @@ function rowFor(name, need, declared) {
   return { name, declared, result, verdict: "Fail", note: `job-${result}` };
 }
 
-function shaRowFor(name, sha, declared) {
+function shaRowFor(name, evidence, declared) {
+  const sha = evidence?.sha ?? null;
+  const attempt = evidence?.attempt ?? null;
   if (sha == null || sha === "") {
-    return { name, declared, sha: null, verdict: "Fail", note: "checkout-sha-missing" };
+    return { name, declared, sha: null, attempt, verdict: "Fail", note: "checkout-sha-missing" };
   }
   if (!SHA_RE.test(sha)) {
-    return { name, declared, sha, verdict: "Fail", note: "checkout-sha-invalid" };
+    return { name, declared, sha, attempt, verdict: "Fail", note: "checkout-sha-invalid" };
   }
-  return { name, declared, sha, verdict: "Pass", note: declared ? "" : "undeclared-checkout-leg" };
+  if (evidence.divergent) {
+    // The same leg reported different checkouts in different attempts of
+    // this run — the latest attempt's value is kept for the report, but a
+    // leg whose own evidence disagrees cannot define a verified revision.
+    return { name, declared, sha, attempt, verdict: "Fail", note: "checkout-sha-attempt-divergence" };
+  }
+  return { name, declared, sha, attempt, verdict: "Pass", note: declared ? "" : "undeclared-checkout-leg" };
 }
 
-export function evaluate({ needs, expectedSha = null, headSha = null, eventSha = null, checkoutShas = null }) {
+export function evaluate({ needs, expectedSha = null, headSha = null, eventSha = null, checkoutEvidence = null }) {
   const reasons = [];
   const rows = [];
 
@@ -125,26 +138,34 @@ export function evaluate({ needs, expectedSha = null, headSha = null, eventSha =
   }
 
   // Checkout-sha evidence: every declared leg plus every extra file must be
-  // a valid sha. The lane legs' values define `laneCommon` — the single
-  // revision the run actually verified. The summary job's own measured
-  // checkout (headSha) and the event sha (github.sha) are corroborating
-  // anchors that must agree with it — they corroborate, they do not define
-  // the verified revision, because `github.sha` is an event property, not
-  // a measurement of what was on disk.
+  // a valid sha taken from that leg's latest run attempt — `needs.<job>.result`
+  // likewise reflects the latest attempt, so the verdict always describes
+  // what the latest attempt of each leg actually checked out. The lane legs'
+  // values define `laneCommon` — the single revision the run actually
+  // verified. The summary job's own measured checkout (headSha) and the
+  // event sha (github.sha) are corroborating anchors that must agree with
+  // it — they corroborate, they do not define the verified revision,
+  // because `github.sha` is an event property, not a measurement of what
+  // was on disk.
+  const legs = checkoutEvidence?.legs ?? {};
   const shaRows = [];
   const legShas = new Set();
   for (const leg of REQUIRED_CHECKOUT_LEGS) {
-    const row = shaRowFor(leg, checkoutShas?.[leg], true);
+    const row = shaRowFor(leg, legs[leg], true);
     shaRows.push(row);
     if (row.verdict === "Fail") reasons.push(`${leg}:${row.note}`);
     else legShas.add(row.sha);
   }
-  for (const [name, sha] of Object.entries(checkoutShas ?? {})) {
+  for (const [name, evidence] of Object.entries(legs)) {
     if (REQUIRED_CHECKOUT_LEGS.includes(name)) continue;
-    const row = shaRowFor(name, sha, false);
+    const row = shaRowFor(name, evidence, false);
     shaRows.push(row);
     if (row.verdict === "Fail") reasons.push(`${name}:${row.note}`);
     else legShas.add(row.sha);
+  }
+  for (const name of checkoutEvidence?.malformed ?? []) {
+    shaRows.push({ name, declared: false, sha: null, attempt: null, verdict: "Fail", note: "checkout-sha-malformed" });
+    reasons.push(`${name}:checkout-sha-malformed`);
   }
 
   const laneDistinct = [...legShas];
@@ -197,10 +218,10 @@ function markdownTable(result, meta) {
       (r) => `| ${r.name} | ${r.declared} | ${r.result} | ${r.verdict} | ${r.note || "-"} |`,
     ),
     "",
-    "| checkout leg | declared | sha | verdict | note |",
-    "| --- | --- | --- | --- | --- |",
+    "| checkout leg | declared | attempt | sha | verdict | note |",
+    "| --- | --- | --- | --- | --- | --- |",
     ...result.shaRows.map(
-      (r) => `| ${r.name} | ${r.declared} | ${r.sha ?? "-"} | ${r.verdict} | ${r.note || "-"} |`,
+      (r) => `| ${r.name} | ${r.declared} | ${r.attempt ?? "-"} | ${r.sha ?? "-"} | ${r.verdict} | ${r.note || "-"} |`,
     ),
   ];
   if (result.reasons.length > 0) {
@@ -218,30 +239,51 @@ function parseJsonText(text, what) {
   }
 }
 
-// Reads `checkout-sha-<leg>.txt` files produced by the per-lane
-// `git rev-parse HEAD` evidence steps (fetched via
-// actions/download-artifact `checkout-sha-*` pattern + merge-multiple).
-// A missing/unreadable dir yields an empty map — every declared leg then
-// fails closed as evidence-not-obtained.
+// Reads `checkout-sha-<leg>-attempt-<n>.txt` files produced by the per-lane
+// `git rev-parse HEAD` evidence steps (fetched via actions/download-artifact
+// `checkout-sha-*` pattern + merge-multiple). upload-artifact v4 makes
+// artifact names unique per run, so rerun attempts never overwrite each
+// other — every attempt's evidence is present and the latest attempt per
+// leg is selected to match the latest-attempt semantics of `needs` results.
+// A leg whose attempts disagree is flagged `divergent`; a file that does
+// not match the declared naming scheme is listed in `malformed`. A missing
+// or unreadable dir yields empty legs — every declared leg then fails
+// closed as evidence-not-obtained.
 function readCheckoutShas(dir) {
-  const shas = {};
-  if (dir == null) return shas;
-  let names;
-  try {
-    names = readdirSync(dir);
-  } catch {
-    return shas;
-  }
-  for (const name of names) {
-    const m = /^checkout-sha-(.+)\.txt$/.exec(name);
-    if (m == null) continue;
+  const byLeg = new Map();
+  const malformed = [];
+  let names = [];
+  if (dir != null) {
     try {
-      shas[m[1]] = readFileSync(join(dir, name), "utf8").trim();
+      names = readdirSync(dir);
     } catch {
-      shas[m[1]] = "";
+      names = [];
     }
   }
-  return shas;
+  for (const name of names) {
+    const m = CHECKOUT_FILE_RE.exec(name);
+    if (m == null) {
+      malformed.push(name);
+      continue;
+    }
+    let sha = "";
+    try {
+      sha = readFileSync(join(dir, name), "utf8").trim();
+    } catch {
+      sha = "";
+    }
+    const attempt = Number.parseInt(m[2], 10);
+    if (!byLeg.has(m[1])) byLeg.set(m[1], new Map());
+    byLeg.get(m[1]).set(attempt, sha);
+  }
+  const legs = {};
+  for (const [leg, attempts] of byLeg) {
+    const entries = [...attempts.entries()].sort((a, b) => a[0] - b[0]);
+    const [attempt, sha] = entries[entries.length - 1];
+    const distinct = new Set(entries.map(([, value]) => value));
+    legs[leg] = { sha, attempt, divergent: distinct.size > 1 };
+  }
+  return { legs, malformed };
 }
 
 export function main(argv = process.argv, env = process.env) {
@@ -287,14 +329,14 @@ export function main(argv = process.argv, env = process.env) {
     process.exit(2);
   }
   const needs = parseJsonText(needsText, "needs");
-  const checkoutShas = readCheckoutShas(args.checkoutDir);
+  const checkoutEvidence = readCheckoutShas(args.checkoutDir);
 
   const result = evaluate({
     needs,
     expectedSha: args.expectedSha,
     headSha: args.head,
     eventSha: args.eventSha,
-    checkoutShas,
+    checkoutEvidence,
   });
 
   const report = {

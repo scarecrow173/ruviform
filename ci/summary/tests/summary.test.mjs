@@ -25,11 +25,12 @@ function needsWith(result, jobs = REQUIRED_JOBS) {
   return needs;
 }
 
-// A consistent run: every declared checkout leg measured the same sha.
-function checkoutShasWith(sha, legs = REQUIRED_CHECKOUT_LEGS) {
-  const shas = {};
-  for (const leg of legs) shas[leg] = sha;
-  return shas;
+// A consistent run: every declared checkout leg measured the same sha at
+// attempt 1 (single-attempt evidence, the common case).
+function checkoutEvidenceWith(sha, legs = REQUIRED_CHECKOUT_LEGS, attempt = 1) {
+  const legMap = {};
+  for (const leg of legs) legMap[leg] = { sha, attempt, divergent: false };
+  return { legs: legMap, malformed: [] };
 }
 
 function passingInput(overrides = {}) {
@@ -37,7 +38,7 @@ function passingInput(overrides = {}) {
     needs: needsWith("success"),
     headSha: SHA_A,
     eventSha: SHA_A,
-    checkoutShas: checkoutShasWith(SHA_A),
+    checkoutEvidence: checkoutEvidenceWith(SHA_A),
     ...overrides,
   };
 }
@@ -145,9 +146,9 @@ test("extra needs entry is evaluated with the same success rule", () => {
 });
 
 test("checkout-sha evidence missing for a declared leg -> fail closed", () => {
-  const checkoutShas = checkoutShasWith(SHA_A);
-  delete checkoutShas["verify-windows-latest"];
-  const r = evaluate(passingInput({ checkoutShas }));
+  const checkoutEvidence = checkoutEvidenceWith(SHA_A);
+  delete checkoutEvidence.legs["verify-windows-latest"];
+  const r = evaluate(passingInput({ checkoutEvidence }));
   assert.equal(r.verdict, "fail");
   const row = shaRowOf(r, "verify-windows-latest");
   assert.equal(row.verdict, "Fail");
@@ -156,7 +157,7 @@ test("checkout-sha evidence missing for a declared leg -> fail closed", () => {
 });
 
 test("checkout-sha evidence absent entirely -> fail closed (not assumed)", () => {
-  const r = evaluate(passingInput({ checkoutShas: null }));
+  const r = evaluate(passingInput({ checkoutEvidence: null }));
   assert.equal(r.verdict, "fail");
   for (const leg of REQUIRED_CHECKOUT_LEGS) {
     assert.ok(r.reasons.includes(`${leg}:checkout-sha-missing`), leg);
@@ -164,19 +165,61 @@ test("checkout-sha evidence absent entirely -> fail closed (not assumed)", () =>
 });
 
 test("malformed checkout-sha file content -> fail closed", () => {
-  const checkoutShas = checkoutShasWith(SHA_A);
-  checkoutShas["bench"] = "not-a-sha";
-  const r = evaluate(passingInput({ checkoutShas }));
+  const checkoutEvidence = checkoutEvidenceWith(SHA_A);
+  checkoutEvidence.legs["bench"] = { sha: "not-a-sha", attempt: 1, divergent: false };
+  const r = evaluate(passingInput({ checkoutEvidence }));
   assert.equal(r.verdict, "fail");
   assert.equal(shaRowOf(r, "bench").note, "checkout-sha-invalid");
 });
 
 test("one lane leg checked out a different revision -> fail", () => {
-  const checkoutShas = checkoutShasWith(SHA_A);
-  checkoutShas["ui-verify-macos"] = SHA_B;
-  const r = evaluate(passingInput({ checkoutShas }));
+  const checkoutEvidence = checkoutEvidenceWith(SHA_A);
+  checkoutEvidence.legs["ui-verify-macos"] = { sha: SHA_B, attempt: 1, divergent: false };
+  const r = evaluate(passingInput({ checkoutEvidence }));
   assert.equal(r.verdict, "fail");
   assert.ok(r.reasons.some((reason) => reason.startsWith("lane-checkout-mismatch")));
+});
+
+test("re-run failed jobs: legs at mixed attempts with same sha -> pass, latest attempt selected", () => {
+  // Rerunning only failed jobs leaves successful legs at attempt 1 while
+  // the rerun leg uploads attempt 2 — needs.*.result reflects the latest
+  // attempt of each job, so the evidence set is legitimately mixed.
+  const checkoutEvidence = checkoutEvidenceWith(SHA_A);
+  checkoutEvidence.legs["ui-verify-macos"] = { sha: SHA_A, attempt: 2, divergent: false };
+  const r = evaluate(passingInput({ checkoutEvidence }));
+  assert.equal(r.verdict, "pass");
+  assert.equal(shaRowOf(r, "ui-verify-macos").attempt, 2);
+});
+
+test("re-run all jobs: every leg at attempt 2 with same sha -> pass", () => {
+  const r = evaluate(passingInput({ checkoutEvidence: checkoutEvidenceWith(SHA_A, REQUIRED_CHECKOUT_LEGS, 2) }));
+  assert.equal(r.verdict, "pass");
+  for (const row of r.shaRows) assert.equal(row.attempt, 2);
+});
+
+test("same leg measured different checkouts across attempts -> fail (divergence)", () => {
+  // Pinned checkout makes per-attempt divergence impossible in theory —
+  // if it ever happens the leg's evidence cannot define the verified
+  // revision, so the verdict must fail closed.
+  const checkoutEvidence = checkoutEvidenceWith(SHA_A);
+  checkoutEvidence.legs["bench"] = { sha: SHA_B, attempt: 2, divergent: true };
+  const r = evaluate(passingInput({ checkoutEvidence }));
+  assert.equal(r.verdict, "fail");
+  const row = shaRowOf(r, "bench");
+  assert.equal(row.note, "checkout-sha-attempt-divergence");
+  assert.equal(row.sha, SHA_B);
+  assert.ok(r.reasons.includes("bench:checkout-sha-attempt-divergence"));
+});
+
+test("evidence file that does not match the attempt naming scheme -> fail (malformed)", () => {
+  // e.g. a legacy `checkout-sha-<leg>.txt` artifact — anything shipped via
+  // the checkout-sha-* pattern that cannot be attributed to a leg+attempt
+  // is unverifiable evidence and must not be silently ignored.
+  const checkoutEvidence = checkoutEvidenceWith(SHA_A);
+  checkoutEvidence.malformed.push("checkout-sha-verify-ubuntu-latest.txt");
+  const r = evaluate(passingInput({ checkoutEvidence }));
+  assert.equal(r.verdict, "fail");
+  assert.ok(r.reasons.includes("checkout-sha-verify-ubuntu-latest.txt:checkout-sha-malformed"));
 });
 
 test("summary job checkout disagrees with lanes -> fail", () => {
@@ -200,13 +243,13 @@ test("summary checkout sha unmeasured -> fail closed", () => {
 });
 
 test("extra undeclared checkout leg is evaluated with the same rule", () => {
-  const checkoutShas = checkoutShasWith(SHA_A);
-  checkoutShas["future-leg"] = SHA_A;
-  const ok = evaluate(passingInput({ checkoutShas }));
+  const checkoutEvidence = checkoutEvidenceWith(SHA_A);
+  checkoutEvidence.legs["future-leg"] = { sha: SHA_A, attempt: 1, divergent: false };
+  const ok = evaluate(passingInput({ checkoutEvidence }));
   assert.equal(ok.verdict, "pass");
   assert.equal(shaRowOf(ok, "future-leg").declared, false);
-  checkoutShas["future-leg"] = SHA_B;
-  const bad = evaluate(passingInput({ checkoutShas }));
+  checkoutEvidence.legs["future-leg"] = { sha: SHA_B, attempt: 1, divergent: false };
+  const bad = evaluate(passingInput({ checkoutEvidence }));
   assert.equal(bad.verdict, "fail");
 });
 
@@ -241,7 +284,7 @@ test("expected_sha differs from the measured common checkout -> fail", () => {
 });
 
 test("expected_sha set but checkout evidence incomplete -> fail closed", () => {
-  const r = evaluate(passingInput({ expectedSha: SHA_A, checkoutShas: null }));
+  const r = evaluate(passingInput({ expectedSha: SHA_A, checkoutEvidence: null }));
   assert.equal(r.verdict, "fail");
   assert.ok(r.reasons.some((reason) => reason.startsWith("expected-sha-unverifiable")));
 });
@@ -253,8 +296,8 @@ test("CLI end-to-end: pass writes report + summary and exits 0", () => {
   const summaryPath = join(dir, "summary.md");
   const shaDir = join(dir, "checkout-shas");
   mkdirSync(shaDir);
-  for (const [leg, sha] of Object.entries(checkoutShasWith(SHA_A))) {
-    writeFileSync(join(shaDir, `checkout-sha-${leg}.txt`), `${sha}\n`);
+  for (const leg of REQUIRED_CHECKOUT_LEGS) {
+    writeFileSync(join(shaDir, `checkout-sha-${leg}-attempt-1.txt`), `${SHA_A}\n`);
   }
   writeFileSync(needsPath, JSON.stringify(needsWith("success")));
   const out = execFileSync(
@@ -287,8 +330,8 @@ test("CLI end-to-end: failure exits 1 and lists fail reasons", () => {
   const reportPath = join(dir, "report.json");
   const shaDir = join(dir, "checkout-shas");
   mkdirSync(shaDir);
-  for (const [leg, sha] of Object.entries(checkoutShasWith(SHA_A))) {
-    writeFileSync(join(shaDir, `checkout-sha-${leg}.txt`), `${sha}\n`);
+  for (const leg of REQUIRED_CHECKOUT_LEGS) {
+    writeFileSync(join(shaDir, `checkout-sha-${leg}-attempt-1.txt`), `${SHA_A}\n`);
   }
   const needs = needsWith("success");
   needs["verify-macos"] = { result: "cancelled" };
@@ -311,6 +354,50 @@ test("CLI end-to-end: failure exits 1 and lists fail reasons", () => {
   const report = JSON.parse(readFileSync(reportPath, "utf8"));
   assert.equal(report.verdict, "fail");
   assert.ok(report.reasons.some((reason) => reason.includes("verify-macos")));
+});
+
+test("CLI end-to-end: rerun evidence — latest attempt per leg is selected, legacy names fail closed", () => {
+  // Mixed-attempt evidence (as produced by "re-run failed jobs"): one leg
+  // re-ran at attempt 2 while others stayed at attempt 1. A leftover file
+  // that does not carry the attempt suffix must fail closed rather than
+  // be silently ignored or ambiguously overwrite a newer measurement.
+  const dir = mkdtempSync(join(tmpdir(), "ci-summary-"));
+  const needsPath = join(dir, "needs.json");
+  const reportPath = join(dir, "report.json");
+  const shaDir = join(dir, "checkout-shas");
+  mkdirSync(shaDir);
+  for (const leg of REQUIRED_CHECKOUT_LEGS) {
+    writeFileSync(join(shaDir, `checkout-sha-${leg}-attempt-1.txt`), `${SHA_A}\n`);
+  }
+  writeFileSync(join(shaDir, "checkout-sha-rt-verify-attempt-2.txt"), `${SHA_A}\n`);
+  writeFileSync(needsPath, JSON.stringify(needsWith("success")));
+  const out = execFileSync(
+    process.execPath,
+    [SCRIPT, "--needs", needsPath, "--checkout-dir", shaDir, "--report", reportPath, "--head", SHA_A, "--event-sha", SHA_A],
+    { encoding: "utf8" },
+  );
+  assert.match(out, /ci-summary verdict: PASS/);
+  const report = JSON.parse(readFileSync(reportPath, "utf8"));
+  assert.equal(report.verdict, "pass");
+  assert.equal(report.checkoutShas.find((r) => r.name === "rt-verify").attempt, 2);
+  assert.match(out, /\| rt-verify \| true \| 2 \|/);
+
+  // Same leg diverging across attempts fails closed (unprovable revision).
+  writeFileSync(join(shaDir, "checkout-sha-rt-verify-attempt-3.txt"), `${SHA_B}\n`);
+  let code = 0;
+  let failOut = "";
+  try {
+    failOut = execFileSync(
+      process.execPath,
+      [SCRIPT, "--needs", needsPath, "--checkout-dir", shaDir, "--head", SHA_A, "--event-sha", SHA_A],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+  } catch (e) {
+    code = e.status;
+    failOut = e.stdout;
+  }
+  assert.equal(code, 1);
+  assert.match(failOut, /checkout-sha-attempt-divergence/);
 });
 
 test("CLI end-to-end: missing checkout dir -> fail closed, not crash", () => {

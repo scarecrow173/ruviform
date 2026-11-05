@@ -89,14 +89,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -226,14 +232,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -332,14 +344,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -405,14 +423,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -475,14 +499,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -546,14 +576,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -624,14 +660,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -834,7 +876,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ui-browser-evidence-${{ matrix.os }}
+          name: ui-browser-evidence-${{ matrix.os }}-attempt-${{ github.run_attempt }}
           path: ui/browser-test/test-results/
           if-no-files-found: warn
           retention-days: 30
@@ -868,14 +910,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -1041,7 +1089,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ui-browser-evidence-macos
+          name: ui-browser-evidence-macos-attempt-${{ github.run_attempt }}
           path: ui/browser-test/test-results/
           if-no-files-found: warn
           retention-days: 30
@@ -1069,14 +1117,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -1141,14 +1195,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -1212,14 +1272,20 @@ jobs:
       - name: Record actual checkout SHA
         shell: bash
         env:
-          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
         run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
 
       - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
         uses: actions/upload-artifact@v4
         with:
-          name: checkout-sha-${{ env.CHECKOUT_LEG }}
-          path: checkout-sha-${{ env.CHECKOUT_LEG }}.txt
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -1302,9 +1368,10 @@ jobs:
         run: mise run test-ci-summary
 
       # Fetch every lane's measured `git rev-parse HEAD` file
-      # (checkout-sha-<job>[-<os>].txt, merged into one dir). A lane that
-      # ran green but did not ship its measured sha is an evidence gap and
-      # fails closed in the evaluator — never silently absent.
+      # (checkout-sha-<leg>-attempt-<n>.txt from every attempt, merged into
+      # one dir). A lane that ran green but did not ship its measured sha
+      # is an evidence gap and fails closed in the evaluator — never
+      # silently absent.
       - name: Download checkout SHA evidence
         uses: actions/download-artifact@v4
         with:
@@ -1334,6 +1401,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-summary-report
+          # Unique-per-run names (upload-artifact v4): keep every
+          # attempt's report instead of conflicting on rerun.
+          name: ci-summary-report-attempt-${{ github.run_attempt }}
           path: ci-summary-report.json
           if-no-files-found: warn
