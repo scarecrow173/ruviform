@@ -67,7 +67,7 @@ impl PlatformExtractOps for UnixExtractOps {
                         }),
                     }));
                 }
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {},
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
                 Err(e) => return Err(e),
             }
         }
