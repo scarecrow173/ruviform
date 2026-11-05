@@ -15,6 +15,7 @@ import {
   FULL_CI_EVENTS,
   IN_FLIGHT_STATUSES,
   createFixtureClient,
+  createGitHubClient,
   decide,
   execute,
   markdownSummary,
@@ -112,9 +113,19 @@ test("decide: unrecognised status on latest run -> hold-unknown", () => {
 });
 
 test("decide: non-success conclusions -> dispatch candidate", () => {
-  for (const conclusion of ["failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale", null, "weird"]) {
+  for (const conclusion of ["failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale", "skipped", "neutral"]) {
     const d = decideOn([run({ conclusion })]);
     assert.equal(d.decision, "dispatch", conclusion);
+  }
+});
+
+test("decide: unrecognised conclusion on latest run -> hold-unknown, never dispatch", () => {
+  // A completed run whose conclusion we cannot classify is unknown
+  // state, not a retryable failure — dispatching on it could fire while
+  // the SHA is in fact being verified.
+  for (const conclusion of ["weird", "unknown_future_state", null]) {
+    const d = decideOn([run({ conclusion })]);
+    assert.equal(d.decision, "hold-unknown", conclusion);
   }
 });
 
@@ -160,6 +171,34 @@ test("decide: manual actor dispatch does not consume auto budget", () => {
   assert.equal(d.autoDispatches.length, 0);
 });
 
+test("decide: human rerun of bot dispatches does not refund the retry budget", () => {
+  // API semantics: actor = original initiator, triggering_actor = latest
+  // (re)run actor. A maintainer re-running two bot dispatches leaves
+  // actor=github-actions[bot] — the dispatches still consumed budget.
+  const rerun = () =>
+    run({
+      event: "workflow_dispatch",
+      conclusion: "failure",
+      run_attempt: 2,
+      actor: { login: BOT },
+      triggering_actor: { login: "maintainer" },
+    });
+  const d = decideOn([rerun(), rerun()]);
+  assert.equal(d.autoDispatches.length, 2);
+  assert.equal(d.decision, "budget-exhausted");
+});
+
+test("decide: unidentifiable-actor dispatch counts toward the budget", () => {
+  // No actor provenance at all -> count on the safe side. Undercounting
+  // lets automation retry forever; overcounting only dispatches less.
+  const d = decideOn([
+    run({ event: "workflow_dispatch", conclusion: "failure", actor: null, triggering_actor: null }),
+    run({ event: "workflow_dispatch", conclusion: "failure", actor: null, triggering_actor: null }),
+  ]);
+  assert.equal(d.autoDispatches.length, 2);
+  assert.equal(d.decision, "budget-exhausted");
+});
+
 test("decide: push runs never consume the dispatch budget", () => {
   const d = decideOn([
     run({ event: "push", triggering_actor: { login: BOT }, conclusion: "failure" }),
@@ -185,6 +224,62 @@ test("decide: latest attempt by created_at wins; tie falls to higher id", () => 
   // Same created_at -> higher id is the newer run -> in-flight.
   assert.equal(d.latest.id, 6);
   assert.equal(d.decision, "suppress-in-flight");
+});
+
+test("decide: older run rerun-failed after newer success -> not skip-verified", () => {
+  // Real API semantics: created_at stays at original creation while a
+  // rerun moves run_started_at/updated_at. Ordering by created_at alone
+  // would mask the rerun failure behind the newer success — a false
+  // verified. Two fail-closed shapes:
+  //  run_started_at moved -> the rerun is provably newest -> retry
+  const rerunFailed = run({
+    id: 5, conclusion: "failure", run_attempt: 2,
+    created_at: "2026-11-01T00:00:00Z",
+    run_started_at: "2026-11-06T00:00:00Z",
+    updated_at: "2026-11-06T00:30:00Z",
+  });
+  const success = run({ id: 6, conclusion: "success", created_at: "2026-11-05T00:00:00Z", updated_at: "2026-11-05T01:00:00Z" });
+  const d1 = decideOn([rerunFailed, success]);
+  assert.equal(d1.latest.id, 5);
+  assert.equal(d1.decision, "dispatch");
+  //  only updated_at moved -> activity exists that produced no visible
+  //  attempt evidence -> ordering ambiguous -> hold, never false verified
+  const d2 = decideOn([
+    { ...rerunFailed, run_started_at: undefined },
+    success,
+  ]);
+  assert.equal(d2.decision, "hold-unknown");
+  assert.match(d2.reason, /ambiguous/);
+});
+
+test("decide: success run contested by a tied non-success run -> hold-unknown", () => {
+  // Tie at the top: the success run sorts first (higher id) but a
+  // non-success run shares the newest attempt time — the ordering is
+  // ambiguous, so no verified claim may be recorded.
+  const d = decideOn([
+    run({ id: 6, conclusion: "success", created_at: "2026-11-05T01:00:00Z" }),
+    run({ id: 5, conclusion: "failure", created_at: "2026-11-05T01:00:00Z" }),
+  ]);
+  assert.equal(d.decision, "hold-unknown");
+  assert.match(d.reason, /ambiguous/);
+});
+
+test("decide: tied failure on top -> bounded dispatch, not false verified", () => {
+  // Reverse tie: the failure sorts first. Dispatch is a bounded retry —
+  // never a success claim — and is therefore the safe resolution.
+  const d = decideOn([
+    run({ id: 5, conclusion: "success", created_at: "2026-11-05T01:00:00Z" }),
+    run({ id: 6, conclusion: "failure", created_at: "2026-11-05T01:00:00Z" }),
+  ]);
+  assert.equal(d.decision, "dispatch");
+});
+
+test("decide: unorderable non-success run blocks a success claim", () => {
+  const d = decideOn([
+    run({ id: 5, conclusion: "success", created_at: "2026-11-05T01:00:00Z" }),
+    run({ id: 6, conclusion: "failure", created_at: undefined, updated_at: undefined }),
+  ]);
+  assert.equal(d.decision, "hold-unknown");
 });
 
 test("decide: latestVerified reports newest success across shas", () => {
@@ -307,14 +402,74 @@ test("execute: budget-exhausted completes at exit 0 with warning", async () => {
   assert.equal(warnings.length, 1);
 });
 
-test("execute: truncated history is recorded and warned", async () => {
-  const { report, warnings } = await executeFixture({
-    refReads: [SHA_A],
-    listCalls: [[[]]],
-    truncated: true,
+test("execute: truncated history holds every verdict — no verified claim, no dispatch", async () => {
+  // Unseen older pages could hide auto dispatches (budget undercount) or
+  // a rerun on this SHA contesting a success claim — incomplete data
+  // cannot certify any verdict. Even a visible success must not become
+  // a recorded skip-verified.
+  for (const runs of [[], [run({ conclusion: "success" })]]) {
+    const { outcome, report, warnings, calls } = await executeFixture({
+      refReads: [SHA_A],
+      listCalls: [[runs]],
+      truncated: true,
+    });
+    assert.equal(outcome, "history-truncated");
+    assert.equal(report.historyTruncated, true);
+    assert.equal(calls.dispatches.length, 0);
+    assert.ok(warnings.some((w) => w.includes("truncated")));
+  }
+});
+
+test("execute: malformed runs-list response -> error, no dispatch", async () => {
+  // A 200 body without workflow_runs is malformed — not empty history.
+  // Exercised through the real createGitHubClient response boundary.
+  const client = createGitHubClient({
+    token: "t",
+    repo: "o/r",
+    apiBase: "https://api.invalid",
+    fetchImpl: async (url, init) => {
+      if (init.method === "POST") return new Response(null, { status: 204 });
+      if (url.includes("/git/ref/")) {
+        return new Response(JSON.stringify({ object: { sha: SHA_A } }));
+      }
+      return new Response(JSON.stringify({}));
+    },
   });
-  assert.equal(report.historyTruncated, true);
-  assert.ok(warnings.some((w) => w.includes("truncated")));
+  const { outcome, exitCode } = await execute({
+    client,
+    repo: "o/r",
+    workflow: "ci.yml",
+    mainRef: "main",
+    autoActors: [BOT],
+    maxAutoDispatches: 2,
+    maxPages: 10,
+    maxRechecks: 2,
+    confirmTimeoutMs: 100,
+    confirmIntervalMs: 10,
+    dryRun: false,
+    sleep: async () => {},
+    now: () => "2026-11-06T00:00:00.000Z",
+  });
+  assert.equal(outcome, "error");
+  assert.equal(exitCode, 1);
+});
+
+test("execute: human dispatch racing ours is reported, not hidden", async () => {
+  // A manual workflow_dispatch landing in the poll window is
+  // indistinguishable from ours at this API surface — the honest result
+  // is dispatch-confirmed naming the observed run (its actor/url are in
+  // the report), never a silent merge. Documented limit, not a
+  // guarantee that "our" run is the one that landed.
+  const manual = run({ id: 9001, status: "queued", conclusion: null, actor: { login: "human" }, triggering_actor: { login: "human" } });
+  const { outcome, report } = await executeFixture({
+    refReads: [SHA_A, SHA_A],
+    listCalls: [
+      [[]],
+      [[manual]],
+    ],
+  });
+  assert.equal(outcome, "dispatch-confirmed");
+  assert.equal(report.dispatch.confirmedRun.id, 9001);
 });
 
 test("execute: skip-verified records latestVerified for ops", async () => {

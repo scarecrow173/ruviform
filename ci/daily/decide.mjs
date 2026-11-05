@@ -22,11 +22,16 @@
 // other branches, other SHAs, and PR runs contribute nothing.
 //
 // Retry budget (spec R4): auto dispatches for S are counted as runs with
-// event === "workflow_dispatch" whose triggering_actor.login is in
-// autoActors (default github-actions[bot]). The list API does not return
-// run `inputs` (measured 2026-11-06), so the actor is the available
-// provenance signal — automation dispatches from any workflow share the
-// budget (conservative); human `workflow_dispatch` runs do not consume it.
+// event === "workflow_dispatch" whose ORIGIN is automation. Per the API
+// contract, `actor` is the run's original initiator and `triggering_actor`
+// is the actor of the LATEST (re)run attempt — so a bot-dispatched run
+// rerun by a human keeps actor=github-actions[bot] while
+// triggering_actor=<human>. Counting triggering_actor alone would refund
+// the budget on every human rerun, so a run counts as auto when EITHER
+// provenance field names an auto actor, and a run with no identifiable
+// actor at all counts too (an undercounted budget retries forever —
+// overcounting merely dispatches less, the safe side). Human
+// `workflow_dispatch` runs do not consume the budget.
 // run status/conclusion/run_attempt always describe the run's LATEST
 // attempt, matching the "latest attempt on the SHA" decision rule.
 //
@@ -38,9 +43,10 @@
 //       [--report FILE] [--summary FILE] [--fixture FILE] [--dry-run]
 //
 // Exit codes: 0 every completed outcome (including budget-exhausted /
-// hold-unknown / main-moved / dispatched-unconfirmed — the decision ran
-// to completion and the unverified state is reported via warnings), 1 on
-// `error` (the scheduler could not complete its decision), 2 usage.
+// hold-unknown / history-truncated / main-moved / dispatched-unconfirmed
+// — the decision ran to completion and the unverified state is reported
+// via warnings), 1 on `error` (the scheduler could not complete its
+// decision — API failure, malformed response, unreadable fixture), 2 usage.
 
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -54,6 +60,10 @@ export const FULL_CI_EVENTS = ["push", "workflow_dispatch", "schedule"];
 // unknown and holds the decision rather than guessing.
 export const IN_FLIGHT_STATUSES = ["queued", "waiting", "in_progress", "pending", "requested"];
 export const TERMINAL_STATUS = "completed";
+// GitHub-documented terminal conclusions. A completed run whose
+// conclusion is null or outside this set is classified "unknown" —
+// holding the decision rather than dispatching on an unrecognised state.
+export const KNOWN_CONCLUSIONS = ["success", "failure", "neutral", "cancelled", "skipped", "timed_out", "action_required", "startup_failure", "stale"];
 
 const SHA_RE = /^[0-9a-f]{40}$/;
 const MAX_ATTEMPTS_IN_REPORT = 20;
@@ -81,17 +91,71 @@ function isFullCiRun(run, mainRef) {
   );
 }
 
-// Newest-first ordering: created_at desc, then run id desc (higher id was
-// created later when timestamps tie).
+// Latest-attempt recency. `created_at` never moves (original creation);
+// `run_started_at` is the start of the run's LATEST attempt, so a rerun
+// moves it forward even though created_at stays old (verified on the
+// real API: run 41958976200 attempt 2, created 03:01 / started 03:07).
+// `updated_at` is excluded from the ordering key — it also moves on
+// non-attempt bookkeeping — but is used as an ambiguity probe below:
+// a run with recent activity that produced no newer attempt is
+// unexplained evidence and must block a success claim, not be ignored.
+function attemptTime(r) {
+  let best = null;
+  for (const key of ["created_at", "run_started_at"]) {
+    const t = Date.parse(r?.[key] ?? "");
+    if (!Number.isNaN(t) && (best == null || t > best)) best = t;
+  }
+  return best; // null = unorderable
+}
+function activityTime(r) {
+  let best = attemptTime(r);
+  const t = Date.parse(r?.updated_at ?? "");
+  if (!Number.isNaN(t) && (best == null || t > best)) best = t;
+  return best;
+}
+
+// Newest-first ordering: latest-attempt recency desc, then run id desc
+// (higher id was created later when timestamps tie). Runs with no
+// parseable timestamps sort last — they are unorderable, not newest.
 function newestFirst(a, b) {
-  const ta = Date.parse(a.created_at ?? "") || 0;
-  const tb = Date.parse(b.created_at ?? "") || 0;
-  if (tb !== ta) return tb - ta;
+  const ta = attemptTime(a);
+  const tb = attemptTime(b);
+  if (ta !== tb) {
+    if (ta == null) return 1;
+    if (tb == null) return -1;
+    return tb - ta;
+  }
   return (b.id ?? 0) - (a.id ?? 0);
 }
 
 function actorOf(run) {
   return run?.triggering_actor?.login ?? run?.actor?.login ?? null;
+}
+
+function isSuccess(r) {
+  return r != null && r.status === TERMINAL_STATUS && r.conclusion === "success";
+}
+
+// Coarse fail-closed classification of one run's latest-attempt state.
+function classifyRun(r) {
+  if (r.status !== TERMINAL_STATUS) {
+    return IN_FLIGHT_STATUSES.includes(r.status) ? "in-flight" : "unknown";
+  }
+  if (!KNOWN_CONCLUSIONS.includes(r.conclusion)) return "unknown";
+  return r.conclusion === "success" ? "success" : "terminal-non-success";
+}
+
+// Retry-budget accounting (see header): automation-origin dispatches.
+// actor = original initiator, triggering_actor = latest attempt's
+// triggerer — a human rerun of a bot dispatch does not refund budget.
+// A workflow_dispatch run with no identifiable actor counts too
+// (undercounting the budget is the unsafe direction).
+function isAutoDispatch(run, autoActors) {
+  if (run?.event !== "workflow_dispatch") return false;
+  const actor = run.actor?.login ?? null;
+  const triggerer = run.triggering_actor?.login ?? null;
+  if (actor == null && triggerer == null) return true;
+  return autoActors.includes(actor) || autoActors.includes(triggerer);
 }
 
 // Evaluates the current main SHA against the run history.
@@ -104,13 +168,11 @@ export function decide({ mainSha, runs, mainRef = "main", autoActors = ["github-
     .filter((r) => isFullCiRun(r, mainRef) && r.head_sha === mainSha)
     .sort(newestFirst);
   const latest = attempts[0] ?? null;
-  const inFlight = attempts.filter((r) => IN_FLIGHT_STATUSES.includes(r.status));
-  const autoDispatches = attempts.filter(
-    (r) => r.event === "workflow_dispatch" && autoActors.includes(actorOf(r)),
-  );
+  const inFlight = attempts.filter((r) => classifyRun(r) === "in-flight");
+  const autoDispatches = attempts.filter((r) => isAutoDispatch(r, autoActors));
 
   const verifiedPool = (runs ?? [])
-    .filter((r) => isFullCiRun(r, mainRef) && r.status === TERMINAL_STATUS && r.conclusion === "success")
+    .filter((r) => isFullCiRun(r, mainRef) && isSuccess(r))
     .sort(newestFirst);
   const latestVerified = verifiedPool[0] ?? null;
 
@@ -120,14 +182,33 @@ export function decide({ mainSha, runs, mainRef = "main", autoActors = ["github-
     // Something is still running for this SHA — never double-dispatch.
     decision = "suppress-in-flight";
     reason = `${inFlight.length} in-flight run(s) on ${mainSha.slice(0, 12)}`;
-  } else if (latest != null && latest.status !== TERMINAL_STATUS) {
-    // The newest attempt reports a status we cannot classify — hold
-    // rather than guess success or dispatch a duplicate.
+  } else if (latest != null && classifyRun(latest) === "unknown") {
+    // The newest attempt reports a status or conclusion we cannot
+    // classify — hold rather than guess success or dispatch a duplicate.
     decision = "hold-unknown";
-    reason = `unrecognised status "${latest.status}" on latest run ${latest.id}`;
-  } else if (latest != null && latest.conclusion === "success") {
-    decision = "skip-verified";
-    reason = `run ${latest.id} completed success on ${mainSha.slice(0, 12)}`;
+    reason = `unrecognised state "${latest.status}"/"${latest.conclusion ?? "null"}" on latest run ${latest.id}`;
+  } else if (latest != null && isSuccess(latest)) {
+    // A success claim is only sound if `latest` is provably the newest
+    // effective attempt on the SHA. A tied or unorderable non-success
+    // run, or one with newer unexplained activity (updated_at past the
+    // latest attempt start — e.g. a rerun not yet reflected in
+    // run_started_at), makes the "latest" ambiguous: hold, never
+    // record a false verified.
+    const top = attemptTime(latest);
+    const contender = attempts.find((r) => {
+      if (r === latest || isSuccess(r)) return false;
+      const at = attemptTime(r);
+      if (top == null || at == null || at === top) return true;
+      const act = activityTime(r);
+      return act != null && act > top;
+    });
+    if (contender != null) {
+      decision = "hold-unknown";
+      reason = `latest-attempt ordering ambiguous: run ${contender.id} contests success run ${latest.id}`;
+    } else {
+      decision = "skip-verified";
+      reason = `run ${latest.id} completed success on ${mainSha.slice(0, 12)}`;
+    }
   } else {
     const base = latest == null ? "no-history" : `latest:${latest.status}/${latest.conclusion ?? "null"}`;
     if (autoDispatches.length >= maxAutoDispatches) {
@@ -187,7 +268,9 @@ export function createGitHubClient({ token, repo, apiBase = "https://api.github.
       return sha;
     },
     // Paginate the workflow run history. The server-side `branch` filter is
-    // an optimisation only — strict matching lives in decide().
+    // an optimisation only — strict matching lives in decide(). A 200
+    // body without the workflow_runs array is a malformed response —
+    // an error, never "empty history" (empty history dispatches).
     async listRuns({ workflow, branch, perPage = 100, maxPages = 10 }) {
       const all = [];
       for (let page = 1; page <= maxPages; page++) {
@@ -195,7 +278,13 @@ export function createGitHubClient({ token, repo, apiBase = "https://api.github.
           "GET",
           `/repos/${repo}/actions/workflows/${workflow}/runs?branch=${encodeURIComponent(branch)}&per_page=${perPage}&page=${page}`,
         );
-        const pageRuns = data?.workflow_runs ?? [];
+        if (data == null || !Array.isArray(data.workflow_runs)) {
+          throw new ApiError(`runs list page ${page} malformed: missing workflow_runs array`);
+        }
+        if (data.workflow_runs.some((r) => r == null || typeof r !== "object")) {
+          throw new ApiError(`runs list page ${page} malformed: non-object run entry`);
+        }
+        const pageRuns = data.workflow_runs;
         all.push(...pageRuns);
         if (pageRuns.length < perPage) return { runs: all, truncated: false };
       }
@@ -305,8 +394,32 @@ export async function execute(cfg) {
       autoActors: cfg.autoActors,
       maxAutoDispatches: cfg.maxAutoDispatches,
     });
+
+    const recordDecision = () => {
+      report.decisionSha = sha;
+      if (d.latestVerified != null) {
+        report.latestVerified = {
+          headSha: d.latestVerified.head_sha,
+          updatedAt: d.latestVerified.updated_at ?? null,
+          url: d.latestVerified.html_url ?? null,
+        };
+      }
+      report.attemptsOnDecisionSha = (d.attempts ?? []).slice(0, MAX_ATTEMPTS_IN_REPORT).map(attemptRow);
+      report.autoDispatchCount = d.autoDispatches.length;
+    };
+    // Truncated history is fail-closed on BOTH sides: unseen older pages
+    // could hide auto dispatches (retry-budget undercount) or a rerun on
+    // this SHA whose recent activity would contest a success claim. No
+    // outcome that asserts "verified" or fires a dispatch is safe on
+    // incomplete data — hold, warn, and let ops widen DAILY_MAX_PAGES.
+    const truncatedHold = () => {
+      report.historyTruncated = true;
+      recordDecision();
+      warnings.push(`run history truncated at ${cfg.maxPages} page(s); cannot certify the verification state — widen DAILY_MAX_PAGES or re-run manually`);
+      return done("history-truncated", `run history truncated at ${cfg.maxPages} page(s); held underlying decision "${d.decision}"`);
+    };
     report.historyTruncated = listed.truncated;
-    if (listed.truncated) warnings.push(`run history truncated at ${cfg.maxPages} page(s); auto-dispatch count is a lower bound`);
+    if (listed.truncated) return truncatedHold();
 
     // Re-check the ref right before dispatching so a moving main never
     // gets a run stamped with a stale expected_sha. Bounded: if main keeps
@@ -329,23 +442,10 @@ export async function execute(cfg) {
         autoActors: cfg.autoActors,
         maxAutoDispatches: cfg.maxAutoDispatches,
       });
-      if (listed.truncated && !report.historyTruncated) {
-        report.historyTruncated = true;
-        warnings.push(`run history truncated at ${cfg.maxPages} page(s); auto-dispatch count is a lower bound`);
-      }
+      if (listed.truncated) return truncatedHold();
     }
 
-    report.decisionSha = sha;
-    if (d.latestVerified != null) {
-      report.latestVerified = {
-        headSha: d.latestVerified.head_sha,
-        updatedAt: d.latestVerified.updated_at ?? null,
-        url: d.latestVerified.html_url ?? null,
-      };
-    }
-    report.attemptsOnDecisionSha = (d.attempts ?? []).slice(0, MAX_ATTEMPTS_IN_REPORT).map(attemptRow);
-    report.autoDispatchCount = d.autoDispatches.length;
-
+    recordDecision();
     if (d.decision !== "dispatch") {
       if (d.decision === "budget-exhausted" || d.decision === "hold-unknown") warnings.push(d.reason);
       return done(d.decision, d.reason);
