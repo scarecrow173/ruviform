@@ -85,6 +85,8 @@ metadata: {}
 ### Rule: ordering は `updated_at` を優先し、曖昧は成功にしない
 
 - Example: 同 run id → `run_attempt` 比較（rerun は新しい attempt）。
+- Example: marker の記録済み `failure` attempt は `(runId, attempt)` 単位の独立証拠 — runs 一覧が同 id の新しい attempt（成功・operational・in_progress）だけを返しても消えない（per-id merge/suppress で失わせない）。同一 attempt の実 record がある時のみ実 record が勝つ。
+- Example: 同 id 失敗 a1 → 同 id 成功 a2（同 sha）→ `identical` coverage で close。同 id 成功 a2 が別 sha → compare カバー時のみ close、`diverged` は close しない。同 id の取消/in_progress rerun は close せず記録 attempt を保持。
 - Example: 異なる run id → `updated_at` 比較（旧 run の遅い rerun を過小評価しない）。
 - Example: `updated_at` 欠損・異 run 同一時刻 → `ambiguous` — close には使わない（issue open 維持）。状態更新のみ run id で保守解決。
 - Example: `latest`/`failure` の `{runId, attempt, updatedAt}` は tuple をまるごと採用 — run 間で field 別 Math.max しない。

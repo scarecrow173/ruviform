@@ -58,7 +58,7 @@ scope（repo × workflow `ci` × branch `main` × event ∈
 {push, workflow_dispatch}）で分類し、GitHub Issue 一覧・job メタ・
 compare の注入 client 経由で create/update/close-recovered/
 close-duplicate/noop の action plan を組み立てて適用する。
-56 件の mock-client contract test を `ci/tracker/tests/` に追加し、
+63 件の mock-client contract test を `ci/tracker/tests/` に追加し、
 `mise.toml` に `test-ci-tracker` タスクを定義した。
 
 ## Context
@@ -107,7 +107,7 @@ close-duplicate/noop の action plan を組み立てて適用する。
     compact JSONL を行単位 parse。
   - `main`: TRACKER_EVENT_PATH/GITHUB_EVENT_PATH から payload 読込み、
     report JSON + Job Summary 出力。API 失敗は propagate して exit 1。
-- `ci/tracker/tests/tracker.test.mjs`: 56 tests。scope 分類・sanitize・
+- `ci/tracker/tests/tracker.test.mjs`: 63 tests。scope 分類・sanitize・
   marker parse/create（legacy flat latestRunId marker の正規化含む）・
   初回 create・連続失敗 update・dedup・stale 拒否・rerun（同 id 高
   attempt・旧 run の遅い rerun）success close/failure update・
@@ -121,8 +121,12 @@ close-duplicate/noop の action plan を組み立てて適用する。
   の pending hold・失敗 run 自身の in_progress rerun・識別不能 record
   （必須 field 欠落・`{}`・非 object・非配列 history）の fail-closed
   停止・out-of-scope の過剰除外なし・unknown conclusion の
-  operational 化・pending が resolved stale failure を復活させない**
-  — 全て mock client、外部副作用なし。
+  operational 化・pending が resolved stale failure を復活させない**、
+  さらに **attempt 単位の証拠保持（同 id 失敗 a1→成功 a2 同 sha は
+  `identical` coverage で close・異 sha rerun は coverage 必須・
+  失敗/取消/実行中 rerun は記録 attempt を保持して close しない・
+  古い別 run 成功で記録 attempt を消さない・別 run の新しい失敗が
+  残る間は close しない）** — 全て mock client、外部副作用なし。
 - `mise.toml`: `[tasks.test-ci-tracker] run = "node --test ci/tracker/"`。
 
 ### Decisions During Implementation
@@ -158,6 +162,17 @@ close-duplicate/noop の action plan を組み立てて適用する。
 - **compare 遅延取得**: 失敗をカバーし得る成功証跡がある時のみ
   `compareCommits` を呼ぶ設計にし、failure イベントごとの不要な API
   呼出しを排除。compare 失敗は close せず job 失敗として伝播。
+- **marker 参照の suppress を `(runId, attempt)` 単位に修正（P1 fix）**:
+  runs 一覧は各 run の最新 attempt のみを返すため、従来の run id 単位
+  `realIds` suppress だと「失敗 a1 記録済み + 一覧に同 id 成功 a2」で
+  記録済み failure attempt が消え `newestFailure=null`→coverage 判定不能
+  →永久に auto-close 不能になることを reviewer mock replay が実証。
+  修正はデータ境界で — marker の `failure` 参照は**同一 attempt の実
+  record**がある時だけ実 record に置き換え、`latest` 観測参照は同 id・
+  以上 attempt の実 record がある時だけ捨てる。これで同 run 最新
+  attempt の成功/operational 状態と記録済み失敗 attempt が別証拠と
+  して共存し、rerun 成功は自分の失敗 attempt を `identical` coverage
+  で close できる（全 guard 維持）。
 - **marker JSON の injection 対策を二重化**: state に jobs が含まれる
   設計（body 再描画に必要）のまま、`-->` を含む job 名で HTML comment
   breakout できる injection 経路を発見。(a) job 名を入力境界
@@ -194,7 +209,7 @@ close-duplicate/noop の action plan を組み立てて適用する。
 
 ## Validation
 
-- `mise run test-ci-tracker` → 56/56 pass（初版 34→45→56）。
+- `mise run test-ci-tracker` → 63/63 pass（初版 34→45→56→63）。
 - `mise exec -- actionlint .github/workflows/ci-issue-tracker.yml` → OK。
 - `mise exec -- actionlint .github/workflows/ci.yml` → OK（無変更確認）。
 - `mise exec -- prek run --all-files` → 全 hook pass。

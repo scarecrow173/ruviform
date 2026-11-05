@@ -165,6 +165,11 @@ Chosen option: **Option A**（+ D/E/F/G の採用側を構成要素として統�
 - ordering: 同 id → `run_attempt`、異 id → `updated_at`。欠損・同一
   時刻は `ambiguous`（close 不使用・状態更新は run id で保守解決）。
   run 参照は `{runId, attempt, updatedAt}` atomic tuple。
+- marker 参照は `(runId, attempt)` 単位で実 record と突き合わせる。
+  runs 一覧は各 run の最新 attempt しか返さないため、記録済み
+  `failure` attempt は同 id の新しい attempt が現れても独立した証拠
+  として保持する — rerun 成功が自分の失敗 attempt を close できる
+  （per-id merge で失わせない）。
 - close: 最新証拠が成功・記録最新失敗より曖昧なく新しい・
   `compare(失敗→成功)` と `compare(現在 main head→成功)` がともに
   {identical, ahead} の時のみ。close 候補で branch head が取れない
@@ -189,7 +194,7 @@ Chosen option: **Option A**（+ D/E/F/G の採用側を構成要素として統�
 
 ### Confirmation
 
-`ci/tracker/tests/tracker.test.mjs` の 56 件の mock-client contract
+`ci/tracker/tests/tracker.test.mjs` の 63 件の mock-client contract
 test が全判定経路を網羅（scope 分類・dedup・stale 拒否・rerun・
 compare/main-tip guard・operational・API 失敗 propagate に加え、
 reconciliation 系: stale 成功の誤 close 拒否・遅延失敗の誤起票拒否・
@@ -197,7 +202,10 @@ duplicate 最新状態 merge・旧 run rerun の updated_at 順序・ambiguous
 ordering の hold・dropped notification 復元・atomic tuple 採用・
 非 completed/未知 status の pending hold・失敗 run 自身の in_progress
 rerun・識別不能 record（必須 field 欠落・`{}`・非 object・非配列
-history）の fail-closed 停止・out-of-scope の過剰除外なし・unknown
+history）の fail-closed 停止・out-of-scope の過剰除外なし・
+attempt 単位の証拠保持（同 id 失敗 a1→成功 a2 close・失敗/取消/
+実行中 rerun は保持・異 sha rerun は coverage 必須・別 run の新しい
+失敗が残る間は誤 close しない・古い成功で記録 attempt を消さない）・unknown
 conclusion の operational 化）。
 `mise run test-ci-tracker` で CI/ローカル共通に実行可能。実 GitHub
 API・実 Issue・実 dispatch はテストで発生させない。
@@ -225,7 +233,7 @@ API・実 Issue・実 dispatch はテストで発生させない。
 
 ## Verification
 
-- [x] `mise run test-ci-tracker` → 56/56 pass（初版 34→45→56）。
+- [x] `mise run test-ci-tracker` → 63/63 pass（初版 34→45→56→63）。
 - [x] `mise exec -- actionlint .github/workflows/ci-issue-tracker.yml` → OK。
 - [x] `mise exec -- actionlint .github/workflows/ci.yml` → OK（ci.yml 無変更）。
 - [x] `mise exec -- prek run --all-files` → 全 hook pass。
