@@ -101,7 +101,7 @@ const JOB_LANES = [
   [/^dep-guard\b/, "dep-guard"],
   [/^gui-real\b/, "gui-real"],
   [/^(ruviform-access|preflight)\b/, "preflight"],
-  [/^(evidence|summary)\b/, "evidence"],
+  [/^(evidence|summary|ci-summary)\b/, "evidence"],
 ];
 function jobLane(name, workflowName) {
   if (workflowName === "consumer-impact-check") return "consumer-impact";
