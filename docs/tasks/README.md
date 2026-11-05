@@ -143,6 +143,175 @@ Directory: `docs/tasks`
 | TASK-034RTggRy4UgfgaFSfQY4f | T1 ruviform-io-structured scaffold・共通契約・JSON Format (Issue #297) | done | [issue-297-t1-crate-and-contract.md](./issue-297-t1-crate-and-contract.md) |
 | TASK-034RTghO8nOg3ZiYGau2pe | T2 YAML/TOML Format module・Budget 写像・2相分類 (Issue #297) | done | [issue-297-t2-yaml-toml.md](./issue-297-t2-yaml-toml.md) |
 | TASK-034RTgiDjrTlcheIw55nAn | T3 file feature・workspace 台帳・総合検証 (Issue #297) | done | [issue-297-t3-file-feature.md](./issue-297-t3-file-feature.md) |
+| TASK-034TKw7zfSgzOzI8oNY79D | Issue #298 T1 — csv module 本体と共有拡張 | done | [issue-298-t1-csv-module.md](./issue-298-t1-csv-module.md) |
+| TASK-034DgWopBD0NzsxoZGVxdm | Issue #298 T2 — file feature 合成・試験仕上げ・README・impl record | done | [issue-298-t2-file-docs.md](./issue-298-t2-file-docs.md) |
+| TASK-GONrZ5DneYV2H4ryIMA4EK | T1 クレート scaffold + 共有型 + Gzip/Deflate 両 module (Issue #300) | done | [issue-300-t1-crate-core.md](./issue-300-t1-crate-core.md) |
+| TASK-2v8sucBEWaF0frYXFmed85 | T2 AC1-AC6 試験群 + rustdoc/crate README (Issue #300) | done | [issue-300-t2-tests.md](./issue-300-t2-tests.md) |
+| TASK-OjT0wWawFEmwEe6bibhaMq | T3 compression-verify CI lane + classifier + impl record (Issue #300) | done | [issue-300-t3-ci-lane.md](./issue-300-t3-ci-lane.md) |
+| TASK-emXL9hZuOAzbTa1mAxJSN3 | T1 TAR header Parser・共通型拡張・Streaming Reader/Pending (Issue #303) | done | [issue-303-t1-tar-reader.md](./issue-303-t1-tar-reader.md) |
+| TASK-klizn5ZWBc8d4fBskVs3or | T2 TAR Writer・宣言 size cap・finish 型分離・PAX x 出力 (Issue #303) | done | [issue-303-t2-tar-writer.md](./issue-303-t2-tar-writer.md) |
+| TASK-9zUBxcJWsJbiJzI8S143vV | T3 crate doc/README・台帳・main 取込・最終検証 (Issue #303) | done | [issue-303-t3-ledger-verify.md](./issue-303-t3-ledger-verify.md) |
+| TASK-QNzC22ZqitcqDhco1hHMKj | Issue #307 T1: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | done | [issue-307-t1-attach-frame-base-verified-context.md](./issue-307-t1-attach-frame-base-verified-context.md) |
+| TASK-034Rp7jV966SX0fG78cOBL | Issue #310-T1 browser-test パッケージ骨格・serve・page protocol | done | [issue-310-01-browser-harness-package.md](./issue-310-01-browser-harness-package.md) |
+| TASK-034Rp7kQsMmyk0At2QYrwX | Issue #310-T2 共有 Fixture/Driver/Assertion (gesture/receipt/state/theme/canvas/a11y) | done | [issue-310-02-shared-fixtures-and-drivers.md](./issue-310-02-shared-fixtures-and-drivers.md) |
+| TASK-034Rp7lRJbB15NEGHdCXpU | Issue #310-T3 実ブラウザ spec・Consumer-shaped fixture・CI/evidence 接続 | done | [issue-310-03-specs-ci-evidence.md](./issue-310-03-specs-ci-evidence.md) |
+| TASK-8hTQjGqBYDGbC2jTMks1j8 | T1 versioned fixture corpus + ui/guitest package 骨格（Issue #311） | done | [issue-311-t1-fixture-corpus.md](./issue-311-t1-fixture-corpus.md) |
+| TASK-jXU3ZGuh6DP2FfCSvkx5FC | T2 TS wire validators — ipcwire/bindingwire + conformance テスト（Issue #311） | done | [issue-311-t2-ts-wire-validators.md](./issue-311-t2-ts-wire-validators.md) |
+| TASK-KayYlp12EsEWZZKk2pMZgF | T3 recorder/replay/oracle + consumer mocks + seeded シナリオ（Issue #311） | done | [issue-311-t3-recorder-replay-oracle.md](./issue-311-t3-recorder-replay-oracle.md) |
+| TASK-uyCbW614DqUYmATBzUrQxz | T4 fault matrix + Rust conformance lanes + mise/CI/AGENTS 同期 + IR（Issue #311） | done | [issue-311-t4-fault-matrix-lanes.md](./issue-311-t4-fault-matrix-lanes.md) |
+| TASK-034RBNKfGF6WS4OfHfW1of | Issue #327 CI計測Baseline 計測実施・文書化 | done | [issue-327-t1-baseline-measurement.md](./issue-327-t1-baseline-measurement.md) |
+| TASK-uRQkJW5851dqMXehrKNZkI | Issue #328 T1 — ci.yml / consumer-impact-check.yml へ PR concurrency block 適用 | done | [issue-328-t1-ci-pr-concurrency.md](./issue-328-t1-ci-pr-concurrency.md) |
+| TASK-034RBIMQzuYAewg2JXTXOk | T1 mise task install/freshness 分離 + ui-verify setup ステップ（Issue #330） | done | [issue-330-t1-mise-ui-install-dedup.md](./issue-330-t1-mise-ui-install-dedup.md) |
+| TASK-O3Q2a0lPvct9PFKBgBig2j | T1 Playwright Chromium cache・準備 step 分離（Issue #332） | done | [issue-332-t1-playwright-browser-cache.md](./issue-332-t1-playwright-browser-cache.md) |
+| TASK-69XeSXbqn9bazeVEgD0LzH | T1 ci/impact classifier + gate 実装（Issue #333） | done | [issue-333-t1-impact-classifier.md](./issue-333-t1-impact-classifier.md) |
+| TASK-auXqAVyXzCi31qldUWzY6t | T2 ci.yml Shadow wiring（impact/ci-gate job・trigger types・mise task・AGENTS.md）（Issue #333） | done | [issue-333-t2-ci-gate-shadow-wiring.md](./issue-333-t2-ci-gate-shadow-wiring.md) |
+| TASK-AacpjXZ02dbHUiacENEOSZ | T1 SinkDegraded Clone derive 追加（Issue #336） | done | [issue-336-t1-sink-degraded-clone.md](./issue-336-t1-sink-degraded-clone.md) |
+| TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
+| TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
+| TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
+| TASK-034NlQlLZkVZRtEVfF8Sdp | L1 子構造再編（Shared/Inner→L1Child+InstShared split・demux・converge split・Destroying gate） | done | [l1-child-instance-split.md](./l1-child-instance-split.md) |
+| TASK-034LNY736TLX2w3k4RFFZM | plugin-core L1 基盤（契約移設 + Lifecycle Failed + wire codec） | done | [l1-core-contracts-and-wire-codec.md](./l1-core-contracts-and-wire-codec.md) |
+| TASK-034OpsGOwquB9NPINeMKyz | T12. docs/ledger・最終検証（#120/#101 trigger・index・mise 全量・audit） | done | [l1-diagnostics-ledger-and-verify.md](./l1-diagnostics-ledger-and-verify.md) |
+| TASK-034MrsLWkKNHnu7jX1ghp8 | L1 endpoint（leg 移出・arm channel・pending_arm・leg 返却・drain-before-early-return） | done | [l1-endpoint-arm-and-leg-return.md](./l1-endpoint-arm-and-leg-return.md) |
+| TASK-034N3QIPDPFbB37OxHMZLy | Issue #123 L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | done | [l1-internal-cleanup.md](./l1-internal-cleanup.md) |
+| TASK-034LNYf8Qj1NeGAKmaP7B4 | plugin-host L1 プロキシ制御面（spawn/handshake/コマンド転送/クラッシュ検出） | done | [l1-proxy-control-plane.md](./l1-proxy-control-plane.md) |
+| TASK-034NlQmTAKwSUzU49wWswM | L1 route pool + 隔離選択面（OutOfProcessIsolation・Route struct variant・pool lifecycle） | done | [l1-route-pool-and-isolation-surface.md](./l1-route-pool-and-isolation-surface.md) |
+| TASK-034LNYmL2ezSeFFgddaeDX | L1 共有メモリデータ面 + RT 脚 + pass-through | done | [l1-shm-data-plane-and-rt-legs.md](./l1-shm-data-plane-and-rt-legs.md) |
+| TASK-034NOXIiAgzm2Ur1Ud7nLt | L1 supervisor core（src/supervisor.rs — watch/poll state machine・attempt replay・checkpoint bound・host binding） | done | [l1-supervisor-core.md](./l1-supervisor-core.md) |
+| TASK-034NOXIS4eJ3G8peEvr6pq | L1 supervisor E2E（実子 restart・bundle burst・crash-loop GaveUp・restore 分類・Send witness） | done | [l1-supervisor-e2e.md](./l1-supervisor-e2e.md) |
+| TASK-034NOXJpTlwWqDQf7WFQFQ | L1 supervisor final verification（Full Gate・AC 証拠・IR・status 同期） | done | [l1-supervisor-final-verification.md](./l1-supervisor-final-verification.md) |
+| TASK-034NOXyYOTNwDoH2c7VhrV | l1-test-worker fault flags（--fail-restore・--state-unsupported・--fail-initialize・--fail-start-processing） | done | [l1-test-worker-fault-flags.md](./l1-test-worker-fault-flags.md) |
+| TASK-034NXuA0ENhlZxgP8zpnqd | L1 video docs sweep（crate README・親文書 re-engagement 注記・test-spec v3 reconcile・literal sweep） | done | [l1-video-docs-sweep.md](./l1-video-docs-sweep.md) |
+| TASK-034NXuzqcpqV0zLNlPSHUR | L1 video fixture + 公開面 E2E（l1-test-video-worker + tests/l1_video_e2e.rs — Failed parity・frame 内容・cross-kind） | done | [l1-video-fixture-and-e2e.md](./l1-video-fixture-and-e2e.md) |
+| TASK-034NXuq6kT7i5UmNviPjy6 | L1 video host surface（video() façade・Route/Slot video arm・descriptors kind-tag・create_video_instance・Creating ゲート・vshm::Segment・VideoL1Instance） | done | [l1-video-host-surface.md](./l1-video-host-surface.md) |
+| TASK-034NXuAACPRKeBy1TSW1EO | L1 video/NONRT final verification（Full Gate・AC/R-V 証拠・IR・status 同期・closeout） | done | [l1-video-l1-final-verification.md](./l1-video-l1-final-verification.md) |
+| TASK-034NXupvMzQElYkWehw8ln | L1 video runner + erased surface（erase_video・run_video・VideoEntry・vshm attach・reference bin・runner E2E） | done | [l1-video-runner-and-erased-surface.md](./l1-video-runner-and-erased-surface.md) |
+| TASK-034NlQlfkFL52FRHRjhYmr | L1 wire v2 codec + 全系統 v2 cutover（envelope・新動詞・InstanceLimit・registry・harness） | done | [l1-wire-v2-codec-cutover.md](./l1-wire-v2-codec-cutover.md) |
+| TASK-034NlPHnwYkRTWHq1nvYvo | L1 wire v2 docs/metadata sweep（README・bin doc・test-spec・親文書 addenda・literal sweep） | done | [l1-wire-v2-docs-sweep.md](./l1-wire-v2-docs-sweep.md) |
+| TASK-034NXuhy2LmLb9qDBo7gj6 | L1 wire v3 codec + vshm 定盤 + InvalidValue（video 動詞 tag 12-22・Reply 4-7・video 型 codec・WIRE_MAX_VIDEO_*） | done | [l1-wire-v3-video-codec.md](./l1-wire-v3-video-codec.md) |
+| TASK-034NhK97jcINkcEKDNbpum | L1 wire バージョン方針の記録と契約検証の補強 | done | [l1-wire-version-policy.md](./l1-wire-version-policy.md) |
+| TASK-034Qfs0cxlLQ9xk1dN3NJM | T-1 typed buffer arena + io views + compiler (schedule/slots/PDC) | done | [m2-t1-typed-compiler-buffer-io.md](./m2-t1-typed-compiler-buffer-io.md) |
+| TASK-034Qfs3QuOMXdVC8ZnuKz6 | T-2 typed RT runtime: GraphProcessor, GraphRuntime/RtRuntime, activation, faults | done | [m2-t2-typed-rt-runtime-activation.md](./m2-t2-typed-rt-runtime-activation.md) |
+| TASK-034Qfs4U6jKNPhfoasgTFI | T-3 acceptance tests + ownership PoC + fault injection | done | [m2-t3-tests-ownership-poc-faults.md](./m2-t3-tests-ownership-poc-faults.md) |
+| TASK-034Qfs62FTCiTj3vNuOwAz | T-4 golden legacy, EX/TA traceability, merge+lockfile+verification, impl record | done | [m2-t4-golden-traceability-verification.md](./m2-t4-golden-traceability-verification.md) |
+| TASK-034JNwTZ8WalgowFahLc8E | Timecode API の FrameRate 移行（破壊的シグネチャ置換と呼び出し側移行） | done | [migrate-timecode-to-framerate.md](./migrate-timecode-to-framerate.md) |
+| TASK-034KoQ7sXAxjPHQbdWqDVW | Issue #90 文書クローズと全量検証 | done | [music-time-closeout.md](./music-time-closeout.md) |
+| TASK-gJ0wsCnJrG8Wo0JQSENFtz | 音楽時間 ABI 整合検証 + Issue #33 クローズ | done | [music-time-design-verify.md](./music-time-design-verify.md) |
+| TASK-034KoQ1xQURHojhURlBqP6 | media-core::music モジュール実装 + テスト | done | [music-time-media-core-module.md](./music-time-media-core-module.md) |
+| TASK-034KpKrywhQhq1kR5WqrgS | TransportInfo.musical + アダプタ写像実装 | done | [musical-transport-abi-impl.md](./musical-transport-abi-impl.md) |
+| TASK-034KpKs0YVpCCF1YlXTyqt | Issue #91 文書クローズと全量検証 | done | [musical-transport-closeout.md](./musical-transport-closeout.md) |
+| TASK-034JRcXSEdyHdLa42O9KKP | Issue #24 文書クローズと全量検証 | done | [offline-exec-closeout.md](./offline-exec-closeout.md) |
+| TASK-034JRcXokykm0XlpOqcor0 | 並列ワーカープール駆動（有界キュー・順序再構成） | done | [offline-exec-parallel.md](./offline-exec-parallel.md) |
+| TASK-034JRcWTeJbPQAh5fUwPZs | オフライン駆動プリミティブ（CancellationToken/Progress/OfflineError/逐次ドライバ） | done | [offline-exec-primitives.md](./offline-exec-primitives.md) |
+| TASK-034L6ycSsF8VW32LLoNxXr | Implement video plugin core contract | done | [ofx-core-contract-implementation.md](./ofx-core-contract-implementation.md) |
+| TASK-034L6yiJbB3boniBUWvfmC | OFX host closeout | done | [ofx-host-closeout.md](./ofx-host-closeout.md) |
+| TASK-034L6yib4dmV9rd1MUZxbw | OFX host final verification | done | [ofx-host-final-verification.md](./ofx-host-final-verification.md) |
+| TASK-034N3SaVVNHQRJjWEndfH7 | OFX host window lease + clip props clone 実装 | done | [ofx-host-window-lease-implementation.md](./ofx-host-window-lease-implementation.md) |
+| TASK-034L6yeVFSaiVUoV4RiRtm | Implement native OFX runtime | done | [ofx-native-runtime-implementation.md](./ofx-native-runtime-implementation.md) |
+| TASK-034L6yh0fBmRabh1TMLv2F | Implement OFX video rendering | done | [ofx-render-implementation.md](./ofx-render-implementation.md) |
+| TASK-034N9p1bBWmE7AioxpndKq | OFX UAF residuals — non-catalog window lease + lifecycle hardening | done | [ofx-uaf-residuals-non-catalog-window-lease-lifecycle-hardening.md](./ofx-uaf-residuals-non-catalog-window-lease-lifecycle-hardening.md) |
+| TASK-034QidaAEbNmHe5Q6M5sRI | T-1 ChannelLevel::measure extraction + deps + compile binding centralization | done | [p185-t1-level-extract-and-binding-centralization.md](./p185-t1-level-extract-and-binding-centralization.md) |
+| TASK-034QidbvzKgQyKTfniAhWG | T-2 RtRuntime probe plumbing: frame_cursor, published_plan, command drains, tap sites, deck channels | done | [p185-t2-runtime-probe-plumbing-taps.md](./p185-t2-runtime-probe-plumbing-taps.md) |
+| TASK-034Qidce7Pq9AxEezYMaNE | T-3 typed::probe contract: capability resolver, ProbeBroker, ProbeDeck/RtProbe, ProbeCollector | done | [p185-t3-probe-contract-broker-collector.md](./p185-t3-probe-contract-broker-collector.md) |
+| TASK-034QidcTgfNesKcwIF1aZ7 | T-4 PoC acceptance tests, rt alloc, perf evidence, impl record, merge+verify | done | [p185-t4-probe-poc-tests-verification.md](./p185-t4-probe-poc-tests-verification.md) |
+| TASK-034Rp2aMrgIhyU5ZATHDQz | T-1 core primitives: Gauge/Histogram + RT-lane tests | done | [p277-t1-core-primitives-gauge-histogram.md](./p277-t1-core-primitives-gauge-histogram.md) |
+| TASK-034Rp2bMkXB7Xa0FKSWPw9 | T-2 source contract: descriptors/SourceId/Registrar/Lease/lifecycle + tests + README | done | [p277-t2-source-contract-registration-lifecycle.md](./p277-t2-source-contract-registration-lifecycle.md) |
+| TASK-034RTukbgTWDcKGHBdKYYN | P279-T1 l1/sources.rs 4 Descriptor + AudioSourceLeases + slot state + mod tests | done | [p279-t1-l1-sources-descriptors-leases.md](./p279-t1-l1-sources-descriptors-leases.md) |
+| TASK-034RTukTevxIOK0EVaR8A3 | P279-T2 create_instance/destroy registrar wiring + PluginHost注入面 + tests | done | [p279-t2-create-destroy-registrar-wiring.md](./p279-t2-create-destroy-registrar-wiring.md) |
+| TASK-034IdQiK2RW8ol4gpyUYLb | Rust toolchain pin と lockfile 確定 | done | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
+| TASK-034OpskKobU4qEsX7F7IYc | T6. stderr piped + drain thread（案A・FFI 局所化・fixture knob） | done | [pipe-and-drain-l1-stderr.md](./pipe-and-drain-l1-stderr.md) |
+| TASK-034MrsDzlHRpUHHLtYkZdN | plugin-core endpoint 前提面（EndpointUnavailable・fallible encode・Send capability・view impl） | done | [plugin-core-endpoint-primitives.md](./plugin-core-endpoint-primitives.md) |
+| TASK-034LNYeFTd7EgCwbDA0GWD | ruviform-plugin-export 新設 + run() ランナー + l1-runner bin | done | [plugin-export-crate-and-l1-runner.md](./plugin-export-crate-and-l1-runner.md) |
+| TASK-034Mrt1HhkO2vVKksdYxgA | endpoint process/process_audio shell + グラフ E2E + rt_ レーン（bound clip・in-bus-first・source-position 慣行） | done | [plugin-graph-e2e-and-rt-lane.md](./plugin-graph-e2e-and-rt-lane.md) |
+| TASK-034JZPGUI0000000000006 | Issue #30 ADR + 文書クローズ | done | [plugin-gui-poc-closeout.md](./plugin-gui-poc-closeout.md) |
+| TASK-034JZPGUI0000000000005 | plugin-gui PoC ハーネス + 実機実験 | done | [plugin-gui-poc-harness.md](./plugin-gui-poc-harness.md) |
+| TASK-034LNYndN4rzshflcqGHt5 | PluginHost コンポジット + 選択 API + doc 整合 | done | [plugin-host-composite-and-l1-e2e.md](./plugin-host-composite-and-l1-e2e.md) |
+| TASK-034MrsUoYlicb5uG8XpODT | PluginHost endpoint 公開面（prepare_endpoint・latency_frames・統一拒否表・crate doc） | done | [plugin-host-endpoint-surface.md](./plugin-host-endpoint-surface.md) |
+| TASK-Cay381BHNWhN855kjvMcL1 | Issue #74 文書クローズと全量検証 | done | [plugin-host-l0-closeout.md](./plugin-host-l0-closeout.md) |
+| TASK-AMKTeO5Inr8CXr3RzX3uOV | ruviform-plugin-host クレート実装 + テスト | done | [plugin-host-l0-crate.md](./plugin-host-l0-crate.md) |
+| TASK-034JZLISO0000000000005 | plugin-host API 整合検証 + Issue #31 クローズ | done | [plugin-isolation-verify.md](./plugin-isolation-verify.md) |
+| TASK-034LNYvBEBtmjJIUa6xJMi | Issue #76 プラグイン L1 分離 closeout | done | [plugin-l1-closeout.md](./plugin-l1-closeout.md) |
+| TASK-034LNYv07MQpWKTmfQ3vX0 | Issue #76 プラグイン L1 分離 final verification | done | [plugin-l1-final-verification.md](./plugin-l1-final-verification.md) |
+| TASK-034JfHz5u1uXcPkG8d8t4B | PoC 採否 ADR 確定（エビデンス集約・confirm/revise・accepted 遷移） | done | [poc-adr-finalize.md](./poc-adr-finalize.md) |
+| TASK-034JgsGOtyuy2MkLRLZQI5 | clack 系による CLAP binding PoC（最小ゲインプラグイン） | done | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
+| TASK-034JfHyxKSwvhiQ0sKqjXQ | PoC フロントエンド比較と配布検証（Solid 移植・単一バイナリ・OS 別方針） | done | [poc-frontend-and-dist.md](./poc-frontend-and-dist.md) |
+| TASK-034JfH9TmzdaGlsimZsJiq | PoC メッセージ境界計測（JSON RTT・バイナリ pull・evaluate_script push） | done | [poc-message-boundary.md](./poc-message-boundary.md) |
+| TASK-034JfHavtGmdqmRGyDAbch | PoC ネイティブサーフェス合成（wgpu 隣接構成・PR #1762 評価） | done | [poc-native-surface.md](./poc-native-surface.md) |
+| TASK-034JfGDrzj4yLZMu9A4qHS | PoC 描画バックエンド計測（canvas2d/webgl2/webgpu フレーム統計） | done | [poc-render-backends.md](./poc-render-backends.md) |
+| TASK-034JfGCUwtk0lzJvJPr36B | PoC UI ハーネスホスト（独立ワークスペース・wry+tao・計測契約） | done | [poc-ui-harness-host.md](./poc-ui-harness-host.md) |
+| TASK-034JgsHeZt7Bm40uBMo9wg | coupler-rs vst3 による VST3 binding PoC（最小ゲインプラグイン） | done | [poc-vst3-binding-adapter.md](./poc-vst3-binding-adapter.md) |
+| TASK-034MLSyEUOp70P1hRsepM9 | 実プラグイン L1 E2E + opt-in lane（tests/l1_real_adapter_e2e.rs 両規格・mise task・l1-real-verify job・OFX 境界明文化・doc 同期） | done | [real-adapter-e2e-and-lane.md](./real-adapter-e2e-and-lane.md) |
+| TASK-034MLSzaZebh5KuCkE4guN | real-adapter final verification + closeout（Full Gate・opt-in lane 実測・AC 証跡・status 同期） | done | [real-adapter-final-verification.md](./real-adapter-final-verification.md) |
+| TASK-034MLSxXJkDzlYvxqtGWDY | 規格別 runner bin（required-features=["host"]・DLL_PREFIX fixture 解決・RUVIFORM_L1_REAL_PLUGIN_DIR・compile-time 固定 factories） | done | [real-adapter-runner-bins.md](./real-adapter-runner-bins.md) |
+| TASK-034Jf4gzf7OAwNOoW3t9WV | impl record と文書整合 | done | [record-impl-and-sync-docs.md](./record-impl-and-sync-docs.md) |
+| TASK-034IwCiYXp6ub3O8Brcs3L | 設定ファイルのレビューと最小修正 | done | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
+| TASK-034IwCiByN74V3hysJ9iTR | AGENTS.md の Ruviform 向け節単位改稿 | done | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
+| TASK-034IwCbgksOGvhF5E4CQbp | README.md の Ruviform 向け全面改稿 | done | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
+| TASK-034LFHlxNkMOGDilPsdP0f | 既存カーネルの RgbaF32 arm 拡張（CompositeOver/Crossfade/AffineTransform） | done | [rgba-f32-composite-affine-arms.md](./rgba-f32-composite-affine-arms.md) |
+| TASK-034LFH4wXKj32ElWzaI2lb | RgbaF32 pixel format + transfer/primaries 内部基盤 | done | [rgba-f32-format-and-transfer-internals.md](./rgba-f32-format-and-transfer-internals.md) |
+| TASK-034KV6AzIxXBCyJdl6BFjk | RT 観測計測ハーネスの実装（PoC scaffolding・criterion ベンチ・スモーク配線） | done | [rt-observability-bench-harness.md](./rt-observability-bench-harness.md) |
+| TASK-034KV6AXTsAaxjMCc4m8px | RT 観測 PoC の計測実行・experiment/impl 記録・#103 判定フィードバック | done | [rt-observability-poc-run-and-report.md](./rt-observability-poc-run-and-report.md) |
+| TASK-034JglHs8cNMDOvyZFeUpc | PoC example（list_devices・play_sine）実機手順と実験ログ | done | [run-device-poc-examples-and-exp-log.md](./run-device-poc-examples-and-exp-log.md) |
+| TASK-034JPwYHzq8qU5fxLnMLlO | 低負荷再計測と生データ収集 | done | [run-dispatch-remeasure.md](./run-dispatch-remeasure.md) |
+| TASK-034IwCjptfvbSFBQaSKigx | プレースホルダー最終スイープ・総合検証と ADR メタデータ編集 | done | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
+| TASK-034Jf49f5gwAy5fpTPvXG9 | ベンチ実行と結果収集 | done | [run-simd-bench-and-collect-results.md](./run-simd-bench-and-collect-results.md) |
+| TASK-H0PE3xMNpsPWNpf1zHdJtV | Issue #75 文書クローズと全量検証 | done | [ruviform-dsp-closeout.md](./ruviform-dsp-closeout.md) |
+| TASK-mNC1TFjl14YiCKvImNjrB6 | ruviform-dsp クレート実装 + テスト | done | [ruviform-dsp-crate.md](./ruviform-dsp-crate.md) |
+| TASK-6yBeOSA8bu0fh2nwosiwVj | 第 2 ターゲット設計の整合検証 + Issue #32 クローズ | done | [second-target-design-verify.md](./second-target-design-verify.md) |
+| TASK-034JQH8VJI6x2EXHMsOJU9 | 公開カーネル API + ルーティング + panic-free 化 + 精度契約 doc | done | [simd-dispatch-api-routing.md](./simd-dispatch-api-routing.md) |
+| TASK-034JQH9WjGTpvxbXgZ1sXR | Issue #53 文書クローズと全量検証 | done | [simd-dispatch-closeout.md](./simd-dispatch-closeout.md) |
+| TASK-034JQH8r1Mfi5CItnm9Ebf | fearless_simd 昇格 + dsp モジュール新設（SimdToken + カーネル本体） | done | [simd-dispatch-token-and-kernels.md](./simd-dispatch-token-and-kernels.md) |
+| TASK-034JQH9rC2GoOQC8WTqmpY | 本番経路の検証（forced 単体・matrix 列・RT no-alloc） | done | [simd-dispatch-verification.md](./simd-dispatch-verification.md) |
+| TASK-034J6Pq9WM0XMkGqryZrvQ | フォローアップトリアージ由来の小修正（try_new・Custom 不変条件・丸め注記） | done | [small-fixes-from-followup-triage.md](./small-fixes-from-followup-triage.md) |
+| TASK-034J5KRwAtAqF1xu0moYuS | Issue #18 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-18.md](./sync-docs-and-verify-issue-18.md) |
+| TASK-034Jgi4vWCuaMUu3POps1c | Issue #20 ドキュメント同期と総合検証 | done | [sync-docs-and-verify-issue-20.md](./sync-docs-and-verify-issue-20.md) |
+| TASK-034JNwUPMqjwynDi5XzU09 | ドキュメント同期と Issue #58 完了検証（AGENTS.md 型列挙・全量検証・監査） | done | [sync-docs-and-verify-issue-58.md](./sync-docs-and-verify-issue-58.md) |
+| TASK-034JgsIynX51YyqUrzgppO | プラグイン基盤のドキュメント同期と総合検証 | done | [sync-docs-and-verify-plugin-foundation.md](./sync-docs-and-verify-plugin-foundation.md) |
+| TASK-034JcD43sDKFAlPxYuAWmj | Issue #26 ドキュメント同期（baseline 採否表・AGENTS・README）と総合検証 | done | [sync-docs-issue-26.md](./sync-docs-issue-26.md) |
+| TASK-034JxObKHc0v3kUhnQiePv | RT 基盤ドキュメント同期と総合検証 | done | [sync-rt-foundation-docs-and-verify.md](./sync-rt-foundation-docs-and-verify.md) |
+| TASK-034JOul8zCtHMR49d9c78V | write_interleaved の per-chunk timestamp 合成 | done | [synthesize-per-chunk-timestamps.md](./synthesize-per-chunk-timestamps.md) |
+| TASK-034Qhxbnndd80h2whxhIG4 | Issue 191 T1: MediaSink port + StagedOutput in ruviform-media-io | done | [task-191-t1-media-io-sink-staged.md](./task-191-t1-media-io-sink-staged.md) |
+| TASK-034Qhxc5D3P3En9XfxxPSm | Issue 191 T2: ruviform-io-wav crate (encoder, muxer, capabilities) | done | [task-191-t2-wav-backend.md](./task-191-t2-wav-backend.md) |
+| TASK-034QhxcLDQJmQx1cut9ge3 | Issue 191 T3: integration tests + verification lanes + impl record inputs | done | [task-191-t3-tests-verification.md](./task-191-t3-tests-verification.md) |
+| TASK-voSb34RCLdA14Lc1kTfNlD | Issue 197 T1: Demuxer::seekable + make_decoder + DecodeMode boundary additions | done | [task-197-t1-demuxer-seekable-make-decoder.md](./task-197-t1-demuxer-seekable-make-decoder.md) |
+| TASK-e5oaEOXS8FGE9PrXrLwkGi | Issue 197 T2: ruviform-media-reader crate — metadata, SourceReader, prefetch pipeline | done | [task-197-t2-media-reader-crate.md](./task-197-t2-media-reader-crate.md) |
+| TASK-02vjFSak80ajcQNqOMIF0s | Issue 197 T3: RD-01..RD-10 acceptance tests + verification record | done | [task-197-t3-tests-verification.md](./task-197-t3-tests-verification.md) |
+| TASK-eM0HvOCV03pTzfSqyt3jgm | Issue 198 T1: render core — OfflineRenderSupport, PreparedRender, Progress::bump_by, deps | done | [task-198-t1-render-core.md](./task-198-t1-render-core.md) |
+| TASK-K54oAzr1E0TFOYRxcMd30t | Issue 198 T2: sequential driver + staged output lifecycle | done | [task-198-t2-driver-output.md](./task-198-t2-driver-output.md) |
+| TASK-ubO5TxPGQDZSaLVHth3aaa | Issue 198 T3: OF-01..OF-07 acceptance tests + verification + merge + impl record | done | [task-198-t3-tests-verification.md](./task-198-t3-tests-verification.md) |
+| TASK-034Qooz8UlxyXeGHTFwHXk | Issue 233 T1: prefetch contract doc rewrites — expected_first stream-position assertion + pump iteration contract | done | [task-233-t1-contract-docs.md](./task-233-t1-contract-docs.md) |
+| TASK-034QoozSINn40AO2e1Ke1k | Issue 233 T2: discard surface — PrefetchConsumer::discard_pending + DiscardReport + seek_discard_pending pending purge | done | [task-233-t2-discard-pending.md](./task-233-t2-discard-pending.md) |
+| TASK-034QooAu3EbKEEhgcUSJnv | Issue 233 T3: reopen_at fused reopen-to-seek-target | done | [task-233-t3-reopen-at.md](./task-233-t3-reopen-at.md) |
+| TASK-034QooB7rhCVhK4sqW6lzZ | Issue 233 T4: verification sweep + implementation record | done | [task-233-t4-verify-ir.md](./task-233-t4-verify-ir.md) |
+| TASK-034RoYsOdygNXYa3BanrU1 | Issue 276 T1: logging config/API types + feature wiring | done | [task-276-t1-config-and-wiring.md](./task-276-t1-config-and-wiring.md) |
+| TASK-034RoYu0iSpPIN9pnjyhDU | Issue 276 T2: bounded writer + sinks + build result | done | [task-276-t2-writer-sinks-build.md](./task-276-t2-writer-sinks-build.md) |
+| TASK-034RoYvGpykxcXUHa5X8VR | Issue 276 T3: contract tests + host example + docs + verification | done | [task-276-t3-tests-docs-verify.md](./task-276-t3-tests-docs-verify.md) |
+| TASK-034S312gtUiTestT1GG77 | Issue 312 T1: ruviform-ui-test skeleton — proto types + journal + FakeHost + fixture/TestApp + HeadlessIo | done | [task-312-t1-contract-headless-core.md](./task-312-t1-contract-headless-core.md) |
+| TASK-034S312gtUiTestT2HH88 | Issue 312 T2: control plane — TestAgent + transport frames/env + TestDriver + dummy_app bin | done | [task-312-t2-control-plane.md](./task-312-t2-control-plane.md) |
+| TASK-034S312gtUiTestT3II99 | Issue 312 T3: agent gate unit tests + cross-process E2E + README/crates index | done | [task-312-t3-tests-docs.md](./task-312-t3-tests-docs.md) |
+| TASK-034LFHdEfDbppnNeuh0u48 | ToneMapSdr カーネル実装（BT.2390 EETF） | done | [tone-map-sdr-kernel.md](./tone-map-sdr-kernel.md) |
+| TASK-034IRZB7D249qUO1bLldy4 | AGENTS.md 暫定原則の確定契約化 | done | [update-agents-interim-principles-to-fixed-contracts.md](./update-agents-interim-principles-to-fixed-contracts.md) |
+| TASK-034IwCbI6X4pBBby5Donzz | apm.yml 識別子更新と APM lockfile 再生成 | done | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
+| TASK-034IRZk613ql8oL3Y2Yxli | README.md の Issue #1 ベースライン向け差分更新 | done | [update-readme-for-issue-1-baseline.md](./update-readme-for-issue-1-baseline.md) |
+| TASK-034IRZFUgbTZlBX2kH7psN | Issue #1 リポジトリ反映の総合検証と spec/design バックリンク | done | [verify-issue-1-repo-reflection.md](./verify-issue-1-repo-reflection.md) |
+| TASK-034OpsG2QXJ66gdCKuXWSJ | T11. video parity（stderr・cause・counter 非混入・fixture 同条件） | done | [verify-l1-video-diagnostics-parity.md](./verify-l1-video-diagnostics-parity.md) |
+| TASK-034JO3XBRTT20ZNbIBDPRM | MSRV 1.89 実測検証と Issue #52 完了確認 | done | [verify-msrv-1-89-build.md](./verify-msrv-1-89-build.md) |
+| TASK-034IdQxdPQUxXweHBN1ZxT | 再現インストール検証と #3 転記用作業メモ | done | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |
+| TASK-034JZVID00000000000070 | Issue #27 文書クローズと全量検証 | done | [video-engine-closeout.md](./video-engine-closeout.md) |
+| TASK-034JZVID00000000000060 | ruviform-video クレート実装 + テスト | done | [video-engine-crate.md](./video-engine-crate.md) |
+| TASK-034N3MMigFuy0YOIHJFklc | video-proc rt_process_* への assert_no_alloc 測定窓適用 + OFX 評価 | done | [video-proc-assert-no-alloc-lane.md](./video-proc-assert-no-alloc-lane.md) |
+| TASK-034MLSxnXfu3lnbTX3LQzI | VST3 host bridge（host feature・Vst3Library/dlopen+class scan・COM host objects・lifecycle 写像・Vst3PluginFactory） | done | [vst3-host-bridge.md](./vst3-host-bridge.md) |
+| TASK-034JP1sJ8ZJThe3Fj9w0mr | clack thread-check の有効化と process での is_audio_thread 照会 | done | [wire-clap-thread-check.md](./wire-clap-thread-check.md) |
+| TASK-034OpsCV3XA7dtr4iHd2sg | T7. FailureCause 分類配線（first-observed・timeout-before-kill・通知伝搬） | done | [wire-failure-cause-classification.md](./wire-failure-cause-classification.md) |
+| TASK-034OpshwEw34KxMBdhQ5mw | T4. audio counters 計装・query 面（InstShared・RtLeg::pass_through 内部） | done | [wire-l1-audio-counters.md](./wire-l1-audio-counters.md) |
+| TASK-034LFHddlrfvXu5Jlmwdr0 | working space カーネル実装（ToWorking + FromWorking） | done | [working-space-kernels.md](./working-space-kernels.md) |
+| TASK-034JPwZ8htMzYNPNgOceEI | 分析・レポート記述・文書整合 | done | [write-dispatch-analysis-report.md](./write-dispatch-analysis-report.md) |
+| TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | done | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |
+
+| TASK-034RTggRy4UgfgaFSfQY4f | T1 ruviform-io-structured scaffold・共通契約・JSON Format (Issue #297) | done | [issue-297-t1-crate-and-contract.md](./issue-297-t1-crate-and-contract.md) |
+| TASK-034RTghO8nOg3ZiYGau2pe | T2 YAML/TOML Format module・Budget 写像・2相分類 (Issue #297) | done | [issue-297-t2-yaml-toml.md](./issue-297-t2-yaml-toml.md) |
+| TASK-034RTgiDjrTlcheIw55nAn | T3 file feature・workspace 台帳・総合検証 (Issue #297) | done | [issue-297-t3-file-feature.md](./issue-297-t3-file-feature.md) |
+>>>>>>> origin/main
 | TASK-GONrZ5DneYV2H4ryIMA4EK | T1 クレート scaffold + 共有型 + Gzip/Deflate 両 module (Issue #300) | done | [issue-300-t1-crate-core.md](./issue-300-t1-crate-core.md) |
 | TASK-2v8sucBEWaF0frYXFmed85 | T2 AC1-AC6 試験群 + rustdoc/crate README (Issue #300) | done | [issue-300-t2-tests.md](./issue-300-t2-tests.md) |
 | TASK-OjT0wWawFEmwEe6bibhaMq | T3 compression-verify CI lane + classifier + impl record (Issue #300) | done | [issue-300-t3-ci-lane.md](./issue-300-t3-ci-lane.md) |
