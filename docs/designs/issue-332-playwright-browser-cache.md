@@ -51,7 +51,6 @@ relations:
     - "mise.toml"
     - ".github/workflows/ci.yml"
     - "ui/browser-test/package-lock.json"
-    - "ui/browser-test/node_modules/playwright-core/browsers.json"
     - "ci/metrics/collect-ci-metrics.mjs"
   defers: []
   deferred-by: []

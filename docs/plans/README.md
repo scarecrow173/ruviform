@@ -60,6 +60,7 @@ Directory: `docs/plans`
 | PLAN-41sS0eh4UmdvUPmw1c99BS | Issue #301 ruviform-io-compression Zstd Frame 実装計画 (IO-IMP-07) | approved | [issue-301-io-compression-zstd.md](./issue-301-io-compression-zstd.md) |
 | PLAN-034RT7NR5zMcrEqmbWbWy3 | Issue #302 ruviform-io-archive 実装計画 (IO-IMP-08) | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | PLAN-UecvheIvCz0oE2tUFPmFC0 | Issue #303 ruviform-io-archive TAR 実装計画 (IO-IMP-09) | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
+| PLAN-kMb7YLTQ28L2txLvTj6dcD | Issue #304 ruviform-io-archive Secure Extraction 実装計画 (IO-IMP-10) | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
@@ -72,6 +73,7 @@ Directory: `docs/plans`
 | PLAN-xLvFbRwmfJj1P2olT3eT9q | Issue #332 CI-OPT-05 実装計画 | approved | [issue-332-playwright-browser-cache.md](./issue-332-playwright-browser-cache.md) |
 | PLAN-zwAUuudwYKnZuLsOviWhpU | Issue #333 CI-OPT-06 実装計画（Shadow Mode + 集約 gate） | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
 | PLAN-psvzdxaW4MHzk7mhctaYxG | Issue #336 SinkDegraded Clone 実装計画 | approved | [issue-336-sink-degraded-clone.md](./issue-336-sink-degraded-clone.md) |
+| PLAN-034Smuf3EM4rzdHln1pYaz | Issue #366+#364 Full CI Stage 1 実装計画 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 

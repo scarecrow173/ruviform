@@ -67,6 +67,7 @@ Directory: `docs/designs`
 | DESIGN-K3VAKLOqVu5SxMRUaZCAso | Issue #301 ruviform-io-compression — Zstd Frame 借用 Stream 設計 (IO-IMP-07) | approved | [issue-301-io-compression-zstd.md](./issue-301-io-compression-zstd.md) |
 | DESIGN-034RT7CvRTe3b8jPTFBHtq | Issue #302 ruviform-io-archive — Archive 共通型・ZIP Indexed Reader/Writer・検証パイプライン設計 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | DESIGN-HR0Ud1VXoIpQCfUcosM6ib | Issue #303 ruviform-io-archive — TAR Streaming Reader/Pending・PAX/GNU・Writer 設計 | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
+| DESIGN-mH3gJLoQj3rdU7xRXX8eZD | Issue #304 ruviform-io-archive — Secure Extraction・Staging/Recovery・OS 別 Root Capability 設計 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
 | DESIGN-dHUQ40Hk50tvziqjx7Kewj | Issue #307 attach 時 frame_base 検証 context — 実装設計 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | DESIGN-034Rp1KqXNzTDTKRXTbqHx | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | DESIGN-wrF61tPcejIc31wMBYJHok | Issue #311 RF-GT-02 ui/guitest — IPC conformance fixture・deterministic record/replay・fault matrix 設計 | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
@@ -80,6 +81,7 @@ Directory: `docs/designs`
 | DESIGN-oq5cpmBZrL3fUcNnuUzPxg | Issue #333 CI-OPT-06 Impact Classifier・集約 Required Gate・段階移行設計 | approved | [issue-333-impact-based-ci.md](./issue-333-impact-based-ci.md) |
 | DESIGN-elUvrfyRcsMrmrESYqsxDn | Issue #336 SinkDegraded Clone 設計 | approved | [issue-336-sink-degraded-clone.md](./issue-336-sink-degraded-clone.md) |
 | DESIGN-034RP4B7OViSh6O4YCu1rz | Issue #346 CI-OPT-06 選択実行有効化・ruleset required context 移行 runbook | approved | [issue-346-ruleset-migration-runbook.md](./issue-346-ruleset-migration-runbook.md) |
+| DESIGN-034SmuehTqDxp5K68M5dSG | Issue #366+#364 Full CI Stage 1 設計 — 選択実行撤去・3OS 常時実行・ci-summary fail-closed・expected_sha 契約 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |
