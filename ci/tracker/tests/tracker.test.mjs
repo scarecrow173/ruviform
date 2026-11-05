@@ -52,6 +52,7 @@ function payload(overrides = {}) {
     html_url: RUN_URL,
     run_attempt: 1,
     updated_at: T1,
+    status: "completed",
     head_repository: { full_name: REPO },
     ...(overrides.workflow_run ?? {}),
   };
@@ -62,7 +63,8 @@ function rest(o) {
   return r;
 }
 
-// Raw runs-list entry (authoritative history fixture).
+// Raw runs-list entry (authoritative history fixture) — mirrors the shape
+// GET /actions/workflows/{file}/runs returns, including workflow identity.
 function histRun(id, sha, conclusion, updated_at, { attempt = 1, event = "push", status = "completed", branch = "main", repo = REPO } = {}) {
   return {
     id,
@@ -75,7 +77,10 @@ function histRun(id, sha, conclusion, updated_at, { attempt = 1, event = "push",
     updated_at,
     run_started_at: updated_at,
     status,
-    head_repository: { full_name: repo },
+    path: ".github/workflows/ci.yml",
+    name: "ci",
+    repository: { full_name: repo },
+    head_repository: { full_name: repo, fork: false },
   };
 }
 
@@ -213,6 +218,17 @@ test("classifyRun rejects malformed run metadata", () => {
   assert.equal(classifyRun(payload({ workflow_run: { id: "abc" } }), scope).kind, "skip");
   assert.equal(classifyRun(payload({ workflow_run: { head_sha: "not-a-sha" } }), scope).kind, "skip");
   assert.equal(classifyRun(payload({ workflow_run: { id: null } }), scope).kind, "skip");
+  assert.equal(classifyRun(payload({ workflow_run: { run_attempt: null } }), scope).kind, "skip");
+});
+
+test("classifyRun requires status=completed on a completed action", () => {
+  // A missing or contradicting status is a malformed payload, never
+  // silently treated as completed evidence.
+  assert.equal(classifyRun(payload({ workflow_run: { status: "in_progress" } }), scope).kind, "skip");
+  assert.equal(classifyRun(payload({ workflow_run: { status: "queued" } }), scope).kind, "skip");
+  assert.equal(classifyRun(payload({ workflow_run: { status: null } }), scope).kind, "skip");
+  assert.equal(classifyRun(payload({ workflow_run: { status: undefined } }), scope).kind, "skip");
+  assert.equal(classifyRun(payload({ workflow_run: { status: "completed" } }), scope).kind, "failure");
 });
 
 test("classifyRun conclusion matrix", () => {
@@ -840,4 +856,227 @@ test("run: out-of-scope history runs are ignored as evidence", async () => {
   });
   const res = await run({ payload: payload(), client, scope });
   assert.ok(res.applied.some((a) => a.type === "create"), "only the in-scope incoming run counts");
+});
+
+// (7) A NEWER run that has not completed yet (queued/in_progress/
+// requested/waiting/pending/unknown status) is live evidence — its
+// completion lies in the future, so an older success can never close.
+test("run: newer in_progress run in history blocks close", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [
+      histRun(300, SHA_C, null, T3, { status: "in_progress" }),
+      histRun(200, SHA_B, "success", T2),
+      histRun(100, SHA_A, "failure", T1),
+    ],
+    compare: "ahead",
+    branchSha: SHA_A, // even with main == the failed sha, no close
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 200, conclusion: "success", head_sha: SHA_B, updated_at: T2 } }),
+    client,
+    scope,
+  });
+  assert.ok(!res.applied.some((a) => a.type === "close-recovered"), "live run blocks close");
+  assert.ok(!client.calls.includes("closeIssue:#42"), "issue stays open");
+  assert.equal(res.effective.kind, "pending");
+});
+
+test("run: every non-completed status in history blocks close", async () => {
+  const issue = managedIssue(42, failureState());
+  for (const status of ["queued", "in_progress", "requested", "waiting", "pending", "made_up_status"]) {
+    const client = mockClient({
+      issues: [{ number: 42, body: issue.body }],
+      history: [
+        histRun(300, SHA_C, null, T3, { status }),
+        histRun(200, SHA_B, "success", T2),
+        histRun(100, SHA_A, "failure", T1),
+      ],
+      compare: "ahead",
+      branchSha: SHA_C,
+    });
+    const res = await run({
+      payload: payload({ workflow_run: { id: 200, conclusion: "success", head_sha: SHA_B, updated_at: T2 } }),
+      client,
+      scope,
+    });
+    assert.ok(!res.applied.some((a) => a.type === "close-recovered"), status);
+    assert.ok(!client.calls.includes("closeIssue:#42"), status);
+  }
+});
+
+test("run: an in_progress rerun of the failed run itself prevents close", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [
+      histRun(100, SHA_A, null, T4, { attempt: 2, status: "in_progress" }), // rerun still live
+      histRun(200, SHA_B, "success", T2),
+    ],
+    compare: "ahead",
+    branchSha: SHA_A,
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 200, conclusion: "success", head_sha: SHA_B, updated_at: T2 } }),
+    client,
+    scope,
+  });
+  assert.ok(!res.applied.some((a) => a.type === "close-recovered"));
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+  const update = res.applied.find((a) => a.type === "update" && a.issue === 42);
+  assert.ok(update, "live rerun is recorded, not closed");
+  assert.equal(update.state.failure.runId, 100, "recorded failure preserved");
+  assert.deepEqual(update.state.latest, { runId: 100, attempt: 2, updatedAt: T4 });
+});
+
+// (8) A history record that cannot be classified — missing scope fields,
+// missing ordering fields, or a bare malformed object — is incomplete
+// evidence: it blocks every close and never becomes success.
+test("run: malformed history record holds — never closes", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [histRun(200, SHA_B, "success", T2), histRun(100, SHA_A, "failure", T1), {}],
+    compare: "ahead",
+    branchSha: SHA_C,
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 200, conclusion: "success", head_sha: SHA_B, updated_at: T2 } }),
+    client,
+    scope,
+  });
+  assert.ok(!res.applied.some((a) => a.type === "close-recovered"), "unclassifiable record blocks close");
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+  const update = res.applied.find((a) => a.type === "update" && a.issue === 42);
+  assert.ok(update, "held success is recorded, not closed");
+  assert.equal(update.state.failure.runId, 100);
+});
+
+test("run: every missing-essential-field history record holds close", async () => {
+  const issue = managedIssue(42, failureState());
+  const variants = [
+    (r) => ({ ...r, id: undefined }),            // no run id
+    (r) => ({ ...r, updated_at: undefined }),    // no ordering timestamp
+    (r) => ({ ...r, run_attempt: undefined }),   // no attempt
+    (r) => ({ ...r, head_branch: undefined }),   // branch unverifiable
+    (r) => ({ ...r, head_repository: undefined }),// repo unverifiable
+    (r) => ({ ...r, event: undefined }),         // event unverifiable
+    (r) => ({ ...r, status: undefined }),        // completed? unverifiable
+    (r) => ({ ...r, path: undefined, name: undefined }), // workflow unverifiable
+    () => null,
+    () => "garbage",
+  ];
+  for (const make of variants) {
+    const client = mockClient({
+      issues: [{ number: 42, body: issue.body }],
+      history: [
+        make(histRun(300, SHA_C, null, T3)),
+        histRun(200, SHA_B, "success", T2),
+        histRun(100, SHA_A, "failure", T1),
+      ],
+      compare: "ahead",
+      branchSha: SHA_C,
+    });
+    const res = await run({
+      payload: payload({ workflow_run: { id: 200, conclusion: "success", head_sha: SHA_B, updated_at: T2 } }),
+      client,
+      scope,
+    });
+    assert.ok(!res.applied.some((a) => a.type === "close-recovered"), JSON.stringify(make(histRun(300, SHA_C, null, T3))));
+    assert.ok(!client.calls.includes("closeIssue:#42"));
+  }
+});
+
+test("run: non-array history response throws — missing evidence is fail-closed", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({ issues: [{ number: 42, body: issue.body }], history: null });
+  await assert.rejects(
+    run({
+      payload: payload({ workflow_run: { id: 200, conclusion: "success", head_sha: SHA_B, updated_at: T2 } }),
+      client,
+      scope,
+    }),
+    /run history unavailable/,
+  );
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+});
+
+// Unclassifiable evidence also prevents resolved-suppression: it could
+// hide a newer failure, so the real failure evidence still files.
+test("run: unclassifiable history prevents stale-failure suppression — issue files", async () => {
+  const client = mockClient({
+    issues: [],
+    history: [histRun(200, SHA_B, "success", T2), histRun(100, SHA_A, "failure", T1), {}],
+    compare: "ahead",
+  });
+  const res = await run({ payload: payload(), client, scope }); // delayed failure 100
+  assert.ok(res.applied.some((a) => a.type === "create"), "incomplete evidence cannot prove resolution");
+});
+
+// A live pending run does NOT undo proven coverage — the stale failure
+// stays suppressed and the pending run reconciles on its own completion
+// event.
+test("run: pending run does not resurrect a resolved stale failure", async () => {
+  const client = mockClient({
+    issues: [],
+    history: [
+      histRun(300, SHA_C, null, T3, { status: "queued" }),
+      histRun(200, SHA_B, "success", T2),
+      histRun(100, SHA_A, "failure", T1),
+    ],
+    compare: "ahead",
+  });
+  const res = await run({ payload: payload(), client, scope });
+  assert.ok(res.applied.every((a) => a.type === "noop"));
+  assert.ok(!client.calls.some((c) => c.startsWith("createIssue")));
+});
+
+// An unknown conclusion on a COMPLETED run is operational — never success.
+test("run: unknown conclusion on a completed run blocks close", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [
+      histRun(300, SHA_C, "inconclusive", T3),
+      histRun(200, SHA_B, "success", T2),
+      histRun(100, SHA_A, "failure", T1),
+    ],
+    compare: "ahead",
+    branchSha: SHA_C,
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 200, conclusion: "success", head_sha: SHA_B, updated_at: T2 } }),
+    client,
+    scope,
+  });
+  assert.ok(!res.applied.some((a) => a.type === "close-recovered"));
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+  assert.equal(res.effective.kind, "operational");
+});
+
+// Clearly out-of-scope records stay excluded — they never hold a valid
+// close back (the fail-closed net must not over-block).
+test("run: definite out-of-scope records do not block a valid close", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [
+      histRun(400, SHA_D, null, T4, { status: "in_progress", branch: "release" }),
+      histRun(401, SHA_D, null, T4, { repo: "fork/ruviform" }),
+      histRun(402, SHA_D, "success", T4, { event: "pull_request" }),
+      { ...histRun(403, SHA_D, "success", T4), path: ".github/workflows/other.yml" },
+      histRun(200, SHA_B, "success", T2),
+      histRun(100, SHA_A, "failure", T1),
+    ],
+    compare: "ahead",
+    branchSha: SHA_C,
+  });
+  const res = await run({
+    payload: payload({ workflow_run: { id: 200, conclusion: "success", head_sha: SHA_B, updated_at: T2 } }),
+    client,
+    scope,
+  });
+  assert.ok(res.applied.some((a) => a.type === "close-recovered"), "excluded records leave the close intact");
+  assert.ok(client.calls.includes("closeIssue:#42"));
 });

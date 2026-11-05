@@ -172,15 +172,63 @@ function normalizeRun(wr, scope) {
   };
 }
 
-// A runs-list entry is valid tracker evidence only when it ran on this
-// repository's `main` branch via an allowed event and is completed.
-function isScopedHistoryRun(run, scope) {
-  return (
-    run.repo === scope.repo &&
-    run.branch === scope.branch &&
-    scope.allowedEvents.includes(run.event) &&
-    (run.status == null || run.status === "completed")
-  );
+// Classify a raw runs-list record into three dispositions:
+//   "out"     — a PRESENT field proves exclusion (other repo, fork head,
+//               other branch, disallowed event, other workflow file/name):
+//               dropped, never evidence.
+//   "in"      — every essential field is present and matches scope (repo,
+//               branch, event, workflow identity, id, sha, attempt,
+//               updated_at, status). A `completed` record is evidence
+//               classified by conclusion; any OTHER status — queued,
+//               in_progress, requested, waiting, pending, or an
+//               unrecognized value — is a live run whose completion still
+//               lies in the FUTURE, so it is `pending` evidence that can
+//               never promote a success to a close.
+//   "unknown" — scope or ordering cannot be proven (missing/unusable id,
+//               sha, run_attempt, updated_at, status, repo, branch, event,
+//               or workflow identity): fail-closed evidence — it blocks
+//               every close and prevents resolved-suppression, and is
+//               never itself a success, failure, or issue trigger.
+export function classifyHistoryRecord(raw, scope) {
+  const partial = {
+    id: sanitizeRunId(raw?.id) ?? null,
+    sha: sanitizeSha(raw?.head_sha) ?? null,
+    attempt: sanitizeRunId(raw?.run_attempt) ?? null,
+    updatedAt: sanitizeIso(raw?.updated_at) ?? null,
+    conclusion: null,
+  };
+  const unknown = { disposition: "unknown", run: partial };
+  if (raw == null || typeof raw !== "object") return unknown;
+  const headRepo = raw.head_repository?.full_name ?? null;
+  const parentRepo = raw.repository?.full_name ?? null;
+  const path = typeof raw.path === "string" ? raw.path : null;
+  const wname = typeof raw.name === "string" ? raw.name : null;
+  if (
+    (headRepo != null && headRepo !== scope.repo) ||
+    (parentRepo != null && parentRepo !== scope.repo) ||
+    (raw.head_branch != null && raw.head_branch !== scope.branch) ||
+    (raw.event != null && !scope.allowedEvents.includes(raw.event)) ||
+    (path != null && !(path === scope.workflowFile || path.endsWith(`/${scope.workflowFile}`))) ||
+    (wname != null && wname !== scope.workflow)
+  ) {
+    return { disposition: "out" };
+  }
+  const provable =
+    headRepo === scope.repo &&
+    raw.head_repository?.fork !== true &&
+    raw.head_branch === scope.branch &&
+    scope.allowedEvents.includes(raw.event) &&
+    (path != null || wname != null) &&
+    typeof raw.status === "string" &&
+    partial.id != null &&
+    partial.sha != null &&
+    partial.attempt != null &&
+    partial.updatedAt != null;
+  if (!provable) return unknown;
+  const run = normalizeRun(raw, scope);
+  if (run == null) return unknown;
+  if (run.status !== "completed") return { disposition: "in", run: { ...run, pending: true } };
+  return { disposition: "in", run };
 }
 
 // A completed run is a valid Full CI target only when it ran on this
@@ -201,8 +249,15 @@ export function classifyRun(payload, scope) {
   if (!scope.allowedEvents.includes(wr.event)) {
     return skip(`event:${sanitizeText(wr.event) || "unknown"}`);
   }
+  // action === "completed" must agree with the run status — a missing or
+  // contradicting status is a malformed payload, not evidence.
+  if (wr.status !== "completed") {
+    return skip(`status:${sanitizeText(wr.status) || "missing"}`);
+  }
   const run = normalizeRun(wr, scope);
-  if (run == null) return skip("malformed-run-metadata");
+  if (run == null || sanitizeRunId(wr.run_attempt) == null) {
+    return skip("malformed-run-metadata");
+  }
   return { kind: kindOfConclusion(run.conclusion), run };
 }
 
@@ -553,8 +608,14 @@ function baseState(run, jobs, note = null) {
 //   coverage        — compare(newestFailure.sha → coveringSuccess.sha)
 //   mainCoverage    — compare(current main head → newest.run.sha); fetched
 //                     only when a close is otherwise a candidate
-//   resolved        — coveringSuccess != null && coverage covers: the
-//                     newest failure evidence is already verified fixed
+//   resolved        — coveringSuccess != null && coverage covers &&
+//                     evidence complete: the newest failure evidence is
+//                     already verified fixed
+//   evidencePending — a live (non-completed) run exists in evidence: its
+//                     completion is in the future, so nothing may close
+//   evidenceUnknown — an unclassifiable history record exists: the list is
+//                     incomplete, so neither close nor resolved-suppression
+//                     is allowed
 export function plan({
   classified,
   canonical,
@@ -566,11 +627,17 @@ export function plan({
   coverage = null,
   mainCoverage = null,
   jobs = null,
+  evidencePending = false,
+  evidenceUnknown = false,
 }) {
   const actions = [];
   const stored = mergedState ?? canonical?.marker?.state ?? null;
+  // Coverage resolves a failure only when the evidence is complete — an
+  // unclassifiable history record could hide a newer failure.
   const resolved =
-    coveringSuccess != null && (coverage === "identical" || coverage === "ahead");
+    coveringSuccess != null &&
+    (coverage === "identical" || coverage === "ahead") &&
+    !evidenceUnknown;
 
   // Duplicate consolidation first: merge-state (only when a duplicate
   // actually held newer state — otherwise the decision's own update covers
@@ -613,9 +680,9 @@ export function plan({
       const note =
         newest.kind === "failure"
           ? null
-          : `Latest observed run ${newest.run.id} concluded \`${sanitizeConclusion(newest.run.conclusion)}\` (${newest.kind}); issue opened on the newest failure evidence, reconciled from run history.`;
+          : `Latest observed run ${newest.run.id ?? "?"} (${newest.kind}${newest.run.conclusion ? `, concluded \`${sanitizeConclusion(newest.run.conclusion)}\`` : ""}); issue opened on the newest failure evidence, reconciled from run history.`;
       const state = baseState(newestFailure.run, jobs);
-      if (orderForState(newest.run, refOf(newestFailure.run)) === "newer") {
+      if (newest.run.id != null && orderForState(newest.run, refOf(newestFailure.run)) === "newer") {
         state.latest = refOf(newest.run);
       }
       state.operationalNote = note;
@@ -626,7 +693,11 @@ export function plan({
       reason:
         newest.kind === "success"
           ? "success:no-unresolved-failure"
-          : `operational:${newest.run.conclusion ?? "null"}`,
+          : newest.kind === "pending"
+            ? `pending-run:${newest.run.id}`
+            : newest.kind === "unknown"
+              ? "unclassified-history"
+              : `operational:${newest.run.conclusion ?? "null"}`,
     });
   }
 
@@ -654,6 +725,8 @@ export function plan({
     //  2. not stale/ambiguous vs the newest observed run
     //  3. compare(failed sha → success sha) covers the failed revision
     //  4. compare(current main head → success sha) covers the CURRENT tip
+    //  5. evidence is complete — no live (pending) run and no
+    //     unclassifiable history record may coexist with the close
     const ordFailure = newestFailure != null
       ? compareRunOrder(newest.run, refOf(newestFailure.run))
       : "newer";
@@ -666,7 +739,9 @@ export function plan({
       ordFailure === "newer" &&
       (ordLatest === "newer" || ordLatest === "same") &&
       coveredFailure &&
-      coveredMain
+      coveredMain &&
+      !evidencePending &&
+      !evidenceUnknown
     ) {
       return pushDecision({
         type: "close-recovered",
@@ -679,6 +754,8 @@ export function plan({
     if (ordLatest !== "newer" && ordLatest !== "same") why.push(`vs-latest:${ordLatest}`);
     if (!coveredFailure) why.push(`compare-failure:${coverage ?? "unavailable"}`);
     if (!coveredMain) why.push(`compare-main:${mainCoverage ?? "unavailable"}`);
+    if (evidencePending) why.push("pending-run");
+    if (evidenceUnknown) why.push("unclassified-history");
     if (ordLatest === "stale" && ordFailure !== "newer") {
       return pushDecision({ type: "noop", reason: `stale-success:${why.join(",")}` });
     }
@@ -729,19 +806,28 @@ export function plan({
     });
   }
 
-  // ----------------------------------------------- operational/observed --
-  // cancelled/skipped/neutral/stale/action_required/unknown (and marker
-  // "observed" refs): never a success (no close) and never by itself a
-  // reason for a new issue. A newer failure in evidence (e.g. one whose
-  // notification was dropped) still updates the stored failure.
+  // --------------------------------------- operational/observed/pending --
+  // cancelled/skipped/neutral/stale/action_required/unknown conclusions,
+  // marker "observed" refs, live "pending" runs, and unclassifiable
+  // "unknown" history records: never a success (no close) and never by
+  // itself a reason for a new issue. A newer failure in evidence (e.g. one
+  // whose notification was dropped) still updates the stored failure.
   const failureIsNewer =
     newestFailure != null && orderForState(newestFailure.run, stored?.failure) === "newer";
   const latestOrder = orderForState(newest.run, stored?.latest);
+  const newestDesc =
+    newest.kind === "pending"
+      ? `is still in progress (status \`${sanitizeText(newest.run.status) || "non-completed"}\`) — its completion is in the future`
+      : newest.kind === "unknown"
+        ? "could not be classified from run-history metadata (incomplete record) — held open"
+        : `concluded \`${sanitizeConclusion(newest.run.conclusion)}\` — verification pending retry; counted as neither failure nor success`;
   if (failureIsNewer || latestOrder === "newer") {
     const next = {
       ...stored,
-      latest: latestOrder === "newer" ? refOf(newest.run) : stored?.latest,
-      operationalNote: `Latest observed run ${newest.run.id} concluded \`${sanitizeConclusion(newest.run.conclusion)}\` — verification pending retry; counted as neither failure nor success.`,
+      // An unclassifiable record may carry no run id — never let it
+      // overwrite the recorded latest ref.
+      latest: latestOrder === "newer" && newest.run.id != null ? refOf(newest.run) : stored?.latest,
+      operationalNote: `Latest observed run ${newest.run.id ?? "?"} ${newestDesc}.`,
     };
     if (failureIsNewer) {
       next.failure = failureFrom(
@@ -750,16 +836,18 @@ export function plan({
         stored?.failure?.firstSha,
         stored?.failure?.firstAt,
       );
-      next.history = historyPush(
-        historyPush(next, { ...runHistoryEntry("failure", newestFailure.run, "history") }),
-        { ...runHistoryEntry("operational", newest.run) },
-      );
-    } else {
-      next.history = historyPush(next, { ...runHistoryEntry("operational", newest.run) });
+      next.history = historyPush(next, { ...runHistoryEntry("failure", newestFailure.run, "history") });
+    }
+    // Id-less unclassifiable records live only in the note — the marker
+    // history must stay runId-valid.
+    if (newest.run.id != null) {
+      next.history = historyPush(next, {
+        ...runHistoryEntry(newest.kind === "pending" ? "pending" : "operational", newest.run),
+      });
     }
     return pushDecision({ type: "update", issue: canonical.number, state: next });
   }
-  return pushDecision({ type: "noop", reason: `operational-stale:run-${newest.run.id}` });
+  return pushDecision({ type: "noop", reason: `operational-stale:run-${newest.run.id ?? "?"}` });
 }
 
 // --------------------------------------------------------------- apply ---
@@ -871,11 +959,21 @@ export async function run({ payload, client, scope }) {
     workflowFile: scope.workflowFile,
     branch: scope.branch,
   });
+  // History is required evidence — a non-array response is an API failure,
+  // and missing evidence is fail-closed (propagates; nothing is written).
+  if (!Array.isArray(historyRaw)) {
+    throw new Error("run history unavailable — cannot reconcile evidence");
+  }
+  const historyParts = historyRaw.map((r) => classifyHistoryRecord(r, scope));
+  // Records whose scope/ordering cannot be proven still count as evidence
+  // of an incomplete list: they never become success but they block close
+  // and resolved-suppression.
+  const unknownEvidence = historyParts
+    .filter((p) => p.disposition === "unknown")
+    .map((p) => ({ kind: "unknown", run: { ...p.run, src: "history-unknown" } }));
   const historyRuns = mergeRunRecords(
     [
-      ...(historyRaw ?? [])
-        .map((r) => normalizeRun(r, scope))
-        .filter((r) => r != null && isScopedHistoryRun(r, scope)),
+      ...historyParts.filter((p) => p.disposition === "in").map((p) => p.run),
       // The incoming run may not be listed yet (eventual consistency), or
       // the list may lag on its latest attempt — it is still authoritative
       // for itself, so it always participates in the per-id merge.
@@ -889,7 +987,9 @@ export async function run({ payload, client, scope }) {
   // record carries the actual conclusion, so it always outranks the marker
   // ref for the same run.
   const toCand = (run, src) =>
-    run == null ? null : { kind: kindOfConclusion(run.conclusion), run: { ...run, src } };
+    run == null
+      ? null
+      : { kind: run.pending ? "pending" : kindOfConclusion(run.conclusion), run: { ...run, src } };
   const realIds = new Set(historyRuns.map((r) => r.id));
   const storedCandidates = [];
   if (mergedState != null) {
@@ -910,7 +1010,13 @@ export async function run({ payload, client, scope }) {
     ...storedCandidates,
     toCand(classified.run, "event"),
     ...historyRuns.map((r) => toCand(r, "history")),
+    ...unknownEvidence,
   ].filter(Boolean);
+  // Evidence is incomplete while any live run (pending — its completion is
+  // still in the future) or any unclassifiable record exists: a close
+  // requires the evidence to be complete AND to show a verifiable success.
+  const hasPending = evidence.some((c) => c.kind === "pending");
+  const hasUnknown = unknownEvidence.length > 0;
   const newest = pickNewest(evidence);
   const newestFailure = pickNewest(evidence.filter((c) => c.kind === "failure"));
   result.effective = newest;
@@ -947,7 +1053,13 @@ export async function run({ payload, client, scope }) {
       coverage = await client.compareCommits(newestFailure.run.sha, coveringSuccess.run.sha);
     }
   }
-  const resolved = coveringSuccess != null && (coverage === "identical" || coverage === "ahead");
+  // resolved suppresses a create only when coverage is proven AND the
+  // evidence is complete — an unclassifiable record could hide a newer
+  // failure, so incomplete evidence falls back to recording the failure.
+  const resolved =
+    coveringSuccess != null &&
+    (coverage === "identical" || coverage === "ahead") &&
+    !hasUnknown;
 
   // A close is a candidate only when every ordering/coverage precondition
   // already holds; only then is the main-head compare fetched. Its absence
@@ -957,6 +1069,8 @@ export async function run({ payload, client, scope }) {
     canonical != null &&
     newest != null &&
     !newest.ambiguous &&
+    !hasPending &&
+    !hasUnknown &&
     newest.kind === "success" &&
     coveringSuccess != null &&
     coveringSuccess.run.id === newest.run.id &&
@@ -1001,6 +1115,8 @@ export async function run({ payload, client, scope }) {
     coverage,
     mainCoverage,
     jobs,
+    evidencePending: hasPending,
+    evidenceUnknown: hasUnknown,
   });
   result.applied = await applyActions(result.actions, scope, client);
   return result;

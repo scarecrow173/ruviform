@@ -69,10 +69,22 @@ eventual consistency も同様）。そこで非 skip イベントごとに
   失敗で状態を更新する（dropped notification の自己修復）。
 - 履歴の最新が成功（coverage 充足）なら、遅延到着した古い失敗通知は
   Issue を起票しない — 到着順が事実にならない。
-- 履歴 API 自体の失敗は伝播して job を落とす — 証跡欠損で黙って成功・
-  close しない（fail-closed）。
-- 対象外（他 repo・他 branch・許可外 event・未 completed）の履歴 run は
-  evidence にしない。
+- 履歴 API 自体の失敗・非配列レスポンスは伝播して job を落とす —
+  証跡欠損で黙って成功・close しない（fail-closed）。
+- 履歴 record は 3 分類される。**対象外**（他 repo・fork head・他
+  branch・許可外 event・他 workflow の `path`/`name`）だけが除外され、
+  **対象内**は completed → conclusion 分類、非 completed
+  （`queued`/`in_progress`/`requested`/`waiting`/`pending`/未知 status）
+  → `pending` evidence として残る。pending run の完了は**未来**にある
+  ため、どれだけ古い `updated_at` を持っていても実質最新であり、
+  success 昇格も close もしない。
+- 対象か非対象か識別できない record（repo/branch/event/workflow 同一性・
+  `id`/`head_sha`/`run_attempt`/`updated_at`/`status` のいずれか欠落、
+  または record 自体が不正）は `unknown` evidence として残り、close と
+  resolved-suppression（stale failure の起票抑止）の両方を止める。
+  「識別不能を黙って捨てる」はしない — 欠落項目は常に安全側に扱う。
+- イベント payload 側も同様に `status === "completed"` 必須であり、
+  `action: completed` と矛盾・欠落する status は skip される。
 
 ## Ordering（順序キーは一つの atomic tuple）
 
@@ -101,11 +113,14 @@ eventual consistency も同様）。そこで非 skip イベントごとに
    履歴に含む）
 4. `compare(現在の main head → 成功 sha) ∈ {identical, ahead}`（**現在の
    main tip をカバー** — 古い失敗 revision の検証だけでは閉じない）
+5. evidence が完全であること — live な `pending` run も識別不能な
+   `unknown` 履歴 record も存在しない（live run の完了は未来にあり、
+   欠損 record は新しい失敗を隠し得るため）
 
 `behind`（古い revision の成功）・`diverged`（main 履歴書換えで失敗 sha
-が残っていない）・順序 ambiguous・branch head 取得不能・compare 不能は
-**close しない**。close 候補で branch head が取れない場合は job を失敗
-させて誤 close を防ぐ。
+が残っていない）・順序 ambiguous・branch head 取得不能・compare 不能・
+pending/unknown 証跡の残存は**close しない**。close 候補で branch head
+が取れない場合は job を失敗させて誤 close を防ぐ。
 
 ## 運用ポリシー
 
