@@ -16,7 +16,7 @@ Ruviform ワークスペースのメンバークレート索引（計35クレー
 | [`ruviform-rt`](ruviform-rt/README.md) | RT 基盤（`Processor`/`RtProcessor`・`RtContext`・`MasterClock`・SPSC・retire channel・スナップショット交換） |
 | [`ruviform-media-core`](ruviform-media-core/README.md) | 規格中立メディアデータモデル（時間・transport・音楽時間・`Error`） |
 | [`ruviform-exec`](ruviform-exec/README.md) | 非 RT 実行基盤（スレッド優先度機構・`OfflineDriver`） |
-| [`ruviform-observability`](ruviform-observability/README.md) | 共有観測基盤（core: `Counter`/`Gauge`/`Histogram` writer-reader ペア + source: 登録ポート・Descriptor・`SourceId`/Generation・寿命契約 — Issue #101 候補・#121 初消費者・#277 OBS-02） |
+| [`ruviform-observability`](ruviform-observability/README.md) | 共有観測基盤（core: `Counter`/`Gauge`/`Histogram` writer-reader ペア + source: 登録ポート・Descriptor・`SourceId`/Generation・寿命契約 + record: `ClockContext`/`Correlation`/`EventRecord` + `rt_bridge`: RT→非RT 固定長 Record Bridge — Issue #101 候補・#121 初消費者・#277 OBS-02・#280 OBS-05。`ruviform-rt`/`ruviform-media-core` への一方向依存） |
 
 ## Domain foundations
 
@@ -39,7 +39,7 @@ Ruviform ワークスペースのメンバークレート索引（計35クレー
 
 | クレート | 責務 |
 | --- | --- |
-| [`ruviform-io-structured`](ruviform-io-structured/README.md) | Serde 型付き構造化ドキュメント I/O（JSON/YAML/TOML `from_reader`/`to_writer`・Strict EOF・byte budget・正規化 `DocumentError`・`file` feature で StagedFile publish — Issue #297。IO-IMP-04 CSV / IO-IMP-05 XML の基底 scaffold） |
+| [`ruviform-io-structured`](ruviform-io-structured/README.md) | Serde 型付き構造化ドキュメント I/O（JSON/YAML/TOML `from_reader`/`to_writer`・CSV streaming `CsvReader`/`CsvWriter`・Strict EOF・byte budget・正規化 `DocumentError`・`file` feature で StagedFile publish — Issue #297/#298。IO-IMP-05 XML の基底 scaffold） |
 
 ## 汎用圧縮 I/O（非 RT 専用）
 

@@ -258,6 +258,7 @@ fn position(line: usize, column: usize) -> DocumentPosition {
         byte: None,
         line: Some(line as u64),
         column: Some(column as u64),
+        record: None,
     }
 }
 
