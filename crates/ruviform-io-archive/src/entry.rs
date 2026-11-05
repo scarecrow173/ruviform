@@ -133,6 +133,10 @@ pub struct ArchiveEntryInfo {
     name: ArchiveName,
     /// Entry kind as declared by the format.
     kind: EntryKind,
+    /// Link target for [`EntryKind::SymbolicLink`]/[`EntryKind::HardLink`]
+    /// entries, when the format records one (TAR `linkname`/PAX
+    /// `linkpath`/GNU `K` extension; ZIP does not).
+    link_name: Option<ArchiveName>,
     /// Declared uncompressed size in bytes, when the format records one.
     uncompressed_size: Option<u64>,
     /// Declared compressed size in bytes, when the format records one
@@ -147,6 +151,7 @@ impl ArchiveEntryInfo {
         index: usize,
         name: ArchiveName,
         kind: EntryKind,
+        link_name: Option<ArchiveName>,
         uncompressed_size: Option<u64>,
         compressed_size: Option<u64>,
     ) -> Self {
@@ -154,6 +159,7 @@ impl ArchiveEntryInfo {
             index,
             name,
             kind,
+            link_name,
             uncompressed_size,
             compressed_size,
         }
@@ -181,6 +187,18 @@ impl ArchiveEntryInfo {
     #[must_use]
     pub const fn kind(&self) -> EntryKind {
         self.kind
+    }
+
+    /// Link target for symbolic/hard link entries (raw bytes, unmodified),
+    /// or `None` when the format records no link target. Like
+    /// [`ArchiveName`], this performs no path-safety validation — link
+    /// targets may be absolute, relative, or point outside the archive;
+    /// handling them safely is the extraction layer's job (IO-IMP-10).
+    ///
+    /// **RT contract:** non-RT only.
+    #[must_use]
+    pub const fn link_name(&self) -> Option<&ArchiveName> {
+        self.link_name.as_ref()
     }
 
     /// Declared uncompressed size in bytes, if the format records one.
