@@ -85,6 +85,7 @@ Directory: `docs/designs`
 | DESIGN-034SmuehTqDxp5K68M5dSG | Issue #366+#364 Full CI Stage 1 設計 — 選択実行撤去・3OS 常時実行・ci-summary fail-closed・expected_sha 契約 | approved | [issue-366-full-ci-stage1.md](./issue-366-full-ci-stage1.md) |
 | DESIGN-LKKyu5XTONFK84RN45ZdM2 | Issue #367 共通 Daily Scheduler 設計 — 履歴駆動判定・重複抑止・bounded retry・dispatch SHA race 対策 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | DESIGN-UGm4KjCwx7pEetENeTzIwB | Issue #368 CI failure Issue Tracker 設計 — 有効 run 判定・1 Issue 集約・完了順逆転・coverage close 条件 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
+| DESIGN-StMgstUBs2Df2UPm1oy2GF | Issue #368 Tracker reconcile 設計 — event 非依存の同一判定器入口・別 workflow schedule/dispatch・mode 分離 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |
