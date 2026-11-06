@@ -105,6 +105,7 @@ Directory: `docs/designs`
 | DESIGN-20261101-synvelis-driven-ruviform-target-architecture | Synvelis要件を基準としたRuviform目標アーキテクチャと段階的Migration v0.7.1 | approved | [synvelis-driven-target-architecture-and-migration.md](./synvelis-driven-target-architecture-and-migration.md) |
 | DESIGN-034JcePtzKFix4IuxyE5mD | 時間モデル拡張の設計（FrameRate/TimeBase 分離・Timecode 拡張・丸め誤差累積方針） | approved | [time-model-extension.md](./time-model-extension.md) |
 | DESIGN-034JZVID00000000000030 | 動画エンジン設計（パイプライン・スケジューラ・セッション） | approved | [video-engine.md](./video-engine.md) |
+| DESIGN-aYGxhiXLZHim70lzzr4olp | ViewLink.attach authoritative generation 採用設計 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

@@ -8,7 +8,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { LinkRegistry, ViewLink } from "../src/link.ts";
-import type { InteractionEvent } from "../src/index.ts";
+import { CommandBinding } from "../src/binding.ts";
+import type {
+  BindingPort,
+  InteractionEvent,
+  StateProjection,
+} from "../src/index.ts";
 import {
   flushSync,
   ManualTimers,
@@ -259,6 +264,273 @@ describe("ViewLink late-created bindings", () => {
       }
     });
   }
+});
+
+describe("ViewLink authoritative generation", () => {
+  it("adopts the attach-response epoch across bindings, subscriptions, and wire context", () => {
+    const { gateway, link } = setup();
+    const early = link.createBinding("track.vol", {
+      flushWith: flushSync,
+      ackTimeoutMs: 0,
+    });
+    link.attach("window-A", 7);
+
+    assert.equal(link.generation, 7);
+    assert.equal(early.generation, 7);
+    const earlySub = gateway.subscribeCalls.at(-1);
+    assert.equal(earlySub?.ctx.viewId, "mixer.strip.1");
+    assert.equal(earlySub?.ctx.windowId, "window-A");
+    assert.equal(earlySub?.ctx.generation, 7);
+
+    // A binding created after the attach adopts the same epoch.
+    const late = link.createBinding("track.vol", {
+      flushWith: flushSync,
+      ackTimeoutMs: 0,
+    });
+    assert.equal(late.generation, 7);
+    assert.equal(gateway.subscribeCalls.at(-1)?.ctx.generation, 7);
+
+    gateway.deliver = (r) => late.ack(r);
+    late.event(begin("g1", 1));
+    late.event(commit("g1", 2));
+    const sent = gateway.received.find((r) => r.intent.kind === "commit");
+    assert.ok(sent);
+    assert.equal(sent.ctx.viewId, "mixer.strip.1");
+    assert.equal(sent.ctx.windowId, "window-A");
+    assert.equal(sent.ctx.generation, 7);
+    gateway.accept(sent.ctx.commandId);
+    assert.equal(late.state.phase, "accepted");
+    assert.equal(late.diagnostics.staleReceipts, 0);
+  });
+
+  it("re-synchronizes to a new epoch on detach + re-attach", () => {
+    const { gateway, link } = setup();
+    const binding = link.createBinding("track.vol", {
+      flushWith: flushSync,
+      ackTimeoutMs: 0,
+    });
+    link.attach("window-A", 7);
+    link.detach("unmount");
+    link.attach("window-A", 11);
+    assert.equal(link.generation, 11);
+    assert.equal(binding.generation, 11);
+    assert.equal(gateway.subscribeCalls.at(-1)?.ctx.generation, 11);
+    const late = link.createBinding("track.vol", {
+      flushWith: flushSync,
+      ackTimeoutMs: 0,
+    });
+    assert.equal(late.generation, 11);
+  });
+
+  it("queries mint and replay replies under the adopted epoch", async () => {
+    const backend = new MockAnalysisBackend();
+    const gateway = new MockDawGateway();
+    gateway.addTarget("track.vol", 0.2);
+    const port = {
+      dispatch: gateway.dispatch.bind(gateway),
+      subscribe: gateway.subscribe.bind(gateway),
+      query: backend.query.bind(backend),
+      cancelQuery: backend.cancelQuery.bind(backend),
+    };
+    const link = new ViewLink({ viewId: "v1", port });
+    const query = link.createQuery();
+    link.attach("window-A", 7);
+    const p = query.request({
+      sourceId: "ds",
+      sourceRevision: 1,
+      start: 0,
+      end: 10,
+    });
+    assert.equal(backend.queries[0]?.generation, 7);
+    backend.resolveQuery(backend.queries[0]!.queryId, {});
+    const outcome = await p;
+    assert.equal(outcome.ok, true);
+    // A new epoch cancels the old epoch's in-flight query.
+    const q2 = query.request({
+      sourceId: "ds",
+      sourceRevision: 1,
+      start: 0,
+      end: 10,
+    });
+    link.attach("window-A", 9);
+    assert.equal((await q2).ok, false);
+    assert.equal(backend.cancelledQueries.length, 1);
+    assert.equal(backend.queries[1]?.generation, 7);
+    // Queries issued after the transition mint under the new epoch.
+    const q3 = query.request({
+      sourceId: "ds",
+      sourceRevision: 1,
+      start: 0,
+      end: 10,
+    });
+    assert.equal(backend.queries[2]?.generation, 9);
+    backend.resolveQuery(backend.queries[2]!.queryId, {});
+    assert.equal((await q3).ok, true);
+  });
+
+  it("same window + same or omitted generation stays a no-op", () => {
+    const { gateway, link } = setup();
+    link.createBinding("track.vol", { flushWith: flushSync });
+    link.attach("window-A", 7);
+    link.attach("window-A", 7);
+    link.attach("window-A");
+    assert.equal(gateway.subscribeCalls.length, 1);
+    assert.equal(link.linkStats.attaches, 1);
+    assert.equal(link.generation, 7);
+  });
+
+  it("same window + different generation transitions the epoch atomically", () => {
+    const { gateway, link } = setup();
+    const binding = link.createBinding("track.vol", {
+      flushWith: flushSync,
+      ackTimeoutMs: 0,
+    });
+    link.attach("window-A", 7);
+    binding.event(begin("g1", 1));
+    link.attach("window-A", 9);
+    // The in-flight gesture is cancelled under the OLD epoch — the
+    // cancel is the terminal message of the dead generation.
+    const cancel = gateway.received.find((r) => r.intent.kind === "cancel");
+    assert.ok(cancel);
+    assert.equal(cancel.intent.kind === "cancel" ? cancel.intent.reason : "", "unmount");
+    assert.equal(cancel.ctx.generation, 7);
+    // Old subscription released; exactly one new subscription under 9.
+    assert.equal(gateway.unsubscribed, 1);
+    assert.equal(gateway.subscribeCalls.length, 2);
+    assert.equal(gateway.subscribeCalls[1]?.ctx.generation, 9);
+    assert.equal(link.linkStats.activeSubscriptions, 1);
+    assert.equal(link.generation, 9);
+    assert.equal(binding.generation, 9);
+    assert.equal(binding.attached, true);
+  });
+
+  it("a different window adopts the supplied epoch after dock-transfer", () => {
+    const { gateway, link } = setup();
+    const binding = link.createBinding("track.vol", {
+      flushWith: flushSync,
+      ackTimeoutMs: 0,
+    });
+    link.attach("window-A", 7);
+    link.attach("window-B", 9);
+    const cancel = gateway.received.find((r) => r.intent.kind === "cancel");
+    // No gesture was in flight — dock-transfer detaches with nothing
+    // to cancel; the epoch still re-subscribes under the new value.
+    assert.equal(cancel, undefined);
+    assert.equal(link.windowId, "window-B");
+    assert.equal(link.generation, 9);
+    assert.equal(binding.generation, 9);
+    assert.equal(gateway.subscribeCalls.at(-1)?.ctx.windowId, "window-B");
+    assert.equal(gateway.subscribeCalls.at(-1)?.ctx.generation, 9);
+  });
+
+  it("rejects invalid generations without touching link state", () => {
+    const { gateway, link } = setup();
+    link.createBinding("track.vol", { flushWith: flushSync });
+    link.attach("window-A", 7);
+    for (const bad of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      assert.throws(() => link.attach("window-A", bad), RangeError);
+      assert.throws(() => link.attach("window-B", bad), RangeError);
+    }
+    assert.equal(link.attached, true);
+    assert.equal(link.windowId, "window-A");
+    assert.equal(link.generation, 7);
+    assert.equal(gateway.subscribeCalls.length, 1);
+    assert.equal(gateway.unsubscribed, 0);
+    // Detached links reject atomically too.
+    const detached = setup();
+    for (const bad of [-1, 1.5, NaN]) {
+      assert.throws(() => detached.link.attach("window-X", bad), RangeError);
+    }
+    assert.equal(detached.link.attached, false);
+    assert.equal(detached.link.generation, 0);
+    assert.equal(detached.gateway.subscribeCalls.length, 0);
+  });
+
+  it("omitted generation keeps the local increment", () => {
+    const { link } = setup();
+    link.attach("window-A", 7);
+    link.detach("unmount");
+    link.attach("window-A");
+    assert.equal(link.generation, 8);
+  });
+
+  it("an externally registered binding adopts the live epoch and unsubscribes on unregister", () => {
+    const { gateway, link } = setup();
+    link.createBinding("track.vol", { flushWith: flushSync });
+    link.attach("window-A", 7);
+
+    const external = new CommandBinding<{ plain: number }>({
+      target: "track.vol",
+      port: gateway,
+      flushWith: flushSync,
+      ackTimeoutMs: 0,
+    });
+    const unregister = link.registerBinding(external);
+
+    // Same state a pre-registered binding holds after attach: the
+    // adopted epoch and a live subscription.
+    assert.equal(external.generation, 7);
+    assert.equal(external.attached, true);
+    assert.equal(gateway.subscribeCalls.length, 2);
+    assert.equal(gateway.subscribeCalls[1]?.ctx.generation, 7);
+    assert.equal(link.linkStats.activeSubscriptions, 2);
+
+    gateway.deliver = (r) => external.ack(r);
+    external.event(begin("ext", 1));
+    external.event(commit("ext", 2));
+    const sent = gateway.received.find((r) => r.intent.kind === "commit");
+    assert.ok(sent);
+    assert.equal(sent.ctx.generation, 7);
+    assert.equal(sent.ctx.viewId, "mixer.strip.1");
+    assert.equal(sent.ctx.windowId, "window-A");
+
+    // Unregister releases the subscription the link made at
+    // registration — the binding is no longer link-managed.
+    unregister();
+    assert.equal(link.linkStats.activeSubscriptions, 1);
+    assert.equal(gateway.unsubscribed, 1);
+    link.attach("window-B", 9);
+    assert.equal(gateway.subscribeCalls.length, 3);
+    assert.equal(gateway.subscribeCalls[2]?.ctx.generation, 9);
+    // Untouched by the transition: not re-attached, not re-subscribed.
+    assert.equal(external.generation, 7);
+  });
+
+  it("a projection delivered to a dead epoch's listener is dropped at the link guard", () => {
+    // Capture listeners so a racy port that still pushes to an
+    // already-unsubscribed listener can be simulated.
+    const gateway = new MockDawGateway();
+    gateway.addTarget("track.vol", 0.2);
+    const captured: Array<(p: StateProjection<unknown>) => void> = [];
+    const port: BindingPort = {
+      dispatch: (intent, ctx) => gateway.dispatch(intent, ctx),
+      subscribe: (target, listener, ctx) => {
+        captured.push(listener as (p: StateProjection<unknown>) => void);
+        return gateway.subscribe(target, listener, ctx);
+      },
+    };
+    const link = new ViewLink({ viewId: "v-dead", port });
+    const binding = link.createBinding<{ plain: number }>("track.vol", {
+      flushWith: flushSync,
+      ackTimeoutMs: 0,
+    });
+    link.attach("window-A", 7);
+    assert.equal(captured.length, 1);
+    link.attach("window-A", 9);
+    assert.equal(captured.length, 2);
+
+    // A push reaching the epoch-7 listener after the epoch-9
+    // transition is dropped before `observe` — the observed truth
+    // (revision 0, pushed at subscribe) cannot be overwritten.
+    captured[0]!({ revision: 100, value: { plain: 0.9 } });
+    assert.equal(binding.state.lastObserved?.value.plain, 0.2);
+    assert.equal(binding.state.observedSeq, 1);
+
+    // The live epoch-9 listener still delivers.
+    captured[1]!({ revision: 100, value: { plain: 0.9 } });
+    assert.equal(binding.state.lastObserved?.value.plain, 0.9);
+    assert.equal(binding.state.observedSeq, 2);
+  });
 });
 
 describe("LinkRegistry", () => {

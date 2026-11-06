@@ -114,6 +114,7 @@ Directory: `docs/test-specs`
 | TSPEC-034JZVID00000000000050 | 動画エンジン テスト仕様 | approved | [video-engine-tests.md](./video-engine-tests.md) |
 | TSPEC-034JcCwISRw7E9Q8XoNvD8 | 動画基盤 API の契約保証（所有権・RT・色変換カーネル） | approved | [video-foundation-api.md](./video-foundation-api.md) |
 | TSPEC-034L6w5zHELr4fPxPNpBsk | Video Plugin Plain Contract Tests | proposed | [video-plugin-plain-contract-tests.md](./video-plugin-plain-contract-tests.md) |
+| TSPEC-42XLbuUif4jmek9sQGVA3S | ViewLink authoritative generation テスト仕様 | approved | [viewlink-authoritative-generation-tests.md](./viewlink-authoritative-generation-tests.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

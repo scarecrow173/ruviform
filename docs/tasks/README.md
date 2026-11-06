@@ -320,6 +320,7 @@ Directory: `docs/tasks`
 | TASK-034JZVID00000000000070 | Issue #27 文書クローズと全量検証 | done | [video-engine-closeout.md](./video-engine-closeout.md) |
 | TASK-034JZVID00000000000060 | ruviform-video クレート実装 + テスト | done | [video-engine-crate.md](./video-engine-crate.md) |
 | TASK-034N3MMigFuy0YOIHJFklc | video-proc rt_process_* への assert_no_alloc 測定窓適用 + OFX 評価 | done | [video-proc-assert-no-alloc-lane.md](./video-proc-assert-no-alloc-lane.md) |
+| TASK-U2Bnd3KffOanQDe08MNWxo | Task 1 Ruviform SDK epoch採用 — ViewLink.attach(windowId, generation?) | done | [viewlink-authoritative-generation-t1-sdk-epoch.md](./viewlink-authoritative-generation-t1-sdk-epoch.md) |
 | TASK-034MLSxnXfu3lnbTX3LQzI | VST3 host bridge（host feature・Vst3Library/dlopen+class scan・COM host objects・lifecycle 写像・Vst3PluginFactory） | done | [vst3-host-bridge.md](./vst3-host-bridge.md) |
 | TASK-034JP1sJ8ZJThe3Fj9w0mr | clack thread-check の有効化と process での is_audio_thread 照会 | done | [wire-clap-thread-check.md](./wire-clap-thread-check.md) |
 | TASK-034OpsCV3XA7dtr4iHd2sg | T7. FailureCause 分類配線（first-observed・timeout-before-kill・通知伝搬） | done | [wire-failure-cause-classification.md](./wire-failure-cause-classification.md) |

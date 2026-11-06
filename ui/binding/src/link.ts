@@ -7,7 +7,8 @@
  * (Issue #257 §8, Issue #261 contract).
  *
  * Per-attach contract:
- * - `attach(windowId)` bumps the view generation and re-subscribes
+ * - `attach(windowId, generation?)` bumps the view generation — or
+ *   adopts the caller-supplied authoritative epoch — and re-subscribes
  *   every registered binding through the port — a fresh projection is
  *   re-read rather than trusting what the old window showed.
  * - `detach(reason)` cancels each binding's in-flight gesture
@@ -133,15 +134,13 @@ export class ViewLink {
       ...(options ?? {}),
     });
     this.registerBinding(binding);
-    if (this.attached_) {
-      binding.attach(this.generation_);
-      this.subscribeBinding(binding);
-    }
     return binding;
   }
 
   /** Register an externally created binding. Returns an unregister
-   *  that detaches it from link lifecycle management. */
+   *  that detaches it from link lifecycle management — the binding is
+   *  removed from attach/detach handling and, if the link subscribed
+   *  it at registration, that subscription is released. */
   registerBinding<P>(binding: CommandBinding<P>): () => void {
     const m = managed(binding);
     this.bindings.add(m);
@@ -151,11 +150,30 @@ export class ViewLink {
         ? { windowId: this.windowId_ }
         : {}),
     });
+    // A binding joining an attached link adopts the live view epoch and
+    // is subscribed immediately — the same state a pre-registered
+    // binding holds after `attach`, so every managed binding dispatches
+    // under one epoch (external registration is not a second rule).
+    let off: (() => void) | undefined;
+    if (this.attached_) {
+      binding.attach(this.generation_);
+      off = this.subscribeBinding(binding);
+    }
     let live = true;
     return () => {
       if (!live) return;
       live = false;
       this.bindings.delete(m);
+      if (off !== undefined) {
+        const at = this.subscriptions.indexOf(off);
+        if (at >= 0) {
+          // Still live: release it here. After `detach` the array is
+          // already drained and every `off` already ran once — calling
+          // it again would double-count at the port.
+          this.subscriptions.splice(at, 1);
+          off();
+        }
+      }
     };
   }
 
@@ -181,13 +199,44 @@ export class ViewLink {
    * a dock transfer. Idempotent for the same window; a different window
    * while still attached performs an implicit `detach("dock-transfer")`
    * first so in-flight work terminates under the old epoch.
+   *
+   * `generation`, when supplied, is the consumer's authoritative attach
+   * epoch (e.g. the backend's attach-response value): it replaces the
+   * local increment so every binding, query, and subscription mints
+   * under the epoch the backend expects. Supplying a different value
+   * while attached to the *same* window is an epoch transition — the
+   * old mounted session is over, so the link performs an implicit
+   * `detach("unmount")` first; the same value stays a no-op. The value
+   * must be a non-negative safe integer: anything else is rejected
+   * with a `RangeError` before any link state changes.
+   *
+   * The supplied epoch must be the consumer's authoritative value —
+   * monotonic per view like the backend attach counter. Reusing a
+   * dead epoch value for the same view is contract-legal input but
+   * defeats the numeric stale guards: the caller owns epoch reuse.
    */
-  attach(windowId: string): void {
-    if (this.attached_ && this.windowId_ === windowId) return;
-    if (this.attached_) this.detach("dock-transfer");
+  attach(windowId: string, generation?: number): void {
+    if (
+      generation !== undefined &&
+      (!Number.isSafeInteger(generation) || generation < 0)
+    ) {
+      throw new RangeError(
+        `ViewLink.attach: generation must be a non-negative safe integer, got ${String(generation)}`,
+      );
+    }
+    if (
+      this.attached_ &&
+      this.windowId_ === windowId &&
+      (generation === undefined || generation === this.generation_)
+    ) {
+      return;
+    }
+    if (this.attached_) {
+      this.detach(this.windowId_ === windowId ? "unmount" : "dock-transfer");
+    }
     this.attached_ = true;
     this.windowId_ = windowId;
-    this.generation_ += 1;
+    this.generation_ = generation ?? this.generation_ + 1;
     this.attachCount_ += 1;
     for (const binding of this.bindings) {
       binding.setContext({ viewId: this.viewId, windowId });
@@ -213,8 +262,10 @@ export class ViewLink {
     for (const query of this.queries) query.detach();
   }
 
-  private subscribeBinding(binding: ManagedBinding): void {
-    if (this.port.subscribe === undefined) return;
+  private subscribeBinding(
+    binding: ManagedBinding,
+  ): (() => void) | undefined {
+    if (this.port.subscribe === undefined) return undefined;
     const ctx: SubscriptionContext = {
       viewId: this.viewId,
       generation: this.generation_,
@@ -234,6 +285,7 @@ export class ViewLink {
     );
     this.subscribeCount_ += 1;
     if (off !== undefined) this.subscriptions.push(off);
+    return off;
   }
 }
 
