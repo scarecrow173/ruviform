@@ -3,7 +3,11 @@
 `.github/workflows/ci-issue-tracker.yml` が `ci`（Full CI）workflow の
 `workflow_run` 完了を監視し、**この repo の `main` に対する有効な
 Full CI 実行**だけを対象に、`main × ci` の未解決障害 Issue を原則
-1 件に集約する（Issue #365 ルール 5）。
+1 件に集約する（Issue #365 ルール 5）。GITHUB_TOKEN dispatch で
+event が起きない完了は、別 workflow の
+`.github/workflows/ci-issue-tracker-reconcile.yml` が定期・手動で
+同一判定器を `--reconcile` モードで呼び、権威 run 履歴から回復する
+（後述「reconcile 入口」参照）。
 
 ## 構成
 
@@ -11,14 +15,30 @@ Full CI 実行**だけを対象に、`main × ci` の未解決障害 Issue を�
   [completed], branches: [main]}` でのみ起動。job `track` のみ
   `contents: read` / `actions: read` / `issues: write`。
   `concurrency` で repo 単位に直列化（`cancel-in-progress: false`）。
+  event 入口は `schedule`/`workflow_dispatch`/`pull_request`/`push` を
+  **持たない**（ADR-034SraR8CrkZ0SSa7tQEwh の契約）。
+- `ci-issue-tracker-reconcile.yml` — `schedule: "23 */6 * * *"`
+  （UTC・6 時間間隔）+ `workflow_dispatch`（入力なし）で起動する
+  reconcile 入口。job `reconcile` は `if: github.ref_name == 'main'`
+  で非 default ref 起動を skip し、checkout を
+  `github.event.repository.default_branch` に pin する。権限・
+  concurrency group は event 入口と同一（group を共有して workflow
+  横断で直列化）。**TRACKER_EVENT_PATH は渡さない**。
 - `ci/tracker/tracker.mjs` — stdlib-only。`classifyRun`（有効 run +
   conclusion 分類）→ run-history reconciliation（権威ある run 一覧と
   marker 状態の突き合わせ）→ `plan`（action list）→ `apply`（`gh api`
   client 注入）。GitHub API は全て client 経由で、テストは mock client。
+  `--reconcile` モードは event payload を一切読まず、履歴+marker のみ
+  で同一の判定を行う。
 - `ci/tracker/tests/tracker.test.mjs` — `node --test` contract tests。
   実 GitHub API・実 Issue・実 dispatch を一切起こさない。
 
 ## 有効 run の定義
+
+event モードの payload は JSON object 必須 — `null`/スカラ/配列に parse
+される event file は破損入力として job を失敗させる（正規 skip と
+区別する。reconcile モードの `payload:null` 正当化に伴い mode 境界を
+強化したもので、object の場合の従来分類は不変）。
 
 `workflow_run` payload が以下を全て満たすこと:
 
@@ -108,6 +128,34 @@ eventual consistency も同様）。そこで非 skip イベントごとに
   tuple をまるごと採用する — 別 run の値を Math.max で混ぜて実在しない
   順序キーを捏造しない。
 
+## reconcile 入口（GITHUB_TOKEN dispatch の通知 gap 対策）
+
+Daily Scheduler（Issue #367）が `GITHUB_TOKEN` で `workflow_dispatch`
+した bot Full CI run は dispatch 自体は実行されるが、GitHub の
+anti-recursion ルールにより完了時の `workflow_run` event は**発火し
+ない**。bot 失敗も bot 成功も event 入口には届かず、起票済み Issue が
+閉じない（観測: #375 で manual Replay が必要だった）。
+
+`ci-issue-tracker-reconcile.yml` は同一判定器を event 非依存で呼ぶ
+第二の入口:
+
+- `schedule: "23 */6 * * *"`（UTC）— 6 時間ごとに権威履歴を reconcile。
+  `workflow_dispatch` — 手動の即時 reconcile / 診断用。
+- `tracker.mjs --reconcile` は `TRACKER_EVENT_PATH`/`GITHUB_EVENT_PATH`
+  を**一切読まない**（runner が常に設定する ambient path も mode 分離
+  のため無視）。`--event` との同時指定は usage error。
+- reconcile は履歴+marker のみで event 入口と同一の fail-closed guard
+  （上記 close 条件全て）を通る。pending/unknown が残れば close しない。
+- event 入口と同一 concurrency group を共有するため同時書き込みは起き
+  ない。pending 置換で reconcile が落ちても冪等であり、次回 tick または
+  event が同じ権威履歴を見て同じ結論に収束する。
+- **schedule auto-disable（既知の運用制約）**: GitHub は public repo で
+  ~60 日間 repository activity が無いと scheduled workflow を自動無効化
+  し、disabled workflow は **全 trigger 不応答** になる。cron を event
+  入口と別ファイルに閉じ込めたのはこの blast radius 分離のため
+  （ADR-vJvyZNtrHi2xnycJxbnSPv）。reconcile が Actions 一覧から消えた
+  場合は `gh workflow enable ci-issue-tracker-reconcile` で再有効化する。
+
 ## 自動 close の条件（多重 guard）
 
 以下を **全て** 満たす時のみ close（回復 SHA・Run URL を comment に記録）:
@@ -185,6 +233,10 @@ pending/unknown 証跡の残存は**close しない**。close 候補で branch h
 
 - `ci-issue-tracker.yml` の `workflow_run.workflows`（対象 workflow 名）
   と `branches`（対象ブランチ）。
+- `ci-issue-tracker-reconcile.yml` は追跡対象を参照しない（履歴は
+  scope の `--workflow-file`/`--branch` で絞る）ため、変更点は
+  concurrency group と artifact 名の repo 語だけ。スケジュール間隔は
+  consumer の bot dispatch 頻度に合わせて調整してよい。
 - `tracker.mjs` の `--repo`（`GITHUB_REPOSITORY` 既定）・`--branch`・
   `--workflow`・`--label`、および `ISSUE_TITLE` / `ALLOWED_EVENTS` /
   `FAILURE_CONCLUSIONS` の定数。
@@ -203,4 +255,5 @@ pending/unknown 証跡の残存は**close しない**。close 候補で branch h
 - `mise run test-ci-tracker`（`node --test ci/tracker/`）— 全判定経路
   を mock client で検証。実 GitHub API・実 Issue・実 dispatch を起こ
   さない。
-- `mise exec -- actionlint .github/workflows/ci-issue-tracker.yml`。
+- `mise exec -- actionlint .github/workflows/ci-issue-tracker.yml
+  .github/workflows/ci-issue-tracker-reconcile.yml`。

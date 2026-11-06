@@ -44,6 +44,7 @@ relations:
   derived-by:
     - "docs/designs/issue-368-ci-issue-tracker.md"
     - "docs/plans/issue-368-ci-issue-tracker.md"
+    - "docs/specs/issue-368-tracker-reconcile.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-368-ci-issue-tracker.md"

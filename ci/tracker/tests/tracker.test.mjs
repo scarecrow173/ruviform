@@ -16,6 +16,7 @@ import {
   defaultScope,
   mergeMarkerStates,
   parseMarker,
+  parseTrackerArgs,
   plan,
   renderBody,
   renderMarker,
@@ -1235,4 +1236,166 @@ test("run: same-id success does not close while a newer different-run failure ex
   assert.ok(!client.calls.includes("closeIssue:#42"));
   const update = res.applied.find((a) => a.type === "update" && a.issue === 42);
   assert.equal(update?.state.failure.runId, 300, "newest failure is the unrelated run");
+});
+
+// ------------------------------------------------------- reconcile mode ---
+// Issue #368 notification-gap fill: GITHUB_TOKEN-dispatched `ci` completions
+// fire no workflow_run event, so a second entry runs the SAME evaluator with
+// no event payload. `run({payload: null, reconcile: true})` must reconcile
+// purely from authoritative history + marker state — identical fail-closed
+// contract, no event candidate.
+
+// The #375 incident shape: tracker opened the issue on a real failure, the
+// scheduler's bot dispatch then succeeded with no event — reconcile closes
+// it from authoritative history alone.
+test("reconcile: bot success in history closes the open failure issue", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [histRun(200, SHA_B, "success", T2, { event: "workflow_dispatch" }), histRun(100, SHA_A, "failure", T1)],
+    compare: "ahead",
+    branchSha: SHA_B,
+  });
+  const res = await run({ payload: null, reconcile: true, client, scope });
+  assert.equal(res.classified.kind, "reconcile");
+  assert.ok(res.applied.some((a) => a.type === "close-recovered" && a.issue === 42));
+  assert.ok(client.calls.includes("closeIssue:#42"));
+});
+
+// The gap is symmetric: a bot-dispatched FAILURE also fires no event —
+// reconcile must file it even though no payload ever arrived.
+test("reconcile: unresolved bot failure in history creates an issue", async () => {
+  const client = mockClient({
+    issues: [],
+    history: [histRun(300, SHA_C, "failure", T3, { event: "workflow_dispatch" })],
+    jobs: [{ name: "verify", conclusion: "failure" }],
+  });
+  const res = await run({ payload: null, reconcile: true, client, scope });
+  assert.equal(res.classified.kind, "reconcile");
+  assert.ok(res.applied.some((a) => a.type === "create" && a.issue === 500));
+  assert.ok(client.calls.includes("getRunJobs"));
+});
+
+test("reconcile: success-only history with no issue is a noop", async () => {
+  const client = mockClient({
+    issues: [],
+    history: [histRun(200, SHA_B, "success", T2, { event: "workflow_dispatch" })],
+  });
+  const res = await run({ payload: null, reconcile: true, client, scope });
+  assert.equal(res.classified.kind, "reconcile");
+  assert.ok(res.applied.every((a) => a.type === "noop"));
+  assert.ok(!client.calls.some((c) => c.startsWith("createIssue")));
+});
+
+// Reconcile must not smuggle in an event candidate — a payload-less run has
+// no `status:"completed"` self-evidence, only history + marker.
+test("reconcile: live pending run in history still blocks close", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [
+      histRun(400, SHA_C, null, T4, { status: "in_progress", event: "workflow_dispatch" }),
+      histRun(200, SHA_B, "success", T2),
+      histRun(100, SHA_A, "failure", T1),
+    ],
+    compare: "ahead",
+    branchSha: SHA_B,
+  });
+  const res = await run({ payload: null, reconcile: true, client, scope });
+  assert.ok(!res.applied.some((a) => a.type === "close-recovered"));
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+});
+
+test("reconcile: unclassifiable history record blocks close", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [{ garbage: true }, histRun(200, SHA_B, "success", T2), histRun(100, SHA_A, "failure", T1)],
+    compare: "ahead",
+    branchSha: SHA_B,
+  });
+  const res = await run({ payload: null, reconcile: true, client, scope });
+  assert.ok(!res.applied.some((a) => a.type === "close-recovered"));
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+});
+
+test("reconcile: history API failure propagates", async () => {
+  const client = mockClient({ failOn: "getRunHistory" });
+  await assert.rejects(run({ payload: null, reconcile: true, client, scope }), /getRunHistory/);
+});
+
+test("reconcile: unavailable branch head on a close candidate propagates", async () => {
+  const issue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [histRun(200, SHA_B, "success", T2), histRun(100, SHA_A, "failure", T1)],
+    compare: "ahead",
+    failOn: "getBranchHead",
+  });
+  await assert.rejects(run({ payload: null, reconcile: true, client, scope }), /getBranchHead/);
+  assert.ok(!client.calls.includes("closeIssue:#42"));
+});
+
+// ------------------------------------------------- parseTrackerArgs -------
+// Mode separation contract: --reconcile never consults the event path;
+// ambient env paths are ignored, an explicit --event is a contradiction.
+
+test("parseTrackerArgs: --reconcile ignores ambient event paths", () => {
+  const r = parseTrackerArgs(["node", "tracker.mjs", "--reconcile"], {
+    TRACKER_EVENT_PATH: "/tmp/event.json",
+    GITHUB_EVENT_PATH: "/tmp/github-event.json",
+    GITHUB_REPOSITORY: REPO,
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.args.mode, "reconcile");
+  assert.equal(r.args.event, null);
+});
+
+test("parseTrackerArgs: --reconcile with explicit --event is a usage error", () => {
+  const r = parseTrackerArgs(["node", "tracker.mjs", "--reconcile", "--event", "/tmp/e.json"], {
+    GITHUB_REPOSITORY: REPO,
+  });
+  assert.equal(r.ok, false);
+});
+
+test("parseTrackerArgs: default mode reads TRACKER_EVENT_PATH", () => {
+  const r = parseTrackerArgs(["node", "tracker.mjs"], {
+    TRACKER_EVENT_PATH: "/tmp/event.json",
+    GITHUB_REPOSITORY: REPO,
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.args.mode, "event");
+  assert.equal(r.args.event, "/tmp/event.json");
+});
+
+test("parseTrackerArgs: no flag and no event path is a usage error", () => {
+  const r = parseTrackerArgs(["node", "tracker.mjs"], { GITHUB_REPOSITORY: REPO });
+  assert.equal(r.ok, false);
+});
+
+test("reconcile: passing an event payload is rejected (no cross-mode interpretation)", async () => {
+  const client = mockClient({ history: [] });
+  await assert.rejects(
+    run({ payload: payload(), reconcile: true, client, scope }),
+    /does not accept an event payload/,
+  );
+});
+
+test("reconcile: result carries mode", async () => {
+  const client = mockClient({ history: [] });
+  const res = await run({ payload: null, reconcile: true, client, scope });
+  assert.equal(res.mode, "reconcile");
+  const ev = await run({ payload: payload(), client: mockClient({ history: [] }), scope });
+  assert.equal(ev.mode, "event");
+});
+
+// Event mode boundary: a file that parses but is not a webhook object is
+// corrupt input, not a valid skip — it must error rather than silently noop.
+test("event mode: non-object payload is a hard error, not a skip", async () => {
+  for (const bad of [null, "completed", 42, []]) {
+    await assert.rejects(
+      run({ payload: bad, client: mockClient({ history: [] }), scope }),
+      /requires a JSON object event payload/,
+    );
+  }
 });

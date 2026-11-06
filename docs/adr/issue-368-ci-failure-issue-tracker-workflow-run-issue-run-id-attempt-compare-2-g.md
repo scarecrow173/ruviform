@@ -4,7 +4,7 @@ type: "adr"
 status: "accepted"
 title: "Issue #368 CI failure Issue Tracker — workflow_run 監視・Issue 集約・(run id, attempt) 順序と compare 2 重 guard"
 created: "2026-11-05"
-updated: "2026-11-05"
+updated: "2026-11-06"
 owners: []
 relations:
   source:
@@ -39,8 +39,10 @@ relations:
   related:
     - "docs/adr/issue-328-ci-concurrency-grouping.md"
     - "docs/designs/issue-366-full-ci-stage1.md"
+    - "docs/adr/issue-368-tracker-reconcile-schedule-entry.md"
   refines: []
-  refined-by: []
+  refined-by:
+    - "docs/adr/issue-368-tracker-reconcile-schedule-entry.md"
   derives-from: []
   derived-by:
     - "docs/designs/issue-368-ci-issue-tracker.md"
@@ -289,3 +291,10 @@ API・実 Issue・実 dispatch はテストで発生させない。
 - AudioLens #159 / Synvelis #167 への展開を想定した汎用 scope 設計
   （marker に repo/workflow/branch を含める）— 詳細は
   `ci/tracker/README.md` の Consumer 再利用契約。
+- 2026-11-06 補足: 本 ADR の trigger 禁止（`pull_request`/`push`/
+  `schedule`/`workflow_dispatch` を持たない）は `ci-issue-tracker.yml`
+  ファイルに限定して維持される。`GITHUB_TOKEN` dispatch 完了の
+  `workflow_run` 不発火（anti-recursion）を埋めるため、同一 evaluator を
+  呼ぶ別 workflow `ci-issue-tracker-reconcile.yml`（schedule +
+  workflow_dispatch）が `docs/adr/issue-368-tracker-reconcile-schedule-entry.md`
+  で追加決定された — 本ファイルへの trigger 追加は引き続き禁止。
