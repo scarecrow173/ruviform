@@ -1,7 +1,7 @@
 ---
 id: "TASK-U2Bnd3KffOanQDe08MNWxo"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Task 1 Ruviform SDK epoch採用 — ViewLink.attach(windowId, generation?)"
 created: "2026-11-07"
 updated: "2026-11-07"
@@ -56,7 +56,7 @@ relations:
 
 ## Acceptance
 
-- [ ] RED確認後の恒久テストgreen（test-specの全ケース）
-- [ ] `mise run check-ui-binding` / `test-ui-binding` / `build-ui-binding` green
-- [ ] `mise run check-ui-guitest` / `test-ui-guitest` green（oracle変更なしで成立を確認）
-- [ ] 独立review-protocol通過、自branch push + 日本語PR + 候補SHA manual Full CI結果報告
+- [x] RED確認後の恒久テストgreen（test-specの全ケース）— RED 8 fail → GREEN 87/0
+- [x] `mise run check-ui-binding` / `test-ui-binding` / `build-ui-binding` green
+- [x] `mise run check-ui-guitest` / `test-ui-guitest` green（oracle変更なしで成立を確認 — 135/0）
+- [x] 独立review-protocol通過（Reviewer A/B → Validator → Judge: A1 P1 blocking→修正→ACCEPT WITH NON-BLOCKING NOTES）、自branch push + 日本語PR + 候補SHA manual Full CI結果報告

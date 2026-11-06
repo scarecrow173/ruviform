@@ -74,6 +74,6 @@ relations:
 
 ## Verification
 
-- [ ] `mise run check-ui-binding` / `test-ui-binding` / `build-ui-binding` green
-- [ ] link.test.ts に authoritative 採用・epoch遷移・無効原子性・local fallback の恒久テスト
-- [ ] `mise run check-ui-guitest` / `test-ui-guitest` green（replay は generation 未指定の既存経路のみ — oracle変更不要を確認）
+- [x] `mise run check-ui-binding` / `test-ui-binding` / `build-ui-binding` green
+- [x] link.test.ts に authoritative 採用・epoch遷移・無効原子性・local fallback の恒久テスト（外部registerBinding・dead-listener含む10件）
+- [x] `mise run check-ui-guitest` / `test-ui-guitest` green（replay は generation 未指定の既存経路のみ — oracle変更不要を確認）
