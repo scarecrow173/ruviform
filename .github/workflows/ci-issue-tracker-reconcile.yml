@@ -1,0 +1,124 @@
+name: ci-issue-tracker-reconcile
+
+# Issue #368 (CI-DAILY-03) reconcile entry: the event tracker
+# (ci-issue-tracker.yml) can never observe `ci` runs that the daily
+# scheduler dispatched with GITHUB_TOKEN — the dispatch itself runs, but
+# GitHub's anti-recursion rule fires no downstream workflow_run event on
+# its completion, so bot failures never file and bot successes never
+# close. This second entry runs the SAME evaluator (ci/tracker/tracker.mjs
+# --reconcile) on a schedule and on demand: it ignores every event path
+# and reconciles purely from the authoritative `ci` run list for main plus
+# stored marker state, so a lost notification self-heals instead of
+# depending on an event that never arrives. Close/create guards are
+# unchanged — newest-evidence ordering, attempt-aware dedup, compare
+# double guard, pending/unknown fail-closed, canonical issue idempotency.
+#
+# Trust model: schedule only ever runs default-branch code, and checkout
+# is pinned to the default branch even for manual dispatch, so an
+# unmodified copy of this file always executes the mainline tracker —
+# never a completed run's revision, PR code, or artifacts. (As with every
+# workflow, a dispatch runs the SELECTED REF's copy of this file, so the
+# guard+pin defend against accidental non-main dispatch, not an actor who
+# can already edit workflow files — same exposure as daily-ci.yml.) No new
+# secrets or permissions — the job touches GitHub REST metadata only
+# (issues, jobs, run history, compare, branch head).
+#
+# The cron lives in THIS file on purpose (see
+# docs/adr/issue-368-tracker-reconcile-schedule-entry.md): GitHub can
+# auto-disable a scheduled workflow after ~60 days of repository
+# inactivity, and a disabled workflow stops answering ALL its triggers —
+# keeping schedule out of ci-issue-tracker.yml isolates that blast radius
+# from the event entry. Auto-disable is an operational limit: if the
+# reconcile stops appearing in the Actions list, re-enable the workflow
+# (docs in ci/tracker/README.md).
+on:
+  # 6h cadence, off the top of the hour and offset from daily-ci's
+  # 21:17 UTC dispatch — ticks at 00:23/06:23/12:23/18:23 UTC, so a bot
+  # Full CI finishing ~1-2h after dispatch is typically reconciled on the
+  # next tick (~1-3h later; worst case one interval).
+  schedule:
+    - cron: "23 */6 * * *"
+  # Manual diagnostic/replay entry. No inputs: the evaluator is
+  # deliberately uniform so a manual run proves the same path cron takes.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# SAME group as the event tracker so a reconcile run and an event run can
+# never write issues concurrently (group does not embed the workflow name).
+# Pending replacement can drop a queued reconcile, but reconcile is
+# idempotent over authoritative history — the next tick or event replays
+# the same evidence and converges to the same verdict.
+concurrency:
+  group: ci-issue-tracker-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  MISE_ENABLE_TOOLS: node
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    # A workflow_dispatch fired on a non-default ref must not run the
+    # privileged job — the dispatch uses that ref's workflow file, so gate
+    # here and pin the checkout below to the default branch. The schedule
+    # branch is unconditional: a schedule run definitionally executes on
+    # the default branch (GitHub guarantee) and its event payload may not
+    # carry `repository`, so comparing ref_name there could resolve
+    # `main == ''` and silently skip every cron tick — the guard exists
+    # for dispatch only.
+    if: github.event_name == 'schedule' || github.ref_name == github.event.repository.default_branch
+    # Bound the hold on the shared concurrency group — a hung step would
+    # otherwise occupy the serialization point until the job default and
+    # widen the pending-replacement window for the event entry.
+    timeout-minutes: 15
+    # Same least privilege as the event tracker: issues:write to manage
+    # the failure issue, actions:read for run/job metadata, contents:read
+    # for the compare API and default-branch checkout.
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - name: Checkout repository (default branch tracker code)
+        uses: actions/checkout@v7.0.1
+        with:
+          # Pin to the default branch so a dispatch on any other ref still
+          # executes only trusted mainline tracker code — never the ref
+          # the dispatch was launched from. An empty expression value
+          # would make checkout fall back to the triggering ref, so
+          # default to 'main' explicitly.
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked node
+
+      # A broken evaluator must fail this job rather than
+      # create/update/close the wrong issue. All tests run against a mock
+      # client — no API calls.
+      - name: Self-test tracker evaluator (mise run test-ci-tracker)
+        run: mise run test-ci-tracker
+
+      - name: Reconcile authoritative run history and update failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Deliberately NO TRACKER_EVENT_PATH: --reconcile never reads an
+          # event payload (the ambient GITHUB_EVENT_PATH the runner always
+          # sets is ignored by design — mode separation is explicit).
+        run: mise exec -- node ci/tracker/tracker.mjs --reconcile --report ci-issue-tracker-report.json
+
+      - name: Upload tracker report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-issue-tracker-reconcile-report-attempt-${{ github.run_attempt }}
+          path: ci-issue-tracker-report.json
+          if-no-files-found: warn
