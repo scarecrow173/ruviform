@@ -18,6 +18,7 @@ Directory: `docs/tasks`
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
+| TASK-U2Bnd3KffOanQDe08MNWxo | Task 1 Ruviform SDK epoch採用 — ViewLink.attach(windowId, generation?) | in-progress | [viewlink-authoritative-generation-t1-sdk-epoch.md](./viewlink-authoritative-generation-t1-sdk-epoch.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

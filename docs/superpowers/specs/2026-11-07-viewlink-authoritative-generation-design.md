@@ -1,7 +1,7 @@
 # ViewLinkへのbackend generation採用設計
 
 日付: 2026-11-07  
-状態: ユーザー方針選択済み・設計承認待ち  
+状態: ユーザー承認済み（方針A・設計 2026-11-07 承認）  
 対象: Ruviform `ui/binding` と Synvelis PR #171
 
 ## 意図
