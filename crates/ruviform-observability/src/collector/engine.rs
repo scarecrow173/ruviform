@@ -121,22 +121,70 @@ impl Shared {
     /// Drains every live source and stores `Stopped` — the caller must
     /// hold the state lock. Idempotent; returns immediately when the
     /// drain already happened.
+    ///
+    /// The terminal drain is an observation commit like any poll: it
+    /// mints a new generation carrying the drain measurements, the
+    /// `removed` identities and the post-commit snapshot — so the
+    /// final delta/`Removed` event stays recoverable through
+    /// `latest_batch()`/`snapshot()` even when history retention is
+    /// disabled (`history_max_samples == 0` /
+    /// `history_budget_bytes == 0`).
     fn drain_all(&self, guard: &mut MutexGuard<'_, State>, now: Instant) {
         if self.collector_state() == CollectorState::Stopped {
             return;
         }
         let ids: Vec<SourceId> = guard.registry.entries.keys().copied().collect();
+        let planned = ids.len();
+        let mut measurements = Vec::with_capacity(planned);
+        let mut removed = Vec::with_capacity(planned);
+        let mut ring_evicted = 0usize;
+        let mut window_anomaly = false;
         for id in ids {
             if let Some(m) = guard.commit_drain(id, now, &self.config) {
                 let outcome = guard.history.push(&m);
+                ring_evicted += outcome.evicted;
                 guard.health.history_evicted_total += outcome.evicted as u64;
                 if outcome.oversized {
                     guard.health.history_oversized_dropped_total += 1;
                 }
+                if matches!(m.issue, Some(MeasurementIssue::ClockAnomaly)) {
+                    window_anomaly = true;
+                }
+                if m.lifecycle == SourceLifecycle::Removed {
+                    removed.push(m.identity);
+                }
+                measurements.push(m);
             }
         }
-        let generation = guard.generation;
-        guard.latest_snapshot = rebuild_snapshot(&guard.registry, generation, now);
+        let generation = guard.generation + 1;
+        let window_started = guard.last_window_end;
+        let measured = if let Some(d) = now.checked_duration_since(window_started) {
+            d
+        } else {
+            window_anomaly = true;
+            Duration::ZERO
+        };
+        let window = ObservationWindow {
+            generation,
+            started: window_started,
+            ended: now,
+            expected: self.config.poll_interval,
+            measured,
+            clock: ClockDomainId::MONOTONIC,
+            planned,
+            observed: measurements.len(),
+            skipped: 0,
+            drained: removed.len(),
+            history_evicted: ring_evicted,
+            clock_anomaly: window_anomaly,
+        };
+        let snapshot = rebuild_snapshot(&guard.registry, generation, now);
+        let batch =
+            ObservationBatch::new(generation, window, measurements, removed, snapshot.clone());
+        guard.generation = generation;
+        guard.last_window_end = now;
+        guard.latest_snapshot = snapshot;
+        guard.latest_batch = Some(batch);
         self.collector_state.store(STATE_STOPPED, Ordering::Release);
     }
 }
@@ -607,8 +655,12 @@ impl Collector {
         self.shared.lock_state().latest_snapshot.clone()
     }
 
-    /// The latest committed batch — `None` until the first poll.
-    /// Readable after `Stopped`.
+    /// The latest committed batch — `None` only before the first
+    /// observation pass commits. The terminal drain (shutdown/drop)
+    /// is itself an observation pass: after `Stopped` this returns
+    /// the terminal generation carrying every final drain
+    /// measurement and `removed` identity, so terminal values stay
+    /// recoverable even with history retention disabled.
     #[must_use]
     pub fn latest_batch(&self) -> Option<ObservationBatch> {
         self.shared.lock_state().latest_batch.clone()
@@ -734,6 +786,11 @@ impl Collector {
     /// collector itself — their final values commit as `Partial` +
     /// `WriterNotQuiesced` since writer quiescence was never
     /// confirmed.
+    ///
+    /// The drain pass commits one terminal [`ObservationBatch`] at a
+    /// new generation (final measurements + `removed` + post-drain
+    /// snapshot), retrievable via [`Collector::latest_batch`] and
+    /// [`Collector::snapshot`] — independent of history capacity.
     ///
     /// **Non-RT only** — locks and allocates.
     pub fn shutdown(&self) {
@@ -885,8 +942,9 @@ impl CollectorHandle {
         self.shared.lock_state().latest_snapshot.clone()
     }
 
-    /// The latest committed batch — `None` until the first poll;
-    /// readable after `Stopped`.
+    /// The latest committed batch — `None` only before the first
+    /// observation pass commits; after `Stopped` it is the terminal
+    /// drain batch (see [`Collector::latest_batch`]).
     #[must_use]
     pub fn latest_batch(&self) -> Option<ObservationBatch> {
         self.shared.lock_state().latest_batch.clone()

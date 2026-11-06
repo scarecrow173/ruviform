@@ -847,6 +847,12 @@ fn shutdown_is_idempotent_and_concurrent() {
     }
     assert_eq!(handle.state(), CollectorState::Stopped);
     assert_eq!(handle.health().sources_removed_total, 1);
+    // A repeated shutdown is a no-op — the terminal generation must
+    // not mint again.
+    let generation = handle.latest_batch().unwrap().generation();
+    handle.shutdown();
+    collector.shutdown();
+    assert_eq!(handle.latest_batch().unwrap().generation(), generation);
     drop(collector);
 }
 
@@ -1138,4 +1144,239 @@ fn mid_poll_retire_still_drains_this_poll() {
     assert_eq!(ticket.lifecycle(), SourceLifecycle::Removed);
     assert!(b.removed().contains(&ticket.identity()));
     drop(collector);
+}
+
+// --- terminal drain batch -----------------------------------------------------
+// The shutdown/drop final-drain pass is an observation commit like any
+// poll: it mints one generation carrying the drain measurements, the
+// `removed` identities and the post-commit snapshot — so the final
+// delta/`Removed` event stays recoverable through `latest_batch()`/
+// `snapshot()` even when history retention is disabled
+// (`history_max_samples == 0` / `history_budget_bytes == 0`).
+
+#[test]
+fn shutdown_drain_publishes_terminal_batch_with_history_disabled() {
+    let mut c = config();
+    c.history_max_samples = 0;
+    c.history_budget_bytes = 0;
+    let mut collector = Collector::new(c).unwrap();
+    let port = collector.registration_port();
+    let (counter, source) = counter_source("test.counter.term_hist0");
+    counter.increment();
+    let lease = port.register(source).unwrap();
+    let identity = lease.identity();
+    let t0 = Instant::now();
+    let b1 = collector.poll(t0).unwrap();
+    assert_eq!(b1.generation(), 1);
+    counter.increment();
+    counter.increment();
+    let ticket = lease.retire(); // domain retire — writer quiesced.
+    let handle = collector.handle();
+    // Keep the drain's elapsed anchor measurably positive on coarse
+    // timers so the final delta/rate is not ClockAnomaly-suppressed.
+    thread::sleep(Duration::from_millis(2));
+
+    collector.shutdown();
+    assert_eq!(handle.state(), CollectorState::Stopped);
+
+    // Terminal generation minted — the final delta and the Removed
+    // event are recoverable from the batch itself.
+    let terminal = handle.latest_batch().expect("terminal drain batch");
+    assert_eq!(terminal.generation(), 2);
+    assert_eq!(terminal.removed(), &[identity]);
+    assert_eq!(terminal.measurements().len(), 1);
+    let m = &terminal.measurements()[0];
+    assert_eq!(m.lifecycle, SourceLifecycle::Removed);
+    assert_eq!(m.validity, MeasurementValidity::Valid); // domain-retired
+    let (raw, _cumulative, delta, _rate) = counter_value(m);
+    assert_eq!(raw, 3);
+    assert_eq!(delta, Some(2));
+    let w = terminal.window();
+    assert_eq!(w.generation, 2);
+    assert_eq!(w.planned, 1);
+    assert_eq!(w.drained, 1);
+    assert_eq!(w.observed, 1);
+    assert_eq!(w.skipped, 0);
+    assert!(!w.clock_anomaly);
+    assert!(w.ended >= w.started);
+
+    // Snapshot is rebuilt at the same terminal generation — live
+    // series gone, tombstone retained.
+    let snap = handle.snapshot();
+    assert_eq!(snap.generation(), 2);
+    assert_eq!(terminal.snapshot().generation(), 2);
+    let tomb = snap.get(identity).unwrap();
+    assert_eq!(tomb.validity, MeasurementValidity::Unavailable);
+
+    // History retention is disabled — nothing there; the batch is the
+    // carrier that makes the terminal loss impossible.
+    assert!(handle.series(identity).is_empty());
+    assert!(handle.history().is_empty());
+    drop(ticket);
+    drop(collector);
+}
+
+#[test]
+fn forced_shutdown_drain_is_recoverable_without_history() {
+    let mut c = config();
+    c.history_max_samples = 0;
+    c.history_budget_bytes = 0;
+    let mut collector = Collector::new(c).unwrap();
+    let port = collector.registration_port();
+    let (counter, source) = counter_source("test.counter.term_forced");
+    let lease = port.register(source).unwrap();
+    let identity = lease.identity();
+    let t0 = Instant::now();
+    collector.poll(t0).unwrap();
+    counter.increment();
+    counter.increment();
+    counter.increment();
+    let handle = collector.handle();
+    thread::sleep(Duration::from_millis(2));
+
+    // Writer never quiesced — the collector forces the drain and the
+    // final delta is still recoverable, marked Partial.
+    collector.shutdown();
+
+    let terminal = handle.latest_batch().expect("terminal drain batch");
+    assert_eq!(terminal.generation(), 2);
+    assert_eq!(terminal.removed(), &[identity]);
+    let m = &terminal.measurements()[0];
+    assert_eq!(m.lifecycle, SourceLifecycle::Removed);
+    assert_eq!(m.validity, MeasurementValidity::Partial);
+    assert_eq!(m.issue, Some(MeasurementIssue::WriterNotQuiesced));
+    let (raw, _cumulative, delta, _rate) = counter_value(m);
+    assert_eq!(raw, 3);
+    assert_eq!(delta, Some(3));
+    assert!(handle.series(identity).is_empty());
+    // Health parity with the drain commit — forced (unquiesced)
+    // drain is not abandonment.
+    let health = handle.health();
+    assert_eq!(health.sources_removed_total, 1);
+    assert_eq!(health.abandoned_sources_total, 0);
+    assert!(health.samples_total >= 2);
+    drop(lease);
+    drop(collector);
+}
+
+#[test]
+fn shutdown_terminal_batch_covers_mixed_sources() {
+    // History enabled — the terminal batch still carries every drain
+    // (retired → Valid; still-Active → Partial), not just what the
+    // ring happened to retain.
+    let mut collector = Collector::new(config()).unwrap();
+    let port = collector.registration_port();
+    let (counter_a, source_a) = counter_source("test.counter.term_a");
+    let (_counter_b, source_b) = counter_source("test.counter.term_b");
+    let (gauge_c, source_c) = gauge_source("test.gauge.term_c", 7);
+    counter_a.increment();
+    let lease_a = port.register(source_a).unwrap();
+    let lease_b = port.register(source_b).unwrap();
+    let lease_c = port.register(source_c).unwrap();
+    let id_a = lease_a.identity();
+    let id_b = lease_b.identity();
+    let id_c = lease_c.identity();
+    let t0 = Instant::now();
+    collector.poll(t0).unwrap();
+    gauge_c.set(9);
+    let _ticket_a = lease_a.retire();
+    let handle = collector.handle();
+    thread::sleep(Duration::from_millis(2));
+
+    collector.shutdown();
+
+    let terminal = handle.latest_batch().expect("terminal drain batch");
+    assert_eq!(terminal.generation(), 2);
+    assert_eq!(terminal.removed().len(), 3);
+    for id in [id_a, id_b, id_c] {
+        assert!(terminal.removed().contains(&id));
+    }
+    let by_id = |id| {
+        terminal
+            .measurements()
+            .iter()
+            .find(|m| m.identity == id)
+            .unwrap()
+    };
+    let ma = by_id(id_a);
+    assert_eq!(ma.validity, MeasurementValidity::Valid); // domain retire
+    let mb = by_id(id_b);
+    assert_eq!(mb.validity, MeasurementValidity::Partial);
+    assert_eq!(mb.issue, Some(MeasurementIssue::WriterNotQuiesced));
+    let mc = by_id(id_c);
+    assert_eq!(mc.validity, MeasurementValidity::Partial);
+    assert!(matches!(
+        mc.value,
+        Some(MetricValue::Gauge { value: 9, .. })
+    ));
+    assert_eq!(handle.snapshot().generation(), 2);
+    drop(lease_b);
+    drop(lease_c);
+    drop(collector);
+}
+
+#[test]
+fn shutdown_without_live_sources_mints_empty_terminal_batch() {
+    // The terminal pass is still an observation commit — it mints a
+    // generation even when nothing was live, so `latest_batch` is
+    // always the defined terminal generation after `Stopped`.
+    let collector = Collector::new(config()).unwrap();
+    let handle = collector.handle();
+    collector.shutdown();
+    let terminal = handle.latest_batch().expect("empty terminal batch");
+    assert_eq!(terminal.generation(), 1);
+    assert_eq!(terminal.measurements().len(), 0);
+    assert_eq!(terminal.removed(), []);
+    assert_eq!(handle.snapshot().generation(), 1);
+    drop(collector);
+}
+
+#[test]
+fn shutdown_after_fully_drained_poll_still_mints_terminal_generation() {
+    let mut collector = Collector::new(config()).unwrap();
+    let port = collector.registration_port();
+    let (_, source) = counter_source("test.counter.term_empty");
+    let lease = port.register(source).unwrap();
+    let t0 = Instant::now();
+    collector.poll(t0).unwrap();
+    let ticket = lease.retire();
+    let b2 = collector.poll(t0 + Duration::from_millis(10)).unwrap();
+    assert!(b2.removed().contains(&ticket.identity()));
+    drop(ticket);
+    let handle = collector.handle();
+
+    collector.shutdown();
+
+    // The drain batch exists (generation 3) even though the source
+    // was already Removed — the terminal generation is defined.
+    let terminal = handle.latest_batch().unwrap();
+    assert_eq!(terminal.generation(), 3);
+    assert_eq!(terminal.removed(), []);
+    assert_eq!(terminal.measurements().len(), 0);
+    drop(collector);
+}
+
+#[test]
+fn poll_runner_stop_publishes_terminal_batch() {
+    let collector = Collector::new(config()).unwrap();
+    let port = collector.registration_port();
+    let (counter, source) = counter_source("test.counter.runner_term");
+    counter.increment();
+    let lease = port.register(source).unwrap();
+    let identity = lease.identity();
+    let runner = collector.into_poll_runner();
+    let handle = runner.handle();
+
+    runner.stop().unwrap();
+
+    assert_eq!(handle.state(), CollectorState::Stopped);
+    let terminal = handle.latest_batch().expect("terminal drain batch");
+    assert!(terminal.removed().contains(&identity));
+    let last = terminal
+        .measurements()
+        .iter()
+        .find(|m| m.identity == identity)
+        .unwrap();
+    assert_eq!(last.lifecycle, SourceLifecycle::Removed);
+    drop(lease);
 }

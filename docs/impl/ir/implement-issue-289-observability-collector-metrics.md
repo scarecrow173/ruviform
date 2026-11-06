@@ -214,6 +214,30 @@ RT producer は collector の lock/alloc/IO に一切触れない。
   `#[expect(clippy::cast_precision_loss)]` を局所適用（既存
   codebase の cast 規約に一致）。
 
+### Post-Review Fix（統合前追加レビュー P1）
+
+- **指摘**: `history_max_samples=0`/`history_budget_bytes=0`
+  （有効な「履歴無効」設定）で poll→increment→writer 停止→
+  `lease.retire`→`shutdown` すると、最終 drain の `Measurement`
+  は capacity-0 の history への push のみで消失し、`latest_batch`
+  は古い世代のまま・snapshot は同世代の tombstone のみ — 最終
+  delta/Removed 事象がどこからも回収不能だった（独立 Validator
+  CONFIRMED・Judge P1 Blocking）。
+- **修正**: `drain_all` を poll と同じ観測 commit 責務へ揃え、終端
+  drain が新世代を mint するよう変更。drain measurement 全件・
+  `removed` identity・`ObservationWindow`（measured elapsed・
+  planned/observed/drained・clock_anomaly）・post-drain snapshot を
+  1 つの terminal `ObservationBatch` として `latest_batch`/
+  `latest_snapshot` に公開し、`generation`/`last_window_end` を
+  進める。drain 対象ゼロでも空の terminal batch が mint され、
+  `Stopped` 後の `latest_batch` が常に定義済み世代を指す。
+  history への push は従来どおり（有効時の記録責務）で、回収正本は
+  batch — history 強制 ON にはしなかった。
+- **RED→GREEN**: 終端 batch 系の回帰試験 6 件を追加（history 0/
+  非 0・domain retire `Valid`/未 quiescence `Partial`/複数 source/
+  空 drain でも世代 mint/`PollRunner::stop` 経路）。全件 RED 確認後
+  に実装で GREEN。
+
 ## Related Experiments
 
 ### Adopted
@@ -233,12 +257,15 @@ RT producer は collector の lock/alloc/IO に一切触れない。
 | `mise run lint` (`cargo clippy --workspace --all-targets -- -D warnings`) | 実行 | Pass |
 | `mise run test` (`cargo test --workspace`) | 実行 | Pass — 全 test target 緑 |
 | `mise run test-rt` (rt_ フィルタレーン) | 実行 | Pass — observability 17 件含む全 lane 緑 |
-| `cargo test -p ruviform-observability` | 実行 | Pass — unit 104 + doctest 6（補助証拠） |
+| `cargo test -p ruviform-observability` | 実行 | Pass — unit 110 + doctest 6（補助証拠。terminal drain batch 回帰 +6） |
 | `cargo check -p ruviform-observability --features logging` | 実行 | Pass — logging feature 両立 |
 | `cargo check -p ruviform-observability --no-default-features` | 実行 | Pass — logging OFF でも collector 独立 |
 
 実施環境: Windows 11 x64 / Git Bash / Rust 1.99.0 (mise pin)・MSRV
-1.89 準拠コード・unsafe なし・新規外部依存なし。
+1.89 準拠コード・unsafe なし・新規外部依存なし。Post-Review Fix
+適用後に `origin/main`（ad99d18、#392 consumer-verify 統合）を
+merge し、上記全 lane を merge 済み HEAD で再実行して Pass
+（再実行時 plugin-host composite_e2e spawn timeout は未再現）。
 
 主な pinned 証拠（test-spec の証拠行列に対応）:
 

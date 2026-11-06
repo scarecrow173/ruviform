@@ -153,7 +153,10 @@ relations:
   Unsupported` を型で区別し、loss 量と reason は別フィールドで保持する。
 - `Active→Retiring→最終Drain→Removed` を OBS-02 契約どおり駆動し、RT writer
   quiescence 宣言（`retire`）なしに最終値を確定しない。`abandon` 経由の
-  drain は `Partial` を明示する。
+  drain は `Partial` を明示する。終端 drain（shutdown/drop）は poll と
+  同じ観測 commit として新世代の `ObservationBatch` を公開し、最終
+  delta/Removed 事象は履歴容量に依存せず `latest_batch()`/`snapshot()`
+  から回収できる。
 - Series/key/scope の cardinality は `max_sources`/`max_series` と OBS-02 の
   `&'static str` key・enum scope で制御する。ユーザー由来文字列を Series key
   にせず、内部 Source ID を高 cardinality Label に自動公開しない。

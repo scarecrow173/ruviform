@@ -115,13 +115,19 @@ Snapshot・Health を持つ型付き観測結果として提供されること�
   `history_oversized_dropped_total` を計数するが batch/snapshot には出る。
 - R-15（世代共有・AC-2/6）: `poll` は `Result<ObservationBatch, PollError>`
   を返し、batch は `Arc` 共有。`latest_batch()`/`snapshot()` で複数
-  購読者が同一世代を読める。`Stopped` 後も最後の batch/snapshot は
-  参照可能（`latest_batch` は `None` ではない）。世代 gap は
-  `generation` 差で自己診断。
+  購読者が同一世代を読める。終端 drain（shutdown/drop）も 1 世代を
+  mint するため `Stopped` 後の `latest_batch` は terminal batch
+  （drain measurement + `removed` + post-drain snapshot。drain 対象
+  ゼロでも空 batch）を返し、`snapshot()` 世代と一致する。最終
+  delta/Removed 事象の回収正本は terminal batch であり history
+  容量（`history_*==0`）に依存しない。世代 gap は `generation`
+  差で自己診断。
 - R-16（shutdown・AC-7）: `shutdown()` は冪等。CAS 勝者のみ drain を
   実行し全 caller が `Stopped` まで待機して返る。`Draining` 中の登録は
   `FinalDrainInProgress`、poll は `CollectorStopped`。`Stopped` 後の登録は
-  `RegistrarStopped`。
+  `RegistrarStopped`。drain 全件は 1 世代の terminal
+  `ObservationBatch` として commit され `latest_batch`/`snapshot`
+  に公開される（history 容量ゼロでも回収可能）。
 - R-17（公平性・AC-6）: `max_batch_size` より多い Active source は
   round-robin で均等に poll される（cursor 移動で偏りなし）。
 - R-18（RT 契約・AC-8）: Collector 実装は `Counter::increment` 等 RT
@@ -233,8 +239,25 @@ Then: `latest_batch()` は新しい方を返し、`snapshot()` の世代と一�
 Given: Active source を 2 件持つ collector。
 When: `handle.shutdown()`。
 Then: `health().state=Stopped`・`register` → `RegistrarStopped`・
-`poll` → `Err(CollectorStopped)`・drain 対象の最終値が履歴に残り、
-強制 drain 分は `Partial`+`WriterNotQuiesced`。
+`poll` → `Err(CollectorStopped)`・`latest_batch()` は新世代の
+terminal batch を返し drain 対象の最終 measurement（強制 drain 分は
+`Partial`+`WriterNotQuiesced`）と全 `removed` identity を保持、
+`snapshot()` 世代と一致する。history 有効時は履歴にも残る。
+
+### E-14b terminal batch — history 容量ゼロ（R-15/16・AC-7）
+
+Given: `history_max_samples=0` かつ `history_budget_bytes=0` の
+collector に Counter を登録し `poll` で baseline を取る。
+When: 追加 increment → `lease.retire()`（または retire せず強制）→
+`shutdown()`。
+Then: `latest_batch()` は最終 poll 世代 +1 の terminal batch で、
+`removed` に identity・`measurements` に `lifecycle: Removed` の最終
+値（domain retire なら `Valid`・強制なら `Partial`+
+`WriterNotQuiesced`）と post-poll delta を保持。`snapshot()` は同
+世代の tombstone。`series()`/`history()` は空でも最終 delta は
+batch から回収できる。drain 対象ゼロの shutdown でも空の terminal
+batch（世代+1）が mint される。`PollRunner::stop` 経路でも同じ
+terminal batch が公開される。
 
 ### E-15 key kind 付替拒否（R-13・AC-1）
 

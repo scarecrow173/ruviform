@@ -128,10 +128,11 @@ PollRunner ─ Collector を消費して専用 thread で定期 poll。
 - `shutdown(&self)` は `&self` で冪等（Collector/Handle 双方から呼べる）。
   `AtomicU8` を `compare_exchange(Running→Draining)` した勝者だけが
   drain を実行する。実施手順: CAS 成功→`Mutex` 獲得→全 source を強制
-  drain→`Stopped` へ store。CAS 敗者は `Mutex` を獲得して返るだけだが、
-  drain がその同一 lock 区間内で完結するため **lock 獲得時点で既に
-  `Stopped` 到達済み = 全 caller が drain 完了を待って返る**。2 回目
-  以降の呼出は即座に返る（冪等）。
+  drain→`Stopped` へ store。lock 区間の先頭で `Stopped` かを見る
+  ため、CAS 敗者が先に lock を獲得した場合はその caller 自身が
+  drain を完遂する（勝者は `Stopped` を観測して即返る）。いずれに
+  せよ drain は同一 lock 区間内で完結し **`Stopped` 到達済みで全
+  caller が返る**。2 回目以降の呼出は即座に返る（冪等）。
 - Collector 状態は `AtomicU8` に置くため `Draining` は lock 不要で観測
   可能（health の `state` もこの atomic を読む）。`register` は lock
   **前**に atomic を読み `Draining → FinalDrainInProgress`・
@@ -317,7 +318,10 @@ pub enum MeasurementIssue /* #[non_exhaustive] */ {
   **shutdown の強制 drain は必ず前者なので `Partial` になる**
   （quiescence 未確認の値を `Valid` と偽装しない）。
 - **Unavailable**: Removed series（retained）の snapshot entry。
-  `value: None`。履歴には最終値が残る。
+  `value: None`。最終値は drain commit した `ObservationBatch`
+  （poll または終端 drain 世代）に保持される。履歴が有効なら履歴
+  ring にも残るが、回収経路の正本は batch であり history 容量に
+  依存しない。
 - **Unsupported**: 将来の kind 用。現行 `MetricReader` は 3 kind で
   exhaustive に処理されるため到達不能（contract 上の reserved variant
   であり発生条件はない。`#[non_exhaustive]` 付きで将来 kind 追加時の
@@ -357,9 +361,13 @@ pub struct ObservationBatch /* Arc 共有・Clone */ {
   `Stopped` での呼出）。caller は毎回新しい `Instant::now()` を渡す前提
   （Rustdoc 明記）。
 - `CollectorHandle::latest_batch() -> Option<ObservationBatch>`: `State`
-  に保存した最新 batch `Arc` を返す。`None` は一度も poll していない
-  場合のみ。`Stopped` 後も最後の batch は読める（登録・poll は停止しても
-  観測結果は残す）。`ObservationBatch::snapshot() -> MetricsSnapshot` で
+  に保存した最新 batch `Arc` を返す。`None` は観測 commit（poll または
+  終端 drain）が一度も走っていない場合のみ。終端 drain も 1 世代を
+  mint するため `Stopped` 後は terminal batch（drain measurement +
+  `removed` + post-drain snapshot。drain 対象ゼロなら空 batch）を返す
+  — history 容量ゼロでも最終 delta/Removed はここから回収できる
+  （登録・poll は停止しても観測結果は残す）。
+  `ObservationBatch::snapshot() -> MetricsSnapshot` で
   batch が参照する post-commit snapshot を取り出せる。
 - `snapshot() -> MetricsSnapshot`（Arc 共有）: 全 tracked series の最新
   `Measurement`（Active/Retiring/retained-removed）+ generation +
@@ -446,10 +454,18 @@ Mutex poison から `into_inner` で回復した回数。Health 自身は source
   Removed 到達後に registry が行う（契約どおり）。
 - Shutdown: `shutdown()` → `AtomicU8` CAS `Running→Draining`（登録は
   `FinalDrainInProgress`）→ `Mutex` 獲得→全 source を強制
-  retire→drain→Removed→`Stopped` へ store→unlock（登録
-  `RegistrarStopped`・poll `CollectorStopped`）。全 caller は drain
-  完了を待って返る（冪等）。強制 drain された source は
-  `Partial` + `WriterNotQuiesced` で記録される。
+  retire→drain→Removed→**終端 drain を 1 世代の `ObservationBatch`
+  として commit（drain measurement + `removed` + post-drain
+  snapshot を `latest_batch`/`latest_snapshot` に公開）**→`Stopped`
+  へ store→unlock（登録 `RegistrarStopped`・poll
+  `CollectorStopped`）。全 caller は drain 完了を待って返る（冪等）。
+  強制 drain された source は `Partial` + `WriterNotQuiesced` で
+  記録される。終端 drain は poll と同じ観測 commit 責務で世代を
+  mint するため、history 容量ゼロでも最終 delta/Removed 事象は
+  `latest_batch()`/`snapshot()` から必ず回収できる。終端 pass は
+  poll ではないため `polls_total`/`overdue_polls_total`/
+  `last_poll_at` は更新しない（window の `measured` は最後の
+  window 終端からの実測経過を正直に記録する）。
 
 ## Non-Functional Constraints
 
