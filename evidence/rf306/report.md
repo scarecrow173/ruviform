@@ -18,6 +18,18 @@ base: `origin/main` = `ad99d181c34cded1e56489fa9542027fe0dfc966`（branch 起点
 | workspace check | `CARGO_BUILD_JOBS=2 mise run check` | Pass (exit 0, 1m07s) | `cargo check --workspace --all-targets` |
 | workspace lint | `CARGO_BUILD_JOBS=2 mise run lint` | Pass (exit 0, 23.65s) | `cargo clippy --workspace --all-targets -- -D warnings` |
 | doc index 再生成 | `node .agents/skills/doc-maintenance/scripts/doc_maintenance.js apply --type all` | applied 6 | managed index のみ再生成（whitelisted repairs） |
+| merge 後再検証 | `origin/main` = `ccf61a21` を merge（衝突は managed index 4 件のみ・union 解決）後に `check-io-e2e` / `test-io-e2e` / `fmt-check` / `mise run check`（CARGO_BUILD_JOBS=2）を再実走 | 全 Pass (exit 0) | merge commit `d40a9ba`、31 tests 変わらず全 pass |
+
+独立 review は runtime subagent 2 名（Reviewer A: コード/契約・B: docs/証拠の
+正直さ）で実施。A の BLOCKER 指摘（lint fail 推測）は実走で否認済み。
+A/B の NON-BLOCKER から以下を採用して反映済み: crafted ustar header の
+version field 訂正（`00`）、extraction 失敗時 staging root 不在の assert 追加、
+symlink/hardlink/special の refusal kind 個別 assert、case-fold 試験の
+「plan phase」誤記を streaming 実態に修正、zstd round-trip の全 entry 照合、
+WAV 独立 decode を payload バイト一致に強化、recovery handle の実 cleanup、
+test-spec R8・design test map を実装済み試験の実態（truncated payload）に整合。
+未採用: extraction 試験が io-archive 独自 suite と重複する指摘は
+「層越え失敗分類と staging 非残存の合成観点」として維持。
 
 ### `test-io-e2e` 内訳（31 件全 pass）
 
