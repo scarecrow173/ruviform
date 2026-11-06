@@ -85,6 +85,15 @@ Fake Driver と GPUI Driver で**同一の意味論**を持つこと、および
 - `post_event` が `Entity` の view inbox に届く。
 - `windows()` が live `WindowId` 集合を返す。
 
+> 実装注記（design §構成の deviation 記録に一致）:
+> `tests/driver_contract.rs` の `#[gpui::test]` suite は minimal
+> fixture 段階では未導入。`test-ui-gpui` の実行 test 数は 0 で、
+> GPUI 側 semantic は compile lane(check/lint/check-ui-gpui の
+> `-D warnings`)・FakeDriver semantic fixture(共通契約の決定的
+> 検証)・`example-ui-gpui-minimal` 実 OS 手動検証で担保する。
+> `#[gpui::test]` suite の導入は RF390 の Native Component Lab /
+> 境界試験で再検討する。
+
 ### R4: 接続試験の等価性
 
 - Fake/GPUI 双方で同一シナリオの event 系列

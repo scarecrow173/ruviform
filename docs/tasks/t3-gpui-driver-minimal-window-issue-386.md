@@ -12,17 +12,9 @@ relations:
   changes:
     added:
       - type: "file"
-        path: "crates/ruviform-ui-gpui/src/detect.rs"
-      - type: "file"
-        path: "crates/ruviform-ui-gpui/src/driver.rs"
-      - type: "file"
-        path: "crates/ruviform-ui-gpui/src/session.rs"
-      - type: "file"
-        path: "crates/ruviform-ui-gpui/src/view.rs"
-      - type: "file"
         path: "crates/ruviform-ui-gpui/examples/minimal_window.rs"
       - type: "file"
-        path: "crates/ruviform-ui-gpui/tests/driver_contract.rs"
+        path: "crates/ruviform-ui-gpui/README.md"
     modified:
       - type: "file"
         path: "crates/ruviform-ui-gpui/src/lib.rs"
@@ -68,8 +60,16 @@ relations:
 - `examples/minimal_window.rs`（`required-features=["gpui"]`）。
 - `tests/driver_contract.rs`（`#[gpui::test]` + `TestAppContext`
   で FakeDriver と同一シナリオを GPUI Driver で検証）。
+  ※実装では未導入 — semantic 契約検証は
+  `ruviform-ui-test/tests/fake_driver.rs`（14 fixture）と
+  `ruviform-ui/tests/runtime.rs`（dispatch parity）に集約し、
+  GPUI 側は compile lane + example 実 OS 検証で担保
+  （`test-ui-gpui` の実行 test 数は 0、design §構成の deviation
+  記録に一致）。`#[gpui::test]` suite は RF390 へ defer。
 
 ## Acceptance
 
 - `mise run check-ui-gpui`/`lint-ui-gpui`/`test-ui-gpui` pass（R3/R4）。
-- 2 window・close veto・Destroyed の event 系列が fake と一致。
+- 2 window・close veto・Destroyed の event 系列が fake と一致
+  （FakeDriver fixture で固定 — GPUI 側は同一契約実装 +
+  example 実 OS 検証）。
