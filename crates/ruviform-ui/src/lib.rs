@@ -24,6 +24,11 @@
 //!   [`WindowConfig`], [`MonitorInfo`] and the [`WindowHandle`] port,
 //!   so one native event loop can drive many windows/webviews behind
 //!   the same backend-free boundary.
+//! - [`driver`]: the driver-neutral window/host contract
+//!   (Issue #386) — [`WindowSpec`], [`WindowLifecycle`],
+//!   [`DriverEvent`], [`WindowCapabilities`]/[`Capability`] and the
+//!   [`WindowDriver`] port, the migration target that carries no
+//!   JS/`url`/`devtools` assumptions.
 //! - [`detect`]: backend detection report types.
 //! - [`demo`]: a reference [`Service`] proving the shared GUI/CLI
 //!   boundary end to end.
@@ -60,6 +65,7 @@ pub mod data;
 pub mod demo;
 pub mod detect;
 pub mod dock;
+pub mod driver;
 pub mod error;
 pub mod event;
 pub mod ipc;
@@ -81,6 +87,10 @@ pub use dock::{
     LAYOUT_SCHEMA_VERSION, LayoutSnapshot, MonitorHint, MoveReport, MoveToken, RestoredLayout,
     ViewInstanceId, ViewLocation, WindowCloseDisposition, WindowGeometry, WindowPlacement,
     WindowSnapshot,
+};
+pub use driver::{
+    Capability, DriverEvent, LogicalPosition, LogicalSize, WindowCapabilities, WindowDriver,
+    WindowLifecycle, WindowSpec,
 };
 pub use error::UiError;
 pub use event::{HostEvent, HostHandle};
