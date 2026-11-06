@@ -176,13 +176,24 @@ API 不在と `WavMuxer<&mut StagedFile>` フローの実走を確認。
   `test-io-e2e`: Pass（31/31 tests）。
 - `mise run check` / `lint`（workspace、CARGO_BUILD_JOBS=2）:
   Pass。
-- RF #305 候補 `82256cf…` scratch: 旧 `StagedOutput`/
-  `PublishOptions`/`staged.rs` 不在 grep 0 件、`cargo check
-  -p ruviform-io-wav --all-targets` Pass、`cargo test -p
-  ruviform-io-wav` 38/38 Pass。
-- NotRun: `cargo test --workspace`、io-compression/io-structured
-  feature matrix lane、両 Consumer 実 runner（Blocked: AL127/
-  SV e815384 保留 — coordinator 管理）、実 fault 強制再現
+- `CARGO_BUILD_JOBS=2 mise run test`（`cargo test --workspace`、
+  merge head `a99e953`）: **Pass (exit 0)・2773 passed / 0 failed /
+  1 ignored**。main `ccf61a2` 既知の plugin-host 起動 Timeout
+  flake は本 run 未発生（失敗未観測のため分類対象なし。
+  同一性は推測しない）。
+- RF #305 候補 `82256cf…` scratch run 2（正規 mise lane）:
+  `mise run check-io-e2e` / `lint-io-e2e` / `test-io-e2e` 全
+  Pass・**31/31 tests が候補 revision 上で同一緑**（fixture を
+  候補 worktree へ uncommitted 接続し実走）。run 1 の旧 API
+  grep 0 件・io-wav 38/38 は直接 cargo による補助証拠であり
+  正規 Pass ではない。
+- 独立 review: runtime subagent Reviewer A/B → Validator →
+  Judge。採用/REJECTED/維持の disposition は report の
+  disposition 表に全件記録（実バグ 1 件=ustar version を含む
+  採用指摘を反映し再実走で緑維持）。
+- NotRun: io-compression/io-structured feature matrix lane、
+  両 Consumer 実 runner（Blocked: AL127 修復・SV e815384 候補
+  旧 API 参照残存 — coordinator 管理）、実 fault 強制再現
   （io-file mock adapter 層で既検証）、macOS/Linux。
 
 ## Notes
