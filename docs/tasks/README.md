@@ -135,6 +135,8 @@ Directory: `docs/tasks`
 | TASK-034Qxfiiwcs7VUi4SIArot | T3 seeded fault fixture + discard_pending coverage (Issue #244) | done | [issue-244-t3-seeded-coverage.md](./issue-244-t3-seeded-coverage.md) |
 | TASK-034QxfiWo8R8kkqMasIoQm | T4 verification + review-protocol + impl record (Issue #244) | done | [issue-244-t4-verification-record.md](./issue-244-t4-verification-record.md) |
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
+| TASK-034Sa3F7jL2nQ5uY8cE1hK | T1 ci/consumer-verify evidence.mjs + fixture tests + test-ci-consumer-verify task（Issue #294） | done | [issue-294-t1-consumer-verify-evidence-script.md](./issue-294-t1-consumer-verify-evidence-script.md) |
+| TASK-034Sa6J9mP4sV7xB1fK5nQ | T2 consumer-verify.yml tuple証拠・SHA ref・UI headless lane・extra_tasks 接続点 + yml contract test（Issue #294） | done | [issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md](./issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md) |
 | TASK-034RoWzXiLur2zHG5iHl7u | T1 ruviform-io-file クレート新設・公開契約・Mock Publish (Issue #295) | done | [issue-295-t1-crate-and-contract.md](./issue-295-t1-crate-and-contract.md) |
 | TASK-034RoWAHTxefOCVrz2FVL4 | T2 共有台帳更新・main 取込・最終検証・IR (Issue #295) | done | [issue-295-t2-ledger-verify.md](./issue-295-t2-ledger-verify.md) |
 | TASK-034RBIWkzzcEXV0X3v5ySr | T1 OsFileOps 実 OS アダプタ + factory 接続 (Issue #296) | done | [issue-296-t1-os-adapter.md](./issue-296-t1-os-adapter.md) |
@@ -156,6 +158,12 @@ Directory: `docs/tasks`
 | TASK-PGN5ItjVgMoSpqmL4YJtjn | T1 Path Policy・canonical 衝突・FS trait 骨格 (Issue #304) | done | [issue-304-t1-path-policy.md](./issue-304-t1-path-policy.md) |
 | TASK-KfnrekDg0F7pVPV37olgXQ | T2 Staging backend・Session/Tree・identity cleanup (Issue #304) | done | [issue-304-t2-staging-backend.md](./issue-304-t2-staging-backend.md) |
 | TASK-PUEIOL8kRSg2p5kKdPYMUK | T3 end-to-end 否定行列・doc/台帳・最終検証 (Issue #304) | done | [issue-304-t3-secure-verify.md](./issue-304-t3-secure-verify.md) |
+| TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |
+| TASK-laPtj98NpzxI9OnVwLg5y4 | T2 File・Structured 境界試験 (Issue #306) | done | [issue-306-t2-file-structured-boundary.md](./issue-306-t2-file-structured-boundary.md) |
+| TASK-MzTtn00zwhx1kzvEGUUep1 | T3 Archive・Compression 境界試験 (Issue #306) | done | [issue-306-t3-archive-compression-boundary.md](./issue-306-t3-archive-compression-boundary.md) |
+| TASK-rahQqS2k4zTTzmXeFud6L2 | T4 WAV finalize→seal→readback→publish→reopen 境界試験 (Issue #306) | done | [issue-306-t4-wav-boundary.md](./issue-306-t4-wav-boundary.md) |
+| TASK-BkA2wlhpSoTJR2UkZvWTJX | T5 mise task 追加と正規検証 (Issue #306) | done | [issue-306-t5-mise-task-verification.md](./issue-306-t5-mise-task-verification.md) |
+| TASK-0Un8zJnU8BpZljyBDTCZNe | T6 RF #305 候補 scratch 検証と evidence 記録 (Issue #306) | done | [issue-306-t6-candidate-scratch-evidence.md](./issue-306-t6-candidate-scratch-evidence.md) |
 | TASK-QNzC22ZqitcqDhco1hHMKj | Issue #307 T1: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | done | [issue-307-t1-attach-frame-base-verified-context.md](./issue-307-t1-attach-frame-base-verified-context.md) |
 | TASK-034Rp7jV966SX0fG78cOBL | Issue #310-T1 browser-test パッケージ骨格・serve・page protocol | done | [issue-310-01-browser-harness-package.md](./issue-310-01-browser-harness-package.md) |
 | TASK-034Rp7kQsMmyk0At2QYrwX | Issue #310-T2 共有 Fixture/Driver/Assertion (gesture/receipt/state/theme/canvas/a11y) | done | [issue-310-02-shared-fixtures-and-drivers.md](./issue-310-02-shared-fixtures-and-drivers.md) |
