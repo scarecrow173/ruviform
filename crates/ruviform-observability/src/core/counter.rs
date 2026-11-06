@@ -84,6 +84,25 @@ impl CounterReader {
     pub fn read(&self) -> u64 {
         self.inner.load(Ordering::Relaxed)
     }
+
+    /// The raw shared-cell address — used by the collector to reject
+    /// re-registration of an already-registered cell
+    /// (`SourceReused`). Valid only while the cell is alive, which the
+    /// registry guarantees by holding this `Arc` for the claim's
+    /// duration.
+    pub(crate) fn shared_cell_ptr(&self) -> usize {
+        Arc::as_ptr(&self.inner) as usize
+    }
+}
+
+/// Builds a [`CounterReader`] on a caller-owned cell so contract tests
+/// can `store` arbitrary (including decreasing) values — impossible
+/// through the public increment-only API.
+#[cfg(test)]
+pub(crate) fn counter_reader_on_cell(cell: &Arc<AtomicU64>) -> CounterReader {
+    CounterReader {
+        inner: Arc::clone(cell),
+    }
 }
 
 #[cfg(test)]

@@ -25,6 +25,7 @@ Directory: `docs/plans`
 | PLAN-034Rp216xT1c4Dc6YM6xqa | Implement Issue #277 OBS-02 observability core/source contract | approved | [implement-issue-277-observability-core-source.md](./implement-issue-277-observability-core-source.md) |
 | PLAN-034RTsBYMsfKWtQaNUpvnl | Implement Issue #279 OBS-04 plugin-host counter source registration | approved | [implement-issue-279-plugin-host-counter-source.md](./implement-issue-279-plugin-host-counter-source.md) |
 | PLAN-m7f29Op1o9KCQ037OSq6i8 | Implement Issue #280 OBS-05 RT record bridge・record vocabulary | approved | [implement-issue-280-rt-record-bridge.md](./implement-issue-280-rt-record-bridge.md) |
+| PLAN-034T2Nmh2tErwGOV4X6guz | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装計画 | approved | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
 | PLAN-034JZPGUI0000000000003 | Issue #30 実施計画 — プラグイン GUI PoC | approved | [implement-issue-30-plugin-gui-poc.md](./implement-issue-30-plugin-gui-poc.md) |
 | PLAN-034JZLISO0000000000004 | Issue #31 実施計画 — プラグイン分離設計確定 | approved | [implement-issue-31-plugin-isolation.md](./implement-issue-31-plugin-isolation.md) |
 | PLAN-XyRGyqOXQg05BHSeuQmtEC | Issue #32 実施計画 — 第 2 ターゲット設計 | approved | [implement-issue-32-second-target-design.md](./implement-issue-32-second-target-design.md) |

@@ -56,6 +56,7 @@ Directory: `docs/test-specs`
 | TSPEC-034RTrq34tAM6KDpPaC83H | Issue #279 OBS-04 plugin-host 4 Counter Source登録・寿命・degraded試験 | approved | [issue-279-plugin-host-counter-source-tests.md](./issue-279-plugin-host-counter-source-tests.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-iF1sER54cUJ1FKmvvSy6W2 | Issue #280 OBS-05 RT record bridge・record vocabulary tests | approved | [issue-280-rt-record-bridge-tests.md](./issue-280-rt-record-bridge-tests.md) |
+| TSPEC-034T2NeVNZOhwkPaIzj0Q7 | Issue #289 OBS-07 Collector/Metrics/Snapshot 試験仕様 | approved | [issue-289-observability-collector-metrics-tests.md](./issue-289-observability-collector-metrics-tests.md) |
 | TSPEC-034RoRhmlBaEa2BqB4gYX1 | Issue #295 ruviform-io-file Mock-driven publish 契約テスト仕様 | approved | [issue-295-io-file-staged-publish.md](./issue-295-io-file-staged-publish.md) |
 | TSPEC-034RBIVDSp1VYbb5Tt3x9B | Issue #296 ruviform-io-file 実 OS backend テスト仕様 | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | TSPEC-034RTeRrELQYdXaCBD66Jy | Issue #297 ruviform-io-structured テスト仕様 | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
