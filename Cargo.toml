@@ -73,6 +73,10 @@ members = [
     # adapter 実装は非既定 `webview` feature ゲートで headless 検証経路を壊さない）
     "crates/ruviform-ui",
     "crates/ruviform-ui-webview",
+    # GPUI 標準 Driver adapter（Issue #386 — Driver-neutral Window/Host
+    # 契約の消費者。adapter 実装は非既定 `gpui` feature ゲートで
+    # headless 検証経路を壊さない — ruviform-ui-webview 前例）
+    "crates/ruviform-ui-gpui",
     # 利用側層 テスト共有基盤（Issue #312 / RF-GT-03 — test-only GUI host
     # lifecycle・secure control adapter・fixture/clock/observation。
     # ruviform-ui 公開 API のみに依存し、本番クレートからは誰も依存しない）
