@@ -7,7 +7,8 @@
  * (Issue #257 §8, Issue #261 contract).
  *
  * Per-attach contract:
- * - `attach(windowId)` bumps the view generation and re-subscribes
+ * - `attach(windowId, generation?)` bumps the view generation — or
+ *   adopts the caller-supplied authoritative epoch — and re-subscribes
  *   every registered binding through the port — a fresh projection is
  *   re-read rather than trusting what the old window showed.
  * - `detach(reason)` cancels each binding's in-flight gesture
@@ -181,13 +182,39 @@ export class ViewLink {
    * a dock transfer. Idempotent for the same window; a different window
    * while still attached performs an implicit `detach("dock-transfer")`
    * first so in-flight work terminates under the old epoch.
+   *
+   * `generation`, when supplied, is the consumer's authoritative attach
+   * epoch (e.g. the backend's attach-response value): it replaces the
+   * local increment so every binding, query, and subscription mints
+   * under the epoch the backend expects. Supplying a different value
+   * while attached to the *same* window is an epoch transition — the
+   * old mounted session is over, so the link performs an implicit
+   * `detach("unmount")` first; the same value stays a no-op. The value
+   * must be a non-negative safe integer: anything else is rejected
+   * with a `RangeError` before any link state changes.
    */
-  attach(windowId: string): void {
-    if (this.attached_ && this.windowId_ === windowId) return;
-    if (this.attached_) this.detach("dock-transfer");
+  attach(windowId: string, generation?: number): void {
+    if (
+      generation !== undefined &&
+      (!Number.isSafeInteger(generation) || generation < 0)
+    ) {
+      throw new RangeError(
+        `ViewLink.attach: generation must be a non-negative safe integer, got ${String(generation)}`,
+      );
+    }
+    if (
+      this.attached_ &&
+      this.windowId_ === windowId &&
+      (generation === undefined || generation === this.generation_)
+    ) {
+      return;
+    }
+    if (this.attached_) {
+      this.detach(this.windowId_ === windowId ? "unmount" : "dock-transfer");
+    }
     this.attached_ = true;
     this.windowId_ = windowId;
-    this.generation_ += 1;
+    this.generation_ = generation ?? this.generation_ + 1;
     this.attachCount_ += 1;
     for (const binding of this.bindings) {
       binding.setContext({ viewId: this.viewId, windowId });
