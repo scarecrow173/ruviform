@@ -147,6 +147,120 @@ describe("ViewLink attach/detach", () => {
   });
 });
 
+describe("ViewLink late-created bindings", () => {
+  const lateCases: ReadonlyArray<{
+    readonly name: string;
+    readonly windowId: string;
+    readonly generation: number;
+    readonly subscribeCalls: number;
+    readonly unsubscribed: number;
+    readonly attach: (link: ViewLink) => void;
+  }> = [
+    {
+      name: "late-created binding adopts the initial attach epoch",
+      windowId: "window-A",
+      generation: 1,
+      subscribeCalls: 2,
+      unsubscribed: 2,
+      attach: (link) => link.attach("window-A"),
+    },
+    {
+      name: "late-created binding adopts the dock-transfer epoch",
+      windowId: "window-B",
+      generation: 2,
+      subscribeCalls: 3,
+      unsubscribed: 3,
+      attach: (link) => {
+        link.attach("window-A");
+        link.attach("window-B");
+      },
+    },
+    {
+      name: "late-created binding adopts the re-attach epoch",
+      windowId: "window-A",
+      generation: 2,
+      subscribeCalls: 3,
+      unsubscribed: 3,
+      attach: (link) => {
+        link.attach("window-A");
+        link.detach("unmount");
+        link.attach("window-A");
+      },
+    },
+  ];
+
+  for (const c of lateCases) {
+    it(c.name, () => {
+      const { gateway, link } = setup();
+      try {
+        const existing = link.createBinding("track.vol", {
+          flushWith: flushSync,
+          ackTimeoutMs: 0,
+        });
+        c.attach(link);
+
+        const observedGenerations: number[] = [];
+        const late = link.createBinding<{ plain: number }>("track.vol", {
+          flushWith: flushSync,
+          ackTimeoutMs: 0,
+          onState: (s) => {
+            observedGenerations.push(s.generation);
+          },
+        });
+
+        assert.ok(observedGenerations.length > 0);
+        for (const g of observedGenerations) assert.equal(g, c.generation);
+
+        assert.equal(link.windowId, c.windowId);
+        assert.equal(link.generation, c.generation);
+        assert.equal(existing.generation, link.generation);
+        assert.equal(late.generation, link.generation);
+
+        const lateSub = gateway.subscribeCalls.at(-1);
+        assert.equal(lateSub?.target, "track.vol");
+        assert.equal(lateSub?.ctx.viewId, "mixer.strip.1");
+        assert.equal(lateSub?.ctx.windowId, c.windowId);
+        assert.equal(lateSub?.ctx.generation, c.generation);
+        assert.equal(gateway.subscribeCalls.length, c.subscribeCalls);
+        assert.equal(link.linkStats.activeSubscriptions, 2);
+
+        gateway.deliver = (r) => late.ack(r);
+        late.event(begin("late", 1));
+        late.event(commit("late", 2));
+
+        const sent = gateway.received.find((r) => r.intent.kind === "commit");
+        assert.ok(sent);
+        assert.equal(sent.ctx.viewId, "mixer.strip.1");
+        assert.equal(sent.ctx.windowId, c.windowId);
+        assert.equal(sent.ctx.generation, c.generation);
+
+        gateway.accept(sent.ctx.commandId);
+        assert.equal(late.state.phase, "accepted");
+        gateway.apply(sent);
+        assert.equal(gateway.valueOf("track.vol"), 0.5);
+        assert.equal(late.state.lastObserved?.value.plain, 0.5);
+        assert.equal(late.diagnostics.staleReceipts, 0);
+
+        link.detach("unmount");
+        assert.equal(late.attached, false);
+        assert.equal(link.linkStats.activeSubscriptions, 0);
+        assert.equal(gateway.unsubscribed, c.unsubscribed);
+        link.detach("unmount");
+        assert.equal(gateway.unsubscribed, c.unsubscribed);
+        assert.equal(gateway.subscribeCalls.length, c.subscribeCalls);
+
+        gateway.pushProjection("track.vol", {
+          revision: 100,
+          value: { plain: 0.9 },
+        });
+        assert.equal(late.state.lastObserved?.value.plain, 0.5);
+      } finally {
+        link.detach("unmount");
+      }
+    });
+  }
+});
+
 describe("LinkRegistry", () => {
   it("keeps the logical view id stable across windows", () => {
     const gateway = new MockDawGateway();

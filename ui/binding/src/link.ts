@@ -133,7 +133,10 @@ export class ViewLink {
       ...(options ?? {}),
     });
     this.registerBinding(binding);
-    if (this.attached_) this.subscribeBinding(binding);
+    if (this.attached_) {
+      binding.attach(this.generation_);
+      this.subscribeBinding(binding);
+    }
     return binding;
   }
 
