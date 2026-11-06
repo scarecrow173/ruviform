@@ -167,7 +167,41 @@ for (const [name, job] of [
     assert.ok(count >= 2, `expected >=2 static unsupported rows, got ${count}`);
     assert.ok(/timeout-minutes:/.test(job), "extra tasks are unbounded without a job timeout");
   });
+
+  test(`contract: ${name} GUI gates split not-connected (not_run) from capability-absent (unsupported)`, () => {
+    // A-1: GUI-CONTRACT (GPUI 不要の public API/禁止依存/allowlist 検査) と
+    // fake/semantic oracle は capability 不足ではなく未接続 — 実 window 必須の
+    // unsupported と混同しない。各々独立行・Owner・再実行条件を持つ。
+    const contract = job.match(/rec "GUI-CONTRACT checks[^"]*" "[^"]*" "[^"]*" "(\w+)"/);
+    const semantic = job.match(/rec "GUI semantic\/fake-oracle checks" "[^"]*" "[^"]*" "(\w+)"/);
+    const visual = job.match(/rec "GUI visual\/OS \+ 実 window lanes" "[^"]*" "[^"]*" "(\w+)"/);
+    assert.ok(contract && contract[1] === "not_run", "GUI-CONTRACT must be not_run (not wired), not unsupported");
+    assert.ok(semantic && semantic[1] === "not_run", "GUI semantic/fake must be not_run (not wired)");
+    assert.ok(visual && visual[1] === "unsupported", "visual/OS real-window must stay unsupported");
+    // 混同していた旧行名が残っていないこと
+    assert.ok(!job.includes("contract/semantic/visual-OS/dock"), "conflated capability row must be removed");
+  });
 }
+
+test("contract: concurrency group keys on the full tuple, not just refs", () => {
+  // B-1: group が RF SHA + Consumer ref のみだと、同 ref・別 expected SHA /
+  // extra tasks の run が pending 置換で証拠なく cancel される。tuple の全
+  // 要素を key に含める。
+  const group = src.match(/group: (consumer-verify-.+)\n/);
+  assert.ok(group, "concurrency group missing");
+  for (const part of [
+    "inputs.ruviform_rev || github.sha",
+    "inputs.audiolens_ref",
+    "inputs.synvelis_ref",
+    "inputs.audiolens_expected_sha",
+    "inputs.synvelis_expected_sha",
+    "inputs.audiolens_extra_tasks",
+    "inputs.synvelis_extra_tasks",
+  ]) {
+    assert.ok(group[1].includes(`\${{ ${part} }}`), `concurrency group must include ${part}`);
+  }
+  assert.ok(/cancel-in-progress: false/.test(src));
+});
 
 test("contract: expected-SHA guard is fail-closed in both lanes", () => {
   assert.equal((src.match(/tuple_mismatch/g) ?? []).length >= 2, true);

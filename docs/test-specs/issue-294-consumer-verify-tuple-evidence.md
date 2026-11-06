@@ -48,7 +48,7 @@ relations:
 
 ## Purpose
 
-`consumer-verify.yml` が「候補 tuple を実測で証拠化し、unknown/not_run/unsupported/fail を pass に偽装しない」ことを、ローカル fixture test で保証する。実 runner 検証は merge 後 dispatch に委ね、本 test-spec は判定器と workflow 構造の契約を固定する（先行 test-spec `consumer-verify-workflow-gate-...` の gate 意味論を変更しない）。
+`consumer-verify.yml` が「候補 tuple を実測で証拠化し、unknown/not_run/unsupported/fail を pass に偽装しない」ことを、ローカル fixture test で保証する。実 runner 検証は別途 dispatch で実施（`gh workflow run --ref <branch>` でブランチ上の変更版も dispatch 可能 — 基準 head `30205f2` で実測済み・run 42302538464）。本 test-spec は判定器と workflow 構造の契約を固定する（先行 test-spec `consumer-verify-workflow-gate-...` の gate 意味論を変更しない）。
 
 ## Feature
 

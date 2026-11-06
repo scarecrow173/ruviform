@@ -63,7 +63,7 @@ metadata:
 
 ## Summary
 
-`consumer-verify.yml` を Issue #294（2026-11-05 改訂: 候補 tuple 証拠契約＋GUI headless lane）に対応させた。各 Consumer lane が `git rev-parse HEAD` の解決 SHA を捕捉し任意入力の期待 SHA と fail-closed 照合、ref 入力は branch/tag に加え 40-hex SHA を統一 fetch 経路で受理、AudioLens/Synvelis の headless UI lane を段階接続、Consumer 別 `*_extra_tasks` 接続点、lane 結果語彙に `unsupported`/`skipped` を加え全終端経路で構造化 JSON artifact + Job Summary を出力する。status 導出・証拠生成は `ci/consumer-verify/evidence.mjs` に集約し、`mise run test-ci-consumer-verify`（58 tests）で fixture 化 — preflight が run ごとに証拠器を自己検証してから lane 使用。
+`consumer-verify.yml` を Issue #294（2026-11-05 改訂: 候補 tuple 証拠契約＋GUI headless lane）に対応させた。統合前 review の CONFIRMED 指摘 A-1（GUI-CONTRACT/fake oracle と実 window 必須 lane の `unsupported` 混同）は固定行を `not_run`（未接続・Owner/再実行条件付き）と `unsupported`（capability 不足）へ分離して修復、B-1（concurrency group の tuple 衝突）は expected SHA + extra tasks を key に追加して修復。各 Consumer lane が `git rev-parse HEAD` の解決 SHA を捕捉し任意入力の期待 SHA と fail-closed 照合、ref 入力は branch/tag に加え 40-hex SHA を統一 fetch 経路で受理、AudioLens/Synvelis の headless UI lane を段階接続、Consumer 別 `*_extra_tasks` 接続点、lane 結果語彙に `unsupported`/`skipped` を加え全終端経路で構造化 JSON artifact + Job Summary を出力する。status 導出・証拠生成は `ci/consumer-verify/evidence.mjs` に集約し、`mise run test-ci-consumer-verify`（61 tests）で fixture 化 — preflight が run ごとに証拠器を自己検証してから lane 使用。
 
 ## Context
 
@@ -85,8 +85,8 @@ metadata:
 
 ### Lane 集合（確定）
 
-- **verify-audiolens**: fetch+lockfile guard→`check-ruviform-lock`→`check-ci`→`al-cli` ci build+`check-cli-headless`→`test-ci`（LFS pull）→UI 独立 chain `sync-ui-deps`→`check-ruviform-rev --require-vendor`→`setup-ui`→`check-ui`→`test-ui`。固定行: GPUI/native GUI capability gates（contract/semantic/visual-OS/dock, GUI v2: RF #384/#390/#313/#314 + AL #166/#127）・macOS/実 OS lanes = `unsupported`。
-- **verify-synvelis**: presence check→fetch+lockfile guard→`check-ruviform-rev`→`check`→`test`（LFS pull）→`test-rt`→`check-headless-deps`→`sync-ui-deps`→`setup-ui`→`check-ui`→`test-ui`→`build-ui`→`check-ruviform-rev --require-vendor`（manifest は build-ui 産物のため必ず後置）。固定行: GPUI/native GUI capability gates（+ SV #175-177）・PLUGIN-NATIVE-DOCK（RF #388/#389 + SV #176、Floating/Generic fallback 成功を Pass にしない）・macOS/実 OS lanes = `unsupported`。
+- **verify-audiolens**: fetch+lockfile guard→`check-ruviform-lock`→`check-ci`→`al-cli` ci build+`check-cli-headless`→`test-ci`（LFS pull）→UI 独立 chain `sync-ui-deps`→`check-ruviform-rev --require-vendor`→`setup-ui`→`check-ui`→`test-ui`。固定行（未接続と capability 不足を分離）: GUI-CONTRACT checks（GPUI 不要・Owner RF #390）と GUI semantic/fake-oracle（Owner GUI-SEMANTIC + AL #166/#127）= `not_run`、GUI visual/OS + 実 window（RF #313/#314 + AL #166/#127）・macOS/実 OS lanes = `unsupported`。
+- **verify-synvelis**: presence check→fetch+lockfile guard→`check-ruviform-rev`→`check`→`test`（LFS pull）→`test-rt`→`check-headless-deps`→`sync-ui-deps`→`setup-ui`→`check-ui`→`test-ui`→`build-ui`→`check-ruviform-rev --require-vendor`（manifest は build-ui 産物のため必ず後置）。固定行（同分離）: GUI-CONTRACT（Owner RF #390）と GUI semantic/fake-oracle（Owner GUI-SEMANTIC + SV #175-177）= `not_run`、GUI visual/OS + 実 window・PLUGIN-NATIVE-DOCK（RF #388/#389 + SV #176、Floating/Generic fallback 成功を Pass にしない）・macOS/実 OS lanes = `unsupported`。
 - **extra tasks**: 各 job `fetch` 成功後・`EXTRA_TASKS` 非空時のみ、pattern 済み task を順に `mise run`、各 task を lane 行として記録（途中失敗でも後続を試行、任一失敗で step fail）。
 
 ### Decisions During Implementation
@@ -100,7 +100,7 @@ metadata:
 
 ### Known Limitations（正直記録）
 
-- **実 runner 検証は NotRun**: `workflow_dispatch` は default branch の workflow 定義を使うため、本ブランチの workflow 変更は merge 後の初回 dispatch でのみ実走検証可能。本 PR の検証は fixture test + yml contract test + actionlint + 機構 smoke（ローカル temp repo での fetch+FETCH_HEAD）に留まる。
+- **実 runner 検証は review 基準 head `30205f2` で実測済み（修復後 head は別候補・正式 Pass へ転用しない）**: coordinator dispatch [run 42302538464](https://github.com/scarecrow173/ruviform/actions/runs/42302538464)（`gh workflow run --ref feature/consumer-verify-gui-candidate-gates`、RF `30205f2` + AL `04f1861` + SV `d8bf8ca` 期待 SHA 照合付き）。preflight success、両 Consumer clone・expected-SHA 照合 success、verify-synvelis 全 lane **pass**、verify-audiolens は `check-ci lane` で **fail**（al-observability `SinkConfig.span_events` 欠落の実 API 不整合 — Consumer 側追随待ち、gate 設計通り fail-closed）。summary の not-run-is-not-pass 強制も発火。`workflow_dispatch` は `--ref` でブランチ指定可能という前記述（merge 前実走不可）は実測で訂正済み。
 - **SHA fetch の境界**: GitHub は unadvertised commit の fetch を受理するが、GC 済み・未 push の SHA は clone step fail → `fail` 証拠として正直に出る。
 - **extra_tasks は operator 信頼入力**: pattern は shell 注入排除のみで意味論は制約しない。job `timeout-minutes: 120` が暴走境界。
 - **unsupported 行は ubuntu headless の宣言**: 実窓 host（RF #313/#314）・macOS/実 OS 正式受入の実測は本 run の範囲外。
@@ -109,12 +109,12 @@ metadata:
 
 | 検証 | コマンド | 結果 |
 | --- | --- | --- |
-| 証拠器 fixture + yml 契約 | `mise exec -- node --test ci/consumer-verify/` | **58 pass / 0 fail / 0 skip**（`mise run test-ci-consumer-verify` 相当） |
+| 証拠器 fixture + yml 契約 | `mise exec -- node --test ci/consumer-verify/` | **61 pass / 0 fail / 0 skip**（`mise run test-ci-consumer-verify` 相当） |
 | workflow 構文 | `mise exec -- actionlint`（全 workflow） | exit 0・エラー 0（`runner` context 誤用を検出→`$GITHUB_ENV` 方式に修正） |
 | hygiene | `mise exec -- prek run --all-files` | 全 hook pass（check-yaml/whitespace/eof/bom/private-key） |
 | checkout 機構 smoke | temp repo: `git init`+`fetch --depth 1 origin <sha|master>`+`checkout --detach FETCH_HEAD`+`rev-parse HEAD` | branch・40-hex SHA 双方で解決成功（SHA fetch は `uploadpack.allowAnySHA1InWant` 有効 remote で再現） |
-| 実 runner dispatch | — | **NotRun**（workflow_dispatch は default branch 定義を使用。merge 後初回 dispatch で実走確認が必要） |
-| Consumer scratch lane 実走 | — | **NotRun**（同上。Consumer repo 編集なし・実 lane 実行は runner 上のみ） |
+| 実 runner dispatch（基準 head `30205f2`） | [run 42302538464](https://github.com/scarecrow173/ruviform/actions/runs/42302538464) `gh workflow run --ref <branch>` | **partial pass**: preflight/clone/tuple 照合/verify-synvelis pass・verify-audiolens `check-ci` fail（実 API 不整合検出・fail-closed 動作確認）・summary 強制発火。修復後 head は未実走 |
+| Consumer scratch lane 実走 | run 42302538464（基準 head） | **SV pass / AL fail**（AL `check-ci` で実 API 不整合 `SinkConfig.span_events` — Consumer 側追随待ち。修復後 head は未実走） |
 
 ## Links
 

@@ -95,7 +95,7 @@ relations:
 - Daily tuple 判定・dispatch・重複抑止・retry（#367 scheduler の責務。本 spec はその入力・証拠契約のみ）。
 - `ci-issue-tracker.yml` の監視対象拡大・失敗 Issue 自動起票（#368 tracker の責務境界）。
 - `ci.yml`・各 Consumer 独立 CI・Consumer repo 内ファイルの変更。
-- 実 GUI desktop（GPUI Driver-neutral）/Native Plugin Dock/実 OS lane（GUI-CONTRACT #390・GUI-VISUAL/OS #313/#314・PLUGIN-NATIVE-DOCK #388/#389・実機 Gate #243/#262）— 理由付き `unsupported` 記録に留める。GUI v2 方針では PR 必須 GUI gate・新規独立 GUI workflow・PR/push 起動 GUI workflow を追加しない。既存 Daily Full・manual・real-OS 経路が authoritative。
+- GUI 検査 lane の実装（GUI-CONTRACT #390・GUI-SEMANTIC・GUI-VISUAL/OS #313/#314・PLUGIN-NATIVE-DOCK #388/#389・実機 Gate #243/#262）。本 spec では分類契約のみ定める: GPUI 不要な contract/semantic 系で Consumer 側検査 task 未接続のものは独立 `not_run`（Owner + 再実行条件を記録）、実 window/実 plugin/macOS 等 capability 不足のものは独立 `unsupported` — 両者を混同した単一行にはしない。GUI v2 方針では PR 必須 GUI gate・新規独立 GUI workflow・PR/push 起動 GUI workflow を追加しない。既存 Daily Full・manual・real-OS 経路が authoritative。
 - macOS runner lane — 正式受入 Gate の対象 revision 実測要件は残るが、本 run では「macOS 未実測を NotRun/Unsupported として正直に記録する」契約のみ（実 lane 追加は後続）。
 - AudioLens Export portability 失敗等 Consumer 側既知 bug の修正（Consumer repo 側 Issue の責務）。
 
@@ -104,7 +104,7 @@ relations:
 - **tuple 証拠**: 各 Consumer job が解決 SHA（checkout 実測）・要求 ref・期待 SHA・照合結果を Job Summary と JSON artifact に記録する。GitHub Run 履歴だけで Consumer SHA が判ると仮定しない。
 - **tuple 照合の fail-closed**: 期待 SHA が提供され解決 SHA と不一致の場合、その Consumer は `fail` + reason=`tuple_mismatch` で lane を実行しない（別 tuple の結果を期待 tuple の証拠にしない）。期待 SHA 未提供時は解決 SHA を記録のみ。
 - **SHA ref 受理**: `audiolens_ref`/`synvelis_ref` に 40-hex SHA を許可し、branch/tag と同一の検証 lane を通す。checkout は fetch＋`FETCH_HEAD` で統一し、解決 SHA を必ず捕捉する。
-- **lane 結果語彙と集約行列**: lane 結果は `pass`/`fail`/`not_run`/`unsupported`/`skipped`、Consumer status は `pass`/`fail`/`not_run`/`unsupported`。status=`pass` は「実行された lane が全て pass（fail 0 件・実行 lane ≥1）」のときのみ。`unsupported` は workflow が静的に宣言する capability-absent 行（実窓 host・macOS/実 OS）でのみ生成し、lane/task の実行失敗を `unsupported` へ再分類しない（実行して落ちたものは `fail`）。`skipped` は同一 job 内の上流 lane 失敗・gate 不達で実行されなかった派生記録に限る。Missing/NotRun/Unsupported/Fail を Pass 扱いしない。理由と追跡先（Issue/owner）を記録する。
+- **lane 結果語彙と集約行列**: lane 結果は `pass`/`fail`/`not_run`/`unsupported`/`skipped`、Consumer status は `pass`/`fail`/`not_run`/`unsupported`。status=`pass` は「実行された lane が全て pass（fail 0 件・実行 lane ≥1）」のときのみ。`unsupported` は workflow が静的に宣言する capability-absent 行（実窓 host・実 plugin・macOS/実 OS）でのみ生成し、lane/task の実行失敗を `unsupported` へ再分類しない（実行して落ちたものは `fail`）。実行可能だが検査入口が未接続の lane（GUI-CONTRACT #390・GUI semantic/fake oracle 等）は `not_run` の静的行として Owner と再実行条件を記録し、capability-absent の `unsupported` と混同しない。`skipped` は同一 job 内の上流 lane 失敗・gate 不達で実行されなかった派生記録に限る。Missing/NotRun/Unsupported/Fail を Pass 扱いしない。理由と追跡先（Issue/owner）を記録する。
 - **UI lane**: Consumer 自身の mise task を使い、vendor REV/lockfile 整合を Consumer 側 authoritative 検証（`check-ruviform-rev` 系）で担保する。headless 完結 lane は既定実行、実窓 host 依存 lane は `unsupported` 記録。UI lane の rust/npm ツール要件（synvelis の `node` 導入を含む）を lane 前提として明示する。
 - **追加 task 接続点**: 追加 task 名は Consumer 別入力・pattern 検証（preflight、lane 実行前）・上限付きで lane 化し、個別結果を記録する。失敗は lane 失敗として扱い、skip しない。
 - **証拠 artifact**: `schemaVersion`・`contract` を持つ JSON を Consumer 別に upload-artifact へ出す。Job Summary は API で機械再取得できないため、**全終端経路**（gate=not_run・tuple_mismatch・workspace 不在・lane 途中失敗を含む）で artifact を `if: always()` 出力し、名前は attempt 固有（`-attempt-${{ github.run_attempt }}`）とする。Job Summary の Markdown 表は従来どおり人間可読の正本として併記する。
@@ -115,7 +115,7 @@ relations:
 
 本 workflow は `workflow_dispatch` 専用で、dispatch は default branch の定義を使う — **PR 時点で実 runner 検証は不可能**。以下「構造証拠」は PR 時点で検証可能な契約（fixture test・contract test・actionlint）、「実走証拠」は merge 後初回 dispatch で取得するものと明記する。
 
-- [ ] (構造) `consumer-verify.yml` が `_expected_sha`/`_extra_tasks` 入力・解決 SHA 捕捉 step・`if: always()` の artifact 出力・`unsupported` 固定行を持ち、両 verify job で対称であることを yml contract test が保証。
+- [ ] (構造) `consumer-verify.yml` が `_expected_sha`/`_extra_tasks` 入力・解決 SHA 捕捉 step・`if: always()` の artifact 出力・未接続 lane の `not_run` と capability-absent の `unsupported` を分離した固定行を持ち、両 verify job で対称であることを yml contract test が保証。
 - [ ] (構造) status 導出の全分岐（pass/fail/tuple_mismatch/not_run/unsupported/coverage）と証拠 JSON schema・`shaMatch` 三値が `mise run test-ci-consumer-verify` で pass。
 - [ ] (構造) `actionlint` と `prek run --all-files`（check-yaml）が pass。
 - [ ] (実走) dispatch で指定した期待 tuple と解決 SHA が JSON artifact / Job Summary に記録され、`gh api`（runs + artifacts）で再取得できる。

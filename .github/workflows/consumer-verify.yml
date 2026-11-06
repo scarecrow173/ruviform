@@ -85,8 +85,11 @@ permissions:
 # 同一候補組合せの run を直列化する（重複起動の補助線。打ち切りで証拠を
 # 失わないよう cancel-in-progress は false。抑止判定の正本は #367
 # scheduler であり、ここは runner 浪費を避ける下位互換の guard）。
+# tuple は RF SHA + 両 Consumer ref + 期待 SHA + extra tasks で識別する —
+# ref 同一でも expected SHA / extra tasks が異なれば別 tuple（pending 置換
+# で別 tuple の証拠を欠落させない）。
 concurrency:
-  group: consumer-verify-${{ inputs.ruviform_rev || github.sha }}-${{ inputs.audiolens_ref }}-${{ inputs.synvelis_ref }}
+  group: consumer-verify-${{ inputs.ruviform_rev || github.sha }}-${{ inputs.audiolens_ref }}-${{ inputs.synvelis_ref }}-${{ inputs.audiolens_expected_sha }}-${{ inputs.synvelis_expected_sha }}-${{ inputs.audiolens_extra_tasks }}-${{ inputs.synvelis_extra_tasks }}
   cancel-in-progress: false
 
 env:
@@ -491,8 +494,11 @@ jobs:
             rec "mise run check-ui (typecheck+vendor)" "mise run check-ui" "ui headless" "$(o '${{ steps.check_ui.outcome }}')"
             rec "mise run test-ui (happy-dom)" "mise run test-ui" "ui headless" "$(o '${{ steps.test_ui.outcome }}')"
             rec "extra tasks (aggregate)" "mise run <audiolens_extra_tasks>" "extra dispatch input" "$(o '${{ steps.extra.outcome }}')"
+            # 未接続 lane（capability は足りるが検査入口が未 wiring — not_run と owner/再実行条件を正直記録）
+            rec "GUI-CONTRACT checks (public API/禁止依存/allowlist — GPUI 不要)" "-" "ui contract" "not_run" "RF #390 が Owner — ubuntu headless で実行可能だが Consumer 側検査 task 未接続。Consumer 側専用 mise task 接続時に extra_tasks/専用 lane で再実行（再分類は Owner 判断。extra_tasks 指定しても本行の分類は固定のまま）"
+            rec "GUI semantic/fake-oracle checks" "-" "ui semantic" "not_run" "GUI-SEMANTIC + AL #166/#127 が Owner — fake/headless oracle 未接続。接続後に再実行・再分類"
             # capability-absent 固定行（実行しない — skip=pass にしない正直記録）
-            rec "GPUI/native GUI capability gates (contract/semantic/visual-OS/dock)" "-" "real-window host" "unsupported" "GUI v2: RF #384/#390/#313/#314 + AL #166/#127 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
+            rec "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #313/#314 + AL #166/#127 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
             rec "macOS/実 OS lanes" "-" "os-specific" "unsupported" "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
             # 解決 SHA 記録後に consumer task が HEAD を動かしていないか再照合
             drift=$(git -C "$CONSUMER_DIR" rev-parse HEAD 2>/dev/null || echo "")
@@ -840,8 +846,11 @@ jobs:
             rec "mise run build-ui (vite+manifest)" "mise run build-ui" "ui headless" "$(o '${{ steps.build_ui.outcome }}')"
             rec "check-ruviform-rev --require-vendor (lock+REV+manifest)" "node tools/check-ruviform-rev.mjs --require-vendor" "ui vendor" "$(o '${{ steps.rev_full.outcome }}')"
             rec "extra tasks (aggregate)" "mise run <synvelis_extra_tasks>" "extra dispatch input" "$(o '${{ steps.extra.outcome }}')"
+            # 未接続 lane（capability は足りるが検査入口が未 wiring — not_run と owner/再実行条件を正直記録）
+            rec "GUI-CONTRACT checks (public API/禁止依存/allowlist — GPUI 不要)" "-" "ui contract" "not_run" "RF #390 が Owner — ubuntu headless で実行可能だが Consumer 側検査 task 未接続。Consumer 側専用 mise task 接続時に extra_tasks/専用 lane で再実行（再分類は Owner 判断。extra_tasks 指定しても本行の分類は固定のまま）"
+            rec "GUI semantic/fake-oracle checks" "-" "ui semantic" "not_run" "GUI-SEMANTIC + SV #175-177 oracle が Owner — fake/headless oracle 未接続。接続後に再実行・再分類"
             # capability-absent 固定行（実行しない — skip=pass にしない正直記録）
-            rec "GPUI/native GUI capability gates (contract/semantic/visual-OS/dock)" "-" "real-window host" "unsupported" "GUI v2: RF #384/#390/#313/#314 + SV #175-177 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
+            rec "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #313/#314 + SV #175-177 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
             rec "PLUGIN-NATIVE-DOCK (実 plugin binary)" "-" "real-plugin" "unsupported" "RF #388/#389 + SV #176 — Floating/Generic fallback のみの成功は採用 Pass にしない"
             rec "macOS/実 OS lanes" "-" "os-specific" "unsupported" "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
             # 解決 SHA 記録後に consumer task が HEAD を動かしていないか再照合

@@ -227,7 +227,9 @@ checkout ruviform（actions/checkout 既定 = dispatch ref。evidence.mjs 供給
 | `check-ruviform-rev --require-vendor` | `mise exec -- node tools/check-ruviform-rev.mjs --require-vendor` | lock+REV+assets manifest の完全整合（manifest は build-ui 産物のため **必ず build-ui 後**。事前実行は manifest 検証が vacuous） |
 
 - UI lane は fetch 成功のみに依存（rust check/test lane と独立に証拠を採る — rust lane 失敗でも UI 証拠が残る）。
-- 実窓 host 依存 lane（`*-ui-webview` / `*-app-webview` / `build-app`）は本 run では lane 表に `unsupported`（reason=`real-window host — RF #313 driver/実機 Gate`）として明示記録する固定行とし、実行しない。macOS/実 OS lane も同様に `unsupported` 行を常設する（未実測を正直に残す）。
+- GUI 系 lane の固定行は未接続と capability 不足を分離する（skip=pass にしない・unsupported 混同もしない正直記録）:
+  - `not_run`（capability は足りるが検査入口が未 wiring — Owner と再実行条件を記録）: `GUI-CONTRACT checks (public API/禁止依存/allowlist — GPUI 不要)`（Owner: RF #390）と `GUI semantic/fake-oracle checks`（Owner: GUI-SEMANTIC + Consumer oracle、AL #166/#127・SV #175-177）。Consumer 側専用 mise task 接続時に `extra_tasks`/専用 lane で再実行。`extra_tasks` を指定してもこれら固定行の分類は固定のままで、extra lane 行として別記録される（再分類は Owner 判断）。
+  - `unsupported`（capability 不足）: `GUI visual/OS + 実 window lanes`（RF #313/#314）、SV `PLUGIN-NATIVE-DOCK (実 plugin binary)`（RF #388/#389 + SV #176 — Floating/Generic fallback 成功を Pass にしない）、`macOS/実 OS lanes`。
 - node ツール導入: AL lane は既に `mise install --locked rust git-lfs node`。SV lane も `rust git-lfs node` へ拡張（npm 系 UI task の前提）。
 
 #### extra_tasks 接続点
@@ -296,11 +298,11 @@ workflow_dispatch(ruviform_rev, *_ref, *_expected_sha, *_extra_tasks)
 
 ## Verification Notes
 
-- [x] `mise run test-ci-consumer-verify`（`node --test ci/consumer-verify/`）— 58 tests / 0 fail。classify-ref 行列、status 導出全枝（pass/fail/tuple_mismatch/not_run/unsupported/coverage/blocked）、証拠 JSON schema・`shaMatch` 三値、summary 形状、extra-task lane 記録、非 run gate での invalid SHA 受容、lanes 行 schema 検証（forged outcome 拒否）、`consumer-verify-yml-contract`（必須 inputs・trigger 限定・rev-parse 捕捉・resolution `always()`・全 step id↔rec 対応・`tuple_ok` ゲート・lanes ファイル truncate・extra backstop・result env pin・always() 証拠経路・finalize 劣化経路・attempt 固有 artifact・unsupported ≥2 行・`inputs.*` の run: 非混入）を含む。
+- [x] `mise run test-ci-consumer-verify`（`node --test ci/consumer-verify/`）— 61 tests / 0 fail。classify-ref 行列、status 導出全枝（pass/fail/tuple_mismatch/not_run/unsupported/coverage/blocked）、証拠 JSON schema・`shaMatch` 三値、summary 形状、extra-task lane 記録、非 run gate での invalid SHA 受容、lanes 行 schema 検証（forged outcome 拒否）、`consumer-verify-yml-contract`（必須 inputs・trigger 限定・rev-parse 捕捉・resolution `always()`・全 step id↔rec 対応・`tuple_ok` ゲート・lanes ファイル truncate・extra backstop・result env pin・always() 証拠経路・finalize 劣化経路・attempt 固有 artifact・unsupported ≥2 行・GUI gate の not_run/unsupported 分離・concurrency group が tuple 全要素を key 化・`inputs.*` の run: 非混入）を含む。
 - [x] `mise exec -- actionlint`（全 workflow、consumer-verify.yml を含む）— エラー 0。検出→修正済み: `runner` context が `jobs.<job>.env` で使用不可だったため runner.temp 派生 path を無条件先頭 step の `$GITHUB_ENV` 供給へ変更。
 - [x] `mise exec -- prek run --all-files`（check-yaml・trailing-whitespace 等）— 全 pass。
 - [x] fetch+FETCH_HEAD checkout の機構 smoke — temp repo で branch 名・40-hex SHA の双方を `git init + remote add + fetch --depth 1 + checkout --detach FETCH_HEAD` → `rev-parse HEAD` で解決できることを確認（SHA fetch は `uploadpack.allowAnySHA1InWant` を立てたローカル remote で再現 — GitHub は既定で有効）。
-- [ ] 手動 dispatch による実 runner 検証は merge 後の初回 run で確認（本 PR の検証表に NotRun として記録。ブランチ上の workflow 変更は default branch 取込後でないと dispatch できない — `workflow_dispatch` は default branch の workflow 定義を使うため）。
+- [x] 実 runner 検証（review 基準 head `30205f2` で実測 — 修復後 head は別候補であり本結果を正式 Pass へ転用しない）: coordinator dispatch [run 42302538464](https://github.com/scarecrow173/ruviform/actions/runs/42302538464)（`gh workflow run --ref feature/consumer-verify-gui-candidate-gates`、候補 RF `30205f2` + AL `04f1861` + SV `d8bf8ca` の期待 SHA 照合付き）— preflight success・両 Consumer の clone/expected-SHA 照合 success・verify-synvelis 全 lane **pass**・verify-audiolens は `check-ci lane` で **fail**（`SinkConfig.span_events` 欠落の実 API 不整合を検出 — gate 設計通り fail-closed）・summary の not-run-is-not-pass 強制が正しく発火。
 - [x] 秘密非露出: evidence JSON・summary に KEY/token 系の転写がないことを code review＋contract test（env allowlist）で確認。
 
 ## Deferred Design Concerns
