@@ -164,6 +164,8 @@ Directory: `docs/tasks`
 | TASK-jXU3ZGuh6DP2FfCSvkx5FC | T2 TS wire validators — ipcwire/bindingwire + conformance テスト（Issue #311） | done | [issue-311-t2-ts-wire-validators.md](./issue-311-t2-ts-wire-validators.md) |
 | TASK-KayYlp12EsEWZZKk2pMZgF | T3 recorder/replay/oracle + consumer mocks + seeded シナリオ（Issue #311） | done | [issue-311-t3-recorder-replay-oracle.md](./issue-311-t3-recorder-replay-oracle.md) |
 | TASK-uyCbW614DqUYmATBzUrQxz | T4 fault matrix + Rust conformance lanes + mise/CI/AGENTS 同期 + IR（Issue #311） | done | [issue-311-t4-fault-matrix-lanes.md](./issue-311-t4-fault-matrix-lanes.md) |
+| TASK-LSK3NBKCdjJ7fablK2DEFK | T1 ci.yml dispatch 専用化 + concurrency 簡素化 + コメント同期（Issue #326） | done | [issue-326-t1-ci-yml-dispatch-only.md](./issue-326-t1-ci-yml-dispatch-only.md) |
+| TASK-kjitc7DOTjE43h2VO4qJgh | T2 trigger contract test（ci-yml-contract.test.mjs）+ dev-env 同期（Issue #326） | done | [issue-326-t2-trigger-contract-test.md](./issue-326-t2-trigger-contract-test.md) |
 | TASK-034RBNKfGF6WS4OfHfW1of | Issue #327 CI計測Baseline 計測実施・文書化 | done | [issue-327-t1-baseline-measurement.md](./issue-327-t1-baseline-measurement.md) |
 | TASK-uRQkJW5851dqMXehrKNZkI | Issue #328 T1 — ci.yml / consumer-impact-check.yml へ PR concurrency block 適用 | done | [issue-328-t1-ci-pr-concurrency.md](./issue-328-t1-ci-pr-concurrency.md) |
 | TASK-034RBIMQzuYAewg2JXTXOk | T1 mise task install/freshness 分離 + ui-verify setup ステップ（Issue #330） | done | [issue-330-t1-mise-ui-install-dedup.md](./issue-330-t1-mise-ui-install-dedup.md) |

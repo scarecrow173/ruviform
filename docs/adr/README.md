@@ -34,6 +34,7 @@ Directory: `docs/adr`
 | ADR-rgzm45MqKPlpzqO7Uhbqeq | Issue #255 CorrelationPlan 変換長の非2冪高速サイズ化 — 既定選択の変更と混合基数 FFT の採用 | accepted | [issue-255-nonpow2-fft-transform-length.md](./issue-255-nonpow2-fft-transform-length.md) |
 | ADR-034RoY92ThOb7k8jYxuEQy | Issue #276 logging adapter: bounded writer ownership and build-time sink resilience | accepted | [issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md](./issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md) |
 | ADR-034S312gtUiTestAdrCC33 | Issue #312 テスト制御ポートの分離クレート・transport・fail-closed 認証・capability 宣言 | accepted | [issue-312-test-control-transport-security.md](./issue-312-test-control-transport-security.md) |
+| ADR-SYd9kRt5mEssMKoPG8hnSG | Issue #326 ci.yml workflow_dispatch 専用化 — PR/push trigger 撤去と concurrency 簡素化（Issue #328 ADR 補足） | accepted | [issue-326-ci-yml-dispatch-only.md](./issue-326-ci-yml-dispatch-only.md) |
 | ADR-ieVahO2wRjuTcKd43fT59I | Issue #328 CI concurrency — group キーと cancel-in-progress の event 条件化 | accepted | [issue-328-ci-concurrency-grouping.md](./issue-328-ci-concurrency-grouping.md) |
 | ADR-SG8Lf0sCLiCM8ziAFqCNZ7 | Issue #329 sccache 導入方式 — sccache-action + GHA cache backend + repo-variable kill switch | accepted | [issue-329-sccache-gha-backend.md](./issue-329-sccache-gha-backend.md) |
 | ADR-jD7nl5tHt9wQ3G5Xm5YSyC | Issue #336 SinkDegraded Clone 方針 — snapshot record は Clone 可能に揃える | accepted | [issue-336-sink-degraded-clone-derive.md](./issue-336-sink-degraded-clone-derive.md) |
