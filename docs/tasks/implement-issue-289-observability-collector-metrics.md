@@ -62,7 +62,8 @@ relations:
     generated: []
   implements:
     - "docs/plans/implement-issue-289-observability-collector-metrics.md"
-  implemented-by: []
+  implemented-by:
+    - "docs/impl/ir/implement-issue-289-observability-collector-metrics.md"
   depends-on:
     - "docs/plans/implement-issue-289-observability-collector-metrics.md"
   blocks: []
