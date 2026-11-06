@@ -47,6 +47,7 @@ relations:
   derived-by:
     - "docs/designs/issue-366-full-ci-stage1.md"
     - "docs/plans/issue-366-full-ci-stage1.md"
+    - "docs/specs/issue-326-ci-manual-only.md"
   verifies: []
   verified-by: []
   references:

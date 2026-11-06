@@ -4,7 +4,7 @@ type: "adr"
 status: "accepted"
 title: "Issue #328 CI concurrency — group キーと cancel-in-progress の event 条件化"
 created: "2026-11-04"
-updated: "2026-11-04"
+updated: "2026-11-06"
 owners: []
 relations:
   source:
@@ -31,7 +31,8 @@ relations:
   related:
     - "docs/designs/issue-328-ci-pr-concurrency.md"
   refines: []
-  refined-by: []
+  refined-by:
+    - "docs/adr/issue-326-ci-yml-dispatch-only.md"
   derives-from: []
   derived-by: []
   verifies: []
@@ -87,3 +88,8 @@ concurrency:
 - Good: PR 連続 push で最新 run のみが残る(pending の置換は既定動作、in-progress は `cancel-in-progress` が cancel)。main push/dispatch は `run_id` 一意 group で現状と同一の並列性。workflow 接頭辞で将来 `pull_request` workflow が増えても衝突しない。permission・依存は不変。
 - Bad: 同一 group に対する既知の edge — 古い run を手動 **re-run** すると、その run が同 group に再入して最新 run を cancel し得る(古い revision の check が cancelled になる方向 = fail-safe、且つ人間の明示操作のみが引き金)。復旧は最新 run の再実行または再 push。設計書に既知挙動として記録する。
 - Neutral: group 名は case-insensitive だが `refs/pull/N/merge`・`run_id`・workflow 名はいずれも大文字を含まず影響なし。`queue: max` は `cancel-in-progress` と併用不可かつ不要のため使用しない。
+
+---
+
+> **2026-11-06 補足（後続 ADR への pointer — 本 ADR の決定は不変）**:
+> `docs/adr/issue-326-ci-yml-dispatch-only.md`（ADR-SYd9kRt5mEssMKoPG8hnSG）により、`ci.yml` の `pull_request`/`push` trigger は Issue #365 決定 1 / #326 Stage 4 の下で撤去された。`pull_request` event が存在しなくなったため、本 ADR が採用した event 条件式（`github.event_name == 'pull_request' && github.ref || github.run_id`）は常に非 PR 分岐に解決する dead 機構となり、concurrency は `ci-<run_id>` 一意 group・`cancel-in-progress: false` の単純形に簡素化された。本 ADR の核心不変条件（非 PR run は他 run を cancel しない・run ごと一意 group・workflow 接頭辞で衝突しない）は単純形でも同一に満たされる。trigger 復活時に per-PR cancel 機構が「仕様として」戻ることを意図しない — 復活する場合は改めて設計すること。
