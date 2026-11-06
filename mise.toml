@@ -140,6 +140,14 @@ run = "node --test ci/tracker/"
 description = "Run ci/daily scheduler decision contract tests via `node --test ci/daily/` (decision matrix, in-flight/unknown hold, bounded retry budget, dispatch confirm + landed-sha, report JSON shape, workflow trigger contract ci-yml-contract.test.mjs; requires node from the pinned toolchain)"
 run = "node --test ci/daily/"
 
+# Issue #294 (cross-consumer candidate-tuple gate): contract tests for the
+# ci/consumer-verify evidence evaluator. The `preflight` job in
+# consumer-verify.yml runs this before any lane executes so a broken
+# evaluator fails the run instead of recording a wrong status.
+[tasks.test-ci-consumer-verify]
+description = "Run ci/consumer-verify contract tests via `node --test ci/consumer-verify/` (classify-ref matrix, lane/status derivation, tuple match/mismatch, evidence JSON+summary shape, secret non-leak, workflow yml structure contract; requires node from the pinned toolchain)"
+run = "node --test ci/consumer-verify/"
+
 [tasks.test-plugin-core]
 description = "Run plugin-core contract tests"
 run = "cargo test -p ruviform-plugin-core"
