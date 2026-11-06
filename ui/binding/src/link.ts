@@ -134,15 +134,13 @@ export class ViewLink {
       ...(options ?? {}),
     });
     this.registerBinding(binding);
-    if (this.attached_) {
-      binding.attach(this.generation_);
-      this.subscribeBinding(binding);
-    }
     return binding;
   }
 
   /** Register an externally created binding. Returns an unregister
-   *  that detaches it from link lifecycle management. */
+   *  that detaches it from link lifecycle management — the binding is
+   *  removed from attach/detach handling and, if the link subscribed
+   *  it at registration, that subscription is released. */
   registerBinding<P>(binding: CommandBinding<P>): () => void {
     const m = managed(binding);
     this.bindings.add(m);
@@ -152,11 +150,30 @@ export class ViewLink {
         ? { windowId: this.windowId_ }
         : {}),
     });
+    // A binding joining an attached link adopts the live view epoch and
+    // is subscribed immediately — the same state a pre-registered
+    // binding holds after `attach`, so every managed binding dispatches
+    // under one epoch (external registration is not a second rule).
+    let off: (() => void) | undefined;
+    if (this.attached_) {
+      binding.attach(this.generation_);
+      off = this.subscribeBinding(binding);
+    }
     let live = true;
     return () => {
       if (!live) return;
       live = false;
       this.bindings.delete(m);
+      if (off !== undefined) {
+        const at = this.subscriptions.indexOf(off);
+        if (at >= 0) {
+          // Still live: release it here. After `detach` the array is
+          // already drained and every `off` already ran once — calling
+          // it again would double-count at the port.
+          this.subscriptions.splice(at, 1);
+          off();
+        }
+      }
     };
   }
 
@@ -192,6 +209,11 @@ export class ViewLink {
    * `detach("unmount")` first; the same value stays a no-op. The value
    * must be a non-negative safe integer: anything else is rejected
    * with a `RangeError` before any link state changes.
+   *
+   * The supplied epoch must be the consumer's authoritative value —
+   * monotonic per view like the backend attach counter. Reusing a
+   * dead epoch value for the same view is contract-legal input but
+   * defeats the numeric stale guards: the caller owns epoch reuse.
    */
   attach(windowId: string, generation?: number): void {
     if (
@@ -240,8 +262,10 @@ export class ViewLink {
     for (const query of this.queries) query.detach();
   }
 
-  private subscribeBinding(binding: ManagedBinding): void {
-    if (this.port.subscribe === undefined) return;
+  private subscribeBinding(
+    binding: ManagedBinding,
+  ): (() => void) | undefined {
+    if (this.port.subscribe === undefined) return undefined;
     const ctx: SubscriptionContext = {
       viewId: this.viewId,
       generation: this.generation_,
@@ -261,6 +285,7 @@ export class ViewLink {
     );
     this.subscribeCount_ += 1;
     if (off !== undefined) this.subscriptions.push(off);
+    return off;
   }
 }
 

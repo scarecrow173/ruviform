@@ -8,7 +8,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { LinkRegistry, ViewLink } from "../src/link.ts";
-import type { InteractionEvent } from "../src/index.ts";
+import { CommandBinding } from "../src/binding.ts";
+import type {
+  BindingPort,
+  InteractionEvent,
+  StateProjection,
+} from "../src/index.ts";
 import {
   flushSync,
   ManualTimers,
@@ -447,6 +452,84 @@ describe("ViewLink authoritative generation", () => {
     link.detach("unmount");
     link.attach("window-A");
     assert.equal(link.generation, 8);
+  });
+
+  it("an externally registered binding adopts the live epoch and unsubscribes on unregister", () => {
+    const { gateway, link } = setup();
+    link.createBinding("track.vol", { flushWith: flushSync });
+    link.attach("window-A", 7);
+
+    const external = new CommandBinding<{ plain: number }>({
+      target: "track.vol",
+      port: gateway,
+      flushWith: flushSync,
+      ackTimeoutMs: 0,
+    });
+    const unregister = link.registerBinding(external);
+
+    // Same state a pre-registered binding holds after attach: the
+    // adopted epoch and a live subscription.
+    assert.equal(external.generation, 7);
+    assert.equal(external.attached, true);
+    assert.equal(gateway.subscribeCalls.length, 2);
+    assert.equal(gateway.subscribeCalls[1]?.ctx.generation, 7);
+    assert.equal(link.linkStats.activeSubscriptions, 2);
+
+    gateway.deliver = (r) => external.ack(r);
+    external.event(begin("ext", 1));
+    external.event(commit("ext", 2));
+    const sent = gateway.received.find((r) => r.intent.kind === "commit");
+    assert.ok(sent);
+    assert.equal(sent.ctx.generation, 7);
+    assert.equal(sent.ctx.viewId, "mixer.strip.1");
+    assert.equal(sent.ctx.windowId, "window-A");
+
+    // Unregister releases the subscription the link made at
+    // registration — the binding is no longer link-managed.
+    unregister();
+    assert.equal(link.linkStats.activeSubscriptions, 1);
+    assert.equal(gateway.unsubscribed, 1);
+    link.attach("window-B", 9);
+    assert.equal(gateway.subscribeCalls.length, 3);
+    assert.equal(gateway.subscribeCalls[2]?.ctx.generation, 9);
+    // Untouched by the transition: not re-attached, not re-subscribed.
+    assert.equal(external.generation, 7);
+  });
+
+  it("a projection delivered to a dead epoch's listener is dropped at the link guard", () => {
+    // Capture listeners so a racy port that still pushes to an
+    // already-unsubscribed listener can be simulated.
+    const gateway = new MockDawGateway();
+    gateway.addTarget("track.vol", 0.2);
+    const captured: Array<(p: StateProjection<unknown>) => void> = [];
+    const port: BindingPort = {
+      dispatch: (intent, ctx) => gateway.dispatch(intent, ctx),
+      subscribe: (target, listener, ctx) => {
+        captured.push(listener as (p: StateProjection<unknown>) => void);
+        return gateway.subscribe(target, listener, ctx);
+      },
+    };
+    const link = new ViewLink({ viewId: "v-dead", port });
+    const binding = link.createBinding<{ plain: number }>("track.vol", {
+      flushWith: flushSync,
+      ackTimeoutMs: 0,
+    });
+    link.attach("window-A", 7);
+    assert.equal(captured.length, 1);
+    link.attach("window-A", 9);
+    assert.equal(captured.length, 2);
+
+    // A push reaching the epoch-7 listener after the epoch-9
+    // transition is dropped before `observe` — the observed truth
+    // (revision 0, pushed at subscribe) cannot be overwritten.
+    captured[0]!({ revision: 100, value: { plain: 0.9 } });
+    assert.equal(binding.state.lastObserved?.value.plain, 0.2);
+    assert.equal(binding.state.observedSeq, 1);
+
+    // The live epoch-9 listener still delivers.
+    captured[1]!({ revision: 100, value: { plain: 0.9 } });
+    assert.equal(binding.state.lastObserved?.value.plain, 0.9);
+    assert.equal(binding.state.observedSeq, 2);
   });
 });
 
