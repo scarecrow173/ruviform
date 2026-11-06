@@ -1,27 +1,21 @@
 name: ci
 
-# Full CI: every trigger runs the complete lane set unconditionally — the
+# Full CI: every run executes the complete lane set unconditionally — the
 # retired impact classifier / selective `if:` machinery (Issue #333/#346)
-# is gone per Issue #366 Stage 1. PRs and pushes to main verify the merged
-# result; workflow_dispatch stays for targeted diagnosis, reruns, and the
-# daily scheduler contract.
+# is gone per Issue #366 Stage 1. Entry is workflow_dispatch ONLY (Issue
+# #365 rule 1 / #326 Stage 4): the daily scheduler decides whether current
+# main needs verification and dispatches with expected_sha, and humans
+# dispatch for diagnosis/repair. PR creation/updates and main pushes
+# deliberately start nothing — required checks were retired first (the
+# `main-checkstatus` ruleset is disabled, so no merge deadlock).
 on:
-  pull_request:
-    branches: [main]
-    # `edited` catches base-branch retargets (a new base needs a fresh run;
-    # title/body edits also fire it — the per-PR concurrency group cancels
-    # the superseded run, accepted cost). `ready_for_review` ensures a fresh
-    # run when a draft is promoted.
-    types: [opened, synchronize, reopened, ready_for_review, edited]
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       # Issue #366/#367 dispatch contract: the daily scheduler passes the
       # main HEAD it intends to verify. `ci-summary` fails when the run
       # actually checked out a different revision — a different SHA is never
       # recorded as the expected one. Empty disables the check (manual
-      # dispatch, pull_request, push).
+      # dispatch without the input).
       expected_sha:
         description: "Expected main HEAD SHA this run verifies (daily-ci dispatch contract; empty = no check)"
         required: false
@@ -35,14 +29,13 @@ env:
 permissions:
   contents: read
 
-# Same-PR runs supersede each other: a new pull_request run resolves to a
-# per-PR group (refs/pull/<N>/merge) and cancels the in-progress/pending
-# run for that PR. Other triggers (push to main, workflow_dispatch)
-# resolve to a unique run_id group, so they are never cancelled — and
-# different PRs or workflows never share a group.
+# Every run gets a unique group and is never cancelled (ADR-328's
+# non-PR invariant — its event-conditional expression always resolved to
+# this same shape for non-PR triggers, and pull_request events no longer
+# exist after the dispatch-only migration).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   # Issue #366 (Full CI Stage 1): every lane job runs unconditionally — no
@@ -51,14 +44,13 @@ jobs:
   # in `success` (failure / cancelled / skipped / not-run / unknown) fails
   # the whole run.
   #
-  # Issue #333/#326 rev 2026-11-05, kept in Stage 1: macOS legs are NOT
-  # PR-required — the required matrices below carry ubuntu+windows only and
-  # each macOS leg lives in a physically separate `*-macos` job consumed by
-  # `ci-summary`. The ruleset requires the nine Linux/Windows contexts;
-  # macOS starvation can no longer queue-cancel a required context. Keeping
-  # the separate jobs also gives `ci-summary` per-OS `needs` rows directly;
-  # folding them into the matrices is a deferred Stage-2 simplification
-  # (docs/designs/issue-366-full-ci-stage1.md).
+  # Issue #333/#326 rev 2026-11-05, kept in Stage 1: macOS legs were split
+  # into physically separate `*-macos` jobs so macOS starvation could not
+  # queue-cancel what were then the nine required Linux/Windows contexts
+  # (the `main-checkstatus` ruleset is disabled since Issue #326 Stage 4 —
+  # the split is retained: `ci-summary` consumes each per-OS result from
+  # `needs` directly). Folding them into the matrices is a deferred
+  # Stage-2 simplification (docs/designs/issue-366-full-ci-stage1.md).
   verify:
     name: verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -76,10 +68,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -205,7 +196,7 @@ jobs:
           du -sh target
           du -sh target/ci/deps target/ci/build 2>/dev/null || true
 
-  # Non-required macOS leg of `verify` (Issue #333/#326 rev 2026-11-05,
+  # macOS leg of `verify` (Issue #333/#326 rev 2026-11-05,
   # kept in #366 Stage 1): identical lane steps, physically separate job —
   # `ci-summary` consumes its per-OS result from `needs` directly.
   verify-macos:
@@ -219,10 +210,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -331,10 +321,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -410,10 +399,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -486,10 +474,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -563,10 +550,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -647,10 +633,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -881,7 +866,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-  # Non-required macOS leg of `ui-verify` (Issue #333/#326 rev 2026-11-05,
+  # macOS leg of `ui-verify` (Issue #333/#326 rev 2026-11-05,
   # kept in #366 Stage 1): identical lane steps minus the Linux-only
   # WebKitGTK/system-deps steps, physically separate job — `ci-summary`
   # consumes its per-OS result from `needs` directly.
@@ -897,10 +882,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -1104,10 +1088,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -1182,10 +1165,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -1243,7 +1225,7 @@ jobs:
       - name: Lint host feature (mise run lint-l1-real-plugin)
         run: mise run lint-l1-real-plugin
 
-  # Non-required macOS leg of `l1-real-verify` (Issue #333/#326 rev
+  # macOS leg of `l1-real-verify` (Issue #333/#326 rev
   # 2026-11-05, kept in #366 Stage 1): physically separate job —
   # `ci-summary` consumes its per-OS result from `needs` directly. First
   # exercise on macOS: the raw-.dylib (non-bundle) CLAP resolution and the
@@ -1259,10 +1241,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
           ref: ${{ github.sha }}
 
       # Issue #366 sha evidence: measure what this leg actually checked out
@@ -1330,10 +1311,12 @@ jobs:
   # dispatch contract (Issue #367 daily-ci input) against the measured
   # common checkout — never `github.sha` alone.
   #
-  # Transition note: this job is NOT yet a required context — the ruleset
-  # keeps the nine Linux/Windows lane contexts until the Owner migrates to
-  # `ci-summary` (docs/designs/issue-366-full-ci-stage1.md). Renaming
-  # `ci-gate` is safe because the old name was never required.
+  # Post-migration note (Issue #326/#365 rule 1): this job is the run-level
+  # fail-closed verdict for Daily/manual verification. PR-level required
+  # checks were retired first — the `main-checkstatus` ruleset (nine lane
+  # contexts) is disabled, so no check is required and no merge deadlock
+  # exists. `ci-summary` is NOT a required context; merge gating is the
+  # `main-protect` ruleset's PR requirement plus human review.
   ci-summary:
     name: ci-summary
     needs: [verify, verify-macos, rt-verify, icc-verify, compression-verify, io-structured-verify, ui-verify, ui-verify-macos, bench, l1-real-verify, l1-real-verify-macos]
@@ -1345,10 +1328,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          # Issue #366 sha evidence: pin every lane to the trigger snapshot
-          # (no-op for pull_request/push where checkout already resolves to
-          # github.sha; stops workflow_dispatch legs floating to a newer ref
-          # head between lane job starts).
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head.
           ref: ${{ github.sha }}
 
       - name: Set up mise
