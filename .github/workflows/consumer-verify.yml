@@ -1,18 +1,34 @@
 name: consumer-verify
 
-# Issue #219 Cross-Repo CI Gate: ruviform 候補 revision に対する
+# Issue #219/#294 Cross-Repo CI Gate: ruviform 候補 revision に対する
 # Synvelis / AudioLens の互換検証を workflow_dispatch で実行する情報 lane。
 # required checks には含めず、片 Consumer の失敗・未検証が他 Consumer の
 # 実行や ruviform の merge を止めない。全 lane が not run の run は
 # 「証拠ゼロ」として失敗にし、unknown を pass に見せない。
 #
+# Issue #294 拡張（候補 tuple 証拠契約）:
+# - 各 Consumer lane は checkout 後に `git rev-parse HEAD` で**解決 SHA** を
+#   捕捉し、任意入力の期待 SHA（`*_expected_sha`）と fail-closed 照合する。
+#   tuple=(ruviform SHA, consumer SHA, contract "consumer-verify-tuple/v1") と
+#   全 lane 結果は ci/consumer-verify/evidence.mjs が構造化 JSON artifact
+#   （全終端経路で `if: always()` 出力）と Job Summary に記録する。
+# - `*_ref` は branch/tag に加え repo 上に存在する 40-hex SHA も受理する
+#   （git init + fetch --depth 1 + checkout --detach FETCH_HEAD の統一経路。
+#   候補 PR head 等の SHA 検証・RF #305/#306 系の Consumer 候補連携用）。
+# - `*_extra_tasks` は Consumer 別の追加 mise task 接続点（RF #306 等が定義
+#   する Consumer 側 test command を workflow 編集なしで lane 化する）。
+#   preflight が pattern/件数を検証する。
+# - lane 結果語彙は pass/fail/not_run/unsupported/skipped、Consumer status は
+#   pass/fail/not_run/unsupported。実窓 host・macOS/実 OS lane は実行せず
+#   `unsupported` 固定行として理由付きで記録する（skip=pass にしない）。
+#
 # 両 lane とも scratch checkout 内で ruviform git 依存を候補 rev に
 # 正規化（rev pin 置換・branch 追従/rev 未指定への rev 注入を同一
 # ルールで処理）し、cargo fetch で lockfile を単一 SHA へ再解決してから
-# consumer 側の mise task（check/test/smoke）を実行する。manifest/lockfile
-# の diff は証拠として job summary に出力し、consumer repo には残さない。
-# synvelis lane は workspace Cargo.toml 不在時のみ not run を報告する
-# （workspace 化前の ref を検証対象にした場合の後方互換ガード）。
+# consumer 側の mise task（check/test/smoke/UI headless）を実行する。
+# manifest/lockfile の diff は証拠として job summary に出力し、consumer
+# repo には残さない。synvelis lane は workspace Cargo.toml 不在時のみ
+# not run を報告する（workspace 化前の ref の後方互換ガード）。
 #
 # access mode（preflight が lane ごとに解決）:
 # - deploy_key: secret CROSS_REPO_DEPLOY_KEY 設定済み → 既存の SSH
@@ -23,6 +39,11 @@ name: consumer-verify
 #   lane を実行する（最小権限 = 秘密を持たない）。
 # - not_run: どちらも不可 → not run を明示して終了（unknown を pass に
 #   見せない既定は不変）。
+#
+# ci/consumer-verify/evidence.mjs は workflow 自身の dispatch ref
+# （github.sha）から checkout される — 候補 SHA（ruviform_rev）ではない。
+# script 導入前の候補 SHA を検証する run でも証拠器は存在しなければ
+# ならず、検証対象と検証器の revision を混ぜない。
 
 on:
   workflow_dispatch:
@@ -32,18 +53,44 @@ on:
         required: false
         type: string
       audiolens_ref:
-        description: "audio-lens の checkout ref（branch/tag 名のみ）"
+        description: "audio-lens の checkout ref（branch/tag 名または repo に存在する 40-hex SHA）"
         required: false
         default: "main"
         type: string
       synvelis_ref:
-        description: "synvelis の checkout ref（branch/tag 名のみ）"
+        description: "synvelis の checkout ref（branch/tag 名または repo に存在する 40-hex SHA）"
         required: false
         default: "main"
+        type: string
+      audiolens_expected_sha:
+        description: "期待 audio-lens commit SHA（空なら照合なし・解決 SHA を記録のみ）"
+        required: false
+        type: string
+      synvelis_expected_sha:
+        description: "期待 synvelis commit SHA（空なら照合なし・解決 SHA を記録のみ）"
+        required: false
+        type: string
+      audiolens_extra_tasks:
+        description: "audio-lens 追加 mise task（カンマ区切り、^[A-Za-z0-9][A-Za-z0-9_-]*$、最大8 — RF #306 等の接続点）"
+        required: false
+        type: string
+      synvelis_extra_tasks:
+        description: "synvelis 追加 mise task（カンマ区切り、^[A-Za-z0-9][A-Za-z0-9_-]*$、最大8 — RF #306 等の接続点）"
+        required: false
         type: string
 
 permissions:
   contents: read
+
+# 同一候補組合せの run を直列化する（重複起動の補助線。打ち切りで証拠を
+# 失わないよう cancel-in-progress は false。抑止判定の正本は #367
+# scheduler であり、ここは runner 浪費を避ける下位互換の guard）。
+# tuple は RF SHA + 両 Consumer ref + 期待 SHA + extra tasks で識別する —
+# ref 同一でも expected SHA / extra tasks が異なれば別 tuple（pending 置換
+# で別 tuple の証拠を欠落させない）。
+concurrency:
+  group: consumer-verify-${{ inputs.ruviform_rev || github.sha }}-${{ inputs.audiolens_ref }}-${{ inputs.synvelis_ref }}-${{ inputs.audiolens_expected_sha }}-${{ inputs.synvelis_expected_sha }}-${{ inputs.audiolens_extra_tasks }}-${{ inputs.synvelis_extra_tasks }}
+  cancel-in-progress: false
 
 env:
   RUVIFORM_REV: ${{ inputs.ruviform_rev || github.sha }}
@@ -51,25 +98,68 @@ env:
 jobs:
   preflight:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       credential_configured: ${{ steps.probe.outputs.credential_configured }}
       anon_audiolens: ${{ steps.probe.outputs.anon_audiolens }}
       anon_synvelis: ${{ steps.probe.outputs.anon_synvelis }}
     steps:
+      - name: Checkout ruviform (dispatch ref — evidence.mjs source)
+        uses: actions/checkout@v7.0.1
+      - name: Set up mise + node (ruviform toolchain)
+        uses: jdx/mise-action@v5.2.0
+      - name: Install node
+        run: |
+          mise trust
+          mise install --locked node
       - name: Validate inputs
+        env:
+          IN_AUDIOLENS_REF: ${{ inputs.audiolens_ref }}
+          IN_SYNVELIS_REF: ${{ inputs.synvelis_ref }}
+          IN_AUDIOLENS_EXPECTED: ${{ inputs.audiolens_expected_sha }}
+          IN_SYNVELIS_EXPECTED: ${{ inputs.synvelis_expected_sha }}
+          IN_AUDIOLENS_TASKS: ${{ inputs.audiolens_extra_tasks }}
+          IN_SYNVELIS_TASKS: ${{ inputs.synvelis_extra_tasks }}
         run: |
           set -euo pipefail
           if ! echo "$RUVIFORM_REV" | grep -qE '^[0-9a-f]{40}$'; then
             echo "::error::ruviform_rev must be a 40-hex commit SHA (got: $RUVIFORM_REV)"
             exit 1
           fi
-          for ref in "${{ inputs.audiolens_ref }}" "${{ inputs.synvelis_ref }}"; do
-            if ! echo "$ref" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/-]*$' || echo "$ref" | grep -qE '\.\.|^/|/$|\.lock$'; then
-              echo "::error::consumer ref must be a branch/tag name (got: $ref)"
+          for ref in "$IN_AUDIOLENS_REF" "$IN_SYNVELIS_REF"; do
+            cls=$(node ci/consumer-verify/evidence.mjs classify-ref "$ref")
+            if [ "$cls" = "invalid" ]; then
+              echo "::error::consumer ref must be a branch/tag name or a repo-resident 40-hex SHA (got: $ref)"
+              exit 1
+            fi
+          done
+          for sha in "$IN_AUDIOLENS_EXPECTED" "$IN_SYNVELIS_EXPECTED"; do
+            if [ -n "$sha" ] && ! echo "$sha" | grep -qE '^[0-9a-f]{40}$'; then
+              echo "::error::expected sha must be empty or a 40-hex commit SHA (got: $sha)"
+              exit 1
+            fi
+          done
+          for tasks in "$IN_AUDIOLENS_TASKS" "$IN_SYNVELIS_TASKS"; do
+            [ -z "$tasks" ] && continue
+            n=0
+            IFS=',' read -ra list <<< "$tasks"
+            for t in "${list[@]}"; do
+              t="${t//[[:space:]]/}"
+              [ -z "$t" ] && continue
+              n=$((n+1))
+              if ! echo "$t" | grep -qE '^[A-Za-z0-9][A-Za-z0-9_-]*$'; then
+                echo "::error::extra task name must match ^[A-Za-z0-9][A-Za-z0-9_-]*$ (got: $t)"
+                exit 1
+              fi
+            done
+            if [ "$n" -gt 8 ]; then
+              echo "::error::too many extra tasks (max 8, got: $n)"
               exit 1
             fi
           done
           echo "candidate revision: $RUVIFORM_REV"
+      - name: Self-test ci/consumer-verify evaluator (mise run test-ci-consumer-verify)
+        run: mise run test-ci-consumer-verify
       - name: Probe credential presence + anonymous access
         id: probe
         env:
@@ -100,23 +190,41 @@ jobs:
     needs: [preflight]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     outputs:
       status: ${{ steps.result.outputs.status }}
+      resolved_sha: ${{ steps.resolution.outputs.resolved_sha }}
+    env:
+      CONSUMER_NAME: audiolens
+      CONSUMER_REPO: scarecrow173/audio-lens
+      REQUESTED_REF: ${{ inputs.audiolens_ref }}
+      EXPECTED_SHA: ${{ inputs.audiolens_expected_sha }}
+      EXTRA_TASKS: ${{ inputs.audiolens_extra_tasks }}
     steps:
+      # runner.temp 派生 path は job env では runner context が使えないため
+      # GITHUB_ENV で供給する。always() 経路（blocked/not_run 含む）でも
+      # 必要になるため無条件の先頭 step。
+      - name: Lane path env
+        run: |
+          echo "CONSUMER_DIR=$RUNNER_TEMP/audio-lens" >> "$GITHUB_ENV"
+          echo "LANES_FILE=$RUNNER_TEMP/audiolens-lanes.jsonl" >> "$GITHUB_ENV"
+          echo "EVIDENCE_FILE=$RUNNER_TEMP/consumer-evidence-audiolens.json" >> "$GITHUB_ENV"
+          # self-hosted/persistent temp 上の残留 lane 行が pass を捏造しないよう必ず初期化
+          : > "$RUNNER_TEMP/audiolens-lanes.jsonl"
+          rm -f "$RUNNER_TEMP/consumer-evidence-audiolens.json"
+      # 証拠器を全終端経路（gate=blocked/not_run 含む）で使えるよう先頭に置く。
+      - name: Checkout ruviform (dispatch ref — evidence.mjs source)
+        uses: actions/checkout@v7.0.1
       - name: Gate on preflight result
         id: gate
         run: |
           set -euo pipefail
           if [ "${{ needs.preflight.result }}" != "success" ]; then
-            echo "| lane | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |" >> "$GITHUB_STEP_SUMMARY"
-            echo "|---|---|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
-            echo "| preflight | ubuntu-latest | - | $RUVIFORM_REV | fail (preflight failed) | - | - |" >> "$GITHUB_STEP_SUMMARY"
-            echo "status=fail" >> "$GITHUB_OUTPUT"
             echo "gate=blocked" >> "$GITHUB_OUTPUT"
             echo "mode=blocked" >> "$GITHUB_OUTPUT"
+            echo "reason=preflight failed" >> "$GITHUB_OUTPUT"
             exit 1
           fi
-          echo "status=not_run" >> "$GITHUB_OUTPUT"
           if [ "${{ needs.preflight.outputs.credential_configured }}" = "true" ]; then
             echo "gate=run" >> "$GITHUB_OUTPUT"
             echo "mode=deploy_key" >> "$GITHUB_OUTPUT"
@@ -126,9 +234,7 @@ jobs:
           else
             echo "gate=not_run" >> "$GITHUB_OUTPUT"
             echo "mode=not_run" >> "$GITHUB_OUTPUT"
-            echo "## AudioLens: not run (no access path)" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "CROSS_REPO_DEPLOY_KEY secret 未設定、かつ匿名 HTTPS でも audio-lens/ruviform に到達不可（repo public 化または Deploy Key 一次設定を確認、runbook 参照）。" >> "$GITHUB_STEP_SUMMARY"
+            echo "reason=no access path (deploy key 未設定かつ匿名 HTTPS 到達不可)" >> "$GITHUB_OUTPUT"
           fi
       - name: Install SSH credential
         if: steps.gate.outputs.mode == 'deploy_key'
@@ -158,7 +264,12 @@ jobs:
       - name: Set up mise
         if: steps.gate.outputs.gate == 'run'
         uses: jdx/mise-action@v5.2.0
-      - name: Clone audio-lens
+      - name: Install node (ruviform toolchain — evidence.mjs)
+        if: steps.gate.outputs.gate == 'run'
+        run: |
+          mise trust
+          mise install --locked node
+      - name: Clone audio-lens (ref/SHA 統一 fetch 経路)
         if: steps.gate.outputs.gate == 'run'
         env:
           GIT_LFS_SKIP_SMUDGE: "1"
@@ -169,10 +280,45 @@ jobs:
           else
             url="https://github.com/scarecrow173/audio-lens.git"
           fi
-          git clone --depth 1 --branch "${{ inputs.audiolens_ref }}" \
-            "$url" "$RUNNER_TEMP/audio-lens"
+          # branch/tag/40-hex SHA を同一経路で checkout する。GitHub は
+          # ref 非公開（unadvertised）commit の fetch も受理する
+          # — 境界はサーバ側オブジェクト存在（GC 済み・未 push は失敗→正直な証拠）。
+          mkdir -p "$CONSUMER_DIR"
+          git -C "$CONSUMER_DIR" init -q
+          git -C "$CONSUMER_DIR" remote add origin "$url"
+          git -C "$CONSUMER_DIR" fetch -q --depth 1 origin "$REQUESTED_REF"
+          git -C "$CONSUMER_DIR" checkout -q --detach FETCH_HEAD
+      - name: Resolve consumer SHA + tuple guard
+        id: resolution
+        # clone step 失敗時も走らせて rev-parse 失敗を fail lane として記録する
+        # （lane step のみスキップされる道では証拠が欠落するため always() 必須）
+        if: always() && steps.gate.outputs.gate == 'run'
+        run: |
+          set -uo pipefail
+          EV="$GITHUB_WORKSPACE/ci/consumer-verify/evidence.mjs"
+          command -v node >/dev/null || { echo "::error::node missing — lane records cannot be written"; exit 1; }
+          resolved=$(git -C "$CONSUMER_DIR" rev-parse HEAD 2>/dev/null || echo "")
+          echo "resolved_sha=$resolved" >> "$GITHUB_OUTPUT"
+          if [ -z "$resolved" ]; then
+            reason="checkout failed (ref/SHA fetch 不可または rev-parse 失敗)"
+            [ ! -d "$CONSUMER_DIR" ] && reason="checkout never attempted (上流 step 失敗で clone 未実行)"
+            node "$EV" lane --file "$LANES_FILE" \
+              --name "consumer clone + rev-parse" --command "git fetch --depth 1 + checkout FETCH_HEAD" \
+              --feature "candidate tuple" --os "ubuntu-latest" --outcome fail \
+              --reason "$reason"
+            echo "tuple_ok=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$EXPECTED_SHA" ] && [ "$resolved" != "$EXPECTED_SHA" ]; then
+            node "$EV" lane --file "$LANES_FILE" \
+              --name "tuple guard" --command "resolved SHA vs expected SHA 照合" \
+              --feature "candidate tuple" --os "ubuntu-latest" --outcome fail \
+              --reason "tuple_mismatch: expected $EXPECTED_SHA, resolved $resolved"
+            echo "tuple_ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tuple_ok=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Configure dep access + probe
-        if: steps.gate.outputs.gate == 'run'
+        id: dep
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true'
         run: |
           set -euo pipefail
           if [ "${{ steps.gate.outputs.mode }}" = "deploy_key" ]; then
@@ -185,11 +331,12 @@ jobs:
             echo "dep access OK (anonymous https)"
           fi
       - name: Pin ruviform rev in manifest
-        if: steps.gate.outputs.gate == 'run'
+        id: pin
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true'
         working-directory: ${{ runner.temp }}/audio-lens
         run: |
           set -euo pipefail
-          # ruviform git 依存を候補 rev に正規化する。rev pin・branch 追従・
+          # ruviform git 依存を候補 rev に正規化する。rev pin 置換・branch 追従・
           # rev 未指定（既定ブランチ追従）の 3 形態を同一ルールで `rev = "$RUVIFORM_REV"` へ揃える。
           sed -i -E "/scarecrow173\/ruviform\.git/ {
             s/\{ *rev = \"[0-9a-f]{40}\", */{ /;
@@ -201,16 +348,13 @@ jobs:
           git diff Cargo.toml >> "$GITHUB_STEP_SUMMARY" || true
       - name: cargo fetch + single-SHA lockfile guard
         id: fetch
-        if: steps.gate.outputs.gate == 'run'
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true'
         working-directory: ${{ runner.temp }}/audio-lens
         run: |
           set -euo pipefail
           mise trust
           # lane が使う tool のみに scope（rust=cargo、git-lfs=test lane の
-          # lfs pull、node=check-cli-headless）。audio-lens mise.lock の
-          # actionlint/pipx:serena-agent は platform entry を持たず
-          # --locked が全 platform で失敗するため全量 install しない
-          # （consumer 側の lockfile gap・追従 Issue 起票案として報告）。
+          # lfs pull、node=check-cli-headless と UI lane の npm）。
           mise install --locked rust git-lfs node
           mise exec -- cargo fetch
           total=$(grep -c 'scarecrow173/ruviform\.git' Cargo.lock || true)
@@ -226,61 +370,156 @@ jobs:
           fi
           echo "all $total ruviform sources resolved to $RUVIFORM_REV"
           git diff Cargo.lock >> "$GITHUB_STEP_SUMMARY" || true
+      - name: check-ruviform-lock lane (consumer 側単一 SHA 検証)
+        id: lock
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.fetch.outcome == 'success'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: mise run check-ruviform-lock
       - name: check-ci lane
         id: check
-        if: steps.gate.outputs.gate == 'run'
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.fetch.outcome == 'success'
         working-directory: ${{ runner.temp }}/audio-lens
         run: mise run check-ci
       - name: smoke lane (al-cli ci profile build)
         id: smoke_build
-        if: steps.gate.outputs.gate == 'run' && steps.check.outcome == 'success'
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.check.outcome == 'success'
         working-directory: ${{ runner.temp }}/audio-lens
-        # spec R5 の smoke 定義（headless 境界検証 = al-cli ci build +
-        # check-cli-headless）の build 側。audio-lens 側 ci.yml と同じ入口。
         run: mise exec -- cargo build -p al-cli --profile ci
       - name: smoke lane (check-cli-headless)
         id: smoke
-        if: steps.gate.outputs.gate == 'run' && steps.check.outcome == 'success'
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.check.outcome == 'success'
         working-directory: ${{ runner.temp }}/audio-lens
         run: mise run check-cli-headless
       - name: test-ci lane (with LFS fixtures)
         id: test
-        if: steps.gate.outputs.gate == 'run' && steps.check.outcome == 'success'
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.check.outcome == 'success'
         working-directory: ${{ runner.temp }}/audio-lens
         run: |
           set -euo pipefail
           git lfs pull
           mise run test-ci
+      # UI headless lane 群は rust lane と独立に証拠を採る（fetch 成功のみ依存）。
+      # sync-ui-deps は内部で ruviform へ git fetch するため credential cleanup より前。
+      - name: sync-ui-deps (vendor を候補 SHA で再生成)
+        id: sync_ui
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.fetch.outcome == 'success'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: mise run sync-ui-deps
+      - name: check-ruviform-rev --require-vendor (lock+REV 整合)
+        id: rev_vendor
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.sync_ui.outcome == 'success'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: mise exec -- node tools/check-ruviform-rev.mjs --require-vendor
+      - name: setup-ui (npm ci)
+        id: setup_ui
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.fetch.outcome == 'success'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: mise run setup-ui
+      - name: check-ui (headless typecheck + vendor 照合)
+        id: check_ui
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.setup_ui.outcome == 'success'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: mise run check-ui
+      - name: test-ui (headless node:test / happy-dom)
+        id: test_ui
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.setup_ui.outcome == 'success'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: mise run test-ui
+      - name: extra tasks (dispatch 入力接続点)
+        id: extra
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.fetch.outcome == 'success' && env.EXTRA_TASKS != ''
+        env:
+          EXTRA_TASKS: ${{ inputs.audiolens_extra_tasks }}
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: |
+          set -uo pipefail
+          EV="$GITHUB_WORKSPACE/ci/consumer-verify/evidence.mjs"
+          fail=0
+          IFS=',' read -ra tasks <<< "$EXTRA_TASKS"
+          for t in "${tasks[@]}"; do
+            t="${t//[[:space:]]/}"
+            [ -z "$t" ] && continue
+            if mise run "$t"; then
+              node "$EV" lane --file "$LANES_FILE" \
+                --name "extra: mise run $t" --command "mise run $t" \
+                --feature "extra dispatch input" --os "ubuntu-latest" --outcome pass
+            else
+              node "$EV" lane --file "$LANES_FILE" \
+                --name "extra: mise run $t" --command "mise run $t" \
+                --feature "extra dispatch input" --os "ubuntu-latest" --outcome fail \
+                --reason "exit code $?"
+              fail=1
+            fi
+          done
+          exit $fail
       - name: Record evidence + status
         id: result
         if: always()
+        env:
+          GATE: ${{ steps.gate.outputs.gate }}
+          GATE_REASON: ${{ steps.gate.outputs.reason }}
+          ACCESS_MODE: ${{ steps.gate.outputs.mode }}
+          RESOLVED_SHA: ${{ steps.resolution.outputs.resolved_sha }}
+          # consumer task が GITHUB_ENV 経由で上書きし得る tuple 識別値を固定
+          EXPECTED_SHA: ${{ inputs.audiolens_expected_sha }}
+          REQUESTED_REF: ${{ inputs.audiolens_ref }}
+          CONSUMER_NAME: audiolens
+          CONSUMER_REPO: scarecrow173/audio-lens
         run: |
           set -uo pipefail
-          gate="${{ steps.gate.outputs.gate }}"
-          if [ "${{ needs.preflight.result }}" != "success" ]; then
-            exit 0  # gate step already emitted fail evidence
+          EV="$GITHUB_WORKSPACE/ci/consumer-verify/evidence.mjs"
+          command -v node >/dev/null || { echo "::error::node missing — evidence cannot be written"; exit 1; }
+          rec() {
+            if [ -n "${5:-}" ]; then
+              node "$EV" lane --file "$LANES_FILE" --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4" --reason "$5"
+            else
+              node "$EV" lane --file "$LANES_FILE" --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4"
+            fi
+          }
+          o() { case "$1" in success) echo pass;; failure|cancelled) echo fail;; skipped) echo skipped;; *) echo not_run;; esac }
+          if [ "$GATE" = "blocked" ]; then
+            rec "preflight" "-" "-" "fail" "preflight failed"
+          elif [ "$GATE" = "run" ]; then
+            rec "dep access probe (url.insteadOf + ls-remote)" "git config + ls-remote" "access" "$(o '${{ steps.dep.outcome }}')"
+            rec "manifest rev pin (sed 正規化)" "sed -i -E Cargo.toml" "workspace" "$(o '${{ steps.pin.outcome }}')"
+            rec "manifest rev pin + cargo fetch (lockfile re-resolve)" "sed + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
+            rec "mise run check-ruviform-lock" "mise run check-ruviform-lock" "workspace" "$(o '${{ steps.lock.outcome }}')"
+            rec "mise run check-ci" "mise run check-ci" "workspace" "$(o '${{ steps.check.outcome }}')"
+            rec "cargo build -p al-cli --profile ci (smoke)" "cargo build -p al-cli --profile ci" "al-cli headless" "$(o '${{ steps.smoke_build.outcome }}')"
+            rec "mise run check-cli-headless (smoke)" "mise run check-cli-headless" "al-cli headless" "$(o '${{ steps.smoke.outcome }}')"
+            rec "mise run test-ci (LFS fixtures)" "git lfs pull && mise run test-ci" "workspace" "$(o '${{ steps.test.outcome }}')"
+            rec "mise run sync-ui-deps (vendor 再生成)" "mise run sync-ui-deps" "ui vendor" "$(o '${{ steps.sync_ui.outcome }}')"
+            rec "check-ruviform-rev --require-vendor (lock+REV)" "node tools/check-ruviform-rev.mjs --require-vendor" "ui vendor" "$(o '${{ steps.rev_vendor.outcome }}')"
+            rec "mise run setup-ui (npm ci)" "mise run setup-ui" "ui headless" "$(o '${{ steps.setup_ui.outcome }}')"
+            rec "mise run check-ui (typecheck+vendor)" "mise run check-ui" "ui headless" "$(o '${{ steps.check_ui.outcome }}')"
+            rec "mise run test-ui (happy-dom)" "mise run test-ui" "ui headless" "$(o '${{ steps.test_ui.outcome }}')"
+            rec "extra tasks (aggregate)" "mise run <audiolens_extra_tasks>" "extra dispatch input" "$(o '${{ steps.extra.outcome }}')"
+            # 未接続 lane（capability は足りるが検査入口が未 wiring — not_run と owner/再実行条件を正直記録）
+            rec "GUI-CONTRACT checks (public API/禁止依存/allowlist — GPUI 不要)" "-" "ui contract" "not_run" "RF #390 が Owner — ubuntu headless で実行可能だが Consumer 側検査 task 未接続。Consumer 側専用 mise task 接続時に extra_tasks/専用 lane で再実行（再分類は Owner 判断。extra_tasks 指定しても本行の分類は固定のまま）"
+            rec "GUI semantic/fake-oracle checks" "-" "ui semantic" "not_run" "GUI-SEMANTIC + AL #166/#127 が Owner — fake/headless oracle 未接続。接続後に再実行・再分類"
+            # capability-absent 固定行（実行しない — skip=pass にしない正直記録）
+            rec "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #313/#314 + AL #166/#127 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
+            rec "macOS/実 OS lanes" "-" "os-specific" "unsupported" "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
+            # 解決 SHA 記録後に consumer task が HEAD を動かしていないか再照合
+            drift=$(git -C "$CONSUMER_DIR" rev-parse HEAD 2>/dev/null || echo "")
+            if [ -n "$RESOLVED_SHA" ] && [ "$drift" != "$RESOLVED_SHA" ]; then
+              rec "post-lane HEAD drift check" "git rev-parse HEAD" "candidate tuple" "fail" "HEAD drift: recorded $RESOLVED_SHA, now ${drift:-gone} — tuple 不整合"
+            fi
           fi
-          {
-            echo "## AudioLens — ruviform $RUVIFORM_REV (access: ${{ steps.gate.outputs.mode }})"
-            echo ""
-            echo "| lane | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |"
-            echo "|---|---|---|---|---|---|---|"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$gate" = "not_run" ]; then
-            echo "| all | ubuntu-latest | - | $RUVIFORM_REV | not run (no access path) | - | - |" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          row() { echo "| $1 | ubuntu-latest | $2 | $RUVIFORM_REV | $3 | - | pin を旧 SHA へ revert |" >> "$GITHUB_STEP_SUMMARY"; }
-          row "manifest rev pin + cargo fetch (lockfile re-resolve)" "workspace" "${{ steps.fetch.outcome }}"
-          row "mise run check-ci" "workspace" "${{ steps.check.outcome }}"
-          row "cargo build -p al-cli --profile ci (smoke)" "al-cli headless" "${{ steps.smoke_build.outcome || 'not run' }}"
-          row "mise run check-cli-headless (smoke)" "al-cli headless" "${{ steps.smoke.outcome || 'not run' }}"
-          row "mise run test-ci (LFS fixtures)" "workspace" "${{ steps.test.outcome || 'not run' }}"
-          if [ "${{ steps.check.outcome }}" = "success" ] && [ "${{ steps.smoke_build.outcome }}" = "success" ] && [ "${{ steps.smoke.outcome }}" = "success" ] && [ "${{ steps.test.outcome }}" = "success" ]; then
-            echo "status=pass" >> "$GITHUB_OUTPUT"
-          else
+          if ! node "$EV" finalize --file "$LANES_FILE" --out "$EVIDENCE_FILE" \
+            --summary "$GITHUB_STEP_SUMMARY" --status-out "$GITHUB_OUTPUT"; then
+            # finalize 自身の失敗でも最小証拠を残す（artifact 全終端経路の保証）
+            printf '{"schemaVersion":1,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple/v1","consumer":{"name":"audiolens"},"status":"fail","statusReason":"evidence_finalize_error"}\n' > "$EVIDENCE_FILE"
             echo "status=fail" >> "$GITHUB_OUTPUT"
+            exit 1
           fi
+      - name: Upload evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: consumer-evidence-audiolens-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/consumer-evidence-audiolens.json
+          if-no-files-found: error
       - name: Cleanup credential
         if: always() && steps.gate.outputs.mode == 'deploy_key'
         run: |
@@ -293,6 +532,7 @@ jobs:
     needs: [preflight]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     env:
       # synvelis には .cargo/config.toml が無い（audio-lens は同 config で
       # net.git-fetch-with-cli / GIT_LFS_SKIP_SMUDGE を宣言済み）ため、
@@ -300,23 +540,35 @@ jobs:
       # 依存 checkout の LFS smudge を skip する設定を job env で供給する。
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
       GIT_LFS_SKIP_SMUDGE: "1"
+      CONSUMER_NAME: synvelis
+      CONSUMER_REPO: scarecrow173/synvelis
+      REQUESTED_REF: ${{ inputs.synvelis_ref }}
+      EXPECTED_SHA: ${{ inputs.synvelis_expected_sha }}
+      EXTRA_TASKS: ${{ inputs.synvelis_extra_tasks }}
     outputs:
       status: ${{ steps.result.outputs.status }}
+      resolved_sha: ${{ steps.resolution.outputs.resolved_sha }}
     steps:
+      - name: Lane path env
+        run: |
+          echo "CONSUMER_DIR=$RUNNER_TEMP/synvelis" >> "$GITHUB_ENV"
+          echo "LANES_FILE=$RUNNER_TEMP/synvelis-lanes.jsonl" >> "$GITHUB_ENV"
+          echo "EVIDENCE_FILE=$RUNNER_TEMP/consumer-evidence-synvelis.json" >> "$GITHUB_ENV"
+          # self-hosted/persistent temp 上の残留 lane 行が pass を捏造しないよう必ず初期化
+          : > "$RUNNER_TEMP/synvelis-lanes.jsonl"
+          rm -f "$RUNNER_TEMP/consumer-evidence-synvelis.json"
+      - name: Checkout ruviform (dispatch ref — evidence.mjs source)
+        uses: actions/checkout@v7.0.1
       - name: Gate on preflight result
         id: gate
         run: |
           set -euo pipefail
           if [ "${{ needs.preflight.result }}" != "success" ]; then
-            echo "| lane | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |" >> "$GITHUB_STEP_SUMMARY"
-            echo "|---|---|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
-            echo "| preflight | ubuntu-latest | - | $RUVIFORM_REV | fail (preflight failed) | - | - |" >> "$GITHUB_STEP_SUMMARY"
-            echo "status=fail" >> "$GITHUB_OUTPUT"
             echo "gate=blocked" >> "$GITHUB_OUTPUT"
             echo "mode=blocked" >> "$GITHUB_OUTPUT"
+            echo "reason=preflight failed" >> "$GITHUB_OUTPUT"
             exit 1
           fi
-          echo "status=not_run" >> "$GITHUB_OUTPUT"
           if [ "${{ needs.preflight.outputs.credential_configured }}" = "true" ]; then
             echo "gate=run" >> "$GITHUB_OUTPUT"
             echo "mode=deploy_key" >> "$GITHUB_OUTPUT"
@@ -326,9 +578,7 @@ jobs:
           else
             echo "gate=not_run" >> "$GITHUB_OUTPUT"
             echo "mode=not_run" >> "$GITHUB_OUTPUT"
-            echo "## Synvelis: not run (no access path)" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "CROSS_REPO_DEPLOY_KEY secret 未設定、かつ匿名 HTTPS でも synvelis/ruviform に到達不可（repo public 化または Deploy Key 一次設定を確認、runbook 参照）。" >> "$GITHUB_STEP_SUMMARY"
+            echo "reason=no access path (deploy key 未設定かつ匿名 HTTPS 到達不可)" >> "$GITHUB_OUTPUT"
           fi
       - name: Install SSH credential
         if: steps.gate.outputs.mode == 'deploy_key'
@@ -357,7 +607,12 @@ jobs:
       - name: Set up mise
         if: steps.gate.outputs.gate == 'run'
         uses: jdx/mise-action@v5.2.0
-      - name: Clone synvelis + workspace presence check
+      - name: Install node (ruviform toolchain — evidence.mjs)
+        if: steps.gate.outputs.gate == 'run'
+        run: |
+          mise trust
+          mise install --locked node
+      - name: Clone synvelis (ref/SHA 統一 fetch 経路) + workspace presence check
         id: presence
         if: steps.gate.outputs.gate == 'run'
         run: |
@@ -367,16 +622,48 @@ jobs:
           else
             url="https://github.com/scarecrow173/synvelis.git"
           fi
-          git clone --depth 1 --branch "${{ inputs.synvelis_ref }}" \
-            "$url" "$RUNNER_TEMP/synvelis"
+          mkdir -p "$CONSUMER_DIR"
+          git -C "$CONSUMER_DIR" init -q
+          git -C "$CONSUMER_DIR" remote add origin "$url"
+          git -C "$CONSUMER_DIR" fetch -q --depth 1 origin "$REQUESTED_REF"
+          git -C "$CONSUMER_DIR" checkout -q --detach FETCH_HEAD
           # Cargo.toml 不在（workspace 化前の ref）なら以降の lane は not run。
-          if [ ! -f "$RUNNER_TEMP/synvelis/Cargo.toml" ]; then
+          if [ ! -f "$CONSUMER_DIR/Cargo.toml" ]; then
             echo "presence=absent" >> "$GITHUB_OUTPUT"
           else
             echo "presence=present" >> "$GITHUB_OUTPUT"
           fi
+      - name: Resolve consumer SHA + tuple guard
+        id: resolution
+        # clone step 失敗時も走らせて rev-parse 失敗を fail lane として記録する
+        # （lane step のみスキップされる道では証拠が欠落するため always() 必須）
+        if: always() && steps.gate.outputs.gate == 'run'
+        run: |
+          set -uo pipefail
+          EV="$GITHUB_WORKSPACE/ci/consumer-verify/evidence.mjs"
+          command -v node >/dev/null || { echo "::error::node missing — lane records cannot be written"; exit 1; }
+          resolved=$(git -C "$CONSUMER_DIR" rev-parse HEAD 2>/dev/null || echo "")
+          echo "resolved_sha=$resolved" >> "$GITHUB_OUTPUT"
+          if [ -z "$resolved" ]; then
+            reason="checkout failed (ref/SHA fetch 不可または rev-parse 失敗)"
+            [ ! -d "$CONSUMER_DIR" ] && reason="checkout never attempted (上流 step 失敗で clone 未実行)"
+            node "$EV" lane --file "$LANES_FILE" \
+              --name "consumer clone + rev-parse" --command "git fetch --depth 1 + checkout FETCH_HEAD" \
+              --feature "candidate tuple" --os "ubuntu-latest" --outcome fail \
+              --reason "$reason"
+            echo "tuple_ok=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$EXPECTED_SHA" ] && [ "$resolved" != "$EXPECTED_SHA" ]; then
+            node "$EV" lane --file "$LANES_FILE" \
+              --name "tuple guard" --command "resolved SHA vs expected SHA 照合" \
+              --feature "candidate tuple" --os "ubuntu-latest" --outcome fail \
+              --reason "tuple_mismatch: expected $EXPECTED_SHA, resolved $resolved"
+            echo "tuple_ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tuple_ok=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Configure dep access + probe
-        if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present'
+        id: dep
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present'
         run: |
           set -euo pipefail
           if [ "${{ steps.gate.outputs.mode }}" = "deploy_key" ]; then
@@ -389,7 +676,8 @@ jobs:
             echo "dep access OK (anonymous https)"
           fi
       - name: Pin ruviform rev in manifest
-        if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present'
+        id: pin
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present'
         working-directory: ${{ runner.temp }}/synvelis
         run: |
           set -euo pipefail
@@ -406,12 +694,12 @@ jobs:
           git diff Cargo.toml >> "$GITHUB_STEP_SUMMARY" || true
       - name: cargo fetch + single-SHA lockfile guard
         id: fetch
-        if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present'
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present'
         working-directory: ${{ runner.temp }}/synvelis
         run: |
           set -euo pipefail
           mise trust
-          mise install --locked rust git-lfs
+          mise install --locked rust git-lfs node
           mise exec -- cargo fetch
           total=$(grep -c 'scarecrow173/ruviform\.git' Cargo.lock || true)
           if [ "$total" -eq 0 ]; then
@@ -426,49 +714,165 @@ jobs:
           fi
           echo "all $total ruviform sources resolved to $RUVIFORM_REV"
           git diff Cargo.lock >> "$GITHUB_STEP_SUMMARY" || true
+      - name: check-ruviform-rev lane (lockfile 単一 SHA・consumer 側検証)
+        id: rev
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: mise run check-ruviform-rev
       - name: check lane
         id: check
-        if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present'
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success'
         working-directory: ${{ runner.temp }}/synvelis
         run: mise run check
       - name: test lane (with LFS fixtures)
         id: test
-        if: steps.gate.outputs.gate == 'run' && steps.presence.outputs.presence == 'present' && steps.check.outcome == 'success'
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.check.outcome == 'success'
         working-directory: ${{ runner.temp }}/synvelis
         run: |
           set -euo pipefail
           git lfs pull
           mise run test
+      - name: test-rt lane (RT no-alloc)
+        id: test_rt
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.check.outcome == 'success'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: mise run test-rt
+      - name: check-headless-deps lane
+        id: headless_deps
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: mise run check-headless-deps
+      # UI headless lane 群（sync-ui-deps は内部 git fetch — cleanup より前）。
+      - name: sync-ui-deps (vendor を候補 SHA で再生成)
+        id: sync_ui
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: mise run sync-ui-deps
+      - name: setup-ui (npm ci)
+        id: setup_ui
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: mise run setup-ui
+      - name: check-ui (headless typecheck + vendor 照合)
+        id: check_ui
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.setup_ui.outcome == 'success'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: mise run check-ui
+      - name: test-ui (vitest / happy-dom 実 SolidJS render)
+        id: test_ui
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.setup_ui.outcome == 'success'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: mise run test-ui
+      - name: build-ui (vite build + assets manifest)
+        id: build_ui
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.setup_ui.outcome == 'success'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: mise run build-ui
+      - name: check-ruviform-rev --require-vendor (lock+REV+manifest 完全整合)
+        id: rev_full
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.build_ui.outcome == 'success'
+        working-directory: ${{ runner.temp }}/synvelis
+        # manifest は build-ui 産物 — build 後でなければ manifest 検証が vacuous。
+        run: mise exec -- node tools/check-ruviform-rev.mjs --require-vendor
+      - name: extra tasks (dispatch 入力接続点)
+        id: extra
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success' && env.EXTRA_TASKS != ''
+        env:
+          EXTRA_TASKS: ${{ inputs.synvelis_extra_tasks }}
+        working-directory: ${{ runner.temp }}/synvelis
+        run: |
+          set -uo pipefail
+          EV="$GITHUB_WORKSPACE/ci/consumer-verify/evidence.mjs"
+          fail=0
+          IFS=',' read -ra tasks <<< "$EXTRA_TASKS"
+          for t in "${tasks[@]}"; do
+            t="${t//[[:space:]]/}"
+            [ -z "$t" ] && continue
+            if mise run "$t"; then
+              node "$EV" lane --file "$LANES_FILE" \
+                --name "extra: mise run $t" --command "mise run $t" \
+                --feature "extra dispatch input" --os "ubuntu-latest" --outcome pass
+            else
+              node "$EV" lane --file "$LANES_FILE" \
+                --name "extra: mise run $t" --command "mise run $t" \
+                --feature "extra dispatch input" --os "ubuntu-latest" --outcome fail \
+                --reason "exit code $?"
+              fail=1
+            fi
+          done
+          exit $fail
       - name: Record evidence + status
         id: result
         if: always()
+        env:
+          GATE: ${{ steps.gate.outputs.gate }}
+          GATE_REASON: ${{ steps.gate.outputs.reason }}
+          ACCESS_MODE: ${{ steps.gate.outputs.mode }}
+          RESOLVED_SHA: ${{ steps.resolution.outputs.resolved_sha }}
+          # consumer task が GITHUB_ENV 経由で上書きし得る tuple 識別値を固定
+          EXPECTED_SHA: ${{ inputs.synvelis_expected_sha }}
+          REQUESTED_REF: ${{ inputs.synvelis_ref }}
+          CONSUMER_NAME: synvelis
+          CONSUMER_REPO: scarecrow173/synvelis
         run: |
           set -uo pipefail
-          if [ "${{ needs.preflight.result }}" != "success" ]; then
-            exit 0
-          fi
-          gate="${{ steps.gate.outputs.gate }}"
-          {
-            echo "## Synvelis — ruviform $RUVIFORM_REV (access: ${{ steps.gate.outputs.mode }})"
-            echo ""
-            echo "| lane | OS | feature | ruviform revision | 結果 | 許容例外 | Rollback |"
-            echo "|---|---|---|---|---|---|---|"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$gate" = "not_run" ]; then
-            echo "| all | ubuntu-latest | - | $RUVIFORM_REV | not run (no access path) | - | - |" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ steps.presence.outputs.presence }}" = "absent" ]; then
-            echo "| workspace presence | ubuntu-latest | - | $RUVIFORM_REV | not run (no buildable workspace) | - | - |" >> "$GITHUB_STEP_SUMMARY"
-          else
-            row() { echo "| $1 | ubuntu-latest | $2 | $RUVIFORM_REV | $3 | - | 追従 PR で manifest/lock を revert |" >> "$GITHUB_STEP_SUMMARY"; }
-            row "manifest rev pin + cargo fetch (lockfile re-resolve)" "workspace" "${{ steps.fetch.outcome }}"
-            row "mise run check" "workspace" "${{ steps.check.outcome || 'not run' }}"
-            row "mise run test (--locked・git lfs pull 後)" "workspace" "${{ steps.test.outcome || 'not run' }}"
-            if [ "${{ steps.fetch.outcome }}" = "success" ] && [ "${{ steps.check.outcome }}" = "success" ] && [ "${{ steps.test.outcome }}" = "success" ]; then
-              echo "status=pass" >> "$GITHUB_OUTPUT"
+          EV="$GITHUB_WORKSPACE/ci/consumer-verify/evidence.mjs"
+          command -v node >/dev/null || { echo "::error::node missing — evidence cannot be written"; exit 1; }
+          rec() {
+            if [ -n "${5:-}" ]; then
+              node "$EV" lane --file "$LANES_FILE" --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4" --reason "$5"
             else
-              echo "status=fail" >> "$GITHUB_OUTPUT"
+              node "$EV" lane --file "$LANES_FILE" --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4"
+            fi
+          }
+          o() { case "$1" in success) echo pass;; failure|cancelled) echo fail;; skipped) echo skipped;; *) echo not_run;; esac }
+          if [ "$GATE" = "blocked" ]; then
+            rec "preflight" "-" "-" "fail" "preflight failed"
+          elif [ "${{ steps.presence.outputs.presence }}" = "absent" ]; then
+            rec "workspace presence (Cargo.toml)" "-" "-" "not_run" "no buildable workspace"
+          elif [ "$GATE" = "run" ]; then
+            rec "dep access probe (url.insteadOf + ls-remote)" "git config + ls-remote" "access" "$(o '${{ steps.dep.outcome }}')"
+            rec "manifest rev pin (sed 正規化)" "sed -i -E Cargo.toml" "workspace" "$(o '${{ steps.pin.outcome }}')"
+            rec "manifest rev pin + cargo fetch (lockfile re-resolve)" "sed + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
+            rec "mise run check-ruviform-rev (lock 単一 SHA)" "mise run check-ruviform-rev" "workspace" "$(o '${{ steps.rev.outcome }}')"
+            rec "mise run check" "mise run check" "workspace" "$(o '${{ steps.check.outcome }}')"
+            rec "mise run test (LFS fixtures)" "git lfs pull && mise run test" "workspace" "$(o '${{ steps.test.outcome }}')"
+            rec "mise run test-rt (RT no-alloc)" "mise run test-rt" "rt" "$(o '${{ steps.test_rt.outcome }}')"
+            rec "mise run check-headless-deps" "mise run check-headless-deps" "headless" "$(o '${{ steps.headless_deps.outcome }}')"
+            rec "mise run sync-ui-deps (vendor 再生成)" "mise run sync-ui-deps" "ui vendor" "$(o '${{ steps.sync_ui.outcome }}')"
+            rec "mise run setup-ui (npm ci)" "mise run setup-ui" "ui headless" "$(o '${{ steps.setup_ui.outcome }}')"
+            rec "mise run check-ui (typecheck+vendor)" "mise run check-ui" "ui headless" "$(o '${{ steps.check_ui.outcome }}')"
+            rec "mise run test-ui (vitest/happy-dom)" "mise run test-ui" "ui headless" "$(o '${{ steps.test_ui.outcome }}')"
+            rec "mise run build-ui (vite+manifest)" "mise run build-ui" "ui headless" "$(o '${{ steps.build_ui.outcome }}')"
+            rec "check-ruviform-rev --require-vendor (lock+REV+manifest)" "node tools/check-ruviform-rev.mjs --require-vendor" "ui vendor" "$(o '${{ steps.rev_full.outcome }}')"
+            rec "extra tasks (aggregate)" "mise run <synvelis_extra_tasks>" "extra dispatch input" "$(o '${{ steps.extra.outcome }}')"
+            # 未接続 lane（capability は足りるが検査入口が未 wiring — not_run と owner/再実行条件を正直記録）
+            rec "GUI-CONTRACT checks (public API/禁止依存/allowlist — GPUI 不要)" "-" "ui contract" "not_run" "RF #390 が Owner — ubuntu headless で実行可能だが Consumer 側検査 task 未接続。Consumer 側専用 mise task 接続時に extra_tasks/専用 lane で再実行（再分類は Owner 判断。extra_tasks 指定しても本行の分類は固定のまま）"
+            rec "GUI semantic/fake-oracle checks" "-" "ui semantic" "not_run" "GUI-SEMANTIC + SV #175-177 oracle が Owner — fake/headless oracle 未接続。接続後に再実行・再分類"
+            # capability-absent 固定行（実行しない — skip=pass にしない正直記録）
+            rec "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #313/#314 + SV #175-177 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
+            rec "PLUGIN-NATIVE-DOCK (実 plugin binary)" "-" "real-plugin" "unsupported" "RF #388/#389 + SV #176 — Floating/Generic fallback のみの成功は採用 Pass にしない"
+            rec "macOS/実 OS lanes" "-" "os-specific" "unsupported" "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
+            # 解決 SHA 記録後に consumer task が HEAD を動かしていないか再照合
+            drift=$(git -C "$CONSUMER_DIR" rev-parse HEAD 2>/dev/null || echo "")
+            if [ -n "$RESOLVED_SHA" ] && [ "$drift" != "$RESOLVED_SHA" ]; then
+              rec "post-lane HEAD drift check" "git rev-parse HEAD" "candidate tuple" "fail" "HEAD drift: recorded $RESOLVED_SHA, now ${drift:-gone} — tuple 不整合"
             fi
           fi
+          if ! node "$EV" finalize --file "$LANES_FILE" --out "$EVIDENCE_FILE" \
+            --summary "$GITHUB_STEP_SUMMARY" --status-out "$GITHUB_OUTPUT"; then
+            # finalize 自身の失敗でも最小証拠を残す（artifact 全終端経路の保証）
+            printf '{"schemaVersion":1,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple/v1","consumer":{"name":"synvelis"},"status":"fail","statusReason":"evidence_finalize_error"}\n' > "$EVIDENCE_FILE"
+            echo "status=fail" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+      - name: Upload evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: consumer-evidence-synvelis-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/consumer-evidence-synvelis.json
+          if-no-files-found: error
       - name: Cleanup credential
         if: always() && steps.gate.outputs.mode == 'deploy_key'
         run: |
@@ -481,17 +885,34 @@ jobs:
     needs: [preflight, verify-audiolens, verify-synvelis]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Aggregate evidence table
+        env:
+          EXPECTED_AL: ${{ inputs.audiolens_expected_sha }}
+          EXPECTED_SV: ${{ inputs.synvelis_expected_sha }}
         run: |
           set -euo pipefail
+          al_sha="${{ needs.verify-audiolens.outputs.resolved_sha || 'unknown' }}"
+          sv_sha="${{ needs.verify-synvelis.outputs.resolved_sha || 'unknown' }}"
+          exp_al="${EXPECTED_AL:--}"; exp_sv="${EXPECTED_SV:--}"
           {
             echo "# Cross-Repo Consumer Verify — $RUVIFORM_REV"
+            echo ""
+            echo "## 候補 tuple（contract: consumer-verify-tuple/v1）"
+            echo ""
+            echo "| element | value |"
+            echo "|---|---|"
+            echo "| ruviform candidate | $RUVIFORM_REV |"
+            echo "| audio-lens resolved | $al_sha (expected: $exp_al) |"
+            echo "| synvelis resolved | $sv_sha (expected: $exp_sv) |"
             echo ""
             echo "| Consumer | job result | status |"
             echo "|---|---|---|"
             echo "| AudioLens | ${{ needs.verify-audiolens.result }} | ${{ needs.verify-audiolens.outputs.status || 'unknown' }} |"
             echo "| Synvelis | ${{ needs.verify-synvelis.result }} | ${{ needs.verify-synvelis.outputs.status || 'unknown' }} |"
+            echo ""
+            echo "構造化証拠: consumer-evidence-{audiolens,synvelis}-attempt-${{ github.run_attempt }} artifact を参照"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Enforce not-run-is-not-pass
         run: |
@@ -505,9 +926,13 @@ jobs:
             exit 1
           fi
           if [ "$al_st" != "pass" ] && [ "$sv_st" != "pass" ]; then
-            echo "::error::no consumer lane produced evidence (all not run) — a green run requires at least one executed lane"
+            echo "::error::no consumer lane produced evidence (all not_run/unsupported) — a green run requires at least one executed lane"
             exit 1
           fi
-          if [ "$al_st" != "pass" ] && [ "$al_st" != "not_run" ]; then exit 1; fi
-          if [ "$sv_st" != "pass" ] && [ "$sv_st" != "not_run" ]; then exit 1; fi
-          echo "at least one consumer lane passed; all other lanes are not_run (recorded, not counted as pass)"
+          for st in "$al_st" "$sv_st"; do
+            if [ "$st" != "pass" ] && [ "$st" != "not_run" ] && [ "$st" != "unsupported" ]; then
+              echo "::error::consumer status is neither pass/not_run/unsupported (got: $st) — unknown must not pass"
+              exit 1
+            fi
+          done
+          echo "at least one consumer lane passed; not_run/unsupported lanes are recorded, not counted as pass"
