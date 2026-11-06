@@ -25,8 +25,8 @@ trait に対する初の実装済みバックエンド。
   F32 wire は IEEE-754 をそのまま書く（clip しない）。
 - completion 契約: `finalize()` → `WavReceipt` が唯一の完了レシート。
   `Drop` は best-effort であり完了保証とみなさない。永続化
-  （fsync + rename）は `ruviform-media-io` の `StagedOutput::publish`
-  の責務。
+  （sync + atomic publish + recovery）は `ruviform-io-file` の
+  `SealedFile::publish` の責務。
 
 ## 既知の制限（明示）
 
@@ -36,7 +36,9 @@ trait に対する初の実装済みバックエンド。
   を担当する。本クレートの round-trip テストは dev-dependency でそちらを使う）。
 - plain WAV は非ゼロ開始 pts を表現できないため、packet pts は
   連続性の順序情報として扱い `WavReceipt::first_pts_ticks` で診断報告する。
-- rename の原子性は same-FS の best-effort。OS/FS 横断の保証はしない。
+- atomic publish・durability・recovery は `ruviform-io-file` の
+  `SealedFile::publish` の分類済み契約に従う（達成不能な保証は
+  `Unsupported`/failure で報告。本クレート自身は publish を行わない）。
 
 ## 層・許可依存
 
@@ -44,7 +46,8 @@ trait に対する初の実装済みバックエンド。
 - 許可依存: `ruviform-media-io`（抽象境界）+ ドメインクレート直接依存
   （`ruviform-media-core`・`ruviform-audio-core`）
 - 外部依存: なし（pure-Rust、unsafe 不使用）。
-- dev-dependency: `ruviform-io-symphonia`（round-trip 検証専用）。
+- dev-dependency: `ruviform-io-symphonia`（round-trip 検証専用）、
+  `ruviform-io-file`（contract test の staged publish 専用）。
 
 ## RT 契約
 

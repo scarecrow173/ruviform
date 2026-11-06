@@ -28,10 +28,14 @@
 //!   processed but never emitted. [`TailSpec`] classifies the tail;
 //!   an undefined tail is a caller error, not a silent truncation.
 //! - **Output lifecycle** — emitted runs feed
-//!   `Encoder → Packet → Muxer` inside a [`StagedOutput`]: drain,
-//!   checked `finish`, optional reopen/verify, then `publish`. Partial
-//!   output can never reach the destination: any failure cleans the
-//!   temp file and leaves an existing destination untouched.
+//!   `Encoder → Packet → Muxer` inside a `ruviform-io-file`
+//!   [`StagedFile`]: drain, checked `finish`, `seal`, optional
+//!   readback verify, then `publish`. Failures before publish, and a
+//!   publish reporting `NotPublished`, clean the staged temp and leave
+//!   an existing destination untouched. A publish reporting
+//!   `Published` or `Indeterminate` keeps its `RecoveryHandle` inside
+//!   the [`PublishFailure`] — it is never auto-deleted, and the
+//!   destination may already hold the new content.
 //! - **Progress / cancel** — [`Progress`] counts processed engine
 //!   frames; [`CancellationToken`] is honored at every physical call
 //!   boundary and before drain/finalize/verify/publish.
@@ -42,21 +46,22 @@
 //! without the realtime deadline).
 
 use std::collections::BTreeMap;
-use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use ruviform_audio_core::{AudioBuffer, BufferSpec, ChannelLayout, SampleRate};
 use ruviform_exec::{CancellationToken, Progress};
 use ruviform_graph::{NodeId, PortId, ValidatedGraph};
+use ruviform_io_file::{
+    CleanupFailure, PublishEffect, PublishFailure, PublishFailureKind, PublishMode, PublishOptions,
+    PublishReceipt, SealedFile, StagedFile,
+};
 use ruviform_media_core::{
     ApplyStatus, BlockContract, EngineFrame, FaultKind, MediaDuration, MediaTime, MediaTimestamp,
     RejectReason, ScheduledEvent, SpanSink, TransportCommand, TransportPlan, TransportScheduler,
     TransportSpan, TransportStatus, event_engine_frame,
 };
-use ruviform_media_io::{
-    AudioFrame, Encoder, Error as MediaError, ErrorKind, Frame, Muxer, PublishOptions, StagedOutput,
-};
+use ruviform_media_io::{AudioFrame, Encoder, Error as MediaError, ErrorKind, Frame, Muxer};
 use ruviform_rt::RtContext;
 
 use crate::typed::{
@@ -244,47 +249,54 @@ pub struct OutputFacts {
 
 /// The staged output lifecycle bundle handed to [`render`].
 ///
-/// `make_muxer` receives an owned [`File::try_clone`] of the staged
-/// temp file — a second handle on the same open file description, so
-/// bytes the muxer writes land in the staged file and remain visible
-/// to `publish`'s sync/rename. Owning the handle keeps the muxer
-/// `'static` (boxed) while the original handle stays with
-/// [`StagedOutput`].
+/// `make_muxer` borrows the staged file as `&mut StagedFile` — a
+/// `Write + Seek + Send` sink, so a muxer like
+/// `WavMuxer<&mut StagedFile>` writes into the same staged temp the
+/// publish step later syncs and renames. The borrow ends when the
+/// muxer is dropped, before [`StagedFile::seal`].
 ///
-/// `publish` normally delegates to [`StagedOutput::publish`]; it is a
-/// closure so the publish stage (sync/close/rename) participates in the
-/// same failure-injection contract as the rest of the pipeline.
+/// `publish` normally delegates to [`SealedFile::publish`]; it is a
+/// closure so the publish stage (sync/close/atomic rename) participates
+/// in the same failure-injection contract as the rest of the pipeline.
 ///
 /// **RT contract:** non-RT only.
 pub struct RenderOutput<Mk, V, Pb> {
     /// Staged temp/destination pair (created by the caller).
-    pub staged: StagedOutput,
-    /// Muxer constructor over the cloned staged handle.
+    pub staged: StagedFile,
+    /// Muxer constructor over the borrowed staged file.
     pub make_muxer: Mk,
     /// Canonical planar-f32 encoder.
     pub encoder: Box<dyn Encoder>,
     /// Publish policy handed to `publish`.
     pub publish_options: PublishOptions,
-    /// Optional reopen/verify hook run on `staged.temp_path()` after
-    /// the muxer is finished and closed, before publish.
+    /// Optional verify hook run after the muxer is finished and the
+    /// staged file is sealed, before publish. The hook receives the
+    /// `&mut SealedFile` and must verify through
+    /// [`SealedFile::open_readback`] — it cannot consume the sealed
+    /// file, so it cannot bypass the publish decision.
     pub verify: Option<V>,
-    /// Publish step — normally `StagedOutput::publish`.
+    /// Publish step — normally `SealedFile::publish`.
     pub publish: Pb,
 }
 
-/// Terminal receipt of a successful render: published path plus the
-/// observable render facts. There is no receipt for a failed render —
-/// failure is a typed [`RenderError`], never a partial receipt.
+/// Terminal receipt of a successful render: published path, the
+/// publish evidence, and the observable render facts. There is no
+/// receipt for a failed render — failure is a typed [`RenderError`],
+/// never a partial receipt.
 ///
 /// Backend-specific muxer receipts (e.g. `WavReceipt`) are captured by
 /// the caller's own [`Muxer`] implementation when needed — the driver
 /// sees only the trait.
 ///
 /// **RT contract:** non-RT only — plain data.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct RenderReceipt {
     /// Published destination path.
     pub path: PathBuf,
+    /// The publish receipt: achieved `DurabilityEvidence`, post-publish
+    /// `TempState`, and the `RecoveryHandle` when a temp was retained.
+    /// Kept whole so publish evidence is never dropped silently.
+    pub publish: PublishReceipt,
     /// Audio frames emitted to the encoder (== `range` + tail).
     pub frames_emitted: u64,
     /// Physical `process` calls executed.
@@ -370,8 +382,13 @@ impl std::fmt::Display for PreflightError {
 impl std::error::Error for PreflightError {}
 
 /// Typed render failure. Every variant maps to one pipeline stage and
-/// carries that stage's evidence; on any `Err` the staged temp file is
-/// removed and the destination is untouched.
+/// carries that stage's evidence. On `Err` from any stage before
+/// publish — and on a publish that reports
+/// [`PublishEffect::NotPublished`] — the staged temp is cleaned
+/// (best-effort) and an existing destination is untouched. A publish
+/// reporting `Published`/`Indeterminate` keeps its `RecoveryHandle`
+/// and may have already replaced the destination; see the
+/// [`RenderError::Publish`] variant.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API policy.
 #[non_exhaustive]
@@ -425,8 +442,8 @@ pub enum RenderError {
         /// Events that could not be delivered.
         pending: usize,
     },
-    /// Encoder `send_frame`/`receive_packet` or muxer `write_packet`
-    /// failed — the write/encode stage.
+    /// Muxer construction, encoder `send_frame`/`receive_packet`, or
+    /// muxer `write_packet` failed — the write/encode stage.
     Output {
         /// Backend error (kind classifies disk-full vs corrupt vs …).
         source: MediaError,
@@ -448,15 +465,32 @@ pub enum RenderError {
     },
     /// Destination exists and the publish policy forbids overwrite —
     /// detected before any byte was rendered, or surfaced from a
-    /// `replace_existing == false` publish.
+    /// `PublishMode::CreateNew` publish.
     DestinationExists {
         /// Occupied destination.
         path: PathBuf,
     },
-    /// Publish (sync/close/rename) failed.
+    /// Publish (validate/sync/close/rename/dir-sync) failed. The
+    /// source is the whole [`PublishFailure`] — effect, phase,
+    /// achieved durability, and the `RecoveryHandle` for a retained or
+    /// `Indeterminate` temp are preserved, never flattened into a
+    /// media `Io` error.
+    ///
+    /// On `PublishEffect::NotPublished` the driver attempts temp
+    /// cleanup through the failure's `RecoveryHandle` before storing
+    /// the error. If that cleanup itself fails, the [`CleanupFailure`]
+    /// — which still owns a retry `RecoveryHandle` — is kept in
+    /// `cleanup`; the leftover is also diagnosable via
+    /// `source.info().temp_path()`. `cleanup` is `None` when cleanup
+    /// succeeded or the effect kept the handle inside `source`.
+    /// The payloads are boxed: they are cold-path evidence and keep
+    /// `RenderError` small.
     Publish {
-        /// Backend error.
-        source: MediaError,
+        /// Publish failure evidence.
+        source: Box<PublishFailure>,
+        /// Cleanup failure evidence for a `NotPublished` temp whose
+        /// removal failed — retains the retry `RecoveryHandle`.
+        cleanup: Option<Box<CleanupFailure>>,
     },
 }
 
@@ -488,7 +522,16 @@ impl std::fmt::Display for RenderError {
             Self::DestinationExists { path } => {
                 write!(f, "destination exists: {}", path.display())
             }
-            Self::Publish { source } => write!(f, "publish failed: {source}"),
+            Self::Publish { source, cleanup } => {
+                if cleanup.is_some() {
+                    write!(
+                        f,
+                        "publish failed: {source} (staged temp cleanup also failed)"
+                    )
+                } else {
+                    write!(f, "publish failed: {source}")
+                }
+            }
         }
     }
 }
@@ -500,8 +543,8 @@ impl std::error::Error for RenderError {
             Self::Output { source: e }
             | Self::Drain { source: e }
             | Self::Finalize { source: e }
-            | Self::Verify { source: e }
-            | Self::Publish { source: e } => Some(e),
+            | Self::Verify { source: e } => Some(e),
+            Self::Publish { source: e, .. } => Some(e),
             _ => None,
         }
     }
@@ -892,8 +935,13 @@ impl<P, F: InputFeeder> SpanSink<P> for RenderSink<'_, P, F> {
 /// `(position, source_sequence)` order.
 ///
 /// On `Ok` the destination holds a finished, published file. On `Err`
-/// nothing was published: the staged temp is cleaned and an existing
-/// destination is untouched.
+/// from a stage before publish, or on a publish reporting
+/// [`PublishEffect::NotPublished`], the staged temp is cleaned
+/// (best-effort) and an existing destination is untouched. A
+/// [`RenderError::Publish`] may instead report `Published` (the
+/// destination already holds the new file) or `Indeterminate`
+/// (outcome unknown, temp retained under its `RecoveryHandle`) — the
+/// effect is truthful evidence, never a false "nothing happened".
 ///
 /// **RT contract:** non-RT only — blocks on I/O.
 ///
@@ -913,13 +961,16 @@ pub fn render<P, F, Mk, V, Pb>(
 ) -> Result<RenderReceipt, RenderError>
 where
     F: InputFeeder,
-    Mk: FnOnce(File) -> Result<Box<dyn Muxer>, MediaError>,
-    V: FnOnce(&Path, &OutputFacts) -> Result<(), MediaError>,
-    Pb: FnOnce(StagedOutput, PublishOptions) -> Result<(), MediaError>,
+    Mk: for<'a> FnOnce(&'a mut StagedFile) -> Result<Box<dyn Muxer + 'a>, MediaError>,
+    V: FnOnce(&mut SealedFile, &OutputFacts) -> Result<(), MediaError>,
+    Pb: FnOnce(SealedFile, PublishOptions) -> Result<PublishReceipt, PublishFailure>,
 {
-    let dest_path = output.staged.dest_path().to_path_buf();
+    let dest_path = output.staged.destination().to_path_buf();
     preflight(prepared, transport, spec)?;
-    if output.staged.dest_existed() && !output.publish_options.replace_existing {
+    // Early refusal: skip rendering when a `CreateNew` publish can
+    // never succeed. This is a preflight saving, not the atomicity
+    // source — the publish itself enforces no-overwrite.
+    if output.publish_options.mode == PublishMode::CreateNew && dest_path.exists() {
         return Err(RenderError::DestinationExists { path: dest_path });
     }
     stage_transport(transport)?;
@@ -930,8 +981,8 @@ where
 
 /// Everything after preflight/staging: muxer construction over the
 /// staged sink, the sequential drive, and the checked output tail.
-/// `staged` must live in this frame — the muxer borrows its `&mut
-/// File` sink until `finish` completes.
+/// `staged` must live in this frame — the muxer borrows `&mut
+/// StagedFile` until `finish` completes and the muxer is dropped.
 #[expect(
     clippy::too_many_arguments,
     reason = "pipeline stages share one context"
@@ -953,9 +1004,9 @@ fn run_pipeline<P, F, Mk, V, Pb>(
 ) -> Result<RenderReceipt, RenderError>
 where
     F: InputFeeder,
-    Mk: FnOnce(File) -> Result<Box<dyn Muxer>, MediaError>,
-    V: FnOnce(&Path, &OutputFacts) -> Result<(), MediaError>,
-    Pb: FnOnce(StagedOutput, PublishOptions) -> Result<(), MediaError>,
+    Mk: for<'a> FnOnce(&'a mut StagedFile) -> Result<Box<dyn Muxer + 'a>, MediaError>,
+    V: FnOnce(&mut SealedFile, &OutputFacts) -> Result<(), MediaError>,
+    Pb: FnOnce(SealedFile, PublishOptions) -> Result<PublishReceipt, PublishFailure>,
 {
     let RenderOutput {
         mut staged,
@@ -966,16 +1017,8 @@ where
         publish,
     } = output;
 
-    let mut muxer: Box<dyn Muxer> = {
-        let handle = staged
-            .sink()
-            .and_then(|f| {
-                f.try_clone()
-                    .map_err(|e| MediaError::with_source(ErrorKind::Io, e))
-            })
-            .map_err(|e| RenderError::Output { source: e })?;
-        make_muxer(handle).map_err(|e| RenderError::Output { source: e })?
-    };
+    let mut muxer: Box<dyn Muxer + '_> =
+        make_muxer(&mut staged).map_err(|e| RenderError::Output { source: e })?;
 
     let max = u32::try_from(prepared.plan.max_frames).unwrap_or(u32::MAX);
     let contract = transport.scheduler.contract();
@@ -1049,25 +1092,58 @@ where
         range_end_with_tail: spec.range_end.saturating_add(spec.tail.frames()),
     };
 
+    // ---- seal / verify / publish -------------------------------------
+    // The muxer's `&mut StagedFile` borrow ended at `drop(muxer)`;
+    // `seal` is the type-level end of the write phase.
+    let mut sealed = staged.seal();
+
     if cancel.is_cancelled() {
         return Err(RenderError::Cancelled { phase: "verify" });
     }
     if let Some(verify) = verify {
-        verify(staged.temp_path(), &facts).map_err(|e| RenderError::Verify { source: e })?;
+        // Identity guard: the hook gets `&mut SealedFile` and could
+        // substitute a different sealed file (`mem::swap`) — a swapped
+        // file would publish to *its* destination while the receipt
+        // reports this one. `OperationId` is unique per staged file.
+        let sealed_id = sealed.operation_id();
+        verify(&mut sealed, &facts).map_err(|e| RenderError::Verify { source: e })?;
+        if sealed.operation_id() != sealed_id {
+            return Err(RenderError::Verify {
+                source: MediaError::from_kind(ErrorKind::InvalidData),
+            });
+        }
     }
 
     if cancel.is_cancelled() {
         return Err(RenderError::Cancelled { phase: "publish" });
     }
-    publish(staged, publish_options).map_err(|e| match e.kind() {
-        ErrorKind::InvalidValue => RenderError::DestinationExists {
-            path: dest_path.clone(),
-        },
-        _ => RenderError::Publish { source: e },
+    let publish_receipt = publish(sealed, publish_options).map_err(|mut failure| {
+        // Keep the destination-untouched contract: a publish that did
+        // not apply removes its temp through the recovery handle.
+        // `Published`/`Indeterminate` outcomes keep the handle inside
+        // the failure — never auto-deleted. A failed cleanup keeps its
+        // `CleanupFailure` (with the retry handle) on the error.
+        let mut cleanup = None;
+        if failure.effect() == PublishEffect::NotPublished
+            && let Some(handle) = failure.take_recovery_handle()
+            && let Err(failed) = handle.cleanup()
+        {
+            cleanup = Some(failed);
+        }
+        if failure.kind() == PublishFailureKind::DestinationExists && cleanup.is_none() {
+            return RenderError::DestinationExists {
+                path: dest_path.clone(),
+            };
+        }
+        RenderError::Publish {
+            source: Box::new(failure),
+            cleanup: cleanup.map(Box::new),
+        }
     })?;
 
     Ok(RenderReceipt {
         path: dest_path,
+        publish: publish_receipt,
         frames_emitted,
         blocks_processed,
         plan_generation: prepared.plan.generation,
