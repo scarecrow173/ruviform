@@ -100,7 +100,7 @@ metadata:
 
 ### Known Limitations（正直記録）
 
-- **実 runner 検証は review 基準 head `30205f2` で実測済み（修復後 head は別候補・正式 Pass へ転用しない）**: coordinator dispatch [run 42302538464](https://github.com/scarecrow173/ruviform/actions/runs/42302538464)（`gh workflow run --ref feature/consumer-verify-gui-candidate-gates`、RF `30205f2` + AL `04f1861` + SV `d8bf8ca` 期待 SHA 照合付き）。preflight success、両 Consumer clone・expected-SHA 照合 success、verify-synvelis 全 lane **pass**、verify-audiolens は `check-ci lane` で **fail**（al-observability `SinkConfig.span_events` 欠落の実 API 不整合 — Consumer 側追随待ち、gate 設計通り fail-closed）。summary の not-run-is-not-pass 強制も発火。`workflow_dispatch` は `--ref` でブランチ指定可能という前記述（merge 前実走不可）は実測で訂正済み。
+- **実 runner 検証は review 基準 head `30205f2` で実測済み（修復後 head は別候補・正式 Pass へ転用しない）**: coordinator dispatch [run 42302538464](https://github.com/scarecrow173/ruviform/actions/runs/42302538464)（`gh workflow run --ref feature/consumer-verify-gui-candidate-gates`、RF `30205f2` + AL `04f1861` + SV `d8bf8ca` 期待 SHA 照合付き）。preflight success、両 Consumer clone・expected-SHA 照合 success（AL resolved=expected=`04f1861`、SV resolved=expected=`d8bf8ca`、`shaMatch: true`）。verify-synvelis 全 lane **pass**（check/test/test-rt/headless-deps/sync-ui/setup/check/test/build-ui/--require-vendor manifest 検証）。verify-audiolens は dep/pin/fetch/`check-ruviform-lock` まで pass し `check-ci` で **fail** — `al-observability/src/lib.rs:264` の `SinkConfig.span_events` 初期化子欠落（E0063）。該当 field は RF #335（PR #348・`33d93dd`）で RF main `49de02cc` に既導入済みで本 PR が追加したものではない — AL main `04f1861` 側の未追随が実不整合として検出された（AL127 互換修復は別 task 登録・workflow で補償しない）。fail 以降の AL lane は `skipped` 派生記録、summary の not-run-is-not-pass 強制も発火。artifact: `F:/repositry/audio-products/.devin/evidence/gui-v2-replan-20261107/pr392-run-artifacts/`（旧 artifact の GUI 行名は修復前の混同名 — 修復後 head は分離行を出力）。`workflow_dispatch` は `--ref` でブランチ指定可能という前記述（merge 前実走不可）は実測で訂正済み。
 - **SHA fetch の境界**: GitHub は unadvertised commit の fetch を受理するが、GC 済み・未 push の SHA は clone step fail → `fail` 証拠として正直に出る。
 - **extra_tasks は operator 信頼入力**: pattern は shell 注入排除のみで意味論は制約しない。job `timeout-minutes: 120` が暴走境界。
 - **unsupported 行は ubuntu headless の宣言**: 実窓 host（RF #313/#314）・macOS/実 OS 正式受入の実測は本 run の範囲外。
@@ -113,8 +113,8 @@ metadata:
 | workflow 構文 | `mise exec -- actionlint`（全 workflow） | exit 0・エラー 0（`runner` context 誤用を検出→`$GITHUB_ENV` 方式に修正） |
 | hygiene | `mise exec -- prek run --all-files` | 全 hook pass（check-yaml/whitespace/eof/bom/private-key） |
 | checkout 機構 smoke | temp repo: `git init`+`fetch --depth 1 origin <sha|master>`+`checkout --detach FETCH_HEAD`+`rev-parse HEAD` | branch・40-hex SHA 双方で解決成功（SHA fetch は `uploadpack.allowAnySHA1InWant` 有効 remote で再現） |
-| 実 runner dispatch（基準 head `30205f2`） | [run 42302538464](https://github.com/scarecrow173/ruviform/actions/runs/42302538464) `gh workflow run --ref <branch>` | **partial pass**: preflight/clone/tuple 照合/verify-synvelis pass・verify-audiolens `check-ci` fail（実 API 不整合検出・fail-closed 動作確認）・summary 強制発火。修復後 head は未実走 |
-| Consumer scratch lane 実走 | run 42302538464（基準 head） | **SV pass / AL fail**（AL `check-ci` で実 API 不整合 `SinkConfig.span_events` — Consumer 側追随待ち。修復後 head は未実走） |
+| 実 runner dispatch（基準 head `30205f2`） | [run 42302538464](https://github.com/scarecrow173/ruviform/actions/runs/42302538464) `gh workflow run --ref <branch>` + artifact `pr392-run-artifacts/` | **partial pass**: preflight・clone・tuple 照合（両 Consumer shaMatch=true）・verify-synvelis 全 lane pass・verify-audiolens `check-ci` fail（`SinkConfig.span_events` E0063 — RF #335/#348 で RF main 既導入・AL 未追随の実不整合、AL127 別 task 登録）・fail 以降は skipped 派生・summary 強制発火。修復後 head は未実走 |
+| Consumer scratch lane 実走 | run 42302538464（基準 head） | **SV pass（全 14 lane）/ AL fail**（`check-ci` E0063 `SinkConfig.span_events` — RF #335/#348 で RF main 既導入・AL `04f1861` 未追随。修復は AL repo 責務・workflow 補償なし。修復後 head は未実走） |
 
 ## Links
 
