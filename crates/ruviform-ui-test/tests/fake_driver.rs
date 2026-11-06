@@ -214,8 +214,8 @@ fn post_event_buffers_until_ready_then_flushes() {
     let delivered = driver.events_for(w);
     assert_eq!(delivered.len(), 2);
     // Order and identity preserved: r1 precedes r2.
-    assert_eq!(result_id(&delivered[0]), "r1");
-    assert_eq!(result_id(&delivered[1]), "r2");
+    assert_eq!(result_id(delivered[0]), "r1");
+    assert_eq!(result_id(delivered[1]), "r2");
     driver.post_event(w, &Event::result_ok("r3", json!({"a": 3})));
     assert_eq!(driver.events_for(w).len(), 3);
 }
@@ -240,7 +240,7 @@ fn post_event_backlog_drops_oldest() {
     assert_eq!(result_id(delivered.first().unwrap()), "r4");
     assert_eq!(
         result_id(delivered.last().unwrap()),
-        format!("r{}", MAX_EVENT_BACKLOG + 3)
+        format!("r{}", MAX_EVENT_BACKLOG + 3).as_str()
     );
 }
 
