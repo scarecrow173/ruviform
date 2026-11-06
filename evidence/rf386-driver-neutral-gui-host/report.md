@@ -3,7 +3,8 @@
 - Issue: https://github.com/scarecrow173/ruviform/issues/386
 - Branch: `scarecrow173/rf386-gui-v2`(spec 記載の `feature/gui-neutral-host-gpui-driver` からの相違 — Orca 生成 branch をそのまま使用。rename はしなかった)
 - Base: `49de02c` → main `ad99d18`(CI PR #392)を merge 済み
-- Head: 本 report 作成時点の `git rev-parse HEAD` は別途 status で共有
+- Head: `17454a5e06c7d514fd63686c9c434ae923cc735f`(origin push 済み)
+- PR: https://github.com/scarecrow173/ruviform/pull/394 (draft・Refs)
 
 ## 実施内容
 
@@ -43,7 +44,9 @@
 
 - Reviewer A(契約面): PASS-WITH-NOTES → 全 finding 反映(create_window Errors 記載、malformed parity、`focus(false)` honest error、Resized/Moved 遷移差分、design doc 同期、Intent::new、DriverEvent→runtime 対応表記)
 - Reviewer B(実装): PASS-WITH-NOTES → 全 finding 反映(sweep_destroyed の guard 跨ぎ修正、position:None→Bounds::centered、RequestClose 死 window drop、IntentSink dead drop、inbox bound、doc 修正、backlog 試験の順序/識別 assert 強化)
-- Validator/Judge: 本 report の検証表と review 反映を以って親 agent が判定
+- Validator: VALIDATED(全 claim をコードで確認、gpui 0.2.2 一次情報と照合)
+- Judge: MERGE-READY・blocker なし(minor 3 件を対応: gpui README/index 追加、test-spec/t3 の doc 同期、ui/ui-test README 更新)
+- 記録: 独立 reviewer 2 名 → validator → judge を runtime subagent で実施
 
 ## RF388/389 への受け渡し
 
