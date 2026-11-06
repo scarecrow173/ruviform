@@ -52,6 +52,10 @@
 //   TRACKER_EVENT_PATH=event.json GH_TOKEN=*** node ci/tracker/tracker.mjs \
 //       [--repo owner/name] [--branch main] [--workflow ci] [--label ci-failure] \
 //       [--workflow-file ci.yml] [--report out.json] [--summary out.md]
+//   GH_TOKEN=*** node ci/tracker/tracker.mjs --reconcile   # no event payload:
+//       reconcile purely from authoritative run history + stored marker state
+//       (used by the scheduled/manual reconcile entry — GITHUB_TOKEN-dispatched
+//       runs fire no workflow_run event, so history is the only signal).
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
@@ -915,10 +919,25 @@ async function applyActions(actions, scope, client) {
 // the tracker job must fail and stay diagnosable rather than swallow a
 // permission or outage problem, and incomplete evidence must never produce
 // a close or a silent success.
-export async function run({ payload, client, scope }) {
-  const classified = classifyRun(payload, scope);
+export async function run({ payload, client, scope, reconcile = false }) {
+  // Mode separation is explicit: reconcile mode never interprets an event
+  // payload — evidence comes solely from authoritative run history plus
+  // stored marker state, so a GITHUB_TOKEN-dispatched completion that fired
+  // no workflow_run event is still reconciled.
+  if (reconcile && payload != null) {
+    throw new Error("reconcile mode does not accept an event payload");
+  }
+  // Event mode requires a webhook payload OBJECT — a file that parses to
+  // null/scalar/array is a corrupt event path, not a legitimate skip;
+  // erroring keeps a malformed payload distinguishable from a valid
+  // out-of-scope event.
+  if (!reconcile && (payload == null || typeof payload !== "object" || Array.isArray(payload))) {
+    throw new Error("event mode requires a JSON object event payload");
+  }
+  const classified = reconcile ? { kind: "reconcile" } : classifyRun(payload, scope);
   const result = {
     scope,
+    mode: reconcile ? "reconcile" : "event",
     classified,
     effective: null,
     canonical: null,
@@ -1240,6 +1259,7 @@ function summaryLines(result) {
   const lines = [
     `## ci-issue-tracker`,
     "",
+    `- mode: \`${result.mode ?? "event"}\``,
     `- scope: \`${result.scope.repo}\` × \`${result.scope.workflow}\` × \`${result.scope.branch}\``,
     `- trigger run: ${c.run ? `id ${c.run.id}a${c.run.attempt} · sha \`${c.run.sha}\` · conclusion \`${c.run.conclusion}\` · ${c.run.url ?? "?"}` : "-"}`,
     `- classified: \`${c.kind}\`${c.reason ? ` (${c.reason})` : ""}`,
@@ -1258,9 +1278,17 @@ function summaryLines(result) {
   return lines.join("\n");
 }
 
-export async function main(argv = process.argv, env = process.env) {
+const USAGE =
+  "Usage: node ci/tracker/tracker.mjs [--reconcile] [--event <file>] [--repo <owner/name>] [--branch <b>] [--workflow <name>] [--workflow-file <f.yml>] [--label <l>] [--report <file>] [--summary <file>]  (event path also read from $TRACKER_EVENT_PATH/$GITHUB_EVENT_PATH; ignored under --reconcile)";
+
+// Pure argv/env → args parser so the mode contract is unit-testable:
+// event mode (default) requires an event path from --event or the ambient
+// env vars; reconcile mode forbids --event and never consults the ambient
+// paths — no implicit TRACKER_EVENT_PATH interpretation across modes.
+export function parseTrackerArgs(argv, env = {}) {
   const args = {
-    event: env.TRACKER_EVENT_PATH ?? env.GITHUB_EVENT_PATH ?? null,
+    mode: "event",
+    event: null,
     repo: env.GITHUB_REPOSITORY ?? null,
     branch: "main",
     workflow: "ci",
@@ -1269,36 +1297,57 @@ export async function main(argv = process.argv, env = process.env) {
     report: null,
     summary: null,
   };
+  let eventSet = false;
+  let help = false;
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
-    if (a === "--event") args.event = next();
-    else if (a === "--repo") args.repo = next();
+    if (a === "--reconcile") args.mode = "reconcile";
+    else if (a === "--event") {
+      args.event = next();
+      eventSet = true;
+    } else if (a === "--repo") args.repo = next();
     else if (a === "--branch") args.branch = next();
     else if (a === "--workflow") args.workflow = next();
     else if (a === "--workflow-file") args.workflowFile = next();
     else if (a === "--label") args.label = next();
     else if (a === "--report") args.report = next();
     else if (a === "--summary") args.summary = next();
-    else if (a === "--help" || a === "-h") {
-      console.log(
-        "Usage: node ci/tracker/tracker.mjs [--event <file>] [--repo <owner/name>] [--branch <b>] [--workflow <name>] [--workflow-file <f.yml>] [--label <l>] [--report <file>] [--summary <file>]  (event path also read from $TRACKER_EVENT_PATH/$GITHUB_EVENT_PATH)",
-      );
-      process.exit(0);
-    } else {
-      console.error(`error: unknown argument ${a}`);
-      process.exit(2);
+    else if (a === "--help" || a === "-h") help = true;
+    else return { ok: false, error: `unknown argument ${a}` };
+  }
+  if (help) return { ok: true, help: true, args };
+  if (args.mode === "reconcile") {
+    if (eventSet) return { ok: false, error: "--event cannot be combined with --reconcile" };
+    args.event = null;
+  } else {
+    args.event = args.event ?? env.TRACKER_EVENT_PATH ?? env.GITHUB_EVENT_PATH ?? null;
+    if (args.event == null) {
+      return {
+        ok: false,
+        error: "no event payload (pass --event <file> or set TRACKER_EVENT_PATH, or use --reconcile)",
+      };
     }
   }
-  if (args.event == null) {
-    console.error("error: no event payload (pass --event <file> or set TRACKER_EVENT_PATH)");
-    process.exit(2);
-  }
   if (args.repo == null) {
-    console.error("error: no repo (pass --repo owner/name or set GITHUB_REPOSITORY)");
+    return { ok: false, error: "no repo (pass --repo owner/name or set GITHUB_REPOSITORY)" };
+  }
+  return { ok: true, args };
+}
+
+export async function main(argv = process.argv, env = process.env) {
+  const parsed = parseTrackerArgs(argv, env);
+  if (!parsed.ok) {
+    console.error(`error: ${parsed.error}`);
     process.exit(2);
   }
-  const payload = JSON.parse(readFileSync(args.event, "utf8"));
+  if (parsed.help) {
+    console.log(USAGE);
+    process.exit(0);
+  }
+  const args = parsed.args;
+  const payload =
+    args.mode === "reconcile" ? null : JSON.parse(readFileSync(args.event, "utf8"));
   const scope = {
     ...defaultScope(args.repo),
     branch: args.branch,
@@ -1307,11 +1356,12 @@ export async function main(argv = process.argv, env = process.env) {
     label: args.label,
   };
   const client = makeGhClient({ repo: args.repo });
-  const result = await run({ payload, client, scope });
+  const result = await run({ payload, client, scope, reconcile: args.mode === "reconcile" });
 
   const report = {
     schemaVersion: 1,
     kind: "ci-issue-tracker",
+    mode: result.mode,
     repo: args.repo,
     scope: { workflow: scope.workflow, branch: scope.branch, label: scope.label },
     classified: result.classified,
