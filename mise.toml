@@ -231,6 +231,13 @@ run = "cargo clippy -p ruviform-ui-gpui --all-targets --features gpui -- -D warn
 [tasks.test-ui-gpui]
 description = "Run gpui-feature tests for the UI GPUI adapter (real OS window behavior is manual verification)"
 run = "cargo test -p ruviform-ui-gpui --features gpui"
+# Canonical manual-verification entry for the minimal native Window
+# fixture: opens a real OS window on the local session — run it on a
+# real OS only, never as a headless/CI pass. RF388/RF389 real-OS
+# evidence is recorded through this entry point.
+[tasks.example-ui-gpui-minimal]
+description = "Run the minimal GPUI Window fixture on the real OS session (manual verification entry — not a headless/CI lane)"
+run = "cargo run -p ruviform-ui-gpui --features gpui --example minimal_window"
 
 # UI npm dependency install tasks (Issue #330): each ui/* package's
 # lockfile-driven `npm ci` lives in exactly one task. `sources` (lockfile +

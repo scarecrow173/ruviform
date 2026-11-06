@@ -37,6 +37,7 @@
 | `mise run check-ui-gpui` (`cargo check -p ruviform-ui-gpui --features gpui --all-targets`) | exit 0(example 含む) |
 | `mise run lint-ui-gpui` (`cargo clippy ... --features gpui -- -D warnings`) | exit 0 |
 | `mise run test-ui-gpui` (`cargo test -p ruviform-ui-gpui --features gpui`) | exit 0 |
+| `mise run example-ui-gpui-minimal` (`cargo run -p ruviform-ui-gpui --features gpui --example minimal_window`) | NotRun — 実 OS session での手動検証入口として登録済み(実 Window 表示/入力は未観測)。headless では実行しない |
 
 ## Review protocol
 
@@ -46,7 +47,7 @@
 
 ## RF388/389 への受け渡し
 
-- 最小 Window fixture 利用: `cargo run -p ruviform-ui-gpui --features gpui --example minimal_window`
+- 最小 Window fixture 利用(正規入口): `mise run example-ui-gpui-minimal`(実 OS session でのみ実行)
 - 拡張点: `crates/ruviform-ui-gpui/src/lib.rs` の `RvfRoot`(root view 差替 seam)、`spec_options`(WindowOptions mapping)、`refresh_monitors`(per-display scale 精度化)
 - capability 宣言点: `WindowCapabilities::native_surface_slot`/`ime` は Unsupported 宣言済みで Supported 化は RF388/389 実装時
 - `WindowSpec::position: Option<LogicalPosition>` は layout restore(#182)用
