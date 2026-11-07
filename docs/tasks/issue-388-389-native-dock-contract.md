@@ -68,3 +68,12 @@ metadata:
 
 test-spec 全ケース green + workspace lint/fmt/test green。実機
 PoC 行は Blocked/NotRun 記録のまま（本 dispatch 範囲外）。
+
+## 追補: Issue #389 DoD 再検証（設計 `docs/designs/issue-389-plugin-editor-session.md` 改訂 1）
+
+- [x] T-6 refused open の close が instance を塞ぐ欠陥を修正（`editor_live`）・ES-19 追加
+- [x] T-7 L0 pass-through（`InProcessEditorOps::new`）を廃止し `with_redeemer` に一本化
+- [x] T-8 L0 `capabilities()` を open 成功前は全 Unsupported に（ES-24）
+- [x] T-9 terminal once の async 検証（ES-20/ES-21）・Failed+live close（ES-22）・名前検査（ES-23）
+- [ ] T-10 実 Plugin/Format の L0/L1 capability 実機受入（NotRun・follow-up）
+- [ ] T-11 Floating への明示的 degrade 経路（未実装・follow-up）

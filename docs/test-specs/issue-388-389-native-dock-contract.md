@@ -126,9 +126,15 @@ fake `EditorSessionOps`（応答を制御）+ 実 `InProcessEditorOps`
 | ES-13 | `ops` timeout（fake clock） | `Failed{Timeout}`・request 世代一致の場合のみ |
 | ES-14 | `PluginEditorSessions` 同 instance 2 度目 `begin_session` | `Err(SessionBusy)`（≤1 live） |
 | ES-15 | `notify_terminated(instance)` で全 live session 収束 | 全 `Terminated`・`Closed`・DSP 独立 |
-| ES-16 | `InProcessEditorOps` + stub plugin `open_gui`=`Ok` | `Attached`・`GuiParentToken::new` が内部経由 |
+| ES-16 | `InProcessEditorOps` + stub plugin `open_gui`=`Ok` | `Attached`・lease は `LeaseRedeemer` 経由で token 化（pass-through なし） |
 | ES-17 | `InProcessEditorOps` + stub plugin `open_gui`=`Err(Unsupported)` | `Failed{Unsupported}`・`HostError`→`EditorOpError` 写像 |
 | ES-18 | `L1EditorOps` 全 ops | 全て `EditorOpError::Unsupported`・wire 不変・L0 退化なし |
+| ES-19 | L0 open 拒否（plugin `open_gui`=`Unsupported`）→ 同 session を `close` | adapter `CloseGui` を呼ばず `Closed` 収束・instance 束縛解放（次の `begin_session` が成功）。`editor_live` 規約（Issue #389 DoD 再検証で発見・修正） |
+| ES-20 | `begin_open` 中に `notify_terminated(HostLost)` → 遅延 `complete_attach(Ok)` | `Terminated` 1 回・遅延完了は `StaleRequest`・以後の notify/open は無視・無イベント |
+| ES-21 | `Failed` → `begin_recover` 中に `notify_terminated(WindowLost)` → 遅延完了 | `Terminated` 1 回・遅延完了 `StaleRequest`・`Closed` |
+| ES-22 | attach 成功後 `reattach` 拒否（`Failed`）→ `close` | editor は生存扱いのため adapter `close` を呼ぶ（拒否は `Ops` として可視・`Failed{HostLost}`） |
+| ES-23 | `editor_session.rs` ソースに `gpui`/`wry`/`winit`/`HWND`/`NSView`/`XID`/`raw_window_handle` が無い | session 面に GUI toolkit・OS window handle 名が現れない（source 静的検査・契約の機械検証） |
+| ES-24 | L0 `capabilities()`（open 前）| `EditorCapabilities::default()`（全 Unsupported）。dock/close は open 成功の戻り値でのみ主張 |
 
 ## Fake NativeSlot driver 契約ケース（`crates/ruviform-ui-test/tests/native_slot_contract.rs`）
 

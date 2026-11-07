@@ -16,8 +16,9 @@ use ruviform_plugin_core::{
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
     EditorSessionOps, EditorSessionState, EditorSize, HostCommand, HostError, HostReply,
-    InProcessEditorOps, InProcessHost, L1EditorOps, ParentSlotLease, Plugin, PluginEditorSessionId,
-    PluginEditorSessions, PluginFactory, PluginHandle, SessionFailCause, Support, erase,
+    InProcessEditorOps, InProcessHost, L1EditorOps, LeaseRedeemer, ParentSlotLease, Plugin,
+    PluginEditorSessionId, PluginEditorSessions, PluginFactory, PluginHandle, SessionFailCause,
+    Support, erase,
 };
 
 // ---- shared fixtures -------------------------------------------------
@@ -305,6 +306,89 @@ fn notify_terminated_fires_once_and_late_callbacks_ignored() {
     assert_eq!(
         session.open(&mut ops, &lease(), SIZE, AttachMode::Docked),
         Err(EditorSessionError::InvalidState)
+    );
+}
+
+#[test]
+fn terminate_during_inflight_open_fires_once_and_rejects_late_completion() {
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance()).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    let request = session.begin_open(AttachMode::Docked).unwrap();
+    session.notify_terminated(SessionFailCause::HostLost);
+    assert_eq!(
+        session.drain_events(),
+        vec![EditorSessionEvent::Terminated {
+            cause: SessionFailCause::HostLost
+        }]
+    );
+    // The driver's late attach callback must not revive the session.
+    assert_eq!(
+        session.complete_attach(request, Ok(())),
+        Err(EditorSessionError::StaleRequest)
+    );
+    session.notify_terminated(SessionFailCause::HostLost);
+    assert_eq!(session.state(), EditorSessionState::Closed);
+    assert_eq!(session.drain_events(), vec![]);
+    assert_eq!(
+        session.begin_open(AttachMode::Docked),
+        Err(EditorSessionError::InvalidState)
+    );
+}
+
+#[test]
+fn terminate_during_inflight_recover_fires_once_and_rejects_late_completion() {
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance()).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    let mut ops = FakeOps::ok().open(Err(EditorOpError::Timeout));
+    let _ = session.open(&mut ops, &lease(), SIZE, AttachMode::Docked);
+    let request = session.begin_recover(AttachMode::Docked).unwrap();
+    session.drain_events();
+    session.notify_terminated(SessionFailCause::WindowLost);
+    assert_eq!(
+        session.drain_events(),
+        vec![EditorSessionEvent::Terminated {
+            cause: SessionFailCause::WindowLost
+        }]
+    );
+    assert_eq!(
+        session.complete_attach(request, Ok(())),
+        Err(EditorSessionError::StaleRequest)
+    );
+    assert_eq!(session.state(), EditorSessionState::Closed);
+    assert_eq!(session.drain_events(), vec![]);
+}
+
+#[test]
+fn failed_reattach_keeps_live_editor_and_closes_through_adapter() {
+    // A refused re-attach may leave the editor alive, so the close must
+    // still reach the adapter (and its refusal surfaces, not a silent
+    // conclusion).
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance()).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    let mut ops = FakeOps {
+        reattach_result: Err(EditorOpError::Plugin),
+        close_result: Err(EditorOpError::HostLost),
+        ..FakeOps::ok()
+    };
+    session
+        .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+        .unwrap();
+    assert_eq!(
+        session.reattach(&mut ops, &lease()),
+        Err(EditorSessionError::Ops(EditorOpError::Plugin))
+    );
+    assert_eq!(
+        session.close(&mut ops),
+        Err(EditorSessionError::Ops(EditorOpError::HostLost))
+    );
+    assert_eq!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::HostLost
+        }
     );
 }
 
@@ -605,6 +689,13 @@ fn host_with_plugin(gui_supported: bool) -> InProcessHost {
     host
 }
 
+/// Stands in for the OS-adapter issuer: maps the lease payload to the
+/// raw parent token the plugin receives. The real issuer validates the
+/// lease first (see `l0_redeemer_refusal_blocks_open_and_never_issues_opengui`).
+fn token_redeemer() -> Box<LeaseRedeemer<'static>> {
+    Box::new(|lease: &ParentSlotLease| Ok(GuiParentToken::new(lease.raw())))
+}
+
 fn instantiate(host: &mut InProcessHost) -> PluginHandle {
     match host
         .execute(HostCommand::Instantiate {
@@ -625,7 +716,7 @@ fn l0_inprocess_ops_opens_and_closes_real_gui_path() {
     let id = sessions.begin_session(instance).unwrap();
     let session = sessions.session_mut(id).unwrap();
     {
-        let mut ops = InProcessEditorOps::new(&mut host, instance);
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
         session
             .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
             .expect("open via InProcessHost");
@@ -649,7 +740,7 @@ fn l0_floating_open_is_explicitly_unsupported_not_faked() {
     let id = sessions.begin_session(instance).unwrap();
     let session = sessions.session_mut(id).unwrap();
     {
-        let mut ops = InProcessEditorOps::new(&mut host, instance);
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
         assert_eq!(
             session.open(&mut ops, &lease(), SIZE, AttachMode::Floating),
             Err(EditorSessionError::Ops(EditorOpError::Unsupported))
@@ -666,7 +757,7 @@ fn l0_unsupported_open_gui_maps_to_failed_not_pass() {
     let id = sessions.begin_session(instance).unwrap();
     let session = sessions.session_mut(id).unwrap();
     {
-        let mut ops = InProcessEditorOps::new(&mut host, instance);
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
         assert_eq!(
             session.open(&mut ops, &lease(), SIZE, AttachMode::Docked),
             Err(EditorSessionError::Ops(EditorOpError::Unsupported))
@@ -678,6 +769,48 @@ fn l0_unsupported_open_gui_maps_to_failed_not_pass() {
             }
         );
     }
+}
+
+#[test]
+fn l0_advertises_no_capability_before_an_accepted_open() {
+    // The L0 surface cannot query plugin GUI support, so nothing may be
+    // claimed before an open proves dock/close.
+    let mut host = host_with_plugin(true);
+    let instance = instantiate(&mut host);
+    let ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+    assert_eq!(
+        ops.capabilities(PluginEditorSessionId::new(0, 0)),
+        Ok(EditorCapabilities::default())
+    );
+}
+
+#[test]
+fn refused_open_closes_without_adapter_op_and_frees_instance() {
+    // A refused open never produced a plugin editor, so the session
+    // must conclude without calling `CloseGui` (which the plugin would
+    // refuse too). Otherwise the `Failed` session pins the instance:
+    // `begin_session` would return `SessionBusy` for every later editor.
+    let mut host = host_with_plugin(false);
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        let session = sessions.session_mut(id).unwrap();
+        assert!(
+            session
+                .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+                .is_err()
+        );
+        session
+            .close(&mut ops)
+            .expect("closing a never-attached session needs no adapter op");
+        assert_eq!(session.state(), EditorSessionState::Closed);
+    }
+    sessions.end_session(id).expect("concluded session retires");
+    sessions
+        .begin_session(instance)
+        .expect("instance is free for a new editor session");
 }
 
 #[test]
@@ -821,4 +954,26 @@ fn l1_editor_ops_refuses_every_op_and_never_degrades() {
         ops.reattach(session_id, &lease()),
         Err(EditorOpError::Unsupported)
     );
+}
+
+#[test]
+fn session_surface_names_no_gui_toolkit_or_os_window_handle() {
+    // The session module is the driver-neutral surface: it must not name
+    // a GUI toolkit or an OS window handle. The raw parent token exists
+    // only behind the adapter-side `LeaseRedeemer` seam.
+    let source = include_str!("../src/editor_session.rs");
+    for banned in [
+        "gpui",
+        "wry",
+        "winit",
+        "HWND",
+        "NSView",
+        "XID",
+        "raw_window_handle",
+    ] {
+        assert!(
+            !source.contains(banned),
+            "editor_session names `{banned}` on its public surface"
+        );
+    }
 }
