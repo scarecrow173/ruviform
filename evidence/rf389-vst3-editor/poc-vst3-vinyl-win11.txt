@@ -1,0 +1,33 @@
+[poc] start os=windows
+[poc] capabilities=WindowCapabilities { resize: Supported, focus: Supported, scale_factor: Supported, multi_window: Supported, ime: Unsupported, native_surface_slot: Supported }
+[poc] window=w1
+[poc] vst3_path=C:/Program Files/Common Files/VST3/iZotope/Vinyl.vst3
+[poc] vst3_size=2045952
+[poc] vst3_descriptors=1
+[poc] vst3_plugin id=69545356565a696e5a6f746f70652056 name=Vinyl vendor= version=1.12.0
+[poc] plugin_id=69545356565a696e5a6f746f70652056 vst3_mode=true
+[poc] instance=PluginHandle { slot: 0, generation: 0 }
+[poc] initialize=ok
+[poc] ready
+[poc] declare_slot=ok index=0
+[poc] lease_parent=ok container_hwnd=0x1151820
+[poc] open=ok caps_dock=Supported caps_close=Supported
+[poc] editor_hwnd=0x20f1bd6 parent_token=0x1151820 opens=0
+[poc] editor_rect=Some((360, 192, 553, 400)) parenting_ok=true editor_visible=true
+[poc] set_geometry=true rect_before=Some((360, 192, 553, 400)) rect_after=Some((400, 242, 553, 400))
+[poc] hide=true child_visible=false
+[poc] show=true child_visible=true
+[poc] focus=true focus_hwnd=0x1151820
+[poc] close=true state=Some(Closed) closes=0 child_alive=false
+[poc] release_lease=true container_alive=false
+[poc] release_slot=true
+[poc] slot_event=Declared { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Leased { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=GeometryChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=LeaseRevoked { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Destroyed { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] done state=Some(Closed)
+[poc] done state=Some(Closed)
+[poc] exited

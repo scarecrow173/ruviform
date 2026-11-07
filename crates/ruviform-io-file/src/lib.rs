@@ -107,7 +107,10 @@ mod os;
 mod outcome;
 mod platform;
 mod receipt;
+pub mod rooted;
 mod staged;
+#[doc(hidden)]
+pub mod vfs;
 
 pub use error::{FileError, FileErrorKind};
 pub use options::{Durability, PublishMode, PublishOptions, VisibilityRequirement};

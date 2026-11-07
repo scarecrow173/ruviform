@@ -68,7 +68,7 @@ relations:
     - "docs/designs/issue-390-driver-contract-lab.md"
   verifies: []
   verified-by:
-    - "docs/test-specs/issue-390-driver-contract-lab.md"
+    - "docs/test-specs/issue-390-driver-boundary-lab.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/262"
   defers: []

@@ -302,6 +302,28 @@ fn parent_of(hwnd: usize) -> usize {
     unsafe { GetParent(hwnd as HWND) as usize }
 }
 
+/// The first child HWND of `parent` — how the harness discovers the
+/// editor window a real external plugin created under the container
+/// (the in-process probe reports its own HWND; a third-party binary
+/// does not, so we observe the OS truth directly).
+#[expect(unsafe_code)]
+fn first_child_of(parent: u64) -> usize {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::EnumChildWindows;
+    unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> i32 {
+        // SAFETY: `lparam` is the `*mut Vec<usize>` the caller passed;
+        // it outlives this synchronous enumeration.
+        unsafe { (*(lparam as *mut Vec<usize>)).push(hwnd as usize) };
+        1
+    }
+    let mut found: Vec<usize> = Vec::new();
+    // SAFETY: query-only enumeration; `found` outlives the call.
+    unsafe {
+        EnumChildWindows(parent as HWND, Some(enum_proc), &raw mut found as LPARAM);
+    }
+    found.first().copied().unwrap_or(0)
+}
+
 /// The HWND holding keyboard focus.
 #[expect(unsafe_code)]
 fn focus_hwnd() -> usize {
@@ -340,6 +362,67 @@ fn make_ops(
     )
 }
 
+/// Registers the plugin half and returns `(plugin_id, vst3_mode)`.
+///
+/// With `--features vst3` and `RVF_POC_VST3_PATH` set, loads the real
+/// external VST3 module through the `host` bridge and registers every
+/// scanned class — the in-process probe stays the deterministic
+/// default for every other configuration. `RVF_POC_VST3_PLUGIN_ID`
+/// selects one class when the module ships several; otherwise the
+/// first scanned descriptor is driven.
+#[cfg(feature = "vst3")]
+fn register_plugin(host: &mut InProcessHost, shared: &Rc<ProbeShared>) -> (String, bool) {
+    use ruviform_plugin_vst3::host::Vst3Library;
+    if let Some(path) = std::env::var_os("RVF_POC_VST3_PATH") {
+        let path = std::path::PathBuf::from(path);
+        let size = std::fs::metadata(&path).map_or(0, |m| m.len());
+        ev(&format!("vst3_path={}", path.display()));
+        ev(&format!("vst3_size={size}"));
+        match Vst3Library::load(&path) {
+            Ok(library) => {
+                let descriptors = library.descriptors().to_vec();
+                ev(&format!("vst3_descriptors={}", descriptors.len()));
+                for factory in library.factories() {
+                    host.register_factory(Box::new(factory));
+                }
+                let wanted = std::env::var("RVF_POC_VST3_PLUGIN_ID").ok();
+                let id = match wanted {
+                    Some(w) if descriptors.iter().any(|d| d.id == w) => w,
+                    _ => descriptors
+                        .first()
+                        .map(|d| d.id.to_string())
+                        .unwrap_or_default(),
+                };
+                if let Some(d) = descriptors.iter().find(|d| d.id == id) {
+                    ev(&format!(
+                        "vst3_plugin id={} name={} vendor={} version={}",
+                        d.id, d.name, d.vendor, d.version
+                    ));
+                }
+                return (id, true);
+            }
+            Err(e) => {
+                ev(&format!("vst3_load=fail error={e:?}"));
+                std::process::exit(3);
+            }
+        }
+    }
+    ev("vst3_path=unset mode=probe");
+    host.register_factory(Box::new(ProbeFactory {
+        shared: shared.clone(),
+    }));
+    (PROBE_ID.to_string(), false)
+}
+
+/// Probe-only registration for non-`vst3` builds.
+#[cfg(not(feature = "vst3"))]
+fn register_plugin(host: &mut InProcessHost, shared: &Rc<ProbeShared>) -> (String, bool) {
+    host.register_factory(Box::new(ProbeFactory {
+        shared: shared.clone(),
+    }));
+    (PROBE_ID.to_string(), false)
+}
+
 // ---- the PoC state machine -------------------------------------------
 
 /// Ordered stages; each stage counter settles a fixed number of ticks
@@ -366,6 +449,9 @@ struct Poc {
     slot: Option<SurfaceSlotId>,
     slot_lease: Option<SlotLease>,
     probe: Rc<ProbeShared>,
+    /// Real-external-VST3 mode — the editor HWND is discovered via
+    /// `EnumChildWindows` instead of plugin-reported.
+    vst3_mode: bool,
     stage: Stage,
     /// Child rect snapshot before the move (for delta verification).
     rect_before_move: Option<(i32, i32, i32, i32)>,
@@ -432,6 +518,13 @@ impl Poc {
         };
         match open_result {
             Ok(caps) => {
+                if self.vst3_mode {
+                    // The external plugin does not report its editor
+                    // HWND — observe the container's children directly
+                    // and pin the parent token for the parenting check.
+                    self.probe.parent_token.set(container);
+                    self.probe.child_hwnd.set(first_child_of(container));
+                }
                 ev(&format!(
                     "open=ok caps_dock={caps_dock:?} caps_close={caps_close:?}",
                     caps_dock = caps.dock,
@@ -622,16 +715,21 @@ pub fn run() {
         closes: Cell::new(0),
     });
     let mut host = InProcessHost::new();
-    host.register_factory(Box::new(ProbeFactory {
-        shared: probe.clone(),
-    }));
+    let (plugin_id, vst3_mode) = register_plugin(&mut host, &probe);
+    eprintln!("[poc] plugin_id={plugin_id} vst3_mode={vst3_mode}");
     let instance = match host.execute(HostCommand::Instantiate {
-        plugin_id: PROBE_ID.to_owned(),
+        plugin_id: plugin_id.clone(),
     }) {
         Ok(HostReply::Instantiated { handle }) => handle,
         other => panic!("instantiate failed: {other:?}"),
     };
     eprintln!("[poc] instance={instance:?}");
+    // `open_gui` is only legal on an initialized instance — the
+    // probe's default init is a no-op, so Initialize is uniform.
+    match host.execute(HostCommand::Initialize { handle: instance }) {
+        Ok(_) => eprintln!("[poc] initialize=ok"),
+        Err(e) => eprintln!("[poc] initialize=fail error={e:?}"),
+    }
 
     let mut sessions = PluginEditorSessions::new();
     let session = sessions.begin_session(instance).expect("begin_session");
@@ -646,6 +744,7 @@ pub fn run() {
         slot: None,
         slot_lease: None,
         probe,
+        vst3_mode,
         stage: Stage::WaitReady,
         rect_before_move: None,
     };
