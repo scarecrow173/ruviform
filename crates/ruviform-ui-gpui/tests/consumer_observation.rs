@@ -13,14 +13,16 @@ use ruviform_ui::behavior::{CommandPhase, ControlInput, InputSource, ValueInput}
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{AttachEpoch, ComponentKey, ViewHost, ViewSpec};
 use ruviform_ui::{Intent, WindowId, WindowSpec};
-use ruviform_ui_gpui::{DrawnPlan, GpuiObserver, ViewMount};
+use ruviform_ui_gpui::{DrawnPlan, GpuiObserver, ViewDrawn, ViewMount};
 use serde_json::{Value, json};
 
 const COMMAND_OP: &str = "rvf.ui.command.v1";
 
-fn fixture() -> Value {
+/// Loads a shared Fake/GPUI parity fixture by its file name.
+fn fixture(name: &str) -> Value {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../ruviform-ui-test/fixtures/driver-lab/parity/new-kinds.json");
+        .join("../ruviform-ui-test/fixtures/driver-lab/parity")
+        .join(name);
     let text = std::fs::read_to_string(path).expect("read parity fixture");
     serde_json::from_str(&text).expect("parse parity fixture")
 }
@@ -35,6 +37,17 @@ fn strings(v: &Value) -> Vec<String> {
 
 fn key(name: &str) -> ComponentKey {
     ComponentKey(name.to_string())
+}
+
+/// The drawn plan of the component `name` in `drawn`.
+fn drawn_plan(drawn: &ViewDrawn, name: &str) -> DrawnPlan {
+    drawn
+        .components
+        .iter()
+        .find(|c| c.key == key(name))
+        .expect("drawn component")
+        .plan
+        .clone()
 }
 
 fn assert_near(actual: f64, expected: Option<f64>) {
@@ -94,7 +107,7 @@ fn begin(gesture: &str) -> ControlInput {
 
 #[test]
 fn observes_mounted_projection_of_parity_view() {
-    let fx = fixture();
+    let fx = fixture("new-kinds.json");
     let mut observer = GpuiObserver::new();
     let window = mount_parity(&mut observer, &fx);
 
@@ -121,7 +134,7 @@ fn observes_mounted_projection_of_parity_view() {
 
 #[test]
 fn observes_knob_gesture_intents_through_seam() {
-    let fx = fixture();
+    let fx = fixture("new-kinds.json");
     let mut observer = GpuiObserver::new();
     let window = mount_parity(&mut observer, &fx);
 
@@ -170,7 +183,7 @@ fn observes_knob_gesture_intents_through_seam() {
 
 #[test]
 fn observes_toggle_atomic_set_through_seam() {
-    let fx = fixture();
+    let fx = fixture("new-kinds.json");
     let mut observer = GpuiObserver::new();
     let window = mount_parity(&mut observer, &fx);
 
@@ -210,25 +223,16 @@ fn observes_toggle_atomic_set_through_seam() {
 /// `expect` plans (Issue #436). Only the drawing components appear.
 #[test]
 fn observes_drawn_meter_and_axis_plans_through_seam() {
-    let fx = fixture();
+    let fx = fixture("new-kinds.json");
     let mut observer = GpuiObserver::new();
     let window = mount_parity(&mut observer, &fx);
 
     let drawn = observer.drawn(window).expect("view drawn");
     assert_eq!(drawn.window, window);
     let keys: Vec<ComponentKey> = drawn.components.iter().map(|c| c.key.clone()).collect();
-    assert_eq!(keys, vec![key("meter"), key("ruler")]);
-    let plan = |name: &str| {
-        drawn
-            .components
-            .iter()
-            .find(|c| c.key == key(name))
-            .expect("drawn component")
-            .plan
-            .clone()
-    };
+    assert_eq!(keys, vec![key("meter"), key("ruler"), key("spectrogram")]);
 
-    let DrawnPlan::Meter { bars } = plan("meter") else {
+    let DrawnPlan::Meter { bars } = drawn_plan(&drawn, "meter") else {
         panic!("meter plan");
     };
     let want_bars = fx["expect"]["meter"]["drawnBars"].as_array().expect("bars");
@@ -241,7 +245,7 @@ fn observes_drawn_meter_and_axis_plans_through_seam() {
         assert_near(bar.rms.expect("rms"), want["rms"].as_f64());
     }
 
-    let DrawnPlan::TimeAxis { marks } = plan("ruler") else {
+    let DrawnPlan::TimeAxis { marks } = drawn_plan(&drawn, "ruler") else {
         panic!("time axis plan");
     };
     let want_marks = fx["expect"]["timeAxis"]["drawnMarks"]
@@ -253,6 +257,69 @@ fn observes_drawn_meter_and_axis_plans_through_seam() {
         assert_eq!(Some(mark.major), want["major"].as_bool(), "major");
         assert_eq!(Some(mark.label.as_str()), want["label"].as_str(), "label");
     }
+}
+
+/// Drawn Spectrogram cells equal the shared fixture's `drawnCells`
+/// (Issue #442). The gap column and the culled cells draw nothing.
+#[test]
+fn observes_drawn_spectrogram_cells_through_seam() {
+    let fx = fixture("new-kinds.json");
+    let mut observer = GpuiObserver::new();
+    let window = mount_parity(&mut observer, &fx);
+
+    let drawn = observer.drawn(window).expect("view drawn");
+    let DrawnPlan::Spectrogram { cells } = drawn_plan(&drawn, "spectrogram") else {
+        panic!("spectrogram plan");
+    };
+    let want_cells = fx["expect"]["spectrogram"]["drawnCells"]
+        .as_array()
+        .expect("cells");
+    assert_eq!(cells.len(), want_cells.len(), "drawn cell count");
+    for (cell, want) in cells.iter().zip(want_cells) {
+        assert_near(cell.x0, want["x0"].as_f64());
+        assert_near(cell.x1, want["x1"].as_f64());
+        assert_near(cell.y0, want["y0"].as_f64());
+        assert_near(cell.y1, want["y1"].as_f64());
+        assert_near(cell.intensity, want["intensity"].as_f64());
+    }
+}
+
+/// Drawn Label text and Table grid equal the Label/Table parity fixture
+/// (Issue #442). A missing cell stays `None` in its declared position.
+#[test]
+fn observes_drawn_label_and_table_plans_through_seam() {
+    let fx = fixture("label-table.json");
+    let spec: ViewSpec = serde_json::from_value(fx["view"].clone()).expect("ViewSpec");
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, spec);
+
+    let drawn = observer.drawn(window).expect("view drawn");
+    let keys: Vec<ComponentKey> = drawn.components.iter().map(|c| c.key.clone()).collect();
+    assert_eq!(keys, vec![key("status"), key("events")]);
+
+    let DrawnPlan::Label { text } = drawn_plan(&drawn, "status") else {
+        panic!("label plan");
+    };
+    assert_eq!(Some(text.as_str()), fx["expect"]["label"]["text"].as_str());
+
+    let DrawnPlan::Table { header, rows } = drawn_plan(&drawn, "events") else {
+        panic!("table plan");
+    };
+    let want = &fx["expect"]["table"];
+    assert_eq!(header, strings(&want["drawnHeader"]));
+    let want_rows: Vec<Vec<Option<String>>> = want["drawnRows"]
+        .as_array()
+        .expect("drawnRows")
+        .iter()
+        .map(|row| {
+            row.as_array()
+                .expect("row")
+                .iter()
+                .map(|cell| cell.as_str().map(str::to_string))
+                .collect()
+        })
+        .collect();
+    assert_eq!(rows, want_rows);
 }
 
 /// The parity fixture has no Waveform, so this mounts an inline one. Gap
