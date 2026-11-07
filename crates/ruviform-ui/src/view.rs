@@ -421,6 +421,9 @@ pub struct ComponentSnapshot {
     pub committed: Option<crate::behavior::ControlValue>,
     /// Binding display phase (`Idle` when no binding exists).
     pub phase: CommandPhase,
+    /// Latest accepted authoritative projection — the only channel
+    /// that proves domain state (`None` when none has landed).
+    pub observed: Option<StateProjection<serde_json::Value>>,
     /// Whether the component is mounted.
     pub mounted: bool,
 }
@@ -1011,15 +1014,15 @@ impl ViewHost {
             .control
             .as_ref()
             .and_then(|c| self.dispatcher.control(&c.control_id));
-        let phase = m
+        let binding = m
             .control
             .as_ref()
-            .and_then(|c| self.bindings.get(&c.control_id))
-            .map_or(CommandPhase::Idle, CommandBinding::phase);
+            .and_then(|c| self.bindings.get(&c.control_id));
         Some(ComponentSnapshot {
             display: control.map(crate::behavior::InteractionControl::value),
             committed: control.map(crate::behavior::InteractionControl::committed_value),
-            phase,
+            phase: binding.map_or(CommandPhase::Idle, CommandBinding::phase),
+            observed: binding.and_then(|b| b.state().last_observed),
             mounted: true,
         })
     }

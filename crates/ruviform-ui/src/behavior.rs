@@ -2619,10 +2619,22 @@ pub struct Dispatched {
 #[derive(Debug, Clone)]
 struct PendingRecord {
     command_id: CommandId,
-    rank: u8, // 0 = in-flight, receipt_rank otherwise
+    /// Binding generation at dispatch — receipts for records minted
+    /// under a dead epoch classify stale and never move the display.
+    generation: u64,
+    /// `None` = in-flight; otherwise the last accepted receipt status.
+    status: Option<ReceiptStatus>,
     expect_receipt: bool,
     deadline: Option<std::time::Instant>,
-    settled: bool,
+    /// The ack bound was crossed while the command was still awaiting
+    /// confirmation — kept set even if a late receipt moves it on.
+    expired: bool,
+}
+
+impl PendingRecord {
+    fn rank(&self) -> u8 {
+        self.status.map_or(0, receipt_rank)
+    }
 }
 
 /// Bounded record set for receipt correlation: settled records evict
@@ -2630,30 +2642,33 @@ struct PendingRecord {
 const MAX_PENDING_RECORDS: usize = 64;
 
 /// Per-control command-binding state machine (Rust port of the
-/// `ui/binding` `Binding` semantics). Mints `cmd-N` ids, tracks
-/// receipt-expecting commands, dedups receipts by rank, guards
-/// projections by revision, and marks detach boundaries with a
-/// generation bump + `stale` phase.
+/// `ui/binding` `Binding` semantics). Mints `view-id:N` command ids,
+/// tracks every non-preview command for generation-scoped receipt
+/// classification, dedups receipts by rank, guards projections by
+/// revision, and marks detach boundaries with a generation bump +
+/// `stale` phase. `head` names the newest receipt-expecting command —
+/// the display phase derives from it, the active gesture, and the
+/// last accepted projection rather than being written per arrival.
 ///
 /// The binding owns no clock: ack deadlines are caller-supplied
 /// `Instant`s evaluated by [`CommandBinding::on_tick`], keeping the
 /// contract deterministic for headless verification.
 #[derive(Debug)]
-pub struct CommandBinding {
+pub struct CommandBinding<P = serde_json::Value> {
     view_id: String,
     generation: u64,
     attached: bool,
     counter: u64,
     records: VecDeque<PendingRecord>,
     outbox: VecDeque<Dispatched>,
-    phase: CommandPhase,
-    timed_out: bool,
+    head: Option<CommandId>,
+    active_gesture: Option<GestureId>,
     last_receipt: Option<CommandReceipt>,
-    last_observed_revision: Option<Revision>,
+    last_observed: Option<StateProjection<P>>,
     observed_seq: u64,
 }
 
-impl CommandBinding {
+impl<P: Clone> CommandBinding<P> {
     /// Creates a binding for `view_id`.
     #[must_use]
     pub fn new(view_id: impl Into<String>) -> Self {
@@ -2664,10 +2679,10 @@ impl CommandBinding {
             counter: 0,
             records: VecDeque::new(),
             outbox: VecDeque::new(),
-            phase: CommandPhase::Idle,
-            timed_out: false,
+            head: None,
+            active_gesture: None,
             last_receipt: None,
-            last_observed_revision: None,
+            last_observed: None,
             observed_seq: 0,
         }
     }
@@ -2692,37 +2707,47 @@ impl CommandBinding {
             intent,
             CommandIntent::Commit { .. } | CommandIntent::Action { .. }
         );
-        match intent {
-            // Local tentative value — not a domain claim.
-            CommandIntent::Begin { .. } | CommandIntent::Preview { .. } => {
-                self.phase = CommandPhase::Preview;
+        // Gesture tracking drives the derived `preview` phase: a
+        // begin marks the gesture active; commit/cancel end it.
+        match &intent {
+            CommandIntent::Begin { gesture_id, .. } => {
+                self.active_gesture = Some(gesture_id.clone());
             }
-            // Gesture aborted with nothing awaiting confirmation: back
-            // to the last observed truth (idle).
-            CommandIntent::Cancel { .. } if !self.records.iter().any(|r| !r.settled) => {
-                self.phase = CommandPhase::Idle;
+            CommandIntent::Commit { .. } | CommandIntent::Cancel { .. } => {
+                self.active_gesture = None;
             }
             _ => {}
         }
         let command_id = self.mint();
-        if expect_receipt {
+        // Every non-preview command is tracked so receipts can be
+        // classified by generation; previews mint ids but stay
+        // untracked, so a stray preview receipt reads as stale.
+        if !matches!(intent, CommandIntent::Preview { .. }) {
             self.records.push_back(PendingRecord {
                 command_id: command_id.clone(),
-                rank: 0,
+                generation: self.generation,
+                status: None,
                 expect_receipt,
-                deadline: ack_deadline,
-                settled: false,
+                deadline: if expect_receipt { ack_deadline } else { None },
+                expired: false,
             });
-            // Settled records evict first; in-flight receipt-expecting
-            // ones stay.
+            // In-flight receipt-expecting records stay correlatable;
+            // everything else ages out first under the bound. When
+            // every record is still in flight the bound yields rather
+            // than drop a command the consumer may still answer.
             while self.records.len() > MAX_PENDING_RECORDS {
-                if let Some(pos) = self.records.iter().position(|r| r.settled) {
-                    self.records.remove(pos);
-                } else {
-                    self.records.pop_front();
-                }
+                let Some(pos) = self
+                    .records
+                    .iter()
+                    .position(|r| r.status.is_some() || !r.expect_receipt)
+                else {
+                    break;
+                };
+                self.records.remove(pos);
             }
-            self.phase = CommandPhase::Pending;
+            if expect_receipt {
+                self.head = Some(command_id.clone());
+            }
         }
         self.outbox.push_back(Dispatched {
             context: DispatchContext {
@@ -2749,129 +2774,154 @@ impl CommandBinding {
         if !self.attached {
             return;
         }
-        let rank = receipt_rank(receipt.status);
-        if let Some(rec) = self
+        let Some(rec) = self
             .records
             .iter_mut()
             .find(|r| r.command_id == receipt.command_id)
-        {
-            if rank <= rec.rank {
-                return; // dedup: equal/lower rank absorbed
-            }
-            rec.rank = rank;
-            let terminal = rank == 3;
-            if terminal {
-                rec.settled = true;
-                rec.expect_receipt = false;
-            }
+        else {
+            // Unknown or never-tracked id — absorbed as stale; only a
+            // tracked, generation-live record may move the display.
+            return;
+        };
+        if rec.generation != self.generation {
+            return; // dead-epoch reply — stale
         }
+        if receipt_rank(receipt.status) <= rec.rank() {
+            return; // dedup: equal/lower rank absorbed
+        }
+        rec.status = Some(receipt.status);
         self.last_receipt = Some(receipt.clone());
-        match receipt.status {
-            ReceiptStatus::Accepted | ReceiptStatus::Queued => {
-                self.phase = CommandPhase::Accepted;
-            }
-            ReceiptStatus::Applied => {
-                self.phase = CommandPhase::Applied;
-            }
-            ReceiptStatus::Rejected => {
-                self.phase = CommandPhase::Rejected;
-            }
-            ReceiptStatus::Unsupported => {
-                self.phase = CommandPhase::Unsupported;
-            }
-        }
     }
 
     /// Applies an authoritative projection. A projection that does not
     /// advance `last_observed.revision` is dropped — a delayed answer
-    /// can never overwrite a newer truth.
-    pub fn on_projection<P: Clone>(&mut self, projection: &StateProjection<P>) -> bool {
+    /// can never overwrite a newer truth. A landed projection retires
+    /// a *terminal* head; a head still awaiting confirmation keeps
+    /// answering "did my command land" through [`Self::phase`].
+    pub fn on_projection(&mut self, projection: &StateProjection<P>) -> bool {
         if !self.attached {
             return false;
         }
-        let advances = match (&self.last_observed_revision, &projection.revision) {
-            (Some(Revision::Num(a)), Revision::Num(b)) => b > a,
-            (Some(Revision::Str(a)), Revision::Str(b)) => b != a,
-            // No prior revision or cross-type revisions always advance.
-            _ => true,
+        let advances = match (&self.last_observed, &projection.revision) {
+            (Some(prev), next) => match (&prev.revision, next) {
+                (Revision::Num(a), Revision::Num(b)) => b > a,
+                (Revision::Str(a), Revision::Str(b)) => b != a,
+                // Cross-type revisions always advance.
+                _ => true,
+            },
+            (None, _) => true,
         };
         if !advances {
             return false;
         }
-        self.last_observed_revision = Some(projection.revision.clone());
+        self.last_observed = Some(projection.clone());
         self.observed_seq += 1;
-        self.phase = CommandPhase::Observed;
+        if self.head_record().is_some_and(|r| r.rank() >= 2) {
+            self.head = None;
+        }
         true
     }
 
-    /// Marks receipt-expecting records past `now` as timed out: the
-    /// phase becomes `Timeout` and `timed_out` stays set even if a
-    /// late receipt later moves the phase on.
+    /// Marks receipt-expecting records past `now` as expired — the
+    /// derived phase reads `Timeout` while the head stays unresolved,
+    /// and `expired` stays set even if a late receipt moves it on.
     pub fn on_tick(&mut self, now: std::time::Instant) {
         if !self.attached {
             return;
         }
-        let mut expired = false;
         for rec in &mut self.records {
-            if !rec.settled && rec.expect_receipt && rec.deadline.is_some_and(|d| now >= d) {
-                rec.settled = true;
-                rec.expect_receipt = false;
-                expired = true;
+            if rec.expect_receipt
+                && !rec.expired
+                && rec.rank() < 2
+                && rec.deadline.is_some_and(|d| now >= d)
+            {
+                rec.expired = true;
             }
-        }
-        if expired {
-            self.timed_out = true;
-            self.phase = CommandPhase::Timeout;
         }
     }
 
-    /// Detaches the binding (unmount/dock move): bumps the generation,
-    /// drops pending records and marks the phase `stale`. Late
-    /// receipts/projections are absorbed until [`Self::attach`].
+    /// Detaches the binding (unmount/dock move): bumps the generation
+    /// so every tracked record — kept for classification — goes stale,
+    /// and the derived phase reads `stale`. Late receipts/projections
+    /// are absorbed until [`Self::attach`].
     pub fn detach(&mut self) {
         if !self.attached {
             return;
         }
         self.attached = false;
+        self.active_gesture = None;
         self.generation += 1;
-        self.records.clear();
-        self.phase = CommandPhase::Stale;
     }
 
-    /// Re-attaches a detached binding. The generation stays bumped so
-    /// replies minted under the dead epoch remain attributable.
+    /// Re-attaches a detached binding. The dead epoch's head is
+    /// forgotten and the generation stays bumped, so replies minted
+    /// under it remain attributable.
     pub fn attach(&mut self) {
         if self.attached {
             return;
         }
         self.attached = true;
-        self.phase = CommandPhase::Idle;
+        self.head = None;
+        self.active_gesture = None;
+    }
+
+    /// The head record — the newest receipt-expecting command, kept
+    /// until an advancing projection retires it or [`Self::attach`]
+    /// forgets the dead epoch.
+    fn head_record(&self) -> Option<&PendingRecord> {
+        self.head
+            .as_ref()
+            .and_then(|id| self.records.iter().find(|r| &r.command_id == id))
+    }
+
+    /// The display lifecycle phase, derived from attachment, the
+    /// active gesture, the head command, and the last accepted
+    /// projection — matching the canonical `Binding.phase()` order.
+    #[must_use]
+    pub fn phase(&self) -> CommandPhase {
+        if !self.attached {
+            return CommandPhase::Stale;
+        }
+        if self.active_gesture.is_some() {
+            return CommandPhase::Preview;
+        }
+        if let Some(rec) = self.head_record() {
+            // The ack bound was crossed without an applied/terminal
+            // answer — a distinct failure display, kept even while
+            // the status map below would otherwise read "accepted".
+            if rec.expired && rec.rank() <= 1 {
+                return CommandPhase::Timeout;
+            }
+            return match rec.rank() {
+                0 => CommandPhase::Pending,
+                1 => CommandPhase::Accepted,
+                2 => CommandPhase::Applied,
+                _ => match rec.status {
+                    Some(ReceiptStatus::Rejected) => CommandPhase::Rejected,
+                    _ => CommandPhase::Unsupported,
+                },
+            };
+        }
+        if self.last_observed.is_some() {
+            CommandPhase::Observed
+        } else {
+            CommandPhase::Idle
+        }
     }
 
     /// Current binding view state.
     #[must_use]
-    pub fn state<P: Clone>(&self) -> BindingViewState<P> {
+    pub fn state(&self) -> BindingViewState<P> {
         BindingViewState {
-            phase: self.phase,
-            last_observed: None,
+            phase: self.phase(),
+            last_observed: self.last_observed.clone(),
             observed_seq: self.observed_seq,
             last_receipt: self.last_receipt.clone(),
-            pending_command_id: self
-                .records
-                .iter()
-                .rev()
-                .find(|r| !r.settled && r.expect_receipt)
-                .map(|r| r.command_id.clone()),
-            timed_out: self.timed_out,
+            pending_command_id: self.head.clone(),
+            timed_out: self.head_record().is_some_and(|r| r.expired),
             generation: self.generation,
             attached: self.attached,
         }
-    }
-
-    /// The current phase.
-    #[must_use]
-    pub fn phase(&self) -> CommandPhase {
-        self.phase
     }
 
     /// The current generation.
@@ -3282,7 +3332,7 @@ mod tests {
 
     #[test]
     fn binding_detach_stale() {
-        let mut b = CommandBinding::new("v1");
+        let mut b = CommandBinding::<f64>::new("v1");
         b.dispatch(
             CommandIntent::Commit {
                 target: "t".to_string(),
@@ -3311,5 +3361,107 @@ mod tests {
         b.attach();
         assert!(b.attached());
         assert_eq!(b.phase(), CommandPhase::Idle);
+    }
+
+    fn commit_intent(seq: u64, gid: &str) -> CommandIntent {
+        CommandIntent::Commit {
+            target: "t".to_string(),
+            control_id: "c".to_string(),
+            sequence: seq,
+            gesture_id: gid.to_string(),
+            origin_view: None,
+            atomic: false,
+            value: ControlValue {
+                plain: 1.0,
+                normalized: 1.0,
+            },
+        }
+    }
+
+    #[test]
+    fn binding_observed_payload_and_head_semantics() {
+        let mut b = CommandBinding::<f64>::new("v1");
+
+        // A projection before any command lands the payload and
+        // surfaces it through `state().last_observed`.
+        assert!(b.on_projection(&StateProjection {
+            revision: Revision::Num(1),
+            value: 0.5,
+            provenance: Some("init".to_string()),
+        }));
+        assert_eq!(b.phase(), CommandPhase::Observed);
+        assert_eq!(
+            b.state().last_observed,
+            Some(StateProjection {
+                revision: Revision::Num(1),
+                value: 0.5,
+                provenance: Some("init".to_string()),
+            })
+        );
+
+        // A receipt for a never-tracked id is absorbed — no
+        // last_receipt write, no phase movement.
+        b.on_receipt(&CommandReceipt {
+            command_id: "v1:999".to_string(),
+            status: ReceiptStatus::Rejected,
+            revision: None,
+            detail: None,
+        });
+        assert_eq!(b.state().last_receipt, None);
+        assert_eq!(b.phase(), CommandPhase::Observed);
+
+        // An in-flight commit keeps the phase pending-ish even when a
+        // newer projection lands — the projection cannot answer "did
+        // my command land" for it.
+        let (id, expect) = b.dispatch(commit_intent(2, "g1"), None);
+        assert!(expect);
+        assert_eq!(b.phase(), CommandPhase::Pending);
+        assert!(b.on_projection(&StateProjection {
+            revision: Revision::Num(2),
+            value: 0.9,
+            provenance: None,
+        }));
+        assert_eq!(b.phase(), CommandPhase::Pending);
+        assert_eq!(b.state().pending_command_id, Some(id.clone()));
+
+        // `Applied` moves the head to applied; the projection still
+        // holds, and the head retires only when a terminal head meets
+        // an advancing projection — here already terminal, so the
+        // next projection retires it and the phase reads observed.
+        b.on_receipt(&CommandReceipt {
+            command_id: id,
+            status: ReceiptStatus::Applied,
+            revision: None,
+            detail: None,
+        });
+        assert_eq!(b.phase(), CommandPhase::Applied);
+        assert!(b.on_projection(&StateProjection {
+            revision: Revision::Num(3),
+            value: 1.0,
+            provenance: None,
+        }));
+        assert_eq!(b.phase(), CommandPhase::Observed);
+        assert_eq!(b.state().pending_command_id, None);
+        assert_eq!(b.state().last_observed.map(|p| p.value), Some(1.0));
+    }
+
+    #[test]
+    fn binding_timeout_is_head_scoped() {
+        let mut b = CommandBinding::<f64>::new("v1");
+        let t0 = std::time::Instant::now();
+        let (id, _) = b.dispatch(commit_intent(1, "g1"), Some(t0));
+        b.on_tick(t0 + std::time::Duration::from_millis(1));
+        assert_eq!(b.phase(), CommandPhase::Timeout);
+        assert!(b.state().timed_out);
+        // A late applied still moves the phase on; the expired flag
+        // stays set on the head record.
+        b.on_receipt(&CommandReceipt {
+            command_id: id,
+            status: ReceiptStatus::Applied,
+            revision: None,
+            detail: None,
+        });
+        assert_eq!(b.phase(), CommandPhase::Applied);
+        assert!(b.state().timed_out);
     }
 }
