@@ -66,6 +66,7 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/294"
     - "https://github.com/scarecrow173/synvelis/issues/175"
     - "https://github.com/scarecrow173/synvelis/issues/176"
+    - "https://github.com/scarecrow173/synvelis/issues/177"
     - "https://github.com/scarecrow173/audio-lens/issues/166"
   defers: []
   deferred-by: []
@@ -158,6 +159,15 @@ Composition Root（Consumer の app 起動部）+ 明示的 driver-specific exte
 
 移行原則: 単純な GPUI 型への置換は禁止。旧挙動の接続試験（Fake Driver fixture）は移行前後で失わない。型名は本表が契約上の方向を示すもので、最終的な Rust シグネチャは各 Owner Issue の実装 PR で確定する。
 
+#### 移行状況（main 取り込み時点のコード確認、2026-11-08）
+
+* 既存（移行の受け皿が存在）: `WindowSpec`（`crates/ruviform-ui/src/driver.rs`）、`NativeSurfaceSlot` 系（`crates/ruviform-ui/src/native_slot.rs`）、`ParentSlotLease`（`crates/ruviform-plugin-core/src/boundary.rs:175`、`crates/ruviform-plugin-host/src/editor_session.rs` の adapter 入口で使用）、`WindowId`/`DockWorkspace` 等の backend-neutral 型。
+* 未移行（現状も残存）: `WindowConfig::url` / `devtools`（`crates/ruviform-ui/src/window.rs:158,160`）、`WindowHandle::eval`（同 `window.rs:220`）、`RenderTier`（`crates/ruviform-ui/src/render.rs:30`）と `NativeSurfaceHost`（同 `render.rs:70`）。
+* 部分的: `GuiParentToken`（`crates/ruviform-plugin-core/src/boundary.rs:94`）は `ParentSlotLease` を redeem して生成する経路がある（`crates/ruviform-poc-native-dock/src/poc.rs:343-356`）一方、plugin-host の `Command::OpenGui` の parent は `GuiParentToken` のまま（`crates/ruviform-plugin-host/src/command.rs:97`）。wire の置換は #389 の範囲で未完。
+* 未確認: `HostEvent::Ready { url }` / `HostEvent::Message` の置換、`bridge::dispatch_script` の隔離、`ruviform-ui-webview` 側の移管状況。本 ADR の確認範囲外。
+
+既存 PoC: `crates/ruviform-poc-native-dock`（Issue #388/#389 の早期 Gate 用 harness。非 default `gpui` feature で real GPUI window 上に probe plugin の native editor を attach する経路を持つ）。Native Dock 実機 PASS の判定は本 ADR では行わない（Native Dock 採用 Gate 参照）。
+
 ### DriverCapability Matrix（宣言テンプレート）
 
 Capability は **declared（契約上の宣言）/ Pass / Fail / Unsupported / NotRun / Blocked** を分離して記録する。本 ADR 時点の各行はすべて *declared* であり、実機証拠は #388/#262/#390 の結果で埋める（実証済みと記さない）。
@@ -171,10 +181,11 @@ Capability は **declared（契約上の宣言）/ Pass / Fail / Unsupported / N
 | **NativeSurfaceSlot: plugin native GUI dock** | PoC gate | PoC gate | PoC gate | PoC gate | N/A(WebView 経路は非対象) | 契約 fixture のみ |
 | ResolvedTheme mapping（色空間/単位/フォント/DPI） | declared | declared | declared | declared | N/A | declared |
 | Component/View render・input normalization | declared | declared | declared | declared | N/A | declared |
-| Offscreen/screenshot（Golden 用） | declared | declared | declared | declared | declared | Pass |
+| Offscreen/screenshot（Golden 用） | declared | declared | declared | declared | declared | Unsupported |
 | a11y intent・OS accessibility bridge | declared | declared | declared | declared | declared | declared |
 
 注: Fake 列の `Pass` は既存 `ruviform-ui-test::fake::FakeHost` が headless テスト基盤として実測で提供する window/event/monitor/inject 等の契約を指し、描画・テーマ解決・実 OS 能力を意味しない。Fake の ResolvedTheme/Component render 行は意図的に `declared`（未実装）のままとする。
+Offscreen/screenshot の Fake 列は `Unsupported`（未実装）。根拠: `crates/ruviform-ui-test/src/headless.rs:174`（`screenshot: false`）、同 `:286-289`（screenshot は headless backend で未実装と返す）、`crates/ruviform-ui-test/src/proto.rs:95-96`（capability は `unavailable`）。Pass への繰上げは行わない。
 
 ### Native Dock 採用 Gate（本 ADR の技術採否条件）
 
@@ -227,7 +238,7 @@ Capability は **declared（契約上の宣言）/ Pass / Fail / Unsupported / N
   * `docs/adr/` — 本 ADR の新設、旧 2 ADR の supersession 更新、`docs/adr/README.md` index 再生成
   * `docs/designs/issue-384-driver-neutral-gui-contract.md` — 契約詳細（ID 体系・state transition・fixture 対応）
   * `crates/ruviform-ui` — WebView 前提 API の棚卸しと共通契約/adapter 分離（#386 が実装。本 ADR は方向のみ）
-  * `crates/ruviform-ui-theme`（新設、#385）・`crates/ruviform-ui-gpui`（暫定名、#386）・Native Slot/Session（#388/#389）
+  * `crates/ruviform-ui-theme`（既存・main 取り込み済み、#385 の実装範囲は本 ADR 未確認）・`crates/ruviform-ui-gpui`（既存・暫定名のまま、非 default `gpui` feature、#386 の Window/Host 実装を含む）・NativeSurfaceSlot/PluginEditorSession の残範囲（#388/#389）
   * `ui/*` TS パッケージ — 変更なし（縮退順序 4 まで保持）
 * 従うパターン: `ruviform-audio-device` の adapter パターン（cpal を内部依存に閉じ込め `Box<dyn>` port を実装）を Driver 設計の先例とする。`WindowId`/`ViewInstanceId`/`DockWorkspace` の既存 backend-neutral 契約は再設計せず再利用する。
 * 避けるパターン: GPUI 型の共通 API 露出、JS 前提を GPUI イベントへ直接置換、Toolkit への Theme/State 正本委譲、旧 API の新経路未証明での削除、万能描画抽象。
@@ -268,6 +279,7 @@ Capability は **declared（契約上の宣言）/ Pass / Fail / Unsupported / N
 
 * 一次ソース: GitHub Issue [#384](https://github.com/scarecrow173/ruviform/issues/384)（2026-11-07 横断レビュー確定仕様 v2 が旧記述・旧 ADR に優先）、[#257](https://github.com/scarecrow173/ruviform/issues/257)（共通 UI 正本）、[#385](https://github.com/scarecrow173/ruviform/issues/385)（Token 解釈）、[#262](https://github.com/scarecrow173/ruviform/issues/262)（GPUI 採否 Gate）。
 * 契約詳細設計: [docs/designs/issue-384-driver-neutral-gui-contract.md](../designs/issue-384-driver-neutral-gui-contract.md)。
-* 旧 ADR（superseded、証拠保持）: [ui-architecture-webview-hybrid.md](ui-architecture-webview-hybrid.md)、[ui-tech-selection-poc.md](ui-tech-selection-poc.md)。Synvelis 側の旧 SolidJS 採用 ADR は [Synvelis #175](https://github.com/scarecrow173/synvelis/issues/175) で後継化（別 repo/別 Owner）。
+* frontmatter `relations` の参照先（`docs/designs/issue-384-driver-neutral-gui-contract.md`、`docs/specs/issue-384-driver-neutral-gui-architecture.md`、`docs/plans/rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md`、`docs/tasks/implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md`）は `origin/main` に存在することを確認済み。これらは本 ADR の差分（`67fc51c4` の 1 コミット）には含まれず、先行 PR で取り込み済み。
+* 旧 ADR（superseded、証拠保持）: [ui-architecture-webview-hybrid.md](ui-architecture-webview-hybrid.md)、[ui-tech-selection-poc.md](ui-tech-selection-poc.md)。Synvelis 側の旧 SolidJS 採用 ADR は [Synvelis #175](https://github.com/scarecrow173/synvelis/issues/175) で後継化（別 repo/別 Owner）。Synvelis の製品 Theme・Workspace・GPUI Design Review は [Synvelis #177](https://github.com/scarecrow173/synvelis/issues/177)、AudioLens の Consumer 受入は [AudioLens #166](https://github.com/scarecrow173/audio-lens/issues/166) が所有する。
 * 関連 ADR: [プラグインアーキテクチャ](plugin-architecture-clap-vst3.md)、[plugin-gui-embedding](plugin-gui-embedding.md)（旧方針の Plugin GUI 節は本 ADR の NativeSurfaceSlot/Session 契約に読替え）、[issue-181](issue-181-multi-window-contract-placement-close-decision-ipc-routing.md) / [issue-182](issue-182-dock-tree-placement-move-contract-and-persistence.md)（維持する論理契約）。
 * **GPUI 最終採用判定の逆反映欄（未記入）**: #262 verdict が確定したら、採用範囲・OS/format 制限・代替方針をここに追記する。現在は判定前であり、GPUI は「標準 Driver 候補として契約設計を開始する仮決定」の位置づけ。
