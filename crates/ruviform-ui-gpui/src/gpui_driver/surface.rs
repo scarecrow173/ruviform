@@ -1893,4 +1893,78 @@ mod tests {
         assert!(!alive(token));
         drop(adapter); // No sweep ran — `Drop` must abandon, not destroy.
     }
+
+    // Issue #387 canonical-path integration: the *public* surface
+    // handle (`GpuiDriver::surface()` → `SharedSurface`, the same
+    // canonical ledger the mounted renderer pushes onto) must drive
+    // the whole real-HWND lifecycle — declare → lease → clip
+    // Some/None → re-geometry → owner destroy → revoked/destroyed
+    // events — through per-call borrows only. Standalone-adapter
+    // coverage does not substitute: this is the API surface every
+    // consumer actually holds.
+    #[test]
+    fn shared_surface_drives_real_hwnd_lifecycle() {
+        let parent = TestParent::new();
+        let (driver, window) = driver_window(&parent);
+        let surface = driver.surface();
+
+        let slot = surface
+            .declare_slot(spec(window, rect(10.0, 10.0, 100.0, 100.0)))
+            .expect("declare");
+
+        // Clip recorded pre-lease lands on the fresh container.
+        surface
+            .set_clip(slot, Some(rect(30.0, 20.0, 40.0, 40.0)))
+            .expect("record clip");
+        let lease = surface.lease_parent(slot).expect("lease");
+        let token = surface
+            .container_token(slot)
+            .expect("borrow")
+            .expect("container token");
+        assert!(alive(token), "leased container is a live HWND");
+        assert_eq!(region_box(token), Some((20, 10, 60, 50)));
+
+        // Clip clear → OS region removed; re-clip → region returns.
+        surface.set_clip(slot, None).expect("clear clip");
+        assert_eq!(region_box(token), None);
+        surface
+            .set_clip(slot, Some(rect(30.0, 20.0, 40.0, 40.0)))
+            .expect("re-clip");
+        assert_eq!(region_box(token), Some((20, 10, 60, 50)));
+
+        // Re-geometry re-projects the stored clip into new local
+        // coords: window clip (30,20)-(70,60) − origin (60,10).
+        surface
+            .set_geometry(
+                slot,
+                SlotGeometry {
+                    rect: rect(60.0, 10.0, 100.0, 100.0),
+                    scale_factor: 1.0,
+                },
+            )
+            .expect("re-geometry");
+        assert_eq!(region_box(token), Some((-30, 10, 10, 50)));
+
+        surface.drain_events().expect("borrow"); // consume so far
+
+        // Owner teardown → the bound adapter's sweep auto-releases:
+        // honest reads before the sweep, terminal events on drain,
+        // typed errors — never fake Ok — afterwards.
+        retire(&driver.inner, window);
+        assert_eq!(
+            surface.state(slot).expect("borrow"),
+            Some(SlotState::Released)
+        );
+        assert_eq!(surface.container_token(slot).expect("borrow"), None);
+        assert_eq!(surface.validate_lease(lease), Err(SlotError::LeaseRevoked));
+        assert_eq!(surface.redeem(lease.raw()), Err(SlotError::LeaseRevoked));
+
+        let events = surface.drain_events().expect("borrow");
+        assert!(events.contains(&SlotEvent::LeaseRevoked { slot }));
+        assert!(events.contains(&SlotEvent::Destroyed { slot }));
+        assert_eq!(
+            surface.set_visibility(slot, SlotVisibility::Hidden),
+            Err(SlotError::Released)
+        );
+    }
 }
