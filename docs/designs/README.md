@@ -130,3 +130,4 @@ Directory: `docs/designs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | superseded | [music-time-model.md](./music-time-model.md) |
+| DESIGN-rO8ZT7WxqPYGw0e0jZJx_A | Issue #426 設計 — mechanism の test 実在検査・GPUI lab binding・story matrix | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |

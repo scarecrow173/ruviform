@@ -165,3 +165,4 @@ Directory: `docs/impl/ir`
 | `IMPL-034Sd294TupleEvidenceX9f` | Issue #294 consumer-verify 候補 tuple 証拠契約（解決 SHA 捕捉・期待照合・SHA ref・UI lane・extra tasks・unsupported 状態） | completed | [issue-294-consumer-verify-tuple-evidence.md](./issue-294-consumer-verify-tuple-evidence.md) |
 | IMPL-034ThzZO69OSZMwwEi0OLO | Issue #294 GUI-CONTRACT lane 接続 — 候補 tree 上の boundary guard / Fake driver semantic 評価 | completed | [issue-294-gui-contract-lane-tree-boundary-guard-fake-driver-semantic.md](./issue-294-gui-contract-lane-tree-boundary-guard-fake-driver-semantic.md) |
 | IMPL-0Rj3kVwF2mN8qXbCeLpY4d | Issue 305 media-io 旧 StagedOutput 完全削除・StagedFile 移行 | completed | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
+| IMPL-_exo5tf9F8bfLQSN05ZaeA | Issue #426 実装記録 — GPUI lab binding・story matrix・mechanism 実在検査・Golden 境界 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
