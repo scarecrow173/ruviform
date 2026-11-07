@@ -13,7 +13,7 @@ publish.workspace = true
 # preserves `cargo check --workspace` as a headless verification path,
 # matching the `ruviform-ui-webview` adapter precedent.
 default = []
-gpui = ["dep:gpui", "dep:raw-window-handle"]
+gpui = ["dep:gpui", "dep:raw-window-handle", "dep:windows-sys"]
 
 [dependencies]
 # - ruviform-ui: the port-defining crate this adapter implements.
@@ -29,8 +29,8 @@ raw-window-handle = { version = "0.6", optional = true }
 [target.'cfg(windows)'.dependencies]
 # - windows-sys: the Win32 surface-container path (per-slot child HWND
 #   carrying clip/z-order/visibility for an embedded native editor).
-#   Target-gated: only compiled on Windows, only used under `gpui`.
-windows-sys = { version = "0.61", features = [
+#   Target-gated and optional: only compiled on Windows under `gpui`.
+windows-sys = { version = "0.61", optional = true, features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_System_LibraryLoader",

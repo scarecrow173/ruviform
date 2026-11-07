@@ -17,9 +17,9 @@ use ruviform_plugin_host::{
     PluginFactory, PluginHandle, erase,
 };
 use ruviform_ui::{
-    DriverEvent, LogicalRect, NativeSurfaceSlot, SlotCapabilities, SlotGeometry, SlotLease,
-    SlotSpec, SlotVisibility, Support, SurfaceSlotId, ViewInstanceId, WindowDriver, WindowId,
-    WindowLifecycle, WindowSpec,
+    DriverEvent, LogicalRect, NativeSurfaceSlot, SlotCapabilities, SlotError, SlotGeometry,
+    SlotLease, SlotSpec, SlotVisibility, Support, SurfaceSlotId, ViewInstanceId, WindowDriver,
+    WindowId, WindowLifecycle, WindowSpec,
 };
 use ruviform_ui_gpui::{GpuiDriver, GpuiSurfaceAdapter};
 
@@ -332,7 +332,10 @@ fn make_ops(
                 .borrow()
                 .redeem(lease.raw())
                 .map(GuiParentToken::new)
-                .map_err(|_| EditorOpError::LeaseRejected)
+                .map_err(|error| match error {
+                    SlotError::Unsupported => EditorOpError::Unsupported,
+                    _ => EditorOpError::LeaseRejected,
+                })
         }),
     )
 }

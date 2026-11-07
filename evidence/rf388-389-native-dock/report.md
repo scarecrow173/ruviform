@@ -82,6 +82,7 @@ merge conflict 解決: `ruviform-ui-gpui`(lib.rs/Cargo.toml)は main 版が RF38
 - Reviewer A(契約): 11 findings → 全反映(seq wrap・capability 未適用・event 欠落・`release_lease` 欠落・Display/Error 欠落・doc drift 等)
 - Reviewer B(invariant attack): 2 P1(concluded session re-open 穴・live session `end_session` retire 穴)+ 補助 findings → 全反映
 - Validator(runtime subagent): 本 snapshot 上で P1-2 件とも修正済みを確認。residual 指摘は `PluginHandle.generation` u16( wire u16 互換・別 issue 候補)、`SlotLease::new` doc-hidden 公開、async detach の失敗補完、no-op busy event、`end_session` 伝搬 — 後 3 件は反映済み、u16 は wire 互換のため残留(別 issue 提案)
+- Validator 2nd increment(adapter+PoC): **VALIDATED-WITH-NOTES**。証拠を毀損する欠陥なし。P2 ×4 を修正反映: (1)`redeem` が owner window 死亡後も stale container HWND を返し得た → owner-window 生存 + `IsWindow` 確認を追加し `Backend` で拒否。(2)lease payload は enumerable で doc が "unforgeable" を過剰主張 → 「ledger lookup であって認証ではない・同一 process 信用境界内のみ」と doc 修正。(3)lease 前に記録された clip/z/visibility が container 生成時に未適用 → `lease_parent` で再適用。(4)`capabilities()` が consumer 宣言値をそのまま返していた → backend 実装集合との積(`intersect_caps`)へ。P3 のうち `SetWindowRgn` 失敗時 HRGN 解放・`set_clip` 座標系 doc(window 座標)・`windows-sys` optional 化・redeemer エラー写像 Unsupported 区別も反映。残 P3(任意 z 値の HWND_TOP 丸め・stale-id エラー粒度)は PoC 許容として記録。
 
 ## 残 Gate / 後続へ渡すもの
 

@@ -105,8 +105,11 @@ impl SlotLease {
     /// Encodes `{index, seq}` into the packed payload.
     ///
     /// Layout: `index << 32 | seq`. `seq` is a registry-global unique
-    /// sequence, so a lease is unforgeable without the issuer's ledger
-    /// and cannot alias a lease minted for another slot or generation.
+    /// sequence, so a lease cannot alias a lease minted for another
+    /// slot or generation. Validation is a ledger lookup, not
+    /// authentication — the packed bits are enumerable, so the seam
+    /// is trusted same-process vocabulary and must not cross a trust
+    /// boundary unguarded.
     ///
     /// `#[doc(hidden)]` public because minting is a registry-internal
     /// operation — the session surface only ever receives a lease.
@@ -826,8 +829,9 @@ pub trait NativeSurfaceSlot {
         visibility: SlotVisibility,
     ) -> Result<(), SlotError>;
 
-    /// Applies an explicit clip rect (overlap/dock clipping), `None` to
-    /// clear.
+    /// Applies an explicit clip rect in *window* coordinates
+    /// (overlap/dock clipping), `None` to clear. The driver converts
+    /// it into surface-local space itself.
     ///
     /// # Errors
     /// Returns [`SlotError`] on a bad id or `Unsupported` if the driver

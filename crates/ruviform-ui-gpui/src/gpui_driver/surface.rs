@@ -23,7 +23,7 @@ use std::rc::Rc;
 
 use ruviform_ui::{
     LeaseInfo, LogicalRect, NativeSurfaceSlot, SlotCapabilities, SlotError, SlotEvent,
-    SlotGeometry, SlotLease, SlotSpec, SlotState, SlotVisibility, SurfaceSlotId,
+    SlotGeometry, SlotLease, SlotSpec, SlotState, SlotVisibility, Support, SurfaceSlotId,
     SurfaceSlotRegistry, WindowId,
 };
 
@@ -36,6 +36,71 @@ use super::{GpuiDriver, Inner};
 /// driver's `native_surface_slot` flag and every slot op here refuses
 /// with [`SlotError::Unsupported`].
 pub(super) const BACKEND_AVAILABLE: bool = cfg!(target_os = "windows");
+
+/// The capability set this backend truly implements — intersected
+/// with the consumer-declared `SlotSpec::capabilities` so a spec can
+/// never report support no code path provides (Windows: attach,
+/// hide/show, focus, clip, single-top z-order).
+const BACKEND_CAPS: SlotCapabilities = SlotCapabilities {
+    attach_parent: Support::Supported,
+    reparent: Support::Unsupported,
+    cross_window_move: Support::Unsupported,
+    resize_negotiate: Support::Unsupported,
+    hide_show: Support::Supported,
+    focus: Support::Supported,
+    keyboard_input: Support::Unsupported,
+    ime: Support::Unsupported,
+    popup: Support::Unsupported,
+    clip: Support::Supported,
+    z_order: Support::Supported,
+    out_of_process_parent: Support::Unsupported,
+};
+
+/// Element-wise `declared ∧ implemented` — a capability reports
+/// [`Support::Supported`] only when the consumer asked for it *and*
+/// this backend has a code path for it.
+fn intersect_caps(declared: SlotCapabilities) -> SlotCapabilities {
+    const fn meet(a: Support, b: Support) -> Support {
+        if a.supported() && b.supported() {
+            Support::Supported
+        } else {
+            Support::Unsupported
+        }
+    }
+    SlotCapabilities {
+        attach_parent: meet(declared.attach_parent, BACKEND_CAPS.attach_parent),
+        reparent: meet(declared.reparent, BACKEND_CAPS.reparent),
+        cross_window_move: meet(declared.cross_window_move, BACKEND_CAPS.cross_window_move),
+        resize_negotiate: meet(declared.resize_negotiate, BACKEND_CAPS.resize_negotiate),
+        hide_show: meet(declared.hide_show, BACKEND_CAPS.hide_show),
+        focus: meet(declared.focus, BACKEND_CAPS.focus),
+        keyboard_input: meet(declared.keyboard_input, BACKEND_CAPS.keyboard_input),
+        ime: meet(declared.ime, BACKEND_CAPS.ime),
+        popup: meet(declared.popup, BACKEND_CAPS.popup),
+        clip: meet(declared.clip, BACKEND_CAPS.clip),
+        z_order: meet(declared.z_order, BACKEND_CAPS.z_order),
+        out_of_process_parent: meet(
+            declared.out_of_process_parent,
+            BACKEND_CAPS.out_of_process_parent,
+        ),
+    }
+}
+
+/// Window-coords clip → container-local physical region (the clip
+/// shifted by the geometry origin and scaled).
+fn clip_local(clip: Option<LogicalRect>, geometry: SlotGeometry) -> Option<PhysRect> {
+    clip.map(|c| {
+        to_phys(
+            LogicalRect {
+                x: c.x - geometry.rect.x,
+                y: c.y - geometry.rect.y,
+                width: c.width,
+                height: c.height,
+            },
+            geometry.scale_factor,
+        )
+    })
+}
 
 /// Captures `window`'s OS parent handle as an opaque `usize` — the
 /// redemption seam's raw material. Called once at window open while
@@ -90,7 +155,7 @@ struct Binding {
     window: WindowId,
     /// OS container for the live lease (Windows: a child HWND).
     container: Option<backend::Container>,
-    /// Explicit clip in slot coordinates (`None` = unconstrained).
+    /// Explicit clip in window coordinates (`None` = unconstrained).
     clip: Option<LogicalRect>,
     /// Explicit z-order (`set_zorder`).
     z: i32,
@@ -136,13 +201,19 @@ impl GpuiSurfaceAdapter {
     /// `ParentSlotLease` carries) into the raw OS parent token — the
     /// container surface's handle (`u64`-narrowed).
     ///
-    /// The lease is validated against the ledger first: stale,
-    /// revoked or forged payloads never yield a live parent.
+    /// The lease is validated against the ledger first: stale or
+    /// revoked payloads never yield a live parent. Validation is
+    /// ledger lookup, not authentication — a payload is an enumerable
+    /// `index | seq` bit-pattern that can only alias a *currently
+    /// live* lease, so this seam must not cross a trust boundary
+    /// (same-process use only today). The owner window and the OS
+    /// container are additionally required to still be alive.
     ///
     /// # Errors
     /// [`SlotError::InvalidLease`]/[`SlotError::LeaseRevoked`] on a
-    /// non-live payload, [`SlotError::Backend`] when the container is
-    /// missing, [`SlotError::Unsupported`] on OSes without a backend.
+    /// non-live payload, [`SlotError::Backend`] when the owner window
+    /// or container no longer exists, [`SlotError::Unsupported`] on
+    /// OSes without a backend.
     ///
     /// **RT contract:** non-RT only — UI-thread only.
     pub fn redeem(&self, payload: u64) -> Result<u64, SlotError> {
@@ -151,7 +222,17 @@ impl GpuiSurfaceAdapter {
             .bindings
             .get(&info.slot.index())
             .ok_or(SlotError::UnknownSlot)?;
-        let container = binding.container.as_ref().ok_or(SlotError::Backend)?;
+        if self.parent_of(binding.window).is_none() {
+            // Owner window retired: the OS already destroyed the
+            // child container — never hand out a dead or recycled
+            // handle.
+            return Err(SlotError::Backend);
+        }
+        let container = binding
+            .container
+            .as_ref()
+            .filter(|c| c.is_alive())
+            .ok_or(SlotError::Backend)?;
         Ok(container.token())
     }
 
@@ -229,7 +310,9 @@ impl NativeSurfaceSlot for GpuiSurfaceAdapter {
             // surface-side capability is truly supported.
             return Ok(SlotCapabilities::default());
         }
-        Ok(caps)
+        // Never report a capability the backend has no code path for,
+        // even if the consumer's spec declared it.
+        Ok(intersect_caps(caps))
     }
 
     fn declare_slot(&mut self, spec: SlotSpec) -> Result<SurfaceSlotId, SlotError> {
@@ -307,14 +390,10 @@ impl NativeSurfaceSlot for GpuiSurfaceAdapter {
         if !caps.clip.supported() {
             return Err(SlotError::Unsupported);
         }
-        let scale = self
-            .registry
-            .spec(slot)
-            .map_or(1.0, |s| s.geometry.scale_factor);
         let geometry = self
             .registry
             .spec(slot)
-            .map(|s| s.geometry.rect)
+            .map(|s| s.geometry)
             .ok_or(SlotError::UnknownSlot)?;
         let binding = self
             .bindings
@@ -322,20 +401,7 @@ impl NativeSurfaceSlot for GpuiSurfaceAdapter {
             .ok_or(SlotError::UnknownSlot)?;
         binding.clip = clip;
         if let Some(container) = &binding.container {
-            // Slot coords → container-local region: the region rect
-            // is the clip shifted by the geometry origin.
-            let local = clip.map(|c| {
-                to_phys(
-                    LogicalRect {
-                        x: c.x - geometry.x,
-                        y: c.y - geometry.y,
-                        width: c.width,
-                        height: c.height,
-                    },
-                    scale,
-                )
-            });
-            container.set_clip(local);
+            container.set_clip(clip_local(clip, geometry));
         }
         Ok(())
     }
@@ -388,12 +454,27 @@ impl NativeSurfaceSlot for GpuiSurfaceAdapter {
             .map(|b| b.window)
             .ok_or(SlotError::UnknownSlot)?;
         let parent = self.parent_of(window).ok_or(SlotError::Backend)?;
-        let spec = self.registry.spec(slot).ok_or(SlotError::UnknownSlot)?;
-        let rect = to_phys(spec.geometry.rect, spec.geometry.scale_factor);
+        let (geometry, visibility) = self
+            .registry
+            .spec(slot)
+            .map(|s| (s.geometry, s.visibility))
+            .ok_or(SlotError::UnknownSlot)?;
+        let rect = to_phys(geometry.rect, geometry.scale_factor);
         let lease = self.registry.lease_parent(slot)?;
         match backend::Container::create(parent, rect) {
             Ok(container) => {
                 if let Some(binding) = self.bindings.get_mut(&slot.index()) {
+                    // Re-apply the recorded slot state — clip and
+                    // z-order set before the lease must land on the
+                    // new container, and a `Hidden` spec must attach
+                    // hidden (the OS default is visible).
+                    if binding.clip.is_some() {
+                        container.set_clip(clip_local(binding.clip, geometry));
+                    }
+                    if binding.z != 0 {
+                        container.raise();
+                    }
+                    container.set_visible(matches!(visibility, SlotVisibility::Visible));
                     binding.container = Some(container);
                 }
                 Ok(lease)
@@ -436,12 +517,12 @@ mod backend {
     use std::ptr;
 
     use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, HRGN, SetWindowRgn};
+    use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, DeleteObject, HRGN, SetWindowRgn};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetFocus;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DestroyWindow, HWND_TOP, MoveWindow, SW_HIDE, SW_SHOW, SWP_NOMOVE,
-        SWP_NOSIZE, SetWindowPos, ShowWindow, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
-        WS_VISIBLE,
+        CreateWindowExW, DestroyWindow, HWND_TOP, IsWindow, MoveWindow, SW_HIDE, SW_SHOW,
+        SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow, WS_CHILD, WS_CLIPCHILDREN,
+        WS_CLIPSIBLINGS, WS_VISIBLE,
     };
 
     use ruviform_ui::SlotError;
@@ -500,6 +581,13 @@ mod backend {
             self.hwnd as usize as u64
         }
 
+        /// `true` while the OS window still exists.
+        pub(super) fn is_alive(&self) -> bool {
+            // SAFETY: `IsWindow` accepts any HWND value — a stale
+            // handle simply reports false.
+            unsafe { IsWindow(self.hwnd) != 0 }
+        }
+
         /// Repositions/resizes the container in parent client coords.
         pub(super) fn set_rect(&self, rect: PhysRect) {
             // SAFETY: `hwnd` is our live child HWND; `MoveWindow` on a
@@ -521,17 +609,17 @@ mod backend {
         /// `local` is already in the container's client coordinates;
         /// `None` removes the region.
         pub(super) fn set_clip(&self, local: Option<PhysRect>) {
-            // SAFETY: `CreateRectRgn` yields an owned HRGN; passing it
-            // to `SetWindowRgn` transfers ownership to the OS — a
-            // successful call must not `DeleteObject` it. On failure
-            // the rgn is dropped via DeleteObject-free NULL path (an
-            // HRGN leak on SetWindowRgn failure is bounded and rare;
-            // the OS frees it with the window).
+            // SAFETY: `CreateRectRgn` yields an owned HRGN; a
+            // successful `SetWindowRgn` transfers ownership to the OS
+            // (it must not be `DeleteObject`ed). On failure the region
+            // is still ours — free it explicitly instead of leaking.
             unsafe {
                 let rgn: HRGN = local.map_or(ptr::null_mut(), |c| {
                     CreateRectRgn(c.x, c.y, c.x + c.w, c.y + c.h)
                 });
-                SetWindowRgn(self.hwnd, rgn, 1);
+                if !rgn.is_null() && SetWindowRgn(self.hwnd, rgn, 1) == 0 {
+                    DeleteObject(rgn);
+                }
             }
         }
 
@@ -586,6 +674,11 @@ mod backend {
         /// Never reached — no backend, no container.
         pub(super) fn token(&self) -> u64 {
             0
+        }
+
+        /// Never reached — no backend, no container.
+        pub(super) fn is_alive(&self) -> bool {
+            false
         }
 
         /// Never reached — no backend, no container.
