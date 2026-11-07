@@ -19,9 +19,13 @@ ruviform-graph = { path = "../ruviform-graph" }
 ruviform-audio-analysis = { path = "../ruviform-audio-analysis" }
 ruviform-observability = { path = "../ruviform-observability" }
 # Issue #198 sequential offline render: staged output lifecycle
-# (`MediaSink`/`Encoder`/`Muxer`/`StagedOutput`) and non-RT job
-# primitives (`CancellationToken`/`Progress`).
+# (`MediaSink`/`Encoder`/`Muxer` over `ruviform-io-file`'s
+# `StagedFile`/`SealedFile`) and non-RT job primitives
+# (`CancellationToken`/`Progress`).
 ruviform-media-io = { path = "../ruviform-media-io" }
+# Issue #305: staged file publish contract (StagedFile/SealedFile/
+# PublishReceipt/PublishFailure) consumed by the non-RT render path.
+ruviform-io-file = { path = "../ruviform-io-file" }
 ruviform-exec = { path = "../ruviform-exec" }
 
 [dev-dependencies]

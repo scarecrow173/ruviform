@@ -7,8 +7,7 @@
 
 mod common;
 
-use std::fs::File;
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -24,6 +23,10 @@ use ruviform_audio::typed::{
 use ruviform_audio_core::{ChannelLayout, SampleFormat, SampleRate};
 use ruviform_exec::{CancellationToken, Progress};
 use ruviform_graph::PortId;
+use ruviform_io_file::{
+    Durability, DurabilityEvidence, PublishEffect, PublishFailure, PublishMode, PublishOptions,
+    PublishReceipt, SealedFile, StagedFile, TempState,
+};
 use ruviform_io_wav::WavOutputSpec;
 use ruviform_media_core::{
     BeatPosition, BlockContract, DeliveryPolicy, EngineFrame, InBlockTransportSupport,
@@ -33,9 +36,14 @@ use ruviform_media_core::{
 };
 use ruviform_media_io::{
     CodecFormat, Decoder, Demuxer, Encoder, Error as MediaError, ErrorKind, Frame, Muxer, Packet,
-    PublishOptions, StagedOutput, StreamInfo,
+    StreamInfo,
 };
 use ruviform_rt::RtContext;
+
+/// The no-overwrite publish contract: refuse an existing destination,
+/// require atomic visibility, and require file + directory durability.
+const NO_OVERWRITE: PublishOptions =
+    PublishOptions::new(PublishMode::CreateNew, Durability::FileAndDirectorySync);
 
 const RATE: u32 = 48_000;
 
@@ -190,13 +198,13 @@ impl Muxer for NullMuxer {
 }
 
 /// `null_muxer` as a plain `fn` — a function item satisfies the
-/// driver's `FnOnce(File) -> Result<Box<dyn Muxer>, _>` bound at any
-/// call site without closure inference.
+/// driver's `for<'a> FnOnce(&'a mut StagedFile) -> Result<Box<dyn
+/// Muxer + 'a>, _>` bound at any call site without closure inference.
 #[expect(
     clippy::unnecessary_wraps,
     reason = "the driver bound requires a fallible constructor"
 )]
-fn null_muxer(_file: File) -> Result<Box<dyn Muxer>, MediaError> {
+fn null_muxer(_staged: &mut StagedFile) -> Result<Box<dyn Muxer + '_>, MediaError> {
     Ok(Box::new(NullMuxer {
         streams: Vec::new(),
     }))
@@ -204,15 +212,16 @@ fn null_muxer(_file: File) -> Result<Box<dyn Muxer>, MediaError> {
 
 /// Sink wrapper that fails `write` once `budget` bytes have been
 /// accepted, and/or `flush` unconditionally — deterministic
-/// `Output`/`Finalize` injection.
-struct FailSink {
-    inner: File,
+/// `Output`/`Finalize` injection. It borrows the staged file, so
+/// bytes accepted before the failure still land in the staged temp.
+struct FailSink<'a> {
+    inner: &'a mut StagedFile,
     written: u64,
     budget: u64,
     fail_flush: bool,
 }
 
-impl Write for FailSink {
+impl Write for FailSink<'_> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         if self.written + buf.len() as u64 > self.budget {
             return Err(std::io::Error::new(
@@ -233,7 +242,7 @@ impl Write for FailSink {
     }
 }
 
-impl Seek for FailSink {
+impl Seek for FailSink<'_> {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         self.inner.seek(pos)
     }
@@ -282,25 +291,25 @@ fn spec(c: &Chain, range: (u64, u64), tail: TailSpec, job: (u64, u64), chunk: u3
     }
 }
 
-type VerifyFn = fn(&Path, &OutputFacts) -> Result<(), MediaError>;
-type MuxerCtor = fn(File) -> Result<Box<dyn Muxer>, MediaError>;
-type PublishFn = fn(StagedOutput, PublishOptions) -> Result<(), MediaError>;
+type VerifyFn = fn(&mut SealedFile, &OutputFacts) -> Result<(), MediaError>;
+type MuxerCtor = for<'a> fn(&'a mut StagedFile) -> Result<Box<dyn Muxer + 'a>, MediaError>;
+type PublishFn = fn(SealedFile, PublishOptions) -> Result<PublishReceipt, PublishFailure>;
 
 /// A render bundle whose output lands in `captured` via the
 /// `CaptureEncoder`/`NullMuxer` pair; the staged file still exists on
-/// disk (a real `StagedOutput` over a real temp file).
+/// disk (a real `StagedFile` over a real temp file).
 fn capture_output(
     dest: &Path,
     captured: Arc<Mutex<Captured>>,
     options: PublishOptions,
 ) -> RenderOutput<MuxerCtor, VerifyFn, PublishFn> {
     RenderOutput {
-        staged: StagedOutput::create(dest).expect("staged output"),
+        staged: StagedFile::create(dest).expect("staged file"),
         make_muxer: null_muxer,
         encoder: Box::new(CaptureEncoder { out: captured }),
         publish_options: options,
         verify: None,
-        publish: StagedOutput::publish,
+        publish: SealedFile::publish,
     }
 }
 
@@ -368,7 +377,7 @@ fn of01_block_size_invariance() {
             &mut t,
             &sp,
             &mut feeder_signal(),
-            capture_output(&dest, Arc::clone(&captured), PublishOptions::no_overwrite()),
+            capture_output(&dest, Arc::clone(&captured), NO_OVERWRITE),
             &progress,
             &CancellationToken::new(),
             &mut no_events,
@@ -414,7 +423,7 @@ fn of02_midstream_preroll_pdc_tail() {
             &mut t,
             &sp,
             &mut feeder_signal(),
-            capture_output(&dest, Arc::clone(&captured), PublishOptions::no_overwrite()),
+            capture_output(&dest, Arc::clone(&captured), NO_OVERWRITE),
             &Progress::new(),
             &CancellationToken::new(),
             &mut no_events,
@@ -439,7 +448,7 @@ fn of02_midstream_preroll_pdc_tail() {
             &mut t,
             &sp,
             &mut feeder_signal(),
-            capture_output(&dest, Arc::clone(&captured), PublishOptions::no_overwrite()),
+            capture_output(&dest, Arc::clone(&captured), NO_OVERWRITE),
             &Progress::new(),
             &CancellationToken::new(),
             &mut no_events,
@@ -470,7 +479,7 @@ fn of02_midstream_preroll_pdc_tail() {
             &mut t,
             &sp,
             &mut feeder_signal(),
-            capture_output(&dest, Arc::clone(&captured), PublishOptions::no_overwrite()),
+            capture_output(&dest, Arc::clone(&captured), NO_OVERWRITE),
             &Progress::new(),
             &CancellationToken::new(),
             &mut no_events,
@@ -553,7 +562,7 @@ fn of03_events_loop_transport_order() {
         capture_output(
             &dest,
             Arc::new(Mutex::new(Captured::default())),
-            PublishOptions::no_overwrite(),
+            NO_OVERWRITE,
         ),
         &Progress::new(),
         &CancellationToken::new(),
@@ -627,7 +636,7 @@ fn of04_live_independence_and_capability_gate() {
         capture_output(
             &dest,
             Arc::new(Mutex::new(Captured::default())),
-            PublishOptions::no_overwrite(),
+            NO_OVERWRITE,
         ),
         &Progress::new(),
         &CancellationToken::new(),
@@ -664,7 +673,7 @@ fn of04_live_independence_and_capability_gate() {
             capture_output(
                 &dest,
                 Arc::new(Mutex::new(Captured::default())),
-                PublishOptions::no_overwrite(),
+                NO_OVERWRITE,
             ),
             &Progress::new(),
             &CancellationToken::new(),
@@ -690,13 +699,25 @@ fn map_noop_u32() -> impl FnMut(&ScheduledEvent<u32>, u64) -> Option<NodeEvent> 
 // matching frame count, channels, rate, and PCM content.
 // ------------------------------------------------------------------
 
-/// Reopens `temp` through the symphonia demuxer and checks the
-/// decoded WAV against `expected` PCM and `facts` geometry — the
-/// independent-reader half of the output contract.
-fn verify_wav(expected: Vec<Vec<f32>>) -> impl Fn(&Path, &OutputFacts) -> Result<(), MediaError> {
-    move |temp, facts| {
-        let file = File::open(temp).map_err(|e| MediaError::with_source(ErrorKind::Io, e))?;
-        let mut demuxer = ruviform_io_symphonia::open_demuxer(file)?;
+/// Verifies the sealed staged file through `open_readback` and an
+/// independent symphonia decode — the readback-verification half of
+/// the output contract. The bytes come from the sealed object itself
+/// (never a reopened path); they are copied into a `Cursor` because
+/// `open_demuxer` requires a `'static` `MediaSource`.
+fn verify_wav(
+    expected: Vec<Vec<f32>>,
+) -> impl Fn(&mut SealedFile, &OutputFacts) -> Result<(), MediaError> {
+    move |sealed, facts| {
+        let mut bytes = Vec::new();
+        {
+            let mut readback = sealed
+                .open_readback()
+                .map_err(|e| MediaError::with_source(ErrorKind::Io, e))?;
+            readback
+                .read_to_end(&mut bytes)
+                .map_err(|e| MediaError::with_source(ErrorKind::Io, e))?;
+        }
+        let mut demuxer = ruviform_io_symphonia::open_demuxer(Cursor::new(bytes))?;
         let stream = {
             let streams = demuxer.streams();
             if streams.len() != 1 {
@@ -794,15 +815,12 @@ fn of05_wav_reopen_verify() {
         &sp,
         &mut feeder,
         RenderOutput {
-            staged: StagedOutput::create(&dest).unwrap(),
-            make_muxer: move |file| -> Result<Box<dyn Muxer>, MediaError> {
-                ruviform_io_wav::open_muxer(file, std::slice::from_ref(&info_mux))
-                    .map(|m| Box::new(m) as _)
-            },
+            staged: StagedFile::create(&dest).unwrap(),
+            make_muxer: wav_muxer_ctor(info_mux),
             encoder: Box::new(ruviform_io_wav::make_encoder(&info).expect("wav encoder")),
-            publish_options: PublishOptions::no_overwrite(),
+            publish_options: NO_OVERWRITE,
             verify: Some(verify),
-            publish: StagedOutput::publish,
+            publish: SealedFile::publish,
         },
         &Progress::new(),
         &CancellationToken::new(),
@@ -811,6 +829,13 @@ fn of05_wav_reopen_verify() {
     .expect("wav render");
     assert_eq!(receipt.frames_emitted, len as u64);
     assert!(dest.exists(), "published destination exists");
+    // Publish evidence: full durability was requested and achieved,
+    // the staged temp is gone.
+    assert_eq!(
+        receipt.publish.durability(),
+        DurabilityEvidence::FileAndDirectorySynced
+    );
+    assert_eq!(receipt.publish.temp_state(), TempState::Absent);
 }
 
 // ------------------------------------------------------------------
@@ -828,9 +853,9 @@ fn run_render<Mk, V, Pb>(
     cancel: &CancellationToken,
 ) -> Result<RenderReceipt, RenderError>
 where
-    Mk: FnOnce(File) -> Result<Box<dyn Muxer>, MediaError>,
-    V: FnOnce(&Path, &OutputFacts) -> Result<(), MediaError>,
-    Pb: FnOnce(StagedOutput, PublishOptions) -> Result<(), MediaError>,
+    Mk: for<'a> FnOnce(&'a mut StagedFile) -> Result<Box<dyn Muxer + 'a>, MediaError>,
+    V: FnOnce(&mut SealedFile, &OutputFacts) -> Result<(), MediaError>,
+    Pb: FnOnce(SealedFile, PublishOptions) -> Result<PublishReceipt, PublishFailure>,
 {
     let mut prep = prepared(c, OnePole::new(0));
     let mut tr = transport::<u32>(128);
@@ -859,25 +884,18 @@ fn fail_output(
     info_mux: StreamInfo,
     budget: u64,
     fail_flush: bool,
-) -> RenderOutput<impl FnOnce(File) -> Result<Box<dyn Muxer>, MediaError>, VerifyFn, PublishFn> {
+) -> RenderOutput<
+    impl for<'a> FnOnce(&'a mut StagedFile) -> Result<Box<dyn Muxer + 'a>, MediaError>,
+    VerifyFn,
+    PublishFn,
+> {
     RenderOutput {
-        staged: StagedOutput::create(dest).unwrap(),
-        make_muxer: move |file| {
-            ruviform_io_wav::open_muxer(
-                FailSink {
-                    inner: file,
-                    written: 0,
-                    budget,
-                    fail_flush,
-                },
-                std::slice::from_ref(&info_mux),
-            )
-            .map(|m| Box::new(m) as _)
-        },
+        staged: StagedFile::create(dest).unwrap(),
+        make_muxer: fail_muxer_ctor(info_mux, budget, fail_flush),
         encoder: Box::new(ruviform_io_wav::make_encoder(&wire_spec()).expect("enc")),
-        publish_options: PublishOptions::no_overwrite(),
+        publish_options: NO_OVERWRITE,
         verify: None,
-        publish: StagedOutput::publish,
+        publish: SealedFile::publish,
     }
 }
 
@@ -890,20 +908,72 @@ fn wire_spec() -> StreamInfo {
     .stream_info()
 }
 
+/// `open_muxer` over the staged borrow as a named `fn` — a declared
+/// `<'a>` signature generalizes where a closure's `as _` cast would
+/// collapse the muxer to `Box<dyn Muxer + 'static>`.
+fn wav_muxer<'a>(
+    staged: &'a mut StagedFile,
+    info: &StreamInfo,
+) -> Result<Box<dyn Muxer + 'a>, MediaError> {
+    ruviform_io_wav::open_muxer(staged, std::slice::from_ref(info)).map(|m| Box::new(m) as _)
+}
+
+/// `wav_muxer` behind an HRTB-annotated constructor — the `impl
+/// for<'a> FnOnce` return type propagates the expected signature into
+/// the closure, which plain closures cannot express on their own.
+fn wav_muxer_ctor(
+    info: StreamInfo,
+) -> impl for<'a> FnOnce(&'a mut StagedFile) -> Result<Box<dyn Muxer + 'a>, MediaError> {
+    move |staged: &mut StagedFile| wav_muxer(staged, &info)
+}
+
+/// `FailSink` variant of [`wav_muxer`] — same lifetime reasoning.
+fn fail_muxer<'a>(
+    staged: &'a mut StagedFile,
+    info: &StreamInfo,
+    budget: u64,
+    fail_flush: bool,
+) -> Result<Box<dyn Muxer + 'a>, MediaError> {
+    ruviform_io_wav::open_muxer(
+        FailSink {
+            inner: staged,
+            written: 0,
+            budget,
+            fail_flush,
+        },
+        std::slice::from_ref(info),
+    )
+    .map(|m| Box::new(m) as _)
+}
+
+fn fail_muxer_ctor(
+    info: StreamInfo,
+    budget: u64,
+    fail_flush: bool,
+) -> impl for<'a> FnOnce(&'a mut StagedFile) -> Result<Box<dyn Muxer + 'a>, MediaError> {
+    move |staged: &mut StagedFile| fail_muxer(staged, &info, budget, fail_flush)
+}
+
 /// `RenderOutput` over `CaptureEncoder`/`NullMuxer` with caller-chosen
-/// verify/publish hooks — the "raw" counterpart of `capture_output`.
-fn raw_output(
+/// options/verify/publish hooks — the "raw" counterpart of
+/// `capture_output`. `Pb` is generic so failure-injecting closures
+/// (which cannot coerce to the `PublishFn` pointer) fit too.
+fn raw_output<Pb>(
     dest: &Path,
+    options: PublishOptions,
     verify: Option<VerifyFn>,
-    publish: PublishFn,
-) -> RenderOutput<MuxerCtor, VerifyFn, PublishFn> {
+    publish: Pb,
+) -> RenderOutput<MuxerCtor, VerifyFn, Pb>
+where
+    Pb: FnOnce(SealedFile, PublishOptions) -> Result<PublishReceipt, PublishFailure>,
+{
     RenderOutput {
-        staged: StagedOutput::create(dest).unwrap(),
+        staged: StagedFile::create(dest).unwrap(),
         make_muxer: null_muxer,
         encoder: Box::new(CaptureEncoder {
             out: Arc::new(Mutex::new(Captured::default())),
         }),
-        publish_options: PublishOptions::no_overwrite(),
+        publish_options: options,
         verify,
         publish,
     }
@@ -935,7 +1005,7 @@ fn of06_failure_injection() {
             capture_output(
                 &dest,
                 Arc::new(Mutex::new(Captured::default())),
-                PublishOptions::no_overwrite(),
+                NO_OVERWRITE,
             ),
             &cancel,
         )
@@ -997,21 +1067,40 @@ fn of06_staging_policy() {
     let len = 512u64;
     let fresh = CancellationToken::new();
 
-    // (d) Publish failure → Publish; staged temp cleaned.
+    // (d) Publish failure → Publish carrying the real PublishFailure
+    // (effect NotPublished); staged temp cleaned through the recovery
+    // handle, destination untouched.
     {
         let (scratch, dest) = Scratch::new("of06-pub");
+        // Renaming onto an existing *directory* fails on every
+        // platform — a deterministic real publish failure.
+        std::fs::create_dir(&dest).unwrap();
         let err = run_render(
             &c,
             len,
             &mut feeder_signal(),
-            raw_output(&dest, None, |_staged, _opts| {
-                Err(MediaError::from_kind(ErrorKind::Io))
-            }),
+            raw_output(
+                &dest,
+                PublishOptions::new(PublishMode::Replace, Durability::FileSync),
+                None,
+                SealedFile::publish,
+            ),
             &fresh,
         )
         .unwrap_err();
-        assert!(matches!(err, RenderError::Publish { .. }));
-        assert_no_output(&scratch, &dest);
+        assert!(
+            matches!(
+                err,
+                RenderError::Publish {
+                    ref source,
+                    ref cleanup,
+                } if source.effect() == PublishEffect::NotPublished
+                    && cleanup.is_none()
+            ),
+            "publish failure keeps NotPublished effect, got {err:?}"
+        );
+        assert!(dest.is_dir(), "existing directory untouched");
+        assert_eq!(scratch.leftover_temps(), 0, "staged temp cleaned");
     }
 
     // (e) Destination exists → DestinationExists before rendering;
@@ -1026,7 +1115,7 @@ fn of06_staging_policy() {
             capture_output(
                 &dest,
                 Arc::new(Mutex::new(Captured::default())),
-                PublishOptions::no_overwrite(),
+                NO_OVERWRITE,
             ),
             &fresh,
         )
@@ -1045,13 +1134,87 @@ fn of06_staging_policy() {
             &mut feeder_signal(),
             raw_output(
                 &dest,
+                NO_OVERWRITE,
                 Some(|_p, _f| Err(MediaError::from_kind(ErrorKind::InvalidData))),
-                StagedOutput::publish,
+                SealedFile::publish,
             ),
             &fresh,
         )
         .unwrap_err();
         assert!(matches!(err, RenderError::Verify { .. }));
+        assert_no_output(&scratch, &dest);
+    }
+}
+
+#[test]
+fn of06_publish_lifecycle() {
+    let c = chain();
+    let feeder_signal = || SignalFeeder {
+        data: signal(2, 1_024),
+    };
+    let len = 512u64;
+    let fresh = CancellationToken::new();
+
+    // (g) Publish-time DestinationExists — a destination appearing
+    // after the render-entry check is refused by the atomic CreateNew
+    // at publish and maps to the dedicated variant. The real staged
+    // temp is cleaned via the failure's recovery handle.
+    {
+        let (scratch, dest) = Scratch::new("of06-destpub");
+        let dest_inject = dest.clone();
+        let err = run_render(
+            &c,
+            len,
+            &mut feeder_signal(),
+            raw_output(&dest, NO_OVERWRITE, None, move |sealed, opts| {
+                // Destination appears between the early check and
+                // the atomic publish — a real DestinationExists
+                // PublishFailure (its temp survives inside the
+                // failure's recovery handle).
+                std::fs::write(&dest_inject, b"snuck in").unwrap();
+                sealed.publish(opts)
+            }),
+            &fresh,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, RenderError::DestinationExists { .. }),
+            "publish-time refusal maps to DestinationExists, got {err:?}"
+        );
+        assert_eq!(std::fs::read(&dest).unwrap(), b"snuck in");
+        assert_eq!(scratch.leftover_temps(), 0, "staged temp cleaned");
+    }
+
+    // (h) Cancel between verify and publish → Cancelled{publish};
+    // the sealed temp is dropped and cleaned.
+    {
+        let (scratch, dest) = Scratch::new("of06-pubcancel");
+        let cancel = CancellationToken::new();
+        let cancel_in_verify = cancel.clone();
+        let err = run_render(
+            &c,
+            len,
+            &mut feeder_signal(),
+            RenderOutput {
+                staged: StagedFile::create(&dest).unwrap(),
+                make_muxer: null_muxer,
+                encoder: Box::new(CaptureEncoder {
+                    out: Arc::new(Mutex::new(Captured::default())),
+                }),
+                publish_options: NO_OVERWRITE,
+                verify: Some(move |_sealed: &mut SealedFile, _f: &OutputFacts| {
+                    cancel_in_verify.cancel();
+                    Ok(())
+                }),
+                publish: SealedFile::publish,
+            },
+            &cancel,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, RenderError::Cancelled { phase: "publish" }),
+            "cancel after verify hits the publish phase, got {err:?}"
+        );
         assert_no_output(&scratch, &dest);
     }
 }

@@ -6409,6 +6409,7 @@ dependencies = [
  "ruviform-audio-core",
  "ruviform-exec",
  "ruviform-graph",
+ "ruviform-io-file",
  "ruviform-io-symphonia",
  "ruviform-io-wav",
  "ruviform-media-core",
@@ -6591,6 +6592,7 @@ name = "ruviform-io-wav"
 version = "0.1.0"
 dependencies = [
  "ruviform-audio-core",
+ "ruviform-io-file",
  "ruviform-io-symphonia",
  "ruviform-media-core",
  "ruviform-media-io",

@@ -67,6 +67,7 @@ Directory: `docs/plans`
 | PLAN-034RT7NR5zMcrEqmbWbWy3 | Issue #302 ruviform-io-archive 実装計画 (IO-IMP-08) | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | PLAN-UecvheIvCz0oE2tUFPmFC0 | Issue #303 ruviform-io-archive TAR 実装計画 (IO-IMP-09) | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | PLAN-kMb7YLTQ28L2txLvTj6dcD | Issue #304 ruviform-io-archive Secure Extraction 実装計画 (IO-IMP-10) | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| PLAN-gWrX94JcoMQacCOPFR5FKD | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 実装計画 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | PLAN-W0d5X9GIZLFMnSGqu9OlBg | Issue #306 汎用 I/O 合成 E2E 実装計画 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
@@ -89,6 +90,7 @@ Directory: `docs/plans`
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
+| PLAN-Y2emYF0VFlVKTxwsGWm4Ev | ruviform-io-file Rooted Read Capability 実装計画 | done | [rooted-read-capability.md](./rooted-read-capability.md) |
 | PLAN-kreAOLAGHhliWIVO5VQM6G | ViewLink authoritative generation 実装計画 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
@@ -122,3 +124,4 @@ Directory: `docs/plans`
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
+| PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |

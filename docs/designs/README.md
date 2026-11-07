@@ -71,6 +71,7 @@ Directory: `docs/designs`
 | DESIGN-034RT7CvRTe3b8jPTFBHtq | Issue #302 ruviform-io-archive — Archive 共通型・ZIP Indexed Reader/Writer・検証パイプライン設計 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | DESIGN-HR0Ud1VXoIpQCfUcosM6ib | Issue #303 ruviform-io-archive — TAR Streaming Reader/Pending・PAX/GNU・Writer 設計 | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | DESIGN-mH3gJLoQj3rdU7xRXX8eZD | Issue #304 ruviform-io-archive — Secure Extraction・Staging/Recovery・OS 別 Root Capability 設計 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| DESIGN-eVPQpm7tyMUS2gxitU5KtN | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行設計 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | DESIGN-ODmc6p5Cp7Kbq0u35OrAiR | Issue #306 汎用 I/O 合成 E2E — 試験専用クレート構成・境界試験設計 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | DESIGN-dHUQ40Hk50tvziqjx7Kewj | Issue #307 attach 時 frame_base 検証 context — 実装設計 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | DESIGN-034Rp1KqXNzTDTKRXTbqHx | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
@@ -98,6 +99,7 @@ Directory: `docs/designs`
 | DESIGN-x7UlzjoyvZa1pu2ARRLOZZ | Issue #389 Driver-neutral PluginEditorSession 設計（state machine / typed HostPort / L0-L1 写像・wire negotiation 方針） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | DESIGN-8EX9crwtfdh9PhZtOJ2cfY | Issue #389 VST3/L0 実外部 Editor attach 設計（Vst3Plugin::open_gui/close_gui + Windows HWND attach） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | DESIGN-034T9VaXD2KXqhGxaHawyH | Issue #390 Driver Contract Lab — boundary guard 検査設計・registry schema・実行接続点 | approved | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
+| DESIGN-utKDN0iwqlQEVtqkiEUHJi | Issue #400 借用 sealed readback → 独立 decoder bounded 接続の設計 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |
@@ -106,6 +108,7 @@ Directory: `docs/designs`
 | DESIGN-034JZLISO0000000000003 | プラグイン分離設計（境界・プロセス監視・RT 面制約） | approved | [plugin-isolation.md](./plugin-isolation.md) |
 | DESIGN-034LNAalREIHyUQNVXLLin | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー） | approved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
 | DESIGN-034IvBNBZvoikAgd6DJxdD | テンプレート由来ドキュメント・識別子のRuviform固有化の設計 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
+| DESIGN-6GZ1DYjAInxUNz0dwJRwN7 | ruviform-io-file Rooted Read Capability 設計 | approved | [rooted-read-capability.md](./rooted-read-capability.md) |
 | DESIGN-034JgsK9khgDsPqG04Sp6i | RT 基盤 API 設計（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | approved | [rt-foundation-api-design.md](./rt-foundation-api-design.md) |
 | DESIGN-034JOU7C43HBPJBsnz8JQP | RT 検証レーン設計 | approved | [rt-verification-lane-design.md](./rt-verification-lane-design.md) |
 | DESIGN-034IPynWe2V30FLubzQenb | Ruviform architecture design baseline | approved | [ruviform-architecture-design-baseline.md](./ruviform-architecture-design-baseline.md) |

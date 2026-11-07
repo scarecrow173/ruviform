@@ -20,6 +20,9 @@ ruviform-audio-core = { path = "../ruviform-audio-core" }
 # Symphonia code — WAV decode is exercised through the existing
 # demux/decode backend.
 ruviform-io-symphonia = { path = "../ruviform-io-symphonia" }
+# Staged-publish lifecycle in the contract tests (Issue #305): the
+# backend is generic over `MediaSink`; `StagedFile` satisfies it.
+ruviform-io-file = { path = "../ruviform-io-file" }
 
 [lints]
 workspace = true

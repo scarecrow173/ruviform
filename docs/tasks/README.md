@@ -168,6 +168,7 @@ Directory: `docs/tasks`
 | TASK-PGN5ItjVgMoSpqmL4YJtjn | T1 Path Policy・canonical 衝突・FS trait 骨格 (Issue #304) | done | [issue-304-t1-path-policy.md](./issue-304-t1-path-policy.md) |
 | TASK-KfnrekDg0F7pVPV37olgXQ | T2 Staging backend・Session/Tree・identity cleanup (Issue #304) | done | [issue-304-t2-staging-backend.md](./issue-304-t2-staging-backend.md) |
 | TASK-PUEIOL8kRSg2p5kKdPYMUK | T3 end-to-end 否定行列・doc/台帳・最終検証 (Issue #304) | done | [issue-304-t3-secure-verify.md](./issue-304-t3-secure-verify.md) |
+| TASK-9KS9Fd9Lzf1TjWIavKU8Uz | T1 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 (Issue #305) | done | [issue-305-t1-staged-file-cutover.md](./issue-305-t1-staged-file-cutover.md) |
 | TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |
 | TASK-laPtj98NpzxI9OnVwLg5y4 | T2 File・Structured 境界試験 (Issue #306) | done | [issue-306-t2-file-structured-boundary.md](./issue-306-t2-file-structured-boundary.md) |
 | TASK-MzTtn00zwhx1kzvEGUUep1 | T3 Archive・Compression 境界試験 (Issue #306) | done | [issue-306-t3-archive-compression-boundary.md](./issue-306-t3-archive-compression-boundary.md) |
@@ -202,6 +203,7 @@ Directory: `docs/tasks`
 | TASK-Peb0C7F4qBHb9sZP8wXZnR | T2 ci-issue-tracker.yml workflow + 運用 README + dev-env 同期（Issue #368） | done | [issue-368-t2-tracker-workflow.md](./issue-368-t2-tracker-workflow.md) |
 | TASK-6LaGohoePjG92Eb5u6lUv7 | T3 tracker.mjs reconcile モード + parseTrackerArgs + contract tests（Issue #368） | done | [issue-368-t3-tracker-reconcile-mode.md](./issue-368-t3-tracker-reconcile-mode.md) |
 | TASK-T6nZSLe2NKHl8o4neneyTK | T4 ci-issue-tracker-reconcile.yml 新設 + README/dev-env 同期（Issue #368） | done | [issue-368-t4-reconcile-workflow.md](./issue-368-t4-reconcile-workflow.md) |
+| TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
@@ -287,6 +289,9 @@ Directory: `docs/tasks`
 | TASK-034IwCbgksOGvhF5E4CQbp | README.md の Ruviform 向け全面改稿 | done | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
 | TASK-034LFHlxNkMOGDilPsdP0f | 既存カーネルの RgbaF32 arm 拡張（CompositeOver/Crossfade/AffineTransform） | done | [rgba-f32-composite-affine-arms.md](./rgba-f32-composite-affine-arms.md) |
 | TASK-034LFH4wXKj32ElWzaI2lb | RgbaF32 pixel format + transfer/primaries 内部基盤 | done | [rgba-f32-format-and-transfer-internals.md](./rgba-f32-format-and-transfer-internals.md) |
+| TASK-F1hO5AvuiammHw0t5nBKxP | T1 vfs 共有層抽出 — io-file への OS primitive 集約と archive adapter 化 | done | [rooted-read-t1-vfs.md](./rooted-read-t1-vfs.md) |
+| TASK-PKzErsdcGHe0VY9E50OmL7 | T2 rooted 公開 API + fd-stack resolve engine + FileErrorKind 拡張 | done | [rooted-read-t2-public-api.md](./rooted-read-t2-public-api.md) |
+| TASK-wkAr7DIKDCofXJyOOnTLmo | T3 実 FS 回帰・crate/index/lockfile 更新・全体検証 | done | [rooted-read-t3-tests.md](./rooted-read-t3-tests.md) |
 | TASK-034KV6AzIxXBCyJdl6BFjk | RT 観測計測ハーネスの実装（PoC scaffolding・criterion ベンチ・スモーク配線） | done | [rt-observability-bench-harness.md](./rt-observability-bench-harness.md) |
 | TASK-034KV6AXTsAaxjMCc4m8px | RT 観測 PoC の計測実行・experiment/impl 記録・#103 判定フィードバック | done | [rt-observability-poc-run-and-report.md](./rt-observability-poc-run-and-report.md) |
 | TASK-034JglHs8cNMDOvyZFeUpc | PoC example（list_devices・play_sine）実機手順と実験ログ | done | [run-device-poc-examples-and-exp-log.md](./run-device-poc-examples-and-exp-log.md) |

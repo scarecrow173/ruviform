@@ -16,9 +16,10 @@
 //! separate capability flag.
 //!
 //! Durability is intentionally *not* part of this port: `Write::flush`
-//! reaches only userspace buffers. The checked fsync/rename step lives
-//! in [`StagedOutput`](crate::StagedOutput), which owns the `File`
-//! through the whole write → finalize → publish sequence.
+//! reaches only userspace buffers. The checked sync + atomic publish +
+//! recovery contract lives in `ruviform-io-file`
+//! (`StagedFile`/`SealedFile`/`PublishFailure`), which owns the staged
+//! file through the whole write → finalize → publish sequence.
 //!
 //! A `Box<dyn MediaSink>` is `Send` (the trait has `Send` as a
 //! supertrait), so a sink may be handed to a backend living on the

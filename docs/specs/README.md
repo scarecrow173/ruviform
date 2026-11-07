@@ -56,6 +56,7 @@ Directory: `docs/specs`
 | SPEC-034RT7qvjzmpx6kytmM8O0 | Issue #302 ruviform-io-archive — ZIP Indexed Entry Reader/Writer・CRC/中央Directory検証 (IO-IMP-08) | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | SPEC-h6TZICrhpaneHHENSs2SP8 | Issue #303 ruviform-io-archive — TAR Streaming Entry/Pending・PAX/GNU・EOF検証 (IO-IMP-09) | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | SPEC-6UnMiBIsE4whNsJmSW8SQX | Issue #304 ruviform-io-archive — Secure Extraction・Root Capability・Path Policy・Staging Recovery (IO-IMP-10) | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| SPEC-P6IzbXqAJ2cgiMm8llJIIO | Issue #305 Media I/O 旧 StagedOutput 完全削除・WAV→StagedFile 移行 (IO-IMP-11) | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | SPEC-lYVG6Gr07aTIBC8BSS0WKW | Issue #306 汎用 I/O 合成 E2E — StagedFile/Structured/Compression/Archive/WAV 境界試験 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | SPEC-P7W4Dz6p2EQIQNPclAQG2U | Issue #307 PluginNode attach 時 frame_base の非 RT 型付き検証（verified clock context） | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | SPEC-034Rp1AEJDKiDTpPq3H4Yz | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
@@ -91,6 +92,7 @@ Directory: `docs/specs`
 | SPEC-034JZLISO0000000000001 | プラグイン分離方式設計（サンドボックス・プロセス分離） | approved | [plugin-isolation-design.md](./plugin-isolation-design.md) |
 | SPEC-034LNeyep4t7pIzFlpPyTK | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー） | proposed | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
 | SPEC-034Ivc5nj1AE6P2PcZU6Ki | テンプレート由来のドキュメント・識別子をRuviform向けに置き換える | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
+| SPEC-OSFxdu6zk2jDbA6edHhE38 | ruviform-io-file Rooted Read Capability — dirfd/handle 相対 traversal・FollowWithinRoot/NoFollow・pin/identity | approved | [rooted-read-capability.md](./rooted-read-capability.md) |
 | SPEC-034JOU6EjinMh0rhxE6yM9 | RT 検証基盤（allocation 検出・thread-check・検証文書） | approved | [rt-verification-lane.md](./rt-verification-lane.md) |
 | SPEC-X9YOosDAuB8PX2Qv31thuB | ruviform-dsp 新設（上位 DSP カーネル層 — prepare/process 分離・RT 適合） | approved | [ruviform-dsp.md](./ruviform-dsp.md) |
 | SPEC-5eEaW8lLmoyVPgocJnooYD | 第 2 ターゲット設計（NLE 範囲・OFX 等映像プラグイン規格・広範色管理） | approved | [second-target-design.md](./second-target-design.md) |
@@ -119,5 +121,6 @@ Directory: `docs/specs`
 | SPEC-034TRm8kN4vWqZxYsJpCe | Issue #151 メディア観測情報・非破壊 PCM 取得契約の拡張 | implemented | [issue-151-media-observation-contract.md](./issue-151-media-observation-contract.md) |
 | SPEC-034J6OCXHiP1izKRzbMmgz | Issue #18 フォローアップ（公開 enum 方針適用・時間演算修正・改善トリアージ） | implemented | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
 | SPEC-034Jc9BJlI7ULEBWoIlMP2 | Issue #28 UI 技術検証 PoC（wry・描画バックエンド・フロントエンド FW・配布） | implemented | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
+| SPEC-0kIy1SFw7ffSK1AAi4BXHu | Issue #400 借用 sealed readback を独立 decoder へ bounded に接続する共通API | implemented | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | SPEC-034JceNZQvAawWwMH4ct91 | 時間型拡張（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針） | implemented | [time-type-extension-framerate-timecode-rounding.md](./time-type-extension-framerate-timecode-rounding.md) |
 | SPEC-034N3JBtBP4dPi8ob9HwDV | video-proc RT 検証レーンへの assert_no_alloc 適用（Issue #126） | implemented | [video-proc-rt-verification-lane.md](./video-proc-rt-verification-lane.md) |

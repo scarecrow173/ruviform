@@ -118,9 +118,9 @@ impl<S: MediaSink> WavMuxer<S> {
     /// completion receipt.
     ///
     /// This is the checked completion path — a `WavReceipt` exists
-    /// only when every byte reached the sink. Durability (fsync +
-    /// rename into place) is the caller's next step, e.g.
-    /// [`StagedOutput::publish`](ruviform_media_io::StagedOutput).
+    /// only when every byte reached the sink. Durability (sync +
+    /// atomic publish) is the caller's next step, e.g.
+    /// `ruviform_io_file::SealedFile::publish`.
     ///
     /// **RT contract:** non-RT only — seeks and writes.
     ///
@@ -192,8 +192,9 @@ impl<S: MediaSink> WavMuxer<S> {
     }
 
     /// Unwraps into the sink — useful after `finalize` when the caller
-    /// wants the sink back (e.g. to hand the file to a staging
-    /// primitive).
+    /// wants the sink back (e.g. a `Cursor` for byte inspection in
+    /// tests). Not a completion path — completion evidence is the
+    /// `WavReceipt` returned by [`finalize`](Self::finalize).
     ///
     /// **RT contract:** non-RT only.
     ///

@@ -34,10 +34,9 @@
 //!
 //! [`WavMuxer::finalize`] is the **only** checked completion path:
 //! pad → size backpatch → flush → [`WavReceipt`]. `Drop` is
-//! best-effort cleanup and never a receipt. Durability (fsync + rename
-//! into place) belongs to
-//! [`StagedOutput::publish`](ruviform_media_io::StagedOutput) — the
-//! boundary's staged-publish primitive.
+//! best-effort cleanup and never a receipt. Durability (sync + atomic
+//! publish + recovery) belongs to `ruviform-io-file`'s
+//! `SealedFile::publish` — the staged-publish primitive.
 //!
 //! ## Conversion policy
 //!
