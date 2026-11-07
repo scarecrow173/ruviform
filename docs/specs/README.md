@@ -1,6 +1,5 @@
 # Architecture Decision Records
 
-
 <!-- doc-suite:generated-index -->
 
 Directory: `docs/specs`
@@ -46,6 +45,7 @@ Directory: `docs/specs`
 | SPEC-ML6zMi4szNWY33LanXM0JL | Issue #280 OBS-05 RT固定長Record Bridge・Clock・欠落・Correlation統合 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | SPEC-034T2dgEk6l5QpkecJOJYo | Issue #289 OBS-07 Collector・Metrics・履歴・Snapshot（単一クレート） | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
 | SPEC-034S9nR4tW7xZ2cF5hJ8kM | Issue #294 Cross-Consumer候補tuple Gate — consumer-verify.yml 証拠契約・UI lane 段階拡張・候補連携接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
+| SPEC-7DGwosr0bGXXRsfeRfhe1v | Issue #294 GUI-CONTRACT lane 接続 — ruviform 候補 tree 上の boundary guard / Fake driver semantic を consumer-verify へ | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
 | SPEC-034RoR8tcezgggBLlNk7od | Issue #295 ruviform-io-file — StagedFile 型状態・公開契約・Mock Publish (IO-IMP-01) | approved | [issue-295-io-file-staged-publish-contract.md](./issue-295-io-file-staged-publish-contract.md) |
 | SPEC-034RBEkXlCcpgzIaiikzso | Issue #296 ruviform-io-file — 実 OS Atomic Publish・Durability・Recovery (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | SPEC-034RTbxCxbL7YmxxkxrMmt | Issue #297 ruviform-io-structured — JSON/YAML/TOML Serde型付き Reader/Writer・Strict EOF (IO-IMP-03) | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
@@ -75,10 +75,11 @@ Directory: `docs/specs`
 | SPEC-ElrrvM1k7RbACtLgfzKaxs | Issue #367 共通 Daily Scheduler — `daily-ci.yml` 軽量判定 + `ci.yml` 条件付き dispatch | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | SPEC-4KMssIOpNuvh9jGgKKfp7R | Issue #368 CI failure Issue Tracker — workflow_run 完了監視で main×ci の未解決障害を 1 Issue に集約 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | SPEC-9R6tNeU4aiEuUseUczer9o | Issue #368 Tracker reconcile 入口 — GITHUB_TOKEN dispatch 完了の通知 gap を default-branch 定期/手動 reconcile で埋める | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
-| SPEC-zrIXGa6QONDm4o1DVVUwaz | Issue #388 Driver-neutral NativeSurfaceSlot 契約（早期 Gate 設計・契約実装） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
-| SPEC-ynejrtwiz2jIJrf3DwFtAK | Issue #389 Driver-neutral PluginEditorSession（state / typed HostPort / L0-L1 接続設計） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | SPEC-034T6RWP3Vz7KWTjv6TILE | Driver-neutral GUI Architecture — GPUI標準Driver方針と3repo移行正本（Issue #384） | approved | [issue-384-driver-neutral-gui-architecture.md](./issue-384-driver-neutral-gui-architecture.md) |
 | SPEC-034T6SaLC8Kz85jG9rbdsJ | DTCG Design Token Interpreter — backend-neutral ResolvedTheme/Theme Registry（Issue #385） | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
+| SPEC-0cG0IEArkb6RGWXH0jtA3e | Issue #386 Driver-neutral GUI Host 契約・GPUI 標準 Driver adapter・最小 Window fixture | proposed | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
+| SPEC-zrIXGa6QONDm4o1DVVUwaz | Issue #388 Driver-neutral NativeSurfaceSlot 契約（早期 Gate 設計・契約実装） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
+| SPEC-ynejrtwiz2jIJrf3DwFtAK | Issue #389 Driver-neutral PluginEditorSession（state / typed HostPort / L0-L1 接続設計） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | SPEC-034T9TZQ7ztGDAPvFaz9IT | Issue #390 Driver Contract Lab — UI-DVR fixture registry・境界 Guard・GPUI なし Fake・Native Component Lab harness | proposed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |

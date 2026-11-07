@@ -30,6 +30,7 @@ Directory: `docs/plans`
 | PLAN-034JZLISO0000000000004 | Issue #31 実施計画 — プラグイン分離設計確定 | approved | [implement-issue-31-plugin-isolation.md](./implement-issue-31-plugin-isolation.md) |
 | PLAN-XyRGyqOXQg05BHSeuQmtEC | Issue #32 実施計画 — 第 2 ターゲット設計 | approved | [implement-issue-32-second-target-design.md](./implement-issue-32-second-target-design.md) |
 | PLAN-Fd1MviDXJLLuok363L3rKm | Issue #33 実施計画 — 音楽時間設計確定 | approved | [implement-issue-33-music-time.md](./implement-issue-33-music-time.md) |
+| PLAN-UO09oNkf6X28oaYsQ5DmNe | Issue #386 Driver-neutral GUI Host + GPUI minimal fixture 実装計画 | proposed | [implement-issue-386-driver-neutral-gui-host.md](./implement-issue-386-driver-neutral-gui-host.md) |
 | PLAN-kHnSXCzzcxyo5rlkMiqQWx | Issue #388/#389 Native Dock 契約の実装計画（neutral slot/lease/session + fake 検証 + L0-L1 写像） | approved | [implement-issue-388-389-native-dock-contract.md](./implement-issue-388-389-native-dock-contract.md) |
 | PLAN-034JO2EWa8LuEEE4BFVZ9Q | Issue #52 workspace MSRV 引上げの実施（rust-version 1.85 → 1.89・ドキュメント同期・MSRV 実測検証） | approved | [implement-issue-52-msrv-raise.md](./implement-issue-52-msrv-raise.md) |
 | PLAN-034JQFeYbZCBHPYSBfQe7B | Issue #53 SIMD dispatch 層の実装計画 | approved | [implement-issue-53-simd-dispatch-layer.md](./implement-issue-53-simd-dispatch-layer.md) |
@@ -54,6 +55,7 @@ Directory: `docs/plans`
 | PLAN-034QxdNzPfzn5oye9cCzne | Issue #244 media-reader prefetch contract wart fixes implementation plan | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | PLAN-034RoY5EwSBQJwEF1k5arE | Issue #276 generic logging adapter implementation plan | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | PLAN-034S9vX2cF6hK9mP3rT7wZ | Issue #294 Cross-Consumer候補tuple Gate 実装計画 — evidence script・workflow 拡張・契約 test | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
+| PLAN-ARAErEdgpSOlWBQBofZQ2t | Issue #294 GUI-CONTRACT lane 接続 実装計画 — 候補 checkout/probe step・record 置換・contract test 更新 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
 | PLAN-034RoUNsT1SND8BxtMWhXC | Issue #295 ruviform-io-file 実装計画 (IO-IMP-01) | approved | [issue-295-io-file-staged-publish.md](./issue-295-io-file-staged-publish.md) |
 | PLAN-034RBIiZIxCPVB11km1utN | Issue #296 ruviform-io-file 実 OS バックエンド実装計画 (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | PLAN-034RTeQAV1efnZZIhQamnc | Issue #297 ruviform-io-structured 実装計画 (IO-IMP-03) | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
@@ -83,7 +85,6 @@ Directory: `docs/plans`
 | PLAN-r5yBO16zsFa4LSjxB9grp1 | Issue #367 共通 Daily Scheduler 実装計画 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | PLAN-s8XS22tWJoekwN7HhRH9hj | Issue #368 CI failure Issue Tracker 実装計画 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | PLAN-WuOx4rrntClDKCSVPDAM8d | Issue #368 Tracker reconcile 実装計画 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
-| PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | draft | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
@@ -119,3 +120,4 @@ Directory: `docs/plans`
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
+| PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |

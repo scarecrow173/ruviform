@@ -21,6 +21,10 @@ Directory: `docs/tasks`
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
+| TASK-uFDZyczopm3crTR2lUgeGd | T1 Driver-neutral Window/Host 共通契約（ruviform-ui driver module） | in-progress | [t1-driver-neutral-window-contract-issue-386.md](./t1-driver-neutral-window-contract-issue-386.md) |
+| TASK-fG12kYJjj6jfGGJmfuxaeY | T2 FakeDriver（ruviform-ui-test・WindowDriver headless 実装） | proposed | [t2-fake-driver-issue-386.md](./t2-fake-driver-issue-386.md) |
+| TASK-LlEFlV8p3toRfliU2UWnVn | T3 GPUI Driver + 最小 Window fixture（ruviform-ui-gpui） | proposed | [t3-gpui-driver-minimal-window-issue-386.md](./t3-gpui-driver-minimal-window-issue-386.md) |
+| TASK-DktMpNJBhrTSp3LAfeKMjo | T4 mise lane・索引・GPUI 採用証跡（Issue #386） | proposed | [t4-gpui-lanes-and-evidence-issue-386.md](./t4-gpui-lanes-and-evidence-issue-386.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -141,6 +145,7 @@ Directory: `docs/tasks`
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
 | TASK-034Sa3F7jL2nQ5uY8cE1hK | T1 ci/consumer-verify evidence.mjs + fixture tests + test-ci-consumer-verify task（Issue #294） | done | [issue-294-t1-consumer-verify-evidence-script.md](./issue-294-t1-consumer-verify-evidence-script.md) |
 | TASK-034Sa6J9mP4sV7xB1fK5nQ | T2 consumer-verify.yml tuple証拠・SHA ref・UI headless lane・extra_tasks 接続点 + yml contract test（Issue #294） | done | [issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md](./issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md) |
+| TASK-wTtcOyGIqnDDr4nB4paIK3 | T3 consumer-verify.yml GUI-CONTRACT lane 接続 — 候補 tree guard/semantic step + record 置換 + 構造契約 test（Issue #294） | done | [issue-294-t3-gui-contract-lane-wiring.md](./issue-294-t3-gui-contract-lane-wiring.md) |
 | TASK-034RoWzXiLur2zHG5iHl7u | T1 ruviform-io-file クレート新設・公開契約・Mock Publish (Issue #295) | done | [issue-295-t1-crate-and-contract.md](./issue-295-t1-crate-and-contract.md) |
 | TASK-034RoWAHTxefOCVrz2FVL4 | T2 共有台帳更新・main 取込・最終検証・IR (Issue #295) | done | [issue-295-t2-ledger-verify.md](./issue-295-t2-ledger-verify.md) |
 | TASK-034RBIWkzzcEXV0X3v5ySr | T1 OsFileOps 実 OS アダプタ + factory 接続 (Issue #296) | done | [issue-296-t1-os-adapter.md](./issue-296-t1-os-adapter.md) |

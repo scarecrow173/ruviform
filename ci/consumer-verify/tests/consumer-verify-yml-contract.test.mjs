@@ -168,18 +168,64 @@ for (const [name, job] of [
     assert.ok(/timeout-minutes:/.test(job), "extra tasks are unbounded without a job timeout");
   });
 
-  test(`contract: ${name} GUI gates split not-connected (not_run) from capability-absent (unsupported)`, () => {
-    // A-1: GUI-CONTRACT (GPUI 不要の public API/禁止依存/allowlist 検査) と
-    // fake/semantic oracle は capability 不足ではなく未接続 — 実 window 必須の
-    // unsupported と混同しない。各々独立行・Owner・再実行条件を持つ。
-    const contract = job.match(/rec "GUI-CONTRACT checks[^"]*" "[^"]*" "[^"]*" "(\w+)"/);
-    const semantic = job.match(/rec "GUI semantic\/fake-oracle checks" "[^"]*" "[^"]*" "(\w+)"/);
+  test(`contract: ${name} GUI contract lanes evaluate the candidate tree (guard + fake semantic)`, () => {
+    // A-1 更新: GUI-CONTRACT boundary guard と GUI-SEMANTIC fake driver
+    // contract は ruviform 候補 tree（RUVIFORM_REV）上で実行され、別 step・
+    // 別 lane 行として outcome が記録される。候補に task がない場合は owner
+    // 付き not_run（dispatch ref checkout の task では代用しない — 偽 pass
+    // 禁止）。実 window/plugin 必須 lane は unsupported 固定行のまま。
+    const record = job.slice(job.indexOf("Record evidence"));
+    for (const id of ["gui_candidate", "gui_boundary", "gui_semantic"]) {
+      assert.ok(new RegExp(`\\n\\s+id: ${id}\\n`).test(job), `step id ${id} missing`);
+      assert.ok(record.includes(`steps.${id}.outcome`), `${id} outcome must map to a lane row`);
+    }
+    // 候補 fetch は dep step の url.insteadOf rewrite（deploy_key mode）に
+    // 依存するため、gui_candidate は dep より後に置く。
+    assert.ok(job.indexOf("id: dep") < job.indexOf("id: gui_candidate"),
+      "gui_candidate must run after the dep access step");
+    // 候補 checkout は Consumer clone と同一の統一 fetch 経路で候補 SHA を
+    // 取得し、rev-parse HEAD を候補 SHA と照合してから評価に使う。
+    assert.ok(/git -C "\$cand" fetch -q --depth 1 origin "\$RUVIFORM_REV"/.test(job),
+      "candidate checkout must fetch the candidate SHA");
+    assert.ok(/git -C "\$cand" rev-parse HEAD/.test(job) && /"\$head" != "\$RUVIFORM_REV"/.test(job),
+      "candidate checkout must verify rev-parse HEAD == RUVIFORM_REV");
+    // probe outputs は mise install 成功後にのみ出る — 先出しに戻すと install
+    // 失敗時に lane skipped + pass-with-coverage 化する不誠実経路に戻る
+    // （else 分岐の gui_candidate.outcome=fail 行へ落とす整合の pin）。
+    const guiCand = job.slice(job.indexOf("id: gui_candidate"), job.indexOf("id: gui_boundary"));
+    const installPos = guiCand.indexOf("mise install --locked rust");
+    assert.ok(installPos >= 0, "gui_candidate must install the rust toolchain when tasks exist");
+    assert.ok(guiCand.indexOf('echo "boundary=') > installPos,
+      "probe outputs must be published only after mise install succeeds");
+    assert.ok(!/GITHUB_OUTPUT/.test(guiCand.slice(0, installPos)),
+      "no output may be published before the install block");
+    // task probe — 候補 mise.toml の task 存在で実行可否を判定
+    for (const task of ["check-ui-driver-boundary", "test-ui-driver-contract"]) {
+      assert.ok(new RegExp(`\\[tasks\\\\\\.${task.replace(/-/g, "\\-")}\\\\\\]`).test(job),
+        `candidate mise.toml probe for ${task} missing`);
+      assert.ok(new RegExp(`mise run ${task.replace(/-/g, "\\-")}`).test(job),
+        `lane step must run mise run ${task}`);
+    }
+    // lane step は候補 checkout dir を working-directory に持つ
+    assert.equal(
+      (job.match(/working-directory: \$\{\{ runner\.temp \}\}\/ruviform-candidate/g) ?? []).length >= 2,
+      true, "GUI lane steps must run inside the candidate checkout");
+    // task 不在時の not_run 行は owner（RF #390）+ 再実行条件 + 代用禁止を保持
+    assert.ok(/GUI-CONTRACT boundary guard[^\n]*"not_run" "[^"]*RF #390/.test(job),
+      "task-absent not_run row missing for boundary guard");
+    assert.ok(/GUI-SEMANTIC fake driver contract[^\n]*"not_run" "[^"]*RF #390/.test(job),
+      "task-absent not_run row missing for fake driver contract");
+    // Consumer 側通常 View/Domain headless は未接続のまま owner 付き not_run
+    assert.ok(/GUI-CONTRACT consumer-side[^\n]*"not_run" "[^"]*#1(66|75)/.test(job),
+      "consumer-side GUI contract must stay a not_run row with owners");
+    // capability-absent 固定行は維持
     const visual = job.match(/rec "GUI visual\/OS \+ 実 window lanes" "[^"]*" "[^"]*" "(\w+)"/);
-    assert.ok(contract && contract[1] === "not_run", "GUI-CONTRACT must be not_run (not wired), not unsupported");
-    assert.ok(semantic && semantic[1] === "not_run", "GUI semantic/fake must be not_run (not wired)");
     assert.ok(visual && visual[1] === "unsupported", "visual/OS real-window must stay unsupported");
     // 混同していた旧行名が残っていないこと
     assert.ok(!job.includes("contract/semantic/visual-OS/dock"), "conflated capability row must be removed");
+    // 未接続時代の固定 not_run 行名は置換済みであること（同じ行名の再利用は不可）
+    assert.ok(!job.includes('rec "GUI-CONTRACT checks'), "fixed not_run GUI-CONTRACT row must be replaced");
+    assert.ok(!job.includes('rec "GUI semantic/fake-oracle checks'), "fixed not_run semantic row must be replaced");
   });
 }
 

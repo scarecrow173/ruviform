@@ -1,6 +1,5 @@
 # Architecture Decision Records
 
-
 <!-- doc-suite:generated-index -->
 
 Directory: `docs/designs`
@@ -61,6 +60,7 @@ Directory: `docs/designs`
 | DESIGN-fhvRxnPJKvnhRAlg7TbeKm | Issue #280 OBS-05 RT Record Bridge・ClockContext・欠落envelope・CorrelationBook設計 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | DESIGN-034T2dhkl03BuqPOGmNlmc | Issue #289 OBS-07 Collector/Metrics/Snapshot: 単一Poll Owner・Baseline/Discontinuity・有界履歴・Health | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
 | DESIGN-034S9rV6yB3dG7jL0nQ4sU | Issue #294 Cross-Consumer候補tuple Gate 設計 — 証拠契約・解決SHA捕捉・UI lane 段階接続・task 接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
+| DESIGN-RVQaQUltza40Kb1HlAt48X | Issue #294 GUI-CONTRACT lane 接続設計 — 候補 tree 取得・task probe・step/lane 分離 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
 | DESIGN-034RoR9SDtSG2iiZbvNGKT | Issue #295 ruviform-io-file — StagedFile type-state・PublishOptions・Receipt/Failure・PlatformFileOps/Mock 設計 | approved | [issue-295-io-file-staged-publish.md](./issue-295-io-file-staged-publish.md) |
 | DESIGN-034RBFdth7UW7A6IS10Ha3 | Issue #296 ruviform-io-file — 実 OS PlatformFileOps アダプタ設計 (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | DESIGN-034RTd0bYqWgcxXWa7uVPE | Issue #297 ruviform-io-structured — 共通契約・Format別API・Backend選定設計 (IO-IMP-03) | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
@@ -91,10 +91,11 @@ Directory: `docs/designs`
 | DESIGN-LKKyu5XTONFK84RN45ZdM2 | Issue #367 共通 Daily Scheduler 設計 — 履歴駆動判定・重複抑止・bounded retry・dispatch SHA race 対策 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | DESIGN-UGm4KjCwx7pEetENeTzIwB | Issue #368 CI failure Issue Tracker 設計 — 有効 run 判定・1 Issue 集約・完了順逆転・coverage close 条件 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | DESIGN-StMgstUBs2Df2UPm1oy2GF | Issue #368 Tracker reconcile 設計 — event 非依存の同一判定器入口・別 workflow schedule/dispatch・mode 分離 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
-| DESIGN-E2c3n3d0DhHGOrf8ZGHJrP | Issue #388 Driver-neutral NativeSurfaceSlot 契約設計（SurfaceSlotRegistry / SlotLease / port） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
-| DESIGN-x7UlzjoyvZa1pu2ARRLOZZ | Issue #389 Driver-neutral PluginEditorSession 設計（state machine / typed HostPort / L0-L1 写像・wire negotiation 方針） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | DESIGN-034T6S9KVWbAOq8lqyMak4 | Driver-neutral GUI Contract 詳細設計 — 依存方向・API移行表・DriverCapability・NativeDock Gate（Issue #384） | approved | [issue-384-driver-neutral-gui-contract.md](./issue-384-driver-neutral-gui-contract.md) |
 | DESIGN-034T6SbNaGu3l7owAp7FCX | DTCG Interpreter/Resolver 設計 — alias・mode・override merge・typed ResolvedTheme（Issue #385） | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
+| DESIGN-novwjdV4MyUKuG9Y0bg014 | Issue #386 Driver-neutral GUI Host 契約・GPUI Driver adapter・最小 Window fixture | proposed | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
+| DESIGN-E2c3n3d0DhHGOrf8ZGHJrP | Issue #388 Driver-neutral NativeSurfaceSlot 契約設計（SurfaceSlotRegistry / SlotLease / port） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
+| DESIGN-x7UlzjoyvZa1pu2ARRLOZZ | Issue #389 Driver-neutral PluginEditorSession 設計（state machine / typed HostPort / L0-L1 写像・wire negotiation 方針） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | DESIGN-034T9VaXD2KXqhGxaHawyH | Issue #390 Driver Contract Lab — boundary guard 検査設計・registry schema・実行接続点 | approved | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
