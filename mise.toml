@@ -263,6 +263,15 @@ run = "cargo test -p ruviform-ui-gpui --features gpui"
 description = "Run the minimal GPUI Window fixture on the real OS session (manual verification entry — not a headless/CI lane)"
 run = "cargo run -p ruviform-ui-gpui --features gpui --example minimal_window"
 
+# Canonical manual-verification entry for the RF388/389 native-dock
+# PoC: attaches a real native editor (probe plugin open_gui → Win32
+# WS_CHILD) into a surface container under a real GPUI window — run it
+# on a real OS only, never as a headless/CI pass. Evidence is the
+# `[poc] key=value` log captured from stderr.
+[tasks.poc-native-dock]
+description = "Run the RF388/389 native-dock PoC harness on the real OS session (manual verification entry — Windows only today)"
+run = "cargo run -p ruviform-poc-native-dock --features gpui"
+
 # UI npm dependency install tasks (Issue #330): each ui/* package's
 # lockfile-driven `npm ci` lives in exactly one task. `sources` (lockfile +
 # manifest) and `outputs` (the hidden lockfile npm always writes into

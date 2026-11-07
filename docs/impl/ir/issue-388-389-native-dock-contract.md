@@ -195,31 +195,69 @@ wire 互換のため `u16` のまま（別 Issue 起票候補）。
 
 | OS | 経路 | format | L0 | L1 | 状態 |
 | --- | --- | --- | --- | --- | --- |
-| Windows | GPUI main dock 内 plugin native editor | VST3/CLAP | contract headless Pass / 実機 Blocked | Unsupported | Blocked on RF386 fixture + adapter `open_gui` 未実装 |
-| macOS | 同上 | VST3/CLAP/AU | NotRun | Unsupported | Blocked on RF386 + 実 macOS lane 未実行 |
-| Linux X11/XWayland | 同上 | VST3/CLAP | NotRun | Unsupported | Blocked on RF386 + 実 OS lane 未実行 |
-| Linux Wayland | 同上 | VST3/CLAP | NotRun | Unsupported | Blocked on RF386 + GPUI Wayland 親子表面契約未実証 |
+| Windows | GPUI main dock 内 plugin native editor | VST3/CLAP | contract headless Pass / **実 GPUI window 内実 native attach Pass**(window 内 region。実 dock layout 未実装のため Dock PASS ではない) / 実 plugin binary NotRun | Unsupported | adapter+PoC 完了・残 Gate は dock layout widget + 実 binary |
+| macOS | 同上 | VST3/CLAP/AU | NotRun | Unsupported | backend 未実装(container stub → 明示 `Unsupported`)/ 実 lane 未実行 |
+| Linux X11/XWayland | 同上 | VST3/CLAP | NotRun | Unsupported | 同上(backend 未実装) |
+| Linux Wayland | 同上 | VST3/CLAP | NotRun | Unsupported | 同上 + GPUI Wayland 親子表面契約未実証 |
 
 注記: 「contract headless Pass」は driver-neutral 契約と状態機械の
 headless 検証を指し、実 Native Dock PASS ではない。実 Dock PASS には
-RF386 の実 GPUI window・adapter `open_gui` 実装・実 plugin binary が必要。
+GPUI 実 dock layout(tab/clip/dock 管理 widget)+ 実 plugin binary が必要。
+第二 increment(2026-11-07): `GpuiSurfaceAdapter` + consumer PoC で
+Windows 実 GPUI window 内への実 native editor attach を実機観測済み
+（`evidence/rf388-389-native-dock/`、実行 tuple 同封）。
+
+### 第二 increment: GpuiSurfaceAdapter + consumer PoC(main `5c0f16b` merge 後)
+
+追加したもの:
+
+- `ruviform-plugin-host`: `InProcessEditorOps::with_redeemer` —
+  consumer 側 `LeaseRedeemer` 注入 seam(opaque `ParentSlotLease` →
+  `GuiParentToken` を adapter 検証経由で交換)。plugin↔ui 相互依存禁止の
+  baseline に従い redeemer 本体は利用側層が供給
+- `ruviform-ui`: `SlotError::Backend` 追加(Unsupported と OS 失敗を区別)
+- `ruviform-ui-gpui`(gpui feature): `GpuiSurfaceAdapter` —
+  `NativeSurfaceSlot` port 実装。`open_window` で `HasWindowHandle` 経由
+  GPUI top-level raw handle を捕捉し、slot 毎に Win32 child container
+  HWND を生成(`STATIC` class・`WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS`)。
+  geometry/visibility/clip(SetWindowRgn)/z-order/focus/破棄を実表面へ適用。
+  `WindowCapabilities::native_surface_slot` は backend 存在 OS(Windows)のみ
+  `Supported`、他 OS は `Unsupported` のまま
+- `ruviform-poc-native-dock` 新設: 利用側層 composition root。
+  in-process probe plugin の `open_gui` が redeemed token(container HWND)
+  直下に実 `WS_CHILD` editor を生成。非 default `gpui` feature の手動
+  real-window lane(`mise run poc-native-dock`)
+- `mise.toml`: `poc-native-dock` task 追加(手動 real-OS 入口)
+- RF390 boundary guard fixture: `ruviform-ui-gpui` allowedDeps に
+  `raw-window-handle`、poc crate に `composition-root` grant を追加
+
+実機証拠(Windows 11 x64 / RTX 4070 SUPER / gpui 0.2.2):
+`evidence/rf388-389-native-dock/poc-run-win11.log` — 実 GPUI window 内で
+container HWND 実生成→probe `open_gui` 実 child editor(`GetParent` で
+実親子確認)→`set_geometry` で rect 実追従→hide/show で `IsWindowVisible`
+実追従→`request_focus` で実 focus→session close で editor 破棄→
+`release_lease` で container 破棄。3 回連続で同一証拠列を再現(exit 0)。
 
 ## Risks
 
-- `ParentSlotLease`/`GuiParentToken` の償還は adapter 実装側の責務 — 契約は
-  用意したが redemption 経路の実装は未存在（設計上 composition 層の仕事）
-- GPUI の実 dock 制約（clip/z-order/tab/input/focus）は fixture 到着まで
-  未実証。契約側の `SlotCapabilities`/`SlotGeometry` が GPUI 実制約と
-  不整合になる可能性は残る（設計は dock tree の既知制約から導出済み）
+- redemption 経路は実装・実証済みだが、`LeaseRedeemer` は composition 層の
+  注入 seam — host/plugin 側が自前で償還を偽装しないことの強制は型上は
+  弱い（guard は dep-graph で composition-root のみ adapter 依存を許可）
+- GPUI の実 dock 制約（clip/z-order/tab/input/focus）は **window 内
+  region では実証済み** だが、実 dock layout widget が未実装のため
+  dock 管理下での同一性は未実証（container 方式は dock slot が geometry/
+  visibility を同一 surface へ駆動する前提設計）
 - L1 wire 側の GUI op 到達経路（child runner dispatch）は tag 予約済みだが
   host 側で `Unsupported` short-circuit のまま — wire 変更は行っていない
 
 ## Follow-ups
 
-- RF386 fixture 到着後: adapter `open_gui`/`close_gui` 実装と
-  `NativeSurfaceSlot`→`ParentSlotLease` 償還の結線、Windows 実 plugin
-  native dock PoC へ移行（clip/z-order/hide/tab/resize/dockmove/
-  float-redock/close/hang/RT 隔離の測定）
+- 実 Dock PASS: GPUI 実 dock layout widget 到着後、container surface を
+  dock slot 管理下へ接続し clip/tab/dockmove/float-redock を測定
+- 実 plugin binary(VST3/CLAP/AU)attach: binary 入手後。probe と同経路
+  (`open_gui`→redeemed container 直下 child)を踏む想定
+- macOS(NSView)/Linux(X11/Wayland)container backend 実装は別工程
+- `PluginHandle.generation` u16 wrap は wire 互換のため残留(別 Issue 候補)
 - RF390 到着後: tests 内の最小 fake ops を共通 semantic fixture へ置換
 - RF262: 本 IR の OS/format マトリクスを最終採否判断の入力として供給
 - SV176: Synvelis 側 session 結線の語彙として `PluginEditorSessionId`/

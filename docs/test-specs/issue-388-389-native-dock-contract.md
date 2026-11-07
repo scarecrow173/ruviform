@@ -65,10 +65,14 @@ green は「契約・状態機械・lease/session 安全性」の証拠であり
 ## 対象外（実機 PoC 段へ defer — 本 dispatch では実行不可）
 
 - GPUI Main Dock 内での実ネイティブ Editor 動作・clip/tab/resize/
-  focus/入力/遮蔽（RF386 fixture 未到着 → 実機行 Blocked）。
-- CLAP/VST3 `open_gui` adapter 経由の実 Editor open（adapter 未実装
-  → NotRun）。
-- macOS/Linux/Windows 実機・実 binary・DPI/2Window/IME/popup/a11y。
+  focus/入力/遮蔽（実 dock layout 未実装 → Dock PASS 行は継続
+  `NotRun`。window 内 region での実 attach/geometry/visibility/focus/
+  release は第二 increment で実機観測済み —
+  `evidence/rf388-389-native-dock/`）。
+- CLAP/VST3 `open_gui` adapter 経由の実 binary Editor open（実 binary
+  未入手 → `NotRun`。in-process probe による同一 OS 経路は第二
+  increment で実機観測済み）。
+- macOS/Linux 実機・実 binary・DPI/2Window/IME/popup/a11y。
 - L1 wire 越境 GUI（現行 `Unsupported` — pin テストは既存 e2e が継続）。
 
 ## 既存テストとの関係（非回帰）
