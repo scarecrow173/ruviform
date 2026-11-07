@@ -310,7 +310,7 @@ fn read_link_at(dirfd: RawFd, name: &OsStr) -> io::Result<OsString> {
 /// that descriptor *is* the probe (same object — no probe→open
 /// window). Regular files are reopened through
 /// `/proc/self/fd/N` (`O_RDONLY`) and identity-verified against the
-/// O_PATH probe — magic-link resolution references the inode, never
+/// `O_PATH` probe — magic-link resolution references the inode, never
 /// re-walks a path, and re-runs `MAY_READ`/LSM checks. `/proc`
 /// absent or reopen impossible → `Unsupported` (no silent fallback).
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -619,8 +619,8 @@ fn secs_nanos(sec: i64, nsec: i64) -> u64 {
 /// `None` on unix targets whose `stat` carries no birth time —
 /// those fall to `Weak` identity strength (honest, never claimed).
 #[cfg(target_vendor = "apple")]
-fn birth_ns(st: &libc::stat) -> Option<u64> {
-    Some(secs_nanos(st.st_birthtime, st.st_birthtime_nsec))
+fn birth_ns(st: &libc::stat) -> u64 {
+    secs_nanos(st.st_birthtime, st.st_birthtime_nsec)
 }
 
 #[cfg(not(target_vendor = "apple"))]
@@ -681,8 +681,8 @@ fn tag_of(kind: VfsKind) -> NodeTypeTag {
     }
 }
 
-fn system_time_ns(ns: u64) -> Option<std::time::SystemTime> {
-    Some(std::time::UNIX_EPOCH + std::time::Duration::from_nanos(ns))
+fn system_time_ns(ns: u64) -> std::time::SystemTime {
+    std::time::UNIX_EPOCH + std::time::Duration::from_nanos(ns)
 }
 
 fn probe_from(raw: &RawStat) -> VfsProbe {
@@ -701,7 +701,7 @@ fn probe_from(raw: &RawStat) -> VfsProbe {
             VfsKind::File | VfsKind::Symlink => Some(u64::try_from(raw.size).unwrap_or(u64::MAX)),
             _ => None,
         },
-        modified: system_time_ns(raw.mtime_ns),
+        modified: Some(system_time_ns(raw.mtime_ns)),
         strength: if strong {
             IdentityStrength::Strong
         } else {
@@ -717,6 +717,9 @@ fn raw_from_stat(st: &libc::stat) -> RawStat {
         mode: u64::from(st.st_mode),
         size: st.st_size,
         mtime_ns: secs_nanos(st.st_mtime, st.st_mtime_nsec),
+        #[cfg(target_vendor = "apple")]
+        birth_ns: Some(birth_ns(st)),
+        #[cfg(not(target_vendor = "apple"))]
         birth_ns: birth_ns(st),
         ctime_ns: ctime_ns(st),
         handle: None,
@@ -790,7 +793,7 @@ mod gnu_statx {
             dev: (u64::from(stx.stx_dev_major) << 32) | u64::from(stx.stx_dev_minor),
             ino: u128::from(stx.stx_ino),
             mode: u64::from(stx.stx_mode),
-            size: stx.stx_size,
+            size: i64::try_from(stx.stx_size).unwrap_or(i64::MAX),
             mtime_ns: ts_ns(&stx.stx_mtime),
             birth_ns: (stx.stx_mask & libc::STATX_BTIME != 0).then(|| ts_ns(&stx.stx_btime)),
             ctime_ns: ts_ns(&stx.stx_ctime),

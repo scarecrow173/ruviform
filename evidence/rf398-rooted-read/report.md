@@ -26,19 +26,30 @@
 - doc chain: spec/adr/design/test-spec/plan/tasks（`docs/*/rooted-read-*`）。
   独立 A/B→Validator→Judge 2 cycle で blocking findings 全件解消し approved。
 
-## 検証（本 worktree・Windows host・実測）
+## 検証（本 worktree・Windows host・実測。`mise` 未経由で cargo 直接実行）
 
 | command | result |
 | --- | --- |
-| `cargo fmt --all` / `-- --check` | PASS |
-| `cargo check --workspace --all-targets` | PASS（merge 後 head で再実測） |
-| `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | io-file 71・rooted_read 14・archive 全件 PASS。`ruviform-plugin-host` e2e に pre-existing flaky 1 件（spawn timeout 系・再実行で別 test が落ちる非決定 flake。plugin-host は io-file/io-archive 非依存で本変更と無関係） |
+| `cargo fmt --all` / `-- --check` | PASS（exit 0） |
+| `cargo check --workspace --all-targets` | PASS（exit 0・merge 後 head で再実測） |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS（exit 0・merge 後 head で再実測） |
+| `cargo test --workspace` | io-file 71・rooted_read 14・archive 全件 PASS。`ruviform-plugin-host` e2e `l1_proxy_e2e` に pre-existing flaky 失敗 1 件（初回 `command_timeout_converges_failed_with_timeout_cause`、対象再実行では別 test `spawn_failed_attempt_record_captures_stderr` が落ちる非決定 flake。plugin-host は io-file/io-archive 非依存で本変更と無関係）。 |
+| `cargo test -p ruviform-io-file -p ruviform-io-archive`（unix 修正後の最終 head） | 全件 PASS |
+| `cargo check/clippy --target x86_64-unknown-linux-gnu -p ruviform-io-file -p ruviform-io-archive --all-targets` | PASS（unix 分岐の型/借用/lint を Linux target で実検査 — `stx_size` E0308 を修正済み） |
+| `cargo clippy --target aarch64-apple-darwin`（同 scope） | PASS（非 Linux unix 分岐 `O_NOFOLLOW`/`O_NONBLOCK` 経路も lint 済み） |
+
+補足: workspace 全体の `--target x86_64-unknown-linux-gnu` check は
+`zstd-sys`/`alloca` の C build script が Linux toolchain を要求するため
+Windows host では実行不可（環境制約。io-file/io-archive とその依存閉包は
+上記の通り全 PASS）。実 Linux 正規 mise 検証は root 側の既存 CI
+dispatch に委ねる。
 
 ## 残 Gate / 未検証
 
-- `vfs/unix.rs` は `cfg(unix)` のため Windows host で compile 未検証。
-  Linux CI で確認要。
+- `vfs/unix.rs` は Windows host で compile 未検証だった問題を
+  `--target x86_64-unknown-linux-gnu`/`aarch64-apple-darwin` の type-check
+  で解消（E0308 + 2 lint 修正済み）。**実行時の挙動**（statx/handle
+  等の実 FS 動作）は未検証 — Linux CI で要確認。
 - Windows junction/symlink 権限なし環境では該当 test は明示 skip。
 - `RootedDir::open` の handle 由来 canonical 取得が無い backend では
   canonicalize→open の residual race が唯一の trust boundary（設計明記）。
