@@ -587,6 +587,23 @@ mod gpui_driver {
                 .get(&window)
                 .map_or(0, |slot| slot.inbox.borrow().len())
         }
+
+        /// The mounted view of a window opened through
+        /// [`GpuiDriver::create_view_window`]; `None` for fixture windows.
+        #[must_use]
+        pub(crate) fn view_for_test(
+            &self,
+            cx: &mut gpui::TestAppContext,
+            window: WindowId,
+        ) -> Option<Entity<crate::render::RvfView>> {
+            let root = self.inner.borrow().windows.get(&window)?.root.clone()?;
+            root.update(cx, |root, _cx| {
+                root.content
+                    .clone()
+                    .downcast::<crate::render::RvfView>()
+                    .ok()
+            })
+        }
     }
 
     impl WindowDriver for GpuiDriver {
