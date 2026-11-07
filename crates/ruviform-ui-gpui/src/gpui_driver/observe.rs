@@ -89,7 +89,10 @@ impl GpuiObserver {
     }
 
     /// One harness turn. Delivers the emitted events to `on_event`,
-    /// which may call back into the driver.
+    /// which may call back into the driver. The handler stays installed
+    /// until the next `settle`: events flushed by later observer calls
+    /// (for example [`dispatch_input`](Self::dispatch_input)) reach the
+    /// most recent handler, and intents are recorded either way.
     pub fn settle(
         &mut self,
         mut on_event: impl FnMut(DriverEvent, &mut dyn WindowDriver) + 'static,

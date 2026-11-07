@@ -108,6 +108,7 @@ turn（`settle_turn`）・受信件数（`inbox_len`）・view 解決（`view_of
 - gpui の test platform 上でのみ動く。実 OS window は生成されず、`settle` は 1 turn ずつ進む。実機の描画・IME・focus は manual verification。
 - `observe` の `components` は mount 順ではなく key 順（`mounted_keys` の仕様）。
 - 通常ビルドでは surface の親ハンドルは捕捉される。gpui-test 有効の build では捕捉されず、`native_surface_slot` を使う consumer は fail-closed になる（test build 限定）。
+- `settle` の handler は次の `settle` まで保持される（従来の `settle_for_test` と同じ）。`settle` と `settle` の間の `dispatch_input` 等で flush された event は直近の handler に届く。intent は常に記録されるため、consumer の handler は `settle` の外からも呼ばれうる前提で書く。
 
 ## 検証
 
