@@ -318,6 +318,15 @@ run = "cargo run -p ruviform-poc-native-dock --features gpui"
 description = "Run the native-dock PoC against a real external VST3 module (manual lane — set RVF_POC_VST3_PATH; Windows only)"
 run = "cargo run -p ruviform-poc-native-dock --features gpui,vst3"
 
+# RF388 Dock layout lane: the editor slot is a NativeSlot inside a GPUI
+# Panel/Tab layout. Tab switch, resize and focus are checked; each check
+# is a `[poc] check=… result=pass|fail` line. Set RVF_POC_VST3_PATH for the
+# real module and RVF_POC_EVIDENCE_DIR to capture window screenshots.
+[tasks.poc-native-dock-layout]
+description = "Run the RF388 native-dock Panel/Tab layout scenario on the real OS session (manual lane; Windows only)"
+env = { RVF_POC_SCENARIO = "dock" }
+run = "cargo run -p ruviform-poc-native-dock --features gpui,vst3"
+
 # UI npm dependency install tasks (Issue #330): each ui/* package's
 # lockfile-driven `npm ci` lives in exactly one task. `sources` (lockfile +
 # manifest) and `outputs` (the hidden lockfile npm always writes into
