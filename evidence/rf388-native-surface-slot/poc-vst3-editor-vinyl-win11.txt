@@ -1,0 +1,44 @@
+[poc-vst3-editor] $ cargo run -p ruviform-poc-native-dock --features gpui,vst3
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling ruviform-plugin-export v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf388-native-slot\crates\ruviform-plugin-export)
+   Compiling ruviform-plugin-vst3 v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf388-native-slot\crates\ruviform-plugin-vst3)
+   Compiling ruviform-poc-native-dock v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf388-native-slot\crates\ruviform-poc-native-dock)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.98s
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running `target\debug\ruviform-poc-native-dock.exe`
+[poc] start os=windows
+[poc] capabilities=WindowCapabilities { resize: Supported, focus: Supported, scale_factor: Supported, multi_window: Supported, ime: Unsupported, native_surface_slot: Supported }
+[poc] window=w1
+[poc] vst3_path=C:/Program Files/Common Files/VST3/iZotope/Vinyl.vst3
+[poc] vst3_size=2045952
+[poc] vst3_descriptors=1
+[poc] vst3_plugin id=69545356565a696e5a6f746f70652056 name=Vinyl vendor= version=1.12.0
+[poc] plugin_id=69545356565a696e5a6f746f70652056 vst3_mode=true
+[poc] instance=PluginHandle { slot: 0, generation: 0 }
+[poc] initialize=ok
+[poc] ready
+[poc] declare_slot=ok index=0
+[poc] lease_parent=ok container_hwnd=0xcf1092
+[poc] open=ok caps_dock=Supported caps_close=Supported
+[poc] editor_hwnd=0x4911b8 parent_token=0xcf1092 opens=0
+[poc] editor_rect=Some((360, 192, 553, 400)) parenting_ok=true editor_visible=true
+[poc] set_geometry=true rect_before=Some((360, 192, 553, 400)) rect_after=Some((400, 242, 553, 400))
+[poc] hide=true child_visible=false
+[poc] show=true child_visible=true
+[poc] focus=true focus_hwnd=0xcf1092
+[poc] close=true state=Some(Closed) closes=0 child_alive=false
+[poc] release_lease=true container_alive=false
+[poc] release_slot=true
+[poc] slot_event=Declared { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Leased { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=GeometryChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=LeaseRevoked { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Destroyed { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] done state=Some(Closed)
+[poc] done state=Some(Closed)
+[poc] exited
+EXIT=0

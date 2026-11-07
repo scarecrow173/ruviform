@@ -1,0 +1,109 @@
+[poc-native-dock] $ cargo run -p ruviform-poc-native-dock --features gpui
+   Compiling serde_core v1.0.229
+   Compiling getrandom v0.2.17
+   Compiling serde_json v1.0.154
+   Compiling vswhom-sys v0.1.3
+   Compiling psm v0.1.32
+   Compiling vswhom v0.1.0
+   Compiling ring v0.17.14
+   Compiling rand_core v0.6.4
+   Compiling nanorand v0.7.0
+   Compiling stacker v0.1.25
+   Compiling rand_chacha v0.3.1
+   Compiling stacksafe v0.1.4
+   Compiling flume v0.11.1
+   Compiling rand v0.8.8
+   Compiling shared_memory v0.12.4
+   Compiling rustls-webpki v0.103.16
+   Compiling ruviform-plugin-host v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf388-native-slot\crates\ruviform-plugin-host)
+   Compiling rustls v0.23.46
+   Compiling erased-serde v0.4.11
+   Compiling serde_fmt v1.1.0
+   Compiling indexmap v2.14.2
+   Compiling serde v1.0.229
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling serde_spanned v1.1.2
+   Compiling uuid v1.29.0
+   Compiling toml v1.1.8+spec-1.1.0
+   Compiling value-bag-serde1 v1.14.1
+   Compiling value-bag v1.14.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling gpui_semantic_version v0.2.2
+   Compiling h2 v0.4.20
+   Compiling gpui_collections v0.2.2
+   Compiling serde_json_lenient v0.2.4
+   Compiling log v0.4.35
+   Compiling embed-resource v3.0.12
+   Compiling globset v0.4.21
+   Compiling av-scenechange v0.14.1
+   Compiling av1-grain v0.2.5
+   Compiling kv-log-macro v1.0.7
+   Compiling naga v25.0.1
+   Compiling simplecss v0.2.2
+   Compiling rustybuzz v0.20.1
+   Compiling fontdb v0.23.0
+   Compiling async-std v1.13.2
+   Compiling audio_thread_priority v0.38.0
+   Compiling gpui v0.2.2
+   Compiling rust-embed-utils v8.13.0
+   Compiling rav1e v0.8.1
+   Compiling schemars v1.2.3
+   Compiling rust-embed v8.13.0
+   Compiling gpui_perf v0.2.2
+   Compiling tiny-skia v0.11.4
+   Compiling ruviform-exec v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf388-native-slot\crates\ruviform-exec)
+   Compiling gpui_sum_tree v0.2.2
+   Compiling postage v0.5.0
+   Compiling ruviform-ui-theme v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf388-native-slot\crates\ruviform-ui-theme)
+   Compiling gpui_util_macros v0.2.2
+   Compiling gpui_util v0.2.2
+   Compiling ruviform-ui v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf388-native-slot\crates\ruviform-ui)
+   Compiling tokio-rustls v0.26.6
+   Compiling hyper v1.12.0
+   Compiling usvg v0.45.1
+   Compiling zed-async-tar v0.5.0-zed
+   Compiling hyper-util v0.1.21
+   Compiling resvg v0.45.1
+   Compiling hyper-rustls v0.27.10
+   Compiling zed-reqwest v0.12.15-zed
+   Compiling ravif v0.13.0
+   Compiling image v0.25.10
+   Compiling blade-graphics v0.7.1
+   Compiling gpui_http_client v0.2.2
+   Compiling blade-util v0.3.0
+   Compiling ruviform-ui-gpui v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf388-native-slot\crates\ruviform-ui-gpui)
+   Compiling ruviform-poc-native-dock v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf388-native-slot\crates\ruviform-poc-native-dock)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 53.78s
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running `target\debug\ruviform-poc-native-dock.exe`
+[poc] start os=windows
+[poc] capabilities=WindowCapabilities { resize: Supported, focus: Supported, scale_factor: Supported, multi_window: Supported, ime: Unsupported, native_surface_slot: Supported }
+[poc] window=w1
+[poc] plugin_id=org.ruviform.poc.native-editor-probe vst3_mode=false
+[poc] instance=PluginHandle { slot: 0, generation: 0 }
+[poc] initialize=ok
+[poc] ready
+[poc] declare_slot=ok index=0
+[poc] lease_parent=ok container_hwnd=0x740864
+[poc] open=ok caps_dock=Supported caps_close=Supported
+[poc] editor_hwnd=0x57103e parent_token=0x740864 opens=1
+[poc] editor_rect=Some((360, 192, 400, 300)) parenting_ok=true editor_visible=true
+[poc] set_geometry=true rect_before=Some((360, 192, 400, 300)) rect_after=Some((400, 242, 400, 300))
+[poc] hide=true child_visible=false
+[poc] show=true child_visible=true
+[poc] focus=true focus_hwnd=0x740864
+[poc] close=true state=Some(Closed) closes=1 child_alive=false
+[poc] release_lease=true container_alive=false
+[poc] release_slot=true
+[poc] slot_event=Declared { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Leased { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=GeometryChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=LeaseRevoked { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Destroyed { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] done state=Some(Closed)
+[poc] done state=Some(Closed)
+[poc] exited
+EXIT=0

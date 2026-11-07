@@ -17,6 +17,10 @@ relations:
         path: "crates/ruviform-ui/tests/native_slot.rs"
       - type: "file"
         path: "crates/ruviform-plugin-host/tests/editor_session.rs"
+      - type: "file"
+        path: "crates/ruviform-ui-test/tests/native_slot_contract.rs"
+      - type: "file"
+        path: "crates/ruviform-ui-test/src/fake_native_slot.rs"
     modified: []
     deleted: []
     renamed: []
@@ -125,6 +129,30 @@ fake `EditorSessionOps`（応答を制御）+ 実 `InProcessEditorOps`
 | ES-16 | `InProcessEditorOps` + stub plugin `open_gui`=`Ok` | `Attached`・`GuiParentToken::new` が内部経由 |
 | ES-17 | `InProcessEditorOps` + stub plugin `open_gui`=`Err(Unsupported)` | `Failed{Unsupported}`・`HostError`→`EditorOpError` 写像 |
 | ES-18 | `L1EditorOps` 全 ops | 全て `EditorOpError::Unsupported`・wire 不変・L0 退化なし |
+
+## Fake NativeSlot driver 契約ケース（`crates/ruviform-ui-test/tests/native_slot_contract.rs`）
+
+`FakeNativeSlot`（`NativeSurfaceSlot` port を `SurfaceSlotRegistry` 上に
+実装し、attach された child を記録だけで表す fake）で検証する。
+GPUI adapter と同じ id 解決・capability ゲート・attach 失敗時の lease
+解放規約に従う。**fake 成功は port 契約の適合証拠であり、実 Dock PASS
+ではない**（child は window ではなく記録）。`mise run test-ui-native-slot`。
+
+| TestID | ケース | 期待 |
+| --- | --- | --- |
+| NSC-01 | attach 前の `set_clip`/`set_zorder` → `lease_parent` | child が clip・z・geometry・visibility を継承して attach |
+| NSC-02 | attach 済み child に `set_geometry`（move）・`set_visibility(Hidden)` | child へ反映・lease は維持（hide は detach ではない） |
+| NSC-03 | NaN 幅・負の高さの `set_geometry` | `InvalidValue`・child 不変 |
+| NSC-04 | `capabilities` 未対応の `set_clip`/`set_zorder`/`set_visibility`/`lease_parent` | `Unsupported`（silent no-op・fake 成功にしない）・slot は `Declared` |
+| NSC-05 | `request_focus`: child 無し → `Backend`、attach 後 → 成功・別 slot へ移動で旧 focus 解除 | focus は常に高々 1 child |
+| NSC-06 | attach fault（`arm_attach_fault`）→ `lease_parent` | `Backend`・lease を解放し `Declared`・child 無し・次の attach は成功 |
+| NSC-07 | `release_slot` → 同 index 再 `declare_slot` | 解放直後の旧 id は `Released`、再利用後は `StaleGeneration`・旧 lease は `LeaseRevoked` |
+| NSC-08 | 偽造 lease（未発行 seq）・live lease への二重 `lease_parent` | `InvalidLease` / `LeaseBusy`・live lease は維持 |
+| NSC-09 | `release_lease` → child 除去・再 attach | child 消滅・新 lease は旧と別値 |
+| NSC-10 | `release_slot`（teardown）→ drain | `[LeaseRevoked, Destroyed]` の順・child 消滅・`Released` 終端 |
+| NSC-11 | `mark_busy` 中の `lease_parent`（lease 解放後）→ `clear_busy` | `SlotBusy` → 解除後に成功 |
+| NSC-12 | `DockWorkspace::begin_move` → `mark_busy` → `abort_move` → `clear_busy` | 元 window に view 残留・live lease 維持・lease 検証 OK（rollback） |
+| NSC-13 | `begin_move` → `mark_busy` → `commit_move` → 旧 lease 解放・旧 slot 解放 → 新 window で再 declare・lease | 新 child が attach・旧 lease は `LeaseRevoked`・旧 id は `StaleGeneration` |
 
 ## 非機能ゲート
 

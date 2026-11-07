@@ -36,6 +36,7 @@ pub mod driver_boundary;
 pub mod driver_lab;
 pub mod fake;
 pub mod fake_driver;
+pub mod fake_native_slot;
 pub mod fixture;
 pub mod headless;
 pub mod io;
@@ -48,6 +49,7 @@ pub use agent::{AgentConfig, TestAgent, serve, serve_from_env, serve_stdio, serv
 pub use driver::{DriverError, TestDriver};
 pub use fake::{FakeHost, FakeWindow};
 pub use fake_driver::{FakeDriver, MAX_EVENT_BACKLOG};
+pub use fake_native_slot::{FakeChild, FakeNativeSlot};
 pub use fixture::{FixtureController, TestApp};
 pub use headless::HeadlessIo;
 pub use io::TestIo;
