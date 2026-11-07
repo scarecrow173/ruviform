@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "manifest": "rvf.driver-lab.parity/v1",
+  "issue": "https://github.com/scarecrow173/ruviform/issues/421",
+  "description": "Knob/Toggle/Meter/TimeAxis の Fake/GPUI 同一 fixture。view は ViewSpec（serde 形式）、expect は両 driver が検査する semantic 期待値。Fake は payload 保持と gesture intent、GPUI は描画 plan（drawn）と入力 intent を検査する。",
+  "view": {
+    "root": {
+      "type": "panel",
+      "key": "root",
+      "title": null,
+      "visual": { "error": null },
+      "a11y": {},
+      "children": [
+        {
+          "type": "toggle",
+          "key": "toggle",
+          "control_id": null,
+          "target": "mixer.mute",
+          "descriptor": {
+            "min": 0.0,
+            "max": 1.0,
+            "default_value": 0.0,
+            "step": 1.0,
+            "step_domain": null,
+            "fine_step": null,
+            "fine_step_domain": null,
+            "mapping": null,
+            "out_of_range": null,
+            "unit": null,
+            "read_only": false,
+            "disabled": false,
+            "constant": false
+          },
+          "orientation": "horizontal",
+          "detach_policy": "cancel",
+          "unsupported": false,
+          "visual": { "error": null },
+          "a11y": { "role": "switch", "label": "mute" }
+        },
+        {
+          "type": "knob",
+          "key": "knob",
+          "control_id": null,
+          "target": "mixer.gain",
+          "descriptor": {
+            "min": 0.0,
+            "max": 1.0,
+            "default_value": 0.5,
+            "step": null,
+            "step_domain": null,
+            "fine_step": null,
+            "fine_step_domain": null,
+            "mapping": null,
+            "out_of_range": null,
+            "unit": null,
+            "read_only": false,
+            "disabled": false,
+            "constant": false
+          },
+          "orientation": "vertical",
+          "detach_policy": "cancel",
+          "unsupported": false,
+          "visual": { "error": null },
+          "a11y": { "role": "slider", "label": "gain" }
+        },
+        {
+          "type": "meter",
+          "key": "meter",
+          "channels": 2,
+          "channel_levels": [
+            [
+              { "start": 0, "end": 500, "peak": 0.8, "rms": 0.4, "count": 500 },
+              { "start": 500, "end": 1000, "peak": 0.0, "rms": 0.0, "count": 0 },
+              { "start": 1000, "end": 1500, "peak": 1.2, "rms": 0.9, "count": 500 }
+            ],
+            [
+              { "start": 0, "end": 1000, "peak": 0.5, "rms": 0.2, "count": 1000 },
+              { "start": 1000, "end": 1500, "peak": 0.3, "rms": 0.1, "count": 0 }
+            ]
+          ],
+          "viewport": { "start": 0, "end": 1500 },
+          "visual": { "error": null },
+          "a11y": { "role": "img", "label": "level" }
+        },
+        {
+          "type": "time_axis",
+          "key": "ruler",
+          "viewport": { "start": 0, "end": 1500 },
+          "ticks": [
+            { "at": 0.0, "label": "0", "major": true },
+            { "at": 250.5, "label": "250", "major": false },
+            { "at": 1000.0, "label": "1000", "major": true },
+            { "at": 1600.0, "label": "outside", "major": false }
+          ],
+          "visual": { "error": null },
+          "a11y": { "role": "img", "label": "timeline" }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "mountedKeys": ["root", "toggle", "knob", "meter", "ruler"],
+    "knob": {
+      "orientation": "vertical",
+      "intents": ["begin", "preview", "commit"]
+    },
+    "toggle": {
+      "intents": ["begin", "commit"],
+      "committedAfterClick": 1.0
+    },
+    "meter": {
+      "declaredBins": 5,
+      "drawnBars": [
+        { "channel": 0, "x0": 0.0, "x1": 0.3333, "peak": 0.8, "rms": 0.4 },
+        { "channel": 0, "x0": 0.6667, "x1": 1.0, "peak": 1.0, "rms": 0.9 },
+        { "channel": 1, "x0": 0.0, "x1": 0.6667, "peak": 0.5, "rms": 0.2 }
+      ]
+    },
+    "timeAxis": {
+      "declaredTicks": 4,
+      "drawnMarks": [
+        { "x": 0.0, "major": true, "label": "0" },
+        { "x": 0.1670, "major": false, "label": "250" },
+        { "x": 0.6667, "major": true, "label": "1000" }
+      ]
+    }
+  }
+}
