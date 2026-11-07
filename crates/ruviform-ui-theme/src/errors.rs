@@ -128,6 +128,11 @@ pub enum ResolveError {
     },
     /// `resolve` was called with no documents.
     EmptyDocuments,
+    /// A [`crate::ThemeRegistry`] lookup named a theme that was never registered.
+    UnknownTheme {
+        /// Requested theme name.
+        name: String,
+    },
 }
 
 impl fmt::Display for ResolveError {
@@ -153,6 +158,7 @@ impl fmt::Display for ResolveError {
                 write!(f, "duplicate document source {id:?}")
             }
             Self::EmptyDocuments => write!(f, "no token documents supplied"),
+            Self::UnknownTheme { name } => write!(f, "unknown theme {name:?}"),
         }
     }
 }

@@ -337,7 +337,7 @@ impl ResolvedTheme {
     }
 }
 
-fn resolved_value_json(value: &ResolvedValue) -> Value {
+pub(crate) fn resolved_value_json(value: &ResolvedValue) -> Value {
     match value {
         ResolvedValue::Color(c) => json!({
             "type": "color",

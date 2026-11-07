@@ -31,4 +31,18 @@ let theme = ruviform_ui_theme::ThemeResolver::resolve(&[base, product], "dark")?
 assert_eq!(theme.schema_version(), "rvf-dtcg-profile.v1");
 ```
 
-検証は `mise run check` / `mise run test`（ワークスペース正規入口）。fixtures は `tests/fixtures/`。
+## Theme Registry
+
+`ThemeRegistry` は theme 名 → document stack の対応を保持するだけで、解決規則は持たない（`ThemeResolver::resolve` へ委譲）。Product Theme ごとに base 文書と Consumer override 文書を `register` し、`resolve(name, mode)` で `ResolvedTheme` を得る。未登録名は `ResolveError::UnknownTheme`。
+
+## Golden fixtures と境界
+
+- 入力: `tests/fixtures/`。出力正本: `tests/golden/*.json`（`to_normalized_json()` のバイト一致）。
+- 検証対象（`tests/golden.rs`）: valid（`valid-dark`）・Consumer override（`consumer-override-dark`）・OS font 不在（`os-font-fallback-dark`）・DPI scale（`dpi-scale-2x-dark`）の golden、invalid（`err-invalid-value`）・ref-cycle（`err-cycle`）・type mismatch（`err-type-mismatch`）・missing mode（`product-light-only`）の分類済みエラー。
+- OS font は本 crate では **利用可否を判定しない**。`fontFamily` は宣言された fallback 列を順序どおり保持し、インストール有無による置換・除外は Driver（#386/#390）の capability 判定に委ねる。
+- DPI scale は `ResolvedTheme::with_scale` で `ScaleContext` のみ差し替える。token 値は変化せず、device pixel 換算は mapper 側。
+- 出力は入力文書の順序に依存しない（`tests/golden.rs::output_is_independent_of_input_order_and_repetition`）。fingerprint は値の正規化 JSON に基づき、`Debug` 表現に依存しない。
+
+## 検証
+
+`mise run check` / `mise run test`（ワークスペース正規入口）。Driver 境界は `mise run check-ui-driver-boundary` / `mise run test-ui-driver-contract`。
