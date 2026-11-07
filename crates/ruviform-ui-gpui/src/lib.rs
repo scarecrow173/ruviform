@@ -105,12 +105,29 @@ mod gpui_driver {
     /// Operations queued by [`WindowDriver`] calls, applied inside
     /// `App` context by [`drain`].
     enum Op {
-        Create { id: WindowId, spec: WindowSpec },
-        Resize { id: WindowId, size: LogicalSize },
-        Focus { id: WindowId, focused: bool },
-        RequestClose { id: WindowId },
-        Destroy { id: WindowId },
-        PostEvent { id: WindowId, event: Box<Event> },
+        Create {
+            id: WindowId,
+            spec: WindowSpec,
+            mount: Option<Box<ViewMount>>,
+        },
+        Resize {
+            id: WindowId,
+            size: LogicalSize,
+        },
+        Focus {
+            id: WindowId,
+            focused: bool,
+        },
+        RequestClose {
+            id: WindowId,
+        },
+        Destroy {
+            id: WindowId,
+        },
+        PostEvent {
+            id: WindowId,
+            event: Box<Event>,
+        },
         Exit,
     }
 
@@ -123,11 +140,30 @@ mod gpui_driver {
         approved: bool,
     }
 
+    /// Consumer content mounted as a window's root view — the Issue
+    /// #387 seam. Backend-free: the struct carries only
+    /// `ruviform-ui`/`ruviform-ui-theme` types; the driver projects
+    /// it onto its internal GPUI entity at window open.
+    ///
+    /// Intents minted by the view land on the window's `Action`
+    /// driver-event channel through [`IntentSink`]; `post_event`
+    /// `Result`/`Notify` payloads are projected back into `host`
+    /// (receipts route by `command_id`, projections by
+    /// `control_id`).
+    pub struct ViewMount {
+        /// Authoritative projection host for the view — spec tree,
+        /// interaction dispatchers, and command bindings.
+        pub host: ruviform_ui::view::ViewHost,
+        /// One-way [`ResolvedTheme`] consumption for the palette;
+        /// `None` yields the literal fallback palette.
+        pub theme: Option<ruviform_ui_theme::ResolvedTheme>,
+    }
+
     /// Live window slot. `handle` is `None` between `create_window`
     /// and the deferred `open_window` application.
     struct Slot {
         handle: Option<AnyWindowHandle>,
-        root: Option<Entity<RvfRoot>>,
+        root: Option<Entity<AppRoot>>,
         inbox: Rc<RefCell<Vec<Event>>>,
         ready: bool,
         pending_focus: Option<bool>,
@@ -242,6 +278,23 @@ mod gpui_driver {
             }
         }
 
+        /// Opens a window whose root is the consumer's
+        /// [`ViewSpec`] renderer instead of the fixture surface —
+        /// the Issue #387 mount seam. Same reservation contract as
+        /// [`WindowDriver::create_window`]: the id is minted now,
+        /// the OS window appears at the next `run` drain.
+        ///
+        /// # Errors
+        /// Currently infallible — kept `Result` for parity with
+        /// `create_window` and future backend failures.
+        pub fn create_view_window(
+            &mut self,
+            spec: &WindowSpec,
+            mount: ViewMount,
+        ) -> Result<WindowId, UiError> {
+            Ok(reserve_window(&self.inner, spec, Some(Box::new(mount))))
+        }
+
         /// Ids the driver recorded as destroyed.
         #[must_use]
         pub fn destroyed(&self) -> BTreeSet<WindowId> {
@@ -333,28 +386,7 @@ mod gpui_driver {
         }
 
         fn create_window(&mut self, spec: &WindowSpec) -> Result<WindowId, UiError> {
-            let mut inner = self.inner.borrow_mut();
-            let id = WindowId::new(inner.next).expect("counter nonzero");
-            inner.next += 1;
-            inner.windows.insert(
-                id,
-                Slot {
-                    handle: None,
-                    root: None,
-                    inbox: Rc::new(RefCell::new(Vec::new())),
-                    ready: false,
-                    pending_focus: None,
-                    scale_factor: 1.0,
-                    last_size: None,
-                    last_pos: None,
-                    close: CloseState::default(),
-                },
-            );
-            inner.ops.push_back(Op::Create {
-                id,
-                spec: spec.clone(),
-            });
-            Ok(id)
+            Ok(reserve_window(&self.inner, spec, None))
         }
 
         fn resize(&mut self, window: WindowId, size: LogicalSize) -> Result<(), UiError> {
@@ -479,6 +511,39 @@ mod gpui_driver {
         }
     }
 
+    /// Reserves a [`WindowId`], installs the slot, and queues the
+    /// create op — shared by `create_window` (fixture root) and
+    /// `create_view_window` (consumer mount).
+    fn reserve_window(
+        inner: &Rc<RefCell<Inner>>,
+        spec: &WindowSpec,
+        mount: Option<Box<ViewMount>>,
+    ) -> WindowId {
+        let mut inner = inner.borrow_mut();
+        let id = WindowId::new(inner.next).expect("counter nonzero");
+        inner.next += 1;
+        inner.windows.insert(
+            id,
+            Slot {
+                handle: None,
+                root: None,
+                inbox: Rc::new(RefCell::new(Vec::new())),
+                ready: false,
+                pending_focus: None,
+                scale_factor: 1.0,
+                last_size: None,
+                last_pos: None,
+                close: CloseState::default(),
+            },
+        );
+        inner.ops.push_back(Op::Create {
+            id,
+            spec: spec.clone(),
+            mount,
+        });
+        id
+    }
+
     /// Delivers queued driver→consumer events to the handler.
     /// The handler is taken out while invoked so it may call back
     /// into the driver (which borrows `inner`) without a `RefCell`
@@ -535,7 +600,9 @@ mod gpui_driver {
             let op = inner.borrow_mut().ops.pop_front();
             let Some(op) = op else { break };
             match op {
-                Op::Create { id, spec } => open_window(inner, driver, cx, id, &spec),
+                Op::Create { id, spec, mount } => {
+                    open_window(inner, driver, cx, id, &spec, mount);
+                }
                 Op::Resize { id, size } => {
                     let handle = inner.borrow().windows.get(&id).and_then(|s| s.handle);
                     if let Some(h) = handle {
@@ -699,12 +766,16 @@ mod gpui_driver {
     }
 
     /// Maps `WindowSpec` → `WindowOptions` and opens the OS window.
+    /// `mount` selects the root content: `Some` projects the
+    /// consumer's [`ViewSpec`] through the Issue #387 renderer;
+    /// `None` keeps the fixture surface.
     fn open_window(
         inner: &Rc<RefCell<Inner>>,
         driver: &GpuiDriver,
         cx: &mut App,
         id: WindowId,
         spec: &WindowSpec,
+        mount: Option<Box<ViewMount>>,
     ) {
         let options = spec_options(spec, cx);
         let inner2 = inner.clone();
@@ -729,17 +800,29 @@ mod gpui_driver {
                 let driver = driver2.clone();
                 move |_window, _cx| on_should_close(&inner, &driver, id)
             });
-            let entity = cx.new(|cx| {
-                RvfRoot::new(
-                    id,
-                    spec.title.clone(),
-                    inbox,
-                    inner2.clone(),
-                    driver2,
-                    window,
-                    cx,
-                )
-            });
+            let content: gpui::AnyView = match mount {
+                Some(m) => {
+                    let mount = *m;
+                    let sink = IntentSink {
+                        inner: inner2.clone(),
+                        window: id,
+                    };
+                    cx.new(|cx| {
+                        crate::render::RvfView::mounted(
+                            mount.host,
+                            mount.theme.as_ref(),
+                            &sink,
+                            inbox,
+                            window,
+                            cx,
+                        )
+                    })
+                    .into()
+                }
+                None => cx.new(|_| RvfRoot::new(spec.title.clone(), inbox)).into(),
+            };
+            let entity =
+                cx.new(|cx| AppRoot::new(id, content, inner2.clone(), driver2, window, cx));
             {
                 let mut guard = inner2.borrow_mut();
                 if let Some(slot) = guard.windows.get_mut(&id) {
@@ -910,24 +993,23 @@ mod gpui_driver {
         }
     }
 
-    /// Minimal root view — the fixture surface RF388/RF389 extend.
-    /// Renders the window title and the count of typed [`Event`]s
-    /// delivered via `post_event` so the typed push path is
-    /// observable on the real backend.
-    struct RvfRoot {
+    /// Window-level root entity — owns the lifecycle subscriptions
+    /// (bounds → `Resized`/`Moved`/`ScaleFactorChanged`, activation →
+    /// `Focused`) once per window, and renders the selected content
+    /// view: the fixture [`RvfRoot`] or a consumer
+    /// [`render::RvfView`] mounted through [`GpuiDriver::create_view_window`].
+    struct AppRoot {
         rvf_id: WindowId,
-        title: String,
-        inbox: Rc<RefCell<Vec<Event>>>,
+        content: gpui::AnyView,
         inner: Rc<RefCell<Inner>>,
         driver: GpuiDriver,
         _subscriptions: Vec<Subscription>,
     }
 
-    impl RvfRoot {
+    impl AppRoot {
         fn new(
             rvf_id: WindowId,
-            title: String,
-            inbox: Rc<RefCell<Vec<Event>>>,
+            content: gpui::AnyView,
             inner: Rc<RefCell<Inner>>,
             driver: GpuiDriver,
             window: &mut Window,
@@ -952,12 +1034,31 @@ mod gpui_driver {
             ];
             Self {
                 rvf_id,
-                title,
-                inbox,
+                content,
                 inner,
                 driver,
                 _subscriptions: subscriptions,
             }
+        }
+    }
+
+    impl Render for AppRoot {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            self.content.clone()
+        }
+    }
+
+    /// Minimal fixture content — renders the window title and the
+    /// count of typed [`Event`]s delivered via `post_event` so the
+    /// typed push path is observable on the real backend.
+    struct RvfRoot {
+        title: String,
+        inbox: Rc<RefCell<Vec<Event>>>,
+    }
+
+    impl RvfRoot {
+        fn new(title: String, inbox: Rc<RefCell<Vec<Event>>>) -> Self {
+            Self { title, inbox }
         }
     }
 
@@ -973,4 +1074,16 @@ mod gpui_driver {
 }
 
 #[cfg(feature = "gpui")]
-pub use gpui_driver::{GpuiDriver, IntentSink};
+pub use gpui_driver::{GpuiDriver, IntentSink, ViewMount};
+
+/// Issue #387 — GPUI Controls/Viz renderer: `ViewSpec` → element
+/// projection, pointer/key → `ControlInput` normalization, and
+/// `CommandIntent` egress through `rvf.ui.command.v1` intents.
+/// Adapter-internal: `gpui` types never cross the crate surface —
+/// consumers mount a view through [`ViewMount`] +
+/// [`GpuiDriver::create_view_window`].
+#[cfg(feature = "gpui")]
+mod render;
+
+#[cfg(feature = "gpui")]
+pub use render::COMMAND_INTENT_OP;

@@ -1,253 +1,334 @@
 {
-  "schemaVersion": 1,
-  "manifest": "rvf.driver-lab.cases/v1",
-  "issue": "https://github.com/scarecrow173/ruviform/issues/390",
-  "vocabulary": ["pass", "fail", "not_run", "unsupported", "blocked"],
-  "layers": ["boundary", "fake", "gpui", "real-os", "headless-ts"],
-  "requiredCases": [
-    "UI-DVR-01", "UI-DVR-02", "UI-DVR-03", "UI-DVR-04",
-    "UI-DVR-05", "UI-DVR-06", "UI-DVR-07", "UI-DVR-08"
-  ],
-  "cases": [
+ "schemaVersion": 1,
+ "manifest": "rvf.driver-lab.cases/v1",
+ "issue": "https://github.com/scarecrow173/ruviform/issues/390",
+ "vocabulary": [
+  "pass",
+  "fail",
+  "not_run",
+  "unsupported",
+  "blocked"
+ ],
+ "layers": [
+  "boundary",
+  "fake",
+  "gpui",
+  "real-os",
+  "headless-ts"
+ ],
+ "requiredCases": [
+  "UI-DVR-01",
+  "UI-DVR-02",
+  "UI-DVR-03",
+  "UI-DVR-04",
+  "UI-DVR-05",
+  "UI-DVR-06",
+  "UI-DVR-07",
+  "UI-DVR-08"
+ ],
+ "cases": [
+  {
+   "id": "UI-DVR-01",
+   "title": "Driverless build — 共通契約/Consumer headless が toolkit なしで build/test できる",
+   "oracle": "GUI toolkit・JS runtime・backend crate に依存しない共通契約と Consumer の通常 View/Domain/Headless が、driver 非搭載で build かつ semantic test 可能であること。違反は boundary guard が finding として検出する。",
+   "surfaces": [
+    "contract",
+    "boundary"
+   ],
+   "bindings": [
     {
-      "id": "UI-DVR-01",
-      "title": "Driverless build — 共通契約/Consumer headless が toolkit なしで build/test できる",
-      "oracle": "GUI toolkit・JS runtime・backend crate に依存しない共通契約と Consumer の通常 View/Domain/Headless が、driver 非搭載で build かつ semantic test 可能であること。違反は boundary guard が finding として検出する。",
-      "surfaces": ["contract", "boundary"],
-      "bindings": [
-        {
-          "layer": "boundary",
-          "status": "pass",
-          "mechanism": { "kind": "mise-task", "task": "check-ui-driver-boundary" },
-          "note": "cargo metadata 依存グラフ + public signature の 2 系統検査。live workspace で verdict=pass を確認済み。"
-        },
-        {
-          "layer": "fake",
-          "status": "pass",
-          "mechanism": { "kind": "cargo-test", "package": "ruviform-ui-test", "target": "driver_contract", "filter": "ui_dvr_01" },
-          "note": "GPUI/OS 非搭載の semantic fixture が headless で実行されることの実演。"
-        },
-        {
-          "layer": "gpui",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/386",
-          "rerun": "ruviform-ui-gpui が main に merge 後、同一 scenario を GPUI Window で実行"
-        },
-        {
-          "layer": "real-os",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/313",
-          "rerun": "OS Driver 実装後に実 OS Window で実行"
-        },
-        {
-          "layer": "headless-ts",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/294",
-          "rerun": "consumer-verify GUI-CONTRACT lane への task 接続時に Consumer fixture profile で実行"
-        }
-      ],
-      "evidence": "target/driver-lab/evidence.jsonl"
+     "layer": "boundary",
+     "status": "pass",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "check-ui-driver-boundary"
+     },
+     "note": "cargo metadata 依存グラフ + public signature の 2 系統検査。live workspace で verdict=pass を確認済み。"
     },
     {
-      "id": "UI-DVR-02",
-      "title": "ViewSpec mount/reconcile/unmount — stable key による同一性",
-      "oracle": "ViewSpec tree の mount/reconcile/unmount が stable key で View 同一性を維持し、差分適用が意味的に正しいこと。",
-      "surfaces": ["view", "component"],
-      "bindings": [
-        {
-          "layer": "fake",
-          "status": "blocked",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/387",
-          "rerun": "Component/ViewSpec 公開契約（#387）到着後に Fake Driver 上で実行",
-          "note": "現行 main には ViewSpec 契約が存在しない。仮互換型は作らない。"
-        },
-        {
-          "layer": "gpui",
-          "status": "blocked",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/387",
-          "rerun": "同上・GPUI renderer 到着後"
-        },
-        {
-          "layer": "real-os",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/313",
-          "rerun": "OS Driver + ViewSpec 契約の双方到着後"
-        }
-      ]
+     "layer": "fake",
+     "status": "pass",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "driver_contract",
+      "filter": "ui_dvr_01"
+     },
+     "note": "GPUI/OS 非搭載の semantic fixture が headless で実行されることの実演。"
     },
     {
-      "id": "UI-DVR-03",
-      "title": "Gesture Begin/Preview/Commit/Cancel — 遅延到着を含む状態遷移",
-      "oracle": "gesture 操作が Begin → Preview → Commit/Cancel の状態遷移を正しく辿り、遅延・順序逆転の event 到着でも不変条件を維持すること。",
-      "surfaces": ["gesture", "input"],
-      "bindings": [
-        {
-          "layer": "fake",
-          "status": "blocked",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/387",
-          "rerun": "gesture/input 公開契約（#387 Component Behavior / #257 ViewSpec 系）到着後に実行",
-          "note": "gesture 状態機械の公開契約が main に存在しない。"
-        },
-        {
-          "layer": "gpui",
-          "status": "blocked",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/387",
-          "rerun": "同上・GPUI renderer 到着後"
-        },
-        {
-          "layer": "real-os",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/313",
-          "rerun": "OS Driver 実入力経路到着後"
-        }
-      ]
+     "layer": "gpui",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/386",
+     "rerun": "ruviform-ui-gpui が main に merge 後、同一 scenario を GPUI Window で実行"
     },
     {
-      "id": "UI-DVR-04",
-      "title": "ResolvedTheme mode/override — テーマ解決の semantic parity",
-      "oracle": "ResolvedTheme の mode（light/dark/system）と Consumer override が一貫して適用され、driver 間で同一の semantic 結果になること。",
-      "surfaces": ["theme"],
-      "bindings": [
-        {
-          "layer": "fake",
-          "status": "blocked",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/385",
-          "rerun": "Design Contract/ResolvedTheme interpreter（#385）到着後に実行",
-          "note": "現行 main には ResolvedTheme 契約が存在しない。"
-        },
-        {
-          "layer": "gpui",
-          "status": "blocked",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/385",
-          "rerun": "同上・GPUI adapter 到着後"
-        },
-        {
-          "layer": "real-os",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/313",
-          "rerun": "OS Driver + ResolvedTheme 契約の双方到着後"
-        }
-      ]
+     "layer": "real-os",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/313",
+     "rerun": "OS Driver 実装後に実 OS Window で実行"
     },
     {
-      "id": "UI-DVR-05",
-      "title": "Dock 2-phase move/rollback — ViewInstanceId 安定性",
-      "oracle": "DockWorkspace の 2-phase move が prepare→commit で destination を先に用意し所有権を切替。失敗時は source を保持して rollback。detach/reattach で ViewInstanceId が保持される。",
-      "surfaces": ["window", "dock"],
-      "bindings": [
-        {
-          "layer": "fake",
-          "status": "pass",
-          "mechanism": { "kind": "cargo-test", "package": "ruviform-ui", "target": "dock" },
-          "note": "既存 tests/dock.rs 7 case がこの oracle を検証（mise run test で実行）。"
-        },
-        {
-          "layer": "fake",
-          "status": "pass",
-          "mechanism": { "kind": "cargo-test", "package": "ruviform-ui-test", "target": "driver_contract", "filter": "ui_dvr_05" },
-          "note": "driver-lab registry 側の semantic fixture（同一 oracle を DockWorkspace API で再検証）。"
-        },
-        {
-          "layer": "gpui",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/386",
-          "rerun": "ruviform-ui-gpui merge 後、同一 scenario を WindowDriver 経由で実行"
-        },
-        {
-          "layer": "real-os",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/313",
-          "rerun": "OS Driver 実装後"
-        }
-      ],
-      "evidence": "target/driver-lab/evidence.jsonl"
-    },
-    {
-      "id": "UI-DVR-06",
-      "title": "NativeSlot — Unsupported/stale/destroy の semantic handling",
-      "oracle": "NativeSurfaceSlot が capability Unsupported を正直に報告し、stale/destroy 後の参照が定義済みエラーで失敗すること。",
-      "surfaces": ["native-slot", "capability"],
-      "bindings": [
-        {
-          "layer": "fake",
-          "status": "blocked",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/388",
-          "rerun": "NativeSurfaceSlot 公開契約（#388）到着後に実行",
-          "note": "現行 main には NativeSurfaceSlot 契約が存在しない。"
-        },
-        {
-          "layer": "gpui",
-          "status": "blocked",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/388",
-          "rerun": "同上"
-        },
-        {
-          "layer": "real-os",
-          "status": "blocked",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/389",
-          "rerun": "Plugin Editor Session（#389）+ OS Driver 到着後"
-        }
-      ]
-    },
-    {
-      "id": "UI-DVR-07",
-      "title": "Capability negotiation — 未対応を正直に報告する",
-      "oracle": "driver/host の Capabilities が実装可能な ops のみを広告し、DeniedCapabilities が型付き理由で未対応を報告すること。input_injection/dom_access=false の honest reporting を含む。",
-      "surfaces": ["capability"],
-      "bindings": [
-        {
-          "layer": "fake",
-          "status": "pass",
-          "mechanism": { "kind": "cargo-test", "package": "ruviform-ui-test", "target": "driver_contract", "filter": "ui_dvr_07" },
-          "note": "FakeHost/HeadlessIo の Capabilities/DeniedCapabilities honest-reporting fixture。"
-        },
-        {
-          "layer": "gpui",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/386",
-          "rerun": "GPUI driver capability 契約到着後"
-        },
-        {
-          "layer": "real-os",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/313",
-          "rerun": "OS Driver capability 契約到着後"
-        }
-      ],
-      "evidence": "target/driver-lab/evidence.jsonl"
-    },
-    {
-      "id": "UI-DVR-08",
-      "title": "GPU/Window/Subscription teardown — 終端状態と resource 解放",
-      "oracle": "window close が関連 job を cancel し terminal state に到達し、runtime が lifecycle event を正しく発行すること。job/subscription の後始末が残らないこと（JS bridge の unsubscribe semantic は ruviform-ui bridge 側の契約で本 case の scope 外と記録する）。",
-      "surfaces": ["window", "lifecycle"],
-      "bindings": [
-        {
-          "layer": "fake",
-          "status": "pass",
-          "mechanism": { "kind": "cargo-test", "package": "ruviform-ui", "target": "runtime" },
-          "note": "既存 tests/runtime.rs の close/job-cancel 系 case がこの oracle を検証（mise run test で実行）。"
-        },
-        {
-          "layer": "fake",
-          "status": "pass",
-          "mechanism": { "kind": "cargo-test", "package": "ruviform-ui-test", "target": "driver_contract", "filter": "ui_dvr_08" },
-          "note": "UiRuntime + FakeHost での teardown fixture。"
-        },
-        {
-          "layer": "gpui",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/386",
-          "rerun": "GPUI window teardown 契約到着後"
-        },
-        {
-          "layer": "real-os",
-          "status": "not_run",
-          "owner": "https://github.com/scarecrow173/ruviform/issues/313",
-          "rerun": "OS Driver 実装後"
-        }
-      ],
-      "evidence": "target/driver-lab/evidence.jsonl"
+     "layer": "headless-ts",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/294",
+     "rerun": "consumer-verify GUI-CONTRACT lane への task 接続時に Consumer fixture profile で実行"
     }
-  ]
+   ],
+   "evidence": "target/driver-lab/evidence.jsonl"
+  },
+  {
+   "id": "UI-DVR-02",
+   "title": "ViewSpec mount/reconcile/unmount — stable key による同一性",
+   "oracle": "ViewSpec tree の mount/reconcile/unmount が stable key で View 同一性を維持し、差分適用が意味的に正しいこと。",
+   "surfaces": [
+    "view",
+    "component"
+   ],
+   "bindings": [
+    {
+     "layer": "fake",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/387",
+     "note": "Issue #387 Component/ViewSpec + headless behavior が ruviform-ui に実装済み。ViewHost 経由の semantic fixture。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "component_view",
+      "filter": "ui_dvr_02"
+     }
+    },
+    {
+     "layer": "gpui",
+     "status": "blocked",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/387",
+     "rerun": "同上・GPUI renderer 到着後"
+    },
+    {
+     "layer": "real-os",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/313",
+     "rerun": "OS Driver + ViewSpec 契約の双方到着後"
+    }
+   ]
+  },
+  {
+   "id": "UI-DVR-03",
+   "title": "Gesture Begin/Preview/Commit/Cancel — 遅延到着を含む状態遷移",
+   "oracle": "gesture 操作が Begin → Preview → Commit/Cancel の状態遷移を正しく辿り、遅延・順序逆転の event 到着でも不変条件を維持すること。",
+   "surfaces": [
+    "gesture",
+    "input"
+   ],
+   "bindings": [
+    {
+     "layer": "fake",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/387",
+     "note": "Issue #387 Component/ViewSpec + headless behavior が ruviform-ui に実装済み。ViewHost 経由の semantic fixture。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "component_view",
+      "filter": "ui_dvr_03"
+     }
+    },
+    {
+     "layer": "gpui",
+     "status": "blocked",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/387",
+     "rerun": "同上・GPUI renderer 到着後"
+    },
+    {
+     "layer": "real-os",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/313",
+     "rerun": "OS Driver 実入力経路到着後"
+    }
+   ]
+  },
+  {
+   "id": "UI-DVR-04",
+   "title": "ResolvedTheme mode/override — テーマ解決の semantic parity",
+   "oracle": "ResolvedTheme の mode（light/dark/system）と Consumer override が一貫して適用され、driver 間で同一の semantic 結果になること。",
+   "surfaces": [
+    "theme"
+   ],
+   "bindings": [
+    {
+     "layer": "fake",
+     "status": "blocked",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/385",
+     "rerun": "Design Contract/ResolvedTheme interpreter（#385）到着後に実行",
+     "note": "現行 main には ResolvedTheme 契約が存在しない。"
+    },
+    {
+     "layer": "gpui",
+     "status": "blocked",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/385",
+     "rerun": "同上・GPUI adapter 到着後"
+    },
+    {
+     "layer": "real-os",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/313",
+     "rerun": "OS Driver + ResolvedTheme 契約の双方到着後"
+    }
+   ]
+  },
+  {
+   "id": "UI-DVR-05",
+   "title": "Dock 2-phase move/rollback — ViewInstanceId 安定性",
+   "oracle": "DockWorkspace の 2-phase move が prepare→commit で destination を先に用意し所有権を切替。失敗時は source を保持して rollback。detach/reattach で ViewInstanceId が保持される。",
+   "surfaces": [
+    "window",
+    "dock"
+   ],
+   "bindings": [
+    {
+     "layer": "fake",
+     "status": "pass",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui",
+      "target": "dock"
+     },
+     "note": "既存 tests/dock.rs 7 case がこの oracle を検証（mise run test で実行）。"
+    },
+    {
+     "layer": "fake",
+     "status": "pass",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "driver_contract",
+      "filter": "ui_dvr_05"
+     },
+     "note": "driver-lab registry 側の semantic fixture（同一 oracle を DockWorkspace API で再検証）。"
+    },
+    {
+     "layer": "gpui",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/386",
+     "rerun": "ruviform-ui-gpui merge 後、同一 scenario を WindowDriver 経由で実行"
+    },
+    {
+     "layer": "real-os",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/313",
+     "rerun": "OS Driver 実装後"
+    }
+   ],
+   "evidence": "target/driver-lab/evidence.jsonl"
+  },
+  {
+   "id": "UI-DVR-06",
+   "title": "NativeSlot — Unsupported/stale/destroy の semantic handling",
+   "oracle": "NativeSurfaceSlot が capability Unsupported を正直に報告し、stale/destroy 後の参照が定義済みエラーで失敗すること。",
+   "surfaces": [
+    "native-slot",
+    "capability"
+   ],
+   "bindings": [
+    {
+     "layer": "fake",
+     "status": "blocked",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/388",
+     "rerun": "NativeSurfaceSlot 公開契約（#388）到着後に実行",
+     "note": "現行 main には NativeSurfaceSlot 契約が存在しない。"
+    },
+    {
+     "layer": "gpui",
+     "status": "blocked",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/388",
+     "rerun": "同上"
+    },
+    {
+     "layer": "real-os",
+     "status": "blocked",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/389",
+     "rerun": "Plugin Editor Session（#389）+ OS Driver 到着後"
+    }
+   ]
+  },
+  {
+   "id": "UI-DVR-07",
+   "title": "Capability negotiation — 未対応を正直に報告する",
+   "oracle": "driver/host の Capabilities が実装可能な ops のみを広告し、DeniedCapabilities が型付き理由で未対応を報告すること。input_injection/dom_access=false の honest reporting を含む。",
+   "surfaces": [
+    "capability"
+   ],
+   "bindings": [
+    {
+     "layer": "fake",
+     "status": "pass",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "driver_contract",
+      "filter": "ui_dvr_07"
+     },
+     "note": "FakeHost/HeadlessIo の Capabilities/DeniedCapabilities honest-reporting fixture。"
+    },
+    {
+     "layer": "gpui",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/386",
+     "rerun": "GPUI driver capability 契約到着後"
+    },
+    {
+     "layer": "real-os",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/313",
+     "rerun": "OS Driver capability 契約到着後"
+    }
+   ],
+   "evidence": "target/driver-lab/evidence.jsonl"
+  },
+  {
+   "id": "UI-DVR-08",
+   "title": "GPU/Window/Subscription teardown — 終端状態と resource 解放",
+   "oracle": "window close が関連 job を cancel し terminal state に到達し、runtime が lifecycle event を正しく発行すること。job/subscription の後始末が残らないこと（JS bridge の unsubscribe semantic は ruviform-ui bridge 側の契約で本 case の scope 外と記録する）。",
+   "surfaces": [
+    "window",
+    "lifecycle"
+   ],
+   "bindings": [
+    {
+     "layer": "fake",
+     "status": "pass",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui",
+      "target": "runtime"
+     },
+     "note": "既存 tests/runtime.rs の close/job-cancel 系 case がこの oracle を検証（mise run test で実行）。"
+    },
+    {
+     "layer": "fake",
+     "status": "pass",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "driver_contract",
+      "filter": "ui_dvr_08"
+     },
+     "note": "UiRuntime + FakeHost での teardown fixture。"
+    },
+    {
+     "layer": "gpui",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/386",
+     "rerun": "GPUI window teardown 契約到着後"
+    },
+    {
+     "layer": "real-os",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/313",
+     "rerun": "OS Driver 実装後"
+    }
+   ],
+   "evidence": "target/driver-lab/evidence.jsonl"
+  }
+ ]
 }

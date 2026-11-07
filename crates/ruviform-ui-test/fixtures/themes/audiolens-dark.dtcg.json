@@ -1,0 +1,41 @@
+{
+  "$extensions": {
+    "dev.ruviform.dtcg-profile": {
+      "profile": "rvf-dtcg-profile.v1",
+      "layer": "product",
+      "id": "audiolens-dark",
+      "modes": ["dark"]
+    }
+  },
+  "surface": {
+    "bg": { "$type": "color", "$value": "#10141a" },
+    "raised": { "$type": "color", "$value": "#171d25" },
+    "border": { "$type": "color", "$value": "#28313d" }
+  },
+  "text": {
+    "primary": { "$type": "color", "$value": "#dbe4ec" },
+    "dim": { "$type": "color", "$value": "#7d8b99" }
+  },
+  "accent": {
+    "primary": { "$type": "color", "$value": "#2dd4bf" }
+  },
+  "state": {
+    "error": { "$type": "color", "$value": "#f87171" },
+    "disabled": { "$type": "color", "$value": "#4b5563" }
+  },
+  "control": {
+    "track": { "$type": "color", "$value": "#1e293b" },
+    "fill": { "$type": "color", "$value": "#2dd4bf" },
+    "thumb": { "$type": "color", "$value": "#f1f5f9" }
+  },
+  "viz": {
+    "waveform": { "$type": "color", "$value": "#38bdf8" },
+    "waveform_rms": { "$type": "color", "$value": "#0e7490" },
+    "baseline": { "$type": "color", "$value": "#334155" },
+    "cursor": { "$type": "color", "$value": "#f1f5f9" }
+  },
+  "space": {
+    "sm": { "$type": "dimension", "$value": { "value": 4, "unit": "px" } },
+    "md": { "$type": "dimension", "$value": { "value": 8, "unit": "px" } }
+  }
+}
