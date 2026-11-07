@@ -59,5 +59,8 @@ RVF_POC_VST3_PATH='C:/Program Files/Common Files/VST3/iZotope/Vinyl.vst3' \
   adapter の live-lease 検証経由で行う。
 - `raw-window-handle`/`HWND` などの OS 型は公開 API に露出しない
   （adapter 内・opaque `u64` token のみ境界越え）。
-- Dock PASS ではない: 実 dock layout widget は未実装であり、本 harness は
-  GPUI window 内 region への実埋込みまでを証拠化する。
+- Dock PASS ではない。既定経路は GPUI window 内 region への実埋込みまでを
+  証拠化する。`RVF_POC_SCENARIO=dock`（mise: `mise run poc-native-dock-layout`）は
+  GPUI Panel/Tab レイアウト内の `NativeSlot` へ editor を埋め込み、tab 切替・resize・
+  focus・close を検証する。clip・入力・re-dock・plugin 側 resize は未検証（NotRun/Unsupported）。
+  判定は `evidence/rf388-native-dock-layout/report.md` を参照。

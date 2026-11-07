@@ -4,6 +4,8 @@
 //! All evidence lines use the `[poc] key=value` form so the run log is
 //! the evidence artifact itself.
 
+mod dock;
+
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -692,9 +694,35 @@ impl Poc {
     }
 }
 
+/// Registers the plugin, then instantiates and initializes one
+/// instance. Returns `(instance, vst3_mode)`.
+fn instantiate(host: &mut InProcessHost, shared: &Rc<ProbeShared>) -> (PluginHandle, bool) {
+    let (plugin_id, vst3_mode) = register_plugin(host, shared);
+    eprintln!("[poc] plugin_id={plugin_id} vst3_mode={vst3_mode}");
+    let instance = match host.execute(HostCommand::Instantiate {
+        plugin_id: plugin_id.clone(),
+    }) {
+        Ok(HostReply::Instantiated { handle }) => handle,
+        other => panic!("instantiate failed: {other:?}"),
+    };
+    eprintln!("[poc] instance={instance:?}");
+    // `open_gui` is only legal on an initialized instance — the
+    // probe's default init is a no-op, so Initialize is uniform.
+    match host.execute(HostCommand::Initialize { handle: instance }) {
+        Ok(_) => eprintln!("[poc] initialize=ok"),
+        Err(e) => eprintln!("[poc] initialize=fail error={e:?}"),
+    }
+    (instance, vst3_mode)
+}
+
 /// Entry point — builds the driver, window, host and session, then
-/// runs the GPUI loop until the `PoC` finishes.
+/// runs the GPUI loop until the `PoC` finishes. `RVF_POC_SCENARIO=dock`
+/// selects the Panel/Tab Dock layout scenario instead of the
+/// floating-region probe.
 pub fn run() {
+    if std::env::var("RVF_POC_SCENARIO").is_ok_and(|s| s == "dock") {
+        return dock::run();
+    }
     eprintln!("[poc] start os=windows");
 
     let mut driver = GpuiDriver::new();
@@ -715,21 +743,7 @@ pub fn run() {
         closes: Cell::new(0),
     });
     let mut host = InProcessHost::new();
-    let (plugin_id, vst3_mode) = register_plugin(&mut host, &probe);
-    eprintln!("[poc] plugin_id={plugin_id} vst3_mode={vst3_mode}");
-    let instance = match host.execute(HostCommand::Instantiate {
-        plugin_id: plugin_id.clone(),
-    }) {
-        Ok(HostReply::Instantiated { handle }) => handle,
-        other => panic!("instantiate failed: {other:?}"),
-    };
-    eprintln!("[poc] instance={instance:?}");
-    // `open_gui` is only legal on an initialized instance — the
-    // probe's default init is a no-op, so Initialize is uniform.
-    match host.execute(HostCommand::Initialize { handle: instance }) {
-        Ok(_) => eprintln!("[poc] initialize=ok"),
-        Err(e) => eprintln!("[poc] initialize=fail error={e:?}"),
-    }
+    let (instance, vst3_mode) = instantiate(&mut host, &probe);
 
     let mut sessions = PluginEditorSessions::new();
     let session = sessions.begin_session(instance).expect("begin_session");
