@@ -1,0 +1,11 @@
+[package]
+name = "common"
+version = "0.0.0"
+edition = "2021"
+publish = false
+[features]
+default = []
+gui = ["dep:middle"]
+
+[dependencies]
+middle = { path = "../middle", optional = true }

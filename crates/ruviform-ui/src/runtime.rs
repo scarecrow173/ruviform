@@ -209,6 +209,43 @@ impl UiRuntime {
         }
     }
 
+    /// Typed-action entry point for driver-neutral hosts
+    /// (Issue #386): routes a [`crate::driver::WindowLifecycle::Action`]
+    /// `Intent` through the exact dispatch a parsed
+    /// [`HostEvent::Message`] takes, with `window` recorded as the
+    /// job owner for event routing.
+    ///
+    /// GPUI views construct `Intent`s in Rust and deliver them via
+    /// this path; the `WebView` adapter reaches the same dispatch by
+    /// decoding `postMessage` bodies through
+    /// [`crate::ipc::parse_intent`].
+    ///
+    /// A malformed `op` is rejected with `malformed_message` — the
+    /// same stable error code the parse and [`dispatch_op`](Self::dispatch_op)
+    /// paths report — so the error surface does not depend on which
+    /// entry point a caller took.
+    pub fn dispatch_window_intent(&mut self, window: WindowId, intent: Intent) -> Vec<RoutedEvent> {
+        if !valid_op(&intent.op) {
+            return vec![RoutedEvent {
+                window: Some(window),
+                event: Event::result_err(
+                    intent.id,
+                    ErrorBody::new(
+                        codes::MALFORMED_MESSAGE,
+                        format!("invalid op name {:?}", intent.op),
+                    ),
+                ),
+            }];
+        }
+        self.dispatch_for(Some(window), intent)
+            .into_iter()
+            .map(|event| RoutedEvent {
+                window: Some(window),
+                event,
+            })
+            .collect()
+    }
+
     /// Headless intent entry point — the same routing a parsed
     /// [`HostEvent::Message`] takes (used by `demo_cli`, tests, and
     /// any non-GUI caller).
@@ -220,16 +257,7 @@ impl UiRuntime {
                 ErrorBody::new(codes::MALFORMED_MESSAGE, format!("invalid op name {op:?}")),
             )];
         }
-        self.dispatch_for(
-            None,
-            Intent {
-                v: SCHEMA_VERSION,
-                kind: "intent".to_string(),
-                id,
-                op: op.to_string(),
-                params,
-            },
-        )
+        self.dispatch_for(None, Intent::new(id, op, params))
     }
 
     /// Drains pending job signals into events (GUI path: call on every

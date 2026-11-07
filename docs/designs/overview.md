@@ -108,3 +108,5 @@ Optional platform adapters（opt-in・基礎層への依存は下向きのみ）
 - [engine-plugin-host-integration.md](engine-plugin-host-integration.md) — エンジン/利用側へのプラグイン統合設計（non-RT 制御/RT 処理所有分離・`Send` endpoint + `FnMut` ノード接着・plan 退役シーム、Issue #113）(draft)
 - [issue-115-l1-gui-cross-process-parenting.md](issue-115-l1-gui-cross-process-parenting.md) — L1 GUI 採否設計（プロセス境界越し親ウィンドウ埋め込みの OS 別調査・`Unsupported` 維持判定と境界 pin・`gui_open` keep-for-future、Issue #115）(draft)
 - [issue-121-l1-diagnostics.md](issue-121-l1-diagnostics.md) — L1 診断の counter・子 stderr・失敗原因通知の設計（Issue #121。終了・通知・計数の詳細は未確定）(draft)
+- [issue-384-driver-neutral-gui-contract.md](issue-384-driver-neutral-gui-contract.md) — Driver-neutral GUI 契約詳細（依存方向・ID 体系・crate 配置・旧 WebView API 移行表・NativeSurfaceSlot/PluginEditorSession 共通骨格・Native Dock Gate、Issue #384。後継 ADR `driver-neutral-gui-gpui-driver-webview-first-issue-384.md` の詳細。GPUI 最終採用は #262/#388/#389 実機証拠後）(approved)
+- [issue-385-dtcg-resolved-theme.md](issue-385-dtcg-resolved-theme.md) — DTCG interpreter/Resolver 設計（`rvf-dtcg-profile.v1` 採用範囲・alias/mode/override merge・4 層 precedence・typed 不変 `ResolvedTheme`・crate `ruviform-ui-theme`、Issue #385）(approved)

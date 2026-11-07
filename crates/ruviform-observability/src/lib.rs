@@ -20,6 +20,15 @@
 //!   bridge over [`ruviform_rt::channel`] with drop-on-full loss
 //!   accounting (`recorded`/`dropped` counters and per-record
 //!   `dropped_before`).
+//! - [`metrics`]: the shared measurement vocabulary — typed values
+//!   (`Counter`/`Gauge`/`Histogram`), [`metrics::Measurement`] and its
+//!   typed [`metrics::MeasurementValidity`]/issue/loss semantics.
+//! - [`collector`]: the authoritative non-RT observation path —
+//!   [`collector::Collector`] (single poll owner),
+//!   [`collector::CollectorRegistrar`] (the OBS-02 registrar port),
+//!   [`collector::CollectorHandle`] (shareable snapshot/history/
+//!   health reads), [`collector::ObservationBatch`],
+//!   [`collector::MetricsSnapshot`] and [`collector::CollectorHealth`].
 //!
 //! `counter`, `Counter` and `CounterReader` are re-exported at the
 //! crate root for compatibility with existing consumers; new code may
@@ -54,6 +63,11 @@
 //!   or registry lock; required readers/metadata are prepared before
 //!   RT operation begins. Endpoint `Drop`s are likewise non-RT — never
 //!   drop a recorder or sink on an RT thread.
+//! - Every [`collector`] operation — `poll`, `register`, `snapshot`,
+//!   `latest_batch`, `series`, `history`, `health`, `shutdown`,
+//!   [`collector::PollRunner`]: **non-RT only** — locking and
+//!   allocation throughout. The collector's registry lock is never
+//!   held on an RT writer path.
 //!
 //! # Read semantics
 //!
@@ -104,7 +118,9 @@
 #[cfg(feature = "logging")]
 pub mod logging;
 
+pub mod collector;
 pub mod core;
+pub mod metrics;
 pub mod record;
 pub mod rt_bridge;
 pub mod source;

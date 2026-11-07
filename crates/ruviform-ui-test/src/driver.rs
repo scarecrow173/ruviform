@@ -15,7 +15,7 @@ use std::net::TcpListener;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
-use ruviform_ui::ipc::{ErrorBody, Intent, SCHEMA_VERSION, codes};
+use ruviform_ui::ipc::{ErrorBody, Intent, codes};
 use serde_json::{Value, json};
 
 use crate::proto::{
@@ -202,13 +202,7 @@ impl TestDriver {
         if let Some(s) = &secret {
             params["secret"] = json!(s);
         }
-        let intent = Intent {
-            v: SCHEMA_VERSION,
-            kind: "intent".to_string(),
-            id: "d1".to_string(),
-            op: ops::HELLO.to_string(),
-            params,
-        };
+        let intent = Intent::new("d1", ops::HELLO, params);
         let body = serde_json::to_string(&intent)
             .map_err(|e| DriverError::Handshake(format!("intent serialize: {e}")))?;
         write_frame(&mut writer, &body)?;
@@ -280,13 +274,7 @@ impl TestDriver {
     pub fn call(&mut self, op: &str, params: Value) -> Result<Value, DriverError> {
         self.next_id += 1;
         let id = format!("d{}", self.next_id);
-        let intent = Intent {
-            v: SCHEMA_VERSION,
-            kind: "intent".to_string(),
-            id: id.clone(),
-            op: op.to_string(),
-            params,
-        };
+        let intent = Intent::new(id.clone(), op, params);
         let body = serde_json::to_string(&intent)
             .map_err(|e| DriverError::Handshake(format!("intent serialize: {e}")))?;
         write_frame(&mut self.writer, &body)?;

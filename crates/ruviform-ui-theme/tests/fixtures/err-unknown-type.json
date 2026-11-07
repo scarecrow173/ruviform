@@ -1,0 +1,13 @@
+{
+  "$extensions": {
+    "dev.ruviform.dtcg-profile": {
+      "profile": "rvf-dtcg-profile.v1",
+      "layer": "primitive",
+      "id": "err-unknown-type"
+    }
+  },
+  "fx": {
+    "$type": "gradient",
+    "hero": { "$value": "linear-gradient(#fff,#000)" }
+  }
+}

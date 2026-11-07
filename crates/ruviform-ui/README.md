@@ -8,8 +8,16 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
 
 ## 責務
 
+- driver-neutral Window/Host 契約(`driver` モジュール・Issue #386):
+  backend 非依存の `WindowSpec`/`WindowLifecycle`/`DriverEvent`/
+  `WindowDriver`/`WindowCapabilities`。gpui/DOM/`wry`/OS handle を
+  含まない。`Action(Intent)` が `Message(String)` の typed 後継、
+  `UiError::Unsupported` + capability 宣言で silent degrade を禁止。
+  実装は `ruviform-ui-gpui`(標準)・`ruviform-ui-webview`(legacy)・
+  `ruviform-ui-test::FakeDriver`(test)。
 - ホスト抽象(`event` モジュール): `HostEvent`(Tick/Focus/Resize/Close 等)と
-  `HostHandle` による adapter 非依存の UI ライフサイクル通知。
+  `HostHandle` による adapter 非依存の UI ライフサイクル通知
+  (legacy — `driver` モジュールへ移行中)。
 - IPC v1(`ipc` モジュール): `rvf.ipc.v1` 版付き JSON エンベロープ。
   Intent(呼出)/即時 Result/Job 開始/進捗 Event/cancel/終端 Error/
   notification を `id` 相関で扱う。`sys.*` はランタイム組込み op 予約域。
@@ -58,6 +66,15 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
   `LayoutSnapshot`(geometry + monitor signature + trees + detached pool)
   の保存/復元と off-screen・monitor 消失の補正。view state の
   save/restore は consumer 側 — WebView 間の DOM 転送は保証しない。
+- Native Surface Slot(`native_slot` モジュール, Issue #388):
+  driver-neutral なネイティブ埋込領域の契約 —
+  `SurfaceSlotId`(`{index,generation}` の stale 検出可能 ID)、
+  `SlotLease`(opaque・generation-bound・同時 1 lease/slot の
+  parent lease)、`SurfaceSlotRegistry`(mint/validate/revoke/
+  generation recycle を行う headless 純粋モデル)、GUI driver が
+  実装する `NativeSurfaceSlot` port。`HWND`/`NSView`/X11/GPUI 型は
+  持ち込まない。旧 `render::NativeSurfaceHost` は WebView 隣接
+  surface 用として保持し、native dock 埋込の正本は本モジュール。
 - デモ(`demo` モジュール): `DemoService` — synthesize/sleep/fail/panic/
   peaks を提供し、`demo_cli` example(headless)と
   `ruviform-ui-webview` の `demo_app` example(GUI)で共有する。
@@ -93,4 +110,6 @@ cargo run -p ruviform-ui --example demo_dock
 - Dock 基盤(Issue #182): docs/specs/issue-182-dock-tree.md,
   docs/designs/issue-182-dock-tree.md,
   docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md
+- Native Surface Slot(Issue #388): docs/specs/issue-388-native-surface-slot.md,
+  docs/designs/issue-388-native-surface-slot.md
 - adapter: [`ruviform-ui-webview`](../ruviform-ui-webview/README.md)

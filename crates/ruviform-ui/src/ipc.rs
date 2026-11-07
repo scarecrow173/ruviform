@@ -109,6 +109,24 @@ pub struct Intent {
     pub params: Value,
 }
 
+impl Intent {
+    /// Creates a schema-valid intent — fills `v`/`kind` so typed
+    /// (non-JSON) callers produce values identical to a parsed
+    /// [`parse_intent`] result.
+    ///
+    /// **RT contract:** non-RT only.
+    #[must_use]
+    pub fn new(id: impl Into<String>, op: impl Into<String>, params: Value) -> Self {
+        Self {
+            v: SCHEMA_VERSION,
+            kind: "intent".to_string(),
+            id: id.into(),
+            op: op.into(),
+            params,
+        }
+    }
+}
+
 /// Job lifecycle states reported via `job` events.
 ///
 /// **RT contract:** non-RT only.

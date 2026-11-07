@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "ruleset": "rvf.driver-boundary/v1",
+  "strict": true,
+  "forbiddenDepRoots": ["gpui", "wry", "tao"],
+  "forbiddenPathRoots": ["gpui", "wry", "tao"],
+  "allowlist": []
+}

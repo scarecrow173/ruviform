@@ -1,5 +1,6 @@
 //! The shared host-boundary vocabulary: the opaque [`PluginHandle`],
-//! the GUI tokens [`GuiHandle`]/[`GuiParentToken`] and the
+//! the GUI tokens [`GuiHandle`]/[`GuiParentToken`], the session-side
+//! [`PluginEditorSessionId`]/[`ParentSlotLease`] vocabulary and the
 //! command-surface error [`HostError`].
 //!
 //! Everything here is plain data — no trait objects, no pointers — so
@@ -102,6 +103,91 @@ impl GuiParentToken {
     }
 
     /// The raw platform identifier.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+/// Opaque reference to one open plugin editor session.
+///
+/// The `{slot, generation}` pair mirrors [`PluginHandle`]'s stale
+/// detection: the session registry lives in `ruviform-plugin-host`
+/// while the type is shared boundary vocabulary, so callers treat the
+/// value as fully opaque and only the registry can mint a valid id.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PluginEditorSessionId {
+    slot: u32,
+    generation: u32,
+}
+
+impl PluginEditorSessionId {
+    /// Creates an id for `slot`/`generation`.
+    ///
+    /// `#[doc(hidden)]` public because minting is a host-internal
+    /// operation — the session registry owns the slot table.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn new(slot: u32, generation: u32) -> Self {
+        Self { slot, generation }
+    }
+
+    /// The slot index this session id refers to.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn slot(self) -> u32 {
+        self.slot
+    }
+
+    /// The generation stamped on the slot when this id was minted.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn generation(self) -> u32 {
+        self.generation
+    }
+}
+
+/// Opaque, generation-bound parent-surface lease presented to a
+/// plugin editor session.
+///
+/// This is the *session-side* parent vocabulary: it carries an opaque
+/// `u64` payload minted by whoever owns the parent surface (e.g. a
+/// `SurfaceSlotRegistry` in a GUI driver), never a raw OS handle. The
+/// payload structure is the issuer's private implementation detail —
+/// sessions and the wire carry it uninterpreted, and only the
+/// issuer-side adapter redeems it into an OS parent token.
+///
+/// [`GuiParentToken`] remains the lower-level raw vocabulary used at
+/// the OS-adapter boundary inside that redemption; it is *not*
+/// replaced by this type and stays behind the adapter, never on the
+/// session-facing surface.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ParentSlotLease(u64);
+
+impl ParentSlotLease {
+    /// Wraps an issuer-minted lease payload as an opaque session token.
+    ///
+    /// `#[doc(hidden)]` public because minting is an issuer-internal
+    /// operation — the session surface only ever receives a lease.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    /// The raw issuer payload.
     ///
     /// **RT contract:** RT-suitable — `const`, pure.
     #[must_use]

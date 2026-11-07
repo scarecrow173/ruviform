@@ -12,6 +12,7 @@ Directory: `docs/adr`
 | ADR-20261101-variable-ppqn-rational-beat | 可変PPQN・分解能非依存の音楽時間・Native MIDI時刻保持 | accepted | [configurable-ppqn-resolution-independent-musical-time.md](./configurable-ppqn-resolution-independent-musical-time.md) |
 | ADR-034QdDEaffrclLniNBLhQe | Cross-Repo CI アクセス認証と候補revision検証方式 | proposed | [cross-repo-ci-revision.md](./cross-repo-ci-revision.md) |
 | ADR-034JZDNRML000000000002 | denormal 崖対策の実装方針（エンジン層ソフトウェア flush ノード） | accepted | [denormal-mitigation-policy.md](./denormal-mitigation-policy.md) |
+| ADR-034T6RXL42NlmST9mgHHgZ | Driver-neutral GUIアーキテクチャ — GPUI標準Driver方針（仮決定）とWebView-first後継（Issue #384） | proposed | [driver-neutral-gui-gpui-driver-webview-first-issue-384.md](./driver-neutral-gui-gpui-driver-webview-first-issue-384.md) |
 | ADR-034JEe7SAbksaycyrum16R | DSP/SIMD 二層構造とバックエンドの採否 | accepted | [dsp-simd-backend-adoption.md](./dsp-simd-backend-adoption.md) |
 | ADR-034JcihlNe8WCZVpp9RBCq | DSP/SIMD PoC 評価アプローチ | accepted | [dsp-simd-poc.md](./dsp-simd-poc.md) |
 | ADR-034JceOKDwTeWus9xBVXND | FrameRate/TimeBase 意味分離と Timecode 拡張 | accepted | [framerate-timebase-separation-and-timecode-extension.md](./framerate-timebase-separation-and-timecode-extension.md) |
@@ -69,8 +70,6 @@ Directory: `docs/adr`
 | ADR-20261101-synvelis-driven-generic-execution-boundaries | Ruviformの汎用Graph/Audio Execution/Stateful Processorとアプリ意味論の責務境界 | accepted | [synvelis-driven-generic-execution-boundaries.md](./synvelis-driven-generic-execution-boundaries.md) |
 | ADR-20261102-transport-span-scheduler-applied-receipt | Generic Transport Span Scheduler・Applied Receipt・Clock/Plan Generation 契約と Plugin min/max Block 方針 | accepted | [transport-span-scheduler-applied-receipt.md](./transport-span-scheduler-applied-receipt.md) |
 | ADR-034QdPgLCqwTPQ4FHtjLsj | Typed multi-bus Graph IR placement and Port/Connection validation model (Issue #184 M1) | accepted | [typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md](./typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md) |
-| ADR-034IO01BpGWCl1DcEbcTQI | UIアーキテクチャ方針（WebViewファースト・ハイブリッド） | accepted | [ui-architecture-webview-hybrid.md](./ui-architecture-webview-hybrid.md) |
-| ADR-034Jc9Cguud7nZ2Tt88Ptu | UI 技術選定（wry・描画バックエンド・フロントエンド FW・配布）— PoC 採否 | accepted | [ui-tech-selection-poc.md](./ui-tech-selection-poc.md) |
 | ADR-034JZVID00000000000002 | A/V 同期判定ポリシー（audio master + PTS 追従） | accepted | [video-av-sync-policy.md](./video-av-sync-policy.md) |
 | ADR-034JcidaiOOip5EhNPOnDI | video-proc カーネル API 形状と色変換・HDR 対応範囲 | accepted | [video-proc-kernel-api-and-color-hdr-scope.md](./video-proc-kernel-api-and-color-hdr-scope.md) |
 | ADR-034JNYt58J8NlUkn6RfJMs | workspace MSRV 引上げ（1.85 → 1.89）と fearless_simd 本番昇格の解禁 | accepted | [workspace-msrv-1-85-1-89-fearless-simd.md](./workspace-msrv-1-85-1-89-fearless-simd.md) |
@@ -80,3 +79,5 @@ Directory: `docs/adr`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | ADR-2iNuZm3ymoyzRUmpgnKr0x | 音楽時間モデル（PPQN 960 tick 中核・piecewise-constant テンポマップ） | superseded | [musical-time-model.md](./musical-time-model.md) |
+| ADR-034IO01BpGWCl1DcEbcTQI | UIアーキテクチャ方針（WebViewファースト・ハイブリッド） | superseded | [ui-architecture-webview-hybrid.md](./ui-architecture-webview-hybrid.md) |
+| ADR-034Jc9Cguud7nZ2Tt88Ptu | UI 技術選定（wry・描画バックエンド・フロントエンド FW・配布）— PoC 採否 | superseded | [ui-tech-selection-poc.md](./ui-tech-selection-poc.md) |

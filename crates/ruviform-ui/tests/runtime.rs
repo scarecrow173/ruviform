@@ -553,3 +553,66 @@ fn close_requested_cancels_jobs_and_emits_lifecycle() {
         }
     )));
 }
+
+/// Issue #386 connection test: the typed `Action(Intent)` path —
+/// `dispatch_window_intent` — produces the same dispatch as the
+/// legacy `HostEvent::Message` raw-string path, with the window
+/// recorded as routing owner.
+#[test]
+fn dispatch_window_intent_parity_with_message_path() {
+    use ruviform_ui::{Intent, WindowId};
+
+    let (mut rt_msg, _) = rt();
+    let (mut rt_typed, _) = rt();
+    let window = WindowId::new(7).expect("nonzero");
+    let intent = parse_intent(r#"{"v":1,"kind":"intent","id":"i-1","op":"sys.ping","params":{}}"#)
+        .expect("valid intent");
+
+    // Legacy path: raw string through HostEvent::Message → parse →
+    // dispatch_for.
+    let legacy = rt_msg.handle_window(
+        window,
+        HostEvent::Message(
+            r#"{"v":1,"kind":"intent","id":"i-1","op":"sys.ping","params":{}}"#.to_string(),
+        ),
+    );
+    // Typed path: driver constructed the Intent directly.
+    let typed = rt_typed.dispatch_window_intent(
+        window,
+        Intent::new(intent.id.clone(), intent.op.clone(), intent.params.clone()),
+    );
+    assert_eq!(legacy.len(), typed.len());
+    for (l, t) in legacy.iter().zip(typed.iter()) {
+        assert_eq!(l.window, Some(window));
+        assert_eq!(t.window, Some(window));
+        assert_eq!(l.event.to_json(), t.event.to_json());
+    }
+}
+
+/// Issue #386: a malformed `op` on the typed path reports the same
+/// stable `malformed_message` code the parse path produces — the
+/// error surface must not depend on the entry point.
+#[test]
+fn dispatch_window_intent_malformed_op_matches_parse_path() {
+    use ruviform_ui::{Intent, WindowId};
+
+    let (mut rt_msg, _) = rt();
+    let (mut rt_typed, _) = rt();
+    let window = WindowId::new(7).expect("nonzero");
+
+    let legacy = rt_msg.handle_window(
+        window,
+        HostEvent::Message(
+            r#"{"v":1,"kind":"intent","id":"i-1","op":"Bad Op","params":{}}"#.to_string(),
+        ),
+    );
+    let typed = rt_typed.dispatch_window_intent(window, Intent::new("i-1", "Bad Op", json!({})));
+    assert_eq!(legacy.len(), 1);
+    assert_eq!(typed.len(), 1);
+    // Same stable error code on both paths; the shapes differ
+    // legitimately — the parse path fails before the intent id is
+    // known (kind "error"), the typed path can correlate (kind
+    // "result" carrying the id).
+    assert!(legacy[0].event.to_json().contains("malformed_message"));
+    assert!(typed[0].event.to_json().contains("malformed_message"));
+}

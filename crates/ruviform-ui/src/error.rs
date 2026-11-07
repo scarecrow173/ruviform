@@ -30,6 +30,17 @@ pub enum UiError {
         /// Human-readable reason.
         message: String,
     },
+    /// The driver does not implement the requested capability
+    /// (Issue #386 — declared via
+    /// [`crate::driver::WindowCapabilities`]). Drivers must surface
+    /// this instead of silently degrading or faking the result.
+    Unsupported {
+        /// The capability that was requested (for example
+        /// `"native_surface_slot"`).
+        capability: String,
+        /// Human-readable reason.
+        message: String,
+    },
 }
 
 impl UiError {
@@ -56,6 +67,15 @@ impl UiError {
             message: message.into(),
         }
     }
+
+    /// Convenience constructor for [`UiError::Unsupported`].
+    #[must_use]
+    pub fn unsupported(capability: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::Unsupported {
+            capability: capability.into(),
+            message: message.into(),
+        }
+    }
 }
 
 impl Display for UiError {
@@ -66,6 +86,10 @@ impl Display for UiError {
             }
             Self::Host { message } => write!(f, "host operation failed: {message}"),
             Self::Internal { message } => write!(f, "internal ui error: {message}"),
+            Self::Unsupported {
+                capability,
+                message,
+            } => write!(f, "unsupported capability {capability}: {message}"),
         }
     }
 }

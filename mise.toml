@@ -54,6 +54,14 @@ run = "cargo clippy --workspace --all-targets -- -D warnings"
 description = "Run workspace tests with `cargo test --workspace` (dev/test profile; writes only target/)"
 run = "cargo test --workspace"
 
+[tasks.check-ui-driver-boundary]
+description = "Issue #390 driver boundary guard: `cargo metadata` dependency-graph + syn public-signature leak inspection against fixtures/driver-lab/boundary.json (exit 0 pass / 1 violation / 2 tool error; writes only target/)"
+run = "cargo run -p ruviform-ui-test --bin gui-boundary-guard -- --offline"
+
+[tasks.test-ui-driver-contract]
+description = "Issue #390 DriverContractFixture: cases.json/stories.json manifest consistency + executable UI-DVR-01/05/07/08 fake-layer fixtures (evidence via RUVIFORM_DRIVER_LAB_EVIDENCE; writes only target/)"
+run = "cargo test -p ruviform-ui-test --test driver_contract"
+
 [tasks.build]
 description = "Build workspace with `cargo build --workspace` (dev profile; writes only target/)"
 run = "cargo build --workspace"
@@ -140,6 +148,14 @@ run = "node --test ci/tracker/"
 description = "Run ci/daily scheduler decision contract tests via `node --test ci/daily/` (decision matrix, in-flight/unknown hold, bounded retry budget, dispatch confirm + landed-sha, report JSON shape, workflow trigger contract ci-yml-contract.test.mjs; requires node from the pinned toolchain)"
 run = "node --test ci/daily/"
 
+# Issue #294 (cross-consumer candidate-tuple gate): contract tests for the
+# ci/consumer-verify evidence evaluator. The `preflight` job in
+# consumer-verify.yml runs this before any lane executes so a broken
+# evaluator fails the run instead of recording a wrong status.
+[tasks.test-ci-consumer-verify]
+description = "Run ci/consumer-verify contract tests via `node --test ci/consumer-verify/` (classify-ref matrix, lane/status derivation, tuple match/mismatch, evidence JSON+summary shape, secret non-leak, workflow yml structure contract; requires node from the pinned toolchain)"
+run = "node --test ci/consumer-verify/"
+
 [tasks.test-plugin-core]
 description = "Run plugin-core contract tests"
 run = "cargo test -p ruviform-plugin-core"
@@ -191,6 +207,22 @@ run = "cargo clippy -p ruviform-io-structured --all-targets -- -D warnings && ca
 description = "Run io-structured tests across the format feature matrix (unit/integration/doc tests per combination)"
 run = "cargo test -p ruviform-io-structured && cargo test -p ruviform-io-structured --features xml && cargo test -p ruviform-io-structured --features xml,file && cargo test -p ruviform-io-structured --all-features"
 
+# IO composition lane (Issue #306): the ruviform-io-e2e crate carries the
+# cross-layer boundary tests (StagedFile lifecycle, Structured→StagedFile,
+# TAR/ZIP→Gzip/Zstd→StagedFile, secure extraction, WavMuxer→seal→decode→
+# publish). It is test-only — dev-dependencies pull the feature
+# combinations the boundary needs (structured json,csv,file; compression
+# gzip,zstd), so `-p` alone exercises the full composition surface.
+[tasks.check-io-e2e]
+description = "Type-check the io-e2e composition test crate and all its test targets"
+run = "cargo check -p ruviform-io-e2e --all-targets"
+[tasks.lint-io-e2e]
+description = "Lint the io-e2e composition test crate and its test targets"
+run = "cargo clippy -p ruviform-io-e2e --all-targets -- -D warnings"
+[tasks.test-io-e2e]
+description = "Run the io-e2e composition boundary tests (staged lifecycle, structured/compression/archive/wav layers)"
+run = "cargo test -p ruviform-io-e2e"
+
 # UI webview lane (Issue #156): the adapter's implementation lives behind
 # the non-default `webview` feature so `cargo check --workspace` stays
 # headless; these tasks are the feature-enabled verification entry points.
@@ -205,6 +237,40 @@ run = "cargo clippy -p ruviform-ui-webview --all-targets --features webview -- -
 [tasks.test-ui-webview]
 description = "Run webview-feature tests for the UI adapter (rvf:// scheme/data surface; windowed paths are manual verification)"
 run = "cargo test -p ruviform-ui-webview --features webview"
+
+# UI GPUI lane (Issue #386): the standard Driver adapter's
+# implementation lives behind the non-default `gpui` feature so
+# `cargo check --workspace` stays headless; these tasks are the
+# feature-enabled verification entry points. The crate compiles the
+# real GPUI 0.2.2 backend (GPU/font/OS-window stacks) — build times
+# are heavy, and actual window-on-screen behavior is manual
+# verification on a real OS session (RF388/RF389 own real-OS
+# evidence), not a CI headless pass.
+[tasks.check-ui-gpui]
+description = "Type-check the UI GPUI adapter and its targets with the gpui feature enabled"
+run = "cargo check -p ruviform-ui-gpui --features gpui --all-targets"
+[tasks.lint-ui-gpui]
+description = "Lint the UI GPUI adapter and its test/example targets with the gpui feature enabled"
+run = "cargo clippy -p ruviform-ui-gpui --all-targets --features gpui -- -D warnings"
+[tasks.test-ui-gpui]
+description = "Run gpui-feature tests for the UI GPUI adapter (real OS window behavior is manual verification)"
+run = "cargo test -p ruviform-ui-gpui --features gpui"
+# Canonical manual-verification entry for the minimal native Window
+# fixture: opens a real OS window on the local session — run it on a
+# real OS only, never as a headless/CI pass. RF388/RF389 real-OS
+# evidence is recorded through this entry point.
+[tasks.example-ui-gpui-minimal]
+description = "Run the minimal GPUI Window fixture on the real OS session (manual verification entry — not a headless/CI lane)"
+run = "cargo run -p ruviform-ui-gpui --features gpui --example minimal_window"
+
+# Canonical manual-verification entry for the RF388/389 native-dock
+# PoC: attaches a real native editor (probe plugin open_gui → Win32
+# WS_CHILD) into a surface container under a real GPUI window — run it
+# on a real OS only, never as a headless/CI pass. Evidence is the
+# `[poc] key=value` log captured from stderr.
+[tasks.poc-native-dock]
+description = "Run the RF388/389 native-dock PoC harness on the real OS session (manual verification entry — Windows only today)"
+run = "cargo run -p ruviform-poc-native-dock --features gpui"
 
 # UI npm dependency install tasks (Issue #330): each ui/* package's
 # lockfile-driven `npm ci` lives in exactly one task. `sources` (lockfile +
