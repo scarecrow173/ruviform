@@ -8,8 +8,16 @@
 //! handle-derived canonical path where the OS offers one); afterwards
 //! no path string is ever re-resolved inside the tree. A swapped
 //! leaf, a swapped intermediate directory, or a link target pointing
-//! outside can produce `NotFound`/`EscapesRoot`/`IdentityMismatch`/
-//! `NotRegularFile` — never the bytes or facts of an outside object.
+//! outside the authority can produce `NotFound`/`EscapesRoot`/
+//! `IdentityMismatch`/`NotRegularFile` — never the bytes or facts of
+//! an object outside the held handles' reach.
+//!
+//! Authority is delegated to the acquired directory handles (inode
+//! subtrees), not to continued path-namespace containment: a scoped
+//! directory renamed outside the root after acquisition is still
+//! legitimately read through its handle (standard capability
+//! semantics — re-canonicalizing per operation would reintroduce the
+//! TOCTOU this capability exists to remove).
 //!
 //! Guarantees are scoped to the filesystem tree the root inode
 //! belongs to (unix mount/bind-mount crossings pass through as

@@ -221,9 +221,10 @@ impl RootedDir {
     /// （Linux `/proc/self/fd/N` readlink・Windows
     /// `GetFinalPathNameByHandleW`・unix `F_GETPATH`）— (path→object,
     /// canonical-string) の一致を atomic に近く保つ。handle 由来の
-    /// canonical 取得ができない backend では `fs::canonicalize` →
-    /// `open_dir_path` に縮退し、その residual race は唯一の
-    /// trust boundary として明記する。非 dir は `NotDirectory`。
+    /// canonical 取得ができない backend では **open 後に
+    /// `fs::canonicalize` で anchor を得る**（順序は open →
+    /// canonicalize — この residual race が唯一の trust boundary
+    /// として明記される）。非 dir は `NotDirectory`。
     pub fn open(path: &Path) -> Result<Self, FileError>;
     pub fn open_with(path: &Path, options: RootedOptions) -> Result<Self, FileError>;
     /// capability root の canonical path（scoped dir でも root を指す）。
@@ -728,7 +729,7 @@ SV 側は `open_pinned` が `Unsupported` なら自前の digest verify
 | hop/depth limit | `max_depth`（locator 成分、既定 40）/`max_components_total`（展開込み、既定 512）/`max_open_dirs`（同時 dir handle、既定 64）。`LimitExceeded`。resolve は成分ごとに 1 個まで dir fd を保持（EMFILE 自体は `Io`）。 |
 | reparse point | SYMLINK/MOUNT_POINT は `Symlink` として target 解決対象、その他 tag は `Other` で不辿。`FILE_OPEN_REPARSE_POINT` で link object を可視化、中間 traversal は `OBJ_DONT_REPARSE` 相当で差し替え検出。**Windows 10 RS1 (build 14393) 未満は `OBJ_DONT_REPARSE` が silent-ignore されるため ops 初期化時に version gate → `Unsupported`**。 |
 | mount | unix mount/bind mount 横断は kernel namespace の実体としてそのまま通過する（SV canonicalize も同じ穴 — 非回帰だが「root 外 byte/facts を出さない」は **mount namespace 内の FS tree に scope される**と正直に明記。autofs の traverse 副作用も起こり得る）。同一 `st_dev` の bind mount は identity でも検出不能。Windows mount は reparse で link 扱い。 |
-| 同時 rename/swap | 各 component は no-follow dir handle から辿る。差し替えは当該 step で `NotFound`/`EscapesRoot`/`IdentityMismatch`/`NotRegularFile` のいずれかになり、root 外 object は開かない。resolved ancestor fd は inode を pin するので walk 中の ancestor rename でも脱出しない。 |
+| 同時 rename/swap | 各 component は no-follow dir handle から辿る。差し替えは当該 step で `NotFound`/`EscapesRoot`/`IdentityMismatch`/`NotRegularFile` のいずれかになり、**解決 walk の届く範囲外の object は開かない**（authority は取得済 handle subtree への委譲 — 取得済 scoped dir が root 外へ rename された後の継続 authority も正当: 下段「scoped dir の移動」参照）。resolved ancestor fd は inode を pin するので walk 中の ancestor rename でも脱出しない。 |
 | 権限 | handle 相対でも OS の権限検査は有効。permission 失敗は `Io`（source に `PermissionDenied`）。root handle の権限は `RootedDir::open` 時に確立。 |
 | identity | `NodeId`/`NodePin` は volume+index+kind+discriminator(+handle) の opaque 公開形。同 FS 内の同一 object で Eq。ctime 変動（chmod/link/metadata touch）で「同一 object が変化」も mismatch になり得る（fail-closed 安全側 — SV の content-pin とは意味論が異なり、doc に明記）。weak FS では pin 系が `Unsupported`。 |
 | case sensitivity | unix = byte/UTF-8 名の exact、windows = NT の case-insensitive lookup。絶対 link の prefix 比較は windows で case-insensitive（per-dir case-sensitive FS とのずれは in-root wrong-accept/reject の限界として明記）。 |

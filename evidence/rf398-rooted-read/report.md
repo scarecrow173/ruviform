@@ -86,7 +86,12 @@ root 側の既存 CI dispatch に委ねる。
   `RootedOptions`。
 - pin/open_pinned は per-object Strong identity 必須。弱 FS は typed
   `Unsupported` → SV は digest verify 経路へ縮退可能。
+- `FollowMode::{NoFollow, WithinRoot}` は SV の現 `FollowWithinRoot`
+  契約を維持し黙示置換しない。全解決は root-relative handle
+  traversal であり、取得済 scoped handle の rename 後も authority は
+  handle（inode subtree）に委譲される（spec/design 明記済み）。
 - 正規入口: `mise run fmt-check check lint test`。
 - 契約詳細: `docs/specs/rooted-read-capability.md`,
   `docs/designs/rooted-read-capability.md`（approved）。
-- 候補 SHA: `38e66c8c1a95c8c917113537cebed6f9038185e4`（PR #401 head）。
+- 候補 SHA: 本 branch の最新 head（`git rev-parse HEAD` 参照 — PR
+  #401 head と同一）。
