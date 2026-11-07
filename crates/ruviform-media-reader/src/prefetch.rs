@@ -465,7 +465,7 @@ pub enum PumpOutcome {
 /// **RT contract:** non-RT only — decodes, allocates, may block on the
 /// command channel in [`run`](Self::run).
 pub struct PrefetchProducer {
-    reader: SourceReader,
+    reader: SourceReader<'static>,
     data_tx: Producer<PrefetchItem>,
     free_rx: Consumer<PcmBlock>,
     cmd_rx: mpsc::Receiver<PrefetchCmd>,
@@ -1368,7 +1368,7 @@ impl Prefetch {
     /// reader's canonical format, or a zero dimension was supplied.
     #[allow(clippy::type_complexity)]
     pub fn manual(
-        reader: SourceReader,
+        reader: SourceReader<'static>,
         config: PrefetchConfig,
     ) -> Result<(PrefetchHandle, PrefetchProducer, PrefetchConsumer)> {
         validate_config(&reader, config)?;
@@ -1426,7 +1426,7 @@ impl Prefetch {
     ///
     /// Same as [`manual`](Self::manual), plus
     /// [`ErrorKind::Io`] when the thread cannot be spawned.
-    pub fn spawn(reader: SourceReader, config: PrefetchConfig) -> Result<Prefetch> {
+    pub fn spawn(reader: SourceReader<'static>, config: PrefetchConfig) -> Result<Prefetch> {
         let (mut handle, producer, consumer) = Self::manual(reader, config)?;
         let worker = std::thread::Builder::new()
             .name("ruviform-prefetch".to_owned())
@@ -1437,7 +1437,7 @@ impl Prefetch {
     }
 }
 
-fn validate_config(reader: &SourceReader, config: PrefetchConfig) -> Result<()> {
+fn validate_config(reader: &SourceReader<'_>, config: PrefetchConfig) -> Result<()> {
     let meta = reader.metadata();
     let channels = usize::try_from(meta.canonical.layout.channels())
         .map_err(|_| Error::from_kind(ErrorKind::InvalidValue))?;
