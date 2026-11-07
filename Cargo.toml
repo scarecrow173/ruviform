@@ -76,6 +76,10 @@ members = [
     # adapter 実装は非既定 `webview` feature ゲートで headless 検証経路を壊さない）
     "crates/ruviform-ui",
     "crates/ruviform-ui-webview",
+    # Driver 非依存 DTCG design-token interpreter（Issue #385 新設 —
+    # rvf-dtcg-profile.v1: parse/validate/alias/mode/override → typed
+    # immutable ResolvedTheme。serde/serde_json のみ依存、ruviform-ui 非依存）
+    "crates/ruviform-ui-theme",
     # 利用側層 テスト共有基盤（Issue #312 / RF-GT-03 — test-only GUI host
     # lifecycle・secure control adapter・fixture/clock/observation。
     # ruviform-ui 公開 API のみに依存し、本番クレートからは誰も依存しない）

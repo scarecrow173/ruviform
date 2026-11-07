@@ -1,10 +1,10 @@
 ---
 id: "ADR-034IO01BpGWCl1DcEbcTQI"
 type: "adr"
-status: "accepted"
+status: "superseded"
 title: "UIアーキテクチャ方針（WebViewファースト・ハイブリッド）"
 created: "2026-10-20"
-updated: "2026-10-20"
+updated: "2026-11-07"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -22,7 +22,8 @@ relations:
     - "realtime-contract-and-verification-policy.md"
   blocks: []
   supersedes: []
-  superseded-by: []
+  superseded-by:
+    - "driver-neutral-gui-gpui-driver-webview-first-issue-384.md"
   related:
     - "plugin-architecture-clap-vst3.md"
     - "platform-and-toolchain-targets.md"
@@ -53,6 +54,8 @@ metadata:
 ---
 
 # UIアーキテクチャ方針（WebViewファースト・ハイブリッド）
+
+> **Status: superseded（2026-11-07）**。本 ADR の「WebView ファースト・ハイブリッド第一候補」は Issue #384 の 2026-11-07 横断レビュー確定仕様 v2 により **Driver-neutral GUI Architecture + GPUI 標準 Driver** 方針へ置き換わった。後継: [driver-neutral-gui-gpui-driver-webview-first-issue-384.md](driver-neutral-gui-gpui-driver-webview-first-issue-384.md)。本文書の PoC 記録・設計検討は履歴証拠として保持し、本文自体は改訂しない。
 
 ## Context and Problem Statement
 

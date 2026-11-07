@@ -104,6 +104,7 @@ Ruviform ワークスペースのメンバークレート索引（計38クレー
 | [`ruviform-edit`](ruviform-edit/README.md) | NLE 非破壊編集データモデル + 評価射影（全 API 非 RT） |
 | [`ruviform-ui`](ruviform-ui/README.md) | WebView 非依存の GUI 基盤コア（host 抽象・IPC v1・service/job ランタイム・bounded data・assets・描画責務契約 — Issue #156） |
 | [`ruviform-ui-webview`](ruviform-ui-webview/README.md) | `wry`+`tao` のオプション GUI adapter（feature `webview` でホスト実装・`rvf://` スキーム・組込みアセット — Issue #156） |
+| [`ruviform-ui-theme`](ruviform-ui-theme/README.md) | Driver 非依存 DTCG design-token interpreter（`rvf-dtcg-profile.v1` の parse/validate/alias/mode/override → 型付き不変 `ResolvedTheme`。serde/serde_json のみ依存 — Issue #385） |
 | [`ruviform-ui-test`](ruviform-ui-test/README.md) | テスト専用 GUI Host 制御基盤（`rvf.uitest.v1` 制御ポート・stdio/loopback TCP・FakeHost・fixture/clock/fault/観測 — Issue #312。本番クレートは本クレートに依存しない） |
 | [`ruviform-io-e2e`](ruviform-io-e2e/README.md) | 汎用 I/O 合成 E2E 試験専用クレート（StagedFile/Structured/Compression/Archive/WAV の層横断境界試験 — Issue #306 / IO-IMP-12。公開 API なし・本番クレートは本クレートに依存しない） |
 | [`ruviform-cli-sample`](ruviform-cli-sample/README.md) | Issue #155 headless CLI 利用例 — 共有実行サービスの外側アダプタ（probe + オフライン run・JSON/JSONL・Ctrl-C cancel） |
