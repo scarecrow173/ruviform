@@ -272,6 +272,18 @@ run = "cargo run -p ruviform-ui-gpui --features gpui --example minimal_window"
 description = "Run the RF388/389 native-dock PoC harness on the real OS session (manual verification entry — Windows only today)"
 run = "cargo run -p ruviform-poc-native-dock --features gpui"
 
+# RF389 real-external-VST3 manual lane: the same harness loads the
+# module given by RVF_POC_VST3_PATH through the `host` bridge and
+# drives its real IPlugView editor. Example:
+#   RVF_POC_VST3_PATH='C:/Program Files/Common Files/VST3/iZotope/Vinyl.vst3' \
+#     mise run poc-vst3-editor
+# Optional RVF_POC_VST3_PLUGIN_ID selects a class when the module
+# ships several. Load/editor unavailability must be classified
+# NotRun/Unsupported/Fail in evidence — never fabricated success.
+[tasks.poc-vst3-editor]
+description = "Run the native-dock PoC against a real external VST3 module (manual lane — set RVF_POC_VST3_PATH; Windows only)"
+run = "cargo run -p ruviform-poc-native-dock --features gpui,vst3"
+
 # UI npm dependency install tasks (Issue #330): each ui/* package's
 # lockfile-driven `npm ci` lives in exactly one task. `sources` (lockfile +
 # manifest) and `outputs` (the hidden lockfile npm always writes into
