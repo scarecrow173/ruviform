@@ -31,6 +31,10 @@
     "javascriptcore-rs",
     "v8"
   ],
+  "protectedPackages": [
+    "ruviform-ui",
+    "ruviform-ui-theme"
+  ],
   "forbiddenPathRoots": [
     "gpui",
     "gpui_component",
@@ -85,8 +89,8 @@
       "role": "driver-adapter",
       "allowedDeps": ["gpui", "raw-window-handle"],
       "viaFeatures": ["gpui", "gpui-test"],
-      "required": false,
-      "reason": "Issue #386 の GPUI 標準 Driver adapter。main 未 merge のため required=false・到着時に自動検査開始。raw-window-handle は Issue #388 NativeSurfaceSlot の OS parent handle 捕捉用途で gpui feature 経由 optional のみ"
+      "required": true,
+      "reason": "Issue #386 の GPUI 標準 Driver adapter（main merge 済み）。gpui/gpui-test feature 経由の optional のみ許可。raw-window-handle は Issue #388 NativeSurfaceSlot の OS parent handle 捕捉用途で gpui feature 経由 optional のみ"
     },
     {
       "package": "ruviform-poc-native-dock",

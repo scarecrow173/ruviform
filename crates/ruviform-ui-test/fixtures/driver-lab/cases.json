@@ -60,8 +60,8 @@
     {
      "layer": "gpui",
      "status": "not_run",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/386",
-     "rerun": "ruviform-ui-gpui が main に merge 後、同一 scenario を GPUI Window で実行"
+     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
+     "rerun": "ruviform-ui-gpui の gpui feature 有効 build で同一 headless smoke（window 作成）を GPUI test-support 経路に接続する（lab binding 未接続）"
     },
     {
      "layer": "real-os",
@@ -101,9 +101,10 @@
     },
     {
      "layer": "gpui",
-     "status": "blocked",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/387",
-     "rerun": "同上・GPUI renderer 到着後"
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
+     "note": "ruviform-ui-gpui の render.rs（Issue #387 renderer）は存在するが、ViewSpec の mount/reconcile/unmount を stable key で検証する GPUI lab binding は未接続。",
+     "rerun": "同一 ViewSpec scenario を ruviform-ui-gpui の gpui-test（TestAppContext）経路で実行する lab binding を追加"
     },
     {
      "layer": "real-os",
@@ -136,9 +137,10 @@
     },
     {
      "layer": "gpui",
-     "status": "blocked",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/387",
-     "rerun": "同上・GPUI renderer 到着後"
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
+     "note": "ruviform-ui-gpui の rvf_view_fader_gesture が Begin/Preview/Commit の GPUI element 経路を部分的に検証する。Cancel と遅延・順序逆転受信の GPUI 検証は未接続。",
+     "rerun": "Cancel と遅延・順序逆転 receipt を GPUI test-support 経路の lab binding に接続"
     },
     {
      "layer": "real-os",
@@ -158,16 +160,22 @@
    "bindings": [
     {
      "layer": "fake",
-     "status": "blocked",
+     "status": "pass",
      "owner": "https://github.com/scarecrow173/ruviform/issues/385",
-     "rerun": "Design Contract/ResolvedTheme interpreter（#385）到着後に実行",
-     "note": "現行 main には ResolvedTheme 契約が存在しない。"
+     "note": "ThemeResolver の mode 選択・layer 優先順位（consumer override > product > primitive）・宣言外 mode（system を含む）の MissingMode 拒否を検証。system は ResolvedTheme の契約外で、OS 追従は Driver/Consumer 側の責務として拒否を pin する。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "driver_contract",
+      "filter": "ui_dvr_04"
+     }
     },
     {
      "layer": "gpui",
-     "status": "blocked",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/385",
-     "rerun": "同上・GPUI adapter 到着後"
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
+     "note": "render.rs の palettes_differ_per_product_theme が product theme 間の palette 差のみを検証する。mode/override の GPUI 写像は未接続。",
+     "rerun": "ResolvedTheme → GPUI 色写像の mode/override 検証を lab binding に接続"
     },
     {
      "layer": "real-os",
@@ -175,7 +183,8 @@
      "owner": "https://github.com/scarecrow173/ruviform/issues/313",
      "rerun": "OS Driver + ResolvedTheme 契約の双方到着後"
     }
-   ]
+   ],
+   "evidence": "target/driver-lab/evidence.jsonl"
   },
   {
    "id": "UI-DVR-05",
@@ -209,9 +218,12 @@
     },
     {
      "layer": "gpui",
-     "status": "not_run",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/386",
-     "rerun": "ruviform-ui-gpui merge 後、同一 scenario を WindowDriver 経由で実行"
+     "status": "pass",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui"
+     },
+     "note": "ruviform-ui-gpui の lifecycle_fixture::gpui_driver_matches_shared_lifecycle_trace が、ruviform-ui-test::lifecycle の共通 trace（2-phase Dock move + rollback・detach/reattach を含む）と GPUI driver の trace の一致を検証する。ローカル Windows 実行で pass。実描画 pixel は対象外。"
     },
     {
      "layer": "real-os",
@@ -233,16 +245,25 @@
    "bindings": [
     {
      "layer": "fake",
-     "status": "blocked",
+     "status": "pass",
      "owner": "https://github.com/scarecrow173/ruviform/issues/388",
-     "rerun": "NativeSurfaceSlot 公開契約（#388）到着後に実行",
-     "note": "現行 main には NativeSurfaceSlot 契約が存在しない。"
+     "note": "SurfaceSlotRegistry で Unsupported 既定 capability の lease 拒否・個別 capability の honest 報告・destroy による lease revoke と Released・recycle 後の StaleGeneration を検証。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "driver_contract",
+      "filter": "ui_dvr_06"
+     }
     },
     {
      "layer": "gpui",
-     "status": "blocked",
+     "status": "pass",
      "owner": "https://github.com/scarecrow173/ruviform/issues/388",
-     "rerun": "同上"
+     "note": "ruviform-ui-gpui の surface.rs（owner teardown による auto release・release after auto release のエラー・dead parent の拒否）と render.rs（rvf_view_native_slot_fail_closed_on_refusal 等）が GPUI 側の Unsupported/stale/destroy を検証。ローカル Windows 実行で pass。OS 子 HWND の実描画は対象外。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui"
+     }
     },
     {
      "layer": "real-os",
@@ -274,8 +295,9 @@
     {
      "layer": "gpui",
      "status": "not_run",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/386",
-     "rerun": "GPUI driver capability 契約到着後"
+     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
+     "note": "ruviform-ui-gpui の最小 fixture は ime / native_surface_slot を Unsupported と宣言するが、その capability 報告を lab binding で検証していない。",
+     "rerun": "GPUI WindowCapabilities の honest reporting を lab binding に接続"
     },
     {
      "layer": "real-os",
@@ -319,8 +341,9 @@
     {
      "layer": "gpui",
      "status": "not_run",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/386",
-     "rerun": "GPUI window teardown 契約到着後"
+     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
+     "note": "GPUI 側は shared lifecycle trace の window Destroyed/teardown を検証済み（UI-DVR-05 の binding 参照）。関連 job の cancel と terminal event は GPUI harness に接続していないため未検証。",
+     "rerun": "GPUI host の window close で UiRuntime::cancel_window_jobs と job terminal event を検証する lab binding を接続"
     },
     {
      "layer": "real-os",

@@ -367,38 +367,90 @@ pub fn validate_stories(manifest: &StoryManifest) -> Vec<ManifestError> {
     errors
 }
 
-/// `cargo-test` mechanism の存在確認。package が metadata に存在し、
-/// tests/<target>.rs が workspace 内に実在することを検証する。
-/// `filter` 指定時は test file source に同名 `fn` が存在すること。
+/// case manifest の binding mechanism の存在確認（`cargo-test` /
+/// `mise-task`）。`cargo-test` は package が metadata に存在し
+/// tests/<target>.rs が実在すること、`filter` 指定時は test file source に
+/// 同名 `fn` が存在することを検証する。
 #[must_use]
 pub fn verify_mechanisms(
     manifest: &CaseManifest,
     metadata: &cargo_metadata::Metadata,
     workspace_root: &Path,
 ) -> Vec<ManifestError> {
-    let mut errors = Vec::new();
-    for case in &manifest.cases {
-        for binding in &case.bindings {
-            let Some(m) = &binding.mechanism else {
-                continue;
+    manifest
+        .cases
+        .iter()
+        .flat_map(|case| {
+            case.bindings
+                .iter()
+                .map(move |b| (format!("{}/{}", case.id, b.layer), b))
+        })
+        .flat_map(|(subject, b)| verify_binding_mechanism(&subject, b, metadata, workspace_root))
+        .collect()
+}
+
+/// story manifest の driver binding mechanism の存在確認（case 側と同一規則）。
+#[must_use]
+pub fn verify_story_mechanisms(
+    manifest: &StoryManifest,
+    metadata: &cargo_metadata::Metadata,
+    workspace_root: &Path,
+) -> Vec<ManifestError> {
+    manifest
+        .stories
+        .iter()
+        .flat_map(|story| {
+            story
+                .drivers
+                .iter()
+                .map(move |(layer, b)| (format!("{}/{layer}", story.id), b))
+        })
+        .flat_map(|(subject, b)| verify_binding_mechanism(&subject, b, metadata, workspace_root))
+        .collect()
+}
+
+/// 1 binding の mechanism を実在確認する。`cargo-test` は package・
+/// tests/<target>.rs・filter fn、`mise-task` は `mise.toml` の
+/// `[tasks.<name>]` 定義を要求する（`manual` は手順説明のみで検査対象外）。
+fn verify_binding_mechanism(
+    subject: &str,
+    binding: &Binding,
+    metadata: &cargo_metadata::Metadata,
+    workspace_root: &Path,
+) -> Vec<ManifestError> {
+    let subject = subject.to_owned();
+    let error = |detail: String| ManifestError {
+        subject: subject.clone(),
+        detail,
+    };
+    let Some(m) = &binding.mechanism else {
+        return Vec::new();
+    };
+    match m.kind.as_str() {
+        "mise-task" => {
+            let Some(task) = &m.task else {
+                return Vec::new(); // schema 側で検出済み
             };
-            if m.kind != "cargo-test" {
-                continue;
+            let mise_toml =
+                std::fs::read_to_string(workspace_root.join("mise.toml")).unwrap_or_default();
+            if mise_toml.contains(&format!("[tasks.{task}]")) {
+                Vec::new()
+            } else {
+                vec![error(format!(
+                    "mise task `{task}` が mise.toml に定義されていない"
+                ))]
             }
-            let subject = format!("{}/{}", case.id, binding.layer);
+        }
+        "cargo-test" => {
             let (Some(pkg_name), Some(target)) = (&m.package, &m.target) else {
-                continue; // schema 側で検出済み
+                return Vec::new(); // schema 側で検出済み
             };
             let Some(pkg) = metadata
                 .packages
                 .iter()
                 .find(|p| p.name.as_str() == pkg_name.as_str())
             else {
-                errors.push(ManifestError {
-                    subject,
-                    detail: format!("package `{pkg_name}` が metadata に無い"),
-                });
-                continue;
+                return vec![error(format!("package `{pkg_name}` が metadata に無い"))];
             };
             let manifest_dir = PathBuf::from(
                 pkg.manifest_path
@@ -407,40 +459,38 @@ pub fn verify_mechanisms(
             );
             let test_file = manifest_dir.join("tests").join(format!("{target}.rs"));
             if !test_file.exists() {
-                errors.push(ManifestError {
-                    subject,
-                    detail: format!("tests/{target}.rs が存在しない（{}）", test_file.display()),
-                });
-                continue;
+                return vec![error(format!(
+                    "tests/{target}.rs が存在しない（{}）",
+                    test_file.display()
+                ))];
             }
-            if let Some(filter) = &m.filter {
-                // cargo test filter は substring match — filter を名前に
-                // 含み、直前に #[test]/#[tokio::test] がある fn を要求。
-                let src = std::fs::read_to_string(&test_file).unwrap_or_default();
-                let lines: Vec<&str> = src.lines().collect();
-                let hit = lines.iter().enumerate().any(|(i, l)| {
-                    l.trim_start().starts_with("fn ")
-                        && l.contains(filter.as_str())
-                        && lines[..i]
-                            .iter()
-                            .rev()
-                            .take(6)
-                            .any(|p| p.contains("#[test]") || p.contains("#[tokio::test]"))
-                });
-                if !hit {
-                    errors.push(ManifestError {
-                        subject,
-                        detail: format!(
-                            "tests/{target}.rs に filter `{filter}` に一致する \
-                             #[test] fn が見つからない"
-                        ),
-                    });
-                }
+            let Some(filter) = &m.filter else {
+                return Vec::new();
+            };
+            // cargo test filter は substring match — filter を名前に
+            // 含み、直前に #[test]/#[tokio::test] がある fn を要求。
+            let src = std::fs::read_to_string(&test_file).unwrap_or_default();
+            let lines: Vec<&str> = src.lines().collect();
+            let hit = lines.iter().enumerate().any(|(i, l)| {
+                let t = l.trim_start();
+                (t.starts_with("fn ") || t.starts_with("async fn "))
+                    && l.contains(filter.as_str())
+                    && lines[..i]
+                        .iter()
+                        .rev()
+                        .take(6)
+                        .any(|p| p.contains("#[test]") || p.contains("#[tokio::test]"))
+            });
+            if hit {
+                Vec::new()
+            } else {
+                vec![error(format!(
+                    "tests/{target}.rs に filter `{filter}` に一致する #[test] fn が見つからない"
+                ))]
             }
         }
+        _ => Vec::new(),
     }
-    let _ = workspace_root;
-    errors
 }
 
 /// evidence JSONL の 1 行 schema。
