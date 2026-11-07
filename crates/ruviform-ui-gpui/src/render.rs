@@ -776,6 +776,45 @@ impl RvfView {
             }))
     }
 
+    /// Toggle: one click is one atomic `Set` to the flipped binary
+    /// value — no drag, so there is no preview phase to coalesce.
+    fn toggle_element(&mut self, spec: &ControlSpec, cx: &mut Context<Self>) -> impl IntoElement {
+        let key = spec.key.clone();
+        let on = self.toggle_on(&key);
+        let color = if spec.descriptor.disabled || spec.descriptor.read_only {
+            self.palette.disabled
+        } else if on {
+            self.palette.accent
+        } else {
+            self.palette.control_track
+        };
+        div().w(px(32.0)).h(px(24.0)).bg(color).on_mouse_down(
+            MouseButton::Left,
+            cx.listener(move |this, _ev: &MouseDownEvent, _w, cx| {
+                let next = !this.toggle_on(&key);
+                this.input(
+                    &key,
+                    ControlInput::Set {
+                        value: ValueInput::Normalized(if next { 1.0 } else { 0.0 }),
+                        gesture_id: None,
+                        source: Some(InputSource::from(InputSource::POINTER)),
+                        modifiers: None,
+                        seq: None,
+                    },
+                    cx,
+                );
+            }),
+        )
+    }
+
+    /// Current binary state of a toggle, read from the display value.
+    fn toggle_on(&self, key: &ComponentKey) -> bool {
+        self.host
+            .observe(key)
+            .and_then(|s| s.display)
+            .is_some_and(|v| v.normalized >= 0.5)
+    }
+
     /// Wheel input → `Adjust` (Shift = fine step).
     fn scroll_input(&mut self, key: &ComponentKey, ev: &ScrollWheelEvent, cx: &mut Context<Self>) {
         let steps = match ev.delta {
@@ -928,11 +967,12 @@ impl RvfView {
                 }
                 body.into_any_element()
             }
-            ComponentSpec::Fader(c) => div()
+            ComponentSpec::Fader(c) | ComponentSpec::Knob(c) => div()
                 .flex()
                 .h_full()
                 .child(self.control_element(c, false, cx))
                 .into_any_element(),
+            ComponentSpec::Toggle(c) => self.toggle_element(c, cx).into_any_element(),
             ComponentSpec::Seek(c) => div()
                 .flex()
                 .w_full()
@@ -943,10 +983,9 @@ impl RvfView {
                 .child(self.waveform_element(w))
                 .into_any_element(),
             ComponentSpec::NativeSlot(n) => self.native_slot_element(n),
-            other => {
-                let _ = other;
-                div().child("unsupported component").into_any_element()
-            }
+            other => div()
+                .child(format!("unsupported component: {}", other.kind()))
+                .into_any_element(),
         }
     }
 
@@ -1097,7 +1136,11 @@ fn find_control<'a>(spec: &'a ComponentSpec, key: &ComponentKey) -> Option<&'a C
     match spec {
         ComponentSpec::Panel(p) => p.children.iter().find_map(|c| find_control(c, key)),
         ComponentSpec::Tabs(t) => t.tabs.iter().find_map(|tab| find_control(&tab.child, key)),
-        ComponentSpec::Fader(c) | ComponentSpec::Seek(c) if c.key == *key => Some(c),
+        ComponentSpec::Fader(c) | ComponentSpec::Seek(c) | ComponentSpec::Knob(c)
+            if c.key == *key =>
+        {
+            Some(c)
+        }
         _ => None,
     }
 }
@@ -1122,6 +1165,24 @@ mod tests {
                 ..ValueDescriptor::ranged(0.0, 1.0)
             },
             orientation: Orientation::Vertical,
+            detach_policy: DetachPolicy::Cancel,
+            unsupported: false,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    fn toggle_spec(key_name: &str) -> ComponentSpec {
+        ComponentSpec::Toggle(ControlSpec {
+            key: ComponentKey(key_name.to_string()),
+            control_id: None,
+            target: Some("mixer.mute".to_string()),
+            descriptor: ValueDescriptor {
+                default_value: Some(0.0),
+                step: Some(1.0),
+                ..ValueDescriptor::ranged(0.0, 1.0)
+            },
+            orientation: Orientation::Horizontal,
             detach_policy: DetachPolicy::Cancel,
             unsupported: false,
             visual: ComponentVisualState::default(),
@@ -1318,6 +1379,67 @@ mod tests {
             assert!(v.host.observe(&ComponentKey("fader".to_string())).is_none());
         });
         cx.run_until_parked();
+    }
+
+    /// Toggle click → atomic set: each click flips the binary value
+    /// through the headless contract, and the re-rendered control
+    /// reflects the new state on the next click.
+    #[gpui::test]
+    fn rvf_view_toggle_click_flips_binary(cx: &mut TestAppContext) {
+        let mut host = ViewHost::new(
+            ViewInstanceId::new(1).expect("nonzero"),
+            AttachEpoch::new(1),
+        );
+        host.mount(ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("panel".to_string()),
+                title: None,
+                children: vec![toggle_spec("mute")],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+        let (view, cx) =
+            cx.add_window_view(|_window, _cx| RvfView::new(host, ViewPalette::fallback(), |_| {}));
+        cx.run_until_parked();
+
+        // The toggle is the 32x24 cell at the window origin.
+        let at = point(px(16.0), px(12.0));
+        let committed = |cx: &mut gpui::VisualTestContext| {
+            view.update(cx, |v, _cx| {
+                v.host
+                    .observe(&ComponentKey("mute".to_string()))
+                    .and_then(|s| s.committed)
+                    .map(|c| c.normalized)
+            })
+        };
+        cx.simulate_mouse_down(at, MouseButton::Left, Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(committed(cx), Some(1.0));
+        cx.simulate_mouse_down(at, MouseButton::Left, Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(committed(cx), Some(0.0));
+    }
+
+    /// Window-wide mouse-up recovers a control's orientation through
+    /// `find_control`; a vertical Knob must not fall back to horizontal.
+    #[test]
+    fn find_control_resolves_knob_orientation() {
+        let knob = ComponentSpec::Knob(ControlSpec {
+            key: ComponentKey("knob".to_string()),
+            control_id: None,
+            target: None,
+            descriptor: ValueDescriptor::ranged(0.0, 1.0),
+            orientation: Orientation::Vertical,
+            detach_policy: DetachPolicy::Cancel,
+            unsupported: false,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        });
+        let found = find_control(&knob, &ComponentKey("knob".to_string())).expect("knob");
+        assert_eq!(found.orientation, Orientation::Vertical);
     }
 
     /// `Tabs` whose first tab holds a `NativeSlot` for `slot_key` —

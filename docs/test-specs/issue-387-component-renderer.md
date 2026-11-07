@@ -45,10 +45,10 @@ relations:
 | layer | 場所 | 内容 |
 | --- | --- | --- |
 | unit (ruviform-ui) | `src/behavior.rs` `#[cfg(test)]` | value mapper linear/log/custom、clamp/quantize、out-of-range、parse、display special |
-| unit (ruviform-ui) | `src/view.rs` `#[cfg(test)]` | spec validate、reconcile op 列、stale generation 拒否 |
+| unit (ruviform-ui) | `src/view.rs` `#[cfg(test)]` | spec validate、reconcile op 列、stale generation 拒否、Knob/Toggle/Meter/TimeAxis mount、Toggle 非 binary 拒否、Meter/TimeAxis payload 上限・NaN tick 拒否 |
 | semantic fake | `ruviform-ui-test/tests/component_view.rs` | UI-DVR-02/03 機械 binding + 2 story fake layer + 2-theme 同値 |
 | unit (gpui) | `ruviform-ui-gpui` `render.rs` `#[cfg(test)]` | ThemeMap token→palette、normalized→descriptor 写像 |
-| semantic gpui | `ruviform-ui-gpui/tests/component_render.rs` | `TestAppContext` headless parity(可なら)。不可能なら not_run 記録 |
+| semantic gpui | `ruviform-ui-gpui` `render.rs` `#[gpui::test]` | `TestAppContext` headless: Fader gesture(begin/preview/commit)、Toggle クリックで binary 反転、NativeSlot layout/clip。実 OS window は含まない |
 | boundary | `mise run check-ui-driver-boundary` | 中立 module の非依存機械検証 |
 | manifest | `mise run test-ui-driver-contract` | cases/stories validation |
 
@@ -100,6 +100,17 @@ relations:
 - scale factor 1.0/2.0 で同一 spec+入力列から同一 `ViewEvent` 列
   (scale は render 側のみ、semantic は不変)。
 - bounded: bins 数上限超過 spec は `ViewError::InvalidSpec`。
+
+### Knob/Toggle/Meter/TimeAxis(追補)
+
+- `Knob`(Fader と同一 gesture 契約)、`Toggle`(binary)、`Meter`、
+  `TimeAxis` を含む Panel を mount → 全 key が `mounted` で observe 可能。
+- `Toggle` の descriptor が `{0,1,step 1}` 以外 → `InvalidSpec`。
+- `TimeAxis` の tick 上限超過・非有限 `at`、`Meter` の channel 不一致 →
+  `InvalidSpec`。(`Meter` の bins 上限は実装済みだが個別テストは未追加。)
+- GPUI: `Toggle` クリック 1 回で committed が 0↔1 に反転(`rvf_view_toggle_click_flips_binary`)。
+- GPUI: `Meter`/`TimeAxis` は描画されず `unsupported component: <kind>`。
+  headless 契約のみで GPUI 描画は未達(follow-up)。
 
 ### 2-theme 同値
 

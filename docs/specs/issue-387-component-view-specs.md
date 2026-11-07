@@ -64,8 +64,16 @@ GPUI Controls/Viz renderer を提供する。
 
 - `ComponentKey` — View 内 stable な component 識別子(文字列 newtype)。
 - `ViewSpec` — 木構造の spec。root `ComponentSpec` を持つ。
-- `ComponentSpec` — `#[non_exhaustive]` enum。本 Issue の最小 kind:
-  `Panel` / `Tabs` / `Fader` / `Seek` / `Waveform` / `NativeSlot`。
+- `ComponentSpec` — `#[non_exhaustive]` enum。kind:
+  `Panel` / `Tabs` / `Fader` / `Seek` / `Knob` / `Toggle` / `Waveform` /
+  `Meter` / `TimeAxis` / `NativeSlot`。
+  `Knob` は `Fader` と同一の value/gesture 契約(描画のみ別)。
+  `Toggle` は descriptor の範囲が `{min:0,max:1,step:1}` 固定の binary で、
+  mount 時に検証する(違反は `InvalidSpec`)。
+  `Meter` は解決済み `MeterBin`(`{start,end,peak,rms,count}`、channel 毎、
+  bounded `MAX_METER_BINS`)、`TimeAxis` は解決済み `AxisTick`
+  (`{at,label,major}`、bounded `MAX_TIME_AXIS_TICKS`、`at` は有限値のみ)。
+  どちらも query/LOD は持たず、payload は consumer が `ruviform-viz` で解決する。
   `NativeSlot` は #388 `NativeSurfaceSlot` 用の非対話 layout 領域で、
   runtime `SurfaceSlotId` は spec に含めず driver 側
   `bind_native_slot` で `key` に関連付ける(design 参照)。
@@ -152,7 +160,10 @@ GPUI Controls/Viz renderer を提供する。
 - `Waveform` は `gpui::canvas` で `WaveformBin` を描画(fill/rms/gap/
   baseline)。LOD/NaN/gap 意味論は payload が既に保持。
 - 未対応 kind は `UnsupportedKind` を sink/typed error へ返し
-  panic しない。
+  panic しない。現状 GPUI で描画するのは `Panel`/`Tabs`/`Fader`/`Seek`/
+  `Knob`(Fader 描画)/`Toggle`(クリック1回=atomic `Set`)/`Waveform`/
+  `NativeSlot`。`Meter`/`TimeAxis` は headless contract のみで、GPUI では
+  `unsupported component: <kind>` の placeholder になる(未達、follow-up)。
 - GPUI widget tree を一般 GUI DSL へ昇格しない — spec kind の写像のみ。
 
 ### R5 2 vertical slice
@@ -179,8 +190,10 @@ GPUI Controls/Viz renderer を提供する。
 
 ## Non-goals
 
-- 全 widget の網羅(Knob/Toggle/NumericInput/Transport は Issue 記載の
-  初期対象だが本 slice では未実装。kind を追加する際は schema 拡張)。
+- 全 widget の網羅(NumericInput/Transport は未実装。Knob/Toggle は
+  schema と headless 契約を持つが、GPUI の描画は簡易版(Knob=縦バー、
+  Toggle=ボタン相当)に留まる。kind を追加する際は schema 拡張)。
+- Meter/TimeAxis の GPUI 描画(headless contract と mount 検証のみ実装)。
 - consumer 側 screen 構成、ViewLink/binding transport の完全 port
   (preview coalescing queue 等は transport 責務。契約は
   `coalescible` 属性のみ)。
