@@ -67,10 +67,10 @@ intent は `ruviform_ui::Intent`（`rvf.ui.command.v1` の envelope）を返す�
 
 ## D3: projection は描画中の host を直接読む
 
-`RvfView` は `ViewHost` を所有する。driver は window slot に mount 済みの `Entity<RvfView>` を保持し、観測時に `Entity::read` で host を読む（`mounted_keys` / `observe` / `generation`）。
+`RvfView` は `ViewHost` を所有する。mount 済み view は window の root（`AppRoot`）が保持する content を downcast して引く（`GpuiDriver::view_of`）。観測時は `Entity::read` で host を読む（`mounted_keys` / `observe` / `generation`）。
 
 - 複製した snapshot を持たないため、host 状態との乖離（stale）が構造上起きない。
-- 保持は `gpui-test` 時のみ（`#[cfg(feature = "gpui-test")]`）。通常ビルドのフィールド・関数は存在しない。
+- window slot に新たな状態は足さない。`open_window` は変更しない（既存の root 参照を再利用）。
 - `RvfView::host()` は `pub(crate)` の読み取り専用アクセサで、`gpui-test` 時のみ存在する。
 
 ## D4: intent は settle の戻り経路で記録する
@@ -88,14 +88,14 @@ intent は `ruviform_ui::Intent`（`rvf.ui.command.v1` の envelope）を返す�
 
 `open_window` は window ごとに OS 親ハンドルを捕捉する（`surface::raw_parent_of`）。従来は `#[cfg(all(test, feature = "gpui-test"))]` で捕捉を外していた。しかし外部 crate の test（consumer test を含む）では lib は `cfg(test)` でビルドされないため、捕捉が走り、gpui の test platform の `window_handle()` が `unimplemented!` で panic した。既存コメントの意図（「gpui-test の test build は親を未設定に保つ」）と一致するよう、gate を `feature = "gpui-test"` に変更する。通常ビルド（feature なし）の挙動は変わらない。
 
-## D7: 内部フックを撤去し、lifecycle fixture を seam に移す
+## D7: 内部フックを一本化し、lifecycle fixture を seam に移す
 
-`settle_for_test` / `inbox_len_for_test` は撤去する。`lifecycle_fixture` は `GpuiObserver` を通して実行し、同じ経路を consumer と共有する（単一の実装）。`GpuiObserver` が自前の test context を持つため、fixture は `#[gpui::test]` ではなく通常の `#[test]` で動く。
+turn（`settle_turn`）・受信件数（`inbox_len`）・view 解決（`view_of`）は `GpuiDriver` の crate 内 helper として 1 か所に置く。`GpuiObserver` と、crate 内 gpui-test の `*_for_test` hook（`settle_for_test` / `inbox_len_for_test` / `view_for_test`、既存の render.rs の test が利用）は、この helper への薄い wrapper である。`lifecycle_fixture` は `GpuiObserver` を通して実行し、consumer と同じ経路を通す。`GpuiObserver` が自前の test context を持つため、fixture は `#[gpui::test]` ではなく通常の `#[test]` で動く。
 
 ## 影響範囲
 
-- 公開 API: 追加 `GpuiObserver`（`gpui-test` 限定）、`ViewObservation`、`ComponentObservation`。削除なし（撤去したのは `pub(crate)` の test hook のみ）。
-- 既存の通常ビルド（feature なし・`gpui` のみ）: 挙動変更なし。`set_view` と `view` フィールド、`host()` は `gpui-test` 時のみ。
+- 公開 API: 追加 `GpuiObserver`（`gpui-test` 限定）、`ViewObservation`、`ComponentObservation`。既存の公開 API の変更なし。
+- 既存の通常ビルド（feature なし・`gpui` のみ）: 挙動変更なし。`host()` と `*_for_test` は `gpui-test` 時のみ。
 - 永続データ形式・RT: 変更なし（非 RT の UI thread のみ）。
 
 ## 境界

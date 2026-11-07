@@ -2078,50 +2078,53 @@ mod tests {
         cx: &mut TestAppContext,
         gesture: &str,
     ) -> String {
-        view.update(cx, |v, _cx| {
-            let generation = v.host.generation();
-            let key = ComponentKey("fader".to_string());
-            v.host
-                .dispatch_input(
-                    generation,
-                    &key,
-                    ControlInput::Begin {
-                        gesture_id: gesture.to_string(),
-                        source: InputSource::from(InputSource::POINTER),
-                        origin_view: None,
-                        target: None,
-                        at: None,
-                        modifiers: None,
-                        seq: None,
-                    },
-                )
-                .expect("begin");
-            v.host
-                .dispatch_input(
-                    generation,
-                    &key,
-                    ControlInput::Commit {
-                        gesture_id: gesture.to_string(),
-                        value: None,
-                        modifiers: None,
-                        seq: None,
-                    },
-                )
-                .expect("commit");
-            v.host
-                .drain_events()
-                .into_iter()
-                .filter_map(|e| match e {
-                    ViewEvent::Intent {
-                        intent: ruviform_ui::behavior::CommandIntent::Commit { .. },
-                        command_id,
-                        ..
-                    } => Some(command_id),
-                    _ => None,
-                })
-                .next_back()
-                .expect("commit minted")
-        })
+        view.update(cx, |v, _cx| commit_on_host(&mut v.host, gesture))
+    }
+
+    /// Begins + commits a gesture on the `fader` control of `host`
+    /// and returns the minted commit `command_id`. Works on a bare
+    /// host, so a driver test can mint a pending command before the
+    /// view is mounted.
+    fn commit_on_host(host: &mut ViewHost, gesture: &str) -> String {
+        let generation = host.generation();
+        let key = ComponentKey("fader".to_string());
+        host.dispatch_input(
+            generation,
+            &key,
+            ControlInput::Begin {
+                gesture_id: gesture.to_string(),
+                source: InputSource::from(InputSource::POINTER),
+                origin_view: None,
+                target: None,
+                at: None,
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("begin");
+        host.dispatch_input(
+            generation,
+            &key,
+            ControlInput::Commit {
+                gesture_id: gesture.to_string(),
+                value: None,
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("commit");
+        host.drain_events()
+            .into_iter()
+            .filter_map(|e| match e {
+                ViewEvent::Intent {
+                    intent: ruviform_ui::behavior::CommandIntent::Commit { .. },
+                    command_id,
+                    ..
+                } => Some(command_id),
+                _ => None,
+            })
+            .next_back()
+            .expect("commit minted")
     }
 
     fn view_phase(
@@ -2202,6 +2205,37 @@ mod tests {
         view.update(cx, |_v, cx| cx.notify());
         cx.run_until_parked();
         assert_eq!(view_phase(&view, cx), CommandPhase::Observed);
+    }
+
+    /// Issue #423: a receipt posted through the driver before the window
+    /// is `Ready` is held in the window inbox, then projected into the
+    /// mounted view once the window opens — the head retires to
+    /// `Applied` in the rendered binding. The headless lifecycle fixture
+    /// only counts the inbox; this checks the projection itself.
+    #[gpui::test]
+    fn rvf_driver_late_receipt_projects_into_view_after_ready(cx: &mut TestAppContext) {
+        use ruviform_ui::WindowDriver;
+        use ruviform_ui::behavior::CommandPhase;
+        let mut host = host_with_fader();
+        let cmd = commit_on_host(&mut host, "late-g1");
+        let mut driver = crate::GpuiDriver::new();
+        let window = driver
+            .create_view_window(
+                &ruviform_ui::WindowSpec::default(),
+                crate::ViewMount { host, theme: None },
+            )
+            .expect("create view window");
+        driver.post_event(
+            window,
+            &Event::result_ok(cmd, serde_json::json!({"status": "applied", "revision": 3})),
+        );
+        assert_eq!(driver.inbox_len_for_test(window), 1);
+        driver.settle_for_test(cx, |_, _| {});
+        let view = driver.view_for_test(cx, window).expect("mounted view");
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        assert_eq!(driver.inbox_len_for_test(window), 0);
+        assert_eq!(view_phase(&view, cx), CommandPhase::Applied);
     }
 
     /// Issue #414: an authoritative projection must reach the value

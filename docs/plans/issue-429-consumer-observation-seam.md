@@ -55,7 +55,7 @@ relations:
 | ファイル | 変更 |
 | --- | --- |
 | `crates/ruviform-ui-gpui/src/gpui_driver/observe.rs` | 新規。`GpuiObserver` / `ViewObservation` / `ComponentObservation`（`gpui-test` 限定） |
-| `crates/ruviform-ui-gpui/src/lib.rs` | `Slot.view` と `set_view`（`gpui-test` 限定）、raw parent gate を `feature = "gpui-test"` へ、内部 test hook の撤去、観測型の再公開 |
+| `crates/ruviform-ui-gpui/src/lib.rs` | raw parent gate を `feature = "gpui-test"` へ、観測型の再公開、内部 test hook の定義を `observe.rs` へ移動 |
 | `crates/ruviform-ui-gpui/src/render.rs` | `RvfView::host()`（`gpui-test` 限定）、`input` を `pub(crate)` |
 | `crates/ruviform-ui-gpui/src/gpui_driver/surface.rs` | `raw_parent_of` の gate を `feature = "gpui-test"` へ |
 | `crates/ruviform-ui-gpui/src/lifecycle_fixture.rs` | `GpuiObserver` 経由に移行、`#[test]` 化 |
@@ -74,10 +74,10 @@ T2a RvfView::host/input ────┘                                         
 ```
 
 1. T1: `raw_parent_of` と `capture_raw_parent` の gate を `feature = "gpui-test"` に揃える（外部 crate test の panic の根本原因）。
-2. T2: `Slot.view` を `gpui-test` 限定で保持し、`open_window` で mount 済み view を記録する。`set_view` で行数上限（100 行）を超えないようにする。
+2. T2: `view_of` で window の root（`AppRoot`）から mount 済み view を引く。window slot には状態を足さず、`open_window` は変更しない。
 3. T2a: `RvfView::host()`（読み取り専用）と `input` の可視性を `pub(crate)` にする。
 4. T3: `gpui_driver/observe.rs` に `GpuiObserver` を実装する。`settle` は intent を記録してから handler へ渡す。
-5. T4: `lifecycle_fixture` を `GpuiObserver` 経由に移し、`settle_for_test` / `inbox_len_for_test` を撤去する。
+5. T4: `lifecycle_fixture` を `GpuiObserver` 経由に移す。`*_for_test` hook は `observe.rs` に置き、`settle_turn` / `inbox_len` / `view_of` への wrapper にする（upstream の render.rs test を変更しない）。
 6. T5: 外部 crate test `consumer_observation.rs` を追加する。`Cargo.toml` に `[[test]]` を登録する。
 7. T6: 検証（下記 §4）。
 8. T7: `mise.toml` / `docs/development-environment.md` の更新。
@@ -87,7 +87,7 @@ T2a RvfView::host/input ────┘                                         
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
 | 外部 crate test で `cfg(test)` の分岐が効かない | consumer test が gpui test platform の panic で落ちる | T1 で gate を feature に揃えた。外部 test が通ることを T5 で確認 |
-| `open_window` の行数上限（100 行） | clippy `too_many_lines` で lint 失敗 | `set_view` 抽出、`IntentSink` 生成を既存の `intent_sink` へ統一して行数を確保 |
+| `open_window` の行数上限（100 行） | clippy `too_many_lines` で lint 失敗 | window slot に状態を足さず、既存の root から view を引く（`open_window` は gate 修正以外変更しない） |
 | `gpui-test` 有効 build で surface 親が未捕捉 | `native_surface_slot` を使う consumer が fail-closed になる | test build 限定と文書化（設計の限界節）。通常ビルドは従来どおり |
 | `settle` を呼ばない間の intent は観測されない | consumer が取りこぼす可能性 | 仕様として明記（設計 D4）。`settle` 後に観測する手順をテストで固定 |
 | `gpui-test` clippy（unit test 側）に既存の lint 違反 | `-D warnings` で落ちる | 既存の `lint-ui-gpui` は `gpui` feature のみで対象外。本 PR では未修正として報告 |

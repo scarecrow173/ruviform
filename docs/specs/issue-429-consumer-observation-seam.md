@@ -88,8 +88,8 @@ Issue #429 のスコープのうち、本 PR で実装しないものを次に�
 
 ## スコープ（本 PR）
 
-- `ruviform-ui-gpui`: 観測 seam（`gpui_driver/observe.rs`、`gpui-test` 境界）、window slot への view 参照の保持、外部 crate test。
-- 既存の内部フック（`settle_for_test` / `inbox_len_for_test`）の撤去と、lifecycle fixture の seam への移行。
+- `ruviform-ui-gpui`: 観測 seam（`gpui_driver/observe.rs`、`gpui-test` 境界）、mount 済み view の引き当て（`view_of`）、外部 crate test。
+- 既存の内部フック（`settle_for_test` / `inbox_len_for_test` / `view_for_test`）は seam と同じ helper への wrapper に一本化し、lifecycle fixture を seam へ移行する。
 - raw parent 捕捉の gate を `cfg(test)` から `feature = "gpui-test"` へ修正（外部 crate test で gpui test platform の `window_handle` が panic していた欠陥）。
 - `mise.toml` の `test-ui-consumer-observation` 新設、`docs/development-environment.md` の表。
 - 文書 chain（spec → design → plan → task → test-spec）。

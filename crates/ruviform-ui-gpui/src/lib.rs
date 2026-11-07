@@ -186,10 +186,6 @@ mod gpui_driver {
         /// `usize` keeps it pointer-width without naming OS types.
         raw_parent: Option<usize>,
         root: Option<Entity<AppRoot>>,
-        /// The mounted consumer view (`create_view_window` only) — the
-        /// observation seam reads its projection host through this.
-        #[cfg(feature = "gpui-test")]
-        view: Option<Entity<crate::render::RvfView>>,
         inbox: Rc<RefCell<Vec<Event>>>,
         /// `ComponentKey → SurfaceSlotId` associations installed by
         /// [`GpuiDriver::bind_native_slot`] — the mounted view reads
@@ -586,6 +582,9 @@ mod gpui_driver {
             if inner.capabilities.focus != Capability::Supported {
                 return Err(UiError::unsupported("focus", "gpui driver cannot focus"));
             }
+            let Some(slot) = inner.windows.get_mut(&window) else {
+                return Err(UiError::host(format!("no window {window}")));
+            };
             if !focused {
                 // gpui 0.2.2 exposes window activation but no OS-level
                 // deactivation — report honestly rather than silently
@@ -595,9 +594,6 @@ mod gpui_driver {
                     "gpui 0.2.2 cannot release window focus",
                 ));
             }
-            let Some(slot) = inner.windows.get_mut(&window) else {
-                return Err(UiError::host(format!("no window {window}")));
-            };
             // Focus requests stay meaningful before the OS window
             // exists — applied again at open.
             slot.pending_focus = Some(focused);
@@ -708,8 +704,6 @@ mod gpui_driver {
                 handle: None,
                 raw_parent: None,
                 root: None,
-                #[cfg(feature = "gpui-test")]
-                view: None,
                 inbox: Rc::new(RefCell::new(Vec::new())),
                 surface_bindings: Rc::new(RefCell::new(BTreeMap::new())),
                 ready: false,
@@ -726,15 +720,6 @@ mod gpui_driver {
             mount,
         });
         id
-    }
-
-    /// Records the mounted consumer view on its window slot — the
-    /// observation seam reads the projection host through it.
-    #[cfg(feature = "gpui-test")]
-    fn set_view(inner: &Rc<RefCell<Inner>>, id: WindowId, view: Entity<crate::render::RvfView>) {
-        if let Some(slot) = inner.borrow_mut().windows.get_mut(&id) {
-            slot.view = Some(view);
-        }
     }
 
     /// Delivers queued driver→consumer events to the handler.
@@ -1014,7 +999,10 @@ mod gpui_driver {
             let content: gpui::AnyView = match mount {
                 Some(m) => {
                     let mount = *m;
-                    let sink = driver2.intent_sink(id);
+                    let sink = IntentSink {
+                        inner: inner2.clone(),
+                        window: id,
+                    };
                     let slots = crate::render::SlotMount {
                         adapter: driver2.surface.clone(),
                         bindings: inner2
@@ -1024,7 +1012,7 @@ mod gpui_driver {
                             .map(|s| s.surface_bindings.clone())
                             .unwrap_or_default(),
                     };
-                    let view = cx.new(|cx| {
+                    cx.new(|cx| {
                         crate::render::RvfView::mounted(
                             mount.host,
                             mount.theme.as_ref(),
@@ -1034,10 +1022,8 @@ mod gpui_driver {
                             window,
                             cx,
                         )
-                    });
-                    #[cfg(feature = "gpui-test")]
-                    set_view(&inner2, id, view.clone());
-                    view.into()
+                    })
+                    .into()
                 }
                 None => cx.new(|_| RvfRoot::new(spec.title.clone(), inbox)).into(),
             };

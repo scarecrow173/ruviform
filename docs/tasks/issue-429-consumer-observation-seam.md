@@ -57,10 +57,10 @@ relations:
 ## 完了済み（本 PR）
 
 - [x] T1: raw parent 捕捉の gate を `feature = "gpui-test"` に揃える（外部 crate test の panic を解消）
-- [x] T2: 通常ビルドに影響しない形で、mount 済み view の参照を window slot に保持する（`set_view`）
+- [x] T2: mount 済み view を window の root（`AppRoot`）の content から引く（`view_of`）。window slot に新たな状態は足さない
 - [x] T2a: `RvfView::host()`（読み取り専用）と `input` の `pub(crate)` 化
 - [x] T3: `GpuiObserver`（`observe` / `intents` / `dispatch_input` / `settle` / `inbox_len` / `driver` / `driver_mut`）の実装
-- [x] T4: `lifecycle_fixture` を `GpuiObserver` 経由に移し、`settle_for_test` / `inbox_len_for_test` を撤去
+- [x] T4: `lifecycle_fixture` を `GpuiObserver` 経由に移す。`*_for_test` hook は seam と同じ helper への wrapper に一本化（upstream の render.rs test が引き続き利用）
 - [x] T5: 外部 crate test `tests/consumer_observation.rs`（4 件）と `[[test]]` 登録
 - [x] T7: `mise.toml` に `test-ui-consumer-observation` を新設し、検証表に追記
 - [x] 文書 chain（spec / design / plan / task / test-spec）

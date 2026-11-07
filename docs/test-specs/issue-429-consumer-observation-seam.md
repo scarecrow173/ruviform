@@ -55,7 +55,7 @@ relations:
 - Example: 未知の window に対して `observe` は `None`、`dispatch_input` は `UiError::Host` を返す。
   - 検査: `unknown_window_has_no_view_to_observe_or_drive`。
 
-## Feature: 内部 test hook の撤去と共有 lifecycle 経路
+## Feature: 内部 test hook の一本化と共有 lifecycle 経路
 
 ### Rule: lifecycle trace は seam 経由で Fake と同一になる
 

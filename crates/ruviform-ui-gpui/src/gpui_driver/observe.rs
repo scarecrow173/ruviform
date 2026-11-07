@@ -7,14 +7,15 @@
 //!
 //! Test-only: gated by `gpui-test`, which enables gpui's test-support.
 //! The platform loop is turned one step at a time, so real OS window
-//! behaviour is not covered here.
+//! behaviour is not covered here. The crate-internal `*_for_test` hooks
+//! at the bottom share the same turn/lookup implementation.
 //!
 //! **RT contract:** non-RT only.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui::{Entity, TestAppContext};
+use gpui::{App, Entity, TestAppContext};
 use ruviform_ui::behavior::ControlInput;
 use ruviform_ui::view::{ComponentKey, ComponentSnapshot};
 use ruviform_ui::{DriverEvent, Intent, UiError, WindowDriver, WindowId, WindowLifecycle};
@@ -94,24 +95,16 @@ impl GpuiObserver {
         mut on_event: impl FnMut(DriverEvent, &mut dyn WindowDriver) + 'static,
     ) {
         let intents = self.intents.clone();
-        let inner = self.driver.inner.clone();
-        let driver = self.driver.clone();
-        inner.borrow_mut().handler = Some(Box::new(
-            move |event: DriverEvent, drv: &mut dyn WindowDriver| {
-                if let DriverEvent::Windowed {
-                    event: WindowLifecycle::Action(intent),
-                    ..
-                } = &event
-                {
-                    intents.borrow_mut().push(intent.clone());
-                }
-                on_event(event, drv);
-            },
-        ));
-        self.cx.update(|app| drain(&inner, &driver, app));
-        self.cx.run_until_parked();
-        self.cx.update(|app| drain(&inner, &driver, app));
-        flush_events(&inner, &driver);
+        self.driver.settle_turn(&mut self.cx, move |event, drv| {
+            if let DriverEvent::Windowed {
+                event: WindowLifecycle::Action(intent),
+                ..
+            } = &event
+            {
+                intents.borrow_mut().push(intent.clone());
+            }
+            on_event(event, drv);
+        });
     }
 
     /// Dispatches a control input to `key` in `window`, as the pointer
@@ -154,7 +147,7 @@ impl GpuiObserver {
             window,
             generation,
             components,
-            inbox_len: self.inbox_len(window),
+            inbox_len: self.driver.inbox_len(window),
         })
     }
 
@@ -169,21 +162,75 @@ impl GpuiObserver {
     /// view; `0` for unknown windows.
     #[must_use]
     pub fn inbox_len(&self, window: WindowId) -> usize {
-        self.driver
-            .inner
+        self.driver.inbox_len(window)
+    }
+
+    fn view(&self, window: WindowId) -> Result<Entity<RvfView>, UiError> {
+        self.cx
+            .update(|app| self.driver.view_of(app, window))
+            .ok_or_else(|| UiError::host(format!("no view mounted in window {window}")))
+    }
+}
+
+impl GpuiDriver {
+    /// One harness turn over `cx`: applies queued window ops inside an App
+    /// update, lets deferred work park (the first-frame `Ready`), applies
+    /// follow-up ops, then delivers the emitted events to `on_event`.
+    pub(crate) fn settle_turn(
+        &self,
+        cx: &mut TestAppContext,
+        on_event: impl FnMut(DriverEvent, &mut dyn WindowDriver) + 'static,
+    ) {
+        let this = self.clone();
+        this.inner.borrow_mut().handler = Some(Box::new(on_event));
+        cx.update(|app| drain(&this.inner, &this, app));
+        cx.run_until_parked();
+        cx.update(|app| drain(&this.inner, &this, app));
+        flush_events(&this.inner, &this);
+    }
+
+    /// Events queued in `window`'s inbox and not yet consumed by its root
+    /// view; `0` for unknown windows.
+    pub(crate) fn inbox_len(&self, window: WindowId) -> usize {
+        self.inner
             .borrow()
             .windows
             .get(&window)
             .map_or(0, |slot| slot.inbox.borrow().len())
     }
 
-    fn view(&self, window: WindowId) -> Result<Entity<RvfView>, UiError> {
-        self.driver
-            .inner
-            .borrow()
-            .windows
-            .get(&window)
-            .and_then(|slot| slot.view.clone())
-            .ok_or_else(|| UiError::host(format!("no view mounted in window {window}")))
+    /// The view mounted by [`GpuiDriver::create_view_window`], looked up
+    /// through the window's root; `None` for fixture windows.
+    pub(crate) fn view_of(&self, app: &mut App, window: WindowId) -> Option<Entity<RvfView>> {
+        let root = self.inner.borrow().windows.get(&window)?.root.clone()?;
+        root.update(app, |root, _cx| {
+            root.content.clone().downcast::<RvfView>().ok()
+        })
+    }
+}
+
+/// Crate-internal hooks for the gpui-test fixtures in `render.rs` and
+/// `lifecycle_fixture.rs`. They are thin views onto the same turn and
+/// lookup used by [`GpuiObserver`].
+#[cfg(all(test, feature = "gpui-test"))]
+impl GpuiDriver {
+    pub(crate) fn settle_for_test(
+        &mut self,
+        cx: &mut TestAppContext,
+        on_event: impl FnMut(DriverEvent, &mut dyn WindowDriver) + 'static,
+    ) {
+        self.settle_turn(cx, on_event);
+    }
+
+    pub(crate) fn inbox_len_for_test(&self, window: WindowId) -> usize {
+        self.inbox_len(window)
+    }
+
+    pub(crate) fn view_for_test(
+        &self,
+        cx: &mut TestAppContext,
+        window: WindowId,
+    ) -> Option<Entity<RvfView>> {
+        cx.update(|app| self.view_of(app, window))
     }
 }
