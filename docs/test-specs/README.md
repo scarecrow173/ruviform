@@ -69,6 +69,7 @@ Directory: `docs/test-specs`
 | TSPEC-034RT7OuFi1aZ0rhvdSFEt | Issue #302 ruviform-io-archive ZIP 検証・Budget・Writer テスト仕様 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | TSPEC-EtHC4HLHJhXDwgG6UbrccI | Issue #303 ruviform-io-archive TAR 検証・Pending・Writer テスト仕様 | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | TSPEC-pWc14Y17FV06GN2600rX8h | Issue #304 ruviform-io-archive Secure Extraction・Staging/Recovery テスト仕様 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| TSPEC-0kY8BSgqOCJHezrud22f3h | Issue #305 Media I/O StagedFile 移行 テスト仕様 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | TSPEC-rviIWrpuHyJUT11Wykzopn | Issue #306 汎用 I/O 合成 E2E テスト仕様 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | TSPEC-XQ6Q9VkNnBlPRcMf4cqLFu | Issue #307 attach 時 frame_base 検証 context — テスト仕様 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | TSPEC-034Rp62M5XwHUCClhVcEPk | Issue #310 Browser GUI Test Harness 検証仕様 | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
