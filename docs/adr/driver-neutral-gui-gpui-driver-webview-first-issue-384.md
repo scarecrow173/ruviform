@@ -53,6 +53,7 @@ relations:
     - "../specs/issue-384-driver-neutral-gui-architecture.md"
   derived-by:
     - "../designs/issue-384-driver-neutral-gui-contract.md"
+    - "../plans/rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md"
   verifies: []
   verified-by: []
   references:

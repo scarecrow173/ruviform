@@ -83,17 +83,19 @@ relations:
 
 ```text
 crates/ruviform-ui-theme/src/
-  lib.rs       — crate doc・再 export・version()
-  error.rs     — TokenError / ResolveError（分類済み・#[non_exhaustive]）
-  document.rs  — TokenDocument（profile metadata + raw token tree・layer）
-  parse.rs     — JSON → raw token/group tree（serde 手書き deserialize、deterministic）
-  validate.rs  — schema/type validation（$type 解決・値形状・strictness）
-  alias.rs     — {a.b.c} 参照の存在検証・DFS 循環検出（安定順エラー）
-  resolve.rs   — layer merge（precedence）+ mode/override 合成 → ResolvedTheme
-  theme.rs     — ResolvedTheme / ResolvedValue / 型付き accessor
+  lib.rs       — crate doc・再 export・SCHEMA_VERSION（"rvf-dtcg-profile.v1"）
+  errors.rs    — TokenError / ResolveError（分類済み・#[non_exhaustive]）
+  doc.rs       — TokenDocument（profile metadata + raw token tree・layer）
+                 + JSON → raw tree parse・schema/type validation・strictness・
+                 duplicate path 検出・alias 文字列抽出
+  resolve.rs   — layer merge（precedence・呼出順非依存の rank sort）+
+                 mode/override 合成 + {a.b.c} alias 解決（存在検証・DFS 循環検出）
+                 → ResolvedTheme
+  snapshot.rs  — ResolvedTheme / ResolvedValue / ScaleContext / TokenSource /
+                 型付き accessor・to_normalized_json（deterministic）
 tests/
-  fixtures/    — *.json token docs（valid/invalid/cycle/type-mismatch/missing-mode/override）
-  pipeline.rs  — fixture → normalized output golden / error 分類テスト
+  fixtures/    — *.json token docs（valid/invalid/cycle/type-mismatch/override/modeless）
+  pipeline.rs  — fixture → normalized output / error 分類テスト
 ```
 
 ### 公開 API（骨格）
@@ -109,8 +111,9 @@ impl TokenDocument {
 
 pub struct ThemeResolver;
 impl ThemeResolver {
-    /// mode 名で解決。documents は precedence 昇順（primitive→product）。
-    /// mode が各 document の宣言 modes に存在しない場合 MissingMode。
+    /// mode 名で解決。resolver が layer rank で整列するため呼出順は
+    /// precedence に影響しない（同 layer 内の順のみ tiebreak）。
+    /// mode が非空の宣言 modes を持つ document に存在しない場合 MissingMode。
     pub fn resolve(docs: &[TokenDocument], mode: &str) -> Result<ResolvedTheme, ResolveError>;
 }
 

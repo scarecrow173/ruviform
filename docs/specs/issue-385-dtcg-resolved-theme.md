@@ -30,6 +30,7 @@ relations:
   implements: []
   implemented-by:
     - "docs/designs/issue-385-dtcg-resolved-theme.md"
+    - "docs/plans/rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md"
   depends-on:
     - "docs/specs/issue-384-driver-neutral-gui-architecture.md"
   blocks: []
@@ -44,6 +45,7 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/384"
   derived-by:
     - "docs/designs/issue-385-dtcg-resolved-theme.md"
+    - "docs/plans/rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md"
   verifies: []
   verified-by: []
   references:

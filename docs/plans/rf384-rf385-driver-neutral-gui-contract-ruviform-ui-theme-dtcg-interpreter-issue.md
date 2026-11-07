@@ -61,6 +61,7 @@ relations:
   references: []
   defers: []
   deferred-by: []
+test-spec-skip: "検証正本は crates/ruviform-ui-theme/tests/pipeline.rs の 18 contract tests + fixtures（正常/override/alias cycle/unknown-ref/type-mismatch/部分 alias/予約キー/missing profile/modeless）と workspace mise 検証。独立 test-spec doc は本 scope（契約文書+単一クレート）では作成しない"
 ---
 
 # RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) Implementation Plan

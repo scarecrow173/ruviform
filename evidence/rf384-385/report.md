@@ -14,9 +14,9 @@ PR: https://github.com/scarecrow173/ruviform/pull/397
 | fmt | `mise run fmt` / `mise run fmt-check` | Pass (exit 0) | `cargo fmt --all -- --check`。merge 後に再実走済み |
 | workspace check | `mise run check` | Pass (exit 0) | `cargo check --workspace --all-targets`（CARGO_BUILD_JOBS=2） |
 | workspace lint | `mise run lint` | Pass (exit 0) | `cargo clippy --workspace --all-targets -- -D warnings` |
-| crate test | `mise exec -- cargo test -p ruviform-ui-theme` | Pass | **18 tests + 1 doctest** 全 pass |
-| workspace test | `mise run test`（`cargo test --workspace`） | 1 件 flake → 単独 pass | `ruviform-plugin-host` L1 e2e `wedged_child_write_converges_and_teardown_is_bounded` が初回のみ `SpawnFailed{Timeout}`。単独再実行 pass。coordinator 通知（msg_419e373e1f1f）により main でも同系失敗を確認済み・本変更無関係 |
-| merge 後再検証 | `mise run fmt-check` + `mise exec -- cargo check -p ruviform-ui-theme --all-targets` | Pass (exit 0) | head `d3b211c` 上で実走 |
+| crate test | `mise exec -- cargo test -p ruviform-ui-theme` | Pass | **22 tests + 1 doctest** 全 pass（Validator P1 修正後に再実走・非 ASCII hex panic 回帰含む） |
+| workspace test | `mise run test`（`cargo test --workspace`） | flake 2 件 → 単独 pass | 実 head `660034f` 上で実走。(a) `ruviform-plugin-host` L1 e2e `wedged_child_write_converges_and_teardown_is_bounded` `SpawnFailed{Timeout}`（初回 run、merge 前）。(b) 同 crate `l1_video_e2e::spawn_failed_attempt_record_captures_stderr` が `left: Spawn / right: Live`（head `660034f`、並列 build 負荷下）。いずれも単独再実行 pass。coordinator 通知（msg_419e373e1f1f）により main でも同系失敗を確認済み・plugin-host/lock 無変更の本変更とは無関係の既知環境 flake |
+| merge 後再検証 | `mise run fmt-check` + `mise exec -- cargo check -p ruviform-ui-theme --all-targets` + `cargo clippy -p ruviform-ui-theme --all-targets -- -D warnings` | Pass (exit 0) | head `d3b211c` / P1 修正後も再実走 |
 | ADR audit | `node scripts/audit_adr.js` | 新 ADR error 0 | `Pros and Cons of the Options` 追記で info 解消 |
 | doc index | `node scripts/doc_maintenance.js` | 再生成済み | specs/designs/plans/tasks/ADR README の managed index を再生成。自 doc の orphan/reciprocal finding は解消（repo 全体の既存 manual finding は本 scope 外） |
 
@@ -28,7 +28,7 @@ runtime subagent 2 名で独立 review を実施（実装者と兼務せず）�
 | --- | --- | --- |
 | Reviewer A（契約/ADR・docs 整合） | PASS_WITH_NITS | Fake Driver capability 誤記（theme/component/render を Pass にしない）→ **ADOPTED**（`declared` へ修正 + Fake 列 Pass の定義注記追加）。旧 ADR 双方向リンク → **FIXED** 確認済み。`Pros and Cons` 節欠落 → **ADOPTED**（Option A–D 追記） |
 | Reviewer B（#385 契約厳密性） | BLOCKED → 修正済み | mode semantics（MissingMode vs optional modes）→ **ADOPTED**（modeless fixture + 選択 policy 明文化）。length rounding → **ADOPTED**（`ResolvedLength.rounding` + `parse_rounding`）。layer 順序の呼出側依存 → **ADOPTED**（merge 前に layer 順を強制）。alias 宛先型 mismatch → **ADOPTED**（`ResolveError::TypeMismatch`）。部分 alias `"{a}-{b}px"` 拒否 → **ADOPTED**（whole-value のみ受理・`{`/`}` 含有非一致は InvalidValue）。duplicate token path → **ADOPTED**。override merge semantics → **ADOPTED**（同一 key の base+mode map wholesale 置換を明文化） |
-| Validator+Judge | 実施中 | rate-limit で 1 回目の validator が未取得のため独立 subagent で再実施。最終 verdict は本ファイルまたは coordinator 報告に追記 |
+| Validator+Judge（独立 subagent・実装者非兼務） | BLOCKED → **P1 修正済み・再検証 green** | **P1-1 CONFIRMED**: `parse_hex_color` が 3 バイト非 ASCII `$value`（例 `"#日"`/`"#é1"`/`"#1é"`）で char-boundary slice panic → **FIXED**（`hex.get(i..=i)` 安全スライス化 + `non_ascii_hex_color_is_invalid_value_not_panic` 回帰テスト追加）。従来指摘 10 件は全件 FIXED を独立検証。NIT 対応: 未使用 serde dep 削除（serde_json のみへ）・rounding 非文字列値を InvalidValue 化・duplicate path/rounding 非文字列/modeless 正常解決のテスト 3 件追加・誤解を招く test 名修正・design-385 module skeleton を実装へ整合・plans README index 再生成（`draft`→`in-progress`）・plan→ADR/specs の derived-by/implemented-by reciprocal link と `test-spec-skip` 理由を追記。残 NIT: `fingerprint` Debug 依存・preserve_order 非保証・旧 upstream ref は履歴的導出として意図保持（plan 記録済み） |
 
 ## 契約仕様の要点（下流 worker 向け）
 

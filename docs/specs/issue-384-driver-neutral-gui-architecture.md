@@ -29,6 +29,7 @@ relations:
   implemented-by:
     - "docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md"
     - "docs/designs/issue-384-driver-neutral-gui-contract.md"
+    - "docs/plans/rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md"
   depends-on: []
   blocks: []
   supersedes: []
@@ -44,6 +45,7 @@ relations:
   derived-by:
     - "docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md"
     - "docs/designs/issue-384-driver-neutral-gui-contract.md"
+    - "docs/plans/rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md"
   verifies: []
   verified-by: []
   references:

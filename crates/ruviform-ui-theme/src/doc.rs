@@ -340,14 +340,21 @@ fn parse_rounding(obj: &Map<String, Value>, path: &str) -> Result<Rounding, Toke
     let Some(ext) = obj.get("$extensions").and_then(Value::as_object) else {
         return Ok(Rounding::None);
     };
-    match ext.get(ROUNDING_EXT).and_then(Value::as_str) {
-        None | Some("none") => Ok(Rounding::None),
+    let Some(raw) = ext.get(ROUNDING_EXT) else {
+        return Ok(Rounding::None);
+    };
+    match raw.as_str() {
+        Some("none") => Ok(Rounding::None),
         Some("nearest") => Ok(Rounding::Nearest),
         Some("floor") => Ok(Rounding::Floor),
         Some("ceil") => Ok(Rounding::Ceil),
         Some(other) => Err(TokenError::InvalidValue {
             path: path.to_owned(),
             reason: format!("unknown rounding {other:?}"),
+        }),
+        None => Err(TokenError::InvalidValue {
+            path: path.to_owned(),
+            reason: format!("{ROUNDING_EXT} must be a string"),
         }),
     }
 }
@@ -492,7 +499,7 @@ fn parse_color(v: &Value, path: &str) -> Result<ResolvedValue, TokenError> {
 
 fn parse_hex_color(text: &str) -> Option<(f64, f64, f64, f64)> {
     let hex = text.strip_prefix('#')?;
-    let digit = |i: usize| u8::from_str_radix(&hex[i..=i], 16).ok();
+    let digit = |i: usize| u8::from_str_radix(hex.get(i..=i)?, 16).ok();
     let byte = |i: usize| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok();
     let (red, green, blue, alpha) = match hex.len() {
         3 => (digit(0)? * 0x11, digit(1)? * 0x11, digit(2)? * 0x11, 0xFF),

@@ -145,11 +145,76 @@ fn missing_mode_is_error() {
 }
 
 #[test]
-fn mode_agnostic_document_accepts_any_mode() {
+fn modeless_document_resolves_under_any_requested_mode() {
+    let json = r##"{
+      "$extensions": { "dev.ruviform.dtcg-profile": {
+        "profile": "rvf-dtcg-profile.v1", "layer": "primitive", "id": "t" } },
+      "c": { "$type": "color", "x": { "$value": "#112233" } }
+    }"##;
+    let doc = TokenDocument::from_json(json).unwrap();
+    let theme = ThemeResolver::resolve(&[doc], "anything").unwrap();
+    assert!(theme.color("c.x").is_some());
+}
+
+#[test]
+fn modeless_document_reaches_alias_resolution_not_mode_gate() {
     let docs = vec![fixture("semantic-modeless.json")];
-    let theme = ThemeResolver::resolve(&docs, "anything").unwrap_err();
-    // alias target is missing -> still a classified resolve error, not a panic
-    assert!(matches!(theme, ResolveError::UnknownReference { .. }));
+    // dangling alias -> classified UnknownReference at alias stage,
+    // proving the mode gate did not fire on the modeless doc
+    assert!(matches!(
+        ThemeResolver::resolve(&docs, "anything").unwrap_err(),
+        ResolveError::UnknownReference { .. }
+    ));
+}
+
+#[test]
+fn non_ascii_hex_color_is_invalid_value_not_panic() {
+    for bad in ["#日", "#é1", "#1é"] {
+        let json = format!(
+            r#"{{
+              "$extensions": {{ "dev.ruviform.dtcg-profile": {{
+                "profile": "rvf-dtcg-profile.v1", "layer": "primitive", "id": "t" }} }},
+              "c": {{ "$type": "color", "x": {{ "$value": {bad:?} }} }}
+            }}"#
+        );
+        assert!(
+            matches!(
+                TokenDocument::from_json(&json),
+                Err(TokenError::InvalidValue { .. })
+            ),
+            "{bad} must be InvalidValue, not a panic"
+        );
+    }
+}
+
+#[test]
+fn duplicate_token_path_is_parse_error() {
+    let json = r##"{
+      "$extensions": { "dev.ruviform.dtcg-profile": {
+        "profile": "rvf-dtcg-profile.v1", "layer": "primitive", "id": "t" } },
+      "a": { "$type": "color",
+        "b": { "c": { "$value": "#112233" } },
+        "b.c": { "$value": "#445566" } }
+    }"##;
+    assert!(matches!(
+        TokenDocument::from_json(json),
+        Err(TokenError::InvalidValue { .. })
+    ));
+}
+
+#[test]
+fn non_string_rounding_extension_is_parse_error() {
+    let json = r#"{
+      "$extensions": { "dev.ruviform.dtcg-profile": {
+        "profile": "rvf-dtcg-profile.v1", "layer": "primitive", "id": "t" } },
+      "d": { "$type": "dimension", "x": {
+        "$value": { "value": 1, "unit": "px" },
+        "$extensions": { "dev.ruviform.rounding": 123 } } }
+    }"#;
+    assert!(matches!(
+        TokenDocument::from_json(json),
+        Err(TokenError::InvalidValue { .. })
+    ));
 }
 
 #[test]
