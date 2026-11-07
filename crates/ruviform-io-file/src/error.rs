@@ -38,16 +38,51 @@ use std::fmt;
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FileErrorKind {
-    /// Underlying I/O failed.
+    /// Underlying I/O failed (including `PermissionDenied` — the raw
+    /// `io::ErrorKind` is kept in `source` but not elevated to a
+    /// stable kind).
     Io,
     /// The platform adapter does not provide the requested capability
     /// — including `StagedFile::create` while the OS backend is still
-    /// unimplemented (IO-IMP-02), or a readback surface the platform
-    /// cannot offer safely.
+    /// unimplemented (IO-IMP-02), a readback surface the platform
+    /// cannot offer safely, a target without a handle-relative
+    /// no-follow backend, Windows builds older than RS1, Linux
+    /// without `/proc`, and `pin`/`open_pinned` on a filesystem whose
+    /// identity strength cannot discriminate delete+recreate.
     Unsupported,
-    /// A supplied argument (e.g. a destination without a file name)
-    /// was invalid.
+    /// A supplied argument (e.g. a destination without a file name or
+    /// a [`RelativePath`] grammar violation) was invalid.
+    ///
+    /// [`RelativePath`]: crate::rooted::RelativePath
     InvalidInput,
+    /// No object exists at the resolved position (`ENOENT` /
+    /// `STATUS_OBJECT_NAME_NOT_FOUND` family), or a link target was
+    /// empty.
+    NotFound,
+    /// A directory was expected but the object is not one (`ENOTDIR`
+    /// family), including a link where `NoFollow` forbids traversal
+    /// (`open_dir`/`read_dir`, and intermediate components of any
+    /// rooted API).
+    NotDirectory,
+    /// A regular file was required but the resolved object is not
+    /// one (`EISDIR`, nonregular leaf: FIFO/device/socket/dir/link
+    /// under `NoFollow`).
+    NotRegularFile,
+    /// Resolution would touch an object outside the capability
+    /// root: an absolute link whose target does not keep the
+    /// canonical-root prefix (tainted), a `..` that pops below the
+    /// capability-root floor, or a link target resolving outside.
+    EscapesRoot,
+    /// A link expansion exceeded the hop budget or formed a loop
+    /// (raised by the resolve layer — distinct from a kernel
+    /// `ELOOP`).
+    LoopDetected,
+    /// `open_pinned` found a different object identity than the
+    /// pinned one — a swapped/recreated object, never its bytes.
+    IdentityMismatch,
+    /// A resolve budget was exceeded: locator depth, expanded
+    /// component total, or simultaneous open directory handles.
+    LimitExceeded,
 }
 
 impl fmt::Display for FileErrorKind {
@@ -56,6 +91,13 @@ impl fmt::Display for FileErrorKind {
             Self::Io => "I/O failure",
             Self::Unsupported => "unsupported feature",
             Self::InvalidInput => "invalid input",
+            Self::NotFound => "not found",
+            Self::NotDirectory => "not a directory",
+            Self::NotRegularFile => "not a regular file",
+            Self::EscapesRoot => "path escapes the capability root",
+            Self::LoopDetected => "link expansion loop detected",
+            Self::IdentityMismatch => "object identity mismatch",
+            Self::LimitExceeded => "resolve budget exceeded",
         };
         f.write_str(message)
     }
@@ -119,7 +161,15 @@ impl FileError {
     /// Maps an adapter `io::Error` to the normalized kind:
     /// `io::ErrorKind::Unsupported` → [`FileErrorKind::Unsupported`],
     /// `io::ErrorKind::InvalidInput` → [`FileErrorKind::InvalidInput`],
-    /// everything else → [`FileErrorKind::Io`].
+    /// everything else → [`FileErrorKind::Io`]. The rooted
+    /// capability's richer mapping ([`NotFound`], [`NotDirectory`],
+    /// [`NotRegularFile`], …) is applied by `rooted` at its own
+    /// boundary; staged-publish `io` errors stay `Io` for backward
+    /// compatibility.
+    ///
+    /// [`NotFound`]: FileErrorKind::NotFound
+    /// [`NotDirectory`]: FileErrorKind::NotDirectory
+    /// [`NotRegularFile`]: FileErrorKind::NotRegularFile
     pub(crate) fn from_ops_error(error: std::io::Error) -> Self {
         let kind = match error.kind() {
             std::io::ErrorKind::Unsupported => FileErrorKind::Unsupported,

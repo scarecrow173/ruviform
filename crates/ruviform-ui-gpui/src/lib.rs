@@ -195,6 +195,12 @@ mod gpui_driver {
         ops: VecDeque<Op>,
         events: VecDeque<DriverEvent>,
         windows: BTreeMap<WindowId, Slot>,
+        /// Retired window ids — append-only for the driver's
+        /// lifetime: the surface adapter's owner-death detection
+        /// relies on entries never being dropped (`IsWindow` on the
+        /// captured raw parent is the fallback for unrecorded
+        /// teardown routes). `WindowId`s are never reused, so growth
+        /// is bounded by total window creations.
         destroyed: BTreeSet<WindowId>,
         monitors: Vec<MonitorInfo>,
         capabilities: WindowCapabilities,

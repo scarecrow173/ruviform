@@ -95,12 +95,16 @@ IO-IMP-10（Issue #304）の secure `extract` モジュールを提供する。
   `inspect()` は present/absent/identity-mismatch/unknown を区別し、
   `cleanup()` 再試行でも記録 root と identity が一致しない限り
   削除しない。
-- Platform backend — Windows は `NtCreateFile`/`NtOpenFile`/
-  `NtDeleteFile` を RootDirectory 相対 + `OBJ_DONT_REPARSE` +
-  `FILE_OPEN_REPARSE_POINT` で実行。Unix は `openat`/`mkdirat`/
-  `unlinkat` + `O_NOFOLLOW` の dirfd 相対。保証を確立できない
-  環境では `Unsupported` を返し、unsafe な path-string 走査には
-  フォールバックしない。
+- Platform backend — `ruviform-io-file` の内部 `vfs` module が
+  単一の権威実装（IO-IMP-10 共有化）。Windows は `NtCreateFile`/
+  `NtOpenFile`/`NtDeleteFile` を RootDirectory 相対 +
+  `OBJ_DONT_REPARSE` + `FILE_OPEN_REPARSE_POINT` で実行
+  （RS1/build 14393 未満は `Unsupported`）。Unix は `openat`/
+  `mkdirat`/`unlinkat` + `O_NOFOLLOW` の dirfd 相対。保証を確立
+  できない環境では `Unsupported` を返し、unsafe な path-string
+  走査にはフォールバックしない。staging 意味（`0700`/`0600`・
+  exclusive create・`unlinkat` flag 分離・identity-gated
+  `remove_root`）は従来どおり。
 
 ## 脅威境界
 
@@ -126,8 +130,11 @@ miniz_oxide の DEFLATE）は内部実装であり、型・エラー・feature �
 
 ## 層・許可依存
 
-- 層: 汎用ファイル I/O 基盤（`ruviform-io-file` と同順位・相互依存なし）。
-- 許可依存: `crc32fast`・`flate2`（rust_backend）・std のみ。
+- 層: 汎用ファイル I/O 基盤（`ruviform-io-file` の staging 用内部
+  vfs へ依存 — extract backend の共有化のみで、その他の面は
+  相互依存なし）。
+- 許可依存: `crc32fast`・`flate2`（rust_backend）・
+  `ruviform-io-file`（path 依存・staging backend）・std のみ。
   GUI・オーディオデバイス・GPU・consumer 依存なし。
 
 ## RT 契約

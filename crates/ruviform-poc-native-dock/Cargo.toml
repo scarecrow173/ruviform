@@ -12,6 +12,10 @@ publish.workspace = true
 # `cargo check --workspace` stays a headless path.
 default = []
 gpui = ["ruviform-ui-gpui/gpui"]
+# `vst3` enables the real-external-VST3 mode: with `RVF_POC_VST3_PATH`
+# set, the harness loads that module through the `host` bridge and
+# drives its real `IPlugView` editor instead of the in-process probe.
+vst3 = ["dep:ruviform-plugin-vst3"]
 
 [dependencies]
 # Consumer layer: this crate is the composition root allowed to see
@@ -22,6 +26,9 @@ ruviform-ui = { path = "../ruviform-ui" }
 ruviform-ui-gpui = { path = "../ruviform-ui-gpui" }
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 ruviform-plugin-host = { path = "../ruviform-plugin-host" }
+# Real external VST3 loading — only in the manual `vst3` lane; the
+# `host` bridge feature is what performs `LoadLibrary` + factory scan.
+ruviform-plugin-vst3 = { path = "../ruviform-plugin-vst3", features = ["host"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # The probe editor is a real native child HWND — same Win32 surface a
