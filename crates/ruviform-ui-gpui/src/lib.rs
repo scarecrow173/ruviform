@@ -35,6 +35,8 @@ pub fn version() -> &'static str {
 }
 
 #[cfg(all(test, feature = "gpui-test"))]
+mod lab_binding;
+#[cfg(all(test, feature = "gpui-test"))]
 mod lifecycle_fixture;
 
 #[cfg(feature = "gpui")]
