@@ -557,11 +557,17 @@ fn basic_info(handle: RawHandle) -> io::Result<FILE_BASIC_INFO> {
     query_info::<FILE_BASIC_INFO>(handle, FileBasicInfo)
 }
 
-/// FILETIME (100-ns ticks since 1601) → `SystemTime`.
+/// FILETIME (100-ns ticks since 1601) → `SystemTime`. Far-future
+/// timestamps are clamped honestly to `None` — `ticks * 100` would
+/// overflow `u64` for dates beyond ~year 30828, so the conversion
+/// splits into seconds/nanos before scaling and `checked_add`
+/// bounds the result to `SystemTime`'s representable range.
 fn filetime_to_system(t: i64) -> Option<std::time::SystemTime> {
     const EPOCH_DIFF_100NS: u64 = 116_444_736_000_000_000;
     let ticks = u64::try_from(t).ok()?.checked_sub(EPOCH_DIFF_100NS)?;
-    Some(std::time::UNIX_EPOCH + std::time::Duration::from_nanos(ticks * 100))
+    let secs = ticks / 10_000_000;
+    let nanos = u32::try_from(ticks % 10_000_000).ok()? * 100;
+    std::time::UNIX_EPOCH.checked_add(std::time::Duration::new(secs, nanos))
 }
 
 /// Whether the volume hosting `handle` reports strong file identity
@@ -633,7 +639,7 @@ fn probe_handle(handle: RawHandle) -> io::Result<VfsProbe> {
     } else {
         VfsKind::File
     };
-    let identity = identity_parts(handle, &basic, kind);
+    let identity = identity_parts(handle, &basic, kind)?;
     Ok(VfsProbe {
         identity,
         kind,
@@ -645,18 +651,18 @@ fn probe_handle(handle: RawHandle) -> io::Result<VfsProbe> {
 }
 
 /// `(volume, 128-bit file id, tag, discriminator)` of the object the
-/// handle addresses. On filesystems without `FileIdInfo` (e.g. some
-/// FAT configurations) the index degrades to 0 — the reported probe
-/// still carries `Weak` strength so no swap-detection guarantee is
-/// claimed.
-fn identity_parts(handle: RawHandle, basic: &FILE_BASIC_INFO, kind: VfsKind) -> NodeIdentity {
-    let (volume, index) = match query_info::<FILE_ID_INFO>(handle, FileIdInfo) {
-        Ok(info) => {
-            let FILE_ID_128 { Identifier } = info.FileId;
-            (info.VolumeSerialNumber, u128::from_le_bytes(Identifier))
-        }
-        Err(_) => (0, 0),
-    };
+/// handle addresses. A failed `FileIdInfo` query propagates — a
+/// fabricated `(0,0)` volume/index would falsely match unrelated
+/// objects and let archive identity-gated cleanup or `open_pinned`
+/// claim a guarantee the filesystem never provided.
+fn identity_parts(
+    handle: RawHandle,
+    basic: &FILE_BASIC_INFO,
+    kind: VfsKind,
+) -> io::Result<NodeIdentity> {
+    let info = query_info::<FILE_ID_INFO>(handle, FileIdInfo)?;
+    let FILE_ID_128 { Identifier } = info.FileId;
+    let (volume, index) = (info.VolumeSerialNumber, u128::from_le_bytes(Identifier));
     let (tag, discriminator) = match kind {
         VfsKind::Dir => {
             // Directory ChangeTime mutates when children are added, so
@@ -673,7 +679,7 @@ fn identity_parts(handle: RawHandle, basic: &FILE_BASIC_INFO, kind: VfsKind) -> 
         }
         _ => (NodeTypeTag::Other, basic.ChangeTime),
     };
-    NodeIdentity {
+    Ok(NodeIdentity {
         volume,
         index,
         tag,
@@ -681,7 +687,7 @@ fn identity_parts(handle: RawHandle, basic: &FILE_BASIC_INFO, kind: VfsKind) -> 
         // The 128-bit FileId already embeds the MFT sequence number,
         // so the index itself discriminates recreation.
         handle: None,
-    }
+    })
 }
 
 /// `GetFinalPathNameByHandleW` — the handle-derived canonical path
@@ -922,4 +928,67 @@ fn list_dir(dir: &WinVfsDir) -> io::Result<Vec<VfsEntry>> {
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+
+    /// FILETIME for ~year 3000 (ticks past 1601 epoch) — pre-fix this
+    /// overflowed `ticks * 100` in `u64` and panicked in debug builds.
+    #[test]
+    fn filetime_far_future_does_not_overflow() {
+        // ~year 3000: (3000-1601) years ≈ 4.4e19 100ns ticks incl. epoch
+        // offset; with offset subtraction ≈ 3.3e19 ticks → *100 would
+        // exceed u64::MAX (≈1.8e19). Must clamp to `None`, never wrap.
+        let year3000_filetime: i64 = 441_919_392_000_000_000;
+        let t = filetime_to_system(year3000_filetime);
+        assert!(
+            t.is_none_or(|t| t >= std::time::UNIX_EPOCH),
+            "far-future time must not wrap to the past: {t:?}"
+        );
+        // i64::MAX may clamp to `SystemTime::MAX` or `None` — both
+        // honest; it must never panic or wrap into the past.
+        assert!(filetime_to_system(i64::MAX).is_none_or(|t| t >= std::time::UNIX_EPOCH));
+        assert_eq!(filetime_to_system(-1), None);
+        // Just before the 1601 FILETIME epoch → `None`, not a wrap.
+        assert_eq!(filetime_to_system(0), None);
+        assert_eq!(filetime_to_system(116_444_735_999_999_999), None);
+    }
+
+    #[test]
+    fn filetime_normal_value_converts() {
+        // 2024-01-01 UTC ≈ 133_485_120_000_000_000 ticks since 1601.
+        let t = filetime_to_system(133_485_120_000_000_000).unwrap();
+        let epoch = t.duration_since(std::time::UNIX_EPOCH).unwrap();
+        // ticks/1e7 - 11644473600s (1601->1970 epoch delta).
+        assert_eq!(epoch.as_secs(), 1_704_038_400);
+    }
+
+    /// `FileIdInfo` on a non-filesystem handle (the `NUL` device)
+    /// deterministically fails — pre-fix the failure was replaced with
+    /// a fabricated `(0,0)` identity that could match unrelated objects.
+    /// Now the query error must propagate: no object may report a
+    /// success identity the filesystem did not supply.
+    #[test]
+    fn file_id_failure_propagates_instead_of_fabricating_identity() {
+        let nul = File::open("NUL").expect("NUL device must open on Windows");
+        assert!(
+            query_info::<FILE_ID_INFO>(nul.as_raw_handle(), FileIdInfo).is_err(),
+            "FileIdInfo is expected to fail on a device handle"
+        );
+        assert!(
+            identity_parts(
+                nul.as_raw_handle(),
+                &FILE_BASIC_INFO::default(),
+                VfsKind::File,
+            )
+            .is_err(),
+            "FileIdInfo failure must not produce a fabricated identity"
+        );
+        // The whole probe must fail-closed — archive cleanup and
+        // `open_pinned` both consume this boundary.
+        assert!(probe_handle(nul.as_raw_handle()).is_err());
+    }
 }

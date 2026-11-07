@@ -735,6 +735,7 @@ SV 側は `open_pinned` が `Unsupported` なら自前の digest verify
 | 非 UTF-8 name | entry name は `OsString` で返す。`RelativePath` は UTF-8 のみ受理し、非 UTF-8 entry は locator 化不能（呼出し側で skip — SV と同じ）。 |
 | FIFO/device/socket | `open_regular` は開かず `NotRegularFile`。Linux は O_PATH 参照で副作用なしに判定、他 unix は nonblock open+即検証（device open 副作用のみ残留、明記）、Windows は synchronous non-alert open+attributes 判定。 |
 | root の差し替え | `RootedDir` は open 時点の root inode を pin。root 名の rename/差し替え後も能力は pin した inode に閉じる。絶対 link の prefix 判定は canonical 文字列基準のまま（inode と文字列のずれは link 受理ポリシーの不整合として明記 — escape ではない）。 |
+| scoped dir の移動 | authority は取得済 dir handle（inode subtree）への委譲であり、path namespace の継続的包含ではない。scoped dir が取得後に root 外へ rename されても、handle は移動した subtree を正当に読む（cap-std 系の標準的意味論）。namespace 連続性を各 op で再検証する仕組みは存在せず、再 canonicalize は本 capability が排除する TOCTOU の再導入なので採用しない — 宣言契約として明記し黙示の保証とはしない。 |
 | staging 意味 | `create_dir`/`create_file`/`remove_file`/`remove_dir` は archive 現行意味をそのまま vfs へ（0700/0600、exclusive、`FILE_READ_ATTRIBUTES`、ShareAccess=0、`unlinkat` flag 分離）。`open_staging_root` は parent open+leaf no-follow component open に分解（一括 path open で leaf を辿らない）。 |
 
 ## セキュリティ・安全性分析

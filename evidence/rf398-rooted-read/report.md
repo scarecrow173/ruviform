@@ -41,8 +41,32 @@
 補足: workspace 全体の `--target x86_64-unknown-linux-gnu` check は
 `zstd-sys`/`alloca` の C build script が Linux toolchain を要求するため
 Windows host では実行不可（環境制約。io-file/io-archive とその依存閉包は
-上記の通り全 PASS）。実 Linux 正規 mise 検証は root 側の既存 CI
-dispatch に委ねる。
+上記の通り全 PASS）。**正規入口として `mise run check-linux` を追加済み**
+（上記 linux-gnu scoped check+clippy と同等）。実 Linux 正規検証は
+root 側の既存 CI dispatch に委ねる。
+
+## Review fix-up round 2（本 head に含まれる修正）
+
+- `vfs/windows.rs identity_parts`: `FileIdInfo` 失敗を `(0,0)`
+  fabricated identity へ潰さず Err 伝播（旧 archive `identity_of`
+  と同じ fail-closed。archive cleanup / `open_pinned` 双方の境界）。
+  回帰: `file_id_failure_propagates_instead_of_fabricating_identity`
+  （NUL device handle での実注入 — FileIdInfo が確実に失敗する
+  object で Err を検証）。
+- `filetime_to_system`: `ticks * 100` の u64 overflow（~year 30828
+  以降で debug panic/release wrap）を secs/nanos 分解 +
+  `checked_add` で修正。回帰: `filetime_far_future_does_not_overflow`,
+  `filetime_normal_value_converts`。
+- 契約明記（仕様確定・コード変更なし）: capability の authority は
+  取得済 dir handle（inode subtree）への委譲であり path namespace
+  の継続的包含ではない — scoped dir が取得後に root 外へ rename
+  されても handle は移動した subtree を正当に読む。namespace 連続性を
+  各 op で再検証する手段は存在せず、再 canonicalize は TOCTOU の
+  再導入のため採用しない（cap-std 系の標準的意味論。spec/design に
+  明記済み。現 SV canonicalize モデルと等価以下の露出ではない）。
+- statx `stx_size` u64→i64 の正規化契約をコードコメントで明記
+  （kernel inode size は loff_t なので >i64::MAX は実在不可 —
+  到達不能値は wrap せず i64::MAX に clamp）。
 
 ## 残 Gate / 未検証
 

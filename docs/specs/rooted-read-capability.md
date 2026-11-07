@@ -120,6 +120,13 @@ Ruviform 所有の**最小 read-only root capability** を
 （保証の scope は root inode が属する FS tree — unix mount/bind
 mount 横断は kernel namespace の実体として通過する。現 SV の
 canonicalize+containment も同一の限界を持つ非回帰の範囲）。
+capability の authority は**取得済み directory handle（inode
+subtree）への委譲**であって、path namespace の継続的包含ではない:
+取得後に scoped dir 自身が root 外へ rename されても、handle は
+移動した subtree を正当に読む（cap-std 系の標準的意味論。
+namespace 連続性を各 op で再検証する手段は存在せず、再
+canonicalize は本 capability が排除する TOCTOU そのものを再導入
+するため行わない）。
 Synvelis の `stat` / `pin` / `open_preview` / `open_pinned` /
 browse-descend に必要な同一保証を、path 再解決ではなく
 handle-relative primitive で提供する。

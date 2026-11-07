@@ -793,6 +793,11 @@ mod gnu_statx {
             dev: (u64::from(stx.stx_dev_major) << 32) | u64::from(stx.stx_dev_minor),
             ino: u128::from(stx.stx_ino),
             mode: u64::from(stx.stx_mode),
+            // statx reports `stx_size` as u64; `RawStat.size` follows
+            // the `stat.st_size`/`off_t` contract (i64). Kernel inode
+            // sizes are `loff_t` so >i64::MAX is unreachable — clamp
+            // honestly rather than wrap if an exotic filesystem ever
+            // reports it. Negative sizes cannot exist in u64 source.
             size: i64::try_from(stx.stx_size).unwrap_or(i64::MAX),
             mtime_ns: ts_ns(&stx.stx_mtime),
             birth_ns: (stx.stx_mask & libc::STATX_BTIME != 0).then(|| ts_ns(&stx.stx_btime)),
