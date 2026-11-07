@@ -24,8 +24,8 @@
 | OS | Windows 11 x64(Git Bash) |
 | GPU | NVIDIA GeForce RTX 4070 SUPER / driver 32.0.16.1088 |
 | GPUI revision | gpui 0.2.2(crates.io)/ blade-graphics 0.7.1 |
-| format | in-process probe(format binary は NotRun) |
-| plugin binary/version | `org.ruviform.poc.native-editor-probe` 0.1.0(in-process) |
+| format | in-process probe(plugin format ではない。VST3/CLAP/AU binary ではなく `ruviform-poc-native-dock` 内自作 probe — 実外部 plugin binary 証拠ではない) |
+| plugin binary/version | `org.ruviform.poc.native-editor-probe` 0.1.0(in-process・host 同一 process/binary。外部 .vst3/.clap/.component ではない) |
 | process boundary | L0 in-process |
 | parent | GPUI top-level HWND → per-slot Win32 container HWND → plugin editor HWND(`GetParent` で実親確認) |
 | command | `cargo run -p ruviform-poc-native-dock --features gpui` → 追加で `./target/debug/ruviform-poc-native-dock.exe` 直接実行×2(再現確認) |
@@ -39,7 +39,7 @@
 - `open` → `LeaseRedeemer` → `GuiParentToken` → probe `open_gui` → 実 `WS_CHILD` editor HWND 生成、`GetParent(child) == container` で **実親子関係確認**
 - `set_geometry` → editor rect が (360,192)→(400,242) に実追従(logical 40/40→80/90、scale 1.0 で +40/+50)
 - `set_visibility` Hidden/Visible → `IsWindowVisible` が false/true に実追従
-- `request_focus` → `GetFocus()` が container HWND を返却(実 focus)
+- `request_focus` → `GetFocus()` が **container** HWND を返却。これは slot 側 container の実 focus であり、plugin editor HWND への keyboard/IME/input focus 達成とは別物( editor への実 key/IME 入力ルーティングは未検証=NotRun)
 - session `close` → `close_gui` → editor HWND 破棄(`IsWindow` false)
 - `release_lease` → container HWND 破棄、`release_slot` → slot 破棄
 - slot event 列: Declared→Leased→GeometryChanged→VisibilityChanged×2→LeaseRevoked→Destroyed(確定的)
@@ -70,12 +70,13 @@ merge conflict 解決: `ruviform-ui-gpui`(lib.rs/Cargo.toml)は main 版が RF38
 | --- | --- | --- |
 | 中立契約 RF388 | headless Pass + Windows 実機 Pass(attach/redeem/geometry/visibility/focus/release) | 上記 log |
 | session 契約 RF389 | headless Pass + Windows 実機 Pass(open/close 遷移) | 同上 |
-| Windows 実 native attach(実 GPUI window 内) | **Pass** — 実 HWND 親子・実 rect/visible/focus 追従を観測 | 同上 |
+| Windows 実 native attach(実 GPUI window 内) | **Pass** — 実 HWND 親子・実 rect/visible/container-focus 追従を観測(focus は container 到達まで;editor への key/IME 入力は NotRun) | 同上 |
 | **Dock PASS** | **NotRun(未達)** — GPUI 実 dock layout(tab/clip/dock 管理 widget)が未実装。本証拠は GPUI window 内 region での実埋込みであり dock 管理下ではない | 実装未存在 |
 | 実 plugin binary(VST3/CLAP/AU) | NotRun — probe は in-process。`open_gui` 経路は実 binary と同一 OS API を使用 | binary 未入手 |
 | L1(out-of-process) | Unsupported(明示) — `L1EditorOps` が全 op Unsupported を返す | code |
 | macOS / Linux(X11/Wayland) | Unsupported(backend 未実装)/ NotRun(未検証) | `BACKEND_AVAILABLE` = cfg!(windows) |
 | float/re-dock/RT 隔離/hang | NotRun | 未実装/未測定 |
+| editor への keyboard/IME/input ルーティング | NotRun — `GetFocus()==container` は container focus の観測であり editor 入力到達の証拠ではない | 未実装(キー転送経路なし) |
 
 ## Review protocol
 
