@@ -20,7 +20,7 @@ Directory: `docs/discovery`
 | DISC-034QfjLwjBVqddpxivwOTg | Issue #195 M2 Typed Graph Audio Compiler・Buffer/PDC・Stateful RT Ownership・Plan Activation の現行棚卸し | active | [issue-195-m2-typed-graph-compiler-runtime-audit.md](./issue-195-m2-typed-graph-compiler-runtime-audit.md) |
 | DISC-034QdBDFXQ7CpGCCYpN94k | Issue #219 両 Consumer 依存形態・検証基盤棚卸しと Cross-Repo CI 前提実測 | draft | [issue-219-consumer-cross-repo-ci.md](./issue-219-consumer-cross-repo-ci.md) |
 | DISC-034JbXZSba3SvOavRFfs66 | Issue #28 UI 技術検証 PoC の事前調査 | draft | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
-| DISC-034T9T71FKLbmcJ4jmuUcD | Issue #390 Driver Contract Lab 既存資産棚卸し（Fake/Boundary/Dock/Headless 現行 coverage と gap） | draft | [issue-390-driver-contract-lab-inventory.md](./issue-390-driver-contract-lab-inventory.md) |
+| DISC-034T9T71FKLbmcJ4jmuUcD | Issue #390 Driver Contract Lab 既存資産棚卸し（Fake/Boundary/Dock/Headless 現行 coverage と gap） | final | [issue-390-driver-contract-lab-inventory.md](./issue-390-driver-contract-lab-inventory.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -53,6 +53,7 @@ Directory: `docs/discovery`
 | DISC-034RIZZ08rxXFAvXxiesKc | Issue #331 check/clippy/test 重複評価の調査・実測 | resolved | [issue-331-check-clippy-test-dedup.md](./issue-331-check-clippy-test-dedup.md) |
 | DISC-k7Pjkn8XoebpncwaTSISdf | Issue #332 CI-OPT-05 Playwright Chromium 準備・計測分離の棚卸し | resolved | [issue-332-playwright-browser-prep-inventory.md](./issue-332-playwright-browser-prep-inventory.md) |
 | DISC-3qnA5E8SxxIxxEfA9LSI1k | Issue #333 CI-OPT-06 変更影響ベース検証 DAG・Fail-Closed Required Gate の棚卸し | resolved | [issue-333-impact-classifier-inventory.md](./issue-333-impact-classifier-inventory.md) |
+| DISC-im2uskbeNbGlhxBg1mtsTR | Issue #386 Driver-neutral GUI Host: 現行契約棚卸しと WebView 前提分離案 | resolved | [issue-386-driver-neutral-gui-host-inventory.md](./issue-386-driver-neutral-gui-host-inventory.md) |
 | DISC-c2G2365EomTupKRjR3zoqt | Issue #388/#389 Native Plugin Dock 現行実装監査（GuiParentToken / L1 Unsupported / wire / Dock 契約の棚卸し） | resolved | [issue-388-389-native-dock-current-state.md](./issue-388-389-native-dock-current-state.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |

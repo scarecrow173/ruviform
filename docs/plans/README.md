@@ -89,6 +89,7 @@ Directory: `docs/plans`
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
+| PLAN-Y2emYF0VFlVKTxwsGWm4Ev | ruviform-io-file Rooted Read Capability 実装計画 | done | [rooted-read-capability.md](./rooted-read-capability.md) |
 | PLAN-kreAOLAGHhliWIVO5VQM6G | ViewLink authoritative generation 実装計画 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
@@ -122,3 +123,4 @@ Directory: `docs/plans`
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
+| PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |

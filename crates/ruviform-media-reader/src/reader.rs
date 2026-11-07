@@ -66,16 +66,18 @@ pub struct SeekReceipt {
 
 /// Sequential source-frame-addressed reader over one stream.
 ///
-/// Construct with [`SourceReader::open`]; the demuxer stays owned so
-/// the reader drives the whole packet→frame pipeline itself. The
-/// selected stream's metadata is available through
-/// [`metadata`](Self::metadata) and never goes stale — a
-/// [`reopen`](Self::reopen) rebuilds it under the caller's control.
+/// Construct with [`SourceReader::open`]; the demuxer is held so the
+/// reader drives the whole packet→frame pipeline itself — `'static`
+/// ownership for the common case, or a shorter `'a` bound when the
+/// boxed demuxer is a reborrow (e.g. `impl Demuxer for &mut D` inside
+/// a scope-bound callback). The selected stream's metadata is
+/// available through [`metadata`](Self::metadata) and never goes stale
+/// — a [`reopen`](Self::reopen) rebuilds it under the caller's control.
 ///
 /// **RT contract:** non-RT only — every method may allocate, block on
 /// source I/O and run unbounded codec work.
-pub struct SourceReader {
-    demuxer: Box<dyn Demuxer>,
+pub struct SourceReader<'a> {
+    demuxer: Box<dyn Demuxer + 'a>,
     decoder: Box<dyn Decoder>,
     stream: StreamId,
     mode: DecodeMode,
@@ -104,10 +106,15 @@ struct Pending {
     cursor: usize,
 }
 
-impl SourceReader {
+impl<'a> SourceReader<'a> {
     /// Opens a reader over `stream` of an already-probed `demuxer`,
     /// building the decoder in `mode` through
     /// [`Demuxer::make_decoder`].
+    ///
+    /// `demuxer` is `Box<dyn Demuxer + 'a>` — an owned `'static` box
+    /// infers `SourceReader<'static>` as before, while a box built from
+    /// a reborrow (`Box::new(&mut *d)` via `impl Demuxer for &mut D`)
+    /// yields a `SourceReader` bound to that borrow's lifetime.
     ///
     /// **RT contract:** non-RT only — probes metadata, allocates codec
     /// state.
@@ -118,7 +125,11 @@ impl SourceReader {
     ///   stream is not decodable (`StreamFacts::decodable`).
     /// * [`ErrorKind::Unsupported`] — the stream is not audio, or the
     ///   backend cannot build the requested decoder.
-    pub fn open(demuxer: Box<dyn Demuxer>, stream: StreamId, mode: DecodeMode) -> Result<Self> {
+    pub fn open(
+        demuxer: Box<dyn Demuxer + 'a>,
+        stream: StreamId,
+        mode: DecodeMode,
+    ) -> Result<Self> {
         let meta = stream_metadata(demuxer.as_ref(), stream, mode)?;
         if !matches!(meta.stream.facts.decodable, Fact::Known(())) {
             return Err(Error::from_kind(ErrorKind::InvalidValue));
@@ -373,7 +384,7 @@ impl SourceReader {
     /// # Errors
     ///
     /// Same classes as [`open`](Self::open).
-    pub fn reopen(&mut self, demuxer: Box<dyn Demuxer>) -> Result<()> {
+    pub fn reopen(&mut self, demuxer: Box<dyn Demuxer + 'a>) -> Result<()> {
         let meta = stream_metadata(demuxer.as_ref(), self.stream, self.mode)?;
         if !matches!(meta.stream.facts.decodable, Fact::Known(())) {
             return Err(Error::from_kind(ErrorKind::InvalidValue));

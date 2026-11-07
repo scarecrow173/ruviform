@@ -421,6 +421,50 @@ pub trait Demuxer: Send {
     }
 }
 
+/// Reborrow port: a `&mut D` demuxer is itself a [`Demuxer`], forwarding
+/// every method to the pointee (the same convention as `std`'s
+/// `impl<R: Read + ?Sized> Read for &mut R`).
+///
+/// Boxing a `&mut dyn Demuxer` yields `Box<dyn Demuxer + 'a>` bound by
+/// the borrow's lifetime — this impl only ever produces `'a`-bound
+/// demuxer handles, never `'static` ownership, so it cannot extend a
+/// scope-bound borrow beyond its scope (e.g. a demuxer lent inside a
+/// scoped callback stays inside it).
+///
+/// `seekable`/`make_decoder` are forwarded explicitly: relying on the
+/// trait defaults would report `NotDeclared`/`Unsupported` even when the
+/// underlying demuxer supports the capability — a lie the boundary
+/// contract forbids.
+impl<D: Demuxer + ?Sized> Demuxer for &mut D {
+    fn container(&self) -> &ContainerInfo {
+        (**self).container()
+    }
+
+    fn backend_info(&self) -> BackendInfo {
+        (**self).backend_info()
+    }
+
+    fn streams(&self) -> &[StreamInfo] {
+        (**self).streams()
+    }
+
+    fn read_packet(&mut self) -> Result<Option<Packet>> {
+        (**self).read_packet()
+    }
+
+    fn seek(&mut self, position: MediaTime) -> Result<()> {
+        (**self).seek(position)
+    }
+
+    fn seekable(&self) -> Fact<()> {
+        (**self).seekable()
+    }
+
+    fn make_decoder(&self, id: StreamId, mode: DecodeMode) -> Result<Box<dyn Decoder>> {
+        (**self).make_decoder(id, mode)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -63,7 +63,7 @@ fn config() -> PrefetchConfig {
     }
 }
 
-fn open_reader(frames: usize) -> SourceReader {
+fn open_reader(frames: usize) -> SourceReader<'static> {
     let demuxer =
         ruviform_io_symphonia::open_demuxer(Cursor::new(wav_bytes(CHANNELS, frames))).unwrap();
     let stream = demuxer.streams()[0].stream.id;
@@ -106,7 +106,7 @@ impl Seek for SeededSource {
     }
 }
 
-fn open_seeded_reader(frames: usize, fail: Arc<AtomicBool>) -> SourceReader {
+fn open_seeded_reader(frames: usize, fail: Arc<AtomicBool>) -> SourceReader<'static> {
     let demuxer = ruviform_io_symphonia::open_demuxer(SeededSource::new(frames, fail)).unwrap();
     let stream = demuxer.streams()[0].stream.id;
     SourceReader::open(Box::new(demuxer), stream, DecodeMode::Canonical).unwrap()

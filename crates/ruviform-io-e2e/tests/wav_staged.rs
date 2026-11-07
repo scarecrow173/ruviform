@@ -9,7 +9,7 @@
 
 mod common;
 
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Write};
 
 use common::{TestDir, read};
 use ruviform_audio_core::{ChannelLayout, SampleFormat, SampleRate};
@@ -92,14 +92,21 @@ fn wav_finalize_borrow_release_seal_decode_publish_reopen() {
 
     let mut sealed = staged.seal();
     // Pre-publish verification: an independent backend parses the
-    // sealed bytes — header, fmt chunk, data chunk, PCM payload.
-    let mut sealed_bytes = Vec::new();
-    sealed
-        .open_readback()
-        .expect("readback")
-        .read_to_end(&mut sealed_bytes)
-        .expect("read sealed");
-    let (format, decoded) = independent_decode(&sealed_bytes).expect("independent decode");
+    // sealed bytes — header, fmt chunk, data chunk, PCM payload —
+    // streamed straight from the borrowed readback, with no full
+    // encoded-size copy (RF400).
+    let (format, decoded) = {
+        let mut readback = sealed.open_readback().expect("readback");
+        ruviform_io_symphonia::with_borrowed_demuxer(&mut readback, |d| {
+            let format = d.container().format;
+            let mut payload = Vec::new();
+            while let Some(pkt) = d.read_packet()? {
+                payload.extend_from_slice(&pkt.data);
+            }
+            Ok((format, payload))
+        })
+        .expect("independent decode over borrowed readback")
+    };
     assert_eq!(format, ContainerFormat::Wav);
     assert_eq!(decoded, payload, "sealed PCM must decode byte-exact");
 
@@ -143,17 +150,22 @@ fn truncated_wav_payload_is_caught_by_independent_decode() {
     let mut staged = StagedFile::create(&dest).expect("stage");
     staged.write_all(cut).expect("write truncated");
     let mut sealed = staged.seal();
-    let mut sealed_bytes = Vec::new();
-    sealed
-        .open_readback()
-        .expect("readback")
-        .read_to_end(&mut sealed_bytes)
-        .expect("read sealed");
 
-    // Independent decode either errors outright or yields strictly
-    // fewer/different payload bytes than the muxed stream — never a
-    // silent pass matching the full payload.
-    let decoded = independent_decode(&sealed_bytes).ok().map(|(_, p)| p);
+    // Independent decode over the borrowed readback either errors
+    // outright or yields strictly fewer/different payload bytes than
+    // the muxed stream — never a silent pass matching the full
+    // payload.
+    let decoded = {
+        let mut readback = sealed.open_readback().expect("readback");
+        ruviform_io_symphonia::with_borrowed_demuxer(&mut readback, |d| {
+            let mut payload = Vec::new();
+            while let Some(pkt) = d.read_packet()? {
+                payload.extend_from_slice(&pkt.data);
+            }
+            Ok(payload)
+        })
+        .ok()
+    };
     assert_ne!(
         decoded,
         Some(payload),
