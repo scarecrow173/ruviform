@@ -33,6 +33,7 @@ Directory: `docs/plans`
 | PLAN-UO09oNkf6X28oaYsQ5DmNe | Issue #386 Driver-neutral GUI Host + GPUI minimal fixture 実装計画 | proposed | [implement-issue-386-driver-neutral-gui-host.md](./implement-issue-386-driver-neutral-gui-host.md) |
 | PLAN-kHnSXCzzcxyo5rlkMiqQWx | Issue #388/#389 Native Dock 契約の実装計画（neutral slot/lease/session + fake 検証 + L0-L1 写像） | approved | [implement-issue-388-389-native-dock-contract.md](./implement-issue-388-389-native-dock-contract.md) |
 | PLAN-5rBdUXHzqmuHrA1h4sweAj | Issue #389 VST3/L0 実外部 Editor attach の実装計画（adapter open_gui + PoC vst3 lane） | approved | [implement-issue-389-vst3-l0-editor-attach.md](./implement-issue-389-vst3-l0-editor-attach.md) |
+| PLAN-ECzI54BQngMiQpOP23flK3 | Issue #404/#405 NativeSurfaceSlot host 境界修復 実装計画 | draft | [implement-issue-404-405-native-surface-host-boundary.md](./implement-issue-404-405-native-surface-host-boundary.md) |
 | PLAN-034JO2EWa8LuEEE4BFVZ9Q | Issue #52 workspace MSRV 引上げの実施（rust-version 1.85 → 1.89・ドキュメント同期・MSRV 実測検証） | approved | [implement-issue-52-msrv-raise.md](./implement-issue-52-msrv-raise.md) |
 | PLAN-034JQFeYbZCBHPYSBfQe7B | Issue #53 SIMD dispatch 層の実装計画 | approved | [implement-issue-53-simd-dispatch-layer.md](./implement-issue-53-simd-dispatch-layer.md) |
 | PLAN-034JZDNRML000000000004 | Issue #54 実装計画 — denormal flush ノード | approved | [implement-issue-54-denormal-policy.md](./implement-issue-54-denormal-policy.md) |
@@ -125,3 +126,4 @@ Directory: `docs/plans`
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
+| PLAN-XVTjRRZhCMBS0tmK8M7Nf5 | Issue #411 — cargo_metadata MSRV 修復 実装計画 | completed | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |

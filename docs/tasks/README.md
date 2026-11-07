@@ -204,6 +204,7 @@ Directory: `docs/tasks`
 | TASK-6LaGohoePjG92Eb5u6lUv7 | T3 tracker.mjs reconcile モード + parseTrackerArgs + contract tests（Issue #368） | done | [issue-368-t3-tracker-reconcile-mode.md](./issue-368-t3-tracker-reconcile-mode.md) |
 | TASK-T6nZSLe2NKHl8o4neneyTK | T4 ci-issue-tracker-reconcile.yml 新設 + README/dev-env 同期（Issue #368） | done | [issue-368-t4-reconcile-workflow.md](./issue-368-t4-reconcile-workflow.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
+| TASK-hupw1aLckqDaLNAlnDrTMF | Issue #411 — cargo_metadata 0.19 系への依存選定修復 + MSRV 検証入口 | done | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
