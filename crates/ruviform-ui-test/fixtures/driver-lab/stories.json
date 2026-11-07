@@ -32,9 +32,10 @@
    "drivers": {
     "fake": {
      "layer": "fake",
-     "status": "pass",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/387",
-     "note": "ViewHost semantic fixture で同一 spec/theme の semantic state 遷移を検証。",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
+     "note": "lab_sv_fader_dock は Fader/Tabs/Dock の mount・dock move・focus/drag/commit の ViewHost semantic 遷移を部分的に検証する。stale/invalid/teardown の state 遷移は別 filter（ui_dvr_02/03）に、theme 非依存性は two_themes_semantic_equivalence に分かれており、この story 単位の 2 scale factor × 2 theme 検証は未実装。ViewHost は scale/theme を持たないため scale 差は GPUI 層で扱う。",
+     "rerun": "story 単位の semantic 遷移（focus/drag/commit/stale/invalid/teardown）と 2 theme 同一性を 1 つの lab fixture に統合する",
      "mechanism": {
       "kind": "cargo-test",
       "package": "ruviform-ui-test",
@@ -44,9 +45,10 @@
     },
     "gpui": {
      "layer": "gpui",
-     "status": "blocked",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/386",
-     "rerun": "ruviform-ui-gpui + renderer 到着後に実描画で実行（Fake 成功を GPUI Pass にしない）"
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
+     "note": "examples/component_showcase.rs（Issue #387 renderer）は Fader/Tabs を描画するが、本 story の Dock・2 scale factor・semantic state 遷移を GPUI test-support で検証する lab story は未実装。",
+     "rerun": "component_showcase の Fader/Tabs/Dock を GPUI test-support 経路で synvelis-dark × scaleFactor 2 値の semantic state 遷移に接続（Fake 成功を GPUI Pass にしない）"
     },
     "real-os": {
      "layer": "real-os",
@@ -82,9 +84,10 @@
    "drivers": {
     "fake": {
      "layer": "fake",
-     "status": "pass",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/387",
-     "note": "ViewHost semantic fixture で同一 spec/theme の semantic state 遷移を検証。",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
+     "note": "lab_al_waveform_bounded は Waveform の上限・InvalidSpec のみを検証する。Seek の drag/commit/stale/teardown は別 filter（ui_dvr_03 等）に、theme 非依存性は two_themes_semantic_equivalence に分かれており、この story 単位の 2 scale factor × 2 theme 検証は未実装。ViewHost は scale/theme を持たないため scale 差は GPUI 層で扱う。",
+     "rerun": "story 単位の semantic 遷移（focus/drag/commit/stale/invalid/teardown）と 2 theme 同一性を 1 つの lab fixture に統合する",
      "mechanism": {
       "kind": "cargo-test",
       "package": "ruviform-ui-test",
@@ -94,9 +97,10 @@
     },
     "gpui": {
      "layer": "gpui",
-     "status": "blocked",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/386",
-     "rerun": "ruviform-ui-gpui + renderer 到着後に実描画で実行"
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
+     "note": "examples/component_showcase.rs（Issue #387 renderer）は Waveform/Seek を描画するが、本 story の semantic state 遷移・2 scale factor を GPUI test-support で検証する lab story は未実装。",
+     "rerun": "component_showcase の Waveform/Seek を GPUI test-support 経路で audiolens-dark × scaleFactor 2 値の semantic state 遷移に接続"
     },
     "real-os": {
      "layer": "real-os",

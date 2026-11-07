@@ -1,6 +1,6 @@
 //! Issue #390 `DriverContractFixture` — UI-DVR case manifest の
 //! 整合性検査と、現行 main で実行可能な semantic fixture
-//! （UI-DVR-01/05/07/08 の `fake` layer）を提供する。
+//! （UI-DVR-01/04/05/06/07/08 の `fake` layer）を提供する。
 //!
 //! `blocked`/`not_run` の binding は契約到着まで実行しない —
 //! Fake semantic pass を GPUI/実 OS/Native Dock の成功と混同しない
@@ -10,11 +10,16 @@
 use std::path::{Path, PathBuf};
 
 use cargo_metadata::MetadataCommand;
+use ruviform_ui::native_slot::{
+    LogicalRect, SlotCapabilities, SlotError, SlotEvent, SlotGeometry, SlotSpec, SlotState,
+    SlotVisibility, Support, SurfaceSlotRegistry,
+};
 use ruviform_ui::{
     DataRegistry, DemoService, DockTarget, DockWorkspace, HostEvent, UiRuntime, ViewInstanceId,
     WindowEvent, WindowHandle, WindowId,
 };
 use ruviform_ui_test::{HeadlessIo, TestApp, TestIo, driver_lab};
+use ruviform_ui_theme::{ResolveError, ResolvedColor, ThemeResolver, TokenDocument};
 
 /// Sink app — event を飲み込む最小 `TestApp`（close-decision 等は
 /// 本 fixture の検証対象外）。
@@ -65,6 +70,8 @@ fn manifests_are_consistent() {
         .expect("workspace metadata");
     let errors = driver_lab::verify_mechanisms(&cases, &metadata, &workspace_root);
     assert!(errors.is_empty(), "mechanism violations: {errors:?}");
+    let errors = driver_lab::verify_story_mechanisms(&stories, &metadata, &workspace_root);
+    assert!(errors.is_empty(), "story mechanism violations: {errors:?}");
 
     // UI-DVR-01..09 が requiredCases で pin されていること。
     assert_eq!(cases.required_cases.len(), 9);
@@ -138,6 +145,162 @@ fn ui_dvr_05_dock_two_phase_move_rollback() {
         "pass",
         "cargo-test:ruviform-ui-test/driver_contract",
         "2-phase move/rollback + owner semantics",
+    );
+}
+
+fn theme_doc(json: &str) -> TokenDocument {
+    TokenDocument::from_json(json).unwrap_or_else(|e| panic!("theme doc parse: {e}"))
+}
+
+fn synvelis_dark() -> TokenDocument {
+    let path = manifest_dir().join("fixtures/themes/synvelis-dark.dtcg.json");
+    let json =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    theme_doc(&json)
+}
+
+/// 解決済み color が `#rrggbb` と同じ成分であること（8bit 成分を
+/// `/255` した値との差が丸め誤差内）。
+fn assert_hex(c: ResolvedColor, hex: &str) {
+    let want = [1, 3, 5].map(|i| {
+        let byte = u8::from_str_radix(&hex[i..i + 2], 16).expect("hex byte");
+        f64::from(byte) / 255.0
+    });
+    for (got, want) in c.components.iter().zip(want) {
+        assert!((got - want).abs() < 1e-6, "{hex}: got {c:?}");
+    }
+}
+
+/// UI-DVR-04 fake: `ResolvedTheme` の mode 解決と layer 優先順位
+/// （consumer override > product > primitive）。OS の system mode は
+/// `ResolvedTheme` の契約外で、解決側は未宣言 mode として拒否する。
+#[test]
+fn ui_dvr_04_theme_mode_and_override_precedence() {
+    let base = theme_doc(
+        r##"{
+          "$extensions": {"dev.ruviform.dtcg-profile": {
+            "profile": "rvf-dtcg-profile.v1", "layer": "primitive", "id": "base-palette"}},
+          "accent": {"primary": {"$type": "color", "$value": "#000000"},
+                     "secondary": {"$type": "color", "$value": "#112233"}}
+        }"##,
+    );
+    let product = synvelis_dark();
+    // Product は primitive より優先される（同一 key は product 値）。
+    let resolved = ThemeResolver::resolve(&[base, product], "dark").expect("resolve dark");
+    assert_hex(resolved.color("accent.primary").unwrap(), "#3d7be0");
+    // primitive 側だけが宣言する key は残る（layer 間 merge）。
+    assert_hex(resolved.color("accent.secondary").unwrap(), "#112233");
+
+    // Consumer override（同 layer は後勝ち・mode 別値を持つ）。
+    let consumer = theme_doc(
+        r##"{
+          "$extensions": {"dev.ruviform.dtcg-profile": {
+            "profile": "rvf-dtcg-profile.v1", "layer": "product", "id": "consumer-override",
+            "modes": ["light", "dark"]}},
+          "accent": {"primary": {"$type": "color", "$value": "#ff8800",
+            "$extensions": {"dev.ruviform.modes": {"dark": "#ffaa33"}}}}
+        }"##,
+    );
+    let dark = ThemeResolver::resolve(std::slice::from_ref(&consumer), "dark").expect("dark");
+    let light = ThemeResolver::resolve(std::slice::from_ref(&consumer), "light").expect("light");
+    assert_hex(dark.color("accent.primary").unwrap(), "#ffaa33");
+    assert_hex(light.color("accent.primary").unwrap(), "#ff8800");
+
+    // 宣言外 mode は型付き MissingMode で拒否（system は resolver 契約外）。
+    for mode in ["system", "unknown"] {
+        let err = ThemeResolver::resolve(&[synvelis_dark()], mode)
+            .expect_err("undeclared mode must be rejected");
+        assert!(
+            matches!(err, ResolveError::MissingMode { .. }),
+            "{mode}: {err:?}"
+        );
+    }
+
+    driver_lab::emit_evidence(
+        "UI-DVR-04",
+        "fake",
+        binding_status(&cases(), "UI-DVR-04", "fake"),
+        "pass",
+        "cargo-test:ruviform-ui-test/driver_contract",
+        "ResolvedTheme mode selection + layer precedence (system mode rejected as out-of-contract)",
+    );
+}
+
+/// UI-DVR-06 fake: `NativeSurfaceSlot` の未対応 capability の正直な報告、
+/// 破棄後の lease/slot 参照の型付きエラー、recycle 後の stale generation。
+#[test]
+fn ui_dvr_06_native_slot_unsupported_stale_destroy() {
+    let window = WindowId::new(1).expect("nonzero");
+    let view = ViewInstanceId::new(10).expect("nonzero");
+    let spec = |capabilities: SlotCapabilities| SlotSpec {
+        window,
+        view,
+        geometry: SlotGeometry {
+            rect: LogicalRect {
+                x: 0.0,
+                y: 0.0,
+                width: 400.0,
+                height: 300.0,
+            },
+            scale_factor: 1.0,
+        },
+        visibility: SlotVisibility::Visible,
+        capabilities,
+    };
+    let supported = SlotCapabilities {
+        attach_parent: Support::Supported,
+        hide_show: Support::Supported,
+        clip: Support::Supported,
+        ..SlotCapabilities::default()
+    };
+    let mut reg = SurfaceSlotRegistry::new();
+
+    // Unsupported: 既定 capability（全て Unsupported）の slot は lease を
+    // 偽成功させず明示的に拒否する。
+    let unsupported = reg.declare_slot(spec(SlotCapabilities::default())).unwrap();
+    assert_eq!(
+        reg.capabilities(unsupported).unwrap().attach_parent,
+        Support::Unsupported
+    );
+    assert_eq!(reg.lease_parent(unsupported), Err(SlotError::Unsupported));
+
+    // Honest reporting: 宣言していない IME は Unsupported のまま。
+    let slot = reg.declare_slot(spec(supported)).unwrap();
+    assert!(!reg.capabilities(slot).unwrap().ime.supported());
+
+    // Destroy: live lease は revoke され、slot 以降の参照は Released。
+    let lease = reg.lease_parent(slot).expect("lease");
+    reg.release_slot(slot).expect("release");
+    assert_eq!(reg.state(slot), Some(SlotState::Released));
+    assert_eq!(reg.validate_lease(lease), Err(SlotError::LeaseRevoked));
+    assert_eq!(reg.lease_parent(slot), Err(SlotError::Released));
+    assert_eq!(reg.release_slot(slot), Err(SlotError::Released));
+    let events = reg.drain_events();
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, SlotEvent::Destroyed { slot: s } if *s == slot)),
+        "terminal Destroyed event: {events:?}"
+    );
+
+    // Stale: index recycle 後は旧 id が StaleGeneration で失敗し、
+    // 旧 lease は revoke のまま（新 slot の lease と混同されない）。
+    let fresh = reg.declare_slot(spec(supported)).unwrap();
+    assert_eq!(fresh.index(), slot.index());
+    assert_ne!(fresh.generation(), slot.generation());
+    assert_eq!(
+        reg.set_visibility(slot, SlotVisibility::Hidden),
+        Err(SlotError::StaleGeneration)
+    );
+    assert_eq!(reg.validate_lease(lease), Err(SlotError::LeaseRevoked));
+
+    driver_lab::emit_evidence(
+        "UI-DVR-06",
+        "fake",
+        binding_status(&cases(), "UI-DVR-06", "fake"),
+        "pass",
+        "cargo-test:ruviform-ui-test/driver_contract",
+        "NativeSurfaceSlot unsupported refusal + destroy/revoke + stale generation",
     );
 }
 
