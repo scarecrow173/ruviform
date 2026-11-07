@@ -67,7 +67,7 @@ description = "Issue #390 DriverContractFixture: cases.json/stories.json manifes
 run = "cargo test -p ruviform-ui-test --test driver_contract"
 
 [tasks.test-ui-parity]
-description = "Issue #421 Fake/GPUI parity fixture (fake side): shared driver-lab/parity/new-kinds.json for Knob/Toggle/Meter/TimeAxis mount/reconcile (UI-DVR-02), gesture intents (UI-DVR-03) and payload retention. The GPUI side of the same fixture runs under test-ui-gpui (writes only target/)"
+description = "Issue #421/#434 Fake/GPUI parity fixture (fake side): shared driver-lab/parity/new-kinds.json for Knob/Toggle/Meter/TimeAxis/Spectrogram mount/reconcile (UI-DVR-02), gesture intents (UI-DVR-03) and payload retention. The GPUI side of the same fixture runs under test-ui-gpui (writes only target/)"
 run = "cargo test -p ruviform-ui-test --test driver_parity"
 
 [tasks.test-ui-native-slot]

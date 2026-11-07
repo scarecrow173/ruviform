@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "manifest": "rvf.driver-lab.parity/v1",
   "issue": "https://github.com/scarecrow173/ruviform/issues/421",
-  "description": "Knob/Toggle/Meter/TimeAxis の Fake/GPUI 同一 fixture。view は ViewSpec（serde 形式）、expect は両 driver が検査する semantic 期待値。Fake は payload 保持と gesture intent、GPUI は描画 plan（drawn）と入力 intent を検査する。",
+  "description": "Knob/Toggle/Meter/TimeAxis/Spectrogram の Fake/GPUI 同一 fixture。view は ViewSpec（serde 形式）、expect は両 driver が検査する semantic 期待値。Fake は payload 保持と gesture intent、GPUI は描画 plan（drawn）と入力 intent を検査する。",
   "view": {
     "root": {
       "type": "panel",
@@ -94,12 +94,26 @@
           ],
           "visual": { "error": null },
           "a11y": { "role": "img", "label": "timeline" }
+        },
+        {
+          "type": "spectrogram",
+          "key": "spectrogram",
+          "viewport": { "start": 0, "end": 1500 },
+          "rows": 2,
+          "magnitude_range": { "start": 0.0, "end": 1.0 },
+          "columns": [
+            { "start": 0, "end": 500, "count": 500, "magnitudes": [0.25, 1.0] },
+            { "start": 500, "end": 1000, "count": 0, "magnitudes": [0.0, 0.0] },
+            { "start": 1000, "end": 1500, "count": 500, "magnitudes": [0.5, 2.0] }
+          ],
+          "visual": { "error": null },
+          "a11y": { "role": "img", "label": "spectrum" }
         }
       ]
     }
   },
   "expect": {
-    "mountedKeys": ["root", "toggle", "knob", "meter", "ruler"],
+    "mountedKeys": ["root", "toggle", "knob", "meter", "ruler", "spectrogram"],
     "knob": {
       "orientation": "vertical",
       "intents": ["begin", "preview", "commit"]
@@ -122,6 +136,17 @@
         { "x": 0.0, "major": true, "label": "0" },
         { "x": 0.1670, "major": false, "label": "250" },
         { "x": 0.6667, "major": true, "label": "1000" }
+      ]
+    },
+    "spectrogram": {
+      "declaredColumns": 3,
+      "declaredCells": 6,
+      "gapColumns": 1,
+      "drawnCells": [
+        { "x0": 0.0, "x1": 0.3333, "y0": 0.5, "y1": 1.0, "intensity": 0.25 },
+        { "x0": 0.0, "x1": 0.3333, "y0": 0.0, "y1": 0.5, "intensity": 1.0 },
+        { "x0": 0.6667, "x1": 1.0, "y0": 0.5, "y1": 1.0, "intensity": 0.5 },
+        { "x0": 0.6667, "x1": 1.0, "y0": 0.0, "y1": 0.5, "intensity": 1.0 }
       ]
     }
   }

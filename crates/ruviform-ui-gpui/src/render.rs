@@ -30,8 +30,9 @@ use ruviform_ui::behavior::{
     StateProjection, ValueInput,
 };
 use ruviform_ui::view::{
-    ComponentKey, ComponentSpec, ControlSpec, MeterSpec, NativeSlotSpec, Orientation, TimeAxisSpec,
-    ViewError, ViewEvent, ViewHost, ViewSpec, WaveformBin, WaveformSpec,
+    ComponentKey, ComponentSpec, ControlSpec, MeterSpec, NativeSlotSpec, Orientation,
+    SpectrogramSpec, TimeAxisSpec, ViewError, ViewEvent, ViewHost, ViewSpec, WaveformBin,
+    WaveformSpec,
 };
 use ruviform_ui::{
     Event, Intent, LogicalRect, SlotError, SlotGeometry, SlotVisibility, SurfaceSlotId,
@@ -1026,6 +1027,31 @@ impl RvfView {
             .children(labels)
     }
 
+    /// Intensity cells per time column and frequency row. Gap cells
+    /// draw nothing; intensity is drawn as alpha of the viz colour
+    /// over the surface.
+    fn spectrogram_element(&self, spec: &SpectrogramSpec) -> impl IntoElement {
+        let palette = self.palette.clone();
+        let cells = spectrogram_cell_plan(spec);
+        let paint = canvas(
+            move |_bounds, _window, _cx| (),
+            move |bounds, (), window, _cx| {
+                window.paint_quad(fill(bounds, palette.surface_bg));
+                for cell in &cells {
+                    let x0 = bounds.origin.x + bounds.size.width * cell.x0;
+                    let y0 = bounds.origin.y + bounds.size.height * cell.y0;
+                    let w = bounds.size.width * (cell.x1 - cell.x0);
+                    let h = bounds.size.height * (cell.y1 - cell.y0);
+                    window.paint_quad(fill(
+                        Bounds::new(point(x0, y0), size(w.max(px(1.0)), h.max(px(1.0)))),
+                        palette.viz_waveform.opacity(cell.intensity),
+                    ));
+                }
+            },
+        );
+        div().flex_grow().min_h(px(120.0)).child(paint)
+    }
+
     fn element_for(&mut self, spec: &ComponentSpec, cx: &mut Context<Self>) -> gpui::AnyElement {
         match spec {
             ComponentSpec::Panel(p) => {
@@ -1086,6 +1112,7 @@ impl RvfView {
                 .into_any_element(),
             ComponentSpec::Meter(m) => self.meter_element(m).into_any_element(),
             ComponentSpec::TimeAxis(t) => self.time_axis_element(t).into_any_element(),
+            ComponentSpec::Spectrogram(s) => self.spectrogram_element(s).into_any_element(),
             ComponentSpec::NativeSlot(n) => self.native_slot_element(n),
             other => div()
                 .child(format!("unsupported component: {}", other.kind()))
@@ -1324,6 +1351,50 @@ fn axis_mark_plan(spec: &TimeAxisSpec) -> Vec<AxisMarkPlan> {
         .collect()
 }
 
+/// One drawn spectrogram cell: normalized x span inside the viewport,
+/// top-down normalized y span (row 0 = lowest Hz sits at the bottom),
+/// and intensity in `[0, 1]`.
+#[derive(Debug, Clone, PartialEq)]
+struct SpectrogramCellPlan {
+    x0: f32,
+    x1: f32,
+    y0: f32,
+    y1: f32,
+    intensity: f32,
+}
+
+/// Cells to draw for a `Spectrogram` spec. A gap column (`count == 0`)
+/// and a non-finite magnitude draw nothing; a column fully outside the
+/// viewport is culled; magnitudes map linearly onto the declared
+/// `magnitude_range` and clamp to `[0, 1]`.
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+fn spectrogram_cell_plan(spec: &SpectrogramSpec) -> Vec<SpectrogramCellPlan> {
+    let rows = spec.rows.max(1) as f32;
+    let lo = spec.magnitude_range.start;
+    let span = spec.magnitude_range.end - lo;
+    let mut cells = Vec::new();
+    for column in &spec.columns {
+        let f0 = viewport_fraction(column.start as f64, &spec.viewport);
+        let f1 = viewport_fraction(column.end as f64, &spec.viewport);
+        if column.count == 0 || f1 <= f0 || f1 <= 0.0 || f0 >= 1.0 {
+            continue;
+        }
+        for (row, &magnitude) in column.magnitudes.iter().enumerate() {
+            if !magnitude.is_finite() {
+                continue;
+            }
+            cells.push(SpectrogramCellPlan {
+                x0: f0.max(0.0),
+                x1: f1.min(1.0),
+                y0: 1.0 - (row + 1) as f32 / rows,
+                y1: 1.0 - row as f32 / rows,
+                intensity: ((magnitude - lo) / span).clamp(0.0, 1.0) as f32,
+            });
+        }
+    }
+    cells
+}
+
 /// A Waveform bin that paints. A gap bin (`count == 0` or a non-finite
 /// min/max) draws nothing; the paint closure and the drawn plan share
 /// this rule.
@@ -1391,7 +1462,7 @@ mod tests {
     use ruviform_ui::dock::ViewInstanceId;
     use ruviform_ui::view::{
         A11ySpec, AttachEpoch, AxisTick, ComponentVisualState, MeterBin, PanelSpec, ProjectionOp,
-        TabSpec, TabsSpec, ViewSpec,
+        SpectrogramColumn, TabSpec, TabsSpec, ViewSpec,
     };
     use ruviform_ui_theme::{ThemeResolver, TokenDocument};
 
@@ -1918,6 +1989,78 @@ mod tests {
             assert_eq!(Some(mark.major), want["major"].as_bool(), "major");
             assert_eq!(Some(mark.label.as_str()), want["label"].as_str(), "label");
         }
+
+        let ComponentSpec::Spectrogram(spectrogram) = panel
+            .children
+            .iter()
+            .find(|c| matches!(c, ComponentSpec::Spectrogram(_)))
+            .expect("spectrogram")
+        else {
+            unreachable!("found by matches!")
+        };
+        let cells = spectrogram_cell_plan(spectrogram);
+        let want_cells = fx["expect"]["spectrogram"]["drawnCells"]
+            .as_array()
+            .expect("cells");
+        assert_eq!(cells.len(), want_cells.len(), "drawn cell count");
+        for (cell, want) in cells.iter().zip(want_cells) {
+            assert_near(cell.x0, want["x0"].as_f64());
+            assert_near(cell.x1, want["x1"].as_f64());
+            assert_near(cell.y0, want["y0"].as_f64());
+            assert_near(cell.y1, want["y1"].as_f64());
+            assert_near(cell.intensity, want["intensity"].as_f64());
+        }
+    }
+
+    /// Spectrogram gap columns (`count == 0`), non-finite magnitudes and
+    /// viewport-culled columns draw nothing; magnitudes clamp to the
+    /// declared range; row 0 (lowest Hz) sits at the bottom.
+    #[test]
+    fn spectrogram_plan_skips_gaps_and_clamps() {
+        let column = |start, end, count, magnitudes: Vec<f64>| SpectrogramColumn {
+            start,
+            end,
+            count,
+            magnitudes,
+        };
+        let spectrogram = SpectrogramSpec {
+            key: ComponentKey("s".to_string()),
+            viewport: 0..300,
+            rows: 2,
+            magnitude_range: 0.0..1.0,
+            columns: vec![
+                column(0, 100, 100, vec![f64::NAN, 0.5]),
+                column(100, 200, 0, vec![1.0, 1.0]),
+                column(200, 300, 100, vec![3.0, -1.0]),
+                column(300, 400, 100, vec![1.0, 1.0]),
+            ],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        };
+        let cells = spectrogram_cell_plan(&spectrogram);
+        assert_eq!(
+            cells.len(),
+            3,
+            "NaN, count==0 and culled cells draw nothing"
+        );
+        assert!((cells[0].intensity - 0.5).abs() < f32::EPSILON);
+        assert!(
+            (cells[0].y0 - 0.0).abs() < f32::EPSILON,
+            "row 1 sits at the top"
+        );
+        assert!((cells[0].y1 - 0.5).abs() < f32::EPSILON);
+        assert!(
+            (cells[1].intensity - 1.0).abs() < f32::EPSILON,
+            "over-range clamps"
+        );
+        assert!(
+            (cells[2].intensity - 0.0).abs() < f32::EPSILON,
+            "under-range clamps"
+        );
+        assert!(
+            (cells[1].y0 - 0.5).abs() < f32::EPSILON,
+            "row 0 sits at the bottom"
+        );
     }
 
     /// Gap bins (`count == 0`) and non-finite peaks draw nothing; a
