@@ -95,6 +95,29 @@ relations:
 | `mise run test-ofx-msrv` | pass（既存 MSRV lane 退行なし） |
 | `mise run test-ui-test-msrv` | pass（Rust 1.89.0・76 test） |
 
+## merge 後再検証（origin/main 68bb8710 取込・HEAD e3a42630）
+
+- merge: ort 自動 merge・手動 conflict 解消なし。Cargo.lock は
+  union（削除行 0・cargo_metadata 0.19.2 / cargo-platform 0.1.9
+  維持・main 側追加依存のみ additive）。managed index は
+  doc_maintenance 正規再生成（issue-411 findings 0）。
+- `mise run fmt-check` / `check` / `lint` / `check-ui-driver-boundary`
+  / `test-ui-driver-contract`（5/5）/ `test-ui-component-view`
+  （12/12・main 新設 lane）/ `test-ofx-msrv` / `test-ui-test-msrv`
+  （Rust 1.89.0・88 test 全 pass）: 全て pass。
+- `mise run test`（workspace）: `ruviform-plugin-host`
+  l1_proxy_e2e `wedged_child_write_converges_and_teardown_is_bounded`
+  が並行負荷時に 1 度だけ spawn timeout（flaky）。単独再実行で
+  当該 test 含む suite 184/184 pass・本変更と無関係（PR407 でも
+  既知 flaky 記録）。それ以外の workspace 全 test pass。
+- 独立 review（内部 subagent）: PASS-WITH-NOTES — 全 readable
+  artifact で修正正確性・guard 意味保持・制約遵守を確認。残 note
+  （Cargo.lock・mise.toml の byte 検証）は本 worker が実測で
+  全て閉じた（platform 0.1.9 単一・他 dep regression 0・task 定義
+  実在確認）。
+- branch `fix/gui-guard-msrv`（head e3a42630）を push、PR #413
+  作成済み（merge/close は root 管轄）。
+
 ## NotRun / 引き渡し
 
 - Synvelis 側 lock 更新と `mise run test-msrv` 再検証: 別 repo・
