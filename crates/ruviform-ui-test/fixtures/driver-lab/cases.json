@@ -59,9 +59,14 @@
     },
     {
      "layer": "gpui",
-     "status": "not_run",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
-     "rerun": "ruviform-ui-gpui の gpui feature 有効 build で同一 headless smoke（window 作成）を GPUI test-support 経路に接続する（lab binding 未接続）"
+     "status": "pass",
+     "note": "Issue #426: ruviform-ui-gpui の lab_binding::ui_dvr_01_gpui_headless_smoke_window_opens（gpui-test・TestAppContext）が GPUI window を作成し Created → Ready に到達することを検証。実 OS window の描画・close は #313 の範囲。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "ui_dvr_01_gpui_headless_smoke_window_opens"
+     }
     },
     {
      "layer": "real-os",
@@ -118,7 +123,9 @@
      "note": "Issue #421: ruviform-ui-gpui の rvf_view_parity_new_kinds_mount_reconcile（gpui-test・TestAppContext + RvfView）が parity fixture の ViewSpec を mount し、reconcile で stable key を検証（落ちた key は Removed、残存 key は identity 保持）。ローカル Windows で pass。",
      "mechanism": {
       "kind": "mise-task",
-      "task": "test-ui-gpui"
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "rvf_view_parity_new_kinds_mount_reconcile"
      }
     },
     {
@@ -164,10 +171,14 @@
     },
     {
      "layer": "gpui",
-     "status": "not_run",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
-     "note": "ruviform-ui-gpui の rvf_view_fader_gesture（fader）と rvf_view_parity_new_kinds_gesture_and_render（Issue #421、knob Begin/Preview/Commit・toggle atomic set）が Begin/Preview/Commit の GPUI element 経路を検証する。Cancel と遅延・順序逆転受信の GPUI 検証は未接続のため not_run のまま。",
-     "rerun": "Cancel と遅延・順序逆転 receipt を GPUI test-support 経路の lab binding に接続"
+     "status": "pass",
+     "note": "Issue #426: render.rs の ui_dvr_03_gpui_*。既存の Begin/Preview/Commit に加え、window deactivate による Cancel（FocusLost・cancel 後の遅延 preview は stale 拒否）と、seq 逆転 preview の OutOfOrder 拒否を GPUI の mounted view で検証。実 OS の focus 喪失・IME は #313/#389 の範囲。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "ui_dvr_03_gpui"
+     }
     },
     {
      "layer": "real-os",
@@ -199,10 +210,14 @@
     },
     {
      "layer": "gpui",
-     "status": "not_run",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
-     "note": "render.rs の palettes_differ_per_product_theme が product theme 間の palette 差のみを検証する。mode/override の GPUI 写像は未接続。",
-     "rerun": "ResolvedTheme → GPUI 色写像の mode/override 検証を lab binding に接続"
+     "status": "pass",
+     "note": "Issue #426: render.rs の ui_dvr_04_gpui_mode_override_palette が consumer override（後勝ちの product 文書）を ViewPalette（描画色）へ反映し、未宣言 mode（light）を resolver が拒否することを検証。fixture の宣言 mode は dark のみ。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "ui_dvr_04_gpui_mode_override_palette"
+     }
     },
     {
      "layer": "real-os",
@@ -248,7 +263,9 @@
      "status": "pass",
      "mechanism": {
       "kind": "mise-task",
-      "task": "test-ui-gpui"
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "gpui_driver_matches_shared_lifecycle_trace"
      },
      "note": "ruviform-ui-gpui の lifecycle_fixture::gpui_driver_matches_shared_lifecycle_trace が、ruviform-ui-test::lifecycle の共通 trace（2-phase Dock move + rollback・detach/reattach を含む）と GPUI driver の trace の一致を検証する。ローカル Windows 実行で pass。実描画 pixel は対象外。"
     },
@@ -289,7 +306,9 @@
      "note": "ruviform-ui-gpui の surface.rs（owner teardown による auto release・release after auto release のエラー・dead parent の拒否）と render.rs（rvf_view_native_slot_fail_closed_on_refusal 等）が GPUI 側の Unsupported/stale/destroy を検証。ローカル Windows 実行で pass。OS 子 HWND の実描画は対象外。",
      "mechanism": {
       "kind": "mise-task",
-      "task": "test-ui-gpui"
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "rvf_view_native_slot_fail_closed_on_refusal"
      }
     },
     {
@@ -321,10 +340,14 @@
     },
     {
      "layer": "gpui",
-     "status": "not_run",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
-     "note": "ruviform-ui-gpui の最小 fixture は ime / native_surface_slot を Unsupported と宣言するが、その capability 報告を lab binding で検証していない。",
-     "rerun": "GPUI WindowCapabilities の honest reporting を lab binding に接続"
+     "status": "pass",
+     "note": "Issue #426: lab_binding::ui_dvr_07_gpui_capabilities_are_honest が resize/focus/multi_window の宣言 Supported を実操作で確認し、ime Unsupported（#389 owner）と native_surface_slot の OS 別宣言を検証。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "ui_dvr_07_gpui_capabilities_are_honest"
+     }
     },
     {
      "layer": "real-os",
@@ -367,10 +390,14 @@
     },
     {
      "layer": "gpui",
-     "status": "not_run",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
-     "note": "GPUI 側は shared lifecycle trace の window Destroyed/teardown を検証済み（UI-DVR-05 の binding 参照）。関連 job の cancel と terminal event は GPUI harness に接続していないため未検証。",
-     "rerun": "GPUI host の window close で UiRuntime::cancel_window_jobs と job terminal event を検証する lab binding を接続"
+     "status": "pass",
+     "note": "Issue #426: lab_binding::ui_dvr_08_gpui_window_teardown_cancels_jobs が GPUI window の Destroyed 到達後、close policy としての UiRuntime::cancel_window_jobs で window job が Cancelled の terminal event に至ることを検証。UiRuntime は window close で自動 cancel しない契約（runtime.rs）。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "ui_dvr_08_gpui_window_teardown_cancels_jobs"
+     }
     },
     {
      "layer": "real-os",
@@ -409,7 +436,9 @@
      "note": "render.rs の inbox Notify → apply_projection → observe().display.normalized（control_element が読む値）を検証する headless GPUI test（rvf_view_inbox_projection_*）。",
      "mechanism": {
       "kind": "mise-task",
-      "task": "test-ui-gpui"
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "rvf_view_inbox_projection_updates_controlled_display"
      }
     },
     {

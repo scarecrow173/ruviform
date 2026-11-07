@@ -93,13 +93,14 @@ pub struct Binding {
 pub struct Mechanism {
     /// `cargo-test` / `mise-task` / `manual`。
     pub kind: String,
-    /// `cargo-test` の package 名。
+    /// `cargo-test` / `mise-task`（filter 検査時）の package 名。
     #[serde(default)]
     pub package: Option<String>,
     /// `cargo-test` の test target 名（tests/<target>.rs）。
     #[serde(default)]
     pub target: Option<String>,
     /// `cargo-test` の test name filter（`cargo test -- <filter>`）。
+    /// `mise-task` では `package` 配下に実在を要求する test fn 名。
     #[serde(default)]
     pub filter: Option<String>,
     /// `mise-task` のタスク名。
@@ -411,7 +412,8 @@ pub fn verify_story_mechanisms(
 
 /// 1 binding の mechanism を実在確認する。`cargo-test` は package・
 /// tests/<target>.rs・filter fn、`mise-task` は `mise.toml` の
-/// `[tasks.<name>]` 定義を要求する（`manual` は手順説明のみで検査対象外）。
+/// `[tasks.<name>]` 定義を要求し、`package`+`filter` 指定時は package の
+/// src/tests に同名 test fn を要求する（`manual` は手順説明のみで検査対象外）。
 fn verify_binding_mechanism(
     subject: &str,
     binding: &Binding,
@@ -433,30 +435,40 @@ fn verify_binding_mechanism(
             };
             let mise_toml =
                 std::fs::read_to_string(workspace_root.join("mise.toml")).unwrap_or_default();
-            if mise_toml.contains(&format!("[tasks.{task}]")) {
-                Vec::new()
-            } else {
-                vec![error(format!(
+            let mut errors = Vec::new();
+            if !mise_toml.contains(&format!("[tasks.{task}]")) {
+                errors.push(error(format!(
                     "mise task `{task}` が mise.toml に定義されていない"
-                ))]
+                )));
             }
+            match (&m.package, &m.filter) {
+                (Some(pkg_name), Some(filter)) => match package_manifest_dir(metadata, pkg_name) {
+                    Some(dir) => {
+                        if !["src", "tests"]
+                            .iter()
+                            .any(|d| package_has_test_fn(&dir.join(d), filter))
+                        {
+                            errors.push(error(format!(
+                                    "package `{pkg_name}` の src/tests に filter `{filter}` に一致する test fn が見つからない"
+                                )));
+                        }
+                    }
+                    None => errors.push(error(format!("package `{pkg_name}` が metadata に無い"))),
+                },
+                (None, Some(_)) => errors.push(error(
+                    "mise-task の filter は package 指定が必要".to_string(),
+                )),
+                _ => {}
+            }
+            errors
         }
         "cargo-test" => {
             let (Some(pkg_name), Some(target)) = (&m.package, &m.target) else {
                 return Vec::new(); // schema 側で検出済み
             };
-            let Some(pkg) = metadata
-                .packages
-                .iter()
-                .find(|p| p.name.as_str() == pkg_name.as_str())
-            else {
+            let Some(manifest_dir) = package_manifest_dir(metadata, pkg_name) else {
                 return vec![error(format!("package `{pkg_name}` が metadata に無い"))];
             };
-            let manifest_dir = PathBuf::from(
-                pkg.manifest_path
-                    .parent()
-                    .map_or(".", cargo_metadata::camino::Utf8Path::as_str),
-            );
             let test_file = manifest_dir.join("tests").join(format!("{target}.rs"));
             if !test_file.exists() {
                 return vec![error(format!(
@@ -467,21 +479,8 @@ fn verify_binding_mechanism(
             let Some(filter) = &m.filter else {
                 return Vec::new();
             };
-            // cargo test filter は substring match — filter を名前に
-            // 含み、直前に #[test]/#[tokio::test] がある fn を要求。
             let src = std::fs::read_to_string(&test_file).unwrap_or_default();
-            let lines: Vec<&str> = src.lines().collect();
-            let hit = lines.iter().enumerate().any(|(i, l)| {
-                let t = l.trim_start();
-                (t.starts_with("fn ") || t.starts_with("async fn "))
-                    && l.contains(filter.as_str())
-                    && lines[..i]
-                        .iter()
-                        .rev()
-                        .take(6)
-                        .any(|p| p.contains("#[test]") || p.contains("#[tokio::test]"))
-            });
-            if hit {
+            if has_test_fn(&src, filter) {
                 Vec::new()
             } else {
                 vec![error(format!(
@@ -491,6 +490,45 @@ fn verify_binding_mechanism(
         }
         _ => Vec::new(),
     }
+}
+
+fn package_manifest_dir(metadata: &cargo_metadata::Metadata, name: &str) -> Option<PathBuf> {
+    let pkg = metadata.packages.iter().find(|p| p.name.as_str() == name)?;
+    Some(PathBuf::from(
+        pkg.manifest_path
+            .parent()
+            .map_or(".", cargo_metadata::camino::Utf8Path::as_str),
+    ))
+}
+
+/// `cargo test` filter は substring match — filter を名前に含み、直前に
+/// test 属性（`#[test]`/`#[tokio::test]`/`#[gpui::test]`）がある fn を要求する。
+fn has_test_fn(src: &str, filter: &str) -> bool {
+    let lines: Vec<&str> = src.lines().collect();
+    lines.iter().enumerate().any(|(i, l)| {
+        let t = l.trim_start();
+        (t.starts_with("fn ") || t.starts_with("async fn "))
+            && l.contains(filter)
+            && lines[..i].iter().rev().take(6).any(|p| {
+                p.contains("#[test]") || p.contains("#[tokio::test]") || p.contains("#[gpui::test]")
+            })
+    })
+}
+
+/// `dir` 配下（再帰）の `.rs` のいずれかに [`has_test_fn`] が成り立つか。
+fn package_has_test_fn(dir: &Path, filter: &str) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    entries.flatten().any(|e| {
+        let p = e.path();
+        if p.is_dir() {
+            package_has_test_fn(&p, filter)
+        } else {
+            p.extension().and_then(|x| x.to_str()) == Some("rs")
+                && has_test_fn(&std::fs::read_to_string(&p).unwrap_or_default(), filter)
+        }
+    })
 }
 
 /// evidence JSONL の 1 行 schema。

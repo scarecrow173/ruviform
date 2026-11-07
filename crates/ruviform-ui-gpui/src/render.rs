@@ -1478,6 +1478,161 @@ mod tests {
         assert_ne!(sv.control_fill.h, al.control_fill.h);
     }
 
+    /// UI-DVR-04 GPUI lane: the palette the view paints follows the
+    /// resolved theme's consumer override (the highest-precedence product
+    /// document) and leaves untouched tokens alone. A mode the theme does
+    /// not declare never reaches a palette — the resolver rejects it.
+    #[test]
+    fn ui_dvr_04_gpui_mode_override_palette() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../ruviform-ui-test/fixtures/themes/synvelis-dark.dtcg.json"
+        );
+        let base_json = std::fs::read_to_string(path).expect("read fixture");
+        let mut override_value: serde_json::Value =
+            serde_json::from_str(&base_json).expect("fixture json");
+        override_value["accent"]["primary"]["$value"] = serde_json::json!("#ff0000");
+        override_value["$extensions"]["dev.ruviform.dtcg-profile"]["id"] =
+            serde_json::json!("synvelis-dark-consumer-override");
+        let parse = |json: &str| TokenDocument::from_json(json).expect("parse");
+
+        let base = ThemeResolver::resolve(&[parse(&base_json)], "dark").expect("resolve");
+        let overridden = ThemeResolver::resolve(
+            &[parse(&base_json), parse(&override_value.to_string())],
+            "dark",
+        )
+        .expect("resolve override");
+        let base_p = ViewPalette::from_theme(&base);
+        let over_p = ViewPalette::from_theme(&overridden);
+        let hsla = |c: Hsla| (c.h, c.s, c.l, c.a);
+        assert_ne!(hsla(base_p.accent), hsla(over_p.accent));
+        assert_eq!(hsla(base_p.surface_bg), hsla(over_p.surface_bg));
+        assert!(ThemeResolver::resolve(&[parse(&base_json)], "light").is_err());
+    }
+
+    /// UI-DVR-03 GPUI lane (cancel + delayed arrival): window deactivation
+    /// mid-drag cancels through the canonical `FocusLost` input. The drag
+    /// is released, the committed value keeps its pre-gesture value (no
+    /// commit applied), and a late preview for the cancelled gesture is
+    /// rejected by the mounted host.
+    #[gpui::test]
+    fn ui_dvr_03_gpui_cancel_on_deactivate_keeps_committed(cx: &mut TestAppContext) {
+        use ruviform_ui::WindowDriver;
+        use ruviform_ui::behavior::{ControlInput, InteractionEvent, RejectReason, ValueInput};
+        let mut driver = crate::GpuiDriver::new();
+        let window = WindowDriver::create_window(&mut driver, &ruviform_ui::WindowSpec::default())
+            .expect("reserve window");
+        let bindings = driver.slot_binding_map(window).expect("binding map");
+        let sink = driver.intent_sink(window);
+        let adapter = driver.surface();
+        let (view, cx) = cx.add_window_view(move |window, cx| {
+            RvfView::mounted(
+                host_with_fader(),
+                None,
+                &sink,
+                Rc::new(RefCell::new(Vec::new())),
+                SlotMount { adapter, bindings },
+                window,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        view.update_in(cx, |_v, window, _cx| window.activate_window());
+        cx.run_until_parked();
+        cx.simulate_mouse_down(
+            point(px(16.0), px(300.0)),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        cx.run_until_parked();
+        cx.simulate_mouse_move(
+            point(px(16.0), px(200.0)),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        cx.run_until_parked();
+        let key = ComponentKey("fader".to_string());
+        let gesture_id = view.update(cx, |v, _cx| {
+            v.drags.get(&key).expect("active drag").gesture_id.clone()
+        });
+        cx.deactivate_window();
+        cx.run_until_parked();
+
+        view.update(cx, |v, _cx| {
+            assert!(v.drags.is_empty(), "deactivation releases the drag");
+            let snap = v.host.observe(&key).expect("fader snapshot");
+            assert_eq!(snap.committed.map(|c| c.normalized), Some(0.5));
+            let late = ControlInput::Preview {
+                gesture_id: gesture_id.clone(),
+                value: ValueInput::Plain(0.9),
+                modifiers: None,
+                seq: None,
+            };
+            let generation = v.host.generation();
+            let ev = v
+                .host
+                .dispatch_input(generation, &key, late)
+                .expect("dispatch late");
+            assert!(ev.iter().any(|e| matches!(
+                e,
+                InteractionEvent::Rejected {
+                    reason: RejectReason::StaleGesture | RejectReason::AlreadyTerminated,
+                    ..
+                }
+            )));
+        });
+    }
+
+    /// UI-DVR-03 GPUI lane (out-of-order): a preview whose `seq` is older
+    /// than the last accepted input is rejected by the mounted view's
+    /// host, and the newer accepted input is not displaced.
+    #[gpui::test]
+    fn ui_dvr_03_gpui_out_of_order_preview_rejected(cx: &mut TestAppContext) {
+        use ruviform_ui::behavior::{ControlInput, InteractionEvent, RejectReason, ValueInput};
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(host_with_fader(), ViewPalette::fallback(), |_| {})
+        });
+        cx.run_until_parked();
+        cx.simulate_mouse_down(
+            point(px(16.0), px(300.0)),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        cx.run_until_parked();
+
+        view.update(cx, |v, _cx| {
+            let key = ComponentKey("fader".to_string());
+            let gesture_id = v.drags.get(&key).expect("active drag").gesture_id.clone();
+            let generation = v.host.generation();
+            let preview = |seq: u64| ControlInput::Preview {
+                gesture_id: gesture_id.clone(),
+                value: ValueInput::Plain(0.9),
+                modifiers: None,
+                seq: Some(seq),
+            };
+            let newer = v
+                .host
+                .dispatch_input(generation, &key, preview(10))
+                .expect("dispatch newer");
+            assert!(
+                !newer
+                    .iter()
+                    .any(|e| matches!(e, InteractionEvent::Rejected { .. }))
+            );
+            let older = v
+                .host
+                .dispatch_input(generation, &key, preview(4))
+                .expect("dispatch older");
+            assert!(older.iter().any(|e| matches!(
+                e,
+                InteractionEvent::Rejected {
+                    reason: RejectReason::OutOfOrder,
+                    ..
+                }
+            )));
+        });
+    }
+
     /// Real GPUI element path on the headless test platform: mount a
     /// fader, simulate drag, expect begin → preview → commit intents.
     #[gpui::test]
