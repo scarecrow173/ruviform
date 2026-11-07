@@ -24,7 +24,8 @@
   "UI-DVR-05",
   "UI-DVR-06",
   "UI-DVR-07",
-  "UI-DVR-08"
+  "UI-DVR-08",
+  "UI-DVR-09"
  ],
  "cases": [
   {
@@ -320,6 +321,46 @@
      "status": "not_run",
      "owner": "https://github.com/scarecrow173/ruviform/issues/386",
      "rerun": "GPUI window teardown 契約到着後"
+    },
+    {
+     "layer": "real-os",
+     "status": "not_run",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/313",
+     "rerun": "OS Driver 実装後"
+    }
+   ],
+   "evidence": "target/driver-lab/evidence.jsonl"
+  },
+  {
+   "id": "UI-DVR-09",
+   "title": "Authoritative projection → controlled display — 外部更新が表示値へ到達すること",
+   "oracle": "idle 中に着地した authoritative projection が binding の observed だけでなく ViewHost の display（renderer が読む snapshot.display）を更新すること。gesture preview 中は preview が優先され、gesture 終了時に staged truth が確定値になること。stale revision・detach/reattach の既存契約を壊さないこと。業務 JSON を無条件に f64 として解釈しないこと。",
+   "surfaces": [
+    "projection",
+    "display"
+   ],
+   "bindings": [
+    {
+     "layer": "fake",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/414",
+     "note": "Issue #414: ViewHost::apply_projection が accepted projection を InteractionControl::apply_external 経由で controlled display へ反映。ui_dvr_09_* fixture が idle/gesture commit/cancel/stale/detach-reattach を検証。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "component_view",
+      "filter": "ui_dvr_09"
+     }
+    },
+    {
+     "layer": "gpui",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/414",
+     "note": "render.rs の inbox Notify → apply_projection → observe().display.normalized（control_element が読む値）を検証する headless GPUI test（rvf_view_inbox_projection_*）。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui"
+     }
     },
     {
      "layer": "real-os",

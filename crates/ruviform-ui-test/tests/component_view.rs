@@ -16,7 +16,8 @@
 
 use ruviform_ui::behavior::{
     AvailabilityFlags, CommandIntent, ControlInput, DetachPolicy, InputSource, InteractionEvent,
-    NoopReason, RejectReason, UnavailableReason, ValueDescriptor, ValueInput,
+    NoopReason, RejectReason, Revision, StateProjection, UnavailableReason, ValueDescriptor,
+    ValueInput,
 };
 use ruviform_ui::dock::{DockTarget, DockWorkspace, DropZone, ViewInstanceId};
 use ruviform_ui::view::{
@@ -895,4 +896,127 @@ fn lab_sv_native_slot_reconcile() {
     }
     let err = host.mount(bad).unwrap_err();
     assert!(matches!(err, ViewError::InvalidSpec { .. }));
+}
+
+// ---------------------------------------------------------------------
+// UI-DVR-09 authoritative projection → controlled display (Issue #414)
+// ---------------------------------------------------------------------
+
+fn projection(value: serde_json::Value, revision: u64) -> StateProjection<serde_json::Value> {
+    StateProjection {
+        revision: Revision::Num(revision),
+        value,
+        provenance: None,
+    }
+}
+
+fn display_of(host: &ViewHost, name: &str) -> ruviform_ui::behavior::ControlValue {
+    host.observe(&key(name))
+        .and_then(|s| s.display)
+        .expect("display")
+}
+
+/// An authoritative projection that lands while the control is idle
+/// must update the value the renderer reads (`snapshot.display`),
+/// not merely populate `observed` — and the write must mint no
+/// gesture events or intents (the controlled-write loop stays
+/// closed).
+#[test]
+fn ui_dvr_09_projection_updates_controlled_display() {
+    let mut host = host();
+    let k = key("fader-ch1");
+    assert!((display_of(&host, "fader-ch1").plain - 0.5).abs() < 1e-9);
+
+    assert!(host.apply_projection(
+        "fader-ch1",
+        &projection(serde_json::json!({"normalized": 0.8}), 1)
+    ));
+    let snap = host.observe(&k).expect("snapshot");
+    // The renderer-consumed value follows the observed truth.
+    assert!((snap.display.expect("display").normalized - 0.8).abs() < 1e-9);
+    assert!((snap.committed.expect("committed").normalized - 0.8).abs() < 1e-9);
+    assert!(snap.observed.is_some());
+    assert_eq!(snap.phase, ruviform_ui::behavior::CommandPhase::Observed);
+    // Silent write: no Gesture/Intent events were minted.
+    assert!(
+        !events_of(&mut host)
+            .iter()
+            .any(|e| matches!(e, ViewEvent::Intent { .. } | ViewEvent::Gesture { .. }))
+    );
+
+    // A non-control-value payload is still recorded as observed but
+    // must not be guessed into the display.
+    assert!(host.apply_projection("fader-ch1", &projection(serde_json::json!("chorus"), 2)));
+    assert!((display_of(&host, "fader-ch1").normalized - 0.8).abs() < 1e-9);
+
+    // Stale/equal revisions never touch the display.
+    assert!(!host.apply_projection(
+        "fader-ch1",
+        &projection(serde_json::json!({"normalized": 0.1}), 1)
+    ));
+    assert!((display_of(&host, "fader-ch1").normalized - 0.8).abs() < 1e-9);
+}
+
+/// During an active gesture the authoritative write is staged, not
+/// applied: the local preview keeps the display, and the staged
+/// truth lands when the gesture terminates — on commit the last
+/// observed state wins, on cancel the aborted preview is replaced
+/// by the observed truth rather than the stale committed value.
+#[test]
+fn ui_dvr_09_projection_respects_gesture_preview() {
+    let mut host = host();
+    let generation = host.generation();
+    let k = key("fader-ch1");
+
+    // --- commit path ---
+    host.dispatch_input(generation, &k, begin("g1")).unwrap();
+    host.dispatch_input(generation, &k, preview("g1", 0.7))
+        .unwrap();
+    assert!(host.apply_projection(
+        "fader-ch1",
+        &projection(serde_json::json!({"normalized": 0.3}), 1)
+    ));
+    // Preview wins mid-gesture; observed still records the truth.
+    assert!((display_of(&host, "fader-ch1").normalized - 0.7).abs() < 1e-9);
+    assert!(host.observe(&k).expect("snap").observed.is_some());
+    host.dispatch_input(generation, &k, commit("g1")).unwrap();
+    // Staged truth lands as the committed display.
+    assert!((display_of(&host, "fader-ch1").normalized - 0.3).abs() < 1e-9);
+    host.drain_events();
+
+    // --- cancel path ---
+    host.dispatch_input(generation, &k, begin("g2")).unwrap();
+    host.dispatch_input(generation, &k, preview("g2", 0.9))
+        .unwrap();
+    assert!(host.apply_projection(
+        "fader-ch1",
+        &projection(serde_json::json!({"normalized": 0.2}), 2)
+    ));
+    assert!((display_of(&host, "fader-ch1").normalized - 0.9).abs() < 1e-9);
+    host.dispatch_input(generation, &k, cancel("g2")).unwrap();
+    // Cancel restores nothing stale: the staged observed value lands.
+    assert!((display_of(&host, "fader-ch1").normalized - 0.2).abs() < 1e-9);
+}
+
+/// Detach absorbs projections (binding goes `stale`); after reattach
+/// the next advancing projection drives the display again.
+#[test]
+fn ui_dvr_09_projection_detach_reattach() {
+    let mut host = host();
+    assert!(host.apply_projection(
+        "fader-ch1",
+        &projection(serde_json::json!({"normalized": 0.8}), 1)
+    ));
+    host.detach("dock-transfer");
+    assert!(!host.apply_projection(
+        "fader-ch1",
+        &projection(serde_json::json!({"normalized": 0.9}), 2)
+    ));
+    assert!((display_of(&host, "fader-ch1").normalized - 0.8).abs() < 1e-9);
+    host.attach();
+    assert!(host.apply_projection(
+        "fader-ch1",
+        &projection(serde_json::json!({"normalized": 0.95}), 3)
+    ));
+    assert!((display_of(&host, "fader-ch1").normalized - 0.95).abs() < 1e-9);
 }

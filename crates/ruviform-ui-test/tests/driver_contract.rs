@@ -66,8 +66,8 @@ fn manifests_are_consistent() {
     let errors = driver_lab::verify_mechanisms(&cases, &metadata, &workspace_root);
     assert!(errors.is_empty(), "mechanism violations: {errors:?}");
 
-    // UI-DVR-01..08 が requiredCases で pin されていること。
-    assert_eq!(cases.required_cases.len(), 8);
+    // UI-DVR-01..09 が requiredCases で pin されていること。
+    assert_eq!(cases.required_cases.len(), 9);
 }
 
 /// UI-DVR-01 fake: driver 非搭載の headless semantic fixture が

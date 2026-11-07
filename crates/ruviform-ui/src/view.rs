@@ -831,6 +831,21 @@ impl ViewHost {
         self.bindings
             .entry(control_id.clone())
             .or_insert_with(|| CommandBinding::new(namespace));
+        // A binding that survived re-registration (descriptor change)
+        // still holds the last accepted projection — re-apply it to
+        // the fresh control so the controlled display restores the
+        // last observed truth through the new descriptor's mapper
+        // instead of sitting at the default until the next push.
+        let observed = self
+            .bindings
+            .get(&control_id)
+            .and_then(|b| b.state().last_observed)
+            .and_then(|p| crate::behavior::projection_value_input(&p.value));
+        if let Some(input) = observed
+            && let Some(control) = self.dispatcher.control_mut(&control_id)
+        {
+            control.apply_external(input);
+        }
     }
 
     /// Command-id namespace for `control_id` under this host's
@@ -1214,14 +1229,33 @@ impl ViewHost {
     /// (e.g. after remount) accepts any *first* revision; a delayed
     /// older-revision projection can land once and self-heals on the
     /// next newer one.
+    ///
+    /// An accepted projection also drives the controlled display:
+    /// [`crate::behavior::projection_value_input`] decodes the
+    /// payload into an absolute [`crate::behavior::ValueInput`] and
+    /// [`crate::behavior::InteractionControl::apply_external`] writes
+    /// it through the control's mapper — staged while a gesture is
+    /// active (preview wins), committed immediately while idle, and
+    /// silent (no events, no intents) in both cases. The three display
+    /// states stay distinct: `display`/`committed` are the controlled
+    /// display, receipts are `applied` progress, and `observed` is
+    /// the authoritative [`StateProjection`] itself.
     pub fn apply_projection(
         &mut self,
         control_id: &str,
         projection: &StateProjection<serde_json::Value>,
     ) -> bool {
-        self.bindings
+        let accepted = self
+            .bindings
             .get_mut(control_id)
-            .is_some_and(|b| b.on_projection(projection))
+            .is_some_and(|b| b.on_projection(projection));
+        if accepted
+            && let Some(input) = crate::behavior::projection_value_input(&projection.value)
+            && let Some(control) = self.dispatcher.control_mut(control_id)
+        {
+            control.apply_external(input);
+        }
+        accepted
     }
 
     /// Drains the recorded event stream.
@@ -1611,5 +1645,247 @@ mod tests {
         assert_ne!(dead_commit, live_commit);
         assert!(!host.apply_receipt(&receipt(dead_commit, ReceiptStatus::Applied)));
         assert!(host.apply_receipt(&receipt(live_commit, ReceiptStatus::Applied)));
+    }
+
+    fn projection(value: serde_json::Value, revision: u64) -> StateProjection<serde_json::Value> {
+        StateProjection {
+            revision: crate::behavior::Revision::Num(revision),
+            value,
+            provenance: None,
+        }
+    }
+
+    fn display_plain(host: &ViewHost, key: &str) -> f64 {
+        host.observe(&ComponentKey::from(key))
+            .and_then(|s| s.display)
+            .expect("display")
+            .plain
+    }
+
+    #[test]
+    fn projection_updates_controlled_display_when_idle() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        let key = ComponentKey::from("a");
+        assert_eq!(display_plain(&host, "a"), 50.0);
+        // Idle external nonzero update: observed lands AND the
+        // controlled display follows — the renderer's
+        // `snap.display.normalized` now paints the truth.
+        assert!(host.apply_projection("a", &projection(serde_json::json!({"plain": 80.0}), 1)));
+        let snap = host.observe(&key).expect("snapshot");
+        assert!((snap.display.expect("display").plain - 80.0).abs() < 1e-9);
+        assert!((snap.committed.expect("committed").plain - 80.0).abs() < 1e-9);
+        assert!(snap.observed.is_some());
+        assert_eq!(snap.phase, CommandPhase::Observed);
+        // The write is silent — no gesture events, no intents (the
+        // controlled-write loop stays closed).
+        assert!(
+            !host
+                .drain_events()
+                .iter()
+                .any(|e| matches!(e, ViewEvent::Intent { .. } | ViewEvent::Gesture { .. }))
+        );
+    }
+
+    #[test]
+    fn projection_defers_to_gesture_preview() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        let generation = host.generation();
+        let key = ComponentKey::from("a");
+        host.dispatch_input(
+            generation,
+            &key,
+            ControlInput::Begin {
+                gesture_id: "g1".to_string(),
+                source: InputSource::from(InputSource::POINTER),
+                origin_view: None,
+                target: None,
+                at: None,
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("begin");
+        host.dispatch_input(
+            generation,
+            &key,
+            ControlInput::Preview {
+                gesture_id: "g1".to_string(),
+                value: ValueInput::Normalized(0.7),
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("preview");
+        // An authoritative write mid-gesture is accepted into
+        // `observed` but the preview keeps winning the display.
+        assert!(host.apply_projection("a", &projection(serde_json::json!({"plain": 30.0}), 1)));
+        assert!((display_plain(&host, "a") - 70.0).abs() < 1e-9);
+        let snap = host.observe(&key).expect("snapshot");
+        assert!(snap.observed.is_some());
+        // Commit: the staged truth lands as the committed display —
+        // the last observed state wins once the gesture ends.
+        host.dispatch_input(
+            generation,
+            &key,
+            ControlInput::Commit {
+                gesture_id: "g1".to_string(),
+                value: None,
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("commit");
+        assert!((display_plain(&host, "a") - 30.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn projection_lands_after_gesture_cancel() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        let generation = host.generation();
+        let key = ComponentKey::from("a");
+        host.dispatch_input(
+            generation,
+            &key,
+            ControlInput::Begin {
+                gesture_id: "g1".to_string(),
+                source: InputSource::from(InputSource::POINTER),
+                origin_view: None,
+                target: None,
+                at: None,
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("begin");
+        host.dispatch_input(
+            generation,
+            &key,
+            ControlInput::Cancel {
+                gesture_id: "g1".to_string(),
+                reason: None,
+                seq: None,
+            },
+        )
+        .expect("cancel");
+        // Cancel restores the committed value; with the gesture over,
+        // the next projection applies immediately while idle.
+        assert!(host.apply_projection("a", &projection(serde_json::json!({"plain": 30.0}), 1)));
+        assert!((display_plain(&host, "a") - 30.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn projection_staged_during_cancelled_gesture_lands() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        let generation = host.generation();
+        let key = ComponentKey::from("a");
+        host.dispatch_input(
+            generation,
+            &key,
+            ControlInput::Begin {
+                gesture_id: "g1".to_string(),
+                source: InputSource::from(InputSource::POINTER),
+                origin_view: None,
+                target: None,
+                at: None,
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("begin");
+        host.dispatch_input(
+            generation,
+            &key,
+            ControlInput::Preview {
+                gesture_id: "g1".to_string(),
+                value: ValueInput::Normalized(0.7),
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("preview");
+        assert!(host.apply_projection("a", &projection(serde_json::json!({"plain": 30.0}), 1)));
+        assert!((display_plain(&host, "a") - 70.0).abs() < 1e-9);
+        host.dispatch_input(
+            generation,
+            &key,
+            ControlInput::Cancel {
+                gesture_id: "g1".to_string(),
+                reason: None,
+                seq: None,
+            },
+        )
+        .expect("cancel");
+        // The staged truth lands on cancel — the display shows the
+        // last observed value, not the aborted preview nor the stale
+        // pre-gesture committed.
+        assert!((display_plain(&host, "a") - 30.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn stale_projection_leaves_display_untouched() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        assert!(host.apply_projection("a", &projection(serde_json::json!({"plain": 80.0}), 2)));
+        assert!((display_plain(&host, "a") - 80.0).abs() < 1e-9);
+        // Older and equal revisions are dropped before touching the
+        // display — a delayed answer never overwrites a newer truth.
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({"plain": 10.0}), 1)));
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({"plain": 90.0}), 2)));
+        assert!((display_plain(&host, "a") - 80.0).abs() < 1e-9);
+        assert!(host.apply_projection("a", &projection(serde_json::json!({"plain": 90.0}), 3)));
+        assert!((display_plain(&host, "a") - 90.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn undecodable_projection_records_observed_only() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        let key = ComponentKey::from("a");
+        // A non-control-value payload is still authoritative truth:
+        // the binding records `observed`, but the display is not
+        // guessed at — no unconditional `f64` interpretation.
+        assert!(host.apply_projection("a", &projection(serde_json::json!("loudness"), 1)));
+        let snap = host.observe(&key).expect("snapshot");
+        assert!(snap.observed.is_some());
+        assert_eq!(snap.phase, CommandPhase::Observed);
+        assert!((display_plain(&host, "a") - 50.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn detached_binding_absorbs_projection_until_reattach() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        assert!(host.apply_projection("a", &projection(serde_json::json!({"plain": 80.0}), 1)));
+        host.detach("dock-transfer");
+        // Detached: the projection is absorbed — no observed write,
+        // no display write.
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({"plain": 90.0}), 2)));
+        assert!((display_plain(&host, "a") - 80.0).abs() < 1e-9);
+        host.attach();
+        // Reattach: the next advancing projection lands normally.
+        assert!(host.apply_projection("a", &projection(serde_json::json!({"plain": 95.0}), 3)));
+        assert!((display_plain(&host, "a") - 95.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn reregister_restores_last_observed_display() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a"), fader("b")]))
+            .expect("mount");
+        assert!(host.apply_projection("a", &projection(serde_json::json!({"plain": 80.0}), 1)));
+        assert!((display_plain(&host, "a") - 80.0).abs() < 1e-9);
+        let generation = host.generation();
+        // Remove + re-add through `update`: the binding survives with
+        // its last observed projection, and the fresh control
+        // restores the display through the (unchanged) mapper.
+        host.update(panel(vec![fader("b")]), generation)
+            .expect("remove a");
+        host.update(panel(vec![fader("a"), fader("b")]), generation)
+            .expect("re-add a");
+        assert!((display_plain(&host, "a") - 80.0).abs() < 1e-9);
     }
 }
