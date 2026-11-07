@@ -82,6 +82,7 @@ Directory: `docs/test-specs`
 | TSPEC-GfyGGakuj069mKFQrVtF3e | Issue #367 テスト仕様 — daily scheduler 判定・dispatch 確認・fail-closed 契約 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | TSPEC-3iZ6nd0UGy5yuVGAnGQI1y | Issue #368 CI failure Issue Tracker test specification — 有効 run 判定・plan 行列・close guard・sanitize | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | TSPEC-qvpqeonK5xwqk0hZpF3ARO | Issue #368 Tracker reconcile test specification — mode 分離・bot 履歴 reconcile・fail-closed 維持 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| TSPEC-0f0PqMFNljVvAz5wOtJEQu | Issue #388/#389 Native Dock 契約テスト仕様（slot/lease/session の headless 検証 + L0-L1 写像） | approved | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |

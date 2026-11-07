@@ -58,6 +58,15 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
   `LayoutSnapshot`(geometry + monitor signature + trees + detached pool)
   の保存/復元と off-screen・monitor 消失の補正。view state の
   save/restore は consumer 側 — WebView 間の DOM 転送は保証しない。
+- Native Surface Slot(`native_slot` モジュール, Issue #388):
+  driver-neutral なネイティブ埋込領域の契約 —
+  `SurfaceSlotId`(`{index,generation}` の stale 検出可能 ID)、
+  `SlotLease`(opaque・generation-bound・同時 1 lease/slot の
+  parent lease)、`SurfaceSlotRegistry`(mint/validate/revoke/
+  generation recycle を行う headless 純粋モデル)、GUI driver が
+  実装する `NativeSurfaceSlot` port。`HWND`/`NSView`/X11/GPUI 型は
+  持ち込まない。旧 `render::NativeSurfaceHost` は WebView 隣接
+  surface 用として保持し、native dock 埋込の正本は本モジュール。
 - デモ(`demo` モジュール): `DemoService` — synthesize/sleep/fail/panic/
   peaks を提供し、`demo_cli` example(headless)と
   `ruviform-ui-webview` の `demo_app` example(GUI)で共有する。
@@ -93,4 +102,6 @@ cargo run -p ruviform-ui --example demo_dock
 - Dock 基盤(Issue #182): docs/specs/issue-182-dock-tree.md,
   docs/designs/issue-182-dock-tree.md,
   docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md
+- Native Surface Slot(Issue #388): docs/specs/issue-388-native-surface-slot.md,
+  docs/designs/issue-388-native-surface-slot.md
 - adapter: [`ruviform-ui-webview`](../ruviform-ui-webview/README.md)
