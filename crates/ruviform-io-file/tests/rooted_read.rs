@@ -803,9 +803,7 @@ fn read_dir_each_nested_enumeration_is_independent() {
             outer += 1;
             // Re-entrant full enumeration of the same dir through the
             // same capability — must not steal the outer scan state.
-            let inner = root
-                .read_dir(&rel("d"), FollowMode::NoFollow)
-                .unwrap();
+            let inner = root.read_dir(&rel("d"), FollowMode::NoFollow).unwrap();
             assert_eq!(inner.len(), 20);
             EntryFlow::Continue
         })

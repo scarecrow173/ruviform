@@ -277,7 +277,7 @@ pub trait VfsDir: Send + Sync + fmt::Debug {
     /// `visit`. Every call takes an independent enumeration state
     /// (unix: a fresh `openat(dirfd, ".")` + `fdopendir`; Windows: a
     /// fresh empty-name `NtOpenFile` handle — the scan position lives
-    /// on the FILE_OBJECT — queried with `NtQueryDirectoryFile` and
+    /// on the `FILE_OBJECT` — queried with `NtQueryDirectoryFile` and
     /// `RestartScan`). An entry that vanishes mid-enumeration is
     /// skipped (unix `NotFound` probe → skip; Windows delivers the
     /// fetched record); only real enumeration failures return `Err`.
