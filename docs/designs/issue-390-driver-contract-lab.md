@@ -274,10 +274,17 @@ crate 外に出ないため検出しない — 誤検出防止）。
   - `pub use`: use tree の path root（glob は root のみ評価）。
   - `pub trait`: supertraits・assoc fn sig・assoc type bound/
     default・assoc const 型。
-  - `impl` block: inherent impl の `pub fn` sig。trait impl の
-    assoc const/type/fn の型（trait impl は trait 側公開性に
-    従うため全走査）。`pub extern crate`/`pub static`/`pub const`
-    の型。
+  - `impl` block: impl が公開 surface に関わる場合のみ走査 —
+    self type または trait が crate の公開 type 名集合（pass 1
+    で `pub` item と `pub use` leaf から収集）に含まれる場合。
+    対象 impl では header（self type・trait path）と assoc
+    item を走査する。inherent impl は `pub fn` sig、trait
+    impl は assoc const/type/fn の型（trait impl item は
+    trait 側公開性に従うため全走査）。private type 上の impl
+    （adapter が backend trait を private に実装する
+    `impl gpui::Render for <private view>` 等）は consumer が
+    型を名付けられず public API でないため対象外。
+    `pub extern crate`/`pub static`/`pub const` の型。
 - `pub(crate)`/`pub(super)`/`pub(in)` item は対象外（crate 境界
   を越えない。`pub use` は `pub(crate)` item をより広く公開
   できない Rust 意味論に依拠）。

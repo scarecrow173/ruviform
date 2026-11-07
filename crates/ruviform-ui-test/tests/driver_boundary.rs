@@ -150,8 +150,15 @@ fn negative_signature_leak_detected() {
     let dep = check_findings(&report, "dep-graph");
     assert!(dep.is_empty(), "dep 宣言違反なしのはず: {dep:?}");
     let sig = check_findings(&report, "signature");
-    // pub fn 戻り型 / pub field / re-export trait bound / impl method。
-    for needle in ["gpui::Entity", "tao::Size", "wry::Into", "impl Pub"] {
+    // pub fn 戻り型 / pub field / re-export trait bound / impl
+    // method / pub type への forbidden trait impl header。
+    for needle in [
+        "gpui::Entity",
+        "tao::Size",
+        "wry::Into",
+        "impl Pub",
+        "gpui::Render",
+    ] {
         assert!(
             sig.iter().any(|f| f.detail.contains(needle)),
             "`{needle}` を含む finding が必要: {sig:?}"

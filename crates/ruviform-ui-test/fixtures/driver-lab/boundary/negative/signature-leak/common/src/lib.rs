@@ -27,9 +27,18 @@ impl Pub {
     pub fn take(&self, _e: gpui::Entity) {}
 }
 
+/// public type への forbidden trait impl — impl header が
+/// `gpui` を公開 surface に露出するため検出対象。
+impl gpui::Render for Pub {}
+
 /// private type への impl — 検出対象外（public API でない）。
 struct Priv;
 impl Priv {
     /// private type 上なので finding にならない。
     pub fn take(&self, _e: gpui::Entity) {}
 }
+
+/// private type への forbidden trait impl — consumer が Priv を
+/// 名付けられず public API でないため検出対象外（RF386 adapter
+/// の `impl gpui::Render for <private root view>` と同形）。
+impl gpui::Render for Priv {}

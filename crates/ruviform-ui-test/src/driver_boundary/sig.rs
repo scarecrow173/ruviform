@@ -282,14 +282,17 @@ fn process_scope(
                 }
             }
             syn::Item::Impl(i) => {
-                if let Mode::Scan(pub_types) = mode {
-                    // impl header（self_ty / trait path）は公開性に
-                    // 関わらず走査 — `impl wry::Trait for T` 自体が
-                    // 型の public surface に backend 型を露出する。
+                if let Mode::Scan(pub_types) = mode
+                    && impl_is_public(i, pub_types)
+                {
+                    // impl header / associated item ともに「impl が
+                    // 公開 surface に関わる場合」のみ走査 —
+                    // `impl wry::Trait for PubType` は PubType の
+                    // 公開 surface への backend 露出だが、private
+                    // type 上の `impl gpui::Render for RvfRoot` 等は
+                    // consumer が型を名付けられず public API でない。
                     scan_impl_header(i, path, package, &aliases, forbidden, findings);
-                    if impl_is_public(i, pub_types) {
-                        scan_impl(i, path, package, &aliases, forbidden, findings);
-                    }
+                    scan_impl(i, path, package, &aliases, forbidden, findings);
                 }
             }
             _ => {
@@ -842,8 +845,11 @@ fn scan_item(
     }
 }
 
-/// impl header の `self_ty` / trait path を走査する（公開性不問 —
-/// `impl wry::Trait for T` は T の公開 surface に wry を露出する）。
+/// impl header の `self_ty` / trait path を走査する。caller 側で
+/// `impl_is_public`（self type または trait が公開 type）で
+/// gate 済み — `impl wry::Trait for PubType` は `PubType` の公開
+/// surface に wry を露出するが、private type 上の impl は
+/// consumer から名付けられないため対象外。
 fn scan_impl_header(
     i: &syn::ItemImpl,
     path: &Path,
