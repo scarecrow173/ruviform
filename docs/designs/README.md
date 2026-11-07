@@ -1,5 +1,6 @@
 # Architecture Decision Records
 
+
 <!-- doc-suite:generated-index -->
 
 Directory: `docs/designs`
@@ -92,6 +93,7 @@ Directory: `docs/designs`
 | DESIGN-StMgstUBs2Df2UPm1oy2GF | Issue #368 Tracker reconcile 設計 — event 非依存の同一判定器入口・別 workflow schedule/dispatch・mode 分離 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
 | DESIGN-034T6S9KVWbAOq8lqyMak4 | Driver-neutral GUI Contract 詳細設計 — 依存方向・API移行表・DriverCapability・NativeDock Gate（Issue #384） | approved | [issue-384-driver-neutral-gui-contract.md](./issue-384-driver-neutral-gui-contract.md) |
 | DESIGN-034T6SbNaGu3l7owAp7FCX | DTCG Interpreter/Resolver 設計 — alias・mode・override merge・typed ResolvedTheme（Issue #385） | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
+| DESIGN-034T9VaXD2KXqhGxaHawyH | Issue #390 Driver Contract Lab — boundary guard 検査設計・registry schema・実行接続点 | approved | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |

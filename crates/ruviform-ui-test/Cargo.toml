@@ -19,6 +19,22 @@ ruviform-ui = { path = "../ruviform-ui" }
 #   envelope payloads — same dependency set ruviform-ui already uses.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# - cargo_metadata: Issue #390 driver boundary guard の
+#   `cargo metadata` 依存グラフ検査の型付き parse/実行に使用
+#   （test-support crate のみの通常 dep で本番 graph に波及しない）。
+cargo_metadata = "0.23"
+# - syn + proc-macro2(span-locations): Issue #390 driver boundary
+#   guard の public signature 漏出検査（`pub` item signature の
+#   forbidden path root 走査・finding 行番号）に使用。grep 文字列
+#   一致では検査できない pub item 単位の構文解析のため。
+syn = { version = "2", features = ["full", "visit"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+
+# Issue #390 driver boundary guard CLI（自動検出名
+# `gui_boundary_guard` を canonical 名 `gui-boundary-guard` へ rename）。
+[[bin]]
+name = "gui-boundary-guard"
+path = "src/bin/gui_boundary_guard.rs"
 
 [lints]
 workspace = true

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "ruleset": "rvf.driver-boundary/v1",
+  "strict": true,
+  "forbiddenDepRoots": [
+    "gpui",
+    "wry",
+    "tao"
+  ],
+  "forbiddenPathRoots": [
+    "gpui",
+    "wry",
+    "tao"
+  ],
+  "allowlist": [
+    {
+      "package": "adapter",
+      "role": "driver-adapter",
+      "allowedDeps": [
+        "gpui"
+      ],
+      "viaFeatures": [
+        "gpui"
+      ],
+      "required": true,
+      "reason": "negative fixture — dep.features による toolkit feature 起動を検出"
+    }
+  ]
+}

@@ -20,6 +20,7 @@ Directory: `docs/discovery`
 | DISC-034QfjLwjBVqddpxivwOTg | Issue #195 M2 Typed Graph Audio Compiler・Buffer/PDC・Stateful RT Ownership・Plan Activation の現行棚卸し | active | [issue-195-m2-typed-graph-compiler-runtime-audit.md](./issue-195-m2-typed-graph-compiler-runtime-audit.md) |
 | DISC-034QdBDFXQ7CpGCCYpN94k | Issue #219 両 Consumer 依存形態・検証基盤棚卸しと Cross-Repo CI 前提実測 | draft | [issue-219-consumer-cross-repo-ci.md](./issue-219-consumer-cross-repo-ci.md) |
 | DISC-034JbXZSba3SvOavRFfs66 | Issue #28 UI 技術検証 PoC の事前調査 | draft | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
+| DISC-034T9T71FKLbmcJ4jmuUcD | Issue #390 Driver Contract Lab 既存資産棚卸し（Fake/Boundary/Dock/Headless 現行 coverage と gap） | draft | [issue-390-driver-contract-lab-inventory.md](./issue-390-driver-contract-lab-inventory.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

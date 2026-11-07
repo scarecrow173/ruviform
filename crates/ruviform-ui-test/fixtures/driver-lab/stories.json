@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "manifest": "rvf.driver-lab.stories/v1",
+  "issue": "https://github.com/scarecrow173/ruviform/issues/390",
+  "themes": ["synvelis-dark", "audiolens-dark"],
+  "stories": [
+    {
+      "id": "LAB-SV-FADER-DOCK",
+      "title": "Synvelis Fader + Tabs + Dock slice",
+      "components": ["Fader", "Tabs", "Dock"],
+      "theme": "synvelis-dark",
+      "scaleFactor": [1.0, 2.0],
+      "states": ["idle", "focus", "drag", "commit", "stale", "invalid", "teardown"],
+      "drivers": {
+        "fake": {
+          "layer": "fake",
+          "status": "blocked",
+          "owner": "https://github.com/scarecrow173/ruviform/issues/387",
+          "rerun": "Component/ViewSpec 公開契約（#387）+ ResolvedTheme（#385）到着後に Fake Driver で実行",
+          "note": "component 契約未着のため story は registry のみ"
+        },
+        "gpui": {
+          "layer": "gpui",
+          "status": "blocked",
+          "owner": "https://github.com/scarecrow173/ruviform/issues/386",
+          "rerun": "ruviform-ui-gpui + renderer 到着後に実描画で実行（Fake 成功を GPUI Pass にしない）"
+        },
+        "real-os": {
+          "layer": "real-os",
+          "status": "blocked",
+          "owner": "https://github.com/scarecrow173/ruviform/issues/313",
+          "rerun": "OS Driver 到着後"
+        }
+      },
+      "oracle": "Fader/Tabs/Dock slice が 2 scale factor で同一 semantic state 遷移（focus/drag/commit/stale/invalid/teardown）を持ち、synvelis-dark theme が一貫適用されること。",
+      "evidence": "target/driver-lab/evidence.jsonl"
+    },
+    {
+      "id": "LAB-AL-WAVEFORM-SEEK",
+      "title": "AudioLens Waveform + Seek slice",
+      "components": ["Waveform", "Seek"],
+      "theme": "audiolens-dark",
+      "scaleFactor": [1.0, 2.0],
+      "states": ["idle", "focus", "drag", "commit", "stale", "invalid", "teardown"],
+      "drivers": {
+        "fake": {
+          "layer": "fake",
+          "status": "blocked",
+          "owner": "https://github.com/scarecrow173/ruviform/issues/387",
+          "rerun": "Component/ViewSpec 公開契約（#387）+ ResolvedTheme（#385）到着後に Fake Driver で実行",
+          "note": "component 契約未着のため story は registry のみ"
+        },
+        "gpui": {
+          "layer": "gpui",
+          "status": "blocked",
+          "owner": "https://github.com/scarecrow173/ruviform/issues/386",
+          "rerun": "ruviform-ui-gpui + renderer 到着後に実描画で実行"
+        },
+        "real-os": {
+          "layer": "real-os",
+          "status": "blocked",
+          "owner": "https://github.com/scarecrow173/ruviform/issues/313",
+          "rerun": "OS Driver 到着後"
+        }
+      },
+      "oracle": "Waveform/Seek slice が 2 scale factor で同一 semantic state 遷移を持ち、audiolens-dark theme が一貫適用されること。",
+      "evidence": "target/driver-lab/evidence.jsonl"
+    }
+  ]
+}
