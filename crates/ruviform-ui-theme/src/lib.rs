@@ -40,11 +40,13 @@
 
 mod doc;
 mod errors;
+mod registry;
 mod resolve;
 mod snapshot;
 
 pub use doc::{DocumentLayer, TokenDocument};
 pub use errors::{ResolveError, TokenError};
+pub use registry::ThemeRegistry;
 pub use resolve::ThemeResolver;
 pub use snapshot::{
     ColorSpace, DurationUnit, LengthUnit, ResolvedColor, ResolvedDuration, ResolvedLength,

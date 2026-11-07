@@ -1,0 +1,141 @@
+{
+  "mode": "dark",
+  "scale": {
+    "rem_base_px": 16.0,
+    "scale_factor": 1.0
+  },
+  "schema": "rvf-dtcg-profile.v1",
+  "sources": [
+    {
+      "fingerprint": 10080511628439911983,
+      "id": "rvf-primitive",
+      "layer": "primitive"
+    },
+    {
+      "fingerprint": 10813005418659735569,
+      "id": "rvf-semantic-modeless",
+      "layer": "semantic"
+    },
+    {
+      "fingerprint": 8434225366303463936,
+      "id": "rvf-component",
+      "layer": "component"
+    },
+    {
+      "fingerprint": 11192364904624770628,
+      "id": "consumer-os-font",
+      "layer": "product"
+    }
+  ],
+  "tokens": {
+    "button.bg": {
+      "alpha": 1.0,
+      "components": [
+        0.4,
+        0.7215686274509804,
+        1.0
+      ],
+      "space": "srgb",
+      "type": "color"
+    },
+    "button.padding": {
+      "rounding": "none",
+      "type": "dimension",
+      "unit": "px",
+      "value": 8.0
+    },
+    "color.bg": {
+      "alpha": 1.0,
+      "components": [
+        0.4,
+        0.7215686274509804,
+        1.0
+      ],
+      "space": "srgb",
+      "type": "color"
+    },
+    "color.muted": {
+      "alpha": 0.8,
+      "components": [
+        0.5,
+        0.5,
+        0.55
+      ],
+      "space": "srgb",
+      "type": "color"
+    },
+    "color.primary": {
+      "alpha": 1.0,
+      "components": [
+        0.4,
+        0.7215686274509804,
+        1.0
+      ],
+      "space": "srgb",
+      "type": "color"
+    },
+    "font.brand": {
+      "type": "fontFamily",
+      "value": [
+        "Ruviform Brand Not Installed",
+        "Inter",
+        "sans-serif"
+      ]
+    },
+    "font.family": {
+      "type": "fontFamily",
+      "value": [
+        "Inter",
+        "system-ui"
+      ]
+    },
+    "font.weight": {
+      "type": "fontWeight",
+      "value": 600
+    },
+    "motion.ease": {
+      "type": "cubicBezier",
+      "value": [
+        0.2,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    "motion.fast": {
+      "type": "duration",
+      "unit": "ms",
+      "value": 120.0
+    },
+    "scale.factor": {
+      "type": "number",
+      "value": 1.25
+    },
+    "space.md": {
+      "rounding": "none",
+      "type": "dimension",
+      "unit": "px",
+      "value": 12.0
+    },
+    "space.page": {
+      "rounding": "nearest",
+      "type": "dimension",
+      "unit": "rem",
+      "value": 1.5
+    },
+    "stroke.border": {
+      "type": "strokeStyle",
+      "value": "dashed"
+    },
+    "surface.bg": {
+      "alpha": 1.0,
+      "components": [
+        0.4,
+        0.7215686274509804,
+        1.0
+      ],
+      "space": "srgb",
+      "type": "color"
+    }
+  }
+}

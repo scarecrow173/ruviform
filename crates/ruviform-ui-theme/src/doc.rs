@@ -13,7 +13,7 @@ use serde_json::{Map, Value};
 use crate::errors::TokenError;
 use crate::snapshot::{
     ColorSpace, DurationUnit, LengthUnit, ResolvedColor, ResolvedDuration, ResolvedLength,
-    ResolvedValue, Rounding, StrokeStyle,
+    ResolvedValue, Rounding, StrokeStyle, resolved_value_json,
 };
 
 /// Precedence layer of a token document.
@@ -668,7 +668,7 @@ fn fingerprint_tokens(tokens: &BTreeMap<String, RawToken>) -> u64 {
 
 fn raw_value_json(v: &RawValue) -> Value {
     match v {
-        RawValue::Literal(rv) => serde_json::json!({ "literal": format!("{rv:?}") }),
+        RawValue::Literal(rv) => resolved_value_json(rv),
         RawValue::Alias(target) => serde_json::json!({ "alias": target }),
     }
 }
