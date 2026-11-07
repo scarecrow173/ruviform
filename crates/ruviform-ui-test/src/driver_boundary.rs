@@ -39,6 +39,11 @@ pub struct Ruleset {
     /// allowlist（adapter/composition-root/extension のみ例外）。
     #[serde(default)]
     pub allowlist: Vec<AllowlistEntry>,
+    /// Common Core / Theme / `ComponentSpec` を担う workspace package 名。
+    /// 全 member 走査とは別に、これらが workspace に存在し allowlist
+    /// 例外を持たないことを名指しで pin する（改名・除外での検査漏れ防止）。
+    #[serde(default, rename = "protectedPackages")]
+    pub protected_packages: Vec<String>,
 }
 
 /// allowlist エントリ。明示 grant のみ禁止 dep 宣言を許可する。
@@ -152,6 +157,32 @@ pub fn load_ruleset(path: &Path) -> Result<Ruleset, String> {
 #[must_use]
 pub fn check_ruleset(ruleset: &Ruleset, metadata: &Metadata) -> Vec<Finding> {
     let mut findings = Vec::new();
+    for name in &ruleset.protected_packages {
+        let is_member = metadata
+            .packages
+            .iter()
+            .any(|p| metadata.workspace_members.contains(&p.id) && p.name.as_str() == name);
+        if !is_member {
+            findings.push(Finding {
+                check: CHECK_ALLOWLIST,
+                code: "protected-missing",
+                package: name.clone(),
+                file: None,
+                line: None,
+                detail: format!("protected package `{name}` が workspace member に存在しない"),
+            });
+        }
+        if ruleset.allowlist.iter().any(|g| &g.package == name) {
+            findings.push(Finding {
+                check: CHECK_ALLOWLIST,
+                code: "protected-allowlisted",
+                package: name.clone(),
+                file: None,
+                line: None,
+                detail: format!("protected package `{name}` に allowlist 例外は許可されない"),
+            });
+        }
+    }
     for grant in &ruleset.allowlist {
         for dep in &grant.allowed_deps {
             if !matches_forbidden(dep, &ruleset.forbidden_dep_roots) {

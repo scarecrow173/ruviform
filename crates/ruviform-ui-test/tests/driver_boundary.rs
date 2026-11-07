@@ -220,6 +220,42 @@ fn negative_adapter_feature_activation_detected() {
     );
 }
 
+/// Common Core / Theme を名指しで pin する（存在・allowlist 非例外）。
+/// 欠落と allowlist 例外の両方を finding として検出できることも確認する。
+#[test]
+fn protected_packages_are_pinned_by_name() {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .expect("workspace root");
+    let mut ruleset = driver_boundary::load_ruleset(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/driver-lab/boundary.json"),
+    )
+    .expect("repo ruleset");
+    let metadata = MetadataCommand::new()
+        .manifest_path(workspace_root.join("Cargo.toml"))
+        .exec()
+        .expect("workspace cargo metadata");
+
+    assert!(
+        driver_boundary::check_ruleset(&ruleset, &metadata).is_empty(),
+        "live ruleset は protectedPackages を満たすこと"
+    );
+
+    ruleset
+        .protected_packages
+        .push("ruviform-missing-core".to_owned());
+    ruleset
+        .protected_packages
+        .push("ruviform-ui-gpui".to_owned());
+    let codes: Vec<&str> = driver_boundary::check_ruleset(&ruleset, &metadata)
+        .iter()
+        .map(|f| f.code)
+        .collect();
+    assert!(codes.contains(&"protected-missing"), "{codes:?}");
+    assert!(codes.contains(&"protected-allowlisted"), "{codes:?}");
+}
+
 /// live workspace 自体が ruleset を pass すること（UI-DVR-01 の
 /// driverless build 証拠の片側。`check-ui-driver-boundary` task の
 /// 実実行と同一検査）。
