@@ -230,17 +230,30 @@ pub(crate) struct SlotMount {
 }
 
 /// What the renderer last pushed onto a slot — the dedupe ledger.
-/// `None` on an aspect means "never pushed" (not `Some(default)`).
+/// `None` on an aspect means "never pushed" (not `Some(default)`);
+/// for `clip` that coincides with the port's initial state, so an
+/// unpushed `None` legitimately reads as "no clip applied".
 #[derive(Default)]
 struct AppliedSlot {
     geometry: Option<SlotGeometry>,
-    clip_pushed: bool,
     clip: Option<LogicalRect>,
     visibility: Option<SlotVisibility>,
     /// Aspects that failed with a permanent error — retried only when
     /// `Backend`/`SlotBusy` (transient) so a dead/unsupported slot
     /// does not spam the port every frame.
     failed: HashSet<&'static str>,
+}
+
+impl AppliedSlot {
+    /// `true` while the port state recorded here satisfies what the
+    /// current frame requires — geometry equal to the request and a
+    /// clip equal to the request. `clip == None` is satisfied by a
+    /// never-pushed ledger (the port's initial state is unclipped),
+    /// which is the contract-level distinction that keeps a
+    /// clip-incapable driver usable when the layout needs no clip.
+    fn holds(&self, geometry: SlotGeometry, clip: Option<LogicalRect>) -> bool {
+        self.geometry == Some(geometry) && self.clip == clip
+    }
 }
 
 /// Per-view slot projection state — Panel/Tab/clip →
@@ -310,7 +323,16 @@ fn push_slot_op(
 /// Painted-frame projection for one bound slot: the element's
 /// laid-out bounds → `set_geometry`, the ancestor clip mask →
 /// `set_clip` (`None` when the mask is the whole viewport — the
-/// layout applied no real clip), and `Visible` after both land.
+/// layout applied no real clip). Visibility is fail-closed: the
+/// native child is shown only while the port state actually holds
+/// the geometry and clip this frame requests — a refused borrow, a
+/// transient port error, or a permanent refusal on a required op
+/// keeps (or returns) the slot `Hidden`, so an unclipped or
+/// misplaced child is never exposed outside its ancestor region.
+/// A `None` clip request needs nothing applied — a driver without
+/// clip support still satisfies it; the `set_clip(None)` refusal
+/// case is a contract-level necessary condition, not a silent
+/// workaround for the upstream clip-clear defect (Issue #404).
 fn project_slot_frame(
     proj: &Rc<RefCell<SlotProjection>>,
     slot: SurfaceSlotId,
@@ -333,29 +355,34 @@ fn project_slot_frame(
             |a| a.geometry = Some(geometry),
         );
     }
-    let clip_state = proj
-        .applied
-        .get(&slot)
-        .map_or((false, None), |a| (a.clip_pushed, a.clip));
-    if clip_state != (true, clip) {
+    if proj.applied.get(&slot).and_then(|a| a.clip) != clip {
         push_slot_op(
             &mut proj,
             slot,
             "clip",
             |adapter| adapter.set_clip(slot, clip),
-            |a| {
-                a.clip_pushed = true;
-                a.clip = clip;
-            },
+            |a| a.clip = clip,
         );
     }
-    if proj.applied.get(&slot).and_then(|a| a.visibility) != Some(SlotVisibility::Visible) {
+    // Readiness is judged on the post-push ledger, not the op
+    // results — dedupe means "not pushed this frame" can still be
+    // "already holding the requested state".
+    let ready = proj
+        .applied
+        .get(&slot)
+        .is_some_and(|a| a.holds(geometry, clip));
+    let wanted = if ready {
+        SlotVisibility::Visible
+    } else {
+        SlotVisibility::Hidden
+    };
+    if proj.applied.get(&slot).and_then(|a| a.visibility) != Some(wanted) {
         push_slot_op(
             &mut proj,
             slot,
             "visibility",
-            |adapter| adapter.set_visibility(slot, SlotVisibility::Visible),
-            |a| a.visibility = Some(SlotVisibility::Visible),
+            |adapter| adapter.set_visibility(slot, wanted),
+            |a| a.visibility = Some(wanted),
         );
     }
 }
@@ -478,11 +505,19 @@ impl RvfView {
 
     /// Projects `post_event` inbox payloads into the host — the
     /// driver→view half of the mount seam. `Result` replies map to
-    /// [`CommandReceipt`]s (`ok` → `Applied`, failure → `Rejected`,
-    /// `data.revision` → receipt revision); `Notify` payloads decode
-    /// as `{control_id, revision, value, provenance?}` →
-    /// [`StateProjection`]. `Job`/`Lifecycle`/`Error` events have no
-    /// view route — driver-level concerns only.
+    /// [`CommandReceipt`]s: `ok` is only the transport ack — the
+    /// semantic status is the typed `data.status` field decoded
+    /// against the canonical receipt vocabulary (`accepted`/
+    /// `queued`/`applied`/`rejected`/`unsupported`). A bare `ok`
+    /// with no status records `Accepted` — the gateway took the
+    /// command, not that it landed — so the head keeps its ack
+    /// bound instead of being faked `Applied`. An unrecognized
+    /// status is an honest terminal `Rejected`, never a default
+    /// success. `ok == false` is `Rejected` with the error message
+    /// (`data.revision` → receipt revision either way). `Notify`
+    /// payloads decode as `{control_id, revision, value,
+    /// provenance?}` → [`StateProjection`]. `Job`/`Lifecycle`/
+    /// `Error` events have no view route — driver-level concerns only.
     fn drain_inbox(&mut self) {
         let Some(inbox) = &self.inbox else { return };
         let events: Vec<Event> = inbox.borrow_mut().drain(..).collect();
@@ -494,21 +529,33 @@ impl RvfView {
                     data,
                     error,
                 } => {
-                    let status = if ok {
-                        ReceiptStatus::Applied
-                    } else {
-                        ReceiptStatus::Rejected
-                    };
                     let revision = data
                         .as_ref()
                         .and_then(|d| d.get("revision"))
                         .and_then(|v| serde_json::from_value::<Revision>(v.clone()).ok());
-                    let detail = error.map(|e| e.message).or_else(|| {
+                    let mut detail = error.map(|e| e.message).or_else(|| {
                         data.as_ref()
                             .and_then(|d| d.get("detail"))
                             .and_then(serde_json::Value::as_str)
                             .map(str::to_string)
                     });
+                    let status = if ok {
+                        match data.as_ref().and_then(|d| d.get("status")) {
+                            None => ReceiptStatus::Accepted,
+                            Some(raw) => {
+                                if let Ok(status) =
+                                    serde_json::from_value::<ReceiptStatus>(raw.clone())
+                                {
+                                    status
+                                } else {
+                                    detail = Some(format!("unrecognized receipt status: {raw}"));
+                                    ReceiptStatus::Rejected
+                                }
+                            }
+                        }
+                    } else {
+                        ReceiptStatus::Rejected
+                    };
                     self.host.apply_receipt(&CommandReceipt {
                         command_id: id,
                         status,
@@ -1084,6 +1131,73 @@ mod tests {
         host
     }
 
+    /// The fail-closed readiness truth table: `Visible` is allowed
+    /// only while the recorded port state equals the frame's exact
+    /// request — a stale geometry (layout moved, re-push refused),
+    /// a stale clip (clear denied), or a never-pushed ledger all
+    /// hold the slot `Hidden`; a never-pushed clip satisfies a
+    /// `None` request since the port starts unclipped.
+    #[test]
+    fn applied_slot_holds_only_matching_state() {
+        let geo = |x: f64| SlotGeometry {
+            rect: LogicalRect {
+                x,
+                y: 0.0,
+                width: 10.0,
+                height: 10.0,
+            },
+            scale_factor: 1.0,
+        };
+        let clip_r = |x: f64| {
+            Some(LogicalRect {
+                x,
+                y: 0.0,
+                width: 5.0,
+                height: 5.0,
+            })
+        };
+
+        // Never pushed anything → not ready (geometry is required).
+        assert!(!AppliedSlot::default().holds(geo(0.0), None));
+
+        // Geometry + clip both applied as requested → ready.
+        let applied = AppliedSlot {
+            geometry: Some(geo(0.0)),
+            clip: clip_r(0.0),
+            ..AppliedSlot::default()
+        };
+        assert!(applied.holds(geo(0.0), clip_r(0.0)));
+
+        // Geometry applied but clip required and never landed → Hidden.
+        let applied = AppliedSlot {
+            geometry: Some(geo(0.0)),
+            clip: None,
+            ..AppliedSlot::default()
+        };
+        assert!(!applied.holds(geo(0.0), clip_r(0.0)));
+        // …while the same ledger satisfies a clip-free frame.
+        assert!(applied.holds(geo(0.0), None));
+
+        // Layout moved but the new geometry push was refused → the
+        // stale ledger must not justify visibility.
+        let applied = AppliedSlot {
+            geometry: Some(geo(0.0)),
+            clip: None,
+            visibility: Some(SlotVisibility::Visible),
+            ..AppliedSlot::default()
+        };
+        assert!(!applied.holds(geo(2.0), None));
+
+        // Clip was applied, then a clear (`None`) was refused → the
+        // stale clip keeps the slot hidden rather than leaking.
+        let applied = AppliedSlot {
+            geometry: Some(geo(0.0)),
+            clip: clip_r(0.0),
+            ..AppliedSlot::default()
+        };
+        assert!(!applied.holds(geo(0.0), None));
+    }
+
     #[test]
     fn normalized_at_math() {
         // Horizontal: left edge = 0, right edge = 1, clamped outside.
@@ -1364,6 +1478,473 @@ mod tests {
                 .iter()
                 .any(|e| matches!(e, SlotEvent::VisibilityChanged { slot: s } if *s == slot)),
             "visibility event recorded: {events:?}"
+        );
+    }
+
+    /// A mounted fader view with a driver-wired inbox — the seam a
+    /// consumer's `post_event` replies travel through.
+    fn mount_view_with_inbox(
+        cx: &mut TestAppContext,
+    ) -> (gpui::Entity<RvfView>, Rc<RefCell<Vec<Event>>>) {
+        use ruviform_ui::WindowDriver;
+        let mut driver = crate::GpuiDriver::new();
+        let window = WindowDriver::create_window(&mut driver, &ruviform_ui::WindowSpec::default())
+            .expect("reserve window");
+        let bindings = driver.slot_binding_map(window).expect("binding map");
+        let sink = driver.intent_sink(window);
+        let adapter = driver.surface();
+        let inbox = Rc::new(RefCell::new(Vec::new()));
+        let inbox_view = inbox.clone();
+        let (view, _cx) = cx.add_window_view(move |window, cx| {
+            RvfView::mounted(
+                host_with_fader(),
+                None,
+                &sink,
+                inbox_view,
+                SlotMount { adapter, bindings },
+                window,
+                cx,
+            )
+        });
+        (view, inbox)
+    }
+
+    /// Begins + commits a gesture on `key` inside the view and
+    /// returns the minted commit `command_id`.
+    fn commit_in_view(
+        view: &gpui::Entity<RvfView>,
+        cx: &mut TestAppContext,
+        gesture: &str,
+    ) -> String {
+        view.update(cx, |v, _cx| {
+            let generation = v.host.generation();
+            let key = ComponentKey("fader".to_string());
+            v.host
+                .dispatch_input(
+                    generation,
+                    &key,
+                    ControlInput::Begin {
+                        gesture_id: gesture.to_string(),
+                        source: InputSource::from(InputSource::POINTER),
+                        origin_view: None,
+                        target: None,
+                        at: None,
+                        modifiers: None,
+                        seq: None,
+                    },
+                )
+                .expect("begin");
+            v.host
+                .dispatch_input(
+                    generation,
+                    &key,
+                    ControlInput::Commit {
+                        gesture_id: gesture.to_string(),
+                        value: None,
+                        modifiers: None,
+                        seq: None,
+                    },
+                )
+                .expect("commit");
+            v.host
+                .drain_events()
+                .into_iter()
+                .filter_map(|e| match e {
+                    ViewEvent::Intent {
+                        intent: ruviform_ui::behavior::CommandIntent::Commit { .. },
+                        command_id,
+                        ..
+                    } => Some(command_id),
+                    _ => None,
+                })
+                .next_back()
+                .expect("commit minted")
+        })
+    }
+
+    fn view_phase(
+        view: &gpui::Entity<RvfView>,
+        cx: &mut TestAppContext,
+    ) -> ruviform_ui::behavior::CommandPhase {
+        use ruviform_ui::behavior::CommandPhase;
+        view.update(cx, |v, _cx| {
+            v.host
+                .binding("fader")
+                .map_or(CommandPhase::Idle, ruviform_ui::behavior::CommandBinding::phase)
+        })
+    }
+
+    /// `Result.ok` is a transport ack, not a semantic receipt: a
+    /// typed `queued` keeps the head pending (still ack-bound, never
+    /// faked `Applied`), and a later projection cannot retire a head
+    /// that never reached `applied` rank.
+    #[gpui::test]
+    fn rvf_view_inbox_queued_receipt_keeps_head(cx: &mut TestAppContext) {
+        use ruviform_ui::behavior::CommandPhase;
+        let (view, inbox) = mount_view_with_inbox(cx);
+        cx.run_until_parked();
+        let cmd = commit_in_view(&view, cx, "g1");
+        inbox.borrow_mut().push(Event::result_ok(
+            cmd.clone(),
+            serde_json::json!({"status": "queued", "revision": 1}),
+        ));
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        assert_eq!(view_phase(&view, cx), CommandPhase::Accepted);
+        // An advancing projection proves domain state — but the head
+        // still answers "did my command land": only an applied/terminal
+        // receipt retires it.
+        inbox.borrow_mut().push(Event::Notify {
+            seq: 1,
+            data: serde_json::json!({
+                "control_id": "fader",
+                "revision": 2,
+                "value": 0.8
+            }),
+        });
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        assert_eq!(view_phase(&view, cx), CommandPhase::Accepted);
+        let pending = view.update(cx, |v, _cx| {
+            v.host
+                .binding("fader")
+                .and_then(|b| b.state().pending_command_id)
+        });
+        assert_eq!(pending.as_deref(), Some(cmd.as_str()));
+    }
+
+    /// `applied` then an advancing projection — the canonical
+    /// settle path: head retires on the observed truth.
+    #[gpui::test]
+    fn rvf_view_inbox_applied_then_projection_observed(cx: &mut TestAppContext) {
+        use ruviform_ui::behavior::CommandPhase;
+        let (view, inbox) = mount_view_with_inbox(cx);
+        cx.run_until_parked();
+        let cmd = commit_in_view(&view, cx, "g1");
+        inbox.borrow_mut().push(Event::result_ok(
+            cmd,
+            serde_json::json!({"status": "applied", "revision": 3}),
+        ));
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        assert_eq!(view_phase(&view, cx), CommandPhase::Applied);
+        inbox.borrow_mut().push(Event::Notify {
+            seq: 2,
+            data: serde_json::json!({
+                "control_id": "fader",
+                "revision": 4,
+                "value": 0.9
+            }),
+        });
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        assert_eq!(view_phase(&view, cx), CommandPhase::Observed);
+    }
+
+    /// Terminal and malformed replies stay honest: `ok:false` and an
+    /// unrecognized typed status both read `Rejected` (the latter
+    /// preserving the raw status in the detail), while a bare `ok`
+    /// with no status is `Accepted` — never a default `Applied`.
+    #[gpui::test]
+    fn rvf_view_inbox_terminal_and_unknown_status(cx: &mut TestAppContext) {
+        use ruviform_ui::behavior::CommandPhase;
+        use ruviform_ui::ipc::ErrorBody;
+        let (view, inbox) = mount_view_with_inbox(cx);
+        cx.run_until_parked();
+
+        let cmd = commit_in_view(&view, cx, "g1");
+        inbox.borrow_mut().push(Event::result_err(
+            cmd,
+            ErrorBody::new("service_error", "domain refused"),
+        ));
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        assert_eq!(view_phase(&view, cx), CommandPhase::Rejected);
+
+        let cmd = commit_in_view(&view, cx, "g2");
+        inbox.borrow_mut().push(Event::result_ok(
+            cmd,
+            serde_json::json!({"status": "bogus"}),
+        ));
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        assert_eq!(view_phase(&view, cx), CommandPhase::Rejected);
+        let detail = view.update(cx, |v, _cx| {
+            v.host
+                .binding("fader")
+                .and_then(|b| b.state().last_receipt)
+                .and_then(|r| r.detail)
+        });
+        assert!(
+            detail.as_deref().is_some_and(|d| d.contains("bogus")),
+            "unrecognized status surfaced in detail: {detail:?}"
+        );
+
+        let cmd = commit_in_view(&view, cx, "g3");
+        inbox
+            .borrow_mut()
+            .push(Event::result_ok(cmd, serde_json::json!({"revision": 9})));
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        assert_eq!(view_phase(&view, cx), CommandPhase::Accepted);
+    }
+
+    /// Fail-closed visibility: a painted slot whose port ops are
+    /// refused (released slot — permanent `Released` on every
+    /// aspect) must never be shown, and nothing is recorded on the
+    /// ledger as if it had been.
+    #[gpui::test]
+    fn rvf_view_native_slot_fail_closed_on_refusal(cx: &mut TestAppContext) {
+        use ruviform_ui::{NativeSurfaceSlot, SlotEvent, WindowDriver};
+
+        let key = ComponentKey("dock.editor".to_string());
+        let mut driver = crate::GpuiDriver::new();
+        let window = WindowDriver::create_window(&mut driver, &ruviform_ui::WindowSpec::default())
+            .expect("reserve window");
+        let view_id = ViewInstanceId::new(1).expect("nonzero");
+        let slot = declare_and_bind(&mut driver, window, view_id, &key);
+        let bindings = driver.slot_binding_map(window).expect("binding map");
+        let sink = driver.intent_sink(window);
+        let adapter = driver.surface();
+
+        let mut host = ViewHost::new(view_id);
+        host.mount(ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("root".to_string()),
+                title: None,
+                children: vec![tabs_with_native_slot(&key)],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+
+        // Release after binding: every port op now refuses with a
+        // permanent `Released` — the painted frame must stay Hidden.
+        adapter
+            .borrow_mut()
+            .release_slot(slot)
+            .expect("release slot");
+        adapter.borrow_mut().drain_events();
+
+        let inbox = Rc::new(RefCell::new(Vec::new()));
+        let mount_adapter = adapter.clone();
+        let (view, cx) = cx.add_window_view(move |window, cx| {
+            RvfView::mounted(
+                host,
+                None,
+                &sink,
+                inbox,
+                SlotMount {
+                    adapter: mount_adapter,
+                    bindings,
+                },
+                window,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        cx.run_until_parked();
+
+        let spec = adapter.borrow().spec(slot).expect("slot spec");
+        assert_eq!(
+            spec.visibility,
+            SlotVisibility::Hidden,
+            "a refused slot is never shown"
+        );
+        let events = adapter.borrow_mut().drain_events();
+        assert!(
+            !events.iter().any(|e| matches!(
+                e,
+                SlotEvent::VisibilityChanged { slot: s } if *s == slot
+            )),
+            "no visibility op could have landed: {events:?}"
+        );
+        // The refusals are recorded honestly — the ops ran and were
+        // denied, not silently skipped.
+        let last_error = view.update(cx, |v, _cx| {
+            v.slots.as_ref().and_then(|p| p.borrow().last_error)
+        });
+        assert!(
+            matches!(last_error, Some(SlotError::Released)),
+            "refusal recorded: {last_error:?}"
+        );
+    }
+
+    /// Fail-closed while the consumer holds the adapter: a refused
+    /// borrow leaves nothing applied, so the slot stays `Hidden`
+    /// until the port state can actually be pushed — then it shows.
+    #[gpui::test]
+    fn rvf_view_native_slot_fail_closed_while_borrowed(cx: &mut TestAppContext) {
+        use ruviform_ui::{SlotEvent, WindowDriver};
+
+        let key = ComponentKey("dock.editor".to_string());
+        let mut driver = crate::GpuiDriver::new();
+        let window = WindowDriver::create_window(&mut driver, &ruviform_ui::WindowSpec::default())
+            .expect("reserve window");
+        let view_id = ViewInstanceId::new(1).expect("nonzero");
+        let slot = declare_and_bind(&mut driver, window, view_id, &key);
+        let bindings = driver.slot_binding_map(window).expect("binding map");
+        let sink = driver.intent_sink(window);
+        let adapter = driver.surface();
+
+        let mut host = ViewHost::new(view_id);
+        host.mount(ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("root".to_string()),
+                title: None,
+                children: vec![tabs_with_native_slot(&key)],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+
+        let inbox = Rc::new(RefCell::new(Vec::new()));
+        let mount_adapter = adapter.clone();
+        adapter.borrow_mut().drain_events();
+        // Hold the adapter across the mount paint: every
+        // `try_borrow_mut` refuses → nothing lands → the slot must
+        // stay `Hidden` — never half-projected into visibility.
+        let (view, cx) = {
+            let _guard = adapter.borrow_mut();
+            let (view, cx) = cx.add_window_view(move |window, cx| {
+                RvfView::mounted(
+                    host,
+                    None,
+                    &sink,
+                    inbox,
+                    SlotMount {
+                        adapter: mount_adapter,
+                        bindings,
+                    },
+                    window,
+                    cx,
+                )
+            });
+            cx.run_until_parked();
+            (view, cx)
+        };
+        {
+            let spec = adapter.borrow().spec(slot).expect("slot spec");
+            assert_eq!(
+                spec.visibility,
+                SlotVisibility::Hidden,
+                "borrow-refused paint must not have shown the slot"
+            );
+            let events = adapter.borrow_mut().drain_events();
+            assert!(
+                !events.iter().any(|e| matches!(
+                    e,
+                    SlotEvent::GeometryChanged { slot: s } | SlotEvent::VisibilityChanged { slot: s }
+                        if *s == slot
+                )),
+                "no slot op could have landed while borrowed: {events:?}"
+            );
+        }
+        // Once the port is reachable the projection lands → Visible.
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        let spec = adapter.borrow().spec(slot).expect("slot spec");
+        assert_eq!(spec.visibility, SlotVisibility::Visible);
+    }
+
+    /// Necessary-condition distinction: a driver without clip
+    /// support still satisfies a frame that needs no clip (mask ==
+    /// viewport → `None`), so the slot shows — while `set_clip` is
+    /// never pushed at all.
+    #[gpui::test]
+    fn rvf_view_native_slot_unclipped_shows_without_clip_support(cx: &mut TestAppContext) {
+        use ruviform_ui::{
+            LogicalRect, NativeSurfaceSlot, SlotCapabilities, SlotGeometry, SlotSpec,
+            SlotVisibility, Support, WindowDriver,
+        };
+
+        let key = ComponentKey("dock.editor".to_string());
+        let mut driver = crate::GpuiDriver::new();
+        let window = WindowDriver::create_window(&mut driver, &ruviform_ui::WindowSpec::default())
+            .expect("reserve window");
+        let view_id = ViewInstanceId::new(1).expect("nonzero");
+        let slot = driver
+            .surface()
+            .borrow_mut()
+            .declare_slot(SlotSpec {
+                window,
+                view: view_id,
+                geometry: SlotGeometry {
+                    rect: LogicalRect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: 0.0,
+                        height: 0.0,
+                    },
+                    scale_factor: 1.0,
+                },
+                visibility: SlotVisibility::Hidden,
+                capabilities: SlotCapabilities {
+                    attach_parent: Support::Supported,
+                    hide_show: Support::Supported,
+                    clip: Support::Unsupported,
+                    ..SlotCapabilities::default()
+                },
+            })
+            .expect("declare slot");
+        driver
+            .bind_native_slot(window, key.clone(), slot)
+            .expect("bind slot");
+        let bindings = driver.slot_binding_map(window).expect("binding map");
+        let sink = driver.intent_sink(window);
+        let adapter = driver.surface();
+        adapter.borrow_mut().drain_events();
+
+        let mut host = ViewHost::new(view_id);
+        host.mount(ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("root".to_string()),
+                title: None,
+                children: vec![tabs_with_native_slot(&key)],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+
+        let inbox = Rc::new(RefCell::new(Vec::new()));
+        let mount_adapter = adapter.clone();
+        let (view, cx) = cx.add_window_view(move |window, cx| {
+            RvfView::mounted(
+                host,
+                None,
+                &sink,
+                inbox,
+                SlotMount {
+                    adapter: mount_adapter,
+                    bindings,
+                },
+                window,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+
+        let spec = adapter.borrow().spec(slot).expect("slot spec");
+        assert_eq!(
+            spec.visibility,
+            SlotVisibility::Visible,
+            "no clip requested → clip capability irrelevant"
+        );
+        // A vacuous `None` clip request is satisfied without pushing
+        // `set_clip` at all — the `Unsupported` refusal the port
+        // would have returned is never even attempted.
+        let last_error = view.update(cx, |v, _cx| {
+            v.slots.as_ref().and_then(|p| p.borrow().last_error)
+        });
+        assert!(
+            last_error.is_none(),
+            "no clip op attempted for a clip-free frame: {last_error:?}"
         );
     }
 }

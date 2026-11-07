@@ -189,17 +189,33 @@ impl GpuiDriver {
 - event 経路: `post_event` の `Event` は bounded inbox(`MAX_INBOX`)
   に積まれ、**render 冒頭の `drain_inbox`** が host へ投影:
   - `Event::Result{id, ok, data, error}` → `CommandReceipt`:
-    `id`=`command_id`(correlation)、`ok`→`Applied`/failure→`Rejected`、
-    `data.revision`→receipt revision、`error.message`/`data.detail`→detail。
-    `ViewHost::apply_receipt` が dispatch 時の `command_index`
-    (`command_id`→`control_id`)で owner binding へ route。
+    `id`=`command_id`(correlation)。`ok` は transport ack に過ぎず、
+    semantic status は `data.status` を canonical receipt 語彙
+    (`accepted|queued|applied|rejected|unsupported`)で decode する:
+    status 欠落の bare `ok` は `Accepted`(gateway が受領しただけで
+    domain 反映ではない — head は引き続き ack bound 対象)、
+    未知/非文字列 status は `Rejected`+raw を detail へ(正直な失敗で
+    あって偽 `Applied`/既定成功へ落とさない)、`ok=false` は `Rejected`
+    (`error.message`/`data.detail`→detail)。`data.revision`→receipt
+    revision。`ViewHost::apply_receipt` が dispatch 時の
+    `command_index`(`command_id`→`control_id`)で owner binding へ route。
   - `Event::Notify{data}` → `{control_id, revision, value,
     provenance?}` を `StateProjection<serde_json::Value>` として
     `ViewHost::apply_projection` へ route。
   - `Job`/`Lifecycle`/`Error` は view route なし(driver 層の責務)。
 - `CommandBinding::mint` は namespace 付き
-  (`format!("{view_id}:{control_id}:{n}")`)— receipt は `Intent.id`
-  のみで相関するため同一 view 内で一意である必要がある。
+  (`format!("view-{view_id}:m{mount_epoch}:{control_id}:{n}")`)—
+  receipt は `Intent.id` のみで相関するため同一 view 内で一意である
+  必要がある。`mount_epoch` は `ViewHost` 所有で fresh `mount` 毎に
+  増加し `unmount` を跨いで持続する — binding は unmount で破棄・
+  remount で counter/gen=0 へ再生成されるため、epoch segment がないと
+  同一 `ViewInstanceId`+`ControlId` の旧 command_id が再採番され、
+  stale receipt が新 epoch の `command_index` 経由で新 head を誤って
+  進めてしまう(root review P1 で確証・修正済み)。`update` 経由の
+  remove/re-add は remount ではなく binding が生存し counter が継続
+  するため epoch は据置 — epoch 境界は `unmount` のみ。consumer は
+  command_id を opaque として扱うことが前提で、format 追加は
+  typed adapter(SV182 系)の意味を変えない。
 - `render` で spec tree を `AnyElement` へ写像:
   - `Panel` → `div` + children `flex_col`、`Tabs` → header row
     (active tab = accent underline、hairline border)+ active child
@@ -247,13 +263,22 @@ impl GpuiDriver {
   ② `element_for` が bound `NativeSlot` を `placeable` 登録 + canvas
   prepaint で `bounds`(window coords)→`set_geometry`、
   `window.content_mask()`→`set_clip`(viewport 全体なら `None`)、
-  `set_visibility(Visible)` を dedupe ledger 経由で push、
+  visibility を dedupe ledger 経由で push、
   ③ tree 構築後 `(bindings ∪ applied) − placeable` を `Hidden` へ
   suppress(inactive tab/removed/unbind = 未描画)。
 - dedupe ledger(`applied`): aspect 別 last-pushed 値を保持し同一値は
   port 呼び出ししない。`Backend`/`SlotBusy` は retry、恒久的
   error(`Unsupported`/`Released`/`StaleGeneration` 等)は aspect を
   `failed` 化して毎 frame の hammering を防ぎ `last_error` に記録。
+- visibility は **fail-closed**: `Visible` は ledger の geometry が
+  現在 frame の要求値と一致 かつ clip が現在要求値と一致する間のみ。
+  refused borrow・transient error・必須 op の永久拒否では ledger が
+  要求値を保持しないため `Hidden` を維持/復帰する(unclip 済みでない
+  child・旧 geometry の child を祖先 clip 外へ露出させない)。
+  `clip=None` 要求は ledger `clip=None`(未 push=port 初期状態)で
+  充足 — `set_clip` を push すらしないため clip 非対応 driver でも
+  clip 不要 frame では表示できる(必要条件の契約区別。clip 解除不能
+  は上流 #404 の責務であり、ここでは黙示補償しない)。
 - slot lifecycle(declare/release/lease/redeem/busy)は consumer が
   adapter 経由で所有 — glue は layout→port 投影のみ担い、
   RF388/389 の責務を複製しない。unbind 後の suppress は renderer が

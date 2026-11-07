@@ -460,6 +460,11 @@ enum ReconcileAction {
 pub struct ViewHost {
     view_id: ViewInstanceId,
     generation: u64,
+    /// Mount epoch — bumped on every fresh `mount` after `unmount`.
+    /// It is part of each binding's command-id namespace so ids
+    /// minted under a dead epoch can never collide with (and be
+    /// answered as) ids minted under the live one.
+    mount_epoch: u64,
     spec: Option<ViewSpec>,
     mounted: HashMap<ComponentKey, Mounted>,
     dispatcher: InteractionDispatcher,
@@ -479,6 +484,7 @@ impl ViewHost {
         Self {
             view_id,
             generation: 0,
+            mount_epoch: 0,
             spec: None,
             mounted: HashMap::new(),
             dispatcher: InteractionDispatcher::new(),
@@ -715,9 +721,24 @@ impl ViewHost {
         for event in events {
             self.emit_gesture(&spec.key, event);
         }
-        self.bindings.entry(control_id.clone()).or_insert_with(|| {
-            CommandBinding::new(format!("view-{}:{}", self.view_id.get(), control_id))
-        });
+        let namespace = self.binding_namespace(&control_id);
+        self.bindings
+            .entry(control_id.clone())
+            .or_insert_with(|| CommandBinding::new(namespace));
+    }
+
+    /// Command-id namespace for `control_id` under the current mount
+    /// epoch. `unmount` drops the bindings wholesale, so the epoch
+    /// segment is what keeps a remounted control's minted ids
+    /// distinct from the dead epoch's — stale receipts then miss the
+    /// `command_index` instead of resolving onto a recycled id.
+    fn binding_namespace(&self, control_id: &str) -> String {
+        format!(
+            "view-{}:m{}:{}",
+            self.view_id.get(),
+            self.mount_epoch,
+            control_id
+        )
     }
 
     fn unregister_control(&mut self, meta: &ControlMeta) {
@@ -743,9 +764,11 @@ impl ViewHost {
                 .and_then(|c| c.spec.target.clone())
         });
         if let Some(intent) = intent_from_gesture(&event, fallback.as_ref()) {
-            let binding = self.bindings.entry(control_id.clone()).or_insert_with(|| {
-                CommandBinding::new(format!("view-{}:{}", self.view_id.get(), control_id))
-            });
+            let namespace = self.binding_namespace(&control_id);
+            let binding = self
+                .bindings
+                .entry(control_id.clone())
+                .or_insert_with(|| CommandBinding::new(namespace));
             let (command_id, expect_receipt) = binding.dispatch(intent.clone(), None);
             self.command_index.insert(command_id.clone(), control_id);
             self.push_event(ViewEvent::Intent {
@@ -771,6 +794,7 @@ impl ViewHost {
             return self.update(spec, generation);
         }
         self.generation += 1;
+        self.mount_epoch += 1;
         let mut ops = Vec::new();
         for (key, node) in &flat {
             ops.push(ProjectionOp::Mounted {
@@ -1271,5 +1295,119 @@ mod tests {
                 ..
             }
         )));
+    }
+
+    fn commit_intent_id(host: &mut ViewHost, key: &str, gesture: &str) -> CommandId {
+        host.dispatch_input(
+            host.generation(),
+            &ComponentKey::from(key),
+            ControlInput::Begin {
+                gesture_id: gesture.to_string(),
+                source: InputSource::from(InputSource::POINTER),
+                origin_view: None,
+                target: None,
+                at: None,
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("begin");
+        host.dispatch_input(
+            host.generation(),
+            &ComponentKey::from(key),
+            ControlInput::Commit {
+                gesture_id: gesture.to_string(),
+                value: None,
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("commit");
+        host.drain_events()
+            .into_iter()
+            .filter_map(|e| match e {
+                ViewEvent::Intent {
+                    intent: CommandIntent::Commit { .. },
+                    command_id,
+                    ..
+                } => Some(command_id),
+                _ => None,
+            })
+            .next_back()
+            .expect("commit intent minted")
+    }
+
+    fn receipt(command_id: CommandId, status: ReceiptStatus) -> CommandReceipt {
+        CommandReceipt {
+            command_id,
+            status,
+            revision: Some(crate::behavior::Revision::Num(1)),
+            detail: None,
+        }
+    }
+
+    #[test]
+    fn remount_absorbs_stale_receipts() {
+        // Same stable key + ViewInstance across unmount/remount: the
+        // new mount epoch must mint distinct command ids so a
+        // pre-unmount receipt can never advance the new epoch's head.
+        let mut host = ViewHost::new(view_id());
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        let old_commit = commit_intent_id(&mut host, "a", "g1");
+        host.unmount();
+        host.mount(panel(vec![fader("a")])).expect("remount");
+        let new_commit = commit_intent_id(&mut host, "a", "g2");
+
+        assert_ne!(old_commit, new_commit);
+        // The pre-unmount receipt is stale: index miss → absorbed,
+        // the new head stays pending rather than being faked applied.
+        assert!(!host.apply_receipt(&receipt(old_commit.clone(), ReceiptStatus::Applied)));
+        assert_eq!(
+            host.binding("a").expect("binding").phase(),
+            CommandPhase::Pending
+        );
+        assert_eq!(
+            host.binding("a").expect("binding").state().last_receipt,
+            None
+        );
+
+        // The receipt minted under the new epoch still settles normally.
+        assert!(host.apply_receipt(&receipt(new_commit, ReceiptStatus::Applied)));
+        assert_eq!(
+            host.binding("a").expect("binding").phase(),
+            CommandPhase::Applied
+        );
+    }
+
+    #[test]
+    fn update_reregister_keeps_binding_epoch() {
+        // Removed + re-added through `update` is NOT a remount: the
+        // binding survives, its counter keeps minting unique ids in
+        // the same epoch, and receipts for the re-added control's
+        // fresh commands still settle. The epoch boundary is
+        // `unmount`, not per-registration.
+        let mut host = ViewHost::new(view_id());
+        host.mount(panel(vec![fader("a"), fader("b")]))
+            .expect("mount");
+        let first_commit = commit_intent_id(&mut host, "a", "g1");
+        let generation = host.generation();
+        host.update(panel(vec![fader("b")]), generation)
+            .expect("remove a");
+        host.update(panel(vec![fader("a"), fader("b")]), generation)
+            .expect("re-add a");
+        let second_commit = commit_intent_id(&mut host, "a", "g2");
+
+        assert_ne!(first_commit, second_commit);
+        // Same epoch → namespace segment stays `m1`; the counter
+        // continues (begin `:3`, commit `:4`) rather than restarting.
+        assert!(second_commit.ends_with(":4"), "got {second_commit}");
+        // Pre-removal receipt was index-cleared at unregister → stale.
+        assert!(!host.apply_receipt(&receipt(first_commit, ReceiptStatus::Applied)));
+        // The re-registered control's own receipt settles normally.
+        assert!(host.apply_receipt(&receipt(second_commit, ReceiptStatus::Applied)));
+        assert_eq!(
+            host.binding("a").expect("binding").phase(),
+            CommandPhase::Applied
+        );
     }
 }
