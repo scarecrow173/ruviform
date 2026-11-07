@@ -85,14 +85,12 @@ Fake Driver と GPUI Driver で**同一の意味論**を持つこと、および
 - `post_event` が `Entity` の view inbox に届く。
 - `windows()` が live `WindowId` 集合を返す。
 
-> 実装注記（design §構成の deviation 記録に一致）:
-> `tests/driver_contract.rs` の `#[gpui::test]` suite は minimal
-> fixture 段階では未導入。`test-ui-gpui` の実行 test 数は 0 で、
-> GPUI 側 semantic は compile lane(check/lint/check-ui-gpui の
-> `-D warnings`)・FakeDriver semantic fixture(共通契約の決定的
-> 検証)・`example-ui-gpui-minimal` 実 OS 手動検証で担保する。
-> `#[gpui::test]` suite の導入は RF390 の Native Component Lab /
-> 境界試験で再検討する。
+> 実装注記（#386 第 2 PR で更新）: `crates/ruviform-ui-gpui/src/lifecycle_fixture.rs`
+> に `#[gpui::test]`（`TestAppContext`）の接続試験を導入した。R6 の共通シナリオを
+> GPUI Driver で実行し、Fake Driver と同一の trace を検証する。Driver 固有の
+> pump は `cfg(test)` + `gpui-test` 専用の crate 内 seam（`GpuiDriver::settle_for_test`、`pub(crate)`）で、本番の
+> `run` は変更しない。実 OS の window 表示・IME・DPI は `example-ui-gpui-minimal`
+> の手動検証に残す。
 
 ### R4: 接続試験の等価性
 
@@ -107,6 +105,24 @@ Fake Driver と GPUI Driver で**同一の意味論**を持つこと、および
   GPU device lost・実 plugin Native Dock・Dock 2-phase move・
   両 Consumer gate。これらは #262/#388/#389/#390 の実機
   fixture で別途検証する。
+
+### R6: 共通 Window/Dock lifecycle fixture（Fake / GPUI 同一 trace）
+
+- 共通シナリオ `ruviform_ui_test::lifecycle::run_lifecycle` は、
+  2 Window の作成・Dock 2-phase move の commit と abort（rollback）・
+  detach/reattach（`ViewInstanceId` 保持）・focus・late `post_event`
+  （Ready 前の受信が Ready で配送される）・Close veto / defer / approve・
+  unanswered close の既定 Approve（対象 window のみ）・id 非再利用・
+  tear-down（close 後の `exit`）を、`WindowDriver` の中立 API だけで実行する。
+- 正規化 trace（window 名ごとの `Created`/`Ready`/`CloseRequested`/
+  `Destroyed` の順序）が `expected_trace()` と一致すること。Focused・
+  Resized・Moved・ScaleFactorChanged・Action はタイミング依存のため
+  trace に含めない。
+- 実行: Fake は `cargo test -p ruviform-ui-test --test lifecycle_fixture`
+  （`mise run test`）、GPUI は `cargo test -p ruviform-ui-gpui --features gpui-test
+  lifecycle_fixture`（`mise run test-ui-gpui`）。
+- 対象外（NotRun）: IME・DPI 遷移・OS 起因 focus・実 close ボタン・GPU device
+  lost・実 Dock 描画。
 
 ## 検証入口
 

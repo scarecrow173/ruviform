@@ -283,25 +283,52 @@ crate のみに現れ、`ruviform-ui` の公開 API には漏出しない。
 | transitive 規模 | docs.rs の dep list で数十 direct + target 別。`naga`/`cosmic-text`/`resvg`/`usvg`/`metal`/`windows`/`wayland-*`/`blade-*` 等 | docs.rs dep list |
 | 採否の留保 | GPUI 最終採否は #262 が RF-GPUI-05/06（#388/#389）の実機証拠を待つ。本 Issue の最小 fixture は「採用 Gate の候補 Driver が GPUI 0.2.2 で build・最小 contract を満たす」までを示す | Issue #262/#388 |
 
-## 旧 API → 新 API 移行表
+## 旧 API → 新 API 移行表（Host / Window / Dock / Binding）
 
-| 旧 API（`ruviform-ui` / `-webview`） | 新 API / 移行先 | 物理位置 | 状態 |
-| --- | --- | --- | --- |
-| `WindowConfig`（`url`/`devtools` を含む） | 中立 `WindowSpec`（`title`/`logical_size`/`position`/`resizable`） | `ruviform-ui::driver` | 本 Issue で追加。`url`/`devtools` は `WebViewWindowConfig` へ |
-| `WindowConfig::url` | `WebViewWindowConfig::url` | `ruviform-ui-webview`（本 Issue は移行表記録のみ） | 旧 `WindowConfig` は当面維持 |
-| `WindowConfig::devtools` | `WebViewWindowConfig::devtools` | 同上 | 同上 |
-| `HostHandle::eval` / `WindowHandle::eval` | `WebViewScriptPort` 相当（adapter 固有） | `ruviform-ui-webview` | 移行表記録。共通側は `WindowDriver::post_event` |
-| `HostEvent::Ready { url }` | `WindowLifecycle::Ready`（payload なし） | `ruviform-ui::driver` | url は adapter 内部ログへ |
-| `HostEvent::Message(String)` | `WindowLifecycle::Action(Intent)` + WebView IPC decode adapter | `ruviform-ui::driver` + `ruviform-ui-webview` | 生文字列は共通契約に入れない |
-| `HostEvent::Resized/Moved/Focused/ScaleFactorChanged/CloseRequested/Destroyed/Tick` | `WindowLifecycle`/`DriverEvent::Tick` に中立のまま対応 | `ruviform-ui::driver` | payload 型は同一 |
-| `WindowEvent` envelope | `DriverEvent` envelope | `ruviform-ui::driver` | 構造は同一 |
-| `RoutedEvent` | そのまま利用（`Event` + window） | `ruviform-ui::window` | 中立のまま再利用 |
-| `WindowHandle` の `resize`/`focus`/`create_window`/`request_close`/`respond_close`/`destroy_window`/`windows`/`monitors`/`exit` | `WindowDriver` の同名操作 | `ruviform-ui::driver` | `eval` のみ除去・`post_event`/`capabilities` 追加 |
-| `RenderTier::{Dom,Canvas2d,Webgl2}` | 旧 WebView renderer 固有 enum（`render.rs` に残置） | `ruviform-ui::render` | repo 内利用 0。新 Driver は扱わない（#387 側） |
-| `NativeSurfaceHost`/`SurfaceRegion`/`SurfaceId` | `NativeSurfaceSlot` semantic contract（**#388 owner**） | `ruviform-ui::render` → 後継は #388 | 本 Issue は接続点のみ記録 |
-| `run`/`run_multi` の `FnMut(WindowEvent, &mut dyn WindowHandle)` | `run` の `FnMut(DriverEvent, &mut dyn WindowDriver)` | `ruviform-ui-gpui::session` | 同一形状 |
-| `UiRuntime::handle`/`handle_window`（`HostEvent` 消費） | `UiRuntime::dispatch_for`/`dispatch_op` への `Intent` 直受け + `Action(Intent)` 経路 | `ruviform-ui::runtime` | `Action` で `handle_window` 経由の既存 dispatch を再利用 |
-| `FakeHost`（`ruviform-ui-test`） | `FakeDriver`（`WindowDriver` 実装） | `ruviform-ui-test` | 新設。旧 fake は維持 |
+棚卸しは現行コードで確認済み（`crates/ruviform-ui/src/{event,window,render,bridge,runtime,dock,behavior}.rs`・
+`crates/ruviform-ui-webview/src/{host,session}.rs`）。「状態」は本 Issue 時点の実装状況。
+旧 WebView 経路は**削除せず並存**させる（Issue 本文「新 Native 完成前に旧 WebView path を削除しない」）。
+
+### Host / Window
+
+| # | 旧 API（型・場所） | 新 API / 移行先（型・実装ファイル） | 移行手順 | 状態 |
+| --- | --- | --- | --- | --- |
+| H1 | `HostHandle::eval(&mut self, script)`（`ruviform-ui/src/event.rs`） | 共通: `WindowDriver::post_event(window, &Event)`（`ruviform-ui/src/driver.rs`）。WebView 専用: `eval(dispatch_script(..))` を adapter 内に局所化 | Consumer は `post_event` のみ使う。WebView adapter は `post_event` を `eval(dispatch_script)` で実装する。旧 trait は残置 | 共通 port 追加済。WebView 側の `post_event` 実装は未着手（旧 `HostHandle` を使用中） |
+| H2 | `WindowHandle::eval(window, script)`（`ruviform-ui/src/window.rs`） | H1 と同じ（`WindowDriver::post_event`） | H1 と同じ。`WindowHandle` は旧 WebView 経路で存続 | 共通 port 追加済。旧 trait 残置 |
+| H3 | `HostEvent::Ready { url }`（`event.rs:23`）。WebView は `host.rs:224` で生成 | `WindowLifecycle::Ready`（payload なし。`driver.rs`） | `url` は WebView adapter 内ログへ移す。adapter は `Ready{url}` → `WindowLifecycle::Ready` へ写像する | 型追加済。WebView 側の写像は未着手（旧 `Ready{url}` を生成） |
+| H4 | `HostEvent::Message(String)`（`event.rs:31`。WebView は `host.rs:220` で生成） | `WindowLifecycle::Action(Intent)`（`driver.rs`）+ WebView IPC decode（`ipc::parse_intent` を adapter 内で呼ぶ） | 生文字列を共通契約に入れない。decode 失敗は `Event::error` として adapter 側で処理 | 型追加済。WebView decode 写像は未着手。GPUI は `IntentSink::send` で `Action` を発行（済） |
+| H5 | `WindowConfig { url, devtools, … }`（`window.rs:146-161`。WebView は `ruviform-ui-webview/src/host.rs:49-66` でも定義） | 中立: `WindowSpec { title, logical_size, position, resizable }`（`driver.rs`）。`url`/`devtools` は `WebViewWindowConfig`（未作成） | WebView adapter に `WebViewWindowConfig { url, devtools, … }` を作り、`WindowSpec` → 変換を提供する。旧 `WindowConfig` は残置 | `WindowSpec` 追加済。`WebViewWindowConfig` 未作成（**未達**） |
+| H6 | `HostEvent::{Resized, Moved, Focused, ScaleFactorChanged, CloseRequested, Destroyed, Tick}`（`event.rs`） | `WindowLifecycle::{Resized, Moved, Focused, ScaleFactorChanged, CloseRequested, Destroyed}` / `DriverEvent::Tick`（`driver.rs`） | payload 同一。WebView adapter は既存イベントを写像するだけで済む | 追加済（payload 同一） |
+| H7 | `WindowEvent`（`window.rs:88`。`Windowed`/`Tick`） | `DriverEvent`（`driver.rs`） | envelope 構造同一 | 追加済 |
+| H8 | `WindowHandle::{create_window, resize, focus, request_close, respond_close, destroy_window, windows, monitors, exit}` | `WindowDriver` の同名操作（`driver.rs`）。`create_window` は `&WindowSpec`、`resize` は `LogicalSize` | 旧 trait の操作を新 trait へ 1:1 で対応。`eval` のみ除去、`post_event`・`capabilities` を追加 | 追加済（GPUI/Fake 実装あり） |
+| H9 | `run` / `run_multi`（`ruviform-ui-webview/src/host.rs:82`・`session.rs:455`。`FnMut(HostEvent/WindowEvent, &mut dyn HostHandle/WindowHandle)`） | `GpuiDriver::run(tick, FnMut(DriverEvent, &mut dyn WindowDriver))`（`ruviform-ui-gpui/src/lib.rs`） | GPUI 側は新形状で実装済。WebView 側は旧形状のまま残置 | GPUI 側追加済。WebView 側は残置 |
+| H10 | `UiRuntime::handle(HostEvent)` / `handle_window(WindowId, HostEvent)`（`runtime.rs:156,187`） | `UiRuntime::dispatch_window_intent(WindowId, Intent)`（`runtime.rs:227`）+ `drain_jobs_routed()`（`DriverEvent::Tick` の受け口） | `Windowed { Action(intent) }` → `dispatch_window_intent`。`Tick` → `drain_jobs_routed`。旧 `handle*` は残置 | 追加済。旧 `handle*` 残置（WebView 経路が使用） |
+| H11 | `RenderTier::{Dom, Canvas2d, Webgl2}`（`render.rs:30-38`） | 新 Driver の対象外。Component/View 契約（#387）と `ruviform-ui-gpui` の描画に置換 | 旧 WebView renderer 固有 enum として `render.rs` に残置。repo 内の新 Driver 利用は 0 | 残置（**新 API 未定義。移行は旧 WebView 削除判断後**） |
+| H12 | `NativeSurfaceHost` / `SurfaceRegion` / `SurfaceId`（`render.rs:47-70`。WebView-adjacent 前提） | `NativeSurfaceSlot` semantic contract（`native_slot.rs`、Issue #388 owner）。`WindowCapabilities::native_surface_slot` が宣言点 | 本 Issue は接続点のみ。旧 trait は残置 | #388 側で追加済。旧 trait 残置 |
+| H13 | `JS bridge`（`bridge.rs:23` `BRIDGE_JS`、`bridge.rs:74` `dispatch_script`。`window.__rvf` / `rvf.ipc.v1` の postMessage） | WebView adapter 専用（`ruviform-ui-webview` が init script として注入）。共通契約と GPUI は JS を使わない | 旧経路として残置。共通 crate からは参照しない | 残置（webview 専用であることを明示） |
+
+### Dock
+
+| # | 旧 API（型・場所） | 新 API / 移行先（型・実装ファイル） | 移行手順 | 状態 |
+| --- | --- | --- | --- | --- |
+| D1 | `DockWorkspace` / `DockTree` / `DockNode` / `ViewInstanceId`（`ruviform-ui/src/dock.rs`） | 変更なし（driver-neutral。`WindowId` のみ参照し、JS / GPUI 型を持たない） | Consumer は `create_window` が返す `WindowId` を `register_window` する | 変更不要。共通 fixture で検証（`ruviform-ui-test/src/lifecycle.rs`） |
+| D2 | Dock 2-phase move / rollback（`begin_move`・`commit_move`・`abort_move`・`move_view`） | 変更なし | 同上。Late receipt と組み合わせる場合も Dock API は不変 | 変更不要。Fake/GPUI 両方で同一 fixture 検証（**GPUI の実 OS 上の DockWorkspace 統合は未実施**） |
+| D3 | Window 破棄時の view 処理（`remove_window(window, WindowCloseDisposition)`） | 変更なし。Consumer が `WindowLifecycle::Destroyed` 受信後に呼ぶ | `DriverEvent::Windowed { Destroyed }` を受けて `remove_window` を呼ぶ（明示的な処分選択） | 変更不要。fixture で検証（`RelocateTo` / `DetachViews`） |
+
+### Binding
+
+| # | 旧 API（型・場所） | 新 API / 移行先（型・実装ファイル） | 移行手順 | 状態 |
+| --- | --- | --- | --- | --- |
+| B1 | `rvf.ipc.v1` `Intent`/`Event`/`parse_intent`（`ipc.rs`） | 共通維持。`Intent` は `Action` と `post_event` の型 | 変更なし | 維持 |
+| B2 | `window.__rvf` JS dispatch（`bridge.rs` の `BRIDGE_JS` / `dispatch_script`） | H13 と同じ（WebView 専用） | 旧経路として残置 | 残置 |
+| B3 | Headless value / gesture / command binding（`behavior.rs`、`view.rs`。Issue #387） | 変更なし（driver-neutral）。GPUI 描画は `ruviform-ui-gpui/src/render.rs` で投影 | 変更なし | 変更不要 |
+| B4 | GPUI view からの Intent 発行 | `IntentSink::send`（`ruviform-ui-gpui/src/lib.rs`）→ `WindowLifecycle::Action` | 済 | 追加済 |
+
+### 移行段階（Phase）
+
+1. **Phase 0（本 Issue の範囲）**: 共通契約（`driver.rs`）・Fake Driver・GPUI Driver・共通 lifecycle fixture（2 Window / Dock 2-phase move・rollback / detach・reattach / close veto・defer・approve / unanswered close default / late receipt / id non-reuse / tear-down）を追加。旧 API は残置。
+2. **Phase 1（後続 Issue）**: WebView adapter に `WebViewWindowConfig` を導入し、H1・H3・H4・H5・H9 を adapter 内の写像として実装する。旧 `HostHandle`/`WindowHandle`/`run` は、この写像で同じ挙動を保つ接続試験が通るまで残す。
+3. **Phase 2（別明示判断）**: Synvelis/AudioLens の native 最小 Slice・実 OS・Native Dock・両 Consumer gate 合格後に、旧 API（H1〜H5・H9・H10・H11・H13）の削除/移動を判断する。
 
 ## 検証と残 Gate
 
@@ -309,6 +336,18 @@ crate のみに現れ、`ruviform-ui` の公開 API には漏出しない。
   経路が残ること）・`check-ui-gpui`/`lint-ui-gpui`/`test-ui-gpui`
   （feature lane）・Fake Driver と GPUI Driver の同一 lifecycle
   接続試験。
+- 同一 lifecycle fixture: `ruviform-ui-test::lifecycle::run_lifecycle`
+  （共通シナリオ・`expected_trace()`）を、Fake は
+  `crates/ruviform-ui-test/tests/lifecycle_fixture.rs`（`mise run test`）、
+  GPUI は `crates/ruviform-ui-gpui/src/lifecycle_fixture.rs`（`cfg(all(test, gpui-test))`）
+  （`mise run test-ui-gpui`、`TestAppContext` の 1 turn ごとの settle）で
+  同じ trace に対して実行する。GPUI 側の settle は `gpui-test` 専用の
+  crate 内 seam（`GpuiDriver::settle_for_test`、`pub(crate)`）で、本番の `run` は変更しない。公開 signature に gpui 型を出さないため `pub` にしない（境界 guard の signature 検査で確認）。
+- gpui 0.2.2 の test platform は OS window handle を持たず
+  `window_handle()` が panic する。`gpui-test` ビルドでは surface 親
+  HWND の取得を行わない（`capture_raw_parent`）。本番ビルドの挙動は不変。
+- NotRun（実 OS のみ）: DPI/scale 遷移・IME・OS 起因の focus 遷移・
+  GPU device lost・実 plugin Native Dock・両 Consumer gate。
 - 残 Gate（本 Issue では NotRun/別 Issue へ委譲）: 実 OS window・
   実 plugin Native Dock・IME/DPI・a11y・GPU device lost・両
   Consumer gate・Dock 2-phase move/rollback の実 Driver
