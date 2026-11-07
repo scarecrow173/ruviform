@@ -198,7 +198,7 @@ pub use composite::{
 pub use editor_session::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
     EditorSessionOps, EditorSessionState, EditorSize, InProcessEditorOps, L1EditorOps,
-    PluginEditorSession, PluginEditorSessions, SessionFailCause, Support,
+    LeaseRedeemer, PluginEditorSession, PluginEditorSessions, SessionFailCause, Support,
 };
 pub use endpoint::{EndpointBounds, PluginEndpoint};
 pub use host::{BusReport, InProcessHost};

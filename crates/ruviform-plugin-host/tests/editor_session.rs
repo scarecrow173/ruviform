@@ -681,6 +681,122 @@ fn l0_unsupported_open_gui_maps_to_failed_not_pass() {
 }
 
 #[test]
+fn l0_redeemer_refusal_blocks_open_and_never_issues_opengui() {
+    // The adapter-backed redeemer is the staleness boundary: a rejected
+    // lease must fail the open before `OpenGui` ever reaches the plugin.
+    let mut host = host_with_plugin(true);
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(
+            &mut host,
+            instance,
+            Box::new(|_lease| Err(EditorOpError::LeaseRejected)),
+        );
+        assert_eq!(
+            session.open(&mut ops, &lease(), SIZE, AttachMode::Docked),
+            Err(EditorSessionError::Ops(EditorOpError::LeaseRejected))
+        );
+        assert_eq!(
+            session.state(),
+            EditorSessionState::Failed {
+                cause: SessionFailCause::LeaseInvalid
+            }
+        );
+    }
+}
+
+#[test]
+fn l0_redeemer_token_reaches_plugin_open_gui() {
+    // The adapter-backed redeemer maps the opaque lease payload to the
+    // raw parent token the plugin sees — distinct from pass-through.
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    struct TokenProbe {
+        seen: Rc<Cell<Option<u64>>>,
+    }
+    impl ruviform_plugin_core::PluginProcessor for TokenProbe {
+        fn prepare(
+            &mut self,
+            _config: &ProcessConfig,
+            _context: &mut ProcessContext,
+        ) -> Result<(), PrepareError> {
+            Ok(())
+        }
+        fn process<I, O>(
+            &mut self,
+            _inputs: &[I],
+            _outputs: &mut [O],
+            _events: EventList<'_>,
+            _transport: Option<TransportInfo>,
+            _context: &mut ProcessContext,
+        ) -> ProcessResult
+        where
+            I: BufferView,
+            O: BufferViewMut,
+        {
+            ProcessResult::new(ProcessStatus::Continue, ProcessResult::TAIL_NONE)
+        }
+    }
+    impl Plugin for TokenProbe {
+        fn descriptor(&self) -> PluginDescriptor {
+            GAIN_DESCRIPTOR
+        }
+        fn params(&self) -> &[ParamInfo] {
+            &[]
+        }
+        fn open_gui(&mut self, parent: GuiParentToken) -> Result<GuiHandle, HostError> {
+            self.seen.set(Some(parent.raw()));
+            Ok(GuiHandle::new(9))
+        }
+        fn close_gui(&mut self) -> Result<(), HostError> {
+            Ok(())
+        }
+    }
+    struct ProbeFactory {
+        seen: Rc<Cell<Option<u64>>>,
+    }
+    impl PluginFactory for ProbeFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            GAIN_DESCRIPTOR
+        }
+        fn create(&self) -> Box<dyn ruviform_plugin_host::ErasedPlugin> {
+            erase(TokenProbe {
+                seen: self.seen.clone(),
+            })
+        }
+    }
+
+    let seen = Rc::new(Cell::new(None));
+    let mut host = InProcessHost::new();
+    host.register_factory(Box::new(ProbeFactory { seen: seen.clone() }));
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    {
+        // The adapter redeems lease 0xAAAA… into token 0xBBBB… — not
+        // the pass-through value.
+        let mut ops = InProcessEditorOps::with_redeemer(
+            &mut host,
+            instance,
+            Box::new(|_lease| Ok(GuiParentToken::new(0xBBBB))),
+        );
+        session
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open via redeemer");
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+    }
+    assert_eq!(seen.get(), Some(0xBBBB));
+}
+
+#[test]
 fn l1_editor_ops_refuses_every_op_and_never_degrades() {
     let mut ops = L1EditorOps::new();
     let session_id = PluginEditorSessionId::new(0, 0);

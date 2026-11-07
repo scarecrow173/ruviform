@@ -1133,25 +1133,68 @@ impl PluginEditorSessions {
 /// `OpenGui`/`CloseGui` command path for one instance.
 ///
 /// This is the **only** production place that mints a raw
-/// [`GuiParentToken`] from a session [`ParentSlotLease`]
-/// (`GuiParentToken::new(lease.raw())`) — the lease's opaque payload is
-/// the parent handle the issuing driver encoded into it. A plugin whose
-/// `open_gui` is the default `Unsupported` surfaces
-/// [`EditorOpError::Unsupported`].
+/// [`GuiParentToken`] from a session [`ParentSlotLease`] — through an
+/// injected [`LeaseRedeemer`] (the adapter-backed path) or, for
+/// [`InProcessEditorOps::new`], pass-through
+/// (`GuiParentToken::new(lease.raw())`, the lease payload already being
+/// the raw token). A plugin whose `open_gui` is the default
+/// `Unsupported` surfaces [`EditorOpError::Unsupported`].
 ///
 /// **RT contract:** non-RT only — UI-thread only.
 pub struct InProcessEditorOps<'a> {
     host: &'a mut InProcessHost,
     instance: PluginHandle,
+    redeemer: Option<Box<LeaseRedeemer<'a>>>,
 }
 
+/// Redeems an opaque [`ParentSlotLease`] into the raw
+/// [`GuiParentToken`] a plugin's `open_gui` consumes.
+///
+/// This is the composition-side seam: the lease payload is the
+/// issuer's private encoding, and only the issuer-side adapter (e.g.
+/// a GUI driver's surface-slot implementation) can validate it and
+/// map it to a real OS parent handle. The host's L0 command surface
+/// speaks [`GuiParentToken`]; this callback is where the
+/// redemption — including staleness checks — happens. A failed
+/// redemption surfaces as the returned [`EditorOpError`] (typically
+/// [`EditorOpError::LeaseRejected`]).
+///
+/// **RT contract:** non-RT only — UI-thread only.
+pub type LeaseRedeemer<'a> =
+    dyn FnMut(&ParentSlotLease) -> Result<GuiParentToken, EditorOpError> + 'a;
+
 impl<'a> InProcessEditorOps<'a> {
-    /// Wraps `host` to drive editor ops for `instance`.
+    /// Wraps `host` to drive editor ops for `instance` — the
+    /// pass-through redemption used when the lease payload already
+    /// *is* the raw parent token (test fakes and flat issuers).
     ///
     /// **RT contract:** non-RT only — UI-thread only.
     #[must_use]
     pub fn new(host: &'a mut InProcessHost, instance: PluginHandle) -> Self {
-        Self { host, instance }
+        Self {
+            host,
+            instance,
+            redeemer: None,
+        }
+    }
+
+    /// Wraps `host` with an adapter-backed [`LeaseRedeemer`] — the
+    /// real redemption path: the adapter validates the lease against
+    /// its own ledger before yielding the raw parent token, so a
+    /// stale or forged lease never reaches the plugin.
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    #[must_use]
+    pub fn with_redeemer(
+        host: &'a mut InProcessHost,
+        instance: PluginHandle,
+        redeemer: Box<LeaseRedeemer<'a>>,
+    ) -> Self {
+        Self {
+            host,
+            instance,
+            redeemer: Some(redeemer),
+        }
     }
 }
 
@@ -1200,9 +1243,14 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
             AttachMode::Docked => {}
             _ => return Err(EditorOpError::Unsupported),
         }
-        // The lease's opaque payload is the driver-encoded parent handle;
-        // redeeming it into the raw `GuiParentToken` is confined here.
-        let parent = GuiParentToken::new(lease.raw());
+        // Redeem the lease at this adapter boundary: an injected
+        // `LeaseRedeemer` validates it against the issuer's ledger;
+        // the pass-through form treats the payload as the raw token
+        // already (test fakes and flat issuers).
+        let parent = match self.redeemer.as_mut() {
+            Some(redeem) => redeem(lease)?,
+            None => GuiParentToken::new(lease.raw()),
+        };
         match self.host.execute(HostCommand::OpenGui {
             handle: self.instance,
             parent,

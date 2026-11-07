@@ -328,6 +328,12 @@ pub enum SlotError {
     /// The requested operation/capability is not supported by this
     /// slot or driver — an explicit refusal, not a silent no-op.
     Unsupported,
+    /// The driver backend refused or failed the operation (e.g. a
+    /// native surface could not be created, or the parent window's OS
+    /// handle is not available yet) — distinct from
+    /// [`SlotError::Unsupported`]: the operation is defined, the
+    /// backend failed it.
+    Backend,
     /// A caller-supplied value fell outside its defined domain (e.g. a
     /// non-finite or negative geometry).
     InvalidValue,
@@ -344,6 +350,7 @@ impl std::fmt::Display for SlotError {
             Self::SlotBusy => "slot is busy (dock move in progress)",
             Self::Released => "slot has been released",
             Self::Unsupported => "operation is unsupported by this slot/driver",
+            Self::Backend => "driver backend refused the operation",
             Self::InvalidValue => "value outside its defined domain",
         };
         f.write_str(message)
