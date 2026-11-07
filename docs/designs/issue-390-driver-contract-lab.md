@@ -151,7 +151,7 @@ JSON を得る（`--manifest-path`/`--metadata` override で fixture
   "forbiddenPathRoots":   [ "gpui", "gpui_component", "gpui_base", "gpui_kit", "gpui_toolkit", "gpui_audio_kit", "gpui_design", "wry", "tao", "winit", "dpi", "raw_window_handle", "web_view", "webkit2gtk", "gtk", "gdk", "egui", "eframe", "iced", "slint", "fltk", "druid", "vizia", "dioxus", "azul", "tauri" ],
   "allowlist": [
     { "package": "ruviform-ui-webview", "role": "driver-adapter",
-      "allowedDeps": ["wry", "tao", "dpi", "http", "rust-embed"],
+      "allowedDeps": ["wry", "tao", "dpi"],
       "viaFeatures": ["webview"], "required": true,
       "reason": "Issue #156 accepted WebView driver adapter" },
     { "package": "ruviform-ui-gpui", "role": "driver-adapter",
@@ -161,11 +161,11 @@ JSON を得る（`--manifest-path`/`--metadata` override で fixture
 }
 ```
 
-- `allowedDeps` は `forbiddenDepRoots` に一致する名前のみ有効
-  （`http`/`rust-embed` は禁止 root ではないが adapter 固有の
-  backend 依存として grant 内で宣言を許容 — 禁止 root 以外の
-  allowedDeps は検査対象外。設計を単純にするため allowedDeps は
-  forbidden root 名のみ必須、それ以外の記述は無視される）。
+- `allowedDeps` は `forbiddenDepRoots` に一致する名前のみ有効。
+  forbidden root に一致しない allowedDeps は ruleset 自体の不整合
+  として `allowlist-invalid-dep` finding を出す — grant は
+  「この adapter が持ってよい *禁止* backend 依存」の列挙であり、
+  非禁止 dep（`http` 等）は grant の対象ではない。
 - `role`: `driver-adapter` | `composition-root` | `driver-extension`。
 - `required: false` は package 不在時に skip（未 merge driver）。
 
@@ -181,10 +181,13 @@ workspace member 各 package P について:
 2. **feature** (`forbidden-dep-feature`): P の `features` 表を
    展開し、feature 値 `"dep:<name>"`（推移的に feature→feature
    連鎖も辿る）が forbidden dep を有効化する場合、allowlist の
-   `viaFeatures` に無ければ violation。`dep:` 形式以外の
-   `"crate/feature"` 値で他 crate の toolkit 側 feature を
-   有効化する場合も同様に検査（allowlist 外の crate 間 feature
-   連鎖は resolve 側検査で担保）。
+   `viaFeatures` に無ければ violation。`dep:` の operand は
+   manifest の依存 key（rename 後の名前）なので、実 package
+   名へ解決してから判定する（`dep:alias` による rename 迂回を
+   塞ぐ）。`"crate/feature"` 値は adapter を指す場合は
+   dep-activation 検査（5）で viaFeatures 整合を検査し、
+   それ以外の crate 間 feature 連鎖は resolve 側検査で担保
+   （限界 9 参照）。
 3. **transitive** (`forbidden-dep-transitive`): resolve graph を
    起点 P から BFS。辺の traversal 規則:
    - `cargo metadata` の resolve graph は未 activation の
@@ -214,14 +217,23 @@ workspace member 各 package P について:
    - optional 辺を含まない経路のみの forbidden 到達は
      transitive 側が報告（重複しない）。
 5. **dep-activation** (`forbidden-dep-adapter-feature` /
-   `adapter-consumer`): dependency 宣言の `features` /
-   `uses_default_features` 値が allowlisted adapter の
-   `viaFeatures`（toolkit 有効化 feature 連鎖）を有効化する
-   場合 → composition-root/driver-extension grant を持たない
-   member なら violation。非 grant member の allowlisted
-   adapter 依存自体も `adapter-consumer` violation。
-4. **allowlist 整合** (`allowlist-*`):
+   `adapter-consumer`): allowlisted adapter を指す依存宣言を
+   検査する。依存先の解決は resolve node の辺を優先し、resolve
+   に現れない未 activation の optional 辺は workspace member の
+   name 一致で補完する — **kind（normal/build/dev）と
+   activation 状態を問わず**、非 composition-root/
+   driver-extension member の adapter 依存は `adapter-consumer`
+   violation（optional/dev 宣言では検査をすり抜けられない）。
+   加えて、dependency 宣言の `features`/`uses_default_features`
+   値と consumer の `features` 表内の `<depkey>/<f>`・
+   `<depkey>?/<f>` 値が adapter の `viaFeatures`（toolkit
+   有効化 feature 連鎖を含む）を有効化する場合 →
+   `forbidden-dep-adapter-feature` violation。
+6. **allowlist 整合** (`allowlist-*`):
    - `required: true` で package 不在 → `allowlist-missing`。
+   - grant.allowedDeps に `forbiddenDepRoots` 非一致の名前 →
+     `allowlist-invalid-dep`（grant は禁止 backend 依存のみ
+     列挙する — 非禁止 dep の宣言は grant 不要）。
    - grant.package が allowlist 対象でない package に同名 grant
      → n/a（name 一致のみ）。
    - grant.allowedDeps のうち manifest に未宣言の名前 →
@@ -319,22 +331,47 @@ crate 外に出ないため検出しない — 誤検出防止）。
    tracking で「crate 外に露出する item」を判定するため、
    `pub use` の glob 展開や複雑な re-export 連鎖では実際の
    rustc 公開性と誤差が生じ得る（保守側 = 過検出方向）。
-9. 検査範囲は workspace member — `workspace_members` に無い
-   package（外部 path dep 等）は direct/feature 検査対象外
-   （到達経路としては辿る）。
+9. `"crate/feature"` feature 値は adapter を指す場合のみ
+   viaFeatures 整合を検査する。allowlist 外の crate 間
+   feature 連鎖（`x/f` で x が非 adapter）は本検査では展開
+   せず、resolve/transitive 側の辺検査に委ねる。
+10. conditional 到達の manifest 走査は host 解決の resolve
+    graph 前提 — 他 platform 限定の `target.'cfg(..)'` 非
+    optional 辺が resolve graph に出ない構成（target 絞り込み
+    済み metadata 等）では transitive 経路を辿れない。ただし
+    target-gated direct forbidden dep 宣言自体は
+    `check_direct_deps` が manifest 宣言から捕捉する。
+11. dep 宣言先の package 解決は name 一致ベース — 同名
+    package が複数 version で共存する場合、target の誤同定が
+    起こり得る（witness path の精度低下方向。検出漏れではない）。
+12. 検査範囲は workspace member — `workspace_members` に無い
+    package（外部 path dep 等）は direct/feature/dep-activation
+    検査対象外（到達経路としては辿る）。manifest 走査で
+    `cargo metadata --no-deps` が解決不能な manifest は
+    `conditional-manifest-error` finding（fail-closed）。
 
 #### Report 形式
 
 ```jsonc
 { "schemaVersion":1, "report":"rvf.driver-boundary/v1",
   "verdict":"pass|fail",
-  "workspaceRoot":"...", "metadataSource":"cargo-metadata|fixture",
   "checks":[
-    {"id":"dep-graph","status":"pass|fail","findings":[{code,package,dep|path,kind,detail}...]},
-    {"id":"signature","status":"pass|fail","findings":[{code,package,file,line,pathRoot}...]},
-    {"id":"allowlist","status":"pass|fail|warn","findings":[...]}
+    {"id":"dep-graph","status":"pass|fail",
+     "findings":[{"check":"dep-graph","code":"forbidden-dep-*|adapter-consumer|conditional-manifest-error","package":"...","detail":"dep 名・kind・witness path 等"},...]},
+    {"id":"signature","status":"pass|fail",
+     "findings":[{"check":"signature","code":"signature-leak|signature-src-unreadable|signature-src-unparseable","package":"...","file":"...","line":0,"detail":"item 名・pathRoot・path 等"},...]},
+    {"id":"allowlist","status":"pass|fail",
+     "findings":[{"check":"allowlist","code":"allowlist-missing|allowlist-grant-unused|allowlist-invalid-dep","package":"...","detail":"..."},...]}
   ] }
 ```
+
+finding の `detail` は人間可読の根拠文字列（dep 名・witness
+path・item 名を含む）。`file`/`line` は signature 系統のみ出力
+（`Option`、dep-graph/allowlist では省略）。verdict は全 check
+を集約 — dep-graph/signature の finding は全て fail、allowlist
+では `allowlist-grant-unused` のみ `strict: false` なら
+warning 級（記録はされるが verdict 非影響）、`strict: true`
+なら fail にする。
 
 ### B. Case manifest（cases.json）
 

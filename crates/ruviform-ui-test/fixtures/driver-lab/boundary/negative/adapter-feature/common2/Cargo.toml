@@ -1,0 +1,18 @@
+[package]
+name = "common2"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[features]
+default = []
+# optional dep を feature 経由で有効化し adapter の toolkit
+# feature を起動する経路（H1）— manifest 宣言段階で検出されるべき。
+evil = ["dep:adapter", "adapter/gpui"]
+
+[dependencies]
+adapter = { path = "../adapter", optional = true }
+
+[dev-dependencies]
+# dev-dep 経由の adapter 依存 + toolkit feature 起動（H2）。
+adapter = { path = "../adapter", features = ["gpui"] }

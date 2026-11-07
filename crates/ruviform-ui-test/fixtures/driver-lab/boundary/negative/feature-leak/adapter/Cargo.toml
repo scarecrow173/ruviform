@@ -5,8 +5,10 @@ edition = "2021"
 publish = false
 [features]
 default = []
-gpui = ["dep:gpui"]
-sneaky = ["dep:gpui"]
+gpui = ["dep:mygpui"]
+sneaky = ["dep:mygpui"]
 
 [dependencies]
-gpui = { path = "../gpui", optional = true }
+# `dep:` operand は rename 後の dep key — guard は実 package 名
+# （gpui）へ解決して判定しなければ rename 迂回を見逃す（H3）。
+mygpui = { package = "gpui", path = "../gpui", optional = true }

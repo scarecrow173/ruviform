@@ -110,6 +110,13 @@ fn negative_feature_leak_detected() {
             .any(|f| f.code == "forbidden-dep-feature" && f.detail.contains("sneaky")),
         "{dep:?}"
     );
+    // `dep:mygpui`（rename 後の dep key）は実 package 名 `gpui` へ
+    // 解決して判定する — `dep:alias` の rename 迂回を見逃さない。
+    assert!(
+        dep.iter().any(|f| f.code == "forbidden-dep-feature"
+            && f.detail.contains("forbidden dep `gpui`")),
+        "rename 経由でも実名で検出されること: {dep:?}"
+    );
     // `gpui` feature 自体は grant 済み — `sneaky` のみ違反。
     assert!(
         !dep.iter()
@@ -172,7 +179,8 @@ fn negative_signature_leak_detected() {
 }
 
 /// negative: dep.features による adapter toolkit feature 起動 +
-/// composition-root なしの adapter 依存。
+/// composition-root なしの adapter 依存。optional・dev・feature 表
+/// `adapter/f` 経由の迂回も検出する（H1/H2）。
 #[test]
 fn negative_adapter_feature_activation_detected() {
     let report = run_guard("negative/adapter-feature");
@@ -182,7 +190,34 @@ fn negative_adapter_feature_activation_detected() {
         codes.contains(&"forbidden-dep-adapter-feature"),
         "{codes:?}"
     );
-    assert!(codes.contains(&"adapter-consumer"), "{codes:?}");
+    let dep = check_findings(&report, "dep-graph");
+    // normal dep（common）+ optional dep（common2）+ dev-dep
+    // （common2）の 3 経路全てで adapter-consumer が出る。
+    for pkg in ["common", "common2"] {
+        assert!(
+            dep.iter()
+                .any(|f| f.code == "adapter-consumer" && f.package == pkg),
+            "{pkg} の adapter-consumer finding が必要: {dep:?}"
+        );
+    }
+    assert!(
+        dep.iter().any(|f| f.code == "adapter-consumer"
+            && f.package == "common2"
+            && f.detail.contains("optional=true")),
+        "optional 宣言の adapter-consumer: {dep:?}"
+    );
+    assert!(
+        dep.iter().any(|f| f.code == "adapter-consumer"
+            && f.package == "common2"
+            && f.detail.contains("dev")),
+        "dev-dep の adapter-consumer: {dep:?}"
+    );
+    // feature 表 `adapter/gpui` 値による toolkit feature 起動。
+    assert!(
+        dep.iter().any(|f| f.code == "forbidden-dep-adapter-feature"
+            && f.detail.contains("adapter/gpui")),
+        "feature 表経由の起動: {dep:?}"
+    );
 }
 
 /// live workspace 自体が ruleset を pass すること（UI-DVR-01 の

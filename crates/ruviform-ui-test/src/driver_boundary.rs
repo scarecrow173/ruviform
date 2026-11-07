@@ -339,7 +339,11 @@ fn check_features(
         visited.insert(fname.clone());
         while let Some(v) = stack.pop_front() {
             if let Some(dep) = v.strip_prefix("dep:") {
-                enabled.insert(dep.to_string());
+                // `dep:` の operand は manifest の依存 key（rename
+                // 後の名前）— 実 package 名へ解決して判定しないと
+                // `dep:alias` で rename 迂回できる（H3）。
+                let real = dep_name_by_feature.get(dep).copied().unwrap_or(dep);
+                enabled.insert(real.to_string());
                 continue;
             }
             if v.contains('/') {
@@ -404,20 +408,35 @@ fn check_dep_activation(
         )
     });
     for dep in &pkg.dependencies {
-        // 依存先 package が allowlisted adapter か調べる（pkg 自身の
-        // resolve node から）。
-        let Some(target_id) = metadata.resolve.as_ref().and_then(|r| {
-            r.nodes.iter().find(|n| n.id == pkg.id).and_then(|n| {
-                n.deps
-                    .iter()
-                    .find(|d| {
-                        packages
-                            .get(&d.pkg)
-                            .is_some_and(|p| p.name.as_str() == dep.name.as_str())
-                    })
-                    .map(|d| d.pkg.clone())
+        // 依存先 package が allowlisted adapter か調べる。resolve
+        // node の辺を優先し、resolve に現れない未 activation の
+        // optional 辺は workspace member の name 一致で解決する —
+        // optional/dev 宣言だけでは adapter 依存の検査をすり抜け
+        // られない（H1/H2: kind・activation 状態を不問とする）。
+        let target_id = metadata
+            .resolve
+            .as_ref()
+            .and_then(|r| {
+                r.nodes.iter().find(|n| n.id == pkg.id).and_then(|n| {
+                    n.deps
+                        .iter()
+                        .find(|d| {
+                            packages
+                                .get(&d.pkg)
+                                .is_some_and(|p| p.name.as_str() == dep.name.as_str())
+                        })
+                        .map(|d| d.pkg.clone())
+                })
             })
-        }) else {
+            .or_else(|| {
+                metadata
+                    .workspace_members
+                    .iter()
+                    .filter_map(|id| packages.get(id))
+                    .find(|p| p.name.as_str() == dep.name.as_str())
+                    .map(|p| p.id.clone())
+            });
+        let Some(target_id) = target_id else {
             continue;
         };
         let Some(target_pkg) = packages.get(&target_id) else {
@@ -430,14 +449,17 @@ fn check_dep_activation(
         else {
             continue;
         };
-        if dep.kind == DependencyKind::Development {
-            continue;
-        }
         if consumer_ok {
             // composition-root / driver-extension は adapter への依存と
             // toolkit feature の有効化自体が職務 — 以降の検査は不要。
             continue;
         }
+        let kind = match dep.kind {
+            DependencyKind::Normal => "normal",
+            DependencyKind::Development => "dev",
+            DependencyKind::Build => "build",
+            DependencyKind::Unknown => "unknown",
+        };
         findings.push(Finding {
             check: CHECK_DEP_GRAPH,
             code: "adapter-consumer",
@@ -445,50 +467,101 @@ fn check_dep_activation(
             file: None,
             line: None,
             detail: format!(
-                "allowlisted adapter `{}` への依存は composition-root \
-                 grant なしでは不可",
-                target_pkg.name
+                "allowlisted adapter `{}` への依存（{kind}, optional={}）は \
+                 composition-root grant なしでは不可",
+                target_pkg.name, dep.optional
             ),
         });
-        // dep.features / default feature で adapter の viaFeatures が
-        // 有効化されると toolkit が protected crate の build に入る。
-        let mut activated: BTreeSet<String> = dep.features.iter().cloned().collect();
-        if dep.uses_default_features
-            && let Some(default) = target_pkg.features.get("default")
-        {
-            activated.extend(default.iter().cloned());
-        }
-        // adapter 側 feature 連鎖も辿る（`webview` が別 feature 経由でも良い）。
-        let mut work: VecDeque<String> = activated.iter().cloned().collect();
-        let mut seen: BTreeSet<String> = activated;
-        let mut hits: Vec<String> = Vec::new();
-        while let Some(f) = work.pop_front() {
-            if target_grant.via_features.iter().any(|v| v == &f) {
-                hits.push(f.clone());
+        // consumer 側 feature 表の `depkey/f`・`depkey?/f` 値が
+        // adapter の viaFeatures を起動する経路 — optional dep +
+        // feature 有効化でも検出する（H1: `evil = ["dep:a",
+        // "a/gpui"]` 形の迂回を塞ぐ）。
+        let depkey = dep.rename.as_deref().unwrap_or(dep.name.as_str());
+        feature_table_activation(pkg, depkey, target_pkg, target_grant, findings);
+        dep_feature_activation(dep, pkg, target_pkg, target_grant, findings);
+    }
+}
+
+/// consumer feature 表の `<depkey>/<f>`・`<depkey>?/<f>` 値が
+/// adapter の viaFeatures を起動する経路を検査する。
+fn feature_table_activation(
+    pkg: &Package,
+    depkey: &str,
+    target_pkg: &Package,
+    target_grant: &AllowlistEntry,
+    findings: &mut Vec<Finding>,
+) {
+    for (fname, values) in &pkg.features {
+        for v in values {
+            let Some(tail) = v
+                .strip_prefix(depkey)
+                .and_then(|r| r.strip_prefix('/').or_else(|| r.strip_prefix("?/")))
+            else {
+                continue;
+            };
+            if target_grant.via_features.iter().any(|vf| vf == tail) {
+                findings.push(Finding {
+                    check: CHECK_DEP_GRAPH,
+                    code: "forbidden-dep-adapter-feature",
+                    package: pkg.name.to_string(),
+                    file: None,
+                    line: None,
+                    detail: format!(
+                        "feature `{fname}` の値 `{v}` が adapter `{}` の \
+                         toolkit feature `{tail}` を起動",
+                        target_pkg.name
+                    ),
+                });
             }
-            // dep:X 形式は dep 直接有効化 — feature 名としては辿れない。
-            if let Some(vals) = target_pkg.features.get(&f) {
-                for v in vals {
-                    if !v.contains('/') && !v.starts_with("dep:") && seen.insert(v.clone()) {
-                        work.push_back(v.clone());
-                    }
+        }
+    }
+}
+
+/// dep 宣言の `features`/`uses_default_features` が adapter の
+/// viaFeatures を起動する経路を検査する（RB-01）。adapter 側の
+/// feature→feature 連鎖も辿る。
+fn dep_feature_activation(
+    dep: &Dependency,
+    pkg: &Package,
+    target_pkg: &Package,
+    target_grant: &AllowlistEntry,
+    findings: &mut Vec<Finding>,
+) {
+    let mut activated: BTreeSet<String> = dep.features.iter().cloned().collect();
+    if dep.uses_default_features
+        && let Some(default) = target_pkg.features.get("default")
+    {
+        activated.extend(default.iter().cloned());
+    }
+    let mut work: VecDeque<String> = activated.iter().cloned().collect();
+    let mut seen: BTreeSet<String> = activated;
+    let mut hits: Vec<String> = Vec::new();
+    while let Some(f) = work.pop_front() {
+        if target_grant.via_features.iter().any(|v| v == &f) {
+            hits.push(f.clone());
+        }
+        // dep:X 形式は dep 直接有効化 — feature 名としては辿れない。
+        if let Some(vals) = target_pkg.features.get(&f) {
+            for v in vals {
+                if !v.contains('/') && !v.starts_with("dep:") && seen.insert(v.clone()) {
+                    work.push_back(v.clone());
                 }
             }
         }
-        for hit in hits {
-            findings.push(Finding {
-                check: CHECK_DEP_GRAPH,
-                code: "forbidden-dep-adapter-feature",
-                package: pkg.name.to_string(),
-                file: None,
-                line: None,
-                detail: format!(
-                    "dep `{}` の feature 有効化が adapter `{}` の toolkit \
-                     feature `{hit}` を起動",
-                    dep.name, target_pkg.name
-                ),
-            });
-        }
+    }
+    for hit in hits {
+        findings.push(Finding {
+            check: CHECK_DEP_GRAPH,
+            code: "forbidden-dep-adapter-feature",
+            package: pkg.name.to_string(),
+            file: None,
+            line: None,
+            detail: format!(
+                "dep `{}` の feature 有効化が adapter `{}` の toolkit \
+                 feature `{hit}` を起動",
+                dep.name, target_pkg.name
+            ),
+        });
     }
 }
 
@@ -531,6 +604,7 @@ fn check_transitive(
         allowlisted_ids,
         &root_exempt,
         &ruleset.forbidden_dep_roots,
+        findings,
     );
     for (name, path) in &mandatory {
         findings.push(Finding {
@@ -639,14 +713,18 @@ struct ReachItem {
 }
 
 /// unit の manifest 依存宣言と resolve 無条件辺を集める。
-/// Manifest-only unit は `cargo metadata --no-deps` で manifest を
-/// 読み依存宣言のみ返す（resolve 辺なし）。
+/// Manifest-only unit は `cargo metadata --no-deps --offline` で
+/// manifest を読み依存宣言のみ返す（resolve 辺なし）。解決失敗は
+/// `conditional-manifest-error` finding で記録する — 無言 skip は
+/// fail-open となり「到達不能」の無根拠な保証になるため。
 fn unit_deps(
     unit: &ReachUnit,
     packages: &HashMap<&PackageId, &Package>,
     nodes: &HashMap<&PackageId, &cargo_metadata::Node>,
     is_root: bool,
-    manifest_pkgs: &mut HashMap<std::path::PathBuf, Vec<Dependency>>,
+    manifest_pkgs: &mut HashMap<std::path::PathBuf, Option<Vec<Dependency>>>,
+    root_name: &str,
+    findings: &mut Vec<Finding>,
 ) -> Option<(Vec<Dependency>, Vec<PackageId>)> {
     match unit {
         ReachUnit::Resolve(pid) => {
@@ -669,25 +747,50 @@ fn unit_deps(
             Some((pkg.dependencies.clone(), edges))
         }
         ReachUnit::Manifest(dir) => {
-            let mdeps = if let Some(d) = manifest_pkgs.get(dir) {
-                d.clone()
-            } else {
-                let md = cargo_metadata::MetadataCommand::new()
-                    .manifest_path(dir.join("Cargo.toml"))
-                    .no_deps()
-                    .exec()
-                    .ok()?;
-                let deps = md
-                    .packages
-                    .first()
-                    .map(|p| p.dependencies.clone())
-                    .unwrap_or_default();
-                manifest_pkgs.insert(dir.clone(), deps.clone());
-                deps
-            };
-            Some((mdeps, Vec::new()))
+            let mdeps = manifest_pkgs
+                .entry(dir.clone())
+                .or_insert_with(|| manifest_deps(dir))
+                .clone();
+            if let Some(d) = mdeps {
+                return Some((d, Vec::new()));
+            }
+            findings.push(Finding {
+                check: CHECK_DEP_GRAPH,
+                code: "conditional-manifest-error",
+                package: root_name.to_string(),
+                file: None,
+                line: None,
+                detail: format!(
+                    "manifest 走査で `{}` の deps を解決不能 \
+                     （fail-closed として検査不能を記録）",
+                    dir.display()
+                ),
+            });
+            None
         }
     }
+}
+
+/// manifest dir の package 依存宣言を `--no-deps` で読む。
+/// virtual/multi-member manifest では `manifest_path` が一致する
+/// package を選び、一意特定できない場合は `None`（曖昧な package
+/// 選択による誤走査を避ける）。
+fn manifest_deps(dir: &Path) -> Option<Vec<Dependency>> {
+    let want = dir.join("Cargo.toml");
+    let want = want.canonicalize().unwrap_or(want);
+    let md = cargo_metadata::MetadataCommand::new()
+        .manifest_path(&want)
+        .no_deps()
+        .other_options(vec!["--offline".to_string()])
+        .exec()
+        .ok()?;
+    md.packages
+        .iter()
+        .find(|p| {
+            let m = p.manifest_path.as_std_path().to_path_buf();
+            m.canonicalize().unwrap_or(m) == want
+        })
+        .map(|p| p.dependencies.clone())
 }
 
 /// manifest dep の target を解決する — workspace package name 一致
@@ -752,8 +855,9 @@ fn conditional_reach(
     allowlisted_ids: &HashSet<PackageId>,
     root_exempt: &HashSet<String>,
     forbidden: &[String],
+    findings: &mut Vec<Finding>,
 ) -> BTreeMap<String, String> {
-    let mut manifest_pkgs: HashMap<std::path::PathBuf, Vec<Dependency>> = HashMap::new();
+    let mut manifest_pkgs: HashMap<std::path::PathBuf, Option<Vec<Dependency>>> = HashMap::new();
     let mut found: BTreeMap<String, String> = BTreeMap::new();
     let mut queue: VecDeque<ReachItem> = VecDeque::new();
     let mut visited: HashSet<String> = HashSet::new();
@@ -768,9 +872,15 @@ fn conditional_reach(
 
     while let Some(item) = queue.pop_front() {
         let is_root = item.key == root_key;
-        let Some((mdeps, resolve_edges)) =
-            unit_deps(&item.unit, packages, nodes, is_root, &mut manifest_pkgs)
-        else {
+        let Some((mdeps, resolve_edges)) = unit_deps(
+            &item.unit,
+            packages,
+            nodes,
+            is_root,
+            &mut manifest_pkgs,
+            root.name.as_str(),
+            findings,
+        ) else {
             continue;
         };
         let resolve_edge_set: HashSet<PackageId> = resolve_edges.iter().cloned().collect();
@@ -819,21 +929,19 @@ fn conditional_reach(
             );
         }
 
-        // manifest 宣言辺 — Resolve unit は optional dep のみ
-        // （resolve 未出の optional 辺 = conditional）。Manifest unit
-        // は非 dev の全辺（unit 自体が manifest 走査由来のため
-        // manifest でしか辿れない）。
+        // manifest 宣言辺 — Resolve unit は未 activation の optional
+        // 辺のみ（起点は自身 dev 辺も対象）、Manifest unit は非 dev
+        // の全辺を辿る。
         for mdep in &mdeps {
-            if !is_root && mdep.kind == DependencyKind::Development {
-                continue;
-            }
             let edge_optional = mdep.optional;
-            match &item.unit {
-                ReachUnit::Resolve(_) if !edge_optional => continue,
-                ReachUnit::Manifest(_) if mdep.kind == DependencyKind::Development => {
-                    continue;
+            let skip = match &item.unit {
+                ReachUnit::Resolve(_) => {
+                    !edge_optional || (!is_root && mdep.kind == DependencyKind::Development)
                 }
-                _ => {}
+                ReachUnit::Manifest(_) => mdep.kind == DependencyKind::Development,
+            };
+            if skip {
+                continue;
             }
             let Some((tunit, tname, tkey)) = mdep_target(
                 &item.unit,

@@ -206,6 +206,9 @@ public signature 漏出検査 + 明示 allowlist）**、
   root が driver adapter を直接参照するのは許容（allowlist の
   `composition-root` role）。ruviform workspace 内では adapter への
   依存は adapter 自身の example/bin のみが持てる形を検査する。
+  依存の kind（normal/build/dev）と activation 状態（optional
+  含む）は例外事由にならない — dev-dep や未 activation の
+  optional 宣言による adapter 参照も検査対象とする。
 - **R9（RT 契約）**: lab/guard は全て非 RT。RT/Audio thread
   semantics を fixture に持ち込まない。
 
