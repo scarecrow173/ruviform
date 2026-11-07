@@ -55,7 +55,7 @@ relations:
 | `mise run test-ui-driver-contract` | pass（7 件。manifest 整合・mechanism 実在検査を含む） |
 | 負例: UI-DVR-07 gpui の filter を存在しない名前に変更 | 失敗（期待どおり）。fixture は復元済み |
 | `mise run test-ui-component-view` | pass（17 件。story matrix 2 件を含む） |
-| `mise run test-ui-gpui` | pass（46 件。baseline 40 件 + 新規 6 件） |
+| `mise run test-ui-gpui` | pass（lib 46 件 = baseline 40 + 新規 6、加えて #429 の統合 test 4 件） |
 | `mise run test-ui-parity` | pass（3 件） |
 | `mise run test-ui-native-slot` | pass（13 件） |
 | `mise run test-ui-test-msrv`（rust 1.89.0） | pass |
@@ -66,8 +66,9 @@ relations:
 | `mise run fmt-check` | pass（`mise run fmt` 適用後） |
 | `mise run test`（workspace） | pass（exit 0。`test result` に失敗 0 件を確認） |
 
-検証はすべて作業ツリーで実施し、コミット後の HEAD にも同一内容が載る。
-`origin/main` は `38b7a46e` のままで merge 対象の差分は無い（作業開始時と最終検証時に `git fetch origin main` で確認）。
+最終検証は `origin/main`（`c31dc67c`, Issue #429 観測 seam）を merge した HEAD `21be9695` で実施した。
+merge は競合なし（`lib.rs` / `render.rs` は自動マージ）。merge 後の全項目が pass であることを確認している。
+本 IR の更新コミットは検証内容を変えない文書のみ。
 
 ## Consumer 検査（read-only、consumer 変更なし）
 
