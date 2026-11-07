@@ -8,8 +8,16 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
 
 ## 責務
 
+- driver-neutral Window/Host 契約(`driver` モジュール・Issue #386):
+  backend 非依存の `WindowSpec`/`WindowLifecycle`/`DriverEvent`/
+  `WindowDriver`/`WindowCapabilities`。gpui/DOM/`wry`/OS handle を
+  含まない。`Action(Intent)` が `Message(String)` の typed 後継、
+  `UiError::Unsupported` + capability 宣言で silent degrade を禁止。
+  実装は `ruviform-ui-gpui`(標準)・`ruviform-ui-webview`(legacy)・
+  `ruviform-ui-test::FakeDriver`(test)。
 - ホスト抽象(`event` モジュール): `HostEvent`(Tick/Focus/Resize/Close 等)と
-  `HostHandle` による adapter 非依存の UI ライフサイクル通知。
+  `HostHandle` による adapter 非依存の UI ライフサイクル通知
+  (legacy — `driver` モジュールへ移行中)。
 - IPC v1(`ipc` モジュール): `rvf.ipc.v1` 版付き JSON エンベロープ。
   Intent(呼出)/即時 Result/Job 開始/進捗 Event/cancel/終端 Error/
   notification を `id` 相関で扱う。`sys.*` はランタイム組込み op 予約域。

@@ -238,6 +238,31 @@ run = "cargo clippy -p ruviform-ui-webview --all-targets --features webview -- -
 description = "Run webview-feature tests for the UI adapter (rvf:// scheme/data surface; windowed paths are manual verification)"
 run = "cargo test -p ruviform-ui-webview --features webview"
 
+# UI GPUI lane (Issue #386): the standard Driver adapter's
+# implementation lives behind the non-default `gpui` feature so
+# `cargo check --workspace` stays headless; these tasks are the
+# feature-enabled verification entry points. The crate compiles the
+# real GPUI 0.2.2 backend (GPU/font/OS-window stacks) — build times
+# are heavy, and actual window-on-screen behavior is manual
+# verification on a real OS session (RF388/RF389 own real-OS
+# evidence), not a CI headless pass.
+[tasks.check-ui-gpui]
+description = "Type-check the UI GPUI adapter and its targets with the gpui feature enabled"
+run = "cargo check -p ruviform-ui-gpui --features gpui --all-targets"
+[tasks.lint-ui-gpui]
+description = "Lint the UI GPUI adapter and its test/example targets with the gpui feature enabled"
+run = "cargo clippy -p ruviform-ui-gpui --all-targets --features gpui -- -D warnings"
+[tasks.test-ui-gpui]
+description = "Run gpui-feature tests for the UI GPUI adapter (real OS window behavior is manual verification)"
+run = "cargo test -p ruviform-ui-gpui --features gpui"
+# Canonical manual-verification entry for the minimal native Window
+# fixture: opens a real OS window on the local session — run it on a
+# real OS only, never as a headless/CI pass. RF388/RF389 real-OS
+# evidence is recorded through this entry point.
+[tasks.example-ui-gpui-minimal]
+description = "Run the minimal GPUI Window fixture on the real OS session (manual verification entry — not a headless/CI lane)"
+run = "cargo run -p ruviform-ui-gpui --features gpui --example minimal_window"
+
 # UI npm dependency install tasks (Issue #330): each ui/* package's
 # lockfile-driven `npm ci` lives in exactly one task. `sources` (lockfile +
 # manifest) and `outputs` (the hidden lockfile npm always writes into
