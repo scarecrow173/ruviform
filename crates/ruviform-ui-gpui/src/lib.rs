@@ -1343,7 +1343,10 @@ mod gpui_driver {
 }
 
 #[cfg(feature = "gpui-test")]
-pub use gpui_driver::observe::{ComponentObservation, GpuiObserver, ViewObservation};
+pub use gpui_driver::observe::{
+    ComponentDrawn, ComponentObservation, DrawnBar, DrawnMark, DrawnPlan, DrawnWaveformChannel,
+    GpuiObserver, ViewDrawn, ViewObservation,
+};
 #[cfg(feature = "gpui")]
 pub use gpui_driver::surface::{GpuiSurfaceAdapter, SharedSurface};
 #[cfg(feature = "gpui")]
