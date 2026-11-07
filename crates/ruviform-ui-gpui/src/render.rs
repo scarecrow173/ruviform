@@ -33,12 +33,12 @@ use ruviform_ui::view::{
     WaveformSpec,
 };
 use ruviform_ui::{
-    Event, Intent, LogicalRect, NativeSurfaceSlot, SlotError, SlotGeometry, SlotVisibility,
-    SurfaceSlotId,
+    Event, Intent, LogicalRect, SlotError, SlotGeometry, SlotVisibility, SurfaceSlotId,
 };
 use ruviform_ui_theme::ResolvedTheme;
 
-use crate::{GpuiSurfaceAdapter, IntentSink};
+use crate::IntentSink;
+use crate::gpui_driver::surface::SharedSurface;
 
 /// `op` carried on the [`Intent`] envelope for every projected
 /// [`ruviform_ui::behavior::CommandIntent`] — the Action-channel
@@ -221,9 +221,11 @@ struct DragState {
 /// projection (Issue #387 × #388 glue): the canonical shared adapter
 /// plus this window's `key → slot` map.
 pub(crate) struct SlotMount {
-    /// The driver's canonical adapter — the same ledger consumers
-    /// declare/lease/release on through `GpuiDriver::surface`.
-    pub adapter: Rc<RefCell<GpuiSurfaceAdapter>>,
+    /// The driver's canonical surface handle — the same ledger
+    /// consumers declare/lease/release on through
+    /// `GpuiDriver::surface`. Per-call borrows only, so no foreign
+    /// guard can starve the renderer's pushes.
+    pub adapter: SharedSurface,
     /// `bind_native_slot` associations for this window — mutated
     /// live by the consumer, read each frame by the renderer.
     pub bindings: Rc<RefCell<BTreeMap<ComponentKey, SurfaceSlotId>>>,
@@ -295,7 +297,7 @@ fn push_slot_op(
     proj: &mut SlotProjection,
     slot: SurfaceSlotId,
     aspect: &'static str,
-    op: impl FnOnce(&mut GpuiSurfaceAdapter) -> Result<(), SlotError>,
+    op: impl FnOnce(&SharedSurface) -> Result<(), SlotError>,
     mark: impl FnOnce(&mut AppliedSlot),
 ) {
     if proj
@@ -305,11 +307,7 @@ fn push_slot_op(
     {
         return;
     }
-    let Ok(mut adapter) = proj.mount.adapter.try_borrow_mut() else {
-        // Consumer holds the adapter this frame — retry next frame.
-        return;
-    };
-    match op(&mut adapter) {
+    match op(&proj.mount.adapter) {
         Ok(()) => mark(proj.applied.entry(slot).or_default()),
         Err(error) => {
             if permanent_slot_error(error) {
@@ -1106,7 +1104,7 @@ mod tests {
     use gpui::{Modifiers, MouseButton, TestAppContext, point, px};
     use ruviform_ui::behavior::{DetachPolicy, ValueDescriptor};
     use ruviform_ui::dock::ViewInstanceId;
-    use ruviform_ui::view::{A11ySpec, ComponentVisualState, PanelSpec, ViewSpec};
+    use ruviform_ui::view::{A11ySpec, AttachEpoch, ComponentVisualState, PanelSpec, ViewSpec};
     use ruviform_ui_theme::{ThemeResolver, TokenDocument};
 
     fn fader_spec(key_name: &str) -> ComponentSpec {
@@ -1128,7 +1126,10 @@ mod tests {
     }
 
     fn host_with_fader() -> ViewHost {
-        let mut host = ViewHost::new(ViewInstanceId::new(1).expect("nonzero"));
+        let mut host = ViewHost::new(
+            ViewInstanceId::new(1).expect("nonzero"),
+            AttachEpoch::new(1),
+        );
         host.mount(ViewSpec {
             root: ComponentSpec::Panel(PanelSpec {
                 key: ComponentKey("panel".to_string()),
@@ -1360,8 +1361,7 @@ mod tests {
         key: &ComponentKey,
     ) -> SurfaceSlotId {
         use ruviform_ui::{
-            LogicalRect, NativeSurfaceSlot, SlotCapabilities, SlotGeometry, SlotSpec,
-            SlotVisibility, Support,
+            LogicalRect, SlotCapabilities, SlotGeometry, SlotSpec, SlotVisibility, Support,
         };
         let caps = SlotCapabilities {
             attach_parent: Support::Supported,
@@ -1371,7 +1371,6 @@ mod tests {
         };
         let slot = driver
             .surface()
-            .borrow_mut()
             .declare_slot(SlotSpec {
                 window,
                 view: view_id,
@@ -1412,7 +1411,7 @@ mod tests {
         let sink = driver.intent_sink(window);
         let adapter = driver.surface();
 
-        let mut host = ViewHost::new(view_id);
+        let mut host = ViewHost::new(view_id, AttachEpoch::new(1));
         host.mount(ViewSpec {
             root: ComponentSpec::Panel(PanelSpec {
                 key: ComponentKey("root".to_string()),
@@ -1446,8 +1445,8 @@ mod tests {
         // Painted + bound → geometry, clip, Visible all projected.
         {
             let spec = adapter
-                .borrow()
                 .spec(slot)
+                .expect("surface borrow")
                 .expect("slot spec on canonical adapter");
             assert!(
                 spec.geometry.rect.width > 0.0 && spec.geometry.rect.height > 0.0,
@@ -1471,14 +1470,17 @@ mod tests {
         });
         cx.run_until_parked();
         {
-            let spec = adapter.borrow().spec(slot).expect("slot spec");
+            let spec = adapter
+                .spec(slot)
+                .expect("surface borrow")
+                .expect("slot spec");
             assert_eq!(
                 spec.visibility,
                 SlotVisibility::Hidden,
                 "unpainted bound slot suppressed"
             );
         }
-        let events = adapter.borrow_mut().drain_events();
+        let events = adapter.drain_events().expect("surface borrow");
         assert!(
             events
                 .iter()
@@ -1708,7 +1710,7 @@ mod tests {
     /// ledger as if it had been.
     #[gpui::test]
     fn rvf_view_native_slot_fail_closed_on_refusal(cx: &mut TestAppContext) {
-        use ruviform_ui::{NativeSurfaceSlot, SlotEvent, WindowDriver};
+        use ruviform_ui::{SlotEvent, WindowDriver};
 
         let key = ComponentKey("dock.editor".to_string());
         let mut driver = crate::GpuiDriver::new();
@@ -1720,7 +1722,7 @@ mod tests {
         let sink = driver.intent_sink(window);
         let adapter = driver.surface();
 
-        let mut host = ViewHost::new(view_id);
+        let mut host = ViewHost::new(view_id, AttachEpoch::new(1));
         host.mount(ViewSpec {
             root: ComponentSpec::Panel(PanelSpec {
                 key: ComponentKey("root".to_string()),
@@ -1735,11 +1737,8 @@ mod tests {
 
         // Release after binding: every port op now refuses with a
         // permanent `Released` — the painted frame must stay Hidden.
-        adapter
-            .borrow_mut()
-            .release_slot(slot)
-            .expect("release slot");
-        adapter.borrow_mut().drain_events();
+        adapter.release_slot(slot).expect("release slot");
+        adapter.drain_events().expect("surface borrow");
 
         let inbox = Rc::new(RefCell::new(Vec::new()));
         let mount_adapter = adapter.clone();
@@ -1760,13 +1759,16 @@ mod tests {
         cx.run_until_parked();
         cx.run_until_parked();
 
-        let spec = adapter.borrow().spec(slot).expect("slot spec");
+        let spec = adapter
+            .spec(slot)
+            .expect("surface borrow")
+            .expect("slot spec");
         assert_eq!(
             spec.visibility,
             SlotVisibility::Hidden,
             "a refused slot is never shown"
         );
-        let events = adapter.borrow_mut().drain_events();
+        let events = adapter.drain_events().expect("surface borrow");
         assert!(
             !events.iter().any(|e| matches!(
                 e,
@@ -1785,12 +1787,13 @@ mod tests {
         );
     }
 
-    /// Fail-closed while the consumer holds the adapter: a refused
-    /// borrow leaves nothing applied, so the slot stays `Hidden`
-    /// until the port state can actually be pushed — then it shows.
+    /// Public-API starvation regression: a consumer holding only a
+    /// `SharedSurface` clone (per-call borrows — it cannot hold a
+    /// `RefMut`) can never block the renderer's pushes, so every
+    /// `Visible` → `Hidden` → `Visible` transition lands honestly.
     #[gpui::test]
-    fn rvf_view_native_slot_fail_closed_while_borrowed(cx: &mut TestAppContext) {
-        use ruviform_ui::{SlotEvent, WindowDriver};
+    fn rvf_view_native_slot_public_api_cannot_starve_pushes(cx: &mut TestAppContext) {
+        use ruviform_ui::WindowDriver;
 
         let key = ComponentKey("dock.editor".to_string());
         let mut driver = crate::GpuiDriver::new();
@@ -1802,7 +1805,7 @@ mod tests {
         let sink = driver.intent_sink(window);
         let adapter = driver.surface();
 
-        let mut host = ViewHost::new(view_id);
+        let mut host = ViewHost::new(view_id, AttachEpoch::new(1));
         host.mount(ViewSpec {
             root: ComponentSpec::Panel(PanelSpec {
                 key: ComponentKey("root".to_string()),
@@ -1817,51 +1820,105 @@ mod tests {
 
         let inbox = Rc::new(RefCell::new(Vec::new()));
         let mount_adapter = adapter.clone();
-        adapter.borrow_mut().drain_events();
-        // Hold the adapter across the mount paint: every
-        // `try_borrow_mut` refuses → nothing lands → the slot must
-        // stay `Hidden` — never half-projected into visibility.
-        let (view, cx) = {
-            let _guard = adapter.borrow_mut();
-            let (view, cx) = cx.add_window_view(move |window, cx| {
-                RvfView::mounted(
-                    host,
-                    None,
-                    &sink,
-                    inbox,
-                    SlotMount {
-                        adapter: mount_adapter,
-                        bindings,
-                    },
-                    window,
-                    cx,
-                )
-            });
-            cx.run_until_parked();
-            (view, cx)
-        };
-        {
-            let spec = adapter.borrow().spec(slot).expect("slot spec");
-            assert_eq!(
-                spec.visibility,
-                SlotVisibility::Hidden,
-                "borrow-refused paint must not have shown the slot"
-            );
-            let events = adapter.borrow_mut().drain_events();
-            assert!(
-                !events.iter().any(|e| matches!(
-                    e,
-                    SlotEvent::GeometryChanged { slot: s } | SlotEvent::VisibilityChanged { slot: s }
-                        if *s == slot
-                )),
-                "no slot op could have landed while borrowed: {events:?}"
-            );
-        }
-        // Once the port is reachable the projection lands → Visible.
+        let (view, cx) = cx.add_window_view(move |window, cx| {
+            RvfView::mounted(
+                host,
+                None,
+                &sink,
+                inbox,
+                SlotMount {
+                    adapter: mount_adapter,
+                    bindings,
+                },
+                window,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+
+        // The stale-`Visible` counterexample is unconstructible
+        // through the public API: the consumer keeps its
+        // `SharedSurface` clone across every frame below — the only
+        // thing it *can* hold — and the renderer's pushes still land.
+        let spec = adapter
+            .spec(slot)
+            .expect("surface borrow")
+            .expect("slot spec");
+        assert_eq!(spec.visibility, SlotVisibility::Visible);
+
+        // Visible → inactive tab: `Hidden` must land — a starved
+        // push would leave the port stuck at `Visible`.
+        view.update(cx, |v, cx| {
+            let generation = v.host.generation();
+            let mut spec = v.host.spec().expect("spec").clone();
+            if let ComponentSpec::Panel(p) = &mut spec.root
+                && let ComponentSpec::Tabs(t) = &mut p.children[0]
+            {
+                t.active = 1;
+            }
+            v.host.update(spec, generation).expect("switch tab");
+            cx.notify();
+        });
+        cx.run_until_parked();
+        let spec = adapter
+            .spec(slot)
+            .expect("surface borrow")
+            .expect("slot spec");
+        assert_eq!(
+            spec.visibility,
+            SlotVisibility::Hidden,
+            "inactive tab must hide an already-Visible slot"
+        );
+
+        // Back to the slot's tab: geometry + Visible project again.
+        view.update(cx, |v, cx| {
+            let generation = v.host.generation();
+            let mut spec = v.host.spec().expect("spec").clone();
+            if let ComponentSpec::Panel(p) = &mut spec.root
+                && let ComponentSpec::Tabs(t) = &mut p.children[0]
+            {
+                t.active = 0;
+            }
+            v.host.update(spec, generation).expect("switch back");
+            cx.notify();
+        });
+        cx.run_until_parked();
+        let spec = adapter
+            .spec(slot)
+            .expect("surface borrow")
+            .expect("slot spec");
+        assert_eq!(
+            spec.visibility,
+            SlotVisibility::Visible,
+            "re-painting an already-Visible slot re-projects it"
+        );
+
+        // Unbind → suppressed + forgotten; rebind → Visible again.
+        driver
+            .unbind_native_slot(window, &key)
+            .expect("unbind slot");
         view.update(cx, |_v, cx| cx.notify());
         cx.run_until_parked();
-        let spec = adapter.borrow().spec(slot).expect("slot spec");
-        assert_eq!(spec.visibility, SlotVisibility::Visible);
+        cx.run_until_parked();
+        let spec = adapter
+            .spec(slot)
+            .expect("surface borrow")
+            .expect("slot spec");
+        assert_eq!(spec.visibility, SlotVisibility::Hidden);
+        driver
+            .bind_native_slot(window, key.clone(), slot)
+            .expect("rebind slot");
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        let spec = adapter
+            .spec(slot)
+            .expect("surface borrow")
+            .expect("slot spec");
+        assert_eq!(
+            spec.visibility,
+            SlotVisibility::Visible,
+            "rebound slot is re-projected, not left at a stale state"
+        );
     }
 
     /// Necessary-condition distinction: a driver without clip
@@ -1871,8 +1928,8 @@ mod tests {
     #[gpui::test]
     fn rvf_view_native_slot_unclipped_shows_without_clip_support(cx: &mut TestAppContext) {
         use ruviform_ui::{
-            LogicalRect, NativeSurfaceSlot, SlotCapabilities, SlotGeometry, SlotSpec,
-            SlotVisibility, Support, WindowDriver,
+            LogicalRect, SlotCapabilities, SlotGeometry, SlotSpec, SlotVisibility, Support,
+            WindowDriver,
         };
 
         let key = ComponentKey("dock.editor".to_string());
@@ -1882,7 +1939,6 @@ mod tests {
         let view_id = ViewInstanceId::new(1).expect("nonzero");
         let slot = driver
             .surface()
-            .borrow_mut()
             .declare_slot(SlotSpec {
                 window,
                 view: view_id,
@@ -1910,9 +1966,9 @@ mod tests {
         let bindings = driver.slot_binding_map(window).expect("binding map");
         let sink = driver.intent_sink(window);
         let adapter = driver.surface();
-        adapter.borrow_mut().drain_events();
+        adapter.drain_events().expect("surface borrow");
 
-        let mut host = ViewHost::new(view_id);
+        let mut host = ViewHost::new(view_id, AttachEpoch::new(1));
         host.mount(ViewSpec {
             root: ComponentSpec::Panel(PanelSpec {
                 key: ComponentKey("root".to_string()),
@@ -1943,7 +1999,10 @@ mod tests {
         });
         cx.run_until_parked();
 
-        let spec = adapter.borrow().spec(slot).expect("slot spec");
+        let spec = adapter
+            .spec(slot)
+            .expect("surface borrow")
+            .expect("slot spec");
         assert_eq!(
             spec.visibility,
             SlotVisibility::Visible,
@@ -1968,7 +2027,7 @@ mod tests {
     /// clips to a stale rect.
     #[gpui::test]
     fn rvf_view_native_slot_forget_clears_clip(cx: &mut TestAppContext) {
-        use ruviform_ui::{NativeSurfaceSlot, WindowDriver};
+        use ruviform_ui::WindowDriver;
 
         let key = ComponentKey("dock.editor".to_string());
         let mut driver = crate::GpuiDriver::new();
@@ -1980,7 +2039,7 @@ mod tests {
         let sink = driver.intent_sink(window);
         let adapter = driver.surface();
 
-        let mut host = ViewHost::new(view_id);
+        let mut host = ViewHost::new(view_id, AttachEpoch::new(1));
         host.mount(ViewSpec {
             root: ComponentSpec::Panel(PanelSpec {
                 key: ComponentKey("root".to_string()),
@@ -2011,7 +2070,11 @@ mod tests {
         });
         cx.run_until_parked();
         assert_eq!(
-            adapter.borrow().spec(slot).expect("spec").visibility,
+            adapter
+                .spec(slot)
+                .expect("surface borrow")
+                .expect("spec")
+                .visibility,
             SlotVisibility::Visible
         );
 
@@ -2025,7 +2088,6 @@ mod tests {
             height: 40.0,
         };
         adapter
-            .borrow_mut()
             .set_clip(slot, Some(stale_clip))
             .expect("stage port clip");
         view.update(cx, |v, _cx| {
@@ -2044,7 +2106,7 @@ mod tests {
         cx.run_until_parked();
 
         assert_eq!(
-            adapter.borrow().clip_of(slot),
+            adapter.clip_of(slot).expect("surface borrow"),
             None,
             "port clip restored to unclipped before forgetting"
         );

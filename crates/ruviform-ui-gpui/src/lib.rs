@@ -215,7 +215,7 @@ mod gpui_driver {
     /// reserves the [`WindowId`] immediately; if OS-level creation
     /// later fails, the window terminates with `Destroyed`.
     ///
-    /// `surface` is the driver's canonical [`GpuiSurfaceAdapter`]:
+    /// `surface` is the driver's canonical [`SharedSurface`] handle:
     /// every clone shares the same slot ledger, and mounted views
     /// project laid-out `NativeSlot` component bounds onto it.
     ///
@@ -223,7 +223,7 @@ mod gpui_driver {
     #[derive(Clone)]
     pub struct GpuiDriver {
         inner: Rc<RefCell<Inner>>,
-        surface: Rc<RefCell<surface::GpuiSurfaceAdapter>>,
+        surface: surface::SharedSurface,
     }
 
     /// Typed-intent ingress for views inside a GPUI window (Issue
@@ -291,22 +291,24 @@ mod gpui_driver {
                 exited: false,
             }));
             Self {
-                surface: Rc::new(RefCell::new(surface::GpuiSurfaceAdapter::bound(&inner))),
+                surface: surface::SharedSurface::wrap(surface::GpuiSurfaceAdapter::bound(&inner)),
                 inner,
             }
         }
 
-        /// The driver's canonical [`GpuiSurfaceAdapter`] handle —
-        /// the one slot ledger mounted views project onto. Declare
-        /// slots through this adapter (not a fresh
-        /// `GpuiSurfaceAdapter::new`, which would own a separate
-        /// ledger) so `bind_native_slot`'s runtime check and the
-        /// renderer's `set_geometry`/`set_clip`/`set_visibility`
-        /// calls see them.
+        /// The driver's canonical [`SharedSurface`] handle — the one
+        /// slot ledger mounted views project onto. Declare slots
+        /// through this handle (not a fresh `GpuiSurfaceAdapter::new`,
+        /// which would own a separate ledger) so `bind_native_slot`'s
+        /// runtime check and the renderer's
+        /// `set_geometry`/`set_clip`/`set_visibility` calls see them.
+        /// Borrow discipline is internal to the handle — a consumer
+        /// cannot hold a guard across frames, so it cannot starve the
+        /// renderer's pushes.
         ///
         /// **RT contract:** non-RT only — UI-thread only.
         #[must_use]
-        pub fn surface(&self) -> Rc<RefCell<surface::GpuiSurfaceAdapter>> {
+        pub fn surface(&self) -> surface::SharedSurface {
             self.surface.clone()
         }
 
@@ -337,8 +339,11 @@ mod gpui_driver {
                 }
             }
             {
-                let adapter = self.surface.borrow();
-                match adapter.state(slot) {
+                match self
+                    .surface
+                    .state(slot)
+                    .map_err(|e| UiError::host(format!("surface borrow: {e:?}")))?
+                {
                     Some(SlotState::Declared | SlotState::Leased) => {}
                     Some(SlotState::Released) => {
                         return Err(UiError::host(format!("surface slot {slot:?} is released")));
@@ -347,7 +352,12 @@ mod gpui_driver {
                         return Err(UiError::host(format!("unknown surface slot {slot:?}")));
                     }
                 }
-                if adapter.spec(slot).is_some_and(|s| s.window != window) {
+                if self
+                    .surface
+                    .spec(slot)
+                    .map_err(|e| UiError::host(format!("surface borrow: {e:?}")))?
+                    .is_some_and(|s| s.window != window)
+                {
                     return Err(UiError::host(format!(
                         "surface slot {slot:?} belongs to a different window"
                     )));
@@ -1233,7 +1243,7 @@ mod gpui_driver {
 }
 
 #[cfg(feature = "gpui")]
-pub use gpui_driver::surface::GpuiSurfaceAdapter;
+pub use gpui_driver::surface::{GpuiSurfaceAdapter, SharedSurface};
 #[cfg(feature = "gpui")]
 pub use gpui_driver::{GpuiDriver, IntentSink, ViewMount};
 

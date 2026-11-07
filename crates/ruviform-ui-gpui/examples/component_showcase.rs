@@ -18,8 +18,9 @@
 use ruviform_ui::behavior::{DetachPolicy, ValueDescriptor};
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{
-    A11yRole, A11ySpec, ComponentKey, ComponentSpec, ComponentVisualState, ControlSpec,
-    Orientation, PanelSpec, TabSpec, TabsSpec, ViewHost, ViewSpec, WaveformBin, WaveformSpec,
+    A11yRole, A11ySpec, AttachEpoch, ComponentKey, ComponentSpec, ComponentVisualState,
+    ControlSpec, Orientation, PanelSpec, TabSpec, TabsSpec, ViewHost, ViewSpec, WaveformBin,
+    WaveformSpec,
 };
 use ruviform_ui::{DriverEvent, LogicalSize, WindowLifecycle, WindowSpec};
 use ruviform_ui_gpui::{GpuiDriver, ViewMount};
@@ -127,7 +128,10 @@ fn showcase_spec() -> ViewSpec {
 
 fn main() {
     let mut driver = GpuiDriver::new();
-    let mut host = ViewHost::new(ViewInstanceId::new(1).expect("nonzero"));
+    let mut host = ViewHost::new(
+        ViewInstanceId::new(1).expect("nonzero"),
+        AttachEpoch::new(1),
+    );
     host.mount(showcase_spec()).expect("mount showcase");
     let window = driver
         .create_view_window(

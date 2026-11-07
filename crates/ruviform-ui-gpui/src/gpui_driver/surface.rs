@@ -17,7 +17,7 @@
 //!
 //! **RT contract:** non-RT only — UI-thread only, same as the driver.
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -535,6 +535,219 @@ impl NativeSurfaceSlot for GpuiSurfaceAdapter {
 
     fn drain_events(&mut self) -> Vec<SlotEvent> {
         self.registry.drain_events()
+    }
+}
+
+/// Cloneable, per-call-borrowed handle to a [`GpuiSurfaceAdapter`].
+///
+/// [`GpuiDriver::surface`] hands out these handles; every clone
+/// points at the *same* canonical slot ledger the mounted view
+/// projects onto. Each method borrows the adapter for exactly that
+/// call — a consumer can never hold a `RefMut` across frames, so
+/// renderer pushes can no longer be starved by a foreign guard (the
+/// exposure class behind the stale-`Visible` residual). A
+/// `try_borrow` refusal — reachable only through reentrancy inside
+/// an adapter call — surfaces as [`SlotError::Backend`] (typed,
+/// retryable) rather than a silent success or a panic.
+///
+/// **RT contract:** non-RT only — UI-thread only.
+#[derive(Clone)]
+pub struct SharedSurface {
+    inner: Rc<RefCell<GpuiSurfaceAdapter>>,
+}
+
+impl SharedSurface {
+    /// Wraps `adapter` as the shared handle. The driver owns the
+    /// canonical construction — consumers receive clones via
+    /// [`GpuiDriver::surface`], never mint their own.
+    pub(crate) fn wrap(adapter: GpuiSurfaceAdapter) -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(adapter)),
+        }
+    }
+
+    fn ops(&self) -> Result<RefMut<'_, GpuiSurfaceAdapter>, SlotError> {
+        self.inner.try_borrow_mut().map_err(|_| SlotError::Backend)
+    }
+
+    fn read(&self) -> Result<Ref<'_, GpuiSurfaceAdapter>, SlotError> {
+        self.inner.try_borrow().map_err(|_| SlotError::Backend)
+    }
+
+    /// [`NativeSurfaceSlot::capabilities`]
+    pub fn capabilities(&self, slot: SurfaceSlotId) -> Result<SlotCapabilities, SlotError> {
+        self.read()?.capabilities(slot)
+    }
+
+    /// [`NativeSurfaceSlot::declare_slot`]
+    pub fn declare_slot(&self, spec: SlotSpec) -> Result<SurfaceSlotId, SlotError> {
+        self.ops()?.declare_slot(spec)
+    }
+
+    /// [`NativeSurfaceSlot::release_slot`]
+    pub fn release_slot(&self, slot: SurfaceSlotId) -> Result<(), SlotError> {
+        self.ops()?.release_slot(slot)
+    }
+
+    /// [`NativeSurfaceSlot::set_geometry`]
+    pub fn set_geometry(
+        &self,
+        slot: SurfaceSlotId,
+        geometry: SlotGeometry,
+    ) -> Result<(), SlotError> {
+        self.ops()?.set_geometry(slot, geometry)
+    }
+
+    /// [`NativeSurfaceSlot::set_visibility`]
+    pub fn set_visibility(
+        &self,
+        slot: SurfaceSlotId,
+        visibility: SlotVisibility,
+    ) -> Result<(), SlotError> {
+        self.ops()?.set_visibility(slot, visibility)
+    }
+
+    /// [`NativeSurfaceSlot::set_clip`]
+    pub fn set_clip(
+        &self,
+        slot: SurfaceSlotId,
+        clip: Option<LogicalRect>,
+    ) -> Result<(), SlotError> {
+        self.ops()?.set_clip(slot, clip)
+    }
+
+    /// [`NativeSurfaceSlot::set_zorder`]
+    pub fn set_zorder(&self, slot: SurfaceSlotId, z: i32) -> Result<(), SlotError> {
+        self.ops()?.set_zorder(slot, z)
+    }
+
+    /// [`NativeSurfaceSlot::request_focus`]
+    pub fn request_focus(&self, slot: SurfaceSlotId) -> Result<(), SlotError> {
+        self.ops()?.request_focus(slot)
+    }
+
+    /// [`NativeSurfaceSlot::lease_parent`]
+    pub fn lease_parent(&self, slot: SurfaceSlotId) -> Result<SlotLease, SlotError> {
+        self.ops()?.lease_parent(slot)
+    }
+
+    /// [`NativeSurfaceSlot::release_lease`]
+    pub fn release_lease(&self, lease: SlotLease) -> Result<(), SlotError> {
+        self.ops()?.release_lease(lease)
+    }
+
+    /// [`NativeSurfaceSlot::validate_lease`]
+    pub fn validate_lease(&self, lease: SlotLease) -> Result<LeaseInfo, SlotError> {
+        self.read()?.validate_lease(lease)
+    }
+
+    /// [`NativeSurfaceSlot::drain_events`]
+    pub fn drain_events(&self) -> Result<Vec<SlotEvent>, SlotError> {
+        Ok(self.ops()?.drain_events())
+    }
+
+    /// [`GpuiSurfaceAdapter::redeem`]
+    pub fn redeem(&self, payload: u64) -> Result<u64, SlotError> {
+        self.read()?.redeem(payload)
+    }
+
+    /// [`GpuiSurfaceAdapter::mark_busy`]
+    pub fn mark_busy(&self, slot: SurfaceSlotId) -> Result<(), SlotError> {
+        self.ops()?.mark_busy(slot)
+    }
+
+    /// [`GpuiSurfaceAdapter::clear_busy`]
+    pub fn clear_busy(&self, slot: SurfaceSlotId) -> Result<(), SlotError> {
+        self.ops()?.clear_busy(slot)
+    }
+
+    /// [`GpuiSurfaceAdapter::state`] — `Err` means the ledger could
+    /// not be consulted this call, `Ok(None)` means unknown slot;
+    /// the two are never conflated.
+    pub fn state(&self, slot: SurfaceSlotId) -> Result<Option<SlotState>, SlotError> {
+        Ok(self.read()?.state(slot))
+    }
+
+    /// [`GpuiSurfaceAdapter::spec`] — same `Err`/`Ok(None)`
+    /// distinction as [`Self::state`].
+    pub fn spec(&self, slot: SurfaceSlotId) -> Result<Option<SlotSpec>, SlotError> {
+        Ok(self.read()?.spec(slot))
+    }
+
+    /// [`GpuiSurfaceAdapter::container_token`]
+    pub fn container_token(&self, slot: SurfaceSlotId) -> Result<Option<u64>, SlotError> {
+        Ok(self.read()?.container_token(slot))
+    }
+
+    /// The explicit clip recorded for `slot` — test visibility into
+    /// port-side clip state.
+    #[cfg(all(test, feature = "gpui-test"))]
+    pub(crate) fn clip_of(&self, slot: SurfaceSlotId) -> Result<Option<LogicalRect>, SlotError> {
+        Ok(self.read()?.clip_of(slot))
+    }
+}
+
+impl NativeSurfaceSlot for SharedSurface {
+    fn capabilities(&self, slot: SurfaceSlotId) -> Result<SlotCapabilities, SlotError> {
+        SharedSurface::capabilities(self, slot)
+    }
+
+    fn declare_slot(&mut self, spec: SlotSpec) -> Result<SurfaceSlotId, SlotError> {
+        SharedSurface::declare_slot(self, spec)
+    }
+
+    fn release_slot(&mut self, slot: SurfaceSlotId) -> Result<(), SlotError> {
+        SharedSurface::release_slot(self, slot)
+    }
+
+    fn set_geometry(
+        &mut self,
+        slot: SurfaceSlotId,
+        geometry: SlotGeometry,
+    ) -> Result<(), SlotError> {
+        SharedSurface::set_geometry(self, slot, geometry)
+    }
+
+    fn set_visibility(
+        &mut self,
+        slot: SurfaceSlotId,
+        visibility: SlotVisibility,
+    ) -> Result<(), SlotError> {
+        SharedSurface::set_visibility(self, slot, visibility)
+    }
+
+    fn set_clip(
+        &mut self,
+        slot: SurfaceSlotId,
+        clip: Option<LogicalRect>,
+    ) -> Result<(), SlotError> {
+        SharedSurface::set_clip(self, slot, clip)
+    }
+
+    fn set_zorder(&mut self, slot: SurfaceSlotId, z: i32) -> Result<(), SlotError> {
+        SharedSurface::set_zorder(self, slot, z)
+    }
+
+    fn request_focus(&mut self, slot: SurfaceSlotId) -> Result<(), SlotError> {
+        SharedSurface::request_focus(self, slot)
+    }
+
+    fn lease_parent(&mut self, slot: SurfaceSlotId) -> Result<SlotLease, SlotError> {
+        SharedSurface::lease_parent(self, slot)
+    }
+
+    fn release_lease(&mut self, lease: SlotLease) -> Result<(), SlotError> {
+        SharedSurface::release_lease(self, lease)
+    }
+
+    fn validate_lease(&self, lease: SlotLease) -> Result<LeaseInfo, SlotError> {
+        SharedSurface::validate_lease(self, lease)
+    }
+
+    fn drain_events(&mut self) -> Vec<SlotEvent> {
+        self.ops()
+            .expect("shared surface borrow conflicted during drain_events")
+            .drain_events()
     }
 }
 

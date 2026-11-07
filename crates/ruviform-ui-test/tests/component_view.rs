@@ -20,9 +20,9 @@ use ruviform_ui::behavior::{
 };
 use ruviform_ui::dock::{DockTarget, DockWorkspace, DropZone, ViewInstanceId};
 use ruviform_ui::view::{
-    A11yRole, A11ySpec, ComponentKey, ComponentSpec, ComponentVisualState, ControlSpec,
-    Orientation, ProjectionOp, TabSpec, TabsSpec, ViewError, ViewEvent, ViewHost, ViewSpec,
-    WaveformBin, WaveformSpec,
+    A11yRole, A11ySpec, AttachEpoch, ComponentKey, ComponentSpec, ComponentVisualState,
+    ControlSpec, Orientation, ProjectionOp, TabSpec, TabsSpec, ViewError, ViewEvent, ViewHost,
+    ViewSpec, WaveformBin, WaveformSpec,
 };
 use ruviform_ui::window::WindowId;
 use ruviform_ui_theme::{ThemeResolver, TokenDocument};
@@ -155,7 +155,10 @@ fn wave_view() -> ViewSpec {
 }
 
 fn host() -> ViewHost {
-    let mut host = ViewHost::new(ViewInstanceId::new(1).expect("nonzero"));
+    let mut host = ViewHost::new(
+        ViewInstanceId::new(1).expect("nonzero"),
+        AttachEpoch::new(1),
+    );
     let ops = host.mount(fader_view()).expect("mount");
     assert_eq!(ops.len(), 3);
     host.drain_events();
@@ -609,7 +612,7 @@ fn ui_dvr_03_sequence_dedup() {
 fn lab_sv_fader_dock() {
     // Synvelis slice: Panel > Tabs(ch1: Fader, ch2: Fader).
     let view_id = ViewInstanceId::new(42).expect("nonzero");
-    let mut host = ViewHost::new(view_id);
+    let mut host = ViewHost::new(view_id, AttachEpoch::new(1));
     let spec = ViewSpec {
         root: panel(vec![tabs(
             "mixer-tabs",
@@ -676,7 +679,10 @@ fn lab_sv_fader_dock() {
 
 #[test]
 fn lab_al_waveform_seek() {
-    let mut host = ViewHost::new(ViewInstanceId::new(7).expect("nonzero"));
+    let mut host = ViewHost::new(
+        ViewInstanceId::new(7).expect("nonzero"),
+        AttachEpoch::new(1),
+    );
     let ops = host.mount(wave_view()).expect("mount");
     for k in ["panel", "wave", "seek"] {
         assert!(ops.contains(&ProjectionOp::Mounted { key: key(k) }), "{k}");
@@ -730,7 +736,10 @@ fn lab_al_waveform_seek() {
 
 #[test]
 fn lab_al_waveform_bounded() {
-    let mut host = ViewHost::new(ViewInstanceId::new(8).expect("nonzero"));
+    let mut host = ViewHost::new(
+        ViewInstanceId::new(8).expect("nonzero"),
+        AttachEpoch::new(1),
+    );
     let bins: Vec<WaveformBin> = (0..100_000u64)
         .map(|i| wave_bin(i, i + 1, -0.5, 0.5))
         .collect();
@@ -824,7 +833,10 @@ fn lab_sv_native_slot_reconcile() {
             a11y: A11ySpec::default(),
         })
     };
-    let mut host = ViewHost::new(ViewInstanceId::new(9).expect("nonzero"));
+    let mut host = ViewHost::new(
+        ViewInstanceId::new(9).expect("nonzero"),
+        AttachEpoch::new(1),
+    );
     let ops = host
         .mount(ViewSpec {
             root: panel(vec![slot_component("dock.editor")]),

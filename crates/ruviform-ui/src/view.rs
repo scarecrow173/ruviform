@@ -449,6 +449,90 @@ enum ReconcileAction {
     Unchanged,
 }
 
+/// Runtime-instance epoch distinguishing live [`ViewHost`]s that
+/// share one logical [`ViewInstanceId`].
+///
+/// A `ViewInstanceId` is the *logical* identity — it survives
+/// moves, layout restores, and host recreation by contract. The
+/// `AttachEpoch` is the *runtime* identity: a fresh value for every
+/// `ViewHost` instance created for that logical id, injected at
+/// construction and folded into each binding's command-id
+/// namespace. A receipt minted against a dead runtime instance can
+/// therefore never resolve onto a command minted by its successor —
+/// the same collision class as the per-host `mount_epoch`, closed
+/// across `Drop`+recreate boundaries.
+///
+/// Mint via [`AttachEpochAllocator`]; a literal `AttachEpoch::new`
+/// is legal for single-shot hosts when the caller owns uniqueness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AttachEpoch(u64);
+
+impl AttachEpoch {
+    /// Wraps a raw value as an [`AttachEpoch`]. Callers minting
+    /// literals must uphold the uniqueness contract themselves —
+    /// prefer [`AttachEpochAllocator`] whenever more than one host
+    /// can exist per logical id.
+    #[must_use]
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    /// The raw epoch value.
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+impl Display for AttachEpoch {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// Session-scoped allocator of [`AttachEpoch`]s — the authority
+/// that tells two runtime instances of one logical view apart.
+///
+/// The party that owns the logical-id lifecycle (the consumer's
+/// view session / dock restore path — whatever creates and drops
+/// [`ViewHost`]s) owns one allocator and injects each minted epoch
+/// into `ViewHost::new`. Uniqueness is guaranteed per allocator,
+/// which is honest because command ids and their receipts are
+/// inbox-scoped: a receipt can only arrive through the live session
+/// that minted the command, so a restarted process or session —
+/// which starts a fresh allocator at the same values — can never
+/// receive the dead session's receipts.
+///
+/// `mint` is monotonic `u64`; exhaustion panics rather than
+/// silently reusing a value (2^64 mints is unreachable in any real
+/// session).
+#[derive(Debug, Default)]
+pub struct AttachEpochAllocator {
+    next: u64,
+}
+
+impl AttachEpochAllocator {
+    /// An empty allocator; the first minted epoch is `1`.
+    #[must_use]
+    pub fn new() -> Self {
+        Self { next: 0 }
+    }
+
+    /// Mints the next runtime-instance epoch.
+    ///
+    /// # Panics
+    /// After 2^64 mints — unreachable in a real session; a panic is
+    /// honest where silently reusing an epoch would reopen the
+    /// stale-receipt collision the epoch exists to close.
+    pub fn mint(&mut self) -> AttachEpoch {
+        self.next = self
+            .next
+            .checked_add(1)
+            .expect("AttachEpochAllocator exhausted (2^64 mints)");
+        AttachEpoch(self.next)
+    }
+}
+
 /// Headless projection engine for one [`ViewInstanceId`].
 ///
 /// Owns the spec tree, per-control [`InteractionDispatcher`], and
@@ -459,6 +543,12 @@ enum ReconcileAction {
 /// [`ViewError::StaleGeneration`] and never mutate the current tree.
 pub struct ViewHost {
     view_id: ViewInstanceId,
+    /// Runtime-instance epoch for this host — fixed at construction
+    /// and part of every binding's command-id namespace. Two hosts
+    /// created for the same logical id (drop → recreate, layout
+    /// restore) carry distinct epochs, so a receipt minted against
+    /// one can never resolve inside the other.
+    attach_epoch: AttachEpoch,
     generation: u64,
     /// Mount epoch — bumped on every fresh `mount` after `unmount`.
     /// It is part of each binding's command-id namespace so ids
@@ -478,11 +568,15 @@ pub struct ViewHost {
 }
 
 impl ViewHost {
-    /// Creates an empty host for `view_id` (detached, generation 0).
+    /// Creates an empty host for `view_id` (detached, generation 0)
+    /// carrying `attach_epoch` as its runtime-instance identity.
+    /// Mint the epoch from the session's [`AttachEpochAllocator`] —
+    /// two hosts for one logical id must never share an epoch.
     #[must_use]
-    pub fn new(view_id: ViewInstanceId) -> Self {
+    pub fn new(view_id: ViewInstanceId, attach_epoch: AttachEpoch) -> Self {
         Self {
             view_id,
+            attach_epoch,
             generation: 0,
             mount_epoch: 0,
             spec: None,
@@ -727,15 +821,18 @@ impl ViewHost {
             .or_insert_with(|| CommandBinding::new(namespace));
     }
 
-    /// Command-id namespace for `control_id` under the current mount
-    /// epoch. `unmount` drops the bindings wholesale, so the epoch
-    /// segment is what keeps a remounted control's minted ids
-    /// distinct from the dead epoch's — stale receipts then miss the
-    /// `command_index` instead of resolving onto a recycled id.
+    /// Command-id namespace for `control_id` under this host's
+    /// attach epoch and the current mount epoch. `unmount` drops
+    /// the bindings wholesale and dropping the host drops the whole
+    /// runtime instance, so the two epoch segments keep minted ids
+    /// distinct from both dead mounts and dead host instances —
+    /// stale receipts then miss the `command_index` instead of
+    /// resolving onto a recycled id.
     fn binding_namespace(&self, control_id: &str) -> String {
         format!(
-            "view-{}:m{}:{}",
+            "view-{}:a{}:m{}:{}",
             self.view_id.get(),
+            self.attach_epoch,
             self.mount_epoch,
             control_id
         )
@@ -1151,7 +1248,7 @@ mod tests {
 
     #[test]
     fn mount_update_unmount_ops() {
-        let mut host = ViewHost::new(view_id());
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
         let ops = host
             .mount(panel(vec![fader("a"), fader("b")]))
             .expect("mount");
@@ -1188,7 +1285,7 @@ mod tests {
 
     #[test]
     fn stale_generation_rejected() {
-        let mut host = ViewHost::new(view_id());
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
         host.mount(panel(vec![fader("a")])).expect("mount");
         let stale = host.generation() + 99;
         let err = host
@@ -1211,7 +1308,7 @@ mod tests {
 
     #[test]
     fn gesture_intent_flow() {
-        let mut host = ViewHost::new(view_id());
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
         host.mount(panel(vec![fader("a")])).expect("mount");
         let generation = host.generation();
         host.dispatch_input(
@@ -1266,7 +1363,7 @@ mod tests {
 
     #[test]
     fn remove_cancels_gesture() {
-        let mut host = ViewHost::new(view_id());
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
         host.mount(panel(vec![fader("a"), fader("b")]))
             .expect("mount");
         let generation = host.generation();
@@ -1351,7 +1448,7 @@ mod tests {
         // Same stable key + ViewInstance across unmount/remount: the
         // new mount epoch must mint distinct command ids so a
         // pre-unmount receipt can never advance the new epoch's head.
-        let mut host = ViewHost::new(view_id());
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
         host.mount(panel(vec![fader("a")])).expect("mount");
         let old_commit = commit_intent_id(&mut host, "a", "g1");
         host.unmount();
@@ -1386,7 +1483,7 @@ mod tests {
         // the same epoch, and receipts for the re-added control's
         // fresh commands still settle. The epoch boundary is
         // `unmount`, not per-registration.
-        let mut host = ViewHost::new(view_id());
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
         host.mount(panel(vec![fader("a"), fader("b")]))
             .expect("mount");
         let first_commit = commit_intent_id(&mut host, "a", "g1");
@@ -1409,5 +1506,43 @@ mod tests {
             host.binding("a").expect("binding").phase(),
             CommandPhase::Applied
         );
+    }
+
+    #[test]
+    fn fresh_host_same_logical_id_absorbs_stale_receipts() {
+        // Drop → recreate a ViewHost for the same logical
+        // ViewInstanceId (layout restore / move): the runtime
+        // instances are distinct epochs, so a receipt minted against
+        // the dead host can never resolve inside the new one.
+        let mut epochs = AttachEpochAllocator::new();
+        let mut first = ViewHost::new(view_id(), epochs.mint());
+        first.mount(panel(vec![fader("a")])).expect("mount");
+        let dead_commit = commit_intent_id(&mut first, "a", "g1");
+        drop(first);
+
+        let mut second = ViewHost::new(view_id(), epochs.mint());
+        second.mount(panel(vec![fader("a")])).expect("mount");
+        let live_commit = commit_intent_id(&mut second, "a", "g2");
+
+        assert_ne!(dead_commit, live_commit);
+        assert!(!second.apply_receipt(&receipt(dead_commit, ReceiptStatus::Applied)));
+        assert_eq!(
+            second.binding("a").expect("binding").phase(),
+            CommandPhase::Pending
+        );
+        assert!(second.apply_receipt(&receipt(live_commit, ReceiptStatus::Applied)));
+        assert_eq!(
+            second.binding("a").expect("binding").phase(),
+            CommandPhase::Applied
+        );
+    }
+
+    #[test]
+    fn attach_epoch_allocator_mints_monotonic_epochs() {
+        let mut epochs = AttachEpochAllocator::new();
+        let a = epochs.mint();
+        let b = epochs.mint();
+        let c = epochs.mint();
+        assert_eq!((a.get(), b.get(), c.get()), (1, 2, 3));
     }
 }

@@ -204,16 +204,29 @@ impl GpuiDriver {
     `ViewHost::apply_projection` へ route。
   - `Job`/`Lifecycle`/`Error` は view route なし(driver 層の責務)。
 - `CommandBinding::mint` は namespace 付き
-  (`format!("view-{view_id}:m{mount_epoch}:{control_id}:{n}")`)—
+  (`format!("view-{view_id}:a{attach_epoch}:m{mount_epoch}:{control_id}:{n}")`)—
   receipt は `Intent.id` のみで相関するため同一 view 内で一意である
-  必要がある。`mount_epoch` は `ViewHost` 所有で fresh `mount` 毎に
-  増加し `unmount` を跨いで持続する — binding は unmount で破棄・
-  remount で counter/gen=0 へ再生成されるため、epoch segment がないと
-  同一 `ViewInstanceId`+`ControlId` の旧 command_id が再採番され、
-  stale receipt が新 epoch の `command_index` 経由で新 head を誤って
-  進めてしまう(root review P1 で確証・修正済み)。`update` 経由の
-  remove/re-add は remount ではなく binding が生存し counter が継続
-  するため epoch は据置 — epoch 境界は `unmount` のみ。consumer は
+  必要がある。2段の epoch が所有境界を分離する:
+  - `attach_epoch`(`AttachEpoch`)は **runtime instance** 識別 —
+    `ViewHost` 構築時に外部注入で不変。`ViewInstanceId` は move/
+    layout restore を跨ぐ **logical** 識別なので、host drop→new で
+    `mount_epoch`=0 へ戻り旧 receipt が新 head に相関する衝突は
+    logical id 単独では閉じられない(root review P1 で確証)。
+    epoch の発行権は logical id ライフサイクルの所有者
+    (consumer の view session)が持つ `AttachEpochAllocator`
+    — `u64` 単調・枯渇は panic(2^64 は実用上到達不能で、
+    黙って再利用するより正直)。一意性の保証範囲は session
+    (allocator lifetime)内: command id と receipt は inbox 経由で
+    しか届かないため process/session restart では旧 session の
+    receipt が新 host に届く経路自体が存在しない。`AttachEpoch::new`
+    literal は単発 host の test/fixture では合法。
+  - `mount_epoch` は `ViewHost` 所有で fresh `mount` 毎に増加し
+    `unmount` を跨いで持続する — binding は unmount で破棄・
+    remount で counter/gen=0 へ再生成されるため、同一 runtime
+    instance 内の stale receipt を吸収する。
+  `update` 経由の remove/re-add は remount ではなく binding が生存し
+  counter が継続するため両 epoch とも据置 — epoch 境界は
+  `unmount`(mount)と host drop(attach)のみ。consumer は
   command_id を opaque として扱うことが前提で、format 追加は
   typed adapter(SV182 系)の意味を変えない。
 - `render` で spec tree を `AnyElement` へ写像:
@@ -240,7 +253,7 @@ impl GpuiDriver {
 
 ```rust
 impl GpuiDriver {
-    pub fn surface(&self) -> Rc<RefCell<GpuiSurfaceAdapter>>;   // canonical 共有
+    pub fn surface(&self) -> SharedSurface;   // canonical 共有 opaque handle
     pub fn bind_native_slot(&mut self, window: WindowId,
                             key: ComponentKey, slot: SurfaceSlotId)
         -> Result<(), UiError>;   // window/spec.window/live 検査
@@ -249,11 +262,24 @@ impl GpuiDriver {
 }
 ```
 
-- `GpuiDriver` は canonical `GpuiSurfaceAdapter` を `new` で生成・
-  共有する。adapter は instance 毎に独立 `SurfaceSlotRegistry`
+- `GpuiDriver` は canonical `GpuiSurfaceAdapter` を `new` で生成し
+  `SharedSurface`(`Rc<RefCell<Adapter>>` を内包する opaque cloneable
+  handle)として共有する。**per-call borrow が境界契約**: consumer
+  には `Rc`/`RefCell`/`RefMut` を公開しないため、consumer が任意長の
+  borrow guard を保持して renderer の push を恒久的に starve する
+  反例(既に `Visible` の slot が `Hidden`/geometry/clip push 失敗で
+  stale `Visible` に留まる露呈クラス、root review P1)は公開 API
+  からは構成不能になる。borrow 拒否は reentrancy のみで到達可能で
+  `SlotError::Backend` として typed に報告される(panic/silent
+  success ではない)。`SharedSurface` は `NativeSurfaceSlot` trait
+  自体も実装するため trait-object 文脈でも同一 ledger を共有でき、
+  `state`/`spec`/`container_token` は `Result<Option<…>, SlotError>`
+  (「ledger を参照できない」Err と「slot 不明」`Ok(None)` を混同
+  しない)。adapter は instance 毎に独立 `SurfaceSlotRegistry`
   ledger を持つため、consumer は必ず `driver.surface()` 経由で
   declare/lease/redeem する(`GpuiSurfaceAdapter::new` は別 ledger を
-  持つ standalone 用途 — PoC/fixture 用)。
+  持つ standalone 用途 — PoC/fixture 用)。二重 OS ledger や別経路
+  hide による補償は行わない — 修復は borrow 所有権の境界にある。
 - `Slot`(driver window record)に `slot_bindings:
   Rc<RefCell<BTreeMap<ComponentKey, SurfaceSlotId>>>` を持たせ、
   `open_window` が `SlotMount{adapter, bindings}` として `RvfView`
