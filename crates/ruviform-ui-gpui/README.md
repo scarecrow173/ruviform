@@ -62,6 +62,20 @@ mise run example-ui-gpui-minimal
 実 OS Window 表示/入力は `example-ui-gpui-minimal` による manual
 検証であり、headless の green を実機受入 Pass とは区別する。
 
+実機 lifecycle（manual・CI 対象外。Issue #431）:
+
+2 window の生成・Dock 2-phase move（commit/abort）・detach/reattach・inspector の defer→approve・
+main の approve を実行し、trace 照合で exit 0 を返す。OS close の送り方は次のどちらか。
+
+```sh
+# (a) 手動: 起動し、inspector の close ボタンを 2 回・main の close ボタンを 1 回押す
+mise run example-ui-gpui-lifecycle
+
+# (b) 自動: exe を起動して WM_CLOSE（close ボタンと同じメッセージ）を順に送る
+powershell -NoProfile -ExecutionPolicy Bypass -File evidence/issue-431-real-verify/wm-close.ps1 \
+  -Exe target/debug/examples/real_window_lifecycle.exe -Steps "inspector,inspector,main"
+```
+
 ## 関連
 
 - 共通契約: [`ruviform-ui`](../ruviform-ui/README.md) `driver` module

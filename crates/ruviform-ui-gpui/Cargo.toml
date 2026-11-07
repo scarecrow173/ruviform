@@ -68,6 +68,12 @@ name = "minimal_window"
 required-features = ["gpui"]
 
 [[example]]
+name = "real_window_lifecycle"
+# Issue #431 real-OS lifecycle check (manual verification): two real
+# windows, Dock 2-phase move, veto/defer/approve closes via OS input.
+required-features = ["gpui"]
+
+[[example]]
 name = "component_showcase"
 # Issue #387 renderer demo — Fader/Tabs + Waveform/Seek in a real
 # GPUI window. Requires the real GPUI backend.

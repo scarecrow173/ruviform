@@ -51,3 +51,7 @@ required-features = ["webview"]
 [[example]]
 name = "demo_multi"
 required-features = ["webview"]
+
+[[example]]
+name = "e2e_smoke"
+required-features = ["webview"]

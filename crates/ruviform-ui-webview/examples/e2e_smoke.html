@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ruviform e2e_smoke</title>
+</head>
+<body>
+  <p id="status">loading</p>
+  <script>
+    // Round trip driven by the page: IPC out (ping) → Rust routes the
+    // result back as an event → page resolves the call → IPC out again
+    // (received). The Rust side only passes when it sees the second
+    // intent, which proves the event reached the page.
+    (async () => {
+      const status = document.getElementById('status');
+      try {
+        const echoed = await window.__rvf.call('demo.echo', { probe: 'ping' });
+        if (echoed.echo.probe !== 'ping') {
+          throw new Error('unexpected echo ' + JSON.stringify(echoed));
+        }
+        status.textContent = 'ping ok';
+        await window.__rvf.call('demo.echo', { probe: 'received' });
+        status.textContent = 'received';
+      } catch (e) {
+        status.textContent = 'error: ' + e.message;
+      }
+    })();
+  </script>
+</body>
+</html>
