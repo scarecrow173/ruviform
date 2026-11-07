@@ -26,7 +26,7 @@ use ruviform_ui::view::{
     ViewSpec, WaveformBin, WaveformSpec,
 };
 use ruviform_ui::window::WindowId;
-use ruviform_ui_theme::{ThemeResolver, TokenDocument};
+use ruviform_ui_theme::{ScaleContext, ThemeResolver, TokenDocument};
 
 // ---------------------------------------------------------------------
 // spec builders
@@ -751,6 +751,153 @@ fn lab_al_waveform_bounded() {
         host.mount(spec),
         Err(ViewError::InvalidSpec { .. })
     ));
+}
+
+// ---------------------------------------------------------------------
+// LAB story matrix (Issue #426): 2 theme × 2 scale × semantic state
+// ---------------------------------------------------------------------
+
+fn sv_fader_dock_view() -> ViewSpec {
+    ViewSpec {
+        root: panel(vec![tabs(
+            "mixer-tabs",
+            vec![
+                ("Ch 1", fader("fader-ch1", "Ch 1")),
+                ("Ch 2", fader("fader-ch2", "Ch 2")),
+            ],
+        )]),
+    }
+}
+
+/// One story control walked through the seven story states, one trace
+/// line per step: idle → focus (begin) → drag (preview) → commit →
+/// stale (late preview after terminal) → invalid (NaN preview) →
+/// teardown (unmount).
+fn story_trace(host: &mut ViewHost, k: &ComponentKey, empty: ViewSpec) -> Vec<String> {
+    let g = host.generation();
+    let idle = host.observe(k).and_then(|s| s.committed).map(|v| v.plain);
+    let mut trace = vec![format!("idle {idle:?}")];
+    let focus = host.dispatch_input(g, k, begin("s1")).unwrap();
+    trace.push(format!("focus {focus:?}"));
+    let drag = host.dispatch_input(g, k, preview("s1", 0.8)).unwrap();
+    trace.push(format!("drag {drag:?}"));
+    let committed = host.dispatch_input(g, k, commit("s1")).unwrap();
+    trace.push(format!("commit {committed:?}"));
+    trace.push(format!("commit-intents {:?}", intents(host)));
+    let stale = host.dispatch_input(g, k, preview("s1", 0.2)).unwrap();
+    trace.push(format!("stale {stale:?}"));
+    host.dispatch_input(g, k, begin("s2")).unwrap();
+    let invalid = host.dispatch_input(g, k, preview("s2", f64::NAN)).unwrap();
+    trace.push(format!("invalid {invalid:?}"));
+    let teardown = host.update(empty, g).unwrap();
+    trace.push(format!("teardown {teardown:?}"));
+    trace
+}
+
+/// Runs the story walk for every {theme, scale} combination and asserts
+/// the semantic trace is identical. Each combination resolves its theme
+/// at the scale under test; scale changes only the `ScaleContext` and
+/// tokens stay identical. `ViewHost` holds neither theme nor scale, so
+/// the trace must not depend on either axis.
+fn assert_story_matrix(
+    story: &str,
+    view: fn() -> ViewSpec,
+    empty: fn() -> ViewSpec,
+    k: &ComponentKey,
+) -> Vec<String> {
+    let mut reference: Option<Vec<String>> = None;
+    for theme_name in ["synvelis-dark", "audiolens-dark"] {
+        let base = resolve_fixture(theme_name);
+        for scale_factor in [1.0, 2.0] {
+            let themed = base.with_scale(ScaleContext {
+                scale_factor,
+                rem_base_px: 16.0,
+            });
+            assert_eq!(themed.scale().scale_factor, scale_factor);
+            assert_eq!(
+                themed.tokens().collect::<Vec<_>>(),
+                base.tokens().collect::<Vec<_>>(),
+            );
+            let mut host = ViewHost::new(
+                ViewInstanceId::new(9).expect("nonzero"),
+                AttachEpoch::new(1),
+            );
+            host.mount(view()).expect("mount");
+            host.drain_events();
+            let trace = story_trace(&mut host, k, empty());
+            match &reference {
+                Some(want) => {
+                    assert_eq!(
+                        &trace, want,
+                        "{story} @ {theme_name} x scale {scale_factor}"
+                    );
+                }
+                None => reference = Some(trace),
+            }
+        }
+    }
+    reference.expect("matrix ran")
+}
+
+fn assert_story_states(trace: &[String], expected: &[(&str, &str)]) {
+    for (state, marker) in expected {
+        let line = trace
+            .iter()
+            .find(|l| l.starts_with(&format!("{state} ")))
+            .unwrap_or_else(|| panic!("no `{state}` step in {trace:?}"));
+        assert!(
+            line.contains(marker),
+            "{state}: `{marker}` missing in {line}"
+        );
+    }
+}
+
+#[test]
+fn lab_story_sv_fader_dock_matrix() {
+    let trace = assert_story_matrix(
+        "LAB-SV-FADER-DOCK",
+        sv_fader_dock_view,
+        || ViewSpec {
+            root: panel(vec![]),
+        },
+        &key("fader-ch1"),
+    );
+    assert_story_states(
+        &trace,
+        &[
+            ("idle", "Some(0.5)"),
+            ("focus", "Begin"),
+            ("drag", "Preview"),
+            ("commit", "Commit"),
+            ("stale", "StaleGesture"),
+            ("invalid", "NonFiniteInput"),
+            ("teardown", "Removed"),
+        ],
+    );
+}
+
+#[test]
+fn lab_story_al_waveform_seek_matrix() {
+    let trace = assert_story_matrix(
+        "LAB-AL-WAVEFORM-SEEK",
+        wave_view,
+        || ViewSpec {
+            root: panel(vec![waveform("wave", vec![wave_bin(0, 1000, -0.8, 0.9)])]),
+        },
+        &key("seek"),
+    );
+    assert_story_states(
+        &trace,
+        &[
+            ("idle", "Some(0.5)"),
+            ("focus", "Begin"),
+            ("drag", "Preview"),
+            ("commit", "Commit"),
+            ("stale", "StaleGesture"),
+            ("invalid", "NonFiniteInput"),
+            ("teardown", "Removed"),
+        ],
+    );
 }
 
 // ---------------------------------------------------------------------
