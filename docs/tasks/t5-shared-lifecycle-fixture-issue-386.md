@@ -69,7 +69,7 @@ relations:
 - Fake は `tests/lifecycle_fixture.rs`（workspace `test`）で同じ trace を検証する。
 - GPUI は `cfg(all(test, gpui-test))` 専用の crate 内 seam（`GpuiDriver::settle_for_test`・
   `inbox_len_for_test`、`pub(crate)`）と `src/lifecycle_fixture.rs`（`#[gpui::test]`）で同じ
-  trace を検証する。`gpui-test` ビルドでは surface 親 HWND を取得しない
+  trace を検証する。`cfg(test)` + `gpui-test` ビルドでは surface 親 HWND を取得しない
   （test platform は window handle で panic するため）。
 
 ## Acceptance

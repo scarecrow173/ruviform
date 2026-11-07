@@ -90,7 +90,7 @@ pub fn run_lifecycle<H: LifecycleHarness>(harness: &mut H) -> Trace {
     let main = run.create("main");
     let inspector = run.create("inspector");
     run.settle();
-    assert_eq!(run.driver().windows(), vec![main, inspector]);
+    run.assert_live(&[main, inspector]);
 
     // Dock: both views start in `main`. v2 moves to `inspector` via a
     // committed 2-phase move; v1's move is aborted and must stay put.
@@ -140,19 +140,19 @@ pub fn run_lifecycle<H: LifecycleHarness>(harness: &mut H) -> Trace {
 
     // An unanswered close defaults to Approve for that window only.
     run.close(late, None);
-    assert_eq!(run.driver().windows(), vec![main, inspector]);
+    run.assert_live(&[main, inspector]);
 
     // Veto keeps `inspector` open. Defer keeps it close-pending until
     // the consumer approves it through `respond_close`.
     run.close(inspector, Some(CloseDecision::Veto));
-    assert_eq!(run.driver().windows(), vec![main, inspector]);
+    run.assert_live(&[main, inspector]);
     run.close(inspector, Some(CloseDecision::Defer));
-    assert_eq!(run.driver().windows(), vec![main, inspector]);
+    run.assert_live(&[main, inspector]);
     run.driver()
         .respond_close(inspector, CloseDecision::Approve)
         .expect("approve deferred close");
     run.settle();
-    assert_eq!(run.driver().windows(), vec![main]);
+    run.assert_live(&[main]);
 
     // The consumer disposes of the closed window's views explicitly.
     let moved = run
@@ -168,13 +168,13 @@ pub fn run_lifecycle<H: LifecycleHarness>(harness: &mut H) -> Trace {
 
     // Ids are never reused after destroy.
     let reborn = run.create("reborn");
-    assert!(reborn > inspector && reborn > late);
+    assert!(![late, inspector].contains(&reborn));
     run.settle();
 
     // Tear-down: close the remaining windows, drop the dock, exit.
     run.close(reborn, None);
     run.close(main, None);
-    assert_eq!(run.driver().windows(), Vec::new());
+    run.assert_live(&[]);
     run.ws
         .remove_window(main, WindowCloseDisposition::DetachViews)
         .expect("detach views on teardown");
@@ -250,6 +250,15 @@ impl<H: LifecycleHarness> Run<'_, H> {
                     .expect("answer pending close");
             }
         }));
+    }
+
+    /// Live windows as a set — the contract gives `windows()` no order.
+    fn assert_live(&mut self, expected: &[WindowId]) {
+        let mut live = self.driver().windows();
+        live.sort_unstable();
+        let mut expected = expected.to_vec();
+        expected.sort_unstable();
+        assert_eq!(live, expected);
     }
 
     fn close(&mut self, window: WindowId, answer: Option<CloseDecision>) {

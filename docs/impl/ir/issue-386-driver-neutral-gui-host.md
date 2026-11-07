@@ -90,7 +90,7 @@ relations:
   かつ `pub(crate)` で、公開 signature に gpui 型を出さない。
 - **gpui test platform の制約への対応**: test platform の window は OS handle を
   持たず `window_handle()` が panic する。`capture_raw_parent` を
-  `gpui-test` ビルドで None を返す seam とした。本番ビルドの挙動は不変。
+  `cfg(test)` + `gpui-test` ビルドで None を返す seam とした。本番・非 test ビルドの挙動は不変。
   判断理由は surface 親 HWND を lifecycle fixture が使わないこと。
 - **移行表**: `docs/designs/issue-386-driver-neutral-gui-host.md` の
   「旧 API → 新 API 移行表」を Host/Window/Dock/Binding の 3 セクション

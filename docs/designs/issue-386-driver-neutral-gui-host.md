@@ -341,11 +341,11 @@ crate のみに現れ、`ruviform-ui` の公開 API には漏出しない。
   `crates/ruviform-ui-test/tests/lifecycle_fixture.rs`（`mise run test`）、
   GPUI は `crates/ruviform-ui-gpui/src/lifecycle_fixture.rs`（`cfg(all(test, gpui-test))`）
   （`mise run test-ui-gpui`、`TestAppContext` の 1 turn ごとの settle）で
-  同じ trace に対して実行する。GPUI 側の settle は `gpui-test` 専用の
+  同じ trace に対して実行する。GPUI 側の settle は `cfg(test)` + `gpui-test` 専用の
   crate 内 seam（`GpuiDriver::settle_for_test`、`pub(crate)`）で、本番の `run` は変更しない。公開 signature に gpui 型を出さないため `pub` にしない（境界 guard の signature 検査で確認）。
 - gpui 0.2.2 の test platform は OS window handle を持たず
-  `window_handle()` が panic する。`gpui-test` ビルドでは surface 親
-  HWND の取得を行わない（`capture_raw_parent`）。本番ビルドの挙動は不変。
+  `window_handle()` が panic する。test ビルド（`cfg(test)` + `gpui-test`）では surface 親
+  HWND の取得を行わない（`capture_raw_parent`）。本番・非 test ビルドの挙動は不変。
 - NotRun（実 OS のみ）: DPI/scale 遷移・IME・OS 起因の focus 遷移・
   GPU device lost・実 plugin Native Dock・両 Consumer gate。
 - 残 Gate（本 Issue では NotRun/別 Issue へ委譲）: 実 OS window・

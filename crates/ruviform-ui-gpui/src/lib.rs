@@ -978,14 +978,14 @@ mod gpui_driver {
 
     /// OS parent handle for surface containers. gpui's test platform
     /// has no OS handle and its `window_handle` panics rather than
-    /// erroring, so `gpui-test` builds keep the parent unset — the
-    /// lifecycle fixture embeds no surface.
-    #[cfg(not(feature = "gpui-test"))]
+    /// erroring, so test builds with `gpui-test` keep the parent unset —
+    /// the lifecycle fixture embeds no surface.
+    #[cfg(not(all(test, feature = "gpui-test")))]
     fn capture_raw_parent(window: &Window) -> Option<usize> {
         surface::raw_parent_of(window)
     }
 
-    #[cfg(feature = "gpui-test")]
+    #[cfg(all(test, feature = "gpui-test"))]
     fn capture_raw_parent(_window: &Window) -> Option<usize> {
         None
     }
