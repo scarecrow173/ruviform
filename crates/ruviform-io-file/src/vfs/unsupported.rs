@@ -11,7 +11,7 @@ use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::{NodeIdentity, VfsDir, VfsEntry, VfsOps, VfsProbe};
+use super::{ListingOutcome, NodeIdentity, VfsDir, VfsEntry, VfsOps, VfsProbe, VisitFlow};
 
 /// Constructs the shared unsupported backend.
 pub(crate) fn ops() -> std::sync::Arc<dyn VfsOps> {
@@ -74,7 +74,10 @@ impl VfsDir for UnsupportedDir {
         Err(unsupported())
     }
 
-    fn list(&self) -> io::Result<Vec<VfsEntry>> {
+    fn list_each(
+        &self,
+        _visit: &mut dyn FnMut(VfsEntry) -> VisitFlow,
+    ) -> io::Result<ListingOutcome> {
         Err(unsupported())
     }
 

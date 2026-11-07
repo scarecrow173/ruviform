@@ -170,6 +170,34 @@ pub struct VfsEntry {
     pub kind: VfsKind,
 }
 
+/// Per-entry flow control returned by a [`VfsDir::list_each`]
+/// visitor. `Stop` terminates the enumeration early — the backend
+/// must then make no further enumeration progress (no additional OS
+/// enumeration calls, per-entry probes, or visitor invocations;
+/// already-fetched OS batch records are simply discarded).
+#[doc(hidden)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VisitFlow {
+    /// Deliver the next entry.
+    Continue,
+    /// Stop enumerating — the outcome is [`ListingOutcome::Stopped`].
+    Stop,
+}
+
+/// Terminal state of a [`VfsDir::list_each`] enumeration: whether
+/// the directory was walked to exhaustion or the visitor stopped it.
+/// Enumeration errors are reported as `Err`, never via this type.
+#[doc(hidden)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListingOutcome {
+    /// Every entry was delivered.
+    Complete,
+    /// The visitor returned [`VisitFlow::Stop`].
+    Stopped,
+}
+
 /// The vfs backend factory surface.
 #[doc(hidden)]
 pub trait VfsOps: Send + Sync + fmt::Debug {
@@ -244,11 +272,40 @@ pub trait VfsDir: Send + Sync + fmt::Debug {
     /// `InvalidInput`.
     fn read_link(&self, name: &OsStr) -> io::Result<OsString>;
 
-    /// Lists this directory's entries (`.`/`..` excluded), each with
-    /// a no-follow kind. Every call takes an independent enumeration
-    /// state (unix: a fresh `openat(dirfd, ".")` + `fdopendir`;
-    /// Windows: `NtQueryDirectoryFile` with `RestartScan`).
-    fn list(&self) -> io::Result<Vec<VfsEntry>>;
+    /// Enumerates this directory's entries (`.`/`..` excluded), each
+    /// with a no-follow kind, delivering them one at a time to
+    /// `visit`. Every call takes an independent enumeration state
+    /// (unix: a fresh `openat(dirfd, ".")` + `fdopendir`; Windows: a
+    /// fresh empty-name `NtOpenFile` handle — the scan position lives
+    /// on the FILE_OBJECT — queried with `NtQueryDirectoryFile` and
+    /// `RestartScan`). An entry that vanishes mid-enumeration is
+    /// skipped (unix `NotFound` probe → skip; Windows delivers the
+    /// fetched record); only real enumeration failures return `Err`.
+    ///
+    /// The backend must not materialize the whole directory before
+    /// visiting: each entry is classified (probing only that entry
+    /// where the OS record lacks a kind) and delivered in turn. When
+    /// `visit` returns [`VisitFlow::Stop`] the backend returns
+    /// [`ListingOutcome::Stopped`] without issuing another OS
+    /// enumeration call, per-entry probe, or visitor invocation —
+    /// records already fetched inside a fixed-size OS batch are
+    /// discarded. A visitor panic unwinds with the enumeration
+    /// resources released (unix `DIR*`/`fd` via drop guard).
+    fn list_each(&self, visit: &mut dyn FnMut(VfsEntry) -> VisitFlow)
+    -> io::Result<ListingOutcome>;
+
+    /// Lists this directory's entries (`.`/`..` excluded) — the
+    /// collect form of [`list_each`](Self::list_each), kept as the
+    /// single source of truth so full-vector callers share the same
+    /// enumeration rules.
+    fn list(&self) -> io::Result<Vec<VfsEntry>> {
+        let mut out = Vec::new();
+        self.list_each(&mut |entry| {
+            out.push(entry);
+            VisitFlow::Continue
+        })?;
+        Ok(out)
+    }
 
     // ---- archive staging ops (current IO-IMP-10 semantics) ----
 

@@ -19,6 +19,7 @@ Directory: `docs/tasks`
 | TASK-ibEQJ0Q4JzJ0UtqiKM5W5u | Issue #388/#389 Native Dock 契約タスク（boundary / native_slot / editor_session） | completed | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TASK-ll0hVC7GhO5tm1LEDBWZIe | Issue #389 VST3/L0 実外部 Editor attach タスク（adapter open_gui + PoC vst3 lane） | completed | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TASK-034TaJ4jQd92g4mWa81cxX | Issue #390 Driver Contract/Lab 実装 | todo | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
+| TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | todo | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -287,6 +288,9 @@ Directory: `docs/tasks`
 | TASK-034IwCbgksOGvhF5E4CQbp | README.md の Ruviform 向け全面改稿 | done | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
 | TASK-034LFHlxNkMOGDilPsdP0f | 既存カーネルの RgbaF32 arm 拡張（CompositeOver/Crossfade/AffineTransform） | done | [rgba-f32-composite-affine-arms.md](./rgba-f32-composite-affine-arms.md) |
 | TASK-034LFH4wXKj32ElWzaI2lb | RgbaF32 pixel format + transfer/primaries 内部基盤 | done | [rgba-f32-format-and-transfer-internals.md](./rgba-f32-format-and-transfer-internals.md) |
+| TASK-F1hO5AvuiammHw0t5nBKxP | T1 vfs 共有層抽出 — io-file への OS primitive 集約と archive adapter 化 | done | [rooted-read-t1-vfs.md](./rooted-read-t1-vfs.md) |
+| TASK-PKzErsdcGHe0VY9E50OmL7 | T2 rooted 公開 API + fd-stack resolve engine + FileErrorKind 拡張 | done | [rooted-read-t2-public-api.md](./rooted-read-t2-public-api.md) |
+| TASK-wkAr7DIKDCofXJyOOnTLmo | T3 実 FS 回帰・crate/index/lockfile 更新・全体検証 | done | [rooted-read-t3-tests.md](./rooted-read-t3-tests.md) |
 | TASK-034KV6AzIxXBCyJdl6BFjk | RT 観測計測ハーネスの実装（PoC scaffolding・criterion ベンチ・スモーク配線） | done | [rt-observability-bench-harness.md](./rt-observability-bench-harness.md) |
 | TASK-034KV6AXTsAaxjMCc4m8px | RT 観測 PoC の計測実行・experiment/impl 記録・#103 判定フィードバック | done | [rt-observability-poc-run-and-report.md](./rt-observability-poc-run-and-report.md) |
 | TASK-034JglHs8cNMDOvyZFeUpc | PoC example（list_devices・play_sine）実機手順と実験ログ | done | [run-device-poc-examples-and-exp-log.md](./run-device-poc-examples-and-exp-log.md) |

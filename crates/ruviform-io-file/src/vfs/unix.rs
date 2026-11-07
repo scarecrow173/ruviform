@@ -37,7 +37,10 @@ use std::os::fd::{AsRawFd, FromRawFd, RawFd};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
-use super::{NodeHandle, NodeIdentity, NodeTypeTag, VfsDir, VfsEntry, VfsKind, VfsOps, VfsProbe};
+use super::{
+    ListingOutcome, NodeHandle, NodeIdentity, NodeTypeTag, VfsDir, VfsEntry, VfsKind, VfsOps,
+    VfsProbe, VisitFlow,
+};
 use crate::rooted::IdentityStrength;
 
 const DIR_MODE: libc::mode_t = 0o700;
@@ -105,8 +108,11 @@ impl VfsDir for UnixVfsDir {
         read_link_at(self.fd.as_raw_fd(), name)
     }
 
-    fn list(&self) -> io::Result<Vec<VfsEntry>> {
-        list_dir(self)
+    fn list_each(
+        &self,
+        visit: &mut dyn FnMut(VfsEntry) -> VisitFlow,
+    ) -> io::Result<ListingOutcome> {
+        list_each(self, visit)
     }
 
     fn create_dir(&self, name: &OsStr) -> io::Result<Box<dyn VfsDir>> {
@@ -452,26 +458,47 @@ fn clear_nonblock(fd: RawFd) -> io::Result<()> {
 // dirfd's enumeration offset is never disturbed.
 // ------------------------------------------------------------------
 
+/// Releases a `DIR*` (and the fd it owns) — a drop guard so the
+/// enumeration state is freed even when the visitor panics.
+struct DirStream(*mut libc::DIR);
+
+#[expect(unsafe_code, reason = "closedir is libc FFI; see SAFETY comment")]
+impl Drop for DirStream {
+    fn drop(&mut self) {
+        // SAFETY: `self.0` is a valid DIR* owned by this guard.
+        unsafe { libc::closedir(self.0) };
+    }
+}
+
 #[expect(
     unsafe_code,
     reason = "openat/fdopendir/readdir/closedir are libc FFI; see SAFETY comments"
 )]
-fn list_dir(dir: &UnixVfsDir) -> io::Result<Vec<VfsEntry>> {
+fn list_each(
+    dir: &UnixVfsDir,
+    visit: &mut dyn FnMut(VfsEntry) -> VisitFlow,
+) -> io::Result<ListingOutcome> {
     let dot = cstring(OsStr::new("."))?;
     // SAFETY: `dir.fd` is a valid open directory descriptor and `dot`
     // a valid C string; flags are the openat(2) contract. A fresh fd
     // is required because fdopendir takes ownership of the offset.
-    let fd = unsafe {
-        libc::openat(
-            dir.fd.as_raw_fd(),
-            dot.as_ptr(),
-            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC,
-            0,
-        )
+    let fd = loop {
+        let fd = unsafe {
+            libc::openat(
+                dir.fd.as_raw_fd(),
+                dot.as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC,
+                0,
+            )
+        };
+        if fd >= 0 {
+            break fd;
+        }
+        let e = io::Error::last_os_error();
+        if e.kind() != io::ErrorKind::Interrupted {
+            return Err(e);
+        }
     };
-    if fd < 0 {
-        return Err(io::Error::last_os_error());
-    }
     // SAFETY: `fd` is a fresh descriptor transferred to fdopendir.
     let dirp = unsafe { libc::fdopendir(fd) };
     if dirp.is_null() {
@@ -480,13 +507,24 @@ fn list_dir(dir: &UnixVfsDir) -> io::Result<Vec<VfsEntry>> {
         unsafe { libc::close(fd) };
         return Err(e);
     }
-    let mut out = Vec::new();
+    let _stream = DirStream(dirp);
     loop {
+        // `readdir` NULL means both end-of-stream and error — errno
+        // distinguishes them (cleared before each call).
+        // SAFETY: the pointer is this thread's errno slot.
+        unsafe { *errno_location() = 0 };
         // SAFETY: `dirp` is a valid DIR*; readdir returns entries
         // owned by `dirp` (not freed) until closedir.
         let ent = unsafe { libc::readdir(dirp) };
         if ent.is_null() {
-            break;
+            let e = io::Error::last_os_error();
+            return if e.raw_os_error() == Some(0) {
+                Ok(ListingOutcome::Complete)
+            } else {
+                // A mid-enumeration OS failure is `Err`, never a
+                // silently truncated `Complete`.
+                Err(e)
+            };
         }
         // SAFETY: `ent` is a valid dirent until the next readdir.
         let ent = unsafe { &*ent };
@@ -500,14 +538,37 @@ fn list_dir(dir: &UnixVfsDir) -> io::Result<Vec<VfsEntry>> {
         let kind = match dirent_kind(ent) {
             Some(kind) => kind,
             // DT_UNKNOWN (or no d_type on this platform): classify
-            // per entry with the same no-follow probe.
-            None => dir.probe(&name)?.kind,
+            // per entry with the same no-follow probe. A child that
+            // vanishes mid-enumeration is skipped — matching
+            // `std::fs::read_dir` and the other backends.
+            None => match dir.probe(&name) {
+                Ok(p) => p.kind,
+                Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(e),
+            },
         };
-        out.push(VfsEntry { name, kind });
+        if visit(VfsEntry { name, kind }) == VisitFlow::Stop {
+            return Ok(ListingOutcome::Stopped);
+        }
     }
-    // SAFETY: `dirp` is a valid DIR*; closedir releases it and the fd.
-    unsafe { libc::closedir(dirp) };
-    Ok(out)
+}
+
+/// This thread's `errno` slot — `__errno_location` on Linux/Android,
+/// `__error` on Apple and the BSDs.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+#[expect(unsafe_code, reason = "__errno_location is libc FFI")]
+fn errno_location() -> *mut libc::c_int {
+    // SAFETY: returns this thread's errno pointer; no preconditions.
+    unsafe { libc::__errno_location() }
+}
+
+/// This thread's `errno` slot — `__errno_location` on Linux/Android,
+/// `__error` on Apple and the BSDs.
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[expect(unsafe_code, reason = "__error is libc FFI")]
+fn errno_location() -> *mut libc::c_int {
+    // SAFETY: returns this thread's errno pointer; no preconditions.
+    unsafe { libc::__error() }
 }
 
 /// `dirent.d_type` → [`VfsKind`] where the platform exposes the

@@ -81,6 +81,8 @@ Directory: `docs/specs`
 | SPEC-zrIXGa6QONDm4o1DVVUwaz | Issue #388 Driver-neutral NativeSurfaceSlot 契約（早期 Gate 設計・契約実装） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
 | SPEC-ynejrtwiz2jIJrf3DwFtAK | Issue #389 Driver-neutral PluginEditorSession（state / typed HostPort / L0-L1 接続設計） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | SPEC-034T9TZQ7ztGDAPvFaz9IT | Issue #390 Driver Contract Lab — UI-DVR fixture registry・境界 Guard・GPUI なし Fake・Native Component Lab harness | proposed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
+| SPEC-xCsjb8OsiMswabSn30uVVs | Issue #404/#405 NativeSurfaceSlot host 境界修復（clip 解除/再投影 + owner window teardown 伝播） | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
+| SPEC-034Tnjp8f4gexhi9BsQuq1 | Issue #409 Rooted capability の再 root 化と停止可能な bounded directory 列挙 | draft | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |
@@ -91,6 +93,7 @@ Directory: `docs/specs`
 | SPEC-034JZLISO0000000000001 | プラグイン分離方式設計（サンドボックス・プロセス分離） | approved | [plugin-isolation-design.md](./plugin-isolation-design.md) |
 | SPEC-034LNeyep4t7pIzFlpPyTK | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー） | proposed | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
 | SPEC-034Ivc5nj1AE6P2PcZU6Ki | テンプレート由来のドキュメント・識別子をRuviform向けに置き換える | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
+| SPEC-OSFxdu6zk2jDbA6edHhE38 | ruviform-io-file Rooted Read Capability — dirfd/handle 相対 traversal・FollowWithinRoot/NoFollow・pin/identity | approved | [rooted-read-capability.md](./rooted-read-capability.md) |
 | SPEC-034JOU6EjinMh0rhxE6yM9 | RT 検証基盤（allocation 検出・thread-check・検証文書） | approved | [rt-verification-lane.md](./rt-verification-lane.md) |
 | SPEC-X9YOosDAuB8PX2Qv31thuB | ruviform-dsp 新設（上位 DSP カーネル層 — prepare/process 分離・RT 適合） | approved | [ruviform-dsp.md](./ruviform-dsp.md) |
 | SPEC-5eEaW8lLmoyVPgocJnooYD | 第 2 ターゲット設計（NLE 範囲・OFX 等映像プラグイン規格・広範色管理） | approved | [second-target-design.md](./second-target-design.md) |

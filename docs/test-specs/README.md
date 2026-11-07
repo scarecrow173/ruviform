@@ -90,6 +90,8 @@ Directory: `docs/test-specs`
 | TSPEC-0f0PqMFNljVvAz5wOtJEQu | Issue #388/#389 Native Dock 契約テスト仕様（slot/lease/session の headless 検証 + L0-L1 写像） | approved | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TSPEC-034TaI7Luee0T88mH1IYv2 | Issue #390 Driver Boundary/Lab 検証 | draft | [issue-390-driver-boundary-lab.md](./issue-390-driver-boundary-lab.md) |
+| TESTSPEC-XADte5w8EHAalnm33WCVyn | Issue #404/#405 NativeSurfaceSlot host 境界修復 test 仕様 | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
+| TSPEC-034TnnBwjsmwufsaEZZ0RG | Issue #409 scoped re-root + bounded enumeration テスト仕様 | draft | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |
@@ -110,6 +112,7 @@ Directory: `docs/test-specs`
 | TSPEC-034LNXxXa2vencBWSvgemD | plugin L1 ワイヤ codec・ライフサイクル Failed 拡張 テスト仕様 | approved | [plugin-l1-wire-codec-tests.md](./plugin-l1-wire-codec-tests.md) |
 | TSPEC-034Mrsijk0b3tEOMrMG0MN | plugin/audio RT 契約 + 退役（assert_no_alloc・arm_apply・leg 返却・plan 退役 drain）テスト仕様 | approved | [plugin-rt-retirement-tests.md](./plugin-rt-retirement-tests.md) |
 | TSPEC-034MLRBDZVBiSYnXZ5dTrr | 実規格アダプタ L1 E2E（spawn/handshake/lifecycle/shm block/state defined 応答/destroy + 異常系継承）テスト仕様 | approved | [real-adapter-l1-e2e-tests.md](./real-adapter-l1-e2e-tests.md) |
+| TSPEC-wJA20tmm9AN7JyNH6uMDQ6 | ruviform-io-file Rooted Read Capability テスト仕様 | approved | [rooted-read-capability.md](./rooted-read-capability.md) |
 | TSPEC-034JxNwt3ReMphshEaeFVe | SPSC・退役・スナップショット交換の RT 契約保証 | approved | [rt-channel-and-snapshot-contracts.md](./rt-channel-and-snapshot-contracts.md) |
 | TSPEC-034JxNxcYxa29rPklpknWh | RtContext・Processor 契約・MasterClock の RT 契約保証 | approved | [rt-context-and-processor-contract.md](./rt-context-and-processor-contract.md) |
 | TSPEC-034KV6hs4k3mZ6jVBgDaKf | RT 観測コスト計測 PoC ハーネスの計測保証 | approved | [rt-observability-poc-tests.md](./rt-observability-poc-tests.md) |
