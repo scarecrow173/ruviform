@@ -82,6 +82,7 @@ Directory: `docs/plans`
 | PLAN-r5yBO16zsFa4LSjxB9grp1 | Issue #367 共通 Daily Scheduler 実装計画 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | PLAN-s8XS22tWJoekwN7HhRH9hj | Issue #368 CI failure Issue Tracker 実装計画 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | PLAN-WuOx4rrntClDKCSVPDAM8d | Issue #368 Tracker reconcile 実装計画 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | draft | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-kreAOLAGHhliWIVO5VQM6G | ViewLink authoritative generation 実装計画 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |

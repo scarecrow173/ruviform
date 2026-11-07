@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "ruleset": "rvf.driver-boundary/v1",
+  "strict": true,
+  "forbiddenDepRoots": ["gpui", "gpui-*", "wry", "tao", "winit"],
+  "forbiddenPathRoots": ["gpui", "wry", "tao", "winit"],
+  "allowlist": [
+    {
+      "package": "adapter",
+      "role": "driver-adapter",
+      "allowedDeps": ["gpui"],
+      "viaFeatures": ["gpui"],
+      "required": true,
+      "reason": "positive fixture — allowlisted adapter は optional+feature 経由で forbidden dep を持てる"
+    }
+  ]
+}
