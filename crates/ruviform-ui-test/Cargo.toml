@@ -22,7 +22,14 @@ serde_json = "1"
 # - cargo_metadata: Issue #390 driver boundary guard の
 #   `cargo metadata` 依存グラフ検査の型付き parse/実行に使用
 #   （test-support crate のみの通常 dep で本番 graph に波及しない）。
-cargo_metadata = "0.23"
+#   Issue #411: 0.19 系に固定。0.22+ は cargo-platform ^0.3.0 を引き、
+#   通常解決で platform 0.3.3（rustc 1.91 必須）へ再発収束するため MSRV
+#   1.89 と不整合。0.19.2 は cargo-platform ^0.1.2（platform 0.1.x は
+#   rust-version <=1.78）のみを引き、追加の推移依存を増やさず通常解決で
+#   MSRV 範囲に収束する（0.20/0.21 は platform 0.2 系で MSRV 上は可能だが
+#   cargo-util-schemas 系の追加 transitive tree を伴う）。guard が使う
+#   型付き parse API は 0.19.2 にも存在し、検査の意味は保持。
+cargo_metadata = "0.19"
 # - syn + proc-macro2(span-locations): Issue #390 driver boundary
 #   guard の public signature 漏出検査（`pub` item signature の
 #   forbidden path root 走査・finding 行番号）に使用。grep 文字列

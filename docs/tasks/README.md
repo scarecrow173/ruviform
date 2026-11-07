@@ -19,14 +19,18 @@ Directory: `docs/tasks`
 | TASK-ibEQJ0Q4JzJ0UtqiKM5W5u | Issue #388/#389 Native Dock 契約タスク（boundary / native_slot / editor_session） | completed | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TASK-ll0hVC7GhO5tm1LEDBWZIe | Issue #389 VST3/L0 実外部 Editor attach タスク（adapter open_gui + PoC vst3 lane） | completed | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TASK-034TaJ4jQd92g4mWa81cxX | Issue #390 Driver Contract/Lab 実装 | todo | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
-| TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | todo | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
+| TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | in_progress | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
+| TASK-034T6RWUx1Zc8Qf6mE4rP9 | T1 Component/View Spec schema + ViewHost(ruviform-ui::view) | proposed | [t1-component-view-spec-issue-387.md](./t1-component-view-spec-issue-387.md) |
 | TASK-uFDZyczopm3crTR2lUgeGd | T1 Driver-neutral Window/Host 共通契約（ruviform-ui driver module） | in-progress | [t1-driver-neutral-window-contract-issue-386.md](./t1-driver-neutral-window-contract-issue-386.md) |
 | TASK-fG12kYJjj6jfGGJmfuxaeY | T2 FakeDriver（ruviform-ui-test・WindowDriver headless 実装） | proposed | [t2-fake-driver-issue-386.md](./t2-fake-driver-issue-386.md) |
+| TASK-034T6RWVy5Sd3Hb9jG7wN4 | T2 Headless behavior(ruviform-ui::behavior) | proposed | [t2-headless-behavior-issue-387.md](./t2-headless-behavior-issue-387.md) |
 | TASK-LlEFlV8p3toRfliU2UWnVn | T3 GPUI Driver + 最小 Window fixture（ruviform-ui-gpui） | proposed | [t3-gpui-driver-minimal-window-issue-386.md](./t3-gpui-driver-minimal-window-issue-386.md) |
+| TASK-034T6RWWz8Xa6Lf2tK5yQ7 | T3 Semantic fixtures + manifest binding(ruviform-ui-test) | proposed | [t3-semantic-fixtures-issue-387.md](./t3-semantic-fixtures-issue-387.md) |
 | TASK-DktMpNJBhrTSp3LAfeKMjo | T4 mise lane・索引・GPUI 採用証跡（Issue #386） | proposed | [t4-gpui-lanes-and-evidence-issue-386.md](./t4-gpui-lanes-and-evidence-issue-386.md) |
+| TASK-034T6RWXn4Bv9Hg8sM2eR5 | T4 GPUI Controls/Viz renderer(ruviform-ui-gpui::render) | proposed | [t4-gpui-renderer-issue-387.md](./t4-gpui-renderer-issue-387.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -205,6 +209,7 @@ Directory: `docs/tasks`
 | TASK-6LaGohoePjG92Eb5u6lUv7 | T3 tracker.mjs reconcile モード + parseTrackerArgs + contract tests（Issue #368） | done | [issue-368-t3-tracker-reconcile-mode.md](./issue-368-t3-tracker-reconcile-mode.md) |
 | TASK-T6nZSLe2NKHl8o4neneyTK | T4 ci-issue-tracker-reconcile.yml 新設 + README/dev-env 同期（Issue #368） | done | [issue-368-t4-reconcile-workflow.md](./issue-368-t4-reconcile-workflow.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
+| TASK-hupw1aLckqDaLNAlnDrTMF | Issue #411 — cargo_metadata 0.19 系への依存選定修復 + MSRV 検証入口 | done | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

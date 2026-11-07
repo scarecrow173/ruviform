@@ -281,7 +281,7 @@ fn check_direct_deps(
                     findings.push(Finding {
                         check: CHECK_DEP_GRAPH,
                         code: "forbidden-dep-not-optional",
-                        package: pkg.name.to_string(),
+                        package: pkg.name.clone(),
                         file: None,
                         line: None,
                         detail: format!(
@@ -294,7 +294,7 @@ fn check_direct_deps(
             _ => findings.push(Finding {
                 check: CHECK_DEP_GRAPH,
                 code: "forbidden-dep-direct",
-                package: pkg.name.to_string(),
+                package: pkg.name.clone(),
                 file: None,
                 line: None,
                 detail: format!(
@@ -375,7 +375,7 @@ fn check_features(
                 findings.push(Finding {
                     check: CHECK_DEP_GRAPH,
                     code: "forbidden-dep-feature",
-                    package: pkg.name.to_string(),
+                    package: pkg.name.clone(),
                     file: None,
                     line: None,
                     detail: format!("feature `{fname}` が forbidden dep `{dep}` を有効化"),
@@ -463,7 +463,7 @@ fn check_dep_activation(
         findings.push(Finding {
             check: CHECK_DEP_GRAPH,
             code: "adapter-consumer",
-            package: pkg.name.to_string(),
+            package: pkg.name.clone(),
             file: None,
             line: None,
             detail: format!(
@@ -503,7 +503,7 @@ fn feature_table_activation(
                 findings.push(Finding {
                     check: CHECK_DEP_GRAPH,
                     code: "forbidden-dep-adapter-feature",
-                    package: pkg.name.to_string(),
+                    package: pkg.name.clone(),
                     file: None,
                     line: None,
                     detail: format!(
@@ -553,7 +553,7 @@ fn dep_feature_activation(
         findings.push(Finding {
             check: CHECK_DEP_GRAPH,
             code: "forbidden-dep-adapter-feature",
-            package: pkg.name.to_string(),
+            package: pkg.name.clone(),
             file: None,
             line: None,
             detail: format!(
@@ -610,7 +610,7 @@ fn check_transitive(
         findings.push(Finding {
             check: CHECK_DEP_GRAPH,
             code: "forbidden-dep-transitive",
-            package: root.name.to_string(),
+            package: root.name.clone(),
             file: None,
             line: None,
             detail: format!("forbidden dep `{name}` に非 optional 辺で到達: {path}"),
@@ -623,7 +623,7 @@ fn check_transitive(
         findings.push(Finding {
             check: CHECK_DEP_GRAPH,
             code: "forbidden-dep-conditional",
-            package: root.name.to_string(),
+            package: root.name.clone(),
             file: None,
             line: None,
             detail: format!("forbidden dep `{name}` に optional 辺経由で到達可能: {path}"),
@@ -648,7 +648,7 @@ fn reach_set(
     let mut found: BTreeMap<String, String> = BTreeMap::new();
     let mut queue: VecDeque<(PackageId, String)> = VecDeque::new();
     let mut visited: HashSet<PackageId> = HashSet::new();
-    queue.push_back((root.id.clone(), root.name.to_string()));
+    queue.push_back((root.id.clone(), root.name.clone()));
     visited.insert(root.id.clone());
     while let Some((pid, path)) = queue.pop_front() {
         let is_root = pid == root.id;
@@ -683,9 +683,7 @@ fn reach_set(
             }
             let next_path = format!("{path} -> {}", target_pkg.name);
             if matches_forbidden(target_pkg.name.as_str(), forbidden) {
-                found
-                    .entry(target_pkg.name.to_string())
-                    .or_insert(next_path);
+                found.entry(target_pkg.name.clone()).or_insert(next_path);
                 continue;
             }
             if visited.insert(dep.pkg.clone()) {
@@ -817,7 +815,7 @@ fn mdep_target(
         }
         return Some((
             ReachUnit::Resolve(tp.id.clone()),
-            tp.name.to_string(),
+            tp.name.clone(),
             format!("r:{}", tp.id),
         ));
     }
@@ -864,7 +862,7 @@ fn conditional_reach(
     let root_key = format!("r:{}", root.id);
     queue.push_back(ReachItem {
         unit: ReachUnit::Resolve(root.id.clone()),
-        path: root.name.to_string(),
+        path: root.name.clone(),
         key: root_key.clone(),
         cond: false,
     });
