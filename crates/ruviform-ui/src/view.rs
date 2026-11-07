@@ -1164,12 +1164,15 @@ impl ViewHost {
 
         // Removed keys first — detach semantics must not be confused
         // with an update on the surviving tree.
-        let removed: Vec<ComponentKey> = self
+        // `mounted` is a HashMap: sort so the op order is independent of
+        // the hash seed (same spec transition → same ops, every run).
+        let mut removed: Vec<ComponentKey> = self
             .mounted
             .keys()
             .filter(|k| !next_keys.contains(*k))
             .cloned()
             .collect();
+        removed.sort();
         for key in removed {
             if let Some(m) = self.mounted.remove(&key)
                 && let Some(meta) = &m.control
