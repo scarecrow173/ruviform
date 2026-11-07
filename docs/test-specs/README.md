@@ -91,7 +91,9 @@ Directory: `docs/test-specs`
 | TSPEC-0f0PqMFNljVvAz5wOtJEQu | Issue #388/#389 Native Dock 契約テスト仕様（slot/lease/session の headless 検証 + L0-L1 写像） | approved | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TSPEC-034TaI7Luee0T88mH1IYv2 | Issue #390 Driver Boundary/Lab 検証 | draft | [issue-390-driver-boundary-lab.md](./issue-390-driver-boundary-lab.md) |
+| TESTSPEC-XADte5w8EHAalnm33WCVyn | Issue #404/#405 NativeSurfaceSlot host 境界修復 test 仕様 | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
 | TSPEC-UiEoMhS5QMTr3jBiurbTtC | Issue #400 借用 readback → demuxer bounded 接続の test 仕様 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
+| TSPEC-034TnnBwjsmwufsaEZZ0RG | Issue #409 scoped re-root + bounded enumeration テスト仕様 | approved | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |

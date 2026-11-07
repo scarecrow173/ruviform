@@ -110,6 +110,24 @@ TOCTOU（検査時点と open 時点で名前が指す物が変わる問題）�
   path 文字列を一切再解決しない。`open_dir` で scoped capability を
   作り、解決済み ancestor chain を Arc 共有する（`..` は chain 内を
   pop できるが capability root を割ると `EscapesRoot`）。
+- `open_scoped_root(rel, mode)` — 既に保持している capability 上で
+  `rel` を解決し、**解決した directory handle 自体を新しい
+  capability floor** とする再 root 化（Issue #409）。`open_dir` と
+  違い元 root の祖先は新 floor に引き上げないため、新 scope 内の
+  link target の `..`・sibling・scope 外 absolute link は
+  `EscapesRoot`。権威は保持 handle のみ — pathname 再 open も
+  `NodeId`/Strong identity 照合も行わず、root rename/replacement
+  後も継続動作する。lexical anchor は handle 由来の
+  `canonicalize_handle` のみで導出し、path 文字列への再 bind・
+  anchor 捏造は行わない（導出不能 backend は `Unsupported`）。
+- `read_dir_each(rel, mode, visit)` — 全件 Vec 化しない bounded
+  列挙（Issue #409）。`EntryFlow::Stop` で任意 prefix（consumer の
+  `remaining+1` 件など）に打切れ、各 step で cancel/deadline を
+  観測できる。`Stop` 後は後続の OS 列挙・entry probe・callback を
+  発行しない（OS 固定 batch 内の破棄は許容）。結果は
+  `EnumerationOutcome::{Complete, Stopped}` で完走/早期停止を
+  区別し、OS 失敗は `Err`。`read_dir` は同一列挙規則の collect
+  wrapper。
 - `RelativePath` — `/` 区切り UTF-8 locator。`""` は self。
   絶対・`..`・`.`・`\`・`:`・NUL・制御文字・Windows 予約名・
   trailing `.`/space・空成分・255 bytes 超を `InvalidInput` で拒否。

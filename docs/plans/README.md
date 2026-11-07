@@ -33,6 +33,7 @@ Directory: `docs/plans`
 | PLAN-UO09oNkf6X28oaYsQ5DmNe | Issue #386 Driver-neutral GUI Host + GPUI minimal fixture 実装計画 | proposed | [implement-issue-386-driver-neutral-gui-host.md](./implement-issue-386-driver-neutral-gui-host.md) |
 | PLAN-kHnSXCzzcxyo5rlkMiqQWx | Issue #388/#389 Native Dock 契約の実装計画（neutral slot/lease/session + fake 検証 + L0-L1 写像） | approved | [implement-issue-388-389-native-dock-contract.md](./implement-issue-388-389-native-dock-contract.md) |
 | PLAN-5rBdUXHzqmuHrA1h4sweAj | Issue #389 VST3/L0 実外部 Editor attach の実装計画（adapter open_gui + PoC vst3 lane） | approved | [implement-issue-389-vst3-l0-editor-attach.md](./implement-issue-389-vst3-l0-editor-attach.md) |
+| PLAN-ECzI54BQngMiQpOP23flK3 | Issue #404/#405 NativeSurfaceSlot host 境界修復 実装計画 | draft | [implement-issue-404-405-native-surface-host-boundary.md](./implement-issue-404-405-native-surface-host-boundary.md) |
 | PLAN-034JO2EWa8LuEEE4BFVZ9Q | Issue #52 workspace MSRV 引上げの実施（rust-version 1.85 → 1.89・ドキュメント同期・MSRV 実測検証） | approved | [implement-issue-52-msrv-raise.md](./implement-issue-52-msrv-raise.md) |
 | PLAN-034JQFeYbZCBHPYSBfQe7B | Issue #53 SIMD dispatch 層の実装計画 | approved | [implement-issue-53-simd-dispatch-layer.md](./implement-issue-53-simd-dispatch-layer.md) |
 | PLAN-034JZDNRML000000000004 | Issue #54 実装計画 — denormal flush ノード | approved | [implement-issue-54-denormal-policy.md](./implement-issue-54-denormal-policy.md) |
@@ -87,6 +88,7 @@ Directory: `docs/plans`
 | PLAN-r5yBO16zsFa4LSjxB9grp1 | Issue #367 共通 Daily Scheduler 実装計画 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | PLAN-s8XS22tWJoekwN7HhRH9hj | Issue #368 CI failure Issue Tracker 実装計画 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | PLAN-WuOx4rrntClDKCSVPDAM8d | Issue #368 Tracker reconcile 実装計画 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| PLAN-034TnojDZIYRnnvSTlTg34 | Issue #409 scoped re-root + bounded enumeration 実装計画 | draft | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |

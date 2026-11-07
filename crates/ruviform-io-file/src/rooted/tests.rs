@@ -13,7 +13,10 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use super::{FollowMode, IdentityStrength, NodeKind, RelativePath, RootedDir, RootedOptions};
+use super::{
+    EntryFlow, EnumerationOutcome, FollowMode, IdentityStrength, NodeKind, RelativePath, RootedDir,
+    RootedOptions,
+};
 use crate::FileErrorKind;
 use crate::vfs::VfsKind;
 use crate::vfs::mock::{TestFs, TestNode};
@@ -897,4 +900,449 @@ fn dir_identity_returns_stable_key() {
     let b = scoped.dir_identity().unwrap();
     assert_eq!(a, b);
     assert_ne!(a, root.dir_identity().unwrap());
+}
+
+// ----------------------------------------------------------------
+// open_scoped_root — re-rooting on the held handle (Issue #409)
+// ----------------------------------------------------------------
+
+/// The scoped dir's own canonical spelling (`<root>/a`) — the new
+/// lexical anchor after re-rooting.
+fn scoped_abs(tail: &str) -> String {
+    #[cfg(windows)]
+    {
+        format!("C:\\r\\a\\{}", tail.replace('/', "\\"))
+    }
+    #[cfg(not(windows))]
+    {
+        format!("/r/a/{tail}")
+    }
+}
+
+#[test]
+fn scoped_root_establishes_a_new_floor() {
+    let mut fs = fs_root();
+    fs.put(node_path(&["a"]), TestNode::dir(2));
+    fs.put(node_path(&["a", "f"]), TestNode::file(3, b"scoped"));
+    // Link inside `a` whose target pops above `a` — allowed under
+    // the parent root, an escape under the new floor.
+    fs.put(node_path(&["a", "l"]), TestNode::link(4, "../f"));
+    fs.put(node_path(&["f"]), TestNode::file(5, b"root-file"));
+    let (_fs, root) = mount(fs);
+
+    let scoped = root
+        .open_scoped_root(&rel("a"), FollowMode::NoFollow)
+        .unwrap();
+    assert_eq!(
+        read_all(
+            &mut scoped
+                .open_regular(&rel("f"), FollowMode::NoFollow)
+                .unwrap()
+        ),
+        "scoped"
+    );
+    // `..` in the link target hits the new floor → EscapesRoot.
+    assert_eq!(
+        scoped
+            .open_regular(&rel("l"), FollowMode::WithinRoot)
+            .unwrap_err()
+            .kind(),
+        FileErrorKind::EscapesRoot
+    );
+    // The parent capability resolves the same link fine — the
+    // narrow floor belongs only to the scoped capability.
+    assert_eq!(
+        read_all(
+            &mut root
+                .open_regular(&rel("a/l"), FollowMode::WithinRoot)
+                .unwrap()
+        ),
+        "root-file"
+    );
+}
+
+#[test]
+fn scoped_root_judges_absolute_links_against_new_anchor() {
+    let mut fs = fs_root();
+    fs.put(node_path(&["a"]), TestNode::dir(2));
+    fs.put(node_path(&["a", "f"]), TestNode::file(3, b"scoped"));
+    fs.put(node_path(&["a", "in"]), TestNode::link(4, &scoped_abs("f")));
+    fs.put(node_path(&["a", "out"]), TestNode::link(5, &abs("f")));
+    fs.put(node_path(&["f"]), TestNode::file(6, b"outside-scope"));
+    let (_fs, root) = mount(fs);
+
+    let scoped = root
+        .open_scoped_root(&rel("a"), FollowMode::NoFollow)
+        .unwrap();
+    // Absolute target inside the new anchor resolves.
+    assert_eq!(
+        read_all(
+            &mut scoped
+                .open_regular(&rel("in"), FollowMode::WithinRoot)
+                .unwrap()
+        ),
+        "scoped"
+    );
+    // Absolute target outside the new anchor (a sibling subtree of
+    // the scope) is EscapesRoot — not a silent alias acceptance.
+    assert_eq!(
+        scoped
+            .open_regular(&rel("out"), FollowMode::WithinRoot)
+            .unwrap_err()
+            .kind(),
+        FileErrorKind::EscapesRoot
+    );
+}
+
+#[test]
+fn scoped_root_requires_no_identity_strength() {
+    let mut fs = fs_root();
+    let mut weak_dir = TestNode::dir(2);
+    weak_dir.strength = IdentityStrength::Weak;
+    fs.put(node_path(&["a"]), weak_dir);
+    fs.put(node_path(&["a", "f"]), TestNode::file(3, b"weak"));
+    let (_fs, root) = mount(fs);
+    // Handle authority — no NodeId/strength comparison — so a weak
+    // filesystem object still scopes.
+    let scoped = root
+        .open_scoped_root(&rel("a"), FollowMode::NoFollow)
+        .unwrap();
+    assert_eq!(
+        read_all(
+            &mut scoped
+                .open_regular(&rel("f"), FollowMode::NoFollow)
+                .unwrap()
+        ),
+        "weak"
+    );
+}
+
+#[test]
+fn scoped_root_survives_root_rename() {
+    let mut fs = fs_root();
+    fs.put(node_path(&["a"]), TestNode::dir(2));
+    fs.put(node_path(&["a", "f"]), TestNode::file(3, b"original"));
+    let (fs, root) = mount(fs);
+    // The held root's own pathname is renamed underneath it.
+    let renamed = outside_dir().join("r-renamed");
+    fs.lock().unwrap().rename(root_path(), &renamed);
+    // Scope acquisition still resolves through the held handle.
+    let scoped = root
+        .open_scoped_root(&rel("a"), FollowMode::NoFollow)
+        .unwrap();
+    assert_eq!(
+        read_all(
+            &mut scoped
+                .open_regular(&rel("f"), FollowMode::NoFollow)
+                .unwrap()
+        ),
+        "original"
+    );
+    // The new anchor is the handle-derived renamed path.
+    assert_eq!(scoped.canonical_root(), renamed.join("a").as_path());
+}
+
+#[test]
+fn scoped_root_empty_rel_after_rename_rescopes_held_root() {
+    let mut fs = fs_root();
+    fs.put(node_path(&["f"]), TestNode::file(2, b"kept"));
+    let (fs, root) = mount(fs);
+    // Rename the held root's pathname, then re-scope to the held
+    // root itself (`""` = self).
+    let renamed = outside_dir().join("r-self");
+    fs.lock().unwrap().rename(root_path(), &renamed);
+    let scoped = root
+        .open_scoped_root(&rel(""), FollowMode::NoFollow)
+        .unwrap();
+    assert_eq!(scoped.canonical_root(), renamed.as_path());
+    assert_eq!(
+        read_all(
+            &mut scoped
+                .open_regular(&rel("f"), FollowMode::NoFollow)
+                .unwrap()
+        ),
+        "kept"
+    );
+}
+
+#[test]
+fn scoped_root_does_not_acquire_replaced_pathname() {
+    let mut fs = fs_root();
+    fs.put(node_path(&["a"]), TestNode::dir(2));
+    fs.put(node_path(&["a", "f"]), TestNode::file(3, b"original"));
+    let (fs, root) = mount(fs);
+    // Move the held tree away, then plant a different tree at the
+    // old pathname.
+    let renamed = outside_dir().join("r-moved");
+    fs.lock().unwrap().rename(root_path(), &renamed);
+    {
+        let mut g = fs.lock().unwrap();
+        g.put(root_path(), TestNode::dir(90));
+        g.put(node_path(&["a"]), TestNode::dir(91));
+        g.put(node_path(&["a", "f"]), TestNode::file(92, b"IMPOSTER"));
+    }
+    // The held capability still sees its own subtree — never the
+    // imposter planted at the old pathname.
+    let scoped = root
+        .open_scoped_root(&rel("a"), FollowMode::NoFollow)
+        .unwrap();
+    assert_eq!(
+        read_all(
+            &mut scoped
+                .open_regular(&rel("f"), FollowMode::NoFollow)
+                .unwrap()
+        ),
+        "original"
+    );
+    // A *fresh* path-level open does see the replacement — proving
+    // the two authorities really differ.
+    let ops = crate::vfs::mock::MockVfsOps::from_shared(&fs);
+    let fresh =
+        RootedDir::open_with_ops(root_path(), RootedOptions::default(), Arc::new(ops)).unwrap();
+    assert_eq!(
+        read_all(
+            &mut fresh
+                .open_regular(&rel("a/f"), FollowMode::NoFollow)
+                .unwrap()
+        ),
+        "IMPOSTER"
+    );
+}
+
+#[test]
+fn scoped_root_without_handle_anchor_is_unsupported() {
+    let mut fs = fs_root();
+    fs.put(node_path(&["a"]), TestNode::dir(2));
+    let (fs, root) = mount(fs);
+    fs.lock().unwrap().set_canonicalize_unsupported(true);
+    // The anchor cannot be derived from the handle → honest
+    // Unsupported, never a path-string rebind or an empty anchor.
+    assert_eq!(
+        root.open_scoped_root(&rel("a"), FollowMode::NoFollow)
+            .unwrap_err()
+            .kind(),
+        FileErrorKind::Unsupported
+    );
+}
+
+#[test]
+fn scoped_root_leaf_rules() {
+    let mut fs = fs_root();
+    fs.put(node_path(&["f"]), TestNode::file(2, b"x"));
+    let (_fs, root) = mount(fs);
+    assert_eq!(
+        root.open_scoped_root(&rel("f"), FollowMode::NoFollow)
+            .unwrap_err()
+            .kind(),
+        FileErrorKind::NotDirectory
+    );
+}
+
+// ----------------------------------------------------------------
+// read_dir_each — bounded, stoppable enumeration (Issue #409)
+// ----------------------------------------------------------------
+
+/// Puts `n` files `f00`…`f{n-1}` under `node_path(&[dir])`.
+fn many_files(fs: &mut TestFs, dir: &str, n: usize) {
+    fs.put(node_path(&[dir]), TestNode::dir(1000));
+    for i in 0..n {
+        fs.put(
+            node_path(&[dir, &format!("f{i:02}")]),
+            TestNode::file(1001 + i as u64, b"x"),
+        );
+    }
+}
+
+#[test]
+fn read_dir_each_completes_with_nofollow_kinds() {
+    let mut fs = fs_root();
+    fs.put(node_path(&["d"]), TestNode::dir(2));
+    fs.put(node_path(&["d", "f"]), TestNode::file(3, b"x"));
+    fs.put(node_path(&["d", "l"]), TestNode::link(4, "f"));
+    let (_fs, root) = mount(fs);
+    let mut seen = Vec::new();
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |e| {
+            seen.push((e.name.clone(), e.kind));
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    seen.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        seen,
+        vec![
+            (OsStr::new("f").to_os_string(), NodeKind::File),
+            (OsStr::new("l").to_os_string(), NodeKind::Symlink),
+        ]
+    );
+}
+
+#[test]
+fn read_dir_each_stop_halts_enumeration_progress() {
+    let mut fs = fs_root();
+    many_files(&mut fs, "d", 100);
+    let (fs, root) = mount(fs);
+    fs.lock().unwrap().reset_stats();
+    let mut count = 0u64;
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            count += 1;
+            // Consumer's `remaining + 1` prefix bound.
+            if count >= 4 {
+                EntryFlow::Stop
+            } else {
+                EntryFlow::Continue
+            }
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Stopped);
+    assert_eq!(count, 4);
+    // No enumeration progress after Stop: exactly the visited
+    // prefix was pulled and classified — the other 96 entries were
+    // never touched.
+    let g = fs.lock().unwrap();
+    assert_eq!(g.enum_pulled(), 4);
+    assert_eq!(g.classify_calls(), 4);
+}
+
+#[test]
+fn read_dir_each_immediate_stop() {
+    let mut fs = fs_root();
+    many_files(&mut fs, "d", 10);
+    let (fs, root) = mount(fs);
+    fs.lock().unwrap().reset_stats();
+    // `max_entries = 0` analogue: the first callback already stops.
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| EntryFlow::Stop)
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Stopped);
+    let g = fs.lock().unwrap();
+    assert_eq!(g.enum_pulled(), 1);
+    assert_eq!(g.classify_calls(), 1);
+}
+
+#[test]
+fn read_dir_each_empty_dir_completes() {
+    let mut fs = fs_root();
+    fs.put(node_path(&["d"]), TestNode::dir(2));
+    let (_fs, root) = mount(fs);
+    let mut visited = 0u64;
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            visited += 1;
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    assert_eq!(visited, 0);
+}
+
+#[test]
+fn read_dir_each_calls_are_independent() {
+    let mut fs = fs_root();
+    many_files(&mut fs, "d", 7);
+    let (fs, root) = mount(fs);
+    fs.lock().unwrap().reset_stats();
+    // First call stops early…
+    let mut n = 0u64;
+    root.read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+        n += 1;
+        if n >= 2 {
+            EntryFlow::Stop
+        } else {
+            EntryFlow::Continue
+        }
+    })
+    .unwrap();
+    // …the next call owns a fresh enumeration state and sees all.
+    let mut seen = Vec::new();
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |e| {
+            seen.push(e.name.clone());
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    assert_eq!(seen.len(), 7);
+}
+
+#[test]
+fn read_dir_each_os_failure_is_error_not_stopped() {
+    let mut fs = fs_root();
+    many_files(&mut fs, "d", 10);
+    let (fs, root) = mount(fs);
+    fs.lock().unwrap().reset_stats();
+    fs.lock().unwrap().set_list_fail_at(3);
+    let mut count = 0u64;
+    let err = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            count += 1;
+            EntryFlow::Continue
+        })
+        .unwrap_err();
+    // An enumeration failure is `Err` — never reported `Stopped`.
+    assert_eq!(err.kind(), FileErrorKind::Io);
+    assert_eq!(count, 2);
+    // Recovery: with the fault cleared the same call works.
+    fs.lock().unwrap().set_list_fail_at(0);
+    let mut seen = 0u64;
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            seen += 1;
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    assert_eq!(seen, 10);
+}
+
+#[test]
+fn read_dir_each_visitor_panic_releases_enumeration_state() {
+    let mut fs = fs_root();
+    many_files(&mut fs, "d", 5);
+    let (_fs, root) = mount(fs);
+    let mut n = 0u64;
+    let hit = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = root.read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            n += 1;
+            assert!(n != 2, "visitor boom");
+            EntryFlow::Continue
+        });
+    }));
+    assert!(hit.is_err());
+    // The enumeration state was released during unwind — a fresh
+    // call enumerates independently and completes.
+    let mut seen = 0u64;
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            seen += 1;
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    assert_eq!(seen, 5);
+}
+
+#[test]
+fn read_dir_collects_identically() {
+    let mut fs = fs_root();
+    many_files(&mut fs, "d", 6);
+    let (_fs, root) = mount(fs);
+    // `read_dir` is the collect form of the same enumeration.
+    let via_dir: Vec<_> = root
+        .read_dir(&rel("d"), FollowMode::NoFollow)
+        .unwrap()
+        .into_iter()
+        .map(|e| e.name)
+        .collect();
+    let mut via_each = Vec::new();
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |e| {
+            via_each.push(e.name);
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    assert_eq!(via_dir, via_each);
 }
