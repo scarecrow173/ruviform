@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "manifest": "rvf.driver-lab.parity/v1",
+  "issue": "https://github.com/scarecrow173/ruviform/issues/435",
+  "description": "Label/Table の Fake/GPUI 同一 fixture。view は ViewSpec（serde 形式）、expect は両 driver が検査する semantic 期待値。Fake は payload 保持（列・行順序、欠損セル）と a11y tree、GPUI は描画 plan（drawn）と、その drawn grid が a11y tree の grid と一致することを検査する。",
+  "view": {
+    "root": {
+      "type": "panel",
+      "key": "root",
+      "title": null,
+      "visual": { "error": null },
+      "a11y": {},
+      "children": [
+        {
+          "type": "label",
+          "key": "status",
+          "text": "Running",
+          "visual": { "error": null },
+          "a11y": { "label": "job status" }
+        },
+        {
+          "type": "table",
+          "key": "events",
+          "columns": ["stage", "state", "ms"],
+          "rows": [
+            ["decode", "done", 12.5],
+            [null, "running", 3],
+            ["export", null, null]
+          ],
+          "visual": { "error": null },
+          "a11y": { "label": "events" }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "mountedKeys": ["root", "status", "events"],
+    "label": {
+      "text": "Running",
+      "a11yTree": { "role": "text", "name": "job status", "value": "Running" }
+    },
+    "table": {
+      "declaredRows": 3,
+      "declaredColumns": 3,
+      "drawnHeader": ["stage", "state", "ms"],
+      "drawnRows": [
+        ["decode", "done", "12.5"],
+        [null, "running", "3"],
+        ["export", null, null]
+      ],
+      "a11yTree": {
+        "role": "table",
+        "name": "events",
+        "children": [
+          {
+            "role": "row",
+            "children": [
+              { "role": "columnHeader", "value": "stage" },
+              { "role": "columnHeader", "value": "state" },
+              { "role": "columnHeader", "value": "ms" }
+            ]
+          },
+          {
+            "role": "row",
+            "children": [
+              { "role": "cell", "value": "decode" },
+              { "role": "cell", "value": "done" },
+              { "role": "cell", "value": 12.5 }
+            ]
+          },
+          {
+            "role": "row",
+            "children": [
+              { "role": "cell" },
+              { "role": "cell", "value": "running" },
+              { "role": "cell", "value": 3.0 }
+            ]
+          },
+          {
+            "role": "row",
+            "children": [
+              { "role": "cell", "value": "export" },
+              { "role": "cell" },
+              { "role": "cell" }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

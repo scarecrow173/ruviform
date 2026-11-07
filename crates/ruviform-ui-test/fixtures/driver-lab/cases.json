@@ -129,6 +129,30 @@
      }
     },
     {
+     "layer": "fake",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/435",
+     "note": "Issue #435 parity fixture（fixtures/driver-lab/parity/label-table.json）の fake side: Label/Table の mount・reconcile（落ちた key は Removed、残存 key は identity 保持）と、ViewHost の a11y tree が expect と一致すること。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "driver_parity",
+      "filter": "ui_dvr_02_parity_label_table"
+     }
+    },
+    {
+     "layer": "gpui",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/435",
+     "note": "Issue #435: ruviform-ui-gpui の parity_label_table_plans_match_shared_fixture（drawn 表 plan が fixture と一致し、drawn grid が a11y tree の grid と一致）と rvf_view_parity_label_table_renders（gpui-test・RvfView で Label/Table を描画）。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "parity_label_table"
+     }
+    },
+    {
      "layer": "real-os",
      "status": "not_run",
      "owner": "https://github.com/scarecrow173/ruviform/issues/313",
