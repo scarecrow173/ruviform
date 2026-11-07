@@ -1,0 +1,5 @@
+dock-attached size=1016x759 editor_region_rgb=38,45,54
+dock-tab-hidden size=1016x759 editor_region_rgb=20,24,29
+dock-tab-shown size=1016x759 editor_region_rgb=38,45,54
+dock-resize-grow size=1296x939 editor_region_rgb=38,45,54
+dock-resize-shrink size=536x599 editor_region_rgb=38,45,54

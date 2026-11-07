@@ -58,7 +58,7 @@ mod gpui_driver {
         ParentElement, Render, Styled, Subscription, TitlebarOptions, Window,
         WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, point, px, size,
     };
-    use ruviform_ui::view::ComponentKey;
+    use ruviform_ui::view::{ComponentKey, ViewSpec};
     use ruviform_ui::{
         Capability, CloseDecision, DriverEvent, Event, Intent, LogicalSize, MonitorInfo, SlotState,
         SurfaceSlotId, UiError, WindowCapabilities, WindowDriver, WindowId, WindowLifecycle,
@@ -128,6 +128,10 @@ mod gpui_driver {
             id: WindowId,
             size: LogicalSize,
         },
+        UpdateView {
+            id: WindowId,
+            spec: Box<ViewSpec>,
+        },
         Focus {
             id: WindowId,
             focused: bool,
@@ -188,6 +192,10 @@ mod gpui_driver {
         /// `usize` keeps it pointer-width without naming OS types.
         raw_parent: Option<usize>,
         root: Option<Entity<AppRoot>>,
+        /// The mounted [`ViewSpec`] renderer — `Some` only for
+        /// [`GpuiDriver::create_view_window`] windows; target of
+        /// [`GpuiDriver::update_view`].
+        view: Option<Entity<crate::render::RvfView>>,
         inbox: Rc<RefCell<Vec<Event>>>,
         /// `ComponentKey → SurfaceSlotId` associations installed by
         /// [`GpuiDriver::bind_native_slot`] — the mounted view reads
@@ -473,6 +481,31 @@ mod gpui_driver {
             Ok(reserve_window(&self.inner, spec, Some(Box::new(mount))))
         }
 
+        /// Replaces the mounted [`ViewSpec`] of `window` — the consumer
+        /// side of a Panel/Tab change (e.g. switching the active tab).
+        /// The update is queued like the other window ops and applied
+        /// at the next drain; the next painted frame projects the new
+        /// layout, so a `NativeSlot` in a now-inactive tab is
+        /// suppressed through the slot port. A spec the view host
+        /// rejects leaves the previous tree in place — the caller
+        /// observes the outcome through the projected slot state. A
+        /// window opened without a mounted view (`create_window`) accepts
+        /// the call and ignores the update.
+        ///
+        /// # Errors
+        /// [`UiError::Host`] when `window` is unknown or destroyed.
+        pub fn update_view(&self, window: WindowId, spec: ViewSpec) -> Result<(), UiError> {
+            let mut inner = self.inner.borrow_mut();
+            if !inner.windows.contains_key(&window) {
+                return Err(UiError::host(format!("no window {window}")));
+            }
+            inner.ops.push_back(Op::UpdateView {
+                id: window,
+                spec: Box::new(spec),
+            });
+            Ok(())
+        }
+
         /// Ids the driver recorded as destroyed.
         #[must_use]
         pub fn destroyed(&self) -> BTreeSet<WindowId> {
@@ -706,6 +739,7 @@ mod gpui_driver {
                 handle: None,
                 raw_parent: None,
                 root: None,
+                view: None,
                 inbox: Rc::new(RefCell::new(Vec::new())),
                 surface_bindings: Rc::new(RefCell::new(BTreeMap::new())),
                 ready: false,
@@ -792,6 +826,15 @@ mod gpui_driver {
                         });
                     }
                 }
+                Op::UpdateView { id, spec } => {
+                    let view = inner.borrow().windows.get(&id).and_then(|s| s.view.clone());
+                    if let Some(view) = view {
+                        // A rejected spec leaves the mounted tree untouched
+                        // (`ViewHost::update` contract); the next frame
+                        // keeps the previous projection.
+                        let _ = view.update(cx, |v, cx| v.update_spec(*spec, cx));
+                    }
+                }
                 Op::Focus { id, focused } => {
                     let handle = inner.borrow().windows.get(&id).and_then(|s| s.handle);
                     if let Some(h) = handle {
@@ -869,6 +912,43 @@ mod gpui_driver {
                 Op::Exit => cx.quit(),
             }
         }
+    }
+
+    /// Mounts the consumer's [`ViewSpec`] renderer as a window root —
+    /// the `Some` arm of [`open_window`]'s root choice (Issue #387 seam).
+    fn mount_view(
+        inner: &Rc<RefCell<Inner>>,
+        driver: &GpuiDriver,
+        id: WindowId,
+        mount: ViewMount,
+        inbox: Rc<RefCell<Vec<Event>>>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<crate::render::RvfView> {
+        let sink = IntentSink {
+            inner: inner.clone(),
+            window: id,
+        };
+        let slots = crate::render::SlotMount {
+            adapter: driver.surface.clone(),
+            bindings: inner
+                .borrow()
+                .windows
+                .get(&id)
+                .map(|s| s.surface_bindings.clone())
+                .unwrap_or_default(),
+        };
+        cx.new(|cx| {
+            crate::render::RvfView::mounted(
+                mount.host,
+                mount.theme.as_ref(),
+                &sink,
+                inbox,
+                slots,
+                window,
+                cx,
+            )
+        })
     }
 
     /// Maps `WindowSpec` → `WindowOptions` — the whole point of the
@@ -998,43 +1078,24 @@ mod gpui_driver {
                 let driver = driver2.clone();
                 move |_window, _cx| on_should_close(&inner, &driver, id)
             });
-            let content: gpui::AnyView = match mount {
-                Some(m) => {
-                    let mount = *m;
-                    let sink = IntentSink {
-                        inner: inner2.clone(),
-                        window: id,
-                    };
-                    let slots = crate::render::SlotMount {
-                        adapter: driver2.surface.clone(),
-                        bindings: inner2
-                            .borrow()
-                            .windows
-                            .get(&id)
-                            .map(|s| s.surface_bindings.clone())
-                            .unwrap_or_default(),
-                    };
-                    cx.new(|cx| {
-                        crate::render::RvfView::mounted(
-                            mount.host,
-                            mount.theme.as_ref(),
-                            &sink,
-                            inbox,
-                            slots,
-                            window,
-                            cx,
-                        )
-                    })
-                    .into()
-                }
-                None => cx.new(|_| RvfRoot::new(spec.title.clone(), inbox)).into(),
-            };
+            let (content, view): (gpui::AnyView, Option<Entity<crate::render::RvfView>>) =
+                match mount {
+                    Some(m) => {
+                        let view = mount_view(&inner2, &driver2, id, *m, inbox, window, cx);
+                        (view.clone().into(), Some(view))
+                    }
+                    None => (
+                        cx.new(|_| RvfRoot::new(spec.title.clone(), inbox)).into(),
+                        None,
+                    ),
+                };
             let entity =
                 cx.new(|cx| AppRoot::new(id, content, inner2.clone(), driver2, window, cx));
             {
                 let mut guard = inner2.borrow_mut();
                 if let Some(slot) = guard.windows.get_mut(&id) {
                     slot.root = Some(entity.clone());
+                    slot.view = view;
                 }
             }
             entity
@@ -1299,3 +1360,37 @@ mod render;
 
 #[cfg(feature = "gpui")]
 pub use render::COMMAND_INTENT_OP;
+
+#[cfg(all(test, feature = "gpui"))]
+mod update_view_tests {
+    use crate::GpuiDriver;
+    use ruviform_ui::view::{
+        A11ySpec, ComponentKey, ComponentSpec, ComponentVisualState, PanelSpec, ViewSpec,
+    };
+    use ruviform_ui::{UiError, WindowDriver, WindowId, WindowSpec};
+
+    fn panel_only() -> ViewSpec {
+        ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("root".to_string()),
+                title: None,
+                children: vec![],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        }
+    }
+
+    #[test]
+    fn update_view_queues_for_known_window_and_rejects_unknown() {
+        let mut driver = GpuiDriver::new();
+        let window = WindowDriver::create_window(&mut driver, &WindowSpec::default())
+            .expect("reserve window");
+        assert!(driver.update_view(window, panel_only()).is_ok());
+        let unknown = WindowId::new(u64::MAX).expect("nonzero");
+        assert!(matches!(
+            driver.update_view(unknown, panel_only()),
+            Err(UiError::Host { .. })
+        ));
+    }
+}
