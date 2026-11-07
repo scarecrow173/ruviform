@@ -13,6 +13,8 @@ mod counter;
 mod gauge;
 mod histogram;
 
+#[cfg(test)]
+pub(crate) use counter::counter_reader_on_cell;
 pub use counter::{Counter, CounterReader, counter};
 pub use gauge::{Gauge, GaugeReader, gauge};
 pub use histogram::{Histogram, HistogramError, HistogramReader, histogram};

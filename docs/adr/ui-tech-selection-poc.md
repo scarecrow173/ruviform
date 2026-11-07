@@ -1,10 +1,10 @@
 ---
 id: "ADR-034Jc9Cguud7nZ2Tt88Ptu"
 type: "adr"
-status: "accepted"
+status: "superseded"
 title: "UI 技術選定（wry・描画バックエンド・フロントエンド FW・配布）— PoC 採否"
 created: "2026-10-20"
-updated: "2026-10-21"
+updated: "2026-11-07"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -43,7 +43,8 @@ relations:
     - "ui-architecture-webview-hybrid.md"
   blocks: []
   supersedes: []
-  superseded-by: []
+  superseded-by:
+    - "driver-neutral-gui-gpui-driver-webview-first-issue-384.md"
   related:
     - "realtime-contract-and-verification-policy.md"
     - "platform-and-toolchain-targets.md"
@@ -84,6 +85,8 @@ metadata:
 ---
 
 # UI 技術選定（wry・描画バックエンド・フロントエンド FW・配布）— PoC 採否
+
+> **Status: superseded（2026-11-07）**。本 ADR の採否結果（wry+tao・Solid・WebGL2 実測 floor・embedded assets）は旧 WebView 実装の履歴証拠として保持するが、新規 GUI 実装の採用方針としては Issue #384 の **Driver-neutral GUI Architecture + GPUI 標準 Driver** が後継となる。後継: [driver-neutral-gui-gpui-driver-webview-first-issue-384.md](driver-neutral-gui-gpui-driver-webview-first-issue-384.md)。WebView2 composition・描画実測値・配布形態の記録は移行検証の参照資料として維持し、本文は改訂しない。
 
 ## Context and Problem Statement
 

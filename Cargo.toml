@@ -51,6 +51,9 @@ members = [
     "crates/ruviform-io-avi",
     # メディア I/O バックエンド（Issue #191 — PCM WAV encode/mux を所有する pure-Rust RIFF/WAVE 出力 adapter。初の実装済み Encoder/Muxer）
     "crates/ruviform-io-wav",
+    # 汎用 I/O 合成 E2E 試験専用クレート（Issue #306 / IO-IMP-12 — 公開 API なし。
+    # tests/ が io-* 公開面を consumer と同じ経路で層横断に検証。本番クレートは誰も依存しない）
+    "crates/ruviform-io-e2e",
     # Adapters（ドメイン基盤の外側・engine と同じ利用側層。Issue #23 PoC で新設）
     "crates/ruviform-audio-device",
     # 拡張層（規格中立のプラグイン基盤。Issue #29 PoC で新設）
@@ -77,6 +80,10 @@ members = [
     # 契約の消費者。adapter 実装は非既定 `gpui` feature ゲートで
     # headless 検証経路を壊さない — ruviform-ui-webview 前例）
     "crates/ruviform-ui-gpui",
+    # Driver 非依存 DTCG design-token interpreter（Issue #385 新設 —
+    # rvf-dtcg-profile.v1: parse/validate/alias/mode/override → typed
+    # immutable ResolvedTheme。serde/serde_json のみ依存、ruviform-ui 非依存）
+    "crates/ruviform-ui-theme",
     # 利用側層 テスト共有基盤（Issue #312 / RF-GT-03 — test-only GUI host
     # lifecycle・secure control adapter・fixture/clock/observation。
     # ruviform-ui 公開 API のみに依存し、本番クレートからは誰も依存しない）

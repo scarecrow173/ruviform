@@ -1,0 +1,11 @@
+[package]
+name = "middle"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+gpui = { path = "../gpui" }
+# 自前 workspace — 除外済み fixture package を
+# 親 workspace から切り離す（cargo metadata が親を遡らないように）。
+[workspace]

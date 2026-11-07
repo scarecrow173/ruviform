@@ -84,3 +84,34 @@ json/os_pipe。`wry`/`tao`/GUI/RT 依存は持ち込まない。
 
 **RT 契約:** 全 API 非 RT(制御/観測/fixture は UI スレッド外の
 非 RT 基盤)。RT クレートからは参照されない。
+
+## Driver Boundary Guard / Driver Lab（Issue #390）
+
+共通 UI 契約と Consumer 通常 View/Domain/Headless が
+GPUI/Toolkit/OS handle に依存しないことを機械検査する guard と、
+UI-DVR-01〜08 の case/story registry + Fake driver semantic
+fixture を提供する。
+
+- 入口: `mise run check-ui-driver-boundary`（guard、exit
+  0=pass/1=violation/2=tool error）、
+  `mise run test-ui-driver-contract`（manifest 整合 + 実行 fixture）。
+- ruleset: `fixtures/driver-lab/boundary.json` — forbidden dep/path
+  root・allowlist grant（`ruviform-ui-webview` =
+  `wry`/`tao`/`dpi` optional+`webview` feature、将来の
+  `ruviform-ui-gpui` grant は `required:false` で休眠）。
+- 検査: dep-graph（direct/feature/dep.features/transitive/
+  conditional/allowlist 整合/adapter-consumer）+ 公開 signature
+  漏出（syn、exposure-aware 2-pass・alias・impl header）。
+  検査限界（glob/macro/cfg/registry optional target 等）は
+  `docs/designs/issue-390-driver-contract-lab.md` §限界参照。
+- registry: `fixtures/driver-lab/cases.json`（requiredCases で
+  UI-DVR-01〜08 を pin）と `stories.json`。判定語彙
+  `pass/fail/not_run/unsupported/blocked` — Fake semantic pass を
+  GPUI/実 OS/Native Plugin Dock/Visual Golden の成功としない。
+  未実装 layer は owner Issue + rerun 条件付き `not_run`/`blocked`。
+- evidence: `RUVIFORM_DRIVER_LAB_EVIDENCE` 指定時に JSONL を
+  append（`expected`=manifest 宣言、`observed`=実実行結果）。
+
+既知の限界として、cargo metadata の resolve graph は未 activation
+optional dep を省略するため conditional 到達は manifest 宣言を
+再帰走査する（registry dep の未 activation target は skip）。
