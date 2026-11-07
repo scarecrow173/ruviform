@@ -32,7 +32,7 @@ relations:
   superseded-by: []
   related:
     - "docs/plans/implement-issue-388-389-native-dock-contract.md"
-    - "docs/designs/issue-115-l1-cross-process-parenting.md"
+    - "docs/designs/issue-115-l1-gui-cross-process-parenting.md"
   refines: []
   refined-by: []
   derives-from:

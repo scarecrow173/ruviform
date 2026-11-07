@@ -51,10 +51,17 @@ class scan（`"Audio Module Class"` filter）→ `createInstance` →
 `IComponent`/`IAudioProcessor` + `IEditController` を中立
 `PluginFactory`/`ErasedPlugin` 契約へ写像する（`PluginDescriptor`/`ParamInfo`
 の `'static` 境界は load/factory 構築時の 1 回限り bounded `String::leak`/
-`Vec::leak` で実体化）。`save_state`/`restore_state`/`open_gui`/`close_gui`
-は `Plugin` 既定の `Err(HostError::Unsupported)` のまま — bridge は規格
-state/GUI 動詞を呼ばない（fixture の `setState`/`getState` は no-op stub・
-偽の round-trip を観測しない）。
+`Vec::leak` で実体化）。`save_state`/`restore_state` は `Plugin` 既定の
+`Err(HostError::Unsupported)` のまま（fixture の `setState`/`getState` は
+no-op stub・偽の round-trip を観測しない）。`open_gui`/`close_gui` は
+Windows `kPlatformTypeHWND` に対して実装済み —
+`createView("editor")` → `isPlatformTypeSupported` →
+`setFrame(BridgePlugFrame)` → `attached(parent HWND)`、close は
+`removed()` → release（Issue #389 ・設計
+`docs/designs/issue-389-vst3-l0-editor-attach.md`）。distributed plugin
+向けに component↔controller の `IConnectionPoint` 双方向接続と host
+`createInstance` の `IMessage`/`IAttributeList` 提供を行う。他 platform・
+`resizeView` 受理は honest `Unsupported`/defined refusal のまま。
 
 descriptor `id` は component CID（`GainComponent::CID` = `vst3::uid(
 0x5A1B2C3D, 0x4E5F6A7B, 0x8C9D0E1F, 0x2A3B4C5D)`）raw 16 byte の小文字 hex
