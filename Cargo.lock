@@ -6660,6 +6660,7 @@ version = "0.1.0"
 dependencies = [
  "ruviform-plugin-core",
  "ruviform-plugin-host",
+ "ruviform-plugin-vst3",
  "ruviform-ui",
  "ruviform-ui-gpui",
  "windows-sys 0.61.2",
