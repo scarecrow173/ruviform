@@ -287,7 +287,7 @@ run = "cargo clippy -p ruviform-ui-gpui --all-targets --features gpui -- -D warn
 description = "Run gpui-feature tests for the UI GPUI adapter (real OS window behavior is manual verification). `gpui-test` adds gpui test-support so the Issue #387 headless render tests run on the real element path (TestAppContext window + simulated input)."
 run = "cargo test -p ruviform-ui-gpui --features gpui-test"
 [tasks.test-ui-consumer-observation]
-description = "Issue #429 consumer observation seam: external-crate test (ruviform-ui-gpui/tests/consumer_observation.rs) that mounts the shared Knob/Toggle parity fixture and observes GPUI projection and intents through the public GpuiObserver seam (gpui-test; no gpui type on the seam). Writes only target/"
+description = "Issue #429/#436 consumer observation seam: external-crate test (ruviform-ui-gpui/tests/consumer_observation.rs) that mounts the shared parity fixture and observes GPUI projection, intents, and drawing plans (Meter bars, TimeAxis marks, Waveform bins) through the public GpuiObserver seam (gpui-test; no gpui type on the seam). Writes only target/"
 run = "cargo test -p ruviform-ui-gpui --features gpui-test --test consumer_observation"
 # Canonical manual-verification entry for the minimal native Window
 # fixture: opens a real OS window on the local session — run it on a

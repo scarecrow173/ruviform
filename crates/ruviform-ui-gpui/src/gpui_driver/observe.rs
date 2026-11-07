@@ -1,9 +1,10 @@
-//! Consumer observation seam (Issue #429).
+//! Consumer observation seam (Issue #429, drawing plans Issue #436).
 //!
 //! Lets a consumer crate's test drive the GPUI driver and observe the
-//! projection and intents it produces without naming a `gpui` type:
-//! [`GpuiObserver`] owns the gpui test context internally, and every
-//! public item here is built from `ruviform-ui` contract types.
+//! projection, intents, and drawing plans it produces without naming a
+//! `gpui` type: [`GpuiObserver`] owns the gpui test context internally,
+//! and every public item here is built from `ruviform-ui` contract types
+//! or std types.
 //!
 //! Test-only: gated by `gpui-test`, which enables gpui's test-support.
 //! The platform loop is turned one step at a time, so real OS window
@@ -13,6 +14,7 @@
 //! **RT contract:** non-RT only.
 
 use std::cell::RefCell;
+use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{App, Entity, TestAppContext};
@@ -21,7 +23,7 @@ use ruviform_ui::view::{ComponentKey, ComponentSnapshot};
 use ruviform_ui::{DriverEvent, Intent, UiError, WindowDriver, WindowId, WindowLifecycle};
 
 use super::{GpuiDriver, drain, flush_events};
-use crate::render::RvfView;
+use crate::render::{self, DrawPlan, RvfView};
 
 /// Observed state of one mounted component.
 #[derive(Debug, Clone)]
@@ -45,6 +47,89 @@ pub struct ViewObservation {
     pub components: Vec<ComponentObservation>,
     /// Events queued in the window inbox and not yet consumed by the view.
     pub inbox_len: usize,
+}
+
+/// Drawing plan of one Meter, `TimeAxis`, or Waveform component: the
+/// values the renderer paints, with GPUI types left out (Issue #436).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum DrawnPlan {
+    /// Meter bars in paint order.
+    Meter {
+        /// Bars of every channel, each a span of the viewport.
+        bars: Vec<DrawnBar>,
+    },
+    /// `TimeAxis` marks inside the viewport, in tick order.
+    TimeAxis {
+        /// Marks the renderer draws; ticks outside the viewport are culled.
+        marks: Vec<DrawnMark>,
+    },
+    /// Waveform bins that paint.
+    Waveform {
+        /// One entry per channel, including channels with no painted bin.
+        channels: Vec<DrawnWaveformChannel>,
+    },
+}
+
+/// One drawn Meter bar. `x0` and `x1` are fractions of the viewport
+/// width in `[0, 1]`; `peak` and `rms` are amplitudes clamped to `[0, 1]`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct DrawnBar {
+    /// Channel band the bar is drawn in.
+    pub channel: usize,
+    /// Left edge, as a fraction of the viewport width.
+    pub x0: f64,
+    /// Right edge, as a fraction of the viewport width.
+    pub x1: f64,
+    /// Peak height, as a fraction of the channel band.
+    pub peak: f64,
+    /// RMS overlay height; `None` when the bin's RMS is not finite.
+    pub rms: Option<f64>,
+}
+
+/// One drawn `TimeAxis` mark.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct DrawnMark {
+    /// Position, as a fraction of the viewport width in `[0, 1]`.
+    pub x: f64,
+    /// Whether the mark is a major tick (full height).
+    pub major: bool,
+    /// Label drawn above the mark.
+    pub label: String,
+}
+
+/// The painted Waveform bins of one channel.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct DrawnWaveformChannel {
+    /// Channel index.
+    pub channel: usize,
+    /// Frame range (`start..end`) of each painted bin, in bin order.
+    /// Gap bins are absent.
+    pub bins: Vec<Range<u64>>,
+}
+
+/// Drawing plans of the components a window's view paints.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct ViewDrawn {
+    /// Window hosting the view.
+    pub window: WindowId,
+    /// Drawing plans in paint order. Only Meter, `TimeAxis`, and Waveform
+    /// components appear; a Tabs strip contributes its active child only.
+    pub components: Vec<ComponentDrawn>,
+}
+
+/// Drawing plan of one component.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct ComponentDrawn {
+    /// Key of the component in the mounted view.
+    pub key: ComponentKey,
+    /// What the renderer paints for it.
+    pub plan: DrawnPlan,
 }
 
 /// Consumer-side handle onto a [`GpuiDriver`] for test observation.
@@ -154,6 +239,29 @@ impl GpuiObserver {
         })
     }
 
+    /// Drawing plans of the Meter, `TimeAxis`, and Waveform components the
+    /// view mounted in `window` paints; `None` when the window hosts no
+    /// view. Components are in paint order, which differs from the key
+    /// order of [`observe`](Self::observe).
+    #[must_use]
+    pub fn drawn(&self, window: WindowId) -> Option<ViewDrawn> {
+        let view = self.view(window).ok()?;
+        let plans = self.cx.update(|app| {
+            let spec = view.read(app).host().spec()?;
+            Some(render::drawn_plans(&spec.root))
+        })?;
+        Some(ViewDrawn {
+            window,
+            components: plans
+                .into_iter()
+                .map(|(key, plan)| ComponentDrawn {
+                    key,
+                    plan: to_drawn_plan(plan),
+                })
+                .collect(),
+        })
+    }
+
     /// `Action` intents delivered by [`settle`](Self::settle) so far,
     /// in delivery order.
     #[must_use]
@@ -209,6 +317,42 @@ impl GpuiDriver {
         root.update(app, |root, _cx| {
             root.content.clone().downcast::<RvfView>().ok()
         })
+    }
+}
+
+/// Widens a crate-internal plan to the public DTO. The `f32` values are
+/// exact in `f64`, so the observed numbers equal the painted ones.
+fn to_drawn_plan(plan: DrawPlan) -> DrawnPlan {
+    match plan {
+        DrawPlan::Meter(bars) => DrawnPlan::Meter {
+            bars: bars
+                .into_iter()
+                .map(|b| DrawnBar {
+                    channel: b.channel,
+                    x0: f64::from(b.x0),
+                    x1: f64::from(b.x1),
+                    peak: f64::from(b.peak),
+                    rms: b.rms.map(f64::from),
+                })
+                .collect(),
+        },
+        DrawPlan::TimeAxis(marks) => DrawnPlan::TimeAxis {
+            marks: marks
+                .into_iter()
+                .map(|m| DrawnMark {
+                    x: f64::from(m.x),
+                    major: m.major,
+                    label: m.label,
+                })
+                .collect(),
+        },
+        DrawPlan::Waveform(channels) => DrawnPlan::Waveform {
+            channels: channels
+                .into_iter()
+                .enumerate()
+                .map(|(channel, bins)| DrawnWaveformChannel { channel, bins })
+                .collect(),
+        },
     }
 }
 

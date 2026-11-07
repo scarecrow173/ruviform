@@ -31,7 +31,8 @@ use ruviform_ui::behavior::{
 };
 use ruviform_ui::view::{
     ComponentKey, ComponentSpec, ControlSpec, MeterSpec, NativeSlotSpec, Orientation,
-    SpectrogramSpec, TimeAxisSpec, ViewError, ViewEvent, ViewHost, ViewSpec, WaveformSpec,
+    SpectrogramSpec, TimeAxisSpec, ViewError, ViewEvent, ViewHost, ViewSpec, WaveformBin,
+    WaveformSpec,
 };
 use ruviform_ui::{
     Event, Intent, LogicalRect, SlotError, SlotGeometry, SlotVisibility, SurfaceSlotId,
@@ -917,7 +918,7 @@ impl RvfView {
                         palette.viz_baseline,
                     ));
                     for bin in bins {
-                        if bin.count == 0 || !bin.min.is_finite() || !bin.max.is_finite() {
+                        if !waveform_bin_drawn(bin) {
                             continue; // gap — draw nothing
                         }
                         let x0 = bounds.origin.x
@@ -1287,12 +1288,12 @@ fn viewport_fraction(at: f64, viewport: &Range<u64>) -> f32 {
 /// One drawn Meter bar: a normalized x span inside the viewport, its
 /// channel band, and `[0, 1]` peak/RMS heights (amplitudes clamped).
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct MeterBarPlan {
-    channel: usize,
-    x0: f32,
-    x1: f32,
-    peak: f32,
-    rms: Option<f32>,
+pub(crate) struct MeterBarPlan {
+    pub(crate) channel: usize,
+    pub(crate) x0: f32,
+    pub(crate) x1: f32,
+    pub(crate) peak: f32,
+    pub(crate) rms: Option<f32>,
 }
 
 /// Bars to draw for a Meter spec. A gap bin (`count == 0` or a
@@ -1328,10 +1329,10 @@ fn meter_bar_plan(spec: &MeterSpec) -> Vec<MeterBarPlan> {
 /// One drawn time-axis tick: normalized x inside the viewport and its
 /// weight and label.
 #[derive(Debug, Clone, PartialEq)]
-struct AxisMarkPlan {
-    x: f32,
-    major: bool,
-    label: String,
+pub(crate) struct AxisMarkPlan {
+    pub(crate) x: f32,
+    pub(crate) major: bool,
+    pub(crate) label: String,
 }
 
 /// Ticks to draw for a `TimeAxis` spec. Ticks outside the viewport are
@@ -1394,6 +1395,65 @@ fn spectrogram_cell_plan(spec: &SpectrogramSpec) -> Vec<SpectrogramCellPlan> {
     cells
 }
 
+/// A Waveform bin that paints. A gap bin (`count == 0` or a non-finite
+/// min/max) draws nothing; the paint closure and the drawn plan share
+/// this rule.
+fn waveform_bin_drawn(bin: &WaveformBin) -> bool {
+    bin.count != 0 && bin.min.is_finite() && bin.max.is_finite()
+}
+
+/// Plan of one drawing component, the crate-internal form of the
+/// consumer observation (`observe::DrawnPlan`).
+#[cfg(feature = "gpui-test")]
+pub(crate) enum DrawPlan {
+    Meter(Vec<MeterBarPlan>),
+    TimeAxis(Vec<AxisMarkPlan>),
+    /// Per channel, the frame ranges of the bins that paint.
+    Waveform(Vec<Vec<Range<u64>>>),
+}
+
+/// Drawing plans of the Meter, `TimeAxis`, and Waveform components the
+/// renderer paints under `spec`, in paint order. Follows `element_for`:
+/// a Panel paints every child, and a Tabs strip paints only its active
+/// child.
+#[cfg(feature = "gpui-test")]
+pub(crate) fn drawn_plans(spec: &ComponentSpec) -> Vec<(ComponentKey, DrawPlan)> {
+    let mut out = Vec::new();
+    collect_drawn(spec, &mut out);
+    out
+}
+
+#[cfg(feature = "gpui-test")]
+fn collect_drawn(spec: &ComponentSpec, out: &mut Vec<(ComponentKey, DrawPlan)>) {
+    match spec {
+        ComponentSpec::Panel(p) => p.children.iter().for_each(|c| collect_drawn(c, out)),
+        ComponentSpec::Tabs(t) => {
+            let active = t.active.min(t.tabs.len().saturating_sub(1));
+            if let Some(tab) = t.tabs.get(active) {
+                collect_drawn(&tab.child, out);
+            }
+        }
+        ComponentSpec::Meter(m) => out.push((m.key.clone(), DrawPlan::Meter(meter_bar_plan(m)))),
+        ComponentSpec::TimeAxis(t) => {
+            out.push((t.key.clone(), DrawPlan::TimeAxis(axis_mark_plan(t))));
+        }
+        ComponentSpec::Waveform(w) => {
+            let channels = w
+                .channel_bins
+                .iter()
+                .map(|bins| {
+                    bins.iter()
+                        .filter(|bin| waveform_bin_drawn(bin))
+                        .map(|bin| bin.start..bin.end)
+                        .collect()
+                })
+                .collect();
+            out.push((w.key.clone(), DrawPlan::Waveform(channels)));
+        }
+        _ => {}
+    }
+}
+
 #[cfg(all(test, feature = "gpui-test"))]
 mod tests {
     use super::*;
@@ -1402,7 +1462,7 @@ mod tests {
     use ruviform_ui::dock::ViewInstanceId;
     use ruviform_ui::view::{
         A11ySpec, AttachEpoch, AxisTick, ComponentVisualState, MeterBin, PanelSpec, ProjectionOp,
-        SpectrogramColumn, ViewSpec,
+        SpectrogramColumn, TabSpec, TabsSpec, ViewSpec,
     };
     use ruviform_ui_theme::{ThemeResolver, TokenDocument};
 
@@ -2069,6 +2129,89 @@ mod tests {
             (marks[0].x - 0.5).abs() < f32::EPSILON,
             "culled ticks keep fractions"
         );
+    }
+
+    /// `drawn_plans` walks the tree the way `element_for` paints it: a
+    /// Panel paints every child, a Tabs strip only its active child.
+    #[test]
+    fn drawn_plans_follow_paint_tree() {
+        let meter = |key_name: &str| {
+            ComponentSpec::Meter(MeterSpec {
+                key: ComponentKey(key_name.to_string()),
+                channels: 1,
+                channel_levels: vec![vec![MeterBin {
+                    start: 0,
+                    end: 100,
+                    peak: 0.5,
+                    rms: 0.2,
+                    count: 100,
+                }]],
+                viewport: 0..100,
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            })
+        };
+        let tab = |key_name: &str| TabSpec {
+            key: ComponentKey(key_name.to_string()),
+            title: key_name.to_string(),
+            child: Box::new(meter(key_name)),
+        };
+        let tabs = ComponentSpec::Tabs(TabsSpec {
+            key: ComponentKey("tabs".to_string()),
+            active: 1,
+            tabs: vec![tab("hidden"), tab("shown")],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        });
+        let root = ComponentSpec::Panel(PanelSpec {
+            key: ComponentKey("root".to_string()),
+            title: None,
+            children: vec![meter("first"), tabs],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        });
+        let keys: Vec<String> = drawn_plans(&root)
+            .into_iter()
+            .map(|(key, _)| key.0)
+            .collect();
+        assert_eq!(keys, ["first", "shown"]);
+    }
+
+    /// Gap bins (`count == 0` or a non-finite min/max) are absent from the
+    /// Waveform plan; the painted bins keep their frame ranges per channel.
+    #[test]
+    fn waveform_plan_keeps_only_painted_bins() {
+        let bin = |start, end, min: f64, max: f64, count| WaveformBin {
+            start,
+            end,
+            min,
+            max,
+            rms: 0.1,
+            count,
+        };
+        let waveform = ComponentSpec::Waveform(WaveformSpec {
+            key: ComponentKey("wave".to_string()),
+            sample_rate: 48_000,
+            channels: 2,
+            frames: 300,
+            viewport: 0..300,
+            channel_bins: vec![
+                vec![
+                    bin(0, 100, -0.5, 0.5, 100),
+                    bin(100, 200, 0.0, 0.0, 0),
+                    bin(200, 300, f64::NAN, f64::NAN, 100),
+                ],
+                vec![bin(0, 300, -1.0, 1.0, 300)],
+            ],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        });
+        let plans = drawn_plans(&waveform);
+        let [(key, DrawPlan::Waveform(channels))] = plans.as_slice() else {
+            panic!("one waveform plan");
+        };
+        assert_eq!(key.0, "wave");
+        assert_eq!(channels, &vec![vec![0..100], vec![0..300]]);
     }
 
     /// Knob and Toggle gestures through the real element path mint the
