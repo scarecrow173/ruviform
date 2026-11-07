@@ -212,6 +212,91 @@ fn parity_new_kinds_payload_retained_fake() {
         .expect("payload accepted by headless validation");
 }
 
+fn label_table_fixture() -> Value {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures/driver-lab/parity/label-table.json");
+    let text = std::fs::read_to_string(&path).expect("read label-table fixture");
+    serde_json::from_str(&text).expect("parse label-table fixture")
+}
+
+/// Issue #435: Label/Table mount by key, and a dropped Label leaves the
+/// Table's identity intact.
+#[test]
+fn ui_dvr_02_parity_label_table_mount_reconcile() {
+    let fx = label_table_fixture();
+    let mut host = new_host();
+    let ops = host.mount(view_spec(&fx)).expect("mount");
+    for k in strings(&fx["expect"]["mountedKeys"]) {
+        assert!(ops.contains(&ProjectionOp::Mounted { key: key(&k) }), "{k}");
+    }
+
+    let mut next = view_spec(&fx);
+    if let ComponentSpec::Panel(p) = &mut next.root {
+        p.children.retain(|c| c.key().0 != "status");
+    }
+    let generation = host.generation();
+    let ops = host.update(next, generation).expect("reconcile");
+    assert!(ops.contains(&ProjectionOp::Removed { key: key("status") }));
+    assert!(host.observe(&key("events")).is_some());
+    assert!(host.observe(&key("status")).is_none());
+}
+
+/// The headless a11y tree of each Label/Table equals the fixture's
+/// `expect.*.a11yTree` (roles, names, header row, cell values, and
+/// valueless cells for missing values).
+#[test]
+fn parity_label_table_a11y_tree_fake() {
+    let fx = label_table_fixture();
+    let mut host = new_host();
+    host.mount(view_spec(&fx)).expect("mount");
+    let label = host.a11y_node(&key("status")).expect("label a11y");
+    assert_eq!(
+        serde_json::to_value(&label).expect("json"),
+        fx["expect"]["label"]["a11yTree"]
+    );
+    let table = host.a11y_node(&key("events")).expect("table a11y");
+    assert_eq!(
+        serde_json::to_value(&table).expect("json"),
+        fx["expect"]["table"]["a11yTree"]
+    );
+}
+
+/// Column and row order and missing cells (`null`) survive the headless
+/// payload, so every row keeps its full cell count.
+#[test]
+fn parity_label_table_payload_retained_fake() {
+    let fx = label_table_fixture();
+    let spec = view_spec(&fx);
+    let ComponentSpec::Panel(panel) = &spec.root else {
+        panic!("parity fixture root must be a panel");
+    };
+    let table = panel
+        .children
+        .iter()
+        .find_map(|c| match c {
+            ComponentSpec::Table(t) => Some(t),
+            _ => None,
+        })
+        .expect("table");
+    assert_eq!(
+        table.columns,
+        strings(&fx["expect"]["table"]["drawnHeader"])
+    );
+    assert_eq!(
+        u64::try_from(table.rows.len()).expect("small"),
+        fx["expect"]["table"]["declaredRows"]
+            .as_u64()
+            .expect("declaredRows")
+    );
+    assert!(table.rows.iter().all(|r| r.len() == table.columns.len()));
+    assert!(table.rows[1][0].is_none(), "missing cell keeps its column");
+    assert!(table.rows[2][2].is_none(), "trailing missing cell kept");
+
+    let mut host = new_host();
+    host.mount(spec)
+        .expect("payload accepted by headless validation");
+}
+
 #[test]
 fn parity_spectrogram_payload_retained_fake() {
     let fx = fixture();

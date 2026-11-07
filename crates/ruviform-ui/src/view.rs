@@ -74,6 +74,16 @@ pub enum A11yRole {
     Img,
     /// Binary switch (Toggle).
     Switch,
+    /// Static text (Label).
+    Text,
+    /// Table grid (Table).
+    Table,
+    /// Table row (Table header and data rows).
+    Row,
+    /// Table column header.
+    ColumnHeader,
+    /// Table data cell. A missing cell has no value but keeps its position.
+    Cell,
 }
 
 /// Accessibility semantics carried by a spec. `value_min`/`value_max`/
@@ -370,6 +380,135 @@ pub struct NativeSlotSpec {
     pub a11y: A11ySpec,
 }
 
+/// Static text label. The text is the consumer-resolved display string;
+/// the contract does not format or localize it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LabelSpec {
+    /// Component key.
+    pub key: ComponentKey,
+    /// Resolved display text.
+    pub text: String,
+    /// Visual state.
+    pub visual: ComponentVisualState,
+    /// Accessibility semantics. `role` defaults to [`A11yRole::Text`].
+    pub a11y: A11ySpec,
+}
+
+/// One resolved table cell value. The consumer resolves the value;
+/// [`Display`] is the single canonical text form every renderer uses.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CellValue {
+    /// Resolved text.
+    Text(String),
+    /// Resolved finite number (non-finite values are rejected on mount).
+    Number(f64),
+}
+
+impl Display for CellValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(s) => f.write_str(s),
+            Self::Number(n) => n.fmt(f),
+        }
+    }
+}
+
+/// Upper bound on rows a `Table` spec may carry.
+pub const MAX_TABLE_ROWS: usize = 4096;
+
+/// Upper bound on columns a `Table` spec may carry.
+pub const MAX_TABLE_COLUMNS: usize = 64;
+
+/// Read-only table of resolved cells. Column and row order are kept as
+/// declared. A `None` cell is a missing value: it stays in its position
+/// so later cells in the row do not shift. A `List` is a one-column table.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TableSpec {
+    /// Component key.
+    pub key: ComponentKey,
+    /// Column headers in display order.
+    pub columns: Vec<String>,
+    /// Rows in display order (each row has exactly `columns.len()`
+    /// cells, `None` for a missing value).
+    pub rows: Vec<Vec<Option<CellValue>>>,
+    /// Visual state.
+    pub visual: ComponentVisualState,
+    /// Accessibility semantics. `role` defaults to [`A11yRole::Table`].
+    pub a11y: A11ySpec,
+}
+
+/// Backend-neutral accessibility node derived from a spec. The tree is
+/// the single source of truth for `Label`/`Table` semantics; renderers
+/// consume it instead of re-deriving table structure.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct A11yNode {
+    /// Semantic role.
+    pub role: A11yRole,
+    /// Accessible name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Text content. `None` for a container or a missing cell.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<CellValue>,
+    /// Child nodes in document order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub children: Vec<A11yNode>,
+}
+
+impl A11yNode {
+    fn new(
+        role: A11yRole,
+        name: Option<String>,
+        value: Option<CellValue>,
+        children: Vec<A11yNode>,
+    ) -> Self {
+        Self {
+            role,
+            name,
+            value,
+            children,
+        }
+    }
+}
+
+impl TableSpec {
+    /// Table → header row + data rows → cells. Missing cells stay as
+    /// valueless `Cell` nodes so the grid positions remain stable.
+    fn a11y_node(&self) -> A11yNode {
+        let header = A11yNode::new(
+            A11yRole::Row,
+            None,
+            None,
+            self.columns
+                .iter()
+                .map(|c| {
+                    A11yNode::new(
+                        A11yRole::ColumnHeader,
+                        None,
+                        Some(CellValue::Text(c.clone())),
+                        Vec::new(),
+                    )
+                })
+                .collect(),
+        );
+        let rows = self.rows.iter().map(|row| {
+            let cells = row
+                .iter()
+                .map(|cell| A11yNode::new(A11yRole::Cell, None, cell.clone(), Vec::new()))
+                .collect();
+            A11yNode::new(A11yRole::Row, None, None, cells)
+        });
+        A11yNode::new(
+            self.a11y.role.unwrap_or(A11yRole::Table),
+            self.a11y.label.clone(),
+            None,
+            std::iter::once(header).chain(rows).collect(),
+        )
+    }
+}
+
 /// Component tree node. The set is intentionally minimal for the
 /// first two vertical slices (Synvelis Fader+Dock, `AudioLens`
 /// Waveform+Seek); new kinds extend this enum rather than a generic
@@ -408,6 +547,10 @@ pub enum ComponentSpec {
     /// Native-surface region — layout bounds feed the slot port.
     #[serde(rename = "native_slot")]
     NativeSlot(NativeSlotSpec),
+    /// Static text label.
+    Label(LabelSpec),
+    /// Read-only table of resolved cells (a list is a one-column table).
+    Table(TableSpec),
 }
 
 impl ComponentSpec {
@@ -423,6 +566,24 @@ impl ComponentSpec {
             Self::TimeAxis(s) => &s.key,
             Self::Spectrogram(s) => &s.key,
             Self::NativeSlot(s) => &s.key,
+            Self::Label(s) => &s.key,
+            Self::Table(s) => &s.key,
+        }
+    }
+
+    /// Backend-neutral a11y tree for the kinds whose semantics this
+    /// contract defines (`Label`, `Table`). `None` for other kinds.
+    #[must_use]
+    pub fn a11y_node(&self) -> Option<A11yNode> {
+        match self {
+            Self::Label(s) => Some(A11yNode::new(
+                s.a11y.role.unwrap_or(A11yRole::Text),
+                s.a11y.label.clone(),
+                Some(CellValue::Text(s.text.clone())),
+                Vec::new(),
+            )),
+            Self::Table(s) => Some(s.a11y_node()),
+            _ => None,
         }
     }
 
@@ -441,6 +602,8 @@ impl ComponentSpec {
             Self::TimeAxis(_) => "time_axis",
             Self::Spectrogram(_) => "spectrogram",
             Self::NativeSlot(_) => "native_slot",
+            Self::Label(_) => "label",
+            Self::Table(_) => "table",
         }
     }
 
@@ -774,6 +937,13 @@ impl ViewHost {
         self.spec.as_ref()
     }
 
+    /// Backend-neutral a11y tree of a mounted component. `None` when the
+    /// key is not mounted or its kind defines no a11y tree.
+    #[must_use]
+    pub fn a11y_node(&self, key: &ComponentKey) -> Option<A11yNode> {
+        self.mounted.get(key)?.spec.a11y_node()
+    }
+
     /// Currently mounted component keys.
     #[must_use]
     pub fn mounted_keys(&self) -> Vec<ComponentKey> {
@@ -1057,6 +1227,38 @@ impl ViewHost {
                 {
                     return Err(ViewError::InvalidSpec {
                         detail: format!("native_slot {} min_size invalid", n.key),
+                    });
+                }
+            }
+            ComponentSpec::Table(t) => {
+                if t.rows.len() > MAX_TABLE_ROWS || t.columns.len() > MAX_TABLE_COLUMNS {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!(
+                            "table {} is {}x{} (> {MAX_TABLE_ROWS} rows or > {MAX_TABLE_COLUMNS} columns)",
+                            t.key,
+                            t.rows.len(),
+                            t.columns.len()
+                        ),
+                    });
+                }
+                if t.rows.iter().any(|row| row.len() != t.columns.len()) {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!(
+                            "table {} row cell count != columns {}",
+                            t.key,
+                            t.columns.len()
+                        ),
+                    });
+                }
+                let non_finite = t
+                    .rows
+                    .iter()
+                    .flatten()
+                    .flatten()
+                    .any(|v| matches!(v, CellValue::Number(n) if !n.is_finite()));
+                if non_finite {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!("table {} has a non-finite cell", t.key),
                     });
                 }
             }
@@ -2346,6 +2548,28 @@ mod tests {
         ));
     }
 
+    fn label(key: &str, text: &str) -> ComponentSpec {
+        ComponentSpec::Label(LabelSpec {
+            key: ComponentKey::from(key),
+            text: text.into(),
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    fn table(key: &str, rows: Vec<Vec<Option<CellValue>>>) -> ComponentSpec {
+        ComponentSpec::Table(TableSpec {
+            key: ComponentKey::from(key),
+            columns: vec!["stage".into(), "state".into(), "ms".into()],
+            rows,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec {
+                label: Some(key.into()),
+                ..A11ySpec::default()
+            },
+        })
+    }
+
     fn spectrogram(key: &str, rows: usize, columns: Vec<SpectrogramColumn>) -> ComponentSpec {
         ComponentSpec::Spectrogram(SpectrogramSpec {
             key: ComponentKey::from(key),
@@ -2360,6 +2584,120 @@ mod tests {
                 ..Default::default()
             },
         })
+    }
+
+    fn cell_texts(row: &A11yNode) -> Vec<Option<String>> {
+        row.children
+            .iter()
+            .map(|c| c.value.as_ref().map(ToString::to_string))
+            .collect()
+    }
+
+    #[test]
+    fn table_keeps_row_and_column_order_and_missing_cells() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        let rows = vec![
+            vec![
+                Some(CellValue::Text("decode".into())),
+                None,
+                Some(CellValue::Number(12.5)),
+            ],
+            vec![
+                None,
+                Some(CellValue::Text("running".into())),
+                Some(CellValue::Number(3.0)),
+            ],
+        ];
+        host.mount(panel(vec![table("events", rows)]))
+            .expect("mount");
+        let node = host
+            .a11y_node(&ComponentKey::from("events"))
+            .expect("table a11y");
+        assert_eq!(node.role, A11yRole::Table);
+        assert_eq!(node.name.as_deref(), Some("events"));
+        let [header, first, second] = node.children.as_slice() else {
+            panic!("header row plus two data rows");
+        };
+        assert!(
+            header
+                .children
+                .iter()
+                .all(|c| c.role == A11yRole::ColumnHeader)
+        );
+        assert_eq!(
+            cell_texts(header),
+            vec![
+                Some("stage".into()),
+                Some("state".into()),
+                Some("ms".into())
+            ]
+        );
+        assert_eq!(
+            cell_texts(first),
+            vec![Some("decode".into()), None, Some("12.5".into())]
+        );
+        assert_eq!(
+            cell_texts(second),
+            vec![None, Some("running".into()), Some("3".into())]
+        );
+        assert!(first.children.iter().all(|c| c.role == A11yRole::Cell));
+    }
+
+    #[test]
+    fn table_rejects_bad_arity_non_finite_and_oversized_payloads() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        let short_row = table("t", vec![vec![None, None]]);
+        assert!(matches!(
+            host.mount(panel(vec![short_row])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
+        let nan_cell = table(
+            "t",
+            vec![vec![None, None, Some(CellValue::Number(f64::NAN))]],
+        );
+        assert!(matches!(
+            host.mount(panel(vec![nan_cell])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
+        let too_many_rows = table(
+            "t",
+            (0..=MAX_TABLE_ROWS)
+                .map(|_| vec![None, None, None])
+                .collect(),
+        );
+        assert!(matches!(
+            host.mount(panel(vec![too_many_rows])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
+    }
+
+    #[test]
+    fn label_a11y_defaults_to_text_role_and_keeps_text() {
+        let node = label("status", "Running").a11y_node().expect("label a11y");
+        assert_eq!(node.role, A11yRole::Text);
+        assert_eq!(node.value, Some(CellValue::Text("Running".into())));
+        assert_eq!(label("status", "x").kind(), "label");
+        assert_eq!(table("events", vec![]).kind(), "table");
+    }
+
+    #[test]
+    fn mounted_label_and_table_observe_and_reconcile_by_key() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![
+            label("status", "Running"),
+            table("events", vec![]),
+        ]))
+        .expect("mount");
+        assert!(host.observe(&ComponentKey::from("events")).is_some());
+        assert!(host.a11y_node(&ComponentKey::from("status")).is_some());
+        assert!(host.a11y_node(&ComponentKey::from("missing")).is_none());
+        let generation = host.generation();
+        let ops = host
+            .update(panel(vec![label("status", "Done")]), generation)
+            .expect("reconcile");
+        assert!(ops.contains(&ProjectionOp::Removed {
+            key: ComponentKey::from("events"),
+        }));
     }
 
     #[test]

@@ -30,9 +30,9 @@ use ruviform_ui::behavior::{
     StateProjection, ValueInput,
 };
 use ruviform_ui::view::{
-    ComponentKey, ComponentSpec, ControlSpec, MeterSpec, NativeSlotSpec, Orientation,
-    SpectrogramSpec, TimeAxisSpec, ViewError, ViewEvent, ViewHost, ViewSpec, WaveformBin,
-    WaveformSpec,
+    CellValue, ComponentKey, ComponentSpec, ControlSpec, LabelSpec, MeterSpec, NativeSlotSpec,
+    Orientation, SpectrogramSpec, TableSpec, TimeAxisSpec, ViewError, ViewEvent, ViewHost,
+    ViewSpec, WaveformBin, WaveformSpec,
 };
 use ruviform_ui::{
     Event, Intent, LogicalRect, SlotError, SlotGeometry, SlotVisibility, SurfaceSlotId,
@@ -1027,6 +1027,42 @@ impl RvfView {
             .children(labels)
     }
 
+    /// Static label text in the primary text color.
+    fn label_element(&self, spec: &LabelSpec) -> impl IntoElement {
+        div()
+            .text_color(self.palette.text_primary)
+            .child(spec.text.clone())
+    }
+
+    /// Header row in the dim text color, then data rows. A missing cell
+    /// draws empty in its column so the grid stays aligned.
+    fn table_element(&self, spec: &TableSpec) -> impl IntoElement {
+        let palette = self.palette.clone();
+        let plan = table_plan(spec);
+        let row = move |cells: Vec<Option<String>>, color: Hsla| {
+            div()
+                .flex()
+                .flex_row()
+                .border_b_1()
+                .border_color(palette.border)
+                .children(cells.into_iter().map(|cell| {
+                    div()
+                        .flex_grow()
+                        .px(px(palette.space_sm))
+                        .text_color(color)
+                        .child(cell.unwrap_or_default())
+                }))
+        };
+        let mut body = div().flex().flex_col().child(row(
+            plan.header.iter().cloned().map(Some).collect(),
+            self.palette.text_dim,
+        ));
+        for cells in plan.rows {
+            body = body.child(row(cells, self.palette.text_primary));
+        }
+        body
+    }
+
     /// Intensity cells per time column and frequency row. Gap cells
     /// draw nothing; intensity is drawn as alpha of the viz colour
     /// over the surface.
@@ -1112,6 +1148,8 @@ impl RvfView {
                 .into_any_element(),
             ComponentSpec::Meter(m) => self.meter_element(m).into_any_element(),
             ComponentSpec::TimeAxis(t) => self.time_axis_element(t).into_any_element(),
+            ComponentSpec::Label(l) => self.label_element(l).into_any_element(),
+            ComponentSpec::Table(t) => self.table_element(t).into_any_element(),
             ComponentSpec::Spectrogram(s) => self.spectrogram_element(s).into_any_element(),
             ComponentSpec::NativeSlot(n) => self.native_slot_element(n),
             other => div()
@@ -1349,6 +1387,29 @@ fn axis_mark_plan(spec: &TimeAxisSpec) -> Vec<AxisMarkPlan> {
             })
         })
         .collect()
+}
+
+/// Drawn Table grid: header titles and data rows as display text, in
+/// declared order. `None` is a missing cell (drawn empty, position kept).
+#[derive(Debug, Clone, PartialEq)]
+struct TablePlan {
+    header: Vec<String>,
+    rows: Vec<Vec<Option<String>>>,
+}
+
+fn table_plan(spec: &TableSpec) -> TablePlan {
+    TablePlan {
+        header: spec.columns.clone(),
+        rows: spec
+            .rows
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|cell| cell.as_ref().map(CellValue::to_string))
+                    .collect()
+            })
+            .collect(),
+    }
 }
 
 /// One drawn spectrogram cell: normalized x span inside the viewport,
@@ -2129,6 +2190,120 @@ mod tests {
             (marks[0].x - 0.5).abs() < f32::EPSILON,
             "culled ticks keep fractions"
         );
+    }
+
+    /// Issue #435 Fake/GPUI parity — the Label/Table fixture the Fake side
+    /// (`ruviform-ui-test/tests/driver_parity.rs`) also reads.
+    fn label_table_fixture() -> serde_json::Value {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../ruviform-ui-test/fixtures/driver-lab/parity/label-table.json"
+        );
+        let text = std::fs::read_to_string(path).expect("read label-table fixture");
+        serde_json::from_str(&text).expect("parse label-table fixture")
+    }
+
+    /// Drawn Table rows equal the fixture plan, and the drawn grid is the
+    /// same grid as the contract's a11y tree (header row included).
+    #[test]
+    fn parity_label_table_plans_match_shared_fixture() {
+        let fx = label_table_fixture();
+        let ComponentSpec::Panel(panel) = &parity_view(&fx).root else {
+            panic!("label-table fixture root must be a panel");
+        };
+        let table_node = panel
+            .children
+            .iter()
+            .find(|c| matches!(c, ComponentSpec::Table(_)))
+            .expect("table");
+        let ComponentSpec::Table(table) = table_node else {
+            unreachable!("found a table above");
+        };
+
+        let plan = table_plan(table);
+        assert_eq!(
+            plan.header,
+            fixture_strings(&fx["expect"]["table"]["drawnHeader"])
+        );
+        let want_rows = fx["expect"]["table"]["drawnRows"]
+            .as_array()
+            .expect("drawnRows");
+        let want: Vec<Vec<Option<String>>> = want_rows
+            .iter()
+            .map(|row| {
+                row.as_array()
+                    .expect("row")
+                    .iter()
+                    .map(|c| c.as_str().map(str::to_string))
+                    .collect()
+            })
+            .collect();
+        assert_eq!(plan.rows, want);
+
+        let grid: Vec<Vec<Option<String>>> = table_node
+            .a11y_node()
+            .expect("table a11y")
+            .children
+            .iter()
+            .map(|row| {
+                row.children
+                    .iter()
+                    .map(|cell| cell.value.as_ref().map(CellValue::to_string))
+                    .collect()
+            })
+            .collect();
+        let drawn: Vec<Vec<Option<String>>> =
+            std::iter::once(plan.header.iter().cloned().map(Some).collect())
+                .chain(plan.rows.iter().cloned())
+                .collect();
+        assert_eq!(grid, drawn, "drawn grid == a11y grid");
+    }
+
+    /// Declared column and row order survive the plan, and a missing cell
+    /// keeps its column position instead of shifting the cells after it.
+    #[test]
+    fn table_plan_keeps_order_and_missing_cells() {
+        let table = TableSpec {
+            key: ComponentKey("t".to_string()),
+            columns: vec!["a".into(), "b".into(), "c".into()],
+            rows: vec![
+                vec![
+                    None,
+                    Some(CellValue::Text("x".into())),
+                    Some(CellValue::Number(2.0)),
+                ],
+                vec![Some(CellValue::Text("y".into())), None, None],
+            ],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        };
+        let plan = table_plan(&table);
+        assert_eq!(plan.header, ["a", "b", "c"]);
+        assert_eq!(
+            plan.rows,
+            vec![
+                vec![None, Some("x".to_string()), Some("2".to_string())],
+                vec![Some("y".to_string()), None, None],
+            ]
+        );
+    }
+
+    /// The Label/Table fixture mounts and paints through the real element
+    /// path (a missing cell and a dim header included) in one frame.
+    #[gpui::test]
+    fn rvf_view_parity_label_table_renders(cx: &mut TestAppContext) {
+        let fx = label_table_fixture();
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(parity_host(&fx), ViewPalette::fallback(), |_| {})
+        });
+        cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            assert!(
+                v.host
+                    .observe(&ComponentKey("events".to_string()))
+                    .is_some()
+            );
+        });
     }
 
     /// `drawn_plans` walks the tree the way `element_for` paints it: a
