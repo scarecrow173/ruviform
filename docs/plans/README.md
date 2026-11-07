@@ -31,6 +31,7 @@ Directory: `docs/plans`
 | PLAN-XyRGyqOXQg05BHSeuQmtEC | Issue #32 実施計画 — 第 2 ターゲット設計 | approved | [implement-issue-32-second-target-design.md](./implement-issue-32-second-target-design.md) |
 | PLAN-Fd1MviDXJLLuok363L3rKm | Issue #33 実施計画 — 音楽時間設計確定 | approved | [implement-issue-33-music-time.md](./implement-issue-33-music-time.md) |
 | PLAN-UO09oNkf6X28oaYsQ5DmNe | Issue #386 Driver-neutral GUI Host + GPUI minimal fixture 実装計画 | proposed | [implement-issue-386-driver-neutral-gui-host.md](./implement-issue-386-driver-neutral-gui-host.md) |
+| PLAN-034T6RWSw6Tv9Mz2qJ5eL8 | Issue #387 Component/View Specs + Headless Behavior + GPUI Renderer 実装計画 | proposed | [implement-issue-387-component-renderer.md](./implement-issue-387-component-renderer.md) |
 | PLAN-kHnSXCzzcxyo5rlkMiqQWx | Issue #388/#389 Native Dock 契約の実装計画（neutral slot/lease/session + fake 検証 + L0-L1 写像） | approved | [implement-issue-388-389-native-dock-contract.md](./implement-issue-388-389-native-dock-contract.md) |
 | PLAN-5rBdUXHzqmuHrA1h4sweAj | Issue #389 VST3/L0 実外部 Editor attach の実装計画（adapter open_gui + PoC vst3 lane） | approved | [implement-issue-389-vst3-l0-editor-attach.md](./implement-issue-389-vst3-l0-editor-attach.md) |
 | PLAN-ECzI54BQngMiQpOP23flK3 | Issue #404/#405 NativeSurfaceSlot host 境界修復 実装計画 | draft | [implement-issue-404-405-native-surface-host-boundary.md](./implement-issue-404-405-native-surface-host-boundary.md) |

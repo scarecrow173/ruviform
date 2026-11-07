@@ -683,9 +683,7 @@ fn reach_set(
             }
             let next_path = format!("{path} -> {}", target_pkg.name);
             if matches_forbidden(target_pkg.name.as_str(), forbidden) {
-                found
-                    .entry(target_pkg.name.clone())
-                    .or_insert(next_path);
+                found.entry(target_pkg.name.clone()).or_insert(next_path);
                 continue;
             }
             if visited.insert(dep.pkg.clone()) {

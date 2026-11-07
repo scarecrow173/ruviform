@@ -37,6 +37,13 @@ cargo_metadata = "0.19"
 syn = { version = "2", features = ["full", "visit"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 
+[dev-dependencies]
+# - ruviform-ui-theme: Issue #387 semantic fixtures resolve the two
+#   product-theme DTCG fixtures (synvelis-dark / audiolens-dark) to
+#   prove the semantic machine is theme-independent (T3 2-theme
+#   equivalence). Test-only; the production graph is untouched.
+ruviform-ui-theme = { path = "../ruviform-ui-theme" }
+
 # Issue #390 driver boundary guard CLI（自動検出名
 # `gui_boundary_guard` を canonical 名 `gui-boundary-guard` へ rename）。
 [[bin]]

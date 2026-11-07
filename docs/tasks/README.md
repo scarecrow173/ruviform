@@ -22,10 +22,14 @@ Directory: `docs/tasks`
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
+| TASK-034T6RWUx1Zc8Qf6mE4rP9 | T1 Component/View Spec schema + ViewHost(ruviform-ui::view) | proposed | [t1-component-view-spec-issue-387.md](./t1-component-view-spec-issue-387.md) |
 | TASK-uFDZyczopm3crTR2lUgeGd | T1 Driver-neutral Window/Host 共通契約（ruviform-ui driver module） | in-progress | [t1-driver-neutral-window-contract-issue-386.md](./t1-driver-neutral-window-contract-issue-386.md) |
 | TASK-fG12kYJjj6jfGGJmfuxaeY | T2 FakeDriver（ruviform-ui-test・WindowDriver headless 実装） | proposed | [t2-fake-driver-issue-386.md](./t2-fake-driver-issue-386.md) |
+| TASK-034T6RWVy5Sd3Hb9jG7wN4 | T2 Headless behavior(ruviform-ui::behavior) | proposed | [t2-headless-behavior-issue-387.md](./t2-headless-behavior-issue-387.md) |
 | TASK-LlEFlV8p3toRfliU2UWnVn | T3 GPUI Driver + 最小 Window fixture（ruviform-ui-gpui） | proposed | [t3-gpui-driver-minimal-window-issue-386.md](./t3-gpui-driver-minimal-window-issue-386.md) |
+| TASK-034T6RWWz8Xa6Lf2tK5yQ7 | T3 Semantic fixtures + manifest binding(ruviform-ui-test) | proposed | [t3-semantic-fixtures-issue-387.md](./t3-semantic-fixtures-issue-387.md) |
 | TASK-DktMpNJBhrTSp3LAfeKMjo | T4 mise lane・索引・GPUI 採用証跡（Issue #386） | proposed | [t4-gpui-lanes-and-evidence-issue-386.md](./t4-gpui-lanes-and-evidence-issue-386.md) |
+| TASK-034T6RWXn4Bv9Hg8sM2eR5 | T4 GPUI Controls/Viz renderer(ruviform-ui-gpui::render) | proposed | [t4-gpui-renderer-issue-387.md](./t4-gpui-renderer-issue-387.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
