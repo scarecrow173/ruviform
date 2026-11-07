@@ -104,7 +104,9 @@ fn clip_local(clip: Option<LogicalRect>, geometry: SlotGeometry) -> Option<PhysR
 
 /// Captures `window`'s OS parent handle as an opaque `usize` — the
 /// redemption seam's raw material. Called once at window open while
-/// `&mut Window` is in scope.
+/// `&mut Window` is in scope. Only the non-test driver calls it
+/// (see `capture_raw_parent` in `lib.rs`).
+#[cfg(not(feature = "gpui-test"))]
 pub(super) fn raw_parent_of(window: &gpui::Window) -> Option<usize> {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     // `Window::window_handle` is shadowed by gpui's inherent

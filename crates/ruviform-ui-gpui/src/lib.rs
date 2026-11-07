@@ -34,6 +34,9 @@ pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+#[cfg(all(test, feature = "gpui-test"))]
+mod lifecycle_fixture;
+
 #[cfg(feature = "gpui")]
 mod gpui_driver {
     /// The `NativeSurfaceSlot` port implementation for this backend
@@ -550,6 +553,42 @@ mod gpui_driver {
         }
     }
 
+    /// Test-harness seam (`cfg(test)` + `gpui-test` only — not a
+    /// production entry point). `run` owns the platform loop; these
+    /// hooks let a `TestAppContext` drive the same queue and event
+    /// delivery one turn at a time for the shared lifecycle fixture
+    /// (Issue #386).
+    #[cfg(all(test, feature = "gpui-test"))]
+    impl GpuiDriver {
+        /// One harness turn: applies queued window ops inside an App
+        /// update, lets deferred work park (the first-frame `Ready`),
+        /// applies follow-up ops, then delivers the emitted events to
+        /// `on_event`. The handler may call back into the driver.
+        pub(crate) fn settle_for_test(
+            &mut self,
+            cx: &mut gpui::TestAppContext,
+            on_event: impl FnMut(DriverEvent, &mut dyn WindowDriver) + 'static,
+        ) {
+            let this = self.clone();
+            this.inner.borrow_mut().handler = Some(Box::new(on_event));
+            cx.update(|app| drain(&this.inner, &this, app));
+            cx.run_until_parked();
+            cx.update(|app| drain(&this.inner, &this, app));
+            flush_events(&this.inner, &this);
+        }
+
+        /// Events queued in `window`'s inbox and not yet consumed by
+        /// its root view.
+        #[must_use]
+        pub(crate) fn inbox_len_for_test(&self, window: WindowId) -> usize {
+            self.inner
+                .borrow()
+                .windows
+                .get(&window)
+                .map_or(0, |slot| slot.inbox.borrow().len())
+        }
+    }
+
     impl WindowDriver for GpuiDriver {
         fn capabilities(&self) -> WindowCapabilities {
             self.inner.borrow().capabilities.clone()
@@ -937,6 +976,20 @@ mod gpui_driver {
         }
     }
 
+    /// OS parent handle for surface containers. gpui's test platform
+    /// has no OS handle and its `window_handle` panics rather than
+    /// erroring, so `gpui-test` builds keep the parent unset — the
+    /// lifecycle fixture embeds no surface.
+    #[cfg(not(feature = "gpui-test"))]
+    fn capture_raw_parent(window: &Window) -> Option<usize> {
+        surface::raw_parent_of(window)
+    }
+
+    #[cfg(feature = "gpui-test")]
+    fn capture_raw_parent(_window: &Window) -> Option<usize> {
+        None
+    }
+
     /// Maps `WindowSpec` → `WindowOptions` and opens the OS window.
     /// `mount` selects the root content: `Some` projects the
     /// consumer's [`ViewSpec`] through the Issue #387 renderer;
@@ -967,7 +1020,7 @@ mod gpui_driver {
                     // Capture the OS parent handle while `&mut Window`
                     // is in scope — the surface adapter redeems leases
                     // into containers parented under this handle.
-                    slot.raw_parent = surface::raw_parent_of(window);
+                    slot.raw_parent = capture_raw_parent(window);
                 }
             }
             // User/OS close → veto-able CloseRequested contract.
