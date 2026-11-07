@@ -168,6 +168,7 @@ Directory: `docs/tasks`
 | TASK-PGN5ItjVgMoSpqmL4YJtjn | T1 Path Policy・canonical 衝突・FS trait 骨格 (Issue #304) | done | [issue-304-t1-path-policy.md](./issue-304-t1-path-policy.md) |
 | TASK-KfnrekDg0F7pVPV37olgXQ | T2 Staging backend・Session/Tree・identity cleanup (Issue #304) | done | [issue-304-t2-staging-backend.md](./issue-304-t2-staging-backend.md) |
 | TASK-PUEIOL8kRSg2p5kKdPYMUK | T3 end-to-end 否定行列・doc/台帳・最終検証 (Issue #304) | done | [issue-304-t3-secure-verify.md](./issue-304-t3-secure-verify.md) |
+| TASK-9KS9Fd9Lzf1TjWIavKU8Uz | T1 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 (Issue #305) | done | [issue-305-t1-staged-file-cutover.md](./issue-305-t1-staged-file-cutover.md) |
 | TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |
 | TASK-laPtj98NpzxI9OnVwLg5y4 | T2 File・Structured 境界試験 (Issue #306) | done | [issue-306-t2-file-structured-boundary.md](./issue-306-t2-file-structured-boundary.md) |
 | TASK-MzTtn00zwhx1kzvEGUUep1 | T3 Archive・Compression 境界試験 (Issue #306) | done | [issue-306-t3-archive-compression-boundary.md](./issue-306-t3-archive-compression-boundary.md) |

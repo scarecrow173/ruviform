@@ -289,8 +289,18 @@ unapproved candidate）を順次 merge した combined head `ce8bc99b` で
   Rooted Read ADR 行と `docs/discovery/README.md` の DISC-034T9T71
   final 化・DISC-im2uskbe 行は RF407 側の正規再生成が main の index
   欠落を補完する意味不変差分（対応 doc file は main に実在）。
-- 独立 Validator（read-only subagent）へ cross-diff 検査を委譲済み。
-  判定結果が本ファイルへ追記されるまでは暫定記録。
+- 独立 Validator（read-only subagent）で cross-diff 検査を実施し
+  **APPROVED**: scope 内行数再構成・main 成果保全・RF407 実装非改変・
+  旧 API 除去・`wav_staged` 順序・`SourceReader<'a>` 注釈・merge 履歴の
+  全確認が PASS。付随指摘2件を解消済み:
+  - `mise.toml` サイズ差の疑義 → `cmp` で origin/main と byte 一致を確認
+    （file 推定量の false positive）。
+  - issue-305 文書の managed index 未掲載（RF305 側の既存 gap、merge
+    起因ではない）→ `doc_maintenance apply` の正規再生成で
+    specs/designs/plans/tasks/test-specs 各 README に issue-305 行を
+    +1 のみ追加（findings 452→442）。`docs/impl/ir/README.md` は
+    hand-curated のため同表形式で手動 1 行追加。いずれも意味不変の
+    index 補完のみ。
 
 ## Acceptance ledger
 
