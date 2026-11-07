@@ -632,6 +632,9 @@ mod gpui_driver {
             if inner.capabilities.focus != Capability::Supported {
                 return Err(UiError::unsupported("focus", "gpui driver cannot focus"));
             }
+            let Some(slot) = inner.windows.get_mut(&window) else {
+                return Err(UiError::host(format!("no window {window}")));
+            };
             if !focused {
                 // gpui 0.2.2 exposes window activation but no OS-level
                 // deactivation — report honestly rather than silently
@@ -641,9 +644,6 @@ mod gpui_driver {
                     "gpui 0.2.2 cannot release window focus",
                 ));
             }
-            let Some(slot) = inner.windows.get_mut(&window) else {
-                return Err(UiError::host(format!("no window {window}")));
-            };
             // Focus requests stay meaningful before the OS window
             // exists — applied again at open.
             slot.pending_focus = Some(focused);
