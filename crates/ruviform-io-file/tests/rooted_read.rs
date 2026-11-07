@@ -16,7 +16,9 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use ruviform_io_file::FileErrorKind;
-use ruviform_io_file::rooted::{FollowMode, NodeKind, RelativePath, RootedDir};
+use ruviform_io_file::rooted::{
+    EntryFlow, EnumerationOutcome, FollowMode, NodeKind, RelativePath, RootedDir,
+};
 
 fn rel(s: &str) -> RelativePath {
     RelativePath::new(s).unwrap()
@@ -572,4 +574,366 @@ fn junction_to_outside_escapes() {
             .kind(),
         FileErrorKind::EscapesRoot
     );
+}
+
+// ----------------------------------------------------------------
+// open_scoped_root — re-rooting on the held handle (Issue #409)
+// ----------------------------------------------------------------
+
+#[test]
+fn scoped_root_bounds_links_to_new_floor() {
+    let dir = TestDir::new("scope-floor");
+    tree(&dir);
+    // A link inside `d` that pops to the scope's parent — resolvable
+    // under the original root, an escape under the new floor.
+    if dir_link(&PathBuf::from("../f"), &dir.path().join("d").join("l")).is_err() {
+        eprintln!("skipping: cannot create a directory link on this host");
+        return;
+    }
+    let root = root_of(&dir);
+    let scoped = root
+        .open_scoped_root(&rel("d"), FollowMode::NoFollow)
+        .unwrap();
+    assert_eq!(scoped.canonical_root().file_name(), Some(OsStr::new("d")));
+    // `..` in the link target hits the new floor.
+    assert_eq!(
+        scoped
+            .open_regular(&rel("l"), FollowMode::WithinRoot)
+            .unwrap_err()
+            .kind(),
+        FileErrorKind::EscapesRoot
+    );
+    // The same link still resolves under the parent capability.
+    assert_eq!(
+        read_all(
+            &mut root
+                .open_regular(&rel("d/l"), FollowMode::WithinRoot)
+                .unwrap()
+        ),
+        "top"
+    );
+}
+
+#[test]
+fn scoped_root_absolute_links_judged_against_new_anchor() {
+    let dir = TestDir::new("scope-abs");
+    std::fs::create_dir(dir.path().join("d")).unwrap();
+    std::fs::create_dir(dir.path().join("d").join("sub")).unwrap();
+    write_file(&dir.path().join("d").join("f"), b"scoped");
+    let root = root_of(&dir);
+    let scoped = root
+        .open_scoped_root(&rel("d"), FollowMode::NoFollow)
+        .unwrap();
+    // Absolute link spelled through the *scoped* anchor resolves.
+    let inner = canonical_link_target(scoped.canonical_root(), "");
+    if dir_link(&inner, &dir.path().join("d").join("in")).is_err() {
+        eprintln!("skipping: cannot create a directory link on this host");
+        return;
+    }
+    // Absolute link to the parent root (outside the scope anchor)
+    // is rejected — sibling/ancestor escape.
+    let parent_target = canonical_link_target(root.canonical_root(), "");
+    if dir_link(&parent_target, &dir.path().join("d").join("out")).is_err() {
+        eprintln!("skipping: cannot create a directory link on this host");
+        return;
+    }
+    assert_eq!(
+        read_all(
+            &mut scoped
+                .open_regular(&rel("in/f"), FollowMode::WithinRoot)
+                .unwrap()
+        ),
+        "scoped"
+    );
+    assert_eq!(
+        scoped
+            .open_regular(&rel("out/f"), FollowMode::WithinRoot)
+            .unwrap_err()
+            .kind(),
+        FileErrorKind::EscapesRoot
+    );
+}
+
+#[test]
+fn scoped_root_survives_root_rename() {
+    let dir = TestDir::new("scope-rename");
+    tree(&dir);
+    let root = root_of(&dir);
+    let renamed = dir.path().with_file_name(format!(
+        "{}-moved",
+        dir.path().file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::rename(dir.path(), &renamed).expect("rename root dir");
+    // Scope acquisition through the held handle still works.
+    let scoped = root
+        .open_scoped_root(&rel("d"), FollowMode::NoFollow)
+        .unwrap();
+    assert_eq!(
+        read_all(
+            &mut scoped
+                .open_regular(&rel("f"), FollowMode::NoFollow)
+                .unwrap()
+        ),
+        "deep"
+    );
+    // Handle-derived anchor follows the rename.
+    assert_eq!(scoped.canonical_root().file_name(), Some(OsStr::new("d")));
+    let _ = std::fs::rename(&renamed, dir.path());
+}
+
+#[test]
+fn scoped_root_ignores_replacement_at_old_pathname() {
+    let dir = TestDir::new("scope-replace");
+    tree(&dir);
+    let root = root_of(&dir);
+    let moved = dir.path().with_file_name(format!(
+        "{}-moved",
+        dir.path().file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::rename(dir.path(), &moved).expect("rename root dir");
+    // Plant a different tree at the old pathname.
+    std::fs::create_dir(dir.path()).unwrap();
+    std::fs::create_dir(dir.path().join("d")).unwrap();
+    write_file(&dir.path().join("d").join("f"), b"IMPOSTER");
+    // The held capability still binds its own subtree — never the
+    // pathname's new object.
+    let scoped = root
+        .open_scoped_root(&rel("d"), FollowMode::NoFollow)
+        .unwrap();
+    assert_eq!(
+        read_all(
+            &mut scoped
+                .open_regular(&rel("f"), FollowMode::NoFollow)
+                .unwrap()
+        ),
+        "deep"
+    );
+    // A fresh path-level open does acquire the replacement.
+    let fresh = RootedDir::open(dir.path()).unwrap();
+    assert_eq!(
+        read_all(
+            &mut fresh
+                .open_regular(&rel("d/f"), FollowMode::NoFollow)
+                .unwrap()
+        ),
+        "IMPOSTER"
+    );
+    let _ = std::fs::remove_dir_all(dir.path());
+    let _ = std::fs::rename(&moved, dir.path());
+}
+
+#[test]
+fn scoped_root_self_form_and_leaf_rules() {
+    let dir = TestDir::new("scope-rules");
+    tree(&dir);
+    let root = root_of(&dir);
+    // `rel == ""` re-roots at this directory itself.
+    let scoped = root
+        .open_scoped_root(&rel(""), FollowMode::NoFollow)
+        .unwrap();
+    assert_eq!(
+        read_all(
+            &mut scoped
+                .open_regular(&rel("d/f"), FollowMode::NoFollow)
+                .unwrap()
+        ),
+        "deep"
+    );
+    // A file leaf is NotDirectory.
+    assert_eq!(
+        root.open_scoped_root(&rel("f"), FollowMode::NoFollow)
+            .unwrap_err()
+            .kind(),
+        FileErrorKind::NotDirectory
+    );
+}
+
+// ----------------------------------------------------------------
+// read_dir_each — bounded, stoppable enumeration (Issue #409)
+// ----------------------------------------------------------------
+
+#[test]
+fn read_dir_each_stops_at_prefix() {
+    let dir = TestDir::new("enum-stop");
+    std::fs::create_dir(dir.path().join("d")).unwrap();
+    for i in 0..50 {
+        write_file(&dir.path().join("d").join(format!("f{i:02}")), b"x");
+    }
+    let root = root_of(&dir);
+    let mut count = 0u64;
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            count += 1;
+            // `remaining + 1` style prefix bound.
+            if count >= 5 {
+                EntryFlow::Stop
+            } else {
+                EntryFlow::Continue
+            }
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Stopped);
+    assert_eq!(count, 5);
+    // A second call enumerates independently and completes.
+    let mut seen = 0u64;
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            seen += 1;
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    assert_eq!(seen, 50);
+}
+
+#[test]
+fn read_dir_each_nested_enumeration_is_independent() {
+    // A visitor that re-entrantly enumerates the same directory must
+    // not disturb the outer enumeration — the scan position is
+    // per-call state (fresh fd/FILE_OBJECT), never shared.
+    let dir = TestDir::new("enum-nested");
+    std::fs::create_dir(dir.path().join("d")).unwrap();
+    for i in 0..20 {
+        write_file(&dir.path().join("d").join(format!("f{i:02}")), b"x");
+    }
+    let root = root_of(&dir);
+    let mut outer = 0u64;
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            outer += 1;
+            // Re-entrant full enumeration of the same dir through the
+            // same capability — must not steal the outer scan state.
+            let inner = root.read_dir(&rel("d"), FollowMode::NoFollow).unwrap();
+            assert_eq!(inner.len(), 20);
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    assert_eq!(outer, 20);
+}
+
+#[test]
+fn read_dir_each_matches_read_dir_and_keeps_link_kinds() {
+    let dir = TestDir::new("enum-kinds");
+    tree(&dir);
+    let link_created = dir_link(&dir.path().join("d"), &dir.path().join("lj")).is_ok();
+    let root = root_of(&dir);
+    let via_dir: Vec<_> = root
+        .read_dir(&rel(""), FollowMode::NoFollow)
+        .unwrap()
+        .into_iter()
+        .map(|e| (e.name, e.kind))
+        .collect();
+    let mut via_each = Vec::new();
+    let outcome = root
+        .read_dir_each(&rel(""), FollowMode::NoFollow, &mut |e| {
+            via_each.push((e.name, e.kind));
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    let mut a = via_dir;
+    let mut b = via_each;
+    a.sort_by(|x, y| x.0.cmp(&y.0));
+    b.sort_by(|x, y| x.0.cmp(&y.0));
+    assert_eq!(a, b);
+    if link_created {
+        assert!(b.iter().any(|(n, k)| n == "lj" && *k == NodeKind::Symlink));
+    }
+}
+
+#[test]
+fn read_dir_each_immediate_stop_and_empty_dir() {
+    let dir = TestDir::new("enum-edge");
+    std::fs::create_dir(dir.path().join("empty")).unwrap();
+    write_file(&dir.path().join("f"), b"x");
+    let root = root_of(&dir);
+    // `max_entries = 0` analogue.
+    let mut visits = 0u64;
+    let outcome = root
+        .read_dir_each(&rel(""), FollowMode::NoFollow, &mut |_e| {
+            visits += 1;
+            assert_eq!(visits, 1, "only one entry visited before Stop");
+            EntryFlow::Stop
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Stopped);
+    // Empty directory completes without a single visit.
+    let mut visited = 0u64;
+    let outcome = root
+        .read_dir_each(&rel("empty"), FollowMode::NoFollow, &mut |_e| {
+            visited += 1;
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    assert_eq!(visited, 0);
+    // A link leaf is NotDirectory under NoFollow — same as read_dir.
+    if dir_link(dir.path(), &dir.path().join("lj")).is_ok() {
+        assert_eq!(
+            root.read_dir_each(&rel("lj"), FollowMode::NoFollow, &mut |_e| {
+                EntryFlow::Continue
+            })
+            .unwrap_err()
+            .kind(),
+            FileErrorKind::NotDirectory
+        );
+    }
+}
+
+#[test]
+fn read_dir_each_visitor_panic_releases_state() {
+    let dir = TestDir::new("enum-panic");
+    std::fs::create_dir(dir.path().join("d")).unwrap();
+    for i in 0..8 {
+        write_file(&dir.path().join("d").join(format!("f{i}")), b"x");
+    }
+    let root = root_of(&dir);
+    let mut n = 0u64;
+    let hit = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = root.read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            n += 1;
+            assert!(n != 2, "visitor boom");
+            EntryFlow::Continue
+        });
+    }));
+    assert!(hit.is_err());
+    // A fresh enumeration completes — the unwound call left no
+    // half-held enumeration state.
+    let mut seen = 0u64;
+    let outcome = root
+        .read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+            seen += 1;
+            EntryFlow::Continue
+        })
+        .unwrap();
+    assert_eq!(outcome, EnumerationOutcome::Complete);
+    assert_eq!(seen, 8);
+}
+
+/// Repeating panicked enumerations must not leak the unix `DIR*`/fd
+/// or the Windows enumeration state — this loops far above the
+/// typical fd soft limit, so a leak deterministically errors.
+#[cfg(unix)]
+#[test]
+fn read_dir_each_repeated_panics_do_not_leak() {
+    let dir = TestDir::new("enum-leak");
+    std::fs::create_dir(dir.path().join("d")).unwrap();
+    write_file(&dir.path().join("d").join("f"), b"x");
+    let root = root_of(&dir);
+    for _ in 0..1500 {
+        let hit = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = root.read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+                panic!("visitor boom");
+            });
+        }));
+        assert!(hit.is_err());
+    }
+    let mut seen = 0u64;
+    root.read_dir_each(&rel("d"), FollowMode::NoFollow, &mut |_e| {
+        seen += 1;
+        EntryFlow::Continue
+    })
+    .unwrap();
+    assert_eq!(seen, 1);
 }

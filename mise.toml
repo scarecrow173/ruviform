@@ -231,6 +231,21 @@ run = "cargo clippy -p ruviform-io-e2e --all-targets -- -D warnings"
 description = "Run the io-e2e composition boundary tests (staged lifecycle, structured/compression/archive/wav layers)"
 run = "cargo test -p ruviform-io-e2e"
 
+# IO file/archive lane (Issue #409): the rooted-read capability and the
+# shared vfs backend (unix/windows/unsupported) live in io-file; io-archive
+# is the direct consumer that must not regress. Dedicated lane so rooted
+# capability + extraction changes iterate without a workspace-wide run;
+# the unix backend is additionally cross-checked by `check-linux`.
+[tasks.check-io-file]
+description = "Type-check io-file and io-archive across all targets"
+run = "cargo check -p ruviform-io-file -p ruviform-io-archive --all-targets"
+[tasks.lint-io-file]
+description = "Lint io-file and io-archive across all targets"
+run = "cargo clippy -p ruviform-io-file -p ruviform-io-archive --all-targets -- -D warnings"
+[tasks.test-io-file]
+description = "Run io-file and io-archive tests (rooted capability, vfs, secure extraction)"
+run = "cargo test -p ruviform-io-file -p ruviform-io-archive"
+
 # UI webview lane (Issue #156): the adapter's implementation lives behind
 # the non-default `webview` feature so `cargo check --workspace` stays
 # headless; these tasks are the feature-enabled verification entry points.

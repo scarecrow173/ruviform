@@ -51,7 +51,9 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use crate::error::{FileError, FileErrorKind};
-use crate::vfs::{self, VfsDir, VfsKind, VfsOps, VfsProbe, platform_vfs_ops};
+use crate::vfs::{
+    self, ListingOutcome, VfsDir, VfsKind, VfsOps, VfsProbe, VisitFlow, platform_vfs_ops,
+};
 
 mod resolve;
 #[cfg(test)]
@@ -400,18 +402,65 @@ impl RootedDir {
         rel: &RelativePath,
         mode: FollowMode,
     ) -> Result<Vec<DirEntry>, FileError> {
+        let mut out = Vec::new();
+        self.read_dir_each(rel, mode, &mut |entry| {
+            out.push(entry);
+            EntryFlow::Continue
+        })?;
+        Ok(out)
+    }
+
+    /// Enumerates the directory `rel` resolves to one entry at a
+    /// time, delivering each [`DirEntry`] to `visit` without
+    /// materializing the whole directory first.
+    ///
+    /// The visitor returns [`EntryFlow::Continue`] to receive the
+    /// next entry or [`EntryFlow::Stop`] to end the enumeration
+    /// early — so a consumer can stop after `remaining + 1` entries,
+    /// and observe its own cancellation/deadline between entries by
+    /// returning `Stop`. After `Stop` (or an OS failure) the backend
+    /// makes no further enumeration progress: no additional
+    /// directory reads, per-entry probes, or visitor calls —
+    /// entries already fetched inside a fixed-size OS batch are
+    /// simply discarded.
+    ///
+    /// The returned [`EnumerationOutcome`] tells the two normal
+    /// endings apart honestly — `Complete` means the directory was
+    /// walked to exhaustion, `Stopped` means the visitor ended it.
+    /// OS failures are `Err`, never a reported outcome. A visitor
+    /// panic propagates with the enumeration resources released.
+    ///
+    /// Every call takes an independent enumeration state; `rel ==
+    /// ""` enumerates this directory itself; `.`/`..` are never
+    /// reported and entry kinds are no-follow (links stay
+    /// `Symlink`). Enumeration order is the backend's — not sorted.
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// `NotDirectory` when `rel` resolves to a non-directory (or a
+    /// link under `NoFollow`), plus the usual resolve errors, and
+    /// `Io`/`Unsupported` when the backend enumeration fails.
+    pub fn read_dir_each(
+        &self,
+        rel: &RelativePath,
+        mode: FollowMode,
+        visit: &mut dyn FnMut(DirEntry) -> EntryFlow,
+    ) -> Result<EnumerationOutcome, FileError> {
         let dir = self.resolve_dir(rel, mode)?;
-        dir.list()
-            .map(|entries| {
-                entries
-                    .into_iter()
-                    .map(|e| DirEntry {
-                        name: e.name,
-                        kind: e.kind.into(),
-                    })
-                    .collect()
-            })
-            .map_err(ops_error)
+        dir.list_each(&mut |e| match visit(DirEntry {
+            name: e.name,
+            kind: e.kind.into(),
+        }) {
+            EntryFlow::Continue => VisitFlow::Continue,
+            EntryFlow::Stop => VisitFlow::Stop,
+        })
+        .map(|outcome| match outcome {
+            ListingOutcome::Complete => EnumerationOutcome::Complete,
+            ListingOutcome::Stopped => EnumerationOutcome::Stopped,
+        })
+        .map_err(ops_error)
     }
 
     /// Scoped capability on the directory `rel` resolves to. The
@@ -436,6 +485,76 @@ impl RootedDir {
             }),
             resolve::Resolved::Leaf { .. } => Err(kind_err(FileErrorKind::NotDirectory)),
         }
+    }
+
+    /// Re-roots this capability: resolves `rel` under `self` and
+    /// returns a new `RootedDir` whose capability floor is the
+    /// **resolved directory handle itself** — not this capability's
+    /// root. `rel == ""` re-roots at this directory.
+    ///
+    /// Unlike [`open_dir`](Self::open_dir) (which shares the
+    /// original capability root as the floor), the returned
+    /// capability knows nothing about the ancestors of `rel`: a
+    /// link target containing `..` that would pop above the
+    /// resolved directory fails `EscapesRoot`, and absolute link
+    /// targets are judged against the resolved directory's own
+    /// canonical path.
+    ///
+    /// Authority comes from the already-held handle — there is no
+    /// pathname re-open and no `NodeId`/strong-identity comparison,
+    /// so this works on weak-identity filesystems and keeps working
+    /// after the original root is renamed or its pathname replaced:
+    /// the held handle still addresses the same directory, while a
+    /// replacement planted at the old pathname is a different object
+    /// the capability never reaches.
+    ///
+    /// The new lexical anchor is derived from the resolved handle
+    /// (`canonicalize_handle`) only — it is never re-bound from a
+    /// path string, and an anchor is never fabricated. Backends
+    /// that cannot produce a handle-derived canonical path fail
+    /// `Unsupported` rather than silently narrowing the
+    /// absolute-link guarantee.
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// `NotDirectory` for non-directory leaves (link under
+    /// `NoFollow` included), `Unsupported` where a handle-derived
+    /// canonical anchor is unavailable, plus the usual resolve
+    /// errors.
+    pub fn open_scoped_root(
+        &self,
+        rel: &RelativePath,
+        mode: FollowMode,
+    ) -> Result<Self, FileError> {
+        let dir = self.resolve_dir(rel, mode)?;
+        // Any failure to derive the anchor — unsupported backend or a
+        // transient handle-canonicalization error — fails the API as
+        // `Unsupported` (source preserved): the anchor is the
+        // absolute-link guarantee and must not silently degrade.
+        let canonical = dir
+            .canonicalize_handle()
+            .map_err(|e| FileError::with_source(FileErrorKind::Unsupported, e))
+            .and_then(|p| {
+                if p.as_os_str().is_empty() {
+                    // An empty anchor would silently defeat the
+                    // absolute-link prefix check — never fabricate.
+                    Err(kind_err(FileErrorKind::Unsupported))
+                } else {
+                    Ok(p)
+                }
+            })?;
+        let canonical_comps = normalize_canonical(&canonical);
+        Ok(Self {
+            ops: self.ops.clone(),
+            chain: vec![dir],
+            shared: Arc::new(RootShared {
+                canonical,
+                canonical_comps,
+                options: self.shared.options,
+            }),
+        })
     }
 
     // --------------------------------------------------------------
@@ -638,6 +757,37 @@ pub struct DirEntry {
     pub name: OsString,
     /// The entry's no-follow kind — `Symlink` stays visible.
     pub kind: NodeKind,
+}
+
+/// Per-entry flow control returned by a
+/// [`RootedDir::read_dir_each`] visitor.
+///
+/// `Stop` ends the enumeration early — after it, the backend makes
+/// no further enumeration progress (no additional directory reads,
+/// per-entry probes, or visitor calls). A consumer observes its own
+/// cancellation or deadline between entries by checking it inside
+/// the visitor and returning `Stop`.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryFlow {
+    /// Deliver the next entry.
+    Continue,
+    /// Stop enumerating — the outcome is
+    /// [`EnumerationOutcome::Stopped`].
+    Stop,
+}
+
+/// Terminal state of a [`RootedDir::read_dir_each`] enumeration:
+/// whether the directory was walked to exhaustion or the visitor
+/// stopped it. OS failures are `Err(FileError)`, never a reported
+/// outcome.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnumerationOutcome {
+    /// Every entry was delivered.
+    Complete,
+    /// The visitor returned [`EntryFlow::Stop`].
+    Stopped,
 }
 
 /// Resolve budgets. Defaults are conservative; `Default` is

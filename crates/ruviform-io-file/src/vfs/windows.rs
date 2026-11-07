@@ -72,7 +72,10 @@ use windows_sys::Win32::System::SystemServices::{
     IO_REPARSE_TAG_MOUNT_POINT, IO_REPARSE_TAG_SYMLINK,
 };
 
-use super::{NodeIdentity, NodeTypeTag, VfsDir, VfsEntry, VfsKind, VfsOps, VfsProbe};
+use super::{
+    ListingOutcome, NodeIdentity, NodeTypeTag, VfsDir, VfsEntry, VfsKind, VfsOps, VfsProbe,
+    VisitFlow,
+};
 use crate::rooted::IdentityStrength;
 
 const SHARE_ALL: FILE_SHARE_MODE = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
@@ -192,8 +195,11 @@ impl VfsDir for WinVfsDir {
         reparse_target(handle.as_raw_handle())
     }
 
-    fn list(&self) -> io::Result<Vec<VfsEntry>> {
-        list_dir(self)
+    fn list_each(
+        &self,
+        visit: &mut dyn FnMut(VfsEntry) -> VisitFlow,
+    ) -> io::Result<ListingOutcome> {
+        list_each(self, visit)
     }
 
     fn create_dir(&self, name: &OsStr) -> io::Result<Box<dyn VfsDir>> {
@@ -826,30 +832,42 @@ fn reparse_target(handle: RawHandle) -> io::Result<OsString> {
 }
 
 // ------------------------------------------------------------------
-// Directory listing — NtQueryDirectoryFile with RestartScan so every
-// call owns independent enumeration state.
+// Directory listing — NtQueryDirectoryFile with RestartScan over a
+// fresh per-call handle: the scan position lives on the FILE_OBJECT,
+// so reusing `dir.handle` would share state between calls (nested or
+// concurrent enumerations would steal each other's batches). An
+// empty-name `NtOpenFile` relative to the directory opens the object
+// itself — an independent FILE_OBJECT, mirroring the unix backend's
+// `openat(fd, ".")`.
 // ------------------------------------------------------------------
 
 #[expect(
     unsafe_code,
     reason = "NtQueryDirectoryFile is NT syscall FFI; see SAFETY comments"
 )]
-fn list_dir(dir: &WinVfsDir) -> io::Result<Vec<VfsEntry>> {
+fn list_each(
+    dir: &WinVfsDir,
+    visit: &mut dyn FnMut(VfsEntry) -> VisitFlow,
+) -> io::Result<ListingOutcome> {
     const BUF_CAP: usize = 64 * 1024;
     const STATUS_NO_MORE_FILES: NTSTATUS = 0x8000_0006u32.cast_signed();
+    // Independent enumeration state per call (closed on drop —
+    // panic-safe like every OwnedHandle). An empty ObjectName opens
+    // the RootDirectory object itself — a fresh FILE_OBJECT for the
+    // same directory.
+    let scan = open_dir_rel(dir.handle.as_raw_handle(), OsStr::new(""))?;
     // `u64` elements keep the buffer 8-aligned — matching
     // FILE_BOTH_DIR_INFORMATION record alignment (NextEntryOffset
     // values are LONGLONG-aligned, so `offset` stays a multiple of 8).
     let mut buf = vec![0u64; BUF_CAP / 8];
-    let mut out = Vec::new();
     let mut restart = true;
     loop {
         let mut sb = IO_STATUS_BLOCK::default();
-        // SAFETY: `dir.handle` is a valid open directory HANDLE;
-        // `buf`/`sb` are valid for the call.
+        // SAFETY: `scan` is a valid open directory HANDLE owned by
+        // this call; `buf`/`sb` are valid for the call.
         let status = unsafe {
             NtQueryDirectoryFile(
-                dir.handle.as_raw_handle().cast(),
+                scan.as_raw_handle().cast(),
                 std::ptr::null_mut(),
                 None,
                 std::ptr::null(),
@@ -865,13 +883,32 @@ fn list_dir(dir: &WinVfsDir) -> io::Result<Vec<VfsEntry>> {
         restart = false;
         // STATUS_NO_MORE_FILES — enumeration finished.
         if status == STATUS_NO_MORE_FILES {
-            break;
+            return Ok(ListingOutcome::Complete);
         }
         if status < 0 {
             return Err(nt_error(status));
         }
+        // Only `sb.Information` bytes are kernel-filled — records are
+        // walked strictly inside that region so a zero/short/truncated
+        // fill cannot fabricate entries from stale buffer contents.
+        let info_len = sb.Information.min(BUF_CAP);
+        if info_len == 0 {
+            return Ok(ListingOutcome::Complete);
+        }
+        let malformed = || {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "ruviform-io-file: malformed directory record batch",
+            )
+        };
         let mut offset = 0usize;
         loop {
+            if offset
+                .checked_add(size_of::<FILE_BOTH_DIR_INFORMATION>())
+                .is_none_or(|end| end > info_len)
+            {
+                return Err(malformed());
+            }
             // SAFETY: `buf` holds FILE_BOTH_DIR_INFORMATION records
             // returned by the kernel; `offset` walks via
             // NextEntryOffset inside the returned region, and the
@@ -887,47 +924,48 @@ fn list_dir(dir: &WinVfsDir) -> io::Result<Vec<VfsEntry>> {
             // field's buffer position is the pointer difference.
             let name_start =
                 (&raw const info.FileName).cast::<u8>() as usize - buf.as_ptr() as usize;
-            if name_start + name_len * 2 <= BUF_CAP {
-                // SAFETY: `[name_start, +name_len*2)` is inside the
-                // kernel-filled region; the FileName field is
-                // WCHAR-aligned, so the `u16` view is aligned.
-                let wide = unsafe {
-                    std::slice::from_raw_parts(
-                        buf.as_ptr().cast::<u16>().add(name_start / 2),
-                        name_len,
-                    )
+            if name_start
+                .checked_add(name_len * 2)
+                .is_none_or(|end| end > info_len)
+            {
+                return Err(malformed());
+            }
+            // SAFETY: `[name_start, +name_len*2)` is inside the
+            // kernel-filled region; the FileName field is
+            // WCHAR-aligned, so the `u16` view is aligned.
+            let wide = unsafe {
+                std::slice::from_raw_parts(buf.as_ptr().cast::<u16>().add(name_start / 2), name_len)
+            };
+            let name = OsString::from_wide(wide);
+            if name != "." && name != ".." {
+                let attrs = info.FileAttributes;
+                // Reparse before directory — a junction is
+                // DIRECTORY|REPARSE_POINT and must be `Symlink`.
+                let kind = if attrs & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                    // For reparse points the EaSize field carries
+                    // the reparse tag.
+                    reparse_kind(info.EaSize)
+                } else if attrs & FILE_ATTRIBUTE_DIRECTORY != 0 {
+                    VfsKind::Dir
+                } else {
+                    VfsKind::File
                 };
-                let name = OsString::from_wide(wide);
-                if name != "." && name != ".." {
-                    let attrs = info.FileAttributes;
-                    // Reparse before directory — a junction is
-                    // DIRECTORY|REPARSE_POINT and must be `Symlink`.
-                    let kind = if attrs & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-                        // For reparse points the EaSize field carries
-                        // the reparse tag.
-                        reparse_kind(info.EaSize)
-                    } else if attrs & FILE_ATTRIBUTE_DIRECTORY != 0 {
-                        VfsKind::Dir
-                    } else {
-                        VfsKind::File
-                    };
-                    out.push(VfsEntry { name, kind });
+                // A `Stop` discards the rest of this batch —
+                // no further NtQueryDirectoryFile call is made.
+                if visit(VfsEntry { name, kind }) == VisitFlow::Stop {
+                    return Ok(ListingOutcome::Stopped);
                 }
             }
             if info.NextEntryOffset == 0 {
                 break;
             }
             offset += usize::try_from(info.NextEntryOffset).unwrap_or(usize::MAX);
-            if offset >= buf.len() * 8 {
-                break;
+            // NextEntryOffset is a LONGLONG-aligned byte offset.
+            if !offset.is_multiple_of(8) || offset >= info_len {
+                return Err(malformed());
             }
         }
-        // sb.Information == 0 → no entries returned this call.
-        if sb.Information == 0 {
-            break;
-        }
     }
-    Ok(out)
 }
 
 #[cfg(test)]
