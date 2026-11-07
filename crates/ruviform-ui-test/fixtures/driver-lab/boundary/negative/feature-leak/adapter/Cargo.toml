@@ -1,0 +1,12 @@
+[package]
+name = "adapter"
+version = "0.0.0"
+edition = "2021"
+publish = false
+[features]
+default = []
+gpui = ["dep:gpui"]
+sneaky = ["dep:gpui"]
+
+[dependencies]
+gpui = { path = "../gpui", optional = true }

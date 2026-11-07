@@ -69,3 +69,7 @@ apm_modules/
 
 # Rust build artifacts
 target/
+
+# fixture mini-workspaces（Issue #390 boundary guard）の cargo metadata 生成物
+fixtures/**/Cargo.lock
+crates/ruviform-ui-test/fixtures/**/Cargo.lock

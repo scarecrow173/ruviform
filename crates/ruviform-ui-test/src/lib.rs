@@ -32,6 +32,8 @@
 
 pub mod agent;
 pub mod driver;
+pub mod driver_boundary;
+pub mod driver_lab;
 pub mod fake;
 pub mod fixture;
 pub mod headless;
