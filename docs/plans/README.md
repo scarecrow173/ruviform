@@ -68,6 +68,7 @@ Directory: `docs/plans`
 | PLAN-034RT7NR5zMcrEqmbWbWy3 | Issue #302 ruviform-io-archive 実装計画 (IO-IMP-08) | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | PLAN-UecvheIvCz0oE2tUFPmFC0 | Issue #303 ruviform-io-archive TAR 実装計画 (IO-IMP-09) | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | PLAN-kMb7YLTQ28L2txLvTj6dcD | Issue #304 ruviform-io-archive Secure Extraction 実装計画 (IO-IMP-10) | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| PLAN-gWrX94JcoMQacCOPFR5FKD | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 実装計画 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | PLAN-W0d5X9GIZLFMnSGqu9OlBg | Issue #306 汎用 I/O 合成 E2E 実装計画 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
@@ -125,3 +126,4 @@ Directory: `docs/plans`
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
+| PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |

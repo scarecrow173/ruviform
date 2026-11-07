@@ -3,11 +3,15 @@
 //! AC2, AC4, AC5.
 
 use ruviform_audio_core::{AudioBuffer, BufferSpec, ChannelLayout, SampleFormat, SampleRate};
+use ruviform_io_file::{
+    Durability, PublishEffect, PublishFailureKind, PublishMode, PublishOptions, StagedFile,
+    TempState,
+};
 use ruviform_io_wav::{WavOutputSpec, make_encoder, open_muxer, wav_capabilities};
 use ruviform_media_core::{Fact, MediaTime, MediaTimestamp, StreamId, StreamKind};
 use ruviform_media_io::{
-    AudioFrame, CodecDescriptor, CodecFormat, CodecId, Demuxer, Encoder, ErrorKind, Frame, Muxer,
-    PublishOptions, StagedOutput, StreamInfo,
+    AudioFrame, CodecDescriptor, CodecFormat, CodecId, Decoder, Demuxer, Encoder, ErrorKind, Frame,
+    Muxer, StreamInfo,
 };
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -352,6 +356,21 @@ fn read(path: &Path) -> Vec<u8> {
     bytes
 }
 
+/// Asserts the scratch dir holds no leftover `.rvf-tmp-*` staged
+/// temps — the cleanup half of the staged-output guarantee.
+fn assert_no_temps(dir: &Path) {
+    let leftovers: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .is_some_and(|n| n.contains(".rvf-tmp-"))
+        })
+        .collect();
+    assert!(leftovers.is_empty(), "staged temps left: {leftovers:?}");
+}
+
 fn write_wav_to_sink<S: ruviform_media_io::MediaSink>(
     sink: S,
     info: &StreamInfo,
@@ -368,23 +387,99 @@ fn write_wav_to_sink<S: ruviform_media_io::MediaSink>(
     receipt.total_bytes
 }
 
+/// Decodes `bytes` through the symphonia backend and returns the
+/// per-channel f32 planes plus the frame count — the independent
+/// verification used both on readback bytes and on the reopened
+/// destination.
+fn decode_wav(bytes: Vec<u8>) -> (Vec<Vec<f32>>, u64) {
+    let mut demuxer =
+        ruviform_io_symphonia::open_demuxer(Cursor::new(bytes)).expect("wav bytes must reopen");
+    let stream = {
+        let streams = demuxer.streams();
+        assert_eq!(streams.len(), 1, "single stream");
+        streams[0].clone()
+    };
+    let mut decoder = demuxer.make_decoder(stream.stream.id).expect("wav decoder");
+    let mut planes: Vec<Vec<f32>> = Vec::new();
+    let mut frames = 0_u64;
+    let mut take = |frame: &Frame| {
+        if let Frame::Audio(audio) = frame {
+            let buffer = audio.buffer();
+            if planes.is_empty() {
+                planes = vec![Vec::new(); buffer.channels()];
+            }
+            for (channel, plane) in planes.iter_mut().enumerate() {
+                plane.extend_from_slice(buffer.channel(channel).unwrap());
+            }
+            frames += buffer.frames() as u64;
+        }
+    };
+    while let Some(packet) = demuxer.read_packet().unwrap() {
+        decoder.send_packet(packet).unwrap();
+        while let Some(frame) = decoder.receive_frame().unwrap() {
+            take(&frame);
+        }
+    }
+    decoder.drain().unwrap();
+    while let Some(frame) = decoder.receive_frame().unwrap() {
+        take(&frame);
+    }
+    (planes, frames)
+}
+
+// Index values stay under 64, so the usize→f32 cast is exact.
+#[allow(clippy::cast_precision_loss)]
 #[test]
-fn staged_publish_produces_reopenable_wav() {
+fn staged_seal_readback_publish_e2e() {
+    const FRAMES: usize = 480;
     let dir = scratch_dir();
     let dest = dir.join("out.wav");
     let info = spec(48_000, ChannelLayout::Stereo, SampleFormat::S16).stream_info();
 
-    let mut staged = StagedOutput::create(&dest).unwrap();
-    write_wav_to_sink(staged.sink().unwrap(), &info, 480);
-    staged.publish(PublishOptions::no_overwrite()).unwrap();
+    // Required order: `WavMuxer::finalize` success → muxer borrow
+    // released → `seal` → `open_readback` independent decode →
+    // `publish` → post-publish reopen.
+    let mut staged = StagedFile::create(&dest).unwrap();
+    write_wav_to_sink(&mut staged, &info, FRAMES);
 
-    // Reopen via the symphonia path used in the round-trip tests.
+    let mut sealed = staged.seal();
+    let sealed_bytes = {
+        let mut readback = sealed.open_readback().unwrap();
+        let mut bytes = Vec::new();
+        readback.read_to_end(&mut bytes).unwrap();
+        bytes
+    };
+    assert_eq!(sealed_bytes[0..4], *b"RIFF", "sealed bytes are RIFF");
+
+    // Independent decode of the sealed content: stream geometry,
+    // frame count, and PCM values within S16 quantization tolerance.
+    let (planes, frames) = decode_wav(sealed_bytes.clone());
+    assert_eq!(frames, FRAMES as u64, "decoded frame count");
+    assert_eq!(planes.len(), 2, "stereo planes");
+    for plane in &planes {
+        for (index, &value) in plane.iter().enumerate() {
+            let expected = (index % 64) as f32 / 128.0 - 0.25;
+            assert!(
+                (value - expected).abs() < 1e-4,
+                "PCM sample {index} within S16 quantization: {value} vs {expected}"
+            );
+        }
+    }
+
+    let receipt = sealed
+        .publish(PublishOptions::new(
+            PublishMode::CreateNew,
+            Durability::FileAndDirectorySync,
+        ))
+        .unwrap();
+    assert_eq!(receipt.temp_state(), TempState::Absent);
+
+    // Post-publish reopen: identical bytes, decodable.
     let bytes = read(&dest);
-    let demuxer = ruviform_io_symphonia::open_demuxer(Cursor::new(bytes.clone()))
-        .expect("published wav must reopen");
-    assert_eq!(demuxer.streams().len(), 1);
-    let _ = demuxer.streams()[0].clone();
-    assert_eq!(bytes[0..4], *b"RIFF");
+    assert_eq!(bytes, sealed_bytes, "published bytes == sealed bytes");
+    let (_planes, frames) = decode_wav(bytes);
+    assert_eq!(frames, FRAMES as u64, "reopened frame count");
+    assert_no_temps(&dir);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -395,10 +490,11 @@ fn staged_abort_preserves_existing_destination() {
     std::fs::write(&dest, b"old master").unwrap();
     let info = spec(48_000, ChannelLayout::Stereo, SampleFormat::S16).stream_info();
 
-    let mut staged = StagedOutput::create(&dest).unwrap();
-    write_wav_to_sink(staged.sink().unwrap(), &info, 480);
-    staged.abort();
+    let mut staged = StagedFile::create(&dest).unwrap();
+    write_wav_to_sink(&mut staged, &info, 480);
+    staged.abort().unwrap();
     assert_eq!(read(&dest), b"old master");
+    assert_no_temps(&dir);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -410,11 +506,12 @@ fn staged_drop_after_write_preserves_destination() {
     let info = spec(48_000, ChannelLayout::Stereo, SampleFormat::S16).stream_info();
 
     {
-        let mut staged = StagedOutput::create(&dest).unwrap();
-        write_wav_to_sink(staged.sink().unwrap(), &info, 480);
+        let mut staged = StagedFile::create(&dest).unwrap();
+        write_wav_to_sink(&mut staged, &info, 480);
         // dropped without publish — simulates cancellation
     }
     assert_eq!(read(&dest), b"old master");
+    assert_no_temps(&dir);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -425,11 +522,24 @@ fn staged_no_overwrite_conflict_preserves_destination() {
     std::fs::write(&dest, b"old master").unwrap();
     let info = spec(48_000, ChannelLayout::Stereo, SampleFormat::S16).stream_info();
 
-    let mut staged = StagedOutput::create(&dest).unwrap();
-    write_wav_to_sink(staged.sink().unwrap(), &info, 480);
-    let error = staged.publish(PublishOptions::no_overwrite()).unwrap_err();
-    assert_eq!(error.kind(), ErrorKind::InvalidValue);
+    let mut staged = StagedFile::create(&dest).unwrap();
+    write_wav_to_sink(&mut staged, &info, 480);
+    let mut error = staged
+        .seal()
+        .publish(PublishOptions::new(
+            PublishMode::CreateNew,
+            Durability::FileAndDirectorySync,
+        ))
+        .unwrap_err();
+    assert_eq!(error.kind(), PublishFailureKind::DestinationExists);
+    assert_eq!(error.effect(), PublishEffect::NotPublished);
     assert_eq!(read(&dest), b"old master");
+    // The failure retains the temp through its recovery handle —
+    // clean it explicitly so the staged lifecycle ends.
+    if let Some(handle) = error.take_recovery_handle() {
+        handle.cleanup().unwrap();
+    }
+    assert_no_temps(&dir);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -440,12 +550,19 @@ fn staged_replace_overwrites_destination() {
     std::fs::write(&dest, b"old master").unwrap();
     let info = spec(48_000, ChannelLayout::Stereo, SampleFormat::S16).stream_info();
 
-    let mut staged = StagedOutput::create(&dest).unwrap();
-    write_wav_to_sink(staged.sink().unwrap(), &info, 480);
-    staged.publish(PublishOptions::replace()).unwrap();
+    let mut staged = StagedFile::create(&dest).unwrap();
+    write_wav_to_sink(&mut staged, &info, 480);
+    staged
+        .seal()
+        .publish(PublishOptions::new(
+            PublishMode::Replace,
+            Durability::FileAndDirectorySync,
+        ))
+        .unwrap();
     let bytes = read(&dest);
     assert_eq!(bytes[0..4], *b"RIFF");
     assert_ne!(bytes, b"old master");
+    assert_no_temps(&dir);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -456,12 +573,10 @@ fn staged_disk_full_leaves_destination_untouched() {
     std::fs::write(&dest, b"old master").unwrap();
     let info = spec(48_000, ChannelLayout::Stereo, SampleFormat::S16).stream_info();
 
-    let staged = StagedOutput::create(&dest).unwrap();
-    // A wrapper around the staged file that fails quickly is not
-    // possible while `staged` owns the File — simulate disk-full
-    // against a standalone failing sink instead, then drop the staged
-    // output as the cancel path. Both halves of the guarantee are
-    // covered: the write fails Io, the destination survives.
+    let staged = StagedFile::create(&dest).unwrap();
+    // The sink write fails part-way through; the staged output is
+    // then aborted as the cancel path. Both halves of the guarantee
+    // are covered: the write fails Io, the destination survives.
     let mut encoder = make_encoder(&info).unwrap();
     encoder.send_frame(stereo_frame(48_000, 1_024)).unwrap();
     let mut muxer = open_muxer(FailAfter::new(64), &[info]).unwrap();
@@ -474,7 +589,8 @@ fn staged_disk_full_leaves_destination_untouched() {
     }
     assert!(failed);
     drop(muxer);
-    staged.abort();
+    staged.abort().unwrap();
     assert_eq!(read(&dest), b"old master");
+    assert_no_temps(&dir);
     std::fs::remove_dir_all(&dir).unwrap();
 }

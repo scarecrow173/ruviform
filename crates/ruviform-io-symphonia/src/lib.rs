@@ -71,12 +71,14 @@
 // re-exports, so the repetition lint does not apply.
 #![allow(clippy::module_name_repetitions)]
 
+mod borrowed;
 mod decoder;
 mod demuxer;
 mod error;
 mod map;
 mod source;
 
+pub use borrowed::with_borrowed_demuxer;
 pub use decoder::SymphoniaDecoder;
 pub use demuxer::SymphoniaDemuxer;
 

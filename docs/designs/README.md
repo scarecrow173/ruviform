@@ -71,6 +71,7 @@ Directory: `docs/designs`
 | DESIGN-034RT7CvRTe3b8jPTFBHtq | Issue #302 ruviform-io-archive — Archive 共通型・ZIP Indexed Reader/Writer・検証パイプライン設計 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | DESIGN-HR0Ud1VXoIpQCfUcosM6ib | Issue #303 ruviform-io-archive — TAR Streaming Reader/Pending・PAX/GNU・Writer 設計 | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | DESIGN-mH3gJLoQj3rdU7xRXX8eZD | Issue #304 ruviform-io-archive — Secure Extraction・Staging/Recovery・OS 別 Root Capability 設計 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| DESIGN-eVPQpm7tyMUS2gxitU5KtN | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行設計 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | DESIGN-ODmc6p5Cp7Kbq0u35OrAiR | Issue #306 汎用 I/O 合成 E2E — 試験専用クレート構成・境界試験設計 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | DESIGN-dHUQ40Hk50tvziqjx7Kewj | Issue #307 attach 時 frame_base 検証 context — 実装設計 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | DESIGN-034Rp1KqXNzTDTKRXTbqHx | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
@@ -99,7 +100,8 @@ Directory: `docs/designs`
 | DESIGN-8EX9crwtfdh9PhZtOJ2cfY | Issue #389 VST3/L0 実外部 Editor attach 設計（Vst3Plugin::open_gui/close_gui + Windows HWND attach） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | DESIGN-034T9VaXD2KXqhGxaHawyH | Issue #390 Driver Contract Lab — boundary guard 検査設計・registry schema・実行接続点 | approved | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | DESIGN-z4LQPvCYdpedQfNlIZbQ7J | Issue #404/#405 NativeSurfaceSlot host 境界修復設計（clip 整合 + teardown reconcile） | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
-| DESIGN-034Tnjz1ofC4OXppkHjsgB | Issue #409 scoped re-root + bounded enumeration 設計 | draft | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
+| DESIGN-utKDN0iwqlQEVtqkiEUHJi | Issue #400 借用 sealed readback → 独立 decoder bounded 接続の設計 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
+| DESIGN-034Tnjz1ofC4OXppkHjsgB | Issue #409 scoped re-root + bounded enumeration 設計 | approved | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |

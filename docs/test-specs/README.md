@@ -69,6 +69,7 @@ Directory: `docs/test-specs`
 | TSPEC-034RT7OuFi1aZ0rhvdSFEt | Issue #302 ruviform-io-archive ZIP 検証・Budget・Writer テスト仕様 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | TSPEC-EtHC4HLHJhXDwgG6UbrccI | Issue #303 ruviform-io-archive TAR 検証・Pending・Writer テスト仕様 | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | TSPEC-pWc14Y17FV06GN2600rX8h | Issue #304 ruviform-io-archive Secure Extraction・Staging/Recovery テスト仕様 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| TSPEC-0kY8BSgqOCJHezrud22f3h | Issue #305 Media I/O StagedFile 移行 テスト仕様 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | TSPEC-rviIWrpuHyJUT11Wykzopn | Issue #306 汎用 I/O 合成 E2E テスト仕様 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | TSPEC-XQ6Q9VkNnBlPRcMf4cqLFu | Issue #307 attach 時 frame_base 検証 context — テスト仕様 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | TSPEC-034Rp62M5XwHUCClhVcEPk | Issue #310 Browser GUI Test Harness 検証仕様 | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
@@ -91,7 +92,8 @@ Directory: `docs/test-specs`
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TSPEC-034TaI7Luee0T88mH1IYv2 | Issue #390 Driver Boundary/Lab 検証 | draft | [issue-390-driver-boundary-lab.md](./issue-390-driver-boundary-lab.md) |
 | TESTSPEC-XADte5w8EHAalnm33WCVyn | Issue #404/#405 NativeSurfaceSlot host 境界修復 test 仕様 | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
-| TSPEC-034TnnBwjsmwufsaEZZ0RG | Issue #409 scoped re-root + bounded enumeration テスト仕様 | draft | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
+| TSPEC-UiEoMhS5QMTr3jBiurbTtC | Issue #400 借用 readback → demuxer bounded 接続の test 仕様 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
+| TSPEC-034TnnBwjsmwufsaEZZ0RG | Issue #409 scoped re-root + bounded enumeration テスト仕様 | approved | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |

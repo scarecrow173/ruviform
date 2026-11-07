@@ -66,6 +66,10 @@ run = "cargo run -p ruviform-ui-test --bin gui-boundary-guard -- --offline"
 description = "Issue #390 DriverContractFixture: cases.json/stories.json manifest consistency + executable UI-DVR-01/05/07/08 fake-layer fixtures (evidence via RUVIFORM_DRIVER_LAB_EVIDENCE; writes only target/)"
 run = "cargo test -p ruviform-ui-test --test driver_contract"
 
+[tasks.test-ui-component-view]
+description = "Issue #387 Component/View semantic fixtures: UI-DVR-02/03 + LAB-SV-FADER-DOCK/LAB-AL-WAVEFORM-SEEK fake layer + 2-theme equivalence (writes only target/)"
+run = "cargo test -p ruviform-ui-test --test component_view"
+
 [tasks.build]
 description = "Build workspace with `cargo build --workspace` (dev profile; writes only target/)"
 run = "cargo build --workspace"
@@ -272,8 +276,8 @@ run = "cargo check -p ruviform-ui-gpui --features gpui --all-targets"
 description = "Lint the UI GPUI adapter and its test/example targets with the gpui feature enabled"
 run = "cargo clippy -p ruviform-ui-gpui --all-targets --features gpui -- -D warnings"
 [tasks.test-ui-gpui]
-description = "Run gpui-feature tests for the UI GPUI adapter (real OS window behavior is manual verification)"
-run = "cargo test -p ruviform-ui-gpui --features gpui"
+description = "Run gpui-feature tests for the UI GPUI adapter (real OS window behavior is manual verification). `gpui-test` adds gpui test-support so the Issue #387 headless render tests run on the real element path (TestAppContext window + simulated input)."
+run = "cargo test -p ruviform-ui-gpui --features gpui-test"
 # Canonical manual-verification entry for the minimal native Window
 # fixture: opens a real OS window on the local session — run it on a
 # real OS only, never as a headless/CI pass. RF388/RF389 real-OS

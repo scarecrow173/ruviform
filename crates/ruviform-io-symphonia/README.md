@@ -45,6 +45,25 @@ demux + decode のみの実装。
 - PoC の既知制限（隠さずフォローアップとして記録）: 連結 Ogg は先頭リンクで
   終了、シーク不可ソースは構築時プローブで正直に報告し
   `Demuxer::seek` は `ErrorKind::Unsupported`。
+- 借用ソース入口（Issue #400）: `with_borrowed_demuxer(&mut source, f)` —
+  借用 `Read + Seek`（`SealedFile::open_readback` の `!Send` な
+  `ReadbackFile` を含む）から、encoded 全量コピーなしに所有型
+  `Demuxer` を駆動するスコープ付きブリッジ。呼び出し側スレッドが
+  `serve` ループとして `&mut source` を保持し、spawn した 1 本の
+  worker が `sync_channel(1)` 背後の proxy 経由で `read`/`seek` を
+  逐次フォワードする — 飛行中の encoded バイトは単方向あたり
+  ≤64KiB の 1 チャンクに有界。`f` は worker スレッド上で
+  `&mut dyn Demuxer` を受け取り、その借用は `f` の外へ escape
+  できない（box しても `Box<dyn Demuxer + '_>` は scope 寿命に
+  束縛され、owned 化・偽 demuxer への swap・`R` 経由の return は
+  いずれも不可）。`f` が作る所有値
+  （`Packet`・`Frame`・`Box<dyn Decoder>`・その借用上の
+  `SourceReader` が生んだ decoded 出力）は借用を含まなければ
+  `R: Send` 経由で返せる。制約: `f` は worker スレッドで走り
+  `Send` な captures のみ持てる・呼び出し側スレッドは `f` の間
+  serve に専有される・`f` が呼び出し側スレッド上の処理を待つと
+  デッドロック・ソースの最終位置は未規定。チャンネル切断は常に
+  `io::Error`（`BrokenPipe`）として伝搬し、clean EOF には化けない。
 
 ## 層・許可依存
 

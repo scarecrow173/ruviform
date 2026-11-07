@@ -50,14 +50,14 @@ fn expected(i: usize) -> f32 {
     f32::from(sample_at(i)) / 32768.0
 }
 
-fn open_reader(channels: u16, frames: usize) -> SourceReader {
+fn open_reader(channels: u16, frames: usize) -> SourceReader<'static> {
     let demuxer =
         ruviform_io_symphonia::open_demuxer(Cursor::new(wav_bytes(channels, frames))).unwrap();
     let stream = demuxer.streams()[0].stream.id;
     SourceReader::open(Box::new(demuxer), stream, DecodeMode::Canonical).unwrap()
 }
 
-fn read_all(reader: &mut SourceReader, channels: usize) -> Vec<Vec<f32>> {
+fn read_all(reader: &mut SourceReader<'_>, channels: usize) -> Vec<Vec<f32>> {
     let mut out = vec![Vec::new(); channels];
     let mut window = vec![vec![0.0f32; 997]; channels];
     let mut slices: Vec<&mut [f32]> = window.iter_mut().map(Vec::as_mut_slice).collect();
