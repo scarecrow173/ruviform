@@ -296,3 +296,44 @@ fn parity_label_table_payload_retained_fake() {
     host.mount(spec)
         .expect("payload accepted by headless validation");
 }
+
+#[test]
+fn parity_spectrogram_payload_retained_fake() {
+    let fx = fixture();
+    let spec = view_spec(&fx);
+    let ComponentSpec::Panel(panel) = &spec.root else {
+        panic!("parity fixture root must be a panel");
+    };
+    let spectrogram = panel
+        .children
+        .iter()
+        .find_map(|c| match c {
+            ComponentSpec::Spectrogram(s) => Some(s),
+            _ => None,
+        })
+        .expect("spectrogram");
+    let expect = &fx["expect"]["spectrogram"];
+    assert_eq!(
+        u64::try_from(spectrogram.columns.len()).expect("small"),
+        expect["declaredColumns"].as_u64().expect("declaredColumns")
+    );
+    let cells: usize = spectrogram.columns.iter().map(|c| c.magnitudes.len()).sum();
+    assert_eq!(
+        u64::try_from(cells).expect("small"),
+        expect["declaredCells"].as_u64().expect("declaredCells")
+    );
+    assert_eq!(
+        u64::try_from(spectrogram.columns.iter().filter(|c| c.count == 0).count()).expect("small"),
+        expect["gapColumns"].as_u64().expect("gapColumns"),
+        "count==0 columns pass through the headless payload"
+    );
+
+    let mut host = new_host();
+    let ops = host
+        .mount(spec)
+        .expect("payload accepted by headless validation");
+    assert!(ops.contains(&ProjectionOp::Mounted {
+        key: key("spectrogram"),
+    }));
+    assert!(host.observe(&key("spectrogram")).is_some());
+}

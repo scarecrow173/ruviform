@@ -70,7 +70,7 @@ pub enum A11yRole {
     Tab,
     /// Grouping container (Panel).
     Group,
-    /// Non-interactive visualization (Waveform/Meter/TimeAxis).
+    /// Non-interactive visualization (Waveform/Meter/TimeAxis/Spectrogram).
     Img,
     /// Binary switch (Toggle).
     Switch,
@@ -310,6 +310,52 @@ pub struct WaveformSpec {
     pub a11y: A11ySpec,
 }
 
+/// One resolved spectrogram time column — a frame span with one
+/// magnitude per frequency row. `count == 0` ⇒ empty column (gap), and
+/// a `NaN` magnitude ⇒ missing data for that cell. The gap semantics
+/// match [`WaveformBin`]; the magnitudes are consumer-resolved values
+/// (`ruviform-viz` `Tile` values on the consumer side).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpectrogramColumn {
+    /// First frame the column covers (inclusive).
+    pub start: u64,
+    /// Last frame the column covers (exclusive).
+    pub end: u64,
+    /// Finite samples aggregated (`0` = nothing covered).
+    pub count: u64,
+    /// Magnitude per frequency row, row 0 = lowest Hz
+    /// (`len() == SpectrogramSpec::rows`).
+    pub magnitudes: Vec<f64>,
+}
+
+/// Upper bound on total cells (`columns × rows`) a `Spectrogram` spec
+/// may carry — keeps spec payloads bounded by construction.
+pub const MAX_SPECTROGRAM_CELLS: usize = 65536;
+
+/// Spectrogram visualization component. Payload is resolved data, not
+/// a query — renderers draw the cells they are given. `magnitude_range`
+/// is the consumer-resolved display range that renderers map onto
+/// intensity (values outside it clamp); the contract does not
+/// prescribe dB or linear scale.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpectrogramSpec {
+    /// Component key.
+    pub key: ComponentKey,
+    /// Viewport frame range the columns cover.
+    pub viewport: Range<u64>,
+    /// Frequency rows per column (`>= 1`).
+    pub rows: usize,
+    /// Display range for magnitudes (`start < end`, both finite).
+    pub magnitude_range: Range<f64>,
+    /// Resolved time columns (`magnitudes.len() == rows` per column,
+    /// `columns.len() * rows <= MAX_SPECTROGRAM_CELLS`).
+    pub columns: Vec<SpectrogramColumn>,
+    /// Visual state.
+    pub visual: ComponentVisualState,
+    /// Accessibility semantics.
+    pub a11y: A11ySpec,
+}
+
 /// A region reserved for a native surface slot (Issue #388
 /// [`NativeSurfaceSlot`](crate::NativeSurfaceSlot) port).
 ///
@@ -496,6 +542,8 @@ pub enum ComponentSpec {
     /// Resolved time-axis tick marks.
     #[serde(rename = "time_axis")]
     TimeAxis(TimeAxisSpec),
+    /// Resolved spectrogram (time × frequency magnitudes).
+    Spectrogram(SpectrogramSpec),
     /// Native-surface region — layout bounds feed the slot port.
     #[serde(rename = "native_slot")]
     NativeSlot(NativeSlotSpec),
@@ -516,6 +564,7 @@ impl ComponentSpec {
             Self::Waveform(s) => &s.key,
             Self::Meter(s) => &s.key,
             Self::TimeAxis(s) => &s.key,
+            Self::Spectrogram(s) => &s.key,
             Self::NativeSlot(s) => &s.key,
             Self::Label(s) => &s.key,
             Self::Table(s) => &s.key,
@@ -551,6 +600,7 @@ impl ComponentSpec {
             Self::Waveform(_) => "waveform",
             Self::Meter(_) => "meter",
             Self::TimeAxis(_) => "time_axis",
+            Self::Spectrogram(_) => "spectrogram",
             Self::NativeSlot(_) => "native_slot",
             Self::Label(_) => "label",
             Self::Table(_) => "table",
@@ -956,7 +1006,7 @@ impl ViewHost {
         Ok(flat)
     }
 
-    /// Resolved visualization payload bounds (`Waveform`, `Meter`, `TimeAxis`).
+    /// Resolved visualization payload bounds (`Waveform`, `Meter`, `TimeAxis`, `Spectrogram`).
     fn check_viz(node: &ComponentSpec) -> Result<(), ViewError> {
         match node {
             ComponentSpec::Waveform(w) => {
@@ -1032,7 +1082,43 @@ impl ViewHost {
                     });
                 }
             }
+            ComponentSpec::Spectrogram(s) => Self::check_spectrogram(s)?,
             _ => {}
+        }
+        Ok(())
+    }
+
+    fn check_spectrogram(s: &SpectrogramSpec) -> Result<(), ViewError> {
+        if s.rows == 0 || s.columns.iter().any(|c| c.magnitudes.len() != s.rows) {
+            return Err(ViewError::InvalidSpec {
+                detail: format!(
+                    "spectrogram {} rows {} must be >= 1 and match every column",
+                    s.key, s.rows
+                ),
+            });
+        }
+        let cells = s.columns.len().saturating_mul(s.rows);
+        if cells > MAX_SPECTROGRAM_CELLS {
+            return Err(ViewError::InvalidSpec {
+                detail: format!(
+                    "spectrogram {} carries {cells} cells (> {MAX_SPECTROGRAM_CELLS})",
+                    s.key
+                ),
+            });
+        }
+        if s.viewport.end < s.viewport.start {
+            return Err(ViewError::InvalidSpec {
+                detail: format!("spectrogram {} viewport end < start", s.key),
+            });
+        }
+        let r = &s.magnitude_range;
+        if !(r.start.is_finite() && r.end.is_finite() && r.start < r.end) {
+            return Err(ViewError::InvalidSpec {
+                detail: format!(
+                    "spectrogram {} magnitude_range must be finite and start < end",
+                    s.key
+                ),
+            });
         }
         Ok(())
     }
@@ -2484,6 +2570,22 @@ mod tests {
         })
     }
 
+    fn spectrogram(key: &str, rows: usize, columns: Vec<SpectrogramColumn>) -> ComponentSpec {
+        ComponentSpec::Spectrogram(SpectrogramSpec {
+            key: ComponentKey::from(key),
+            viewport: 0..200,
+            rows,
+            magnitude_range: 0.0..1.0,
+            columns,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec {
+                role: Some(A11yRole::Img),
+                label: Some(key.to_string()),
+                ..Default::default()
+            },
+        })
+    }
+
     fn cell_texts(row: &A11yNode) -> Vec<Option<String>> {
         row.children
             .iter()
@@ -2596,5 +2698,58 @@ mod tests {
         assert!(ops.contains(&ProjectionOp::Removed {
             key: ComponentKey::from("events"),
         }));
+    }
+
+    #[test]
+    fn spectrogram_keeps_gap_cells_and_rejects_unbounded_payloads() {
+        let column = |start, end, count, magnitudes: Vec<f64>| SpectrogramColumn {
+            start,
+            end,
+            count,
+            magnitudes,
+        };
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![spectrogram(
+            "spec",
+            2,
+            vec![
+                column(0, 100, 100, vec![f64::NAN, 0.5]),
+                column(100, 200, 0, vec![0.0, 0.0]),
+            ],
+        )]))
+        .expect("NaN magnitude and count==0 column are valid payload");
+        let ComponentSpec::Panel(p) = host.spec().expect("spec").root.clone() else {
+            panic!("root must be panel");
+        };
+        let ComponentSpec::Spectrogram(s) = &p.children[0] else {
+            panic!("spectrogram child");
+        };
+        assert!(s.columns[0].magnitudes[0].is_nan(), "NaN gap is retained");
+        assert_eq!(s.columns[1].count, 0, "count==0 column is retained");
+
+        let bad_rows = spectrogram("spec", 2, vec![column(0, 1, 1, vec![0.5])]);
+        assert!(matches!(
+            host.mount(panel(vec![bad_rows])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
+        let too_many_cells = spectrogram(
+            "spec",
+            1,
+            (0..=MAX_SPECTROGRAM_CELLS)
+                .map(|i| column(i as u64, i as u64 + 1, 1, vec![0.0]))
+                .collect(),
+        );
+        assert!(matches!(
+            host.mount(panel(vec![too_many_cells])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
+        let mut inverted = spectrogram("spec", 1, vec![]);
+        if let ComponentSpec::Spectrogram(s) = &mut inverted {
+            s.magnitude_range = 1.0..1.0;
+        }
+        assert!(matches!(
+            host.mount(panel(vec![inverted])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
     }
 }
