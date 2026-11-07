@@ -31,7 +31,7 @@ use ruviform_ui::behavior::{
 };
 use ruviform_ui::view::{
     CellValue, ComponentKey, ComponentSpec, ControlSpec, LabelSpec, MeterSpec, NativeSlotSpec,
-    Orientation, TableSpec, TimeAxisSpec, ViewEvent, ViewHost, WaveformSpec,
+    Orientation, TableSpec, TimeAxisSpec, ViewError, ViewEvent, ViewHost, ViewSpec, WaveformSpec,
 };
 use ruviform_ui::{
     Event, Intent, LogicalRect, SlotError, SlotGeometry, SlotVisibility, SurfaceSlotId,
@@ -410,6 +410,20 @@ pub struct RvfView {
 }
 
 impl RvfView {
+    /// Replaces the mounted spec at the current generation and repaints —
+    /// the driver's [`crate::GpuiDriver::update_view`] apply step. A
+    /// rejected spec leaves the mounted tree untouched.
+    pub(crate) fn update_spec(
+        &mut self,
+        spec: ViewSpec,
+        cx: &mut Context<Self>,
+    ) -> Result<(), ViewError> {
+        let generation = self.host.generation();
+        let result = self.host.update(spec, generation).map(|_| ());
+        self.flush_events(cx);
+        result
+    }
+
     /// Creates a view projecting `host` with a callback receiving
     /// minted command intents — test construction; production views
     /// come through [`Self::mounted`].

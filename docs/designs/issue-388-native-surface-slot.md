@@ -183,7 +183,7 @@ NotRun/Blocked。推測と実測を分離する。**
 
 | OS / format | L0/L1 | embedding API | parent ownership | process boundary | resize negotiation | popup/IME | rendering & z-order | observed outcomes | verdict | limitation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Windows / VST3 | L0 | `IPlugView::attached(HWND)` → `WS_CHILD` | host 子 | 同一プロセス | `onSize`/`checkSizeConstraint` | 親 IME/子 popup 実機要検証 | HWND z-order・GPUI swapchain 遮蔽要検証 | `open_gui` adapter 未実装・機構は issue-115 調査で条件付き | **NotRun** | 実 binary・GPUI Window・`open_gui` 実装待ち |
+| Windows / VST3 | L0 | `IPlugView::attached(HWND)` → `WS_CHILD` | host 子（slot container） | 同一プロセス | host→plugin `onSize` 未配線（plugin `resizeView` は defined refusal）— **Unsupported** | 親 IME/子 popup 未検証（keyboard/IME 配送 **NotRun**） | GPUI Panel/Tab 内で tab 切替 hide/show・resize 追従を実測。clip/overhang は **NotRun**（slot が window 端まで伸びるため画面上で観測不能） | 実測（`evidence/rf388-native-dock-layout/report.md`）: Panel/Tab layout attach・tab 可視性（pixel 確認）・resize 追従・container focus・close/解放 **Pass**。Vinyl 1.12.0 | **Partial**（Dock PASS 不成立） | plugin resize・keyboard/IME/popup・clip・re-dock/move/float・DPI/multi-monitor・2 window・crash/hang 隔離は未実施 / Unsupported / NotRun |
 | Windows / VST3 | L1 | 越境 `WS_CHILD`/`SetParent` | host 子（別 proc） | 別プロセス・入力キュー暗黙結合 | 同上（越境追加リスク） | 入力キュー結合で hang 波及 | 孤児窓/reparent 回復要 | 現行 `Unsupported` defined rejection | **Unsupported**（現行実装）/ 要再評価 | isolation 弱体化 — issue-115 defer |
 | Windows / CLAP | L0 | `clap_window.win32` HWND → `WS_CHILD` | host 子 | 同一プロセス | `clap_plugin_gui.set_size`/`adjust_size` | 同上 | 同上 | `open_gui` adapter 未実装 | **NotRun** | 同上 |
 | Windows / CLAP | L1 | 越境 `WS_CHILD` | host 子（別 proc） | 別プロセス | 同上 | 同上 | 同上 | 現行 `Unsupported` | **Unsupported**（現行）/ 要再評価 | 同上 |
@@ -206,6 +206,8 @@ NotRun/Blocked。推測と実測を分離する。**
 
 補足:
 
+- 「Windows / VST3 / L0」行のみ GPUI Panel/Tab レイアウトの実機測定で更新済み（`evidence/rf388-native-dock-layout/report.md`）。
+  他の行は未測定のまま NotRun/Unsupported を維持する。
 - 「GPUI swapchain の遮蔽」は GPUI Driver 実機試験でのみ評価可能 —
   本表では全行要検証として残す。
 - 方式候補（L0 view attach / L1 cross-process child attach / 別 proc

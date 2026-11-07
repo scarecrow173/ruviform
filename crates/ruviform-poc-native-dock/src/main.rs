@@ -18,9 +18,10 @@
 //! - `close` → `close_gui` → editor destroyed; `release_lease` →
 //!   container destroyed.
 //!
-//! This is a real-execution probe of the embedding mechanism, **not**
-//! a Dock PASS: the surface lives in a GPUI window region, not inside
-//! an actual dock layout (no GPUI dock widget exists yet).
+//! Default run is a real-execution probe of the embedding mechanism in
+//! a GPUI window region. `RVF_POC_SCENARIO=dock` runs the Panel/Tab
+//! layout scenario (tab hide/show, resize follow, focus) instead. Neither
+//! is a Dock PASS by itself — see `evidence/rf388-native-dock-layout/report.md`.
 
 #[cfg(not(all(feature = "gpui", target_os = "windows")))]
 fn main() {
