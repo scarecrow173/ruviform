@@ -250,8 +250,11 @@ pub enum Capability {
 pub struct WindowCapabilities {
     /// Accepts [`WindowDriver::resize`] requests.
     pub resize: Capability,
-    /// Accepts [`WindowDriver::focus`] requests and emits
-    /// [`WindowLifecycle::Focused`] transitions.
+    /// Accepts [`WindowDriver::focus`] requests with `focused = true`
+    /// and emits [`WindowLifecycle::Focused`] transitions. Releasing
+    /// focus (`focused = false`) is not implied by this flag: a driver
+    /// whose platform cannot release focus keeps `Supported` here and
+    /// answers the release with [`UiError::Unsupported`] per operation.
     pub focus: Capability,
     /// Emits [`WindowLifecycle::ScaleFactorChanged`] transitions.
     pub scale_factor: Capability,
@@ -308,12 +311,15 @@ pub trait WindowDriver {
     /// driver declares `resize` unsupported.
     fn resize(&mut self, window: WindowId, size: LogicalSize) -> Result<(), UiError>;
 
-    /// Requests or releases focus on `window`.
+    /// Requests focus on `window` (`focused = true`), or releases it
+    /// (`focused = false`) where the platform allows.
     ///
     /// # Errors
     /// [`UiError::Host`] when `window` is unknown/destroyed or the
     /// driver rejects the request; [`UiError::Unsupported`] when the
-    /// driver declares `focus` unsupported.
+    /// driver declares `focus` unsupported, or when it cannot honour
+    /// the requested direction (for example a release on a platform
+    /// without one — see [`WindowCapabilities::focus`]).
     fn focus(&mut self, window: WindowId, focused: bool) -> Result<(), UiError>;
 
     /// Asks `window` to close through the normal `CloseRequested`
