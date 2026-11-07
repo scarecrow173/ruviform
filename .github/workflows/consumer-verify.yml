@@ -440,7 +440,7 @@ jobs:
       # checkout とは分離する。候補に task がない（RF #390 以前の SHA）ときは
       # 実行せず、record 側で owner 付き not_run を記録する — dispatch ref の
       # task 代用による偽 pass を構造的に排除する。
-      - name: Checkout ruviform candidate + GUI task probe (RUVIFORM_REV)
+      - name: Checkout ruviform candidate + GUI task probe + dep fetch (RUVIFORM_REV)
         id: gui_candidate
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true'
         run: |
@@ -465,9 +465,15 @@ jobs:
           if grep -qE '^\[tasks\.test-ui-driver-contract\]' "$cand/mise.toml" 2>/dev/null; then contract=1; fi
           if [ "$boundary" = "1" ] || [ "$contract" = "1" ]; then
             # GUI lane が使う tool のみ scope（cargo 系 task — node/git-lfs 不要）。
-            # outputs は install 成功後に出す — toolchain 解決失敗を output 空
-            # → else 分岐の gui_candidate.outcome（fail）行へ落とす整合。
-            (cd "$cand" && mise trust && mise install --locked rust)
+            # toolchain 解決後に候補自身の Cargo.lock による全 workspace 依存
+            # 取得を行う — Consumer clone の cargo fetch cache は ruviform 全
+            # workspace（dev-dep 含む、例: criterion→alloca）を覆わず、未取得の
+            # ままだと gui-boundary-guard 内部の `cargo metadata --offline` が
+            # 欠落 crate で失敗する（run42348131128 synvelis job 実障害）。
+            # outputs は install/fetch 成功後に出す — toolchain/依存取得の失敗を
+            # output 空 → else 分岐の gui_candidate.outcome（fail）行へ落とす整合。
+            (cd "$cand" && mise trust && mise install --locked rust \
+              && mise exec -- cargo fetch --locked)
           fi
           echo "boundary=$boundary" >> "$GITHUB_OUTPUT"
           echo "contract=$contract" >> "$GITHUB_OUTPUT"
@@ -566,21 +572,21 @@ jobs:
             rec "extra tasks (aggregate)" "mise run <audiolens_extra_tasks>" "extra dispatch input" "$(o '${{ steps.extra.outcome }}')"
             # GUI contract lane — ruviform 候補 tree（RUVIFORM_REV）上の実行結果を
             # 別行で記録。候補に task がない場合は owner 付き not_run（dispatch ref
-            # checkout の task では代用しない）。checkout/probe 未完了はその
+            # checkout の task では代用しない）。checkout/probe/toolchain/依存取得 未完了はその
             # outcome をそのまま写す。
             if [ "${{ steps.gui_candidate.outputs.boundary }}" = "1" ]; then
               rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_boundary.outcome }}')"
             elif [ "${{ steps.gui_candidate.outputs.boundary }}" = "0" ]; then
               rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
             else
-              rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain 未完了"
+              rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
             fi
             if [ "${{ steps.gui_candidate.outputs.contract }}" = "1" ]; then
               rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_semantic.outcome }}')"
             elif [ "${{ steps.gui_candidate.outputs.contract }}" = "0" ]; then
               rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
             else
-              rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain 未完了"
+              rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
             fi
             # 未接続 lane（Consumer 側の通常 View/Domain headless — capability は
             # 足りるが Consumer 側 fixture が未実装。owner + 再実行条件を正直記録）
@@ -867,7 +873,7 @@ jobs:
       # checkout とは分離する。候補に task がない（RF #390 以前の SHA）ときは
       # 実行せず、record 側で owner 付き not_run を記録する — dispatch ref の
       # task 代用による偽 pass を構造的に排除する。
-      - name: Checkout ruviform candidate + GUI task probe (RUVIFORM_REV)
+      - name: Checkout ruviform candidate + GUI task probe + dep fetch (RUVIFORM_REV)
         id: gui_candidate
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present'
         run: |
@@ -892,9 +898,15 @@ jobs:
           if grep -qE '^\[tasks\.test-ui-driver-contract\]' "$cand/mise.toml" 2>/dev/null; then contract=1; fi
           if [ "$boundary" = "1" ] || [ "$contract" = "1" ]; then
             # GUI lane が使う tool のみ scope（cargo 系 task — node/git-lfs 不要）。
-            # outputs は install 成功後に出す — toolchain 解決失敗を output 空
-            # → else 分岐の gui_candidate.outcome（fail）行へ落とす整合。
-            (cd "$cand" && mise trust && mise install --locked rust)
+            # toolchain 解決後に候補自身の Cargo.lock による全 workspace 依存
+            # 取得を行う — Consumer clone の cargo fetch cache は ruviform 全
+            # workspace（dev-dep 含む、例: criterion→alloca）を覆わず、未取得の
+            # ままだと gui-boundary-guard 内部の `cargo metadata --offline` が
+            # 欠落 crate で失敗する（run42348131128 synvelis job 実障害）。
+            # outputs は install/fetch 成功後に出す — toolchain/依存取得の失敗を
+            # output 空 → else 分岐の gui_candidate.outcome（fail）行へ落とす整合。
+            (cd "$cand" && mise trust && mise install --locked rust \
+              && mise exec -- cargo fetch --locked)
           fi
           echo "boundary=$boundary" >> "$GITHUB_OUTPUT"
           echo "contract=$contract" >> "$GITHUB_OUTPUT"
@@ -996,21 +1008,21 @@ jobs:
             rec "extra tasks (aggregate)" "mise run <synvelis_extra_tasks>" "extra dispatch input" "$(o '${{ steps.extra.outcome }}')"
             # GUI contract lane — ruviform 候補 tree（RUVIFORM_REV）上の実行結果を
             # 別行で記録。候補に task がない場合は owner 付き not_run（dispatch ref
-            # checkout の task では代用しない）。checkout/probe 未完了はその
+            # checkout の task では代用しない）。checkout/probe/toolchain/依存取得 未完了はその
             # outcome をそのまま写す。
             if [ "${{ steps.gui_candidate.outputs.boundary }}" = "1" ]; then
               rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_boundary.outcome }}')"
             elif [ "${{ steps.gui_candidate.outputs.boundary }}" = "0" ]; then
               rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
             else
-              rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain 未完了"
+              rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
             fi
             if [ "${{ steps.gui_candidate.outputs.contract }}" = "1" ]; then
               rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_semantic.outcome }}')"
             elif [ "${{ steps.gui_candidate.outputs.contract }}" = "0" ]; then
               rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
             else
-              rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain 未完了"
+              rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
             fi
             # 未接続 lane（Consumer 側の通常 View/Domain headless — capability は
             # 足りるが Consumer 側 fixture が未実装。owner + 再実行条件を正直記録）

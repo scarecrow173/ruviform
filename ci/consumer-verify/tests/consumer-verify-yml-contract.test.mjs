@@ -25,6 +25,8 @@ const YML = fileURLToPath(
   new URL("../../../.github/workflows/consumer-verify.yml", import.meta.url),
 );
 const src = readFileSync(YML, "utf8");
+const MISE_TOML = fileURLToPath(new URL("../../../mise.toml", import.meta.url));
+const miseSrc = readFileSync(MISE_TOML, "utf8");
 
 // Slice the text of one job block (from `  <name>:` at jobs-level indent to
 // the next same-indent key or EOF) so per-job assertions can't drift.
@@ -227,7 +229,59 @@ for (const [name, job] of [
     assert.ok(!job.includes('rec "GUI-CONTRACT checks'), "fixed not_run GUI-CONTRACT row must be replaced");
     assert.ok(!job.includes('rec "GUI semantic/fake-oracle checks'), "fixed not_run semantic row must be replaced");
   });
+
+  test(`contract: ${name} candidate dep fetch fills the whole-workspace cache before probe outputs`, () => {
+    // run42348131128 の実障害: 候補の GUI task は内部で `cargo metadata
+    // --offline` を全 workspace（dev-dep 含む、例 criterion→alloca）に掛けるが、
+    // Consumer clone の cargo fetch cache は ruviform 全依存を覆わない。候補
+    // checkout で候補自身の lock（--locked）による `mise exec -- cargo fetch` を
+    // toolchain 解決後・probe outputs 公開前に置く。fetch 失敗は step fail →
+    // outputs 空 → record else 分岐の fail 行（not_run/pass 化しない）。
+    const guiCand = job.slice(job.indexOf("id: gui_candidate"), job.indexOf("id: gui_boundary"));
+    const installPos = guiCand.indexOf("mise install --locked rust");
+    const fetchPos = guiCand.indexOf("mise exec -- cargo fetch");
+    // install/fetch は task 存在分岐の中でのみ行う — task 不在候補で実行して
+    // その失敗を fail 化しない（owner 付き not_run のまま）
+    assert.ok(/if \[ "\$boundary" = "1" \] \|\| \[ "\$contract" = "1" \]/.test(guiCand),
+      "install+fetch must stay inside the task-present branch");
+    assert.ok(/set -euo pipefail/.test(guiCand), "step must keep fail-fast shell flags");
+    assert.ok(installPos >= 0, "gui_candidate must install the rust toolchain when tasks exist");
+    assert.ok(fetchPos > installPos,
+      "candidate cargo fetch must run after the pinned toolchain install");
+    // fetch 失敗が step fail になるよう、fetch は subshell の `&&` 末端である
+    // こと（`|| true`・`;` 継続・コメント化は失敗を隠蔽して outputs 公開へ進む）
+    assert.ok(/&& mise exec -- cargo fetch --locked\s*\)/.test(guiCand),
+      "fetch must be the &&-chained tail so its failure fails the step");
+    // 両 output とも fetch 成功後にのみ公開（partial early-publish は else
+    // fail 行を迂回して lane 実行へ進ませる）
+    for (const out of ["boundary", "contract"]) {
+      assert.ok(fetchPos < guiCand.indexOf(`echo "${out}=`),
+        `probe output '${out}' must be published only after the candidate fetch succeeds`);
+    }
+    assert.ok(
+      /cd "\$cand"[^)]*mise exec -- cargo fetch --locked/.test(guiCand),
+      "fetch must run inside the candidate checkout via mise exec on the candidate's own lockfile",
+    );
+    // 依存取得失敗が record 側の fail 行へ落ちる経路（boundary/semantic 両
+    // else 分岐の理由に依存取得を含む — 片側だけ残す修正は行名偽装）
+    const record = job.slice(job.indexOf("Record evidence"));
+    assert.ok((record.match(/steps\.gui_candidate\.outcome[^\n]*依存取得/g) ?? []).length >= 2,
+      "both gui_candidate failure rows must name dependency fetch in their reason");
+  });
 }
+
+test("contract: boundary guard task stays --offline (fetch, not online relaxation)", () => {
+  // run42348131128 の修復は guard の offline 契約を緩めない — 欠落依存の取得は
+  // 候補 fetch 側で行う。`--offline` を落とすと fresh-cache 条件の退行が
+  // online 化で隠れ、guard の別契約（online 許容）へすり替わる。
+  const begin = miseSrc.indexOf("[tasks.check-ui-driver-boundary]");
+  const end = miseSrc.indexOf("[tasks.test-ui-driver-contract]");
+  assert.notEqual(begin, -1, "check-ui-driver-boundary task missing from mise.toml");
+  assert.notEqual(end, -1, "test-ui-driver-contract task missing from mise.toml");
+  const task = miseSrc.slice(begin, end);
+  assert.ok(/gui-boundary-guard -- --offline/.test(task),
+    "check-ui-driver-boundary must keep the --offline guard contract");
+});
 
 test("contract: concurrency group keys on the full tuple, not just refs", () => {
   // B-1: group が RF SHA + Consumer ref のみだと、同 ref・別 expected SHA /

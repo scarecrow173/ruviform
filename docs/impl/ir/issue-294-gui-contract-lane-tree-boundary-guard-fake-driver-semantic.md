@@ -106,7 +106,9 @@ Task `docs/tasks/issue-294-t3-gui-contract-lane-wiring.md`（plan/design/spec:
     `checkout --detach FETCH_HEAD` で候補 tree を取得し、
     `rev-parse HEAD` を候補 SHA と照合。候補 `mise.toml` の
     `[tasks.<name>]` 存在を grep probe して `boundary`/`contract` output を
-    出力。task が 1 つでもあれば `mise trust` + `mise install --locked rust`。
+    出力。task が 1 つでもあれば `mise trust` + `mise install --locked rust`
+    + 候補 dir で `mise exec -- cargo fetch --locked`（依存取得は Post-run
+    repair 節の修復分 — run42348131128 実障害由来）。
   - `gui_boundary` / `gui_semantic` step を追加: `if` = 既存 lane 条件
     （synvelis は `presence == 'present'` も）+ 対応 probe output が `'1'`、
     `working-directory` は候補 dir。`gui_semantic` は
@@ -174,6 +176,44 @@ Task `docs/tasks/issue-294-t3-gui-contract-lane-wiring.md`（plan/design/spec:
   正直な `fail` として記録される（偽 pass 側には倒れない）。
 - GUI-SEMANTIC が失敗した旧候補修正は ruviform 側の仕事であり、本 workflow
   側では step outcome をそのまま写すのみ。
+
+## Post-run repair（run42348131128 実障害で判明した条件）
+
+初回実 candidate run（workflow head `3aa54523`、target tuple
+RF `4ade0781` / AL `99a7c03` / SV `2c0711e`）で synvelis job の
+GUI-CONTRACT lane が exit 2 失敗した。原因: `gui_boundary` が呼ぶ
+`check-ui-driver-boundary` の `cargo run` は必要な build 依存を online で
+取得するが、guard binary 内部の `cargo metadata --offline` は候補
+workspace の Cargo.lock 内 **全 package**（dev-dep・非 host target dep
+含む）の manifest を要求する。Consumer clone の `cargo fetch` cache では
+ruviform 全 workspace を覆えず、`alloca v0.4.0`（dev-dep criterion 経由）
+未取得 → `cargo metadata --offline` が download 不能で失敗した。
+
+修復: `gui_candidate` の task probe 成功分岐で `mise install --locked rust`
+に続けて `mise exec -- cargo fetch --locked` を候補 dir で実行するよう追加
+（両 job 対称）。`--locked` は候補自身の lock をそのまま使い変えない条件。
+outputs は install/fetch 成功後にのみ公開するため、依存取得失敗は
+`gui_candidate.outcome` = fail → record else 分岐の `fail` 行（理由に
+「依存取得」を追記）へ落ち、not_run/pass 化しない。offline guard 契約・
+SHA/証拠器分離・秘密情報/SSH rewrite/expected tuple/lock 正規化は無変更。
+
+fresh cache 条件の回帰 pin: `consumer-verify-yml-contract.test.mjs` に
+候補 fetch の位置・順序（install 後・outputs 前）・`--locked` 使用と、
+record 理由の依存取得言及を両 job 分 pin する test を追加。guard の
+`--offline` 維持も pin。ローカル実測: fresh `CARGO_HOME` で
+`cargo fetch` → `cargo metadata --offline` exit 0（`alloca-0.4.0` 取得済み）。
+
+修復後検証（修復 head、Windows local）:
+- `mise run test-ci-consumer-verify` → 64 tests pass（既存 61 件維持 +
+  fetch ordering/`--offline` pin 3 件追加）
+- `mise run check-ui-driver-boundary` → verdict: pass
+- `mise run test-ui-driver-contract` → 5 tests pass
+- `mise exec -- actionlint .github/workflows/consumer-verify.yml` → pass
+  （補助 — `lint-actions` task は mise.toml に存在しない。canonical 入口は
+  上記 mise task 3 件、直接 cargo は canonical 扱いしない）
+- 両 `gui_candidate` `run:` block の `bash -n` → pass
+- 実 `workflow_dispatch` 再実行は root が修復 candidate workflow で exact
+  tuple を一元起動 — 本 worker は未実行（Worker 側 dispatch 禁止）
 
 ## Follow-ups
 

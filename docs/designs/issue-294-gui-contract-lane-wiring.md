@@ -89,11 +89,19 @@ contract = grep -qE '^\[tasks\.test-ui-driver-contract\]' mise.toml
 ```
 
 - task が 1 つでもあれば `mise install --locked rust`（lane が使う tool のみ —
-  node / git-lfs は両 task とも不要）。
-- `boundary` / `contract` を step output として出力するが、**install 成功後に
-  限る**。toolchain 解決の失敗を output 空 → record の else 分岐
-  （`gui_candidate.outcome` = fail）へ落とし、実行 lane が `skipped` のまま
-  pass-with-coverage 化する経路を塞ぐ。
+  node / git-lfs は両 task とも不要）に続けて、候補 dir で
+  `mise exec -- cargo fetch --locked` を実行する。**候補自身の Cargo.lock に
+  基づく全 workspace 依存を取得する** — Consumer clone の `cargo fetch`
+  cache は ruviform 全 workspace（dev-dep・非 host target dep 含む）を覆わず、
+  `check-ui-driver-boundary` が内部で掛ける `cargo metadata --offline` は
+  lock 内の全 package manifest を要求するため、未取得 crate（実例:
+  dev-dep criterion→alloca v0.4.0）があると exit 2 で失敗する
+  （run42348131128 synvelis job の実障害。`--locked` は候補 lock を変えない
+  不変条件 — stale lock は正直な fail として記録される）。
+- `boundary` / `contract` を step output として出力するが、**install/fetch
+  成功後に限る**。toolchain 解決・依存取得の失敗を output 空 → record の
+  else 分岐（`gui_candidate.outcome` = fail）へ落とし、実行 lane が
+  `skipped` のまま pass-with-coverage 化する経路を塞ぐ。
 
 ## lane step
 
@@ -115,9 +123,9 @@ contract = grep -qE '^\[tasks\.test-ui-driver-contract\]' mise.toml
 1. `"1"` → `o('<実行 step>.outcome')`（実行結果を正直記録）。
 2. `"0"` → `not_run` + 理由「候補 SHA に task 未定義・RF #390 Owner・
    task を含む候補で再実行（dispatch ref 代用なし）」。
-3. 上記以外（checkout/probe/toolchain 解決の skipped/failure）→
-   `o('gui_candidate.outcome')` + 理由「candidate checkout/probe/toolchain
-   未完了」。
+3. 上記以外（checkout/probe/toolchain/依存取得の skipped/failure）→
+   `o('gui_candidate.outcome')` + 理由「candidate checkout/probe/toolchain/
+   依存取得 未完了」。
 
 Consumer 側通常 View/Domain headless は別 `not_run` 行として保持
 （Owner: AL #166 / SV #175）。`unsupported` 固定行は無変更。
@@ -138,6 +146,9 @@ Consumer 側通常 View/Domain headless は別 `not_run` 行として保持
   outcome 参照されること（既存の全 id→lane 行ルールに自動適合）。
 - 候補 checkout が `$RUVIFORM_REV` を fetch し `rev-parse` 照合すること、
   lane step が候補 dir で実行されることを pin する。
+- `gui_candidate` 内の候補 `cargo fetch --locked` が toolchain install 後・
+  outputs 公開前に置かれる順序、および boundary guard task の `--offline`
+  契約維持（依存取得は fetch 側で行い online 化しない）を pin する。
 - `evidence.mjs checkout is the dispatch ref` 契約は維持
   （actions/checkout の `ref:` に候補 SHA を渡さない不変条件は無変更）。
 

@@ -63,6 +63,15 @@ relations:
   `[tasks.test-ui-driver-contract]`。
 - **Rule**: task 不在時は owner（RF #390）+ 再実行条件付き `not_run`、
   dispatch ref の task で代用しない。
+- **Rule**: task 存在時のみ、候補 dir で toolchain install 後に候補自身の
+  lock による全 workspace 依存取得（`mise exec -- cargo fetch --locked`）を
+  行い、install/fetch 成功後に限り probe outputs を公開する。
+  **Example**: install/fetch 失敗 → outputs 空 → record else 分岐の
+  `gui_candidate.outcome` = `fail` 行（理由: 依存取得 未完了）— Consumer
+  fetch cache では `cargo metadata --offline` が必要な全 workspace 依存
+  （dev-dep 含む）を覆わない実障害（run42348131128）への対処。
+- **Rule**: 依存取得は fetch 側で行い、boundary guard の `--offline` 契約を
+  緩めない（online 化で欠落依存を隠蔽しない）。
 
 ## Feature: 別 command / 別結果
 
