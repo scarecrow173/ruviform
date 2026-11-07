@@ -2,8 +2,7 @@
 
 - Issue: https://github.com/scarecrow173/ruviform/issues/388 / https://github.com/scarecrow173/ruviform/issues/389
 - Branch: `feature/native-surface-plugin-editor-poc`
-- Base: `49de02c` + RF386 candidate `d907bfc` merge(`62e317d`)
-- 依存 merge 予定: main `5c0f16b`(RF386/PR394 統合済み — coordinator mail 2026-11-07)
+- Base: `49de02c` + RF386 candidate `d907bfc` merge(`62e317d`) → main `5c0f16b` merge(`86895a3`、RF386/PR394 + RF390 guard/lab + RF384/385 統合済みを取込)
 
 ## 実施内容(本 increment)
 
@@ -48,17 +47,22 @@
 
 ## 検証(実 command/exit)
 
+merge `86895a3`(main `5c0f16b` 取込後)の最終 head で実施:
+
 | command | 結果 |
 | --- | --- |
 | `cargo fmt --all -- --check`(mise exec) | exit 0 |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0(headless lane — gpui feature off で全 workspace green = feature 隔離確認) |
-| `cargo test --workspace` | exit 0(153 suite 全 ok / 0 failed。`editor_session` 22/22、`native_slot` 11/11 含む) |
+| `cargo test --workspace` | exit 0(166 suite 全 ok / 0 failed。`editor_session` 22/22、`native_slot` 11/11、RF390 `driver_contract` 5/5 含む) |
 | `cargo check -p ruviform-ui-gpui --features gpui --all-targets` | exit 0 |
 | `cargo clippy -p ruviform-ui-gpui --features gpui --all-targets -- -D warnings` | exit 0 |
-| `cargo check -p ruviform-poc-native-dock --features gpui --all-targets` | exit 0 |
 | `cargo clippy -p ruviform-poc-native-dock --features gpui --all-targets -- -D warnings` | exit 0 |
-| `cargo run -p ruviform-poc-native-dock --features gpui` | exit 0(実 Window で全 stage 完走) |
+| `mise run check-ui-driver-boundary`(RF390 guard) | exit 0 — dep-graph/signature/allowlist 全 pass。`ruviform-ui-gpui` の allowedDeps に `raw-window-handle`(gpui feature optional)を追加、`ruviform-poc-native-dock` に `composition-root` grant を付与 |
+| `mise run test-ui-driver-contract`(RF390 lab) | exit 0(5/5) |
+| `cargo run -p ruviform-poc-native-dock --features gpui` | exit 0(merged tree で実 Window 全 stage 完走・証拠列を再現) |
 | `cargo run -p ruviform-poc-native-dock`(feature off) | exit 2 — `--features gpui` 要求 message を出力(honest refusal) |
+
+merge conflict 解決: `ruviform-ui-gpui`(lib.rs/Cargo.toml)は main 版が RF386 candidate と同一のため自側 delta(surface/raw_parent/capability)を保持。`Cargo.lock` は main 版 + 本 increment 分 13 行のみ(新規 package 2 件 + dep 記述 2 行)。doc README index は union。`evidence/rf386` report は main 側(統合後再検証版)を採用。
 
 ## 状態/受入判定
 
