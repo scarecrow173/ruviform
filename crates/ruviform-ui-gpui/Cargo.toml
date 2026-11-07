@@ -13,7 +13,17 @@ publish.workspace = true
 # preserves `cargo check --workspace` as a headless verification path,
 # matching the `ruviform-ui-webview` adapter precedent.
 default = []
-gpui = ["dep:gpui", "dep:raw-window-handle", "dep:windows-sys"]
+gpui = [
+    "dep:gpui",
+    "dep:ruviform-ui-theme",
+    "dep:serde_json",
+    "dep:raw-window-handle",
+    "dep:windows-sys",
+]
+# `gpui-test` enables gpui's `test-support` (TestAppContext /
+# `#[gpui::test]` / simulate_* APIs) for the headless render tests.
+# Not for production use — production code needs only `gpui`.
+gpui-test = ["gpui", "gpui/test-support"]
 
 [dependencies]
 # - ruviform-ui: the port-defining crate this adapter implements.
@@ -21,6 +31,13 @@ ruviform-ui = { path = "../ruviform-ui" }
 # - gpui: Zed's GPU-accelerated UI framework — the standard Driver
 #   backend per the Issue #384 direction. Optional: only under `gpui`.
 gpui = { version = "0.2.2", optional = true }
+# - ruviform-ui-theme: Issue #387 renderer maps `ResolvedTheme` one-way
+#   into GPUI colors/lengths (second theme source of truth is never
+#   created). Optional: only needed by the gpui-gated render module.
+ruviform-ui-theme = { path = "../ruviform-ui-theme", optional = true }
+# - serde_json: serializes `CommandIntent` into the `rvf.ui.command.v1`
+#   Intent `params` payload. Optional: only needed by the render module.
+serde_json = { version = "1", optional = true }
 # - raw-window-handle: the redemption seam — `Window::window_handle()`
 #   yields the OS parent token the surface adapter wraps into opaque
 #   lease payloads. The raw handle never leaves this adapter.
@@ -41,6 +58,12 @@ windows-sys = { version = "0.61", optional = true, features = [
 [[example]]
 name = "minimal_window"
 # Manual-verification fixture: requires the real GPUI backend.
+required-features = ["gpui"]
+
+[[example]]
+name = "component_showcase"
+# Issue #387 renderer demo — Fader/Tabs + Waveform/Seek in a real
+# GPUI window. Requires the real GPUI backend.
 required-features = ["gpui"]
 
 [lints]

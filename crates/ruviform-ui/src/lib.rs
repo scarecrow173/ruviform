@@ -29,6 +29,12 @@
 //!   [`DriverEvent`], [`WindowCapabilities`]/[`Capability`] and the
 //!   [`WindowDriver`] port, the migration target that carries no
 //!   JS/`url`/`devtools` assumptions.
+//! - [`view`]: the driver-neutral Component/View spec contract and
+//!   the [`view::ViewHost`] headless projection engine (Issue #387).
+//! - [`behavior`]: the headless value/interaction/command-binding
+//!   contract — value mapping, the `Begin → Preview* → Commit|Cancel`
+//!   gesture machine, and per-control command binding state
+//!   (Issue #387).
 //! - [`detect`]: backend detection report types.
 //! - [`demo`]: a reference [`Service`] proving the shared GUI/CLI
 //!   boundary end to end.
@@ -60,6 +66,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub mod assets;
+pub mod behavior;
 pub mod bridge;
 pub mod data;
 pub mod demo;
@@ -73,6 +80,7 @@ pub mod native_slot;
 pub mod render;
 pub mod runtime;
 pub mod service;
+pub mod view;
 pub mod window;
 
 pub use assets::{Asset, AssetSource, MapAssetSource, mime_for, resolve_path};
