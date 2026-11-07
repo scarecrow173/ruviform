@@ -173,6 +173,59 @@ pub struct Tile {
     pub values: Vec<f64>,
 }
 
+/// One time column of a [`Tile`]: the source frames it covers, how
+/// many of its cells are finite, and its magnitudes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TileColumn {
+    /// Source frames the column covers (`[start, end)`, within
+    /// [`Tile::frames`]).
+    pub frames: Range<u64>,
+    /// Finite cells in `magnitudes` (`0..=rows`). `0` marks a gap
+    /// column: no output cell in it holds data.
+    pub count: u64,
+    /// Magnitudes, row 0 = lowest Hz (`rows` values).
+    pub magnitudes: Vec<f64>,
+}
+
+impl Tile {
+    /// Time columns in order, one per output column.
+    ///
+    /// The frame ranges cover [`Tile::frames`] without gaps. They
+    /// partition it exactly when `cols <= frames.len()`; with more
+    /// columns than frames, each column still covers at least one frame
+    /// and neighbouring columns share frames. An empty tile yields
+    /// empty frame ranges.
+    pub fn columns(&self) -> impl Iterator<Item = TileColumn> + '_ {
+        let span = (self.frames.end - self.frames.start).max(1);
+        (0..self.cols).map(move |c| {
+            let offsets = column_offsets(span, self.cols, c);
+            let end = self.frames.end;
+            let frames = (self.frames.start + offsets.start).min(end)
+                ..(self.frames.start + offsets.end).min(end);
+            let magnitudes: Vec<f64> = (0..self.rows)
+                .map(|r| self.values[r * self.cols + c])
+                .collect();
+            let count = magnitudes.iter().filter(|v| v.is_finite()).count() as u64;
+            TileColumn {
+                frames,
+                count,
+                magnitudes,
+            }
+        })
+    }
+}
+
+/// Relative frame offsets `[cf0, cf1)` of output column `c` when a span
+/// of `span` frames is split into `cols` columns. This is the single
+/// definition of the column rule, shared by [`Spectrogram::tile`] and
+/// [`Tile::columns`]. Every column covers at least one frame.
+fn column_offsets(span: u64, cols: usize, c: usize) -> Range<u64> {
+    let (c, cols) = (c as u64, cols as u64);
+    let cf0 = span * c / cols;
+    let cf1 = (span * (c + 1) / cols).max(cf0 + 1);
+    cf0..cf1
+}
+
 /// A bounded tile query: which source frames, at what output
 /// resolution, aggregated how.
 #[derive(Clone, Debug, PartialEq)]
@@ -334,7 +387,8 @@ impl Spectrogram {
     /// Output size is `rows × cols` regardless of input size — the
     /// load contract scales with the request, not the dataset. Cells
     /// covering no finite bins are `NaN`. Complex bins are reduced to
-    /// magnitudes during aggregation only.
+    /// magnitudes during aggregation only. Time columns follow the rule
+    /// of [`Tile::columns`].
     ///
     /// **RT contract:** non-RT only.
     ///
@@ -366,12 +420,11 @@ impl Spectrogram {
             let lo = bins.start.max(rb0);
             let hi = bins.end.min(rb1);
             for c in 0..req.cols {
-                let cf0 = span * c as u64 / req.cols as u64;
-                let cf1 = (span * (c as u64 + 1) / req.cols as u64).max(cf0 + 1);
+                let offsets = column_offsets(span, req.cols, c);
                 let mut acc = 0.0f64;
                 let mut n = 0u64;
                 let mut peak = f64::NEG_INFINITY;
-                for f in cf0..cf1.min(nfr) {
+                for f in offsets.start..offsets.end.min(nfr) {
                     for b in lo..hi {
                         let v = mag[f as usize * read.bins + (b - rb0)];
                         if !v.is_finite() {
@@ -579,5 +632,109 @@ mod tests {
             })
             .is_err()
         );
+    }
+
+    #[test]
+    fn columns_partition_frames_for_every_span() {
+        for span in 1..=24usize {
+            for cols in 1..=span {
+                let span = span as u64;
+                let tile = Tile {
+                    frames: 5..5 + span,
+                    cols,
+                    rows: 1,
+                    values: vec![0.0; cols],
+                };
+                let mut next = tile.frames.start;
+                for col in tile.columns() {
+                    assert_eq!(col.frames.start, next, "span={span} cols={cols}");
+                    assert!(!col.frames.is_empty(), "span={span} cols={cols}");
+                    next = col.frames.end;
+                }
+                assert_eq!(next, tile.frames.end, "span={span} cols={cols}");
+            }
+        }
+    }
+
+    #[test]
+    fn empty_tile_columns_have_empty_frame_ranges() {
+        let tile = Tile {
+            frames: 7..7,
+            cols: 3,
+            rows: 1,
+            values: vec![f64::NAN; 3],
+        };
+        let cols: Vec<TileColumn> = tile.columns().collect();
+        assert_eq!(cols.len(), 3);
+        assert!(cols.iter().all(|c| c.frames == (7..7) && c.count == 0));
+    }
+
+    #[test]
+    fn columns_cover_frames_when_cols_exceed_span() {
+        let tile = Tile {
+            frames: 0..2,
+            cols: 4,
+            rows: 1,
+            values: vec![0.0; 4],
+        };
+        let frames: Vec<_> = tile.columns().map(|c| c.frames).collect();
+        assert_eq!(frames, vec![0..1, 0..1, 1..2, 1..2]);
+    }
+
+    #[test]
+    fn tile_columns_split_indivisible_span_and_mark_nan_gap() {
+        // 10 frames into 3 columns: 0..3, 3..6, 6..10 (indivisible span).
+        let info = SpectrumInfo {
+            frames: 10,
+            bins: 2,
+            grid: FrameGrid::new(4, 2, 0).unwrap(),
+            axis: BinAxis::Uniform {
+                first_hz: 0.0,
+                step_hz: 100.0,
+            },
+            sample_rate: 48_000,
+        };
+        let mut data = vec![1.0; 20];
+        // Frames 0..3 (column 0) are entirely NaN.
+        data[..6].fill(f64::NAN);
+        let spec = Spectrogram::new(Arc::new(
+            VecSpectrum::new(info, SpectrumData::Magnitude(data)).unwrap(),
+        ));
+        let tile = spec
+            .tile(&TileRequest {
+                frames: 0..10,
+                rows: RowSpec::uniform(2, 2),
+                cols: 3,
+                aggregate: Aggregate::Max,
+            })
+            .unwrap();
+        let cols: Vec<TileColumn> = tile.columns().collect();
+        assert_eq!(
+            cols.iter().map(|c| c.frames.clone()).collect::<Vec<_>>(),
+            vec![0..3, 3..6, 6..10]
+        );
+        assert_eq!(
+            cols.iter().map(|c| c.count).collect::<Vec<_>>(),
+            vec![0, 2, 2]
+        );
+        assert!(cols[0].magnitudes.iter().all(|v| v.is_nan()));
+    }
+
+    #[test]
+    fn column_count_counts_finite_cells() {
+        // Row-major 2×3: column 1 is all NaN (gap); column 2 has one finite cell.
+        let tile = Tile {
+            frames: 0..4,
+            cols: 3,
+            rows: 2,
+            values: vec![1.0, f64::NAN, f64::NAN, 2.0, f64::NAN, 4.0],
+        };
+        let cols: Vec<TileColumn> = tile.columns().collect();
+        assert_eq!(
+            cols.iter().map(|c| c.count).collect::<Vec<_>>(),
+            vec![2, 0, 1]
+        );
+        assert_eq!(cols[0].magnitudes, vec![1.0, 2.0]);
+        assert_eq!(cols[2].frames, 2..4);
     }
 }
