@@ -253,6 +253,45 @@ conflict なし。`Cargo.toml` members・`crates/README.md`・`AGENTS.md`・
   poc-native-dock / observability collector / plugin-host
   editor_session / consumer-verify workflow）への diff はゼロ。
 
+### Post-merge re-verification（combined merge `16eacc48` + `ce8bc99b`）
+
+`d68b14d` 上へ `origin/main` `5d48298`（RF401 rooted read capability・
+RF402 real VST3 attach・RF403 consumer-verify GUI-CONTRACT lane 含む）と
+RF407 候補 `4c67519`（Issue #400 `with_borrowed_demuxer` +
+`Demuxer for &mut D` + `SourceReader<'a>`、main 未 merge の
+unapproved candidate）を順次 merge した combined head `ce8bc99b` で
+同一正規入口を再実行（Windows 11 x64 / Git Bash、mise pin toolchain）。
+両 merge とも ort で conflict なし。RF407 実装ファイル
+（io-symphonia・`media-io/src/demux.rs`・media-reader 全体）への diff は
+ゼロで、唯一の交差は `media-io/src/lib.rs` の `mod staged` 除去
+（RF305 scope）。`SourceReader<'a>` の named 型位置は RF407 側で
+`<'static>`/`'_>` 注釈済み（workspace 内の未注釈残存ゼロ、追加修正不要）。
+
+| task | 結果 |
+| --- | --- |
+| `mise run fmt-check` | PASS |
+| `mise run check` | PASS（exit 0） |
+| `mise run lint`（clippy `-D warnings`） | PASS |
+| `mise run test`（workspace + doctests） | PASS（170 test-result blocks・0 failed） |
+| `mise run test-io-e2e` | PASS（31 件・0 failed、`wav_staged` 3 件は実 sealed `ReadbackFile` 上の `with_borrowed_demuxer` decode） |
+| focused（補助 `mise exec -- cargo test -p ruviform-io-symphonia -p ruviform-media-reader --jobs 2`） | PASS（borrowed 12・borrowed_source 3・prefetch 27・reader 11・`compile_fail` escape doctest 含む、canonical test 内でも同 PASS） |
+
+- 旧 API 残存検査（combined head）: `StagedOutput`・`media-io` 内
+  `PublishOptions`・`mod staged`/`staged::` → 各 0 件。
+- merge 整合性（cross-diff 検査、実測）:
+  `git diff origin/main...HEAD` は RF305+RF400 scope の 41 file のみ。
+  main 新規成果（`ruviform-io-file` rooted/vfs・io-archive・
+  consumer-verify workflow・plugin-vst3 host・ui-theme/ui-test/
+  ui-gpui・poc-native-dock・mise.toml）への diff はゼロ。
+  `git diff 4c67519 HEAD -- <RF407 paths>` は `media-io/src/lib.rs` の
+  staged 除去のみ。managed index（`docs/*/README.md`）は両側 union で
+  issue-305・issue-400・main 由来 entry が共存。`docs/adr/README.md` の
+  Rooted Read ADR 行と `docs/discovery/README.md` の DISC-034T9T71
+  final 化・DISC-im2uskbe 行は RF407 側の正規再生成が main の index
+  欠落を補完する意味不変差分（対応 doc file は main に実在）。
+- 独立 Validator（read-only subagent）へ cross-diff 検査を委譲済み。
+  判定結果が本ファイルへ追記されるまでは暫定記録。
+
 ## Acceptance ledger
 
 | AC | 状態 | 根拠 |
