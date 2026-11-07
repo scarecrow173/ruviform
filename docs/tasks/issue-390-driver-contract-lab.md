@@ -93,3 +93,42 @@ fixture、正負 mini-workspace fixtures、canonical mise task の実装。
   → clean。
 - [x] `RUVIFORM_DRIVER_LAB_EVIDENCE=target/driver-lab/evidence.jsonl`
   で 4 実行 case の evidence emission 確認。
+
+## Phase 2（Issue #390 DoD 残件の実装・stale status 修正）
+
+- [x] UI-DVR-04（ResolvedTheme mode/layer 優先順位・宣言外 mode 拒否）と
+  UI-DVR-06（NativeSurfaceSlot Unsupported 報告・destroy/revoke・
+  recycle 後 StaleGeneration）の fake 実行 fixture を追加。どちらも
+  #385/#388 の契約が main に存在するため blocked 表記を修正。
+- [x] UI-DVR-05/06 の gpui binding を `test-ui-gpui`（mise-task）で
+  pass 化（UI-DVR-09 の gpui pass は既存）。根拠は
+  `lifecycle_fixture::gpui_driver_matches_shared_lifecycle_trace`、
+  `rvf_view_native_slot_*` / `surface::tests`。
+- [x] GPUI binding の未接続分を owner=#390 の `not_run` + 具体的 rerun
+  条件へ修正（UI-DVR-02/03/04 と LAB-SV-FADER-DOCK / LAB-AL-WAVEFORM-SEEK の
+  gpui は旧 `blocked` の stale な契約未着表記、UI-DVR-01/07/08 は旧 `not_run` の
+  owner/rerun 文言を更新）。
+- [x] Story の fake binding（LAB-SV-FADER-DOCK / LAB-AL-WAVEFORM-SEEK）は
+  Phase 1 の `pass` が oracle（2 scale factor × 2 theme × state 遷移）を
+  覆っていなかったため `not_run`（owner=#390）へ修正。既存 filter は部分
+  検証として note と mechanism に残す。
+- [x] `ruviform-ui-gpui` allowlist grant を `required:true` へ更新
+  （crate は main 上の workspace member で、`required:false` の休眠記述は stale）。
+- [x] manifest の mechanism 検査を stories へ拡張し、`mise-task` の
+  `[tasks.<name>]` 実在を検査（`verify_story_mechanisms` /
+  `verify_binding_mechanism`）。
+- [x] boundary ruleset に `protectedPackages`（`ruviform-ui`・
+  `ruviform-ui-theme`）を追加し、存在と allowlist 非例外を名指しで pin
+  （`protected-missing` / `protected-allowlisted`）。
+- [x] Phase 2 検証（同一 tree・`mise run` 経由）: `fmt-check` / `check-ui-driver-boundary`
+  （verdict pass）/ `test-ui-driver-contract`（7 tests ok）/ `test-ui-component-view`（15 ok）/
+  `check-ui-headless` / `test-ui-headless` / `check-ui-gpui` / `lint-ui-gpui` /
+  `test-ui-gpui`（34 ok）/ `lint`（`-D warnings` clean）/ `check` / `test`（workspace 3026 passed,
+  0 failed）/ `test-ui-test-msrv`（`rustc 1.89.0`、95 ok）。
+- [ ] Case manifest 上の GPUI lab binding（UI-DVR-01/02/03/04/07/08 と
+  Story 2 件）の接続は未実装（owner=#390 の `not_run`）。
+- [ ] Pixel Golden（色/配置）・実描画 screenshot は未実装（#314 の
+  Golden Utility 待ち）。OS 実機（#313）・Native Plugin Dock（#388/#389）・
+  IME/a11y・製品 precision/RT は別 Gate で未達。
+- [ ] Consumer 通常画面の GPUI 型不使用は、本 repo に Consumer コードが
+  無いため機械検査できない（boundary guard は workspace member のみ検査）。

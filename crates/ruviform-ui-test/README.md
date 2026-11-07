@@ -90,7 +90,7 @@ proc-macro2。`wry`/`tao`/GUI/RT 依存は持ち込まない。
 
 共通 UI 契約と Consumer 通常 View/Domain/Headless が
 GPUI/Toolkit/OS handle に依存しないことを機械検査する guard と、
-UI-DVR-01〜08 の case/story registry + Fake driver semantic
+UI-DVR-01〜09 の case/story registry + Fake driver semantic
 fixture を提供する。
 
 - 入口: `mise run check-ui-driver-boundary`（guard、exit
@@ -98,20 +98,52 @@ fixture を提供する。
   `mise run test-ui-driver-contract`（manifest 整合 + 実行 fixture）。
 - ruleset: `fixtures/driver-lab/boundary.json` — forbidden dep/path
   root・allowlist grant（`ruviform-ui-webview` =
-  `wry`/`tao`/`dpi` optional+`webview` feature、将来の
-  `ruviform-ui-gpui` grant は `required:false` で休眠）。
+  `wry`/`tao`/`dpi` optional+`webview` feature、`ruviform-ui-gpui` grant
+  は `gpui`/`gpui-test` feature 経由の optional のみ・`required:true`）。
 - 検査: dep-graph（direct/feature/dep.features/transitive/
   conditional/allowlist 整合/adapter-consumer）+ 公開 signature
   漏出（syn、exposure-aware 2-pass・alias・impl header）。
   検査限界（glob/macro/cfg/registry optional target 等）は
   `docs/designs/issue-390-driver-contract-lab.md` §限界参照。
 - registry: `fixtures/driver-lab/cases.json`（requiredCases で
-  UI-DVR-01〜08 を pin）と `stories.json`。判定語彙
+  UI-DVR-01〜09 を pin）と `stories.json`。判定語彙
   `pass/fail/not_run/unsupported/blocked` — Fake semantic pass を
   GPUI/実 OS/Native Plugin Dock/Visual Golden の成功としない。
   未実装 layer は owner Issue + rerun 条件付き `not_run`/`blocked`。
 - evidence: `RUVIFORM_DRIVER_LAB_EVIDENCE` 指定時に JSONL を
   append（`expected`=manifest 宣言、`observed`=実実行結果）。
+- 固定事項（Issue #390 phase 2）:
+  - **Case manifest**: `fixtures/driver-lab/cases.json`（UI-DVR-01〜09、
+    `requiredCases` で 01〜09 を pin）。**Story manifest**:
+    `fixtures/driver-lab/stories.json`（LAB-SV-FADER-DOCK /
+    LAB-AL-WAVEFORM-SEEK、2 theme × 2 scale factor）。
+  - **Oracle の層分離**: `fake` = ViewHost/ThemeResolver/
+    SurfaceSlotRegistry/DockWorkspace 等の semantic 契約（GPUI・OS 非
+    依存）。`gpui` = `ruviform-ui-gpui` の `gpui-test`
+    （TestAppContext + simulated input）上の semantic 検証で、
+    実描画 pixel・OS 子 HWND 描画は対象外。`real-os` = OS Driver
+    （#313）・Native Plugin Dock（#388/#389）の実機結果で、Fake/GPUI
+    の pass で代替しない。Pixel Golden は色/配置のみで semantic
+    oracle を置換しない。IME/a11y・各製品の precision/RT は別 Gate。
+  - **mechanism の機械検査**: `cargo-test`（package・
+    `tests/<target>.rs`・filter fn の実在）と `mise-task`
+    （`mise.toml` の `[tasks.<name>]` 定義）を cases/stories 両方で
+    検査する（`manifests_are_consistent`）。
+  - **実行方法**: fake = `mise run test-ui-driver-contract` /
+    `mise run test-ui-component-view`、gpui = `mise run test-ui-gpui`
+    （headless `gpui-test`、Windows 11 x64 で 34 test pass を確認）、
+    boundary = `mise run check-ui-driver-boundary`。real-os は手動
+    （`example-ui-gpui-minimal` 等）で CI pass としない。
+  - **環境差**: `gpui-test` は GPU/フォント/DPI に依存しない
+    semantic lane。GPU/DPI/font/device の実差は real-os 層の
+    証拠にのみ残す（OS 別 metadata は未取得）。
+  - **証拠保存先**: `target/driver-lab/evidence.jsonl`（生成物、
+    commit しない）。`RUVIFORM_DRIVER_LAB_EVIDENCE=target/driver-lab/evidence.jsonl`
+    で有効化し、`mise run test-ui-driver-contract` の結果を追記する。
+  - **依存境界の名指し pin**: `protectedPackages`（`ruviform-ui`・
+    `ruviform-ui-theme`）が workspace member に存在し allowlist 例外を
+    持たないことを検査（`protected-missing` / `protected-allowlisted`）。
+    全 member の dep-graph 走査とは別に Common Core/Theme を名指しする。
 
 既知の限界として、cargo metadata の resolve graph は未 activation
 optional dep を省略するため conditional 到達は manifest 宣言を
