@@ -1,0 +1,6 @@
+[package]
+name = "gpui"
+version = "0.0.0"
+edition = "2021"
+description = "fixture dummy — forbidden root 名を持つ path crate"
+publish = false

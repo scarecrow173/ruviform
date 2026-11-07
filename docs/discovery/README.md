@@ -20,6 +20,7 @@ Directory: `docs/discovery`
 | DISC-034QfjLwjBVqddpxivwOTg | Issue #195 M2 Typed Graph Audio Compiler・Buffer/PDC・Stateful RT Ownership・Plan Activation の現行棚卸し | active | [issue-195-m2-typed-graph-compiler-runtime-audit.md](./issue-195-m2-typed-graph-compiler-runtime-audit.md) |
 | DISC-034QdBDFXQ7CpGCCYpN94k | Issue #219 両 Consumer 依存形態・検証基盤棚卸しと Cross-Repo CI 前提実測 | draft | [issue-219-consumer-cross-repo-ci.md](./issue-219-consumer-cross-repo-ci.md) |
 | DISC-034JbXZSba3SvOavRFfs66 | Issue #28 UI 技術検証 PoC の事前調査 | draft | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
+| DISC-034T9T71FKLbmcJ4jmuUcD | Issue #390 Driver Contract Lab 既存資産棚卸し（Fake/Boundary/Dock/Headless 現行 coverage と gap） | draft | [issue-390-driver-contract-lab-inventory.md](./issue-390-driver-contract-lab-inventory.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -44,6 +45,7 @@ Directory: `docs/discovery`
 | DISC-ubO5TxPGQDZSaLVHth3jpg | Issue #198 Stateful Sequential Offline Render・Frame/Preroll/PDC/Tail・Safe Output Receipt — inventory, placement, contract shape | resolved | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |
 | DISC-034Qohljm0FMrizvY86YLe | Issue #233 media-reader Prefetch/Seek/Pump contract doc & feature improvement candidates — inventory, option analysis | resolved | [issue-233-media-reader-prefetch-contract-improvements.md](./issue-233-media-reader-prefetch-contract-improvements.md) |
 | DISC-034Qx5mnsXSbsrFmJqSCM1 | Issue #244 media-reader prefetch contract residual warts — boundary-first fault emission, reopen-failure dead generation, End commit-once | resolved | [issue-244-media-reader-prefetch-contract-warts.md](./issue-244-media-reader-prefetch-contract-warts.md) |
+| DISC-034S9kMn2pQ7rT4vX8yB1w | Issue #294 Cross-Consumer候補Gate — consumer-verify.yml 現状監査と要件ギャップ | resolved | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | DISC-UsHnmyyijB53IvR586RquN | Issue #311 RF-GT-02 IPC schema conformance / deterministic record-replay / fault matrix — contract inventory | resolved | [issue-311-ipc-conformance-inventory.md](./issue-311-ipc-conformance-inventory.md) |
 | DISC-034S312gtUiTestDiscAA11 | Issue #312 test-only GUI host lifecycle / secure control adapter — inventory and option survey | resolved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | DISC-034RBJK2HlLAlKCKmHP5Au | Issue #327 3リポジトリ横断CI計測Baseline 前提棚卸し | resolved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |

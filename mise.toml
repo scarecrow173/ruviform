@@ -54,6 +54,14 @@ run = "cargo clippy --workspace --all-targets -- -D warnings"
 description = "Run workspace tests with `cargo test --workspace` (dev/test profile; writes only target/)"
 run = "cargo test --workspace"
 
+[tasks.check-ui-driver-boundary]
+description = "Issue #390 driver boundary guard: `cargo metadata` dependency-graph + syn public-signature leak inspection against fixtures/driver-lab/boundary.json (exit 0 pass / 1 violation / 2 tool error; writes only target/)"
+run = "cargo run -p ruviform-ui-test --bin gui-boundary-guard -- --offline"
+
+[tasks.test-ui-driver-contract]
+description = "Issue #390 DriverContractFixture: cases.json/stories.json manifest consistency + executable UI-DVR-01/05/07/08 fake-layer fixtures (evidence via RUVIFORM_DRIVER_LAB_EVIDENCE; writes only target/)"
+run = "cargo test -p ruviform-ui-test --test driver_contract"
+
 [tasks.build]
 description = "Build workspace with `cargo build --workspace` (dev profile; writes only target/)"
 run = "cargo build --workspace"
@@ -198,6 +206,22 @@ run = "cargo clippy -p ruviform-io-structured --all-targets -- -D warnings && ca
 [tasks.test-io-structured]
 description = "Run io-structured tests across the format feature matrix (unit/integration/doc tests per combination)"
 run = "cargo test -p ruviform-io-structured && cargo test -p ruviform-io-structured --features xml && cargo test -p ruviform-io-structured --features xml,file && cargo test -p ruviform-io-structured --all-features"
+
+# IO composition lane (Issue #306): the ruviform-io-e2e crate carries the
+# cross-layer boundary tests (StagedFile lifecycle, Structured→StagedFile,
+# TAR/ZIP→Gzip/Zstd→StagedFile, secure extraction, WavMuxer→seal→decode→
+# publish). It is test-only — dev-dependencies pull the feature
+# combinations the boundary needs (structured json,csv,file; compression
+# gzip,zstd), so `-p` alone exercises the full composition surface.
+[tasks.check-io-e2e]
+description = "Type-check the io-e2e composition test crate and all its test targets"
+run = "cargo check -p ruviform-io-e2e --all-targets"
+[tasks.lint-io-e2e]
+description = "Lint the io-e2e composition test crate and its test targets"
+run = "cargo clippy -p ruviform-io-e2e --all-targets -- -D warnings"
+[tasks.test-io-e2e]
+description = "Run the io-e2e composition boundary tests (staged lifecycle, structured/compression/archive/wav layers)"
+run = "cargo test -p ruviform-io-e2e"
 
 # UI webview lane (Issue #156): the adapter's implementation lives behind
 # the non-default `webview` feature so `cargo check --workspace` stays
