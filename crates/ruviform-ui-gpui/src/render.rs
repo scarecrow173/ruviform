@@ -22,15 +22,16 @@ use gpui::prelude::FluentBuilder;
 use gpui::{
     Bounds, Context, Hsla, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, Render, Rgba, ScrollDelta,
-    ScrollWheelEvent, Styled, Subscription, Window, canvas, div, fill, point, px, rgb, size,
+    ScrollWheelEvent, Styled, Subscription, Window, canvas, div, fill, point, px, relative, rgb,
+    size,
 };
 use ruviform_ui::behavior::{
     CommandReceipt, ControlInput, GestureId, InputModifiers, InputSource, ReceiptStatus, Revision,
     StateProjection, ValueInput,
 };
 use ruviform_ui::view::{
-    ComponentKey, ComponentSpec, ControlSpec, NativeSlotSpec, Orientation, ViewEvent, ViewHost,
-    WaveformSpec,
+    ComponentKey, ComponentSpec, ControlSpec, MeterSpec, NativeSlotSpec, Orientation, TimeAxisSpec,
+    ViewEvent, ViewHost, WaveformSpec,
 };
 use ruviform_ui::{
     Event, Intent, LogicalRect, SlotError, SlotGeometry, SlotVisibility, SurfaceSlotId,
@@ -924,6 +925,83 @@ impl RvfView {
         div().flex_grow().min_h(px(120.0)).child(paint)
     }
 
+    /// Level bars per channel band. Peaks grow from the band floor and
+    /// the RMS overlay sits inside them; gap bins draw nothing.
+    #[allow(clippy::cast_precision_loss)]
+    fn meter_element(&self, spec: &MeterSpec) -> impl IntoElement {
+        let palette = self.palette.clone();
+        let channel_count = spec.channel_levels.len().max(1);
+        let bars = meter_bar_plan(spec);
+        let paint = canvas(
+            move |_bounds, _window, _cx| (),
+            move |bounds, (), window, _cx| {
+                window.paint_quad(fill(bounds, palette.surface_bg));
+                let ch_h = bounds.size.height / channel_count as f32;
+                for bar in &bars {
+                    let floor = bounds.origin.y + ch_h * (bar.channel + 1) as f32;
+                    let x0 = bounds.origin.x + bounds.size.width * bar.x0;
+                    let w = bounds.size.width * (bar.x1 - bar.x0);
+                    let peak_h = ch_h * bar.peak;
+                    window.paint_quad(fill(
+                        Bounds::new(point(x0, floor - peak_h), size(w, peak_h)),
+                        palette.viz_waveform,
+                    ));
+                    if let Some(rms) = bar.rms {
+                        let rms_h = ch_h * rms;
+                        window.paint_quad(fill(
+                            Bounds::new(point(x0, floor - rms_h), size(w, rms_h)),
+                            palette.viz_waveform_rms,
+                        ));
+                    }
+                }
+            },
+        );
+        div().flex_grow().min_h(px(120.0)).child(paint)
+    }
+
+    /// Tick marks along a baseline with labels above each mark. Major
+    /// ticks span the full height; minor ticks span half of it.
+    fn time_axis_element(&self, spec: &TimeAxisSpec) -> impl IntoElement {
+        let palette = self.palette.clone();
+        let marks = axis_mark_plan(spec);
+        let labels: Vec<_> = marks
+            .iter()
+            .map(|m| {
+                div()
+                    .absolute()
+                    .left(relative(m.x))
+                    .top(px(palette.space_sm))
+                    .text_color(palette.text_dim)
+                    .child(m.label.clone())
+            })
+            .collect();
+        let paint = canvas(
+            move |_bounds, _window, _cx| (),
+            move |bounds, (), window, _cx| {
+                for m in &marks {
+                    let h = if m.major {
+                        bounds.size.height
+                    } else {
+                        bounds.size.height * 0.5
+                    };
+                    let x = bounds.origin.x + bounds.size.width * m.x;
+                    let top = bounds.origin.y + bounds.size.height - h;
+                    window.paint_quad(fill(
+                        Bounds::new(point(x, top), size(px(1.0), h)),
+                        palette.viz_baseline,
+                    ));
+                }
+            },
+        )
+        .size_full();
+        div()
+            .relative()
+            .w_full()
+            .h(px(24.0))
+            .child(paint)
+            .children(labels)
+    }
+
     fn element_for(&mut self, spec: &ComponentSpec, cx: &mut Context<Self>) -> gpui::AnyElement {
         match spec {
             ComponentSpec::Panel(p) => {
@@ -982,6 +1060,8 @@ impl RvfView {
                 .flex_grow()
                 .child(self.waveform_element(w))
                 .into_any_element(),
+            ComponentSpec::Meter(m) => self.meter_element(m).into_any_element(),
+            ComponentSpec::TimeAxis(t) => self.time_axis_element(t).into_any_element(),
             ComponentSpec::NativeSlot(n) => self.native_slot_element(n),
             other => div()
                 .child(format!("unsupported component: {}", other.kind()))
@@ -1145,13 +1225,91 @@ fn find_control<'a>(spec: &'a ComponentSpec, key: &ComponentKey) -> Option<&'a C
     }
 }
 
+/// Fraction of `viewport` at which `at` falls (`0.0` = start, `1.0` =
+/// end). The common layer validates `end >= start`; a zero-length
+/// viewport counts as one frame wide so the division stays finite.
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+fn viewport_fraction(at: f64, viewport: &Range<u64>) -> f32 {
+    let span = (viewport.end - viewport.start).max(1) as f64;
+    ((at - viewport.start as f64) / span) as f32
+}
+
+/// One drawn Meter bar: a normalized x span inside the viewport, its
+/// channel band, and `[0, 1]` peak/RMS heights (amplitudes clamped).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MeterBarPlan {
+    channel: usize,
+    x0: f32,
+    x1: f32,
+    peak: f32,
+    rms: Option<f32>,
+}
+
+/// Bars to draw for a Meter spec. A gap bin (`count == 0` or a
+/// non-finite peak), an empty or inverted bin, and a bin fully outside
+/// the viewport draw nothing; a non-finite RMS draws the peak alone.
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+fn meter_bar_plan(spec: &MeterSpec) -> Vec<MeterBarPlan> {
+    spec.channel_levels
+        .iter()
+        .enumerate()
+        .flat_map(|(channel, bins)| {
+            bins.iter().filter_map(move |bin| {
+                if bin.count == 0 || !bin.peak.is_finite() {
+                    return None;
+                }
+                let f0 = viewport_fraction(bin.start as f64, &spec.viewport);
+                let f1 = viewport_fraction(bin.end as f64, &spec.viewport);
+                if f1 <= f0 || f1 <= 0.0 || f0 >= 1.0 {
+                    return None;
+                }
+                Some(MeterBarPlan {
+                    channel,
+                    x0: f0.max(0.0),
+                    x1: f1.min(1.0),
+                    peak: bin.peak.clamp(0.0, 1.0) as f32,
+                    rms: bin.rms.is_finite().then(|| bin.rms.clamp(0.0, 1.0) as f32),
+                })
+            })
+        })
+        .collect()
+}
+
+/// One drawn time-axis tick: normalized x inside the viewport and its
+/// weight and label.
+#[derive(Debug, Clone, PartialEq)]
+struct AxisMarkPlan {
+    x: f32,
+    major: bool,
+    label: String,
+}
+
+/// Ticks to draw for a `TimeAxis` spec. Ticks outside the viewport are
+/// culled — the payload keeps them, the renderer does not draw them.
+fn axis_mark_plan(spec: &TimeAxisSpec) -> Vec<AxisMarkPlan> {
+    spec.ticks
+        .iter()
+        .filter_map(|tick| {
+            let x = viewport_fraction(tick.at, &spec.viewport);
+            (0.0..=1.0).contains(&x).then(|| AxisMarkPlan {
+                x,
+                major: tick.major,
+                label: tick.label.clone(),
+            })
+        })
+        .collect()
+}
+
 #[cfg(all(test, feature = "gpui-test"))]
 mod tests {
     use super::*;
     use gpui::{Modifiers, MouseButton, TestAppContext, point, px};
     use ruviform_ui::behavior::{DetachPolicy, ValueDescriptor};
     use ruviform_ui::dock::ViewInstanceId;
-    use ruviform_ui::view::{A11ySpec, AttachEpoch, ComponentVisualState, PanelSpec, ViewSpec};
+    use ruviform_ui::view::{
+        A11ySpec, AttachEpoch, AxisTick, ComponentVisualState, MeterBin, PanelSpec, ProjectionOp,
+        ViewSpec,
+    };
     use ruviform_ui_theme::{ThemeResolver, TokenDocument};
 
     fn fader_spec(key_name: &str) -> ComponentSpec {
@@ -1421,6 +1579,260 @@ mod tests {
         cx.simulate_mouse_down(at, MouseButton::Left, Modifiers::default());
         cx.run_until_parked();
         assert_eq!(committed(cx), Some(0.0));
+    }
+
+    /// Issue #421 Fake/GPUI parity — the shared fixture the Fake side
+    /// (`ruviform-ui-test/tests/driver_parity.rs`) also reads.
+    fn parity_fixture() -> serde_json::Value {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../ruviform-ui-test/fixtures/driver-lab/parity/new-kinds.json"
+        );
+        let text = std::fs::read_to_string(path).expect("read parity fixture");
+        serde_json::from_str(&text).expect("parse parity fixture")
+    }
+
+    fn parity_view(fx: &serde_json::Value) -> ViewSpec {
+        serde_json::from_value(fx["view"].clone()).expect("ViewSpec from parity fixture")
+    }
+
+    fn parity_host(fx: &serde_json::Value) -> ViewHost {
+        let mut host = ViewHost::new(
+            ViewInstanceId::new(421).expect("nonzero"),
+            AttachEpoch::new(1),
+        );
+        host.mount(parity_view(fx)).expect("mount parity fixture");
+        host.drain_events();
+        host
+    }
+
+    fn fixture_strings(v: &serde_json::Value) -> Vec<String> {
+        v.as_array()
+            .expect("array")
+            .iter()
+            .map(|s| s.as_str().expect("string").to_string())
+            .collect()
+    }
+
+    fn command_kinds(collected: &RefCell<Vec<Intent>>) -> Vec<String> {
+        collected
+            .borrow()
+            .iter()
+            .filter(|i| i.op == COMMAND_INTENT_OP)
+            .filter_map(|i| {
+                i.params
+                    .get("intent")?
+                    .get("kind")?
+                    .as_str()
+                    .map(str::to_string)
+            })
+            .collect()
+    }
+
+    fn assert_near(actual: f32, expected: Option<f64>) {
+        let e = expected.expect("fixture number");
+        assert!((f64::from(actual) - e).abs() < 1e-3, "{actual} != {e}");
+    }
+
+    /// Drawn Meter bars and TimeAxis marks equal the shared fixture's
+    /// `expect` plan — the GPUI half of the Fake/GPUI parity contract.
+    #[test]
+    fn parity_new_kinds_plans_match_shared_fixture() {
+        let fx = parity_fixture();
+        let ComponentSpec::Panel(panel) = &parity_view(&fx).root else {
+            panic!("parity fixture root must be a panel");
+        };
+        let meter = panel
+            .children
+            .iter()
+            .find_map(|c| match c {
+                ComponentSpec::Meter(m) => Some(m),
+                _ => None,
+            })
+            .expect("meter");
+        let axis = panel
+            .children
+            .iter()
+            .find_map(|c| match c {
+                ComponentSpec::TimeAxis(t) => Some(t),
+                _ => None,
+            })
+            .expect("time_axis");
+
+        let bars = meter_bar_plan(meter);
+        let want_bars = fx["expect"]["meter"]["drawnBars"].as_array().expect("bars");
+        assert_eq!(bars.len(), want_bars.len(), "drawn bar count");
+        for (bar, want) in bars.iter().zip(want_bars) {
+            assert_eq!(u64::try_from(bar.channel).ok(), want["channel"].as_u64());
+            assert_near(bar.x0, want["x0"].as_f64());
+            assert_near(bar.x1, want["x1"].as_f64());
+            assert_near(bar.peak, want["peak"].as_f64());
+            assert_near(bar.rms.expect("rms"), want["rms"].as_f64());
+        }
+
+        let marks = axis_mark_plan(axis);
+        let want_marks = fx["expect"]["timeAxis"]["drawnMarks"]
+            .as_array()
+            .expect("marks");
+        assert_eq!(marks.len(), want_marks.len(), "drawn mark count");
+        for (mark, want) in marks.iter().zip(want_marks) {
+            assert_near(mark.x, want["x"].as_f64());
+            assert_eq!(Some(mark.major), want["major"].as_bool(), "major");
+            assert_eq!(Some(mark.label.as_str()), want["label"].as_str(), "label");
+        }
+    }
+
+    /// Gap bins (`count == 0`) and non-finite peaks draw nothing; a
+    /// non-finite RMS keeps the peak bar; over-range levels clamp to the
+    /// band; an out-of-range tick is culled.
+    #[test]
+    fn meter_and_axis_plans_skip_gaps_and_clamp() {
+        let bin = |start, end, peak: f64, rms: f64, count| MeterBin {
+            start,
+            end,
+            peak,
+            rms,
+            count,
+        };
+        let meter = MeterSpec {
+            key: ComponentKey("m".to_string()),
+            channels: 1,
+            channel_levels: vec![vec![
+                bin(0, 100, f64::NAN, f64::NAN, 100),
+                bin(100, 200, 0.5, f64::NAN, 100),
+                bin(200, 300, 2.0, 0.1, 0),
+                bin(300, 400, 3.0, 0.2, 100),
+                bin(350, 300, 0.5, 0.2, 10),
+            ]],
+            viewport: 0..400,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        };
+        let bars = meter_bar_plan(&meter);
+        assert_eq!(bars.len(), 2, "NaN peak and count==0 bins draw nothing");
+        assert_eq!(bars[0].rms, None, "non-finite RMS keeps the peak only");
+        assert!(
+            (bars[1].peak - 1.0).abs() < f32::EPSILON,
+            "over-range peak clamps"
+        );
+
+        let axis = TimeAxisSpec {
+            key: ComponentKey("t".to_string()),
+            viewport: 100..200,
+            ticks: vec![
+                AxisTick {
+                    at: 99.0,
+                    label: "before".into(),
+                    major: true,
+                },
+                AxisTick {
+                    at: 150.0,
+                    label: "mid".into(),
+                    major: false,
+                },
+                AxisTick {
+                    at: 200.0,
+                    label: "end".into(),
+                    major: true,
+                },
+            ],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        };
+        let marks = axis_mark_plan(&axis);
+        assert_eq!(
+            marks.iter().map(|m| m.label.as_str()).collect::<Vec<_>>(),
+            ["mid", "end"]
+        );
+        assert!(
+            (marks[0].x - 0.5).abs() < f32::EPSILON,
+            "culled ticks keep fractions"
+        );
+    }
+
+    /// Knob and Toggle gestures through the real element path mint the
+    /// same intent kinds as the fixture, and the new kinds lay out and
+    /// paint in the same frame.
+    #[gpui::test]
+    fn rvf_view_parity_new_kinds_gesture_and_render(cx: &mut TestAppContext) {
+        let fx = parity_fixture();
+        let collected = Rc::new(RefCell::new(Vec::<Intent>::new()));
+        let sink = collected.clone();
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(parity_host(&fx), ViewPalette::fallback(), move |i| {
+                sink.borrow_mut().push(i);
+            })
+        });
+        cx.run_until_parked();
+
+        // The toggle is the first child — the 32x24 cell at the origin.
+        cx.simulate_mouse_down(
+            point(px(16.0), px(12.0)),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        cx.run_until_parked();
+        assert_eq!(
+            command_kinds(&collected),
+            fixture_strings(&fx["expect"]["toggle"]["intents"])
+        );
+        let toggled = view.update(cx, |v, _cx| {
+            v.host
+                .observe(&ComponentKey("toggle".to_string()))
+                .and_then(|s| s.committed)
+                .map(|c| c.normalized)
+        });
+        assert_eq!(
+            toggled,
+            fx["expect"]["toggle"]["committedAfterClick"].as_f64()
+        );
+        collected.borrow_mut().clear();
+
+        // The knob's bounds are recorded at prepaint; drag up through its center.
+        let knob = view.update(cx, |v, _cx| {
+            *v.bounds
+                .borrow()
+                .get(&ComponentKey("knob".to_string()))
+                .expect("knob bounds")
+        });
+        let c = knob.center();
+        let mid = point(c.x, c.y - px(20.0));
+        let end = point(c.x, c.y - px(40.0));
+        cx.simulate_mouse_down(c, MouseButton::Left, Modifiers::default());
+        cx.run_until_parked();
+        cx.simulate_mouse_move(mid, MouseButton::Left, Modifiers::default());
+        cx.run_until_parked();
+        cx.simulate_mouse_up(end, MouseButton::Left, Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(
+            command_kinds(&collected),
+            fixture_strings(&fx["expect"]["knob"]["intents"])
+        );
+    }
+
+    /// `ui_dvr_02` GPUI lane: the view reconciles the new kinds with
+    /// stable keys — a dropped key is removed, a surviving key keeps its
+    /// identity — and the reconciled view still renders.
+    #[gpui::test]
+    fn rvf_view_parity_new_kinds_mount_reconcile(cx: &mut TestAppContext) {
+        let fx = parity_fixture();
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(parity_host(&fx), ViewPalette::fallback(), |_| {})
+        });
+        cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            let mut next = parity_view(&fx);
+            if let ComponentSpec::Panel(p) = &mut next.root {
+                p.children.retain(|c| c.key().0 != "toggle");
+            }
+            let generation = v.host.generation();
+            let ops = v.host.update(next, generation).expect("reconcile");
+            assert!(ops.contains(&ProjectionOp::Removed {
+                key: ComponentKey("toggle".to_string()),
+            }));
+            assert!(v.host.observe(&ComponentKey("knob".to_string())).is_some());
+        });
+        cx.run_until_parked();
     }
 
     /// Window-wide mouse-up recovers a control's orientation through

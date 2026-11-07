@@ -100,11 +100,26 @@
      }
     },
     {
+     "layer": "fake",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/421",
+     "note": "Issue #421 parity fixture（fixtures/driver-lab/parity/new-kinds.json）の fake side: Knob/Toggle/Meter/TimeAxis の mount と reconcile（落ちた key は Removed、残存 key は identity 保持）。GPUI side は gpui lane 参照。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "driver_parity",
+      "filter": "ui_dvr_02_parity"
+     }
+    },
+    {
      "layer": "gpui",
-     "status": "not_run",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/390",
-     "note": "ruviform-ui-gpui の render.rs（Issue #387 renderer）は存在するが、ViewSpec の mount/reconcile/unmount を stable key で検証する GPUI lab binding は未接続。",
-     "rerun": "同一 ViewSpec scenario を ruviform-ui-gpui の gpui-test（TestAppContext）経路で実行する lab binding を追加"
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/421",
+     "note": "Issue #421: ruviform-ui-gpui の rvf_view_parity_new_kinds_mount_reconcile（gpui-test・TestAppContext + RvfView）が parity fixture の ViewSpec を mount し、reconcile で stable key を検証（落ちた key は Removed、残存 key は identity 保持）。ローカル Windows で pass。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui"
+     }
     },
     {
      "layer": "real-os",
@@ -136,10 +151,22 @@
      }
     },
     {
+     "layer": "fake",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/421",
+     "note": "Issue #421 parity fixture の fake side: Knob の Begin/Preview/Commit と Toggle の atomic set（begin+commit）の intent 列・committed 値を検証。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "driver_parity",
+      "filter": "ui_dvr_03_parity"
+     }
+    },
+    {
      "layer": "gpui",
      "status": "not_run",
      "owner": "https://github.com/scarecrow173/ruviform/issues/390",
-     "note": "ruviform-ui-gpui の rvf_view_fader_gesture が Begin/Preview/Commit の GPUI element 経路を部分的に検証する。Cancel と遅延・順序逆転受信の GPUI 検証は未接続。",
+     "note": "ruviform-ui-gpui の rvf_view_fader_gesture（fader）と rvf_view_parity_new_kinds_gesture_and_render（Issue #421、knob Begin/Preview/Commit・toggle atomic set）が Begin/Preview/Commit の GPUI element 経路を検証する。Cancel と遅延・順序逆転受信の GPUI 検証は未接続のため not_run のまま。",
      "rerun": "Cancel と遅延・順序逆転 receipt を GPUI test-support 経路の lab binding に接続"
     },
     {
