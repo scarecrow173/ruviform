@@ -70,8 +70,10 @@ pub enum A11yRole {
     Tab,
     /// Grouping container (Panel).
     Group,
-    /// Non-interactive visualization (Waveform).
+    /// Non-interactive visualization (Waveform/Meter/TimeAxis).
     Img,
+    /// Binary switch (Toggle).
+    Switch,
 }
 
 /// Accessibility semantics carried by a spec. `value_min`/`value_max`/
@@ -196,6 +198,85 @@ pub struct WaveformBin {
 /// payloads bounded by construction.
 pub const MAX_WAVEFORM_BINS: usize = 16384;
 
+/// One resolved level-meter bin — peak/RMS over a frame span.
+/// `count == 0` marks an empty bin (no samples covered); `NaN`
+/// statistics carry the same gap/missing-data meaning as
+/// [`WaveformBin`]. Level values are consumer-domain amplitudes —
+/// the contract does not prescribe dB or linear scale.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MeterBin {
+    /// First frame the bin covers (inclusive).
+    pub start: u64,
+    /// Last frame the bin covers (exclusive).
+    pub end: u64,
+    /// Peak absolute level over the bin (`NaN` when empty).
+    pub peak: f64,
+    /// RMS level over the bin (`NaN` when empty).
+    pub rms: f64,
+    /// Samples aggregated (`0` = nothing covered).
+    pub count: u64,
+}
+
+/// Upper bound on total bins a `Meter` spec may carry.
+pub const MAX_METER_BINS: usize = 8192;
+
+/// Level-meter visualization component. Payload is resolved data,
+/// not a query — renderers draw the bins they are given. Levels are
+/// unipolar (no min/max pair like [`WaveformBin`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MeterSpec {
+    /// Component key.
+    pub key: ComponentKey,
+    /// Channel count (`>= 1`, matches `channel_levels.len()`).
+    pub channels: usize,
+    /// Resolved level bins per channel (`channel_levels.len() ==
+    /// channels`, total bins `<= MAX_METER_BINS`).
+    pub channel_levels: Vec<Vec<MeterBin>>,
+    /// Viewport frame range the bins cover.
+    pub viewport: Range<u64>,
+    /// Visual state.
+    pub visual: ComponentVisualState,
+    /// Accessibility semantics.
+    pub a11y: A11ySpec,
+}
+
+/// One resolved time-axis tick. `at` is expressed in the same frame
+/// units as the owning [`TimeAxisSpec::viewport`] (fractional values
+/// allowed — ticks need not align to whole frames); `label` is the
+/// consumer-resolved display text (the contract carries no timebase
+/// formatting — `ruviform-viz`'s `SampleTimebase`/`FrameGrid` are the
+/// consumer-side resolution path).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AxisTick {
+    /// Tick position in viewport frame units.
+    pub at: f64,
+    /// Display label.
+    pub label: String,
+    /// Major ticks render stronger than minor ones.
+    pub major: bool,
+}
+
+/// Upper bound on ticks a `TimeAxis` spec may carry.
+pub const MAX_TIME_AXIS_TICKS: usize = 1024;
+
+/// Time/ruler axis component — non-interactive resolved tick marks.
+/// Consumers resolve tick positions and labels through their own
+/// timebase (`ruviform-viz` timeline primitives on the consumer
+/// side); the spec only carries the resolved payload.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TimeAxisSpec {
+    /// Component key.
+    pub key: ComponentKey,
+    /// Viewport frame range the axis spans.
+    pub viewport: Range<u64>,
+    /// Resolved ticks (`<= MAX_TIME_AXIS_TICKS`).
+    pub ticks: Vec<AxisTick>,
+    /// Visual state.
+    pub visual: ComponentVisualState,
+    /// Accessibility semantics.
+    pub a11y: A11ySpec,
+}
+
 /// Waveform visualization component. Payload is resolved data, not a
 /// query — renderers draw the bins they are given.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -259,8 +340,23 @@ pub enum ComponentSpec {
     Fader(ControlSpec),
     /// Timeline seek control (horizontal fader semantics).
     Seek(ControlSpec),
+    /// Continuous control with the same value/gesture contract as
+    /// `Fader` (`Begin` → `Preview*` → `Commit|Cancel`). The first GPUI
+    /// slice draws it as a vertical bar; a rotary drawing is renderer
+    /// work and does not change the headless contract.
+    Knob(ControlSpec),
+    /// Binary switch. The descriptor must declare the fixed binary
+    /// range `{min: 0, max: 1, step: 1}` (linear mapping) — toggle
+    /// semantics are inherently two-state and the range is part of
+    /// the component's identity, not consumer configuration.
+    Toggle(ControlSpec),
     /// Resolved-waveform visualization.
     Waveform(WaveformSpec),
+    /// Resolved level-meter visualization.
+    Meter(MeterSpec),
+    /// Resolved time-axis tick marks.
+    #[serde(rename = "time_axis")]
+    TimeAxis(TimeAxisSpec),
     /// Native-surface region — layout bounds feed the slot port.
     #[serde(rename = "native_slot")]
     NativeSlot(NativeSlotSpec),
@@ -273,8 +369,10 @@ impl ComponentSpec {
         match self {
             Self::Panel(s) => &s.key,
             Self::Tabs(s) => &s.key,
-            Self::Fader(s) | Self::Seek(s) => &s.key,
+            Self::Fader(s) | Self::Seek(s) | Self::Knob(s) | Self::Toggle(s) => &s.key,
             Self::Waveform(s) => &s.key,
+            Self::Meter(s) => &s.key,
+            Self::TimeAxis(s) => &s.key,
             Self::NativeSlot(s) => &s.key,
         }
     }
@@ -287,16 +385,21 @@ impl ComponentSpec {
             Self::Tabs(_) => "tabs",
             Self::Fader(_) => "fader",
             Self::Seek(_) => "seek",
+            Self::Knob(_) => "knob",
+            Self::Toggle(_) => "toggle",
             Self::Waveform(_) => "waveform",
+            Self::Meter(_) => "meter",
+            Self::TimeAxis(_) => "time_axis",
             Self::NativeSlot(_) => "native_slot",
         }
     }
 
-    /// Control spec for continuous controls (`Fader`/`Seek`).
+    /// Control spec for continuous/discrete value controls
+    /// (`Fader`/`Seek`/`Knob`/`Toggle`).
     #[must_use]
     pub fn control(&self) -> Option<&ControlSpec> {
         match self {
-            Self::Fader(s) | Self::Seek(s) => Some(s),
+            Self::Fader(s) | Self::Seek(s) | Self::Knob(s) | Self::Toggle(s) => Some(s),
             _ => None,
         }
     }
@@ -645,6 +748,125 @@ impl ViewHost {
         Ok(())
     }
 
+    /// Validate a spec tree. Returns the flattened `(key, node)` list
+    /// when valid.
+    fn validate_spec(spec: &ViewSpec) -> Result<Vec<(&ComponentKey, &ComponentSpec)>, ViewError> {
+        fn walk<'a>(
+            node: &'a ComponentSpec,
+            flat: &mut Vec<(&'a ComponentKey, &'a ComponentSpec)>,
+        ) {
+            flat.push((node.key(), node));
+            match node {
+                ComponentSpec::Panel(p) => {
+                    for c in &p.children {
+                        walk(c, flat);
+                    }
+                }
+                ComponentSpec::Tabs(t) => {
+                    for tab in &t.tabs {
+                        flat.push((&tab.key, tab.child.as_ref()));
+                        walk(tab.child.as_ref(), flat);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut flat: Vec<(&ComponentKey, &ComponentSpec)> = Vec::new();
+        walk(&spec.root, &mut flat);
+
+        let mut seen = std::collections::HashSet::new();
+        for (key, node) in &flat {
+            if !seen.insert(*key) {
+                return Err(ViewError::InvalidSpec {
+                    detail: format!("duplicate component key {key}"),
+                });
+            }
+            Self::check_node(node)?;
+        }
+        Ok(flat)
+    }
+
+    /// Resolved visualization payload bounds (`Waveform`, `Meter`, `TimeAxis`).
+    fn check_viz(node: &ComponentSpec) -> Result<(), ViewError> {
+        match node {
+            ComponentSpec::Waveform(w) => {
+                if w.channels == 0 || w.channel_bins.len() != w.channels {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!(
+                            "waveform {} channels {} != channel_bins {}",
+                            w.key,
+                            w.channels,
+                            w.channel_bins.len()
+                        ),
+                    });
+                }
+                let total: usize = w.channel_bins.iter().map(Vec::len).sum();
+                if total > MAX_WAVEFORM_BINS {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!(
+                            "waveform {} carries {total} bins (> {MAX_WAVEFORM_BINS})",
+                            w.key
+                        ),
+                    });
+                }
+                if w.viewport.end < w.viewport.start {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!("waveform {} viewport end < start", w.key),
+                    });
+                }
+            }
+            ComponentSpec::Meter(m) => {
+                if m.channels == 0 || m.channel_levels.len() != m.channels {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!(
+                            "meter {} channels {} != channel_levels {}",
+                            m.key,
+                            m.channels,
+                            m.channel_levels.len()
+                        ),
+                    });
+                }
+                let total: usize = m.channel_levels.iter().map(Vec::len).sum();
+                if total > MAX_METER_BINS {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!(
+                            "meter {} carries {total} bins (> {MAX_METER_BINS})",
+                            m.key
+                        ),
+                    });
+                }
+                if m.viewport.end < m.viewport.start {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!("meter {} viewport end < start", m.key),
+                    });
+                }
+            }
+            ComponentSpec::TimeAxis(t) => {
+                if t.ticks.len() > MAX_TIME_AXIS_TICKS {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!(
+                            "time_axis {} carries {} ticks (> {MAX_TIME_AXIS_TICKS})",
+                            t.key,
+                            t.ticks.len()
+                        ),
+                    });
+                }
+                if t.viewport.end < t.viewport.start {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!("time_axis {} viewport end < start", t.key),
+                    });
+                }
+                if t.ticks.iter().any(|tick| !tick.at.is_finite()) {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!("time_axis {} has a non-finite tick", t.key),
+                    });
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     fn push_event(&mut self, e: ViewEvent) {
         if self.events.len() >= MAX_VIEW_EVENTS {
             // Coalescible events evict first; non-droppable records
@@ -703,109 +925,71 @@ impl ViewHost {
             .map_or_else(|| ComponentKey(control_id.to_string()), |(k, _)| k.clone())
     }
 
-    /// Validate a spec tree. Returns the flattened `(key, node)` list
-    /// when valid.
-    fn validate_spec(spec: &ViewSpec) -> Result<Vec<(&ComponentKey, &ComponentSpec)>, ViewError> {
-        fn walk<'a>(
-            node: &'a ComponentSpec,
-            flat: &mut Vec<(&'a ComponentKey, &'a ComponentSpec)>,
-        ) {
-            flat.push((node.key(), node));
-            match node {
-                ComponentSpec::Panel(p) => {
-                    for c in &p.children {
-                        walk(c, flat);
-                    }
-                }
-                ComponentSpec::Tabs(t) => {
-                    for tab in &t.tabs {
-                        flat.push((&tab.key, tab.child.as_ref()));
-                        walk(tab.child.as_ref(), flat);
-                    }
-                }
-                _ => {}
-            }
-        }
-        let mut flat: Vec<(&ComponentKey, &ComponentSpec)> = Vec::new();
-        walk(&spec.root, &mut flat);
-
-        let mut seen = std::collections::HashSet::new();
-        for (key, node) in &flat {
-            if !seen.insert(*key) {
-                return Err(ViewError::InvalidSpec {
-                    detail: format!("duplicate component key {key}"),
-                });
-            }
-            match node {
-                ComponentSpec::Tabs(t) => {
-                    if t.tabs.is_empty() {
-                        return Err(ViewError::InvalidSpec {
-                            detail: format!("tabs {} has no tabs", t.key),
-                        });
-                    }
-                    if t.active >= t.tabs.len() {
-                        return Err(ViewError::InvalidSpec {
-                            detail: format!(
-                                "tabs {} active {} out of range {}",
-                                t.key,
-                                t.active,
-                                t.tabs.len()
-                            ),
-                        });
-                    }
-                }
-                ComponentSpec::Waveform(w) => {
-                    if w.channels == 0 || w.channel_bins.len() != w.channels {
-                        return Err(ViewError::InvalidSpec {
-                            detail: format!(
-                                "waveform {} channels {} != channel_bins {}",
-                                w.key,
-                                w.channels,
-                                w.channel_bins.len()
-                            ),
-                        });
-                    }
-                    let total: usize = w.channel_bins.iter().map(Vec::len).sum();
-                    if total > MAX_WAVEFORM_BINS {
-                        return Err(ViewError::InvalidSpec {
-                            detail: format!(
-                                "waveform {} carries {total} bins (> {MAX_WAVEFORM_BINS})",
-                                w.key
-                            ),
-                        });
-                    }
-                    if w.viewport.end < w.viewport.start {
-                        return Err(ViewError::InvalidSpec {
-                            detail: format!("waveform {} viewport end < start", w.key),
-                        });
-                    }
-                }
-                ComponentSpec::NativeSlot(n) => {
-                    if let Some([w, h]) = n.min_size
-                        && (!w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0)
-                    {
-                        return Err(ViewError::InvalidSpec {
-                            detail: format!("native_slot {} min_size invalid", n.key),
-                        });
-                    }
-                }
-                _ => {}
-            }
-            if let Some(c) = node.control() {
-                let issues = validate_descriptor(&c.descriptor);
-                if !issues.is_empty() {
-                    let detail = issues
-                        .iter()
-                        .map(|i| i.detail.clone())
-                        .collect::<Vec<_>>()
-                        .join("; ");
+    /// Per-node structural checks: kind payload bounds and descriptor rules.
+    fn check_node(node: &ComponentSpec) -> Result<(), ViewError> {
+        Self::check_viz(node)?;
+        match node {
+            ComponentSpec::Tabs(t) => {
+                if t.tabs.is_empty() {
                     return Err(ViewError::InvalidSpec {
-                        detail: format!("control {} descriptor: {detail}", c.key),
+                        detail: format!("tabs {} has no tabs", t.key),
+                    });
+                }
+                if t.active >= t.tabs.len() {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!(
+                            "tabs {} active {} out of range {}",
+                            t.key,
+                            t.active,
+                            t.tabs.len()
+                        ),
                     });
                 }
             }
+            ComponentSpec::Toggle(c) => {
+                let d = &c.descriptor;
+                let binary = d.min.total_cmp(&0.0).is_eq()
+                    && d.max.total_cmp(&1.0).is_eq()
+                    && d.step == Some(1.0)
+                    && matches!(
+                        d.mapping,
+                        None | Some(crate::behavior::ValueMappingSpec::Linear)
+                    );
+                if !binary {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!(
+                            "toggle {} descriptor must be the fixed binary range \
+                                 {{min: 0, max: 1, step: 1}} with linear mapping",
+                            c.key
+                        ),
+                    });
+                }
+            }
+            ComponentSpec::NativeSlot(n) => {
+                if let Some([w, h]) = n.min_size
+                    && (!w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0)
+                {
+                    return Err(ViewError::InvalidSpec {
+                        detail: format!("native_slot {} min_size invalid", n.key),
+                    });
+                }
+            }
+            _ => {}
         }
-        Ok(flat)
+        if let Some(c) = node.control() {
+            let issues = validate_descriptor(&c.descriptor);
+            if !issues.is_empty() {
+                let detail = issues
+                    .iter()
+                    .map(|i| i.detail.clone())
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(ViewError::InvalidSpec {
+                    detail: format!("control {} descriptor: {detail}", c.key),
+                });
+            }
+        }
+        Ok(())
     }
 
     fn register_control(&mut self, spec: &ControlSpec) {
@@ -1887,5 +2071,189 @@ mod tests {
         host.update(panel(vec![fader("a"), fader("b")]), generation)
             .expect("re-add a");
         assert!((display_plain(&host, "a") - 80.0).abs() < 1e-9);
+    }
+
+    fn toggle(key: &str) -> ComponentSpec {
+        ComponentSpec::Toggle(ControlSpec {
+            key: ComponentKey::from(key),
+            control_id: None,
+            target: Some(format!("mix.{key}.on")),
+            descriptor: ValueDescriptor {
+                default_value: Some(0.0),
+                step: Some(1.0),
+                ..ValueDescriptor::ranged(0.0, 1.0)
+            },
+            orientation: Orientation::Horizontal,
+            detach_policy: DetachPolicy::Cancel,
+            unsupported: false,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec {
+                role: Some(A11yRole::Switch),
+                label: Some(key.to_string()),
+                ..Default::default()
+            },
+        })
+    }
+
+    fn meter(key: &str) -> ComponentSpec {
+        ComponentSpec::Meter(MeterSpec {
+            key: ComponentKey::from(key),
+            channels: 1,
+            channel_levels: vec![vec![MeterBin {
+                start: 0,
+                end: 480,
+                peak: 0.8,
+                rms: 0.5,
+                count: 480,
+            }]],
+            viewport: 0..480,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec {
+                role: Some(A11yRole::Img),
+                label: Some(key.to_string()),
+                ..Default::default()
+            },
+        })
+    }
+
+    fn time_axis(key: &str) -> ComponentSpec {
+        ComponentSpec::TimeAxis(TimeAxisSpec {
+            key: ComponentKey::from(key),
+            viewport: 0..480,
+            ticks: vec![
+                AxisTick {
+                    at: 0.0,
+                    label: "0:00".into(),
+                    major: true,
+                },
+                AxisTick {
+                    at: 240.0,
+                    label: "1 bar".into(),
+                    major: false,
+                },
+                AxisTick {
+                    at: 479.5,
+                    label: "end".into(),
+                    major: true,
+                },
+            ],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec {
+                role: Some(A11yRole::Img),
+                label: Some(key.to_string()),
+                ..Default::default()
+            },
+        })
+    }
+
+    #[test]
+    fn new_kinds_mount() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        let knob = ComponentSpec::Knob(ControlSpec {
+            key: ComponentKey::from("cutoff"),
+            control_id: None,
+            target: Some("filter.cutoff".into()),
+            descriptor: ValueDescriptor {
+                default_value: Some(0.5),
+                ..ValueDescriptor::ranged(0.0, 1.0)
+            },
+            orientation: Orientation::Vertical,
+            detach_policy: DetachPolicy::Cancel,
+            unsupported: false,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec {
+                role: Some(A11yRole::Slider),
+                label: Some("cutoff".into()),
+                ..Default::default()
+            },
+        });
+        host.mount(panel(vec![
+            knob,
+            toggle("gate"),
+            meter("lvl"),
+            time_axis("ruler"),
+        ]))
+        .expect("mount");
+        let keys = host.mounted_keys();
+        assert_eq!(keys.len(), 5);
+        // Every mounted key observes a snapshot — controls carry a
+        // display, viz kinds carry none but stay observable.
+        for key in &keys {
+            assert!(host.observe(key).is_some(), "{key} observable");
+        }
+        // The spec tree round-trips the new kinds with stable keys.
+        let root = host.spec().expect("spec").root.clone();
+        if let ComponentSpec::Panel(p) = root {
+            let kinds: Vec<&'static str> = p.children.iter().map(ComponentSpec::kind).collect();
+            assert_eq!(kinds, vec!["knob", "toggle", "meter", "time_axis"]);
+        } else {
+            panic!("root must be panel");
+        }
+    }
+
+    #[test]
+    fn toggle_requires_binary_descriptor() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        let bad = ComponentSpec::Toggle(ControlSpec {
+            key: ComponentKey::from("bad"),
+            control_id: None,
+            target: None,
+            descriptor: ValueDescriptor::ranged(0.0, 10.0),
+            orientation: Orientation::Horizontal,
+            detach_policy: DetachPolicy::Cancel,
+            unsupported: false,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        });
+        let err = host
+            .mount(panel(vec![bad]))
+            .expect_err("reject non-binary toggle");
+        assert!(matches!(err, ViewError::InvalidSpec { .. }));
+    }
+
+    #[test]
+    fn meter_and_time_axis_reject_unbounded_payloads() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        let too_many_ticks = ComponentSpec::TimeAxis(TimeAxisSpec {
+            key: ComponentKey::from("ruler"),
+            viewport: 0..1,
+            ticks: (0..=MAX_TIME_AXIS_TICKS)
+                .map(|_| AxisTick {
+                    at: 0.0,
+                    label: String::new(),
+                    major: false,
+                })
+                .collect(),
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        });
+        assert!(matches!(
+            host.mount(panel(vec![too_many_ticks])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
+        let nan_tick = ComponentSpec::TimeAxis(TimeAxisSpec {
+            key: ComponentKey::from("ruler"),
+            viewport: 0..1,
+            ticks: vec![AxisTick {
+                at: f64::NAN,
+                label: "x".into(),
+                major: true,
+            }],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        });
+        assert!(matches!(
+            host.mount(panel(vec![nan_tick])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
+        // Meter channel mismatch.
+        let mut m = meter("lvl");
+        if let ComponentSpec::Meter(spec) = &mut m {
+            spec.channel_levels.push(vec![]);
+        }
+        assert!(matches!(
+            host.mount(panel(vec![m])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
     }
 }
