@@ -478,8 +478,18 @@ impl RvfView {
         format!("gpui-{}", self.next_gesture)
     }
 
+    #[cfg(feature = "gpui-test")]
+    pub(crate) fn host(&self) -> &ViewHost {
+        &self.host
+    }
+
     /// Dispatch an input to `key` and flush emitted events.
-    fn input(&mut self, key: &ComponentKey, input: ControlInput, cx: &mut Context<Self>) {
+    pub(crate) fn input(
+        &mut self,
+        key: &ComponentKey,
+        input: ControlInput,
+        cx: &mut Context<Self>,
+    ) {
         let generation = self.host.generation();
         let _ = self.host.dispatch_input(generation, key, input);
         self.flush_events(cx);

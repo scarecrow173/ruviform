@@ -39,6 +39,9 @@ mod lifecycle_fixture;
 
 #[cfg(feature = "gpui")]
 mod gpui_driver {
+    /// Consumer observation seam (Issue #429) — `gpui-test` only.
+    #[cfg(feature = "gpui-test")]
+    pub mod observe;
     /// The `NativeSurfaceSlot` port implementation for this backend
     /// (Issue #388) — slot ledger plus real OS surface containers.
     pub(super) mod surface;
@@ -183,6 +186,10 @@ mod gpui_driver {
         /// `usize` keeps it pointer-width without naming OS types.
         raw_parent: Option<usize>,
         root: Option<Entity<AppRoot>>,
+        /// The mounted consumer view (`create_view_window` only) — the
+        /// observation seam reads its projection host through this.
+        #[cfg(feature = "gpui-test")]
+        view: Option<Entity<crate::render::RvfView>>,
         inbox: Rc<RefCell<Vec<Event>>>,
         /// `ComponentKey → SurfaceSlotId` associations installed by
         /// [`GpuiDriver::bind_native_slot`] — the mounted view reads
@@ -553,42 +560,6 @@ mod gpui_driver {
         }
     }
 
-    /// Test-harness seam (`cfg(test)` + `gpui-test` only — not a
-    /// production entry point). `run` owns the platform loop; these
-    /// hooks let a `TestAppContext` drive the same queue and event
-    /// delivery one turn at a time for the shared lifecycle fixture
-    /// (Issue #386).
-    #[cfg(all(test, feature = "gpui-test"))]
-    impl GpuiDriver {
-        /// One harness turn: applies queued window ops inside an App
-        /// update, lets deferred work park (the first-frame `Ready`),
-        /// applies follow-up ops, then delivers the emitted events to
-        /// `on_event`. The handler may call back into the driver.
-        pub(crate) fn settle_for_test(
-            &mut self,
-            cx: &mut gpui::TestAppContext,
-            on_event: impl FnMut(DriverEvent, &mut dyn WindowDriver) + 'static,
-        ) {
-            let this = self.clone();
-            this.inner.borrow_mut().handler = Some(Box::new(on_event));
-            cx.update(|app| drain(&this.inner, &this, app));
-            cx.run_until_parked();
-            cx.update(|app| drain(&this.inner, &this, app));
-            flush_events(&this.inner, &this);
-        }
-
-        /// Events queued in `window`'s inbox and not yet consumed by
-        /// its root view.
-        #[must_use]
-        pub(crate) fn inbox_len_for_test(&self, window: WindowId) -> usize {
-            self.inner
-                .borrow()
-                .windows
-                .get(&window)
-                .map_or(0, |slot| slot.inbox.borrow().len())
-        }
-    }
-
     impl WindowDriver for GpuiDriver {
         fn capabilities(&self) -> WindowCapabilities {
             self.inner.borrow().capabilities.clone()
@@ -737,6 +708,8 @@ mod gpui_driver {
                 handle: None,
                 raw_parent: None,
                 root: None,
+                #[cfg(feature = "gpui-test")]
+                view: None,
                 inbox: Rc::new(RefCell::new(Vec::new())),
                 surface_bindings: Rc::new(RefCell::new(BTreeMap::new())),
                 ready: false,
@@ -753,6 +726,15 @@ mod gpui_driver {
             mount,
         });
         id
+    }
+
+    /// Records the mounted consumer view on its window slot — the
+    /// observation seam reads the projection host through it.
+    #[cfg(feature = "gpui-test")]
+    fn set_view(inner: &Rc<RefCell<Inner>>, id: WindowId, view: Entity<crate::render::RvfView>) {
+        if let Some(slot) = inner.borrow_mut().windows.get_mut(&id) {
+            slot.view = Some(view);
+        }
     }
 
     /// Delivers queued driver→consumer events to the handler.
@@ -980,12 +962,12 @@ mod gpui_driver {
     /// has no OS handle and its `window_handle` panics rather than
     /// erroring, so test builds with `gpui-test` keep the parent unset —
     /// the lifecycle fixture embeds no surface.
-    #[cfg(not(all(test, feature = "gpui-test")))]
+    #[cfg(not(feature = "gpui-test"))]
     fn capture_raw_parent(window: &Window) -> Option<usize> {
         surface::raw_parent_of(window)
     }
 
-    #[cfg(all(test, feature = "gpui-test"))]
+    #[cfg(feature = "gpui-test")]
     fn capture_raw_parent(_window: &Window) -> Option<usize> {
         None
     }
@@ -1032,10 +1014,7 @@ mod gpui_driver {
             let content: gpui::AnyView = match mount {
                 Some(m) => {
                     let mount = *m;
-                    let sink = IntentSink {
-                        inner: inner2.clone(),
-                        window: id,
-                    };
+                    let sink = driver2.intent_sink(id);
                     let slots = crate::render::SlotMount {
                         adapter: driver2.surface.clone(),
                         bindings: inner2
@@ -1045,7 +1024,7 @@ mod gpui_driver {
                             .map(|s| s.surface_bindings.clone())
                             .unwrap_or_default(),
                     };
-                    cx.new(|cx| {
+                    let view = cx.new(|cx| {
                         crate::render::RvfView::mounted(
                             mount.host,
                             mount.theme.as_ref(),
@@ -1055,8 +1034,10 @@ mod gpui_driver {
                             window,
                             cx,
                         )
-                    })
-                    .into()
+                    });
+                    #[cfg(feature = "gpui-test")]
+                    set_view(&inner2, id, view.clone());
+                    view.into()
                 }
                 None => cx.new(|_| RvfRoot::new(spec.title.clone(), inbox)).into(),
             };
@@ -1312,6 +1293,8 @@ mod gpui_driver {
     }
 }
 
+#[cfg(feature = "gpui-test")]
+pub use gpui_driver::observe::{ComponentObservation, GpuiObserver, ViewObservation};
 #[cfg(feature = "gpui")]
 pub use gpui_driver::surface::{GpuiSurfaceAdapter, SharedSurface};
 #[cfg(feature = "gpui")]
