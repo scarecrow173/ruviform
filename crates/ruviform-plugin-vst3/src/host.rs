@@ -41,19 +41,24 @@
 //!
 //! ## COM host objects
 //!
-//! The bridge implements four minimal host objects with
+//! The bridge implements its minimal host objects with
 //! `Class`/`ComWrapper` — the same pattern as `component.rs`'s test
 //! `TestQueue`/`TestChanges`:
 //!
 //! - `BridgeHostApplication` — `IHostApplication`; supplies the
 //!   `initialize` context. `getName` reports the bridge identity;
-//!   `createInstance` declines (`kNotImplemented`) — the bridge hosts
-//!   no shared services.
+//!   `createInstance` serves the standard host classes the spec
+//!   assigns to it (`IMessage` — required by `IConnectionPoint`
+//!   notify — and `IAttributeList`) and declines others honestly.
+//! - `BridgeMessage`/`BridgeAttributeList` — the `IMessage`/
+//!   `IAttributeList` host classes `createInstance` serves.
+//! - `BridgePlugFrame` — `IPlugFrame` handed to the view's `setFrame`;
+//!   `resizeView` is a defined refusal (`kResultFalse`).
 //! - `BridgeComponentHandler` — `IComponentHandler`; injected via
 //!   `setComponentHandler` and *acknowledge-only*: the fixture's
 //!   handler is non-retaining (`controller.rs`), and routing
-//!   `performEdit`/`restartComponent` back into the component needs a
-//!   connection point the v1 boundary does not carry — the runner's
+//!   `performEdit`/`restartComponent` back into the component is a
+//!   defined boundary — the runner's
 //!   only param path is the `process` event list. `beginEdit`/
 //!   `performEdit`/`endEdit` still answer `kResultOk` (a refused edit
 //!   could wedge the plugin's UI thread); `restartComponent` answers
@@ -112,9 +117,15 @@
 //! - Load/scan/instantiate/lifecycle failures converge to
 //!   `Err(Vst3HostError)`/`Err(HostError)`/`Err(PrepareError)` — never
 //!   a panic.
-//! - `save_state`/`restore_state`/`open_gui`/`close_gui` keep the
-//!   [`Plugin`] defaults (`Err(HostError::Unsupported)`) — the bridge
-//!   never calls `setState`/`getState`/`setComponentState`.
+//! - `save_state`/`restore_state` keep the [`Plugin`] defaults
+//!   (`Err(HostError::Unsupported)`) — the bridge never calls
+//!   `setState`/`getState`/`setComponentState`.
+//! - `open_gui`/`close_gui` are implemented for Windows
+//!   (`kPlatformTypeHWND`): `createView("editor")` →
+//!   `isPlatformTypeSupported` → `setFrame(BridgePlugFrame)` →
+//!   `attached(parent)`. Other platforms keep the honest
+//!   `Err(HostError::Unsupported)` (design
+//!   `docs/designs/issue-389-vst3-l0-editor-attach.md` D4).
 //! - `create_sendable` keeps its `None` default — `Vst3Plugin` holds
 //!   raw channel pointers (`!Send`), so no `Send` instance can be
 //!   honestly produced.
@@ -144,7 +155,8 @@
 #![allow(clippy::unnecessary_cast)]
 
 use std::cell::RefCell;
-use std::ffi::c_void;
+use std::collections::HashMap;
+use std::ffi::{c_char, c_void};
 use std::fmt;
 use std::path::Path;
 use std::ptr;
@@ -154,24 +166,28 @@ use libloading::Library;
 use ruviform_media_core::{Rounding, TimeBase, TransportStatus};
 use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ErasedPlugin, EventKind, EventList, HostError, ParamFlags, ParamId,
-    ParamInfo, Plugin, PluginDescriptor, PluginFactory, PluginProcessor, PrepareError,
-    ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo, erase,
+    BufferView, BufferViewMut, ErasedPlugin, EventKind, EventList, GuiHandle, GuiParentToken,
+    HostError, ParamFlags, ParamId, ParamInfo, Plugin, PluginDescriptor, PluginFactory,
+    PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus,
+    TransportInfo, erase,
 };
 use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, BusDirection, BusDirections_, BusInfo, Chord,
-    FrameRate, IAudioProcessor, IAudioProcessorTrait, IComponent, IComponentHandler,
-    IComponentHandlerTrait, IComponentTrait, IEditController, IEditControllerTrait,
-    IHostApplication, IHostApplicationTrait, IParamValueQueue, IParamValueQueueTrait,
-    IParameterChanges, IParameterChangesTrait, MediaTypes_, ParamID, ParamValue, ParameterInfo,
-    ParameterInfo_::ParameterFlags_, ProcessContext as VstProcessContext, ProcessContext_,
-    ProcessData, ProcessModes_, ProcessSetup, String128, SymbolicSampleSizes_, TChar,
+    FrameRate, IAttributeList, IAttributeList_iid, IAttributeListTrait, IAudioProcessor,
+    IAudioProcessorTrait, IComponent, IComponentHandler, IComponentHandlerTrait, IComponentTrait,
+    IConnectionPoint, IConnectionPointTrait, IEditController, IEditControllerTrait,
+    IHostApplication, IHostApplicationTrait, IMessage, IMessage_iid, IMessageTrait,
+    IParamValueQueue, IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait,
+    MediaTypes_, ParamID, ParamValue, ParameterInfo, ParameterInfo_::ParameterFlags_,
+    ProcessContext as VstProcessContext, ProcessContext_, ProcessData, ProcessModes_, ProcessSetup,
+    String128, SymbolicSampleSizes_, TChar, ViewType,
 };
 use vst3::Steinberg::{
-    FUnknown, IPluginBaseTrait, IPluginFactory, IPluginFactory2, IPluginFactory2Trait,
-    IPluginFactory3, IPluginFactory3Trait, IPluginFactoryTrait, PClassInfo, PClassInfo2,
-    PClassInfoW, TUID, char8, kInvalidArgument, kNotImplemented, kResultFalse, kResultOk,
-    kResultTrue, tresult,
+    FUnknown, FUnknown_iid, IPlugFrame, IPlugFrameTrait, IPlugView, IPlugViewTrait,
+    IPluginBaseTrait, IPluginFactory, IPluginFactory2, IPluginFactory2Trait, IPluginFactory3,
+    IPluginFactory3Trait, IPluginFactoryTrait, PClassInfo, PClassInfo2, PClassInfoW, TUID,
+    ViewRect, char8, kInvalidArgument, kNotImplemented, kResultFalse, kResultOk, kResultTrue,
+    tresult,
 };
 use vst3::{Class, ComPtr, ComWrapper, Interface};
 
@@ -381,10 +397,228 @@ impl ClassInfo {
 // COM host objects
 // ---------------------------------------------------------------------------
 
+/// Minimal `IAttributeList` — per-`AttrID` typed stores. The VST3
+/// contract: `set*` stores (replaces), `get*` on a missing id answers
+/// `kResultFalse`, null out-args answer `kInvalidArgument`.
+#[derive(Default)]
+struct BridgeAttributeList {
+    ints: RefCell<HashMap<Vec<u8>, i64>>,
+    floats: RefCell<HashMap<Vec<u8>, f64>>,
+    strings: RefCell<HashMap<Vec<u8>, Vec<u16>>>,
+    binaries: RefCell<HashMap<Vec<u8>, Box<[u8]>>>,
+}
+
+/// Reads an `AttrID` (`FIDString`) into owned bytes — the map key.
+/// Null/empty ids are rejected by the callers' guard.
+///
+/// # Safety
+/// `id` must point at a valid NUL-terminated `char8` string.
+#[expect(unsafe_code)]
+unsafe fn attr_key(id: *const c_char) -> Vec<u8> {
+    // SAFETY: caller guarantees a valid NUL-terminated string.
+    unsafe { std::ffi::CStr::from_ptr(id) }.to_bytes().to_vec()
+}
+
+impl Class for BridgeAttributeList {
+    type Interfaces = (IAttributeList,);
+}
+
+#[expect(unsafe_code)]
+impl IAttributeListTrait for BridgeAttributeList {
+    unsafe fn setInt(&self, id: *const c_char, value: i64) -> tresult {
+        if id.is_null() {
+            return kInvalidArgument;
+        }
+        self.ints
+            .borrow_mut()
+            .insert(unsafe { attr_key(id) }, value);
+        kResultOk
+    }
+
+    unsafe fn getInt(&self, id: *const c_char, value: *mut i64) -> tresult {
+        if id.is_null() || value.is_null() {
+            return kInvalidArgument;
+        }
+        match self.ints.borrow().get(&unsafe { attr_key(id) }) {
+            Some(v) => {
+                // SAFETY: `value` is a valid out-ptr, checked above.
+                unsafe { *value = *v };
+                kResultOk
+            }
+            None => kResultFalse,
+        }
+    }
+
+    unsafe fn setFloat(&self, id: *const c_char, value: f64) -> tresult {
+        if id.is_null() {
+            return kInvalidArgument;
+        }
+        self.floats
+            .borrow_mut()
+            .insert(unsafe { attr_key(id) }, value);
+        kResultOk
+    }
+
+    unsafe fn getFloat(&self, id: *const c_char, value: *mut f64) -> tresult {
+        if id.is_null() || value.is_null() {
+            return kInvalidArgument;
+        }
+        match self.floats.borrow().get(&unsafe { attr_key(id) }) {
+            Some(v) => {
+                // SAFETY: `value` is a valid out-ptr, checked above.
+                unsafe { *value = *v };
+                kResultOk
+            }
+            None => kResultFalse,
+        }
+    }
+
+    unsafe fn setString(&self, id: *const c_char, string: *const TChar) -> tresult {
+        if id.is_null() || string.is_null() {
+            return kInvalidArgument;
+        }
+        // `TChar` is UTF-16 on Windows — copy up to the NUL.
+        let mut len = 0usize;
+        // SAFETY: `string` is a valid NUL-terminated TChar buffer.
+        while unsafe { *string.add(len) } != 0 {
+            len += 1;
+        }
+        // SAFETY: `len` TChar elements are readable (checked above).
+        let data = unsafe { std::slice::from_raw_parts(string, len) }.to_vec();
+        self.strings
+            .borrow_mut()
+            .insert(unsafe { attr_key(id) }, data);
+        kResultOk
+    }
+
+    unsafe fn getString(&self, id: *const c_char, string: *mut TChar, size_bytes: u32) -> tresult {
+        // `sizeInBytes` must hold at least one `TChar` — the NUL
+        // terminator write needs 2 bytes, so sub-`TChar` buffers are
+        // rejected rather than truncated into (plugin-triggerable OOB).
+        if id.is_null() || string.is_null() || (size_bytes as usize) < size_of::<TChar>() {
+            return kInvalidArgument;
+        }
+        match self.strings.borrow().get(&unsafe { attr_key(id) }) {
+            Some(data) => {
+                // `sizeInBytes` counts bytes; `TChar` is 2 bytes.
+                let capacity = (size_bytes as usize / 2).saturating_sub(1);
+                let write_len = data.len().min(capacity);
+                // SAFETY: `string` has room for `size_bytes` bytes per
+                // the contract; we stay strictly inside it.
+                unsafe {
+                    ptr::copy_nonoverlapping(data.as_ptr(), string, write_len);
+                    *string.add(write_len) = 0;
+                }
+                kResultOk
+            }
+            None => kResultFalse,
+        }
+    }
+
+    unsafe fn setBinary(&self, id: *const c_char, data: *const c_void, size_bytes: u32) -> tresult {
+        if id.is_null() || (data.is_null() && size_bytes > 0) {
+            return kInvalidArgument;
+        }
+        // `from_raw_parts` requires a valid non-null ptr even at len
+        // 0 — handle the empty binary without dereferencing `data`.
+        let bytes: Box<[u8]> = if size_bytes == 0 {
+            Box::new([])
+        } else {
+            // SAFETY: `data..data+size_bytes` is readable per contract
+            // (non-null checked above).
+            unsafe { std::slice::from_raw_parts(data.cast::<u8>(), size_bytes as usize) }
+                .to_vec()
+                .into_boxed_slice()
+        };
+        self.binaries
+            .borrow_mut()
+            .insert(unsafe { attr_key(id) }, bytes);
+        kResultOk
+    }
+
+    unsafe fn getBinary(
+        &self,
+        id: *const c_char,
+        data: *mut *const c_void,
+        size_bytes: *mut u32,
+    ) -> tresult {
+        if id.is_null() || data.is_null() || size_bytes.is_null() {
+            return kInvalidArgument;
+        }
+        match self.binaries.borrow().get(&unsafe { attr_key(id) }) {
+            Some(bytes) => {
+                // The returned pointer borrows our stored bytes — the
+                // contract's own sharing rule (caller does not free).
+                // SAFETY: out-ptrs checked above.
+                unsafe {
+                    *data = bytes.as_ptr().cast::<c_void>();
+                    *size_bytes = u32::try_from(bytes.len()).unwrap_or(u32::MAX);
+                }
+                kResultOk
+            }
+            None => kResultFalse,
+        }
+    }
+}
+
+/// Minimal `IMessage` — the host-class plugins create through
+/// `IHostApplication::createInstance` (e.g. to send the
+/// `IConnectionPoint` notification). Attributes live in a real
+/// `BridgeAttributeList` the message owns.
+struct BridgeMessage {
+    id: RefCell<Vec<u8>>,
+    attributes: ComPtr<IAttributeList>,
+}
+
+impl BridgeMessage {
+    fn new() -> Self {
+        let attrs = ComWrapper::new(BridgeAttributeList::default());
+        Self {
+            id: RefCell::new(Vec::new()),
+            attributes: attrs
+                .to_com_ptr::<IAttributeList>()
+                .expect("BridgeAttributeList exposes IAttributeList"),
+        }
+    }
+}
+
+impl Class for BridgeMessage {
+    type Interfaces = (IMessage,);
+}
+
+#[expect(unsafe_code)]
+impl IMessageTrait for BridgeMessage {
+    unsafe fn getMessageID(&self) -> *const char8 {
+        let id = self.id.borrow();
+        if id.is_empty() {
+            ptr::null()
+        } else {
+            id.as_ptr().cast()
+        }
+    }
+
+    unsafe fn setMessageID(&self, id: *const char8) {
+        *self.id.borrow_mut() = if id.is_null() {
+            Vec::new()
+        } else {
+            // SAFETY: `id` is a valid NUL-terminated FIDString.
+            let mut v = unsafe { std::ffi::CStr::from_ptr(id.cast()) }
+                .to_bytes()
+                .to_vec();
+            v.push(0);
+            v
+        };
+    }
+
+    unsafe fn getAttributes(&self) -> *mut IAttributeList {
+        self.attributes.as_ptr()
+    }
+}
+
 /// Minimal `IHostApplication` — supplies the `initialize` context;
-/// `getName` reports the bridge identity. `createInstance` declines:
-/// the bridge hosts no shared services, so a plugin asking for one
-/// gets the honest `kNotImplemented` rather than a fabricated object.
+/// `getName` reports the bridge identity. `createInstance` serves the
+/// standard host classes the VST3 spec assigns to it (`IMessage`,
+/// `IAttributeList`) — other CIDs answer `kNotImplemented` honestly.
 struct BridgeHostApplication;
 
 impl Class for BridgeHostApplication {
@@ -406,11 +640,78 @@ impl IHostApplicationTrait for BridgeHostApplication {
     #[expect(unsafe_code)]
     unsafe fn createInstance(
         &self,
-        _cid: *mut TUID,
-        _iid: *mut TUID,
-        _obj: *mut *mut c_void,
+        cid: *mut TUID,
+        iid: *mut TUID,
+        obj: *mut *mut c_void,
     ) -> tresult {
+        if cid.is_null() || iid.is_null() || obj.is_null() {
+            return kInvalidArgument;
+        }
+        // SAFETY: `obj` is a valid out-ptr — null it so a declined
+        // request never hands back garbage.
+        unsafe { *obj = ptr::null_mut() };
+        // The VST3 spec assigns these standard classes to the host's
+        // `createInstance`: `IMessage` (used by `IConnectionPoint`
+        // notify — its absence crashes connection-based plugins) and
+        // `IAttributeList` (message attributes + presets).
+        // SAFETY: `cid`/`iid` are valid 16-byte TUIDs.
+        let (cid, requested) = unsafe { (*cid, *iid) };
+        if cid == IMessage_iid {
+            // Honour `iid` — a mismatched request must not hand back
+            // a mistyped pointer.
+            if requested != IMessage_iid && requested != FUnknown_iid {
+                return kInvalidArgument;
+            }
+            return match ComWrapper::new(BridgeMessage::new()).to_com_ptr::<IMessage>() {
+                Some(p) => {
+                    // SAFETY: `obj` checked; `into_raw` hands the
+                    // ownership to the caller per the COM out contract.
+                    unsafe { *obj = p.into_raw().cast::<c_void>() };
+                    kResultOk
+                }
+                None => kResultFalse,
+            };
+        }
+        if cid == IAttributeList_iid {
+            if requested != IAttributeList_iid && requested != FUnknown_iid {
+                return kInvalidArgument;
+            }
+            return match ComWrapper::new(BridgeAttributeList::default())
+                .to_com_ptr::<IAttributeList>()
+            {
+                Some(p) => {
+                    // SAFETY: same ownership hand-off as above.
+                    unsafe { *obj = p.into_raw().cast::<c_void>() };
+                    kResultOk
+                }
+                None => kResultFalse,
+            };
+        }
         kNotImplemented
+    }
+}
+
+/// Minimal `IPlugFrame` — the host frame handed to `setFrame` before
+/// `attached`. `resizeView` is the plugin-initiated resize request:
+/// the bridge answers the honest `kResultFalse` because container
+/// geometry is owned by the slot side (`NativeSurfaceSlot`/
+/// `set_geometry`) and no neutral channel carries a plugin-requested
+/// resize back to it — acknowledging would fake a resize the bridge
+/// never performs (`docs/designs/issue-389-vst3-l0-editor-attach.md`
+/// D2).
+struct BridgePlugFrame;
+
+impl Class for BridgePlugFrame {
+    type Interfaces = (IPlugFrame,);
+}
+
+impl IPlugFrameTrait for BridgePlugFrame {
+    #[expect(unsafe_code)]
+    unsafe fn resizeView(&self, _view: *mut IPlugView, _new_size: *mut ViewRect) -> tresult {
+        // `kResultFalse` — a defined refusal: the plugin keeps its
+        // current size; the bridge cannot move the consumer-owned
+        // container.
+        kResultFalse
     }
 }
 
@@ -1172,6 +1473,23 @@ struct Vst3Plugin {
     /// (a plugin may retain the `initialize` context / handler).
     host_app: Option<ComPtr<IHostApplication>>,
     handler: Option<ComPtr<IComponentHandler>>,
+    /// The open editor view (`IPlugView`) — `None` until `open_gui`.
+    /// Must be `removed()` + released before `controller` can
+    /// `terminate` (the VST3 view-lifetime rule enforced by
+    /// [`Vst3Plugin::close_view`] and `Drop`).
+    view: Option<ComPtr<IPlugView>>,
+    /// The bridge-owned `IPlugFrame` handed to `setFrame` — kept for
+    /// the view's open lifetime and released with it.
+    plug_frame: Option<ComPtr<IPlugFrame>>,
+    /// The component↔controller connection pair, when both objects
+    /// expose `IConnectionPoint` (distributed plugins only). Held so
+    /// `Drop` can `disconnect` before `terminate` — the VST3 contract
+    /// wants the link released while both objects are still live.
+    component_cp: Option<ComPtr<IConnectionPoint>>,
+    controller_cp: Option<ComPtr<IConnectionPoint>>,
+    /// Mint counter for [`GuiHandle`] values — instance-local,
+    /// monotonically increasing.
+    gui_seq: u32,
     phase: Phase,
     /// Negotiated max block + rate from `setupProcessing`.
     max_frames: usize,
@@ -1220,6 +1538,11 @@ impl Vst3Plugin {
             single_component: false,
             host_app: None,
             handler: None,
+            view: None,
+            plug_frame: None,
+            component_cp: None,
+            controller_cp: None,
+            gui_seq: 0,
             phase: Phase::Dormant,
             max_frames: 0,
             sample_rate: 0,
@@ -1267,6 +1590,27 @@ impl Vst3Plugin {
                 .map(|n| n.min(MAX_SCAN_CHANNELS))
         }
     }
+
+    /// Tears down the open editor view, if any: `removed()` then
+    /// release the view and frame. The VST3 lifetime rule — a view
+    /// must be `removed`ed and released before its controller can
+    /// `terminate` — is enforced here so `Drop` can run it before
+    /// the lifecycle descent. Idempotent: a second call is a no-op.
+    #[expect(unsafe_code)]
+    fn close_view(&mut self) {
+        if let Some(view) = self.view.take() {
+            // SAFETY: `view` is a live `IPlugView` created by
+            // `open_gui`; `removed` is the required detach before
+            // release and runs on the owning UI thread. `setFrame(0)`
+            // clears the plugin's frame pointer defensively (some
+            // plugins hold it without addref) before our release.
+            let result = unsafe { view.removed() };
+            debug_assert_eq!(result, kResultOk, "view.removed() declined");
+            let _ = unsafe { view.setFrame(ptr::null_mut()) };
+            drop(view);
+        }
+        drop(self.plug_frame.take());
+    }
 }
 
 impl Drop for Vst3Plugin {
@@ -1279,6 +1623,11 @@ impl Drop for Vst3Plugin {
     /// order is pinned.
     #[expect(unsafe_code)]
     fn drop(&mut self) {
+        // The VST3 view-lifetime rule pins this first: a view must be
+        // `removed`ed + released before its controller can
+        // `terminate` — `close_gui` may already have done it, so the
+        // helper is a defined no-op then.
+        self.close_view();
         // SAFETY: each `Option` COM pointer is a live object owned by
         // `self`; calls are skipped (not made) when absent.
         unsafe {
@@ -1300,6 +1649,15 @@ impl Drop for Vst3Plugin {
                 debug_assert_eq!(result, kResultOk, "setActive(false) declined");
             }
             if self.phase >= Phase::Initialized {
+                // Release the component↔controller link while both
+                // objects are still live — the connection contract's
+                // own teardown order (disconnect before terminate).
+                if let (Some(c_cp), Some(e_cp)) =
+                    (self.component_cp.take(), self.controller_cp.take())
+                {
+                    let _ = e_cp.disconnect(c_cp.as_ptr());
+                    let _ = c_cp.disconnect(e_cp.as_ptr());
+                }
                 // A distributed controller is a separate object with
                 // its own `terminate`; a single-component plugin
                 // shares the component's — terminating the shared
@@ -1767,6 +2125,28 @@ impl Plugin for Vst3Plugin {
                 let _ = component.terminate();
                 return Err(HostError::PluginFailed);
             }
+            // Distributed plugins: the spec makes the host connect the
+            // component and controller `IConnectionPoint`s in both
+            // directions — a controller that never sees its component
+            // can legitimately refuse `createView`. Single-component
+            // plugins expose no pair to connect.
+            if !single_component {
+                let component_cp = component.cast::<IConnectionPoint>();
+                let controller_cp = controller.cast::<IConnectionPoint>();
+                if let (Some(c_cp), Some(e_cp)) = (component_cp, controller_cp) {
+                    if c_cp.connect(e_cp.as_ptr()) != kResultOk
+                        || e_cp.connect(c_cp.as_ptr()) != kResultOk
+                    {
+                        let _ = e_cp.disconnect(c_cp.as_ptr());
+                        let _ = c_cp.disconnect(e_cp.as_ptr());
+                        let _ = controller.terminate();
+                        let _ = component.terminate();
+                        return Err(HostError::PluginFailed);
+                    }
+                    self.component_cp = Some(c_cp);
+                    self.controller_cp = Some(e_cp);
+                }
+            }
             self.component = Some(component);
             self.processor = Some(processor);
             self.controller = Some(controller);
@@ -1831,7 +2211,109 @@ impl Plugin for Vst3Plugin {
             Err(HostError::PluginFailed)
         }
     }
+
+    /// `open_gui` → `createView("editor")` →
+    /// `isPlatformTypeSupported` → `setFrame(BridgePlugFrame)` →
+    /// `attached(parent)` — Windows `HWND` only; other platforms and
+    /// editor-less plugins answer `Unsupported` (design
+    /// `docs/designs/issue-389-vst3-l0-editor-attach.md` D1/D4/D6).
+    ///
+    /// **Thread contract:** non-RT — must run on the thread owning
+    /// the parent HWND's message pump (the L0 caller's UI thread);
+    /// the adapter owns no pump and spawns no thread.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::PluginFailed`] when the instance is not yet
+    /// `Initialized`, a view is already open, or a view-creation call
+    /// declines; [`HostError::Unsupported`] when no editor view
+    /// exists or the platform type is unsupported.
+    #[expect(unsafe_code)]
+    fn open_gui(&mut self, parent: GuiParentToken) -> Result<GuiHandle, HostError> {
+        if self.phase < Phase::Initialized {
+            // `createView` is only legal on an initialized
+            // controller — the same bad-state convention as
+            // `init`/`start_processing` misuse.
+            return Err(HostError::PluginFailed);
+        }
+        if self.view.is_some() {
+            // One live editor per instance — the session contract's
+            // 1:1 rule; a second `open_gui` is a misuse, not a
+            // capability answer.
+            return Err(HostError::PluginFailed);
+        }
+        let Some(platform) = EDITOR_PLATFORM_TYPE else {
+            return Err(HostError::Unsupported);
+        };
+        let Some(controller) = self.controller.as_ref() else {
+            // `phase >= Initialized` implies `controller` — defensive
+            // only (an empty `else` would hide a broken invariant).
+            return Err(HostError::PluginFailed);
+        };
+        // SAFETY: `controller` is a live `IEditController` owned by
+        // `self`; all calls run on the caller's UI thread per the doc
+        // contract. `createView` returns an owned interface pointer
+        // (or null) and COM objects released on scope exit below
+        // leak nothing.
+        let view = unsafe { ComPtr::from_raw(controller.createView(ViewType::kEditor)) };
+        let Some(view) = view else {
+            // `createView` null — the plugin ships no editor.
+            return Err(HostError::Unsupported);
+        };
+        if unsafe { view.isPlatformTypeSupported(platform) } != kResultTrue {
+            return Err(HostError::Unsupported);
+        }
+        let frame_wrapper = ComWrapper::new(BridgePlugFrame);
+        let Some(frame) = frame_wrapper.to_com_ptr::<IPlugFrame>() else {
+            return Err(HostError::PluginFailed);
+        };
+        // `parent` is the redeemed raw platform handle — re-widened
+        // inside the OS adapter boundary only.
+        let parent_ptr = parent.raw() as *mut c_void;
+        if unsafe { view.setFrame(frame.as_ptr()) } != kResultOk {
+            return Err(HostError::PluginFailed);
+        }
+        if unsafe { view.attached(parent_ptr, platform) } != kResultOk {
+            let _ = unsafe { view.setFrame(ptr::null_mut()) };
+            return Err(HostError::PluginFailed);
+        }
+        self.gui_seq = self.gui_seq.wrapping_add(1);
+        self.plug_frame = Some(frame);
+        self.view = Some(view);
+        Ok(GuiHandle::new(self.gui_seq))
+    }
+
+    /// `close_gui` → `removed()` → release view + frame.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no view is open — closing an
+    /// unopened GUI is not a no-op success.
+    fn close_gui(&mut self) -> Result<(), HostError> {
+        if self.view.is_none() {
+            return Err(HostError::Unsupported);
+        }
+        self.close_view();
+        Ok(())
+    }
 }
+
+// ---------------------------------------------------------------------------
+// Editor view platform type
+// ---------------------------------------------------------------------------
+
+/// The VST3 platform type string for this OS — `Some` only on
+/// Windows (`kPlatformTypeHWND`); other platforms hold `None` so
+/// `open_gui` answers the honest `Unsupported` instead of claiming an
+/// unverified `NSView`/`X11EmbedWindowID` attach (design
+/// `docs/designs/issue-389-vst3-l0-editor-attach.md` D4).
+#[cfg(target_os = "windows")]
+const EDITOR_PLATFORM_TYPE: Option<vst3::Steinberg::FIDString> =
+    Some(vst3::Steinberg::kPlatformTypeHWND);
+
+/// Non-Windows attach is not implemented — see the Windows arm.
+#[cfg(not(target_os = "windows"))]
+const EDITOR_PLATFORM_TYPE: Option<vst3::Steinberg::FIDString> = None;
 
 // ---------------------------------------------------------------------------
 // Fixture resolution helper (shared with the Task-3 runner / Task-4 E2E)
@@ -2124,7 +2606,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_state_and_gui_verbs_are_defaults() {
+    fn unsupported_state_verbs_are_defaults() {
         let library = load_fixture();
         let factories = library.factories();
         let mut plugin = factories[0].create();
@@ -2133,11 +2615,42 @@ mod tests {
             plugin.restore_state(&[1, 2, 3]),
             Err(HostError::Unsupported)
         );
+    }
+
+    #[test]
+    fn open_gui_before_init_is_plugin_failed() {
+        // `phase=Dormant` — `createView` is only legal on an
+        // initialized controller, so the pre-init call is the
+        // bad-state refusal (`PluginFailed`), not a capability answer
+        // (test-spec VA-02).
+        let library = load_fixture();
+        let factories = library.factories();
+        let mut plugin = factories[0].create();
         assert_eq!(
-            plugin.open_gui(ruviform_plugin_core::GuiParentToken::new(0)),
+            plugin.open_gui(GuiParentToken::new(0)),
+            Err(HostError::PluginFailed)
+        );
+        // close with nothing open is the honest refusal.
+        assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));
+    }
+
+    #[test]
+    fn open_gui_null_view_is_unsupported() {
+        // The workspace fixture's `createView` returns null (no
+        // editor shipped) — the adapter maps that to the honest
+        // `Unsupported`, not a fabricated success (VA-03).
+        let library = load_fixture();
+        let factories = library.factories();
+        let mut plugin = factories[0].create();
+        plugin.init().expect("init");
+        assert_eq!(
+            plugin.open_gui(GuiParentToken::new(0)),
             Err(HostError::Unsupported)
         );
+        // The failed open leaves no view: close is the same refusal.
         assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));
+        // `drop` now runs `close_view` first — a defined no-op here,
+        // then the pinned descent (Initialized → terminate).
     }
 
     #[test]
