@@ -26,23 +26,13 @@ flate2 = { version = "1", default-features = false, features = [
 # Internal implementation detail — never exposed in the public API.
 unicode-normalization = "0.1"
 
-# Secure-extraction staging backend (IO-IMP-10): dirfd-relative
-# openat/mkdirat/unlinkat with O_NOFOLLOW on unix.
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
-
-# Secure-extraction staging backend (IO-IMP-10): NtCreateFile /
-# NtOpenFile / NtDeleteFile RootDirectory-relative opens with
-# OBJ_DONT_REPARSE + FILE_OPEN_REPARSE_POINT on Windows.
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = [
-    "Wdk_Foundation",
-    "Wdk_Storage_FileSystem",
-    "Win32_Foundation",
-    "Win32_Security",
-    "Win32_Storage_FileSystem",
-    "Win32_System_IO",
-] }
+# Secure-extraction staging backend (IO-IMP-10): the shared
+# handle-relative no-follow vfs layer (dirfd/`RootDirectory`
+# traversal, exclusive create, node identity) lives in
+# ruviform-io-file so the rooted-read capability and extraction
+# staging share one authoritative implementation. Internal
+# implementation detail — never exposed in the public API.
+ruviform-io-file = { path = "../ruviform-io-file" }
 
 [dev-dependencies]
 # tar.gz composition tests: the TAR layer's finish must be separable

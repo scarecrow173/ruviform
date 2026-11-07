@@ -1,14 +1,18 @@
 //! Private OS-ops boundary for staging-tree filesystem work
-//! (IO-IMP-10).
+//! (IO-IMP-10), adapted onto the shared `ruviform-io-file::vfs`
+//! backend.
 //!
 //! Every OS interaction the extraction pipeline performs is funneled
 //! through this trait family so platform backends stay swappable
 //! implementation details and the pipeline can be driven by a
-//! fault-injection mock in unit tests. The same private-adapter shape
-//! as IO-01 `PlatformFileOps` is used deliberately: IO-IMP-02's
-//! `OsFileOps` is `pub(crate)` to `ruviform-io-file` and scoped to
-//! *file* publish — it cannot be shared here without confusing a
-//! single-file transaction with a directory-tree transaction.
+//! fault-injection mock in unit tests. The real backend is the
+//! workspace-internal vfs layer in `ruviform-io-file` — the same
+//! authoritative implementation of handle/fd-relative traversal,
+//! no-follow opens, exclusive create, and stable node identity that
+//! the rooted-read capability uses. There is no per-crate OS backend
+//! here anymore: `OsExtractOps` below is a thin adapter translating
+//! the archive's `&str`-named staging surface onto `VfsDir`
+//! component operations.
 //!
 //! Guarantees the trait family is built around (adapters must provide
 //! them as *operations*, never as `exists()`-then-act checks):
@@ -31,98 +35,27 @@
 //! **RT contract:** non-RT only — every operation may block on
 //! filesystem I/O and allocate.
 
+use std::ffi::{OsStr, OsString};
 use std::fmt;
+use std::fs::File;
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-/// The object-type the identity was captured for. Cross-type swaps
-/// never compare equal — a link at a recorded file name mismatches
-/// even if the underlying index were somehow reused.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NodeTypeTag {
-    /// Unidentifiable — never matches a real object tag.
-    Unknown = 0,
-    /// A regular file.
-    File,
-    /// A real directory.
-    Dir,
-    /// Links, sockets, devices, reparse points — never equals a
-    /// recorded File/Dir tag.
-    Other,
-}
-
-/// Stable filesystem identity of a node.
-///
-/// unix: (`st_dev`/`stx_dev`, `st_ino`/`stx_ino`, `S_IFMT`-derived
-/// tag, birth-time or change-time discriminator). Windows:
-/// (`VolumeSerialNumber`, `FileId`, attribute-derived tag,
-/// `FileBasicInfo` time discriminator).
-///
-/// The `handle` is the kernel-exported file handle
-/// (`name_to_handle_at` on Linux): it embeds the inode generation,
-/// so a delete+recreate that lands on the same inode in the same
-/// timestamp tick still produces a different identity. `None` where
-/// the platform or filesystem does not export handles.
-///
-/// The `discriminator` is a secondary timestamp key — birth time
-/// where the platform reports it, else change time — closing most
-/// of the index-reuse window even without handles. A directory's
-/// change time mutates when the session adds children, so
-/// directories without birth time carry `0`.
-///
-/// Compared for equality only — the values are opaque and never
-/// interpreted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct NodeIdentity {
-    pub volume: u64,
-    pub index: u128,
-    /// Object type at capture time.
-    pub tag: NodeTypeTag,
-    /// Timestamp discriminator; `0` for directories without birth
-    /// time.
-    pub discriminator: u64,
-    /// Kernel file-handle discriminator where available.
-    pub handle: Option<NodeHandle>,
-}
-
-/// Opaque kernel file handle — the `name_to_handle_at` result
-/// (`handle_type` + bytes). Equality covers the full buffer; the
-/// unused tail is always zeroed so same-length handles compare by
-/// content.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct NodeHandle {
-    /// `handle_type` reported by the kernel (e.g. `FILEID_INO32_GEN`).
-    pub kind: i32,
-    /// Kernel-reported byte length of the handle.
-    pub len: u8,
-    /// Handle bytes, zero-padded to the fixed capacity.
-    pub bytes: [u8; 128],
-}
+pub(crate) use ruviform_io_file::vfs::{NodeIdentity, NodeTypeTag};
+use ruviform_io_file::vfs::{VfsDir, VfsOps, platform_vfs_ops};
 
 /// The default platform backend factory.
 ///
-/// unix and Windows have real backends ([`crate::extract::unix`],
-/// [`crate::extract::windows`]). Every other target reports
-/// `Unsupported` rather than falling back to path-string traversal.
-/// Shared via `Arc` so recovery handles carry the same backend the
-/// session used.
-pub(crate) fn platform_extract_ops() -> std::sync::Arc<dyn PlatformExtractOps> {
-    os_extract_ops()
-}
-
-#[cfg(unix)]
-fn os_extract_ops() -> std::sync::Arc<dyn PlatformExtractOps> {
-    std::sync::Arc::new(crate::extract::unix::UnixExtractOps)
-}
-
-#[cfg(windows)]
-fn os_extract_ops() -> std::sync::Arc<dyn PlatformExtractOps> {
-    std::sync::Arc::new(crate::extract::windows::WindowsExtractOps)
-}
-
-#[cfg(not(any(unix, windows)))]
-fn os_extract_ops() -> std::sync::Arc<dyn PlatformExtractOps> {
-    std::sync::Arc::new(UnsupportedExtractOps)
+/// The vfs factory installs the unix/Windows backend as appropriate
+/// (including the pre-RS1 `OBJ_DONT_REPARSE` version gate); every
+/// other target reports `Unsupported` per-operation rather than
+/// falling back to path-string traversal. Shared via `Arc` so
+/// recovery handles carry the same backend the session used.
+pub(crate) fn platform_extract_ops() -> Arc<dyn PlatformExtractOps> {
+    Arc::new(OsExtractOps {
+        ops: platform_vfs_ops(),
+    })
 }
 
 /// Factory surface: creates the isolated staging root.
@@ -190,7 +123,7 @@ pub(crate) trait StagingFile: Write + Send + fmt::Debug {
 /// Shared helper: generates a collision-resistant staging name
 /// `<prefix>-<16 hex>` (time ⊕ pid ⊕ counter, not cryptographic —
 /// `create_new` retries cover collisions).
-pub(crate) fn staging_name(prefix: &str) -> String {
+fn staging_name(prefix: &str) -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let nanos = std::time::SystemTime::now()
@@ -207,26 +140,187 @@ pub(crate) fn staging_name(prefix: &str) -> String {
 }
 
 /// Maximum exclusive-name attempts before giving up.
-pub(crate) const MAX_NAME_ATTEMPTS: u32 = 64;
+const MAX_NAME_ATTEMPTS: u32 = 64;
 
-/// Backend for targets without a real adapter.
-#[cfg(not(any(unix, windows)))]
+// ------------------------------------------------------------------
+// The real backend: archive surface → vfs adapter.
+// ------------------------------------------------------------------
+
+/// [`PlatformExtractOps`] backed by the shared vfs layer.
 #[derive(Debug)]
-struct UnsupportedExtractOps;
+struct OsExtractOps {
+    ops: Arc<dyn VfsOps>,
+}
 
-#[cfg(not(any(unix, windows)))]
-impl PlatformExtractOps for UnsupportedExtractOps {
-    fn create_staging_root(&self, _parent: &Path) -> io::Result<Box<dyn StagingRoot>> {
+impl PlatformExtractOps for OsExtractOps {
+    /// Creates the staging root: open trusted parent → exclusive
+    /// `create_dir` of a unique name (unix `mkdirat(0700)`; Windows
+    /// `NtCreateFile(FILE_CREATE|FILE_DIRECTORY_FILE|
+    /// FILE_OPEN_REPARSE_POINT)`), retried across name collisions.
+    /// The returned root keeps the parent handle so `remove_root`
+    /// can re-verify and delete itself.
+    fn create_staging_root(&self, parent: &Path) -> io::Result<Box<dyn StagingRoot>> {
+        let parent = std::path::absolute(parent)?;
+        let parent_dir = self.ops.open_dir_path(&parent)?;
+        for _ in 0..MAX_NAME_ATTEMPTS {
+            let name = staging_name("rvf-staging");
+            match parent_dir.create_dir(OsStr::new(&name)) {
+                Ok(dir) => {
+                    return Ok(Box::new(OsStagingDir {
+                        dir,
+                        parent: Some(ParentRef {
+                            dir: parent_dir,
+                            name: OsString::from(name),
+                        }),
+                        ops: self.ops.clone(),
+                    }));
+                }
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(e) => return Err(e),
+            }
+        }
         Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "ruviform-io-archive: secure extraction has no OS backend for this target",
+            io::ErrorKind::AlreadyExists,
+            "ruviform-io-archive: staging name space exhausted",
         ))
     }
-    fn open_staging_root(&self, _path: &Path) -> io::Result<Box<dyn StagingRoot>> {
-        Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "ruviform-io-archive: secure extraction has no OS backend for this target",
-        ))
+
+    /// Re-opens an existing staging root by path (final component
+    /// opened no-follow — `O_NOFOLLOW`/`FILE_OPEN_REPARSE_POINT`,
+    /// never a path-level open of the leaf) for recovery handle
+    /// `inspect`/`cleanup`.
+    fn open_staging_root(&self, path: &Path) -> io::Result<Box<dyn StagingRoot>> {
+        let path = std::path::absolute(path)?;
+        let name = path
+            .file_name()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "path has no file name"))?
+            .to_os_string();
+        let parent_path = path
+            .parent()
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
+        let parent_dir = self.ops.open_dir_path(&parent_path)?;
+        let dir = parent_dir.open_dir(&name)?;
+        Ok(Box::new(OsStagingDir {
+            dir,
+            parent: Some(ParentRef {
+                dir: parent_dir,
+                name,
+            }),
+            ops: self.ops.clone(),
+        }))
+    }
+}
+
+/// An open staging directory backed by a [`VfsDir`] handle.
+/// `parent` is set only on the root so it can remove itself.
+#[derive(Debug)]
+struct OsStagingDir {
+    dir: Box<dyn VfsDir>,
+    parent: Option<ParentRef>,
+    ops: Arc<dyn VfsOps>,
+}
+
+/// The staging root's trusted parent handle + its own leaf name.
+#[derive(Debug)]
+struct ParentRef {
+    dir: Box<dyn VfsDir>,
+    name: OsString,
+}
+
+impl StagingDir for OsStagingDir {
+    fn path(&self) -> &Path {
+        self.dir.path()
+    }
+
+    fn identity(&self) -> io::Result<NodeIdentity> {
+        self.dir.identity()
+    }
+
+    fn probe_identity(&self, name: &str) -> io::Result<NodeIdentity> {
+        self.dir.probe(OsStr::new(name)).map(|p| p.identity)
+    }
+
+    fn create_dir(&self, name: &str) -> io::Result<Box<dyn StagingDir>> {
+        let dir = self.dir.create_dir(OsStr::new(name))?;
+        Ok(Box::new(OsStagingDir {
+            dir,
+            parent: None,
+            ops: self.ops.clone(),
+        }))
+    }
+
+    fn open_dir(&self, name: &str) -> io::Result<Box<dyn StagingDir>> {
+        let dir = self.dir.open_dir(OsStr::new(name))?;
+        Ok(Box::new(OsStagingDir {
+            dir,
+            parent: None,
+            ops: self.ops.clone(),
+        }))
+    }
+
+    fn create_file(&self, name: &str) -> io::Result<Box<dyn StagingFile>> {
+        let file = self.dir.create_file(OsStr::new(name))?;
+        Ok(Box::new(OsStagingFile {
+            file,
+            ops: self.ops.clone(),
+        }))
+    }
+
+    fn remove_file(&self, name: &str) -> io::Result<()> {
+        self.dir.remove_file(OsStr::new(name))
+    }
+
+    fn remove_dir(&self, name: &str) -> io::Result<()> {
+        self.dir.remove_dir(OsStr::new(name))
+    }
+}
+
+impl StagingRoot for OsStagingDir {
+    /// Deletes the staging root via its parent dir handle. Re-checks
+    /// the recorded name's identity against this handle's own
+    /// identity first: a swapped-in link or foreign directory at the
+    /// name reports an error instead of being deleted.
+    fn remove_root(self: Box<Self>) -> io::Result<()> {
+        let Some(parent) = &self.parent else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "ruviform-io-archive: remove_root on a non-root directory",
+            ));
+        };
+        let expected = self.dir.identity()?;
+        let observed = parent.dir.probe(&parent.name).map(|p| p.identity)?;
+        if observed != expected {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "ruviform-io-archive: staging root identity changed; refusing removal",
+            ));
+        }
+        parent.dir.remove_dir(&parent.name)
+    }
+}
+
+/// An open staging file backed by a vfs-created `File` (unix
+/// `O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW, 0600`; Windows
+/// `NtCreateFile(FILE_CREATE)` + `FILE_GENERIC_WRITE|
+/// FILE_READ_ATTRIBUTES` + `ShareAccess=0`).
+#[derive(Debug)]
+struct OsStagingFile {
+    file: File,
+    ops: Arc<dyn VfsOps>,
+}
+
+impl Write for OsStagingFile {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.file.write(buf)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.file.flush()
+    }
+}
+
+impl StagingFile for OsStagingFile {
+    fn identity(&self) -> io::Result<NodeIdentity> {
+        self.ops.stat_file(&self.file).map(|p| p.identity)
     }
 }
 
@@ -235,8 +329,7 @@ impl PlatformExtractOps for UnsupportedExtractOps {
 pub(crate) mod mock {
     use super::*;
     use std::collections::BTreeMap;
-    use std::path::PathBuf;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Mutex;
 
     /// What the mock should do at the next matching call.
     #[derive(Debug, Clone)]

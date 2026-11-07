@@ -96,12 +96,64 @@ AudioLens（#143）・Synvelis（#84）・Ruviform 本体（#305/#306）が共�
 - 誘導不能な失敗（中途不明の publish・transport-level indeterminacy・
   電源断）は `src/staged.rs` の fault-injection mock で網羅する。
 
+## Rooted read capability（`rooted` module）
+
+`rooted` は「開いた root ディレクトリハンドルに対してのみ相対解決する」
+読み取り専用 capability。canonicalize + 後続 open の分離に起因する
+TOCTOU（検査時点と open 時点で名前が指す物が変わる問題）を、
+コンポーネントごとに open handle 相対で辿る構造で除去する
+（Synvelis SV85 / Issue #304 系の脆弱性パターンへの基盤側回答）。
+
+- `RootedDir` — `open(path)` は open-first で、canonical root は
+  handle 由来（Linux `/proc/self/fd`・Windows `GetFinalPathNameByHandleW`・
+  Apple `fcntl(F_GETPATH)`）で取得する唯一の path 信頼境界。以後は
+  path 文字列を一切再解決しない。`open_dir` で scoped capability を
+  作り、解決済み ancestor chain を Arc 共有する（`..` は chain 内を
+  pop できるが capability root を割ると `EscapesRoot`）。
+- `RelativePath` — `/` 区切り UTF-8 locator。`""` は self。
+  絶対・`..`・`.`・`\`・`:`・NUL・制御文字・Windows 予約名・
+  trailing `.`/space・空成分・255 bytes 超を `InvalidInput` で拒否。
+- `FollowMode::{NoFollow, WithinRoot}` — leaf/intermediate 双方で
+  no-follow probe → dir は open・link は hop 上限内で解決
+  （`WithinRoot` のみ）。絶対 link target は canonical prefix の
+  TEXTUAL walk + 残 suffix の FD walk。「一度でも root prefix を外れた
+  target は tainted」— 外を経由して戻る形も保守的に `EscapesRoot`。
+- `open_regular` — Linux は `O_PATH|O_NOFOLLOW` pin→`fstat`→
+  `/proc/self/fd` reopen + identity 検証。他 unix は `O_NONBLOCK`
+  open+`fstat`。Windows は `FILE_NON_DIRECTORY_FILE|
+  FILE_OPEN_REPARSE_POINT|FILE_SYNCHRONOUS_IO_NONALERT`。
+  非 regular は `NotRegularFile` で通常 open に到達させない。
+- `metadata`/`read_dir` — 同一 object の facts（kind・len・mtime・
+  identity・`IdentityStrength`）と no-follow 分類済み列挙。
+  `metadata` は `leaf_kind` で「leaf が link だった」も報告する。
+- `pin`/`open_pinned` — object-identity token（volume+index+tag+
+  discriminator+kernel handle）による open 時照合。`Weak` FS では
+  `Unsupported` と正直に報告する（`NodePin` は digest ではない —
+  消費側の digest 検証と併用）。
+- `FileErrorKind` — `NotFound`/`NotDirectory`/`NotRegularFile`/
+  `EscapesRoot`/`LoopDetected`/`IdentityMismatch`/`LimitExceeded`/
+  `Unsupported`/`Io`/`InvalidInput`。生 `io::Error` は `source` に保持。
+- `RootedOptions` — `max_hops`/`max_depth`/`max_components_total`/
+  `max_open_dirs` の budget（既定 40/40/512/64）。
+- 内部 `#[doc(hidden)] vfs` module — `openat`/`O_NOFOLLOW`/`fstatat`
+  （unix）と `NtCreateFile`/`NtOpenFile`/`OBJECT_ATTRIBUTES.
+  RootDirectory`/`OBJ_DONT_REPARSE`/`FILE_OPEN_REPARSE_POINT`
+  （Windows）の no-follow・handle 相対プリミティブを workspace 共有で
+  集約。`ruviform-io-archive` の staging backend もここを使う。
+  サポート不能な target（Windows 10 RS1 未満を含む — `OBJ_DONT_REPARSE`
+  が silent-ignore される環境）では全 op `Unsupported`。
+- 限界: 保証は mount namespace 内の FS tree に scope される（unix
+  mount/bind mount 横断は kernel の実体として通過する）。root
+  `canonicalize` の fallback がある backend では open→canonicalize の
+  わずかな race が残留する（doc 明記の residual）。
+
 ## 層・許可依存
 
 - 層: 汎用ファイル I/O 基盤（メディア I/O より下位・Primitives 同様の
   相互依存なし位置）。
-- 許可依存: `libc`（`cfg(unix)` のみ、`renameat2`/`renamex_np` FFI）・
-  `windows-sys`（`cfg(windows)` のみ、`MoveFileExW` 等）。それ以外は
+- 許可依存: `libc`（`cfg(unix)` のみ、`renameat2`/`renamex_np`・
+  `openat`/`statx`/`name_to_handle_at` FFI）・`windows-sys`
+  （`cfg(windows)` のみ、`MoveFileExW`・NT syscall FFI）。それ以外は
   std のみ。Media/Codec/Serde 非依存。
 - `default = []`・feature なし・`publish = false` 継承・MSRV 1.89。
 
@@ -118,3 +170,6 @@ AudioLens（#143）・Synvelis（#84）・Ruviform 本体（#305/#306）が共�
   durability・recovery の実 OS adapter（`src/os.rs`）・実 FS 試験
 - Issue #305/#306: 旧 Media File API 撤去・消費者移行・構成/OS/障害/消費者
   受入ゲート
+- Issue #304 関連: rooted read capability — handle 相対の no-follow
+  traversal + 共有 vfs（`rooted` module・`docs/designs/
+  rooted-read-capability.md`）
