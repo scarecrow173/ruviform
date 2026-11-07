@@ -66,6 +66,7 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/294"
     - "https://github.com/scarecrow173/synvelis/issues/175"
     - "https://github.com/scarecrow173/synvelis/issues/176"
+    - "https://github.com/scarecrow173/synvelis/issues/177"
     - "https://github.com/scarecrow173/audio-lens/issues/166"
   defers: []
   deferred-by: []
@@ -268,6 +269,6 @@ Capability は **declared（契約上の宣言）/ Pass / Fail / Unsupported / N
 
 * 一次ソース: GitHub Issue [#384](https://github.com/scarecrow173/ruviform/issues/384)（2026-11-07 横断レビュー確定仕様 v2 が旧記述・旧 ADR に優先）、[#257](https://github.com/scarecrow173/ruviform/issues/257)（共通 UI 正本）、[#385](https://github.com/scarecrow173/ruviform/issues/385)（Token 解釈）、[#262](https://github.com/scarecrow173/ruviform/issues/262)（GPUI 採否 Gate）。
 * 契約詳細設計: [docs/designs/issue-384-driver-neutral-gui-contract.md](../designs/issue-384-driver-neutral-gui-contract.md)。
-* 旧 ADR（superseded、証拠保持）: [ui-architecture-webview-hybrid.md](ui-architecture-webview-hybrid.md)、[ui-tech-selection-poc.md](ui-tech-selection-poc.md)。Synvelis 側の旧 SolidJS 採用 ADR は [Synvelis #175](https://github.com/scarecrow173/synvelis/issues/175) で後継化（別 repo/別 Owner）。
+* 旧 ADR（superseded、証拠保持）: [ui-architecture-webview-hybrid.md](ui-architecture-webview-hybrid.md)、[ui-tech-selection-poc.md](ui-tech-selection-poc.md)。Synvelis 側の旧 SolidJS 採用 ADR は [Synvelis #175](https://github.com/scarecrow173/synvelis/issues/175) で後継化（別 repo/別 Owner）。Synvelis の製品 Theme・Workspace・GPUI Design Review は [Synvelis #177](https://github.com/scarecrow173/synvelis/issues/177)、AudioLens の Consumer 受入は [AudioLens #166](https://github.com/scarecrow173/audio-lens/issues/166) が所有する。
 * 関連 ADR: [プラグインアーキテクチャ](plugin-architecture-clap-vst3.md)、[plugin-gui-embedding](plugin-gui-embedding.md)（旧方針の Plugin GUI 節は本 ADR の NativeSurfaceSlot/Session 契約に読替え）、[issue-181](issue-181-multi-window-contract-placement-close-decision-ipc-routing.md) / [issue-182](issue-182-dock-tree-placement-move-contract-and-persistence.md)（維持する論理契約）。
 * **GPUI 最終採用判定の逆反映欄（未記入）**: #262 verdict が確定したら、採用範囲・OS/format 制限・代替方針をここに追記する。現在は判定前であり、GPUI は「標準 Driver 候補として契約設計を開始する仮決定」の位置づけ。
