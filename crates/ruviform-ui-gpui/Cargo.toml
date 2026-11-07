@@ -73,5 +73,11 @@ name = "component_showcase"
 # GPUI window. Requires the real GPUI backend.
 required-features = ["gpui"]
 
+[[test]]
+name = "consumer_observation"
+# Issue #429 consumer seam test — external crate, binds only the public
+# `GpuiObserver` seam. Requires gpui test-support (`gpui-test`).
+required-features = ["gpui-test"]
+
 [lints]
 workspace = true
