@@ -981,6 +981,43 @@ pub enum ValueInput {
     Extreme(Extreme),
 }
 
+/// Decodes an authoritative [`StateProjection`] payload into the
+/// [`ValueInput`] a controlled display may apply — the canonical
+/// projection→display contract (Issue #414).
+///
+/// The payload stays opaque business JSON until here; nothing is
+/// interpreted as `f64` unconditionally. Accepted shapes:
+///
+/// - a finite JSON number → [`ValueInput::Plain`] (the product-value
+///   domain — the same domain the `value` property carries in the
+///   reference implementation);
+/// - `{"plain": <finite number>}` → [`ValueInput::Plain`];
+/// - `{"normalized": <finite number>}` → [`ValueInput::Normalized`].
+///
+/// Anything else — strings, nulls, nested objects, non-finite
+/// numbers — yields `None`: the binding still records the projection
+/// as `observed`, but it carries no displayable control value and the
+/// controlled display is left untouched.
+#[must_use]
+pub fn projection_value_input(value: &serde_json::Value) -> Option<ValueInput> {
+    fn finite(v: &serde_json::Value) -> Option<f64> {
+        v.as_f64().filter(|n| n.is_finite())
+    }
+    match value {
+        serde_json::Value::Number(_) => finite(value).map(ValueInput::Plain),
+        serde_json::Value::Object(map) if map.len() == 1 => {
+            if let Some(v) = map.get("plain") {
+                finite(v).map(ValueInput::Plain)
+            } else {
+                map.get("normalized")
+                    .and_then(finite)
+                    .map(ValueInput::Normalized)
+            }
+        }
+        _ => None,
+    }
+}
+
 /// Typed inputs accepted by [`InteractionControl::dispatch`].
 ///
 /// `Set`/`Adjust`/`Reset` are value-producing shorthand inputs:
@@ -1385,6 +1422,11 @@ pub struct InteractionControl {
     phase: GesturePhase,
     gesture: Option<GestureState>,
     committed_value: ControlValue,
+    /// An authoritative write staged while a gesture is active —
+    /// lands as `committed_value` when the gesture terminates. The
+    /// local preview always wins mid-gesture; the last observed truth
+    /// takes over afterwards (Issue #414).
+    pending_external: Option<ControlValue>,
     sequence: SequenceNumber,
     last_input_seq: Option<InputSeq>,
     atomic_counter: u64,
@@ -1433,6 +1475,7 @@ impl InteractionControl {
                 plain: initial.1,
                 normalized: initial.0,
             },
+            pending_external: None,
             sequence: 0,
             last_input_seq: None,
             atomic_counter: 0,
@@ -1465,6 +1508,46 @@ impl InteractionControl {
         self.gesture
             .as_ref()
             .map_or(self.committed_value, |g| g.preview)
+    }
+
+    /// Applies an authoritative external value to the controlled
+    /// display — the write half of the projection contract
+    /// (Issue #414).
+    ///
+    /// `input` must be an absolute [`ValueInput::Plain`] or
+    /// [`ValueInput::Normalized`]; the value resolves through the
+    /// same [`ValueMapper`] as user input (range policy, step snap,
+    /// domain mapping), so a projection can never store a value the
+    /// descriptor would reject for a user. Relative/jump inputs
+    /// (`Steps`/`Extreme`) are meaningless as absolute truth and are
+    /// refused with `None`.
+    ///
+    /// While a gesture is active the resolved value is staged and
+    /// lands as the committed value when the gesture terminates
+    /// (commit, cancel, detach, focus loss): the local preview
+    /// always wins mid-gesture. While idle it becomes the committed
+    /// value immediately.
+    ///
+    /// The write emits no [`InteractionEvent`]s and consumes no input
+    /// sequence — it reflects domain truth pushed by the consumer,
+    /// never a command back to it, so the controlled-write loop
+    /// stays closed. Returns the resolved [`ControlValue`] when the
+    /// input was absolute and resolvable, `None` otherwise — an
+    /// unresolvable value leaves the display untouched (the binding
+    /// still records the projection as `observed`).
+    pub fn apply_external(&mut self, input: ValueInput) -> Option<ControlValue> {
+        if !matches!(input, ValueInput::Plain(_) | ValueInput::Normalized(_)) {
+            return None;
+        }
+        let resolved = self
+            .resolve_value_input(input, self.committed_value, false)
+            .ok()?;
+        if self.gesture.is_some() {
+            self.pending_external = Some(resolved);
+        } else {
+            self.committed_value = resolved;
+        }
+        Some(resolved)
     }
 
     /// Change capability flags at runtime. Making a control
@@ -1571,6 +1654,12 @@ impl InteractionControl {
         self.terminated.push_back(g.gesture_id);
         while self.terminated.len() > self.history_bound {
             self.terminated.pop_front();
+        }
+        // A staged authoritative write lands as the gesture ends —
+        // commit/cancel paths assign `committed_value` before calling
+        // here, so the last observed truth takes over uniformly.
+        if let Some(v) = self.pending_external.take() {
+            self.committed_value = v;
         }
     }
 
@@ -3463,5 +3552,144 @@ mod tests {
         });
         assert_eq!(b.phase(), CommandPhase::Applied);
         assert!(b.state().timed_out);
+    }
+
+    #[test]
+    fn external_write_commits_when_idle() {
+        let mut c = control();
+        // An absolute plain value resolves through the mapper and
+        // becomes the committed display value immediately.
+        let applied = c.apply_external(ValueInput::Plain(80.0)).expect("applied");
+        assert!((applied.plain - 80.0).abs() < 1e-9);
+        assert!((c.value().plain - 80.0).abs() < 1e-9);
+        assert!((c.committed_value().plain - 80.0).abs() < 1e-9);
+        // Normalized input resolves to the same committed pair.
+        c.apply_external(ValueInput::Normalized(0.25))
+            .expect("applied");
+        assert!((c.value().plain - 25.0).abs() < 1e-9);
+        assert!((c.value().normalized - 0.25).abs() < 1e-9);
+        // Relative/jump inputs are not absolute truth — refused and
+        // the display is untouched.
+        assert!(c.apply_external(ValueInput::Steps(1.0)).is_none());
+        assert!(
+            c.apply_external(ValueInput::Extreme(Extreme::Max))
+                .is_none()
+        );
+        assert!((c.value().plain - 25.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn external_write_stages_during_gesture() {
+        let mut c = control();
+        c.dispatch(ControlInput::Begin {
+            gesture_id: "g1".to_string(),
+            source: InputSource::from(InputSource::POINTER),
+            origin_view: None,
+            target: None,
+            at: None,
+            modifiers: None,
+            seq: None,
+        });
+        c.dispatch(ControlInput::Preview {
+            gesture_id: "g1".to_string(),
+            value: ValueInput::Normalized(0.7),
+            modifiers: None,
+            seq: None,
+        });
+        // Staged while active — the local preview keeps winning the
+        // display and the committed value is not touched.
+        c.apply_external(ValueInput::Plain(30.0)).expect("staged");
+        assert!((c.value().plain - 70.0).abs() < 1e-9);
+        assert!((c.committed_value().plain - 50.0).abs() < 1e-9);
+        // A second staged write replaces the first — last wins.
+        c.apply_external(ValueInput::Plain(20.0)).expect("staged");
+        // Commit promotes the preview, then the staged truth lands
+        // as the committed value — the last observed state displays.
+        c.dispatch(ControlInput::Commit {
+            gesture_id: "g1".to_string(),
+            value: None,
+            modifiers: None,
+            seq: None,
+        });
+        assert!((c.value().plain - 20.0).abs() < 1e-9);
+        assert!((c.committed_value().plain - 20.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn external_write_lands_after_cancel() {
+        let mut c = control();
+        c.dispatch(ControlInput::Begin {
+            gesture_id: "g1".to_string(),
+            source: InputSource::from(InputSource::POINTER),
+            origin_view: None,
+            target: None,
+            at: None,
+            modifiers: None,
+            seq: None,
+        });
+        c.dispatch(ControlInput::Preview {
+            gesture_id: "g1".to_string(),
+            value: ValueInput::Normalized(0.7),
+            modifiers: None,
+            seq: None,
+        });
+        c.apply_external(ValueInput::Plain(30.0)).expect("staged");
+        c.dispatch(ControlInput::Cancel {
+            gesture_id: "g1".to_string(),
+            reason: None,
+            seq: None,
+        });
+        // Cancel never rewrote the committed preview; the staged
+        // authoritative value lands instead, so the display shows
+        // the last observed truth rather than the stale committed.
+        assert!((c.value().plain - 30.0).abs() < 1e-9);
+        assert!((c.committed_value().plain - 30.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn external_write_honors_range_policy() {
+        let mut d = desc();
+        d.out_of_range = Some(OutOfRangePolicy::Reject);
+        let mut c = InteractionControl::new(InteractionControlOptions {
+            control_id: "vol".to_string(),
+            descriptor: Some(d),
+            ..Default::default()
+        });
+        // Out-of-range under `reject` is refused — display untouched.
+        assert!(c.apply_external(ValueInput::Plain(150.0)).is_none());
+        assert!((c.value().plain - 50.0).abs() < 1e-9);
+        // The default clamp policy lands the same write clamped.
+        let mut c2 = control();
+        c2.apply_external(ValueInput::Plain(150.0))
+            .expect("clamped");
+        assert!((c2.value().plain - 100.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn projection_value_input_shapes() {
+        use serde_json::json;
+        assert_eq!(
+            projection_value_input(&json!(0.8)),
+            Some(ValueInput::Plain(0.8))
+        );
+        assert_eq!(
+            projection_value_input(&json!({"plain": 42.0})),
+            Some(ValueInput::Plain(42.0))
+        );
+        assert_eq!(
+            projection_value_input(&json!({"normalized": 0.25})),
+            Some(ValueInput::Normalized(0.25))
+        );
+        for bad in [
+            json!("loudness"),
+            json!(null),
+            json!(true),
+            json!({"plain": "x"}),
+            json!({"plain": 1.0, "normalized": 0.5}),
+            json!({"other": 1.0}),
+            json!([1.0]),
+        ] {
+            assert_eq!(projection_value_input(&bad), None, "{bad}");
+        }
     }
 }

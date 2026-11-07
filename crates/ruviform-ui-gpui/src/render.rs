@@ -1660,6 +1660,140 @@ mod tests {
         assert_eq!(view_phase(&view, cx), CommandPhase::Observed);
     }
 
+    /// Issue #414: an authoritative projection must reach the value
+    /// the renderer actually paints. `control_element` reads
+    /// `snapshot.display.normalized` — this test asserts that exact
+    /// field through the real inbox → `apply_projection` path, not
+    /// merely that `observed` was recorded.
+    #[gpui::test]
+    fn rvf_view_inbox_projection_updates_controlled_display(cx: &mut TestAppContext) {
+        use ruviform_ui::behavior::CommandPhase;
+        let (view, inbox) = mount_view_with_inbox(cx);
+        cx.run_until_parked();
+        // Baseline: the descriptor default is what the renderer reads.
+        let before = view.update(cx, |v, _cx| {
+            v.host
+                .observe(&ComponentKey("fader".to_string()))
+                .and_then(|s| s.display)
+                .map(|d| d.normalized)
+        });
+        assert_eq!(before, Some(0.5));
+
+        // Idle external nonzero update through the wire envelope.
+        inbox.borrow_mut().push(Event::Notify {
+            seq: 1,
+            data: serde_json::json!({
+                "control_id": "fader",
+                "revision": 1,
+                "value": {"normalized": 0.8}
+            }),
+        });
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        let after = view.update(cx, |v, _cx| {
+            let snap = v
+                .host
+                .observe(&ComponentKey("fader".to_string()))
+                .expect("snapshot");
+            (snap.display.map(|d| d.normalized), snap.phase)
+        });
+        let (Some(after_n), CommandPhase::Observed) = after else {
+            panic!("projection must land as observed display: {after:?}");
+        };
+        assert!((after_n - 0.8).abs() < 1e-9, "display={after_n}");
+    }
+
+    /// Issue #414: mid-gesture the authoritative write must not
+    /// overwrite the local preview; once the gesture ends the staged
+    /// truth becomes the displayed value.
+    #[gpui::test]
+    fn rvf_view_inbox_projection_defers_to_active_gesture(cx: &mut TestAppContext) {
+        use ruviform_ui::behavior::CommandPhase;
+        let (view, inbox) = mount_view_with_inbox(cx);
+        cx.run_until_parked();
+        // Begin + preview a local drag to 0.7.
+        view.update(cx, |v, _cx| {
+            let generation = v.host.generation();
+            let key = ComponentKey("fader".to_string());
+            v.host
+                .dispatch_input(
+                    generation,
+                    &key,
+                    ControlInput::Begin {
+                        gesture_id: "g1".to_string(),
+                        source: InputSource::from(InputSource::POINTER),
+                        origin_view: None,
+                        target: None,
+                        at: None,
+                        modifiers: None,
+                        seq: None,
+                    },
+                )
+                .expect("begin");
+            v.host
+                .dispatch_input(
+                    generation,
+                    &key,
+                    ControlInput::Preview {
+                        gesture_id: "g1".to_string(),
+                        value: ValueInput::Normalized(0.7),
+                        modifiers: None,
+                        seq: None,
+                    },
+                )
+                .expect("preview");
+        });
+        // The projection lands while the gesture is active: observed
+        // records it, but the display keeps the preview.
+        inbox.borrow_mut().push(Event::Notify {
+            seq: 1,
+            data: serde_json::json!({
+                "control_id": "fader",
+                "revision": 1,
+                "value": {"normalized": 0.3}
+            }),
+        });
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        let during = view.update(cx, |v, _cx| {
+            let snap = v
+                .host
+                .observe(&ComponentKey("fader".to_string()))
+                .expect("snapshot");
+            (snap.display.map(|d| d.normalized), snap.phase)
+        });
+        let (Some(during_n), CommandPhase::Preview) = during else {
+            panic!("preview must win mid-gesture: {during:?}");
+        };
+        assert!((during_n - 0.7).abs() < 1e-9, "display={during_n}");
+        // Commit: the staged authoritative value takes the display.
+        view.update(cx, |v, _cx| {
+            let generation = v.host.generation();
+            v.host
+                .dispatch_input(
+                    generation,
+                    &ComponentKey("fader".to_string()),
+                    ControlInput::Commit {
+                        gesture_id: "g1".to_string(),
+                        value: None,
+                        modifiers: None,
+                        seq: None,
+                    },
+                )
+                .expect("commit");
+        });
+        let after = view.update(cx, |v, _cx| {
+            v.host
+                .observe(&ComponentKey("fader".to_string()))
+                .and_then(|s| s.display)
+                .map(|d| d.normalized)
+        });
+        let Some(after_n) = after else {
+            panic!("display missing after commit");
+        };
+        assert!((after_n - 0.3).abs() < 1e-9, "display={after_n}");
+    }
+
     /// Terminal and malformed replies stay honest: `ok:false` and an
     /// unrecognized typed status both read `Rejected` (the latter
     /// preserving the raw status in the detail), while a bare `ok`
