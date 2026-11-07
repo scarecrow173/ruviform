@@ -287,3 +287,112 @@ consumer(GUI Driver / app):
   2Window/DPI/crash/hang/IME/popup/a11y/RT 非停止）。
 - timeout の wall-clock 監視基盤（GUI runtime 側の timer/cancel —
   現行 port は request 世代で「完了対照」を強制するに留める）。
+
+## 改訂 1: DoD 再検証（Issue #389 PR・2026-11-08）
+
+Issue #389 の DoD（移行表・状態遷移表・所有責務・fake host 検証・
+Capability Matrix）を現行コードに照らして再検証し、発見した欠陥を
+修正した。D1〜D8 の決定は維持し、以下を追記・修正する。
+
+### R1: 欠陥修正（session 状態機械の不変条件）
+
+- **Refused open が L0 instance を永久に塞ぐ欠陥を修正**: 従来は
+  open 拒否で `Failed` になった session を `close` すると adapter の
+  `CloseGui` が呼ばれ（plugin 既定 `Unsupported`）、再び `Failed` に
+  戻るため `concluded` にならず `begin_session` が常に `SessionBusy`
+  を返した。修正: `PluginEditorSession` に `editor_live`（adapter 側
+  editor が生存しうるか）を追加。成功 attach で `true`、conclusion で
+  `false`。`close` は `editor_live == false` なら adapter を呼ばず
+  `Closed` へ収束する。`reattach` 拒否のように editor が生存しうる
+  `Failed` は従来どおり adapter `close` を呼ぶ（ES-19/ES-22）。
+- **L0 pass-through 廃止**: `InProcessEditorOps::new`（lease payload を
+  無検証に `GuiParentToken::new(lease.raw())` として `OpenGui` へ渡す
+  経路）を削除。L0 の `OpenGui` は必ず `LeaseRedeemer` を経由する。
+  `with_redeemer` が唯一の constructor。
+- **L0 capability の過大申告を修正**: 従来 `capabilities()` は open 前に
+  `dock`/`close` を `Supported` と返していた。L0 surface は plugin の
+  GUI 対応を問い合わせる手段がないため、open 前は全 `Unsupported`、
+  open 成功の戻り値でのみ `dock`/`close` を主張する（ES-24）。
+- **terminal once の規律を簡素化**: `terminated` フラグを削除。
+  termination は必ず `concluded` を立てるため、`Closed` 判定だけで
+  重複 notify を無視できる（clippy `struct_excessive_bools` 対応を
+  bool 追加の抑制ではなく冗長状態の削除で解消）。
+
+### R2: 移行表（D8 の増分）
+
+| 現行 Public API / 内部 | 新設計での扱い | 根拠 |
+| --- | --- | --- |
+| `InProcessEditorOps::new(host, instance)`（pass-through） | **廃止** | lease を無検証で token 化する経路 |
+| `InProcessEditorOps::with_redeemer` | **保持（唯一の constructor）** | poc-native-dock・GPUI driver の redemption 接続点 |
+| `LeaseRedeemer<'a>`（出力 `GuiParentToken`） | **保持・seam として明示** | raw parent は OS adapter の redemption 出力に限定。公開 API から完全除去は未達（下記 DoD gap） |
+| `InProcessEditorOps::capabilities`（open 前 dock/close=Supported） | **挙動変更**: 全 Unsupported | 未検証の GUI 対応を主張しない |
+| `PluginEditorSession` 内部 `terminated: bool` | **廃止** | `concluded` と `Closed` 判定で代替 |
+| `PluginEditorSession` 内部 `editor_live: bool` | **追加**（非公開フィールド） | refused open の close 規律 |
+| `PluginEditorSession::close` | **挙動変更**（非 live Failed は adapter 非呼出し） | R1 |
+| 既存 editor_session contract 22 件（fake/L0/L1） | **保持**（test 名・期待値不変） | 非回帰 |
+
+### R3: 状態遷移表（現行実装）
+
+| 状態 | `open`/`begin_open` | `recover` | `set_visibility` | `set_size` | `reattach` | `close` | `notify_terminated` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `Closed`（未 open） | `Creating` → ok: `Attached`(`Attached`) / err: `Failed`(`Failed`) | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | 既存 session を `concluded` 化、イベントなし |
+| `Closed`（concluded） | `InvalidState`（再 open 不可・instance 解放は registry） | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | イベントなし（無視） |
+| `Creating{r}` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState`（in-flight 完了を待つ） | `Closed` + `Terminated`、遅延 `complete_*` は `StaleRequest` |
+| `Attached{m}` | `InvalidState` | `InvalidState` | `Hidden{m}` (`Hidden`) / 不変 | 不変（拒否は非致命） | detach→re-attach: `Attached`(`Detached`,`Reattached`) / 拒否: `Failed` | `Closing` → `Closed`(`Closed`) / 拒否: `Failed` | `Closed` + `Terminated` |
+| `Hidden{m}` | `InvalidState` | `InvalidState` | `Attached{m}` (`Shown`) | 不変 | 同 `Attached` | 同 `Attached` | `Closed` + `Terminated` |
+| `Detaching{r}` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | atomic: `Attached`(`Reattached`) / 拒否: `Failed` | `Closing` | `Closed` + `Terminated` |
+| `Closing{r}` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | `Closed` + `Terminated`、遅延 `complete_close` は `StaleRequest` |
+| `Failed{c}`（editor 生存しうる） | `InvalidState` | `Recovering{r}` → ok: `Attached`(`Recovered`) / err: `Failed` | `InvalidState` | `InvalidState` | `InvalidState` | `Closing` → `Closed` / 拒否: `Failed` | `Closed` + `Terminated` |
+| `Failed{c}`（refused open・`editor_live=false`） | `InvalidState` | `Recovering{r}`（同上） | `InvalidState` | `InvalidState` | `InvalidState` | **adapter 非呼出しで `Closed`**（`Closed` イベント） | `Closed` + `Terminated` |
+| `Recovering{r}` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | `InvalidState` | `Closed` + `Terminated`、遅延 `complete_attach` は `StaleRequest` |
+
+共通規則: 完了は必ず request id で照合し、不一致は `StaleRequest`
+（状態不変・イベントなし）。`Terminated` は non-`Closed` から
+`Closed` へ落ちる遷移でのみ発火し、以後は無視される。
+
+### R4: 所有責務
+
+| 概念 | 所有者（生成・破棄） | 本契約での役割 |
+| --- | --- | --- |
+| `PluginInstanceId`（= `PluginHandle`） | `InProcessHost`（plugin-host） | DSP instance の寿命。session はこれを握らず、destroy 時は `notify_terminated` を受けるだけ |
+| `PluginEditorSessionId` | `PluginEditorSessions`（plugin-host registry） | slot+generation で mint/recycle。stale id は `UnknownSession` |
+| `ParentSlotLease` | 発行側（UI 側 `SurfaceSlotRegistry` / `GpuiSurfaceAdapter`） | opaque 値。session は運ぶだけで解釈しない |
+| `SurfaceSlotId` / `WindowId` / `ViewInstanceId` | `ruviform-ui`（dock/window 所有） | plugin-host の型には現れない。composition root が `lease` へ写像する |
+| raw parent（`GuiParentToken` / HWND・NSView 等） | OS adapter（`LeaseRedeemer` の出力側） | redemption 直後に `OpenGui` へ渡すのみ。session 面に現れない |
+| widget teardown | UI driver（Dock/Window 側） | `Terminated` を受けて後始末。DSP/RT の停止を伴わない |
+| editor 生存判定（`editor_live`） | `PluginEditorSession` | 成功 attach で真、conclusion で偽。close 規律のみに使う |
+
+### R5: Capability Matrix（現行コード根拠・実機未検証）
+
+凡例: **Supported** = コード上で成功経路あり（実プラグイン実行は
+未実施）。**Unsupported** = 定義済み拒否。**NotRun** = 実機・実
+binary 未実施。**対象外** = 初期スコープ外。
+
+| 経路 | Dock（Docked open） | Floating | Resize | Hide/Show | Reparent | Close | 根拠・状態 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| L0 / VST3（Windows） | Supported（`open_gui` 実装・`kPlatformTypeHWND`） | Unsupported | Unsupported（verb なし） | Unsupported | Unsupported | Supported（`close_gui` 実装） | `ruviform-plugin-vst3/src/host.rs`。実 attach の証拠は #388 記録（本 PR では再実行せず NotRun） |
+| L0 / VST3（非 Windows） | Unsupported（`EDITOR_PLATFORM_TYPE=None`） | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | 非 Windows attach は未実装 |
+| L0 / CLAP | Unsupported（`Plugin` 既定） | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | `ruviform-plugin-clap` は GUI verb を既定 Unsupported のまま |
+| L0 / AU（macOS） | 対象外 | 対象外 | 対象外 | 対象外 | 対象外 | 対象外 | ADR `plugin-architecture-clap-vst3`: AU は初期対象外。adapter crate なし |
+| L0 / Ruviform 製 GPUI Plugin | NotRun | NotRun | NotRun | NotRun | NotRun | NotRun | plugin 側 GPUI editor の adapter・実装なし |
+| L1 out-of-process（全規格） | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | `L1EditorOps` 全 op 拒否・`l1/mod.rs` の `OpenGui`/`CloseGui` 拒否 |
+| Fake ops（contract・既定 `FakeOps::ok`） | Supported（fake） | 成功する（fake は mode/caps を強制しない） | 成功する（fake） | 成功する（fake） | 成功する（fake） | Supported（fake） | 状態機械の契約検証のみ。fake の既定 caps は dock/close のみで、op は caps を検査しない。**実 Dock PASS ではない** |
+
+Ruviform 製 GPUI Plugin 対 外部 DAW の埋込み方向は、本 PR では
+capability として宣言しない（実装 Issue が必要）。
+
+### R6: DoD 達成状況（この PR 時点）
+
+| DoD 項目 | 状態 | 根拠・未達理由 |
+| --- | --- | --- |
+| L0/L1 移行表（追加/廃止/保持）・状態遷移表・所有責務 | **達成（文書）** | R2・R3・R4 |
+| fake driver の Open/Attach/Reparent/Detach/Close・stale generation・double close・timeout・OS unsupported・crash の terminal-event | **達成（契約層）** | `tests/editor_session.rs` 28 件。Reparent は `reattach` で検証。crash は `HostLost` で代用（GPU host 固有 cause は未定義・未達） |
+| 代表実 Plugin/Format の L0/L1 capability・GUI hang で DAW/RT を巻き込まない実機受入 | **未達（NotRun）** | 実 binary・実 DAW・実 GUI hang 試験なし。R5 の NotRun を維持 |
+| Floating / Recovery の安全 fallback（Floating へ明示的に degrade） | **未達** | `recover` は同 mode の再 open のみ。Floating への自動 degrade 経路と L0 の floating op は未実装（L0 Floating は `Unsupported`） |
+| GPUI 型・raw native handle の公開 API 非露出 | **部分達成** | session 面は `editor_session.rs` の名前検査（ES-23）と `check-ui-driver-boundary` で確認。raw `GuiParentToken` は OS adapter seam（`LeaseRedeemer` 出力）と `plugin-core` の既存 wire/`Plugin` trait に残存（`GuiParentToken` 自体の除去は既存 `open_gui` 契約変更が必要なため別 Issue） |
+| `SurfaceSlotId`/`WindowId`/`ViewInstanceId` の分離 | **設計文書で分離（型は未追加）** | R4 のとおり UI 側所有。plugin-host に写像用の型を増やさない（YAGNI）。consumer の composition 実装は別 Issue |
+| 同一 Plugin Instance の Dock/Float/Hidden 同一意味論 | **部分達成** | 状態機械上は同一（R3）。実装は L0 Docked のみ |
+| Native Dock の可否（#388 Driver capability への委譲） | **委譲のまま未解決** | #388 gate は OPEN。本 PR は Native Dock PASS を主張しない |
+| 両 Consumer 非回帰 | **NotRun** | Consumer repo は本 worktree 外（scope 外） |
+
+Issue #389 は本 PR で close しない（上記未達項目を follow-up として残す）。

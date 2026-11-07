@@ -464,11 +464,14 @@ pub struct PluginEditorSession {
     request: u64,
     /// The mode an in-flight `Creating`/`Recovering` should land in.
     pending_mode: AttachMode,
-    /// Whether the terminal `Terminated` event already fired.
-    terminated: bool,
     /// A `Creating` entered via detach-for-reattach — its
     /// `complete_attach` emits `Reattached`, not `Attached`.
     reattach_pending: bool,
+    /// Whether an adapter-side editor may still exist: set by a
+    /// successful attach, cleared on conclusion. A refused fresh open
+    /// never produced an editor, so its `Failed` session closes without
+    /// an adapter `close` — otherwise the session pins its instance.
+    editor_live: bool,
     /// Whether the session reached `Closed` by an actual lifecycle
     /// path (graceful close or termination) — distinct from a session
     /// that was merely *born* `Closed` and has not opened yet. Only a
@@ -494,8 +497,8 @@ impl PluginEditorSession {
             state: EditorSessionState::Closed,
             request: 0,
             pending_mode: AttachMode::Docked,
-            terminated: false,
             reattach_pending: false,
+            editor_live: false,
             concluded: false,
             events: Vec::new(),
         }
@@ -568,10 +571,10 @@ impl PluginEditorSession {
     ///
     /// **RT contract:** non-RT only — UI-thread only.
     pub fn begin_open(&mut self, mode: AttachMode) -> Result<u64, EditorSessionError> {
-        // A `concluded`/`terminated` session is `Closed` but dead — its
-        // lifecycle already converged; reopening it would let the
-        // registry retire a *live* session (two editors per instance).
-        if self.concluded || self.terminated || !matches!(self.state, EditorSessionState::Closed) {
+        // A `concluded` session is `Closed` but dead — its lifecycle
+        // already converged; reopening it would let the registry retire
+        // a *live* session (two editors per instance).
+        if self.concluded || !matches!(self.state, EditorSessionState::Closed) {
             return Err(EditorSessionError::InvalidState);
         }
         self.pending_mode = mode;
@@ -660,6 +663,7 @@ impl PluginEditorSession {
             ) if r != request => Err(EditorSessionError::StaleRequest),
             (EditorSessionState::Creating { .. }, Ok(())) => {
                 self.state = EditorSessionState::Attached { mode };
+                self.editor_live = true;
                 // A `Creating` reached through `complete_detach` is a
                 // re-attach — same event vocabulary as the sync path.
                 if self.reattach_pending {
@@ -672,6 +676,7 @@ impl PluginEditorSession {
             }
             (EditorSessionState::Recovering { .. }, Ok(())) => {
                 self.state = EditorSessionState::Attached { mode };
+                self.editor_live = true;
                 self.push(EditorSessionEvent::Recovered { mode });
                 Ok(())
             }
@@ -696,6 +701,7 @@ impl PluginEditorSession {
         match self.state {
             EditorSessionState::Closing { request: r } if r == request => {
                 self.state = EditorSessionState::Closed;
+                self.editor_live = false;
                 self.concluded = true;
                 self.push(EditorSessionEvent::Closed);
                 Ok(())
@@ -749,17 +755,14 @@ impl PluginEditorSession {
     ///
     /// **RT contract:** non-RT only — UI-thread only.
     pub fn notify_terminated(&mut self, cause: SessionFailCause) {
-        if self.terminated {
-            return;
-        }
         if matches!(self.state, EditorSessionState::Closed) {
-            // A never-opened session has nothing live to terminate, but
-            // it must still be poisoned so it can never be opened.
+            // Nothing live to terminate — a never-opened or already
+            // converged session is poisoned so it can never be opened.
             self.concluded = true;
             return;
         }
-        self.terminated = true;
         self.concluded = true;
+        self.editor_live = false;
         self.state = EditorSessionState::Closed;
         self.push(EditorSessionEvent::Terminated { cause });
     }
@@ -808,6 +811,9 @@ impl PluginEditorSession {
     /// On adapter refusal the session lands `Failed` and the error is
     /// returned.
     ///
+    /// A `Failed` session whose open was refused has no adapter editor,
+    /// so it concludes without an adapter `close` call.
+    ///
     /// # Errors
     /// [`EditorSessionError::InvalidState`] on double-close / never-open;
     /// [`EditorSessionError::Ops`] on an adapter refusal.
@@ -815,6 +821,9 @@ impl PluginEditorSession {
     /// **RT contract:** non-RT only — UI-thread only.
     pub fn close<O: EditorSessionOps>(&mut self, ops: &mut O) -> Result<(), EditorSessionError> {
         let request = self.begin_close()?;
+        if !self.editor_live {
+            return self.complete_close(request);
+        }
         match ops.close(self.id) {
             Ok(()) => self.complete_close(request),
             Err(error) => {
@@ -1132,19 +1141,18 @@ impl PluginEditorSessions {
 /// L0 editor-session ops: drives the existing [`InProcessHost`]
 /// `OpenGui`/`CloseGui` command path for one instance.
 ///
-/// This is the **only** production place that mints a raw
-/// [`GuiParentToken`] from a session [`ParentSlotLease`] — through an
-/// injected [`LeaseRedeemer`] (the adapter-backed path) or, for
-/// [`InProcessEditorOps::new`], pass-through
-/// (`GuiParentToken::new(lease.raw())`, the lease payload already being
-/// the raw token). A plugin whose `open_gui` is the default
-/// `Unsupported` surfaces [`EditorOpError::Unsupported`].
+/// Every `OpenGui` carries a raw [`GuiParentToken`] minted by the
+/// injected [`LeaseRedeemer`] — the only path from a session
+/// [`ParentSlotLease`] to a native parent. There is no pass-through: a
+/// lease payload is never reinterpreted as a raw token. A plugin whose
+/// `open_gui` is the default `Unsupported` surfaces
+/// [`EditorOpError::Unsupported`].
 ///
 /// **RT contract:** non-RT only — UI-thread only.
 pub struct InProcessEditorOps<'a> {
     host: &'a mut InProcessHost,
     instance: PluginHandle,
-    redeemer: Option<Box<LeaseRedeemer<'a>>>,
+    redeemer: Box<LeaseRedeemer<'a>>,
 }
 
 /// Redeems an opaque [`ParentSlotLease`] into the raw
@@ -1164,24 +1172,10 @@ pub type LeaseRedeemer<'a> =
     dyn FnMut(&ParentSlotLease) -> Result<GuiParentToken, EditorOpError> + 'a;
 
 impl<'a> InProcessEditorOps<'a> {
-    /// Wraps `host` to drive editor ops for `instance` — the
-    /// pass-through redemption used when the lease payload already
-    /// *is* the raw parent token (test fakes and flat issuers).
-    ///
-    /// **RT contract:** non-RT only — UI-thread only.
-    #[must_use]
-    pub fn new(host: &'a mut InProcessHost, instance: PluginHandle) -> Self {
-        Self {
-            host,
-            instance,
-            redeemer: None,
-        }
-    }
-
-    /// Wraps `host` with an adapter-backed [`LeaseRedeemer`] — the
-    /// real redemption path: the adapter validates the lease against
-    /// its own ledger before yielding the raw parent token, so a
-    /// stale or forged lease never reaches the plugin.
+    /// Wraps `host` to drive editor ops for `instance`, redeeming leases
+    /// through `redeemer` — the adapter validates the lease against its
+    /// own ledger before yielding the raw parent token, so a stale or
+    /// forged lease never reaches the plugin.
     ///
     /// **RT contract:** non-RT only — UI-thread only.
     #[must_use]
@@ -1193,7 +1187,7 @@ impl<'a> InProcessEditorOps<'a> {
         Self {
             host,
             instance,
-            redeemer: Some(redeemer),
+            redeemer,
         }
     }
 }
@@ -1219,19 +1213,14 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
         &self,
         _session: PluginEditorSessionId,
     ) -> Result<EditorCapabilities, EditorOpError> {
-        // The L0 command surface carries open/close only — report the
-        // honest set rather than claiming dock/resize/hide the wire
-        // vocabulary cannot express.
-        Ok(EditorCapabilities {
-            dock: Support::Supported,
-            close: Support::Supported,
-            ..EditorCapabilities::default()
-        })
+        // The L0 command surface has no GUI capability query, so nothing
+        // is advertised before an open proves what the plugin supports.
+        Ok(EditorCapabilities::default())
     }
 
     fn open(
         &mut self,
-        session: PluginEditorSessionId,
+        _session: PluginEditorSessionId,
         lease: &ParentSlotLease,
         _size: EditorSize,
         mode: AttachMode,
@@ -1243,19 +1232,18 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
             AttachMode::Docked => {}
             _ => return Err(EditorOpError::Unsupported),
         }
-        // Redeem the lease at this adapter boundary: an injected
-        // `LeaseRedeemer` validates it against the issuer's ledger;
-        // the pass-through form treats the payload as the raw token
-        // already (test fakes and flat issuers).
-        let parent = match self.redeemer.as_mut() {
-            Some(redeem) => redeem(lease)?,
-            None => GuiParentToken::new(lease.raw()),
-        };
+        let parent = (self.redeemer)(lease)?;
         match self.host.execute(HostCommand::OpenGui {
             handle: self.instance,
             parent,
         }) {
-            Ok(HostReply::Opened { .. }) => self.capabilities(session),
+            // The L0 surface carries open/close only — an accepted docked
+            // open proves dock and close; nothing else is claimed.
+            Ok(HostReply::Opened { .. }) => Ok(EditorCapabilities {
+                dock: Support::Supported,
+                close: Support::Supported,
+                ..EditorCapabilities::default()
+            }),
             // Any other successful reply shape is an invariant violation
             // in the host mapping — surfaced as a plugin-level failure.
             Ok(_) => Err(EditorOpError::Plugin),

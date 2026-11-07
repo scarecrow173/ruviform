@@ -81,9 +81,10 @@ Ruviform メディア基盤のプラグインホスト層: ホストアプリケ
   terminal event 一度切り・instance 毎 ≤1 live session の
   `PluginEditorSessions` registry）と typed host port
   `EditorSessionOps`。`InProcessEditorOps` は L0 の既存
-  `OpenGui`/`CloseGui` 経路を駆動し（raw `GuiParentToken::new` の
-  唯一の production 呼出点 — session API は opaque `ParentSlotLease`
-  を運ぶ）、`L1EditorOps` は現行 L1 の実装状態を全 op
+  `OpenGui`/`CloseGui` 経路を駆動し（`ParentSlotLease` は必ず
+  `LeaseRedeemer`（OS adapter の検証付き redemption）で raw parent へ
+  変換し、lease 値を無検証に token とみなす pass-through はない）、
+  `L1EditorOps` は現行 L1 の実装状態を全 op
   `EditorOpError::Unsupported` の defined refusal として表す
   （wire に出さず L0 へ退化させない）。GUI driver 側の parent slot
   契約（`ruviform-ui::native_slot`、Issue #388）とは opaque lease
