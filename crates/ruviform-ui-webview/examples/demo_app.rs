@@ -70,8 +70,10 @@ fn main() -> ExitCode {
                 route(host, rt.dispatch_window_intent(window, intent));
             }
             WindowLifecycle::CloseRequested => {
+                // Single window: cancel its jobs (the legacy single-window
+                // close policy), then approve; the loop exits on `Destroyed`.
+                let _ = rt.cancel_window_jobs(window);
                 host.post_event(window, &Event::lifecycle(LifecycleState::Closing));
-                // Single window: approve; the loop exits on `Destroyed`.
                 let _ = host.respond_close(window, CloseDecision::Approve);
             }
             WindowLifecycle::Destroyed if host.windows().is_empty() => host.exit(),

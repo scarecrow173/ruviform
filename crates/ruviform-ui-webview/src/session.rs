@@ -196,6 +196,10 @@ impl Session {
                 awaiting_response: false,
             },
         );
+        self.queue
+            .borrow_mut()
+            .push_back((id, Ok(WindowLifecycle::Created)));
+        let _ = self.proxy.send_event(());
         Ok(id)
     }
 

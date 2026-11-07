@@ -73,6 +73,9 @@ adapter の実装は次の 2 ファイルに集約した。
 | H5 | `WindowConfig { url, devtools, … }` | `WebViewWindowConfig { spec: WindowSpec, url, devtools }`。neutral `create_window` は `SessionConfig.default_url` / `devtools` を使う | 実装済 |
 | H9 (WebView 側) | `run` / `run_multi`（legacy callback） | `run_multi(&SessionConfig, assets, data, FnMut(DriverEvent, &mut dyn WindowDriver))`。GPUI の `run` と同形 | 実装済（下記逸脱） |
 
+`create_entry` は窓を受理した時点で `WindowLifecycle::Created` を queue する（`WindowDriver::create_window`
+の契約）。`Ready` は page load まで届かないため、この順序を fixture trace（`Created`, `Ready`, …）と一致させる。
+
 ### 逸脱: legacy 単一 window `run` の削除
 
 #386 設計の Phase 1 は「旧 `run` は接続試験が通るまで残す」としていた。本 Issue では
