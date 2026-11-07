@@ -170,6 +170,17 @@ cargo run -p ruviform-ui-webview --features webview --example demo_multi
 CI は `ui-verify` ジョブが 3 OS matrix で実行する
 (Linux は WebKitGTK 開発パッケージをジョブ内で導入)。
 
+実機 e2e(manual・CI 対象外。実 OS の webview backend が必要):
+
+```sh
+# page load → IPC(ping) → event 配送 → IPC(received) を 1 window で確認し、
+# 4 マイルストーン揃いで exit 0(Issue #431)
+mise run example-ui-webview-e2e
+```
+
+`demo_app` / `demo_multi` の OS close 経路（`WM_CLOSE` → `Destroyed` → exit）は
+`evidence/issue-431-real-verify/wm-close.ps1` で駆動して確認する。
+
 ## 関連
 
 - コア: [`ruviform-ui`](../ruviform-ui/README.md)

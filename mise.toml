@@ -296,6 +296,14 @@ run = "cargo test -p ruviform-ui-gpui --features gpui-test --test consumer_obser
 [tasks.example-ui-gpui-minimal]
 description = "Run the minimal GPUI Window fixture on the real OS session (manual verification entry — not a headless/CI lane)"
 run = "cargo run -p ruviform-ui-gpui --features gpui --example minimal_window"
+# Issue #431 manual lanes (real OS session only, never CI). The
+# close steps are driven by evidence/issue-431-real-verify/wm-close.ps1.
+[tasks.example-ui-gpui-lifecycle]
+description = "Run the real-OS-window lifecycle check (two windows, Dock 2-phase move, defer/approve closes; manual verification — drive closes with wm-close.ps1 -Steps \"inspector,inspector,main\")"
+run = "cargo run -p ruviform-ui-gpui --features gpui --example real_window_lifecycle"
+[tasks.example-ui-webview-e2e]
+description = "Run the real WebView round-trip check (page load → IPC → event delivery; WebView2 on Windows, manual verification — not a CI lane)"
+run = "cargo run -p ruviform-ui-webview --features webview --example e2e_smoke"
 
 # Canonical manual-verification entry for the RF388/389 native-dock
 # PoC: attaches a real native editor (probe plugin open_gui → Win32
