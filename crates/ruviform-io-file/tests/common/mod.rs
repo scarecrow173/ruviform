@@ -128,6 +128,38 @@ pub fn write_file(path: &Path, data: &[u8]) {
     std::fs::write(path, data).expect("write test file");
 }
 
+/// Joins `rel` onto a canonical root for use as an *in-root*
+/// absolute link target. The capability's absolute-target rule is
+/// a lexical component-prefix match against
+/// `RootedDir::canonical_root()` (the handle-derived spelling), so
+/// an in-root target must reuse that exact spelling — an alias of
+/// the same directory (`/var` vs `/private/var`, Windows 8.3 short
+/// names) is out-of-contract and conservatively `EscapesRoot`s.
+/// Windows link creators reject the verbatim `\\?\` form, so it is
+/// mapped to the DOS/UNC spelling (`\\?\UNC\s\sh` → `\\s\sh`) —
+/// the stored `\??\` substitute name still bridges back to the
+/// same canonical components.
+pub fn canonical_link_target(canonical_root: &Path, rel: &str) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let s = canonical_root.to_string_lossy();
+        let dos = if let Some(rest) = s
+            .strip_prefix(r"\\?\UNC\")
+            .or_else(|| s.strip_prefix(r"\\?\UNC/"))
+        {
+            format!(r"\\{rest}")
+        } else {
+            s.trim_start_matches(r"\\?\").to_owned()
+        };
+        let base = PathBuf::from(dos);
+        if rel.is_empty() { base } else { base.join(rel) }
+    }
+    #[cfg(not(windows))]
+    {
+        canonical_root.join(rel)
+    }
+}
+
 /// Creates a fifo at `path` (unix only).
 #[cfg(unix)]
 #[expect(unsafe_code, reason = "mkfifo(3) is libc FFI; see SAFETY comment")]

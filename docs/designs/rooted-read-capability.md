@@ -723,7 +723,7 @@ SV 側は `open_pinned` が `Unsupported` なら自前の digest verify
 
 | 項目 | 契約 |
 | --- | --- |
-| 絶対 symlink | TEXTUAL prefix 判定（canonical root component 一致・case 規則は OS 準拠）+ raw suffix の FD walk。R-prefix を外れる target は tainted → `EscapesRoot`（SV canonicalize が受理し得る「外を経由して戻る」形は保守的に拒否 — 意図的な縮小として明記）。 |
+| 絶対 symlink | TEXTUAL prefix 判定（canonical root component 一致・case 規則は OS 準拠）+ raw suffix の FD walk。R-prefix を外れる target は tainted → `EscapesRoot`（SV canonicalize が受理し得る「外を経由して戻る」形は保守的に拒否 — 意図的な縮小として明記）。同じく **同一 dir の非 canonical alias 綴り**（`/var` vs `/private/var`・8.3 短縮名・bind mount・`subst`・firmlink 由来の別綴り）で書かれた in-root target も kernel 的には内だが lexical 判定では外 → 保守的 `EscapesRoot`（alias を判定するには capability が排除する path 再解決が必要になるための意図的縮小。受理されるのは `canonical_root()` の成分列で綴られた target のみ）。 |
 | `..` | locator 内の `..` は `RelativePath` が拒否。link target 内の `..` は resolved chain の pop（kernel post-substitution 意味に忠実）。capability root floor を割ると `EscapesRoot`。scoped dir の chain 内は合法。 |
 | symlink loop | hop 上限（既定 40）で `LoopDetected`。link 環は hop 消費で必ず停止。 |
 | hop/depth limit | `max_depth`（locator 成分、既定 40）/`max_components_total`（展開込み、既定 512）/`max_open_dirs`（同時 dir handle、既定 64）。`LimitExceeded`。resolve は成分ごとに 1 個まで dir fd を保持（EMFILE 自体は `Io`）。 |

@@ -9,7 +9,7 @@
 
 mod common;
 
-use common::{TestDir, dir_link, file_link, write_file};
+use common::{TestDir, canonical_link_target, dir_link, file_link, write_file};
 
 use std::ffi::OsStr;
 use std::io::Read;
@@ -115,11 +115,19 @@ fn failure_classifications_on_real_fs() {
 fn leaf_link_nofollow_vs_withinroot() {
     let dir = TestDir::new("leaflink");
     tree(&dir);
-    if file_link(&dir.path().join("f"), &dir.path().join("l")).is_err() {
+    let root = root_of(&dir);
+    // In-root absolute target spelled via the canonical root (the
+    // contract's lexical anchor) — `dir.path()` is a non-canonical
+    // alias on macOS/Windows and would conservatively `EscapesRoot`.
+    if file_link(
+        &canonical_link_target(root.canonical_root(), "f"),
+        &dir.path().join("l"),
+    )
+    .is_err()
+    {
         eprintln!("skipping: cannot create a file link on this host");
         return;
     }
-    let root = root_of(&dir);
     let info = root.metadata(&rel("l"), FollowMode::NoFollow).unwrap();
     assert_eq!(info.kind, NodeKind::Symlink);
     assert_eq!(info.leaf_kind, NodeKind::Symlink);
@@ -179,17 +187,68 @@ fn leaf_link_absolute_inside_resolves() {
     assert_eq!(read_all(&mut f), "deep");
 }
 
+// The contract's documented narrowing: an absolute target spelled
+// through a *non-canonical alias* of the root (here a second link
+// into it — the class that bit the original tests via `/var` vs
+// `/private/var` and 8.3 temp names) kernel-resolves inside the
+// root but fails the lexical prefix check, so it conservatively
+// `EscapesRoot`s. Both links are dir links (junctions — no
+// privilege needed on Windows).
+#[test]
+fn absolute_link_alias_spelling_escapes_root() {
+    let dir = TestDir::new("alias-out");
+    let outside = TestDir::new("alias-out-side");
+    tree(&dir);
+    let root = root_of(&dir);
+    // `outside/alias` is a non-canonical path spelling of the root.
+    if dir_link(
+        &canonical_link_target(root.canonical_root(), ""),
+        &outside.path().join("alias"),
+    )
+    .is_err()
+    {
+        eprintln!("skipping: cannot create a dir link on this host");
+        return;
+    }
+    // `<outside>/alias/d` kernel-resolves to `<root>/d` — inside —
+    // yet the stored text never prefixes the canonical root.
+    if dir_link(
+        &outside.path().join("alias").join("d"),
+        &dir.path().join("l"),
+    )
+    .is_err()
+    {
+        eprintln!("skipping: cannot create a dir link on this host");
+        return;
+    }
+    assert_eq!(
+        root.open_regular(&rel("l/f"), FollowMode::WithinRoot)
+            .unwrap_err()
+            .kind(),
+        FileErrorKind::EscapesRoot
+    );
+    assert_eq!(
+        root.metadata(&rel("l"), FollowMode::NoFollow).unwrap().kind,
+        NodeKind::Symlink
+    );
+}
+
 #[test]
 fn leaf_link_swap_never_reads_outside() {
     let dir = TestDir::new("leafswap");
     let outside = TestDir::new("leafswap-out");
     tree(&dir);
     write_file(&outside.path().join("secret"), b"SECRET");
-    if file_link(&dir.path().join("f"), &dir.path().join("l")).is_err() {
+    let root = root_of(&dir);
+    if file_link(
+        &canonical_link_target(root.canonical_root(), "f"),
+        &dir.path().join("l"),
+    )
+    .is_err()
+    {
         eprintln!("skipping: cannot create a file link on this host");
         return;
     }
-    let root = root_of(&dir);
     // Read once for sanity, then swap the link at an outside object.
     let mut f = root
         .open_regular(&rel("l"), FollowMode::WithinRoot)
@@ -215,11 +274,19 @@ fn leaf_link_swap_never_reads_outside() {
 fn intermediate_link_descend_withinroot() {
     let dir = TestDir::new("midlink");
     tree(&dir);
-    if dir_link(&dir.path().join("d"), &dir.path().join("ld")).is_err() {
+    let root = root_of(&dir);
+    // Same canonical-anchor rule as the leaf cases: the junction
+    // target must be spelled as the canonical root or the TEXTUAL
+    // prefix check (correctly, conservatively) escapes.
+    if dir_link(
+        &canonical_link_target(root.canonical_root(), "d"),
+        &dir.path().join("ld"),
+    )
+    .is_err()
+    {
         eprintln!("skipping: cannot create a dir link on this host");
         return;
     }
-    let root = root_of(&dir);
     let mut f = root
         .open_regular(&rel("ld/sub/g"), FollowMode::WithinRoot)
         .unwrap();
@@ -470,13 +537,8 @@ fn junction_absolute_inside_resolves_via_nt_bridge() {
     let root = root_of(&dir);
     // Junction targets are stored as \??\<path> — the bridge maps it
     // onto the canonical (verbatim-stripped) component list.
-    let target_dos = root
-        .canonical_root()
-        .to_string_lossy()
-        .trim_start_matches(r"\\?\")
-        .to_string();
     if dir_link(
-        Path::new(&target_dos).join("d").as_path(),
+        &canonical_link_target(root.canonical_root(), "d"),
         &dir.path().join("lj"),
     )
     .is_err()

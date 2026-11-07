@@ -173,8 +173,13 @@ handle-relative primitive で提供する。
   で解決する（`..` は resolved ancestor handle の pop — kernel の
   post-substitution 意味に忠実。root floor を割ると `EscapesRoot`）。
   「外を経由して戻る」形の target は保守的に `EscapesRoot`（意図的
-  な縮小）。hop 上限・loop 検出・component/depth/fd budget は
-  typed 失敗で報告する。
+  な縮小）。同一 dir の非 canonical alias 綴り（`/var` vs
+  `/private/var`・8.3 短縮名・bind mount・`subst` 等）で書かれた
+  in-root target も同じく保守的 `EscapesRoot` — 受理されるのは
+  `canonical_root()` の成分列で綴られた絶対 target のみ（alias
+  判定は path 再解決を要し本 capability の不変条件と衝突するため
+  の意図的縮小）。hop 上限・loop 検出・component/depth/fd budget
+  は typed 失敗で報告する。
 - scoped dir（`open_dir` の返り値）は capability root からの
   resolved ancestor handle chain を保持し、link target 中の `..`
   は chain 内を pop できる（SV の `../b/x` 相当の合法的な in-root

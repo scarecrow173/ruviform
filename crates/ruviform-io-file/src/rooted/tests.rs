@@ -525,6 +525,86 @@ fn absolute_target_dotdot_inside_root_is_kernel_faithful() {
     assert_eq!(read_all(&mut file), "landed");
 }
 
+/// Two-component root for the TEXTUAL `..` cases (`/a/b` vs
+/// `C:\a\b`): a `..` consumed while `virtual` is still a proper
+/// prefix of R exercises the TEXTUAL pop arm the single-component
+/// `/r` root can never reach.
+#[cfg(windows)]
+fn nested_root_path() -> &'static Path {
+    Path::new("C:\\a\\b")
+}
+#[cfg(not(windows))]
+fn nested_root_path() -> &'static Path {
+    Path::new("/a/b")
+}
+
+#[test]
+fn absolute_target_dotdot_within_prefix_is_kernel_faithful() {
+    // `<R-parent>/../<R>/f` — the `..` folds a component that is a
+    // *proper prefix* of R (kernel: `/a/../a/b/f` = `/a/b/f`), then
+    // the walk re-enters R and resolves FD-relative. Pins the
+    // TEXTUAL `..` pop on the accept arm; the tainted sibling
+    // (`<R-parent>/../<else>`) escapes because the folded result
+    // stops prefixing R.
+    let mut fs = TestFs::default();
+    let r = nested_root_path();
+    fs.put(r, TestNode::dir(1));
+    fs.put(r.join("f"), TestNode::file(2, b"landed"));
+    #[cfg(windows)]
+    fs.put(r.join("l"), TestNode::link(3, "C:\\a\\..\\a\\b\\f"));
+    #[cfg(not(windows))]
+    fs.put(r.join("l"), TestNode::link(3, "/a/../a/b/f"));
+    #[cfg(windows)]
+    fs.put(r.join("m"), TestNode::link(4, "C:\\a\\..\\x\\f"));
+    #[cfg(not(windows))]
+    fs.put(r.join("m"), TestNode::link(4, "/a/../x/f"));
+    let (_fs, root) = mount_at(r, fs, RootedOptions::default());
+    let mut file = root
+        .open_regular(&rel("l"), FollowMode::WithinRoot)
+        .unwrap();
+    assert_eq!(read_all(&mut file), "landed");
+    // `/a/../x/f` — the fold leaves the canonical prefix → tainted.
+    assert_eq!(
+        root.open_regular(&rel("m"), FollowMode::WithinRoot)
+            .unwrap_err()
+            .kind(),
+        FileErrorKind::EscapesRoot
+    );
+}
+
+#[test]
+fn absolute_target_dotdot_at_namespace_root_clamps_and_resolves() {
+    // `/../r/f` — `..` on an empty virtual clamps to the namespace
+    // root (kernel `/..` = `/`), then re-enters R → accept.
+    let mut fs = fs_root();
+    fs.put(node_path(&["f"]), TestNode::file(2, b"landed"));
+    #[cfg(windows)]
+    fs.put(node_path(&["l"]), TestNode::link(3, "C:\\..\\r\\f"));
+    #[cfg(not(windows))]
+    fs.put(node_path(&["l"]), TestNode::link(3, "/../r/f"));
+    let (_fs, root) = mount(fs);
+    #[cfg(windows)]
+    {
+        // Windows narrows this arm: folding `..` pops the `C:`
+        // component and `r` alone can never re-prefix `[C:, r]`
+        // — conservative EscapesRoot (kernel would accept; same
+        // wrong-reject class as non-canonical alias spellings).
+        assert_eq!(
+            root.open_regular(&rel("l"), FollowMode::WithinRoot)
+                .unwrap_err()
+                .kind(),
+            FileErrorKind::EscapesRoot
+        );
+    }
+    #[cfg(not(windows))]
+    {
+        let mut file = root
+            .open_regular(&rel("l"), FollowMode::WithinRoot)
+            .unwrap();
+        assert_eq!(read_all(&mut file), "landed");
+    }
+}
+
 // ----------------------------------------------------------------
 // Loops and budgets
 // ----------------------------------------------------------------

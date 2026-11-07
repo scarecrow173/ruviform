@@ -208,7 +208,12 @@ impl RootedDir {
 
     /// The capability root's canonical path. Used only as the lexical
     /// anchor for absolute-link prefix policy — the pinned root
-    /// handle, not this string, is the security guarantee.
+    /// handle, not this string, is the security guarantee. An
+    /// absolute link target is accepted only when spelled through
+    /// this exact component sequence; another spelling of the same
+    /// directory (`/var` vs `/private/var`, 8.3 names, bind mounts,
+    /// `subst` drives) is a non-canonical alias — out-of-contract —
+    /// and conservatively fails `EscapesRoot`.
     ///
     /// **RT contract:** non-RT only.
     #[must_use]
@@ -525,6 +530,12 @@ pub enum FollowMode {
     /// Leaf and intermediate links follow the same rule; a target
     /// that would escape fails `EscapesRoot` (including the
     /// conservative rejection of targets that leave and return).
+    /// Absolute targets are judged lexically against
+    /// [`RootedDir::canonical_root`]'s component sequence — a target
+    /// spelled through a non-canonical alias of the root kernel-
+    /// resolves inside yet conservatively fails `EscapesRoot` (the
+    /// documented narrowing: judging aliases would require the path
+    /// re-resolution this capability exists to remove).
     WithinRoot,
 }
 

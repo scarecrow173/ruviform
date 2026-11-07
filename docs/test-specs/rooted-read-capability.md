@@ -85,6 +85,12 @@ assert する。OS 非依存で resolve 規則の全分岐を網羅する。
 - `resolve_absolute_link_in/out`: 絶対 link が canonical root
   prefix 内のみ受理、外は `EscapesRoot`（lexical 正規化で
   `root/../x` 等の畳込みも検査）。
+- `absolute_target_dotdot_within_prefix_is_kernel_faithful` /
+  `absolute_target_dotdot_at_namespace_root_clamps_and_resolves`:
+  TEXTUAL フェーズの `..` fold を pin — prefix 内での fold は
+  kernel 忠実に受理、prefix を外れる fold は `EscapesRoot`、
+  namespace root での clamp も受理（Windows は drive 成分を
+  畳み戻せず保守的 reject — 限界として pin）。
 - `resolve_dotdot_overflow`: link target `../../..` で stack が
   root を割る → `EscapesRoot`。
 - `resolve_loop_and_hops`: `a→b`,`b→a` 環 → `LoopDetected`；
@@ -107,6 +113,10 @@ assert する。OS 非依存で resolve 規則の全分岐を網羅する。
   受理される（canonical root prefix 一致）。
 - `escape_absolute_link` / `escape_relative_link_to_outside`:
   `WithinRoot` でも root 外 target は `EscapesRoot`。
+- `absolute_link_alias_spelling_escapes_root`: canonical root と
+  同一 dir の**非 canonical alias 綴り**（別 link 経由）で書かれた
+  絶対 target — kernel 的には in-root だが lexical 判定で
+  `EscapesRoot`（契約の意図的縮小を pin）。
 - `swap_leaf_open_pinned`: `pin` → leaf を outside file への link
   に差し替え → `open_pinned` が `IdentityMismatch`/`EscapesRoot`
   で失敗し `Read` から outside byte が出ない。
