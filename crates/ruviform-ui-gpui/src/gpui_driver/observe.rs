@@ -49,8 +49,8 @@ pub struct ViewObservation {
     pub inbox_len: usize,
 }
 
-/// Drawing plan of one Meter, `TimeAxis`, or Waveform component: the
-/// values the renderer paints, with GPUI types left out (Issue #436).
+/// Drawing plan of one drawing component: the values the renderer paints,
+/// with GPUI types left out (Issues #436, #442).
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum DrawnPlan {
@@ -68,6 +68,25 @@ pub enum DrawnPlan {
     Waveform {
         /// One entry per channel, including channels with no painted bin.
         channels: Vec<DrawnWaveformChannel>,
+    },
+    /// Spectrogram cells that paint. Gap columns and non-finite magnitudes
+    /// draw nothing and are absent.
+    Spectrogram {
+        /// Cells in paint order: by column, then by row.
+        cells: Vec<DrawnCell>,
+    },
+    /// Label text as painted.
+    Label {
+        /// Display text.
+        text: String,
+    },
+    /// Table grid as painted: the header and the data rows.
+    Table {
+        /// Column titles in declared order.
+        header: Vec<String>,
+        /// Data rows in declared order. `None` is a missing cell: it draws
+        /// empty and keeps its column position.
+        rows: Vec<Vec<Option<String>>>,
     },
 }
 
@@ -100,6 +119,25 @@ pub struct DrawnMark {
     pub label: String,
 }
 
+/// One drawn Spectrogram cell. `x0`/`x1` are fractions of the viewport
+/// width and `y0`/`y1` are fractions of the spectrogram height, both in
+/// `[0, 1]`; `y` is measured top-down, so row 0 (lowest frequency) sits at
+/// the bottom. `intensity` is clamped to `[0, 1]`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct DrawnCell {
+    /// Left edge, as a fraction of the viewport width.
+    pub x0: f64,
+    /// Right edge, as a fraction of the viewport width.
+    pub x1: f64,
+    /// Top edge, as a fraction of the spectrogram height.
+    pub y0: f64,
+    /// Bottom edge, as a fraction of the spectrogram height.
+    pub y1: f64,
+    /// Intensity in `[0, 1]`, the alpha of the cell's fill.
+    pub intensity: f64,
+}
+
 /// The painted Waveform bins of one channel.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -117,8 +155,9 @@ pub struct DrawnWaveformChannel {
 pub struct ViewDrawn {
     /// Window hosting the view.
     pub window: WindowId,
-    /// Drawing plans in paint order. Only Meter, `TimeAxis`, and Waveform
-    /// components appear; a Tabs strip contributes its active child only.
+    /// Drawing plans in paint order. Only drawing components appear (Meter,
+    /// `TimeAxis`, Waveform, Spectrogram, Label, Table); a Tabs strip
+    /// contributes its active child only.
     pub components: Vec<ComponentDrawn>,
 }
 
@@ -239,10 +278,9 @@ impl GpuiObserver {
         })
     }
 
-    /// Drawing plans of the Meter, `TimeAxis`, and Waveform components the
-    /// view mounted in `window` paints; `None` when the window hosts no
-    /// view. Components are in paint order, which differs from the key
-    /// order of [`observe`](Self::observe).
+    /// Drawing plans of the drawing components the view mounted in `window`
+    /// paints; `None` when the window hosts no view. Components are in paint
+    /// order, which differs from the key order of [`observe`](Self::observe).
     #[must_use]
     pub fn drawn(&self, window: WindowId) -> Option<ViewDrawn> {
         let view = self.view(window).ok()?;
@@ -352,6 +390,23 @@ fn to_drawn_plan(plan: DrawPlan) -> DrawnPlan {
                 .enumerate()
                 .map(|(channel, bins)| DrawnWaveformChannel { channel, bins })
                 .collect(),
+        },
+        DrawPlan::Spectrogram(cells) => DrawnPlan::Spectrogram {
+            cells: cells
+                .into_iter()
+                .map(|c| DrawnCell {
+                    x0: f64::from(c.x0),
+                    x1: f64::from(c.x1),
+                    y0: f64::from(c.y0),
+                    y1: f64::from(c.y1),
+                    intensity: f64::from(c.intensity),
+                })
+                .collect(),
+        },
+        DrawPlan::Label(text) => DrawnPlan::Label { text },
+        DrawPlan::Table(table) => DrawnPlan::Table {
+            header: table.header,
+            rows: table.rows,
         },
     }
 }

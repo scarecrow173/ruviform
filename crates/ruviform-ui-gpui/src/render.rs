@@ -1392,9 +1392,9 @@ fn axis_mark_plan(spec: &TimeAxisSpec) -> Vec<AxisMarkPlan> {
 /// Drawn Table grid: header titles and data rows as display text, in
 /// declared order. `None` is a missing cell (drawn empty, position kept).
 #[derive(Debug, Clone, PartialEq)]
-struct TablePlan {
-    header: Vec<String>,
-    rows: Vec<Vec<Option<String>>>,
+pub(crate) struct TablePlan {
+    pub(crate) header: Vec<String>,
+    pub(crate) rows: Vec<Vec<Option<String>>>,
 }
 
 fn table_plan(spec: &TableSpec) -> TablePlan {
@@ -1416,12 +1416,12 @@ fn table_plan(spec: &TableSpec) -> TablePlan {
 /// top-down normalized y span (row 0 = lowest Hz sits at the bottom),
 /// and intensity in `[0, 1]`.
 #[derive(Debug, Clone, PartialEq)]
-struct SpectrogramCellPlan {
-    x0: f32,
-    x1: f32,
-    y0: f32,
-    y1: f32,
-    intensity: f32,
+pub(crate) struct SpectrogramCellPlan {
+    pub(crate) x0: f32,
+    pub(crate) x1: f32,
+    pub(crate) y0: f32,
+    pub(crate) y1: f32,
+    pub(crate) intensity: f32,
 }
 
 /// Cells to draw for a `Spectrogram` spec. A gap column (`count == 0`)
@@ -1471,12 +1471,15 @@ pub(crate) enum DrawPlan {
     TimeAxis(Vec<AxisMarkPlan>),
     /// Per channel, the frame ranges of the bins that paint.
     Waveform(Vec<Vec<Range<u64>>>),
+    Spectrogram(Vec<SpectrogramCellPlan>),
+    /// The text `label_element` paints.
+    Label(String),
+    Table(TablePlan),
 }
 
-/// Drawing plans of the Meter, `TimeAxis`, and Waveform components the
-/// renderer paints under `spec`, in paint order. Follows `element_for`:
-/// a Panel paints every child, and a Tabs strip paints only its active
-/// child.
+/// Drawing plans of the drawing components the renderer paints under
+/// `spec`, in paint order. Follows `element_for`: a Panel paints every
+/// child, and a Tabs strip paints only its active child.
 #[cfg(feature = "gpui-test")]
 pub(crate) fn drawn_plans(spec: &ComponentSpec) -> Vec<(ComponentKey, DrawPlan)> {
     let mut out = Vec::new();
@@ -1511,6 +1514,14 @@ fn collect_drawn(spec: &ComponentSpec, out: &mut Vec<(ComponentKey, DrawPlan)>) 
                 .collect();
             out.push((w.key.clone(), DrawPlan::Waveform(channels)));
         }
+        ComponentSpec::Spectrogram(s) => {
+            out.push((
+                s.key.clone(),
+                DrawPlan::Spectrogram(spectrogram_cell_plan(s)),
+            ));
+        }
+        ComponentSpec::Label(l) => out.push((l.key.clone(), DrawPlan::Label(l.text.clone()))),
+        ComponentSpec::Table(t) => out.push((t.key.clone(), DrawPlan::Table(table_plan(t)))),
         _ => {}
     }
 }
