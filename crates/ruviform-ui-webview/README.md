@@ -7,19 +7,23 @@ WebView ホスト・`rvf://` カスタムプロトコル・組込みアセット
 
 ## 責務
 
-- ホスト(`host` モジュール・feature `webview`): tao イベントループ上に
-  wry WebView を構築し、`HostEvent` へ変換して `UiRuntime` へ流す。
-  `EventLoopProxy` による WebView2 コールバックの wakeup、resize /
-  scale-factor での WebView bounds 再適用、Close/Focus/Tick 転送を担う。
-- マルチウィンドウ(`session` モジュール・feature `webview`・Issue #181):
-  `run_multi` が 1 本のイベントループで複数 window/webview を管理する。
-  各 window に安定 `WindowId` を発行し、`WindowEvent::Windowed` で起点を
-  明示。`CloseRequested` は veto 可能な要求(既定は対象 window のみ
-  `Approve`)で、破棄は `Destroyed` で通知。未 `Ready` WebView への
-  `eval` は有界 backlog(古い順 drop)、既破棄宛ては黙って捨てる。
+- セッションホスト(`session` モジュール・feature `webview`・Issue #181 / #423):
+  `run_multi` が 1 本の tao イベントループで複数 window/webview を管理し、
+  driver-neutral な `WindowDriver` を consumer へ渡す。各 window に安定
+  `WindowId` を発行し、`DriverEvent::Windowed` で起点を明示する。
+  `CloseRequested` は veto 可能な要求(既定は対象 window のみ `Approve`)で、
+  破棄は `Destroyed` で通知。`EventLoopProxy` による WebView2 コールバックの
+  wakeup、resize / scale-factor での WebView bounds 再適用、Tick 転送を担う。
   全 window で 1 つの `WebContext`(user-data dir)を共有し、
-  last-window / app-exit 判断は consumer 側の `WindowHandle::exit`
-  呼出しに委ねる。
+  last-window / app-exit 判断は consumer 側の `WindowDriver::exit` 呼出しに委ねる。
+- 写像(`host` モジュール・feature `webview`・Issue #423 / 移行表 H1–H5):
+  - `post_event` → `evaluate_script(dispatch_script(..))`。未 `Ready` WebView へは
+    有界 backlog(古い順 drop)、既破棄宛ては黙って捨てる。
+  - wry の page load → `WindowLifecycle::Ready`(ページ URL は契約へ出さない)。
+  - `window.ipc.postMessage` 本文 → `parse_intent` → `WindowLifecycle::Action(Intent)`。
+    不正な IPC は当該 window へ `Event::error` を返し、consumer へは渡さない。
+  - 旧 `HostEvent` / `HostHandle` / `WindowConfig` はこの crate で使わない。
+    WebView 固有の URL・devtools は `WebViewWindowConfig` に局所化する。
 - スキーム(`scheme` モジュール・feature 非依存): `rvf://app` アセット配信と
   `rvf://data/<name>` 有界 range pull。WebView2 が書き換える
   `http://rvf.app` / `http://rvf.data` ホスト形も受理する。

@@ -1,13 +1,18 @@
 //! `ruviform-ui-webview` — `wry` + `tao` adapter implementing the
-//! `ruviform-ui` host boundary (Issue #156).
+//! driver-neutral `ruviform-ui` [`WindowDriver`](ruviform_ui::WindowDriver)
+//! port (Issue #156; contract mapping Issue #423).
 //!
 //! The adapter owns everything backend-shaped so `ruviform-ui` stays
 //! dependency-free:
 //!
-//! - [`host`]: windowed [`run`](host::run) — tao event loop, wry
-//!   webview, `EventLoopProxy` wake-up, `set_bounds` resize follow,
-//!   tick-driven job drain. Emits normalized [`HostEvent`]s, accepts a
-//!   [`HostHandle`] for driving back.
+//! - [`session`]: windowed [`run_multi`] — tao event loop, wry
+//!   webviews, `EventLoopProxy` wake-up, `set_bounds` resize follow,
+//!   tick-driven job drain. Emits [`DriverEvent`](ruviform_ui::DriverEvent)s
+//!   and accepts a [`WindowDriver`](ruviform_ui::WindowDriver) for driving
+//!   back (create, resize, focus, close flow, `post_event`, exit).
+//! - [`host`] (crate-private): per-window wry wiring that decodes page
+//!   load into `WindowLifecycle::Ready` and IPC bodies into typed
+//!   `WindowLifecycle::Action(Intent)`.
 //! - `scheme`: `rvf://app` + `rvf://data` custom-protocol handler —
 //!   asset serving, bounded pulls, traversal rejection, CORS. Pure;
 //!   headless-tested.
@@ -15,9 +20,12 @@
 //!   the production single-binary layout.
 //! - [`detect`]: `wry::webview_version()` backend probe (no window).
 //!
-//! Rust→frontend pushes serialize [`ruviform_ui::Event`] via
-//! [`ruviform_ui::dispatch_script`] + `evaluate_script`; the
-//! `window.__rvf` bridge is injected by the host.
+//! Rust→frontend pushes go through `post_event`, which the adapter
+//! realises as `evaluate_script(dispatch_script(..))` — the
+//! `window.__rvf` bridge is injected by the host. The legacy
+//! `HostEvent`/`HostHandle`/`WindowConfig` types are not used by this
+//! crate (migration table H1–H5 in
+//! `docs/designs/issue-386-driver-neutral-gui-host.md`).
 //!
 //! ## Feature gate
 //!
@@ -53,15 +61,9 @@ mod session;
 #[cfg(feature = "webview")]
 pub use embed::EmbedAssets;
 #[cfg(feature = "webview")]
-pub use host::{HostConfig, run};
-#[cfg(feature = "webview")]
-pub use session::{SessionConfig, run_multi};
+pub use session::{SessionConfig, WebViewWindowConfig, run_multi};
 
 pub use detect::{backend_name, detect_backend, webview_available};
-
-// Re-exported for adapter users wiring an event push loop:
-// `host.eval(&dispatch_script(&event))`.
-pub use ruviform_ui::dispatch_script;
 
 /// Returns the crate version string.
 ///

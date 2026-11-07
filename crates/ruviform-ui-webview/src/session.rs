@@ -1,30 +1,27 @@
-//! Multi-window host — one tao event loop managing many
-//! windows/webviews (Issue #181).
+//! Session host — one tao event loop managing many windows/webviews
+//! behind the driver-neutral [`WindowDriver`] port (Issues #181, #423).
 //!
-//! Same mechanics as the single-window [`host`](crate::host) —
-//! `EventLoopProxy` wake-up, `set_bounds` resize follow, tick-driven
-//! job drain — plus the multi-window contract:
-//!
-//! - **Registry**: every window/webview pair gets a stable
-//!   [`WindowId`] issued at create; backend callbacks carry it into a
-//!   shared queue so every emitted [`WindowEvent::Windowed`] knows its
-//!   origin.
+//! - **Registry**: every window/webview pair gets a stable [`WindowId`]
+//!   issued at create; backend callbacks carry it into a shared queue so
+//!   every [`DriverEvent::Windowed`] knows its origin.
 //! - **Shared `WebContext`**: all webviews share one context/user-data
 //!   dir (`WebView2`'s UDF is a process singleton lock — `poc/ui`
 //!   measured stale browser children blocking the next init). The
 //!   context lives for the whole session and drops after the loop.
-//! - **Close flow**: `CloseRequested` marks the window close-pending
-//!   and emits — it never destroys and never exits the loop. The
-//!   consumer answers via [`WindowHandle::respond_close`]; an
-//!   unanswered request defaults to `Approve` for that window only.
-//!   `Destroyed` follows any teardown (approved close, programmatic
-//!   destroy, backend loss).
-//! - **Delivery safety**: `eval` to an unknown or destroyed window is
-//!   a silent drop; a not-yet-ready webview buffers a bounded backlog
+//! - **Close flow**: `CloseRequested` marks the window close-pending and
+//!   emits — it never destroys and never exits the loop. The consumer
+//!   answers via [`WindowDriver::respond_close`]; an unanswered request
+//!   defaults to `Approve` for that window only. `Destroyed` follows any
+//!   teardown (approved close, programmatic destroy, backend loss).
+//! - **Delivery safety**: `post_event` to an unknown or destroyed window
+//!   is a silent drop; a not-yet-ready webview buffers a bounded backlog
 //!   (drop-oldest) flushed on `Ready`.
 //! - **App-exit policy**: the loop only exits via
-//!   [`WindowHandle::exit`] — last-window semantics are the
-//!   consumer's.
+//!   [`WindowDriver::exit`] — last-window semantics are the consumer's.
+//! - **Adapter-private mapping**: wry callbacks are decoded in
+//!   [`crate::host`]; the legacy `HostEvent`/`HostHandle`/`WindowConfig`
+//!   surface is not used here (migration table H1–H5,
+//!   docs/designs/issue-386-driver-neutral-gui-host.md).
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
@@ -33,28 +30,51 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use dpi::{LogicalPosition, LogicalSize};
 use ruviform_ui::{
-    AssetSource, CloseDecision, DataRegistry, HostEvent, MonitorInfo, UiError, WindowConfig,
-    WindowEvent, WindowHandle, WindowId,
+    AssetSource, Capability, CloseDecision, DataRegistry, DriverEvent, Event, LogicalSize,
+    MonitorInfo, UiError, WindowCapabilities, WindowDriver, WindowId, WindowLifecycle, WindowSpec,
+    dispatch_script,
 };
-use tao::event::{Event, StartCause, WindowEvent as TaoEvent};
+use tao::event::{Event as TaoEvent, StartCause, WindowEvent as TaoWindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget};
 use tao::platform::run_return::EventLoopExtRunReturn;
 use tao::window::WindowBuilder;
 use wry::{WebContext, WebView};
 
-use crate::host::{HostConfig, bounds_for, build_webview, full_bounds};
+use crate::host::{Inbound, bounds_for, build_webview, full_bounds};
 
-/// Bounded eval backlog per not-yet-ready window (drop-oldest).
-const MAX_EVAL_BACKLOG: usize = 16;
+/// Bounded script backlog per not-yet-ready window (drop-oldest).
+const MAX_PENDING_SCRIPTS: usize = 16;
+
+/// Per-window creation parameters: the driver-neutral [`WindowSpec`]
+/// plus the WebView-only page and devtools settings (table H5).
+///
+/// Consumers construct this — it is deliberately not
+/// `#[non_exhaustive]`.
+#[derive(Debug, Clone)]
+pub struct WebViewWindowConfig {
+    /// Driver-neutral window parameters (title, size, position, resize).
+    pub spec: WindowSpec,
+    /// Initial URL — normally inside the `rvf://app` namespace.
+    pub url: String,
+    /// Enable backend devtools for this window's webview.
+    pub devtools: bool,
+}
+
+impl Default for WebViewWindowConfig {
+    fn default() -> Self {
+        Self {
+            spec: WindowSpec::default(),
+            url: "rvf://app/index.html".to_string(),
+            devtools: cfg!(debug_assertions),
+        }
+    }
+}
 
 /// Session-level configuration for [`run_multi`].
 ///
-/// Session concerns (the shared `WebContext` user-data dir, the tick
-/// cadence) live here; per-window parameters are [`WindowConfig`]s.
-/// The single-window [`run`](crate::host::run) takes [`HostConfig`]
-/// instead — [`SessionConfig::single`] converts one for parity.
+/// Consumers construct this — it is deliberately not
+/// `#[non_exhaustive]`.
 #[derive(Debug, Clone)]
 pub struct SessionConfig {
     /// `WebView` user-data folder shared by every window in the
@@ -62,34 +82,20 @@ pub struct SessionConfig {
     /// contexts on the same folder would collide). `None` selects a
     /// process-unique temp dir.
     pub data_dir: Option<PathBuf>,
-    /// Periodic [`WindowEvent::Tick`] cadence (job-drain wakeup).
+    /// Periodic [`DriverEvent::Tick`] cadence (job-drain wakeup).
     /// `None` = never.
     pub tick: Option<Duration>,
     /// Windows to create before the loop starts. May be empty —
     /// consumers can create windows later via
-    /// [`WindowHandle::create_window`]; the loop still runs until
-    /// [`WindowHandle::exit`].
-    pub windows: Vec<WindowConfig>,
-}
-
-impl SessionConfig {
-    /// Builds a single-window session from a [`HostConfig`] — the
-    /// multi-window equivalent of [`run`](crate::host::run)'s config.
-    #[must_use]
-    pub fn single(config: &HostConfig) -> Self {
-        Self {
-            data_dir: config.data_dir.clone(),
-            tick: config.tick,
-            windows: vec![WindowConfig {
-                title: config.title.clone(),
-                width: config.width,
-                height: config.height,
-                position: None,
-                url: config.url.clone(),
-                devtools: config.devtools,
-            }],
-        }
-    }
+    /// [`WindowDriver::create_window`]; the loop still runs until
+    /// [`WindowDriver::exit`].
+    pub windows: Vec<WebViewWindowConfig>,
+    /// Page for windows created through [`WindowDriver::create_window`],
+    /// which carries only a [`WindowSpec`] and therefore no URL.
+    pub default_url: String,
+    /// Devtools flag for windows created through
+    /// [`WindowDriver::create_window`].
+    pub devtools: bool,
 }
 
 /// One managed window/webview pair plus delivery/close state.
@@ -114,12 +120,14 @@ struct Session {
     by_tao: HashMap<tao::window::WindowId, WindowId>,
     next_id: u64,
     /// Backend callbacks + host pushes share this queue:
-    /// `(window, event)` pairs, drained on `Event::UserEvent`.
-    queue: Rc<RefCell<VecDeque<(WindowId, HostEvent)>>>,
+    /// `(window, inbound)` pairs, drained on `Event::UserEvent`.
+    queue: Rc<RefCell<VecDeque<(WindowId, Inbound)>>>,
     proxy: EventLoopProxy<()>,
     web_context: WebContext,
     assets: Arc<dyn AssetSource>,
     data: DataRegistry,
+    default_url: String,
+    devtools: bool,
     want_exit: Cell<bool>,
 }
 
@@ -135,26 +143,32 @@ impl Session {
     fn create_entry(
         &mut self,
         target: &EventLoopWindowTarget<()>,
-        config: &WindowConfig,
+        spec: &WindowSpec,
+        url: &str,
+        devtools: bool,
     ) -> Result<WindowId, UiError> {
         let mut attrs = WindowBuilder::new()
-            .with_title(&config.title)
-            .with_inner_size(LogicalSize::new(config.width, config.height));
-        if let Some((x, y)) = config.position {
-            attrs = attrs.with_position(LogicalPosition::new(x, y));
+            .with_title(&spec.title)
+            .with_inner_size(dpi::LogicalSize::new(
+                spec.logical_size.width,
+                spec.logical_size.height,
+            ))
+            .with_resizable(spec.resizable);
+        if let Some(p) = spec.position {
+            attrs = attrs.with_position(dpi::LogicalPosition::new(p.x, p.y));
         }
         let window = attrs
             .build(target)
             .map_err(|e| UiError::host(format!("window creation failed: {e}")))?;
 
         let id = self.issue_id();
-        // The webview's backend callbacks stamp every queued event
-        // with this window's id — IPC bodies stay opaque.
+        // The webview's backend callbacks stamp every queued item with
+        // this window's id — IPC bodies stay opaque until decoded.
         let enqueue = {
             let queue = self.queue.clone();
             let proxy = self.proxy.clone();
-            move |ev: HostEvent| {
-                queue.borrow_mut().push_back((id, ev));
+            move |inbound: Inbound| {
+                queue.borrow_mut().push_back((id, inbound));
                 let _ = proxy.send_event(());
             }
         };
@@ -163,15 +177,14 @@ impl Session {
         let webview = build_webview(
             &window,
             &mut self.web_context,
-            &config.url,
-            config.devtools,
+            url,
+            devtools,
             self.assets.clone(),
             self.data.clone(),
             enqueue,
         )?;
 
-        let tao_id = window.id();
-        self.by_tao.insert(tao_id, id);
+        self.by_tao.insert(window.id(), id);
         self.windows.insert(
             id,
             Entry {
@@ -201,45 +214,62 @@ impl Session {
         drop(window);
         self.queue
             .borrow_mut()
-            .push_back((id, HostEvent::Destroyed));
+            .push_back((id, Ok(WindowLifecycle::Destroyed)));
         let _ = self.proxy.send_event(());
         Ok(())
     }
 
+    /// Delivers a typed event to `window`'s view (table H1): the
+    /// `rvf.ipc.v1` envelope becomes the page's dispatch script, held
+    /// in a bounded backlog until the page reports `Ready`.
+    fn post(&mut self, window: WindowId, event: &Event) {
+        // Unknown/destroyed — silent drop.
+        let Some(entry) = self.windows.get_mut(&window) else {
+            return;
+        };
+        let script = dispatch_script(event);
+        if entry.ready {
+            // Fire-and-forget: a dead page must not wedge the loop.
+            let _ = entry.webview.evaluate_script(&script);
+        } else {
+            if entry.backlog.len() >= MAX_PENDING_SCRIPTS {
+                entry.backlog.pop_front();
+            }
+            entry.backlog.push_back(script);
+        }
+    }
+
+    /// Marks `window`'s page ready and flushes its held scripts.
+    fn mark_ready(&mut self, window: WindowId) {
+        if let Some(entry) = self.windows.get_mut(&window) {
+            entry.ready = true;
+            for script in std::mem::take(&mut entry.backlog) {
+                let _ = entry.webview.evaluate_script(&script);
+            }
+        }
+    }
+
     /// Handles one tao window event for registry window `wid`:
     /// performs the native follow (bounds/focus) then emits the
-    /// normalized [`HostEvent`].
+    /// normalized lifecycle payload.
     fn on_tao_window_event(
         &mut self,
-        on_event: &mut dyn FnMut(WindowEvent, &mut dyn WindowHandle),
+        on_event: &mut dyn FnMut(DriverEvent, &mut dyn WindowDriver),
         target: &EventLoopWindowTarget<()>,
         wid: WindowId,
-        event: &TaoEvent,
+        event: &TaoWindowEvent,
     ) {
-        let mut emit = |session: &mut Self, ev: HostEvent| {
-            session.emit(
-                on_event,
-                target,
-                WindowEvent::Windowed {
-                    window: wid,
-                    event: ev,
-                },
-            );
-        };
-        match event {
-            TaoEvent::Resized(size) => {
+        let lifecycle = match event {
+            TaoWindowEvent::Resized(size) => {
                 if let Some(e) = self.windows.get(&wid) {
                     let _ = e.webview.set_bounds(bounds_for(*size));
                 }
-                emit(
-                    self,
-                    HostEvent::Resized {
-                        width: size.width,
-                        height: size.height,
-                    },
-                );
+                WindowLifecycle::Resized {
+                    width: size.width,
+                    height: size.height,
+                }
             }
-            TaoEvent::Focused(focused) => {
+            TaoWindowEvent::Focused(focused) => {
                 if let Some(e) = self.windows.get(&wid) {
                     let _ = if *focused {
                         e.webview.focus()
@@ -247,121 +277,107 @@ impl Session {
                         e.webview.focus_parent()
                     };
                 }
-                emit(self, HostEvent::Focused(*focused));
+                WindowLifecycle::Focused(*focused)
             }
-            TaoEvent::Moved(pos) => {
-                emit(self, HostEvent::Moved { x: pos.x, y: pos.y });
-            }
-            TaoEvent::ScaleFactorChanged { scale_factor, .. } => {
+            TaoWindowEvent::Moved(pos) => WindowLifecycle::Moved { x: pos.x, y: pos.y },
+            TaoWindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 if let Some(e) = self.windows.get(&wid) {
                     let _ = e.webview.set_bounds(full_bounds(&e.window));
                 }
-                emit(
-                    self,
-                    HostEvent::ScaleFactorChanged {
-                        factor: *scale_factor,
-                    },
-                );
+                WindowLifecycle::ScaleFactorChanged {
+                    factor: *scale_factor,
+                }
             }
-            TaoEvent::CloseRequested => {
-                // Veto-able request only — never destroys, never exits
-                // the loop. The default Approve for an unanswered
-                // request is applied post-emit.
-                emit(self, HostEvent::CloseRequested);
-            }
-            _ => {}
-        }
+            // Veto-able request only — never destroys, never exits the
+            // loop. The default Approve is applied after the emit.
+            TaoWindowEvent::CloseRequested => WindowLifecycle::CloseRequested,
+            _ => return,
+        };
+        self.emit(
+            on_event,
+            target,
+            DriverEvent::Windowed {
+                window: wid,
+                event: lifecycle,
+            },
+        );
     }
 
-    /// Emits one event to the consumer with a bound [`WindowHandle`],
+    /// Emits one event to the consumer with a bound [`WindowDriver`],
     /// applying pre/post semantics (ready-flush, close default).
     fn emit(
         &mut self,
-        on_event: &mut dyn FnMut(WindowEvent, &mut dyn WindowHandle),
+        on_event: &mut dyn FnMut(DriverEvent, &mut dyn WindowDriver),
         target: &EventLoopWindowTarget<()>,
-        wev: WindowEvent,
+        ev: DriverEvent,
     ) {
         // Pre-emit bookkeeping.
-        if let WindowEvent::Windowed { window, event } = &wev {
-            let window = *window;
+        let mut close_requested = None;
+        if let DriverEvent::Windowed { window, event } = &ev {
             match event {
-                HostEvent::Ready { .. } => {
-                    if let Some(entry) = self.windows.get_mut(&window) {
-                        entry.ready = true;
-                        let backlog = std::mem::take(&mut entry.backlog);
-                        for script in backlog {
-                            let _ = entry.webview.evaluate_script(&script);
-                        }
-                    }
-                }
-                HostEvent::CloseRequested => {
-                    if let Some(entry) = self.windows.get_mut(&window) {
+                WindowLifecycle::Ready => self.mark_ready(*window),
+                WindowLifecycle::CloseRequested => {
+                    if let Some(entry) = self.windows.get_mut(window) {
                         entry.close_pending = true;
                         entry.awaiting_response = true;
                     }
+                    close_requested = Some(*window);
                 }
                 _ => {}
             }
         }
 
-        // Remember whether this emit was a CloseRequested — `wev` is
-        // moved into `on_event` below.
-        let close_check = if let WindowEvent::Windowed {
-            window,
-            event: HostEvent::CloseRequested,
-        } = &wev
         {
-            Some(*window)
-        } else {
-            None
-        };
-
-        {
-            let mut host = SessionHandle {
+            let mut handle = SessionHandle {
                 session: self,
                 target,
             };
-            on_event(wev, &mut host);
+            on_event(ev, &mut handle);
         }
 
         // Post-emit default: an unanswered CloseRequested approves for
         // that window only (never the loop).
-        if let Some(wid) = close_check {
-            let default_approve = self.windows.get(&wid).is_some_and(|e| e.awaiting_response);
-            if default_approve {
-                let _ = self.destroy_entry(wid);
-            }
+        if let Some(wid) = close_requested
+            && self.windows.get(&wid).is_some_and(|e| e.awaiting_response)
+        {
+            let _ = self.destroy_entry(wid);
         }
     }
 }
 
-/// [`WindowHandle`] bound to the live session — handed to `on_event`.
+/// [`WindowDriver`] bound to the live session — handed to `on_event`.
 struct SessionHandle<'a> {
     session: &'a mut Session,
     target: &'a EventLoopWindowTarget<()>,
 }
 
-impl WindowHandle for SessionHandle<'_> {
-    fn eval(&mut self, window: WindowId, script: &str) {
-        let Some(entry) = self.session.windows.get_mut(&window) else {
-            return; // unknown/destroyed — silent drop
-        };
-        if entry.ready {
-            // Fire-and-forget: a dead page must not wedge the loop.
-            let _ = entry.webview.evaluate_script(script);
-        } else {
-            if entry.backlog.len() >= MAX_EVAL_BACKLOG {
-                entry.backlog.pop_front();
-            }
-            entry.backlog.push_back(script.to_string());
+impl WindowDriver for SessionHandle<'_> {
+    fn capabilities(&self) -> WindowCapabilities {
+        WindowCapabilities {
+            resize: Capability::Supported,
+            // `focus(false)` hands keyboard focus back to the parent
+            // window (`focus_parent`), so the release direction is
+            // implemented as well as acquisition.
+            focus: Capability::Supported,
+            scale_factor: Capability::Supported,
+            multi_window: Capability::Supported,
+            ime: Capability::Unsupported,
+            native_surface_slot: Capability::Unsupported,
         }
     }
 
-    fn resize(&mut self, window: WindowId, width: u32, height: u32) -> Result<(), UiError> {
+    fn create_window(&mut self, spec: &WindowSpec) -> Result<WindowId, UiError> {
+        let (url, devtools) = (self.session.default_url.clone(), self.session.devtools);
+        self.session.create_entry(self.target, spec, &url, devtools)
+    }
+
+    fn resize(&mut self, window: WindowId, size: LogicalSize) -> Result<(), UiError> {
         let Some(entry) = self.session.windows.get(&window) else {
             return Err(UiError::host(format!("no window {window}")));
         };
-        entry.window.set_inner_size(LogicalSize::new(width, height));
+        entry
+            .window
+            .set_inner_size(dpi::LogicalSize::new(size.width, size.height));
         Ok(())
     }
 
@@ -378,16 +394,12 @@ impl WindowHandle for SessionHandle<'_> {
         result.map_err(|e| UiError::host(format!("focus request failed: {e}")))
     }
 
-    fn create_window(&mut self, config: &WindowConfig) -> Result<WindowId, UiError> {
-        self.session.create_entry(self.target, config)
-    }
-
     fn request_close(&mut self, window: WindowId) {
         if self.session.windows.contains_key(&window) {
             self.session
                 .queue
                 .borrow_mut()
-                .push_back((window, HostEvent::CloseRequested));
+                .push_back((window, Ok(WindowLifecycle::CloseRequested)));
             let _ = self.session.proxy.send_event(());
         }
     }
@@ -411,6 +423,10 @@ impl WindowHandle for SessionHandle<'_> {
 
     fn destroy_window(&mut self, window: WindowId) -> Result<(), UiError> {
         self.session.destroy_entry(window)
+    }
+
+    fn post_event(&mut self, window: WindowId, event: &Event) {
+        self.session.post(window, event);
     }
 
     fn windows(&self) -> Vec<WindowId> {
@@ -442,9 +458,9 @@ impl WindowHandle for SessionHandle<'_> {
     }
 }
 
-/// Runs the multi-window host loop until [`WindowHandle::exit`].
+/// Runs the multi-window host loop until [`WindowDriver::exit`].
 ///
-/// `on_event` receives [`WindowEvent`]s plus a [`WindowHandle`] for
+/// `on_event` receives [`DriverEvent`]s plus a [`WindowDriver`] for
 /// driving back. It is invoked on the UI thread — it must not block;
 /// heavy work belongs to job workers via `UiRuntime`.
 ///
@@ -459,7 +475,7 @@ pub fn run_multi<F>(
     mut on_event: F,
 ) -> Result<(), UiError>
 where
-    F: FnMut(WindowEvent, &mut dyn WindowHandle),
+    F: FnMut(DriverEvent, &mut dyn WindowDriver),
 {
     let mut event_loop = EventLoopBuilder::<()>::with_user_event().build();
     let proxy = event_loop.create_proxy();
@@ -479,13 +495,15 @@ where
         web_context,
         assets,
         data,
+        default_url: config.default_url.clone(),
+        devtools: config.devtools,
         want_exit: Cell::new(false),
     };
 
     // Initial windows — a failed create aborts the session before the
     // loop starts; nothing observable is left behind.
-    for cfg in &config.windows {
-        session.create_entry(&event_loop, cfg)?;
+    for window in &config.windows {
+        session.create_entry(&event_loop, &window.spec, &window.url, window.devtools)?;
     }
 
     let mut next_tick = config.tick.map(|d| Instant::now() + d);
@@ -497,31 +515,38 @@ where
             None => ControlFlow::Wait,
         };
         match event {
-            Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
-                session.emit(&mut on_event, elwt, WindowEvent::Tick);
+            TaoEvent::NewEvents(StartCause::ResumeTimeReached { .. }) => {
+                session.emit(&mut on_event, elwt, DriverEvent::Tick);
                 next_tick = tick.map(|d| Instant::now() + d);
             }
-            Event::UserEvent(()) => {
-                loop {
-                    let next = session.queue.borrow_mut().pop_front();
-                    let Some((wid, ev)) = next else { break };
-                    // Events for windows destroyed between queueing and
-                    // draining are dropped — except `Destroyed` itself,
-                    // which must always reach the consumer.
-                    if !matches!(ev, HostEvent::Destroyed) && !session.windows.contains_key(&wid) {
-                        continue;
+            TaoEvent::UserEvent(()) => loop {
+                let next = session.queue.borrow_mut().pop_front();
+                let Some((wid, inbound)) = next else { break };
+                match inbound {
+                    Ok(ev) => {
+                        // Events for windows destroyed between queueing and
+                        // draining are dropped — except `Destroyed` itself,
+                        // which must always reach the consumer.
+                        if !matches!(ev, WindowLifecycle::Destroyed)
+                            && !session.windows.contains_key(&wid)
+                        {
+                            continue;
+                        }
+                        session.emit(
+                            &mut on_event,
+                            elwt,
+                            DriverEvent::Windowed {
+                                window: wid,
+                                event: ev,
+                            },
+                        );
                     }
-                    session.emit(
-                        &mut on_event,
-                        elwt,
-                        WindowEvent::Windowed {
-                            window: wid,
-                            event: ev,
-                        },
-                    );
+                    // A malformed IPC body is answered on its origin
+                    // window; the consumer never sees it.
+                    Err(error) => session.post(wid, &Event::error(error)),
                 }
-            }
-            Event::WindowEvent {
+            },
+            TaoEvent::WindowEvent {
                 window_id, event, ..
             } => {
                 let Some(&wid) = session.by_tao.get(&window_id) else {
@@ -531,7 +556,7 @@ where
                 };
                 session.on_tao_window_event(&mut on_event, elwt, wid, &event);
             }
-            Event::MainEventsCleared if session.want_exit.get() => {
+            TaoEvent::MainEventsCleared if session.want_exit.get() => {
                 *control_flow = ControlFlow::Exit;
             }
             _ => {}
