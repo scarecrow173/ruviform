@@ -69,6 +69,7 @@ pub mod driver;
 pub mod error;
 pub mod event;
 pub mod ipc;
+pub mod native_slot;
 pub mod render;
 pub mod runtime;
 pub mod service;
@@ -97,6 +98,11 @@ pub use event::{HostEvent, HostHandle};
 pub use ipc::{
     ErrorBody, Event, Intent, JobState, LifecycleState, MAX_INTENT_BYTES, SCHEMA_VERSION, codes,
     parse_intent, valid_op,
+};
+pub use native_slot::{
+    LeaseInfo, LogicalRect, NativeSurfaceSlot, SlotCapabilities, SlotError, SlotEvent,
+    SlotGeometry, SlotLease, SlotSpec, SlotState, SlotVisibility, Support, SurfaceSlotId,
+    SurfaceSlotRegistry,
 };
 pub use render::{NativeSurfaceHost, RenderTier, SurfaceId, SurfaceRegion};
 pub use runtime::UiRuntime;

@@ -6655,6 +6655,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-poc-native-dock"
+version = "0.1.0"
+dependencies = [
+ "ruviform-plugin-core",
+ "ruviform-plugin-host",
+ "ruviform-ui",
+ "ruviform-ui-gpui",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "ruviform-rt"
 version = "0.1.0"
 dependencies = [
@@ -6678,7 +6689,9 @@ name = "ruviform-ui-gpui"
 version = "0.1.0"
 dependencies = [
  "gpui",
+ "raw-window-handle",
  "ruviform-ui",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

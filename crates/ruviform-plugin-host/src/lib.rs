@@ -169,6 +169,7 @@
 
 mod command;
 mod composite;
+mod editor_session;
 mod endpoint;
 mod host;
 // The `pub(crate)` L1 out-of-process instance machinery (Issue #76):
@@ -183,7 +184,8 @@ mod supervisor;
 mod video;
 
 pub use command::{
-    FailureCause, GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, PluginHandle,
+    FailureCause, GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, ParentSlotLease,
+    PluginEditorSessionId, PluginHandle,
 };
 pub use composite::{
     AudioCounterSnapshot, ChildExit, HostNotification, OutOfProcessIsolation, OutOfProcessSpec,
@@ -193,6 +195,11 @@ pub use composite::{
 // `diagnostics_*` methods return these — re-exported here because
 // `mod l1` is `pub(crate)` (public consumers must be able to name
 // the result types).
+pub use editor_session::{
+    AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
+    EditorSessionOps, EditorSessionState, EditorSize, InProcessEditorOps, L1EditorOps,
+    LeaseRedeemer, PluginEditorSession, PluginEditorSessions, SessionFailCause, Support,
+};
 pub use endpoint::{EndpointBounds, PluginEndpoint};
 pub use host::{BusReport, InProcessHost};
 pub use l1::diag::{DiagRegistry, DiagnosticQuery, DiagnosticRecord, SpawnPhase, StderrSnapshot};

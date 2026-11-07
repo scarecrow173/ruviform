@@ -74,6 +74,20 @@ Ruviform メディア基盤のプラグインホスト層: ホストアプリケ
   （`init`・処理通知・状態・GUI — 全てデフォルト実装付きで、最小プラグインは
   記述子・パラメータ・処理契約のみ実装すればよい）で拡張する。
   `PluginFactory` は規格アダプタが `register_factory` へ渡す登録単位。
+- エディタセッション（`editor_session` モジュール, Issue #389 —
+  **全操作 NONRT**）: driver-neutral な `PluginEditorSession` 状態機械
+  （`Closed → Creating → Attached{Docked|Floating} → Hidden|Detaching|
+  Closing → Closed`・`Failed → Recovering|Closed`。request 世代管理・
+  terminal event 一度切り・instance 毎 ≤1 live session の
+  `PluginEditorSessions` registry）と typed host port
+  `EditorSessionOps`。`InProcessEditorOps` は L0 の既存
+  `OpenGui`/`CloseGui` 経路を駆動し（raw `GuiParentToken::new` の
+  唯一の production 呼出点 — session API は opaque `ParentSlotLease`
+  を運ぶ）、`L1EditorOps` は現行 L1 の実装状態を全 op
+  `EditorOpError::Unsupported` の defined refusal として表す
+  （wire に出さず L0 へ退化させない）。GUI driver 側の parent slot
+  契約（`ruviform-ui::native_slot`、Issue #388）とは opaque lease
+  経由で接続し、plugin 系 ↔ ui 系の相互依存は持たない。
 
 ## 層・許可依存
 

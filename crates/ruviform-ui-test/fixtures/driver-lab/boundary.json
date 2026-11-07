@@ -83,10 +83,18 @@
     {
       "package": "ruviform-ui-gpui",
       "role": "driver-adapter",
-      "allowedDeps": ["gpui"],
+      "allowedDeps": ["gpui", "raw-window-handle"],
       "viaFeatures": ["gpui"],
       "required": false,
-      "reason": "Issue #386 の GPUI 標準 Driver adapter。main 未 merge のため required=false・到着時に自動検査開始"
+      "reason": "Issue #386 の GPUI 標準 Driver adapter。main 未 merge のため required=false・到着時に自動検査開始。raw-window-handle は Issue #388 NativeSurfaceSlot の OS parent handle 捕捉用途で gpui feature 経由 optional のみ"
+    },
+    {
+      "package": "ruviform-poc-native-dock",
+      "role": "composition-root",
+      "allowedDeps": [],
+      "viaFeatures": [],
+      "required": true,
+      "reason": "Issue #388/#389 Native Dock PoC harness — adapter への依存と toolkit feature 起動自体が職務の実 binary composition root(利用側層)"
     }
   ]
 }
