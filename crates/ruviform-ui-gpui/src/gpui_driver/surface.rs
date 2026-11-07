@@ -297,6 +297,15 @@ impl GpuiSurfaceAdapter {
         self.registry.spec(slot).copied()
     }
 
+    /// The explicit clip currently recorded for `slot`, if bound —
+    /// `None` when unclipped or unknown. Renderer/test visibility
+    /// into port-side clip state (the registry ledger does not carry
+    /// clip, so `spec()` alone cannot prove it).
+    #[cfg(all(test, feature = "gpui-test"))]
+    pub(crate) fn clip_of(&self, slot: SurfaceSlotId) -> Option<LogicalRect> {
+        self.bindings.get(&slot.index()).and_then(|b| b.clip)
+    }
+
     /// The container's raw OS token for `slot` while a lease is live —
     /// for the consumer's evidence channel (equivalent to `redeem`
     /// output without needing the payload at hand).

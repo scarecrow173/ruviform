@@ -282,7 +282,11 @@ impl GpuiDriver {
 - slot lifecycle(declare/release/lease/redeem/busy)は consumer が
   adapter 経由で所有 — glue は layout→port 投影のみ担い、
   RF388/389 の責務を複製しない。unbind 後の suppress は renderer が
-  一度 `Hidden` を push した後 ledger から drop する。
+  `Hidden` + `clip=None` を push して port を fresh-ledger 不変条件
+  (hidden AND unclipped)へ戻してから ledger から drop する —
+  これを省くと rebind した slot の fresh `clip:None` ledger が
+  `None` 要求を vacuous 充足し、port が stale rect で clip した
+  まま `Visible` になる(同一の露出クラス)。
 - preview 中は `ViewHost::observe().display` を thumb 位置に使う
   (controlled display = preview。committed 描画と混同しない)。
 

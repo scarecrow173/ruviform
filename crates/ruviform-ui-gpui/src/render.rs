@@ -1013,29 +1013,41 @@ impl RvfView {
             .filter(|s| !proj.placeable.contains(s))
             .collect();
         for slot in suppressed {
-            let already_hidden = proj
+            let hidden = proj
                 .applied
                 .get(&slot)
                 .is_some_and(|a| a.visibility == Some(SlotVisibility::Hidden));
-            if already_hidden {
-                if !bound.contains(&slot) {
-                    proj.applied.remove(&slot);
-                }
+            if !hidden {
+                push_slot_op(
+                    &mut proj,
+                    slot,
+                    "visibility",
+                    |adapter| adapter.set_visibility(slot, SlotVisibility::Hidden),
+                    |a| a.visibility = Some(SlotVisibility::Hidden),
+                );
+            }
+            if bound.contains(&slot) {
                 continue;
             }
-            push_slot_op(
-                &mut proj,
-                slot,
-                "visibility",
-                |adapter| adapter.set_visibility(slot, SlotVisibility::Hidden),
-                |a| a.visibility = Some(SlotVisibility::Hidden),
-            );
-            if !bound.contains(&slot)
-                && proj
-                    .applied
-                    .get(&slot)
-                    .is_some_and(|a| a.visibility == Some(SlotVisibility::Hidden))
-            {
+            // Forgetting an unbound slot must leave the port at the
+            // fresh-ledger invariant — hidden AND unclipped — or a
+            // rebound slot's `clip: None` ledger would vacuously
+            // satisfy a `None` request while the port still clips to
+            // a stale rect.
+            if proj.applied.get(&slot).is_some_and(|a| a.clip.is_some()) {
+                push_slot_op(
+                    &mut proj,
+                    slot,
+                    "clip",
+                    |adapter| adapter.set_clip(slot, None),
+                    |a| a.clip = None,
+                );
+            }
+            let forgotten = proj
+                .applied
+                .get(&slot)
+                .is_some_and(|a| a.visibility == Some(SlotVisibility::Hidden) && a.clip.is_none());
+            if forgotten {
                 proj.applied.remove(&slot);
             }
         }
@@ -1568,9 +1580,10 @@ mod tests {
     ) -> ruviform_ui::behavior::CommandPhase {
         use ruviform_ui::behavior::CommandPhase;
         view.update(cx, |v, _cx| {
-            v.host
-                .binding("fader")
-                .map_or(CommandPhase::Idle, ruviform_ui::behavior::CommandBinding::phase)
+            v.host.binding("fader").map_or(
+                CommandPhase::Idle,
+                ruviform_ui::behavior::CommandBinding::phase,
+            )
         })
     }
 
@@ -1946,5 +1959,100 @@ mod tests {
             last_error.is_none(),
             "no clip op attempted for a clip-free frame: {last_error:?}"
         );
+    }
+
+    /// Unbind → ledger drop must restore the port to the
+    /// fresh-ledger invariant — hidden AND unclipped. Without the
+    /// clip reset, a rebound slot's fresh `clip: None` ledger
+    /// vacuously satisfies a `None` request while the port still
+    /// clips to a stale rect.
+    #[gpui::test]
+    fn rvf_view_native_slot_forget_clears_clip(cx: &mut TestAppContext) {
+        use ruviform_ui::{NativeSurfaceSlot, WindowDriver};
+
+        let key = ComponentKey("dock.editor".to_string());
+        let mut driver = crate::GpuiDriver::new();
+        let window = WindowDriver::create_window(&mut driver, &ruviform_ui::WindowSpec::default())
+            .expect("reserve window");
+        let view_id = ViewInstanceId::new(1).expect("nonzero");
+        let slot = declare_and_bind(&mut driver, window, view_id, &key);
+        let bindings = driver.slot_binding_map(window).expect("binding map");
+        let sink = driver.intent_sink(window);
+        let adapter = driver.surface();
+
+        let mut host = ViewHost::new(view_id);
+        host.mount(ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("root".to_string()),
+                title: None,
+                children: vec![tabs_with_native_slot(&key)],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+
+        let inbox = Rc::new(RefCell::new(Vec::new()));
+        let mount_adapter = adapter.clone();
+        let (view, cx) = cx.add_window_view(move |window, cx| {
+            RvfView::mounted(
+                host,
+                None,
+                &sink,
+                inbox,
+                SlotMount {
+                    adapter: mount_adapter,
+                    bindings,
+                },
+                window,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            adapter.borrow().spec(slot).expect("spec").visibility,
+            SlotVisibility::Visible
+        );
+
+        // Stage a previously-applied clip on both sides — the
+        // port's recorded clip and the renderer's dedupe ledger —
+        // as if an earlier frame had required a real clip mask.
+        let stale_clip = LogicalRect {
+            x: 4.0,
+            y: 4.0,
+            width: 40.0,
+            height: 40.0,
+        };
+        adapter
+            .borrow_mut()
+            .set_clip(slot, Some(stale_clip))
+            .expect("stage port clip");
+        view.update(cx, |v, _cx| {
+            if let Some(proj) = &v.slots {
+                proj.borrow_mut().applied.entry(slot).or_default().clip = Some(stale_clip);
+            }
+        });
+
+        // Unbind → suppressed → forgotten only once port state is
+        // back at hidden + unclipped.
+        driver
+            .unbind_native_slot(window, &key)
+            .expect("unbind slot");
+        view.update(cx, |_v, cx| cx.notify());
+        cx.run_until_parked();
+        cx.run_until_parked();
+
+        assert_eq!(
+            adapter.borrow().clip_of(slot),
+            None,
+            "port clip restored to unclipped before forgetting"
+        );
+        let retained = view.update(cx, |v, _cx| {
+            v.slots
+                .as_ref()
+                .is_some_and(|p| p.borrow().applied.contains_key(&slot))
+        });
+        assert!(!retained, "ledger entry dropped after hidden+clear");
     }
 }
