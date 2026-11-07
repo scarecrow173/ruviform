@@ -6428,10 +6428,9 @@ version = "0.1.0"
 dependencies = [
  "crc32fast",
  "flate2",
- "libc",
  "ruviform-io-compression",
+ "ruviform-io-file",
  "unicode-normalization",
- "windows-sys 0.61.2",
 ]
 
 [[package]]

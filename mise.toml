@@ -50,6 +50,10 @@ run = "cargo check --workspace --all-targets"
 description = "Lint workspace with `cargo clippy --workspace --all-targets -- -D warnings` (dev profile; writes only target/)"
 run = "cargo clippy --workspace --all-targets -- -D warnings"
 
+[tasks.check-linux]
+description = "Cross type-check + lint io-file/io-archive for x86_64-unknown-linux-gnu (auxiliary check of cfg(unix) code a non-Linux host never compiles; scoped to crates with unix backends since workspace-wide linux check needs a Linux C toolchain for zstd-sys/alloca build scripts; requires `rustup target add x86_64-unknown-linux-gnu`; writes only target/)"
+run = "cargo check --target x86_64-unknown-linux-gnu -p ruviform-io-file -p ruviform-io-archive --all-targets && cargo clippy --target x86_64-unknown-linux-gnu -p ruviform-io-file -p ruviform-io-archive --all-targets -- -D warnings"
+
 [tasks.test]
 description = "Run workspace tests with `cargo test --workspace` (dev/test profile; writes only target/)"
 run = "cargo test --workspace"

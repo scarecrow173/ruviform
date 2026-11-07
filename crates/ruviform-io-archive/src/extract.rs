@@ -44,10 +44,6 @@
 mod fs;
 mod path;
 mod session;
-#[cfg(unix)]
-mod unix;
-#[cfg(windows)]
-mod windows;
 
 pub use path::SafeRelativePath;
 pub use session::{
