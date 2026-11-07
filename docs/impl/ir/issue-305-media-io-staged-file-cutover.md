@@ -228,6 +228,31 @@ Windows 11 x64 / Git Bash、rustc は mise 管理 toolchain。
   `dest_existed`/`.sink()`/`try_clone`）の使用 → 0 件（docs の
   歴史的 ADR/design/task 記録は対象外）。
 
+### Post-merge re-verification（merge commit `7ead144`）
+
+`origin/main` `e8adcc0` を merge した commit `7ead144` で同一正規入口を
+再実行（Windows 11 x64 / Git Bash、mise pin toolchain）。merge は ort で
+conflict なし。`Cargo.toml` members・`crates/README.md`・`AGENTS.md`・
+`mise.toml` は union 解消の結果 main と byte 一致、`Cargo.lock` は
+`ruviform-io-file` 依存追加の +2 行のみ差分（`ruviform-audio`・
+`ruviform-io-wav` の Cargo.toml 変更と整合）。
+
+| task | 結果 |
+| --- | --- |
+| `mise run fmt-check` | PASS |
+| `mise run check` | PASS |
+| `mise run lint`（clippy `-D warnings`） | PASS |
+| `mise run test`（workspace + doctests） | PASS（166 test-result blocks・0 failed） |
+| `mise run test-io-e2e`（Issue #306 lane、main 由来） | PASS（31 件: archive_compression_staged 6・extraction 10・staged_lifecycle 6・structured_staged 6・wav_staged 3、0 failed） |
+
+- 旧 API 残存検査（merged head）: `StagedOutput`・`media-io` 内
+  `PublishOptions`・`mod staged`/`staged::` → 各 0 件。
+- merge 整合性は独立 Validator（read-only subagent）で確認: cross-diff
+  （`git diff origin/main HEAD`）が RF305 scope の 18 file のみで、
+  main の新規成果（io-e2e / ui-gpui / ui-theme / ui-test /
+  poc-native-dock / observability collector / plugin-host
+  editor_session / consumer-verify workflow）への diff はゼロ。
+
 ## Acceptance ledger
 
 | AC | 状態 | 根拠 |

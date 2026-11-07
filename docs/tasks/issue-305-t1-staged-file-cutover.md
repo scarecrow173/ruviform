@@ -1,7 +1,7 @@
 ---
 id: "TASK-9KS9Fd9Lzf1TjWIavKU8Uz"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "T1 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 (Issue #305)"
 created: "2026-11-07"
 updated: "2026-11-07"
