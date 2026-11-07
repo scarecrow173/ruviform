@@ -219,6 +219,30 @@ pub struct WaveformSpec {
     pub a11y: A11ySpec,
 }
 
+/// A region reserved for a native surface slot (Issue #388
+/// [`NativeSurfaceSlot`](crate::NativeSurfaceSlot) port).
+///
+/// The component is **non-interactive and declarative**: it marks
+/// where in the Panel/Tab layout a native child surface lives, so the
+/// renderer can project the laid-out bounds — including ancestor
+/// clip rects and inactive-tab suppression — onto the slot port.
+/// The runtime [`SurfaceSlotId`](crate::SurfaceSlotId) is *not* part
+/// of the spec: slots are minted by `declare_slot` against a live
+/// window, so consumers bind `key → slot` on the driver side
+/// (`GpuiDriver::bind_native_slot`) after window creation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NativeSlotSpec {
+    /// Component key — also the `bind_native_slot` lookup key.
+    pub key: ComponentKey,
+    /// Minimum logical `[width, height]` the region reserves when the
+    /// layout would otherwise give it zero extent.
+    pub min_size: Option<[f64; 2]>,
+    /// Visual state.
+    pub visual: ComponentVisualState,
+    /// Accessibility semantics.
+    pub a11y: A11ySpec,
+}
+
 /// Component tree node. The set is intentionally minimal for the
 /// first two vertical slices (Synvelis Fader+Dock, `AudioLens`
 /// Waveform+Seek); new kinds extend this enum rather than a generic
@@ -237,6 +261,9 @@ pub enum ComponentSpec {
     Seek(ControlSpec),
     /// Resolved-waveform visualization.
     Waveform(WaveformSpec),
+    /// Native-surface region — layout bounds feed the slot port.
+    #[serde(rename = "native_slot")]
+    NativeSlot(NativeSlotSpec),
 }
 
 impl ComponentSpec {
@@ -248,6 +275,7 @@ impl ComponentSpec {
             Self::Tabs(s) => &s.key,
             Self::Fader(s) | Self::Seek(s) => &s.key,
             Self::Waveform(s) => &s.key,
+            Self::NativeSlot(s) => &s.key,
         }
     }
 
@@ -260,6 +288,7 @@ impl ComponentSpec {
             Self::Fader(_) => "fader",
             Self::Seek(_) => "seek",
             Self::Waveform(_) => "waveform",
+            Self::NativeSlot(_) => "native_slot",
         }
     }
 
@@ -633,6 +662,15 @@ impl ViewHost {
                     if w.viewport.end < w.viewport.start {
                         return Err(ViewError::InvalidSpec {
                             detail: format!("waveform {} viewport end < start", w.key),
+                        });
+                    }
+                }
+                ComponentSpec::NativeSlot(n) => {
+                    if let Some([w, h]) = n.min_size
+                        && (!w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0)
+                    {
+                        return Err(ViewError::InvalidSpec {
+                            detail: format!("native_slot {} min_size invalid", n.key),
                         });
                     }
                 }

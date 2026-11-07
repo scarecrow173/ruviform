@@ -14,7 +14,7 @@
 //! **RT contract:** non-RT only.
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -29,12 +29,16 @@ use ruviform_ui::behavior::{
     StateProjection, ValueInput,
 };
 use ruviform_ui::view::{
-    ComponentKey, ComponentSpec, ControlSpec, Orientation, ViewEvent, ViewHost, WaveformSpec,
+    ComponentKey, ComponentSpec, ControlSpec, NativeSlotSpec, Orientation, ViewEvent, ViewHost,
+    WaveformSpec,
 };
-use ruviform_ui::{Event, Intent};
+use ruviform_ui::{
+    Event, Intent, LogicalRect, NativeSurfaceSlot, SlotError, SlotGeometry, SlotVisibility,
+    SurfaceSlotId,
+};
 use ruviform_ui_theme::ResolvedTheme;
 
-use crate::IntentSink;
+use crate::{GpuiSurfaceAdapter, IntentSink};
 
 /// `op` carried on the [`Intent`] envelope for every projected
 /// [`ruviform_ui::behavior::CommandIntent`] — the Action-channel
@@ -213,6 +217,149 @@ struct DragState {
 ///
 /// Owns pointer→input normalization and intent egress. The host owns
 /// all semantics — this entity never mutates control state directly.
+/// Driver-side wiring the mounted view needs for native-surface
+/// projection (Issue #387 × #388 glue): the canonical shared adapter
+/// plus this window's `key → slot` map.
+pub(crate) struct SlotMount {
+    /// The driver's canonical adapter — the same ledger consumers
+    /// declare/lease/release on through `GpuiDriver::surface`.
+    pub adapter: Rc<RefCell<GpuiSurfaceAdapter>>,
+    /// `bind_native_slot` associations for this window — mutated
+    /// live by the consumer, read each frame by the renderer.
+    pub bindings: Rc<RefCell<BTreeMap<ComponentKey, SurfaceSlotId>>>,
+}
+
+/// What the renderer last pushed onto a slot — the dedupe ledger.
+/// `None` on an aspect means "never pushed" (not `Some(default)`).
+#[derive(Default)]
+struct AppliedSlot {
+    geometry: Option<SlotGeometry>,
+    clip_pushed: bool,
+    clip: Option<LogicalRect>,
+    visibility: Option<SlotVisibility>,
+    /// Aspects that failed with a permanent error — retried only when
+    /// `Backend`/`SlotBusy` (transient) so a dead/unsupported slot
+    /// does not spam the port every frame.
+    failed: HashSet<&'static str>,
+}
+
+/// Per-view slot projection state — Panel/Tab/clip →
+/// [`NativeSurfaceSlot`] port glue. `placeable` is rebuilt each
+/// render pass: a bound slot not painted this frame (inactive tab,
+/// removed component, unbound key) is suppressed `Hidden`, matching
+/// the dock contract that invisible regions hide their native child.
+struct SlotProjection {
+    mount: SlotMount,
+    applied: HashMap<SurfaceSlotId, AppliedSlot>,
+    placeable: HashSet<SurfaceSlotId>,
+    /// Last port error — surfaced for diagnostics; paint cannot
+    /// propagate failures, so they are recorded instead.
+    last_error: Option<SlotError>,
+}
+
+/// `Bounds<Pixels>` → window-coords [`LogicalRect`] for the slot port.
+fn logical_rect_of(bounds: Bounds<Pixels>) -> LogicalRect {
+    LogicalRect {
+        x: f64::from(f32::from(bounds.origin.x)),
+        y: f64::from(f32::from(bounds.origin.y)),
+        width: f64::from(f32::from(bounds.size.width)),
+        height: f64::from(f32::from(bounds.size.height)),
+    }
+}
+
+/// Whether a port error is permanent for this slot — permanent
+/// failures stop retrying that aspect (the ledger/adapter already
+/// reported them; hammering every frame adds nothing). `Backend`
+/// (OS/driver transient) and `SlotBusy` (dock two-phase move —
+/// clears on `BusyCleared`) stay retryable.
+fn permanent_slot_error(error: SlotError) -> bool {
+    !matches!(error, SlotError::Backend | SlotError::SlotBusy)
+}
+
+/// Applies a single port call through the dedupe ledger — shared by
+/// the painted path (`project_slot_frame`) and the suppression pass.
+fn push_slot_op(
+    proj: &mut SlotProjection,
+    slot: SurfaceSlotId,
+    aspect: &'static str,
+    op: impl FnOnce(&mut GpuiSurfaceAdapter) -> Result<(), SlotError>,
+    mark: impl FnOnce(&mut AppliedSlot),
+) {
+    if proj
+        .applied
+        .get(&slot)
+        .is_some_and(|a| a.failed.contains(aspect))
+    {
+        return;
+    }
+    let Ok(mut adapter) = proj.mount.adapter.try_borrow_mut() else {
+        // Consumer holds the adapter this frame — retry next frame.
+        return;
+    };
+    match op(&mut adapter) {
+        Ok(()) => mark(proj.applied.entry(slot).or_default()),
+        Err(error) => {
+            if permanent_slot_error(error) {
+                proj.applied.entry(slot).or_default().failed.insert(aspect);
+            }
+            proj.last_error = Some(error);
+        }
+    }
+}
+
+/// Painted-frame projection for one bound slot: the element's
+/// laid-out bounds → `set_geometry`, the ancestor clip mask →
+/// `set_clip` (`None` when the mask is the whole viewport — the
+/// layout applied no real clip), and `Visible` after both land.
+fn project_slot_frame(
+    proj: &Rc<RefCell<SlotProjection>>,
+    slot: SurfaceSlotId,
+    bounds: Bounds<Pixels>,
+    window: &mut Window,
+) {
+    let mut proj = proj.borrow_mut();
+    let geometry = SlotGeometry {
+        rect: logical_rect_of(bounds),
+        scale_factor: f64::from(window.scale_factor()),
+    };
+    let mask = window.content_mask().bounds;
+    let clip = (mask != window.bounds()).then(|| logical_rect_of(mask));
+    if proj.applied.get(&slot).and_then(|a| a.geometry) != Some(geometry) {
+        push_slot_op(
+            &mut proj,
+            slot,
+            "geometry",
+            |adapter| adapter.set_geometry(slot, geometry),
+            |a| a.geometry = Some(geometry),
+        );
+    }
+    let clip_state = proj
+        .applied
+        .get(&slot)
+        .map_or((false, None), |a| (a.clip_pushed, a.clip));
+    if clip_state != (true, clip) {
+        push_slot_op(
+            &mut proj,
+            slot,
+            "clip",
+            |adapter| adapter.set_clip(slot, clip),
+            |a| {
+                a.clip_pushed = true;
+                a.clip = clip;
+            },
+        );
+    }
+    if proj.applied.get(&slot).and_then(|a| a.visibility) != Some(SlotVisibility::Visible) {
+        push_slot_op(
+            &mut proj,
+            slot,
+            "visibility",
+            |adapter| adapter.set_visibility(slot, SlotVisibility::Visible),
+            |a| a.visibility = Some(SlotVisibility::Visible),
+        );
+    }
+}
+
 pub struct RvfView {
     host: ViewHost,
     palette: ViewPalette,
@@ -226,6 +373,9 @@ pub struct RvfView {
     /// `post_event` channel drained into the host each render —
     /// `Some` only for driver-mounted views (Issue #387 seam).
     inbox: Option<Rc<RefCell<Vec<Event>>>>,
+    /// Panel/Tab/clip → [`NativeSurfaceSlot`] projection — `Some`
+    /// only for driver-mounted views.
+    slots: Option<Rc<RefCell<SlotProjection>>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -247,6 +397,7 @@ impl RvfView {
             drags: BTreeMap::new(),
             next_gesture: 0,
             inbox: None,
+            slots: None,
             _subscriptions: Vec::new(),
         }
     }
@@ -255,13 +406,16 @@ impl RvfView {
     /// `open_window` for [`crate::GpuiDriver::create_view_window`].
     /// `sink` carries minted intents onto the window's `Action`
     /// channel; `inbox` receives `post_event` payloads drained into
-    /// the host at render. Window deactivation cancels in-flight
-    /// drags through the canonical `FocusLost` lifecycle input.
+    /// the host at render; `slots` wires `NativeSlot` components to
+    /// the driver's surface adapter. Window deactivation cancels
+    /// in-flight drags through the canonical `FocusLost` lifecycle
+    /// input.
     pub(crate) fn mounted(
         host: ViewHost,
         theme: Option<&ResolvedTheme>,
         sink: &IntentSink,
         inbox: Rc<RefCell<Vec<Event>>>,
+        slots: SlotMount,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -275,6 +429,12 @@ impl RvfView {
             drags: BTreeMap::new(),
             next_gesture: 0,
             inbox: Some(inbox),
+            slots: Some(Rc::new(RefCell::new(SlotProjection {
+                mount: slots,
+                applied: HashMap::new(),
+                placeable: HashSet::new(),
+                last_error: None,
+            }))),
             _subscriptions: vec![cx.observe_window_activation(window, |this, window, cx| {
                 if !window.is_window_active() {
                     this.cancel_active_drags(cx);
@@ -733,9 +893,103 @@ impl RvfView {
                 .flex_grow()
                 .child(self.waveform_element(w))
                 .into_any_element(),
+            ComponentSpec::NativeSlot(n) => self.native_slot_element(n),
             other => {
                 let _ = other;
                 div().child("unsupported component").into_any_element()
+            }
+        }
+    }
+
+    /// A region a native child surface draws into. When `key` is
+    /// bound (`GpuiDriver::bind_native_slot`) the canvas prepaint
+    /// hook projects the laid-out bounds + content-mask clip onto
+    /// the slot and registers it `placeable` for the frame;
+    /// unbound components render the placeholder only.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "min_size logical extents stay far below f32 range"
+    )]
+    fn native_slot_element(&mut self, spec: &NativeSlotSpec) -> gpui::AnyElement {
+        let bound = self
+            .slots
+            .as_ref()
+            .and_then(|p| p.borrow().mount.bindings.borrow().get(&spec.key).copied());
+        let mut el = div()
+            .flex_grow()
+            .border_1()
+            .border_color(self.palette.border)
+            .bg(self.palette.surface_raised);
+        if let Some([w, h]) = spec.min_size {
+            el = el.min_w(px(w as f32)).min_h(px(h as f32));
+        }
+        let Some(proj) = self.slots.clone() else {
+            return el.into_any_element();
+        };
+        let Some(slot) = bound else {
+            return el
+                .child(format!("native slot {}", spec.key.0))
+                .into_any_element();
+        };
+        proj.borrow_mut().placeable.insert(slot);
+        let fill_color = self.palette.control_track;
+        let projection = canvas(
+            move |bounds, window, _cx| {
+                project_slot_frame(&proj, slot, bounds, window);
+            },
+            move |bounds, (), window, _cx| {
+                // Placeholder under the native surface — visible only
+                // where the native child does not cover the region.
+                window.paint_quad(fill(bounds, fill_color));
+            },
+        )
+        .size_full();
+        el.child(projection).into_any_element()
+    }
+
+    /// Suppresses bound slots that were not painted this frame —
+    /// inactive-tab children, removed components, and dropped
+    /// bindings all count as "not painted". Bound slots stay in the
+    /// dedupe ledger (re-activation re-projects them); unbound ones
+    /// are hidden once then dropped from it.
+    fn suppress_unpainted_slots(&mut self) {
+        let Some(proj) = &self.slots else { return };
+        let mut proj = proj.borrow_mut();
+        let bound: HashSet<SurfaceSlotId> =
+            proj.mount.bindings.borrow().values().copied().collect();
+        let suppressed: Vec<SurfaceSlotId> = bound
+            .iter()
+            .copied()
+            .chain(proj.applied.keys().copied())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .filter(|s| !proj.placeable.contains(s))
+            .collect();
+        for slot in suppressed {
+            let already_hidden = proj
+                .applied
+                .get(&slot)
+                .is_some_and(|a| a.visibility == Some(SlotVisibility::Hidden));
+            if already_hidden {
+                if !bound.contains(&slot) {
+                    proj.applied.remove(&slot);
+                }
+                continue;
+            }
+            push_slot_op(
+                &mut proj,
+                slot,
+                "visibility",
+                |adapter| adapter.set_visibility(slot, SlotVisibility::Hidden),
+                |a| a.visibility = Some(SlotVisibility::Hidden),
+            );
+            if !bound.contains(&slot)
+                && proj
+                    .applied
+                    .get(&slot)
+                    .is_some_and(|a| a.visibility == Some(SlotVisibility::Hidden))
+            {
+                proj.applied.remove(&slot);
             }
         }
     }
@@ -747,6 +1001,12 @@ impl Render for RvfView {
         // since the last paint project into the host before the
         // element tree is built from it.
         self.drain_inbox();
+        // Slot projection frame boundary: `placeable` is repopulated
+        // as `element_for` builds bound `NativeSlot` elements; slots
+        // absent from the set after the tree is built are suppressed.
+        if let Some(proj) = &self.slots {
+            proj.borrow_mut().placeable.clear();
+        }
         // Commit any drag still in flight when the pointer is released
         // anywhere in the window (window-wide mouse-up continuation).
         let root = div().size_full().on_mouse_up(
@@ -763,10 +1023,12 @@ impl Render for RvfView {
                 }
             }),
         );
-        match self.host.spec().map(|s| s.root.clone()) {
+        let tree = match self.host.spec().map(|s| s.root.clone()) {
             Some(spec) => root.child(self.element_for(&spec, cx)),
             None => root,
-        }
+        };
+        self.suppress_unpainted_slots();
+        tree
     }
 }
 
@@ -925,5 +1187,183 @@ mod tests {
             assert!(v.host.observe(&ComponentKey("fader".to_string())).is_none());
         });
         cx.run_until_parked();
+    }
+
+    /// `Tabs` whose first tab holds a `NativeSlot` for `slot_key` —
+    /// the docked-editor layout the slot glue is measured against.
+    fn tabs_with_native_slot(slot_key: &ComponentKey) -> ComponentSpec {
+        use ruviform_ui::view::{NativeSlotSpec, TabSpec, TabsSpec};
+        let slot_component = ComponentSpec::NativeSlot(NativeSlotSpec {
+            key: slot_key.clone(),
+            min_size: None,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        });
+        ComponentSpec::Tabs(TabsSpec {
+            key: ComponentKey("tabs".to_string()),
+            active: 0,
+            tabs: vec![
+                TabSpec {
+                    key: ComponentKey("tab.editor".to_string()),
+                    title: "Editor".to_string(),
+                    child: Box::new(slot_component),
+                },
+                TabSpec {
+                    key: ComponentKey("tab.mixer".to_string()),
+                    title: "Mixer".to_string(),
+                    child: Box::new(ComponentSpec::Panel(PanelSpec {
+                        key: ComponentKey("mixer".to_string()),
+                        title: None,
+                        children: vec![],
+                        visual: ComponentVisualState::default(),
+                        a11y: A11ySpec::default(),
+                    })),
+                },
+            ],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    /// Declares a Hidden slot on `window`'s canonical adapter and
+    /// binds it to `key` — the consumer-side mount flow.
+    fn declare_and_bind(
+        driver: &mut crate::GpuiDriver,
+        window: ruviform_ui::WindowId,
+        view_id: ViewInstanceId,
+        key: &ComponentKey,
+    ) -> SurfaceSlotId {
+        use ruviform_ui::{
+            LogicalRect, NativeSurfaceSlot, SlotCapabilities, SlotGeometry, SlotSpec,
+            SlotVisibility, Support,
+        };
+        let caps = SlotCapabilities {
+            attach_parent: Support::Supported,
+            hide_show: Support::Supported,
+            clip: Support::Supported,
+            ..SlotCapabilities::default()
+        };
+        let slot = driver
+            .surface()
+            .borrow_mut()
+            .declare_slot(SlotSpec {
+                window,
+                view: view_id,
+                geometry: SlotGeometry {
+                    rect: LogicalRect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: 0.0,
+                        height: 0.0,
+                    },
+                    scale_factor: 1.0,
+                },
+                visibility: SlotVisibility::Hidden,
+                capabilities: caps,
+            })
+            .expect("declare slot");
+        driver
+            .bind_native_slot(window, key.clone(), slot)
+            .expect("bind slot");
+        slot
+    }
+
+    /// Panel/Tab → slot-port glue: a bound `NativeSlot` painted in
+    /// the active tab gets geometry/clip/visible; switching to a tab
+    /// where it is absent suppresses it `Hidden` — all asserted on
+    /// the canonical adapter's event ledger (Issue #387 × #388).
+    #[gpui::test]
+    fn rvf_view_native_slot_projects_layout(cx: &mut TestAppContext) {
+        use ruviform_ui::{SlotEvent, WindowDriver};
+
+        let key = ComponentKey("dock.editor".to_string());
+        let mut driver = crate::GpuiDriver::new();
+        let window = WindowDriver::create_window(&mut driver, &ruviform_ui::WindowSpec::default())
+            .expect("reserve window");
+        let view_id = ViewInstanceId::new(1).expect("nonzero");
+        let slot = declare_and_bind(&mut driver, window, view_id, &key);
+        let bindings = driver.slot_binding_map(window).expect("binding map");
+        let sink = driver.intent_sink(window);
+        let adapter = driver.surface();
+
+        let mut host = ViewHost::new(view_id);
+        host.mount(ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("root".to_string()),
+                title: None,
+                children: vec![tabs_with_native_slot(&key)],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+
+        let inbox = Rc::new(RefCell::new(Vec::new()));
+        let mount_adapter = adapter.clone();
+        let (view, cx) = cx.add_window_view(move |window, cx| {
+            RvfView::mounted(
+                host,
+                None,
+                &sink,
+                inbox,
+                SlotMount {
+                    adapter: mount_adapter,
+                    bindings,
+                },
+                window,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+
+        // Painted + bound → geometry, clip, Visible all projected.
+        {
+            let spec = adapter
+                .borrow()
+                .spec(slot)
+                .expect("slot spec on canonical adapter");
+            assert!(
+                spec.geometry.rect.width > 0.0 && spec.geometry.rect.height > 0.0,
+                "painted bounds projected: {:?}",
+                spec.geometry.rect
+            );
+            assert_eq!(spec.visibility, SlotVisibility::Visible);
+        }
+
+        // Switch to the tab without the slot → suppressed Hidden.
+        view.update(cx, |v, cx| {
+            let generation = v.host.generation();
+            let mut spec = v.host.spec().expect("spec").clone();
+            if let ComponentSpec::Panel(p) = &mut spec.root
+                && let ComponentSpec::Tabs(t) = &mut p.children[0]
+            {
+                t.active = 1;
+            }
+            v.host.update(spec, generation).expect("switch tab");
+            cx.notify();
+        });
+        cx.run_until_parked();
+        {
+            let spec = adapter.borrow().spec(slot).expect("slot spec");
+            assert_eq!(
+                spec.visibility,
+                SlotVisibility::Hidden,
+                "unpainted bound slot suppressed"
+            );
+        }
+        let events = adapter.borrow_mut().drain_events();
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, SlotEvent::GeometryChanged { slot: s } if *s == slot)),
+            "geometry event recorded: {events:?}"
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, SlotEvent::VisibilityChanged { slot: s } if *s == slot)),
+            "visibility event recorded: {events:?}"
+        );
     }
 }

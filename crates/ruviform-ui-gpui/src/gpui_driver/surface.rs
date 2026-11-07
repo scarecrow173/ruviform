@@ -187,11 +187,25 @@ pub struct GpuiSurfaceAdapter {
 impl GpuiSurfaceAdapter {
     /// Creates a surface adapter bound to `driver`'s shared state.
     ///
+    /// Each adapter owns its own [`SurfaceSlotRegistry`] ledger —
+    /// slots declared on one adapter are unknown to another. Views
+    /// that want renderer-projected geometry/clip/tab-hide must use
+    /// the driver's canonical adapter via
+    /// [`GpuiDriver::surface`](crate::GpuiDriver::surface); `new` is
+    /// for standalone use (fixtures, the native-dock proof-of-concept).
+    ///
     /// **RT contract:** non-RT only — UI-thread only.
     #[must_use]
     pub fn new(driver: &GpuiDriver) -> Self {
+        Self::bound(&driver.inner)
+    }
+
+    /// Creates an adapter bound to `inner` — used by
+    /// [`GpuiDriver::new`](crate::GpuiDriver::new) to install the
+    /// canonical shared adapter before `self` exists.
+    pub(super) fn bound(inner: &Rc<RefCell<Inner>>) -> Self {
         Self {
-            inner: driver.inner.clone(),
+            inner: inner.clone(),
             registry: SurfaceSlotRegistry::new(),
             bindings: BTreeMap::new(),
         }
@@ -272,6 +286,15 @@ impl GpuiSurfaceAdapter {
     #[must_use]
     pub fn state(&self, slot: SurfaceSlotId) -> Option<SlotState> {
         self.registry.state(slot)
+    }
+
+    /// The declared [`SlotSpec`] of `slot`, if the id is live — the
+    /// owner window/view check for binding-time validation.
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    #[must_use]
+    pub fn spec(&self, slot: SurfaceSlotId) -> Option<SlotSpec> {
+        self.registry.spec(slot).copied()
     }
 
     /// The container's raw OS token for `slot` while a lease is live —

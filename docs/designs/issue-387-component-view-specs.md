@@ -213,6 +213,51 @@ impl GpuiDriver {
     (canonical lifecycle input、seq drop 免除)
 - `drag` は bounds store(canvas prepaint が window 座標を記録)で
   normalized 計算。window 全体の `on_mouse_up` が drag 継続/終端を保証。
+
+#### NativeSlot glue(#387 × #388、PR399 merge 後)
+
+`ComponentSpec::NativeSlot(NativeSlotSpec)` は native child surface が
+描画する layout 領域を宣言する**非対話 leaf**。runtime の
+`SurfaceSlotId` は spec に含めない — `declare_slot` が live window
+を要求するため spec は先に存在できず、また id は runtime registry
+発行で serialize 契約に載せない。関連付けは driver 側 binding:
+
+```rust
+impl GpuiDriver {
+    pub fn surface(&self) -> Rc<RefCell<GpuiSurfaceAdapter>>;   // canonical 共有
+    pub fn bind_native_slot(&mut self, window: WindowId,
+                            key: ComponentKey, slot: SurfaceSlotId)
+        -> Result<(), UiError>;   // window/spec.window/live 検査
+    pub fn unbind_native_slot(&mut self, window: WindowId,
+                            key: &ComponentKey) -> Result<(), UiError>;
+}
+```
+
+- `GpuiDriver` は canonical `GpuiSurfaceAdapter` を `new` で生成・
+  共有する。adapter は instance 毎に独立 `SurfaceSlotRegistry`
+  ledger を持つため、consumer は必ず `driver.surface()` 経由で
+  declare/lease/redeem する(`GpuiSurfaceAdapter::new` は別 ledger を
+  持つ standalone 用途 — PoC/fixture 用)。
+- `Slot`(driver window record)に `slot_bindings:
+  Rc<RefCell<BTreeMap<ComponentKey, SurfaceSlotId>>>` を持たせ、
+  `open_window` が `SlotMount{adapter, bindings}` として `RvfView`
+  へ注入。consumer は `bind_native_slot` で window+slot 有効性を
+  検査済みの関連付けだけを登録できる。
+- renderer は frame 毎に: ① render 冒頭で `placeable` を clear、
+  ② `element_for` が bound `NativeSlot` を `placeable` 登録 + canvas
+  prepaint で `bounds`(window coords)→`set_geometry`、
+  `window.content_mask()`→`set_clip`(viewport 全体なら `None`)、
+  `set_visibility(Visible)` を dedupe ledger 経由で push、
+  ③ tree 構築後 `(bindings ∪ applied) − placeable` を `Hidden` へ
+  suppress(inactive tab/removed/unbind = 未描画)。
+- dedupe ledger(`applied`): aspect 別 last-pushed 値を保持し同一値は
+  port 呼び出ししない。`Backend`/`SlotBusy` は retry、恒久的
+  error(`Unsupported`/`Released`/`StaleGeneration` 等)は aspect を
+  `failed` 化して毎 frame の hammering を防ぎ `last_error` に記録。
+- slot lifecycle(declare/release/lease/redeem/busy)は consumer が
+  adapter 経由で所有 — glue は layout→port 投影のみ担い、
+  RF388/389 の責務を複製しない。unbind 後の suppress は renderer が
+  一度 `Hidden` を push した後 ledger から drop する。
 - preview 中は `ViewHost::observe().display` を thumb 位置に使う
   (controlled display = preview。committed 描画と混同しない)。
 

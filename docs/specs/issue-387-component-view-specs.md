@@ -65,7 +65,10 @@ GPUI Controls/Viz renderer を提供する。
 - `ComponentKey` — View 内 stable な component 識別子(文字列 newtype)。
 - `ViewSpec` — 木構造の spec。root `ComponentSpec` を持つ。
 - `ComponentSpec` — `#[non_exhaustive]` enum。本 Issue の最小 kind:
-  `Panel` / `Tabs` / `Fader` / `Seek` / `Waveform`。
+  `Panel` / `Tabs` / `Fader` / `Seek` / `Waveform` / `NativeSlot`。
+  `NativeSlot` は #388 `NativeSurfaceSlot` 用の非対話 layout 領域で、
+  runtime `SurfaceSlotId` は spec に含めず driver 側
+  `bind_native_slot` で `key` に関連付ける(design 参照)。
 - Props/Variant: kind 毎の最小 props。連続値コントロール(Fader/Seek)は
   `ValueDescriptor` を持つ。`readOnly`/`disabled`/`constant` は
   descriptor の宣言 flag(availability の正本)、`error` は

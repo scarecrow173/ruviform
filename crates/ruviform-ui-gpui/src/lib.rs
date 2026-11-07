@@ -50,9 +50,11 @@ mod gpui_driver {
         ParentElement, Render, Styled, Subscription, TitlebarOptions, Window,
         WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, point, px, size,
     };
+    use ruviform_ui::view::ComponentKey;
     use ruviform_ui::{
-        Capability, CloseDecision, DriverEvent, Event, Intent, LogicalSize, MonitorInfo, UiError,
-        WindowCapabilities, WindowDriver, WindowId, WindowLifecycle, WindowSpec,
+        Capability, CloseDecision, DriverEvent, Event, Intent, LogicalSize, MonitorInfo, SlotState,
+        SurfaceSlotId, UiError, WindowCapabilities, WindowDriver, WindowId, WindowLifecycle,
+        WindowSpec,
     };
 
     /// Default periodic tick (`DriverEvent::Tick` cadence) when the
@@ -173,6 +175,11 @@ mod gpui_driver {
         raw_parent: Option<usize>,
         root: Option<Entity<AppRoot>>,
         inbox: Rc<RefCell<Vec<Event>>>,
+        /// `ComponentKey → SurfaceSlotId` associations installed by
+        /// [`GpuiDriver::bind_native_slot`] — the mounted view reads
+        /// the shared map each frame to project laid-out bounds onto
+        /// bound slots (Issue #387 × #388 glue).
+        surface_bindings: Rc<RefCell<BTreeMap<ComponentKey, SurfaceSlotId>>>,
         ready: bool,
         pending_focus: Option<bool>,
         scale_factor: f32,
@@ -208,10 +215,15 @@ mod gpui_driver {
     /// reserves the [`WindowId`] immediately; if OS-level creation
     /// later fails, the window terminates with `Destroyed`.
     ///
+    /// `surface` is the driver's canonical [`GpuiSurfaceAdapter`]:
+    /// every clone shares the same slot ledger, and mounted views
+    /// project laid-out `NativeSlot` component bounds onto it.
+    ///
     /// **RT contract:** non-RT only — UI thread.
     #[derive(Clone)]
     pub struct GpuiDriver {
         inner: Rc<RefCell<Inner>>,
+        surface: Rc<RefCell<surface::GpuiSurfaceAdapter>>,
     }
 
     /// Typed-intent ingress for views inside a GPUI window (Issue
@@ -249,37 +261,154 @@ mod gpui_driver {
         /// Creates a driver with no windows.
         #[must_use]
         pub fn new() -> Self {
-            Self {
-                inner: Rc::new(RefCell::new(Inner {
-                    ops: VecDeque::new(),
-                    events: VecDeque::new(),
-                    windows: BTreeMap::new(),
-                    destroyed: BTreeSet::new(),
-                    monitors: Vec::new(),
-                    capabilities: WindowCapabilities {
-                        resize: Capability::Supported,
-                        focus: Capability::Supported,
-                        scale_factor: Capability::Supported,
-                        multi_window: Capability::Supported,
-                        // IME routing stays unwired — Issue #389 owns
-                        // that contract. `native_surface_slot` is
-                        // implemented by `GpuiSurfaceAdapter` on the
-                        // OSes that have a container-surface backend;
-                        // honest per-OS reporting, never fake support.
-                        ime: Capability::Unsupported,
-                        native_surface_slot: if surface::BACKEND_AVAILABLE {
-                            Capability::Supported
-                        } else {
-                            Capability::Unsupported
-                        },
+            let inner = Rc::new(RefCell::new(Inner {
+                ops: VecDeque::new(),
+                events: VecDeque::new(),
+                windows: BTreeMap::new(),
+                destroyed: BTreeSet::new(),
+                monitors: Vec::new(),
+                capabilities: WindowCapabilities {
+                    resize: Capability::Supported,
+                    focus: Capability::Supported,
+                    scale_factor: Capability::Supported,
+                    multi_window: Capability::Supported,
+                    // IME routing stays unwired — Issue #389 owns
+                    // that contract. `native_surface_slot` is
+                    // implemented by `GpuiSurfaceAdapter` on the
+                    // OSes that have a container-surface backend;
+                    // honest per-OS reporting, never fake support.
+                    ime: Capability::Unsupported,
+                    native_surface_slot: if surface::BACKEND_AVAILABLE {
+                        Capability::Supported
+                    } else {
+                        Capability::Unsupported
                     },
-                    handler: None,
-                    app_subs: Vec::new(),
-                    next: 1,
-                    started: false,
-                    exited: false,
-                })),
+                },
+                handler: None,
+                app_subs: Vec::new(),
+                next: 1,
+                started: false,
+                exited: false,
+            }));
+            Self {
+                surface: Rc::new(RefCell::new(surface::GpuiSurfaceAdapter::bound(&inner))),
+                inner,
             }
+        }
+
+        /// The driver's canonical [`GpuiSurfaceAdapter`] handle —
+        /// the one slot ledger mounted views project onto. Declare
+        /// slots through this adapter (not a fresh
+        /// `GpuiSurfaceAdapter::new`, which would own a separate
+        /// ledger) so `bind_native_slot`'s runtime check and the
+        /// renderer's `set_geometry`/`set_clip`/`set_visibility`
+        /// calls see them.
+        ///
+        /// **RT contract:** non-RT only — UI-thread only.
+        #[must_use]
+        pub fn surface(&self) -> Rc<RefCell<surface::GpuiSurfaceAdapter>> {
+            self.surface.clone()
+        }
+
+        /// Binds a mounted view's `NativeSlot` component (`key`) to a
+        /// live [`SurfaceSlotId`] — after this, the view projects its
+        /// laid-out bounds, ancestor clip, and painted/suppressed
+        /// state onto `slot` each frame.
+        ///
+        /// The slot must already be declared on [`Self::surface`]
+        /// (`spec.window == window`) and not released — binding a
+        /// stale or unknown id fails here rather than silently
+        /// no-oping in the paint loop.
+        ///
+        /// # Errors
+        /// [`UiError::Host`] when `window` is unknown, `key` is
+        /// already bound, or `slot` is not a live slot on the
+        /// canonical adapter.
+        pub fn bind_native_slot(
+            &mut self,
+            window: WindowId,
+            key: ComponentKey,
+            slot: SurfaceSlotId,
+        ) -> Result<(), UiError> {
+            {
+                let inner = self.inner.borrow();
+                if !inner.windows.contains_key(&window) {
+                    return Err(UiError::host(format!("no window {window}")));
+                }
+            }
+            {
+                let adapter = self.surface.borrow();
+                match adapter.state(slot) {
+                    Some(SlotState::Declared | SlotState::Leased) => {}
+                    Some(SlotState::Released) => {
+                        return Err(UiError::host(format!("surface slot {slot:?} is released")));
+                    }
+                    _ => {
+                        return Err(UiError::host(format!("unknown surface slot {slot:?}")));
+                    }
+                }
+                if adapter.spec(slot).is_some_and(|s| s.window != window) {
+                    return Err(UiError::host(format!(
+                        "surface slot {slot:?} belongs to a different window"
+                    )));
+                }
+            }
+            let bindings = self
+                .slot_binding_map(window)
+                .ok_or_else(|| UiError::host(format!("no window {window}")))?;
+            {
+                let map = bindings.borrow();
+                if map.contains_key(&key) {
+                    return Err(UiError::host(format!(
+                        "component key {key} already bound to a surface slot"
+                    )));
+                }
+                // One slot paints into one region — binding the same
+                // slot to a second key would race its geometry.
+                if map.values().any(|s| *s == slot) {
+                    return Err(UiError::host(format!(
+                        "surface slot {slot:?} already bound to another key"
+                    )));
+                }
+            }
+            bindings.borrow_mut().insert(key, slot);
+            Ok(())
+        }
+
+        /// Removes `key`'s slot binding. The next painted frame
+        /// suppresses the slot (`Hidden`) — releasing the slot itself
+        /// stays the consumer's call on [`Self::surface`].
+        ///
+        /// # Errors
+        /// [`UiError::Host`] when `window` is unknown or `key` has no
+        /// binding.
+        pub fn unbind_native_slot(
+            &mut self,
+            window: WindowId,
+            key: &ComponentKey,
+        ) -> Result<(), UiError> {
+            let bindings = self
+                .slot_binding_map(window)
+                .ok_or_else(|| UiError::host(format!("no window {window}")))?;
+            if bindings.borrow_mut().remove(key).is_none() {
+                return Err(UiError::host(format!(
+                    "component key {key} has no surface-slot binding"
+                )));
+            }
+            Ok(())
+        }
+
+        /// The shared `key → slot` map for `window`, if live — the
+        /// mounted view reads it each frame.
+        pub(crate) fn slot_binding_map(
+            &self,
+            window: WindowId,
+        ) -> Option<Rc<RefCell<BTreeMap<ComponentKey, SurfaceSlotId>>>> {
+            self.inner
+                .borrow()
+                .windows
+                .get(&window)
+                .map(|s| s.surface_bindings.clone())
         }
 
         /// An [`IntentSink`] bound to `window` for view-side
@@ -543,6 +672,7 @@ mod gpui_driver {
                 raw_parent: None,
                 root: None,
                 inbox: Rc::new(RefCell::new(Vec::new())),
+                surface_bindings: Rc::new(RefCell::new(BTreeMap::new())),
                 ready: false,
                 pending_focus: None,
                 scale_factor: 1.0,
@@ -826,12 +956,22 @@ mod gpui_driver {
                         inner: inner2.clone(),
                         window: id,
                     };
+                    let slots = crate::render::SlotMount {
+                        adapter: driver2.surface.clone(),
+                        bindings: inner2
+                            .borrow()
+                            .windows
+                            .get(&id)
+                            .map(|s| s.surface_bindings.clone())
+                            .unwrap_or_default(),
+                    };
                     cx.new(|cx| {
                         crate::render::RvfView::mounted(
                             mount.host,
                             mount.theme.as_ref(),
                             &sink,
                             inbox,
+                            slots,
                             window,
                             cx,
                         )

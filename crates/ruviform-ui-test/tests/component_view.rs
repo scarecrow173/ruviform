@@ -803,3 +803,84 @@ fn two_themes_semantic_equivalence() {
     }
     assert_eq!(a_snap, b_snap);
 }
+
+// ---------------------------------------------------------------------
+// LAB-SV-NATIVE-SLOT (fake layer — Issue #387 × #388 glue)
+// ---------------------------------------------------------------------
+
+/// A `NativeSlot` component participates in key-driven reconciliation
+/// like every other leaf: `Mounted`/`Updated`/`Removed` ops, spec
+/// validation of `min_size`, no interaction registration (it is not a
+/// control — slot state flows through the driver-side binding map).
+#[test]
+fn lab_sv_native_slot_reconcile() {
+    use ruviform_ui::view::NativeSlotSpec;
+
+    let slot_component = |key_name: &str| {
+        ComponentSpec::NativeSlot(NativeSlotSpec {
+            key: key(key_name),
+            min_size: Some([320.0, 240.0]),
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    };
+    let mut host = ViewHost::new(ViewInstanceId::new(9).expect("nonzero"));
+    let ops = host
+        .mount(ViewSpec {
+            root: panel(vec![slot_component("dock.editor")]),
+        })
+        .expect("mount");
+    assert!(ops.contains(&ProjectionOp::Mounted {
+        key: key("dock.editor")
+    }));
+    // Non-interactive: a mounted non-control component absorbs inputs
+    // without events; unmounted keys still fail UnknownComponent.
+    let generation = host.generation();
+    let events = host
+        .dispatch_input(generation, &key("dock.editor"), begin("x"))
+        .expect("non-control absorbs");
+    assert_eq!(events, [] as [InteractionEvent; 0]);
+    let err = host
+        .dispatch_input(generation, &key("unmounted"), begin("x"))
+        .unwrap_err();
+    assert!(matches!(err, ViewError::UnknownComponent { .. }));
+
+    // Same key, changed props → Updated; key gone → Removed.
+    let generation = host.generation();
+    let mut updated = host.spec().expect("spec").clone();
+    if let ComponentSpec::Panel(p) = &mut updated.root {
+        p.children[0] = slot_component("dock.editor");
+        if let ComponentSpec::NativeSlot(n) = &mut p.children[0] {
+            n.min_size = Some([640.0, 480.0]);
+        }
+    }
+    let ops = host.update(updated, generation).expect("update");
+    assert!(ops.contains(&ProjectionOp::Updated {
+        key: key("dock.editor")
+    }));
+
+    let generation = host.generation();
+    let ops = host
+        .update(
+            ViewSpec {
+                root: panel(vec![]),
+            },
+            generation,
+        )
+        .expect("remove");
+    assert!(ops.contains(&ProjectionOp::Removed {
+        key: key("dock.editor")
+    }));
+
+    // Validation: non-finite/negative min_size is an InvalidSpec.
+    let mut bad = ViewSpec {
+        root: panel(vec![slot_component("dock.editor")]),
+    };
+    if let ComponentSpec::Panel(p) = &mut bad.root
+        && let ComponentSpec::NativeSlot(n) = &mut p.children[0]
+    {
+        n.min_size = Some([f64::NAN, 10.0]);
+    }
+    let err = host.mount(bad).unwrap_err();
+    assert!(matches!(err, ViewError::InvalidSpec { .. }));
+}
