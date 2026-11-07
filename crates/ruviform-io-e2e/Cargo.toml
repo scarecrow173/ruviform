@@ -1,0 +1,49 @@
+[package]
+name = "ruviform-io-e2e"
+description = "Composition E2E tests for the generic IO crates — cross-layer staged publish boundaries (test-only, no public API)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Test-only crate: every IO dependency is exercised exclusively by the
+# integration tests under `tests/`, so all of them are dev-dependencies.
+# Dependency addition records (暫定規約「依存追加は理由を記録」):
+# - ruviform-io-file: StagedFile/SealedFile/publish boundary under test.
+# - ruviform-io-structured (json,csv,file): write_file/read_file
+#   convenience on top of StagedFile under test.
+# - ruviform-io-compression (gzip,zstd): borrowed Encoder/Decoder
+#   layers between TAR and StagedFile under test.
+# - ruviform-io-archive: ZIP/TAR writers/readers and secure
+#   ExtractionSession under test.
+# - ruviform-io-wav: WavMuxer<&mut StagedFile> finalize boundary
+#   under test.
+# - ruviform-io-symphonia: independent decode oracle for pre-publish
+#   readback and post-publish reopen verification (no production use).
+# - ruviform-media-io / ruviform-media-core / ruviform-audio-core:
+#   StreamInfo/Frame/Packet/AudioBuffer types the wav boundary
+#   requires (same domain dependency set io-wav itself uses).
+# - serde (derive): test-only document structs for the structured
+#   boundary.
+[dev-dependencies]
+ruviform-io-file = { path = "../ruviform-io-file" }
+ruviform-io-structured = { path = "../ruviform-io-structured", features = [
+    "json",
+    "csv",
+    "file",
+] }
+ruviform-io-compression = { path = "../ruviform-io-compression", features = [
+    "gzip",
+    "zstd",
+] }
+ruviform-io-archive = { path = "../ruviform-io-archive" }
+ruviform-io-wav = { path = "../ruviform-io-wav" }
+ruviform-io-symphonia = { path = "../ruviform-io-symphonia" }
+ruviform-media-io = { path = "../ruviform-media-io" }
+ruviform-media-core = { path = "../ruviform-media-core" }
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+serde = { version = "1", features = ["derive"] }
+
+[lints]
+workspace = true

@@ -3117,6 +3117,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-io-e2e"
+version = "0.1.0"
+dependencies = [
+ "ruviform-audio-core",
+ "ruviform-io-archive",
+ "ruviform-io-compression",
+ "ruviform-io-file",
+ "ruviform-io-structured",
+ "ruviform-io-symphonia",
+ "ruviform-io-wav",
+ "ruviform-media-core",
+ "ruviform-media-io",
+ "serde",
+]
+
+[[package]]
 name = "ruviform-io-file"
 version = "0.1.0"
 dependencies = [

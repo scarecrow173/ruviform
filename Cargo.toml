@@ -51,6 +51,9 @@ members = [
     "crates/ruviform-io-avi",
     # メディア I/O バックエンド（Issue #191 — PCM WAV encode/mux を所有する pure-Rust RIFF/WAVE 出力 adapter。初の実装済み Encoder/Muxer）
     "crates/ruviform-io-wav",
+    # 汎用 I/O 合成 E2E 試験専用クレート（Issue #306 / IO-IMP-12 — 公開 API なし。
+    # tests/ が io-* 公開面を consumer と同じ経路で層横断に検証。本番クレートは誰も依存しない）
+    "crates/ruviform-io-e2e",
     # Adapters（ドメイン基盤の外側・engine と同じ利用側層。Issue #23 PoC で新設）
     "crates/ruviform-audio-device",
     # 拡張層（規格中立のプラグイン基盤。Issue #29 PoC で新設）

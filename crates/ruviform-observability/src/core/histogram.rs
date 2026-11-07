@@ -183,6 +183,15 @@ impl HistogramReader {
             .map(|b| b.load(Ordering::Relaxed))
             .collect()
     }
+
+    /// The raw shared-cell address — used by the collector to reject
+    /// re-registration of an already-registered cell
+    /// (`SourceReused`). Valid only while the cell is alive, which the
+    /// registry guarantees by holding this `Arc` for the claim's
+    /// duration.
+    pub(crate) fn shared_cell_ptr(&self) -> usize {
+        Arc::as_ptr(&self.inner) as usize
+    }
 }
 
 #[cfg(test)]

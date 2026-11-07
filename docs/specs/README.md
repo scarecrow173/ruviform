@@ -43,6 +43,8 @@ Directory: `docs/specs`
 | SPEC-034Rp1Lwq5BGjy5ucoWJ4s | Issue #277 OBS-02 軽量Primitive・Observation Source型・登録/寿命契約 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
 | SPEC-034RToefGzxcXIANSfMf7U | Issue #279 OBS-04 Plugin Host既存4 CounterのSource登録・統合 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | SPEC-ML6zMi4szNWY33LanXM0JL | Issue #280 OBS-05 RT固定長Record Bridge・Clock・欠落・Correlation統合 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
+| SPEC-034T2dgEk6l5QpkecJOJYo | Issue #289 OBS-07 Collector・Metrics・履歴・Snapshot（単一クレート） | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
+| SPEC-034S9nR4tW7xZ2cF5hJ8kM | Issue #294 Cross-Consumer候補tuple Gate — consumer-verify.yml 証拠契約・UI lane 段階拡張・候補連携接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | SPEC-034RoR8tcezgggBLlNk7od | Issue #295 ruviform-io-file — StagedFile 型状態・公開契約・Mock Publish (IO-IMP-01) | approved | [issue-295-io-file-staged-publish-contract.md](./issue-295-io-file-staged-publish-contract.md) |
 | SPEC-034RBEkXlCcpgzIaiikzso | Issue #296 ruviform-io-file — 実 OS Atomic Publish・Durability・Recovery (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | SPEC-034RTbxCxbL7YmxxkxrMmt | Issue #297 ruviform-io-structured — JSON/YAML/TOML Serde型付き Reader/Writer・Strict EOF (IO-IMP-03) | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
@@ -53,6 +55,7 @@ Directory: `docs/specs`
 | SPEC-034RT7qvjzmpx6kytmM8O0 | Issue #302 ruviform-io-archive — ZIP Indexed Entry Reader/Writer・CRC/中央Directory検証 (IO-IMP-08) | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | SPEC-h6TZICrhpaneHHENSs2SP8 | Issue #303 ruviform-io-archive — TAR Streaming Entry/Pending・PAX/GNU・EOF検証 (IO-IMP-09) | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | SPEC-6UnMiBIsE4whNsJmSW8SQX | Issue #304 ruviform-io-archive — Secure Extraction・Root Capability・Path Policy・Staging Recovery (IO-IMP-10) | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| SPEC-lYVG6Gr07aTIBC8BSS0WKW | Issue #306 汎用 I/O 合成 E2E — StagedFile/Structured/Compression/Archive/WAV 境界試験 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | SPEC-P7W4Dz6p2EQIQNPclAQG2U | Issue #307 PluginNode attach 時 frame_base の非 RT 型付き検証（verified clock context） | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | SPEC-034Rp1AEJDKiDTpPq3H4Yz | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | SPEC-3S6R25rgxNv9VL9etjWsH9 | Issue #311 RF-GT-02 Rust↔TypeScript IPC Schema Conformance・Deterministic Record/Replay・Fault Matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
