@@ -94,6 +94,11 @@ members = [
     # タイムラインの汎用インタラクティブ表示プリミティブ。GUI/WebView 非依存で
     # headless 検証経路を維持。ruviform-ui との結合は adapter 側の責務）
     "crates/ruviform-viz",
+    # 利用側層 Native Dock PoC harness（Issue #388/#389 — plugin 系と ui 系の
+    # 相互依存禁止に従い、session↔surface adapter 結線は利用側で行う。
+    # 非既定 `gpui` feature で real GPUI window 上の実 native editor attach
+    # を実行する手動検証入口）
+    "crates/ruviform-poc-native-dock",
 ]
 
 [workspace.package]

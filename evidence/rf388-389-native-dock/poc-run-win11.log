@@ -1,0 +1,27 @@
+[poc] start os=windows
+[poc] capabilities=WindowCapabilities { resize: Supported, focus: Supported, scale_factor: Supported, multi_window: Supported, ime: Unsupported, native_surface_slot: Supported }
+[poc] window=w1
+[poc] instance=PluginHandle { slot: 0, generation: 0 }
+[poc] ready
+[poc] declare_slot=ok index=0
+[poc] lease_parent=ok container_hwnd=0x1d30ef4
+[poc] open=ok caps_dock=Supported caps_close=Supported
+[poc] editor_hwnd=0xe011dc parent_token=0x1d30ef4 opens=1
+[poc] editor_rect=Some((360, 192, 400, 300)) parenting_ok=true editor_visible=true
+[poc] set_geometry=true rect_before=Some((360, 192, 400, 300)) rect_after=Some((400, 242, 400, 300))
+[poc] hide=true child_visible=false
+[poc] show=true child_visible=true
+[poc] focus=true focus_hwnd=0x1d30ef4
+[poc] close=true state=Some(Closed) closes=1 child_alive=false
+[poc] release_lease=true container_alive=false
+[poc] release_slot=true
+[poc] slot_event=Declared { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Leased { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=GeometryChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=LeaseRevoked { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Destroyed { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] done state=Some(Closed)
+[poc] done state=Some(Closed)
+[poc] exited

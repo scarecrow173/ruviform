@@ -111,3 +111,4 @@ Ruviform ワークスペースのメンバークレート索引（計38クレー
 | [`ruviform-cli-sample`](ruviform-cli-sample/README.md) | Issue #155 headless CLI 利用例 — 共有実行サービスの外側アダプタ（probe + オフライン run・JSON/JSONL・Ctrl-C cancel） |
 | [`ruviform-viz`](ruviform-viz/README.md) | 汎用インタラクティブ可視化プリミティブ（波形 LOD・STFT スペクトログラム・タイムライン座標変換・表示 quantization・RVBW/RVST binary transfer — Issue #157。GUI/WebView 非依存） |
 | [`ruviform-audio-plugin-bridge`](ruviform-audio-plugin-bridge/README.md) | ホストプラグイン → typed multi-bus グラフのアダプタ（bus→port 射影・logical span→physical call 分割・process-start 相対 EventList・`PluginNodeControl`/`PluginNodeFactory` — Issue #196 / Migration M4） |
+| [`ruviform-poc-native-dock`](ruviform-poc-native-dock/README.md) | Native Dock PoC harness（`GpuiSurfaceAdapter`↔`PluginEditorSession` 結線の composition root・probe plugin 実 native editor を real GPUI window へ attach — Issue #388/#389。手動検証入口、本番 API なし） |

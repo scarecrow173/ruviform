@@ -36,6 +36,10 @@ pub fn version() -> &'static str {
 
 #[cfg(feature = "gpui")]
 mod gpui_driver {
+    /// The `NativeSurfaceSlot` port implementation for this backend
+    /// (Issue #388) — slot ledger plus real OS surface containers.
+    pub(super) mod surface;
+
     use std::cell::RefCell;
     use std::collections::{BTreeMap, BTreeSet, VecDeque};
     use std::rc::Rc;
@@ -163,6 +167,10 @@ mod gpui_driver {
     /// and the deferred `open_window` application.
     struct Slot {
         handle: Option<AnyWindowHandle>,
+        /// Raw OS window identifier captured at open — the surface
+        /// adapter's parent of record for surface-slot containers.
+        /// `usize` keeps it pointer-width without naming OS types.
+        raw_parent: Option<usize>,
         root: Option<Entity<AppRoot>>,
         inbox: Rc<RefCell<Vec<Event>>>,
         ready: bool,
@@ -253,11 +261,17 @@ mod gpui_driver {
                         focus: Capability::Supported,
                         scale_factor: Capability::Supported,
                         multi_window: Capability::Supported,
-                        // Not wired by the minimal fixture — Issues
-                        // #388/#389 own the real contracts. Never
-                        // silently degrade: report honestly.
+                        // IME routing stays unwired — Issue #389 owns
+                        // that contract. `native_surface_slot` is
+                        // implemented by `GpuiSurfaceAdapter` on the
+                        // OSes that have a container-surface backend;
+                        // honest per-OS reporting, never fake support.
                         ime: Capability::Unsupported,
-                        native_surface_slot: Capability::Unsupported,
+                        native_surface_slot: if surface::BACKEND_AVAILABLE {
+                            Capability::Supported
+                        } else {
+                            Capability::Unsupported
+                        },
                     },
                     handler: None,
                     app_subs: Vec::new(),
@@ -526,6 +540,7 @@ mod gpui_driver {
             id,
             Slot {
                 handle: None,
+                raw_parent: None,
                 root: None,
                 inbox: Rc::new(RefCell::new(Vec::new())),
                 ready: false,
@@ -792,6 +807,10 @@ mod gpui_driver {
                 let mut guard = inner2.borrow_mut();
                 if let Some(slot) = guard.windows.get_mut(&id) {
                     slot.scale_factor = scale;
+                    // Capture the OS parent handle while `&mut Window`
+                    // is in scope — the surface adapter redeems leases
+                    // into containers parented under this handle.
+                    slot.raw_parent = surface::raw_parent_of(window);
                 }
             }
             // User/OS close → veto-able CloseRequested contract.
@@ -1073,6 +1092,8 @@ mod gpui_driver {
     }
 }
 
+#[cfg(feature = "gpui")]
+pub use gpui_driver::surface::GpuiSurfaceAdapter;
 #[cfg(feature = "gpui")]
 pub use gpui_driver::{GpuiDriver, IntentSink, ViewMount};
 

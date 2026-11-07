@@ -13,7 +13,13 @@ publish.workspace = true
 # preserves `cargo check --workspace` as a headless verification path,
 # matching the `ruviform-ui-webview` adapter precedent.
 default = []
-gpui = ["dep:gpui", "dep:ruviform-ui-theme", "dep:serde_json"]
+gpui = [
+    "dep:gpui",
+    "dep:ruviform-ui-theme",
+    "dep:serde_json",
+    "dep:raw-window-handle",
+    "dep:windows-sys",
+]
 # `gpui-test` enables gpui's `test-support` (TestAppContext /
 # `#[gpui::test]` / simulate_* APIs) for the headless render tests.
 # Not for production use — production code needs only `gpui`.
@@ -32,6 +38,22 @@ ruviform-ui-theme = { path = "../ruviform-ui-theme", optional = true }
 # - serde_json: serializes `CommandIntent` into the `rvf.ui.command.v1`
 #   Intent `params` payload. Optional: only needed by the render module.
 serde_json = { version = "1", optional = true }
+# - raw-window-handle: the redemption seam — `Window::window_handle()`
+#   yields the OS parent token the surface adapter wraps into opaque
+#   lease payloads. The raw handle never leaves this adapter.
+raw-window-handle = { version = "0.6", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+# - windows-sys: the Win32 surface-container path (per-slot child HWND
+#   carrying clip/z-order/visibility for an embedded native editor).
+#   Target-gated and optional: only compiled on Windows under `gpui`.
+windows-sys = { version = "0.61", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [[example]]
 name = "minimal_window"

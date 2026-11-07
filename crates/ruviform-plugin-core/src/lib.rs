@@ -21,7 +21,8 @@
 //! [`ErasedPlugin`], [`erase`], [`erase_sendable`], [`HostInput`],
 //! [`HostOutput`]), the shared host-boundary vocabulary
 //! ([`PluginHandle`], [`GuiHandle`], [`GuiParentToken`],
-//! [`HostError`]) and the L1 out-of-process wire codec ([`wire`]).
+//! [`PluginEditorSessionId`], [`ParentSlotLease`], [`HostError`])
+//! and the L1 out-of-process wire codec ([`wire`]).
 //!
 //! Standard-specific types and concepts — CLAP, VST3, and any
 //! binding-crate (`clack`, `vst3`, `clap-sys`, …) types — are
@@ -99,7 +100,10 @@ mod video_plugin;
 
 pub mod wire;
 
-pub use boundary::{FailureCause, GuiHandle, GuiParentToken, HostError, PluginHandle};
+pub use boundary::{
+    FailureCause, GuiHandle, GuiParentToken, HostError, ParentSlotLease, PluginEditorSessionId,
+    PluginHandle,
+};
 pub use bus::{BusDescriptor, BusDirection, BusRole};
 pub use descriptor::{PluginDescriptor, PluginDescriptorView};
 pub use event::{

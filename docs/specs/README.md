@@ -75,6 +75,8 @@ Directory: `docs/specs`
 | SPEC-ElrrvM1k7RbACtLgfzKaxs | Issue #367 共通 Daily Scheduler — `daily-ci.yml` 軽量判定 + `ci.yml` 条件付き dispatch | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | SPEC-4KMssIOpNuvh9jGgKKfp7R | Issue #368 CI failure Issue Tracker — workflow_run 完了監視で main×ci の未解決障害を 1 Issue に集約 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | SPEC-9R6tNeU4aiEuUseUczer9o | Issue #368 Tracker reconcile 入口 — GITHUB_TOKEN dispatch 完了の通知 gap を default-branch 定期/手動 reconcile で埋める | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| SPEC-zrIXGa6QONDm4o1DVVUwaz | Issue #388 Driver-neutral NativeSurfaceSlot 契約（早期 Gate 設計・契約実装） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
+| SPEC-ynejrtwiz2jIJrf3DwFtAK | Issue #389 Driver-neutral PluginEditorSession（state / typed HostPort / L0-L1 接続設計） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | SPEC-034T6RWP3Vz7KWTjv6TILE | Driver-neutral GUI Architecture — GPUI標準Driver方針と3repo移行正本（Issue #384） | approved | [issue-384-driver-neutral-gui-architecture.md](./issue-384-driver-neutral-gui-architecture.md) |
 | SPEC-034T6SaLC8Kz85jG9rbdsJ | DTCG Design Token Interpreter — backend-neutral ResolvedTheme/Theme Registry（Issue #385） | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
 | SPEC-034T9TZQ7ztGDAPvFaz9IT | Issue #390 Driver Contract Lab — UI-DVR fixture registry・境界 Guard・GPUI なし Fake・Native Component Lab harness | proposed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
