@@ -1006,7 +1006,8 @@ impl NativeSurfaceSlot for SharedSurface {
         // untouched and events surface on the next successful poll.
         // Returning empty is honest; panicking would unwind through
         // whichever OS wndproc re-entered on the borrowed call.
-        self.ops().map_or_else(|_| Vec::new(), |mut g| g.drain_events())
+        self.ops()
+            .map_or_else(|_| Vec::new(), |mut g| g.drain_events())
     }
 }
 
