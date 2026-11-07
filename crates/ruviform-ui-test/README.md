@@ -35,6 +35,11 @@ opt-in 専用**であり、本番クレートは本クレートに依存しな�
   有界 backlog・破棄済み宛て drop・veto 可能な `CloseRequested`
   (既定は対象 window のみ approve)・終端 `Destroyed`・app 所有の
   `exit`。
+- `FakeDriver`(`fake_driver` モジュール・Issue #386): driver-neutral
+  `WindowDriver` の deterministic 実装。`FakeHost` と同一 semantic
+  を中立契約で再現 — capability gating(`UiError::Unsupported`)・
+  `Action` ingress・monitor snapshot 付き。semantic fixture は
+  `tests/fake_driver.rs`。
 - 観測(`journal` モジュール): host→app / app→host 双方の receipt を
   有界 ring に記録。payload は byte 長のみ(bulk 本文は複写しない)。
   `seq` cursor + `truncated` で pagination。`deliver_routed` は

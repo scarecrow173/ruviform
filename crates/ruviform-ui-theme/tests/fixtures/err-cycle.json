@@ -1,0 +1,14 @@
+{
+  "$extensions": {
+    "dev.ruviform.dtcg-profile": {
+      "profile": "rvf-dtcg-profile.v1",
+      "layer": "primitive",
+      "id": "err-cycle"
+    }
+  },
+  "a": {
+    "$type": "color",
+    "x": { "$value": "{a.y}" },
+    "y": { "$value": "{a.x}" }
+  }
+}

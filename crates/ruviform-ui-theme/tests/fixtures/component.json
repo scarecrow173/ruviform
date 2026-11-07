@@ -1,0 +1,20 @@
+{
+  "$extensions": {
+    "dev.ruviform.dtcg-profile": {
+      "profile": "rvf-dtcg-profile.v1",
+      "layer": "component",
+      "id": "rvf-component",
+      "modes": ["light", "dark"]
+    }
+  },
+  "button": {
+    "bg": {
+      "$type": "color",
+      "$value": "{color.primary}"
+    },
+    "padding": {
+      "$type": "dimension",
+      "$value": { "value": 8, "unit": "px" }
+    }
+  }
+}

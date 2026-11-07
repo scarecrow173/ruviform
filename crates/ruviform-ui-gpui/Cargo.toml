@@ -1,0 +1,47 @@
+[package]
+name = "ruviform-ui-gpui"
+description = "GPUI adapter implementing the ruviform-ui driver-neutral window/host contract (minimal window fixture; Issue #386)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# `gpui` is off by default: enabling it pulls the GPUI backend (GPU,
+# font, and OS window stacks) into the build. Keeping it non-default
+# preserves `cargo check --workspace` as a headless verification path,
+# matching the `ruviform-ui-webview` adapter precedent.
+default = []
+gpui = ["dep:gpui", "dep:raw-window-handle", "dep:windows-sys"]
+
+[dependencies]
+# - ruviform-ui: the port-defining crate this adapter implements.
+ruviform-ui = { path = "../ruviform-ui" }
+# - gpui: Zed's GPU-accelerated UI framework — the standard Driver
+#   backend per the Issue #384 direction. Optional: only under `gpui`.
+gpui = { version = "0.2.2", optional = true }
+# - raw-window-handle: the redemption seam — `Window::window_handle()`
+#   yields the OS parent token the surface adapter wraps into opaque
+#   lease payloads. The raw handle never leaves this adapter.
+raw-window-handle = { version = "0.6", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+# - windows-sys: the Win32 surface-container path (per-slot child HWND
+#   carrying clip/z-order/visibility for an embedded native editor).
+#   Target-gated and optional: only compiled on Windows under `gpui`.
+windows-sys = { version = "0.61", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[[example]]
+name = "minimal_window"
+# Manual-verification fixture: requires the real GPUI backend.
+required-features = ["gpui"]
+
+[lints]
+workspace = true

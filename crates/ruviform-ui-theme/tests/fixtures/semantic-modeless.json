@@ -1,0 +1,15 @@
+{
+  "$extensions": {
+    "dev.ruviform.dtcg-profile": {
+      "profile": "rvf-dtcg-profile.v1",
+      "layer": "semantic",
+      "id": "rvf-semantic-modeless"
+    }
+  },
+  "surface": {
+    "bg": {
+      "$type": "color",
+      "$value": "{color.bg}"
+    }
+  }
+}
