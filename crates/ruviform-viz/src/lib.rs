@@ -85,7 +85,9 @@ pub use source::{
     BinAxis, PcmBlock, SliceWaveform, SpectrumData, SpectrumInfo, SpectrumSource, SpectrumTile,
     VecSpectrum, WaveformInfo, WaveformSource,
 };
-pub use spectrogram::{Aggregate, RowSpec, Spectrogram, Stft, StftConfig, Tile, TileRequest};
+pub use spectrogram::{
+    Aggregate, RowSpec, Spectrogram, Stft, StftConfig, Tile, TileColumn, TileRequest,
+};
 pub use timeline::{
     FrameGrid, LaneAssignment, LaneItem, SampleTimebase, Selection, Viewport, assign_lanes,
     hit_test, items_in,

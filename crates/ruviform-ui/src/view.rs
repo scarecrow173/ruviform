@@ -321,7 +321,9 @@ pub struct SpectrogramColumn {
     pub start: u64,
     /// Last frame the column covers (exclusive).
     pub end: u64,
-    /// Finite samples aggregated (`0` = nothing covered).
+    /// Finite cells in `magnitudes` (`0..=rows`; `0` = gap column).
+    /// Counts output cells, not source samples: the consumer derives
+    /// it from the `ruviform-viz` tile (`TileColumn::count`).
     pub count: u64,
     /// Magnitude per frequency row, row 0 = lowest Hz
     /// (`len() == SpectrogramSpec::rows`).

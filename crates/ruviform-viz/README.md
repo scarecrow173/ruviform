@@ -20,7 +20,9 @@ Ruviform の汎用インタラクティブ可視化プリミティブを担う�
 - `spectrogram` — `Stft::analyze`（`ruviform-numeric` f64 real FFT による
   汎用 STFT、複素 bin を `SpectrumData::Complex` として保持）と
   `Spectrogram::tile`（`TileRequest`: フレーム範囲→cols、bin 範囲→rows の
-  `RowSpec` 集約で f64 magnitude tile を返す）。蓄積済み中間複素スペクトルは
+  `RowSpec` 集約で f64 magnitude tile を返す）。`Tile::columns` は列ごとの
+  frame 区間・有限セル数（`count`、0 = gap 列）・magnitude を返し、列区間の
+  規則は `tile` と共有する単一実装（Issue #443）。蓄積済み中間複素スペクトルは
   `SpectrumSource` 経由で再解析なしに同じタイル経路を使う。
 - `timeline` — `SampleTimebase`（sample↔秒、`media-core` 有理数時刻で正確）、
   `FrameGrid`（window/hop↔sample）、`Viewport`（軸↔pixel、zoom/pan）、
