@@ -40,6 +40,7 @@ pub mod fixture;
 pub mod headless;
 pub mod io;
 pub mod journal;
+pub mod lifecycle;
 pub mod proto;
 pub mod transport;
 

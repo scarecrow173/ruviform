@@ -23,6 +23,7 @@ relations:
     - "../tasks/t2-fake-driver-issue-386.md"
     - "../tasks/t3-gpui-driver-minimal-window-issue-386.md"
     - "../tasks/t4-gpui-lanes-and-evidence-issue-386.md"
+    - "../tasks/t5-shared-lifecycle-fixture-issue-386.md"
   depends-on: []
   blocks: []
   supersedes: []

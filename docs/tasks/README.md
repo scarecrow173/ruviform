@@ -30,6 +30,7 @@ Directory: `docs/tasks`
 | TASK-LlEFlV8p3toRfliU2UWnVn | T3 GPUI Driver + 最小 Window fixture（ruviform-ui-gpui） | proposed | [t3-gpui-driver-minimal-window-issue-386.md](./t3-gpui-driver-minimal-window-issue-386.md) |
 | TASK-034T6RWWz8Xa6Lf2tK5yQ7 | T3 Semantic fixtures + manifest binding(ruviform-ui-test) | proposed | [t3-semantic-fixtures-issue-387.md](./t3-semantic-fixtures-issue-387.md) |
 | TASK-DktMpNJBhrTSp3LAfeKMjo | T4 mise lane・索引・GPUI 採用証跡（Issue #386） | proposed | [t4-gpui-lanes-and-evidence-issue-386.md](./t4-gpui-lanes-and-evidence-issue-386.md) |
+| TASK-1N5a7PAIOH2xfWl6PJFte5 | T5 Fake/GPUI 共通 Window/Dock lifecycle fixture（Issue #386 第 2 PR） | completed | [t5-shared-lifecycle-fixture-issue-386.md](./t5-shared-lifecycle-fixture-issue-386.md) |
 | TASK-034T6RWXn4Bv9Hg8sM2eR5 | T4 GPUI Controls/Viz renderer(ruviform-ui-gpui::render) | proposed | [t4-gpui-renderer-issue-387.md](./t4-gpui-renderer-issue-387.md) |
 
 ## Settled <!-- doc-suite:settled-index -->

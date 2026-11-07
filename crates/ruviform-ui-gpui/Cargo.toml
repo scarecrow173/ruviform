@@ -55,6 +55,13 @@ windows-sys = { version = "0.61", optional = true, features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[dev-dependencies]
+# - ruviform-ui-test: the shared Window/Dock lifecycle fixture
+#   (`lifecycle::run_lifecycle`) that the Fake and GPUI drivers both run
+#   (Issue #386). Test-only; the production graph is untouched, and the
+#   test crate depends on no GPUI type, so the boundary stays one-way.
+ruviform-ui-test = { path = "../ruviform-ui-test" }
+
 [[example]]
 name = "minimal_window"
 # Manual-verification fixture: requires the real GPUI backend.
