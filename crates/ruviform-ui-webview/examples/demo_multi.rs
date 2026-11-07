@@ -17,16 +17,17 @@
 //!
 //! **Not automated** — a real OS webview backend is required
 //! (`WebView2`/`WKWebView`/`WebKitGTK`); CI verifies the headless
-//! contract via `ruviform-ui`'s fake-host tests instead.
+//! contract via `ruviform-ui`'s fake-driver tests instead.
 
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::time::Duration;
 
 use ruviform_ui::{
-    CloseDecision, DataRegistry, DemoService, HostEvent, MapAssetSource, UiRuntime, WindowConfig,
-    WindowEvent, dispatch_script,
+    CloseDecision, DataRegistry, DemoService, DriverEvent, Event, LifecycleState, MapAssetSource,
+    RoutedEvent, UiRuntime, WindowDriver, WindowLifecycle, WindowSpec,
 };
-use ruviform_ui_webview::{SessionConfig, detect_backend, run_multi};
+use ruviform_ui_webview::{SessionConfig, WebViewWindowConfig, detect_backend, run_multi};
 
 fn main() -> ExitCode {
     let report = detect_backend();
@@ -53,68 +54,66 @@ fn main() -> ExitCode {
         .expect("demo service registration");
 
     let config = SessionConfig {
+        data_dir: None,
+        tick: Some(Duration::from_millis(16)),
         windows: vec![
-            WindowConfig {
-                title: "ruviform demo_multi — main".to_string(),
-                ..WindowConfig::default()
+            WebViewWindowConfig {
+                spec: WindowSpec {
+                    title: "ruviform demo_multi — main".to_string(),
+                    ..WindowSpec::default()
+                },
+                ..WebViewWindowConfig::default()
             },
-            WindowConfig {
-                title: "ruviform demo_multi — panel".to_string(),
-                width: 800,
-                height: 600,
-                ..WindowConfig::default()
+            WebViewWindowConfig {
+                spec: WindowSpec {
+                    title: "ruviform demo_multi — panel".to_string(),
+                    logical_size: ruviform_ui::LogicalSize::new(800, 600),
+                    ..WindowSpec::default()
+                },
+                ..WebViewWindowConfig::default()
             },
         ],
-        ..SessionConfig::single(&ruviform_ui_webview::HostConfig::default())
+        default_url: "rvf://app/index.html".to_string(),
+        devtools: cfg!(debug_assertions),
     };
 
-    let result = run_multi(&config, assets, registry, |event, host| {
-        let WindowEvent::Windowed { window, event } = event else {
-            // Loop-global tick → drain routed job events.
-            for out in rt.drain_jobs_routed() {
-                match out.window {
-                    Some(w) => host.eval(w, &dispatch_script(&out.event)),
-                    // Unrouted (headless/legacy) jobs go to the first
-                    // live window — the consumer's sink choice.
-                    None => {
-                        if let Some(&w) = host.windows().first() {
-                            host.eval(w, &dispatch_script(&out.event));
-                        }
-                    }
-                }
+    let result = run_multi(&config, assets, registry, |event, host| match event {
+        DriverEvent::Tick => route(host, rt.drain_jobs_routed()),
+        DriverEvent::Windowed { window, event } => match event {
+            WindowLifecycle::Action(intent) => {
+                route(host, rt.dispatch_window_intent(window, intent));
             }
-            return;
-        };
-
-        // Consumer close policy: approve every close; exit only when
-        // the last window is destroyed. A sub-window close never exits
-        // the loop or cancels jobs — that policy lives here, not in
-        // the host.
-        if matches!(event, HostEvent::CloseRequested) {
-            let _ = host.respond_close(window, CloseDecision::Approve);
-            // `Destroyed` follows through the queue; last-window exit
-            // is decided there.
-        }
-        if matches!(event, HostEvent::Destroyed) && host.windows().is_empty() {
-            host.exit();
-        }
-
-        for out in rt.handle_window(window, event) {
-            match out.window {
-                Some(w) => host.eval(w, &dispatch_script(&out.event)),
-                None => {
-                    if let Some(&w) = host.windows().first() {
-                        host.eval(w, &dispatch_script(&out.event));
-                    }
-                }
+            // Consumer close policy: approve every close and announce
+            // `closing` to that window. A sub-window close never exits
+            // the loop or cancels jobs — that policy lives here, not in
+            // the adapter.
+            WindowLifecycle::CloseRequested => {
+                host.post_event(window, &Event::lifecycle(LifecycleState::Closing));
+                let _ = host.respond_close(window, CloseDecision::Approve);
             }
-        }
+            // Last-window exit: `Destroyed` follows the approved close.
+            WindowLifecycle::Destroyed if host.windows().is_empty() => host.exit(),
+            _ => {}
+        },
+        _ => {}
     });
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("host exited with error: {e}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+/// Delivers routed events to their window; unrouted ones (headless or
+/// ownerless jobs) go to the first live window — the consumer's sink
+/// choice.
+fn route(host: &mut dyn WindowDriver, outs: Vec<RoutedEvent>) {
+    for out in outs {
+        let target = out.window.or_else(|| host.windows().first().copied());
+        if let Some(w) = target {
+            host.post_event(w, &out.event);
         }
     }
 }
