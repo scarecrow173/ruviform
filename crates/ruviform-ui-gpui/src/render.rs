@@ -285,10 +285,14 @@ fn logical_rect_of(bounds: Bounds<Pixels>) -> LogicalRect {
 /// Whether a port error is permanent for this slot — permanent
 /// failures stop retrying that aspect (the ledger/adapter already
 /// reported them; hammering every frame adds nothing). `Backend`
-/// (OS/driver transient) and `SlotBusy` (dock two-phase move —
-/// clears on `BusyCleared`) stay retryable.
+/// (OS/driver transient), `SlotBusy` (dock two-phase move — clears
+/// on `BusyCleared`), and `InvalidValue` (request-specific — the
+/// next frame's request may be valid) stay retryable.
 fn permanent_slot_error(error: SlotError) -> bool {
-    !matches!(error, SlotError::Backend | SlotError::SlotBusy)
+    !matches!(
+        error,
+        SlotError::Backend | SlotError::SlotBusy | SlotError::InvalidValue
+    )
 }
 
 /// Applies a single port call through the dedupe ledger — shared by

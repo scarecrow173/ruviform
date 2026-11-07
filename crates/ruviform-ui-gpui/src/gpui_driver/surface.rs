@@ -1002,9 +1002,11 @@ impl NativeSurfaceSlot for SharedSurface {
     }
 
     fn drain_events(&mut self) -> Vec<SlotEvent> {
-        self.ops()
-            .expect("shared surface borrow conflicted during drain_events")
-            .drain_events()
+        // A refused borrow means the drain never ran — the queue is
+        // untouched and events surface on the next successful poll.
+        // Returning empty is honest; panicking would unwind through
+        // whichever OS wndproc re-entered on the borrowed call.
+        self.ops().map_or_else(|_| Vec::new(), |mut g| g.drain_events())
     }
 }
 

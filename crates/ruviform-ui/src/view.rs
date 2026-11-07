@@ -518,6 +518,10 @@ pub struct AttachEpochAllocator {
     next: u64,
 }
 
+#[expect(
+    clippy::new_without_default,
+    reason = "Default is deliberately withheld — a second allocator mints the same sequence and re-opens the collision"
+)]
 impl AttachEpochAllocator {
     /// An empty allocator; the first minted epoch is `1`.
     #[must_use]
@@ -603,8 +607,9 @@ impl ViewHost {
     }
 
     /// The current generation. Callers must pass this back to
-    /// `update`/`dispatch_input`; adapters receive it from the last
-    /// `mount`/`detach`/`attach` result.
+    /// `update`/`dispatch_input`; adapters read it after `mount`/
+    /// `detach` bumps it (`detach` also returns it; `attach`
+    /// returns `()` — read the getter).
     #[must_use]
     pub fn generation(&self) -> u64 {
         self.generation
@@ -1179,8 +1184,10 @@ impl ViewHost {
     /// Routes a consumer receipt to the binding that minted the
     /// command. The IPC envelope correlates by `command_id` alone, so
     /// the dispatch-time index resolves the owning control. Returns
-    /// `false` for unknown or stale ids (late replies after detach or
-    /// unregister are absorbed without effect).
+    /// `false` when no index entry or binding exists for the id
+    /// (unknown, or stale after detach/unregister). A receipt that
+    /// *routes* but fails the binding's generation/dedup guards is
+    /// absorbed inside `on_receipt` and still returns `true`.
     pub fn apply_receipt(&mut self, receipt: &CommandReceipt) -> bool {
         let Some(owner) = self.command_index.get(&receipt.command_id).cloned() else {
             return false;
@@ -1201,7 +1208,12 @@ impl ViewHost {
     /// Routes an authoritative state projection to `control_id`'s
     /// binding. The wire payload is opaque JSON — adapters decode the
     /// consumer's projection envelope into this call. Returns `false`
-    /// when no binding exists (unmounted control, stale view epoch).
+    /// when no binding exists for `control_id` (unmounted or
+    /// never-registered). Projections correlate by `control_id`
+    /// alone — they carry no epoch-scoped id, so a fresh binding
+    /// (e.g. after remount) accepts any *first* revision; a delayed
+    /// older-revision projection can land once and self-heals on the
+    /// next newer one.
     pub fn apply_projection(
         &mut self,
         control_id: &str,

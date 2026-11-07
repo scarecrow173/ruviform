@@ -360,8 +360,13 @@ mod gpui_driver {
                     Some(SlotState::Released) => {
                         return Err(UiError::host(format!("surface slot {slot:?} is released")));
                     }
-                    _ => {
+                    None => {
                         return Err(UiError::host(format!("unknown surface slot {slot:?}")));
+                    }
+                    Some(state) => {
+                        return Err(UiError::host(format!(
+                            "surface slot {slot:?} in unbindable state {state:?}"
+                        )));
                     }
                 }
                 if self
