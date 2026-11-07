@@ -1,0 +1,13 @@
+{
+  "$extensions": {
+    "dev.ruviform.dtcg-profile": {
+      "profile": "rvf-dtcg-profile.v1",
+      "layer": "product",
+      "id": "err-type-mismatch"
+    }
+  },
+  "color": {
+    "$type": "dimension",
+    "primary": { "$value": { "value": 4, "unit": "px" } }
+  }
+}

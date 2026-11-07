@@ -1,0 +1,67 @@
+{
+  "$extensions": {
+    "dev.ruviform.dtcg-profile": {
+      "profile": "rvf-dtcg-profile.v1",
+      "layer": "primitive",
+      "id": "rvf-primitive",
+      "modes": ["light", "dark"]
+    }
+  },
+  "color": {
+    "$type": "color",
+    "primary": {
+      "$value": "#1e90ff",
+      "$extensions": {
+        "dev.ruviform.modes": { "dark": "#66b8ff" }
+      }
+    },
+    "bg": { "$value": "{color.primary}" },
+    "muted": {
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.5, 0.5, 0.55],
+        "alpha": 0.8
+      }
+    }
+  },
+  "space": {
+    "$type": "dimension",
+    "md": { "$value": { "value": 12, "unit": "px" } },
+    "page": {
+      "$value": { "value": 1.5, "unit": "rem" },
+      "$extensions": { "dev.ruviform.rounding": "nearest" }
+    }
+  },
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "$value": ["Inter", "system-ui"]
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "$value": "semi-bold"
+    }
+  },
+  "motion": {
+    "fast": {
+      "$type": "duration",
+      "$value": { "value": 120, "unit": "ms" }
+    },
+    "ease": {
+      "$type": "cubicBezier",
+      "$value": [0.2, 0.0, 0.0, 1.0]
+    }
+  },
+  "scale": {
+    "factor": {
+      "$type": "number",
+      "$value": 1.25
+    }
+  },
+  "stroke": {
+    "border": {
+      "$type": "strokeStyle",
+      "$value": "dashed"
+    }
+  }
+}
