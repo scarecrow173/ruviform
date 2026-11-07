@@ -215,17 +215,29 @@ impl GpuiDriver {
     epoch の発行権は logical id ライフサイクルの所有者
     (consumer の view session)が持つ `AttachEpochAllocator`
     — `u64` 単調・枯渇は panic(2^64 は実用上到達不能で、
-    黙って再利用するより正直)。一意性の保証範囲は session
-    (allocator lifetime)内: command id と receipt は inbox 経由で
-    しか届かないため process/session restart では旧 session の
-    receipt が新 host に届く経路自体が存在しない。`AttachEpoch::new`
-    literal は単発 host の test/fixture では合法。
+    黙って再利用するより正直)。allocator は composition root
+    (consumer が `ViewMount.host` を構築する session assembly 点)
+    が session 毎に1つ保持し、その session 内で作る全 host に
+    mint を配る — host 毎に allocator を作り直すと同一系列が
+    再採番され衝突が復活するため、`Default`/`Clone` は持たない
+    (2つ目の権威を暗黙生成させない)。一意性の保証範囲は
+    session(allocator lifetime)内 — 実経路根拠: receipt が
+    host に届く唯一の入口は per-window inbox(`Slot.inbox`,
+    `post_event` enqueue → `drain_inbox`→`apply_receipt`)であり、
+    同一 window 上で view が作り直される process 内
+    carry-over は attach_epoch segment が吸収する。process
+    restart では inbox 自体が memory 上の `Rc<RefCell<Vec>>` で
+    消滅し配送経路が存在しない。`AttachEpoch::new` literal は
+    発行者が一意性を所有する単発 host の test/fixture では合法。
   - `mount_epoch` は `ViewHost` 所有で fresh `mount` 毎に増加し
     `unmount` を跨いで持続する — binding は unmount で破棄・
     remount で counter/gen=0 へ再生成されるため、同一 runtime
     instance 内の stale receipt を吸収する。
   `update` 経由の remove/re-add は remount ではなく binding が生存し
-  counter が継続するため両 epoch とも据置 — epoch 境界は
+  counter が継続するため両 epoch とも据置。unmounted host への
+  `update` は `ViewError::NotMounted` で拒否する — さもないと
+  current-gen caller が `update` 経由で dead mount epoch を蘇生し
+  command id を再採番できた(root review 残存経路)。epoch 境界は
   `unmount`(mount)と host drop(attach)のみ。consumer は
   command_id を opaque として扱うことが前提で、format 追加は
   typed adapter(SV182 系)の意味を変えない。

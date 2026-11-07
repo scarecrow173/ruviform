@@ -158,7 +158,13 @@ mod gpui_driver {
     /// `control_id`).
     pub struct ViewMount {
         /// Authoritative projection host for the view — spec tree,
-        /// interaction dispatchers, and command bindings.
+        /// interaction dispatchers, and command bindings. The host's
+        /// [`AttachEpoch`](ruviform_ui::view::AttachEpoch) must be
+        /// minted by the consumer's session-owned
+        /// [`AttachEpochAllocator`](ruviform_ui::view::AttachEpochAllocator)
+        /// — one allocator per session, shared across every host it
+        /// creates — so a recreated host (layout restore, move) can
+        /// never reuse a dead host's command-id namespace.
         pub host: ruviform_ui::view::ViewHost,
         /// One-way [`ResolvedTheme`] consumption for the palette;
         /// `None` yields the literal fallback palette.

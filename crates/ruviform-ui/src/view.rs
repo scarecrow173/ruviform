@@ -384,6 +384,10 @@ pub enum ViewError {
         /// Human-readable reason.
         detail: String,
     },
+    /// The host has no mounted tree — `update` reconciles an
+    /// existing mount and is not a remount entry; go through
+    /// [`ViewHost::mount`] (the epoch boundary) instead.
+    NotMounted,
     /// No component with the given key is mounted.
     UnknownComponent {
         /// The missing key.
@@ -398,6 +402,7 @@ impl Display for ViewError {
                 write!(f, "stale generation {got} (expected {expected})")
             }
             Self::InvalidSpec { detail } => write!(f, "invalid spec: {detail}"),
+            Self::NotMounted => write!(f, "no mounted tree — use mount()"),
             Self::UnknownComponent { key } => {
                 write!(f, "no mounted component for key {key}")
             }
@@ -505,8 +510,10 @@ impl Display for AttachEpoch {
 ///
 /// `mint` is monotonic `u64`; exhaustion panics rather than
 /// silently reusing a value (2^64 mints is unreachable in any real
-/// session).
-#[derive(Debug, Default)]
+/// session). No `Default`/`Clone`: a second allocator mints the same
+/// sequence and silently re-opens the collision it exists to close —
+/// the composition root constructs exactly one per session.
+#[derive(Debug)]
 pub struct AttachEpochAllocator {
     next: u64,
 }
@@ -928,14 +935,24 @@ impl ViewHost {
     ///
     /// # Errors
     /// [`ViewError::StaleGeneration`] when `generation` is stale;
-    /// [`ViewError::InvalidSpec`] when the new spec fails validation.
-    /// On error the mounted tree is untouched.
+    /// [`ViewError::NotMounted`] when the host has no mounted tree
+    /// (`update` is not a remount entry — go through
+    /// [`ViewHost::mount`]); [`ViewError::InvalidSpec`] when the new
+    /// spec fails validation. On error the mounted tree is untouched.
     pub fn update(
         &mut self,
         spec: ViewSpec,
         generation: u64,
     ) -> Result<Vec<ProjectionOp>, ViewError> {
         self.check_gen(generation)?;
+        // `update` reconciles a mounted tree only — an unmounted host
+        // must remount through `mount`, which bumps the namespace
+        // epoch. Otherwise a current-gen caller could resurrect the
+        // dead mount epoch and re-mint its command ids, letting stale
+        // receipts correlate onto the new bindings.
+        if self.spec.is_none() {
+            return Err(ViewError::NotMounted);
+        }
         let flat = Self::validate_spec(&spec)?;
         let mut ops = Vec::new();
         let next_keys: std::collections::HashSet<ComponentKey> =
@@ -1544,5 +1561,43 @@ mod tests {
         let b = epochs.mint();
         let c = epochs.mint();
         assert_eq!((a.get(), b.get(), c.get()), (1, 2, 3));
+    }
+
+    #[test]
+    fn update_on_unmounted_host_cannot_remount_dead_epoch() {
+        // `update` is not a remount entry — an unmounted host has no
+        // tree to reconcile, so the caller must go through `mount`
+        // (the epoch boundary). Without the guard a current-gen
+        // `update` silently remounted under the dead mount epoch,
+        // re-minting the same command ids so stale receipts
+        // correlated onto live bindings again.
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        let dead_commit = commit_intent_id(&mut host, "a", "g1");
+        host.unmount();
+
+        // A caller holding the *current* generation still cannot
+        // resurrect the dead namespace through `update`.
+        let err = host
+            .update(panel(vec![fader("a")]), host.generation())
+            .expect_err("update on an unmounted host must fail");
+        assert!(matches!(err, ViewError::NotMounted));
+
+        // A virgin host cannot `update`-mount under epoch 0 either —
+        // the first mount must go through `mount` so the namespace
+        // epoch is established explicitly.
+        let mut virgin = ViewHost::new(view_id(), AttachEpoch::new(2));
+        let err = virgin
+            .update(panel(vec![fader("a")]), virgin.generation())
+            .expect_err("update on a never-mounted host must fail");
+        assert!(matches!(err, ViewError::NotMounted));
+
+        // The only remount path is `mount`: bumped epoch, fresh
+        // namespace — the dead mount's receipt still cannot resolve.
+        host.mount(panel(vec![fader("a")])).expect("remount");
+        let live_commit = commit_intent_id(&mut host, "a", "g2");
+        assert_ne!(dead_commit, live_commit);
+        assert!(!host.apply_receipt(&receipt(dead_commit, ReceiptStatus::Applied)));
+        assert!(host.apply_receipt(&receipt(live_commit, ReceiptStatus::Applied)));
     }
 }
