@@ -41,7 +41,8 @@ pub struct ComponentObservation {
 pub struct ViewObservation {
     /// Window hosting the view.
     pub window: WindowId,
-    /// Host generation — advances on mount, accepted update, and detach.
+    /// Host generation — the mutation-guard token; advances on mount
+    /// and detach, and stays stable across spec updates.
     pub generation: u64,
     /// Mounted components, sorted by key.
     pub components: Vec<ComponentObservation>,
