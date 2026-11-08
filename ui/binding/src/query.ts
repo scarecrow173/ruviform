@@ -6,7 +6,9 @@
  * {@link BindingPort} (Issue #257 §6.1):
  *
  * - every request carries `queryId` + the view's `viewId` + the current
- *   view `generation`, plus the caller's `sourceRevision` — a reply that
+ *   view `generation` — a `ViewLink`-managed binding adopts the link's
+ *   live epoch both at `attach` and at registration on an attached
+ *   link — plus the caller's `sourceRevision` — a reply that
  *   fails either identity check is discarded as `stale`, never applied;
  * - in-flight queries are bounded (`maxInflight`); overflow cancels the
  *   oldest — a viewport query is by nature superseded by the next one;

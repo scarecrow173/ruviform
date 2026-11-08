@@ -258,8 +258,12 @@ export type QueryId = string;
 /**
  * A bounded viz/analysis read (Issue #257 §6.1). `generation` is the
  * view-epoch token: replies minted under a superseded generation are
- * discarded. `maxBytes` bounds the transfer — the `rvf://data`
- * range-pull bound (default {@link DEFAULT_QUERY_MAX_BYTES}).
+ * discarded. A `QueryBinding` managed by a `ViewLink` inherits
+ * the link's live view epoch — at `attach` for queries registered
+ * before it, and at registration (adopt-on-join) for queries created
+ * or registered while the link is already attached. `maxBytes` bounds
+ * the transfer — the `rvf://data` range-pull bound (default
+ * {@link DEFAULT_QUERY_MAX_BYTES}).
  */
 export interface ViewportQuery {
   readonly queryId: QueryId;
