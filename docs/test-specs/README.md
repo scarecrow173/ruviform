@@ -87,15 +87,27 @@ Directory: `docs/test-specs`
 | TSPEC-GfyGGakuj069mKFQrVtF3e | Issue #367 テスト仕様 — daily scheduler 判定・dispatch 確認・fail-closed 契約 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | TSPEC-3iZ6nd0UGy5yuVGAnGQI1y | Issue #368 CI failure Issue Tracker test specification — 有効 run 判定・plan 行列・close guard・sanitize | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | TSPEC-qvpqeonK5xwqk0hZpF3ARO | Issue #368 Tracker reconcile test specification — mode 分離・bot 履歴 reconcile・fail-closed 維持 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| TSPEC-7kQ2mWcR9dLx4VfT1hZa8N | Issue #385 — DTCG 解釈器・ResolvedTheme の golden / 分類エラー検証契約 | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
 | TESTSPEC-npkv0TXtBSoMiqPQl8ClVv | Issue #386 Driver-neutral GUI Host 接続試験仕様 | proposed | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
 | TESTSPEC-034T6RWTu4Bx7Ng3hV0dK2 | Issue #387 Component/View + Headless Behavior + GPUI Renderer 試験仕様 | proposed | [issue-387-component-renderer.md](./issue-387-component-renderer.md) |
 | TSPEC-0f0PqMFNljVvAz5wOtJEQu | Issue #388/#389 Native Dock 契約テスト仕様（slot/lease/session の headless 検証 + L0-L1 写像） | approved | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
+| TSPEC-rf388DockLayoutPoc01 | Issue #388 GPUI Panel/Tab レイアウト内 Editor 埋め込みの実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-layout-poc.md](./issue-388-native-dock-layout-poc.md) |
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TSPEC-034TaI7Luee0T88mH1IYv2 | Issue #390 Driver Boundary/Lab 検証 | draft | [issue-390-driver-boundary-lab.md](./issue-390-driver-boundary-lab.md) |
 | TSPEC-UiEoMhS5QMTr3jBiurbTtC | Issue #400 借用 readback → demuxer bounded 接続の test 仕様 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | TESTSPEC-XADte5w8EHAalnm33WCVyn | Issue #404/#405 NativeSurfaceSlot host 境界修復 test 仕様 | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
 | TSPEC-034TnnBwjsmwufsaEZZ0RG | Issue #409 scoped re-root + bounded enumeration テスト仕様 | approved | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TSPEC-CeWNpGq9NFmtzCCp3dkysw | Issue #411 — cargo_metadata MSRV 修復の検証契約 | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
+| TSPEC-bN4yZaDfS6xOvJpM8qTu5H | Issue #414 — projection→controlled display の検証契約 | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
+| TSPEC-Pw8DcTn5KgBy2VaQr7ZmFu | Issue #421 — Meter/TimeAxis GPUI 描画と Fake/GPUI parity の検証契約 | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
+| TSPEC-Vm4QrJc7LsBk2NwYg9DeHa | Issue #429 — Consumer 観測 seam の検証契約 | proposed | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
+| TSPEC-Bw6Qk3RnZtLp9VcSj4MdGa | Issue #434 — Spectrogram kind の検証契約 | proposed | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
+| TSPEC-Mv4HxFc7BqKe1NwRj9TsZa | Issue #435 — Label/Table の契約・Fake/GPUI parity の検証契約 | proposed | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
+| TEST-Cz6GhM2TwPq9RkLd4VnXa7 | Issue #436 — 描画 plan 公開のテスト仕様 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
+| TEST-Ek8Nr3Gu6LvBx4Cq9TjMa2 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加のテスト仕様 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
+| TSPEC-Nd4Gq8VzMr2TkLb6XjPw1Ec | Issue #443 — Tile 列区間と count の検証契約 | proposed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
+| TSPEC-Qm7Lw3Rt9Xc2Hb5Vd8Ns4Ke | Issue #446 — 空 frame 範囲の Tile 検証契約 | proposed | [issue-446-tile-empty-frames.md](./issue-446-tile-empty-frames.md) |
+| TSPEC-EcUAfWYYG6G0Npqen48ITk | Issue #450 — Seek/Fader canvas bounds の検証契約 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |

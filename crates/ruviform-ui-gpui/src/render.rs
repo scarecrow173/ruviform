@@ -734,7 +734,8 @@ impl RvfView {
                 window.paint_quad(fill(fill_b, fill_color));
                 window.paint_quad(fill(thumb_b, thumb_color));
             },
-        );
+        )
+        .size_full();
 
         let down_key = key.clone();
         let move_key = key.clone();
@@ -1918,6 +1919,60 @@ mod tests {
             assert!(v.host.observe(&ComponentKey("fader".to_string())).is_none());
         });
         cx.run_until_parked();
+    }
+
+    fn seek_spec(key_name: &str) -> ComponentSpec {
+        ComponentSpec::Seek(ControlSpec {
+            key: ComponentKey(key_name.to_string()),
+            control_id: None,
+            target: Some("transport.seek".to_string()),
+            descriptor: ValueDescriptor {
+                default_value: Some(0.25),
+                step: Some(0.01),
+                ..ValueDescriptor::ranged(0.0, 1.0)
+            },
+            orientation: Orientation::Horizontal,
+            detach_policy: DetachPolicy::Cancel,
+            unsupported: false,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    #[gpui::test]
+    fn rvf_view_seek_and_fader_canvas_bounds_nonzero(cx: &mut TestAppContext) {
+        let mut host = ViewHost::new(
+            ViewInstanceId::new(1).expect("nonzero"),
+            AttachEpoch::new(1),
+        );
+        host.mount(ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("panel".to_string()),
+                title: None,
+                children: vec![seek_spec("seek"), fader_spec("fader")],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(host, ViewPalette::fallback(), |_intent| {})
+        });
+        cx.run_until_parked();
+
+        view.update(cx, |v, _cx| {
+            let bounds = v.bounds.borrow();
+            for key in ["seek", "fader"] {
+                let b = bounds
+                    .get(&ComponentKey(key.to_string()))
+                    .unwrap_or_else(|| panic!("{key} canvas painted"));
+                assert!(
+                    f32::from(b.size.width) > 0.0 && f32::from(b.size.height) > 0.0,
+                    "{key} canvas bounds non-zero: {b:?}"
+                );
+            }
+        });
     }
 
     /// Toggle click → atomic set: each click flips the binary value

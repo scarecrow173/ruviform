@@ -85,6 +85,18 @@ Directory: `docs/specs`
 | SPEC-034T9TZQ7ztGDAPvFaz9IT | Issue #390 Driver Contract Lab — UI-DVR fixture registry・境界 Guard・GPUI なし Fake・Native Component Lab harness | proposed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | SPEC-xCsjb8OsiMswabSn30uVVs | Issue #404/#405 NativeSurfaceSlot host 境界修復（clip 解除/再投影 + owner window teardown 伝播） | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
 | SPEC-Y6JWBZ3CHy6qvkcyHzSK5H | Issue #411 — ruviform-ui-test の cargo_metadata 推移依存 MSRV 1.89 不整合を修復する | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
+| SPEC-kR4mNxQwY8vLpTzH2jFd6A | Issue #414 — authoritative projection を controlled display へ到達させる | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
+| SPEC-Yq7KpWx3RtNm8LbVd2HaJe | Issue #421 — Meter/TimeAxis GPUI 描画と Knob/Toggle/Meter/TimeAxis の Fake/GPUI parity | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
+| SPEC-Qm7RvT2kXc9LpW4dHs8NfA | Issue #423 WebView 側写像・GPUI Dock 実窓検証・focus capability 精緻化（#386 残 DoD） | proposed | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
+| SPEC-bO4Bjvhj9IWEhVO0Vo3ghA | Issue #426 GPUI lab binding・Story 2 scale × 2 theme fixture・Pixel Golden 境界・Consumer GPUI 型不使用検査 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
+| SPEC-Wb3KqT8nLf2RvXc6HmPd9Y | Issue #429 — Consumer 観測 seam・残 Fake/GPUI 検証の公開 | proposed | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
+| SPEC-Rk4Vw9TqLb2XcJ7NhPd5Ya | Issue #431 WebView 実機 e2e・GPUI 実窓 close veto/Dock 検証・legacy trait Phase 2 判断 | proposed | [issue-431-webview-gpui-real-verify.md](./issue-431-webview-gpui-real-verify.md) |
+| SPEC-Vn3Qa7Lk2RwXe9TdYc5MbHg | Issue #434 — Spectrogram ViewSpec kind（解決済み bounded payload） | proposed | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
+| SPEC-Lk3RvQ8mTxWn5HcZb2GdYu | Issue #435 — Label/Table ViewSpec kind と Fake/GPUI parity | proposed | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
+| SPEC-Qm4Wd7Lz1RbNc8Xk3TgHs5 | Issue #436 — GpuiObserver の描画 plan（drawn）公開 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
+| SPEC-Hs7Kd2Mv9QpXc4Nw1ZrTb6 | Issue #442 — GpuiObserver の描画 plan に Spectrogram / Label / Table を追加 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
+| SPEC-Qm7Lr2TxVb9KdWn4HcYe8Sa | Issue #443 — Tile から SpectrogramColumn への写し替え規則の上流契約 | proposed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
+| SPEC-LOaygozld2Yp16xXhm1Yx5 | Issue #450 — Seek/Fader の canvas が実窓で 0 サイズになり描画されない問題の是正 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |
@@ -128,4 +140,3 @@ Directory: `docs/specs`
 | SPEC-034Tnjp8f4gexhi9BsQuq1 | Issue #409 Rooted capability の再 root 化と停止可能な bounded directory 列挙 | implemented | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | SPEC-034JceNZQvAawWwMH4ct91 | 時間型拡張（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針） | implemented | [time-type-extension-framerate-timecode-rounding.md](./time-type-extension-framerate-timecode-rounding.md) |
 | SPEC-034N3JBtBP4dPi8ob9HwDV | video-proc RT 検証レーンへの assert_no_alloc 適用（Issue #126） | implemented | [video-proc-rt-verification-lane.md](./video-proc-rt-verification-lane.md) |
-| SPEC-bO4Bjvhj9IWEhVO0Vo3ghA | Issue #426 GPUI lab binding・Story matrix・Golden 境界・Consumer GPUI 型不使用検査 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
