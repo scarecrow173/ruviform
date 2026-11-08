@@ -133,6 +133,7 @@ Directory: `docs/designs`
 | DESIGN-rhqM5KfSVajqQ3vvtVDHol | Issue #465 Legacy WebView P0/P1 — 分類ポリシーと文書歴史化の設計 | approved | [issue-465-legacy-webview-p0p1.md](./issue-465-legacy-webview-p0p1.md) |
 | DESIGN-034UaAirEnkd41uDSZZzUH | Issue #468 RootedDir canonical 前提の設計判断 | approved | [issue-468-rooteddir-canonical-premise.md](./issue-468-rooteddir-canonical-premise.md) |
 | DESIGN-034UeuINTqCil2VtMHJxGx | Issue #478 Fader/Knob 縦寸法契約 — h_full 兄弟押し出しのレイアウト判断 | approved | [issue-478-fader-knob-height-contract.md](./issue-478-fader-knob-height-contract.md) |
+| DESIGN-64fKOE68pKEdIkGIEgcsyW | Issue #479 — 値制御コンポーネントのキーボード操作の設計 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |

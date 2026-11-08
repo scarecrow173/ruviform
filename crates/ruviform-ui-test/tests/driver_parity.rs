@@ -14,7 +14,10 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use ruviform_ui::behavior::{CommandIntent, CommandReceipt, ControlInput, InputSource, ValueInput};
+use ruviform_ui::behavior::{
+    CommandIntent, CommandReceipt, ControlInput, Extreme, InputModifiers, InputSource,
+    InteractionEvent, ValueInput,
+};
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{
     AttachEpoch, ComponentKey, ComponentSpec, ProjectionOp, ViewEvent, ViewHost, ViewSpec,
@@ -467,6 +470,140 @@ fn ui_dvr_03_parity_tab_keyboard_intents() {
         snap.selected.and_then(|r| u64::try_from(r).ok()),
         kb["selectedAfterKey"].as_u64()
     );
+}
+
+/// Issue #479: the shared keyboard-ops fixture — Fader/Seek/Knob/Toggle
+/// key steps that both drivers must turn into the same intents and
+/// committed values.
+fn key_ops_fixture() -> Value {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/driver-lab/parity/key-ops.json");
+    let text = std::fs::read_to_string(&path).expect("read key-ops fixture");
+    serde_json::from_str(&text).expect("parse key-ops fixture")
+}
+
+/// The `ControlInput` a fixture key step declares — what the GPUI key
+/// mapping must produce, dispatched here with `source: keyboard`.
+fn keyboard_input(step: &Value) -> ControlInput {
+    let source = Some(InputSource::from(InputSource::KEYBOARD));
+    if let Some(adjust) = step["input"].get("adjust") {
+        return ControlInput::Adjust {
+            steps: adjust["steps"].as_f64().expect("adjust steps"),
+            gesture_id: None,
+            source,
+            modifiers: Some(InputModifiers {
+                fine: adjust["fine"].as_bool().unwrap_or(false),
+            }),
+            seq: None,
+        };
+    }
+    let extreme = match step["input"]["extreme"].as_str().expect("extreme") {
+        "min" => Extreme::Min,
+        "max" => Extreme::Max,
+        other => panic!("unknown extreme {other}"),
+    };
+    ControlInput::Set {
+        value: ValueInput::Extreme(extreme),
+        gesture_id: None,
+        source,
+        modifiers: Some(InputModifiers { fine: false }),
+        seq: None,
+    }
+}
+
+/// Issue #479: the Fake side has no key input, so it replays each
+/// fixture step's declared `ControlInput` with `source: keyboard` and
+/// checks the contract's answer: every gesture event carries
+/// `source: "keyboard"`, mutating steps are `atomic: true` begin/commit
+/// pairs while `disabled`/`read_only` controls report `unavailable`
+/// instead, the minted intent kinds match `expect.*.intents`, and the
+/// committed normalized lands on the fixture's `committedNormalized`.
+/// The GPUI side presses the real key names (`consumer_observation.rs`).
+#[test]
+fn ui_dvr_03_parity_key_ops_keyboard_intents() {
+    let fx = key_ops_fixture();
+    let mut host = new_host();
+    host.mount(view_spec(&fx)).expect("mount");
+    host.drain_events();
+
+    for (name, spec) in fx["expect"]["controls"]
+        .as_object()
+        .expect("controls object")
+    {
+        let k = key(name);
+        let snap = host.observe(&k).expect("control snapshot");
+        let committed = snap
+            .committed
+            .map(|c| c.normalized)
+            .expect("committed value");
+        let want_initial = spec["initialNormalized"].as_f64().expect("initial");
+        assert!(
+            (committed - want_initial).abs() < 1e-9,
+            "{name} initial {committed} != {want_initial}"
+        );
+
+        let keys = spec["keys"].as_array().expect("keys");
+        let mut kinds = Vec::new();
+        let mut unavailable = 0usize;
+        for step in keys {
+            host.dispatch_input(host.generation(), &k, keyboard_input(step))
+                .expect("dispatch key input");
+            for event in host.drain_events() {
+                match event {
+                    ViewEvent::Gesture { event, .. } => {
+                        assert_eq!(
+                            event.meta().source.as_ref().map(|s| s.0.as_str()),
+                            Some(InputSource::KEYBOARD),
+                            "{name} gesture source"
+                        );
+                        match event {
+                            // An unavailable control reports the press
+                            // instead of mutating: the notification is
+                            // not itself an atomic begin/commit pair.
+                            InteractionEvent::Unavailable { reason, .. } => {
+                                unavailable += 1;
+                                assert_eq!(
+                                    serde_json::to_value(reason).expect("reason json"),
+                                    spec["unavailable"],
+                                    "{name} unavailable reason"
+                                );
+                            }
+                            _ => assert!(event.meta().atomic, "{name} atomic pair"),
+                        }
+                    }
+                    ViewEvent::Intent { intent, .. } => kinds.push(
+                        serde_json::to_value(&intent).expect("intent json")["kind"]
+                            .as_str()
+                            .expect("kind")
+                            .to_string(),
+                    ),
+                    _ => {}
+                }
+            }
+        }
+        assert_eq!(kinds, strings(&spec["intents"]), "{name} intent kinds");
+        let want_unavailable = if spec["unavailable"].is_string() {
+            keys.len()
+        } else {
+            0
+        };
+        assert_eq!(
+            unavailable, want_unavailable,
+            "{name} unavailable notifications"
+        );
+
+        let last = keys.last().expect("last step");
+        let want = last["committedNormalized"].as_f64().expect("committed");
+        let committed = host
+            .observe(&k)
+            .and_then(|s| s.committed)
+            .map(|c| c.normalized)
+            .expect("committed after keys");
+        assert!(
+            (committed - want).abs() < 1e-9,
+            "{name} committed {committed} != {want}"
+        );
+    }
 }
 
 fn wait_terminal(rt: &mut UiRuntime) -> Vec<Event> {
