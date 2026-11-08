@@ -142,3 +142,4 @@ Directory: `docs/plans`
 | PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | PLAN-XVTjRRZhCMBS0tmK8M7Nf5 | Issue #411 — cargo_metadata MSRV 修復 実装計画 | completed | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | PLAN-dS9xUtZcP4wLvYnK6nRt3F | Issue #414 — projection→controlled display 実装計画 | completed | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
+| PLAN-Wp3Nd7TzKb5QxHv2RcLf9J | Issue #451 — Tabs pointer 切替と descriptor 更新の実装計画 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
