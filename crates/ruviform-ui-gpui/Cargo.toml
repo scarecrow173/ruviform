@@ -79,6 +79,12 @@ name = "component_showcase"
 # GPUI window. Requires the real GPUI backend.
 required-features = ["gpui"]
 
+[[example]]
+name = "spectrogram_intensity"
+# Issue #463 real-window fixture — intensity-gradient Spectrogram with
+# contract-legal column frame overlap. Requires the real GPUI backend.
+required-features = ["gpui"]
+
 [[test]]
 name = "consumer_observation"
 # Issue #429 consumer seam test — external crate, binds only the public
