@@ -80,6 +80,7 @@ Directory: `docs/specs`
 | SPEC-ElrrvM1k7RbACtLgfzKaxs | Issue #367 共通 Daily Scheduler — `daily-ci.yml` 軽量判定 + `ci.yml` 条件付き dispatch | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | SPEC-4KMssIOpNuvh9jGgKKfp7R | Issue #368 CI failure Issue Tracker — workflow_run 完了監視で main×ci の未解決障害を 1 Issue に集約 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | SPEC-9R6tNeU4aiEuUseUczer9o | Issue #368 Tracker reconcile 入口 — GITHUB_TOKEN dispatch 完了の通知 gap を default-branch 定期/手動 reconcile で埋める | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| SPEC-034UhhQycxrrbYudGthyQi | Issue #378 oracle late-create binding epoch 整合 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
 | SPEC-034T6RWP3Vz7KWTjv6TILE | Driver-neutral GUI Architecture — GPUI標準Driver方針と3repo移行正本（Issue #384） | approved | [issue-384-driver-neutral-gui-architecture.md](./issue-384-driver-neutral-gui-architecture.md) |
 | SPEC-034T6SaLC8Kz85jG9rbdsJ | DTCG Design Token Interpreter — backend-neutral ResolvedTheme/Theme Registry（Issue #385） | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
 | SPEC-0cG0IEArkb6RGWXH0jtA3e | Issue #386 Driver-neutral GUI Host 契約・GPUI 標準 Driver adapter・最小 Window fixture | proposed | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
