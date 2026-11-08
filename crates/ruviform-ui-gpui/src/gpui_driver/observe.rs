@@ -19,7 +19,8 @@ use std::rc::Rc;
 
 use gpui::{AnyWindowHandle, App, AppContext, Entity, Keystroke, TestAppContext};
 use ruviform_ui::behavior::ControlInput;
-use ruviform_ui::view::{ComponentKey, ComponentSnapshot};
+use ruviform_ui::dock::ViewInstanceId;
+use ruviform_ui::view::{AttachEpoch, ComponentKey, ComponentSnapshot};
 use ruviform_ui::{DriverEvent, Intent, UiError, WindowDriver, WindowId, WindowLifecycle};
 
 use super::{GpuiDriver, drain, flush_events};
@@ -41,6 +42,14 @@ pub struct ComponentObservation {
 pub struct ViewObservation {
     /// Window hosting the view.
     pub window: WindowId,
+    /// Logical view identity — the [`ViewInstanceId`] the consumer
+    /// mounted. Scenario adapters resolve targets against it (Issue
+    /// #464).
+    pub view: ViewInstanceId,
+    /// Runtime-instance epoch of the mounted [`ViewHost`] — fixed for
+    /// the host's lifetime; a recreated host carries a new epoch, so
+    /// pinned targets go stale honestly.
+    pub attach_epoch: AttachEpoch,
     /// Host generation — advances on mount, accepted update, and detach.
     pub generation: u64,
     /// Mounted components, sorted by key.
@@ -258,6 +267,29 @@ impl GpuiObserver {
         Ok(())
     }
 
+    /// [`dispatch_input`](Self::dispatch_input) with the host's
+    /// [`ruviform_ui::view::ViewError`] surfaced as [`UiError::Host`] —
+    /// the scenario adapter's honest-error path (Issue #464). Pointer
+    /// and gesture paths keep the dropping variant.
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` hosts no view or the host
+    /// rejects the input.
+    pub fn try_dispatch_input(
+        &self,
+        window: WindowId,
+        key: &ComponentKey,
+        input: ControlInput,
+    ) -> Result<(), UiError> {
+        let view = self.view(window)?;
+        self.cx.update(|app| {
+            view.update(app, |v, cx| {
+                v.try_input(key, input, cx)
+                    .map_err(|e| UiError::host(e.to_string()))
+            })
+        })
+    }
+
     /// Selects `row` of the table `key` in `window`, as a row press does.
     /// Like [`dispatch_input`](Self::dispatch_input), the emitted intent
     /// shows in [`intents`](Self::intents) after [`settle`](Self::settle).
@@ -276,6 +308,28 @@ impl GpuiObserver {
         Ok(())
     }
 
+    /// [`select_row`](Self::select_row) with the host's
+    /// [`ruviform_ui::view::ViewError`] surfaced as [`UiError::Host`]
+    /// (Issue #464).
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` hosts no view or the host
+    /// rejects the selection.
+    pub fn try_select_row(
+        &self,
+        window: WindowId,
+        key: &ComponentKey,
+        row: usize,
+    ) -> Result<(), UiError> {
+        let view = self.view(window)?;
+        self.cx.update(|app| {
+            view.update(app, |v, cx| {
+                v.try_select_row(key, row, cx)
+                    .map_err(|e| UiError::host(e.to_string()))
+            })
+        })
+    }
+
     /// Presses tab `index` of the tab strip `key` in `window`, as a tab
     /// header click does. The emitted intent shows in
     /// [`intents`](Self::intents) after [`settle`](Self::settle).
@@ -292,6 +346,28 @@ impl GpuiObserver {
         self.cx
             .update(|app| view.update(app, |v, cx| v.select_tab(key, index, cx)));
         Ok(())
+    }
+
+    /// [`select_tab`](Self::select_tab) with the host's
+    /// [`ruviform_ui::view::ViewError`] surfaced as [`UiError::Host`]
+    /// (Issue #464).
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` hosts no view or the host
+    /// rejects the selection.
+    pub fn try_select_tab(
+        &self,
+        window: WindowId,
+        key: &ComponentKey,
+        index: usize,
+    ) -> Result<(), UiError> {
+        let view = self.view(window)?;
+        self.cx.update(|app| {
+            view.update(app, |v, cx| {
+                v.try_select_tab(key, index, cx)
+                    .map_err(|e| UiError::host(e.to_string()))
+            })
+        })
     }
 
     /// Focuses the tab strip `key` in `window` as a header press does, then
@@ -336,12 +412,48 @@ impl GpuiObserver {
         Ok(())
     }
 
+    /// [`invoke`](Self::invoke) with the host's
+    /// [`ruviform_ui::view::ViewError`] surfaced as [`UiError::Host`]
+    /// (Issue #464).
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` hosts no view or the host
+    /// rejects the press.
+    pub fn try_invoke(&self, window: WindowId, key: &ComponentKey) -> Result<(), UiError> {
+        let view = self.view(window)?;
+        self.cx.update(|app| {
+            view.update(app, |v, cx| {
+                v.try_invoke(key, cx)
+                    .map_err(|e| UiError::host(e.to_string()))
+            })
+        })
+    }
+
+    /// Detaches the view mounted in `window` — the dock-transfer /
+    /// window-hide path: in-flight gestures end per detach policy and
+    /// the host generation bumps so targets resolved before the detach
+    /// go stale. Returns the new generation. The tree stays mounted;
+    /// the view keeps rendering.
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` hosts no view.
+    pub fn detach_view(&self, window: WindowId, reason: &str) -> Result<u64, UiError> {
+        let view = self.view(window)?;
+        Ok(self.cx.update(|app| {
+            view.update(app, |v, cx| {
+                let generation = v.host_mut().detach(reason);
+                v.flush_events(cx);
+                generation
+            })
+        }))
+    }
+
     /// Projection and window state of the view mounted in `window`;
     /// `None` when the window hosts no view.
     #[must_use]
     pub fn observe(&self, window: WindowId) -> Option<ViewObservation> {
         let view = self.view(window).ok()?;
-        let (generation, components) = self.cx.update(|app| {
+        let (view_id, attach_epoch, generation, components) = self.cx.update(|app| {
             let host = view.read(app).host();
             let components: Vec<ComponentObservation> = host
                 .mounted_keys()
@@ -351,10 +463,17 @@ impl GpuiObserver {
                     Some(ComponentObservation { key, snapshot })
                 })
                 .collect();
-            (host.generation(), components)
+            (
+                host.view_id(),
+                host.attach_epoch(),
+                host.generation(),
+                components,
+            )
         });
         Some(ViewObservation {
             window,
+            view: view_id,
+            attach_epoch,
             generation,
             components,
             inbox_len: self.driver.inbox_len(window),
