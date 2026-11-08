@@ -89,6 +89,13 @@ name = "spectrogram_intensity"
 # contract-legal column frame overlap. Requires the real GPUI backend.
 required-features = ["gpui"]
 
+[[example]]
+name = "window_lifecycle_probe"
+# Issue #243 real-OS lifecycle probe (manual verification): per-window
+# focus/close/error contract, OS WM_CLOSE Veto/Defer/Approve/default,
+# id non-reuse, destroy_window bypass, degenerate-spec observation.
+required-features = ["gpui"]
+
 [[test]]
 name = "consumer_observation"
 # Issue #429 consumer seam test — external crate, binds only the public
