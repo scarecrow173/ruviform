@@ -63,6 +63,13 @@ relations:
 
 # Issue #311 RF-GT-02 — Rust↔TypeScript IPC Schema Conformance・Deterministic Record/Replay・Fault Matrix
 
+> **歴史/旧方式（legacy）注記**: 本書の `rvf.ipc.v1` schema・versioned
+> fixture corpus の契約部分は driver-neutral 経路（`WindowLifecycle::Action(Intent)`）
+> でも共有・維持される。一方、`ui/guitest` の TS 実装・`window.ipc.postMessage` /
+> `evaluate_script` 輸送・WebView DOM 前提の検証 lane は legacy/preview。
+> 物理撤去は Issue #465 P2 の別判断。棚卸し正本:
+> [issue-465-legacy-webview-inventory](../discovery/issue-465-legacy-webview-inventory.md)。
+
 GUI Testing v1.0 / RF-GT-02（Issue #257 の合意済み分解、実装未着手）の実装 spec。
 既存 `rvf.ipc.v1`・`rvf://data`・Binding 契約を改変せず、Rust/TS 両側で**同一の versioned fixture 集合**を処理し、決定的 record/replay と fault matrix を持つ共有テスト基盤を `ui/guitest` として新設する。
 

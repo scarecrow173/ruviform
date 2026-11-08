@@ -1,7 +1,12 @@
 //! `rvf.ipc.v1` message schema — the typed contract between the
 //! frontend and Rust.
 //!
-//! Two directions share one versioned envelope:
+//! **Shared schema (Issue #465):** the envelope types in this module
+//! are driver-neutral — the driver contract's
+//! [`crate::driver::WindowLifecycle::Action`] carries
+//! [`Intent`]s directly and [`crate::UiRuntime`] dispatches them
+//! without any `WebView` involvement. Only the *transport bindings*
+//! below are WebView-specific:
 //!
 //! - Frontend → Rust: [`Intent`] JSON over `window.ipc.postMessage`
 //!   (string payloads only — the wry `with_ipc_handler` contract).
@@ -12,6 +17,10 @@
 //! pulled through `rvf://data` ([`crate::data`]). This is the 3-path
 //! boundary measured in `poc/ui` (RESULTS.md): intents/results as
 //! JSON, state pushes as eval scripts, large data as binary fetches.
+//!
+//! The schema itself is retained after the `WebView` adapter is retired
+//! (Issue #465 P2); only the JS transport and `rvf://*` serving are
+//! removal candidates.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

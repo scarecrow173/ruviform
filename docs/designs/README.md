@@ -111,10 +111,10 @@ Directory: `docs/designs`
 | DESIGN-Fn7RtQk2VbXp9LwCs4HgJu | Issue #429 — Consumer 観測 seam（GpuiObserver）の設計 | proposed | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
 | DESIGN-Wq8Ht3NcZ6RmLv1KbFg7Sd | Issue #431 実機 e2e・実窓 lifecycle 検証・OS close 駆動の設計 | proposed | [issue-431-webview-gpui-real-verify.md](./issue-431-webview-gpui-real-verify.md) |
 | DESIGN-Kt8PwRz4LxMc1VqBn6HdSu | Issue #434 — Spectrogram ViewSpec kind の設計 | proposed | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
-| DESIGN-Pw6NsJc4VhTq9BrXy1MaFe | Issue #435 — Label/Table ViewSpec kind と parity の設計 | proposed | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
+| DESIGN-Pw6NsJc4VhTq9BrXy1MaFe | Issue #435 — Label/Table ViewSpec kind と parity の設計 | approved | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
 | DESIGN-Hv8ZsN3QcKr6YwTe2LmBd1 | Issue #436 — GpuiObserver 描画 plan（drawn）公開の設計 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
-| DESIGN-Jq3Lw8Yn5RtBe2Fk7MzUc4 | Issue #442 — GpuiObserver 描画 plan への Spectrogram / Label / Table 追加の設計 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
-| DESIGN-Vc3Nh8PtRq5LkXw2MdBy7Fj | Issue #443 — Tile 列区間と count の上流契約の設計 | proposed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
+| DESIGN-Jq3Lw8Yn5RtBe2Fk7MzUc4 | Issue #442 — GpuiObserver 描画 plan への Spectrogram / Label / Table 追加の設計 | approved | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
+| DESIGN-Vc3Nh8PtRq5LkXw2MdBy7F | Issue #443 — Tile 列区間と count の上流契約の設計 | approved | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | DESIGN-Hn4Wz8QeKs1TcVb6LrYg2D | Issue #448 — 行選択と command 起動の ViewSpec 契約の設計 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | DESIGN-5mzN1XENwHq9qvfxBhzqdc | Issue #450 — Seek/Fader canvas のサイズ決定契約 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | DESIGN-Hm4Vq8ZsLw2KxTn6RcYb1G | Issue #451 FU-1 — Tabs のキーボード切替の設計 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
@@ -125,6 +125,7 @@ Directory: `docs/designs`
 | DESIGN-034U1MKPf89ADLuIJkjzgP | Issue #461 残課題 — TimeAxis label の canvas 内共有 layer 描画 | approved | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | DESIGN-034U0zRvA4RGErmyI4Tcad | Issue #463 — Spectrogram cell 色の不透明事前合成 | approved | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | DESIGN-034Uc9jupOZFWHdV6h98Xu | Issue #464 — Consumer-neutral GUI Scenario Contract | draft | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
+| DESIGN-rhqM5KfSVajqQ3vvtVDHol | Issue #465 Legacy WebView P0/P1 — 分類ポリシーと文書歴史化の設計 | approved | [issue-465-legacy-webview-p0p1.md](./issue-465-legacy-webview-p0p1.md) |
 | DESIGN-034UaAirEnkd41uDSZZzUH | Issue #468 RootedDir canonical 前提の設計判断 | approved | [issue-468-rooteddir-canonical-premise.md](./issue-468-rooteddir-canonical-premise.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |

@@ -26,10 +26,7 @@ Directory: `docs/tasks`
 | TASK-ovbF_E6zV8WeEi0OsUIw-w | Issue #426 GPUI lab binding・Story matrix・Golden 境界・Consumer 検査の作業記録 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
 | TASK-Hk8LsWq3RnVc6YbTd1PeMz | Issue #429 — Consumer 観測 seam の実装タスク | in-progress | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
 | TASK-Ze4Rp7MvBkWc2QnYt9LdXh | Issue #434 — Spectrogram ViewSpec kind の実装タスク | in-progress | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
-| TASK-Gy5KbQe2WnRt8LxVc3PmHo | Issue #435 — Label/Table ViewSpec kind の実装タスク | in-progress | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
 | TASK-Wn3PdK7RyLb5QvHs9ZcGe8 | Issue #436 — 描画 plan 公開の実装タスク | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
-| TASK-Xb2Qm5Ty7WzHf3Jn6RsPd1 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装タスク | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
-| TASK-Xk2Dv9LqNb7RtPm5WcFs8Hg | Issue #443 — Tile 列区間と count 契約の実装タスク | in-progress | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | TASK-Kd2Pw7YvNs4QbTm9RxLe6J | Issue #448 — 行選択と command 起動の実装タスク | in-progress | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | TASK-Xryam9aweXgtkqZzZupujs | Issue #450 — Seek/Fader canvas サイズ是正の実装タスク | in-progress | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | TASK-Wd8Cp2Lr6XsNb4KqVf1TzG | Issue #451 FU-1 — Tabs のキーボード切替の実装タスク | in-progress | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
@@ -115,6 +112,7 @@ Directory: `docs/tasks`
 | TASK-034JNwTz163N6eT3EJfdaD | FrameRate 型の実装（TimeBase newtype・検証付きコンストラクタ・nominal_fps） | done | [implement-framerate-type.md](./implement-framerate-type.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | TASK-034T2PiH8yPGqaV8KE8r4M | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装 | done | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
+| TASK-BS44ckVmFBThwWFjdUUaro | Issue #465 Legacy WebView P0/P1 — 文書歴史化と棚卸し | done | [implement-issue-465-legacy-webview-p0p1.md](./implement-issue-465-legacy-webview-p0p1.md) |
 | TASK-034UaK7UfGDq7HHHhdeetT | Issue #468 RootedDir canonical 前提の契約明示 | done | [implement-issue-468-rooteddir-canonical-premise.md](./implement-issue-468-rooteddir-canonical-premise.md) |
 | TASK-034J5KJgwtjFonTMQQIvpX | ruviform-media-core のデータモデル実装 | done | [implement-media-core-data-model.md](./implement-media-core-data-model.md) |
 | TASK-034JghH9i5p72LmOoWIPGe | ruviform-media-io 抽象境界クレート実装 | done | [implement-media-io-abstraction.md](./implement-media-io-abstraction.md) |
@@ -233,6 +231,9 @@ Directory: `docs/tasks`
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
 | TASK-hupw1aLckqDaLNAlnDrTMF | Issue #411 — cargo_metadata 0.19 系への依存選定修復 + MSRV 検証入口 | done | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TASK-mV2zXwAeR5yNuIoL7pSt4G | Issue #414 — projection→controlled display 正規経路の実装 | done | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
+| TASK-Gy5KbQe2WnRt8LxVc3PmHo | Issue #435 — Label/Table ViewSpec kind の実装タスク | done | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
+| TASK-Xb2Qm5Ty7WzHf3Jn6RsPd1 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装タスク | done | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
+| TASK-Xk2Dv9LqNb7RtPm5WcFs8H | Issue #443 — Tile 列区間と count 契約の実装タスク | done | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

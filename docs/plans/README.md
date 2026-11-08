@@ -37,6 +37,7 @@ Directory: `docs/plans`
 | PLAN-ECzI54BQngMiQpOP23flK3 | Issue #404/#405 NativeSurfaceSlot host 境界修復 実装計画 | draft | [implement-issue-404-405-native-surface-host-boundary.md](./implement-issue-404-405-native-surface-host-boundary.md) |
 | PLAN-Hv8LcR3wQ5nTk2YbM7pXdA | Issue #423 WebView 写像・focus capability・GPUI 実窓検証の実装計画 | proposed | [implement-issue-423-webview-dock-verify.md](./implement-issue-423-webview-dock-verify.md) |
 | PLAN-Hn3Lx7Qv2Wc9Ab5Ej1Rm8Tp | Issue #431 実機 e2e・実窓 lifecycle 検証・legacy 判断の実装計画 | proposed | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
+| PLAN-f7s6LZ2O4ASTSi0kJoiojB | Issue #465 Legacy WebView P0/P1 実装計画 | approved | [implement-issue-465-legacy-webview-p0p1.md](./implement-issue-465-legacy-webview-p0p1.md) |
 | PLAN-034UaIKFsXeS7a1ILrmjKe | Issue #468 RootedDir canonical 前提の契約明示 実装計画 | approved | [implement-issue-468-rooteddir-canonical-premise.md](./implement-issue-468-rooteddir-canonical-premise.md) |
 | PLAN-034JO2EWa8LuEEE4BFVZ9Q | Issue #52 workspace MSRV 引上げの実施（rust-version 1.85 → 1.89・ドキュメント同期・MSRV 実測検証） | approved | [implement-issue-52-msrv-raise.md](./implement-issue-52-msrv-raise.md) |
 | PLAN-034JQFeYbZCBHPYSBfQe7B | Issue #53 SIMD dispatch 層の実装計画 | approved | [implement-issue-53-simd-dispatch-layer.md](./implement-issue-53-simd-dispatch-layer.md) |
@@ -97,10 +98,7 @@ Directory: `docs/plans`
 | PLAN-84yUP5PkLYsA3yfDgOShzQ | Issue #426 GPUI lab binding 実装計画 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
 | PLAN-Qx5MnBv8TcHs3RdLe6WaKp | Issue #429 — Consumer 観測 seam の実装計画 | in-progress | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
 | PLAN-Hd5Ym2QwNtRx8LcGv3KpJe | Issue #434 — Spectrogram ViewSpec kind の実装計画 | in-progress | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
-| PLAN-Dz8GuKm3QpYv7RtWb4LoCs | Issue #435 — Label/Table ViewSpec kind の実装計画 | in-progress | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
 | PLAN-Rt5LxV8dNq2MzKc7WbFy4 | Issue #436 — GpuiObserver 描画 plan 公開の実装計画 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
-| PLAN-Vn6Pc1Rh4SxDa9Gt3KwLe8 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装計画 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
-| PLAN-Ws6Tz1RbMn4QcKe9YhGx3Dp | Issue #443 — Tile 列区間と count 契約の実装計画 | in-progress | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | PLAN-Qz8Ld3WbTm6XyKr2HnVc4E | Issue #448 — 行選択と command 起動の実装計画 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | PLAN-cXVjL8azFccQWa3dVmLi1a | Issue #450 — Seek/Fader canvas サイズ是正の実装計画 | in-progress | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | PLAN-Qf3Nr9WxKc7TbVz2LmHd4P | Issue #451 FU-1 — Tabs のキーボード切替の実装計画 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
@@ -150,4 +148,7 @@ Directory: `docs/plans`
 | PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | PLAN-XVTjRRZhCMBS0tmK8M7Nf5 | Issue #411 — cargo_metadata MSRV 修復 実装計画 | completed | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | PLAN-dS9xUtZcP4wLvYnK6nRt3F | Issue #414 — projection→controlled display 実装計画 | completed | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
+| PLAN-Dz8GuKm3QpYv7RtWb4LoCs | Issue #435 — Label/Table ViewSpec kind の実装計画 | completed | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
+| PLAN-Vn6Pc1Rh4SxDa9Gt3KwLe8 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装計画 | completed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
+| PLAN-Ws6Tz1RbMn4QcKe9YhGx3D | Issue #443 — Tile 列区間と count 契約の実装計画 | completed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | PLAN-034U0ARdtPkZR0btUirc6D | Issue #463 — Spectrogram cell intensity 修正計画 | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |

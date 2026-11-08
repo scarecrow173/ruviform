@@ -1,10 +1,10 @@
 ---
 id: "SPEC-Hs7Kd2Mv9QpXc4Nw1ZrTb6"
 type: "spec"
-status: "proposed"
+status: "implemented"
 title: "Issue #442 — GpuiObserver の描画 plan に Spectrogram / Label / Table を追加"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -52,6 +52,8 @@ relations:
   superseded-by: []
   related:
     - "docs/specs/issue-421-meter-timeaxis-gpui-parity.md"
+  refines:
+    - "docs/specs/issue-436-observer-drawn.md"
 ---
 
 # Issue #442 — GpuiObserver の描画 plan に Spectrogram / Label / Table を追加

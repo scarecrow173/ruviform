@@ -1,10 +1,10 @@
 ---
 id: "TASK-Gy5KbQe2WnRt8LxVc3PmHo"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #435 — Label/Table ViewSpec kind の実装タスク"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -53,10 +53,10 @@ relations:
 ## 部分達成・未達
 
 - [ ] T10 GPUI の platform a11y API への接続（OS の accessibility tree）。renderer は a11y を描画に使っておらず、a11y の実 OS 検証は別 Gate。現状は drawn grid と contract の a11y 木の一致で代替。follow-up Issue を推奨。
-- [ ] T11 AudioLens 側 Job/Run/Analysis の ViewSpec 化。consumer 側の作業で、本 kind の merge 後に別 PR で行う。
+- [x] T11 AudioLens 側 Job/Run/Analysis の ViewSpec 化。consumer 側の作業で、本 kind の merge 後に別 PR で行う。（2026-11-09 に audio-lens main で確認: `view/run_screen.rs` の状態 Label・stage Table、`job_list` の一列 Table、`analysis_screen.rs` の events/alignments Table が `ruviform_ui::view` の `label()`/`table()` helper 経由で `ComponentSpec::Label`/`Table` を生成している）
 - [ ] T12 大量行の仮想化・スクロール。上限は固定値で、超過は mount 時に拒否する。
 
 ## 最終確認
 
-- [ ] T13 merge 後 HEAD で検証マトリクス（plan §5）を全件実行し、結果を PR 本文に記録する。
-- [ ] T14 review-protocol（独立サブエージェントによる diff レビュー）を実施し、blocker がないことを確認する。
+- [x] T13 merge 後 HEAD で検証マトリクス（plan §5）を全件実行し、結果を PR 本文に記録する。（PR #440 で merge 後 HEAD `a777f14b` の結果を記録済み。2026-11-09 に `chore/verify-442-443-435`（= `origin/main` `4e81b055` + docs のみの差分）で再実行し全件 pass。`docs/impl/ir/issue-442-443-435-verification-closeout.md` 参照）
+- [x] T14 review-protocol（独立サブエージェントによる diff レビュー）を実施し、blocker がないことを確認する（PR #440 本文に記録済み。判定 ACCEPT WITH NON-BLOCKING NOTES、P0/P1 なし）。

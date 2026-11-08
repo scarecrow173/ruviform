@@ -56,5 +56,6 @@ Directory: `docs/discovery`
 | DISC-3qnA5E8SxxIxxEfA9LSI1k | Issue #333 CI-OPT-06 変更影響ベース検証 DAG・Fail-Closed Required Gate の棚卸し | resolved | [issue-333-impact-classifier-inventory.md](./issue-333-impact-classifier-inventory.md) |
 | DISC-im2uskbeNbGlhxBg1mtsTR | Issue #386 Driver-neutral GUI Host: 現行契約棚卸しと WebView 前提分離案 | resolved | [issue-386-driver-neutral-gui-host-inventory.md](./issue-386-driver-neutral-gui-host-inventory.md) |
 | DISC-c2G2365EomTupKRjR3zoqt | Issue #388/#389 Native Plugin Dock 現行実装監査（GuiParentToken / L1 Unsupported / wire / Dock 契約の棚卸し） | resolved | [issue-388-389-native-dock-current-state.md](./issue-388-389-native-dock-current-state.md) |
+| DISC-PZXzzHRXfnvatIchgHgLEJ | Issue #465 Legacy WebView 基盤の棚卸し — 撤去対象・移行先・consumer 影響 | resolved | [issue-465-legacy-webview-inventory.md](./issue-465-legacy-webview-inventory.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |

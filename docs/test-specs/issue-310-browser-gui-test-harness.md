@@ -37,6 +37,15 @@ relations:
 
 # Issue #310 Browser GUI Test Harness 検証仕様
 
+> **歴史/旧方式（legacy）**: 本書は Issue #310 当時の WebView/DOM 前提
+> GUI テスト基盤（`ui/browser-test`・Playwright 実ブラウザ検証）の記録である。
+> 現行の GUI 検証標準は Driver-neutral 契約 + GPUI 標準 Driver（Issue #384）と
+> driver-lab の Fake/GPUI parity 検証（`check-ui-driver-boundary` /
+> `test-ui-driver-contract` / `test-ui-parity`）。当該 lane は legacy/preview
+> として保持され、物理撤去は Issue #465 P2 の別判断（gate: #419 採用判定 +
+> consumer Native 受入）。棚卸し正本:
+> [issue-465-legacy-webview-inventory](../discovery/issue-465-legacy-webview-inventory.md)。
+
 ## Purpose
 
 Issue #310 の受入（Issue 本文正本）を実ブラウザ spec に落とした検証仕様。Harness API が廃止・仕様変更されたとき、ここが「何を守るべきか」の正本になる。RF-GT-04/05 で上位 lane が確立されても browser lane の意味的検証は残る。
