@@ -1,7 +1,7 @@
 ---
 id: "TASK-Fe8Qa3WrNm7YtKc2XzLb4H"
 type: "task"
-status: "in-progress"
+status: "completed"
 title: "Issue #456 — job 終端 receipt の実装タスク"
 created: "2026-11-08"
 updated: "2026-11-08"
@@ -69,5 +69,5 @@ relations:
 
 ## T5. 検証と文書の索引
 
-- [ ] `git fetch origin main && git merge origin/main` 後に検証を再実行する（Coordinator 側の最終確認）。
+- [x] `git fetch origin main && git merge origin/main` 後に検証を再実行する（`selection-command.json` の競合は RF#451 の tabs 節と結合して解消）。
 - [x] 文書チェーン（spec → design → plan → task → test-spec）を作成し、各 README に索引を登録する。
