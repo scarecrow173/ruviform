@@ -88,6 +88,11 @@ pub enum DrawnPlan {
         /// empty and keeps its column position.
         rows: Vec<Vec<Option<String>>>,
     },
+    /// Button label as painted.
+    Button {
+        /// Display text.
+        label: String,
+    },
 }
 
 /// One drawn Meter bar. `x0` and `x1` are fractions of the viewport
@@ -253,6 +258,37 @@ impl GpuiObserver {
         Ok(())
     }
 
+    /// Selects `row` of the table `key` in `window`, as a row press does.
+    /// Like [`dispatch_input`](Self::dispatch_input), the emitted intent
+    /// shows in [`intents`](Self::intents) after [`settle`](Self::settle).
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` hosts no view.
+    pub fn select_row(
+        &self,
+        window: WindowId,
+        key: &ComponentKey,
+        row: usize,
+    ) -> Result<(), UiError> {
+        let view = self.view(window)?;
+        self.cx
+            .update(|app| view.update(app, |v, cx| v.select_row(key, row, cx)));
+        Ok(())
+    }
+
+    /// Presses the button `key` in `window`, as a click does. The emitted
+    /// intent shows in [`intents`](Self::intents) after
+    /// [`settle`](Self::settle).
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` hosts no view.
+    pub fn invoke(&self, window: WindowId, key: &ComponentKey) -> Result<(), UiError> {
+        let view = self.view(window)?;
+        self.cx
+            .update(|app| view.update(app, |v, cx| v.invoke(key, cx)));
+        Ok(())
+    }
+
     /// Projection and window state of the view mounted in `window`;
     /// `None` when the window hosts no view.
     #[must_use]
@@ -408,6 +444,7 @@ fn to_drawn_plan(plan: DrawPlan) -> DrawnPlan {
             header: table.header,
             rows: table.rows,
         },
+        DrawPlan::Button(label) => DrawnPlan::Button { label },
     }
 }
 
