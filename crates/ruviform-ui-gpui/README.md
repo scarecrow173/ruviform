@@ -39,6 +39,13 @@ Rust action ingress)。
 scale API が無いため、monitor の physical 寸法は live window の
 scale factor で推定(#388 の拡張点)。
 
+Scenario Contract(#464) adapter(`gpui_driver::scenario`)は
+semantic capability のみ宣言し、`VisualCapture` は未宣言。
+`VisualGuiTest::capture_frame` は pinned target を検証した上で
+`Unsupported` を返す — `GpuiObserver::drawn()` は描画 plan であり
+pixel framebuffer ではないため、golden 比較の pixel evidence に
+昇格しない(Issue #314 slice 2。実 capture は slice 3)。
+
 ## 層・許可依存
 
 - 層: Optional platform adapter(利用側層)。

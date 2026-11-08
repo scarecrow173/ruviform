@@ -80,6 +80,7 @@ Directory: `docs/plans`
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | PLAN-034S312gtUiTestPlnEE55 | Issue #312 ruviform-ui-test implementation plan | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | PLAN-Z43s6oJzXX8u7P4xAKcbau | Issue #314 slice 1 — Golden Utility コアの実装計画 | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
+| PLAN-034UeymubB5x0zXeYGvfEl | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装計画 | draft | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | PLAN-lb9Tb7cIysOfXayRz4GJY8 | Issue #326 ci.yml dispatch 専用化 実装計画 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | PLAN-034RBML1CjEEPA4ApRK8R9 | Issue #327 CI計測Baseline 実施計画 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | PLAN-SIZd1oW7Pd1d5Vi3BzCMFc | Issue #328 実施計画 — CI PR concurrency(cancel stale PR runs) | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |

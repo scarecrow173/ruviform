@@ -156,6 +156,8 @@ headless な pixel golden コア(`golden` モジュール)。実 pixel
 capture は slice 3 の対象であり、本モジュールは取得済み
 screenshot(`proto::Screenshot` の `png`/`rgba-raw`)を RGBA8 に
 正規化し、baseline 比較・差分承認・evidence を提供する。
+Scenario Contract(#464) への接続は `scenario::visual` slice 2
+として下記「Scenario Contract 接続」に記す。
 
 - key/env: `GoldenKey`(story/theme/state/driver・OS・GPU class/
   scale/font/revision の canonical key)と `EnvironmentMeta`
@@ -179,7 +181,7 @@ screenshot(`proto::Screenshot` の `png`/`rgba-raw`)を RGBA8 に
   `pass/fail/not_run/unsupported/blocked` + machine-readable
   `reason`。`RUVIFORM_GOLDEN_EVIDENCE` 設定時のみ JSONL(schema
   `rvf.golden.evidence/v1`)を append — 通常 test は副作用なし。
-- 境界: semantic oracle・DrawPlan・story fixture(#464/#426)・
+- 境界: semantic oracle・DrawPlan・story fixture(#426)・
   実 OS window capture(#313)・capture 経路(slice 3)は対象外。
   pixel golden は semantic oracle を置換しない。
 - 検証: `mise run test-ui-golden`(統合 test)、unit test は
@@ -187,3 +189,30 @@ screenshot(`proto::Screenshot` の `png`/`rgba-raw`)を RGBA8 に
   layout・承認手順の正本は `fixtures/golden/README.md`。
 
 **RT 契約:** golden module も非 RT(画像処理・store I/O)。
+
+## Scenario Contract 接続（Issue #314 slice 2）
+
+`scenario::visual` が #464 の consumer-neutral Scenario
+Contract に visual capture / golden compare を接続する。
+
+- `VisualGuiTest`(`SemanticGuiTest` の companion trait)は
+  `capture_frame(&ScenarioTarget) -> CaptureOutcome` を提供。
+  `CaptureOutcome` は `Captured(RgbaImage)` と
+  `Unsupported{reason}`/`NotRun{reason}` を区別し、semantic
+  observation や draw plan を pixel evidence に昇格しない。
+- `golden_check` は pinned target を再検証してから capture →
+  `BaselineStore::compare` を実行し `GoldenReport`/evidence を
+  発行する。capture 非対応は `unsupported`/`not_run` verdict で
+  `pass` にしない。
+- `record_golden_step` は scenario report の observed に golden
+  verdict/reason を記録する。`ScenarioVerdict::lane_status()` で
+  consumer lane 語彙へ写像(`blocked` は `not_run` + reason 保持、
+  `unsupported` は `unsupported`)。
+- capability: `ScenarioCapability::VisualCapture` は Fake/GPUI
+  とも未宣言。`require_capabilities` preflight が拒否し、
+  `capture_frame` も `Unsupported` を返す — 実 capture backend
+  は slice 3、story fixture 接続は #426/slice 4。
+- 検証: `mise run test-ui-scenario-contract-fake` /
+  `test-ui-scenario-contract-gpui`(parity contract test)。
+
+**RT 契約:** visual module も非 RT(capture seam・report 記録)。

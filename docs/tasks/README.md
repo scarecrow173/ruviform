@@ -16,6 +16,7 @@ Directory: `docs/tasks`
 | TASK-034RT8aupBUW6NpSHSrRWq | T2 ZIP Writer・Entry finish→Archive finish・否定fixture (Issue #302) | completed | [issue-302-t2-zip-writer.md](./issue-302-t2-zip-writer.md) |
 | TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | completed | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
 | TASK-IfiV9xO2raU6D60zy70KLs | Issue #314 slice 1 — Golden Utility コアの実装タスク | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
+| TASK-034Uey3QmAAfhAZo6ln7H4 | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装タスク | todo | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | TASK-yFczRmBPJEUZkKyX3bngmg | Issue #329 T1 — ci.yml verify/ui-verify へ sccache 導入 + Cold/Warm 実測 + IR | in-progress | [issue-329-t1-sccache-verify-ui-lanes.md](./issue-329-t1-sccache-verify-ui-lanes.md) |
 | TASK-034RJ02dFTbxsMkC5rKofw | Issue #331 T1 — verify lane の check-ci を lint-ci に統合 + 等価性・実測記録 | in-progress | [issue-331-t1-check-step-dedup.md](./issue-331-t1-check-step-dedup.md) |
 | TASK-ibEQJ0Q4JzJ0UtqiKM5W5u | Issue #388/#389 Native Dock 契約タスク（boundary / native_slot / editor_session） | completed | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
