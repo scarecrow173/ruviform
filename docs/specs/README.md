@@ -95,6 +95,7 @@ Directory: `docs/specs`
 | SPEC-Qm4Wd7Lz1RbNc8Xk3TgHs5 | Issue #436 — GpuiObserver の描画 plan（drawn）公開 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
 | SPEC-Vd7Qk2LmRt9WxYc4NbHa3F | Issue #448 — 読み取り専用 Table の行選択と command 起動の ViewSpec 契約 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | SPEC-LOaygozld2Yp16xXhm1Yx5 | Issue #450 — Seek/Fader の canvas が実窓で 0 サイズになり描画されない問題の是正 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
+| SPEC-034Ue3JcZURnCZrdgjO2Os | Issue #451 FU-1b — Tab/Shift-Tab によるフォーカス巡回の配線 | draft | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | SPEC-Kb7Tn3QwRx9LpVc2Hy5Ud8 | Issue #451 FU-1 — Tabs のキーボード切替 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
 | SPEC-Gt5Rw2KqZm8LxNv3TcYb7H | Issue #451 — Tabs ヘッダの pointer 切替と ViewSpec descriptor の mount 後更新契約 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | SPEC-7snPYyix2JlpoyXvP0zKwf | Issue #453 — 残 canvas 要素（Waveform/Meter/Spectrogram/TimeAxis/NativeSlot）のサイズ規則監査と是正 | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |

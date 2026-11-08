@@ -29,6 +29,7 @@ Directory: `docs/tasks`
 | TASK-Wn3PdK7RyLb5QvHs9ZcGe8 | Issue #436 — 描画 plan 公開の実装タスク | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
 | TASK-Kd2Pw7YvNs4QbTm9RxLe6J | Issue #448 — 行選択と command 起動の実装タスク | in-progress | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | TASK-Xryam9aweXgtkqZzZupujs | Issue #450 — Seek/Fader canvas サイズ是正の実装タスク | in-progress | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
+| TASK-034Ue8ThHNXd5Ah4vY5uvG | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の実装タスク | todo | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | TASK-Wd8Cp2Lr6XsNb4KqVf1TzG | Issue #451 FU-1 — Tabs のキーボード切替の実装タスク | in-progress | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
 | TASK-Ym6Rc1EkVw8PsTn4ZhDa3G | Issue #451 — Tabs pointer 切替と descriptor 更新の実装タスク | in-progress | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | TASK-CgXiI8C68Y81CRHocDi0QY | Issue #453 — 残 canvas のサイズ規則監査と是正の実装タスク | in-progress | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
