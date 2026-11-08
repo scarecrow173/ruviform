@@ -6,7 +6,7 @@
 //! utility。**capture（pixel の取得）は対象外** — 本 module は
 //! decode 済みの画像と `proto::Screenshot` wire 型の変換、比較、
 //! baseline store（candidate → promote の承認境界）、証拠出力を
-//! 担う。`GpuiObserver::drawn()` の DrawPlan は semantic/描画計画
+//! 担う。`GpuiObserver::drawn()` の `DrawPlan` は semantic/描画計画
 //! であり pixel ではない — pixel の `Pass` は semantic oracle の
 //! `Pass` を意味しない。
 //!

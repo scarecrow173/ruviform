@@ -2,7 +2,7 @@
 //! （Issue #314 slice 1）。
 //!
 //! 内部表現は `width * height * 4` byte の RGBA8。`from_png` は
-//! `png` crate の `normalize_to_color8`（EXPAND|STRIP_16）で
+//! `png` crate の `normalize_to_color8`（`EXPAND`/`STRIP_16`）で
 //! 8bit Gray/RGB/GA/RGBA を受理して RGBA8 に正規化する。
 //! `from_screenshot` は `proto::Screenshot` の `png` /
 //! `rgba-raw` format のみを受理し、それ以外の format は
@@ -221,7 +221,7 @@ impl RgbaImage {
 
     /// PNG バイト列から decode する。
     ///
-    /// `normalize_to_color8`（EXPAND|STRIP_16）を適用し、8bit の
+    /// `normalize_to_color8`（`EXPAND`/`STRIP_16`）を適用し、8bit の
     /// Gray/RGB/GA/RGBA 出力を RGBA8 に正規化する。次元は
     /// `MAX_DIMENSION`/`MAX_PIXELS` で制限する。
     ///
@@ -311,7 +311,8 @@ fn check_dimensions(width: u32, height: u32) -> Result<(), GoldenImageError> {
 
 /// `normalize_to_color8` 後の 8bit 出力を RGBA8 に展開する。
 /// 受理するのは Grayscale/Rgb/GrayscaleAlpha/Rgba の 8bit のみ
-/// （Indexed は EXPAND で展開済み、16bit は STRIP_16 で 8bit 化済み）。
+/// （Indexed は `EXPAND` で展開済み、16bit は `STRIP_16` で
+/// 8bit 化済み）。
 fn expand_to_rgba(buf: &[u8], info: &png::OutputInfo) -> Result<Vec<u8>, GoldenImageError> {
     use png::{BitDepth, ColorType};
     if info.bit_depth != BitDepth::Eight {
@@ -325,7 +326,7 @@ fn expand_to_rgba(buf: &[u8], info: &png::OutputInfo) -> Result<Vec<u8>, GoldenI
     match info.color_type {
         ColorType::Rgba => out.extend_from_slice(buf),
         ColorType::Rgb => {
-            for px in buf.chunks_exact(3) {
+            for px in buf.as_chunks::<3>().0 {
                 out.extend_from_slice(&[px[0], px[1], px[2], 255]);
             }
         }
@@ -335,11 +336,11 @@ fn expand_to_rgba(buf: &[u8], info: &png::OutputInfo) -> Result<Vec<u8>, GoldenI
             }
         }
         ColorType::GrayscaleAlpha => {
-            for px in buf.chunks_exact(2) {
+            for px in buf.as_chunks::<2>().0 {
                 out.extend_from_slice(&[px[0], px[0], px[0], px[1]]);
             }
         }
-        other => {
+        other @ ColorType::Indexed => {
             return Err(GoldenImageError::UnsupportedColorType {
                 color_type: format!("{other:?}"),
                 bit_depth: format!("{:?}", info.bit_depth),

@@ -565,10 +565,10 @@ pub(crate) fn evidence_target(env_var: &str) -> Option<PathBuf> {
 /// open/serialize 失敗は静かに無視する（evidence は best-effort で
 /// test を fail させない — driver-lab/golden 共通）。
 pub(crate) fn append_jsonl_line(path: &Path, line: &str) {
+    use std::io::Write;
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    use std::io::Write;
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

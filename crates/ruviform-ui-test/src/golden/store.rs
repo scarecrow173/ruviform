@@ -200,12 +200,12 @@ impl BaselineStore {
     /// baseline の `(png_path, sidecar_path)` を返す。
     #[must_use]
     pub fn paths(&self, key: &GoldenKey) -> (PathBuf, PathBuf) {
-        self.paths_under(&self.root, key)
+        Self::paths_under(&self.root, key)
     }
 
     /// `dir` 配下の `(png_path, sidecar_path)`。candidate staging
     /// でも同じ layout を使う。
-    fn paths_under(&self, dir: &Path, key: &GoldenKey) -> (PathBuf, PathBuf) {
+    fn paths_under(dir: &Path, key: &GoldenKey) -> (PathBuf, PathBuf) {
         let mut d = dir.to_path_buf();
         for seg in key.path_segments() {
             d.push(seg);
@@ -225,12 +225,12 @@ impl BaselineStore {
     /// # Errors
     /// [`StoreError`] on I/O, decode, or integrity failures.
     pub fn read(&self, key: &GoldenKey) -> Result<Option<Baseline>, StoreError> {
-        self.read_under(&self.root, key)
+        Self::read_under(&self.root, key)
     }
 
     /// `dir` 配下の baseline/candidate を読む（`read` と同一規則）。
-    fn read_under(&self, dir: &Path, key: &GoldenKey) -> Result<Option<Baseline>, StoreError> {
-        let (png_path, sidecar_path) = self.paths_under(dir, key);
+    fn read_under(dir: &Path, key: &GoldenKey) -> Result<Option<Baseline>, StoreError> {
+        let (png_path, sidecar_path) = Self::paths_under(dir, key);
         if !png_path.exists() {
             return Ok(None);
         }
@@ -281,7 +281,7 @@ impl BaselineStore {
         environment: Option<&EnvironmentMeta>,
         policy: &DiffPolicy,
     ) -> Result<BaselineSidecar, StoreError> {
-        self.write_under(staging_root, key, image, environment, policy, None)
+        Self::write_under(staging_root, key, image, environment, policy, None)
     }
 
     /// staging の candidate を baseline root へ promote する —
@@ -300,11 +300,10 @@ impl BaselineStore {
         approval: &BaselineApproval,
     ) -> Result<BaselineSidecar, StoreError> {
         let candidate =
-            self.read_under(staging_root, key)?
-                .ok_or_else(|| StoreError::CandidateMissing {
-                    key: key.canonical(),
-                })?;
-        self.write_under(
+            Self::read_under(staging_root, key)?.ok_or_else(|| StoreError::CandidateMissing {
+                key: key.canonical(),
+            })?;
+        Self::write_under(
             &self.root,
             key,
             &candidate.image,
@@ -318,7 +317,6 @@ impl BaselineStore {
     /// `approval` は candidate では `None`、promote 済み baseline
     /// では `Some`。
     fn write_under(
-        &self,
         dir: &Path,
         key: &GoldenKey,
         image: &RgbaImage,
@@ -326,7 +324,7 @@ impl BaselineStore {
         policy: &DiffPolicy,
         approval: Option<&BaselineApproval>,
     ) -> Result<BaselineSidecar, StoreError> {
-        let (png_path, sidecar_path) = self.paths_under(dir, key);
+        let (png_path, sidecar_path) = Self::paths_under(dir, key);
         if let Some(parent) = png_path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -600,7 +598,9 @@ mod tests {
         assert!(cand.approval.is_none(), "candidate must have no approval");
         assert!(store.read(&key()).unwrap().is_none());
         // staging 側には candidate がある
-        let staged = store.read_under(&staging, &key()).unwrap().unwrap();
+        let staged = BaselineStore::read_under(&staging, &key())
+            .unwrap()
+            .unwrap();
         assert_eq!(staged.image, img);
         assert_eq!(staged.sidecar.policy, policy());
 
@@ -790,7 +790,11 @@ mod tests {
         let cmp = store.compare(&key(), &actual, None).unwrap();
         assert_eq!(cmp.report.verdict, GoldenVerdict::Pass);
         assert!(cmp.report.baseline.is_some());
-        assert!(cmp.report.baseline.as_ref().unwrap().ends_with(".png"));
+        assert!(
+            Path::new(cmp.report.baseline.as_ref().unwrap())
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+        );
 
         // +10 ずれ → fail（sidecar の policy=2 が使われる）
         let actual2 = RgbaImage::solid(4, 4, [110, 100, 100, 255]);

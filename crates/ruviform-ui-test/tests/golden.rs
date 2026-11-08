@@ -205,7 +205,11 @@ fn baseline_lifecycle_candidate_promote_compare_evidence() {
             .unwrap()
             .contains("test-headless")
     );
-    assert!(v["baseline"].as_str().unwrap().ends_with(".png"));
+    assert!(
+        std::path::Path::new(v["baseline"].as_str().unwrap())
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+    );
 
     // emit_evidence は env 未設定なら None（副作用なし）— この test
     // process では RUVIFORM_GOLDEN_EVIDENCE を設定していない。

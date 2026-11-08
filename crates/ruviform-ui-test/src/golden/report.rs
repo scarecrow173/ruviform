@@ -9,7 +9,7 @@
 //! `not_run` を立てる入口として `unsupported()`/`not_run()`
 //! constructor を提供する。
 //!
-//! `reason` は機械可読な snake_case コード（`match`/
+//! `reason` は機械可読な `snake_case` コード（`match`/
 //! `tolerance_exceeded`/`size_mismatch`/`empty_comparison`/
 //! `baseline_missing`/caller 指定）、`detail` は人間可読の補足。
 //!
@@ -47,7 +47,7 @@ pub struct GoldenReport {
     pub environment: Option<EnvironmentMeta>,
     /// 判定。
     pub verdict: GoldenVerdict,
-    /// 機械可読な理由コード（snake_case）。
+    /// 機械可読な理由コード（`snake_case`）。
     pub reason: String,
     /// 人間可読の詳細（fail 理由・blocked 理由等）。
     pub detail: String,
@@ -291,8 +291,7 @@ impl From<&GoldenReport> for GoldenEvidence {
 fn now_unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
 }
 
 /// `RUVIFORM_GOLDEN_EVIDENCE` で指定された path に evidence を

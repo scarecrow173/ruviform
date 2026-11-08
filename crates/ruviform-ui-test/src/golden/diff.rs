@@ -60,7 +60,7 @@ impl ChannelTolerance {
     }
 
     /// channel index（0=R,1=G,2=B,3=A）に対応する許容差を返す。
-    const fn channel(&self, i: usize) -> u8 {
+    const fn channel(self, i: usize) -> u8 {
         match i {
             0 => self.red,
             1 => self.green,
@@ -108,7 +108,7 @@ impl MaskRect {
 /// 「完全一致・mask 無し」= 最も厳しい policy）。baseline 承認時に
 /// sidecar へ同梱され、比較は常に承認済み policy で行われる
 /// （`store` 参照）。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct DiffPolicy {
     /// per-channel 許容差。
@@ -116,15 +116,6 @@ pub struct DiffPolicy {
     /// 比較から除外する領域。画像外の矩形は clip される。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mask: Vec<MaskRect>,
-}
-
-impl Default for DiffPolicy {
-    fn default() -> Self {
-        Self {
-            channel_tolerance: ChannelTolerance::default(),
-            mask: Vec::new(),
-        }
-    }
 }
 
 /// channel 別の観測最大差分（0..=255、順序は R,G,B,A）。
@@ -213,7 +204,16 @@ pub enum DiffOutcome {
 /// [`DiffOutcome::SizeMismatch`] を返し、差分画像は作らない。
 /// 本関数は失敗しない — 不正な policy という概念は v1 に存在しない
 /// （policy は常に有限な u8 許容差と矩形列）。
+///
+/// # Panics
+/// 内部不変条件（diff buffer 長 = `width * height * 4`）が壊れた
+/// 場合のみ panic する — `RgbaImage` の構築時検証により通常は
+/// 到達不能。
 #[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "pixel counts are bounded by image dimensions (<= u32::MAX^2 px) and f64 mantissa (2^53) is far larger; ratio precision loss is not observable"
+)]
 pub fn diff(baseline: &RgbaImage, actual: &RgbaImage, policy: &DiffPolicy) -> DiffOutcome {
     if baseline.width() != actual.width() || baseline.height() != actual.height() {
         return DiffOutcome::SizeMismatch {
@@ -294,10 +294,7 @@ pub fn diff(baseline: &RgbaImage, actual: &RgbaImage, policy: &DiffPolicy) -> Di
         width: x1 - x0 + 1,
         height: y1 - y0 + 1,
     });
-    debug_assert_eq!(
-        u64::from(stats.compared_pixels) + stats.masked_pixels,
-        pixel_count
-    );
+    debug_assert_eq!(stats.compared_pixels + stats.masked_pixels, pixel_count);
 
     let within_policy = stats.compared_pixels > 0 && stats.mismatched_pixels == 0;
     let diff_image = RgbaImage::new(baseline.width(), baseline.height(), diff_pixels)
@@ -314,7 +311,7 @@ mod tests {
     use super::*;
 
     fn img(px: &[[u8; 4]]) -> RgbaImage {
-        let w = px.len() as u32;
+        let w = u32::try_from(px.len()).unwrap();
         let mut buf = Vec::with_capacity(px.len() * 4);
         for p in px {
             buf.extend_from_slice(p);
@@ -399,17 +396,17 @@ mod tests {
     #[test]
     fn both_transparent_pixels_match_regardless_of_rgb() {
         // alpha=0 正規化: 双方 alpha=0 は RGB が違っても差分にしない
-        let a = img(&[[0, 0, 0, 0], [9, 9, 9, 0]]);
-        let b = img(&[[255, 255, 255, 0], [1, 2, 3, 0]]);
-        let r = compared(diff(&a, &b, &DiffPolicy::default()));
-        assert_eq!(r.stats.compared_pixels, 2);
-        assert_eq!(r.stats.mismatched_pixels, 0);
-        assert!(r.within_policy);
+        let pa = img(&[[0, 0, 0, 0], [9, 9, 9, 0]]);
+        let pb = img(&[[255, 255, 255, 0], [1, 2, 3, 0]]);
+        let res = compared(diff(&pa, &pb, &DiffPolicy::default()));
+        assert_eq!(res.stats.compared_pixels, 2);
+        assert_eq!(res.stats.mismatched_pixels, 0);
+        assert!(res.within_policy);
         // 片方だけ alpha=0 → alpha 差分として mismatch
-        let c = img(&[[0, 0, 0, 0]]);
-        let d = img(&[[0, 0, 0, 255]]);
-        let r2 = compared(diff(&c, &d, &DiffPolicy::default()));
-        assert_eq!(r2.stats.mismatched_pixels, 1);
+        let pc = img(&[[0, 0, 0, 0]]);
+        let pd = img(&[[0, 0, 0, 255]]);
+        let res2 = compared(diff(&pc, &pd, &DiffPolicy::default()));
+        assert_eq!(res2.stats.mismatched_pixels, 1);
     }
 
     #[test]

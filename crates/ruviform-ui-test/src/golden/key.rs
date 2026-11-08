@@ -265,6 +265,11 @@ mod tests {
         for v in variants {
             assert_ne!(v.canonical(), canonical, "variant must differ: {v:?}");
         }
+    }
+
+    #[test]
+    fn golden_key_file_stem_covers_env_and_revision_only() {
+        let base = key();
         // file_stem は env class + revision のみを畳み込む
         // （story/theme/state は path segment 側）。
         for (v, expect_diff) in [
