@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "ruviform-io-file Rooted Read Capability — dirfd/handle 相対 traversal・FollowWithinRoot/NoFollow・pin/identity"
 created: "2026-11-07"
-updated: "2026-11-07"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -71,12 +71,17 @@ relations:
     - "docs/designs/ruviform-architecture-design-baseline.md"
     - "docs/adr/public-enum-non-exhaustive-policy.md"
     - "docs/adr/rooted-read-capability-placement.md"
+    - "../specs/issue-468-rooteddir-canonical-premise.md"
+    - "../designs/issue-468-rooteddir-canonical-premise.md"
+    - "../adr/issue-468-rooteddir-canonical-premise.md"
   refines: []
-  refined-by: []
+  refined-by:
+    - "../specs/issue-468-rooteddir-canonical-premise.md"
   derives-from: []
   derived-by:
     - "docs/designs/rooted-read-capability.md"
     - "docs/adr/rooted-read-capability-placement.md"
+    - "../specs/issue-468-rooteddir-canonical-premise.md"
   verifies: []
   verified-by:
     - "docs/test-specs/rooted-read-capability.md"
