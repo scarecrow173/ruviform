@@ -413,7 +413,7 @@ impl Spectrogram {
         let read = self.source.read_tile(f0..f1, b0..b1)?;
         let mag = read.data.magnitudes();
         let (rb0, rb1) = (read.bin_start, read.bin_start + read.bins);
-        let nfr = read.frames.max(1) as u64;
+        let nfr = read.frames as u64;
         let span = (f1 - f0).max(1);
         let mut values = vec![f64::NAN; rows * req.cols];
         for (r, bins) in req.rows.bins.iter().enumerate() {
@@ -632,6 +632,40 @@ mod tests {
             })
             .is_err()
         );
+    }
+
+    #[test]
+    fn tile_empty_frame_range_with_bins_is_all_nan() {
+        let info = SpectrumInfo {
+            frames: 2,
+            bins: 2,
+            grid: FrameGrid::new(4, 2, 0).unwrap(),
+            axis: BinAxis::Uniform {
+                first_hz: 0.0,
+                step_hz: 100.0,
+            },
+            sample_rate: 48_000,
+        };
+        let spec = Spectrogram::new(Arc::new(
+            VecSpectrum::new(info, SpectrumData::Magnitude(vec![1.0, 2.0, 3.0, 4.0])).unwrap(),
+        ));
+        // 5..9 clamps to an empty range past the end; 0..0 is empty in place.
+        let empty_frames: [Range<u64>; 2] = [5..9, 0..0];
+        for frames in empty_frames {
+            for aggregate in [Aggregate::Max, Aggregate::Mean] {
+                let t = spec
+                    .tile(&TileRequest {
+                        frames: frames.clone(),
+                        rows: RowSpec::uniform(2, 2),
+                        cols: 3,
+                        aggregate,
+                    })
+                    .unwrap();
+                assert!(t.frames.is_empty());
+                assert_eq!(t.values.len(), 2 * 3);
+                assert!(t.values.iter().all(|v| v.is_nan()));
+            }
+        }
     }
 
     #[test]
