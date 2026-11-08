@@ -78,6 +78,7 @@ Directory: `docs/designs`
 | DESIGN-034Rp1KqXNzTDTKRXTbqHx | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | DESIGN-wrF61tPcejIc31wMBYJHok | Issue #311 RF-GT-02 ui/guitest — IPC conformance fixture・deterministic record/replay・fault matrix 設計 | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | DESIGN-034S312gtUiTestDsnDD44 | Issue #312 ruviform-ui-test — test-only GUI host lifecycle・secure control adapter 設計 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| DESIGN-034Ug8WYFJ37a8hKlmcQaW | Issue #314 slice 3 — GPUI/OS capture backend の設計 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | DESIGN-GKjcGBxFK0ZtzxCEKsh1e7 | Issue #314 slice 1 — headless Pixel Golden Utility コアの設計 | approved | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | DESIGN-034UewQlz8GZ6RlexpCiXW | Issue #314 slice 2 — Golden Utility × Scenario Contract 能力契約接続の設計 | approved | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | DESIGN-bgU7RV8JrPVEY31dlXpJCG | Issue #326 ci.yml dispatch 専用化 設計 — trigger 撤去・concurrency 簡素化・trigger 契約テスト | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
@@ -95,6 +96,7 @@ Directory: `docs/designs`
 | DESIGN-LKKyu5XTONFK84RN45ZdM2 | Issue #367 共通 Daily Scheduler 設計 — 履歴駆動判定・重複抑止・bounded retry・dispatch SHA race 対策 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | DESIGN-UGm4KjCwx7pEetENeTzIwB | Issue #368 CI failure Issue Tracker 設計 — 有効 run 判定・1 Issue 集約・完了順逆転・coverage close 条件 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | DESIGN-StMgstUBs2Df2UPm1oy2GF | Issue #368 Tracker reconcile 設計 — event 非依存の同一判定器入口・別 workflow schedule/dispatch・mode 分離 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| DESIGN-034UhiZJ7MAi32Sa1sVTWR | Issue #378 oracle late-create binding epoch 整合設計 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
 | DESIGN-034T6S9KVWbAOq8lqyMak4 | Driver-neutral GUI Contract 詳細設計 — 依存方向・API移行表・DriverCapability・NativeDock Gate（Issue #384） | approved | [issue-384-driver-neutral-gui-contract.md](./issue-384-driver-neutral-gui-contract.md) |
 | DESIGN-034T6SbNaGu3l7owAp7FCX | DTCG Interpreter/Resolver 設計 — alias・mode・override merge・typed ResolvedTheme（Issue #385） | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
 | DESIGN-novwjdV4MyUKuG9Y0bg014 | Issue #386 Driver-neutral GUI Host 契約・GPUI Driver adapter・最小 Window fixture | proposed | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |

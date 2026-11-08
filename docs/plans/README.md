@@ -80,6 +80,7 @@ Directory: `docs/plans`
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | PLAN-034S312gtUiTestPlnEE55 | Issue #312 ruviform-ui-test implementation plan | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| PLAN-034Ug8XG3cIM1VEYu5sQpv | Issue #314 slice 3 — GPUI/OS capture backend 実装計画 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | PLAN-Z43s6oJzXX8u7P4xAKcbau | Issue #314 slice 1 — Golden Utility コアの実装計画 | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | PLAN-034UeymubB5x0zXeYGvfEl | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装計画 | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | PLAN-lb9Tb7cIysOfXayRz4GJY8 | Issue #326 ci.yml dispatch 専用化 実装計画 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
@@ -96,6 +97,7 @@ Directory: `docs/plans`
 | PLAN-r5yBO16zsFa4LSjxB9grp1 | Issue #367 共通 Daily Scheduler 実装計画 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | PLAN-s8XS22tWJoekwN7HhRH9hj | Issue #368 CI failure Issue Tracker 実装計画 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | PLAN-WuOx4rrntClDKCSVPDAM8d | Issue #368 Tracker reconcile 実装計画 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| PLAN-034UhlBN58rtCJqfZMTYgt | Issue #378 oracle late-create binding epoch 実装計画 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
 | PLAN-034TnojDZIYRnnvSTlTg34 | Issue #409 scoped re-root + bounded enumeration 実装計画 | draft | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | PLAN-Hs2MvCe8ZyWp5QnXb7TkRa | Issue #421 — Meter/TimeAxis GPUI 描画と parity の実装計画 | in-progress | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | PLAN-84yUP5PkLYsA3yfDgOShzQ | Issue #426 GPUI lab binding 実装計画 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |

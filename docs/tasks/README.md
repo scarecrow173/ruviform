@@ -16,6 +16,7 @@ Directory: `docs/tasks`
 | TASK-034RT89xVtZ6NMuRh08JQg | T1 ruviform-io-archive クレート新設・Archive共通型・ZIP Indexed Reader (Issue #302) | completed | [issue-302-t1-scaffold-reader.md](./issue-302-t1-scaffold-reader.md) |
 | TASK-034RT8aupBUW6NpSHSrRWq | T2 ZIP Writer・Entry finish→Archive finish・否定fixture (Issue #302) | completed | [issue-302-t2-zip-writer.md](./issue-302-t2-zip-writer.md) |
 | TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | completed | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
+| TASK-034Ug9lk3rk5h8iKkSQY2c | Issue #314 slice 3 — GPUI/OS capture backend | in-progress | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | TASK-IfiV9xO2raU6D60zy70KLs | Issue #314 slice 1 — Golden Utility コアの実装タスク | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | TASK-034Uey3QmAAfhAZo6ln7H4 | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装タスク | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | TASK-yFczRmBPJEUZkKyX3bngmg | Issue #329 T1 — ci.yml verify/ui-verify へ sccache 導入 + Cold/Warm 実測 + IR | in-progress | [issue-329-t1-sccache-verify-ui-lanes.md](./issue-329-t1-sccache-verify-ui-lanes.md) |
@@ -231,6 +232,7 @@ Directory: `docs/tasks`
 | TASK-Peb0C7F4qBHb9sZP8wXZnR | T2 ci-issue-tracker.yml workflow + 運用 README + dev-env 同期（Issue #368） | done | [issue-368-t2-tracker-workflow.md](./issue-368-t2-tracker-workflow.md) |
 | TASK-6LaGohoePjG92Eb5u6lUv7 | T3 tracker.mjs reconcile モード + parseTrackerArgs + contract tests（Issue #368） | done | [issue-368-t3-tracker-reconcile-mode.md](./issue-368-t3-tracker-reconcile-mode.md) |
 | TASK-T6nZSLe2NKHl8o4neneyTK | T4 ci-issue-tracker-reconcile.yml 新設 + README/dev-env 同期（Issue #368） | done | [issue-368-t4-reconcile-workflow.md](./issue-368-t4-reconcile-workflow.md) |
+| TASK-034Uhnq0kOMsOzPLSOL8Bz | Issue #378 T1 oracle addBinding epoch 整合 | done | [issue-378-t1-oracle-addbinding-epoch.md](./issue-378-t1-oracle-addbinding-epoch.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
 | TASK-hupw1aLckqDaLNAlnDrTMF | Issue #411 — cargo_metadata 0.19 系への依存選定修復 + MSRV 検証入口 | done | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TASK-mV2zXwAeR5yNuIoL7pSt4G | Issue #414 — projection→controlled display 正規経路の実装 | done | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |

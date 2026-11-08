@@ -76,6 +76,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Rp62M5XwHUCClhVcEPk | Issue #310 Browser GUI Test Harness 検証仕様 | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | TSPEC-e0XfO8Zf3a26iGOk1UyquR | Issue #311 RF-GT-02 test specification — fixture conformance・record/replay determinism・fault matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | TSPEC-034S312gtUiTestTspFF66 | Issue #312 ruviform-ui-test — lifecycle/control/fixture/clock/observation/fail-closed test specification | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| TSPEC-034Ug943CVpTG4Br56eTfE | Issue #314 slice 3 — GPUI/OS capture backend test spec | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | TSPEC-e1fQqoSXueHMyLvDmFV5Gz | Issue #314 slice 1 — Golden Utility コアのテスト仕様 | proposed | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | TSPEC-034UeyabB9HNuQvfyPVYdA | Issue #314 slice 2 — Golden × Scenario 能力契約接続のテスト仕様 | proposed | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | TSPEC-nB4WC4Q4CYMJmm6HVksOwr | Issue #326 ci.yml dispatch 専用化 test specification — trigger 不存在契約・dispatch 契約維持・PR 起動ゼロ実証 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
@@ -90,6 +91,7 @@ Directory: `docs/test-specs`
 | TSPEC-GfyGGakuj069mKFQrVtF3e | Issue #367 テスト仕様 — daily scheduler 判定・dispatch 確認・fail-closed 契約 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | TSPEC-3iZ6nd0UGy5yuVGAnGQI1y | Issue #368 CI failure Issue Tracker test specification — 有効 run 判定・plan 行列・close guard・sanitize | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | TSPEC-qvpqeonK5xwqk0hZpF3ARO | Issue #368 Tracker reconcile test specification — mode 分離・bot 履歴 reconcile・fail-closed 維持 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| TSPEC-034UhmzL4r0lLg4T5tUy74 | Issue #378 oracle late-create binding epoch テスト仕様 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
 | TSPEC-7kQ2mWcR9dLx4VfT1hZa8N | Issue #385 — DTCG 解釈器・ResolvedTheme の golden / 分類エラー検証契約 | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
 | TESTSPEC-npkv0TXtBSoMiqPQl8ClVv | Issue #386 Driver-neutral GUI Host 接続試験仕様 | proposed | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
 | TESTSPEC-034T6RWTu4Bx7Ng3hV0dK2 | Issue #387 Component/View + Headless Behavior + GPUI Renderer 試験仕様 | proposed | [issue-387-component-renderer.md](./issue-387-component-renderer.md) |

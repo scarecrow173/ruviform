@@ -63,6 +63,7 @@ Directory: `docs/specs`
 | SPEC-034Rp1AEJDKiDTpPq3H4Yz | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | SPEC-3S6R25rgxNv9VL9etjWsH9 | Issue #311 RF-GT-02 Rust↔TypeScript IPC Schema Conformance・Deterministic Record/Replay・Fault Matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | SPEC-034S312gtUiTestSpecBB22 | Issue #312 test-only GUI host lifecycle・secure control adapter・fixture/clock/observation 仕様 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| SPEC-034Ug8RuRab8De5zcQCjTB | Issue #314 slice 3 — GPUI/OS capture backend と能力の正直な配線 | proposed | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | SPEC-0k38sOnYLZQngydDDLygHu | Issue #314 slice 1 — headless Pixel Golden Utility コア | proposed | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | SPEC-034UevQgR6YDvj7j5Urcrc | Issue #314 slice 2 — Golden Utility と Scenario Contract の能力契約接続 | proposed | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | SPEC-LVITTCzVKzuRSkMzcYwUmc | Issue #326 ci.yml を workflow_dispatch 専用化 — PR/push trigger 撤去（Daily Full CI 移行・RF Stage 4） | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
@@ -79,6 +80,7 @@ Directory: `docs/specs`
 | SPEC-ElrrvM1k7RbACtLgfzKaxs | Issue #367 共通 Daily Scheduler — `daily-ci.yml` 軽量判定 + `ci.yml` 条件付き dispatch | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | SPEC-4KMssIOpNuvh9jGgKKfp7R | Issue #368 CI failure Issue Tracker — workflow_run 完了監視で main×ci の未解決障害を 1 Issue に集約 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | SPEC-9R6tNeU4aiEuUseUczer9o | Issue #368 Tracker reconcile 入口 — GITHUB_TOKEN dispatch 完了の通知 gap を default-branch 定期/手動 reconcile で埋める | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| SPEC-034UhhQycxrrbYudGthyQi | Issue #378 oracle late-create binding epoch 整合 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
 | SPEC-034T6RWP3Vz7KWTjv6TILE | Driver-neutral GUI Architecture — GPUI標準Driver方針と3repo移行正本（Issue #384） | approved | [issue-384-driver-neutral-gui-architecture.md](./issue-384-driver-neutral-gui-architecture.md) |
 | SPEC-034T6SaLC8Kz85jG9rbdsJ | DTCG Design Token Interpreter — backend-neutral ResolvedTheme/Theme Registry（Issue #385） | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
 | SPEC-0cG0IEArkb6RGWXH0jtA3e | Issue #386 Driver-neutral GUI Host 契約・GPUI 標準 Driver adapter・最小 Window fixture | proposed | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
