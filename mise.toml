@@ -82,6 +82,20 @@ run = "cargo test -p ruviform-ui-test --test component_view"
 description = "Issue #314 slice 1 Pixel Golden core: headless RGBA8 normalization, per-channel tolerance diff + masks, candidate→promote baseline store, verdict vocabulary and evidence (writes only target/ + temp dirs; capture paths are slice 3, NotRun/Unsupported by design)"
 run = "cargo test -p ruviform-ui-test --test golden"
 
+[tasks.test-ui-scenario-contract]
+description = "Issue #464 consumer-neutral Scenario Contract: shared SemanticGuiTest surface — Fake adapter contract tests (ruviform-ui-test/tests/scenario_contract.rs) + GPUI adapter contract tests (ruviform-ui-gpui/tests/scenario_contract.rs, gpui-test). Writes only target/"
+depends = ["test-ui-scenario-contract-fake", "test-ui-scenario-contract-gpui"]
+
+[tasks.test-ui-scenario-contract-fake]
+description = "Issue #464 scenario contract, Fake side: target resolution, stale epoch/generation errors, capability pre-flight, intent drain, receipt/projection via deliver_event (writes only target/)"
+run = "cargo test -p ruviform-ui-test --test scenario_contract"
+hide = true
+
+[tasks.test-ui-scenario-contract-gpui]
+description = "Issue #464 scenario contract, GPUI side: same parity scenario through GpuiGuiTest/GpuiObserver (gpui-test; writes only target/)"
+run = "cargo test -p ruviform-ui-gpui --features gpui-test --test scenario_contract"
+hide = true
+
 [tasks.build]
 description = "Build workspace with `cargo build --workspace` (dev profile; writes only target/)"
 run = "cargo build --workspace"
@@ -291,7 +305,7 @@ run = "cargo clippy -p ruviform-ui-gpui --all-targets --features gpui -- -D warn
 description = "Run gpui-feature tests for the UI GPUI adapter (real OS window behavior is manual verification). `gpui-test` adds gpui test-support so the Issue #387 headless render tests run on the real element path (TestAppContext window + simulated input)."
 run = "cargo test -p ruviform-ui-gpui --features gpui-test"
 [tasks.test-ui-consumer-observation]
-description = "Issue #429/#436/#442 consumer observation seam: external-crate test (ruviform-ui-gpui/tests/consumer_observation.rs) that mounts the shared parity fixtures and observes GPUI projection, intents, and drawing plans (Meter bars, TimeAxis marks, Waveform bins, Spectrogram cells, Label text, Table grid) through the public GpuiObserver seam (gpui-test; no gpui type on the seam). Writes only target/"
+description = "Issue #429/#436/#442 consumer observation seam: external-crate test (ruviform-ui-gpui/tests/consumer_observation.rs) that mounts the shared parity fixtures and observes GPUI projection, intents, and drawing plans (Meter bars, TimeAxis marks, Waveform bins, Spectrogram cells, Label text, Table grid) through the public GpuiObserver seam (gpui-test; no gpui type on the seam), plus bound-near payloads at the contract ceilings, viewport culling, mid-gesture projections, f64 precision, and update_view reprojection (gpui-test; no gpui type on the seam). Writes only target/"
 run = "cargo test -p ruviform-ui-gpui --features gpui-test --test consumer_observation"
 # Canonical manual-verification entry for the minimal native Window
 # fixture: opens a real OS window on the local session — run it on a

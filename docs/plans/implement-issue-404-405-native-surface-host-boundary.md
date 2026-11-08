@@ -33,8 +33,7 @@ relations:
   refined-by: []
   derives-from:
     - "docs/designs/issue-404-405-native-surface-host-boundary.md"
-  derived-by:
-    - "docs/tasks/issue-404-405-native-surface-host-boundary.md"
+  derived-by: []
   verifies: []
   verified-by:
     - "docs/test-specs/issue-404-405-native-surface-host-boundary.md"

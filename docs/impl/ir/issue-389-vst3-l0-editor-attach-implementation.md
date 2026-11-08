@@ -34,7 +34,7 @@ relations:
     - "../../tasks/issue-389-vst3-l0-editor-attach.md"
   implemented-by: []
   depends-on:
-    - "issue-389-vst3-l0-editor-attach.md"
+    - "../../tasks/issue-389-vst3-l0-editor-attach.md"
   blocks: []
   supersedes: []
   superseded-by: []

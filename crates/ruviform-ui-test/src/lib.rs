@@ -50,6 +50,7 @@ pub mod io;
 pub mod journal;
 pub mod lifecycle;
 pub mod proto;
+pub mod scenario;
 pub mod transport;
 
 pub use agent::{AgentConfig, TestAgent, serve, serve_from_env, serve_stdio, serve_tcp};
@@ -65,5 +66,11 @@ pub use proto::{
     AppMeta, BackendMeta, Capabilities, CleanupReport, ClockDomain, DeniedCapabilities, Direction,
     FaultKind, FixtureReceipt, FixtureSpec, Notice, PROTOCOL_VERSION, ReadyState, Receipt,
     ReceiptPage, Screenshot, ServeOutcome, ShutdownMode, Welcome, WindowMeta, ops, test_codes,
+};
+pub use scenario::fake::FakeGuiTest;
+pub use scenario::{
+    CaseId, GuiAction, MintedIntent, RunId, ScenarioCapability, ScenarioDriver, ScenarioError,
+    ScenarioId, ScenarioReport, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery,
+    begin, cancel, commit, parity_gesture_scenario, preview,
 };
 pub use transport::{ENV_ADDR, ENV_CONTROL, ENV_DISABLE, ENV_SECRET, gen_token};

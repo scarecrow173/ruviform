@@ -23,7 +23,7 @@ gpui = [
 # `gpui-test` enables gpui's `test-support` (TestAppContext /
 # `#[gpui::test]` / simulate_* APIs) for the headless render tests.
 # Not for production use — production code needs only `gpui`.
-gpui-test = ["gpui", "gpui/test-support"]
+gpui-test = ["gpui", "gpui/test-support", "dep:ruviform-ui-test"]
 
 [dependencies]
 # - ruviform-ui: the port-defining crate this adapter implements.
@@ -38,6 +38,10 @@ ruviform-ui-theme = { path = "../ruviform-ui-theme", optional = true }
 # - serde_json: serializes `CommandIntent` into the `rvf.ui.command.v1`
 #   Intent `params` payload. Optional: only needed by the render module.
 serde_json = { version = "1", optional = true }
+# - ruviform-ui-test: Issue #464 scenario adapter — `GpuiGuiTest`
+#   implements the driver-neutral `SemanticGuiTest` contract. Optional:
+#   only under `gpui-test` (test-support feature, never production).
+ruviform-ui-test = { path = "../ruviform-ui-test", optional = true }
 # - raw-window-handle: the redemption seam — `Window::window_handle()`
 #   yields the OS parent token the surface adapter wraps into opaque
 #   lease payloads. The raw handle never leaves this adapter.
@@ -89,6 +93,12 @@ required-features = ["gpui"]
 name = "consumer_observation"
 # Issue #429 consumer seam test — external crate, binds only the public
 # `GpuiObserver` seam. Requires gpui test-support (`gpui-test`).
+required-features = ["gpui-test"]
+
+[[test]]
+name = "scenario_contract"
+# Issue #464 scenario contract test — runs the shared
+# `ruviform-ui-test` parity scenario against `GpuiGuiTest`.
 required-features = ["gpui-test"]
 
 [lints]
