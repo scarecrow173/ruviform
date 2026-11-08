@@ -1,7 +1,7 @@
 ---
 id: "TASK-034UaK7UfGDq7HHHhdeetT"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #468 RootedDir canonical 前提の契約明示"
 created: "2026-11-09"
 updated: "2026-11-09"
