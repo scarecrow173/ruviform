@@ -920,45 +920,52 @@ impl RvfView {
                 let origin = viewport.start as f32;
                 let ch_h = bounds.size.height / channel_count as f32;
                 window.paint_quad(fill(bounds, palette.surface_bg));
-                for (ci, bins) in channels.iter().enumerate() {
-                    let top = bounds.origin.y + ch_h * ci as f32;
-                    // baseline
-                    let base_y = top + ch_h * 0.5;
-                    window.paint_quad(fill(
-                        Bounds::new(
-                            point(bounds.origin.x, base_y),
-                            size(bounds.size.width, px(1.0)),
-                        ),
-                        palette.viz_baseline,
-                    ));
-                    for bin in bins {
-                        if !waveform_bin_drawn(bin) {
-                            continue; // gap — draw nothing
-                        }
-                        let x0 = bounds.origin.x
-                            + ((bin.start as f32 - origin) / span) * bounds.size.width;
-                        let x1 = bounds.origin.x
-                            + ((bin.end as f32 - origin) / span) * bounds.size.width;
-                        let w = (x1 - x0).max(px(1.0));
-                        // min..max mapped [-1,1] → channel band.
-                        let y_min = top + (1.0 - (bin.max as f32 * 0.5 + 0.5)) * ch_h;
-                        let y_max = top + (1.0 - (bin.min as f32 * 0.5 + 0.5)) * ch_h;
+                // Issue #461: spec-proportional quads share one layer
+                // order instead of paying a `BoundsTree::insert` each.
+                window.paint_layer(bounds, |window| {
+                    for (ci, bins) in channels.iter().enumerate() {
+                        let top = bounds.origin.y + ch_h * ci as f32;
+                        // baseline
+                        let base_y = top + ch_h * 0.5;
                         window.paint_quad(fill(
-                            Bounds::new(point(x0, y_min), size(w, (y_max - y_min).max(px(1.0)))),
-                            palette.viz_waveform,
+                            Bounds::new(
+                                point(bounds.origin.x, base_y),
+                                size(bounds.size.width, px(1.0)),
+                            ),
+                            palette.viz_baseline,
                         ));
-                        if bin.rms.is_finite() {
-                            let half = (bin.rms as f32 * 0.5) * ch_h;
+                        for bin in bins {
+                            if !waveform_bin_drawn(bin) {
+                                continue; // gap — draw nothing
+                            }
+                            let x0 = bounds.origin.x
+                                + ((bin.start as f32 - origin) / span) * bounds.size.width;
+                            let x1 = bounds.origin.x
+                                + ((bin.end as f32 - origin) / span) * bounds.size.width;
+                            let w = (x1 - x0).max(px(1.0));
+                            // min..max mapped [-1,1] → channel band.
+                            let y_min = top + (1.0 - (bin.max as f32 * 0.5 + 0.5)) * ch_h;
+                            let y_max = top + (1.0 - (bin.min as f32 * 0.5 + 0.5)) * ch_h;
                             window.paint_quad(fill(
                                 Bounds::new(
-                                    point(x0, base_y - half),
-                                    size(w, (half * 2.0).max(px(1.0))),
+                                    point(x0, y_min),
+                                    size(w, (y_max - y_min).max(px(1.0))),
                                 ),
-                                palette.viz_waveform_rms,
+                                palette.viz_waveform,
                             ));
+                            if bin.rms.is_finite() {
+                                let half = (bin.rms as f32 * 0.5) * ch_h;
+                                window.paint_quad(fill(
+                                    Bounds::new(
+                                        point(x0, base_y - half),
+                                        size(w, (half * 2.0).max(px(1.0))),
+                                    ),
+                                    palette.viz_waveform_rms,
+                                ));
+                            }
                         }
                     }
-                }
+                });
             },
         );
         viz_slot(paint)
@@ -976,23 +983,27 @@ impl RvfView {
             move |bounds, (), window, _cx| {
                 window.paint_quad(fill(bounds, palette.surface_bg));
                 let ch_h = bounds.size.height / channel_count as f32;
-                for bar in &bars {
-                    let floor = bounds.origin.y + ch_h * (bar.channel + 1) as f32;
-                    let x0 = bounds.origin.x + bounds.size.width * bar.x0;
-                    let w = bounds.size.width * (bar.x1 - bar.x0);
-                    let peak_h = ch_h * bar.peak;
-                    window.paint_quad(fill(
-                        Bounds::new(point(x0, floor - peak_h), size(w, peak_h)),
-                        palette.viz_waveform,
-                    ));
-                    if let Some(rms) = bar.rms {
-                        let rms_h = ch_h * rms;
+                // Issue #461: spec-proportional quads share one layer
+                // order instead of paying a `BoundsTree::insert` each.
+                window.paint_layer(bounds, |window| {
+                    for bar in &bars {
+                        let floor = bounds.origin.y + ch_h * (bar.channel + 1) as f32;
+                        let x0 = bounds.origin.x + bounds.size.width * bar.x0;
+                        let w = bounds.size.width * (bar.x1 - bar.x0);
+                        let peak_h = ch_h * bar.peak;
                         window.paint_quad(fill(
-                            Bounds::new(point(x0, floor - rms_h), size(w, rms_h)),
-                            palette.viz_waveform_rms,
+                            Bounds::new(point(x0, floor - peak_h), size(w, peak_h)),
+                            palette.viz_waveform,
                         ));
+                        if let Some(rms) = bar.rms {
+                            let rms_h = ch_h * rms;
+                            window.paint_quad(fill(
+                                Bounds::new(point(x0, floor - rms_h), size(w, rms_h)),
+                                palette.viz_waveform_rms,
+                            ));
+                        }
                     }
-                }
+                });
             },
         );
         viz_slot(paint)
@@ -1017,19 +1028,23 @@ impl RvfView {
         let paint = canvas(
             self.record_bounds(spec.key.clone()),
             move |bounds, (), window, _cx| {
-                for m in &marks {
-                    let h = if m.major {
-                        bounds.size.height
-                    } else {
-                        bounds.size.height * 0.5
-                    };
-                    let x = bounds.origin.x + bounds.size.width * m.x;
-                    let top = bounds.origin.y + bounds.size.height - h;
-                    window.paint_quad(fill(
-                        Bounds::new(point(x, top), size(px(1.0), h)),
-                        palette.viz_baseline,
-                    ));
-                }
+                // Issue #461: spec-proportional quads share one layer
+                // order instead of paying a `BoundsTree::insert` each.
+                window.paint_layer(bounds, |window| {
+                    for m in &marks {
+                        let h = if m.major {
+                            bounds.size.height
+                        } else {
+                            bounds.size.height * 0.5
+                        };
+                        let x = bounds.origin.x + bounds.size.width * m.x;
+                        let top = bounds.origin.y + bounds.size.height - h;
+                        window.paint_quad(fill(
+                            Bounds::new(point(x, top), size(px(1.0), h)),
+                            palette.viz_baseline,
+                        ));
+                    }
+                });
             },
         )
         .size_full();
@@ -1122,16 +1137,20 @@ impl RvfView {
             self.record_bounds(spec.key.clone()),
             move |bounds, (), window, _cx| {
                 window.paint_quad(fill(bounds, palette.surface_bg));
-                for cell in &cells {
-                    let x0 = bounds.origin.x + bounds.size.width * cell.x0;
-                    let y0 = bounds.origin.y + bounds.size.height * cell.y0;
-                    let w = bounds.size.width * (cell.x1 - cell.x0);
-                    let h = bounds.size.height * (cell.y1 - cell.y0);
-                    window.paint_quad(fill(
-                        Bounds::new(point(x0, y0), size(w.max(px(1.0)), h.max(px(1.0)))),
-                        palette.viz_waveform.opacity(cell.intensity),
-                    ));
-                }
+                // Issue #461: spec-proportional quads share one layer
+                // order instead of paying a `BoundsTree::insert` each.
+                window.paint_layer(bounds, |window| {
+                    for cell in &cells {
+                        let x0 = bounds.origin.x + bounds.size.width * cell.x0;
+                        let y0 = bounds.origin.y + bounds.size.height * cell.y0;
+                        let w = bounds.size.width * (cell.x1 - cell.x0);
+                        let h = bounds.size.height * (cell.y1 - cell.y0);
+                        window.paint_quad(fill(
+                            Bounds::new(point(x0, y0), size(w.max(px(1.0)), h.max(px(1.0)))),
+                            palette.viz_waveform.opacity(cell.intensity),
+                        ));
+                    }
+                });
             },
         );
         viz_slot(paint)
@@ -3859,5 +3878,145 @@ mod tests {
                 .is_some_and(|p| p.borrow().applied.contains_key(&slot))
         });
         assert!(!retained, "ledger entry dropped after hidden+clear");
+    }
+
+    /// Issue #461 regression gate: spec-proportional canvas painters
+    /// batch their per-item quads through `Window::paint_layer`, so a
+    /// repaint at the contract payload ceiling stays in the
+    /// tens-of-milliseconds range. Pre-fix debug measurements on this
+    /// path (headless `TestAppContext`, which still builds the full
+    /// `Scene`): spectrogram 6.4 s, waveform 45.2 s, meter 13.1 s —
+    /// every quad paid a `BoundsTree::insert`, O(n²) overall.
+    ///
+    /// The budget is deliberately ~10x the measured post-fix cost
+    /// (<= ~55 ms): it exists to catch an algorithmic regression back
+    /// to per-quad scene inserts, not to benchmark the painter.
+    /// `TimeAxis` is not gated here: its repaint cost is dominated by
+    /// per-tick label divs (element tree), not canvas quads — see the
+    /// Issue #461 design doc audit table.
+    #[gpui::test]
+    fn rvf_view_max_payload_canvas_repaint_budget(cx: &mut TestAppContext) {
+        const REPAINT_BUDGET: std::time::Duration = std::time::Duration::from_millis(500);
+
+        fn panel_with(child: ComponentSpec) -> ViewHost {
+            let mut host = ViewHost::new(
+                ViewInstanceId::new(1).expect("nonzero"),
+                AttachEpoch::new(1),
+            );
+            host.mount(ViewSpec {
+                root: ComponentSpec::Panel(PanelSpec {
+                    key: ComponentKey("panel".to_string()),
+                    title: None,
+                    children: vec![child],
+                    visual: ComponentVisualState::default(),
+                    a11y: A11ySpec::default(),
+                }),
+            })
+            .expect("mount");
+            host.drain_events();
+            host
+        }
+
+        /// One warmup repaint (untimed), then a timed repaint.
+        /// `notify` marks the window dirty and `flush_effects` draws
+        /// it synchronously inside `update`, so the repaint cost lands
+        /// inside the timed region.
+        fn timed_repaint(cx: &mut TestAppContext, host: ViewHost) -> std::time::Duration {
+            let (view, cx) = cx.add_window_view(|_window, _cx| {
+                RvfView::new(host, ViewPalette::fallback(), |_intent| {})
+            });
+            cx.run_until_parked();
+            view.update(cx, |_v, cx| cx.notify());
+            cx.run_until_parked();
+            let start = std::time::Instant::now();
+            view.update(cx, |_v, cx| cx.notify());
+            cx.run_until_parked();
+            start.elapsed()
+        }
+
+        fn assert_budget(label: &str, elapsed: std::time::Duration) {
+            eprintln!("{label}: {elapsed:?} per repaint");
+            assert!(
+                elapsed < REPAINT_BUDGET,
+                "{label} repaint {elapsed:?} exceeds budget {REPAINT_BUDGET:?}"
+            );
+        }
+
+        // Spectrogram at MAX_SPECTROGRAM_CELLS: 512 columns x 128 rows.
+        let spectrogram = SpectrogramSpec {
+            key: ComponentKey("spectrogram".to_string()),
+            viewport: 0..512,
+            rows: 128,
+            magnitude_range: 0.0..1.0,
+            columns: (0..512)
+                .map(|i| SpectrogramColumn {
+                    start: i,
+                    end: i + 1,
+                    count: 128,
+                    magnitudes: vec![0.5; 128],
+                })
+                .collect(),
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        };
+        assert_budget(
+            "spectrogram 65536 cells",
+            timed_repaint(cx, panel_with(ComponentSpec::Spectrogram(spectrogram))),
+        );
+
+        // Waveform at MAX_WAVEFORM_BINS: 2 channels x 8192 drawn bins,
+        // each with an RMS overlay (up to 2 quads per bin).
+        let waveform_bins = || {
+            (0..8192)
+                .map(|i| WaveformBin {
+                    start: i,
+                    end: i + 1,
+                    min: -1.0,
+                    max: 1.0,
+                    rms: 0.5,
+                    count: 1,
+                })
+                .collect::<Vec<_>>()
+        };
+        let waveform = WaveformSpec {
+            key: ComponentKey("wave".to_string()),
+            sample_rate: 48_000,
+            channels: 2,
+            frames: 8192,
+            viewport: 0..8192,
+            channel_bins: vec![waveform_bins(), waveform_bins()],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        };
+        assert_budget(
+            "waveform 16384 bins",
+            timed_repaint(cx, panel_with(ComponentSpec::Waveform(waveform))),
+        );
+
+        // Meter at MAX_METER_BINS: 2 channels x 4096 drawn bars, each
+        // with an RMS overlay (up to 2 quads per bar).
+        let meter_levels = || {
+            (0..4096)
+                .map(|i| MeterBin {
+                    start: i,
+                    end: i + 1,
+                    peak: 0.5,
+                    rms: 0.25,
+                    count: 1,
+                })
+                .collect::<Vec<_>>()
+        };
+        let meter = MeterSpec {
+            key: ComponentKey("meter".to_string()),
+            channels: 2,
+            channel_levels: vec![meter_levels(), meter_levels()],
+            viewport: 0..4096,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        };
+        assert_budget(
+            "meter 8192 bins",
+            timed_repaint(cx, panel_with(ComponentSpec::Meter(meter))),
+        );
     }
 }
