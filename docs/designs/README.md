@@ -122,6 +122,7 @@ Directory: `docs/designs`
 | DESIGN-60vvc47vxcVx8vlRAGVd3v | Issue #453 — paint canvas のサイズ決定契約と kind 別監査 | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
 | DESIGN-Tm7Xp4QvKn1ZrWd6JbGe8F | Issue #456 — job 終端 receipt の routing 設計 | approved | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |
 | DESIGN-034TXijlXpfTBgjbwGLo16 | Issue #461 — canvas painter の paint batch（paint_layer）適用と kind 別監査 | approved | [issue-461-canvas-paint-layer.md](./issue-461-canvas-paint-layer.md) |
+| DESIGN-034U0zRvA4RGErmyI4Tcad | Issue #463 — Spectrogram cell 色の不透明事前合成 | approved | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |

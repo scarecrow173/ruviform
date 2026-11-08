@@ -107,6 +107,7 @@ Directory: `docs/plans`
 | PLAN-yicQRN5SwNiNcaiqCAvmpf | Issue #453 — 残 canvas のサイズ規則監査と是正の実装計画 | in-progress | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
 | PLAN-Hb2Yn9LcSt5RkVw3MxPq6D | Issue #456 — job 終端 receipt の実装計画 | approved | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |
 | PLAN-034TXozGzl5Y5HRbsrn4t3 | Issue #461 — canvas painter paint batch の実装計画 | in-progress | [issue-461-canvas-paint-layer.md](./issue-461-canvas-paint-layer.md) |
+| PLAN-034U0ARdtPkZR0btUirc6D | Issue #463 — Spectrogram cell intensity 修正計画 | in-progress | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
