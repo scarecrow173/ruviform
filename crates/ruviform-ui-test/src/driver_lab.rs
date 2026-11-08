@@ -543,12 +543,44 @@ struct EvidenceRow<'a> {
     detail: &'a str,
 }
 
-/// evidence JSONL 行を `RUVIFORM_DRIVER_LAB_EVIDENCE` で指定された
-/// path に append する。env 未設定では何もしない（cargo test を
-/// 純粋に保つ）。相対 path は workspace root
+/// `env_var` で指定された evidence 出力 path を解決する。
+/// env 未設定では `None`。相対 path は workspace root
 /// （`CARGO_MANIFEST_DIR/../..`）から解決する — `cargo test` の
 /// CWD は package root なので未解決の相対 path は crate 配下に
-/// 漏れる。
+/// 漏れる。driver-lab / golden の evidence で共通の解決規則。
+pub(crate) fn evidence_target(env_var: &str) -> Option<PathBuf> {
+    let raw = std::env::var(env_var).ok()?;
+    if raw.is_empty() {
+        return None;
+    }
+    let p = PathBuf::from(raw);
+    Some(if p.is_absolute() {
+        p
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(p)
+    })
+}
+
+/// JSONL 1 行を `path` に append する。parent dir が無ければ作成し、
+/// open/serialize 失敗は静かに無視する（evidence は best-effort で
+/// test を fail させない — driver-lab/golden 共通）。
+pub(crate) fn append_jsonl_line(path: &Path, line: &str) {
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = writeln!(f, "{line}");
+    }
+}
+
+/// evidence JSONL 行を `RUVIFORM_DRIVER_LAB_EVIDENCE` で指定された
+/// path に append する。env 未設定では何もしない（cargo test を
+/// 純粋に保つ）。
 ///
 /// `expected` は manifest 宣言 status、`observed` は実際に実行した
 /// fixture の結果 — 乖離は呼び出し側が assertion にすること。
@@ -560,20 +592,9 @@ pub fn emit_evidence(
     mechanism: &str,
     detail: &str,
 ) {
-    let Ok(raw) = std::env::var("RUVIFORM_DRIVER_LAB_EVIDENCE") else {
+    let Some(path) = evidence_target("RUVIFORM_DRIVER_LAB_EVIDENCE") else {
         return;
     };
-    let path = {
-        let p = PathBuf::from(&raw);
-        if p.is_absolute() {
-            p
-        } else {
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(p)
-        }
-    };
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
     let row = EvidenceRow {
         manifest: "rvf.driver-lab.evidence/v1",
         subject,
@@ -584,13 +605,6 @@ pub fn emit_evidence(
         detail,
     };
     if let Ok(line) = serde_json::to_string(&row) {
-        use std::io::Write;
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-        {
-            let _ = writeln!(f, "{line}");
-        }
+        append_jsonl_line(&path, &line);
     }
 }
