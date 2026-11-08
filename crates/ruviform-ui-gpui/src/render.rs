@@ -2285,6 +2285,7 @@ mod tests {
                 ],
                 vec![Some(CellValue::Text("y".into())), None, None],
             ],
+            selection: None,
             visual: ComponentVisualState::default(),
             a11y: A11ySpec::default(),
         };
