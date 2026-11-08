@@ -8,11 +8,14 @@
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 use ruviform_ui::behavior::{CommandPhase, ControlInput, InputSource, ValueInput};
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{AttachEpoch, ComponentKey, ViewHost, ViewSpec};
-use ruviform_ui::{Intent, WindowId, WindowSpec};
+use ruviform_ui::{
+    DataRegistry, DemoService, Event, Intent, UiRuntime, WindowDriver, WindowId, WindowSpec,
+};
 use ruviform_ui_gpui::{DrawnPlan, GpuiObserver, ViewDrawn, ViewMount};
 use serde_json::{Value, json};
 
@@ -470,4 +473,84 @@ fn observes_selection_and_command_intents_through_seam() {
         panic!("table plan");
     };
     assert_eq!(header, strings(&fx["expect"]["table"]["drawnHeader"]));
+}
+
+/// Phase of the fixture's `run` button in the observed projection.
+fn run_phase(observer: &GpuiObserver, window: WindowId) -> Value {
+    let view = observer.observe(window).expect("view observed");
+    let run = view
+        .components
+        .iter()
+        .find(|c| c.key == key("run"))
+        .expect("run observed");
+    serde_json::to_value(run.snapshot.phase).expect("phase json")
+}
+
+/// Posts `events` into the window inbox (the consumer's `post_event`
+/// path), settles one turn, and returns the `run` phase afterwards.
+fn deliver(observer: &mut GpuiObserver, window: WindowId, events: &[Event]) -> Value {
+    for event in events {
+        observer.driver_mut().post_event(window, event);
+    }
+    observer.settle(|_, _| {});
+    run_phase(observer, window)
+}
+
+/// Issue #456: presses `run` and delivers the runtime's events for that
+/// command through the inbox, returning the phase after each step.
+fn job_command_phases(op: &str, params: Value) -> Vec<Value> {
+    let fx = fixture("selection-command.json");
+    let spec: ViewSpec = serde_json::from_value(fx["view"].clone()).expect("ViewSpec");
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, spec);
+    observer.invoke(window, &key("run")).expect("invoke");
+    observer.settle(|_, _| {});
+    let command_id = observer
+        .intents()
+        .iter()
+        .rev()
+        .find(|i| i.op == COMMAND_OP)
+        .expect("command intent")
+        .id
+        .clone();
+
+    let mut rt = UiRuntime::new(DataRegistry::new());
+    rt.register_service(DemoService::new())
+        .expect("demo service");
+    let mut phases = vec![run_phase(&observer, window)];
+    phases.push(deliver(
+        &mut observer,
+        window,
+        &rt.dispatch_op(command_id, op, params),
+    ));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut terminal = Vec::new();
+    while rt.has_running_jobs() && Instant::now() < deadline {
+        terminal.extend(rt.poll(Some(Duration::from_millis(50))));
+    }
+    terminal.extend(rt.drain_jobs());
+    phases.push(deliver(&mut observer, window, &terminal));
+    phases
+}
+
+/// Issue #456: the GPUI side walks the same receipt phases as the Fake
+/// side (`ruviform-ui-test/tests/driver_parity.rs`): `pending` → `accepted`
+/// on the ack, then `applied` or `rejected` on the job's terminal receipt.
+#[test]
+fn observes_job_command_receipt_phases_through_seam() {
+    let fx = fixture("selection-command.json");
+    let want = &fx["expect"]["button"];
+    let (pending, ack) = (want["phase"].clone(), want["jobReceipt"]["ack"].clone());
+    assert_eq!(
+        job_command_phases("demo.sleep", json!({ "ms": 10 })),
+        [
+            pending.clone(),
+            ack.clone(),
+            want["jobReceipt"]["applied"].clone()
+        ]
+    );
+    assert_eq!(
+        job_command_phases("demo.panic", json!({})),
+        [pending, ack, want["jobReceipt"]["rejected"].clone()]
+    );
 }

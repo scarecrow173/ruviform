@@ -12,12 +12,14 @@
 //!   renderer concern checked by the GPUI side against `expect.*.drawn*`.
 
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
-use ruviform_ui::behavior::{CommandIntent, ControlInput, InputSource, ValueInput};
+use ruviform_ui::behavior::{CommandIntent, CommandReceipt, ControlInput, InputSource, ValueInput};
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{
     AttachEpoch, ComponentKey, ComponentSpec, ProjectionOp, ViewEvent, ViewHost, ViewSpec,
 };
+use ruviform_ui::{DataRegistry, DemoService, Event, UiRuntime};
 use serde_json::{Value, json};
 
 fn fixture() -> Value {
@@ -425,5 +427,73 @@ fn ui_dvr_03_parity_selection_command_intents_and_snapshot() {
     assert_eq!(
         serde_json::to_value(snap.phase).expect("phase json"),
         fx["expect"]["button"]["phase"]
+    );
+}
+
+fn wait_terminal(rt: &mut UiRuntime) -> Vec<Event> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut all = Vec::new();
+    while rt.has_running_jobs() && Instant::now() < deadline {
+        all.extend(rt.poll(Some(Duration::from_millis(50))));
+    }
+    all.extend(rt.drain_jobs());
+    all
+}
+
+/// Feeds runtime result events into the view as receipts — the same
+/// `CommandReceipt::from_result` decoding the GPUI inbox applies.
+fn deliver(host: &mut ViewHost, events: &[Event]) {
+    for receipt in events.iter().filter_map(CommandReceipt::from_result) {
+        host.apply_receipt(&receipt);
+    }
+}
+
+/// Issue #456: a job-spawning command's receipts, produced by the runtime
+/// under the command id the view minted, walk `pending` → `accepted`
+/// (ack) → `applied` (job finished) or `rejected` (job panicked).
+#[test]
+fn ui_dvr_03_parity_job_command_receipt_phases() {
+    let fx = selection_fixture();
+    let want = &fx["expect"]["button"];
+    let run = |op: &str, params: Value| -> Vec<Value> {
+        let mut host = new_host();
+        host.mount(view_spec(&fx)).expect("mount");
+        host.drain_events();
+        host.invoke(host.generation(), &key("run"))
+            .expect("invoke button");
+        let command_id = host
+            .binding("run")
+            .and_then(|b| b.state().pending_command_id)
+            .expect("pending command id");
+        let phase = |host: &ViewHost| {
+            serde_json::to_value(host.observe(&key("run")).expect("button snapshot").phase)
+                .expect("phase json")
+        };
+        let mut rt = UiRuntime::new(DataRegistry::new());
+        rt.register_service(DemoService::new())
+            .expect("demo service");
+        let mut phases = vec![phase(&host)];
+        deliver(&mut host, &rt.dispatch_op(command_id, op, params));
+        phases.push(phase(&host));
+        deliver(&mut host, &wait_terminal(&mut rt));
+        phases.push(phase(&host));
+        phases
+    };
+    let ack = want["jobReceipt"]["ack"].clone();
+    assert_eq!(
+        run("demo.sleep", json!({ "ms": 10 })),
+        [
+            want["phase"].clone(),
+            ack.clone(),
+            want["jobReceipt"]["applied"].clone()
+        ]
+    );
+    assert_eq!(
+        run("demo.panic", json!({})),
+        [
+            want["phase"].clone(),
+            ack,
+            want["jobReceipt"]["rejected"].clone()
+        ]
     );
 }
