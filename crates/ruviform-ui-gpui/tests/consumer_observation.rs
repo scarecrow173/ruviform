@@ -1188,3 +1188,117 @@ fn tab_and_shift_tab_traverse_window_tab_stops() {
     observer.settle(|_, _| {});
     assert!(command_kinds(&observer).is_empty());
 }
+
+/// Issue #479: each fixture key step pressed on the focused control
+/// emits the same `begin`+`commit` intents and lands on the same
+/// committed normalized as the Fake side (`driver_parity.rs`).
+#[test]
+fn observes_key_op_intents_through_seam() {
+    let fx = fixture("key-ops.json");
+    let mut observer = GpuiObserver::new();
+    let window = mount_parity(&mut observer, &fx);
+
+    let mut want_kinds = Vec::new();
+    for (name, spec) in fx["expect"]["controls"]
+        .as_object()
+        .expect("controls object")
+    {
+        for step in spec["keys"].as_array().expect("keys") {
+            observer
+                .press_control_key(window, &key(name), step["key"].as_str().expect("key"))
+                .expect("press control key");
+            assert_eq!(
+                observer.focused_control(window),
+                Some(key(name)),
+                "{name} holds focus"
+            );
+        }
+        want_kinds.extend(strings(&spec["intents"]));
+    }
+    observer.settle(|_, _| {});
+    assert_eq!(command_kinds(&observer), want_kinds);
+
+    let view = observer.observe(window).expect("view observed");
+    for (name, spec) in fx["expect"]["controls"]
+        .as_object()
+        .expect("controls object")
+    {
+        let snap = &view
+            .components
+            .iter()
+            .find(|c| c.key == key(name))
+            .expect("observed control")
+            .snapshot;
+        let last = spec["keys"]
+            .as_array()
+            .expect("keys")
+            .last()
+            .expect("last step");
+        let want = last["committedNormalized"].as_f64().expect("committed");
+        let got = snap
+            .committed
+            .map(|c| c.normalized)
+            .expect("committed value");
+        assert_near(got, Some(want));
+    }
+}
+
+/// Issue #479: value controls are tab stops — Tab traversal reaches a
+/// Fader after the tab strip and Shift-Tab walks back to it, and the
+/// focused control is reported through `focused_control`.
+#[test]
+fn tab_traversal_reaches_value_controls() {
+    let tabs = json!({
+        "type": "tabs", "key": "tabs_a", "active": 0,
+        "tabs": [
+            { "key": "tabs_a.one", "title": "One",
+              "child": { "type": "label", "key": "tabs_a.one.body", "text": "one",
+                         "visual": { "error": null }, "a11y": {} } }
+        ],
+        "selection": { "target": "a.select" },
+        "visual": { "error": null }, "a11y": {}
+    });
+    let fader = json!({
+        "type": "fader", "key": "fader", "control_id": null,
+        "target": "mixer.fader",
+        "descriptor": {
+            "min": 0.0, "max": 1.0, "default_value": 0.5,
+            "step": 0.05, "step_domain": null,
+            "fine_step": 0.01, "fine_step_domain": null,
+            "mapping": null, "out_of_range": null, "unit": null,
+            "read_only": false, "disabled": false, "constant": false
+        },
+        "orientation": "vertical", "detach_policy": "cancel",
+        "unsupported": false, "visual": { "error": null },
+        "a11y": { "role": "slider", "label": "fader" }
+    });
+    let spec: ViewSpec = serde_json::from_value(json!({
+        "root": {
+            "type": "panel", "key": "root", "title": null,
+            "visual": { "error": null }, "a11y": {},
+            "children": [tabs, fader]
+        }
+    }))
+    .expect("ViewSpec");
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, spec);
+
+    // Tab order follows paint order: the tab strip header, then the
+    // Fader — and traversal wraps around both stops.
+    observer.press_key(window, "tab").expect("press tab");
+    assert_eq!(observer.focused_tab(window), Some(key("tabs_a")));
+    assert_eq!(observer.focused_control(window), None);
+    observer.press_key(window, "tab").expect("press tab");
+    assert_eq!(observer.focused_tab(window), None);
+    assert_eq!(observer.focused_control(window), Some(key("fader")));
+    observer.press_key(window, "tab").expect("press tab");
+    assert_eq!(observer.focused_tab(window), Some(key("tabs_a")));
+    observer
+        .press_key(window, "shift-tab")
+        .expect("press shift-tab");
+    assert_eq!(observer.focused_control(window), Some(key("fader")));
+
+    // Traversal itself mints no command intent.
+    observer.settle(|_, _| {});
+    assert!(command_kinds(&observer).is_empty());
+}

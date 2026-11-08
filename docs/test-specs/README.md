@@ -112,7 +112,7 @@ Directory: `docs/test-specs`
 | TSPEC-Qm7Lw3Rt9Xc2Hb5Vd8Ns4Ke | Issue #446 — 空 frame 範囲の Tile 検証契約 | proposed | [issue-446-tile-empty-frames.md](./issue-446-tile-empty-frames.md) |
 | TSPEC-Bn6Xc1RqLw3KtYv8ZmHd2G | Issue #448 — 行選択と command 起動の検証契約 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | TSPEC-EcUAfWYYG6G0Npqen48ITk | Issue #450 — Seek/Fader canvas bounds の検証契約 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
-| TSPEC-034Ue3Xudk0zUKfypVisTg | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回のテスト仕様 | draft | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
+| TSPEC-034Ue3Xudk0zUKfypVisTg | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回のテスト仕様 | approved | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | TSPEC-Yn5Gk3Rt9MvQc2BxLw7DeJ | Issue #451 FU-1 — Tabs のキーボード切替の検証契約 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
 | TSPEC-Js8Lv3XqRb6NwKt1YcMg5F | Issue #451 — Tabs pointer 切替と descriptor 更新の検証契約 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | TSPEC-WsywxRxhFuHBznTRP361Ie | Issue #453 — paint canvas bounds の検証契約（kind 別監査） | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
@@ -122,6 +122,7 @@ Directory: `docs/test-specs`
 | TSPEC-034U0AQAAk59m51vJU5F4G | Issue #463 — Spectrogram cell intensity の paint 色検証契約 | approved | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | TSPEC-034UcapDuO3SYzYw2r2tHz | Issue #464 — Consumer-neutral GUI Scenario Contract | approved | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
 | TSPEC-034UewQGei6BGVolWZlKjI | Issue #478 Fader/Knob 縦寸法契約の検証 | approved | [issue-478-fader-knob-height-contract.md](./issue-478-fader-knob-height-contract.md) |
+| TSPEC-LqfidO2iIqcMjOeeHeLMd2 | Issue #479 — 値制御キーボード操作の検証契約 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |

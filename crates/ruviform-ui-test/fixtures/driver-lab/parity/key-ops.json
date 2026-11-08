@@ -1,0 +1,280 @@
+{
+  "schemaVersion": 1,
+  "manifest": "rvf.driver-lab.parity/v1",
+  "issue": "https://github.com/scarecrow173/ruviform/issues/479",
+  "description": "値制御コンポーネント（Fader/Seek/Knob/Toggle）のキーボード操作の Fake/GPUI 同一 fixture（Issue #479）。view は ViewSpec（serde 形式）。expect.controls.<key>.keys の各 step は key 名（GPUI の keystroke 表記）と、そのキーが driver-neutral 契約へ写すべき ControlInput（input.adjust / input.extreme）と、押下後の committed normalized を宣言する。Fake 側は input を source=keyboard の ControlInput として dispatch して gesture source・intent kinds・committed を検査し、GPUI 側は press_control_key で実キー dispatch して同じ intent kinds と committed normalized を検査する。キー→入力の写像そのものは GPUI の control_key_input が持ち、fixture はその結果を semantic 期待値として pin する。",
+  "view": {
+    "root": {
+      "type": "panel",
+      "key": "root",
+      "title": null,
+      "visual": { "error": null },
+      "a11y": {},
+      "children": [
+        {
+          "type": "fader",
+          "key": "fader",
+          "control_id": null,
+          "target": "mixer.fader",
+          "descriptor": {
+            "min": 0.0,
+            "max": 1.0,
+            "default_value": 0.5,
+            "step": 0.05,
+            "step_domain": null,
+            "fine_step": 0.01,
+            "fine_step_domain": null,
+            "mapping": null,
+            "out_of_range": null,
+            "unit": null,
+            "read_only": false,
+            "disabled": false,
+            "constant": false
+          },
+          "orientation": "vertical",
+          "detach_policy": "cancel",
+          "unsupported": false,
+          "visual": { "error": null },
+          "a11y": { "role": "slider", "label": "fader" }
+        },
+        {
+          "type": "seek",
+          "key": "seek",
+          "control_id": null,
+          "target": "transport.position",
+          "descriptor": {
+            "min": 0.0,
+            "max": 200.0,
+            "default_value": 100.0,
+            "step": 20.0,
+            "step_domain": null,
+            "fine_step": 5.0,
+            "fine_step_domain": null,
+            "mapping": null,
+            "out_of_range": null,
+            "unit": null,
+            "read_only": false,
+            "disabled": false,
+            "constant": false
+          },
+          "orientation": "horizontal",
+          "detach_policy": "cancel",
+          "unsupported": false,
+          "visual": { "error": null },
+          "a11y": { "role": "slider", "label": "position" }
+        },
+        {
+          "type": "knob",
+          "key": "knob",
+          "control_id": null,
+          "target": "mixer.gain",
+          "descriptor": {
+            "min": 0.0,
+            "max": 1.0,
+            "default_value": 0.5,
+            "step": null,
+            "step_domain": null,
+            "fine_step": null,
+            "fine_step_domain": null,
+            "mapping": null,
+            "out_of_range": null,
+            "unit": null,
+            "read_only": false,
+            "disabled": false,
+            "constant": false
+          },
+          "orientation": "vertical",
+          "detach_policy": "cancel",
+          "unsupported": false,
+          "visual": { "error": null },
+          "a11y": { "role": "slider", "label": "gain" }
+        },
+        {
+          "type": "toggle",
+          "key": "toggle",
+          "control_id": null,
+          "target": "mixer.mute",
+          "descriptor": {
+            "min": 0.0,
+            "max": 1.0,
+            "default_value": 0.0,
+            "step": 1.0,
+            "step_domain": null,
+            "fine_step": null,
+            "fine_step_domain": null,
+            "mapping": null,
+            "out_of_range": null,
+            "unit": null,
+            "read_only": false,
+            "disabled": false,
+            "constant": false
+          },
+          "orientation": "horizontal",
+          "detach_policy": "cancel",
+          "unsupported": false,
+          "visual": { "error": null },
+          "a11y": { "role": "switch", "label": "mute" }
+        },
+        {
+          "type": "fader",
+          "key": "disabled_fader",
+          "control_id": null,
+          "target": "mixer.disabled",
+          "descriptor": {
+            "min": 0.0,
+            "max": 1.0,
+            "default_value": 0.5,
+            "step": 0.05,
+            "step_domain": null,
+            "fine_step": 0.01,
+            "fine_step_domain": null,
+            "mapping": null,
+            "out_of_range": null,
+            "unit": null,
+            "read_only": false,
+            "disabled": true,
+            "constant": false
+          },
+          "orientation": "vertical",
+          "detach_policy": "cancel",
+          "unsupported": false,
+          "visual": { "error": null },
+          "a11y": { "role": "slider", "label": "disabled" }
+        },
+        {
+          "type": "knob",
+          "key": "readonly_knob",
+          "control_id": null,
+          "target": "mixer.readonly",
+          "descriptor": {
+            "min": 0.0,
+            "max": 1.0,
+            "default_value": 0.5,
+            "step": null,
+            "step_domain": null,
+            "fine_step": null,
+            "fine_step_domain": null,
+            "mapping": null,
+            "out_of_range": null,
+            "unit": null,
+            "read_only": true,
+            "disabled": false,
+            "constant": false
+          },
+          "orientation": "vertical",
+          "detach_policy": "cancel",
+          "unsupported": false,
+          "visual": { "error": null },
+          "a11y": { "role": "slider", "label": "readonly" }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "controls": {
+      "fader": {
+        "initialNormalized": 0.5,
+        "keys": [
+          { "key": "right", "input": { "adjust": { "steps": 1.0, "fine": false } }, "committedNormalized": 0.55 },
+          { "key": "shift-right", "input": { "adjust": { "steps": 1.0, "fine": true } }, "committedNormalized": 0.56 },
+          { "key": "up", "input": { "adjust": { "steps": 1.0, "fine": false } }, "committedNormalized": 0.61 },
+          { "key": "pageup", "input": { "adjust": { "steps": 10.0, "fine": false } }, "committedNormalized": 1.0 },
+          { "key": "pagedown", "input": { "adjust": { "steps": -10.0, "fine": false } }, "committedNormalized": 0.5 },
+          { "key": "home", "input": { "extreme": "min" }, "committedNormalized": 0.0 },
+          { "key": "end", "input": { "extreme": "max" }, "committedNormalized": 1.0 },
+          { "key": "left", "input": { "adjust": { "steps": -1.0, "fine": false } }, "committedNormalized": 0.95 },
+          { "key": "down", "input": { "adjust": { "steps": -1.0, "fine": false } }, "committedNormalized": 0.9 }
+        ],
+        "intents": [
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit"
+        ]
+      },
+      "seek": {
+        "initialNormalized": 0.5,
+        "keys": [
+          { "key": "right", "input": { "adjust": { "steps": 1.0, "fine": false } }, "committedNormalized": 0.6 },
+          { "key": "shift-right", "input": { "adjust": { "steps": 1.0, "fine": true } }, "committedNormalized": 0.625 },
+          { "key": "left", "input": { "adjust": { "steps": -1.0, "fine": false } }, "committedNormalized": 0.525 },
+          { "key": "pagedown", "input": { "adjust": { "steps": -10.0, "fine": false } }, "committedNormalized": 0.0 },
+          { "key": "pageup", "input": { "adjust": { "steps": 10.0, "fine": false } }, "committedNormalized": 1.0 },
+          { "key": "home", "input": { "extreme": "min" }, "committedNormalized": 0.0 },
+          { "key": "end", "input": { "extreme": "max" }, "committedNormalized": 1.0 }
+        ],
+        "intents": [
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit"
+        ]
+      },
+      "knob": {
+        "initialNormalized": 0.5,
+        "keys": [
+          { "key": "up", "input": { "adjust": { "steps": 1.0, "fine": false } }, "committedNormalized": 0.51 },
+          { "key": "shift-down", "input": { "adjust": { "steps": -1.0, "fine": true } }, "committedNormalized": 0.509 },
+          { "key": "pageup", "input": { "adjust": { "steps": 10.0, "fine": false } }, "committedNormalized": 0.609 },
+          { "key": "pagedown", "input": { "adjust": { "steps": -10.0, "fine": false } }, "committedNormalized": 0.509 },
+          { "key": "home", "input": { "extreme": "min" }, "committedNormalized": 0.0 },
+          { "key": "end", "input": { "extreme": "max" }, "committedNormalized": 1.0 }
+        ],
+        "intents": [
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit"
+        ]
+      },
+      "toggle": {
+        "initialNormalized": 0.0,
+        "keys": [
+          { "key": "right", "input": { "adjust": { "steps": 1.0, "fine": false } }, "committedNormalized": 1.0 },
+          { "key": "left", "input": { "adjust": { "steps": -1.0, "fine": false } }, "committedNormalized": 0.0 },
+          { "key": "up", "input": { "adjust": { "steps": 1.0, "fine": false } }, "committedNormalized": 1.0 },
+          { "key": "home", "input": { "extreme": "min" }, "committedNormalized": 0.0 },
+          { "key": "end", "input": { "extreme": "max" }, "committedNormalized": 1.0 }
+        ],
+        "intents": [
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit",
+          "begin", "commit"
+        ]
+      },
+      "disabled_fader": {
+        "initialNormalized": 0.5,
+        "unavailable": "disabled",
+        "keys": [
+          { "key": "right", "input": { "adjust": { "steps": 1.0, "fine": false } }, "committedNormalized": 0.5 },
+          { "key": "shift-right", "input": { "adjust": { "steps": 1.0, "fine": true } }, "committedNormalized": 0.5 },
+          { "key": "pageup", "input": { "adjust": { "steps": 10.0, "fine": false } }, "committedNormalized": 0.5 },
+          { "key": "home", "input": { "extreme": "min" }, "committedNormalized": 0.5 }
+        ],
+        "intents": []
+      },
+      "readonly_knob": {
+        "initialNormalized": 0.5,
+        "unavailable": "readOnly",
+        "keys": [
+          { "key": "up", "input": { "adjust": { "steps": 1.0, "fine": false } }, "committedNormalized": 0.5 },
+          { "key": "pagedown", "input": { "adjust": { "steps": -10.0, "fine": false } }, "committedNormalized": 0.5 },
+          { "key": "end", "input": { "extreme": "max" }, "committedNormalized": 0.5 }
+        ],
+        "intents": []
+      }
+    }
+  }
+}

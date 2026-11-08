@@ -21,11 +21,13 @@ use std::rc::Rc;
 use gpui::prelude::FluentBuilder;
 use gpui::{
     App, Bounds, Canvas, Context, FocusHandle, Hsla, InteractiveElement, IntoElement, KeyDownEvent,
-    LineLayout, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels,
-    Point, Render, Rgba, ScrollDelta, ScrollWheelEvent, SharedString, Styled, Subscription, Window,
-    WrappedLine, canvas, div, fill, point, px, rgb, size,
+    LineLayout, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    ParentElement, Pixels, Point, Render, Rgba, ScrollDelta, ScrollWheelEvent, SharedString,
+    Styled, Subscription, Window, WrappedLine, canvas, div, fill, point, px, rgb, size,
 };
-use ruviform_ui::behavior::{ControlInput, GestureId, InputModifiers, InputSource, ValueInput};
+use ruviform_ui::behavior::{
+    ControlInput, Extreme, GestureId, InputModifiers, InputSource, ValueInput,
+};
 use ruviform_ui::view::{
     ButtonSpec, CellValue, ComponentKey, ComponentSpec, ControlSpec, LabelSpec, MeterSpec,
     NativeSlotSpec, Orientation, SpectrogramSpec, TableSpec, TimeAxisSpec, ViewError, ViewEvent,
@@ -419,6 +421,10 @@ pub struct RvfView {
     /// Focus handle of each tab strip with a selection, created on the
     /// strip's first render; the keyboard target of [`tab_key_target`].
     tab_focus: BTreeMap<ComponentKey, FocusHandle>,
+    /// Focus handle of each value control, created on the control's
+    /// first render; the keyboard target of [`control_key_input`]
+    /// (Issue #479).
+    control_focus: BTreeMap<ComponentKey, FocusHandle>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -456,6 +462,7 @@ impl RvfView {
             inbox: None,
             slots: None,
             tab_focus: BTreeMap::new(),
+            control_focus: BTreeMap::new(),
             _subscriptions: Vec::new(),
         }
     }
@@ -494,6 +501,7 @@ impl RvfView {
                 last_error: None,
             }))),
             tab_focus: BTreeMap::new(),
+            control_focus: BTreeMap::new(),
             _subscriptions: vec![cx.observe_window_activation(window, |this, window, cx| {
                 if !window.is_window_active() {
                     this.cancel_active_drags(cx);
@@ -600,6 +608,31 @@ impl RvfView {
     #[cfg(feature = "gpui-test")]
     pub(crate) fn focused_tab_key(&self, window: &Window) -> Option<ComponentKey> {
         self.tab_focus
+            .iter()
+            .find(|(_, handle)| handle.is_focused(window))
+            .map(|(key, _)| key.clone())
+    }
+
+    /// The focus handle of the value control `key`, created on first
+    /// use. `tab_stop(true)` lives on the handle itself for the same
+    /// reason as [`tab_focus`](Self::tab_focus) (Issue #479).
+    pub(crate) fn control_focus(
+        &mut self,
+        key: &ComponentKey,
+        cx: &mut Context<Self>,
+    ) -> FocusHandle {
+        self.control_focus
+            .entry(key.clone())
+            .or_insert_with(|| cx.focus_handle().tab_stop(true))
+            .clone()
+    }
+
+    /// The value control whose element holds keyboard focus —
+    /// read-only; never creates a handle (Issue #479 `gpui-test`
+    /// observation seam).
+    #[cfg(feature = "gpui-test")]
+    pub(crate) fn focused_control_key(&self, window: &Window) -> Option<ComponentKey> {
+        self.control_focus
             .iter()
             .find(|(_, handle)| handle.is_focused(window))
             .map(|(key, _)| key.clone())
@@ -751,18 +784,7 @@ impl RvfView {
         let n = snap.and_then(|s| s.display).map_or(0.0, |v| v.normalized) as f32;
         let horizontal = matches!(orientation, Orientation::Horizontal);
         let thumb_frac = 0.06_f32;
-        // Visual state → fill/thumb color: the descriptor is the
-        // availability authority (disabled/read_only), `visual.error`
-        // marks the control, and a Seek's thumb is the viz cursor.
-        let (fill_color, thumb_color) = if spec.descriptor.disabled || spec.descriptor.read_only {
-            (palette.disabled, palette.disabled)
-        } else if spec.visual.error.is_some() {
-            (palette.control_fill, palette.error)
-        } else if is_seek {
-            (palette.control_fill, palette.viz_cursor)
-        } else {
-            (palette.control_fill, palette.control_thumb)
-        };
+        let (fill_color, thumb_color) = control_colors(&palette, spec, is_seek);
 
         // The control paints itself: track + fill + thumb via quads,
         // and records its bounds for pointer mapping.
@@ -782,15 +804,26 @@ impl RvfView {
         let move_key = key.clone();
         let up_key = key.clone();
         let scroll_key = key.clone();
+        let key_key = key.clone();
+        let focus = self.control_focus(&key, cx);
+        let focus_down = focus.clone();
+        let accent = self.palette.accent;
         div()
             .size_full()
             .flex()
             .when(is_seek, |d| d.h(px(24.0)))
             .when(!is_seek, |d| d.w(px(32.0)).h_full())
+            .track_focus(&focus)
+            .tab_stop(true)
+            .focus(|s| s.border_1().border_color(accent))
             .child(paint)
+            .on_key_down(cx.listener(move |this, ev: &KeyDownEvent, _w, cx| {
+                this.control_key_down(&key_key, ev, cx);
+            }))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |this, ev: &MouseDownEvent, _w, cx| {
+                cx.listener(move |this, ev: &MouseDownEvent, window, cx| {
+                    window.focus(&focus_down);
                     let gid = this.mint_gesture();
                     this.drags.insert(
                         down_key.clone(),
@@ -856,23 +889,38 @@ impl RvfView {
         } else {
             self.palette.control_track
         };
-        div().w(px(32.0)).h(px(24.0)).bg(color).on_mouse_down(
-            MouseButton::Left,
-            cx.listener(move |this, _ev: &MouseDownEvent, _w, cx| {
-                let next = !this.toggle_on(&key);
-                this.input(
-                    &key,
-                    ControlInput::Set {
-                        value: ValueInput::Normalized(if next { 1.0 } else { 0.0 }),
-                        gesture_id: None,
-                        source: Some(InputSource::from(InputSource::POINTER)),
-                        modifiers: None,
-                        seq: None,
-                    },
-                    cx,
-                );
-            }),
-        )
+        let key_key = key.clone();
+        let focus = self.control_focus(&key, cx);
+        let focus_down = focus.clone();
+        let accent = self.palette.accent;
+        div()
+            .w(px(32.0))
+            .h(px(24.0))
+            .bg(color)
+            .track_focus(&focus)
+            .tab_stop(true)
+            .focus(|s| s.border_1().border_color(accent))
+            .on_key_down(cx.listener(move |this, ev: &KeyDownEvent, _w, cx| {
+                this.control_key_down(&key_key, ev, cx);
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _ev: &MouseDownEvent, window, cx| {
+                    window.focus(&focus_down);
+                    let next = !this.toggle_on(&key);
+                    this.input(
+                        &key,
+                        ControlInput::Set {
+                            value: ValueInput::Normalized(if next { 1.0 } else { 0.0 }),
+                            gesture_id: None,
+                            source: Some(InputSource::from(InputSource::POINTER)),
+                            modifiers: None,
+                            seq: None,
+                        },
+                        cx,
+                    );
+                }),
+            )
     }
 
     /// Current binary state of a toggle, read from the display value.
@@ -881,6 +929,17 @@ impl RvfView {
             .observe(key)
             .and_then(|s| s.display)
             .is_some_and(|v| v.normalized >= 0.5)
+    }
+
+    /// Key down on a focused value control → the shared key convention
+    /// ([`control_key_input`]); handled keys stop propagation so Tab
+    /// traversal and other bindings stay free (Issue #479).
+    fn control_key_down(&mut self, key: &ComponentKey, ev: &KeyDownEvent, cx: &mut Context<Self>) {
+        let Some(input) = control_key_input(&ev.keystroke.key, ev.keystroke.modifiers) else {
+            return;
+        };
+        cx.stop_propagation();
+        self.input(key, input, cx);
     }
 
     /// Wheel input → `Adjust` (Shift = fine step).
@@ -1458,11 +1517,17 @@ impl Render for RvfView {
     }
 }
 
-fn find_control<'a>(spec: &'a ComponentSpec, key: &ComponentKey) -> Option<&'a ControlSpec> {
+pub(crate) fn find_control<'a>(
+    spec: &'a ComponentSpec,
+    key: &ComponentKey,
+) -> Option<&'a ControlSpec> {
     match spec {
         ComponentSpec::Panel(p) => p.children.iter().find_map(|c| find_control(c, key)),
         ComponentSpec::Tabs(t) => t.tabs.iter().find_map(|tab| find_control(&tab.child, key)),
-        ComponentSpec::Fader(c) | ComponentSpec::Seek(c) | ComponentSpec::Knob(c)
+        ComponentSpec::Fader(c)
+        | ComponentSpec::Seek(c)
+        | ComponentSpec::Knob(c)
+        | ComponentSpec::Toggle(c)
             if c.key == *key =>
         {
             Some(c)
@@ -1805,6 +1870,78 @@ fn tab_key_target(key: &str, current: usize, len: usize) -> Option<usize> {
         _ => return None,
     };
     (next != current).then_some(next)
+}
+
+/// Fill/thumb color pair for a value control: the descriptor is the
+/// availability authority (`disabled`/`read_only`), `visual.error`
+/// marks the control, and a Seek's thumb is the viz cursor.
+fn control_colors(palette: &ViewPalette, spec: &ControlSpec, is_seek: bool) -> (Hsla, Hsla) {
+    if spec.descriptor.disabled || spec.descriptor.read_only {
+        (palette.disabled, palette.disabled)
+    } else if spec.visual.error.is_some() {
+        (palette.control_fill, palette.error)
+    } else if is_seek {
+        (palette.control_fill, palette.viz_cursor)
+    } else {
+        (palette.control_fill, palette.control_thumb)
+    }
+}
+
+/// Step count of one PageUp/PageDown press — ten effective steps, so a
+/// page key is always "one step × 10" whatever the descriptor declares
+/// (Issue #479).
+const PAGE_KEY_STEPS: f64 = 10.0;
+
+/// The atomic [`ControlInput`] a key press on a focused value control
+/// produces (Issue #479). Every `ControlSpec` kind — Fader, Seek, Knob,
+/// Toggle — shares one convention:
+///
+/// - `right`/`up` step up, `left`/`down` step down by one effective
+///   step; `shift` selects the fine step (`InputModifiers.fine`).
+/// - `pageup`/`pagedown` step by [`PAGE_KEY_STEPS`] effective steps.
+/// - `home`/`end` jump to the descriptor minimum/maximum.
+/// - `control`/`alt`/`platform`/`function` modifiers and unlisted keys
+///   leave the press unhandled (`None`) so global bindings and Tab
+///   traversal stay free.
+///
+/// Each press is one atomic input (`gesture_id: None`) with
+/// `source: keyboard` — the same synthesized `begin`+`commit` pair the
+/// wheel path produces, and key repeat is just another press.
+fn control_key_input(key: &str, modifiers: Modifiers) -> Option<ControlInput> {
+    if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
+        return None;
+    }
+    let modifiers = Some(InputModifiers {
+        fine: modifiers.shift,
+    });
+    let adjust = |steps: f64| ControlInput::Adjust {
+        steps,
+        gesture_id: None,
+        source: Some(InputSource::from(InputSource::KEYBOARD)),
+        modifiers,
+        seq: None,
+    };
+    match key {
+        "right" | "up" => Some(adjust(1.0)),
+        "left" | "down" => Some(adjust(-1.0)),
+        "pageup" => Some(adjust(PAGE_KEY_STEPS)),
+        "pagedown" => Some(adjust(-PAGE_KEY_STEPS)),
+        "home" => Some(ControlInput::Set {
+            value: ValueInput::Extreme(Extreme::Min),
+            gesture_id: None,
+            source: Some(InputSource::from(InputSource::KEYBOARD)),
+            modifiers,
+            seq: None,
+        }),
+        "end" => Some(ControlInput::Set {
+            value: ValueInput::Extreme(Extreme::Max),
+            gesture_id: None,
+            source: Some(InputSource::from(InputSource::KEYBOARD)),
+            modifiers,
+            seq: None,
+        }),
+        _ => None,
+    }
 }
 
 #[cfg(feature = "gpui-test")]
@@ -2241,6 +2378,129 @@ mod tests {
             .map(|i| i.params["intent"]["params"]["index"].clone())
             .collect();
         assert_eq!(indices, [json!(1), json!(0), json!(1), json!(0), json!(1)]);
+    }
+
+    /// Issue #479: the shared key convention maps to atomic keyboard
+    /// inputs — arrows step one effective step, Shift selects the fine
+    /// step, PageUp/PageDown step ten quanta, Home/End jump to the
+    /// extremes. Control/Alt/platform/function modifiers and unlisted
+    /// keys stay unhandled.
+    #[test]
+    fn control_key_input_maps_keys_to_atomic_inputs() {
+        let keyboard = |steps: f64, fine: bool| {
+            Some(ControlInput::Adjust {
+                steps,
+                gesture_id: None,
+                source: Some(InputSource::from(InputSource::KEYBOARD)),
+                modifiers: Some(InputModifiers { fine }),
+                seq: None,
+            })
+        };
+        let extreme = |e: Extreme| {
+            Some(ControlInput::Set {
+                value: ValueInput::Extreme(e),
+                gesture_id: None,
+                source: Some(InputSource::from(InputSource::KEYBOARD)),
+                modifiers: Some(InputModifiers { fine: false }),
+                seq: None,
+            })
+        };
+        let plain = Modifiers::default();
+        let shift = Modifiers {
+            shift: true,
+            ..Modifiers::default()
+        };
+        assert_eq!(control_key_input("right", plain), keyboard(1.0, false));
+        assert_eq!(control_key_input("up", plain), keyboard(1.0, false));
+        assert_eq!(control_key_input("left", plain), keyboard(-1.0, false));
+        assert_eq!(control_key_input("down", plain), keyboard(-1.0, false));
+        assert_eq!(control_key_input("right", shift), keyboard(1.0, true));
+        assert_eq!(control_key_input("pageup", plain), keyboard(10.0, false));
+        assert_eq!(control_key_input("pagedown", plain), keyboard(-10.0, false));
+        assert_eq!(control_key_input("pagedown", shift), keyboard(-10.0, true));
+        assert_eq!(control_key_input("home", plain), extreme(Extreme::Min));
+        assert_eq!(control_key_input("end", plain), extreme(Extreme::Max));
+        assert_eq!(control_key_input("enter", plain), None);
+        assert_eq!(control_key_input("tab", plain), None);
+        assert_eq!(control_key_input("escape", plain), None);
+        for modifiers in [
+            Modifiers {
+                control: true,
+                ..Modifiers::default()
+            },
+            Modifiers {
+                alt: true,
+                ..Modifiers::default()
+            },
+            Modifiers {
+                platform: true,
+                ..Modifiers::default()
+            },
+            Modifiers {
+                function: true,
+                ..Modifiers::default()
+            },
+            Modifiers {
+                control: true,
+                shift: true,
+                ..Modifiers::default()
+            },
+        ] {
+            assert_eq!(control_key_input("right", modifiers), None, "{modifiers:?}");
+            assert_eq!(control_key_input("home", modifiers), None, "{modifiers:?}");
+        }
+    }
+
+    /// Issue #479: a focused value control takes the shared key
+    /// convention through real key dispatch — arrows, page keys, and
+    /// Home/End adjust or jump the committed value; unhandled keys and
+    /// other modifiers change nothing, and an unfocused control
+    /// ignores keys.
+    #[gpui::test]
+    fn control_keys_adjust_value_through_focus(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(host_with_fader(), ViewPalette::fallback(), |_| {})
+        });
+        cx.run_until_parked();
+        let key = ComponentKey("fader".to_string());
+        let committed = |cx: &mut gpui::VisualTestContext| {
+            view.update(cx, |v, _cx| {
+                v.host
+                    .observe(&key)
+                    .and_then(|s| s.committed)
+                    .map(|c| c.normalized)
+            })
+        };
+        // Unfocused: keys do nothing.
+        cx.simulate_keystrokes("right");
+        cx.run_until_parked();
+        assert_eq!(committed(cx), Some(0.5));
+
+        // Focus the control the way the observer seam does, then keys apply.
+        // `host_with_fader` declares no `fine_step`, so Shift falls back
+        // to the normal step — the shared fixture covers `fine_step`.
+        cx.update(|window, app| {
+            let focus = view.update(app, |v, cx| v.control_focus(&key, cx));
+            window.focus(&focus);
+        });
+        for (keystroke, want) in [
+            ("right", 0.55),
+            ("shift-right", 0.60),
+            ("pageup", 1.0),
+            ("pagedown", 0.5),
+            ("home", 0.0),
+            ("end", 1.0),
+            ("ctrl-right", 1.0),
+            ("enter", 1.0),
+        ] {
+            cx.simulate_keystrokes(keystroke);
+            cx.run_until_parked();
+            let got = committed(cx).expect("committed value");
+            assert!(
+                (got - want).abs() < 1e-9,
+                "after {keystroke}: {got} != {want}"
+            );
+        }
     }
 
     /// UI-DVR-03 GPUI lane (out-of-order): a preview whose `seq` is older
