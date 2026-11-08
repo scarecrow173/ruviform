@@ -102,6 +102,8 @@ Directory: `docs/plans`
 | PLAN-Ws6Tz1RbMn4QcKe9YhGx3Dp | Issue #443 — Tile 列区間と count 契約の実装計画 | in-progress | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | PLAN-Qz8Ld3WbTm6XyKr2HnVc4E | Issue #448 — 行選択と command 起動の実装計画 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | PLAN-cXVjL8azFccQWa3dVmLi1a | Issue #450 — Seek/Fader canvas サイズ是正の実装計画 | in-progress | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
+| PLAN-Wp3Nd7TzKb5QxHv2RcLf9J | Issue #451 — Tabs pointer 切替と descriptor 更新の実装計画 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
+| PLAN-yicQRN5SwNiNcaiqCAvmpf | Issue #453 — 残 canvas のサイズ規則監査と是正の実装計画 | in-progress | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
@@ -142,4 +144,3 @@ Directory: `docs/plans`
 | PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | PLAN-XVTjRRZhCMBS0tmK8M7Nf5 | Issue #411 — cargo_metadata MSRV 修復 実装計画 | completed | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | PLAN-dS9xUtZcP4wLvYnK6nRt3F | Issue #414 — projection→controlled display 実装計画 | completed | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
-| PLAN-Wp3Nd7TzKb5QxHv2RcLf9J | Issue #451 — Tabs pointer 切替と descriptor 更新の実装計画 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |

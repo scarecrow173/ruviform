@@ -98,6 +98,8 @@ Directory: `docs/specs`
 | SPEC-Qm7Lr2TxVb9KdWn4HcYe8Sa | Issue #443 — Tile から SpectrogramColumn への写し替え規則の上流契約 | proposed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | SPEC-Vd7Qk2LmRt9WxYc4NbHa3F | Issue #448 — 読み取り専用 Table の行選択と command 起動の ViewSpec 契約 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | SPEC-LOaygozld2Yp16xXhm1Yx5 | Issue #450 — Seek/Fader の canvas が実窓で 0 サイズになり描画されない問題の是正 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
+| SPEC-Gt5Rw2KqZm8LxNv3TcYb7H | Issue #451 — Tabs ヘッダの pointer 切替と ViewSpec descriptor の mount 後更新契約 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
+| SPEC-7snPYyix2JlpoyXvP0zKwf | Issue #453 — 残 canvas 要素（Waveform/Meter/Spectrogram/TimeAxis/NativeSlot）のサイズ規則監査と是正 | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |
@@ -141,4 +143,3 @@ Directory: `docs/specs`
 | SPEC-034Tnjp8f4gexhi9BsQuq1 | Issue #409 Rooted capability の再 root 化と停止可能な bounded directory 列挙 | implemented | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | SPEC-034JceNZQvAawWwMH4ct91 | 時間型拡張（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針） | implemented | [time-type-extension-framerate-timecode-rounding.md](./time-type-extension-framerate-timecode-rounding.md) |
 | SPEC-034N3JBtBP4dPi8ob9HwDV | video-proc RT 検証レーンへの assert_no_alloc 適用（Issue #126） | implemented | [video-proc-rt-verification-lane.md](./video-proc-rt-verification-lane.md) |
-| SPEC-Gt5Rw2KqZm8LxNv3TcYb7H | Issue #451 — Tabs ヘッダの pointer 切替と ViewSpec descriptor の mount 後更新契約 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
