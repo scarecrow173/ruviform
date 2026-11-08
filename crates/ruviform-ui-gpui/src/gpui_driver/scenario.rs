@@ -26,6 +26,7 @@ use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::ipc::Event;
 use ruviform_ui::view::{ComponentKey, ComponentSnapshot};
 use ruviform_ui::{Intent, WindowDriver, WindowId};
+use ruviform_ui_test::scenario::visual::{CaptureOutcome, VisualGuiTest};
 use ruviform_ui_test::scenario::{
     MintedIntent, ScenarioCapability, ScenarioDriver, ScenarioError, ScenarioTarget,
     SemanticGuiTest, TargetQuery,
@@ -134,6 +135,22 @@ impl GpuiGuiTest {
             .iter()
             .find(|c| &c.key == key)
             .ok_or_else(|| ScenarioError::UnknownComponent { key: key.clone() })
+    }
+}
+
+impl VisualGuiTest for GpuiGuiTest {
+    /// The `gpui-test` platform has no pixel readback — `GpuiObserver`
+    /// exposes draw plans and projections, never a framebuffer.
+    /// `GpuiObserver::drawn()` is a semantic render plan, not a
+    /// screenshot, so it must not be returned as `Captured`. Pins are
+    /// still re-checked first. Slice 3 adds the real capture path;
+    /// until then the honest outcome is `Unsupported` — and
+    /// `capabilities()` keeps not claiming `VisualCapture`.
+    fn capture_frame(&mut self, target: &ScenarioTarget) -> Result<CaptureOutcome, ScenarioError> {
+        self.check_target(target)?;
+        Ok(CaptureOutcome::Unsupported {
+            reason: "gpui_test_platform_has_no_pixel_readback".to_string(),
+        })
     }
 }
 

@@ -38,6 +38,7 @@ use ruviform_ui::{UiError, WindowId};
 use serde::{Deserialize, Serialize};
 
 pub mod fake;
+pub mod visual;
 
 // ---------------------------------------------------------------------
 // identifiers
@@ -263,6 +264,24 @@ impl ScenarioVerdict {
             Self::NotRun => "not_run",
             Self::Unsupported => "unsupported",
             Self::Blocked => "blocked",
+        }
+    }
+
+    /// The consumer-verify lane vocabulary word
+    /// (`pass`/`fail`/`not_run`/`unsupported`/`skipped`).
+    ///
+    /// `Blocked` has no lane counterpart — it maps to `not_run`, and
+    /// the caller MUST preserve the original verdict and its reason
+    /// in the lane detail (`blocked` = `not_run` + reason, the #390
+    /// convention codified here — see also
+    /// [`crate::golden::GoldenVerdict`], which shares the vocabulary).
+    #[must_use]
+    pub const fn lane_status(self) -> &'static str {
+        match self {
+            Self::Pass => "pass",
+            Self::Fail => "fail",
+            Self::NotRun | Self::Blocked => "not_run",
+            Self::Unsupported => "unsupported",
         }
     }
 }

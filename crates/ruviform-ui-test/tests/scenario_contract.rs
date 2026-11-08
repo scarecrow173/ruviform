@@ -15,10 +15,11 @@ use ruviform_ui::view::{
     ViewSpec,
 };
 use ruviform_ui::{Event, WindowId};
+use ruviform_ui_test::golden::{BaselineStore, GoldenKey, GoldenVerdict};
 use ruviform_ui_test::{
     FakeGuiTest, RunId, ScenarioCapability, ScenarioDriver, ScenarioError, ScenarioId,
-    ScenarioReport, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery, begin, cancel,
-    parity_gesture_scenario,
+    ScenarioReport, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery, VisualGuiTest,
+    begin, cancel, parity_gesture_scenario, record_golden_step,
 };
 use serde_json::json;
 
@@ -275,6 +276,121 @@ fn cancel_and_set_helpers_are_plain_control_inputs() {
     );
     assert_eq!(report.verdict, ScenarioVerdict::NotRun);
     assert_eq!(report.driver, ScenarioDriver::Fake);
+}
+
+// ---------------------------------------------------------------------
+// Issue #314 slice 2 — visual/golden step on the Fake adapter
+// ---------------------------------------------------------------------
+
+fn golden_key() -> GoldenKey {
+    GoldenKey {
+        story_id: "scenario-fader".to_string(),
+        theme: "test-dark".to_string(),
+        state: "idle".to_string(),
+        driver_class: "fake".to_string(),
+        os_class: "test-os".to_string(),
+        gpu_class: None,
+        scale_factor: 1.0,
+        font_class: None,
+        revision: "test-rev".to_string(),
+    }
+}
+
+fn golden_store() -> (std::path::PathBuf, BaselineStore) {
+    let dir = std::env::temp_dir().join(format!(
+        "ruviform-scenario-golden-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    (dir.clone(), BaselineStore::new(dir))
+}
+
+#[test]
+fn visual_capability_is_not_claimed_and_preflight_rejects() {
+    let (gui, _window, _view, _target) = mounted();
+    assert!(
+        !gui.capabilities()
+            .contains(&ScenarioCapability::VisualCapture),
+        "fake must not claim VisualCapture without a capture backend"
+    );
+    let err = gui
+        .require_capabilities(&BTreeSet::from([ScenarioCapability::VisualCapture]))
+        .expect_err("visual capture is not a fake capability");
+    assert!(matches!(
+        err,
+        ScenarioError::Unsupported {
+            capability: ScenarioCapability::VisualCapture
+        }
+    ));
+}
+
+#[test]
+fn visual_golden_check_returns_unsupported_report_not_pass() {
+    let (mut gui, _window, _view, target) = mounted();
+    let (_dir, store) = golden_store();
+
+    let comparison = gui
+        .golden_check(&target, &golden_key(), None, &store)
+        .expect("golden_check returns a report, not an error");
+
+    assert_eq!(comparison.report.verdict, GoldenVerdict::Unsupported);
+    assert_ne!(comparison.report.reason, "");
+    assert!(comparison.report.stats.is_none());
+    assert!(comparison.diff_image.is_none());
+    // The report folds into the scenario vocabulary without upgrade.
+    assert_eq!(
+        ScenarioVerdict::from(comparison.report.verdict),
+        ScenarioVerdict::Unsupported
+    );
+}
+
+#[test]
+fn visual_golden_check_stale_target_is_contract_error() {
+    let (mut gui, window, view, target) = mounted();
+    let (_dir, store) = golden_store();
+
+    gui.detach_view(window, view, "test").expect("detach");
+    let err = gui
+        .golden_check(&target, &golden_key(), None, &store)
+        .expect_err("stale generation must fail before any capture claim");
+    assert!(
+        matches!(err, ScenarioError::StaleGeneration { .. }),
+        "expected StaleGeneration, got {err:?}"
+    );
+}
+
+#[test]
+fn visual_record_golden_step_writes_scenario_report() {
+    let (mut gui, _window, _view, target) = mounted();
+    let (_dir, store) = golden_store();
+
+    let mut report = ScenarioReport::new(
+        RunId::new("run-visual"),
+        ScenarioId::new("scenario-visual"),
+        None,
+        gui.driver(),
+    );
+    report.required.insert(ScenarioCapability::VisualCapture);
+    report.capabilities = gui.capabilities();
+    report.verdict = ScenarioVerdict::Unsupported;
+
+    let comparison = gui
+        .golden_check(&target, &golden_key(), None, &store)
+        .expect("golden_check");
+    record_golden_step(&mut report, &comparison);
+
+    assert_eq!(
+        report.evidence,
+        vec![format!("golden:{}", comparison.report.key.canonical())]
+    );
+    let observed = report.observed.as_ref().expect("observed recorded");
+    assert_eq!(observed["golden"]["verdict"], "unsupported");
+    // The lane vocabulary keeps `blocked` = `not_run` + reason.
+    assert_eq!(ScenarioVerdict::Blocked.lane_status(), "not_run");
+    assert_eq!(ScenarioVerdict::Unsupported.lane_status(), "unsupported");
 }
 
 #[test]
