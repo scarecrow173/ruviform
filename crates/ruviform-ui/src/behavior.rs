@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::ipc::Event;
+
 // ── value contract ─────────────────────────────────────────────────
 
 /// How a finite input outside the declared range is handled.
@@ -2616,6 +2618,53 @@ pub struct CommandReceipt {
     pub detail: Option<String>,
 }
 
+impl CommandReceipt {
+    /// Decodes a `result` event into the receipt it carries (`None` for
+    /// other events). `ok` is only the transport ack: the semantic status
+    /// is the typed `data.status`. A bare `ok` with no status is
+    /// `Accepted` — the gateway took the command, not that it landed. An
+    /// unrecognized status is an honest terminal `Rejected`, never a
+    /// default success; `ok == false` is `Rejected` with the error message.
+    /// `data.revision` becomes the receipt revision either way.
+    #[must_use]
+    pub fn from_result(event: &Event) -> Option<Self> {
+        let Event::Result {
+            id,
+            ok,
+            data,
+            error,
+        } = event
+        else {
+            return None;
+        };
+        let revision = data
+            .as_ref()
+            .and_then(|d| d.get("revision"))
+            .and_then(|v| serde_json::from_value::<Revision>(v.clone()).ok());
+        let mut detail = error.as_ref().map(|e| e.message.clone()).or_else(|| {
+            data.as_ref()
+                .and_then(|d| d.get("detail"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        });
+        let status = match (*ok, data.as_ref().and_then(|d| d.get("status"))) {
+            (false, _) => ReceiptStatus::Rejected,
+            (true, None) => ReceiptStatus::Accepted,
+            (true, Some(raw)) => serde_json::from_value::<ReceiptStatus>(raw.clone())
+                .unwrap_or_else(|_| {
+                    detail = Some(format!("unrecognized receipt status: {raw}"));
+                    ReceiptStatus::Rejected
+                }),
+        };
+        Some(Self {
+            command_id: id.clone(),
+            status,
+            revision,
+            detail,
+        })
+    }
+}
+
 /// Authoritative state pushed by the consumer. `revision` is the
 /// ordering token the stale-response check runs on: a projection that
 /// does not advance the last observed revision is dropped, so a delayed
@@ -3032,6 +3081,8 @@ impl<P: Clone> CommandBinding<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ipc::{ErrorBody, LifecycleState};
+    use serde_json::{Value, json};
 
     fn desc() -> ValueDescriptor {
         ValueDescriptor {
@@ -3420,6 +3471,38 @@ mod tests {
         });
         assert!(!dropped2);
         assert_eq!(b.phase(), CommandPhase::Observed);
+    }
+
+    #[test]
+    fn result_events_decode_to_receipts() {
+        let result = |ok: bool, data: Option<Value>, error: Option<ErrorBody>| Event::Result {
+            id: "c-1".to_string(),
+            ok,
+            data,
+            error,
+        };
+        let decode = |e: Event| CommandReceipt::from_result(&e).expect("result event");
+        // A bare ok is the ack: the gateway took the command.
+        let ack = decode(result(true, Some(json!({ "job": 1 })), None));
+        assert_eq!(ack.status, ReceiptStatus::Accepted);
+        let applied = decode(result(
+            true,
+            Some(json!({ "status": "applied", "revision": 3 })),
+            None,
+        ));
+        assert_eq!(applied.status, ReceiptStatus::Applied);
+        assert_eq!(applied.revision, Some(Revision::Num(3)));
+        let failed = decode(result(
+            false,
+            None,
+            Some(ErrorBody::new("worker_failed", "boom")),
+        ));
+        assert_eq!(failed.status, ReceiptStatus::Rejected);
+        assert_eq!(failed.detail.as_deref(), Some("boom"));
+        let unknown = decode(result(true, Some(json!({ "status": "maybe" })), None));
+        assert_eq!(unknown.status, ReceiptStatus::Rejected);
+        assert!(unknown.detail.is_some_and(|d| d.contains("maybe")));
+        assert!(CommandReceipt::from_result(&Event::lifecycle(LifecycleState::Closing)).is_none());
     }
 
     #[test]

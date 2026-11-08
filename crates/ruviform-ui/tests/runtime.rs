@@ -529,12 +529,136 @@ fn gui_and_cli_paths_produce_identical_event_shapes() {
     c.extend(cli_rt.drain_jobs());
     let kind_of = |e: &Event| match e {
         Event::Job { state, .. } => format!("job/{state:?}"),
+        Event::Result { .. } => "result".to_string(),
         _ => "other".to_string(),
     };
     let gk: Vec<String> = g.iter().map(kind_of).collect();
     let ck: Vec<String> = c.iter().map(kind_of).collect();
-    assert_eq!(gk.last().map(String::as_str), Some("job/Finished"));
-    assert_eq!(ck.last().map(String::as_str), Some("job/Finished"));
+    // The spawning intent's terminal receipt follows the job's terminal event.
+    assert_eq!(gk.last().map(String::as_str), Some("result"));
+    assert_eq!(ck.last().map(String::as_str), Some("result"));
+    assert_eq!(gk[gk.len() - 2], "job/Finished");
+    assert_eq!(ck[ck.len() - 2], "job/Finished");
+}
+
+fn results_for<'a>(events: &'a [Event], id: &str) -> Vec<&'a Event> {
+    events
+        .iter()
+        .filter(|e| matches!(e, Event::Result { id: rid, .. } if rid == id))
+        .collect()
+}
+
+/// Issue #456: a job-spawning command is answered by an ack (no
+/// `status`, i.e. `accepted`) and then by exactly one terminal receipt
+/// under the same id — `applied` on success, `ok: false` (`rejected`) on
+/// failure, panic or cancellation.
+#[test]
+fn job_command_receipt_follows_the_job_terminal() {
+    let (mut rt, _) = rt();
+
+    let ack = rt.dispatch_op("ok", "demo.sleep", json!({ "ms": 20 }));
+    let [
+        Event::Result {
+            ok: true,
+            data: Some(ack_data),
+            ..
+        },
+    ] = ack.as_slice()
+    else {
+        panic!("ack shape: {ack:?}");
+    };
+    assert!(ack_data.get("status").is_none(), "ack carries no status");
+    let job = ack_data["job"].as_u64().expect("job id");
+    let all = wait_terminal(&mut rt, Duration::from_secs(10));
+    let finished = all
+        .iter()
+        .position(
+            |e| matches!(e, Event::Job { job: j, state: JobState::Finished, .. } if *j == job),
+        )
+        .expect("job finished");
+    let receipts = results_for(&all, "ok");
+    let [
+        Event::Result {
+            ok: true,
+            data: Some(data),
+            ..
+        },
+    ] = receipts.as_slice()
+    else {
+        panic!("terminal receipt shape: {receipts:?}");
+    };
+    assert_eq!(data["status"], "applied");
+    assert_eq!(data["job"], job, "receipt correlates to the spawned job");
+    assert!(
+        all.iter()
+            .position(|e| matches!(e, Event::Result { id, .. } if id == "ok"))
+            .expect("receipt position")
+            > finished
+    );
+
+    rt.dispatch_op("p", "demo.panic", json!({}));
+    let all = wait_terminal(&mut rt, Duration::from_secs(10));
+    let receipts = results_for(&all, "p");
+    assert!(matches!(
+        receipts.as_slice(),
+        [Event::Result { ok: false, error: Some(e), .. }] if e.code == codes::WORKER_FAILED
+    ));
+
+    // Cancellation: the spawning command's receipt is `rejected` with the
+    // `cancelled` code, while `job.cancel` answers only for its own id.
+    let spawned = rt.dispatch_op("s", "demo.sleep", json!({ "ms": 60_000 }));
+    let job = job_of(&spawned);
+    let cancel = rt.dispatch_op("c", "job.cancel", json!({ "job": job }));
+    assert!(
+        matches!(cancel.as_slice(), [Event::Result { id, ok: true, .. }] if id == "c"),
+        "cancel is its own command: {cancel:?}"
+    );
+    let all = wait_terminal(&mut rt, Duration::from_secs(10));
+    let receipts = results_for(&all, "s");
+    assert!(matches!(
+        receipts.as_slice(),
+        [Event::Result { ok: false, error: Some(e), .. }] if e.code == codes::CANCELLED
+    ));
+    assert!(
+        results_for(&all, "c").is_empty(),
+        "no receipt for job.cancel"
+    );
+}
+
+/// The job id a job-spawning command's ack reports.
+fn job_of(ack: &[Event]) -> u64 {
+    match ack {
+        [
+            Event::Result {
+                ok: true,
+                data: Some(d),
+                ..
+            },
+        ] => d["job"].as_u64().expect("job id"),
+        other => panic!("ack shape: {other:?}"),
+    }
+}
+
+/// Issue #456: concurrent job commands each receive their own terminal
+/// receipt — command id ↔ job id correspondence is kept per job.
+#[test]
+fn concurrent_job_commands_receive_their_own_receipts() {
+    let (mut rt, _) = rt();
+    let slow = rt.dispatch_op("slow", "demo.sleep", json!({ "ms": 40 }));
+    let fast = rt.dispatch_op("fast", "demo.sleep", json!({ "ms": 10 }));
+    let (slow_job, fast_job) = (job_of(&slow), job_of(&fast));
+    let all = wait_terminal(&mut rt, Duration::from_secs(10));
+    for (id, job) in [("slow", slow_job), ("fast", fast_job)] {
+        let receipts = results_for(&all, id);
+        assert!(
+            matches!(
+                receipts.as_slice(),
+                [Event::Result { ok: true, data: Some(d), .. }]
+                    if d["status"] == "applied" && d["job"] == job
+            ),
+            "{id}: {receipts:?}"
+        );
+    }
 }
 
 #[test]

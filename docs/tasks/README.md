@@ -31,6 +31,7 @@ Directory: `docs/tasks`
 | TASK-Xb2Qm5Ty7WzHf3Jn6RsPd1 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装タスク | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
 | TASK-Xk2Dv9LqNb7RtPm5WcFs8Hg | Issue #443 — Tile 列区間と count 契約の実装タスク | in-progress | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | TASK-Kd2Pw7YvNs4QbTm9RxLe6J | Issue #448 — 行選択と command 起動の実装タスク | in-progress | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
+| TASK-Fe8Qa3WrNm7YtKc2XzLb4H | Issue #456 — job 終端 receipt の実装タスク | completed | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |
 | TASK-Xryam9aweXgtkqZzZupujs | Issue #450 — Seek/Fader canvas サイズ是正の実装タスク | in-progress | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |

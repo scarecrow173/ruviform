@@ -63,6 +63,9 @@ struct JobRecord {
     /// Window that spawned the job (multi-window routing only — never
     /// used for lifetime control, Issue #181).
     owner: Option<WindowId>,
+    /// Intent id of the command that spawned the job. Its terminal
+    /// receipt is routed back under this id (Issue #456).
+    command_id: String,
 }
 
 /// The shared GUI/CLI dispatcher. See module docs.
@@ -386,7 +389,14 @@ impl UiRuntime {
             });
         match spawn {
             Ok(_) => {
-                self.jobs.insert(job, JobRecord { cancel, owner });
+                self.jobs.insert(
+                    job,
+                    JobRecord {
+                        cancel,
+                        owner,
+                        command_id: id.clone(),
+                    },
+                );
                 Event::result_ok(id, json!({ "job": job, "label": label }))
             }
             Err(e) => Event::result_err(
@@ -447,26 +457,31 @@ impl UiRuntime {
                     latest.insert(job, (done, total, detail));
                 }
                 JobSignal::Finished { job, result } => {
-                    let window = self.jobs.get(&job).and_then(|rec| rec.owner);
+                    let record = self.jobs.remove(&job);
+                    let window = record.as_ref().and_then(|rec| rec.owner);
                     if let Some((d, t, detail)) = latest.remove(&job) {
                         events.push(RoutedEvent {
                             window,
                             event: Event::job_progress_detail(job, d, t, detail),
                         });
                     }
-                    self.jobs.remove(&job);
+                    let outcome = match result {
+                        JobResult::Ok(v) => Ok(v),
+                        JobResult::Err(e) => Err(e),
+                        JobResult::Panic => {
+                            Err(ErrorBody::new(codes::WORKER_FAILED, "job worker panicked"))
+                        }
+                    };
+                    let receipt = record.map(|rec| terminal_receipt(rec.command_id, job, &outcome));
                     events.push(RoutedEvent {
                         window,
-                        event: match result {
-                            JobResult::Ok(v) => Event::job_finished(job, v),
-                            JobResult::Err(e) if e.is_cancelled() => Event::job_cancelled(job),
-                            JobResult::Err(e) => Event::job_failed(job, e),
-                            JobResult::Panic => Event::job_failed(
-                                job,
-                                ErrorBody::new(codes::WORKER_FAILED, "job worker panicked"),
-                            ),
+                        event: match outcome {
+                            Ok(v) => Event::job_finished(job, v),
+                            Err(e) if e.is_cancelled() => Event::job_cancelled(job),
+                            Err(e) => Event::job_failed(job, e),
                         },
                     });
+                    events.extend(receipt.map(|event| RoutedEvent { window, event }));
                 }
             }
         }
@@ -501,5 +516,16 @@ impl UiRuntime {
             },
             "jobs": { "running": self.jobs.len() },
         })
+    }
+}
+
+/// Terminal receipt for the command that spawned a job (Issue #456).
+/// Success is `applied`; failure, panic and cancellation are
+/// `rejected` through the `ok: false` result path, the same shape
+/// every other failed command reply takes.
+fn terminal_receipt(command_id: String, job: u64, outcome: &Result<Value, ErrorBody>) -> Event {
+    match outcome {
+        Ok(_) => Event::result_ok(command_id, json!({ "status": "applied", "job": job })),
+        Err(e) => Event::result_err(command_id, e.clone()),
     }
 }

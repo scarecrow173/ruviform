@@ -116,6 +116,7 @@ Directory: `docs/designs`
 | DESIGN-Jq3Lw8Yn5RtBe2Fk7MzUc4 | Issue #442 — GpuiObserver 描画 plan への Spectrogram / Label / Table 追加の設計 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
 | DESIGN-Vc3Nh8PtRq5LkXw2MdBy7Fj | Issue #443 — Tile 列区間と count の上流契約の設計 | proposed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | DESIGN-Hn4Wz8QeKs1TcVb6LrYg2D | Issue #448 — 行選択と command 起動の ViewSpec 契約の設計 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
+| DESIGN-Tm7Xp4QvKn1ZrWd6JbGe8F | Issue #456 — job 終端 receipt の routing 設計 | approved | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |
 | DESIGN-5mzN1XENwHq9qvfxBhzqdc | Issue #450 — Seek/Fader canvas のサイズ決定契約 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |

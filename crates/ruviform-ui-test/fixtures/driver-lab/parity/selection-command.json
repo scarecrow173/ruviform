@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "manifest": "rvf.driver-lab.parity/v1",
   "issue": "https://github.com/scarecrow173/ruviform/issues/448",
-  "description": "行選択・Button の command 起動・タブ選択の Fake/GPUI 同一 fixture（Issue #451 でタブ選択を追加）。view は ViewSpec（serde 形式）、expect は両 driver が検査する semantic 期待値。Fake と GPUI は同じ操作（行の選択・Button の押下・タブの選択）から同じ Action intent（kind/target/controlId/action/params）と、同じ snapshot（selected・phase）を得ること、Button の a11y 木と描画ラベルが一致し、タブ選択後は選択中のタブ本文だけが描画されることを検査する。receipt の進行（accepted/applied/rejected）は headless 契約で検査し、GPUI 側では発行しない。",
+  "description": "行選択・Button の command 起動・タブ選択の Fake/GPUI 同一 fixture（Issue #451 でタブ選択を追加）。view は ViewSpec（serde 形式）、expect は両 driver が検査する semantic 期待値。Fake と GPUI は同じ操作（行の選択・Button の押下・タブの選択）から同じ Action intent（kind/target/controlId/action/params）と、同じ snapshot（selected・phase）を得ること、Button の a11y 木と描画ラベルが一致し、タブ選択後は選択中のタブ本文だけが描画されることを検査する。job を伴う command の receipt 進行（button.jobReceipt: ack → 終端 applied / rejected）は、runtime が返す result を両 driver の view へ同じ経路（CommandReceipt::from_result）で流して検査する。receipt の発行元は runtime であり、GPUI driver 自身は発行しない。",
   "view": {
     "root": {
       "type": "panel",
@@ -107,7 +107,8 @@
       ],
       "phase": "pending",
       "drawnLabel": "Run",
-      "a11yTree": { "role": "button", "name": "Run" }
+      "a11yTree": { "role": "button", "name": "Run" },
+      "jobReceipt": { "ack": "accepted", "applied": "applied", "rejected": "rejected" }
     },
     "tabs": {
       "selectIndex": 1,
