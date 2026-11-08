@@ -1,5 +1,11 @@
 //! Rendering responsibility split — type-level contract only.
 //!
+//! **Legacy (Issue #465):** the DOM/`Canvas2D`/`WebGL2` tiers describe
+//! the retired `WebView` rendering model; the native-surface port is
+//! superseded by [`crate::native_slot`] (Issue #388). New driver-neutral
+//! rendering goes through `ViewSpec`/GPUI elements, not these tiers.
+//! This module is kept for the `WebView` adapter until Issue #465 P2.
+//!
 //! The accepted hybrid-UI ADR separates three tiers; this module names
 //! them and sketches the native-surface port. Implementation is
 //! intentionally **not** in this crate:

@@ -6,8 +6,13 @@
 //!
 //! - [`event`]: normalized host events ([`HostEvent`]) and the
 //!   host-control port ([`HostHandle`]) — no backend types.
+//!   **Legacy (Issue #465):** WebView-adapter compatibility surface;
+//!   the driver-neutral migration target is [`driver`].
 //! - [`ipc`]: the `rvf.ipc.v1` wire schema — [`Intent`]/[`Event`]
 //!   envelopes, [`ErrorBody`], stable error codes, size caps.
+//!   **Shared:** the schema is driver-neutral (`driver::WindowLifecycle::
+//!   Action(Intent)` uses it directly); only the JS transport binding
+//!   ([`bridge`]) is WebView-specific.
 //! - [`service`] + [`runtime`]: the Intent → [`Service`] → [`JobSpec`]
 //!   execution model (progress / cancellation / errors) driven by
 //!   [`UiRuntime`]. Jobs reuse `ruviform-exec`'s
@@ -15,15 +20,23 @@
 //!   same non-UI computation is callable from GUI and CLI alike.
 //! - [`assets`] + [`data`]: delivery ports — [`AssetSource`] for
 //!   `rvf://app` frontend assets and [`DataRegistry`]/[`DataSource`]
-//!   for bounded binary pulls (`rvf://data`).
+//!   for bounded binary pulls (`rvf://data`). **Shared semantics,
+//!   WebView-bound wire:** the `rvf://*` scheme serving lives in the
+//!   `ruviform-ui-webview` adapter; a driver-neutral delivery contract
+//!   is not yet established (Issue #465 P2 follow-up).
 //! - [`bridge`]: the `window.__rvf` JS contract and push helper.
+//!   **Legacy:** WebView/JS transport only.
 //! - [`render`]: the DOM / `Canvas2D` / `WebGL2` / native-surface
 //!   split — type-level port only, implementations live in adapters.
+//!   **Legacy:** DOM-tier variants are WebView-specific; the
+//!   native-surface role is superseded by [`native_slot`].
 //! - [`window`]: the multi-window contract (Issue #181) —
 //!   [`WindowId`], [`WindowEvent`], [`RoutedEvent`], [`CloseDecision`],
 //!   [`WindowConfig`], [`MonitorInfo`] and the [`WindowHandle`] port,
 //!   so one native event loop can drive many windows/webviews behind
-//!   the same backend-free boundary.
+//!   the same backend-free boundary. **Legacy:** `WindowConfig`'s
+//!   `url`/`devtools` and `WindowHandle::eval` are WebView-shaped;
+//!   the driver-neutral counterpart is [`driver`].
 //! - [`driver`]: the driver-neutral window/host contract
 //!   (Issue #386) — [`WindowSpec`], [`WindowLifecycle`],
 //!   [`DriverEvent`], [`WindowCapabilities`]/[`Capability`] and the
@@ -36,13 +49,21 @@
 //!   gesture machine, and per-control command binding state
 //!   (Issue #387).
 //! - [`detect`]: backend detection report types.
+//!   **Legacy:** WebView-engine detection; driver-neutral capability
+//!   reporting lives in [`driver::WindowCapabilities`].
 //! - [`demo`]: a reference [`Service`] proving the shared GUI/CLI
 //!   boundary end to end.
 //!
 //! Backend implementations (windowing, `WebView` engine, scheme
 //! handling, GPU surfaces) live in adapter crates — currently
-//! `ruviform-ui-webview` (`wry` + `tao`). This crate must never depend
-//! on `wry`/`tao`/`wgpu` or expose their types.
+//! `ruviform-ui-webview` (`wry` + `tao`, legacy adapter) and
+//! `ruviform-ui-gpui` (GPUI, the standard driver direction per
+//! Issue #384). This crate must never depend
+//! on `wry`/`tao`/`wgpu`/`gpui` or expose their types.
+//!
+//! Issue #465 inventory: legacy vs shared vs current classification
+//! of every module above is recorded in
+//! `docs/discovery/issue-465-legacy-webview-inventory.md`.
 //!
 //! ## Dependency layers
 //!
@@ -59,7 +80,9 @@
 //!
 //! Contract sources: `docs/designs/issue-156-gui-host-foundation.md`,
 //! `docs/discovery/issue-156-gui-host-foundation-inventory.md`,
-//! `docs/adr/ui-architecture-webview-hybrid.md`.
+//! `docs/adr/ui-architecture-webview-hybrid.md` (superseded — kept as
+//! history), `docs/designs/issue-384-driver-neutral-gui-contract.md`,
+//! `docs/discovery/issue-465-legacy-webview-inventory.md`.
 
 // Public names deliberately echo their module (data::DataSource,
 // event::HostEvent) — the `ruviform-exec` precedent.

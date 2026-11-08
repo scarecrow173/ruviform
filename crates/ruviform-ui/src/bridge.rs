@@ -2,6 +2,11 @@
 //! webview (`with_initialization_script`) plus the Rust-side push
 //! helper.
 //!
+//! **Legacy (Issue #465):** WebView/JS transport only — the
+//! driver-neutral path delivers typed [`crate::ipc::Intent`]s via
+//! [`crate::driver::WindowLifecycle::Action`] and does not use this
+//! bridge. Kept for the `WebView` adapter until Issue #465 P2.
+//!
 //! `window.__rvf` exposes:
 //!
 //! - `call(op, params) -> Promise<data>` — sends an `rvf.ipc.v1`

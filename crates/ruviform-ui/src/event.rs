@@ -1,18 +1,34 @@
 //! Normalized host events and the host-control port.
 //!
-//! Adapters (for example `ruviform-ui-webview`) translate their
+//! **Legacy (Issue #465):** this module is the WebView-adapter
+//! compatibility surface. Adapters (for example
+//! `ruviform-ui-webview`) translate their
 //! backend's native window/webview events into [`HostEvent`]. The
 //! variants deliberately mirror the event surface the `poc/ui` harness
 //! proved sufficient: page-load readiness, raw IPC payloads, resize,
 //! focus, scale-factor changes, close requests and periodic ticks.
 //!
+//! The driver-neutral migration target is [`crate::driver`]:
+//! `WindowLifecycle` carries the same lifecycle semantics without the
+//! WebView-specific `Ready { url }` and `Message(String)` payloads
+//! (`Action(Intent)` replaces the raw message string). This module
+//! stays available for the `WebView` adapter and existing consumers
+//! until Issue #465 P2 decides physical removal.
+//!
 //! [`HostHandle`] is the port through which application code drives the
 //! host back (script eval, resize, focus, close). It contains no
-//! backend types, so headless tests can substitute fakes.
+//! backend types, so headless tests can substitute fakes. `eval` is
+//! JS-execution specific to the `WebView` adapter; the driver-neutral
+//! counterpart is [`crate::driver::WindowDriver`].
 
 use crate::error::UiError;
 
 /// Backend-normalized host event delivered to the UI runtime.
+///
+/// **Legacy (Issue #465):** WebView-adapter compatibility surface —
+/// migration target is [`crate::driver::WindowLifecycle`]. Kept for
+/// the `WebView` adapter and current consumers; not a parity target
+/// for new drivers.
 ///
 /// **RT contract:** non-RT only — produced and consumed on the UI
 /// thread.
@@ -73,6 +89,10 @@ pub enum HostEvent {
 
 /// Port for driving the host back. Implemented by adapters; the UI
 /// runtime and services interact only with this trait.
+///
+/// **Legacy (Issue #465):** WebView-adapter compatibility surface —
+/// migration target is [`crate::driver::WindowDriver`]. `eval` is
+/// JS-execution specific and has no driver-neutral counterpart.
 ///
 /// **RT contract:** non-RT only — called on the UI thread.
 pub trait HostHandle {

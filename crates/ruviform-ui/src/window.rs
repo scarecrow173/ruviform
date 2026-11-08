@@ -2,6 +2,17 @@
 //! routed IPC events, close decisions, and the host-driving port
 //! (Issue #181).
 //!
+//! **Legacy (Issue #465):** this module is the WebView-adapter
+//! compatibility surface for multi-window hosts. The driver-neutral
+//! migration target is [`crate::driver`] (`WindowSpec`/`WindowDriver`/
+//! `WindowLifecycle`/`DriverEvent`), which carries no JS `url`/
+//! `devtools`/`eval` assumptions. `WindowConfig::{url,devtools}` and
+//! `WindowHandle::eval` are WebView-specific; the lifecycle, close-
+//! decision, monitor and routing semantics are ported to the driver
+//! contract. This module stays available for the `WebView` adapter
+//! and current consumers until Issue #465 P2 decides physical
+//! removal.
+//!
 //! The single-window path ([`crate::event::HostEvent`] +
 //! [`crate::event::HostHandle`]) stays untouched; this module adds the
 //! multi-window counterpart so one native event loop can manage many
@@ -138,6 +149,10 @@ pub enum CloseDecision {
 /// Session-level settings (the shared `WebContext` user-data dir, the
 /// tick cadence) live on the host's session config, not here.
 ///
+/// **Legacy (Issue #465):** `url`/`devtools` are WebView-specific;
+/// the driver-neutral counterpart [`crate::driver::WindowSpec`] carries
+/// only title/size/position/resizability.
+///
 /// Consumers construct this — it is deliberately not
 /// `#[non_exhaustive]`.
 ///
@@ -202,6 +217,10 @@ pub struct MonitorInfo {
 /// Port for driving a multi-window host. Implemented by adapters
 /// (for example `ruviform-ui-webview`) and by fake hosts in tests;
 /// consumer code interacts only with this trait — no backend types.
+///
+/// **Legacy (Issue #465):** WebView-adapter compatibility surface —
+/// migration target is [`crate::driver::WindowDriver`] (same lifecycle
+/// operations minus `eval`, plus `post_event`/`capabilities`).
 ///
 /// Delivery safety contract: [`eval`](Self::eval) is fire-and-forget —
 /// messages to unknown, destroyed, or not-yet-ready destinations are

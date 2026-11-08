@@ -1,6 +1,11 @@
 //! Bounded binary data transfer — the `rvf://data` pull side of the
 //! 3-path message boundary.
 //!
+//! **Shared semantics, WebView-bound wire (Issue #465):** the
+//! registry/range-pull contract is driver-neutral, but the `rvf://data`
+//! URL scheme and paging headers are served by the `ruviform-ui-webview`
+//! adapter only; a driver-neutral delivery contract is a P2 follow-up.
+//!
 //! Large payloads (waveform peaks, spectrograms, previews) are never
 //! inlined into JSON events. A service registers a named [`DataSource`]
 //! in the shared [`DataRegistry`]; the frontend then pulls bounded

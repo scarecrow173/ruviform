@@ -1,5 +1,10 @@
 //! Frontend asset delivery port.
 //!
+//! **Shared semantics, WebView-bound wire (Issue #465):** [`AssetSource`]
+//! is backend-agnostic, but the `rvf://app` scheme serving lives in the
+//! `ruviform-ui-webview` adapter; a driver-neutral asset delivery
+//! contract is a P2 follow-up.
+//!
 //! `rvf://app/<path>` resolves through an [`AssetSource`]. The
 //! foundation ships [`MapAssetSource`] for embedded/static assets and
 //! `ruviform-ui-webview` provides a `rust-embed` adapter for the
