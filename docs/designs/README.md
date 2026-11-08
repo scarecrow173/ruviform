@@ -78,6 +78,7 @@ Directory: `docs/designs`
 | DESIGN-034Rp1KqXNzTDTKRXTbqHx | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | DESIGN-wrF61tPcejIc31wMBYJHok | Issue #311 RF-GT-02 ui/guitest — IPC conformance fixture・deterministic record/replay・fault matrix 設計 | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | DESIGN-034S312gtUiTestDsnDD44 | Issue #312 ruviform-ui-test — test-only GUI host lifecycle・secure control adapter 設計 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| DESIGN-034Ug8WYFJ37a8hKlmcQaW | Issue #314 slice 3 — GPUI/OS capture backend の設計 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | DESIGN-GKjcGBxFK0ZtzxCEKsh1e7 | Issue #314 slice 1 — headless Pixel Golden Utility コアの設計 | approved | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | DESIGN-034UewQlz8GZ6RlexpCiXW | Issue #314 slice 2 — Golden Utility × Scenario Contract 能力契約接続の設計 | approved | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | DESIGN-bgU7RV8JrPVEY31dlXpJCG | Issue #326 ci.yml dispatch 専用化 設計 — trigger 撤去・concurrency 簡素化・trigger 契約テスト | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
@@ -120,7 +121,7 @@ Directory: `docs/designs`
 | DESIGN-Vc3Nh8PtRq5LkXw2MdBy7F | Issue #443 — Tile 列区間と count の上流契約の設計 | approved | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | DESIGN-Hn4Wz8QeKs1TcVb6LrYg2D | Issue #448 — 行選択と command 起動の ViewSpec 契約の設計 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | DESIGN-5mzN1XENwHq9qvfxBhzqdc | Issue #450 — Seek/Fader canvas のサイズ決定契約 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
-| DESIGN-034Ue3PUgmQ7PIOzbrGa9K | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の設計 | draft | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
+| DESIGN-034Ue3PUgmQ7PIOzbrGa9K | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の設計 | approved | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | DESIGN-Hm4Vq8ZsLw2KxTn6RcYb1G | Issue #451 FU-1 — Tabs のキーボード切替の設計 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
 | DESIGN-Hk9Qz4WsNt6XrLc1VbYe8M | Issue #451 — Tabs pointer 切替と descriptor 更新の ViewSpec 契約の設計 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | DESIGN-60vvc47vxcVx8vlRAGVd3v | Issue #453 — paint canvas のサイズ決定契約と kind 別監査 | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |

@@ -76,6 +76,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Rp62M5XwHUCClhVcEPk | Issue #310 Browser GUI Test Harness 検証仕様 | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | TSPEC-e0XfO8Zf3a26iGOk1UyquR | Issue #311 RF-GT-02 test specification — fixture conformance・record/replay determinism・fault matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | TSPEC-034S312gtUiTestTspFF66 | Issue #312 ruviform-ui-test — lifecycle/control/fixture/clock/observation/fail-closed test specification | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| TSPEC-034Ug943CVpTG4Br56eTfE | Issue #314 slice 3 — GPUI/OS capture backend test spec | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | TSPEC-e1fQqoSXueHMyLvDmFV5Gz | Issue #314 slice 1 — Golden Utility コアのテスト仕様 | proposed | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | TSPEC-034UeyabB9HNuQvfyPVYdA | Issue #314 slice 2 — Golden × Scenario 能力契約接続のテスト仕様 | proposed | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | TSPEC-nB4WC4Q4CYMJmm6HVksOwr | Issue #326 ci.yml dispatch 専用化 test specification — trigger 不存在契約・dispatch 契約維持・PR 起動ゼロ実証 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
@@ -112,7 +113,7 @@ Directory: `docs/test-specs`
 | TSPEC-Qm7Lw3Rt9Xc2Hb5Vd8Ns4Ke | Issue #446 — 空 frame 範囲の Tile 検証契約 | proposed | [issue-446-tile-empty-frames.md](./issue-446-tile-empty-frames.md) |
 | TSPEC-Bn6Xc1RqLw3KtYv8ZmHd2G | Issue #448 — 行選択と command 起動の検証契約 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | TSPEC-EcUAfWYYG6G0Npqen48ITk | Issue #450 — Seek/Fader canvas bounds の検証契約 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
-| TSPEC-034Ue3Xudk0zUKfypVisTg | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回のテスト仕様 | draft | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
+| TSPEC-034Ue3Xudk0zUKfypVisTg | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回のテスト仕様 | approved | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | TSPEC-Yn5Gk3Rt9MvQc2BxLw7DeJ | Issue #451 FU-1 — Tabs のキーボード切替の検証契約 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
 | TSPEC-Js8Lv3XqRb6NwKt1YcMg5F | Issue #451 — Tabs pointer 切替と descriptor 更新の検証契約 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | TSPEC-WsywxRxhFuHBznTRP361Ie | Issue #453 — paint canvas bounds の検証契約（kind 別監査） | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |

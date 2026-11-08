@@ -81,6 +81,7 @@ Directory: `docs/plans`
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | PLAN-034S312gtUiTestPlnEE55 | Issue #312 ruviform-ui-test implementation plan | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| PLAN-034Ug8XG3cIM1VEYu5sQpv | Issue #314 slice 3 — GPUI/OS capture backend 実装計画 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | PLAN-Z43s6oJzXX8u7P4xAKcbau | Issue #314 slice 1 — Golden Utility コアの実装計画 | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | PLAN-034UeymubB5x0zXeYGvfEl | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装計画 | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | PLAN-lb9Tb7cIysOfXayRz4GJY8 | Issue #326 ci.yml dispatch 専用化 実装計画 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
@@ -105,7 +106,7 @@ Directory: `docs/plans`
 | PLAN-Rt5LxV8dNq2MzKc7WbFy4 | Issue #436 — GpuiObserver 描画 plan 公開の実装計画 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
 | PLAN-Qz8Ld3WbTm6XyKr2HnVc4E | Issue #448 — 行選択と command 起動の実装計画 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | PLAN-cXVjL8azFccQWa3dVmLi1a | Issue #450 — Seek/Fader canvas サイズ是正の実装計画 | in-progress | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
-| PLAN-034Ue8cy65F5L1MWmEzj3E | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の実装計画 | draft | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
+| PLAN-034Ue8cy65F5L1MWmEzj3E | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の実装計画 | approved | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | PLAN-Qf3Nr9WxKc7TbVz2LmHd4P | Issue #451 FU-1 — Tabs のキーボード切替の実装計画 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
 | PLAN-Wp3Nd7TzKb5QxHv2RcLf9J | Issue #451 — Tabs pointer 切替と descriptor 更新の実装計画 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | PLAN-yicQRN5SwNiNcaiqCAvmpf | Issue #453 — 残 canvas のサイズ規則監査と是正の実装計画 | in-progress | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
