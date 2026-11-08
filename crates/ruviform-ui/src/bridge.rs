@@ -5,10 +5,13 @@
 //! `window.__rvf` exposes:
 //!
 //! - `call(op, params) -> Promise<data>` — sends an `rvf.ipc.v1`
-//!   intent; resolves on `result.ok`, rejects with an `Error` carrying
-//!   `.code` on failure.
+//!   intent; resolves on the first `result.ok` for it (for a
+//!   job-spawning intent that is the ack, `accepted`), rejects with an
+//!   `Error` carrying `.code` on failure.
 //! - `onEvent(cb) -> unsubscribe` — receives every non-result event
-//!   (`job`, `notify`, `lifecycle`, `error`).
+//!   (`job`, `notify`, `lifecycle`, `error`), and the terminal `result`
+//!   (receipt) of a job-spawning intent whose `call` already settled on
+//!   the ack (Issue #456).
 //! - `dataUrl(name, offset?, len?) -> string` — builds the `rvf://data`
 //!   pull URL for a registered [`crate::data::DataSource`].
 //! - `dispatch(obj)` — internal entry point invoked from Rust via

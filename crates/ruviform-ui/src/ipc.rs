@@ -91,9 +91,10 @@ impl std::fmt::Display for ErrorBody {
 
 impl std::error::Error for ErrorBody {}
 
-/// Frontend → Rust call. One intent yields exactly one `result` event
-/// correlated by [`Intent::id`]; long-running calls additionally emit
-/// `job` events under a fresh job id.
+/// Frontend → Rust call. One intent yields a `result` event correlated
+/// by [`Intent::id`]; long-running calls additionally emit `job`
+/// events under a fresh job id, and the job's terminal outcome is a
+/// second `result` under the same id (see the module docs).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Intent {
     /// Schema version; must equal [`SCHEMA_VERSION`].
@@ -159,8 +160,14 @@ pub enum LifecycleState {
 /// Rust → frontend event. Serialized inside [`Envelope`] as
 /// `{"v":1,"kind":"<variant>","...":...}`.
 ///
-/// - `result`: synchronous reply to an intent (correlated by `id`).
-///   `ok` selects `data` vs `error`.
+/// - `result`: reply to an intent (correlated by `id`). `ok` selects
+///   `data` vs `error`. A job-spawning intent gets two `result`s under
+///   its id: the ack (`ok`, `data` = `{job, label}` with no `status` —
+///   the gateway took the command, `accepted`), then the job's terminal
+///   receipt — `data.status = "applied"` on success, or `ok: false` on
+///   failure, panic and cancellation (`rejected`). `job.cancel` is a
+///   command of its own: its `result` acknowledges the cancel request
+///   only and does not stand in for the spawning command's receipt.
 /// - `job`: asynchronous job lifecycle under a job id.
 /// - `notify`: latest-wins state push (`seq` is monotonic — receivers
 ///   must keep only the newest; eval pushes may coalesce, see the
@@ -174,7 +181,8 @@ pub enum LifecycleState {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Event {
-    /// Synchronous reply correlated by [`Intent::id`].
+    /// Reply correlated by [`Intent::id`]; see the module docs for the
+    /// job-command receipt sequence.
     Result {
         /// Correlation id of the intent this answers.
         id: String,
