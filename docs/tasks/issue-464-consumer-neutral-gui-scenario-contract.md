@@ -1,7 +1,7 @@
 ---
 id: "TASK-034UcbptcbQ9OYtF7EZwzG"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #464 — Consumer-neutral GUI Scenario Contract"
 created: "2026-11-08"
 updated: "2026-11-08"
