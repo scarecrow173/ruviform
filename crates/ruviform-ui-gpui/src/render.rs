@@ -21,9 +21,9 @@ use std::rc::Rc;
 use gpui::prelude::FluentBuilder;
 use gpui::{
     App, Bounds, Canvas, Context, FocusHandle, Hsla, InteractiveElement, IntoElement, KeyDownEvent,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point,
-    Render, Rgba, ScrollDelta, ScrollWheelEvent, Styled, Subscription, Window, canvas, div, fill,
-    point, px, relative, rgb, size,
+    LineLayout, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels,
+    Point, Render, Rgba, ScrollDelta, ScrollWheelEvent, SharedString, Styled, Subscription, Window,
+    WrappedLine, canvas, div, fill, point, px, rgb, size,
 };
 use ruviform_ui::behavior::{
     CommandReceipt, ControlInput, GestureId, InputModifiers, InputSource, Revision,
@@ -1011,27 +1011,34 @@ impl RvfView {
 
     /// Tick marks along a baseline with labels above each mark. Major
     /// ticks span the full height; minor ticks span half of it.
+    ///
+    /// Issue #461 follow-up: labels paint as shaped glyphs inside the
+    /// canvas instead of one `div` per tick. Each label `div`'s text
+    /// line paid its own `paint_layer` → `BoundsTree::insert`, and
+    /// overlapping label bounds made the inserts scan wide subtrees —
+    /// O(n²) at the 1,024-tick contract ceiling (~0.8 s/repaint,
+    /// debug). Shaping still goes through gpui's `WindowTextSystem`
+    /// line-layout cache, so identical labels across frames stay
+    /// cache hits.
     fn time_axis_element(&self, spec: &TimeAxisSpec) -> impl IntoElement {
         let palette = self.palette.clone();
-        let marks = axis_mark_plan(spec);
-        let labels: Vec<_> = marks
-            .iter()
-            .map(|m| {
-                div()
-                    .absolute()
-                    .left(relative(m.x))
-                    .top(px(palette.space_sm))
-                    .text_color(palette.text_dim)
-                    .child(m.label.clone())
-            })
-            .collect();
+        let marks = Rc::new(axis_mark_plan(spec));
+        let key = spec.key.clone();
+        let bounds_store = self.bounds.clone();
+        let prepaint_marks = Rc::clone(&marks);
+        let prepaint_palette = palette.clone();
         let paint = canvas(
-            self.record_bounds(spec.key.clone()),
-            move |bounds, (), window, _cx| {
+            move |bounds: Bounds<Pixels>, window: &mut Window, _cx: &mut App| {
+                // Same record as `record_bounds`: pointer mapping and
+                // the drawn-size audit read the canvas bounds.
+                bounds_store.borrow_mut().insert(key, bounds);
+                shape_axis_labels(bounds, &prepaint_marks, &prepaint_palette, window)
+            },
+            move |bounds, labels, window, _cx| {
                 // Issue #461: spec-proportional quads share one layer
                 // order instead of paying a `BoundsTree::insert` each.
                 window.paint_layer(bounds, |window| {
-                    for m in &marks {
+                    for m in &*marks {
                         let h = if m.major {
                             bounds.size.height
                         } else {
@@ -1045,6 +1052,27 @@ impl RvfView {
                         ));
                     }
                 });
+                // Labels share one layer whose bounds cover exactly the
+                // label ink — the region the per-line layers of the
+                // old label `div`s covered — so draw order against
+                // sibling elements is preserved.
+                if let Some(ink) = labels.ink {
+                    window.paint_layer(ink, |window| {
+                        for label in &labels.items {
+                            let mut line_origin = label.origin;
+                            for line in &label.lines {
+                                paint_axis_label_line(
+                                    line_origin,
+                                    labels.line_height,
+                                    &line.unwrapped_layout,
+                                    palette.text_dim,
+                                    window,
+                                );
+                                line_origin.y += line.size(labels.line_height).height;
+                            }
+                        }
+                    });
+                }
             },
         )
         .size_full();
@@ -1054,7 +1082,6 @@ impl RvfView {
             .h(px(24.0))
             .flex_shrink_0()
             .child(paint)
-            .children(labels)
     }
 
     /// Static label text in the primary text color.
@@ -1491,6 +1518,126 @@ fn axis_mark_plan(spec: &TimeAxisSpec) -> Vec<AxisMarkPlan> {
         .collect()
 }
 
+/// Shaped label lines for one drawn `TimeAxis` mark, produced by the
+/// canvas prepaint (text shaping needs `Window` access).
+struct AxisLabelLines {
+    /// Top-left of the label's first line — the same spot the
+    /// absolutely-positioned label `div` occupied (`left: m.x`,
+    /// `top: space_sm` inside the axis box).
+    origin: Point<Pixels>,
+    /// Shaped lines in paint order; `\n` inside a label splits into
+    /// several, stacked by `line_height` like `TextLayout::paint`.
+    lines: Vec<WrappedLine>,
+}
+
+/// Paint payload for `time_axis_element` labels, built during canvas
+/// prepaint and consumed by the paint callback.
+struct AxisLabelPaint {
+    /// One entry per drawn mark, in mark order.
+    items: Vec<AxisLabelLines>,
+    /// Union of every label line's bounds — the `paint_layer` bounds
+    /// covering exactly the label ink, matching the region the old
+    /// per-line label layers covered.
+    ink: Option<Bounds<Pixels>>,
+    /// Shared line height (all labels use one text style).
+    line_height: Pixels,
+}
+
+/// Canvas prepaint for `time_axis_element`: shapes every drawn mark's
+/// label through `WindowTextSystem::shape_text` — the same entry the
+/// `div` text elements used — with the style the label `div`s resolved
+/// to (`window.text_style()` refined by the dim text color, exactly
+/// what `.text_color(palette.text_dim)` did). Returns the paint
+/// payload for the paint phase.
+fn shape_axis_labels(
+    bounds: Bounds<Pixels>,
+    marks: &[AxisMarkPlan],
+    palette: &ViewPalette,
+    window: &Window,
+) -> AxisLabelPaint {
+    let mut style = window.text_style();
+    style.color = palette.text_dim;
+    let rem_size = window.rem_size();
+    let font_size = style.font_size.to_pixels(rem_size);
+    let line_height = style.line_height.to_pixels(font_size.into(), rem_size);
+    let mut ink: Option<Bounds<Pixels>> = None;
+    let mut items = Vec::with_capacity(marks.len());
+    for mark in marks {
+        let origin = point(
+            bounds.origin.x + bounds.size.width * mark.x,
+            bounds.origin.y + px(palette.space_sm),
+        );
+        let text = SharedString::from(mark.label.clone());
+        let runs = [style.to_run(text.len())];
+        let lines = window
+            .text_system()
+            .shape_text(text, font_size, &runs, None, None)
+            .unwrap_or_default()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let mut line_origin = origin;
+        for line in &lines {
+            // `shape_text` was called without a wrap width, so no line
+            // carries wrap boundaries — `paint_axis_label_line`
+            // replicates only the unwrapped glyph placement.
+            debug_assert_eq!(line.wrap_boundaries(), &[]);
+            let line_bounds = Bounds::new(line_origin, line.size(line_height));
+            ink = Some(ink.map_or(line_bounds, |u| u.union(&line_bounds)));
+            line_origin.y += line.size(line_height).height;
+        }
+        items.push(AxisLabelLines { origin, lines });
+    }
+    AxisLabelPaint {
+        items,
+        ink,
+        line_height,
+    }
+}
+
+/// Paints one shaped label line's glyphs with `origin` as the line's
+/// top-left, replicating gpui's `paint_line` glyph placement for the
+/// single-style, left-aligned, unwrapped case — but emitting every
+/// glyph into the caller's already-open `paint_layer` instead of
+/// paying a `BoundsTree::insert` per text line.
+fn paint_axis_label_line(
+    origin: Point<Pixels>,
+    line_height: Pixels,
+    layout: &LineLayout,
+    color: Hsla,
+    window: &mut Window,
+) {
+    let padding_top = (line_height - layout.ascent - layout.descent) / 2.;
+    let baseline_offset = point(px(0.), padding_top + layout.ascent);
+    let mut glyph_origin = origin;
+    let mut prev_glyph_position = Point::default();
+    let content_mask = window.content_mask();
+    for run in &layout.runs {
+        let max_glyph_size = window
+            .text_system()
+            .bounding_box(run.font_id, layout.font_size)
+            .size;
+        for glyph in &run.glyphs {
+            glyph_origin.x += glyph.position.x - prev_glyph_position.x;
+            prev_glyph_position = glyph.position;
+            if Bounds::new(glyph_origin, max_glyph_size).intersects(&content_mask.bounds) {
+                let paint_origin = glyph_origin + baseline_offset;
+                if glyph.is_emoji {
+                    let _ =
+                        window.paint_emoji(paint_origin, run.font_id, glyph.id, layout.font_size);
+                } else {
+                    let _ = window.paint_glyph(
+                        paint_origin,
+                        run.font_id,
+                        glyph.id,
+                        layout.font_size,
+                        color,
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Drawn Table grid: header titles and data rows as display text, in
 /// declared order. `None` is a missing cell (drawn empty, position kept).
 #[derive(Debug, Clone, PartialEq)]
@@ -1678,8 +1825,8 @@ mod tests {
     use ruviform_ui::behavior::{DetachPolicy, ValueDescriptor};
     use ruviform_ui::dock::ViewInstanceId;
     use ruviform_ui::view::{
-        A11ySpec, AttachEpoch, AxisTick, ComponentVisualState, MeterBin, PanelSpec, ProjectionOp,
-        SpectrogramColumn, TabSpec, TabsSpec, ViewSpec,
+        A11ySpec, AttachEpoch, AxisTick, ComponentVisualState, MAX_TIME_AXIS_TICKS, MeterBin,
+        PanelSpec, ProjectionOp, SpectrogramColumn, TabSpec, TabsSpec, ViewSpec,
     };
     use ruviform_ui_theme::{ThemeResolver, TokenDocument};
     use serde_json::json;
@@ -4020,10 +4167,10 @@ mod tests {
     ///
     /// The budget is deliberately ~10x the measured post-fix cost
     /// (<= ~55 ms): it exists to catch an algorithmic regression back
-    /// to per-quad scene inserts, not to benchmark the painter.
-    /// `TimeAxis` is not gated here: its repaint cost is dominated by
-    /// per-tick label divs (element tree), not canvas quads — see the
-    /// Issue #461 design doc audit table.
+    /// to per-item scene inserts, not to benchmark the painter.
+    /// `TimeAxis` labels went through the same per-line layer cost
+    /// (Issue #461 follow-up, ~0.8 s at the 1,024-tick ceiling in
+    /// debug); they now share one label layer.
     #[gpui::test]
     fn rvf_view_max_payload_canvas_repaint_budget(cx: &mut TestAppContext) {
         const REPAINT_BUDGET: std::time::Duration = std::time::Duration::from_millis(500);
@@ -4147,6 +4294,29 @@ mod tests {
         assert_budget(
             "meter 8192 bins",
             timed_repaint(cx, panel_with(ComponentSpec::Meter(meter))),
+        );
+
+        // TimeAxis at MAX_TIME_AXIS_TICKS: 1024 labelled ticks. Tick
+        // quads share one canvas layer (Issue #461) and labels paint
+        // as shaped glyphs inside a second shared layer (Issue #461
+        // follow-up); the per-tick label `div` text path regressed to
+        // ~0.8 s/repaint in debug before that fix.
+        let axis = TimeAxisSpec {
+            key: ComponentKey("axis".to_string()),
+            viewport: 0..MAX_TIME_AXIS_TICKS as u64,
+            ticks: (0..MAX_TIME_AXIS_TICKS)
+                .map(|i| AxisTick {
+                    at: i as f64,
+                    label: format!("0:{:02}.{:03}", i / 60, i % 60),
+                    major: i % 16 == 0,
+                })
+                .collect(),
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        };
+        assert_budget(
+            "time axis 1024 labelled ticks",
+            timed_repaint(cx, panel_with(ComponentSpec::TimeAxis(axis))),
         );
     }
 }
