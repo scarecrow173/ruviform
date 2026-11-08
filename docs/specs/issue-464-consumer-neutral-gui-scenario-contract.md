@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034Uc80WBRvRmOb7dt2yeU"
 type: "spec"
-status: "proposed"
+status: "approved"
 title: "Issue #464 — Consumer-neutral GUI Scenario Contract"
 created: "2026-11-08"
 updated: "2026-11-08"
