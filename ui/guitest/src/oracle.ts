@@ -36,9 +36,10 @@
  * - `ViewLink.attach` bumps the view generation, sets context, and
  *   re-subscribes — a fresh projection is re-read rather than trusting
  *   the old window. Re-attach of the same window and detach of an
- *   already-detached link are no-ops. A binding created on an
- *   already-attached link is subscribed but does NOT adopt the view
- *   epoch (its generation stays its own counter until a detach cycle).
+ *   already-detached link are no-ops. A binding registered on an
+ *   already-attached link adopts the live view epoch and is
+ *   subscribed immediately — the same state a pre-registered binding
+ *   holds after `attach` (`registerBinding` contract).
  * - `QueryBinding` mints `q-<viewId>-<n>` under the current view
  *   generation; replies whose generation, sourceRevision, or live
  *   revision probe disagree are `stale`; over `maxBytes` is
@@ -816,10 +817,12 @@ export class ContractModel {
     this.bindings.set(controlId, b);
     this.bindingsByTarget.set(target, b);
     this.store.set(target, { revision: 0 });
-    // `createBinding` on an attached link: context + subscribe, but the
-    // binding does NOT adopt the view epoch until its next detach cycle.
+    // `registerBinding` contract: context unconditionally, then — on an
+    // attached link — the binding adopts the live view epoch before
+    // subscribing, matching `ContractModel.attach`'s ordering.
+    b.setContext(this.viewId, this.linkWindow);
     if (this.linkAttached) {
-      b.setContext(this.viewId, this.linkWindow);
+      b.attach(this.linkGeneration);
       this.subscribe(b);
     }
   }
