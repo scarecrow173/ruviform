@@ -101,6 +101,7 @@ Directory: `docs/plans`
 | PLAN-Vn6Pc1Rh4SxDa9Gt3KwLe8 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装計画 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
 | PLAN-Ws6Tz1RbMn4QcKe9YhGx3Dp | Issue #443 — Tile 列区間と count 契約の実装計画 | in-progress | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | PLAN-Qz8Ld3WbTm6XyKr2HnVc4E | Issue #448 — 行選択と command 起動の実装計画 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
+| PLAN-Hb2Yn9LcSt5RkVw3MxPq6D | Issue #456 — job 終端 receipt の実装計画 | approved | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |
 | PLAN-cXVjL8azFccQWa3dVmLi1a | Issue #450 — Seek/Fader canvas サイズ是正の実装計画 | in-progress | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | PLAN-Wp3Nd7TzKb5QxHv2RcLf9J | Issue #451 — Tabs pointer 切替と descriptor 更新の実装計画 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | PLAN-yicQRN5SwNiNcaiqCAvmpf | Issue #453 — 残 canvas のサイズ規則監査と是正の実装計画 | in-progress | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
