@@ -2478,6 +2478,9 @@ pub enum CommandIntent {
         /// Optional provenance tag.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         source: Option<String>,
+        /// Optional action parameters (e.g. the selected row index).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        params: Option<serde_json::Value>,
     },
 }
 

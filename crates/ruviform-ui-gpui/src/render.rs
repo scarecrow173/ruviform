@@ -30,9 +30,9 @@ use ruviform_ui::behavior::{
     StateProjection, ValueInput,
 };
 use ruviform_ui::view::{
-    CellValue, ComponentKey, ComponentSpec, ControlSpec, LabelSpec, MeterSpec, NativeSlotSpec,
-    Orientation, SpectrogramSpec, TableSpec, TimeAxisSpec, ViewError, ViewEvent, ViewHost,
-    ViewSpec, WaveformBin, WaveformSpec,
+    ButtonSpec, CellValue, ComponentKey, ComponentSpec, ControlSpec, LabelSpec, MeterSpec,
+    NativeSlotSpec, Orientation, SpectrogramSpec, TableSpec, TimeAxisSpec, ViewError, ViewEvent,
+    ViewHost, ViewSpec, WaveformBin, WaveformSpec,
 };
 use ruviform_ui::{
     Event, Intent, LogicalRect, SlotError, SlotGeometry, SlotVisibility, SurfaceSlotId,
@@ -507,6 +507,20 @@ impl RvfView {
     ) {
         let generation = self.host.generation();
         let _ = self.host.dispatch_input(generation, key, input);
+        self.flush_events(cx);
+    }
+
+    /// Selects `row` of the table `key` (a row press) and flushes its intent.
+    pub(crate) fn select_row(&mut self, key: &ComponentKey, row: usize, cx: &mut Context<Self>) {
+        let generation = self.host.generation();
+        let _ = self.host.select_row(generation, key, row);
+        self.flush_events(cx);
+    }
+
+    /// Presses the button `key` and flushes its intent.
+    pub(crate) fn invoke(&mut self, key: &ComponentKey, cx: &mut Context<Self>) {
+        let generation = self.host.generation();
+        let _ = self.host.invoke(generation, key);
         self.flush_events(cx);
     }
 
@@ -1036,10 +1050,12 @@ impl RvfView {
     }
 
     /// Header row in the dim text color, then data rows. A missing cell
-    /// draws empty in its column so the grid stays aligned.
-    fn table_element(&self, spec: &TableSpec) -> impl IntoElement {
+    /// draws empty in its column so the grid stays aligned. A selectable
+    /// table selects a row on press and marks the displayed selection.
+    fn table_element(&mut self, spec: &TableSpec, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.palette.clone();
         let plan = table_plan(spec);
+        let selected = self.host.observe(&spec.key).and_then(|s| s.selected);
         let row = move |cells: Vec<Option<String>>, color: Hsla| {
             div()
                 .flex()
@@ -1058,10 +1074,42 @@ impl RvfView {
             plan.header.iter().cloned().map(Some).collect(),
             self.palette.text_dim,
         ));
-        for cells in plan.rows {
-            body = body.child(row(cells, self.palette.text_primary));
+        for (index, cells) in plan.rows.into_iter().enumerate() {
+            let mut line = row(cells, self.palette.text_primary);
+            if spec.selection.is_some() {
+                let key = spec.key.clone();
+                line = line.on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _ev: &MouseDownEvent, _w, cx| {
+                        this.select_row(&key, index, cx);
+                    }),
+                );
+                if selected == Some(index) {
+                    line = line.bg(self.palette.surface_raised);
+                }
+            }
+            body = body.child(line);
         }
         body
+    }
+
+    /// Discrete command trigger: a press invokes the button.
+    fn button_element(&mut self, spec: &ButtonSpec, cx: &mut Context<Self>) -> impl IntoElement {
+        let key = spec.key.clone();
+        div()
+            .px(px(self.palette.space_md))
+            .py(px(self.palette.space_sm))
+            .bg(self.palette.surface_raised)
+            .border_1()
+            .border_color(self.palette.border)
+            .text_color(self.palette.text_primary)
+            .child(spec.label.clone())
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _ev: &MouseDownEvent, _w, cx| {
+                    this.invoke(&key, cx);
+                }),
+            )
     }
 
     /// Intensity cells per time column and frequency row. Gap cells
@@ -1150,7 +1198,8 @@ impl RvfView {
             ComponentSpec::Meter(m) => self.meter_element(m).into_any_element(),
             ComponentSpec::TimeAxis(t) => self.time_axis_element(t).into_any_element(),
             ComponentSpec::Label(l) => self.label_element(l).into_any_element(),
-            ComponentSpec::Table(t) => self.table_element(t).into_any_element(),
+            ComponentSpec::Table(t) => self.table_element(t, cx).into_any_element(),
+            ComponentSpec::Button(b) => self.button_element(b, cx).into_any_element(),
             ComponentSpec::Spectrogram(s) => self.spectrogram_element(s).into_any_element(),
             ComponentSpec::NativeSlot(n) => self.native_slot_element(n),
             other => div()
@@ -1476,6 +1525,8 @@ pub(crate) enum DrawPlan {
     /// The text `label_element` paints.
     Label(String),
     Table(TablePlan),
+    /// The text `button_element` paints.
+    Button(String),
 }
 
 /// Drawing plans of the drawing components the renderer paints under
@@ -1523,6 +1574,7 @@ fn collect_drawn(spec: &ComponentSpec, out: &mut Vec<(ComponentKey, DrawPlan)>) 
         }
         ComponentSpec::Label(l) => out.push((l.key.clone(), DrawPlan::Label(l.text.clone()))),
         ComponentSpec::Table(t) => out.push((t.key.clone(), DrawPlan::Table(table_plan(t)))),
+        ComponentSpec::Button(b) => out.push((b.key.clone(), DrawPlan::Button(b.label.clone()))),
         _ => {}
     }
 }
@@ -2340,6 +2392,7 @@ mod tests {
                 ],
                 vec![Some(CellValue::Text("y".into())), None, None],
             ],
+            selection: None,
             visual: ComponentVisualState::default(),
             a11y: A11ySpec::default(),
         };

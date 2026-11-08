@@ -153,6 +153,30 @@
      }
     },
     {
+     "layer": "fake",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/448",
+     "note": "Issue #448 parity fixture（fixtures/driver-lab/parity/selection-command.json）の fake side: 選択可能 Table と Button の mount・a11y tree が expect と一致すること。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-test",
+      "target": "driver_parity",
+      "filter": "ui_dvr_02_parity_selection_command"
+     }
+    },
+    {
+     "layer": "gpui",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/448",
+     "note": "Issue #448: consumer_observation の observes_selection_and_command_intents_through_seam。Table 行の選択と Button の押下が Fake と同じ Action intent を発行し、snapshot（selected・phase）と drawn Button label が fixture の expect と一致する。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-consumer-observation",
+      "package": "ruviform-ui-gpui",
+      "filter": "observes_selection_and_command_intents_through_seam"
+     }
+    },
+    {
      "layer": "real-os",
      "status": "not_run",
      "owner": "https://github.com/scarecrow173/ruviform/issues/313",
@@ -202,6 +226,18 @@
       "task": "test-ui-gpui",
       "package": "ruviform-ui-gpui",
       "filter": "ui_dvr_03_gpui"
+     }
+    },
+    {
+     "layer": "gpui",
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/448",
+     "note": "Issue #448: consumer_observation の observes_selection_and_command_intents_through_seam。GPUI の行押下・Button 押下の Action intent 列（select の params.row、action の target/action/params）を Fake の driver_parity（ui_dvr_03_parity）と同じ fixture で検査する。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-consumer-observation",
+      "package": "ruviform-ui-gpui",
+      "filter": "observes_selection_and_command_intents_through_seam"
      }
     },
     {

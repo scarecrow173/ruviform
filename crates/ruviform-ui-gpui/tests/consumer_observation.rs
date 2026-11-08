@@ -380,3 +380,94 @@ fn unknown_window_has_no_view_to_observe_or_drive() {
             .is_err()
     );
 }
+
+/// `Action` intents delivered so far, as the fixture's
+/// `{kind, target, controlId, action, params}` summary.
+fn action_summaries(observer: &GpuiObserver) -> Value {
+    Value::Array(
+        observer
+            .intents()
+            .iter()
+            .filter(|i| i.op == COMMAND_OP)
+            .filter_map(|i| i.params.get("intent").cloned())
+            .filter(|v| v["kind"] == "action")
+            .map(|v| {
+                json!({
+                    "kind": v["kind"],
+                    "target": v["target"],
+                    "controlId": v["control_id"],
+                    "action": v["action"],
+                    "params": v["params"],
+                })
+            })
+            .collect(),
+    )
+}
+
+/// Issue #448: a row press and a Button press emit the Fake side's
+/// `Action` intents, and the observed snapshot and drawn plans equal the
+/// shared selection/command fixture's `expect`.
+#[test]
+fn observes_selection_and_command_intents_through_seam() {
+    let fx = fixture("selection-command.json");
+    let spec: ViewSpec = serde_json::from_value(fx["view"].clone()).expect("ViewSpec");
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, spec);
+
+    let row = usize::try_from(fx["expect"]["table"]["selectRow"].as_u64().expect("row"))
+        .expect("row index");
+    observer
+        .select_row(window, &key("jobs"), row)
+        .expect("select row");
+    observer.invoke(window, &key("run")).expect("invoke");
+    observer.settle(|_, _| {});
+
+    let mut want = fx["expect"]["table"]["intents"]
+        .as_array()
+        .expect("table intents")
+        .clone();
+    want.extend(
+        fx["expect"]["button"]["intents"]
+            .as_array()
+            .expect("button intents")
+            .iter()
+            .cloned(),
+    );
+    assert_eq!(action_summaries(&observer), Value::Array(want));
+
+    let view = observer.observe(window).expect("view observed");
+    let snap_of = |name: &str| {
+        view.components
+            .iter()
+            .find(|c| c.key == key(name))
+            .expect("observed component")
+            .snapshot
+            .clone()
+    };
+    let jobs = snap_of("jobs");
+    assert_eq!(
+        jobs.selected.and_then(|r| u64::try_from(r).ok()),
+        fx["expect"]["table"]["selectedAfterSelect"].as_u64()
+    );
+    assert_eq!(
+        serde_json::to_value(jobs.phase).expect("phase json"),
+        fx["expect"]["table"]["phase"]
+    );
+    assert_eq!(
+        serde_json::to_value(snap_of("run").phase).expect("phase json"),
+        fx["expect"]["button"]["phase"]
+    );
+
+    let drawn = observer.drawn(window).expect("view drawn");
+    let DrawnPlan::Button { label } = drawn_plan(&drawn, "run") else {
+        panic!("button plan");
+    };
+    assert_eq!(
+        Some(label.as_str()),
+        fx["expect"]["button"]["drawnLabel"].as_str()
+    );
+    let DrawnPlan::Table { header, .. } = drawn_plan(&drawn, "jobs") else {
+        panic!("table plan");
+    };
+    assert_eq!(header, strings(&fx["expect"]["table"]["drawnHeader"]));
+}

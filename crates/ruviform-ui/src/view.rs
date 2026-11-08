@@ -84,6 +84,8 @@ pub enum A11yRole {
     ColumnHeader,
     /// Table data cell. A missing cell has no value but keeps its position.
     Cell,
+    /// Value-less command trigger (Button).
+    Button,
 }
 
 /// Accessibility semantics carried by a spec. `value_min`/`value_max`/
@@ -423,9 +425,22 @@ pub const MAX_TABLE_ROWS: usize = 4096;
 /// Upper bound on columns a `Table` spec may carry.
 pub const MAX_TABLE_COLUMNS: usize = 64;
 
+/// Discrete action name of a table row-selection intent. Its params are
+/// `{"row": <index>}` in the spec's row order at the time of selection.
+pub const TABLE_SELECT_ACTION: &str = "select";
+
+/// Row-selection capability of a [`TableSpec`]. Selecting a row issues a
+/// discrete `Action` intent on `target` with action [`TABLE_SELECT_ACTION`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TableSelectionSpec {
+    /// Logical command target of the selection intent.
+    pub target: LogicalTarget,
+}
+
 /// Read-only table of resolved cells. Column and row order are kept as
 /// declared. A `None` cell is a missing value: it stays in its position
 /// so later cells in the row do not shift. A `List` is a one-column table.
+/// With a `selection`, rows are selectable (see [`ViewHost::select_row`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TableSpec {
     /// Component key.
@@ -435,15 +450,40 @@ pub struct TableSpec {
     /// Rows in display order (each row has exactly `columns.len()`
     /// cells, `None` for a missing value).
     pub rows: Vec<Vec<Option<CellValue>>>,
+    /// Row selection; `None` keeps the table read-only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection: Option<TableSelectionSpec>,
     /// Visual state.
     pub visual: ComponentVisualState,
     /// Accessibility semantics. `role` defaults to [`A11yRole::Table`].
     pub a11y: A11ySpec,
 }
 
+/// Value-less command trigger. Pressing it ([`ViewHost::invoke`]) issues
+/// one discrete `Action` intent carrying `target`, `action`, and `params`.
+/// Its phase follows the command receipt contract, like any other command.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ButtonSpec {
+    /// Component key.
+    pub key: ComponentKey,
+    /// Resolved display text.
+    pub label: String,
+    /// Logical command target of the emitted intent.
+    pub target: LogicalTarget,
+    /// Discrete action name of the emitted intent.
+    pub action: String,
+    /// Action parameters, carried verbatim in the emitted intent.
+    #[serde(default)]
+    pub params: Option<serde_json::Value>,
+    /// Visual state.
+    pub visual: ComponentVisualState,
+    /// Accessibility semantics. `role` defaults to [`A11yRole::Button`].
+    pub a11y: A11ySpec,
+}
+
 /// Backend-neutral accessibility node derived from a spec. The tree is
-/// the single source of truth for `Label`/`Table` semantics; renderers
-/// consume it instead of re-deriving table structure.
+/// the single source of truth for `Label`/`Table`/`Button` semantics;
+/// renderers consume it instead of re-deriving table structure.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct A11yNode {
     /// Semantic role.
@@ -553,6 +593,8 @@ pub enum ComponentSpec {
     Label(LabelSpec),
     /// Read-only table of resolved cells (a list is a one-column table).
     Table(TableSpec),
+    /// Value-less command trigger.
+    Button(ButtonSpec),
 }
 
 impl ComponentSpec {
@@ -570,11 +612,12 @@ impl ComponentSpec {
             Self::NativeSlot(s) => &s.key,
             Self::Label(s) => &s.key,
             Self::Table(s) => &s.key,
+            Self::Button(s) => &s.key,
         }
     }
 
     /// Backend-neutral a11y tree for the kinds whose semantics this
-    /// contract defines (`Label`, `Table`). `None` for other kinds.
+    /// contract defines (`Label`, `Table`, `Button`). `None` for other kinds.
     #[must_use]
     pub fn a11y_node(&self) -> Option<A11yNode> {
         match self {
@@ -585,6 +628,12 @@ impl ComponentSpec {
                 Vec::new(),
             )),
             Self::Table(s) => Some(s.a11y_node()),
+            Self::Button(s) => Some(A11yNode::new(
+                s.a11y.role.unwrap_or(A11yRole::Button),
+                Some(s.a11y.label.clone().unwrap_or_else(|| s.label.clone())),
+                None,
+                Vec::new(),
+            )),
             _ => None,
         }
     }
@@ -606,6 +655,7 @@ impl ComponentSpec {
             Self::NativeSlot(_) => "native_slot",
             Self::Label(_) => "label",
             Self::Table(_) => "table",
+            Self::Button(_) => "button",
         }
     }
 
@@ -711,6 +761,14 @@ pub enum ViewError {
         /// The missing key.
         key: ComponentKey,
     },
+    /// The input does not apply to the mounted component: wrong kind,
+    /// not selectable, or a row outside the table.
+    InvalidInput {
+        /// Component key the input targeted.
+        key: ComponentKey,
+        /// Human-readable reason.
+        detail: String,
+    },
 }
 
 impl Display for ViewError {
@@ -724,7 +782,15 @@ impl Display for ViewError {
             Self::UnknownComponent { key } => {
                 write!(f, "no mounted component for key {key}")
             }
+            Self::InvalidInput { key, detail } => write!(f, "invalid input for {key}: {detail}"),
         }
+    }
+}
+
+fn invalid_input(key: &ComponentKey, detail: impl Into<String>) -> ViewError {
+    ViewError::InvalidInput {
+        key: key.clone(),
+        detail: detail.into(),
     }
 }
 
@@ -747,6 +813,10 @@ pub struct ComponentSnapshot {
     /// Latest accepted authoritative projection — the only channel
     /// that proves domain state (`None` when none has landed).
     pub observed: Option<StateProjection<serde_json::Value>>,
+    /// Displayed row selection of a selectable `Table` (`None` otherwise
+    /// and when no row is selected). Optimistic: a rejected selection
+    /// restores the previous row.
+    pub selected: Option<usize>,
     /// Whether the component is mounted.
     pub mounted: bool,
 }
@@ -762,6 +832,48 @@ struct Mounted {
     kind: &'static str,
     spec: ComponentSpec,
     control: Option<ControlMeta>,
+    selected: Option<usize>,
+}
+
+impl Mounted {
+    /// Binding id that owns this component's command intents.
+    fn binding_id(&self) -> Option<ControlId> {
+        self.control
+            .as_ref()
+            .map(|c| c.control_id.clone())
+            .or_else(|| action_binding_id(&self.spec))
+    }
+}
+
+/// Binding id of a component that issues command intents without a
+/// control: a `Button`, or a `Table` with a selection. The key is the id.
+fn action_binding_id(node: &ComponentSpec) -> Option<ControlId> {
+    match node {
+        ComponentSpec::Button(b) => Some(b.key.0.clone()),
+        ComponentSpec::Table(t) if t.selection.is_some() => Some(t.key.0.clone()),
+        _ => None,
+    }
+}
+
+fn mounted_node(node: &ComponentSpec) -> Mounted {
+    Mounted {
+        kind: node.kind(),
+        spec: node.clone(),
+        control: node.control().map(|c| ControlMeta {
+            control_id: c.control_id.clone().unwrap_or_else(|| c.key.0.clone()),
+            spec: c.clone(),
+        }),
+        selected: None,
+    }
+}
+
+/// The displayed row selection `row` is valid for `node`: only a selectable
+/// table holds a selection, and only for a row that still exists in it.
+fn clamp_selection(row: Option<usize>, node: &ComponentSpec) -> Option<usize> {
+    match node {
+        ComponentSpec::Table(t) if t.selection.is_some() => row.filter(|&r| r < t.rows.len()),
+        _ => None,
+    }
 }
 
 /// Reconcile outcome for one `(key, node)` pair.
@@ -893,6 +1005,13 @@ pub struct ViewHost {
     /// back. Entries drop on terminal receipts and control unregister.
     command_index: HashMap<CommandId, ControlId>,
     ports: HashMap<ControlId, ValuePorts>,
+    /// Host-wide sequence of discrete `Action` intents (Button, Table
+    /// selection), monotonic like a control's element sequence.
+    action_sequence: u64,
+    /// Selection to restore when its command settles as `rejected` /
+    /// `unsupported`: `command_id` → (table key, previously displayed row).
+    /// Released by any terminal receipt, detach, and unmount.
+    selection_undo: HashMap<CommandId, (ComponentKey, Option<usize>)>,
     events: VecDeque<ViewEvent>,
 }
 
@@ -914,6 +1033,8 @@ impl ViewHost {
             bindings: HashMap::new(),
             command_index: HashMap::new(),
             ports: HashMap::new(),
+            action_sequence: 0,
+            selection_undo: HashMap::new(),
             events: VecDeque::new(),
         }
     }
@@ -1183,9 +1304,30 @@ impl ViewHost {
             .map_or_else(|| ComponentKey(control_id.to_string()), |(k, _)| k.clone())
     }
 
+    /// Command-bearing kinds must name the target (and action) of the
+    /// intents they emit.
+    fn check_command(node: &ComponentSpec) -> Result<(), ViewError> {
+        let invalid = match node {
+            ComponentSpec::Button(b) => b.target.is_empty() || b.action.is_empty(),
+            ComponentSpec::Table(t) => t.selection.as_ref().is_some_and(|s| s.target.is_empty()),
+            _ => false,
+        };
+        if invalid {
+            return Err(ViewError::InvalidSpec {
+                detail: format!(
+                    "{} {} has an empty command target or action",
+                    node.kind(),
+                    node.key()
+                ),
+            });
+        }
+        Ok(())
+    }
+
     /// Per-node structural checks: kind payload bounds and descriptor rules.
     fn check_node(node: &ComponentSpec) -> Result<(), ViewError> {
         Self::check_viz(node)?;
+        Self::check_command(node)?;
         match node {
             ComponentSpec::Tabs(t) => {
                 if t.tabs.is_empty() {
@@ -1362,23 +1504,68 @@ impl ViewHost {
                 .and_then(|c| c.spec.target.clone())
         });
         if let Some(intent) = intent_from_gesture(&event, fallback.as_ref()) {
-            let namespace = self.binding_namespace(&control_id);
-            let binding = self
-                .bindings
-                .entry(control_id.clone())
-                .or_insert_with(|| CommandBinding::new(namespace));
-            let (command_id, expect_receipt) = binding.dispatch(intent.clone(), None);
-            self.command_index.insert(command_id.clone(), control_id);
-            self.push_event(ViewEvent::Intent {
-                intent,
-                command_id,
-                expect_receipt,
-            });
+            self.emit_intent(&control_id, intent);
         }
         self.push_event(ViewEvent::Gesture {
             key: key.clone(),
             event,
         });
+    }
+
+    /// Binds `intent` to `control_id`'s command binding, records the
+    /// command for receipt routing, and emits the `Intent` event.
+    fn emit_intent(&mut self, control_id: &str, intent: CommandIntent) -> CommandId {
+        let namespace = self.binding_namespace(control_id);
+        let binding = self
+            .bindings
+            .entry(control_id.to_string())
+            .or_insert_with(|| CommandBinding::new(namespace));
+        let (command_id, expect_receipt) = binding.dispatch(intent.clone(), None);
+        self.command_index
+            .insert(command_id.clone(), control_id.to_string());
+        self.push_event(ViewEvent::Intent {
+            intent,
+            command_id: command_id.clone(),
+            expect_receipt,
+        });
+        command_id
+    }
+
+    fn action_intent(
+        &mut self,
+        key: &ComponentKey,
+        target: LogicalTarget,
+        action: &str,
+        params: Option<serde_json::Value>,
+    ) -> CommandIntent {
+        self.action_sequence += 1;
+        CommandIntent::Action {
+            target,
+            control_id: key.0.clone(),
+            sequence: self.action_sequence,
+            origin_view: Some(format!("view-{}", self.view_id.get())),
+            action: action.to_string(),
+            source: None,
+            params,
+        }
+    }
+
+    fn set_selected(&mut self, key: &ComponentKey, row: Option<usize>) {
+        if let Some(m) = self.mounted.get_mut(key) {
+            m.selected = clamp_selection(row, &m.spec);
+        }
+    }
+
+    /// Drops a removed component's routing state: its control, or its
+    /// action binding's receipt index entries, and any selection undo.
+    fn release(&mut self, m: &Mounted) {
+        let key = m.spec.key();
+        self.selection_undo.retain(|_, (owner, _)| owner != key);
+        if let Some(meta) = &m.control {
+            self.unregister_control(meta);
+        } else if let Some(id) = action_binding_id(&m.spec) {
+            self.command_index.retain(|_, owner| owner != &id);
+        }
     }
 
     /// Mounts a spec on an empty host. Returns the ops emitted.
@@ -1401,17 +1588,7 @@ impl ViewHost {
             if let Some(c) = node.control() {
                 self.register_control(c);
             }
-            self.mounted.insert(
-                (*key).clone(),
-                Mounted {
-                    kind: node.kind(),
-                    spec: (*node).clone(),
-                    control: node.control().map(|c| ControlMeta {
-                        control_id: c.control_id.clone().unwrap_or_else(|| c.key.0.clone()),
-                        spec: c.clone(),
-                    }),
-                },
-            );
+            self.mounted.insert((*key).clone(), mounted_node(node));
         }
         self.spec = Some(spec);
         for op in &ops {
@@ -1464,10 +1641,8 @@ impl ViewHost {
             .collect();
         removed.sort();
         for key in removed {
-            if let Some(m) = self.mounted.remove(&key)
-                && let Some(meta) = &m.control
-            {
-                self.unregister_control(meta);
+            if let Some(m) = self.mounted.remove(&key) {
+                self.release(&m);
             }
             ops.push(ProjectionOp::Removed { key });
         }
@@ -1490,35 +1665,23 @@ impl ViewHost {
                     }
                     ops.push(ProjectionOp::Updated { key: key.clone() });
                     if let Some(m) = self.mounted.get_mut(key) {
-                        m.spec = node.clone();
-                        m.control = node.control().map(|c| ControlMeta {
-                            control_id: c.control_id.clone().unwrap_or_else(|| c.key.0.clone()),
-                            spec: c.clone(),
-                        });
+                        let selected = clamp_selection(m.selected, node);
+                        *m = Mounted {
+                            selected,
+                            ..mounted_node(node)
+                        };
                     }
                 }
                 ReconcileAction::Mount | ReconcileAction::KindSwap => {
                     if let Some(m) = self.mounted.remove(key) {
-                        if let Some(meta) = &m.control {
-                            self.unregister_control(meta);
-                        }
+                        self.release(&m);
                         ops.push(ProjectionOp::Removed { key: key.clone() });
                     }
                     ops.push(ProjectionOp::Mounted { key: key.clone() });
                     if let Some(c) = node.control() {
                         self.register_control(c);
                     }
-                    self.mounted.insert(
-                        key.clone(),
-                        Mounted {
-                            kind: node.kind(),
-                            spec: node.clone(),
-                            control: node.control().map(|c| ControlMeta {
-                                control_id: c.control_id.clone().unwrap_or_else(|| c.key.0.clone()),
-                                spec: c.clone(),
-                            }),
-                        },
-                    );
+                    self.mounted.insert(key.clone(), mounted_node(node));
                 }
             }
         }
@@ -1548,6 +1711,7 @@ impl ViewHost {
         // dropped so a remount starts from a clean generation.
         self.bindings.clear();
         self.command_index.clear();
+        self.selection_undo.clear();
         let ops: Vec<ProjectionOp> = keys
             .into_iter()
             .map(|key| ProjectionOp::Unmounted { key })
@@ -1574,6 +1738,7 @@ impl ViewHost {
         // Detached bindings absorb late replies; the index is dropped
         // so stale ids never reach a re-attached epoch.
         self.command_index.clear();
+        self.selection_undo.clear();
         self.generation += 1;
         self.generation
     }
@@ -1614,6 +1779,77 @@ impl ViewHost {
         Ok(events)
     }
 
+    /// Selects `row` of the selectable `Table` `key`. The display moves
+    /// to `row` at once; the emitted `Action` intent
+    /// (`action` = [`TABLE_SELECT_ACTION`], `params` = `{"row": row}`)
+    /// settles through its receipt. A rejected or unsupported receipt
+    /// restores the previous row.
+    ///
+    /// # Errors
+    /// [`ViewError::StaleGeneration`] for a dead epoch;
+    /// [`ViewError::UnknownComponent`] for an unmounted key;
+    /// [`ViewError::InvalidInput`] when `key` is not a selectable table
+    /// or `row` is outside it. Rejected inputs emit nothing.
+    pub fn select_row(
+        &mut self,
+        generation: u64,
+        key: &ComponentKey,
+        row: usize,
+    ) -> Result<(), ViewError> {
+        self.check_gen(generation)?;
+        let m = self
+            .mounted
+            .get(key)
+            .ok_or_else(|| ViewError::UnknownComponent { key: key.clone() })?;
+        let (target, rows, previous) = match &m.spec {
+            ComponentSpec::Table(t) => match &t.selection {
+                Some(selection) => (selection.target.clone(), t.rows.len(), m.selected),
+                None => return Err(invalid_input(key, "table is not selectable")),
+            },
+            _ => return Err(invalid_input(key, "component is not a table")),
+        };
+        if row >= rows {
+            return Err(invalid_input(
+                key,
+                format!("row {row} is outside {rows} rows"),
+            ));
+        }
+        let intent = self.action_intent(
+            key,
+            target,
+            TABLE_SELECT_ACTION,
+            Some(serde_json::json!({ "row": row })),
+        );
+        self.set_selected(key, Some(row));
+        let command_id = self.emit_intent(&key.0, intent);
+        self.selection_undo
+            .insert(command_id, (key.clone(), previous));
+        Ok(())
+    }
+
+    /// Presses the `Button` `key`: emits one discrete `Action` intent
+    /// carrying the spec's target, action, and params. Its phase follows
+    /// the command receipt.
+    ///
+    /// # Errors
+    /// [`ViewError::StaleGeneration`] for a dead epoch;
+    /// [`ViewError::UnknownComponent`] for an unmounted key;
+    /// [`ViewError::InvalidInput`] when `key` is not a button.
+    pub fn invoke(&mut self, generation: u64, key: &ComponentKey) -> Result<(), ViewError> {
+        self.check_gen(generation)?;
+        let m = self
+            .mounted
+            .get(key)
+            .ok_or_else(|| ViewError::UnknownComponent { key: key.clone() })?;
+        let ComponentSpec::Button(b) = &m.spec else {
+            return Err(invalid_input(key, "component is not a button"));
+        };
+        let (target, action, params) = (b.target.clone(), b.action.clone(), b.params.clone());
+        let intent = self.action_intent(key, target, &action, params);
+        self.emit_intent(&key.0, intent);
+        Ok(())
+    }
+
     /// Runtime availability override for one control (e.g. a view-level
     /// disabled state). Cancels in-flight gestures on unavailable.
     ///
@@ -1649,15 +1885,13 @@ impl ViewHost {
             .control
             .as_ref()
             .and_then(|c| self.dispatcher.control(&c.control_id));
-        let binding = m
-            .control
-            .as_ref()
-            .and_then(|c| self.bindings.get(&c.control_id));
+        let binding = m.binding_id().and_then(|id| self.bindings.get(&id));
         Some(ComponentSnapshot {
             display: control.map(crate::behavior::InteractionControl::value),
             committed: control.map(crate::behavior::InteractionControl::committed_value),
             phase: binding.map_or(CommandPhase::Idle, CommandBinding::phase),
             observed: binding.and_then(|b| b.state().last_observed),
+            selected: m.selected,
             mounted: true,
         })
     }
@@ -1694,7 +1928,29 @@ impl ViewHost {
         ) {
             self.command_index.remove(&receipt.command_id);
         }
+        self.settle_selection(receipt);
         true
+    }
+
+    /// Settles an optimistic row selection on its command's receipt: a
+    /// terminal failure restores the previous row, and any terminal
+    /// status releases the undo record. `accepted`/`queued` keep it.
+    fn settle_selection(&mut self, receipt: &CommandReceipt) {
+        if matches!(
+            receipt.status,
+            ReceiptStatus::Accepted | ReceiptStatus::Queued
+        ) {
+            return;
+        }
+        let Some((key, previous)) = self.selection_undo.remove(&receipt.command_id) else {
+            return;
+        };
+        if matches!(
+            receipt.status,
+            ReceiptStatus::Rejected | ReceiptStatus::Unsupported
+        ) {
+            self.set_selected(&key, previous);
+        }
     }
 
     /// Routes an authoritative state projection to `control_id`'s
@@ -2564,6 +2820,7 @@ mod tests {
             key: ComponentKey::from(key),
             columns: vec!["stage".into(), "state".into(), "ms".into()],
             rows,
+            selection: None,
             visual: ComponentVisualState::default(),
             a11y: A11ySpec {
                 label: Some(key.into()),
@@ -2700,6 +2957,344 @@ mod tests {
         assert!(ops.contains(&ProjectionOp::Removed {
             key: ComponentKey::from("events"),
         }));
+    }
+
+    fn rows(n: usize) -> Vec<Vec<Option<CellValue>>> {
+        vec![vec![None, None, None]; n]
+    }
+
+    fn selectable_table(key: &str, rows: Vec<Vec<Option<CellValue>>>) -> ComponentSpec {
+        ComponentSpec::Table(TableSpec {
+            key: ComponentKey::from(key),
+            columns: vec!["stage".into(), "state".into(), "ms".into()],
+            rows,
+            selection: Some(TableSelectionSpec {
+                target: "jobs".into(),
+            }),
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    fn button(
+        key: &str,
+        target: &str,
+        action: &str,
+        params: Option<serde_json::Value>,
+    ) -> ComponentSpec {
+        ComponentSpec::Button(ButtonSpec {
+            key: ComponentKey::from(key),
+            label: "Run".into(),
+            target: target.into(),
+            action: action.into(),
+            params,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    /// Drains the stream and returns each minted `Action` intent with its
+    /// command id, in order.
+    fn action_intents(host: &mut ViewHost) -> Vec<(CommandIntent, CommandId)> {
+        host.drain_events()
+            .into_iter()
+            .filter_map(|e| match e {
+                ViewEvent::Intent {
+                    intent: intent @ CommandIntent::Action { .. },
+                    command_id,
+                    ..
+                } => Some((intent, command_id)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn table_row_selection_emits_action_and_observes_selected_row() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![selectable_table("jobs", rows(3))]))
+            .expect("mount");
+        host.drain_events();
+        let key = ComponentKey::from("jobs");
+        host.select_row(host.generation(), &key, 1).expect("select");
+
+        let intents = action_intents(&mut host);
+        assert_eq!(intents.len(), 1);
+        match &intents[0].0 {
+            CommandIntent::Action {
+                target,
+                control_id,
+                action,
+                params,
+                ..
+            } => {
+                assert_eq!(target, "jobs");
+                assert_eq!(control_id, "jobs");
+                assert_eq!(action, TABLE_SELECT_ACTION);
+                assert_eq!(params.as_ref(), Some(&serde_json::json!({ "row": 1 })));
+            }
+            other => panic!("expected action, got {other:?}"),
+        }
+        let snap = host.observe(&key).expect("snapshot");
+        assert_eq!(snap.selected, Some(1));
+        assert_eq!(snap.phase, CommandPhase::Pending);
+    }
+
+    #[test]
+    fn selection_rejects_inputs_that_do_not_apply_without_emitting() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![
+            table("static", rows(2)),
+            selectable_table("jobs", rows(2)),
+            label("status", "ok"),
+            button("run", "run.start", "start", None),
+        ]))
+        .expect("mount");
+        host.drain_events();
+        let generation = host.generation();
+        assert!(matches!(
+            host.select_row(generation, &ComponentKey::from("static"), 0),
+            Err(ViewError::InvalidInput { .. })
+        ));
+        assert!(matches!(
+            host.select_row(generation, &ComponentKey::from("jobs"), 2),
+            Err(ViewError::InvalidInput { .. })
+        ));
+        assert!(matches!(
+            host.select_row(generation, &ComponentKey::from("status"), 0),
+            Err(ViewError::InvalidInput { .. })
+        ));
+        assert!(matches!(
+            host.select_row(generation, &ComponentKey::from("missing"), 0),
+            Err(ViewError::UnknownComponent { .. })
+        ));
+        assert!(matches!(
+            host.invoke(generation, &ComponentKey::from("jobs")),
+            Err(ViewError::InvalidInput { .. })
+        ));
+        assert!(matches!(
+            host.select_row(generation + 1, &ComponentKey::from("jobs"), 0),
+            Err(ViewError::StaleGeneration { .. })
+        ));
+        assert_eq!(action_intents(&mut host), Vec::new());
+        assert_eq!(
+            host.observe(&ComponentKey::from("jobs"))
+                .expect("snapshot")
+                .selected,
+            None
+        );
+    }
+
+    #[test]
+    fn rejected_selection_restores_the_previous_row() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![selectable_table("jobs", rows(3))]))
+            .expect("mount");
+        host.drain_events();
+        let key = ComponentKey::from("jobs");
+
+        host.select_row(host.generation(), &key, 0)
+            .expect("select 0");
+        let first = action_intents(&mut host)[0].1.clone();
+        assert!(host.apply_receipt(&receipt(first, ReceiptStatus::Applied)));
+        assert_eq!(host.observe(&key).expect("snapshot").selected, Some(0));
+
+        host.select_row(host.generation(), &key, 2)
+            .expect("select 2");
+        let second = action_intents(&mut host)[0].1.clone();
+        assert_eq!(host.observe(&key).expect("snapshot").selected, Some(2));
+        assert!(host.apply_receipt(&receipt(second, ReceiptStatus::Rejected)));
+        let snap = host.observe(&key).expect("snapshot");
+        assert_eq!(snap.selected, Some(0), "rejected selection restores row 0");
+        assert_eq!(snap.phase, CommandPhase::Rejected);
+    }
+
+    #[test]
+    fn accepted_and_applied_selection_keep_the_row() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![selectable_table("jobs", rows(3))]))
+            .expect("mount");
+        host.drain_events();
+        let key = ComponentKey::from("jobs");
+
+        host.select_row(host.generation(), &key, 1).expect("select");
+        let id = action_intents(&mut host)[0].1.clone();
+        host.apply_receipt(&receipt(id.clone(), ReceiptStatus::Accepted));
+        let snap = host.observe(&key).expect("snapshot");
+        assert_eq!(
+            (snap.selected, snap.phase),
+            (Some(1), CommandPhase::Accepted)
+        );
+        host.apply_receipt(&receipt(id, ReceiptStatus::Applied));
+        let snap = host.observe(&key).expect("snapshot");
+        assert_eq!(
+            (snap.selected, snap.phase),
+            (Some(1), CommandPhase::Applied)
+        );
+    }
+
+    #[test]
+    fn table_update_keeps_selection_only_while_the_row_exists() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![selectable_table("jobs", rows(3))]))
+            .expect("mount");
+        let key = ComponentKey::from("jobs");
+        host.select_row(host.generation(), &key, 2).expect("select");
+        let generation = host.generation();
+        host.update(panel(vec![selectable_table("jobs", rows(3))]), generation)
+            .expect("same rows");
+        assert_eq!(host.observe(&key).expect("snapshot").selected, Some(2));
+        let generation = host.generation();
+        host.update(panel(vec![selectable_table("jobs", rows(2))]), generation)
+            .expect("shrink");
+        assert_eq!(host.observe(&key).expect("snapshot").selected, None);
+    }
+
+    #[test]
+    fn rejected_selection_does_not_restore_a_row_the_table_lost() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![selectable_table("jobs", rows(3))]))
+            .expect("mount");
+        host.drain_events();
+        let key = ComponentKey::from("jobs");
+
+        host.select_row(host.generation(), &key, 2)
+            .expect("select 2");
+        let first = action_intents(&mut host)[0].1.clone();
+        host.apply_receipt(&receipt(first, ReceiptStatus::Applied));
+        host.select_row(host.generation(), &key, 0)
+            .expect("select 0");
+        let second = action_intents(&mut host)[0].1.clone();
+        let generation = host.generation();
+        host.update(panel(vec![selectable_table("jobs", rows(2))]), generation)
+            .expect("shrink");
+        assert!(host.apply_receipt(&receipt(second, ReceiptStatus::Rejected)));
+        assert_eq!(
+            host.observe(&key).expect("snapshot").selected,
+            None,
+            "row 2 no longer exists, so it is not restored"
+        );
+    }
+
+    #[test]
+    fn selection_is_dropped_when_the_table_becomes_read_only() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![selectable_table("jobs", rows(3))]))
+            .expect("mount");
+        let key = ComponentKey::from("jobs");
+        host.select_row(host.generation(), &key, 1).expect("select");
+        let generation = host.generation();
+        host.update(panel(vec![table("jobs", rows(3))]), generation)
+            .expect("read-only");
+        assert_eq!(host.observe(&key).expect("snapshot").selected, None);
+        assert!(matches!(
+            host.select_row(host.generation(), &key, 0),
+            Err(ViewError::InvalidInput { .. })
+        ));
+    }
+
+    #[test]
+    fn button_invoke_emits_spec_target_action_and_params() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![button(
+            "run",
+            "run.start",
+            "start",
+            Some(serde_json::json!({ "dataset": "ds-1" })),
+        )]))
+        .expect("mount");
+        host.drain_events();
+        let key = ComponentKey::from("run");
+        host.invoke(host.generation(), &key).expect("invoke");
+
+        let intents = action_intents(&mut host);
+        assert_eq!(intents.len(), 1);
+        match &intents[0].0 {
+            CommandIntent::Action {
+                target,
+                control_id,
+                action,
+                params,
+                ..
+            } => {
+                assert_eq!(target, "run.start");
+                assert_eq!(control_id, "run");
+                assert_eq!(action, "start");
+                assert_eq!(
+                    params.as_ref(),
+                    Some(&serde_json::json!({ "dataset": "ds-1" }))
+                );
+            }
+            other => panic!("expected action, got {other:?}"),
+        }
+        let id = intents[0].1.clone();
+        assert_eq!(
+            host.observe(&key).expect("snapshot").phase,
+            CommandPhase::Pending
+        );
+        host.apply_receipt(&receipt(id.clone(), ReceiptStatus::Accepted));
+        assert_eq!(
+            host.observe(&key).expect("snapshot").phase,
+            CommandPhase::Accepted
+        );
+        host.apply_receipt(&receipt(id, ReceiptStatus::Applied));
+        assert_eq!(
+            host.observe(&key).expect("snapshot").phase,
+            CommandPhase::Applied
+        );
+
+        let a11y = host.a11y_node(&key).expect("a11y tree");
+        assert_eq!(a11y.role, A11yRole::Button);
+        assert_eq!(a11y.name.as_deref(), Some("Run"));
+    }
+
+    #[test]
+    fn button_and_selection_specs_require_a_target_and_an_action() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        assert!(matches!(
+            host.mount(panel(vec![button("run", "", "start", None)])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
+        assert!(matches!(
+            host.mount(panel(vec![button("run", "run.start", "", None)])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
+        let mut table = selectable_table("jobs", rows(1));
+        if let ComponentSpec::Table(t) = &mut table {
+            t.selection = Some(TableSelectionSpec {
+                target: String::new(),
+            });
+        }
+        assert!(matches!(
+            host.mount(panel(vec![table])),
+            Err(ViewError::InvalidSpec { .. })
+        ));
+    }
+
+    #[test]
+    fn removed_action_components_drop_their_receipt_routing() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![
+            selectable_table("jobs", rows(2)),
+            button("run", "run.start", "start", None),
+        ]))
+        .expect("mount");
+        host.drain_events();
+        host.select_row(host.generation(), &ComponentKey::from("jobs"), 0)
+            .expect("select");
+        host.invoke(host.generation(), &ComponentKey::from("run"))
+            .expect("invoke");
+        let ids: Vec<CommandId> = action_intents(&mut host)
+            .into_iter()
+            .map(|(_, id)| id)
+            .collect();
+
+        let generation = host.generation();
+        host.update(panel(vec![label("status", "idle")]), generation)
+            .expect("remove both");
+        for id in ids {
+            assert!(!host.apply_receipt(&receipt(id, ReceiptStatus::Applied)));
+        }
     }
 
     #[test]

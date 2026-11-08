@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "manifest": "rvf.driver-lab.parity/v1",
+  "issue": "https://github.com/scarecrow173/ruviform/issues/448",
+  "description": "行選択と command 起動の Fake/GPUI 同一 fixture。view は ViewSpec（serde 形式）、expect は両 driver が検査する semantic 期待値。Fake と GPUI は同じ操作（行の選択・Button の押下）から同じ Action intent（kind/target/controlId/action/params）と、同じ snapshot（selected・phase）を得ること、Button の a11y 木と描画ラベルが一致することを検査する。receipt の進行（accepted/applied/rejected）は headless 契約で検査し、GPUI 側では発行しない。",
+  "view": {
+    "root": {
+      "type": "panel",
+      "key": "root",
+      "title": null,
+      "visual": { "error": null },
+      "a11y": {},
+      "children": [
+        {
+          "type": "table",
+          "key": "jobs",
+          "columns": ["job", "state"],
+          "rows": [
+            ["job-1", "done"],
+            ["job-2", "queued"],
+            ["job-3", null]
+          ],
+          "selection": { "target": "jobs.select" },
+          "visual": { "error": null },
+          "a11y": { "label": "jobs" }
+        },
+        {
+          "type": "button",
+          "key": "run",
+          "label": "Run",
+          "target": "run.start",
+          "action": "start",
+          "params": { "dataset": "ds-1" },
+          "visual": { "error": null },
+          "a11y": {}
+        }
+      ]
+    }
+  },
+  "expect": {
+    "mountedKeys": ["root", "jobs", "run"],
+    "table": {
+      "selectRow": 1,
+      "intents": [
+        {
+          "kind": "action",
+          "target": "jobs.select",
+          "controlId": "jobs",
+          "action": "select",
+          "params": { "row": 1 }
+        }
+      ],
+      "selectedAfterSelect": 1,
+      "phase": "pending",
+      "drawnHeader": ["job", "state"]
+    },
+    "button": {
+      "intents": [
+        {
+          "kind": "action",
+          "target": "run.start",
+          "controlId": "run",
+          "action": "start",
+          "params": { "dataset": "ds-1" }
+        }
+      ],
+      "phase": "pending",
+      "drawnLabel": "Run",
+      "a11yTree": { "role": "button", "name": "Run" }
+    }
+  }
+}

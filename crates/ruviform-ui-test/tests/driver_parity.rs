@@ -18,7 +18,7 @@ use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{
     AttachEpoch, ComponentKey, ComponentSpec, ProjectionOp, ViewEvent, ViewHost, ViewSpec,
 };
-use serde_json::Value;
+use serde_json::{Value, json};
 
 fn fixture() -> Value {
     let path =
@@ -336,4 +336,94 @@ fn parity_spectrogram_payload_retained_fake() {
         key: key("spectrogram"),
     }));
     assert!(host.observe(&key("spectrogram")).is_some());
+}
+
+/// Issue #448: the shared selection/command fixture — the row selection
+/// and the Button press emit the same `Action` intents and snapshot as
+/// the GPUI side (`consumer_observation.rs`).
+fn selection_fixture() -> Value {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures/driver-lab/parity/selection-command.json");
+    let text = std::fs::read_to_string(&path).expect("read selection fixture");
+    serde_json::from_str(&text).expect("parse selection fixture")
+}
+
+/// The `Action` intents minted since the last drain, as the fixture's
+/// `{kind, target, controlId, action, params}` summary.
+fn action_summaries(host: &mut ViewHost) -> Value {
+    Value::Array(
+        host.drain_events()
+            .into_iter()
+            .filter_map(|e| match e {
+                ViewEvent::Intent {
+                    intent: intent @ CommandIntent::Action { .. },
+                    ..
+                } => Some(intent),
+                _ => None,
+            })
+            .map(|i| {
+                let v = serde_json::to_value(&i).expect("intent json");
+                json!({
+                    "kind": v["kind"],
+                    "target": v["target"],
+                    "controlId": v["control_id"],
+                    "action": v["action"],
+                    "params": v["params"],
+                })
+            })
+            .collect(),
+    )
+}
+
+#[test]
+fn ui_dvr_02_parity_selection_command_mount() {
+    let fx = selection_fixture();
+    let mut host = new_host();
+    let ops = host.mount(view_spec(&fx)).expect("mount");
+    for k in strings(&fx["expect"]["mountedKeys"]) {
+        assert!(ops.contains(&ProjectionOp::Mounted { key: key(&k) }), "{k}");
+    }
+    let button = host.a11y_node(&key("run")).expect("button a11y tree");
+    assert_eq!(
+        serde_json::to_value(&button).expect("a11y json"),
+        fx["expect"]["button"]["a11yTree"]
+    );
+}
+
+#[test]
+fn ui_dvr_03_parity_selection_command_intents_and_snapshot() {
+    let fx = selection_fixture();
+    let mut host = new_host();
+    host.mount(view_spec(&fx)).expect("mount");
+    host.drain_events();
+
+    let row = usize::try_from(fx["expect"]["table"]["selectRow"].as_u64().expect("row"))
+        .expect("row index");
+    host.select_row(host.generation(), &key("jobs"), row)
+        .expect("select row");
+    assert_eq!(
+        action_summaries(&mut host),
+        fx["expect"]["table"]["intents"]
+    );
+    let snap = host.observe(&key("jobs")).expect("table snapshot");
+    assert_eq!(
+        snap.selected.and_then(|r| u64::try_from(r).ok()),
+        fx["expect"]["table"]["selectedAfterSelect"].as_u64()
+    );
+    assert_eq!(
+        serde_json::to_value(snap.phase).expect("phase json"),
+        fx["expect"]["table"]["phase"]
+    );
+
+    host.invoke(host.generation(), &key("run"))
+        .expect("invoke button");
+    assert_eq!(
+        action_summaries(&mut host),
+        fx["expect"]["button"]["intents"]
+    );
+    let snap = host.observe(&key("run")).expect("button snapshot");
+    assert_eq!(
+        serde_json::to_value(snap.phase).expect("phase json"),
+        fx["expect"]["button"]["phase"]
+    );
 }
