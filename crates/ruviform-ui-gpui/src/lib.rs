@@ -41,6 +41,8 @@ mod lifecycle_fixture;
 
 #[cfg(feature = "gpui")]
 mod gpui_driver {
+    /// OS-level window pixel capture (Issue #314 slice 3).
+    pub mod capture;
     /// Consumer observation seam (Issue #429) — `gpui-test` only.
     #[cfg(feature = "gpui-test")]
     pub mod observe;
@@ -1384,6 +1386,8 @@ mod gpui_driver {
     }
 }
 
+#[cfg(feature = "gpui")]
+pub use gpui_driver::capture::OsCapturedFrame;
 #[cfg(feature = "gpui-test")]
 pub use gpui_driver::observe::{
     ComponentDrawn, ComponentObservation, DrawnBar, DrawnCell, DrawnMark, DrawnPlan,
