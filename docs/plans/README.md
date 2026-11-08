@@ -37,6 +37,7 @@ Directory: `docs/plans`
 | PLAN-ECzI54BQngMiQpOP23flK3 | Issue #404/#405 NativeSurfaceSlot host 境界修復 実装計画 | draft | [implement-issue-404-405-native-surface-host-boundary.md](./implement-issue-404-405-native-surface-host-boundary.md) |
 | PLAN-Hv8LcR3wQ5nTk2YbM7pXdA | Issue #423 WebView 写像・focus capability・GPUI 実窓検証の実装計画 | proposed | [implement-issue-423-webview-dock-verify.md](./implement-issue-423-webview-dock-verify.md) |
 | PLAN-Hn3Lx7Qv2Wc9Ab5Ej1Rm8Tp | Issue #431 実機 e2e・実窓 lifecycle 検証・legacy 判断の実装計画 | proposed | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
+| PLAN-f7s6LZ2O4ASTSi0kJoiojB | Issue #465 Legacy WebView P0/P1 実装計画 | approved | [implement-issue-465-legacy-webview-p0p1.md](./implement-issue-465-legacy-webview-p0p1.md) |
 | PLAN-034UaIKFsXeS7a1ILrmjKe | Issue #468 RootedDir canonical 前提の契約明示 実装計画 | approved | [implement-issue-468-rooteddir-canonical-premise.md](./implement-issue-468-rooteddir-canonical-premise.md) |
 | PLAN-034JO2EWa8LuEEE4BFVZ9Q | Issue #52 workspace MSRV 引上げの実施（rust-version 1.85 → 1.89・ドキュメント同期・MSRV 実測検証） | approved | [implement-issue-52-msrv-raise.md](./implement-issue-52-msrv-raise.md) |
 | PLAN-034JQFeYbZCBHPYSBfQe7B | Issue #53 SIMD dispatch 層の実装計画 | approved | [implement-issue-53-simd-dispatch-layer.md](./implement-issue-53-simd-dispatch-layer.md) |
