@@ -445,6 +445,30 @@ fn ui_dvr_03_parity_selection_command_intents_and_snapshot() {
     );
 }
 
+/// Issue #451 FU-1: the Fake side has no key input. It checks that the
+/// `tab-select` intent and snapshot the fixture's keyboard step expects are
+/// what the contract yields for that selection; the GPUI side derives the
+/// same index from the key press (`consumer_observation.rs`).
+#[test]
+fn ui_dvr_03_parity_tab_keyboard_intents() {
+    let fx = selection_fixture();
+    let kb = &fx["expect"]["tabs"]["keyboard"];
+    let mut host = new_host();
+    host.mount(view_spec(&fx)).expect("mount");
+    host.drain_events();
+
+    let index = usize::try_from(kb["selectedAfterKey"].as_u64().expect("keyboard target"))
+        .expect("tab index");
+    host.select_tab(host.generation(), &key("mixer_tabs"), index)
+        .expect("select tab");
+    assert_eq!(action_summaries(&mut host), kb["intents"]);
+    let snap = host.observe(&key("mixer_tabs")).expect("tabs snapshot");
+    assert_eq!(
+        snap.selected.and_then(|r| u64::try_from(r).ok()),
+        kb["selectedAfterKey"].as_u64()
+    );
+}
+
 fn wait_terminal(rt: &mut UiRuntime) -> Vec<Event> {
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut all = Vec::new();

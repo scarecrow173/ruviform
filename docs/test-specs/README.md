@@ -109,6 +109,7 @@ Directory: `docs/test-specs`
 | TSPEC-Qm7Lw3Rt9Xc2Hb5Vd8Ns4Ke | Issue #446 — 空 frame 範囲の Tile 検証契約 | proposed | [issue-446-tile-empty-frames.md](./issue-446-tile-empty-frames.md) |
 | TSPEC-Bn6Xc1RqLw3KtYv8ZmHd2G | Issue #448 — 行選択と command 起動の検証契約 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | TSPEC-EcUAfWYYG6G0Npqen48ITk | Issue #450 — Seek/Fader canvas bounds の検証契約 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
+| TSPEC-Yn5Gk3Rt9MvQc2BxLw7DeJ | Issue #451 FU-1 — Tabs のキーボード切替の検証契約 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
 | TSPEC-Js8Lv3XqRb6NwKt1YcMg5F | Issue #451 — Tabs pointer 切替と descriptor 更新の検証契約 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | TSPEC-WsywxRxhFuHBznTRP361Ie | Issue #453 — paint canvas bounds の検証契約（kind 別監査） | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
 | TSPEC-Vc4Dk1PhGj6WsQy9NrTm5A | Issue #456 — job 終端 receipt の検証契約 | approved | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |

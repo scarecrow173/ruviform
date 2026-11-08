@@ -514,6 +514,39 @@ fn observes_selection_and_command_intents_through_seam() {
     );
 }
 
+/// Issue #451 FU-1: a key press on the focused tab strip emits the
+/// `tab-select` intent the fixture's keyboard step expects, and the observed
+/// selection follows it.
+#[test]
+fn observes_tab_key_intents_through_seam() {
+    let fx = fixture("selection-command.json");
+    let spec: ViewSpec = serde_json::from_value(fx["view"].clone()).expect("ViewSpec");
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, spec);
+    let kb = &fx["expect"]["tabs"]["keyboard"];
+    let selected = |observer: &GpuiObserver| {
+        observer
+            .observe(window)
+            .expect("view observed")
+            .components
+            .iter()
+            .find(|c| c.key == key("mixer_tabs"))
+            .expect("tabs observed")
+            .snapshot
+            .selected
+            .and_then(|r| u64::try_from(r).ok())
+    };
+    assert_eq!(selected(&observer), kb["fromIndex"].as_u64());
+
+    observer
+        .press_tab_key(window, &key("mixer_tabs"), kb["key"].as_str().expect("key"))
+        .expect("press tab key");
+    observer.settle(|_, _| {});
+
+    assert_eq!(action_summaries(&observer), kb["intents"]);
+    assert_eq!(selected(&observer), kb["selectedAfterKey"].as_u64());
+}
+
 /// Phase of the fixture's `run` button in the observed projection.
 fn run_phase(observer: &GpuiObserver, window: WindowId) -> Value {
     let view = observer.observe(window).expect("view observed");

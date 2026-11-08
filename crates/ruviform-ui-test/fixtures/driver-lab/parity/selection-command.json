@@ -124,7 +124,21 @@
       "selectedAfterSelect": 1,
       "phase": "pending",
       "drawnBody": "Routing body",
-      "undrawnBody": "Mixer body"
+      "undrawnBody": "Mixer body",
+      "keyboard": {
+        "key": "right",
+        "fromIndex": 0,
+        "selectedAfterKey": 1,
+        "intents": [
+          {
+            "kind": "action",
+            "target": "mixer.tabs.select",
+            "controlId": "mixer_tabs",
+            "action": "tab-select",
+            "params": { "index": 1 }
+          }
+        ]
+      }
     }
   }
 }
