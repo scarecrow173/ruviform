@@ -106,8 +106,9 @@ Issue #478 の受入条件のうち「修正 + 回帰テスト」は後続 dispa
 - [x] D4: `git fetch origin main && git merge origin/main`（`7ae916b3`
   取り込み済み）で生成 index を再生成した後に `mise run fmt-check` /
   `mise run check` / `mise run test-ui-gpui` を実行し、全て pass。
-- [ ] D5: 論理単位でコミットし、`docs/478-fader-height-contract` を
-  push して PR を作る（Issue #478 の受入条件 A1–A3 の記録先）。
+- [x] D5: 論理単位でコミットし、`docs/478-fader-height-contract` を
+  push して PR を作る（PR #485。Issue #478 の受入条件 A1–A3 の
+  記録先）。
 
 後続実装 dispatch（未着手・別 dispatch で実施）:
 

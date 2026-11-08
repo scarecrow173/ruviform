@@ -110,8 +110,8 @@ Fader / Knob の Panel 子としての縦寸法契約を決定し、docs チェ�
 - [x] T5: `git fetch origin main && git merge origin/main`（`7ae916b3`
   取り込み済み）で生成 index を再生成した後に `mise run fmt-check` /
   `mise run check` / `mise run test-ui-gpui` を実行し、全て pass。
-- [ ] T6: 論理単位でコミットし、`docs/478-fader-height-contract` を
-  push して PR を作る（`Refs #478`）。
+- [x] T6: 論理単位でコミットし、`docs/478-fader-height-contract` を
+  push して PR を作る（PR #485、`Refs #478`）。
 
 後続実装 dispatch（未着手）:
 
@@ -124,10 +124,10 @@ Fader / Knob の Panel 子としての縦寸法契約を決定し、docs チェ�
 
 ## Done When
 
-- [ ] 縦寸法契約の設計判断が ADR（不採用判断を含む）に記録され、
-  PR が作成されている。
-- [ ] 実装判断の場合の「修正 + 回帰テスト」は後続 dispatch に
-  引き継がれる旨が PR 本文・plan・task に明記されている。
+- [x] 縦寸法契約の設計判断が ADR（不採用判断を含む）に記録され、
+  PR が作成されている（PR #485）。
+- [x] 実装判断の場合の「修正 + 回帰テスト」は後続 dispatch に
+  引き継がれる旨が PR 本文・plan・task・Issue コメントに明記されている。
 - [x] `mise run fmt-check` / `mise run check` が通過している。
 
 ## Verification
