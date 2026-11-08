@@ -35,6 +35,8 @@ Directory: `docs/plans`
 | PLAN-kHnSXCzzcxyo5rlkMiqQWx | Issue #388/#389 Native Dock 契約の実装計画（neutral slot/lease/session + fake 検証 + L0-L1 写像） | approved | [implement-issue-388-389-native-dock-contract.md](./implement-issue-388-389-native-dock-contract.md) |
 | PLAN-5rBdUXHzqmuHrA1h4sweAj | Issue #389 VST3/L0 実外部 Editor attach の実装計画（adapter open_gui + PoC vst3 lane） | approved | [implement-issue-389-vst3-l0-editor-attach.md](./implement-issue-389-vst3-l0-editor-attach.md) |
 | PLAN-ECzI54BQngMiQpOP23flK3 | Issue #404/#405 NativeSurfaceSlot host 境界修復 実装計画 | draft | [implement-issue-404-405-native-surface-host-boundary.md](./implement-issue-404-405-native-surface-host-boundary.md) |
+| PLAN-Hv8LcR3wQ5nTk2YbM7pXdA | Issue #423 WebView 写像・focus capability・GPUI 実窓検証の実装計画 | proposed | [implement-issue-423-webview-dock-verify.md](./implement-issue-423-webview-dock-verify.md) |
+| PLAN-Hn3Lx7Qv2Wc9Ab5Ej1Rm8Tp | Issue #431 実機 e2e・実窓 lifecycle 検証・legacy 判断の実装計画 | proposed | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | PLAN-034JO2EWa8LuEEE4BFVZ9Q | Issue #52 workspace MSRV 引上げの実施（rust-version 1.85 → 1.89・ドキュメント同期・MSRV 実測検証） | approved | [implement-issue-52-msrv-raise.md](./implement-issue-52-msrv-raise.md) |
 | PLAN-034JQFeYbZCBHPYSBfQe7B | Issue #53 SIMD dispatch 層の実装計画 | approved | [implement-issue-53-simd-dispatch-layer.md](./implement-issue-53-simd-dispatch-layer.md) |
 | PLAN-034JZDNRML000000000004 | Issue #54 実装計画 — denormal flush ノード | approved | [implement-issue-54-denormal-policy.md](./implement-issue-54-denormal-policy.md) |
@@ -90,6 +92,15 @@ Directory: `docs/plans`
 | PLAN-s8XS22tWJoekwN7HhRH9hj | Issue #368 CI failure Issue Tracker 実装計画 | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | PLAN-WuOx4rrntClDKCSVPDAM8d | Issue #368 Tracker reconcile 実装計画 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
 | PLAN-034TnojDZIYRnnvSTlTg34 | Issue #409 scoped re-root + bounded enumeration 実装計画 | draft | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
+| PLAN-Hs2MvCe8ZyWp5QnXb7TkRa | Issue #421 — Meter/TimeAxis GPUI 描画と parity の実装計画 | in-progress | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
+| PLAN-84yUP5PkLYsA3yfDgOShzQ | Issue #426 GPUI lab binding 実装計画 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
+| PLAN-Qx5MnBv8TcHs3RdLe6WaKp | Issue #429 — Consumer 観測 seam の実装計画 | in-progress | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
+| PLAN-Hd5Ym2QwNtRx8LcGv3KpJe | Issue #434 — Spectrogram ViewSpec kind の実装計画 | in-progress | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
+| PLAN-Dz8GuKm3QpYv7RtWb4LoCs | Issue #435 — Label/Table ViewSpec kind の実装計画 | in-progress | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
+| PLAN-Rt5LxV8dNq2MzKc7WbFy4 | Issue #436 — GpuiObserver 描画 plan 公開の実装計画 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
+| PLAN-Vn6Pc1Rh4SxDa9Gt3KwLe8 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装計画 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
+| PLAN-Ws6Tz1RbMn4QcKe9YhGx3Dp | Issue #443 — Tile 列区間と count 契約の実装計画 | in-progress | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
+| PLAN-Qz8Ld3WbTm6XyKr2HnVc4E | Issue #448 — 行選択と command 起動の実装計画 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
@@ -129,4 +140,4 @@ Directory: `docs/plans`
 | PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | PLAN-XVTjRRZhCMBS0tmK8M7Nf5 | Issue #411 — cargo_metadata MSRV 修復 実装計画 | completed | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
-| PLAN-84yUP5PkLYsA3yfDgOShzQ | Issue #426 GPUI lab binding 実装計画 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
+| PLAN-dS9xUtZcP4wLvYnK6nRt3F | Issue #414 — projection→controlled display 実装計画 | completed | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |

@@ -104,6 +104,18 @@ Directory: `docs/designs`
 | DESIGN-z4LQPvCYdpedQfNlIZbQ7J | Issue #404/#405 NativeSurfaceSlot host 境界修復設計（clip 整合 + teardown reconcile） | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
 | DESIGN-034Tnjz1ofC4OXppkHjsgB | Issue #409 scoped re-root + bounded enumeration 設計 | approved | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | DESIGN-NS1HOEsCLKLDYdKMhuZOSf | Issue #411 — cargo_metadata 依存系列選定設計（MSRV 1.89 収束） | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
+| DESIGN-pL8wRtYbN3xKcVhJ5mQs2E | Issue #414 — projection→controlled display 正規経路の設計 | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
+| DESIGN-Kt4NzBw9QxLr6VfGc1PuDo | Issue #421 — Meter/TimeAxis GPUI 描画と parity fixture の設計 | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
+| DESIGN-Z3hWk8NpR2tLq6VbYc4MdE | Issue #423 WebView 写像・focus capability 精緻化・GPUI 実窓検証の設計 | proposed | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
+| DESIGN-rO8ZT7WxqPYGw0e0jZJx_A | Issue #426 設計 — mechanism の test 実在検査・GPUI lab binding・story matrix | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
+| DESIGN-Fn7RtQk2VbXp9LwCs4HgJu | Issue #429 — Consumer 観測 seam（GpuiObserver）の設計 | proposed | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
+| DESIGN-Wq8Ht3NcZ6RmLv1KbFg7Sd | Issue #431 実機 e2e・実窓 lifecycle 検証・OS close 駆動の設計 | proposed | [issue-431-webview-gpui-real-verify.md](./issue-431-webview-gpui-real-verify.md) |
+| DESIGN-Kt8PwRz4LxMc1VqBn6HdSu | Issue #434 — Spectrogram ViewSpec kind の設計 | proposed | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
+| DESIGN-Pw6NsJc4VhTq9BrXy1MaFe | Issue #435 — Label/Table ViewSpec kind と parity の設計 | proposed | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
+| DESIGN-Hv8ZsN3QcKr6YwTe2LmBd1 | Issue #436 — GpuiObserver 描画 plan（drawn）公開の設計 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
+| DESIGN-Jq3Lw8Yn5RtBe2Fk7MzUc4 | Issue #442 — GpuiObserver 描画 plan への Spectrogram / Label / Table 追加の設計 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
+| DESIGN-Vc3Nh8PtRq5LkXw2MdBy7Fj | Issue #443 — Tile 列区間と count の上流契約の設計 | proposed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
+| DESIGN-Hn4Wz8QeKs1TcVb6LrYg2D | Issue #448 — 行選択と command 起動の ViewSpec 契約の設計 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |
@@ -130,4 +142,3 @@ Directory: `docs/designs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | superseded | [music-time-model.md](./music-time-model.md) |
-| DESIGN-rO8ZT7WxqPYGw0e0jZJx_A | Issue #426 設計 — mechanism の test 実在検査・GPUI lab binding・story matrix | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |

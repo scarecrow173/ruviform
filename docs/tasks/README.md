@@ -6,6 +6,7 @@ Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
@@ -20,6 +21,16 @@ Directory: `docs/tasks`
 | TASK-ll0hVC7GhO5tm1LEDBWZIe | Issue #389 VST3/L0 実外部 Editor attach タスク（adapter open_gui + PoC vst3 lane） | completed | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TASK-034TaJ4jQd92g4mWa81cxX | Issue #390 Driver Contract/Lab 実装 | todo | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | in_progress | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
+| TASK-Rd6GjUf3LxSo9WmEb4YhNi | Issue #421 — Meter/TimeAxis GPUI 描画と parity の実装タスク | in-progress | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
+| TASK-Ka4Yp9dWmR7sXq2LnV5TcE | Issue #423 WebView 写像・focus capability・GPUI 実窓検証（実装スライス） | in-progress | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
+| TASK-ovbF_E6zV8WeEi0OsUIw-w | Issue #426 GPUI lab binding・Story matrix・Golden 境界・Consumer 検査の作業記録 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
+| TASK-Hk8LsWq3RnVc6YbTd1PeMz | Issue #429 — Consumer 観測 seam の実装タスク | in-progress | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
+| TASK-Ze4Rp7MvBkWc2QnYt9LdXh | Issue #434 — Spectrogram ViewSpec kind の実装タスク | in-progress | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
+| TASK-Gy5KbQe2WnRt8LxVc3PmHo | Issue #435 — Label/Table ViewSpec kind の実装タスク | in-progress | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
+| TASK-Wn3PdK7RyLb5QvHs9ZcGe8 | Issue #436 — 描画 plan 公開の実装タスク | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
+| TASK-Xb2Qm5Ty7WzHf3Jn6RsPd1 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装タスク | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
+| TASK-Xk2Dv9LqNb7RtPm5WcFs8Hg | Issue #443 — Tile 列区間と count 契約の実装タスク | in-progress | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
+| TASK-Kd2Pw7YvNs4QbTm9RxLe6J | Issue #448 — 行選択と command 起動の実装タスク | in-progress | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -30,8 +41,8 @@ Directory: `docs/tasks`
 | TASK-LlEFlV8p3toRfliU2UWnVn | T3 GPUI Driver + 最小 Window fixture（ruviform-ui-gpui） | proposed | [t3-gpui-driver-minimal-window-issue-386.md](./t3-gpui-driver-minimal-window-issue-386.md) |
 | TASK-034T6RWWz8Xa6Lf2tK5yQ7 | T3 Semantic fixtures + manifest binding(ruviform-ui-test) | proposed | [t3-semantic-fixtures-issue-387.md](./t3-semantic-fixtures-issue-387.md) |
 | TASK-DktMpNJBhrTSp3LAfeKMjo | T4 mise lane・索引・GPUI 採用証跡（Issue #386） | proposed | [t4-gpui-lanes-and-evidence-issue-386.md](./t4-gpui-lanes-and-evidence-issue-386.md) |
-| TASK-1N5a7PAIOH2xfWl6PJFte5 | T5 Fake/GPUI 共通 Window/Dock lifecycle fixture（Issue #386 第 2 PR） | completed | [t5-shared-lifecycle-fixture-issue-386.md](./t5-shared-lifecycle-fixture-issue-386.md) |
 | TASK-034T6RWXn4Bv9Hg8sM2eR5 | T4 GPUI Controls/Viz renderer(ruviform-ui-gpui::render) | proposed | [t4-gpui-renderer-issue-387.md](./t4-gpui-renderer-issue-387.md) |
+| TASK-1N5a7PAIOH2xfWl6PJFte5 | T5 Fake/GPUI 共通 Window/Dock lifecycle fixture（Issue #386 第 2 PR） | completed | [t5-shared-lifecycle-fixture-issue-386.md](./t5-shared-lifecycle-fixture-issue-386.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -211,6 +222,7 @@ Directory: `docs/tasks`
 | TASK-T6nZSLe2NKHl8o4neneyTK | T4 ci-issue-tracker-reconcile.yml 新設 + README/dev-env 同期（Issue #368） | done | [issue-368-t4-reconcile-workflow.md](./issue-368-t4-reconcile-workflow.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
 | TASK-hupw1aLckqDaLNAlnDrTMF | Issue #411 — cargo_metadata 0.19 系への依存選定修復 + MSRV 検証入口 | done | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
+| TASK-mV2zXwAeR5yNuIoL7pSt4G | Issue #414 — projection→controlled display 正規経路の実装 | done | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
