@@ -22,10 +22,11 @@ use serde::{Deserialize, Serialize};
 use crate::behavior::{
     AvailabilityFlags, CommandBinding, CommandId, CommandIntent, CommandPhase, CommandReceipt,
     ControlId, ControlInput, DetachPolicy, InteractionControlOptions, InteractionDispatcher,
-    InteractionEvent, LogicalTarget, ReceiptStatus, StateProjection, ValueDescriptor, ValuePorts,
-    intent_from_gesture, validate_descriptor,
+    InteractionEvent, LogicalTarget, ReceiptStatus, Revision, StateProjection, ValueDescriptor,
+    ValuePorts, intent_from_gesture, validate_descriptor,
 };
 use crate::dock::ViewInstanceId;
+use crate::ipc::Event;
 
 /// Stable component identifier within a [`ViewSpec`] tree.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -941,7 +942,8 @@ enum ReconcileAction {
 ///
 /// Mint via [`AttachEpochAllocator`]; a literal `AttachEpoch::new`
 /// is legal for single-shot hosts when the caller owns uniqueness.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct AttachEpoch(u64);
 
 impl AttachEpoch {
@@ -1085,6 +1087,16 @@ impl ViewHost {
     #[must_use]
     pub fn view_id(&self) -> ViewInstanceId {
         self.view_id
+    }
+
+    /// The runtime-instance epoch this host was constructed with —
+    /// fixed for the host's lifetime and part of every minted
+    /// command-id namespace. Scenario/test adapters pin it at target
+    /// resolution and re-check it before each operation so a receipt
+    /// or observation can never be attributed to a recreated host.
+    #[must_use]
+    pub const fn attach_epoch(&self) -> AttachEpoch {
+        self.attach_epoch
     }
 
     /// The current generation. Callers must pass this back to
@@ -2101,6 +2113,51 @@ impl ViewHost {
         accepted
     }
 
+    /// Routes one wire [`Event`] into this host — the single decode
+    /// path shared by every driver adapter (Issue #464).
+    ///
+    /// `Result` replies decode through [`CommandReceipt::from_result`]
+    /// into [`Self::apply_receipt`]; `Notify` payloads decode as
+    /// `{control_id, revision, value, provenance?}` into
+    /// [`Self::apply_projection`]. `Job`/`Lifecycle`/`Error` events
+    /// have no view route and return `false`. The return value
+    /// reports whether the event reached a live binding — unrouted
+    /// events are dropped honestly, never fabricated into state.
+    pub fn deliver_event(&mut self, event: &Event) -> bool {
+        match event {
+            Event::Result { .. } => CommandReceipt::from_result(event)
+                .is_some_and(|receipt| self.apply_receipt(&receipt)),
+            Event::Notify { data, .. } => {
+                let Some(control_id) = data.get("control_id").and_then(serde_json::Value::as_str)
+                else {
+                    return false;
+                };
+                let Some(revision) = data
+                    .get("revision")
+                    .and_then(|v| serde_json::from_value::<Revision>(v.clone()).ok())
+                else {
+                    return false;
+                };
+                let provenance = data
+                    .get("provenance")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string);
+                self.apply_projection(
+                    control_id,
+                    &StateProjection {
+                        revision,
+                        value: data
+                            .get("value")
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null),
+                        provenance,
+                    },
+                )
+            }
+            _ => false,
+        }
+    }
+
     /// Drains the recorded event stream.
     pub fn drain_events(&mut self) -> Vec<ViewEvent> {
         self.events.drain(..).collect()
@@ -2344,7 +2401,7 @@ mod tests {
         CommandReceipt {
             command_id,
             status,
-            revision: Some(crate::behavior::Revision::Num(1)),
+            revision: Some(Revision::Num(1)),
             detail: None,
         }
     }
@@ -2546,7 +2603,7 @@ mod tests {
 
     fn projection(value: serde_json::Value, revision: u64) -> StateProjection<serde_json::Value> {
         StateProjection {
-            revision: crate::behavior::Revision::Num(revision),
+            revision: Revision::Num(revision),
             value,
             provenance: None,
         }

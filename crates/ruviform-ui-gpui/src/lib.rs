@@ -44,6 +44,9 @@ mod gpui_driver {
     /// Consumer observation seam (Issue #429) — `gpui-test` only.
     #[cfg(feature = "gpui-test")]
     pub mod observe;
+    /// Consumer-neutral scenario adapter (Issue #464) — `gpui-test` only.
+    #[cfg(feature = "gpui-test")]
+    pub mod scenario;
     /// The `NativeSurfaceSlot` port implementation for this backend
     /// (Issue #388) — slot ledger plus real OS surface containers.
     pub(super) mod surface;
@@ -1347,6 +1350,8 @@ pub use gpui_driver::observe::{
     ComponentDrawn, ComponentObservation, DrawnBar, DrawnCell, DrawnMark, DrawnPlan,
     DrawnWaveformChannel, GpuiObserver, ViewDrawn, ViewObservation,
 };
+#[cfg(feature = "gpui-test")]
+pub use gpui_driver::scenario::GpuiGuiTest;
 #[cfg(feature = "gpui")]
 pub use gpui_driver::surface::{GpuiSurfaceAdapter, SharedSurface};
 #[cfg(feature = "gpui")]

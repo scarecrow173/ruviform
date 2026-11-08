@@ -233,6 +233,7 @@ Directory: `docs/tasks`
 | TASK-Gy5KbQe2WnRt8LxVc3PmHo | Issue #435 — Label/Table ViewSpec kind の実装タスク | done | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
 | TASK-Xb2Qm5Ty7WzHf3Jn6RsPd1 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装タスク | done | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
 | TASK-Xk2Dv9LqNb7RtPm5WcFs8H | Issue #443 — Tile 列区間と count 契約の実装タスク | done | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
+| TASK-034UcbptcbQ9OYtF7EZwzG | Issue #464 — Consumer-neutral GUI Scenario Contract | done | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

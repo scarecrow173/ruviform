@@ -25,10 +25,7 @@ use gpui::{
     Point, Render, Rgba, ScrollDelta, ScrollWheelEvent, SharedString, Styled, Subscription, Window,
     WrappedLine, canvas, div, fill, point, px, rgb, size,
 };
-use ruviform_ui::behavior::{
-    CommandReceipt, ControlInput, GestureId, InputModifiers, InputSource, Revision,
-    StateProjection, ValueInput,
-};
+use ruviform_ui::behavior::{ControlInput, GestureId, InputModifiers, InputSource, ValueInput};
 use ruviform_ui::view::{
     ButtonSpec, CellValue, ComponentKey, ComponentSpec, ControlSpec, LabelSpec, MeterSpec,
     NativeSlotSpec, Orientation, SpectrogramSpec, TableSpec, TimeAxisSpec, ViewError, ViewEvent,
@@ -515,6 +512,13 @@ impl RvfView {
         &self.host
     }
 
+    /// Mutable host access for the `gpui-test` lifecycle seams
+    /// (Issue #464 detach/dock-transfer simulation).
+    #[cfg(feature = "gpui-test")]
+    pub(crate) fn host_mut(&mut self) -> &mut ViewHost {
+        &mut self.host
+    }
+
     /// Dispatch an input to `key` and flush emitted events.
     pub(crate) fn input(
         &mut self,
@@ -522,23 +526,60 @@ impl RvfView {
         input: ControlInput,
         cx: &mut Context<Self>,
     ) {
+        let _ = self.try_input(key, input, cx);
+    }
+
+    /// [`input`](Self::input) with the host's [`ViewError`] surfaced —
+    /// the scenario adapter's honest-error path (Issue #464). Pointer
+    /// handlers keep the dropping [`input`](Self::input).
+    pub(crate) fn try_input(
+        &mut self,
+        key: &ComponentKey,
+        input: ControlInput,
+        cx: &mut Context<Self>,
+    ) -> Result<(), ViewError> {
         let generation = self.host.generation();
-        let _ = self.host.dispatch_input(generation, key, input);
+        let result = self.host.dispatch_input(generation, key, input);
         self.flush_events(cx);
+        result.map(|_| ())
     }
 
     /// Selects `row` of the table `key` (a row press) and flushes its intent.
     pub(crate) fn select_row(&mut self, key: &ComponentKey, row: usize, cx: &mut Context<Self>) {
+        let _ = self.try_select_row(key, row, cx);
+    }
+
+    /// [`select_row`](Self::select_row) with the host's [`ViewError`]
+    /// surfaced (Issue #464).
+    pub(crate) fn try_select_row(
+        &mut self,
+        key: &ComponentKey,
+        row: usize,
+        cx: &mut Context<Self>,
+    ) -> Result<(), ViewError> {
         let generation = self.host.generation();
-        let _ = self.host.select_row(generation, key, row);
+        let result = self.host.select_row(generation, key, row);
         self.flush_events(cx);
+        result
     }
 
     /// Presses tab `index` of the tab strip `key` and flushes its intent.
     pub(crate) fn select_tab(&mut self, key: &ComponentKey, index: usize, cx: &mut Context<Self>) {
+        let _ = self.try_select_tab(key, index, cx);
+    }
+
+    /// [`select_tab`](Self::select_tab) with the host's [`ViewError`]
+    /// surfaced (Issue #464).
+    pub(crate) fn try_select_tab(
+        &mut self,
+        key: &ComponentKey,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> Result<(), ViewError> {
         let generation = self.host.generation();
-        let _ = self.host.select_tab(generation, key, index);
+        let result = self.host.select_tab(generation, key, index);
         self.flush_events(cx);
+        result
     }
 
     /// The focus handle of the tab strip `key`, created on first use.
@@ -551,9 +592,20 @@ impl RvfView {
 
     /// Presses the button `key` and flushes its intent.
     pub(crate) fn invoke(&mut self, key: &ComponentKey, cx: &mut Context<Self>) {
+        let _ = self.try_invoke(key, cx);
+    }
+
+    /// [`invoke`](Self::invoke) with the host's [`ViewError`] surfaced
+    /// (Issue #464).
+    pub(crate) fn try_invoke(
+        &mut self,
+        key: &ComponentKey,
+        cx: &mut Context<Self>,
+    ) -> Result<(), ViewError> {
         let generation = self.host.generation();
-        let _ = self.host.invoke(generation, key);
+        let result = self.host.invoke(generation, key);
         self.flush_events(cx);
+        result
     }
 
     /// Cancels every in-flight drag on window deactivation — the
@@ -578,59 +630,20 @@ impl RvfView {
     }
 
     /// Projects `post_event` inbox payloads into the host — the
-    /// driver→view half of the mount seam. `Result` replies decode
-    /// through [`CommandReceipt::from_result`], the shared receipt
-    /// contract; a job-spawning command's terminal receipt arrives as
-    /// a second `Result` under its id (Issue #456). `Notify`
-    /// payloads decode as `{control_id, revision, value,
-    /// provenance?}` → [`StateProjection`]. `Job`/`Lifecycle`/
-    /// `Error` events have no view route — driver-level concerns only.
+    /// driver→view half of the mount seam. Decode lives in
+    /// [`ViewHost::deliver_event`], the single wire→view path shared
+    /// with the fake scenario adapter (Issue #464).
     fn drain_inbox(&mut self) {
         let Some(inbox) = &self.inbox else { return };
         let events: Vec<Event> = inbox.borrow_mut().drain(..).collect();
-        for event in events {
-            match event {
-                Event::Result { .. } => {
-                    if let Some(receipt) = CommandReceipt::from_result(&event) {
-                        self.host.apply_receipt(&receipt);
-                    }
-                }
-                Event::Notify { data, .. } => {
-                    let Some(control_id) =
-                        data.get("control_id").and_then(serde_json::Value::as_str)
-                    else {
-                        continue;
-                    };
-                    let Some(revision) = data
-                        .get("revision")
-                        .and_then(|v| serde_json::from_value::<Revision>(v.clone()).ok())
-                    else {
-                        continue;
-                    };
-                    let provenance = data
-                        .get("provenance")
-                        .and_then(serde_json::Value::as_str)
-                        .map(str::to_string);
-                    self.host.apply_projection(
-                        control_id,
-                        &StateProjection {
-                            revision,
-                            value: data
-                                .get("value")
-                                .cloned()
-                                .unwrap_or(serde_json::Value::Null),
-                            provenance,
-                        },
-                    );
-                }
-                _ => {}
-            }
+        for event in &events {
+            self.host.deliver_event(event);
         }
     }
 
     /// Drain host events: intents → sink, others are recorded by the
     /// host. Repaint after semantic changes.
-    fn flush_events(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn flush_events(&mut self, cx: &mut Context<Self>) {
         for event in self.host.drain_events() {
             if let ViewEvent::Intent {
                 intent,
