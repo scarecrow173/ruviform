@@ -36,6 +36,16 @@ cargo_metadata = "0.19"
 #   一致では検査できない pub item 単位の構文解析のため。
 syn = { version = "2", features = ["full", "visit"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
+# - png: Issue #314 Pixel Golden の baseline/diff/証拠 artifact の
+#   PNG codec。MIT OR Apache-2.0・pure Rust・no unsafe・rust-version
+#   1.73（MSRV 1.89 適合）。lock tree 内に既存（image→gpui 経由で
+#   0.18.1 解決済み）のため推移依存の増加なし。`image` crate 全体
+#   （exr/gif/tiff/ravif 等）は PNG のみ必要な本用途に過剰。
+png = "0.18"
+# - base64: `proto::Screenshot.data_base64` の decode（Issue #314
+#   golden の `RgbaImage::from_screenshot`）。0.22.1 は既に lock tree
+#   内（usvg/zed-reqwest 経由）で rust-version が低く MSRV 安全側。
+base64 = "0.22"
 
 [dev-dependencies]
 # - ruviform-ui-theme: Issue #387 semantic fixtures resolve the two

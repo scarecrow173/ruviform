@@ -66,6 +66,7 @@ relations:
     - "docs/discovery/issue-390-driver-contract-lab-inventory.md"
   derived-by:
     - "docs/designs/issue-390-driver-contract-lab.md"
+    - "docs/specs/issue-314-golden-core.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-390-driver-boundary-lab.md"

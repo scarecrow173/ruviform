@@ -21,6 +21,12 @@
 //! - [`driver::TestDriver`]: the test-side client — spawns the app
 //!   (stdio default / loopback TCP opt-in), performs the handshake,
 //!   calls typed ops, and owns cleanup (no orphan process/window/port).
+//! - [`golden`]: Issue #314 Pixel Golden utility core — golden key,
+//!   environment metadata, RGBA8 decode/normalize, per-channel
+//!   tolerance + mask diff, baseline store with approval audit, and
+//!   evidence output. Pixel *capture* is out of scope (slice 3); a
+//!   missing screenshot is reported `unsupported`/`not_run`, never
+//!   `pass`.
 //!
 //! Deliberately out of scope (RF-GT-04 / #313): OS-level
 //! click/drag/focus injection and DOM manipulation — the honest
@@ -38,6 +44,7 @@ pub mod fake;
 pub mod fake_driver;
 pub mod fake_native_slot;
 pub mod fixture;
+pub mod golden;
 pub mod headless;
 pub mod io;
 pub mod journal;

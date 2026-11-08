@@ -6788,7 +6788,9 @@ dependencies = [
 name = "ruviform-ui-test"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "cargo_metadata",
+ "png 0.18.1",
  "proc-macro2",
  "ruviform-ui",
  "ruviform-ui-theme",
