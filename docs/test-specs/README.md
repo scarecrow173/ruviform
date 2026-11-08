@@ -114,6 +114,7 @@ Directory: `docs/test-specs`
 | TSPEC-WsywxRxhFuHBznTRP361Ie | Issue #453 — paint canvas bounds の検証契約（kind 別監査） | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
 | TSPEC-Vc4Dk1PhGj6WsQy9NrTm5A | Issue #456 — job 終端 receipt の検証契約 | approved | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |
 | TSPEC-034TXoqpr4Ij3WOJxlAjic | Issue #461 — canvas painter paint batch の検証契約 | approved | [issue-461-canvas-paint-layer.md](./issue-461-canvas-paint-layer.md) |
+| TSPEC-034U1MLtHiia8IiRjMgkW9 | Issue #461 残課題 — TimeAxis label canvas 描画の検証契約 | approved | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | TSPEC-034U0AQAAk59m51vJU5F4G | Issue #463 — Spectrogram cell intensity の paint 色検証契約 | approved | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
