@@ -1,10 +1,10 @@
 ---
 id: "TASK-Xb2Qm5Ty7WzHf3Jn6RsPd1"
 type: "task"
-status: "proposed"
+status: "done"
 title: "Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装タスク"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -82,3 +82,9 @@ relations:
 
 - 作業: `docs/plans/issue-442-observer-drawn-spectrogram-label-table.md` の検証マトリクス 1〜7 を実行し、結果を `docs/test-specs/issue-442-observer-drawn-spectrogram-label-table.md` に記録。review-protocol（独立レビュー）を実施し、指摘を反映。
 - 完了条件: 検証結果と NotRun / Unsupported の理由を PR 本文に記載。PR は `Refs #442`（Issue は close しない）。
+
+## 完了記録
+
+- T1〜T5 は PR #444（`3121f8e6`、merge 済み）で完了。検証マトリクス 1〜7 の結果は PR #444 本文に記録済み。
+- 2026-11-09 に `chore/verify-442-443-435`（= `origin/main` `4e81b055` + docs のみの差分）で検証 lane を再実行し全件 pass。結果は `docs/impl/ir/issue-442-443-435-verification-closeout.md` を参照。
+- consumer 側（audio-lens `crates/al-gui/tests/gpui_parity.rs`）の Spectrogram gap 列・NaN セル・Table 欠損セル・Label text の照合は audio-lens main に実装済みであることを確認した。

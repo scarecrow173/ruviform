@@ -1,10 +1,10 @@
 ---
 id: "SPEC-Lk3RvQ8mTxWn5HcZb2GdYu"
 type: "spec"
-status: "proposed"
+status: "implemented"
 title: "Issue #435 — Label/Table ViewSpec kind と Fake/GPUI parity"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -36,6 +36,8 @@ relations:
   superseded-by: []
   related:
     - "docs/designs/issue-421-meter-timeaxis-gpui-parity.md"
+  refines:
+    - "docs/specs/issue-387-component-view-specs.md"
 ---
 
 # Issue #435 — Label/Table ViewSpec kind と Fake/GPUI parity

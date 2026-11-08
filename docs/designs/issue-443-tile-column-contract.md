@@ -1,10 +1,10 @@
 ---
-id: "DESIGN-Vc3Nh8PtRq5LkXw2MdBy7Fj"
+id: "DESIGN-Vc3Nh8PtRq5LkXw2MdBy7F"
 type: "design"
-status: "proposed"
+status: "approved"
 title: "Issue #443 — Tile 列区間と count の上流契約の設計"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:

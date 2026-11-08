@@ -1,10 +1,10 @@
 ---
-id: "TEST-Ek8Nr3Gu6LvBx4Cq9TjMa2"
+id: "TSPEC-Ek8Nr3Gu6LvBx4Cq9TjMaZ"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "Issue #442 — 描画 plan への Spectrogram / Label / Table 追加のテスト仕様"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -32,6 +32,9 @@ relations:
   superseded-by: []
   related:
     - "docs/tasks/issue-442-observer-drawn-spectrogram-label-table.md"
+  verifies:
+    - "docs/specs/issue-442-observer-drawn-spectrogram-label-table.md"
+    - "docs/designs/issue-442-observer-drawn-spectrogram-label-table.md"
 ---
 
 # Issue #442 — 描画 plan への Spectrogram / Label / Table 追加のテスト仕様

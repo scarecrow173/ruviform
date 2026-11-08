@@ -1,10 +1,10 @@
 ---
-id: "TSPEC-Nd4Gq8VzMr2TkLb6XjPw1Ec"
+id: "TSPEC-Nd4Gq8VzMr2TkLb6XjPw1E"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "Issue #443 — Tile 列区間と count の検証契約"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -26,6 +26,9 @@ relations:
   superseded-by: []
   related:
     - "docs/test-specs/issue-434-spectrogram-kind.md"
+  verifies:
+    - "docs/specs/issue-443-tile-column-contract.md"
+    - "docs/designs/issue-443-tile-column-contract.md"
 ---
 
 # Issue #443 — 検証契約

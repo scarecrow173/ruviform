@@ -167,3 +167,4 @@ Directory: `docs/impl/ir`
 | IMPL-0Rj3kVwF2mN8qXbCeLpY4d | Issue 305 media-io 旧 StagedOutput 完全削除・StagedFile 移行 | completed | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | IMPL-_exo5tf9F8bfLQSN05ZaeA | Issue #426 実装記録 — GPUI lab binding・story matrix・mechanism 実在検査・Golden 境界 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
 | IMPL-034UaLZbuMa8o4uov8RY26 | Issue #436 実装記録 — GpuiObserver drawn の consumer 側検証（ruviform 内 consumer 型テスト） | completed | [issue-436-drawn-consumer-verification.md](./issue-436-drawn-consumer-verification.md) |
+| IMPL-034UcjJXdshRRIGjbzDcS9 | Issue #442/#443/#435 検証クローズアウト — 既実装 3 Issue の検証証拠と文書整合 | completed | [issue-442-443-435-verification-closeout.md](./issue-442-443-435-verification-closeout.md) |

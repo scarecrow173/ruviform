@@ -1,10 +1,10 @@
 ---
 id: "DESIGN-Pw6NsJc4VhTq9BrXy1MaFe"
 type: "design"
-status: "proposed"
+status: "approved"
 title: "Issue #435 — Label/Table ViewSpec kind と parity の設計"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:

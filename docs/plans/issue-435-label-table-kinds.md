@@ -1,10 +1,10 @@
 ---
 id: "PLAN-Dz8GuKm3QpYv7RtWb4LoCs"
 type: "plan"
-status: "in-progress"
+status: "completed"
 title: "Issue #435 — Label/Table ViewSpec kind の実装計画"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -28,6 +28,8 @@ relations:
   refines: []
   refined-by: []
   derives-from: []
+  verified-by:
+    - "docs/test-specs/issue-435-label-table-kinds.md"
 ---
 
 # Issue #435 — 実装計画

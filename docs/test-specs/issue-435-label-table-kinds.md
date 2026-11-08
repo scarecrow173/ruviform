@@ -1,10 +1,10 @@
 ---
 id: "TSPEC-Mv4HxFc7BqKe1NwRj9TsZa"
 type: "test-spec"
-status: "proposed"
+status: "approved"
 title: "Issue #435 — Label/Table の契約・Fake/GPUI parity の検証契約"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -28,6 +28,9 @@ relations:
   superseded-by: []
   related:
     - "docs/test-specs/issue-421-meter-timeaxis-gpui-parity.md"
+  verifies:
+    - "docs/specs/issue-435-label-table-kinds.md"
+    - "docs/designs/issue-435-label-table-kinds.md"
 ---
 
 # Issue #435 — 検証契約

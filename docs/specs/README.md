@@ -92,10 +92,7 @@ Directory: `docs/specs`
 | SPEC-Wb3KqT8nLf2RvXc6HmPd9Y | Issue #429 — Consumer 観測 seam・残 Fake/GPUI 検証の公開 | proposed | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
 | SPEC-Rk4Vw9TqLb2XcJ7NhPd5Ya | Issue #431 WebView 実機 e2e・GPUI 実窓 close veto/Dock 検証・legacy trait Phase 2 判断 | proposed | [issue-431-webview-gpui-real-verify.md](./issue-431-webview-gpui-real-verify.md) |
 | SPEC-Vn3Qa7Lk2RwXe9TdYc5MbHg | Issue #434 — Spectrogram ViewSpec kind（解決済み bounded payload） | proposed | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
-| SPEC-Lk3RvQ8mTxWn5HcZb2GdYu | Issue #435 — Label/Table ViewSpec kind と Fake/GPUI parity | proposed | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
 | SPEC-Qm4Wd7Lz1RbNc8Xk3TgHs5 | Issue #436 — GpuiObserver の描画 plan（drawn）公開 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
-| SPEC-Hs7Kd2Mv9QpXc4Nw1ZrTb6 | Issue #442 — GpuiObserver の描画 plan に Spectrogram / Label / Table を追加 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
-| SPEC-Qm7Lr2TxVb9KdWn4HcYe8Sa | Issue #443 — Tile から SpectrogramColumn への写し替え規則の上流契約 | proposed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | SPEC-Vd7Qk2LmRt9WxYc4NbHa3F | Issue #448 — 読み取り専用 Table の行選択と command 起動の ViewSpec 契約 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | SPEC-LOaygozld2Yp16xXhm1Yx5 | Issue #450 — Seek/Fader の canvas が実窓で 0 サイズになり描画されない問題の是正 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | SPEC-Kb7Tn3QwRx9LpVc2Hy5Ud8 | Issue #451 FU-1 — Tabs のキーボード切替 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
@@ -147,5 +144,8 @@ Directory: `docs/specs`
 | SPEC-034Jc9BJlI7ULEBWoIlMP2 | Issue #28 UI 技術検証 PoC（wry・描画バックエンド・フロントエンド FW・配布） | implemented | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | SPEC-0kIy1SFw7ffSK1AAi4BXHu | Issue #400 借用 sealed readback を独立 decoder へ bounded に接続する共通API | implemented | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | SPEC-034Tnjp8f4gexhi9BsQuq1 | Issue #409 Rooted capability の再 root 化と停止可能な bounded directory 列挙 | implemented | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
+| SPEC-Lk3RvQ8mTxWn5HcZb2GdYu | Issue #435 — Label/Table ViewSpec kind と Fake/GPUI parity | implemented | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
+| SPEC-Hs7Kd2Mv9QpXc4Nw1ZrTb6 | Issue #442 — GpuiObserver の描画 plan に Spectrogram / Label / Table を追加 | implemented | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
+| SPEC-Qm7Lr2TxVb9KdWn4HcYe8S | Issue #443 — Tile から SpectrogramColumn への写し替え規則の上流契約 | implemented | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | SPEC-034JceNZQvAawWwMH4ct91 | 時間型拡張（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針） | implemented | [time-type-extension-framerate-timecode-rounding.md](./time-type-extension-framerate-timecode-rounding.md) |
 | SPEC-034N3JBtBP4dPi8ob9HwDV | video-proc RT 検証レーンへの assert_no_alloc 適用（Issue #126） | implemented | [video-proc-rt-verification-lane.md](./video-proc-rt-verification-lane.md) |
