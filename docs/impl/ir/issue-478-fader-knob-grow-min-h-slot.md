@@ -92,7 +92,9 @@ bounds と一致し続ける（#450 契約の維持）。driver-neutral の
 - OS: Windows 11 Pro 10.0.26300（x64）・対話 session・CPU i9-9900K
 - toolchain: mise 管理 rustc 1.99.0・GPUI 0.2.2
 - revision: `be466ebe`（`origin/main` HEAD。実装は同一 worktree の
-  `feat/478-fader-knob-height-contract` 上の未コミット差分として実施）
+  `feat/478-fader-knob-height-contract` 上の未コミット差分として実施）。
+  最終検証は `origin/main`（`41b24fac`、PR #487/#488 取り込み）merge 後の
+  merge commit `754e30f8` で再実行した。
 - 実施日: 2026-11-09
 - gpui-test の `TestDisplay` は 1920×1080 logical px で、
   `TestAppContext::add_window_view` は maximize 状態の window を開く
@@ -187,6 +189,14 @@ bounds と一致し続ける（#450 契約の維持）。driver-neutral の
 | `mise run test-ui-driver-contract` | 0 | 7 tests pass |
 | `mise run test-ui-component-view` | 0 | 17 tests pass |
 | `mise run check-ui-driver-boundary` | 0 | dep-graph / signature / allowlist 全 pass |
+| `mise run check-ui-gpui` / `lint-ui-gpui` | 0 | `--features gpui --all-targets` check / clippy `-D warnings` clean（merge 後に追加実行） |
+
+上表は `origin/main` merge（`754e30f8`）後の再実行結果。merge 前の
+`be466ebe` 時点でも同一 lane を全て pass させている
+（`mise run test` のみ merge 前初回に無関係の flaky 失敗を 1 度観測、
+単独・全体の再実行で pass）。`test-ui-gpui` には merge で追加された
+`tests/golden_capture.rs`（#487）も含まれ、1 pass + 1 ignored
+（実 OS 窓 test は `#[ignore]`、desktop session 要）。
 
 補助証拠（canonical = mise ではない直接 cargo 実行）:
 `cargo build -p ruviform-ui-gpui --features gpui --example component_showcase`
