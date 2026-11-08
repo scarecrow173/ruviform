@@ -4,7 +4,7 @@ type: "test-spec"
 status: "proposed"
 title: "Issue #429 — Consumer 観測 seam の検証契約"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -69,6 +69,32 @@ relations:
 - Example: `gui-boundary-guard` の `dep-graph` / `signature` / `allowlist` が pass する。`GpuiObserver` と観測 DTO の公開 signature に `gpui::*` は現れない。
   - 検査: `mise run check-ui-driver-boundary`。
 
+## Feature: 長尺・bound 近傍 payload を seam 経由で観測できる
+
+### Rule: payload 上限ちょうどの描画 plan が欠落なく観測できる
+
+- Example: Waveform が `MAX_WAVEFORM_BINS`（16_384 = 8ch × 2_048 bins）で、frame が `u32::MAX` を超える長尺領域にあるとき、`drawn` の各 channel は宣言順の全 bin の frame range（`start..end`）を bit-exact に返す。
+  - 検査: `observes_waveform_at_bin_bound_with_long_frame_range`。
+- Example: Spectrogram が `MAX_SPECTROGRAM_CELLS`（65_536 = 512 列 × 128 行）で、viewport が列の一部だけを含むとき、viewport 外の列は描画されず、残り 256 列 × 128 行 = 32_768 cell が column-major 順で、f32 幾何・intensity を f64 へ正確に拡幅して返す。
+  - 検査: `observes_spectrogram_at_cell_bound_with_viewport_culling`。
+- Example: Meter が `MAX_METER_BINS`（8_192 = 16ch × 512 bins）で、viewport 外の bin が channel ごとに cull され、残り 251 bin × 16ch の bar が viewport 分数・clamp 済み peak/RMS を返す。
+  - 検査: `observes_meter_at_bin_bound_with_viewport_culling`。
+
+### Rule: gesture 中の authoritative projection は observed に記録され preview が display を駆動する
+
+- Example: knob の gesture 中に `Notify`（revision 1→2）を inbox 経由で届けると、`observed.revision` は新しい側を追い、`display` は preview 値・`committed` は据え置き・`phase` は `Preview` のままである。commit 後は最後に stage された projection が committed/display を上書きする。
+  - 検査: `observes_projection_during_gesture_through_seam`。
+
+### Rule: 契約の f64 値は観測経路で f32 に縮退しない
+
+- Example: `min=-60, max=0` の knob に `Plain(-33.333333333333336)` を `Set` すると `committed.plain`/`display.plain` が bit-exact（`to_bits` 一致）で、`normalized` は mapper と同じ f64 演算順の値になる。`Normalized` 入力でも `plain = min + n*(max-min)` が bit-exact で返る。
+  - 検査: `observes_committed_value_at_f64_precision`。
+
+### Rule: spec 差し替え後の描画 plan が seam に反映される
+
+- Example: `update_view` で waveform spec を差し替えると、mount 世代（generation guard）は維持されたまま `drawn` が新しい bin range を返す。
+  - 検査: `observes_updated_spec_reprojection_through_seam`。
+
 ## Feature: 通常ビルドの挙動は変わらない
 
 ### Rule: raw parent 捕捉は gpui-test 以外で従来どおり行われる
@@ -79,4 +105,6 @@ relations:
 ## 未検証（NotRun）
 
 - 実 OS window 上での観測（manual verification。gpui test platform の範囲外）。
-- Issue #429 の残 DoD（NumericInput/Transport・長尺/RT/GPU release・UI-DVR-03/07/08 GPUI・story 2×2）。PR 本文の対応表を参照。
+- 実 GPU release（platform 制約。#313 帰属）。
+- Issue #429 の残 DoD のうち他 Issue 帰属のもの: story 2×2 GPUI（#426）・real-os lane（#313）・headless-ts（#294）・pixel golden（#314）・共通 Scenario 契約（#464）。
+- `NumericInput` / `Transport` kind: 再評価の結果 composition で充足と判断し新 kind は未実装（task doc の再評価記録参照）。

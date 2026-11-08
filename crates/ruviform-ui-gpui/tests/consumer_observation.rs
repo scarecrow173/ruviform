@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use ruviform_ui::behavior::{CommandPhase, ControlInput, InputSource, ValueInput};
+use ruviform_ui::behavior::{CommandPhase, ControlInput, InputSource, Revision, ValueInput};
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{AttachEpoch, ComponentKey, ViewHost, ViewSpec};
 use ruviform_ui::{
@@ -625,4 +625,505 @@ fn observes_job_command_receipt_phases_through_seam() {
         job_command_phases("demo.panic", json!({})),
         [pending, ack, want["jobReceipt"]["rejected"].clone()]
     );
+}
+
+// ── Issue #429 remaining DoD ────────────────────────────────────────
+//
+// Bound-near payloads, projections landing mid-gesture, spec snapshot
+// replacement, and f64 precision — all observed through the public seam
+// only. Gap/NaN handling, bound rejection, cancel/stale/out-of-order,
+// and teardown are covered by the lanes enumerated in the task doc and
+// are not re-implemented here.
+
+/// Fraction of `viewport` at which `at` falls — mirrors the renderer's
+/// `viewport_fraction` (f64 → f32 → f64) so expected values compare
+/// bit-exact against the observed `f64`s.
+fn viewport_frac(at: u64, start: u64, end: u64) -> f64 {
+    let span = (end - start).max(1) as f64;
+    f64::from(((at as f64 - start as f64) / span) as f32)
+}
+
+/// Spectrogram cell intensity for `magnitude` inside `lo..hi` — mirrors
+/// `spectrogram_cell_plan`: f64 math, clamp, then f32 → f64 widening.
+fn cell_intensity(magnitude: f64, lo: f64, hi: f64) -> f64 {
+    f64::from(((magnitude - lo) / (hi - lo)).clamp(0.0, 1.0) as f32)
+}
+
+/// Top-down y span of `row` in a `rows`-high spectrogram — mirrors the
+/// plan's f32 arithmetic widened to f64.
+fn cell_y(row: usize, rows: usize) -> (f64, f64) {
+    let rows = rows.max(1) as f32;
+    (
+        f64::from(1.0 - (row + 1) as f32 / rows),
+        f64::from(1.0 - row as f32 / rows),
+    )
+}
+
+/// Peak of meter bin `i` on channel `c`: mostly in `[0, 1]`, with a
+/// deterministic over-range value (`> 1.0`) every 53 bins so the seam
+/// reports the renderer's clamp.
+fn meter_peak(channel: usize, bin: usize) -> f64 {
+    if (channel + bin) % 53 == 0 {
+        1.5
+    } else {
+        ((channel * 31 + bin * 7) % 17) as f64 / 16.0
+    }
+}
+
+/// `MAX_WAVEFORM_BINS` is 16_384: 8 channels × 2_048 bins sits exactly on
+/// the bound. Frame numbers beyond `u32::MAX` prove the u64 → f64 path
+/// keeps long-duration ranges bit-exact through the seam.
+#[test]
+fn observes_waveform_at_bin_bound_with_long_frame_range() {
+    const CHANNELS: usize = 8;
+    const BINS_PER_CHANNEL: usize = 2048;
+    const BIN_SPAN: u64 = 8;
+    let viewport_start = 4_999_984_000u64;
+    let viewport_end = viewport_start + BINS_PER_CHANNEL as u64 * BIN_SPAN;
+
+    let channel_bins = Value::Array(
+        (0..CHANNELS)
+            .map(|_| {
+                Value::Array(
+                    (0..BINS_PER_CHANNEL)
+                        .map(|i| {
+                            let start = viewport_start + i as u64 * BIN_SPAN;
+                            json!({
+                                "start": start,
+                                "end": start + BIN_SPAN,
+                                "min": -1.0,
+                                "max": 1.0,
+                                "rms": 0.5,
+                                "count": 100,
+                            })
+                        })
+                        .collect(),
+                )
+            })
+            .collect(),
+    );
+    let spec: ViewSpec = serde_json::from_value(json!({
+        "root": {
+            "type": "panel", "key": "root", "title": null,
+            "visual": { "error": null }, "a11y": {},
+            "children": [{
+                "type": "waveform", "key": "wave",
+                "sample_rate": 48000, "channels": CHANNELS,
+                "frames": viewport_end,
+                "viewport": { "start": viewport_start, "end": viewport_end },
+                "channel_bins": channel_bins,
+                "visual": { "error": null }, "a11y": {}
+            }]
+        }
+    }))
+    .expect("ViewSpec");
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, spec);
+
+    let view = observer.observe(window).expect("view observed");
+    assert!(
+        view.components
+            .iter()
+            .any(|c| c.key == key("wave") && c.snapshot.mounted)
+    );
+
+    let drawn = observer.drawn(window).expect("view drawn");
+    let [component] = drawn.components.as_slice() else {
+        panic!("one waveform component");
+    };
+    let DrawnPlan::Waveform { channels } = &component.plan else {
+        panic!("waveform plan");
+    };
+    assert_eq!(channels.len(), CHANNELS);
+    for (channel, drawn_channel) in channels.iter().enumerate() {
+        assert_eq!(drawn_channel.channel, channel);
+        assert_eq!(drawn_channel.bins.len(), BINS_PER_CHANNEL);
+        for (i, bin) in drawn_channel.bins.iter().enumerate() {
+            let start = viewport_start + i as u64 * BIN_SPAN;
+            assert_eq!(*bin, start..start + BIN_SPAN);
+        }
+    }
+}
+
+/// `MAX_SPECTROGRAM_CELLS` is 65_536: 512 columns × 128 rows sits exactly
+/// on the bound. The viewport keeps columns 128..=383 (256 columns), so
+/// 32_768 cells paint — column-major order, f32-exact geometry.
+#[test]
+fn observes_spectrogram_at_cell_bound_with_viewport_culling() {
+    const ROWS: usize = 128;
+    const COLUMNS: usize = 512;
+    const VIEWPORT: (u64, u64) = (128, 384);
+    const KEPT_COLUMNS: usize = 256;
+
+    // Deterministic magnitudes in `[-60, 0)` — repeating-decimal
+    // intensities exercise the f64 → f32 → f64 round-trip.
+    let magnitude =
+        |column: usize, row: usize| -> f64 { -60.0 + ((column * 31 + row * 17) % 61) as f64 };
+    let columns = Value::Array(
+        (0..COLUMNS)
+            .map(|i| {
+                json!({
+                    "start": i as u64,
+                    "end": i as u64 + 1,
+                    "count": 100,
+                    "magnitudes": (0..ROWS).map(|r| magnitude(i, r)).collect::<Vec<_>>(),
+                })
+            })
+            .collect(),
+    );
+    let spec: ViewSpec = serde_json::from_value(json!({
+        "root": {
+            "type": "panel", "key": "root", "title": null,
+            "visual": { "error": null }, "a11y": {},
+            "children": [{
+                "type": "spectrogram", "key": "spec",
+                "viewport": { "start": VIEWPORT.0, "end": VIEWPORT.1 },
+                "rows": ROWS,
+                "magnitude_range": { "start": -60.0, "end": 0.0 },
+                "columns": columns,
+                "visual": { "error": null }, "a11y": {}
+            }]
+        }
+    }))
+    .expect("ViewSpec");
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, spec);
+
+    let drawn = observer.drawn(window).expect("view drawn");
+    let DrawnPlan::Spectrogram { cells } = drawn_plan(&drawn, "spec") else {
+        panic!("spectrogram plan");
+    };
+    assert_eq!(
+        cells.len(),
+        KEPT_COLUMNS * ROWS,
+        "culled columns draw nothing"
+    );
+    for (kept, column) in (VIEWPORT.0 as usize..VIEWPORT.1 as usize).enumerate() {
+        for (row, cell) in cells[kept * ROWS..(kept + 1) * ROWS].iter().enumerate() {
+            let (y0, y1) = cell_y(row, ROWS);
+            assert_eq!(
+                cell.x0,
+                viewport_frac(column as u64, VIEWPORT.0, VIEWPORT.1).max(0.0)
+            );
+            assert_eq!(
+                cell.x1,
+                viewport_frac(column as u64 + 1, VIEWPORT.0, VIEWPORT.1).min(1.0)
+            );
+            assert_eq!(cell.y0, y0);
+            assert_eq!(cell.y1, y1);
+            assert_eq!(
+                cell.intensity,
+                cell_intensity(magnitude(column, row), -60.0, 0.0)
+            );
+        }
+    }
+}
+
+/// `MAX_METER_BINS` is 8_192: 16 channels × 512 bins sits exactly on the
+/// bound. Bins fully outside the viewport are culled per channel — bin
+/// `i` covers `[i*16, (i+1)*16)`, so bins 62..=312 (251 per channel)
+/// intersect viewport `1000..5000`.
+#[test]
+fn observes_meter_at_bin_bound_with_viewport_culling() {
+    const CHANNELS: usize = 16;
+    const BINS_PER_CHANNEL: usize = 512;
+    const BIN_SPAN: u64 = 16;
+    const VIEWPORT: (u64, u64) = (1000, 5000);
+    const KEPT_FIRST: usize = 62;
+    const KEPT_BINS: usize = 251;
+
+    let channel_levels = Value::Array(
+        (0..CHANNELS)
+            .map(|c| {
+                Value::Array(
+                    (0..BINS_PER_CHANNEL)
+                        .map(|i| {
+                            let start = i as u64 * BIN_SPAN;
+                            let peak = meter_peak(c, i);
+                            json!({
+                                "start": start,
+                                "end": start + BIN_SPAN,
+                                "peak": peak,
+                                "rms": peak * 0.5,
+                                "count": 1000,
+                            })
+                        })
+                        .collect(),
+                )
+            })
+            .collect(),
+    );
+    let spec: ViewSpec = serde_json::from_value(json!({
+        "root": {
+            "type": "panel", "key": "root", "title": null,
+            "visual": { "error": null }, "a11y": {},
+            "children": [{
+                "type": "meter", "key": "meter",
+                "channels": CHANNELS,
+                "channel_levels": channel_levels,
+                "viewport": { "start": VIEWPORT.0, "end": VIEWPORT.1 },
+                "visual": { "error": null }, "a11y": {}
+            }]
+        }
+    }))
+    .expect("ViewSpec");
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, spec);
+
+    let drawn = observer.drawn(window).expect("view drawn");
+    let DrawnPlan::Meter { bars } = drawn_plan(&drawn, "meter") else {
+        panic!("meter plan");
+    };
+    assert_eq!(bars.len(), CHANNELS * KEPT_BINS);
+    for (channel, channel_bars) in bars.chunks(KEPT_BINS).enumerate() {
+        assert_eq!(channel_bars.len(), KEPT_BINS);
+        for (j, bar) in channel_bars.iter().enumerate() {
+            let i = KEPT_FIRST + j;
+            let start = i as u64 * BIN_SPAN;
+            let peak = meter_peak(channel, i);
+            assert_eq!(bar.channel, channel);
+            assert_eq!(
+                bar.x0,
+                viewport_frac(start, VIEWPORT.0, VIEWPORT.1).max(0.0)
+            );
+            assert_eq!(
+                bar.x1,
+                viewport_frac(start + BIN_SPAN, VIEWPORT.0, VIEWPORT.1).min(1.0)
+            );
+            assert_eq!(bar.peak, f64::from(peak.clamp(0.0, 1.0) as f32));
+            assert_eq!(
+                bar.rms,
+                Some(f64::from((peak * 0.5).clamp(0.0, 1.0) as f32))
+            );
+        }
+    }
+}
+
+/// A `Notify` projection that lands mid-gesture is recorded as
+/// `observed` and staged, while the local preview keeps driving
+/// `display`; the staged truth becomes `committed` when the gesture
+/// commits — all visible through the seam.
+#[test]
+fn observes_projection_during_gesture_through_seam() {
+    let fx = fixture("new-kinds.json");
+    let mut observer = GpuiObserver::new();
+    let window = mount_parity(&mut observer, &fx);
+
+    observer
+        .dispatch_input(window, &key("knob"), begin("g1"))
+        .expect("begin");
+    observer
+        .dispatch_input(
+            window,
+            &key("knob"),
+            ControlInput::Preview {
+                gesture_id: "g1".to_string(),
+                value: ValueInput::Normalized(0.8),
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("preview");
+
+    // Two authoritative pushes land while the gesture is active; the
+    // newer revision wins `observed`, the preview keeps `display`.
+    for (seq, revision, normalized) in [(1u64, 1u64, 0.3), (2, 2, 0.9)] {
+        observer.driver_mut().post_event(
+            window,
+            &Event::Notify {
+                seq,
+                data: json!({
+                    "control_id": "knob",
+                    "revision": revision,
+                    "value": { "normalized": normalized },
+                }),
+            },
+        );
+        observer.settle(|_, _| {});
+        let view = observer.observe(window).expect("view observed");
+        let knob = view
+            .components
+            .iter()
+            .find(|c| c.key == key("knob"))
+            .expect("knob observed");
+        let snap = &knob.snapshot;
+        assert_eq!(snap.phase, CommandPhase::Preview);
+        assert_eq!(snap.display.map(|v| v.normalized), Some(0.8));
+        assert_eq!(snap.committed.map(|v| v.normalized), Some(0.5));
+        assert_eq!(
+            snap.observed.as_ref().map(|p| p.revision.clone()),
+            Some(Revision::Num(revision))
+        );
+    }
+
+    observer
+        .dispatch_input(
+            window,
+            &key("knob"),
+            ControlInput::Commit {
+                gesture_id: "g1".to_string(),
+                value: None,
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("commit");
+    observer.settle(|_, _| {});
+    let view = observer.observe(window).expect("view observed");
+    let snap = &view
+        .components
+        .iter()
+        .find(|c| c.key == key("knob"))
+        .expect("knob observed")
+        .snapshot;
+    // The last staged projection is the authoritative truth — it
+    // overwrites even the just-committed preview value.
+    assert_eq!(snap.display.map(|v| v.normalized), Some(0.9));
+    assert_eq!(snap.committed.map(|v| v.normalized), Some(0.9));
+}
+
+/// Contract f64 values survive the whole observe path: `committed` and
+/// `display` are never narrowed through f32. `Plain` input round-trips
+/// bit-exact; `Normalized` input resolves through the same f64 mapper
+/// ops the renderer-independent contract defines.
+#[test]
+fn observes_committed_value_at_f64_precision() {
+    let spec: ViewSpec = serde_json::from_value(json!({
+        "root": {
+            "type": "panel", "key": "root", "title": null,
+            "visual": { "error": null }, "a11y": {},
+            "children": [{
+                "type": "knob", "key": "fine",
+                "control_id": "fine", "target": null,
+                "descriptor": {
+                    "min": -60.0, "max": 0.0, "default_value": -30.0,
+                    "step": null, "step_domain": null,
+                    "fine_step": null, "fine_step_domain": null,
+                    "mapping": null, "out_of_range": null,
+                    "unit": null, "read_only": false,
+                    "disabled": false, "constant": false
+                },
+                "orientation": "vertical", "detach_policy": "cancel",
+                "unsupported": false,
+                "visual": { "error": null },
+                "a11y": { "role": "slider", "label": "fine" }
+            }]
+        }
+    }))
+    .expect("ViewSpec");
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, spec);
+    let snap = |observer: &GpuiObserver| {
+        observer
+            .observe(window)
+            .expect("view observed")
+            .components
+            .iter()
+            .find(|c| c.key == key("fine"))
+            .expect("fine observed")
+            .snapshot
+            .clone()
+    };
+
+    let plain = -33.333333333333336;
+    observer
+        .dispatch_input(
+            window,
+            &key("fine"),
+            ControlInput::Set {
+                value: ValueInput::Plain(plain),
+                gesture_id: None,
+                source: Some(InputSource::from(InputSource::POINTER)),
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("set plain");
+    observer.settle(|_, _| {});
+    let s = snap(&observer);
+    assert_eq!(
+        s.committed.map(|v| v.plain.to_bits()),
+        Some(plain.to_bits()),
+        "plain round-trips bit-exact"
+    );
+    assert_eq!(
+        s.committed.map(|v| v.normalized),
+        Some((plain + 60.0) / 60.0)
+    );
+    assert_eq!(s.display.map(|v| v.plain.to_bits()), Some(plain.to_bits()));
+
+    let n = 0.7543210987654321;
+    observer
+        .dispatch_input(
+            window,
+            &key("fine"),
+            ControlInput::Set {
+                value: ValueInput::Normalized(n),
+                gesture_id: None,
+                source: Some(InputSource::from(InputSource::POINTER)),
+                modifiers: None,
+                seq: None,
+            },
+        )
+        .expect("set normalized");
+    observer.settle(|_, _| {});
+    let s = snap(&observer);
+    // `min + n * (max - min)` in f64 — the same op order as the mapper.
+    let want_plain = -60.0 + n * 60.0;
+    assert_eq!(
+        s.committed.map(|v| v.plain.to_bits()),
+        Some(want_plain.to_bits())
+    );
+    assert_eq!(s.committed.map(|v| v.normalized), Some(n));
+    assert_eq!(s.display.map(|v| v.normalized), Some(n));
+}
+
+/// `update_view` replaces the mounted spec; the seam then observes the
+/// advanced generation and the re-projected drawing plan — the
+/// snapshot-push path a consumer drives at RT cadence.
+#[test]
+fn observes_updated_spec_reprojection_through_seam() {
+    let waveform = |end: u64| -> ViewSpec {
+        serde_json::from_value(json!({
+            "root": {
+                "type": "panel", "key": "root", "title": null,
+                "visual": { "error": null }, "a11y": {},
+                "children": [{
+                    "type": "waveform", "key": "wave",
+                    "sample_rate": 48000, "channels": 1, "frames": end,
+                    "viewport": { "start": 0, "end": end },
+                    "channel_bins": [[{
+                        "start": 0, "end": end,
+                        "min": -1.0, "max": 1.0, "rms": 0.5, "count": 100
+                    }]],
+                    "visual": { "error": null }, "a11y": {}
+                }]
+            }
+        }))
+        .expect("ViewSpec")
+    };
+    let bins_of = |observer: &GpuiObserver, window: WindowId| {
+        let drawn = observer.drawn(window).expect("view drawn");
+        let DrawnPlan::Waveform { channels } = drawn_plan(&drawn, "wave") else {
+            panic!("waveform plan");
+        };
+        channels[0].bins.clone()
+    };
+
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, waveform(100));
+    let before = observer.observe(window).expect("view observed");
+    assert_eq!(bins_of(&observer, window), vec![0..100]);
+
+    observer
+        .driver()
+        .update_view(window, waveform(200))
+        .expect("update_view");
+    observer.settle(|_, _| {});
+
+    let after = observer.observe(window).expect("view observed");
+    // Reconcile preserves the mount: the generation guard is stable
+    // across spec updates (it advances on mount/detach only).
+    assert_eq!(after.generation, before.generation);
+    assert_eq!(bins_of(&observer, window), vec![0..200]);
 }
