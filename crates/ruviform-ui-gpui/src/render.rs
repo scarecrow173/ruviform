@@ -1128,8 +1128,8 @@ impl RvfView {
     }
 
     /// Intensity cells per time column and frequency row. Gap cells
-    /// draw nothing; intensity is drawn as alpha of the viz colour
-    /// over the surface.
+    /// draw nothing; intensity is composited into an opaque cell
+    /// colour (see [`spectrogram_cell_color`]).
     fn spectrogram_element(&self, spec: &SpectrogramSpec) -> impl IntoElement {
         let palette = self.palette.clone();
         let cells = spectrogram_cell_plan(spec);
@@ -1147,7 +1147,11 @@ impl RvfView {
                         let h = bounds.size.height * (cell.y1 - cell.y0);
                         window.paint_quad(fill(
                             Bounds::new(point(x0, y0), size(w.max(px(1.0)), h.max(px(1.0)))),
-                            palette.viz_waveform.opacity(cell.intensity),
+                            spectrogram_cell_color(
+                                palette.viz_waveform,
+                                palette.surface_bg,
+                                cell.intensity,
+                            ),
                         ));
                     }
                 });
@@ -1552,6 +1556,20 @@ fn spectrogram_cell_plan(spec: &SpectrogramSpec) -> Vec<SpectrogramCellPlan> {
         }
     }
     cells
+}
+
+/// Paint colour for one spectrogram cell (Issue #463): `viz` at
+/// `intensity` alpha composited source-over onto `surface`, returned
+/// as an opaque colour.
+///
+/// Column frame ranges may legally overlap — `ruviform-viz`
+/// `Tile::columns` shares frames when `cols > frames` — so translucent
+/// cell quads would blend `1-(1-a)^n` toward saturation and flatten
+/// every intensity to the same near-opaque colour. Pre-compositing
+/// makes each cell quad opaque, so overlapping cells resolve by paint
+/// order (later columns/rows win) instead of accumulating alpha.
+fn spectrogram_cell_color(viz: Hsla, surface: Hsla, intensity: f32) -> Rgba {
+    Rgba::from(surface).blend(Rgba::from(viz.opacity(intensity)))
 }
 
 /// A Waveform bin that paints. A gap bin (`count == 0` or a non-finite
@@ -3878,6 +3896,118 @@ mod tests {
                 .is_some_and(|p| p.borrow().applied.contains_key(&slot))
         });
         assert!(!retained, "ledger entry dropped after hidden+clear");
+    }
+
+    /// Issue #463 regression gate: every spectrogram cell must paint
+    /// as an opaque composite of `viz_waveform.opacity(intensity)`
+    /// over `surface_bg`. Translucent cells blend `1-(1-a)^n` toward
+    /// saturation wherever column frame ranges legally overlap
+    /// (`ruviform-viz` `Tile::columns` shares frames when
+    /// `cols > frames`), which produced the AL#179 all-blue canvas.
+    /// Exercises the same `spectrogram_cell_plan` →
+    /// `spectrogram_cell_color` path `spectrogram_element` paints.
+    #[test]
+    fn spectrogram_cell_color_is_opaque_intensity_composite() {
+        /// Source-over of `src` onto an opaque `dst`, written out
+        /// independently of `Rgba::blend` so the gate pins the
+        /// contract rather than the helper's implementation.
+        fn over(dst: Rgba, src: Rgba) -> Rgba {
+            Rgba {
+                r: src.r * src.a + dst.r * (1.0 - src.a),
+                g: src.g * src.a + dst.g * (1.0 - src.a),
+                b: src.b * src.a + dst.b * (1.0 - src.a),
+                a: 1.0,
+            }
+        }
+        fn assert_color(actual: Rgba, expected: Rgba, ctx: &str) {
+            for (name, got, want) in [
+                ("r", actual.r, expected.r),
+                ("g", actual.g, expected.g),
+                ("b", actual.b, expected.b),
+                ("a", actual.a, expected.a),
+            ] {
+                assert!(
+                    (got - want).abs() < 1e-5,
+                    "{ctx}: {name} {got} != expected {want}"
+                );
+            }
+        }
+
+        let palette = ViewPalette::fallback();
+        let (viz, surface) = (palette.viz_waveform, palette.surface_bg);
+        let surface_rgb = Rgba::from(surface);
+        let viz_rgb = Rgba::from(viz);
+
+        // Endpoints: intensity 0 reveals the surface, intensity 1 the
+        // full viz colour; both paint opaque.
+        assert_color(
+            spectrogram_cell_color(viz, surface, 0.0),
+            over(surface_rgb, Rgba { a: 0.0, ..viz_rgb }),
+            "intensity 0",
+        );
+        assert_color(
+            spectrogram_cell_color(viz, surface, 1.0),
+            over(surface_rgb, Rgba { a: 1.0, ..viz_rgb }),
+            "intensity 1",
+        );
+
+        // A gradient stays visible: consecutive intensities produce
+        // distinct opaque colours, each matching source-over.
+        let levels = [0.0_f32, 0.25, 0.5, 0.75, 1.0];
+        let gradient = levels.map(|i| spectrogram_cell_color(viz, surface, i));
+        for pair in gradient.windows(2) {
+            assert_ne!(pair[0], pair[1], "intensity gradient must stay visible");
+            assert_eq!(pair[1].a, 1.0);
+        }
+        for (&intensity, &color) in levels.iter().zip(gradient.iter()) {
+            let src = Rgba::from(viz.opacity(intensity));
+            assert_color(color, over(surface_rgb, src), "gradient step");
+        }
+
+        // Contract-legal overlap: two columns covering the same frame
+        // range paint identical x rects. Each cell must still emit its
+        // own opaque composite so the later column wins by paint
+        // order instead of alpha accumulating toward saturation.
+        let spec = SpectrogramSpec {
+            key: ComponentKey("spectrogram".to_string()),
+            viewport: 0..2,
+            rows: 2,
+            magnitude_range: 0.0..1.0,
+            columns: vec![
+                SpectrogramColumn {
+                    start: 0,
+                    end: 2,
+                    count: 2,
+                    magnitudes: vec![1.0, 0.0],
+                },
+                SpectrogramColumn {
+                    start: 0,
+                    end: 2,
+                    count: 2,
+                    magnitudes: vec![0.0, 1.0],
+                },
+            ],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        };
+        let cells = spectrogram_cell_plan(&spec);
+        assert_eq!(cells.len(), 4, "2 columns x 2 rows");
+        assert!(
+            cells
+                .iter()
+                .all(|c| c.x0 == cells[0].x0 && c.x1 == cells[0].x1),
+            "both columns must share the same x range"
+        );
+        for cell in &cells {
+            let actual = spectrogram_cell_color(viz, surface, cell.intensity);
+            let src = Rgba::from(viz.opacity(cell.intensity));
+            assert_color(actual, over(surface_rgb, src), "overlapped cell");
+        }
+        // Swapped intensities under full overlap still produce
+        // distinct paint colours — intensity survives into output.
+        let first = spectrogram_cell_color(viz, surface, cells[0].intensity);
+        let third = spectrogram_cell_color(viz, surface, cells[2].intensity);
+        assert_ne!(first, third, "overlapping cells must differ by intensity");
     }
 
     /// Issue #461 regression gate: spec-proportional canvas painters
