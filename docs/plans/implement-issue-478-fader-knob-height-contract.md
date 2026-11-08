@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034UexVzkirHD8NES7sXZQ"
 type: "plan"
-status: "in-progress"
+status: "completed"
 title: "Issue #478 Fader/Knob 縦寸法契約 — 設計判断と実装引き継ぎ計画"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -110,15 +110,16 @@ Issue #478 の受入条件のうち「修正 + 回帰テスト」は後続 dispa
   push して PR を作る（PR #485。Issue #478 の受入条件 A1–A3 の
   記録先）。
 
-後続実装 dispatch（未着手・別 dispatch で実施）:
+後続実装 dispatch（本 dispatch で完了・実装記録
+`docs/impl/ir/issue-478-fader-knob-grow-min-h-slot.md`）:
 
-- [ ] I1: `element_for` の `Fader | Knob` 分岐を `flex_grow` +
+- [x] I1: `element_for` の `Fader | Knob` 分岐を `flex_grow` +
   `min_h(px(120))` の slot に改め、`control_element` 非 Seek 経路が
   slot を `size_full` で満たす形にする（`min_h` 値は viz_slot と
-  一本化することを推奨）。
-- [ ] I2: test-spec の Rule/Example に対応する gpui-test を追加し、
+  一本化することを推奨）→ `grow_slot` helper に集約して実現。
+- [x] I2: test-spec の Rule/Example に対応する gpui-test を追加し、
   修正前に赤・修正後に緑を確認する。
-- [ ] I3: `mise run test-ui-gpui` / `test-ui-parity` /
+- [x] I3: `mise run test-ui-gpui` / `test-ui-parity` /
   `test-ui-consumer-observation` / `test-ui-driver-contract` /
   `test-ui-component-view` / `check-ui-driver-boundary` と
   `component_showcase` 実窓確認を行う。
@@ -145,15 +146,18 @@ Issue #478 の受入条件のうち「修正 + 回帰テスト」は後続 dispa
 
 - [x] （本 dispatch）`mise run fmt-check` / `mise run check` /
   `mise run test-ui-gpui` が docs のみの変更で pass（非破壊確認）。
-- [ ] （後続実装 dispatch）test-spec の各 Rule に対応する gpui-test
+- [x] （後続実装 dispatch）test-spec の各 Rule に対応する gpui-test
   が赤→緑で確認される。
-- [ ] （後続実装 dispatch）既存 UI lane が成功条件を弱めずに通過する。
+- [x] （後続実装 dispatch）既存 UI lane が成功条件を弱めずに通過する
+  （`fmt-check` / `check` / `lint` / `test` / 全 UI lane /
+  `check-ui-driver-boundary` pass。`component_showcase` 実窓確認済み）。
 
 ## Open Questions / Gaps
 
 - `min_h` の具体値（120 px で viz_slot と一本化するか、control 用に
   別値を置くか）は実装 dispatch で確定する。ADR は「viz slot と同じ床」
-  を契約とし、一本化を推奨する。
+  を契約とし、一本化を推奨する。→ 解決済み: `grow_slot` helper で
+  `min_h(px(120.0))` に一本化（実装記録参照）。
 - Tabs body の `size_full`・orientation ベース sizing・Panel の
   overflow/scroll は本 Issue の範囲外（design の Deferred Design
   Concerns に記録）。
