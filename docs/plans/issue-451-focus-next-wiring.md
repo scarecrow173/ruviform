@@ -72,10 +72,10 @@ relations:
 
 ## Implementation Sequence
 
-- [ ] S1: `Inner` フラグと `wire_focus_navigation`（`observe_keystrokes` → `focus_next`/`focus_prev`、Shift のみ → prev、その他修飾は無視）を `lib.rs` に実装。
-- [ ] S2: `RvfView::focused_tab_key` と `GpuiObserver::press_key` / `focused_tab` seam を追加。
-- [ ] S3: `consumer_observation.rs` にフォーカス巡回テスト（無フォーカス→先頭、Tab→次、循環、Shift-Tab→逆方向、Ctrl+Tab→不変）を追加。
-- [ ] S4: `fmt` → `lint-ui-gpui` → `test-ui-gpui` → `test-ui` → `check` → `fmt-check` を実行。
+- [x] S1: `Inner` フラグと `wire_focus_navigation`（`observe_keystrokes` → `focus_next`/`focus_prev`、Shift のみ → prev、その他修飾は無視）を `lib.rs` に実装。
+- [x] S2: `RvfView::focused_tab_key` と `GpuiObserver::press_key` / `focused_tab` seam を追加。
+- [x] S3: `consumer_observation.rs` にフォーカス巡回テスト（無フォーカス→先頭、Tab→次、循環、Shift-Tab→逆方向、Ctrl+Tab→不変）を追加。
+- [x] S4: `fmt` → `lint-ui-gpui` → `test-ui-gpui` → `test-ui` → `check` → `fmt-check` を実行。
 - [ ] S5: main 取り込み、docs 索引再生成、review-protocol レビュー、PR 作成。
 
 ## Dependencies and Risks
@@ -92,11 +92,11 @@ relations:
 
 ## Verification
 
-- [ ] `mise run test-ui-gpui` — 新規フォーカス巡回テストを含め pass。
-- [ ] `mise run test-ui` — 共有 fixture / parity が無回帰。
-- [ ] `mise run check` / `mise run lint` / `mise run fmt-check` — workspace 健全性。
-- [ ] `mise run check-ui-driver-boundary`（存在すれば）— 契約層に gpui 型を出さない。
-- [ ] 実窓手動証拠（F3）— NotRun 可。理由を PR に明記。
+- [x] `mise run test-ui-gpui` — 新規フォーカス巡回テストを含め pass。
+- [x] `mise run test-ui` — 共有 fixture / parity が無回帰。
+- [x] `mise run check` / `mise run lint` / `mise run fmt-check` — workspace 健全性。
+- [x] `mise run check-ui-driver-boundary`（存在すれば）— 契約層に gpui 型を出さない。
+- [ ] 実窓手動証拠（F3）— NotRun（実 OS 入力経路の自動化は #313 の責務。PR に理由を明記）
 
 ## Open Questions / Gaps
 

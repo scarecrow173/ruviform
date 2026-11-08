@@ -1,7 +1,7 @@
 ---
 id: "TASK-034Ue8ThHNXd5Ah4vY5uvG"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の実装タスク"
 created: "2026-11-08"
 updated: "2026-11-08"
@@ -73,14 +73,14 @@ relations:
 
 ## Done When
 
-- [ ] Tab が `focus_next`、Shift-Tab が `focus_prev` を呼ぶ配線が `ruviform-ui-gpui` 内にある。
-- [ ] headless テストでフォーカスが次 / 前の tab stop へ移り、循環と修飾キー除外が確認できる。
-- [ ] `mise run test-ui-gpui`・`test-ui`・`check`・`lint`・`fmt-check` が pass する。
+- [x] Tab が `focus_next`、Shift-Tab が `focus_prev` を呼ぶ配線が `ruviform-ui-gpui` 内にある。
+- [x] headless テストでフォーカスが次 / 前の tab stop へ移り、循環と修飾キー除外が確認できる。
+- [x] `mise run test-ui-gpui`・`test-ui`・`check`・`lint`・`fmt-check` が pass する。
 
 ## Verification
 
-- [ ] `mise run test-ui-gpui`
-- [ ] `mise run test-ui`
-- [ ] `mise run check`
-- [ ] `mise run lint`
-- [ ] `mise run fmt-check`
+- [x] `mise run test-ui-gpui`
+- [x] `mise run test-ui`
+- [x] `mise run check`
+- [x] `mise run lint`
+- [x] `mise run fmt-check`
