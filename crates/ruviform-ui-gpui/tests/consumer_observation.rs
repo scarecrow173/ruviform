@@ -1127,3 +1127,64 @@ fn observes_updated_spec_reprojection_through_seam() {
     assert_eq!(after.generation, before.generation);
     assert_eq!(bins_of(&observer, window), vec![0..200]);
 }
+
+/// Issue #451 FU-1b: Tab / Shift-Tab traverse the window's tab stops
+/// through the driver's app-level keystroke observer — forward,
+/// backward with wrap-around, no movement from other modifiers, and
+/// reaching the first stop from no focus at all.
+#[test]
+fn tab_and_shift_tab_traverse_window_tab_stops() {
+    let tabs = |key: &str, target: &str| {
+        json!({
+            "type": "tabs", "key": key, "active": 0,
+            "tabs": [
+                { "key": format!("{key}.one"), "title": "One",
+                  "child": { "type": "label", "key": format!("{key}.one.body"), "text": "one",
+                             "visual": { "error": null }, "a11y": {} } },
+                { "key": format!("{key}.two"), "title": "Two",
+                  "child": { "type": "label", "key": format!("{key}.two.body"), "text": "two",
+                             "visual": { "error": null }, "a11y": {} } }
+            ],
+            "selection": { "target": target },
+            "visual": { "error": null }, "a11y": {}
+        })
+    };
+    let spec: ViewSpec = serde_json::from_value(json!({
+        "root": {
+            "type": "panel", "key": "root", "title": null,
+            "visual": { "error": null }, "a11y": {},
+            "children": [tabs("tabs_a", "a.select"), tabs("tabs_b", "b.select")]
+        }
+    }))
+    .expect("ViewSpec");
+    let mut observer = GpuiObserver::new();
+    let window = mount_view(&mut observer, spec);
+
+    // No focus: Tab reaches the first tab stop.
+    assert_eq!(observer.focused_tab(window), None);
+    observer.press_key(window, "tab").expect("press tab");
+    assert_eq!(observer.focused_tab(window), Some(key("tabs_a")));
+    // Tab moves to the next strip, then wraps to the first.
+    observer.press_key(window, "tab").expect("press tab");
+    assert_eq!(observer.focused_tab(window), Some(key("tabs_b")));
+    observer.press_key(window, "tab").expect("press tab");
+    assert_eq!(observer.focused_tab(window), Some(key("tabs_a")));
+    // Shift-Tab walks backwards and wraps to the last stop.
+    observer
+        .press_key(window, "shift-tab")
+        .expect("press shift-tab");
+    assert_eq!(observer.focused_tab(window), Some(key("tabs_b")));
+    // Other modifiers do not traverse.
+    observer
+        .press_key(window, "ctrl-tab")
+        .expect("press ctrl-tab");
+    assert_eq!(observer.focused_tab(window), Some(key("tabs_b")));
+    observer
+        .press_key(window, "alt-tab")
+        .expect("press alt-tab");
+    assert_eq!(observer.focused_tab(window), Some(key("tabs_b")));
+
+    // Focus traversal is not selection: no command intent is minted.
+    observer.settle(|_, _| {});
+    assert!(command_kinds(&observer).is_empty());
+}

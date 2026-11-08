@@ -400,6 +400,43 @@ impl GpuiObserver {
             .map_err(|e| UiError::host(e.to_string()))
     }
 
+    /// Presses `keystroke` (a GPUI key name such as `"tab"`,
+    /// `"shift-tab"`, or `"ctrl-tab"`) on `window` through GPUI's key
+    /// dispatch without focusing anything first — the driver's
+    /// Tab/Shift-Tab focus traversal is exercised as a real key event
+    /// would reach it (Issue #451 FU-1b). Unlike
+    /// [`press_tab_key`](Self::press_tab_key) no tab strip is focused
+    /// beforehand.
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` has no GPUI window or
+    /// `keystroke` does not parse.
+    pub fn press_key(&mut self, window: WindowId, keystroke: &str) -> Result<(), UiError> {
+        let handle = self
+            .driver
+            .window_of(window)
+            .ok_or_else(|| UiError::host(format!("no window {window}")))?;
+        let keystroke = Keystroke::parse(keystroke).map_err(|e| UiError::host(e.to_string()))?;
+        self.cx
+            .update_window(handle, |_, win, app| {
+                win.dispatch_keystroke(keystroke, app);
+            })
+            .map_err(|e| UiError::host(e.to_string()))
+    }
+
+    /// The [`ComponentKey`] of the tab strip whose header holds
+    /// keyboard focus in `window`; `None` when no strip is focused or
+    /// `window` hosts no view (Issue #451 FU-1b).
+    #[must_use]
+    pub fn focused_tab(&mut self, window: WindowId) -> Option<ComponentKey> {
+        let view = self.view(window).ok()?;
+        let handle = self.driver.window_of(window)?;
+        self.cx
+            .update_window(handle, |_, win, app| view.read(app).focused_tab_key(win))
+            .ok()
+            .flatten()
+    }
+
     /// Presses the button `key` in `window`, as a click does. The emitted
     /// intent shows in [`intents`](Self::intents) after
     /// [`settle`](Self::settle).
