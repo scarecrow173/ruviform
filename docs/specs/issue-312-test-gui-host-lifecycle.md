@@ -55,6 +55,13 @@ relations:
 
 # Issue #312 test-only GUI host lifecycle・secure control adapter・fixture/clock/observation 仕様
 
+> **歴史/旧方式（legacy）注記**: `ruviform-ui-test` の FakeDriver /
+> driver-lab / `rvf.uitest.v1` lane は現行の driver-neutral 契約検証に使用
+> される。`FakeHost` / `HeadlessIo` / `run_multi` 配線など WebView adapter
+> 経路の lane は legacy/preview。物理撤去は Issue #465 P2 の別判断。
+> 棚卸し正本:
+> [issue-465-legacy-webview-inventory](../discovery/issue-465-legacy-webview-inventory.md)。
+
 ## What Should Be Built
 
 新クレート **`ruviform-ui-test`** — GUI Testing v1.0 / RF-GT-03 の共有テスト基盤。実 Window E2E（および headless 検証）で利用する **分離されたテスト用 Lifecycle/Control ポート** を、本番 `ruviform-ui` / `ruviform-ui-webview` の変更なしに提供する。

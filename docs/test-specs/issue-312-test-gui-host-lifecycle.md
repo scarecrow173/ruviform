@@ -32,6 +32,13 @@ relations:
 
 # Issue #312 ruviform-ui-test — lifecycle/control/fixture/clock/observation/fail-closed test specification
 
+> **歴史/旧方式（legacy）注記**: `ruviform-ui-test` の FakeDriver /
+> driver-lab / `rvf.uitest.v1` lane は現行の driver-neutral 契約検証に使用
+> される。`FakeHost` / `HeadlessIo` / `run_multi` 配線など WebView adapter
+> 経路の lane は legacy/preview。物理撤去は Issue #465 P2 の別判断。
+> 棚卸し正本:
+> [issue-465-legacy-webview-inventory](../discovery/issue-465-legacy-webview-inventory.md)。
+
 ## Purpose
 
 Pin the observable contract of `rvf.uitest.v1` + `TestIo`/`FakeHost`/`HeadlessIo`/`TestAgent`/`TestDriver` (spec AC1–AC5): handshake typing, capability-gated ops, honest observation/fault/clock semantics, shutdown/cleanup ownership, and fail-closed security. Retire only if the crate is removed or the protocol is replaced.

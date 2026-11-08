@@ -54,6 +54,13 @@ relations:
 
 # Issue #312 ruviform-ui-test — test-only GUI host lifecycle・secure control adapter 設計
 
+> **歴史/旧方式（legacy）注記**: `ruviform-ui-test` の FakeDriver /
+> driver-lab / `rvf.uitest.v1` lane は現行の driver-neutral 契約検証に使用
+> される。`FakeHost` / `HeadlessIo` / `run_multi` 配線など WebView adapter
+> 経路の lane は legacy/preview。物理撤去は Issue #465 P2 の別判断。
+> 棚卸し正本:
+> [issue-465-legacy-webview-inventory](../discovery/issue-465-legacy-webview-inventory.md)。
+
 ## Overview
 
 `ruviform-ui-test` は GUI テスト共有基盤クレート。app-under-test 内に埋め込む **agent**（`TestAgent` + `TestIo` ポート）、テスト側 **driver**（`TestDriver`）、headless **fake host**（`FakeHost` + `HeadlessIo`）、`rvf.uitest.v1` wire 契約、fixture/clock/fault/observation の最小ポート、および stdio/TCP transport を提供する。`ruviform-ui` 公開 API のみに依存し、本番クレートは無変更。
