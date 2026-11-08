@@ -56,8 +56,9 @@ opt-in 専用**であり、本番クレートは本クレートに依存しな�
 ## feature / 依存
 
 feature なし。依存は `ruviform-ui`(公開 API のみ)と serde/serde_
-json、および Issue #390 boundary guard 用の cargo_metadata/syn/
-proc-macro2。`wry`/`tao`/GUI/RT 依存は持ち込まない。
+json、Issue #390 boundary guard 用の cargo_metadata/syn/
+proc-macro2、Issue #314 golden 用の png/base64。`wry`/`tao`/GUI/RT
+依存は持ち込まない。
 `ruviform-ui-webview`・RT クレート・他 consumer は本クレートに
 依存しない — production release で制御ポートは到達不能。
 
@@ -148,3 +149,41 @@ fixture を提供する。
 既知の限界として、cargo metadata の resolve graph は未 activation
 optional dep を省略するため conditional 到達は manifest 宣言を
 再帰走査する（registry dep の未 activation target は skip）。
+
+## Pixel Golden Utility（Issue #314 slice 1）
+
+headless な pixel golden コア(`golden` モジュール)。実 pixel
+capture は slice 3 の対象であり、本モジュールは取得済み
+screenshot(`proto::Screenshot` の `png`/`rgba-raw`)を RGBA8 に
+正規化し、baseline 比較・差分承認・evidence を提供する。
+
+- key/env: `GoldenKey`(story/theme/state/driver・OS・GPU class/
+  scale/font/revision の canonical key)と `EnvironmentMeta`
+  (driver-neutral DTO、GPUI 型を含まない)。
+- 画像: `RgbaImage`(RGBA8 正規化。alpha=0 は RGB を 0 に正規化
+  し encoder 差分を吸収)、`proto::Screenshot` からの decode
+  (base64 + png 0.18 / raw RGBA、寸法・長さ・上限を検証)。
+- diff: `DiffPolicy`(per-channel `ChannelTolerance` + `MaskRect`
+  mask)による決定的比較。delta == tolerance は match、超過のみ
+  mismatch。stats(mismatch 数/ratio/max delta/bbox)と決定的
+  diff 画像を返す。`compared_pixels == 0` や size mismatch は
+  `pass` にしない(`blocked`/`fail`)。
+- store: `BaselineStore` が `<root>/<story>/<theme>/<state>/
+  <stem>.png|.json` に baseline + sidecar(schema
+  `rvf.golden.baseline/v1`)を保持。更新は
+  `write_candidate`(staging のみ)→ 人間レビュー →
+  `promote`(`BaselineApproval` 必須)の 2 相。直接上書き API は
+  無く、破損・key 不一致は `StoreError`。
+- report/evidence: `GoldenReport`/`GoldenComparison`/
+  `GoldenEvidence`。verdict 語彙は driver-lab と同一
+  `pass/fail/not_run/unsupported/blocked` + machine-readable
+  `reason`。`RUVIFORM_GOLDEN_EVIDENCE` 設定時のみ JSONL(schema
+  `rvf.golden.evidence/v1`)を append — 通常 test は副作用なし。
+- 境界: semantic oracle・DrawPlan・story fixture(#464/#426)・
+  実 OS window capture(#313)・capture 経路(slice 3)は対象外。
+  pixel golden は semantic oracle を置換しない。
+- 検証: `mise run test-ui-golden`(統合 test)、unit test は
+  `cargo test -p ruviform-ui-test` に含まれる。baseline
+  layout・承認手順の正本は `fixtures/golden/README.md`。
+
+**RT 契約:** golden module も非 RT(画像処理・store I/O)。
