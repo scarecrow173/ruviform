@@ -78,6 +78,10 @@ run = "cargo test -p ruviform-ui-test --test native_slot_contract"
 description = "Issue #387 Component/View semantic fixtures: UI-DVR-02/03 + LAB-SV-FADER-DOCK/LAB-AL-WAVEFORM-SEEK fake layer + 2-theme equivalence (writes only target/)"
 run = "cargo test -p ruviform-ui-test --test component_view"
 
+[tasks.test-ui-golden]
+description = "Issue #314 slice 1 Pixel Golden core: headless RGBA8 normalization, per-channel tolerance diff + masks, candidate→promote baseline store, verdict vocabulary and evidence (writes only target/ + temp dirs; capture paths are slice 3, NotRun/Unsupported by design)"
+run = "cargo test -p ruviform-ui-test --test golden"
+
 [tasks.build]
 description = "Build workspace with `cargo build --workspace` (dev profile; writes only target/)"
 run = "cargo build --workspace"
