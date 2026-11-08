@@ -231,6 +231,10 @@ mod gpui_driver {
         capabilities: WindowCapabilities,
         handler: Option<Handler>,
         app_subs: Vec<Subscription>,
+        /// Whether the app-level Tab/Shift-Tab keystroke observer is
+        /// registered — set once by [`wire_focus_navigation`] on the
+        /// first [`drain`].
+        focus_nav_wired: bool,
         next: u64,
         started: bool,
         exited: bool,
@@ -317,6 +321,7 @@ mod gpui_driver {
                 },
                 handler: None,
                 app_subs: Vec::new(),
+                focus_nav_wired: false,
                 next: 1,
                 started: false,
                 exited: false,
@@ -804,6 +809,39 @@ mod gpui_driver {
         }
     }
 
+    /// Registers the driver's Tab / Shift-Tab focus-traversal default
+    /// once per app (Issue #451 FU-1b). [`App::observe_keystrokes`]
+    /// fires after element dispatch has resolved, so a focused
+    /// component that stops propagation keeps precedence, and the
+    /// callback still runs when no element holds focus — an
+    /// element-level handler cannot cover that case. The subscription
+    /// lives in `app_subs` for the app's lifetime.
+    ///
+    /// Only the unmodified `tab` key and Shift-only `tab` are wired:
+    /// `focus_next` / `focus_prev` delegate ordering and wrap-around
+    /// to the rendered frame's tab-stop map. Every other modifier
+    /// combination (Ctrl+Tab, Alt+Tab, platform+Tab, …) is left to
+    /// focused components.
+    fn wire_focus_navigation(inner: &Rc<RefCell<Inner>>, cx: &mut App) {
+        if inner.borrow().focus_nav_wired {
+            return;
+        }
+        let sub = cx.observe_keystrokes(|event, window, _cx| {
+            if event.keystroke.key != "tab" {
+                return;
+            }
+            let m = event.keystroke.modifiers;
+            if !m.modified() {
+                window.focus_next();
+            } else if m.shift && !m.control && !m.alt && !m.platform && !m.function {
+                window.focus_prev();
+            }
+        });
+        let mut inner = inner.borrow_mut();
+        inner.focus_nav_wired = true;
+        inner.app_subs.push(sub);
+    }
+
     /// Applies queued [`Op`]s inside `App` context — window ops
     /// cannot run without `cx`, so `WindowDriver` calls defer here.
     ///
@@ -811,6 +849,7 @@ mod gpui_driver {
     /// *before* the op loop so ops never touch released entities or
     /// dead window handles.
     fn drain(inner: &Rc<RefCell<Inner>>, driver: &GpuiDriver, cx: &mut App) {
+        wire_focus_navigation(inner, cx);
         refresh_monitors(inner, cx);
         sweep_destroyed(inner, cx);
         loop {

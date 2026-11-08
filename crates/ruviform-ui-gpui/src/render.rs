@@ -583,11 +583,26 @@ impl RvfView {
     }
 
     /// The focus handle of the tab strip `key`, created on first use.
+    /// `tab_stop(true)` lives on the handle itself: gpui applies an
+    /// element's `.tab_stop` flag only to auto-created handles, so a
+    /// `track_focus` handle must opt in for `focus_next`/`focus_prev`
+    /// traversal to reach it (Issue #451 FU-1b).
     pub(crate) fn tab_focus(&mut self, key: &ComponentKey, cx: &mut Context<Self>) -> FocusHandle {
         self.tab_focus
             .entry(key.clone())
-            .or_insert_with(|| cx.focus_handle())
+            .or_insert_with(|| cx.focus_handle().tab_stop(true))
             .clone()
+    }
+
+    /// The tab strip whose header currently holds keyboard focus —
+    /// read-only; never creates a handle (Issue #451 FU-1b
+    /// `gpui-test` observation seam).
+    #[cfg(feature = "gpui-test")]
+    pub(crate) fn focused_tab_key(&self, window: &Window) -> Option<ComponentKey> {
+        self.tab_focus
+            .iter()
+            .find(|(_, handle)| handle.is_focused(window))
+            .map(|(key, _)| key.clone())
     }
 
     /// Presses the button `key` and flushes its intent.
