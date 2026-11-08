@@ -167,8 +167,8 @@ flex-shrink への暗黙依存を明示契約に置き換える。
   `check-ui-driver-boundary` が通過する。
 * [ ] （後続実装 dispatch）`component_showcase` 実窓で Fader の表示を
   確認する。
-* [ ] （本 dispatch）docs のみの変更で `mise run fmt-check` /
-  `mise run check` が通過する。
+* [x] （本 dispatch）docs のみの変更で `mise run fmt-check` /
+  `mise run check` / `mise run test-ui-gpui` が pass（非破壊確認）。
 
 ## Pros and Cons of the Options
 

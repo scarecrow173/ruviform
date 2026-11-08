@@ -99,13 +99,13 @@ Issue #478 の受入条件のうち「修正 + 回帰テスト」は後続 dispa
 
 - [x] D1: spec → design → ADR → test-spec → plan → task の文書
   チェーンを作成し、relations を揃える。
-- [ ] D2: review-protocol のレビューを実施し、blocker が残らない
-  ことを確認する。
+- [x] D2: review-protocol のレビューを実施し、blocker が残らない
+  ことを確認する（2 サイクル。順序づけの指摘を修正済み）。
 - [x] D3: `doc_maintenance.js` で managed index を再生成する
   （merge 後に再確認する）。
-- [ ] D4: `git fetch origin main && git merge origin/main` で最新
-  main を取り込み、生成 index を再生成した後に `mise run fmt-check` /
-  `mise run check` を実行する。
+- [x] D4: `git fetch origin main && git merge origin/main`（`7ae916b3`
+  取り込み済み）で生成 index を再生成した後に `mise run fmt-check` /
+  `mise run check` / `mise run test-ui-gpui` を実行し、全て pass。
 - [ ] D5: 論理単位でコミットし、`docs/478-fader-height-contract` を
   push して PR を作る（Issue #478 の受入条件 A1–A3 の記録先）。
 
@@ -142,8 +142,8 @@ Issue #478 の受入条件のうち「修正 + 回帰テスト」は後続 dispa
 
 ## Verification
 
-- [ ] （本 dispatch）`mise run fmt-check` / `mise run check` が
-  docs のみの変更で通過する。
+- [x] （本 dispatch）`mise run fmt-check` / `mise run check` /
+  `mise run test-ui-gpui` が docs のみの変更で pass（非破壊確認）。
 - [ ] （後続実装 dispatch）test-spec の各 Rule に対応する gpui-test
   が赤→緑で確認される。
 - [ ] （後続実装 dispatch）既存 UI lane が成功条件を弱めずに通過する。

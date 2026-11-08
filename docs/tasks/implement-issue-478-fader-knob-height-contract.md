@@ -102,14 +102,14 @@ Fader / Knob の Panel 子としての縦寸法契約を決定し、docs チェ�
   `issue-450-control-canvas-size.md`・`render.rs` の対象箇所を読み、
   選択肢（現状維持 / 固定高さ / viz_slot 型 min_h+grow /
   ViewSpec 契約追加）を評価する。
-- [ ] T3: review-protocol のレビューを実施し、blocker が残らない
-  ことを確認する。
+- [x] T3: review-protocol のレビューを実施し、blocker が残らない
+  ことを確認する（2 サイクル。順序づけの指摘を修正済み）。
 - [x] T4: `doc_maintenance.js` で managed index を再生成し、
   doc audit に新規 broken relation がないことを確認する
   （merge 後に再確認する）。
-- [ ] T5: `git fetch origin main && git merge origin/main` で最新
-  main を取り込み、生成 index を再生成した後に `mise run fmt-check` /
-  `mise run check` を実行する。
+- [x] T5: `git fetch origin main && git merge origin/main`（`7ae916b3`
+  取り込み済み）で生成 index を再生成した後に `mise run fmt-check` /
+  `mise run check` / `mise run test-ui-gpui` を実行し、全て pass。
 - [ ] T6: 論理単位でコミットし、`docs/478-fader-height-contract` を
   push して PR を作る（`Refs #478`）。
 
@@ -128,10 +128,11 @@ Fader / Knob の Panel 子としての縦寸法契約を決定し、docs チェ�
   PR が作成されている。
 - [ ] 実装判断の場合の「修正 + 回帰テスト」は後続 dispatch に
   引き継がれる旨が PR 本文・plan・task に明記されている。
-- [ ] `mise run fmt-check` / `mise run check` が通過している。
+- [x] `mise run fmt-check` / `mise run check` が通過している。
 
 ## Verification
 
-- [ ] `mise run fmt-check`（docs のみの変更での非破壊確認）
-- [ ] `mise run check`（同上）
+- [x] `mise run fmt-check`（docs のみの変更での非破壊確認・pass）
+- [x] `mise run check`（同上・pass）
+- [x] `mise run test-ui-gpui`（A3 非破壊確認・85 tests pass）
 - [ ] （後続実装 dispatch）`mise run test-ui-gpui` 等の該当 lane
