@@ -102,6 +102,7 @@ Directory: `docs/specs`
 | SPEC-Gt5Rw2KqZm8LxNv3TcYb7H | Issue #451 — Tabs ヘッダの pointer 切替と ViewSpec descriptor の mount 後更新契約 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | SPEC-7snPYyix2JlpoyXvP0zKwf | Issue #453 — 残 canvas 要素（Waveform/Meter/Spectrogram/TimeAxis/NativeSlot）のサイズ規則監査と是正 | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
 | SPEC-Rk5Wq2TnBx8LmYc3VdHa9E | Issue #456 — job を伴う command の receipt を job 終端まで route する | approved | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |
+| SPEC-034TXb9sMUqVVNvWbTUXkU | Issue #461 — spec サイズ比例の canvas painter の O(n²) paint を paint_layer で解消 | approved | [issue-461-canvas-paint-layer.md](./issue-461-canvas-paint-layer.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |

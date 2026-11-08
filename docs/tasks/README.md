@@ -36,6 +36,7 @@ Directory: `docs/tasks`
 | TASK-Ym6Rc1EkVw8PsTn4ZhDa3G | Issue #451 — Tabs pointer 切替と descriptor 更新の実装タスク | in-progress | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | TASK-CgXiI8C68Y81CRHocDi0QY | Issue #453 — 残 canvas のサイズ規則監査と是正の実装タスク | in-progress | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
 | TASK-Fe8Qa3WrNm7YtKc2XzLb4H | Issue #456 — job 終端 receipt の実装タスク | completed | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |
+| TASK-034TXoGba4bLlZ1oiI3L2z | Issue #461 — canvas painter paint batch の実装タスク | in-progress | [issue-461-canvas-paint-layer.md](./issue-461-canvas-paint-layer.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
