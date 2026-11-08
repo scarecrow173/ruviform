@@ -1,5 +1,9 @@
 //! Backend detection report types.
 //!
+//! **Legacy (Issue #465):** WebView-engine detection for the legacy
+//! adapter. Driver-neutral capability reporting lives in
+//! [`crate::driver::WindowCapabilities`].
+//!
 //! Detection itself lives in the adapter (`ruviform-ui-webview` calls
 //! `wry::webview_version()` without creating a window — the `poc/ui`
 //! `check` pattern). These types carry the result so applications can

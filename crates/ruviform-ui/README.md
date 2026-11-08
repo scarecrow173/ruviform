@@ -6,6 +6,30 @@ Ruviform の再利用可能なデスクトップ GUI 基盤の WebView 非依存
 プラットフォーム GUI 依存は持たず、headless(CLI)経路から同一の
 `Service` を駆動できる(Issue #156)。
 
+## legacy 分類（Issue #465）
+
+GUI 標準方針は Driver-neutral 契約 + GPUI 標準 Driver（Issue #384）。
+本クレートは driver-neutral 契約（`driver`/`view`/`behavior`/`dock`/
+`native_slot`/`service`/`runtime`/`ipc` schema）と旧 WebView 向け互換面が
+同居する。分類の正本は
+[docs/discovery/issue-465-legacy-webview-inventory.md](../../docs/discovery/issue-465-legacy-webview-inventory.md)。
+
+- **現行**: `driver`・`view`・`behavior`・`dock`・`native_slot`・
+  `service`/`runtime`・`ipc` の `rvf.ipc.v1` schema（`Intent`/`Event`/
+  `ErrorBody` 等 — `WindowLifecycle::Action(Intent)` が直接使用）。
+- **legacy（WebView adapter 互換・P2 で撤去判断）**: `event`
+  （`HostEvent`/`HostHandle`）、`window`（`WindowHandle`/`WindowConfig`
+  の `url`/`devtools`/`eval`）、`bridge`（`window.__rvf` JS transport）、
+  `detect`（WebView backend 検出）、`render` の DOM/Canvas2d/Webgl2
+  tier と `NativeSurfaceHost`（native dock 正本は `native_slot`）。
+- **共有 semantics / WebView-bound wire**: `assets`/`data` —
+  `AssetSource`/`DataRegistry` の意味論は driver 非依存だが、
+  `rvf://app`/`rvf://data` scheme 配信は `ruviform-ui-webview` adapter
+  実装。driver-neutral 配信契約は P2 の follow-up。
+- `#[deprecated]` は consumer・`ruviform-ui-webview`・`ruviform-ui-test`
+  が現役利用中のため付与しない（`-D warnings` lane 保護）。物理削除は
+  Issue #465 P2 の別判断（gate: #419 採用判定 + consumer Native 受入）。
+
 ## 責務
 
 - driver-neutral Window/Host 契約(`driver` モジュール・Issue #386):

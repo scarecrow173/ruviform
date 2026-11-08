@@ -68,6 +68,13 @@ relations:
 
 # Issue #311 RF-GT-02 — ui/guitest 設計
 
+> **歴史/旧方式（legacy）注記**: 本書の `rvf.ipc.v1` schema・versioned
+> fixture corpus の契約部分は driver-neutral 経路（`WindowLifecycle::Action(Intent)`）
+> でも共有・維持される。一方、`ui/guitest` の TS 実装・`window.ipc.postMessage` /
+> `evaluate_script` 輸送・WebView DOM 前提の検証 lane は legacy/preview。
+> 物理撤去は Issue #465 P2 の別判断。棚卸し正本:
+> [issue-465-legacy-webview-inventory](../discovery/issue-465-legacy-webview-inventory.md)。
+
 設計正本は Issue #257（GUI Testing v1.0 / RF-GT-02 行）および spec `docs/specs/issue-311-ipc-conformance-replay.md`。本書は実装選択と形式の詳細を固定する。
 
 ## 1. パッケージ配置と責務

@@ -89,6 +89,15 @@ relations:
 
 # Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証)
 
+> **歴史/旧方式（legacy）**: 本書は Issue #310 当時の WebView/DOM 前提
+> GUI テスト基盤（`ui/browser-test`・Playwright 実ブラウザ検証）の記録である。
+> 現行の GUI 検証標準は Driver-neutral 契約 + GPUI 標準 Driver（Issue #384）と
+> driver-lab の Fake/GPUI parity 検証（`check-ui-driver-boundary` /
+> `test-ui-driver-contract` / `test-ui-parity`）。当該 lane は legacy/preview
+> として保持され、物理撤去は Issue #465 P2 の別判断（gate: #419 採用判定 +
+> consumer Native 受入）。棚卸し正本:
+> [issue-465-legacy-webview-inventory](../discovery/issue-465-legacy-webview-inventory.md)。
+
 ## What Should Be Built
 
 GUI Testing v1.0 / RF-GT-01 の実装。既存 `ui/core`・`ui/components`・`ui/viz`・`ui/binding`・`ui/showcase` の headless / happy-dom 検証を置き換えず、**実ブラウザ DOM 上でのユーザー操作・表示・Accessibility** を継続検証する共有 Harness を新設する。

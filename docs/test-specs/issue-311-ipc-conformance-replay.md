@@ -45,6 +45,13 @@ relations:
 
 # Issue #311 RF-GT-02 test specification
 
+> **歴史/旧方式（legacy）注記**: 本書の `rvf.ipc.v1` schema・versioned
+> fixture corpus の契約部分は driver-neutral 経路（`WindowLifecycle::Action(Intent)`）
+> でも共有・維持される。一方、`ui/guitest` の TS 実装・`window.ipc.postMessage` /
+> `evaluate_script` 輸送・WebView DOM 前提の検証 lane は legacy/preview。
+> 物理撤去は Issue #465 P2 の別判断。棚卸し正本:
+> [issue-465-legacy-webview-inventory](../discovery/issue-465-legacy-webview-inventory.md)。
+
 検証対象: spec AC-1〜AC-5。責務は「契約上観測可能な振る舞いの一致」であり、実装内部の再検証ではない。
 
 ## Feature
