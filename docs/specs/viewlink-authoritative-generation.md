@@ -39,6 +39,7 @@ relations:
   derived-by:
     - "docs/designs/viewlink-authoritative-generation.md"
     - "docs/plans/viewlink-authoritative-generation.md"
+    - "docs/specs/issue-377-query-binding-epoch.md"
   verifies: []
   verified-by: []
   references:

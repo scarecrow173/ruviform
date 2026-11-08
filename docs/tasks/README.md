@@ -232,6 +232,7 @@ Directory: `docs/tasks`
 | TASK-Peb0C7F4qBHb9sZP8wXZnR | T2 ci-issue-tracker.yml workflow + 運用 README + dev-env 同期（Issue #368） | done | [issue-368-t2-tracker-workflow.md](./issue-368-t2-tracker-workflow.md) |
 | TASK-6LaGohoePjG92Eb5u6lUv7 | T3 tracker.mjs reconcile モード + parseTrackerArgs + contract tests（Issue #368） | done | [issue-368-t3-tracker-reconcile-mode.md](./issue-368-t3-tracker-reconcile-mode.md) |
 | TASK-T6nZSLe2NKHl8o4neneyTK | T4 ci-issue-tracker-reconcile.yml 新設 + README/dev-env 同期（Issue #368） | done | [issue-368-t4-reconcile-workflow.md](./issue-368-t4-reconcile-workflow.md) |
+| TASK-1EfMLBvEIXGocxCFFgixSj | Issue #377 — QueryBinding adopt-on-join 実装と恒久テスト | done | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
 | TASK-hupw1aLckqDaLNAlnDrTMF | Issue #411 — cargo_metadata 0.19 系への依存選定修復 + MSRV 検証入口 | done | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TASK-mV2zXwAeR5yNuIoL7pSt4G | Issue #414 — projection→controlled display 正規経路の実装 | done | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |

@@ -91,6 +91,7 @@ Directory: `docs/test-specs`
 | TSPEC-GfyGGakuj069mKFQrVtF3e | Issue #367 テスト仕様 — daily scheduler 判定・dispatch 確認・fail-closed 契約 | approved | [issue-367-daily-scheduler.md](./issue-367-daily-scheduler.md) |
 | TSPEC-3iZ6nd0UGy5yuVGAnGQI1y | Issue #368 CI failure Issue Tracker test specification — 有効 run 判定・plan 行列・close guard・sanitize | approved | [issue-368-ci-issue-tracker.md](./issue-368-ci-issue-tracker.md) |
 | TSPEC-qvpqeonK5xwqk0hZpF3ARO | Issue #368 Tracker reconcile test specification — mode 分離・bot 履歴 reconcile・fail-closed 維持 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
+| TSPEC-qAlLq79jiKf7NgITUKo6as | Issue #377 QueryBinding adopt-on-join テスト仕様 | approved | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | TSPEC-7kQ2mWcR9dLx4VfT1hZa8N | Issue #385 — DTCG 解釈器・ResolvedTheme の golden / 分類エラー検証契約 | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
 | TESTSPEC-npkv0TXtBSoMiqPQl8ClVv | Issue #386 Driver-neutral GUI Host 接続試験仕様 | proposed | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
 | TESTSPEC-034T6RWTu4Bx7Ng3hV0dK2 | Issue #387 Component/View + Headless Behavior + GPUI Renderer 試験仕様 | proposed | [issue-387-component-renderer.md](./issue-387-component-renderer.md) |
