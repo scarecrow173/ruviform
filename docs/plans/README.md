@@ -101,6 +101,7 @@ Directory: `docs/plans`
 | PLAN-Vn6Pc1Rh4SxDa9Gt3KwLe8 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装計画 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
 | PLAN-Ws6Tz1RbMn4QcKe9YhGx3Dp | Issue #443 — Tile 列区間と count 契約の実装計画 | in-progress | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | PLAN-Qz8Ld3WbTm6XyKr2HnVc4E | Issue #448 — 行選択と command 起動の実装計画 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
+| PLAN-cXVjL8azFccQWa3dVmLi1a | Issue #450 — Seek/Fader canvas サイズ是正の実装計画 | in-progress | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
