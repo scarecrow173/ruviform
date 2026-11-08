@@ -4,7 +4,7 @@ type: "spec"
 status: "proposed"
 title: "Issue #429 — Consumer 観測 seam・残 Fake/GPUI 検証の公開"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -73,18 +73,19 @@ relations:
 | --- | --- | --- |
 | A1 | consumer crate から GPUI Driver の projection/intent を driver-neutral な観測 API で取得できる（または等価の公開 seam） | 達成。`GpuiObserver`（`observe` / `intents` / `dispatch_input` / `settle`）。外部 crate の `tests/consumer_observation.rs` が parity fixture を mount して観測する |
 | A2 | boundary guard（`check-ui-driver-boundary`）が pass したまま seam が公開されている | 達成。公開 signature に `gpui` 型なし。guard の `dep-graph` / `signature` / `allowlist` が pass |
-| A3 | 各項目の検証が mise タスクとして記録されている | 部分達成。観測 seam は `test-ui-consumer-observation`（新設）と `test-ui-gpui` で記録。残項目は下表の未達を参照 |
+| A3 | 各項目の検証が mise タスクとして記録されている | 達成。観測 seam は `test-ui-consumer-observation`（新設）と `test-ui-gpui` で記録。2026-11-09 のフォローアップで残項目の検証・判断も同タスクに記録した（下表参照） |
 
-## 残 DoD の扱い（未達は明示する）
+## 残 DoD の扱い（2026-11-09 フォローアップで再評価）
 
-Issue #429 のスコープのうち、本 PR で実装しないものを次に明示する。いずれも完了と偽らず、PR 本文と worker_done に同じ内容を書く。
+Issue #429 のスコープのうち、本 chain の初回 PR で実装しなかったものの現在の状態を次に示す。完了と偽らず、PR 本文と worker_done に同じ内容を書く。
 
-| 項目 | 状態 | 理由 |
+| 項目 | 状態 | 根拠 |
 | --- | --- | --- |
-| `NumericInput` / `Transport` Control | 未達（NotRun） | #387 の Non-goals。Consumer 必要性の再評価が前提。観測 seam とは独立 |
-| Waveform/Meter/Spectrum の長尺・RT snapshot・gap/NaN precision・bounded memory/cancel/stale・GPU release の GPUI 検証 | 未達（NotRun） | 範囲が大きく、本 PR の seam 公開を優先した |
-| driver-lab manifest の残 lane（UI-DVR-03 GPUI の Cancel・遅延/順序逆転、UI-DVR-07/08 GPUI） | 未達（not_run のまま） | Cancel 等の lab binding が未接続。`cases.json` の status は実行結果と一致させ、変更しない |
-| `LAB-SV-FADER-DOCK` / `LAB-AL-WAVEFORM-SEEK` の 2 scale factor × 2 theme × 状態遷移の GPUI 実行 | 未達（not_run のまま） | story の GPUI 実行 lab が未実装。`stories.json` の status は変更しない |
+| `NumericInput` / `Transport` Control | 再評価済み — 新 kind 不要（composition で充足） | consumer 棚卸し（synvelis の transport 合成・audio-lens `gpui_parity` の利用 kind・`ValueDescriptor`/`ControlInput` の既存契約）で共通 semantic gap なし。[task doc の再評価記録](../tasks/issue-429-consumer-observation-seam.md)参照 |
+| Waveform/Meter/Spectrum の長尺・RT snapshot・gap/NaN precision・bounded memory/cancel/stale・GPU release の GPUI 検証 | 一部達成 | bound 近傍 payload（`MAX_WAVEFORM_BINS`/`MAX_METER_BINS`/`MAX_SPECTROGRAM_CELLS` ちょうど）・多チャンネル・viewport culling・gesture 中 projection・`update_view` spec 差し替え・f64 precision を `consumer_observation.rs` の seam test で検証。gap/NaN・bound 拒否・cancel/stale/out-of-order・teardown は既存 lane でカバー済み。実 GPU release は platform 制約で NotRun（#313） |
+| driver-lab manifest の UI-DVR-03/07/08 GPUI | 達成（実測一致） | PR #432/#433/#444 で統合済み。`mise run test-ui-gpui` の実測 pass と `cases.json` の gpui `pass` が一致 |
+| `LAB-SV-FADER-DOCK` / `LAB-AL-WAVEFORM-SEEK` の 2 scale factor × 2 theme × 状態遷移の GPUI 実行 | 未達（not_run のまま） | story の GPUI 実行 lab は owner = #426。`stories.json` の status は変更しない |
+| 実 OS window・real GPU release（#313）・headless-ts（#294）・pixel golden（#314）・共通 Scenario 契約（#464） | 未達（NotRun・他 Issue 帰属） | platform/owner 制約により本 chain の範囲外 |
 
 ## スコープ（本 PR）
 
