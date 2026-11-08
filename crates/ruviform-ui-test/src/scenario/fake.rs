@@ -19,6 +19,7 @@ use ruviform_ui::view::{
     AttachEpochAllocator, ComponentKey, ComponentSnapshot, ViewEvent, ViewHost, ViewSpec,
 };
 
+use super::visual::{CaptureOutcome, VisualGuiTest};
 use super::{
     MintedIntent, ScenarioCapability, ScenarioDriver, ScenarioError, ScenarioTarget,
     SemanticGuiTest, TargetQuery,
@@ -344,6 +345,20 @@ impl SemanticGuiTest for FakeGuiTest {
             .deliver_event(event);
         self.absorb(target.window, target.view);
         Ok(())
+    }
+}
+
+impl VisualGuiTest for FakeGuiTest {
+    /// The `ViewHost` fake has no pixel pipeline — `ViewHost` is a
+    /// semantic state machine, not a renderer. Pins are still
+    /// re-checked first so a stale target stays a contract error.
+    /// Slice 3 may replace this with a real capture path; until then
+    /// the honest outcome is `Unsupported`.
+    fn capture_frame(&mut self, target: &ScenarioTarget) -> Result<CaptureOutcome, ScenarioError> {
+        self.check_target(target)?;
+        Ok(CaptureOutcome::Unsupported {
+            reason: "fake_viewhost_has_no_pixel_pipeline".to_string(),
+        })
     }
 }
 

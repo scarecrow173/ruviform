@@ -15,9 +15,12 @@ use ruviform_ui::view::{
 };
 use ruviform_ui::{Event, WindowSpec};
 use ruviform_ui_gpui::{GpuiGuiTest, ViewMount};
+use ruviform_ui_test::golden::{BaselineStore, GoldenKey, GoldenVerdict};
+use ruviform_ui_test::scenario::visual::VisualGuiTest;
 use ruviform_ui_test::{
-    ScenarioCapability, ScenarioDriver, ScenarioError, SemanticGuiTest, TargetQuery, begin,
-    parity_gesture_scenario,
+    RunId, ScenarioCapability, ScenarioDriver, ScenarioError, ScenarioId, ScenarioReport,
+    ScenarioVerdict, SemanticGuiTest, TargetQuery, begin, parity_gesture_scenario,
+    record_golden_step,
 };
 use serde_json::json;
 
@@ -161,6 +164,110 @@ fn gpui_capability_preflight_matches_fake() {
         .require_capabilities(&BTreeSet::from([ScenarioCapability::VisualCapture]))
         .expect_err("visual capture is not a simulated capability");
     assert!(matches!(err, ScenarioError::Unsupported { .. }));
+}
+
+// ---------------------------------------------------------------------
+// Issue #314 slice 2 — visual/golden step on the GPUI adapter
+// (parity with the Fake adapter's `visual_*` tests)
+// ---------------------------------------------------------------------
+
+fn golden_key() -> GoldenKey {
+    GoldenKey {
+        story_id: "scenario-fader".to_string(),
+        theme: "test-dark".to_string(),
+        state: "idle".to_string(),
+        driver_class: "gpui-test".to_string(),
+        os_class: "test-os".to_string(),
+        gpu_class: None,
+        scale_factor: 1.0,
+        font_class: None,
+        revision: "test-rev".to_string(),
+    }
+}
+
+fn golden_store() -> (std::path::PathBuf, BaselineStore) {
+    let dir = std::env::temp_dir().join(format!(
+        "ruviform-scenario-golden-gpui-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    (dir.clone(), BaselineStore::new(dir))
+}
+
+#[test]
+fn gpui_visual_golden_check_returns_unsupported_report_not_pass() {
+    let (mut gui, target) = mounted();
+    let (_dir, store) = golden_store();
+
+    let comparison = gui
+        .golden_check(&target, &golden_key(), None, &store)
+        .expect("golden_check returns a report, not an error");
+
+    // Same verdict vocabulary as the Fake adapter — `unsupported`,
+    // never `pass`/`fail` without a measured pixel comparison.
+    assert_eq!(comparison.report.verdict, GoldenVerdict::Unsupported);
+    assert_ne!(comparison.report.reason, "");
+    assert!(comparison.report.stats.is_none());
+    assert!(comparison.diff_image.is_none());
+    assert_eq!(
+        ScenarioVerdict::from(comparison.report.verdict),
+        ScenarioVerdict::Unsupported
+    );
+    // `GpuiObserver::drawn()` is a draw plan, not a screenshot — the
+    // adapter must not have produced pixels for it.
+    assert!(
+        !gui.capabilities()
+            .contains(&ScenarioCapability::VisualCapture),
+        "gpui-test must not claim VisualCapture without a capture backend"
+    );
+}
+
+#[test]
+fn gpui_visual_golden_check_stale_target_is_contract_error() {
+    let (mut gui, target) = mounted();
+    let (_dir, store) = golden_store();
+
+    gui.detach_view(target.window, "test").expect("detach");
+    let err = gui
+        .golden_check(&target, &golden_key(), None, &store)
+        .expect_err("stale generation must fail before any capture claim");
+    assert!(
+        matches!(err, ScenarioError::StaleGeneration { .. }),
+        "expected StaleGeneration, got {err:?}"
+    );
+}
+
+#[test]
+fn gpui_visual_record_golden_step_matches_fake_evidence_shape() {
+    let (mut gui, target) = mounted();
+    let (_dir, store) = golden_store();
+
+    let mut report = ScenarioReport::new(
+        RunId::new("run-visual-gpui"),
+        ScenarioId::new("scenario-visual"),
+        None,
+        gui.driver(),
+    );
+    report.required.insert(ScenarioCapability::VisualCapture);
+    report.capabilities = gui.capabilities();
+
+    let comparison = gui
+        .golden_check(&target, &golden_key(), None, &store)
+        .expect("golden_check");
+    record_golden_step(&mut report, &comparison);
+
+    // Identical evidence/observed shape to the Fake adapter's
+    // `visual_record_golden_step_writes_scenario_report`.
+    assert_eq!(
+        report.evidence,
+        vec![format!("golden:{}", comparison.report.key.canonical())]
+    );
+    let observed = report.observed.as_ref().expect("observed recorded");
+    assert_eq!(observed["golden"]["verdict"], "unsupported");
+    assert_eq!(report.driver, ScenarioDriver::GpuiSimulated);
 }
 
 #[test]

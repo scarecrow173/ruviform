@@ -83,16 +83,16 @@ description = "Issue #314 slice 1 Pixel Golden core: headless RGBA8 normalizatio
 run = "cargo test -p ruviform-ui-test --test golden"
 
 [tasks.test-ui-scenario-contract]
-description = "Issue #464 consumer-neutral Scenario Contract: shared SemanticGuiTest surface — Fake adapter contract tests (ruviform-ui-test/tests/scenario_contract.rs) + GPUI adapter contract tests (ruviform-ui-gpui/tests/scenario_contract.rs, gpui-test). Writes only target/"
+description = "Issue #464 consumer-neutral Scenario Contract: shared SemanticGuiTest/VisualGuiTest surface — Fake adapter contract tests (ruviform-ui-test/tests/scenario_contract.rs) + GPUI adapter contract tests (ruviform-ui-gpui/tests/scenario_contract.rs, gpui-test). Issue #314 slice 2: VisualCapture capability + golden check/report path, honestly Unsupported until slice 3 capture. Writes only target/"
 depends = ["test-ui-scenario-contract-fake", "test-ui-scenario-contract-gpui"]
 
 [tasks.test-ui-scenario-contract-fake]
-description = "Issue #464 scenario contract, Fake side: target resolution, stale epoch/generation errors, capability pre-flight, intent drain, receipt/projection via deliver_event (writes only target/)"
+description = "Issue #464 scenario contract + #314 slice 2 visual/golden path, Fake side: target resolution, stale epoch/generation errors, capability pre-flight (VisualCapture not claimed), golden_check Unsupported verdict, record_golden_step evidence, intent drain, receipt/projection via deliver_event (writes only target/)"
 run = "cargo test -p ruviform-ui-test --test scenario_contract"
 hide = true
 
 [tasks.test-ui-scenario-contract-gpui]
-description = "Issue #464 scenario contract, GPUI side: same parity scenario through GpuiGuiTest/GpuiObserver (gpui-test; writes only target/)"
+description = "Issue #464 scenario contract + #314 slice 2 visual/golden path, GPUI side: same parity scenario through GpuiGuiTest/GpuiObserver (gpui-test); VisualCapture not claimed, golden_check Unsupported — GpuiObserver::drawn() is a draw plan, not pixels (writes only target/)"
 run = "cargo test -p ruviform-ui-gpui --features gpui-test --test scenario_contract"
 hide = true
 
