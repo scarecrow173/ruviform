@@ -18,8 +18,10 @@
 //!   [`CaptureOutcome::NotRun`] rather than fabricate pixels when the
 //!   adapter/environment cannot capture. Neither current adapter
 //!   (Fake, GPUI-simulated) claims [`ScenarioCapability::VisualCapture`]
-//!   nor produces pixels — both return `Unsupported` until slice 3
-//!   lands a real capture backend.
+//!   nor produces pixels — the slice-3 real capture backend lives on
+//!   the real-window `GpuiDriver` (`capture_window`), which is not a
+//!   `SemanticGuiTest` adapter, so both scenario adapters keep
+//!   returning `Unsupported`.
 //! - A semantic or draw-plan observation is never promoted into pixel
 //!   evidence: only `Captured` pixels reach `BaselineStore::compare`,
 //!   and only a measured comparison yields `pass`/`fail`.
