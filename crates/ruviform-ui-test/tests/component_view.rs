@@ -126,6 +126,7 @@ fn tabs(name: &str, tabs: Vec<(&str, ComponentSpec)>) -> ComponentSpec {
                 child: Box::new(child),
             })
             .collect(),
+        selection: None,
         visual: ComponentVisualState::default(),
         a11y: A11ySpec {
             role: Some(A11yRole::TabList),

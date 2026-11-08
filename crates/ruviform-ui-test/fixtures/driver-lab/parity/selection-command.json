@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "manifest": "rvf.driver-lab.parity/v1",
   "issue": "https://github.com/scarecrow173/ruviform/issues/448",
-  "description": "行選択と command 起動の Fake/GPUI 同一 fixture。view は ViewSpec（serde 形式）、expect は両 driver が検査する semantic 期待値。Fake と GPUI は同じ操作（行の選択・Button の押下）から同じ Action intent（kind/target/controlId/action/params）と、同じ snapshot（selected・phase）を得ること、Button の a11y 木と描画ラベルが一致することを検査する。receipt の進行（accepted/applied/rejected）は headless 契約で検査し、GPUI 側では発行しない。",
+  "description": "行選択・Button の command 起動・タブ選択の Fake/GPUI 同一 fixture（Issue #451 でタブ選択を追加）。view は ViewSpec（serde 形式）、expect は両 driver が検査する semantic 期待値。Fake と GPUI は同じ操作（行の選択・Button の押下・タブの選択）から同じ Action intent（kind/target/controlId/action/params）と、同じ snapshot（selected・phase）を得ること、Button の a11y 木と描画ラベルが一致し、タブ選択後は選択中のタブ本文だけが描画されることを検査する。receipt の進行（accepted/applied/rejected）は headless 契約で検査し、GPUI 側では発行しない。",
   "view": {
     "root": {
       "type": "panel",
@@ -33,12 +33,53 @@
           "params": { "dataset": "ds-1" },
           "visual": { "error": null },
           "a11y": {}
+        },
+        {
+          "type": "tabs",
+          "key": "mixer_tabs",
+          "active": 0,
+          "tabs": [
+            {
+              "key": "tab.mixer",
+              "title": "Mixer",
+              "child": {
+                "type": "label",
+                "key": "mixer.body",
+                "text": "Mixer body",
+                "visual": { "error": null },
+                "a11y": {}
+              }
+            },
+            {
+              "key": "tab.routing",
+              "title": "Routing",
+              "child": {
+                "type": "label",
+                "key": "routing.body",
+                "text": "Routing body",
+                "visual": { "error": null },
+                "a11y": {}
+              }
+            }
+          ],
+          "selection": { "target": "mixer.tabs.select" },
+          "visual": { "error": null },
+          "a11y": { "label": "mixer tabs" }
         }
       ]
     }
   },
   "expect": {
-    "mountedKeys": ["root", "jobs", "run"],
+    "mountedKeys": [
+      "root",
+      "jobs",
+      "run",
+      "mixer_tabs",
+      "tab.mixer",
+      "mixer.body",
+      "tab.routing",
+      "routing.body"
+    ],
     "table": {
       "selectRow": 1,
       "intents": [
@@ -67,6 +108,22 @@
       "phase": "pending",
       "drawnLabel": "Run",
       "a11yTree": { "role": "button", "name": "Run" }
+    },
+    "tabs": {
+      "selectIndex": 1,
+      "intents": [
+        {
+          "kind": "action",
+          "target": "mixer.tabs.select",
+          "controlId": "mixer_tabs",
+          "action": "tab-select",
+          "params": { "index": 1 }
+        }
+      ],
+      "selectedAfterSelect": 1,
+      "phase": "pending",
+      "drawnBody": "Routing body",
+      "undrawnBody": "Mixer body"
     }
   }
 }

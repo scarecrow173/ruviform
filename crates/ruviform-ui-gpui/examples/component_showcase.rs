@@ -7,7 +7,8 @@
 //! Synvelis-style Panel > Tabs > Faders, and an AudioLens-style
 //! Waveform + Seek strip. Drag the faders / click-drag the seek to
 //! see `Begin → Preview → Commit` intents on the window's `Action`
-//! channel logged to stderr.
+//! channel logged to stderr. Click a tab header to switch the Tabs
+//! (`tab-select` intent).
 //!
 //! This is a manual-verification fixture — semantic equivalence is
 //! proven headlessly in `ruviform-ui-test::component_view`; this
@@ -19,8 +20,8 @@ use ruviform_ui::behavior::{DetachPolicy, ValueDescriptor};
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{
     A11yRole, A11ySpec, AttachEpochAllocator, ComponentKey, ComponentSpec, ComponentVisualState,
-    ControlSpec, Orientation, PanelSpec, TabSpec, TabsSpec, ViewHost, ViewSpec, WaveformBin,
-    WaveformSpec,
+    ControlSpec, Orientation, PanelSpec, TabSpec, TabsSelectionSpec, TabsSpec, ViewHost, ViewSpec,
+    WaveformBin, WaveformSpec,
 };
 use ruviform_ui::{DriverEvent, LogicalSize, WindowLifecycle, WindowSpec};
 use ruviform_ui_gpui::{GpuiDriver, ViewMount};
@@ -87,6 +88,9 @@ fn showcase_spec() -> ViewSpec {
                             ))),
                         },
                     ],
+                    selection: Some(TabsSelectionSpec {
+                        target: "showcase.tabs.select".to_string(),
+                    }),
                     visual: ComponentVisualState::default(),
                     a11y: A11ySpec::default(),
                 }),
