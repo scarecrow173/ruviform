@@ -55,16 +55,16 @@ relations:
 - [x] V3: `mise run test-ui-gpui` が通過する（57 件、exit 0）。
 - [x] V4: `mise run test-ui-consumer-observation` が通過する（9 件、exit 0）。
 - [x] V5: `mise run test-ui-parity` / `test-ui-driver-contract` / `test-ui-component-view` / `check-ui-driver-boundary` が通過する（exit 0）。
-- [ ] V6: `mise run check` / `lint` / `test` / `build` が通過する（ワークスペース全体、最終検証で実行）。
+- [x] V6: `mise run check` / `lint` / `test` / `build` が通過する（ワークスペース全体、main 取り込み後に exit 0）。
 - [x] V7: `component_showcase` の実 GPUI 窓で修正前後を撮影した。修正前は Waveform が空白、修正後は bins が表示された。
 - [ ] V8: `synvelis-native` 実窓の確認は NotRun（consumer 環境が必要）。PR 本文に明記する。
 
 ## 文書とコミット
 
 - [x] D1: spec / design / test-spec / plan / task を作成する。
-- [ ] D2: review-protocol のレビューを実施し、blocker が残らないことを確認する。
-- [ ] D3: `doc_maintenance` の plan/apply で managed index を再生成し、doc_status で本件の文書エラーがないことを確認する。
-- [ ] D4: `git fetch origin main && git merge origin/main` を実行する。
+- [x] D2: review-protocol のレビューを実施し、blocker が残らないことを確認する（1 サイクル、判定は ACCEPT WITH NON-BLOCKING NOTES）。
+- [x] D3: `doc_maintenance` の plan/apply で managed index を再生成し、doc_status lint で本件の文書に指摘がないことを確認する。
+- [x] D4: `git fetch origin main && git merge origin/main` を実行する（main は RF#456 の `a5b1db13` まで進んでおり、衝突なく取り込んだ。取り込み後に index を再生成した）。
 - [ ] D5: 論理単位でコミットし、`feature/453-canvas-size-audit` を push する。PR を作る（`Refs #453`）。
 
 ## 残課題（本 Issue の範囲外）

@@ -108,10 +108,10 @@ Directory: `docs/test-specs`
 | TSPEC-Nd4Gq8VzMr2TkLb6XjPw1Ec | Issue #443 — Tile 列区間と count の検証契約 | proposed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | TSPEC-Qm7Lw3Rt9Xc2Hb5Vd8Ns4Ke | Issue #446 — 空 frame 範囲の Tile 検証契約 | proposed | [issue-446-tile-empty-frames.md](./issue-446-tile-empty-frames.md) |
 | TSPEC-Bn6Xc1RqLw3KtYv8ZmHd2G | Issue #448 — 行選択と command 起動の検証契約 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
-| TSPEC-Vc4Dk1PhGj6WsQy9NrTm5A | Issue #456 — job 終端 receipt の検証契約 | approved | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |
 | TSPEC-EcUAfWYYG6G0Npqen48ITk | Issue #450 — Seek/Fader canvas bounds の検証契約 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
 | TSPEC-Js8Lv3XqRb6NwKt1YcMg5F | Issue #451 — Tabs pointer 切替と descriptor 更新の検証契約 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | TSPEC-WsywxRxhFuHBznTRP361Ie | Issue #453 — paint canvas bounds の検証契約（kind 別監査） | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
+| TSPEC-Vc4Dk1PhGj6WsQy9NrTm5A | Issue #456 — job 終端 receipt の検証契約 | approved | [issue-456-job-command-receipt.md](./issue-456-job-command-receipt.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |
