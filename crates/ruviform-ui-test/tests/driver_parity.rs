@@ -428,6 +428,21 @@ fn ui_dvr_03_parity_selection_command_intents_and_snapshot() {
         serde_json::to_value(snap.phase).expect("phase json"),
         fx["expect"]["button"]["phase"]
     );
+
+    let index = usize::try_from(fx["expect"]["tabs"]["selectIndex"].as_u64().expect("tab"))
+        .expect("tab index");
+    host.select_tab(host.generation(), &key("mixer_tabs"), index)
+        .expect("select tab");
+    assert_eq!(action_summaries(&mut host), fx["expect"]["tabs"]["intents"]);
+    let snap = host.observe(&key("mixer_tabs")).expect("tabs snapshot");
+    assert_eq!(
+        snap.selected.and_then(|r| u64::try_from(r).ok()),
+        fx["expect"]["tabs"]["selectedAfterSelect"].as_u64()
+    );
+    assert_eq!(
+        serde_json::to_value(snap.phase).expect("phase json"),
+        fx["expect"]["tabs"]["phase"]
+    );
 }
 
 fn wait_terminal(rt: &mut UiRuntime) -> Vec<Event> {

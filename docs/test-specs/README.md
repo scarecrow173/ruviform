@@ -150,3 +150,4 @@ Directory: `docs/test-specs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TSPEC-034WvK9mNqR2sTxYcAbEfG | consumer-impact-check workflow の PR 分類機械検査（記入検査・unknown 解消先・draft 除外） | superseded | [consumer-impact-check-pr-classification.md](./consumer-impact-check-pr-classification.md) |
+| TSPEC-Js8Lv3XqRb6NwKt1YcMg5F | Issue #451 — Tabs pointer 切替と descriptor 更新の検証契約 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |

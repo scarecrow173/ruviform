@@ -31,8 +31,8 @@ use ruviform_ui::behavior::{
 };
 use ruviform_ui::view::{
     ButtonSpec, CellValue, ComponentKey, ComponentSpec, ControlSpec, LabelSpec, MeterSpec,
-    NativeSlotSpec, Orientation, SpectrogramSpec, TableSpec, TimeAxisSpec, ViewError, ViewEvent,
-    ViewHost, ViewSpec, WaveformBin, WaveformSpec,
+    NativeSlotSpec, Orientation, SpectrogramSpec, TableSpec, TabsSpec, TimeAxisSpec, ViewError,
+    ViewEvent, ViewHost, ViewSpec, WaveformBin, WaveformSpec,
 };
 use ruviform_ui::{
     Event, Intent, LogicalRect, SlotError, SlotGeometry, SlotVisibility, SurfaceSlotId,
@@ -514,6 +514,13 @@ impl RvfView {
     pub(crate) fn select_row(&mut self, key: &ComponentKey, row: usize, cx: &mut Context<Self>) {
         let generation = self.host.generation();
         let _ = self.host.select_row(generation, key, row);
+        self.flush_events(cx);
+    }
+
+    /// Presses tab `index` of the tab strip `key` and flushes its intent.
+    pub(crate) fn select_tab(&mut self, key: &ComponentKey, index: usize, cx: &mut Context<Self>) {
+        let generation = self.host.generation();
+        let _ = self.host.select_tab(generation, key, index);
         self.flush_events(cx);
     }
 
@@ -1110,7 +1117,7 @@ impl RvfView {
                 el.into_any_element()
             }
             ComponentSpec::Tabs(t) => {
-                let active = t.active.min(t.tabs.len().saturating_sub(1));
+                let active = displayed_tab(&self.host, t);
                 let mut header = div()
                     .flex()
                     .flex_row()
@@ -1129,6 +1136,16 @@ impl RvfView {
                         .child(tab.title.clone());
                     if i == active {
                         tab_el = tab_el.border_b_2().border_color(self.palette.accent);
+                    }
+                    tab_el = tab_el.debug_selector(|| format!("{}-tab-{i}", t.key));
+                    if t.selection.is_some() {
+                        let key = t.key.clone();
+                        tab_el = tab_el.on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, _ev: &MouseDownEvent, _w, cx| {
+                                this.select_tab(&key, i, cx);
+                            }),
+                        );
                     }
                     header = header.child(tab_el);
                 }
@@ -1487,24 +1504,33 @@ pub(crate) enum DrawPlan {
     Button(String),
 }
 
-/// Drawing plans of the drawing components the renderer paints under
-/// `spec`, in paint order. Follows `element_for`: a Panel paints every
-/// child, and a Tabs strip paints only its active child.
+/// Drawing plans of the drawing components the renderer paints under the
+/// mounted tree of `host`, in paint order. Follows `element_for`: a Panel
+/// paints every child, and a Tabs strip paints only its displayed tab.
 #[cfg(feature = "gpui-test")]
-pub(crate) fn drawn_plans(spec: &ComponentSpec) -> Vec<(ComponentKey, DrawPlan)> {
+pub(crate) fn drawn_plans(host: &ViewHost) -> Vec<(ComponentKey, DrawPlan)> {
     let mut out = Vec::new();
-    collect_drawn(spec, &mut out);
+    if let Some(spec) = host.spec() {
+        collect_drawn(&spec.root, host, &mut out);
+    }
     out
 }
 
+/// The tab a `Tabs` strip displays: the host's selection, which starts on
+/// the spec's active tab and follows the user's tab presses.
+fn displayed_tab(host: &ViewHost, t: &TabsSpec) -> usize {
+    host.observe(&t.key)
+        .and_then(|s| s.selected)
+        .unwrap_or(t.active)
+}
+
 #[cfg(feature = "gpui-test")]
-fn collect_drawn(spec: &ComponentSpec, out: &mut Vec<(ComponentKey, DrawPlan)>) {
+fn collect_drawn(spec: &ComponentSpec, host: &ViewHost, out: &mut Vec<(ComponentKey, DrawPlan)>) {
     match spec {
-        ComponentSpec::Panel(p) => p.children.iter().for_each(|c| collect_drawn(c, out)),
+        ComponentSpec::Panel(p) => p.children.iter().for_each(|c| collect_drawn(c, host, out)),
         ComponentSpec::Tabs(t) => {
-            let active = t.active.min(t.tabs.len().saturating_sub(1));
-            if let Some(tab) = t.tabs.get(active) {
-                collect_drawn(&tab.child, out);
+            if let Some(tab) = t.tabs.get(displayed_tab(host, t)) {
+                collect_drawn(&tab.child, host, out);
             }
         }
         ComponentSpec::Meter(m) => out.push((m.key.clone(), DrawPlan::Meter(meter_bar_plan(m)))),
@@ -1808,6 +1834,63 @@ mod tests {
                 }
             )));
         });
+    }
+
+    /// A selectable tab strip; each header is addressable as
+    /// `"mixer_tabs-tab-<index>"` for the pointer test.
+    fn host_with_selectable_tabs() -> ViewHost {
+        use ruviform_ui::view::{TabSpec, TabsSelectionSpec};
+        let tab = |key_name: &str, title: &str| TabSpec {
+            key: ComponentKey(key_name.to_string()),
+            title: title.to_string(),
+            child: Box::new(ComponentSpec::Label(LabelSpec {
+                key: ComponentKey(format!("{key_name}.body")),
+                text: format!("{title} body"),
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            })),
+        };
+        let mut host = ViewHost::new(
+            ViewInstanceId::new(1).expect("nonzero"),
+            AttachEpoch::new(1),
+        );
+        host.mount(ViewSpec {
+            root: ComponentSpec::Tabs(TabsSpec {
+                key: ComponentKey("mixer_tabs".to_string()),
+                active: 0,
+                tabs: vec![tab("tab.mixer", "Mixer"), tab("tab.routing", "Routing")],
+                selection: Some(TabsSelectionSpec {
+                    target: "mixer.tabs.select".to_string(),
+                }),
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+        host
+    }
+
+    /// Issue #451: a press on a tab header selects that tab through the
+    /// element's mouse listener, and the displayed tab follows the host.
+    #[gpui::test]
+    fn tab_header_press_selects_the_tab_through_the_pointer(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(host_with_selectable_tabs(), ViewPalette::fallback(), |_| {})
+        });
+        cx.run_until_parked();
+        let key = ComponentKey("mixer_tabs".to_string());
+        let selected = |cx: &mut gpui::VisualTestContext| {
+            view.update(cx, |v, _cx| v.host.observe(&key).and_then(|s| s.selected))
+        };
+        assert_eq!(selected(cx), Some(0));
+
+        let header = cx
+            .debug_bounds("mixer_tabs-tab-1")
+            .expect("routing tab header is drawn");
+        cx.simulate_mouse_down(header.center(), MouseButton::Left, Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(selected(cx), Some(1));
     }
 
     /// UI-DVR-03 GPUI lane (out-of-order): a preview whose `seq` is older
@@ -2383,8 +2466,18 @@ mod tests {
         });
     }
 
+    /// Plans `root` through a mounted host, as the observer does.
+    fn drawn_of(root: ComponentSpec) -> Vec<(ComponentKey, DrawPlan)> {
+        let mut host = ViewHost::new(
+            ViewInstanceId::new(1).expect("nonzero"),
+            AttachEpoch::new(1),
+        );
+        host.mount(ViewSpec { root }).expect("mount");
+        drawn_plans(&host)
+    }
+
     /// `drawn_plans` walks the tree the way `element_for` paints it: a
-    /// Panel paints every child, a Tabs strip only its active child.
+    /// Panel paints every child, a Tabs strip only its displayed tab.
     #[test]
     fn drawn_plans_follow_paint_tree() {
         let meter = |key_name: &str| {
@@ -2404,7 +2497,7 @@ mod tests {
             })
         };
         let tab = |key_name: &str| TabSpec {
-            key: ComponentKey(key_name.to_string()),
+            key: ComponentKey(format!("tab.{key_name}")),
             title: key_name.to_string(),
             child: Box::new(meter(key_name)),
         };
@@ -2412,6 +2505,7 @@ mod tests {
             key: ComponentKey("tabs".to_string()),
             active: 1,
             tabs: vec![tab("hidden"), tab("shown")],
+            selection: None,
             visual: ComponentVisualState::default(),
             a11y: A11ySpec::default(),
         });
@@ -2422,10 +2516,7 @@ mod tests {
             visual: ComponentVisualState::default(),
             a11y: A11ySpec::default(),
         });
-        let keys: Vec<String> = drawn_plans(&root)
-            .into_iter()
-            .map(|(key, _)| key.0)
-            .collect();
+        let keys: Vec<String> = drawn_of(root).into_iter().map(|(key, _)| key.0).collect();
         assert_eq!(keys, ["first", "shown"]);
     }
 
@@ -2458,7 +2549,7 @@ mod tests {
             visual: ComponentVisualState::default(),
             a11y: A11ySpec::default(),
         });
-        let plans = drawn_plans(&waveform);
+        let plans = drawn_of(waveform);
         let [(key, DrawPlan::Waveform(channels))] = plans.as_slice() else {
             panic!("one waveform plan");
         };
@@ -2601,6 +2692,7 @@ mod tests {
                     })),
                 },
             ],
+            selection: None,
             visual: ComponentVisualState::default(),
             a11y: A11ySpec::default(),
         })

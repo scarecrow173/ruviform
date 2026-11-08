@@ -103,6 +103,7 @@ fn dock_view(active: usize) -> ViewSpec {
                         child: Box::new(other),
                     },
                 ],
+                selection: None,
                 visual: ComponentVisualState::default(),
                 a11y: A11ySpec::default(),
             })],

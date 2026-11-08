@@ -276,6 +276,24 @@ impl GpuiObserver {
         Ok(())
     }
 
+    /// Presses tab `index` of the tab strip `key` in `window`, as a tab
+    /// header click does. The emitted intent shows in
+    /// [`intents`](Self::intents) after [`settle`](Self::settle).
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` hosts no view.
+    pub fn select_tab(
+        &self,
+        window: WindowId,
+        key: &ComponentKey,
+        index: usize,
+    ) -> Result<(), UiError> {
+        let view = self.view(window)?;
+        self.cx
+            .update(|app| view.update(app, |v, cx| v.select_tab(key, index, cx)));
+        Ok(())
+    }
+
     /// Presses the button `key` in `window`, as a click does. The emitted
     /// intent shows in [`intents`](Self::intents) after
     /// [`settle`](Self::settle).
@@ -321,8 +339,8 @@ impl GpuiObserver {
     pub fn drawn(&self, window: WindowId) -> Option<ViewDrawn> {
         let view = self.view(window).ok()?;
         let plans = self.cx.update(|app| {
-            let spec = view.read(app).host().spec()?;
-            Some(render::drawn_plans(&spec.root))
+            let host = view.read(app).host();
+            host.spec().map(|_| render::drawn_plans(host))
         })?;
         Some(ViewDrawn {
             window,

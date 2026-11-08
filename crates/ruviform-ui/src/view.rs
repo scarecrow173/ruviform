@@ -153,6 +153,10 @@ pub struct TabsSpec {
     pub active: usize,
     /// Tabs in order.
     pub tabs: Vec<TabSpec>,
+    /// Tab selection; `None` keeps the strip spec-driven (the active tab
+    /// changes only through a new spec).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection: Option<TabsSelectionSpec>,
     /// Visual state.
     pub visual: ComponentVisualState,
     /// Accessibility semantics.
@@ -433,6 +437,19 @@ pub const TABLE_SELECT_ACTION: &str = "select";
 /// discrete `Action` intent on `target` with action [`TABLE_SELECT_ACTION`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TableSelectionSpec {
+    /// Logical command target of the selection intent.
+    pub target: LogicalTarget,
+}
+
+/// Discrete action name of a tab-selection intent. Its params are
+/// `{"index": <index>}` in the spec's tab order at the time of selection.
+pub const TAB_SELECT_ACTION: &str = "tab-select";
+
+/// Tab-selection capability of a [`TabsSpec`]. Pressing a tab header
+/// issues a discrete `Action` intent on `target` with action
+/// [`TAB_SELECT_ACTION`]; the displayed tab follows the receipt contract.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TabsSelectionSpec {
     /// Logical command target of the selection intent.
     pub target: LogicalTarget,
 }
@@ -813,9 +830,10 @@ pub struct ComponentSnapshot {
     /// Latest accepted authoritative projection — the only channel
     /// that proves domain state (`None` when none has landed).
     pub observed: Option<StateProjection<serde_json::Value>>,
-    /// Displayed row selection of a selectable `Table` (`None` otherwise
-    /// and when no row is selected). Optimistic: a rejected selection
-    /// restores the previous row.
+    /// Displayed selection: the row of a selectable `Table` (`None`
+    /// otherwise and when no row is selected), or the displayed active
+    /// tab of a `Tabs` (always `Some`). Optimistic: a rejected selection
+    /// restores the previous row or tab.
     pub selected: Option<usize>,
     /// Whether the component is mounted.
     pub mounted: bool,
@@ -846,11 +864,21 @@ impl Mounted {
 }
 
 /// Binding id of a component that issues command intents without a
-/// control: a `Button`, or a `Table` with a selection. The key is the id.
+/// control: a `Button`, or a `Table`/`Tabs` with a selection. The key is the id.
 fn action_binding_id(node: &ComponentSpec) -> Option<ControlId> {
     match node {
         ComponentSpec::Button(b) => Some(b.key.0.clone()),
         ComponentSpec::Table(t) if t.selection.is_some() => Some(t.key.0.clone()),
+        ComponentSpec::Tabs(t) if t.selection.is_some() => Some(t.key.0.clone()),
+        _ => None,
+    }
+}
+
+/// The selection a freshly mounted `node` displays: a `Tabs` starts on its
+/// spec's active tab.
+fn initial_selection(node: &ComponentSpec) -> Option<usize> {
+    match node {
+        ComponentSpec::Tabs(t) => Some(t.active),
         _ => None,
     }
 }
@@ -863,16 +891,30 @@ fn mounted_node(node: &ComponentSpec) -> Mounted {
             control_id: c.control_id.clone().unwrap_or_else(|| c.key.0.clone()),
             spec: c.clone(),
         }),
-        selected: None,
+        selected: initial_selection(node),
     }
 }
 
-/// The displayed row selection `row` is valid for `node`: only a selectable
-/// table holds a selection, and only for a row that still exists in it.
+/// The displayed selection `row` is valid for `node`. A selectable table
+/// keeps only a row that still exists; a tab strip always displays a tab and
+/// falls back to its spec's active tab when the displayed one is gone.
 fn clamp_selection(row: Option<usize>, node: &ComponentSpec) -> Option<usize> {
     match node {
         ComponentSpec::Table(t) if t.selection.is_some() => row.filter(|&r| r < t.rows.len()),
+        ComponentSpec::Tabs(t) => Some(row.filter(|&i| i < t.tabs.len()).unwrap_or(t.active)),
         _ => None,
+    }
+}
+
+/// The selection a same-key `node` inherits from the mounted `prev`. A new
+/// spec `active` tab is authoritative and replaces the displayed tab; an
+/// unchanged one keeps the user's displayed selection.
+fn carried_selection(prev: &Mounted, node: &ComponentSpec) -> Option<usize> {
+    match (&prev.spec, node) {
+        (ComponentSpec::Tabs(old), ComponentSpec::Tabs(new)) if old.active == new.active => {
+            clamp_selection(prev.selected, node)
+        }
+        _ => clamp_selection(initial_selection(node), node),
     }
 }
 
@@ -1310,6 +1352,7 @@ impl ViewHost {
         let invalid = match node {
             ComponentSpec::Button(b) => b.target.is_empty() || b.action.is_empty(),
             ComponentSpec::Table(t) => t.selection.as_ref().is_some_and(|s| s.target.is_empty()),
+            ComponentSpec::Tabs(t) => t.selection.as_ref().is_some_and(|s| s.target.is_empty()),
             _ => false,
         };
         if invalid {
@@ -1481,11 +1524,20 @@ impl ViewHost {
         )
     }
 
-    fn unregister_control(&mut self, meta: &ControlMeta) {
+    /// Ends the control's gesture and drops it from the dispatcher. Its
+    /// command routing survives: a contract change re-registers the same
+    /// control, and its in-flight receipts must still settle.
+    fn detach_control(&mut self, meta: &ControlMeta) {
         let events = self.dispatcher.unregister(&meta.control_id);
         for event in events {
             self.emit_gesture(&meta.spec.key, event);
         }
+    }
+
+    /// Removes a control for good: detaches it and releases its receipt
+    /// routing, so late receipts for its commands miss the index.
+    fn unregister_control(&mut self, meta: &ControlMeta) {
+        self.detach_control(meta);
         self.command_index
             .retain(|_, owner| owner != &meta.control_id);
     }
@@ -1554,6 +1606,24 @@ impl ViewHost {
         if let Some(m) = self.mounted.get_mut(key) {
             m.selected = clamp_selection(row, &m.spec);
         }
+    }
+
+    /// Moves the displayed selection of `key` to `index` and emits its
+    /// `Action` intent. The previous selection is kept for a rejected or
+    /// unsupported receipt to restore.
+    fn emit_selection(
+        &mut self,
+        key: &ComponentKey,
+        target: LogicalTarget,
+        (action, params): (&str, serde_json::Value),
+        index: usize,
+    ) {
+        let previous = self.mounted.get(key).and_then(|m| m.selected);
+        let intent = self.action_intent(key, target, action, Some(params));
+        self.set_selected(key, Some(index));
+        let command_id = self.emit_intent(&key.0, intent);
+        self.selection_undo
+            .insert(command_id, (key.clone(), previous));
     }
 
     /// Drops a removed component's routing state: its control, or its
@@ -1657,7 +1727,7 @@ impl ViewHost {
                             && let Some(meta) = &m.control
                         {
                             let meta = meta.clone();
-                            self.unregister_control(&meta);
+                            self.detach_control(&meta);
                         }
                         if let Some(c) = node.control() {
                             self.register_control(c);
@@ -1665,7 +1735,7 @@ impl ViewHost {
                     }
                     ops.push(ProjectionOp::Updated { key: key.clone() });
                     if let Some(m) = self.mounted.get_mut(key) {
-                        let selected = clamp_selection(m.selected, node);
+                        let selected = carried_selection(m, node);
                         *m = Mounted {
                             selected,
                             ..mounted_node(node)
@@ -1801,9 +1871,9 @@ impl ViewHost {
             .mounted
             .get(key)
             .ok_or_else(|| ViewError::UnknownComponent { key: key.clone() })?;
-        let (target, rows, previous) = match &m.spec {
+        let (target, rows) = match &m.spec {
             ComponentSpec::Table(t) => match &t.selection {
-                Some(selection) => (selection.target.clone(), t.rows.len(), m.selected),
+                Some(selection) => (selection.target.clone(), t.rows.len()),
                 None => return Err(invalid_input(key, "table is not selectable")),
             },
             _ => return Err(invalid_input(key, "component is not a table")),
@@ -1814,16 +1884,56 @@ impl ViewHost {
                 format!("row {row} is outside {rows} rows"),
             ));
         }
-        let intent = self.action_intent(
+        self.emit_selection(
             key,
             target,
-            TABLE_SELECT_ACTION,
-            Some(serde_json::json!({ "row": row })),
+            (TABLE_SELECT_ACTION, serde_json::json!({ "row": row })),
+            row,
         );
-        self.set_selected(key, Some(row));
-        let command_id = self.emit_intent(&key.0, intent);
-        self.selection_undo
-            .insert(command_id, (key.clone(), previous));
+        Ok(())
+    }
+
+    /// Selects tab `index` of the `Tabs` `key`, as a tab-header press does.
+    /// The display moves to `index` at once; the emitted `Action` intent
+    /// (`action` = [`TAB_SELECT_ACTION`], `params` = `{"index": index}`)
+    /// settles through its receipt. A rejected or unsupported receipt
+    /// restores the previous tab.
+    ///
+    /// # Errors
+    /// [`ViewError::StaleGeneration`] for a dead epoch;
+    /// [`ViewError::UnknownComponent`] for an unmounted key;
+    /// [`ViewError::InvalidInput`] when `key` is not a selectable tab strip
+    /// or `index` is outside it. Rejected inputs emit nothing.
+    pub fn select_tab(
+        &mut self,
+        generation: u64,
+        key: &ComponentKey,
+        index: usize,
+    ) -> Result<(), ViewError> {
+        self.check_gen(generation)?;
+        let m = self
+            .mounted
+            .get(key)
+            .ok_or_else(|| ViewError::UnknownComponent { key: key.clone() })?;
+        let (target, tabs) = match &m.spec {
+            ComponentSpec::Tabs(t) => match &t.selection {
+                Some(selection) => (selection.target.clone(), t.tabs.len()),
+                None => return Err(invalid_input(key, "tabs are not selectable")),
+            },
+            _ => return Err(invalid_input(key, "component is not tabs")),
+        };
+        if index >= tabs {
+            return Err(invalid_input(
+                key,
+                format!("tab {index} is outside {tabs} tabs"),
+            ));
+        }
+        self.emit_selection(
+            key,
+            target,
+            (TAB_SELECT_ACTION, serde_json::json!({ "index": index })),
+            index,
+        );
         Ok(())
     }
 
@@ -1932,8 +2042,8 @@ impl ViewHost {
         true
     }
 
-    /// Settles an optimistic row selection on its command's receipt: a
-    /// terminal failure restores the previous row, and any terminal
+    /// Settles an optimistic row or tab selection on its command's receipt:
+    /// a terminal failure restores the previous selection, and any terminal
     /// status releases the undo record. `accepted`/`queued` keep it.
     fn settle_selection(&mut self, receipt: &CommandReceipt) {
         if matches!(
@@ -2300,6 +2410,60 @@ mod tests {
         assert!(host.apply_receipt(&receipt(second_commit, ReceiptStatus::Applied)));
         assert_eq!(
             host.binding("a").expect("binding").phase(),
+            CommandPhase::Applied
+        );
+    }
+
+    fn seek(key: &str, max: f64) -> ComponentSpec {
+        ComponentSpec::Seek(ControlSpec {
+            key: ComponentKey::from(key),
+            control_id: None,
+            target: Some(format!("transport.{key}")),
+            descriptor: ValueDescriptor::ranged(0.0, max),
+            orientation: Orientation::Horizontal,
+            detach_policy: DetachPolicy::Cancel,
+            unsupported: false,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec {
+                role: Some(A11yRole::Slider),
+                label: Some(key.to_string()),
+                ..Default::default()
+            },
+        })
+    }
+
+    #[test]
+    fn descriptor_update_widens_seek_range_without_remount() {
+        // Project length change: the same Seek key is re-spec'd with a
+        // wider descriptor through `update`. The projection that lands
+        // after the update may exceed the old maximum — proof that the
+        // dispatcher now maps through the new range.
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![seek("transport_seek", 240.0)]))
+            .expect("mount");
+        let generation = host.generation();
+        host.update(panel(vec![seek("transport_seek", 600.0)]), generation)
+            .expect("range update");
+        assert_eq!(host.generation(), generation, "update keeps the epoch");
+        host.apply_projection("transport_seek", &projection(serde_json::json!(300.0), 1));
+        assert!((display_plain(&host, "transport_seek") - 300.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn descriptor_update_keeps_in_flight_receipt_routing() {
+        // The control is re-registered with a new range while its commit
+        // is still pending. The re-registration is a contract change, not
+        // a removal: the receipt for that commit must still settle.
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![seek("transport_seek", 240.0)]))
+            .expect("mount");
+        let commit = commit_intent_id(&mut host, "transport_seek", "g1");
+        let generation = host.generation();
+        host.update(panel(vec![seek("transport_seek", 600.0)]), generation)
+            .expect("range update");
+        assert!(host.apply_receipt(&receipt(commit, ReceiptStatus::Applied)));
+        assert_eq!(
+            host.binding("transport_seek").expect("binding").phase(),
             CommandPhase::Applied
         );
     }
@@ -3191,6 +3355,137 @@ mod tests {
             host.select_row(host.generation(), &key, 0),
             Err(ViewError::InvalidInput { .. })
         ));
+    }
+
+    fn tabs(key: &str, count: usize, active: usize, selectable: bool, body: &str) -> ComponentSpec {
+        ComponentSpec::Tabs(TabsSpec {
+            key: ComponentKey::from(key),
+            active,
+            tabs: (0..count)
+                .map(|i| TabSpec {
+                    key: ComponentKey(format!("{key}.tab{i}")),
+                    title: format!("Tab {i}"),
+                    child: Box::new(label(&format!("{key}.label{i}"), body)),
+                })
+                .collect(),
+            selection: selectable.then(|| TabsSelectionSpec {
+                target: "mixer".into(),
+            }),
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    #[test]
+    fn tab_select_emits_action_and_observes_displayed_tab() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![tabs("mixer_tabs", 3, 0, true, "")]))
+            .expect("mount");
+        host.drain_events();
+        let key = ComponentKey::from("mixer_tabs");
+        host.select_tab(host.generation(), &key, 2)
+            .expect("select tab");
+
+        let intents = action_intents(&mut host);
+        assert_eq!(intents.len(), 1);
+        match &intents[0].0 {
+            CommandIntent::Action {
+                target,
+                control_id,
+                action,
+                params,
+                ..
+            } => {
+                assert_eq!(target, "mixer");
+                assert_eq!(control_id, "mixer_tabs");
+                assert_eq!(action, TAB_SELECT_ACTION);
+                assert_eq!(params.as_ref(), Some(&serde_json::json!({ "index": 2 })));
+            }
+            other => panic!("expected action, got {other:?}"),
+        }
+        let snap = host.observe(&key).expect("snapshot");
+        assert_eq!(snap.selected, Some(2));
+        assert_eq!(snap.phase, CommandPhase::Pending);
+    }
+
+    #[test]
+    fn tab_selection_rejects_inputs_that_do_not_apply_without_emitting() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![
+            tabs("fixed", 2, 0, false, ""),
+            tabs("mixer_tabs", 2, 0, true, ""),
+        ]))
+        .expect("mount");
+        host.drain_events();
+        let generation = host.generation();
+        assert!(matches!(
+            host.select_tab(generation, &ComponentKey::from("fixed"), 1),
+            Err(ViewError::InvalidInput { .. })
+        ));
+        assert!(matches!(
+            host.select_tab(generation, &ComponentKey::from("mixer_tabs"), 2),
+            Err(ViewError::InvalidInput { .. })
+        ));
+        assert!(matches!(
+            host.select_tab(generation, &ComponentKey::from("missing"), 0),
+            Err(ViewError::UnknownComponent { .. })
+        ));
+        assert!(matches!(
+            host.select_tab(generation + 1, &ComponentKey::from("mixer_tabs"), 0),
+            Err(ViewError::StaleGeneration { .. })
+        ));
+        assert_eq!(action_intents(&mut host).len(), 0);
+        let snap = host
+            .observe(&ComponentKey::from("mixer_tabs"))
+            .expect("snapshot");
+        assert_eq!(snap.selected, Some(0));
+    }
+
+    #[test]
+    fn rejected_tab_selection_restores_the_previous_tab() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![tabs("mixer_tabs", 3, 0, true, "")]))
+            .expect("mount");
+        host.drain_events();
+        let key = ComponentKey::from("mixer_tabs");
+        let generation = host.generation();
+        host.select_tab(generation, &key, 1).expect("first");
+        let first = action_intents(&mut host).remove(0).1;
+        host.select_tab(generation, &key, 2).expect("second");
+        let second = action_intents(&mut host).remove(0).1;
+
+        assert!(host.apply_receipt(&receipt(second, ReceiptStatus::Rejected)));
+        assert_eq!(host.observe(&key).expect("snapshot").selected, Some(1));
+        assert!(host.apply_receipt(&receipt(first, ReceiptStatus::Applied)));
+        assert_eq!(host.observe(&key).expect("snapshot").selected, Some(1));
+    }
+
+    #[test]
+    fn tab_update_adopts_a_new_active_tab_and_keeps_the_displayed_one() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![tabs("mixer_tabs", 3, 0, true, "a")]))
+            .expect("mount");
+        let key = ComponentKey::from("mixer_tabs");
+        let generation = host.generation();
+        host.select_tab(generation, &key, 2).expect("select");
+        let selected = |host: &ViewHost| host.observe(&key).expect("snapshot").selected;
+
+        // Same authoritative `active`: the displayed tab survives an
+        // unrelated change to the strip's content.
+        host.update(panel(vec![tabs("mixer_tabs", 3, 0, true, "b")]), generation)
+            .expect("content update");
+        assert_eq!(selected(&host), Some(2));
+
+        // A new authoritative `active` replaces the displayed tab.
+        host.update(panel(vec![tabs("mixer_tabs", 3, 1, true, "b")]), generation)
+            .expect("active update");
+        assert_eq!(selected(&host), Some(1));
+
+        // A displayed tab the strip no longer has falls back to `active`.
+        host.select_tab(generation, &key, 2).expect("select last");
+        host.update(panel(vec![tabs("mixer_tabs", 2, 1, true, "b")]), generation)
+            .expect("shrink");
+        assert_eq!(selected(&host), Some(1));
     }
 
     #[test]

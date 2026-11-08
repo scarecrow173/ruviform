@@ -144,3 +144,4 @@ Directory: `docs/designs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | superseded | [music-time-model.md](./music-time-model.md) |
+| DESIGN-Hk9Qz4WsNt6XrLc1VbYe8M | Issue #451 — Tabs pointer 切替と descriptor 更新の ViewSpec 契約の設計 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |

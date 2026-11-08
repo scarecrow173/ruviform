@@ -423,6 +423,11 @@ fn observes_selection_and_command_intents_through_seam() {
         .select_row(window, &key("jobs"), row)
         .expect("select row");
     observer.invoke(window, &key("run")).expect("invoke");
+    let tab = usize::try_from(fx["expect"]["tabs"]["selectIndex"].as_u64().expect("tab"))
+        .expect("tab index");
+    observer
+        .select_tab(window, &key("mixer_tabs"), tab)
+        .expect("select tab");
     observer.settle(|_, _| {});
 
     let mut want = fx["expect"]["table"]["intents"]
@@ -433,6 +438,13 @@ fn observes_selection_and_command_intents_through_seam() {
         fx["expect"]["button"]["intents"]
             .as_array()
             .expect("button intents")
+            .iter()
+            .cloned(),
+    );
+    want.extend(
+        fx["expect"]["tabs"]["intents"]
+            .as_array()
+            .expect("tabs intents")
             .iter()
             .cloned(),
     );
@@ -473,6 +485,33 @@ fn observes_selection_and_command_intents_through_seam() {
         panic!("table plan");
     };
     assert_eq!(header, strings(&fx["expect"]["table"]["drawnHeader"]));
+
+    let tabs = snap_of("mixer_tabs");
+    assert_eq!(
+        tabs.selected.and_then(|r| u64::try_from(r).ok()),
+        fx["expect"]["tabs"]["selectedAfterSelect"].as_u64()
+    );
+    assert_eq!(
+        serde_json::to_value(tabs.phase).expect("phase json"),
+        fx["expect"]["tabs"]["phase"]
+    );
+    let DrawnPlan::Label { text } = drawn_plan(&drawn, "routing.body") else {
+        panic!("selected tab body plan");
+    };
+    assert_eq!(
+        Some(text.as_str()),
+        fx["expect"]["tabs"]["drawnBody"].as_str()
+    );
+    let undrawn = fx["expect"]["tabs"]["undrawnBody"]
+        .as_str()
+        .expect("undrawn");
+    assert!(
+        !drawn
+            .components
+            .iter()
+            .any(|c| matches!(&c.plan, DrawnPlan::Label { text } if text.as_str() == undrawn)),
+        "the unselected tab body is not drawn"
+    );
 }
 
 /// Phase of the fixture's `run` button in the observed projection.
