@@ -98,7 +98,7 @@ Directory: `docs/specs`
 | SPEC-Qm4Wd7Lz1RbNc8Xk3TgHs5 | Issue #436 — GpuiObserver の描画 plan（drawn）公開 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
 | SPEC-Vd7Qk2LmRt9WxYc4NbHa3F | Issue #448 — 読み取り専用 Table の行選択と command 起動の ViewSpec 契約 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | SPEC-LOaygozld2Yp16xXhm1Yx5 | Issue #450 — Seek/Fader の canvas が実窓で 0 サイズになり描画されない問題の是正 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
-| SPEC-034Ue3JcZURnCZrdgjO2Os | Issue #451 FU-1b — Tab/Shift-Tab によるフォーカス巡回の配線 | draft | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
+| SPEC-034Ue3khxUUmbPdFCx4Mbh | Issue #451 FU-1b — Tab/Shift-Tab によるフォーカス巡回の配線 | approved | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | SPEC-Kb7Tn3QwRx9LpVc2Hy5Ud8 | Issue #451 FU-1 — Tabs のキーボード切替 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
 | SPEC-Gt5Rw2KqZm8LxNv3TcYb7H | Issue #451 — Tabs ヘッダの pointer 切替と ViewSpec descriptor の mount 後更新契約 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | SPEC-7snPYyix2JlpoyXvP0zKwf | Issue #453 — 残 canvas 要素（Waveform/Meter/Spectrogram/TimeAxis/NativeSlot）のサイズ規則監査と是正 | approved | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
@@ -110,6 +110,7 @@ Directory: `docs/specs`
 | SPEC-HvasimHE9mJVFN1ay6D68D | Issue #465 Legacy WebView 基盤の段階的廃止 P0/P1 — 文書歴史化と棚卸し | proposed | [issue-465-legacy-webview-p0p1.md](./issue-465-legacy-webview-p0p1.md) |
 | SPEC-034Uay7qlGIC70AEeDcn7u | Issue #468 RootedDir containment の canonical 前提の設計判断 | proposed | [issue-468-rooteddir-canonical-premise.md](./issue-468-rooteddir-canonical-premise.md) |
 | SPEC-034UetYOiYEThOr1lvUH8t | Issue #478 Fader/Knob 縦寸法契約 — h_full 兄弟押し出しのレイアウト判断 | approved | [issue-478-fader-knob-height-contract.md](./issue-478-fader-knob-height-contract.md) |
+| SPEC-z3dzJJAH4RMnLrkQfhkR0m | Issue #479 — Seek/Fader/Knob のキーボード操作（共通 key 規約） | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |

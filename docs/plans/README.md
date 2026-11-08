@@ -105,7 +105,7 @@ Directory: `docs/plans`
 | PLAN-Rt5LxV8dNq2MzKc7WbFy4 | Issue #436 — GpuiObserver 描画 plan 公開の実装計画 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
 | PLAN-Qz8Ld3WbTm6XyKr2HnVc4E | Issue #448 — 行選択と command 起動の実装計画 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | PLAN-cXVjL8azFccQWa3dVmLi1a | Issue #450 — Seek/Fader canvas サイズ是正の実装計画 | in-progress | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |
-| PLAN-034Ue8cy65F5L1MWmEzj3E | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の実装計画 | draft | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
+| PLAN-034Ue8cy65F5L1MWmEzj3E | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の実装計画 | approved | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | PLAN-Qf3Nr9WxKc7TbVz2LmHd4P | Issue #451 FU-1 — Tabs のキーボード切替の実装計画 | approved | [issue-451-keyboard-tab-nav.md](./issue-451-keyboard-tab-nav.md) |
 | PLAN-Wp3Nd7TzKb5QxHv2RcLf9J | Issue #451 — Tabs pointer 切替と descriptor 更新の実装計画 | approved | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | PLAN-yicQRN5SwNiNcaiqCAvmpf | Issue #453 — 残 canvas のサイズ規則監査と是正の実装計画 | in-progress | [issue-453-canvas-size-audit.md](./issue-453-canvas-size-audit.md) |
@@ -113,6 +113,7 @@ Directory: `docs/plans`
 | PLAN-034TXozGzl5Y5HRbsrn4t3 | Issue #461 — canvas painter paint batch の実装計画 | in-progress | [issue-461-canvas-paint-layer.md](./issue-461-canvas-paint-layer.md) |
 | PLAN-034U1MMbt0YsJ3ObAlnx0z | Issue #461 残課題 — TimeAxis label canvas 描画の実装計画 | in-progress | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | PLAN-034UcaoYWDDGPoQ9CBmEdc | Issue #464 — Consumer-neutral GUI Scenario Contract | approved | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
+| PLAN-1OVcOgiEi7tc3VMXPzF9F3 | Issue #479 — 値制御キーボード操作の実装計画 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
