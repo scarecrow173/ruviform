@@ -1,10 +1,10 @@
 ---
 id: "PLAN-Vn6Pc1Rh4SxDa9Gt3KwLe8"
 type: "plan"
-status: "proposed"
+status: "completed"
 title: "Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装計画"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -37,6 +37,8 @@ relations:
   supersedes: []
   superseded-by: []
   related:
+    - "docs/test-specs/issue-442-observer-drawn-spectrogram-label-table.md"
+  verified-by:
     - "docs/test-specs/issue-442-observer-drawn-spectrogram-label-table.md"
 ---
 

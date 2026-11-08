@@ -102,10 +102,10 @@ Directory: `docs/test-specs`
 | TSPEC-Pw8DcTn5KgBy2VaQr7ZmFu | Issue #421 — Meter/TimeAxis GPUI 描画と Fake/GPUI parity の検証契約 | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | TSPEC-Vm4QrJc7LsBk2NwYg9DeHa | Issue #429 — Consumer 観測 seam の検証契約 | proposed | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
 | TSPEC-Bw6Qk3RnZtLp9VcSj4MdGa | Issue #434 — Spectrogram kind の検証契約 | proposed | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
-| TSPEC-Mv4HxFc7BqKe1NwRj9TsZa | Issue #435 — Label/Table の契約・Fake/GPUI parity の検証契約 | proposed | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
+| TSPEC-Mv4HxFc7BqKe1NwRj9TsZa | Issue #435 — Label/Table の契約・Fake/GPUI parity の検証契約 | approved | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
 | TEST-Cz6GhM2TwPq9RkLd4VnXa7 | Issue #436 — 描画 plan 公開のテスト仕様 | proposed | [issue-436-observer-drawn.md](./issue-436-observer-drawn.md) |
-| TEST-Ek8Nr3Gu6LvBx4Cq9TjMa2 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加のテスト仕様 | proposed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
-| TSPEC-Nd4Gq8VzMr2TkLb6XjPw1Ec | Issue #443 — Tile 列区間と count の検証契約 | proposed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
+| TSPEC-Ek8Nr3Gu6LvBx4Cq9TjMaZ | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加のテスト仕様 | approved | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
+| TSPEC-Nd4Gq8VzMr2TkLb6XjPw1E | Issue #443 — Tile 列区間と count の検証契約 | approved | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | TSPEC-Qm7Lw3Rt9Xc2Hb5Vd8Ns4Ke | Issue #446 — 空 frame 範囲の Tile 検証契約 | proposed | [issue-446-tile-empty-frames.md](./issue-446-tile-empty-frames.md) |
 | TSPEC-Bn6Xc1RqLw3KtYv8ZmHd2G | Issue #448 — 行選択と command 起動の検証契約 | approved | [issue-448-table-selection-command.md](./issue-448-table-selection-command.md) |
 | TSPEC-EcUAfWYYG6G0Npqen48ITk | Issue #450 — Seek/Fader canvas bounds の検証契約 | approved | [issue-450-control-canvas-size.md](./issue-450-control-canvas-size.md) |

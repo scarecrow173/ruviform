@@ -1,10 +1,10 @@
 ---
-id: "SPEC-Qm7Lr2TxVb9KdWn4HcYe8Sa"
+id: "SPEC-Qm7Lr2TxVb9KdWn4HcYe8S"
 type: "spec"
-status: "proposed"
+status: "implemented"
 title: "Issue #443 — Tile から SpectrogramColumn への写し替え規則の上流契約"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -37,6 +37,8 @@ relations:
   superseded-by: []
   related:
     - "crates/ruviform-viz/src/spectrogram.rs"
+  refines:
+    - "docs/specs/issue-434-spectrogram-kind.md"
 ---
 
 # Issue #443 — Tile から SpectrogramColumn への写し替え規則の上流契約

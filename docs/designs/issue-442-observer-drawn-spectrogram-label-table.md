@@ -1,10 +1,10 @@
 ---
 id: "DESIGN-Jq3Lw8Yn5RtBe2Fk7MzUc4"
 type: "design"
-status: "proposed"
+status: "approved"
 title: "Issue #442 — GpuiObserver 描画 plan への Spectrogram / Label / Table 追加の設計"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:

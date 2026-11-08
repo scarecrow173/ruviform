@@ -1,10 +1,10 @@
 ---
-id: "PLAN-Ws6Tz1RbMn4QcKe9YhGx3Dp"
+id: "PLAN-Ws6Tz1RbMn4QcKe9YhGx3D"
 type: "plan"
-status: "in-progress"
+status: "completed"
 title: "Issue #443 — Tile 列区間と count 契約の実装計画"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -34,6 +34,8 @@ relations:
   implemented-by: []
   depends-on: []
   blocks: []
+  verified-by:
+    - "docs/test-specs/issue-443-tile-column-contract.md"
 ---
 
 # Issue #443 — Tile 列区間と count 契約の実装計画
