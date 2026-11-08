@@ -136,6 +136,18 @@ TOCTOU（検査時点と open 時点で名前が指す物が変わる問題）�
   （`WithinRoot` のみ）。絶対 link target は canonical prefix の
   TEXTUAL walk + 残 suffix の FD walk。「一度でも root prefix を外れた
   target は tainted」— 外を経由して戻る形も保守的に `EscapesRoot`。
+- canonical 前提（Issue #468）— `open`/`open_scoped_root` に渡す
+  path の綴りは canonical でなくてよい（anchor は handle 由来の
+  canonical で導出される）。前提が効くのは **tree 内の絶対 link
+  target の綴り**で、`canonical_root()` の成分列で綴るか相対
+  target にする必要がある。非 canonical alias 綴り
+  （macOS `/var` vs `/private/var`・Windows 8.3 名・junction・
+  `subst`）の in-root 絶対 target は kernel 解決では内側でも
+  保守的に `EscapesRoot`（wrong-reject は fail-closed であり、
+  root 外の byte/fact は一切返さない）。consumer が root 内に
+  絶対 symlink を作る場合は、当該 capability の `canonical_root()`
+  を基底に target を組み立てるか、相対 target を使う。判断の
+  正本は `docs/adr/issue-468-rooteddir-canonical-premise.md`。
 - `open_regular` — Linux は `O_PATH|O_NOFOLLOW` pin→`fstat`→
   `/proc/self/fd` reopen + identity 検証。他 unix は `O_NONBLOCK`
   open+`fstat`。Windows は `FILE_NON_DIRECTORY_FILE|

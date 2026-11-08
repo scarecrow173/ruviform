@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "ruviform-io-file Rooted Read Capability テスト仕様"
 created: "2026-11-07"
-updated: "2026-11-07"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -26,7 +26,10 @@ relations:
   blocks: []
   supersedes: []
   superseded-by: []
-  related: []
+  related:
+    - "../specs/issue-468-rooteddir-canonical-premise.md"
+    - "../designs/issue-468-rooteddir-canonical-premise.md"
+    - "../adr/issue-468-rooteddir-canonical-premise.md"
   refines: []
   refined-by: []
   derives-from:

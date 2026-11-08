@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "ruviform-io-file Rooted Read Capability 設計"
 created: "2026-11-07"
-updated: "2026-11-07"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -70,6 +70,9 @@ relations:
     - "../specs/issue-304-io-archive-extract.md"
     - "../plans/issue-304-io-archive-extract.md"
     - "ruviform-architecture-design-baseline.md"
+    - "../designs/issue-468-rooteddir-canonical-premise.md"
+    - "../specs/issue-468-rooteddir-canonical-premise.md"
+    - "../adr/issue-468-rooteddir-canonical-premise.md"
   refines: []
   refined-by: []
   derives-from:

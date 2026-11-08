@@ -24,6 +24,19 @@
 //! kernel-namespace reality — documented limit, same as any
 //! canonicalize+containment check).
 //!
+//! **Canonical premise:** the `path` handed to [`RootedDir::open`]
+//! may be spelled any way — non-canonical aliases are fine because
+//! the anchor is derived from the opened handle, never from the
+//! string. The load-bearing premise sits on *link targets inside the
+//! tree*: under [`FollowMode::WithinRoot`], an absolute target is
+//! accepted only when spelled through [`RootedDir::canonical_root`]'s
+//! component sequence (relative targets are unaffected). A target
+//! spelled via a non-canonical alias of the root (`/var` vs
+//! `/private/var`, 8.3 names, junctions, `subst` drives)
+//! kernel-resolves inside yet conservatively fails `EscapesRoot` —
+//! consumers creating in-root absolute links must build targets from
+//! `canonical_root()` or use relative targets.
+//!
 //! **RT contract:** non-RT only — filesystem I/O, allocation.
 //!
 //! # Examples
@@ -148,6 +161,13 @@ impl RootedDir {
     /// `fs::canonicalize` — the only documented residual race in the
     /// capability.
     ///
+    /// `path` need not be canonical: any spelling that resolves to
+    /// the directory works, because the anchor is derived from the
+    /// opened handle. The canonical premise applies to *absolute
+    /// link targets encountered during resolution* — they must be
+    /// spelled through [`canonical_root`](Self::canonical_root)'s
+    /// component sequence (see [`FollowMode::WithinRoot`]).
+    ///
     /// `path` must name a directory (`NotDirectory` otherwise); all
     /// later lookups are relative to the opened handle, never to the
     /// path string.
@@ -164,6 +184,10 @@ impl RootedDir {
     }
 
     /// [`open`](Self::open) with explicit resolve budgets.
+    ///
+    /// Same canonical premise as [`open`](Self::open): `path` need
+    /// not be canonical; absolute link targets must be spelled via
+    /// [`canonical_root`](Self::canonical_root).
     ///
     /// **RT contract:** non-RT only.
     ///
@@ -215,7 +239,11 @@ impl RootedDir {
     /// this exact component sequence; another spelling of the same
     /// directory (`/var` vs `/private/var`, 8.3 names, bind mounts,
     /// `subst` drives) is a non-canonical alias — out-of-contract —
-    /// and conservatively fails `EscapesRoot`.
+    /// and conservatively fails `EscapesRoot`. Consumers that create
+    /// absolute symlinks inside the tree should build targets from
+    /// this path (or use relative targets); the spelling is this
+    /// capability's anchor, not a portable canonical form to persist
+    /// across environments.
     ///
     /// **RT contract:** non-RT only.
     #[must_use]
@@ -513,7 +541,9 @@ impl RootedDir {
     /// path string, and an anchor is never fabricated. Backends
     /// that cannot produce a handle-derived canonical path fail
     /// `Unsupported` rather than silently narrowing the
-    /// absolute-link guarantee.
+    /// absolute-link guarantee. The same canonical premise applies:
+    /// an absolute link target must be spelled through the new
+    /// [`canonical_root`](Self::canonical_root) component sequence.
     ///
     /// **RT contract:** non-RT only.
     ///
