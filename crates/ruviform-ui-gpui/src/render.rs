@@ -20,10 +20,10 @@ use std::rc::Rc;
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    Bounds, Context, Hsla, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, Render, Rgba, ScrollDelta,
-    ScrollWheelEvent, Styled, Subscription, Window, canvas, div, fill, point, px, relative, rgb,
-    size,
+    App, Bounds, Canvas, Context, Hsla, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, Render, Rgba,
+    ScrollDelta, ScrollWheelEvent, Styled, Subscription, Window, canvas, div, fill, point, px,
+    relative, rgb, size,
 };
 use ruviform_ui::behavior::{
     CommandReceipt, ControlInput, GestureId, InputModifiers, InputSource, ReceiptStatus, Revision,
@@ -272,6 +272,18 @@ struct SlotProjection {
     /// Last port error — surfaced for diagnostics; paint cannot
     /// propagate failures, so they are recorded instead.
     last_error: Option<SlotError>,
+}
+
+/// Slot for a viz paint canvas. A canvas has no intrinsic size and a
+/// block child with auto height paints at 0 px, so the canvas fills
+/// this flex column (`size_full`) and the slot owns the minimum height.
+fn viz_slot<T: 'static>(paint: Canvas<T>) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_col()
+        .flex_grow()
+        .min_h(px(120.0))
+        .child(paint.size_full())
 }
 
 /// `Bounds<Pixels>` → window-coords [`LogicalRect`] for the slot port.
@@ -711,6 +723,19 @@ impl RvfView {
 
     // -- element builders --------------------------------------------------
 
+    /// Canvas prepaint hook: records the paint canvas's laid-out bounds
+    /// under `key`. Pointer mapping and the drawn-size audit read this
+    /// same value, so every paint canvas reports through it.
+    fn record_bounds(
+        &self,
+        key: ComponentKey,
+    ) -> impl FnOnce(Bounds<Pixels>, &mut Window, &mut App) + 'static {
+        let store = self.bounds.clone();
+        move |bounds, _window, _cx| {
+            store.borrow_mut().insert(key, bounds);
+        }
+    }
+
     /// The displayed normalized value is already `[0, 1]` — the
     /// f64→f32 narrowing for quad geometry is intentional.
     #[allow(clippy::cast_possible_truncation)]
@@ -723,7 +748,6 @@ impl RvfView {
         let key = spec.key.clone();
         let orientation = spec.orientation;
         let palette = self.palette.clone();
-        let bounds_store = self.bounds.clone();
         let snap = self.host.observe(&spec.key);
         let n = snap.and_then(|s| s.display).map_or(0.0, |v| v.normalized) as f32;
         let horizontal = matches!(orientation, Orientation::Horizontal);
@@ -743,11 +767,8 @@ impl RvfView {
 
         // The control paints itself: track + fill + thumb via quads,
         // and records its bounds for pointer mapping.
-        let bounds_key = key.clone();
         let paint = canvas(
-            move |bounds, _window, _cx| {
-                bounds_store.borrow_mut().insert(bounds_key.clone(), bounds);
-            },
+            self.record_bounds(key.clone()),
             move |bounds, (), window, _cx| {
                 let (track_b, fill_b, thumb_b) =
                     slider_geometry(bounds, n.clamp(0.0, 1.0), thumb_frac, horizontal);
@@ -922,7 +943,7 @@ impl RvfView {
         let viewport: Range<u64> = spec.viewport.clone();
         let channel_count = channels.len().max(1);
         let paint = canvas(
-            move |_bounds, _window, _cx| (),
+            self.record_bounds(spec.key.clone()),
             move |bounds, (), window, _cx| {
                 let span = (viewport.end - viewport.start).max(1) as f32;
                 let origin = viewport.start as f32;
@@ -969,7 +990,7 @@ impl RvfView {
                 }
             },
         );
-        div().flex_grow().min_h(px(120.0)).child(paint)
+        viz_slot(paint)
     }
 
     /// Level bars per channel band. Peaks grow from the band floor and
@@ -980,7 +1001,7 @@ impl RvfView {
         let channel_count = spec.channel_levels.len().max(1);
         let bars = meter_bar_plan(spec);
         let paint = canvas(
-            move |_bounds, _window, _cx| (),
+            self.record_bounds(spec.key.clone()),
             move |bounds, (), window, _cx| {
                 window.paint_quad(fill(bounds, palette.surface_bg));
                 let ch_h = bounds.size.height / channel_count as f32;
@@ -1003,7 +1024,7 @@ impl RvfView {
                 }
             },
         );
-        div().flex_grow().min_h(px(120.0)).child(paint)
+        viz_slot(paint)
     }
 
     /// Tick marks along a baseline with labels above each mark. Major
@@ -1023,7 +1044,7 @@ impl RvfView {
             })
             .collect();
         let paint = canvas(
-            move |_bounds, _window, _cx| (),
+            self.record_bounds(spec.key.clone()),
             move |bounds, (), window, _cx| {
                 for m in &marks {
                     let h = if m.major {
@@ -1045,6 +1066,7 @@ impl RvfView {
             .relative()
             .w_full()
             .h(px(24.0))
+            .flex_shrink_0()
             .child(paint)
             .children(labels)
     }
@@ -1126,7 +1148,7 @@ impl RvfView {
         let palette = self.palette.clone();
         let cells = spectrogram_cell_plan(spec);
         let paint = canvas(
-            move |_bounds, _window, _cx| (),
+            self.record_bounds(spec.key.clone()),
             move |bounds, (), window, _cx| {
                 window.paint_quad(fill(bounds, palette.surface_bg));
                 for cell in &cells {
@@ -1141,7 +1163,7 @@ impl RvfView {
                 }
             },
         );
-        div().flex_grow().min_h(px(120.0)).child(paint)
+        viz_slot(paint)
     }
 
     fn element_for(&mut self, spec: &ComponentSpec, cx: &mut Context<Self>) -> gpui::AnyElement {
@@ -1208,10 +1230,7 @@ impl RvfView {
                 .w_full()
                 .child(self.control_element(c, true, cx))
                 .into_any_element(),
-            ComponentSpec::Waveform(w) => div()
-                .flex_grow()
-                .child(self.waveform_element(w))
-                .into_any_element(),
+            ComponentSpec::Waveform(w) => self.waveform_element(w).into_any_element(),
             ComponentSpec::Meter(m) => self.meter_element(m).into_any_element(),
             ComponentSpec::TimeAxis(t) => self.time_axis_element(t).into_any_element(),
             ComponentSpec::Label(l) => self.label_element(l).into_any_element(),
@@ -1257,8 +1276,10 @@ impl RvfView {
         };
         proj.borrow_mut().placeable.insert(slot);
         let fill_color = self.palette.control_track;
+        let record = self.record_bounds(spec.key.clone());
         let projection = canvas(
-            move |bounds, window, _cx| {
+            move |bounds, window, cx| {
+                record(bounds, window, cx);
                 project_slot_frame(&proj, slot, bounds, window);
             },
             move |bounds, (), window, _cx| {
@@ -2110,6 +2131,94 @@ mod tests {
         });
     }
 
+    fn waveform_spec(key_name: &str) -> ComponentSpec {
+        ComponentSpec::Waveform(WaveformSpec {
+            key: ComponentKey(key_name.to_string()),
+            sample_rate: 48_000,
+            channels: 1,
+            frames: 1_500,
+            viewport: 0..1_500,
+            channel_bins: vec![vec![WaveformBin {
+                start: 0,
+                end: 1_500,
+                min: -0.5,
+                max: 0.5,
+                rms: 0.25,
+                count: 1_500,
+            }]],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    /// Issue #453 audit: every listed paint canvas reports a non-zero
+    /// width and height. All keys are read before asserting, so a failure
+    /// lists the whole measured table.
+    fn assert_canvas_bounds_nonzero(v: &RvfView, keys: &[&str]) {
+        let bounds = v.bounds.borrow();
+        let measured = |k: &str| bounds.get(&ComponentKey(k.to_string())).copied();
+        let table: Vec<String> = keys
+            .iter()
+            .map(|k| format!("{k}: {:?}", measured(k)))
+            .collect();
+        let all_nonzero = keys.iter().all(|k| {
+            measured(k)
+                .is_some_and(|b| f32::from(b.size.width) > 0.0 && f32::from(b.size.height) > 0.0)
+        });
+        assert!(all_nonzero, "paint canvas bounds:\n{}", table.join("\n"));
+    }
+
+    /// Issue #453 audit: Fader, Seek and Waveform canvases in a Panel.
+    #[gpui::test]
+    fn rvf_view_canvas_bounds_nonzero_for_controls_and_waveform(cx: &mut TestAppContext) {
+        let mut host = ViewHost::new(
+            ViewInstanceId::new(1).expect("nonzero"),
+            AttachEpoch::new(1),
+        );
+        host.mount(ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("panel".to_string()),
+                title: None,
+                children: vec![
+                    fader_spec("fader"),
+                    seek_spec("seek"),
+                    waveform_spec("wave"),
+                ],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(host, ViewPalette::fallback(), |_intent| {})
+        });
+        cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            assert_canvas_bounds_nonzero(v, &["fader", "seek", "wave"])
+        });
+    }
+
+    /// Issue #453 audit: Knob, Meter, TimeAxis and Spectrogram canvases in
+    /// the shared parity fixture's Panel.
+    #[gpui::test]
+    fn rvf_view_canvas_bounds_nonzero_for_parity_kinds(cx: &mut TestAppContext) {
+        let fx = parity_fixture();
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(parity_host(&fx), ViewPalette::fallback(), |_intent| {})
+        });
+        cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            assert_canvas_bounds_nonzero(v, &["knob", "meter", "ruler", "spectrogram"]);
+            let ruler = v.bounds.borrow()[&ComponentKey("ruler".to_string())];
+            assert_eq!(
+                f32::from(ruler.size.height),
+                24.0,
+                "ruler keeps its slot height"
+            );
+        });
+    }
+
     /// Toggle click → atomic set: each click flips the binary value
     /// through the headless contract, and the re-rendered control
     /// reflects the new state on the next click.
@@ -2829,6 +2938,9 @@ mod tests {
             )
         });
         cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            assert_canvas_bounds_nonzero(v, &["dock.editor"])
+        });
 
         // Painted + bound → geometry, clip, Visible all projected.
         {
