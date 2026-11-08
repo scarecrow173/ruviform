@@ -26,7 +26,7 @@ use gpui::{
     size,
 };
 use ruviform_ui::behavior::{
-    CommandReceipt, ControlInput, GestureId, InputModifiers, InputSource, ReceiptStatus, Revision,
+    CommandReceipt, ControlInput, GestureId, InputModifiers, InputSource, Revision,
     StateProjection, ValueInput,
 };
 use ruviform_ui::view::{
@@ -546,17 +546,10 @@ impl RvfView {
     }
 
     /// Projects `post_event` inbox payloads into the host — the
-    /// driver→view half of the mount seam. `Result` replies map to
-    /// [`CommandReceipt`]s: `ok` is only the transport ack — the
-    /// semantic status is the typed `data.status` field decoded
-    /// against the canonical receipt vocabulary (`accepted`/
-    /// `queued`/`applied`/`rejected`/`unsupported`). A bare `ok`
-    /// with no status records `Accepted` — the gateway took the
-    /// command, not that it landed — so the head keeps its ack
-    /// bound instead of being faked `Applied`. An unrecognized
-    /// status is an honest terminal `Rejected`, never a default
-    /// success. `ok == false` is `Rejected` with the error message
-    /// (`data.revision` → receipt revision either way). `Notify`
+    /// driver→view half of the mount seam. `Result` replies decode
+    /// through [`CommandReceipt::from_result`], the shared receipt
+    /// contract; a job-spawning command's terminal receipt arrives as
+    /// a second `Result` under its id (Issue #456). `Notify`
     /// payloads decode as `{control_id, revision, value,
     /// provenance?}` → [`StateProjection`]. `Job`/`Lifecycle`/
     /// `Error` events have no view route — driver-level concerns only.
@@ -565,45 +558,10 @@ impl RvfView {
         let events: Vec<Event> = inbox.borrow_mut().drain(..).collect();
         for event in events {
             match event {
-                Event::Result {
-                    id,
-                    ok,
-                    data,
-                    error,
-                } => {
-                    let revision = data
-                        .as_ref()
-                        .and_then(|d| d.get("revision"))
-                        .and_then(|v| serde_json::from_value::<Revision>(v.clone()).ok());
-                    let mut detail = error.map(|e| e.message).or_else(|| {
-                        data.as_ref()
-                            .and_then(|d| d.get("detail"))
-                            .and_then(serde_json::Value::as_str)
-                            .map(str::to_string)
-                    });
-                    let status = if ok {
-                        match data.as_ref().and_then(|d| d.get("status")) {
-                            None => ReceiptStatus::Accepted,
-                            Some(raw) => {
-                                if let Ok(status) =
-                                    serde_json::from_value::<ReceiptStatus>(raw.clone())
-                                {
-                                    status
-                                } else {
-                                    detail = Some(format!("unrecognized receipt status: {raw}"));
-                                    ReceiptStatus::Rejected
-                                }
-                            }
-                        }
-                    } else {
-                        ReceiptStatus::Rejected
-                    };
-                    self.host.apply_receipt(&CommandReceipt {
-                        command_id: id,
-                        status,
-                        revision,
-                        detail,
-                    });
+                Event::Result { .. } => {
+                    if let Some(receipt) = CommandReceipt::from_result(&event) {
+                        self.host.apply_receipt(&receipt);
+                    }
                 }
                 Event::Notify { data, .. } => {
                     let Some(control_id) =
