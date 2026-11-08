@@ -1,7 +1,7 @@
 ---
 id: "TASK-G72QPe3EioqQac8Dsnoglk"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #479 — 値制御キーボード操作の実装タスク"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -47,7 +47,7 @@ relations:
 - [x] **T7（S6）main の取り込みと検証の再実行。** `git fetch origin main` 後に、取り込みが必要なら再実行する。
 - [x] **T8（S6）文書の索引を再生成する。** doc-maintenance の preview で差分を確認してから apply する。
 - [x] **T9（S6）review-protocol のレビューを行う。** blocker が残っていないことを確認する。
-- [ ] **T10（S6）PR を作成する。** `Refs #479` を含める。キー規約と NotRun（K4）を本文に書く。
+- [x] **T10（S6）PR を作成する。** `Refs #479` を含める。キー規約と NotRun（K4）を本文に書く。
 
 ## follow-up（本 PR の外）
 
