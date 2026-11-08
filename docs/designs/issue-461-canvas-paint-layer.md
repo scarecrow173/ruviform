@@ -73,7 +73,7 @@ relations:
 注記:
 
 - Waveform が Spectrogram より遅いのは、peak quad と RMS overlay quad が同一 x 範囲で重なり、隣接 bin の 1 px clamp も重なりを生むため、`find_max_ordering` の走査がより深くなるためと考えられる（構造推定。計測値のみが確定事実）。
-- TimeAxis は layer 化で tick quad 分（約 100 ms 相当）が改善したが、repaint の大部分は tick ごとの label `div`（最大 1,024 要素）の layout・text 描画に支配される。これは canvas quad ではなく element tree 規模の問題であり、本 Issue の対象外として残課題に記録する。tick quad は spec サイズに比例するため、規則の一貫性と将来の tick 数増加への備えとして layer 化を維持する。
+- TimeAxis は layer 化で tick quad 分（約 100 ms 相当）が改善したが、repaint の大部分は tick ごとの label `div`（最大 1,024 要素）の layout・text 描画に支配される。これは canvas quad ではなく element tree 規模の問題であり、本 Issue の対象外として残課題に記録する（→ follow-up `issue-461-timeaxis-label-cost` で解消済み）。tick quad は spec サイズに比例するため、規則の一貫性と将来の tick 数増加への備えとして layer 化を維持する。
 - Fader / Knob / Seek は `control_element` が track + fill + thumb の 3 quad のみ、NativeSlot は placeholder 1 quad のみで、spec サイズに比例しない。3〜1 回の `BoundsTree::insert` は問題にならないため layer 化しない。
 
 ## 原因の位置
@@ -102,7 +102,7 @@ relations:
 
 ## 残課題（本設計の範囲外）
 
-- TimeAxis の repaint 約 0.8 s は tick ごとの label `div` + text 描画が支配的。上限 1,024 tick で実用上ブロックし得るため、label 描画戦略（間引き・canvas 化・件数上限の再検討）は別 Issue で扱う。
+- ~~TimeAxis の repaint 約 0.8 s は tick ごとの label `div` + text 描画が支配的。~~ **Follow-up で解消済み**: `docs/specs|designs|plans|tasks|test-specs/issue-461-timeaxis-label-cost.md`。原因は label text 行ごとの `paint_line` → `paint_layer` → `BoundsTree::insert`（label bounds が交差し O(n²)）であり、label を canvas prepaint で `WindowTextSystem::shape_text` により shaping し、共有 `paint_layer` 内で glyph 描画する形に置き換えた。計測上は 1,024 labelled ticks の repaint が約 0.8〜1.7 s → 約 11 ms（debug、headless `TestAppContext`）。
 - Table の行×列 `div` 生成（`MAX_TABLE_ROWS` × `MAX_TABLE_COLUMNS`）も element tree 規模のコストであり、本 Issue の canvas painter 監査の対象外。必要なら別途監査する。
 - audio-lens 側の pin 更新は本 Issue merge 後に Coordinator が管理する。
 
