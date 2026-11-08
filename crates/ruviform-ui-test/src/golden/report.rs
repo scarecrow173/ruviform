@@ -28,10 +28,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 
 use crate::driver_lab::{append_jsonl_line, evidence_target};
+use crate::golden::GoldenVerdict;
 use crate::golden::diff::{self, DiffOutcome, DiffPolicy, DiffStats};
 use crate::golden::image::RgbaImage;
 use crate::golden::key::{EnvironmentMeta, GoldenKey};
-use crate::golden::GoldenVerdict;
 
 /// `RUVIFORM_GOLDEN_EVIDENCE` env 名（evidence 出力先 path）。
 pub const EVIDENCE_ENV: &str = "RUVIFORM_GOLDEN_EVIDENCE";
@@ -317,7 +317,10 @@ pub fn emit_evidence(report: &GoldenReport) -> Option<PathBuf> {
 /// # Errors
 /// serde 直列化失敗時のみ（I/O 失敗は best-effort で握り潰す —
 /// evidence は test を fail させない）。
-pub fn append_evidence(path: &Path, evidence: &GoldenEvidence) -> Result<PathBuf, serde_json::Error> {
+pub fn append_evidence(
+    path: &Path,
+    evidence: &GoldenEvidence,
+) -> Result<PathBuf, serde_json::Error> {
     let line = serde_json::to_string(evidence)?;
     append_jsonl_line(path, &line);
     Ok(path.to_path_buf())

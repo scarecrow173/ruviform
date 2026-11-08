@@ -294,7 +294,10 @@ pub fn diff(baseline: &RgbaImage, actual: &RgbaImage, policy: &DiffPolicy) -> Di
         width: x1 - x0 + 1,
         height: y1 - y0 + 1,
     });
-    debug_assert_eq!(u64::from(stats.compared_pixels) + stats.masked_pixels, pixel_count);
+    debug_assert_eq!(
+        u64::from(stats.compared_pixels) + stats.masked_pixels,
+        pixel_count
+    );
 
     let within_policy = stats.compared_pixels > 0 && stats.mismatched_pixels == 0;
     let diff_image = RgbaImage::new(baseline.width(), baseline.height(), diff_pixels)

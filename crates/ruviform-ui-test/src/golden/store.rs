@@ -43,11 +43,11 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::golden::GoldenError;
 use crate::golden::diff::DiffPolicy;
 use crate::golden::image::{GoldenImageError, RgbaImage};
 use crate::golden::key::{EnvironmentMeta, GoldenKey};
 use crate::golden::report::{self, GoldenComparison};
-use crate::golden::GoldenError;
 
 /// sidecar の schema 識別子。
 pub const BASELINE_SIDECAR_SCHEMA: &str = "rvf.golden.baseline/v1";
@@ -151,7 +151,11 @@ impl std::fmt::Display for StoreError {
                 write!(f, "key mismatch: expected {expected}, found {found}")
             }
             Self::MissingSidecar { path } => {
-                write!(f, "baseline png exists but sidecar missing: {}", path.display())
+                write!(
+                    f,
+                    "baseline png exists but sidecar missing: {}",
+                    path.display()
+                )
             }
             Self::CandidateMissing { key } => {
                 write!(f, "no staged candidate for key {key}")
@@ -207,7 +211,10 @@ impl BaselineStore {
             d.push(seg);
         }
         let stem = key.file_stem();
-        (d.join(format!("{stem}.png")), d.join(format!("{stem}.json")))
+        (
+            d.join(format!("{stem}.png")),
+            d.join(format!("{stem}.json")),
+        )
     }
 
     /// baseline を読む。png が存在しなければ `Ok(None)`。
@@ -292,11 +299,11 @@ impl BaselineStore {
         key: &GoldenKey,
         approval: &BaselineApproval,
     ) -> Result<BaselineSidecar, StoreError> {
-        let candidate = self
-            .read_under(staging_root, key)?
-            .ok_or_else(|| StoreError::CandidateMissing {
-                key: key.canonical(),
-            })?;
+        let candidate =
+            self.read_under(staging_root, key)?
+                .ok_or_else(|| StoreError::CandidateMissing {
+                    key: key.canonical(),
+                })?;
         self.write_under(
             &self.root,
             key,
@@ -337,10 +344,12 @@ impl BaselineStore {
             },
             approval: approval.cloned(),
         };
-        let sidecar_json = serde_json::to_vec_pretty(&SidecarWire::from(&sidecar))
-            .map_err(|e| StoreError::CorruptSidecar {
-                path: sidecar_path.clone(),
-                reason: format!("serialize: {e}"),
+        let sidecar_json =
+            serde_json::to_vec_pretty(&SidecarWire::from(&sidecar)).map_err(|e| {
+                StoreError::CorruptSidecar {
+                    path: sidecar_path.clone(),
+                    reason: format!("serialize: {e}"),
+                }
             })?;
         atomic_write(&png_path, &png_bytes)?;
         atomic_write(&sidecar_path, &sidecar_json)?;
@@ -454,12 +463,11 @@ struct ImageMetaWireOwned {
 }
 
 fn parse_sidecar(path: &Path, bytes: &[u8]) -> Result<BaselineSidecar, StoreError> {
-    let wire: SidecarWireOwned = serde_json::from_slice(bytes).map_err(|e| {
-        StoreError::CorruptSidecar {
+    let wire: SidecarWireOwned =
+        serde_json::from_slice(bytes).map_err(|e| StoreError::CorruptSidecar {
             path: path.to_path_buf(),
             reason: format!("json parse: {e}"),
-        }
-    })?;
+        })?;
     if wire.schema != BASELINE_SIDECAR_SCHEMA {
         return Err(StoreError::CorruptSidecar {
             path: path.to_path_buf(),
@@ -732,8 +740,7 @@ mod tests {
         store.promote(&staging, &key(), &approval()).unwrap();
         // sidecar の key を改ざんする
         let (_, sc) = store.paths(&key());
-        let mut v: serde_json::Value =
-            serde_json::from_slice(&fs::read(&sc).unwrap()).unwrap();
+        let mut v: serde_json::Value = serde_json::from_slice(&fs::read(&sc).unwrap()).unwrap();
         v["key"]["state"] = serde_json::json!("tampered");
         fs::write(&sc, serde_json::to_vec_pretty(&v).unwrap()).unwrap();
         assert!(matches!(

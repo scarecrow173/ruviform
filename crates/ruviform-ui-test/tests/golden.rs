@@ -81,8 +81,7 @@ fn golden_key_drives_deterministic_layout() {
     assert!(canonical.contains("rev-test"));
     let stem = k.file_stem();
     assert!(
-        stem
-            .chars()
+        stem.chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
     );
     // serde round-trip
@@ -151,8 +150,14 @@ fn baseline_lifecycle_candidate_promote_compare_evidence() {
     // promote（承認必須）→ baseline 出現
     store.promote(&staging, &k, &approval()).unwrap();
     let baseline = store.read(&k).unwrap().expect("promoted baseline");
-    assert_eq!(baseline.sidecar.approval.as_ref().unwrap().approved_by, "integration-test");
-    assert_eq!(baseline.sidecar.policy.channel_tolerance, ChannelTolerance::uniform(0));
+    assert_eq!(
+        baseline.sidecar.approval.as_ref().unwrap().approved_by,
+        "integration-test"
+    );
+    assert_eq!(
+        baseline.sidecar.policy.channel_tolerance,
+        ChannelTolerance::uniform(0)
+    );
 
     // 同一画像 → pass
     let cmp = store.compare(&k, &actual, Some(&env())).unwrap();
@@ -194,7 +199,12 @@ fn baseline_lifecycle_candidate_promote_compare_evidence() {
     assert_eq!(v["verdict"], "fail");
     assert_eq!(v["reason"], "tolerance_exceeded");
     assert!(v["subject"].as_str().unwrap().contains("LAB-SV-FADER-DOCK"));
-    assert!(v["environment"]["backend"].as_str().unwrap().contains("test-headless"));
+    assert!(
+        v["environment"]["backend"]
+            .as_str()
+            .unwrap()
+            .contains("test-headless")
+    );
     assert!(v["baseline"].as_str().unwrap().ends_with(".png"));
 
     // emit_evidence は env 未設定なら None（副作用なし）— この test

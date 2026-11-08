@@ -269,41 +269,62 @@ mod tests {
         // （story/theme/state は path segment 側）。
         for (v, expect_diff) in [
             (base.clone(), false),
-            ({
-                let mut v = base.clone();
-                v.story_id = "OTHER".to_string();
-                v
-            }, false),
-            ({
-                let mut v = base.clone();
-                v.theme = "other".to_string();
-                v
-            }, false),
-            ({
-                let mut v = base.clone();
-                v.driver_class = "real-window".to_string();
-                v
-            }, true),
-            ({
-                let mut v = base.clone();
-                v.gpu_class = None;
-                v
-            }, true),
-            ({
-                let mut v = base.clone();
-                v.scale_factor = 1.0;
-                v
-            }, true),
-            ({
-                let mut v = base.clone();
-                v.font_class = None;
-                v
-            }, true),
-            ({
-                let mut v = base.clone();
-                v.revision = "def5678".to_string();
-                v
-            }, true),
+            (
+                {
+                    let mut v = base.clone();
+                    v.story_id = "OTHER".to_string();
+                    v
+                },
+                false,
+            ),
+            (
+                {
+                    let mut v = base.clone();
+                    v.theme = "other".to_string();
+                    v
+                },
+                false,
+            ),
+            (
+                {
+                    let mut v = base.clone();
+                    v.driver_class = "real-window".to_string();
+                    v
+                },
+                true,
+            ),
+            (
+                {
+                    let mut v = base.clone();
+                    v.gpu_class = None;
+                    v
+                },
+                true,
+            ),
+            (
+                {
+                    let mut v = base.clone();
+                    v.scale_factor = 1.0;
+                    v
+                },
+                true,
+            ),
+            (
+                {
+                    let mut v = base.clone();
+                    v.font_class = None;
+                    v
+                },
+                true,
+            ),
+            (
+                {
+                    let mut v = base.clone();
+                    v.revision = "def5678".to_string();
+                    v
+                },
+                true,
+            ),
         ] {
             if expect_diff {
                 assert_ne!(v.file_stem(), base.file_stem(), "{v:?}");
@@ -321,8 +342,7 @@ mod tests {
         k.revision = "rev/with space".to_string();
         let stem = k.file_stem();
         assert!(
-            stem
-                .chars()
+            stem.chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')),
             "stem must be fs-safe: {stem}"
         );

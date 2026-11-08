@@ -38,11 +38,10 @@ pub mod store;
 use std::fmt;
 
 pub use diff::{
-    ChannelDelta, ChannelTolerance, DiffOutcome, DiffPolicy, DiffResult, DiffStats, MaskRect,
-    diff,
+    ChannelDelta, ChannelTolerance, DiffOutcome, DiffPolicy, DiffResult, DiffStats, MaskRect, diff,
 };
 pub use image::{GoldenImageError, RgbaImage};
-pub use key::{CapturePath, EnvironmentMeta, GpuMeta, GoldenKey};
+pub use key::{CapturePath, EnvironmentMeta, GoldenKey, GpuMeta};
 pub use report::{
     EVIDENCE_ENV, EVIDENCE_SCHEMA, EvidenceStats, GoldenComparison, GoldenEvidence, GoldenReport,
     append_evidence, blocked, compare, emit_evidence, not_run, unsupported,

@@ -75,11 +75,7 @@ pub enum GoldenImageError {
 impl std::fmt::Display for GoldenImageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidBuffer {
-                width,
-                height,
-                len,
-            } => write!(
+            Self::InvalidBuffer { width, height, len } => write!(
                 f,
                 "invalid rgba buffer: {width}x{height} needs {} bytes, got {len}",
                 u64::from(*width) * u64::from(*height) * 4
@@ -97,11 +93,7 @@ impl std::fmt::Display for GoldenImageError {
                 write!(f, "unsupported screenshot format `{format}`")
             }
             Self::Base64(e) => write!(f, "base64: {e}"),
-            Self::RawLength {
-                width,
-                height,
-                len,
-            } => write!(
+            Self::RawLength { width, height, len } => write!(
                 f,
                 "rgba-raw length mismatch: {width}x{height} needs {} bytes, got {len}",
                 u64::from(*width) * u64::from(*height) * 4
@@ -320,10 +312,7 @@ fn check_dimensions(width: u32, height: u32) -> Result<(), GoldenImageError> {
 /// `normalize_to_color8` 後の 8bit 出力を RGBA8 に展開する。
 /// 受理するのは Grayscale/Rgb/GrayscaleAlpha/Rgba の 8bit のみ
 /// （Indexed は EXPAND で展開済み、16bit は STRIP_16 で 8bit 化済み）。
-fn expand_to_rgba(
-    buf: &[u8],
-    info: &png::OutputInfo,
-) -> Result<Vec<u8>, GoldenImageError> {
+fn expand_to_rgba(buf: &[u8], info: &png::OutputInfo) -> Result<Vec<u8>, GoldenImageError> {
     use png::{BitDepth, ColorType};
     if info.bit_depth != BitDepth::Eight {
         return Err(GoldenImageError::UnsupportedColorType {
@@ -428,8 +417,7 @@ mod tests {
         let img = RgbaImage::solid(2, 1, [1, 2, 3, 4]);
         let shot = Screenshot {
             format: "rgba-raw".to_string(),
-            data_base64: base64::engine::general_purpose::STANDARD
-                .encode(img.pixels()),
+            data_base64: base64::engine::general_purpose::STANDARD.encode(img.pixels()),
             width: 2,
             height: 1,
         };
