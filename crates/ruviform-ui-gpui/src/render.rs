@@ -20,10 +20,10 @@ use std::rc::Rc;
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, Bounds, Canvas, Context, Hsla, InteractiveElement, IntoElement, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, Render, Rgba,
-    ScrollDelta, ScrollWheelEvent, Styled, Subscription, Window, canvas, div, fill, point, px,
-    relative, rgb, size,
+    App, Bounds, Canvas, Context, FocusHandle, Hsla, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point,
+    Render, Rgba, ScrollDelta, ScrollWheelEvent, Styled, Subscription, Window, canvas, div, fill,
+    point, px, relative, rgb, size,
 };
 use ruviform_ui::behavior::{
     CommandReceipt, ControlInput, GestureId, InputModifiers, InputSource, Revision,
@@ -31,8 +31,8 @@ use ruviform_ui::behavior::{
 };
 use ruviform_ui::view::{
     ButtonSpec, CellValue, ComponentKey, ComponentSpec, ControlSpec, LabelSpec, MeterSpec,
-    NativeSlotSpec, Orientation, SpectrogramSpec, TableSpec, TabsSpec, TimeAxisSpec, ViewError,
-    ViewEvent, ViewHost, ViewSpec, WaveformBin, WaveformSpec,
+    NativeSlotSpec, Orientation, SpectrogramSpec, TableSpec, TimeAxisSpec, ViewError, ViewEvent,
+    ViewHost, ViewSpec, WaveformBin, WaveformSpec,
 };
 use ruviform_ui::{
     Event, Intent, LogicalRect, SlotError, SlotGeometry, SlotVisibility, SurfaceSlotId,
@@ -419,6 +419,9 @@ pub struct RvfView {
     /// Panel/Tab/clip → [`NativeSurfaceSlot`] projection — `Some`
     /// only for driver-mounted views.
     slots: Option<Rc<RefCell<SlotProjection>>>,
+    /// Focus handle of each tab strip with a selection, created on the
+    /// strip's first render; the keyboard target of [`tab_key_target`].
+    tab_focus: BTreeMap<ComponentKey, FocusHandle>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -455,6 +458,7 @@ impl RvfView {
             next_gesture: 0,
             inbox: None,
             slots: None,
+            tab_focus: BTreeMap::new(),
             _subscriptions: Vec::new(),
         }
     }
@@ -492,6 +496,7 @@ impl RvfView {
                 placeable: HashSet::new(),
                 last_error: None,
             }))),
+            tab_focus: BTreeMap::new(),
             _subscriptions: vec![cx.observe_window_activation(window, |this, window, cx| {
                 if !window.is_window_active() {
                     this.cancel_active_drags(cx);
@@ -534,6 +539,14 @@ impl RvfView {
         let generation = self.host.generation();
         let _ = self.host.select_tab(generation, key, index);
         self.flush_events(cx);
+    }
+
+    /// The focus handle of the tab strip `key`, created on first use.
+    pub(crate) fn tab_focus(&mut self, key: &ComponentKey, cx: &mut Context<Self>) -> FocusHandle {
+        self.tab_focus
+            .entry(key.clone())
+            .or_insert_with(|| cx.focus_handle())
+            .clone()
     }
 
     /// Presses the button `key` and flushes its intent.
@@ -1139,13 +1152,32 @@ impl RvfView {
                 el.into_any_element()
             }
             ComponentSpec::Tabs(t) => {
-                let active = displayed_tab(&self.host, t);
+                let active = displayed_tab(&self.host, &t.key, t.active);
                 let mut header = div()
                     .flex()
                     .flex_row()
                     .bg(self.palette.surface_raised)
                     .border_b_1()
                     .border_color(self.palette.border);
+                let focus = t.selection.is_some().then(|| self.tab_focus(&t.key, cx));
+                if let Some(focus) = &focus {
+                    let (key, spec_active, len) = (t.key.clone(), t.active, t.tabs.len());
+                    let accent = self.palette.accent;
+                    header = header
+                        .track_focus(focus)
+                        .tab_stop(true)
+                        .focus(|s| s.border_1().border_color(accent))
+                        .on_key_down(cx.listener(move |this, ev: &KeyDownEvent, _w, cx| {
+                            if ev.keystroke.modifiers.number_of_modifiers() > 0 {
+                                return;
+                            }
+                            let current = displayed_tab(&this.host, &key, spec_active);
+                            if let Some(next) = tab_key_target(&ev.keystroke.key, current, len) {
+                                cx.stop_propagation();
+                                this.select_tab(&key, next, cx);
+                            }
+                        }));
+                }
                 for (i, tab) in t.tabs.iter().enumerate() {
                     let mut tab_el = div()
                         .px(px(self.palette.space_md))
@@ -1160,11 +1192,12 @@ impl RvfView {
                         tab_el = tab_el.border_b_2().border_color(self.palette.accent);
                     }
                     tab_el = tab_el.debug_selector(|| format!("{}-tab-{i}", t.key));
-                    if t.selection.is_some() {
-                        let key = t.key.clone();
+                    if let Some(focus) = &focus {
+                        let (key, focus) = (t.key.clone(), focus.clone());
                         tab_el = tab_el.on_mouse_down(
                             MouseButton::Left,
-                            cx.listener(move |this, _ev: &MouseDownEvent, _w, cx| {
+                            cx.listener(move |this, _ev: &MouseDownEvent, window, cx| {
+                                window.focus(&focus);
                                 this.select_tab(&key, i, cx);
                             }),
                         );
@@ -1539,10 +1572,27 @@ pub(crate) fn drawn_plans(host: &ViewHost) -> Vec<(ComponentKey, DrawPlan)> {
 
 /// The tab a `Tabs` strip displays: the host's selection, which starts on
 /// the spec's active tab and follows the user's tab presses.
-fn displayed_tab(host: &ViewHost, t: &TabsSpec) -> usize {
-    host.observe(&t.key)
-        .and_then(|s| s.selected)
-        .unwrap_or(t.active)
+fn displayed_tab(host: &ViewHost, key: &ComponentKey, active: usize) -> usize {
+    host.observe(key).and_then(|s| s.selected).unwrap_or(active)
+}
+
+/// The tab a key press moves a tab strip to, from the displayed tab
+/// `current` of `len` tabs. Follows the WAI-ARIA tabs pattern: Left and
+/// Right step with wrap-around, Home and End jump to the ends. `None` for
+/// other keys, for a strip with no tabs, and for a move that keeps the
+/// displayed tab.
+fn tab_key_target(key: &str, current: usize, len: usize) -> Option<usize> {
+    if len == 0 {
+        return None;
+    }
+    let next = match key {
+        "left" => (current + len - 1) % len,
+        "right" => (current + 1) % len,
+        "home" => 0,
+        "end" => len - 1,
+        _ => return None,
+    };
+    (next != current).then_some(next)
 }
 
 #[cfg(feature = "gpui-test")]
@@ -1550,7 +1600,7 @@ fn collect_drawn(spec: &ComponentSpec, host: &ViewHost, out: &mut Vec<(Component
     match spec {
         ComponentSpec::Panel(p) => p.children.iter().for_each(|c| collect_drawn(c, host, out)),
         ComponentSpec::Tabs(t) => {
-            if let Some(tab) = t.tabs.get(displayed_tab(host, t)) {
+            if let Some(tab) = t.tabs.get(displayed_tab(host, &t.key, t.active)) {
                 collect_drawn(&tab.child, host, out);
             }
         }
@@ -1595,6 +1645,7 @@ mod tests {
         SpectrogramColumn, TabSpec, TabsSpec, ViewSpec,
     };
     use ruviform_ui_theme::{ThemeResolver, TokenDocument};
+    use serde_json::json;
 
     fn fader_spec(key_name: &str) -> ComponentSpec {
         ComponentSpec::Fader(ControlSpec {
@@ -1912,6 +1963,72 @@ mod tests {
         cx.simulate_mouse_down(header.center(), MouseButton::Left, Modifiers::default());
         cx.run_until_parked();
         assert_eq!(selected(cx), Some(1));
+    }
+
+    /// Issue #451 FU-1: Left/Right step the focused strip with wrap-around
+    /// and Home/End jump to its ends. Keys that keep the displayed tab move
+    /// nothing, so they emit no intent.
+    #[test]
+    fn tab_key_target_steps_wraps_and_jumps() {
+        let target = |key: &str, current: usize| tab_key_target(key, current, 3);
+        assert_eq!(target("right", 0), Some(1));
+        assert_eq!(target("right", 2), Some(0));
+        assert_eq!(target("left", 0), Some(2));
+        assert_eq!(target("left", 1), Some(0));
+        assert_eq!(target("home", 2), Some(0));
+        assert_eq!(target("end", 0), Some(2));
+        assert_eq!(target("home", 0), None);
+        assert_eq!(target("end", 2), None);
+        assert_eq!(target("enter", 0), None);
+        assert_eq!(tab_key_target("right", 0, 1), None, "one tab never moves");
+        assert_eq!(tab_key_target("right", 0, 0), None, "no tabs never move");
+    }
+
+    /// Issue #451 FU-1: a header press focuses the strip, and the focused
+    /// strip moves its selection with the arrow and Home/End keys through
+    /// the same `tab-select` intent as the pointer. Keys without focus do
+    /// nothing.
+    #[gpui::test]
+    fn tab_strip_keys_select_tabs_through_focus(cx: &mut TestAppContext) {
+        let intents = Rc::new(RefCell::new(Vec::<Intent>::new()));
+        let sink = intents.clone();
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(
+                host_with_selectable_tabs(),
+                ViewPalette::fallback(),
+                move |i| {
+                    sink.borrow_mut().push(i);
+                },
+            )
+        });
+        cx.run_until_parked();
+        let key = ComponentKey("mixer_tabs".to_string());
+        let selected = |cx: &mut gpui::VisualTestContext| {
+            view.update(cx, |v, _cx| v.host.observe(&key).and_then(|s| s.selected))
+        };
+        cx.simulate_keystrokes("right");
+        cx.run_until_parked();
+        assert_eq!(selected(cx), Some(0), "an unfocused strip ignores keys");
+
+        let header = cx
+            .debug_bounds("mixer_tabs-tab-1")
+            .expect("routing tab header is drawn");
+        cx.simulate_mouse_down(header.center(), MouseButton::Left, Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(selected(cx), Some(1));
+
+        for (keystroke, want) in [("left", 0), ("left", 1), ("home", 0), ("end", 1)] {
+            cx.simulate_keystrokes(keystroke);
+            cx.run_until_parked();
+            assert_eq!(selected(cx), Some(want), "after {keystroke}");
+        }
+        let indices: Vec<serde_json::Value> = intents
+            .borrow()
+            .iter()
+            .filter(|i| i.op == COMMAND_INTENT_OP)
+            .map(|i| i.params["intent"]["params"]["index"].clone())
+            .collect();
+        assert_eq!(indices, [json!(1), json!(0), json!(1), json!(0), json!(1)]);
     }
 
     /// UI-DVR-03 GPUI lane (out-of-order): a preview whose `seq` is older

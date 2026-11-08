@@ -17,7 +17,7 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
 
-use gpui::{App, Entity, TestAppContext};
+use gpui::{AnyWindowHandle, App, AppContext, Entity, Keystroke, TestAppContext};
 use ruviform_ui::behavior::ControlInput;
 use ruviform_ui::view::{ComponentKey, ComponentSnapshot};
 use ruviform_ui::{DriverEvent, Intent, UiError, WindowDriver, WindowId, WindowLifecycle};
@@ -294,6 +294,35 @@ impl GpuiObserver {
         Ok(())
     }
 
+    /// Focuses the tab strip `key` in `window` as a header press does, then
+    /// presses `keystroke` (a GPUI key name such as `"right"`) through GPUI's
+    /// key dispatch. The emitted intent shows in [`intents`](Self::intents)
+    /// after [`settle`](Self::settle).
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` hosts no view or `keystroke` does not
+    /// parse.
+    pub fn press_tab_key(
+        &mut self,
+        window: WindowId,
+        key: &ComponentKey,
+        keystroke: &str,
+    ) -> Result<(), UiError> {
+        let view = self.view(window)?;
+        let handle = self
+            .driver
+            .window_of(window)
+            .ok_or_else(|| UiError::host(format!("no window {window}")))?;
+        let keystroke = Keystroke::parse(keystroke).map_err(|e| UiError::host(e.to_string()))?;
+        self.cx
+            .update_window(handle, |_, win, app| {
+                let focus = view.update(app, |v, cx| v.tab_focus(key, cx));
+                win.focus(&focus);
+                win.dispatch_keystroke(keystroke, app);
+            })
+            .map_err(|e| UiError::host(e.to_string()))
+    }
+
     /// Presses the button `key` in `window`, as a click does. The emitted
     /// intent shows in [`intents`](Self::intents) after
     /// [`settle`](Self::settle).
@@ -400,6 +429,11 @@ impl GpuiDriver {
             .windows
             .get(&window)
             .map_or(0, |slot| slot.inbox.borrow().len())
+    }
+
+    /// The GPUI window handle of `window`, for test-side key dispatch.
+    pub(crate) fn window_of(&self, window: WindowId) -> Option<AnyWindowHandle> {
+        self.inner.borrow().windows.get(&window)?.handle
     }
 
     /// The view mounted by [`GpuiDriver::create_view_window`], looked up
