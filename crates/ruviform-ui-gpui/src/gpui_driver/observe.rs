@@ -17,7 +17,7 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
 
-use gpui::{AnyWindowHandle, App, AppContext, Entity, Keystroke, TestAppContext};
+use gpui::{AnyWindowHandle, App, AppContext, Entity, FocusHandle, Keystroke, TestAppContext};
 use ruviform_ui::behavior::ControlInput;
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{AttachEpoch, ComponentKey, ComponentSnapshot};
@@ -433,6 +433,65 @@ impl GpuiObserver {
         let handle = self.driver.window_of(window)?;
         self.cx
             .update_window(handle, |_, win, app| view.read(app).focused_tab_key(win))
+            .ok()
+            .flatten()
+    }
+
+    /// Focuses the value control `key` (Fader/Seek/Knob/Toggle) in
+    /// `window` as a pointer press would, then presses `keystroke` (a
+    /// GPUI key name such as `"right"` or `"shift-pageup"`) through
+    /// GPUI's key dispatch — the Issue #479 keyboard path end to end.
+    /// The emitted intents show in [`intents`](Self::intents) after
+    /// [`settle`](Self::settle).
+    ///
+    /// # Errors
+    /// [`UiError::Host`] when `window` hosts no view, `key` is not a
+    /// mounted value control, or `keystroke` does not parse.
+    pub fn press_control_key(
+        &mut self,
+        window: WindowId,
+        key: &ComponentKey,
+        keystroke: &str,
+    ) -> Result<(), UiError> {
+        let view = self.view(window)?;
+        let handle = self
+            .driver
+            .window_of(window)
+            .ok_or_else(|| UiError::host(format!("no window {window}")))?;
+        let keystroke = Keystroke::parse(keystroke).map_err(|e| UiError::host(e.to_string()))?;
+        self.cx
+            .update_window(handle, |_, win, app| -> Result<(), UiError> {
+                let focus: FocusHandle = view.update(app, |v, cx| -> Result<_, UiError> {
+                    // Only a mounted value control owns a keyboard focus
+                    // handle — anything else would report focus with no
+                    // element to receive the keys.
+                    let is_control = v
+                        .host()
+                        .spec()
+                        .is_some_and(|s| render::find_control(&s.root, key).is_some());
+                    if !is_control {
+                        return Err(UiError::host(format!("no value control {key:?}")));
+                    }
+                    Ok(v.control_focus(key, cx))
+                })?;
+                win.focus(&focus);
+                win.dispatch_keystroke(keystroke, app);
+                Ok(())
+            })
+            .map_err(|e| UiError::host(e.to_string()))?
+    }
+
+    /// The [`ComponentKey`] of the value control holding keyboard focus
+    /// in `window`; `None` when no control is focused or `window` hosts
+    /// no view (Issue #479).
+    #[must_use]
+    pub fn focused_control(&mut self, window: WindowId) -> Option<ComponentKey> {
+        let view = self.view(window).ok()?;
+        let handle = self.driver.window_of(window)?;
+        self.cx
+            .update_window(handle, |_, win, app| {
+                view.read(app).focused_control_key(win)
+            })
             .ok()
             .flatten()
     }
