@@ -194,6 +194,7 @@ Directory: `docs/tasks`
 | TASK-5IbSvHOaqP5LVXNKwJaonI | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | done | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |
 | TASK-034UAvL4WBHRKsOVxsrTgG | Issue #286 IO-04 ZIP/TAR Archive — Entry API・安全な展開・終了/公開契約 設計 | done | [issue-286-io-04-zip-tar-archive.md](./issue-286-io-04-zip-tar-archive.md) |
 | TASK-034UtPLgt4p9kVhsCVVQ5f | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | done | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
+| TASK-1t4MTPYFiTORT83MpcEqRB | Issue #294 consumer-verify → ci-issue-tracker 配線実装 — scope 別 job・reconcile 全 scope 化・contract test | done | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | TASK-034UlgdtbhGVBT1saWLNNP | Issue #294 daily tuple trigger 実装 — decide.mjs tuple モード・daily-ci job・契約 test | done | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TASK-034Sa3F7jL2nQ5uY8cE1hK | T1 ci/consumer-verify evidence.mjs + fixture tests + test-ci-consumer-verify task（Issue #294） | done | [issue-294-t1-consumer-verify-evidence-script.md](./issue-294-t1-consumer-verify-evidence-script.md) |
 | TASK-034Sa6J9mP4sV7xB1fK5nQ | T2 consumer-verify.yml tuple証拠・SHA ref・UI headless lane・extra_tasks 接続点 + yml contract test（Issue #294） | done | [issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md](./issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md) |
@@ -222,6 +223,7 @@ Directory: `docs/tasks`
 | TASK-9KS9Fd9Lzf1TjWIavKU8Uz | T1 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 (Issue #305) | done | [issue-305-t1-staged-file-cutover.md](./issue-305-t1-staged-file-cutover.md) |
 | TASK-034UwchDKTHXsAzupuKHkC | W1 Issue #305 io-e2e WAV golden/fault fixture 実装 | done | [issue-305-w1-fixture-extension.md](./issue-305-w1-fixture-extension.md) |
 | TASK-034UwcoMpAnO2xGUgLMC7x | W2 Issue #305 io-e2e WAV golden/fault 検証・handoff | done | [issue-305-w2-verification-handoff.md](./issue-305-w2-verification-handoff.md) |
+| TASK-7VWD8KuRBS2voBCngFoIJF | A1 IO MSRV lane 追加・DAG/RT audit 証跡・検証 | done | [issue-306-a1-msrv-dag-rt-audit.md](./issue-306-a1-msrv-dag-rt-audit.md) |
 | TASK-034UtEdJ4J9ekRBHmpucta | F1 IO E2E fixture 実装 — Fault/Fuzz・Directory・OS/FS probe | done | [issue-306-f1-fixture-extension.md](./issue-306-f1-fixture-extension.md) |
 | TASK-034UtEeCVQCg44aM7iUrV3 | F2 正規検証・evidence・CI handoff 記録 | done | [issue-306-f2-verification-handoff.md](./issue-306-f2-verification-handoff.md) |
 | TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |

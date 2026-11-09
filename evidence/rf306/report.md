@@ -170,3 +170,153 @@ base: `origin/main` = `ad99d181c34cded1e56489fa9542027fe0dfc966`（branch 起点
 - `mise.toml` +3 task（check/lint/test-io-e2e）
 - docs チェーン 9 本（spec/design/plan/test-spec/task×6、
   index 反映済み）+ 本 evidence
+
+---
+
+# Slice 3 追記 — IO MSRV lane・DAG/RT 境界 audit・License 状態（Issue #306 残存受入行）
+
+本節は slice 3（MSRV lane + DAG/RT audit 証跡）の記録であり、
+上記 slice 1 の worktree/branch/base とは別の実行環境である。
+
+- 作業 worktree: `C:\Users\akiyoshi\orca\workspaces\ruviform\rf306-msrv`
+- branch: `scarecrow173/rf306-msrv`（PR head）
+- base: `origin/main` = `5267141369fe63821f5eb2aba8b0223f7aa67319`
+  （branch 起点時点で origin/main tip と一致）
+- 環境: Windows 11 x64 / rustc 1.99.0（pin toolchain）+
+  rust@1.89.0（MSRV lane）/ cargo 1.99.0 / NTFS
+- 実行日時: 2026-11-10 (UTC)
+- doc チェーン: `docs/{specs,designs,test-specs,plans,tasks,
+  impl/ir}/issue-306-*msrv-dag-rt-audit*`（slice 3）
+
+## MSRV lane（`test-io-msrv`）実走結果
+
+`mise.toml` に `[tasks.test-io-msrv]` を追加
+（`test-ofx-msrv`/`test-ui-test-msrv` の直後。`mise exec
+rust@1.89.0` + `CARGO_TARGET_DIR = "target/msrv-io"`）。
+2 コマンド構成:
+
+1. `mise exec rust@1.89.0 -- cargo test -p ruviform-io-file
+   -p ruviform-io-archive -p ruviform-io-structured
+   -p ruviform-io-compression -p ruviform-io-wav
+   -p ruviform-io-e2e`
+2. `mise exec rust@1.89.0 -- cargo test -p
+   ruviform-io-compression --features deflate`
+
+実行コマンド: `mise run test-io-msrv` → **Pass (exit 0)**。
+
+- toolchain 確認: `mise exec rust@1.89.0 -- rustc --version`
+  → `rustc 1.89.0 (29483883e 2025-08-04)`
+- 合計 **680 passed / 0 failed / 1 ignored**（unittest/
+  integration/doc test の全 53 集計行が `test result: ok`）。
+  ignored 1 件は
+  `ruviform-io-file/tests/os_publish.rs` の gate spawned
+  `#[ignore]` helper（`create_new_contention_multi_process`
+  が spawn する非 standalone test）であり既存の意図的
+  ignore で、本 lane の回帰ではない。
+
+| crate | tests（cmd1、feature unify 適用後） | doctests | 備考 |
+| --- | --- | --- | --- |
+| ruviform-io-archive | 154 | 10 | 単体 feature なし |
+| ruviform-io-compression | 96 | 7 | io-e2e dev-deps 経由で gzip+zstd が unify（deflate_format は 0 件 = feature 未 enable を確認） |
+| ruviform-io-e2e | 77 | 0 | 全統合 fixture（staged 6・structured 6+8・archive_compression 6・extraction 10・fault 6・negative_fuzz 10・os_fs_probe 1・rooted 4・wav_fault 9・wav_golden 8・wav_staged 3） |
+| ruviform-io-file | 132（1 ignored） | 11 | mock `#[cfg(test)]` 群を含む |
+| ruviform-io-structured | 117 | 12 | io-e2e dev-deps 経由で json,yaml,toml,csv,xml,file 全 format が unify |
+| ruviform-io-wav | 35 | 3 | contract 19 + roundtrip 9 + lib 7 |
+| ruviform-io-compression（cmd2, `--features deflate`） | 21 | 5 | deflate_format 11・decoder/encoder contract の deflate 系・api_surface。gzip_format/zstd_format は 0 件（feature 非 enable を確認） |
+
+feature unify の実測確認: cmd1 で io-structured の
+`tests/structured.rs` が 117 tests（全 format 有効時の規模）
+・io-compression の `gzip_format` 20 + `zstd_format` 34 +
+`deflate_format` 0、cmd2 で `deflate_format` 11 +
+gzip/zstd 各 0 — E2E 消費 feature と deflate 補完が意図どおり
+分離・網羅されている。
+
+## DAG/RT 境界 audit（`cargo metadata` / `cargo tree` 実測）
+
+全て既定 toolchain（rustc 1.99.0）で実行。判定は実コマンド
+出力に基づく。
+
+### A1. `ruviform-io-e2e` は leaf
+
+- `cargo tree -i ruviform-io-e2e` → 出力は
+  `ruviform-io-e2e v0.1.0 (...)` 自身のみ（逆依存なし）。
+- `cargo tree -i ruviform-io-e2e --edges dev` → 同上（dev 辺
+  を含めても逆依存なし）。
+- `grep -rn "ruviform-io-e2e" crates/*/Cargo.toml Cargo.toml`
+  → 自身の `name` 行と workspace `members` 行のみ。依存宣言
+  0 件。
+- `cargo metadata` parse（python）: 全 workspace member の
+  `dependencies` を走査し `ruviform-io-e2e` を参照する
+  package は **0 件** → **Pass（leaf 確認）**。
+
+### A2. `ruviform-media-io` の Domain-Core3 依存方向
+
+- `cargo tree -p ruviform-media-io --depth 1` →
+  `ruviform-audio-core`・`ruviform-media-core`・
+  `ruviform-video-core` の 3 path 依存のみ。
+- `cargo tree -p ruviform-media-core` / `-p
+  ruviform-audio-core` / `-p ruviform-video-core --depth 1`
+  → いずれも `ruviform-media-io`・`ruviform-io-*` への
+  依存なし（media-core は dev-dep `assert_no_alloc` のみ、
+  audio-core/video-core は media-core への下向き依存のみ）。
+- `cargo metadata` parse: `media-io.dependencies` の名前集合
+  == `{ruviform-media-core, ruviform-audio-core,
+  ruviform-video-core}`（Domain-Core3）で一致、3 core の
+  dependencies に media-io/io-* を含むものなし →
+  **Pass（下向き一方向を確認）**。
+
+### A3. `ruviform-rt` は io/blocking 依存を持たない
+
+- `cargo tree -p ruviform-rt` → 通常依存は `arc-swap`・
+  `rtrb` のみ（いずれも外部 crate）。dev-dependencies は
+  criterion bench harness（`alloca`/`ciborium`/`clap` 等の
+  bench 計測用）で production 依存ではない。
+- `cargo metadata` parse: `ruviform-rt.dependencies` =
+  `arc-swap`(normal)・`rtrb`(normal)・`criterion`(dev) の
+  3 件のみ。`ruviform-io-*`・blocking 系名・workspace path
+  依存は **0 件** → **Pass**。
+
+## License 状態の記録
+
+- `[workspace.package] license = "MIT"` は配布方針確定までの
+  **仮置き**であり、リポジトリの license は**未決定**
+  （`LICENSE` ファイル非存在）。AGENTS.md「ライセンス注記」
+  の記述どおりであり、本 slice で決定・承認はしていない。
+- `publish.workspace = true` の `publish = false` は未決定
+  クレートを公開しない licensing ADR の原則であり、license
+  決定を意味しない。
+
+## Slice 3 の NotRun / Blocked / Unsupported（正直な記録）
+
+- macOS/Linux 実機での MSRV/IO 実測: **NotRun** — 本検証は
+  Windows 11 x64 / NTFS のみ。
+- Network/Cloud FS での durability/IO 実測:
+  **Unsupported** — 実測環境なし。durability 保証は FS 依存
+  のため主張しない（slice 2 report と同じ扱い）。
+- MSRV clippy 検証: **NotRun（lane 未追加）** — `test-io-msrv`
+  は test 実行のみ。MSRV clippy の扱いは `docs/development-
+  guidelines.md`（Issue #223）の情報 lane 方針に従う。
+- Consumer 実測（AudioLens #139/#143・Synvelis #82/#84）:
+  **NotRun/Blocked** — #219/#294 cross-repo gate の責務
+  （slice 2 report の引き渡し節を参照）。
+- 実 4 GiB ファイル publish・性能計測: **NotRun** — scope 外。
+- `Indeterminate`・DirSync 後失敗・`TempState::Unknown`:
+  **Unsupported（fixture 化せず）** — 公開 API から誘発不能。
+  `ruviform-io-file` `#[cfg(test)]` MockFileOps 試験が正本
+  （slice 1・2 と同じ分類。本 slice で偽装 fixture は追加
+  していない）。
+- Issue #306 の close: **対象外** — 残存受入行は本 slice で
+  全てではない（consumer 実測等が残る）。
+
+## Slice 3 で変更したもの
+
+- `mise.toml`: `[tasks.test-io-msrv]` 追加（+15 行・task 定義
+  と説明コメントのみ。既存 task 無変更）。
+- `evidence/rf306/report.md`: 本節追記。
+- `crates/ruviform-io-e2e/README.md`: 検証節に `test-io-msrv`
+  を追記。
+- `docs/development-environment.md`: opt-in task 一覧に
+  `test-io-msrv` を追記。
+- docs チェーン 6 本（spec/design/test-spec/plan/task/impl）
+  + managed index 再生成。
+- crate の公開 API・実装・feature・依存: **無変更**。

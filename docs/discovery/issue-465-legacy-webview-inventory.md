@@ -12,6 +12,8 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/384"
     - "https://github.com/scarecrow173/ruviform/issues/257"
     - "https://github.com/scarecrow173/ruviform/issues/455"
+    - "https://github.com/scarecrow173/audio-lens/issues/189"
+    - "https://github.com/scarecrow173/synvelis/issues/232"
   changes:
     added: []
     modified: []
@@ -144,7 +146,7 @@ Issue #465 P0/P1 の調査成果物。旧 WebView-first GUI 基盤の全構成�
 | `mise.toml` `poc-native-dock`/`poc-native-dock-layout` | 現行 | GPUI Native Dock 検証 |
 | `.github/workflows/ci.yml` `ui-verify`/`ui-verify-macos` jobs | legacy lane | WebViewGTK 依存導入 + Playwright browser cache を含む。driver-neutral lane（`verify` 内の contract/boundary 呼出）とは別 job |
 | `.github/workflows/consumer-verify.yml` の consumer 側 `setup-ui`/`check-ui`/`test-ui`/`build-ui` step | consumer 側 lane | consumer repo の mise task を呼ぶ情報 lane。consumer の WebView UI が残る間は必要 |
-| `Cargo.toml` workspace members（`ruviform-ui-webview`、`poc/*`） | legacy member | P2 で member 除外判断。現時点では除外しない |
+| ルート `Cargo.toml` workspace members（`ruviform-ui-webview`） | legacy member | P2 で member 除外判断。現時点では除外しない。`poc/ui`・`poc/plugin-gui` は自前 `[workspace]` と lockfile を持つ独立ワークスペースで root members ではない（§1.4 参照） |
 | `Cargo.lock` / `ui/*/package-lock.json` | 追跡継続 | 依存 pin の正本。変更なし |
 | `README.md` / `crates/README.md` / `docs/development-environment.md` | 記述の歴史化対象 | WebView UI を現行機能として記述している箇所に legacy 注記を追加（P0） |
 | `docs/adr/ui-architecture-webview-hybrid.md`/`ui-tech-selection-poc.md` | 歴史（superseded 済み） | 2026-11-07 に #384 ADR へ supersede 済み。banner あり、追記不要 |
@@ -181,9 +183,23 @@ Issue #465 P0/P1 の調査成果物。旧 WebView-first GUI 基盤の全構成�
   同期する仕組みを持つ。P2 で `ruviform-ui-webview`/`ui/*` を物理撤去
   すると、pin 更新時に consumer 側の webview feature/bin・vendored
   sync・WebView 向け mise lane が連鎖的に壊れる。
-- consumer 側の WebView 撤去は各 repo の Issue（synvelis #175/#28 系、
-  audio-lens #166/#127 系）で追跡される。本書は ruviform 側の記録であり
-  consumer repo の編集は行わない。
+- consumer 側の WebView 撤去は各 repo の Issue で追跡される。RF#465
+  P1 の「実際の撤去に必要な製品固有 Issue/PR を各 repo で明示的に
+  管理」と audio-lens#127 の「物理削除は独立した AudioLens の実装
+  Issue/PR に分解」の要求に対応し、物理撤去の専任 Owner Issue が
+  起票済み（いずれも OPEN・2026-11-09 起票）:
+  - AudioLens [#189](https://github.com/scarecrow173/audio-lens/issues/189)
+    — `al-gui` の webview feature/bin・`ui/` TS assets・vendor 同期・
+    IPC・CI/配布の撤去を担う。`rvf.ipc.v1` schema は共有維持として
+    区別済み、撤去 Gate は RF#419 採用判定 + RF#465 撤去計画 + 独立
+    精度 Gate 充足が前提。
+  - Synvelis [#232](https://github.com/scarecrow173/synvelis/issues/232)
+    — `ruviform-ui-webview` optional dep・webview bin・HostConfig/
+    assets/CI の撤去を担う。撤去 Gate は RF#419 採用判定 + RF#465
+    撤去計画 + 製品 Gate 充足が前提。
+  - 従来の追跡系列は synvelis #175（closed・先代 GUI lane）/#28 系・
+    audio-lens #166（closed・GPUI 移行履歴）/#127 系（基盤追従）。
+    本書は ruviform 側の記録であり consumer repo の編集は行わない。
 
 ## 3. 移行先の決定（記録）
 
@@ -198,8 +214,15 @@ Issue #465 P0/P1 の調査成果物。旧 WebView-first GUI 基盤の全構成�
 | `ui/*` TS 資産 | headless 契約意味論は Rust 側（`behavior`/`view`/driver-lab fixture）へ移植済み。TS 実装の存続は consumer frontend の要否次第 | P2 判断 |
 | `ui/browser-test`（Playwright） | driver-lab の Fake/GPUI parity fixture（`test-ui-driver-contract`/`test-ui-parity`）が新標準 | legacy lane として保持、P2 で縮退判断 |
 
-## 4. P2 ゲート状態
+## 4. P1 引き渡し状況と P2 ゲート状態
 
+- **P1（per-repo Issue 管理）: 引き渡し済み**。RF#465 P1 の要求どおり、
+  consumer 側の物理撤去は各 repo の専任 Issue — AudioLens #189・
+  Synvelis #232（ともに OPEN）— が Owner であり、ruviform 側は本書の
+  棚卸し・分類・consumer 影響記録（§2）を引き渡し証跡とする。
+  ruviform 側の P0/P1 記録・分類・doc コメント注記は PR #475 で
+  main へ反映済み（doc chain: spec/design/ADR/plan/task、task status
+  `done`）。
 - **P2（物理撤去）: NotRun / 対象外**。前提条件は #419 GPUI 採用判定
   （#262 verdict + #388/#389 実機証拠）と両 consumer の Native 受入。
   いずれも未達のため、本 P0/P1 では削除・member 除外・CI lane 撤去を

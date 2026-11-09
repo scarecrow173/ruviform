@@ -670,6 +670,23 @@ description = "Test ruviform-observability on MSRV 1.89 with all features (integ
 run = "mise exec rust@1.89.0 -- cargo test -p ruviform-observability --all-features"
 env = { CARGO_TARGET_DIR = "target/msrv-observability" }
 
+# Issue #306 受入行「MSRV1.89 … 監査を統合」に対応する IO 系 crate の
+# MSRV lane。`test-ofx-msrv`/`test-ui-test-msrv` と同じく
+# `mise exec rust@1.89.0` で toolchain を固定して実走する。
+# io-e2e を同時 -p に含めると、その dev-dependencies 経由で
+# io-structured（json,yaml,toml,csv,xml,file）と io-compression
+# （gzip,zstd）の feature が unify され、合成 E2E が実際に使う
+# feature 組合せが MSRV toolchain でそのまま検証される。
+# io-compression の `deflate` は io-e2e が消費しないため、第 2
+# コマンドで単独 feature として別途実行する。
+[tasks.test-io-msrv]
+description = "Test the six generic IO crates (io-file/io-archive/io-structured/io-compression/io-wav/io-e2e) on MSRV 1.89, including io-e2e-unified feature sets plus io-compression deflate (Issue #306)"
+run = [
+  "mise exec rust@1.89.0 -- cargo test -p ruviform-io-file -p ruviform-io-archive -p ruviform-io-structured -p ruviform-io-compression -p ruviform-io-wav -p ruviform-io-e2e",
+  "mise exec rust@1.89.0 -- cargo test -p ruviform-io-compression --features deflate",
+]
+env = { CARGO_TARGET_DIR = "target/msrv-io" }
+
 # Real-plugin L1 lane (Issue #114): the `#[ignore]`-gated E2E tests under
 # `tests/l1_real_adapter_e2e.rs` need the workspace-built fixture cdylib and the
 # `host`-feature L1 runner binary, so the lane builds them deterministically

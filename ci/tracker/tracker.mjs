@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // tracker.mjs — Issue #368 CI failure Issue Tracker.
 //
-// Watches `workflow_run` completions of the `ci` workflow and keeps at most
-// ONE open failure issue per scope (repo × workflow × branch). It is the
+// Watches `workflow_run` completions of the tracked workflows (`ci` Full CI
+// and, since Issue #294, `consumer-verify`) and keeps at most ONE open
+// failure issue per scope (repo × workflow × branch). It is the
 // Issue-side counterpart of `ci/summary/summary.mjs`: where ci-summary
 // fail-closes the run, the tracker records that a main Full CI failure
 // exists and closes the issue only when a NEWER success covers the failed
@@ -65,17 +66,26 @@ import { pathToFileURL } from "node:url";
 
 export const TRACKER_LABEL = "ci-failure";
 export const LABEL_COLOR = "d93f0b";
-export const ISSUE_TITLE = "[CI failure][main] Full CI failed";
 export const MARKER_TAG = "ci-issue-tracker";
 export const HISTORY_LIMIT = 10;
 export const HISTORY_PAGE_SIZE = 30;
 
-// Events whose completed `ci` runs count as valid main Full CI executions:
-// `push` (main) and `workflow_dispatch` (manual + the Issue #367 daily
-// scheduler). `pull_request`/`merge_group`/`schedule`/anything else is
-// skipped — the allowlist is deliberate so a new trigger added to ci.yml
+// Events whose completed runs count as valid main executions: `push` (main)
+// and `workflow_dispatch` (manual + the Issue #367 daily scheduler).
+// `pull_request`/`merge_group`/`schedule`/anything else is skipped — the
+// allowlist is deliberate so a new trigger added to a tracked workflow
 // cannot silently become tracked evidence.
 export const ALLOWED_EVENTS = ["push", "workflow_dispatch"];
+
+// Issue titles are scope-derived so a second tracked workflow never files
+// under another workflow's name. `ci` keeps its historical title verbatim —
+// existing open issues are found by marker scope, not by title, so the
+// mapping only has to stay stable going forward.
+const WORKFLOW_TITLES = { ci: "Full CI", "consumer-verify": "consumer-verify" };
+export function issueTitle(scope) {
+  const what = WORKFLOW_TITLES[scope.workflow] ?? sanitizeText(scope.workflow, 60);
+  return `[CI failure][${sanitizeText(scope.branch, 60)}] ${what || "workflow"} failed`;
+}
 
 // Conclusions that mean "the run finished without verifying" — the failure
 // side of the tracker. `timed_out`/`startup_failure` never verified either.
@@ -249,6 +259,21 @@ export function classifyRun(payload, scope) {
   }
   if (wr.head_branch !== scope.branch) {
     return skip(`branch:${sanitizeText(wr.head_branch) || "unknown"}`);
+  }
+  // Workflow identity must match the scope: the workflow_run trigger can
+  // watch several workflows, and a same-named workflow file elsewhere (or
+  // a renamed workflow) must never feed the wrong scope's evidence. Each
+  // present field must match and at least one must be present — a payload
+  // with no identity at all is malformed → skip (the reconcile entry heals
+  // any missed notification from authoritative history).
+  const wpath = typeof wr.path === "string" ? wr.path : null;
+  const wname = typeof wr.name === "string" ? wr.name : null;
+  if (
+    (wpath == null && wname == null) ||
+    (wpath != null && !(wpath === scope.workflowFile || wpath.endsWith(`/${scope.workflowFile}`))) ||
+    (wname != null && wname !== scope.workflow)
+  ) {
+    return skip(`workflow:${sanitizeText(wname ?? wpath, 200) || "unknown"}`);
   }
   if (!scope.allowedEvents.includes(wr.event)) {
     return skip(`event:${sanitizeText(wr.event) || "unknown"}`);
@@ -507,10 +532,10 @@ export function renderBody(scope, state) {
     "",
     `## CI failure tracker — \`${sanitizeText(scope.branch)}\` × \`${sanitizeText(scope.workflow)}\``,
     "",
-    "Managed by `.github/workflows/ci-issue-tracker.yml` (Issue #368).",
+    "Managed by `.github/workflows/ci-issue-tracker.yml` + `ci-issue-tracker-reconcile.yml` (Issues #368, #294).",
     "Do not edit the leading marker comment — it identifies this issue to the tracker.",
     "",
-    "### Status: OPEN — unresolved Full CI failure",
+    "### Status: OPEN — unresolved workflow failure",
     "",
     "| field | value |",
     "| --- | --- |",
@@ -539,9 +564,9 @@ export function renderBody(scope, state) {
     "",
     "#### Triage",
     "",
-    "1. Open the latest failing run and inspect the failing jobs.",
-    "2. Land a fix on `main` or re-run `ci` via `workflow_dispatch`.",
-    "3. This issue closes automatically only when a **newer** `ci` run succeeds",
+    `1. Open the latest failing run and inspect the failing jobs.`,
+    `2. Land a fix on \`${sanitizeText(scope.branch)}\` or re-run \`${sanitizeText(scope.workflow)}\` via \`workflow_dispatch\`.`,
+    `3. This issue closes automatically only when a **newer** \`${sanitizeText(scope.workflow)}\` run succeeds`,
     "   at a revision covering the failed one AND the current `main` tip. Old-run,",
     "   ambiguous-order, or divergent successes do not close it.",
     "",
@@ -552,7 +577,7 @@ export function renderBody(scope, state) {
     "- The tracker never reopens manually closed issues; a failure after a",
     "  manual close opens a new issue.",
     "- While GitHub Actions itself is down the tracker cannot run — check the",
-    "  last green `ci` run and re-dispatch manually after recovery.",
+    `  last green \`${sanitizeText(scope.workflow)}\` run and re-dispatch manually after recovery.`,
     "",
   );
   return lines.join("\n");
@@ -875,7 +900,7 @@ async function applyActions(actions, scope, client) {
     }
     if (a.type === "create") {
       const created = await client.createIssue({
-        title: ISSUE_TITLE,
+        title: issueTitle(scope),
         body: renderBody(scope, a.state),
         labels: [scope.label],
       });
@@ -884,7 +909,7 @@ async function applyActions(actions, scope, client) {
     }
     if (a.type === "update" || a.type === "merge-state") {
       await client.updateIssue(a.issue, {
-        title: ISSUE_TITLE,
+        title: issueTitle(scope),
         body: renderBody(scope, a.state),
       });
       applied.push({ ...a });
@@ -894,7 +919,7 @@ async function applyActions(actions, scope, client) {
       await client.addComment(
         a.issue,
         [
-          `Recovered: newer \`ci\` run ${a.recovery.runId}a${a.recovery.attempt ?? 1} succeeded at revision`,
+          `Recovered: newer \`${sanitizeText(scope.workflow)}\` run ${a.recovery.runId}a${a.recovery.attempt ?? 1} succeeded at revision`,
           `\`${a.recovery.sha}\` covering the failed revision and the current main tip.`,
           a.recovery.runUrl ? `Run: ${a.recovery.runUrl}` : null,
         ]

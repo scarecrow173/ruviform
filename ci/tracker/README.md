@@ -1,18 +1,23 @@
-# ci/tracker — CI failure Issue Tracker（Issue #368）
+# ci/tracker — CI failure Issue Tracker（Issue #368 / #294）
 
-`.github/workflows/ci-issue-tracker.yml` が `ci`（Full CI）workflow の
+`.github/workflows/ci-issue-tracker.yml` が `ci`（Full CI）と
+`consumer-verify`（Issue #294 Cross-Repo 候補 tuple 検証）の
 `workflow_run` 完了を監視し、**この repo の `main` に対する有効な
-Full CI 実行**だけを対象に、`main × ci` の未解決障害 Issue を原則
-1 件に集約する（Issue #365 ルール 5）。GITHUB_TOKEN dispatch で
-event が起きない完了は、別 workflow の
+実行**だけを対象に、scope（repo × workflow × branch）ごとの未解決
+障害 Issue を原則 1 件に集約する（Issue #365 ルール 5）。
+GITHUB_TOKEN dispatch で event が起きない完了は、別 workflow の
 `.github/workflows/ci-issue-tracker-reconcile.yml` が定期・手動で
 同一判定器を `--reconcile` モードで呼び、権威 run 履歴から回復する
 （後述「reconcile 入口」参照）。
 
 ## 構成
 
-- `ci-issue-tracker.yml` — `workflow_run: {workflows: [ci], types:
-  [completed], branches: [main]}` でのみ起動。job `track` のみ
+- `ci-issue-tracker.yml` — `workflow_run: {workflows: [ci,
+  consumer-verify], types: [completed], branches: [main]}` でのみ起動。
+  job は scope ごとに 1 つ: `track`（`if: workflow_run.name == 'ci'`、
+  既定 scope）と `track-consumer-verify`
+  （`if: workflow_run.name == 'consumer-verify'`、`--workflow
+  consumer-verify --workflow-file consumer-verify.yml`）。両 job とも
   `contents: read` / `actions: read` / `issues: write`。
   `concurrency` で repo 単位に直列化（`cancel-in-progress: false`）。
   event 入口は `schedule`/`workflow_dispatch`/`pull_request`/`push` を
@@ -21,9 +26,10 @@ event が起きない完了は、別 workflow の
   （UTC・6 時間間隔）+ `workflow_dispatch`（入力なし）で起動する
   reconcile 入口。job `reconcile` は `if: github.ref_name == 'main'`
   で非 default ref 起動を skip し、checkout を
-  `github.event.repository.default_branch` に pin する。権限・
-  concurrency group は event 入口と同一（group を共有して workflow
-  横断で直列化）。**TRACKER_EVENT_PATH は渡さない**。
+  `github.event.repository.default_branch` に pin する。1 job が
+  **全 scope を順に reconcile** する（`ci` 既定 → `consumer-verify`
+  明示）。権限・concurrency group は event 入口と同一（group を共有
+  して workflow 横断で直列化）。**TRACKER_EVENT_PATH は渡さない**。
 - `ci/tracker/tracker.mjs` — stdlib-only。`classifyRun`（有効 run +
   conclusion 分類）→ run-history reconciliation（権威ある run 一覧と
   marker 状態の突き合わせ）→ `plan`（action list）→ `apply`（`gh api`
@@ -45,8 +51,14 @@ event モードの payload は JSON object 必須 — `null`/スカラ/配列に
 - `action: completed`
 - `head_repository.full_name == この repo`（fork run 除外）
 - `head_branch == "main"`
+- workflow 同一性: `name`/`path` の存在する方が全て scope の
+  `workflow`/`workflowFile` と一致（両方欠落は malformed → skip。
+  event 入口は複数 workflow を監視するため、payload 側でも scope を
+  再検証する — job の `if` gate と二重の防御）
 - `event ∈ {push, workflow_dispatch}`（PR・merge_group・schedule・未知
-  event は skip — ci.yml に新 trigger が増えても黙って追跡対象にしない）
+  event は skip — 追跡 workflow に新 trigger が増えても黙って追跡対象
+  にしない。`consumer-verify` は dispatch-only なので実質
+  `workflow_dispatch` のみが届く）
 
 ## conclusion 分類
 
@@ -131,10 +143,13 @@ eventual consistency も同様）。そこで非 skip イベントごとに
 ## reconcile 入口（GITHUB_TOKEN dispatch の通知 gap 対策）
 
 Daily Scheduler（Issue #367）が `GITHUB_TOKEN` で `workflow_dispatch`
-した bot Full CI run は dispatch 自体は実行されるが、GitHub の
+した bot run は dispatch 自体は実行されるが、GitHub の
 anti-recursion ルールにより完了時の `workflow_run` event は**発火し
-ない**。bot 失敗も bot 成功も event 入口には届かず、起票済み Issue が
-閉じない（観測: #375 で manual Replay が必要だった）。
+ない**。これは `ci`（daily-ci の Full CI dispatch）と
+`consumer-verify`（daily-ci の tuple scheduler dispatch、Issue #294）
+の**両 scope** に当てはまる — bot 失敗も bot 成功も event 入口には
+届かず、起票済み Issue が閉じない（観測: #375 で manual Replay が
+必要だった）。
 
 `ci-issue-tracker-reconcile.yml` は同一判定器を event 非依存で呼ぶ
 第二の入口:
@@ -207,13 +222,13 @@ pending/unknown 証跡の残存は**close しない**。close 候補で branch h
 - **tracker job 自身の失敗**: Actions UI の `ci-issue-tracker` run が
   赤くなる。自動通知は持たない — daily 運用での Job Summary 確認を
   運用手順とする。
-- **同名 workflow の混入（既知の限界・P2 として別途管理）**:
-  `workflow_run.workflows: [ci]` は workflow **name** でマッチするため、
+- **同名 workflow の混入（#294 で解消）**:
+  `workflow_run.workflows` は workflow **name** でマッチするため、
   `name: ci` を持つ**別ファイル**の workflow が存在するとその run でも
-  tracker が起動する。history 側は `path`/`name` で排除するが、event
-  payload 側は workflow file/`workflow_id` を照合していない。現時点で
-  同名 workflow は存在せず対応は別タスク — consumer 導入時は `name` の
-  衝突がないことを確認すること。
+  tracker job は起動し得る。event payload 側は `classifyRun` が
+  `name`/`path` を scope の `workflow`/`workflowFile` と照合して
+  skip し（job の `if` gate と二重防御）、history 側は `path`/`name`
+  で排除する — 別ファイルの同名 workflow は証拠にならない。
 
 ## セキュリティ
 
@@ -238,11 +253,13 @@ pending/unknown 証跡の残存は**close しない**。close 候補で branch h
   concurrency group と artifact 名の repo 語だけ。スケジュール間隔は
   consumer の bot dispatch 頻度に合わせて調整してよい。
 - `tracker.mjs` の `--repo`（`GITHUB_REPOSITORY` 既定）・`--branch`・
-  `--workflow`・`--label`、および `ISSUE_TITLE` / `ALLOWED_EVENTS` /
+  `--workflow`・`--workflow-file`・`--label`、および `WORKFLOW_TITLES`
+  （`issueTitle(scope)` が参照）/ `ALLOWED_EVENTS` /
   `FAILURE_CONCLUSIONS` の定数。
-- marker の `scope` が `repo`/`workflow`/`branch` を持つため、同一 repo
-  で複数 workflow を追跡する場合も scope 単位で Issue が分離される
-  （`consumer-verify` 追跡は #294 の別ステップ）。
+- marker の `scope` が `repo`/`workflow`/`branch` を持ち、Issue title
+  も `issueTitle(scope)` で scope 別に導出されるため、同一 repo で
+  複数 workflow を追跡しても Issue は scope 単位で分離される
+  （`ci` と `consumer-verify` は別 Issue・別 title・別 marker）。
 - 依存は GitHub-hosted runner 標準の `gh` CLI + Node のみ。Ruviform の
   Cargo/frontend artifact への依存は一切ない。
 - Consumer repo 側の Actions 設定（`GITHUB_TOKEN` の default permission が

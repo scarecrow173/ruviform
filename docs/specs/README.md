@@ -61,6 +61,7 @@ Directory: `docs/specs`
 | SPEC-034UnxeRRp2vX35gnordF9 | Issue #291 OBS-09 Diagnostics・Evidence・Finding・Health・Report | approved | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | SPEC-tBdATMZtqYxn8MbVgZquYA | Issue #292 OBS-10 Debug Inspection・Invariant・Session・Probe連携（observability 内完結 slice） | approved | [issue-292-observability-debug-inspection.md](./issue-292-observability-debug-inspection.md) |
 | SPEC-4IC1B6yvvsvwdDR85TSYNI | Issue #293 OBS-11 Host統合 Config + ObservationRunner 生命周期 slice（observability 内完結） | approved | [issue-293-observability-integration-runner.md](./issue-293-observability-integration-runner.md) |
+| SPEC-ko4Wl9fIvU1e2cmiVYFmwp | Issue #294 consumer-verify → ci-issue-tracker 配線 — 失敗の Issue 追跡を既存 tracker scope で実現 | proposed | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | SPEC-034S9nR4tW7xZ2cF5hJ8kM | Issue #294 Cross-Consumer候補tuple Gate — consumer-verify.yml 証拠契約・UI lane 段階拡張・候補連携接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | SPEC-034Ul9sCnKK1pa64jCWkdO | Issue #294 daily candidate-tuple trigger — consumer-verify tuple 判定の daily-ci 組込み（tuple-aware decide・証拠 artifact 回復・bounded retry） | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | SPEC-7DGwosr0bGXXRsfeRfhe1v | Issue #294 GUI-CONTRACT lane 接続 — ruviform 候補 tree 上の boundary guard / Fake driver semantic を consumer-verify へ | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
@@ -78,6 +79,7 @@ Directory: `docs/specs`
 | SPEC-P6IzbXqAJ2cgiMm8llJIIO | Issue #305 Media I/O 旧 StagedOutput 完全削除・WAV→StagedFile 移行 (IO-IMP-11) | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | SPEC-lYVG6Gr07aTIBC8BSS0WKW | Issue #306 汎用 I/O 合成 E2E — StagedFile/Structured/Compression/Archive/WAV 境界試験 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | SPEC-034UtxqBI7DX73fpCfjAok | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture・OS/FS 実測・CI handoff | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
+| SPEC-akGFe19N27efIRTF1LTQdg | Issue #306 IO E2E slice 3 — IO MSRV lane・DAG/RT 境界 audit 証跡 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | SPEC-P7W4Dz6p2EQIQNPclAQG2U | Issue #307 PluginNode attach 時 frame_base の非 RT 型付き検証（verified clock context） | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | SPEC-034Ui3cZpzwuwGdf2aHCCv | Issue #308 — Generation切替時のProbe再Bindingを全件整合・部分失敗可観測にする | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
 | SPEC-034Uwjri6KbgwOU8k9kjh0 | Issue #309 PROBE-TIME slice — 複数Probe時間アライメント fixture 検証 | approved | [issue-309-probe-time-align-fixture.md](./issue-309-probe-time-align-fixture.md) |

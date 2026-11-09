@@ -77,6 +77,7 @@ Directory: `docs/designs`
 | DESIGN-034Unxw6Jlg98IypxJkHfQ | Issue #291 OBS-09 Diagnostics: Evidence/Finding/Health/Report — 型で分ける事実と推定 | approved | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | DESIGN-koNZAEijupozhje6vYRpDO | Issue #292 OBS-10 Debug Inspection・Invariant・Session・Probe連携 — observability 内完結 slice | approved | [issue-292-observability-debug-inspection.md](./issue-292-observability-debug-inspection.md) |
 | DESIGN-DQg7hyyzqx49OBMHYx8lv8 | Issue #293 OBS-11 ObservabilityConfig + ObservationRunner 設計 | approved | [issue-293-observability-integration-runner.md](./issue-293-observability-integration-runner.md) |
+| DESIGN-MxFLFDKeJa955vgMTzSni8 | Issue #294 consumer-verify → ci-issue-tracker 配線設計 — 既存 scope 機構の再利用・scope 別 job・reconcile 全 scope 化 | approved | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | DESIGN-034S9rV6yB3dG7jL0nQ4sU | Issue #294 Cross-Consumer候補tuple Gate 設計 — 証拠契約・解決SHA捕捉・UI lane 段階接続・task 接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | DESIGN-034UlaEev2MQ6gsnrNqias | Issue #294 daily candidate-tuple trigger 設計 — tuple-aware decide・証拠 artifact 回復・daily-ci job | approved | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | DESIGN-RVQaQUltza40Kb1HlAt48X | Issue #294 GUI-CONTRACT lane 接続設計 — 候補 tree 取得・task probe・step/lane 分離 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
@@ -94,6 +95,7 @@ Directory: `docs/designs`
 | DESIGN-eVPQpm7tyMUS2gxitU5KtN | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行設計 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | DESIGN-ODmc6p5Cp7Kbq0u35OrAiR | Issue #306 汎用 I/O 合成 E2E — 試験専用クレート構成・境界試験設計 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | DESIGN-034UtzREeBZLceakda7vIS | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture 設計 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
+| DESIGN-CTGZSygUhyfXwQSdShQuap | Issue #306 IO E2E slice 3 — IO MSRV lane・DAG/RT 境界 audit 設計 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | DESIGN-dHUQ40Hk50tvziqjx7Kewj | Issue #307 attach 時 frame_base 検証 context — 実装設計 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | DESIGN-034Ui3n3nIZNFJKLyIv0Uf | Issue #308 — Probe再Bindingのstaged all-or-nothing設計 | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
 | DESIGN-034UwjzYYEPPjIvuXPl28f | Issue #309 PROBE-TIME slice — 複数Probeアライメント fixture 設計 | approved | [issue-309-probe-time-align-fixture.md](./issue-309-probe-time-align-fixture.md) |

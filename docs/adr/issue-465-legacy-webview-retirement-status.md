@@ -117,4 +117,4 @@ Issue #465 はこの残存物の段階的廃止を扱うが、P2 の物理撤去
 
 - 棚卸し正本: [inventory](../discovery/issue-465-legacy-webview-inventory.md)
 - 後継関係: 本 ADR は [driver-neutral-gui-gpui-driver-webview-first-issue-384.md](driver-neutral-gui-gpui-driver-webview-first-issue-384.md) の移行表・縮退順序を Issue #465 の P0/P1 として実行するものであり、GPUI 最終採用判断（#262/#419）を代替しない。
-- 関連 Issue: #257（共通 UI 正本）、#294（cross-repo CI lane）、#455（ViewSpec parity not-planned）、#464（consumer-neutral scenario）、#262/#419（GPUI 採否 gate）、consumer 側は synvelis #175/#28 系・audio-lens #166/#127 系。
+- 関連 Issue: #257（共通 UI 正本）、#294（cross-repo CI lane）、#455（ViewSpec parity not-planned）、#464（consumer-neutral scenario）、#262/#419（GPUI 採否 gate）。consumer 側の物理撤去 Owner Issue は audio-lens #189・synvelis #232（ともに OPEN、2026-11-09 起票 — RF#465 P1 の per-repo Issue 管理要求への対応）。従来の追跡系列は synvelis #175/#28 系・audio-lens #166/#127 系。

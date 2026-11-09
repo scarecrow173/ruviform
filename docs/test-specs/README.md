@@ -74,6 +74,7 @@ Directory: `docs/test-specs`
 | TSPEC-034UnxESRAtEpUTP5RInqW | Issue #291 OBS-09 Diagnostics/Evidence/Finding/Health/Report 試験仕様 | approved | [issue-291-observability-diagnostics-tests.md](./issue-291-observability-diagnostics-tests.md) |
 | TSPEC-a7qCcQ6m0LyKTiq4IswgJo | Issue #292 OBS-10 Debug Inspection/Invariant/Session/Report 試験仕様 | approved | [issue-292-observability-debug-inspection-tests.md](./issue-292-observability-debug-inspection-tests.md) |
 | TSPEC-zq1tvuEsFrUjTnAjn3csSR | Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 試験仕様 | approved | [issue-293-observability-integration-runner-tests.md](./issue-293-observability-integration-runner-tests.md) |
+| TSPEC-9cHJxPHaQTlIrwbuTfhkPc | Issue #294 consumer-verify → ci-issue-tracker 配線 test spec — scope 分離・identity 照合・verdict 写像 | proposed | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | TSPEC-034S9zD5gJ8lN2qU6xA9eH | consumer-verify tuple証拠契約（解決SHA捕捉・期待照合・status導出・証拠JSON・workflow構造） | implemented | [issue-294-consumer-verify-tuple-evidence.md](./issue-294-consumer-verify-tuple-evidence.md) |
 | TSPEC-034Ule6zLxK0at8L5q0W7q | Issue #294 daily candidate-tuple trigger test spec — tuple 判定・証拠回復・dispatch 契約 | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TSPEC-qrIvFGA7o1j1g1gLAH1gW2 | consumer-verify GUI-CONTRACT lane — 候補 tree 評価・task probe・別結果記録の構造契約 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
@@ -91,6 +92,7 @@ Directory: `docs/test-specs`
 | TSPEC-0kY8BSgqOCJHezrud22f3h | Issue #305 Media I/O StagedFile 移行 テスト仕様 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | TSPEC-rviIWrpuHyJUT11Wykzopn | Issue #306 汎用 I/O 合成 E2E テスト仕様 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | TSPEC-034UtBs1z6PAEjR3T4EiV2 | Issue #306 IO E2E slice 2 テスト仕様 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
+| TSPEC-7h5x0wTVw48oHC6pAm1VId | Issue #306 IO E2E slice 3 テスト仕様 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | TSPEC-XQ6Q9VkNnBlPRcMf4cqLFu | Issue #307 attach 時 frame_base 検証 context — テスト仕様 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | TSPEC-034Ui3L8Aap8bdwyrLbDGp | Issue #308 — Probe再Bindingの検証契約 | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
 | TSPEC-034UwjAIH8nOcoNlsyjent | Issue #309 PROBE-TIME slice — アライメント fixture 検証契約 | approved | [issue-309-probe-time-align-fixture.md](./issue-309-probe-time-align-fixture.md) |
