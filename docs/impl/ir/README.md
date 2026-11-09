@@ -170,3 +170,4 @@ Directory: `docs/impl/ir`
 | IMPL-034UcjJXdshRRIGjbzDcS9 | Issue #442/#443/#435 検証クローズアウト — 既実装 3 Issue の検証証拠と文書整合 | completed | [issue-442-443-435-verification-closeout.md](./issue-442-443-435-verification-closeout.md) |
 | IMPL-034Uh5vBGP1ASyRB9MdhY8 | Issue #478 Fader/Knob 縦寸法契約 — grow+min_h slot 実装 | completed | [issue-478-fader-knob-grow-min-h-slot.md](./issue-478-fader-knob-grow-min-h-slot.md) |
 | IMPL-034UiuvjiiksJVjjkxtT5W | Issue #308 — Generation切替時のProbe再Binding全件整合・部分失敗契約（staged rebind + RebindReceipt + CapturePolicy） | completed | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
+| IMPL-034Ukaiqpkd3tCCzSFomK7 | Issue #309 — PROBE-TIME時間コンテキスト・整列契約の実装（ProbeClockMark + ProbeTimeContext + align_observation_points + ObservationCoverage） | completed | [issue-309-probe-time-context-and-alignment.md](./issue-309-probe-time-context-and-alignment.md) |
