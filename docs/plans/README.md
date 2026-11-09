@@ -182,6 +182,7 @@ Directory: `docs/plans`
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
+| PLAN-J2SBIDqNyZcnFDIJmvppYM | Issue #294 consumer-verify → ci-issue-tracker 配線実装計画 — scope 別 job・reconcile 全 scope 化・contract test | completed | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | PLAN-034Ulf4tsZJz5CatpaE7hG | Issue #294 daily candidate-tuple trigger 実装計画 — decide.mjs tuple モード・daily-ci job・契約 test | completed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |

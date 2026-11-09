@@ -11,9 +11,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   ALLOWED_EVENTS,
+  classifyHistoryRecord,
   classifyRun,
   compareRunOrder,
   defaultScope,
+  issueTitle,
   mergeMarkerStates,
   parseMarker,
   parseTrackerArgs,
@@ -46,6 +48,8 @@ const scope = defaultScope(REPO);
 function payload(overrides = {}) {
   const wr = {
     id: 100,
+    name: "ci",
+    path: ".github/workflows/ci.yml",
     head_sha: SHA_A,
     head_branch: "main",
     event: "push",
@@ -66,7 +70,7 @@ function rest(o) {
 
 // Raw runs-list entry (authoritative history fixture) — mirrors the shape
 // GET /actions/workflows/{file}/runs returns, including workflow identity.
-function histRun(id, sha, conclusion, updated_at, { attempt = 1, event = "push", status = "completed", branch = "main", repo = REPO } = {}) {
+function histRun(id, sha, conclusion, updated_at, { attempt = 1, event = "push", status = "completed", branch = "main", repo = REPO, wfname = "ci", wfpath = ".github/workflows/ci.yml" } = {}) {
   return {
     id,
     head_sha: sha,
@@ -78,8 +82,8 @@ function histRun(id, sha, conclusion, updated_at, { attempt = 1, event = "push",
     updated_at,
     run_started_at: updated_at,
     status,
-    path: ".github/workflows/ci.yml",
-    name: "ci",
+    path: wfpath,
+    name: wfname,
     repository: { full_name: repo },
     head_repository: { full_name: repo, fork: false },
   };
@@ -1398,4 +1402,220 @@ test("event mode: non-object payload is a hard error, not a skip", async () => {
       /requires a JSON object event payload/,
     );
   }
+});
+
+// ------------------------------------------- consumer-verify scope (#294) --
+//
+// The tracker now watches TWO workflows. These tests pin the scope
+// isolation contract: a `consumer-verify` completion is evidence ONLY for
+// the consumer-verify scope (repo × workflow × branch marker + title), a
+// `ci` payload can never feed it, and vice versa. consumer-verify is
+// dispatch-only, so its allowed events collapse to workflow_dispatch in
+// practice — the shared ALLOWED_EVENTS allowlist still applies unchanged.
+
+const cvScope = {
+  ...defaultScope(REPO),
+  workflow: "consumer-verify",
+  workflowFile: "consumer-verify.yml",
+};
+
+function cvPayload(overrides = {}) {
+  return payload({
+    workflow_run: {
+      name: "consumer-verify",
+      path: ".github/workflows/consumer-verify.yml",
+      event: "workflow_dispatch",
+      ...(overrides.workflow_run ?? {}),
+    },
+    ...rest(overrides),
+  });
+}
+
+test("issueTitle: ci keeps the historical title, consumer-verify gets its own", () => {
+  assert.equal(issueTitle(scope), "[CI failure][main] Full CI failed");
+  assert.equal(issueTitle(cvScope), "[CI failure][main] consumer-verify failed");
+  // Unknown workflow names fall back to the sanitized workflow id — never
+  // to another scope's title.
+  assert.equal(
+    issueTitle({ ...scope, workflow: "mystery-ci", branch: "main" }),
+    "[CI failure][main] mystery-ci failed",
+  );
+});
+
+test("classifyRun: consumer-verify scope accepts its own dispatch run", () => {
+  const c = classifyRun(cvPayload(), cvScope);
+  assert.equal(c.kind, "failure");
+  assert.equal(c.run.id, 100);
+});
+
+test("classifyRun: cross-scope payloads are skipped, never evidence", () => {
+  // A consumer-verify completion must not feed the ci scope…
+  assert.equal(classifyRun(cvPayload(), scope).kind, "skip");
+  // …and a ci completion must not feed the consumer-verify scope.
+  assert.equal(classifyRun(payload(), cvScope).kind, "skip");
+});
+
+test("classifyRun: workflow identity fields must match the scope", () => {
+  // Same workflow name but a different file path → skip.
+  assert.equal(
+    classifyRun(
+      payload({ workflow_run: { path: ".github/workflows/ci-copy.yml" } }),
+      scope,
+    ).kind,
+    "skip",
+  );
+  // Same file path but a renamed workflow → skip.
+  assert.equal(
+    classifyRun(payload({ workflow_run: { name: "ci-renamed" } }), scope).kind,
+    "skip",
+  );
+  // No identity fields at all → malformed, skip (reconcile heals).
+  assert.equal(
+    classifyRun(
+      payload({ workflow_run: { name: null, path: null } }),
+      scope,
+    ).kind,
+    "skip",
+  );
+  // A matching name alone is sufficient identity (path may be absent).
+  assert.equal(
+    classifyRun(payload({ workflow_run: { path: null } }), scope).kind,
+    "failure",
+  );
+});
+
+test("classifyHistoryRecord: consumer-verify history is in-scope only for its own scope", () => {
+  const cv = histRun(200, SHA_B, "failure", T2, {
+    event: "workflow_dispatch",
+    wfname: "consumer-verify",
+    wfpath: ".github/workflows/consumer-verify.yml",
+  });
+  // In scope for consumer-verify…
+  const inScope = classifyHistoryRecord(cv, cvScope);
+  assert.equal(inScope.disposition, "in");
+  // …out of scope for ci (proven exclusion, not unknown).
+  assert.equal(classifyHistoryRecord(cv, scope).disposition, "out");
+  // And ci history is out of scope for consumer-verify.
+  assert.equal(
+    classifyHistoryRecord(histRun(100, SHA_A, "failure", T1), cvScope).disposition,
+    "out",
+  );
+});
+
+test("run: consumer-verify failure creates its own scoped issue", async () => {
+  const client = mockClient({
+    history: [
+      histRun(200, SHA_B, "failure", T2, {
+        event: "workflow_dispatch",
+        wfname: "consumer-verify",
+        wfpath: ".github/workflows/consumer-verify.yml",
+      }),
+    ],
+    jobs: [{ name: "audiolens", conclusion: "failure" }],
+  });
+  const res = await run({ payload: cvPayload(), client, scope: cvScope });
+  const create = res.applied.find((a) => a.type === "create");
+  assert.ok(create, "consumer-verify failure must file an issue");
+  assert.ok(client.calls.includes("createIssue:[CI failure][main] consumer-verify failed"));
+  // The marker scope pins the workflow so ci-scope issues stay foreign.
+  assert.equal(create.state.failure.runId, 200);
+});
+
+test("run: a ci-scoped managed issue is foreign to the consumer-verify scope", async () => {
+  // An open issue carrying the ci marker must not be adopted, updated, or
+  // closed by a consumer-verify evaluation — scopes never share issues.
+  const ciIssue = managedIssue(42, failureState());
+  const client = mockClient({
+    issues: [{ number: 42, body: ciIssue.body }],
+    history: [
+      histRun(200, SHA_B, "failure", T2, {
+        event: "workflow_dispatch",
+        wfname: "consumer-verify",
+        wfpath: ".github/workflows/consumer-verify.yml",
+      }),
+    ],
+    jobs: [{ name: "synvelis", conclusion: "failure" }],
+  });
+  const res = await run({ payload: cvPayload(), client, scope: cvScope });
+  assert.ok(res.applied.some((a) => a.type === "create"), "new scoped issue expected");
+  assert.ok(!client.calls.some((c) => c.startsWith("updateIssue:#42")));
+  assert.ok(!client.calls.some((c) => c.startsWith("closeIssue:#42")));
+});
+
+test("run: consumer-verify cancelled run is operational — no issue", async () => {
+  // `cancelled` is neither pass nor fail: it must not create an issue and
+  // must not count as recovery either.
+  const client = mockClient({ history: [] });
+  const res = await run({
+    payload: cvPayload({ workflow_run: { conclusion: "cancelled" } }),
+    client,
+    scope: cvScope,
+  });
+  assert.ok(!res.applied.some((a) => a.type === "create" || a.type === "update"));
+  assert.ok(!client.calls.some((c) => c.startsWith("createIssue:")));
+});
+
+test("run: consumer-verify reconcile recovers a dropped dispatch notification", async () => {
+  // daily-ci dispatches consumer-verify with GITHUB_TOKEN → no
+  // workflow_run event fires. Reconcile must still file the failure from
+  // authoritative history alone.
+  const client = mockClient({
+    history: [
+      histRun(200, SHA_B, "failure", T2, {
+        event: "workflow_dispatch",
+        wfname: "consumer-verify",
+        wfpath: ".github/workflows/consumer-verify.yml",
+      }),
+    ],
+    jobs: [{ name: "audiolens", conclusion: "failure" }],
+  });
+  const res = await run({ payload: null, reconcile: true, client, scope: cvScope });
+  assert.equal(res.mode, "reconcile");
+  assert.ok(res.applied.some((a) => a.type === "create"));
+  assert.ok(client.calls.includes("createIssue:[CI failure][main] consumer-verify failed"));
+});
+
+test("run: consumer-verify success newer than failure closes the scoped issue", async () => {
+  const cvState = failureState({
+    latest: { runId: 200, attempt: 1, updatedAt: T2 },
+    failure: {
+      ...failureState().failure,
+      sha: SHA_B,
+      runId: 200,
+      attempt: 1,
+      updatedAt: T2,
+      runUrl: runUrl(200),
+      firstSha: SHA_B,
+      firstAt: T2,
+      lastAt: T2,
+    },
+    history: [{ kind: "failure", runId: 200, attempt: 1, updatedAt: T2, sha: SHA_B, conclusion: "failure", at: T2 }],
+  });
+  const cvIssueScope = { workflow: "consumer-verify", workflowFile: "consumer-verify.yml" };
+  const issue = managedIssue(42, cvState, cvIssueScope);
+  const client = mockClient({
+    issues: [{ number: 42, body: issue.body }],
+    history: [
+      histRun(201, SHA_C, "success", T3, {
+        event: "workflow_dispatch",
+        wfname: "consumer-verify",
+        wfpath: ".github/workflows/consumer-verify.yml",
+      }),
+      histRun(200, SHA_B, "failure", T2, {
+        event: "workflow_dispatch",
+        wfname: "consumer-verify",
+        wfpath: ".github/workflows/consumer-verify.yml",
+      }),
+    ],
+    compare: "ahead",
+    branchSha: SHA_C,
+  });
+  const res = await run({
+    payload: cvPayload({ workflow_run: { id: 201, conclusion: "success", head_sha: SHA_C, updated_at: T3 } }),
+    client,
+    scope: cvScope,
+  });
+  const close = res.applied.find((a) => a.type === "close-recovered" && a.issue === 42);
+  assert.ok(close, "newer covering success must close the consumer-verify issue");
+  assert.ok(client.calls.includes("closeIssue:#42"));
 });
