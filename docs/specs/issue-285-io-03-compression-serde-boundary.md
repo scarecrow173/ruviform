@@ -42,6 +42,8 @@ relations:
     - "docs/specs/issue-296-io-file-os-backend.md"
     - "docs/specs/issue-303-io-archive-tar.md"
     - "docs/designs/issue-303-io-archive-tar.md"
+    - "docs/specs/issue-286-io-04-zip-tar-archive.md"
+    - "docs/designs/issue-286-io-04-zip-tar-archive.md"
     - "docs/specs/issue-288-io-06-cross-consumer-os-fs-security-gate.md"
     - "docs/designs/issue-288-io-06-cross-consumer-os-fs-security-gate.md"
     - "docs/specs/issue-306-io-composition-e2e.md"
