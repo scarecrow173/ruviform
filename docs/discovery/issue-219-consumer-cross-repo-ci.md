@@ -334,3 +334,55 @@ mise exec -- cargo check --workspace --all-targets   # exit 0・25.78s
 - **not verified**: Golden/`baseline` 系 lane（v1 スコープ外・引き続き Deferred）、3 OS matrix、synvelis `gw10` lane の cross-repo 接続、audio-lens export 3 test の修正後再検証（consumer 側対応待ち）。
 
 **分類（本変更自身）:** Synvelis = no impact・AudioLens = no impact（ruviform 側 CI 基盤のみの変更。consumer repo への変更なし・依存 pin・API・行為規約は不変。#224 の基盤整備と同じ分類根拠）。実測 worker: Orca dispatched `task_91078cf22169`/`ctx_9a2208a14504`。
+
+### 2026-11-10: 棚卸し refresh（read-only metadata snapshot・Issue #219 docs slice）
+
+設計・文書 slice（branch `feature/219-crossrepo-gate-design`）に伴う棚卸しの再確認。**read-only の `gh api` metadata 取得のみ**で、consumer repo での build/test/smoke/lane 実行・credential 設定・workflow 変更は一切行っていない（実測は NotRun）。前回 snapshot（2026-11-03）から 7 日分の drift を記録する。
+
+**Repo 現状（`gh api repos/scarecrow173/<repo>` + `commits/HEAD`・2026-11-10 取得）:**
+
+| 対象 | 観測値 |
+| --- | --- |
+| visibility | 3 repo とも `public`（前回から不変。再 private 化の可能性は audio-lens 側「暫定」記述どおり残存） |
+| ruviform HEAD | `0cd7dc408554`（2026-11-09 push。main と一致） |
+| synvelis HEAD | `91a2c3a9e1f4`（2026-11-09 push） |
+| audio-lens HEAD | `da2db918d294`（2026-11-08 push） |
+
+**synvelis（`scarecrow173/synvelis` @ `91a2c3a9`）:**
+
+| 項目 | 観測値 |
+| --- | --- |
+| workspace members | **11 member**（`synvelis-theme`/`synvelis-project`/`synvelis-library`/`synvelis-recording`/`recording-poc`/`synvelis-player`/`synvelis-render`/`synvelis-workspace`/`synvelis-gateway`/`mcp-poc`/`synvelis-app`。前回 8 member から +3: theme/library/app） |
+| ruviform git dep | `git = "https://github.com/scarecrow173/ruviform.git"`（`rev`/`branch` 未指定の既定ブランチ追従形）×**20** entry（前回 13 から +7: `ruviform-io-file`/`ruviform-ui-theme`/`ruviform-ui-gpui`/`ruviform-ui-test`/`ruviform-observability` 等）。AGENTS.md 規約どおり SHA 恒久固定なし |
+| Cargo.lock | ruviform 系 **26 crate** が `0f5b57372e9a43f84415f7964b2f9636774174f0` に単一解決（ruviform main 比 **30 commit 遅れ**・2026-11-09 時点の main 祖先であることを確認） |
+| toolchain | `rust-version = "1.89"`（workspace.package）・mise `rust = "1.99.0"`（rustfmt/clippy component）+ `node = "26.12.1"` pin。edition 2024・`publish = false`・workspace lint `unsafe_code = "forbid"` |
+| mise tasks | `fmt`/`fmt-check`/`check`/`lint`/`test --locked`/`test-rt`/`build --locked`/`lint-actions`/`gw10`/`gw10-report`/`ci-summary-gate`/`test-ci-summary`/`test-ci-tracker-entry`/`sync-ui-deps`/`install-ui`/`setup-ui`/`check-ruviform-rev`/`check-headless-deps`/`check-ui`/`test-ui`/`build-ui` 等（UI headless lane・GW-10 harness・CI 集約 gate が揃った） |
+| `.github/workflows/` | `ci.yml`（Issue #145 で pull_request/push 撤去済み・`workflow_dispatch` + `inputs.expected_sha` の Full CI）・`daily-ci.yml`（schedule cron `29 21 * * *` + dispatch の decide→dispatch 方式）・`ci-issue-tracker.yml`/`ci-issue-tracker-reconcile.yml` — ruviform #365/#367/#368 と同型の CI 構造を consumer 側にも導入済み |
+| `.cargo/config.toml` | 非存在（404）— `net.git-fetch-with-cli` は consumer-verify job env の `CARGO_NET_GIT_FETCH_WITH_CLI` 供給に依存（設計どおり） |
+
+**audio-lens（`scarecrow173/audio-lens` @ `da2db918`）:**
+
+| 項目 | 観測値 |
+| --- | --- |
+| workspace members | **11 member**（`al-core`/`al-job`/`al-cli`/`al-media`/`al-dataset`/`al-locate`/`al-analysis`/`al-service`/`al-gui`/`al-testkit`/`al-observability`。前回 11 member のうち `al-observability` が OBS 系で新設） |
+| ruviform git dep | `git` URL ×**17** entry、**manifest に `rev`/`branch`/`tag` を書かない** — Issue #140 完了形の **Cargo.lock 正本契約**（`Cargo.toml` コメント明記: 「解決された commit SHA の正本は `Cargo.lock` の `source = "git+...#<sha>"` fragment」）。追従更新は `tools/update-ruviform-rev.mjs <sha>`、単一 SHA 検証は `tools/ruviform-lock-rev.mjs`（`mise run check-ruviform-lock`）が fail-closed で所有。追加 dep: `ruviform-observability`（`features = ["logging"]`・OBS-01 #138 系）/`ruviform-ui-theme`/`ruviform-ui-gpui`/`ruviform-ui-test`。`tracing`/`tracing-subscriber`/`tracing-appender` も workspace 依存に出現 |
+| 非 default feature | `ruviform-io-symphonia` `["mp4","aac"]` + `ruviform-observability` `["logging"]`（前回から observability feature が追加） |
+| Cargo.lock | ruviform 系 **20 crate** が `84d21641a6bd50fa570ed074ae263284d05262ca` に単一解決（ruviform main 比 **44 commit 遅れ**・main 祖先であることを確認） |
+| toolchain | mise `rust = "1.99.0"`（rustfmt/clippy）+ `node = "26.12.1"`・`uv = "0.13.5"`・`biome = "2.6.2"` 等 pin。edition 2024・`publish = false`（暫定・ruviform と同じ仮置き） |
+| mise tasks | `check`/`test`/`build` + CI profile 系 `check-ci`/`lint-ci`/`test-ci`/`build-ci`（`--profile ci`・`CARGO_INCREMENTAL=0`）+ `verify-toolchain`/`check-ci-workflow`/`check-ci-tracker-workflows`/`check-cli-headless`/`check-ruviform-lock`/`check-ruviform-rev`/`sync-ui-deps`/`setup-ui`/`check-ui`/`test-ui`/`check-ui-webview`/`baseline` 等 |
+| `.github/workflows/` | `ci.yml`（`workflow_dispatch` + `inputs.expected_sha` 必須の Full CI — #158/#159 系）・`daily-ci.yml`（cron `23 21 * * *` + dispatch）・`ci-issue-tracker.yml`/`ci-issue-tracker-reconcile.yml` — synvelis と同じ #365 型構造 |
+| `.cargo/config.toml` | 存続（`net.git-fetch-with-cli = true` + `GIT_LFS_SKIP_SMUDGE = "1"`）。コメントは「Ruviform(private repo)」表記のままだが repo は public — 実害なしの stale comment として記録（consumer 側対応候補） |
+| repo 保護 | 両 consumer repo とも ruviform と同型の ruleset 構成: `main-protect`（active）+ `main-checkstatus`（**disabled**・required status checks 実効なし）。branch protection API は 404（ruleset 管理のため）。2026-11-10 `gh api repos/<repo>/rulesets` 実測 |
+
+**ruviform 側の対応状態:**
+
+- `.github/workflows/consumer-verify.yml` は `workflow_dispatch` 情報 lane として存続。lane 構成は audio-lens が `check-ruviform-lock`/`check-ci`/smoke 2 lane/`test-ci`(LFS)/`sync-ui-deps`/`check-ruviform-rev --require-vendor`/`setup-ui`/`check-ui`/`test-ui` + GUI-CONTRACT boundary guard・GUI-SEMANTIC fake driver contract（**候補 tree** 上で実行・#294 gui-contract-lane-wiring）+ `extra_tasks`、synvelis が `check-ruviform-rev`/`check`/`test`(LFS)/`test-rt`/`check-headless-deps`/`sync-ui-deps`/`setup-ui`/`check-ui`/`test-ui`/`build-ui`/`check-ruviform-rev --require-vendor` + 同 GUI 2 lane + `extra_tasks`。
+- manifest 正規化 sed は 3 形態（rev pin 置換・branch 追従除去・rev 未指定への注入）を同一ルールで処理 — audio-lens の新 lockfile 正本形態（manifest pin 非保持）も「rev 未指定」形として機械的には同じ経路を通る。ただし consumer 側 `check-ruviform-rev`/`check-ruviform-lock` 系 tool が manifest pin 非保持を契約として検査する場合、scratch 注入した `rev` 行が lane 結果に影響し得る — **次回実 dispatch での観測事項**として記録（consumer repo 変更はしない）。
+- `.github/workflows/consumer-impact-check.yml` は Issue #366 Stage 1 で**撤去済み**（`docs/development-environment.md` 記載どおり）— 影響分類の機械検査 lane は現存せず、PR template + human gate のみが運用経路。
+- `ci.yml` は Issue #365 で `workflow_dispatch` 専用化済み、`main-checkstatus` ruleset の enforcement は disabled（2026-11-06 実測・development-environment.md 記載）— required checks 実効ゼロの現状は #219 の「required 昇格は実測後」方針と整合。
+- consumer-verify の実 dispatch 履歴: 最新は 2026-11-07 run [42358249783](https://github.com/scarecrow173/ruviform/actions/runs/42358249783)（`workflow_dispatch`・success）。直近は手動 dispatch のみで schedule/push trigger なし。
+
+**検証状態の正直な区分（本追記時点）:**
+
+- **verified（read-only metadata）**: 上表の repo visibility・HEAD SHA・manifest/lockfile の dep 形態・mise task・workflow 構成は `gh api` の実測値。synvelis/audio-lens の lockfile resolved SHA が ruviform main の祖先であること・main からの commit 距離（30/44）を `git merge-base`/`rev-list` で確認。
+- **not verified（NotRun）**: 両 consumer repo での build/test/smoke/lane 実行、consumer-verify の新 lane 構成（GUI-CONTRACT/SEMANTIC・UI lane 群）を現行 consumer main で通した実走、audio-lens lockfile 正本契約と manifest rev 注入の整合、Deploy Key/credential 経路、3 OS matrix、Golden/baseline lane。これらは実 Consumer repo での実測を要し本 slice の対象外。
