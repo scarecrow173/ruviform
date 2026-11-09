@@ -179,3 +179,4 @@ Directory: `docs/impl/ir`
 | IMPL-034UoQCq3m1rqajAlcen87 | Issue #418 — theme-codegen 実装記録 | completed | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
 | IMPL-034UpDoz64058mto7srnOJ | Issue #290 OBS-08 allocation-probe 実装記録 | completed | [issue-290-obs-08-allocation-probe.md](./issue-290-obs-08-allocation-probe.md) |
 | IMPL-034UqAG1z1lwcerRfda1x1 | Issue #292 OBS-10 Debug Inspection 実装記録 | completed | [issue-292-obs-10-debug-inspection.md](./issue-292-obs-10-debug-inspection.md) |
+| IMPL-uQYRObw7mzwY2AGJRMgIkm | Issue #293 OBS-11 ObservabilityConfig + ObservationRunner 実装記録 | completed | [issue-293-obs-11-observability-integration-runner.md](./issue-293-obs-11-observability-integration-runner.md) |

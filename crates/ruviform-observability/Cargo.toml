@@ -28,6 +28,13 @@ tracing-export = ["dep:tracing"]
 # Off by default; adds no dependencies — the probe is std-only and the
 # crate never installs a `#[global_allocator]` itself.
 allocation-probe = []
+# `integration` — Issue #293 (OBS-11) host-facing non-RT integration
+# layer (`integration` module: `ObservabilityConfig` +
+# `ObservationRunner` lifecycle/poll/drain/reconfigure + composed
+# `RunnerHealth`). Off by default so the lightweight core stays minimal;
+# it adds no dependencies and does not force `tracing-export`/`logging` —
+# those stay independently optional.
+integration = []
 
 [dependencies]
 # Issue #280 (OBS-05): leaf-primitive deps for `rt_bridge`/`record`
@@ -76,6 +83,13 @@ assert_no_alloc = "1.1"
 [[test]]
 name = "logging"
 required-features = ["logging"]
+
+# Issue #293: `integration` contract tests — lifecycle/drain/dispatch/
+# dynamic-config/health across feature combinations. Inner `#[cfg]`
+# sections cover `tracing-export`/`logging` when those features are on.
+[[test]]
+name = "integration"
+required-features = ["integration"]
 
 [[example]]
 name = "logging_host"

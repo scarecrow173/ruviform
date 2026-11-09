@@ -291,3 +291,96 @@ cargo run -p ruviform-observability --features logging --example logging_host
 
 `examples/logging_host.rs` — Host 側 config 写像 → `build_logging` →
 scoped dispatch → health snapshot → guard shutdown の一通りを示す。
+
+## `integration` feature（Issue #293 / OBS-11）
+
+Host 所有の非 RT 統合境界 — `ObservabilityConfig`（Collector / Metrics /
+Diagnostics / Debug / tracing-export の独立設定）と `ObservationRunner`
+（Collector poll の駆動・Source 登録・Snapshot 照会・停止/Drain
+レポート）を提供する。`integration` は additive feature で既定 off
+かつ外部依存を追加しない（`logging` / `tracing-export` は独立に
+選択する）。runner はスレッド・タイマーを所有せず、すべての操作は
+Host が非 RT コンテキストから呼ぶ。
+
+```toml
+ruviform-observability = { path = "...", features = ["integration"] }
+```
+
+ライブラリは `tracing::Dispatch` の global install を一切行わない。
+`tracing-export` 使用時は Host が構築した `Dispatch` を
+`ExportPolicy.dispatch` に注入し、exporter は emit ごとに
+`tracing::dispatcher::with_default` でスコープする。
+
+### 起動（通常運用）
+
+```rust
+use ruviform_observability::integration::{
+    ObservabilityConfig, ObservationRunner,
+};
+use std::time::{Duration, Instant};
+
+let config = ObservabilityConfig {
+    collection: /* CollectorConfig::default() 相当 */ todo!(),
+    diagnostics: None, // Diagnostics 無効でも Collector 単体で動く
+    debug: None,
+    // export は tracing-export feature 時のみ存在
+};
+
+let mut runner = ObservationRunner::new();
+runner.prepare(config)?;   // Validate → Prepare（構成要素を完全構築）
+runner.activate()?;        // Prepared → Ready
+// Host の非 RT loop で poll を駆動。初回 poll で Ready → Running。
+while running {
+    runner.poll_once(Instant::now())?;
+    std::thread::sleep(Duration::from_millis(10));
+}
+```
+
+Source の登録は `runner.registration_port()`（`Collector` の
+`ObservationRegistrar`）経由で、収集中でも追加できる。Snapshot 照会は
+`runner.snapshot()` / `latest_batch()` / `history()`、Diagnostics は
+`diagnostics_snapshot()`、Debug inspector は `debug()` から辿る。
+
+### 通常停止
+
+```rust
+// 1) Draining へ — domain writer に quiescence を宣言させる猶予
+runner.begin_shutdown()?;              // Running → Draining
+// 2) writer 停止後に lease.retire() → Collector が FinalDrain を駆動
+// 3) 非 RT の最終 drain（順序固定）:
+let report = runner.finish_shutdown(Instant::now())?;
+//    a. Collector 最終 poll → b. Collector::shutdown（terminal drain）
+//    c. terminal batch の tracing export → d. logging writer guard drop
+//       （flush + join、bounded wait 後 abandon は health に記録）
+```
+
+`runner.shutdown(now)` は上記を一括で行う one-shot 版。
+`ShutdownReport` は `DrainCompleteness`（`Complete` / `Partial` /
+`Unknown`）・quiesced/abandoned source 数・export 件数・
+`writers_closed` を正直に報告する — 回収不能・writer 未静止を
+「完全保存」とは主張しない。
+
+### 異常停止（writer 未静止）
+
+`begin_shutdown` 後に writer が quiesce しないまま `finish_shutdown`
+を呼ぶと、Collector は active source を強制 drain し、観測は
+`Partial`（writer-not-quiesced）として報告される。Host crash 等で
+最終回収が走らなかった場合は `Unknown` — いずれも完全性を偽らない。
+
+### Logging OFF
+
+`attach_logging` を呼ばなければ logging は完全に無効のまま動く。
+`build_logging` / `WriterGuard` は Host が構築し、
+`attach_logging(guards, health)` で明示的に取り付ける
+（Prepared/Ready/Running のみ受理）。guard の drop が shutdown 時の
+flush/close を担い、`RunnerHealth.logging` は atomic のみで読む
+非再帰 snapshot — 自身の health 計測が logging sink に再帰しない。
+
+### Debug Session
+
+`ObservabilityConfig.debug = Some(DebugSettings::new(debug_config))`
+で debug inspector を有効化する。`SessionPermit` による disclosure
+認可は Host が `DebugAuthority` 経由で行い、session 容量・probe 状態は
+`RunnerHealth.debug` / `debug_session` に現れる。再構成
+（`reconfigure`）では debug session・retention・exporter baseline は
+**移行しない** — `ReconfigureReport.non_migrated` が明示する。

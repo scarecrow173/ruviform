@@ -31,6 +31,7 @@ Directory: `docs/plans`
 | PLAN-034UoVUbDw0ACJnYRUdjWo | Implement Issue #290 OBS-08 allocation-probe — CountingAllocator/AllocationScope Implementation Plan | approved | [implement-issue-290-observability-allocation-probe.md](./implement-issue-290-observability-allocation-probe.md) |
 | PLAN-034UnAUkBnCas6lEsFTewD | Issue #291 OBS-09 Diagnostics 実装計画 | approved | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
 | PLAN-4afZ4yYXHh9Vey7rTu5wFt | Issue #292 OBS-10 Debug Inspection 実装計画 | approved | [implement-issue-292-observability-debug-inspection.md](./implement-issue-292-observability-debug-inspection.md) |
+| PLAN-BMe1olaQdn0e0jQ5JgPxiT | Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 実装計画 | approved | [implement-issue-293-observability-integration-runner.md](./implement-issue-293-observability-integration-runner.md) |
 | PLAN-034JZPGUI0000000000003 | Issue #30 実施計画 — プラグイン GUI PoC | approved | [implement-issue-30-plugin-gui-poc.md](./implement-issue-30-plugin-gui-poc.md) |
 | PLAN-034JZLISO0000000000004 | Issue #31 実施計画 — プラグイン分離設計確定 | approved | [implement-issue-31-plugin-isolation.md](./implement-issue-31-plugin-isolation.md) |
 | PLAN-XyRGyqOXQg05BHSeuQmtEC | Issue #32 実施計画 — 第 2 ターゲット設計 | approved | [implement-issue-32-second-target-design.md](./implement-issue-32-second-target-design.md) |
