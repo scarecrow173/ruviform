@@ -95,6 +95,7 @@ Directory: `docs/specs`
 | SPEC-ynejrtwiz2jIJrf3DwFtAK | Issue #389 Driver-neutral PluginEditorSession（state / typed HostPort / L0-L1 接続設計） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | SPEC-034T9TZQ7ztGDAPvFaz9IT | Issue #390 Driver Contract Lab — UI-DVR fixture registry・境界 Guard・GPUI なし Fake・Native Component Lab harness | proposed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | SPEC-xCsjb8OsiMswabSn30uVVs | Issue #404/#405 NativeSurfaceSlot host 境界修復（clip 解除/再投影 + owner window teardown 伝播） | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
+| SPEC-034UmGsNtxrfkDz2KxieUt | Issue #410 — view command ledger の bounded retention と correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | SPEC-Y6JWBZ3CHy6qvkcyHzSK5H | Issue #411 — ruviform-ui-test の cargo_metadata 推移依存 MSRV 1.89 不整合を修復する | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | SPEC-kR4mNxQwY8vLpTzH2jFd6A | Issue #414 — authoritative projection を controlled display へ到達させる | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
 | SPEC-Yq7KpWx3RtNm8LbVd2HaJe | Issue #421 — Meter/TimeAxis GPUI 描画と Knob/Toggle/Meter/TimeAxis の Fake/GPUI parity | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
