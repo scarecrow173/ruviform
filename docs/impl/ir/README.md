@@ -186,3 +186,4 @@ Directory: `docs/impl/ir`
 | IMPL-034UqAG1z1lwcerRfda1x1 | Issue #292 OBS-10 Debug Inspection 実装記録 | completed | [issue-292-obs-10-debug-inspection.md](./issue-292-obs-10-debug-inspection.md) |
 | IMPL-uQYRObw7mzwY2AGJRMgIkm | Issue #293 OBS-11 ObservabilityConfig + ObservationRunner 実装記録 | completed | [issue-293-obs-11-observability-integration-runner.md](./issue-293-obs-11-observability-integration-runner.md) |
 | IMPL-034UzejWEL4tv3LAZGmQKA | Issue #290 OBS-08 RT Timing 実装記録 | completed | [issue-290-obs-08-rt-timing.md](./issue-290-obs-08-rt-timing.md) |
+| IMPL-034UDl0o66TbT5Ovx4NeVe | Issue #398/#400 残件 audit — rooted capability・sealed readback decoder bridge の受入照合と検証証拠 | completed | [issue-398-400-audit-rooted-capability-sealed-readback-decoder-bridge.md](./issue-398-400-audit-rooted-capability-sealed-readback-decoder-bridge.md) |

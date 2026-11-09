@@ -1,10 +1,10 @@
 ---
 id: "PLAN-Y2emYF0VFlVKTxwsGWm4Ev"
 type: "plan"
-status: "done"
+status: "completed"
 title: "ruviform-io-file Rooted Read Capability 実装計画"
 created: "2026-11-07"
-updated: "2026-11-07"
+updated: "2026-11-09"
 owners: []
 relations:
   source: []

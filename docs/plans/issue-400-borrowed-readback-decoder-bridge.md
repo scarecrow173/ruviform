@@ -4,7 +4,7 @@ type: "plan"
 status: "completed"
 title: "Issue #400 実施計画 — 借用 readback → demuxer bounded 接続"
 created: "2026-11-07"
-updated: "2026-11-07"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -125,21 +125,21 @@ O(1) のまま接続する `with_borrowed_demuxer` を `ruviform-io-symphonia`
 
 ## Implementation Sequence
 
-- [ ] media-io: `impl<D: Demuxer + ?Sized> Demuxer for &mut D`（7
+- [x] media-io: `impl<D: Demuxer + ?Sized> Demuxer for &mut D`（7
   メソッド forward、`stream` は default 利用）+ doc。
-- [ ] media-reader: `SourceReader<'a>` 化（open/reopen の
+- [x] media-reader: `SourceReader<'a>` 化（open/reopen の
   `Box<dyn Demuxer + 'a>` 化）+ prefetch/tests の `<'static>`/`<'_>`
   注釈。既存 test が無変更で通ることを確認。
-- [ ] `borrowed.rs` 実装（`Req`/`Resp` enum、proxy、serve、scope join、
+- [x] `borrowed.rs` 実装（`Req`/`Resp` enum、proxy、serve、scope join、
   panic 伝搬）。公開 API doc に RT/bound/escape 制約を明記。
-- [ ] `lib.rs` へ re-export + doctest。
-- [ ] `tests/borrowed.rs` に回帰 test（test-spec R-1..R-11 から
+- [x] `lib.rs` へ re-export + doctest。
+- [x] `tests/borrowed.rs` に回帰 test（test-spec R-1..R-11 から
   実装可能な oracle を抽出）。
-- [ ] `media-reader/tests/borrowed_source.rs` 新設: `f` 内
+- [x] `media-reader/tests/borrowed_source.rs` 新設: `f` 内
   `SourceReader::open(Box::new(d))` の canonical `read_planar` 回帰。
-- [ ] `wav_staged.rs` の独立 decode を `with_borrowed_demuxer` 経由へ
+- [x] `wav_staged.rs` の独立 decode を `with_borrowed_demuxer` 経由へ
   置き換え（`&mut readback` を直接渡す）。
-- [ ] `mise run fmt` → `mise run check` → `mise run lint` →
+- [x] `mise run fmt` → `mise run check` → `mise run lint` →
   `mise exec -- cargo test -p ruviform-io-symphonia` →
   `mise exec -- cargo test -p ruviform-media-reader` →
   `mise run test-io-e2e` → `mise run test`。
@@ -176,14 +176,18 @@ O(1) のまま接続する `with_borrowed_demuxer` を `ruviform-io-symphonia`
 
 ## Verification
 
-- [ ] `mise run fmt-check` / `check` / `lint`
-- [ ] `mise exec -- cargo test -p ruviform-io-symphonia`
-- [ ] `mise exec -- cargo test -p ruviform-media-reader`
-- [ ] `mise exec -- cargo test -p ruviform-media-io`
-- [ ] `mise run test-io-e2e`
-- [ ] `mise run test`（workspace）
-- [ ] doctest 実行が `cargo test -p ruviform-io-symphonia --doc` に
-  含まれること
+実績（2026-11-09・`origin/main` `b36f6de2` で再検証、
+`docs/impl/ir/issue-398-400-audit-rooted-capability-sealed-readback-decoder-bridge.md`）:
+
+- [x] `mise run fmt-check` / `check` / `lint`
+- [x] `mise exec -- cargo test -p ruviform-io-symphonia`
+- [x] `mise exec -- cargo test -p ruviform-media-reader`
+- [x] `mise exec -- cargo test -p ruviform-media-io`
+- [x] `mise run test-io-e2e`
+- [x] `mise run test`（workspace — plugin-host l1 e2e の既知 flaky を除き pass。詳細は IR 検証節）
+- [x] doctest 実行が `cargo test -p ruviform-io-symphonia --doc` に
+  含まれること（`with_borrowed_demuxer` doctest + escape `compile_fail`
+  を確認）
 
 ## Open Questions / Gaps
 
