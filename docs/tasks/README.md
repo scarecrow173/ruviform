@@ -16,7 +16,7 @@ Directory: `docs/tasks`
 | TASK-034RT89xVtZ6NMuRh08JQg | T1 ruviform-io-archive クレート新設・Archive共通型・ZIP Indexed Reader (Issue #302) | completed | [issue-302-t1-scaffold-reader.md](./issue-302-t1-scaffold-reader.md) |
 | TASK-034RT8aupBUW6NpSHSrRWq | T2 ZIP Writer・Entry finish→Archive finish・否定fixture (Issue #302) | completed | [issue-302-t2-zip-writer.md](./issue-302-t2-zip-writer.md) |
 | TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | completed | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
-| TASK-034UwchDKTHXsAzupuKHkC | W1 Issue #305 io-e2e WAV golden/fault fixture 実装 | todo | [issue-305-w1-fixture-extension.md](./issue-305-w1-fixture-extension.md) |
+| TASK-034UwchDKTHXsAzupuKHkC | W1 Issue #305 io-e2e WAV golden/fault fixture 実装 | in-progress | [issue-305-w1-fixture-extension.md](./issue-305-w1-fixture-extension.md) |
 | TASK-034UwcoMpAnO2xGUgLMC7x | W2 Issue #305 io-e2e WAV golden/fault 検証・handoff | todo | [issue-305-w2-verification-handoff.md](./issue-305-w2-verification-handoff.md) |
 | TASK-034UjNKCoOCnJfLYQhT8Fx | Issue #313 — Windows 実 OS SendInput キーボード smoke 実装タスク | in-progress | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | TASK-034Ug9lk3rk5h8iKkSQY2c | Issue #314 slice 3 — GPUI/OS capture backend | in-progress | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
@@ -254,8 +254,8 @@ Directory: `docs/tasks`
 | TASK-034Uhnq0kOMsOzPLSOL8Bz | Issue #378 T1 oracle addBinding epoch 整合 | done | [issue-378-t1-oracle-addbinding-epoch.md](./issue-378-t1-oracle-addbinding-epoch.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
 | TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | done | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
-| TASK-034UmKPCkhRiRPGs873bWz | Issue #410 — view command ledger bounded retention & correlation semantics | done | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | TASK-034UwdhT5Gt2dptCoVPLfF | Issue #410 P2 — view ledger correlation hardening | done | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |
+| TASK-034UmKPCkhRiRPGs873bWz | Issue #410 — view command ledger bounded retention & correlation semantics | done | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | TASK-hupw1aLckqDaLNAlnDrTMF | Issue #411 — cargo_metadata 0.19 系への依存選定修復 + MSRV 検証入口 | done | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TASK-mV2zXwAeR5yNuIoL7pSt4G | Issue #414 — projection→controlled display 正規経路の実装 | done | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
 | TASK-Gy5KbQe2WnRt8LxVc3PmHo | Issue #435 — Label/Table ViewSpec kind の実装タスク | done | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
