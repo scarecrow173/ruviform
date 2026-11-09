@@ -255,6 +255,7 @@ Directory: `docs/tasks`
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
 | TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | done | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TASK-034UmKPCkhRiRPGs873bWz | Issue #410 — view command ledger bounded retention & correlation semantics | done | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
+| TASK-034UwdhT5Gt2dptCoVPLfF | Issue #410 P2 — view ledger correlation hardening | done | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |
 | TASK-hupw1aLckqDaLNAlnDrTMF | Issue #411 — cargo_metadata 0.19 系への依存選定修復 + MSRV 検証入口 | done | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TASK-mV2zXwAeR5yNuIoL7pSt4G | Issue #414 — projection→controlled display 正規経路の実装 | done | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
 | TASK-Gy5KbQe2WnRt8LxVc3PmHo | Issue #435 — Label/Table ViewSpec kind の実装タスク | done | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
