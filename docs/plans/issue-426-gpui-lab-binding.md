@@ -4,7 +4,7 @@ type: "plan"
 status: "proposed"
 title: "Issue #426 GPUI lab binding 実装計画"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -36,6 +36,10 @@ relations:
 | P5 | Consumer 検査の実行・記録（変更なし） | consumer `check-cli-headless` / `check-headless-deps` |
 | P6 | Golden 境界の確認・NotRun 記録 | IR |
 | P7 | fmt / lint / boundary / 全体 test・merge 後 HEAD で再検証 | `fmt-check` `lint` `lint-ui-gpui` `check-ui-driver-boundary` `test` |
+| P8 | 共有 story fixture（`lab_story.rs`）新設・Fake/GPUI adapter の同一 oracle walk | `test-ui-component-view` `test-ui-scenario-contract-fake` `test-ui-scenario-contract-gpui` |
+| P9 | GPUI story matrix（`tests/lab_story.rs`）+ story-keyed golden link（Unsupported 正直記録） | `test-ui-gpui` |
+| P10 | `golden_capture.rs` story-keyed 実窓 capture（ignored・desktop）+ tick guard 修正 | `--features gpui --test golden_capture -- --ignored`（ローカル Windows で実測） |
+| P11 | stories.json GPUI binding を pass に更新（honest note 付き） | `test-ui-driver-contract` |
 
 ## 依存
 
@@ -48,7 +52,7 @@ relations:
 | リスク | 対策 |
 | --- | --- |
 | gpui test platform の window activation が `RvfView::new` では購読されない | cancel 検証は `RvfView::mounted` 経路で行う |
-| gpui test platform の scale が 2.0 固定 | scale 1.0 の GPUI 検証は NotRun とし、fake 側で 2 scale 軸を検証 |
+| gpui test platform の scale が 2.0 固定 | scale 軸は `ResolvedTheme::with_scale` の ScaleContext で与え tokens 不変を検査（Fake/GPUI 同一解釈）。window pixel の scale 1.0 は real-os/Visual lane の残件として明記し pass の対象外とする |
 | `HashMap` 反復順による op 順序の不安定 | 削除キーを sort（`ruviform-ui/src/view.rs`） |
 | consumer 検査が ruviform の pinned revision で評価される | IR に明記。consumer 変更は範囲外 |
 

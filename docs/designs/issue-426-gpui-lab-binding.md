@@ -4,7 +4,7 @@ type: "design"
 status: "proposed"
 title: "Issue #426 設計 — mechanism の test 実在検査・GPUI lab binding・story matrix"
 created: "2026-11-08"
-updated: "2026-11-08"
+updated: "2026-11-09"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -14,11 +14,23 @@ relations:
     added:
       - type: "file"
         path: "crates/ruviform-ui-gpui/src/lab_binding.rs"
+      - type: "file"
+        path: "crates/ruviform-ui-test/src/lab_story.rs"
+      - type: "file"
+        path: "crates/ruviform-ui-gpui/tests/lab_story.rs"
     modified:
       - type: "file"
         path: "crates/ruviform-ui-test/src/driver_lab.rs"
       - type: "file"
+        path: "crates/ruviform-ui-test/src/lib.rs"
+      - type: "file"
         path: "crates/ruviform-ui-test/tests/component_view.rs"
+      - type: "file"
+        path: "crates/ruviform-ui-test/tests/scenario_contract.rs"
+      - type: "file"
+        path: "crates/ruviform-ui-test/fixtures/driver-lab/stories.json"
+      - type: "file"
+        path: "crates/ruviform-ui-gpui/tests/golden_capture.rs"
       - type: "file"
         path: "crates/ruviform-ui-gpui/src/render.rs"
       - type: "file"
@@ -58,19 +70,59 @@ GPUI 側の test は `#[gpui::test]`（test-support）で実行し、実経路�
 cancel 検証は `RvfView::mounted`（本番の購読経路）で行う。`RvfView::new` は
 window activation 購読を持たないため、テストで使うと cancel 経路を通さない。
 
-cancel は `CommandIntent` を発行しない（Begin/Preview/Commit のみ）ため、
-「commit 非発行」は committed 値の不変で示す。
+gesture の cancel は `CommandIntent::Cancel` を発行する
+（`intent_from_gesture` が `InteractionEvent::Cancel` を写像する。
+第 2 段の story oracle が unmount 時の cancel intent を実測で確認済み）。
+UI-DVR-03 の検証は committed 値の不変と drag 解放で行い、intent 列は
+対象にしていない。
 
-## 3. Story matrix（`component_view.rs`）
+## 3. Story matrix（`lab_story.rs` 共有 fixture + 両 adapter）
 
 story の semantic 遷移（idle → focus → drag → commit → stale → invalid → teardown）を
-`ViewHost` で歩き、trace を文字列化する。`synvelis-dark` / `audiolens-dark` × scale
-1.0 / 2.0 の 4 組合せで trace が一致することを検証する。
+`SemanticGuiTest` port 経由で歩く。第 2 段では story 定義を
+`crates/ruviform-ui-test/src/lab_story.rs` に集約し、Fake / GPUI-simulated の
+両 adapter が**同一の canonical `ViewSpec`・同一の `ComponentKey`・同一の
+expected oracle**（`expected_lab_story_trace()`）を共有する。
 
+- `StoryFixture` は manifest id・宣言 theme・mount spec・walk 対象 key・
+  teardown spec を持つ。`lab_story_walk` は adapter-neutral で、teardown の
+  spec 差し替えだけを呼び出し側の closure に委ねる。
+- `StoryStep` は intent kind 列・committed/display・phase・mounted・
+  observe error kind を構造化して記録する（文字列 trace ではない）。
+- teardown で walk 対象 key が unmount される際、開いたままの gesture は
+  detach policy により cancel され `cancel` intent が mint される — これが
+  実際の `ViewHost` 挙動であり、oracle はそれをそのまま期待値にする。
+- `synvelis-dark` / `audiolens-dark` × scale 1.0 / 2.0 の 4 組合せで
+  trace が一致することを Fake（`scenario_contract.rs`）と GPUI
+  （`tests/lab_story.rs`、`GpuiGuiTest`/`GpuiObserver` 経由の実 GPUI
+  window）で検証する。`component_view.rs` の matrix は同じ fixture を
+  直接 `ViewHost` に mount する第 3 の確認経路。
 - `ViewHost` は theme・scale を持たない。scale 軸は `ResolvedTheme::with_scale` の
   `ScaleContext` で与え、tokens が不変であることを同時に確認する。
-- 各 state の期待マーカー（例: stale は `StaleGesture`、invalid は `NonFiniteInput`）を
-  別途検査し、trace が空回りしないことを保証する。
+  GPUI 層では `ViewMount.theme` に resolved theme を渡すが、semantic/draw
+  経路は scale hint を消費しない — scale の実測差は window pixel の話であり
+  Visual/real-os lane の責務。
+- GPUI 層では `GpuiObserver::drawn()` の draw plan が行列全体で同一である
+  ことも確認する。draw plan は geometry/text/値の一致であり pixel ではない
+  （色は palette 側にあり plan に含まれない）。
+
+## 3b. GPUI story golden link（`tests/lab_story.rs` / `tests/golden_capture.rs`）
+
+- gpui-test（`GpuiGuiTest`）には pixel readback が無いため、story-keyed
+  `GoldenKey` に対する `golden_check` は `Unsupported` を返す。これは
+  capability の正直な報告であり、`record_golden_step` で story
+  id/theme/state/driver_class を含む evidence 行を scenario report に残す。
+  Fake adapter も同じ link shape（`scenario_contract.rs`）。
+- Win32 実窓 backend（`GpuiDriver::capture_window`、PrintWindow 主・
+  BitBlt fallback）は #314 slice 3 で実装済み。`tests/golden_capture.rs` の
+  e2e を共通化し、canonical story spec を宣言 theme 付きで mount した
+  story-keyed capture（`idle` state、scale factor は frame 実測値）を
+  2 story 分追加した。ignored test（desktop session 必須）で、
+  ローカル Windows で pass を実測済み。
+- 実窓 capture の scale factor は display が報告する実測値であり、
+  story manifest の `scaleFactor: [1.0, 2.0]` 全網羅は display 依存。
+  window pixel の scale 1.0 再現は gpui test platform の制約上不能で、
+  real-os/Visual lane の残件とする。
 
 ## 4. 共通層の修正（`ruviform-ui/src/view.rs`）
 
@@ -81,9 +133,17 @@ story matrix の実行で、`ViewHost::update` の `Removed` op 順序が `HashM
 
 ## 5. Pixel Golden の扱い
 
-- #314（RF-GT-05 GPUI Native Semantic/Visual Golden）は OPEN。Golden Utility は repo に存在しない。
-- `ruviform-ui-test` の `TestIo::screenshot` は headless 実装のみで、GPUI driver は pixel 取得を実装していない。
-- したがって本 PR では pixel 取得・比較を行わず NotRun とし、rerun 条件を IR に記録する。
+- #314（RF-GT-05 GPUI Native Semantic/Visual Golden）の Golden Utility
+  （headless core・Scenario 能力接続・Win32 capture backend）は main に
+  存在する。本 Issue はその consumer として story-keyed link を接続する。
+- 層の分離: semantic oracle（Fake/GPUI-simulated の `StoryStep` trace）、
+  draw plan（`GpuiObserver::drawn`）、pixel（`BaselineStore` compare）の
+  3 つは別証拠として記録し、混同しない。
+- gpui-test の `VisualCapture` は Unsupported（pixel readback なし）。
+  `golden_check` の `Unsupported` verdict と story-keyed evidence 行が
+  正直な記録となる。
+- 実窓 pixel は `tests/golden_capture.rs` の ignored test が担う
+  （desktop session 必須・CI 対象外）。
 - ruviform-ui-theme の golden は正規化 JSON の golden であり、pixel golden ではない（混同しない）。
 
 ## 6. Consumer GPUI 型不使用検査
@@ -97,6 +157,10 @@ story matrix の実行で、`ViewHost::update` の `Removed` op 順序が `HashM
 
 ## 7. 非目標・残課題
 
-- GPUI story fixture の GPUI layer（scale 1.0 再現不可・Dock の GPUI 接続が未実装）
-- Pixel Golden（#314）
+- window pixel の scale 1.0（gpui test platform が `window.scale_factor` を
+  2.0 固定。実測 scale の全網羅は real-os/Visual lane・#313/#314 の残件）
+- story の real-os driver binding（OS 実入力は #313 owner のまま blocked）
 - UI-DVR-03 の GPUI 側 Cancel は window deactivate 経路のみ（IME・実 OS focus は #313/#389）
+- `golden_capture.rs` の story-keyed test は ignored（desktop session 必須）。
+  CI/ヘッドレス lane では実行されず、実窓 pixel の継続的 gate は #314 側の
+  lane 設計に従う
