@@ -722,9 +722,7 @@ impl RvfView {
                 // bounded by the mounted tree. gpui releases the last
                 // clone through `release_dropped_focus_handles`, which
                 // blurs a focused handle on the next effect flush.
-                ViewEvent::Op(
-                    ProjectionOp::Removed { key } | ProjectionOp::Unmounted { key },
-                ) => {
+                ViewEvent::Op(ProjectionOp::Removed { key } | ProjectionOp::Unmounted { key }) => {
                     self.tab_focus.remove(&key);
                 }
                 _ => {}
@@ -2492,7 +2490,10 @@ mod tests {
         });
         cx.run_until_parked();
         view.update(cx, |v, _cx| {
-            assert!(!v.tab_focus.contains_key(&strip_a), "removed strip released");
+            assert!(
+                !v.tab_focus.contains_key(&strip_a),
+                "removed strip released"
+            );
             assert!(v.tab_focus.contains_key(&strip_b), "sibling strip kept");
         });
         cx.update(|window, app| {
@@ -2507,10 +2508,7 @@ mod tests {
         cx.simulate_keystrokes("right");
         cx.run_until_parked();
         view.update(cx, |v, _cx| {
-            assert_eq!(
-                v.host.observe(&strip_b).and_then(|s| s.selected),
-                Some(1)
-            );
+            assert_eq!(v.host.observe(&strip_b).and_then(|s| s.selected), Some(1));
         });
 
         // `selection: Some → None` is an `Updated` op — the key stays
@@ -2576,7 +2574,10 @@ mod tests {
         });
         cx.run_until_parked();
         view.update(cx, |v, _cx| {
-            assert!(!v.tab_focus.contains_key(&strip_a), "kind-swapped strip released");
+            assert!(
+                !v.tab_focus.contains_key(&strip_a),
+                "kind-swapped strip released"
+            );
             assert!(v.tab_focus.contains_key(&strip_b), "sibling strip kept");
         });
     }
