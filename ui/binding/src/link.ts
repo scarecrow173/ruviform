@@ -11,6 +11,10 @@
  *   adopts the caller-supplied authoritative epoch — and re-subscribes
  *   every registered binding through the port — a fresh projection is
  *   re-read rather than trusting what the old window showed.
+ * - Bindings and queries joining an already-attached link adopt the
+ *   live view epoch at registration (`registerBinding` /
+ *   `registerQuery`): join is an epoch boundary, so a query's
+ *   in-flight requests minted under a foreign epoch are cancelled.
  * - `detach(reason)` cancels each binding's in-flight gesture
  *   (contractual cancel — the command still reaches the consumer),
  *   releases every subscription, and cancels every in-flight query.
@@ -177,15 +181,32 @@ export class ViewLink {
     };
   }
 
-  /** Create a query binding on this link's port and register it. */
+  /** Create a query binding on this link's port and register it for
+   *  attach/detach management — on an attached link it adopts the
+   *  live view epoch (see {@link ViewLink.registerQuery}). */
   createQuery(options?: QueryOptionsSansPort): QueryBinding {
     const q = new QueryBinding({ viewId: this.viewId, port: this.port, ...(options ?? {}) });
     this.registerQuery(q);
     return q;
   }
 
+  /**
+   * Register an externally created query for attach/detach lifecycle
+   * management. Returns an unregister that removes the query from
+   * link lifecycle handling — membership only: unlike bindings,
+   * queries hold no subscription, so there is nothing to release.
+   *
+   * On an already-attached link the query adopts the live view epoch
+   * — the same adopt-on-join rule as {@link ViewLink.registerBinding}.
+   * Join is an epoch transition for the query: `attach` cancels every
+   * in-flight request it carries, so work minted under a foreign epoch
+   * resolves `cancelled` rather than landing under the adopted one.
+   * On a detached link registration defers adoption to the next
+   * `attach`, which re-epochs every registered query.
+   */
   registerQuery(query: QueryBinding): () => void {
     this.queries.add(query);
+    if (this.attached_) query.attach(this.generation_);
     let live = true;
     return () => {
       if (!live) return;

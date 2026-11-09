@@ -1,7 +1,7 @@
 ---
 id: "TASK-034UexWbrpLoijqKctQjFB"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #478 Fader/Knob 縦寸法契約 — 設計判断と実装タスク"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -113,14 +113,18 @@ Fader / Knob の Panel 子としての縦寸法契約を決定し、docs チェ�
 - [x] T6: 論理単位でコミットし、`docs/478-fader-height-contract` を
   push して PR を作る（PR #485、`Refs #478`）。
 
-後続実装 dispatch（未着手）:
+後続実装 dispatch（本 dispatch で完了）:
 
-- [ ] T7: `element_for` の `Fader | Knob` 分岐と `control_element`
-  非 Seek 経路を grow + `min_h` slot 契約に改める。
-- [ ] T8: test-spec の Rule/Example に対応する gpui-test を追加し、
-  赤→緑を確認する。
-- [ ] T9: 既存 UI lane（`test-ui-gpui` 等）と `component_showcase`
-  実窓確認を行う。
+- [x] T7: `element_for` の `Fader | Knob` 分岐と `control_element`
+  非 Seek 経路を grow + `min_h` slot 契約に改める（`grow_slot`
+  helper に集約し `viz_slot` と `min_h(px(120))` を一本化）。
+- [x] T8: test-spec の Rule/Example に対応する gpui-test を追加し、
+  赤→緑を確認する（`rvf_view_fader_slot_shares_height_with_siblings`、
+  `rvf_view_fader_in_tabs_fills_body_remainder`、
+  `rvf_view_canvas_bounds_nonzero_for_parity_kinds` へ assert 追加）。
+- [x] T9: 既存 UI lane（`test-ui-gpui` 等）と `component_showcase`
+  実窓確認を行う（実装記録
+  `docs/impl/ir/issue-478-fader-knob-grow-min-h-slot.md` に証拠を記録）。
 
 ## Done When
 
@@ -135,4 +139,12 @@ Fader / Knob の Panel 子としての縦寸法契約を決定し、docs チェ�
 - [x] `mise run fmt-check`（docs のみの変更での非破壊確認・pass）
 - [x] `mise run check`（同上・pass）
 - [x] `mise run test-ui-gpui`（A3 非破壊確認・85 tests pass）
-- [ ] （後続実装 dispatch）`mise run test-ui-gpui` 等の該当 lane
+- [x] （後続実装 dispatch）`mise run fmt-check` / `check` / `lint` /
+  `test`・`test-ui-gpui` / `test-ui-parity` /
+  `test-ui-consumer-observation` / `test-ui-driver-contract` /
+  `test-ui-component-view` / `check-ui-driver-boundary` が全て pass
+  （`mise run test` は workspace 全体で 1 度だけ無関係の flaky 失敗を
+  観測したが単独・全体の再実行で pass を確認）。
+- [x] （後続実装 dispatch）`component_showcase` 実窓確認 — Fader は
+  Tabs body 単独子のため見た目不変（実測 約299px）、tab-select・
+  fader drag の Begin/Preview/Commit intent を観測。

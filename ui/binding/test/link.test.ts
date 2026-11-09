@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { LinkRegistry, ViewLink } from "../src/link.ts";
 import { CommandBinding } from "../src/binding.ts";
+import { QueryBinding } from "../src/query.ts";
 import type {
   BindingPort,
   InteractionEvent,
@@ -264,6 +265,201 @@ describe("ViewLink late-created bindings", () => {
       }
     });
   }
+});
+
+describe("ViewLink late-created queries", () => {
+  function querySetup(): {
+    backend: MockAnalysisBackend;
+    link: ViewLink;
+  } {
+    const backend = new MockAnalysisBackend();
+    const link = new ViewLink({ viewId: "v1", port: backend });
+    return { backend, link };
+  }
+
+  const QUERY_INPUT = {
+    sourceId: "ds",
+    sourceRevision: 1,
+    start: 0,
+    end: 10,
+  };
+
+  const lateQueryCases: ReadonlyArray<{
+    readonly name: string;
+    readonly generation: number;
+    readonly attach: (link: ViewLink) => void;
+  }> = [
+    {
+      name: "query created after the initial attach",
+      generation: 1,
+      attach: (link) => link.attach("window-A"),
+    },
+    {
+      name: "query created after a dock move",
+      generation: 2,
+      attach: (link) => {
+        link.attach("window-A");
+        link.attach("window-B");
+      },
+    },
+    {
+      name: "query created after detach/reattach",
+      generation: 2,
+      attach: (link) => {
+        link.attach("window-A");
+        link.detach("unmount");
+        link.attach("window-A");
+      },
+    },
+  ];
+
+  for (const c of lateQueryCases) {
+    it(`${c.name} adopts the live epoch via createQuery`, async () => {
+      const { backend, link } = querySetup();
+      c.attach(link);
+
+      const query = link.createQuery();
+      assert.equal(query.generation, c.generation);
+      assert.equal(query.diagnostics.generation, c.generation);
+
+      const p = query.request(QUERY_INPUT);
+      const req = backend.queries.at(-1);
+      assert.equal(req?.generation, c.generation);
+      assert.equal(req?.viewId, "v1");
+      backend.resolveQuery(req!.queryId, {});
+      const out = await p;
+      assert.equal(out.ok, true);
+      assert.equal(query.diagnostics.resolved, 1);
+      assert.equal(query.diagnostics.stale, 0);
+    });
+
+    it(`${c.name} adopts the live epoch via registerQuery`, async () => {
+      const { backend, link } = querySetup();
+      c.attach(link);
+
+      const query = new QueryBinding({ viewId: "v1", port: backend });
+      link.registerQuery(query);
+      assert.equal(query.generation, c.generation);
+      assert.equal(query.diagnostics.generation, c.generation);
+
+      const p = query.request(QUERY_INPUT);
+      const req = backend.queries.at(-1);
+      assert.equal(req?.generation, c.generation);
+      backend.resolveQuery(req!.queryId, {});
+      const out = await p;
+      assert.equal(out.ok, true);
+      assert.equal(query.diagnostics.resolved, 1);
+    });
+  }
+
+  it("a reply echoing a foreign generation is discarded as stale", async () => {
+    const { backend, link } = querySetup();
+    link.attach("window-A");
+    const query = link.createQuery();
+
+    const p = query.request(QUERY_INPUT);
+    const req = backend.queries.at(-1)!;
+    backend.resolveQuery(req.queryId, { generation: 999 });
+    const out = await p;
+    assert.equal(out.ok, false);
+    if (!out.ok) assert.equal(out.error.kind, "stale");
+    assert.equal(query.diagnostics.stale, 1);
+    assert.equal(query.diagnostics.resolved, 0);
+  });
+
+  it("queries created after an authoritative attach adopt the supplied epoch", async () => {
+    const { backend, link } = querySetup();
+    link.attach("window-A", 7);
+
+    const viaFactory = link.createQuery();
+    assert.equal(viaFactory.generation, 7);
+
+    const external = new QueryBinding({ viewId: "v1", port: backend });
+    link.registerQuery(external);
+    assert.equal(external.generation, 7);
+    assert.equal(external.diagnostics.generation, 7);
+
+    const p = external.request(QUERY_INPUT);
+    const req = backend.queries.at(-1);
+    assert.equal(req?.generation, 7);
+    backend.resolveQuery(req!.queryId, {});
+    assert.equal((await p).ok, true);
+  });
+
+  it("an epoch transition cancels the adopted-epoch in-flight query", async () => {
+    const { backend, link } = querySetup();
+    link.attach("window-A");
+    const query = link.createQuery();
+
+    const p = query.request(QUERY_INPUT);
+    const first = backend.queries.at(-1)!;
+    assert.equal(first.generation, 1);
+
+    link.attach("window-B"); // dock move → epoch 2
+    const out = await p;
+    assert.equal(out.ok, false);
+    if (!out.ok) assert.equal(out.error.kind, "cancelled");
+    assert.deepEqual(backend.cancelledQueries, [first.queryId]);
+    assert.equal(query.diagnostics.inflight, 0);
+
+    // Requests issued after the transition mint under the new epoch.
+    const p2 = query.request(QUERY_INPUT);
+    const second = backend.queries.at(-1)!;
+    assert.equal(second.generation, 2);
+    backend.resolveQuery(second.queryId, {});
+    assert.equal((await p2).ok, true);
+  });
+
+  it("registering a query with in-flight work onto an attached link cancels it — join is an epoch transition", async () => {
+    const { backend, link } = querySetup();
+    link.attach("window-A");
+
+    const query = new QueryBinding({ viewId: "v1", port: backend });
+    const p = query.request(QUERY_INPUT);
+    const first = backend.queries.at(-1)!;
+    assert.equal(first.generation, 0);
+
+    link.registerQuery(query);
+    assert.equal(query.generation, 1);
+    const out = await p;
+    assert.equal(out.ok, false);
+    if (!out.ok) assert.equal(out.error.kind, "cancelled");
+    assert.deepEqual(backend.cancelledQueries, [first.queryId]);
+  });
+
+  it("registerQuery on a detached link defers adoption to the next attach", async () => {
+    const { backend, link } = querySetup();
+    const query = new QueryBinding({ viewId: "v1", port: backend });
+    link.registerQuery(query);
+    assert.equal(query.generation, 0);
+
+    link.attach("window-A", 7);
+    assert.equal(query.generation, 7);
+    const p = query.request(QUERY_INPUT);
+    assert.equal(backend.queries[0]?.generation, 7);
+    backend.resolveQuery(backend.queries[0]!.queryId, {});
+    assert.equal((await p).ok, true);
+  });
+
+  it("unregistering a late-created query removes membership only", async () => {
+    const { backend, link } = querySetup();
+    link.attach("window-A");
+
+    const query = new QueryBinding({ viewId: "v1", port: backend });
+    const unregister = link.registerQuery(query);
+    assert.equal(query.generation, 1);
+
+    unregister();
+    link.attach("window-B"); // epoch 2 — the unregistered query is untouched
+    assert.equal(query.generation, 1);
+    assert.equal(link.generation, 2);
+
+    // Still functional standalone: it mints under its own last epoch.
+    const p = query.request(QUERY_INPUT);
+    assert.equal(backend.queries.at(-1)?.generation, 1);
+    backend.resolveQuery(backend.queries.at(-1)!.queryId, {});
+    assert.equal((await p).ok, true);
+  });
 });
 
 describe("ViewLink authoritative generation", () => {

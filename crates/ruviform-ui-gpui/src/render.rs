@@ -273,16 +273,24 @@ struct SlotProjection {
     last_error: Option<SlotError>,
 }
 
-/// Slot for a viz paint canvas. A canvas has no intrinsic size and a
-/// block child with auto height paints at 0 px, so the canvas fills
-/// this flex column (`size_full`) and the slot owns the minimum height.
-fn viz_slot<T: 'static>(paint: Canvas<T>) -> impl IntoElement {
+/// Slot for a vertically-growing element: viz paint canvases and
+/// Fader/Knob controls share the Panel's remaining height through
+/// `flex_grow` and keep the `min_h` floor (Issue #478 unifies the
+/// floor with the viz slot's). The child fills the slot.
+fn grow_slot(child: impl IntoElement) -> impl IntoElement {
     div()
         .flex()
         .flex_col()
         .flex_grow()
         .min_h(px(120.0))
-        .child(paint.size_full())
+        .child(child)
+}
+
+/// Slot for a viz paint canvas. A canvas has no intrinsic size and a
+/// block child with auto height paints at 0 px, so the canvas fills
+/// this flex column (`size_full`) and the slot owns the minimum height.
+fn viz_slot<T: 'static>(paint: Canvas<T>) -> impl IntoElement {
+    grow_slot(paint.size_full())
 }
 
 /// `Bounds<Pixels>` → window-coords [`LogicalRect`] for the slot port.
@@ -812,7 +820,7 @@ impl RvfView {
             .size_full()
             .flex()
             .when(is_seek, |d| d.h(px(24.0)))
-            .when(!is_seek, |d| d.w(px(32.0)).h_full())
+            .when(!is_seek, |d| d.w(px(32.0)))
             .track_focus(&focus)
             .tab_stop(true)
             .focus(|s| s.border_1().border_color(accent))
@@ -1347,11 +1355,9 @@ impl RvfView {
                 }
                 body.into_any_element()
             }
-            ComponentSpec::Fader(c) | ComponentSpec::Knob(c) => div()
-                .flex()
-                .h_full()
-                .child(self.control_element(c, false, cx))
-                .into_any_element(),
+            ComponentSpec::Fader(c) | ComponentSpec::Knob(c) => {
+                grow_slot(self.control_element(c, false, cx)).into_any_element()
+            }
             ComponentSpec::Toggle(c) => self.toggle_element(c, cx).into_any_element(),
             ComponentSpec::Seek(c) => div()
                 .flex()
@@ -2762,6 +2768,144 @@ mod tests {
                 f32::from(ruler.size.height),
                 24.0,
                 "ruler keeps its slot height"
+            );
+            // Issue #478: the Knob slot is a `flex_grow` + `min_h(120)`
+            // share of the Panel's remaining height — it keeps the
+            // floor, and the three grow slots split what the fixed
+            // rows (toggle 24 + ruler 24) leave of the 1080 px window.
+            let knob = canvas_height_px(v, "knob");
+            let meter = canvas_height_px(v, "meter");
+            let spectrogram = canvas_height_px(v, "spectrogram");
+            assert!(
+                knob >= 120.0 && meter >= 120.0 && spectrogram >= 120.0,
+                "grow slots keep the min_h floor: knob={knob} meter={meter} spectrogram={spectrogram}"
+            );
+            let grow_sum = knob + meter + spectrogram;
+            assert!(
+                (grow_sum - 1032.0).abs() <= 0.5,
+                "grow slots share the Panel remainder: {grow_sum}"
+            );
+        });
+    }
+
+    /// Logical height of the gpui-test window content — `TestDisplay`
+    /// is 1920×1080 and `add_window_view` opens a maximized window, so
+    /// the Panel under test fills it edge to edge.
+    const TEST_WINDOW_HEIGHT: f32 = 1080.0;
+
+    /// Painted canvas height in logical px for `key`.
+    fn canvas_height_px(v: &RvfView, key: &str) -> f32 {
+        let bounds = v.bounds.borrow();
+        let b = bounds
+            .get(&ComponentKey(key.to_string()))
+            .unwrap_or_else(|| panic!("{key} canvas painted"));
+        f32::from(b.size.height)
+    }
+
+    /// Issue #478 contract: a Fader next to fixed/min-height siblings
+    /// shares the Panel's remaining height instead of occupying the
+    /// full height — Seek keeps 24 px, the Waveform slot keeps its
+    /// `min_h` floor, and the column does not exceed the Panel height.
+    #[gpui::test]
+    fn rvf_view_fader_slot_shares_height_with_siblings(cx: &mut TestAppContext) {
+        let mut host = ViewHost::new(
+            ViewInstanceId::new(1).expect("nonzero"),
+            AttachEpoch::new(1),
+        );
+        host.mount(ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("panel".to_string()),
+                title: None,
+                children: vec![
+                    fader_spec("fader"),
+                    seek_spec("seek"),
+                    waveform_spec("wave"),
+                ],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(host, ViewPalette::fallback(), |_intent| {})
+        });
+        cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            let fader = canvas_height_px(v, "fader");
+            let seek = canvas_height_px(v, "seek");
+            let wave = canvas_height_px(v, "wave");
+            assert_eq!(seek, 24.0, "seek keeps its declared slot height");
+            assert!(
+                fader >= 120.0 && wave >= 120.0,
+                "fader/viz slots keep the shared min_h floor: fader={fader} wave={wave}"
+            );
+            // Both slots are `flex_grow` shares of the same remainder —
+            // under the old `h_full` contract the Fader took 936 px and
+            // the Waveform was left at its 120 px floor instead.
+            assert!(
+                (fader - wave).abs() <= 0.5,
+                "fader and viz slot split the remainder evenly: fader={fader} wave={wave}"
+            );
+            assert!(
+                fader + seek + wave <= TEST_WINDOW_HEIGHT + 0.5,
+                "siblings are not pushed out of the Panel: fader={fader} seek={seek} wave={wave}"
+            );
+        });
+    }
+
+    /// Issue #478 contract: a Fader that is the sole growing child of a
+    /// Tabs body fills the remainder below the tab header — the header
+    /// keeps its height and the fader grows past `min_h` rather than
+    /// sticking to the floor.
+    #[gpui::test]
+    fn rvf_view_fader_in_tabs_fills_body_remainder(cx: &mut TestAppContext) {
+        let mut host = ViewHost::new(
+            ViewInstanceId::new(1).expect("nonzero"),
+            AttachEpoch::new(1),
+        );
+        host.mount(ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("panel".to_string()),
+                title: None,
+                children: vec![ComponentSpec::Tabs(TabsSpec {
+                    key: ComponentKey("tabs".to_string()),
+                    active: 0,
+                    tabs: vec![TabSpec {
+                        key: ComponentKey("tab.ch1".to_string()),
+                        title: "Ch 1".to_string(),
+                        child: Box::new(fader_spec("fader")),
+                    }],
+                    selection: None,
+                    visual: ComponentVisualState::default(),
+                    a11y: A11ySpec::default(),
+                })],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        })
+        .expect("mount");
+        host.drain_events();
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(host, ViewPalette::fallback(), |_intent| {})
+        });
+        cx.run_until_parked();
+        // The tab cell carries a debug selector; the header row adds
+        // its 1 px bottom border on top of the cell's height.
+        let tab_height = cx
+            .debug_bounds("tabs-tab-0")
+            .map(|b| f32::from(b.size.height))
+            .expect("tab header cell painted");
+        view.update(cx, |v, _cx| {
+            let fader = canvas_height_px(v, "fader");
+            let expected = TEST_WINDOW_HEIGHT - tab_height - 1.0;
+            assert!(
+                fader > 120.0,
+                "sole growing child fills the body remainder, not min_h: {fader}"
+            );
+            assert!(
+                (fader - expected).abs() <= 0.5,
+                "fader height equals the tab-body remainder: fader={fader} expected={expected}"
             );
         });
     }
