@@ -661,6 +661,15 @@ description = "Test ruviform-ui-test on MSRV 1.89 (GUI boundary guard + cargo_me
 run = "mise exec rust@1.89.0 -- cargo test -p ruviform-ui-test"
 env = { CARGO_TARGET_DIR = "target/msrv-ui-test" }
 
+# Issue #293 (OBS-11): ruviform-observability の MSRV 1.89 検証。
+# `--all-features` で feature-gated test target（integration /
+# logging / tracing-export / allocation-probe）も MSRV toolchain で
+# ビルド・実行する。
+[tasks.test-observability-msrv]
+description = "Test ruviform-observability on MSRV 1.89 with all features (integration/logging/tracing-export/allocation-probe test targets included; Issue #293)"
+run = "mise exec rust@1.89.0 -- cargo test -p ruviform-observability --all-features"
+env = { CARGO_TARGET_DIR = "target/msrv-observability" }
+
 # Issue #306 受入行「MSRV1.89 … 監査を統合」に対応する IO 系 crate の
 # MSRV lane。`test-ofx-msrv`/`test-ui-test-msrv` と同じく
 # `mise exec rust@1.89.0` で toolchain を固定して実走する。

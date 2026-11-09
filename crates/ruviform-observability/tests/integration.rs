@@ -485,3 +485,209 @@ mod debug_session {
         assert_eq!(report.debug_records_lost, 0);
     }
 }
+
+// --- reconfigure edges: live sources, filter changes ---------------------------
+
+/// A live registered source does not migrate: `reconfigure` reports it
+/// under `non_migrated.sources_requiring_reregistration`, the retired
+/// pipeline stops observing it, and the domain must re-register
+/// against the new `registration_port()`.
+#[test]
+fn reconfigure_reports_live_sources_and_requires_reregistration() {
+    let mut runner = running_runner();
+    let port = runner.registration_port().unwrap();
+    let (counter, source) = counter_source("test.integration.reregister");
+    let _lease = port.register(source).unwrap();
+    counter.increment();
+    runner.poll_once(now()).unwrap();
+    assert_eq!(runner.latest_batch().unwrap().measurements().len(), 1);
+
+    let report = runner.reconfigure(&config()).unwrap();
+    assert_eq!(runner.state(), RunnerState::Running);
+    assert_eq!(report.non_migrated.sources_requiring_reregistration, 1);
+    assert!(!report.non_migrated.debug_session_abandoned);
+
+    // The retired source is gone from the new pipeline — further
+    // increments are unobserved until re-registration.
+    counter.increment();
+    runner.poll_once(now()).unwrap();
+    assert!(runner.latest_batch().unwrap().measurements().is_empty());
+
+    // Re-register against the new port: the new pipeline observes it.
+    let port = runner.registration_port().unwrap();
+    let (counter2, source2) = counter_source("test.integration.reregister2");
+    let _lease2 = port.register(source2).unwrap();
+    counter2.increment();
+    runner.poll_once(now()).unwrap();
+    let batch = runner.latest_batch().unwrap();
+    assert_eq!(batch.measurements().len(), 1);
+    assert_eq!(
+        batch.measurements()[0].descriptor.key,
+        "test.integration.reregister2"
+    );
+}
+
+/// Filter/retention changes (`stale_after`, history budgets) take
+/// effect only in the new configuration — the retired pipeline drains
+/// first and the new one applies its own rules independently.
+#[test]
+fn reconfigure_filter_change_applies_to_new_pipeline_only() {
+    let mut runner = running_runner();
+    let port = runner.registration_port().unwrap();
+    let (counter, source) = counter_source("test.integration.filter");
+    let _lease = port.register(source).unwrap();
+    counter.increment();
+    runner.poll_once(now()).unwrap();
+    assert!(runner.history().is_some_and(|h| !h.is_empty()));
+
+    // Tighten the metrics filters: no history retention, stale
+    // marking at 1ms. The old pipeline's history must not leak
+    // forward — re-registration is required under the new rules.
+    let mut next = config();
+    next.collection.history_max_samples = 0;
+    next.collection.history_budget_bytes = 0;
+    next.collection.stale_after = Some(Duration::from_millis(1));
+    let report = runner.reconfigure(&next).unwrap();
+    assert_eq!(report.non_migrated.sources_requiring_reregistration, 1);
+
+    let port = runner.registration_port().unwrap();
+    let (counter2, source2) = counter_source("test.integration.filter2");
+    let _lease2 = port.register(source2).unwrap();
+    counter2.increment();
+    runner.poll_once(now()).unwrap();
+    assert_eq!(runner.latest_batch().unwrap().measurements().len(), 1);
+    assert!(
+        runner.history().is_none_or(|h| h.is_empty()),
+        "history_max_samples = 0 must disable history in the new pipeline"
+    );
+}
+
+// --- debug contract: secrecy notes + probe port through the runner -------------
+
+#[cfg(feature = "integration")]
+mod debug_contract {
+    use ruviform_observability::debug::{
+        DebugReportRequest, ExportLimits, InspectionDetail, InspectionInputs, InspectionRequest,
+        InspectionSection, InspectionTarget, ProbeAvailability, ProbeClockMark, ProbeDeckSnapshot,
+        ProbeMode, ProbeReading, ProbeSource,
+    };
+    use ruviform_observability::source::Confidentiality;
+
+    use super::*;
+
+    /// Minimal in-crate `ProbeSource` — the observability-side port
+    /// contract, independent of any domain adapter.
+    struct StubProbes;
+
+    impl ProbeSource for StubProbes {
+        fn decks(&mut self) -> Vec<ProbeDeckSnapshot> {
+            vec![ProbeDeckSnapshot {
+                generation: 7,
+                clock: ProbeClockMark::UNKNOWN,
+                confidentiality: Confidentiality::Internal,
+                probes: vec![ProbeReading {
+                    probe: 42,
+                    node: 11,
+                    port: 22,
+                    mode: ProbeMode::Monitor,
+                    availability: ProbeAvailability::Configured,
+                    generation: 7,
+                    clock: ProbeClockMark::UNKNOWN,
+                    last_status: None,
+                    recorded: 3,
+                    dropped: 0,
+                    lost_blocks: 0,
+                }],
+            }]
+        }
+    }
+
+    fn debug_runner() -> ObservationRunner {
+        let mut runner = ObservationRunner::new();
+        let mut cfg = config();
+        cfg.debug = Some(DebugSettings::new(
+            ruviform_observability::debug::DebugConfig::default(),
+        ));
+        runner.prepare(&cfg).unwrap();
+        runner.activate().unwrap();
+        runner
+    }
+
+    /// `debug_mut()` registration + `inspect` produces the Probes
+    /// section through the runner-owned inspector — the same wiring
+    /// a domain adapter (e.g. ruviform-audio's) uses.
+    #[test]
+    fn runner_debug_mut_probe_source_flows_into_inspection() {
+        let mut runner = debug_runner();
+        runner
+            .debug_mut()
+            .unwrap()
+            .add_probe_source(Box::new(StubProbes));
+
+        let snap = runner
+            .debug_mut()
+            .unwrap()
+            .inspect(
+                &InspectionRequest {
+                    targets: vec![InspectionTarget::Probes],
+                    detail: InspectionDetail::Verbose,
+                    disclosure: Confidentiality::Internal,
+                    budget: ruviform_observability::debug::InspectionBudget::default(),
+                },
+                &InspectionInputs::default(),
+                now(),
+            )
+            .unwrap();
+        let probes = snap
+            .sections
+            .iter()
+            .find_map(|s| match s {
+                InspectionSection::Probes(p) => Some(p),
+                _ => None,
+            })
+            .expect("Probes section");
+        assert_eq!(probes.decks.len(), 1);
+        assert_eq!(probes.decks[0].probes[0].probe, 42);
+        let counters = probes.decks[0].probes[0]
+            .counters
+            .expect("Verbose carries counters");
+        assert_eq!(counters.recorded, 3);
+    }
+
+    /// Secret/payload non-exposure is a typed contract, not a
+    /// convention: every generated report carries the static notes
+    /// declaring that secrets, media bytes, paths, credentials,
+    /// prompts and raw stderr have no carrier, and record summaries
+    /// expose metadata fields only.
+    #[test]
+    fn debug_report_declares_secret_non_exposure() {
+        let mut runner = debug_runner();
+        let report = runner
+            .debug_mut()
+            .unwrap()
+            .report(
+                &DebugReportRequest {
+                    disclosure: Confidentiality::Internal,
+                    external: false,
+                    limits: ExportLimits::default(),
+                },
+                None,
+                now(),
+            )
+            .unwrap();
+        assert!(
+            report
+                .notes
+                .iter()
+                .any(|n| n.contains("Secrets, media bytes, paths, credentials, prompts")),
+            "secrecy note must be attached to every report"
+        );
+        assert!(
+            report
+                .notes
+                .iter()
+                .any(|n| n.contains("payload values are domain-owned")),
+            "payload non-export note must be attached"
+        );
+    }
+}

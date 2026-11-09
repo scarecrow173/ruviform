@@ -187,6 +187,7 @@ Directory: `docs/impl/ir`
 | IMPL-034UpDoz64058mto7srnOJ | Issue #290 OBS-08 allocation-probe 実装記録 | completed | [issue-290-obs-08-allocation-probe.md](./issue-290-obs-08-allocation-probe.md) |
 | IMPL-034UqAG1z1lwcerRfda1x1 | Issue #292 OBS-10 Debug Inspection 実装記録 | completed | [issue-292-obs-10-debug-inspection.md](./issue-292-obs-10-debug-inspection.md) |
 | IMPL-uQYRObw7mzwY2AGJRMgIkm | Issue #293 OBS-11 ObservabilityConfig + ObservationRunner 実装記録 | completed | [issue-293-obs-11-observability-integration-runner.md](./issue-293-obs-11-observability-integration-runner.md) |
+| IMPL-4bN8kQ2wX7vL3pR6tY9mD1s | Issue #293 OBS-11 ProbeSource adapter + 統合 edge 強化 実装記録 | completed | [issue-293-probe-source-adapter.md](./issue-293-probe-source-adapter.md) |
 | IMPL-034UzejWEL4tv3LAZGmQKA | Issue #290 OBS-08 RT Timing 実装記録 | completed | [issue-290-obs-08-rt-timing.md](./issue-290-obs-08-rt-timing.md) |
 | IMPL-jcCS5NAauic4OhiRJK2CAb | Issue #389 Plugin Editor Session headless fixture 実装記録（contract 認定 + DSP/RT 非干渉 fixture + NotRun 記録） | completed | [issue-389-editor-session-headless-implementation.md](./issue-389-editor-session-headless-implementation.md) |
 | IMPL-034UDl0o66TbT5Ovx4NeVe | Issue #398/#400 残件 audit — rooted capability・sealed readback decoder bridge の受入照合と検証証拠 | completed | [issue-398-400-audit-rooted-capability-sealed-readback-decoder-bridge.md](./issue-398-400-audit-rooted-capability-sealed-readback-decoder-bridge.md) |
