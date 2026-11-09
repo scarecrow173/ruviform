@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "共通基盤・Observability・Diagnostics・Debug とクレート分割の設計方針"
 created: "2026-10-22"
-updated: "2026-10-27"
+updated: "2026-11-09"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -32,6 +32,7 @@ relations:
     - "../../AGENTS.md"
     - "overview.md"
     - "plugin-isolation.md"
+    - "issue-275-observability-integration-design.md"
   refines:
     - "ruviform-architecture-design-baseline.md"
   refined-by: []
@@ -49,6 +50,7 @@ relations:
   references:
     - "https://github.com/scarecrow173/ruviform/issues/76"
     - "https://github.com/scarecrow173/ruviform/issues/17"
+    - "https://github.com/scarecrow173/ruviform/issues/275"
     - "https://github.com/scarecrow173/ruviform/pull/100"
     - "https://doc.rust-lang.org/cargo/reference/features.html"
     - "https://doc.rust-lang.org/cargo/reference/workspaces.html"
@@ -144,6 +146,8 @@ Applications / Hosts / Integrations        （利用側。本設計の境界外�
 | `ruviform-platform` / `ruviform-process` / `ruviform-ipc` 等 | プロセス管理・共有メモリ・IPC・共通 OS 資源の抽象と寿命管理 | 音声デバイス等のドメイン固有 API、プラグイン固有プロトコル | **構成候補**（独立クレートか機能別モジュールかは**要 PoC**。Issue #76 等の要件／PoC を受けて判断） |
 | `ruviform-rt`・`ruviform-exec` | RT 契約、非 RT 実行、退避・スナップショット、スレッド優先度 | 汎用 OS サービス、重い観測・出力 | **実装済み**（既存契約を維持。汎用部品の抽出は**要 PoC**） |
 | `*-core`・`ruviform-math`・DSP 等 | 各ドメインの型・処理・実行計画・数値演算 | 汎用 Foundation の雑多な再実装 | **実装済み**（原則として既存の責務境界を維持） |
+
+> **2026-11-09 改訂（Issue #275 合意版）**: `ruviform-observability` の構成候補名と「内部モジュール先行・必要な時のみクレート抽出」方針は、Issue [#275](https://github.com/scarecrow173/ruviform/issues/275) の合意設計（2026-11-04）により確定した — 単一クレート `ruviform-observability` が `core`/`source`/`collector`/`diagnostics`/`debug`/`record`/`rt_bridge`/`rt_timing`/`profiling`/`tracing_export`/`logging`/`integration` モジュールを持ち、独立サブクレートは新設しない。統合設計の正本は [Issue #275 Observability統合設計正本](issue-275-observability-integration-design.md)。`ruviform-foundation`・`ruviform-debug`・`ruviform-platform` 等の他候補の保留判定は本改訂の対象外であり不変。
 
 ## Foundation 候補の内訳
 
@@ -317,6 +321,8 @@ Issue #101 の後続として workspace 18 クレート（棚卸し時点の数�
 4. **Graph inspection:** 音声・動画の固有状態は各 engine 側に保持し、スナップショットを取得してから非 RT の Debug tool で図示・保存する。
 
 ## 状態一覧（方針／構成候補／保留／要 PoC／実装済み）
+
+> 注: `ruviform-observability` の「構成候補」「新設・API 範囲は保留」の行は、2026-11-09 の Issue #275 合意により解決済み（前掲の改訂注記参照）。他候補の区分は不変。
 
 | 論点 | 区分 | 方針／確定条件 |
 | --- | --- | --- |

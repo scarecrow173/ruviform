@@ -55,6 +55,7 @@ Directory: `docs/designs`
 | DESIGN-034UdN3RWXD8Kk4elhwAtR | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 — 設計 | approved | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | DESIGN-034QxcnAfFWswZmwSKPbKH | Issue #244 prefetch contract wart fixes — boundary-first emission, dead-generation sequence, End commit-once, seeded-fault coverage | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | DESIGN-034UjQBuwtfaWhLg6ZZMBn | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合設計 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| DESIGN-hXhz1NTWfHfPzPb5P4A5ff | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | DESIGN-034RoXjgYbKKZ3ZSazkSGi | Issue #276 汎用 Logging Adapter 設計 | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | DESIGN-034Rp1Um3ZXDWfRx8pCmuw | Issue #277 OBS-02 軽量Primitive・Observation Source契約: Gauge/Histogram・Descriptor・SourceId/Generation・Registrar/Lease・寿命 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
 | DESIGN-034UBq1SnAHmlvoFnohCoS | Issue #278 OBS-03 tracing_export slice 2: EventRecord export + Correlation unlinked + W3C Trace Context | approved | [issue-278-observability-tracing-export-records.md](./issue-278-observability-tracing-export-records.md) |
@@ -63,6 +64,7 @@ Directory: `docs/designs`
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-fhvRxnPJKvnhRAlg7TbeKm | Issue #280 OBS-05 RT Record Bridge・ClockContext・欠落envelope・CorrelationBook設計 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | DESIGN-034UydimCfynTXvl5UJT6x | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
+| DESIGN-TUrjxcJLe7rvYr6up8mhf3 | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |
 | DESIGN-034UApwItFwQ4wBpfOs2EC | Issue #286 IO-04 ZIP/TAR Archive — Entry API・安全な展開・終了/公開契約 設計 | approved | [issue-286-io-04-zip-tar-archive.md](./issue-286-io-04-zip-tar-archive.md) |
 | DESIGN-034UtFFzzM3wAegGBSycbJ | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | DESIGN-034T2dhkl03BuqPOGmNlmc | Issue #289 OBS-07 Collector/Metrics/Snapshot: 単一Poll Owner・Baseline/Discontinuity・有界履歴・Health | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
