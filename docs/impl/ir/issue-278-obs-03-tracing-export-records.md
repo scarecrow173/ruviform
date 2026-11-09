@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034UBve3q5ki4mCV8cLprd"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #278 OBS-03 tracing_export slice 2 実装記録"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -145,7 +145,22 @@ spec → design → test-spec → plan → task の文書チェーンは
 
 ## Validation
 
-補助証拠（canonical = mise、最終検証は別途記録）:
+Canonical（`origin/main` `369adc78` merge 後に実施）:
+
+- `mise run fmt-check` — pass（exit 0）。
+- `mise run check`（`cargo check --workspace --all-targets`）—
+  pass（exit 0）。
+- `mise run lint`（`cargo clippy --workspace --all-targets --
+  -D warnings`）— pass（exit 0）。workspace lint は default
+  features のみを対象とするため、feature 組合せは下記補助証拠で
+  補完。
+- `mise run test`（`cargo test --workspace`）— pass（exit 0）。
+- `mise run test-rt` — pass（exit 0）。
+- `mise run test-msrv` — **NotRun**: 当該 task は mise.toml に
+  存在しない（crate 固有の `test-ofx-msrv`/`test-ui-test-msrv`
+  のみで observability 対象外）。
+
+補助証拠（canonical = mise、feature 組合せ検証）:
 
 - `cargo check -p ruviform-observability --features tracing-export`
   — pass（exit 0）。
@@ -163,6 +178,12 @@ spec → design → test-spec → plan → task の文書チェーンは
   なし。`--features tracing-export`: `tracing`/`tracing-core`/
   `tracing-attributes` のみ（`tracing-subscriber`/
   `tracing-appender` は normal dep に出ない）。
+
+review-protocol: Reviewer A（cooperative）/ Reviewer B
+（adversarial）の分離 pass を実施。Issue Candidate は schema.rs
+module doc の記述漏れと records.rs doctest の未使用 import の
+P3 2 件のみで、いずれも修正済み。CONFIRMED P0/P1 なし、
+verdict = ACCEPT。
 
 ## Risks
 
