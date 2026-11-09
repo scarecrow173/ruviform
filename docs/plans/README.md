@@ -112,7 +112,6 @@ Directory: `docs/plans`
 | PLAN-WuOx4rrntClDKCSVPDAM8d | Issue #368 Tracker reconcile 実装計画 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
 | PLAN-UmRPBDr4lZ2y8Aj9H6tdYe | Issue #377 実装計画 — QueryBinding adopt-on-join | approved | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | PLAN-034UhlBN58rtCJqfZMTYgt | Issue #378 oracle late-create binding epoch 実装計画 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
-| PLAN-034TnojDZIYRnnvSTlTg34 | Issue #409 scoped re-root + bounded enumeration 実装計画 | draft | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | PLAN-034UmJJcFMIKvjd1orEeeI | Issue #410 — view command ledger bounded retention & correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | PLAN-034Uoj9ui4gTFQIKFt9GqA | Issue #418 — theme-codegen 実装計画 | approved | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
 | PLAN-Hs2MvCe8ZyWp5QnXb7TkRa | Issue #421 — Meter/TimeAxis GPUI 描画と parity の実装計画 | in-progress | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
@@ -173,6 +172,7 @@ Directory: `docs/plans`
 | PLAN-034Ulf4tsZJz5CatpaE7hG | Issue #294 daily candidate-tuple trigger 実装計画 — decide.mjs tuple モード・daily-ci job・契約 test | completed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
+| PLAN-034TnojDZIYRnnvSTlTg34 | Issue #409 scoped re-root + bounded enumeration 実装計画 | completed | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | PLAN-XVTjRRZhCMBS0tmK8M7Nf5 | Issue #411 — cargo_metadata MSRV 修復 実装計画 | completed | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | PLAN-dS9xUtZcP4wLvYnK6nRt3F | Issue #414 — projection→controlled display 実装計画 | completed | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
 | PLAN-Dz8GuKm3QpYv7RtWb4LoCs | Issue #435 — Label/Table ViewSpec kind の実装計画 | completed | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |

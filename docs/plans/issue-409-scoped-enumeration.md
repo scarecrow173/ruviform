@@ -1,10 +1,10 @@
 ---
 id: "PLAN-034TnojDZIYRnnvSTlTg34"
 type: "plan"
-status: "draft"
+status: "completed"
 title: "Issue #409 scoped re-root + bounded enumeration 実装計画"
 created: "2026-11-07"
-updated: "2026-11-07"
+updated: "2026-11-09"
 owners: []
 relations:
   source: []
@@ -92,9 +92,9 @@ test/docs/mise のみ。
 - [x] `RootedDir::read_dir_each` + `read_dir` collect 化
 - [x] RED test 追加（mock + real FS）→ 失敗確認 → GREEN
 - [x] README/docs 更新・mise 最小 task 追加（不足時のみ）
-- [ ] mise fmt-check/check/lint/test + targeted lane 実測
-- [ ] origin/main merge → lock/index 再生成 → 再検証
-- [ ] 独立 review 修正確認 → commit/push/PR → worker_done
+- [x] mise fmt-check/check/lint/test + targeted lane 実測
+- [x] origin/main merge → lock/index 再生成 → 再検証
+- [x] 独立 review 修正確認 → commit/push/PR → worker_done
 
 ## Dependencies and Risks
 
@@ -112,12 +112,12 @@ test/docs/mise のみ。
 
 ## Verification
 
-- [ ] `mise run fmt-check`（0 差分）
-- [ ] `mise run check`（workspace 全対象）
-- [ ] `mise run lint`（clippy -D warnings）
-- [ ] `mise run test`（workspace、既存 rooted/archive 回帰含む）
-- [ ] targeted: io-file の rooted tests・archive tests
-- [ ] `check-linux`（unix backend compile/lint、未実測 OS は
+- [x] `mise run fmt-check`（0 差分）
+- [x] `mise run check`（workspace 全対象）
+- [x] `mise run lint`（clippy -D warnings）
+- [x] `mise run test`（workspace、既存 rooted/archive 回帰含む）
+- [x] targeted: io-file の rooted tests・archive tests
+- [x] `check-linux`（unix backend compile/lint、未実測 OS は
   NotRun 明記）
 
 ## Open Questions / Gaps
@@ -129,9 +129,9 @@ test/docs/mise のみ。
 
 ## Self-Review
 
-- [ ] Every spec requirement maps to a task.
-- [ ] No placeholders remain.
-- [ ] File paths, relations, status values, and terminology are consistent.
+- [x] Every spec requirement maps to a task.
+- [x] No placeholders remain.
+- [x] File paths, relations, status values, and terminology are consistent.
 
 ## Implementation Handoff
 

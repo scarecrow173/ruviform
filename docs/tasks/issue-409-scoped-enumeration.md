@@ -1,10 +1,10 @@
 ---
 id: "TASK-034TnjAUsNWElluY7lj4cl"
 type: "task"
-status: "in_progress"
+status: "done"
 title: "Issue #409 scoped re-root + bounded enumeration"
 created: "2026-11-07"
-updated: "2026-11-07"
+updated: "2026-11-09"
 owners: []
 relations:
   source:
@@ -79,14 +79,15 @@ test を追加する。
   probe / callback を続行しない。`read_dir` は collect wrapper。
 - [x] test-spec の Examples が mock + real FS test で固定され、
   既存 rooted/archive test が非破壊で通過。
-- [ ] 実測した OS の検証結果を記録し、未実測 OS は NotRun
+- [x] 実測した OS の検証結果を記録し、未実測 OS は NotRun
   （記録は commit/PR/worker_done 報告にて）。
 
 ## Verification
 
-- [ ] `mise run fmt-check` / `check` / `lint` / `test` が pass
+- [x] `mise run fmt-check` / `check` / `lint` / `test` が pass
   （targeted lane は pass 済；workspace 全体の check/lint/test は
-  origin/main merge 後に最終実測）。
+  origin/main merge 後に最終実測 — 2026-11-09 `eaab7230`→`967b6fd8`
+  取り込み後に全て exit 0 を再確認）。
 - [x] targeted io-file + archive 回帰が pass
   （`check-io-file`/`lint-io-file`/`test-io-file` exit 0）。
 - [x] `mise run fmt-check` pass・`mise run check-linux`
