@@ -119,23 +119,23 @@ runner 統合・証拠 lane を `ruviform-ui-test` に additive に実装
 
 ## Done When
 
-- [ ] `key_env` が `EnvironmentMeta` から env class を正規化し、
+- [x] `key_env` が `EnvironmentMeta` から env class を正規化し、
       不正値を `NormalizeError` で拒否する。
-- [ ] `key_for_fixture` が fixture の story_id/theme を持つ
+- [x] `key_for_fixture` が fixture の story_id/theme を持つ
       `GoldenKey` を返し、`registry_mismatches` が manifest
       整合を検査する。
-- [ ] `record_golden_outcome` が `ScenarioOutcome` に golden
+- [x] `record_golden_outcome` が `ScenarioOutcome` に golden
       evidence を畳み込み、`run_scenario` 経由で Fake adapter の
       `Unsupported` が正直に記録される。
-- [ ] `GoldenEvidence` JSONL が `"lane":"pixel-golden"` を含む。
-- [ ] 既存 golden/scenario/manifest 検査が非回帰。
-- [ ] mise canonical 検証一式が pass する。
+- [x] `GoldenEvidence` JSONL が `"lane":"pixel-golden"` を含む。
+- [x] 既存 golden/scenario/manifest 検査が非回帰。
+- [x] mise canonical 検証一式が pass する。
 
 ## Verification
 
-- [ ] `mise run fmt-check` / `check` / `lint` / `test`
-- [ ] `mise run test-ui-golden` / `test-ui-scenario-contract` /
+- [x] `mise run fmt-check` / `check` / `lint` / `test`
+- [x] `mise run test-ui-golden` / `test-ui-scenario-contract` /
       `test-ui-scenario-contract-fake` /
       `test-ui-scenario-contract-gpui` / `test-ui-driver-contract`
-- [ ] `mise run check-ui-driver-boundary` /
+- [x] `mise run check-ui-driver-boundary` /
       `test-ui-test-msrv`

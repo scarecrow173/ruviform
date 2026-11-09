@@ -196,7 +196,7 @@ pub struct RegistryMismatch {
 ///   は 1 つだが #426 matrix は両 theme を走るため、theme 軸は
 ///   manifest 全体の宣言集合で検査する）。
 /// - `state`: 該当 story entry の `states` に含まれるか
-///   （story 未登録の場合は state/scale_factor の entry-level
+///   （story 未登録の場合は `state`/`scale_factor` の entry-level
 ///   検査を skip する — theme は manifest-level のため常に検査）。
 /// - `scale_factor`: 該当 story entry の `scaleFactor` に f64
 ///   完全一致で含まれるか（NaN は一致しない — 正直に mismatch）。
@@ -388,7 +388,7 @@ mod tests {
             font_class: None,
         };
         let key = key_for_fixture(&fixture, "idle", &classes, "rev");
-        assert!(registry_mismatches(&key, &manifest).is_empty());
+        assert_eq!(registry_mismatches(&key, &manifest), Vec::new());
     }
 
     #[test]

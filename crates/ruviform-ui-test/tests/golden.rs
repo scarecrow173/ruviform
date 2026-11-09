@@ -332,8 +332,9 @@ fn registry_mismatches_reports_manifest_drift() {
     };
     let fixture = lab_story::sv_fader_dock_fixture();
     let k = key_for_fixture(&fixture, "idle", &classes, "rev");
-    assert!(
-        registry_mismatches(&k, &manifest).is_empty(),
+    assert_eq!(
+        registry_mismatches(&k, &manifest),
+        Vec::new(),
         "fixture-derived key must match stories.json"
     );
 
