@@ -83,6 +83,7 @@ Directory: `docs/plans`
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | PLAN-034S312gtUiTestPlnEE55 | Issue #312 ruviform-ui-test implementation plan | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| PLAN-034UjMMA7vTOdlkqHFOrca | Issue #313 — Windows 実 OS SendInput キーボード smoke 実装計画 | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | PLAN-034Ug8XG3cIM1VEYu5sQpv | Issue #314 slice 3 — GPUI/OS capture backend 実装計画 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | PLAN-Z43s6oJzXX8u7P4xAKcbau | Issue #314 slice 1 — Golden Utility コアの実装計画 | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | PLAN-034UeymubB5x0zXeYGvfEl | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装計画 | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
@@ -158,6 +159,7 @@ Directory: `docs/plans`
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
+| PLAN-034Ulf4tsZJz5CatpaE7hG | Issue #294 daily candidate-tuple trigger 実装計画 — decide.mjs tuple モード・daily-ci job・契約 test | completed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | PLAN-XVTjRRZhCMBS0tmK8M7Nf5 | Issue #411 — cargo_metadata MSRV 修復 実装計画 | completed | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
