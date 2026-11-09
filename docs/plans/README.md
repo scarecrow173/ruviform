@@ -66,6 +66,7 @@ Directory: `docs/plans`
 | PLAN-0H8Jzc5oPC9umJnYUWKcbN | Issue #182 Dock Tree / View Move / Layout Restore — implementation plan | approved | [issue-182-dock-tree.md](./issue-182-dock-tree.md) |
 | PLAN-ayJ9gag4RycXPJ01POnAkp | Issue #188 Timed MIDI — implementation plan | approved | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | PLAN-034Qhwlp4j8Gy5S5uG46Qr | Issue #191 PCM WAV output backend implementation plan | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
+| PLAN-034UCajy65hNl8zISc6rvu | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
 | PLAN-034UCTG1MAGz2NU32GulcZ | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 計画 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | PLAN-YNOz2WL10n4v4Avi6qlRE9 | Issue #197 media reader / prefetch / RT consumer implementation plan | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
 | PLAN-034Qonvu2E5YQaWUHEcTeL | Issue #233 media-reader prefetch contract improvements implementation plan | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
