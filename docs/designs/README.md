@@ -28,6 +28,7 @@ Directory: `docs/designs`
 | DESIGN-034NVCweXy0wECErcpEcv8 | video/NONRT プラグインの L1 経路設計（Issue #118） | approved | [issue-118-video-l1.md](./issue-118-video-l1.md) |
 | DESIGN-034O9RrQutLFWyaHJGOF3G | Issue 121 L1 diagnostics | approved | [issue-121-l1-diagnostics.md](./issue-121-l1-diagnostics.md) |
 | DESIGN-034N3EYKKosV8OzCP7Y9tY | 共通 platform/process/ipc 基盤の抽出評価（Issue #122） | approved | [issue-122-shared-platform-process-ipc-eval.md](./issue-122-shared-platform-process-ipc-eval.md) |
+| DESIGN-034udQraUSrCxCnhZza67E | Issue #127 Linux 実配布方式 設計 — GPUI 標準 Driver の runtime 依存・Capability Matrix・deb/AppImage/Flatpak 適合条件 | draft | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | DESIGN-034R150f64Num3r1cKxVb2zQ | Issue #150 f64 高精度オフライン数値・DSP API（ruviform-numeric 新設） | approved | [issue-150-f64-offline-numeric.md](./issue-150-f64-offline-numeric.md) |
 | DESIGN-034R152f64Corr3l4t10nXy | Issue #152 f64 相互相関・NCC・GCC-PHAT・overlap 相関 API（ruviform-numeric `corr` モジュール） | approved | [issue-152-f64-correlation.md](./issue-152-f64-correlation.md) |
 | DESIGN-034R153StftBand5Xq9wPzLm | Issue #153 汎用 f64 帯域演算・STFT・スペクトル統計（ruviform-numeric 拡張） | approved | [issue-153-f64-stft-bands-spectral.md](./issue-153-f64-stft-bands-spectral.md) |
@@ -47,6 +48,7 @@ Directory: `docs/designs`
 | DESIGN-034Qh2kLmNoPqRsTuVwX | Issue #190 Transport Span Scheduler — 実装設計 | approved | [issue-190-transport-span-scheduler.md](./issue-190-transport-span-scheduler.md) |
 | DESIGN-034Qhua2OtuBq26hwS8LpX | Issue #191 PCM WAV output backend design | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | DESIGN-034UBX7Lbr3m4u4ZGzQpHA | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| DESIGN-034UCMjL9ps9ffJkQqwDlR | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | DESIGN-034QfjYdt3o2a4lijg4lwt | Issue #195 M2 Typed Graph Compiler・Bounded Buffers/PDC・RT Runtime・Stateful Ownership・Activation | approved | [issue-195-m2-typed-graph-compiler-buffer-pdc-rt-runtime-ownership-activation.md](./issue-195-m2-typed-graph-compiler-buffer-pdc-rt-runtime-ownership-activation.md) |
 | DESIGN-C1EIkNXtQvzacfPU0a2bhv | Issue #196 M4 Typed Graph Plugin Adapter — 実装設計 | approved | [issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md](./issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md) |
 | DESIGN-fl6bBJvoJRiJHSkk73mskx | Issue #197 Generic Media Reader / Prefetch / RT Consumer — structural design | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |

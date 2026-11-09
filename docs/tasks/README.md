@@ -9,6 +9,7 @@ Directory: `docs/tasks`
 | TASK-034UdR18snUStfTR5NpZge | Issue #243 実装タスク | in-progress | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
+| TASK-034udQraUdxLs1SxuYiaAK | Issue #127 Linux 実配布方式 設計 — docs チェーン作成・索引再生成・検証・PR | in-progress | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
 | TASK-AsjkeCFskQSQZMsB5Tgl5H | Issue #301 T2 — zstd format/contract/API 試験 | completed | [issue-301-t2-zstd-tests.md](./issue-301-t2-zstd-tests.md) |
@@ -170,6 +171,7 @@ Directory: `docs/tasks`
 | TASK-034Qh6uIoPqWsErTyU | Issue #190 T-2: transport controller + RT span scheduler | done | [issue-190-t-2-span-scheduler-apply.md](./issue-190-t-2-span-scheduler-apply.md) |
 | TASK-034Qh7vBnMxZaSdFgH | Issue #190 T-3: plugin transport bridge + Mock Driver PoC | done | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
 | TASK-034UCcxDGa2UGOpkpXCbQJ | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | done | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| TASK-034UCVp0kqovy1IEDp0LWy | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | done | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | TASK-Awm44usEpigGUWYXNxfbWd | Issue #196 T-1: plugin-core bus role + enumeration contract | done | [issue-196-t-1-plugin-core-bus-enumeration.md](./issue-196-t-1-plugin-core-bus-enumeration.md) |
 | TASK-HfEXpjuOcYSGP35UqpabKo | Issue #196 T-2: media-core receipt/fault pop + host bus enumeration | done | [issue-196-t-2-host-media-bus-enumeration.md](./issue-196-t-2-host-media-bus-enumeration.md) |
 | TASK-mO3RtjrUoyUadajAWyCadp | Issue #196 T-3: ruviform-audio-plugin-bridge crate | done | [issue-196-t-3-bridge-crate.md](./issue-196-t-3-bridge-crate.md) |

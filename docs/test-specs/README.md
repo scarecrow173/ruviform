@@ -34,6 +34,7 @@ Directory: `docs/test-specs`
 | TSPEC-034OpmNe3vUnEprFdOIHb6 | L1 FailureCause・通知互換（Issue #121 — 7 variant 分類・first-observed・InstanceFailed.cause・wire 不変） | approved | [issue-121-l1-failure-cause-notification-tests.md](./issue-121-l1-failure-cause-notification-tests.md) |
 | TSPEC-034OpmNQsPNOBT99IHbrQz | L1 diagnostics parity・無退行（Issue #121 — video parity・supervisor pass-through・L0/wire/supervisor 契約維持） | approved | [issue-121-l1-parity-nonregression-tests.md](./issue-121-l1-parity-nonregression-tests.md) |
 | TSPEC-034OpmLKqqBA5YuKQkRrIU | L1 child stderr drain（Issue #121 — piped stderr・64KiB tail ring・snapshot 不変・500ms grace・heir bounded teardown） | approved | [issue-121-l1-stderr-drain-tests.md](./issue-121-l1-stderr-drain-tests.md) |
+| TSPEC-034udQraULNWJKR6z8GYjq | Issue #127 Linux 実配布方式 設計文書の検証仕様 — Matrix 完全性・判定語彙・分離・Owner 境界 | proposed | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | TSPEC-ajLVDeHdxTEsvm0JMWptbM | Issue #181 Multi-Window Host — test spec | approved | [issue-181-multi-window.md](./issue-181-multi-window.md) |
 | TSPEC-79iCQBCeCxmbN386U8wYgM | Issue #182 Dock Tree / View Move / Layout Restore — test spec | approved | [issue-182-dock-tree.md](./issue-182-dock-tree.md) |
 | TSPEC-034QeeLKxXQyMBzA6HNOW6 | Issue #184 M1 typed graph IR: representation, multi-bus topology, validation failures, revisions, legacy coexistence | approved | [issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md](./issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md) |
@@ -45,6 +46,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Qh4wErTyUiOpAsD | Issue #190 Transport Span Scheduler テスト仕様 | approved | [issue-190-transport-span-scheduler-tests.md](./issue-190-transport-span-scheduler-tests.md) |
 | TSPEC-034Qhwm0HeEmVIU2j6ttxT | Issue #191 PCM WAV output test specification | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | TSPEC-034UC88veX939aXOGHd2sw | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| TSPEC-034UCSrsj3GYcyfu8KYMB2 | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | TSPEC-034QfqUJnhyPPfGZsl7kXW | Issue #195 M2 typed graph compiler/runtime: schedule, buffers, PDC, ownership, activation, faults, legacy coexistence | approved | [issue-195-m2-typed-graph-compiler-runtime-tests.md](./issue-195-m2-typed-graph-compiler-runtime-tests.md) |
 | TSPEC-7zOboSetinQdiV2b3AD6Yq | Issue #196 M4 Typed Graph Plugin Adapter テスト仕様 | approved | [issue-196-typed-graph-plugin-adapter-tests.md](./issue-196-typed-graph-plugin-adapter-tests.md) |
 | TSPEC-JSe276zDPhy5bjOFWJMtgn | Issue #197 media reader / prefetch / RT consumer test specification | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |

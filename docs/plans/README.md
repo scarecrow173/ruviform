@@ -62,12 +62,14 @@ Directory: `docs/plans`
 | PLAN-034Kq8IiJyWJrYeKbeaNK9 | Issue #92 実施計画 — ruviform-audio-analysis 新設 | approved | [implement-issue-92-audio-analysis.md](./implement-issue-92-audio-analysis.md) |
 | PLAN-034KPgI4Qmc4o0yAzYskID | Issue #96 実施計画 — ruviform-edit 新設 | approved | [implement-issue-96-edit-model.md](./implement-issue-96-edit-model.md) |
 | PLAN-034KSVb6BAzhMH2cZgxnSy | Issue #97 実施計画 — video-proc コンポジット/遷移カーネル追加 | approved | [implement-issue-97-composite-kernels.md](./implement-issue-97-composite-kernels.md) |
+| PLAN-034udQraUPXx00zp4pCYaL | Issue #127 Linux 実配布方式 設計文書チェーン 実装計画 — docs-only 5 文書 + 索引再生成 + 検証 | draft | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | PLAN-034N9piQHt6Evb7QShnGx8 | Issue #131 OFX UAF residuals 実施計画 | approved | [issue-131-ofx-uaf-residuals.md](./issue-131-ofx-uaf-residuals.md) |
 | PLAN-YhNVDi1L10HncvCUA5RufU | Issue #181 Multi-Window Host — implementation plan | approved | [issue-181-multi-window.md](./issue-181-multi-window.md) |
 | PLAN-0H8Jzc5oPC9umJnYUWKcbN | Issue #182 Dock Tree / View Move / Layout Restore — implementation plan | approved | [issue-182-dock-tree.md](./issue-182-dock-tree.md) |
 | PLAN-ayJ9gag4RycXPJ01POnAkp | Issue #188 Timed MIDI — implementation plan | approved | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | PLAN-034Qhwlp4j8Gy5S5uG46Qr | Issue #191 PCM WAV output backend implementation plan | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | PLAN-034UCajy65hNl8zISc6rvu | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| PLAN-034UCTG1MAGz2NU32GulcZ | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 計画 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | PLAN-YNOz2WL10n4v4Avi6qlRE9 | Issue #197 media reader / prefetch / RT consumer implementation plan | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
 | PLAN-034Qonvu2E5YQaWUHEcTeL | Issue #233 media-reader prefetch contract improvements implementation plan | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | PLAN-cNIlZseMNfbfI0D3uYpFLK | Issue #238 実施計画 — l1_proxy_e2e 壁時計 sleep 同期を有界 barrier/poll 待機へ置換 | approved | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
@@ -147,7 +149,6 @@ Directory: `docs/plans`
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
-| PLAN-Y2emYF0VFlVKTxwsGWm4Ev | ruviform-io-file Rooted Read Capability 実装計画 | done | [rooted-read-capability.md](./rooted-read-capability.md) |
 | PLAN-kreAOLAGHhliWIVO5VQM6G | ViewLink authoritative generation 実装計画 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
@@ -192,3 +193,4 @@ Directory: `docs/plans`
 | PLAN-Ws6Tz1RbMn4QcKe9YhGx3D | Issue #443 — Tile 列区間と count 契約の実装計画 | completed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | PLAN-034U0ARdtPkZR0btUirc6D | Issue #463 — Spectrogram cell intensity 修正計画 | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | PLAN-VM42GIDhiqjgeTP4U1EbJM | Issue #464 slice — Scenario Runner・Report 組み立て契約の実装計画 | completed | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
+| PLAN-Y2emYF0VFlVKTxwsGWm4Ev | ruviform-io-file Rooted Read Capability 実装計画 | completed | [rooted-read-capability.md](./rooted-read-capability.md) |
