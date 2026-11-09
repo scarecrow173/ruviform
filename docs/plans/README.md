@@ -24,9 +24,11 @@ Directory: `docs/plans`
 | PLAN-034JcCFGe6ILSTWLgUIjAn | Issue #26 動画基盤 API の実装（video-core 所有権契約・video-proc 新設・色変換カーネル） | approved | [implement-issue-26-video-foundation.md](./implement-issue-26-video-foundation.md) |
 | PLAN-034JZVID00000000000040 | Issue #27 実装計画 — 動画エンジン | approved | [implement-issue-27-video-engine.md](./implement-issue-27-video-engine.md) |
 | PLAN-034Rp216xT1c4Dc6YM6xqa | Implement Issue #277 OBS-02 observability core/source contract | approved | [implement-issue-277-observability-core-source.md](./implement-issue-277-observability-core-source.md) |
+| PLAN-034UprlQzHK8jUy6ATqC0u | Issue #278 OBS-03 tracing_export 実装計画 | approved | [implement-issue-278-observability-tracing-export.md](./implement-issue-278-observability-tracing-export.md) |
 | PLAN-034RTsBYMsfKWtQaNUpvnl | Implement Issue #279 OBS-04 plugin-host counter source registration | approved | [implement-issue-279-plugin-host-counter-source.md](./implement-issue-279-plugin-host-counter-source.md) |
 | PLAN-m7f29Op1o9KCQ037OSq6i8 | Implement Issue #280 OBS-05 RT record bridge・record vocabulary | approved | [implement-issue-280-rt-record-bridge.md](./implement-issue-280-rt-record-bridge.md) |
 | PLAN-034T2Nmh2tErwGOV4X6guz | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装計画 | approved | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
+| PLAN-034UoVUbDw0ACJnYRUdjWo | Implement Issue #290 OBS-08 allocation-probe — CountingAllocator/AllocationScope Implementation Plan | approved | [implement-issue-290-observability-allocation-probe.md](./implement-issue-290-observability-allocation-probe.md) |
 | PLAN-034UnAUkBnCas6lEsFTewD | Issue #291 OBS-09 Diagnostics 実装計画 | approved | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
 | PLAN-4afZ4yYXHh9Vey7rTu5wFt | Issue #292 OBS-10 Debug Inspection 実装計画 | approved | [implement-issue-292-observability-debug-inspection.md](./implement-issue-292-observability-debug-inspection.md) |
 | PLAN-034JZPGUI0000000000003 | Issue #30 実施計画 — プラグイン GUI PoC | approved | [implement-issue-30-plugin-gui-poc.md](./implement-issue-30-plugin-gui-poc.md) |

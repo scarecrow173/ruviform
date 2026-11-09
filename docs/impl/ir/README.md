@@ -173,7 +173,9 @@ Directory: `docs/impl/ir`
 | IMPL-034UiuvjiiksJVjjkxtT5W | Issue #308 — Generation切替時のProbe再Binding全件整合・部分失敗契約（staged rebind + RebindReceipt + CapturePolicy） | completed | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
 | IMPL-034Ukaiqpkd3tCCzSFomK7 | Issue #309 — PROBE-TIME時間コンテキスト・整列契約の実装（ProbeClockMark + ProbeTimeContext + align_observation_points + ObservationCoverage） | completed | [issue-309-probe-time-context-and-alignment.md](./issue-309-probe-time-context-and-alignment.md) |
 | IMPL-034UnDVtaBTUOTvc3aTj8m | Issue #291 OBS-09 Diagnostics 実装記録 | completed | [issue-291-obs-09-diagnostics.md](./issue-291-obs-09-diagnostics.md) |
+| IMPL-034Upz8rpFOqIgQe87GGYp | Issue #278 OBS-03 tracing_export 実装記録 | completed | [issue-278-obs-03-tracing-export.md](./issue-278-obs-03-tracing-export.md) |
 | IMPL-034UnS9SUfwZF2v4zSQck6 | Issue #389 Plugin Editor Session hardening 実装記録（timeout/degrade/GraphicsLost/DComp 記録） | completed | [issue-389-session-hardening-implementation.md](./issue-389-session-hardening-implementation.md) |
 | IMPL-034Unx21W1IKfK78iReH5b | Issue #410 view command ledger bounded retention and correlation hardening | completed | [issue-410-view-command-ledger-bounded-retention-and-correlation-hardening.md](./issue-410-view-command-ledger-bounded-retention-and-correlation-hardening.md) |
 | IMPL-034UoQCq3m1rqajAlcen87 | Issue #418 — theme-codegen 実装記録 | completed | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
+| IMPL-034UpDoz64058mto7srnOJ | Issue #290 OBS-08 allocation-probe 実装記録 | completed | [issue-290-obs-08-allocation-probe.md](./issue-290-obs-08-allocation-probe.md) |
 | IMPL-034UqAG1z1lwcerRfda1x1 | Issue #292 OBS-10 Debug Inspection 実装記録 | in-progress | [issue-292-obs-10-debug-inspection.md](./issue-292-obs-10-debug-inspection.md) |
