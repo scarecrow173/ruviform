@@ -145,7 +145,6 @@ Directory: `docs/plans`
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
-| PLAN-Y2emYF0VFlVKTxwsGWm4Ev | ruviform-io-file Rooted Read Capability 実装計画 | done | [rooted-read-capability.md](./rooted-read-capability.md) |
 | PLAN-kreAOLAGHhliWIVO5VQM6G | ViewLink authoritative generation 実装計画 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
@@ -190,3 +189,4 @@ Directory: `docs/plans`
 | PLAN-Ws6Tz1RbMn4QcKe9YhGx3D | Issue #443 — Tile 列区間と count 契約の実装計画 | completed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | PLAN-034U0ARdtPkZR0btUirc6D | Issue #463 — Spectrogram cell intensity 修正計画 | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | PLAN-VM42GIDhiqjgeTP4U1EbJM | Issue #464 slice — Scenario Runner・Report 組み立て契約の実装計画 | completed | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
+| PLAN-Y2emYF0VFlVKTxwsGWm4Ev | ruviform-io-file Rooted Read Capability 実装計画 | completed | [rooted-read-capability.md](./rooted-read-capability.md) |

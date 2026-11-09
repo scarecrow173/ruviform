@@ -37,6 +37,7 @@ relations:
   derived-by: []
   verifies:
     - "docs/specs/rooted-read-capability.md"
+    - "docs/designs/rooted-read-capability.md"
   verified-by: []
   references: []
   defers: []
