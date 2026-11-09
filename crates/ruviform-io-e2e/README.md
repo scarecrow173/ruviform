@@ -67,6 +67,11 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
 
 ```sh
 mise run test-io-e2e   # cargo test -p ruviform-io-e2e
+mise run test-io-msrv  # MSRV 1.89 toolchain で IO 系 6 crate を test
+                       # （io-file/io-archive/io-structured/io-compression/
+                       #  io-wav/io-e2e。Issue #306。io-e2e の dev-deps 経由で
+                       #  structured 全 format・compression gzip,zstd が
+                       #  feature unify され、deflate は別コマンドで補完）
 ```
 
 主張境界: 実施した OS/FS・toolchain のみを実測として記録する。
