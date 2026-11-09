@@ -18,6 +18,11 @@ logging = [
     "dep:tracing-subscriber",
     "dep:tracing-appender",
 ]
+# `allocation-probe` — Issue #290 (OBS-08) development/test allocation
+# probe (`profiling` module: `CountingAllocator` + TLS `AllocationScope`).
+# Off by default; adds no dependencies — the probe is std-only and the
+# crate never installs a `#[global_allocator]` itself.
+allocation-probe = []
 
 [dependencies]
 # Issue #280 (OBS-05): leaf-primitive deps for `rt_bridge`/`record`
