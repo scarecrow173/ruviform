@@ -1,7 +1,7 @@
 ---
 id: "TASK-034UwjBX1xcKeAC33krCUQ"
 type: "task"
-status: "todo"
+status: "done"
 title: "F1 PROBE-TIME アライメント fixture 実装"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -114,7 +114,8 @@ fixture で、drain した実 record から `ObservationSpan`/
 - [ ] `mise run test-msrv` — **NotRun**: `mise.toml` に
       `test-msrv` task は存在しない（`test-ofx-msrv`/
       `test-ui-test-msrv` のみ・本 slice 対象外）
-- [ ] `git merge origin/main` 後の再検証
+- [x] `git merge origin/main`（`cf1d2c8b` 取込）後に
+      `fmt-check`/`check`/`lint`/`test`/`test-rt` を再実行し全 exit 0
 
 ## 内容
 

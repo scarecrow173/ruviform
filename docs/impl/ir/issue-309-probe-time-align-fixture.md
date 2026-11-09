@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034Ux2ZcFoBhisTdYZmYtY"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #309 — PROBE-TIME複数Probe時間アライメントfixture検証"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -146,7 +146,26 @@ span/coverage を再構成して契約の全分岐を実測した。
 
 ## Validation
 
-<!-- 実行結果を完了時に記録 -->
+`origin/main`（`cf1d2c8b`）merge 後の最終状態で実行（canonical =
+mise、cargo 直接実行は補助証拠）:
+
+| command | result |
+| --- | --- |
+| `mise run fmt-check` | exit 0 |
+| `mise run check` | exit 0 |
+| `mise run lint` | exit 0（`clippy --workspace --all-targets -D warnings`） |
+| `mise run test` | exit 0 — `typed_probe_time_align` 11/11 pass・workspace 全体非退行 |
+| `mise run test-rt` | exit 0 — `rt_capture_process_allocates_nothing` 実行・pass |
+| `mise run test-msrv` | **NotRun** — `mise.toml` に task 非存在（`test-ofx-msrv`/`test-ui-test-msrv` のみ・対象外） |
+| `git merge origin/main` 後の再検証 | 上記 5 lane を merge 後に再実行し全 exit 0 |
+
+補助証拠（canonical ではない）: `cargo test -p ruviform-audio
+--test typed_probe_time_align` → 11 passed / 0 failed。
+
+実装中に発見・修正した fixture 側の問題（`src/` 契約の不具合では
+ない）: 無音判定を latency 補正後の観測窓基準に修正、telemetry
+capacity を block 0 の 6 record 構成に合わせて 6 に設定、
+`rt_` prefix test を `test-rt` lane 選択用に追加。
 
 ## Risks
 
