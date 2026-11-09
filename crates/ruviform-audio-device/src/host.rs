@@ -13,7 +13,7 @@
 use cpal::traits::HostTrait;
 use ruviform_audio_core::device::{Device, DeviceEnumerator, DeviceError, DeviceResult};
 
-use crate::device::CpalDevice;
+use crate::device::{CpalDevice, clock_profile};
 use crate::error::{ErrorCtx, map_error};
 
 /// A backend audio host (e.g. WASAPI on Windows) implementing the
@@ -164,11 +164,16 @@ pub fn host(id: HostId) -> DeviceResult<Host> {
 
 impl DeviceEnumerator for Host {
     fn output_devices(&self) -> DeviceResult<Vec<Box<dyn Device>>> {
+        // The host's clock/timestamp profile is resolved once per
+        // enumeration — every device (and every stream they open)
+        // reports the same domain, which is what makes `same_clock_domain`
+        // duplex correlation possible on shared-clock hosts.
+        let profile = clock_profile(self.inner.id().name());
         self.inner
             .output_devices()
             .map(|devices| {
                 devices
-                    .map(|device| Box::new(CpalDevice::new(device)) as Box<dyn Device>)
+                    .map(|device| Box::new(CpalDevice::new(device, profile)) as Box<dyn Device>)
                     .collect()
             })
             .map_err(|e| map_error(&e, ErrorCtx::Control))
@@ -177,18 +182,20 @@ impl DeviceEnumerator for Host {
     fn default_output_device(&self) -> DeviceResult<Option<Box<dyn Device>>> {
         // cpal reports "no default device" as `None` — the same shape
         // the port uses; the query itself is infallible.
+        let profile = clock_profile(self.inner.id().name());
         Ok(self
             .inner
             .default_output_device()
-            .map(|device| Box::new(CpalDevice::new(device)) as Box<dyn Device>))
+            .map(|device| Box::new(CpalDevice::new(device, profile)) as Box<dyn Device>))
     }
 
     fn input_devices(&self) -> DeviceResult<Vec<Box<dyn Device>>> {
+        let profile = clock_profile(self.inner.id().name());
         self.inner
             .input_devices()
             .map(|devices| {
                 devices
-                    .map(|device| Box::new(CpalDevice::new(device)) as Box<dyn Device>)
+                    .map(|device| Box::new(CpalDevice::new(device, profile)) as Box<dyn Device>)
                     .collect()
             })
             .map_err(|e| map_error(&e, ErrorCtx::Control))
@@ -197,10 +204,11 @@ impl DeviceEnumerator for Host {
     fn default_input_device(&self) -> DeviceResult<Option<Box<dyn Device>>> {
         // Same shape as `default_output_device`: cpal `None` is the
         // port's `Ok(None)` ("no default"), not an error.
+        let profile = clock_profile(self.inner.id().name());
         Ok(self
             .inner
             .default_input_device()
-            .map(|device| Box::new(CpalDevice::new(device)) as Box<dyn Device>))
+            .map(|device| Box::new(CpalDevice::new(device, profile)) as Box<dyn Device>))
     }
 }
 

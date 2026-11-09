@@ -707,3 +707,18 @@ run = [
 [tasks.lint-l1-real-plugin]
 description = "Lint the CLAP/VST3 adapter crates at `-D warnings` with feature `host` (bridge, runner bins and E2E test targets) — outside the default `lint` task's feature set"
 run = "cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 --all-targets --features host -- -D warnings"
+
+# Real-device input lane (Issue #251): the `#[ignore]`-gated E2E tests
+# under `tests/real_input_e2e.rs` need real capture hardware + OS input
+# permission, so the lane enables the opt-in `real-device` feature and
+# selects `--ignored` explicitly. This task is the only intended entry
+# point — default `cargo test` never runs them (`#![cfg(feature)]` +
+# `#[ignore]`). Hardware-dependent manual lane: never in CI; results
+# are recorded in the Issue #251 implementation record.
+[tasks.test-audio-real-input]
+description = "Run the `#[ignore]`-gated real-device input E2E (`--features real-device --test real_input_e2e -- --ignored`) — requires audio hardware with an input device + capture permission; manual lane, never CI"
+run = "cargo test -p ruviform-audio-device --features real-device --test real_input_e2e -- --ignored --test-threads=1"
+
+[tasks.lint-audio-real-input]
+description = "Lint ruviform-audio-device at `-D warnings` with feature `real-device` (the E2E test target) — outside the default `lint` task's feature set"
+run = "cargo clippy -p ruviform-audio-device --all-targets --features real-device -- -D warnings"

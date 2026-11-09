@@ -1,6 +1,7 @@
-//! [`CpalOutputStream`] — wraps the backend stream privately and
-//! implements the port's [`OutputStream`] — plus the callback plumbing
-//! (`DataCallbackState`) that turns each backend data callback into a
+//! [`CpalOutputStream`]/[`CpalInputStream`] — wrap the backend streams
+//! privately and implement the port's [`OutputStream`]/[`InputStream`]
+//! — plus the callback plumbing (`DataCallbackState`/
+//! `InputCallbackState`) that turns each backend data callback into a
 //! planar view call into the engine.
 //!
 //! Callback plumbing contract (design "コールバック配管"):
@@ -9,28 +10,42 @@
 //!   `frames_capacity * channels`, where `frames_capacity` is
 //!   `min(effective_max, FRAMES_CAPACITY_HARD_CAP)`. The callback path
 //!   never grows it.
-//! - Each callback fires [`convert::write_interleaved`]: per-chunk
-//!   zero-fill → user callback → `copy_to_interleaved` — all bounded
-//!   and allocation-free.
+//! - Output fires [`convert::write_interleaved`] (planar →
+//!   interleaved); input fires [`convert::read_interleaved`]
+//!   (interleaved → planar read view) — all bounded and
+//!   allocation-free.
 //! - The data and error closures own their state outright — no
 //!   `Arc`/`Mutex` shared between them (a lock on the RT thread would
 //!   violate the RT contract).
 //! - Timestamps come from `StreamInstant::as_nanos()` (primary path)
 //!   with an epoch-delta fallback when a `u128` nanosecond value
 //!   overflows `i64`.
+//! - `clock_domain` is the host profile resolved at enumeration
+//!   (see [`crate::device::clock_profile`]): hosts whose cpal
+//!   `StreamInstant` clock is a shared monotonic clock report
+//!   [`ClockDomainId::MONOTONIC`]; hosts with per-device clocks
+//!   (ALSA) or unverifiable ones report [`ClockDomainId::UNKNOWN`],
+//!   which `same_clock_domain` correctly treats as *not* same-clock.
+//!   `frame_position` is always `None` — cpal exposes no frame
+//!   position — and `input_latency`/`output_latency` report
+//!   `Ok(None)` — cpal exposes no portable latency query.
 //!
 //! [`OutputStream`] methods are control-path (non-RT) operations.
 
 use cpal::traits::StreamTrait;
-use cpal::{OutputCallbackInfo as CpalOutputCallbackInfo, OutputStreamTimestamp, StreamInstant};
+use cpal::{
+    InputCallbackInfo as CpalInputCallbackInfo, InputStreamTimestamp,
+    OutputCallbackInfo as CpalOutputCallbackInfo, OutputStreamTimestamp, StreamInstant,
+};
 use ruviform_audio_core::AudioFormat;
 use ruviform_audio_core::device::{
-    BufferSize, DEVICE_CLOCK_TIMEBASE, DeviceError, DeviceResult, OutputCallbackInfo,
-    OutputDataCallback, OutputStream, OutputTimestamp,
+    BufferSize, DEVICE_CLOCK_TIMEBASE, DeviceError, DeviceResult, InputCallbackInfo,
+    InputDataCallback, InputStream, InputTimestamp, OutputCallbackInfo, OutputDataCallback,
+    OutputStream, OutputTimestamp, StreamLatency,
 };
-use ruviform_media_core::MediaTime;
+use ruviform_media_core::{ClockDomainId, MediaTime, MediaTimestamp, TimestampProvenance};
 
-use crate::convert::write_interleaved;
+use crate::convert::{read_interleaved, write_interleaved};
 use crate::error::{ErrorCtx, map_error};
 
 /// Hard cap on the scratch's per-pass frame capacity: a
@@ -47,14 +62,24 @@ pub(crate) struct CpalOutputStream {
     /// The stream-clock instant captured at open — the epoch anchor for
     /// the saturating timestamp fallback.
     epoch: StreamInstant,
+    /// The clock domain this stream's timestamps belong to — the host
+    /// profile resolved at enumeration; `same_clock_domain` decides
+    /// duplex eligibility from it.
+    clock_domain: ClockDomainId,
 }
 
 impl CpalOutputStream {
-    pub(crate) fn new(inner: cpal::Stream, format: AudioFormat, epoch: StreamInstant) -> Self {
+    pub(crate) fn new(
+        inner: cpal::Stream,
+        format: AudioFormat,
+        epoch: StreamInstant,
+        clock_domain: ClockDomainId,
+    ) -> Self {
         Self {
             inner,
             format,
             epoch,
+            clock_domain,
         }
     }
 }
@@ -86,6 +111,83 @@ impl OutputStream for CpalOutputStream {
     fn now(&self) -> DeviceResult<MediaTime> {
         instant_to_media_time(self.inner.now(), self.epoch)
             .ok_or(DeviceError::Backend("timestamp_overflow"))
+    }
+
+    fn clock_domain(&self) -> ClockDomainId {
+        self.clock_domain
+    }
+}
+
+/// An opened input stream — behind `Box<dyn InputStream>` on the port
+/// surface. Dropping stops delivery (backend-defined).
+pub(crate) struct CpalInputStream {
+    inner: cpal::Stream,
+    format: AudioFormat,
+    /// The stream-clock instant captured at open — the epoch anchor for
+    /// the saturating timestamp fallback.
+    epoch: StreamInstant,
+    /// The clock domain this stream's timestamps belong to — the host
+    /// profile resolved at enumeration; `same_clock_domain` decides
+    /// duplex eligibility from it.
+    clock_domain: ClockDomainId,
+}
+
+impl CpalInputStream {
+    pub(crate) fn new(
+        inner: cpal::Stream,
+        format: AudioFormat,
+        epoch: StreamInstant,
+        clock_domain: ClockDomainId,
+    ) -> Self {
+        Self {
+            inner,
+            format,
+            epoch,
+            clock_domain,
+        }
+    }
+}
+
+impl InputStream for CpalInputStream {
+    fn start(&self) -> DeviceResult<()> {
+        self.inner
+            .play()
+            .map_err(|e| map_error(&e, ErrorCtx::Control))
+    }
+
+    fn stop(&self) -> DeviceResult<()> {
+        self.inner
+            .pause()
+            .map_err(|e| map_error(&e, ErrorCtx::Control))
+    }
+
+    fn format(&self) -> AudioFormat {
+        self.format
+    }
+
+    fn buffer_size(&self) -> DeviceResult<BufferSize> {
+        self.inner
+            .buffer_size()
+            .map(|frames| BufferSize::Fixed(usize::try_from(frames).unwrap_or(usize::MAX)))
+            .map_err(|e| map_error(&e, ErrorCtx::Control))
+    }
+
+    fn now(&self) -> DeviceResult<MediaTime> {
+        instant_to_media_time(self.inner.now(), self.epoch)
+            .ok_or(DeviceError::Backend("timestamp_overflow"))
+    }
+
+    fn clock_domain(&self) -> ClockDomainId {
+        self.clock_domain
+    }
+
+    /// cpal exposes no portable input-latency query — `Ok(None)` is the
+    /// honest "unsupported" (never `Ok(0)`). The effective input
+    /// latency is observable per callback as
+    /// `timestamp.callback - timestamp.capture` when `capture` is
+    /// `Some`.
+    fn input_latency(&self) -> DeviceResult<Option<StreamLatency>> {
+        Ok(None)
     }
 }
 
@@ -192,6 +294,117 @@ fn map_output_timestamp(
     }
 }
 
+/// The input-direction counterpart of [`DataCallbackState`] — moved
+/// into and solely owned by the backend's input data callback closure.
+/// Nothing here allocates after construction.
+pub(crate) struct InputCallbackState {
+    data_callback: InputDataCallback,
+    /// Channel-major planar scratch, `frames_capacity * channels` —
+    /// pre-allocated at open, never grown on the callback path.
+    scratch: Vec<f32>,
+    channels: usize,
+    frames_capacity: usize,
+    /// Negotiated sample rate — needed to synthesize per-chunk instant
+    /// offsets when a callback delivers more frames than the scratch
+    /// capacity (`read_interleaved` chunk path).
+    sample_rate: u32,
+    /// First observed callback instant — the epoch anchor for the
+    /// saturating timestamp fallback, recorded lazily because the
+    /// stream clock is only observable once callbacks (or `now()`)
+    /// run.
+    epoch: Option<StreamInstant>,
+    /// The clock domain reported on every [`InputCallbackInfo`] — the
+    /// host profile resolved at enumeration.
+    clock_domain: ClockDomainId,
+    /// The provenance label applied to backend capture timestamps —
+    /// per host (WASAPI reports a carried `qpc_position` fact; other
+    /// audited hosts derive capture as callback-minus-latency).
+    capture_provenance: TimestampProvenance,
+}
+
+impl InputCallbackState {
+    pub(crate) fn new(
+        data_callback: InputDataCallback,
+        scratch: Vec<f32>,
+        channels: usize,
+        frames_capacity: usize,
+        sample_rate: u32,
+        clock_domain: ClockDomainId,
+        capture_provenance: TimestampProvenance,
+    ) -> Self {
+        Self {
+            data_callback,
+            scratch,
+            channels,
+            frames_capacity,
+            sample_rate,
+            epoch: None,
+            clock_domain,
+            capture_provenance,
+        }
+    }
+
+    /// One backend input data callback — RT-contract section.
+    ///
+    /// `data` is the backend's interleaved `f32` capture. The callback
+    /// instant seeds the epoch anchor on first fire.
+    pub(crate) fn handle(&mut self, data: &[f32], info: &CpalInputCallbackInfo) {
+        let timestamp = info.timestamp();
+        let epoch = *self.epoch.get_or_insert(timestamp.callback);
+        let info = InputCallbackInfo {
+            timestamp: map_input_timestamp(&timestamp, epoch, self.capture_provenance),
+            clock_domain: self.clock_domain,
+            // cpal exposes no frame position — `None` is the honest
+            // "unsupported", never a synthesized counter that would
+            // hide a real discontinuity.
+            frame_position: None,
+        };
+        read_interleaved(
+            &mut self.scratch,
+            self.frames_capacity,
+            self.channels,
+            data,
+            info,
+            self.sample_rate,
+            &mut self.data_callback,
+        );
+    }
+}
+
+/// Maps a backend input timestamp onto the port's [`InputTimestamp`].
+///
+/// `callback` is non-optional on the port: the epoch-delta fallback
+/// cannot overflow in practice (same clock, bounded uptime); a
+/// doubly-saturated value collapses to the clock origin rather than
+/// panicking on the RT path. `capture` is `Some` only when the
+/// backend instant converts — `None` is the honest "cannot represent",
+/// never a substituted `callback` value (which would shift placement
+/// by the buffering latency).
+///
+/// **RT contract:** RT-suitable — pure, allocation-free.
+fn map_input_timestamp(
+    timestamp: &InputStreamTimestamp,
+    epoch: StreamInstant,
+    capture_provenance: TimestampProvenance,
+) -> InputTimestamp {
+    InputTimestamp {
+        callback: instant_to_media_time(timestamp.callback, epoch)
+            .unwrap_or_else(|| MediaTime::new(0, DEVICE_CLOCK_TIMEBASE)),
+        // A `StreamInstant::ZERO` capture is a backend "not reported"
+        // sentinel in practice (no real capture predates the stream
+        // clock origin) — surface it as `None` rather than a
+        // clock-origin timestamp consumers could misplace.
+        capture: if timestamp.capture == StreamInstant::ZERO {
+            None
+        } else {
+            instant_to_media_time(timestamp.capture, epoch).map(|time| MediaTimestamp {
+                time,
+                provenance: capture_provenance,
+            })
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,5 +505,137 @@ mod tests {
             );
         });
         assert!(data.iter().all(|s| *s == 0.5));
+    }
+
+    fn input_instant(secs: u64, nanos: u32) -> StreamInstant {
+        StreamInstant::new(secs, nanos)
+    }
+
+    fn cpal_input_info(callback: StreamInstant, capture: StreamInstant) -> CpalInputCallbackInfo {
+        CpalInputCallbackInfo::new(InputStreamTimestamp { callback, capture })
+    }
+
+    #[test]
+    fn map_input_timestamp_carries_callback_and_capture() {
+        let ts = InputStreamTimestamp {
+            callback: input_instant(10, 0),
+            capture: input_instant(9, 500_000_000),
+        };
+        let mapped = map_input_timestamp(&ts, StreamInstant::ZERO, TimestampProvenance::Derived);
+        assert_eq!(mapped.callback.value(), 10_000_000_000);
+        let capture = mapped.capture.unwrap();
+        assert_eq!(capture.time.value(), 9_500_000_000);
+        assert_eq!(capture.time.base(), DEVICE_CLOCK_TIMEBASE);
+        assert_eq!(capture.provenance, TimestampProvenance::Derived);
+    }
+
+    #[test]
+    fn map_input_timestamp_zero_capture_is_unreported() {
+        // `StreamInstant::ZERO` is the backend "not reported" sentinel —
+        // surfaced as `None`, never a clock-origin timestamp.
+        let ts = InputStreamTimestamp {
+            callback: input_instant(10, 0),
+            capture: StreamInstant::ZERO,
+        };
+        let mapped = map_input_timestamp(&ts, StreamInstant::ZERO, TimestampProvenance::Carried);
+        assert_eq!(mapped.callback.value(), 10_000_000_000);
+        assert!(mapped.capture.is_none());
+    }
+
+    #[test]
+    fn map_input_timestamp_capture_overflow_is_none() {
+        // An unrepresentable capture instant yields `None` — the
+        // honest "cannot represent", never a substituted callback.
+        let ts = InputStreamTimestamp {
+            callback: input_instant(10, 0),
+            capture: input_instant(u64::MAX, 999_999_999),
+        };
+        let mapped = map_input_timestamp(&ts, StreamInstant::ZERO, TimestampProvenance::Derived);
+        assert_eq!(mapped.callback.value(), 10_000_000_000);
+        assert!(mapped.capture.is_none());
+    }
+
+    /// RT-lane check: the whole input callback path — interleaved→
+    /// planar unpack + view construction + a representative user
+    /// callback + timestamp/domain mapping — must not allocate.
+    ///
+    /// `assert_no_alloc` arms a thread-local forbid counter around the
+    /// closure; any (de)allocation inside aborts the test binary —
+    /// which *is* the failure signal. Selected by `mise run test-rt`
+    /// via the `rt_` name prefix.
+    // Exact comparisons: the input carried exactly `1.0`/`2.0`.
+    #[allow(clippy::float_cmp)]
+    #[test]
+    fn rt_input_callback_path_allocates_nothing() {
+        // Setup (allocating, outside the assertion).
+        let mut state = InputCallbackState::new(
+            Box::new(
+                |input: ruviform_audio_core::AudioBufferView<'_, f32>, info: InputCallbackInfo| {
+                    assert_eq!(input.channels(), 2);
+                    assert_eq!(info.clock_domain, ClockDomainId::MONOTONIC);
+                    assert_eq!(info.frame_position, None);
+                    assert!(info.timestamp.capture.is_some());
+                    // Read-only access — values verified after.
+                    let _ = input.channel(0).unwrap()[0];
+                },
+            ),
+            vec![0.0_f32; 8], // capacity 4 × 2ch
+            2,
+            4,
+            48_000,
+            ClockDomainId::MONOTONIC,
+            TimestampProvenance::Derived,
+        );
+        // 2 frames interleaved: (1.0, 2.0), (1.0, 2.0).
+        let data = [1.0_f32, 2.0, 1.0, 2.0];
+        let info = cpal_input_info(input_instant(42, 0), input_instant(41, 0));
+
+        assert_no_alloc::assert_no_alloc(|| {
+            state.handle(&data, &info);
+        });
+    }
+
+    #[test]
+    fn input_callback_state_delivers_planar_view_and_info() {
+        // Non-RT companion to the rt_ test: verify the observable
+        // callback payload end-to-end through `handle`.
+        let collected = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured = std::sync::Arc::clone(&collected);
+        let mut state = InputCallbackState::new(
+            Box::new(
+                move |input: ruviform_audio_core::AudioBufferView<'_, f32>,
+                      info: InputCallbackInfo| {
+                    captured.lock().unwrap().push((
+                        input.data().to_vec(),
+                        input.channels(),
+                        input.frames(),
+                        info,
+                    ));
+                },
+            ),
+            vec![0.0_f32; 8],
+            2,
+            4,
+            48_000,
+            ClockDomainId::UNKNOWN,
+            TimestampProvenance::Derived,
+        );
+        // 3 frames interleaved + tail sample.
+        let data = [1.0_f32, -1.0, 2.0, -2.0, 3.0, -3.0, 9.0];
+        let info = cpal_input_info(input_instant(10, 0), input_instant(9, 0));
+        state.handle(&data, &info);
+
+        let collected = collected.lock().unwrap();
+        assert_eq!(collected.len(), 1);
+        let (slab, channels, frames, info) = &collected[0];
+        assert_eq!(*channels, 2);
+        assert_eq!(*frames, 3);
+        assert_eq!(slab, &[1.0, 2.0, 3.0, -1.0, -2.0, -3.0]);
+        // Epoch anchored at the first callback instant: callback=10s,
+        // capture=9s map verbatim.
+        assert_eq!(info.timestamp.callback.value(), 10_000_000_000);
+        assert_eq!(info.timestamp.capture.unwrap().time.value(), 9_000_000_000);
+        assert_eq!(info.clock_domain, ClockDomainId::UNKNOWN);
+        assert_eq!(info.frame_position, None);
     }
 }
