@@ -1,0 +1,33 @@
+{"check":"bind_native_slot","result":"pass","detail":"slot_index=0 error=Ok(())"}
+{"check":"attach_parented","result":"pass","detail":"editor_hwnd=0x4ef0150 container=0x4541072"}
+{"check":"attach_visible","result":"pass","detail":"editor_rect=Some((461, 230, 553, 400))"}
+{"check":"msg_hook","result":"pass","detail":""}
+{"check":"clip_overhang_region","result":"pass","detail":"slot_rect=(1.0,38.0,398.0,298.0) viewport_logical=(380.0,300.0) expected_region=(0, 0, 379, 262) actual_region=Some((0, 0, 379, 262)) scale=1"}
+{"check":"clip_overhang_editor_alive","result":"pass","detail":"editor_visible=true parent_ok=true"}
+{"check":"clip_cleared","result":"pass","detail":"region=None editor_visible=true slot_rect=Some((1.0, 38.0, 998.0, 681.0))"}
+{"check":"clip_direct_region","result":"pass","detail":"expected_region=(0, 0, 499, 681) actual_region=Some((0, 0, 499, 681)) scale=1"}
+{"check":"clip_direct_hit_test","result":"pass","detail":"topmost_inside=0x3440198 topmost_outside=0x18707d4 child=0x4ef0150 gpui=0x18707d4 (dcomp_topmost covers child pixels)"}
+{"check":"clip_direct_cleared","result":"pass","detail":"region=None"}
+{"check":"focus_container","result":"pass","detail":"focus=Ok(()) focus_hwnd=0x4541072 container=0x4541072"}
+{"check":"key_to_container_not_plugin","result":"pass","detail":"container_got=true plugin_got=false"}
+{"check":"click_focuses_plugin","result":"pass","detail":"path=click focus_hwnd=0x3440198 plugin_tree=2"}
+{"check":"key_reaches_plugin","result":"pass","detail":"container_got=false plugin_got=true"}
+{"check":"key_boundary_return","result":"pass","detail":"container_got=true plugin_got=false focus_hwnd=0x4541072"}
+{"check":"redock_ws_attach","result":"pass","detail":"attach=Ok(()) owner=Some(WindowId(1))"}
+{"check":"redock_scratch_declared","result":"pass","detail":"index=1"}
+{"check":"redock_begin_move","result":"pass","detail":"begin=Ok(MoveToken(1)) transferring=true"}
+{"check":"redock_busy_refuses_lease","result":"pass","detail":"mark_busy=Ok(()) lease=Err(SlotBusy)"}
+{"check":"redock_commit_move","result":"pass","detail":"commit=Ok(MoveReport { view: ViewInstanceId(1), from: Some(WindowId(1)), to: WindowId(1) })"}
+{"check":"redock_busy_cleared_lease","result":"pass","detail":"clear_busy=Ok(()) lease=true"}
+{"check":"redock_move_events","result":"pass","detail":"events=[TreeChanged { window: WindowId(1) }, MovePrepared { view: ViewInstanceId(1) }, TreeChanged { window: WindowId(1) }, TreeChanged { window: WindowId(1) }, MoveCommitted { view: ViewInstanceId(1), from: Some(WindowId(1)), to: WindowId(1) }]"}
+{"check":"redock_detach","result":"pass","detail":"detach=Ok(()) is_detached=true"}
+{"check":"redock_update_view_detach","result":"pass","detail":"Ok(())"}
+{"check":"redock_detach_surface_survives","result":"pass","detail":"slot_visibility=Some(Hidden) editor_visible=false child_alive=true parent_ok=true"}
+{"check":"redock_reattach","result":"pass","detail":"attach=Ok(()) owner=Some(WindowId(1))"}
+{"check":"redock_update_view_attach","result":"pass","detail":"Ok(())"}
+{"check":"redock_reattach_same_surface","result":"pass","detail":"slot_visibility=Some(Visible) editor_visible=true editor_hwnd=0x4ef0150 parent_ok=true"}
+{"check":"close_session","result":"pass","detail":"state=Some(Closed) editor_alive=false"}
+{"check":"unbind_native_slot","result":"pass","detail":"error=Ok(())"}
+{"check":"release_lease","result":"pass","detail":"container_alive=false"}
+{"check":"release_slot","result":"pass","detail":""}
+{"check":"slot_event_order","result":"pass","detail":"lease_revoked=Some(14) destroyed=Some(15)"}

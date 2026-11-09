@@ -303,6 +303,24 @@ fn logical_rect_of(bounds: Bounds<Pixels>) -> LogicalRect {
     }
 }
 
+/// The clip the slot port must enforce this frame: the part of the
+/// element's laid-out `bounds` still inside the ancestor `mask`,
+/// or `None` when the mask does not narrow the element (the native
+/// child is already confined by its container and the OS window
+/// clip). A fully-masked element yields an empty clip so the child
+/// can never show outside its ancestor region; `Bounds::intersect`
+/// reports negative extents for disjoint inputs, clamped to zero.
+fn slot_clip(bounds: Bounds<Pixels>, mask: Bounds<Pixels>) -> Option<LogicalRect> {
+    let mut visible = bounds.intersect(&mask);
+    if f32::from(visible.size.width) < 0.0 {
+        visible.size.width = px(0.0);
+    }
+    if f32::from(visible.size.height) < 0.0 {
+        visible.size.height = px(0.0);
+    }
+    (visible != bounds).then(|| logical_rect_of(visible))
+}
+
 /// Whether a port error is permanent for this slot — permanent
 /// failures stop retrying that aspect (the ledger/adapter already
 /// reported them; hammering every frame adds nothing). `Backend`
@@ -344,9 +362,10 @@ fn push_slot_op(
 }
 
 /// Painted-frame projection for one bound slot: the element's
-/// laid-out bounds → `set_geometry`, the ancestor clip mask →
-/// `set_clip` (`None` when the mask is the whole viewport — the
-/// layout applied no real clip). Visibility is fail-closed: the
+/// laid-out bounds → `set_geometry`, the ancestor clip mask ∩
+/// element bounds → `set_clip` (`None` when no ancestor narrows the
+/// element — the layout applied no real clip). Visibility is
+/// fail-closed: the
 /// native child is shown only while the port state actually holds
 /// the geometry and clip this frame requests — a refused borrow, a
 /// transient port error, or a permanent refusal on a required op
@@ -367,8 +386,7 @@ fn project_slot_frame(
         rect: logical_rect_of(bounds),
         scale_factor: f64::from(window.scale_factor()),
     };
-    let mask = window.content_mask().bounds;
-    let clip = (mask != window.bounds()).then(|| logical_rect_of(mask));
+    let clip = slot_clip(bounds, window.content_mask().bounds);
     if proj.applied.get(&slot).and_then(|a| a.geometry) != Some(geometry) {
         push_slot_op(
             &mut proj,
@@ -2135,6 +2153,44 @@ mod tests {
             ..AppliedSlot::default()
         };
         assert!(!applied.holds(geo(0.0), None));
+    }
+
+    /// `slot_clip` truth table: `None` exactly when the ancestor mask
+    /// does not narrow the element; the visible intersection
+    /// otherwise — including an empty clip for a fully-masked element.
+    #[test]
+    fn slot_clip_reports_only_real_restrictions() {
+        let b = |x: f32, y: f32, w: f32, h: f32| Bounds {
+            origin: point(px(x), px(y)),
+            size: size(px(w), px(h)),
+        };
+        let lr = |x: f64, y: f64, w: f64, h: f64| LogicalRect {
+            x,
+            y,
+            width: w,
+            height: h,
+        };
+        let viewport = b(0.0, 0.0, 1000.0, 720.0);
+
+        // Element fully inside the viewport mask → no clip needed.
+        assert_eq!(slot_clip(b(10.0, 40.0, 400.0, 300.0), viewport), None);
+
+        // Element overhanging the viewport → clip to the visible part.
+        assert_eq!(
+            slot_clip(b(900.0, 0.0, 400.0, 300.0), viewport),
+            Some(lr(900.0, 0.0, 100.0, 300.0))
+        );
+
+        // An ancestor mask smaller than the element (e.g. a future
+        // clipping container) → clip to mask ∩ element.
+        assert_eq!(
+            slot_clip(b(0.0, 0.0, 400.0, 300.0), b(100.0, 50.0, 200.0, 100.0)),
+            Some(lr(100.0, 50.0, 200.0, 100.0))
+        );
+
+        // Element fully outside the mask → empty clip (never visible).
+        let clip = slot_clip(b(2000.0, 2000.0, 100.0, 100.0), viewport).expect("clip");
+        assert_eq!((clip.width, clip.height), (0.0, 0.0));
     }
 
     #[test]

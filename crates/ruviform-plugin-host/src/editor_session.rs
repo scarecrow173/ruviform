@@ -24,6 +24,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::time::{Duration, Instant};
 
 use ruviform_plugin_core::{
     GuiParentToken, HostError, ParentSlotLease, PluginEditorSessionId, PluginHandle,
@@ -139,6 +140,10 @@ pub enum SessionFailCause {
     Timeout,
     /// The host/instance/process is gone (crash, destroy, child exit).
     HostLost,
+    /// The graphics device/driver was lost (device removed, driver
+    /// reset, compositor failure) — the editor's pixels may be gone
+    /// while the DSP instance survives.
+    GraphicsLost,
     /// The parent window/slot vanished under the session.
     WindowLost,
     /// A plugin hook declined.
@@ -238,6 +243,15 @@ pub enum EditorSessionEvent {
         /// The attach mode.
         mode: AttachMode,
     },
+    /// The editor attached via an explicit degrade to `mode` — the
+    /// requested mode was refused and the session fell back (e.g. a
+    /// floating window). A degrade is *not* a requested-mode attach
+    /// and never counts as a Native Dock PASS; it is emitted instead
+    /// of `Attached`/`Recovered`/`Reattached`.
+    Degraded {
+        /// The mode the session degraded to.
+        mode: AttachMode,
+    },
     /// The session failed.
     Failed {
         /// Why it failed.
@@ -272,6 +286,8 @@ pub enum EditorOpError {
     Timeout,
     /// The host/instance is gone.
     HostLost,
+    /// The graphics device/driver was lost.
+    GraphicsLost,
     /// A plugin hook declined.
     Plugin,
     /// The session/editor is already closed.
@@ -320,6 +336,7 @@ impl fmt::Display for EditorOpError {
             Self::LeaseRejected => "parent lease rejected",
             Self::Timeout => "operation deadline elapsed",
             Self::HostLost => "host or instance is gone",
+            Self::GraphicsLost => "graphics device or driver lost",
             Self::Plugin => "plugin hook declined",
             Self::Closed => "editor session is closed",
             Self::InvalidState => "operation illegal for adapter state",
@@ -348,6 +365,112 @@ impl fmt::Display for EditorSessionError {
 
 impl std::error::Error for EditorSessionError {}
 
+/// Monotonic clock port for editor-session request deadlines.
+///
+/// Values are only meaningful as differences — the epoch is the
+/// implementation's own. This is a UI-thread (non-RT) port: deadline
+/// evaluation happens when the driver calls
+/// [`PluginEditorSession::tick`] or [`PluginEditorSessions::tick_all`],
+/// never from an RT path.
+///
+/// **RT contract:** non-RT only — UI-thread only.
+pub trait SessionClock {
+    /// Current monotonic time in the clock's own domain.
+    fn now(&self) -> Duration;
+}
+
+/// Default request deadline for in-flight editor-session requests.
+///
+/// Armed on every session unless
+/// [`PluginEditorSession::set_deadline_policy`] replaces or clears it.
+/// Enforcement still requires the driver to call
+/// [`PluginEditorSession::tick`] / [`PluginEditorSessions::tick_all`] —
+/// a session whose driver never ticks leaves requests unmonitored
+/// (the pre-hardening behavior).
+///
+/// **RT contract:** non-RT only — UI-thread only.
+pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// `SessionClock` over `std::time::Instant` — monotonic elapsed time
+/// since construction.
+///
+/// **RT contract:** non-RT only — UI-thread only.
+#[derive(Debug)]
+pub struct MonotonicSessionClock {
+    start: Instant,
+}
+
+impl MonotonicSessionClock {
+    /// Creates a clock reading `Duration::ZERO` at construction.
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            start: Instant::now(),
+        }
+    }
+}
+
+impl Default for MonotonicSessionClock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SessionClock for MonotonicSessionClock {
+    fn now(&self) -> Duration {
+        self.start.elapsed()
+    }
+}
+
+/// Bounded-timeout policy for in-flight editor-session requests.
+///
+/// Installed via [`PluginEditorSession::set_deadline_policy`]; while
+/// installed, every request minted by `begin_*`/`complete_detach`
+/// records an absolute deadline (`clock.now() + timeout`) that
+/// [`PluginEditorSession::tick`] evaluates. A `timeout` of
+/// [`Duration::ZERO`] expires the request on the next tick — a valid
+/// fail-fast policy.
+///
+/// **RT contract:** non-RT only — UI-thread only.
+pub struct SessionDeadlinePolicy {
+    /// Maximum time an in-flight request may remain incomplete.
+    pub timeout: Duration,
+    /// Monotonic clock the deadline is evaluated against.
+    pub clock: Box<dyn SessionClock>,
+}
+
+impl fmt::Debug for SessionDeadlinePolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SessionDeadlinePolicy")
+            .field("timeout", &self.timeout)
+            .finish_non_exhaustive()
+    }
+}
+
+/// How an open request concluded — a clean attach or an explicit
+/// degrade to a fallback mode.
+///
+/// **RT contract:** non-RT only — UI-thread only.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum OpenOutcome {
+    /// Attached in the requested mode — a clean attach.
+    Attached(EditorCapabilities),
+    /// The requested mode was refused ([`EditorOpError::Unsupported`])
+    /// and the session explicitly degraded to `mode`. This is *not* a
+    /// requested-mode attach and never counts as a Native Dock PASS —
+    /// the session emits [`EditorSessionEvent::Degraded`] instead of
+    /// `Attached`/`Recovered`.
+    Degraded {
+        /// The mode the session degraded to.
+        mode: AttachMode,
+        /// Capabilities reported by the fallback attach.
+        capabilities: EditorCapabilities,
+    },
+}
+
 /// Maps an adapter [`EditorOpError`] to the session-level
 /// [`SessionFailCause`].
 fn fail_cause(error: EditorOpError) -> SessionFailCause {
@@ -356,6 +479,7 @@ fn fail_cause(error: EditorOpError) -> SessionFailCause {
         EditorOpError::LeaseRejected => SessionFailCause::LeaseInvalid,
         EditorOpError::Timeout => SessionFailCause::Timeout,
         EditorOpError::HostLost => SessionFailCause::HostLost,
+        EditorOpError::GraphicsLost => SessionFailCause::GraphicsLost,
         EditorOpError::Plugin => SessionFailCause::PluginFailed,
         EditorOpError::Io => SessionFailCause::Transport,
         EditorOpError::Closed
@@ -437,6 +561,22 @@ pub trait EditorSessionOps {
     ) -> Result<(), EditorOpError>;
 }
 
+/// Which terminal event an in-flight `Creating`/`Recovering` attach
+/// emits on success — the session's pending-attach marker. The
+/// variants are mutually exclusive by construction: a `Creating`
+/// reached via `complete_detach` re-attaches, while
+/// `open_or_degrade`/`begin_degrade` mark an explicit degrade.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+enum PendingAttach {
+    /// Plain attach — `Attached`/`Recovered`.
+    #[default]
+    None,
+    /// `Creating` reached via `complete_detach` — `Reattached`.
+    Reattach,
+    /// Explicit degrade — `Degraded`, never a requested-mode attach.
+    Degrade,
+}
+
 /// One plugin editor session: a pure state machine over
 /// [`EditorSessionOps`].
 ///
@@ -464,9 +604,11 @@ pub struct PluginEditorSession {
     request: u64,
     /// The mode an in-flight `Creating`/`Recovering` should land in.
     pending_mode: AttachMode,
-    /// A `Creating` entered via detach-for-reattach — its
-    /// `complete_attach` emits `Reattached`, not `Attached`.
-    reattach_pending: bool,
+    /// The terminal event an in-flight `Creating`/`Recovering` attach
+    /// emits on success — [`PendingAttach::Reattach`] for a
+    /// detach-for-reattach `Creating`, [`PendingAttach::Degrade`] for
+    /// an explicit degrade (`open_or_degrade`/`begin_degrade`).
+    pending_attach: PendingAttach,
     /// Whether an adapter-side editor may still exist: set by a
     /// successful attach, cleared on conclusion. A refused fresh open
     /// never produced an editor, so its `Failed` session closes without
@@ -477,6 +619,13 @@ pub struct PluginEditorSession {
     /// that was merely *born* `Closed` and has not opened yet. Only a
     /// concluded session frees its instance binding.
     concluded: bool,
+    /// Wall-clock deadline policy for in-flight requests — `None`
+    /// leaves requests unbounded (the pre-hardening behavior).
+    deadline_policy: Option<SessionDeadlinePolicy>,
+    /// Absolute deadline of the current in-flight request in the
+    /// policy clock's domain — meaningful only while
+    /// `in_flight()`; re-armed by every `next_request`.
+    deadline_at: Option<Duration>,
     events: Vec<EditorSessionEvent>,
 }
 
@@ -497,9 +646,14 @@ impl PluginEditorSession {
             state: EditorSessionState::Closed,
             request: 0,
             pending_mode: AttachMode::Docked,
-            reattach_pending: false,
+            pending_attach: PendingAttach::None,
             editor_live: false,
             concluded: false,
+            deadline_policy: Some(SessionDeadlinePolicy {
+                timeout: DEFAULT_REQUEST_TIMEOUT,
+                clock: Box::new(MonotonicSessionClock::new()),
+            }),
+            deadline_at: None,
             events: Vec::new(),
         }
     }
@@ -548,7 +702,38 @@ impl PluginEditorSession {
 
     fn next_request(&mut self) -> u64 {
         self.request = self.request.wrapping_add(1);
+        // Every caller enters an in-flight state right after — arm
+        // unconditionally (the pre-request state may not be
+        // in-flight yet, e.g. `Closed → Creating`).
+        self.deadline_at = self
+            .deadline_policy
+            .as_ref()
+            .map(|policy| policy.clock.now().saturating_add(policy.timeout));
         self.request
+    }
+
+    /// Whether a request is in flight — the states a deadline covers.
+    fn in_flight(&self) -> bool {
+        matches!(
+            self.state,
+            EditorSessionState::Creating { .. }
+                | EditorSessionState::Detaching { .. }
+                | EditorSessionState::Closing { .. }
+                | EditorSessionState::Recovering { .. }
+        )
+    }
+
+    /// (Re)arms `deadline_at` for the current in-flight request from
+    /// the installed policy — `None` clears it when no policy is
+    /// installed or no request is in flight.
+    fn arm_deadline(&mut self) {
+        self.deadline_at = if self.in_flight() {
+            self.deadline_policy
+                .as_ref()
+                .map(|policy| policy.clock.now().saturating_add(policy.timeout))
+        } else {
+            None
+        };
     }
 
     fn push(&mut self, event: EditorSessionEvent) {
@@ -556,7 +741,7 @@ impl PluginEditorSession {
     }
 
     fn mark_failed(&mut self, cause: SessionFailCause) {
-        self.reattach_pending = false;
+        self.pending_attach = PendingAttach::None;
         self.state = EditorSessionState::Failed { cause };
         self.push(EditorSessionEvent::Failed { cause });
     }
@@ -638,6 +823,27 @@ impl PluginEditorSession {
         Ok(request)
     }
 
+    /// `Failed → Recovering{request}` marked as an explicit degrade
+    /// to `mode`; returns the request id.
+    ///
+    /// Same transition as [`Self::begin_recover`], but a successful
+    /// [`Self::complete_attach`] lands `Attached{mode}` emitting
+    /// [`EditorSessionEvent::Degraded`] instead of `Recovered` — the
+    /// async counterpart of [`Self::open_or_degrade`] for drivers
+    /// that drive `ops.open` themselves. Use when the preferred mode
+    /// was refused and the session falls back (e.g. Docked →
+    /// Floating); a degrade is never a Native Dock PASS.
+    ///
+    /// # Errors
+    /// [`EditorSessionError::InvalidState`] unless `Failed`.
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    pub fn begin_degrade(&mut self, mode: AttachMode) -> Result<u64, EditorSessionError> {
+        let request = self.begin_recover(mode)?;
+        self.pending_attach = PendingAttach::Degrade;
+        Ok(request)
+    }
+
     /// Completes an in-flight `Creating`/`Recovering` attach request.
     ///
     /// `Ok` lands the session `Attached{pending_mode}` (emitting
@@ -664,20 +870,36 @@ impl PluginEditorSession {
             (EditorSessionState::Creating { .. }, Ok(())) => {
                 self.state = EditorSessionState::Attached { mode };
                 self.editor_live = true;
-                // A `Creating` reached through `complete_detach` is a
-                // re-attach — same event vocabulary as the sync path.
-                if self.reattach_pending {
-                    self.reattach_pending = false;
-                    self.push(EditorSessionEvent::Reattached { mode });
-                } else {
-                    self.push(EditorSessionEvent::Attached { mode });
+                match self.pending_attach {
+                    // An explicit degrade emits `Degraded` — never a
+                    // requested-mode `Attached`.
+                    PendingAttach::Degrade => {
+                        self.pending_attach = PendingAttach::None;
+                        self.push(EditorSessionEvent::Degraded { mode });
+                    }
+                    // A `Creating` reached through `complete_detach`
+                    // is a re-attach — same event vocabulary as the
+                    // sync path.
+                    PendingAttach::Reattach => {
+                        self.pending_attach = PendingAttach::None;
+                        self.push(EditorSessionEvent::Reattached { mode });
+                    }
+                    PendingAttach::None => {
+                        self.push(EditorSessionEvent::Attached { mode });
+                    }
                 }
                 Ok(())
             }
             (EditorSessionState::Recovering { .. }, Ok(())) => {
                 self.state = EditorSessionState::Attached { mode };
                 self.editor_live = true;
-                self.push(EditorSessionEvent::Recovered { mode });
+                let degraded = self.pending_attach == PendingAttach::Degrade;
+                self.pending_attach = PendingAttach::None;
+                if degraded {
+                    self.push(EditorSessionEvent::Degraded { mode });
+                } else {
+                    self.push(EditorSessionEvent::Recovered { mode });
+                }
                 Ok(())
             }
             (
@@ -731,7 +953,7 @@ impl PluginEditorSession {
             }
             (EditorSessionState::Detaching { .. }, Ok(())) => {
                 self.push(EditorSessionEvent::Detached);
-                self.reattach_pending = true;
+                self.pending_attach = PendingAttach::Reattach;
                 let request = self.next_request();
                 self.state = EditorSessionState::Creating { request };
                 Ok(request)
@@ -765,6 +987,86 @@ impl PluginEditorSession {
         self.editor_live = false;
         self.state = EditorSessionState::Closed;
         self.push(EditorSessionEvent::Terminated { cause });
+    }
+
+    // ---- deadline monitoring (non-RT, driver-driven) ----
+
+    /// Installs (or replaces) the wall-clock deadline policy for
+    /// in-flight requests; `None` disarms — requests then stay in
+    /// flight until their driver completes them.
+    ///
+    /// While a policy is installed, every request minted by
+    /// `begin_*`/`complete_detach` records an absolute deadline in
+    /// the policy clock's domain; [`Self::tick`] expires overdue
+    /// requests as [`EditorOpError::Timeout`] → `Failed{Timeout}`.
+    /// Re-installing while a request is in flight re-arms its
+    /// deadline against the new clock/timeout.
+    ///
+    /// # Errors — none (infallible).
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    pub fn set_deadline_policy(&mut self, policy: Option<SessionDeadlinePolicy>) {
+        self.deadline_policy = policy;
+        self.arm_deadline();
+    }
+
+    /// The armed deadline of the current in-flight request, in the
+    /// policy clock's domain — `None` when no policy is installed or
+    /// no request is in flight. A driver uses this to schedule its
+    /// next [`Self::tick`].
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    #[must_use]
+    pub fn request_deadline(&self) -> Option<Duration> {
+        if self.in_flight() {
+            self.deadline_at
+        } else {
+            None
+        }
+    }
+
+    /// Evaluates the deadline policy once: an in-flight request past
+    /// its deadline completes as [`EditorOpError::Timeout`] — the
+    /// session lands `Failed{Timeout}` and emits `Failed{Timeout}`.
+    /// Returns `true` when a request timed out.
+    ///
+    /// Call periodically from the GUI timer; a request that is never
+    /// ticked stays in flight (monitoring is the driver's job). A
+    /// late `complete_*` after a timeout is `StaleRequest`, so
+    /// terminal events never duplicate.
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    pub fn tick(&mut self) -> bool {
+        let expired = self.deadline_policy.as_ref().is_some_and(|policy| {
+            self.in_flight()
+                && self
+                    .deadline_at
+                    .is_some_and(|deadline| policy.clock.now() >= deadline)
+        });
+        if !expired {
+            return false;
+        }
+        match self.state {
+            EditorSessionState::Creating { request }
+            | EditorSessionState::Recovering { request } => {
+                // `complete_attach` maps `Timeout` → `Failed{Timeout}`.
+                let _ = self.complete_attach(request, Err(EditorOpError::Timeout));
+            }
+            EditorSessionState::Detaching { request } => {
+                // `complete_detach` maps `Timeout` → `Failed{Timeout}`.
+                let _ = self.complete_detach(request, Err(EditorOpError::Timeout));
+            }
+            EditorSessionState::Closing { .. } => {
+                // `complete_close` carries no error channel — a
+                // timed-out close fails the session instead;
+                // `editor_live` stays set because the adapter may
+                // still have closed it, so a later `close` can
+                // converge via the adapter path.
+                self.mark_failed(SessionFailCause::Timeout);
+            }
+            _ => {}
+        }
+        true
     }
 
     // ---- synchronous convenience (ops-driven) ----
@@ -929,7 +1231,7 @@ impl PluginEditorSession {
                 // The caller's in-flight detach completes inside the
                 // atomic `ops.reattach` — mirror its events.
                 self.push(EditorSessionEvent::Detached);
-                self.reattach_pending = true;
+                self.pending_attach = PendingAttach::Reattach;
                 (self.pending_mode, None)
             }
             _ => return Err(EditorSessionError::InvalidState),
@@ -939,7 +1241,7 @@ impl PluginEditorSession {
                 if let Some(request) = completing {
                     self.complete_attach(request, Ok(()))?;
                 } else {
-                    self.reattach_pending = false;
+                    self.pending_attach = PendingAttach::None;
                     self.state = EditorSessionState::Attached { mode };
                     self.push(EditorSessionEvent::Reattached { mode });
                 }
@@ -979,6 +1281,82 @@ impl PluginEditorSession {
             Ok(capabilities) => {
                 self.complete_attach(request, Ok(()))?;
                 Ok(capabilities)
+            }
+            Err(error) => {
+                let _ = self.complete_attach(request, Err(error));
+                Err(EditorSessionError::Ops(error))
+            }
+        }
+    }
+
+    /// Open with an explicit degrade fallback: tries `preferred`,
+    /// and only when the adapter refuses it with
+    /// [`EditorOpError::Unsupported`] retries **once** with
+    /// `fallback` under the same request id.
+    ///
+    /// A fallback attach lands `Attached{fallback}` and emits
+    /// [`EditorSessionEvent::Degraded`] — *not* `Attached` — and the
+    /// result is [`OpenOutcome::Degraded`], so a degrade is never
+    /// mistaken for a requested-mode (Native Dock) PASS. Any other
+    /// adapter error fails without retry; a failed fallback lands
+    /// `Failed` and its error is returned.
+    ///
+    /// `preferred == fallback` degenerates to a plain open (no retry
+    /// is possible). Note the contract assumption shared with the
+    /// refused-open discipline: an `Unsupported` open produced no
+    /// adapter editor, so the retry cannot orphan one.
+    ///
+    /// # Errors
+    /// [`EditorSessionError::InvalidState`] unless `Closed`;
+    /// [`EditorSessionError::InvalidValue`] on a non-finite/negative
+    /// size; [`EditorSessionError::Ops`] on adapter refusal.
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    pub fn open_or_degrade<O: EditorSessionOps>(
+        &mut self,
+        ops: &mut O,
+        lease: &ParentSlotLease,
+        size: EditorSize,
+        preferred: AttachMode,
+        fallback: AttachMode,
+    ) -> Result<OpenOutcome, EditorSessionError> {
+        if preferred == fallback {
+            return self
+                .open(ops, lease, size, preferred)
+                .map(OpenOutcome::Attached);
+        }
+        if !size.width.is_finite()
+            || !size.height.is_finite()
+            || size.width < 0.0
+            || size.height < 0.0
+        {
+            return Err(EditorSessionError::InvalidValue);
+        }
+        let request = self.begin_open(preferred)?;
+        match ops.open(self.id, lease, size, preferred) {
+            Ok(capabilities) => {
+                self.complete_attach(request, Ok(()))?;
+                Ok(OpenOutcome::Attached(capabilities))
+            }
+            Err(EditorOpError::Unsupported) => {
+                // The preferred mode was refused — retry once under
+                // the fallback, marked so the landing emits
+                // `Degraded`, never `Attached`.
+                self.pending_mode = fallback;
+                self.pending_attach = PendingAttach::Degrade;
+                match ops.open(self.id, lease, size, fallback) {
+                    Ok(capabilities) => {
+                        self.complete_attach(request, Ok(()))?;
+                        Ok(OpenOutcome::Degraded {
+                            mode: fallback,
+                            capabilities,
+                        })
+                    }
+                    Err(error) => {
+                        let _ = self.complete_attach(request, Err(error));
+                        Err(EditorSessionError::Ops(error))
+                    }
+                }
             }
             Err(error) => {
                 let _ = self.complete_attach(request, Err(error));
@@ -1135,6 +1513,20 @@ impl PluginEditorSessions {
             }
             self.by_instance.remove(&instance);
         }
+    }
+
+    /// Evaluates every session's deadline policy once — sessions
+    /// whose in-flight request passed its deadline converge to
+    /// `Failed{Timeout}`. Returns the number of requests that timed
+    /// out. Drivers call this from their periodic GUI timer.
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    pub fn tick_all(&mut self) -> usize {
+        self.sessions
+            .values_mut()
+            .map(PluginEditorSession::tick)
+            .filter(|timed_out| *timed_out)
+            .count()
     }
 }
 
