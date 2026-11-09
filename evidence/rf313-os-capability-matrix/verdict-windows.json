@@ -12,10 +12,10 @@
     "arch": "x86_64",
     "os_version": "Microsoft Windows 11 Pro",
     "gpu": "NVIDIA GeForce RTX 4070 SUPER",
-    "revision": "9d7e930ab914b7bba831f06162ee03f506e13674",
+    "revision": "4aa92c117aa62e0e6f5412933cb7c8bb53fb839a",
     "exe": "C:\\Users\\akiyoshi\\orca\\workspaces\\ruviform\\rf313-realos-smoke\\target\\debug\\examples\\real_os_smoke.exe",
-    "timestamp_unix_ms": 1794187047387,
-    "timestamp_utc": "2026-11-09T01:17:27Z"
+    "timestamp_unix_ms": 1794188101063,
+    "timestamp_utc": "2026-11-09T01:35:01Z"
   },
   "run": {
     "window": "w1",
@@ -129,6 +129,6 @@
       }
     ],
     "ticks": 18,
-    "elapsed_ms": 2011
+    "elapsed_ms": 1948
   }
 }

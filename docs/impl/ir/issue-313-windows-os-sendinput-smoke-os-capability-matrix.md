@@ -167,9 +167,9 @@ GPUI simulated input（`dispatch_keystroke`/`simulate_keystrokes`）
 | `mise run lint` | Pass（workspace clippy `-D warnings`、exit 0） |
 | `mise run check-ui-gpui` | Pass（exit 0） |
 | `mise run lint-ui-gpui` | Pass（`-D warnings`、exit 0） |
-| `mise run test-ui-gpui` | Pass（65+20+4+7 tests、exit 0。real-window golden 3 件は従来通り ignored） |
+| `mise run test-ui-gpui` | Pass（68+20+4+7 tests、exit 0。real-window golden 3 件は従来通り ignored、origin/main merge 後に再実行） |
 | `mise run fmt-check` | Pass（exit 0） |
-| `mise run example-ui-gpui-real-os-smoke` | **Pass（実測）** — Windows 11 Pro x64 / RTX 4070 SUPER / 2×1920×1080@1.0、verdict=pass exit 0、`verdict-windows.json` 採取（2026-11-09T01:17:27Z、revision `9d7e930`） |
+| `mise run example-ui-gpui-real-os-smoke` | **Pass（実測）** — Windows 11 Pro x64 / RTX 4070 SUPER / 2×1920×1080@1.0、verdict=pass exit 0、`verdict-windows.json` 採取（2026-11-09T01:35:01Z、revision `4aa92c1` — origin/main merge 後の再実行） |
 
 ## Risks
 

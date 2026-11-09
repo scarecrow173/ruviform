@@ -43,14 +43,14 @@ Issue #313「RF-GT-04: OS 別ケースマトリクス + 実 OS smoke」の
 | 実体 | `cargo run -p ruviform-ui-gpui --features gpui --example real_os_smoke -- --out evidence/rf313-os-capability-matrix/verdict-windows.json` |
 | view spec | `Panel[Fader(gain), Seek(seek)]` — tab stop が 2 つだけの最小構成。`ValueDescriptor::ranged(0.0,1.0)` + `default 0.5` + `step 0.05`（plain domain） |
 | keystroke | `Tab, Right, Tab, Left`（`os_input::OsKey`）。Ready + `Focused(true)` 観測後に injector thread から投入 |
-| verdict | `verdict-windows.json`（verdict=pass、reasons=[]、checks 4/4 ok、elapsed 2011ms、ticks 18） |
+| verdict | `verdict-windows.json`（verdict=pass、reasons=[]、checks 4/4 ok、elapsed 1948ms、ticks 18） |
 | OS | Windows 11 Pro（`verdict-windows.json` environment.os_version、CIM `Win32_OperatingSystem` 実測） |
 | arch | x86_64 |
 | GPU | NVIDIA GeForce RTX 4070 SUPER（CIM `Win32_VideoController` 実測） |
 | display | 1920×1080 × 2 monitor、scale_factor 1.0（`WindowDriver::monitors()` 実測） |
-| revision | `9d7e930ab914b7bba831f06162ee03f506e13674`（`git rev-parse HEAD` 実測） |
+| revision | `4aa92c117aa62e0e6f5412933cb7c8bb53fb839a`（`git rev-parse HEAD` 実測。origin/main merge 後の再実行） |
 | toolchain | rustc 1.99.0（mise pin）、GPUI 0.2.2 |
-| 実行日時 | 2026-11-09T01:17:27Z（verdict JSON timestamp_utc） |
+| 実行日時 | 2026-11-09T01:35:01Z（verdict JSON timestamp_utc） |
 
 ## 観測値（実測、verdict-windows.json 転記）
 
