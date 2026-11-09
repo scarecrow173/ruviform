@@ -51,6 +51,7 @@ Directory: `docs/specs`
 | SPEC-034UtEnxrMMCVpVRENHQ19 | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | SPEC-034T2dgEk6l5QpkecJOJYo | Issue #289 OBS-07 Collector・Metrics・履歴・Snapshot（単一クレート） | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
 | SPEC-034UoMuIhsjFGaAbbUs8x0 | Issue #290 OBS-08 Profiling — CountingAllocator/AllocationScope（allocation-probe slice） | approved | [issue-290-observability-allocation-probe.md](./issue-290-observability-allocation-probe.md) |
+| SPEC-f0JtG8wUPC8ziWo3EERrZ2 | Issue #290 OBS-08 RT Timing — 事前準備・選択的記録の実行時間観測 slice | approved | [issue-290-observability-rt-timing.md](./issue-290-observability-rt-timing.md) |
 | SPEC-034UnxeRRp2vX35gnordF9 | Issue #291 OBS-09 Diagnostics・Evidence・Finding・Health・Report | approved | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | SPEC-tBdATMZtqYxn8MbVgZquYA | Issue #292 OBS-10 Debug Inspection・Invariant・Session・Probe連携（observability 内完結 slice） | approved | [issue-292-observability-debug-inspection.md](./issue-292-observability-debug-inspection.md) |
 | SPEC-4IC1B6yvvsvwdDR85TSYNI | Issue #293 OBS-11 Host統合 Config + ObservationRunner 生命周期 slice（observability 内完結） | approved | [issue-293-observability-integration-runner.md](./issue-293-observability-integration-runner.md) |

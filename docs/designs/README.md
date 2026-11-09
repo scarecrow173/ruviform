@@ -66,6 +66,7 @@ Directory: `docs/designs`
 | DESIGN-034UtFFzzM3wAegGBSycbJ | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | DESIGN-034T2dhkl03BuqPOGmNlmc | Issue #289 OBS-07 Collector/Metrics/Snapshot: 単一Poll Owner・Baseline/Discontinuity・有界履歴・Health | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
 | DESIGN-034UoQ3mxByzCnjgdAGpe1 | Issue #290 OBS-08 Profiling — allocation-probe 設計（CountingAllocator/AllocationScope） | approved | [issue-290-observability-allocation-probe.md](./issue-290-observability-allocation-probe.md) |
+| DESIGN-ZAfKHGovgBPKLRo8KY7Ss7 | Issue #290 OBS-08 RT Timing — observability 内完結 slice | approved | [issue-290-observability-rt-timing.md](./issue-290-observability-rt-timing.md) |
 | DESIGN-034Unxw6Jlg98IypxJkHfQ | Issue #291 OBS-09 Diagnostics: Evidence/Finding/Health/Report — 型で分ける事実と推定 | approved | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | DESIGN-koNZAEijupozhje6vYRpDO | Issue #292 OBS-10 Debug Inspection・Invariant・Session・Probe連携 — observability 内完結 slice | approved | [issue-292-observability-debug-inspection.md](./issue-292-observability-debug-inspection.md) |
 | DESIGN-DQg7hyyzqx49OBMHYx8lv8 | Issue #293 OBS-11 ObservabilityConfig + ObservationRunner 設計 | approved | [issue-293-observability-integration-runner.md](./issue-293-observability-integration-runner.md) |
