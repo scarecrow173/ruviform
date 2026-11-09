@@ -1,7 +1,7 @@
 ---
 id: "TASK-I1LfNQN5Dh3eVjMCa0yvUi"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #292 OBS-10 Debug Inspection 実装タスク"
 created: "2026-11-09"
 updated: "2026-11-09"

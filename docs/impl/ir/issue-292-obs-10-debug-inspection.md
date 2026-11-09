@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034UqAG1z1lwcerRfda1x1"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #292 OBS-10 Debug Inspection 実装記録"
 created: "2026-11-09"
 updated: "2026-11-09"
