@@ -46,6 +46,7 @@ Directory: `docs/specs`
 | SPEC-034RToefGzxcXIANSfMf7U | Issue #279 OBS-04 Plugin Host既存4 CounterのSource登録・統合 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | SPEC-ML6zMi4szNWY33LanXM0JL | Issue #280 OBS-05 RT固定長Record Bridge・Clock・欠落・Correlation統合 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | SPEC-034T2dgEk6l5QpkecJOJYo | Issue #289 OBS-07 Collector・Metrics・履歴・Snapshot（単一クレート） | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
+| SPEC-034UoMuIhsjFGaAbbUs8x0 | Issue #290 OBS-08 Profiling — CountingAllocator/AllocationScope（allocation-probe slice） | approved | [issue-290-observability-allocation-probe.md](./issue-290-observability-allocation-probe.md) |
 | SPEC-034UnxeRRp2vX35gnordF9 | Issue #291 OBS-09 Diagnostics・Evidence・Finding・Health・Report | approved | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | SPEC-034S9nR4tW7xZ2cF5hJ8kM | Issue #294 Cross-Consumer候補tuple Gate — consumer-verify.yml 証拠契約・UI lane 段階拡張・候補連携接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | SPEC-034Ul9sCnKK1pa64jCWkdO | Issue #294 daily candidate-tuple trigger — consumer-verify tuple 判定の daily-ci 組込み（tuple-aware decide・証拠 artifact 回復・bounded retry） | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
@@ -101,7 +102,7 @@ Directory: `docs/specs`
 | SPEC-034UmGsNtxrfkDz2KxieUt | Issue #410 — view command ledger の bounded retention と correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | SPEC-Y6JWBZ3CHy6qvkcyHzSK5H | Issue #411 — ruviform-ui-test の cargo_metadata 推移依存 MSRV 1.89 不整合を修復する | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | SPEC-kR4mNxQwY8vLpTzH2jFd6A | Issue #414 — authoritative projection を controlled display へ到達させる | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
-| SPEC-034Uoh0rqjKI3fjlaRV6Fj | Issue #418 — DTCG token から ResolvedTheme 相当の静的 Rust 型を生成する codegen | draft | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
+| SPEC-034Uoh0rqjKI3fjlaRV6Fj | Issue #418 — DTCG token から ResolvedTheme 相当の静的 Rust 型を生成する codegen | approved | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
 | SPEC-Yq7KpWx3RtNm8LbVd2HaJe | Issue #421 — Meter/TimeAxis GPUI 描画と Knob/Toggle/Meter/TimeAxis の Fake/GPUI parity | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | SPEC-Qm7RvT2kXc9LpW4dHs8NfA | Issue #423 WebView 側写像・GPUI Dock 実窓検証・focus capability 精緻化（#386 残 DoD） | proposed | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
 | SPEC-bO4Bjvhj9IWEhVO0Vo3ghA | Issue #426 GPUI lab binding・Story 2 scale × 2 theme fixture・Pixel Golden 境界・Consumer GPUI 型不使用検査 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |

@@ -61,6 +61,7 @@ Directory: `docs/designs`
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-fhvRxnPJKvnhRAlg7TbeKm | Issue #280 OBS-05 RT Record Bridge・ClockContext・欠落envelope・CorrelationBook設計 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | DESIGN-034T2dhkl03BuqPOGmNlmc | Issue #289 OBS-07 Collector/Metrics/Snapshot: 単一Poll Owner・Baseline/Discontinuity・有界履歴・Health | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
+| DESIGN-034UoQ3mxByzCnjgdAGpe1 | Issue #290 OBS-08 Profiling — allocation-probe 設計（CountingAllocator/AllocationScope） | approved | [issue-290-observability-allocation-probe.md](./issue-290-observability-allocation-probe.md) |
 | DESIGN-034Unxw6Jlg98IypxJkHfQ | Issue #291 OBS-09 Diagnostics: Evidence/Finding/Health/Report — 型で分ける事実と推定 | approved | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | DESIGN-034S9rV6yB3dG7jL0nQ4sU | Issue #294 Cross-Consumer候補tuple Gate 設計 — 証拠契約・解決SHA捕捉・UI lane 段階接続・task 接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | DESIGN-034UlaEev2MQ6gsnrNqias | Issue #294 daily candidate-tuple trigger 設計 — tuple-aware decide・証拠 artifact 回復・daily-ci job | approved | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
@@ -120,7 +121,7 @@ Directory: `docs/designs`
 | DESIGN-034UmHwuYp52pp4RtddpwM | Issue #410 — view command ledger bounded retention & correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | DESIGN-NS1HOEsCLKLDYdKMhuZOSf | Issue #411 — cargo_metadata 依存系列選定設計（MSRV 1.89 収束） | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | DESIGN-pL8wRtYbN3xKcVhJ5mQs2E | Issue #414 — projection→controlled display 正規経路の設計 | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
-| DESIGN-034Uoh91RxVTOnim395q6R | Issue #418 — theme-codegen 設計（manifest 駆動の ResolvedTheme 静的型生成） | draft | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
+| DESIGN-034Uoh91RxVTOnim395q6R | Issue #418 — theme-codegen 設計（manifest 駆動の ResolvedTheme 静的型生成） | approved | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
 | DESIGN-Kt4NzBw9QxLr6VfGc1PuDo | Issue #421 — Meter/TimeAxis GPUI 描画と parity fixture の設計 | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | DESIGN-Z3hWk8NpR2tLq6VbYc4MdE | Issue #423 WebView 写像・focus capability 精緻化・GPUI 実窓検証の設計 | proposed | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
 | DESIGN-rO8ZT7WxqPYGw0e0jZJx_A | Issue #426 設計 — mechanism の test 実在検査・GPUI lab binding・story matrix | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
