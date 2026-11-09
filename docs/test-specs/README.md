@@ -119,8 +119,8 @@ Directory: `docs/test-specs`
 | TSPEC-UiEoMhS5QMTr3jBiurbTtC | Issue #400 借用 readback → demuxer bounded 接続の test 仕様 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | TESTSPEC-XADte5w8EHAalnm33WCVyn | Issue #404/#405 NativeSurfaceSlot host 境界修復 test 仕様 | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
 | TSPEC-034TnnBwjsmwufsaEZZ0RG | Issue #409 scoped re-root + bounded enumeration テスト仕様 | approved | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
-| TSPEC-034UmKFzwIT1TdxeUWwDrp | Issue #410 — view command ledger retention & correlation guarantees | approved | [issue-410-view-command-ledger-retention-correlation-guarantees.md](./issue-410-view-command-ledger-retention-correlation-guarantees.md) |
 | TSPEC-034Uwdiu2k3CqklLUCSLe0 | Issue #410 P2 — view ledger retention & correlation floor guarantees | approved | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |
+| TSPEC-034UmKFzwIT1TdxeUWwDrp | Issue #410 — view command ledger retention & correlation guarantees | approved | [issue-410-view-command-ledger-retention-correlation-guarantees.md](./issue-410-view-command-ledger-retention-correlation-guarantees.md) |
 | TSPEC-CeWNpGq9NFmtzCCp3dkysw | Issue #411 — cargo_metadata MSRV 修復の検証契約 | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TSPEC-bN4yZaDfS6xOvJpM8qTu5H | Issue #414 — projection→controlled display の検証契約 | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
 | TSPEC-034UohaTnl4VwJLJCSfXgJ | Issue #418 — theme-codegen の検証契約 | approved | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
