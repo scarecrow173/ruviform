@@ -1,16 +1,24 @@
 name: ci-issue-tracker
 
-# Issue #368 (CI-DAILY-03): watch every completed `ci` (Full CI) run and
-# keep at most ONE open failure issue for repo × workflow × main. Each event
-# is a TRIGGER, not the truth: the evaluator reconciles the authoritative
-# `ci`-workflow run list for main against the payload and marker state, so
-# dropped or out-of-order notifications self-heal instead of deciding on
-# arrival order. It auto-closes only when the NEWEST evidence is a success
-# that is unambiguously newer than the newest recorded failure AND covers
-# both the failed revision and the current main tip (updated_at-aware
-# ordering + compare API guards — an old, ambiguous, or divergent success
-# never closes a newer failure). `cancelled`/`skipped`/unknown conclusions
-# are neither success nor failure — they update the operational note only.
+# Issue #368 (CI-DAILY-03) + Issue #294: watch every completed `ci` (Full CI)
+# and `consumer-verify` run and keep at most ONE open failure issue per
+# repo × workflow × main scope. Each event is a TRIGGER, not the truth: the
+# evaluator reconciles the authoritative run list for the matching
+# workflow/branch against the payload and marker state, so dropped or
+# out-of-order notifications self-heal instead of deciding on arrival
+# order. It auto-closes only when the NEWEST evidence is a success that is
+# unambiguously newer than the newest recorded failure AND covers both the
+# failed revision and the current main tip (updated_at-aware ordering +
+# compare API guards — an old, ambiguous, or divergent success never closes
+# a newer failure). `cancelled`/`skipped`/unknown conclusions are neither
+# success nor failure — they update the operational note only.
+#
+# One job per tracked workflow: each job is gated on the completed run's
+# workflow name and evaluates ONLY its own scope, so a `consumer-verify`
+# completion can never be mistaken for `ci` evidence (and vice versa).
+# consumer-verify runs dispatched by daily-ci's GITHUB_TOKEN fire no
+# workflow_run event (anti-recursion) — ci-issue-tracker-reconcile.yml
+# covers that gap on its schedule/manual entries.
 #
 # Trust model: workflow_run jobs always execute THIS file and
 # ci/tracker/tracker.mjs from the default branch — never the completed
@@ -23,14 +31,14 @@ name: ci-issue-tracker
 # documented in ci/tracker/README.md).
 on:
   workflow_run:
-    workflows: [ci]
+    workflows: [ci, consumer-verify]
     types: [completed]
     branches: [main]
 
 permissions:
   contents: read
 
-# Serialize tracker runs repo-wide: completed ci runs queue up instead of
+# Serialize tracker runs repo-wide: completed runs queue up instead of
 # racing each other. Never cancel an in-flight tracker mid-write. NOTE:
 # this group holds at most running-1 + pending-1 and a NEWER pending run
 # replaces the queued one — completion notifications CAN be dropped, so
@@ -45,10 +53,13 @@ env:
 
 jobs:
   track:
+    # This job owns the `ci` scope only — a consumer-verify completion must
+    # never be evaluated as Full CI evidence.
+    if: github.event.workflow_run.name == 'ci'
     runs-on: ubuntu-latest
-    # Least privilege for the only job that exists: issues:write to manage
-    # the failure issue, actions:read for run/job metadata, contents:read
-    # for the compare API and default-branch checkout.
+    # Least privilege: issues:write to manage the failure issue,
+    # actions:read for run/job metadata, contents:read for the compare API
+    # and default-branch checkout.
     permissions:
       contents: read
       actions: read
@@ -90,4 +101,50 @@ jobs:
         with:
           name: ci-issue-tracker-report-attempt-${{ github.run_attempt }}
           path: ci-issue-tracker-report.json
+          if-no-files-found: warn
+
+  track-consumer-verify:
+    # Same evaluator, `consumer-verify` scope (Issue #294). The scope args
+    # pin workflow identity on both sides: the payload check in
+    # classifyRun and the authoritative run-history filter.
+    if: github.event.workflow_run.name == 'consumer-verify'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - name: Checkout repository (default branch tracker code)
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked node
+
+      - name: Self-test tracker evaluator (mise run test-ci-tracker)
+        run: mise run test-ci-tracker
+
+      - name: Evaluate completed run and update failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRACKER_EVENT_PATH: ${{ github.event_path }}
+        run: >-
+          mise exec -- node ci/tracker/tracker.mjs
+          --workflow consumer-verify --workflow-file consumer-verify.yml
+          --report ci-issue-tracker-report-consumer-verify.json
+
+      - name: Upload tracker report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-issue-tracker-report-consumer-verify-attempt-${{ github.run_attempt }}
+          path: ci-issue-tracker-report-consumer-verify.json
           if-no-files-found: warn

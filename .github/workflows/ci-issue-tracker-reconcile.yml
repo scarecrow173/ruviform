@@ -1,17 +1,20 @@
 name: ci-issue-tracker-reconcile
 
-# Issue #368 (CI-DAILY-03) reconcile entry: the event tracker
-# (ci-issue-tracker.yml) can never observe `ci` runs that the daily
-# scheduler dispatched with GITHUB_TOKEN — the dispatch itself runs, but
-# GitHub's anti-recursion rule fires no downstream workflow_run event on
-# its completion, so bot failures never file and bot successes never
-# close. This second entry runs the SAME evaluator (ci/tracker/tracker.mjs
-# --reconcile) on a schedule and on demand: it ignores every event path
-# and reconciles purely from the authoritative `ci` run list for main plus
-# stored marker state, so a lost notification self-heals instead of
-# depending on an event that never arrives. Close/create guards are
-# unchanged — newest-evidence ordering, attempt-aware dedup, compare
-# double guard, pending/unknown fail-closed, canonical issue idempotency.
+# Issue #368 (CI-DAILY-03) + Issue #294 reconcile entry: the event tracker
+# (ci-issue-tracker.yml) can never observe runs that a GITHUB_TOKEN
+# dispatch produced — the dispatch itself runs, but GitHub's
+# anti-recursion rule fires no downstream workflow_run event on its
+# completion, so bot failures never file and bot successes never close.
+# This applies to BOTH tracked scopes: `ci` runs dispatched by daily-ci
+# AND `consumer-verify` runs dispatched by daily-ci's tuple scheduler.
+# This second entry runs the SAME evaluator (ci/tracker/tracker.mjs
+# --reconcile) once per scope on a schedule and on demand: it ignores
+# every event path and reconciles purely from the authoritative run list
+# for each workflow/branch plus stored marker state, so a lost
+# notification self-heals instead of depending on an event that never
+# arrives. Close/create guards are unchanged — newest-evidence ordering,
+# attempt-aware dedup, compare double guard, pending/unknown fail-closed,
+# canonical issue idempotency.
 #
 # Trust model: schedule only ever runs default-branch code, and checkout
 # is pinned to the default branch even for manual dispatch, so an
@@ -107,18 +110,31 @@ jobs:
       - name: Self-test tracker evaluator (mise run test-ci-tracker)
         run: mise run test-ci-tracker
 
-      - name: Reconcile authoritative run history and update failure issue
+      - name: Reconcile authoritative run history and update failure issues
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Deliberately NO TRACKER_EVENT_PATH: --reconcile never reads an
           # event payload (the ambient GITHUB_EVENT_PATH the runner always
           # sets is ignored by design — mode separation is explicit).
-        run: mise exec -- node ci/tracker/tracker.mjs --reconcile --report ci-issue-tracker-report.json
+        run: |
+          set -uo pipefail
+          # One job reconciles every tracked scope sequentially — the
+          # shared concurrency group keeps a single writer, and `|| rc=1`
+          # keeps one scope's API failure from starving the other while
+          # still failing the step (and job) when either scope fails.
+          rc=0
+          mise exec -- node ci/tracker/tracker.mjs --reconcile --report ci-issue-tracker-report.json || rc=1
+          mise exec -- node ci/tracker/tracker.mjs --reconcile \
+            --workflow consumer-verify --workflow-file consumer-verify.yml \
+            --report ci-issue-tracker-report-consumer-verify.json || rc=1
+          exit "$rc"
 
-      - name: Upload tracker report
+      - name: Upload tracker reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ci-issue-tracker-reconcile-report-attempt-${{ github.run_attempt }}
-          path: ci-issue-tracker-report.json
+          path: |
+            ci-issue-tracker-report.json
+            ci-issue-tracker-report-consumer-verify.json
           if-no-files-found: warn
