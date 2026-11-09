@@ -93,7 +93,13 @@
 //!   (the v1 defined boundary), `kSample32` only, `kRealtime`.
 //! - **Events** — `EventKind::ParamValue` (already normalized)
 //!   becomes a `(sample_offset, value)` point on the matching
-//!   param's queue; foreign ids, out-of-block offsets and events past
+//!   param's queue; `EventKind::Midi` translates through
+//!   [`crate::midi::outgoing_event`] into the preallocated
+//!   `IEventList` handed as `ProcessData.inputEvents` (Issue #253 —
+//!   note on/off/poly-pressure → VST3 note events, CC/channel
+//!   pressure/pitch bend/program change → `kLegacyMIDICCOutEvent`,
+//!   `group != 0` and other defined skips counted in `midi_stats`).
+//!   Foreign ids, out-of-block offsets and events past
 //!   `MAX_EVENTS_PER_BLOCK` are dropped by definition.
 //! - **`processContext`** — mapped from the neutral `TransportInfo`
 //!   snapshot (`kPlaying`, `projectTimeSamples`, PPQ musical fields)
@@ -135,10 +141,11 @@
 //!   are never called — the bridge drives the plugin's *default-active*
 //!   bus layout only; a plugin requiring non-default bus state is
 //!   outside the v1 boundary.
-//! - `ProcessData.outputParameterChanges`/`inputEvents`/`outputEvents`
-//!   are always null — plugin-emitted parameter changes and the VST3
-//!   note/event lists are unsupported in v1 (the neutral surface only
-//!   carries `EventList` param events *in*).
+//! - `ProcessData.outputParameterChanges`/`outputEvents` are always
+//!   null — plugin-emitted parameter changes and plugin→host events
+//!   are unsupported in v1. `inputEvents` carries the translated
+//!   canonical MIDI stream (Issue #253); its defined skips are
+//!   counted in `Vst3Plugin::midi_stats`.
 //! - Plugin-reported enumeration counts (`countClasses`,
 //!   `getParameterCount`, `BusInfo.channelCount`) are clamped to
 //!   `MAX_SCAN_*` caps before they
@@ -175,7 +182,7 @@ use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, BusDirection, BusDirections_, BusInfo, Chord,
     FrameRate, IAttributeList, IAttributeList_iid, IAttributeListTrait, IAudioProcessor,
     IAudioProcessorTrait, IComponent, IComponentHandler, IComponentHandlerTrait, IComponentTrait,
-    IConnectionPoint, IConnectionPointTrait, IEditController, IEditControllerTrait,
+    IConnectionPoint, IConnectionPointTrait, IEditController, IEditControllerTrait, IEventList,
     IHostApplication, IHostApplicationTrait, IMessage, IMessage_iid, IMessageTrait,
     IParamValueQueue, IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait,
     MediaTypes_, ParamID, ParamValue, ParameterInfo, ParameterInfo_::ParameterFlags_,
@@ -191,6 +198,7 @@ use vst3::Steinberg::{
 };
 use vst3::{Class, ComPtr, ComWrapper, Interface};
 
+use crate::midi::{self, BridgeEventList, MidiBridgeStats};
 use crate::sdk_enum_i32;
 use crate::strings::copy_wstring;
 
@@ -1513,6 +1521,16 @@ struct Vst3Plugin {
     /// The `IParameterChanges` object handed to `process` — built once
     /// in `prepare`, holds the queue `ComPtr`s.
     param_changes: Option<ComPtr<IParameterChanges>>,
+    /// The `IEventList` object handed to `process` as
+    /// `ProcessData.inputEvents` — the wrapper the bridge fills per
+    /// block from canonical `EventKind::Midi` events (Issue #253).
+    event_list: Option<ComWrapper<BridgeEventList>>,
+    /// The `IEventList` COM pointer kept for `ProcessData` — built
+    /// once in `prepare` beside `event_list`.
+    input_events: Option<ComPtr<IEventList>>,
+    /// Cumulative MIDI translation counters — the observable side of
+    /// the defined-skip policy (`crate::midi` module docs).
+    midi_stats: MidiBridgeStats,
     /// Shared module ownership — declared last so the `Arc` releases
     /// after every COM pointer above (drop order keeps the module
     /// mapped through the final `release`).
@@ -1554,6 +1572,9 @@ impl Vst3Plugin {
             output_ptrs: Vec::new(),
             event_queues: Vec::new(),
             param_changes: None,
+            event_list: None,
+            input_events: None,
+            midi_stats: MidiBridgeStats::new(),
             library,
         }
     }
@@ -1911,6 +1932,13 @@ impl PluginProcessor for Vst3Plugin {
             .collect();
         self.param_changes =
             ComWrapper::new(BridgeParameterChanges { queues }).to_com_ptr::<IParameterChanges>();
+        // The `IEventList` shell for `ProcessData.inputEvents` —
+        // capacity reserved once here; `process` only clears/pushes
+        // inside it (the same no-allocation RT contract as the
+        // param queues).
+        let event_list = ComWrapper::new(BridgeEventList::with_capacity());
+        self.input_events = event_list.to_com_ptr::<IEventList>();
+        self.event_list = Some(event_list);
         Ok(())
     }
 
@@ -1988,6 +2016,19 @@ impl PluginProcessor for Vst3Plugin {
 
         // Distribute param events into the preallocated queues.
         fill_param_queues(&self.event_queues, events, frames);
+        // Translate canonical MIDI events into the preallocated
+        // `IEventList` — `ParamValue`/unknown kinds are not MIDI and
+        // are not counted; defined skips accumulate in `midi_stats`.
+        if let Some(event_list) = self.event_list.as_ref() {
+            let stats = midi::fill_event_list(
+                event_list,
+                events,
+                transport.and_then(TransportInfo::musical),
+                self.sample_rate,
+            );
+            self.midi_stats.translated += stats.translated;
+            self.midi_stats.skipped += stats.skipped;
+        }
 
         let mut process_context = map_process_context(transport, self.sample_rate);
         let mut in_bus = AudioBusBuffers {
@@ -2017,7 +2058,10 @@ impl PluginProcessor for Vst3Plugin {
                 .as_ref()
                 .map_or(ptr::null_mut(), ComPtr::as_ptr),
             outputParameterChanges: ptr::null_mut(),
-            inputEvents: ptr::null_mut(),
+            inputEvents: self
+                .input_events
+                .as_ref()
+                .map_or(ptr::null_mut(), ComPtr::as_ptr),
             outputEvents: ptr::null_mut(),
             processContext: process_context
                 .as_mut()
@@ -2341,11 +2385,13 @@ mod tests {
     use super::*;
     use crate::component::GainComponent;
     use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
-    use ruviform_media_core::{MediaTime, MusicalTimeInfo};
+    use ruviform_media_core::{
+        MediaTime, MidiChannel, MidiEvent, MidiGroup, MidiKind, MidiValue, MusicalTimeInfo, NoteKey,
+    };
     // `ParamValue` here is the *neutral* normalized-value type — the
     // named import shadows the `vst3` `f64` alias brought in by
     // `use super::*`.
-    use ruviform_plugin_core::{Event, HostInput, HostOutput, ParamEvent, ParamValue};
+    use ruviform_plugin_core::{Event, EventKind, HostInput, HostOutput, ParamEvent, ParamValue};
     use std::path::PathBuf;
 
     const FRAMES: usize = 64;
@@ -2557,6 +2603,31 @@ mod tests {
         assert_eq!(result.status, ProcessStatus::Continue);
         assert_eq!(left, vec![0.125_f32; FRAMES]);
         assert_eq!(right, vec![-0.0625_f32; FRAMES]);
+    }
+
+    /// Canonical `EventKind::Midi` events translate into
+    /// `ProcessData.inputEvents` and the fixture's plugin-side
+    /// `collect_incoming` drains them without rejecting the block —
+    /// the gain fixture ignores MIDI, so audio stays a passthrough.
+    /// Translation correctness itself is covered by `midi::tests`
+    /// (both directions + the `IEventList` COM round trip).
+    #[test]
+    fn midi_events_reach_process_as_input_events() {
+        let mut plugin = prepared_plugin();
+        let note_on = MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::NoteOn {
+                key: NoteKey::new(60).unwrap(),
+                velocity: MidiValue::from_u7(100),
+            },
+        };
+        let events = [Event::new(0, EventKind::Midi(note_on))];
+        let events = EventList::new(&events, FRAMES_U32).unwrap();
+        let (result, [left, right]) = drive_block(&mut *plugin, events, None);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert_eq!(left, vec![0.5_f32; FRAMES]);
+        assert_eq!(right, vec![-0.25_f32; FRAMES]);
     }
 
     #[test]

@@ -25,6 +25,12 @@
 //!
 //! Contract source: `docs/specs/issue-188-timed-midi.md` (R1, R3, R8),
 //! `docs/designs/issue-188-timed-midi-detailed.md`.
+//!
+//! [`mock`] is the deterministic scripted backend fixture — the
+//! spec's `MockMidiEnumerator`/`MockMidiInput` (Issue #253). Test/PoC
+//! infrastructure, not a real OS backend.
+
+pub mod mock;
 
 use ruviform_media_core::{ClockDomainId, MidiEvent, TimedInputEvent};
 
