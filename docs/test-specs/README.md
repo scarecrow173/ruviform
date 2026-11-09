@@ -59,6 +59,7 @@ Directory: `docs/test-specs`
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-iF1sER54cUJ1FKmvvSy6W2 | Issue #280 OBS-05 RT record bridge・record vocabulary tests | approved | [issue-280-rt-record-bridge-tests.md](./issue-280-rt-record-bridge-tests.md) |
 | TSPEC-034T2NeVNZOhwkPaIzj0Q7 | Issue #289 OBS-07 Collector/Metrics/Snapshot 試験仕様 | approved | [issue-289-observability-collector-metrics-tests.md](./issue-289-observability-collector-metrics-tests.md) |
+| TSPEC-034UnxESRAtEpUTP5RInqW | Issue #291 OBS-09 Diagnostics/Evidence/Finding/Health/Report 試験仕様 | draft | [issue-291-observability-diagnostics-tests.md](./issue-291-observability-diagnostics-tests.md) |
 | TSPEC-034S9zD5gJ8lN2qU6xA9eH | consumer-verify tuple証拠契約（解決SHA捕捉・期待照合・status導出・証拠JSON・workflow構造） | implemented | [issue-294-consumer-verify-tuple-evidence.md](./issue-294-consumer-verify-tuple-evidence.md) |
 | TSPEC-034Ule6zLxK0at8L5q0W7q | Issue #294 daily candidate-tuple trigger test spec — tuple 判定・証拠回復・dispatch 契約 | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TSPEC-qrIvFGA7o1j1g1gLAH1gW2 | consumer-verify GUI-CONTRACT lane — 候補 tree 評価・task probe・別結果記録の構造契約 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
@@ -103,6 +104,7 @@ Directory: `docs/test-specs`
 | TESTSPEC-034T6RWTu4Bx7Ng3hV0dK2 | Issue #387 Component/View + Headless Behavior + GPUI Renderer 試験仕様 | proposed | [issue-387-component-renderer.md](./issue-387-component-renderer.md) |
 | TSPEC-0f0PqMFNljVvAz5wOtJEQu | Issue #388/#389 Native Dock 契約テスト仕様（slot/lease/session の headless 検証 + L0-L1 写像） | approved | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TSPEC-rf388DockLayoutPoc01 | Issue #388 GPUI Panel/Tab レイアウト内 Editor 埋め込みの実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-layout-poc.md](./issue-388-native-dock-layout-poc.md) |
+| TSPEC-rf388DockWindowing01 | Issue #388 slice 3 windowing 挙動の実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TSPEC-034TaI7Luee0T88mH1IYv2 | Issue #390 Driver Boundary/Lab 検証 | draft | [issue-390-driver-boundary-lab.md](./issue-390-driver-boundary-lab.md) |
 | TSPEC-UiEoMhS5QMTr3jBiurbTtC | Issue #400 借用 readback → demuxer bounded 接続の test 仕様 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |

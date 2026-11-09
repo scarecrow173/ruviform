@@ -27,6 +27,7 @@ Directory: `docs/plans`
 | PLAN-034RTsBYMsfKWtQaNUpvnl | Implement Issue #279 OBS-04 plugin-host counter source registration | approved | [implement-issue-279-plugin-host-counter-source.md](./implement-issue-279-plugin-host-counter-source.md) |
 | PLAN-m7f29Op1o9KCQ037OSq6i8 | Implement Issue #280 OBS-05 RT record bridge・record vocabulary | approved | [implement-issue-280-rt-record-bridge.md](./implement-issue-280-rt-record-bridge.md) |
 | PLAN-034T2Nmh2tErwGOV4X6guz | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装計画 | approved | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
+| PLAN-034UnAUkBnCas6lEsFTewD | Issue #291 OBS-09 Diagnostics 実装計画 | draft | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
 | PLAN-034JZPGUI0000000000003 | Issue #30 実施計画 — プラグイン GUI PoC | approved | [implement-issue-30-plugin-gui-poc.md](./implement-issue-30-plugin-gui-poc.md) |
 | PLAN-034JZLISO0000000000004 | Issue #31 実施計画 — プラグイン分離設計確定 | approved | [implement-issue-31-plugin-isolation.md](./implement-issue-31-plugin-isolation.md) |
 | PLAN-XyRGyqOXQg05BHSeuQmtEC | Issue #32 実施計画 — 第 2 ターゲット設計 | approved | [implement-issue-32-second-target-design.md](./implement-issue-32-second-target-design.md) |
@@ -34,6 +35,7 @@ Directory: `docs/plans`
 | PLAN-UO09oNkf6X28oaYsQ5DmNe | Issue #386 Driver-neutral GUI Host + GPUI minimal fixture 実装計画 | proposed | [implement-issue-386-driver-neutral-gui-host.md](./implement-issue-386-driver-neutral-gui-host.md) |
 | PLAN-034T6RWSw6Tv9Mz2qJ5eL8 | Issue #387 Component/View Specs + Headless Behavior + GPUI Renderer 実装計画 | proposed | [implement-issue-387-component-renderer.md](./implement-issue-387-component-renderer.md) |
 | PLAN-kHnSXCzzcxyo5rlkMiqQWx | Issue #388/#389 Native Dock 契約の実装計画（neutral slot/lease/session + fake 検証 + L0-L1 写像） | approved | [implement-issue-388-389-native-dock-contract.md](./implement-issue-388-389-native-dock-contract.md) |
+| PLAN-rf388DockWindowing01 | Issue #388 slice 3 実装計画 — clip 修正 + windowing PoC + 証拠 | approved | [implement-issue-388-native-dock-windowing-slice3.md](./implement-issue-388-native-dock-windowing-slice3.md) |
 | PLAN-5rBdUXHzqmuHrA1h4sweAj | Issue #389 VST3/L0 実外部 Editor attach の実装計画（adapter open_gui + PoC vst3 lane） | approved | [implement-issue-389-vst3-l0-editor-attach.md](./implement-issue-389-vst3-l0-editor-attach.md) |
 | PLAN-ECzI54BQngMiQpOP23flK3 | Issue #404/#405 NativeSurfaceSlot host 境界修復 実装計画 | draft | [implement-issue-404-405-native-surface-host-boundary.md](./implement-issue-404-405-native-surface-host-boundary.md) |
 | PLAN-Hv8LcR3wQ5nTk2YbM7pXdA | Issue #423 WebView 写像・focus capability・GPUI 実窓検証の実装計画 | proposed | [implement-issue-423-webview-dock-verify.md](./implement-issue-423-webview-dock-verify.md) |

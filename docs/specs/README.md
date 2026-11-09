@@ -46,6 +46,7 @@ Directory: `docs/specs`
 | SPEC-034RToefGzxcXIANSfMf7U | Issue #279 OBS-04 Plugin Host既存4 CounterのSource登録・統合 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | SPEC-ML6zMi4szNWY33LanXM0JL | Issue #280 OBS-05 RT固定長Record Bridge・Clock・欠落・Correlation統合 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | SPEC-034T2dgEk6l5QpkecJOJYo | Issue #289 OBS-07 Collector・Metrics・履歴・Snapshot（単一クレート） | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
+| SPEC-034UnxeRRp2vX35gnordF9 | Issue #291 OBS-09 Diagnostics・Evidence・Finding・Health・Report | draft | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | SPEC-034S9nR4tW7xZ2cF5hJ8kM | Issue #294 Cross-Consumer候補tuple Gate — consumer-verify.yml 証拠契約・UI lane 段階拡張・候補連携接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | SPEC-034Ul9sCnKK1pa64jCWkdO | Issue #294 daily candidate-tuple trigger — consumer-verify tuple 判定の daily-ci 組込み（tuple-aware decide・証拠 artifact 回復・bounded retry） | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | SPEC-7DGwosr0bGXXRsfeRfhe1v | Issue #294 GUI-CONTRACT lane 接続 — ruviform 候補 tree 上の boundary guard / Fake driver semantic を consumer-verify へ | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
@@ -91,6 +92,7 @@ Directory: `docs/specs`
 | SPEC-034T6SaLC8Kz85jG9rbdsJ | DTCG Design Token Interpreter — backend-neutral ResolvedTheme/Theme Registry（Issue #385） | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
 | SPEC-0cG0IEArkb6RGWXH0jtA3e | Issue #386 Driver-neutral GUI Host 契約・GPUI 標準 Driver adapter・最小 Window fixture | proposed | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
 | SPEC-034T6RWQv8Hm2Lj4pD9sT6 | Issue #387 Driver-neutral Component/View Specs・Headless Behavior・GPUI Controls/Viz Renderer | proposed | [issue-387-component-view-specs.md](./issue-387-component-view-specs.md) |
+| SPEC-rf388DockWindowing01 | Issue #388 NativeSurfaceSlot slice 3 — Windows/VST3/L0 ancestor clip・keyboard/focus routing・re-dock/float 2-phase の実測仕様 | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | SPEC-zrIXGa6QONDm4o1DVVUwaz | Issue #388 Driver-neutral NativeSurfaceSlot 契約（早期 Gate 設計・契約実装） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
 | SPEC-ynejrtwiz2jIJrf3DwFtAK | Issue #389 Driver-neutral PluginEditorSession（state / typed HostPort / L0-L1 接続設計） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | SPEC-034T9TZQ7ztGDAPvFaz9IT | Issue #390 Driver Contract Lab — UI-DVR fixture registry・境界 Guard・GPUI なし Fake・Native Component Lab harness | proposed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |

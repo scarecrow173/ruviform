@@ -61,6 +61,7 @@ Directory: `docs/designs`
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-fhvRxnPJKvnhRAlg7TbeKm | Issue #280 OBS-05 RT Record Bridge・ClockContext・欠落envelope・CorrelationBook設計 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | DESIGN-034T2dhkl03BuqPOGmNlmc | Issue #289 OBS-07 Collector/Metrics/Snapshot: 単一Poll Owner・Baseline/Discontinuity・有界履歴・Health | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
+| DESIGN-034Unxw6Jlg98IypxJkHfQ | Issue #291 OBS-09 Diagnostics・Evidence・Finding・Health・Report | draft | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | DESIGN-034S9rV6yB3dG7jL0nQ4sU | Issue #294 Cross-Consumer候補tuple Gate 設計 — 証拠契約・解決SHA捕捉・UI lane 段階接続・task 接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | DESIGN-034UlaEev2MQ6gsnrNqias | Issue #294 daily candidate-tuple trigger 設計 — tuple-aware decide・証拠 artifact 回復・daily-ci job | approved | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | DESIGN-RVQaQUltza40Kb1HlAt48X | Issue #294 GUI-CONTRACT lane 接続設計 — 候補 tree 取得・task probe・step/lane 分離 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
@@ -107,6 +108,7 @@ Directory: `docs/designs`
 | DESIGN-034T6SbNaGu3l7owAp7FCX | DTCG Interpreter/Resolver 設計 — alias・mode・override merge・typed ResolvedTheme（Issue #385） | approved | [issue-385-dtcg-resolved-theme.md](./issue-385-dtcg-resolved-theme.md) |
 | DESIGN-novwjdV4MyUKuG9Y0bg014 | Issue #386 Driver-neutral GUI Host 契約・GPUI Driver adapter・最小 Window fixture | proposed | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
 | DESIGN-034T6RWQr3Kn5Xp8bC7yF1 | Issue #387 Component/View Specs・Headless Behavior・GPUI Renderer 設計 | proposed | [issue-387-component-view-specs.md](./issue-387-component-view-specs.md) |
+| DESIGN-rf388DockWindowing01 | Issue #388 slice 3 設計 — slot projection clip 修正と windowing PoC scenario | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | DESIGN-E2c3n3d0DhHGOrf8ZGHJrP | Issue #388 Driver-neutral NativeSurfaceSlot 契約設計（SurfaceSlotRegistry / SlotLease / port） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
 | DESIGN-x7UlzjoyvZa1pu2ARRLOZZ | Issue #389 Driver-neutral PluginEditorSession 設計（state machine / typed HostPort / L0-L1 写像・wire negotiation 方針） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | DESIGN-8EX9crwtfdh9PhZtOJ2cfY | Issue #389 VST3/L0 実外部 Editor attach 設計（Vst3Plugin::open_gui/close_gui + Windows HWND attach） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
