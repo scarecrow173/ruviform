@@ -73,10 +73,13 @@ Issue #398（rooted read-only filesystem capability — handle 相対の
 open/metadata/browse 境界、SV85/PR180 由来）と Issue #400（借用 sealed
 readback を独立 decoder へ bounded 接続する共通 API）の全受入行を
 `origin/main` `b36f6de2` の実装・tests・merged PR と行単位で照合した。
-**src 変更は不要** — 全行が既存実装で充足済みと確認し、docs チェーンの
-status 不整合（plan status `done`→`completed`、test-spec `verifies`
-への design 追加、#400 plan の stale checkbox）と本記録のみを差分とする。
-`crates/**` は無変更。
+**src 変更は不要** — 全行について充足証拠を確認した
+（cross-repo gate・実 OS runtime 行は対象外規約どおり NotRun 記録）。
+docs チェーンの status 不整合（plan status `done`→`completed`、
+test-spec `verifies` への design 追加、#400 plan の stale checkbox）
+と本記録のみを差分とする。`crates/**` は無変更。最終 head は
+`origin/main` `662ba7ed` の merge 後であり、io 系 lane は merge 後
+head で再検証済み。
 
 ## Context
 
@@ -129,12 +132,11 @@ status 不整合（plan status `done`→`completed`、test-spec `verifies`
 - cross-repo gate（Synvelis 側の互換 tuple 検証・実機/OS/OOM 計測）と
   未実行 OS の runtime 行は本タスクの対象外規約に従い NotRun として
   記録し、Pass 扱いしない。
-- `mise run test`（workspace）は初回実行で `ruviform-plugin-host`
-  `l1_proxy_e2e` の process-boundary timing test 3 件が並行負荷下で
-  flaky 失敗（`SpawnFailed{Timeout}` 等）。対象 crate は io-file /
-  io-archive / io-symphonia / media-io / media-reader / io-e2e の
-  いずれとも非依存で、本差分は docs のみ。単独再実行は 184/184 pass、
-  workspace 再実行は exit 0 で全 suite pass（191 suite・FAILED 0）。
+- `mise run test`（workspace）の `ruviform-plugin-host` `l1_proxy_e2e`
+  flaky は既知の process-boundary timing 問題であり、本差分（docs のみ）
+  とは無関係。baseline では再実行で全 suite pass、merge 後 head では
+  高並列下で散発失敗したが `--test-threads=4` で 184/184 pass を確認。
+  失敗 test は実行ごとに異なり deterministic な回帰ではない。
 - doc_status audit が報告する repo 全体の既存 finding（無関係な
   broken relation・reciprocal warning 等）は対象外 chain のみ本
  タスクで修復し、リポジトリ全体の audit clean は主張しない。
@@ -155,23 +157,26 @@ status 不整合（plan status `done`→`completed`、test-spec `verifies`
 ## Validation
 
 実行環境: Windows 11 x64 / Git Bash、mise 管理 toolchain
-（`mise.toml` pin、Rust 1.99.0）。`chore/io-398-400-audit` ブランチ
-（docs のみの差分、コードは `origin/main` `b36f6de2` と同一）で実施。
-すべて `mise run` / 確立済み `mise exec -- cargo` 入口で実行した。
+（`mise.toml` pin、Rust 1.99.0）。照合 baseline は `origin/main`
+`b36f6de2`、最終検証 head は `origin/main` `662ba7ed` merge 後
+（merge delta は docs と `#[ignore]`d plugin-host 計測 test のみで
+io 系コード差分なし）。`chore/io-398-400-audit` ブランチ
+（docs のみの差分）で実施。すべて `mise run` /
+確立済み `mise exec -- cargo` 入口で実行した。
 
 | タスク | 結果 |
 | --- | --- |
-| `mise run fmt-check` | pass（exit 0） |
-| `mise run check`（workspace `--all-targets`） | pass（exit 0） |
-| `mise run lint`（workspace `--all-targets -D warnings`） | pass（exit 0） |
-| `mise run check-io-file` / `lint-io-file` | pass（exit 0） |
-| `mise run test-io-file` | pass（exit 0 — io-file unit 92 + `tests/rooted_read.rs` 実 FS 25 + io-archive 全 suite + doctests） |
-| `mise run check-io-e2e` / `lint-io-e2e` | pass（exit 0） |
-| `mise run test-io-e2e` | pass（exit 0 — `wav_staged` 3・`rooted_boundary` 4・fault/fuzz/os_fs_probe 含む全 suite） |
-| `mise exec -- cargo test -p ruviform-io-symphonia -p ruviform-media-io -p ruviform-media-reader` | pass（exit 0 — borrowed 12・borrowed_source 3・`SourceReader`/prefetch/reader/rt_fill 全件・`with_borrowed_demuxer` doctest + escape `compile_fail` doctest 含む） |
-| `mise run test-rt` | pass（exit 0、`rt_` filter） |
-| `mise run check-linux` | pass（exit 0 — io-file/io-archive の `x86_64-unknown-linux-gnu` check+clippy scoped lane） |
-| `mise run test`（workspace） | 初回: `ruviform-plugin-host --test l1_proxy_e2e` で 3 件 flaky 失敗（process-boundary timing、並行負荷下）。単独再実行 `cargo test -p ruviform-plugin-host --test l1_proxy_e2e` は 184/184 pass。**再実行は exit 0 で全 suite pass**（191 suite・FAILED 0） |
+| `mise run fmt-check` | pass（exit 0、merge 後 head で再実行） |
+| `mise run check`（workspace `--all-targets`） | pass（exit 0、merge 後 head で再実行） |
+| `mise run lint`（workspace `--all-targets -D warnings`） | pass（exit 0、merge 後 head で再実行） |
+| `mise run check-io-file` / `lint-io-file` | pass（exit 0、baseline で実行。merge 後は workspace `check`/`lint` が同一 crate を `--all-targets` で包含） |
+| `mise run test-io-file` | pass（exit 0、merge 後 head で再実行 — io-file unit 92 + `tests/rooted_read.rs` 実 FS 25 + io-archive 全 suite + doctests） |
+| `mise run check-io-e2e` / `lint-io-e2e` | pass（exit 0、baseline で実行。merge 後は workspace `check`/`lint` が包含） |
+| `mise run test-io-e2e` | pass（exit 0、merge 後 head で再実行 — `wav_staged`・`rooted_boundary`・fault/fuzz/os_fs_probe 含む全 suite） |
+| `mise exec -- cargo test -p ruviform-io-symphonia -p ruviform-media-io -p ruviform-media-reader` | pass（exit 0、merge 後 head で再実行 — borrowed 12・borrowed_source 3・`SourceReader`/prefetch/reader/rt_fill 全件・`with_borrowed_demuxer` doctest + escape `compile_fail` doctest 含む） |
+| `mise run test-rt` | pass（exit 0、`rt_` filter、merge 後 head で再実行） |
+| `mise run check-linux` | pass（exit 0、baseline で実行 — io-file/io-archive の `x86_64-unknown-linux-gnu` check+clippy scoped lane。merge delta に io 系コード差分なし） |
+| `mise run test`（workspace） | baseline head: 初回 `l1_proxy_e2e` 3 件 flaky 失敗 → 再実行 exit 0（191 suite・FAILED 0）。merge 後 head: `l1_proxy_e2e` で 2 件 flaky 失敗（`SpawnFailed{Timeout}` 系・失敗 test は毎回異なる）。同 binary の `--test-threads=4` 再実行は 184/184 pass — 高並列負荷下の timing flake であり、本差分（docs のみ・当該 crate 無変更）とは無関係。io 系全 lane は merge 後 head で個別に pass |
 | `mise run test-msrv` 相当 | NotRun — io 系 crate 向けの MSRV task は `mise.toml` に未定義（`test-ofx-msrv`/`test-ui-test-msrv` のみ存在し対象外） |
 
 ### 受入条件との対応
