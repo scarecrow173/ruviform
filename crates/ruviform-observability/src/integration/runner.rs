@@ -525,6 +525,18 @@ impl Components {
 /// `&mut self` — the runner is a single-owner object; share reads
 /// through [`collector_handle`](Self::collector_handle) /
 /// [`registration_port`](Self::registration_port) clones.
+///
+/// # Consumer subscription boundary (OBS-07 / OBS-11)
+///
+/// The pull surface — [`collector_handle`](Self::collector_handle),
+/// [`snapshot`](Self::snapshot), [`latest_batch`](Self::latest_batch),
+/// [`history`](Self::history), [`series`](Self::series) — is the
+/// canonical read path for GUI and other consumers: they poll at
+/// their own cadence from non-RT code. There is deliberately **no**
+/// push `Subscription` or fan-out API — the library never installs
+/// implicit subscribers; hosts own subscribers, authorization, and
+/// any IPC. Absence of push notification is a design boundary, not
+/// a missing feature.
 pub struct ObservationRunner {
     state: RunnerState,
     components: Option<Components>,

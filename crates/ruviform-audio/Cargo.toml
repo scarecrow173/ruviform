@@ -30,6 +30,11 @@ ruviform-exec = { path = "../ruviform-exec" }
 
 [dev-dependencies]
 assert_no_alloc = "1.1"
+# Issue #293 (OBS-11): `ObservationRunner` lives behind observability's
+# `integration` feature. Enabling it here is test-only — the library
+# dependency above stays feature-free, so downstream consumers of
+# ruviform-audio never pull the integration layer transitively.
+ruviform-observability = { path = "../ruviform-observability", features = ["integration"] }
 # Issue #198 end-to-end render tests: WAV encode/mux backend and an
 # independent reopen/verify reader.
 ruviform-io-wav = { path = "../ruviform-io-wav" }

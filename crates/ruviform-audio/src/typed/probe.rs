@@ -39,6 +39,11 @@ use super::runtime::{GraphRuntime, SharedStatus};
 /// (Issue #309) — non-RT side only.
 pub mod time;
 
+/// Concrete `ruviform_observability::debug::ProbeSource` adapter —
+/// non-RT side only (Issue #293 OBS-11 slice).
+mod source;
+
+pub use source::ProbeSourceAdapter;
 pub use time::{
     AlignPolicy, Alignment, AlignmentBasis, AlignmentCondition, CoverageClass, CoverageEvent,
     CoverageInterval, FrameInterval, GenerationRange, IncomparableReason, LatencyKnowledge,
@@ -1000,11 +1005,36 @@ pub struct ProbeBroker {
 #[derive(Copy, Clone, Debug)]
 struct ProbeEntry {
     point: ProbePoint,
+    /// Last commanded mode — the broker's control-plane view,
+    /// updated when a command is accepted onto the channel.
     mode: ProbeMode,
+    /// Mode the RT side last confirmed via the status stream —
+    /// maintained by the `source` adapter's drain; initialized to
+    /// `mode` at install and reconciled by `Installed`/
+    /// `ModeChanged`/`CaptureStarted`/`CaptureStopped` statuses.
+    applied_mode: ProbeMode,
     budget_frames: u64,
     /// Capture continuation policy consumed by `on_publish`
     /// (Issue #308) — never sent to the RT side directly.
     capture_policy: CapturePolicy,
+    /// Plan generation the broker last staged a binding for —
+    /// `install`, or the newest `on_publish` that resolved the
+    /// point. Stays at the previous generation for a probe whose
+    /// point stopped resolving (its binding is dropped at commit),
+    /// so generation skew stays visible to inspection.
+    bound_generation: u64,
+    /// Availability against the newest plan the broker resolved —
+    /// `Configured`/`Inferred` while bound; after an `on_publish`
+    /// that cannot re-resolve the point it carries the failure
+    /// class (`Unavailable`/`Unknown`/`Unsupported`).
+    availability: PointAvailability,
+    /// Latest drained status kind — maintained by the `source`
+    /// adapter, `None` until the first status record arrives.
+    last_status: Option<StatusKind>,
+    /// Telemetry records drained for this probe — maintained by the
+    /// `source` adapter (metrics and statuses; capture chunks are
+    /// not telemetry).
+    recorded: u64,
 }
 
 /// Resolved physical binding for one point.
@@ -1185,8 +1215,13 @@ impl ProbeBroker {
             ProbeEntry {
                 point,
                 mode,
+                applied_mode: mode,
                 budget_frames: 0,
                 capture_policy: CapturePolicy::StopAtBoundary,
+                bound_generation: plan.generation,
+                availability,
+                last_status: None,
+                recorded: 0,
             },
         );
         Ok(probe)
@@ -1337,6 +1372,8 @@ impl ProbeBroker {
         // reaches the RT side inside RebindCommit, so a mid-sequence
         // channel-full failure leaves the live bindings untouched.
         let mut staged = Vec::with_capacity(self.probes.len());
+        let mut updates: Vec<(ProbeId, PointAvailability, bool)> =
+            Vec::with_capacity(self.probes.len());
         let mut receipt = RebindReceipt {
             generation,
             bound: Vec::with_capacity(self.probes.len()),
@@ -1345,7 +1382,9 @@ impl ProbeBroker {
             capture_restarted: Vec::new(),
         };
         for (&probe, entry) in &mut self.probes {
-            let Some(r) = resolve_point(spec, plan, entry.point).1 else {
+            let (availability, resolved) = resolve_point(spec, plan, entry.point);
+            updates.push((probe, availability, resolved.is_some()));
+            let Some(r) = resolved else {
                 receipt.unbound.push(probe);
                 continue;
             };
@@ -1392,6 +1431,18 @@ impl ProbeBroker {
         self.commands
             .try_push(ProbeCommand::RebindCommit { generation })
             .map_err(|_| ProbeError::CommandChannelFull)?;
+        // The whole Begin/Stage/Commit sequence is enqueued — only now
+        // is it honest to record the new resolution state. A mid-
+        // sequence failure above returns early and leaves every
+        // entry at its previous generation/availability.
+        for (probe, availability, bound) in updates {
+            if let Some(entry) = self.probes.get_mut(&probe) {
+                entry.availability = availability;
+                if bound {
+                    entry.bound_generation = generation;
+                }
+            }
+        }
         Ok(receipt)
     }
 

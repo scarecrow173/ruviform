@@ -127,6 +127,7 @@ Directory: `docs/tasks`
 | TASK-034UnBJEQ9hvQiyzg4UMHk | Issue #291 OBS-09 Diagnostics 実装タスク | done | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
 | TASK-I1LfNQN5Dh3eVjMCa0yvUi | Issue #292 OBS-10 Debug Inspection 実装タスク | done | [implement-issue-292-observability-debug-inspection.md](./implement-issue-292-observability-debug-inspection.md) |
 | TASK-SJPi9nUIVUE9wH6ysAKEGp | Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 実装タスク | done | [implement-issue-293-observability-integration-runner.md](./implement-issue-293-observability-integration-runner.md) |
+| TASK-7xQm2PvL9wR4tN8sK3jH5f | Issue #293 OBS-11 ProbeSource adapter + 統合 edge 強化スライス | done | [implement-issue-293-probe-source-adapter.md](./implement-issue-293-probe-source-adapter.md) |
 | TASK-BS44ckVmFBThwWFjdUUaro | Issue #465 Legacy WebView P0/P1 — 文書歴史化と棚卸し | done | [implement-issue-465-legacy-webview-p0p1.md](./implement-issue-465-legacy-webview-p0p1.md) |
 | TASK-034UaK7UfGDq7HHHhdeetT | Issue #468 RootedDir canonical 前提の契約明示 | done | [implement-issue-468-rooteddir-canonical-premise.md](./implement-issue-468-rooteddir-canonical-premise.md) |
 | TASK-034UexWbrpLoijqKctQjFB | Issue #478 Fader/Knob 縦寸法契約 — 設計判断と実装タスク | done | [implement-issue-478-fader-knob-height-contract.md](./implement-issue-478-fader-knob-height-contract.md) |

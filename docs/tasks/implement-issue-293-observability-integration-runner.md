@@ -4,7 +4,7 @@ type: "task"
 status: "done"
 title: "Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 実装タスク"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-10"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -112,7 +112,12 @@ debug/profiling/tracing_export/logging の公開 API は変更しない。
   NotRun（#281/#219 cross-repo gate）
 - RT callback での Subscriber/allocator/lock/IO/非有界 wake 混入の
   実機計測・AudioLens f64/Synvelis 再生回帰 — NotRun（consumer gate）
-- Linux/macOS 実機・MSRV lane — NotRun（#219/#223 gate）
+- Linux/macOS 実機・MSRV lane — NotRun（#219/#223 gate。
+  ただし observability の MSRV lane は後続 slice
+  [implement-issue-293-probe-source-adapter.md](implement-issue-293-probe-source-adapter.md)
+  で追加・Rust 1.89 実走済み）
 - concrete probe adapter の ruviform-audio 側実装 — NotRun（別
-  Issue/slice）
+  Issue/slice。後続 slice
+  [implement-issue-293-probe-source-adapter.md](implement-issue-293-probe-source-adapter.md)
+  で実装済み）
 - OTLP 等の外部 exporter — 対象外（初期完成条件に混ぜない）

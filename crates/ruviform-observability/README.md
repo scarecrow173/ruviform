@@ -338,8 +338,17 @@ while running {
 
 Source の登録は `runner.registration_port()`（`Collector` の
 `ObservationRegistrar`）経由で、収集中でも追加できる。Snapshot 照会は
-`runner.snapshot()` / `latest_batch()` / `history()`、Diagnostics は
-`diagnostics_snapshot()`、Debug inspector は `debug()` から辿る。
+`runner.snapshot()` / `latest_batch()` / `history()` / `series()` /
+`collector_handle()`、Diagnostics は `diagnostics_snapshot()`、Debug
+inspector は `debug()` / `debug_mut()` から辿る。
+
+**GUI/consumer の購読境界（OBS-07 no-fan-out 規約）**: 観測データの
+正本は pull API のみである。consumer（GUI・AudioLens・Synvelis 等）は
+`collector_handle()` が返す shareable handle か runner の snapshot
+系メソッドを自分のポーリングループから引く。push `Subscription` /
+fan-out / callback 通知の API は**設計上存在しない** — ライブラリが
+subscriber を暗黙 install せず、host が subscriber・認可・IPC を所有
+する OBS-11 の境界そのものであり、欠落した機能ではない。
 
 ### 通常停止
 
