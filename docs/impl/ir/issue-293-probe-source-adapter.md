@@ -177,7 +177,17 @@ rebind/capture boundary policy（#308）。
   opt-in が現行設計の意図と判断（根拠は #293 spec/design の
   feature 節）。変更はスコープ外として記録のみ。
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+（なし）
+
+### Rejected
+
+（なし）
+
+## Validation
 
 | Lane | Command | Result |
 | --- | --- | --- |
@@ -189,6 +199,42 @@ rebind/capture boundary policy（#308）。
 | MSRV | `mise run test-observability-msrv` | pass（rust@1.89.0・`--all-features`・288 unit + 15 integration + 28 logging + doctests） |
 | adapter tests | `cargo test -p ruviform-audio --test typed_probe_source` | 8/8 pass |
 | integration tests | `cargo test -p ruviform-observability --features integration --test integration` | 9/9 pass |
+| doctest | `cargo test -p ruviform-audio --doc` | pass（`ProbeSourceAdapter` rustdoc example 含む 2/2） |
+
+注: `mise run test` の初回実行で `ruviform-plugin-host` の
+`wedged_child_write_converges_and_teardown_is_bounded` が spawn
+timeout で 1 件失敗したが、単独再実行・workspace 再実行ともに
+pass — 本 slice と無関係の timing flake（plugin-host の child
+process spawn 計測）と判断し、最終 lane は全緑。
+
+## Risks
+
+- `decks()` と `drain_events()` は同一 telemetry/chunk channel を
+  共有するため、どちらが先に drain してもその window の record は
+  一方にしか見えない — cumulative counter は累積なので損失には
+  ならないが、record 単位の観測は host が drain 責任を一本化する
+  必要がある（rustdoc に明記済み）。
+- `applied_mode` は status stream の reconcile であり、status
+  record が channel-full で drop された場合は直前の確定値を保持
+  する — loss は `dropped`/`lost_records` に計数され偽装しないが、
+  mode の一時的な staleness はあり得る（bounded lossy channel の
+  固有の制約）。
+- `ProbeEntry` の broker metadata（`bound_generation`/
+  `availability`）は `on_publish` の enqueue 成功後にのみ更新
+  するが、RT 側 commit が失敗・遅延した場合は broker の見え方と
+  RT の実 binding が一時的に乖離し得る — status stream
+  （`RebindDropped`/`Unbound`）がそれを surface する設計。
+
+## Follow-ups
+
+- AudioLens #138・Synvelis #81 の consumer 統合（pull API 経由の
+  probe inspection 利用を含む）— #281/#219 cross-repo gate。
+- RT no-alloc/latency の実機計測・実 OS（Linux/macOS）検証 —
+  #219/#223 gate。
+- cross-repo gate（#281/#219/#294）・外部 consumer 受入 — NotRun。
+- Feature DAG（`collector`/`diagnostics`/`debug-tools` feature
+  分割）の再検討 — 現状 always-on が意図と判断したが、consumer
+  側の要件が固まった時点で再評価。
 
 ## NotRun / Deferred
 
