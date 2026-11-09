@@ -1,7 +1,7 @@
 ---
 id: "TASK-034Ui3oOaxCn3ZMrQTqhed"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #308 — Probe再Binding全件整合の実装タスク"
 created: "2026-11-08"
 updated: "2026-11-08"
@@ -64,13 +64,13 @@ relations:
 
 ## Done When
 
-- [ ] `RebindBegin`/`RebindStage`/`RebindCommit` が generation+staging epoch で fail-closed に適用され、commit が `mem::swap` で atomic
-- [ ] `on_publish` が `Result<RebindReceipt, ProbeError>` を返し、失敗時は Commit 無しの inert prefix のみ残る
-- [ ] `StatusKind::RebindDropped`・`StopReason::GenerationBoundary`・`CapturePolicy`/`set_capture_policy` が実装され doc と一致
-- [ ] queue 飽和点・連続切替・unresolved・Capture boundary・Golden のテストが RED→GREEN
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` 全緑
+- [x] `RebindBegin`/`RebindStage`/`RebindCommit` が generation+staging epoch で fail-closed に適用され、commit が `mem::swap` で atomic
+- [x] `on_publish` が `Result<RebindReceipt, ProbeError>` を返し、失敗時は Commit 無しの inert prefix のみ残る
+- [x] `StatusKind::RebindDropped`・`StopReason::GenerationBoundary`・`CapturePolicy`/`set_capture_policy` が実装され doc と一致
+- [x] queue 飽和点・連続切替・unresolved・Capture boundary・Golden のテストが RED→GREEN
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` 全緑
 
 ## Verification
 
-- [ ] `mise run check` `mise run lint` `mise run fmt-check` `mise run test` `mise run test-rt`
-- [ ] `git merge origin/main` 後の再検証
+- [x] `mise run check` `mise run lint` `mise run fmt-check` `mise run test` `mise run test-rt`
+- [x] `git merge origin/main` 後の再検証
