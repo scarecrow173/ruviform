@@ -23,15 +23,28 @@
 //! lossless Recording Writer contract (Issue #187).
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use ruviform_audio_analysis::ChannelLevel;
 use ruviform_graph::{Direction, GraphSpec, NodeId, PortCapability, PortFormat, PortId};
+use ruviform_media_core::{ClockDomainId, ClockEpochId, TimestampProvenance};
 use ruviform_observability::{Counter, CounterReader, counter};
 use ruviform_rt::{Consumer, Producer};
 
 use super::buffer::Slot;
 use super::compile::PreparedPlan;
 use super::runtime::{GraphRuntime, SharedStatus};
+
+/// Probe time context, clock marks and observation alignment
+/// (Issue #309) — non-RT side only.
+pub mod time;
+
+pub use time::{
+    AlignPolicy, Alignment, AlignmentBasis, AlignmentCondition, CoverageClass, CoverageEvent,
+    CoverageInterval, FrameInterval, GenerationRange, IncomparableReason, LatencyKnowledge,
+    ObservationCoverage, ObservationFormat, ObservationSpan, ProbeClockMark, ProbePrecision,
+    ProbeTimeContext, align_observation_points,
+};
 
 /// Maximum channels a [`MetricRecord`] carries inline (POD bound —
 /// records travel the telemetry channel without allocation).
@@ -161,6 +174,11 @@ pub struct RecordMeta {
     pub sample_rate: u32,
     /// Path latency to this tap point in frames.
     pub effective_latency: u32,
+    /// Clock identity of the frame-cursor series this record belongs
+    /// to (Issue #309) — `UNKNOWN` until the deck is wired via
+    /// `SetClockMark`; records self-describe their `(domain, epoch)`
+    /// so interpretation never depends on registry state.
+    pub clock: ProbeClockMark,
 }
 
 /// Per-block Peak/RMS — POD, telemetry-channel payload.
@@ -259,6 +277,8 @@ pub struct StatusRecord {
     pub generation: u64,
     /// Absolute block position at emit time.
     pub sample_position: u64,
+    /// Clock identity of the cursor series at emit time (Issue #309).
+    pub clock: ProbeClockMark,
     /// What happened.
     pub kind: StatusKind,
 }
@@ -442,6 +462,15 @@ pub enum ProbeCommand {
         /// Target probe.
         probe: ProbeId,
     },
+    /// Replace the deck's clock mark — series/deck-scoped (not
+    /// per-probe): every tap shares the same frame cursor, so one
+    /// mark covers all bindings. A lifetime command applied every
+    /// callback like `SetMode`; the non-RT side mints marks and bumps
+    /// epochs, the RT side only stores the copy (Issue #309).
+    SetClockMark {
+        /// New mark for the cursor series.
+        mark: ProbeClockMark,
+    },
 }
 
 /// Probe construction bounds — all allocation happens at [`pair`].
@@ -560,6 +589,10 @@ pub struct ProbeDeck {
     /// Generation of the open rebind attempt (`None` = no open
     /// attempt — `RebindStage`/`RebindCommit` are rejected).
     staging: Option<u64>,
+    /// Clock mark currently stamped on records — `UNKNOWN` until a
+    /// `SetClockMark` command lands (Issue #309). Series/deck-scoped:
+    /// every binding shares the same frame cursor.
+    current_mark: ProbeClockMark,
     max_probes: usize,
     chunk_frames: usize,
     lost_records: Counter,
@@ -661,8 +694,16 @@ impl ProbeDeck {
                         self.push_status(&b, generation, base, StatusKind::Removed);
                     }
                 }
+                ProbeCommand::SetClockMark { mark } => {
+                    self.current_mark = mark;
+                }
             }
         }
+    }
+
+    /// The clock mark currently stamped on records.
+    pub(crate) fn current_mark(&self) -> ProbeClockMark {
+        self.current_mark
     }
 
     /// `RebindBegin`: opens the staging epoch for `g`, discarding
@@ -770,6 +811,7 @@ impl ProbeDeck {
             port: b.port,
             generation,
             sample_position: base,
+            clock: self.current_mark,
             kind,
         });
         if self.telemetry.try_push(rec).is_err() {
@@ -845,6 +887,7 @@ impl ProbeDeck {
                 channels: b.channels,
                 sample_rate: b.sample_rate,
                 effective_latency: b.effective_latency,
+                clock: c.mark,
             };
             match b.mode {
                 ProbeMode::Monitor => self.emit_metric(&slot, meta),
@@ -934,6 +977,9 @@ pub(crate) struct TapCtx {
     pub generation: u64,
     /// Absolute position of the block's first frame (`frame_cursor`).
     pub base: u64,
+    /// Clock mark of the cursor series — refreshed from the deck
+    /// after `drain_commands` each callback (Issue #309).
+    pub mark: ProbeClockMark,
 }
 
 /// Non-RT control plane — resolves points against the published
@@ -946,6 +992,9 @@ pub struct ProbeBroker {
     next: u64,
     max_probes: usize,
     pool_budget: u64,
+    /// Non-RT time-series registry entry for this pair (Issue #309) —
+    /// one cursor series = one domain; records carry its mark.
+    time: ProbeTimeContext,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -1100,6 +1149,7 @@ impl ProbeBroker {
         mode: ProbeMode,
     ) -> Result<ProbeId, ProbeError> {
         let plan = runtime.published_plan();
+        self.note_generation(plan.generation);
         let (availability, resolved) = resolve_point(spec, plan, point);
         let Some(r) = resolved else {
             return Err(ProbeError::PointUnavailable { availability });
@@ -1282,6 +1332,7 @@ impl ProbeBroker {
     ) -> Result<RebindReceipt, ProbeError> {
         let plan = runtime.published_plan();
         let generation = plan.generation;
+        self.note_generation(generation);
         // Resolve everything before pushing: the staged set only
         // reaches the RT side inside RebindCommit, so a mid-sequence
         // channel-full failure leaves the live bindings untouched.
@@ -1361,6 +1412,66 @@ impl ProbeBroker {
     pub fn is_empty(&self) -> bool {
         self.probes.is_empty()
     }
+
+    /// The non-RT time-series context for this pair (Issue #309):
+    /// `(domain, epoch)` identity plus runtime-instance, anchors and
+    /// generation window used to build [`ObservationSpan`]s. The
+    /// record stream stays interpretable without it — records carry
+    /// their own [`ProbeClockMark`].
+    #[must_use]
+    pub fn time_context(&self) -> &ProbeTimeContext {
+        &self.time
+    }
+
+    /// Mutable access for consumer wiring — declare `sample_rate`,
+    /// install `anchors`, adjust `provenance`. Non-RT only.
+    pub fn time_context_mut(&mut self) -> &mut ProbeTimeContext {
+        &mut self.time
+    }
+
+    /// Delivers the series' current `(domain, epoch)` mark to the
+    /// deck via `SetClockMark`. Until this runs, records carry
+    /// [`ProbeClockMark::UNKNOWN`]. Idempotent — re-sending the same
+    /// mark is harmless.
+    ///
+    /// # Errors
+    /// [`ProbeError::CommandChannelFull`].
+    pub fn wire_clock_mark(&mut self) -> Result<(), ProbeError> {
+        self.commands
+            .try_push(ProbeCommand::SetClockMark {
+                mark: self.time.mark(),
+            })
+            .map_err(|_| ProbeError::CommandChannelFull)
+    }
+
+    /// Declares a cursor-series discontinuity: bumps the epoch and
+    /// delivers the new mark through the same command path. Records
+    /// after the bump carry the new epoch, so spans built across the
+    /// boundary classify as `EpochMismatch`/`DiscontinuityInWindow`
+    /// instead of silently aligning (Issue #309).
+    ///
+    /// # Errors
+    /// [`ProbeError::CommandChannelFull`] — the epoch is bumped
+    /// before the push; on failure the context and deck disagree.
+    /// Retry [`wire_clock_mark`](Self::wire_clock_mark) after the
+    /// channel drains.
+    pub fn bump_epoch(&mut self) -> Result<ClockEpochId, ProbeError> {
+        self.time.epoch = ClockEpochId::new(self.time.epoch.get().wrapping_add(1));
+        self.wire_clock_mark()?;
+        Ok(self.time.epoch)
+    }
+
+    /// Records a plan generation the series has observed, widening
+    /// `generation_window`.
+    fn note_generation(&mut self, generation: u64) {
+        self.time.generation_window = Some(match self.time.generation_window {
+            None => GenerationRange::single(generation),
+            Some(w) => GenerationRange {
+                first: w.first.min(generation),
+                last: w.last.max(generation),
+            },
+        });
+    }
 }
 
 /// Non-RT receive side — drains `chunks_out` and `telemetry`,
@@ -1428,6 +1539,17 @@ pub struct ProbeParts {
     pub collector: ProbeCollector,
 }
 
+/// Probe-series clock domains live in a dedicated high namespace —
+/// far above media-core's well-known ids (`0`=UNKNOWN, `1`=
+/// `SAMPLE_CLOCK`, `2`=MONOTONIC) — so a probe cursor domain can never
+/// collide with a device/backend domain id (Issue #309).
+const PROBE_DOMAIN_NAMESPACE: u64 = 0x5256_4650_0000_0000;
+
+/// Non-RT mint counters — `pair()` is non-RT, so plain atomics are
+/// fine; they only need process-wide uniqueness, not RT speed.
+static NEXT_PROBE_DOMAIN: AtomicU64 = AtomicU64::new(0);
+static NEXT_RUNTIME_INSTANCE: AtomicU64 = AtomicU64::new(1);
+
 /// Builds the broker/deck/collector triple and preallocates the
 /// entire capture pool — all allocation happens here.
 ///
@@ -1445,6 +1567,14 @@ pub fn pair(config: &ProbeConfig) -> ProbeParts {
     let (lost_blocks_w, lost_blocks_r) = counter();
     let (unobserved_w, unobserved_r) = counter();
     let (unbound_w, unbound_r) = counter();
+    // Mint the cursor-series identity (Issue #309): one domain per
+    // pair, epoch starts at 0, runtime instance is a non-RT counter.
+    // The deck stays `UNKNOWN`-marked until the consumer wires the
+    // mark via `ProbeBroker::wire_clock_mark`.
+    let domain = ClockDomainId::new(
+        PROBE_DOMAIN_NAMESPACE.wrapping_add(NEXT_PROBE_DOMAIN.fetch_add(1, Ordering::Relaxed)),
+    );
+    let runtime_instance = NEXT_RUNTIME_INSTANCE.fetch_add(1, Ordering::Relaxed);
     let mut free_prod = free_prod;
     for _ in 0..config.pool_chunks {
         let _ = free_prod.try_push(Box::new(CaptureChunk {
@@ -1461,6 +1591,15 @@ pub fn pair(config: &ProbeConfig) -> ProbeParts {
             next: 0,
             max_probes: config.max_probes,
             pool_budget: (config.pool_chunks as u64) * (config.chunk_frames as u64),
+            time: ProbeTimeContext {
+                domain,
+                epoch: ClockEpochId::new(0),
+                runtime_instance,
+                sample_rate: 0,
+                provenance: TimestampProvenance::Derived,
+                anchors: Vec::new(),
+                generation_window: None,
+            },
         },
         deck: ProbeDeck {
             commands: cmd_cons,
@@ -1470,6 +1609,7 @@ pub fn pair(config: &ProbeConfig) -> ProbeParts {
             bindings: Vec::with_capacity(config.max_probes),
             staged: Vec::with_capacity(config.max_probes),
             staging: None,
+            current_mark: ProbeClockMark::UNKNOWN,
             max_probes: config.max_probes,
             chunk_frames: config.chunk_frames,
             lost_records: lost_records_w,
