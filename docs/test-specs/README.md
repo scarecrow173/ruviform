@@ -59,6 +59,7 @@ Directory: `docs/test-specs`
 | TSPEC-034RTrq34tAM6KDpPaC83H | Issue #279 OBS-04 plugin-host 4 Counter Source登録・寿命・degraded試験 | approved | [issue-279-plugin-host-counter-source-tests.md](./issue-279-plugin-host-counter-source-tests.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-iF1sER54cUJ1FKmvvSy6W2 | Issue #280 OBS-05 RT record bridge・record vocabulary tests | approved | [issue-280-rt-record-bridge-tests.md](./issue-280-rt-record-bridge-tests.md) |
+| TSPEC-034UtKOMzAChsfMRSOpIdg | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | TSPEC-034T2NeVNZOhwkPaIzj0Q7 | Issue #289 OBS-07 Collector/Metrics/Snapshot 試験仕様 | approved | [issue-289-observability-collector-metrics-tests.md](./issue-289-observability-collector-metrics-tests.md) |
 | TSPEC-034UoYH3LGuoCYBYsd5dXf | Issue #290 allocation-probe — CountingAllocator/AllocationScope 契約試験 | approved | [issue-290-observability-allocation-probe-tests.md](./issue-290-observability-allocation-probe-tests.md) |
 | TSPEC-034UnxESRAtEpUTP5RInqW | Issue #291 OBS-09 Diagnostics/Evidence/Finding/Health/Report 試験仕様 | approved | [issue-291-observability-diagnostics-tests.md](./issue-291-observability-diagnostics-tests.md) |

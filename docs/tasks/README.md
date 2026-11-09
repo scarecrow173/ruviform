@@ -7,9 +7,6 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034UdR18snUStfTR5NpZge | Issue #243 実装タスク | in-progress | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
-| TASK-034UprmEYoMJcy1j0tHLHy | Issue #278 OBS-03 tracing_export 実装タスク | done | [implement-issue-278-observability-tracing-export.md](./implement-issue-278-observability-tracing-export.md) |
-| TASK-I1LfNQN5Dh3eVjMCa0yvUi | Issue #292 OBS-10 Debug Inspection 実装タスク | done | [implement-issue-292-observability-debug-inspection.md](./implement-issue-292-observability-debug-inspection.md) |
-| TASK-SJPi9nUIVUE9wH6ysAKEGp | Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 実装タスク | done | [implement-issue-293-observability-integration-runner.md](./implement-issue-293-observability-integration-runner.md) |
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
@@ -121,9 +118,12 @@ Directory: `docs/tasks`
 | TASK-034JxOaMsaSwEIVfvU9MC8 | ruviform-exec スレッド優先度機構の実装 | done | [implement-exec-thread-priority.md](./implement-exec-thread-priority.md) |
 | TASK-034JNwTz163N6eT3EJfdaD | FrameRate 型の実装（TimeBase newtype・検証付きコンストラクタ・nominal_fps） | done | [implement-framerate-type.md](./implement-framerate-type.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
+| TASK-034UprmEYoMJcy1j0tHLHy | Issue #278 OBS-03 tracing_export 実装タスク | done | [implement-issue-278-observability-tracing-export.md](./implement-issue-278-observability-tracing-export.md) |
 | TASK-034T2PiH8yPGqaV8KE8r4M | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装 | done | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
 | TASK-034UoZXLONDKdThLicpKCD | Implement Issue #290 OBS-08 allocation-probe — CountingAllocator/AllocationScope | done | [implement-issue-290-observability-allocation-probe.md](./implement-issue-290-observability-allocation-probe.md) |
 | TASK-034UnBJEQ9hvQiyzg4UMHk | Issue #291 OBS-09 Diagnostics 実装タスク | done | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
+| TASK-I1LfNQN5Dh3eVjMCa0yvUi | Issue #292 OBS-10 Debug Inspection 実装タスク | done | [implement-issue-292-observability-debug-inspection.md](./implement-issue-292-observability-debug-inspection.md) |
+| TASK-SJPi9nUIVUE9wH6ysAKEGp | Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 実装タスク | done | [implement-issue-293-observability-integration-runner.md](./implement-issue-293-observability-integration-runner.md) |
 | TASK-BS44ckVmFBThwWFjdUUaro | Issue #465 Legacy WebView P0/P1 — 文書歴史化と棚卸し | done | [implement-issue-465-legacy-webview-p0p1.md](./implement-issue-465-legacy-webview-p0p1.md) |
 | TASK-034UaK7UfGDq7HHHhdeetT | Issue #468 RootedDir canonical 前提の契約明示 | done | [implement-issue-468-rooteddir-canonical-premise.md](./implement-issue-468-rooteddir-canonical-premise.md) |
 | TASK-034UexWbrpLoijqKctQjFB | Issue #478 Fader/Knob 縦寸法契約 — 設計判断と実装タスク | done | [implement-issue-478-fader-knob-height-contract.md](./implement-issue-478-fader-knob-height-contract.md) |
@@ -183,6 +183,7 @@ Directory: `docs/tasks`
 | TASK-034QxfiWo8R8kkqMasIoQm | T4 verification + review-protocol + impl record (Issue #244) | done | [issue-244-t4-verification-record.md](./issue-244-t4-verification-record.md) |
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
 | TASK-034UjQLrFyv9HY5QSH9HmW | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | done | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| TASK-034UtPLgt4p9kVhsCVVQ5f | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | done | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | TASK-034UlgdtbhGVBT1saWLNNP | Issue #294 daily tuple trigger 実装 — decide.mjs tuple モード・daily-ci job・契約 test | done | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TASK-034Sa3F7jL2nQ5uY8cE1hK | T1 ci/consumer-verify evidence.mjs + fixture tests + test-ci-consumer-verify task（Issue #294） | done | [issue-294-t1-consumer-verify-evidence-script.md](./issue-294-t1-consumer-verify-evidence-script.md) |
 | TASK-034Sa6J9mP4sV7xB1fK5nQ | T2 consumer-verify.yml tuple証拠・SHA ref・UI headless lane・extra_tasks 接続点 + yml contract test（Issue #294） | done | [issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md](./issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md) |
