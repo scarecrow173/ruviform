@@ -13,6 +13,14 @@
 //!   an event, and counter deltas never infer severity.
 //! - [`TracingFindingSink`] adapts [`crate::diagnostics::DiagnosticsEvent`]s
 //!   into `tracing` events for `Diagnostics::set_sink`.
+//! - [`TracingRecordExporter`] turns drained
+//!   [`crate::record::EventRecord`]s into `rt_record` events, resolving
+//!   each record's [`crate::record::CorrelationLink`] through a
+//!   [`crate::record::CorrelationBook`] and optionally attaching W3C
+//!   trace fields from a [`TraceContext`]. Slice 1 event schemas
+//!   (`metric_observation`/`observation_window`/
+//!   `diagnostics.health_transition`) are unchanged — trace fields are
+//!   `rt_record`-only in this revision.
 //!
 //! # Ownership and gating
 //!
@@ -30,10 +38,11 @@
 //!
 //! # RT contract
 //!
-//! Every public operation here is **non-RT only**: `emit` allocates
-//! (`HashMap`, `String`) and runs subscriber code under a scoped
-//! dispatch. RT writer paths must never call into this module or into
-//! `tracing` at all.
+//! Every public operation here is **non-RT only**: `emit` and
+//! `emit_records` allocate (`HashMap`, `String`, slice iteration) and
+//! run subscriber code under a scoped dispatch. RT writer paths must
+//! never call into this module or into `tracing` at all — including
+//! inside a `RecordSink::drain` callback.
 //!
 //! # Failure isolation
 //!
@@ -44,11 +53,15 @@
 //! `catch_unwind` and counts them without recursive logging.
 
 mod exporter;
+mod records;
 mod schema;
 mod sink;
+mod trace_context;
 
 #[cfg(test)]
 mod tests;
 
 pub use exporter::{DEFAULT_MAX_EMISSIONS_PER_POLL, EmitStats, TracingExporter};
+pub use records::{DEFAULT_MAX_EVENTS_PER_DRAIN, RecordEmitStats, TracingRecordExporter};
 pub use sink::TracingFindingSink;
+pub use trace_context::TraceContext;

@@ -44,6 +44,7 @@ Directory: `docs/specs`
 | SPEC-8EJ4gM4rl1pb5GPij5Nm0l | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | SPEC-034RoXidyTvNC4Cd998l35 | Issue #276 汎用 Logging Adapter(observability::logging) | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | SPEC-034Rp1Lwq5BGjy5ucoWJ4s | Issue #277 OBS-02 軽量Primitive・Observation Source型・登録/寿命契約 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
+| SPEC-034UBnaDfEZMAipNtQoTeu | Issue #278 OBS-03 tracing_export slice 2 — EventRecord export + Correlation unlinked + W3C Trace Context | proposed | [issue-278-observability-tracing-export-records.md](./issue-278-observability-tracing-export-records.md) |
 | SPEC-034UpqR38pxxqJjjHLaFBG | Issue #278 OBS-03 tracing_export — ObservationBatch Exporter + FindingSink adapter slice | approved | [issue-278-observability-tracing-export.md](./issue-278-observability-tracing-export.md) |
 | SPEC-034RToefGzxcXIANSfMf7U | Issue #279 OBS-04 Plugin Host既存4 CounterのSource登録・統合 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | SPEC-ML6zMi4szNWY33LanXM0JL | Issue #280 OBS-05 RT固定長Record Bridge・Clock・欠落・Correlation統合 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |

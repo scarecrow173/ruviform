@@ -12,12 +12,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use ruviform_media_core::ClockDomainId;
+use ruviform_media_core::{ClockDomainId, ClockEpochId, InputStamp, TimeBase, TimestampProvenance};
 use serde_json::Value;
-use tracing::{Dispatch, Event, Metadata};
+use tracing::{Dispatch, Event, Metadata, dispatcher};
 use tracing_subscriber::Registry;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
+use tracing_subscriber::registry::LookupSpan;
 
 use crate::collector::{
     Collector, CollectorConfig, MetricsSnapshot, ObservationBatch, ObservationWindow,
@@ -27,13 +28,18 @@ use crate::diagnostics::{
     Diagnostics, DiagnosticsConfig, DiagnosticsEvent, FindingSink, HealthState,
 };
 use crate::metrics::{Measurement, MeasurementValidity};
+use crate::record::{
+    ClockContext, CorrelationBook, CorrelationLink, CorrelationToken, EventId, EventRecord,
+    RecordHeader,
+};
+use crate::rt_bridge::{ReceivedRecord, bridge};
 use crate::source::{
-    AggregationPolicy, MetricDescriptor, MetricKind, MetricReader, MetricSource,
+    AggregationPolicy, Confidentiality, MetricDescriptor, MetricKind, MetricReader, MetricSource,
     ObservationRegistrar, ObservationScope, ObservationUnit, ReportingHint, ReportingImpact,
     SourceGeneration, SourceId, SourceIdentity, SourceLifecycle, SourceSemantics,
 };
 
-use super::{TracingExporter, TracingFindingSink};
+use super::{TraceContext, TracingExporter, TracingFindingSink, TracingRecordExporter};
 
 // --- capture harness ---------------------------------------------------------
 
@@ -114,6 +120,19 @@ fn window_events(events: &[Value]) -> Vec<&Value> {
         .iter()
         .filter(|e| field_str(e, "event_code") == "observation_window")
         .collect()
+}
+
+fn record_events(events: &[Value]) -> Vec<&Value> {
+    events
+        .iter()
+        .filter(|e| field_str(e, "event_code") == "rt_record")
+        .collect()
+}
+
+/// `trace_*` fields are `Option` fields: absent or JSON `null` when no
+/// `TraceContext` was supplied.
+fn field_absent_or_null(event: &Value, key: &str) -> bool {
+    fields(event).get(key).is_none_or(Value::is_null)
 }
 
 // --- collector fixtures ------------------------------------------------------
@@ -822,4 +841,455 @@ fn diagnostics_set_sink_accepts_tracing_sink() {
     // Engine-side suppression/panic isolation is OBS-09's contract;
     // here we only prove the adapter satisfies `FindingSink` as a
     // trait object.
+}
+
+// --- record exporter: schema / correlation / clock goldens ---------------------
+
+fn test_source() -> SourceIdentity {
+    SourceIdentity::new(SourceId::new(1).unwrap(), SourceGeneration::new(0))
+}
+
+fn test_record(event: u32, value: u64) -> EventRecord {
+    EventRecord::new(
+        RecordHeader::new(EventId::new(event), 1, test_source()),
+        value,
+    )
+}
+
+/// Pushes `records` through a real `bridge` and returns the drained
+/// envelopes — `dropped_before` comes from the actual ring contract,
+/// not from a fixture.
+fn drain_records(records: &[EventRecord]) -> Vec<ReceivedRecord<EventRecord>> {
+    let (mut recorder, mut sink) = bridge::<EventRecord>(records.len().max(1));
+    for record in records {
+        assert!(recorder.try_record(*record));
+    }
+    let mut got = Vec::new();
+    sink.drain(|rec| got.push(rec));
+    got
+}
+
+fn stamped_clock(provenance: TimestampProvenance) -> ClockContext {
+    ClockContext::new(
+        InputStamp {
+            ticks: 96_000,
+            base: TimeBase::new(1, 48_000).unwrap(),
+            domain: ClockDomainId::SAMPLE_CLOCK,
+            provenance,
+        },
+        ClockEpochId::new(3),
+    )
+}
+
+#[test]
+fn rt_record_emits_fixed_schema() {
+    let (dispatch, buf) = capture_dispatch();
+    let mut exporter = TracingRecordExporter::new(dispatch);
+    let mut book = CorrelationBook::new();
+    let link = book.issue();
+
+    let header = RecordHeader::new(EventId::new(7), 3, test_source())
+        .with_generation(42)
+        .with_correlation(Some(link))
+        .with_clock(Some(stamped_clock(TimestampProvenance::Carried)))
+        .with_confidentiality(Confidentiality::Public)
+        .with_impact(ReportingImpact::High);
+    let record = EventRecord::new(header, 480);
+    let got = drain_records(&[record]);
+
+    let stats = exporter.emit_records(Instant::now(), &got, &book, None);
+    assert_eq!(stats.emitted, 1);
+    assert_eq!(stats.cap_dropped, 0);
+    assert_eq!(stats.correlation_linked, 1);
+    assert_eq!(stats.correlation_unlinked, 0);
+    assert_eq!(stats.correlation_none, 0);
+
+    let events = buf.take();
+    let records = record_events(&events);
+    assert_eq!(records.len(), 1);
+    let e = records[0];
+
+    // Golden schema — every documented key present with the expected
+    // value; no trace fields without a TraceContext.
+    assert_eq!(field_str(e, "event_code"), "rt_record");
+    assert_eq!(field_u64(e, "event_version"), 1);
+    assert_eq!(field_u64(e, "event_id"), 7);
+    assert_eq!(field_u64(e, "record_version"), 3);
+    assert_eq!(field_u64(e, "source_id"), 1);
+    assert_eq!(field_u64(e, "source_generation"), 0);
+    assert_eq!(field_u64(e, "domain_generation"), 42);
+    assert_eq!(field_u64(e, "value"), 480);
+    assert_eq!(field_u64(e, "dropped_before"), 0);
+    assert_eq!(field_str(e, "confidentiality"), "public");
+    assert_eq!(field_str(e, "correlation_status"), "linked");
+    assert_eq!(field_u64(e, "correlation_token"), link.token().get());
+    assert_eq!(field_u64(e, "correlation_epoch"), link.epoch());
+    assert_eq!(field_str(e, "unlinked_reason"), "none");
+    assert_eq!(field_str(e, "clock_status"), "stamped");
+    assert_eq!(field_u64(e, "clock_domain"), 1); // SAMPLE_CLOCK
+    assert_eq!(field_u64(e, "clock_epoch"), 3);
+    assert_eq!(field_u64(e, "clock_position"), 96_000);
+    assert_eq!(field_u64(e, "clock_timebase_num"), 1);
+    assert_eq!(field_u64(e, "clock_timebase_den"), 48_000);
+    assert_eq!(field_str(e, "clock_provenance"), "carried");
+    assert!(fields(e)["observed_at_mono_us"].is_u64());
+    for key in ["trace_id", "parent_span_id", "trace_flags", "trace_sampled"] {
+        assert!(field_absent_or_null(e, key), "{key} must be absent");
+    }
+
+    // High impact + no loss → WARN (impact_level), never ERROR.
+    assert_eq!(level(e), "WARN");
+}
+
+#[test]
+fn rt_record_correlation_statuses_are_distinct() {
+    let (dispatch, buf) = capture_dispatch();
+    let mut exporter = TracingRecordExporter::new(dispatch);
+    let mut book = CorrelationBook::new();
+
+    let linked = book.issue();
+    let expired_link = book.issue();
+    assert!(book.expire(expired_link.token()));
+    let reminted_old = book.issue();
+    let reminted_new = book.remint(reminted_old.token()).unwrap();
+    let _ = reminted_new;
+    let unknown = CorrelationLink::new(CorrelationToken::new(999).unwrap(), 0);
+
+    let records = vec![
+        // Intentionally uncorrelated — distinct from unlinked.
+        test_record(1, 10),
+        EventRecord::new(
+            RecordHeader::new(EventId::new(2), 1, test_source()).with_correlation(Some(linked)),
+            20,
+        ),
+        EventRecord::new(
+            RecordHeader::new(EventId::new(3), 1, test_source())
+                .with_correlation(Some(expired_link)),
+            30,
+        ),
+        // reminted_old is now SupersededEpoch.
+        EventRecord::new(
+            RecordHeader::new(EventId::new(4), 1, test_source())
+                .with_correlation(Some(reminted_old)),
+            40,
+        ),
+        EventRecord::new(
+            RecordHeader::new(EventId::new(5), 1, test_source()).with_correlation(Some(unknown)),
+            50,
+        ),
+    ];
+    let got = drain_records(&records);
+    let stats = exporter.emit_records(Instant::now(), &got, &book, None);
+    assert_eq!(stats.emitted, 5);
+    assert_eq!(stats.correlation_none, 1);
+    assert_eq!(stats.correlation_linked, 1);
+    assert_eq!(stats.correlation_unlinked, 3);
+
+    let captured = buf.take();
+    let events = record_events(&captured);
+    assert_eq!(events.len(), 5);
+
+    assert_eq!(field_str(events[0], "correlation_status"), "none");
+    assert_eq!(field_u64(events[0], "correlation_token"), 0);
+    assert_eq!(field_str(events[0], "unlinked_reason"), "none");
+
+    assert_eq!(field_str(events[1], "correlation_status"), "linked");
+    assert_eq!(
+        field_u64(events[1], "correlation_token"),
+        linked.token().get()
+    );
+    assert_eq!(field_str(events[1], "unlinked_reason"), "none");
+
+    assert_eq!(field_str(events[2], "correlation_status"), "unlinked");
+    assert_eq!(field_str(events[2], "unlinked_reason"), "expired");
+    // The claimed token/epoch are still reported as record metadata.
+    assert_eq!(
+        field_u64(events[2], "correlation_token"),
+        expired_link.token().get()
+    );
+
+    assert_eq!(field_str(events[3], "correlation_status"), "unlinked");
+    assert_eq!(field_str(events[3], "unlinked_reason"), "superseded_epoch");
+
+    assert_eq!(field_str(events[4], "correlation_status"), "unlinked");
+    assert_eq!(field_str(events[4], "unlinked_reason"), "unknown_token");
+
+    // Unlinked records never fabricate span/parent relationship fields —
+    // the fixed schema has no such keys at all.
+    for e in &events {
+        assert!(fields(e).get("parent_span").is_none());
+        assert!(fields(e).get("trace_span_id").is_none());
+    }
+}
+
+#[test]
+fn rt_record_token_lifecycle_tracks_book() {
+    let (dispatch, buf) = capture_dispatch();
+    let mut exporter = TracingRecordExporter::new(dispatch);
+    let mut book = CorrelationBook::new();
+
+    // issue → linked; expire → expired forever; remint of a live token
+    // supersedes the old epoch but the new link stays linked.
+    let first = book.issue();
+    let second = book.issue();
+    assert!(book.expire(first.token()));
+    let old_epoch_link = second;
+    let new_epoch_link = book.remint(second.token()).unwrap();
+
+    let records = vec![
+        EventRecord::new(
+            RecordHeader::new(EventId::new(1), 1, test_source()).with_correlation(Some(first)),
+            1,
+        ),
+        EventRecord::new(
+            RecordHeader::new(EventId::new(2), 1, test_source())
+                .with_correlation(Some(old_epoch_link)),
+            2,
+        ),
+        EventRecord::new(
+            RecordHeader::new(EventId::new(3), 1, test_source())
+                .with_correlation(Some(new_epoch_link)),
+            3,
+        ),
+    ];
+    let got = drain_records(&records);
+    let stats = exporter.emit_records(Instant::now(), &got, &book, None);
+    assert_eq!(stats.correlation_unlinked, 2);
+    assert_eq!(stats.correlation_linked, 1);
+
+    let captured = buf.take();
+    let events = record_events(&captured);
+    assert_eq!(field_str(events[0], "unlinked_reason"), "expired");
+    assert_eq!(field_str(events[1], "unlinked_reason"), "superseded_epoch");
+    assert_eq!(field_u64(events[1], "correlation_epoch"), 0);
+    assert_eq!(
+        field_u64(events[2], "correlation_epoch"),
+        new_epoch_link.epoch()
+    );
+    assert_eq!(field_str(events[2], "correlation_status"), "linked");
+
+    // The book itself is unchanged by classification — the same links
+    // still classify identically afterwards.
+    assert!(matches!(
+        book.classify(first),
+        crate::record::CorrelationStatus::Unlinked(_)
+    ));
+    assert!(book.is_linked(new_epoch_link));
+}
+
+#[test]
+fn rt_record_clock_unstamped_and_estimated() {
+    let (dispatch, buf) = capture_dispatch();
+    let mut exporter = TracingRecordExporter::new(dispatch);
+    let book = CorrelationBook::new();
+
+    let unstamped = test_record(1, 1);
+    let estimated = EventRecord::new(
+        RecordHeader::new(EventId::new(2), 1, test_source())
+            .with_clock(Some(stamped_clock(TimestampProvenance::Estimated))),
+        2,
+    );
+    let derived = EventRecord::new(
+        RecordHeader::new(EventId::new(3), 1, test_source())
+            .with_clock(Some(stamped_clock(TimestampProvenance::Derived))),
+        3,
+    );
+    let got = drain_records(&[unstamped, estimated, derived]);
+    let stats = exporter.emit_records(Instant::now(), &got, &book, None);
+    assert_eq!(stats.emitted, 3);
+
+    let captured = buf.take();
+    let events = record_events(&captured);
+    assert_eq!(events.len(), 3);
+
+    // Unstamped: explicit status + sentinel fields, never fabricated.
+    assert_eq!(field_str(events[0], "clock_status"), "unstamped");
+    assert_eq!(field_u64(events[0], "clock_domain"), 0);
+    assert_eq!(field_u64(events[0], "clock_epoch"), 0);
+    assert_eq!(field_u64(events[0], "clock_position"), 0);
+    assert_eq!(field_u64(events[0], "clock_timebase_num"), 0);
+    assert_eq!(field_u64(events[0], "clock_timebase_den"), 0);
+    assert_eq!(field_str(events[0], "clock_provenance"), "none");
+
+    // Estimated stays explicitly marked — never upgraded to carried.
+    assert_eq!(field_str(events[1], "clock_status"), "stamped");
+    assert_eq!(field_str(events[1], "clock_provenance"), "estimated");
+    assert_eq!(field_u64(events[1], "clock_position"), 96_000);
+
+    assert_eq!(field_str(events[2], "clock_provenance"), "derived");
+}
+
+#[test]
+fn rt_record_dropped_before_raises_to_warn() {
+    let (dispatch, buf) = capture_dispatch();
+    let mut exporter = TracingRecordExporter::new(dispatch);
+    let book = CorrelationBook::new();
+
+    let low_record = |event: u32, value: u64| {
+        EventRecord::new(
+            RecordHeader::new(EventId::new(event), 1, test_source())
+                .with_impact(ReportingImpact::Low),
+            value,
+        )
+    };
+
+    // Ring capacity 2: fill it, drop one record on full, drain, then
+    // accept — the next envelope carries dropped_before = 1.
+    let (mut recorder, mut sink) = bridge::<EventRecord>(2);
+    assert!(recorder.try_record(low_record(1, 1)));
+    assert!(recorder.try_record(low_record(2, 2)));
+    assert!(!recorder.try_record(low_record(3, 3)));
+    let mut drained = Vec::new();
+    sink.drain(|rec| drained.push(rec));
+    assert!(recorder.try_record(low_record(4, 4))); // dropped_before = 1
+    assert!(recorder.try_record(low_record(5, 5)));
+    sink.drain(|rec| drained.push(rec));
+    assert_eq!(drained.len(), 4);
+    assert_eq!(drained[2].dropped_before(), 1);
+    assert_eq!(drained[3].dropped_before(), 0);
+
+    let stats = exporter.emit_records(Instant::now(), &drained, &book, None);
+    assert_eq!(stats.emitted, 4);
+    let captured = buf.take();
+    let events = record_events(&captured);
+    assert_eq!(events.len(), 4);
+    // No loss → Low impact maps to DEBUG.
+    assert_eq!(level(events[0]), "DEBUG");
+    assert_eq!(field_u64(events[0], "dropped_before"), 0);
+    // Positional loss raises the floor to WARN regardless of impact.
+    assert_eq!(level(events[2]), "WARN");
+    assert_eq!(field_u64(events[2], "dropped_before"), 1);
+    assert_eq!(field_u64(events[2], "event_id"), 4);
+    // The following clean record drops back to DEBUG.
+    assert_eq!(level(events[3]), "DEBUG");
+}
+
+#[test]
+fn rt_record_cap_counts_and_classifies_everything() {
+    let (dispatch, buf) = capture_dispatch();
+    let mut exporter = TracingRecordExporter::with_max_events_per_drain(dispatch, 2);
+    let mut book = CorrelationBook::new();
+    let link = book.issue();
+
+    let records = vec![
+        test_record(1, 1),
+        EventRecord::new(
+            RecordHeader::new(EventId::new(2), 1, test_source()).with_correlation(Some(link)),
+            2,
+        ),
+        test_record(3, 3),
+    ];
+    let got = drain_records(&records);
+    let stats = exporter.emit_records(Instant::now(), &got, &book, None);
+    assert_eq!(stats.emitted, 2);
+    assert_eq!(stats.cap_dropped, 1);
+    // Correlation is classified for every record in the slice, not
+    // just the emitted ones.
+    assert_eq!(stats.correlation_none, 2);
+    assert_eq!(stats.correlation_linked, 1);
+
+    let captured = buf.take();
+    let events = record_events(&captured);
+    assert_eq!(events.len(), 2);
+}
+
+#[test]
+fn rt_record_dispatch_none_and_filter_are_safe() {
+    // No subscriber at all.
+    let mut exporter = TracingRecordExporter::new(Dispatch::none());
+    let book = CorrelationBook::new();
+    let got = drain_records(&[test_record(1, 1), test_record(2, 2)]);
+    let stats = exporter.emit_records(Instant::now(), &got, &book, None);
+    assert_eq!(stats.emitted, 2);
+
+    // A subscriber that filters everything out — counted, not an error.
+    let subscriber = Registry::default().with(SuppressingLayer);
+    let mut exporter = TracingRecordExporter::new(Dispatch::new(subscriber));
+    let stats = exporter.emit_records(Instant::now(), &got, &book, None);
+    assert_eq!(stats.emitted, 2);
+    // The book was only read — classification still works afterwards.
+    let mut book = CorrelationBook::new();
+    let link = book.issue();
+    assert!(book.is_linked(link));
+}
+
+#[test]
+fn rt_record_trace_context_adds_fields() {
+    let (dispatch, buf) = capture_dispatch();
+    let mut exporter = TracingRecordExporter::new(dispatch);
+    let book = CorrelationBook::new();
+    let got = drain_records(&[test_record(1, 42)]);
+
+    let trace = TraceContext::parse("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+        .expect("valid traceparent");
+    let stats = exporter.emit_records(Instant::now(), &got, &book, Some(&trace));
+    assert_eq!(stats.emitted, 1);
+
+    let captured = buf.take();
+    let events = record_events(&captured);
+    assert_eq!(events.len(), 1);
+    let e = events[0];
+    assert_eq!(field_str(e, "trace_id"), "4bf92f3577b34da6a3ce929d0e0e4736");
+    assert_eq!(field_str(e, "parent_span_id"), "00f067aa0ba902b7");
+    assert_eq!(field_u64(e, "trace_flags"), 1);
+    assert!(field_bool(e, "trace_sampled"));
+
+    // An invalid/untrusted traceparent parses to None → no trace
+    // fields, event still emitted normally.
+    let bad = TraceContext::parse("ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+    assert!(bad.is_none());
+    let stats = exporter.emit_records(Instant::now(), &got, &book, bad.as_ref());
+    assert_eq!(stats.emitted, 1);
+    let captured = buf.take();
+    let events = record_events(&captured);
+    assert_eq!(events.len(), 1);
+    for key in ["trace_id", "parent_span_id", "trace_flags", "trace_sampled"] {
+        assert!(field_absent_or_null(events[0], key), "{key} must be absent");
+    }
+}
+
+/// A layer that records the name of the span current at each event —
+/// verifies scoped-dispatch span context reaches `rt_record` events.
+#[derive(Clone, Default)]
+struct SpanNameLayer {
+    seen: Arc<Mutex<Vec<Option<String>>>>,
+}
+
+impl<S> Layer<S> for SpanNameLayer
+where
+    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
+{
+    fn on_event(&self, _event: &Event<'_>, ctx: Context<'_, S>) {
+        let name = ctx
+            .lookup_current()
+            .map(|span| span.metadata().name().to_owned());
+        self.seen.lock().unwrap().push(name);
+    }
+}
+
+#[test]
+fn rt_record_inside_scoped_span_sees_context() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let layer = SpanNameLayer { seen: seen.clone() };
+    let subscriber = Registry::default().with(layer);
+    let dispatch = Dispatch::new(subscriber);
+    let mut exporter = TracingRecordExporter::new(dispatch.clone());
+    let book = CorrelationBook::new();
+    let got = drain_records(&[test_record(1, 1)]);
+
+    // Enter a span under the same dispatch the exporter emits on;
+    // `with_default` inside `emit_records` must not lose the context.
+    dispatcher::with_default(&dispatch, || {
+        let span = tracing::info_span!("rt_record_parent");
+        let _entered = span.enter();
+        let _ = exporter.emit_records(Instant::now(), &got, &book, None);
+    });
+    // Outside any span: context is simply absent — still safe.
+    let _ = exporter.emit_records(Instant::now(), &got, &book, None);
+
+    let names = seen.lock().unwrap();
+    assert_eq!(
+        names.as_slice(),
+        &[Some("rt_record_parent".to_owned()), None,]
+    );
 }
