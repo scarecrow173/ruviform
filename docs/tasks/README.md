@@ -17,6 +17,7 @@ Directory: `docs/tasks`
 | TASK-034RT89xVtZ6NMuRh08JQg | T1 ruviform-io-archive クレート新設・Archive共通型・ZIP Indexed Reader (Issue #302) | completed | [issue-302-t1-scaffold-reader.md](./issue-302-t1-scaffold-reader.md) |
 | TASK-034RT8aupBUW6NpSHSrRWq | T2 ZIP Writer・Entry finish→Archive finish・否定fixture (Issue #302) | completed | [issue-302-t2-zip-writer.md](./issue-302-t2-zip-writer.md) |
 | TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | completed | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
+| TASK-034Ui3oOaxCn3ZMrQTqhed | Issue #308 — Probe再Binding全件整合の実装タスク | in-progress | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
 | TASK-034Ug9lk3rk5h8iKkSQY2c | Issue #314 slice 3 — GPUI/OS capture backend | in-progress | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | TASK-IfiV9xO2raU6D60zy70KLs | Issue #314 slice 1 — Golden Utility コアの実装タスク | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | TASK-034Uey3QmAAfhAZo6ln7H4 | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装タスク | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
