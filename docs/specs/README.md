@@ -125,6 +125,7 @@ Directory: `docs/specs`
 | SPEC-034U1Mw5EZAfhDMxQUUpbi | Issue #461 残課題 — TimeAxis label の O(n²) text paint を canvas 内の共有 layer で解消 | approved | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | SPEC-034U0yFY8Tr771Gyy5U4yy | Issue #463 — Spectrogram cell の intensity(alpha)が実窓で反映されない | approved | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | SPEC-034Uc80WBRvRmOb7dt2yeU | Issue #464 — Consumer-neutral GUI Scenario Contract | approved | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
+| SPEC-Ghn42uyLNbGNp71h5dfWyP | Issue #464 slice — Scenario Runner・Report 組み立て契約（ruviform-ui-test） | approved | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
 | SPEC-HvasimHE9mJVFN1ay6D68D | Issue #465 Legacy WebView 基盤の段階的廃止 P0/P1 — 文書歴史化と棚卸し | proposed | [issue-465-legacy-webview-p0p1.md](./issue-465-legacy-webview-p0p1.md) |
 | SPEC-034Uay7qlGIC70AEeDcn7u | Issue #468 RootedDir containment の canonical 前提の設計判断 | proposed | [issue-468-rooteddir-canonical-premise.md](./issue-468-rooteddir-canonical-premise.md) |
 | SPEC-z3dzJJAH4RMnLrkQfhkR0m | Issue #479 — Seek/Fader/Knob のキーボード操作（共通 key 規約） | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |

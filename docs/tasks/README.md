@@ -257,6 +257,7 @@ Directory: `docs/tasks`
 | TASK-Xk2Dv9LqNb7RtPm5WcFs8H | Issue #443 — Tile 列区間と count 契約の実装タスク | done | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | TASK-034Ue8ThHNXd5Ah4vY5uvG | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の実装タスク | done | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | TASK-034UcbptcbQ9OYtF7EZwzG | Issue #464 — Consumer-neutral GUI Scenario Contract | done | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
+| TASK-j0UrquC3p37Fqdl53IyKUK | Issue #464 slice — Scenario Runner・Report 組み立て契約 | done | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
 | TASK-G72QPe3EioqQac8Dsnoglk | Issue #479 — 値制御キーボード操作の実装タスク | done | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | TASK-034UiUpK8eTff8QiCEtGrP | Issue #480 — tab_focus op 駆動解放の実装と恒久テスト | done | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TASK-DBfsqONthDwUwmD4GpGXzq | Issue #490 T1 oracle addQuery epoch 整合 | done | [issue-490-t1-oracle-addquery-epoch.md](./issue-490-t1-oracle-addquery-epoch.md) |
