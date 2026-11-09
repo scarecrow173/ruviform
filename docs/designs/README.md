@@ -80,6 +80,7 @@ Directory: `docs/designs`
 | DESIGN-034RT7CvRTe3b8jPTFBHtq | Issue #302 ruviform-io-archive — Archive 共通型・ZIP Indexed Reader/Writer・検証パイプライン設計 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | DESIGN-HR0Ud1VXoIpQCfUcosM6ib | Issue #303 ruviform-io-archive — TAR Streaming Reader/Pending・PAX/GNU・Writer 設計 | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | DESIGN-mH3gJLoQj3rdU7xRXX8eZD | Issue #304 ruviform-io-archive — Secure Extraction・Staging/Recovery・OS 別 Root Capability 設計 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| DESIGN-034UvWqyRcaTQap2SH5FfT | Issue #305 IO E2E slice — WAV Byte Golden・Fault fixture 設計 | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | DESIGN-eVPQpm7tyMUS2gxitU5KtN | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行設計 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | DESIGN-ODmc6p5Cp7Kbq0u35OrAiR | Issue #306 汎用 I/O 合成 E2E — 試験専用クレート構成・境界試験設計 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | DESIGN-034UtzREeBZLceakda7vIS | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture 設計 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
