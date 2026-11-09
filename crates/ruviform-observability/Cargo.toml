@@ -23,6 +23,11 @@ logging = [
 # it enables only `dep:tracing` (the `Dispatch` type), never subscriber
 # construction. Hosts inject their own `tracing::Dispatch`.
 tracing-export = ["dep:tracing"]
+# `allocation-probe` — Issue #290 (OBS-08) development/test allocation
+# probe (`profiling` module: `CountingAllocator` + TLS `AllocationScope`).
+# Off by default; adds no dependencies — the probe is std-only and the
+# crate never installs a `#[global_allocator]` itself.
+allocation-probe = []
 
 [dependencies]
 # Issue #280 (OBS-05): leaf-primitive deps for `rt_bridge`/`record`

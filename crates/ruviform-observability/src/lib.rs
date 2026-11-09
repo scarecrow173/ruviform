@@ -41,6 +41,9 @@
 //!   bounded [`diagnostics::DiagnosticSnapshot`]/
 //!   [`diagnostics::DiagnosticReport`], and the
 //!   [`diagnostics::FindingSink`] port (Issue #291, OBS-09).
+//! - `profiling` *(feature `allocation-probe` only)*: development/test
+//!   allocation probe — `CountingAllocator` and the thread-local
+//!   `AllocationScope` measurement windows.
 //!
 //! `counter`, `Counter` and `CounterReader` are re-exported at the
 //! crate root for compatibility with existing consumers; new code may
@@ -84,6 +87,11 @@
 //!   rule declaration, `evaluate`, `report`, `health`: **non-RT only** —
 //!   allocation throughout (vectors, maps, strings, `catch_unwind`
 //!   around sink calls).
+//! - `profiling` *(feature `allocation-probe` only)* declares its
+//!   own per-operation RT contract in the module docs: the
+//!   `GlobalAlloc` methods and scope enter/exit/stats/reset add no
+//!   allocation, lock, or panic beyond the wrapped allocator `A`;
+//!   scope construction is non-RT.
 //!
 //! # Read semantics
 //!
@@ -116,7 +124,9 @@
 //! The opt-in `logging` feature (Issue #276) adds `tracing` /
 //! `tracing-subscriber` / `tracing-appender` for host-owned
 //! subscriber construction only; it is off by default and never
-//! installs a global dispatcher itself.
+//! installs a global dispatcher itself. The opt-in
+//! `allocation-probe` feature (Issue #290) adds the `profiling`
+//! module and **no dependencies** — it is std-only.
 
 // Domain vocabulary intentionally repeats module names at the crate
 // root re-export surface (`Counter`, `MetricDescriptor`,
@@ -145,6 +155,11 @@ pub mod collector;
 pub mod core;
 pub mod diagnostics;
 pub mod metrics;
+/// Development/test allocation probe — Issue #290 (OBS-08).
+/// Only available with the `allocation-probe` feature, which is off by
+/// default so shipped builds carry no instrumentation.
+#[cfg(feature = "allocation-probe")]
+pub mod profiling;
 pub mod record;
 pub mod rt_bridge;
 pub mod source;
