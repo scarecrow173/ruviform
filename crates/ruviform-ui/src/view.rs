@@ -1072,6 +1072,16 @@ pub struct ViewHost {
     /// [`MAX_COMMAND_INDEX`] — unresolved receipt-expecting commands
     /// are protected and the bound yields rather than strand them.
     command_index: HashMap<CommandId, ControlId>,
+    /// `control_id` → highest accepted projection revision — the
+    /// cross-epoch correlation floor. `unmount` drops every binding
+    /// (and with it `last_observed`), so without this mark a fresh
+    /// binding would accept any *first* revision and a delayed
+    /// pre-remount projection could land once. The floor survives
+    /// `unmount`/`detach`/`update` for the host's whole attach epoch:
+    /// a projection that does not advance it is stale and dropped.
+    /// It is never cleared except by dropping the host — the same
+    /// boundary that ends the attach epoch itself.
+    projection_floors: HashMap<ControlId, Revision>,
     ports: HashMap<ControlId, ValuePorts>,
     /// Host-wide sequence of discrete `Action` intents (Button, Table
     /// selection), monotonic like a control's element sequence.
@@ -1100,6 +1110,7 @@ impl ViewHost {
             dispatcher: InteractionDispatcher::new(),
             bindings: HashMap::new(),
             command_index: HashMap::new(),
+            projection_floors: HashMap::new(),
             ports: HashMap::new(),
             action_sequence: 0,
             selection_undo: HashMap::new(),
@@ -1936,8 +1947,11 @@ impl ViewHost {
         self.mounted.clear();
         self.spec = None;
         self.dispatcher = InteractionDispatcher::new();
-        // Unmount is terminal for this host epoch: stale bindings are
-        // dropped so a remount starts from a clean generation.
+        // Unmount is terminal for this mount epoch: stale bindings are
+        // dropped so a remount starts from a clean generation. The
+        // projection floors deliberately survive — they are the
+        // cross-epoch correlation guard that keeps a delayed
+        // pre-remount projection from landing on the fresh bindings.
         self.bindings.clear();
         self.command_index.clear();
         self.selection_undo.clear();
@@ -2235,11 +2249,32 @@ impl ViewHost {
     /// binding. The wire payload is opaque JSON — adapters decode the
     /// consumer's projection envelope into this call. Returns `false`
     /// when no binding exists for `control_id` (unmounted or
-    /// never-registered). Projections correlate by `control_id`
-    /// alone — they carry no epoch-scoped id, so a fresh binding
-    /// (e.g. after remount) accepts any *first* revision; a delayed
-    /// older-revision projection can land once and self-heals on the
-    /// next newer one.
+    /// never-registered), when the binding is detached, or when the
+    /// projection is stale — dropped honestly, never fabricated into
+    /// state.
+    ///
+    /// **Correlation contract.** Two guards order projections per
+    /// `control_id`:
+    ///
+    /// - `projection_floors` — the host-level high-water mark of
+    ///   accepted revisions, kept for the whole attach epoch
+    ///   (survives `unmount`/`detach`/`update`). A projection that
+    ///   does not advance past the floor under the shared
+    ///   `revision_advances` ordering is dropped before reaching the
+    ///   binding, so a delayed pre-remount projection cannot land
+    ///   once on a fresh binding.
+    /// - `CommandBinding::on_projection` — the in-binding
+    ///   `last_observed` guard, which additionally enforces ordering
+    ///   within one binding lifetime and the `attached` gate.
+    ///
+    /// `Revision` must therefore be a monotonic ordering token per
+    /// `control_id` for the host's attach-epoch lifetime; remounting
+    /// does not reset it. A consumer that resets a revision domain
+    /// must do so across an attach-epoch boundary (a new `ViewHost`)
+    /// — the same boundary that already namespaces command ids.
+    /// Ordering *across* hosts, and revision monotonicity itself,
+    /// remain the delivery path's obligation (the envelope carries
+    /// no epoch segment yet — deferred wire-protocol decision).
     ///
     /// An accepted projection also drives the controlled display:
     /// [`crate::behavior::projection_value_input`] decodes the
@@ -2256,15 +2291,25 @@ impl ViewHost {
         control_id: &str,
         projection: &StateProjection<serde_json::Value>,
     ) -> bool {
+        if self
+            .projection_floors
+            .get(control_id)
+            .is_some_and(|floor| !crate::behavior::revision_advances(floor, &projection.revision))
+        {
+            return false;
+        }
         let accepted = self
             .bindings
             .get_mut(control_id)
             .is_some_and(|b| b.on_projection(projection));
-        if accepted
-            && let Some(input) = crate::behavior::projection_value_input(&projection.value)
-            && let Some(control) = self.dispatcher.control_mut(control_id)
-        {
-            control.apply_external(input);
+        if accepted {
+            self.projection_floors
+                .insert(control_id.to_string(), projection.revision.clone());
+            if let Some(input) = crate::behavior::projection_value_input(&projection.value)
+                && let Some(control) = self.dispatcher.control_mut(control_id)
+            {
+                control.apply_external(input);
+            }
         }
         accepted
     }
@@ -4161,5 +4206,116 @@ mod tests {
         assert!(host.command_index.values().all(|owner| owner == "btn"));
         assert!(host.binding("btn").is_some());
         assert!(host.binding("tabs.t0").is_none());
+    }
+
+    #[test]
+    fn projection_floor_rejects_stale_revision_across_remount() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        let key = ComponentKey::from("a");
+        assert!(host.apply_projection("a", &projection(serde_json::json!({ "plain": 90.0 }), 10)));
+        assert!((display_plain(&host, "a") - 90.0).abs() < 1e-9);
+
+        host.unmount();
+        host.mount(panel(vec![fader("a")])).expect("remount");
+        // The fresh binding has no `last_observed`, but the floor
+        // still holds rev 10: a delayed pre-remount projection must
+        // not land even once.
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({ "plain": 10.0 }), 5)));
+        let snap = host.observe(&key).expect("snapshot");
+        assert!(snap.observed.is_none());
+        assert!((display_plain(&host, "a") - 50.0).abs() < 1e-9);
+
+        // An advancing revision lands normally and moves the floor.
+        assert!(host.apply_projection("a", &projection(serde_json::json!({ "plain": 95.0 }), 11)));
+        assert!((display_plain(&host, "a") - 95.0).abs() < 1e-9);
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({ "plain": 20.0 }), 10)));
+    }
+
+    #[test]
+    fn projection_floor_survives_control_absent_remount() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        assert!(host.apply_projection("a", &projection(serde_json::json!({ "plain": 90.0 }), 10)));
+        // Remount a spec that does not carry `a` at all, then bring it
+        // back — the floor is keyed by control_id and outlives both
+        // the binding and the spec that owned it.
+        host.unmount();
+        host.mount(panel(vec![fader("b")])).expect("mount b");
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({ "plain": 90.0 }), 11)));
+        host.unmount();
+        host.mount(panel(vec![fader("a")])).expect("remount a");
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({ "plain": 10.0 }), 9)));
+        assert!(host.apply_projection("a", &projection(serde_json::json!({ "plain": 95.0 }), 11)));
+    }
+
+    #[test]
+    fn projection_orders_across_detach_attach() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        assert!(host.apply_projection("a", &projection(serde_json::json!({ "plain": 60.0 }), 5)));
+        host.detach("dock-transfer");
+        // Detached bindings absorb projections; the dropped rev 8
+        // must not move the floor either.
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({ "plain": 80.0 }), 8)));
+        host.attach();
+        // rev 6 still advances the surviving floor (5): the detached
+        // drop did not pin the floor at 8.
+        assert!(host.apply_projection("a", &projection(serde_json::json!({ "plain": 65.0 }), 6)));
+        // Ordering reversal against the new floor is rejected.
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({ "plain": 55.0 }), 5)));
+        assert!((display_plain(&host, "a") - 65.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn projection_floors_are_independent_per_control() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a"), fader("b")]))
+            .expect("mount");
+        assert!(host.apply_projection("a", &projection(serde_json::json!({ "plain": 90.0 }), 10)));
+        assert!(host.apply_projection("b", &projection(serde_json::json!({ "plain": 20.0 }), 3)));
+        // `a`'s floor does not leak into `b`: b's own low floor still
+        // accepts revisions below a's high-water mark.
+        assert!(host.apply_projection("b", &projection(serde_json::json!({ "plain": 25.0 }), 4)));
+        assert!(!host.apply_projection("b", &projection(serde_json::json!({ "plain": 15.0 }), 3)));
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({ "plain": 10.0 }), 9)));
+        // A remount keeps both floors independent as well.
+        host.unmount();
+        host.mount(panel(vec![fader("a"), fader("b")]))
+            .expect("remount");
+        assert!(!host.apply_projection("a", &projection(serde_json::json!({ "plain": 10.0 }), 9)));
+        // b's floor survived at 4: rev 4 no longer advances, rev 5 does.
+        assert!(!host.apply_projection("b", &projection(serde_json::json!({ "plain": 30.0 }), 4)));
+        assert!(host.apply_projection("b", &projection(serde_json::json!({ "plain": 30.0 }), 5)));
+        assert!((display_plain(&host, "b") - 30.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn deliver_event_drops_stale_projection_after_remount() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        assert!(host.apply_projection("a", &projection(serde_json::json!({ "plain": 90.0 }), 10)));
+        host.unmount();
+        host.mount(panel(vec![fader("a")])).expect("remount");
+        // The wire decode path enforces the same floor.
+        let stale = Event::Notify {
+            seq: 1,
+            data: serde_json::json!({
+                "control_id": "a",
+                "revision": 5,
+                "value": { "plain": 10.0 },
+            }),
+        };
+        assert!(!host.deliver_event(&stale));
+        let fresh = Event::Notify {
+            seq: 2,
+            data: serde_json::json!({
+                "control_id": "a",
+                "revision": 11,
+                "value": { "plain": 95.0 },
+            }),
+        };
+        assert!(host.deliver_event(&fresh));
+        assert!((display_plain(&host, "a") - 95.0).abs() < 1e-9);
     }
 }
