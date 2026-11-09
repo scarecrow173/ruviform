@@ -29,6 +29,7 @@ Directory: `docs/plans`
 | PLAN-m7f29Op1o9KCQ037OSq6i8 | Implement Issue #280 OBS-05 RT record bridge・record vocabulary | approved | [implement-issue-280-rt-record-bridge.md](./implement-issue-280-rt-record-bridge.md) |
 | PLAN-034T2Nmh2tErwGOV4X6guz | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装計画 | approved | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
 | PLAN-034UoVUbDw0ACJnYRUdjWo | Implement Issue #290 OBS-08 allocation-probe — CountingAllocator/AllocationScope Implementation Plan | approved | [implement-issue-290-observability-allocation-probe.md](./implement-issue-290-observability-allocation-probe.md) |
+| PLAN-k3qysbE3jkIfMxFWa8dlGX | Issue #290 OBS-08 RT Timing 実装計画 | approved | [implement-issue-290-observability-rt-timing.md](./implement-issue-290-observability-rt-timing.md) |
 | PLAN-034UnAUkBnCas6lEsFTewD | Issue #291 OBS-09 Diagnostics 実装計画 | approved | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
 | PLAN-4afZ4yYXHh9Vey7rTu5wFt | Issue #292 OBS-10 Debug Inspection 実装計画 | approved | [implement-issue-292-observability-debug-inspection.md](./implement-issue-292-observability-debug-inspection.md) |
 | PLAN-BMe1olaQdn0e0jQ5JgPxiT | Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 実装計画 | approved | [implement-issue-293-observability-integration-runner.md](./implement-issue-293-observability-integration-runner.md) |

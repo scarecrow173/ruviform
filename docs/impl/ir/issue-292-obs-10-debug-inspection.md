@@ -205,6 +205,24 @@ vocabulary（`ruviform-media-core` の `ClockDomainId`/`ClockEpochId`）。
   publish する（health counter は評価全件を計数）。blocker なし
   = 承認扱い。
 
+## Audit（2026-11-09、chore/obs-08-09-10-audit、base `0d07471d`）
+
+Issue #292 受入条件の行ごとの照合結果。実装は main（PR #508
+`9017934a`）の `src/debug/`（`budget.rs`/`engine.rs`/`invariant.rs`/
+`probe.rs`/`report.rs`/`request.rs`/`session.rs`/`snapshot.rs`、
+39 tests）による。
+
+| 受入行 | 判定 | 証跡 |
+| --- | --- | --- |
+| Debug OFF でも本番 Invariant（Invalid Graph/Plugin ABI 等）を維持 | 充足（既存） | `invariant.rs` は debug session 非依存の評価経路 + 試験 |
+| Inspection 各予算・Truncated/Unavailable/Discontinuous/Generation 整合試験 | 充足（既存） | `budget.rs` + `tests.rs`（budget/deadline・truncation・generation skew） |
+| Invariant Satisfied/Violated/Inconclusive 区別・Diagnostics 接続 | 充足（既存） | `invariant.rs` 3 値 outcome + diagnostics 連携試験 |
+| Debug Session 開始/権限/切替/Draining/停止競合・RT buffer 最終回収試験 | 充足（既存） | `session.rs` + `tests.rs`（permit・drain・停止競合） |
+| RT callback 上 alloc/lock/OS IO/Subscriber 呼出しなし・ON/OFF DSP 同値 | 充足（既存） | 本 module は観測 port のみで DSP 経路を持たず、ON/OFF で処理結果は不変（観測追加のみの設計 + 試験） |
+| #185 Probe の OFF/Monitor/Capture を重複実装しない | 充足（既存） | `probe.rs` は port 接続のみ（本体は #185/#293 側） |
+| Debug Report の Secrets/Media・未認可 External Export 拒否 | 充足（既存） | `report.rs` の export 認可/confidentiality 検査 + 試験 |
+| AudioLens 解析 Inspection / Synvelis Graph・Plugin Inspection 両 Consumer 互換 | NotRun | cross-repo gate（#281）・本タスク対象外 |
+
 ## Risks
 
 - `InspectionBudget.timeout` は `Instant` deadline の cooperative

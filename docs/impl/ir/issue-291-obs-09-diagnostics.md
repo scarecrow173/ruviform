@@ -152,6 +152,23 @@ ClockContext`。
   Unknown→X domain transition、report byte budget が findings を
   個別 drop しない）。blocker なし = 承認扱い。
 
+## Audit（2026-11-09、chore/obs-08-09-10-audit、base `0d07471d`）
+
+Issue #291 受入条件の行ごとの照合結果。実装は main（PR #504
+`70375e06`）の `src/diagnostics/`（`evidence.rs`/`finding.rs`/
+`health.rs`/`report.rs`/`sink.rs`/`engine.rs`、31 tests）による。
+
+| 受入行 | 判定 | 証跡 |
+| --- | --- | --- |
+| 事実/Derived/Reported/推論/Unknown を混同しない型・Golden test | 充足（既存） | `evidence.rs` 分類型 + `tests.rs` golden/分類試験 |
+| Source Generation/Clock/Evidence lifetime/Report 上限/切り詰め試験 | 充足（既存） | `tests.rs`（generation 変更・lifetime・byte budget・truncation） |
+| Health 閾値/Hysteresis/回復/Unknown/stale/部分障害の明示的状態遷移 | 充足（既存） | `health.rs` + 遷移試験（review 修正の generation reset 回帰含む） |
+| Logging OFF でも Snapshot/Report/Health を利用可能 | 充足（既存） | `mod.rs`/`sink.rs` doc + default feature で `tracing` 非依存を確認 |
+| 重要状態変化のみ非 RT から標準 tracing へ接続・抑制上限 | 充足（port 水準） | `FindingSink` object-safe port + `SinkPolicy`（`max_events`/`window` 抑制・`sink_suppressed_total` 計数）。具象 `tracing` adapter は OBS-03 #278 の責務として分離済み |
+| Secret/Media/Gateway Grant 非流出・未認可 Report 拒否試験 | 充足（既存） | `report.rs` の confidentiality/認可検査 + 試験 |
+| Domain Error との二重管理禁止・Plugin 既存 DiagRegistry 尊重 | 充足（既存） | 設計境界どおり domain error を複製しない構成（design/test-spec 参照） |
+| 両 Consumer の Evidence/Health ユースケースを #281 で検証 | NotRun | cross-repo gate・本タスク対象外 |
+
 ## Risks
 
 - `MetricValue` が u64 ベースのため、health signal の `f64` 写像は
