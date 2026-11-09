@@ -83,6 +83,7 @@ Directory: `docs/plans`
 | PLAN-034RT7NR5zMcrEqmbWbWy3 | Issue #302 ruviform-io-archive 実装計画 (IO-IMP-08) | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | PLAN-UecvheIvCz0oE2tUFPmFC0 | Issue #303 ruviform-io-archive TAR 実装計画 (IO-IMP-09) | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | PLAN-kMb7YLTQ28L2txLvTj6dcD | Issue #304 ruviform-io-archive Secure Extraction 実装計画 (IO-IMP-10) | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| PLAN-034UwaGC4jBLVC4SdHmkU4 | Issue #305 IO E2E WAV Golden/Fault 実装計画 | draft | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | PLAN-gWrX94JcoMQacCOPFR5FKD | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 実装計画 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | PLAN-W0d5X9GIZLFMnSGqu9OlBg | Issue #306 汎用 I/O 合成 E2E 実装計画 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | PLAN-034UtCUZnaLUCtLUqb8nYz | Issue #306 IO E2E slice 2 実装計画 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |

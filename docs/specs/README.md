@@ -65,6 +65,7 @@ Directory: `docs/specs`
 | SPEC-034RT7qvjzmpx6kytmM8O0 | Issue #302 ruviform-io-archive — ZIP Indexed Entry Reader/Writer・CRC/中央Directory検証 (IO-IMP-08) | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | SPEC-h6TZICrhpaneHHENSs2SP8 | Issue #303 ruviform-io-archive — TAR Streaming Entry/Pending・PAX/GNU・EOF検証 (IO-IMP-09) | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | SPEC-6UnMiBIsE4whNsJmSW8SQX | Issue #304 ruviform-io-archive — Secure Extraction・Root Capability・Path Policy・Staging Recovery (IO-IMP-10) | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| SPEC-034UvWaV1HSJ4d8QLZI8fF | Issue #305 IO E2E slice — WAV→StagedFile Byte Golden・Fault fixture | draft | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | SPEC-P6IzbXqAJ2cgiMm8llJIIO | Issue #305 Media I/O 旧 StagedOutput 完全削除・WAV→StagedFile 移行 (IO-IMP-11) | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | SPEC-lYVG6Gr07aTIBC8BSS0WKW | Issue #306 汎用 I/O 合成 E2E — StagedFile/Structured/Compression/Archive/WAV 境界試験 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | SPEC-034UtxqBI7DX73fpCfjAok | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture・OS/FS 実測・CI handoff | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
