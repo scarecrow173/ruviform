@@ -7,7 +7,6 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034UdR18snUStfTR5NpZge | Issue #243 実装タスク | in-progress | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
-| TASK-034UBtKswl6dq50oYiJ9H8 | Issue #278 OBS-03 tracing_export slice 2 実装タスク | todo | [implement-issue-278-observability-tracing-export-records.md](./implement-issue-278-observability-tracing-export-records.md) |
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
@@ -119,6 +118,7 @@ Directory: `docs/tasks`
 | TASK-034JxOaMsaSwEIVfvU9MC8 | ruviform-exec スレッド優先度機構の実装 | done | [implement-exec-thread-priority.md](./implement-exec-thread-priority.md) |
 | TASK-034JNwTz163N6eT3EJfdaD | FrameRate 型の実装（TimeBase newtype・検証付きコンストラクタ・nominal_fps） | done | [implement-framerate-type.md](./implement-framerate-type.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
+| TASK-034UBtKswl6dq50oYiJ9H8 | Issue #278 OBS-03 tracing_export slice 2 実装タスク | done | [implement-issue-278-observability-tracing-export-records.md](./implement-issue-278-observability-tracing-export-records.md) |
 | TASK-034UprmEYoMJcy1j0tHLHy | Issue #278 OBS-03 tracing_export 実装タスク | done | [implement-issue-278-observability-tracing-export.md](./implement-issue-278-observability-tracing-export.md) |
 | TASK-034T2PiH8yPGqaV8KE8r4M | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装 | done | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
 | TASK-034UoZXLONDKdThLicpKCD | Implement Issue #290 OBS-08 allocation-probe — CountingAllocator/AllocationScope | done | [implement-issue-290-observability-allocation-probe.md](./implement-issue-290-observability-allocation-probe.md) |
@@ -169,6 +169,7 @@ Directory: `docs/tasks`
 | TASK-034Qh5tYhNjMkLoPqRs | Issue #190 T-1: canonical transport contract types (media-core) | done | [issue-190-t-1-canonical-contract-types.md](./issue-190-t-1-canonical-contract-types.md) |
 | TASK-034Qh6uIoPqWsErTyU | Issue #190 T-2: transport controller + RT span scheduler | done | [issue-190-t-2-span-scheduler-apply.md](./issue-190-t-2-span-scheduler-apply.md) |
 | TASK-034Qh7vBnMxZaSdFgH | Issue #190 T-3: plugin transport bridge + Mock Driver PoC | done | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
+| TASK-034UCVp0kqovy1IEDp0LWy | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | done | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | TASK-Awm44usEpigGUWYXNxfbWd | Issue #196 T-1: plugin-core bus role + enumeration contract | done | [issue-196-t-1-plugin-core-bus-enumeration.md](./issue-196-t-1-plugin-core-bus-enumeration.md) |
 | TASK-HfEXpjuOcYSGP35UqpabKo | Issue #196 T-2: media-core receipt/fault pop + host bus enumeration | done | [issue-196-t-2-host-media-bus-enumeration.md](./issue-196-t-2-host-media-bus-enumeration.md) |
 | TASK-mO3RtjrUoyUadajAWyCadp | Issue #196 T-3: ruviform-audio-plugin-bridge crate | done | [issue-196-t-3-bridge-crate.md](./issue-196-t-3-bridge-crate.md) |
