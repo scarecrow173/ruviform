@@ -20,6 +20,7 @@ Directory: `docs/specs`
 | SPEC-034JcicHlRidBgcK1wPtj2 | 動画基盤 API の確定（video-core / video-proc・色変換・HDR 対応範囲） | approved | [implement-video-foundation-api.md](./implement-video-foundation-api.md) |
 | SPEC-034O7hTzfdwtNrUQom8ISw | Issue #121 L1 診断・可観測性（underrun メトリクス・子 stderr 配管・失敗原因 payload） | approved | [issue-121-diagnostics.md](./issue-121-diagnostics.md) |
 | SPEC-034N3QmyfzJRPM3AVpKQTn | Issue #124 OFX フォローアップ（catalog_open cross-window h 露出修正 + instance clip props clone） | approved | [issue-124-ofx-cross-window-h-exposure.md](./issue-124-ofx-cross-window-h-exposure.md) |
+| SPEC-034udQra6CS6JQJJN4e0hG | Issue #127 Linux 実配布方式の設計 — GPUI 標準 Driver の runtime 依存・Capability Matrix・パッケージ形式適合条件 | proposed | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | SPEC-034N9oLnrGISolGjoiaTx2 | Issue #131 OFX UAF residuals — non-catalog window leases + lifecycle hardening | approved | [issue-131-ofx-uaf-residuals-non-catalog-window-leases-lifecycle-hardening.md](./issue-131-ofx-uaf-residuals-non-catalog-window-leases-lifecycle-hardening.md) |
 | SPEC-IM5TwWbpq1rrgX81HVk3bN | Issue #181 Multi-Window Host — per-Window event & lifecycle contract | proposed | [issue-181-multi-window.md](./issue-181-multi-window.md) |
 | SPEC-BkHWcVnZOw9qbxHXdfNUzH | Issue #182 Dock Tree / View Move / Layout Restore — reusable multi-window docking foundation | proposed | [issue-182-dock-tree.md](./issue-182-dock-tree.md) |

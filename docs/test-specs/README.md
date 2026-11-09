@@ -34,6 +34,7 @@ Directory: `docs/test-specs`
 | TSPEC-034OpmNe3vUnEprFdOIHb6 | L1 FailureCause・通知互換（Issue #121 — 7 variant 分類・first-observed・InstanceFailed.cause・wire 不変） | approved | [issue-121-l1-failure-cause-notification-tests.md](./issue-121-l1-failure-cause-notification-tests.md) |
 | TSPEC-034OpmNQsPNOBT99IHbrQz | L1 diagnostics parity・無退行（Issue #121 — video parity・supervisor pass-through・L0/wire/supervisor 契約維持） | approved | [issue-121-l1-parity-nonregression-tests.md](./issue-121-l1-parity-nonregression-tests.md) |
 | TSPEC-034OpmLKqqBA5YuKQkRrIU | L1 child stderr drain（Issue #121 — piped stderr・64KiB tail ring・snapshot 不変・500ms grace・heir bounded teardown） | approved | [issue-121-l1-stderr-drain-tests.md](./issue-121-l1-stderr-drain-tests.md) |
+| TSPEC-034udQraULNWJKR6z8GYjq | Issue #127 Linux 実配布方式 設計文書の検証仕様 — Matrix 完全性・判定語彙・分離・Owner 境界 | proposed | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | TSPEC-ajLVDeHdxTEsvm0JMWptbM | Issue #181 Multi-Window Host — test spec | approved | [issue-181-multi-window.md](./issue-181-multi-window.md) |
 | TSPEC-79iCQBCeCxmbN386U8wYgM | Issue #182 Dock Tree / View Move / Layout Restore — test spec | approved | [issue-182-dock-tree.md](./issue-182-dock-tree.md) |
 | TSPEC-034QeeLKxXQyMBzA6HNOW6 | Issue #184 M1 typed graph IR: representation, multi-bus topology, validation failures, revisions, legacy coexistence | approved | [issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md](./issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md) |

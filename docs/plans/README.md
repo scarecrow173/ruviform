@@ -61,6 +61,7 @@ Directory: `docs/plans`
 | PLAN-034Kq8IiJyWJrYeKbeaNK9 | Issue #92 実施計画 — ruviform-audio-analysis 新設 | approved | [implement-issue-92-audio-analysis.md](./implement-issue-92-audio-analysis.md) |
 | PLAN-034KPgI4Qmc4o0yAzYskID | Issue #96 実施計画 — ruviform-edit 新設 | approved | [implement-issue-96-edit-model.md](./implement-issue-96-edit-model.md) |
 | PLAN-034KSVb6BAzhMH2cZgxnSy | Issue #97 実施計画 — video-proc コンポジット/遷移カーネル追加 | approved | [implement-issue-97-composite-kernels.md](./implement-issue-97-composite-kernels.md) |
+| PLAN-034udQraUPXx00zp4pCYaL | Issue #127 Linux 実配布方式 設計文書チェーン 実装計画 — docs-only 5 文書 + 索引再生成 + 検証 | draft | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | PLAN-034N9piQHt6Evb7QShnGx8 | Issue #131 OFX UAF residuals 実施計画 | approved | [issue-131-ofx-uaf-residuals.md](./issue-131-ofx-uaf-residuals.md) |
 | PLAN-YhNVDi1L10HncvCUA5RufU | Issue #181 Multi-Window Host — implementation plan | approved | [issue-181-multi-window.md](./issue-181-multi-window.md) |
 | PLAN-0H8Jzc5oPC9umJnYUWKcbN | Issue #182 Dock Tree / View Move / Layout Restore — implementation plan | approved | [issue-182-dock-tree.md](./issue-182-dock-tree.md) |
