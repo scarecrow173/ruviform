@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Foundation/Observability 候補モジュールの最小 API・依存 DAG・新設時期の設計"
 created: "2026-10-23"
-updated: "2026-10-29"
+updated: "2026-11-09"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -31,6 +31,7 @@ relations:
     - "../../AGENTS.md"
     - "overview.md"
     - "rt-verification-lane-design.md"
+    - "issue-275-observability-integration-design.md"
   refines: []
   refined-by: []
   derives-from:
@@ -50,6 +51,7 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/104"
     - "https://github.com/scarecrow173/ruviform/issues/76"
     - "https://github.com/scarecrow173/ruviform/issues/22"
+    - "https://github.com/scarecrow173/ruviform/issues/275"
   defers: []
   deferred-by: []
 ---
@@ -151,6 +153,8 @@ pub struct CounterReader /* (非 RT 観測側。load のみ) */;
 所要前提: `retire_channel` の共有 `Arc<AtomicUsize>` オーバーフローカウンタ（`Retirer::overflows`・`DropCollector::overflows`・`SnapshotWriter::retire_overflows` が同一カウンタを読む先例）と、#101「適用例」の audio xrun・キュー飽和・Drop 退避・プール使用量という Metrics の将来消費者。ただし現時点では共有カウンタ型は 1 先例のみであり、`ruviform-rt` への適用は非既定依存問題（後述）に阻まれるため、新設は Issue #104 PoC（RT 記録コスト・オーバーフロー方針の実測）と 2 つ目のドメイン計測点需要をトリガとする。
 
 ## Observability 候補モジュールの最小設計
+
+> **2026-11-09 改訂（Issue #275 合意版）**: 本節の observability 候補モジュール判定（`logging`/`profiling`/`metrics`/`diagnostics`/`debug` の「保留」、`rt_bridge`/`export` の「構成候補・要 PoC」）と、後述の `ruviform-observability` 新設トリガは、Issue [#275](https://github.com/scarecrow173/ruviform/issues/275) の合意設計（2026-11-04）と OBS-01〜11 の main 上の実装により解決済みである。`ruviform-observability` は単一クレートとして `core`/`source`/`collector`/`diagnostics`/`debug`/`record`/`rt_bridge`/`rt_timing`/`profiling`/`tracing_export`/`logging`/`integration` モジュールを持ち、統合設計の正本は [Issue #275 Observability統合設計正本](issue-275-observability-integration-design.md)。本節の判定表とスケッチは当時の分析記録として保持し、本文は改変しない。
 
 ### 判定一覧
 
