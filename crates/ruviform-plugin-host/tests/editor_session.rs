@@ -14,9 +14,11 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
+use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventList, GuiHandle, GuiParentToken, ParamInfo, PluginDescriptor,
-    PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
+    BufferView, BufferViewMut, EventList, GuiHandle, GuiParentToken, HostInput, HostOutput,
+    LifecycleState, ParamInfo, PluginDescriptor, PrepareError, ProcessConfig, ProcessContext,
+    ProcessResult, ProcessStatus, TransportInfo,
 };
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
@@ -1651,4 +1653,156 @@ fn sh17_notify_terminated_graphics_lost_fires_once() {
             }
         ]
     ));
+}
+
+// ---- contract edges ---------------------------------------------------
+
+#[test]
+fn visibility_noop_emits_no_event() {
+    // A `set_visibility` matching the current state is a defined no-op:
+    // the ops call still happens, but no event is emitted — event
+    // consumers count real state changes only.
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance()).unwrap();
+    let mut ops = FakeOps::ok();
+    let session = sessions.session_mut(id).unwrap();
+    session
+        .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+        .unwrap();
+    session.drain_events();
+    session.set_visibility(&mut ops, true).unwrap();
+    session.set_visibility(&mut ops, false).unwrap();
+    session.set_visibility(&mut ops, false).unwrap();
+    assert_eq!(session.drain_events(), vec![EditorSessionEvent::Hidden]);
+    assert!(matches!(session.state(), EditorSessionState::Hidden { .. }));
+}
+
+// ---- DSP/RT independence (L0 real path) -------------------------------
+//
+// Contract rule (design D7 / spec RT contract): editor-session ops are
+// UI-side only — they must never disturb the DSP instance's lifecycle
+// or `process` results. These cases drive a real `InProcessHost`
+// instance to `Processing` and run session ops around `process`
+// blocks; widget teardown — graceful close *and* abnormal termination
+// — and refused opens must leave the audio path untouched.
+
+/// Initialize → Activate → `StartProcessing` — the same command series
+/// the composite E2E uses to reach `Processing`.
+fn drive_to_processing(host: &mut InProcessHost, instance: PluginHandle) {
+    host.execute(HostCommand::Initialize { handle: instance })
+        .unwrap();
+    host.execute(HostCommand::Activate {
+        handle: instance,
+        config: ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, 512).unwrap(),
+    })
+    .unwrap();
+    host.execute(HostCommand::StartProcessing { handle: instance })
+        .unwrap();
+}
+
+/// One `process` block over mono planar views — the stub plugin
+/// answers `Continue`.
+fn process_block(host: &mut InProcessHost, instance: PluginHandle) -> ProcessResult {
+    let input = [0.5_f32; 8];
+    let mut output = [0.0_f32; 8];
+    let in_list = [&input[..]];
+    let input_view = PlanarBufferView::new(&in_list).unwrap();
+    let inputs = [HostInput(&input_view)];
+    let mut out_list = [&mut output[..]];
+    let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+    let mut outputs = [HostOutput(&mut output_view)];
+    host.process(instance, &inputs, &mut outputs, EventList::empty(8), None)
+        .expect("process must keep working across editor-session ops")
+}
+
+/// The instance is still `Processing` and `process` still answers
+/// `Continue` — the session side never reached the DSP path.
+fn assert_dsp_untouched(host: &mut InProcessHost, instance: PluginHandle) {
+    assert_eq!(
+        host.lifecycle_state(instance),
+        Some(LifecycleState::Processing)
+    );
+    assert_eq!(
+        process_block(host, instance).status,
+        ProcessStatus::Continue
+    );
+}
+
+#[test]
+fn l0_session_open_close_leaves_dsp_processing_untouched() {
+    let mut host = host_with_plugin(true);
+    let instance = instantiate(&mut host);
+    drive_to_processing(&mut host, instance);
+    assert_dsp_untouched(&mut host, instance);
+
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        let session = sessions.session_mut(id).unwrap();
+        session
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open while processing");
+        // A refused non-lifecycle op is non-fatal and changes nothing
+        // DSP-side either — the session stays Attached.
+        assert_eq!(
+            session.set_visibility(&mut ops, false),
+            Err(EditorSessionError::Ops(EditorOpError::Unsupported))
+        );
+        session.close(&mut ops).expect("close while processing");
+    }
+    assert_dsp_untouched(&mut host, instance);
+}
+
+#[test]
+fn l0_session_abnormal_termination_leaves_dsp_processing_untouched() {
+    // `notify_terminated` is the window-loss/host-crash/child-exit
+    // vocabulary — converging the session must not touch the DSP path.
+    let mut host = host_with_plugin(true);
+    let instance = instantiate(&mut host);
+    drive_to_processing(&mut host, instance);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        sessions
+            .session_mut(id)
+            .unwrap()
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open while processing");
+    }
+    sessions.notify_terminated(instance, SessionFailCause::HostLost);
+    let session = sessions.session_mut(id).unwrap();
+    assert_eq!(session.state(), EditorSessionState::Closed);
+    assert!(matches!(
+        session.drain_events().last(),
+        Some(EditorSessionEvent::Terminated {
+            cause: SessionFailCause::HostLost
+        })
+    ));
+    assert_dsp_untouched(&mut host, instance);
+}
+
+#[test]
+fn l0_refused_open_leaves_dsp_processing_untouched() {
+    // A plugin whose `open_gui` is the default `Unsupported` produces a
+    // `Failed` session that closes without an adapter op — the refused
+    // open must not disturb the DSP path either.
+    let mut host = host_with_plugin(false);
+    let instance = instantiate(&mut host);
+    drive_to_processing(&mut host, instance);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        let session = sessions.session_mut(id).unwrap();
+        assert_eq!(
+            session.open(&mut ops, &lease(), SIZE, AttachMode::Docked),
+            Err(EditorSessionError::Ops(EditorOpError::Unsupported))
+        );
+        session
+            .close(&mut ops)
+            .expect("refused-open close needs no adapter op");
+    }
+    assert_dsp_untouched(&mut host, instance);
 }
