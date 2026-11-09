@@ -119,6 +119,7 @@ Directory: `docs/tasks`
 | TASK-034JNwTz163N6eT3EJfdaD | FrameRate 型の実装（TimeBase newtype・検証付きコンストラクタ・nominal_fps） | done | [implement-framerate-type.md](./implement-framerate-type.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | TASK-034T2PiH8yPGqaV8KE8r4M | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装 | done | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
+| TASK-034UnBJEQ9hvQiyzg4UMHk | Issue #291 OBS-09 Diagnostics 実装タスク | done | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
 | TASK-BS44ckVmFBThwWFjdUUaro | Issue #465 Legacy WebView P0/P1 — 文書歴史化と棚卸し | done | [implement-issue-465-legacy-webview-p0p1.md](./implement-issue-465-legacy-webview-p0p1.md) |
 | TASK-034UaK7UfGDq7HHHhdeetT | Issue #468 RootedDir canonical 前提の契約明示 | done | [implement-issue-468-rooteddir-canonical-premise.md](./implement-issue-468-rooteddir-canonical-premise.md) |
 | TASK-034UexWbrpLoijqKctQjFB | Issue #478 Fader/Knob 縦寸法契約 — 設計判断と実装タスク | done | [implement-issue-478-fader-knob-height-contract.md](./implement-issue-478-fader-knob-height-contract.md) |
