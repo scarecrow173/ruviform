@@ -221,6 +221,7 @@ Directory: `docs/tasks`
 | TASK-9KS9Fd9Lzf1TjWIavKU8Uz | T1 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 (Issue #305) | done | [issue-305-t1-staged-file-cutover.md](./issue-305-t1-staged-file-cutover.md) |
 | TASK-034UwchDKTHXsAzupuKHkC | W1 Issue #305 io-e2e WAV golden/fault fixture 実装 | done | [issue-305-w1-fixture-extension.md](./issue-305-w1-fixture-extension.md) |
 | TASK-034UwcoMpAnO2xGUgLMC7x | W2 Issue #305 io-e2e WAV golden/fault 検証・handoff | done | [issue-305-w2-verification-handoff.md](./issue-305-w2-verification-handoff.md) |
+| TASK-7VWD8KuRBS2voBCngFoIJF | A1 IO MSRV lane 追加・DAG/RT audit 証跡・検証 | done | [issue-306-a1-msrv-dag-rt-audit.md](./issue-306-a1-msrv-dag-rt-audit.md) |
 | TASK-034UtEdJ4J9ekRBHmpucta | F1 IO E2E fixture 実装 — Fault/Fuzz・Directory・OS/FS probe | done | [issue-306-f1-fixture-extension.md](./issue-306-f1-fixture-extension.md) |
 | TASK-034UtEeCVQCg44aM7iUrV3 | F2 正規検証・evidence・CI handoff 記録 | done | [issue-306-f2-verification-handoff.md](./issue-306-f2-verification-handoff.md) |
 | TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |

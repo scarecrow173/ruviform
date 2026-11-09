@@ -97,6 +97,7 @@ Directory: `docs/plans`
 | PLAN-gWrX94JcoMQacCOPFR5FKD | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 実装計画 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | PLAN-W0d5X9GIZLFMnSGqu9OlBg | Issue #306 汎用 I/O 合成 E2E 実装計画 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | PLAN-034UtCUZnaLUCtLUqb8nYz | Issue #306 IO E2E slice 2 実装計画 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
+| PLAN-eShTb4vnZSc0gaiPtChnIU | Issue #306 IO E2E slice 3 実装計画 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034Ui3RAJGJJ1dJAlUW9N0 | Issue #308 — Probe再Binding全件整合の実装計画 | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
 | PLAN-034UwjBloBOcV5J6YJcNw9 | Issue #309 PROBE-TIME slice 実装計画 | approved | [issue-309-probe-time-align-fixture.md](./issue-309-probe-time-align-fixture.md) |
