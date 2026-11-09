@@ -86,7 +86,17 @@ Ruviform メディア基盤のプラグインホスト層: ホストアプリケ
   変換し、lease 値を無検証に token とみなす pass-through はない）、
   `L1EditorOps` は現行 L1 の実装状態を全 op
   `EditorOpError::Unsupported` の defined refusal として表す
-  （wire に出さず L0 へ退化させない）。GUI driver 側の parent slot
+  （wire に出さず L0 へ退化させない）。hardening slice
+  （Issue #389 session-hardening）として、in-flight request の
+  bounded deadline（注入可能な `SessionClock` +
+  `SessionDeadlinePolicy`、driver が `tick`/`tick_all` で期限切れを
+  `Failed{Timeout}` へ終端）、preferred mode が `Unsupported` の
+  とき 1 回だけ fallback mode へ retry する明示 degrade
+  （`open_or_degrade`/`begin_degrade` → `OpenOutcome::Degraded` +
+  `EditorSessionEvent::Degraded` — `Attached`/`Recovered` とは別の
+  終端であり Native Dock PASS ではない）、および GPU/driver 喪失の
+  `SessionFailCause::GraphicsLost`/`EditorOpError::GraphicsLost` を
+  追加した。GUI driver 側の parent slot
   契約（`ruviform-ui::native_slot`、Issue #388）とは opaque lease
   経由で接続し、plugin 系 ↔ ui 系の相互依存は持たない。
 
