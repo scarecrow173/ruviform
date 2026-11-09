@@ -74,6 +74,7 @@ fn seek(name: &str) -> ComponentSpec {
         unreachable!()
     };
     spec.orientation = Orientation::Horizontal;
+    spec.a11y.orientation = Some(Orientation::Horizontal);
     spec.target = Some("transport.seek".to_string());
     ComponentSpec::Seek(spec)
 }
