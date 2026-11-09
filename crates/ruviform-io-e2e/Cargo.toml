@@ -11,8 +11,9 @@ publish.workspace = true
 # integration tests under `tests/`, so all of them are dev-dependencies.
 # Dependency addition records (暫定規約「依存追加は理由を記録」):
 # - ruviform-io-file: StagedFile/SealedFile/publish boundary under test.
-# - ruviform-io-structured (json,csv,file): write_file/read_file
-#   convenience on top of StagedFile under test.
+# - ruviform-io-structured (json,csv,yaml,toml,xml,file): write_file/
+#   read_file convenience on top of StagedFile under test; xml is
+#   read-only (event API) so it is exercised against published bytes.
 # - ruviform-io-compression (gzip,zstd): borrowed Encoder/Decoder
 #   layers between TAR and StagedFile under test.
 # - ruviform-io-archive: ZIP/TAR writers/readers and secure
@@ -30,7 +31,10 @@ publish.workspace = true
 ruviform-io-file = { path = "../ruviform-io-file" }
 ruviform-io-structured = { path = "../ruviform-io-structured", features = [
     "json",
+    "yaml",
+    "toml",
     "csv",
+    "xml",
     "file",
 ] }
 ruviform-io-compression = { path = "../ruviform-io-compression", features = [
