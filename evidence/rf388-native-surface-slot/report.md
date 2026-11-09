@@ -133,3 +133,28 @@ probe（`poc-native-dock`、in-process 決定論 probe plugin）と実外部 VST
 - P2（doc 正確性）: 指摘なし。NSC-01〜13 と test 名・assert の対応を確認。Pass 判定は fake/Windows L0 attach に限定され、NotRun/Unsupported 行の Pass 繰り上げなし。
 - P3（nit、反映済み）: `capabilities` が backend 交差を行わない点を module doc に明記、attach fault の発火条件（次の成功 mint）を doc に明記。
 - 判定: NO BLOCKERS。
+
+## 追記: main `3f6e6a8b` での再検証（2026-11-09・dispatch `task_08bbbaae8be2`）
+
+本スライス（driver-neutral `NativeSurfaceSlot` 型契約・依存方向・2-phase move/rollback・headless fixture）の成果物は先行 PR で merge 済みであることを確認し、現行 `origin/main`（`3f6e6a8b`、branch `feature/388-nativesurface-contract`、コード差分なし）で受入条件を再検証した。
+
+| 成果物 | merge PR | 現行 main での状態 |
+| --- | --- | --- |
+| driver-neutral `NativeSurfaceSlot` 契約（`crates/ruviform-ui/src/native_slot.rs`）と `SurfaceSlotRegistry` | #399 | 変更なし・存続 |
+| Fake NativeSlot Driver（`fake_native_slot.rs`）+ 契約 fixture NSC-01〜13（`native_slot_contract.rs`）+ `mise run test-ui-native-slot` | #424 | 変更なし・存続 |
+| GPUI driver 側 windowing（ancestor clip・focus/key routing・2-phase re-dock、`render.rs`/`poc/dock_windowing.rs`） | #501 | 契約面（`native_slot.rs`・fake・contract test）は不変 |
+
+再検証コマンドと結果:
+
+| command | exit | 結果 |
+| --- | --- | --- |
+| `mise run fmt-check` | 0 | 整形差分なし |
+| `mise run check` | 0 | `cargo check --workspace --all-targets` |
+| `mise run lint` | 0 | `clippy --workspace --all-targets -- -D warnings` |
+| `mise run test` | 0 | workspace 全 suite ok（`test result: ok` 192 block、FAILED 0） |
+| `mise run test-rt` | 0 | RT 契約試験 green |
+| `mise run test-ui-native-slot` | 0 | 13 passed / 0 failed（NSC-12/13 の 2-phase rollback 含む） |
+| `mise run test-ui-test-msrv` | 0 | MSRV 1.89 で `ruviform-ui-test` 全 target green（`native_slot_contract` 13 件を含む）— 本 report で NotRun だった同 lane を今回実行し Pass |
+| `mise run check-ui-driver-boundary` | 0 | dep-graph / signature / allowlist pass（OS/GPUI private handle の公開 API 非露出を再確認） |
+
+受入対応の再確認: 型契約・依存方向・2-phase move/rollback（`DockWorkspace` begin/commit/abort と slot busy の結線、NSC-12/13）・headless fixture は全て現行 main で成立。実 OS Dock Pass/Fail・実機 fixture・#389 共同検証・ADR 採用条件の実測部分は本スライス範囲外であり、上記 matrix の NotRun/Unsupported 記録を維持する（Pass への繰り上げなし）。コード差分がないため本追記のみの docs commit とする。
