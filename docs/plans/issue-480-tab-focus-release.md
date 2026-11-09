@@ -101,8 +101,10 @@ relations:
 
 - [x] `cargo test -p ruviform-ui-gpui --features gpui-test -- focus_handle`
       （補助証拠）: RED 3 fail → GREEN 3 pass。
-- [ ] `mise run test-ui-gpui` / `lint-ui-gpui` /
+- [x] `mise run test-ui-gpui` / `lint-ui-gpui` /
       `check-ui-driver-boundary` / `check` / `lint` / `fmt-check` green。
+      （`origin/main` 取込後に実施。全て exit 0。追加で `mise run test`
+      workspace 全体も green。）
 
 ## Open Questions / Gaps
 

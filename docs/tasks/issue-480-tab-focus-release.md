@@ -85,13 +85,16 @@ sibling 保持、`Updated` 保持）を追加する。
       design・test-spec・テストで固定されている。
 - [x] `control_focus`（#479 FU-c）への展開可能性が design の
       Deferred Design Concerns に記録されている。
-- [ ] 全 lane green（`mise run test-ui-gpui`・`lint-ui-gpui`・
-      `check-ui-driver-boundary`・`check`・`lint`・`fmt-check`）。
+- [x] 全 lane green（`mise run test-ui-gpui`・`lint-ui-gpui`・
+      `check-ui-driver-boundary`・`check`・`lint`・`fmt-check`。
+      `origin/main` 取込後に実施、全て exit 0。`mise run test`
+      workspace 全体も green）。
 
 ## Verification
 
 - [x] `cargo test -p ruviform-ui-gpui --features gpui-test -- focus_handle`
       — RED→GREEN 確認（補助証拠; canonical = `mise run test-ui-gpui`）。
-- [ ] `mise run test-ui-gpui` / `lint-ui-gpui` /
-      `check-ui-driver-boundary` / `check` / `lint` / `fmt-check`。
-- [ ] review-protocol レビューで blocker なし。
+- [x] `mise run test-ui-gpui` / `lint-ui-gpui` /
+      `check-ui-driver-boundary` / `check` / `lint` / `fmt-check`
+      （`origin/main` 取込後、全て exit 0）。
+- [x] review-protocol レビューで blocker なし。
