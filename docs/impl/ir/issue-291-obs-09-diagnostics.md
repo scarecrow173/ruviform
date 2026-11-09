@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034UnDVtaBTUOTvc3aTj8m"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #291 OBS-09 Diagnostics 実装記録"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -132,7 +132,25 @@ ClockContext`。
 
 ## Validation
 
-（実装中 — 完了時に確定）
+- `mise run fmt-check` — PASS（exit 0、Windows 11 x64 / Git Bash、
+  rust 1.99.0 via mise）。
+- `mise run check` — PASS（exit 0、`cargo check --workspace
+  --all-targets`）。
+- `mise run lint` — PASS（exit 0、clippy `-D warnings` ゲート）。
+- `mise run test` — PASS（exit 0、`cargo test --workspace`。
+  diagnostics 31 テストを含む全クレート緑）。
+- `mise run test-rt` — PASS（exit 0、`cargo test --workspace rt_`）。
+- 補助証拠（canonical ではない）: `cargo test --lib diagnostics`
+  31 件、`cargo clippy --all-targets`、`cargo check --all-features`
+  （logging feature 有効時も diagnostics は独立してコンパイル）。
+- review-protocol: 実装レビュー 1 回。CONFIRMED P1 を 1 件検出・修正
+  （source generation 変更時に confirmed state が transition なしで
+  Healthy に reset される欠陥 → streak のみ reset に修正し回帰テスト
+  `generation_change_never_fabricates_healthy_over_confirmed_bad`
+  を追加）。残りは P3 non-blocking（finding upsert が source を
+  含まない、`observe_again` の refs 全置換、初回 evaluate の
+  Unknown→X domain transition、report byte budget が findings を
+  個別 drop しない）。blocker なし = 承認扱い。
 
 ## Risks
 

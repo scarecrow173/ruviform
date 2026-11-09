@@ -1,7 +1,7 @@
 ---
 id: "TASK-034UnBJEQ9hvQiyzg4UMHk"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #291 OBS-09 Diagnostics 実装タスク"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -90,18 +90,19 @@ logging の公開 API は変更しない。新規外部依存・feature・unsafe
 
 ## Done When
 
-- [ ] `src/diagnostics/` が実装され、`lib.rs` に登録される。
-- [ ] Evidence 4 種・basis 必須・Finding certainty・Health 遷移
+- [x] `src/diagnostics/` が実装され、`lib.rs` に登録される。
+- [x] Evidence 4 種・basis 必須・Finding certainty・Health 遷移
       （threshold/hysteresis/recovery/Unknown/stale/partial）・
       generation リセット・superseded・snapshot/report truncation・
       Unauthorized・sink 抑制/panic 隔離・Logging OFF の試験が pass。
-- [ ] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` が pass。
-- [ ] 実装記録（`docs/impl/ir/`）が作成・更新される。
+- [x] `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` が pass。
+- [x] 実装記録（`docs/impl/ir/`）が作成・更新される。
 
 ## Verification
 
-- [ ] `mise run fmt-check` / `mise run check` / `mise run lint` /
-      `mise run test` / `mise run test-rt`
-- [ ] golden 試験が `cargo test -p ruviform-observability`（mise test
-      経由）で pass
-- [ ] `git fetch origin main && git merge origin/main` 後に再検証
+- [x] `mise run fmt-check` / `mise run check` / `mise run lint` /
+      `mise run test` / `mise run test-rt`（全て exit 0、
+      Windows 11 x64 / rust 1.99.0）
+- [x] golden 試験が `cargo test -p ruviform-observability`（mise test
+      経由）で pass（diagnostics 31 テスト含む）
+- [x] `git fetch origin main && git merge origin/main` 後に再検証
