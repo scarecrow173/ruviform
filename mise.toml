@@ -319,6 +319,15 @@ run = "cargo run -p ruviform-ui-gpui --features gpui --example minimal_window"
 [tasks.example-ui-gpui-lifecycle]
 description = "Run the real-OS-window lifecycle check (two windows, Dock 2-phase move, defer/approve closes; manual verification — drive closes with wm-close.ps1 -Steps \"inspector,inspector,main\")"
 run = "cargo run -p ruviform-ui-gpui --features gpui --example real_window_lifecycle"
+# Issue #313 manual lane (real OS session only, never CI): mounts a
+# Fader+Seek view, waits for Ready+OS focus, injects Tab/arrow
+# keystrokes via Win32 SendInput, and writes the verdict JSON
+# (environment metadata included) to the capability-matrix evidence
+# dir. SendInput is OS automation injection — not physical manual
+# input. Do not move focus to another window while it runs.
+[tasks.example-ui-gpui-real-os-smoke]
+description = "Run the Issue #313 real-OS SendInput keyboard smoke on the interactive session (manual verification — writes verdict-windows.json; exit 0=pass, 1=fail, 2=unsupported)"
+run = "cargo run -p ruviform-ui-gpui --features gpui --example real_os_smoke -- --out evidence/rf313-os-capability-matrix/verdict-windows.json"
 [tasks.example-ui-webview-e2e]
 description = "Run the real WebView round-trip check (page load → IPC → event delivery; WebView2 on Windows, manual verification — not a CI lane)"
 run = "cargo run -p ruviform-ui-webview --features webview --example e2e_smoke"

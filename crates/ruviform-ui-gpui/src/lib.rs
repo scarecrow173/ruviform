@@ -46,6 +46,9 @@ mod gpui_driver {
     /// Consumer observation seam (Issue #429) — `gpui-test` only.
     #[cfg(feature = "gpui-test")]
     pub mod observe;
+    /// OS-level keyboard injection for real-OS smoke verification
+    /// (Issue #313 — `SendInput` on Windows, `Unsupported` elsewhere).
+    pub mod os_input;
     /// Consumer-neutral scenario adapter (Issue #464) — `gpui-test` only.
     #[cfg(feature = "gpui-test")]
     pub mod scenario;
@@ -1393,6 +1396,8 @@ pub use gpui_driver::observe::{
     ComponentDrawn, ComponentObservation, DrawnBar, DrawnCell, DrawnMark, DrawnPlan,
     DrawnWaveformChannel, GpuiObserver, ViewDrawn, ViewObservation,
 };
+#[cfg(feature = "gpui")]
+pub use gpui_driver::os_input;
 #[cfg(feature = "gpui-test")]
 pub use gpui_driver::scenario::GpuiGuiTest;
 #[cfg(feature = "gpui")]
