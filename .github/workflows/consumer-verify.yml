@@ -537,6 +537,7 @@ jobs:
           ACCESS_MODE: ${{ steps.gate.outputs.mode }}
           RESOLVED_SHA: ${{ steps.resolution.outputs.resolved_sha }}
           # consumer task が GITHUB_ENV 経由で上書きし得る tuple 識別値を固定
+          RUVIFORM_REV: ${{ inputs.ruviform_rev || github.sha }}
           EXPECTED_SHA: ${{ inputs.audiolens_expected_sha }}
           REQUESTED_REF: ${{ inputs.audiolens_ref }}
           CONSUMER_NAME: audiolens
@@ -970,6 +971,7 @@ jobs:
           ACCESS_MODE: ${{ steps.gate.outputs.mode }}
           RESOLVED_SHA: ${{ steps.resolution.outputs.resolved_sha }}
           # consumer task が GITHUB_ENV 経由で上書きし得る tuple 識別値を固定
+          RUVIFORM_REV: ${{ inputs.ruviform_rev || github.sha }}
           EXPECTED_SHA: ${{ inputs.synvelis_expected_sha }}
           REQUESTED_REF: ${{ inputs.synvelis_ref }}
           CONSUMER_NAME: synvelis

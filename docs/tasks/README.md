@@ -16,7 +16,7 @@ Directory: `docs/tasks`
 | TASK-034RT89xVtZ6NMuRh08JQg | T1 ruviform-io-archive クレート新設・Archive共通型・ZIP Indexed Reader (Issue #302) | completed | [issue-302-t1-scaffold-reader.md](./issue-302-t1-scaffold-reader.md) |
 | TASK-034RT8aupBUW6NpSHSrRWq | T2 ZIP Writer・Entry finish→Archive finish・否定fixture (Issue #302) | completed | [issue-302-t2-zip-writer.md](./issue-302-t2-zip-writer.md) |
 | TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | completed | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
-| TASK-034UjjbcehweeswcNaA3No | Issue #309 — PROBE-TIME時間コンテキスト・整列契約の実装タスク | todo | [issue-309-probe-time-context-and-alignment.md](./issue-309-probe-time-context-and-alignment.md) |
+| TASK-034UjNKCoOCnJfLYQhT8Fx | Issue #313 — Windows 実 OS SendInput キーボード smoke 実装タスク | in-progress | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | TASK-034Ug9lk3rk5h8iKkSQY2c | Issue #314 slice 3 — GPUI/OS capture backend | in-progress | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | TASK-IfiV9xO2raU6D60zy70KLs | Issue #314 slice 1 — Golden Utility コアの実装タスク | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | TASK-034Uey3QmAAfhAZo6ln7H4 | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装タスク | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
@@ -174,6 +174,8 @@ Directory: `docs/tasks`
 | TASK-034Qxfiiwcs7VUi4SIArot | T3 seeded fault fixture + discard_pending coverage (Issue #244) | done | [issue-244-t3-seeded-coverage.md](./issue-244-t3-seeded-coverage.md) |
 | TASK-034QxfiWo8R8kkqMasIoQm | T4 verification + review-protocol + impl record (Issue #244) | done | [issue-244-t4-verification-record.md](./issue-244-t4-verification-record.md) |
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
+| TASK-034UjQLrFyv9HY5QSH9HmW | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | done | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| TASK-034UlgdtbhGVBT1saWLNNP | Issue #294 daily tuple trigger 実装 — decide.mjs tuple モード・daily-ci job・契約 test | done | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TASK-034Sa3F7jL2nQ5uY8cE1hK | T1 ci/consumer-verify evidence.mjs + fixture tests + test-ci-consumer-verify task（Issue #294） | done | [issue-294-t1-consumer-verify-evidence-script.md](./issue-294-t1-consumer-verify-evidence-script.md) |
 | TASK-034Sa6J9mP4sV7xB1fK5nQ | T2 consumer-verify.yml tuple証拠・SHA ref・UI headless lane・extra_tasks 接続点 + yml contract test（Issue #294） | done | [issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md](./issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md) |
 | TASK-wTtcOyGIqnDDr4nB4paIK3 | T3 consumer-verify.yml GUI-CONTRACT lane 接続 — 候補 tree guard/semantic step + record 置換 + 構造契約 test（Issue #294） | done | [issue-294-t3-gui-contract-lane-wiring.md](./issue-294-t3-gui-contract-lane-wiring.md) |
@@ -207,6 +209,7 @@ Directory: `docs/tasks`
 | TASK-0Un8zJnU8BpZljyBDTCZNe | T6 RF #305 候補 scratch 検証と evidence 記録 (Issue #306) | done | [issue-306-t6-candidate-scratch-evidence.md](./issue-306-t6-candidate-scratch-evidence.md) |
 | TASK-QNzC22ZqitcqDhco1hHMKj | Issue #307 T1: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | done | [issue-307-t1-attach-frame-base-verified-context.md](./issue-307-t1-attach-frame-base-verified-context.md) |
 | TASK-034Ui3oOaxCn3ZMrQTqhed | Issue #308 — Probe再Binding全件整合の実装タスク | done | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
+| TASK-034UjjbcehweeswcNaA3No | Issue #309 — PROBE-TIME時間コンテキスト・整列契約の実装タスク | done | [issue-309-probe-time-context-and-alignment.md](./issue-309-probe-time-context-and-alignment.md) |
 | TASK-034Rp7jV966SX0fG78cOBL | Issue #310-T1 browser-test パッケージ骨格・serve・page protocol | done | [issue-310-01-browser-harness-package.md](./issue-310-01-browser-harness-package.md) |
 | TASK-034Rp7kQsMmyk0At2QYrwX | Issue #310-T2 共有 Fixture/Driver/Assertion (gesture/receipt/state/theme/canvas/a11y) | done | [issue-310-02-shared-fixtures-and-drivers.md](./issue-310-02-shared-fixtures-and-drivers.md) |
 | TASK-034Rp7lRJbB15NEGHdCXpU | Issue #310-T3 実ブラウザ spec・Consumer-shaped fixture・CI/evidence 接続 | done | [issue-310-03-specs-ci-evidence.md](./issue-310-03-specs-ci-evidence.md) |

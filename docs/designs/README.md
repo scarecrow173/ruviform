@@ -54,6 +54,7 @@ Directory: `docs/designs`
 | DESIGN-034QolOnuF7kf2drxSsvvH | Issue #233 prefetch contract improvements — discard_pending drain, seek discard flag, reopen_at structural design | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | DESIGN-034UdN3RWXD8Kk4elhwAtR | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 — 設計 | approved | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | DESIGN-034QxcnAfFWswZmwSKPbKH | Issue #244 prefetch contract wart fixes — boundary-first emission, dead-generation sequence, End commit-once, seeded-fault coverage | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
+| DESIGN-034UjQBuwtfaWhLg6ZZMBn | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合設計 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | DESIGN-034RoXjgYbKKZ3ZSazkSGi | Issue #276 汎用 Logging Adapter 設計 | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | DESIGN-034Rp1Um3ZXDWfRx8pCmuw | Issue #277 OBS-02 軽量Primitive・Observation Source契約: Gauge/Histogram・Descriptor・SourceId/Generation・Registrar/Lease・寿命 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
 | DESIGN-034RTpdouoLLSINNczwa3c | Issue #279 OBS-04 Plugin Host 4 CounterのSource登録: Registrar注入・Descriptor・Lease寿命 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
@@ -61,6 +62,7 @@ Directory: `docs/designs`
 | DESIGN-fhvRxnPJKvnhRAlg7TbeKm | Issue #280 OBS-05 RT Record Bridge・ClockContext・欠落envelope・CorrelationBook設計 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | DESIGN-034T2dhkl03BuqPOGmNlmc | Issue #289 OBS-07 Collector/Metrics/Snapshot: 単一Poll Owner・Baseline/Discontinuity・有界履歴・Health | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
 | DESIGN-034S9rV6yB3dG7jL0nQ4sU | Issue #294 Cross-Consumer候補tuple Gate 設計 — 証拠契約・解決SHA捕捉・UI lane 段階接続・task 接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
+| DESIGN-034UlaEev2MQ6gsnrNqias | Issue #294 daily candidate-tuple trigger 設計 — tuple-aware decide・証拠 artifact 回復・daily-ci job | approved | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | DESIGN-RVQaQUltza40Kb1HlAt48X | Issue #294 GUI-CONTRACT lane 接続設計 — 候補 tree 取得・task probe・step/lane 分離 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
 | DESIGN-034RoR9SDtSG2iiZbvNGKT | Issue #295 ruviform-io-file — StagedFile type-state・PublishOptions・Receipt/Failure・PlatformFileOps/Mock 設計 | approved | [issue-295-io-file-staged-publish.md](./issue-295-io-file-staged-publish.md) |
 | DESIGN-034RBFdth7UW7A6IS10Ha3 | Issue #296 ruviform-io-file — 実 OS PlatformFileOps アダプタ設計 (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
@@ -80,6 +82,7 @@ Directory: `docs/designs`
 | DESIGN-034Rp1KqXNzTDTKRXTbqHx | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | DESIGN-wrF61tPcejIc31wMBYJHok | Issue #311 RF-GT-02 ui/guitest — IPC conformance fixture・deterministic record/replay・fault matrix 設計 | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | DESIGN-034S312gtUiTestDsnDD44 | Issue #312 ruviform-ui-test — test-only GUI host lifecycle・secure control adapter 設計 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| DESIGN-034UjLB6Yn2hveYiujXFY0 | Issue #313 — Windows 実 OS SendInput キーボード smoke 設計（部分スコープ） | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | DESIGN-034Ug8WYFJ37a8hKlmcQaW | Issue #314 slice 3 — GPUI/OS capture backend の設計 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | DESIGN-GKjcGBxFK0ZtzxCEKsh1e7 | Issue #314 slice 1 — headless Pixel Golden Utility コアの設計 | approved | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | DESIGN-034UewQlz8GZ6RlexpCiXW | Issue #314 slice 2 — Golden Utility × Scenario Contract 能力契約接続の設計 | approved | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
