@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034UK2UedkRURdGA03P7k9"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #251 audio-device real backend input plumbing (headless slice)"
 created: "2026-11-09"
 updated: "2026-11-09"
