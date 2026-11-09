@@ -35,6 +35,12 @@ realtime = ["cpal/realtime"]
 # PipeWire host の任意実機比較用。PoC 既定構成では無効。有効化には
 # `libpipewire-0.3-dev` システム依存が必要（Linux のみ）。
 pipewire-backend = ["cpal/pipewire"]
+# 実機 input 検証 lane（Issue #251）。`tests/real_input_e2e.rs` の
+# `#[ignore]` テストを有効化する opt-in feature — 既定の
+# `cargo test` / `lint` には含まれない。実行入口は
+# `mise run test-audio-real-input`（Issue #114 `l1-real-verify`
+# パターン準拠）。
+real-device = []
 
 [lints]
 workspace = true

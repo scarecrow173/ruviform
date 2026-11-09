@@ -21,13 +21,14 @@
 //!   data is ever delivered.
 
 use ruviform_audio_core::device::{
-    BufferSize, DEVICE_CLOCK_TIMEBASE, OutputCallbackInfo, OutputDataCallback, OutputStreamConfig,
+    BufferSize, DEVICE_CLOCK_TIMEBASE, InputCallbackInfo, InputDataCallback, InputStreamConfig,
+    InputTimestamp, OutputCallbackInfo, OutputDataCallback, OutputStreamConfig,
     SupportedBufferSize, SupportedInputFormat, SupportedOutputFormat,
 };
 use ruviform_audio_core::{
-    AudioBufferViewMut, AudioFormat, ChannelLayout, SampleFormat, SampleRate,
+    AudioBufferView, AudioBufferViewMut, AudioFormat, ChannelLayout, SampleFormat, SampleRate,
 };
-use ruviform_media_core::MediaDuration;
+use ruviform_media_core::{MediaDuration, MediaTimestamp};
 
 /// Maps a cpal sample format onto the port's [`SampleFormat`].
 ///
@@ -62,8 +63,9 @@ pub(crate) fn layout_for_channels(channels: u32) -> Option<ChannelLayout> {
 /// bounds are structurally valid (`min <= max`, nonzero ceiling).
 /// Malformed backend reports are skipped, never trusted — `u32::clamp`
 /// on inverted bounds would panic, and a zero ceiling admits no rate.
-fn valid_sample_rate_bounds(range: &SupportedOutputFormat) -> bool {
-    range.min_sample_rate <= range.max_sample_rate && range.max_sample_rate != 0
+fn valid_sample_rate_bounds<R: RangeFields>(range: &R) -> bool {
+    let (_, min, max) = range.range_fields();
+    min <= max && max != 0
 }
 
 /// The same structural-validity rule for the buffer-size axis: a
@@ -71,8 +73,8 @@ fn valid_sample_rate_bounds(range: &SupportedOutputFormat) -> bool {
 /// contradictory bound, never a candidate. `Unknown` (and any future
 /// variant) imposes no bound, hence nothing to violate — admission is
 /// decided in the `negotiate` arms, not here.
-fn valid_buffer_bounds(range: &SupportedOutputFormat) -> bool {
-    match range.buffer_size {
+fn valid_buffer_bounds<R: RangeFields>(range: &R) -> bool {
+    match range.buffer_size() {
         SupportedBufferSize::Range { min, max } => min <= max && max != 0,
         _ => true,
     }
@@ -134,21 +136,39 @@ fn range_fields<T: RangeFields>(range: &T) -> (u32, u32, u32) {
 }
 
 /// The direction-specific supported-range structs share identical
-/// rate/channel fields; this trait lets the selection core consume
-/// either without a direction-neutral public type.
+/// rate/channel/buffer fields; this trait lets the negotiation core
+/// consume either without a direction-neutral public type.
 trait RangeFields {
     fn range_fields(&self) -> (u32, u32, u32);
+    fn sample_format(&self) -> SampleFormat;
+    fn buffer_size(&self) -> SupportedBufferSize;
 }
 
 impl RangeFields for SupportedOutputFormat {
     fn range_fields(&self) -> (u32, u32, u32) {
         (self.channels, self.min_sample_rate, self.max_sample_rate)
     }
+
+    fn sample_format(&self) -> SampleFormat {
+        self.sample_format
+    }
+
+    fn buffer_size(&self) -> SupportedBufferSize {
+        self.buffer_size
+    }
 }
 
 impl RangeFields for SupportedInputFormat {
     fn range_fields(&self) -> (u32, u32, u32) {
         (self.channels, self.min_sample_rate, self.max_sample_rate)
+    }
+
+    fn sample_format(&self) -> SampleFormat {
+        self.sample_format
+    }
+
+    fn buffer_size(&self) -> SupportedBufferSize {
+        self.buffer_size
     }
 }
 
@@ -307,27 +327,48 @@ pub(crate) fn negotiate(
     desired: &OutputStreamConfig,
     supported: &[SupportedOutputFormat],
 ) -> Option<NegotiatedConfig> {
-    if desired.format.sample_format != SampleFormat::F32 {
+    negotiate_impl(&desired.format, desired.buffer_size, supported.iter())
+}
+
+/// The input-direction mirror of [`negotiate`] — identical rules over
+/// [`InputStreamConfig`]/[`SupportedInputFormat`].
+pub(crate) fn negotiate_input(
+    desired: &InputStreamConfig,
+    supported: &[SupportedInputFormat],
+) -> Option<NegotiatedConfig> {
+    negotiate_impl(&desired.format, desired.buffer_size, supported.iter())
+}
+
+/// The direction-neutral negotiation core shared by [`negotiate`] and
+/// [`negotiate_input`]: identical candidate filtering and buffer-size
+/// admission regardless of stream direction.
+fn negotiate_impl<'a, R: RangeFields + 'a>(
+    format: &AudioFormat,
+    buffer_size: BufferSize,
+    supported: impl Iterator<Item = &'a R>,
+) -> Option<NegotiatedConfig> {
+    if format.sample_format != SampleFormat::F32 {
         return None;
     }
-    let channels = desired.format.layout.channels();
-    let rate = desired.format.sample_rate.get();
-    let mut candidates = supported.iter().filter(|range| {
-        valid_sample_rate_bounds(range)
-            && valid_buffer_bounds(range)
-            && range.sample_format == SampleFormat::F32
-            && range.channels == channels
-            && range.min_sample_rate <= rate
-            && rate <= range.max_sample_rate
+    let channels = format.layout.channels();
+    let rate = format.sample_rate.get();
+    let mut candidates = supported.filter(|range| {
+        let (range_channels, min, max) = range.range_fields();
+        valid_sample_rate_bounds(*range)
+            && valid_buffer_bounds(*range)
+            && range.sample_format() == SampleFormat::F32
+            && range_channels == channels
+            && min <= rate
+            && rate <= max
     });
 
-    let (buffer_size, effective_max_frames) = match desired.buffer_size {
+    let (buffer_size, effective_max_frames) = match buffer_size {
         BufferSize::Default => {
             // The scratch sizing estimate covers the loosest admissible
             // bound across every candidate — a larger estimate only
             // means a larger pre-sized slab.
             let effective_max = candidates
-                .map(|range| match range.buffer_size {
+                .map(|range| match range.buffer_size() {
                     SupportedBufferSize::Range { max, .. } => max,
                     _ => DEFAULT_FRAMES_FALLBACK,
                 })
@@ -339,7 +380,7 @@ pub(crate) fn negotiate(
             if frames_u32 == 0 {
                 return None;
             }
-            let admitted = candidates.any(|range| match range.buffer_size {
+            let admitted = candidates.any(|range| match range.buffer_size() {
                 SupportedBufferSize::Range { min, max } => min <= frames && frames <= max,
                 SupportedBufferSize::Unknown => true,
                 // A future variant is conservative — it does not admit.
@@ -502,11 +543,140 @@ fn pack_chunk(scratch: &mut [f32], channels: usize, frames: usize, dst: &mut [f3
     }
 }
 
+/// Drives one input delivery: `n = data.len() / channels` whole frames
+/// of interleaved backend `data` are unpacked into the planar
+/// `scratch`, and `data_callback` is invoked once per
+/// `frames_capacity`-bounded chunk with a read-only
+/// [`AudioBufferView`] over the unpacked slab.
+///
+/// Per-callback steps (design "コールバック配管", input direction):
+///
+/// 1. `data.len() % channels` trailing samples are not part of any
+///    whole frame and are never exposed — the view is built only over
+///    `chunk * channels` unpacked samples.
+/// 2. Each chunk unpacks `chunk` interleaved frames into
+///    `scratch[..chunk * channels]` (channel-major) via
+///    [`unpack_interleaved`], then a fresh [`AudioBufferView`] is
+///    handed to `data_callback` with a per-chunk shifted
+///    [`InputCallbackInfo`].
+///
+/// The view borrows the scratch slab for the call only — the callback
+/// must copy what it keeps (per the port's input-callback contract).
+///
+/// **RT contract:** bounded, allocation-free — every loop iteration is
+/// fixed-work; the scratch is pre-sized at open.
+pub(crate) fn read_interleaved(
+    scratch: &mut [f32],
+    frames_capacity: usize,
+    channels: usize,
+    data: &[f32],
+    info: InputCallbackInfo,
+    sample_rate: u32,
+    data_callback: &mut InputDataCallback,
+) {
+    // `channels`/`frames_capacity` come from a validated config and the
+    // scratch is sized `frames_capacity * channels` at open — but the
+    // RT path must never panic on an inconsistent shape, so the chunk
+    // is bounded by what the scratch can actually hold.
+    if channels == 0 {
+        return;
+    }
+    let max_chunk = frames_capacity.min(scratch.len() / channels);
+    if max_chunk == 0 {
+        return;
+    }
+
+    // Whole frames only: a partial trailing frame is dropped, never
+    // padded into the view.
+    let n = data.len() / channels;
+    let mut frame = 0;
+    while frame < n {
+        let chunk = (n - frame).min(max_chunk);
+        let len = chunk * channels;
+        unpack_interleaved(
+            &data[frame * channels..(frame + chunk) * channels],
+            channels,
+            chunk,
+            &mut scratch[..len],
+        );
+        // Per-chunk timestamp synthesis: chunk starting at `frame` was
+        // captured `frame / sample_rate` seconds after the buffer
+        // head, so both instants shift by that offset (same rule as
+        // the output direction).
+        let chunk_info = if frame == 0 || sample_rate == 0 {
+            info
+        } else {
+            chunk_input_timestamp_info(info, frame, sample_rate)
+        };
+        if let Ok(view) = AudioBufferView::try_new(&scratch[..len], channels, chunk) {
+            data_callback(view, chunk_info);
+        }
+        frame += chunk;
+    }
+}
+
+/// Unpacks `frames` interleaved frames (`src`, `frames * channels`
+/// long, frame-major) into channel-major planar `dst` (`frames *
+/// channels` long, channel `c` at `[c * frames, (c + 1) * frames)`).
+///
+/// **RT contract:** bounded element-wise copy, allocation-free.
+fn unpack_interleaved(src: &[f32], channels: usize, frames: usize, dst: &mut [f32]) {
+    debug_assert_eq!(src.len(), channels * frames);
+    debug_assert_eq!(dst.len(), channels * frames);
+    for c in 0..channels {
+        let dst_channel = &mut dst[c * frames..(c + 1) * frames];
+        for (f, sample) in dst_channel.iter_mut().enumerate() {
+            *sample = src[f * channels + c];
+        }
+    }
+}
+
+/// Synthesizes the per-chunk [`InputCallbackInfo`]: both instants shift
+/// by `frame_offset / sample_rate` seconds expressed as
+/// [`DEVICE_CLOCK_TIMEBASE`] (nanosecond) ticks — the input-direction
+/// mirror of [`chunk_timestamp_info`]. `clock_domain` is carried
+/// unchanged and `frame_position` (always `None` for this adapter)
+/// advances by the chunk's frame offset when present.
+///
+/// On `checked_add` overflow the original instant is kept rather than
+/// losing the timestamp; capture provenance is preserved.
+///
+/// **RT contract:** RT-suitable — integer math only, no allocation.
+fn chunk_input_timestamp_info(
+    info: InputCallbackInfo,
+    frame_offset: usize,
+    sample_rate: u32,
+) -> InputCallbackInfo {
+    let offset_ns =
+        u128::try_from(frame_offset).unwrap_or(u128::MAX) * 1_000_000_000 / u128::from(sample_rate);
+    let Ok(offset) = i64::try_from(offset_ns) else {
+        return info;
+    };
+    let delta = MediaDuration::new(offset, DEVICE_CLOCK_TIMEBASE);
+    InputCallbackInfo {
+        timestamp: InputTimestamp {
+            callback: info
+                .timestamp
+                .callback
+                .checked_add(delta)
+                .unwrap_or(info.timestamp.callback),
+            capture: info.timestamp.capture.map(|capture| MediaTimestamp {
+                time: capture.time.checked_add(delta).unwrap_or(capture.time),
+                provenance: capture.provenance,
+            }),
+        },
+        clock_domain: info.clock_domain,
+        frame_position: info.frame_position.map(|position| {
+            position.saturating_add(u64::try_from(frame_offset).unwrap_or(u64::MAX))
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use ruviform_audio_core::device::{DEVICE_CLOCK_TIMEBASE, OutputTimestamp};
-    use ruviform_media_core::MediaTime;
+    use ruviform_media_core::{MediaTime, TimestampProvenance};
 
     fn f32_range(
         channels: u32,
@@ -1236,5 +1406,325 @@ mod tests {
         let mut dst = vec![9.0_f32; 6];
         pack_chunk(&mut short_slab, 2, 3, &mut dst);
         assert_eq!(dst, [0.0; 6]);
+    }
+
+    // -- input direction -----------------------------------------------------
+
+    fn f32_input_range(
+        channels: u32,
+        min: u32,
+        max: u32,
+        buffer: SupportedBufferSize,
+    ) -> SupportedInputFormat {
+        SupportedInputFormat {
+            channels,
+            min_sample_rate: min,
+            max_sample_rate: max,
+            buffer_size: buffer,
+            sample_format: SampleFormat::F32,
+        }
+    }
+
+    fn desired_input(
+        rate: u32,
+        layout: ChannelLayout,
+        buffer_size: BufferSize,
+    ) -> InputStreamConfig {
+        InputStreamConfig {
+            format: AudioFormat {
+                sample_rate: SampleRate::new(rate).unwrap(),
+                layout,
+                sample_format: SampleFormat::F32,
+            },
+            buffer_size,
+        }
+    }
+
+    fn test_input_info() -> InputCallbackInfo {
+        InputCallbackInfo {
+            timestamp: InputTimestamp {
+                callback: MediaTime::new(0, DEVICE_CLOCK_TIMEBASE),
+                capture: None,
+            },
+            clock_domain: ruviform_media_core::ClockDomainId::MONOTONIC,
+            frame_position: None,
+        }
+    }
+
+    #[test]
+    fn negotiate_input_matches_rate_channels_and_default_buffer() {
+        // The input direction shares the output negotiation core —
+        // identical admission rules over `SupportedInputFormat`.
+        let supported = [f32_input_range(
+            2,
+            44_100,
+            48_000,
+            SupportedBufferSize::Range { min: 64, max: 512 },
+        )];
+        let negotiated = negotiate_input(
+            &desired_input(48_000, ChannelLayout::Stereo, BufferSize::Default),
+            &supported,
+        )
+        .unwrap();
+        assert_eq!(negotiated.stream.channels, 2);
+        assert_eq!(negotiated.stream.sample_rate, 48_000);
+        assert_eq!(negotiated.stream.buffer_size, cpal::BufferSize::Default);
+        assert_eq!(negotiated.effective_max_frames, 512);
+    }
+
+    #[test]
+    fn negotiate_input_rejects_unsupported_requests() {
+        let supported = [f32_input_range(
+            2,
+            44_100,
+            48_000,
+            SupportedBufferSize::Unknown,
+        )];
+        // Non-F32 encoding.
+        let mut config = desired_input(48_000, ChannelLayout::Stereo, BufferSize::Default);
+        config.format.sample_format = SampleFormat::S16;
+        assert_eq!(negotiate_input(&config, &supported), None);
+        // Rate outside every candidate.
+        assert_eq!(
+            negotiate_input(
+                &desired_input(96_000, ChannelLayout::Stereo, BufferSize::Default),
+                &supported,
+            ),
+            None
+        );
+        // Channel count no candidate covers.
+        assert_eq!(
+            negotiate_input(
+                &desired_input(48_000, ChannelLayout::FivePointOne, BufferSize::Default),
+                &supported,
+            ),
+            None
+        );
+        // Fixed size outside the reported bound.
+        assert_eq!(
+            negotiate_input(
+                &desired_input(48_000, ChannelLayout::Stereo, BufferSize::Fixed(4096)),
+                &[f32_input_range(
+                    2,
+                    44_100,
+                    48_000,
+                    SupportedBufferSize::Range { min: 64, max: 512 }
+                ),],
+            ),
+            None
+        );
+        // Empty supported space.
+        assert_eq!(
+            negotiate_input(
+                &desired_input(48_000, ChannelLayout::Stereo, BufferSize::Default),
+                &[],
+            ),
+            None
+        );
+    }
+
+    /// What [`input_collecting_callback`] hands back: the callback
+    /// plus the shared collection it appends `(slab, channels,
+    /// frames, info)` tuples to.
+    type CollectedInputs =
+        std::sync::Arc<std::sync::Mutex<Vec<(Vec<f32>, usize, usize, InputCallbackInfo)>>>;
+
+    /// Collects each callback's slab copy + info — `InputDataCallback`
+    /// requires `'static`; the view is copied out before return.
+    fn input_collecting_callback() -> (InputDataCallback, CollectedInputs) {
+        let collected = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured = std::sync::Arc::clone(&collected);
+        (
+            Box::new(
+                move |input: AudioBufferView<'_, f32>, info: InputCallbackInfo| {
+                    captured.lock().unwrap().push((
+                        input.data().to_vec(),
+                        input.channels(),
+                        input.frames(),
+                        info,
+                    ));
+                },
+            ),
+            collected,
+        )
+    }
+
+    // Exact comparisons: the unpack wrote exactly the input values.
+    #[allow(clippy::float_cmp)]
+    #[test]
+    fn read_interleaved_unpacks_interleaved_into_planar() {
+        // LRLRLR interleaved → channel-major planar: ch0 = L samples,
+        // ch1 = R samples. `data()` is the channel-major slab.
+        let (mut cb, collected) = input_collecting_callback();
+        let mut scratch = vec![f32::NAN; 8]; // capacity 4 × 2ch
+        // 3 frames: (L=1.0,R=-1.0), (2.0,-2.0), (3.0,-3.0) + 1-sample tail
+        let data = [1.0, -1.0, 2.0, -2.0, 3.0, -3.0, 9.0];
+        read_interleaved(
+            &mut scratch,
+            4,
+            2,
+            &data,
+            test_input_info(),
+            48_000,
+            &mut cb,
+        );
+
+        let collected = collected.lock().unwrap();
+        assert_eq!(collected.len(), 1);
+        let (slab, channels, frames, _info) = &collected[0];
+        assert_eq!(*channels, 2);
+        assert_eq!(*frames, 3);
+        // Planar: [L0,L1,L2, R0,R1,R2] — the 9.0 tail never appears.
+        assert_eq!(slab, &[1.0, 2.0, 3.0, -1.0, -2.0, -3.0]);
+    }
+
+    // Exact comparisons: frame indices are small integers, exactly
+    // representable in f32.
+    #[allow(clippy::float_cmp)]
+    #[test]
+    fn read_interleaved_chunks_when_frames_exceed_capacity() {
+        // n = 10 frames, capacity 4 → 4 + 4 + 2 chunks; each chunk's
+        // view covers only its own frames and the timestamp shifts.
+        let (mut cb, collected) = input_collecting_callback();
+        let mut scratch = vec![f32::NAN; 8];
+        // Frame f carries f in both channels: interleaved [f,f]*10.
+        let data: Vec<f32> = (0..10_u8)
+            .flat_map(|f| [f32::from(f), f32::from(f)])
+            .collect();
+        let base = InputCallbackInfo {
+            timestamp: InputTimestamp {
+                callback: MediaTime::new(1_000, DEVICE_CLOCK_TIMEBASE),
+                capture: Some(MediaTimestamp {
+                    time: MediaTime::new(500, DEVICE_CLOCK_TIMEBASE),
+                    provenance: TimestampProvenance::Derived,
+                }),
+            },
+            clock_domain: ruviform_media_core::ClockDomainId::MONOTONIC,
+            frame_position: None,
+        };
+        read_interleaved(&mut scratch, 4, 2, &data, base, 48_000, &mut cb);
+
+        let collected = collected.lock().unwrap();
+        assert_eq!(collected.len(), 3);
+        // Chunk frame counts 4, 4, 2 — planar slabs verify order.
+        let expected_frames = [4_usize, 4, 2];
+        // At 48 kHz each chunk's instants shift by `f_k * 1e9 / 48_000`
+        // ns: 0, 83_333, 166_666.
+        let expected_offsets = [0_i64, 83_333, 166_666];
+        let mut frame_base = 0_usize;
+        for ((slab, channels, frames, info), (&ef, &offset)) in collected
+            .iter()
+            .zip(expected_frames.iter().zip(expected_offsets.iter()))
+        {
+            assert_eq!(*channels, 2);
+            assert_eq!(*frames, ef);
+            // Every sample in the chunk equals its global frame index —
+            // proves no overlap or reordering across chunk boundaries.
+            for (i, sample) in slab.iter().enumerate() {
+                let expected = f32::from(u8::try_from(frame_base + i % ef).unwrap());
+                assert_eq!(*sample, expected, "slab[{i}]");
+            }
+            frame_base += ef;
+            assert_eq!(info.timestamp.callback.value(), 1_000 + offset);
+            let capture = info.timestamp.capture.unwrap();
+            assert_eq!(capture.time.value(), 500 + offset);
+            assert_eq!(capture.provenance, TimestampProvenance::Derived);
+            assert_eq!(
+                info.clock_domain,
+                ruviform_media_core::ClockDomainId::MONOTONIC
+            );
+            assert_eq!(info.frame_position, None);
+        }
+    }
+
+    #[test]
+    fn read_interleaved_never_fires_callback_on_degenerate_input() {
+        let (mut cb, collected) = input_collecting_callback();
+        let mut scratch = vec![0.0_f32; 8];
+        // channels == 0 → nothing can be framed.
+        read_interleaved(
+            &mut scratch,
+            4,
+            0,
+            &[1.0; 4],
+            test_input_info(),
+            48_000,
+            &mut cb,
+        );
+        // Empty scratch → no capacity, no callback.
+        let mut empty = Vec::new();
+        read_interleaved(
+            &mut empty,
+            4,
+            2,
+            &[1.0; 4],
+            test_input_info(),
+            48_000,
+            &mut cb,
+        );
+        // Fewer samples than one whole frame → dropped, no callback.
+        read_interleaved(
+            &mut scratch,
+            4,
+            2,
+            &[1.0],
+            test_input_info(),
+            48_000,
+            &mut cb,
+        );
+        assert!(collected.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn chunk_input_timestamp_info_shifts_both_instants() {
+        // 4 frames at 48 kHz → 83_333 ns offset; capture provenance and
+        // clock_domain pass through unchanged.
+        let info = InputCallbackInfo {
+            timestamp: InputTimestamp {
+                callback: MediaTime::new(10_000, DEVICE_CLOCK_TIMEBASE),
+                capture: Some(MediaTimestamp {
+                    time: MediaTime::new(9_000, DEVICE_CLOCK_TIMEBASE),
+                    provenance: TimestampProvenance::Carried,
+                }),
+            },
+            clock_domain: ruviform_media_core::ClockDomainId::MONOTONIC,
+            frame_position: Some(1_000),
+        };
+        let shifted = chunk_input_timestamp_info(info, 4, 48_000);
+        assert_eq!(shifted.timestamp.callback.value(), 93_333);
+        let capture = shifted.timestamp.capture.unwrap();
+        assert_eq!(capture.time.value(), 92_333);
+        assert_eq!(capture.provenance, TimestampProvenance::Carried);
+        assert_eq!(
+            shifted.clock_domain,
+            ruviform_media_core::ClockDomainId::MONOTONIC
+        );
+        // `frame_position` advances by the chunk's frame offset.
+        assert_eq!(shifted.frame_position, Some(1_004));
+    }
+
+    #[test]
+    fn chunk_input_timestamp_info_overflow_keeps_original() {
+        // `checked_add` failure keeps the original instant rather than
+        // dropping the timestamp; `frame_position` still advances.
+        let near_max = InputCallbackInfo {
+            timestamp: InputTimestamp {
+                callback: MediaTime::new(i64::MAX - 10, DEVICE_CLOCK_TIMEBASE),
+                capture: Some(MediaTimestamp {
+                    time: MediaTime::new(i64::MAX - 10, DEVICE_CLOCK_TIMEBASE),
+                    provenance: TimestampProvenance::Derived,
+                }),
+            },
+            clock_domain: ruviform_media_core::ClockDomainId::UNKNOWN,
+            frame_position: Some(u64::MAX - 1),
+        };
+        let shifted = chunk_input_timestamp_info(near_max, 4, 48_000);
+        assert_eq!(shifted.timestamp.callback.value(), i64::MAX - 10);
+        assert_eq!(
+            shifted.timestamp.capture.unwrap().time.value(),
+            i64::MAX - 10
+        );
+        // Position saturates rather than wrapping.
+        assert_eq!(shifted.frame_position, Some(u64::MAX));
     }
 }

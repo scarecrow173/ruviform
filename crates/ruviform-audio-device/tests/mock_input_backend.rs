@@ -973,11 +973,12 @@ fn open_failures_use_the_defined_error_surface() {
 }
 
 #[test]
-fn cpal_adapter_reports_input_open_as_unsupported() {
-    // The real adapter's honest failure surface: enumeration compiles
-    // and `open_input_stream` returns `Unsupported` — never a fake
-    // capture. Skips silently on hosts with no input device (headless
-    // CI lanes).
+fn cpal_adapter_input_open_reports_typed_surface() {
+    // The real adapter's honest surface: `open_input_stream` either
+    // opens a real stream (whose methods must answer typed queries —
+    // never fabricated values) or fails with a typed `DeviceError`.
+    // It must never panic or silently fake a capture path. Skips
+    // silently on hosts with no input device (headless CI lanes).
     let host = ruviform_audio_device::default_host().unwrap();
     if let Ok(devices) = host.input_devices()
         && let Some(device) = devices.first()
@@ -990,7 +991,19 @@ fn cpal_adapter_reports_input_open_as_unsupported() {
             Box::new(|_, _| {}),
             Box::new(|_| {}),
         );
-        assert!(matches!(result, Err(DeviceError::Unsupported)));
+        if let Ok(stream) = result {
+            // A successfully opened stream answers every port query —
+            // `input_latency` is `Ok(None)` (cpal exposes no portable
+            // latency query), never a fabricated `Ok(0)`.
+            assert_eq!(stream.format(), stereo_format());
+            let _ = stream.clock_domain();
+            let _ = stream.now();
+            let _ = stream.buffer_size();
+            assert_eq!(stream.input_latency().unwrap(), None);
+        }
+        // `Err(DeviceError)` is the honest failure surface — any typed
+        // variant (UnsupportedConfig, permission_denied Backend, …)
+        // is acceptable; an unopened fake stream is not.
 
         // Format queries compile and map through the same F32 rules —
         // either a usable range list/format or a typed error.
