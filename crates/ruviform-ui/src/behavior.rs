@@ -2607,6 +2607,21 @@ fn receipt_rank(status: ReceiptStatus) -> u8 {
     }
 }
 
+/// Whether `next` advances `prev` under the projection revision
+/// ordering: numeric revisions must strictly increase, string
+/// revisions must differ (they carry no order — any change counts as
+/// newer), and cross-type pairs always advance. Shared by
+/// [`CommandBinding::on_projection`]'s in-binding guard and the
+/// host-level cross-epoch floor so both enforce one rule.
+pub(crate) fn revision_advances(prev: &Revision, next: &Revision) -> bool {
+    match (prev, next) {
+        (Revision::Num(a), Revision::Num(b)) => b > a,
+        (Revision::Str(a), Revision::Str(b)) => b != a,
+        // Cross-type revisions always advance.
+        _ => true,
+    }
+}
+
 /// Ordering token for receipts and projections — number or string.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -3022,14 +3037,9 @@ impl<P: Clone> CommandBinding<P> {
         if !self.attached {
             return false;
         }
-        let advances = match (&self.last_observed, &projection.revision) {
-            (Some(prev), next) => match (&prev.revision, next) {
-                (Revision::Num(a), Revision::Num(b)) => b > a,
-                (Revision::Str(a), Revision::Str(b)) => b != a,
-                // Cross-type revisions always advance.
-                _ => true,
-            },
-            (None, _) => true,
+        let advances = match &self.last_observed {
+            Some(prev) => revision_advances(&prev.revision, &projection.revision),
+            None => true,
         };
         if !advances {
             return false;
