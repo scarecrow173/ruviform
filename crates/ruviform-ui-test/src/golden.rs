@@ -17,6 +17,9 @@
 //!   `diff`（統計 + 差分画像 + policy 判定）。
 //! - [`store`]: `BaselineStore`（repo 内 baseline 配置・
 //!   candidate/promote 承認境界・sidecar policy 同梱）。
+//! - [`normalize`]: `EnvironmentMeta` → `GoldenKey` env class の
+//!   正規化（`key_env`）と #426/#390 registry への結合・整合検査
+//!   （`key_for_fixture`/`registry_mismatches`）。
 //! - [`report`]: `GoldenReport` / `GoldenEvidence`（結果語彙と
 //!   `RUVIFORM_GOLDEN_EVIDENCE` 環境変数ゲートの evidence JSONL）。
 //!
@@ -32,6 +35,7 @@
 pub mod diff;
 pub mod image;
 pub mod key;
+pub mod normalize;
 pub mod report;
 pub mod store;
 
@@ -42,9 +46,12 @@ pub use diff::{
 };
 pub use image::{GoldenImageError, RgbaImage};
 pub use key::{CapturePath, EnvironmentMeta, GoldenKey, GpuMeta};
+pub use normalize::{
+    GoldenKeyEnv, NormalizeError, RegistryMismatch, key_env, key_for_fixture, registry_mismatches,
+};
 pub use report::{
-    EVIDENCE_ENV, EVIDENCE_SCHEMA, EvidenceStats, GoldenComparison, GoldenEvidence, GoldenReport,
-    append_evidence, blocked, compare, emit_evidence, not_run, unsupported,
+    EVIDENCE_ENV, EVIDENCE_LANE, EVIDENCE_SCHEMA, EvidenceStats, GoldenComparison, GoldenEvidence,
+    GoldenReport, append_evidence, blocked, compare, emit_evidence, not_run, unsupported,
 };
 pub use store::{
     BASELINE_SIDECAR_SCHEMA, Baseline, BaselineApproval, BaselineImageMeta, BaselineSidecar,

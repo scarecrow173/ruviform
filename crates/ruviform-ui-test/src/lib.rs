@@ -76,7 +76,9 @@ pub use scenario::fake::FakeGuiTest;
 pub use scenario::runner::{
     ScenarioOutcome, ScenarioSpec, ScenarioTimeout, run_scenario, settle_until,
 };
-pub use scenario::visual::{CaptureOutcome, VisualGuiTest, record_golden_step};
+pub use scenario::visual::{
+    CaptureOutcome, VisualGuiTest, record_golden_outcome, record_golden_step,
+};
 pub use scenario::{
     CaseId, GuiAction, MintedIntent, RunId, ScenarioCapability, ScenarioDriver, ScenarioError,
     ScenarioId, ScenarioReport, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery,

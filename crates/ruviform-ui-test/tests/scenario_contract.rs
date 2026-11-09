@@ -20,8 +20,9 @@ use ruviform_ui_test::golden::{BaselineStore, GoldenKey, GoldenVerdict};
 use ruviform_ui_test::lab_story::{self, StoryFixture};
 use ruviform_ui_test::{
     FakeGuiTest, RunId, ScenarioCapability, ScenarioDriver, ScenarioError, ScenarioId,
-    ScenarioReport, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery, VisualGuiTest,
-    begin, cancel, parity_gesture_scenario, record_golden_step,
+    ScenarioOutcome, ScenarioReport, ScenarioSpec, ScenarioTarget, ScenarioVerdict,
+    SemanticGuiTest, TargetQuery, VisualGuiTest, begin, cancel, parity_gesture_scenario,
+    record_golden_outcome, record_golden_step, run_scenario,
 };
 use serde_json::json;
 
@@ -393,6 +394,47 @@ fn visual_record_golden_step_writes_scenario_report() {
     // The lane vocabulary keeps `blocked` = `not_run` + reason.
     assert_eq!(ScenarioVerdict::Blocked.lane_status(), "not_run");
     assert_eq!(ScenarioVerdict::Unsupported.lane_status(), "unsupported");
+}
+
+/// Issue #314 slice 5 — `run_scenario` body composition: a golden
+/// step inside the body folds into `ScenarioOutcome` via
+/// `record_golden_outcome`, and the Fake adapter's measured
+/// `Unsupported` lands on the report without being upgraded.
+#[test]
+fn run_scenario_body_golden_step_records_unsupported_outcome() {
+    let (mut gui, _window, _view, target) = mounted();
+    let (_dir, store) = golden_store();
+    let spec = ScenarioSpec::new(
+        RunId::new("run-golden-scenario"),
+        ScenarioId::new("scenario-golden"),
+    );
+
+    let report = run_scenario(&mut gui, &spec, |gui| {
+        let comparison = gui.golden_check(&target, &golden_key(), None, &store)?;
+        // The consumer maps the golden verdict into its own outcome
+        // verdict; record_golden_outcome only folds evidence.
+        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::from(comparison.report.verdict));
+        outcome
+            .observed
+            .get_or_insert_with(|| json!({"semantic": {"ok": true}}));
+        record_golden_outcome(&mut outcome, &comparison);
+        Ok(outcome)
+    });
+
+    assert_eq!(report.verdict, ScenarioVerdict::Unsupported);
+    assert_eq!(
+        report.evidence,
+        vec![format!("golden:{}", golden_key().canonical())]
+    );
+    let observed = report.observed.as_ref().expect("observed recorded");
+    assert_eq!(observed["semantic"]["ok"], true);
+    assert_eq!(observed["golden"]["verdict"], "unsupported");
+    assert!(
+        observed["golden"]["reason"]
+            .as_str()
+            .is_some_and(|r| !r.is_empty()),
+        "unsupported reason must be recorded: {observed}"
+    );
 }
 
 #[test]
