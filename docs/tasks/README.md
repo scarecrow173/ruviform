@@ -244,6 +244,7 @@ Directory: `docs/tasks`
 | TASK-034Ue8ThHNXd5Ah4vY5uvG | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の実装タスク | done | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | TASK-034UcbptcbQ9OYtF7EZwzG | Issue #464 — Consumer-neutral GUI Scenario Contract | done | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
 | TASK-G72QPe3EioqQac8Dsnoglk | Issue #479 — 値制御キーボード操作の実装タスク | done | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
+| TASK-DBfsqONthDwUwmD4GpGXzq | Issue #490 T1 oracle addQuery epoch 整合 | done | [issue-490-t1-oracle-addquery-epoch.md](./issue-490-t1-oracle-addquery-epoch.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
