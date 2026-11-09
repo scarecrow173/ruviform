@@ -35,6 +35,14 @@
 //!   bounded [`diagnostics::DiagnosticSnapshot`]/
 //!   [`diagnostics::DiagnosticReport`], and the
 //!   [`diagnostics::FindingSink`] port (Issue #291, OBS-09).
+//! - [`debug`]: the bounded, non-RT, disclosure-authorized debug
+//!   layer — [`debug::InspectionBudget`] limits,
+//!   [`debug::InspectionSnapshot`] sections with typed
+//!   [`debug::SectionStatus`]es, three-valued
+//!   [`debug::InvariantOutcome`] checks published into diagnostics,
+//!   the [`debug::ProbeSource`] port over Generic Probe vocabulary,
+//!   the [`debug::DebugSessionState`] lifecycle with bounded drain,
+//!   and [`debug::DebugReport`] exports (Issue #292, OBS-10).
 //!
 //! `counter`, `Counter` and `CounterReader` are re-exported at the
 //! crate root for compatibility with existing consumers; new code may
@@ -78,6 +86,10 @@
 //!   rule declaration, `evaluate`, `report`, `health`: **non-RT only** —
 //!   allocation throughout (vectors, maps, strings, `catch_unwind`
 //!   around sink calls).
+//! - Every [`debug`] operation — `inspect`, `report`, session
+//!   control, invariant evaluation, probe-source reads: **non-RT
+//!   only** — allocation throughout. Debug exposes no RT-suitable
+//!   operations; only its `Copy` value types are RT-adjacent.
 //!
 //! # Read semantics
 //!
@@ -130,6 +142,7 @@ pub mod logging;
 
 pub mod collector;
 pub mod core;
+pub mod debug;
 pub mod diagnostics;
 pub mod metrics;
 pub mod record;
