@@ -29,6 +29,12 @@
 //!   [`collector::CollectorHandle`] (shareable snapshot/history/
 //!   health reads), [`collector::ObservationBatch`],
 //!   [`collector::MetricsSnapshot`] and [`collector::CollectorHealth`].
+//! - [`diagnostics`]: the logging-independent diagnostic layer —
+//!   classified [`diagnostics::Evidence`], [`diagnostics::DiagnosticFinding`],
+//!   [`diagnostics::HealthState`]/[`diagnostics::HealthEvaluator`],
+//!   bounded [`diagnostics::DiagnosticSnapshot`]/
+//!   [`diagnostics::DiagnosticReport`], and the
+//!   [`diagnostics::FindingSink`] port (Issue #291, OBS-09).
 //!
 //! `counter`, `Counter` and `CounterReader` are re-exported at the
 //! crate root for compatibility with existing consumers; new code may
@@ -68,6 +74,10 @@
 //!   [`collector::PollRunner`]: **non-RT only** — locking and
 //!   allocation throughout. The collector's registry lock is never
 //!   held on an RT writer path.
+//! - Every [`diagnostics`] operation — evidence/finding recording,
+//!   rule declaration, `evaluate`, `report`, `health`: **non-RT only** —
+//!   allocation throughout (vectors, maps, strings, `catch_unwind`
+//!   around sink calls).
 //!
 //! # Read semantics
 //!
@@ -120,6 +130,7 @@ pub mod logging;
 
 pub mod collector;
 pub mod core;
+pub mod diagnostics;
 pub mod metrics;
 pub mod record;
 pub mod rt_bridge;
