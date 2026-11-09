@@ -70,6 +70,7 @@ Directory: `docs/specs`
 | SPEC-034UtxqBI7DX73fpCfjAok | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture・OS/FS 実測・CI handoff | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
 | SPEC-P7W4Dz6p2EQIQNPclAQG2U | Issue #307 PluginNode attach 時 frame_base の非 RT 型付き検証（verified clock context） | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | SPEC-034Ui3cZpzwuwGdf2aHCCv | Issue #308 — Generation切替時のProbe再Bindingを全件整合・部分失敗可観測にする | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
+| SPEC-034Uwjri6KbgwOU8k9kjh0 | Issue #309 PROBE-TIME slice — 複数Probe時間アライメント fixture 検証 | approved | [issue-309-probe-time-align-fixture.md](./issue-309-probe-time-align-fixture.md) |
 | SPEC-034Uj8oH3kcr44vuCWxYrC | Issue #309 — 複数Probeの汎用Frame/Clock/Epoch/Latency整列可能性・欠落比較契約（PROBE-TIME） | approved | [issue-309-probe-time-frame-clock-epoch-alignment.md](./issue-309-probe-time-frame-clock-epoch-alignment.md) |
 | SPEC-034Rp1AEJDKiDTpPq3H4Yz | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | SPEC-3S6R25rgxNv9VL9etjWsH9 | Issue #311 RF-GT-02 Rust↔TypeScript IPC Schema Conformance・Deterministic Record/Replay・Fault Matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
