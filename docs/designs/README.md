@@ -61,6 +61,7 @@ Directory: `docs/designs`
 | DESIGN-034RTpdouoLLSINNczwa3c | Issue #279 OBS-04 Plugin Host 4 CounterのSource登録: Registrar注入・Descriptor・Lease寿命 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-fhvRxnPJKvnhRAlg7TbeKm | Issue #280 OBS-05 RT Record Bridge・ClockContext・欠落envelope・CorrelationBook設計 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
+| DESIGN-034UydimCfynTXvl5UJT6x | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
 | DESIGN-034UtFFzzM3wAegGBSycbJ | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | DESIGN-034T2dhkl03BuqPOGmNlmc | Issue #289 OBS-07 Collector/Metrics/Snapshot: 単一Poll Owner・Baseline/Discontinuity・有界履歴・Health | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
 | DESIGN-034UoQ3mxByzCnjgdAGpe1 | Issue #290 OBS-08 Profiling — allocation-probe 設計（CountingAllocator/AllocationScope） | approved | [issue-290-observability-allocation-probe.md](./issue-290-observability-allocation-probe.md) |
