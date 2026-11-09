@@ -30,8 +30,8 @@ use ruviform_ui::behavior::{
 };
 use ruviform_ui::view::{
     ButtonSpec, CellValue, ComponentKey, ComponentSpec, ControlSpec, LabelSpec, MeterSpec,
-    NativeSlotSpec, Orientation, SpectrogramSpec, TableSpec, TimeAxisSpec, ViewError, ViewEvent,
-    ViewHost, ViewSpec, WaveformBin, WaveformSpec,
+    NativeSlotSpec, Orientation, ProjectionOp, SpectrogramSpec, TableSpec, TimeAxisSpec, ViewError,
+    ViewEvent, ViewHost, ViewSpec, WaveformBin, WaveformSpec,
 };
 use ruviform_ui::{
     Event, Intent, LogicalRect, SlotError, SlotGeometry, SlotVisibility, SurfaceSlotId,
@@ -427,7 +427,9 @@ pub struct RvfView {
     /// only for driver-mounted views.
     slots: Option<Rc<RefCell<SlotProjection>>>,
     /// Focus handle of each tab strip with a selection, created on the
-    /// strip's first render; the keyboard target of [`tab_key_target`].
+    /// strip's first render and released when the strip's key leaves
+    /// the spec (`Removed`/`Unmounted` op, Issue #480); the keyboard
+    /// target of [`tab_key_target`].
     tab_focus: BTreeMap<ComponentKey, FocusHandle>,
     /// Focus handle of each value control, created on the control's
     /// first render; the keyboard target of [`control_key_input`]
@@ -697,22 +699,33 @@ impl RvfView {
         }
     }
 
-    /// Drain host events: intents → sink, others are recorded by the
-    /// host. Repaint after semantic changes.
+    /// Drain host events: intents → sink, `Removed`/`Unmounted` ops
+    /// release the component's tab-strip focus handle (Issue #480),
+    /// the rest are dropped. Repaint after semantic changes.
     pub(crate) fn flush_events(&mut self, cx: &mut Context<Self>) {
         for event in self.host.drain_events() {
-            if let ViewEvent::Intent {
-                intent,
-                command_id,
-                expect_receipt,
-            } = event
-            {
-                let params = serde_json::json!({
-                    "command_id": command_id,
-                    "expect_receipt": expect_receipt,
-                    "intent": intent,
-                });
-                (self.intent_handler)(Intent::new(command_id, COMMAND_INTENT_OP, params));
+            match event {
+                ViewEvent::Intent {
+                    intent,
+                    command_id,
+                    expect_receipt,
+                } => {
+                    let params = serde_json::json!({
+                        "command_id": command_id,
+                        "expect_receipt": expect_receipt,
+                        "intent": intent,
+                    });
+                    (self.intent_handler)(Intent::new(command_id, COMMAND_INTENT_OP, params));
+                }
+                // The key can never render a strip again under this
+                // identity — drop the handle so `tab_focus` stays
+                // bounded by the mounted tree. gpui releases the last
+                // clone through `release_dropped_focus_handles`, which
+                // blurs a focused handle on the next effect flush.
+                ViewEvent::Op(ProjectionOp::Removed { key } | ProjectionOp::Unmounted { key }) => {
+                    self.tab_focus.remove(&key);
+                }
+                _ => {}
             }
         }
         cx.notify();
@@ -2384,6 +2397,207 @@ mod tests {
             .map(|i| i.params["intent"]["params"]["index"].clone())
             .collect();
         assert_eq!(indices, [json!(1), json!(0), json!(1), json!(0), json!(1)]);
+    }
+
+    /// A selectable tab strip for `key` with two tabs — enough for the
+    /// arrow-key path to move its selection.
+    fn selectable_tabs(key: &str) -> ComponentSpec {
+        use ruviform_ui::view::TabsSelectionSpec;
+        let tab = |index: usize| TabSpec {
+            key: ComponentKey(format!("{key}.tab.{index}")),
+            title: format!("Tab {index}"),
+            child: Box::new(ComponentSpec::Label(LabelSpec {
+                key: ComponentKey(format!("{key}.tab.{index}.body")),
+                text: format!("Tab {index} body"),
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            })),
+        };
+        ComponentSpec::Tabs(TabsSpec {
+            key: ComponentKey(key.to_string()),
+            active: 0,
+            tabs: vec![tab(0), tab(1)],
+            selection: Some(TabsSelectionSpec {
+                target: format!("{key}.select"),
+            }),
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    /// Two selectable strips (`strip.a`, `strip.b`) under one panel —
+    /// the sibling-preservation fixture for Issue #480.
+    fn two_strip_spec() -> ViewSpec {
+        ViewSpec {
+            root: ComponentSpec::Panel(PanelSpec {
+                key: ComponentKey("root".to_string()),
+                title: None,
+                children: vec![selectable_tabs("strip.a"), selectable_tabs("strip.b")],
+                visual: ComponentVisualState::default(),
+                a11y: A11ySpec::default(),
+            }),
+        }
+    }
+
+    fn two_strip_host() -> ViewHost {
+        let mut host = ViewHost::new(
+            ViewInstanceId::new(1).expect("nonzero"),
+            AttachEpoch::new(1),
+        );
+        host.mount(two_strip_spec()).expect("mount");
+        host.drain_events();
+        host
+    }
+
+    /// Issue #480: `update_spec` dropping a selectable strip releases
+    /// its `tab_focus` entry (`Removed` op) while the surviving strip
+    /// keeps its handle and keyboard focus — and keeps working. An
+    /// `Updated` op on the survivor (selection dropped) keeps the
+    /// handle: the key stays mounted and may regain selection.
+    #[gpui::test]
+    fn removed_tab_strip_releases_focus_handle(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(two_strip_host(), ViewPalette::fallback(), |_| {})
+        });
+        cx.run_until_parked();
+        let strip_a = ComponentKey("strip.a".to_string());
+        let strip_b = ComponentKey("strip.b".to_string());
+        view.update(cx, |v, _cx| {
+            assert!(v.tab_focus.contains_key(&strip_a));
+            assert!(v.tab_focus.contains_key(&strip_b));
+        });
+
+        // Focus strip.b through its real header press.
+        let header = cx
+            .debug_bounds("strip.b-tab-0")
+            .expect("strip.b header is drawn");
+        cx.simulate_mouse_down(header.center(), MouseButton::Left, Modifiers::default());
+        cx.run_until_parked();
+        cx.update(|window, app| {
+            assert_eq!(
+                view.read(app).focused_tab_key(window),
+                Some(strip_b.clone())
+            );
+        });
+
+        // Drop strip.a — `Removed` must release its handle only.
+        view.update(cx, |v, cx| {
+            let mut spec = two_strip_spec();
+            if let ComponentSpec::Panel(p) = &mut spec.root {
+                p.children.retain(|c| c.key().0 != strip_a.0);
+            }
+            v.update_spec(spec, cx).expect("update_spec");
+        });
+        cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            assert!(
+                !v.tab_focus.contains_key(&strip_a),
+                "removed strip released"
+            );
+            assert!(v.tab_focus.contains_key(&strip_b), "sibling strip kept");
+        });
+        cx.update(|window, app| {
+            assert_eq!(
+                view.read(app).focused_tab_key(window),
+                Some(strip_b.clone()),
+                "sibling focus kept"
+            );
+        });
+
+        // The surviving strip still takes arrow keys.
+        cx.simulate_keystrokes("right");
+        cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            assert_eq!(v.host.observe(&strip_b).and_then(|s| s.selected), Some(1));
+        });
+
+        // `selection: Some → None` is an `Updated` op — the key stays
+        // mounted, so the handle stays (it may regain selection).
+        view.update(cx, |v, cx| {
+            let mut spec = v.host.spec().expect("spec").clone();
+            if let ComponentSpec::Panel(p) = &mut spec.root {
+                for child in &mut p.children {
+                    if let ComponentSpec::Tabs(t) = child
+                        && t.key == strip_b
+                    {
+                        t.selection = None;
+                    }
+                }
+            }
+            v.update_spec(spec, cx).expect("update_spec");
+        });
+        cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            assert!(
+                v.tab_focus.contains_key(&strip_b),
+                "Updated op keeps the mounted strip's handle"
+            );
+        });
+    }
+
+    /// Issue #480: a kind swap keeps the key but replaces the
+    /// component — the `Removed` half of the reconcile pair releases
+    /// the old strip's focus handle.
+    #[gpui::test]
+    fn kind_swapped_tab_strip_releases_focus_handle(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(two_strip_host(), ViewPalette::fallback(), |_| {})
+        });
+        cx.run_until_parked();
+        let strip_a = ComponentKey("strip.a".to_string());
+        let strip_b = ComponentKey("strip.b".to_string());
+        view.update(cx, |v, cx| {
+            assert!(v.tab_focus.contains_key(&strip_a));
+
+            let mut spec = two_strip_spec();
+            if let ComponentSpec::Panel(p) = &mut spec.root {
+                for child in &mut p.children {
+                    if child.key() == &strip_a {
+                        *child = ComponentSpec::Label(LabelSpec {
+                            key: strip_a.clone(),
+                            text: "swapped".to_string(),
+                            visual: ComponentVisualState::default(),
+                            a11y: A11ySpec::default(),
+                        });
+                    }
+                }
+            }
+            let generation = v.host.generation();
+            let ops = v.host.update(spec, generation).expect("reconcile");
+            assert!(ops.contains(&ProjectionOp::Removed {
+                key: strip_a.clone()
+            }));
+            assert!(ops.contains(&ProjectionOp::Mounted {
+                key: strip_a.clone()
+            }));
+            v.flush_events(cx);
+        });
+        cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            assert!(
+                !v.tab_focus.contains_key(&strip_a),
+                "kind-swapped strip released"
+            );
+            assert!(v.tab_focus.contains_key(&strip_b), "sibling strip kept");
+        });
+    }
+
+    /// Issue #480: `Unmounted` ops release every strip's focus handle.
+    #[gpui::test]
+    fn unmounted_strips_release_focus_handles(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(|_window, _cx| {
+            RvfView::new(two_strip_host(), ViewPalette::fallback(), |_| {})
+        });
+        cx.run_until_parked();
+        view.update(cx, |v, cx| {
+            assert_eq!(v.tab_focus.len(), 2);
+            v.host_mut().unmount();
+            v.flush_events(cx);
+        });
+        cx.run_until_parked();
+        view.update(cx, |v, _cx| {
+            assert!(v.tab_focus.is_empty(), "unmount releases every handle");
+        });
     }
 
     /// Issue #479: the shared key convention maps to atomic keyboard

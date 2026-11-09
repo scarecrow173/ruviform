@@ -61,6 +61,7 @@ Directory: `docs/specs`
 | SPEC-lYVG6Gr07aTIBC8BSS0WKW | Issue #306 汎用 I/O 合成 E2E — StagedFile/Structured/Compression/Archive/WAV 境界試験 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | SPEC-P7W4Dz6p2EQIQNPclAQG2U | Issue #307 PluginNode attach 時 frame_base の非 RT 型付き検証（verified clock context） | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | SPEC-034Ui3cZpzwuwGdf2aHCCv | Issue #308 — Generation切替時のProbe再Bindingを全件整合・部分失敗可観測にする | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
+| SPEC-034Uj8oH3kcr44vuCWxYrC | Issue #309 — 複数Probeの汎用Frame/Clock/Epoch/Latency整列可能性・欠落比較契約（PROBE-TIME） | approved | [issue-309-probe-time-frame-clock-epoch-alignment.md](./issue-309-probe-time-frame-clock-epoch-alignment.md) |
 | SPEC-034Rp1AEJDKiDTpPq3H4Yz | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | SPEC-3S6R25rgxNv9VL9etjWsH9 | Issue #311 RF-GT-02 Rust↔TypeScript IPC Schema Conformance・Deterministic Record/Replay・Fault Matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | SPEC-034S312gtUiTestSpecBB22 | Issue #312 test-only GUI host lifecycle・secure control adapter・fixture/clock/observation 仕様 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
@@ -114,6 +115,7 @@ Directory: `docs/specs`
 | SPEC-HvasimHE9mJVFN1ay6D68D | Issue #465 Legacy WebView 基盤の段階的廃止 P0/P1 — 文書歴史化と棚卸し | proposed | [issue-465-legacy-webview-p0p1.md](./issue-465-legacy-webview-p0p1.md) |
 | SPEC-034Uay7qlGIC70AEeDcn7u | Issue #468 RootedDir containment の canonical 前提の設計判断 | proposed | [issue-468-rooteddir-canonical-premise.md](./issue-468-rooteddir-canonical-premise.md) |
 | SPEC-z3dzJJAH4RMnLrkQfhkR0m | Issue #479 — Seek/Fader/Knob のキーボード操作（共通 key 規約） | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
+| SPEC-034UiRf9jEzvH2FbreqPsA | Issue #480 — Tabs strip の FocusHandle unmount 解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | SPEC-1ZxAql6tPbxsqXhvmGvphr | Issue #490 oracle late-create query epoch 整合 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
