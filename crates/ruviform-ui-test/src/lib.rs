@@ -73,6 +73,9 @@ pub use proto::{
     ReceiptPage, Screenshot, ServeOutcome, ShutdownMode, Welcome, WindowMeta, ops, test_codes,
 };
 pub use scenario::fake::FakeGuiTest;
+pub use scenario::runner::{
+    ScenarioOutcome, ScenarioSpec, ScenarioTimeout, run_scenario, settle_until,
+};
 pub use scenario::visual::{CaptureOutcome, VisualGuiTest, record_golden_step};
 pub use scenario::{
     CaseId, GuiAction, MintedIntent, RunId, ScenarioCapability, ScenarioDriver, ScenarioError,
