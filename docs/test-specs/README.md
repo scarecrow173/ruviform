@@ -105,11 +105,13 @@ Directory: `docs/test-specs`
 | TSPEC-0f0PqMFNljVvAz5wOtJEQu | Issue #388/#389 Native Dock 契約テスト仕様（slot/lease/session の headless 検証 + L0-L1 写像） | approved | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TSPEC-rf388DockLayoutPoc01 | Issue #388 GPUI Panel/Tab レイアウト内 Editor 埋め込みの実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-layout-poc.md](./issue-388-native-dock-layout-poc.md) |
 | TSPEC-rf388DockWindowing01 | Issue #388 slice 3 windowing 挙動の実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
+| TSPEC-034UnAjuxNxMXzDMasVYeO | Issue #389 Plugin Editor Session hardening テスト仕様（fake-clock timeout・degrade・GraphicsLost contract） | approved | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TSPEC-034TaI7Luee0T88mH1IYv2 | Issue #390 Driver Boundary/Lab 検証 | draft | [issue-390-driver-boundary-lab.md](./issue-390-driver-boundary-lab.md) |
 | TSPEC-UiEoMhS5QMTr3jBiurbTtC | Issue #400 借用 readback → demuxer bounded 接続の test 仕様 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | TESTSPEC-XADte5w8EHAalnm33WCVyn | Issue #404/#405 NativeSurfaceSlot host 境界修復 test 仕様 | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
 | TSPEC-034TnnBwjsmwufsaEZZ0RG | Issue #409 scoped re-root + bounded enumeration テスト仕様 | approved | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
+| TSPEC-034UmKFzwIT1TdxeUWwDrp | Issue #410 — view command ledger retention & correlation guarantees | approved | [issue-410-view-command-ledger-retention-correlation-guarantees.md](./issue-410-view-command-ledger-retention-correlation-guarantees.md) |
 | TSPEC-CeWNpGq9NFmtzCCp3dkysw | Issue #411 — cargo_metadata MSRV 修復の検証契約 | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TSPEC-bN4yZaDfS6xOvJpM8qTu5H | Issue #414 — projection→controlled display の検証契約 | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
 | TSPEC-Pw8DcTn5KgBy2VaQr7ZmFu | Issue #421 — Meter/TimeAxis GPUI 描画と Fake/GPUI parity の検証契約 | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |

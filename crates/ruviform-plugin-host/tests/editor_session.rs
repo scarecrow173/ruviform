@@ -9,6 +9,11 @@
 //! window, OS parent or real plugin). The L1 adapter remains defined-
 //! `Unsupported` on every op and never degrades to L0.
 
+use std::cell::Cell;
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::time::Duration;
+
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, EventList, GuiHandle, GuiParentToken, ParamInfo, PluginDescriptor,
     PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
@@ -16,9 +21,9 @@ use ruviform_plugin_core::{
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
     EditorSessionOps, EditorSessionState, EditorSize, HostCommand, HostError, HostReply,
-    InProcessEditorOps, InProcessHost, L1EditorOps, LeaseRedeemer, ParentSlotLease, Plugin,
-    PluginEditorSessionId, PluginEditorSessions, PluginFactory, PluginHandle, SessionFailCause,
-    Support, erase,
+    InProcessEditorOps, InProcessHost, L1EditorOps, LeaseRedeemer, OpenOutcome, ParentSlotLease,
+    Plugin, PluginEditorSessionId, PluginEditorSessions, PluginFactory, PluginHandle, SessionClock,
+    SessionDeadlinePolicy, SessionFailCause, Support, erase,
 };
 
 // ---- shared fixtures -------------------------------------------------
@@ -976,4 +981,674 @@ fn session_surface_names_no_gui_toolkit_or_os_window_handle() {
             "editor_session names `{banned}` on its public surface"
         );
     }
+}
+
+// ---- hardening: deadline timeout (fake clock) ------------------------
+//
+// SH-xx cases pin `docs/test-specs/issue-389-session-hardening.md`:
+// bounded request deadlines via an injected `SessionClock`, explicit
+// `Degraded` outcomes, and the distinct `GraphicsLost` cause. All
+// contract-level — no real wall-clock, plugin, GPU or OS surface.
+
+/// A manually advanced clock — `Rc<Cell>` so one clock can be shared
+/// across sessions and policies.
+#[derive(Clone, Default)]
+struct FakeClock {
+    now: Rc<Cell<Duration>>,
+}
+
+impl FakeClock {
+    fn advance(&self, by: Duration) {
+        self.now.set(self.now.get() + by);
+    }
+}
+
+impl SessionClock for FakeClock {
+    fn now(&self) -> Duration {
+        self.now.get()
+    }
+}
+
+fn fake_policy(clock: &FakeClock, timeout: Duration) -> SessionDeadlinePolicy {
+    SessionDeadlinePolicy {
+        timeout,
+        clock: Box::new(clock.clone()),
+    }
+}
+
+/// A session in `sessions` bound to `handle` with `timeout` armed
+/// against `clock`.
+fn timed_session(
+    sessions: &mut PluginEditorSessions,
+    handle: PluginHandle,
+    clock: &FakeClock,
+    timeout: Duration,
+) -> PluginEditorSessionId {
+    let id = sessions.begin_session(handle).unwrap();
+    sessions
+        .session_mut(id)
+        .unwrap()
+        .set_deadline_policy(Some(fake_policy(clock, timeout)));
+    id
+}
+
+fn bare_session() -> (PluginEditorSessions, PluginEditorSessionId) {
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance()).unwrap();
+    (sessions, id)
+}
+
+#[test]
+fn sh01_open_request_times_out_to_failed_timeout() {
+    let mut sessions = PluginEditorSessions::new();
+    let clock = FakeClock::default();
+    let id = timed_session(&mut sessions, instance(), &clock, Duration::from_secs(5));
+    let request = sessions
+        .session_mut(id)
+        .unwrap()
+        .begin_open(AttachMode::Docked)
+        .unwrap();
+    clock.advance(Duration::from_secs(6));
+    let session = sessions.session_mut(id).unwrap();
+    assert!(session.tick());
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::Timeout
+        }
+    ));
+    let events = session.drain_events();
+    assert_eq!(events.len(), 1);
+    assert!(matches!(
+        events[0],
+        EditorSessionEvent::Failed {
+            cause: SessionFailCause::Timeout
+        }
+    ));
+    // A late completion is stale — the timeout already terminated
+    // the request; no duplicate terminal event.
+    assert!(matches!(
+        session.complete_attach(request, Ok(())),
+        Err(EditorSessionError::StaleRequest)
+    ));
+    assert_eq!(session.drain_events().len(), 0);
+}
+
+#[test]
+fn sh02_tick_before_deadline_is_a_noop() {
+    let mut sessions = PluginEditorSessions::new();
+    let clock = FakeClock::default();
+    let id = timed_session(&mut sessions, instance(), &clock, Duration::from_secs(5));
+    let session = sessions.session_mut(id).unwrap();
+    let request = session.begin_open(AttachMode::Docked).unwrap();
+    clock.advance(Duration::from_secs(4));
+    assert!(!session.tick());
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Creating { .. }
+    ));
+    assert_eq!(session.drain_events().len(), 0);
+    // The request still completes normally after the early tick.
+    session.complete_attach(request, Ok(())).unwrap();
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Attached {
+            mode: AttachMode::Docked
+        }
+    ));
+}
+
+#[test]
+fn sh03_disarmed_policy_leaves_requests_unbounded() {
+    let mut sessions = PluginEditorSessions::new();
+    let clock = FakeClock::default();
+    let id = timed_session(&mut sessions, instance(), &clock, Duration::from_secs(5));
+    let session = sessions.session_mut(id).unwrap();
+    session.begin_open(AttachMode::Docked).unwrap();
+    // Disarm mid-flight — the in-flight request loses its deadline.
+    session.set_deadline_policy(None);
+    assert!(session.request_deadline().is_none());
+    clock.advance(Duration::from_secs(3600));
+    assert!(!session.tick());
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Creating { .. }
+    ));
+}
+
+#[test]
+fn sh04_close_request_timeout_keeps_adapter_close_path() {
+    let mut sessions = PluginEditorSessions::new();
+    let clock = FakeClock::default();
+    let id = timed_session(&mut sessions, instance(), &clock, Duration::from_secs(5));
+    let mut ops = FakeOps::ok();
+    sessions
+        .session_mut(id)
+        .unwrap()
+        .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+        .unwrap();
+    sessions.session_mut(id).unwrap().begin_close().unwrap();
+    clock.advance(Duration::from_secs(6));
+    let session = sessions.session_mut(id).unwrap();
+    assert!(session.tick());
+    // `complete_close` has no error channel — a timed-out close
+    // fails the session, but `editor_live` stays set so a later
+    // `close` still reaches the adapter.
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::Timeout
+        }
+    ));
+    session.close(&mut ops).unwrap();
+    assert!(matches!(session.state(), EditorSessionState::Closed));
+}
+
+#[test]
+fn sh05_detach_request_timeout_emits_no_detached() {
+    let mut sessions = PluginEditorSessions::new();
+    let clock = FakeClock::default();
+    let id = timed_session(&mut sessions, instance(), &clock, Duration::from_secs(5));
+    let mut ops = FakeOps::ok();
+    sessions
+        .session_mut(id)
+        .unwrap()
+        .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+        .unwrap();
+    sessions.session_mut(id).unwrap().begin_detach().unwrap();
+    sessions.session_mut(id).unwrap().drain_events();
+    clock.advance(Duration::from_secs(6));
+    let session = sessions.session_mut(id).unwrap();
+    assert!(session.tick());
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::Timeout
+        }
+    ));
+    // The detach never completed — no `Detached` event, only the
+    // single `Failed` terminal.
+    let events = session.drain_events();
+    assert_eq!(events.len(), 1);
+    assert!(matches!(
+        events[0],
+        EditorSessionEvent::Failed {
+            cause: SessionFailCause::Timeout
+        }
+    ));
+}
+
+#[test]
+fn sh06_recover_request_timeout_refails_with_timeout() {
+    let mut sessions = PluginEditorSessions::new();
+    let clock = FakeClock::default();
+    let id = timed_session(&mut sessions, instance(), &clock, Duration::from_secs(5));
+    let mut ops = FakeOps::ok().open(Err(EditorOpError::Plugin));
+    assert!(
+        sessions
+            .session_mut(id)
+            .unwrap()
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .is_err()
+    );
+    let session = sessions.session_mut(id).unwrap();
+    session.begin_recover(AttachMode::Docked).unwrap();
+    clock.advance(Duration::from_secs(6));
+    assert!(session.tick());
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::Timeout
+        }
+    ));
+}
+
+#[test]
+fn sh07_post_detach_reattach_request_times_out() {
+    let mut sessions = PluginEditorSessions::new();
+    let clock = FakeClock::default();
+    let id = timed_session(&mut sessions, instance(), &clock, Duration::from_secs(5));
+    let mut ops = FakeOps::ok();
+    let session = sessions.session_mut(id).unwrap();
+    session
+        .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+        .unwrap();
+    let detach = session.begin_detach().unwrap();
+    // `complete_detach(Ok)` mints the re-attach request — it carries
+    // its own deadline.
+    let reattach = session.complete_detach(detach, Ok(())).unwrap();
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Creating { request } if request == reattach
+    ));
+    clock.advance(Duration::from_secs(6));
+    assert!(session.tick());
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::Timeout
+        }
+    ));
+}
+
+#[test]
+fn sh08_tick_all_times_out_only_expired_sessions() {
+    let mut sessions = PluginEditorSessions::new();
+    let clock = FakeClock::default();
+    let expired = timed_session(
+        &mut sessions,
+        PluginHandle::new(3, 0),
+        &clock,
+        Duration::from_secs(5),
+    );
+    let healthy = timed_session(
+        &mut sessions,
+        PluginHandle::new(4, 0),
+        &clock,
+        Duration::from_secs(50),
+    );
+    let mut ops = FakeOps::ok();
+    sessions
+        .session_mut(expired)
+        .unwrap()
+        .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+        .unwrap();
+    sessions
+        .session_mut(healthy)
+        .unwrap()
+        .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+        .unwrap();
+    // Both sessions now have a detach request in flight.
+    sessions
+        .session_mut(expired)
+        .unwrap()
+        .begin_detach()
+        .unwrap();
+    sessions
+        .session_mut(healthy)
+        .unwrap()
+        .begin_detach()
+        .unwrap();
+    clock.advance(Duration::from_secs(10));
+    assert_eq!(sessions.tick_all(), 1);
+    let session = sessions.session_mut(expired).unwrap();
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::Timeout
+        }
+    ));
+    // The healthy session's deadline (50s) has not elapsed.
+    assert!(matches!(
+        sessions.session(healthy).unwrap().state(),
+        EditorSessionState::Detaching { .. }
+    ));
+    assert_eq!(sessions.tick_all(), 0);
+}
+
+// ---- hardening: explicit degrade --------------------------------------
+
+/// Fake ops whose `open` result depends on the requested `AttachMode`
+/// and records every mode it was asked to open — pins degrade paths.
+struct ModeOps {
+    results: HashMap<AttachMode, Result<(), EditorOpError>>,
+    open_modes: Vec<AttachMode>,
+    caps: EditorCapabilities,
+}
+
+impl ModeOps {
+    fn new() -> Self {
+        Self {
+            results: HashMap::new(),
+            open_modes: Vec::new(),
+            caps: EditorCapabilities {
+                dock: Support::Supported,
+                float: Support::Supported,
+                ..EditorCapabilities::default()
+            },
+        }
+    }
+
+    /// Refuses `open` for `mode` with `error`.
+    fn refusing(mut self, mode: AttachMode, error: EditorOpError) -> Self {
+        self.results.insert(mode, Err(error));
+        self
+    }
+}
+
+impl EditorSessionOps for ModeOps {
+    fn capabilities(
+        &self,
+        _session: PluginEditorSessionId,
+    ) -> Result<EditorCapabilities, EditorOpError> {
+        Ok(self.caps)
+    }
+
+    fn open(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _lease: &ParentSlotLease,
+        _size: EditorSize,
+        mode: AttachMode,
+    ) -> Result<EditorCapabilities, EditorOpError> {
+        self.open_modes.push(mode);
+        self.results
+            .get(&mode)
+            .copied()
+            .unwrap_or(Ok(()))
+            .map(|()| self.caps)
+    }
+
+    fn close(&mut self, _session: PluginEditorSessionId) -> Result<(), EditorOpError> {
+        Ok(())
+    }
+
+    fn set_size(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _size: EditorSize,
+    ) -> Result<(), EditorOpError> {
+        Ok(())
+    }
+
+    fn set_visibility(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _visible: bool,
+    ) -> Result<(), EditorOpError> {
+        Ok(())
+    }
+
+    fn reattach(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _lease: &ParentSlotLease,
+    ) -> Result<(), EditorOpError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn sh09_preferred_unsupported_degrades_to_floating_explicitly() {
+    let (mut sessions, id) = bare_session();
+    let mut ops = ModeOps::new().refusing(AttachMode::Docked, EditorOpError::Unsupported);
+    let outcome = sessions
+        .session_mut(id)
+        .unwrap()
+        .open_or_degrade(
+            &mut ops,
+            &lease(),
+            SIZE,
+            AttachMode::Docked,
+            AttachMode::Floating,
+        )
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        OpenOutcome::Degraded {
+            mode: AttachMode::Floating,
+            ..
+        }
+    ));
+    let session = sessions.session_mut(id).unwrap();
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Attached {
+            mode: AttachMode::Floating
+        }
+    ));
+    // The degrade is its own terminal — `Attached`/`Recovered` never
+    // fire, so it cannot be mistaken for a requested-mode attach.
+    let events = session.drain_events();
+    assert_eq!(events.len(), 1);
+    assert!(matches!(
+        events[0],
+        EditorSessionEvent::Degraded {
+            mode: AttachMode::Floating
+        }
+    ));
+    assert_eq!(ops.open_modes, [AttachMode::Docked, AttachMode::Floating]);
+}
+
+#[test]
+fn sh10_preferred_supported_never_retries() {
+    let (mut sessions, id) = bare_session();
+    let mut ops = ModeOps::new();
+    let outcome = sessions
+        .session_mut(id)
+        .unwrap()
+        .open_or_degrade(
+            &mut ops,
+            &lease(),
+            SIZE,
+            AttachMode::Docked,
+            AttachMode::Floating,
+        )
+        .unwrap();
+    assert!(matches!(outcome, OpenOutcome::Attached(_)));
+    let session = sessions.session_mut(id).unwrap();
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Attached {
+            mode: AttachMode::Docked
+        }
+    ));
+    let events = session.drain_events();
+    assert_eq!(events.len(), 1);
+    assert!(matches!(
+        events[0],
+        EditorSessionEvent::Attached {
+            mode: AttachMode::Docked
+        }
+    ));
+    assert_eq!(ops.open_modes, [AttachMode::Docked]);
+}
+
+#[test]
+fn sh11_non_unsupported_preferred_error_never_retries() {
+    let (mut sessions, id) = bare_session();
+    let mut ops = ModeOps::new().refusing(AttachMode::Docked, EditorOpError::Plugin);
+    let result = sessions.session_mut(id).unwrap().open_or_degrade(
+        &mut ops,
+        &lease(),
+        SIZE,
+        AttachMode::Docked,
+        AttachMode::Floating,
+    );
+    assert!(matches!(
+        result,
+        Err(EditorSessionError::Ops(EditorOpError::Plugin))
+    ));
+    let session = sessions.session_mut(id).unwrap();
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::PluginFailed
+        }
+    ));
+    assert_eq!(ops.open_modes, [AttachMode::Docked]);
+}
+
+#[test]
+fn sh12_fallback_failure_terminates_failed() {
+    let (mut sessions, id) = bare_session();
+    let mut ops = ModeOps::new()
+        .refusing(AttachMode::Docked, EditorOpError::Unsupported)
+        .refusing(AttachMode::Floating, EditorOpError::HostLost);
+    let result = sessions.session_mut(id).unwrap().open_or_degrade(
+        &mut ops,
+        &lease(),
+        SIZE,
+        AttachMode::Docked,
+        AttachMode::Floating,
+    );
+    assert!(matches!(
+        result,
+        Err(EditorSessionError::Ops(EditorOpError::HostLost))
+    ));
+    let session = sessions.session_mut(id).unwrap();
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::HostLost
+        }
+    ));
+    assert_eq!(ops.open_modes, [AttachMode::Docked, AttachMode::Floating]);
+}
+
+#[test]
+fn sh13_equal_modes_degenerate_to_plain_open() {
+    let (mut sessions, id) = bare_session();
+    let mut ops = ModeOps::new();
+    let outcome = sessions
+        .session_mut(id)
+        .unwrap()
+        .open_or_degrade(
+            &mut ops,
+            &lease(),
+            SIZE,
+            AttachMode::Docked,
+            AttachMode::Docked,
+        )
+        .unwrap();
+    assert!(matches!(outcome, OpenOutcome::Attached(_)));
+    assert_eq!(ops.open_modes, [AttachMode::Docked]);
+}
+
+#[test]
+fn sh14_async_degrade_lands_degraded_not_recovered() {
+    let (mut sessions, id) = bare_session();
+    let mut failing = FakeOps::ok().open(Err(EditorOpError::Unsupported));
+    assert!(
+        sessions
+            .session_mut(id)
+            .unwrap()
+            .open(&mut failing, &lease(), SIZE, AttachMode::Docked)
+            .is_err()
+    );
+    let session = sessions.session_mut(id).unwrap();
+    let request = session.begin_degrade(AttachMode::Floating).unwrap();
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Recovering { .. }
+    ));
+    session.complete_attach(request, Ok(())).unwrap();
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Attached {
+            mode: AttachMode::Floating
+        }
+    ));
+    let events = session.drain_events();
+    // `[Failed{Unsupported}, Degraded{Floating}]` — no `Recovered`.
+    assert_eq!(events.len(), 2);
+    assert!(matches!(
+        events[1],
+        EditorSessionEvent::Degraded {
+            mode: AttachMode::Floating
+        }
+    ));
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, EditorSessionEvent::Recovered { .. }))
+    );
+}
+
+#[test]
+fn sh15_failed_degrade_does_not_poison_later_recover() {
+    let (mut sessions, id) = bare_session();
+    let mut failing = FakeOps::ok().open(Err(EditorOpError::Unsupported));
+    assert!(
+        sessions
+            .session_mut(id)
+            .unwrap()
+            .open(&mut failing, &lease(), SIZE, AttachMode::Docked)
+            .is_err()
+    );
+    let session = sessions.session_mut(id).unwrap();
+    let request = session.begin_degrade(AttachMode::Floating).unwrap();
+    assert!(matches!(
+        session.complete_attach(request, Err(EditorOpError::Timeout)),
+        Err(EditorSessionError::Ops(EditorOpError::Timeout))
+    ));
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::Timeout
+        }
+    ));
+    // The degrade flag was cleared by the failure — a plain recover
+    // emits `Recovered`, not `Degraded`.
+    let mut ops = FakeOps::ok();
+    session
+        .recover(&mut ops, &lease(), SIZE, AttachMode::Docked)
+        .unwrap();
+    let events = session.drain_events();
+    assert!(matches!(
+        events.last(),
+        Some(EditorSessionEvent::Recovered {
+            mode: AttachMode::Docked
+        })
+    ));
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, EditorSessionEvent::Degraded { .. }))
+    );
+}
+
+// ---- hardening: graphics-lost cause ------------------------------------
+
+#[test]
+fn sh16_graphics_lost_maps_to_distinct_fail_cause() {
+    let (mut sessions, id) = bare_session();
+    let mut ops = FakeOps::ok().open(Err(EditorOpError::GraphicsLost));
+    let result =
+        sessions
+            .session_mut(id)
+            .unwrap()
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked);
+    assert!(matches!(
+        result,
+        Err(EditorSessionError::Ops(EditorOpError::GraphicsLost))
+    ));
+    let session = sessions.session_mut(id).unwrap();
+    assert!(matches!(
+        session.state(),
+        EditorSessionState::Failed {
+            cause: SessionFailCause::GraphicsLost
+        }
+    ));
+    let events = session.drain_events();
+    assert!(matches!(
+        events.as_slice(),
+        [EditorSessionEvent::Failed {
+            cause: SessionFailCause::GraphicsLost
+        }]
+    ));
+}
+
+#[test]
+fn sh17_notify_terminated_graphics_lost_fires_once() {
+    let (mut sessions, id) = bare_session();
+    let mut ops = FakeOps::ok();
+    sessions
+        .session_mut(id)
+        .unwrap()
+        .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+        .unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    session.notify_terminated(SessionFailCause::GraphicsLost);
+    session.notify_terminated(SessionFailCause::GraphicsLost);
+    let events = session.drain_events();
+    assert!(matches!(
+        events.as_slice(),
+        [
+            EditorSessionEvent::Attached { .. },
+            EditorSessionEvent::Terminated {
+                cause: SessionFailCause::GraphicsLost
+            }
+        ]
+    ));
 }

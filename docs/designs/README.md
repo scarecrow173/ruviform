@@ -111,11 +111,13 @@ Directory: `docs/designs`
 | DESIGN-rf388DockWindowing01 | Issue #388 slice 3 設計 — slot projection clip 修正と windowing PoC scenario | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | DESIGN-E2c3n3d0DhHGOrf8ZGHJrP | Issue #388 Driver-neutral NativeSurfaceSlot 契約設計（SurfaceSlotRegistry / SlotLease / port） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
 | DESIGN-x7UlzjoyvZa1pu2ARRLOZZ | Issue #389 Driver-neutral PluginEditorSession 設計（state machine / typed HostPort / L0-L1 写像・wire negotiation 方針） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
+| DESIGN-034UnxZxmELaLcIYblZFRI | Issue #389 Plugin Editor Session hardening 設計（deadline/clock・明示 degrade・GraphicsLost・DComp 記録） | approved | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | DESIGN-8EX9crwtfdh9PhZtOJ2cfY | Issue #389 VST3/L0 実外部 Editor attach 設計（Vst3Plugin::open_gui/close_gui + Windows HWND attach） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | DESIGN-034T9VaXD2KXqhGxaHawyH | Issue #390 Driver Contract Lab — boundary guard 検査設計・registry schema・実行接続点 | approved | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | DESIGN-utKDN0iwqlQEVtqkiEUHJi | Issue #400 借用 sealed readback → 独立 decoder bounded 接続の設計 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | DESIGN-z4LQPvCYdpedQfNlIZbQ7J | Issue #404/#405 NativeSurfaceSlot host 境界修復設計（clip 整合 + teardown reconcile） | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
 | DESIGN-034Tnjz1ofC4OXppkHjsgB | Issue #409 scoped re-root + bounded enumeration 設計 | approved | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
+| DESIGN-034UmHwuYp52pp4RtddpwM | Issue #410 — view command ledger bounded retention & correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | DESIGN-NS1HOEsCLKLDYdKMhuZOSf | Issue #411 — cargo_metadata 依存系列選定設計（MSRV 1.89 収束） | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | DESIGN-pL8wRtYbN3xKcVhJ5mQs2E | Issue #414 — projection→controlled display 正規経路の設計 | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
 | DESIGN-Kt4NzBw9QxLr6VfGc1PuDo | Issue #421 — Meter/TimeAxis GPUI 描画と parity fixture の設計 | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |

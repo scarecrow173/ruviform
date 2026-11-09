@@ -36,6 +36,7 @@ Directory: `docs/plans`
 | PLAN-034T6RWSw6Tv9Mz2qJ5eL8 | Issue #387 Component/View Specs + Headless Behavior + GPUI Renderer 実装計画 | proposed | [implement-issue-387-component-renderer.md](./implement-issue-387-component-renderer.md) |
 | PLAN-kHnSXCzzcxyo5rlkMiqQWx | Issue #388/#389 Native Dock 契約の実装計画（neutral slot/lease/session + fake 検証 + L0-L1 写像） | approved | [implement-issue-388-389-native-dock-contract.md](./implement-issue-388-389-native-dock-contract.md) |
 | PLAN-rf388DockWindowing01 | Issue #388 slice 3 実装計画 — clip 修正 + windowing PoC + 証拠 | approved | [implement-issue-388-native-dock-windowing-slice3.md](./implement-issue-388-native-dock-windowing-slice3.md) |
+| PLAN-034UnzhplY5WerbCeab8un | Implement Issue #389 Plugin Editor Session hardening | approved | [implement-issue-389-session-hardening.md](./implement-issue-389-session-hardening.md) |
 | PLAN-5rBdUXHzqmuHrA1h4sweAj | Issue #389 VST3/L0 実外部 Editor attach の実装計画（adapter open_gui + PoC vst3 lane） | approved | [implement-issue-389-vst3-l0-editor-attach.md](./implement-issue-389-vst3-l0-editor-attach.md) |
 | PLAN-ECzI54BQngMiQpOP23flK3 | Issue #404/#405 NativeSurfaceSlot host 境界修復 実装計画 | draft | [implement-issue-404-405-native-surface-host-boundary.md](./implement-issue-404-405-native-surface-host-boundary.md) |
 | PLAN-Hv8LcR3wQ5nTk2YbM7pXdA | Issue #423 WebView 写像・focus capability・GPUI 実窓検証の実装計画 | proposed | [implement-issue-423-webview-dock-verify.md](./implement-issue-423-webview-dock-verify.md) |
@@ -106,6 +107,7 @@ Directory: `docs/plans`
 | PLAN-UmRPBDr4lZ2y8Aj9H6tdYe | Issue #377 実装計画 — QueryBinding adopt-on-join | approved | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | PLAN-034UhlBN58rtCJqfZMTYgt | Issue #378 oracle late-create binding epoch 実装計画 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
 | PLAN-034TnojDZIYRnnvSTlTg34 | Issue #409 scoped re-root + bounded enumeration 実装計画 | draft | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
+| PLAN-034UmJJcFMIKvjd1orEeeI | Issue #410 — view command ledger bounded retention & correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | PLAN-Hs2MvCe8ZyWp5QnXb7TkRa | Issue #421 — Meter/TimeAxis GPUI 描画と parity の実装計画 | in-progress | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | PLAN-84yUP5PkLYsA3yfDgOShzQ | Issue #426 GPUI lab binding 実装計画 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
 | PLAN-Qx5MnBv8TcHs3RdLe6WaKp | Issue #429 — Consumer 観測 seam の実装計画 | in-progress | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
