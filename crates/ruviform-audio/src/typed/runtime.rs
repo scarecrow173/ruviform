@@ -735,14 +735,19 @@ impl RtRuntime {
 
         // Probe wiring (Issue #185): block's absolute position, then
         // generation-checked command drain and graph-input taps.
-        let ctx_tap = super::probe::TapCtx {
+        let mut ctx_tap = super::probe::TapCtx {
             seq: st.seq,
             frames,
             generation: plan.generation,
             base: st.frame_cursor,
+            mark: super::probe::ProbeClockMark::UNKNOWN,
         };
         if let Some(deck) = self.probes.as_mut() {
             deck.drain_commands(plan.generation, ctx_tap.base, &self.status);
+            // Refresh the cursor-series mark after the command drain
+            // so a `SetClockMark` applied this callback stamps this
+            // callback's records (Issue #309).
+            ctx_tap.mark = deck.current_mark();
             deck.run_site(TapKind::GraphInput, None, &self.arena, &ctx_tap);
         }
 
