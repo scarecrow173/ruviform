@@ -40,7 +40,6 @@ Directory: `docs/plans`
 | PLAN-Hn3Lx7Qv2Wc9Ab5Ej1Rm8Tp | Issue #431 実機 e2e・実窓 lifecycle 検証・legacy 判断の実装計画 | proposed | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | PLAN-f7s6LZ2O4ASTSi0kJoiojB | Issue #465 Legacy WebView P0/P1 実装計画 | approved | [implement-issue-465-legacy-webview-p0p1.md](./implement-issue-465-legacy-webview-p0p1.md) |
 | PLAN-034UaIKFsXeS7a1ILrmjKe | Issue #468 RootedDir canonical 前提の契約明示 実装計画 | approved | [implement-issue-468-rooteddir-canonical-premise.md](./implement-issue-468-rooteddir-canonical-premise.md) |
-| PLAN-034UexVzkirHD8NES7sXZQ | Issue #478 Fader/Knob 縦寸法契約 — 設計判断と実装引き継ぎ計画 | in-progress | [implement-issue-478-fader-knob-height-contract.md](./implement-issue-478-fader-knob-height-contract.md) |
 | PLAN-034JO2EWa8LuEEE4BFVZ9Q | Issue #52 workspace MSRV 引上げの実施（rust-version 1.85 → 1.89・ドキュメント同期・MSRV 実測検証） | approved | [implement-issue-52-msrv-raise.md](./implement-issue-52-msrv-raise.md) |
 | PLAN-034JQFeYbZCBHPYSBfQe7B | Issue #53 SIMD dispatch 層の実装計画 | approved | [implement-issue-53-simd-dispatch-layer.md](./implement-issue-53-simd-dispatch-layer.md) |
 | PLAN-034JZDNRML000000000004 | Issue #54 実装計画 — denormal flush ノード | approved | [implement-issue-54-denormal-policy.md](./implement-issue-54-denormal-policy.md) |
@@ -78,6 +77,7 @@ Directory: `docs/plans`
 | PLAN-gWrX94JcoMQacCOPFR5FKD | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 実装計画 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | PLAN-W0d5X9GIZLFMnSGqu9OlBg | Issue #306 汎用 I/O 合成 E2E 実装計画 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
+| PLAN-034Ui3RAJGJJ1dJAlUW9N0 | Issue #308 — Probe再Binding全件整合の実装計画 | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | PLAN-034S312gtUiTestPlnEE55 | Issue #312 ruviform-ui-test implementation plan | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
@@ -143,6 +143,7 @@ Directory: `docs/plans`
 | PLAN-034N9jeOhQNLPoHfcaUcqZ | Issue #130 実施計画 — media-core/dsp/audio-analysis assert_no_alloc レーン武装 | completed | [implement-issue-130-arm-assert-no-alloc.md](./implement-issue-130-arm-assert-no-alloc.md) |
 | PLAN-034J5K603qXDNmT82wI9v7 | Issue #18 データモデル API の実装（media-core / audio-core / video-core） | completed | [implement-issue-18-data-model.md](./implement-issue-18-data-model.md) |
 | PLAN-034Qh3xYzAbCdEfGhIjK | Issue #190 Transport Span Scheduler 実装計画 | completed | [implement-issue-190-transport-span-scheduler.md](./implement-issue-190-transport-span-scheduler.md) |
+| PLAN-034UexVzkirHD8NES7sXZQ | Issue #478 Fader/Knob 縦寸法契約 — 設計判断と実装引き継ぎ計画 | completed | [implement-issue-478-fader-knob-height-contract.md](./implement-issue-478-fader-knob-height-contract.md) |
 | PLAN-034JNstCXHhzzwOvo9iiCv | Issue #58 時間型拡張の実装（FrameRate 導入・Timecode シグネチャ移行・丸め誤差テスト） | completed | [implement-issue-58-time-type-extension.md](./implement-issue-58-time-type-extension.md) |
 | PLAN-034LNXQmQvHjRBD57FCPBw | Issue #76 実施計画 — プラグイン L1 アウトプロセス分離（plugin-export 新設 + plugin-host L1 プロキシ） | completed | [implement-issue-76-plugin-l1-out-of-process.md](./implement-issue-76-plugin-l1-out-of-process.md) |
 | PLAN-034L5BRUxRuns9cuoAdq8n | Implement Issue 98 OFX Host Adapter | completed | [implement-issue-98-ofx-host-adapter.md](./implement-issue-98-ofx-host-adapter.md) |

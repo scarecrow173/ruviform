@@ -7,8 +7,8 @@ use assert_no_alloc::assert_no_alloc;
 use common::*;
 
 use ruviform_audio::typed::probe::{
-    CaptureConfig, PointAvailability, ProbeConfig, ProbeError, ProbeEvent, ProbeMode, ProbePoint,
-    StatusKind, StopReason, UnobservedReason, capabilities, pair,
+    CaptureConfig, CapturePolicy, PointAvailability, ProbeConfig, ProbeError, ProbeEvent, ProbeId,
+    ProbeMode, ProbePoint, StatusKind, StopReason, UnobservedReason, capabilities, pair,
 };
 use ruviform_audio::typed::{Compiler, GraphProcessor, GraphRuntime, NodeIo};
 use ruviform_graph::{
@@ -22,6 +22,7 @@ const FRAMES: usize = 64;
 
 struct ProbeChain {
     spec: GraphSpec,
+    src: NodeId,
     src_out: PortId,
     proc_in: PortId,
     proc_out: PortId,
@@ -52,6 +53,7 @@ fn probe_chain() -> ProbeChain {
     b.connect(&conn(pref(proc, pp[1]), pref(sink, kp[0])));
     ProbeChain {
         spec: b.build(),
+        src,
         src_out: sp[0],
         proc_in: pp[0],
         proc_out: pp[1],
@@ -901,4 +903,550 @@ fn rt_probe_process_allocates_nothing() {
     rig.rt.process(FRAMES, &rc).unwrap();
     feed_ramp(&mut rig.rt, c.src_out, 0.0);
     assert_no_alloc(|| rig.rt.process(FRAMES, &rc).unwrap());
+}
+
+// ---- Issue #308: staged all-or-nothing rebind ----
+
+/// Compiles and publishes the next generation for `spec`.
+fn republish(rig: &mut Rig, spec: &GraphSpec, f: &mut MockFactory) -> u64 {
+    let compiler = Compiler::new(config(FRAMES));
+    let plan_out = compiler
+        .compile(
+            &validate(spec),
+            f,
+            rig.grt.registry(),
+            rig.grt.allocator(),
+            rig.grt.generation() + 1,
+        )
+        .unwrap();
+    rig.grt.publish(plan_out).unwrap();
+    rig.grt.generation()
+}
+
+/// Pushes `n` inert `SetMode` commands to fill the probe command
+/// channel (each call enqueues exactly one command).
+fn fill_commands(rig: &mut Rig, probe: ProbeId, n: usize) {
+    for _ in 0..n {
+        rig.broker.set_mode(probe, ProbeMode::Monitor).unwrap();
+    }
+}
+
+/// Source → sink spec with no processor node — probed points on the
+/// removed node become unresolvable. Node/port ids are issued
+/// sequentially per builder, so `src`/`src_out` keep the same ids as
+/// in [`probe_chain`] and stay resolvable.
+fn src_sink_spec() -> GraphSpec {
+    let mut b = GraphBuilder::new();
+    let (src, sp) = b.add_node(&node(
+        NodeKind::Source,
+        vec![port_probe(Direction::Output, PortRole::Main, stereo())],
+    ));
+    let (sink, kp) = b.add_node(&node(
+        NodeKind::Sink,
+        vec![port(Direction::Input, PortRole::Main, stereo())],
+    ));
+    b.connect(&conn(pref(src, sp[0]), pref(sink, kp[0])));
+    b.build()
+}
+
+/// Counts `(Installed statuses, metrics)` emitted under `generation`.
+fn gen_counts(evs: &[Ev], generation: u64) -> (usize, usize) {
+    let installed = evs
+        .iter()
+        .filter_map(Ev::status)
+        .filter(|s| s.generation == generation && matches!(s.kind, StatusKind::Installed))
+        .count();
+    let metrics = evs
+        .iter()
+        .filter_map(Ev::metric)
+        .filter(|m| m.meta.generation == generation)
+        .count();
+    (installed, metrics)
+}
+
+/// One saturation point of ex17: `fill` inert commands leave
+/// `8 - fill` free slots in the command channel (capacity 8), then
+/// gen 2 is published and `on_publish` attempted.
+fn saturation_case(fill: usize, expect_err: bool) {
+    const K: usize = 3;
+    let c = probe_chain();
+    let mut f = MockFactory {
+        reuse: true,
+        ..MockFactory::default()
+    };
+    f.pending.insert(c.proc, gain2());
+    let pc = ProbeConfig {
+        command_capacity: 8,
+        ..ProbeConfig::default()
+    };
+    let mut rig = rig(&c.spec, &pc, &mut f);
+    let spec = &c.spec;
+    let points = [
+        ProbePoint {
+            node: c.proc,
+            port: c.proc_in,
+        },
+        ProbePoint {
+            node: c.proc,
+            port: c.proc_out,
+        },
+        ProbePoint {
+            node: c.src,
+            port: c.src_out,
+        },
+    ];
+    let mut probes = Vec::new();
+    for point in points {
+        probes.push(
+            rig.broker
+                .install(&rig.grt, spec, point, ProbeMode::Monitor)
+                .unwrap(),
+        );
+    }
+    // Apply the gen-1 binds, then publish gen 2.
+    feed_ramp(&mut rig.rt, c.src_out, 0.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    collect(&mut rig);
+    let gen2 = republish(&mut rig, spec, &mut f);
+    assert_eq!(gen2, 2);
+    fill_commands(&mut rig, probes[0], fill);
+
+    let result = rig.broker.on_publish(&rig.grt, spec);
+    if expect_err {
+        assert!(
+            matches!(result, Err(ProbeError::CommandChannelFull)),
+            "fill={fill}: expected PendingRetry failure"
+        );
+    } else {
+        let receipt = result.expect("rebind enqueues");
+        assert_eq!(receipt.generation, gen2);
+        assert_eq!(receipt.bound.len(), K);
+        assert_eq!(receipt.unbound, Vec::<ProbeId>::new());
+    }
+
+    // One block under gen 2: a committed rebind emits K Installed +
+    // K gen-2 metrics; a failed one emits neither — only Unbound
+    // skips of the old bindings.
+    feed_ramp(&mut rig.rt, c.src_out, 0.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    let evs = collect(&mut rig);
+    let (installed, metrics) = gen_counts(&evs, gen2);
+    if expect_err {
+        assert_eq!(
+            (installed, metrics),
+            (0, 0),
+            "fill={fill}: partial commit leaked"
+        );
+        assert!(
+            evs.iter()
+                .filter_map(Ev::status)
+                .any(|s| s.generation == gen2 && matches!(s.kind, StatusKind::Unbound)),
+            "fill={fill}: stale bindings must surface Unbound"
+        );
+        assert_retry_commits(&mut rig, spec, c.src_out, gen2, K, fill);
+    } else {
+        assert_eq!((installed, metrics), (K, K));
+    }
+}
+
+/// After a saturated attempt failed, the queue has drained — a retry
+/// must enqueue the complete rebind and commit all probes.
+fn assert_retry_commits(
+    rig: &mut Rig,
+    spec: &GraphSpec,
+    src_out: PortId,
+    gen2: u64,
+    k: usize,
+    fill: usize,
+) {
+    let receipt = rig
+        .broker
+        .on_publish(&rig.grt, spec)
+        .expect("retry after drain");
+    assert_eq!(receipt.bound.len(), k);
+    feed_ramp(&mut rig.rt, src_out, 0.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    let evs = collect(rig);
+    assert_eq!(
+        gen_counts(&evs, gen2),
+        (k, k),
+        "fill={fill}: retry must commit all probes"
+    );
+}
+
+/// ex17 (#308): saturating the command channel at every point of the
+/// rebind sequence never partially applies — the live bindings stay
+/// generation-guarded (`Unbound`), and a retry after drain commits
+/// all-or-nothing.
+#[test]
+fn rebind_queue_saturation_never_partially_applies() {
+    // Rebind sequence needs K + 2 = 5 free slots (Begin + K Stage +
+    // Commit). command_capacity = 8; `fill` leaves `8 - fill` free.
+    for (fill, expect_err) in [(8, true), (7, true), (5, true), (4, true), (3, false)] {
+        saturation_case(fill, expect_err);
+    }
+}
+
+/// ex18 (#308): rapid consecutive republishes — commands for a
+/// superseded generation are stale-dropped; only the latest
+/// generation's commit lands. No record ever carries a generation
+/// other than the active plan's.
+#[test]
+fn rapid_republishes_commit_only_latest_generation() {
+    let c = probe_chain();
+    let mut f = MockFactory {
+        reuse: true,
+        ..MockFactory::default()
+    };
+    f.pending.insert(c.proc, gain2());
+    let mut rig = rig(&c.spec, &ProbeConfig::default(), &mut f);
+    let spec = &c.spec;
+    let p = rig
+        .broker
+        .install(
+            &rig.grt,
+            spec,
+            ProbePoint {
+                node: c.proc,
+                port: c.proc_out,
+            },
+            ProbeMode::Monitor,
+        )
+        .unwrap();
+    feed_ramp(&mut rig.rt, c.src_out, 0.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    collect(&mut rig);
+
+    // Publish gen 2 and queue its rebind, then publish gen 3 and
+    // queue its rebind before the RT side drains anything.
+    let gen2 = republish(&mut rig, spec, &mut f);
+    rig.broker.on_publish(&rig.grt, spec).unwrap();
+    let gen3 = republish(&mut rig, spec, &mut f);
+    rig.broker.on_publish(&rig.grt, spec).unwrap();
+    assert!(gen3 > gen2);
+
+    feed_ramp(&mut rig.rt, c.src_out, 0.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    let evs = collect(&mut rig);
+    assert!(
+        evs.iter()
+            .filter_map(Ev::metric)
+            .any(|m| m.meta.generation == gen3 && m.meta.probe == p),
+        "latest generation must be observed"
+    );
+    assert!(
+        evs.iter()
+            .filter_map(Ev::metric)
+            .all(|m| m.meta.generation != gen2),
+        "superseded generation must never be observed"
+    );
+    assert!(
+        rig.grt.status().snapshot().stale_commands > 0,
+        "superseded rebind commands must be counted as stale"
+    );
+}
+
+/// ex19 (#308): a point that stops resolving is reported in the
+/// receipt and dropped explicitly at commit — never silently.
+#[test]
+fn rebind_reports_and_drops_unresolved_points() {
+    let c = probe_chain();
+    let mut f = MockFactory {
+        reuse: true,
+        ..MockFactory::default()
+    };
+    f.pending.insert(c.proc, gain2());
+    let mut rig = rig(&c.spec, &ProbeConfig::default(), &mut f);
+    let spec = &c.spec;
+    let p_gone = rig
+        .broker
+        .install(
+            &rig.grt,
+            spec,
+            ProbePoint {
+                node: c.proc,
+                port: c.proc_out,
+            },
+            ProbeMode::Monitor,
+        )
+        .unwrap();
+    let p_stays = rig
+        .broker
+        .install(
+            &rig.grt,
+            spec,
+            ProbePoint {
+                node: c.src,
+                port: c.src_out,
+            },
+            ProbeMode::Monitor,
+        )
+        .unwrap();
+    feed_ramp(&mut rig.rt, c.src_out, 0.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    collect(&mut rig);
+
+    // Republish a spec where the processor node no longer exists.
+    let spec2 = src_sink_spec();
+    let gen2 = republish(&mut rig, &spec2, &mut f);
+    let receipt = rig.broker.on_publish(&rig.grt, &spec2).unwrap();
+    assert_eq!(receipt.generation, gen2);
+    assert_eq!(receipt.bound, vec![p_stays]);
+    assert_eq!(receipt.unbound, vec![p_gone]);
+
+    feed_ramp(&mut rig.rt, c.src_out, 0.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    let evs = collect(&mut rig);
+    assert!(
+        evs.iter().filter_map(Ev::status).any(|s| {
+            s.generation == gen2 && s.probe == p_gone && matches!(s.kind, StatusKind::RebindDropped)
+        }),
+        "unresolved probe must be dropped explicitly"
+    );
+    assert!(
+        evs.iter().filter_map(Ev::status).any(|s| {
+            s.generation == gen2 && s.probe == p_stays && matches!(s.kind, StatusKind::Installed)
+        }),
+        "resolvable probe must still install"
+    );
+    assert!(
+        evs.iter()
+            .filter_map(Ev::metric)
+            .all(|m| m.meta.probe != p_gone),
+        "dropped probe must never emit records"
+    );
+}
+
+/// ex20 (#308): default `StopAtBoundary` — an in-flight capture is
+/// cut at the generation boundary; remaining budget is discarded,
+/// never carried into the new generation.
+#[test]
+#[expect(clippy::cast_precision_loss)]
+fn capture_stops_at_generation_boundary_by_default() {
+    let c = probe_chain();
+    let mut f = MockFactory {
+        reuse: true,
+        ..MockFactory::default()
+    };
+    f.pending.insert(c.proc, gain2());
+    let mut rig = rig(&c.spec, &ProbeConfig::default(), &mut f);
+    let spec = &c.spec;
+    let p = rig
+        .broker
+        .install(
+            &rig.grt,
+            spec,
+            ProbePoint {
+                node: c.proc,
+                port: c.proc_out,
+            },
+            ProbeMode::Monitor,
+        )
+        .unwrap();
+    rig.broker
+        .capture(
+            p,
+            CaptureConfig {
+                max_frames: 6 * FRAMES as u64,
+            },
+        )
+        .unwrap();
+    // Two captured blocks under gen 1 (budget remains).
+    for b in 0..2u32 {
+        feed_ramp(&mut rig.rt, c.src_out, b as f32);
+        rig.rt.process(FRAMES, &ctx()).unwrap();
+    }
+    let gen1_chunks = collect(&mut rig)
+        .iter()
+        .filter(|e| matches!(e, Ev::Cap { .. }))
+        .count();
+    assert_eq!(gen1_chunks, 2);
+
+    let gen2 = republish(&mut rig, spec, &mut f);
+    let receipt = rig.broker.on_publish(&rig.grt, spec).unwrap();
+    assert_eq!(receipt.capture_stopped, vec![p]);
+    assert_eq!(receipt.capture_restarted, Vec::<ProbeId>::new());
+
+    // Post-commit block: capture cut, Monitor metrics resume.
+    feed_ramp(&mut rig.rt, c.src_out, 9.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    let evs = collect(&mut rig);
+    assert!(evs.iter().filter_map(Ev::status).any(|s| {
+        s.generation == gen2
+            && s.probe == p
+            && matches!(
+                s.kind,
+                StatusKind::CaptureStopped {
+                    reason: StopReason::GenerationBoundary
+                }
+            )
+    }));
+    assert!(
+        evs.iter()
+            .filter_map(Ev::metric)
+            .any(|m| { m.meta.generation == gen2 && m.meta.probe == p }),
+        "probe must keep monitoring under the new generation"
+    );
+
+    // Two more blocks: still no capture chunks — the budget was
+    // discarded, not carried over.
+    for b in 0..2u32 {
+        feed_ramp(&mut rig.rt, c.src_out, b as f32);
+        rig.rt.process(FRAMES, &ctx()).unwrap();
+    }
+    let evs = collect(&mut rig);
+    assert!(
+        evs.iter()
+            .all(|e| !matches!(e, Ev::Cap { meta, .. } if meta.generation == gen2)),
+        "no gen-2 capture chunks without an explicit capture()"
+    );
+
+    // Explicit restart works and produces gen-2 segments.
+    rig.broker
+        .capture(
+            p,
+            CaptureConfig {
+                max_frames: 2 * FRAMES as u64,
+            },
+        )
+        .unwrap();
+    feed_ramp(&mut rig.rt, c.src_out, 20.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    feed_ramp(&mut rig.rt, c.src_out, 21.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    let evs = collect(&mut rig);
+    assert_eq!(
+        evs.iter()
+            .filter(|e| matches!(e, Ev::Cap { meta, .. } if meta.generation == gen2))
+            .count(),
+        2,
+        "explicit capture() restarts under the new generation"
+    );
+}
+
+/// ex21 (#308): `Restart` policy — capture restarts with a fresh
+/// full budget as an explicit new segment; remaining frames of the
+/// old segment are never merged in.
+#[test]
+#[expect(clippy::cast_precision_loss)]
+fn capture_restarts_with_fresh_budget_under_restart_policy() {
+    let c = probe_chain();
+    let mut f = MockFactory {
+        reuse: true,
+        ..MockFactory::default()
+    };
+    f.pending.insert(c.proc, gain2());
+    let mut rig = rig(&c.spec, &ProbeConfig::default(), &mut f);
+    let spec = &c.spec;
+    let p = rig
+        .broker
+        .install(
+            &rig.grt,
+            spec,
+            ProbePoint {
+                node: c.proc,
+                port: c.proc_out,
+            },
+            ProbeMode::Monitor,
+        )
+        .unwrap();
+    rig.broker
+        .set_capture_policy(p, CapturePolicy::Restart)
+        .unwrap();
+    rig.broker
+        .capture(
+            p,
+            CaptureConfig {
+                max_frames: 4 * FRAMES as u64,
+            },
+        )
+        .unwrap();
+    // Two captured blocks under gen 1 — half the budget remains.
+    for b in 0..2u32 {
+        feed_ramp(&mut rig.rt, c.src_out, b as f32);
+        rig.rt.process(FRAMES, &ctx()).unwrap();
+    }
+    collect(&mut rig);
+
+    let gen2 = republish(&mut rig, spec, &mut f);
+    let receipt = rig.broker.on_publish(&rig.grt, spec).unwrap();
+    assert_eq!(receipt.capture_restarted, vec![p]);
+    assert_eq!(receipt.capture_stopped, Vec::<ProbeId>::new());
+
+    // Commit emits CaptureStarted with the *full* fresh budget; the
+    // commit block itself already captures chunk 1 of the new
+    // segment.
+    feed_ramp(&mut rig.rt, c.src_out, 9.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    let evs = collect(&mut rig);
+    assert!(evs.iter().filter_map(Ev::status).any(|s| {
+        s.generation == gen2
+            && s.probe == p
+            && matches!(
+                s.kind,
+                StatusKind::CaptureStarted {
+                    budget_frames: b
+                } if b == 4 * FRAMES as u64
+            )
+    }));
+    let mut gen2_chunks = evs
+        .iter()
+        .filter(|e| matches!(e, Ev::Cap { meta, .. } if meta.generation == gen2))
+        .count();
+    assert_eq!(gen2_chunks, 1, "commit block starts the new segment");
+
+    // Three more gen-2 chunks exhaust the fresh 4-block budget —
+    // the old segment's 2 remaining blocks are never merged in.
+    for b in 0..5u32 {
+        feed_ramp(&mut rig.rt, c.src_out, b as f32);
+        rig.rt.process(FRAMES, &ctx()).unwrap();
+        for e in collect(&mut rig) {
+            if let Ev::Cap { meta, .. } = e
+                && meta.generation == gen2
+            {
+                gen2_chunks += 1;
+            }
+        }
+    }
+    assert_eq!(gen2_chunks, 4, "restart uses the full fresh budget");
+}
+
+/// ex22 (#308): republish + rebind does not perturb the audio path —
+/// sink output stays bit-identical (Probe OFF / Monitor / Capture
+/// boundary included).
+#[test]
+fn rebind_preserves_output_golden() {
+    let c = probe_chain();
+    let mut f = MockFactory {
+        reuse: true,
+        ..MockFactory::default()
+    };
+    f.pending.insert(c.proc, gain2());
+    let mut rig = rig(&c.spec, &ProbeConfig::default(), &mut f);
+    let spec = &c.spec;
+    let p = rig
+        .broker
+        .install(
+            &rig.grt,
+            spec,
+            ProbePoint {
+                node: c.proc,
+                port: c.proc_out,
+            },
+            ProbeMode::Monitor,
+        )
+        .unwrap();
+    rig.broker.set_mode(p, ProbeMode::Off).unwrap();
+
+    feed_ramp(&mut rig.rt, c.src_out, 0.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    let before = drain(&mut rig.rt, c.sink_in);
+    collect(&mut rig);
+
+    republish(&mut rig, spec, &mut f);
+    rig.broker.on_publish(&rig.grt, spec).unwrap();
+    feed_ramp(&mut rig.rt, c.src_out, 0.0);
+    rig.rt.process(FRAMES, &ctx()).unwrap();
+    let after = drain(&mut rig.rt, c.sink_in);
+    assert_eq!(before, after, "rebind changed audio output");
 }

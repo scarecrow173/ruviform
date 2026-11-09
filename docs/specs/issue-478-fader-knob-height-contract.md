@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034UetYOiYEThOr1lvUH8t"
 type: "spec"
-status: "approved"
+status: "implemented"
 title: "Issue #478 Fader/Knob 縦寸法契約 — h_full 兄弟押し出しのレイアウト判断"
 created: "2026-11-09"
 updated: "2026-11-09"
