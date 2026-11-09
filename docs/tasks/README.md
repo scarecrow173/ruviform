@@ -24,7 +24,7 @@ Directory: `docs/tasks`
 | TASK-034RJ02dFTbxsMkC5rKofw | Issue #331 T1 — verify lane の check-ci を lint-ci に統合 + 等価性・実測記録 | in-progress | [issue-331-t1-check-step-dedup.md](./issue-331-t1-check-step-dedup.md) |
 | TASK-ibEQJ0Q4JzJ0UtqiKM5W5u | Issue #388/#389 Native Dock 契約タスク（boundary / native_slot / editor_session） | completed | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TASK-rf388DockWindowing01 | Issue #388 slice 3 タスク — clip/focus/redock windowing 実測 | in-progress | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
-| TASK-034UnBZ0rgIHpbJPGD8yvA | Issue #389 Plugin Editor Session hardening タスク（timeout/degrade/GraphicsLost/DComp 記録） | in-progress | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
+| TASK-034UnqS8L3S2tF4h6u8LJd | Issue #389 Plugin Editor Session hardening タスク（timeout/degrade/GraphicsLost/DComp 記録） | in-progress | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | TASK-ll0hVC7GhO5tm1LEDBWZIe | Issue #389 VST3/L0 実外部 Editor attach タスク（adapter open_gui + PoC vst3 lane） | completed | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TASK-034TaJ4jQd92g4mWa81cxX | Issue #390 Driver Contract/Lab 実装 | todo | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | in_progress | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
@@ -118,6 +118,7 @@ Directory: `docs/tasks`
 | TASK-034JNwTz163N6eT3EJfdaD | FrameRate 型の実装（TimeBase newtype・検証付きコンストラクタ・nominal_fps） | done | [implement-framerate-type.md](./implement-framerate-type.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
 | TASK-034T2PiH8yPGqaV8KE8r4M | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装 | done | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
+| TASK-034UnBJEQ9hvQiyzg4UMHk | Issue #291 OBS-09 Diagnostics 実装タスク | done | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
 | TASK-BS44ckVmFBThwWFjdUUaro | Issue #465 Legacy WebView P0/P1 — 文書歴史化と棚卸し | done | [implement-issue-465-legacy-webview-p0p1.md](./implement-issue-465-legacy-webview-p0p1.md) |
 | TASK-034UaK7UfGDq7HHHhdeetT | Issue #468 RootedDir canonical 前提の契約明示 | done | [implement-issue-468-rooteddir-canonical-premise.md](./implement-issue-468-rooteddir-canonical-premise.md) |
 | TASK-034UexWbrpLoijqKctQjFB | Issue #478 Fader/Knob 縦寸法契約 — 設計判断と実装タスク | done | [implement-issue-478-fader-knob-height-contract.md](./implement-issue-478-fader-knob-height-contract.md) |
