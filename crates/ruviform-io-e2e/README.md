@@ -34,6 +34,21 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
 - `RootedDir`/`RelativePath` capability を publish 済み・
   extraction 済み tree に適用し、NoFollow read・列挙・locator
   文法拒否・link escape 拒否を検証する（`rooted_boundary.rs`）。
+- WAV byte golden（Issue #305）: publish 済み destination bytes を
+  RIFF/WAVE 仕様から独立に組み立てた期待値と byte-exact 照合する
+  （ZeroFrames・WAVEFORMATEX/EXTENSIBLE・S16 payload・U8/S16/S24/
+  S32/F32 encoder edge sample・pad byte・classic RIFF 4 GiB 境界を
+  discard sink で検証）（`wav_golden.rs`）。期待値は
+  `tests/common/wav.rs` が公開 API と仕様のみから構築し、
+  `ruviform-io-wav` の private helper には依存しない。
+- WAV fault fixture（Issue #305）: `&mut StagedFile` 上の
+  flush/write fault wrapper で finalize `Io`・disk-full・
+  seal 後 cancel・muxer Drop best-effort finalize（completion
+  証拠でないこと）を検証し、publish outcome を
+  `Published`/`NotPublished`/not-provably-unpublished に分類する
+  （`wav_fault.rs`）。`Published`/`Indeterminate` の失敗 effect・
+  DirSync 後失敗・`TempState::Unknown` は実 OS で誘発不能のため
+  NotRun（`ruviform-io-file` の mock 試験が正本）。
 
 ## 依存方向
 
@@ -56,8 +71,10 @@ mise run test-io-e2e   # cargo test -p ruviform-io-e2e
 
 主張境界: 実施した OS/FS・toolchain のみを実測として記録する。
 実測範囲と NotRun/Unsupported の一覧・#219/#294 への引き渡し
-条件は `evidence/rf306/fault-fuzz-report.md` を正本とする。
-adapter 系 fault matrix（Applied/NotApplied/Unknown・DirSync 後
-失敗・Indeterminate・Temp 残留）は `ruviform-io-file` の
-`#[cfg(test)]` MockFileOps ユニット試験が正本。macOS/Linux 実
-OS・Network/Cloud FS・性能は未実測（NotRun）。
+条件は `evidence/rf306/fault-fuzz-report.md`（合成試験）と
+`evidence/rf305/wav-golden-fault-report.md`（WAV golden/fault
+fixture）を正本とする。adapter 系 fault matrix（Applied/
+NotApplied/Unknown・DirSync 後失敗・Indeterminate・Temp 残留）は
+`ruviform-io-file` の `#[cfg(test)]` MockFileOps ユニット試験が
+正本。macOS/Linux 実 OS・Network/Cloud FS・性能・実 4 GiB
+ファイルの publish は未実測（NotRun/Unsupported）。

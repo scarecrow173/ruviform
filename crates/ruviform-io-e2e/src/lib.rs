@@ -17,6 +17,13 @@
 //!   `ExtractionSession` staging trees, path/collision/budget refusal.
 //! - `wav_staged` — `WavMuxer<&mut StagedFile>` → `finalize` →
 //!   `seal` → readback independent decode → `publish` → reopen.
+//! - `wav_golden` — byte-exact RIFF/WAVE goldens for the published
+//!   destination (header layouts, wire formats, conversion edge
+//!   samples, pad byte, classic RIFF 4 GiB boundary) built from the
+//!   spec, never from `ruviform-io-wav` internals (Issue #305).
+//! - `wav_fault` — finalize/write fault injection over
+//!   `&mut StagedFile`, cancel/drop boundaries, and the publish
+//!   outcome trichotomy classifier (Issue #305).
 //!
 //! # RT contract
 //!

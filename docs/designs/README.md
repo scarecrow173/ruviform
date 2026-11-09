@@ -80,6 +80,7 @@ Directory: `docs/designs`
 | DESIGN-034RT7CvRTe3b8jPTFBHtq | Issue #302 ruviform-io-archive — Archive 共通型・ZIP Indexed Reader/Writer・検証パイプライン設計 | approved | [issue-302-io-archive-zip.md](./issue-302-io-archive-zip.md) |
 | DESIGN-HR0Ud1VXoIpQCfUcosM6ib | Issue #303 ruviform-io-archive — TAR Streaming Reader/Pending・PAX/GNU・Writer 設計 | approved | [issue-303-io-archive-tar.md](./issue-303-io-archive-tar.md) |
 | DESIGN-mH3gJLoQj3rdU7xRXX8eZD | Issue #304 ruviform-io-archive — Secure Extraction・Staging/Recovery・OS 別 Root Capability 設計 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
+| DESIGN-034UvWqyRcaTQap2SH5FfT | Issue #305 IO E2E slice — WAV Byte Golden・Fault fixture 設計 | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | DESIGN-eVPQpm7tyMUS2gxitU5KtN | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行設計 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | DESIGN-ODmc6p5Cp7Kbq0u35OrAiR | Issue #306 汎用 I/O 合成 E2E — 試験専用クレート構成・境界試験設計 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | DESIGN-034UtzREeBZLceakda7vIS | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture 設計 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
@@ -124,8 +125,8 @@ Directory: `docs/designs`
 | DESIGN-utKDN0iwqlQEVtqkiEUHJi | Issue #400 借用 sealed readback → 独立 decoder bounded 接続の設計 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | DESIGN-z4LQPvCYdpedQfNlIZbQ7J | Issue #404/#405 NativeSurfaceSlot host 境界修復設計（clip 整合 + teardown reconcile） | draft | [issue-404-405-native-surface-host-boundary.md](./issue-404-405-native-surface-host-boundary.md) |
 | DESIGN-034Tnjz1ofC4OXppkHjsgB | Issue #409 scoped re-root + bounded enumeration 設計 | approved | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
-| DESIGN-034UmHwuYp52pp4RtddpwM | Issue #410 — view command ledger bounded retention & correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | DESIGN-034UwcZWs6jYHWBRpUdA8D | Issue #410 P2 — view ledger correlation hardening | approved | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |
+| DESIGN-034UmHwuYp52pp4RtddpwM | Issue #410 — view command ledger bounded retention & correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | DESIGN-NS1HOEsCLKLDYdKMhuZOSf | Issue #411 — cargo_metadata 依存系列選定設計（MSRV 1.89 収束） | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | DESIGN-pL8wRtYbN3xKcVhJ5mQs2E | Issue #414 — projection→controlled display 正規経路の設計 | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
 | DESIGN-034Uoh91RxVTOnim395q6R | Issue #418 — theme-codegen 設計（manifest 駆動の ResolvedTheme 静的型生成） | approved | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
