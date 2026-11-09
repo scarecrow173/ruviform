@@ -113,6 +113,7 @@ Directory: `docs/test-specs`
 | TSPEC-034UmKFzwIT1TdxeUWwDrp | Issue #410 — view command ledger retention & correlation guarantees | approved | [issue-410-view-command-ledger-retention-correlation-guarantees.md](./issue-410-view-command-ledger-retention-correlation-guarantees.md) |
 | TSPEC-CeWNpGq9NFmtzCCp3dkysw | Issue #411 — cargo_metadata MSRV 修復の検証契約 | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TSPEC-bN4yZaDfS6xOvJpM8qTu5H | Issue #414 — projection→controlled display の検証契約 | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
+| TSPEC-034UohaTnl4VwJLJCSfXgJ | Issue #418 — theme-codegen の検証契約 | draft | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
 | TSPEC-Pw8DcTn5KgBy2VaQr7ZmFu | Issue #421 — Meter/TimeAxis GPUI 描画と Fake/GPUI parity の検証契約 | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | TSPEC-Vm4QrJc7LsBk2NwYg9DeHa | Issue #429 — Consumer 観測 seam の検証契約 | proposed | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |
 | TSPEC-Bw6Qk3RnZtLp9VcSj4MdGa | Issue #434 — Spectrogram kind の検証契約 | proposed | [issue-434-spectrogram-kind.md](./issue-434-spectrogram-kind.md) |
