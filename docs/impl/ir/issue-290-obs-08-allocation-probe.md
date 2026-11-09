@@ -179,6 +179,22 @@ merge 後（origin/main 取込・OBS-09 diagnostics 併存）に
 - RT Timing・CPU sampling・Tracy・AudioLens/Synvelis 回帰:
   Issue #290 の残件（PR 本文に slice 境界を明記）。
 
+## Audit（2026-11-09、chore/obs-08-09-10-audit、base `0d07471d`）
+
+Issue #290 受入条件の行ごとの照合結果。実装・試験は main（PR #506
+`7816a22`）と本ブランチの `rt_timing` slice による。
+
+| 受入行 | 判定 | 証跡 |
+| --- | --- | --- |
+| CountingAllocator 4 GlobalAlloc API・失敗/zero/realloc/align/unsafe invariant 試験 | 充足（既存） | `src/profiling/allocator.rs` 16 tests、`stats.rs` 4 tests（#506） |
+| TLS Scope nested/concurrent/thread teardown/process-wide gap 検証 | 充足（既存） | `src/profiling/scope.rs` 14 tests（#506） |
+| Allocator 内部に alloc/panic/tracing/重い lock/再帰なし（静的・動的） | 充足（既存） | allocator/scope tests + 設計文書の不変条件節 |
+| 既存 `ruviform-rt::alloc_counter`/Example の移行/共存判断文書化・RT lane 保持 | 充足（既存） | 本 IR Decisions + `mise run test-rt` PASS |
+| RT Timing の Clock/overrun/Callback budget 意味論と Histogram 統合試験 | **本 PR で実装** | `src/rt_timing/`（21 tests: `assert_no_alloc`・drop 帰属・clock anomaly 分離・budget 意味論・generation・Collector→`MetricValue::Histogram`）。docs chain: `docs/{specs,designs,test-specs,plans,tasks}/issue-290-observability-rt-timing*`、IR `issue-290-obs-08-rt-timing.md` |
+| CPU sampling 手順と Tracy 等任意 nonRT Layer の制約を文書化 | 充足（既存） | `docs/designs/issue-290-observability-allocation-probe.md`「CPU sampling / 任意 nonRT Layer の制約」節 |
+| Enabled/Disabled で AudioLens 分析精度・Synvelis 再生性能の回帰評価 | NotRun | cross-repo（#281 gate）・本タスク対象外 |
+| MSRV/feature matrix/OS ごとの証拠を #281 へ提示 | NotRun | cross-repo gate・本タスク対象外 |
+
 ## Risks
 
 - `mem::forget(window)` 後の scope は再 enter 不可（panic）で
@@ -192,9 +208,10 @@ merge 後（origin/main 取込・OBS-09 diagnostics 併存）に
 
 ## Follow-ups
 
-- Issue #290 残件: RT Timing（Clock/overrun/budget + Histogram）、
-  CPU sampling 手順の実機検証、Tracy 等 nonRT layer、
-  AudioLens/Synvelis 回帰・#281 証拠。
+- Issue #290 残件: ~~RT Timing（Clock/overrun/budget + Histogram）~~
+  → `issue-290-obs-08-rt-timing.md` で実装済み（2026-11-09 audit
+  ブランチ）。CPU sampling 手順の実機検証、Tracy 等 nonRT layer、
+  AudioLens/Synvelis 回帰・#281 証拠は引き続き残件。
 - `ruviform-rt::alloc_counter` / `play_sine` の移行判断は
   第三 consumer または broader-than-test 需要が出た時点で再検討
   （本 slice は共存を選択・文書化済み）。

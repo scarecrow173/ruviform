@@ -63,6 +63,7 @@ Directory: `docs/test-specs`
 | TSPEC-034UtKOMzAChsfMRSOpIdg | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | TSPEC-034T2NeVNZOhwkPaIzj0Q7 | Issue #289 OBS-07 Collector/Metrics/Snapshot 試験仕様 | approved | [issue-289-observability-collector-metrics-tests.md](./issue-289-observability-collector-metrics-tests.md) |
 | TSPEC-034UoYH3LGuoCYBYsd5dXf | Issue #290 allocation-probe — CountingAllocator/AllocationScope 契約試験 | approved | [issue-290-observability-allocation-probe-tests.md](./issue-290-observability-allocation-probe-tests.md) |
+| TSPEC-1nETjBT2y9V4C04J9pwXer | Issue #290 OBS-08 RT Timing 試験仕様 | approved | [issue-290-observability-rt-timing-tests.md](./issue-290-observability-rt-timing-tests.md) |
 | TSPEC-034UnxESRAtEpUTP5RInqW | Issue #291 OBS-09 Diagnostics/Evidence/Finding/Health/Report 試験仕様 | approved | [issue-291-observability-diagnostics-tests.md](./issue-291-observability-diagnostics-tests.md) |
 | TSPEC-a7qCcQ6m0LyKTiq4IswgJo | Issue #292 OBS-10 Debug Inspection/Invariant/Session/Report 試験仕様 | approved | [issue-292-observability-debug-inspection-tests.md](./issue-292-observability-debug-inspection-tests.md) |
 | TSPEC-zq1tvuEsFrUjTnAjn3csSR | Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 試験仕様 | approved | [issue-293-observability-integration-runner-tests.md](./issue-293-observability-integration-runner-tests.md) |
