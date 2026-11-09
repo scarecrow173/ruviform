@@ -101,6 +101,7 @@ Directory: `docs/specs`
 | SPEC-034UmGsNtxrfkDz2KxieUt | Issue #410 — view command ledger の bounded retention と correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | SPEC-Y6JWBZ3CHy6qvkcyHzSK5H | Issue #411 — ruviform-ui-test の cargo_metadata 推移依存 MSRV 1.89 不整合を修復する | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | SPEC-kR4mNxQwY8vLpTzH2jFd6A | Issue #414 — authoritative projection を controlled display へ到達させる | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
+| SPEC-034Uoh0rqjKI3fjlaRV6Fj | Issue #418 — DTCG token から ResolvedTheme 相当の静的 Rust 型を生成する codegen | draft | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
 | SPEC-Yq7KpWx3RtNm8LbVd2HaJe | Issue #421 — Meter/TimeAxis GPUI 描画と Knob/Toggle/Meter/TimeAxis の Fake/GPUI parity | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | SPEC-Qm7RvT2kXc9LpW4dHs8NfA | Issue #423 WebView 側写像・GPUI Dock 実窓検証・focus capability 精緻化（#386 残 DoD） | proposed | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
 | SPEC-bO4Bjvhj9IWEhVO0Vo3ghA | Issue #426 GPUI lab binding・Story 2 scale × 2 theme fixture・Pixel Golden 境界・Consumer GPUI 型不使用検査 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |

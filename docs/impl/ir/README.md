@@ -175,3 +175,4 @@ Directory: `docs/impl/ir`
 | IMPL-034UnDVtaBTUOTvc3aTj8m | Issue #291 OBS-09 Diagnostics 実装記録 | completed | [issue-291-obs-09-diagnostics.md](./issue-291-obs-09-diagnostics.md) |
 | IMPL-034UnS9SUfwZF2v4zSQck6 | Issue #389 Plugin Editor Session hardening 実装記録（timeout/degrade/GraphicsLost/DComp 記録） | completed | [issue-389-session-hardening-implementation.md](./issue-389-session-hardening-implementation.md) |
 | IMPL-034Unx21W1IKfK78iReH5b | Issue #410 view command ledger bounded retention and correlation hardening | completed | [issue-410-view-command-ledger-bounded-retention-and-correlation-hardening.md](./issue-410-view-command-ledger-bounded-retention-and-correlation-hardening.md) |
+| IMPL-034UoQCq3m1rqajAlcen87 | Issue #418 — theme-codegen 実装記録 | completed | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
