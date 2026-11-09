@@ -61,6 +61,7 @@ Directory: `docs/designs`
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-fhvRxnPJKvnhRAlg7TbeKm | Issue #280 OBS-05 RT Record Bridge・ClockContext・欠落envelope・CorrelationBook設計 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | DESIGN-034T2dhkl03BuqPOGmNlmc | Issue #289 OBS-07 Collector/Metrics/Snapshot: 単一Poll Owner・Baseline/Discontinuity・有界履歴・Health | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
+| DESIGN-034UoQ3mxByzCnjgdAGpe1 | Issue #290 OBS-08 Profiling — allocation-probe 設計（CountingAllocator/AllocationScope） | draft | [issue-290-observability-allocation-probe.md](./issue-290-observability-allocation-probe.md) |
 | DESIGN-034S9rV6yB3dG7jL0nQ4sU | Issue #294 Cross-Consumer候補tuple Gate 設計 — 証拠契約・解決SHA捕捉・UI lane 段階接続・task 接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | DESIGN-034UlaEev2MQ6gsnrNqias | Issue #294 daily candidate-tuple trigger 設計 — tuple-aware decide・証拠 artifact 回復・daily-ci job | approved | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | DESIGN-RVQaQUltza40Kb1HlAt48X | Issue #294 GUI-CONTRACT lane 接続設計 — 候補 tree 取得・task probe・step/lane 分離 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
