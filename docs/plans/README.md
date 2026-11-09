@@ -114,6 +114,7 @@ Directory: `docs/plans`
 | PLAN-UmRPBDr4lZ2y8Aj9H6tdYe | Issue #377 実装計画 — QueryBinding adopt-on-join | approved | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | PLAN-034UhlBN58rtCJqfZMTYgt | Issue #378 oracle late-create binding epoch 実装計画 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
 | PLAN-034UmJJcFMIKvjd1orEeeI | Issue #410 — view command ledger bounded retention & correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
+| PLAN-034Uwdhmr1M7BRW1PnLrbn | Issue #410 P2 — view ledger correlation hardening | approved | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |
 | PLAN-034Uoj9ui4gTFQIKFt9GqA | Issue #418 — theme-codegen 実装計画 | approved | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
 | PLAN-Hs2MvCe8ZyWp5QnXb7TkRa | Issue #421 — Meter/TimeAxis GPUI 描画と parity の実装計画 | in-progress | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | PLAN-84yUP5PkLYsA3yfDgOShzQ | Issue #426 GPUI lab binding 実装計画 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
