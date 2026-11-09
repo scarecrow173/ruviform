@@ -184,6 +184,7 @@ Directory: `docs/tasks`
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
 | TASK-034UjQLrFyv9HY5QSH9HmW | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | done | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | TASK-034UyRQzDJa5cPKTt3NLFF | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | done | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
+| TASK-5IbSvHOaqP5LVXNKwJaonI | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | done | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |
 | TASK-034UtPLgt4p9kVhsCVVQ5f | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | done | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | TASK-034UlgdtbhGVBT1saWLNNP | Issue #294 daily tuple trigger 実装 — decide.mjs tuple モード・daily-ci job・契約 test | done | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TASK-034Sa3F7jL2nQ5uY8cE1hK | T1 ci/consumer-verify evidence.mjs + fixture tests + test-ci-consumer-verify task（Issue #294） | done | [issue-294-t1-consumer-verify-evidence-script.md](./issue-294-t1-consumer-verify-evidence-script.md) |

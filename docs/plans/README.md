@@ -71,6 +71,7 @@ Directory: `docs/plans`
 | PLAN-034UjQKJduyKqWBrTakfn1 | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | PLAN-034RoY5EwSBQJwEF1k5arE | Issue #276 generic logging adapter implementation plan | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | PLAN-034UyQfNa0aSYqwNDMIZn9 | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
+| PLAN-YgAwqghg3ANT8uWJE1Y1t2 | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |
 | PLAN-034UtOFqGK9dkffJMoPRvK | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | PLAN-034S9vX2cF6hK9mP3rT7wZ | Issue #294 Cross-Consumer候補tuple Gate 実装計画 — evidence script・workflow 拡張・契約 test | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | PLAN-ARAErEdgpSOlWBQBofZQ2t | Issue #294 GUI-CONTRACT lane 接続 実装計画 — 候補 checkout/probe step・record 置換・contract test 更新 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
