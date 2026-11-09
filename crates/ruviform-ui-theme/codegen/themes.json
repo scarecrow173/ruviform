@@ -1,0 +1,25 @@
+{
+  "themes": [
+    {
+      "name": "audiolens-dark",
+      "mode": "dark",
+      "documents": [
+        "../../ruviform-ui-test/fixtures/themes/audiolens-dark.dtcg.json"
+      ]
+    },
+    {
+      "name": "synvelis-dark",
+      "mode": "dark",
+      "documents": [
+        "../../ruviform-ui-test/fixtures/themes/synvelis-dark.dtcg.json"
+      ]
+    },
+    {
+      "name": "rvf-primitive",
+      "mode": "dark",
+      "documents": [
+        "../tests/fixtures/primitive.json"
+      ]
+    }
+  ]
+}

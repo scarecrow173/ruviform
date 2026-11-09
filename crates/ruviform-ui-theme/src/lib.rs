@@ -44,6 +44,11 @@ mod registry;
 mod resolve;
 mod snapshot;
 
+// Generated static theme types (Issue #418). Do not edit by hand —
+// regenerate with `mise run codegen-theme`. (`//` not `///`: the file has
+// its own `//!` banner and clippy::mixed_attributes_style forbids mixing.)
+pub mod generated;
+
 pub use doc::{DocumentLayer, TokenDocument};
 pub use errors::{ResolveError, TokenError};
 pub use registry::ThemeRegistry;

@@ -14,5 +14,11 @@ publish.workspace = true
 #   MIT OR Apache-2.0。公開 API には serde 型を露出しない。
 serde_json = "1"
 
+# Issue #418 theme codegen CLI（manifest 駆動の DTCG→静的 Rust 型生成。
+# ui-test の gui-boundary-guard と同じく canonical 名 `theme-codegen` へ rename）。
+[[bin]]
+name = "theme-codegen"
+path = "src/bin/theme_codegen.rs"
+
 [lints]
 workspace = true

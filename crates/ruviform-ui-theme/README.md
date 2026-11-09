@@ -43,6 +43,22 @@ assert_eq!(theme.schema_version(), "rvf-dtcg-profile.v1");
 - DPI scale は `ResolvedTheme::with_scale` で `ScaleContext` のみ差し替える。token 値は変化せず、device pixel 換算は mapper 側。
 - 出力は入力文書の順序に依存しない（`tests/golden.rs::output_is_independent_of_input_order_and_repetition`）。fingerprint は値の正規化 JSON に基づき、`Debug` 表現に依存しない。
 
+## 静的 theme codegen（Issue #418）
+
+`codegen/themes.json` が宣言する theme について、`theme-codegen` bin が生成時に `ThemeResolver::resolve` を 1 回実行し、結果を `src/generated.rs` の型付き Rust リテラルとして emit する。resolve 規則の第二実装は持たず、意味解釈の正本は引き続き本 crate の runtime pipeline のみ。
+
+```sh
+mise run codegen-theme         # src/generated.rs を再生成
+mise run codegen-theme-check   # commit 済み生成物の鮮度を byte 比較（非破壊）
+```
+
+生成物は `generated::<module>::Theme` を公開する。`Theme::new()` が typed field（token path を snake_case 化した accessor）と内部 `ResolvedTheme` を同時に構築し、`resolved_theme()` / `into_resolved_theme()` で runtime snapshot へアクセスできる。`#[non_exhaustive]` enum の新規 variant 追加時は codegen が明示エラーで停止するため、生成物と runtime の乖離は fail-closed。
+
+### runtime resolve との使い分け
+
+- **静的 codegen（本経路）**: 出荷が確定した token 集合に対し、compile-time の発見可能性・型安全な accessor・zero-map-lookup アクセスが欲しい場合。生成物は commit され、入力変更時は `mise run codegen-theme` で再生成する（`tests/codegen.rs` が決定性・鮮度・runtime 一致を検証）。
+- **runtime resolve（`ThemeResolver` / `ThemeRegistry`）**: 実行時に文書・mode・consumer override が決まる場合、開発中の token 編集、未知 theme の解決。動的入力は引き続き runtime pipeline を使う。codegen は runtime resolve の置き換えでも非推奨化でもなく、固定入力に対する同一結果の静的具現化である。
+
 ## 検証
 
-`mise run check` / `mise run test`（ワークスペース正規入口）。Driver 境界は `mise run check-ui-driver-boundary` / `mise run test-ui-driver-contract`。
+`mise run check` / `mise run test`（ワークスペース正規入口）。codegen は `mise run codegen-theme` / `mise run codegen-theme-check`。Driver 境界は `mise run check-ui-driver-boundary` / `mise run test-ui-driver-contract`。
