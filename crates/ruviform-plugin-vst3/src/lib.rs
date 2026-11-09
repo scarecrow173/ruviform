@@ -57,6 +57,7 @@ mod factory;
 mod gain;
 #[cfg(feature = "host")]
 pub mod host;
+mod midi;
 mod strings;
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]

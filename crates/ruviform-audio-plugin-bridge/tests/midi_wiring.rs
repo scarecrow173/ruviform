@@ -17,8 +17,12 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use ruviform_audio::typed::{Compiler, CompilerConfig, DEFAULT_ALIGNMENT, GraphRuntime};
-use ruviform_audio_core::device::DeviceResult;
-use ruviform_audio_core::midi_input::{MidiInput, MidiReadStats, TimedMidiInput};
+use ruviform_audio_core::device::{DeviceError, DeviceResult};
+use ruviform_audio_core::midi_input::mock::MockBackend;
+use ruviform_audio_core::midi_input::{
+    MidiInput, MidiInputEnumerator, MidiInputInfo, MidiPortCapabilities, MidiPortOrigin,
+    MidiReadStats, TimedMidiInput,
+};
 use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
 use ruviform_audio_plugin_bridge::{
     AttachConfig, AttachError, InputConfig, InputTx, NodeReport, PluginNodeFactory, attach,
@@ -559,6 +563,68 @@ fn live_input_waits_for_clock_anchor() {
     // Stamp 0 mapped to frame 0 — now late → clamped to offset 0 of
     // the next block (defined late-delivery degradation, never dropped).
     assert_eq!(calls[1], vec![(0, Ev::On(60))]);
+}
+
+/// Issue #253 — the deterministic scripted backend
+/// (`midi_input::mock::MockBackend`) drives the identical
+/// `InputTx::pump` → `InputStage` → plugin path a real OS adapter
+/// would: enumeration, `open`, timestamped injection, bounded drain,
+/// backend drop accounting and `close` all exercise the port
+/// contract rather than a test-only shortcut.
+#[test]
+fn mock_backend_drives_input_stage_to_plugin() {
+    let mut rig = build_rig(128, true);
+    rig.control.set_clock_anchor(Some(anchor())).unwrap();
+
+    let mut backend = MockBackend::new();
+    let port = backend.add_port(MidiInputInfo::new(
+        "mock-0".to_owned(),
+        "Mock Port 0".to_owned(),
+        MidiPortOrigin::External,
+        MidiPortCapabilities::stamped(false, STAMP_DOMAIN),
+    ));
+    port.push_batch([
+        timed_us(0, note_on(60)),
+        timed_us(2_000, note_off(60)),
+        timed_us(4_000, note_on(64)),
+    ]);
+    port.inject_dropped(2);
+
+    // Enumerate → `info` → `open` through the port traits — the same
+    // calls an engine-side adapter selection makes.
+    let ports = backend.input_ports().unwrap();
+    assert_eq!(ports.len(), 1);
+    assert_eq!(ports[0].info().id, "mock-0");
+    assert_eq!(ports[0].info().name, "Mock Port 0");
+    assert!(ports[0].info().capabilities.provides_timestamps);
+    let mut input = ports[0].open().unwrap();
+    assert!(port.is_open());
+
+    // Scripted backend drops surface through `pump`'s stats and the
+    // `InputTx` cumulative counter.
+    let stats = rig.input_tx.as_mut().unwrap().pump(&mut *input).unwrap();
+    assert_eq!(stats.received, 3);
+    assert_eq!(stats.pushed, 3);
+    assert_eq!(stats.backend_dropped, 2);
+    assert_eq!(rig.input_tx.as_ref().unwrap().dropped_backend(), 2);
+
+    feed(&mut rig.rt, rig.src_out, 256);
+    rig.rt.process(256, &RtContext::mint()).expect("process");
+
+    let calls = events_of(&rig.rec);
+    assert_eq!(calls.len(), 2, "256 frames split as 128+128");
+    assert_eq!(calls[0], vec![(0, Ev::On(60)), (96, Ev::Off(60))]);
+    assert_eq!(calls[1], vec![(64, Ev::On(64))]);
+
+    // `close` invalidates the subscription — a further pump reports
+    // the backend error instead of delivering stale events.
+    input.close();
+    assert!(port.is_closed());
+    port.push(timed_us(0, note_on(62)));
+    assert!(matches!(
+        rig.input_tx.as_mut().unwrap().pump(&mut *input),
+        Err(DeviceError::StreamInvalidated)
+    ));
 }
 
 // ---------------------------------------------------------------------------

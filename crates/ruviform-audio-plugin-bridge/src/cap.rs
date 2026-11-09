@@ -167,11 +167,11 @@ pub const fn capability_for(backend: Backend) -> AdapterCapability {
             param_event_precision: Declared,
             per_note_param: Unsupported,
             param_reporting: Unavailable,
-            midi_channel_voice: Unsupported,
+            midi_channel_voice: Declared,
             midi_ump: Unsupported,
             note_expression: Unsupported,
             midi_sysex: Unsupported,
-            notes: "single stereo main bus; no in-block transport event vocabulary adopted — CLAP behavior is not generalized; param queues capped at 1024 points with a scan bound; outputParameterChanges/handler edits are acked and dropped; Vst::Event noteOn/noteOff/legacy-MIDI-CC are not yet translated — EventKind::Midi never reaches this adapter (defined skip)",
+            notes: "single stereo main bus; no in-block transport event vocabulary adopted — CLAP behavior is not generalized; param queues capped at 1024 points with a scan bound; outputParameterChanges/handler edits are acked and dropped; EventKind::Midi translates both directions — note on/off/poly-pressure → Vst note events, CC/channel-pressure/pitch-bend/program-change → kLegacyMIDICCOutEvent (SDK output-reserved, used on input per de-facto host practice) — with counted defined skips (group!=0, tuning!=0, out-of-range fields, unsupported types); IMidiMapping-routed CC→param delivery, plugin→host output events and real-plugin verification remain gates",
         },
     }
 }
@@ -224,6 +224,11 @@ mod tests {
         assert_eq!(
             capability_for(Backend::Clap).param_event_precision,
             CapabilityLevel::Declared
+        );
+        assert_eq!(
+            capability_for(Backend::Vst3).midi_channel_voice,
+            CapabilityLevel::Declared,
+            "Issue #253: VST3 MIDI translation is headless-proven, not real-plugin verified"
         );
     }
 }

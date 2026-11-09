@@ -74,6 +74,7 @@ use vst3::{Class, ComRef, uid};
 use crate::block::{self, ChannelScratch, EventScratch, MAX_BLOCK_EVENTS, PreparedBlock};
 use crate::controller::GainController;
 use crate::gain::{GAIN_PARAM, GainProcessor};
+use crate::midi::{MidiBridgeStats, collect_incoming};
 use crate::sdk_enum_i32;
 use crate::strings::copy_wstring;
 
@@ -114,6 +115,9 @@ struct ComponentState {
     sample_rate: u32,
     channel_scratch: ChannelScratch,
     event_scratch: EventScratch,
+    /// Cumulative `IEventList` → canonical translation counters
+    /// (Issue #253) — the observable side of the defined-skip policy.
+    midi_stats: MidiBridgeStats,
 }
 
 impl ComponentState {
@@ -126,6 +130,7 @@ impl ComponentState {
             sample_rate: 0,
             channel_scratch: ChannelScratch::empty(),
             event_scratch: EventScratch::empty(),
+            midi_stats: MidiBridgeStats::new(),
         }
     }
 }
@@ -160,7 +165,9 @@ impl GainComponent {
 
     /// Reads `IParameterChanges` into `event_scratch`: one
     /// [`ParamEvent`] per gain queue point, out-of-block offsets and
-    /// non-finite values dropped, list sorted by offset. The scan is
+    /// non-finite values dropped. The caller sorts the scratch once
+    /// after all collectors ran — param and MIDI events interleave
+    /// by frame offset in the final [`EventList`]. The scan is
     /// bounded: at most `MAX_BLOCK_EVENTS` queues and `MAX_BLOCK_EVENTS`
     /// points per queue are visited, the scan stops as soon as the
     /// bounded scratch fills, and — crucially — the *total* inspection
@@ -264,7 +271,6 @@ impl GainComponent {
                 }
             }
         }
-        events.sort();
     }
 
     /// Maps the optional VST3 `ProcessContext` to the neutral
@@ -710,17 +716,29 @@ impl IAudioProcessorTrait for GainComponent {
         // `EventList`).
         // SAFETY: `data.inputParameterChanges` is null or a valid
         // `IParameterChanges` for this call.
+        // SAFETY: `data.inputEvents` is null or a valid `IEventList`
+        // for this call — the VST3 `process` contract.
         unsafe {
             Self::collect_param_events(data.inputParameterChanges, frames, state);
+            collect_incoming(
+                data.inputEvents,
+                frames,
+                &mut state.event_scratch,
+                &mut state.midi_stats,
+            );
         }
+        // Param and MIDI events interleave by frame offset — sort
+        // once after both collectors ran (the merge sort is
+        // allocation-free over the pre-reserved buffer).
+        state.event_scratch.sort();
         // SAFETY: `data.processContext` is null or a valid
         // `ProcessContext` for this call.
         let transport = unsafe { Self::transport(data.processContext, state.sample_rate) };
         let frame_count = u32::try_from(frames).unwrap_or(u32::MAX);
-        // `collect_param_events` sorts and drops out-of-block offsets,
-        // so `EventList::new` cannot reject; a failure means that
-        // invariant broke — a defined reject, never a silently-empty
-        // event set.
+        // Both collectors drop out-of-block offsets and the scratch
+        // is sorted, so `EventList::new` cannot reject; a failure
+        // means that invariant broke — a defined reject, never a
+        // silently-empty event set.
         let Ok(events) = EventList::new(state.event_scratch.as_slice(), frame_count) else {
             debug_assert!(false, "collected events must satisfy EventList");
             return kResultFalse;
