@@ -51,7 +51,8 @@ relations:
     - "docs/designs/issue-451-keyboard-tab-nav.md"
     - "docs/designs/issue-479-keyboard-value-controls.md"
     - "docs/tasks/issue-451-keyboard-tab-nav.md"
-  refines: []
+  refines:
+    - "docs/specs/issue-451-keyboard-tab-nav.md"
   refined-by: []
   derives-from: []
   derived-by:
