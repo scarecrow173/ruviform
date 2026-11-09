@@ -182,7 +182,7 @@ Backend の最終サポート宣言は実機 matrix（§8）の結果を待つ�
 | --- | --- | --- | --- |
 | `cosmic-text` / `rustybuzz` / `swash` / `etagere` | テキスト shaping・レイアウト・グリフ atlas | なし（pure Rust）+ fontconfig 経由のフォント列挙 | — |
 | `fontdb` / `fontconfig-parser` / `yeslogic-fontconfig-sys` | フォント DB・fontconfig 解析 | `libfontconfig.so.1` + フォントファイル（`fonts-*`） | fontconfig と最低 1 フォントが必須。フォント非同梱ならシステムフォント依存 |
-| `font-kit`（GPUI default feature） | プラットフォームフォント API | Linux では fontconfig 経路 | feature 構成依存 |
+| `zed-font-kit`（GPUI `font-kit` feature の実クレート） | プラットフォームフォント API | Linux では fontconfig 経路 | feature 構成依存 |
 | `resvg` / `usvg` | SVG 描画 | pure Rust 主体（フォントは fontconfig 経由） | — |
 
 ### 2.4 Portal / D-Bus / IME 補助
@@ -212,7 +212,7 @@ Backend の最終サポート宣言は実機 matrix（§8）の結果を待つ�
 | 複数ウィンドウ | N | N | N | 同上。Linux での multi-window 実測なし |
 | 入力（keyboard/mouse） | N | N | N | `x11rb`/`wayland-client` 経路は宣言済み。実入力イベント未観測 |
 | フォーカス | N | N | N | 同上 |
-| IME | N | U? | N | X11 は `zed-xim`（XIM）経路が宣言済みだが実動作 `NotRun`。Wayland の IME は text-input protocol 対応が GPUI 側で未確認のため `U?`（要検証・現時点では `Unsupported` 寄りだが断定しない） |
+| IME | N | N | N | X11 は `zed-xim`（XIM）経路が宣言済みだが実動作 `NotRun`。Wayland の IME は text-input protocol 対応が GPUI 側で未確認のため `NotRun`（機構不在が確認されれば `Unsupported` へ再分類） |
 | フォント描画 | N | N | N | `cosmic-text`/`fontdb`/`fontconfig` 経路は宣言済み。フォント列挙・レンダリング品質は未実測 |
 | DPI / スケーリング | N | N | N | GPUI の scale factor 処理は宣言済み。HiDPI 実表示未観測 |
 | NativeSurfaceSlot（L0: 自プロセス内 surface） | N | N | N | `native_surface_slot` capability flag は存在。Linux での実 surface 確保は未実施 |
@@ -224,7 +224,7 @@ Backend の最終サポート宣言は実機 matrix（§8）の結果を待つ�
 
 補足:
 
-- `U?` は「現時点で `Unsupported` と断定はしないが `Pass` でもない」保留表記。最終判定は実機 matrix で行う。
+- Wayland IME のように機構の有無が未確認の項目は `NotRun` とし、機構不在が確認された時点で `Unsupported` へ再分類する。
 - Native Plugin Dock の詳細行列（OS×Level×plugin 規格）は `docs/designs/issue-388-native-surface-slot.md` の D6 matrix が正本であり、本表はその Linux 行を配布設計の観点で再掲したもの。矛盾時は #388 側を正とする。
 - Linux での `Pass` が 0 件であることは設計上の欠陥ではなく、実機検証が後続 Issue に委ねられている現状の正直な記録である。
 
