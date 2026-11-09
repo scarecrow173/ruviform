@@ -39,7 +39,9 @@
  *   already-detached link are no-ops. A binding registered on an
  *   already-attached link adopts the live view epoch and is
  *   subscribed immediately — the same state a pre-registered binding
- *   holds after `attach` (`registerBinding` contract).
+ *   holds after `attach` (`registerBinding` contract). A query
+ *   registered on an already-attached link adopts the live view epoch
+ *   as well (`registerQuery` contract — join is an epoch boundary).
  * - `QueryBinding` mints `q-<viewId>-<n>` under the current view
  *   generation; replies whose generation, sourceRevision, or live
  *   revision probe disagree are `stale`; over `maxBytes` is
@@ -827,6 +829,9 @@ export class ContractModel {
     }
   }
 
+  /** Register the view's query model (idempotent — one per view). On
+   *  an attached link it adopts the live view epoch, matching the SDK
+   *  `registerQuery` contract. */
   addQuery(): void {
     if (this.queryModel !== undefined) return;
     this.queryModel = new QueryModel(
@@ -837,6 +842,12 @@ export class ContractModel {
       this.trace,
       this.queryOutcomes,
     );
+    // `registerQuery` contract: a query joining an attached link adopts
+    // the live view epoch. In-flight is empty at creation, so the
+    // adopt's `cancelAll` is a no-op — same shape as `addBinding`.
+    if (this.linkAttached) {
+      this.queryModel.attach(this.linkGeneration);
+    }
   }
 
   binding(controlId: string): BindingModel | undefined {

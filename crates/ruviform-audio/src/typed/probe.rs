@@ -183,6 +183,11 @@ pub enum StopReason {
     /// `CaptureConfig::max_frames` exhausted — mode returns to
     /// `Monitor`.
     BudgetExhausted,
+    /// A generation rebind committed while the probe was capturing
+    /// and its staged mode is no longer `Capture` — the unspent
+    /// budget is discarded, never carried into the new generation
+    /// (Issue #308).
+    GenerationBoundary,
 }
 
 /// Why a point produced no data record for a block.
@@ -234,6 +239,11 @@ pub enum StatusKind {
     LostRecords,
     /// Probe removed on the RT side.
     Removed,
+    /// Binding dropped by a committed generation rebind — the
+    /// probe's point no longer resolves against the new plan
+    /// (Issue #308). The broker keeps the probe installed; a later
+    /// publish may re-bind it.
+    RebindDropped,
 }
 
 /// Status event — POD, telemetry-channel payload.
@@ -368,23 +378,44 @@ pub struct ProbeBinding {
 }
 
 /// Command channel payload — generation-scoped variants
-/// (`ClearAll`/`Bind`) are applied only when their generation
-/// equals the *published* plan generation (stale ones are dropped
-/// and counted); the rest apply every callback.
+/// (`RebindBegin`/`RebindStage`/`RebindCommit`, and `Bind` from
+/// `install`) are applied only when their generation equals the
+/// *published* plan generation (stale ones are dropped and
+/// counted); the rest apply every callback.
+///
+/// Rebind is staged, not incremental: `RebindBegin` opens a staging
+/// area, `RebindStage` fills it, and only `RebindCommit` swaps it
+/// into the live bindings — so a rebind is all-or-nothing on the RT
+/// side (Issue #308).
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum ProbeCommand {
-    /// Drop all bindings for `generation` (rebind prefix).
-    ClearAll {
-        /// Target generation.
-        generation: u64,
-    },
     /// Install/replace one binding for `generation`.
     Bind {
         /// Target generation.
         generation: u64,
         /// Resolved binding.
         binding: ProbeBinding,
+    },
+    /// Open a rebind staging area for `generation` — clears any
+    /// staged content and marks the attempt's epoch.
+    RebindBegin {
+        /// Target generation.
+        generation: u64,
+    },
+    /// Stage one binding into the open rebind attempt — upserts by
+    /// probe id; applied only while `staging` matches `generation`.
+    RebindStage {
+        /// Target generation.
+        generation: u64,
+        /// Resolved binding.
+        binding: ProbeBinding,
+    },
+    /// Commit the staged set for `generation` — atomically swaps it
+    /// into the live bindings and emits per-probe statuses.
+    RebindCommit {
+        /// Target generation.
+        generation: u64,
     },
     /// Switch mode (capture state preserved except via the capture
     /// commands below).
@@ -445,6 +476,57 @@ impl Default for ProbeConfig {
     }
 }
 
+/// Capture continuation policy across a generation rebind
+/// (Issue #308) — set per probe via
+/// [`ProbeBroker::set_capture_policy`](ProbeBroker::set_capture_policy)
+/// and consumed by
+/// [`ProbeBroker::on_publish`](ProbeBroker::on_publish) when it
+/// stages bindings. An in-flight capture is never silently carried
+/// into the new generation: the unspent budget is either discarded
+/// or restarted as an explicit new segment.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum CapturePolicy {
+    /// Cut the capture at the boundary: the probe is staged as
+    /// `Monitor`, the unspent budget is discarded, and the deck
+    /// emits `CaptureStopped { reason: GenerationBoundary }` when
+    /// the rebind commits. This is the default — matching the
+    /// consumer expectation that a graph change ends the capture
+    /// segment and never auto-restarts it.
+    StopAtBoundary,
+    /// Restart capture under the new generation with the full
+    /// configured budget — an explicit new segment, not a
+    /// continuation: the deck emits `CaptureStarted` at commit and
+    /// `RecordMeta.generation` separates its chunks from the
+    /// previous segment's.
+    Restart,
+}
+
+/// GUI-readable receipt for one [`ProbeBroker::on_publish`] rebind
+/// attempt (Issue #308). It covers the synchronous stages —
+/// requested and enqueued; RT-installed confirmation arrives as
+/// [`StatusKind`] records on the telemetry channel (matched by
+/// `generation`), and observed data as [`MetricRecord`] /
+/// [`CaptureChunk`] records under the same generation.
+pub struct RebindReceipt {
+    /// Plan generation the rebind targets.
+    pub generation: u64,
+    /// Probes resolved against the new plan — each becomes an
+    /// `Installed` status when the rebind commits.
+    pub bound: Vec<ProbeId>,
+    /// Installed probes whose point no longer resolves — their
+    /// bindings are dropped at commit (`RebindDropped` status). The
+    /// broker keeps them installed; a later publish may re-bind.
+    pub unbound: Vec<ProbeId>,
+    /// Bound probes whose in-flight capture is cut at the boundary
+    /// (`CaptureStopped { reason: GenerationBoundary }` at commit).
+    pub capture_stopped: Vec<ProbeId>,
+    /// Bound probes whose capture restarts with a fresh full budget
+    /// under the new generation (`CaptureStarted` at commit — a new
+    /// segment).
+    pub capture_restarted: Vec<ProbeId>,
+}
+
 /// Monotonic probe counters readable on the non-RT side.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ProbeCounts {
@@ -470,6 +552,14 @@ pub struct ProbeDeck {
     chunks_out: Producer<Box<CaptureChunk>>,
     telemetry: Producer<TelemetryRecord>,
     bindings: Vec<ProbeBinding>,
+    /// Rebind staging area — never observed until `RebindCommit`
+    /// swaps it into `bindings` (Issue #308). Same `max_probes`
+    /// capacity as `bindings`; mutated only by capacity-safe `Vec`
+    /// ops.
+    staged: Vec<ProbeBinding>,
+    /// Generation of the open rebind attempt (`None` = no open
+    /// attempt — `RebindStage`/`RebindCommit` are rejected).
+    staging: Option<u64>,
     max_probes: usize,
     chunk_frames: usize,
     lost_records: Counter,
@@ -483,15 +573,24 @@ impl ProbeDeck {
     /// only when `generation` matches the published plan (stale are
     /// dropped + counted — a broker `Rebind` always follows a
     /// publish, so a dropped stale bind is never the last word).
+    /// Rebind commands additionally require the staging epoch opened
+    /// by `RebindBegin`, so a stage/commit without its begin — or
+    /// from an invalidated attempt — is rejected rather than
+    /// half-applied (Issue #308).
     pub(crate) fn drain_commands(&mut self, generation: u64, base: u64, status: &SharedStatus) {
         while let Ok(cmd) = self.commands.try_pop() {
             match cmd {
-                ProbeCommand::ClearAll { generation: g } => {
-                    if g == generation {
-                        self.bindings.clear();
-                    } else {
-                        status.record_stale_commands();
-                    }
+                ProbeCommand::RebindBegin { generation: g } => {
+                    self.rebind_begin(g, generation, status);
+                }
+                ProbeCommand::RebindStage {
+                    generation: g,
+                    binding,
+                } => {
+                    self.rebind_stage(g, binding, generation, status);
+                }
+                ProbeCommand::RebindCommit { generation: g } => {
+                    self.rebind_commit(g, generation, base, status);
                 }
                 ProbeCommand::Bind {
                     generation: g,
@@ -564,6 +663,103 @@ impl ProbeDeck {
                 }
             }
         }
+    }
+
+    /// `RebindBegin`: opens the staging epoch for `g`, discarding
+    /// any leftover staged content from an incomplete attempt.
+    fn rebind_begin(&mut self, g: u64, generation: u64, status: &SharedStatus) {
+        if g == generation {
+            self.staged.clear();
+            self.staging = Some(g);
+        } else {
+            status.record_stale_commands();
+        }
+    }
+
+    /// `RebindStage`: upserts one binding into the open staging area.
+    /// Rejected (counted stale) unless the command's generation both
+    /// matches the published plan and the open staging epoch.
+    fn rebind_stage(
+        &mut self,
+        g: u64,
+        binding: ProbeBinding,
+        generation: u64,
+        status: &SharedStatus,
+    ) {
+        if g != generation || self.staging != Some(g) {
+            status.record_stale_commands();
+            return;
+        }
+        if let Some(existing) = self.staged.iter_mut().find(|b| b.probe == binding.probe) {
+            *existing = binding;
+        } else if self.staged.len() < self.max_probes {
+            self.staged.push(binding);
+        } else {
+            // Staged area full — the attempt can never commit
+            // correctly; invalidate it so the Commit is rejected too.
+            self.staging = None;
+            self.lost_records.increment();
+        }
+    }
+
+    /// `RebindCommit`: swaps the staged set live only when the
+    /// staging epoch still matches — anything else is stale.
+    fn rebind_commit(&mut self, g: u64, generation: u64, base: u64, status: &SharedStatus) {
+        if g == generation && self.staging == Some(g) {
+            self.staging = None;
+            self.commit_rebind(generation, base);
+        } else {
+            status.record_stale_commands();
+        }
+    }
+
+    /// Atomically swaps the staged rebind set into the live
+    /// bindings, then reports the transition per probe (Issue #308).
+    /// Both Vecs keep their `max_probes` capacity — `mem::swap` and
+    /// `clear` never reallocate, so this stays inside the RT
+    /// contract. Runs inside `drain_commands`, before any `run_site`
+    /// of the same callback — observers see either the whole old set
+    /// or the whole new set, never a mix.
+    fn commit_rebind(&mut self, generation: u64, base: u64) {
+        core::mem::swap(&mut self.bindings, &mut self.staged);
+        // `bindings` is now the staged set; `staged` holds the
+        // previous live set for diffing, cleared before return.
+        for i in 0..self.bindings.len() {
+            let b = self.bindings[i];
+            self.push_status(&b, generation, base, StatusKind::Installed);
+        }
+        for i in 0..self.staged.len() {
+            let old = self.staged[i];
+            let Some(new) = self.bindings.iter().find(|b| b.probe == old.probe).copied() else {
+                self.push_status(&old, generation, base, StatusKind::RebindDropped);
+                continue;
+            };
+            match (old.mode, new.mode) {
+                // Restart policy: explicit new capture segment.
+                (_, ProbeMode::Capture) => {
+                    self.push_status(
+                        &new,
+                        generation,
+                        base,
+                        StatusKind::CaptureStarted {
+                            budget_frames: new.capture_remaining,
+                        },
+                    );
+                }
+                (ProbeMode::Capture, _) => {
+                    self.push_status(
+                        &old,
+                        generation,
+                        base,
+                        StatusKind::CaptureStopped {
+                            reason: StopReason::GenerationBoundary,
+                        },
+                    );
+                }
+                _ => {}
+            }
+        }
+        self.staged.clear();
     }
 
     /// Emits one status record; drops + counts on a full channel.
@@ -757,6 +953,9 @@ struct ProbeEntry {
     point: ProbePoint,
     mode: ProbeMode,
     budget_frames: u64,
+    /// Capture continuation policy consumed by `on_publish`
+    /// (Issue #308) — never sent to the RT side directly.
+    capture_policy: CapturePolicy,
 }
 
 /// Resolved physical binding for one point.
@@ -937,6 +1136,7 @@ impl ProbeBroker {
                 point,
                 mode,
                 budget_frames: 0,
+                capture_policy: CapturePolicy::StopAtBoundary,
             },
         );
         Ok(probe)
@@ -1020,53 +1220,128 @@ impl ProbeBroker {
         Ok(())
     }
 
-    /// Rebinds every installed probe against `runtime`'s newly
-    /// published plan — call after every successful `publish`.
-    /// Points that no longer resolve become `Unavailable`: their
-    /// binding is not re-sent, and their entry flips to `Off`.
+    /// Sets what happens to `probe`'s in-flight capture when the next
+    /// generation rebind commits (Issue #308). The policy is consumed
+    /// by [`on_publish`](Self::on_publish) at resolve time — it sends
+    /// no command by itself, so changing it without a following
+    /// publish has no observable effect.
     ///
     /// # Errors
-    /// [`ProbeError::CommandChannelFull`] — the rebind could not be
-    /// queued; probes keep their old (generation-guarded) bindings.
+    /// [`ProbeError::UnknownProbe`].
+    pub fn set_capture_policy(
+        &mut self,
+        probe: ProbeId,
+        policy: CapturePolicy,
+    ) -> Result<(), ProbeError> {
+        let entry = self
+            .probes
+            .get_mut(&probe)
+            .ok_or(ProbeError::UnknownProbe)?;
+        entry.capture_policy = policy;
+        Ok(())
+    }
+
+    /// Rebinds every installed probe against `runtime`'s newly
+    /// published plan — call after every successful `publish`.
+    ///
+    /// The rebind is staged and committed atomically on the RT side
+    /// (Issue #308): `RebindBegin` opens a staging area,
+    /// `RebindStage` fills it, and only `RebindCommit` swaps it into
+    /// the live bindings — observers see either the whole old set or
+    /// the whole new set, never a partial apply. Points that no
+    /// longer resolve are *not* re-bound: the probe stays installed
+    /// in the broker, its binding is dropped at commit with a
+    /// `RebindDropped` status, and a later publish may re-bind it.
+    ///
+    /// An in-flight capture is never silently carried into the new
+    /// generation: [`CapturePolicy::StopAtBoundary`] (default) cuts
+    /// it at the boundary — the probe is staged as `Monitor`, the
+    /// unspent budget is discarded, and the deck emits
+    /// `CaptureStopped { reason: GenerationBoundary }`;
+    /// [`CapturePolicy::Restart`] starts a fresh full-budget capture
+    /// as an explicit new segment (`CaptureStarted` at commit,
+    /// `RecordMeta.generation` separates the chunks).
+    ///
+    /// Returns a [`RebindReceipt`] covering the requested/enqueued
+    /// stages; RT-installed confirmation arrives as [`StatusKind`]
+    /// records on the telemetry channel and observed data as records
+    /// under `receipt.generation`.
+    ///
+    /// # Errors
+    /// [`ProbeError::CommandChannelFull`] — `PendingRetry`: the
+    /// bounded command channel could not hold the whole
+    /// Begin/Stage/Commit sequence, so nothing was committed. The
+    /// staged prefix left in the queue is inert (no `RebindCommit`
+    /// follows it) and the live bindings keep their previous
+    /// generation-guarded state — safe to retry after the RT side
+    /// drains.
     pub fn on_publish(
         &mut self,
         runtime: &GraphRuntime,
         spec: &GraphSpec,
-    ) -> Result<(), ProbeError> {
+    ) -> Result<RebindReceipt, ProbeError> {
         let plan = runtime.published_plan();
         let generation = plan.generation;
-        // Pre-resolve everything before pushing so a mid-sequence
-        // channel-full failure never leaves a half-rebound deck.
-        let mut rebound = Vec::with_capacity(self.probes.len());
-        for (&probe, entry) in &self.probes {
-            if let (_, Some(r)) = resolve_point(spec, plan, entry.point) {
-                rebound.push(ProbeBinding {
-                    probe,
-                    node: entry.point.node,
-                    port: entry.point.port,
-                    kind: r.kind,
-                    slot: r.slot,
-                    bound_generation: generation,
-                    mode: entry.mode,
-                    capture_remaining: entry.budget_frames,
-                    channels: r.channels,
-                    sample_rate: r.sample_rate,
-                    effective_latency: r.effective_latency,
-                });
-            }
+        // Resolve everything before pushing: the staged set only
+        // reaches the RT side inside RebindCommit, so a mid-sequence
+        // channel-full failure leaves the live bindings untouched.
+        let mut staged = Vec::with_capacity(self.probes.len());
+        let mut receipt = RebindReceipt {
+            generation,
+            bound: Vec::with_capacity(self.probes.len()),
+            unbound: Vec::new(),
+            capture_stopped: Vec::new(),
+            capture_restarted: Vec::new(),
+        };
+        for (&probe, entry) in &mut self.probes {
+            let Some(r) = resolve_point(spec, plan, entry.point).1 else {
+                receipt.unbound.push(probe);
+                continue;
+            };
+            let (mode, capture_remaining) = match entry.mode {
+                ProbeMode::Capture => match entry.capture_policy {
+                    CapturePolicy::StopAtBoundary => {
+                        receipt.capture_stopped.push(probe);
+                        entry.mode = ProbeMode::Monitor;
+                        (ProbeMode::Monitor, 0)
+                    }
+                    CapturePolicy::Restart => {
+                        receipt.capture_restarted.push(probe);
+                        (ProbeMode::Capture, entry.budget_frames)
+                    }
+                },
+                mode => (mode, 0),
+            };
+            receipt.bound.push(probe);
+            staged.push(ProbeBinding {
+                probe,
+                node: entry.point.node,
+                port: entry.point.port,
+                kind: r.kind,
+                slot: r.slot,
+                bound_generation: generation,
+                mode,
+                capture_remaining,
+                channels: r.channels,
+                sample_rate: r.sample_rate,
+                effective_latency: r.effective_latency,
+            });
         }
         self.commands
-            .try_push(ProbeCommand::ClearAll { generation })
+            .try_push(ProbeCommand::RebindBegin { generation })
             .map_err(|_| ProbeError::CommandChannelFull)?;
-        for binding in rebound {
+        for binding in staged {
             self.commands
-                .try_push(ProbeCommand::Bind {
+                .try_push(ProbeCommand::RebindStage {
                     generation,
                     binding,
                 })
                 .map_err(|_| ProbeError::CommandChannelFull)?;
         }
-        Ok(())
+        self.commands
+            .try_push(ProbeCommand::RebindCommit { generation })
+            .map_err(|_| ProbeError::CommandChannelFull)?;
+        Ok(receipt)
     }
 
     /// Point of an installed probe (non-RT bookkeeping).
@@ -1193,6 +1468,8 @@ pub fn pair(config: &ProbeConfig) -> ProbeParts {
             chunks_out: chunks_prod,
             telemetry: tele_prod,
             bindings: Vec::with_capacity(config.max_probes),
+            staged: Vec::with_capacity(config.max_probes),
+            staging: None,
             max_probes: config.max_probes,
             chunk_frames: config.chunk_frames,
             lost_records: lost_records_w,

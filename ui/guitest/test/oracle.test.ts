@@ -1,5 +1,6 @@
 /**
  * Issue #378 — `ContractModel` late-created binding epoch.
+ * Issue #490 — `ContractModel` late-created query epoch.
  *
  * `ContractModel.addBinding` must mirror the repaired SDK
  * `ViewLink.registerBinding` contract (Issue #376 / PR #379): a binding
@@ -8,10 +9,20 @@
  * `subscribe` — so its dispatches, subscription context, and final
  * state carry the same generation as pre-registered bindings.
  *
+ * `ContractModel.addQuery` must mirror the repaired SDK
+ * `ViewLink.registerQuery` contract (Issue #377 / PR #489): a query
+ * model created on an already-attached link adopts the live view epoch
+ * via `attach(linkGeneration)`, so issued queries mint under the same
+ * generation a pre-registered query model holds after `attach`.
+ *
  * These tests drive `ContractModel` directly: the replay op vocabulary
- * has no mid-scenario binding creation, so the scenario lane cannot
- * reach this branch. The three cases mirror the late-created binding
- * cases in `ui/binding/test/link.test.ts`.
+ * has no mid-scenario binding/query creation, so the scenario lane
+ * cannot reach these branches. The binding cases mirror the
+ * late-created binding cases in `ui/binding/test/link.test.ts`; the
+ * query cases mirror its late-created query cases, observed through
+ * the oracle's query surface (`queries` / `queryOutcomes` /
+ * `queryDiagnostics`) — queries hold no subscription, so the issued
+ * query's recorded generation is the epoch-adoption evidence.
  */
 
 import { describe, it } from "node:test";
@@ -177,4 +188,144 @@ describe("ContractModel late-created bindings", () => {
       assert.equal(tr.link.windowId, "window-C");
     });
   }
+});
+
+function querySetup(): ContractModel {
+  return new ContractModel("view-1", "analysis", 0, {
+    maxInflight: 4,
+    defaultMaxBytes: 1024,
+  });
+}
+
+const QUERY_INPUT = {
+  sourceId: "ds",
+  sourceRevision: 1,
+  start: 0,
+  end: 10,
+};
+
+describe("ContractModel late-created queries", () => {
+  const lateQueryCases: ReadonlyArray<{
+    readonly name: string;
+    readonly windowId: string;
+    readonly generation: number;
+    readonly attach: (model: ContractModel) => void;
+  }> = [
+    {
+      name: "late-created query adopts the initial attach epoch",
+      windowId: "window-A",
+      generation: 1,
+      attach: (model) => model.attach("window-A"),
+    },
+    {
+      name: "late-created query adopts the dock-transfer epoch",
+      windowId: "window-B",
+      generation: 2,
+      attach: (model) => {
+        model.attach("window-A");
+        model.attach("window-B");
+      },
+    },
+    {
+      name: "late-created query adopts the re-attach epoch",
+      windowId: "window-A",
+      generation: 2,
+      attach: (model) => {
+        model.attach("window-A");
+        model.detach("unmount");
+        model.attach("window-A");
+      },
+    },
+  ];
+
+  for (const c of lateQueryCases) {
+    it(c.name, () => {
+      const model = querySetup();
+      c.attach(model);
+      model.addQuery();
+
+      // The late-created query model adopted the live view epoch —
+      // the same state a pre-registered query model holds after
+      // `attach` (`registerQuery` contract).
+      let tr = model.traceResult();
+      assert.equal(tr.link.attached, true);
+      assert.equal(tr.link.windowId, c.windowId);
+      assert.equal(tr.queryDiagnostics["view-1"]?.generation, c.generation);
+
+      // Issued queries mint under the adopted epoch (queries hold no
+      // subscription — the issued rec's generation is the evidence).
+      model.query("qa", QUERY_INPUT);
+      tr = model.traceResult();
+      const issued = tr.queries.at(-1);
+      assert.equal(issued?.viewId, "view-1");
+      assert.equal(issued?.generation, c.generation);
+
+      // A reply echoing the adopted epoch resolves — never stale.
+      model.resolveQuery("qa", {
+        generation: c.generation,
+        sourceRevision: QUERY_INPUT.sourceRevision,
+      });
+      tr = model.traceResult();
+      assert.equal(tr.queryOutcomes["qa"], "ok");
+      assert.equal(tr.queryDiagnostics["view-1"]?.resolved, 1);
+      assert.equal(tr.queryDiagnostics["view-1"]?.stale, 0);
+
+      // The stale guard is preserved: a foreign-epoch echo is stale.
+      model.query("qb", QUERY_INPUT);
+      model.resolveQuery("qb", {
+        generation: c.generation + 100,
+        sourceRevision: QUERY_INPUT.sourceRevision,
+      });
+      tr = model.traceResult();
+      assert.equal(tr.queryOutcomes["qb"], "stale");
+      assert.equal(tr.queryDiagnostics["view-1"]?.stale, 1);
+
+      // Detach cancels in-flight work and bumps the epoch.
+      model.query("qc", QUERY_INPUT);
+      model.detach("unmount");
+      tr = model.traceResult();
+      assert.equal(tr.link.attached, false);
+      assert.equal(tr.queryOutcomes["qc"], "cancelled");
+      assert.equal(tr.queryDiagnostics["view-1"]?.inflight, 0);
+
+      // The next attach re-adopts the new link epoch — the same
+      // convergence a pre-registered query model reaches.
+      model.attach("window-C");
+      tr = model.traceResult();
+      assert.equal(
+        tr.queryDiagnostics["view-1"]?.generation,
+        c.generation + 1,
+      );
+
+      model.query("qd", QUERY_INPUT);
+      model.resolveQuery("qd", {
+        generation: c.generation + 1,
+        sourceRevision: QUERY_INPUT.sourceRevision,
+      });
+      tr = model.traceResult();
+      assert.equal(tr.queries.at(-1)?.generation, c.generation + 1);
+      assert.equal(tr.queryOutcomes["qd"], "ok");
+    });
+  }
+
+  it("a query registered before attach adopts the epoch at attach", () => {
+    const model = querySetup();
+    model.addQuery();
+    model.attach("window-A");
+    model.attach("window-B"); // dock-transfer → generation 2
+
+    // The pre-registered path is unchanged: `ContractModel.attach`
+    // distributes the live epoch to the query model.
+    model.query("qa", QUERY_INPUT);
+    let tr = model.traceResult();
+    assert.equal(tr.queries.at(-1)?.generation, 2);
+    assert.equal(tr.queryDiagnostics["view-1"]?.generation, 2);
+
+    model.resolveQuery("qa", {
+      generation: 2,
+      sourceRevision: QUERY_INPUT.sourceRevision,
+    });
+    tr = model.traceResult();
+    assert.equal(tr.queryOutcomes["qa"], "ok");
+  });
 });
