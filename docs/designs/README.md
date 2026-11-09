@@ -146,6 +146,7 @@ Directory: `docs/designs`
 | DESIGN-034U1MKPf89ADLuIJkjzgP | Issue #461 残課題 — TimeAxis label の canvas 内共有 layer 描画 | approved | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | DESIGN-034U0zRvA4RGErmyI4Tcad | Issue #463 — Spectrogram cell 色の不透明事前合成 | approved | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | DESIGN-034Uc9jupOZFWHdV6h98Xu | Issue #464 — Consumer-neutral GUI Scenario Contract | approved | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
+| DESIGN-GuVirdX8ynQSJId0tz7Dte | Issue #464 slice — Scenario Runner・Report 組み立て契約の設計 | approved | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
 | DESIGN-rhqM5KfSVajqQ3vvtVDHol | Issue #465 Legacy WebView P0/P1 — 分類ポリシーと文書歴史化の設計 | approved | [issue-465-legacy-webview-p0p1.md](./issue-465-legacy-webview-p0p1.md) |
 | DESIGN-034UaAirEnkd41uDSZZzUH | Issue #468 RootedDir canonical 前提の設計判断 | approved | [issue-468-rooteddir-canonical-premise.md](./issue-468-rooteddir-canonical-premise.md) |
 | DESIGN-034UeuINTqCil2VtMHJxGx | Issue #478 Fader/Knob 縦寸法契約 — h_full 兄弟押し出しのレイアウト判断 | approved | [issue-478-fader-knob-height-contract.md](./issue-478-fader-knob-height-contract.md) |

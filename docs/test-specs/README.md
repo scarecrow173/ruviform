@@ -138,6 +138,7 @@ Directory: `docs/test-specs`
 | TSPEC-034U1MLtHiia8IiRjMgkW9 | Issue #461 残課題 — TimeAxis label canvas 描画の検証契約 | approved | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | TSPEC-034U0AQAAk59m51vJU5F4G | Issue #463 — Spectrogram cell intensity の paint 色検証契約 | approved | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | TSPEC-034UcapDuO3SYzYw2r2tHz | Issue #464 — Consumer-neutral GUI Scenario Contract | approved | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
+| TSPEC-wOxWNRLHg5C2rotQihPFys | Issue #464 slice — Scenario Runner・Report 組み立て契約のテスト仕様 | approved | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
 | TSPEC-034UewQGei6BGVolWZlKjI | Issue #478 Fader/Knob 縦寸法契約の検証 | approved | [issue-478-fader-knob-height-contract.md](./issue-478-fader-knob-height-contract.md) |
 | TSPEC-LqfidO2iIqcMjOeeHeLMd2 | Issue #479 — 値制御キーボード操作の検証契約 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | TSPEC-034UiRtw5zDZciI3peq94F | Issue #480 tab_focus 解放テスト仕様 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |

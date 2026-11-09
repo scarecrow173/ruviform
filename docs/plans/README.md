@@ -177,3 +177,4 @@ Directory: `docs/plans`
 | PLAN-Vn6Pc1Rh4SxDa9Gt3KwLe8 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装計画 | completed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
 | PLAN-Ws6Tz1RbMn4QcKe9YhGx3D | Issue #443 — Tile 列区間と count 契約の実装計画 | completed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | PLAN-034U0ARdtPkZR0btUirc6D | Issue #463 — Spectrogram cell intensity 修正計画 | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
+| PLAN-VM42GIDhiqjgeTP4U1EbJM | Issue #464 slice — Scenario Runner・Report 組み立て契約の実装計画 | completed | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
