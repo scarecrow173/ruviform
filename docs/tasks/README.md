@@ -16,6 +16,8 @@ Directory: `docs/tasks`
 | TASK-034RT89xVtZ6NMuRh08JQg | T1 ruviform-io-archive クレート新設・Archive共通型・ZIP Indexed Reader (Issue #302) | completed | [issue-302-t1-scaffold-reader.md](./issue-302-t1-scaffold-reader.md) |
 | TASK-034RT8aupBUW6NpSHSrRWq | T2 ZIP Writer・Entry finish→Archive finish・否定fixture (Issue #302) | completed | [issue-302-t2-zip-writer.md](./issue-302-t2-zip-writer.md) |
 | TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | completed | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
+| TASK-034UtEdJ4J9ekRBHmpucta | F1 IO E2E fixture 実装 — Fault/Fuzz・Directory・OS/FS probe | done | [issue-306-f1-fixture-extension.md](./issue-306-f1-fixture-extension.md) |
+| TASK-034UtEeCVQCg44aM7iUrV3 | F2 正規検証・evidence・CI handoff 記録 | done | [issue-306-f2-verification-handoff.md](./issue-306-f2-verification-handoff.md) |
 | TASK-034UjNKCoOCnJfLYQhT8Fx | Issue #313 — Windows 実 OS SendInput キーボード smoke 実装タスク | in-progress | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | TASK-034Ug9lk3rk5h8iKkSQY2c | Issue #314 slice 3 — GPUI/OS capture backend | in-progress | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | TASK-IfiV9xO2raU6D60zy70KLs | Issue #314 slice 1 — Golden Utility コアの実装タスク | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
@@ -28,7 +30,6 @@ Directory: `docs/tasks`
 | TASK-034UnqS8L3S2tF4h6u8LJd | Issue #389 Plugin Editor Session hardening タスク（timeout/degrade/GraphicsLost/DComp 記録） | in-progress | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | TASK-ll0hVC7GhO5tm1LEDBWZIe | Issue #389 VST3/L0 実外部 Editor attach タスク（adapter open_gui + PoC vst3 lane） | completed | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TASK-034TaJ4jQd92g4mWa81cxX | Issue #390 Driver Contract/Lab 実装 | todo | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
-| TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | in_progress | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TASK-034Uokf4hj4eTVzf7L9rQd | Issue #418 — theme-codegen 実装 | completed | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
 | TASK-Rd6GjUf3LxSo9WmEb4YhNi | Issue #421 — Meter/TimeAxis GPUI 描画と parity の実装タスク | in-progress | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | TASK-Ka4Yp9dWmR7sXq2LnV5TcE | Issue #423 WebView 写像・focus capability・GPUI 実窓検証（実装スライス） | in-progress | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
@@ -250,6 +251,7 @@ Directory: `docs/tasks`
 | TASK-1EfMLBvEIXGocxCFFgixSj | Issue #377 — QueryBinding adopt-on-join 実装と恒久テスト | done | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | TASK-034Uhnq0kOMsOzPLSOL8Bz | Issue #378 T1 oracle addBinding epoch 整合 | done | [issue-378-t1-oracle-addbinding-epoch.md](./issue-378-t1-oracle-addbinding-epoch.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
+| TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | done | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TASK-034UmKPCkhRiRPGs873bWz | Issue #410 — view command ledger bounded retention & correlation semantics | done | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | TASK-hupw1aLckqDaLNAlnDrTMF | Issue #411 — cargo_metadata 0.19 系への依存選定修復 + MSRV 検証入口 | done | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TASK-mV2zXwAeR5yNuIoL7pSt4G | Issue #414 — projection→controlled display 正規経路の実装 | done | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
