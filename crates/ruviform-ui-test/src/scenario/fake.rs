@@ -98,8 +98,10 @@ impl FakeGuiTest {
         Ok(())
     }
 
-    /// Replaces the mounted spec of `view` — bumps the host
-    /// generation, so previously resolved [`ScenarioTarget`]s go stale.
+    /// Replaces the mounted spec of `view`. The host generation
+    /// stays stable across spec updates — previously resolved
+    /// [`ScenarioTarget`]s remain valid; only mount/detach bump the
+    /// generation and stale them.
     ///
     /// # Errors
     /// [`ScenarioError::NoSuchWindow`]/[`ScenarioError::NoSuchView`]

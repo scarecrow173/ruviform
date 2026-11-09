@@ -33,7 +33,7 @@
     "fake": {
      "layer": "fake",
      "status": "pass",
-     "note": "Issue #426: lab_story_sv_fader_dock_matrix が synvelis-dark/audiolens-dark × scale 1.0/2.0 の 4 組合せで Panel > Tabs > Fader の idle→focus→drag→commit→stale→invalid→teardown の semantic trace が一致することを検証。ViewHost は theme/scale を持たないため scale 軸は ScaleContext で与え、tokens 不変を同時に確認する。Dock の 2-phase move は既存の lab_sv_fader_dock（UI-DVR-05）が担う。",
+     "note": "Issue #426: lab_story_sv_fader_dock_matrix が synvelis-dark/audiolens-dark × scale 1.0/2.0 の 4 組合せで Panel > Tabs > Fader の idle→focus→drag→commit→stale→invalid→teardown の semantic trace が一致することを検証。ViewHost は theme/scale を持たないため scale 軸は ScaleContext で与え、tokens 不変を同時に確認する。共有 oracle（ruviform_ui_test::lab_story::expected_lab_story_trace）との一致は scenario_contract.rs の lab_story_sv_fader_dock_fake_matches_shared_oracle が別途検証する（teardown の cancel intent を含む）。Dock の 2-phase move は既存の lab_sv_fader_dock（UI-DVR-05）が担う。",
      "mechanism": {
       "kind": "cargo-test",
       "package": "ruviform-ui-test",
@@ -43,10 +43,15 @@
     },
     "gpui": {
      "layer": "gpui",
-     "status": "not_run",
+     "status": "pass",
      "owner": "https://github.com/scarecrow173/ruviform/issues/426",
-     "note": "Issue #426 未達: gpui-0.2.2 の test platform は window.scale_factor を 2.0 固定（src/platform/test/window.rs）するため、GPUI test-support 経路で scale 1.0 を再現できない。Story 単位の GPUI fixture（Fader/Tabs/Dock の semantic 遷移の GPUI 接続）も未実装。Fake 成功を GPUI Pass にしない。",
-     "rerun": "scale 1.0 を再現できる GPUI 経路（test platform の scale 指定または DPI 実測）を確保した上で、component_showcase の Fader/Tabs/Dock を GPUI test-support で synvelis-dark × scale 2 値の semantic 遷移に接続する"
+     "note": "Issue #426: ruviform-ui-gpui の tests/lab_story.rs::lab_story_sv_fader_dock_gpui_matrix が、Fake 層と同一の canonical ViewSpec（ruviform_ui_test::lab_story::sv_fader_dock_fixture）を GpuiGuiTest/GpuiObserver 経由で GPUI window に mount し、synvelis-dark/audiolens-dark × theme scale 1.0/2.0 の 4 組合せで idle→focus→drag→commit→stale→invalid→teardown の semantic trace が共有 oracle expected_lab_story_trace と一致することを検証。scale 軸は ResolvedTheme::with_scale の ScaleContext として与え tokens 不変を確認（Fake 層と同一解釈）。Fader/Tabs は DrawnPlan を生成しないため本 story の draw-plan 層は構造上空であり、draw plan 証拠は持たない（pixel 証拠でもない）。theme は ViewMount.theme → ViewPalette::from_theme に mount されるが、semantic/draw 層は palette を観測しない — theme の pixel 差は実窓 capture lane（tests/golden_capture.rs の story-keyed test）の責務。gpui-0.2.2 test platform は window.scale_factor を 2.0 固定するため、window pixel の scale 1.0 は本層の対象外（real-os/Visual lane・#313/#314）。pixel capture は gpui-test で Unsupported を正直に記録し、story-keyed GoldenKey は record_golden_step で scenario evidence に残る（tests/lab_story.rs::lab_story_sv_fader_dock_gpui_golden_link）。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "lab_story_sv_fader_dock_gpui_matrix"
+     }
     },
     "real-os": {
      "layer": "real-os",
@@ -83,7 +88,7 @@
     "fake": {
      "layer": "fake",
      "status": "pass",
-     "note": "Issue #426: lab_story_al_waveform_seek_matrix が audiolens-dark/synvelis-dark × scale 1.0/2.0 の 4 組合せで Waveform + Seek の idle→focus→drag→commit→stale→invalid→teardown の semantic trace が一致することを検証。ViewHost は theme/scale を持たないため scale 軸は ScaleContext で与え、tokens 不変を同時に確認する。Waveform の bounded/NaN payload は既存の lab_al_waveform_* が担う。",
+     "note": "Issue #426: lab_story_al_waveform_seek_matrix が audiolens-dark/synvelis-dark × scale 1.0/2.0 の 4 組合せで Waveform + Seek の idle→focus→drag→commit→stale→invalid→teardown の semantic trace が一致することを検証。ViewHost は theme/scale を持たないため scale 軸は ScaleContext で与え、tokens 不変を同時に確認する。共有 oracle（ruviform_ui_test::lab_story::expected_lab_story_trace）との一致は scenario_contract.rs の lab_story_al_waveform_seek_fake_matches_shared_oracle が別途検証する（teardown の cancel intent を含む）。Waveform の bounded/NaN payload は既存の lab_al_waveform_* が担う。",
      "mechanism": {
       "kind": "cargo-test",
       "package": "ruviform-ui-test",
@@ -93,10 +98,15 @@
     },
     "gpui": {
      "layer": "gpui",
-     "status": "not_run",
+     "status": "pass",
      "owner": "https://github.com/scarecrow173/ruviform/issues/426",
-     "note": "Issue #426 未達: gpui-0.2.2 の test platform は window.scale_factor を 2.0 固定（src/platform/test/window.rs）するため、GPUI test-support 経路で scale 1.0 を再現できない。Story 単位の GPUI fixture（Waveform/Seek の semantic 遷移の GPUI 接続）も未実装。Fake 成功を GPUI Pass にしない。",
-     "rerun": "scale 1.0 を再現できる GPUI 経路を確保した上で、component_showcase の Waveform/Seek を GPUI test-support で audiolens-dark × scale 2 値の semantic 遷移に接続する"
+     "note": "Issue #426: ruviform-ui-gpui の tests/lab_story.rs::lab_story_al_waveform_seek_gpui_matrix が、Fake 層と同一の canonical ViewSpec（ruviform_ui_test::lab_story::al_waveform_seek_fixture）を GpuiGuiTest/GpuiObserver 経由で GPUI window に mount し、audiolens-dark/synvelis-dark × theme scale 1.0/2.0 の 4 組合せで idle→focus→drag→commit→stale→invalid→teardown の semantic trace が共有 oracle expected_lab_story_trace と一致することを検証。draw plan（GpuiObserver::drawn、Waveform plan）は行列全体で同一であることを確認するが、geometry/bin 範囲の一致であり色・pixel ではない。scale 軸は ResolvedTheme::with_scale の ScaleContext として与え tokens 不変を確認（Fake 層と同一解釈）。theme は ViewMount.theme → ViewPalette::from_theme に mount されるが、semantic/draw 層は palette を観測しない — theme の pixel 差は実窓 capture lane（tests/golden_capture.rs の story-keyed test）の責務。gpui-0.2.2 test platform は window.scale_factor を 2.0 固定するため、window pixel の scale 1.0 は本層の対象外（real-os/Visual lane・#313/#314）。pixel capture は gpui-test で Unsupported を正直に記録し、story-keyed GoldenKey は record_golden_step で scenario evidence に残る（tests/lab_story.rs::lab_story_al_waveform_seek_gpui_golden_link）。",
+     "mechanism": {
+      "kind": "mise-task",
+      "task": "test-ui-gpui",
+      "package": "ruviform-ui-gpui",
+      "filter": "lab_story_al_waveform_seek_gpui_matrix"
+     }
     },
     "real-os": {
      "layer": "real-os",

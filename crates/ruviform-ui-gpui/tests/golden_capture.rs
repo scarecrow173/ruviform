@@ -32,6 +32,8 @@ use ruviform_ui_test::golden::{
     BaselineApproval, BaselineStore, CapturePath, ChannelTolerance, DiffPolicy, EnvironmentMeta,
     GoldenComparison, GoldenEvidence, GoldenKey, RgbaImage, append_evidence,
 };
+use ruviform_ui_test::lab_story;
+use ruviform_ui_theme::{ResolvedTheme, ThemeResolver, TokenDocument};
 
 /// Ticks to let the window finish opening animations before the
 /// first capture. Measured on Windows: the first ~200 ms after
@@ -80,15 +82,19 @@ fn static_view() -> ViewSpec {
     }
 }
 
-fn mount_window(driver: &mut GpuiDriver) -> WindowId {
+fn mount_window_with(
+    driver: &mut GpuiDriver,
+    view: ViewSpec,
+    theme: Option<ResolvedTheme>,
+) -> WindowId {
     let mut host = ViewHost::new(
         ViewInstanceId::new(5150).expect("nonzero"),
         AttachEpoch::new(1),
     );
-    host.mount(static_view()).expect("mount view");
+    host.mount(view).expect("mount view");
     host.drain_events();
     driver
-        .create_view_window(&WindowSpec::default(), ViewMount { host, theme: None })
+        .create_view_window(&WindowSpec::default(), ViewMount { host, theme })
         .expect("create_view_window")
 }
 
@@ -104,6 +110,37 @@ fn golden_key(scale_factor: f64) -> GoldenKey {
         font_class: None,
         revision: env!("CARGO_PKG_VERSION").to_string(),
     }
+}
+
+/// The story `GoldenKey` for the real-window lane — the canonical
+/// story/theme ids from the shared story fixture, the `idle`
+/// state, and the *measured* window scale factor (built lazily once
+/// the first frame reports it). `driver_class` names the capture
+/// path, not a driver claim: OS input remains Issue #313.
+fn story_golden_key(story_id: &str, theme: &str, scale_factor: f64) -> GoldenKey {
+    GoldenKey {
+        story_id: story_id.to_string(),
+        theme: theme.to_string(),
+        state: "idle".to_string(),
+        driver_class: "gpui-real-window-os-capture".to_string(),
+        os_class: "windows".to_string(),
+        gpu_class: None,
+        scale_factor,
+        font_class: None,
+        revision: env!("CARGO_PKG_VERSION").to_string(),
+    }
+}
+
+/// Resolves a theme fixture from the shared `ruviform-ui-test` theme
+/// JSON — the same documents the Fake/GPUI-simulated matrices use.
+fn resolve_theme(name: &str) -> ResolvedTheme {
+    let path = format!(
+        "{}/../ruviform-ui-test/fixtures/themes/{name}.dtcg.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let json = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+    let doc = TokenDocument::from_json(&json).unwrap_or_else(|e| panic!("parse {name}: {e}"));
+    ThemeResolver::resolve(&[doc], "dark").unwrap_or_else(|e| panic!("resolve {name}: {e}"))
 }
 
 fn environment(scale_factor: f64, backend: &str) -> EnvironmentMeta {
@@ -168,6 +205,14 @@ fn ensure_nonuniform(frame: &OsCapturedFrame) -> Result<(), String> {
     ))
 }
 
+/// Builds the `(GoldenKey, EnvironmentMeta)` pair once the first
+/// frame reports the *measured* `scale_factor`/`backend` — keys are
+/// never assumed.
+type KeyEnvBuilder = dyn Fn(f64, &str) -> (GoldenKey, EnvironmentMeta);
+
+/// `Rc`-shared builder — moved into the event-loop closure.
+type SharedKeyEnvBuilder = Rc<KeyEnvBuilder>;
+
 /// Step 0 of the e2e flow: first capture → compare (baseline absent →
 /// `blocked`) → write candidate → promote → record evidence. The
 /// promoted baseline is what the second capture compares against.
@@ -179,6 +224,7 @@ fn run_first_step(
     capture_driver: &GpuiDriver,
     window: WindowId,
     key_env: &Rc<RefCell<Option<(GoldenKey, EnvironmentMeta)>>>,
+    build_key_env: &KeyEnvBuilder,
     store: &BaselineStore,
     staging_root: &Path,
     evidence_path: &Path,
@@ -195,10 +241,7 @@ fn run_first_step(
     {
         let mut ke = key_env.borrow_mut();
         if ke.is_none() {
-            *ke = Some((
-                golden_key(frame.scale_factor),
-                environment(frame.scale_factor, frame.backend),
-            ));
+            *ke = Some(build_key_env(frame.scale_factor, frame.backend));
         }
     }
     let (key, env) = key_env.borrow().as_ref().expect("key/env").clone();
@@ -286,15 +329,21 @@ fn capture_window_rejects_unknown_and_unopened_windows() {
     );
 }
 
-/// Opens a real OS window — requires an interactive desktop session.
-/// Ignored by default so headless/`gpui-test` lanes stay green; run
-/// explicitly with `cargo test -p ruviform-ui-gpui --features gpui
-/// --test golden_capture -- --ignored` (or `--include-ignored`).
-#[test]
-#[ignore = "opens a real OS window — needs a desktop session"]
-fn real_window_capture_feeds_golden_compare_to_pass() {
+/// The shared real-window capture e2e: open `view` (with `theme`),
+/// settle, capture → compare (`blocked`/`baseline_missing`) →
+/// candidate → promote → capture → compare (`pass`/`match`), and
+/// append both verdicts to the evidence JSONL. `build_key_env` turns
+/// the measured `(scale_factor, backend)` into the `GoldenKey` +
+/// `EnvironmentMeta` pair — the probe and the story-keyed variants
+/// differ only there.
+fn run_capture_e2e(
+    name: &str,
+    view: ViewSpec,
+    theme: Option<ResolvedTheme>,
+    build_key_env: SharedKeyEnvBuilder,
+) {
     let work = std::env::temp_dir().join(format!(
-        "ruviform-golden-capture-{}-{}",
+        "ruviform-golden-capture-{name}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -317,7 +366,7 @@ fn real_window_capture_feeds_golden_compare_to_pass() {
     };
 
     let mut driver = GpuiDriver::new();
-    let window = mount_window(&mut driver);
+    let window = mount_window_with(&mut driver, view, theme);
     let capture_driver = driver.clone();
     let outcome = Rc::new(RefCell::new(Outcome::default()));
     // Built lazily on the first captured frame — `scale_factor` is
@@ -343,8 +392,12 @@ fn real_window_capture_feeds_golden_compare_to_pass() {
                 } if w == window => st.resized = Some((width, height)),
                 // `step < 2` — once both capture steps are done the
                 // queued `exit` is still in flight; further ticks are
-                // ignored rather than treated as a fault.
-                DriverEvent::Tick if st.ready && st.step < 2 => {
+                // ignored rather than treated as a fault. `fatal` —
+                // a failed step already asked the loop to exit, but
+                // queued ticks can still arrive; running the next
+                // step then would panic on missing state inside the
+                // window procedure (which cannot unwind).
+                DriverEvent::Tick if st.ready && st.step < 2 && st.fatal.is_none() => {
                     st.ticks += 1;
                     if st.ticks > MAX_TICKS {
                         st.fatal = Some("event loop did not finish capture steps".to_string());
@@ -366,6 +419,7 @@ fn real_window_capture_feeds_golden_compare_to_pass() {
                                 &capture_driver,
                                 window,
                                 &key_env,
+                                build_key_env.as_ref(),
                                 &store,
                                 &staging_root,
                                 &evidence_path,
@@ -405,6 +459,90 @@ fn real_window_capture_feeds_golden_compare_to_pass() {
     verify_outcome(&st, &evidence_path_out);
 
     let _ = std::fs::remove_dir_all(&work);
+}
+
+/// Opens a real OS window — requires an interactive desktop session.
+/// Ignored by default so headless/`gpui-test` lanes stay green; run
+/// explicitly with `cargo test -p ruviform-ui-gpui --features gpui
+/// --test golden_capture -- --ignored` (or `--include-ignored`).
+#[test]
+#[ignore = "opens a real OS window — needs a desktop session"]
+fn real_window_capture_feeds_golden_compare_to_pass() {
+    run_capture_e2e(
+        "probe",
+        static_view(),
+        None,
+        Rc::new(|scale_factor, backend| {
+            (golden_key(scale_factor), environment(scale_factor, backend))
+        }),
+    );
+}
+
+/// Issue #426 — story-keyed real-window capture: the canonical
+/// `LAB-SV-FADER-DOCK` spec mounted with its declared
+/// `synvelis-dark` theme feeds the #314 capture → compare → promote
+/// → compare loop under the story `GoldenKey`. This is pixel
+/// evidence for the story's `idle` state on the real-window lane —
+/// separate from the semantic oracle (Fake/GPUI-simulated) and from
+/// the OS *input* driver (#313). The window's scale factor is
+/// measured from the captured frame; the story's declared
+/// `scaleFactor: [1.0, 2.0]` matrix on this lane is bounded by what
+/// the display actually reports.
+#[test]
+#[ignore = "opens a real OS window — needs a desktop session"]
+fn real_window_story_capture_sv_fader_dock() {
+    let fixture = lab_story::sv_fader_dock_fixture();
+    let theme = resolve_theme(fixture.theme);
+    let (story_id, theme_name) = (fixture.story_id, fixture.theme);
+    run_capture_e2e(
+        "lab-sv-fader-dock",
+        fixture.spec,
+        Some(theme),
+        Rc::new(move |scale_factor, backend| {
+            (
+                story_golden_key(story_id, theme_name, scale_factor),
+                environment(scale_factor, backend),
+            )
+        }),
+    );
+    ruviform_ui_test::driver_lab::emit_evidence(
+        story_id,
+        "gpui",
+        "pass",
+        "pass",
+        "cargo-test:ruviform-ui-gpui/golden_capture (--features gpui, --ignored, desktop session)",
+        "real-window OS pixel capture (Win32 PrintWindow/BitBlt) idle-state golden compare — pixel lane evidence, not the OS input driver (#313)",
+    );
+}
+
+/// Issue #426 — story-keyed real-window capture for
+/// `LAB-AL-WAVEFORM-SEEK` (`audiolens-dark`), same contract as the
+/// Synvelis variant above.
+#[test]
+#[ignore = "opens a real OS window — needs a desktop session"]
+fn real_window_story_capture_al_waveform_seek() {
+    let fixture = lab_story::al_waveform_seek_fixture();
+    let theme = resolve_theme(fixture.theme);
+    let (story_id, theme_name) = (fixture.story_id, fixture.theme);
+    run_capture_e2e(
+        "lab-al-waveform-seek",
+        fixture.spec,
+        Some(theme),
+        Rc::new(move |scale_factor, backend| {
+            (
+                story_golden_key(story_id, theme_name, scale_factor),
+                environment(scale_factor, backend),
+            )
+        }),
+    );
+    ruviform_ui_test::driver_lab::emit_evidence(
+        story_id,
+        "gpui",
+        "pass",
+        "pass",
+        "cargo-test:ruviform-ui-gpui/golden_capture (--features gpui, --ignored, desktop session)",
+        "real-window OS pixel capture (Win32 PrintWindow/BitBlt) idle-state golden compare — pixel lane evidence, not the OS input driver (#313)",
+    );
 }
 
 /// Post-run assertions on the recorded [`Outcome`] plus the emitted

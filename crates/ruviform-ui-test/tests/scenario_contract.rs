@@ -15,7 +15,9 @@ use ruviform_ui::view::{
     ViewSpec,
 };
 use ruviform_ui::{Event, WindowId};
+use ruviform_ui_test::driver_lab;
 use ruviform_ui_test::golden::{BaselineStore, GoldenKey, GoldenVerdict};
+use ruviform_ui_test::lab_story::{self, StoryFixture};
 use ruviform_ui_test::{
     FakeGuiTest, RunId, ScenarioCapability, ScenarioDriver, ScenarioError, ScenarioId,
     ScenarioReport, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery, VisualGuiTest,
@@ -422,4 +424,105 @@ fn multi_window_targets_resolve_independently() {
         "intents: {:?}",
         intents.iter().map(|m| &m.command_id).collect::<Vec<_>>()
     );
+}
+
+// ---------------------------------------------------------------------
+// Issue #426 — shared lab story walk on the Fake adapter
+// ---------------------------------------------------------------------
+
+/// Adapter with the story fixture's canonical spec mounted and a
+/// resolved target — the same mount the GPUI adapter performs through
+/// `create_view_window`.
+fn story_mounted(
+    fixture: &StoryFixture,
+) -> (FakeGuiTest, WindowId, ViewInstanceId, ScenarioTarget) {
+    let mut gui = FakeGuiTest::new();
+    let window = gui.open_window();
+    let view = ViewInstanceId::new(426).expect("nonzero");
+    gui.mount_view(window, view, fixture.spec.clone())
+        .expect("mount story spec");
+    let target = gui
+        .resolve_target(&TargetQuery::new(window, view))
+        .expect("resolve");
+    (gui, window, view, target)
+}
+
+/// Runs the shared [`lab_story::lab_story_walk`] on the Fake adapter —
+/// the trace must equal `expected_lab_story_trace()`, the same oracle
+/// the GPUI-simulated layer asserts.
+fn assert_fake_story_oracle(fixture: &StoryFixture) {
+    let (mut gui, window, view, target) = story_mounted(fixture);
+    let walk_key = fixture.walk_key.clone();
+    let teardown = fixture.teardown_spec.clone();
+    let trace = lab_story::lab_story_walk(&mut gui, &target, &walk_key, move |gui| {
+        gui.update_view(window, view, teardown)
+    })
+    .expect("story walk");
+    assert_eq!(
+        trace,
+        lab_story::expected_lab_story_trace(),
+        "{} story trace diverged from the shared oracle",
+        fixture.story_id,
+    );
+    driver_lab::emit_evidence(
+        fixture.story_id,
+        "fake",
+        "pass",
+        "pass",
+        "cargo-test:ruviform-ui-test/scenario_contract",
+        "shared SemanticGuiTest story oracle (7 states) via FakeGuiTest",
+    );
+}
+
+#[test]
+fn lab_story_sv_fader_dock_fake_matches_shared_oracle() {
+    assert_fake_story_oracle(&lab_story::sv_fader_dock_fixture());
+}
+
+#[test]
+fn lab_story_al_waveform_seek_fake_matches_shared_oracle() {
+    assert_fake_story_oracle(&lab_story::al_waveform_seek_fixture());
+}
+
+/// Story-keyed golden check on the Fake adapter: `golden_check`
+/// honestly reports `Unsupported` (no pixel pipeline) and
+/// `record_golden_step` still lands the story `GoldenKey` in the
+/// scenario evidence — the #314 link shape every layer shares.
+#[test]
+fn lab_story_golden_check_records_story_key_as_unsupported() {
+    for fixture in [
+        lab_story::sv_fader_dock_fixture(),
+        lab_story::al_waveform_seek_fixture(),
+    ] {
+        let (mut gui, _window, _view, target) = story_mounted(&fixture);
+        let (_dir, store) = golden_store();
+        let key = GoldenKey {
+            story_id: fixture.story_id.to_string(),
+            theme: fixture.theme.to_string(),
+            state: "idle".to_string(),
+            driver_class: "fake".to_string(),
+            os_class: "test-os".to_string(),
+            gpu_class: None,
+            scale_factor: 1.0,
+            font_class: None,
+            revision: "test-rev".to_string(),
+        };
+        let mut report = ScenarioReport::new(
+            RunId::new(format!("run-{}", fixture.story_id)),
+            ScenarioId::new("lab-story-golden"),
+            None,
+            gui.driver(),
+        );
+        let comparison = gui
+            .golden_check(&target, &key, None, &store)
+            .expect("golden_check returns a report, not an error");
+        assert_eq!(comparison.report.verdict, GoldenVerdict::Unsupported);
+        assert_ne!(comparison.report.reason, "");
+        record_golden_step(&mut report, &comparison);
+        assert_eq!(report.evidence.len(), 1);
+        let evidence = &report.evidence[0];
+        assert!(evidence.contains(fixture.story_id), "{evidence}");
+        assert!(evidence.contains(fixture.theme), "{evidence}");
+        assert!(evidence.contains("/idle/"), "{evidence}");
+    }
 }

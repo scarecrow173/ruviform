@@ -311,7 +311,9 @@ pub enum ScenarioError {
         got: AttachEpoch,
     },
     /// The pinned generation no longer matches the live host — the
-    /// view spec changed (mount/update/detach) since resolution.
+    /// host was mounted/detached (or recreated) since resolution.
+    /// Spec updates via `update_view` keep the generation stable and
+    /// do not stale targets.
     StaleGeneration {
         /// Generation pinned at resolve time.
         expected: u64,
