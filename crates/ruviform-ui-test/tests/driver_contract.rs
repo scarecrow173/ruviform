@@ -18,7 +18,7 @@ use ruviform_ui::{
     DataRegistry, DemoService, DockTarget, DockWorkspace, HostEvent, UiRuntime, ViewInstanceId,
     WindowEvent, WindowHandle, WindowId,
 };
-use ruviform_ui_test::{HeadlessIo, TestApp, TestIo, driver_lab};
+use ruviform_ui_test::{HeadlessIo, TestApp, TestIo, driver_lab, lab_story};
 use ruviform_ui_theme::{ResolveError, ResolvedColor, ThemeResolver, TokenDocument};
 
 /// Sink app — event を飲み込む最小 `TestApp`（close-decision 等は
@@ -75,6 +75,22 @@ fn manifests_are_consistent() {
 
     // UI-DVR-01..09 が requiredCases で pin されていること。
     assert_eq!(cases.required_cases.len(), 9);
+
+    // Story fixture ids must match the manifest's story ids — a
+    // drifted fixture id would put a nonexistent story id into
+    // golden keys and driver-lab evidence while every test stays
+    // green.
+    let mut fixture_ids: Vec<&str> = lab_story::all_fixtures()
+        .iter()
+        .map(|f| f.story_id)
+        .collect();
+    fixture_ids.sort_unstable();
+    let mut manifest_ids: Vec<&str> = stories.stories.iter().map(|s| s.id.as_str()).collect();
+    manifest_ids.sort_unstable();
+    assert_eq!(
+        fixture_ids, manifest_ids,
+        "lab_story fixtures and stories.json must cover the same story ids"
+    );
 }
 
 /// UI-DVR-01 fake: driver 非搭載の headless semantic fixture が
