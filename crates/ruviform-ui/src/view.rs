@@ -814,9 +814,20 @@ fn invalid_input(key: &ComponentKey, detail: impl Into<String>) -> ViewError {
 
 impl std::error::Error for ViewError {}
 
-/// Bound on the internal event backlog — preview-class events evict
-/// first; non-droppable events are never lost under this bound.
+/// Bound on the internal event backlog. Coalescible events evict
+/// first; when none remain the oldest event is dropped even when
+/// non-droppable — the bound is hard, so *something* must give. A
+/// dropped `Intent` is retired honestly (see [`ViewHost::push_event`]):
+/// its receipt routing is removed and its pending record marked
+/// delivery-lost, so the command surfaces `Timeout` rather than
+/// pending forever.
 const MAX_VIEW_EVENTS: usize = 512;
+
+/// Bound on receipt-routing entries (`command_id` → owner). Entries
+/// whose owner binding still awaits a receipt are protected and the
+/// bound yields rather than drop a command the consumer may still
+/// answer — the same honesty as `MAX_PENDING_RECORDS`.
+const MAX_COMMAND_INDEX: usize = 512;
 
 /// Snapshot of a mounted control's display state.
 #[derive(Debug, Clone)]
@@ -873,6 +884,16 @@ fn action_binding_id(node: &ComponentSpec) -> Option<ControlId> {
         ComponentSpec::Tabs(t) if t.selection.is_some() => Some(t.key.0.clone()),
         _ => None,
     }
+}
+
+/// The command-owner id a spec node routes receipts through — the
+/// control's effective `control_id` (explicit or key fallback), or the
+/// component key for command-bearing non-control kinds. Mirrors
+/// [`Mounted::binding_id`]; `None` for kinds that never mint commands.
+fn spec_binding_id(node: &ComponentSpec) -> Option<ControlId> {
+    node.control()
+        .map(|c| c.control_id.clone().unwrap_or_else(|| c.key.0.clone()))
+        .or_else(|| action_binding_id(node))
 }
 
 /// The selection a freshly mounted `node` displays: a `Tabs` starts on its
@@ -1046,7 +1067,10 @@ pub struct ViewHost {
     bindings: HashMap<ControlId, CommandBinding>,
     /// `command_id` → owning control. Receipts arrive through the IPC
     /// envelope carrying only the minted id; this index routes them
-    /// back. Entries drop on terminal receipts and control unregister.
+    /// back. Entries drop on terminal receipts, control unregister,
+    /// lifecycle clears, and liveness-class eviction under
+    /// [`MAX_COMMAND_INDEX`] — unresolved receipt-expecting commands
+    /// are protected and the bound yields rather than strand them.
     command_index: HashMap<CommandId, ControlId>,
     ports: HashMap<ControlId, ValuePorts>,
     /// Host-wide sequence of discrete `Action` intents (Button, Table
@@ -1172,6 +1196,7 @@ impl ViewHost {
         walk(&spec.root, &mut flat);
 
         let mut seen = std::collections::HashSet::new();
+        let mut owners = std::collections::HashSet::new();
         for (key, node) in &flat {
             if !seen.insert(*key) {
                 return Err(ViewError::InvalidSpec {
@@ -1179,6 +1204,19 @@ impl ViewHost {
                 });
             }
             Self::check_node(node)?;
+            // Command-owner dedup on canonical mounts only: a tab
+            // aliases its child under the tab key (`key != node.key()`),
+            // which is the same logical component, not a second owner.
+            // Distinct components sharing an owner id would corrupt
+            // receipt routing and detach attribution, so reject them.
+            if *key == node.key()
+                && let Some(owner) = spec_binding_id(node)
+                && !owners.insert(owner.clone())
+            {
+                return Err(ViewError::InvalidSpec {
+                    detail: format!("duplicate command owner id {owner}"),
+                });
+            }
         }
         Ok(flat)
     }
@@ -1302,23 +1340,52 @@ impl ViewHost {
 
     fn push_event(&mut self, e: ViewEvent) {
         if self.events.len() >= MAX_VIEW_EVENTS {
-            // Coalescible events evict first; non-droppable records
-            // are never lost under this bound.
+            // Coalescible events evict first; when none remain the
+            // oldest event is dropped even when non-droppable — the
+            // backlog bound is hard. A dropped `Intent` means the
+            // command was never delivered: retire its routing and
+            // mark its pending record delivery-lost so the command
+            // reads `Timeout` instead of pending forever, and any
+            // late receipt routes as unrouted.
             let droppable = self.events.iter().position(|ev| match ev {
                 ViewEvent::Gesture { event, .. } => event.is_coalescible(),
                 ViewEvent::Intent { intent, .. } => crate::behavior::is_droppable(intent),
                 _ => false,
             });
-            match droppable {
-                Some(pos) => {
-                    self.events.remove(pos);
-                }
-                None => {
-                    self.events.pop_front();
-                }
+            let evicted = match droppable {
+                Some(pos) => self.events.remove(pos),
+                None => self.events.pop_front(),
+            };
+            if let Some(ViewEvent::Intent { command_id, .. }) = evicted {
+                self.retire_undelivered_intent(&command_id);
             }
         }
         self.events.push_back(e);
+    }
+
+    /// Retires a command whose `Intent` event was dropped by the event
+    /// backlog before delivery: the receipt-routing entry is removed
+    /// (a late receipt now reads unrouted) and the owner binding's
+    /// pending record is marked delivery-lost so an unresolved
+    /// receipt-expecting command surfaces `Timeout` rather than
+    /// pending forever. Settled records are untouched.
+    fn retire_undelivered_intent(&mut self, command_id: &CommandId) {
+        let owner = self.command_index.remove(command_id);
+        self.selection_undo.remove(command_id);
+        if let Some(owner) = owner {
+            if let Some(binding) = self.bindings.get_mut(&owner) {
+                binding.expire_command(command_id);
+            }
+            return;
+        }
+        // The index entry may already be gone (retention evicted it);
+        // command ids are binding-namespaced, so a scan finds the
+        // unique owner when the record is still pending.
+        for binding in self.bindings.values_mut() {
+            if binding.expire_command(command_id) {
+                break;
+            }
+        }
     }
 
     /// Reconcile outcome for one `(key, node)` pair.
@@ -1347,15 +1414,28 @@ impl ViewHost {
 
     /// Resolves the mounted key owning `control_id`; falls back to a
     /// key synthesized from the id when the control is already gone.
+    /// Spec validation rejects distinct components sharing a command
+    /// owner id, so every match is the same logical node — possibly
+    /// mounted under a tab alias as well as its canonical key. The
+    /// canonical mount (map key == spec key) is authoritative for
+    /// detach/unmount attribution; aliases are only a fallback.
     fn key_for_control(&self, control_id: &str) -> ComponentKey {
-        self.mounted
-            .iter()
-            .find(|(_, m)| {
-                m.control
-                    .as_ref()
-                    .is_some_and(|c| c.control_id == control_id)
-            })
-            .map_or_else(|| ComponentKey(control_id.to_string()), |(k, _)| k.clone())
+        let mut alias: Option<ComponentKey> = None;
+        for (key, m) in &self.mounted {
+            if m.control
+                .as_ref()
+                .is_none_or(|c| c.control_id != control_id)
+            {
+                continue;
+            }
+            if m.spec.key() == key {
+                return key.clone();
+            }
+            if alias.as_ref().is_none_or(|a| key < a) {
+                alias = Some(key.clone());
+            }
+        }
+        alias.unwrap_or_else(|| ComponentKey(control_id.to_string()))
     }
 
     /// Command-bearing kinds must name the target (and action) of the
@@ -1576,6 +1656,46 @@ impl ViewHost {
         });
     }
 
+    /// Liveness class of one `command_index` entry for retention:
+    /// dead entries (no live record — previews, evicted records,
+    /// missing bindings) evict first, then settled, then unresolved
+    /// non-receipt commands; unresolved receipt-expecting commands
+    /// are protected last.
+    fn command_ledger_state(
+        &self,
+        command_id: &CommandId,
+        owner: &ControlId,
+    ) -> crate::behavior::RecordLedgerState {
+        use crate::behavior::RecordLedgerState as S;
+        self.bindings
+            .get(owner)
+            .map_or(S::Dead, |b| b.record_ledger_state(command_id))
+    }
+
+    /// Bounds `command_index` at [`MAX_COMMAND_INDEX`]. The victim is
+    /// the lowest-liveness-class entry, ties broken by lexicographically
+    /// smallest `command_id` for determinism. When every entry awaits a
+    /// receipt the bound yields — dropping one would strand a command
+    /// the consumer may still answer (the same honesty as
+    /// `MAX_PENDING_RECORDS`).
+    fn evict_command_index(&mut self) {
+        use crate::behavior::RecordLedgerState as S;
+        while self.command_index.len() > MAX_COMMAND_INDEX {
+            let victim = self
+                .command_index
+                .iter()
+                .map(|(id, owner)| (self.command_ledger_state(id, owner), id.clone()))
+                .min();
+            match victim {
+                Some((state, id)) if state < S::LiveExpect => {
+                    self.command_index.remove(&id);
+                }
+                // All entries are live receipt-expecting: yield.
+                _ => break,
+            }
+        }
+    }
+
     /// Binds `intent` to `control_id`'s command binding, records the
     /// command for receipt routing, and emits the `Intent` event.
     fn emit_intent(&mut self, control_id: &str, intent: CommandIntent) -> CommandId {
@@ -1587,6 +1707,7 @@ impl ViewHost {
         let (command_id, expect_receipt) = binding.dispatch(intent.clone(), None);
         self.command_index
             .insert(command_id.clone(), control_id.to_string());
+        self.evict_command_index();
         self.push_event(ViewEvent::Intent {
             intent,
             command_id: command_id.clone(),
@@ -1602,7 +1723,10 @@ impl ViewHost {
         action: &str,
         params: Option<serde_json::Value>,
     ) -> CommandIntent {
-        self.action_sequence += 1;
+        self.action_sequence = self
+            .action_sequence
+            .checked_add(1)
+            .expect("ViewHost action sequence exhausted (2^64 actions)");
         CommandIntent::Action {
             target,
             control_id: key.0.clone(),
@@ -1620,6 +1744,18 @@ impl ViewHost {
         }
     }
 
+    /// Command-owner key for an intent minted through the mounted
+    /// surface `key`: the spec's canonical owner id, so a component
+    /// alias-mounted under a tab key shares one binding — and one
+    /// receipt-routing owner — with its canonical mount. Falls back to
+    /// the surface key for specs that never mint commands.
+    fn owner_key_for(&self, key: &ComponentKey) -> String {
+        self.mounted
+            .get(key)
+            .and_then(|m| spec_binding_id(&m.spec))
+            .unwrap_or_else(|| key.0.clone())
+    }
+
     /// Moves the displayed selection of `key` to `index` and emits its
     /// `Action` intent. The previous selection is kept for a rejected or
     /// unsupported receipt to restore.
@@ -1633,7 +1769,8 @@ impl ViewHost {
         let previous = self.mounted.get(key).and_then(|m| m.selected);
         let intent = self.action_intent(key, target, action, Some(params));
         self.set_selected(key, Some(index));
-        let command_id = self.emit_intent(&key.0, intent);
+        let owner = self.owner_key_for(key);
+        let command_id = self.emit_intent(&owner, intent);
         self.selection_undo
             .insert(command_id, (key.clone(), previous));
     }
@@ -1654,14 +1791,24 @@ impl ViewHost {
     ///
     /// # Errors
     /// [`ViewError::InvalidSpec`] when the spec fails validation.
+    ///
+    /// # Panics
+    /// On `u64` generation/mount-epoch exhaustion (2^64) — unreachable
+    /// in practice; an honest failure beats silently wrapping the order.
     pub fn mount(&mut self, spec: ViewSpec) -> Result<Vec<ProjectionOp>, ViewError> {
         let flat = Self::validate_spec(&spec)?;
         if self.spec.is_some() {
             let generation = self.generation;
             return self.update(spec, generation);
         }
-        self.generation += 1;
-        self.mount_epoch += 1;
+        self.generation = self
+            .generation
+            .checked_add(1)
+            .expect("ViewHost generation exhausted (2^64 mounts/detaches)");
+        self.mount_epoch = self
+            .mount_epoch
+            .checked_add(1)
+            .expect("ViewHost mount epoch exhausted (2^64 mounts)");
         let mut ops = Vec::new();
         for (key, node) in &flat {
             ops.push(ProjectionOp::Mounted {
@@ -1808,6 +1955,11 @@ impl ViewHost {
     /// gesture ends per its detach policy, bindings go `stale`, and the
     /// generation bumps so late inputs are rejected. The tree stays
     /// mounted — reattach continues from the same spec.
+    ///
+    /// # Panics
+    /// On `u64` generation/sequence-counter exhaustion (2^64) —
+    /// unreachable in practice; an honest failure beats silently
+    /// wrapping the order.
     pub fn detach(&mut self, reason: &str) -> u64 {
         let events = self.dispatcher.detach_all(reason);
         for event in events {
@@ -1821,7 +1973,10 @@ impl ViewHost {
         // so stale ids never reach a re-attached epoch.
         self.command_index.clear();
         self.selection_undo.clear();
-        self.generation += 1;
+        self.generation = self
+            .generation
+            .checked_add(1)
+            .expect("ViewHost generation exhausted (2^64 mounts/detaches)");
         self.generation
     }
 
@@ -1968,7 +2123,8 @@ impl ViewHost {
         };
         let (target, action, params) = (b.target.clone(), b.action.clone(), b.params.clone());
         let intent = self.action_intent(key, target, &action, params);
-        self.emit_intent(&key.0, intent);
+        let owner = self.owner_key_for(key);
+        self.emit_intent(&owner, intent);
         Ok(())
     }
 
@@ -3700,5 +3856,310 @@ mod tests {
             host.mount(panel(vec![inverted])),
             Err(ViewError::InvalidSpec { .. })
         ));
+    }
+
+    fn value() -> crate::behavior::ControlValue {
+        crate::behavior::ControlValue {
+            plain: 0.0,
+            normalized: 0.0,
+        }
+    }
+
+    fn preview_intent(seq: u64) -> CommandIntent {
+        CommandIntent::Preview {
+            target: "t".into(),
+            control_id: "a".into(),
+            sequence: seq,
+            gesture_id: "g".into(),
+            origin_view: None,
+            atomic: false,
+            value: value(),
+        }
+    }
+
+    fn begin_intent(seq: u64) -> CommandIntent {
+        CommandIntent::Begin {
+            target: "t".into(),
+            control_id: "a".into(),
+            sequence: seq,
+            gesture_id: "g".into(),
+            origin_view: None,
+            atomic: false,
+            value: value(),
+        }
+    }
+
+    fn action_intent_cmd(seq: u64) -> CommandIntent {
+        CommandIntent::Action {
+            target: "t".into(),
+            control_id: "a".into(),
+            sequence: seq,
+            origin_view: None,
+            action: "act".into(),
+            source: None,
+            params: None,
+        }
+    }
+
+    fn begin_input(gesture: &str) -> ControlInput {
+        ControlInput::Begin {
+            gesture_id: gesture.to_string(),
+            source: InputSource::from(InputSource::POINTER),
+            origin_view: None,
+            target: None,
+            at: None,
+            modifiers: None,
+            seq: None,
+        }
+    }
+
+    fn commit_input(gesture: &str) -> ControlInput {
+        ControlInput::Commit {
+            gesture_id: gesture.to_string(),
+            value: None,
+            modifiers: None,
+            seq: None,
+        }
+    }
+
+    #[test]
+    fn command_index_bounded_dead_entries_evict_first() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        host.drain_events();
+        // Preview intents mint ids but are never tracked — dead weight
+        // in the routing index that must not grow without bound.
+        for i in 0..(MAX_COMMAND_INDEX + 100) as u64 {
+            host.emit_intent("a", preview_intent(i));
+            host.drain_events();
+        }
+        assert_eq!(host.command_index.len(), MAX_COMMAND_INDEX);
+    }
+
+    #[test]
+    fn command_index_protects_in_flight_and_evicts_deterministically() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        host.drain_events();
+        // 600 receipt-expecting commands: every entry is live
+        // in-flight, so the bound yields rather than strand them.
+        let mut ids = Vec::new();
+        for i in 0..600u64 {
+            ids.push(host.emit_intent("a", action_intent_cmd(i)));
+            host.drain_events();
+        }
+        assert_eq!(host.command_index.len(), 600);
+
+        // Settle the first 100 — their records keep the entries
+        // routable but make them eviction candidates.
+        for id in &ids[..100] {
+            assert!(host.apply_receipt(&receipt(id.clone(), ReceiptStatus::Applied)));
+        }
+        // One more dispatch pushes the index over the cap; the settled
+        // records are evicted from the binding first, so those entries
+        // classify dead and go before any live in-flight command.
+        let extra = host.emit_intent("a", action_intent_cmd(600));
+        ids.push(extra);
+        host.drain_events();
+        assert_eq!(host.command_index.len(), MAX_COMMAND_INDEX);
+        assert_eq!(
+            ids[..100]
+                .iter()
+                .filter(|id| host.command_index.contains_key(*id))
+                .count(),
+            11
+        );
+        // A settled entry that survived still routes (absorbed as
+        // equal-rank); an evicted one reads unrouted.
+        let survivor = ids[..100]
+            .iter()
+            .find(|id| host.command_index.contains_key(*id))
+            .expect("a settled survivor")
+            .clone();
+        assert!(host.apply_receipt(&receipt(survivor, ReceiptStatus::Applied)));
+        assert!(!host.apply_receipt(&receipt(ids[0].clone(), ReceiptStatus::Applied)));
+
+        // Drain the remaining dead entries, then prove class order:
+        // a fresh non-receipt command evicts itself before any
+        // receipt-expecting entry.
+        for i in 601..612u64 {
+            ids.push(host.emit_intent("a", action_intent_cmd(i)));
+            host.drain_events();
+        }
+        assert_eq!(host.command_index.len(), MAX_COMMAND_INDEX);
+        let non_expect = host.emit_intent("a", begin_intent(999));
+        host.drain_events();
+        assert_eq!(host.command_index.len(), MAX_COMMAND_INDEX);
+        assert!(!host.command_index.contains_key(&non_expect));
+        assert!(host.command_index.contains_key(&ids[599]));
+    }
+
+    #[test]
+    fn event_backlog_drop_retires_undelivered_intent() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        host.drain_events();
+        let generation = host.generation();
+        host.dispatch_input(generation, &ComponentKey::from("a"), begin_input("g1"))
+            .expect("begin");
+        host.dispatch_input(generation, &ComponentKey::from("a"), commit_input("g1"))
+            .expect("commit");
+        let commit_id = host
+            .binding("a")
+            .expect("binding")
+            .state()
+            .pending_command_id
+            .clone()
+            .expect("pending commit");
+
+        // Flood the backlog with non-droppable ops until the queued
+        // commit Intent is pushed out the front.
+        for _ in 0..(MAX_VIEW_EVENTS + 100) {
+            host.push_event(ViewEvent::Op(ProjectionOp::Mounted {
+                key: ComponentKey::from("filler"),
+            }));
+        }
+        assert!(!host.events.iter().any(|e| matches!(
+            e,
+            ViewEvent::Intent { command_id, .. } if *command_id == commit_id
+        )));
+        // Delivery was lost: routing is gone, the record reads
+        // Timeout, and a late receipt routes as unrouted.
+        assert!(!host.command_index.contains_key(&commit_id));
+        let binding = host.binding("a").expect("binding");
+        assert_eq!(binding.phase(), CommandPhase::Timeout);
+        assert!(binding.state().timed_out);
+        assert!(!host.apply_receipt(&receipt(commit_id, ReceiptStatus::Applied)));
+    }
+
+    #[test]
+    fn event_backlog_drop_leaves_settled_command_alone() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![fader("a")])).expect("mount");
+        host.drain_events();
+        let generation = host.generation();
+        host.dispatch_input(generation, &ComponentKey::from("a"), begin_input("g1"))
+            .expect("begin");
+        host.dispatch_input(generation, &ComponentKey::from("a"), commit_input("g1"))
+            .expect("commit");
+        let commit_id = host
+            .binding("a")
+            .expect("binding")
+            .state()
+            .pending_command_id
+            .clone()
+            .expect("pending commit");
+        assert!(host.apply_receipt(&receipt(commit_id.clone(), ReceiptStatus::Applied)));
+        assert_eq!(
+            host.binding("a").expect("binding").phase(),
+            CommandPhase::Applied
+        );
+
+        for _ in 0..(MAX_VIEW_EVENTS + 100) {
+            host.push_event(ViewEvent::Op(ProjectionOp::Mounted {
+                key: ComponentKey::from("filler"),
+            }));
+        }
+        // The command already answered: dropping its undelivered
+        // Intent copy must not fabricate a timeout.
+        let binding = host.binding("a").expect("binding");
+        assert_eq!(binding.phase(), CommandPhase::Applied);
+        assert!(!binding.state().timed_out);
+        assert!(!host.apply_receipt(&receipt(commit_id, ReceiptStatus::Rejected)));
+    }
+
+    #[test]
+    fn duplicate_command_owner_id_rejected() {
+        let mut a = fader("a");
+        let mut b = fader("b");
+        if let ComponentSpec::Fader(c) = &mut a {
+            c.control_id = Some("shared".into());
+        }
+        if let ComponentSpec::Fader(c) = &mut b {
+            c.control_id = Some("shared".into());
+        }
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        let err = host.mount(panel(vec![a, b])).unwrap_err();
+        assert!(
+            matches!(&err, ViewError::InvalidSpec { detail } if detail.contains("duplicate command owner")),
+            "unexpected error: {err}"
+        );
+
+        // An action component's key-derived owner collides with an
+        // explicit control_id just the same.
+        let mut c = fader("c");
+        if let ComponentSpec::Fader(spec) = &mut c {
+            spec.control_id = Some("btn".into());
+        }
+        let err = host
+            .mount(panel(vec![c, button("btn", "t", "act", None)]))
+            .unwrap_err();
+        assert!(matches!(err, ViewError::InvalidSpec { .. }));
+
+        // Distinct owners still mount.
+        host.mount(panel(vec![fader("a"), fader("b")]))
+            .expect("distinct owners mount");
+    }
+
+    fn tabs_with_child(child: ComponentSpec) -> ComponentSpec {
+        ComponentSpec::Tabs(TabsSpec {
+            key: ComponentKey::from("tabs"),
+            active: 0,
+            tabs: vec![TabSpec {
+                key: ComponentKey::from("tabs.t0"),
+                title: "T".into(),
+                child: Box::new(child),
+            }],
+            selection: None,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    #[test]
+    fn tab_alias_shares_owner_and_attributes_canonically() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        // The same node mounted under the tab key and its own key is
+        // one logical component — not a duplicate owner.
+        host.mount(panel(vec![tabs_with_child(fader("vol"))]))
+            .expect("alias mount");
+        assert!(host.mounted_keys().contains(&ComponentKey::from("vol")));
+        assert!(host.mounted_keys().contains(&ComponentKey::from("tabs.t0")));
+
+        // A gesture detach must attribute to the canonical key, not
+        // whichever alias the hash map happens to yield first.
+        let generation = host.generation();
+        host.dispatch_input(generation, &ComponentKey::from("vol"), begin_input("g1"))
+            .expect("begin");
+        host.unmount();
+        let stream = host.drain_events();
+        assert!(stream.iter().any(|e| matches!(
+            e,
+            ViewEvent::Gesture {
+                key,
+                event: InteractionEvent::Cancel { .. },
+            } if key.0 == "vol"
+        )));
+    }
+
+    #[test]
+    fn alias_invocation_uses_canonical_command_owner() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![tabs_with_child(button(
+            "btn", "t", "act", None,
+        ))]))
+        .expect("alias mount");
+        // Invoking through the tab alias must mint under the canonical
+        // owner id — the same binding and receipt-routing domain as the
+        // canonical mount — never the alias surface key, which lives
+        // outside the deduplicated owner space.
+        let generation = host.generation();
+        host.invoke(generation, &ComponentKey::from("tabs.t0"))
+            .expect("invoke via alias");
+        host.drain_events();
+        assert!(!host.command_index.is_empty());
+        assert!(host.command_index.values().all(|owner| owner == "btn"));
+        assert!(host.binding("btn").is_some());
+        assert!(host.binding("tabs.t0").is_none());
     }
 }

@@ -1585,7 +1585,10 @@ impl InteractionControl {
     }
 
     fn next_sequence(&mut self) -> SequenceNumber {
-        self.sequence += 1;
+        self.sequence = self
+            .sequence
+            .checked_add(1)
+            .expect("InteractionControl sequence exhausted (2^64 events)");
         self.sequence
     }
 
@@ -1737,7 +1740,10 @@ impl InteractionControl {
     }
 
     fn auto_gesture_id(&mut self) -> GestureId {
-        self.atomic_counter += 1;
+        self.atomic_counter = self
+            .atomic_counter
+            .checked_add(1)
+            .expect("InteractionControl atomic counter exhausted (2^64 gestures)");
         format!("atomic-{}", self.atomic_counter)
     }
 
@@ -2337,9 +2343,16 @@ impl InteractionDispatcher {
 
     /// Dispatch an input to a control. Unknown `control_id` is reported
     /// as `rejected` `unknown-control` rather than dropped silently.
+    ///
+    /// # Panics
+    /// On `u64` sequence-counter exhaustion (2^64) — unreachable in
+    /// practice; an honest failure beats silently wrapping the order.
     pub fn dispatch(&mut self, control_id: &str, input: ControlInput) -> Vec<InteractionEvent> {
         let Some(c) = self.controls.get_mut(control_id) else {
-            self.synthetic_seq += 1;
+            self.synthetic_seq = self
+                .synthetic_seq
+                .checked_add(1)
+                .expect("InteractionDispatcher synthetic sequence exhausted (2^64 rejections)");
             return vec![InteractionEvent::Rejected {
                 meta: InteractionEventMeta {
                     control_id: control_id.to_string(),
@@ -2782,6 +2795,28 @@ impl PendingRecord {
 /// first, in-flight receipt-expecting records stay.
 const MAX_PENDING_RECORDS: usize = 64;
 
+/// Bound on unconsumed dispatch records. The outbox is a bounded
+/// dispatch history — the authoritative delivery path is the host's
+/// `ViewEvent::Intent` stream, so oldest entries drop first when the
+/// consumer never drains.
+const MAX_OUTBOX_DISPATCHES: usize = 64;
+
+/// Liveness class of one command for host-side receipt-routing
+/// retention (`ViewHost::command_index` eviction). Declaration order
+/// is eviction priority: dead entries go first, live
+/// receipt-expecting commands last.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum RecordLedgerState {
+    /// No live record — never tracked (preview) or already evicted.
+    Dead,
+    /// A receipt was recorded (any status).
+    Settled,
+    /// Unresolved and not receipt-expecting.
+    LiveNonExpect,
+    /// Unresolved and receipt-expecting — the consumer may still answer.
+    LiveExpect,
+}
+
 /// Per-control command-binding state machine (Rust port of the
 /// `ui/binding` `Binding` semantics). Mints `view-id:N` command ids,
 /// tracks every non-preview command for generation-scoped receipt
@@ -2829,7 +2864,10 @@ impl<P: Clone> CommandBinding<P> {
     }
 
     fn mint(&mut self) -> CommandId {
-        self.counter += 1;
+        self.counter = self
+            .counter
+            .checked_add(1)
+            .expect("CommandBinding command counter exhausted (2^64 commands)");
         // Namespaced by the binding id: receipts route back through
         // `Intent.id` alone, so command ids must be unique across the
         // bindings of one view.
@@ -2899,12 +2937,49 @@ impl<P: Clone> CommandBinding<P> {
             },
             intent,
         });
+        // The outbox is bounded: undrained dispatches age out oldest
+        // first rather than growing without limit.
+        while self.outbox.len() > MAX_OUTBOX_DISPATCHES {
+            self.outbox.pop_front();
+        }
         (command_id, expect_receipt)
     }
 
     /// Drains queued dispatches for the consumer port.
     pub fn drain_outbox(&mut self) -> Vec<Dispatched> {
         self.outbox.drain(..).collect()
+    }
+
+    /// Liveness class of the tracked record for `command_id`, for
+    /// host-side receipt-routing retention. `Dead` covers ids the
+    /// binding never tracked (previews) and records already evicted
+    /// under [`MAX_PENDING_RECORDS`].
+    pub(crate) fn record_ledger_state(&self, command_id: &CommandId) -> RecordLedgerState {
+        match self.records.iter().find(|r| &r.command_id == command_id) {
+            None => RecordLedgerState::Dead,
+            Some(r) if r.status.is_some() => RecordLedgerState::Settled,
+            Some(r) if r.expect_receipt => RecordLedgerState::LiveExpect,
+            Some(_) => RecordLedgerState::LiveNonExpect,
+        }
+    }
+
+    /// Marks the tracked record for `command_id` as delivery-lost:
+    /// `expired` is set so an unresolved receipt-expecting head reads
+    /// `Timeout` instead of pending forever. Returns `true` when the
+    /// binding tracks the id. Settled records are left untouched — a
+    /// command that already answered is not a timeout.
+    pub(crate) fn expire_command(&mut self, command_id: &CommandId) -> bool {
+        let Some(rec) = self
+            .records
+            .iter_mut()
+            .find(|r| &r.command_id == command_id)
+        else {
+            return false;
+        };
+        if rec.status.is_none() && rec.expect_receipt {
+            rec.expired = true;
+        }
+        true
     }
 
     /// Applies a gateway receipt. Late receipts for settled commands —
@@ -2939,6 +3014,10 @@ impl<P: Clone> CommandBinding<P> {
     /// can never overwrite a newer truth. A landed projection retires
     /// a *terminal* head; a head still awaiting confirmation keeps
     /// answering "did my command land" through [`Self::phase`].
+    ///
+    /// # Panics
+    /// On `u64` observed-sequence exhaustion (2^64) — unreachable in
+    /// practice; an honest failure beats silently wrapping the order.
     pub fn on_projection(&mut self, projection: &StateProjection<P>) -> bool {
         if !self.attached {
             return false;
@@ -2956,7 +3035,10 @@ impl<P: Clone> CommandBinding<P> {
             return false;
         }
         self.last_observed = Some(projection.clone());
-        self.observed_seq += 1;
+        self.observed_seq = self
+            .observed_seq
+            .checked_add(1)
+            .expect("CommandBinding observed sequence exhausted (2^64 projections)");
         if self.head_record().is_some_and(|r| r.rank() >= 2) {
             self.head = None;
         }
@@ -2985,13 +3067,20 @@ impl<P: Clone> CommandBinding<P> {
     /// so every tracked record — kept for classification — goes stale,
     /// and the derived phase reads `stale`. Late receipts/projections
     /// are absorbed until [`Self::attach`].
+    ///
+    /// # Panics
+    /// On `u64` generation exhaustion (2^64) — unreachable in
+    /// practice; an honest failure beats silently wrapping the order.
     pub fn detach(&mut self) {
         if !self.attached {
             return;
         }
         self.attached = false;
         self.active_gesture = None;
-        self.generation += 1;
+        self.generation = self
+            .generation
+            .checked_add(1)
+            .expect("CommandBinding generation exhausted (2^64 detaches)");
     }
 
     /// Re-attaches a detached binding. The dead epoch's head is
@@ -3777,5 +3866,62 @@ mod tests {
         ] {
             assert_eq!(projection_value_input(&bad), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn outbox_stays_bounded_when_undrained() {
+        let mut b = CommandBinding::<Value>::new("v1");
+        for i in 0..(MAX_OUTBOX_DISPATCHES + 10) as u64 {
+            b.dispatch(commit_intent(i, "g"), None);
+        }
+        let drained = b.drain_outbox();
+        assert_eq!(drained.len(), MAX_OUTBOX_DISPATCHES);
+        // Oldest dispatches aged out first: 74 minted, the newest 64 kept.
+        assert_eq!(drained[0].context.command_id, "v1:11".to_string());
+        assert_eq!(
+            drained.last().expect("last").context.command_id,
+            format!("v1:{}", MAX_OUTBOX_DISPATCHES + 10)
+        );
+    }
+
+    #[test]
+    fn expire_command_marks_only_unresolved_expect_records() {
+        let mut b = CommandBinding::<Value>::new("v1");
+        let (settled, _) = b.dispatch(commit_intent(1, "g1"), None);
+        b.on_receipt(&CommandReceipt {
+            command_id: settled.clone(),
+            status: ReceiptStatus::Applied,
+            revision: None,
+            detail: None,
+        });
+        let (pending, _) = b.dispatch(commit_intent(2, "g2"), None);
+
+        assert_eq!(
+            b.record_ledger_state(&pending),
+            RecordLedgerState::LiveExpect
+        );
+        assert_eq!(b.record_ledger_state(&settled), RecordLedgerState::Settled);
+        assert_eq!(
+            b.record_ledger_state(&"v1:999".to_string()),
+            RecordLedgerState::Dead
+        );
+
+        assert!(b.expire_command(&pending));
+        assert!(b.expire_command(&settled)); // found, but not marked
+        assert!(!b.expire_command(&"v1:999".to_string()));
+        // The unresolved head reads Timeout; the settled record is
+        // untouched. A late receipt still classifies normally —
+        // `expired` stays set even as the phase moves on.
+        assert_eq!(b.phase(), CommandPhase::Timeout);
+        assert!(b.state().timed_out);
+        b.on_receipt(&CommandReceipt {
+            command_id: pending.clone(),
+            status: ReceiptStatus::Applied,
+            revision: None,
+            detail: None,
+        });
+        assert_eq!(b.phase(), CommandPhase::Applied);
+        assert!(b.state().timed_out);
+        assert_eq!(b.record_ledger_state(&settled), RecordLedgerState::Settled);
     }
 }
