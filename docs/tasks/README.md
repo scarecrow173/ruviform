@@ -7,7 +7,6 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034UdR18snUStfTR5NpZge | Issue #243 実装タスク | in-progress | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
-| TASK-JYzFc0i8qIPnwLLfOMWSJa | Issue #290 OBS-08 RT Timing 実装タスク | in-progress | [implement-issue-290-observability-rt-timing.md](./implement-issue-290-observability-rt-timing.md) |
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
@@ -122,6 +121,7 @@ Directory: `docs/tasks`
 | TASK-034UprmEYoMJcy1j0tHLHy | Issue #278 OBS-03 tracing_export 実装タスク | done | [implement-issue-278-observability-tracing-export.md](./implement-issue-278-observability-tracing-export.md) |
 | TASK-034T2PiH8yPGqaV8KE8r4M | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装 | done | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
 | TASK-034UoZXLONDKdThLicpKCD | Implement Issue #290 OBS-08 allocation-probe — CountingAllocator/AllocationScope | done | [implement-issue-290-observability-allocation-probe.md](./implement-issue-290-observability-allocation-probe.md) |
+| TASK-JYzFc0i8qIPnwLLfOMWSJa | Issue #290 OBS-08 RT Timing 実装タスク | done | [implement-issue-290-observability-rt-timing.md](./implement-issue-290-observability-rt-timing.md) |
 | TASK-034UnBJEQ9hvQiyzg4UMHk | Issue #291 OBS-09 Diagnostics 実装タスク | done | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
 | TASK-I1LfNQN5Dh3eVjMCa0yvUi | Issue #292 OBS-10 Debug Inspection 実装タスク | done | [implement-issue-292-observability-debug-inspection.md](./implement-issue-292-observability-debug-inspection.md) |
 | TASK-SJPi9nUIVUE9wH6ysAKEGp | Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 実装タスク | done | [implement-issue-293-observability-integration-runner.md](./implement-issue-293-observability-integration-runner.md) |
