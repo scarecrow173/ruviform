@@ -20,8 +20,12 @@
 //!
 //! Default run is a real-execution probe of the embedding mechanism in
 //! a GPUI window region. `RVF_POC_SCENARIO=dock` runs the Panel/Tab
-//! layout scenario (tab hide/show, resize follow, focus) instead. Neither
-//! is a Dock PASS by itself — see `evidence/rf388-native-dock-layout/report.md`.
+//! layout scenario (tab hide/show, resize follow, focus);
+//! `RVF_POC_SCENARIO=dock-windowing` runs the slice-3 windowing
+//! scenario (ancestor clip, keyboard/focus routing, re-dock/float
+//! 2-phase). Neither is a Dock PASS by itself — see
+//! `evidence/rf388-native-dock-layout/report.md` and
+//! `evidence/rf388-native-dock-windowing/report.md`.
 
 #[cfg(not(all(feature = "gpui", target_os = "windows")))]
 fn main() {

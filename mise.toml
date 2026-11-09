@@ -353,6 +353,16 @@ description = "Run the RF388 native-dock Panel/Tab layout scenario on the real O
 env = { RVF_POC_SCENARIO = "dock" }
 run = "cargo run -p ruviform-poc-native-dock --features gpui,vst3"
 
+# RF388 slice-3 windowing lane: ancestor clip/overhang, keyboard/focus
+# routing, and DockWorkspace detach→reattach 2-phase against the real
+# editor. Each check is a `[poc] check=… result=pass|fail` line. Set
+# RVF_POC_VST3_PATH for the real module and RVF_POC_EVIDENCE_DIR for
+# window screenshots.
+[tasks.poc-native-dock-windowing]
+description = "Run the RF388 native-dock windowing scenario (clip/focus/redock) on the real OS session (manual lane; Windows only)"
+env = { RVF_POC_SCENARIO = "dock-windowing" }
+run = "cargo run -p ruviform-poc-native-dock --features gpui,vst3"
+
 # UI npm dependency install tasks (Issue #330): each ui/* package's
 # lockfile-driven `npm ci` lives in exactly one task. `sources` (lockfile +
 # manifest) and `outputs` (the hidden lockfile npm always writes into

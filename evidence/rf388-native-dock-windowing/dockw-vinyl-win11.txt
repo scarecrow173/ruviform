@@ -1,0 +1,90 @@
+[poc] start os=windows scenario=native-dock-windowing
+[poc] evidence_dir=target/poc-evidence-vst3
+[poc] capabilities=WindowCapabilities { resize: Supported, focus: Supported, scale_factor: Supported, multi_window: Supported, ime: Unsupported, native_surface_slot: Supported }
+[poc] window=w1
+[poc] vst3_path=C:/Program Files/Common Files/VST3/iZotope/Vinyl.vst3
+[poc] vst3_size=2045952
+[poc] vst3_descriptors=1
+[poc] vst3_plugin id=69545356565a696e5a6f746f70652056 name=Vinyl vendor= version=1.12.0
+[poc] plugin_id=69545356565a696e5a6f746f70652056 vst3_mode=true
+[poc] instance=PluginHandle { slot: 0, generation: 0 }
+[poc] initialize=ok
+[poc] ready
+[poc] activate_window=true
+[poc] check=bind_native_slot result=pass slot_index=0 error=Ok(())
+[poc] projected_rect=(1.0, 38.0, 998.0, 681.0) visibility=Visible
+[poc] lease_parent=ok container_hwnd=0x4541072
+[poc] open=ok caps_dock=Supported caps_close=Supported plugin_tree=2
+[poc] check=attach_parented result=pass editor_hwnd=0x4ef0150 container=0x4541072
+[poc] check=attach_visible result=pass editor_rect=Some((461, 230, 553, 400))
+[poc] msg_hook=installed thread_id=41888 window_hwnd=0x18707d4
+[poc] check=msg_hook result=pass
+[poc] compositor[attached] editor_rect=(461,230,553,400) center=(737,430) own_tl=0xffffffff(dcnull=false) own_c=0xffffffff(dcnull=false) print_px=0x00362d26 clip=Some((0, 0, 0, 0)) clip_c=Some((0, 0, 0, 0)) region=None gpui_region=None siblings=[54788504] topmost=0x3440198 child=0x4ef0150 container=0x4541072 container_rect=Some((461, 230, 998, 681)) gpui=0x18707d4 gpui_rect=Some((452, 161, 1016, 759))
+[poc] ancestor 0: hwnd=0x4ef0150 cls=iZ_Vinyl_v11200_f11_Window.7FFA863BA640 rect=(461,230,553,400) style=0x52000000 exstyle=0x00000000 region=None clip=Some((0, 0, 0, 0))
+[poc] ancestor 1: hwnd=0x4541072 cls=Static rect=(461,230,998,681) style=0x56000000 exstyle=0x00000000 region=None clip=Some((0, 0, 0, 0))
+[poc] ancestor 2: hwnd=0x18707d4 cls=Zed::Window rect=(452,161,1016,759) style=0x14cf0000 exstyle=0x00240100 region=None clip=Some((0, 0, 0, 0))
+[poc] sibling_probe hwnd=0x2db0200 rect=(501,270,160,120) screen_px=0x00362d26 clip=Some((0, 0, 0, 0)) topmost=0x3440198
+[poc] screenshot=dockw-attached result=ok path=target/poc-evidence-vst3\dockw-attached.png window_origin=(452,161) window_size=1016x759 foreground_is_window=true
+[poc] resize_request=clip_overhang result=ok
+[poc] check=clip_overhang_region result=pass slot_rect=(1.0,38.0,398.0,298.0) viewport_logical=(380.0,300.0) expected_region=(0, 0, 379, 262) actual_region=Some((0, 0, 379, 262)) scale=1
+[poc] check=clip_overhang_editor_alive result=pass editor_visible=true parent_ok=true
+[poc] screenshot=dockw-clip-overhang result=ok path=target/poc-evidence-vst3\dockw-clip-overhang.png window_origin=(452,161) window_size=396x339 foreground_is_window=true
+[poc] resize_request=restore result=ok
+[poc] check=clip_cleared result=pass region=None editor_visible=true slot_rect=Some((1.0, 38.0, 998.0, 681.0))
+[poc] set_clip_direct=true clip=LogicalRect { x: 1.0, y: 38.0, width: 499.0, height: 681.0 }
+[poc] clip_pixels container_rect=(461,230,998,681) inside=(710,570)=0x00362d26 outside=(1209,570)=0x00362d26 center=(960,570)=0x00362d26 topmost inside=0x3440198 outside=0x18707d4 child=0x4ef0150 gpui=0x18707d4
+[poc] check=clip_direct_region result=pass expected_region=(0, 0, 499, 681) actual_region=Some((0, 0, 499, 681)) scale=1
+[poc] check=clip_direct_hit_test result=pass topmost_inside=0x3440198 topmost_outside=0x18707d4 child=0x4ef0150 gpui=0x18707d4 (dcomp_topmost covers child pixels)
+[poc] compositor[clip-direct] editor_rect=(461,230,553,400) center=(737,430) own_tl=0xffffffff(dcnull=false) own_c=0xffffffff(dcnull=false) print_px=0x00362d26 clip=Some((0, 0, 0, 0)) clip_c=Some((0, 0, 0, 0)) region=Some((0, 0, 499, 681)) gpui_region=None siblings=[54788504] topmost=0x3440198 child=0x4ef0150 container=0x4541072 container_rect=Some((461, 230, 998, 681)) gpui=0x18707d4 gpui_rect=Some((452, 161, 1016, 759))
+[poc] screenshot=dockw-clip-direct result=ok path=target/poc-evidence-vst3\dockw-clip-direct.png window_origin=(452,161) window_size=1016x759 foreground_is_window=true
+[poc] set_clip_clear=true
+[poc] check=clip_direct_cleared result=pass region=None
+[poc] check=focus_container result=pass focus=Ok(()) focus_hwnd=0x4541072 container=0x4541072
+[poc] key_container log=181 container_got=true plugin_got=false probe_counts=(0, 0, 0, 0, 0) focus_hwnd=0x4541072
+[poc] check=key_to_container_not_plugin result=pass container_got=true plugin_got=false
+[poc] click_at=(737,430)
+[poc] check=click_focuses_plugin result=pass path=click focus_hwnd=0x3440198 plugin_tree=2
+[poc] key_plugin log=157 container_got=false plugin_got=true probe_counts=(0, 0, 0, 0, 0) focus_hwnd=0x3440198
+[poc] check=key_reaches_plugin result=pass container_got=false plugin_got=true
+[poc] focus_return=Ok(()) focus_hwnd=0x4541072
+[poc] check=key_boundary_return result=pass container_got=true plugin_got=false focus_hwnd=0x4541072
+[poc] check=redock_ws_attach result=pass attach=Ok(()) owner=Some(WindowId(1))
+[poc] check=redock_scratch_declared result=pass index=1
+[poc] check=redock_begin_move result=pass begin=Ok(MoveToken(1)) transferring=true
+[poc] check=redock_busy_refuses_lease result=pass mark_busy=Ok(()) lease=Err(SlotBusy)
+[poc] check=redock_commit_move result=pass commit=Ok(MoveReport { view: ViewInstanceId(1), from: Some(WindowId(1)), to: WindowId(1) })
+[poc] check=redock_busy_cleared_lease result=pass clear_busy=Ok(()) lease=true
+[poc] check=redock_move_events result=pass events=[TreeChanged { window: WindowId(1) }, MovePrepared { view: ViewInstanceId(1) }, TreeChanged { window: WindowId(1) }, TreeChanged { window: WindowId(1) }, MoveCommitted { view: ViewInstanceId(1), from: Some(WindowId(1)), to: WindowId(1) }]
+[poc] check=redock_detach result=pass detach=Ok(()) is_detached=true
+[poc] check=redock_update_view_detach result=pass Ok(())
+[poc] check=redock_detach_surface_survives result=pass slot_visibility=Some(Hidden) editor_visible=false child_alive=true parent_ok=true
+[poc] screenshot=dockw-detached result=ok path=target/poc-evidence-vst3\dockw-detached.png window_origin=(452,161) window_size=1016x759 foreground_is_window=true
+[poc] check=redock_reattach result=pass attach=Ok(()) owner=Some(WindowId(1))
+[poc] check=redock_update_view_attach result=pass Ok(())
+[poc] check=redock_reattach_same_surface result=pass slot_visibility=Some(Visible) editor_visible=true editor_hwnd=0x4ef0150 parent_ok=true
+[poc] compositor[reattached] editor_rect=(461,230,553,400) center=(737,430) own_tl=0xffffffff(dcnull=false) own_c=0xffffffff(dcnull=false) print_px=0x00362d26 clip=Some((0, 0, 0, 0)) clip_c=Some((0, 0, 0, 0)) region=None gpui_region=None siblings=[54788504] topmost=0x3440198 child=0x4ef0150 container=0x4541072 container_rect=Some((461, 230, 998, 681)) gpui=0x18707d4 gpui_rect=Some((452, 161, 1016, 759))
+[poc] screenshot=dockw-reattached result=ok path=target/poc-evidence-vst3\dockw-reattached.png window_origin=(452,161) window_size=1016x759 foreground_is_window=true
+[poc] check=close_session result=pass state=Some(Closed) editor_alive=false
+[poc] check=unbind_native_slot result=pass error=Ok(())
+[poc] check=release_lease result=pass container_alive=false
+[poc] check=release_slot result=pass
+[poc] check=slot_event_order result=pass lease_revoked=Some(14) destroyed=Some(15)
+[poc] slot_event=Declared { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=GeometryChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Leased { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=GeometryChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=GeometryChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Declared { slot: SurfaceSlotId { index: 1, generation: 0 } }
+[poc] slot_event=BusySet { slot: SurfaceSlotId { index: 1, generation: 0 } }
+[poc] slot_event=BusyCleared { slot: SurfaceSlotId { index: 1, generation: 0 } }
+[poc] slot_event=Leased { slot: SurfaceSlotId { index: 1, generation: 0 } }
+[poc] slot_event=LeaseRevoked { slot: SurfaceSlotId { index: 1, generation: 0 } }
+[poc] slot_event=Destroyed { slot: SurfaceSlotId { index: 1, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=VisibilityChanged { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=LeaseRevoked { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] slot_event=Destroyed { slot: SurfaceSlotId { index: 0, generation: 0 } }
+[poc] summary failures=0
+[poc] summary failures=0
+[poc] exited failures=0
