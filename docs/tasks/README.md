@@ -222,6 +222,7 @@ Directory: `docs/tasks`
 | TASK-0Un8zJnU8BpZljyBDTCZNe | T6 RF #305 候補 scratch 検証と evidence 記録 (Issue #306) | done | [issue-306-t6-candidate-scratch-evidence.md](./issue-306-t6-candidate-scratch-evidence.md) |
 | TASK-QNzC22ZqitcqDhco1hHMKj | Issue #307 T1: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | done | [issue-307-t1-attach-frame-base-verified-context.md](./issue-307-t1-attach-frame-base-verified-context.md) |
 | TASK-034Ui3oOaxCn3ZMrQTqhed | Issue #308 — Probe再Binding全件整合の実装タスク | done | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
+| TASK-034UwjBX1xcKeAC33krCUQ | F1 PROBE-TIME アライメント fixture 実装 | done | [issue-309-f1-align-fixture.md](./issue-309-f1-align-fixture.md) |
 | TASK-034UjjbcehweeswcNaA3No | Issue #309 — PROBE-TIME時間コンテキスト・整列契約の実装タスク | done | [issue-309-probe-time-context-and-alignment.md](./issue-309-probe-time-context-and-alignment.md) |
 | TASK-034Rp7jV966SX0fG78cOBL | Issue #310-T1 browser-test パッケージ骨格・serve・page protocol | done | [issue-310-01-browser-harness-package.md](./issue-310-01-browser-harness-package.md) |
 | TASK-034Rp7kQsMmyk0At2QYrwX | Issue #310-T2 共有 Fixture/Driver/Assertion (gesture/receipt/state/theme/canvas/a11y) | done | [issue-310-02-shared-fixtures-and-drivers.md](./issue-310-02-shared-fixtures-and-drivers.md) |
