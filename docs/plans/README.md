@@ -28,6 +28,7 @@ Directory: `docs/plans`
 | PLAN-m7f29Op1o9KCQ037OSq6i8 | Implement Issue #280 OBS-05 RT record bridge・record vocabulary | approved | [implement-issue-280-rt-record-bridge.md](./implement-issue-280-rt-record-bridge.md) |
 | PLAN-034T2Nmh2tErwGOV4X6guz | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装計画 | approved | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
 | PLAN-034UnAUkBnCas6lEsFTewD | Issue #291 OBS-09 Diagnostics 実装計画 | approved | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
+| PLAN-4afZ4yYXHh9Vey7rTu5wFt | Issue #292 OBS-10 Debug Inspection 実装計画 | approved | [implement-issue-292-observability-debug-inspection.md](./implement-issue-292-observability-debug-inspection.md) |
 | PLAN-034JZPGUI0000000000003 | Issue #30 実施計画 — プラグイン GUI PoC | approved | [implement-issue-30-plugin-gui-poc.md](./implement-issue-30-plugin-gui-poc.md) |
 | PLAN-034JZLISO0000000000004 | Issue #31 実施計画 — プラグイン分離設計確定 | approved | [implement-issue-31-plugin-isolation.md](./implement-issue-31-plugin-isolation.md) |
 | PLAN-XyRGyqOXQg05BHSeuQmtEC | Issue #32 実施計画 — 第 2 ターゲット設計 | approved | [implement-issue-32-second-target-design.md](./implement-issue-32-second-target-design.md) |
@@ -108,7 +109,7 @@ Directory: `docs/plans`
 | PLAN-034UhlBN58rtCJqfZMTYgt | Issue #378 oracle late-create binding epoch 実装計画 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
 | PLAN-034TnojDZIYRnnvSTlTg34 | Issue #409 scoped re-root + bounded enumeration 実装計画 | draft | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | PLAN-034UmJJcFMIKvjd1orEeeI | Issue #410 — view command ledger bounded retention & correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
-| PLAN-034Uoj9ui4gTFQIKFt9GqA | Issue #418 — theme-codegen 実装計画 | draft | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
+| PLAN-034Uoj9ui4gTFQIKFt9GqA | Issue #418 — theme-codegen 実装計画 | approved | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
 | PLAN-Hs2MvCe8ZyWp5QnXb7TkRa | Issue #421 — Meter/TimeAxis GPUI 描画と parity の実装計画 | in-progress | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | PLAN-84yUP5PkLYsA3yfDgOShzQ | Issue #426 GPUI lab binding 実装計画 | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
 | PLAN-Qx5MnBv8TcHs3RdLe6WaKp | Issue #429 — Consumer 観測 seam の実装計画 | in-progress | [issue-429-consumer-observation-seam.md](./issue-429-consumer-observation-seam.md) |

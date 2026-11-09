@@ -7,6 +7,7 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034UdR18snUStfTR5NpZge | Issue #243 実装タスク | in-progress | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
+| TASK-I1LfNQN5Dh3eVjMCa0yvUi | Issue #292 OBS-10 Debug Inspection 実装タスク | in-progress | [implement-issue-292-observability-debug-inspection.md](./implement-issue-292-observability-debug-inspection.md) |
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
@@ -28,7 +29,7 @@ Directory: `docs/tasks`
 | TASK-ll0hVC7GhO5tm1LEDBWZIe | Issue #389 VST3/L0 実外部 Editor attach タスク（adapter open_gui + PoC vst3 lane） | completed | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TASK-034TaJ4jQd92g4mWa81cxX | Issue #390 Driver Contract/Lab 実装 | todo | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | in_progress | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
-| TASK-034Uokf4hj4eTVzf7L9rQd | Issue #418 — theme-codegen 実装 | todo | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
+| TASK-034Uokf4hj4eTVzf7L9rQd | Issue #418 — theme-codegen 実装 | completed | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
 | TASK-Rd6GjUf3LxSo9WmEb4YhNi | Issue #421 — Meter/TimeAxis GPUI 描画と parity の実装タスク | in-progress | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | TASK-Ka4Yp9dWmR7sXq2LnV5TcE | Issue #423 WebView 写像・focus capability・GPUI 実窓検証（実装スライス） | in-progress | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
 | TASK-ovbF_E6zV8WeEi0OsUIw-w | Issue #426 GPUI lab binding・Story matrix・Golden 境界・Consumer 検査の作業記録 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
