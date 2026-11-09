@@ -38,6 +38,7 @@ use ruviform_ui::{UiError, WindowId};
 use serde::{Deserialize, Serialize};
 
 pub mod fake;
+pub mod runner;
 pub mod visual;
 
 // ---------------------------------------------------------------------
@@ -468,6 +469,18 @@ pub struct ScenarioReport {
     pub environment: Option<serde_json::Value>,
     /// Human-readable detail for non-pass verdicts.
     pub detail: Option<String>,
+    /// Wall-clock accounting for the run — recorded when the
+    /// scenario declared a budget via
+    /// [`runner::ScenarioSpec::timeout_ms`]. `None` when no budget
+    /// was declared: semantic-port runs are bounded by settle steps,
+    /// not wall-clock, and claiming a timeout record without a
+    /// declared budget would be fabricated evidence.
+    pub timeout: Option<runner::ScenarioTimeout>,
+    /// Cleanup accounting the consumer/driver produced after the
+    /// run — opaque JSON (process exit status, windows closed,
+    /// fixture teardown, ...). [`runner::run_scenario`] never fills
+    /// this; it is the consumer's post-run record.
+    pub cleanup: Option<serde_json::Value>,
 }
 
 impl ScenarioReport {
@@ -494,6 +507,8 @@ impl ScenarioReport {
             evidence: Vec::new(),
             environment: None,
             detail: None,
+            timeout: None,
+            cleanup: None,
         }
     }
 }

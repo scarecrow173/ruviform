@@ -61,10 +61,12 @@ Directory: `docs/designs`
 | DESIGN-034RTpdouoLLSINNczwa3c | Issue #279 OBS-04 Plugin Host 4 CounterのSource登録: Registrar注入・Descriptor・Lease寿命 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DESIGN-fhvRxnPJKvnhRAlg7TbeKm | Issue #280 OBS-05 RT Record Bridge・ClockContext・欠落envelope・CorrelationBook設計 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
+| DESIGN-034UtFFzzM3wAegGBSycbJ | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | DESIGN-034T2dhkl03BuqPOGmNlmc | Issue #289 OBS-07 Collector/Metrics/Snapshot: 単一Poll Owner・Baseline/Discontinuity・有界履歴・Health | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
 | DESIGN-034UoQ3mxByzCnjgdAGpe1 | Issue #290 OBS-08 Profiling — allocation-probe 設計（CountingAllocator/AllocationScope） | approved | [issue-290-observability-allocation-probe.md](./issue-290-observability-allocation-probe.md) |
 | DESIGN-034Unxw6Jlg98IypxJkHfQ | Issue #291 OBS-09 Diagnostics: Evidence/Finding/Health/Report — 型で分ける事実と推定 | approved | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | DESIGN-koNZAEijupozhje6vYRpDO | Issue #292 OBS-10 Debug Inspection・Invariant・Session・Probe連携 — observability 内完結 slice | approved | [issue-292-observability-debug-inspection.md](./issue-292-observability-debug-inspection.md) |
+| DESIGN-DQg7hyyzqx49OBMHYx8lv8 | Issue #293 OBS-11 ObservabilityConfig + ObservationRunner 設計 | approved | [issue-293-observability-integration-runner.md](./issue-293-observability-integration-runner.md) |
 | DESIGN-034S9rV6yB3dG7jL0nQ4sU | Issue #294 Cross-Consumer候補tuple Gate 設計 — 証拠契約・解決SHA捕捉・UI lane 段階接続・task 接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | DESIGN-034UlaEev2MQ6gsnrNqias | Issue #294 daily candidate-tuple trigger 設計 — tuple-aware decide・証拠 artifact 回復・daily-ci job | approved | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | DESIGN-RVQaQUltza40Kb1HlAt48X | Issue #294 GUI-CONTRACT lane 接続設計 — 候補 tree 取得・task probe・step/lane 分離 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
@@ -146,6 +148,7 @@ Directory: `docs/designs`
 | DESIGN-034U1MKPf89ADLuIJkjzgP | Issue #461 残課題 — TimeAxis label の canvas 内共有 layer 描画 | approved | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | DESIGN-034U0zRvA4RGErmyI4Tcad | Issue #463 — Spectrogram cell 色の不透明事前合成 | approved | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | DESIGN-034Uc9jupOZFWHdV6h98Xu | Issue #464 — Consumer-neutral GUI Scenario Contract | approved | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
+| DESIGN-GuVirdX8ynQSJId0tz7Dte | Issue #464 slice — Scenario Runner・Report 組み立て契約の設計 | approved | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
 | DESIGN-rhqM5KfSVajqQ3vvtVDHol | Issue #465 Legacy WebView P0/P1 — 分類ポリシーと文書歴史化の設計 | approved | [issue-465-legacy-webview-p0p1.md](./issue-465-legacy-webview-p0p1.md) |
 | DESIGN-034UaAirEnkd41uDSZZzUH | Issue #468 RootedDir canonical 前提の設計判断 | approved | [issue-468-rooteddir-canonical-premise.md](./issue-468-rooteddir-canonical-premise.md) |
 | DESIGN-034UeuINTqCil2VtMHJxGx | Issue #478 Fader/Knob 縦寸法契約 — h_full 兄弟押し出しのレイアウト判断 | approved | [issue-478-fader-knob-height-contract.md](./issue-478-fader-knob-height-contract.md) |

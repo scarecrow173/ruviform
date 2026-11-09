@@ -125,6 +125,7 @@ Directory: `docs/tasks`
 | TASK-034UoZXLONDKdThLicpKCD | Implement Issue #290 OBS-08 allocation-probe — CountingAllocator/AllocationScope | done | [implement-issue-290-observability-allocation-probe.md](./implement-issue-290-observability-allocation-probe.md) |
 | TASK-034UnBJEQ9hvQiyzg4UMHk | Issue #291 OBS-09 Diagnostics 実装タスク | done | [implement-issue-291-observability-diagnostics.md](./implement-issue-291-observability-diagnostics.md) |
 | TASK-I1LfNQN5Dh3eVjMCa0yvUi | Issue #292 OBS-10 Debug Inspection 実装タスク | done | [implement-issue-292-observability-debug-inspection.md](./implement-issue-292-observability-debug-inspection.md) |
+| TASK-SJPi9nUIVUE9wH6ysAKEGp | Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 実装タスク | done | [implement-issue-293-observability-integration-runner.md](./implement-issue-293-observability-integration-runner.md) |
 | TASK-BS44ckVmFBThwWFjdUUaro | Issue #465 Legacy WebView P0/P1 — 文書歴史化と棚卸し | done | [implement-issue-465-legacy-webview-p0p1.md](./implement-issue-465-legacy-webview-p0p1.md) |
 | TASK-034UaK7UfGDq7HHHhdeetT | Issue #468 RootedDir canonical 前提の契約明示 | done | [implement-issue-468-rooteddir-canonical-premise.md](./implement-issue-468-rooteddir-canonical-premise.md) |
 | TASK-034UexWbrpLoijqKctQjFB | Issue #478 Fader/Knob 縦寸法契約 — 設計判断と実装タスク | done | [implement-issue-478-fader-knob-height-contract.md](./implement-issue-478-fader-knob-height-contract.md) |
@@ -184,6 +185,7 @@ Directory: `docs/tasks`
 | TASK-034QxfiWo8R8kkqMasIoQm | T4 verification + review-protocol + impl record (Issue #244) | done | [issue-244-t4-verification-record.md](./issue-244-t4-verification-record.md) |
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
 | TASK-034UjQLrFyv9HY5QSH9HmW | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | done | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| TASK-034UtPLgt4p9kVhsCVVQ5f | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | done | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | TASK-034UlgdtbhGVBT1saWLNNP | Issue #294 daily tuple trigger 実装 — decide.mjs tuple モード・daily-ci job・契約 test | done | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TASK-034Sa3F7jL2nQ5uY8cE1hK | T1 ci/consumer-verify evidence.mjs + fixture tests + test-ci-consumer-verify task（Issue #294） | done | [issue-294-t1-consumer-verify-evidence-script.md](./issue-294-t1-consumer-verify-evidence-script.md) |
 | TASK-034Sa6J9mP4sV7xB1fK5nQ | T2 consumer-verify.yml tuple証拠・SHA ref・UI headless lane・extra_tasks 接続点 + yml contract test（Issue #294） | done | [issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md](./issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md) |
@@ -257,6 +259,7 @@ Directory: `docs/tasks`
 | TASK-Xk2Dv9LqNb7RtPm5WcFs8H | Issue #443 — Tile 列区間と count 契約の実装タスク | done | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |
 | TASK-034Ue8ThHNXd5Ah4vY5uvG | Issue #451 FU-1b — Tab/Shift-Tab フォーカス巡回配線の実装タスク | done | [issue-451-focus-next-wiring.md](./issue-451-focus-next-wiring.md) |
 | TASK-034UcbptcbQ9OYtF7EZwzG | Issue #464 — Consumer-neutral GUI Scenario Contract | done | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
+| TASK-j0UrquC3p37Fqdl53IyKUK | Issue #464 slice — Scenario Runner・Report 組み立て契約 | done | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
 | TASK-G72QPe3EioqQac8Dsnoglk | Issue #479 — 値制御キーボード操作の実装タスク | done | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | TASK-034UiUpK8eTff8QiCEtGrP | Issue #480 — tab_focus op 駆動解放の実装と恒久テスト | done | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TASK-DBfsqONthDwUwmD4GpGXzq | Issue #490 T1 oracle addQuery epoch 整合 | done | [issue-490-t1-oracle-addquery-epoch.md](./issue-490-t1-oracle-addquery-epoch.md) |

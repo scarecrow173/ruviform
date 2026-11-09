@@ -46,10 +46,12 @@ Directory: `docs/specs`
 | SPEC-034UpqR38pxxqJjjHLaFBG | Issue #278 OBS-03 tracing_export — ObservationBatch Exporter + FindingSink adapter slice | approved | [issue-278-observability-tracing-export.md](./issue-278-observability-tracing-export.md) |
 | SPEC-034RToefGzxcXIANSfMf7U | Issue #279 OBS-04 Plugin Host既存4 CounterのSource登録・統合 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | SPEC-ML6zMi4szNWY33LanXM0JL | Issue #280 OBS-05 RT固定長Record Bridge・Clock・欠落・Correlation統合 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
+| SPEC-034UtEnxrMMCVpVRENHQ19 | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | SPEC-034T2dgEk6l5QpkecJOJYo | Issue #289 OBS-07 Collector・Metrics・履歴・Snapshot（単一クレート） | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
 | SPEC-034UoMuIhsjFGaAbbUs8x0 | Issue #290 OBS-08 Profiling — CountingAllocator/AllocationScope（allocation-probe slice） | approved | [issue-290-observability-allocation-probe.md](./issue-290-observability-allocation-probe.md) |
 | SPEC-034UnxeRRp2vX35gnordF9 | Issue #291 OBS-09 Diagnostics・Evidence・Finding・Health・Report | approved | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | SPEC-tBdATMZtqYxn8MbVgZquYA | Issue #292 OBS-10 Debug Inspection・Invariant・Session・Probe連携（observability 内完結 slice） | approved | [issue-292-observability-debug-inspection.md](./issue-292-observability-debug-inspection.md) |
+| SPEC-4IC1B6yvvsvwdDR85TSYNI | Issue #293 OBS-11 Host統合 Config + ObservationRunner 生命周期 slice（observability 内完結） | approved | [issue-293-observability-integration-runner.md](./issue-293-observability-integration-runner.md) |
 | SPEC-034S9nR4tW7xZ2cF5hJ8kM | Issue #294 Cross-Consumer候補tuple Gate — consumer-verify.yml 証拠契約・UI lane 段階拡張・候補連携接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | SPEC-034Ul9sCnKK1pa64jCWkdO | Issue #294 daily candidate-tuple trigger — consumer-verify tuple 判定の daily-ci 組込み（tuple-aware decide・証拠 artifact 回復・bounded retry） | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | SPEC-7DGwosr0bGXXRsfeRfhe1v | Issue #294 GUI-CONTRACT lane 接続 — ruviform 候補 tree 上の boundary guard / Fake driver semantic を consumer-verify へ | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
@@ -124,6 +126,7 @@ Directory: `docs/specs`
 | SPEC-034U1Mw5EZAfhDMxQUUpbi | Issue #461 残課題 — TimeAxis label の O(n²) text paint を canvas 内の共有 layer で解消 | approved | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | SPEC-034U0yFY8Tr771Gyy5U4yy | Issue #463 — Spectrogram cell の intensity(alpha)が実窓で反映されない | approved | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | SPEC-034Uc80WBRvRmOb7dt2yeU | Issue #464 — Consumer-neutral GUI Scenario Contract | approved | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
+| SPEC-Ghn42uyLNbGNp71h5dfWyP | Issue #464 slice — Scenario Runner・Report 組み立て契約（ruviform-ui-test） | approved | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
 | SPEC-HvasimHE9mJVFN1ay6D68D | Issue #465 Legacy WebView 基盤の段階的廃止 P0/P1 — 文書歴史化と棚卸し | proposed | [issue-465-legacy-webview-p0p1.md](./issue-465-legacy-webview-p0p1.md) |
 | SPEC-034Uay7qlGIC70AEeDcn7u | Issue #468 RootedDir containment の canonical 前提の設計判断 | proposed | [issue-468-rooteddir-canonical-premise.md](./issue-468-rooteddir-canonical-premise.md) |
 | SPEC-z3dzJJAH4RMnLrkQfhkR0m | Issue #479 — Seek/Fader/Knob のキーボード操作（共通 key 規約） | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |

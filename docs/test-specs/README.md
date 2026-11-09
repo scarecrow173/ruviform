@@ -59,10 +59,12 @@ Directory: `docs/test-specs`
 | TSPEC-034RTrq34tAM6KDpPaC83H | Issue #279 OBS-04 plugin-host 4 Counter Source登録・寿命・degraded試験 | approved | [issue-279-plugin-host-counter-source-tests.md](./issue-279-plugin-host-counter-source-tests.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-iF1sER54cUJ1FKmvvSy6W2 | Issue #280 OBS-05 RT record bridge・record vocabulary tests | approved | [issue-280-rt-record-bridge-tests.md](./issue-280-rt-record-bridge-tests.md) |
+| TSPEC-034UtKOMzAChsfMRSOpIdg | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | TSPEC-034T2NeVNZOhwkPaIzj0Q7 | Issue #289 OBS-07 Collector/Metrics/Snapshot 試験仕様 | approved | [issue-289-observability-collector-metrics-tests.md](./issue-289-observability-collector-metrics-tests.md) |
 | TSPEC-034UoYH3LGuoCYBYsd5dXf | Issue #290 allocation-probe — CountingAllocator/AllocationScope 契約試験 | approved | [issue-290-observability-allocation-probe-tests.md](./issue-290-observability-allocation-probe-tests.md) |
 | TSPEC-034UnxESRAtEpUTP5RInqW | Issue #291 OBS-09 Diagnostics/Evidence/Finding/Health/Report 試験仕様 | approved | [issue-291-observability-diagnostics-tests.md](./issue-291-observability-diagnostics-tests.md) |
 | TSPEC-a7qCcQ6m0LyKTiq4IswgJo | Issue #292 OBS-10 Debug Inspection/Invariant/Session/Report 試験仕様 | approved | [issue-292-observability-debug-inspection-tests.md](./issue-292-observability-debug-inspection-tests.md) |
+| TSPEC-zq1tvuEsFrUjTnAjn3csSR | Issue #293 OBS-11 ObservabilityConfig/ObservationRunner 試験仕様 | approved | [issue-293-observability-integration-runner-tests.md](./issue-293-observability-integration-runner-tests.md) |
 | TSPEC-034S9zD5gJ8lN2qU6xA9eH | consumer-verify tuple証拠契約（解決SHA捕捉・期待照合・status導出・証拠JSON・workflow構造） | implemented | [issue-294-consumer-verify-tuple-evidence.md](./issue-294-consumer-verify-tuple-evidence.md) |
 | TSPEC-034Ule6zLxK0at8L5q0W7q | Issue #294 daily candidate-tuple trigger test spec — tuple 判定・証拠回復・dispatch 契約 | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TSPEC-qrIvFGA7o1j1g1gLAH1gW2 | consumer-verify GUI-CONTRACT lane — 候補 tree 評価・task probe・別結果記録の構造契約 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
@@ -138,6 +140,7 @@ Directory: `docs/test-specs`
 | TSPEC-034U1MLtHiia8IiRjMgkW9 | Issue #461 残課題 — TimeAxis label canvas 描画の検証契約 | approved | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | TSPEC-034U0AQAAk59m51vJU5F4G | Issue #463 — Spectrogram cell intensity の paint 色検証契約 | approved | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | TSPEC-034UcapDuO3SYzYw2r2tHz | Issue #464 — Consumer-neutral GUI Scenario Contract | approved | [issue-464-consumer-neutral-gui-scenario-contract.md](./issue-464-consumer-neutral-gui-scenario-contract.md) |
+| TSPEC-wOxWNRLHg5C2rotQihPFys | Issue #464 slice — Scenario Runner・Report 組み立て契約のテスト仕様 | approved | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
 | TSPEC-034UewQGei6BGVolWZlKjI | Issue #478 Fader/Knob 縦寸法契約の検証 | approved | [issue-478-fader-knob-height-contract.md](./issue-478-fader-knob-height-contract.md) |
 | TSPEC-LqfidO2iIqcMjOeeHeLMd2 | Issue #479 — 値制御キーボード操作の検証契約 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | TSPEC-034UiRtw5zDZciI3peq94F | Issue #480 tab_focus 解放テスト仕様 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
