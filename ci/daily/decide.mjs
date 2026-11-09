@@ -35,12 +35,28 @@
 // run status/conclusion/run_attempt always describe the run's LATEST
 // attempt, matching the "latest attempt on the SHA" decision rule.
 //
+// Tuple mode (Issue #294, `--mode tuple` / `DAILY_MODE=tuple`): the unit of
+// verification is the candidate tuple
+//   (ruviform main SHA, consumer main SHAs..., "consumer-verify-tuple/v1")
+// evaluated against `consumer-verify.yml` run history. Workflow run records
+// do not expose dispatch inputs, so the tuple each run verified is recovered
+// from its `consumer-evidence-<consumer>-attempt-<n>` artifacts. A run only
+// counts as verified for the candidate tuple when it completed `success`
+// AND every consumer's evidence reports `consumer.status === "pass"` AND
+// the recovered tuple matches all candidate components exactly. Missing,
+// expired, malformed, or inconsistent evidence is "unverifiable" — never
+// verified, never silently ignored for retry accounting.
+//
 // Usage:
 //   GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repo node ci/daily/decide.mjs
 //       [--workflow ci.yml] [--main-ref main] [--api-base URL]
 //       [--max-auto-dispatches 2] [--max-pages 10]
 //       [--confirm-timeout-ms 120000] [--confirm-interval-ms 15000]
 //       [--report FILE] [--summary FILE] [--fixture FILE] [--dry-run]
+//   # tuple mode:
+//   ... node ci/daily/decide.mjs --mode tuple --workflow consumer-verify.yml
+//       [--consumer-repo audiolens=owner/repo[,synvelis=owner/repo]]
+//       [--tuple-contract consumer-verify-tuple/v1] [--max-evidence-runs 60]
 //
 // Exit codes: 0 every completed outcome (including budget-exhausted /
 // hold-unknown / history-truncated / main-moved / dispatched-unconfirmed
@@ -48,8 +64,13 @@
 // via warnings), 1 on `error` (the scheduler could not complete its
 // decision — API failure, malformed response, unreadable fixture), 2 usage.
 
+import { execFile } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
+import { inflateRawSync } from "node:zlib";
+
+const execFileAsync = promisify(execFile);
 
 // Events that represent a Full CI execution of the target workflow.
 // pull_request runs are excluded structurally (head_branch is the PR
@@ -255,6 +276,357 @@ export function decide({ mainSha, runs, mainRef = "main", autoActors = ["github-
 }
 
 // ---------------------------------------------------------------------------
+// Tuple-mode decision core (Issue #294)
+// ---------------------------------------------------------------------------
+//
+// The tuple-mode history scan classifies every in-scope terminal run into
+// exactly one of three buckets before decideTuple sees it:
+//   covering     — evidence recovered AND the run's tuple equals the
+//                  candidate tuple on every component (ruviformRev,
+//                  every consumerResolvedSha, contract). consumerStatus
+//                  carries each consumer's evidence status.
+//   non-target   — evidence recovered AND provably a DIFFERENT tuple
+//                  (any definite component mismatch, including a
+//                  different contract version). Contributes nothing.
+//   unverifiable — evidence could not be recovered or fails validation
+//                  (artifact missing/expired/corrupt, inconsistent tuple
+//                  fields across consumers, runId mismatch). Never counts
+//                  toward verified; auto-origin ones count toward the
+//                  retry budget conservatively.
+//
+// In-flight runs are NOT evidence-scanned: an unfinished run cannot prove
+// which tuple it belongs to, so every in-scope in-flight run suppresses
+// dispatch (a foreign-tuple in-flight delays us one cycle — never a
+// duplicate dispatch).
+
+// A covering entry counts as verified for the candidate tuple only when
+// the run completed `success` AND every configured consumer's recovered
+// evidence reports status "pass". not_run / unsupported / fail consumers
+// make the run a partial verification — the tuple stays unverified.
+function isVerifiedCovering(entry, consumers) {
+  if (entry == null || !isSuccess(entry.run)) return false;
+  const status = entry.consumerStatus;
+  if (status == null || typeof status !== "object") return false;
+  return consumers.every((c) => status[c.name] === "pass");
+}
+
+// Evaluates the candidate tuple against covering/in-flight/unverifiable
+// run classifications. Decision vocabulary matches decide():
+//   skip-verified | suppress-in-flight | hold-unknown |
+//   budget-exhausted | dispatch
+export function decideTuple({
+  candidate,
+  covering = [],
+  inFlight = [],
+  unverifiable = [],
+  autoActors = ["github-actions[bot]"],
+  maxAutoDispatches = 2,
+}) {
+  const consumers = candidate?.consumers ?? [];
+  const sortedCovering = [...covering].sort((a, b) => newestFirst(a.run, b.run));
+  const latest = sortedCovering[0] ?? null;
+  const verified = (e) => isVerifiedCovering(e, consumers);
+  const latestVerified = sortedCovering.find(verified) ?? null;
+
+  let decision;
+  let reason;
+  if (inFlight.length > 0) {
+    // An in-flight run cannot prove its tuple — it may be verifying ours.
+    // Suppress rather than risk a duplicate dispatch.
+    decision = "suppress-in-flight";
+    reason = `${inFlight.length} in-flight run(s) (tuple unverifiable until completion)`;
+  } else if (latest != null && classifyRun(latest.run) === "unknown") {
+    decision = "hold-unknown";
+    reason = `unrecognised state "${latest.run.status}"/"${latest.run.conclusion ?? "null"}" on latest covering run ${latest.run.id}`;
+  } else if (latest != null && verified(latest)) {
+    // A verified claim is sound only if `latest` is provably the newest
+    // effective attempt on this tuple. A non-verified covering run with
+    // tied/unorderable/newer-unexplained activity, or an unverifiable run
+    // that is newer-or-unorderable relative to it, could hide a newer
+    // attempt — hold, never record a false verified.
+    const top = attemptTime(latest.run);
+    const contender = sortedCovering.find((e) => {
+      if (e === latest || verified(e)) return false;
+      const at = attemptTime(e.run);
+      if (top == null || at == null || at === top) return true;
+      const act = activityTime(e.run);
+      return act != null && act > top;
+    });
+    const uContender = unverifiable.find((u) => {
+      const at = attemptTime(u.run);
+      return at == null || top == null || at >= top;
+    });
+    if (contender != null || uContender != null) {
+      const hid = contender?.run ?? uContender?.run;
+      decision = "hold-unknown";
+      reason = `latest-attempt ordering ambiguous on tuple: run ${hid.id} contests verified run ${latest.run.id}`;
+    } else {
+      decision = "skip-verified";
+      reason = `run ${latest.run.id} completed success with all consumers pass on the candidate tuple`;
+    }
+  } else {
+    // No verified covering run on the candidate tuple. Retry budget counts
+    // auto dispatches attributable to this tuple (covering) PLUS
+    // unverifiable auto dispatches — an unverifiable run cannot disprove
+    // an automated origin on this tuple, so it counts on the safe side
+    // (overcounting dispatches less; undercounting retries forever).
+    const autoOnTuple =
+      sortedCovering.filter((e) => isAutoDispatch(e.run, autoActors)).length +
+      unverifiable.filter((u) => isAutoDispatch(u.run, autoActors)).length;
+    const base = latest == null ? "no-covering-history" : `latest-covering:${latest.run.status}/${latest.run.conclusion ?? "null"}`;
+    if (autoOnTuple >= maxAutoDispatches) {
+      decision = "budget-exhausted";
+      reason = `${base}; ${autoOnTuple} auto dispatches (covering+unverifiable) >= limit ${maxAutoDispatches}`;
+    } else {
+      decision = "dispatch";
+      reason = `${base}; auto dispatches ${autoOnTuple}/${maxAutoDispatches}`;
+    }
+  }
+
+  return {
+    decision,
+    reason,
+    covering: sortedCovering,
+    latest,
+    latestVerified,
+    inFlight,
+    unverifiable,
+    autoOnTuple:
+      sortedCovering.filter((e) => isAutoDispatch(e.run, autoActors)).length +
+      unverifiable.filter((u) => isAutoDispatch(u.run, autoActors)).length,
+  };
+}
+
+// Classifies one terminal run's recovered evidence against the candidate
+// tuple. `evidences` maps consumer name -> parsed evidence JSON (null when
+// unrecoverable). The candidate's consumer list (name/repo/resolved sha)
+// is authoritative — config consumers carry no sha. Returns
+// { kind: "covering", consumerStatus } | { kind: "non-target" } |
+// { kind: "unverifiable" }.
+export function classifyRunEvidence({ run, evidences, candidate, contract }) {
+  const consumers = candidate?.consumers ?? [];
+  const evs = consumers.map((c) => evidences?.get(c.name) ?? null);
+  if (evs.some((e) => e == null)) return { kind: "unverifiable" };
+  for (let i = 0; i < consumers.length; i++) {
+    const ev = evs[i];
+    const c = consumers[i];
+    const t = ev?.tuple;
+    if (
+      ev.kind !== "consumer-verify-evidence" ||
+      typeof ev.contract !== "string" ||
+      ev.contract === "" ||
+      ev.run?.runId !== String(run.id) ||
+      ev.consumer?.name !== c.name ||
+      ev.consumer?.repo !== c.repo ||
+      typeof ev.status !== "string" ||
+      ev.status === "" ||
+      t == null ||
+      typeof t.ruviformRev !== "string" ||
+      !SHA_RE.test(t.ruviformRev) ||
+      typeof t.consumerResolvedSha !== "string" ||
+      !SHA_RE.test(t.consumerResolvedSha)
+    ) {
+      return { kind: "unverifiable" };
+    }
+  }
+  // Cross-evidence consistency: both consumers must attest the SAME
+  // ruviform rev and contract — disagreement means the evidence set is
+  // internally inconsistent and proves nothing.
+  const rfRevs = new Set(evs.map((e) => e.tuple.ruviformRev));
+  const contracts = new Set(evs.map((e) => e.contract));
+  if (rfRevs.size !== 1 || contracts.size !== 1) return { kind: "unverifiable" };
+  const match =
+    evs[0].tuple.ruviformRev === candidate.ruviformSha &&
+    evs[0].contract === contract &&
+    consumers.every((c, i) => evs[i].tuple.consumerResolvedSha === c.sha);
+  if (!match) return { kind: "non-target" };
+  return {
+    kind: "covering",
+    consumerStatus: Object.fromEntries(consumers.map((c, i) => [c.name, evs[i].status])),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Artifact evidence recovery helpers (stdlib only)
+// ---------------------------------------------------------------------------
+
+// Minimal ZIP reader for `actions/upload-artifact` archives: EOCD scan ->
+// central directory -> first `.json` entry (fallback: first entry) ->
+// local header -> stored (method 0) or deflate (method 8, raw) payload ->
+// UTF-8 JSON.parse. Sizes always come from the central directory, so a
+// data-descriptor local header cannot corrupt extraction. Anything that
+// is not a well-formed zip with a parseable JSON entry is an ApiError —
+// callers treat that as "unverifiable", never as verified.
+export function jsonFromArtifactZip(buf) {
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
+  if (b.length < 22) throw new ApiError("artifact zip: too small");
+  let eocd = -1;
+  const floor = Math.max(0, b.length - (22 + 0xffff));
+  for (let i = b.length - 22; i >= floor; i--) {
+    if (b.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) throw new ApiError("artifact zip: no end-of-central-directory record");
+  const count = b.readUInt16LE(eocd + 10);
+  const cdOffset = b.readUInt32LE(eocd + 16);
+  const entries = [];
+  let off = cdOffset;
+  for (let i = 0; i < count; i++) {
+    if (off + 46 > b.length || b.readUInt32LE(off) !== 0x02014b50) {
+      throw new ApiError("artifact zip: malformed central directory entry");
+    }
+    const method = b.readUInt16LE(off + 10);
+    const compSize = b.readUInt32LE(off + 20);
+    const nameLen = b.readUInt16LE(off + 28);
+    const extraLen = b.readUInt16LE(off + 30);
+    const commentLen = b.readUInt16LE(off + 32);
+    const localOff = b.readUInt32LE(off + 42);
+    const name = b.toString("utf8", off + 46, off + 46 + nameLen);
+    entries.push({ name, method, compSize, localOff });
+    off += 46 + nameLen + extraLen + commentLen;
+  }
+  if (entries.length === 0) throw new ApiError("artifact zip: empty archive");
+  const pick = entries.find((e) => /\.json$/i.test(e.name)) ?? entries[0];
+  const lo = pick.localOff;
+  if (lo + 30 > b.length || b.readUInt32LE(lo) !== 0x04034b50) {
+    throw new ApiError("artifact zip: malformed local file header");
+  }
+  const dataStart = lo + 30 + b.readUInt16LE(lo + 26) + b.readUInt16LE(lo + 28);
+  if (dataStart + pick.compSize > b.length) {
+    throw new ApiError("artifact zip: entry data out of bounds");
+  }
+  const data = b.subarray(dataStart, dataStart + pick.compSize);
+  let raw;
+  if (pick.method === 0) {
+    raw = data;
+  } else if (pick.method === 8) {
+    try {
+      raw = inflateRawSync(data);
+    } catch (e) {
+      throw new ApiError(`artifact zip: inflate failed: ${e.message}`);
+    }
+  } else {
+    throw new ApiError(`artifact zip: unsupported compression method ${pick.method}`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw.toString("utf8"));
+  } catch (e) {
+    throw new ApiError(`artifact zip: entry "${pick.name}" is not valid JSON: ${e.message}`);
+  }
+  return parsed;
+}
+
+// Strict `git ls-remote <url> refs/heads/<ref>` output parser: exactly one
+// line of `<40hex>\trefs/heads/<ref>`. Anything else — empty output,
+// multiple matches, non-SHA first field, wrong ref tail — is an ApiError
+// so a consumer SHA is never guessed.
+export function parseLsRemote(stdout, ref) {
+  const lines = String(stdout ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  const valid = lines.filter((l) => {
+    const parts = l.split(/\s+/);
+    return parts.length === 2 && SHA_RE.test(parts[0]) && parts[1] === `refs/heads/${ref}`;
+  });
+  if (lines.length !== 1 || valid.length !== 1) {
+    throw new ApiError(`git ls-remote refs/heads/${ref} returned ${lines.length} line(s), expected exactly 1 matching ref`);
+  }
+  return valid[0].split(/\s+/)[0];
+}
+
+// Recover one run's per-consumer evidence JSON. For each configured
+// consumer, select the `consumer-evidence-<name>-attempt-<attempt>`
+// artifact (skipping expired entries), download its zip, and parse the
+// JSON. Any per-artifact failure yields null for that consumer — the run
+// becomes "unverifiable" downstream. Only the artifact LIST call may
+// throw (an API failure is an `error` outcome, not unverifiable).
+async function recoverRunEvidence({ listRunArtifacts, downloadArtifactZip, runId, attempt, consumers }) {
+  const artifacts = await listRunArtifacts(runId);
+  const result = new Map();
+  for (const c of consumers) {
+    const wanted = `consumer-evidence-${c.name}-attempt-${attempt}`;
+    const art = (artifacts ?? []).find((a) => a != null && typeof a === "object" && a.name === wanted);
+    if (art == null || art.expired === true || typeof art.id !== "number") {
+      result.set(c.name, null);
+      continue;
+    }
+    try {
+      const zip = await downloadArtifactZip(art.id);
+      result.set(c.name, jsonFromArtifactZip(zip));
+    } catch {
+      result.set(c.name, null);
+    }
+  }
+  return result;
+}
+
+// Fixture-only ZIP writer (stored method, no compression): produces real
+// zip bytes so tests exercise the same jsonFromArtifactZip path as
+// production. CRC32 table implementation — no dependencies.
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (const byte of buf) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+export function buildStoredZip(entries) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const e of entries) {
+    const name = Buffer.from(e.name, "utf8");
+    const data = Buffer.isBuffer(e.data) ? e.data : Buffer.from(e.data);
+    const crc = crc32(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0, 6);
+    local.writeUInt16LE(0, 8);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(0, 28);
+    locals.push(local, name, data);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0, 8);
+    central.writeUInt16LE(0, 10);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+    centrals.push(central, name);
+    offset += 30 + name.length + data.length;
+  }
+  const cd = Buffer.concat(centrals);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(cd.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, cd, eocd]);
+}
+
+// ---------------------------------------------------------------------------
 // GitHub API client + fixture client
 // ---------------------------------------------------------------------------
 
@@ -288,7 +660,7 @@ export function createGitHubClient({ token, repo, apiBase = "https://api.github.
     }
   }
 
-  return {
+  const client = {
     // heads/<mainRef> must resolve to a commit sha — validate before use.
     async getRefSha(ref) {
       const data = await request("GET", `/repos/${repo}/git/ref/heads/${ref}`);
@@ -339,7 +711,97 @@ export function createGitHubClient({ token, repo, apiBase = "https://api.github.
     async dispatch({ workflow, ref, inputs }) {
       await request("POST", `/repos/${repo}/actions/workflows/${workflow}/dispatches`, { ref, inputs });
     },
+    // Resolve a consumer repo's branch head via anonymous `git ls-remote`
+    // (Issue #294 tuple mode). Same access boundary as consumer-verify's
+    // anonymous probe: public repos resolve without credentials; a private
+    // or unreachable repo fails -> ApiError -> `error` outcome, never a
+    // guessed SHA.
+    async getRepoRefSha(targetRepo, ref) {
+      const url = `https://github.com/${targetRepo}.git`;
+      let stdout;
+      try {
+        ({ stdout } = await execFileAsync("git", ["ls-remote", url, `refs/heads/${ref}`], { timeout: 30_000 }));
+      } catch (e) {
+        throw new ApiError(`git ls-remote ${targetRepo} refs/heads/${ref} failed: ${e.message}`);
+      }
+      return parseLsRemote(stdout, ref);
+    },
+    // List a run's artifacts (paginated). The `artifacts` array is
+    // required — a 200 body without it is malformed, not "no artifacts".
+    async listRunArtifacts(runId) {
+      const all = [];
+      for (let page = 1; page <= 10; page++) {
+        const data = await request(
+          "GET",
+          `/repos/${repo}/actions/runs/${runId}/artifacts?per_page=100&page=${page}`,
+        );
+        if (data == null || !Array.isArray(data.artifacts)) {
+          throw new ApiError(`run ${runId} artifacts page ${page} malformed: missing artifacts array`);
+        }
+        const badEntry = data.artifacts.some(
+          (a) => a == null || typeof a !== "object" || typeof a.id !== "number" || typeof a.name !== "string",
+        );
+        if (badEntry) {
+          throw new ApiError(`run ${runId} artifacts page ${page} malformed: artifact entry missing id/name`);
+        }
+        all.push(...data.artifacts);
+        if (data.artifacts.length < 100) return all;
+      }
+      return all;
+    },
+    // Download an artifact zip. The endpoint answers 302 to a short-lived
+    // signed URL; the redirect is followed MANUALLY so the GitHub token is
+    // never forwarded to the storage host.
+    async downloadArtifactZip(artifactId) {
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "ruviform-daily-ci",
+      };
+      let res;
+      try {
+        res = await fetchImpl(`${base}/repos/${repo}/actions/artifacts/${artifactId}/zip`, {
+          method: "GET",
+          redirect: "manual",
+          headers,
+        });
+      } catch (e) {
+        throw new ApiError(`github api GET artifact ${artifactId} zip failed: ${e.message}`);
+      }
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers?.get?.("location");
+        if (typeof location !== "string" || location === "") {
+          throw new ApiError(`artifact ${artifactId} zip redirect without location`);
+        }
+        let zip;
+        try {
+          zip = await fetchImpl(location, { method: "GET" });
+        } catch (e) {
+          throw new ApiError(`artifact ${artifactId} zip download failed: ${e.message}`);
+        }
+        if (!zip.ok) throw new ApiError(`artifact ${artifactId} zip download -> ${zip.status}`, zip.status);
+        return Buffer.from(await zip.arrayBuffer());
+      }
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new ApiError(`github api GET artifact ${artifactId} zip -> ${res.status}`, res.status, text.slice(0, 500));
+      }
+      return Buffer.from(await res.arrayBuffer());
+    },
+    // Compose artifact listing + zip download + JSON extraction into the
+    // per-consumer evidence map consumed by classifyRunEvidence.
+    async getRunEvidence(runId, { attempt, consumers }) {
+      return recoverRunEvidence({
+        listRunArtifacts: (id) => client.listRunArtifacts(id),
+        downloadArtifactZip: (id) => client.downloadArtifactZip(id),
+        runId,
+        attempt,
+        consumers,
+      });
+    },
   };
+  return client;
 }
 
 // Deterministic offline client driven by a fixture JSON:
@@ -349,13 +811,31 @@ export function createGitHubClient({ token, repo, apiBase = "https://api.github.
 //     "dispatchCalls": [{"error": {...}} | {}],
 //     "dispatchError": {...},            // shorthand for a single failing call
 //     "refError": {...}, "listError": {...},
-//     "truncated": false }
+//     "truncated": false,
+//     // tuple mode:
+//     "repoRefReads": {"owner/repo": [sha, ...]},  // per getRepoRefSha; repeats last
+//     "repoRefErrors": {"owner/repo": {"message": "..."}},
+//     "runArtifacts": {"<runId>": {"<attempt>": {"<consumer>":
+//        <evidence JSON object> | "__missing__" | "__expired__" |
+//        "__malformed__" | "__badzip__"}}}} }
 export function createFixtureClient(fixture) {
-  const calls = { refReads: 0, listCalls: 0, dispatches: [] };
+  const calls = { refReads: 0, listCalls: 0, dispatches: [], repoRefReads: {}, artifactDownloads: [] };
   const refReads = fixture.refReads?.length ? fixture.refReads : [fixture.mainSha ?? null];
   const listCalls = fixture.listCalls?.length ? fixture.listCalls : [fixture.runs ? [fixture.runs] : [[]]];
   const dispatchCalls = fixture.dispatchCalls ?? (fixture.dispatchError ? [{ error: fixture.dispatchError }] : []);
-  return {
+  const repoRefReads = fixture.repoRefReads ?? {};
+  const repoRefErrors = fixture.repoRefErrors ?? {};
+  const repoRefSeqs = new Map(
+    Object.entries(repoRefReads).map(([repo, seq]) => [repo, Array.isArray(seq) ? seq : [seq]]),
+  );
+  const repoRefCounts = new Map();
+  // artifactId -> { consumer, attempt, runId, value } — populated lazily by
+  // listRunArtifacts so downloadArtifactZip can serve real zip bytes built
+  // by buildStoredZip (the production unzip path stays under test).
+  const artifactStore = new Map();
+  let nextArtifactId = 900_000;
+
+  const client = {
     calls,
     async getRefSha() {
       if (fixture.refError) throw new ApiError(`fixture refError: ${fixture.refError.message ?? "injected"}`);
@@ -377,7 +857,59 @@ export function createFixtureClient(fixture) {
       calls.dispatches.push({ ref, inputs });
       if (entry?.error) throw new ApiError(`fixture dispatchError: ${entry.error.message ?? "injected"}`, entry.error.status ?? null);
     },
+    async getRepoRefSha(repo, ref) {
+      if (repoRefErrors[repo]) {
+        throw new ApiError(`fixture repoRefError ${repo}: ${repoRefErrors[repo].message ?? "injected"}`);
+      }
+      const seq = repoRefSeqs.get(repo);
+      if (seq == null) throw new ApiError(`fixture has no repoRefReads for ${repo}`);
+      const n = repoRefCounts.get(repo) ?? 0;
+      repoRefCounts.set(repo, n + 1);
+      calls.repoRefReads[repo] = (calls.repoRefReads[repo] ?? 0) + 1;
+      const sha = seq[Math.min(n, seq.length - 1)];
+      if (typeof sha !== "string" || !SHA_RE.test(sha)) {
+        throw new ApiError(`fixture repoRefRead ${repo}[${n}] is not a 40-hex sha`);
+      }
+      if (ref !== "main") throw new ApiError(`fixture getRepoRefSha only models refs/heads/main (got ${ref})`);
+      return sha;
+    },
+    async listRunArtifacts(runId) {
+      const perAttempt = fixture.runArtifacts?.[String(runId)] ?? {};
+      const out = [];
+      for (const [attempt, byConsumer] of Object.entries(perAttempt)) {
+        for (const [consumer, value] of Object.entries(byConsumer ?? {})) {
+          if (value === "__missing__") continue;
+          const id = nextArtifactId++;
+          artifactStore.set(id, { runId, attempt, consumer, value });
+          out.push({
+            id,
+            name: `consumer-evidence-${consumer}-attempt-${attempt}`,
+            expired: value === "__expired__",
+            size_in_bytes: 128,
+          });
+        }
+      }
+      return out;
+    },
+    async downloadArtifactZip(artifactId) {
+      calls.artifactDownloads.push(artifactId);
+      const entry = artifactStore.get(artifactId);
+      if (entry == null) throw new ApiError(`fixture artifact ${artifactId} unknown`);
+      if (entry.value === "__badzip__") return Buffer.from("this is not a zip archive");
+      const text = entry.value === "__malformed__" ? "{not valid json" : JSON.stringify(entry.value);
+      return buildStoredZip([{ name: `consumer-evidence-${entry.consumer}.json`, data: Buffer.from(text, "utf8") }]);
+    },
+    async getRunEvidence(runId, { attempt, consumers }) {
+      return recoverRunEvidence({
+        listRunArtifacts: (id) => client.listRunArtifacts(id),
+        downloadArtifactZip: (id) => client.downloadArtifactZip(id),
+        runId,
+        attempt,
+        consumers,
+      });
+    },
   };
+  return client;
 }
 
 // ---------------------------------------------------------------------------
@@ -550,6 +1082,242 @@ export async function execute(cfg) {
 }
 
 // ---------------------------------------------------------------------------
+// Tuple-mode orchestration (Issue #294)
+// ---------------------------------------------------------------------------
+
+// Resolve the full candidate tuple: ruviform main via the repo ref API,
+// each consumer's main via anonymous `git ls-remote`. Any resolution
+// failure throws -> `error` outcome; a tuple is never guessed.
+async function resolveTupleCandidate(client, cfg, observedShas) {
+  const ruviformSha = await client.getRefSha(cfg.mainRef);
+  observedShas.push({ repo: cfg.repo ?? null, ref: cfg.mainRef, sha: ruviformSha, role: "ruviform" });
+  const consumers = [];
+  for (const c of cfg.consumers) {
+    const sha = await client.getRepoRefSha(c.repo, "main");
+    observedShas.push({ repo: c.repo, ref: "main", sha, role: c.name });
+    consumers.push({ name: c.name, repo: c.repo, sha });
+  }
+  return { ruviformSha, consumers, contract: cfg.tupleContract };
+}
+
+function sameTuple(a, b) {
+  return (
+    a.ruviformSha === b.ruviformSha &&
+    a.contract === b.contract &&
+    a.consumers.length === b.consumers.length &&
+    a.consumers.every((c, i) => c.name === b.consumers[i].name && c.repo === b.consumers[i].repo && c.sha === b.consumers[i].sha)
+  );
+}
+
+// List + scope + evidence-scan the workflow run history for `candidate`.
+// Returns { listed, inFlight, covering, unverifiable } or a hold marker
+// ({ truncated } / { evidenceTruncated, terminalCount }).
+async function scanTupleHistory(client, cfg, candidate) {
+  const listed = await client.listRuns({ workflow: cfg.workflow, branch: cfg.mainRef, maxPages: cfg.maxPages });
+  if (listed.truncated) return { truncated: true, listed };
+  const scoped = (listed.runs ?? []).filter((r) => isFullCiRun(r, cfg.mainRef));
+  const inFlight = scoped.filter((r) => classifyRun(r) === "in-flight");
+  const terminal = scoped.filter((r) => classifyRun(r) !== "in-flight").sort(newestFirst);
+  // Evidence recovery costs ~2 API calls per consumer per run — bound the
+  // scan so a pathological history cannot turn the daily job into an
+  // unbounded crawl. Exceeding the bound holds rather than guesses.
+  if (terminal.length > cfg.maxEvidenceRuns) {
+    return { evidenceTruncated: true, terminalCount: terminal.length, listed, inFlight, covering: [], unverifiable: [] };
+  }
+  const covering = [];
+  const unverifiable = [];
+  for (const run of terminal) {
+    const evidences = await client.getRunEvidence(run.id, {
+      attempt: run.run_attempt,
+      consumers: cfg.consumers,
+    });
+    const cls = classifyRunEvidence({
+      run,
+      evidences,
+      candidate,
+      contract: cfg.tupleContract,
+    });
+    if (cls.kind === "covering") covering.push({ run, consumerStatus: cls.consumerStatus });
+    else if (cls.kind === "unverifiable") unverifiable.push({ run });
+    // non-target: proven different tuple — contributes nothing.
+  }
+  return { listed, inFlight, covering, unverifiable };
+}
+
+// Executes the tuple-mode scheduler flow. Same outcome/exit-code contract
+// as execute(): 0 for every completed decision, 1 on `error`.
+export async function executeTuple(cfg) {
+  const warnings = [];
+  const report = {
+    schemaVersion: 1,
+    kind: "daily-ci-tuple-decision",
+    mode: "tuple",
+    repository: cfg.repo ?? null,
+    workflow: cfg.workflow,
+    mainRef: cfg.mainRef,
+    tuple: null,
+    observedShas: [],
+    decisionTuple: null,
+    outcome: null,
+    reason: null,
+    latestVerified: null,
+    coveringAttemptsOnDecisionTuple: [],
+    unverifiableCount: null,
+    autoOnTuple: null,
+    maxAutoDispatches: cfg.maxAutoDispatches,
+    historyTruncated: false,
+    evidenceTruncated: false,
+    dispatch: null,
+    warnings,
+    generatedAt: cfg.now(),
+  };
+  const done = (outcome, reason, extra = {}) => {
+    report.outcome = outcome;
+    report.reason = reason;
+    return { outcome, exitCode: 0, report, warnings, ...extra };
+  };
+
+  try {
+    let candidate = await resolveTupleCandidate(cfg.client, cfg, report.observedShas);
+    report.tuple = candidate;
+    let scan = await scanTupleHistory(cfg.client, cfg, candidate);
+    let d = null;
+
+    const recordDecision = () => {
+      report.decisionTuple = candidate;
+      report.coveringAttemptsOnDecisionTuple = (d?.covering ?? scan.covering ?? [])
+        .slice(0, MAX_ATTEMPTS_IN_REPORT)
+        .map((e) => ({ ...attemptRow(e.run), consumerStatus: e.consumerStatus ?? null }));
+      report.unverifiableCount = (scan.unverifiable ?? []).length;
+      report.autoOnTuple = d?.autoOnTuple ?? null;
+      if (d?.latestVerified != null) {
+        report.latestVerified = {
+          runId: d.latestVerified.run.id ?? null,
+          headSha: d.latestVerified.run.head_sha ?? null,
+          updatedAt: d.latestVerified.run.updated_at ?? null,
+          url: d.latestVerified.run.html_url ?? null,
+          consumerStatus: d.latestVerified.consumerStatus ?? null,
+        };
+      }
+    };
+    const truncatedHold = () => {
+      report.historyTruncated = true;
+      recordDecision();
+      warnings.push(`run history truncated at ${cfg.maxPages} page(s); cannot certify the tuple verification state — widen DAILY_MAX_PAGES or re-run manually`);
+      return done("history-truncated", `run history truncated at ${cfg.maxPages} page(s)`);
+    };
+    const evidenceHold = () => {
+      report.evidenceTruncated = true;
+      recordDecision();
+      warnings.push(`terminal run count ${scan.terminalCount} exceeds DAILY_MAX_EVIDENCE_RUNS=${cfg.maxEvidenceRuns}; evidence scan bound hit — cannot certify the tuple verification state`);
+      return done("evidence-truncated", `terminal runs ${scan.terminalCount} > evidence scan bound ${cfg.maxEvidenceRuns}`);
+    };
+
+    if (scan.truncated) return truncatedHold();
+    if (scan.evidenceTruncated) return evidenceHold();
+    d = decideTuple({
+      candidate,
+      covering: scan.covering,
+      inFlight: scan.inFlight,
+      unverifiable: scan.unverifiable,
+      autoActors: cfg.autoActors,
+      maxAutoDispatches: cfg.maxAutoDispatches,
+    });
+
+    // Re-resolve the whole tuple right before dispatching so a moving
+    // consumer main never gets a run stamped with a stale expected_sha.
+    // Bounded like the single-SHA path: a tuple that keeps moving defers
+    // to the next run instead of chasing it.
+    let rechecks = 0;
+    while (d.decision === "dispatch") {
+      const next = await resolveTupleCandidate(cfg.client, cfg, report.observedShas);
+      if (sameTuple(next, candidate)) break;
+      if (++rechecks > cfg.maxRechecks) {
+        warnings.push(`candidate tuple moved ${rechecks} time(s) during decision; deferring to next run`);
+        return done("candidate-moved", `candidate tuple moved during decision (recheck bound ${cfg.maxRechecks} exceeded)`);
+      }
+      candidate = next;
+      report.tuple = candidate;
+      scan = await scanTupleHistory(cfg.client, cfg, candidate);
+      if (scan.truncated) return truncatedHold();
+      if (scan.evidenceTruncated) return evidenceHold();
+      d = decideTuple({
+        candidate,
+        covering: scan.covering,
+        inFlight: scan.inFlight,
+        unverifiable: scan.unverifiable,
+        autoActors: cfg.autoActors,
+        maxAutoDispatches: cfg.maxAutoDispatches,
+      });
+    }
+
+    recordDecision();
+    if (d.decision !== "dispatch") {
+      if (d.decision === "budget-exhausted" || d.decision === "hold-unknown" || d.decision === "evidence-truncated") {
+        warnings.push(d.reason);
+      }
+      return done(d.decision, d.reason);
+    }
+    if (cfg.dryRun) {
+      return done("dry-run", `would dispatch ${cfg.workflow} on ${cfg.mainRef} for tuple ruviform=${candidate.ruviformSha.slice(0, 12)} (${d.reason})`);
+    }
+
+    // Dispatch with the full tuple inputs consumer-verify.yml expects:
+    // ruviform_rev pins the candidate; *_ref selects the consumer branch;
+    // *_expected_sha makes the lane fail-closed on tuple_mismatch.
+    const preDispatchIds = new Set(
+      (scan.listed?.runs ?? [])
+        .filter((r) => r.event === "workflow_dispatch" && r.head_branch === cfg.mainRef)
+        .map((r) => r.id),
+    );
+    const inputs = { ruviform_rev: candidate.ruviformSha };
+    for (const c of candidate.consumers) {
+      inputs[`${c.name}_ref`] = "main";
+      inputs[`${c.name}_expected_sha`] = c.sha;
+    }
+    const requestedAt = cfg.now();
+    await cfg.client.dispatch({ workflow: cfg.workflow, ref: cfg.mainRef, inputs });
+    report.dispatch = { requestedAt, tuple: candidate, ref: cfg.mainRef, inputs, confirmedRun: null };
+
+    const maxPolls = Math.max(1, Math.ceil(cfg.confirmTimeoutMs / cfg.confirmIntervalMs));
+    let confirmed = null;
+    for (let poll = 0; poll < maxPolls && confirmed == null; poll++) {
+      await cfg.sleep(cfg.confirmIntervalMs);
+      const relisted = await cfg.client.listRuns({ workflow: cfg.workflow, branch: cfg.mainRef, maxPages: cfg.maxPages });
+      confirmed =
+        relisted.runs.find(
+          (r) => r.event === "workflow_dispatch" && r.head_branch === cfg.mainRef && !preDispatchIds.has(r.id),
+        ) ?? null;
+    }
+
+    if (confirmed == null) {
+      warnings.push(`dispatch accepted but no new run observed within ${cfg.confirmTimeoutMs}ms (eventual consistency); next scheduled run re-evaluates`);
+      return done("dispatched-unconfirmed", `dispatched tuple ruviform=${candidate.ruviformSha.slice(0, 12)} but run not observed yet`);
+    }
+    report.dispatch.confirmedRun = attemptRow(confirmed);
+    // head_sha is the dispatch-time main HEAD; the tuple under test is
+    // pinned by the ruviform_rev INPUT, so a mismatch means main moved
+    // between resolution and landing — the evidence tuple stays valid,
+    // but the race is reported honestly.
+    if (confirmed.head_sha !== candidate.ruviformSha) {
+      warnings.push(
+        `dispatched run ${confirmed.id} landed on ${confirmed.head_sha} not ${candidate.ruviformSha}; the run's ruviform_rev input still pins the decided tuple — reported as landed-mismatch`,
+      );
+      return done(
+        "dispatch-landed-mismatch",
+        `dispatched run landed on ${confirmed.head_sha.slice(0, 12)} != decided ruviform ${candidate.ruviformSha.slice(0, 12)}`,
+      );
+    }
+    return done("dispatch-confirmed", `dispatched run ${confirmed.id} for tuple ruviform=${candidate.ruviformSha.slice(0, 12)}`);
+  } catch (e) {
+    report.outcome = "error";
+    report.reason = e.message;
+    report.error = { message: e.message, status: e.status ?? null, body: e.body ?? null };
+    return { outcome: "error", exitCode: 1, report, warnings };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Reporting
 // ---------------------------------------------------------------------------
 
@@ -559,32 +1327,49 @@ function fmtSha(sha) {
 
 export function markdownSummary(report) {
   const lines = [
-    `## daily-ci outcome: ${report.outcome}`,
+    `## daily-ci${report.mode === "tuple" ? "-tuple" : ""} outcome: ${report.outcome}`,
     "",
     `- reason: \`${report.reason ?? "-"}\``,
-    `- decision sha: ${fmtSha(report.decisionSha)}  observed: ${report.observedShas.map((s) => `\`${s.slice(0, 12)}\``).join(", ") || "-"}`,
-    `- latest verified: ${fmtSha(report.latestVerified?.headSha)} @ ${report.latestVerified?.updatedAt ?? "-"}${report.latestVerified?.url ? `  (${report.latestVerified.url})` : ""}`,
-    `- auto dispatches on decision sha: ${report.autoDispatchCount ?? "-"} / ${report.maxAutoDispatches}`,
-    `- history truncated: ${report.historyTruncated}`,
   ];
+  if (report.mode === "tuple" && report.tuple != null) {
+    const t = report.tuple;
+    lines.push(
+      `- tuple: ruviform ${fmtSha(t.ruviformSha)} | ${t.consumers.map((c) => `${c.name} ${fmtSha(c.sha)}`).join(" | ")} | contract \`${t.contract}\``,
+      `- covering attempts on decision tuple: ${(report.coveringAttemptsOnDecisionTuple ?? []).length}  unverifiable runs: ${report.unverifiableCount ?? "-"}  auto on tuple: ${report.autoOnTuple ?? "-"} / ${report.maxAutoDispatches}`,
+      `- latest verified: ${report.latestVerified == null ? "-" : `run ${report.latestVerified.runId} @ ${report.latestVerified.updatedAt ?? "-"}`}${report.latestVerified?.url ? `  (${report.latestVerified.url})` : ""}`,
+    );
+  } else {
+    lines.push(
+      `- decision sha: ${fmtSha(report.decisionSha)}  observed: ${report.observedShas.map((s) => `\`${s.slice(0, 12)}\``).join(", ") || "-"}`,
+      `- latest verified: ${fmtSha(report.latestVerified?.headSha)} @ ${report.latestVerified?.updatedAt ?? "-"}${report.latestVerified?.url ? `  (${report.latestVerified.url})` : ""}`,
+      `- auto dispatches on decision sha: ${report.autoDispatchCount ?? "-"} / ${report.maxAutoDispatches}`,
+    );
+  }
+  lines.push(`- history truncated: ${report.historyTruncated}`);
+  if (report.mode === "tuple") lines.push(`- evidence scan truncated: ${report.evidenceTruncated}`);
   if (report.dispatch != null) {
     const c = report.dispatch.confirmedRun;
+    const expected = report.dispatch.expectedSha ?? report.dispatch.tuple?.ruviformSha;
     lines.push(
-      `- dispatch: expected ${fmtSha(report.dispatch.expectedSha)} on \`${report.dispatch.ref}\` @ ${report.dispatch.requestedAt}`,
+      `- dispatch: expected ${fmtSha(expected)} on \`${report.dispatch.ref}\` @ ${report.dispatch.requestedAt}`,
       c == null
         ? `- confirmed run: not observed within poll window`
         : `- confirmed run: [${c.id}](${c.url})  landed ${fmtSha(c.headSha)}  status \`${c.status}\`/\`${c.conclusion}\`  attempt ${c.runAttempt ?? "-"}`,
     );
+    if (report.dispatch.inputs != null) {
+      lines.push(`- dispatch inputs: \`${JSON.stringify(report.dispatch.inputs)}\``);
+    }
   }
-  if (report.attemptsOnDecisionSha.length > 0) {
+  const attempts = report.attemptsOnDecisionSha ?? report.coveringAttemptsOnDecisionTuple ?? [];
+  if (attempts.length > 0) {
     lines.push(
       "",
-      "| run | event | status | conclusion | attempt | created_at | actor | url |",
-      "| --- | --- | --- | --- | --- | --- | --- | --- |",
-      ...report.attemptsOnDecisionSha.map(
-        (r) =>
-          `| ${r.id ?? "-"} | ${r.event ?? "-"} | ${r.status ?? "-"} | ${r.conclusion ?? "-"} | ${r.runAttempt ?? "-"} | ${r.createdAt ?? "-"} | ${r.actor ?? "-"} | ${r.url ?? "-"} |`,
-      ),
+      "| run | event | status | conclusion | attempt | created_at | actor | consumer status | url |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+      ...attempts.map((r) => {
+        const cs = r.consumerStatus == null ? "-" : Object.entries(r.consumerStatus).map(([k, v]) => `${k}=${v}`).join(",");
+        return `| ${r.id ?? "-"} | ${r.event ?? "-"} | ${r.status ?? "-"} | ${r.conclusion ?? "-"} | ${r.runAttempt ?? "-"} | ${r.createdAt ?? "-"} | ${r.actor ?? "-"} | ${cs} | ${r.url ?? "-"} |`;
+      }),
     );
   }
   if (report.warnings.length > 0) {
@@ -604,6 +1389,27 @@ function parsePositiveInt(value, flag) {
   return n;
 }
 
+const REPO_SPEC_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const CONSUMER_NAME_RE = /^[a-z][a-z0-9-]*$/;
+
+// Parse `name=owner/repo[,name=owner/repo]` consumer specs. Order is
+// preserved — it defines evidence/artifact and dispatch-input ordering.
+export function parseConsumerRepos(spec) {
+  const out = [];
+  for (const part of String(spec ?? "").split(",")) {
+    const trimmed = part.trim();
+    if (trimmed === "") continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) throw new Error(`invalid --consumer-repo entry "${trimmed}" (expected name=owner/repo)`);
+    const name = trimmed.slice(0, eq);
+    const repo = trimmed.slice(eq + 1);
+    if (!CONSUMER_NAME_RE.test(name)) throw new Error(`invalid consumer name "${name}"`);
+    if (!REPO_SPEC_RE.test(repo)) throw new Error(`invalid consumer repo "${repo}" (expected owner/repo)`);
+    out.push({ name, repo });
+  }
+  return out;
+}
+
 export function resolveConfig(argv = process.argv, env = process.env) {
   const cfg = {
     repo: env.GITHUB_REPOSITORY ?? null,
@@ -611,9 +1417,15 @@ export function resolveConfig(argv = process.argv, env = process.env) {
     apiBase: env.DAILY_API_BASE ?? "https://api.github.com",
     workflow: env.DAILY_TARGET_WORKFLOW ?? "ci.yml",
     mainRef: env.DAILY_MAIN_REF ?? "main",
+    mode: env.DAILY_MODE ?? "single",
+    consumers: parseConsumerRepos(
+      env.DAILY_CONSUMER_REPOS ?? "audiolens=scarecrow173/audio-lens,synvelis=scarecrow173/synvelis",
+    ),
+    tupleContract: env.DAILY_TUPLE_CONTRACT ?? "consumer-verify-tuple/v1",
     maxAutoDispatches: 2,
     maxPages: 10,
     maxRechecks: 2,
+    maxEvidenceRuns: 60,
     autoActors: (env.DAILY_AUTO_ACTORS ?? "github-actions[bot]").split(",").map((s) => s.trim()).filter(Boolean),
     confirmTimeoutMs: 120_000,
     confirmIntervalMs: 15_000,
@@ -625,9 +1437,11 @@ export function resolveConfig(argv = process.argv, env = process.env) {
   if (env.DAILY_MAX_AUTO_DISPATCHES != null) cfg.maxAutoDispatches = parsePositiveInt(env.DAILY_MAX_AUTO_DISPATCHES, "DAILY_MAX_AUTO_DISPATCHES");
   if (env.DAILY_MAX_PAGES != null) cfg.maxPages = parsePositiveInt(env.DAILY_MAX_PAGES, "DAILY_MAX_PAGES");
   if (env.DAILY_MAX_RECHECKS != null) cfg.maxRechecks = parsePositiveInt(env.DAILY_MAX_RECHECKS, "DAILY_MAX_RECHECKS");
+  if (env.DAILY_MAX_EVIDENCE_RUNS != null) cfg.maxEvidenceRuns = parsePositiveInt(env.DAILY_MAX_EVIDENCE_RUNS, "DAILY_MAX_EVIDENCE_RUNS");
   if (env.DAILY_CONFIRM_TIMEOUT_MS != null) cfg.confirmTimeoutMs = parsePositiveInt(env.DAILY_CONFIRM_TIMEOUT_MS, "DAILY_CONFIRM_TIMEOUT_MS");
   if (env.DAILY_CONFIRM_INTERVAL_MS != null) cfg.confirmIntervalMs = parsePositiveInt(env.DAILY_CONFIRM_INTERVAL_MS, "DAILY_CONFIRM_INTERVAL_MS");
 
+  let consumerFlagSeen = false;
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -635,9 +1449,21 @@ export function resolveConfig(argv = process.argv, env = process.env) {
     else if (a === "--main-ref") cfg.mainRef = next();
     else if (a === "--api-base") cfg.apiBase = next();
     else if (a === "--repo") cfg.repo = next();
+    else if (a === "--mode") cfg.mode = next();
+    else if (a === "--consumer-repo") {
+      // The flag replaces the env-derived list on first use — appending
+      // would silently union env defaults with explicit flags.
+      if (!consumerFlagSeen) {
+        cfg.consumers = [];
+        consumerFlagSeen = true;
+      }
+      cfg.consumers.push(...parseConsumerRepos(next()));
+    }
+    else if (a === "--tuple-contract") cfg.tupleContract = next();
     else if (a === "--max-auto-dispatches") cfg.maxAutoDispatches = parsePositiveInt(next(), a);
     else if (a === "--max-pages") cfg.maxPages = parsePositiveInt(next(), a);
     else if (a === "--max-rechecks") cfg.maxRechecks = parsePositiveInt(next(), a);
+    else if (a === "--max-evidence-runs") cfg.maxEvidenceRuns = parsePositiveInt(next(), a);
     else if (a === "--auto-actors") cfg.autoActors = next().split(",").map((s) => s.trim()).filter(Boolean);
     else if (a === "--confirm-timeout-ms") cfg.confirmTimeoutMs = parsePositiveInt(next(), a);
     else if (a === "--confirm-interval-ms") cfg.confirmIntervalMs = parsePositiveInt(next(), a);
@@ -650,6 +1476,12 @@ export function resolveConfig(argv = process.argv, env = process.env) {
     } else {
       throw new Error(`unknown argument ${a}`);
     }
+  }
+  if (cfg.mode !== "single" && cfg.mode !== "tuple") {
+    throw new Error(`invalid --mode "${cfg.mode}" (expected single|tuple)`);
+  }
+  if (cfg.mode === "tuple" && cfg.consumers.length === 0) {
+    throw new Error("tuple mode requires at least one --consumer-repo/DAILY_CONSUMER_REPOS entry");
   }
   return cfg;
 }
@@ -665,7 +1497,7 @@ export async function main(argv = process.argv, env = process.env) {
   }
   if (cfg.help) {
     console.log(
-      "Usage: node ci/daily/decide.mjs [--workflow ci.yml] [--main-ref main] [--api-base URL] [--repo owner/repo] [--max-auto-dispatches N] [--max-pages N] [--max-rechecks N] [--auto-actors a,b] [--confirm-timeout-ms N] [--confirm-interval-ms N] [--report FILE] [--summary FILE] [--fixture FILE] [--dry-run]",
+      "Usage: node ci/daily/decide.mjs [--mode single|tuple] [--workflow ci.yml] [--main-ref main] [--api-base URL] [--repo owner/repo] [--consumer-repo name=owner/repo] [--tuple-contract V] [--max-auto-dispatches N] [--max-pages N] [--max-rechecks N] [--max-evidence-runs N] [--auto-actors a,b] [--confirm-timeout-ms N] [--confirm-interval-ms N] [--report FILE] [--summary FILE] [--fixture FILE] [--dry-run]",
     );
     process.exit(0);
     return;
@@ -698,15 +1530,20 @@ export async function main(argv = process.argv, env = process.env) {
     client = createGitHubClient({ token: cfg.token, repo: cfg.repo, apiBase: cfg.apiBase });
   }
 
-  const { exitCode, report, warnings } = await execute({
+  const exec = cfg.mode === "tuple" ? executeTuple : execute;
+  const { exitCode, report, warnings } = await exec({
     client,
     repo: cfg.repo ?? "fixture/fixture",
     workflow: cfg.workflow,
     mainRef: cfg.mainRef,
+    mode: cfg.mode,
+    consumers: cfg.consumers,
+    tupleContract: cfg.tupleContract,
     autoActors: cfg.autoActors,
     maxAutoDispatches: cfg.maxAutoDispatches,
     maxPages: cfg.maxPages,
     maxRechecks: cfg.maxRechecks,
+    maxEvidenceRuns: cfg.maxEvidenceRuns,
     confirmTimeoutMs: cfg.confirmTimeoutMs,
     confirmIntervalMs: cfg.confirmIntervalMs,
     dryRun: cfg.dryRun,

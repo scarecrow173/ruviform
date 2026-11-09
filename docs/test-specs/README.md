@@ -60,6 +60,7 @@ Directory: `docs/test-specs`
 | TSPEC-iF1sER54cUJ1FKmvvSy6W2 | Issue #280 OBS-05 RT record bridge・record vocabulary tests | approved | [issue-280-rt-record-bridge-tests.md](./issue-280-rt-record-bridge-tests.md) |
 | TSPEC-034T2NeVNZOhwkPaIzj0Q7 | Issue #289 OBS-07 Collector/Metrics/Snapshot 試験仕様 | approved | [issue-289-observability-collector-metrics-tests.md](./issue-289-observability-collector-metrics-tests.md) |
 | TSPEC-034S9zD5gJ8lN2qU6xA9eH | consumer-verify tuple証拠契約（解決SHA捕捉・期待照合・status導出・証拠JSON・workflow構造） | implemented | [issue-294-consumer-verify-tuple-evidence.md](./issue-294-consumer-verify-tuple-evidence.md) |
+| TSPEC-034Ule6zLxK0at8L5q0W7q | Issue #294 daily candidate-tuple trigger test spec — tuple 判定・証拠回復・dispatch 契約 | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TSPEC-qrIvFGA7o1j1g1gLAH1gW2 | consumer-verify GUI-CONTRACT lane — 候補 tree 評価・task probe・別結果記録の構造契約 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
 | TSPEC-034RoRhmlBaEa2BqB4gYX1 | Issue #295 ruviform-io-file Mock-driven publish 契約テスト仕様 | approved | [issue-295-io-file-staged-publish.md](./issue-295-io-file-staged-publish.md) |
 | TSPEC-034RBIVDSp1VYbb5Tt3x9B | Issue #296 ruviform-io-file 実 OS backend テスト仕様 | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
@@ -79,6 +80,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Rp62M5XwHUCClhVcEPk | Issue #310 Browser GUI Test Harness 検証仕様 | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | TSPEC-e0XfO8Zf3a26iGOk1UyquR | Issue #311 RF-GT-02 test specification — fixture conformance・record/replay determinism・fault matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | TSPEC-034S312gtUiTestTspFF66 | Issue #312 ruviform-ui-test — lifecycle/control/fixture/clock/observation/fail-closed test specification | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| TSPEC-034UjMKOaa4DzlRpbwWOuL | Issue #313 — Windows 実 OS SendInput キーボード smoke 検証契約 | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | TSPEC-034Ug943CVpTG4Br56eTfE | Issue #314 slice 3 — GPUI/OS capture backend test spec | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | TSPEC-e1fQqoSXueHMyLvDmFV5Gz | Issue #314 slice 1 — Golden Utility コアのテスト仕様 | proposed | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | TSPEC-034UeyabB9HNuQvfyPVYdA | Issue #314 slice 2 — Golden × Scenario 能力契約接続のテスト仕様 | proposed | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |

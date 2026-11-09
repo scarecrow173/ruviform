@@ -17,6 +17,17 @@ name: daily-ci
 # verification state lives in the decision outcome, ::warning annotations,
 # and the daily-ci-report artifact. Failure Issue aggregation is the
 # ci-issue-tracker workflow's job (Issue #368), not this one's.
+#
+# The decide-consumer-verify job (Issue #294) applies the same scheduler
+# to `consumer-verify.yml`, but the unit of verification is the candidate
+# tuple (ruviform main SHA, audio-lens main SHA, synvelis main SHA,
+# consumer-verify-tuple/v1) instead of a single SHA. Consumer main SHAs
+# are resolved via anonymous `git ls-remote` (both consumer repos are
+# public — same access boundary as consumer-verify's own probe), and the
+# tuple each past run verified is recovered from its
+# consumer-evidence-<consumer>-attempt-<n> artifacts because the Actions
+# run API does not expose workflow inputs. Missing/expired/malformed
+# evidence is unverifiable — never a false pass.
 
 on:
   schedule:
@@ -28,7 +39,7 @@ on:
       # Manual re-evaluation path. dry_run runs the same decision pipeline
       # but never POSTs a dispatch — for diagnosing "would it dispatch?".
       dry_run:
-        description: "判定のみ実行し ci.yml を dispatch しない（診断用）"
+        description: "判定のみ実行し ci.yml / consumer-verify.yml を dispatch しない（診断用）"
         required: false
         type: boolean
         default: false
@@ -93,4 +104,56 @@ jobs:
           # attempt's report instead of conflicting on rerun.
           name: daily-ci-report-attempt-${{ github.run_attempt }}
           path: daily-ci-report.json
+          if-no-files-found: warn
+
+  # Issue #294: same scheduler, tuple-aware target. Decides whether the
+  # current (ruviform, audio-lens, synvelis, contract v1) tuple already has
+  # a verified consumer-verify.yml result; dispatches consumer-verify.yml
+  # with ruviform_rev + *_ref/*_expected_sha only when it does not.
+  decide-consumer-verify:
+    name: decide-consumer-verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read # checkout the in-repo script and mise.lock
+      actions: write # read consumer-verify.yml run history/artifacts + POST workflow_dispatch
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore node toolchain from mise.lock
+        run: |
+          mise trust
+          mise install --locked node
+
+      # Same self-test gate as the decide job: a broken evaluator must not
+      # emit a tuple decision.
+      - name: Self-test daily-ci evaluator (mise run test-ci-daily)
+        run: mise run test-ci-daily
+
+      - name: Evaluate consumer-verify tuple state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          DAILY_MODE: tuple
+          DAILY_TARGET_WORKFLOW: consumer-verify.yml
+          DAILY_MAIN_REF: main
+          DAILY_CONSUMER_REPOS: audiolens=scarecrow173/audio-lens,synvelis=scarecrow173/synvelis
+          DAILY_TUPLE_CONTRACT: consumer-verify-tuple/v1
+          DAILY_MAX_AUTO_DISPATCHES: "2"
+          DAILY_MAX_EVIDENCE_RUNS: "60"
+        run: mise exec -- node ci/daily/decide.mjs --mode tuple --report daily-ci-tuple-report.json
+
+      - name: Upload daily-ci tuple report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-ci-tuple-report-attempt-${{ github.run_attempt }}
+          path: daily-ci-tuple-report.json
           if-no-files-found: warn

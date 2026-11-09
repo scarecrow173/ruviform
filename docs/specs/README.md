@@ -47,6 +47,7 @@ Directory: `docs/specs`
 | SPEC-ML6zMi4szNWY33LanXM0JL | Issue #280 OBS-05 RT固定長Record Bridge・Clock・欠落・Correlation統合 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | SPEC-034T2dgEk6l5QpkecJOJYo | Issue #289 OBS-07 Collector・Metrics・履歴・Snapshot（単一クレート） | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
 | SPEC-034S9nR4tW7xZ2cF5hJ8kM | Issue #294 Cross-Consumer候補tuple Gate — consumer-verify.yml 証拠契約・UI lane 段階拡張・候補連携接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
+| SPEC-034Ul9sCnKK1pa64jCWkdO | Issue #294 daily candidate-tuple trigger — consumer-verify tuple 判定の daily-ci 組込み（tuple-aware decide・証拠 artifact 回復・bounded retry） | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | SPEC-7DGwosr0bGXXRsfeRfhe1v | Issue #294 GUI-CONTRACT lane 接続 — ruviform 候補 tree 上の boundary guard / Fake driver semantic を consumer-verify へ | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
 | SPEC-034RoR8tcezgggBLlNk7od | Issue #295 ruviform-io-file — StagedFile 型状態・公開契約・Mock Publish (IO-IMP-01) | approved | [issue-295-io-file-staged-publish-contract.md](./issue-295-io-file-staged-publish-contract.md) |
 | SPEC-034RBEkXlCcpgzIaiikzso | Issue #296 ruviform-io-file — 実 OS Atomic Publish・Durability・Recovery (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
@@ -66,6 +67,7 @@ Directory: `docs/specs`
 | SPEC-034Rp1AEJDKiDTpPq3H4Yz | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | SPEC-3S6R25rgxNv9VL9etjWsH9 | Issue #311 RF-GT-02 Rust↔TypeScript IPC Schema Conformance・Deterministic Record/Replay・Fault Matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | SPEC-034S312gtUiTestSpecBB22 | Issue #312 test-only GUI host lifecycle・secure control adapter・fixture/clock/observation 仕様 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| SPEC-034UjKJM3JWo1yfqUTlRka | Issue #313 — Windows 実 OS SendInput キーボード smoke と OS Capability Matrix（部分スコープ） | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | SPEC-034Ug8RuRab8De5zcQCjTB | Issue #314 slice 3 — GPUI/OS capture backend と能力の正直な配線 | proposed | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | SPEC-0k38sOnYLZQngydDDLygHu | Issue #314 slice 1 — headless Pixel Golden Utility コア | proposed | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | SPEC-034UevQgR6YDvj7j5Urcrc | Issue #314 slice 2 — Golden Utility と Scenario Contract の能力契約接続 | proposed | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |

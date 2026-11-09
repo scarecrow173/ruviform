@@ -155,13 +155,23 @@ for (const [name, job] of [
 
   test(`contract: ${name} result step pins tuple env against GITHUB_ENV forgery`, () => {
     const record = job.slice(job.indexOf("Record evidence"), job.indexOf("Upload evidence"));
-    for (const key of ["EXPECTED_SHA", "REQUESTED_REF", "CONSUMER_NAME", "CONSUMER_REPO"]) {
+    // daily tuple recovery (decide.mjs --mode tuple) trusts tuple.ruviformRev
+    // and tuple.consumerResolvedSha — both must come from pinned inputs /
+    // step outputs, never from a consumer task's $GITHUB_ENV write.
+    for (const key of ["RUVIFORM_REV", "RESOLVED_SHA", "EXPECTED_SHA", "REQUESTED_REF", "CONSUMER_NAME", "CONSUMER_REPO"]) {
       assert.ok(new RegExp(`${key}: `).test(record), `result env must pin ${key}`);
     }
   });
 
-  test(`contract: ${name} artifact name is attempt-unique`, () => {
-    assert.ok(/consumer-evidence-\w+-attempt-\$\{\{ github\.run_attempt \}\}/.test(job));
+  test(`contract: ${name} artifact name is attempt-unique and consumer-exact`, () => {
+    // decide.mjs tuple recovery selects artifacts by the literal name
+    // consumer-evidence-<consumer>-attempt-<run_attempt> — a renamed or
+    // re-patterned artifact makes every historical run unverifiable.
+    const consumer = name.replace(/^verify-/, "");
+    assert.ok(
+      job.includes(`consumer-evidence-${consumer}-attempt-\${{ github.run_attempt }}`),
+      `artifact name must be exactly consumer-evidence-${consumer}-attempt-\${{ github.run_attempt }}`,
+    );
   });
 
   test(`contract: ${name} declares >=2 static unsupported rows and a job timeout`, () => {

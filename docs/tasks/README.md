@@ -175,6 +175,7 @@ Directory: `docs/tasks`
 | TASK-034QxfiWo8R8kkqMasIoQm | T4 verification + review-protocol + impl record (Issue #244) | done | [issue-244-t4-verification-record.md](./issue-244-t4-verification-record.md) |
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
 | TASK-034UjQLrFyv9HY5QSH9HmW | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | done | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| TASK-034UlgdtbhGVBT1saWLNNP | Issue #294 daily tuple trigger 実装 — decide.mjs tuple モード・daily-ci job・契約 test | done | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TASK-034Sa3F7jL2nQ5uY8cE1hK | T1 ci/consumer-verify evidence.mjs + fixture tests + test-ci-consumer-verify task（Issue #294） | done | [issue-294-t1-consumer-verify-evidence-script.md](./issue-294-t1-consumer-verify-evidence-script.md) |
 | TASK-034Sa6J9mP4sV7xB1fK5nQ | T2 consumer-verify.yml tuple証拠・SHA ref・UI headless lane・extra_tasks 接続点 + yml contract test（Issue #294） | done | [issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md](./issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md) |
 | TASK-wTtcOyGIqnDDr4nB4paIK3 | T3 consumer-verify.yml GUI-CONTRACT lane 接続 — 候補 tree guard/semantic step + record 置換 + 構造契約 test（Issue #294） | done | [issue-294-t3-gui-contract-lane-wiring.md](./issue-294-t3-gui-contract-lane-wiring.md) |

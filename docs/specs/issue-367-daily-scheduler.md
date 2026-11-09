@@ -44,6 +44,7 @@ relations:
   derived-by:
     - "docs/designs/issue-367-daily-scheduler.md"
     - "docs/plans/issue-367-daily-scheduler.md"
+    - "docs/specs/issue-294-daily-tuple-trigger.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-367-daily-scheduler.md"
