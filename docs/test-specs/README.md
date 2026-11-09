@@ -55,6 +55,7 @@ Directory: `docs/test-specs`
 | TSPEC-034UjQC8AnQxl52Q8wCT6N | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | TSPEC-034RoYjtRWwL5tpZsCCp6T | Issue #276 generic logging adapter test specification | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | TSPEC-034Rp29Zp9BL0LmhcrU4IF | Issue #277 OBS-02 observability core/source contract tests | approved | [issue-277-observability-core-source-tests.md](./issue-277-observability-core-source-tests.md) |
+| TSPEC-034UBsnivDah67dJlEQhYq | Issue #278 OBS-03 tracing_export slice 2 試験仕様 | approved | [issue-278-observability-tracing-export-records-tests.md](./issue-278-observability-tracing-export-records-tests.md) |
 | TSPEC-034Uprl9YF50Z6pFk0lPWo | Issue #278 OBS-03 tracing_export 試験仕様 | approved | [issue-278-observability-tracing-export-tests.md](./issue-278-observability-tracing-export-tests.md) |
 | TSPEC-034RTrq34tAM6KDpPaC83H | Issue #279 OBS-04 plugin-host 4 Counter Source登録・寿命・degraded試験 | approved | [issue-279-plugin-host-counter-source-tests.md](./issue-279-plugin-host-counter-source-tests.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |

@@ -1,7 +1,7 @@
 //! Fixed event schema — the single source of truth for event names,
 //! `event_version`, field keys, enum→string mappings, severity mapping,
-//! and monotonic-time encoding used by [`super::TracingExporter`] and
-//! [`super::TracingFindingSink`].
+//! and monotonic-time encoding used by [`super::TracingExporter`],
+//! [`super::TracingFindingSink`], and [`super::TracingRecordExporter`].
 //!
 //! # Schema contract
 //!
@@ -21,12 +21,15 @@
 
 use std::time::Instant;
 
+use ruviform_media_core::TimestampProvenance;
 use tracing::Level;
 
 use crate::diagnostics::HealthState;
 use crate::metrics::{MeasurementIssue, MeasurementValidity};
+use crate::record::UnlinkedReason;
 use crate::source::{
-    MetricKind, ObservationScope, ObservationUnit, ReportingImpact, SourceLifecycle,
+    Confidentiality, MetricKind, ObservationScope, ObservationUnit, ReportingImpact,
+    SourceLifecycle,
 };
 
 /// `tracing` target shared by every event this module emits.
@@ -38,6 +41,8 @@ pub(crate) const EVENT_CODE_MEASUREMENT: &str = "metric_observation";
 pub(crate) const EVENT_CODE_WINDOW: &str = "observation_window";
 /// `event_code` of a diagnostics health-transition event.
 pub(crate) const EVENT_CODE_HEALTH_TRANSITION: &str = "diagnostics.health_transition";
+/// `event_code` of an RT [`crate::record::EventRecord`] event.
+pub(crate) const EVENT_CODE_RECORD: &str = "rt_record";
 
 /// Schema revision carried by every event's `event_version` field.
 pub(crate) const EVENT_VERSION: u64 = 1;
@@ -106,6 +111,54 @@ pub(crate) const fn issue_str(issue: Option<MeasurementIssue>) -> &'static str {
     }
 }
 
+/// `correlation_status` field values for `rt_record` events: the
+/// record carried no link (`none`), the book classified the link as
+/// usable (`linked`), or the link is stale/unknown (`unlinked`).
+pub(crate) const CORRELATION_STATUS_NONE: &str = "none";
+pub(crate) const CORRELATION_STATUS_LINKED: &str = "linked";
+pub(crate) const CORRELATION_STATUS_UNLINKED: &str = "unlinked";
+
+/// `clock_status` field values for `rt_record` events.
+pub(crate) const CLOCK_STATUS_STAMPED: &str = "stamped";
+pub(crate) const CLOCK_STATUS_UNSTAMPED: &str = "unstamped";
+
+/// `confidentiality` field value for a [`Confidentiality`]. The value
+/// is the record's own classification only — this exporter never
+/// enforces or interprets it.
+pub(crate) const fn confidentiality_str(confidentiality: Confidentiality) -> &'static str {
+    match confidentiality {
+        Confidentiality::Public => "public",
+        Confidentiality::Internal => "internal",
+        Confidentiality::Confidential => "confidential",
+    }
+}
+
+/// `unlinked_reason` field value; `None` (linked or intentionally
+/// uncorrelated records) maps to the stable `"none"` sentinel so the
+/// field is always present.
+pub(crate) const fn unlinked_reason_str(reason: Option<UnlinkedReason>) -> &'static str {
+    match reason {
+        None => "none",
+        Some(UnlinkedReason::UnknownToken) => "unknown_token",
+        Some(UnlinkedReason::SupersededEpoch) => "superseded_epoch",
+        Some(UnlinkedReason::Expired) => "expired",
+    }
+}
+
+/// `clock_provenance` field value for a [`TimestampProvenance`].
+///
+/// `TimestampProvenance` is `#[non_exhaustive]` in
+/// `ruviform-media-core`, so a future variant added there maps to the
+/// safe `"unknown"` sentinel here instead of failing to compile.
+pub(crate) const fn clock_provenance_str(provenance: TimestampProvenance) -> &'static str {
+    match provenance {
+        TimestampProvenance::Carried => "carried",
+        TimestampProvenance::Derived => "derived",
+        TimestampProvenance::Estimated => "estimated",
+        _ => "unknown",
+    }
+}
+
 /// `health_state`/`from_state`/`to_state` field value for a
 /// [`HealthState`].
 pub(crate) const fn health_state_str(state: HealthState) -> &'static str {
@@ -166,6 +219,24 @@ pub(crate) const fn health_transition_level(to: HealthState) -> Level {
         HealthState::Degraded => Level::WARN,
         HealthState::Unhealthy => Level::ERROR,
     }
+}
+
+/// Level for an `rt_record` event: the declared
+/// [`ReportingImpact`] level, raised to at least `WARN` when the
+/// envelope reports positional loss (`dropped_before > 0` — the RT
+/// bridge dropped records immediately before this one). `ERROR` is
+/// never produced; unlinked correlation and `Estimated` provenance are
+/// reported as fields and never raise severity.
+///
+/// Same `Ord`-is-verbosity rule as [`measurement_level`]: the higher
+/// *severity* of two levels is the `Ord` minimum.
+pub(crate) fn record_level(impact: ReportingImpact, dropped_before: u64) -> Level {
+    let loss_floor = if dropped_before > 0 {
+        Level::WARN
+    } else {
+        Level::TRACE
+    };
+    std::cmp::min(impact_level(impact), loss_floor)
 }
 
 /// Microseconds between `t` and `t0`, saturating at zero and clamped

@@ -177,6 +177,7 @@ Directory: `docs/impl/ir`
 | IMPL-034Ukaiqpkd3tCCzSFomK7 | Issue #309 — PROBE-TIME時間コンテキスト・整列契約の実装（ProbeClockMark + ProbeTimeContext + align_observation_points + ObservationCoverage） | completed | [issue-309-probe-time-context-and-alignment.md](./issue-309-probe-time-context-and-alignment.md) |
 | IMPL-034UnDVtaBTUOTvc3aTj8m | Issue #291 OBS-09 Diagnostics 実装記録 | completed | [issue-291-obs-09-diagnostics.md](./issue-291-obs-09-diagnostics.md) |
 | IMPL-034Upz8rpFOqIgQe87GGYp | Issue #278 OBS-03 tracing_export 実装記録 | completed | [issue-278-obs-03-tracing-export.md](./issue-278-obs-03-tracing-export.md) |
+| IMPL-034UBve3q5ki4mCV8cLprd | Issue #278 OBS-03 tracing_export slice 2 実装記録 | in-progress | [issue-278-obs-03-tracing-export-records.md](./issue-278-obs-03-tracing-export-records.md) |
 | IMPL-034UnS9SUfwZF2v4zSQck6 | Issue #389 Plugin Editor Session hardening 実装記録（timeout/degrade/GraphicsLost/DComp 記録） | completed | [issue-389-session-hardening-implementation.md](./issue-389-session-hardening-implementation.md) |
 | IMPL-034Unx21W1IKfK78iReH5b | Issue #410 view command ledger bounded retention and correlation hardening | completed | [issue-410-view-command-ledger-bounded-retention-and-correlation-hardening.md](./issue-410-view-command-ledger-bounded-retention-and-correlation-hardening.md) |
 | IMPL-034Uwia1yemB1uLcIVLdNU | Issue #410 P2 view ledger correlation hardening — projection revision floor | completed | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |

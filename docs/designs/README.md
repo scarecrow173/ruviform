@@ -57,6 +57,7 @@ Directory: `docs/designs`
 | DESIGN-034UjQBuwtfaWhLg6ZZMBn | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合設計 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | DESIGN-034RoXjgYbKKZ3ZSazkSGi | Issue #276 汎用 Logging Adapter 設計 | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | DESIGN-034Rp1Um3ZXDWfRx8pCmuw | Issue #277 OBS-02 軽量Primitive・Observation Source契約: Gauge/Histogram・Descriptor・SourceId/Generation・Registrar/Lease・寿命 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
+| DESIGN-034UBq1SnAHmlvoFnohCoS | Issue #278 OBS-03 tracing_export slice 2: EventRecord export + Correlation unlinked + W3C Trace Context | approved | [issue-278-observability-tracing-export-records.md](./issue-278-observability-tracing-export-records.md) |
 | DESIGN-034UprcXe8LevfKFoKevlN | Issue #278 OBS-03 tracing_export: ObservationBatch Exporter + FindingSink adapter | approved | [issue-278-observability-tracing-export.md](./issue-278-observability-tracing-export.md) |
 | DESIGN-034RTpdouoLLSINNczwa3c | Issue #279 OBS-04 Plugin Host 4 CounterのSource登録: Registrar注入・Descriptor・Lease寿命 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | DESIGN-034JcpvK9cZEfkeEbBLBoz | Issue #28 UI 技術検証 PoC の設計（使い捨て検証ハーネスと計測・評価方式） | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
