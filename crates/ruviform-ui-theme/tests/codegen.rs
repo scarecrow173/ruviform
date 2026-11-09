@@ -160,6 +160,49 @@ fn invalid_manifest_fails_without_partial_output() {
 }
 
 #[test]
+fn identifier_collision_fails_without_partial_output() {
+    let dir = temp_dir("collision");
+    // `tok.a-b` と `tok.a_b` は同一の snake_case 識別子 `tok_a_b` に潰れる。
+    let doc = dir.join("tokens.json");
+    std::fs::write(
+        &doc,
+        r#"{
+          "$extensions": {
+            "dev.ruviform.dtcg-profile": {
+              "profile": "rvf-dtcg-profile.v1",
+              "layer": "primitive",
+              "id": "collision-fixture",
+              "modes": ["dark"]
+            }
+          },
+          "tok": {
+            "a-b": { "$type": "number", "$value": 1 },
+            "a_b": { "$type": "number", "$value": 2 }
+          }
+        }"#,
+    )
+    .expect("write collision doc");
+    let manifest = dir.join("manifest.json");
+    std::fs::write(
+        &manifest,
+        r#"{"themes":[{"name":"collision","mode":"dark","documents":["tokens.json"]}]}"#,
+    )
+    .expect("write manifest");
+    let out = dir.join("out.rs");
+    let manifest_arg = manifest.to_str().expect("manifest path is UTF-8");
+    let out_arg = out.to_str().expect("out path is UTF-8");
+
+    let output = run_codegen(&["--manifest", manifest_arg, "--out", out_arg]);
+    assert!(
+        !output.status.success(),
+        "identifier collision must fail: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!out.exists(), "失敗時に部分出力ファイルを残してはいけない");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn unresolvable_document_fails() {
     let dir = temp_dir("unresolvable");
     let manifest = dir.join("manifest.json");

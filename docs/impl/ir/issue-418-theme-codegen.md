@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034UoQCq3m1rqajAlcen87"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #418 — theme-codegen 実装記録"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -133,10 +133,10 @@ pipeline のみ（spec §スコープ・design §設計判断どおり）。
 - `src/lib.rs` — `pub mod generated;`（`//` コメント。`///` + `//!` 併用は
   `clippy::mixed_attributes_style` 違反のため）。
 - `Cargo.toml` — `[[bin]] name = "theme-codegen"`（新規依存なし）。
-- `tests/codegen.rs` — 6 test: 繰り返し生成 byte-identical・committed
+- `tests/codegen.rs` — 7 test: 繰り返し生成 byte-identical・committed
   鮮度（`--check`）・manifest 全 theme の generated/runtime
   `to_normalized_json()` 一致・accessor 型検査・invalid manifest /
-  存在しない document で非 0 終了かつ部分出力なし。
+  存在しない document / identifier 衝突で非 0 終了かつ部分出力なし。
 - `mise.toml` — `codegen-theme` / `codegen-theme-check` task 追加のみ。
 - `README.md`・`docs/development-environment.md` — codegen 節・task 表・
   runtime/static 使い分け方針を記述。
@@ -180,11 +180,17 @@ pipeline のみ（spec §スコープ・design §設計判断どおり）。
 
 - `mise run codegen-theme` / `mise run codegen-theme-check` — 生成・鮮度
   byte 比較ともに成功。
+- `mise run fmt-check` / `mise run check` / `mise run lint` /
+  `mise run test` — `origin/main` merge 後に workspace 全体で成功
+  （test は 181 test-result 群・失敗 0）。
+- `cargo test -p ruviform-ui-theme --test codegen` — 7 test 全 pass
+  （補助証拠。canonical は `mise run test`）。
 - `cargo clippy -p ruviform-ui-theme --all-targets -- -D warnings` — clean
   （補助証拠。canonical は `mise run lint`）。
-- `cargo test -p ruviform-ui-theme --test codegen` — 6 test 全 pass
-  （補助証拠。canonical は `mise run test`）。
-- `cargo fmt -p ruviform-ui-theme` 適用後も `--check` が byte 一致を維持。
+- review-protocol: 実装差分に対し cooperative/adversarial の 2 pass +
+  candidate 検証を実施。CONFIRMED P0/P1 なし。修正した非ブロッキング
+  指摘: 生成 header の manifest 名固定記述の除去、identifier 衝突の
+  honest-failure test 追加、impl index 行追加。
 
 ## Risks
 

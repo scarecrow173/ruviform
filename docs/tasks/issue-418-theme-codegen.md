@@ -1,7 +1,7 @@
 ---
 id: "TASK-034Uokf4hj4eTVzf7L9rQd"
 type: "task"
-status: "in-progress"
+status: "completed"
 title: "Issue #418 — theme-codegen 実装"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -86,14 +86,14 @@ relations:
 
 ## Done When
 
-- [ ] `mise run codegen-theme` で `src/generated.rs` が生成・更新される
-- [ ] `mise run codegen-theme-check` が生成物の鮮度を byte 比較で検査する
-- [ ] `cargo test -p ruviform-ui-theme` が決定性・鮮度・実行時一致テストを含めて green
-- [ ] `mise run fmt-check` / `mise run check` / `mise run lint` / `mise run test` が green
-- [ ] 実行時 resolve との使い分けが README/design doc に記述される
+- [x] `mise run codegen-theme` で `src/generated.rs` が生成・更新される
+- [x] `mise run codegen-theme-check` が生成物の鮮度を byte 比較で検査する
+- [x] `cargo test -p ruviform-ui-theme` が決定性・鮮度・実行時一致テストを含めて green
+- [x] `mise run fmt-check` / `mise run check` / `mise run lint` / `mise run test` が green
+- [x] 実行時 resolve との使い分けが README/design doc に記述される
 
 ## Verification
 
-- [ ] `mise run codegen-theme` → `mise run codegen-theme-check`（一致）
-- [ ] `cargo test -p ruviform-ui-theme --test codegen`（補助証拠・canonical は `mise run test`）
-- [ ] `mise run fmt-check` / `mise run check` / `mise run lint` / `mise run test`
+- [x] `mise run codegen-theme` → `mise run codegen-theme-check`（一致）
+- [x] `cargo test -p ruviform-ui-theme --test codegen`（補助証拠・canonical は `mise run test`）
+- [x] `mise run fmt-check` / `mise run check` / `mise run lint` / `mise run test`
