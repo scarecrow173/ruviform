@@ -20,6 +20,14 @@
 //!   bridge over [`ruviform_rt::channel`] with drop-on-full loss
 //!   accounting (`recorded`/`dropped` counters and per-record
 //!   `dropped_before`).
+//! - [`rt_timing`]: measured-interval observation for real-time code —
+//!   [`rt_timing::timing_bridge`] prepares a [`TimingRecorder`](rt_timing::TimingRecorder)
+//!   (RT side: alloc/lock/panic-free `record`) and a
+//!   [`TimingSink`](rt_timing::TimingSink) (non-RT side: per-poll
+//!   [`TimingWindow`](rt_timing::TimingWindow), cumulative
+//!   [`TimingSnapshot`](rt_timing::TimingSnapshot), fixed-bucket
+//!   duration histogram for OBS-07, clock-anomaly/budget/loss
+//!   accounting) — Issue #290 (OBS-08) RT Timing slice.
 //! - [`metrics`]: the shared measurement vocabulary — typed values
 //!   (`Counter`/`Gauge`/`Histogram`), [`metrics::Measurement`] and its
 //!   typed [`metrics::MeasurementValidity`]/issue/loss semantics.
@@ -77,6 +85,13 @@
 //!   [`rt_bridge::RtRecorder::recorded`]: bounded, non-blocking, no-alloc —
 //!   one `try_push` plus `Relaxed` counter ops. These are the bridge
 //!   operations an RT writer may call.
+//! - [`rt_timing::TimingRecorder::record`], [`rt_timing::TimingRecorder::dropped`],
+//!   [`rt_timing::TimingRecorder::recorded`]: RT-suitable — a `const`
+//!   header build plus the inner bridge's bounded `try_push`; no alloc,
+//!   no lock, no panic path, no tracing/subscriber call, no I/O.
+//!   [`rt_timing::timing_bridge`] construction and every
+//!   [`rt_timing::TimingSink`] operation (`poll`, `snapshot`, reader
+//!   accessors) are **non-RT only**.
 //! - [`record`] value types ([`record::ClockContext`],
 //!   [`record::CorrelationLink`], [`record::EventRecord`],
 //!   [`record::RecordHeader`]): `Copy` value types with `const` accessors
@@ -192,6 +207,7 @@ pub mod metrics;
 pub mod profiling;
 pub mod record;
 pub mod rt_bridge;
+pub mod rt_timing;
 pub mod source;
 
 pub use crate::core::{Counter, CounterReader, counter};
