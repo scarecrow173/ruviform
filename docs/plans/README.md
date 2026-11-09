@@ -95,6 +95,7 @@ Directory: `docs/plans`
 | PLAN-034UjMMA7vTOdlkqHFOrca | Issue #313 — Windows 実 OS SendInput キーボード smoke 実装計画 | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | PLAN-034Ug8XG3cIM1VEYu5sQpv | Issue #314 slice 3 — GPUI/OS capture backend 実装計画 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | PLAN-Z43s6oJzXX8u7P4xAKcbau | Issue #314 slice 1 — Golden Utility コアの実装計画 | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
+| PLAN-Sv5LAPR5jiKCGifpkWxo3e | Issue #314 slice 5 — Golden 環境正規化・registry 結合・runner 統合・証拠 lane 実装計画 | approved | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | PLAN-034UeymubB5x0zXeYGvfEl | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装計画 | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | PLAN-lb9Tb7cIysOfXayRz4GJY8 | Issue #326 ci.yml dispatch 専用化 実装計画 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | PLAN-034RBML1CjEEPA4ApRK8R9 | Issue #327 CI計測Baseline 実施計画 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |

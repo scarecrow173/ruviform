@@ -1,12 +1,17 @@
 //! Visual/golden verification connection for [`SemanticGuiTest`]
 //! adapters (Issue #314 slice 2 — design
-//! `docs/designs/issue-314-golden-scenario.md`).
+//! `docs/designs/issue-314-golden-scenario.md`; slice 5 added the
+//! `run_scenario`/`ScenarioOutcome` fold — design
+//! `docs/designs/issue-314-golden-evidence.md`).
 //!
 //! [`VisualGuiTest`] extends the semantic port with one adapter-owned
 //! primitive — [`capture_frame`](VisualGuiTest::capture_frame) — and
 //! one shared step — [`golden_check`](VisualGuiTest::golden_check) —
 //! that turns a captured frame into a [`GoldenComparison`] through the
-//! slice-1 [`crate::golden`] utility. The step is deliberately *not* a
+//! slice-1 [`crate::golden`] utility, and the fold helpers
+//! [`record_golden_step`]/[`record_golden_outcome`] that embed a
+//! comparison into a [`ScenarioReport`] or a `run_scenario` body
+//! [`ScenarioOutcome`]. The step is deliberately *not* a
 //! [`GuiAction`]: it returns a verdict-carrying report, not `()`.
 //!
 //! Honesty contract (same rule as `SemanticGuiTest::capabilities`):
@@ -29,10 +34,11 @@
 //! **RT contract:** non-RT only.
 
 use crate::golden::{
-    self, BaselineStore, EnvironmentMeta, GoldenComparison, GoldenKey, GoldenVerdict, RgbaImage,
-    emit_evidence,
+    self, BaselineStore, EnvironmentMeta, GoldenComparison, GoldenKey, GoldenReport, GoldenVerdict,
+    RgbaImage, emit_evidence,
 };
 
+use super::runner::ScenarioOutcome;
 use super::{ScenarioError, ScenarioReport, ScenarioTarget, ScenarioVerdict, SemanticGuiTest};
 
 /// The honest outcome of one pixel-capture attempt.
@@ -178,27 +184,66 @@ impl From<GoldenVerdict> for ScenarioVerdict {
 /// does not prove semantic checks passed, and a golden `fail` should
 /// fail the scenario but the policy is the consumer's.
 pub fn record_golden_step(report: &mut ScenarioReport, comparison: &GoldenComparison) {
+    record_golden_observation(&mut report.evidence, &mut report.observed, comparison);
+}
+
+/// Folds one golden step into a [`ScenarioOutcome`] — the
+/// `run_scenario` body-side counterpart of [`record_golden_step`]
+/// (Issue #314 slice 5 — design `docs/designs/issue-314-golden-evidence.md`).
+///
+/// A scenario body that calls [`VisualGuiTest::golden_check`]
+/// mid-run records the result here so the runner copies it onto
+/// the returned [`ScenarioReport`]. The fold rules are identical
+/// to [`record_golden_step`]: `golden:<canonical key>` into
+/// `evidence`, the verdict/reason/detail/baseline/stats JSON into
+/// `observed["golden"]` — merged into an existing object, created
+/// when `observed` is `None`, and left untouched when the consumer
+/// already stored a non-object value.
+///
+/// This helper deliberately does **not** touch `outcome.verdict`:
+/// the scenario verdict is the consumer's overall judgment across
+/// all steps. Fold [`ScenarioVerdict::from`]`(comparison.report.
+/// verdict)` into the body's own verdict logic — a golden `pass`
+/// does not prove semantic checks passed, and a golden `fail`
+/// should fail the scenario but the policy is the consumer's.
+pub fn record_golden_outcome(outcome: &mut ScenarioOutcome, comparison: &GoldenComparison) {
+    record_golden_observation(&mut outcome.evidence, &mut outcome.observed, comparison);
+}
+
+/// Shared fold for `record_golden_step`/`record_golden_outcome` —
+/// both targets expose the same `evidence`/`observed` shape, so the
+/// canonical-reference and observed-merge rules live in one place
+/// to keep the two folds from drifting apart.
+fn record_golden_observation(
+    evidence: &mut Vec<String>,
+    observed: &mut Option<serde_json::Value>,
+    comparison: &GoldenComparison,
+) {
     let golden = &comparison.report;
-    report
-        .evidence
-        .push(format!("golden:{}", golden.key.canonical()));
-    let entry = serde_json::json!({
+    evidence.push(format!("golden:{}", golden.key.canonical()));
+    let entry = golden_observed_entry(golden);
+    match observed {
+        Some(serde_json::Value::Object(map)) => {
+            map.insert("golden".to_string(), entry);
+        }
+        Some(_) => {}
+        None => {
+            *observed = Some(serde_json::json!({ "golden": entry }));
+        }
+    }
+}
+
+/// The `observed["golden"]` JSON for one report — shared by both
+/// fold helpers so the wire shape cannot diverge.
+fn golden_observed_entry(golden: &GoldenReport) -> serde_json::Value {
+    serde_json::json!({
         "verdict": golden.verdict.as_str(),
         "reason": golden.reason.as_str(),
         "detail": golden.detail.as_str(),
         "baseline": golden.baseline.as_deref(),
         "stats": golden.stats.as_ref(),
         "artifacts": golden.artifacts.as_slice(),
-    });
-    match &mut report.observed {
-        Some(serde_json::Value::Object(map)) => {
-            map.insert("golden".to_string(), entry);
-        }
-        Some(_) => {}
-        None => {
-            report.observed = Some(serde_json::json!({ "golden": entry }));
-        }
-    }
+    })
 }
 
 #[cfg(test)]
@@ -308,5 +353,44 @@ mod tests {
         );
         assert_eq!(report.evidence.len(), 1);
         assert!(report.evidence[0].starts_with("golden:"));
+    }
+
+    #[test]
+    fn record_golden_outcome_writes_same_fold_without_touching_verdict() {
+        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+        let comparison = unsupported_comparison();
+        let canonical = comparison.report.key.canonical();
+
+        record_golden_outcome(&mut outcome, &comparison);
+
+        assert_eq!(outcome.evidence, vec![format!("golden:{canonical}")]);
+        // The fold records evidence; the consumer's verdict stands —
+        // a golden `unsupported` must not silently rewrite a Pass.
+        assert_eq!(outcome.verdict, ScenarioVerdict::Pass);
+        let observed = outcome.observed.as_ref().expect("observed recorded");
+        assert_eq!(observed["golden"]["verdict"], "unsupported");
+        assert_eq!(observed["golden"]["reason"], "no_capture_backend");
+    }
+
+    #[test]
+    fn record_golden_outcome_merges_and_preserves_like_step() {
+        // Existing object: `golden` key merges alongside consumer keys.
+        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Fail);
+        outcome.observed = Some(serde_json::json!({"semantic": {"ok": false}}));
+        record_golden_outcome(&mut outcome, &unsupported_comparison());
+        let observed = outcome.observed.as_ref().unwrap();
+        assert_eq!(observed["semantic"]["ok"], false);
+        assert_eq!(observed["golden"]["verdict"], "unsupported");
+
+        // Non-object observed is preserved verbatim; evidence ref lands.
+        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+        outcome.observed = Some(serde_json::json!("scalar"));
+        record_golden_outcome(&mut outcome, &unsupported_comparison());
+        assert_eq!(
+            outcome.observed.as_ref().unwrap(),
+            &serde_json::json!("scalar")
+        );
+        assert_eq!(outcome.evidence.len(), 1);
+        assert!(outcome.evidence[0].starts_with("golden:"));
     }
 }

@@ -37,6 +37,14 @@ use crate::golden::key::{EnvironmentMeta, GoldenKey};
 pub const EVIDENCE_ENV: &str = "RUVIFORM_GOLDEN_EVIDENCE";
 /// evidence schema 識別子。
 pub const EVIDENCE_SCHEMA: &str = "rvf.golden.evidence/v1";
+/// evidence が属する証拠 lane の識別子（Issue #314 slice 5）。
+///
+/// Issue #314 は semantic oracle・draw plan・実 pixel Golden・
+/// OS input の 4 lane を分離する — この lane 名は
+/// **実 pixel の baseline 比較**のみを指し、semantic oracle の
+/// `pass`・`DrawnPlan` 比較・Fake の結果をここに記録しない。
+/// draw plan / OS input の lane 語彙は各 owner の schema が持つ。
+pub const EVIDENCE_LANE: &str = "pixel-golden";
 
 /// 1 回の golden 評価の結果レポート。
 #[derive(Debug, Clone)]
@@ -210,6 +218,10 @@ pub fn blocked(
 pub struct GoldenEvidence {
     /// schema 識別子（`rvf.golden.evidence/v1`）。
     pub schema: String,
+    /// 証拠 lane（常に [`EVIDENCE_LANE`] = `pixel-golden`）。
+    /// verdict に依らず不変 — `unsupported`/`not_run`/`blocked`
+    /// も lane を偽装しない。
+    pub lane: String,
     /// 評価対象の canonical key 文字列。
     pub subject: String,
     /// 判定 wire 名（`pass`/`fail`/`not_run`/`unsupported`/`blocked`）。
@@ -275,6 +287,7 @@ impl From<&GoldenReport> for GoldenEvidence {
     fn from(r: &GoldenReport) -> Self {
         Self {
             schema: EVIDENCE_SCHEMA.to_string(),
+            lane: EVIDENCE_LANE.to_string(),
             subject: r.key.canonical(),
             verdict: r.verdict.as_str().to_string(),
             reason: r.reason.clone(),

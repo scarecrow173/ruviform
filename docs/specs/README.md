@@ -77,6 +77,7 @@ Directory: `docs/specs`
 | SPEC-034UjKJM3JWo1yfqUTlRka | Issue #313 — Windows 実 OS SendInput キーボード smoke と OS Capability Matrix（部分スコープ） | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | SPEC-034Ug8RuRab8De5zcQCjTB | Issue #314 slice 3 — GPUI/OS capture backend と能力の正直な配線 | proposed | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | SPEC-0k38sOnYLZQngydDDLygHu | Issue #314 slice 1 — headless Pixel Golden Utility コア | proposed | [issue-314-golden-core.md](./issue-314-golden-core.md) |
+| SPEC-2v1KGNSaMXtSGSr7czOhiR | Issue #314 slice 5 — Golden 環境正規化・fixture registry 結合・Scenario runner 統合・証拠 lane | proposed | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | SPEC-034UevQgR6YDvj7j5Urcrc | Issue #314 slice 2 — Golden Utility と Scenario Contract の能力契約接続 | proposed | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
 | SPEC-LVITTCzVKzuRSkMzcYwUmc | Issue #326 ci.yml を workflow_dispatch 専用化 — PR/push trigger 撤去（Daily Full CI 移行・RF Stage 4） | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | SPEC-034RBJKNinKQbKocpnqqM9 | Issue #327 3リポジトリ横断CI計測Baseline・非回帰基準 仕様 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |

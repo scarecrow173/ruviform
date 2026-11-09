@@ -280,3 +280,84 @@ fn mask_and_alpha_normalization_in_integration() {
     let _ = fs::remove_dir_all(&base);
     let _ = fs::remove_dir_all(&staging);
 }
+
+// ---------------------------------------------------------------------
+// Issue #314 slice 5 — env 正規化・fixture registry 結合・evidence lane
+// ---------------------------------------------------------------------
+
+#[test]
+fn key_env_normalizes_environment_into_key_classes() {
+    use ruviform_ui_test::golden::{GpuMeta, key_env};
+    use ruviform_ui_test::lab_story;
+
+    let mut e = env();
+    e.os = "  Windows  ".to_string();
+    e.gpu = Some(GpuMeta {
+        name: Some("Raw Adapter".to_string()),
+        vendor: Some("nvidia".to_string()),
+        class: Some("dx11".to_string()),
+    });
+    e.font_set = Some("  Inter-V13  ".to_string());
+    let classes = key_env(&e, "gpui-real-window-os-capture").expect("valid env");
+    assert_eq!(classes.os_class, "Windows");
+    assert_eq!(classes.gpu_class.as_deref(), Some("dx11"));
+    assert_eq!(classes.scale_factor, 1.0);
+    assert_eq!(classes.font_class.as_deref(), Some("Inter-V13"));
+
+    // fixture 結合: story_id/theme は registry fixture から来る。
+    let fixture = lab_story::sv_fader_dock_fixture();
+    let k = golden::key_for_fixture(&fixture, "idle", &classes, "rev-1");
+    assert_eq!(k.story_id, "LAB-SV-FADER-DOCK");
+    assert_eq!(k.theme, "synvelis-dark");
+    assert_eq!(k.driver_class, "gpui-real-window-os-capture");
+    assert_eq!(k.revision, "rev-1");
+}
+
+#[test]
+fn registry_mismatches_reports_manifest_drift() {
+    use ruviform_ui_test::driver_lab;
+    use ruviform_ui_test::golden::{GoldenKeyEnv, key_for_fixture, registry_mismatches};
+    use ruviform_ui_test::lab_story;
+
+    let manifest_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/driver-lab/stories.json");
+    let manifest = driver_lab::load_stories(&manifest_path).expect("stories.json loads");
+
+    let classes = GoldenKeyEnv {
+        driver_class: "test".to_string(),
+        os_class: "test-os".to_string(),
+        gpu_class: None,
+        scale_factor: 1.0,
+        font_class: None,
+    };
+    let fixture = lab_story::sv_fader_dock_fixture();
+    let k = key_for_fixture(&fixture, "idle", &classes, "rev");
+    assert_eq!(
+        registry_mismatches(&k, &manifest),
+        Vec::new(),
+        "fixture-derived key must match stories.json"
+    );
+
+    let mut drifted = k.clone();
+    drifted.state = "no-such-state".to_string();
+    let mismatches = registry_mismatches(&drifted, &manifest);
+    assert!(mismatches.iter().any(|m| m.field == "state"));
+}
+
+#[test]
+fn evidence_lane_is_pixel_golden_regardless_of_verdict() {
+    let k = key();
+    for report in [
+        golden::unsupported(&k, Some(&env()), "no_backend"),
+        golden::not_run(&k, Some(&env()), "prereq_unmet"),
+        golden::blocked(&k, Some(&env()), "baseline_missing", "no baseline"),
+    ] {
+        let ev = golden::GoldenEvidence::from(&report);
+        assert_eq!(ev.lane, golden::EVIDENCE_LANE);
+        assert_eq!(ev.lane, "pixel-golden");
+        let line = serde_json::to_string(&ev).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(v["lane"], "pixel-golden");
+        assert_eq!(v["schema"], golden::EVIDENCE_SCHEMA);
+    }
+}
