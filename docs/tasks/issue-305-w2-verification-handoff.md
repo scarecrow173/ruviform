@@ -1,7 +1,7 @@
 ---
 id: "TASK-034UwcoMpAnO2xGUgLMC7x"
 type: "task"
-status: "todo"
+status: "done"
 title: "W2 Issue #305 io-e2e WAV golden/fault 検証・handoff"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -14,7 +14,7 @@ relations:
       - type: "file"
         path: "evidence/rf305/wav-golden-fault-report.md"
       - type: "file"
-        path: "docs/impl/ir/issue-305-io-e2e-wav-golden-fault.md"
+        path: "docs/impl/ir/issue-305-io-e2e-wav-byte-golden-fault-fixtures.md"
     modified:
       - type: "file"
         path: "docs/specs/issue-305-io-e2e-wav-golden-fault.md"
@@ -43,15 +43,13 @@ relations:
     deleted: []
     renamed: []
     moved: []
-    generated:
-      - type: "file"
-        path: "Cargo.lock"
+    generated: []
   implements:
     - "docs/plans/issue-305-io-e2e-wav-golden-fault.md"
   implemented-by: []
   depends-on:
     - "docs/plans/issue-305-io-e2e-wav-golden-fault.md"
-    - "issue-305-w1-fixture-extension"
+    - "docs/tasks/issue-305-w1-fixture-extension.md"
   blocks: []
   supersedes: []
   superseded-by: []
@@ -111,7 +109,7 @@ W1 の fixture を正規 lane で検証し、証拠と handoff を記録する�
 ## Affected Files
 
 - `evidence/rf305/wav-golden-fault-report.md`（新規）
-- `docs/impl/ir/issue-305-io-e2e-wav-golden-fault.md`（新規）
+- `docs/impl/ir/issue-305-io-e2e-wav-byte-golden-fault-fixtures.md`（新規）
 - `docs/{specs,designs,plans,test-specs,tasks,impl/ir}/README.md`
   （index 再生成）
 

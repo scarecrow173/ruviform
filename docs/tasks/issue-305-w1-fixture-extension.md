@@ -1,7 +1,7 @@
 ---
 id: "TASK-034UwchDKTHXsAzupuKHkC"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "W1 Issue #305 io-e2e WAV golden/fault fixture 実装"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -12,10 +12,14 @@ relations:
   changes:
     added:
       - type: "file"
+        path: "crates/ruviform-io-e2e/tests/common/wav.rs"
+      - type: "file"
         path: "crates/ruviform-io-e2e/tests/wav_golden.rs"
       - type: "file"
         path: "crates/ruviform-io-e2e/tests/wav_fault.rs"
     modified:
+      - type: "file"
+        path: "crates/ruviform-io-e2e/tests/common/mod.rs"
       - type: "file"
         path: "crates/ruviform-io-e2e/README.md"
       - type: "file"

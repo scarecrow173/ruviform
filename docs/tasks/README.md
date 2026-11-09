@@ -16,8 +16,6 @@ Directory: `docs/tasks`
 | TASK-034RT89xVtZ6NMuRh08JQg | T1 ruviform-io-archive クレート新設・Archive共通型・ZIP Indexed Reader (Issue #302) | completed | [issue-302-t1-scaffold-reader.md](./issue-302-t1-scaffold-reader.md) |
 | TASK-034RT8aupBUW6NpSHSrRWq | T2 ZIP Writer・Entry finish→Archive finish・否定fixture (Issue #302) | completed | [issue-302-t2-zip-writer.md](./issue-302-t2-zip-writer.md) |
 | TASK-034RT8bdlM0FbHyrczoIR2 | T3 共有台帳・main取込・最終検証・IR (Issue #302) | completed | [issue-302-t3-ledger-verify.md](./issue-302-t3-ledger-verify.md) |
-| TASK-034UwchDKTHXsAzupuKHkC | W1 Issue #305 io-e2e WAV golden/fault fixture 実装 | in-progress | [issue-305-w1-fixture-extension.md](./issue-305-w1-fixture-extension.md) |
-| TASK-034UwcoMpAnO2xGUgLMC7x | W2 Issue #305 io-e2e WAV golden/fault 検証・handoff | todo | [issue-305-w2-verification-handoff.md](./issue-305-w2-verification-handoff.md) |
 | TASK-034UjNKCoOCnJfLYQhT8Fx | Issue #313 — Windows 実 OS SendInput キーボード smoke 実装タスク | in-progress | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | TASK-034Ug9lk3rk5h8iKkSQY2c | Issue #314 slice 3 — GPUI/OS capture backend | in-progress | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
 | TASK-IfiV9xO2raU6D60zy70KLs | Issue #314 slice 1 — Golden Utility コアの実装タスク | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
@@ -212,6 +210,8 @@ Directory: `docs/tasks`
 | TASK-KfnrekDg0F7pVPV37olgXQ | T2 Staging backend・Session/Tree・identity cleanup (Issue #304) | done | [issue-304-t2-staging-backend.md](./issue-304-t2-staging-backend.md) |
 | TASK-PUEIOL8kRSg2p5kKdPYMUK | T3 end-to-end 否定行列・doc/台帳・最終検証 (Issue #304) | done | [issue-304-t3-secure-verify.md](./issue-304-t3-secure-verify.md) |
 | TASK-9KS9Fd9Lzf1TjWIavKU8Uz | T1 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 (Issue #305) | done | [issue-305-t1-staged-file-cutover.md](./issue-305-t1-staged-file-cutover.md) |
+| TASK-034UwchDKTHXsAzupuKHkC | W1 Issue #305 io-e2e WAV golden/fault fixture 実装 | done | [issue-305-w1-fixture-extension.md](./issue-305-w1-fixture-extension.md) |
+| TASK-034UwcoMpAnO2xGUgLMC7x | W2 Issue #305 io-e2e WAV golden/fault 検証・handoff | done | [issue-305-w2-verification-handoff.md](./issue-305-w2-verification-handoff.md) |
 | TASK-034UtEdJ4J9ekRBHmpucta | F1 IO E2E fixture 実装 — Fault/Fuzz・Directory・OS/FS probe | done | [issue-306-f1-fixture-extension.md](./issue-306-f1-fixture-extension.md) |
 | TASK-034UtEeCVQCg44aM7iUrV3 | F2 正規検証・evidence・CI handoff 記録 | done | [issue-306-f2-verification-handoff.md](./issue-306-f2-verification-handoff.md) |
 | TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |
