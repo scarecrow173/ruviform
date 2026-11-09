@@ -62,6 +62,7 @@ Directory: `docs/test-specs`
 | TSPEC-034T2NeVNZOhwkPaIzj0Q7 | Issue #289 OBS-07 Collector/Metrics/Snapshot 試験仕様 | approved | [issue-289-observability-collector-metrics-tests.md](./issue-289-observability-collector-metrics-tests.md) |
 | TSPEC-034UoYH3LGuoCYBYsd5dXf | Issue #290 allocation-probe — CountingAllocator/AllocationScope 契約試験 | approved | [issue-290-observability-allocation-probe-tests.md](./issue-290-observability-allocation-probe-tests.md) |
 | TSPEC-034UnxESRAtEpUTP5RInqW | Issue #291 OBS-09 Diagnostics/Evidence/Finding/Health/Report 試験仕様 | approved | [issue-291-observability-diagnostics-tests.md](./issue-291-observability-diagnostics-tests.md) |
+| TSPEC-a7qCcQ6m0LyKTiq4IswgJo | Issue #292 OBS-10 Debug Inspection/Invariant/Session/Report 試験仕様 | approved | [issue-292-observability-debug-inspection-tests.md](./issue-292-observability-debug-inspection-tests.md) |
 | TSPEC-034S9zD5gJ8lN2qU6xA9eH | consumer-verify tuple証拠契約（解決SHA捕捉・期待照合・status導出・証拠JSON・workflow構造） | implemented | [issue-294-consumer-verify-tuple-evidence.md](./issue-294-consumer-verify-tuple-evidence.md) |
 | TSPEC-034Ule6zLxK0at8L5q0W7q | Issue #294 daily candidate-tuple trigger test spec — tuple 判定・証拠回復・dispatch 契約 | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TSPEC-qrIvFGA7o1j1g1gLAH1gW2 | consumer-verify GUI-CONTRACT lane — 候補 tree 評価・task probe・別結果記録の構造契約 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |

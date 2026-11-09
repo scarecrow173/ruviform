@@ -41,6 +41,14 @@
 //!   bounded [`diagnostics::DiagnosticSnapshot`]/
 //!   [`diagnostics::DiagnosticReport`], and the
 //!   [`diagnostics::FindingSink`] port (Issue #291, OBS-09).
+//! - [`debug`]: the bounded, non-RT, disclosure-authorized debug
+//!   layer — [`debug::InspectionBudget`] limits,
+//!   [`debug::InspectionSnapshot`] sections with typed
+//!   [`debug::SectionStatus`]es, three-valued
+//!   [`debug::InvariantOutcome`] checks published into diagnostics,
+//!   the [`debug::ProbeSource`] port over Generic Probe vocabulary,
+//!   the [`debug::DebugSessionState`] lifecycle with bounded drain,
+//!   and [`debug::DebugReport`] exports (Issue #292, OBS-10).
 //! - `profiling` *(feature `allocation-probe` only)*: development/test
 //!   allocation probe — `CountingAllocator` and the thread-local
 //!   `AllocationScope` measurement windows.
@@ -87,6 +95,10 @@
 //!   rule declaration, `evaluate`, `report`, `health`: **non-RT only** —
 //!   allocation throughout (vectors, maps, strings, `catch_unwind`
 //!   around sink calls).
+//! - Every [`debug`] operation — `inspect`, `report`, session
+//!   control, invariant evaluation, probe-source reads: **non-RT
+//!   only** — allocation throughout. Debug exposes no RT-suitable
+//!   operations; only its `Copy` value types are RT-adjacent.
 //! - `profiling` *(feature `allocation-probe` only)* declares its
 //!   own per-operation RT contract in the module docs: the
 //!   `GlobalAlloc` methods and scope enter/exit/stats/reset add no
@@ -153,6 +165,7 @@ pub mod tracing_export;
 
 pub mod collector;
 pub mod core;
+pub mod debug;
 pub mod diagnostics;
 pub mod metrics;
 /// Development/test allocation probe — Issue #290 (OBS-08).
