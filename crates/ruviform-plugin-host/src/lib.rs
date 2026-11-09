@@ -196,9 +196,10 @@ pub use composite::{
 // `mod l1` is `pub(crate)` (public consumers must be able to name
 // the result types).
 pub use editor_session::{
-    AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
-    EditorSessionOps, EditorSessionState, EditorSize, InProcessEditorOps, L1EditorOps,
-    LeaseRedeemer, PluginEditorSession, PluginEditorSessions, SessionFailCause, Support,
+    AttachMode, DEFAULT_REQUEST_TIMEOUT, EditorCapabilities, EditorOpError, EditorSessionError,
+    EditorSessionEvent, EditorSessionOps, EditorSessionState, EditorSize, InProcessEditorOps,
+    L1EditorOps, LeaseRedeemer, MonotonicSessionClock, OpenOutcome, PluginEditorSession,
+    PluginEditorSessions, SessionClock, SessionDeadlinePolicy, SessionFailCause, Support,
 };
 pub use endpoint::{EndpointBounds, PluginEndpoint};
 pub use host::{BusReport, InProcessHost};
