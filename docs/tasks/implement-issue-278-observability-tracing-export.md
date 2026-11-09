@@ -1,7 +1,7 @@
 ---
 id: "TASK-034UprmEYoMJcy1j0tHLHy"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #278 OBS-03 tracing_export 実装タスク"
 created: "2026-11-09"
 updated: "2026-11-09"

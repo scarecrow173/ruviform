@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034Upz8rpFOqIgQe87GGYp"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #278 OBS-03 tracing_export 実装記録"
 created: "2026-11-09"
 updated: "2026-11-09"
@@ -142,7 +142,34 @@ OBS-09 `FindingSink`/`DiagnosticsEvent`/`HealthState`、OBS-02
 
 ## Validation
 
-（検証完了後に記録）
+canonical（`mise run`、merge `origin/main` = 7816a22a 取り込み後）:
+
+- `mise run fmt-check` — exit 0
+- `mise run check`（`cargo check --workspace --all-targets`）— exit 0
+- `mise run lint`（`cargo clippy --workspace --all-targets --
+  -D warnings`）— exit 0
+- `mise run test`（`cargo test --workspace`）— exit 0
+- `mise run test-rt`（`cargo test --workspace rt_`）— exit 0
+
+補助証拠（canonical = mise、直接 cargo）:
+
+- `cargo check -p ruviform-observability --features
+  tracing-export` — exit 0
+- `cargo test -p ruviform-observability --features
+  tracing-export` — 156 unit + 8 doc tests 全 pass（`tracing_export`
+  15 件を含む）
+- `cargo check -p ruviform-observability`（feature OFF）— exit 0、
+  `cargo tree -e normal` に `tracing` 非含有（`tracing-export` のみ
+  `dep:tracing` を有効化）
+- review-protocol: CONFIRMED P1×2 を修正済み — (1) `tracing::Level`
+  の `Ord` が verbosity 順（TRACE 最大）で severity 比較に `max`
+  が使えず全 Level が逆転していた → `min` に修正、(2) test-spec
+  R-8 dedup 未充足（`min_delta=0`/`min_interval=0` で無変化 poll・
+  同一 batch 再 emit が重複発行し得た）→ 無変化観測の抑制 gate を
+  追加。P2（clippy pedantic・test fixture の lease 落とし）も修正。
+  残 P3: exporter は subscriber panic を呼出側へ伝播（baseline 先行
+  更新で二重報告は防止）、dedup fingerprint に `loss` を含めない
+  （loss 変化は validity/issue 遷移に随伴する前提）。
 
 ## NotRun / Unsupported
 
