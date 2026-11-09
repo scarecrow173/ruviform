@@ -4,7 +4,7 @@ type: "discovery"
 status: "resolved"
 title: "Issue #120 re-evaluation analysis — trigger #3 fired (per-child 3rd thread)"
 created: "2026-10-30"
-updated: "2026-10-30"
+updated: "2026-11-09"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -134,3 +134,62 @@ refined 再トリガ条件の一つ「stderr drain の EINTR latent bug 修正�
   - C の支配的コスト（crate 初グローバル worker・fd→状態 registry・fairness・lifecycle・EOF/deadline 契約複製・テスト隔離）は #147 で一切低下していない
   - 利益側ゲート（実測 N>1・2N+H < 3N が効く領域）も依然未発火 — N=1 では 2N+H=3N で削減効果ゼロ
 - **結論**: re-defer 継続。副次発見の latent bug は #147 で修正・merged 済み、stale doc は本コミット群で修正済み — 副次発見 2 件ともクローズ
+
+## 実測記録（2026-11-09・Windows — Issue #120 受入証跡）
+
+Issue #120 受入条件 (1)「per-child 構成・reader EOF 検出・idle CPU・process 数の現状測定と再トリガ条件の成立有無を記録」への応答。計測 fixture は `crates/ruviform-plugin-host/tests/l1_scale_probe.rs`（全テスト `#[ignore]`・手動実行専用・CI 非対象）。環境: **Windows 11 x64・debug build（`cargo test` dev profile）・単一マシン**。macOS/Linux 実機は **NotRun**（対象外）。以下の `PROBE` 行が生証跡であり、外部サンプラ（`Get-Process`）が process/thread/CPU を採取した。
+
+### per-child 構成・process/thread 数
+
+`probe_scale_idle`（`L1_PROBE_CHILDREN`/`L1_PROBE_INSTANCES`/`L1_PROBE_IDLE_SECS`）が spawn → idle → teardown の位相を `PROBE phase=` 行で出力し、その間に外部サンプラが CPU/thread を採取。instance は mint のみで `Activate`/`StartProcessing` は行わない — 測定対象は driver/reader/stderr-drain の idle コストであり、これらのスレッドは instance の processing 状態に依らず子ごとに存在するため、この形状で代表値となる。
+
+| 形状 | 子プロセス | host スレッド（実測） | spawn/mint コスト |
+|---|---|---|---|
+| Bundled 4 子 × 8 instance（計 32） | 4 + host | 14–17（≒ 3×子 + main/harness） | spawn ≈8.1ms/子・mint ≈0.68–1.23ms/instance |
+| Dedicated 形状 8 子 × 1 instance | 8 + host | 26–29（≒ 3×子 + main/harness） | 同上 |
+
+worker プロセス（`l1-test-worker`）は各 1 スレッド。3 スレッド/子（driver・reader・stderr-drain）が host 側に存在する構造は #121 以降の記述どおり実測で確認。
+
+### idle CPU（15 秒窓・`Get-Process` CPU 差分）
+
+| 形状 | host CPU Δ | worker CPU Δ 合計 | 換算 |
+|---|---|---|---|
+| Bundled 4 子・32 instance | 0.172 s | ≈0.047 s | host ≈1.1% of one core・子あたり ≈0.3% |
+| Dedicated 8 子・8 instance | 0.422 s | 0 s | host ≈2.8% of one core・子あたり ≈0.35% |
+
+`recv_timeout(200µs)` の実効 cadence（`probe_recv_timeout_cadence`・300 reps）: avg **15634.8µs**・min 8886.3µs・med 15828.8µs・max 28265.4µs — Windows のタイマ量子化で設計上の 5000 wake/s は実際 ~64 wake/s。idle CPU は子あたり ~0.3% of one core に留まり、電力上の問題を示す実測値は得られなかった。
+
+### reader EOF 検出・収束レイテンシ（`probe_crash_latency`・10 reps）
+
+| 経路 | `Failed` mirror（med） | `FailedNotice`（med） |
+|---|---|---|
+| `eof_kill`（健全子を host `kill()`） | 2335.1µs | 13181.0µs |
+| `noeof_kill`（`--spawn-heir` で EOF 不到達 — `try_wait` backstop のみ） | 12776.9µs | 12780.4µs |
+| `eof_crash`（子が `exit(3)` — reader EOF 即時検出） | 1758.9µs | —（exec_err med 1755.7µs） |
+
+EOF 経路は ~2ms で収束。EOF 不到達時は ~12.8ms ≈ 実効タイマ tick 1 回分に律速され、設計どおり `try_wait` backstop が機能。reader EOF 即時検出の記述どおりの挙動を確認。
+
+### command/data plane スループット
+
+- `probe_command_rtt`（500 reps・`SaveState` 往復）: **14313.8 ops/s**・avg 69.6µs・med 66.4µs・max 272.9µs
+- `probe_block_rate`（単一 instance・512 frame）:
+  - lookahead=2（slot depth=3）: offered 100/s → dropped 3/1000（定常ほぼ無損失）。offered 500/s → dropped 1229/2000 → 持続受理 ≈**190 blocks/s**（slot alternation × driver tick の往復律速 — child/reader ではない）
+  - lookahead=16（depth=17）: offered 2000/s → 受理 ≈**1085 blocks/s** — per-instance 上限は slot depth に比例して伸び、child+reader は ~1000 blocks/s/instance を余裕でさばく
+- `probe_bundled_block_rate`（**1 子 × 64 instance・各 ~100 blocks/s offer = aggregate ~6400 blocks/s**・30 rounds）: **dropped_submits=0・passthrough_submits=0**（1920 calls）— Bundled 最大占有率で audio レート（512 frame @48kHz ≈ 93.75 blocks/s）の 64 instance が無損失で持続
+
+### 再トリガ条件の成立判定（refined 条件との照合）
+
+| refined 条件 | 実測結果 | 判定 |
+|---|---|---|
+| 実測 >16–32 子 | Bundled は `ceil(N/64)` 子 — 64 instance 最大 bundle が無損失で成立。>16 子は dedicated opt-in か >1024 instance を要し、実測対象の需要は存在しない（dedicated 8 子形状はコスト測定のみ） | **不発火** |
+| 200µs wake 起因の idle-CPU/電力問題 | 実効 cadence ~15.6ms・idle ≈0.3% of one core/子 — 問題を示す実測なし | **不発火** |
+| crate 級グローバル worker 基盤の出現 | 出現していない | **不発火** |
+| RT 契約改定 / FFI wake primitive 採用 | 出現していない | **不発火** |
+| drain 構造を触る機会 / レイテンシ契約厳格化 | 出現していない（#147 は構造不変と評価済み） | **不発火** |
+| sub-poll 検出・doorbell レイテンシ契約・単一 reader スループット上限 | reader+child は aggregate 6400 blocks/s・command 14.3k ops/s を無損失で処理 — 上限未観測。per-instance ~190/s 上限は slot depth 由来の設計特性（lookahead で伸びる）で reader/reaper の問題ではない | **不発火** |
+
+### 結論
+
+**re-defer 維持 — 共有 reaper / full io-mux の実装なしが正しい結果。** 全 refined 再トリガ条件が実測で不発火と確認された。trigger #3（構造変化）は引き続き「再評価の発火」であって実施命令ではなく、実測は全 option のコストが利益を上回ることを裏付けた。
+
+**留保（正直な記録）**: 計測は Windows 11 x64・debug build・単一マシンの値であり、macOS/Linux 実機・release build・実ワークロード（実 plugin の block 内容・RT スレッド競合）は **NotRun**。idle CPU は外部サンプラの 15 秒窓 1 回の値であり、長期・低負荷でのドリフトは未測定。per-instance スループット上限 ~190/s（lookahead=2）は 512 frame @48kHz の ~2 倍のマージンがあり、lookahead を下げる設計変更が入った場合は再測定要。
