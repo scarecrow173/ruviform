@@ -41,6 +41,7 @@ Directory: `docs/specs`
 | SPEC-034UdM9XszyXZB0hZ8wvnc | Issue #243 GPUI 実機 GUI 検証 — Windows 実窓ライフサイクル証拠（部分スコープ） | proposed | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | SPEC-034Qx7sstYyddu4xbj5Q7d | Issue #244 media-reader prefetch contract residual wart fixes — boundary-first fault emission, reopen-failure dead generation, End commit-once | approved | [issue-244-media-reader-prefetch-contract-warts.md](./issue-244-media-reader-prefetch-contract-warts.md) |
 | SPEC-034UjQv2KPJWujHxiCffIK | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| SPEC-8EJ4gM4rl1pb5GPij5Nm0l | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | SPEC-034RoXidyTvNC4Cd998l35 | Issue #276 汎用 Logging Adapter(observability::logging) | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | SPEC-034Rp1Lwq5BGjy5ucoWJ4s | Issue #277 OBS-02 軽量Primitive・Observation Source型・登録/寿命契約 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
 | SPEC-034UpqR38pxxqJjjHLaFBG | Issue #278 OBS-03 tracing_export — ObservationBatch Exporter + FindingSink adapter slice | approved | [issue-278-observability-tracing-export.md](./issue-278-observability-tracing-export.md) |
