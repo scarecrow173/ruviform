@@ -5,6 +5,7 @@
 //! never collide; no `tempfile` dependency.
 #![allow(dead_code)]
 
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -126,4 +127,138 @@ pub fn crafted_tar_entry(name: &str, typeflag: u8, link_name: &str, payload: &[u
     // Two zero blocks terminate the archive.
     out.resize(out.len() + 1024, 0);
     out
+}
+
+/// Creates a directory link at `link` → `target` (unix symlink;
+/// Windows junction via `mklink /J` — both are name-surrogate
+/// reparse/symlink objects the rooted capability must classify
+/// `Symlink`). `Err` means the platform cannot create links for this
+/// test — callers skip honestly.
+///
+/// Same primitives as `ruviform-io-file/tests/common`.
+pub fn dir_link(target: &Path, link: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link)
+    }
+    #[cfg(windows)]
+    {
+        junction(target, link)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (target, link);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "no link primitive",
+        ))
+    }
+}
+
+/// Creates a file link at `link` → `target` (unix symlink; Windows
+/// `symlink_file`, which typically needs
+/// `SeCreateSymbolicLinkPrivilege` — tests must skip on `Err`).
+pub fn file_link(target: &Path, link: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link)
+    }
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_file(target, link)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (target, link);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "no link primitive",
+        ))
+    }
+}
+
+/// `mklink /J` — the unprivileged directory-junction primitive.
+#[cfg(windows)]
+fn junction(target: &Path, link: &Path) -> io::Result<()> {
+    let status = std::process::Command::new("cmd")
+        .args([
+            "/c",
+            "mklink",
+            "/J",
+            link.to_str()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "non-utf8 link path"))?,
+            target.to_str().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "non-utf8 target path")
+            })?,
+        ])
+        .status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!("mklink /J failed with {status}")))
+    }
+}
+
+/// Patches the `external_attrs` field (fixed-part offset +38..42) of
+/// every central-directory record in a ZIP byte stream, returning
+/// the number of records patched.
+///
+/// The ZIP writer cannot emit link/special entries — `external_attrs`
+/// is the only channel through which unix mode bits (e.g. `S_IFLNK`)
+/// reach `EntryKind` classification on read. CRC32 covers payload
+/// bytes only, so patching central-directory metadata leaves every
+/// integrity check intact: the archive stays *valid*, and the hostile
+/// kind is a classification/policy matter for the extraction layer.
+///
+/// The walk is layout-verified: the EOCD record locates the central
+/// directory and each record's name/extra/comment lengths are used to
+/// step to the next. A writer layout change that breaks this walk
+/// fails the assertion instead of silently patching the wrong bytes.
+pub fn patch_zip_external_attrs(bytes: &mut [u8], attrs: u32) -> usize {
+    fn u16le(b: &[u8]) -> u16 {
+        u16::from_le_bytes([b[0], b[1]])
+    }
+    fn u32le(b: &[u8]) -> u32 {
+        u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+    }
+
+    // Locate the EOCD record by scanning the bounded tail backwards
+    // for its signature (mirrors the reader's own search window).
+    const EOCD_SIG: u32 = 0x0605_4b50;
+    const EOCD_LEN: usize = 22;
+    const CD_SIG: u32 = 0x0201_4b50;
+    let len = bytes.len();
+    assert!(len >= EOCD_LEN, "zip too small for EOCD");
+    let span = len.min(EOCD_LEN + u16::MAX as usize);
+    let tail_start = len - span;
+    let mut eocd_at = None;
+    for pos in (tail_start..=len - EOCD_LEN).rev() {
+        if u32le(&bytes[pos..pos + 4]) == EOCD_SIG {
+            let comment_len = usize::from(u16le(&bytes[pos + 20..pos + 22]));
+            if pos + EOCD_LEN + comment_len == len {
+                eocd_at = Some(pos);
+                break;
+            }
+        }
+    }
+    let eocd_at = eocd_at.expect("no end-of-central-directory record found");
+    let cd_count = usize::from(u16le(&bytes[eocd_at + 10..eocd_at + 12]));
+    let mut cursor =
+        usize::try_from(u32le(&bytes[eocd_at + 16..eocd_at + 20])).expect("cd offset fits usize");
+
+    let mut patched = 0;
+    for _ in 0..cd_count {
+        assert!(
+            cursor + 46 <= len && u32le(&bytes[cursor..cursor + 4]) == CD_SIG,
+            "central-directory record {patched} missing or misplaced at {cursor}"
+        );
+        let name_len = usize::from(u16le(&bytes[cursor + 28..cursor + 30]));
+        let extra_len = usize::from(u16le(&bytes[cursor + 30..cursor + 32]));
+        let comment_len = usize::from(u16le(&bytes[cursor + 32..cursor + 34]));
+        bytes[cursor + 38..cursor + 42].copy_from_slice(&attrs.to_le_bytes());
+        patched += 1;
+        cursor += 46 + name_len + extra_len + comment_len;
+    }
+    assert!(patched > 0, "zip has no central-directory records");
+    patched
 }

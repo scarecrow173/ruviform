@@ -14,6 +14,26 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
   形式の bytes が publish されない否定経路を検証する。
 - Path Traversal・canonical/casefold 衝突・resource budget 超過の
   否定 fixture で staging 非残存を検証する。
+- Structured 追加境界（YAML/TOML `write_file→read_file`、XML
+  event parse、publish 後 tamper の型付き decode 拒否）を検証する
+  （`structured_formats_staged.rs`）。
+- 公開 API のみで誘発できる fault 境界（Create/Encode/Publish の
+  失敗分類・recovery handle 所有権・publish 競合・TAR+gzip 複合
+  の publish 前独立検証）を検証する（`fault_boundary.rs`）。
+  `Indeterminate`・DirSync 後失敗・`TempState::Unknown` は実 OS
+  で正直に誘発不能なため fixture 化せず、`ruviform-io-file` の
+  `#[cfg(test)]` mock 試験を正本として参照する。
+- Negative/fuzz fixture（ZIP symlink/special entry・ZIP bomb
+  budget・XML DOCTYPE/entity 拒否・corrupt/truncated
+  TAR/gzip/JSON・決定的 mutation sweep）を検証する
+  （`negative_fuzz.rs`）。敵対的 TAR bytes・ZIP central
+  directory `external_attrs` の patch は `tests/common` の
+  helper で生成し、本番 API は変更しない。
+- publish durability ladder を実 FS で probe し、測定された
+  `DurabilityEvidence` のみを記録する（`os_fs_probe.rs`）。
+- `RootedDir`/`RelativePath` capability を publish 済み・
+  extraction 済み tree に適用し、NoFollow read・列挙・locator
+  文法拒否・link escape 拒否を検証する（`rooted_boundary.rs`）。
 
 ## 依存方向
 
@@ -35,6 +55,8 @@ mise run test-io-e2e   # cargo test -p ruviform-io-e2e
 ```
 
 主張境界: 実施した OS/FS・toolchain のみを実測として記録する。
+実測範囲と NotRun/Unsupported の一覧・#219/#294 への引き渡し
+条件は `evidence/rf306/fault-fuzz-report.md` を正本とする。
 adapter 系 fault matrix（Applied/NotApplied/Unknown・DirSync 後
 失敗・Indeterminate・Temp 残留）は `ruviform-io-file` の
 `#[cfg(test)]` MockFileOps ユニット試験が正本。macOS/Linux 実
