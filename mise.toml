@@ -82,6 +82,14 @@ run = "cargo test -p ruviform-ui-test --test component_view"
 description = "Issue #314 slice 1 Pixel Golden core: headless RGBA8 normalization, per-channel tolerance diff + masks, candidate→promote baseline store, verdict vocabulary and evidence (writes only target/ + temp dirs; capture paths are slice 3, NotRun/Unsupported by design)"
 run = "cargo test -p ruviform-ui-test --test golden"
 
+[tasks.codegen-theme]
+description = "Issue #418: regenerate crates/ruviform-ui-theme/src/generated.rs from codegen/themes.json via theme-codegen (ThemeResolver::resolve → typed Rust literals; writes only src/generated.rs)"
+run = "cargo run -p ruviform-ui-theme --bin theme-codegen -- --manifest crates/ruviform-ui-theme/codegen/themes.json --out crates/ruviform-ui-theme/src/generated.rs"
+
+[tasks.codegen-theme-check]
+description = "Issue #418: verify src/generated.rs freshness — byte-compare theme-codegen output against the committed file, non-destructive (exit 1 on drift/missing; writes nothing)"
+run = "cargo run -p ruviform-ui-theme --bin theme-codegen -- --manifest crates/ruviform-ui-theme/codegen/themes.json --out crates/ruviform-ui-theme/src/generated.rs --check"
+
 [tasks.test-ui-scenario-contract]
 description = "Issue #464 consumer-neutral Scenario Contract: shared SemanticGuiTest/VisualGuiTest surface — Fake adapter contract tests (ruviform-ui-test/tests/scenario_contract.rs) + GPUI adapter contract tests (ruviform-ui-gpui/tests/scenario_contract.rs, gpui-test). Issue #314 slice 2: VisualCapture capability + golden check/report path, honestly Unsupported until slice 3 capture. Writes only target/"
 depends = ["test-ui-scenario-contract-fake", "test-ui-scenario-contract-gpui"]

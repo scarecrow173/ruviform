@@ -29,6 +29,12 @@
 //!   [`collector::CollectorHandle`] (shareable snapshot/history/
 //!   health reads), [`collector::ObservationBatch`],
 //!   [`collector::MetricsSnapshot`] and [`collector::CollectorHealth`].
+//! - [`diagnostics`]: the logging-independent diagnostic layer —
+//!   classified [`diagnostics::Evidence`], [`diagnostics::DiagnosticFinding`],
+//!   [`diagnostics::HealthState`]/[`diagnostics::HealthEvaluator`],
+//!   bounded [`diagnostics::DiagnosticSnapshot`]/
+//!   [`diagnostics::DiagnosticReport`], and the
+//!   [`diagnostics::FindingSink`] port (Issue #291, OBS-09).
 //! - `profiling` *(feature `allocation-probe` only)*: development/test
 //!   allocation probe — `CountingAllocator` and the thread-local
 //!   `AllocationScope` measurement windows.
@@ -71,6 +77,10 @@
 //!   [`collector::PollRunner`]: **non-RT only** — locking and
 //!   allocation throughout. The collector's registry lock is never
 //!   held on an RT writer path.
+//! - Every [`diagnostics`] operation — evidence/finding recording,
+//!   rule declaration, `evaluate`, `report`, `health`: **non-RT only** —
+//!   allocation throughout (vectors, maps, strings, `catch_unwind`
+//!   around sink calls).
 //! - `profiling` *(feature `allocation-probe` only)* declares its
 //!   own per-operation RT contract in the module docs: the
 //!   `GlobalAlloc` methods and scope enter/exit/stats/reset add no
@@ -130,6 +140,7 @@ pub mod logging;
 
 pub mod collector;
 pub mod core;
+pub mod diagnostics;
 pub mod metrics;
 /// Development/test allocation probe — Issue #290 (OBS-08).
 /// Only available with the `allocation-probe` feature, which is off by
