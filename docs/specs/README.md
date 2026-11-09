@@ -48,6 +48,7 @@ Directory: `docs/specs`
 | SPEC-034RToefGzxcXIANSfMf7U | Issue #279 OBS-04 Plugin Host既存4 CounterのSource登録・統合 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | SPEC-ML6zMi4szNWY33LanXM0JL | Issue #280 OBS-05 RT固定長Record Bridge・Clock・欠落・Correlation統合 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
 | SPEC-034Uyb75wxxSWrPfyvFEgh | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
+| SPEC-034UAmZTk0TIdPDXB52i1O | Issue #286 IO-04 ZIP/TAR Archive — Entry API・安全な展開・終了/公開契約 設計 | approved | [issue-286-io-04-zip-tar-archive.md](./issue-286-io-04-zip-tar-archive.md) |
 | SPEC-034UtEnxrMMCVpVRENHQ19 | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | SPEC-034T2dgEk6l5QpkecJOJYo | Issue #289 OBS-07 Collector・Metrics・履歴・Snapshot（単一クレート） | approved | [issue-289-observability-collector-metrics.md](./issue-289-observability-collector-metrics.md) |
 | SPEC-034UoMuIhsjFGaAbbUs8x0 | Issue #290 OBS-08 Profiling — CountingAllocator/AllocationScope（allocation-probe slice） | approved | [issue-290-observability-allocation-probe.md](./issue-290-observability-allocation-probe.md) |

@@ -186,6 +186,7 @@ Directory: `docs/tasks`
 | TASK-034UjQLrFyv9HY5QSH9HmW | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | done | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | TASK-y0ulI5SiiOT2XfWozCd8uK | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | done | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | TASK-034UyRQzDJa5cPKTt3NLFF | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | done | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
+| TASK-034UAvL4WBHRKsOVxsrTgG | Issue #286 IO-04 ZIP/TAR Archive — Entry API・安全な展開・終了/公開契約 設計 | done | [issue-286-io-04-zip-tar-archive.md](./issue-286-io-04-zip-tar-archive.md) |
 | TASK-034UtPLgt4p9kVhsCVVQ5f | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | done | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | TASK-034UlgdtbhGVBT1saWLNNP | Issue #294 daily tuple trigger 実装 — decide.mjs tuple モード・daily-ci job・契約 test | done | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TASK-034Sa3F7jL2nQ5uY8cE1hK | T1 ci/consumer-verify evidence.mjs + fixture tests + test-ci-consumer-verify task（Issue #294） | done | [issue-294-t1-consumer-verify-evidence-script.md](./issue-294-t1-consumer-verify-evidence-script.md) |
