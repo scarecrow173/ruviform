@@ -41,6 +41,12 @@
 //!   bounded [`diagnostics::DiagnosticSnapshot`]/
 //!   [`diagnostics::DiagnosticReport`], and the
 //!   [`diagnostics::FindingSink`] port (Issue #291, OBS-09).
+//! - `integration` *(feature `integration` only)*: the host-facing
+//!   non-RT composition layer — [`integration::ObservabilityConfig`]
+//!   per-subsystem settings and [`integration::ObservationRunner`]
+//!   lifecycle (`Unconfigured → Prepared → Ready → Running →
+//!   Draining → Stopped`), ordered drain, dynamic reconfigure, and
+//!   composed [`integration::RunnerHealth`] (Issue #293, OBS-11).
 //! - [`debug`]: the bounded, non-RT, disclosure-authorized debug
 //!   layer — [`debug::InspectionBudget`] limits,
 //!   [`debug::InspectionSnapshot`] sections with typed
@@ -104,6 +110,11 @@
 //!   `GlobalAlloc` methods and scope enter/exit/stats/reset add no
 //!   allocation, lock, or panic beyond the wrapped allocator `A`;
 //!   scope construction is non-RT.
+//! - Every `integration` operation — `prepare`, `activate`,
+//!   `poll_once`, `begin_shutdown`/`finish_shutdown`/`shutdown`,
+//!   `reconfigure`, `attach_logging`, `health`, and every accessor:
+//!   **non-RT only** — allocation and locking throughout, and the
+//!   runner spawns no thread of its own.
 //!
 //! # Read semantics
 //!
@@ -167,6 +178,12 @@ pub mod collector;
 pub mod core;
 pub mod debug;
 pub mod diagnostics;
+/// Host-facing non-RT integration layer — Issue #293 (OBS-11).
+/// Only available with the `integration` feature, which is off by
+/// default so the lightweight core stays minimal; it adds no
+/// dependencies and leaves `tracing-export`/`logging` optional.
+#[cfg(feature = "integration")]
+pub mod integration;
 pub mod metrics;
 /// Development/test allocation probe — Issue #290 (OBS-08).
 /// Only available with the `allocation-probe` feature, which is off by
