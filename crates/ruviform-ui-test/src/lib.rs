@@ -48,6 +48,7 @@ pub mod golden;
 pub mod headless;
 pub mod io;
 pub mod journal;
+pub mod lab_story;
 pub mod lifecycle;
 pub mod proto;
 pub mod scenario;
@@ -62,6 +63,10 @@ pub use fixture::{FixtureController, TestApp};
 pub use headless::HeadlessIo;
 pub use io::TestIo;
 pub use journal::{DEFAULT_JOURNAL_CAP, Journal, JournalHandle, deliver_routed};
+pub use lab_story::{
+    StoryFixture, StoryStep, al_waveform_seek_fixture, all_fixtures, expected_lab_story_trace,
+    lab_story_walk, sv_fader_dock_fixture,
+};
 pub use proto::{
     AppMeta, BackendMeta, Capabilities, CleanupReport, ClockDomain, DeniedCapabilities, Direction,
     FaultKind, FixtureReceipt, FixtureSpec, Notice, PROTOCOL_VERSION, ReadyState, Receipt,
