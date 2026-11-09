@@ -96,6 +96,14 @@ name = "window_lifecycle_probe"
 # id non-reuse, destroy_window bypass, degenerate-spec observation.
 required-features = ["gpui"]
 
+[[example]]
+name = "real_os_smoke"
+# Issue #313 real-OS keyboard-input smoke (manual verification):
+# SendInput Tab/arrow keystrokes against a mounted Fader+Seek and a
+# verdict JSON with environment metadata. Requires the real GPUI
+# backend and an interactive session that can take OS focus.
+required-features = ["gpui"]
+
 [[test]]
 name = "consumer_observation"
 # Issue #429 consumer seam test — external crate, binds only the public
