@@ -29,6 +29,12 @@
 //!   [`collector::CollectorHandle`] (shareable snapshot/history/
 //!   health reads), [`collector::ObservationBatch`],
 //!   [`collector::MetricsSnapshot`] and [`collector::CollectorHealth`].
+//! - `tracing_export` (feature `tracing-export` only): the opt-in non-RT
+//!   `tracing` conversion layer — `TracingExporter` turns
+//!   [`collector::ObservationBatch`] measurements into `tracing` events
+//!   under a fixed schema, and `TracingFindingSink` adapts
+//!   [`diagnostics::FindingSink`] events (Issue #278, OBS-03). The host
+//!   injects the `tracing::Dispatch`.
 //! - [`diagnostics`]: the logging-independent diagnostic layer —
 //!   classified [`diagnostics::Evidence`], [`diagnostics::DiagnosticFinding`],
 //!   [`diagnostics::HealthState`]/[`diagnostics::HealthEvaluator`],
@@ -127,6 +133,13 @@
 /// dependencies.
 #[cfg(feature = "logging")]
 pub mod logging;
+
+/// Opt-in `tracing` export layer — Issue #278 (OBS-03). Only available
+/// with the `tracing-export` feature, which enables `dep:tracing` alone;
+/// subscriber construction stays host-owned (typically via the `logging`
+/// feature's `Dispatch`).
+#[cfg(feature = "tracing-export")]
+pub mod tracing_export;
 
 pub mod collector;
 pub mod core;

@@ -18,6 +18,11 @@ logging = [
     "dep:tracing-subscriber",
     "dep:tracing-appender",
 ]
+# `tracing-export` — Issue #278 (OBS-03) `ObservationBatch`/`DiagnosticsEvent`
+# → `tracing` event conversion. Off by default and independent of `logging`:
+# it enables only `dep:tracing` (the `Dispatch` type), never subscriber
+# construction. Hosts inject their own `tracing::Dispatch`.
+tracing-export = ["dep:tracing"]
 
 [dependencies]
 # Issue #280 (OBS-05): leaf-primitive deps for `rt_bridge`/`record`
@@ -49,6 +54,15 @@ tracing-appender = { version = "0.2.3", optional = true }
 # `logging` are already visible to test/example targets via `required-features`.
 serde_json = "1"
 tempfile = "3"
+# Issue #278: `tracing_export` contract tests capture emitted events through a
+# JSON-formatting subscriber (`registry` + `fmt`/`json`). Dev-dependency only —
+# the `tracing-export` feature itself never requires a subscriber.
+tracing-subscriber = { version = "0.3", features = [
+    "fmt",
+    "json",
+    "registry",
+    "std",
+] }
 # Issue #277: `assert_no_alloc` 測定窓 — core primitive の RT 許可操作
 # （counter/gauge/histogram の no-alloc 実証）を `rt_` レーンで検証する。
 # dev-dependency のみで公開 API・依存 DAG は std のみを維持する。
