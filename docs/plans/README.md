@@ -78,6 +78,7 @@ Directory: `docs/plans`
 | PLAN-W0d5X9GIZLFMnSGqu9OlBg | Issue #306 汎用 I/O 合成 E2E 実装計画 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034Ui3RAJGJJ1dJAlUW9N0 | Issue #308 — Probe再Binding全件整合の実装計画 | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
+| PLAN-034UjiuskEaR4norBLPJa8 | Issue #309 — PROBE-TIME時間コンテキスト・整列契約の実装計画 | approved | [issue-309-probe-time-context-and-alignment.md](./issue-309-probe-time-context-and-alignment.md) |
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | PLAN-034S312gtUiTestPlnEE55 | Issue #312 ruviform-ui-test implementation plan | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |

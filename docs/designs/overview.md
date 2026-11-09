@@ -4,7 +4,7 @@ type: "design"
 status: "draft"
 title: "System Design Overview"
 created: "2026-10-19"
-updated: "2026-10-24"
+updated: "2026-11-09"
 owners: []
 relations:
   source: []
@@ -110,3 +110,4 @@ Optional platform adapters（opt-in・基礎層への依存は下向きのみ）
 - [issue-121-l1-diagnostics.md](issue-121-l1-diagnostics.md) — L1 診断の counter・子 stderr・失敗原因通知の設計（Issue #121。終了・通知・計数の詳細は未確定）(draft)
 - [issue-384-driver-neutral-gui-contract.md](issue-384-driver-neutral-gui-contract.md) — Driver-neutral GUI 契約詳細（依存方向・ID 体系・crate 配置・旧 WebView API 移行表・NativeSurfaceSlot/PluginEditorSession 共通骨格・Native Dock Gate、Issue #384。後継 ADR `driver-neutral-gui-gpui-driver-webview-first-issue-384.md` の詳細。GPUI 最終採用は #262/#388/#389 実機証拠後）(approved)
 - [issue-385-dtcg-resolved-theme.md](issue-385-dtcg-resolved-theme.md) — DTCG interpreter/Resolver 設計（`rvf-dtcg-profile.v1` 採用範囲・alias/mode/override merge・4 層 precedence・typed 不変 `ResolvedTheme`・crate `ruviform-ui-theme`、Issue #385）(approved)
+- [issue-309-probe-time-context-and-alignment.md](issue-309-probe-time-context-and-alignment.md) — Probe 時間コンテキストと観測整列契約の設計（`ProbeClockMark`/`ProbeTimeContext`・`align_observation_points` の `Aligned`/`Conditional`/`Incomparable`・coverage/loss mask 再構成、Issue #309。実装は後続 dispatch）(approved)

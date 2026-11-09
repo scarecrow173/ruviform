@@ -61,6 +61,7 @@ Directory: `docs/specs`
 | SPEC-lYVG6Gr07aTIBC8BSS0WKW | Issue #306 汎用 I/O 合成 E2E — StagedFile/Structured/Compression/Archive/WAV 境界試験 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | SPEC-P7W4Dz6p2EQIQNPclAQG2U | Issue #307 PluginNode attach 時 frame_base の非 RT 型付き検証（verified clock context） | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | SPEC-034Ui3cZpzwuwGdf2aHCCv | Issue #308 — Generation切替時のProbe再Bindingを全件整合・部分失敗可観測にする | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
+| SPEC-034Uj8oH3kcr44vuCWxYrC | Issue #309 — 複数Probeの汎用Frame/Clock/Epoch/Latency整列可能性・欠落比較契約（PROBE-TIME） | approved | [issue-309-probe-time-frame-clock-epoch-alignment.md](./issue-309-probe-time-frame-clock-epoch-alignment.md) |
 | SPEC-034Rp1AEJDKiDTpPq3H4Yz | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | SPEC-3S6R25rgxNv9VL9etjWsH9 | Issue #311 RF-GT-02 Rust↔TypeScript IPC Schema Conformance・Deterministic Record/Replay・Fault Matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | SPEC-034S312gtUiTestSpecBB22 | Issue #312 test-only GUI host lifecycle・secure control adapter・fixture/clock/observation 仕様 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
