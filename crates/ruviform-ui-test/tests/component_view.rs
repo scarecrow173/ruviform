@@ -26,6 +26,7 @@ use ruviform_ui::view::{
     ViewSpec, WaveformBin, WaveformSpec,
 };
 use ruviform_ui::window::WindowId;
+use ruviform_ui_test::lab_story::{self, StoryFixture};
 use ruviform_ui_theme::{ScaleContext, ThemeResolver, TokenDocument};
 
 // ---------------------------------------------------------------------
@@ -141,19 +142,11 @@ fn fader_view() -> ViewSpec {
     }
 }
 
+/// The `AudioLens` story spec — canonical definition lives in
+/// `ruviform_ui_test::lab_story` so the Fake scenario walk and the
+/// GPUI adapter mount byte-identical trees.
 fn wave_view() -> ViewSpec {
-    ViewSpec {
-        root: panel(vec![
-            waveform(
-                "wave",
-                vec![
-                    wave_bin(0, 1000, -0.8, 0.9),
-                    wave_bin(1000, 2000, -0.3, 0.4),
-                ],
-            ),
-            seek("seek"),
-        ]),
-    }
+    lab_story::al_waveform_seek_fixture().spec
 }
 
 fn host() -> ViewHost {
@@ -758,18 +751,6 @@ fn lab_al_waveform_bounded() {
 // LAB story matrix (Issue #426): 2 theme × 2 scale × semantic state
 // ---------------------------------------------------------------------
 
-fn sv_fader_dock_view() -> ViewSpec {
-    ViewSpec {
-        root: panel(vec![tabs(
-            "mixer-tabs",
-            vec![
-                ("Ch 1", fader("fader-ch1", "Ch 1")),
-                ("Ch 2", fader("fader-ch2", "Ch 2")),
-            ],
-        )]),
-    }
-}
-
 /// One story control walked through the seven story states, one trace
 /// line per step: idle → focus (begin) → drag (preview) → commit →
 /// stale (late preview after terminal) → invalid (NaN preview) →
@@ -799,13 +780,10 @@ fn story_trace(host: &mut ViewHost, k: &ComponentKey, empty: ViewSpec) -> Vec<St
 /// the semantic trace is identical. Each combination resolves its theme
 /// at the scale under test; scale changes only the `ScaleContext` and
 /// tokens stay identical. `ViewHost` holds neither theme nor scale, so
-/// the trace must not depend on either axis.
-fn assert_story_matrix(
-    story: &str,
-    view: fn() -> ViewSpec,
-    empty: fn() -> ViewSpec,
-    k: &ComponentKey,
-) -> Vec<String> {
+/// the trace must not depend on either axis. The spec/key/teardown spec
+/// come from the shared [`StoryFixture`] — the same definition the
+/// `SemanticGuiTest` adapters walk.
+fn assert_story_matrix(fixture: &StoryFixture) -> Vec<String> {
     let mut reference: Option<Vec<String>> = None;
     for theme_name in ["synvelis-dark", "audiolens-dark"] {
         let base = resolve_fixture(theme_name);
@@ -823,14 +801,15 @@ fn assert_story_matrix(
                 ViewInstanceId::new(9).expect("nonzero"),
                 AttachEpoch::new(1),
             );
-            host.mount(view()).expect("mount");
+            host.mount(fixture.spec.clone()).expect("mount");
             host.drain_events();
-            let trace = story_trace(&mut host, k, empty());
+            let trace = story_trace(&mut host, &fixture.walk_key, fixture.teardown_spec.clone());
             match &reference {
                 Some(want) => {
                     assert_eq!(
                         &trace, want,
-                        "{story} @ {theme_name} x scale {scale_factor}"
+                        "{} @ {theme_name} x scale {scale_factor}",
+                        fixture.story_id
                     );
                 }
                 None => reference = Some(trace),
@@ -855,14 +834,7 @@ fn assert_story_states(trace: &[String], expected: &[(&str, &str)]) {
 
 #[test]
 fn lab_story_sv_fader_dock_matrix() {
-    let trace = assert_story_matrix(
-        "LAB-SV-FADER-DOCK",
-        sv_fader_dock_view,
-        || ViewSpec {
-            root: panel(vec![]),
-        },
-        &key("fader-ch1"),
-    );
+    let trace = assert_story_matrix(&lab_story::sv_fader_dock_fixture());
     assert_story_states(
         &trace,
         &[
@@ -879,14 +851,7 @@ fn lab_story_sv_fader_dock_matrix() {
 
 #[test]
 fn lab_story_al_waveform_seek_matrix() {
-    let trace = assert_story_matrix(
-        "LAB-AL-WAVEFORM-SEEK",
-        wave_view,
-        || ViewSpec {
-            root: panel(vec![waveform("wave", vec![wave_bin(0, 1000, -0.8, 0.9)])]),
-        },
-        &key("seek"),
-    );
+    let trace = assert_story_matrix(&lab_story::al_waveform_seek_fixture());
     assert_story_states(
         &trace,
         &[
