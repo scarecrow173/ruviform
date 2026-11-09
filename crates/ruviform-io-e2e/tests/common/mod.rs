@@ -5,6 +5,8 @@
 //! never collide; no `tempfile` dependency.
 #![allow(dead_code)]
 
+pub mod wav;
+
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
