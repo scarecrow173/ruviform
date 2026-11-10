@@ -201,3 +201,4 @@ Directory: `docs/impl/ir`
 | IMPL-034V4ltq3DWHBuZVbOLTjH | Issue #284 IO-02 Structured Formats 設計正本照合・契約試験棚卸し slice | completed | [issue-284-io-02-structured-formats-slice.md](./issue-284-io-02-structured-formats-slice.md) |
 | IMPL-034Ue3QZ2los1ccAjflw0X | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 | completed | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | IMPL-034V5Vzh8RJqYBNZRA9QZW | Issue #243 Windows 実 OS multiwindow smoke 証拠 | completed | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
+| IMPL-rAJqQxI07EYCwOdCi-Qyd | Issue #286 IO-04 ZIP/TAR Archive — 設計正本照合・契約試験棚卸し slice | completed | [issue-286-io-04-archive-acceptance-recheck.md](./issue-286-io-04-archive-acceptance-recheck.md) |
