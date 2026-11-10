@@ -197,3 +197,4 @@ Directory: `docs/impl/ir`
 | IMPL-034UkdjBdy4RDY0x9rZrE0 | Issue #313 Windows 実 OS SendInput キーボード smoke と OS Capability Matrix 証拠 | completed | [issue-313-windows-os-sendinput-smoke-os-capability-matrix.md](./issue-313-windows-os-sendinput-smoke-os-capability-matrix.md) |
 | IMPL-034UkPTR1W1N5M0K3P06 | Issue #313 Windows 実 OS SendInput ポインタ smoke（driver 計測ジオメトリ + capability matrix 更新） | completed | [issue-313-windows-pointer-smoke.md](./issue-313-windows-pointer-smoke.md) |
 | IMPL-9fK2mQxT7vBnRwYsJhGtUi | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture 実装記録（driver async protocol fixture + SM-xx terminal-event 検証） | completed | [issue-389-editor-session-statemachine-implementation.md](./issue-389-editor-session-statemachine-implementation.md) |
+| IMPL-034V4ltq3DWHBuZVbOLTjH | Issue #284 IO-02 Structured Formats 設計正本照合・契約試験棚卸し slice | completed | [issue-284-io-02-structured-formats-slice.md](./issue-284-io-02-structured-formats-slice.md) |
