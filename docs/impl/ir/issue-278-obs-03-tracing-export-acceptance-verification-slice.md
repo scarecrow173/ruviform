@@ -112,6 +112,19 @@ trace_context/tests）と `integration` runner の選択的接続
   `injected_dispatch_gets_events_scoped_over_ambient` /
   `global_default_never_captures_injected_emissions` で検証済み。
 
+## Acceptance mapping（Issue #278 受入 8 行）
+
+| # | 受入行 | 判定 | 根拠 |
+| --- | --- | --- | --- |
+| 1 | Collector 境界が `ObservationBatch` のみ・`tracing` 非依存をコンパイル検証 | Pass | `TracingExporter::emit(&ObservationBatch)` が唯一の境界。default build の `cargo check`/`cargo tree -e normal` で `tracing` 非含有を確認（collector/metrics/source/record/rt_bridge/diagnostics に `tracing` import なし） |
+| 2 | Counter baseline/delta/window/schema/Severity/Source Generation の Golden test | Pass | `counter_onincrease_emits_fixed_schema_event`（baseline 抑制・delta・window event・全固定 key・WARN severity・`source_generation`）他、gauge/histogram/discontinuity/snapshot_only/emission_cap |
+| 3 | nonRT Dispatch 注入・Thread/async Context 伝播・Context 未設定でも安全 | Pass（crate 責務分）+ deferred | Dispatch 注入は全 test が `Dispatch` を明示注入。scoped span context は `rt_record_inside_scoped_span_sees_context`、未設定は `Dispatch::none()`/span 外 emit で検証。ambient/global 分離は `tests/integration.rs` の dispatch 3 test。thread/async task 間の完全伝播は approved design/test-spec が host 責務（#293 `Instrument`/明示 dispatch・#281 gate）へ deferred → NotRun |
+| 4 | W3C Trace Context 有効/不正/未信頼入力・権限と無関係な相関を試験 | Pass | `trace_context` unit test（valid/ff/zero-id/長さ/hex/uppercase/余剰 field）+ `rt_record_trace_context_adds_fields`（valid→field・invalid→なし）+ 本スライス追加 `rt_record_trace_context_is_metadata_not_correlation`（valid traceparent が unlinked 分類・span 関係 field 非存在を変えない） |
+| 5 | RT Correlation token 寿命・Clock 不明/欠落/再生成/不正時の unlinked 処理 | Pass | `rt_record_correlation_statuses_are_distinct`（none/linked/unlinked×expired・superseded_epoch・unknown_token）・`rt_record_token_lifecycle_tracks_book`（issue/expire/remint）・`rt_record_clock_unstamped_and_estimated`（unstamped sentinel・estimated/derived 区別） |
+| 6 | Logging OFF/Filter suppression/Exporter failure/queue full で Metric 正本への影響なし | Pass | `filter_suppression_does_not_mutate_exporter_or_collector`・`panicking_subscriber_does_not_affect_collector`（collector 継続動作）・`emission_cap_drops_and_reports_loss`/`rt_record_cap_counts_and_classifies_everything`（cap=queue 上限の別損失計数）・`rt_record_dropped_before_raises_to_warn`（bridge ring full→`dropped_before`）・`dispatch_none_is_safe_without_subscriber`/`rt_record_dispatch_none_and_filter_are_safe`（Logging OFF 相当）。Sampling/Writer error は design 上 `LoggingHealth`（host pipeline）責務 |
+| 7 | 両 Consumer で同じ Key/Field/Severity・stdout 保護・Privacy を検証 | 一部 Pass + #281 NotRun | 固定 schema（`schema.rs` 単一正本）で consumer 非依存に同一 key/field/severity を保証。stdout 保護: module は global default/subscriber 構築/stdout 書込を持たず、`global_default_never_captures_injected_emissions` が非干渉を検証。Privacy: 本スライス追加 `rt_record_confidentiality_is_reported_not_enforced` で Internal/Confidential 分類の忠実報告を固定（値秘匿は host 認可 — Non-goal）。両 Consumer 実機受入は #281 cross-repo gate → NotRun |
+| 8 | `tracing-export` Feature だけで必要な標準依存・強制 Subscriber・独立クレートなし | Pass | `Cargo.toml`: `tracing-export = ["dep:tracing"]` のみ。`cargo tree -e normal --features tracing-export` は `tracing`/`tracing-core`/`tracing-attributes` のみで `tracing-subscriber`/`tracing-appender` 非含有。`set_global_default`/`init` 呼出なし（grep 確認）。module 内実装で独立クレートなし |
+
 ## Related Experiments
 
 ### Adopted
