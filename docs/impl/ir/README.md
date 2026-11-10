@@ -206,3 +206,4 @@ Directory: `docs/impl/ir`
 | IMPL-BneVKCjBRwNA5pxIVfIZ6X | Issue #285 IO-03 Compression — 設計正本照合・契約試験棚卸し | completed | [issue-285-io-03-compression-contract-audit.md](./issue-285-io-03-compression-contract-audit.md) |
 | IMPL-034VeXFI5DET4CkhWJrBln | Issue #552 SendInput preflight（注入→実効 read-back で environment_blocked を区別） | completed | [issue-552-sendinput-preflight-read-back-environment-blocked.md](./issue-552-sendinput-preflight-read-back-environment-blocked.md) |
 | IMPL-034Vi78tpdb4wvJ1oTJpLb | Issue #253 OS MIDI input backend adapter（Windows WinMM + 非対応 OS Unsupported 境界） | completed | [issue-253-os-midi-input-backend-adapter-windows-winmm-os-unsupported.md](./issue-253-os-midi-input-backend-adapter-windows-winmm-os-unsupported.md) |
+| IMPL-034VgClFxuPB48DOb3hBDv | Issue #314 slice 4 follow-up — real-scenario lane と story matrix（canonical mise lane + 4 cell 実測） | completed | [issue-314-real-scenario-lane.md](./issue-314-real-scenario-lane.md) |

@@ -361,6 +361,24 @@ run = "cargo run -p ruviform-ui-gpui --features gpui --example real_os_pointer_s
 [tasks.example-ui-gpui-real-os-multiwindow-smoke]
 description = "Run the Issue #243 real-OS multiwindow smoke on the interactive session (manual verification — writes verdict-multiwindow-windows.json; exit 0=pass, 1=fail, 2=unsupported)"
 run = "cargo run -p ruviform-ui-gpui --features gpui --example real_os_multiwindow_smoke -- --out evidence/issue-243-multiwindow-verify/verdict-multiwindow-windows.json"
+# Issue #314 slice 4 canonical lane (real OS session only, never CI):
+# runs tests/real_window.rs under the `real-scenario` feature — each
+# Driver Lab story mounts into a real OS window once per {theme,
+# scale} matrix cell (2 themes x 2 scales), walks the shared semantic
+# oracle, captures real client-area pixels (PrintWindow/BitBlt), and
+# runs the story-keyed golden_check promote→pass loop. Evidence env
+# vars pin driver-lab/golden JSONL + PNG/meta output to
+# evidence/issue-314-real-scenario/. Requires an interactive desktop
+# session; on a headless host the session cannot start and the test
+# records observed="environment_blocked" in the evidence JSONL —
+# distinct from a GUI fail (cargo test has no exit-3 verdict, so the
+# classification lives in the JSONL `observed` field + panic tag).
+# This lane injects no OS input (semantic dispatch only), so the
+# Issue #552 os_input::preflight does not apply.
+[tasks.test-ui-real-scenario]
+description = "Run the Issue #314 real-window scenario matrix on the interactive session (manual verification — writes evidence/issue-314-real-scenario/; environment_blocked is recorded in driver-lab JSONL when no desktop session is available)"
+env = { RUVIFORM_DRIVER_LAB_EVIDENCE = "evidence/issue-314-real-scenario/driver-lab-evidence.jsonl", RUVIFORM_GOLDEN_EVIDENCE = "evidence/issue-314-real-scenario/golden-evidence.jsonl", RUVIFORM_REAL_WINDOW_PNG_DIR = "evidence/issue-314-real-scenario/png" }
+run = "cargo test -p ruviform-ui-gpui --features real-scenario --test real_window"
 [tasks.example-ui-webview-e2e]
 description = "Run the real WebView round-trip check (page load → IPC → event delivery; WebView2 on Windows, manual verification — not a CI lane)"
 run = "cargo run -p ruviform-ui-webview --features webview --example e2e_smoke"

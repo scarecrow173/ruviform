@@ -1,9 +1,14 @@
 //! Issue #314 slice 4 — `ScenarioDriver::RealOs` adapter
-//! (`RealOsGuiTest`, `real-scenario` feature).
+//! (`RealOsGuiTest`, `real-scenario` feature); slice 4 follow-up
+//! adds the canonical `test-ui-real-scenario` mise lane and the
+//! full {theme, scale} story matrix.
 //!
 //! Each canonical Driver Lab story mounts into a *real OS window*
 //! (`RealOsGuiTest::run` → `GpuiDriver::create_view_window` on the
-//! platform loop) and walks the seven shared semantic states through
+//! platform loop) once per matrix cell — both manifest themes
+//! (`synvelis-dark`/`audiolens-dark`) × both declared scale factors
+//! (1.0/2.0), mirroring `stories.json` and the Fake/GPUI-simulated
+//! matrices — and walks the seven shared semantic states through
 //! the `SemanticGuiTest` port — the same
 //! `expected_lab_story_trace()` oracle the Fake and GPUI-simulated
 //! layers assert. Semantic dispatch crosses the UI-thread job seam
@@ -21,20 +26,26 @@
 //! `golden_capture.rs` verifies at the driver level.
 //!
 //! Windows + interactive desktop required: on a headless host the
-//! window cannot open and `run` reports `UiError::Host` — recorded
-//! honestly, never substituted. This target is gated on
-//! `real-scenario`, which `gpui-test` deliberately does not enable
-//! (the test platform stubs OS capture), so it runs as an auxiliary
-//! lane: `cargo test -p ruviform-ui-gpui --features real-scenario
+//! window cannot open and `run` reports `UiError::Host` — the cell
+//! records `observed="environment_blocked"` in the driver-lab
+//! evidence JSONL and panics with an `environment_blocked:` tag, a
+//! distinct classification from a GUI/test failure (the same
+//! verdict split the Issue #552 `os_input::preflight` lanes use —
+//! this lane injects no OS input, so the preflight itself does not
+//! apply). This target is gated on `real-scenario`, which
+//! `gpui-test` deliberately does not enable (the test platform
+//! stubs OS capture), so it runs as an auxiliary lane:
+//! `mise run test-ui-real-scenario` (manual, never CI) or
+//! `cargo test -p ruviform-ui-gpui --features real-scenario
 //! --test real_window`.
 
 #![cfg(all(windows, feature = "real-scenario"))]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{AttachEpochAllocator, ViewHost};
-use ruviform_ui::{WindowId, WindowSpec};
+use ruviform_ui::{UiError, WindowId, WindowSpec};
 use ruviform_ui_gpui::{CaptureMeta, RealOsGuiTest, RealWindowMount, RealWindowOptions, ViewMount};
 use ruviform_ui_test::driver_lab;
 use ruviform_ui_test::golden::{
@@ -49,6 +60,16 @@ use ruviform_ui_test::{
 };
 use ruviform_ui_theme::{ResolvedTheme, ScaleContext, ThemeResolver, TokenDocument};
 
+/// Story matrix axes — both product themes × both declared scale
+/// factors, mirroring `stories.json` (`themes` + `scaleFactor`) and
+/// the Fake/GPUI-simulated matrices in `tests/lab_story.rs`.
+const THEMES: [&str; 2] = ["synvelis-dark", "audiolens-dark"];
+const SCALES: [f64; 2] = [1.0, 2.0];
+
+/// Mechanism tag written into driver-lab evidence rows — names the
+/// canonical mise lane that owns this test target.
+const EVIDENCE_MECHANISM: &str = "mise-task:test-ui-real-scenario";
+
 /// Loads a theme fixture from the shared `ruviform-ui-test` theme
 /// JSON — identical to the Fake/GPUI-simulated matrix.
 fn resolve_theme(name: &str) -> ResolvedTheme {
@@ -61,24 +82,37 @@ fn resolve_theme(name: &str) -> ResolvedTheme {
     ThemeResolver::resolve(&[doc], "dark").unwrap_or_else(|e| panic!("resolve {name}: {e}"))
 }
 
-/// Runs `body` inside one real-window session for `fixture` —
-/// mounts the canonical spec as a real OS window, waits the startup
-/// settle, then hands the adapter to `body` on the caller thread.
+/// Runs `body` inside one real-window session for `fixture` at the
+/// `{theme_name, scale_factor}` matrix cell — mounts the canonical
+/// spec as a real OS window, waits the startup settle, then hands
+/// the adapter to `body` on the caller thread. The theme scale
+/// enters as `ResolvedTheme::with_scale` `ScaleContext` (a
+/// mapper-side hint): tokens must be invariant under it, the same
+/// guard the Fake/GPUI-simulated matrices apply per cell.
 fn run_story_session(
     fixture: &StoryFixture,
+    theme_name: &str,
+    scale_factor: f64,
     body: impl FnOnce(&mut RealOsGuiTest, WindowId, ScenarioTarget) -> Result<(), ScenarioError>,
 ) {
-    let themed = resolve_theme(fixture.theme).with_scale(ScaleContext {
-        scale_factor: 1.0,
+    let base = resolve_theme(theme_name);
+    let themed = base.with_scale(ScaleContext {
+        scale_factor,
         rem_base_px: 16.0,
     });
+    assert_eq!(themed.scale().scale_factor, scale_factor);
+    assert_eq!(
+        themed.tokens().collect::<Vec<_>>(),
+        base.tokens().collect::<Vec<_>>(),
+        "{theme_name} tokens must not depend on scale context"
+    );
     let view = ViewInstanceId::new(426).expect("nonzero");
     let mut epochs = AttachEpochAllocator::new();
     let mut host = ViewHost::new(view, epochs.mint());
     host.mount(fixture.spec.clone()).expect("mount story spec");
     host.drain_events();
 
-    RealOsGuiTest::run(
+    let outcome = RealOsGuiTest::run(
         vec![RealWindowMount {
             window: WindowSpec::default(),
             view: ViewMount {
@@ -98,19 +132,59 @@ fn run_story_session(
                 .expect("resolve story target");
             body(gui, window, target)
         },
-    )
-    .expect("real-window session")
-    .expect("scenario body");
+    );
+    match outcome {
+        Ok(result) => result.expect("scenario body"),
+        Err(error) => session_failure(fixture, theme_name, scale_factor, error),
+    }
+}
+
+/// Classifies a `RealOsGuiTest::run` session-level failure. `Host`/
+/// `BackendUnavailable` mean the real-window session itself could
+/// not be established (headless host, session-0, no interactive
+/// desktop, platform loop failure) — an *environment* condition,
+/// recorded as `observed="environment_blocked"` in the driver-lab
+/// evidence JSONL and panicked with an `environment_blocked:` tag so
+/// it is never mistaken for a GUI/test failure. Every other
+/// `UiError` (`Internal`/`Unsupported`/unknown) stays an ordinary
+/// failure — `environment_blocked` is never claimed for it.
+fn session_failure(
+    fixture: &StoryFixture,
+    theme_name: &str,
+    scale_factor: f64,
+    error: UiError,
+) -> ! {
+    let cell = format!("{} @ {theme_name} x scale {scale_factor}", fixture.story_id);
+    match error {
+        UiError::Host { message } | UiError::BackendUnavailable { message } => {
+            driver_lab::emit_evidence(
+                fixture.story_id,
+                "real-os",
+                "pass",
+                "environment_blocked",
+                EVIDENCE_MECHANISM,
+                &format!("{cell}: real-window session could not start — {message}"),
+            );
+            panic!("environment_blocked: {cell} real-window session could not start: {message}");
+        }
+        other => panic!("{cell} real-window session failed: {other}"),
+    }
 }
 
 /// The story `GoldenKey` — real story/theme ids, the declared state,
-/// and the *measured* scale factor. `driver_class` is `real-os`:
-/// only pixels from `capture_frame` can produce a `pass`/`fail`
-/// verdict on this key.
-fn story_golden_key(fixture: &StoryFixture, state: &str, meta: CaptureMeta) -> GoldenKey {
+/// and the *measured* scale factor. `theme` is the cell's actual
+/// mount theme (not necessarily the story's declared theme);
+/// `driver_class` is `real-os`: only pixels from `capture_frame`
+/// can produce a `pass`/`fail` verdict on this key.
+fn story_golden_key(
+    fixture: &StoryFixture,
+    theme_name: &str,
+    state: &str,
+    meta: CaptureMeta,
+) -> GoldenKey {
     GoldenKey {
         story_id: fixture.story_id.to_string(),
-        theme: fixture.theme.to_string(),
+        theme: theme_name.to_string(),
         state: state.to_string(),
         driver_class: "real-os".to_string(),
         os_class: std::env::consts::OS.to_string(),
@@ -157,45 +231,72 @@ fn golden_store(tag: &str) -> BaselineStore {
     BaselineStore::new(dir)
 }
 
+/// Resolves `RUVIFORM_REAL_WINDOW_PNG_DIR` — relative paths anchor
+/// at the workspace root (`CARGO_MANIFEST_DIR/../..`), the same
+/// rule `driver_lab::evidence_target` applies to the JSONL evidence
+/// env vars, so `cargo test`'s package-root CWD cannot leak outputs
+/// into the crate directory.
+fn png_evidence_dir() -> Option<PathBuf> {
+    let raw = std::env::var("RUVIFORM_REAL_WINDOW_PNG_DIR").ok()?;
+    if raw.is_empty() {
+        return None;
+    }
+    let path = PathBuf::from(raw);
+    Some(if path.is_absolute() {
+        path
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(path)
+    })
+}
+
 /// Optional durable pixel evidence: `RUVIFORM_REAL_WINDOW_PNG_DIR`
-/// names a directory that receives `<story>-idle.png`,
-/// `<story>-teardown.png` and a `<story>-meta.jsonl` line. Unset →
-/// no artifacts (same env-gate convention as the driver-lab/golden
-/// evidence channels).
+/// names a directory that receives `<story>-<theme>-scale<N>-
+/// {idle,teardown}.png` and a `<story>-<theme>-scale<N>-meta.jsonl`
+/// line — cell-qualified names so matrix cells never overwrite each
+/// other. Unset → no artifacts (same env-gate convention as the
+/// driver-lab/golden evidence channels).
 fn dump_png_evidence(
-    story_id: &str,
+    fixture: &StoryFixture,
+    theme_name: &str,
+    scale_factor: f64,
     idle: &ruviform_ui_test::golden::RgbaImage,
     teardown: &ruviform_ui_test::golden::RgbaImage,
     meta: Option<CaptureMeta>,
 ) {
-    let Ok(dir) = std::env::var("RUVIFORM_REAL_WINDOW_PNG_DIR") else {
+    let Some(dir) = png_evidence_dir() else {
         return;
     };
-    let dir = PathBuf::from(dir);
     std::fs::create_dir_all(&dir).expect("png evidence dir");
+    let cell = format!("{}-{theme_name}-scale{scale_factor:.1}", fixture.story_id);
     for (name, img) in [("idle", idle), ("teardown", teardown)] {
         let png = img.to_png().expect("encode evidence png");
-        std::fs::write(dir.join(format!("{story_id}-{name}.png")), png)
-            .expect("write evidence png");
+        std::fs::write(dir.join(format!("{cell}-{name}.png")), png).expect("write evidence png");
     }
     if let Some(meta) = meta {
         let line = format!(
-            "{{\"story\":\"{story_id}\",\"state\":\"teardown\",\"width\":{},\"height\":{},\"scale_factor\":{},\"backend\":\"{}\"}}\n",
-            meta.width, meta.height, meta.scale_factor, meta.backend
+            "{{\"story\":\"{}\",\"theme\":\"{theme_name}\",\"scale\":{scale_factor:.1},\"state\":\"teardown\",\"width\":{},\"height\":{},\"scale_factor\":{},\"backend\":\"{}\"}}\n",
+            fixture.story_id, meta.width, meta.height, meta.scale_factor, meta.backend
         );
         std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(dir.join(format!("{story_id}-meta.jsonl")))
+            .open(dir.join(format!("{cell}-meta.jsonl")))
             .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()))
             .expect("write evidence meta");
     }
 }
 
-fn real_window_story(fixture: &StoryFixture) {
+/// One `{theme, scale}` matrix cell: real-window session → shared
+/// oracle walk → idle/teardown pixel capture → story-keyed
+/// `golden_check` promote→pass loop → driver-lab evidence row.
+fn real_window_cell(fixture: &StoryFixture, theme_name: &str, scale_factor: f64) {
     let staging_root = std::env::temp_dir().join(format!(
-        "ruviform-real-window-staging-{}-{}",
-        std::process::id(),
+        "ruviform-real-window-staging-{}-{}-{}-{}",
+        fixture.story_id,
+        theme_name,
+        scale_factor,
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -203,13 +304,13 @@ fn real_window_story(fixture: &StoryFixture) {
     ));
     std::fs::create_dir_all(&staging_root).expect("staging dir");
 
-    run_story_session(fixture, |gui, window, target| {
+    run_story_session(fixture, theme_name, scale_factor, |gui, window, target| {
         // Pixel layer, idle state: the populated story UI must
         // produce real, non-uniform OS pixels before any gesture.
         let idle_image = match gui.capture_frame(&target)? {
             CaptureOutcome::Captured(image) => image,
             other => panic!(
-                "{} idle capture must produce real pixels on a desktop session, got {other:?}",
+                "{} @ {theme_name} x scale {scale_factor} idle capture must produce real pixels on a desktop session, got {other:?}",
                 fixture.story_id
             ),
         };
@@ -228,7 +329,8 @@ fn real_window_story(fixture: &StoryFixture) {
         );
 
         // Semantic layer: the shared seven-state oracle — identical
-        // evidence shape to the Fake/GPUI-simulated layers.
+        // evidence shape to the Fake/GPUI-simulated layers, asserted
+        // per matrix cell.
         let walk_key = fixture.walk_key.clone();
         let teardown = fixture.teardown_spec.clone();
         let trace = lab_story::lab_story_walk(gui, &target, &walk_key, move |g| {
@@ -237,7 +339,7 @@ fn real_window_story(fixture: &StoryFixture) {
         assert_eq!(
             trace,
             lab_story::expected_lab_story_trace(),
-            "{} real-window story trace diverged",
+            "{} story trace diverged @ {theme_name} x scale {scale_factor}",
             fixture.story_id,
         );
 
@@ -250,83 +352,125 @@ fn real_window_story(fixture: &StoryFixture) {
         let image = match gui.capture_frame(&target)? {
             CaptureOutcome::Captured(image) => image,
             other => panic!(
-                "{} teardown capture must produce real pixels on a desktop session, got {other:?}",
+                "{} @ {theme_name} x scale {scale_factor} teardown capture must produce real pixels on a desktop session, got {other:?}",
                 fixture.story_id
             ),
         };
         assert!(image.width() > 0 && image.height() > 0);
         dump_png_evidence(
-            fixture.story_id,
+            fixture,
+            theme_name,
+            scale_factor,
             &idle_image,
             &image,
             gui.last_capture_meta(),
         );
-
-        let meta = gui.last_capture_meta().expect("capture meta");
-        let key = story_golden_key(fixture, "teardown", meta);
-        let env = story_environment(meta);
-        let store = golden_store(fixture.story_id);
-        let policy = DiffPolicy {
-            channel_tolerance: ChannelTolerance::uniform(2),
-            mask: Vec::new(),
-        };
-        let approval = BaselineApproval {
-            approved_by: "real-window-test".to_string(),
-            note: Some("self-approved e2e baseline for slice 4 verification".to_string()),
-        };
-        let mut report = ScenarioReport::new(
-            RunId::new(format!("run-{}", fixture.story_id)),
-            ScenarioId::new("lab-story-real-window"),
-            None,
-            gui.driver(),
-        );
-
-        // Golden layer step 1: story-keyed `golden_check` on a fresh
-        // store → `blocked`/`baseline_missing` — proof the pixels
-        // reached `BaselineStore::compare` (an `Unsupported`/
-        // `NotRun` outcome would name a different verdict).
-        let comparison = gui.golden_check(&target, &key, Some(&env), &store)?;
-        assert_eq!(comparison.report.verdict, GoldenVerdict::Blocked);
-        assert_eq!(comparison.report.reason, "baseline_missing");
-        record_golden_step(&mut report, &comparison);
-
-        // Candidate → promote with the *same* measured pixels, then
-        // a second `golden_check` captures fresh pixels and must
-        // `pass` — the promote→compare loop proves repeatability,
-        // not a one-off framebuffer read.
-        store
-            .write_candidate(&staging_root, &key, &image, Some(&env), &policy)
-            .map_err(|e| ScenarioError::Driver(format!("write_candidate: {e}")))?;
-        store
-            .promote(&staging_root, &key, &approval)
-            .map_err(|e| ScenarioError::Driver(format!("promote: {e}")))?;
-        gui.settle()?;
-        let comparison = gui.golden_check(&target, &key, Some(&env), &store)?;
-        assert_eq!(
-            comparison.report.verdict,
-            GoldenVerdict::Pass,
-            "second compare must pass against promoted baseline, got {:?}",
-            comparison.report.stats
-        );
-        record_golden_step(&mut report, &comparison);
-
-        // Story-keyed evidence: semantic + pixel layers both `pass`,
-        // mechanism names the real-window lane honestly.
-        assert_eq!(report.evidence.len(), 2);
-        for evidence in &report.evidence {
-            assert!(evidence.contains(fixture.story_id), "{evidence}");
-            assert!(evidence.contains("real-os"), "{evidence}");
-        }
-        driver_lab::emit_evidence(
-            fixture.story_id,
-            "real-os",
-            "pass",
-            "pass",
-            "cargo:test-real-window",
-            "RealOsGuiTest: 7-state shared oracle + real OS-window pixel capture → golden_check (baseline_missing → promote → pass)",
-        );
-        Ok(())
+        golden_loop(
+            gui,
+            &target,
+            fixture,
+            theme_name,
+            scale_factor,
+            &image,
+            &staging_root,
+        )
     });
+}
+
+/// Story-keyed golden loop for one cell: `golden_check` on a fresh
+/// store → `blocked`/`baseline_missing` (proof the pixels reached
+/// `BaselineStore::compare`) → candidate → promote → second
+/// `golden_check` `pass` — the promote→compare loop proves
+/// repeatability, not a one-off framebuffer read — then the
+/// driver-lab evidence row.
+fn golden_loop(
+    gui: &mut RealOsGuiTest,
+    target: &ScenarioTarget,
+    fixture: &StoryFixture,
+    theme_name: &str,
+    scale_factor: f64,
+    image: &ruviform_ui_test::golden::RgbaImage,
+    staging_root: &Path,
+) -> Result<(), ScenarioError> {
+    let meta = gui.last_capture_meta().expect("capture meta");
+    let key = story_golden_key(fixture, theme_name, "teardown", meta);
+    let env = story_environment(meta);
+    let store = golden_store(&format!("{}-{theme_name}-{scale_factor}", fixture.story_id));
+    let policy = DiffPolicy {
+        channel_tolerance: ChannelTolerance::uniform(2),
+        mask: Vec::new(),
+    };
+    let approval = BaselineApproval {
+        approved_by: "real-window-test".to_string(),
+        note: Some("self-approved e2e baseline for slice 4 verification".to_string()),
+    };
+    let mut report = ScenarioReport::new(
+        RunId::new(format!(
+            "run-{}-{theme_name}-{scale_factor}",
+            fixture.story_id
+        )),
+        ScenarioId::new("lab-story-real-window"),
+        None,
+        gui.driver(),
+    );
+
+    // Golden layer step 1: story-keyed `golden_check` on a fresh
+    // store → `blocked`/`baseline_missing` — proof the pixels
+    // reached `BaselineStore::compare` (an `Unsupported`/
+    // `NotRun` outcome would name a different verdict).
+    let comparison = gui.golden_check(target, &key, Some(&env), &store)?;
+    assert_eq!(comparison.report.verdict, GoldenVerdict::Blocked);
+    assert_eq!(comparison.report.reason, "baseline_missing");
+    record_golden_step(&mut report, &comparison);
+
+    // Candidate → promote with the *same* measured pixels, then
+    // a second `golden_check` captures fresh pixels and must
+    // `pass`.
+    store
+        .write_candidate(staging_root, &key, image, Some(&env), &policy)
+        .map_err(|e| ScenarioError::Driver(format!("write_candidate: {e}")))?;
+    store
+        .promote(staging_root, &key, &approval)
+        .map_err(|e| ScenarioError::Driver(format!("promote: {e}")))?;
+    gui.settle()?;
+    let comparison = gui.golden_check(target, &key, Some(&env), &store)?;
+    assert_eq!(
+        comparison.report.verdict,
+        GoldenVerdict::Pass,
+        "second compare must pass against promoted baseline @ {theme_name} x scale {scale_factor}, got {:?}",
+        comparison.report.stats
+    );
+    record_golden_step(&mut report, &comparison);
+
+    // Story-keyed evidence: semantic + pixel layers both `pass`,
+    // mechanism names the real-window lane honestly.
+    assert_eq!(report.evidence.len(), 2);
+    for evidence in &report.evidence {
+        assert!(evidence.contains(fixture.story_id), "{evidence}");
+        assert!(evidence.contains("real-os"), "{evidence}");
+    }
+    driver_lab::emit_evidence(
+        fixture.story_id,
+        "real-os",
+        "pass",
+        "pass",
+        EVIDENCE_MECHANISM,
+        &format!(
+            "RealOsGuiTest: 7-state shared oracle + real OS-window pixel capture → golden_check (baseline_missing → promote → pass) @ {theme_name} x scale {scale_factor}"
+        ),
+    );
+    Ok(())
+}
+
+/// The story matrix for one fixture: every {theme, scale} cell —
+/// the residual scale-2.0 and second-theme cells included — runs
+/// its own real-window session.
+fn real_window_story(fixture: &StoryFixture) {
+    for theme_name in THEMES {
+        for scale_factor in SCALES {
+            real_window_cell(fixture, theme_name, scale_factor);
+        }
+    }
 }
 
 #[test]
