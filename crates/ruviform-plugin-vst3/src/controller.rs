@@ -13,12 +13,12 @@ use std::ptr;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use vst3::Steinberg::Vst::{
-    IComponentHandler, IEditController, IEditControllerTrait, ParameterInfo,
-    ParameterInfo_::ParameterFlags_, String128, TChar,
+    ControllerNumbers_, IComponentHandler, IEditController, IEditControllerTrait, IMidiMapping,
+    IMidiMappingTrait, ParameterInfo, ParameterInfo_::ParameterFlags_, String128, TChar,
 };
 use vst3::Steinberg::{
     FUnknown, IBStream, IPlugView, IPluginBaseTrait, TUID, kInvalidArgument, kNotImplemented,
-    kResultOk, tresult,
+    kResultFalse, kResultOk, kResultTrue, tresult,
 };
 use vst3::{Class, uid};
 
@@ -31,7 +31,7 @@ pub(crate) struct GainController {
 }
 
 impl Class for GainController {
-    type Interfaces = (IEditController,);
+    type Interfaces = (IEditController, IMidiMapping);
 }
 
 impl GainController {
@@ -231,6 +231,33 @@ impl IEditControllerTrait for GainController {
     #[expect(unsafe_code)]
     unsafe fn createView(&self, _name: *const c_char) -> *mut IPlugView {
         ptr::null_mut()
+    }
+}
+
+/// `IMidiMapping` — the fixture's deterministic CC→parameter
+/// assignment: volume controller (`kCtrlVolume` = 7) on any channel
+/// of bus 0 drives the gain parameter. This is the surface the host
+/// bridge snapshots into its `MidiAssignmentTable` (Issue #253).
+impl IMidiMappingTrait for GainController {
+    #[expect(unsafe_code)]
+    unsafe fn getMidiControllerAssignment(
+        &self,
+        bus_index: i32,
+        _channel: i16,
+        controller: i16,
+        id: *mut u32,
+    ) -> tresult {
+        if id.is_null() {
+            return kInvalidArgument;
+        }
+        let volume = i16::try_from(i64::from(ControllerNumbers_::kCtrlVolume)).unwrap_or(-1);
+        if bus_index == 0 && controller == volume {
+            // SAFETY: `id` checked non-null — a valid `ParamID`
+            // out-param for the call.
+            unsafe { *id = GAIN_PARAM.id.0 };
+            return kResultTrue;
+        }
+        kResultFalse
     }
 }
 

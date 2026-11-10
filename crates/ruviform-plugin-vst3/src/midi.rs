@@ -28,8 +28,9 @@
 //! JUCE's `createVstEvent` does exactly this — and plugins that do
 //! not understand it ignore unknown event types per the VST3 contract.
 //! Emitting it is the only way to carry channel pressure, pitch bend
-//! and program change into `inputEvents`; `IMidiMapping`-routed
-//! parameter delivery is a separate, unimplemented gate.
+//! and program change into `inputEvents`. `IMidiMapping`-routed
+//! CC→parameter delivery runs *instead of* this event path when the
+//! plugin assigns the controller — see `routed_assignment`.
 //!
 //! ## Defined skips (counted, never silent)
 //!
@@ -61,7 +62,6 @@
 #[cfg(feature = "host")]
 use std::cell::RefCell;
 
-#[cfg(feature = "host")]
 use ruviform_media_core::MusicalTimeInfo;
 use ruviform_media_core::{
     MidiChannel, MidiController, MidiEvent, MidiGroup, MidiKind, MidiProgram, MidiValue, NoteKey,
@@ -71,16 +71,16 @@ use ruviform_plugin_core::EventList;
 use ruviform_plugin_core::{Event, EventKind};
 use vst3::ComRef;
 use vst3::Steinberg::Vst::{
-    ControllerNumbers_, Event as VstEvent, Event_::EventTypes_, IEventList, IEventListTrait,
-    LegacyMIDICCOutEvent,
+    ControllerNumbers_, Event as VstEvent, Event_::EventTypes_, Event__type0, IEventList,
+    IEventListTrait, LegacyMIDICCOutEvent, NoteOffEvent, NoteOnEvent, PolyPressureEvent,
 };
 #[cfg(feature = "host")]
-use vst3::Steinberg::Vst::{Event__type0, NoteOffEvent, NoteOnEvent, PolyPressureEvent};
+use vst3::Steinberg::Vst::{IMidiMapping, IMidiMappingTrait, kNoParamId};
 use vst3::Steinberg::kResultTrue;
 #[cfg(feature = "host")]
 use vst3::Steinberg::{kResultFalse, kResultOk, tresult};
 #[cfg(feature = "host")]
-use vst3::{Class, ComWrapper};
+use vst3::{Class, ComPtr, ComWrapper};
 
 use crate::block::{self, EventScratch, MAX_BLOCK_EVENTS};
 
@@ -94,6 +94,11 @@ pub(crate) struct MidiBridgeStats {
     pub(crate) translated: u64,
     /// Events dropped by a defined skip (see module docs).
     pub(crate) skipped: u64,
+    /// Canonical MIDI events consumed by the `IMidiMapping` route —
+    /// delivered to a parameter queue or defined-dropped because the
+    /// mapped parameter had no queue (host direction only; the
+    /// plugin-side read path never routes).
+    pub(crate) param_routed: u64,
 }
 
 impl MidiBridgeStats {
@@ -105,6 +110,7 @@ impl MidiBridgeStats {
         Self {
             translated: 0,
             skipped: 0,
+            param_routed: 0,
         }
     }
 }
@@ -120,7 +126,6 @@ impl MidiBridgeStats {
 /// approximation `ProcessContext` fields already carry).
 ///
 /// **RT contract:** RT-suitable — pure float math.
-#[cfg(feature = "host")]
 #[must_use]
 pub(crate) fn ppq_position(
     musical: Option<MusicalTimeInfo>,
@@ -146,7 +151,6 @@ pub(crate) fn ppq_position(
 /// Canonical `u32` (scale-to-max) → VST3 normalized `f32` `[0.0, 1.0]`.
 ///
 /// **RT contract:** RT-suitable — pure.
-#[cfg(feature = "host")]
 #[must_use]
 fn u32_to_norm_f32(value: u32) -> f32 {
     // `f64 → f32` is the defined 24-bit-mantissa narrowing — the
@@ -190,7 +194,6 @@ fn enum_to_u8(value: impl Into<i64>) -> u8 {
 /// inputs are `<= 0x7F` by construction (`MidiValue::as_u7`,
 /// `MidiChannel`, `MidiProgram`); the `unwrap_or` arm is unreachable
 /// but keeps the conversion total.
-#[cfg(feature = "host")]
 fn u7_to_i8(value: u8) -> i8 {
     i8::try_from(value).unwrap_or(i8::MAX)
 }
@@ -215,7 +218,6 @@ fn wrap_midi(kind: MidiKind, channel: MidiChannel) -> MidiEvent {
 /// canonical event carries no duration or note-expression linkage.
 ///
 /// **RT contract:** RT-suitable — pure, allocation-free.
-#[cfg(feature = "host")]
 #[must_use]
 pub(crate) fn outgoing_event(
     frame_offset: u32,
@@ -347,7 +349,7 @@ fn note_key(raw: i16) -> Option<NoteKey> {
 /// Union access is `unsafe`: each arm reads `__field0` only after
 /// `r#type` selects the member — the VST3 layout contract.
 #[expect(unsafe_code)]
-fn incoming_event(raw: &VstEvent, frames: usize) -> Option<Event> {
+pub(crate) fn incoming_event(raw: &VstEvent, frames: usize) -> Option<Event> {
     // Only bus 0 is meaningful — the fixture declares no event bus
     // topology, so any other index is an unexpected host input.
     if raw.busIndex != 0 {
@@ -547,6 +549,22 @@ impl BridgeEventList {
         events.push(event);
         true
     }
+
+    /// Copies the collected events into `out` — the plugin→host
+    /// report collection path (`ProcessData.outputEvents` drain).
+    /// `false` on a re-entrant borrow — the defined skip the caller
+    /// counts. `out` must have `MAX_BLOCK_EVENTS` spare capacity
+    /// (reserved at setup) so the copy never allocates.
+    ///
+    /// **RT contract:** RT-suitable — bounded copy, no allocation
+    /// inside reserved capacity.
+    pub(crate) fn copy_events_into(&self, out: &mut Vec<VstEvent>) -> bool {
+        let Ok(events) = self.events.try_borrow() else {
+            return false;
+        };
+        out.extend_from_slice(&events);
+        true
+    }
 }
 
 #[cfg(feature = "host")]
@@ -601,9 +619,169 @@ impl IEventListTrait for BridgeEventList {
     }
 }
 
+// ---------------------------------------------------------------------------
+// IMidiMapping routing (host direction, Issue #253 slice b)
+// ---------------------------------------------------------------------------
+
+/// Channel count of the `IMidiMapping` assignment table — MIDI 1.0
+/// channel voice is 16 channels.
+#[cfg(feature = "host")]
+const MIDI_MAP_CHANNELS: usize = 16;
+
+/// Controller-number slots per channel — `kCountCtrlNumber` (130):
+/// `0..=127` plain CC, `128` channel pressure (`kAfterTouch`),
+/// `129` pitch bend (`kPitchBend`).
+#[cfg(feature = "host")]
+const MIDI_MAP_CONTROLLERS: usize = 130;
+
+/// Snapshot of a plugin's `IMidiMapping` assignments — captured once
+/// per `prepare` (non-RT) so the RT path performs only table lookups,
+/// never plugin COM calls. This mirrors JUCE's `StoredMidiMapping`,
+/// which snapshots the full table off the audio thread for the same
+/// reason.
+///
+/// Slots hold the assigned `ParamID` or `kNoParamId`.
+#[cfg(feature = "host")]
+pub(crate) struct MidiAssignmentTable {
+    /// Flat `[channel][controller]` — `MIDI_MAP_CHANNELS ×
+    /// MIDI_MAP_CONTROLLERS` slots.
+    slots: Box<[u32]>,
+}
+
+#[cfg(feature = "host")]
+impl MidiAssignmentTable {
+    /// Queries every `(channel, controller)` pair on `mapping` —
+    /// `busIndex` 0 is the only event context the fixture topology
+    /// has. `kResultTrue` assignments keep their `ParamID`; every
+    /// other answer (including `kResultFalse` and a `kNoParamId`
+    /// write) stays `kNoParamId`.
+    ///
+    /// Bounded: exactly `16 × 130` queries, run once per `prepare`.
+    ///
+    /// # Safety
+    ///
+    /// `mapping` must be a live `IMidiMapping` for the duration of
+    /// the call (the VST3 instance contract guarantees it between
+    /// `init`/`terminate`).
+    #[expect(unsafe_code)]
+    pub(crate) fn capture(mapping: &ComPtr<IMidiMapping>) -> Self {
+        let mut slots =
+            vec![kNoParamId; MIDI_MAP_CHANNELS * MIDI_MAP_CONTROLLERS].into_boxed_slice();
+        for channel in 0..MIDI_MAP_CHANNELS {
+            for controller in 0..MIDI_MAP_CONTROLLERS {
+                // `getMidiControllerAssignment` takes `i16` indices —
+                // the table bounds (16/130) always fit.
+                let (Ok(channel_i16), Ok(controller_i16)) =
+                    (i16::try_from(channel), i16::try_from(controller))
+                else {
+                    continue;
+                };
+                let mut id = kNoParamId;
+                // SAFETY: `mapping` is a live `IMidiMapping`; `id` is
+                // a valid `ParamID` out-param for the call.
+                let assigned = unsafe {
+                    mapping.getMidiControllerAssignment(0, channel_i16, controller_i16, &raw mut id)
+                } == kResultTrue;
+                if assigned && id != kNoParamId {
+                    slots[channel * MIDI_MAP_CONTROLLERS + controller] = id;
+                }
+            }
+        }
+        Self { slots }
+    }
+
+    /// The `ParamID` assigned to `(channel, controller)` —
+    /// `kNoParamId` when unmapped or out of table range.
+    ///
+    /// **RT contract:** RT-suitable — pure lookup.
+    #[must_use]
+    pub(crate) fn lookup(&self, channel: u8, controller: i16) -> u32 {
+        let Ok(controller) = usize::try_from(controller) else {
+            return kNoParamId;
+        };
+        if controller >= MIDI_MAP_CONTROLLERS {
+            return kNoParamId;
+        }
+        self.slots
+            .get(usize::from(channel) * MIDI_MAP_CONTROLLERS + controller)
+            .copied()
+            .unwrap_or(kNoParamId)
+    }
+}
+
+/// The VST3 `(channel, controllerNumber, normalizedValue)` triple a
+/// canonical [`MidiEvent`] maps to for `IMidiMapping` lookup — the
+/// same domain JUCE's `toVst3ControlEvent` covers:
+///
+/// | `MidiKind` | controllerNumber | normalized value |
+/// | --- | --- | --- |
+/// | `ControlChange` | the controller number | `as_u7/127` |
+/// | `ChannelPressure` | `kAfterTouch` | `as_u7/127` |
+/// | `PitchBend` | `kPitchBend` | `bend_as_u14/16383` |
+///
+/// `None` for kinds outside the mapping domain — note on/off, poly
+/// pressure (per-note, no controller number), program change (not a
+/// continuous controller per the reference hosts) and unknown future
+/// variants.
+///
+/// The normalized value divides by the controller's own width
+/// (7-bit / 14-bit), matching JUCE's `ccValue / 127.0` /
+/// `pitchWheel / 16383.0` — canonical values wider than the MIDI 1.0
+/// controller width narrow through the defined `as_u7`/`bend_as_u14`
+/// projections, the same narrowing policy the event translation uses.
+///
+/// **RT contract:** RT-suitable — pure.
+#[cfg(feature = "host")]
+#[must_use]
+pub(crate) fn control_assignment(midi: &MidiEvent) -> Option<(u8, i16, f64)> {
+    let channel = midi.channel.get();
+    match midi.kind {
+        MidiKind::ControlChange { controller, value } => Some((
+            channel,
+            i16::from(controller.get()),
+            f64::from(MidiValue::as_u7(value)) / 127.0,
+        )),
+        MidiKind::ChannelPressure { pressure } => Some((
+            channel,
+            i16::from(enum_to_u8(ControllerNumbers_::kAfterTouch)),
+            f64::from(MidiValue::as_u7(pressure)) / 127.0,
+        )),
+        MidiKind::PitchBend { value } => Some((
+            channel,
+            i16::from(enum_to_u8(ControllerNumbers_::kPitchBend)),
+            f64::from(MidiValue::bend_as_u14(value)) / 16_383.0,
+        )),
+        _ => None,
+    }
+}
+
+/// The `(ParamID, normalizedValue)` an `IMidiMapping`-routed MIDI
+/// event delivers — `None` when the kind has no mapping domain, no
+/// table was captured, or the `(channel, controller)` slot is
+/// unmapped. Both the param-queue fill and the event-list suppression
+/// use this single predicate so they can never disagree about which
+/// events the mapping consumes.
+///
+/// **RT contract:** RT-suitable — pure.
+#[cfg(feature = "host")]
+#[must_use]
+pub(crate) fn routed_assignment(
+    midi: &MidiEvent,
+    map: Option<&MidiAssignmentTable>,
+) -> Option<(u32, f64)> {
+    let map = map?;
+    let (channel, controller, value) = control_assignment(midi)?;
+    let id = map.lookup(channel, controller);
+    (id != kNoParamId).then_some((id, value))
+}
+
 /// Fills a [`BridgeEventList`] from a canonical [`EventList`]: every
 /// [`EventKind::Midi`] event translates through [`outgoing_event`];
 /// `ParamValue` and unknown kinds are not MIDI and are not counted.
+/// MIDI events consumed by `IMidiMapping` routing (`midi_map` +
+/// [`routed_assignment`]) are suppressed here — they are delivered to
+/// parameter queues by the caller and counted in
+/// [`MidiBridgeStats::param_routed`] there, never double-counted.
 /// Returns the per-call stats (translated/skipped MIDI events).
 ///
 /// **RT contract:** RT-suitable — bounded iteration, no allocation.
@@ -613,6 +791,7 @@ pub(crate) fn fill_event_list(
     events: EventList<'_>,
     musical: Option<MusicalTimeInfo>,
     sample_rate: u32,
+    midi_map: Option<&MidiAssignmentTable>,
 ) -> MidiBridgeStats {
     let mut stats = MidiBridgeStats::new();
     event_list.clear();
@@ -620,6 +799,9 @@ pub(crate) fn fill_event_list(
         let EventKind::Midi(midi) = event.kind() else {
             continue;
         };
+        if routed_assignment(&midi, midi_map).is_some() {
+            continue;
+        }
         let ppq = ppq_position(musical, event.frame_offset(), sample_rate);
         match outgoing_event(event.frame_offset(), &midi, ppq) {
             Some(vst) => {
@@ -1140,7 +1322,7 @@ mod tests {
         ];
         let list_events = EventList::new(&events, 64).unwrap();
         let list = ComWrapper::new(BridgeEventList::with_capacity());
-        let stats = fill_event_list(&list, list_events, None, 48_000);
+        let stats = fill_event_list(&list, list_events, None, 48_000, None);
         assert_eq!(stats.translated, 1);
         assert_eq!(stats.skipped, 1);
 
@@ -1154,6 +1336,54 @@ mod tests {
         let got = unsafe { raw.assume_init() };
         assert_eq!(got.sampleOffset, 3);
         assert_eq!(got.r#type, enum_to_u16(kNoteOnEvent));
+    }
+
+    /// `fill_event_list` suppresses events the `IMidiMapping` route
+    /// consumes — they are counted in `param_routed` by the caller's
+    /// param-queue fill, never double-delivered as MIDI.
+    #[cfg(feature = "host")]
+    #[test]
+    #[expect(unsafe_code)]
+    fn fill_event_list_suppresses_mapped_events() {
+        // Channel 3 CC 7 → ParamID 42.
+        let mut slots =
+            vec![kNoParamId; MIDI_MAP_CHANNELS * MIDI_MAP_CONTROLLERS].into_boxed_slice();
+        slots[3 * MIDI_MAP_CONTROLLERS + 7] = 42;
+        let table = MidiAssignmentTable { slots };
+
+        let mapped_cc = MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(3).unwrap(),
+            kind: MidiKind::ControlChange {
+                controller: MidiController::new(7).unwrap(),
+                value: MidiValue::from_u7(63),
+            },
+        };
+        // Same controller on an unmapped channel still flows through.
+        let unmapped_cc = MidiEvent {
+            channel: MidiChannel::new(4).unwrap(),
+            ..mapped_cc
+        };
+        let events = [
+            Event::new(3, EventKind::Midi(mapped_cc)),
+            Event::new(9, EventKind::Midi(unmapped_cc)),
+        ];
+        let list_events = EventList::new(&events, 64).unwrap();
+        let list = ComWrapper::new(BridgeEventList::with_capacity());
+        let stats = fill_event_list(&list, list_events, None, 48_000, Some(&table));
+        assert_eq!(stats.translated, 1);
+        assert_eq!(stats.skipped, 0);
+        // Only the unmapped-channel CC reached the event list.
+        let com = list.to_com_ptr::<IEventList>().unwrap();
+        // SAFETY: `com` is a live IEventList for this test.
+        assert_eq!(unsafe { com.getEventCount() }, 1);
+        let mut raw = core::mem::MaybeUninit::<VstEvent>::uninit();
+        // SAFETY: index 0 is in range; `raw` is a valid out-param.
+        assert_eq!(unsafe { com.getEvent(0, raw.as_mut_ptr()) }, kResultOk);
+        // SAFETY: `getEvent` returned `kResultOk` — `raw` initialized.
+        let got = unsafe { raw.assume_init() };
+        assert_eq!(got.sampleOffset, 9);
+        assert_eq!(got.r#type, enum_to_u16(kLegacyMIDICCOutEvent));
     }
 
     /// Plugin-side read: a host `IEventList` drains into canonical
@@ -1239,5 +1469,134 @@ mod tests {
             unsafe { com.getEvent(0, core::ptr::null_mut()) },
             kResultFalse
         );
+    }
+
+    // -----------------------------------------------------------------
+    // IMidiMapping routing (Issue #253 slice b)
+    // -----------------------------------------------------------------
+
+    /// `control_assignment` covers exactly the three continuous
+    /// controller kinds — CC, channel pressure, pitch bend — with the
+    /// controller-width-normalized values the VST3 mapping contract
+    /// uses (`/127` for 7-bit, `/16383` for 14-bit).
+    #[cfg(feature = "host")]
+    #[test]
+    fn control_assignment_covers_cc_pressure_and_bend() {
+        let channel = MidiChannel::new(5).unwrap();
+        let shell = |kind| MidiEvent {
+            group: MidiGroup::ZERO,
+            channel,
+            kind,
+        };
+
+        let cc = shell(MidiKind::ControlChange {
+            controller: MidiController::new(7).unwrap(),
+            value: MidiValue::from_u7(63),
+        });
+        let (ch, controller, value) = control_assignment(&cc).unwrap();
+        assert_eq!((ch, controller), (5, 7));
+        assert!((value - 63.0 / 127.0).abs() < 1e-12);
+
+        let pressure = shell(MidiKind::ChannelPressure {
+            pressure: MidiValue::from_u7(100),
+        });
+        let (_, controller, value) = control_assignment(&pressure).unwrap();
+        assert_eq!(
+            controller,
+            i16::from(enum_to_u8(ControllerNumbers_::kAfterTouch))
+        );
+        assert!((value - 100.0 / 127.0).abs() < 1e-12);
+
+        let bend = shell(MidiKind::PitchBend {
+            value: MidiValue::bend_from_u14(8192),
+        });
+        let (_, controller, value) = control_assignment(&bend).unwrap();
+        assert_eq!(
+            controller,
+            i16::from(enum_to_u8(ControllerNumbers_::kPitchBend))
+        );
+        assert!((value - 8192.0 / 16_383.0).abs() < 1e-12);
+
+        // Outside the mapping domain — note on/off, poly pressure,
+        // program change — is never routed.
+        assert!(control_assignment(&note_on()).is_none());
+        let program = shell(MidiKind::ProgramChange {
+            program: MidiProgram::new(4).unwrap(),
+        });
+        assert!(control_assignment(&program).is_none());
+    }
+
+    /// `routed_assignment` resolves `(ParamID, normalized)` through
+    /// the snapshot table — channel-scoped, kind-scoped, `kNoParamId`
+    /// honest.
+    #[cfg(feature = "host")]
+    #[test]
+    fn routed_assignment_resolves_through_table() {
+        let mut slots =
+            vec![kNoParamId; MIDI_MAP_CHANNELS * MIDI_MAP_CONTROLLERS].into_boxed_slice();
+        slots[3 * MIDI_MAP_CONTROLLERS + 7] = 42;
+        slots[3 * MIDI_MAP_CONTROLLERS + 128] = 7;
+        slots[3 * MIDI_MAP_CONTROLLERS + 129] = 9;
+        let table = MidiAssignmentTable { slots };
+        let shell = |kind| MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(3).unwrap(),
+            kind,
+        };
+
+        let cc = shell(MidiKind::ControlChange {
+            controller: MidiController::new(7).unwrap(),
+            value: MidiValue::from_u7(63),
+        });
+        let (id, value) = routed_assignment(&cc, Some(&table)).unwrap();
+        assert_eq!(id, 42);
+        assert!((value - 63.0 / 127.0).abs() < 1e-12);
+
+        // Same controller, different channel — unmapped.
+        let other_channel = MidiEvent {
+            channel: MidiChannel::new(4).unwrap(),
+            ..cc
+        };
+        assert!(routed_assignment(&other_channel, Some(&table)).is_none());
+
+        let pressure = shell(MidiKind::ChannelPressure {
+            pressure: MidiValue::from_u7(64),
+        });
+        assert_eq!(
+            routed_assignment(&pressure, Some(&table)).map(|(id, _)| id),
+            Some(7)
+        );
+        let bend = shell(MidiKind::PitchBend {
+            value: MidiValue::bend_from_u14(8192),
+        });
+        assert_eq!(
+            routed_assignment(&bend, Some(&table)).map(|(id, _)| id),
+            Some(9)
+        );
+
+        // No table → nothing routes; out-of-domain kinds never route.
+        assert!(routed_assignment(&cc, None).is_none());
+        assert!(routed_assignment(&note_on(), Some(&table)).is_none());
+    }
+
+    /// `MidiAssignmentTable::capture` snapshots the fixture
+    /// controller's `IMidiMapping`: volume CC 7 on every channel of
+    /// bus 0 → gain `ParamID`; everything else stays `kNoParamId`.
+    #[cfg(feature = "host")]
+    #[test]
+    fn assignment_table_capture_reads_fixture_controller() {
+        use crate::controller::GainController;
+        use crate::gain::GAIN_PARAM;
+
+        let controller = ComWrapper::new(GainController::new());
+        let Some(mapping) = controller.to_com_ptr::<IMidiMapping>() else {
+            panic!("GainController must answer the IMidiMapping query");
+        };
+        let table = MidiAssignmentTable::capture(&mapping);
+        assert_eq!(table.lookup(0, 7), GAIN_PARAM.id.0);
+        assert_eq!(table.lookup(15, 7), GAIN_PARAM.id.0);
+        assert_eq!(table.lookup(0, 6), kNoParamId);
+        assert_eq!(table.lookup(0, 128), kNoParamId);
+        assert_eq!(table.lookup(0, 129), kNoParamId);
     }
 }

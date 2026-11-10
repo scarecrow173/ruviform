@@ -60,10 +60,10 @@ use ruviform_plugin_core::{
 };
 use vst3::Steinberg::Vst::{
     BusDirection, BusDirections_, BusInfo, BusInfo_::BusFlags_, BusTypes_, IAudioProcessor,
-    IAudioProcessorTrait, IComponent, IComponentTrait, IParamValueQueueTrait, IParameterChanges,
-    IParameterChangesTrait, IProcessContextRequirements, IProcessContextRequirementsTrait, IoMode,
-    MediaType, MediaTypes_, ProcessContext_, ProcessData, ProcessSetup, RoutingInfo, SpeakerArr,
-    SpeakerArrangement, SymbolicSampleSizes_,
+    IAudioProcessorTrait, IComponent, IComponentTrait, IEventListTrait, IParamValueQueueTrait,
+    IParameterChanges, IParameterChangesTrait, IProcessContextRequirements,
+    IProcessContextRequirementsTrait, IoMode, MediaType, MediaTypes_, ProcessContext_, ProcessData,
+    ProcessSetup, RoutingInfo, SpeakerArr, SpeakerArrangement, SymbolicSampleSizes_,
 };
 use vst3::Steinberg::{
     FUnknown, IBStream, IPluginBaseTrait, TBool, TUID, kInvalidArgument, kNotImplemented,
@@ -74,7 +74,7 @@ use vst3::{Class, ComRef, uid};
 use crate::block::{self, ChannelScratch, EventScratch, MAX_BLOCK_EVENTS, PreparedBlock};
 use crate::controller::GainController;
 use crate::gain::{GAIN_PARAM, GainProcessor};
-use crate::midi::{MidiBridgeStats, collect_incoming};
+use crate::midi::{MidiBridgeStats, collect_incoming, outgoing_event, ppq_position};
 use crate::sdk_enum_i32;
 use crate::strings::copy_wstring;
 
@@ -118,6 +118,15 @@ struct ComponentState {
     /// Cumulative `IEventList` → canonical translation counters
     /// (Issue #253) — the observable side of the defined-skip policy.
     midi_stats: MidiBridgeStats,
+    /// Plugin→host report drain scratch — the processor's queued
+    /// [`Event`] reports are moved here once per block, then written
+    /// through `ProcessData.outputParameterChanges`/`outputEvents`.
+    /// Capacity reserved at construction; pushes stay inside it.
+    report_scratch: Vec<Event>,
+    /// Report-translation counters — the observable side of the
+    /// plugin→host defined-skip policy (null output channels,
+    /// out-of-block offsets, unwritable queues).
+    report_stats: MidiBridgeStats,
 }
 
 impl ComponentState {
@@ -131,6 +140,8 @@ impl ComponentState {
             channel_scratch: ChannelScratch::empty(),
             event_scratch: EventScratch::empty(),
             midi_stats: MidiBridgeStats::new(),
+            report_scratch: Vec::with_capacity(MAX_BLOCK_EVENTS),
+            report_stats: MidiBridgeStats::new(),
         }
     }
 }
@@ -308,6 +319,108 @@ impl GainComponent {
                 None => info,
             }
         })
+    }
+
+    /// Drains [`GainProcessor`]'s queued plugin→host reports into the
+    /// `ProcessData` output channels: `EventKind::ParamValue` reports
+    /// go through `outputParameterChanges` (`addParameterData` →
+    /// `addPoint`), `EventKind::Midi` reports through `outputEvents`
+    /// (`addEvent` with the same canonical→VST3 translation the
+    /// host→plugin direction uses). A null output channel, an
+    /// out-of-block offset, an unwritable queue and unknown future
+    /// `EventKind`s are defined skips counted in `report_stats` —
+    /// never a block rejection and never an allocation.
+    ///
+    /// # Safety
+    ///
+    /// `data` must be the live `ProcessData` of the current `process`
+    /// call — its `outputParameterChanges`/`outputEvents` fields are
+    /// null or valid `IParameterChanges`/`IEventList` pointers for
+    /// the duration of the call per the VST3 contract.
+    #[expect(unsafe_code)]
+    unsafe fn emit_reports(
+        data: &ProcessData,
+        frames: usize,
+        transport: Option<TransportInfo>,
+        state: &mut ComponentState,
+    ) {
+        state.report_scratch.clear();
+        state
+            .processor
+            .drain_output_reports(&mut state.report_scratch);
+        if state.report_scratch.is_empty() {
+            return;
+        }
+        let musical = transport.and_then(TransportInfo::musical);
+        let sample_rate = state.sample_rate;
+        let frame_bound = u32::try_from(frames).unwrap_or(u32::MAX);
+        for report in &state.report_scratch {
+            // Out-of-block report offsets are a defined skip — the
+            // same drop policy the input collectors apply (never a
+            // wrong-frame clamp).
+            if report.frame_offset() >= frame_bound {
+                state.report_stats.skipped += 1;
+                continue;
+            }
+            match report.kind() {
+                EventKind::ParamValue(param) => {
+                    // SAFETY: `data.outputParameterChanges` is null or
+                    // a valid `IParameterChanges` for this call.
+                    let Some(changes) = (unsafe { ComRef::from_raw(data.outputParameterChanges) })
+                    else {
+                        state.report_stats.skipped += 1;
+                        continue;
+                    };
+                    let mut queue_index = 0_i32;
+                    // SAFETY: `changes` is live for the call;
+                    // `param.param_id.0` is a valid `ParamID` in-param
+                    // and `queue_index` a valid out-param.
+                    let queue = unsafe {
+                        changes.addParameterData(&raw const param.param_id.0, &raw mut queue_index)
+                    };
+                    let Some(queue) = (unsafe { ComRef::from_raw(queue) }) else {
+                        state.report_stats.skipped += 1;
+                        continue;
+                    };
+                    let offset = i32::try_from(report.frame_offset()).unwrap_or(i32::MAX);
+                    let mut point_index = 0_i32;
+                    // SAFETY: `queue` is live for the call; `offset`/
+                    // `param.value.get()` are in-params and
+                    // `point_index` a valid out-param.
+                    if unsafe { queue.addPoint(offset, param.value.get(), &raw mut point_index) }
+                        == kResultTrue
+                    {
+                        state.report_stats.translated += 1;
+                    } else {
+                        state.report_stats.skipped += 1;
+                    }
+                }
+                EventKind::Midi(midi) => {
+                    // SAFETY: `data.outputEvents` is null or a valid
+                    // `IEventList` for this call.
+                    let Some(list) = (unsafe { ComRef::from_raw(data.outputEvents) }) else {
+                        state.report_stats.skipped += 1;
+                        continue;
+                    };
+                    let ppq = ppq_position(musical, report.frame_offset(), sample_rate);
+                    let Some(mut vst) = outgoing_event(report.frame_offset(), &midi, ppq) else {
+                        state.report_stats.skipped += 1;
+                        continue;
+                    };
+                    // SAFETY: `list` is live for the call; `vst` is a
+                    // valid `Event` value for the call's duration.
+                    if unsafe { list.addEvent(&raw mut vst) } == kResultTrue {
+                        state.report_stats.translated += 1;
+                    } else {
+                        state.report_stats.skipped += 1;
+                    }
+                }
+                // `EventKind` is `#[non_exhaustive]` — a future kind
+                // has no VST3 output-channel mapping yet: defined skip.
+                _ => state.report_stats.skipped += 1,
+            }
+        }
+        state.report_scratch.clear();
     }
 }
 
@@ -814,6 +927,16 @@ impl IAudioProcessorTrait for GainComponent {
                 }
             }
         };
+
+        // Plugin→host reports: drain the processor's queued reports
+        // into the host-supplied output channels — runs on every
+        // completed `process` call, including `Sleep`/event-only
+        // blocks (reports are produced during the event scan).
+        // SAFETY: `data` is the live `ProcessData` of this call; its
+        // output pointers are null or valid per the VST3 contract.
+        unsafe {
+            Self::emit_reports(data, frames, transport, state);
+        }
 
         self.tail.store(result.tail_frames, Ordering::Release);
         match result.status {
