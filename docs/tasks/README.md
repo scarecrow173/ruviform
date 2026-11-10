@@ -12,7 +12,7 @@ Directory: `docs/tasks`
 | TASK-034udQraUdxLs1SxuYiaAK | Issue #127 Linux 実配布方式 設計 — docs チェーン作成・索引再生成・検証・PR | in-progress | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
 | TASK-034V4uYcdcMjdFzOg15rFm | Issue #243 — Windows 実 OS multiwindow smoke 実装タスク | in-progress | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
-| TASK-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice タスク（IMidiMapping + plugin→host reporting） | in-progress | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
+| TASK-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice タスク（IMidiMapping + plugin→host reporting） | completed | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
 | TASK-AsjkeCFskQSQZMsB5Tgl5H | Issue #301 T2 — zstd format/contract/API 試験 | completed | [issue-301-t2-zstd-tests.md](./issue-301-t2-zstd-tests.md) |
 | TASK-nnP07tqKBoCJML7LH9xWsQ | Issue #301 T3 — compression-verify lane matrix・crate 文書 | completed | [issue-301-t3-ci-docs.md](./issue-301-t3-ci-docs.md) |
@@ -250,6 +250,7 @@ Directory: `docs/tasks`
 | TASK-jXU3ZGuh6DP2FfCSvkx5FC | T2 TS wire validators — ipcwire/bindingwire + conformance テスト（Issue #311） | done | [issue-311-t2-ts-wire-validators.md](./issue-311-t2-ts-wire-validators.md) |
 | TASK-KayYlp12EsEWZZKk2pMZgF | T3 recorder/replay/oracle + consumer mocks + seeded シナリオ（Issue #311） | done | [issue-311-t3-recorder-replay-oracle.md](./issue-311-t3-recorder-replay-oracle.md) |
 | TASK-uyCbW614DqUYmATBzUrQxz | T4 fault matrix + Rust conformance lanes + mise/CI/AGENTS 同期 + IR（Issue #311） | done | [issue-311-t4-fault-matrix-lanes.md](./issue-311-t4-fault-matrix-lanes.md) |
+| TASK-034Vgd9bXcARNIc2rWG7tW | Issue #314 slice 4 follow-up — real-scenario lane + matrix tasks | done | [issue-314-real-scenario-lane.md](./issue-314-real-scenario-lane.md) |
 | TASK-LSK3NBKCdjJ7fablK2DEFK | T1 ci.yml dispatch 専用化 + concurrency 簡素化 + コメント同期（Issue #326） | done | [issue-326-t1-ci-yml-dispatch-only.md](./issue-326-t1-ci-yml-dispatch-only.md) |
 | TASK-kjitc7DOTjE43h2VO4qJgh | T2 trigger contract test（ci-yml-contract.test.mjs）+ dev-env 同期（Issue #326） | done | [issue-326-t2-trigger-contract-test.md](./issue-326-t2-trigger-contract-test.md) |
 | TASK-034RBNKfGF6WS4OfHfW1of | Issue #327 CI計測Baseline 計測実施・文書化 | done | [issue-327-t1-baseline-measurement.md](./issue-327-t1-baseline-measurement.md) |

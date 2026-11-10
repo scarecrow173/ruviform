@@ -112,6 +112,7 @@ Directory: `docs/designs`
 | DESIGN-GKjcGBxFK0ZtzxCEKsh1e7 | Issue #314 slice 1 — headless Pixel Golden Utility コアの設計 | approved | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | DESIGN-L3YSlsSU8u5EdRMDfpHhy6 | Issue #314 slice 5 — Golden 環境正規化・registry 結合・runner 統合・証拠 lane の設計 | approved | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | DESIGN-034UewQlz8GZ6RlexpCiXW | Issue #314 slice 2 — Golden Utility × Scenario Contract 能力契約接続の設計 | approved | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
+| DESIGN-034Vg9PXhXAWj20QVdvHWj | Issue #314 slice 4 follow-up — real-scenario lane + matrix 詳細設計 | approved | [issue-314-real-scenario-lane.md](./issue-314-real-scenario-lane.md) |
 | DESIGN-314rwBn7xK2pQwE5rTyUi | Issue #314 slice 4 residual — real-window adapter 詳細設計 | approved | [issue-314-real-window-adapter.md](./issue-314-real-window-adapter.md) |
 | DESIGN-034V2ho95TYYvIaJsGmRSx | Issue #314 slice 6 — Consumer-shaped semantic oracle fixtures の設計 | approved | [issue-314-semantic-oracle.md](./issue-314-semantic-oracle.md) |
 | DESIGN-bgU7RV8JrPVEY31dlXpJCG | Issue #326 ci.yml dispatch 専用化 設計 — trigger 撤去・concurrency 簡素化・trigger 契約テスト | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
@@ -177,7 +178,7 @@ Directory: `docs/designs`
 | DESIGN-64fKOE68pKEdIkGIEgcsyW | Issue #479 — 値制御コンポーネントのキーボード操作の設計 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | DESIGN-034UiRsPAtNVImhGaTw2TY | Issue #480 設計 — tab_focus の op 駆動解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | DESIGN-eBMdc3IAyT8cNugckC1k2Q | Issue #490 oracle late-create query epoch 整合設計 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
-| DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | draft | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
+| DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |
