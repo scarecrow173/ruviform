@@ -30,8 +30,17 @@
 //! on exit — run it on an interactive desktop, not over unsaved
 //! work.
 //!
+//! Issue #552 preflight: before the window opens, the lane runs
+//! `os_input::preflight(PreflightScope::Pointer)` — an absolute cursor
+//! probe whose effect is verified through `GetCursorPos`, not the
+//! `SendInput` return count, then the cursor is restored. `SendInput`
+//! can accept every event while the OS drops them all; a blocked
+//! environment must not masquerade as a GUI failure.
+//!
 //! Exit codes: `0` = pass, `1` = fail, `2` = unsupported (non-Windows
-//! hosts — `os_input` has no backend there).
+//! hosts — `os_input` has no backend there), `3` = `environment_blocked`
+//! (injection accepted but provably ineffective — the lane body never
+//! ran; distinct from `fail`, which means the GUI itself broke).
 //!
 //! The example binds only the driver-neutral API plus the thin
 //! `os_input`/`OsWindowGeometry` verification surface — no `gpui`
@@ -55,7 +64,7 @@ use ruviform_ui::{
     DriverEvent, Intent, LogicalRect, LogicalSize, MonitorInfo, WindowDriver, WindowId,
     WindowLifecycle, WindowSpec,
 };
-use ruviform_ui_gpui::os_input;
+use ruviform_ui_gpui::os_input::{self, PreflightReport, PreflightScope};
 use ruviform_ui_gpui::{COMMAND_INTENT_OP, GpuiDriver, OsWindowGeometry, ViewMount};
 use serde_json::{Value, json};
 
@@ -180,6 +189,8 @@ struct Smoke {
     out: Option<PathBuf>,
     /// Cursor position saved before the run — restored on exit.
     cursor_home: Option<(i32, i32)>,
+    /// Issue #552 preflight report — recorded in every verdict.
+    preflight: PreflightReport,
     /// Final verdict; `Some` also means the run is finished.
     result: Option<Result<(), String>>,
 }
@@ -608,6 +619,24 @@ fn bounds_json(bounds: Option<&BTreeMap<ComponentKey, LogicalRect>>) -> Value {
     }
 }
 
+/// Serializes the Issue #552 preflight report for the verdict JSON.
+fn preflight_json(report: &PreflightReport) -> Value {
+    json!({
+        "effective": report.effective,
+        "checks": report
+            .checks
+            .iter()
+            .map(|c| {
+                json!({
+                    "family": c.family,
+                    "effective": c.effective,
+                    "detail": c.detail,
+                })
+            })
+            .collect::<Vec<_>>(),
+    })
+}
+
 /// Builds the verdict document. `reasons` is empty iff the run
 /// passed; `notes` carries anomalies that did not decide the verdict.
 fn verdict_doc(st: &Smoke, verdict: &str, reasons: &[String], seen: &[IntentSeen]) -> Value {
@@ -662,7 +691,7 @@ fn verdict_doc(st: &Smoke, verdict: &str, reasons: &[String], seen: &[IntentSeen
         {"name": "seek_click_begin_commit", "ok": seek_click_ok(seen)},
     ]);
     json!({
-        "schema": "rf313-real-os-pointer-smoke/v1",
+        "schema": "rf313-real-os-pointer-smoke/v2",
         "issue": 313,
         "lane": "windows-sendinput-pointer",
         "input_method": "win32-SendInput-mouse-absolute",
@@ -671,6 +700,7 @@ fn verdict_doc(st: &Smoke, verdict: &str, reasons: &[String], seen: &[IntentSeen
         "reasons": reasons,
         "notes": st.notes,
         "environment": st.meta,
+        "preflight": preflight_json(&st.preflight),
         "run": {
             "window": st.window.to_string(),
             "ready": st.ready,
@@ -959,7 +989,12 @@ fn on_tick(st: &mut Smoke, drv: &mut dyn WindowDriver, query: &GpuiDriver) {
     try_finish_if_passed(st, drv);
 }
 
-fn run_smoke(opts: Opts, meta: Value, cursor_home: Option<(i32, i32)>) -> ExitCode {
+fn run_smoke(
+    opts: Opts,
+    meta: Value,
+    cursor_home: Option<(i32, i32)>,
+    preflight: PreflightReport,
+) -> ExitCode {
     let mut driver = GpuiDriver::new();
     // One `AttachEpochAllocator` per session — same rule as
     // `component_showcase` (never mint a second one for a fresh host).
@@ -1008,6 +1043,7 @@ fn run_smoke(opts: Opts, meta: Value, cursor_home: Option<(i32, i32)>) -> ExitCo
         meta,
         out: opts.out,
         cursor_home,
+        preflight,
         result: None,
     }));
     let handler = state.clone();
@@ -1062,18 +1098,37 @@ fn main() -> ExitCode {
         eprintln!("[real_os_pointer_smoke] verdict: unsupported");
         return ExitCode::from(2);
     }
+    // Issue #552: prove injection takes effect *before* the lane body.
+    // A blocked environment is not a GUI failure — report
+    // `environment_blocked` (exit 3) and never open a window.
+    let preflight = os_input::preflight(PreflightScope::Pointer);
+    if !preflight.effective {
+        let reasons: Vec<String> = preflight
+            .checks
+            .iter()
+            .filter(|c| !c.effective)
+            .map(|c| format!("preflight {}: {}", c.family, c.detail))
+            .collect();
+        let doc = blocked_doc(&meta, &preflight, &reasons);
+        if let Err(e) = write_verdict(&doc, opts.out.as_deref()) {
+            eprintln!("[real_os_pointer_smoke] failed to write verdict file: {e}");
+            eprintln!("{doc}");
+        }
+        eprintln!("[real_os_pointer_smoke] verdict: environment_blocked");
+        return ExitCode::from(3);
+    }
     // Save the user's cursor position up front — restored on exit.
     let cursor_home = os_input::cursor_position()
         .map_err(|e| eprintln!("[real_os_pointer_smoke] cursor_position probe failed: {e}"))
         .ok();
-    run_smoke(opts, meta, cursor_home)
+    run_smoke(opts, meta, cursor_home, preflight)
 }
 
 /// Minimal verdict document for platforms without an `os_input`
-/// backend — same schema, `run` fields null.
+/// backend — same schema, `run` fields null, no preflight ran.
 fn unsupported_doc(meta: &Value, reasons: &[String]) -> Value {
     json!({
-        "schema": "rf313-real-os-pointer-smoke/v1",
+        "schema": "rf313-real-os-pointer-smoke/v2",
         "issue": 313,
         "lane": "windows-sendinput-pointer",
         "input_method": "win32-SendInput-mouse-absolute",
@@ -1082,6 +1137,28 @@ fn unsupported_doc(meta: &Value, reasons: &[String]) -> Value {
         "reasons": reasons,
         "notes": [],
         "environment": meta,
+        "preflight": Value::Null,
+        "run": Value::Null,
+    })
+}
+
+/// Verdict document for an environment-blocked run (Issue #552):
+/// `SendInput` accepted events but the read-back proved no effect, so
+/// the lane body never ran. `run` is null; `preflight` carries the
+/// per-check evidence. Distinct from `unsupported` (no backend) and
+/// `fail` (the GUI itself broke).
+fn blocked_doc(meta: &Value, preflight: &PreflightReport, reasons: &[String]) -> Value {
+    json!({
+        "schema": "rf313-real-os-pointer-smoke/v2",
+        "issue": 313,
+        "lane": "windows-sendinput-pointer",
+        "input_method": "win32-SendInput-mouse-absolute",
+        "input_method_note": "OS automation injection through the real OS input path — not physical manual input; distinct from GPUI simulated input (dispatch_input/simulate_mouse_*), which never leaves the toolkit. The real cursor is moved and restored on exit.",
+        "verdict": "environment_blocked",
+        "reasons": reasons,
+        "notes": [],
+        "environment": meta,
+        "preflight": preflight_json(preflight),
         "run": Value::Null,
     })
 }
