@@ -160,6 +160,7 @@ Directory: `docs/plans`
 | PLAN-034VehuU5KuL3vurAXEXph | Issue #552 — SendInput preflight 実装計画 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
+| PLAN-034VnMw6PrT9NBJxWK4N1L | Implement Issue #253 L1 wire report verb | approved | [rf-midi-l1-report-verb-plan.md](./rf-midi-l1-report-verb-plan.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
 | PLAN-kreAOLAGHhliWIVO5VQM6G | ViewLink authoritative generation 実装計画 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 
