@@ -8,7 +8,7 @@ mod common;
 
 use std::io::{BufReader, Read, Write};
 
-use common::{ShortFill, assert_io_kind, assert_kind};
+use common::{FailingReader, ShortFill, assert_io_kind, assert_kind};
 use ruviform_io_compression::{CompressionErrorKind, DecodeLimits, DecodeScope};
 
 #[cfg(feature = "gzip")]
@@ -225,6 +225,95 @@ mod gzip {
         let err = dec.read_to_end(&mut out).expect_err("unit cap");
         assert_io_kind(&err, CompressionErrorKind::LimitExceeded);
     }
+
+    #[test]
+    fn finish_is_idempotent_after_verified_end() {
+        let data = encoded(b"payload");
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("decode");
+        let first = dec.finish().expect("finish");
+        let second = dec.finish().expect("finish again");
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn chained_decoder_resumes_at_member_boundary() {
+        // `SingleUnit` must leave the second member readable *as a
+        // stream* — a fresh decoder on the same `BufRead` verifies it
+        // independently of the first decoder's receipt.
+        let mut data = encoded(b"first");
+        data.extend_from_slice(&encoded(b"second"));
+        let mut source = BufReader::new(&data[..]);
+        let single = || DecodeOptions::new(DecodeScope::SingleUnit, DecodeLimits::new());
+        {
+            let mut dec = Decoder::new(&mut source, single());
+            let mut out = Vec::new();
+            dec.read_to_end(&mut out).expect("first member");
+            dec.finish().expect("first verified");
+            assert_eq!(out, b"first");
+        }
+        let mut dec = Decoder::new(&mut source, single());
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("second member");
+        dec.finish().expect("second verified");
+        assert_eq!(out, b"second");
+    }
+
+    #[test]
+    fn read_error_latches_failed() {
+        // A mid-stream source error surfaces as `Io` and latches the
+        // decoder exactly like a format failure.
+        let data = encoded(b"payload payload payload");
+        let fail_at = data.len() / 2;
+        let mut source = FailingReader::new(&data[..], fail_at);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut out = Vec::new();
+        let err = dec.read_to_end(&mut out).expect_err("source error");
+        assert_io_kind(&err, CompressionErrorKind::Io);
+        let mut buf = [0u8; 8];
+        assert_io_kind(
+            &dec.read(&mut buf).expect_err("reuse rejected"),
+            CompressionErrorKind::InvalidState,
+        );
+        assert_kind(dec.finish(), CompressionErrorKind::InvalidState);
+    }
+
+    #[test]
+    fn decoded_budget_enforced_on_high_ratio_payload() {
+        // SEC-01 zip-bomb shape: ~1 MiB of zeros compresses to ~1 KiB.
+        // The decoded-byte cap must trip on real expansion — not just
+        // on tiny fixtures — and exactly-at-cap must still succeed.
+        let payload = vec![0u8; 1 << 20];
+        let data = encoded(&payload);
+        assert!(
+            data.len() < payload.len() / 100,
+            "fixture must actually compress"
+        );
+
+        let under = DecodeOptions::new(
+            DecodeScope::WholeInput,
+            DecodeLimits::new().with_max_decoded_bytes(payload.len() as u64 - 1),
+        );
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, under);
+        let mut out = Vec::new();
+        let err = dec.read_to_end(&mut out).expect_err("one byte under cap");
+        assert_io_kind(&err, CompressionErrorKind::LimitExceeded);
+        assert_eq!(out.len(), payload.len() - 1, "cap bytes still deliver");
+
+        let exact = DecodeOptions::new(
+            DecodeScope::WholeInput,
+            DecodeLimits::new().with_max_decoded_bytes(payload.len() as u64),
+        );
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, exact);
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("exact cap decodes");
+        assert_eq!(out.len(), payload.len());
+        dec.finish().expect("finish");
+    }
 }
 
 #[cfg(feature = "deflate")]
@@ -292,6 +381,106 @@ mod deflate {
         assert_eq!(n, payload.len() - 1);
         let err = dec.read(&mut buf).expect_err("over budget");
         assert_io_kind(&err, CompressionErrorKind::LimitExceeded);
+    }
+
+    #[test]
+    fn finish_mid_output_is_not_exhausted() {
+        let data = encoded(b"0123456789");
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut buf = [0u8; 4];
+        dec.read_exact(&mut buf).expect("partial read");
+        assert_kind(dec.finish(), CompressionErrorKind::NotExhausted);
+        // The failed call consumed nothing — decoding proceeds with
+        // the 6 bytes not yet delivered by the partial read.
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("decode");
+        assert_eq!(out.len(), 6);
+        dec.finish().expect("verified end now reachable");
+    }
+
+    #[test]
+    fn finish_is_idempotent_after_verified_end() {
+        let data = encoded(b"payload");
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("decode");
+        let first = dec.finish().expect("finish");
+        let second = dec.finish().expect("finish again");
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn chained_decoder_decodes_next_stream() {
+        // Two finished streams concatenated: `SingleUnit` leaves the
+        // second stream's bytes in the caller's `BufRead`, where a
+        // fresh decoder verifies it independently.
+        let mut data = encoded(b"first");
+        data.extend_from_slice(&encoded(b"second"));
+        let mut source = BufReader::new(&data[..]);
+        let single = || DecodeOptions::new(DecodeScope::SingleUnit, DecodeLimits::new());
+        {
+            let mut dec = Decoder::new(&mut source, single());
+            let mut out = Vec::new();
+            dec.read_to_end(&mut out).expect("first stream");
+            dec.finish().expect("first verified");
+            assert_eq!(out, b"first");
+        }
+        let mut dec = Decoder::new(&mut source, single());
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("second stream");
+        dec.finish().expect("second verified");
+        assert_eq!(out, b"second");
+    }
+
+    #[test]
+    fn read_error_latches_failed() {
+        let data = encoded(b"payload payload payload");
+        let fail_at = data.len() / 2;
+        let mut source = FailingReader::new(&data[..], fail_at);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut out = Vec::new();
+        let err = dec.read_to_end(&mut out).expect_err("source error");
+        assert_io_kind(&err, CompressionErrorKind::Io);
+        let mut buf = [0u8; 8];
+        assert_io_kind(
+            &dec.read(&mut buf).expect_err("reuse rejected"),
+            CompressionErrorKind::InvalidState,
+        );
+        assert_kind(dec.finish(), CompressionErrorKind::InvalidState);
+    }
+
+    #[test]
+    fn decoded_budget_enforced_on_high_ratio_payload() {
+        let payload = vec![0u8; 1 << 20];
+        let data = encoded(&payload);
+        assert!(
+            data.len() < payload.len() / 100,
+            "fixture must actually compress"
+        );
+
+        let under = DecodeOptions::new(
+            DecodeScope::WholeInput,
+            DecodeLimits::new().with_max_decoded_bytes(payload.len() as u64 - 1),
+        );
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, under);
+        let mut out = Vec::new();
+        let err = dec.read_to_end(&mut out).expect_err("one byte under cap");
+        assert_io_kind(&err, CompressionErrorKind::LimitExceeded);
+        assert_eq!(out.len(), payload.len() - 1, "cap bytes still deliver");
+
+        let exact = DecodeOptions::new(
+            DecodeScope::WholeInput,
+            DecodeLimits::new().with_max_decoded_bytes(payload.len() as u64),
+        );
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, exact);
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("exact cap decodes");
+        assert_eq!(out.len(), payload.len());
+        dec.finish().expect("finish");
     }
 }
 
@@ -413,5 +602,105 @@ mod zstd {
         let err = dec.read_to_end(&mut out).expect_err("cumulative cap");
         assert_io_kind(&err, CompressionErrorKind::LimitExceeded);
         assert_eq!(out, b"aaab");
+    }
+
+    #[test]
+    fn finish_mid_output_is_not_exhausted() {
+        let data = encoded(b"0123456789");
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut buf = [0u8; 4];
+        dec.read_exact(&mut buf).expect("partial read");
+        assert_kind(dec.finish(), CompressionErrorKind::NotExhausted);
+        // The failed call consumed nothing — decoding proceeds with
+        // the 6 bytes not yet delivered by the partial read.
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("decode");
+        assert_eq!(out.len(), 6);
+        dec.finish().expect("verified end now reachable");
+    }
+
+    #[test]
+    fn finish_is_idempotent_after_verified_end() {
+        let data = encoded(b"payload");
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("decode");
+        let first = dec.finish().expect("finish");
+        let second = dec.finish().expect("finish again");
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn chained_decoder_decodes_next_frame() {
+        // Two finished frames concatenated: `SingleUnit` leaves the
+        // second frame's bytes in the caller's `BufRead`, where a
+        // fresh decoder verifies it independently.
+        let mut data = encoded(b"first");
+        data.extend_from_slice(&encoded(b"second"));
+        let mut source = BufReader::new(&data[..]);
+        let single = || DecodeOptions::new(DecodeScope::SingleUnit, DecodeLimits::new());
+        {
+            let mut dec = Decoder::new(&mut source, single());
+            let mut out = Vec::new();
+            dec.read_to_end(&mut out).expect("first frame");
+            dec.finish().expect("first verified");
+            assert_eq!(out, b"first");
+        }
+        let mut dec = Decoder::new(&mut source, single());
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("second frame");
+        dec.finish().expect("second verified");
+        assert_eq!(out, b"second");
+    }
+
+    #[test]
+    fn read_error_latches_failed() {
+        let data = encoded(b"payload payload payload");
+        let fail_at = data.len() / 2;
+        let mut source = FailingReader::new(&data[..], fail_at);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut out = Vec::new();
+        let err = dec.read_to_end(&mut out).expect_err("source error");
+        assert_io_kind(&err, CompressionErrorKind::Io);
+        let mut buf = [0u8; 8];
+        assert_io_kind(
+            &dec.read(&mut buf).expect_err("reuse rejected"),
+            CompressionErrorKind::InvalidState,
+        );
+        assert_kind(dec.finish(), CompressionErrorKind::InvalidState);
+    }
+
+    #[test]
+    fn decoded_budget_enforced_on_high_ratio_payload() {
+        let payload = vec![0u8; 1 << 20];
+        let data = encoded(&payload);
+        assert!(
+            data.len() < payload.len() / 100,
+            "fixture must actually compress"
+        );
+
+        let under = DecodeOptions::new(
+            DecodeScope::WholeInput,
+            DecodeLimits::new().with_max_decoded_bytes(payload.len() as u64 - 1),
+        );
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, under);
+        let mut out = Vec::new();
+        let err = dec.read_to_end(&mut out).expect_err("one byte under cap");
+        assert_io_kind(&err, CompressionErrorKind::LimitExceeded);
+        assert_eq!(out.len(), payload.len() - 1, "cap bytes still deliver");
+
+        let exact = DecodeOptions::new(
+            DecodeScope::WholeInput,
+            DecodeLimits::new().with_max_decoded_bytes(payload.len() as u64),
+        );
+        let mut source = BufReader::new(&data[..]);
+        let mut dec = Decoder::new(&mut source, exact);
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out).expect("exact cap decodes");
+        assert_eq!(out.len(), payload.len());
+        dec.finish().expect("finish");
     }
 }

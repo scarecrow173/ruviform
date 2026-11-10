@@ -80,6 +80,7 @@ Directory: `docs/plans`
 | PLAN-H6keHUx9U3sTwtH2ngWKyQ | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | PLAN-034RoY5EwSBQJwEF1k5arE | Issue #276 generic logging adapter implementation plan | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | PLAN-034UyQfNa0aSYqwNDMIZn9 | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
+| PLAN-LwPSJRNM4HAuPalTuxW7pu | Issue #285 IO-03 Compression 契約試験棚卸し 実装計画 | approved | [issue-285-io-03-compression-contract-audit.md](./issue-285-io-03-compression-contract-audit.md) |
 | PLAN-YgAwqghg3ANT8uWJE1Y1t2 | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |
 | PLAN-034UAvKoJIuTCFJwOSaF5Z | Issue #286 IO-04 ZIP/TAR Archive — Entry API・安全な展開・終了/公開契約 設計 | approved | [issue-286-io-04-zip-tar-archive.md](./issue-286-io-04-zip-tar-archive.md) |
 | PLAN-034UtOFqGK9dkffJMoPRvK | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |

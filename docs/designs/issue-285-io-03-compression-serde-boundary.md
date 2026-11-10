@@ -148,6 +148,26 @@ v0.2（2026-11-04）」と「最終整合性レビュー — 実装 Issue への
   Synvelis #84 は OPEN・#25 は CLOSED（Issue 状態は変動
   し得る snapshot として記録）。
 
+**契約試験棚卸し（2026-11-10・本 slice）**
+
+- `docs/specs|designs|test-specs|plans|tasks/
+  issue-285-io-03-compression-contract-audit.md` の slice で、
+  `tests/` を Issue 受入条件の ENC/DEC/SEC/BUF 契約へ写像して
+  棚卸しし、failure-path（writer write 失敗・finish 時底流
+  flush 失敗・失敗後 writer 回復・decoder source I/O 失敗）・
+  Drop 無書込・flush≠finish・budget ちょうど/+1・高圧縮率
+  payload・連結単位の独立検証・`NotExhausted` 非破壊性の
+  不足を `tests/encoder_contract.rs`・`tests/decoder_contract.rs`
+  に追加した。`tests/common/mod.rs` に `FailFlush`・
+  `RecoveringWriter`・`FailingReader` fixture を新設し、
+  `FailAfter` は受理 byte を `inner` に保持するよう強化した。
+- 照合の結果 `src/` の設計不整合は確認されず、公開 API・
+  状態機械・error 語彙・budget 意味論は本書の記述どおりで
+  あった（実装変更なし）。`mise run fmt-check`/
+  `check-io-compression`/`lint-io-compression`/
+  `test-io-compression`（5 feature 組合せ）/`test-io-e2e`/
+  `test-rt`/`test-io-msrv`（rust@1.89.0）が pass。
+
 文書チェーン: [spec](../specs/issue-285-io-03-compression-serde-boundary.md)・
 [plan](../plans/issue-285-io-03-compression-serde-boundary.md)・
 [test-spec](../test-specs/issue-285-io-03-compression-serde-boundary.md)・
@@ -749,24 +769,24 @@ test-spec・合成 E2E・#288 matrix・実装 Issue/PR）へ対応
 | 証拠項目（Issue #285） | 内容 | 正本（test-spec / gate / 実装） |
 | --- | --- | --- |
 | ENC-01 | Format 別 `Encoder<W:Write>`・借用・状態遷移がコンパイル可能 | `issue-300` R1/R8、`issue-301` AC6、`tests/encoder_contract.rs`（gzip/deflate/zstd 各 feature） |
-| ENC-02 | `flush`/`finish` の意味・Trailer/Frame 完了・Drop 未完了・追加 Write の InvalidState | `issue-300` R1/R2、`issue-301` AC5、#288 matrix C-X4、`tests/encoder_contract.rs`（`flush_*`/`drop_writes_*`/`write_after_finish_rejected_*`） |
-| ENC-03 | Encoder 失敗時の底流 Writer 所有権保全・部分出力の禁止 Publish | `issue-300` R2、`writer_borrow_recovered_after_scope`、#306 `archive_compression_staged.rs`（未 finish → abort → destination 不在） |
-| ENC-04 | 借用 Writer の Ownership と失敗後の底流 Writer 回復可能性 | `issue-300` R2・`writer_borrow_recovered_after_scope`・`io_failure_latches_failed_and_rejects_reuse` |
-| ENC-05 | finish 成功の冪等性・Failed からの追加 Write 拒否・Panic 防止 | `issue-300` R1、`issue-301` AC5（finish 冪等・Failed latch）、#288 matrix C-X4 |
+| ENC-02 | `flush`/`finish` の意味・Trailer/Frame 完了・Drop 未完了・追加 Write の InvalidState | `issue-300` R1/R2、`issue-301` AC5、#288 matrix C-X4、`tests/encoder_contract.rs`（`flush_*`/`drop_writes_*`/`write_after_finish_rejected_*`/`flush_mid_stream_then_finish_still_decodes`/`flush_after_finish_is_ok`/`finish_fails_when_underlying_flush_fails`） |
+| ENC-03 | Encoder 失敗時の底流 Writer 所有権保全・部分出力の禁止 Publish | `issue-300` R2、`writer_borrow_recovered_after_scope`、`failed_encoder_releases_usable_writer`/`failed_encoder_drop_writes_no_*`、#306 `archive_compression_staged.rs`（未 finish → abort → destination 不在） |
+| ENC-04 | 借用 Writer の Ownership と失敗後の底流 Writer 回復可能性 | `issue-300` R2・`writer_borrow_recovered_after_scope`・`io_failure_latches_failed_and_rejects_reuse`・`failed_encoder_releases_usable_writer` |
+| ENC-05 | finish 成功の冪等性・Failed からの追加 Write 拒否・Panic 防止 | `issue-300` R1、`issue-301` AC5（finish 冪等・Failed latch）、#288 matrix C-X4、`finish_is_idempotent_after_verified_end`（decoder 側） |
 | ENC-06 | Backend Drop 副作用の調査・未完成 Stream の誤 Publish 防止 | `issue-300` R2（Drop は書込まない実装保証）、`issue-301` AC5（Drop）、#300/#301 設計「Backend 選定と隠蔽」 |
-| DEC-01 | 展開終了/Trailer/Checksum/EOF の検証 Receipt・Checksum 非存在との区別 | `issue-300` R3/R4/R5、`issue-301` AC2、`IntegritySummary` checked/unchecked（`tests/*_format.rs`・`decoder_contract.rs`） |
-| DEC-02 | Gzip Member/Zstd Frame 単独・連結の処理・入力境界・Trailing 拒否 | `issue-300` R4/R5/R6、`issue-301` AC1/AC3、#288 matrix C-X1/C-X3、`tests/gzip_format.rs`/`zstd_format.rs`（連結・trailing・SingleUnit） |
+| DEC-01 | 展開終了/Trailer/Checksum/EOF の検証 Receipt・Checksum 非存在との区別 | `issue-300` R3/R4/R5、`issue-301` AC2、`IntegritySummary` checked/unchecked（`tests/*_format.rs`・`decoder_contract.rs`・`finish_is_idempotent_after_verified_end`） |
+| DEC-02 | Gzip Member/Zstd Frame 単独・連結の処理・入力境界・Trailing 拒否 | `issue-300` R4/R5/R6、`issue-301` AC1/AC3、#288 matrix C-X1/C-X3、`tests/gzip_format.rs`/`zstd_format.rs`（連結・trailing・SingleUnit）・`chained_decoder_*`/`sequential_encoders_*` |
 | DEC-03 | 実際に読んだ圧縮 Byte/返した展開 Byte/Frame 数の正確な計測 | `issue-300` R6（consumed vs prefetch）、`issue-301` AC5、#288 matrix C-X3、`consumed_counts_logical_bytes_not_prefetch`/`compressed_consumption_ignores_caller_prefetch` |
-| SEC-01 | 展開 Byte 上限到達を正常 EOF と誤認しない・高圧縮率/過大 Window/連結 Frame で予算強制 | `issue-300` R7、`issue-301` AC3/AC4、#288 matrix C-X2、`decoded_budget_*`/`compressed_budget_*`/`unit_budget_*`/`oversized_window_rejected_as_limit_exceeded` |
-| SEC-02 | Corrupt/Truncated/Bad Checksum/Input Overrun/Cancel/Backend Panic 境界の否定テスト・Fuzz | `issue-300` R4/R5/R7、`issue-301` AC2/AC3/AC4、#306 `negative_fuzz.rs`（corrupted gzip/composite mutant）、#288 matrix C-X1/C-X2 |
-| SEC-04 | 出力上限と完全一致する正常データ/1 Byte 超過の厳密な区別 | `issue-300` R7（ちょうど許容・+1 `LimitExceeded`・probe）、`issue-301` AC4、#288 matrix C-X2、`output_budget_exact_boundary_succeeds`/`decoded_budget_allows_exact_and_rejects_one_over` |
+| SEC-01 | 展開 Byte 上限到達を正常 EOF と誤認しない・高圧縮率/過大 Window/連結 Frame で予算強制 | `issue-300` R7、`issue-301` AC3/AC4、#288 matrix C-X2、`decoded_budget_*`/`compressed_budget_*`/`unit_budget_*`/`oversized_window_rejected_as_limit_exceeded`/`decoded_budget_enforced_on_high_ratio_payload` |
+| SEC-02 | Corrupt/Truncated/Bad Checksum/Input Overrun/Cancel/Backend Panic 境界の否定テスト・Fuzz | `issue-300` R4/R5/R7、`issue-301` AC2/AC3/AC4、#306 `negative_fuzz.rs`（corrupted gzip/composite mutant）、#288 matrix C-X1/C-X2、`read_error_latches_failed`（source I/O 失敗の `Io` 正規化と latch） |
+| SEC-04 | 出力上限と完全一致する正常データ/1 Byte 超過の厳密な区別 | `issue-300` R7（ちょうど許容・+1 `LimitExceeded`・probe）、`issue-301` AC4、#288 matrix C-X2、`output_budget_exact_boundary_succeeds`/`decoded_budget_allows_exact_and_rejects_one_over`/`decoded_budget_enforced_on_high_ratio_payload` |
 | SEC-05 | Window/Frame 数/Backend 内部 Memory の強制可能性 | `issue-301` AC3（`max_window_log`・units）/AC4、#300/#301 設計「Limits」、本書「Resource Budget」節の非保証明記 |
 | INT-01 | TAR→Gzip→StagedFile の `finish` 順序と Publish 失敗の保全・独立 Raw Zstd 保存・IO-04 Archive への接続 | `issue-300` R9（TAR 様合成）、#306 `archive_compression_staged.rs`（tar_gzip/tar_zstd staged round-trip・layered completion proofs）、#288 matrix E-N1 |
 | INT-02 | 複数 Frame で Checksum 有無が混在する Receipt 検証 | `issue-301` AC2（mixed concatenated → checked=1/unchecked=1）、`IntegritySummary` |
 | ARC-01 | TAR 終端と Gzip 終端を別々に検証 | #306 `fault_boundary.rs`（`verify_composite`: gzip verified EOF wrapping TAR read — `archive.finish()` と `decoder.finish()` の両方を要求）・`archive_compression_staged.rs`（layered completion proofs）・`docs/designs/issue-303-…`（TAR EOF 検証）・`docs/designs/issue-304-…`（tar.gz 展開） |
 | COMP-01 | AudioLens #139・Synvelis #82 の Round-trip/性能/保存結果を各 Consumer で検証し #288 へ証拠を接続 | #288 Owner 接続表 IO-03 行・Consumer 非回帰判定表・#219/#294 consumer-verify・AL #139・SV #82/#84/#25（いずれも実走は Consumer repo の段階） |
 | COMP-03 | 両 Consumer に精度・性能の回帰を生まない・横断受入は #288 | 同上（COMP-01 と同一の gate 経路） |
-| BUF-01 | BufRead の残余 Byte 境界が保たれる | `issue-300` R6、`issue-301` AC5、#288 matrix C-X3、`single_unit_*`/`SingleUnit` 系試験 |
+| BUF-01 | BufRead の残余 Byte 境界が保たれる | `issue-300` R6、`issue-301` AC5、#288 matrix C-X3、`single_unit_*`/`SingleUnit` 系試験・`chained_decoder_*`（次単位の独立検証） |
 | BUF-02 | compressed bytes consumed と underlying prefetch を区別 | `issue-300` R6、`issue-301` AC5、#288 matrix C-X3、`consumed_counts_logical_bytes_not_prefetch`/`compressed_consumption_ignores_caller_prefetch` |
 
 ### Design Acceptance Gate → 対応
