@@ -1,0 +1,144 @@
+{
+  "schema": "rf313-real-os-smoke/v2",
+  "issue": 313,
+  "lane": "windows-sendinput-keyboard",
+  "input_method": "win32-SendInput",
+  "input_method_note": "OS automation injection through the real foreground input path — not physical manual input; distinct from GPUI simulated input (dispatch_keystroke/simulate_keystrokes), which never leaves the toolkit",
+  "verdict": "pass",
+  "reasons": [],
+  "notes": [],
+  "environment": {
+    "os": "windows",
+    "arch": "x86_64",
+    "os_version": "Microsoft Windows 11 Pro",
+    "gpu": "NVIDIA GeForce RTX 4070 SUPER",
+    "revision": "317094b7eeb7c5ea45f28676f75c28893db5fd18",
+    "exe": "C:\\Users\\akiyoshi\\orca\\workspaces\\ruviform\\rf552-sendinput-preflight\\target\\debug\\examples\\real_os_smoke.exe",
+    "timestamp_unix_ms": 1794326306823,
+    "timestamp_utc": "2026-11-10T15:58:26Z"
+  },
+  "preflight": {
+    "effective": true,
+    "checks": [
+      {
+        "family": "keyboard",
+        "effective": true,
+        "detail": "VK_F24 down confirmed by read-back, released"
+      }
+    ]
+  },
+  "run": {
+    "window": "w1",
+    "ready": true,
+    "focused": true,
+    "focus_lost_count": 0,
+    "scale_factors": [
+      1.0
+    ],
+    "monitors": [
+      {
+        "name": "78692035-3a04-52f3-a2bf-1133155ae828",
+        "width": 1920,
+        "height": 1080,
+        "x": 0,
+        "y": 0,
+        "scale_factor": 1.0
+      },
+      {
+        "name": "92ad53a4-b389-52ef-afab-a27406d2e276",
+        "width": 1920,
+        "height": 1080,
+        "x": 1920,
+        "y": 0,
+        "scale_factor": 1.0
+      }
+    ],
+    "keystrokes": [
+      "tab",
+      "right",
+      "tab",
+      "left"
+    ],
+    "inject_result": "ok",
+    "value_commits": [
+      {
+        "control_id": "gain",
+        "normalized": 0.55
+      },
+      {
+        "control_id": "seek",
+        "normalized": 0.45
+      }
+    ],
+    "intents": [
+      {
+        "id": "view-1:a1:m1:gain:1",
+        "op": "rvf.ui.command.v1",
+        "kind": "begin",
+        "control_id": "gain",
+        "target": "mixer.gain",
+        "atomic": true,
+        "value": {
+          "plain": 0.55,
+          "normalized": 0.55
+        }
+      },
+      {
+        "id": "view-1:a1:m1:gain:2",
+        "op": "rvf.ui.command.v1",
+        "kind": "commit",
+        "control_id": "gain",
+        "target": "mixer.gain",
+        "atomic": true,
+        "value": {
+          "plain": 0.55,
+          "normalized": 0.55
+        }
+      },
+      {
+        "id": "view-1:a1:m1:seek:1",
+        "op": "rvf.ui.command.v1",
+        "kind": "begin",
+        "control_id": "seek",
+        "target": "mixer.seek",
+        "atomic": true,
+        "value": {
+          "plain": 0.45,
+          "normalized": 0.45
+        }
+      },
+      {
+        "id": "view-1:a1:m1:seek:2",
+        "op": "rvf.ui.command.v1",
+        "kind": "commit",
+        "control_id": "seek",
+        "target": "mixer.seek",
+        "atomic": true,
+        "value": {
+          "plain": 0.45,
+          "normalized": 0.45
+        }
+      }
+    ],
+    "checks": [
+      {
+        "name": "ready",
+        "ok": true
+      },
+      {
+        "name": "os_focused",
+        "ok": true
+      },
+      {
+        "name": "inject_ok",
+        "ok": true
+      },
+      {
+        "name": "commits_on_both_controls_with_direction",
+        "ok": true
+      }
+    ],
+    "ticks": 18,
+    "elapsed_ms": 2098
+  }
+}
