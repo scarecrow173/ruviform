@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034V4ltq3DWHBuZVbOLTjH"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue 284 IO-02 Structured Formats 設計正本照合・契約試験棚卸し slice"
 created: "2026-11-10"
 updated: "2026-11-10"
