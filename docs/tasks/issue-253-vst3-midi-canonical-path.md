@@ -1,7 +1,7 @@
 ---
 id: "TASK-rf253vst3midicanonpath001"
 type: "task"
-status: "in-progress"
+status: "completed"
 title: "Issue #253 VST3 MIDI 正規経路 slice タスク（IMidiMapping + plugin→host reporting）"
 created: "2026-11-12"
 updated: "2026-11-12"
@@ -50,4 +50,4 @@ metadata:
 - [x] T5 cap.rs `param_reporting` → Declared + test 更新
 - [x] T6 E2E/unit tests（MM-01..05, PR-01..05）
 - [x] T7 IR + 既存 IR 更新（neutral contract 判断記録）
-- [ ] T8 canonical 検証 lane 実行・merge origin/main・review・commit/push/PR
+- [x] T8 canonical 検証 lane 実行・merge origin/main・review・commit/push/PR
