@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計38クレート）。
+Ruviform ワークスペースのメンバークレート索引（計39クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -67,6 +67,7 @@ Ruviform ワークスペースのメンバークレート索引（計38クレー
 | クレート | 責務 |
 | --- | --- |
 | [`ruviform-audio-device`](ruviform-audio-device/README.md) | cpal アダプタ（`audio-core` device ポートの `Box<dyn>` 実装） |
+| [`ruviform-midi-device`](ruviform-midi-device/README.md) | OS MIDI input アダプタ（`audio-core` midi_input ポートの `Box<dyn>` 実装 — Windows=WinMM、macOS/Linux=Unsupported 境界。Issue #253） |
 
 ## 拡張層（Plugin）
 

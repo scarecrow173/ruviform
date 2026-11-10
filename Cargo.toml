@@ -56,6 +56,9 @@ members = [
     "crates/ruviform-io-e2e",
     # Adapters（ドメイン基盤の外側・engine と同じ利用側層。Issue #23 PoC で新設）
     "crates/ruviform-audio-device",
+    # OS MIDI input アダプタ（Issue #253 slice (a) — audio-core midi_input
+    # ポートの WinMM/Unsupported 境界実装。audio-device とは別ドメインのため別クレート）
+    "crates/ruviform-midi-device",
     # 拡張層（規格中立のプラグイン基盤。Issue #29 PoC で新設）
     "crates/ruviform-plugin-core",
     "crates/ruviform-plugin-clap",
