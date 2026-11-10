@@ -114,6 +114,17 @@ name = "real_os_pointer_smoke"
 # on exit).
 required-features = ["gpui"]
 
+[[example]]
+name = "real_os_multiwindow_smoke"
+# Issue #243 real-OS multiwindow smoke (manual verification):
+# 2-3 real GPUI windows driven through SendInput OS input — per-window
+# focus clicks, Win+Arrow move, Alt+F4 close (Veto/Defer/Approve/
+# default), keyboard value commits, update_view state survival, Dock
+# detach/reattach/move, window-vs-app job cancellation, regenerate +
+# id non-reuse. Requires the real GPUI backend and an interactive
+# desktop session; moves the real cursor (restored on exit).
+required-features = ["gpui"]
+
 [[test]]
 name = "consumer_observation"
 # Issue #429 consumer seam test — external crate, binds only the public

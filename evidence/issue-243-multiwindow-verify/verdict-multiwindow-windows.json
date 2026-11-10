@@ -1,0 +1,115 @@
+{
+  "schema": "rf243-real-os-multiwindow-smoke/v1",
+  "issue": 243,
+  "lane": "windows-sendinput-multiwindow",
+  "input_method": "win32-SendInput keyboard/pointer + example-local modifier chords (Win+Arrow, Alt+F4)",
+  "input_method_note": "OS automation injection through the real OS input path — not physical manual input; distinct from GPUI simulated input. The real cursor is moved for focus clicks and restored on exit.",
+  "verdict": "fail",
+  "problems": [
+    "check failed: per_window_focus_real_click",
+    "check failed: close_veto_defer_approve_real_input",
+    "check failed: close_default_approve_real_input",
+    "check failed: window_job_cancelled_app_job_survives"
+  ],
+  "checks": [
+    {
+      "name": "component_bounds_and_geometry",
+      "ok": true,
+      "detail": "geom_a0=Some((80, 92, 640, 480)) gain_bound=true monitors=2"
+    },
+    {
+      "name": "per_window_focus_real_click",
+      "ok": false,
+      "detail": "focused_true={WindowId(1), WindowId(2)} focused={WindowId(1): false, WindowId(2): true} fg_alpha=false fg_bravo=false"
+    },
+    {
+      "name": "close_veto_defer_approve_real_input",
+      "ok": false,
+      "detail": "bravo trace=[\"Created\", \"Ready\", \"Focused\", \"Resized\", \"Moved\"] close_count=0"
+    },
+    {
+      "name": "close_default_approve_real_input",
+      "ok": false,
+      "detail": "alpha trace=[\"Created\", \"Ready\", \"Focused\", \"Resized\", \"Moved\", \"Focused\"]"
+    },
+    {
+      "name": "window_job_cancelled_app_job_survives",
+      "ok": false,
+      "detail": "cancelled_count=0 win_event=false app_cancelled=false app_still_running=false progress_events=0 events=[]"
+    }
+  ],
+  "traces": {
+    "WindowId(1)": [
+      "Created",
+      "Ready",
+      "Focused",
+      "Resized",
+      "Moved",
+      "Focused"
+    ],
+    "WindowId(2)": [
+      "Created",
+      "Ready",
+      "Focused",
+      "Resized",
+      "Moved"
+    ]
+  },
+  "focused": {
+    "WindowId(1)": false,
+    "WindowId(2)": true
+  },
+  "os_foreground_log": [
+    "click(1140,152)->cursor=Some((586, 1079)) under=\"rf243 bravo\" foreground=\"タスク マネージャー\"",
+    "click(1140,152)->cursor=Some((586, 1079)) under=\"rf243 bravo\" foreground=\"タスク マネージャー\"",
+    "click(1140,152)->cursor=Some((586, 1079)) under=\"rf243 bravo\" foreground=\"タスク マネージャー\""
+  ],
+  "intents": [],
+  "job_events": [],
+  "receipts": [],
+  "geometry": {
+    "alpha_initial": {
+      "x": 80,
+      "y": 92,
+      "w": 640,
+      "h": 480,
+      "scale": 1.0
+    },
+    "alpha_after_winleft": null,
+    "alpha_after_winright": null,
+    "alpha_after_windown": null,
+    "alpha_after_windown_err": null,
+    "alpha_after_winup": null,
+    "alpha_after_winup_err": null,
+    "charlie": null
+  },
+  "moved_events_alpha": 1,
+  "monitors": [
+    {
+      "name": "78692035-3a04-52f3-a2bf-1133155ae828",
+      "x": 0,
+      "y": 0,
+      "w": 1920,
+      "h": 1080,
+      "scale": 1.0
+    },
+    {
+      "name": "92ad53a4-b389-52ef-afab-a27406d2e276",
+      "x": 1920,
+      "y": 0,
+      "w": 1920,
+      "h": 1080,
+      "scale": 1.0
+    }
+  ],
+  "capabilities": "WindowCapabilities { resize: Supported, focus: Supported, scale_factor: Supported, multi_window: Supported, ime: Unsupported, native_surface_slot: Supported }",
+  "environment": {
+    "os": "windows",
+    "arch": "x86_64",
+    "revision": "d7b1f013"
+  },
+  "run": {
+    "ticks": 183,
+    "elapsed_ms": 38331
+  }
+}
