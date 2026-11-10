@@ -54,6 +54,10 @@ pub enum MidiPortOrigin {
     /// A port owned by the host itself (e.g. an embedded test source)
     /// rather than any external peer.
     Internal,
+    /// The backend cannot determine the origin. Backends that expose
+    /// no origin distinction (e.g. `WinMM`) report this rather than
+    /// guessing.
+    Unknown,
 }
 
 /// What a backend honestly claims about one input port. Every field
@@ -144,20 +148,44 @@ impl MidiInputInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MidiReadStats {
     /// Events the backend dropped before `read` could see them
-    /// (internal queue overflow). Nonzero is an observable overload
-    /// signal for the engine's control/status surface — the bridge
-    /// reports it, the engine decides policy.
+    /// (internal queue overflow, or a driver-level loss notification
+    /// such as `WinMM` `MIM_MOREDATA`). Nonzero is an observable
+    /// overload signal for the engine's control/status surface — the
+    /// bridge reports it, the engine decides policy.
     pub dropped: u64,
+    /// Messages the backend received but could not translate into the
+    /// declared channel-voice vocabulary (`SysEx`, system common/
+    /// realtime, malformed bytes). Tracked separately from `dropped`
+    /// because it is steady-state traffic the vocabulary excludes by
+    /// design, not an overload signal — adapters must still count it
+    /// so the loss is observable, never silent.
+    pub unsupported: u64,
 }
 
 impl MidiReadStats {
-    /// Stats with `dropped` lost events — adapters construct through
-    /// here (the struct is `#[non_exhaustive]`).
+    /// Stats with `dropped` lost events and no unsupported traffic —
+    /// adapters construct through here (the struct is
+    /// `#[non_exhaustive]`).
     ///
     /// **RT contract:** RT-suitable — `const`, pure.
     #[must_use]
     pub const fn new(dropped: u64) -> Self {
-        Self { dropped }
+        Self {
+            dropped,
+            unsupported: 0,
+        }
+    }
+
+    /// Stats with both counters set — for backends that track
+    /// received-but-untranslatable messages separately from drops.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn with_unsupported(dropped: u64, unsupported: u64) -> Self {
+        Self {
+            dropped,
+            unsupported,
+        }
     }
 }
 
@@ -261,9 +289,7 @@ mod tests {
         ) -> DeviceResult<MidiReadStats> {
             let n = self.pending.len().min(max_events);
             out.extend(self.pending.drain(..n));
-            let stats = MidiReadStats {
-                dropped: self.dropped,
-            };
+            let stats = MidiReadStats::new(self.dropped);
             self.dropped = 0;
             Ok(stats)
         }

@@ -21,6 +21,7 @@ Directory: `docs/plans`
 | PLAN-034JRcspAdty0HzWF0KzIr | Issue #24 オフライン実行ドライバ実装 | approved | [implement-issue-24-offline-execution-driver.md](./implement-issue-24-offline-execution-driver.md) |
 | PLAN-034UdQaz13FoOQV6oq6eKq | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 — 実装計画 | in-progress | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
 | PLAN-034JRQoIQSe5Sh13CkKfjN | Issue #25 音声エンジン実装 | approved | [implement-issue-25-audio-engine.md](./implement-issue-25-audio-engine.md) |
+| PLAN-rf253osmidibackend001 | Issue #253 OS MIDI input backend implementation plan | approved | [implement-issue-253-os-midi-backend.md](./implement-issue-253-os-midi-backend.md) |
 | PLAN-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice 実装計画 | approved | [implement-issue-253-vst3-midi-canonical-path.md](./implement-issue-253-vst3-midi-canonical-path.md) |
 | PLAN-034JcCFGe6ILSTWLgUIjAn | Issue #26 動画基盤 API の実装（video-core 所有権契約・video-proc 新設・色変換カーネル） | approved | [implement-issue-26-video-foundation.md](./implement-issue-26-video-foundation.md) |
 | PLAN-034JZVID00000000000040 | Issue #27 実装計画 — 動画エンジン | approved | [implement-issue-27-video-engine.md](./implement-issue-27-video-engine.md) |

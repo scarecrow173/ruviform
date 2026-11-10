@@ -12,6 +12,7 @@ Directory: `docs/tasks`
 | TASK-034udQraUdxLs1SxuYiaAK | Issue #127 Linux 実配布方式 設計 — docs チェーン作成・索引再生成・検証・PR | in-progress | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
 | TASK-034V4uYcdcMjdFzOg15rFm | Issue #243 — Windows 実 OS multiwindow smoke 実装タスク | in-progress | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
+| TASK-rf253osmidibackend001 | Issue #253 OS MIDI input backend 実装タスク | completed | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | TASK-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice タスク（IMidiMapping + plugin→host reporting） | completed | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
 | TASK-AsjkeCFskQSQZMsB5Tgl5H | Issue #301 T2 — zstd format/contract/API 試験 | completed | [issue-301-t2-zstd-tests.md](./issue-301-t2-zstd-tests.md) |

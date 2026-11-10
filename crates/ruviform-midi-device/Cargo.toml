@@ -1,0 +1,28 @@
+[package]
+name = "ruviform-midi-device"
+description = "OS MIDI input device adapter for Ruviform (midi_input port implementation; WinMM backend on Windows)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+# `MidiEvent`/`InputStamp`/`TimeBase`/`ClockDomainId`/`TimestampProvenance`
+# を adapter が直接利用するため追加（audio-device と同じ直接依存方針）。
+ruviform-media-core = { path = "../ruviform-media-core" }
+
+[target.'cfg(windows)'.dependencies]
+# WinMM MIDI input backend（Issue #253 slice (a)）。backend 選定の根拠は
+# docs/adr/select-midi-input-backend.md — midir は MIM_MOREDATA/
+# MIM_LONGERROR の喪失 signal と生 timestamp を握りつぶすため不採用、
+# WinRT/UWP は UIPI/packaging 制約のため不採用。windows-sys は薄い binding
+# で workspace lock 内に既存（io-file/plugin-host が 0.61 を使用）。
+windows-sys = { version = "0.61", features = [
+    "Win32_Media_Audio",
+    "Win32_Media_Multimedia",
+] }
+
+[lints]
+workspace = true

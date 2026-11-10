@@ -6639,6 +6639,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-midi-device"
+version = "0.1.0"
+dependencies = [
+ "ruviform-audio-core",
+ "ruviform-media-core",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "ruviform-numeric"
 version = "0.1.0"
 dependencies = [

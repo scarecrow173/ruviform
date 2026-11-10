@@ -72,6 +72,7 @@ Directory: `docs/adr`
 | ADR-R2GFzIbod68oHGdQZTuyJW | 第 2 ターゲット NLE 編集モデル | accepted | [second-target-editing-model.md](./second-target-editing-model.md) |
 | ADR-034Jc9RslnH7QSQ1nZEEHL | オーディオデバイスバックエンドの選定（cpal 条件付き採用） | accepted | [select-audio-device-backend.md](./select-audio-device-backend.md) |
 | ADR-154-media-backends | AVI/MP4/AAC 入力バックエンドの配置: AVI は専用 pure-Rust クレート、MP4/AAC は symphonia opt-in feature | accepted | [select-media-backends-avi-and-mp4.md](./select-media-backends-avi-and-mp4.md) |
+| ADR-C3k293rplIbL9VJJzCrFKh | Select MIDI input backend（Windows = raw WinMM / 他 OS = Unsupported 境界） | accepted | [select-midi-input-backend.md](./select-midi-input-backend.md) |
 | ADR-034JQvAkxQaMfRbMHDRLoM | 本番 SIMD カーネルの精度契約形（ulp 固定 + 有限入力前提） | accepted | [simd-ulp.md](./simd-ulp.md) |
 | ADR-20261101-synvelis-driven-generic-execution-boundaries | Ruviformの汎用Graph/Audio Execution/Stateful Processorとアプリ意味論の責務境界 | accepted | [synvelis-driven-generic-execution-boundaries.md](./synvelis-driven-generic-execution-boundaries.md) |
 | ADR-20261102-transport-span-scheduler-applied-receipt | Generic Transport Span Scheduler・Applied Receipt・Clock/Plan Generation 契約と Plugin min/max Block 方針 | accepted | [transport-span-scheduler-applied-receipt.md](./transport-span-scheduler-applied-receipt.md) |
