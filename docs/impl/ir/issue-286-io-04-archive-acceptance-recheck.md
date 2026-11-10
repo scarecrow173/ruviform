@@ -92,10 +92,10 @@ Issue #286（IO-04）の設計正本と main 入り済み実装の照合
 文書チェーンのみを作成し、実装試験を `NotRun` として記録
 していた。その後 #302/#303/#304 の実装が merge され、
 `tests/{zip_reader,zip_writer,tar_reader,tar_writer,
-extract_zip,extract_tar,extract_staging}.rs`（計 139 本）+
-`src/extract/{path,session,fs}.rs` の `#[cfg(test)]` unit
-test が契約を pin している。本スライスはその棚卸しと残件
-試験の追加。
+extract_zip,extract_tar,extract_staging}.rs`（本 slice
+追加前で計 139 本）と `src/extract/{path,session,fs}.rs` の
+`#[cfg(test)]` unit test が契約を pin している。本スライスは
+その棚卸しと残件試験の追加。
 
 ## Audit findings（設計 ↔ 実装の照合結果）
 
@@ -195,14 +195,25 @@ test が契約を pin している。本スライスはその棚卸しと残件
 
 ## Verification
 
-- `mise exec -- cargo test -p ruviform-io-archive`
-  （補助証拠・非 canonical）— 全 test 通過。新規 8 本を含む
-  `zip_reader` 34・`tar_reader` 44・`extract_zip` 17・
-  `extract_tar` 14・`extract_staging` 13・`zip_writer` 10・
-  `tar_writer` 15 + unit/doc test 全 pass。
-- canonical 検証（`mise run fmt-check`/`check-io-file`/
-  `lint-io-file`/`test-io-file`/`check-linux`/`test-io-msrv`）
-  は PR 前に実施し結果を PR 本文に記録する。
+canonical 検証（Windows 11・mise 管理 toolchain・
+`origin/main` = `8ff39973` merge 後）:
+
+- `mise run fmt-check` — pass。
+- `mise run check`（`cargo check --workspace --all-targets`）
+  — pass。
+- `mise run lint`（`cargo clippy --workspace --all-targets
+  -- -D warnings`）— pass。
+- `mise run test`（`cargo test --workspace`）— pass
+  （197 test binary 全て `0 failed`）。
+- `mise run test-rt`（`cargo test --workspace rt_`）— pass。
+- `mise run test-io-msrv`（`rust@1.89.0` で io-file/
+  io-archive/io-structured/io-compression/io-wav/io-e2e）
+  — pass。新規 8 試験も MSRV で実行・通過。
+- 補助（io-archive scoped）: `check-io-file`・
+  `lint-io-file`・`test-io-file`・`check-linux`
+  （x86_64-unknown-linux-gnu type-check+clippy）— 全て pass。
+- 補助証拠（非 canonical）: `cargo test -p
+  ruviform-io-archive` 単独実行も pass。
 
 ## NotRun / Unsupported（本 slice 対象外・後続 gate）
 

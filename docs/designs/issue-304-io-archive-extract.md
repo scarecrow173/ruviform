@@ -43,6 +43,8 @@ relations:
       - type: "file"
         path: "crates/ruviform-io-archive/README.md"
       - type: "file"
+        path: "crates/ruviform-io-archive/tests/common/mod.rs"
+      - type: "file"
         path: "crates/README.md"
     deleted: []
     renamed: []
