@@ -24,6 +24,15 @@ gpui = [
 # `#[gpui::test]` / simulate_* APIs) for the headless render tests.
 # Not for production use — production code needs only `gpui`.
 gpui-test = ["gpui", "gpui/test-support", "dep:ruviform-ui-test"]
+# `real-scenario` enables the Issue #314 slice 4 real-window
+# `SemanticGuiTest`/`VisualGuiTest` adapter (`RealOsGuiTest`): real OS
+# windows driven through `GpuiDriver::capture_window` OS pixel
+# capture. It needs `ruviform-ui-test` for the scenario/golden
+# contract but NOT `gpui/test-support` — the simulated platform has
+# no OS surface. Do not combine with `gpui-test`: the test platform
+# stubs `capture_raw_parent`, so pixel capture would honestly report
+# `Unsupported` anyway.
+real-scenario = ["gpui", "dep:ruviform-ui-test"]
 
 [dependencies]
 # - ruviform-ui: the port-defining crate this adapter implements.
@@ -136,6 +145,13 @@ name = "scenario_contract"
 # Issue #464 scenario contract test — runs the shared
 # `ruviform-ui-test` parity scenario against `GpuiGuiTest`.
 required-features = ["gpui-test"]
+
+[[test]]
+name = "real_window"
+# Issue #314 slice 4 real-window adapter test — `RealOsGuiTest`
+# needs `real-scenario` (real OS capture; `gpui-test` deliberately
+# excludes it because test-support stubs the OS surface).
+required-features = ["real-scenario"]
 
 [lints]
 workspace = true

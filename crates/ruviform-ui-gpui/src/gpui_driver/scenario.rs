@@ -21,19 +21,19 @@
 
 use std::collections::BTreeSet;
 
-use ruviform_ui::behavior::{CommandIntent, ControlInput};
+use ruviform_ui::behavior::ControlInput;
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::ipc::Event;
 use ruviform_ui::view::{ComponentKey, ComponentSnapshot};
-use ruviform_ui::{Intent, WindowDriver, WindowId};
+use ruviform_ui::{WindowDriver, WindowId};
 use ruviform_ui_test::scenario::visual::{CaptureOutcome, VisualGuiTest};
 use ruviform_ui_test::scenario::{
     MintedIntent, ScenarioCapability, ScenarioDriver, ScenarioError, ScenarioTarget,
     SemanticGuiTest, TargetQuery,
 };
 
+use super::minted_from_ipc;
 use super::observe::{GpuiObserver, ViewObservation};
-use crate::COMMAND_INTENT_OP;
 
 /// `GpuiObserver`-backed [`SemanticGuiTest`] — the simulated-GPUI
 /// evidence level (`driver()` reports [`ScenarioDriver::GpuiSimulated`]).
@@ -152,27 +152,6 @@ impl VisualGuiTest for GpuiGuiTest {
             reason: "gpui_test_platform_has_no_pixel_readback".to_string(),
         })
     }
-}
-
-/// Decodes one recorded [`Intent`] into a [`MintedIntent`] — the
-/// `rvf.ui.command.v1` params carry `command_id`/`expect_receipt`/
-/// `intent` (see `render::flush_events`).
-fn minted_from_ipc(intent: &Intent) -> Option<MintedIntent> {
-    if intent.op != COMMAND_INTENT_OP {
-        return None;
-    }
-    let params = &intent.params;
-    let command_id = params.get("command_id")?.as_str()?.to_string();
-    let expect_receipt = params
-        .get("expect_receipt")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    let intent = serde_json::from_value::<CommandIntent>(params.get("intent")?.clone()).ok()?;
-    Some(MintedIntent {
-        command_id,
-        expect_receipt,
-        intent,
-    })
 }
 
 impl SemanticGuiTest for GpuiGuiTest {

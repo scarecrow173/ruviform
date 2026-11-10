@@ -52,6 +52,13 @@ mod gpui_driver {
     /// verification (Issue #313 — `SendInput` on Windows,
     /// `Unsupported` elsewhere).
     pub mod os_input;
+    /// Real-window [`ruviform_ui_test::scenario::SemanticGuiTest`] +
+    /// [`ruviform_ui_test::scenario::visual::VisualGuiTest`] adapter
+    /// (Issue #314 slice 4) — `real-scenario` feature. Real OS windows
+    /// with OS pixel capture via [`GpuiDriver::capture_window`];
+    /// OS-level input stays Issue #313 scope.
+    #[cfg(feature = "real-scenario")]
+    pub mod real_window;
     /// Consumer-neutral scenario adapter (Issue #464) — `gpui-test` only.
     #[cfg(feature = "gpui-test")]
     pub mod scenario;
@@ -86,6 +93,16 @@ mod gpui_driver {
 
     /// Consumer event handler stored in [`Inner`].
     type Handler = Box<dyn FnMut(DriverEvent, &mut dyn WindowDriver)>;
+
+    /// `Send` job executed inside [`drain`]'s `App` context — the
+    /// real-window scenario adapter's command payload (Issue #314
+    /// slice 4). The closure receives the driver's shared state, the
+    /// driver handle, and `App`, so GPUI `Entity`/`Window` handles
+    /// never cross the thread boundary: only this boxed closure's
+    /// *arguments* stay on the UI thread. Wired by
+    /// [`GpuiDriver::set_ui_jobs`].
+    #[cfg(feature = "real-scenario")]
+    type UiJob = Box<dyn FnOnce(&Rc<RefCell<Inner>>, &GpuiDriver, &mut App) + Send>;
 
     /// `u32` logical pixel → gpui `f32` pixel — exact at all
     /// realistic window coordinates (far below 2^24).
@@ -252,6 +269,12 @@ mod gpui_driver {
         next: u64,
         started: bool,
         exited: bool,
+        /// Cross-thread UI-job inbox for the real-window scenario
+        /// adapter (Issue #314 slice 4). [`drain`] polls it after the
+        /// queued window ops each pass; `None` outside a
+        /// `real-scenario` session.
+        #[cfg(feature = "real-scenario")]
+        ui_jobs: Option<std::sync::mpsc::Receiver<UiJob>>,
     }
 
     /// GPUI-backed implementation of [`WindowDriver`] — cloneable
@@ -339,6 +362,8 @@ mod gpui_driver {
                 next: 1,
                 started: false,
                 exited: false,
+                #[cfg(feature = "real-scenario")]
+                ui_jobs: None,
             }));
             Self {
                 surface: surface::SharedSurface::wrap(surface::GpuiSurfaceAdapter::bound(&inner)),
@@ -484,6 +509,15 @@ mod gpui_driver {
                 inner: self.inner.clone(),
                 window,
             }
+        }
+
+        /// Installs the cross-thread UI-job inbox [`drain`] polls
+        /// (Issue #314 slice 4) — the real-window scenario adapter's
+        /// command channel. Jobs are `Send` closures executed inside
+        /// `App` context; install before [`Self::run`].
+        #[cfg(feature = "real-scenario")]
+        fn set_ui_jobs(&mut self, rx: std::sync::mpsc::Receiver<UiJob>) {
+            self.inner.borrow_mut().ui_jobs = Some(rx);
         }
 
         /// Opens a window whose root is the consumer's
@@ -1009,6 +1043,78 @@ mod gpui_driver {
                 Op::Exit => cx.quit(),
             }
         }
+        // Cross-thread scenario jobs run after the queued window ops
+        // so they observe post-op state (a `Create` applied this pass
+        // is visible to a `ResolveTarget` job in the same pass).
+        #[cfg(feature = "real-scenario")]
+        drain_ui_jobs(inner, driver, cx);
+    }
+
+    /// Polls the [`GpuiDriver::set_ui_jobs`] receiver and runs every
+    /// queued job inside `App` context — the `real-scenario`
+    /// adapter's only legal entity seam (Issue #314 slice 4).
+    /// Collected before execution so a job may borrow `inner`
+    /// freely.
+    #[cfg(feature = "real-scenario")]
+    fn drain_ui_jobs(inner: &Rc<RefCell<Inner>>, driver: &GpuiDriver, cx: &mut App) {
+        let mut jobs = Vec::new();
+        if let Some(rx) = inner.borrow().ui_jobs.as_ref() {
+            while let Ok(job) = rx.try_recv() {
+                jobs.push(job);
+            }
+        }
+        for job in jobs {
+            job(inner, driver, cx);
+        }
+    }
+
+    /// The [`crate::render::RvfView`] mounted by
+    /// [`GpuiDriver::create_view_window`], looked up through the
+    /// window's root; `None` for fixture windows and unknown ids.
+    /// Shared by the `gpui-test` observer and the `real-scenario`
+    /// adapter — both need the entity inside `App` context.
+    #[cfg(any(feature = "gpui-test", feature = "real-scenario"))]
+    impl GpuiDriver {
+        pub(crate) fn view_of(
+            &self,
+            app: &mut App,
+            window: WindowId,
+        ) -> Option<Entity<crate::render::RvfView>> {
+            let root = self.inner.borrow().windows.get(&window)?.root.clone()?;
+            root.update(app, |root, _cx| {
+                root.content
+                    .clone()
+                    .downcast::<crate::render::RvfView>()
+                    .ok()
+            })
+        }
+    }
+
+    /// Decodes one recorded [`Intent`] into a
+    /// [`ruviform_ui_test::scenario::MintedIntent`] — the
+    /// `rvf.ui.command.v1` params carry `command_id`/`expect_receipt`/
+    /// `intent` (see `render::flush_events`). Shared by the
+    /// `gpui-test` scenario adapter and the `real-scenario` adapter.
+    #[cfg(any(feature = "gpui-test", feature = "real-scenario"))]
+    fn minted_from_ipc(intent: &Intent) -> Option<ruviform_ui_test::scenario::MintedIntent> {
+        if intent.op != crate::COMMAND_INTENT_OP {
+            return None;
+        }
+        let params = &intent.params;
+        let command_id = params.get("command_id")?.as_str()?.to_string();
+        let expect_receipt = params
+            .get("expect_receipt")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        let intent = serde_json::from_value::<ruviform_ui::behavior::CommandIntent>(
+            params.get("intent")?.clone(),
+        )
+        .ok()?;
+        Some(ruviform_ui_test::scenario::MintedIntent {
+            command_id,
+            expect_receipt,
+            intent,
+        })
     }
 
     /// Mounts the consumer's [`ViewSpec`] renderer as a window root —
@@ -1464,6 +1570,10 @@ pub use gpui_driver::observe::{
 };
 #[cfg(feature = "gpui")]
 pub use gpui_driver::os_input;
+#[cfg(feature = "real-scenario")]
+pub use gpui_driver::real_window::{
+    CaptureMeta, RealOsGuiTest, RealWindowMount, RealWindowOptions,
+};
 #[cfg(feature = "gpui-test")]
 pub use gpui_driver::scenario::GpuiGuiTest;
 #[cfg(feature = "gpui")]

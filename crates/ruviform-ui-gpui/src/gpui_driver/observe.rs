@@ -17,7 +17,7 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
 
-use gpui::{AnyWindowHandle, App, AppContext, Entity, FocusHandle, Keystroke, TestAppContext};
+use gpui::{AnyWindowHandle, AppContext, Entity, FocusHandle, Keystroke, TestAppContext};
 use ruviform_ui::behavior::ControlInput;
 use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::view::{AttachEpoch, ComponentKey, ComponentSnapshot};
@@ -650,15 +650,6 @@ impl GpuiDriver {
     /// The GPUI window handle of `window`, for test-side key dispatch.
     pub(crate) fn window_of(&self, window: WindowId) -> Option<AnyWindowHandle> {
         self.inner.borrow().windows.get(&window)?.handle
-    }
-
-    /// The view mounted by [`GpuiDriver::create_view_window`], looked up
-    /// through the window's root; `None` for fixture windows.
-    pub(crate) fn view_of(&self, app: &mut App, window: WindowId) -> Option<Entity<RvfView>> {
-        let root = self.inner.borrow().windows.get(&window)?.root.clone()?;
-        root.update(app, |root, _cx| {
-            root.content.clone().downcast::<RvfView>().ok()
-        })
     }
 }
 
