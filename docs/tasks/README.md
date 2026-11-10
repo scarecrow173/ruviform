@@ -12,7 +12,7 @@ Directory: `docs/tasks`
 | TASK-034udQraUdxLs1SxuYiaAK | Issue #127 Linux 実配布方式 設計 — docs チェーン作成・索引再生成・検証・PR | in-progress | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
 | TASK-034V4uYcdcMjdFzOg15rFm | Issue #243 — Windows 実 OS multiwindow smoke 実装タスク | in-progress | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
-| TASK-034Vj6McJYc0Zg8Cae9FZg | Issue #253 host-graph report consumer タスク（host drain API + fixture E2E） | in-progress | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
+| TASK-034Vj6McJYc0Zg8Cae9FZg | Issue #253 host-graph report consumer タスク（host drain API + fixture E2E） | completed | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | TASK-rf253osmidibackend001 | Issue #253 OS MIDI input backend 実装タスク | completed | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | TASK-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice タスク（IMidiMapping + plugin→host reporting） | completed | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
@@ -375,6 +375,7 @@ Directory: `docs/tasks`
 | TASK-034IwCiYXp6ub3O8Brcs3L | 設定ファイルのレビューと最小修正 | done | [review-config-files-minimal-edits.md](./review-config-files-minimal-edits.md) |
 | TASK-034IwCiByN74V3hysJ9iTR | AGENTS.md の Ruviform 向け節単位改稿 | done | [rewrite-agents-for-ruviform.md](./rewrite-agents-for-ruviform.md) |
 | TASK-034IwCbgksOGvhF5E4CQbp | README.md の Ruviform 向け全面改稿 | done | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
+| TASK-034VnNxw0tKz4kSLCz9cRZ | Issue #253 L1 wire report verb task1（wire verb + runner + host 配線 + fixture E2E） | done | [rf-253-task1-l1-report-verb.md](./rf-253-task1-l1-report-verb.md) |
 | TASK-034LFHlxNkMOGDilPsdP0f | 既存カーネルの RgbaF32 arm 拡張（CompositeOver/Crossfade/AffineTransform） | done | [rgba-f32-composite-affine-arms.md](./rgba-f32-composite-affine-arms.md) |
 | TASK-034LFH4wXKj32ElWzaI2lb | RgbaF32 pixel format + transfer/primaries 内部基盤 | done | [rgba-f32-format-and-transfer-internals.md](./rgba-f32-format-and-transfer-internals.md) |
 | TASK-F1hO5AvuiammHw0t5nBKxP | T1 vfs 共有層抽出 — io-file への OS primitive 集約と archive adapter 化 | done | [rooted-read-t1-vfs.md](./rooted-read-t1-vfs.md) |

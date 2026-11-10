@@ -33,6 +33,7 @@
 //! | `--fail-start-processing` | `StartProcessing` replies `Err(HostError::PluginFailed)` without committing — the entry stays `Activated` (the real runner's rollback destination), so cleanup unwinds `Deactivate` → `Destroy` |
 //! | `--stderr-bytes=N` | emit `N` stderr bytes at startup, before `Hello` — the drain's pre-handshake capture oracle |
 //! | `--heir-stderr-bytes=N` / `--heir-stderr-delay-ms=M` | heir mode: emit `N` stderr bytes after `M` ms — forwarded into the heir's argv by the parent's `--leave-heir-after-msgs` spawn, exercising the drain's deadline flags |
+//! | `--reports-per-block=N` | queue `N` deterministic canonical `Event` reports per processed `BlockIn` (even indices `ParamValue`, odd `Midi`, content a pure function of a running index) — the wire-v4 `DrainOutputReports` fixture; `0` (default) queues nothing |
 //!
 //! Wire v2 retired the `--ruviform-plugin-id`/`--ruviform-shm-key`
 //! bootstrap flags — the `CreateInstance` payload now carries the
@@ -51,10 +52,11 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 use std::sync::atomic::{Ordering, fence};
 
+use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
 use ruviform_plugin_core::wire::{self, shm};
 use ruviform_plugin_core::{
-    HostError, Lifecycle, LifecycleEvent, PluginDescriptor, PrepareError, ProcessResult,
-    ProcessStatus,
+    Event, EventKind, HostError, Lifecycle, LifecycleEvent, ParamEvent, ParamId, ParamValue,
+    PluginDescriptor, PrepareError, ProcessResult, ProcessStatus,
 };
 use shared_memory::{Shmem, ShmemConf};
 
@@ -146,6 +148,9 @@ struct Flags {
     heir_stderr_bytes: Option<u64>,
     /// Heir mode: delay before `heir_stderr_bytes` is emitted.
     heir_stderr_delay_ms: Option<u64>,
+    /// Deterministic reports queued per processed `BlockIn`
+    /// (wire v4 fixture) — `0` queues nothing.
+    reports_per_block: u64,
 }
 
 /// Writes `n` bytes to stderr in bounded chunks — the drain-capture
@@ -182,6 +187,7 @@ fn parse_flags() -> Flags {
         stderr_bytes: None,
         heir_stderr_bytes: None,
         heir_stderr_delay_ms: None,
+        reports_per_block: 0,
     };
     for arg in std::env::args_os().skip(1) {
         let arg = arg.to_string_lossy();
@@ -225,6 +231,8 @@ fn parse_flags() -> Flags {
             flags.heir_stderr_bytes = value.parse().ok();
         } else if let Some(value) = arg.strip_prefix("--heir-stderr-delay-ms=") {
             flags.heir_stderr_delay_ms = value.parse().ok();
+        } else if let Some(value) = arg.strip_prefix("--reports-per-block=") {
+            flags.reports_per_block = value.parse().unwrap_or(0);
         }
     }
     flags
@@ -254,6 +262,52 @@ struct WorkerEntry {
     /// `Activate`, cleared on `Deactivate` (the real runner's
     /// `activated_max_frames` enforcement).
     activated_max_frames: Option<u32>,
+    /// Reports queued for the next `DrainOutputReports` — appended
+    /// by every processed `BlockIn`, drained oldest-first at most
+    /// `WIRE_MAX_EVENTS` per reply (wire v4).
+    pending_reports: Vec<Event>,
+    /// Reports one processed `BlockIn` queues — the
+    /// `--reports-per-block` knob copied at `CreateInstance`.
+    reports_per_block: u64,
+    /// Running index feeding [`report_events`] — keeps the
+    /// deterministic stream unique across blocks.
+    next_report_index: u64,
+}
+
+/// The deterministic report run one processed `BlockIn` queues:
+/// `count` canonical `Event`s whose content is a pure function of
+/// `base + i` — even indices are `ParamValue` (param id `index % 8`,
+/// normalized value `(index % 100) / 100`), odd indices are `Midi`
+/// `NoteOn` (key `60 + index % 12`, channel 0, velocity `index`),
+/// `frame_offset` the within-run index. A single drain therefore
+/// proves both `EventKind`s arrive in producer order and tests
+/// predict the exact stream.
+fn report_events(count: u64, base: u64) -> Vec<Event> {
+    (0..count)
+        .map(|i| {
+            let index = base + i;
+            let kind = if index.is_multiple_of(2) {
+                EventKind::ParamValue(ParamEvent {
+                    param_id: ParamId(u32::try_from(index % 8).unwrap_or(0)),
+                    value: ParamValue::new(
+                        f64::from(u32::try_from(index % 100).unwrap_or(0)) / 100.0,
+                    )
+                    .unwrap_or(ParamValue::ONE),
+                })
+            } else {
+                EventKind::Midi(MidiEvent {
+                    group: MidiGroup::ZERO,
+                    channel: MidiChannel::new(0).expect("channel 0 is valid"),
+                    kind: MidiKind::NoteOn {
+                        key: NoteKey::new(u8::try_from(60 + index % 12).unwrap_or(60))
+                            .expect("key <= 71 is valid"),
+                        velocity: u32::try_from(index).unwrap_or(u32::MAX),
+                    },
+                })
+            };
+            Event::new(u32::try_from(i).unwrap_or(u32::MAX), kind)
+        })
+        .collect()
 }
 
 impl WorkerEntry {
@@ -344,6 +398,19 @@ impl WorkerEntry {
             wire::Command::SaveState => Ok(wire::Reply::State {
                 bytes: self.state.clone(),
             }),
+            wire::Command::DrainOutputReports => {
+                // Wire v4: answer at most `WIRE_MAX_EVENTS` oldest-
+                // first — the remainder stays queued for the next
+                // drain (the host loops until a short reply).
+                // Lifecycle-ungated: the report buffer is plugin
+                // state, matching the L0 drain.
+                let take = self
+                    .pending_reports
+                    .len()
+                    .min(usize::try_from(wire::WIRE_MAX_EVENTS).unwrap_or(usize::MAX));
+                let events: Vec<Event> = self.pending_reports.drain(..take).collect();
+                Ok(wire::Reply::Reports { events })
+            }
             wire::Command::RestoreState { bytes } => {
                 // `--state-unsupported` is evaluated before
                 // `--fail-restore` — both set answers
@@ -359,9 +426,10 @@ impl WorkerEntry {
                 self.state.clone_from(bytes);
                 Ok(wire::Reply::Ok)
             }
-            // GUI is `Unsupported` — the proxy never forwards these, so
-            // reaching them here means the proxy violated the contract;
-            // the reply still matches the documented rejection.
+            // GUI and the video verbs are `Unsupported` — the proxy
+            // never forwards these to an audio entry, so reaching
+            // them here means the proxy violated the contract; the
+            // reply still matches the documented rejection.
             _ => Err(HostError::Unsupported),
         }
     }
@@ -410,6 +478,9 @@ fn dispatch(
                     state: vec![0x11, 0x22, 0x33, 0x44],
                     segment,
                     activated_max_frames: None,
+                    pending_reports: Vec::new(),
+                    reports_per_block: flags.reports_per_block,
+                    next_report_index: 0,
                 },
             );
             Ok(wire::Reply::Ok)
@@ -647,6 +718,16 @@ fn block_in(
     fence(Ordering::Acquire);
     let outcome = entry.segment.process_block(seq, entry.activated_max_frames);
     fence(Ordering::Release);
+    if outcome.is_ok() {
+        // Wire-v4 report fixture: a processed doorbell queues its
+        // deterministic run — rejected/failed blocks queue nothing.
+        let count = entry.reports_per_block;
+        if count > 0 {
+            let base = entry.next_report_index;
+            entry.next_report_index = base.saturating_add(count);
+            entry.pending_reports.extend(report_events(count, base));
+        }
+    }
     let message = match outcome {
         Ok(result) => wire::Message::BlockDone {
             seq,

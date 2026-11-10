@@ -24,7 +24,9 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
 use ruviform_audio_core::SampleRate;
-use ruviform_media_core::{MediaTime, TimeBase, TransportStatus};
+use ruviform_media_core::{
+    MediaTime, MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey, TimeBase, TransportStatus,
+};
 use ruviform_plugin_core::wire::{self, Command as WireCommand, Message, Reply as WireReply, shm};
 use ruviform_plugin_core::{
     Event, EventKind, HostError, ParamEvent, ParamId, ParamValue, PluginDescriptor, ProcessConfig,
@@ -603,6 +605,150 @@ fn e2e_happy_path() {
         Ok(WireReply::Ok)
     );
 
+    host.send(&Message::Shutdown);
+    assert_eq!(host.wait_exit().code(), Some(0), "Shutdown must exit(0)");
+}
+
+/// The deterministic `Midi` marker `GainPlugin` closes each
+/// processed block's report run with — mirrors
+/// `report_marker` in the runner binary (key cycles 60..=71,
+/// velocity counts blocks).
+fn gain_marker(blocks: u32) -> Event {
+    Event::new(
+        0,
+        EventKind::Midi(MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::NoteOn {
+                key: NoteKey::new(60 + u8::try_from((blocks - 1) % 12).unwrap()).unwrap(),
+                velocity: blocks,
+            },
+        }),
+    )
+}
+
+/// Issues `DrainOutputReports` and returns the `Reports` payload —
+/// any other reply is a test failure.
+fn drain_reports(host: &mut MiniHost, instance: u32) -> Vec<Event> {
+    match host.command(instance, WireCommand::DrainOutputReports) {
+        Ok(WireReply::Reports { events }) => events,
+        other => panic!("expected Reports, got {other:?}"),
+    }
+}
+
+/// Wire v4 (Issue #253): `DrainOutputReports` pulls the plugin's
+/// since-last-drain reports as canonical `Event`s — `GainPlugin`
+/// echoes every input event in arrival order and closes each block
+/// with one deterministic `Midi` marker, so one drain returns both
+/// `EventKind`s oldest-first, a repeat drain is the defined empty
+/// answer, and the verb is lifecycle-ungated.
+#[test]
+fn e2e_drain_output_reports() {
+    let key = unique_key("reports");
+    let mut segment = create_segment(&key);
+    let mut host = MiniHost::spawn_runner();
+    host.expect_hello();
+
+    let instance = 0;
+    assert_eq!(
+        host.create_instance(instance, GAIN_ID, &key),
+        Ok(WireReply::Ok)
+    );
+    assert_eq!(
+        host.command(instance, WireCommand::Initialize),
+        Ok(WireReply::Ok)
+    );
+    let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, 512).unwrap();
+    assert_eq!(
+        host.command(instance, WireCommand::Activate { config }),
+        Ok(WireReply::Ok)
+    );
+    assert_eq!(
+        host.command(instance, WireCommand::StartProcessing),
+        Ok(WireReply::Ok)
+    );
+
+    // An unregistered handle is the defined `InvalidHandle`.
+    assert_eq!(
+        host.command(7, WireCommand::DrainOutputReports),
+        Err(HostError::InvalidHandle)
+    );
+
+    // Nothing processed yet — the defined empty drain.
+    assert_eq!(drain_reports(&mut host, instance), vec![]);
+
+    // Block 0: one `ParamValue` + one `Midi` input event (offset-
+    // sorted for `EventList::new`) — both echo as reports, then the
+    // block's deterministic marker.
+    let param_event = Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.75).unwrap(),
+        }),
+    );
+    let midi_event = Event::new(
+        2,
+        EventKind::Midi(MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::NoteOn {
+                key: NoteKey::new(64).unwrap(),
+                velocity: 100,
+            },
+        }),
+    );
+    let inputs = [vec![1.0_f32; 4]];
+    write_in_slot(
+        &mut segment,
+        0,
+        4,
+        1,
+        &[param_event, midi_event],
+        None,
+        &inputs,
+    );
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Release);
+    host.block_in(0, instance);
+    assert_eq!(
+        expect_block_done(&mut host, 0, instance).status,
+        ProcessStatus::Continue
+    );
+
+    assert_eq!(
+        drain_reports(&mut host, instance),
+        vec![param_event, midi_event, gain_marker(1)],
+        "echoed input events then the block marker, producer order"
+    );
+    // Since-last-drain: the next pull is empty.
+    assert_eq!(drain_reports(&mut host, instance), vec![]);
+
+    // Block 1: no input events — only the second marker queues.
+    write_in_slot(&mut segment, 1, 4, 1, &[], None, &inputs);
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Release);
+    host.block_in(1, instance);
+    assert_eq!(
+        expect_block_done(&mut host, 1, instance).status,
+        ProcessStatus::Continue
+    );
+    assert_eq!(drain_reports(&mut host, instance), vec![gain_marker(2)]);
+
+    // Lifecycle-ungated: the drain still answers after
+    // `StopProcessing` (the report buffer is plugin state).
+    assert_eq!(
+        host.command(instance, WireCommand::StopProcessing),
+        Ok(WireReply::Ok)
+    );
+    assert_eq!(drain_reports(&mut host, instance), vec![]);
+
+    assert_eq!(
+        host.command(instance, WireCommand::Deactivate),
+        Ok(WireReply::Ok)
+    );
+    assert_eq!(
+        host.command(instance, WireCommand::DestroyInstance),
+        Ok(WireReply::Ok)
+    );
     host.send(&Message::Shutdown);
     assert_eq!(host.wait_exit().code(), Some(0), "Shutdown must exit(0)");
 }

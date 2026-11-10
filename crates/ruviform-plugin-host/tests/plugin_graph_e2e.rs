@@ -541,11 +541,18 @@ const WORKER_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
 /// worker binary + `Instantiate` driven to `Processing`.
 /// `lookahead_blocks` rides `OutOfProcessSpec::new`'s default (2).
 fn l1_processing() -> (PluginHost, PluginHandle) {
+    l1_processing_with_args(&[])
+}
+
+/// [`l1_processing`] with worker argv — the report fixture's
+/// `--reports-per-block` knob rides here.
+fn l1_processing_with_args(args: &[&str]) -> (PluginHost, PluginHandle) {
     let mut host = PluginHost::new();
-    let spec = OutOfProcessSpec::new(
+    let mut spec = OutOfProcessSpec::new(
         WORKER_DESCRIPTOR,
         OsString::from(env!("CARGO_BIN_EXE_l1-test-worker")),
     );
+    spec.args = args.iter().map(OsString::from).collect();
     host.register_out_of_process(spec).unwrap();
     let handle = instantiate(&mut host, WORKER_DESCRIPTOR.id);
     host.execute(HostCommand::Initialize { handle }).unwrap();
@@ -1411,16 +1418,92 @@ fn l0_reports_drain_through_host_while_endpoint_attached() {
     drop(session);
 }
 
-/// Issue #253 slice (b): the honest L1 answer — the wire protocol
-/// has no report verb, so `PluginHost::drain_output_reports` on an
-/// out-of-process audio slot reports `Unavailable` and leaves `out`
-/// untouched (callers must not infer report silence from it). Runs
-/// against the real `l1-test-worker` child — the fixture proves the
-/// routing answer, not report data (L1 report transport is a later
-/// slice).
+/// Mirrors `l1-test-worker`'s `report_events` — the deterministic
+/// run `--reports-per-block` queues per processed `BlockIn`: `count`
+/// canonical `Event`s from running index `base`, even indices
+/// `ParamValue` (id `index % 8`, value `(index % 100)/100`), odd
+/// `Midi` `NoteOn` (key `60 + index % 12`, channel 0, velocity
+/// `index`), `frame_offset` the within-run index.
+fn l1_worker_reports(count: u64, base: u64) -> Vec<Event> {
+    (0..count)
+        .map(|i| {
+            let index = base + i;
+            let kind = if index.is_multiple_of(2) {
+                EventKind::ParamValue(ParamEvent {
+                    param_id: ParamId(u32::try_from(index % 8).unwrap_or(0)),
+                    value: ParamValue::new(
+                        f64::from(u32::try_from(index % 100).unwrap_or(0)) / 100.0,
+                    )
+                    .unwrap_or(ParamValue::ONE),
+                })
+            } else {
+                EventKind::Midi(MidiEvent {
+                    group: MidiGroup::ZERO,
+                    channel: MidiChannel::new(0).unwrap(),
+                    kind: MidiKind::NoteOn {
+                        key: NoteKey::new(u8::try_from(60 + index % 12).unwrap_or(60)).unwrap(),
+                        velocity: u32::try_from(index).unwrap_or(u32::MAX),
+                    },
+                })
+            };
+            Event::new(u32::try_from(i).unwrap_or(u32::MAX), kind)
+        })
+        .collect()
+}
+
+/// Issue #253 slice (c): the L1 wire route — reports the
+/// `l1-test-worker` child queues per processed `BlockIn` travel the
+/// wire-v4 `DrainOutputReports` verb through the composite L1 arm
+/// and arrive at `PluginHost::drain_output_reports` in producer
+/// order, while the endpoint stays attached to the session. The
+/// drain is opt-in pull: a repeat drain appends nothing yet still
+/// reports `Drained`, `out` keeps its prior contents, and
+/// post-drain processing surfaces only the new reports.
 #[test]
-fn l1_reports_drain_answers_unavailable() {
-    let (mut host, handle) = l1_processing();
+fn l1_reports_drain_through_host_while_endpoint_attached() {
+    let (mut host, handle) = l1_processing_with_args(&["--reports-per-block=2"]);
+    let endpoint = host
+        .prepare_endpoint(handle, bounds(512, 2))
+        .expect("L1 attach");
+
+    let results = Arc::new(Mutex::new(Vec::new()));
+    let mut graph = Graph::new();
+    graph.push(Box::new(transform_node(endpoint, Arc::clone(&results))));
+    let (enumerator, slot) = MockEnumerator::new();
+    let device = enumerator.default_output_device().unwrap().unwrap();
+    let session = Session::open(&*device, stream_config(), GraphPlan::new(graph)).unwrap();
+    let mut cb = take_callback(&slot);
+
+    // Four graph-driven blocks — each submits one doorbell the
+    // child answers with a processed `BlockIn`, queueing its
+    // deterministic two-report run. The submit channel is only
+    // `lookahead + 1` deep, so each block is followed by the
+    // two-`SaveState` pipeline barrier (mirrors `l1_proxy_e2e`):
+    // the second round-trip returns only after the child's serial
+    // loop has run `process_block` — the reports are queued and
+    // the submit channel is empty again before the next doorbell.
+    let mut slab = [0.5_f32; 16];
+    for _ in 0..4 {
+        slab.fill(0.5);
+        cb(
+            AudioBufferViewMut::try_new(&mut slab, 2, 8).unwrap(),
+            info(),
+        );
+        for _ in 0..2 {
+            host.execute(HostCommand::SaveState { handle }).unwrap();
+        }
+    }
+    assert!(
+        results
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|r| *r == Ok(ProcessResult::CONTINUE)),
+        "every L1 block answers Ok(CONTINUE)"
+    );
+
+    // The consumer pull — a pre-seeded `out` survives; the four
+    // blocks' reports arrive in producer order.
     let sentinel = Event::new(
         0,
         EventKind::ParamValue(ParamEvent {
@@ -1431,7 +1514,43 @@ fn l1_reports_drain_answers_unavailable() {
     let mut out = vec![sentinel];
     assert_eq!(
         host.drain_output_reports(handle, &mut out),
-        Ok(ReportDrain::Unavailable)
+        Ok(ReportDrain::Drained)
     );
-    assert_eq!(out, [sentinel]);
+    let mut expected: Vec<Event> = Vec::new();
+    for block in 0..4_u64 {
+        expected.extend(l1_worker_reports(2, block * 2));
+    }
+    assert_eq!(out.len(), 1 + expected.len());
+    assert_eq!(out[0], sentinel);
+    assert_eq!(&out[1..], expected.as_slice());
+
+    // Repeat drain — `Drained` with nothing appended; the consumer
+    // measures a drain by the length delta.
+    assert_eq!(
+        host.drain_output_reports(handle, &mut out),
+        Ok(ReportDrain::Drained)
+    );
+    assert_eq!(out.len(), 1 + expected.len());
+
+    // One more graph-driven block surfaces only its two reports.
+    slab.fill(0.5);
+    cb(
+        AudioBufferViewMut::try_new(&mut slab, 2, 8).unwrap(),
+        info(),
+    );
+    for _ in 0..2 {
+        host.execute(HostCommand::SaveState { handle }).unwrap();
+    }
+    assert_eq!(
+        host.drain_output_reports(handle, &mut out),
+        Ok(ReportDrain::Drained)
+    );
+    expected.extend(l1_worker_reports(2, 8));
+    assert_eq!(&out[1..], expected.as_slice());
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    drop(session);
 }

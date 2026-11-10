@@ -192,6 +192,7 @@ Directory: `docs/test-specs`
 | TSPEC-034LNXxXa2vencBWSvgemD | plugin L1 ワイヤ codec・ライフサイクル Failed 拡張 テスト仕様 | approved | [plugin-l1-wire-codec-tests.md](./plugin-l1-wire-codec-tests.md) |
 | TSPEC-034Mrsijk0b3tEOMrMG0MN | plugin/audio RT 契約 + 退役（assert_no_alloc・arm_apply・leg 返却・plan 退役 drain）テスト仕様 | approved | [plugin-rt-retirement-tests.md](./plugin-rt-retirement-tests.md) |
 | TSPEC-034MLRBDZVBiSYnXZ5dTrr | 実規格アダプタ L1 E2E（spawn/handshake/lifecycle/shm block/state defined 応答/destroy + 異常系継承）テスト仕様 | approved | [real-adapter-l1-e2e-tests.md](./real-adapter-l1-e2e-tests.md) |
+| TSPEC-034VnJrvHHjxgNUk56P3pD | Issue #253 L1 wire report verb テスト仕様 | approved | [rf-midi-l1-report-verb.md](./rf-midi-l1-report-verb.md) |
 | TSPEC-wJA20tmm9AN7JyNH6uMDQ6 | ruviform-io-file Rooted Read Capability テスト仕様 | approved | [rooted-read-capability.md](./rooted-read-capability.md) |
 | TSPEC-034JxNwt3ReMphshEaeFVe | SPSC・退役・スナップショット交換の RT 契約保証 | approved | [rt-channel-and-snapshot-contracts.md](./rt-channel-and-snapshot-contracts.md) |
 | TSPEC-034JxNxcYxa29rPklpknWh | RtContext・Processor 契約・MasterClock の RT 契約保証 | approved | [rt-context-and-processor-contract.md](./rt-context-and-processor-contract.md) |

@@ -109,8 +109,10 @@ use crate::{
 /// Issue #118 video revision — the video verbs ([`Command`] tags
 /// 12-22), video replies ([`Reply`] tags 4-7), the video type codecs
 /// and the [`vshm`] segment layout are additive on top of the v2
-/// tags, which are unchanged.
-pub const WIRE_VERSION: u16 = 3;
+/// tags, which are unchanged. `4` is the Issue #253 report revision —
+/// [`Command::DrainOutputReports`] (tag 23) and [`Reply::Reports`]
+/// (tag 8) are additive on top of the v3 tags, which are unchanged.
+pub const WIRE_VERSION: u16 = 4;
 
 /// Maximum frames per processing block carried on the wire
 /// (`Activate` configs and shm block payloads share this bound).
@@ -252,7 +254,7 @@ pub mod shm {
     /// Byte offset of the slot `transport` region.
     pub const TRANSPORT_OFF: usize = 24;
     /// Reserved capacity of the `transport` region — the maximum
-    /// wire size of `TransportInfo` under `WIRE_VERSION` 3 is 91 B.
+    /// wire size of `TransportInfo` under `WIRE_VERSION` 4 is 91 B.
     pub const TRANSPORT_LEN: usize = 96;
     /// Byte offset of the slot `result` region.
     pub const RESULT_OFF: usize = TRANSPORT_OFF + TRANSPORT_LEN;
@@ -262,7 +264,7 @@ pub mod shm {
     /// Byte offset of the slot `events` region.
     pub const EVENTS_OFF: usize = RESULT_OFF + RESULT_LEN;
     /// Byte length of one wire-encoded `Event` record under
-    /// `WIRE_VERSION` 3 (`u32` offset + `u8` kind + `u32` param id +
+    /// `WIRE_VERSION` 4 (`u32` offset + `u8` kind + `u32` param id +
     /// `f64` value + `u64` reserved ×2).
     pub const EVENT_WIRE_SIZE: usize = 33;
     /// Byte offset of the slot `samples` region.
@@ -273,7 +275,7 @@ pub mod shm {
     /// Byte length of the fixed-capacity `samples` region
     /// (`WIRE_MAX_CHANNELS` planes).
     pub const SAMPLES_LEN: usize = WIRE_MAX_CHANNELS as usize * SAMPLE_STRIDE;
-    /// Fixed byte length of one in/out slot under `WIRE_VERSION` 3.
+    /// Fixed byte length of one in/out slot under `WIRE_VERSION` 4.
     pub const SLOT_BYTES: usize = SAMPLES_OFF + SAMPLES_LEN;
 
     /// Byte offset of the in-slot array — always right after the
@@ -569,8 +571,8 @@ pub mod vshm {
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy; the wire itself is strictly versioned by [`WIRE_VERSION`],
 /// so new messages arrive only with a protocol revision. It is
-/// `PartialEq` but not `Eq`: wire-v3 [`Reply`] payloads carry
-/// [`PlainParamValue`], which contains an `f64`.
+/// `PartialEq` but not `Eq`: [`Reply`] payloads carry `f64`-bearing
+/// values ([`PlainParamValue`], [`Event`]).
 ///
 /// **RT contract:** non-RT only — the codec allocates on the
 /// control-plane pipe.
@@ -593,7 +595,7 @@ pub enum Message {
         /// Protocol version — [`WIRE_VERSION`] on a live handshake.
         version: u16,
         /// Capability bitmask reserved for protocol extensions;
-        /// must be `0` under [`WIRE_VERSION`] `3` — decode rejects a
+        /// must be `0` under [`WIRE_VERSION`] `4` — decode rejects a
         /// nonzero value as [`WireError::Malformed`], like any other
         /// nonzero reserved field.
         capabilities: u32,
@@ -657,7 +659,9 @@ pub enum Message {
 /// `VideoPluginInstance` lifecycle and its plain-parameter channel.
 /// They are instance-scoped like every non-`Scan` verb; the frame
 /// bytes they describe travel a per-instance [`vshm`] segment, never
-/// the pipe.
+/// the pipe. Tag 23 is the wire-v4 (Issue #253) report verb —
+/// [`Command::DrainOutputReports`] pulls the instance's
+/// plugin→host [`Event`] reports over the control plane.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy — new verbs arrive only with a [`WIRE_VERSION`] bump. It is
@@ -810,14 +814,28 @@ pub enum Command {
         /// New parameter value.
         value: PlainParamValue,
     },
+    /// `PluginProcessor::drain_output_reports` — wire tag 23, the
+    /// wire-v4 (Issue #253) report verb → [`Reply::Reports`]. Pulls
+    /// the canonical [`Event`] reports the plugin queued during
+    /// `process` calls since the previous drain — the same
+    /// since-last-drain, producer-ordered semantics the in-process
+    /// contract defines; nothing drains unless this verb is sent.
+    /// Instance-scoped like every non-`Scan` verb and ungated by
+    /// lifecycle (a plugin's pending buffer is its own state — the
+    /// L0 `Plain` drain has no lifecycle gate either). One reply
+    /// carries at most [`WIRE_MAX_EVENTS`] events; a larger backlog
+    /// is chunked child-side across successive drains, so a single
+    /// host-side drain may take several round-trips.
+    DrainOutputReports,
 }
 
 /// The reply payload of a successful wire [`Command`].
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy — new replies arrive only with a [`WIRE_VERSION`] bump.
-/// Tags 4-7 are the wire-v3 (Issue #118) video replies. It is
-/// `PartialEq` but not `Eq`: [`PlainParamValue`] contains an `f64`.
+/// Tags 4-7 are the wire-v3 (Issue #118) video replies; tag 8 is the
+/// wire-v4 (Issue #253) [`Reply::Reports`]. It is `PartialEq` but
+/// not `Eq`: [`PlainParamValue`] contains an `f64`.
 ///
 /// **RT contract:** non-RT only.
 #[non_exhaustive]
@@ -860,6 +878,18 @@ pub enum Reply {
     ParamValue {
         /// Current parameter value.
         value: PlainParamValue,
+    },
+    /// `DrainOutputReports` result — wire tag 8, the wire-v4
+    /// (Issue #253) report reply. The canonical [`Event`] stream the
+    /// plugin produced since the previous drain, in producer order —
+    /// `ParamValue` reports for plugin-generated parameter
+    /// observations and `Midi` reports for plugin-generated
+    /// channel-voice events. At most [`WIRE_MAX_EVENTS`] events per
+    /// reply; an empty list is the defined "nothing pending" answer,
+    /// distinct from any transport failure.
+    Reports {
+        /// Drained events, oldest first.
+        events: Vec<Event>,
     },
 }
 
@@ -1522,7 +1552,7 @@ fn push_str(out: &mut Vec<u8>, value: &str) {
 
 /// Writes `command`'s verb tag plus payload fields. Fallible through
 /// the video verbs' nested codecs (a `#[non_exhaustive]` `PixelFormat`
-/// or color enum added after this revision has no `WIRE_VERSION` 3
+/// or color enum added after this revision has no `WIRE_VERSION` 4
 /// representation) — `encode` owns the all-or-nothing rollback for
 /// every `Err` from here.
 fn encode_command(command: &Command, out: &mut Vec<u8>) -> Result<(), WireError> {
@@ -1593,6 +1623,7 @@ fn encode_command(command: &Command, out: &mut Vec<u8>) -> Result<(), WireError>
             push_u32(out, *id);
             encode_plain_param_value(value, out);
         }
+        Command::DrainOutputReports => push_u8(out, 23),
     }
     Ok(())
 }
@@ -1669,6 +1700,7 @@ fn decode_command(verb: u8, reader: &mut Reader<'_>) -> Result<Command, WireErro
             id: reader.read_u32()?,
             value: decode_plain_param_value(reader)?,
         }),
+        23 => Ok(Command::DrainOutputReports),
         _ => Err(WireError::Malformed),
     }
 }
@@ -1719,6 +1751,13 @@ fn encode_reply(reply: &Reply, out: &mut Vec<u8>) -> Result<(), WireError> {
             push_u8(out, 7);
             encode_plain_param_value(value, out);
         }
+        Reply::Reports { events } => {
+            push_u8(out, 8);
+            push_u32(out, len_u32(events.len()));
+            for event in events {
+                encode_event(event, out);
+            }
+        }
     }
     Ok(())
 }
@@ -1761,6 +1800,18 @@ fn decode_reply(reader: &mut Reader<'_>) -> Result<Reply, WireError> {
         7 => Ok(Reply::ParamValue {
             value: decode_plain_param_value(reader)?,
         }),
+        8 => {
+            // `u32` count + each `Event` in order — the same element
+            // bound every wire event list carries. A producer whose
+            // since-last-drain backlog exceeds it is chunked
+            // child-side, so an honest peer never trips this.
+            let count = reader.read_count(WIRE_MAX_EVENTS)?;
+            let mut events = Vec::with_capacity(count as usize);
+            for _ in 0..count {
+                events.push(decode_event(reader)?);
+            }
+            Ok(Reply::Reports { events })
+        }
         _ => Err(WireError::Malformed),
     }
 }
@@ -2147,7 +2198,7 @@ fn decode_musical_time_info(reader: &mut Reader<'_>) -> Result<MusicalTimeInfo, 
 /// # Errors
 ///
 /// [`WireError::UnsupportedVariant`] when `status` is a
-/// `#[non_exhaustive]` variant added after [`WIRE_VERSION`] `3` — it
+/// `#[non_exhaustive]` variant added after [`WIRE_VERSION`] `4` — it
 /// has no representation under this protocol revision. Nothing is
 /// appended on failure.
 pub fn encode_transport(info: &TransportInfo, out: &mut Vec<u8>) -> Result<(), WireError> {
@@ -3333,6 +3384,9 @@ mod tests {
                 0,
             ),
             (Command::CloseGui, 0),
+            // Wire v4 (Issue #253) — instance-scoped like every
+            // non-`Scan` verb.
+            (Command::DrainOutputReports, 0),
         ] {
             let message = Message::Command {
                 seq: 7,
@@ -3357,6 +3411,32 @@ mod tests {
             Reply::Opened {
                 gui: GuiHandle::new(42),
             },
+            // Wire v4 (Issue #253) — the drained `Event` stream,
+            // both kinds, producer order.
+            Reply::Reports {
+                events: vec![
+                    Event::new(
+                        3,
+                        EventKind::ParamValue(ParamEvent {
+                            param_id: ParamId(1),
+                            value: ParamValue::new(0.5).unwrap(),
+                        }),
+                    ),
+                    Event::new(
+                        9,
+                        EventKind::Midi(MidiEvent {
+                            group: MidiGroup::ZERO,
+                            channel: MidiChannel::new(0).unwrap(),
+                            kind: MidiKind::NoteOn {
+                                key: NoteKey::new(60).unwrap(),
+                                velocity: 100,
+                            },
+                        }),
+                    ),
+                ],
+            },
+            // The defined empty answer — "nothing pending".
+            Reply::Reports { events: Vec::new() },
         ];
         for reply in replies {
             let message = Message::Reply {
@@ -3483,6 +3563,90 @@ mod tests {
                 KIND_COMMAND,
                 &command_payload(1, WIRE_INSTANCE_NONE, 10)
             )),
+            Err(WireError::Malformed)
+        );
+        // DrainOutputReports (tag 23, wire v4) with NONE → the same
+        // instance-scope rule — it is not a second child-scoped verb.
+        assert_eq!(
+            decode(&raw_frame(
+                KIND_COMMAND,
+                &command_payload(1, WIRE_INSTANCE_NONE, 23)
+            )),
+            Err(WireError::Malformed)
+        );
+        // …and with a live handle it decodes to the unit verb.
+        assert_eq!(
+            decode(&raw_frame(KIND_COMMAND, &command_payload(1, 0, 23))),
+            Ok(Message::Command {
+                seq: 1,
+                instance: 0,
+                cmd: Command::DrainOutputReports,
+            })
+        );
+    }
+
+    /// Wire v4 (Issue #253): `Reply::Reports` decode is bounded like
+    /// every wire event list — an over-`WIRE_MAX_EVENTS` count is
+    /// `LimitExceeded` before any allocation, a truncated element is
+    /// `Truncated`/`Malformed`, and a nonzero reserved word inside an
+    /// event is `Malformed`.
+    #[test]
+    fn reports_reply_is_bounded_and_strict() {
+        // A `Reply` payload: `u8` tag 8 + `u32` count + events.
+        let mut payload = Vec::new();
+        push_u8(&mut payload, 8);
+        // Count over the bound → LimitExceeded, nothing allocated.
+        push_u32(&mut payload, WIRE_MAX_EVENTS + 1);
+        assert_eq!(
+            decode_reply(&mut Reader::new(&payload)),
+            Err(WireError::LimitExceeded)
+        );
+
+        // A count that cannot fit the remaining bytes → Truncated.
+        let mut payload = Vec::new();
+        push_u8(&mut payload, 8);
+        push_u32(&mut payload, WIRE_MAX_EVENTS);
+        assert_eq!(
+            decode_reply(&mut Reader::new(&payload)),
+            Err(WireError::Truncated)
+        );
+
+        // Two declared events, the second cut mid-record → the
+        // element decode rejects, never a partial `Reports`.
+        let mut payload = Vec::new();
+        push_u8(&mut payload, 8);
+        push_u32(&mut payload, 2);
+        for offset in [0_u32, 33] {
+            encode_event(
+                &Event::new(
+                    offset,
+                    EventKind::ParamValue(ParamEvent {
+                        param_id: ParamId(0),
+                        value: ParamValue::ONE,
+                    }),
+                ),
+                &mut payload,
+            );
+        }
+        payload.truncate(payload.len() - 10); // cut inside event 2
+        assert!(matches!(
+            decode_reply(&mut Reader::new(&payload)),
+            Err(WireError::Truncated | WireError::Malformed)
+        ));
+
+        // A nonzero event `reserved` word → Malformed (the codec
+        // re-validates the shared value type's invariants).
+        let mut payload = Vec::new();
+        push_u8(&mut payload, 8);
+        push_u32(&mut payload, 1);
+        push_u32(&mut payload, 0); // frame_offset
+        push_u8(&mut payload, 0); // ParamValue kind
+        push_u32(&mut payload, 0); // param_id
+        push_f64(&mut payload, 0.5);
+        push_u64(&mut payload, 1); // reserved[0] — must be zero
+        push_u64(&mut payload, 0);
+        assert_eq!(
+            decode_reply(&mut Reader::new(&payload)),
             Err(WireError::Malformed)
         );
     }
@@ -4046,7 +4210,7 @@ mod tests {
             Err(WireError::UnsupportedVariant)
         );
         assert_eq!(out, before);
-        assert_eq!(WIRE_VERSION, 3);
+        assert_eq!(WIRE_VERSION, 4);
     }
 
     #[test]
@@ -4363,8 +4527,8 @@ mod tests {
     }
 
     #[test]
-    fn wire_version_is_v3() {
-        assert_eq!(WIRE_VERSION, 3);
+    fn wire_version_is_v4() {
+        assert_eq!(WIRE_VERSION, 4);
     }
 
     #[test]
@@ -4453,12 +4617,13 @@ mod tests {
                 "ParamInfo presence tag {tag} must be rejected",
             );
         }
-        // Reply tags > 7 are outside the v3 vocabulary.
+        // Reply tags > 8 are outside the v4 vocabulary (tag 8 is the
+        // wire-v4 `Reports` payload — covered above).
         let mut payload = Vec::new();
         push_u64(&mut payload, 1);
         push_u32(&mut payload, 0);
         push_u8(&mut payload, REPLY_OK);
-        push_u8(&mut payload, 8);
+        push_u8(&mut payload, 9);
         assert_eq!(
             decode(&raw_frame(KIND_REPLY, &payload)),
             Err(WireError::Malformed)

@@ -117,8 +117,9 @@ use ruviform_observability::source::ObservationRegistrar;
 use ruviform_observability::{Counter, CounterReader};
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    EventList, FailureCause, HostError, HostInput, HostOutput, LifecycleState, PluginDescriptor,
-    PrepareError, ProcessConfig, ProcessResult, TransportInfo, VideoProcessConfig,
+    Event, EventList, FailureCause, HostError, HostInput, HostOutput, LifecycleState,
+    PluginDescriptor, PrepareError, ProcessConfig, ProcessResult, TransportInfo,
+    VideoProcessConfig,
 };
 
 // `composite.rs` is the only in-crate consumer of the video facade
@@ -3124,6 +3125,35 @@ impl L1Instance {
             _ => self.instance,
         };
         self.child.request(instance, cmd)
+    }
+
+    /// Drains the child's plugin→host report backlog over the wire
+    /// (wire v4, Issue #253): issues `DrainOutputReports` until a
+    /// reply carries fewer than `WIRE_MAX_EVENTS` events, appending
+    /// them to `out` oldest-first. One host-level pull therefore
+    /// retrieves a backlog larger than a single bounded reply — the
+    /// child chunks child-side and this loop re-asks. Lifecycle-
+    /// ungated like the L0 drain: the report buffer is plugin state,
+    /// not a lifecycle transition (`post_command_state`'s wildcard
+    /// leaves the mirror alone).
+    ///
+    /// **RT contract:** non-RT only — each verb waits at most
+    /// `command_timeout`; the `out` append may allocate.
+    pub(crate) fn drain_output_reports(&mut self, out: &mut Vec<Event>) -> Result<(), HostError> {
+        loop {
+            match self.execute(wire::Command::DrainOutputReports)? {
+                wire::Reply::Reports { mut events } => {
+                    let chunk_full = events.len() >= wire::WIRE_MAX_EVENTS as usize;
+                    out.append(&mut events);
+                    if !chunk_full {
+                        return Ok(());
+                    }
+                }
+                // Any other payload is a protocol anomaly — the
+                // child answered a verb it was not sent.
+                _ => return Err(HostError::Ipc),
+            }
+        }
     }
 
     /// `Destroy`'s control-plane meaning: wire v2's teardown is

@@ -189,6 +189,7 @@ Directory: `docs/designs`
 | DESIGN-034JZLISO0000000000003 | プラグイン分離設計（境界・プロセス監視・RT 面制約） | approved | [plugin-isolation.md](./plugin-isolation.md) |
 | DESIGN-034LNAalREIHyUQNVXLLin | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー） | approved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
 | DESIGN-034IvBNBZvoikAgd6DJxdD | テンプレート由来ドキュメント・識別子のRuviform固有化の設計 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
+| DESIGN-034VnJlduDjKcQQfErsMwS | Issue #253 L1 wire report verb（drain_output_reports の L1 実装） | approved | [rf-midi-l1-report-verb-design.md](./rf-midi-l1-report-verb-design.md) |
 | DESIGN-6GZ1DYjAInxUNz0dwJRwN7 | ruviform-io-file Rooted Read Capability 設計 | approved | [rooted-read-capability.md](./rooted-read-capability.md) |
 | DESIGN-034JgsK9khgDsPqG04Sp6i | RT 基盤 API 設計（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | approved | [rt-foundation-api-design.md](./rt-foundation-api-design.md) |
 | DESIGN-034JOU7C43HBPJBsnz8JQP | RT 検証レーン設計 | approved | [rt-verification-lane-design.md](./rt-verification-lane-design.md) |
