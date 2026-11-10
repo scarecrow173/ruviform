@@ -34,7 +34,18 @@
 //!
 //! Manual verification only — real windows open on the desktop and
 //! OS input is injected; the cursor is restored on exit. Exit codes:
-//! `0` = pass, `1` = fail, `2` = unsupported (non-Windows hosts).
+//! `0` = pass, `1` = fail, `2` = unsupported (non-Windows hosts),
+//! `3` = `environment_blocked` (Issue #552: `SendInput` accepted events
+//! but the preflight read-back proved no effect — the lane body never
+//! ran; distinct from `fail`, which means the GUI itself broke).
+//!
+//! Issue #552 preflight: before any window opens, the lane runs
+//! `os_input::preflight(PreflightScope::PointerAndKeyboard)` — a
+//! cursor probe verified through `GetCursorPos` and an unassigned-key
+//! probe verified through `GetAsyncKeyState`, never the `SendInput`
+//! return count. `SendInput` can accept every event while the OS
+//! drops them all; a blocked environment must not masquerade as a
+//! GUI failure.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -54,7 +65,7 @@ use ruviform_ui::{
     LogicalPosition, LogicalSize, MonitorInfo, UiError, UiRuntime, WindowDriver, WindowId,
     WindowLifecycle, WindowSpec,
 };
-use ruviform_ui_gpui::os_input::{self, OsKey};
+use ruviform_ui_gpui::os_input::{self, OsKey, PreflightReport, PreflightScope};
 use ruviform_ui_gpui::{COMMAND_INTENT_OP, GpuiDriver, OsWindowGeometry, ViewMount};
 use serde_json::{Value, json};
 
@@ -197,6 +208,8 @@ struct State {
     out: Option<PathBuf>,
     revision: Option<String>,
     cursor_home: Option<(i32, i32)>,
+    // Issue #552 preflight report — recorded in every verdict.
+    preflight: PreflightReport,
     // Test windows raised to the topmost z-band so real clicks reach
     // them even when a covering window (e.g. the agent IDE) owns the
     // desktop foreground. Titles are re-resolved and lowered in
@@ -224,10 +237,31 @@ fn main() -> ExitCode {
         eprintln!("[rf243-multiwin] verdict: unsupported");
         return ExitCode::from(2);
     }
+    // Issue #552: prove injection takes effect *before* the lane body.
+    // A blocked environment is not a GUI failure — report
+    // `environment_blocked` (exit 3) and never open a window. Both
+    // families are probed: the lane injects pointer *and* keyboard
+    // (the local chord injector shares the same SendInput path).
+    let preflight = os_input::preflight(PreflightScope::PointerAndKeyboard);
+    if !preflight.effective {
+        let reasons: Vec<String> = preflight
+            .checks
+            .iter()
+            .filter(|c| !c.effective)
+            .map(|c| format!("preflight {}: {}", c.family, c.detail))
+            .collect();
+        let doc = blocked_doc(&meta, &preflight, &reasons);
+        if let Err(e) = write_verdict(&doc, opts.out.as_deref()) {
+            eprintln!("[rf243-multiwin] failed to write verdict: {e}");
+            eprintln!("{doc}");
+        }
+        eprintln!("[rf243-multiwin] verdict: environment_blocked");
+        return ExitCode::from(3);
+    }
     let cursor_home = os_input::cursor_position()
         .map_err(|e| eprintln!("[rf243-multiwin] cursor_position probe failed: {e}"))
         .ok();
-    run_smoke(&opts, cursor_home)
+    run_smoke(&opts, cursor_home, preflight)
 }
 
 struct Opts {
@@ -261,7 +295,9 @@ fn parse_args() -> Opts {
                  --out <path>       verdict JSON destination\n\
                  --revision <rev>   revision override\n\
                  \n\
-                 Exit codes: 0 pass, 1 fail, 2 unsupported (non-Windows)."
+                 Exit codes: 0 pass, 1 fail, 2 unsupported (non-Windows),\n\
+                 3 environment_blocked (Issue #552 preflight read-back\n\
+                 proved injection ineffective — lane body never ran)."
             );
             std::process::exit(0);
         }
@@ -281,9 +317,27 @@ fn collect_meta(opts: &Opts) -> Value {
     })
 }
 
+/// Serializes the Issue #552 preflight report for the verdict JSON.
+fn preflight_json(report: &PreflightReport) -> Value {
+    json!({
+        "effective": report.effective,
+        "checks": report
+            .checks
+            .iter()
+            .map(|c| {
+                json!({
+                    "family": c.family,
+                    "effective": c.effective,
+                    "detail": c.detail,
+                })
+            })
+            .collect::<Vec<_>>(),
+    })
+}
+
 fn unsupported_doc(meta: &Value) -> Value {
     json!({
-        "schema": "rf243-real-os-multiwindow-smoke/v1",
+        "schema": "rf243-real-os-multiwindow-smoke/v2",
         "issue": 243,
         "lane": "windows-sendinput-multiwindow",
         "input_method": "win32-SendInput keyboard/pointer + example-local modifier chords (Win+Arrow, Alt+F4)",
@@ -295,6 +349,28 @@ fn unsupported_doc(meta: &Value) -> Value {
         )],
         "checks": [],
         "environment": meta,
+        "preflight": Value::Null,
+        "run": Value::Null,
+    })
+}
+
+/// Verdict document for an environment-blocked run (Issue #552):
+/// `SendInput` accepted events but the preflight read-back proved no
+/// effect, so the lane body never ran. `run` is null; `preflight`
+/// carries the per-check evidence. Distinct from `unsupported` (no
+/// backend) and `fail` (the GUI itself broke).
+fn blocked_doc(meta: &Value, preflight: &PreflightReport, reasons: &[String]) -> Value {
+    json!({
+        "schema": "rf243-real-os-multiwindow-smoke/v2",
+        "issue": 243,
+        "lane": "windows-sendinput-multiwindow",
+        "input_method": "win32-SendInput keyboard/pointer + example-local modifier chords (Win+Arrow, Alt+F4)",
+        "input_method_note": "OS automation injection through the real OS input path — not physical manual input; distinct from GPUI simulated input. The real cursor is moved for focus clicks and restored on exit.",
+        "verdict": "environment_blocked",
+        "problems": reasons,
+        "checks": [],
+        "environment": meta,
+        "preflight": preflight_json(preflight),
         "run": Value::Null,
     })
 }
@@ -1631,7 +1707,7 @@ fn on_event(st: &mut State, ev: DriverEvent, drv: &mut dyn WindowDriver, query: 
     }
 }
 
-fn run_smoke(opts: &Opts, cursor_home: Option<(i32, i32)>) -> ExitCode {
+fn run_smoke(opts: &Opts, cursor_home: Option<(i32, i32)>, preflight: PreflightReport) -> ExitCode {
     let mut driver = GpuiDriver::new();
     eprintln!("[rf243-multiwin] capabilities: {:?}", driver.capabilities());
 
@@ -1682,6 +1758,7 @@ fn run_smoke(opts: &Opts, cursor_home: Option<(i32, i32)>) -> ExitCode {
         out: opts.out.clone(),
         revision: opts.revision.clone(),
         cursor_home,
+        preflight,
         raised: Vec::new(),
         fg_log: Vec::new(),
         last_fg: None,
@@ -1832,7 +1909,7 @@ fn verdict_doc(st: &State, problems: &[String]) -> Value {
             .map(|g| json!({"x": g.origin_x, "y": g.origin_y, "w": g.width, "h": g.height}))
     };
     json!({
-        "schema": "rf243-real-os-multiwindow-smoke/v1",
+        "schema": "rf243-real-os-multiwindow-smoke/v2",
         "issue": 243,
         "lane": "windows-sendinput-multiwindow",
         "input_method": "win32-SendInput keyboard/pointer + example-local modifier chords (Win+Arrow, Alt+F4)",
@@ -1840,6 +1917,7 @@ fn verdict_doc(st: &State, problems: &[String]) -> Value {
         "verdict": if problems.is_empty() { "pass" } else { "fail" },
         "problems": problems,
         "checks": checks,
+        "preflight": preflight_json(&st.preflight),
         "traces": st.traces.iter().map(|(w, t)| (format!("{w:?}"), t.clone())).collect::<BTreeMap<_, _>>(),
         "focused": st.focused.iter().map(|(w, f)| (format!("{w:?}"), *f)).collect::<BTreeMap<_, _>>(),
         "os_foreground_log": st.fg_log,
