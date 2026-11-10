@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034VeXFI5DET4CkhWJrBln"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #552 SendInput preflight（注入→実効 read-back で environment_blocked を区別）"
 created: "2026-11-10"
 updated: "2026-11-10"
@@ -179,12 +179,30 @@ Issue #552。spec → design → test-spec → plan → task の文書チェー�
 
 ## Validation
 
-- `cargo test -p ruviform-ui-gpui --features gpui-test os_input`:
-  8 tests passed（補助証拠・canonical は `mise run test-ui-gpui`）。
-- `mise run lint-ui-gpui`: Passed。
-- `mise run fmt-check`: Passed。
-- 残りの mise 検証・実機 lane は検証節の最終結果を参照
-  （本レコードは検証完了時に更新する）。
+全て Windows 11 x64・toolchain rust 1.99.0（mise pin）で実行。
+canonical = `mise run`、cargo 直接実行は補助証拠。
+
+- `mise run fmt-check` / `check` / `lint` / `test`: Passed（exit 0）。
+- `mise run test-ui-golden` / `test-ui-scenario-contract` /
+  `test-ui-parity` / `test-ui-component-view` /
+  `check-ui-driver-boundary`: Passed（exit 0）。
+- `mise run test-ui-gpui`: Passed（77 unit + 22 consumer_observation
+  + 4 lab_story + 7 scenario_contract。os_input mock 8 件含む）。
+- `mise run lint-ui-gpui`（gpui feature lint・補助）: Passed。
+- 実機 lane（対話 Windows desktop session、補助実走）:
+  - `real_os_smoke`（keyboard preflight）: verdict pass・exit 0、
+    `evidence/rf552-sendinput-preflight/verdict-keyboard-windows.json`
+  - `real_os_pointer_smoke`（pointer preflight）: verdict pass・
+    exit 0、`verdict-pointer-windows.json`
+  - `real_os_multiwindow_smoke`（pointer+keyboard preflight）:
+    verdict pass・exit 0、`verdict-multiwindow-windows.json`
+  - 3 件とも schema v2・`preflight.effective=true` を記録
+    （証拠レポート: `evidence/rf552-sendinput-preflight/report.md`）。
+- review-protocol: 1 サイクル実施、Issue Candidate 1 件
+  （空 scope での vacuous-true）を CONFIRMED→修正→再検証済み、
+  残 blocker なし（判定 ACCEPT）。
+- `git fetch origin main && git merge origin/main`: Already up to
+  date（検証前に実施）。
 
 ## Risks
 
