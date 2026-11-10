@@ -561,7 +561,7 @@ impl RvfView {
         format!("gpui-{}", self.next_gesture)
     }
 
-    #[cfg(feature = "gpui-test")]
+    #[cfg(any(feature = "gpui-test", feature = "real-scenario"))]
     pub(crate) fn host(&self) -> &ViewHost {
         &self.host
     }
