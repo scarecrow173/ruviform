@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "Issue #304 ruviform-io-archive Secure Extraction・Staging/Recovery テスト仕様"
 created: "2026-11-05"
-updated: "2026-11-05"
+updated: "2026-11-10"
 owners: []
 relations:
   source:
@@ -13,9 +13,11 @@ relations:
   changes:
     added:
       - type: "file"
-        path: "crates/ruviform-io-archive/tests/extract_path.rs"
+        path: "crates/ruviform-io-archive/tests/common/extract.rs"
       - type: "file"
-        path: "crates/ruviform-io-archive/tests/extract_secure.rs"
+        path: "crates/ruviform-io-archive/tests/extract_zip.rs"
+      - type: "file"
+        path: "crates/ruviform-io-archive/tests/extract_tar.rs"
       - type: "file"
         path: "crates/ruviform-io-archive/tests/extract_staging.rs"
     modified:

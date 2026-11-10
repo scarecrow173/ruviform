@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #304 ruviform-io-archive — Secure Extraction・Staging/Recovery・OS 別 Root Capability 設計"
 created: "2026-11-05"
-updated: "2026-11-05"
+updated: "2026-11-10"
 owners: []
 relations:
   source:
@@ -26,11 +26,11 @@ relations:
       - type: "file"
         path: "crates/ruviform-io-archive/src/extract/session.rs"
       - type: "file"
-        path: "crates/ruviform-io-archive/src/extract/failure.rs"
+        path: "crates/ruviform-io-archive/tests/common/extract.rs"
       - type: "file"
-        path: "crates/ruviform-io-archive/tests/extract_path.rs"
+        path: "crates/ruviform-io-archive/tests/extract_zip.rs"
       - type: "file"
-        path: "crates/ruviform-io-archive/tests/extract_secure.rs"
+        path: "crates/ruviform-io-archive/tests/extract_tar.rs"
       - type: "file"
         path: "crates/ruviform-io-archive/tests/extract_staging.rs"
     modified:
@@ -432,15 +432,18 @@ caller -> tree.cleanup() / tree.into_path() / drop(tree)
 
 ## Verification Notes
 
-- `tests/extract_path.rs`: `SafeRelativePath` 否定/受理行列（Public
-  API 経由・ArchiveName 構築可能）。
-- `tests/extract_secure.rs`: crafted ZIP/TAR（既存 builder）での
-  end-to-end 拒否・collision・kind/budget・取消/writer error・
-  `tar.gz` 2 層。
+- `SafeRelativePath` の否定/受理行列は `src/extract/path.rs` の
+  `#[cfg(test)]` unit test（Public `ArchiveName` 構築経由）と、
+  `tests/extract_zip.rs`/`tests/extract_tar.rs` の negative path
+  matrix（crafted archive → `ExtractionFailure`）で pin する。
+- `tests/extract_zip.rs`/`tests/extract_tar.rs`: crafted ZIP/TAR
+  （既存 builder）での end-to-end 拒否・collision・kind/budget・
+  取消/writer error・`tar.gz` 2 層。
 - `tests/extract_staging.rs`: 実 FS での staging 排他・identity・
   Drop/cleanup・差し替え（symlink/junction・foreign dir）・recovery
   inspect/cleanup。Windows 分はローカル実測、unix 分は CI。
-- `#[cfg(test)]` mock: fault injection（create_file N 回目失敗・
-  cleanup 失敗・identity tamper）。
+- `#[cfg(test)]` mock（`src/extract/session.rs`/`fs.rs`）:
+  fault injection（create_file N 回目失敗・cleanup 失敗・
+  identity tamper）。
 - `mise run fmt`/`check`/`lint`/`test` + Required CI（verify:
   ubuntu+windows）・非必須 verify-macos。
