@@ -4,7 +4,7 @@ type: "impl"
 status: "completed"
 title: "Issue #292 OBS-10 Debug Inspection 実装記録"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-10"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -222,6 +222,25 @@ Issue #292 受入条件の行ごとの照合結果。実装は main（PR #508
 | #185 Probe の OFF/Monitor/Capture を重複実装しない | 充足（既存） | `probe.rs` は port 接続のみ（本体は #185/#293 側） |
 | Debug Report の Secrets/Media・未認可 External Export 拒否 | 充足（既存） | `report.rs` の export 認可/confidentiality 検査 + 試験 |
 | AudioLens 解析 Inspection / Synvelis Graph・Plugin Inspection 両 Consumer 互換 | NotRun | cross-repo gate（#281）・本タスク対象外 |
+
+## Audit（2026-11-10、rf292-obs10 残件確認 slice、base `42db78ac`）
+
+Issue #292 受入条件の再照合。実装は main の `src/debug/`（PR #508
+`9017934a` 以降変更なし）。本 slice の差分は `debug/tests.rs` への
+受入関連の未検証要素を固定する試験 6 件追加のみ（39 → 45 tests）。
+concrete probe adapter は引き続き #293 / `ruviform-audio` 側の責務
+であり、本 module は port 接続のみ（重複実装なし）。
+
+| 受入行 | 判定 | 証跡 |
+| --- | --- | --- |
+| Debug OFF でも本番 Invariant（Invalid Graph/Plugin ABI 等）を維持 | 充足 | `debug/` は opt-in の追加コスト層であり domain invariant を持たず変更もしない（`mod.rs` Contracts「Debug OFF is free」）。domain 側の本番 invariant は各 domain crate の既存契約・試験が担保し、debug OFF/未使用で経路は不変 |
+| Inspection 各予算・Truncated/Unavailable/Discontinuous/Generation 整合試験 | 充足 | `budget.rs` + `tests.rs`: max_items/max_bytes/timeout・deliberate `max_items=0`・Truncated/Unavailable/Withheld・`Discontinuous` を含む validity 計数・generation skew（metrics vs diagnostics・probe deck mismatch・`source_generation==0` sentinel 除外・Skewed>Unknown 優先）+ 今回追加の `batch_generation_skew_is_declared_not_hidden`（`ObservationBatch.generation` が同一 collector domain の第 3 stamp として Skewed を報告することを明示検証） |
+| Invariant Satisfied/Violated/Inconclusive 区別・Diagnostics 接続 | 充足 | `invariant.rs` 3 値 outcome + `InconclusiveReason` + check panic → `CheckPanicked` 隔離 + `publish_invariants` → OBS-09 `Diagnostics` の evidence/finding 写像試験一式 |
+| Debug Session 開始/権限/切替/Draining/停止競合・RT buffer 最終回収試験 | 充足 | `session.rs` 状態機械 + `tests.rs`: `SessionPermit` capability（NoAuthority/PermitDenied）・SessionBusy/InvalidTransition/NoDrains・`drain_timeout` 非強制・overflow 計数・再 prepare で新 generation + 今回追加の `drain_waits_for_quiescence_then_recovers_rt_records`（実 `rt_bridge` 上で quiescence 未確認では `drain_final` 非実行・in-flight 保持・endpoint 保持、確認後のみ最終回収と drain endpoint 解放）と `draining_rejects_attach_activate_and_prepare`（Draining 中の attach/activate/prepare を typed 拒否） |
+| RT callback 上 alloc/lock/OS IO/Subscriber 呼出しなし・ON/OFF DSP 結果同値 | 充足 | 本 module は RT 呼出 API を持たない構造保証（module doc「Non-RT only」— 全公開操作が alloc/lock を伴い RT writer path から呼ばない）。RT 隣接 `Copy` 値型（`SessionRecord`/`ProbeReading`/`ProbeClockMark`/`ProbeStatusKind`）の構築・copy・読み取り no-alloc を `rt_debug_value_types_allocate_nothing`（`rt_` name filter・`test-rt` lane）で検証。ON/OFF での DSP 結果同値は debug が DSP 経路を持たないことによる構造保証であり、実機検証は spec Non-goals どおり domain/consumer + RT verification lane 側 |
+| #185 Probe の OFF/Monitor/Capture を重複実装しない | 充足 | `probe.rs` は読み取り語彙（`ProbeMode`/`ProbeAvailability`/`ProbeStatusKind`/`ProbeClockMark`/`ProbeReading`/`ProbeDeckSnapshot`）と `ProbeSource` port のみ。OFF/Monitor/Capture 本体・capture pool・rebind は #185/#293 側（`ruviform-observability → ruviform-audio` は依存循環のため adapter を本 crate に置かない） |
+| Debug Report の Secrets/Media・未認可 External Export 拒否 | 充足 | `report.rs` の closed vocabulary（`RecordSummary` は identity/classification/loss metadata のみで payload を持たない）+ `Unauthorized`/`ExternalNotPermitted` 拒否試験 + 今回追加の `report_external_export_permitted_when_allowed`（`allow_external_export` 許可時の external export 成功経路）と `report_export_limits_bytes_and_deadline_truncate`（`ExportLimits` の `max_bytes`/`deadline` による構造化打切り計数） |
+| AudioLens 解析 Inspection / Synvelis Graph・Plugin Inspection 両 Consumer 互換 | NotRun | cross-repo gate（#281）・別 Gate。本 slice 対象外 |
 
 ## Risks
 
