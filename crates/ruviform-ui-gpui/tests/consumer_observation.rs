@@ -1302,3 +1302,165 @@ fn tab_traversal_reaches_value_controls() {
     observer.settle(|_, _| {});
     assert!(command_kinds(&observer).is_empty());
 }
+
+/// Issue #314 slice 6: the AudioLens-shaped semantic oracle fixture —
+/// the drawn-plan half. The Waveform plan reports every painted bin's
+/// declared frame range verbatim (gap bins absent; partial bins and
+/// out-of-viewport bins kept — the Waveform plan does not cull by
+/// viewport, unlike Meter/`TimeAxis`/Spectrogram), `TimeAxis` marks carry
+/// the viewport-fraction x of in-viewport ticks only, and the Seek
+/// control's committed domain value round-trips f64-exact. The
+/// Fake-side payload half lives in `driver_parity.rs`.
+#[test]
+fn observes_viz_semantic_audiolens_oracle_through_seam() {
+    let fx = fixture("viz-semantic-audiolens.json");
+    let mut observer = GpuiObserver::new();
+    let window = mount_parity(&mut observer, &fx);
+
+    let observed = observer.observe(window).expect("view observed");
+    for k in strings(&fx["expect"]["mountedKeys"]) {
+        assert!(
+            observed
+                .components
+                .iter()
+                .any(|c| c.key == key(&k) && c.snapshot.mounted),
+            "{k} mounted"
+        );
+    }
+
+    let drawn = observer.drawn(window).expect("view drawn");
+    let keys: Vec<ComponentKey> = drawn.components.iter().map(|c| c.key.clone()).collect();
+    assert_eq!(keys, vec![key("wave"), key("ruler")]);
+
+    let DrawnPlan::Waveform { channels } = drawn_plan(&drawn, "wave") else {
+        panic!("waveform plan");
+    };
+    let want_channels = fx["expect"]["waveform"]["drawnChannels"]
+        .as_array()
+        .expect("channels");
+    assert_eq!(channels.len(), want_channels.len(), "drawn channel count");
+    for (channel, want_channel) in channels.iter().zip(want_channels) {
+        assert_eq!(
+            u64::try_from(channel.channel).ok(),
+            want_channel["channel"].as_u64(),
+            "channel index"
+        );
+        let want_bins = want_channel["bins"].as_array().expect("bins");
+        assert_eq!(channel.bins.len(), want_bins.len(), "painted bin count");
+        for (bin, want) in channel.bins.iter().zip(want_bins) {
+            assert_eq!(bin.start, want[0].as_u64().expect("start"));
+            assert_eq!(bin.end, want[1].as_u64().expect("end"));
+        }
+    }
+
+    let DrawnPlan::TimeAxis { marks } = drawn_plan(&drawn, "ruler") else {
+        panic!("time axis plan");
+    };
+    let want_marks = fx["expect"]["timeAxis"]["drawnMarks"]
+        .as_array()
+        .expect("marks");
+    assert_eq!(marks.len(), want_marks.len(), "drawn mark count");
+    for (mark, want) in marks.iter().zip(want_marks) {
+        assert_near(mark.x, want["x"].as_f64());
+        assert_eq!(mark.major, want["major"].as_bool().expect("major"));
+        assert_eq!(mark.label, want["label"].as_str().expect("label"));
+    }
+
+    // The Seek control keeps its domain value: committed plain is the
+    // consumer-domain position (seconds), normalized the [0, 1]
+    // fraction of the declared descriptor range.
+    let seek = observed
+        .components
+        .iter()
+        .find(|c| c.key == key("seek"))
+        .expect("seek observed");
+    let committed = seek.snapshot.committed.expect("committed value");
+    let want_seek = &fx["expect"]["seek"];
+    assert_eq!(
+        committed.plain,
+        want_seek["committedPlain"]
+            .as_f64()
+            .expect("committedPlain")
+    );
+    assert_eq!(
+        committed.normalized,
+        want_seek["committedNormalized"]
+            .as_f64()
+            .expect("committedNormalized")
+    );
+}
+
+/// Issue #314 slice 6: the Synvelis-shaped semantic oracle fixture —
+/// the drawn-plan half. RT-snapshot Meter bars clamp over-range
+/// amplitudes to `[0, 1]` and partial viewport overlaps to the
+/// viewport edge while culled bins draw nothing; Spectrogram cells
+/// clamp magnitudes onto `magnitude_range` the same way; `TimeAxis`
+/// marks keep in-viewport ticks only. The Fake-side payload half
+/// (over-range/partial values retained verbatim) lives in
+/// `driver_parity.rs`.
+#[test]
+fn observes_viz_semantic_synvelis_oracle_through_seam() {
+    let fx = fixture("viz-semantic-synvelis.json");
+    let mut observer = GpuiObserver::new();
+    let window = mount_parity(&mut observer, &fx);
+
+    let observed = observer.observe(window).expect("view observed");
+    for k in strings(&fx["expect"]["mountedKeys"]) {
+        assert!(
+            observed
+                .components
+                .iter()
+                .any(|c| c.key == key(&k) && c.snapshot.mounted),
+            "{k} mounted"
+        );
+    }
+
+    let drawn = observer.drawn(window).expect("view drawn");
+    let keys: Vec<ComponentKey> = drawn.components.iter().map(|c| c.key.clone()).collect();
+    assert_eq!(keys, vec![key("meters"), key("spec"), key("ruler")]);
+
+    let DrawnPlan::Meter { bars } = drawn_plan(&drawn, "meters") else {
+        panic!("meter plan");
+    };
+    let want_bars = fx["expect"]["meter"]["drawnBars"].as_array().expect("bars");
+    assert_eq!(bars.len(), want_bars.len(), "drawn bar count");
+    for (bar, want) in bars.iter().zip(want_bars) {
+        assert_eq!(
+            u64::try_from(bar.channel).ok(),
+            want["channel"].as_u64(),
+            "channel"
+        );
+        assert_near(bar.x0, want["x0"].as_f64());
+        assert_near(bar.x1, want["x1"].as_f64());
+        assert_near(bar.peak, want["peak"].as_f64());
+        assert_near(bar.rms.expect("rms"), want["rms"].as_f64());
+    }
+
+    let DrawnPlan::Spectrogram { cells } = drawn_plan(&drawn, "spec") else {
+        panic!("spectrogram plan");
+    };
+    let want_cells = fx["expect"]["spectrogram"]["drawnCells"]
+        .as_array()
+        .expect("cells");
+    assert_eq!(cells.len(), want_cells.len(), "drawn cell count");
+    for (cell, want) in cells.iter().zip(want_cells) {
+        assert_near(cell.x0, want["x0"].as_f64());
+        assert_near(cell.x1, want["x1"].as_f64());
+        assert_near(cell.y0, want["y0"].as_f64());
+        assert_near(cell.y1, want["y1"].as_f64());
+        assert_near(cell.intensity, want["intensity"].as_f64());
+    }
+
+    let DrawnPlan::TimeAxis { marks } = drawn_plan(&drawn, "ruler") else {
+        panic!("time axis plan");
+    };
+    let want_marks = fx["expect"]["timeAxis"]["drawnMarks"]
+        .as_array()
+        .expect("marks");
+    assert_eq!(marks.len(), want_marks.len(), "drawn mark count");
+    for (mark, want) in marks.iter().zip(want_marks) {
+        assert_near(mark.x, want["x"].as_f64());
+        assert_eq!(mark.major, want["major"].as_bool().expect("major"));
+        assert_eq!(mark.label, want["label"].as_str().expect("label"));
+    }
+}

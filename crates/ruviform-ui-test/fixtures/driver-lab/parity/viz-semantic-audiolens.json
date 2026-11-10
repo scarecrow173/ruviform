@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "manifest": "rvf.driver-lab.parity/v1",
+  "issue": "https://github.com/scarecrow173/ruviform/issues/314",
+  "description": "AudioLens 形状の semantic oracle fixture（Issue #314 slice 6）。Waveform（f64 source 値・u32 超の長尺 frame・count<span の partial bin・count==0 gap bin・viewport 外 bin）+ TimeAxis（frame 単位の fractional tick・viewport 外 tick の cull）+ Seek（time 座標の consumer resolved control）を 1 ViewSpec に載せる。expect.*.drawn* は GPUI draw plan（semantic/plan lane）の期待値であり pixel ではない — Fake 側は payload 保持（f64 の再解釈なし・gap/partial の温存・mount 受理）を検査し、GPUI 側は drawn plan が expect と一致することを検査する。bit-exact oracle の小数は serde_json と std parse が一致する値に限定する（serde_json 1.0.154 は一部の 17 桁小数を 1 ulp 誤丸めする — 実測済み）。NaN 統計量は JSON で表現できないため count==0 gap で表し、NaN 個別ケースは render.rs/view.rs の unit test が担う。stale（spec 更新後の再投影）・selection・LOD・Revision は既存 lane（consumer_observation.rs の reprojection test・selection-command.json・ruviform-viz acceptance・AttachEpoch/scenario test）が担い、本 fixture は Source/Viewport/時間軸/NaN-gap/partial/Geometry の drawn-plan oracle に限定する。Waveform の drawn plan は paint される bin の frame range を全て報告し viewport cull を行わない（viewport 外 bin は bounds 外 quad として clip される）— Meter/TimeAxis/Spectrogram が cull するのと非対称だが、現行 contract の正直な記述である。",
+  "view": {
+    "root": {
+      "type": "panel",
+      "key": "root",
+      "title": null,
+      "visual": { "error": null },
+      "a11y": {},
+      "children": [
+        {
+          "type": "waveform",
+          "key": "wave",
+          "sample_rate": 48000,
+          "channels": 2,
+          "frames": 5000002000,
+          "viewport": { "start": 4999999000, "end": 5000000000 },
+          "channel_bins": [
+            [
+              { "start": 4999998000, "end": 4999999000, "min": -0.5, "max": 0.5, "rms": 0.25, "count": 512 },
+              { "start": 4999999000, "end": 4999999500, "min": -0.9, "max": 0.9, "rms": 0.4, "count": 173 },
+              { "start": 4999999500, "end": 4999999800, "min": 0.0, "max": 0.0, "rms": 0.0, "count": 0 },
+              { "start": 4999999800, "end": 5000000000, "min": -0.1234567890123456, "max": 0.9876543210987654, "rms": 0.1111111111111111, "count": 512 },
+              { "start": 5000000000, "end": 5000001000, "min": -0.2, "max": 0.8, "rms": 0.3, "count": 512 }
+            ],
+            [
+              { "start": 4999998000, "end": 4999999000, "min": 0.0, "max": 0.0, "rms": 0.0, "count": 0 },
+              { "start": 4999999000, "end": 5000000000, "min": -1.0, "max": 1.0, "rms": 0.5, "count": 1000 }
+            ]
+          ],
+          "visual": { "error": null },
+          "a11y": { "role": "img", "label": "waveform" }
+        },
+        {
+          "type": "time_axis",
+          "key": "ruler",
+          "viewport": { "start": 4999999000, "end": 5000000000 },
+          "ticks": [
+            { "at": 4999998000.0, "label": "pre", "major": false },
+            { "at": 4999999000.0, "label": "0:00", "major": true },
+            { "at": 4999999250.5, "label": "0:00.25", "major": false },
+            { "at": 4999999500.0, "label": "0:00.50", "major": true },
+            { "at": 5000000000.0, "label": "0:01", "major": true },
+            { "at": 5000001000.0, "label": "post", "major": false }
+          ],
+          "visual": { "error": null },
+          "a11y": { "role": "img", "label": "timeline" }
+        },
+        {
+          "type": "seek",
+          "key": "seek",
+          "control_id": null,
+          "target": "transport.position",
+          "descriptor": {
+            "min": 0.0,
+            "max": 200.0,
+            "default_value": 100.0,
+            "step": 20.0,
+            "step_domain": null,
+            "fine_step": 5.0,
+            "fine_step_domain": null,
+            "mapping": null,
+            "out_of_range": null,
+            "unit": null,
+            "read_only": false,
+            "disabled": false,
+            "constant": false
+          },
+          "orientation": "horizontal",
+          "detach_policy": "cancel",
+          "unsupported": false,
+          "visual": { "error": null },
+          "a11y": { "role": "slider", "label": "position" }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "mountedKeys": ["root", "wave", "ruler", "seek"],
+    "waveform": {
+      "declaredBins": 7,
+      "gapBins": 2,
+      "drawnChannels": [
+        {
+          "channel": 0,
+          "bins": [
+            [4999998000, 4999999000],
+            [4999999000, 4999999500],
+            [4999999800, 5000000000],
+            [5000000000, 5000001000]
+          ]
+        },
+        {
+          "channel": 1,
+          "bins": [[4999999000, 5000000000]]
+        }
+      ]
+    },
+    "timeAxis": {
+      "declaredTicks": 6,
+      "drawnMarks": [
+        { "x": 0.0, "major": true, "label": "0:00" },
+        { "x": 0.2505, "major": false, "label": "0:00.25" },
+        { "x": 0.5, "major": true, "label": "0:00.50" },
+        { "x": 1.0, "major": true, "label": "0:01" }
+      ]
+    },
+    "seek": {
+      "committedPlain": 100.0,
+      "committedNormalized": 0.5
+    }
+  }
+}
