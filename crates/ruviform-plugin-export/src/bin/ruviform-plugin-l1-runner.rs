@@ -7,9 +7,12 @@
 //! - `GainPlugin` (`dev.ruviform.mock.gain`) — a deterministic gain
 //!   plugin: planar `f32` input × a single normalized gain parameter —
 //!   each `ParamValue` event sets the block-wide gain (the latest
-//!   event in the block wins; there is no per-offset ramp).
-//!   Implements the full `Plugin` surface — `init`/
-//!   `start_processing`/`stop_processing`/`save_state`/
+//!   event in the block wins; there is no per-offset ramp). Every
+//!   input event is echoed into its output-report backlog in arrival
+//!   order and each processed block closes with one deterministic
+//!   `Midi` marker, so `drain_output_reports` (wire v4) returns both
+//!   `EventKind`s oldest-first. Implements the full `Plugin` surface
+//!   — `init`/`start_processing`/`stop_processing`/`save_state`/
 //!   `restore_state` — so the E2E can drive the lifecycle and the
 //!   state round-trip.
 //! - `PanicPlugin` (`dev.ruviform.mock.panic`) — panics inside `init`;
@@ -31,10 +34,11 @@
 
 use std::process::ExitCode;
 
+use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventKind, EventList, HostError, ParamFlags, ParamId, ParamInfo,
-    Plugin, PluginDescriptor, PluginFactory, PluginProcessor, PrepareError, ProcessConfig,
-    ProcessContext, ProcessResult, TransportInfo, erase,
+    BufferView, BufferViewMut, Event, EventKind, EventList, HostError, ParamFlags, ParamId,
+    ParamInfo, Plugin, PluginDescriptor, PluginFactory, PluginProcessor, PrepareError,
+    ProcessConfig, ProcessContext, ProcessResult, TransportInfo, erase,
 };
 
 fn main() -> ExitCode {
@@ -74,11 +78,42 @@ const STATE_MAGIC: &[u8; 4] = b"RFG1";
 struct GainPlugin {
     /// Plain-domain gain multiplier.
     gain: f32,
+    /// Reports queued for the next `drain_output_reports` pull:
+    /// every input event echoed in arrival order, plus one
+    /// deterministic `Midi` marker per processed block.
+    pending_reports: Vec<Event>,
+    /// Blocks processed so far — seeds the marker's note key and
+    /// velocity so the E2E can predict the exact report stream.
+    blocks: u32,
 }
 
 impl GainPlugin {
     fn new() -> Self {
-        Self { gain: 1.0 }
+        Self {
+            gain: 1.0,
+            pending_reports: Vec::new(),
+            blocks: 0,
+        }
+    }
+
+    /// The deterministic per-block `Midi` marker — `None` only if a
+    /// constructor rejects an in-range literal (unreachable; the
+    /// fixture never panics inside `process`).
+    fn report_marker(blocks: u32) -> Option<Event> {
+        // Key cycles 60..=71, velocity counts processed blocks.
+        let key = NoteKey::new(u8::try_from(60 + (blocks - 1) % 12).ok()?).ok()?;
+        let channel = MidiChannel::new(0).ok()?;
+        Some(Event::new(
+            0,
+            EventKind::Midi(MidiEvent {
+                group: MidiGroup::ZERO,
+                channel,
+                kind: MidiKind::NoteOn {
+                    key,
+                    velocity: blocks,
+                },
+            }),
+        ))
     }
 }
 
@@ -104,6 +139,10 @@ impl PluginProcessor for GainPlugin {
         O: BufferViewMut,
     {
         for event in events.iter() {
+            // Report fixture (wire v4): echo every input event into
+            // the output-report backlog in arrival order — both
+            // `EventKind`s reach `drain_output_reports` unchanged.
+            self.pending_reports.push(event);
             if let EventKind::ParamValue(param) = event.kind()
                 && param.param_id == ParamId(0)
             {
@@ -116,6 +155,10 @@ impl PluginProcessor for GainPlugin {
                     self.gain = GAIN_PARAMS[0].denormalize(param.value) as f32;
                 }
             }
+        }
+        self.blocks += 1;
+        if let Some(marker) = Self::report_marker(self.blocks) {
+            self.pending_reports.push(marker);
         }
         let (Some(input), Some(output)) = (inputs.first(), outputs.first_mut()) else {
             return ProcessResult::CONTINUE;
@@ -130,6 +173,10 @@ impl PluginProcessor for GainPlugin {
             }
         }
         ProcessResult::CONTINUE
+    }
+
+    fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
+        out.append(&mut self.pending_reports);
     }
 }
 

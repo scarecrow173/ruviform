@@ -390,6 +390,10 @@ struct InstanceEntry {
     /// Planar `f32` staging — `channels * frames`, channel-major.
     staging_in: Vec<f32>,
     staging_out: Vec<f32>,
+    /// Queued canonical `Event` reports awaiting a `DrainOutputReports`
+    /// reply — the plugin appends since-last-drain events here and
+    /// each reply answers at most `WIRE_MAX_EVENTS`, oldest first.
+    report_backlog: Vec<Event>,
 }
 
 impl Runner {
@@ -474,6 +478,7 @@ impl Runner {
                 segment,
                 staging_in: Vec::new(),
                 staging_out: Vec::new(),
+                report_backlog: Vec::new(),
             },
         );
         Ok(WireReply::Ok)
@@ -593,11 +598,30 @@ impl InstanceEntry {
             WireCommand::CloseGui => guarded(&mut *self.instance, ErasedPlugin::close_gui)
                 .and_then(|inner| inner)
                 .map(|()| WireReply::Ok),
+            WireCommand::DrainOutputReports => self.drain_output_reports(),
             // `#[non_exhaustive]` — the wire-v3 video verbs are the
             // cross-kind defined rejection on an audio entry, as is
             // any verb a later WIRE_VERSION adds.
             _ => Err(HostError::Unsupported),
         }
+    }
+
+    /// `DrainOutputReports` (wire v4, Issue #253): pull the plugin's
+    /// since-last-drain reports into the entry backlog, then answer
+    /// the oldest `WIRE_MAX_EVENTS` — producer order preserved, the
+    /// remainder stays queued for the next drain so one host-level
+    /// pull loops over successive verbs. Lifecycle-ungated: the
+    /// report buffer is plugin state, matching the L0 drain.
+    fn drain_output_reports(&mut self) -> Result<WireReply, HostError> {
+        guarded(&mut *self.instance, |plugin| {
+            plugin.drain_output_reports(&mut self.report_backlog);
+        })?;
+        let take = self
+            .report_backlog
+            .len()
+            .min(wire::WIRE_MAX_EVENTS as usize);
+        let events: Vec<Event> = self.report_backlog.drain(..take).collect();
+        Ok(WireReply::Reports { events })
     }
 
     /// `Created → Initialized`: validate first (`InitFailed` is only
