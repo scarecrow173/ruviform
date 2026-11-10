@@ -8,7 +8,7 @@ mod common;
 
 use std::io::Write;
 
-use common::{FailAfter, assert_io_kind, assert_kind};
+use common::{FailAfter, FailFlush, RecoveringWriter, assert_io_kind, assert_kind};
 use ruviform_io_compression::CompressionErrorKind;
 
 #[cfg(feature = "gzip")]
@@ -194,6 +194,147 @@ mod gzip {
         let receipt = enc.finish().expect("exact output budget");
         assert_eq!(receipt.output_bytes(), exact);
     }
+
+    #[test]
+    fn new_fails_when_header_write_fails() {
+        // The fixed 10-byte header is emitted inside `new` — a dead
+        // writer fails construction and the caller keeps the writer.
+        let mut sink = FailAfter::new(0);
+        assert_kind(
+            Encoder::new(&mut sink, EncodeOptions::default()),
+            CompressionErrorKind::Io,
+        );
+        assert!(
+            sink.attempts > 0,
+            "the header write must have been attempted"
+        );
+    }
+
+    #[test]
+    fn header_write_respects_output_budget() {
+        // The header must not be emitted across a smaller output cap —
+        // `new` fails before any physical write.
+        let mut out = Vec::new();
+        let limits = EncodeLimits::new().with_max_output_bytes(9);
+        assert_kind(
+            Encoder::new(&mut out, EncodeOptions::new(6, limits)),
+            CompressionErrorKind::LimitExceeded,
+        );
+        assert!(out.is_empty(), "no partial header may be published");
+    }
+
+    #[test]
+    fn flush_after_finish_is_ok() {
+        let mut out = Vec::new();
+        let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+        enc.finish().expect("finish");
+        // `Finished` flush is a documented no-op so stacked writers
+        // can flush unconditionally.
+        enc.flush().expect("flush after finish");
+    }
+
+    #[test]
+    fn flush_mid_stream_then_finish_still_decodes() {
+        // A sync flush is not completion but must not corrupt the
+        // member — write/flush/write/finish stays a valid stream.
+        let mut out = Vec::new();
+        {
+            let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+            enc.write_all(b"before").expect("write");
+            enc.flush().expect("mid-stream flush");
+            enc.write_all(b"after").expect("write");
+            enc.finish().expect("finish");
+        }
+        let mut source = std::io::BufReader::new(&out[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut decoded = Vec::new();
+        dec.read_to_end(&mut decoded).expect("decode");
+        assert_eq!(decoded, b"beforeafter");
+    }
+
+    #[test]
+    fn failed_encoder_drop_writes_no_trailer() {
+        // Budget covers the 10-byte header plus 2 bytes of the
+        // flush-time sync marker; the rest fails. Drop must not
+        // append a trailer over the terminal failure.
+        let mut sink = FailAfter::new(12);
+        {
+            let mut enc = Encoder::new(&mut sink, EncodeOptions::default()).expect("encoder");
+            enc.write_all(b"abcdef").expect("write");
+            let err = enc.flush().expect_err("flush must hit the failing writer");
+            assert_io_kind(&err, CompressionErrorKind::Io);
+        }
+        assert_eq!(sink.inner.len(), 12, "only the accepted prefix was emitted");
+        let mut source = std::io::BufReader::new(&sink.inner[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut decoded = Vec::new();
+        assert_io_kind(
+            &dec.read_to_end(&mut decoded)
+                .expect_err("partial member must not verify"),
+            CompressionErrorKind::TruncatedInput,
+        );
+    }
+
+    #[test]
+    fn failed_encoder_releases_usable_writer() {
+        // After terminal `Failed` the encoder is dropped and the
+        // caller's writer must be fully usable again — partial encoder
+        // output stays owned by the caller (publish-or-discard theirs).
+        // call 1 = header (ok); call 2 = first body emission (fails).
+        let mut sink = RecoveringWriter::after_ok(1, 1);
+        {
+            let mut enc = Encoder::new(&mut sink, EncodeOptions::default()).expect("encoder");
+            let _ = enc.write_all(b"data");
+            let _ = enc.flush();
+            let _ = enc.finish();
+            assert_io_kind(
+                &enc.write_all(b"x").expect_err("terminal state"),
+                CompressionErrorKind::InvalidState,
+            );
+        }
+        sink.write_all(b"caller-owned")
+            .expect("writer usable after failure");
+        assert!(sink.inner.ends_with(b"caller-owned"));
+        assert!(
+            sink.inner.starts_with(&[0x1f, 0x8b]),
+            "partial encoder output is retained for the caller"
+        );
+    }
+
+    #[test]
+    fn finish_fails_when_underlying_flush_fails() {
+        // `finish` ends with the caller's `flush` — a flush failure is
+        // an encoder I/O failure and latches `Failed` like any other.
+        let mut sink = FailFlush::default();
+        let mut enc = Encoder::new(&mut sink, EncodeOptions::default()).expect("encoder");
+        enc.write_all(b"data").expect("write");
+        assert_kind(enc.finish(), CompressionErrorKind::Io);
+        assert_kind(enc.finish(), CompressionErrorKind::InvalidState);
+        assert!(
+            sink.inner.len() > 10,
+            "compressed bytes were emitted before the flush failure"
+        );
+    }
+
+    #[test]
+    fn sequential_encoders_concatenate_members_on_one_writer() {
+        // Each `Encoder` writes exactly one member; finishing one and
+        // starting another on the same writer produces a valid
+        // concatenated stream under `WholeInput`.
+        let mut out = Vec::new();
+        for part in [&b"first"[..], &b"second"[..]] {
+            let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+            enc.write_all(part).expect("write");
+            enc.finish().expect("finish");
+        }
+        let mut source = std::io::BufReader::new(&out[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut decoded = Vec::new();
+        dec.read_to_end(&mut decoded).expect("decode");
+        assert_eq!(decoded, b"firstsecond");
+        let receipt = dec.finish().expect("finish");
+        assert_eq!(receipt.units_decoded(), 2);
+    }
 }
 
 #[cfg(feature = "deflate")]
@@ -250,6 +391,94 @@ mod deflate {
             CompressionErrorKind::InvalidState,
         );
         assert_kind(enc.finish(), CompressionErrorKind::InvalidState);
+    }
+
+    #[test]
+    fn write_after_finish_rejected_but_finish_stays_valid() {
+        let mut out = Vec::new();
+        let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+        enc.finish().expect("finish");
+        assert_io_kind(
+            &enc.write_all(b"x").expect_err("write after finish"),
+            CompressionErrorKind::InvalidState,
+        );
+        enc.finish().expect("finish stays idempotent");
+    }
+
+    #[test]
+    fn flush_mid_stream_then_finish_still_decodes() {
+        let mut out = Vec::new();
+        {
+            let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+            enc.write_all(b"before").expect("write");
+            enc.flush().expect("mid-stream flush");
+            enc.write_all(b"after").expect("write");
+            enc.finish().expect("finish");
+        }
+        let mut source = std::io::BufReader::new(&out[..]);
+        let mut dec = ruviform_io_compression::deflate::Decoder::new(
+            &mut source,
+            ruviform_io_compression::deflate::DecodeOptions::default(),
+        );
+        let mut decoded = Vec::new();
+        std::io::Read::read_to_end(&mut dec, &mut decoded).expect("decode");
+        assert_eq!(decoded, b"beforeafter");
+    }
+
+    #[test]
+    fn failed_encoder_drop_writes_no_final_block() {
+        // The failed encoder's partial output must not grow on Drop —
+        // no final block may appear over the terminal failure.
+        let mut sink = FailAfter::new(4);
+        {
+            let mut enc = Encoder::new(&mut sink, EncodeOptions::default()).expect("encoder");
+            enc.write_all(b"abcdef").expect("write");
+            let err = enc.flush().expect_err("flush must hit the failing writer");
+            assert_io_kind(&err, CompressionErrorKind::Io);
+        }
+        let accepted = sink.inner.len();
+        assert!(accepted <= 4, "only the budgeted prefix was emitted");
+        let mut source = std::io::BufReader::new(&sink.inner[..]);
+        let mut dec = ruviform_io_compression::deflate::Decoder::new(
+            &mut source,
+            ruviform_io_compression::deflate::DecodeOptions::default(),
+        );
+        let mut decoded = Vec::new();
+        assert_io_kind(
+            &std::io::Read::read_to_end(&mut dec, &mut decoded)
+                .expect_err("partial stream must not verify"),
+            CompressionErrorKind::TruncatedInput,
+        );
+    }
+
+    #[test]
+    fn failed_encoder_releases_usable_writer() {
+        // call 1 = first emitted chunk (fails); the writer recovers
+        // afterwards and the caller owns whatever prefix was accepted.
+        let mut sink = RecoveringWriter::new(1);
+        {
+            let mut enc = Encoder::new(&mut sink, EncodeOptions::default()).expect("encoder");
+            let _ = enc.write_all(b"data");
+            let _ = enc.flush();
+            let _ = enc.finish();
+            assert_io_kind(
+                &enc.write_all(b"x").expect_err("terminal state"),
+                CompressionErrorKind::InvalidState,
+            );
+        }
+        sink.write_all(b"caller-owned")
+            .expect("writer usable after failure");
+        assert!(sink.inner.ends_with(b"caller-owned"));
+    }
+
+    #[test]
+    fn finish_fails_when_underlying_flush_fails() {
+        let mut sink = FailFlush::default();
+        let mut enc = Encoder::new(&mut sink, EncodeOptions::default()).expect("encoder");
+        enc.write_all(b"data").expect("write");
+        assert_kind(enc.finish(), CompressionErrorKind::Io);
+        assert_kind(enc.finish(), CompressionErrorKind::InvalidState);
+        assert!(!sink.inner.is_empty(), "deflate bytes were emitted");
     }
 }
 
@@ -401,5 +630,112 @@ mod zstd {
         enc.write_all(b"data").expect("write");
         let receipt = enc.finish().expect("exact output budget");
         assert_eq!(receipt.output_bytes(), probe);
+    }
+
+    #[test]
+    fn write_after_finish_rejected_but_finish_stays_valid() {
+        let mut out = Vec::new();
+        let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+        enc.finish().expect("finish");
+        assert_io_kind(
+            &enc.write_all(b"x").expect_err("write after finish"),
+            CompressionErrorKind::InvalidState,
+        );
+        enc.finish().expect("finish stays idempotent");
+    }
+
+    #[test]
+    fn flush_mid_stream_then_finish_still_decodes() {
+        let mut out = Vec::new();
+        {
+            let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+            enc.write_all(b"before").expect("write");
+            enc.flush().expect("mid-stream flush");
+            enc.write_all(b"after").expect("write");
+            enc.finish().expect("finish");
+        }
+        let mut source = std::io::BufReader::new(&out[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut decoded = Vec::new();
+        dec.read_to_end(&mut decoded).expect("decode");
+        assert_eq!(decoded, b"beforeafter");
+        dec.finish().expect("verified end");
+    }
+
+    #[test]
+    fn failed_encoder_drop_writes_no_epilogue() {
+        // The failed encoder's partial frame must not grow on Drop —
+        // no epilogue may appear over the terminal failure.
+        let mut sink = FailAfter::new(6);
+        {
+            let mut enc = Encoder::new(&mut sink, EncodeOptions::default()).expect("encoder");
+            enc.write_all(b"abcdef").expect("write");
+            let err = enc
+                .finish()
+                .expect_err("finish must hit the failing writer");
+            assert_eq!(err.kind(), CompressionErrorKind::Io);
+        }
+        let accepted = sink.inner.len();
+        assert!(accepted <= 6, "only the budgeted prefix was emitted");
+        let mut source = std::io::BufReader::new(&sink.inner[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut decoded = Vec::new();
+        assert!(
+            dec.read_to_end(&mut decoded).is_err() || dec.finish().is_err(),
+            "a partial frame must not verify"
+        );
+    }
+
+    #[test]
+    fn failed_encoder_releases_usable_writer() {
+        // call 1 = first emitted chunk (fails); the writer recovers
+        // afterwards and the caller owns whatever prefix was accepted.
+        let mut sink = RecoveringWriter::new(1);
+        {
+            let mut enc = Encoder::new(&mut sink, EncodeOptions::default()).expect("encoder");
+            let _ = enc.write_all(b"data");
+            let _ = enc.flush();
+            let _ = enc.finish();
+            assert_io_kind(
+                &enc.write_all(b"x").expect_err("terminal state"),
+                CompressionErrorKind::InvalidState,
+            );
+        }
+        sink.write_all(b"caller-owned")
+            .expect("writer usable after failure");
+        assert!(sink.inner.ends_with(b"caller-owned"));
+    }
+
+    #[test]
+    fn finish_fails_when_underlying_flush_fails() {
+        let mut sink = FailFlush::default();
+        let mut enc = Encoder::new(&mut sink, EncodeOptions::default()).expect("encoder");
+        enc.write_all(b"data").expect("write");
+        assert_kind(enc.finish(), CompressionErrorKind::Io);
+        assert_kind(enc.finish(), CompressionErrorKind::InvalidState);
+        assert!(
+            sink.inner.len() > 4,
+            "frame bytes were emitted before the flush failure"
+        );
+    }
+
+    #[test]
+    fn sequential_encoders_concatenate_frames() {
+        // Each `Encoder` writes exactly one frame; finishing one and
+        // starting another on the same writer produces a valid
+        // concatenated stream under `WholeInput`.
+        let mut out = Vec::new();
+        for part in [&b"first"[..], &b"second"[..]] {
+            let mut enc = Encoder::new(&mut out, EncodeOptions::default()).expect("encoder");
+            enc.write_all(part).expect("write");
+            enc.finish().expect("finish");
+        }
+        let mut source = std::io::BufReader::new(&out[..]);
+        let mut dec = Decoder::new(&mut source, DecodeOptions::default());
+        let mut decoded = Vec::new();
+        dec.read_to_end(&mut decoded).expect("decode");
+        assert_eq!(decoded, b"firstsecond");
+        let receipt = dec.finish().expect("finish");
+        assert_eq!(receipt.units_decoded(), 2);
     }
 }
