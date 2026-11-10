@@ -946,21 +946,26 @@ impl PluginHost {
     /// pinned three-tier lock protocol, so the drain serializes
     /// against an attached endpoint's `try_lock` RT leg on the same
     /// `core` mutex and converges `Failed`/poisoned observations
-    /// exactly like every other `Shared` verb. L1 audio and video
-    /// slots answer [`ReportDrain::Unavailable`]: the wire protocol
-    /// has no report verb yet, and callers must not infer report
-    /// silence from that answer.
+    /// exactly like every other `Shared` verb. L1 audio slots run
+    /// the wire-v4 `DrainOutputReports` verb — the child chunks its
+    /// backlog at `WIRE_MAX_EVENTS` per reply and the instance loops
+    /// until a short reply, so one call still retrieves everything
+    /// pending, oldest-first. L1 video slots keep answering
+    /// [`ReportDrain::Unavailable`]: the video protocol has no
+    /// report verb, and callers must not infer report silence from
+    /// that answer.
     ///
     /// **RT contract:** non-RT only — the `out` append may allocate
-    /// (the caller owns and may reuse the buffer) and the L0 `Shared`
-    /// arm takes the instance's `core` mutex. Never call from inside
-    /// `process`.
+    /// (the caller owns and may reuse the buffer), the L0 `Shared`
+    /// arm takes the instance's `core` mutex, and the L1 arm waits
+    /// at most `command_timeout` per wire verb. Never call from
+    /// inside `process`.
     ///
     /// # Errors
     ///
     /// [`HostError::InvalidHandle`] for a stale/unknown handle and
-    /// [`HostError::Failed`] when an L0 `Shared` instance has already
-    /// converged.
+    /// [`HostError::Failed`] when an L0 `Shared` instance or an L1
+    /// audio instance has already converged.
     pub fn drain_output_reports(
         &mut self,
         handle: PluginHandle,
@@ -971,7 +976,11 @@ impl PluginHost {
                 let inner = *inner;
                 self.l0.drain_output_reports(inner, out)
             }
-            Slot::OutOfProcess(_) | Slot::OutOfProcessVideo(_) => Ok(ReportDrain::Unavailable),
+            Slot::OutOfProcess(instance) => {
+                instance.drain_output_reports(out)?;
+                Ok(ReportDrain::Drained)
+            }
+            Slot::OutOfProcessVideo(_) => Ok(ReportDrain::Unavailable),
         }
     }
 
@@ -2411,12 +2420,14 @@ mod tests {
         endpoint.process(&inputs, &mut outputs, EventList::empty(8), None)
     }
 
-    /// Issue #253 slice (b): the composite drain surface routes by
-    /// slot kind — L0 delegates to `InProcessHost::drain_output_reports`
-    /// (reports reach the caller in producer order), L1 audio and
-    /// video slots answer `Unavailable` without touching `out` (the
-    /// wire has no report verb; callers must not infer silence), and
-    /// stale handles take `InvalidHandle`.
+    /// Issue #253: the composite drain surface routes by slot kind —
+    /// L0 delegates to `InProcessHost::drain_output_reports` (reports
+    /// reach the caller in producer order), the L1 audio arm issues
+    /// the wire-v4 `DrainOutputReports` verb (the childless fixture
+    /// answers the defined transport failure `Ipc` — routing is
+    /// proven by *not* getting `Unavailable`), the L1 video slot
+    /// keeps the honest `Unavailable` (the video protocol has no
+    /// report verb), and stale handles take `InvalidHandle`.
     #[test]
     fn drain_output_reports_routes_by_slot_kind() {
         // L0 — a reporting plugin's events reach the caller through
@@ -2438,7 +2449,9 @@ mod tests {
         );
         assert_eq!(out, expected);
 
-        // L1 audio — `Unavailable`, `out` untouched.
+        // L1 audio — the wire-v4 verb is issued; the childless
+        // fixture's request fails the defined transport `Ipc`
+        // (routing proven: no `Unavailable`, no fabricated drain).
         let (mut host, handle) = l1_instance(LifecycleState::Processing, Some(512));
         let mut out = vec![Event::new(
             0,
@@ -2450,12 +2463,12 @@ mod tests {
         let sentinel = out.clone();
         assert_eq!(
             host.drain_output_reports(handle, &mut out),
-            Ok(ReportDrain::Unavailable)
+            Err(HostError::Ipc)
         );
         assert_eq!(out, sentinel);
 
-        // L1 video — the same honest answer (video has no report
-        // surface at all).
+        // L1 video — `Unavailable`, `out` untouched (video has no
+        // report surface at all).
         let mut host = PluginHost::new();
         let handle = mint_video(&mut host, LifecycleState::Processing);
         assert_eq!(

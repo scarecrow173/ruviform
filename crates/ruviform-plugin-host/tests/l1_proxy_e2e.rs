@@ -24,7 +24,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
-use ruviform_media_core::{MediaTime, TransportStatus};
+use ruviform_media_core::{
+    MediaTime, MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey, TransportStatus,
+};
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
     Event, EventKind, EventList, FailureCause, GuiParentToken, HostError, HostInput, HostOutput,
@@ -831,6 +833,116 @@ fn process_roundtrip_gain_and_lookahead_delay() {
         matched >= 16,
         "the lookahead pipeline never filled — {matched} matched calls"
     );
+    instance.destroy();
+}
+
+/// Mirrors `l1-test-worker`'s `report_events` — the deterministic
+/// report run `--reports-per-block` queues per processed `BlockIn`:
+/// `count` canonical `Event`s from running index `base`, even
+/// indices `ParamValue` (id `index % 8`, value `(index % 100)/100`),
+/// odd `Midi` `NoteOn` (key `60 + index % 12`, channel 0, velocity
+/// `index`), `frame_offset` the within-run index.
+fn worker_reports(count: u64, base: u64) -> Vec<Event> {
+    (0..count)
+        .map(|i| {
+            let index = base + i;
+            let kind = if index.is_multiple_of(2) {
+                EventKind::ParamValue(ParamEvent {
+                    param_id: ParamId(u32::try_from(index % 8).unwrap_or(0)),
+                    value: ParamValue::new(
+                        f64::from(u32::try_from(index % 100).unwrap_or(0)) / 100.0,
+                    )
+                    .unwrap_or(ParamValue::ONE),
+                })
+            } else {
+                EventKind::Midi(MidiEvent {
+                    group: MidiGroup::ZERO,
+                    channel: MidiChannel::new(0).unwrap(),
+                    kind: MidiKind::NoteOn {
+                        key: NoteKey::new(u8::try_from(60 + index % 12).unwrap_or(60)).unwrap(),
+                        velocity: u32::try_from(index).unwrap_or(u32::MAX),
+                    },
+                })
+            };
+            Event::new(u32::try_from(i).unwrap_or(u32::MAX), kind)
+        })
+        .collect()
+}
+
+/// Wire v4 (Issue #253): `L1Instance::drain_output_reports` pulls
+/// the child's queued reports over `DrainOutputReports` — both
+/// `EventKind`s arrive in producer order, a repeat drain appends
+/// nothing, and `destroy` turns the verb into the defined `Ipc`.
+#[test]
+fn drain_output_reports_pulls_worker_reports() {
+    let mut instance = processing_instance(&["--reports-per-block=3"]);
+    let input = [0.5_f32; 8];
+    let mut output = [0.0_f32; 8];
+    for _ in 0..2 {
+        run_block(&mut instance, &input, &mut output).unwrap();
+    }
+    // Flush every submitted doorbell — the completions prove the
+    // child ran `process_block`, which is what queues the reports.
+    pipeline_barrier(&mut instance);
+
+    let mut out = Vec::new();
+    assert_eq!(instance.drain_output_reports(&mut out), Ok(()));
+    // Each block queues its own run — `frame_offset` restarts at 0
+    // per run while the content index keeps climbing.
+    let mut expected = worker_reports(3, 0);
+    expected.extend(worker_reports(3, 3));
+    assert_eq!(out, expected);
+
+    // Since-last-drain: the repeat pull appends nothing.
+    assert_eq!(instance.drain_output_reports(&mut out), Ok(()));
+    assert_eq!(out, expected);
+
+    instance.destroy();
+    // A reclaimed instance answers the defined transport failure.
+    assert_eq!(instance.drain_output_reports(&mut out), Err(HostError::Ipc));
+}
+
+/// Wire v4 chunking: a child backlog larger than one
+/// `WIRE_MAX_EVENTS`-bounded reply is retrieved by the host-side
+/// loop — one `drain_output_reports` call still returns everything
+/// pending, oldest-first.
+#[test]
+fn drain_output_reports_chunks_over_wire_max_events() {
+    let mut instance = processing_instance(&["--reports-per-block=1100"]);
+    let input = [0.5_f32; 8];
+    let mut output = [0.0_f32; 8];
+    run_block(&mut instance, &input, &mut output).unwrap();
+    pipeline_barrier(&mut instance);
+
+    let mut out = Vec::new();
+    assert_eq!(instance.drain_output_reports(&mut out), Ok(()));
+    assert_eq!(out.len(), 1100);
+    assert_eq!(out, worker_reports(1100, 0));
+
+    // The remainder drained completely — the next pull is empty.
+    assert_eq!(instance.drain_output_reports(&mut out), Ok(()));
+    assert_eq!(out.len(), 1100);
+    instance.destroy();
+}
+
+/// Wire v4 failure surface: a converged `Failed` instance answers
+/// `Err(Failed)` — the same classification every other verb gets.
+#[test]
+fn drain_output_reports_failed_instance_is_failed() {
+    let mut instance =
+        L1Instance::spawn(&spec(&["--crash-after-msgs=4"]), &DiagRegistry::new(), None).unwrap();
+    instance.execute(wire::Command::Initialize).unwrap();
+    // Message 4 is `Activate` — the child dies mid-command, the
+    // pending waiter wakes `Ipc` and the child converges `Failed`.
+    let _ = instance.execute(wire::Command::Activate { config: config() });
+    wait_for_failed(&instance);
+
+    let mut out = Vec::new();
+    assert_eq!(
+        instance.drain_output_reports(&mut out),
+        Err(HostError::Failed)
+    );
+    assert_eq!(out, Vec::<Event>::new());
     instance.destroy();
 }
 
