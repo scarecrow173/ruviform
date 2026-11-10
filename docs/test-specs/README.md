@@ -106,6 +106,7 @@ Directory: `docs/test-specs`
 | TSPEC-e1fQqoSXueHMyLvDmFV5Gz | Issue #314 slice 1 — Golden Utility コアのテスト仕様 | proposed | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | TSPEC-suZHG6N60Cpt2NxAwyqq2G | Issue #314 slice 5 — Golden 環境正規化・registry 結合・runner 統合・証拠 lane のテスト仕様 | approved | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | TSPEC-034UeyabB9HNuQvfyPVYdA | Issue #314 slice 2 — Golden × Scenario 能力契約接続のテスト仕様 | proposed | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
+| TSPEC-034V2hpT0kkEMk2hJtieRh | Issue #314 slice 6 — Consumer-shaped semantic oracle fixtures のテスト仕様 | approved | [issue-314-semantic-oracle.md](./issue-314-semantic-oracle.md) |
 | TSPEC-nB4WC4Q4CYMJmm6HVksOwr | Issue #326 ci.yml dispatch 専用化 test specification — trigger 不存在契約・dispatch 契約維持・PR 起動ゼロ実証 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | TSPEC-034RBMKdNX5HX6vExF2WlS | Issue #327 CI計測Baseline 検証仕様 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | TSPEC-oHAlZzKO4OjFLCg0SpIiws | Issue #328 テスト仕様 — CI concurrency の不変条件と証拠 | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |

@@ -109,6 +109,7 @@ Directory: `docs/designs`
 | DESIGN-GKjcGBxFK0ZtzxCEKsh1e7 | Issue #314 slice 1 — headless Pixel Golden Utility コアの設計 | approved | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | DESIGN-L3YSlsSU8u5EdRMDfpHhy6 | Issue #314 slice 5 — Golden 環境正規化・registry 結合・runner 統合・証拠 lane の設計 | approved | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | DESIGN-034UewQlz8GZ6RlexpCiXW | Issue #314 slice 2 — Golden Utility × Scenario Contract 能力契約接続の設計 | approved | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
+| DESIGN-034V2ho95TYYvIaJsGmRSx | Issue #314 slice 6 — Consumer-shaped semantic oracle fixtures の設計 | approved | [issue-314-semantic-oracle.md](./issue-314-semantic-oracle.md) |
 | DESIGN-bgU7RV8JrPVEY31dlXpJCG | Issue #326 ci.yml dispatch 専用化 設計 — trigger 撤去・concurrency 簡素化・trigger 契約テスト | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | DESIGN-034RBJLryk98hb4Yyq5wYG | Issue #327 CI計測Baseline 計測契約・分類・比較手順 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | DESIGN-yMdXfkOVFpXfZGKfVH7LjG | Issue #328 CI PR concurrency 設計 — group 解決・cancel 意味論・required checks 保護 | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
