@@ -31,14 +31,16 @@ use ruviform_audio_core::device::{
 use ruviform_audio_core::{
     AudioBufferViewMut, AudioFormat, ChannelLayout, SampleFormat, SampleRate,
 };
-use ruviform_media_core::MediaTime;
+use ruviform_media_core::{MediaTime, MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventList, HostError, LifecycleState, ParamInfo, PluginDescriptor,
-    PluginProcessor, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
+    BufferView, BufferViewMut, Event, EventKind, EventList, HostError, LifecycleState, ParamEvent,
+    ParamId, ParamInfo, ParamValue, PluginDescriptor, PluginProcessor, ProcessConfig,
+    ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
 };
 use ruviform_plugin_host::{
     EndpointBounds, ErasedPlugin, HostCommand, HostNotification, HostReply, OutOfProcessSpec,
-    Plugin, PluginEndpoint, PluginFactory, PluginHandle, PluginHost, erase, erase_sendable,
+    Plugin, PluginEndpoint, PluginFactory, PluginHandle, PluginHost, ReportDrain, erase,
+    erase_sendable,
 };
 use ruviform_rt::RtContext;
 
@@ -353,6 +355,129 @@ impl PluginFactory for GainFactory {
             factor: self.gain,
             panic: Arc::clone(&self.panic),
             dropped: self.dropped.clone(),
+        }))
+    }
+}
+
+/// The per-block report pair `ReportingGain` queues — one
+/// `ParamValue` plus one `Midi` `NoteOn`, offsets and payloads
+/// derived from the block counter so tests can rebuild the expected
+/// stream with the same function.
+fn report_pair(block: u32) -> [Event; 2] {
+    [
+        Event::new(
+            block % 8,
+            EventKind::ParamValue(ParamEvent {
+                param_id: ParamId(0),
+                value: ParamValue::new(f64::from(block % 4 + 1) / 4.0).unwrap(),
+            }),
+        ),
+        Event::new(
+            4 + block % 4,
+            EventKind::Midi(MidiEvent {
+                group: MidiGroup::ZERO,
+                channel: MidiChannel::new(0).unwrap(),
+                kind: MidiKind::NoteOn {
+                    key: NoteKey::new(60).unwrap(),
+                    velocity: block,
+                },
+            }),
+        ),
+    ]
+}
+
+/// The report-producing fixture — a `Send` gain that queues
+/// canonical [`Event`] reports into a bounded pending buffer during
+/// `process`, the producer shape a real adapter's
+/// `outputParameterChanges`/`outputEvents` mirror implements
+/// (Issue #253 slice (b)).
+struct ReportingGain {
+    factor: f32,
+    blocks: u32,
+    pending: Vec<Event>,
+}
+
+impl PluginProcessor for ReportingGain {
+    fn prepare(
+        &mut self,
+        _config: &ProcessConfig,
+        _context: &mut ProcessContext,
+    ) -> Result<(), ruviform_plugin_core::PrepareError> {
+        Ok(())
+    }
+
+    fn process<I, O>(
+        &mut self,
+        inputs: &[I],
+        outputs: &mut [O],
+        _events: EventList<'_>,
+        _transport: Option<TransportInfo>,
+        _context: &mut ProcessContext,
+    ) -> ProcessResult
+    where
+        I: BufferView,
+        O: BufferViewMut,
+    {
+        for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
+            for channel in 0..output.channels() {
+                if let (Some(src), Some(dst)) =
+                    (input.channel(channel), output.channel_mut(channel))
+                {
+                    for (s, d) in src.iter().zip(dst.iter_mut()) {
+                        *d = *s * self.factor;
+                    }
+                }
+            }
+        }
+        if self.pending.len() + 2 <= 8 {
+            self.pending.extend_from_slice(&report_pair(self.blocks));
+        }
+        self.blocks += 1;
+        ProcessResult::new(ProcessStatus::Continue, ProcessResult::TAIL_NONE)
+    }
+
+    /// The fixture's drain — move the whole pending buffer into the
+    /// caller's `out`, the append contract real adapters implement
+    /// over their bounded queues.
+    fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
+        out.append(&mut self.pending);
+    }
+}
+
+impl Plugin for ReportingGain {
+    fn descriptor(&self) -> PluginDescriptor {
+        GAIN_DESCRIPTOR
+    }
+
+    fn params(&self) -> &[ParamInfo] {
+        &[]
+    }
+}
+
+/// `create_sendable`-capable factory for [`ReportingGain`] — rides
+/// the same `GAIN_DESCRIPTOR` id so `l0_processing` resolves it.
+struct ReportingGainFactory {
+    gain: f32,
+}
+
+impl PluginFactory for ReportingGainFactory {
+    fn descriptor(&self) -> PluginDescriptor {
+        GAIN_DESCRIPTOR
+    }
+
+    fn create(&self) -> Box<dyn ErasedPlugin> {
+        erase(ReportingGain {
+            factor: self.gain,
+            blocks: 0,
+            pending: Vec::with_capacity(8),
+        })
+    }
+
+    fn create_sendable(&self) -> Option<Box<dyn ErasedPlugin + Send>> {
+        Some(erase_sendable(ReportingGain {
+            factor: self.gain,
+            blocks: 0,
+            pending: Vec::with_capacity(8),
         }))
     }
 }
@@ -1200,4 +1325,113 @@ fn rt_endpoint_graph_pull_no_alloc() {
             );
         }
     });
+}
+
+/// Issue #253 slice (b): the host-graph consumer path — reports a
+/// `Send` plugin queues during `process` blocks driven through a
+/// graph node's endpoint drain through
+/// `PluginHost::drain_output_reports` while the endpoint stays
+/// attached to the session. The drain is opt-in pull: a repeat
+/// drain appends nothing yet still reports `Drained`, `out` keeps
+/// its prior contents, and post-drain processing surfaces only the
+/// new reports.
+#[test]
+fn l0_reports_drain_through_host_while_endpoint_attached() {
+    let (mut host, handle) = l0_processing(Box::new(ReportingGainFactory { gain: 2.0 }));
+    let endpoint = host
+        .prepare_endpoint(handle, bounds(512, 2))
+        .expect("L0 Shared attach");
+
+    let results = Arc::new(Mutex::new(Vec::new()));
+    let mut graph = Graph::new();
+    graph.push(Box::new(transform_node(endpoint, Arc::clone(&results))));
+    let (enumerator, slot) = MockEnumerator::new();
+    let device = enumerator.default_output_device().unwrap().unwrap();
+    let session = Session::open(&*device, stream_config(), GraphPlan::new(graph)).unwrap();
+    let mut cb = take_callback(&slot);
+
+    // Four graph-driven blocks — each queues one `ParamValue` +
+    // one `Midi` report inside the plugin's bounded pending buffer.
+    let mut slab = [0.5_f32; 16];
+    for _ in 0..4 {
+        slab.fill(0.5);
+        cb(
+            AudioBufferViewMut::try_new(&mut slab, 2, 8).unwrap(),
+            info(),
+        );
+        assert!(all_eq(&slab, 1.0));
+    }
+    assert_eq!(
+        results.lock().unwrap().as_slice(),
+        &[Ok(ProcessResult::CONTINUE); 4]
+    );
+
+    // The consumer pull — a pre-seeded `out` survives; the four
+    // blocks' reports arrive in producer order with offsets and
+    // payloads intact.
+    let sentinel = Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(9),
+            value: ParamValue::ONE,
+        }),
+    );
+    let mut out = vec![sentinel];
+    assert_eq!(
+        host.drain_output_reports(handle, &mut out),
+        Ok(ReportDrain::Drained)
+    );
+    let expected: Vec<Event> = (0..4u32).flat_map(report_pair).collect();
+    assert_eq!(out.len(), 1 + expected.len());
+    assert_eq!(out[0], sentinel);
+    assert_eq!(&out[1..], expected.as_slice());
+
+    // Repeat drain — `Drained` with nothing appended; the consumer
+    // measures a drain by the length delta.
+    assert_eq!(
+        host.drain_output_reports(handle, &mut out),
+        Ok(ReportDrain::Drained)
+    );
+    assert_eq!(out.len(), 1 + expected.len());
+
+    // One more graph-driven block surfaces only its two reports.
+    slab.fill(0.5);
+    cb(
+        AudioBufferViewMut::try_new(&mut slab, 2, 8).unwrap(),
+        info(),
+    );
+    assert!(all_eq(&slab, 1.0));
+    assert_eq!(
+        host.drain_output_reports(handle, &mut out),
+        Ok(ReportDrain::Drained)
+    );
+    let mut expected = expected;
+    expected.extend_from_slice(&report_pair(4));
+    assert_eq!(&out[1..], expected.as_slice());
+    drop(session);
+}
+
+/// Issue #253 slice (b): the honest L1 answer — the wire protocol
+/// has no report verb, so `PluginHost::drain_output_reports` on an
+/// out-of-process audio slot reports `Unavailable` and leaves `out`
+/// untouched (callers must not infer report silence from it). Runs
+/// against the real `l1-test-worker` child — the fixture proves the
+/// routing answer, not report data (L1 report transport is a later
+/// slice).
+#[test]
+fn l1_reports_drain_answers_unavailable() {
+    let (mut host, handle) = l1_processing();
+    let sentinel = Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(9),
+            value: ParamValue::ONE,
+        }),
+    );
+    let mut out = vec![sentinel];
+    assert_eq!(
+        host.drain_output_reports(handle, &mut out),
+        Ok(ReportDrain::Unavailable)
+    );
+    assert_eq!(out, [sentinel]);
 }

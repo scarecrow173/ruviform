@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex, TryLockError};
 
 use ruviform_plugin_core::wire::{WIRE_MAX_CHANNELS, WIRE_MAX_FRAMES};
 use ruviform_plugin_core::{
-    BusDescriptor, EventList, Lifecycle, LifecycleError, LifecycleEvent, LifecycleState,
+    BusDescriptor, Event, EventList, Lifecycle, LifecycleError, LifecycleEvent, LifecycleState,
     PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
 };
 
@@ -167,6 +167,29 @@ pub enum BusReport {
     /// none", distinct from `Unavailable`).
     Reported(Vec<BusDescriptor>),
     /// Bus enumeration is unavailable at this layer.
+    Unavailable,
+}
+
+/// The plugin→host report drain result
+/// [`InProcessHost::drain_output_reports`] and
+/// [`crate::PluginHost::drain_output_reports`] return — an honest
+/// "drained" vs "unavailable" distinction, the same shape
+/// [`BusReport`] gives `buses`.
+///
+/// `Drained` means the instance's pending reports were appended to
+/// the caller's buffer — possibly zero reports; callers measure the
+/// drain by the `out` length delta. `Unavailable` means the layer
+/// cannot surface plugin→host reports at all (an out-of-process L1
+/// instance has no wire verb for them yet, and video slots have no
+/// report surface) — callers must not infer report silence from it.
+///
+/// **RT contract:** non-RT only — returned by value.
+#[derive(Debug, PartialEq)]
+#[non_exhaustive]
+pub enum ReportDrain {
+    /// The instance's pending reports were drained into `out`.
+    Drained,
+    /// Report draining is unavailable at this layer.
     Unavailable,
 }
 
@@ -968,6 +991,58 @@ impl InProcessHost {
         }
     }
 
+    /// Drains the instance's plugin→host reports — the canonical
+    /// [`Event`]s the plugin queued during `process` calls since the
+    /// last drain — appending them to `out`.
+    ///
+    /// This is the host-side consumer surface of the neutral
+    /// [`PluginProcessor::drain_output_reports`](ruviform_plugin_core::PluginProcessor::drain_output_reports)
+    /// contract
+    /// (`docs/designs/issue-253-hostgraph-reports.md`): a pull-based,
+    /// opt-in read. Nothing drains implicitly — a consumer that
+    /// never calls this simply lets reports accumulate in the
+    /// plugin's bounded pending buffer, where overflow is the
+    /// producer's defined drop. `Plain` slots call the plugin
+    /// directly (the same ungated shape `buses` takes); `Shared`
+    /// slots run the pinned three-tier lock protocol, so the drain
+    /// serializes against an attached endpoint's `try_lock` RT leg
+    /// on the same `core` mutex and converges `Failed`/poisoned
+    /// observations exactly like every other `Shared` verb.
+    ///
+    /// Reports keep their producer order and within-block frame
+    /// offsets; when several blocks were processed between drains the
+    /// stream carries no block-boundary marks — per-block attribution
+    /// is the consumer's drain cadence, not the host's reinterpretation.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate
+    /// (the caller owns and may reuse the buffer) and the `Shared`
+    /// arm takes the `core` mutex. Never call from inside `process`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle and
+    /// [`HostError::Failed`] when a `Shared` instance has already
+    /// converged (same gate every `Shared` verb runs).
+    pub fn drain_output_reports(
+        &mut self,
+        handle: PluginHandle,
+        out: &mut Vec<Event>,
+    ) -> Result<ReportDrain, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.drain_output_reports(out);
+                Ok(ReportDrain::Drained)
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin.drain_output_reports(out);
+                    Ok(ReportDrain::Drained)
+                })
+            }
+        }
+    }
+
     fn restore_state(
         &mut self,
         handle: PluginHandle,
@@ -1042,8 +1117,10 @@ mod tests {
     use std::rc::Rc;
 
     use ruviform_audio_core::{AudioBufferViewMut, SampleRate};
+    use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
     use ruviform_plugin_core::{
-        BufferView, BufferViewMut, ParamInfo, PluginDescriptor, PluginProcessor, ProcessStatus,
+        BufferView, BufferViewMut, EventKind, ParamEvent, ParamId, ParamInfo, ParamValue,
+        PluginDescriptor, PluginProcessor, ProcessStatus,
     };
     use ruviform_rt::RtContext;
 
@@ -1061,6 +1138,14 @@ mod tests {
     const PLAIN_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
         id: "org.ruviform.test.plain-gain",
         name: "Test Plain Gain",
+        vendor: "Ruviform",
+        version: "0.1.0",
+        features: &[],
+    };
+
+    const REPORT_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
+        id: "org.ruviform.test.report-gain",
+        name: "Test Report Gain",
         vendor: "Ruviform",
         version: "0.1.0",
         features: &[],
@@ -1292,6 +1377,150 @@ mod tests {
                 _pin: Rc::new(()),
             })
         }
+    }
+
+    /// The pending-report bound the fixture declares — a real
+    /// adapter's producer-side capacity. `process` drops (does not
+    /// count) past it; the fixture stays silent on overflow
+    /// accounting, which is producer-defined.
+    const REPORT_CAPACITY: usize = 8;
+
+    /// The report pair one `process` block queues — one
+    /// `ParamValue` plus one `Midi` `NoteOn`, offsets and payloads
+    /// derived from the block counter so tests can rebuild the
+    /// expected stream with the same function.
+    fn report_pair(block: u32) -> [Event; 2] {
+        [
+            Event::new(
+                block % 8,
+                EventKind::ParamValue(ParamEvent {
+                    param_id: ParamId(0),
+                    value: ParamValue::new(f64::from(block % 4 + 1) / 4.0).unwrap(),
+                }),
+            ),
+            Event::new(
+                4 + block % 4,
+                EventKind::Midi(MidiEvent {
+                    group: MidiGroup::ZERO,
+                    channel: MidiChannel::new(0).unwrap(),
+                    kind: MidiKind::NoteOn {
+                        key: NoteKey::new(60).unwrap(),
+                        velocity: block,
+                    },
+                }),
+            ),
+        ]
+    }
+
+    /// The report-producing fixture — a `Send` gain that queues
+    /// canonical [`Event`] reports into a bounded pending buffer
+    /// during `process`, the producer shape a real adapter's
+    /// `outputParameterChanges`/`outputEvents` mirror implements.
+    /// `ReportGainFactory`'s `sendable` flag picks the `Shared` or
+    /// `Plain` slot so both drain arms run identical producer code.
+    struct ReportGain {
+        gain: f32,
+        blocks: u32,
+        pending: Vec<Event>,
+        panic_in_process: bool,
+    }
+
+    impl PluginProcessor for ReportGain {
+        fn prepare(
+            &mut self,
+            _config: &ProcessConfig,
+            _context: &mut ProcessContext,
+        ) -> Result<(), PrepareError> {
+            Ok(())
+        }
+
+        fn process<I, O>(
+            &mut self,
+            inputs: &[I],
+            outputs: &mut [O],
+            _events: EventList<'_>,
+            _transport: Option<TransportInfo>,
+            _context: &mut ProcessContext,
+        ) -> ProcessResult
+        where
+            I: BufferView,
+            O: BufferViewMut,
+        {
+            assert!(!self.panic_in_process, "injected process panic");
+            for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
+                for channel in 0..output.channels() {
+                    if let (Some(src), Some(dst)) =
+                        (input.channel(channel), output.channel_mut(channel))
+                    {
+                        for (s, d) in src.iter().zip(dst.iter_mut()) {
+                            *d = *s * self.gain;
+                        }
+                    }
+                }
+            }
+            if self.pending.len() + 2 <= REPORT_CAPACITY {
+                self.pending.extend_from_slice(&report_pair(self.blocks));
+            }
+            self.blocks += 1;
+            ProcessResult::CONTINUE
+        }
+
+        /// The fixture's drain — move the whole pending buffer into
+        /// the caller's `out`, the same append contract real adapters
+        /// implement over their bounded queues.
+        fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
+            out.append(&mut self.pending);
+        }
+    }
+
+    impl Plugin for ReportGain {
+        fn descriptor(&self) -> PluginDescriptor {
+            REPORT_DESCRIPTOR
+        }
+        fn params(&self) -> &[ParamInfo] {
+            &[]
+        }
+    }
+
+    /// The report fixture's factory — `sendable` picks the slot
+    /// kind: `true` offers `create_sendable` (→ `Shared`), `false`
+    /// leaves it at the default `None` (→ `Plain`).
+    struct ReportGainFactory {
+        sendable: bool,
+        panic_in_process: bool,
+    }
+
+    impl PluginFactory for ReportGainFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            REPORT_DESCRIPTOR
+        }
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            erase(ReportGain {
+                gain: 2.0,
+                blocks: 0,
+                pending: Vec::with_capacity(REPORT_CAPACITY),
+                panic_in_process: self.panic_in_process,
+            })
+        }
+        fn create_sendable(&self) -> Option<Box<dyn ErasedPlugin + Send>> {
+            self.sendable.then(|| {
+                erase_sendable(ReportGain {
+                    gain: 2.0,
+                    blocks: 0,
+                    pending: Vec::with_capacity(REPORT_CAPACITY),
+                    panic_in_process: self.panic_in_process,
+                })
+            })
+        }
+    }
+
+    fn report_host(sendable: bool) -> InProcessHost {
+        let mut host = InProcessHost::new();
+        host.register_factory(Box::new(ReportGainFactory {
+            sendable,
+            panic_in_process: false,
+        }));
+        host
     }
 
     fn send_host() -> InProcessHost {
@@ -2259,5 +2488,171 @@ mod tests {
             }
         });
         assert_eq!(slab, [9.0f32; 16]);
+    }
+
+    /// Issue #253 slice (b), `Plain` arm: reports queued by `process`
+    /// reach the caller in producer order with offsets and payloads
+    /// intact; a repeat drain appends nothing yet still reports
+    /// `Drained`; pre-existing `out` contents survive (the caller
+    /// measures a drain by the length delta).
+    #[test]
+    fn drain_output_reports_plain_slot() {
+        let mut host = report_host(false);
+        let handle = instantiate(&mut host, REPORT_DESCRIPTOR.id);
+
+        // A pre-`process` drain is an honest empty `Drained` — the
+        // verb is not lifecycle-gated (the same ungated shape
+        // `buses` takes).
+        let sentinel = Event::new(
+            0,
+            EventKind::ParamValue(ParamEvent {
+                param_id: ParamId(9),
+                value: ParamValue::ONE,
+            }),
+        );
+        let mut out = vec![sentinel];
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        assert_eq!(out, [sentinel]);
+
+        drive_to_processing(&mut host, handle);
+        let input = [0.5f32; 4];
+        for _ in 0..3 {
+            let mut block = [0.0f32; 4];
+            run_host(&mut host, handle, &[&input[..]], &mut [&mut block[..]]).unwrap();
+        }
+        // DR-03 — a non-drain verb between processing and the pull
+        // consumes nothing: the reports still arrive complete.
+        assert!(matches!(host.buses(handle), Ok(BusReport::Reported(_))));
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        // Sentinel preserved; three blocks × two reports in producer
+        // order — offsets and payloads carried verbatim.
+        let expected: Vec<Event> = (0..3u32).flat_map(report_pair).collect();
+        assert_eq!(out.len(), 1 + expected.len());
+        assert_eq!(out[0], sentinel);
+        assert_eq!(&out[1..], expected.as_slice());
+
+        // No new processing → `Drained` with nothing appended.
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        assert_eq!(out.len(), 1 + expected.len());
+
+        // Processing after a drain surfaces only the new reports.
+        let mut block = [0.0f32; 4];
+        run_host(&mut host, handle, &[&input[..]], &mut [&mut block[..]]).unwrap();
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        let mut expected = expected;
+        expected.extend_from_slice(&report_pair(3));
+        assert_eq!(&out[1..], expected.as_slice());
+    }
+
+    /// Issue #253 slice (b), `Shared` arm — the graph-attached
+    /// consumer shape: reports produced through the endpoint's
+    /// `try_lock` RT leg drain through the host's blocking
+    /// `shared_verb`, and reports produced host-side
+    /// (`InProcessHost::process`'s `try_lock` arm) land in the same
+    /// pending buffer in call order.
+    #[test]
+    fn drain_output_reports_shared_slot_while_endpoint_attached() {
+        let mut host = report_host(true);
+        let handle = instantiate(&mut host, REPORT_DESCRIPTOR.id);
+        drive_to_processing(&mut host, handle);
+        let mut endpoint = host.attach_endpoint(handle, bounds(512, 2)).unwrap();
+
+        let in_l = [0.5f32; 4];
+        let in_r = [0.25f32; 4];
+        let mut out_l = [0.0f32; 4];
+        let mut out_r = [0.0f32; 4];
+        run_endpoint(
+            &mut endpoint,
+            &[&in_l[..], &in_r[..]],
+            &mut [&mut out_l[..], &mut out_r[..]],
+        )
+        .unwrap();
+        // One host-side block on the same `Shared` cell — the two
+        // legs feed one pending buffer.
+        let input = [0.5f32; 4];
+        let mut block = [0.0f32; 4];
+        run_host(&mut host, handle, &[&input[..]], &mut [&mut block[..]]).unwrap();
+        run_endpoint(
+            &mut endpoint,
+            &[&in_l[..], &in_r[..]],
+            &mut [&mut out_l[..], &mut out_r[..]],
+        )
+        .unwrap();
+
+        let mut out = Vec::new();
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        let expected: Vec<Event> = (0..3u32).flat_map(report_pair).collect();
+        assert_eq!(out, expected);
+    }
+
+    /// Issue #253 slice (b), error surface: stale/unknown handles
+    /// take `InvalidHandle` (the `instance_mut` gate every verb
+    /// shares); a `Shared` instance that converged `Failed` answers
+    /// `Err(Failed)` through `shared_verb`'s entry pre-check, before
+    /// any plugin reach.
+    #[test]
+    fn drain_output_reports_error_surface() {
+        // Stale handle — never instantiated.
+        let mut host = report_host(true);
+        let mut out = Vec::new();
+        assert_eq!(
+            host.drain_output_reports(PluginHandle::new(9, 0), &mut out),
+            Err(HostError::InvalidHandle)
+        );
+
+        // Destroyed handle — the slot generation moved on.
+        let handle = instantiate(&mut host, REPORT_DESCRIPTOR.id);
+        drive_to_processing(&mut host, handle);
+        host.execute(HostCommand::StopProcessing { handle })
+            .unwrap();
+        host.execute(HostCommand::Deactivate { handle }).unwrap();
+        host.execute(HostCommand::Destroy { handle }).unwrap();
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Err(HostError::InvalidHandle)
+        );
+
+        // Failed `Shared` instance — an endpoint-side plugin panic
+        // converges the mirror; the drain short-circuits on the
+        // entry pre-check like every other `Shared` verb.
+        let mut host = InProcessHost::new();
+        host.register_factory(Box::new(ReportGainFactory {
+            sendable: true,
+            panic_in_process: true,
+        }));
+        let handle = instantiate(&mut host, REPORT_DESCRIPTOR.id);
+        drive_to_processing(&mut host, handle);
+        let mut endpoint = host.attach_endpoint(handle, bounds(512, 2)).unwrap();
+        let in_l = [0.5f32; 4];
+        let in_r = [0.5f32; 4];
+        let mut out_l = [0.0f32; 4];
+        let mut out_r = [0.0f32; 4];
+        run_endpoint(
+            &mut endpoint,
+            &[&in_l[..], &in_r[..]],
+            &mut [&mut out_l[..], &mut out_r[..]],
+        )
+        .unwrap();
+        assert_eq!(host.lifecycle_state(handle), Some(LifecycleState::Failed));
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Err(HostError::Failed)
+        );
+        assert_eq!(out, []);
     }
 }
