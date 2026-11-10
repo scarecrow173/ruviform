@@ -48,7 +48,7 @@ use ruviform_audio_core::SampleRate;
 use ruviform_observability::source::ObservationRegistrar;
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    EventList, FailureCause, LifecycleEvent, LifecycleState, ParamId, PlainParamValue,
+    Event, EventList, FailureCause, LifecycleEvent, LifecycleState, ParamId, PlainParamValue,
     PluginDescriptor, PrepareError, ProcessResult, TransportInfo, VideoProcessConfig,
 };
 
@@ -60,7 +60,7 @@ use crate::l1::{
 use crate::video::{VideoHostCommand, VideoHostReply, VideoOutOfProcessSpec, VideoPluginHost};
 use crate::{
     BusReport, ErasedPlugin, HostCommand, HostError, HostInput, HostOutput, HostReply,
-    InProcessHost, PluginFactory, PluginHandle,
+    InProcessHost, PluginFactory, PluginHandle, ReportDrain,
 };
 
 /// How L1 instances of one out-of-process route map onto child
@@ -928,6 +928,50 @@ impl PluginHost {
                 self.l0.buses(inner)
             }
             Slot::OutOfProcess(_) | Slot::OutOfProcessVideo(_) => Ok(BusReport::Unavailable),
+        }
+    }
+
+    /// Drains the instance's plugin→host reports — the canonical
+    /// [`Event`]s the plugin queued during `process` calls since the
+    /// last drain — appending them to `out`. The consumer-facing
+    /// pull surface of the neutral
+    /// [`PluginProcessor::drain_output_reports`](ruviform_plugin_core::PluginProcessor::drain_output_reports)
+    /// contract (`docs/designs/issue-253-hostgraph-reports.md`):
+    /// opt-in — nothing drains unless the consumer calls this, and
+    /// reports a consumer never reads stay in the plugin's bounded
+    /// pending buffer (producer-side defined drop past capacity).
+    ///
+    /// L0 slots delegate to [`InProcessHost::drain_output_reports`]
+    /// — `Plain` calls the plugin directly, `Shared` runs the
+    /// pinned three-tier lock protocol, so the drain serializes
+    /// against an attached endpoint's `try_lock` RT leg on the same
+    /// `core` mutex and converges `Failed`/poisoned observations
+    /// exactly like every other `Shared` verb. L1 audio and video
+    /// slots answer [`ReportDrain::Unavailable`]: the wire protocol
+    /// has no report verb yet, and callers must not infer report
+    /// silence from that answer.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate
+    /// (the caller owns and may reuse the buffer) and the L0 `Shared`
+    /// arm takes the instance's `core` mutex. Never call from inside
+    /// `process`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle and
+    /// [`HostError::Failed`] when an L0 `Shared` instance has already
+    /// converged.
+    pub fn drain_output_reports(
+        &mut self,
+        handle: PluginHandle,
+        out: &mut Vec<Event>,
+    ) -> Result<ReportDrain, HostError> {
+        match self.slot_mut(handle)? {
+            Slot::InProcess(inner) => {
+                let inner = *inner;
+                self.l0.drain_output_reports(inner, out)
+            }
+            Slot::OutOfProcess(_) | Slot::OutOfProcessVideo(_) => Ok(ReportDrain::Unavailable),
         }
     }
 
@@ -1967,9 +2011,11 @@ mod tests {
     use std::panic::{AssertUnwindSafe, catch_unwind};
 
     use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
+    use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
     use ruviform_plugin_core::{
-        BufferView, BufferViewMut, ParamInfo, PluginDescriptor, PluginProcessor, PrepareError,
-        ProcessConfig, ProcessContext, ProcessStatus,
+        BufferView, BufferViewMut, EventKind, ParamEvent, ParamId, ParamInfo, ParamValue,
+        PluginDescriptor, PluginProcessor, PrepareError, ProcessConfig, ProcessContext,
+        ProcessStatus,
     };
 
     use super::*;
@@ -2219,6 +2265,102 @@ mod tests {
         }
     }
 
+    /// The per-block report pair the composite fixture queues — same
+    /// producer shape as `host.rs`'s `report_pair` (the per-module
+    /// duplication is intentional).
+    fn report_pair(block: u32) -> [Event; 2] {
+        [
+            Event::new(
+                block % 8,
+                EventKind::ParamValue(ParamEvent {
+                    param_id: ParamId(0),
+                    value: ParamValue::new(f64::from(block % 4 + 1) / 4.0).unwrap(),
+                }),
+            ),
+            Event::new(
+                4 + block % 4,
+                EventKind::Midi(MidiEvent {
+                    group: MidiGroup::ZERO,
+                    channel: MidiChannel::new(0).unwrap(),
+                    kind: MidiKind::NoteOn {
+                        key: NoteKey::new(60).unwrap(),
+                        velocity: block,
+                    },
+                }),
+            ),
+        ]
+    }
+
+    /// The report-producing fixture for the composite drain route —
+    /// queues the bounded pending pair per `process` block, the same
+    /// producer shape `host.rs`'s `ReportGain` implements.
+    struct ReportGain {
+        blocks: u32,
+        pending: Vec<Event>,
+    }
+
+    impl PluginProcessor for ReportGain {
+        fn prepare(
+            &mut self,
+            _config: &ProcessConfig,
+            _context: &mut ProcessContext,
+        ) -> Result<(), PrepareError> {
+            Ok(())
+        }
+
+        fn process<I, O>(
+            &mut self,
+            _inputs: &[I],
+            _outputs: &mut [O],
+            _events: EventList<'_>,
+            _transport: Option<TransportInfo>,
+            _context: &mut ProcessContext,
+        ) -> ProcessResult
+        where
+            I: BufferView,
+            O: BufferViewMut,
+        {
+            if self.pending.len() + 2 <= 8 {
+                self.pending.extend_from_slice(&report_pair(self.blocks));
+            }
+            self.blocks += 1;
+            ProcessResult::CONTINUE
+        }
+
+        fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
+            out.append(&mut self.pending);
+        }
+    }
+
+    impl Plugin for ReportGain {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESCRIPTOR
+        }
+        fn params(&self) -> &[ParamInfo] {
+            &[]
+        }
+    }
+
+    struct ReportGainFactory;
+
+    impl PluginFactory for ReportGainFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESCRIPTOR
+        }
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            erase(ReportGain {
+                blocks: 0,
+                pending: Vec::with_capacity(8),
+            })
+        }
+        fn create_sendable(&self) -> Option<Box<dyn ErasedPlugin + Send>> {
+            Some(erase_sendable(ReportGain {
+                blocks: 0,
+                pending: Vec::with_capacity(8),
+            }))
+        }
+    }
+
     /// Register `factory`, instantiate its plugin and drive the
     /// instance to `Processing` — `Activated` when `start` is false.
     fn l0_instance(factory: Box<dyn PluginFactory>, start: bool) -> (PluginHost, PluginHandle) {
@@ -2267,6 +2409,66 @@ mod tests {
         let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
         let mut outputs = [HostOutput(&mut output_view)];
         endpoint.process(&inputs, &mut outputs, EventList::empty(8), None)
+    }
+
+    /// Issue #253 slice (b): the composite drain surface routes by
+    /// slot kind — L0 delegates to `InProcessHost::drain_output_reports`
+    /// (reports reach the caller in producer order), L1 audio and
+    /// video slots answer `Unavailable` without touching `out` (the
+    /// wire has no report verb; callers must not infer silence), and
+    /// stale handles take `InvalidHandle`.
+    #[test]
+    fn drain_output_reports_routes_by_slot_kind() {
+        // L0 — a reporting plugin's events reach the caller through
+        // the `Shared` slot's `shared_verb`.
+        let (mut host, handle) = l0_instance(Box::new(ReportGainFactory), true);
+        run_block(&mut host, handle).unwrap();
+        run_block(&mut host, handle).unwrap();
+        let mut out = Vec::new();
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        let expected: Vec<Event> = (0..2u32).flat_map(report_pair).collect();
+        assert_eq!(out, expected);
+        // Repeat drain — `Drained` with nothing appended.
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        assert_eq!(out, expected);
+
+        // L1 audio — `Unavailable`, `out` untouched.
+        let (mut host, handle) = l1_instance(LifecycleState::Processing, Some(512));
+        let mut out = vec![Event::new(
+            0,
+            EventKind::ParamValue(ParamEvent {
+                param_id: ParamId(9),
+                value: ParamValue::ONE,
+            }),
+        )];
+        let sentinel = out.clone();
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Ok(ReportDrain::Unavailable)
+        );
+        assert_eq!(out, sentinel);
+
+        // L1 video — the same honest answer (video has no report
+        // surface at all).
+        let mut host = PluginHost::new();
+        let handle = mint_video(&mut host, LifecycleState::Processing);
+        assert_eq!(
+            host.drain_output_reports(handle, &mut out),
+            Ok(ReportDrain::Unavailable)
+        );
+        assert_eq!(out, sentinel);
+
+        // Stale handle — never minted.
+        assert_eq!(
+            host.drain_output_reports(PluginHandle::new(77, 0), &mut out),
+            Err(HostError::InvalidHandle)
+        );
     }
 
     /// The public mint attaches on both routes — L0 through the

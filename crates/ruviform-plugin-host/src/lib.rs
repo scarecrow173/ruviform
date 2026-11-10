@@ -144,7 +144,12 @@
 //! shared mutex). [`PluginHost::lifecycle_state`] and
 //! [`PluginHost::latency_frames`] are const-cheap for L0 slots; for
 //! L1 slots they take the instance's shared mutex — treat them as
-//! non-RT. [`PluginEndpoint::process`] is the endpoint's
+//! non-RT. [`PluginHost::drain_output_reports`] /
+//! [`InProcessHost::drain_output_reports`] are the plugin→host
+//! report consumer surface — pull-based and **non-RT only** (the
+//! caller-owned `Vec` append may allocate and the L0 `Shared` arm
+//! takes the `core` mutex); nothing drains implicitly on the RT
+//! path. [`PluginEndpoint::process`] is the endpoint's
 //! RT leg — `Send`, `try_lock`-only and allocation-free on the
 //! block path (the `rt_`-prefixed tests pin that), and
 //! [`PluginEndpoint::process_audio`] is its graph-facing sibling
@@ -202,7 +207,7 @@ pub use editor_session::{
     PluginEditorSessions, SessionClock, SessionDeadlinePolicy, SessionFailCause, Support,
 };
 pub use endpoint::{EndpointBounds, PluginEndpoint};
-pub use host::{BusReport, InProcessHost};
+pub use host::{BusReport, InProcessHost, ReportDrain};
 pub use l1::diag::{DiagRegistry, DiagnosticQuery, DiagnosticRecord, SpawnPhase, StderrSnapshot};
 pub use plugin::{
     ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
