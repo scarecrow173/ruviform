@@ -71,8 +71,12 @@
 //! }
 //! ```
 
+// The decoder and bounded queue exist only to serve the WinMM backend
+// in this slice; they are ungated when the macOS/Linux backends land.
+#[cfg(windows)]
 mod midi;
 mod os;
+#[cfg(windows)]
 mod queue;
 mod system;
 

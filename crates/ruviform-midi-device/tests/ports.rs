@@ -2,9 +2,10 @@
 //! consumer (e.g. `InputTx::pump`) actually takes.
 
 use ruviform_audio_core::device::DeviceError;
-use ruviform_audio_core::midi_input::{
-    MidiInput, MidiInputEnumerator, MidiInputPort, MidiPortOrigin, MidiReadStats,
-};
+use ruviform_audio_core::midi_input::MidiInputEnumerator;
+#[cfg(windows)]
+use ruviform_audio_core::midi_input::{MidiInput, MidiInputPort, MidiPortOrigin, MidiReadStats};
+#[cfg(windows)]
 use ruviform_midi_device::backend;
 
 #[cfg(windows)]
@@ -54,7 +55,10 @@ fn read_contract_shape_holds_for_trait_objects() {
 #[test]
 fn unsupported_platforms_return_explicit_unsupported() {
     let backend: Box<dyn MidiInputEnumerator> = Box::new(ruviform_midi_device::SystemBackend);
-    assert_eq!(backend.input_ports().unwrap_err(), DeviceError::Unsupported);
+    assert!(matches!(
+        backend.input_ports(),
+        Err(DeviceError::Unsupported)
+    ));
 }
 
 #[cfg(windows)]

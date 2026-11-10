@@ -21,6 +21,6 @@ mod tests {
 
     #[test]
     fn enumeration_is_explicitly_unsupported() {
-        assert_eq!(enumerate_ports().unwrap_err(), DeviceError::Unsupported);
+        assert!(matches!(enumerate_ports(), Err(DeviceError::Unsupported)));
     }
 }
