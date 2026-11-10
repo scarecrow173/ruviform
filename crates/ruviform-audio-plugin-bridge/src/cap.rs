@@ -68,10 +68,12 @@ pub struct AdapterCapability {
     /// note-targeting (e.g. CLAP `pckn`) collapses to global.
     pub per_note_param: CapabilityLevel,
     /// Plugin→host parameter value reporting (gestures, rescan,
-    /// output parameter queues) — `Unavailable` on every backend:
-    /// CLAP output events are discarded and VST3
-    /// `outputParameterChanges`/`IComponentHandler` are acked and
-    /// dropped.
+    /// output parameter queues). `Declared` = the adapter supplies
+    /// and collects the standard's output channel into canonical
+    /// reports (`PluginProcessor::drain_output_reports`) but no
+    /// host-graph consumer is wired yet; `Unavailable` = the
+    /// adapter acks and drops the channel (CLAP output events) or
+    /// never surfaces it.
     pub param_reporting: CapabilityLevel,
     /// Channel-voice MIDI delivery (`EventKind::Midi` → adapter event
     /// vocabulary). `Verified` = proven on this layer; `Declared` =
@@ -166,12 +168,12 @@ pub const fn capability_for(backend: Backend) -> AdapterCapability {
             crash_isolation: Verified,
             param_event_precision: Declared,
             per_note_param: Unsupported,
-            param_reporting: Unavailable,
+            param_reporting: Declared,
             midi_channel_voice: Declared,
             midi_ump: Unsupported,
             note_expression: Unsupported,
             midi_sysex: Unsupported,
-            notes: "single stereo main bus; no in-block transport event vocabulary adopted — CLAP behavior is not generalized; param queues capped at 1024 points with a scan bound; outputParameterChanges/handler edits are acked and dropped; EventKind::Midi translates both directions — note on/off/poly-pressure → Vst note events, CC/channel-pressure/pitch-bend/program-change → kLegacyMIDICCOutEvent (SDK output-reserved, used on input per de-facto host practice) — with counted defined skips (group!=0, tuning!=0, out-of-range fields, unsupported types); IMidiMapping-routed CC→param delivery, plugin→host output events and real-plugin verification remain gates",
+            notes: "single stereo main bus; no in-block transport event vocabulary adopted — CLAP behavior is not generalized; param queues capped at 1024 points with a scan bound; outputParameterChanges/outputEvents are collected into canonical drain_output_reports (fixture-proven in-process; no graph consumer wired yet); EventKind::Midi translates both directions — note on/off/poly-pressure → Vst note events, CC/channel-pressure/pitch-bend/program-change → kLegacyMIDICCOutEvent (SDK output-reserved, used on input per de-facto host practice) — with counted defined skips (group!=0, tuning!=0, out-of-range fields, unsupported types); IMidiMapping CC→param routing is snapshot-routed at prepare; real-plugin verification remains a gate",
         },
     }
 }
@@ -211,12 +213,19 @@ mod tests {
                 CapabilityLevel::Unsupported,
                 "no backend may claim per-note param targeting yet"
             );
+        }
+        for backend in [Backend::L0, Backend::L1, Backend::Clap] {
             assert_eq!(
-                row.param_reporting,
+                capability_for(backend).param_reporting,
                 CapabilityLevel::Unavailable,
-                "no plugin→host param reporting channel exists yet"
+                "only the VST3 adapter surfaces plugin→host reports so far"
             );
         }
+        assert_eq!(
+            capability_for(Backend::Vst3).param_reporting,
+            CapabilityLevel::Declared,
+            "Issue #253: VST3 output reporting is adapter-proven, not consumer-wired"
+        );
         assert_eq!(
             capability_for(Backend::L0).param_event_precision,
             CapabilityLevel::Verified
