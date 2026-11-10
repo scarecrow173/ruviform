@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #286 IO-04 ZIP/TAR Archive — Entry API・安全な展開・終了/公開契約 設計"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-10"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -131,14 +131,21 @@ Reader/Writer/Entry API・安全な展開（Secure Extraction）・
   将来更新、Directory 原子的 Publish・Consumer Commit の
   契約。
 
-**実装の現状（2026-11-09 時点の snapshot）**
+**実装の現状（2026-11-10 時点の snapshot）**
 
 - `crates/ruviform-io-archive` は main に存在し、#302
   （ZIP・PR #352）・#303（TAR・PR #357）・#304（Secure
   Extraction・PR #362）で merge 済み。`zip`/`tar`/`extract`
   module が実装され、`tests/{zip_reader,zip_writer,
-  tar_reader,tar_writer,extract_path,extract_secure,
+  tar_reader,tar_writer,extract_zip,extract_tar,
   extract_staging}.rs` が契約を pin する。
+- 2026-11-10 の受入再照合 slice で不足していた headless
+  契約試験を追加した: ZIP `verify_all` の先頭失敗伝播と
+  `into_inner` の非完了性、TAR Solaris `X` header の PAX
+  record 適用、`discard_pending` の total budget 途中遮断、
+  TAR PAX `path` override への Path Policy 適用
+  （受理/拒否の両側）、Recovery `Absent` 状態と retry
+  no-op、nested archive payload の非再帰受理。
 - 検証入口は `mise run test-io-file`（`cargo test -p
   ruviform-io-file -p ruviform-io-archive` — io-archive を
   含む）・`check-io-file`/`lint-io-file`・`check-linux`
