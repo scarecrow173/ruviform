@@ -91,6 +91,15 @@ required-features = ["logging"]
 name = "integration"
 required-features = ["integration"]
 
+# Issue #275: RT call path emits no `tracing` events even while a
+# subscriber dispatch is installed — pins the tracing/subscriber half
+# of the RT acceptance row (the no-alloc half lives in the `rt_*`
+# lanes). `tracing-export` is the minimal feature enabling
+# `dep:tracing`; the counting subscriber is dev-dependency only.
+[[test]]
+name = "rt_boundary"
+required-features = ["tracing-export"]
+
 [[example]]
 name = "logging_host"
 required-features = ["logging"]

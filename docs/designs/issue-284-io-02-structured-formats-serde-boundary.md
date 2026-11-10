@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-10"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -247,7 +247,12 @@ backend 型非露出は per-format test-spec の audit 規則で
 pin されている: `issue-297` Rule 5、`issue-298` S8、
 `issue-299` S7（公開 signature に backend 型名がないことの
 目視/grep 確認）。#288 matrix 行 S-X6 が同契約を gate
-項目として参照する。
+項目として参照する。横断の機械的 audit として
+`crates/ruviform-io-structured/tests/api_surface.rs` が
+公開型の canonical path に backend crate 名が現れないこと・
+Serde bound のみで typed I/O が組み立てられることを
+`type_name` レベルで固定する（IO-02 slice・IR
+`issue-284-io-02-structured-formats-slice`）。
 
 ## Format/Version 契約
 
@@ -620,33 +625,33 @@ consumer-verify（#219/#294）が Owner。
 
 ## Verification Notes
 
-- [ ] Serde 公開境界節が「許可: serde traits・std::io・
+- [x] Serde 公開境界節が「許可: serde traits・std::io・
       Ruviform 独自型」「非公開: backend 型/Error/feature/
       version」「source() 経由のみ」「自作 Serializer/
       DOM/Registry なし」を全て含み、`issue-297` Rule 5・
       `issue-298` S8・`issue-299` S7 への参照を持つこと。
-- [ ] Format/Version 契約節が 5 Format の API 族・単一文書
+- [x] Format/Version 契約節が 5 Format の API 族・単一文書
       Strict EOF・Consumer 所有の schema/version/canonical
       bytes・Format A→DOM→B 非提供を含むこと。
-- [ ] Resource Budget 節が hard limit/parser budget/
+- [x] Resource Budget 節が hard limit/parser budget/
       advisory の 3 層と「保証できない制限を偽装しない」
       規則を含み、`BoundedRead`・`max_bytes` 既定 16 MiB・
       Format 別 budget の実装済み値と一致すること。
-- [ ] Error 契約節が `DocumentErrorKind` 7 variant・
+- [x] Error 契約節が `DocumentErrorKind` 7 variant・
       `DocumentFileReadError`/`DocumentFileWriteError` の
       variant と `PublishFailure` 保存を含むこと。
-- [ ] Backend 選定表の版・MSRV・ライセンスが `Cargo.toml`
+- [x] Backend 選定表の版・MSRV・ライセンスが `Cargo.toml`
       の pin と per-format 設計の記述に一致すること
       （serde_json 1.0.154/serde-saphyr 2.0.0/toml
       1.1.8+spec-1.1.0/csv 1.4.0+csv-core 0.1.13/
       quick-xml 0.42.0）。
-- [ ] 証拠項目対応表の OWN/CSV/XML/DOC/ERR/COMP 各行が
+- [x] 証拠項目対応表の OWN/CSV/XML/DOC/ERR/COMP 各行が
       実在する test-spec rule/節・#288 matrix 行・Issue/PR
       番号へ解決できること。
-- [ ] Consumer 利用面節が AL #139/#143・SV #82/#84/#25 の
+- [x] Consumer 利用面節が AL #139/#143・SV #82/#84/#25 の
       Issue 番号と責務分界（schema/version は Consumer 所有・
       Ruviform 単一 Publish ≠ Project Transaction/HEAD CAS）
       を含むこと。
-- [ ] 「設計合意と実装/検証の分離」節が存在し、未実施項目を
+- [x] 「設計合意と実装/検証の分離」節が存在し、未実施項目を
       `not run`/`NotRun`/`Unsupported` と記録する方針を
       明記していること。
