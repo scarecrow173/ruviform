@@ -4,7 +4,7 @@ type: "impl"
 status: "completed"
 title: "Issue #291 OBS-09 Diagnostics 実装記録"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-10"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -168,6 +168,27 @@ Issue #291 受入条件の行ごとの照合結果。実装は main（PR #504
 | Secret/Media/Gateway Grant 非流出・未認可 Report 拒否試験 | 充足（既存） | `report.rs` の confidentiality/認可検査 + 試験 |
 | Domain Error との二重管理禁止・Plugin 既存 DiagRegistry 尊重 | 充足（既存） | 設計境界どおり domain error を複製しない構成（design/test-spec 参照） |
 | 両 Consumer の Evidence/Health ユースケースを #281 で検証 | NotRun | cross-repo gate・本タスク対象外 |
+
+## Audit（2026-11-10、rf291-obs09 残件確認 slice、base `1dc235b9`）
+
+Issue #291 受入条件の再照合。実装は main の `src/diagnostics/`
+（PR #504 `70375e06` 以降変更なし）に加え、OBS-03 の具象 adapter
+`tracing_export::TracingFindingSink`（PR #507 `d134f95f`・slice 2
+`b36f6de2`）が main に着地済み。本 slice の差分は
+`diagnostics/tests.rs` への `EvidenceTime::Clock` golden 試験
+`evidence_clock_domain_stamp_is_preserved_verbatim` 1 件追加のみ
+（受入行 2 の Clock 要素を diagnostics 層で明示検証）。
+
+| 受入行 | 判定 | 証跡 |
+| --- | --- | --- |
+| 事実/Derived/Reported/推論/Unknown を混同しない型・Golden test | 充足 | `evidence.rs` `EvidenceKind` 4 分類 + basis 不変条件 + `tests.rs` golden/分類試験 |
+| Source Generation/Clock/Evidence lifetime/Report 上限/切り詰め試験 | 充足 | generation リセット 2 試験・superseded/lifetime・byte/deadline/count truncation 試験 + 今回追加の `EvidenceTime::Clock` verbatim 保存 golden |
+| Health 閾値/Hysteresis/回復/Unknown/stale/部分障害の明示的状態遷移 | 充足 | `health.rs` 固定評価順序 + hysteresis + rollup + 遷移試験一式 |
+| Logging OFF でも Snapshot/Report/Health を利用可能 | 充足 | default feature（`logging` 無効）で `diagnostics` 全 API が `tracing` 非依存に動作 — `cargo test -p ruviform-observability --lib` が default features で pass |
+| 重要状態変化のみ非 RT から標準 tracing へ接続・抑制上限 | 充足 | `DiagnosticsEvent::HealthTransition`（domain rollup 遷移のみ）→ `FindingSink` port + `SinkPolicy` 抑制（`sink_suppressed_total` 計数）+ 具象 `tracing_export::TracingFindingSink`（`tracing-export` feature、panic 隔離・`catch_unwind`）。adapter 側試験: `sink_emits_health_transition_with_stable_fields`/`sink_panic_is_isolated_and_counted`/`diagnostics_set_sink_accepts_tracing_sink` |
+| Secret/Media/Gateway Grant 非流出・未認可 Report 拒否試験 | 充足 | closed `EvidencePayload`（任意バイト列を型で排除）+ confidentiality 超過 item の wholesale 除外 + `ReportError::Unauthorized` 拒否試験 |
+| Domain Error との二重管理禁止・Plugin 既存 DiagRegistry 尊重 | 充足 | `DiagnosticCode` は domain 所有 `name`+`schema_version`（中央 enum なし）。`REPORT_NOTES`/module doc が domain `Error`/`Result`・`DiagRegistry` の authoritative 境界を明記 |
+| 両 Consumer の Evidence/Health ユースケースを #281 で検証 | NotRun | cross-repo gate・別 Gate（#281）。本 slice 対象外 |
 
 ## Risks
 
