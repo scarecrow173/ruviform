@@ -4,13 +4,8 @@
   "lane": "windows-sendinput-multiwindow",
   "input_method": "win32-SendInput keyboard/pointer + example-local modifier chords (Win+Arrow, Alt+F4)",
   "input_method_note": "OS automation injection through the real OS input path — not physical manual input; distinct from GPUI simulated input. The real cursor is moved for focus clicks and restored on exit.",
-  "verdict": "fail",
-  "problems": [
-    "check failed: per_window_focus_real_click",
-    "check failed: close_veto_defer_approve_real_input",
-    "check failed: close_default_approve_real_input",
-    "check failed: window_job_cancelled_app_job_survives"
-  ],
+  "verdict": "pass",
+  "problems": [],
   "checks": [
     {
       "name": "component_bounds_and_geometry",
@@ -18,24 +13,79 @@
       "detail": "geom_a0=Some((80, 92, 640, 480)) gain_bound=true monitors=2"
     },
     {
+      "name": "focus_release_unsupported",
+      "ok": true,
+      "detail": "focus(bravo,false) -> Err(Unsupported { capability: \"focus\", message: \"gpui 0.2.2 cannot release window focus\" })"
+    },
+    {
+      "name": "focus_unknown_window_host_error",
+      "ok": true,
+      "detail": "focus(unknown,true) -> Err(Host { message: \"no window w18446744073709551615\" })"
+    },
+    {
+      "name": "capabilities_declared",
+      "ok": true,
+      "detail": "WindowCapabilities { resize: Supported, focus: Supported, scale_factor: Supported, multi_window: Supported, ime: Unsupported, native_surface_slot: Supported }"
+    },
+    {
+      "name": "keyboard_commit_end_max",
+      "ok": true,
+      "detail": "alpha gain commits=[1.0] expected≈1.0 (End)"
+    },
+    {
+      "name": "view_state_survives_update_view",
+      "ok": true,
+      "detail": "prev=Some(1.0) last=Some(0.9500000000000001) expected≈Some(0.95) (Left -0.05)"
+    },
+    {
+      "name": "dock_detach_reattach_two_phase_move",
+      "ok": true,
+      "detail": "owner_v1=Some(WindowId(1)) owner_v2=Some(WindowId(2)) detached_v1=true "
+    },
+    {
+      "name": "window_move_real_input",
+      "ok": true,
+      "detail": "moved_events=5 g0=Some((80, 92)) left=Some((1, 31)) right=Some((80, 92)) down=None up=Some((80, 92))"
+    },
+    {
+      "name": "window_minimize_restore_real_input",
+      "ok": true,
+      "detail": "down_geom=None down_err=Some(\"Host { message: \\\"window client area is empty\\\" }\") up_geom=Some((80, 92, 640, 480)) up_err=None"
+    },
+    {
+      "name": "regenerate_fresh_window_id_bounds",
+      "ok": true,
+      "detail": "charlie=w3 fresh_id=true gain_bound=true"
+    },
+    {
+      "name": "regenerated_view_state_is_fresh",
+      "ok": true,
+      "detail": "last_gain_commit=Some(0.55) expected≈0.55 (default 0.5 + step 0.05)"
+    },
+    {
+      "name": "dock_view_ownership_survives_regen",
+      "ok": true,
+      "detail": "owner_b=Some(WindowId(3)) owner_c=Some(WindowId(3)) detached_a=true"
+    },
+    {
       "name": "per_window_focus_real_click",
-      "ok": false,
-      "detail": "focused_true={WindowId(1), WindowId(2)} focused={WindowId(1): false, WindowId(2): true} fg_alpha=false fg_bravo=false"
+      "ok": true,
+      "detail": "focused_true={WindowId(1), WindowId(2), WindowId(3)} focused={WindowId(1): true, WindowId(2): true, WindowId(3): true} fg_alpha=true fg_bravo=true"
     },
     {
       "name": "close_veto_defer_approve_real_input",
-      "ok": false,
-      "detail": "bravo trace=[\"Created\", \"Ready\", \"Focused\", \"Resized\", \"Moved\"] close_count=0"
+      "ok": true,
+      "detail": "bravo trace=[\"Created\", \"Ready\", \"Focused\", \"Resized\", \"Moved\", \"Focused\", \"Focused\", \"Focused\", \"Focused\", \"CloseRequested\", \"CloseRequested\", \"CloseRequested\", \"Destroyed\"] close_count=3"
     },
     {
       "name": "close_default_approve_real_input",
-      "ok": false,
-      "detail": "alpha trace=[\"Created\", \"Ready\", \"Focused\", \"Resized\", \"Moved\", \"Focused\"]"
+      "ok": true,
+      "detail": "alpha trace=[\"Created\", \"Ready\", \"Focused\", \"Resized\", \"Moved\", \"Focused\", \"Focused\", \"Moved\", \"Resized\", \"Moved\", \"Resized\", \"Moved\", \"Focused\", \"Focused\", \"Moved\", \"Focused\", \"Focused\", \"Focused\", \"Focused\", \"Focused\", \"CloseRequested\", \"Destroyed\"]"
     },
     {
       "name": "window_job_cancelled_app_job_survives",
-      "ok": false,
-      "detail": "cancelled_count=0 win_event=false app_cancelled=false app_still_running=false progress_events=0 events=[]"
+      "ok": true,
+      "detail": "cancelled_count=1 win_event=true app_cancelled=false app_still_running=true progress_events=1068 events=[(Some(WindowId(1)), Cancelled)]"
     }
   ],
   "traces": {
@@ -45,28 +95,133 @@
       "Focused",
       "Resized",
       "Moved",
-      "Focused"
+      "Focused",
+      "Focused",
+      "Moved",
+      "Resized",
+      "Moved",
+      "Resized",
+      "Moved",
+      "Focused",
+      "Focused",
+      "Moved",
+      "Focused",
+      "Focused",
+      "Focused",
+      "Focused",
+      "Focused",
+      "CloseRequested",
+      "Destroyed"
     ],
     "WindowId(2)": [
       "Created",
       "Ready",
       "Focused",
       "Resized",
-      "Moved"
+      "Moved",
+      "Focused",
+      "Focused",
+      "Focused",
+      "Focused",
+      "CloseRequested",
+      "CloseRequested",
+      "CloseRequested",
+      "Destroyed"
+    ],
+    "WindowId(3)": [
+      "Created",
+      "Ready",
+      "Focused",
+      "Resized",
+      "Moved",
+      "Focused",
+      "Focused",
+      "CloseRequested",
+      "Destroyed"
     ]
   },
   "focused": {
-    "WindowId(1)": false,
-    "WindowId(2)": true
+    "WindowId(1)": true,
+    "WindowId(2)": true,
+    "WindowId(3)": true
   },
   "os_foreground_log": [
-    "click(1140,152)->cursor=Some((586, 1079)) under=\"rf243 bravo\" foreground=\"タスク マネージャー\"",
-    "click(1140,152)->cursor=Some((586, 1079)) under=\"rf243 bravo\" foreground=\"タスク マネージャー\"",
-    "click(1140,152)->cursor=Some((586, 1079)) under=\"rf243 bravo\" foreground=\"タスク マネージャー\""
+    "click(1140,152)->cursor=Some((1139, 151)) under=\"rf243 bravo\" foreground=\"rf243 bravo\"",
+    "click(400,152)->cursor=Some((399, 151)) under=\"rf243 alpha\" foreground=\"rf243 bravo\"",
+    "click(400,152)->cursor=Some((399, 151)) under=\"rf243 alpha\" foreground=\"rf243 alpha\"",
+    "click(400,152)->cursor=Some((399, 151)) under=\"rf243 alpha\" foreground=\"rf243 alpha\"",
+    "click(1140,152)->cursor=Some((1139, 151)) under=\"rf243 bravo\" foreground=\"rf243 alpha\"",
+    "click(1140,152)->cursor=Some((1139, 151)) under=\"rf243 bravo\" foreground=\"rf243 bravo\"",
+    "click(720,372)->cursor=Some((719, 371)) under=\"rf243 charlie\" foreground=\"rf243 charlie\"",
+    "click(400,152)->cursor=Some((399, 151)) under=\"rf243 alpha\" foreground=\"rf243 charlie\"",
+    "click(400,152)->cursor=Some((399, 151)) under=\"rf243 alpha\" foreground=\"rf243 alpha\"",
+    "click(720,372)->cursor=Some((719, 371)) under=\"rf243 charlie\" foreground=\"rf243 charlie\""
   ],
-  "intents": [],
-  "job_events": [],
-  "receipts": [],
+  "intents": [
+    {
+      "window": "WindowId(1)",
+      "id": "view-1:a1:m1:gain:1",
+      "op": "rvf.ui.command.v1",
+      "kind": "begin",
+      "control_id": "gain",
+      "normalized": 1.0
+    },
+    {
+      "window": "WindowId(1)",
+      "id": "view-1:a1:m1:gain:2",
+      "op": "rvf.ui.command.v1",
+      "kind": "commit",
+      "control_id": "gain",
+      "normalized": 1.0
+    },
+    {
+      "window": "WindowId(1)",
+      "id": "view-1:a1:m1:gain:3",
+      "op": "rvf.ui.command.v1",
+      "kind": "begin",
+      "control_id": "gain",
+      "normalized": 0.9500000000000001
+    },
+    {
+      "window": "WindowId(1)",
+      "id": "view-1:a1:m1:gain:4",
+      "op": "rvf.ui.command.v1",
+      "kind": "commit",
+      "control_id": "gain",
+      "normalized": 0.9500000000000001
+    },
+    {
+      "window": "WindowId(3)",
+      "id": "view-3:a3:m1:gain:1",
+      "op": "rvf.ui.command.v1",
+      "kind": "begin",
+      "control_id": "gain",
+      "normalized": 0.55
+    },
+    {
+      "window": "WindowId(3)",
+      "id": "view-3:a3:m1:gain:2",
+      "op": "rvf.ui.command.v1",
+      "kind": "commit",
+      "control_id": "gain",
+      "normalized": 0.55
+    }
+  ],
+  "job_events": [
+    {
+      "window": "WindowId(1)",
+      "state": "Cancelled"
+    }
+  ],
+  "receipts": [
+    {
+      "route": "Some(WindowId(1))",
+      "event": "Result { id: \"job-win\", ok: true, data: Some(Object {\"job\": Number(1), \"label\": String(\"demo.sleep\")}), error: None }"
+    },
+    {
+      "event": "Result { id: \"job-app\", ok: true, data: Some(Object {\"job\": Number(2), \"label\": String(\"demo.sleep\")}), error: None }"
+    }
+  ],
   "geometry": {
     "alpha_initial": {
       "x": 80,
@@ -75,15 +230,36 @@
       "h": 480,
       "scale": 1.0
     },
-    "alpha_after_winleft": null,
-    "alpha_after_winright": null,
+    "alpha_after_winleft": {
+      "x": 1,
+      "y": 31,
+      "w": 958,
+      "h": 1000
+    },
+    "alpha_after_winright": {
+      "x": 80,
+      "y": 92,
+      "w": 640,
+      "h": 480
+    },
     "alpha_after_windown": null,
-    "alpha_after_windown_err": null,
-    "alpha_after_winup": null,
+    "alpha_after_windown_err": "Host { message: \"window client area is empty\" }",
+    "alpha_after_winup": {
+      "x": 80,
+      "y": 92,
+      "w": 640,
+      "h": 480
+    },
     "alpha_after_winup_err": null,
-    "charlie": null
+    "charlie": {
+      "x": 400,
+      "y": 312,
+      "w": 640,
+      "h": 480,
+      "scale": 1.0
+    }
   },
-  "moved_events_alpha": 1,
+  "moved_events_alpha": 5,
   "monitors": [
     {
       "name": "78692035-3a04-52f3-a2bf-1133155ae828",
@@ -106,10 +282,10 @@
   "environment": {
     "os": "windows",
     "arch": "x86_64",
-    "revision": "d7b1f013"
+    "revision": "unknown"
   },
   "run": {
-    "ticks": 183,
-    "elapsed_ms": 38331
+    "ticks": 787,
+    "elapsed_ms": 92582
   }
 }
