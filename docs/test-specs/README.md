@@ -54,6 +54,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Qonw7qg8hdeWBuDqEqQ | Issue #233 prefetch discard/drain/reopen_at + contract-doc test specification | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | TSPEC-Jm8jpNK8kjkyBaizXBqwQo | Issue #238 テスト仕様 — l1_proxy_e2e 同期機構の不変条件 | approved | [issue-238-l1-proxy-e2e-sync.md](./issue-238-l1-proxy-e2e-sync.md) |
 | TSPEC-034UdQbwnBMc4dBhcTwfxI | Issue #243 GPUI 実窓 lifecycle 実機検証 試験仕様 | in-progress | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
+| TSPEC-034V4sgGc35MAPIRgG7lmm | Issue #243 — Windows 実 OS multiwindow smoke 検証契約 | approved | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | TSPEC-034QxdOanEeX8da72nWdYo | Issue #244 prefetch boundary-first/dead-generation/End commit-once test specification | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | TSPEC-034UjQC8AnQxl52Q8wCT6N | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | TSPEC-sFT08b6Qp306TbonlKfL28 | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
