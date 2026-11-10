@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-10"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -231,8 +231,9 @@ Observability 統合設計正本（単一クレート・OBS-01〜11・
   設計文書が完璧でも gate 未実施なら Issue #275 の受入は
   未完である — この分離を崩すと「設計合意＝受入完了」の
   誤認が起きる。
-- 参照先 Issue の状態（OPEN/CLOSED）は変動する。本書は
-  2026-11-09 時点の snapshot（#276/#277/#279/#280 CLOSED、
-  #278/#281/#289〜#294 OPEN、AL #138/SV #81 CLOSED）を
-  記録しており、将来の状態変化で接続表の「役割」記述が
-  古くなる可能性がある — snapshot 日付の明記で緩和する。
+- 参照先 Issue の状態（OPEN/CLOSED）は変動する。設計
+  書の snapshot は 2026-11-10 時点（#275/#281/#294 OPEN、
+  #276〜#280・#289〜#293 CLOSED、AL #138/SV #81 CLOSED）
+  へ更新済みであり、将来の状態変化で接続表の「役割」
+  記述が古くなる可能性がある — snapshot 日付の明記で
+  緩和する。
