@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034V68pdzoGf0crvlem0Zy"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #275 Observability integration design reconciliation and contract-test inventory"
 created: "2026-11-10"
 updated: "2026-11-10"
@@ -26,6 +26,8 @@ relations:
         path: "crates/ruviform-observability/src/collector/tests.rs"
       - type: "file"
         path: "docs/designs/issue-275-observability-integration-design.md"
+      - type: "file"
+        path: "docs/test-specs/issue-275-observability-integration-design.md"
       - type: "file"
         path: "docs/impl/ir/README.md"
     deleted: []
@@ -209,26 +211,43 @@ quiescence→final drain→unregister の競合安全・外部故障
 
 ## Validation
 
-canonical（`mise run`、worktree = `feature/275-obs-design-authority`）:
+canonical（`mise run`、worktree = `feature/275-obs-design-authority`、
+`git merge origin/main`（72b00642）取込後・Windows 11・
+rust 1.99.0 pinned）:
 
-- `mise run fmt-check` — （実行結果を記録）
-- `mise run check`（`cargo check --workspace --all-targets`）— exit 0。
-- `mise run lint` — （実行結果を記録）
-- `mise run test` — （実行結果を記録）
-- `mise run test-rt` — （実行結果を記録）
+- `mise run fmt-check` — exit 0。
+- `mise run check`（`cargo check --workspace --all-targets`）—
+  exit 0。
+- `mise run lint`（`cargo clippy --workspace --all-targets --
+  -D warnings`）— exit 0。
+- `mise run test`（`cargo test --workspace`）— exit 0。
+- `mise run test-rt`（`cargo test --workspace rt_`）— exit 0。
 - `mise run test-observability-msrv`（`mise exec rust@1.89.0 --
-  cargo test -p ruviform-observability --all-features`）—
-  （実行結果を記録）
+  cargo test -p ruviform-observability --all-features`）— exit 0
+  （lib 298 + integration 15 + logging 28 + rt_boundary 3 +
+  doctest 15 全 pass、MSRV 1.89 toolchain）。
 
-補助証拠（canonical = mise、直接 cargo）:
+補助証拠（canonical = mise、直接 cargo・feature 組合せ）:
 
 - `cargo test -p ruviform-observability --all-features --test
   rt_boundary` — 3 tests 全 pass。
+- `cargo test -p ruviform-observability --features
+  tracing-export --test rt_boundary` — 3 tests 全 pass
+  （`required-features` の最小 feature 単独でも target が
+  build・実行されることを確認）。
 - `cargo test -p ruviform-observability --lib
   abandoned_leases_racing` — 1 test pass。
 - `gh issue view`（#275〜#294）— Issue 状態 snapshot
   （2026-11-10）: #275/#281/#294 OPEN、#276〜#280・
   #289〜#293 CLOSED。
+- `audit_docs.js --type all` — 本 slice の docs
+  （issue-275 設計書・test-spec・本 IR）に対する finding 0
+  （repo 全体の既存 finding は範囲外）。
+- `doc_maintenance.js plan --type all` — 本 slice 起因の
+  action 0。`docs/tasks/README.md` の index rebuild 指摘
+  （index-duplicate-entry 等）は merge 後も残る main 既存の
+  drift であり、本 slice は task 文書を変更していないため
+  対象外として未対応（証拠として記録）。
 
 ## Risks
 
