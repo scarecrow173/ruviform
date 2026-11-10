@@ -62,6 +62,38 @@ mod fixtures {
         pub(crate) name: String,
     }
 
+    /// `NameDoc` with serde's `deny_unknown_fields` — pins that schema
+    /// strictness is the consumer's serde-level choice, not something
+    /// the adapter imposes or forbids.
+    #[cfg(any(feature = "json", feature = "yaml", feature = "toml"))]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub(crate) struct StrictNameDoc {
+        pub(crate) name: String,
+    }
+
+    /// High-precision `f64` values for round-trip exactness probes.
+    #[cfg(any(feature = "json", feature = "yaml", feature = "toml"))]
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub(crate) struct Floats {
+        pub(crate) a: f64,
+        pub(crate) b: f64,
+        pub(crate) c: f64,
+        pub(crate) d: f64,
+    }
+
+    #[cfg(any(feature = "json", feature = "yaml", feature = "toml"))]
+    impl Floats {
+        pub(crate) fn precise() -> Self {
+            Self {
+                a: 0.1,
+                b: 0.300_000_000_000_000_04,
+                c: 1.797_693_134_862_315_7e308,
+                d: -2.5e-10,
+            }
+        }
+    }
+
     /// A CSV row bound by header names (`#[cfg]`-visible under `csv`).
     #[cfg(feature = "csv")]
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,7 +105,7 @@ mod fixtures {
 
 #[cfg(feature = "json")]
 mod json_tests {
-    use super::fixtures::{Manifest, NameDoc};
+    use super::fixtures::{Floats, Manifest, NameDoc, StrictNameDoc};
     use ruviform_io_structured::{DocumentErrorKind, DocumentFormat, InputLimits, json};
     use std::collections::HashMap;
     use std::error::Error;
@@ -233,11 +265,75 @@ mod json_tests {
             .expect_err("failing reader must fail");
         assert_eq!(err.kind(), DocumentErrorKind::Io);
     }
+
+    #[test]
+    fn unknown_fields_are_ignored_unless_the_consumer_denies_them() {
+        // Serde's default skips unknown members — the adapter does not
+        // impose schema policy. `deny_unknown_fields` is the consumer's
+        // opt-in strictness and must still classify as `DataModel`.
+        let mut input = br#"{"name":"a","surprise":1}"#.as_slice();
+        let doc: NameDoc = json::from_reader(&mut input, &json::JsonReadOptions::default())
+            .expect("lenient parse");
+        assert_eq!(doc.name, "a");
+
+        let mut strict_input = br#"{"name":"a","surprise":1}"#.as_slice();
+        let err = json::from_reader::<StrictNameDoc>(
+            &mut strict_input,
+            &json::JsonReadOptions::default(),
+        )
+        .expect_err("deny_unknown_fields must reject");
+        assert_eq!(err.kind(), DocumentErrorKind::DataModel);
+
+        let mut clean_input = br#"{"name":"b"}"#.as_slice();
+        let clean: StrictNameDoc =
+            json::from_reader(&mut clean_input, &json::JsonReadOptions::default())
+                .expect("strict parse of clean input");
+        assert_eq!(clean.name, "b");
+    }
+
+    #[test]
+    fn float_precision_round_trips_bit_exact() {
+        // serde_json's shortest-round-trip float encoding must preserve
+        // f64 values exactly — consumers rely on this for numeric
+        // fidelity (manifest scores, timestamps, ratios).
+        let value = Floats::precise();
+        let mut bytes = Vec::new();
+        json::to_writer(&mut bytes, &value, &json::JsonWriteOptions::default()).expect("serialize");
+        let mut slice = bytes.as_slice();
+        let back: Floats =
+            json::from_reader(&mut slice, &json::JsonReadOptions::default()).expect("parse");
+        assert_eq!(back, value);
+        for (a, b) in [
+            (back.a, value.a),
+            (back.b, value.b),
+            (back.c, value.c),
+            (back.d, value.d),
+        ] {
+            assert_eq!(a.to_bits(), b.to_bits(), "f64 bits must round-trip exactly");
+        }
+    }
+
+    #[test]
+    fn extreme_nesting_is_backend_fixed_syntax_not_fake_limit() {
+        // serde_json's recursion limit is fixed inside the backend —
+        // exceeding it is honestly `Syntax`, never a pretend
+        // `LimitExceeded` from `InputLimits` (which has no depth knob).
+        let mut doc = vec![b'['; 256];
+        doc.extend(std::iter::repeat_n(b']', 256));
+        let mut input = doc.as_slice();
+        // `Value` forces real recursive descent — `IgnoredAny` skips the
+        // backend's depth accounting, so it cannot probe the limit.
+        let err =
+            json::from_reader::<serde_json::Value>(&mut input, &json::JsonReadOptions::default())
+                .expect_err("pathological nesting must fail");
+        assert_eq!(err.kind(), DocumentErrorKind::Syntax);
+        assert_ne!(err.kind(), DocumentErrorKind::LimitExceeded);
+    }
 }
 
 #[cfg(feature = "yaml")]
 mod yaml_tests {
-    use super::fixtures::{Manifest, NameDoc};
+    use super::fixtures::{Floats, Manifest, NameDoc, StrictNameDoc};
     use ruviform_io_structured::{DocumentErrorKind, DocumentFormat, InputLimits, yaml};
     use std::collections::BTreeMap;
     use std::error::Error;
@@ -358,11 +454,64 @@ mod yaml_tests {
             ));
         }
     }
+
+    #[test]
+    fn display_does_not_embed_input_text() {
+        // ERR-02: `DocumentError`'s own `Display` is the normalized
+        // surface — input content may only appear inside the erased
+        // `source()` diagnostic, never in the matchable error's text.
+        let mut input = b"name: [unclosed MARKER7f3a9c\n".as_slice();
+        let err = yaml::from_reader::<NameDoc>(&mut input, &yaml::YamlReadOptions::default())
+            .expect_err("malformed input must fail");
+        let rendered = err.to_string();
+        assert!(
+            !rendered.contains("MARKER7f3a9c"),
+            "Display must not echo input text: {rendered}"
+        );
+        assert!(rendered.contains("yaml"), "{rendered}");
+    }
+
+    #[test]
+    fn unknown_fields_are_ignored_unless_the_consumer_denies_them() {
+        let mut input = b"name: a\nsurprise: 1\n".as_slice();
+        let doc: NameDoc = yaml::from_reader(&mut input, &yaml::YamlReadOptions::default())
+            .expect("lenient parse");
+        assert_eq!(doc.name, "a");
+
+        let mut strict_input = b"name: a\nsurprise: 1\n".as_slice();
+        let err = yaml::from_reader::<StrictNameDoc>(
+            &mut strict_input,
+            &yaml::YamlReadOptions::default(),
+        )
+        .expect_err("deny_unknown_fields must reject");
+        assert_eq!(err.kind(), DocumentErrorKind::DataModel);
+    }
+
+    #[test]
+    fn float_precision_round_trips() {
+        // Finite f64 values must survive the YAML emit/parse pair
+        // without drift — consumers compare manifest/job numerics.
+        let value = Floats::precise();
+        let mut bytes = Vec::new();
+        yaml::to_writer(&mut bytes, &value, &yaml::YamlWriteOptions::new()).expect("serialize");
+        let mut slice = bytes.as_slice();
+        let back: Floats =
+            yaml::from_reader(&mut slice, &yaml::YamlReadOptions::default()).expect("parse");
+        assert_eq!(back, value);
+        for (a, b) in [
+            (back.a, value.a),
+            (back.b, value.b),
+            (back.c, value.c),
+            (back.d, value.d),
+        ] {
+            assert_eq!(a.to_bits(), b.to_bits(), "f64 bits must round-trip exactly");
+        }
+    }
 }
 
 #[cfg(feature = "toml")]
 mod toml_tests {
-    use super::fixtures::{Manifest, NameDoc};
+    use super::fixtures::{Floats, Manifest, NameDoc, StrictNameDoc};
     use ruviform_io_structured::{DocumentErrorKind, DocumentFormat, InputLimits, toml};
     use std::error::Error;
 
@@ -456,6 +605,57 @@ mod toml_tests {
         toml::to_writer(&mut bytes, &manifest, &toml::TomlWriteOptions::default())
             .expect("serialize");
         assert!(str::from_utf8(&bytes).is_ok(), "TOML output is UTF-8");
+    }
+
+    #[test]
+    fn display_does_not_embed_input_text() {
+        // ERR-02: even though the TOML backend diagnostic (`source()`)
+        // is reduced to its bare message, `DocumentError`'s own
+        // `Display` never renders input content.
+        let mut input = b"name = \"MARKER7f3a9c".as_slice();
+        let err = toml::from_reader::<NameDoc>(&mut input, &toml::TomlReadOptions::default())
+            .expect_err("unterminated string must fail");
+        let rendered = err.to_string();
+        assert!(
+            !rendered.contains("MARKER7f3a9c"),
+            "Display must not echo input text: {rendered}"
+        );
+        assert!(rendered.contains("toml"), "{rendered}");
+    }
+
+    #[test]
+    fn unknown_fields_are_ignored_unless_the_consumer_denies_them() {
+        let mut input = b"name = \"a\"\nsurprise = 1\n".as_slice();
+        let doc: NameDoc = toml::from_reader(&mut input, &toml::TomlReadOptions::default())
+            .expect("lenient parse");
+        assert_eq!(doc.name, "a");
+
+        let mut strict_input = b"name = \"a\"\nsurprise = 1\n".as_slice();
+        let err = toml::from_reader::<StrictNameDoc>(
+            &mut strict_input,
+            &toml::TomlReadOptions::default(),
+        )
+        .expect_err("deny_unknown_fields must reject");
+        assert_eq!(err.kind(), DocumentErrorKind::DataModel);
+    }
+
+    #[test]
+    fn float_precision_round_trips_bit_exact() {
+        let value = Floats::precise();
+        let mut bytes = Vec::new();
+        toml::to_writer(&mut bytes, &value, &toml::TomlWriteOptions::default()).expect("serialize");
+        let mut slice = bytes.as_slice();
+        let back: Floats =
+            toml::from_reader(&mut slice, &toml::TomlReadOptions::default()).expect("parse");
+        assert_eq!(back, value);
+        for (a, b) in [
+            (back.a, value.a),
+            (back.b, value.b),
+            (back.c, value.c),
+            (back.d, value.d),
+        ] {
+            assert_eq!(a.to_bits(), b.to_bits(), "f64 bits must round-trip exactly");
+        }
     }
 }
 
@@ -586,6 +786,59 @@ mod file_tests {
         let _ = failure.take_recovery_handle();
         // The pre-existing destination content is untouched.
         assert_eq!(fs::read(&dest).expect("read dest"), b"existing");
+    }
+
+    #[test]
+    fn file_error_source_chain_is_reachable() {
+        // ERR-01: every file-convenience failure keeps its inner cause
+        // reachable through `Error::source()` — Open → io::Error,
+        // Decode/Encode → DocumentError, Publish → PublishFailure.
+        use std::error::Error as _;
+
+        let dir = workdir("sourcechain");
+        let _guard = DirGuard(dir.clone());
+
+        let open_err =
+            json::read_file::<Manifest>(dir.join("absent.json"), &json::JsonReadOptions::default())
+                .expect_err("missing file must fail");
+        assert!(open_err.source().is_some(), "Open keeps io::Error source");
+
+        let bad = dir.join("bad.json");
+        fs::write(&bad, b"{oops").expect("seed");
+        let decode_err = json::read_file::<Manifest>(&bad, &json::JsonReadOptions::default())
+            .expect_err("bad content must fail");
+        assert!(
+            decode_err.source().is_some(),
+            "Decode keeps DocumentError source"
+        );
+
+        let mut bad_map: HashMap<(i32, i32), String> = HashMap::new();
+        bad_map.insert((1, 2), "x".to_owned());
+        let encode_err = json::write_file(
+            dir.join("enc.json"),
+            &bad_map,
+            &json::JsonWriteOptions::default(),
+            PublishOptions::new(PublishMode::CreateNew, Durability::FileSync),
+        )
+        .expect_err("unserializable value must fail");
+        assert!(
+            encode_err.source().is_some(),
+            "Encode keeps DocumentError source"
+        );
+
+        let pub_dest = dir.join("pub.json");
+        fs::write(&pub_dest, b"existing").expect("seed destination");
+        let publish_err = json::write_file(
+            &pub_dest,
+            &Manifest::sample(),
+            &json::JsonWriteOptions::default(),
+            PublishOptions::new(PublishMode::CreateNew, Durability::FileSync),
+        )
+        .expect_err("existing destination must fail");
+        assert!(
+            publish_err.source().is_some(),
+            "Publish keeps PublishFailure source"
+        );
     }
 }
 
@@ -1244,6 +1497,24 @@ mod csv_tests {
                 while matches!(reader.read_record(&mut record), Ok(true)) {}
             }
         }
+    }
+
+    #[test]
+    fn display_does_not_embed_field_text() {
+        // ERR-02: a typed-record failure reports the normalized
+        // classification — the offending field's bytes stay inside the
+        // erased `source()` diagnostic, never in `Display`.
+        let mut input = b"city,pop\nBoston,MARKER7f3a9c\n".as_slice();
+        let mut reader = csv::CsvReader::new(&mut input, &read_options()).expect("reader");
+        let err = reader
+            .read_typed::<Row>()
+            .expect_err("non-numeric pop must fail");
+        let rendered = err.to_string();
+        assert!(
+            !rendered.contains("MARKER7f3a9c"),
+            "Display must not echo field text: {rendered}"
+        );
+        assert!(rendered.contains("csv"), "{rendered}");
     }
 }
 
@@ -1974,6 +2245,29 @@ mod xml_tests {
         assert_eq!(first.kind(), DocumentErrorKind::Syntax);
         let second = reader.read_event(&mut buffer).expect_err("still poisoned");
         assert_eq!(second.kind(), DocumentErrorKind::Syntax);
+    }
+
+    #[test]
+    fn display_does_not_embed_input_text() {
+        // ERR-02: the adapter's own `XmlErrorDetail` source text is
+        // generic; `DocumentError`'s `Display` never renders input
+        // content even when the payload carries a marker.
+        let mut input = b"<root>MARKER7f3a9c</unclosed>".as_slice();
+        let mut reader = XmlEventReader::new(&mut input, &options());
+        let mut buffer = XmlEventBuffer::new();
+        let err = loop {
+            match reader.read_event(&mut buffer) {
+                Ok(Some(_)) => {}
+                Ok(None) => panic!("mismatched document must not reach EOF cleanly"),
+                Err(e) => break e,
+            }
+        };
+        let rendered = err.to_string();
+        assert!(
+            !rendered.contains("MARKER7f3a9c"),
+            "Display must not echo input text: {rendered}"
+        );
+        assert!(rendered.contains("xml"), "{rendered}");
     }
 }
 

@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-10"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -131,7 +131,7 @@ Cross-Consumer 移行完了を意味しない**。per-module の実装は
   確定）、Consumer 側の schema/version/migration・
   認可/Audit の意味論（各 Consumer が所有）。
 
-## 実装の現状（2026-11-09 snapshot）
+## 実装の現状（2026-11-10 snapshot）
 
 `crates/ruviform-observability` は main 上に存在し、
 `src/` のモジュール配置は Issue の構想木と概ね一致する。
@@ -150,33 +150,46 @@ Cross-Consumer 移行完了を意味しない**。per-module の実装は
 | `logging`（Dispatch/Subscriber builder/filter/sink/writer/health） | `logging` | #276（OBS-01） | `issue-276-…` |
 | `integration`（Host non-RT Runner/Config/Lifecycle/Health） | `integration` | #293（OBS-11） | `issue-293-…` |
 
-Issue 状態 snapshot（2026-11-09・`gh issue view`）:
+Issue 状態 snapshot（2026-11-10・`gh issue view`）:
 
 | Issue | 状態 | 備考 |
 | --- | --- | --- |
 | #275（本 Issue） | OPEN | 本書が正本文書。Gate 実行証拠は別途 |
 | #276 OBS-01 | CLOSED | logging adapter 実装済み |
 | #277 OBS-02 | CLOSED | core/source 契約実装済み |
-| #278 OBS-03 | OPEN | `tracing_export` モジュールは存在。受入残件あり |
+| #278 OBS-03 | CLOSED | `tracing_export` 実装済み（受入照合 slice #539 含む） |
 | #279 OBS-04 | CLOSED | plugin-host source 登録実装済み |
 | #280 OBS-05 | CLOSED | record/rt_bridge 実装済み（実機 Gate は別段階） |
 | #281 OBS-06 | OPEN | 両 Consumer 互換/RT/精度検証 Gate（継続） |
-| #289 OBS-07 | OPEN | collector/metrics 実装済み。受入残件あり |
-| #290 OBS-08 | OPEN | allocation-probe + rt_timing 実装済み（PR #519） |
-| #291 OBS-09 | OPEN | diagnostics 実装済み（PR #504 系）。受入残件監査済み |
-| #292 OBS-10 | OPEN | debug 実装済み（PR #508 系）。受入残件監査済み |
-| #293 OBS-11 | OPEN | integration runner 実装済み。受入残件あり |
+| #289 OBS-07 | CLOSED | collector/metrics 実装済み |
+| #290 OBS-08 | CLOSED | allocation-probe + rt_timing 実装済み |
+| #291 OBS-09 | CLOSED | diagnostics 実装済み（受入照合 #540 含む） |
+| #292 OBS-10 | CLOSED | debug 実装済み（受入照合 #542 含む） |
+| #293 OBS-11 | CLOSED | integration runner 実装済み |
 | #294 | OPEN | consumer-verify 横断 Gate 拡張 |
 | AL #138 | CLOSED | AudioLens 移行 Issue（Consumer repo 側受入） |
 | SV #81 | CLOSED | Synvelis 統合 Issue（Consumer repo 側受入） |
 
 **読み方の注意**: Issue OPEN は「コード非存在」を意味
-しない。#290/#291/#292 の残件 audit（PR #519 同梱の
-`docs/impl/ir/issue-290-obs-08-allocation-probe.md` 更新）
-では、対象行の多くが merge 済み実装で satisfied、
-cross-repo #281/Consumer 回帰行が `NotRun` と記録されて
-いる。Issue 状態・コード存在・受入証拠は別レイヤーの
-事実であり、本書はそれらを混同しない。
+しない。Issue 状態・コード存在・受入証拠は別レイヤーの
+事実であり、本書はそれらを混同しない。#281（OBS-06）
+と #294（consumer-verify）が OPEN のまま残るのは、
+両 Consumer の cross-repo 互換・RT・精度の実機証拠が
+未収集だからであり、in-repo の実装・契約試験の完了を
+意味しない。
+
+**2026-11-10 追記（実装照合・契約試験棚卸し slice）**:
+OBS-01〜11 の全実装 Issue が CLOSED となった時点で
+`crates/ruviform-observability` の module/feature 構成と
+本書の合意アーキテクチャを再照合した。headless 検証可能
+な契約試験ギャップとして、RT-suitable 操作の `tracing`/
+Subscriber 非発行を subscriber dispatch 設置下で固定する
+`tests/rt_boundary.rs`（3 test）と、lease abandon ×
+`Collector::shutdown` 競合での Partial drain を固定する
+collector test 1 件を追加した（記録:
+`docs/impl/ir/issue-275-obs-design-reconciliation.md`）。
+両 Consumer 実機受入・compile matrix 全組合せ・実機 RT
+保証は #281/#219/#294 の gate 段階であり `NotRun` のまま。
 
 ## 責務分担 — 本書と per-issue 正本
 
@@ -448,19 +461,22 @@ adapter・diagnostics/debug の機構と RT 安全性。
 ## 証拠項目対応 — 受入 Gate 9 項目の索引
 
 Issue #275 受入条件（= 受入 Gate 全項目）各行の正本
-対応。**本 slice は docs のみであり、実行証拠の収集・
-判定は #281/#219/#294 の gate 段階**。
+対応。**gate 実行証拠の収集・判定は #281/#219/#294 の
+gate 段階**であり、本書はその索引。2026-11-10 の
+実装照合 slice は in-repo で検証可能な契約試験の
+不足分のみを補完した（`docs/impl/ir/
+issue-275-obs-design-reconciliation.md`）。
 
 | # | Gate 項目 | 証拠の正本 |
 | --- | --- | --- |
 | G-1 | 単一 crate/Feature DAG コンパイル確認・core 使用時に外部 Subscriber/Logging 非強制 | `crates/ruviform-observability/Cargo.toml` feature matrix + #276/#293 の feature 組合せ検証 + #281 G0。compile matrix 実行は `NotRun` |
-| G-2 | RT call path に alloc/blocking lock/OS IO/`tracing`/Subscriber/無制限 queue/制御されない Drop がない | `rt_` レーン `assert_no_alloc` 系 test（#277/#280/#290 test-spec）+ #281 G3 + 実機負荷 Gate（別段階） |
-| G-3 | Counter/Gauge/Histogram・Collector Snapshot・Diagnostics・Debug・CountingAllocator・Tracing Export・Logging の契約試験 | per-issue test-spec（`issue-276-generic-logging-adapter.md`・`issue-277-observability-core-source-tests.md`・`issue-278-…-tests`・`issue-279-…-tests`・`issue-280-rt-record-bridge-tests.md`・`issue-289-…-tests`・`issue-290-observability-allocation-probe-tests.md`・`issue-290-observability-rt-timing-tests.md`・`issue-291-…-tests`・`issue-292-…-tests`・`issue-293-…-tests`）+ crate `tests/` contract tests + `mise run test-rt` 系 lane |
-| G-4 | Source quiescence→final drain→unregister の競合安全・loss/stale/clock/epoch 非偽装 | `issue-277-…`/`issue-289-…`/`issue-280-…` の lifecycle・drain・validity 規則 + 各 test-spec |
+| G-2 | RT call path に alloc/blocking lock/OS IO/`tracing`/Subscriber/無制限 queue/制御されない Drop がない | `rt_` レーン `assert_no_alloc` 系 test（#277/#280/#290 test-spec）+ `tests/rt_boundary.rs`（dispatch 設置下での `tracing` 非発行、2026-11-10 追加）+ #281 G3 + 実機負荷 Gate（別段階） |
+| G-3 | Counter/Gauge/Histogram・Collector Snapshot・Diagnostics・Debug・CountingAllocator・Tracing Export・Logging の契約試験 | per-issue test-spec（`issue-276-generic-logging-adapter.md`・`issue-277-observability-core-source-tests.md`・`issue-278-…-tests`・`issue-279-…-tests`・`issue-280-rt-record-bridge-tests.md`・`issue-289-…-tests`・`issue-290-observability-allocation-probe-tests.md`・`issue-290-observability-rt-timing-tests.md`・`issue-291-…-tests`・`issue-292-…-tests`・`issue-293-…-tests`）+ crate `tests/` contract tests（`integration`/`logging`/`rt_boundary`）+ `src/*/tests.rs` unit test + `mise run test-rt` 系 lane |
+| G-4 | Source quiescence→final drain→unregister の競合安全・loss/stale/clock/epoch 非偽装 | `issue-277-…`/`issue-289-…`/`issue-280-…` の lifecycle・drain・validity 規則 + 各 test-spec + collector lifecycle test（abandon×shutdown 競合を含む、2026-11-10 追加） |
 | G-5 | AudioLens 旧 Logging 既定 OFF/`AL_LOG`/stderr/json/inspect stdout/daily 7 世代/機密・f64/samply 維持 | AL #138（CLOSED）+ `issue-276-…` derived requirements + #281 G1 Golden 比較（consumer-verify 実走は `NotRun`） |
 | G-6 | Synvelis Rust Host/Multiwindow/Playback/Plugin/Gateway で Subscriber/RT 安全/認可・Audit 分離 | SV #81（CLOSED）+ `issue-293-…` host 境界 + `issue-292-…` session 権限 + #281 G4 |
 | G-7 | 外部 Provider/Exporter 故障で RT/Job 正本・Source のメトリクス/Query を損なわない | `issue-276-…` SinkFailureMode/Health・`issue-293-…` drain/error isolation・`issue-291-…` sink panic isolation + #281 G4 |
-| G-8 | MSRV・Linux/macOS/Windows・Cross-Repo #219/#281 に Evidence（未実行は NOT RUN） | #219 consumer-verify runbook + #294 candidate gate + #281 PASS 証跡書式。本 slice 環境は Windows のみ・docs のみ |
+| G-8 | MSRV・Linux/macOS/Windows・Cross-Repo #219/#281 に Evidence（未実行は NOT RUN） | #219 consumer-verify runbook + #294 candidate gate + #281 PASS 証跡書式。`test-observability-msrv`（MSRV 1.89・all features）は 2026-11-10 slice で実行済み。Linux/macOS・cross-repo evidence は `NotRun` |
 | G-9 | #101/#103 の古い Logging 保留・クレート抽出前提を合意版として設計書更新し影響変更を記録 | 本 slice: `foundation-observability-minimal-api.md`・`shared-foundations-and-modularization-policy.md` への改訂注記（後述） |
 
 ## #101/#103 前提の更新記録
@@ -507,7 +523,7 @@ Issue 合意 G-9 に対応し、本 slice で以下 2 文書へ合意版
   対応表に限定し、詳細語彙（型名・variant・閾値）は
   per-issue 正本への参照で構成する。
 - **snapshot 陳腐化**: Issue 状態・module 存在は
-  2026-11-09 時点。将来の merge/close で表が古くなる
+  2026-11-10 時点。将来の merge/close で表が古くなる
   可能性は snapshot 日付の明記で緩和する。
 - **feature matrix の誤読**: 合意構想の feature 名と実
   装の差異を「未実装の不備」と誤読しないよう、突合表と

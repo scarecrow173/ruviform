@@ -347,6 +347,20 @@ run = "cargo run -p ruviform-ui-gpui --features gpui --example real_os_smoke -- 
 [tasks.example-ui-gpui-real-os-pointer-smoke]
 description = "Run the Issue #313 real-OS SendInput pointer smoke on the interactive session (manual verification — writes verdict-pointer-windows.json; exit 0=pass, 1=fail, 2=unsupported)"
 run = "cargo run -p ruviform-ui-gpui --features gpui --example real_os_pointer_smoke -- --out evidence/rf313-os-capability-matrix/verdict-pointer-windows.json"
+# Issue #243 multiwindow lane (real OS session only, never CI):
+# creates 3 real GPUI windows and drives per-window focus,
+# Alt+F4 close choreography, Dock detach/reattach/move,
+# Win+Arrow move/minimize/restore, regeneration, and
+# window-vs-app Job policy through Win32 SendInput (keyboard/
+# pointer) plus example-local modifier chords. Independent OS
+# oracles (foreground title, WindowFromPoint, cursor read-back)
+# accompany the GPUI semantic oracle. SendInput is OS automation
+# injection — not physical manual input. The real cursor is
+# moved and restored on exit; do not touch mouse/keyboard while
+# it runs (~95s).
+[tasks.example-ui-gpui-real-os-multiwindow-smoke]
+description = "Run the Issue #243 real-OS multiwindow smoke on the interactive session (manual verification — writes verdict-multiwindow-windows.json; exit 0=pass, 1=fail, 2=unsupported)"
+run = "cargo run -p ruviform-ui-gpui --features gpui --example real_os_multiwindow_smoke -- --out evidence/issue-243-multiwindow-verify/verdict-multiwindow-windows.json"
 [tasks.example-ui-webview-e2e]
 description = "Run the real WebView round-trip check (page load → IPC → event delivery; WebView2 on Windows, manual verification — not a CI lane)"
 run = "cargo run -p ruviform-ui-webview --features webview --example e2e_smoke"

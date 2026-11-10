@@ -11,6 +11,7 @@ Directory: `docs/tasks`
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034udQraUdxLs1SxuYiaAK | Issue #127 Linux 実配布方式 設計 — docs チェーン作成・索引再生成・検証・PR | in-progress | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
+| TASK-034V4uYcdcMjdFzOg15rFm | Issue #243 — Windows 実 OS multiwindow smoke 実装タスク | in-progress | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
 | TASK-AsjkeCFskQSQZMsB5Tgl5H | Issue #301 T2 — zstd format/contract/API 試験 | completed | [issue-301-t2-zstd-tests.md](./issue-301-t2-zstd-tests.md) |
 | TASK-nnP07tqKBoCJML7LH9xWsQ | Issue #301 T3 — compression-verify lane matrix・crate 文書 | completed | [issue-301-t3-ci-docs.md](./issue-301-t3-ci-docs.md) |
@@ -269,6 +270,7 @@ Directory: `docs/tasks`
 | TASK-1EfMLBvEIXGocxCFFgixSj | Issue #377 — QueryBinding adopt-on-join 実装と恒久テスト | done | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | TASK-034Uhnq0kOMsOzPLSOL8Bz | Issue #378 T1 oracle addBinding epoch 整合 | done | [issue-378-t1-oracle-addbinding-epoch.md](./issue-378-t1-oracle-addbinding-epoch.md) |
 | TASK-hCLO8YPWLtzGOIGdhW5yxp | Issue #389 Plugin Editor Session headless fixture タスク（contract 認定 + DSP/RT 非干渉 fixture） | done | [issue-389-editor-session-headless.md](./issue-389-editor-session-headless.md) |
+| TASK-Q2ek2gQVRR1KvvM8kyaMei | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture タスク | done | [issue-389-editor-session-statemachine.md](./issue-389-editor-session-statemachine.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
 | TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | done | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TASK-034UwdhT5Gt2dptCoVPLfF | Issue #410 P2 — view ledger correlation hardening | done | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |

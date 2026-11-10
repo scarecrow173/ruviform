@@ -54,6 +54,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Qonw7qg8hdeWBuDqEqQ | Issue #233 prefetch discard/drain/reopen_at + contract-doc test specification | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | TSPEC-Jm8jpNK8kjkyBaizXBqwQo | Issue #238 テスト仕様 — l1_proxy_e2e 同期機構の不変条件 | approved | [issue-238-l1-proxy-e2e-sync.md](./issue-238-l1-proxy-e2e-sync.md) |
 | TSPEC-034UdQbwnBMc4dBhcTwfxI | Issue #243 GPUI 実窓 lifecycle 実機検証 試験仕様 | in-progress | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
+| TSPEC-034V4sgGc35MAPIRgG7lmm | Issue #243 — Windows 実 OS multiwindow smoke 検証契約 | approved | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | TSPEC-034QxdOanEeX8da72nWdYo | Issue #244 prefetch boundary-first/dead-generation/End commit-once test specification | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | TSPEC-034UjQC8AnQxl52Q8wCT6N | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | TSPEC-sFT08b6Qp306TbonlKfL28 | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
@@ -129,6 +130,7 @@ Directory: `docs/test-specs`
 | TSPEC-rf388DockLayoutPoc01 | Issue #388 GPUI Panel/Tab レイアウト内 Editor 埋め込みの実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-layout-poc.md](./issue-388-native-dock-layout-poc.md) |
 | TSPEC-rf388DockWindowing01 | Issue #388 slice 3 windowing 挙動の実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | TSPEC-Vqv91J1zDZ6Qvi57khd2TT | Issue #389 Plugin Editor Session headless fixture テスト仕様（DSP/RT 非干渉 + contract edge + focus 境界） | approved | [issue-389-editor-session-headless.md](./issue-389-editor-session-headless.md) |
+| TSPEC-Q5Bwy4OQ5KsQyE0Z4uhWg6 | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture テスト仕様（terminal-event・stale・timeout・degrade・crash） | approved | [issue-389-editor-session-statemachine.md](./issue-389-editor-session-statemachine.md) |
 | TSPEC-034UnAjuxNxMXzDMasVYeO | Issue #389 Plugin Editor Session hardening テスト仕様（fake-clock timeout・degrade・GraphicsLost contract） | approved | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TSPEC-034TaI7Luee0T88mH1IYv2 | Issue #390 Driver Boundary/Lab 検証 | draft | [issue-390-driver-boundary-lab.md](./issue-390-driver-boundary-lab.md) |

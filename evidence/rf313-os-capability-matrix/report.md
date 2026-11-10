@@ -186,3 +186,49 @@ RF313_POINTER_SMOKE_VERDICT=/tmp/pv.json RF313_POINTER_SMOKE_REVISION=<rev> \
   Fail になり得る — manual lane の運用注意として明記。
   Tab 巡回順は spec の tab stop 順に依存するが、assert は順序非依存
   （2 control の網羅と値方向のみ検査）。
+
+## Issue #243 multiwindow slice（2026-11-10 追記）
+
+`real_os_multiwindow_smoke`（`mise run
+example-ui-gpui-real-os-multiwindow-smoke`）による 3 実 Window の
+multiwindow/Dock/Job lifecycle を `SendInput` keyboard/pointer +
+example-local chord（Win+Arrow・Alt+F4）で駆動した Windows 実測。
+証拠: `evidence/issue-243-multiwindow-verify/`。
+
+| 対象 | 判定 | 根拠 |
+| --- | --- | --- |
+| 3 実 Window 生成・window 別 focus（実クリック）・keyboard commit・update_view state 保持・Dock detach/move/abort/reattach・Win+Arrow 実移動・minimize/restore・再生成（新 WindowId + fresh view state）・view ownership・Window-owned Job cancel vs Application-owned Job 生存・orphan view なし・teardown 後 runtime 生存 | **Pass（前回実測）** | pre-refactor binary の 1 回実測で全 check green（verdict=pass）。verdict JSON は環境ブロック run で上書き済みのため、詳細は `environment-blocked-sendinput.md` と本記録を参照 |
+| post-refactor binary の実 OS 再検証 | **NotRun** | 実行時点で host の `SendInput`/`SendKeys` が system-wide に無効化（受付を返すが注入イベントが一切効果を持たない。legacy `mouse_event`/`keybd_event`/`SetCursorPos` は正常）。`vgk`/`vgc`/`vgtray` 停止・LG HUB/GameInput proxy kill 後も不変。原因は未同定の injected-input filter で、worker 権限では除去不能。健全 host での再実行が必要 |
+| move/close/focus 失敗時の stale handle・二重破棄・孤立 view・RT 停止なし | **Pass（前回実測）+ NotRun（再検証）** | 前回 run で `destroyed_lifecycle_trace`/`no_orphaned_views`/`runtime_alive_after_teardown` が green。最終コードは headless lane で検証済みだが実 OS 再検証は環境ブロック |
+| macOS / Linux multiwindow | **NotRun** | 本環境は Windows のみ |
+| 動的 DPI・モニター間移動・モニター切断 | **NotRun** | 静的 2 monitor @1.0 のみ実測 |
+| Native Plugin Dock | **NotRun** | #388/#389・Synvelis #176 の OS 別 Gate。Floating/Generic fallback・Mock/画像を Native Dock PASS にしない |
+| consumer（AudioLens/Synvelis）非回帰 | **NotRun** | fixture/契約レベルのみ。consumer 実機は別 Gate |
+
+### 環境ブロックの記録（`environment-blocked-sendinput.md`）
+
+post-refactor run が `per_window_focus_real_click` で fail した原因を
+host-level で切り分けた結果、**SendInput がシステム全体で無効**
+（マウス・キーボード両方、絶対/相対両方、対話 session・
+Task Scheduler context の双方で `sent=1` を返しつつ効果ゼロ）
+であることを確認。`mouse_event`/`keybd_event`/`SetCursorPos` は
+正常に動作し、Riot Vanguard（`vgk`/`vgc`/`vgtray`）、LG HUB、
+GameInput user-mode proxy を停止しても改善しない。class
+Upper/LowerFilters・BlockInput・RDP・アクセシビリティ設定・
+IL 差異はいずれも否定済み。`LLMHF_INJECTED` 付きイベントを
+落とす user-mode hook または kernel filter が session 中に
+導入された可能性が高いが、サービス停止には admin 権限が必要で
+worker の範囲外。fixture 側は cursor read-back oracle で
+「SendInput 受理 ≠ カーソル到達」を検出し fail として正直に
+記録する設計であり、oracle を弱めた Pass 偽装はしていない。
+
+### 再現・再検証手順
+
+```sh
+# SendInput -> GetCursorPos preflight: カーソルが動けば健全
+# （例: sendinput-rel-test 相当の move_to -> cursor_position）
+mise run example-ui-gpui-real-os-multiwindow-smoke
+# verdict: evidence/issue-243-multiwindow-verify/verdict-multiwindow-windows.json
+# exit code: 0=pass / 1=fail / 2=unsupported(非 Windows)
+# 実行中はマウス/キーボードに触れないこと（実カーソルを使用・復元）
+```

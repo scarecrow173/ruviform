@@ -343,3 +343,23 @@ fn staging_root_survives_nothing_on_plan_failure() {
     assert!(!exists(&f.staging_root));
     assert!(f.handle().is_none());
 }
+
+// --- archive payloads are opaque --------------------------------------
+
+#[test]
+fn nested_archive_payload_is_extracted_opaquely() {
+    // A ZIP inside a ZIP is just bytes: extraction never recurses into
+    // nested archives (that would be a consumer-level decision).
+    let dir = TestDir::new("zip-nested");
+    let inner = build_simple(&[EntrySpec::stored("inner.txt", b"nested")]);
+    let bytes = build_simple(&[EntrySpec::stored("bundle.zip", &inner)]);
+    let tree = extract(bytes, dir.path(), options()).expect("extract");
+    let root = tree.path().to_path_buf();
+    assert_eq!(
+        read_staged(&root.join("bundle.zip")).as_deref(),
+        Some(inner.as_slice())
+    );
+    assert_eq!(tree.receipt().entries, 1);
+    assert_eq!(tree.receipt().unverified_entries, 0);
+    tree.cleanup().expect("cleanup");
+}
