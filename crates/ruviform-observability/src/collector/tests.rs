@@ -1114,6 +1114,75 @@ fn register_retire_and_poll_race_without_deadlock() {
 }
 
 #[test]
+fn abandoned_leases_racing_shutdown_still_drain_partial() {
+    // Issue #275 acceptance: quiescence → final drain → unregister
+    // stays safe *including races*. Every lease here is dropped
+    // without `retire` (abandon) on its own thread while the main
+    // thread shuts the collector down — whichever side of the race
+    // each drop lands on, the source must drain as `Partial` +
+    // `WriterNotQuiesced` (quiescence was never declared) and reach
+    // `Removed` exactly once.
+    const KEYS: &[&str] = &[
+        "test.abandon.race.a",
+        "test.abandon.race.b",
+        "test.abandon.race.c",
+        "test.abandon.race.d",
+        "test.abandon.race.e",
+        "test.abandon.race.f",
+        "test.abandon.race.g",
+        "test.abandon.race.h",
+    ];
+    const SOURCES: usize = KEYS.len();
+
+    let mut collector = Collector::new(config()).unwrap();
+    let port = collector.registration_port();
+    let handle = collector.handle();
+
+    let mut leases = Vec::with_capacity(SOURCES);
+    for key in KEYS {
+        let (_, source) = counter_source(key);
+        leases.push(port.register(source).unwrap());
+    }
+
+    let t0 = Instant::now();
+    collector.poll(t0).unwrap(); // baseline for every source
+
+    let mut threads = Vec::with_capacity(SOURCES);
+    for lease in leases {
+        threads.push(thread::spawn(move || {
+            // Widen the race window — the drop may land before,
+            // during, or after the shutdown drain pass.
+            thread::yield_now();
+            drop(lease);
+        }));
+    }
+    thread::yield_now();
+    handle.shutdown();
+    for t in threads {
+        t.join().unwrap();
+    }
+
+    assert_eq!(handle.state(), CollectorState::Stopped);
+    assert_eq!(handle.health().sources_removed_total, SOURCES as u64);
+
+    // The terminal batch carries one final measurement per source —
+    // all Partial because no lease ever declared quiescence.
+    let terminal = handle.latest_batch().expect("terminal drain batch");
+    assert_eq!(terminal.removed().len(), SOURCES);
+    let drained: Vec<_> = terminal
+        .measurements()
+        .iter()
+        .filter(|m| m.lifecycle == SourceLifecycle::Removed)
+        .collect();
+    assert_eq!(drained.len(), SOURCES);
+    for m in drained {
+        assert_eq!(m.validity, MeasurementValidity::Partial);
+        assert_eq!(m.issue, Some(MeasurementIssue::WriterNotQuiesced));
+    }
+    drop(collector);
+}
+
+#[test]
 fn mutex_poison_recovers_and_is_counted() {
     let mut collector = Collector::new(config()).unwrap();
     // A panic while holding the guard poisons the mutex; once
