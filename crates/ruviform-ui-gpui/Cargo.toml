@@ -104,6 +104,16 @@ name = "real_os_smoke"
 # backend and an interactive session that can take OS focus.
 required-features = ["gpui"]
 
+[[example]]
+name = "real_os_pointer_smoke"
+# Issue #313 real-OS pointer-input smoke (manual verification):
+# SendInput absolute move + left-button drag/click aimed through
+# measured component bounds + window geometry, verdict JSON with
+# environment metadata. Requires the real GPUI backend, an
+# interactive desktop session, and moves the real cursor (restored
+# on exit).
+required-features = ["gpui"]
+
 [[test]]
 name = "consumer_observation"
 # Issue #429 consumer seam test — external crate, binds only the public

@@ -336,6 +336,17 @@ run = "cargo run -p ruviform-ui-gpui --features gpui --example real_window_lifec
 [tasks.example-ui-gpui-real-os-smoke]
 description = "Run the Issue #313 real-OS SendInput keyboard smoke on the interactive session (manual verification — writes verdict-windows.json; exit 0=pass, 1=fail, 2=unsupported)"
 run = "cargo run -p ruviform-ui-gpui --features gpui --example real_os_smoke -- --out evidence/rf313-os-capability-matrix/verdict-windows.json"
+# Issue #313 pointer lane (real OS session only, never CI): mounts a
+# Fader+Seek view, waits for Ready+OS focus, aims absolute
+# move/down/up pointer input through measured component bounds +
+# window geometry via Win32 SendInput, and writes the verdict JSON
+# (environment metadata + cursor read-backs included) to the
+# capability-matrix evidence dir. SendInput is OS automation
+# injection — not physical manual input. The real cursor is moved
+# and restored on exit; do not touch mouse/keyboard while it runs.
+[tasks.example-ui-gpui-real-os-pointer-smoke]
+description = "Run the Issue #313 real-OS SendInput pointer smoke on the interactive session (manual verification — writes verdict-pointer-windows.json; exit 0=pass, 1=fail, 2=unsupported)"
+run = "cargo run -p ruviform-ui-gpui --features gpui --example real_os_pointer_smoke -- --out evidence/rf313-os-capability-matrix/verdict-pointer-windows.json"
 [tasks.example-ui-webview-e2e]
 description = "Run the real WebView round-trip check (page load → IPC → event delivery; WebView2 on Windows, manual verification — not a CI lane)"
 run = "cargo run -p ruviform-ui-webview --features webview --example e2e_smoke"

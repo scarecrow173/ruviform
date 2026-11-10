@@ -1,10 +1,15 @@
-# RF313 — OS Capability Matrix 証拠レポート（Windows 実 OS キーボード smoke・部分スコープ）
+# RF313 — OS Capability Matrix 証拠レポート（Windows 実 OS keyboard + pointer smoke・部分スコープ）
 
 Issue #313「RF-GT-04: OS 別ケースマトリクス + 実 OS smoke」の
 **Windows 部分スコープ**の実測証拠。実 GPUI window に value control
 （Fader + Seek）を mount し、Win32 `SendInput` で OS レベルの
-キーストロークを注入して、`WindowLifecycle::Action` intent が
-実 OS 入力経路で到達することを確認した。
+キーストローク（`verdict-windows.json`）と絶対座標ポインタ
+注入（`verdict-pointer-windows.json`）を送り、
+`WindowLifecycle::Action` intent が実 OS 入力経路で到達することを
+確認した。ポインタ注入は `GpuiDriver::component_bounds`（paint
+記録の論理 bounds）と `GpuiDriver::window_geometry`（client-area
+物理スクリーン rect）の計測値から照準を導出する — 座標の
+ハードコードはない。
 
 ## 判定
 
@@ -13,7 +18,8 @@ Issue #313「RF-GT-04: OS 別ケースマトリクス + 実 OS smoke」の
 | Windows 実 OS キーボード入力（SendInput）→ value control の commit intent 到達 | **Pass** | `verdict-windows.json`: verdict=pass、checks 全 4 項目 ok、exit code 0 |
 | Tab フォーカス移動（#451 `observe_keystrokes` → `focus_next`）が OS 入力で機能 | **Pass** | Tab → gain、Tab → seek と異なる control に commit が分散（value_commits 2 件） |
 | #479 キーボード規約（Right=+step / Left=−step、atomic begin+commit） | **Pass** | gain normalized 0.55（>0.5）、seek normalized 0.45（<0.5）。両 intent が `atomic: true` の begin/commit pair |
-| ポインタ（マウス）実入力 | **NotRun** | カーソル実占有を伴うため本 dispatch 対象外。owner: 後続 pointer smoke タスク |
+| Windows 実 OS ポインタ入力（SendInput 絶対 move + 左ボタン）→ gesture intent 到達 | **Pass** | `verdict-pointer-windows.json`: verdict=pass、checks 全 7 項目 ok、exit code 0。Fader drag で begin≈0.25→commit≈0.75、Seek click で begin+commit≈0.8（共に `atomic != true`、同一 `gesture_id`） |
+| ポインタ照準の計測基盤（component bounds + window geometry） | **Pass** | `window_geometry` = client-area (720,392) 480×320 phys px @scale 1.0、`component_bounds` = gain (0,0,32×296) / seek (0,296,480×24) logical px。カーソル read-back は commanded 座標から最大 1px 以内 |
 | macOS / Linux の全項目 | **NotRun** | 本環境は Windows のみ。実測なしに対応を推測しない |
 | IME / a11y / DPI 変更多数 / モニター切断 / 2 window | **NotRun** | 本 dispatch の対象外（Issue #313 の残スコープ） |
 
@@ -34,6 +40,14 @@ Issue #313「RF-GT-04: OS 別ケースマトリクス + 実 OS smoke」の
   （部分注入を成功と偽らない）。非 Windows では
   `UiError::Unsupported` を返し、example は verdict=`unsupported`
   / exit 2 で終了する（Pass に偽装しない）。
+- ポインタ側も同じ規約: `move_to`/`mouse_down`/`mouse_up`/
+  `cursor_position` は `SendInput`/`GetCursorPos` の Win32 実装で、
+  部分注入は `UiError::Host`、非 Windows は `Unsupported`。
+  絶対座標は `GetSystemMetrics` の virtual screen（負原点を
+  含む全モニタ空間）で 0..=65535 に正規化する。
+- ポインタ smoke は**実カーソルを物理的に動かす**。起動時の
+  カーソル位置を保存し verdict 確定後に復元する（best-effort、
+  失敗は stderr 記録）。実行中はマウス/キーボードに触れないこと。
 
 ## 対象・環境
 
@@ -52,6 +66,19 @@ Issue #313「RF-GT-04: OS 別ケースマトリクス + 実 OS smoke」の
 | toolchain | rustc 1.99.0（mise pin）、GPUI 0.2.2 |
 | 実行日時 | 2026-11-09T01:35:01Z（verdict JSON timestamp_utc） |
 
+### ポインタ smoke（`verdict-pointer-windows.json`、2026-11-10T04:46:46Z）
+
+| key | value |
+| --- | --- |
+| fixture | `mise run example-ui-gpui-real-os-pointer-smoke`（pointer スライスで追加した manual lane。canonical = mise） |
+| 実体 | `cargo run -p ruviform-ui-gpui --features gpui --example real_os_pointer_smoke -- --out evidence/rf313-os-capability-matrix/verdict-pointer-windows.json` |
+| view spec | keyboard smoke と同一 `Panel[Fader(gain), Seek(seek)]` |
+| pointer input | `move_to` + `mouse_down`/`mouse_up`（`os_input`、Win32 `SendInput` 絶対座標・左ボタン） |
+| 照準 | `window_geometry` = client-area 原点 (720,392)・480×320 物理 px・scale 1.0。`component_bounds` = gain (0,0,32×296)・seek (0,296,480×24) 論理 px。screen point = `origin + (component_origin + frac×size) × scale` |
+| 注入系列 | gain drag: (0.5,0.75)→down→(0.5,0.25)→up。seek click: (0.8,0.5)→down→up |
+| verdict | `verdict-pointer-windows.json`（verdict=pass、reasons=[]、checks 7/7 ok、elapsed 2527ms、ticks 23） |
+| OS / arch / GPU / display / revision | keyboard smoke と同一環境（Windows 11 Pro x86_64 / RTX 4070 SUPER / 2×1920×1080@1.0）。revision `1dc235b9e0dcece626721b1094b1cad7c6d125a3` |
+
 ## 観測値（実測、verdict-windows.json 転記）
 
 - `WindowLifecycle::Ready` → `Focused(true)` を観測後に注入開始
@@ -65,14 +92,35 @@ Issue #313「RF-GT-04: OS 別ケースマトリクス + 実 OS smoke」の
   #451 の Tab 巡回が OS 入力経路で機能したことの裏付け。
 - `inject_result: "ok"`（4 キー全て `SendInput` 2/2 イベント投入）。
 
+## 観測値（ポインタ smoke、verdict-pointer-windows.json 転記）
+
+- `Ready` → `Focused(true)` → geometry/bounds 計測後に注入開始
+  （`ready/focused/geometry_and_bounds` 全て ok）。
+- カーソル read-back 3 件、commanded 座標から最大 1px 以内
+  （tolerance ±4px、`cursor_reached_targets` ok）— SendInput
+  受付ではなく `GetCursorPos` 実測でカーソル到達を確認。
+- `Action` intent 5 件（gesture 2 組、いずれも `atomic` 非 true）:
+  - `gain`（gesture_id `gpui-1`）: begin `normalized: 0.25` →
+    preview `0.75` → commit `0.75`（ドラッグ下端→上端、
+    Fader は上=最大なので値上昇）
+  - `seek`（gesture_id `gpui-2`）: begin `normalized: 0.8` →
+    commit `0.8`（クリック、`expect_receipt: true`）
+- Preview は contract 上 coalescible のため合格条件にせず
+  件数のみ記録（本実行では 1 件観測）。
+- `inject_result: "ok"`（move×3 + down×2 + up×2 の全
+  `SendInput` が期待イベント数を投入）。
+- 実行前カーソル位置を保存し終了時に復元（verdict 確定後・
+  window close 前、best-effort）。
+
 ## 実行した検証
 
 | コマンド | exit | 結果 |
 | --- | --- | --- |
 | `mise run example-ui-gpui-real-os-smoke` | 0 | verdict=pass、`verdict-windows.json` 採取（Windows 11 Pro 実機・対話 session） |
+| `mise run example-ui-gpui-real-os-pointer-smoke` | 0 | verdict=pass、`verdict-pointer-windows.json` 採取（同一実機・2 回実行とも pass） |
 | `mise run check-ui-gpui` | 0 | `cargo check -p ruviform-ui-gpui --features gpui --all-targets` Pass |
 | `mise run lint-ui-gpui` | 0 | `cargo clippy -p ruviform-ui-gpui --all-targets --features gpui -- -D warnings` Pass |
-| `mise run test-ui-gpui` | 0 | 65 unit + 20 consumer_observation + 4 lab_story + 7 scenario_contract Pass（3 golden_capture real-window tests は desktop session 前提で ignored — 従来通り） |
+| `mise run test-ui-gpui` | 0 | 69 unit + 20 consumer_observation + 4 lab_story + 7 scenario_contract Pass（3 golden_capture real-window tests は desktop session 前提で ignored — 従来通り） |
 | `mise run fmt-check` | 0 | `cargo fmt --all -- --check` Pass |
 
 ## 関連証拠へのリンク
@@ -103,16 +151,24 @@ mise run example-ui-gpui-real-os-smoke
 # verdict JSON: evidence/rf313-os-capability-matrix/verdict-windows.json
 # exit code: 0=pass / 1=fail / 2=unsupported(非 Windows)
 
+# ポインタ smoke（実カーソルを動かし終了時に復元する。
+# 実行中はマウス/キーボードに触れないこと）
+mise run example-ui-gpui-real-os-pointer-smoke
+# verdict JSON: evidence/rf313-os-capability-matrix/verdict-pointer-windows.json
+# exit code: 0=pass / 1=fail / 2=unsupported(非 Windows)
+
 # 出力先・revision の上書き
 RF313_SMOKE_VERDICT=/tmp/v.json RF313_SMOKE_REVISION=<rev> \
   cargo run -p ruviform-ui-gpui --features gpui --example real_os_smoke
+RF313_POINTER_SMOKE_VERDICT=/tmp/pv.json RF313_POINTER_SMOKE_REVISION=<rev> \
+  cargo run -p ruviform-ui-gpui --features gpui --example real_os_pointer_smoke
 ```
 
 ## NotRun / Unsupported の理由と owner
 
 | 項目 | status | 理由 | owner / 後続 |
 | --- | --- | --- | --- |
-| ポインタ実入力（マウス移動・クリック） | NotRun | カーソル実占有・座標・clip/復元の設計が必要。本 dispatch はキーボードのみ | pointer smoke タスク（未起票） |
+| ポインタ右/中ボタン・修飾キー・ホイール | NotRun | 本スライスは左ボタン move/down/up のみ（`os_input` の公開範囲） | Issue #313 残スコープ |
 | macOS / Linux 全項目 | NotRun | 本 dispatch の環境は Windows のみ。未実行 OS の対応を推測しない | 各 OS の real-OS smoke タスク |
 | IME / a11y（OS 支援技術） | NotRun | 対象外。IME capability は #243 記録でも `ime: Unsupported` | 別 Issue |
 | DPI/マルチモニター変化・モニター切断・2 window | NotRun | 静的 2 monitor @1.0 のみ観測。変动态は未検証 | Issue #313 残スコープ |
