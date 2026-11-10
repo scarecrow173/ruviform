@@ -55,9 +55,15 @@
     },
     "real-os": {
      "layer": "real-os",
-     "status": "blocked",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/313",
-     "rerun": "OS Driver 到着後"
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/314",
+     "note": "Issue #314 slice 4: ruviform-ui-gpui の tests/real_window.rs::lab_story_sv_fader_dock_real_window が RealOsGuiTest（ScenarioDriver::RealOs, real-scenario feature）経由で canonical ViewSpec を実 OS window に mount し、synvelis-dark × scale 1.0 で idle→focus→drag→commit→stale→invalid→teardown の semantic trace が共有 oracle expected_lab_story_trace と一致することを検証。semantic dispatch は ViewHost 経由の semantic action であり pointer/keyboard/OS-input 証拠ではない（OS input gate は #313 の別 scope で blocked のまま）。pixel 層は capture_frame → GpuiDriver::capture_window（Win32 PrintWindow 主・screen BitBlt 副）による実 OS window pixel で、idle/teardown 両 state を取得し golden_check（driver_class=real-os, capture=RealWindow）で baseline_missing → candidate → promote → pass を検証。Windows 実 desktop session で実測。macOS/Linux capture backend・scale 2.0 cell・consumer 製品 fixture 実接続は本 slice 対象外。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-gpui",
+      "target": "real_window",
+      "filter": "lab_story_sv_fader_dock_real_window"
+     }
     }
    },
    "oracle": "Fader/Tabs/Dock slice が 2 scale factor で同一 semantic state 遷移（focus/drag/commit/stale/invalid/teardown）を持ち、synvelis-dark theme が一貫適用されること。",
@@ -110,9 +116,15 @@
     },
     "real-os": {
      "layer": "real-os",
-     "status": "blocked",
-     "owner": "https://github.com/scarecrow173/ruviform/issues/313",
-     "rerun": "OS Driver 到着後"
+     "status": "pass",
+     "owner": "https://github.com/scarecrow173/ruviform/issues/314",
+     "note": "Issue #314 slice 4: ruviform-ui-gpui の tests/real_window.rs::lab_story_al_waveform_seek_real_window が RealOsGuiTest（ScenarioDriver::RealOs, real-scenario feature）経由で canonical ViewSpec を実 OS window に mount し、audiolens-dark × scale 1.0 で idle→focus→drag→commit→stale→invalid→teardown の semantic trace が共有 oracle expected_lab_story_trace と一致することを検証。semantic dispatch は ViewHost 経由の semantic action であり pointer/keyboard/OS-input 証拠ではない（OS input gate は #313 の別 scope で blocked のまま）。pixel 層は capture_frame → GpuiDriver::capture_window（Win32 PrintWindow 主・screen BitBlt 副）による実 OS window pixel で、idle/teardown 両 state を取得し golden_check（driver_class=real-os, capture=RealWindow）で baseline_missing → candidate → promote → pass を検証。Windows 実 desktop session で実測。macOS/Linux capture backend・scale 2.0 cell・consumer 製品 fixture 実接続は本 slice 対象外。",
+     "mechanism": {
+      "kind": "cargo-test",
+      "package": "ruviform-ui-gpui",
+      "target": "real_window",
+      "filter": "lab_story_al_waveform_seek_real_window"
+     }
     }
    },
    "oracle": "Waveform/Seek slice が 2 scale factor で同一 semantic state 遷移を持ち、audiolens-dark theme が一貫適用されること。",
