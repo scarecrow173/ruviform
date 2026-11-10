@@ -168,7 +168,8 @@ Issue #313 は「実際のユーザー入力経路を通る Smoke と OS 別可�
 - macOS / Linux の実 OS 計測 | 本環境は Windows のみ |
   各 OS 環境での実行時に同じ example/lane を再利用して行を埋める。
 - ポインタ（マウス）実入力 | カーソル実占有を伴い自動実行の副作用が
-  大きい | pointer 対応タスクで座標解決・focus 契約と併せて設計する。
+  大きい | 後続スライス `docs/specs/issue-313-windows-pointer-smoke.md`
+  で座標解決（計測ジオメトリ）・focus 契約と併せて実施済み。
 
 ## Sources and Relations
 

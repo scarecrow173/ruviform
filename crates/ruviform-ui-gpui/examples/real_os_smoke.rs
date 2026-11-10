@@ -23,7 +23,9 @@
 //! physical manual input, and it is a different layer from the GPUI
 //! test helpers (`dispatch_keystroke`/`simulate_keystrokes`), which
 //! never leave the toolkit. Do not record this run as physical-input
-//! evidence. Pointer input is out of scope for this slice.
+//! evidence. Pointer input is covered by the sibling
+//! `real_os_pointer_smoke` example (same lane family, same honesty
+//! contract).
 //!
 //! Exit codes: `0` = pass, `1` = fail, `2` = unsupported (non-Windows
 //! hosts — `os_input` has no backend there).

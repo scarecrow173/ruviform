@@ -41,13 +41,16 @@ mod lifecycle_fixture;
 
 #[cfg(feature = "gpui")]
 mod gpui_driver {
-    /// OS-level window pixel capture (Issue #314 slice 3).
+    /// OS-level window pixel capture (Issue #314 slice 3) and
+    /// client-area screen geometry for real-OS input targeting
+    /// (Issue #313).
     pub mod capture;
     /// Consumer observation seam (Issue #429) — `gpui-test` only.
     #[cfg(feature = "gpui-test")]
     pub mod observe;
-    /// OS-level keyboard injection for real-OS smoke verification
-    /// (Issue #313 — `SendInput` on Windows, `Unsupported` elsewhere).
+    /// OS-level keyboard/pointer injection for real-OS smoke
+    /// verification (Issue #313 — `SendInput` on Windows,
+    /// `Unsupported` elsewhere).
     pub mod os_input;
     /// Consumer-neutral scenario adapter (Issue #464) — `gpui-test` only.
     #[cfg(feature = "gpui-test")]
@@ -68,9 +71,9 @@ mod gpui_driver {
     };
     use ruviform_ui::view::{ComponentKey, ViewSpec};
     use ruviform_ui::{
-        Capability, CloseDecision, DriverEvent, Event, Intent, LogicalSize, MonitorInfo, SlotState,
-        SurfaceSlotId, UiError, WindowCapabilities, WindowDriver, WindowId, WindowLifecycle,
-        WindowSpec,
+        Capability, CloseDecision, DriverEvent, Event, Intent, LogicalRect, LogicalSize,
+        MonitorInfo, SlotState, SurfaceSlotId, UiError, WindowCapabilities, WindowDriver, WindowId,
+        WindowLifecycle, WindowSpec,
     };
 
     /// Default periodic tick (`DriverEvent::Tick` cadence) when the
@@ -210,6 +213,12 @@ mod gpui_driver {
         /// the shared map each frame to project laid-out bounds onto
         /// bound slots (Issue #387 × #388 glue).
         surface_bindings: Rc<RefCell<BTreeMap<ComponentKey, SurfaceSlotId>>>,
+        /// `ComponentKey → last-painted bounds` store shared with the
+        /// mounted [`crate::render::RvfView`] — the paint pass records
+        /// into it and [`GpuiDriver::component_bounds`] reads it for
+        /// real-OS input targeting (Issue #313). `None` for windows
+        /// opened without a mounted view.
+        component_bounds: Option<crate::render::ComponentBounds>,
         ready: bool,
         pending_focus: Option<bool>,
         scale_factor: f32,
@@ -531,6 +540,46 @@ mod gpui_driver {
             self.inner.borrow().exited
         }
 
+        /// The last-painted bounds of every recorded component in
+        /// `window`, in window-client logical pixels — the same map
+        /// the pointer hit-test path uses, exposed for real-OS input
+        /// targeting (Issue #313: an OS-level click must be aimed at
+        /// measured geometry, never a hard-coded position).
+        ///
+        /// Only components that paint a recorded canvas (controls,
+        /// viz surfaces) appear; entries refresh on each paint, so a
+        /// query before the first frame or after a spec change that
+        /// removed the component returns a stale-free but possibly
+        /// empty/incomplete map — callers must treat a missing key as
+        /// "not yet laid out", not as a zero-size component.
+        ///
+        /// # Errors
+        /// [`UiError::Host`] when `window` is unknown or was opened
+        /// without a mounted view (the fixture root records no
+        /// component bounds).
+        pub fn component_bounds(
+            &self,
+            window: WindowId,
+        ) -> Result<BTreeMap<ComponentKey, LogicalRect>, UiError> {
+            let store = {
+                let inner = self.inner.borrow();
+                let Some(slot) = inner.windows.get(&window) else {
+                    return Err(UiError::host(format!("no window {window}")));
+                };
+                slot.component_bounds.clone()
+            };
+            let Some(store) = store else {
+                return Err(UiError::host(format!(
+                    "window {window} has no mounted view — no component bounds"
+                )));
+            };
+            Ok(store
+                .borrow()
+                .iter()
+                .map(|(key, bounds)| (key.clone(), crate::render::logical_rect_of(*bounds)))
+                .collect())
+        }
+
         /// Runs the GPUI application event loop, delivering
         /// [`DriverEvent`]s to `on_event` — the driver-neutral
         /// counterpart of `ruviform-ui-webview`'s `run_multi`.
@@ -755,6 +804,7 @@ mod gpui_driver {
                 view: None,
                 inbox: Rc::new(RefCell::new(Vec::new())),
                 surface_bindings: Rc::new(RefCell::new(BTreeMap::new())),
+                component_bounds: None,
                 ready: false,
                 pending_focus: None,
                 scale_factor: 1.0,
@@ -963,6 +1013,9 @@ mod gpui_driver {
 
     /// Mounts the consumer's [`ViewSpec`] renderer as a window root —
     /// the `Some` arm of [`open_window`]'s root choice (Issue #387 seam).
+    /// Returns the view entity plus the component-bounds store the
+    /// paint pass records into — the driver keeps it on the slot for
+    /// [`GpuiDriver::component_bounds`].
     fn mount_view(
         inner: &Rc<RefCell<Inner>>,
         driver: &GpuiDriver,
@@ -971,7 +1024,10 @@ mod gpui_driver {
         inbox: Rc<RefCell<Vec<Event>>>,
         window: &mut Window,
         cx: &mut App,
-    ) -> Entity<crate::render::RvfView> {
+    ) -> (
+        Entity<crate::render::RvfView>,
+        crate::render::ComponentBounds,
+    ) {
         let sink = IntentSink {
             inner: inner.clone(),
             window: id,
@@ -985,17 +1041,23 @@ mod gpui_driver {
                 .map(|s| s.surface_bindings.clone())
                 .unwrap_or_default(),
         };
-        cx.new(|cx| {
+        let bounds: crate::render::ComponentBounds = Rc::new(RefCell::new(BTreeMap::new()));
+        let view_bounds = bounds.clone();
+        let view = cx.new(|cx| {
             crate::render::RvfView::mounted(
                 mount.host,
                 mount.theme.as_ref(),
                 &sink,
-                inbox,
-                slots,
+                crate::render::ViewChannels {
+                    inbox,
+                    slots,
+                    bounds: view_bounds,
+                },
                 window,
                 cx,
             )
-        })
+        });
+        (view, bounds)
     }
 
     /// Maps `WindowSpec` → `WindowOptions` — the whole point of the
@@ -1125,10 +1187,13 @@ mod gpui_driver {
                 let driver = driver2.clone();
                 move |_window, _cx| on_should_close(&inner, &driver, id)
             });
+            let mut component_bounds = None;
             let (content, view): (gpui::AnyView, Option<Entity<crate::render::RvfView>>) =
                 match mount {
                     Some(m) => {
-                        let view = mount_view(&inner2, &driver2, id, *m, inbox, window, cx);
+                        let (view, bounds) =
+                            mount_view(&inner2, &driver2, id, *m, inbox, window, cx);
+                        component_bounds = Some(bounds);
                         (view.clone().into(), Some(view))
                     }
                     None => (
@@ -1143,6 +1208,7 @@ mod gpui_driver {
                 if let Some(slot) = guard.windows.get_mut(&id) {
                     slot.root = Some(entity.clone());
                     slot.view = view;
+                    slot.component_bounds = component_bounds;
                 }
             }
             entity
@@ -1390,7 +1456,7 @@ mod gpui_driver {
 }
 
 #[cfg(feature = "gpui")]
-pub use gpui_driver::capture::OsCapturedFrame;
+pub use gpui_driver::capture::{OsCapturedFrame, OsWindowGeometry};
 #[cfg(feature = "gpui-test")]
 pub use gpui_driver::observe::{
     ComponentDrawn, ComponentObservation, DrawnBar, DrawnCell, DrawnMark, DrawnPlan,

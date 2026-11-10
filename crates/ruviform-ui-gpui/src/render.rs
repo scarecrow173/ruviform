@@ -232,6 +232,24 @@ pub(crate) struct SlotMount {
     pub bindings: Rc<RefCell<BTreeMap<ComponentKey, SurfaceSlotId>>>,
 }
 
+/// `ComponentKey → last-painted bounds` store shared between the
+/// mounted view (writer, during paint) and the driver (reader, for
+/// real-OS input targeting — Issue #313).
+pub(crate) type ComponentBounds = Rc<RefCell<BTreeMap<ComponentKey, Bounds<Pixels>>>>;
+
+/// Driver-owned channels a mounted view needs beyond its spec:
+/// the `post_event` inbox, the native-slot mount, and the
+/// component-bounds store. Bundled so [`RvfView::mounted`] stays
+/// under the argument-count lint.
+pub(crate) struct ViewChannels {
+    /// `post_event` payloads drained into the host each render.
+    pub inbox: Rc<RefCell<Vec<Event>>>,
+    /// Native-surface projection mount.
+    pub slots: SlotMount,
+    /// Component-bounds store the paint pass records into.
+    pub bounds: ComponentBounds,
+}
+
 /// What the renderer last pushed onto a slot — the dedupe ledger.
 /// `None` on an aspect means "never pushed" (not `Some(default)`);
 /// for `clip` that coincides with the port's initial state, so an
@@ -294,7 +312,7 @@ fn viz_slot<T: 'static>(paint: Canvas<T>) -> impl IntoElement {
 }
 
 /// `Bounds<Pixels>` → window-coords [`LogicalRect`] for the slot port.
-fn logical_rect_of(bounds: Bounds<Pixels>) -> LogicalRect {
+pub(crate) fn logical_rect_of(bounds: Bounds<Pixels>) -> LogicalRect {
     LogicalRect {
         x: f64::from(f32::from(bounds.origin.x)),
         y: f64::from(f32::from(bounds.origin.y)),
@@ -435,7 +453,7 @@ pub struct RvfView {
     intent_handler: Box<dyn FnMut(Intent)>,
     /// Component bounds recorded during the last paint — maps pointer
     /// position to normalized values.
-    bounds: Rc<RefCell<BTreeMap<ComponentKey, Bounds<Pixels>>>>,
+    bounds: ComponentBounds,
     drags: BTreeMap<ComponentKey, DragState>,
     next_gesture: u64,
     /// `post_event` channel drained into the host each render —
@@ -498,17 +516,17 @@ impl RvfView {
     /// Mounts a consumer view inside a driver window — called by
     /// `open_window` for [`crate::GpuiDriver::create_view_window`].
     /// `sink` carries minted intents onto the window's `Action`
-    /// channel; `inbox` receives `post_event` payloads drained into
-    /// the host at render; `slots` wires `NativeSlot` components to
-    /// the driver's surface adapter. Window deactivation cancels
-    /// in-flight drags through the canonical `FocusLost` lifecycle
-    /// input.
+    /// channel; `channels` carries the `post_event` inbox, the
+    /// native-slot mount, and the caller-owned bounds store the paint
+    /// pass records component bounds into (the driver's real-OS
+    /// input-targeting query reads the same map). Window
+    /// deactivation cancels in-flight drags through the canonical
+    /// `FocusLost` lifecycle input.
     pub(crate) fn mounted(
         host: ViewHost,
         theme: Option<&ResolvedTheme>,
         sink: &IntentSink,
-        inbox: Rc<RefCell<Vec<Event>>>,
-        slots: SlotMount,
+        channels: ViewChannels,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -518,12 +536,12 @@ impl RvfView {
             host,
             palette,
             intent_handler: Box::new(move |intent| sink.send(intent)),
-            bounds: Rc::new(RefCell::new(BTreeMap::new())),
+            bounds: channels.bounds,
             drags: BTreeMap::new(),
             next_gesture: 0,
-            inbox: Some(inbox),
+            inbox: Some(channels.inbox),
             slots: Some(Rc::new(RefCell::new(SlotProjection {
-                mount: slots,
+                mount: channels.slots,
                 applied: HashMap::new(),
                 placeable: HashSet::new(),
                 last_error: None,
@@ -2279,8 +2297,11 @@ mod tests {
                 host_with_fader(),
                 None,
                 &sink,
-                Rc::new(RefCell::new(Vec::new())),
-                SlotMount { adapter, bindings },
+                ViewChannels {
+                    inbox: Rc::new(RefCell::new(Vec::new())),
+                    slots: SlotMount { adapter, bindings },
+                    bounds: Rc::new(RefCell::new(BTreeMap::new())),
+                },
                 window,
                 cx,
             )
@@ -3889,10 +3910,13 @@ mod tests {
                 host,
                 None,
                 &sink,
-                inbox,
-                SlotMount {
-                    adapter: mount_adapter,
-                    bindings,
+                ViewChannels {
+                    inbox,
+                    slots: SlotMount {
+                        adapter: mount_adapter,
+                        bindings,
+                    },
+                    bounds: Rc::new(RefCell::new(BTreeMap::new())),
                 },
                 window,
                 cx,
@@ -3975,8 +3999,11 @@ mod tests {
                 host_with_fader(),
                 None,
                 &sink,
-                inbox_view,
-                SlotMount { adapter, bindings },
+                ViewChannels {
+                    inbox: inbox_view,
+                    slots: SlotMount { adapter, bindings },
+                    bounds: Rc::new(RefCell::new(BTreeMap::new())),
+                },
                 window,
                 cx,
             )
@@ -4376,10 +4403,13 @@ mod tests {
                 host,
                 None,
                 &sink,
-                inbox,
-                SlotMount {
-                    adapter: mount_adapter,
-                    bindings,
+                ViewChannels {
+                    inbox,
+                    slots: SlotMount {
+                        adapter: mount_adapter,
+                        bindings,
+                    },
+                    bounds: Rc::new(RefCell::new(BTreeMap::new())),
                 },
                 window,
                 cx,
@@ -4454,10 +4484,13 @@ mod tests {
                 host,
                 None,
                 &sink,
-                inbox,
-                SlotMount {
-                    adapter: mount_adapter,
-                    bindings,
+                ViewChannels {
+                    inbox,
+                    slots: SlotMount {
+                        adapter: mount_adapter,
+                        bindings,
+                    },
+                    bounds: Rc::new(RefCell::new(BTreeMap::new())),
                 },
                 window,
                 cx,
@@ -4617,10 +4650,13 @@ mod tests {
                 host,
                 None,
                 &sink,
-                inbox,
-                SlotMount {
-                    adapter: mount_adapter,
-                    bindings,
+                ViewChannels {
+                    inbox,
+                    slots: SlotMount {
+                        adapter: mount_adapter,
+                        bindings,
+                    },
+                    bounds: Rc::new(RefCell::new(BTreeMap::new())),
                 },
                 window,
                 cx,
@@ -4688,10 +4724,13 @@ mod tests {
                 host,
                 None,
                 &sink,
-                inbox,
-                SlotMount {
-                    adapter: mount_adapter,
-                    bindings,
+                ViewChannels {
+                    inbox,
+                    slots: SlotMount {
+                        adapter: mount_adapter,
+                        bindings,
+                    },
+                    bounds: Rc::new(RefCell::new(BTreeMap::new())),
                 },
                 window,
                 cx,

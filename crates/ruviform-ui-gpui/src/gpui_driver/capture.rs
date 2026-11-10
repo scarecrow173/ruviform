@@ -34,6 +34,30 @@ use ruviform_ui::{UiError, WindowId};
 
 use super::GpuiDriver;
 
+/// OS-window geometry for real-OS input targeting (Issue #313):
+/// where the window's client area sits on the physical screen and
+/// the scale factor that maps window-logical coordinates onto it.
+///
+/// This is the measurement an OS-level pointer injection must be
+/// aimed through — [`crate::gpui_driver::os_input`] coordinates are
+/// physical screen pixels, while [`GpuiDriver::component_bounds`]
+/// reports window-logical units; `origin + logical * scale_factor`
+/// is the honest conversion, never a hard-coded position.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OsWindowGeometry {
+    /// Client-area left edge in physical screen pixels
+    /// (virtual-desktop coordinates — may be negative).
+    pub origin_x: i32,
+    /// Client-area top edge in physical screen pixels.
+    pub origin_y: i32,
+    /// Client-area width in physical pixels.
+    pub width: u32,
+    /// Client-area height in physical pixels.
+    pub height: u32,
+    /// Window scale factor (logical → physical) at query time.
+    pub scale_factor: f64,
+}
+
 /// One captured frame: RGBA8 pixels, row-major, top-down.
 ///
 /// `pixels.len() == width * height * 4`. This is a plain driver-side
@@ -103,6 +127,47 @@ impl GpuiDriver {
         };
         backend::capture_client_area(raw_parent, scale_factor)
     }
+
+    /// Reports `window`'s client-area geometry on the physical
+    /// screen — the target space of [`crate::gpui_driver::os_input`]
+    /// absolute pointer injection (Issue #313).
+    ///
+    /// Same honesty contract as [`Self::capture_window`]: unknown
+    /// or not-yet-opened windows are [`UiError::Host`], windows
+    /// without an OS handle (`gpui-test`) are
+    /// [`UiError::Unsupported`], and non-Windows hosts have no
+    /// backend in this slice.
+    ///
+    /// # Errors
+    /// - [`UiError::Host`] — unknown window id, window not yet open,
+    ///   dead OS handle, or a failed OS geometry call.
+    /// - [`UiError::Unsupported`] — no OS handle (`gpui-test`) or no
+    ///   backend on this OS.
+    pub fn window_geometry(&self, window: WindowId) -> Result<OsWindowGeometry, UiError> {
+        let (opened, raw_parent, scale_factor) = {
+            let inner = self.inner.borrow();
+            let Some(slot) = inner.windows.get(&window) else {
+                return Err(UiError::host(format!("no window {window}")));
+            };
+            (
+                slot.handle.is_some(),
+                slot.raw_parent,
+                f64::from(slot.scale_factor),
+            )
+        };
+        if !opened {
+            return Err(UiError::host(format!(
+                "window {window} has no OS window yet — query after Ready"
+            )));
+        }
+        let Some(raw_parent) = raw_parent else {
+            return Err(UiError::unsupported(
+                "window_geometry",
+                "window has no OS handle — real-OS geometry requires the `gpui` backend, not `gpui-test`",
+            ));
+        };
+        backend::client_geometry(raw_parent, scale_factor)
+    }
 }
 
 // Per-OS capture backend. Each returns an [`OsCapturedFrame`] or an
@@ -145,7 +210,7 @@ mod backend {
         GetClientRect, IsIconic, IsWindow, IsWindowVisible,
     };
 
-    use super::OsCapturedFrame;
+    use super::{OsCapturedFrame, OsWindowGeometry};
 
     /// `PrintWindow` `nflags`: client area only, full rendered
     /// content (`PW_CLIENTONLY | PW_RENDERFULLCONTENT`). The Win32
@@ -212,6 +277,37 @@ mod backend {
             // The screen path still returns real displayed pixels;
             // its `backend` tag records which path produced the frame.
             Err(_) => capture_screen_rect(x, y, w, h, scale_factor),
+        }
+    }
+
+    /// Client-area screen geometry of the OS window `raw_parent`
+    /// (Windows: an `HWND` value captured at open) — the input
+    /// targeting query, sharing the capture path's handle probes.
+    ///
+    /// # Errors
+    /// [`UiError::Host`] on dead handle or a failed geometry call.
+    pub(super) fn client_geometry(
+        raw_parent: usize,
+        scale_factor: f64,
+    ) -> Result<OsWindowGeometry, UiError> {
+        let hwnd = raw_parent as HWND;
+        // SAFETY: `hwnd` is the OS handle the driver captured from
+        // gpui's own window at open; `IsWindow` is the cheap liveness
+        // probe before any other call touches it.
+        unsafe {
+            if IsWindow(hwnd) == 0 {
+                return Err(UiError::host("window OS handle is no longer valid"));
+            }
+            // SAFETY: `hwnd` passed the `IsWindow` probe above;
+            // `client_screen_rect` writes only caller-owned out-params.
+            let (x, y, w, h) = client_screen_rect(hwnd)?;
+            Ok(OsWindowGeometry {
+                origin_x: x,
+                origin_y: y,
+                width: w,
+                height: h,
+                scale_factor,
+            })
         }
     }
 
@@ -468,13 +564,13 @@ mod backend {
 }
 
 /// Non-Windows placeholder — the `raw_parent` token is an
-/// NSView/X11 handle this slice does not capture. Honest
-/// [`UiError::Unsupported`], never fabricated pixels.
+/// NSView/X11 handle this slice does not capture or measure.
+/// Honest [`UiError::Unsupported`], never fabricated geometry.
 #[cfg(not(windows))]
 mod backend {
     use ruviform_ui::UiError;
 
-    use super::OsCapturedFrame;
+    use super::{OsCapturedFrame, OsWindowGeometry};
 
     /// Always unsupported on non-Windows targets in this slice.
     pub(super) fn capture_client_area(
@@ -484,6 +580,17 @@ mod backend {
         Err(UiError::unsupported(
             "visual_capture",
             "OS window capture is implemented for Windows only in this slice",
+        ))
+    }
+
+    /// Always unsupported on non-Windows targets in this slice.
+    pub(super) fn client_geometry(
+        _raw_parent: usize,
+        _scale_factor: f64,
+    ) -> Result<OsWindowGeometry, UiError> {
+        Err(UiError::unsupported(
+            "window_geometry",
+            "OS window geometry is implemented for Windows only in this slice",
         ))
     }
 }
