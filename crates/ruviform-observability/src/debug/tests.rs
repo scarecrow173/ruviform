@@ -6,13 +6,13 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use ruviform_media_core::{ClockDomainId, ClockEpochId};
 
 use super::*;
-use crate::collector::MetricsSnapshot;
+use crate::collector::{MetricsSnapshot, ObservationBatch, ObservationWindow};
 use crate::diagnostics::{
     DiagnosticCode, Diagnostics, DiagnosticsConfig, FindingCertainty, FindingSeverity, HealthRule,
     HealthState, Hysteresis, ReportRequest, SignalDirection, SignalKind,
@@ -1651,4 +1651,302 @@ fn diagnostics_findings_total_excludes_domain_health() {
     assert_eq!(ds.findings_total, 1);
     assert_eq!(ds.health.len(), 1);
     assert_eq!(ds.entries.len(), 1);
+}
+
+// ------------------------------------------------------------------
+// Issue #292 acceptance re-audit additions (rf292-obs10 slice)
+// ------------------------------------------------------------------
+
+#[test]
+fn batch_generation_skew_is_declared_not_hidden() {
+    let mut insp = DebugInspector::new(DebugConfig::default());
+    let now = Instant::now();
+    // `ObservationBatch.generation` is a third stamp in the *same*
+    // collector generation domain — a batch at generation 2 against a
+    // metrics snapshot at generation 1 must surface as Skewed.
+    let snap = snapshot_of(1, Vec::new());
+    let window = ObservationWindow {
+        generation: 2,
+        started: now,
+        ended: now,
+        expected: Duration::from_millis(10),
+        measured: Duration::ZERO,
+        clock: ClockDomainId::MONOTONIC,
+        planned: 0,
+        observed: 0,
+        skipped: 0,
+        drained: 0,
+        history_evicted: 0,
+        clock_anomaly: false,
+    };
+    let batch = ObservationBatch::new(
+        2,
+        window,
+        Vec::new(),
+        Vec::new(),
+        snapshot_of(2, Vec::new()),
+    );
+    let out = insp
+        .inspect(
+            &request(&[InspectionTarget::Metrics]),
+            &InspectionInputs {
+                metrics: Some(&snap),
+                batch: Some(&batch),
+                ..no_inputs()
+            },
+            now,
+        )
+        .expect("inspect");
+    assert_eq!(out.consistency.level, ConsistencyLevel::Skewed);
+    assert_eq!(out.consistency.collector.snapshot, Some(1));
+    assert_eq!(out.consistency.collector.batch, Some(2));
+    assert_eq!(out.consistency.collector.diagnostics, None);
+    assert!(!out.consistency.collector.aligned);
+}
+
+#[test]
+fn drain_waits_for_quiescence_then_recovers_rt_records() {
+    let authority = DebugAuthority::new();
+    let mut insp = DebugInspector::with_authority(DebugConfig::default(), &authority);
+    let now = Instant::now();
+    insp.prepare_session(
+        authority.permit().expect("p"),
+        SessionRequest {
+            label: "rt",
+            max_records: 8,
+        },
+        now,
+    )
+    .expect("prepare");
+
+    // Real OBS-05 bridge: two records sit in flight while the writer
+    // has not confirmed quiescence.
+    let (mut recorder, sink) = rt_bridge::bridge::<EventRecord>(8);
+    assert!(recorder.try_record(event(Confidentiality::Internal)));
+    assert!(recorder.try_record(event(Confidentiality::Internal)));
+    let quiesced = Arc::new(AtomicBool::new(false));
+    insp.attach_drain(Box::new(EventRecordDrain::new(sink, Arc::clone(&quiesced))))
+        .expect("attach");
+    insp.activate_session(now).expect("activate");
+    insp.request_stop(authority.permit().expect("p"), now)
+        .expect("stop");
+
+    // Un-quiesced: the endpoint (ring/`Arc`) is retained, the in-flight
+    // records are *not* collected, and repeated polls stay honestly
+    // `Draining` — final recovery never runs early.
+    for _ in 0..2 {
+        let status = insp.poll_drain(now);
+        assert!(matches!(
+            status,
+            SessionDrainStatus::Draining {
+                pending_quiescence: 1,
+                pending_records: 2,
+                deadline_exceeded: false,
+            }
+        ));
+    }
+    assert!(insp.drained_records().is_empty());
+    let view = insp.session_view();
+    assert_eq!(view.drains_attached, 1);
+    assert_eq!(view.pending_records, 2);
+
+    // Quiescence confirmed → the bounded final drain recovers both
+    // records and only then are the drain endpoints released.
+    quiesced.store(true, Ordering::Relaxed);
+    let status = insp.poll_drain(now);
+    assert!(matches!(
+        status,
+        SessionDrainStatus::Stopped {
+            clean: true,
+            records_collected: 2,
+            records_overflowed: 0,
+        }
+    ));
+    assert_eq!(insp.drained_records().len(), 2);
+    let view = insp.session_view();
+    assert_eq!(view.drains_attached, 0);
+    assert_eq!(view.pending_records, 0);
+    assert_eq!(insp.health().drain_records_delivered_total, 2);
+}
+
+#[test]
+fn draining_rejects_attach_activate_and_prepare() {
+    let authority = DebugAuthority::new();
+    let mut insp = DebugInspector::with_authority(DebugConfig::default(), &authority);
+    let now = Instant::now();
+    insp.prepare_session(
+        authority.permit().expect("p"),
+        SessionRequest {
+            label: "t",
+            max_records: 4,
+        },
+        now,
+    )
+    .expect("prepare");
+    insp.attach_drain(Box::new(MockDrain {
+        quiesced: true,
+        in_flight: 0,
+        records: VecDeque::new(),
+    }))
+    .expect("attach");
+    insp.activate_session(now).expect("activate");
+    insp.request_stop(authority.permit().expect("p"), now)
+        .expect("stop");
+    assert_eq!(insp.session_state(), DebugSessionState::Draining);
+
+    // Stop race: while Draining no new drain may attach, the session
+    // cannot re-activate, and a new session cannot be prepared — every
+    // rejection is typed, never queued or reported as success.
+    let err = insp
+        .attach_drain(Box::new(MockDrain {
+            quiesced: true,
+            in_flight: 0,
+            records: VecDeque::new(),
+        }))
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        SessionError::InvalidTransition {
+            actual: DebugSessionState::Draining
+        }
+    ));
+    let err = insp.activate_session(now).unwrap_err();
+    assert!(matches!(
+        err,
+        SessionError::InvalidTransition {
+            actual: DebugSessionState::Draining
+        }
+    ));
+    let err = insp
+        .prepare_session(
+            authority.permit().expect("p"),
+            SessionRequest {
+                label: "t",
+                max_records: 4,
+            },
+            now,
+        )
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        SessionError::SessionBusy {
+            state: DebugSessionState::Draining
+        }
+    ));
+}
+
+#[test]
+fn report_external_export_permitted_when_allowed() {
+    let config = DebugConfig {
+        allow_external_export: true,
+        ..DebugConfig::default()
+    };
+    let mut insp = DebugInspector::new(config);
+    let now = Instant::now();
+    let mut req = report_request(Confidentiality::Internal);
+    req.external = true;
+    let report = insp.report(&req, None, now).expect("authorized export");
+    assert!(report.external);
+    assert_eq!(report.disclosure, Confidentiality::Internal);
+    assert_eq!(insp.health().reports_generated_total, 1);
+}
+
+#[test]
+fn report_export_limits_bytes_and_deadline_truncate() {
+    let authority = DebugAuthority::new();
+    let mut insp = DebugInspector::with_authority(DebugConfig::default(), &authority);
+    let now = Instant::now();
+    insp.prepare_session(
+        authority.permit().expect("p"),
+        SessionRequest {
+            label: "t",
+            max_records: 8,
+        },
+        now,
+    )
+    .expect("prepare");
+    let mut records = VecDeque::new();
+    for _ in 0..4 {
+        records.push_back(session_record(Confidentiality::Internal));
+    }
+    insp.attach_drain(Box::new(MockDrain {
+        quiesced: true,
+        in_flight: 0,
+        records,
+    }))
+    .expect("attach");
+    insp.activate_session(now).expect("activate");
+    insp.request_stop(authority.permit().expect("p"), now)
+        .expect("stop");
+    let status = insp.poll_drain(now);
+    assert!(matches!(status, SessionDrainStatus::Stopped { .. }));
+
+    // `max_bytes` admits exactly one `RecordSummary`-sized entry; the
+    // rest are counted as dropped, never silently carried.
+    let mut req = report_request(Confidentiality::Internal);
+    req.limits.max_bytes = size_of::<RecordSummary>();
+    let report = insp.report(&req, None, now).expect("report");
+    assert_eq!(report.records.len(), 1);
+    assert_eq!(report.truncation.items_dropped, 3);
+    assert_eq!(
+        report.truncation.bytes_estimated,
+        size_of::<RecordSummary>()
+    );
+    assert!(!report.truncation.deadline_exceeded);
+
+    // A zero deadline expires before the first item — every retained
+    // record is accounted as dropped and the flag is reported.
+    let mut req = report_request(Confidentiality::Internal);
+    req.limits.deadline = Some(Duration::ZERO);
+    let report = insp.report(&req, None, now).expect("report");
+    assert!(report.records.is_empty());
+    assert_eq!(report.truncation.items_dropped, 4);
+    assert!(report.truncation.deadline_exceeded);
+}
+
+/// RT lane (`cargo test --workspace rt_`): the `Copy` value types an
+/// RT-adjacent path may hold — construct, copy, and read — allocate
+/// nothing inside the measurement window.
+#[test]
+fn rt_debug_value_types_allocate_nothing() {
+    use assert_no_alloc::assert_no_alloc;
+
+    assert_no_alloc(|| {
+        let clock = ProbeClockMark {
+            domain: ClockDomainId::new(1),
+            epoch: ClockEpochId::new(0),
+        };
+        let status = ProbeStatusKind::ModeChanged {
+            to: ProbeMode::Capture,
+        };
+        let reading = ProbeReading {
+            probe: 1,
+            node: 2,
+            port: 3,
+            mode: ProbeMode::Monitor,
+            availability: ProbeAvailability::Configured,
+            generation: 4,
+            clock,
+            last_status: Some(status),
+            recorded: 5,
+            dropped: 6,
+            lost_blocks: 7,
+        };
+        let record = SessionRecord {
+            record: event(Confidentiality::Internal),
+            dropped_before: 0,
+        };
+        // Copies and field reads — the only operations an RT-adjacent
+        // consumer may perform on these types.
+        let (clock, status, reading, record) = (clock, status, reading, record);
+        std::hint::black_box((
+            clock.domain,
+            clock.epoch,
+            matches!(status, ProbeStatusKind::ModeChanged { .. }),
+            reading.generation,
+            reading.last_status.is_some(),
+            record.dropped_before,
+            record.record.header().event().get(),
+        ));
+    });
 }

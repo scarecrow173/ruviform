@@ -606,6 +606,223 @@ fn ui_dvr_03_parity_key_ops_keyboard_intents() {
     }
 }
 
+/// Issue #314 slice 6: the AudioLens-shaped semantic oracle fixture —
+/// the headless layer retains the declared Waveform/TimeAxis/Seek
+/// payload verbatim (f64 values un-reinterpreted, gap/partial bins and
+/// out-of-viewport ticks kept) and mounts every key. The drawn-plan
+/// half is checked by the GPUI side (`consumer_observation.rs`).
+#[test]
+fn parity_viz_semantic_audiolens_payload_retained_fake() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures/driver-lab/parity/viz-semantic-audiolens.json");
+    let fx: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("read fixture"))
+        .expect("parse fixture");
+    let spec = view_spec(&fx);
+    let ComponentSpec::Panel(panel) = &spec.root else {
+        panic!("fixture root must be a panel");
+    };
+
+    let wave = panel
+        .children
+        .iter()
+        .find_map(|c| match c {
+            ComponentSpec::Waveform(w) => Some(w),
+            _ => None,
+        })
+        .expect("waveform");
+    let want_wave = &fx["expect"]["waveform"];
+    assert_eq!(wave.channels, 2);
+    assert_eq!(wave.frames, 5_000_002_000);
+    let declared: usize = wave.channel_bins.iter().map(Vec::len).sum();
+    assert_eq!(
+        u64::try_from(declared).expect("small"),
+        want_wave["declaredBins"].as_u64().expect("declaredBins")
+    );
+    assert_eq!(
+        wave.channel_bins
+            .iter()
+            .flatten()
+            .filter(|b| b.count == 0)
+            .count(),
+        usize::try_from(want_wave["gapBins"].as_u64().expect("gapBins")).expect("small"),
+        "gap bins pass through the headless payload"
+    );
+    // f64 source truth is carried bit-exact: no re-quantization, no
+    // interpolation, partial bins keep their declared count. The
+    // fixture decimals are chosen so serde_json and `str::parse`
+    // agree bit-for-bit (serde_json 1.0.154 mis-rounds some 17-digit
+    // decimals by 1 ulp — measured); the check pins that the mounted
+    // spec keeps the parsed f64, e.g. never narrows to f32.
+    let precision = &wave.channel_bins[0][3];
+    assert_eq!(
+        precision.min.to_bits(),
+        (-0.123_456_789_012_345_6f64).to_bits()
+    );
+    assert_eq!(
+        precision.max.to_bits(),
+        0.987_654_321_098_765_4f64.to_bits()
+    );
+    assert_eq!(wave.channel_bins[0][1].count, 173, "partial bin kept");
+    for (channel, want_channel) in want_wave["drawnChannels"]
+        .as_array()
+        .expect("channels")
+        .iter()
+        .enumerate()
+    {
+        let want_bins: Vec<(u64, u64)> = want_channel["bins"]
+            .as_array()
+            .expect("bins")
+            .iter()
+            .map(|b| (b[0].as_u64().expect("start"), b[1].as_u64().expect("end")))
+            .collect();
+        let drawn: Vec<(u64, u64)> = wave.channel_bins[channel]
+            .iter()
+            .filter(|b| b.count != 0 && b.min.is_finite() && b.max.is_finite())
+            .map(|b| (b.start, b.end))
+            .collect();
+        assert_eq!(drawn, want_bins, "channel {channel} painted bins");
+    }
+
+    let axis = panel
+        .children
+        .iter()
+        .find_map(|c| match c {
+            ComponentSpec::TimeAxis(t) => Some(t),
+            _ => None,
+        })
+        .expect("time_axis");
+    assert_eq!(
+        u64::try_from(axis.ticks.len()).expect("small"),
+        fx["expect"]["timeAxis"]["declaredTicks"]
+            .as_u64()
+            .expect("declaredTicks")
+    );
+    assert!(
+        axis.ticks.iter().any(|t| t.at < 4_999_999_000.0)
+            && axis.ticks.iter().any(|t| t.at > 5_000_000_000.0),
+        "out-of-viewport ticks are retained in the payload"
+    );
+
+    // The Seek control keeps its domain value: committed plain is the
+    // consumer-domain position, normalized is the [0, 1] fraction.
+    let mut host = new_host();
+    let ops = host.mount(spec).expect("mount");
+    for k in strings(&fx["expect"]["mountedKeys"]) {
+        assert!(ops.contains(&ProjectionOp::Mounted { key: key(&k) }), "{k}");
+    }
+    let snap = host.observe(&key("seek")).expect("seek snapshot");
+    let committed = snap.committed.expect("committed value");
+    let want_seek = &fx["expect"]["seek"];
+    assert_eq!(
+        committed.plain,
+        want_seek["committedPlain"].as_f64().unwrap()
+    );
+    assert_eq!(
+        committed.normalized,
+        want_seek["committedNormalized"].as_f64().unwrap()
+    );
+}
+
+/// Issue #314 slice 6: the Synvelis-shaped semantic oracle fixture —
+/// RT-snapshot Meter bins (gap/partial/over-range/clamped viewport),
+/// Spectrogram columns (gap/clamp/cull), and `TimeAxis` ticks are
+/// retained verbatim by the headless payload.
+#[test]
+fn parity_viz_semantic_synvelis_payload_retained_fake() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures/driver-lab/parity/viz-semantic-synvelis.json");
+    let fx: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("read fixture"))
+        .expect("parse fixture");
+    let spec = view_spec(&fx);
+    let ComponentSpec::Panel(panel) = &spec.root else {
+        panic!("fixture root must be a panel");
+    };
+
+    let meter = panel
+        .children
+        .iter()
+        .find_map(|c| match c {
+            ComponentSpec::Meter(m) => Some(m),
+            _ => None,
+        })
+        .expect("meter");
+    let want_meter = &fx["expect"]["meter"];
+    let declared: usize = meter.channel_levels.iter().map(Vec::len).sum();
+    assert_eq!(
+        u64::try_from(declared).expect("small"),
+        want_meter["declaredBins"].as_u64().expect("declaredBins")
+    );
+    assert_eq!(
+        meter
+            .channel_levels
+            .iter()
+            .flatten()
+            .filter(|b| b.count == 0)
+            .count(),
+        usize::try_from(want_meter["gapBins"].as_u64().expect("gapBins")).expect("small")
+    );
+    // Over-range RT levels and sparse partial bins are payload truth —
+    // clamping is a renderer concern, not a payload rewrite.
+    let over = meter.channel_levels[0]
+        .iter()
+        .find(|b| b.peak > 1.0)
+        .expect("over-range bin");
+    assert_eq!(over.peak, 1.7);
+    assert_eq!(over.rms, 1.2);
+    assert!(
+        meter.channel_levels[1]
+            .iter()
+            .any(|b| b.count == 37 && b.count < b.end - b.start),
+        "sparse partial bin kept"
+    );
+
+    let spectrogram = panel
+        .children
+        .iter()
+        .find_map(|c| match c {
+            ComponentSpec::Spectrogram(s) => Some(s),
+            _ => None,
+        })
+        .expect("spectrogram");
+    let want_spec = &fx["expect"]["spectrogram"];
+    assert_eq!(
+        u64::try_from(spectrogram.columns.len()).expect("small"),
+        want_spec["declaredColumns"]
+            .as_u64()
+            .expect("declaredColumns")
+    );
+    let cells: usize = spectrogram.columns.iter().map(|c| c.magnitudes.len()).sum();
+    assert_eq!(
+        u64::try_from(cells).expect("small"),
+        want_spec["declaredCells"].as_u64().expect("declaredCells")
+    );
+    assert_eq!(
+        spectrogram.columns.iter().filter(|c| c.count == 0).count(),
+        usize::try_from(want_spec["gapColumns"].as_u64().expect("gapColumns")).expect("small")
+    );
+    // Magnitudes outside magnitude_range are payload truth — the
+    // renderer clamps intensity, the payload keeps the source value.
+    assert!(
+        spectrogram
+            .columns
+            .iter()
+            .flat_map(|c| &c.magnitudes)
+            .any(|&m| m.to_bits() == (-70.0f64).to_bits() && m < spectrogram.magnitude_range.start)
+            && spectrogram
+                .columns
+                .iter()
+                .flat_map(|c| &c.magnitudes)
+                .any(|&m| m.to_bits() == 10.0f64.to_bits() && m > spectrogram.magnitude_range.end),
+        "out-of-range magnitudes retained verbatim"
+    );
+
+    let mut host = new_host();
+    let ops = host.mount(spec).expect("mount");
+    for k in strings(&fx["expect"]["mountedKeys"]) {
+        assert!(ops.contains(&ProjectionOp::Mounted { key: key(&k) }), "{k}");
+    }
+}
+
 fn wait_terminal(rt: &mut UiRuntime) -> Vec<Event> {
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut all = Vec::new();

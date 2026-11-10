@@ -43,6 +43,7 @@ Directory: `docs/plans`
 | PLAN-kHnSXCzzcxyo5rlkMiqQWx | Issue #388/#389 Native Dock 契約の実装計画（neutral slot/lease/session + fake 検証 + L0-L1 写像） | approved | [implement-issue-388-389-native-dock-contract.md](./implement-issue-388-389-native-dock-contract.md) |
 | PLAN-rf388DockWindowing01 | Issue #388 slice 3 実装計画 — clip 修正 + windowing PoC + 証拠 | approved | [implement-issue-388-native-dock-windowing-slice3.md](./implement-issue-388-native-dock-windowing-slice3.md) |
 | PLAN-KtWrNWuBuOq3OuF5yJ0x9o | Issue #389 Plugin Editor Session headless fixture slice 実装計画（contract 認定 + DSP/RT 非干渉 fixture + NotRun 記録） | approved | [implement-issue-389-editor-session-headless.md](./implement-issue-389-editor-session-headless.md) |
+| PLAN-HDjvE9BDnWUjWa0unFqU0g | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture slice 実装計画 | approved | [implement-issue-389-editor-session-statemachine.md](./implement-issue-389-editor-session-statemachine.md) |
 | PLAN-034UnzhplY5WerbCeab8un | Implement Issue #389 Plugin Editor Session hardening | approved | [implement-issue-389-session-hardening.md](./implement-issue-389-session-hardening.md) |
 | PLAN-5rBdUXHzqmuHrA1h4sweAj | Issue #389 VST3/L0 実外部 Editor attach の実装計画（adapter open_gui + PoC vst3 lane） | approved | [implement-issue-389-vst3-l0-editor-attach.md](./implement-issue-389-vst3-l0-editor-attach.md) |
 | PLAN-ECzI54BQngMiQpOP23flK3 | Issue #404/#405 NativeSurfaceSlot host 境界修復 実装計画 | draft | [implement-issue-404-405-native-surface-host-boundary.md](./implement-issue-404-405-native-surface-host-boundary.md) |
@@ -112,6 +113,7 @@ Directory: `docs/plans`
 | PLAN-Z43s6oJzXX8u7P4xAKcbau | Issue #314 slice 1 — Golden Utility コアの実装計画 | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | PLAN-Sv5LAPR5jiKCGifpkWxo3e | Issue #314 slice 5 — Golden 環境正規化・registry 結合・runner 統合・証拠 lane 実装計画 | approved | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | PLAN-034UeymubB5x0zXeYGvfEl | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装計画 | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
+| PLAN-034V2hp0I1d6mdR2ya94bO | Issue #314 slice 6 — Consumer-shaped semantic oracle fixtures 実装計画 | approved | [issue-314-semantic-oracle.md](./issue-314-semantic-oracle.md) |
 | PLAN-lb9Tb7cIysOfXayRz4GJY8 | Issue #326 ci.yml dispatch 専用化 実装計画 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | PLAN-034RBML1CjEEPA4ApRK8R9 | Issue #327 CI計測Baseline 実施計画 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | PLAN-SIZd1oW7Pd1d5Vi3BzCMFc | Issue #328 実施計画 — CI PR concurrency(cancel stale PR runs) | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
