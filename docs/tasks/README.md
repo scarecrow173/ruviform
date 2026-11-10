@@ -23,6 +23,7 @@ Directory: `docs/tasks`
 | TASK-IfiV9xO2raU6D60zy70KLs | Issue #314 slice 1 — Golden Utility コアの実装タスク | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | TASK-aX702E4kUPjRWUHnHKK82B | Issue #314 slice 5 — Golden 環境正規化・registry 結合・runner 統合・証拠 lane | in-progress | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | TASK-034Uey3QmAAfhAZo6ln7H4 | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装タスク | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
+| TASK-034V2hqLGYpcCEu3a3OqFm | Issue #314 slice 6 — Consumer-shaped semantic oracle fixtures | in-progress | [issue-314-semantic-oracle.md](./issue-314-semantic-oracle.md) |
 | TASK-yFczRmBPJEUZkKyX3bngmg | Issue #329 T1 — ci.yml verify/ui-verify へ sccache 導入 + Cold/Warm 実測 + IR | in-progress | [issue-329-t1-sccache-verify-ui-lanes.md](./issue-329-t1-sccache-verify-ui-lanes.md) |
 | TASK-034RJ02dFTbxsMkC5rKofw | Issue #331 T1 — verify lane の check-ci を lint-ci に統合 + 等価性・実測記録 | in-progress | [issue-331-t1-check-step-dedup.md](./issue-331-t1-check-step-dedup.md) |
 | TASK-ibEQJ0Q4JzJ0UtqiKM5W5u | Issue #388/#389 Native Dock 契約タスク（boundary / native_slot / editor_session） | completed | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |

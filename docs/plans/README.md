@@ -111,6 +111,7 @@ Directory: `docs/plans`
 | PLAN-Z43s6oJzXX8u7P4xAKcbau | Issue #314 slice 1 — Golden Utility コアの実装計画 | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | PLAN-Sv5LAPR5jiKCGifpkWxo3e | Issue #314 slice 5 — Golden 環境正規化・registry 結合・runner 統合・証拠 lane 実装計画 | approved | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | PLAN-034UeymubB5x0zXeYGvfEl | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装計画 | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
+| PLAN-034V2hp0I1d6mdR2ya94bO | Issue #314 slice 6 — Consumer-shaped semantic oracle fixtures 実装計画 | approved | [issue-314-semantic-oracle.md](./issue-314-semantic-oracle.md) |
 | PLAN-lb9Tb7cIysOfXayRz4GJY8 | Issue #326 ci.yml dispatch 専用化 実装計画 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | PLAN-034RBML1CjEEPA4ApRK8R9 | Issue #327 CI計測Baseline 実施計画 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | PLAN-SIZd1oW7Pd1d5Vi3BzCMFc | Issue #328 実施計画 — CI PR concurrency(cancel stale PR runs) | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
