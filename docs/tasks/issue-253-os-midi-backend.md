@@ -1,7 +1,7 @@
 ---
 id: "TASK-rf253osmidibackend001"
 type: "task"
-status: "in-progress"
+status: "completed"
 title: "Issue #253 OS MIDI input backend 実装タスク"
 created: "2026-11-11"
 updated: "2026-11-11"
@@ -60,4 +60,4 @@ metadata:
 - [x] review-protocol + IR doc
 - [x] `git fetch origin main && git merge origin/main` +
       Cargo.lock 再生成 + 最終検証
-- [ ] push + PR 作成 + worker_done
+- [x] push + PR 作成 + worker_done
