@@ -114,6 +114,7 @@ Directory: `docs/plans`
 | PLAN-Z43s6oJzXX8u7P4xAKcbau | Issue #314 slice 1 — Golden Utility コアの実装計画 | in-progress | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | PLAN-Sv5LAPR5jiKCGifpkWxo3e | Issue #314 slice 5 — Golden 環境正規化・registry 結合・runner 統合・証拠 lane 実装計画 | approved | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | PLAN-034UeymubB5x0zXeYGvfEl | Issue #314 slice 2 — Golden × Scenario 能力契約接続の実装計画 | in-progress | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
+| PLAN-314rwCt3mN8qRsV6xZ1aB | Issue #314 slice 4 residual — real-window adapter 実装 plan | approved | [issue-314-real-window-adapter.md](./issue-314-real-window-adapter.md) |
 | PLAN-034V2hp0I1d6mdR2ya94bO | Issue #314 slice 6 — Consumer-shaped semantic oracle fixtures 実装計画 | approved | [issue-314-semantic-oracle.md](./issue-314-semantic-oracle.md) |
 | PLAN-lb9Tb7cIysOfXayRz4GJY8 | Issue #326 ci.yml dispatch 専用化 実装計画 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | PLAN-034RBML1CjEEPA4ApRK8R9 | Issue #327 CI計測Baseline 実施計画 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
@@ -152,6 +153,7 @@ Directory: `docs/plans`
 | PLAN-1OVcOgiEi7tc3VMXPzF9F3 | Issue #479 — 値制御キーボード操作の実装計画 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | PLAN-034UiTo1gkl570hZTb2iU7 | Issue #480 実装計画 — tab_focus の op 駆動解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | PLAN-2uLb895SP6hIbAneuh5Pjs | Issue #490 oracle late-create query epoch 実装計画 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
+| PLAN-034VehuU5KuL3vurAXEXph | Issue #552 — SendInput preflight 実装計画 | draft | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |

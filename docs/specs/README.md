@@ -95,6 +95,7 @@ Directory: `docs/specs`
 | SPEC-0k38sOnYLZQngydDDLygHu | Issue #314 slice 1 — headless Pixel Golden Utility コア | proposed | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | SPEC-2v1KGNSaMXtSGSr7czOhiR | Issue #314 slice 5 — Golden 環境正規化・fixture registry 結合・Scenario runner 統合・証拠 lane | proposed | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | SPEC-034UevQgR6YDvj7j5Urcrc | Issue #314 slice 2 — Golden Utility と Scenario Contract の能力契約接続 | proposed | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
+| SPEC-314rwAd4pX9kLmN2vQ8sT | Issue #314 slice 4 residual — real-window VisualGuiTest adapter + manifest/証拠 link | approved | [issue-314-real-window-adapter.md](./issue-314-real-window-adapter.md) |
 | SPEC-034V2gKIAk9L49Yej6EXsG | Issue #314 slice 6 — Consumer-shaped semantic oracle fixtures (AudioLens/Synvelis) | proposed | [issue-314-semantic-oracle.md](./issue-314-semantic-oracle.md) |
 | SPEC-LVITTCzVKzuRSkMzcYwUmc | Issue #326 ci.yml を workflow_dispatch 専用化 — PR/push trigger 撤去（Daily Full CI 移行・RF Stage 4） | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | SPEC-034RBJKNinKQbKocpnqqM9 | Issue #327 3リポジトリ横断CI計測Baseline・非回帰基準 仕様 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
@@ -151,6 +152,7 @@ Directory: `docs/specs`
 | SPEC-z3dzJJAH4RMnLrkQfhkR0m | Issue #479 — Seek/Fader/Knob のキーボード操作（共通 key 規約） | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | SPEC-034UiRf9jEzvH2FbreqPsA | Issue #480 — Tabs strip の FocusHandle unmount 解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | SPEC-1ZxAql6tPbxsqXhvmGvphr | Issue #490 oracle late-create query epoch 整合 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
+| SPEC-034VeaErc3izqznL8Ycsk6 | Issue #552 — real-OS input lane SendInput preflight（注入→実効 read-back で EnvironmentBlocked と GUI Fail を区別） | draft | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |

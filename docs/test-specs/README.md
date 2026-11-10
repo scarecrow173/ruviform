@@ -108,6 +108,7 @@ Directory: `docs/test-specs`
 | TSPEC-e1fQqoSXueHMyLvDmFV5Gz | Issue #314 slice 1 — Golden Utility コアのテスト仕様 | proposed | [issue-314-golden-core.md](./issue-314-golden-core.md) |
 | TSPEC-suZHG6N60Cpt2NxAwyqq2G | Issue #314 slice 5 — Golden 環境正規化・registry 結合・runner 統合・証拠 lane のテスト仕様 | approved | [issue-314-golden-evidence.md](./issue-314-golden-evidence.md) |
 | TSPEC-034UeyabB9HNuQvfyPVYdA | Issue #314 slice 2 — Golden × Scenario 能力契約接続のテスト仕様 | proposed | [issue-314-golden-scenario.md](./issue-314-golden-scenario.md) |
+| TEST-314rwEt8pC4wHxJ7nQ3rS | Issue #314 slice 4 residual — real-window adapter test-spec | approved | [issue-314-real-window-adapter.md](./issue-314-real-window-adapter.md) |
 | TSPEC-034V2hpT0kkEMk2hJtieRh | Issue #314 slice 6 — Consumer-shaped semantic oracle fixtures のテスト仕様 | approved | [issue-314-semantic-oracle.md](./issue-314-semantic-oracle.md) |
 | TSPEC-nB4WC4Q4CYMJmm6HVksOwr | Issue #326 ci.yml dispatch 専用化 test specification — trigger 不存在契約・dispatch 契約維持・PR 起動ゼロ実証 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | TSPEC-034RBMKdNX5HX6vExF2WlS | Issue #327 CI計測Baseline 検証仕様 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
@@ -166,6 +167,7 @@ Directory: `docs/test-specs`
 | TSPEC-LqfidO2iIqcMjOeeHeLMd2 | Issue #479 — 値制御キーボード操作の検証契約 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | TSPEC-034UiRtw5zDZciI3peq94F | Issue #480 tab_focus 解放テスト仕様 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TSPEC-hojj4XgrGAgMW3wK6Tr5Ok | Issue #490 oracle late-create query epoch テスト仕様 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
+| TSPEC-034VedyL5Ej4Yc3P62YgUl | Issue #552 — SendInput preflight 検証契約 | draft | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |
