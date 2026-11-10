@@ -196,3 +196,4 @@ Directory: `docs/impl/ir`
 | IMPL-034UXQ38rN5TtHZ9AGp6EW | Issue #278 OBS-03 tracing_export acceptance verification slice | completed | [issue-278-obs-03-tracing-export-acceptance-verification-slice.md](./issue-278-obs-03-tracing-export-acceptance-verification-slice.md) |
 | IMPL-034UkdjBdy4RDY0x9rZrE0 | Issue #313 Windows 実 OS SendInput キーボード smoke と OS Capability Matrix 証拠 | completed | [issue-313-windows-os-sendinput-smoke-os-capability-matrix.md](./issue-313-windows-os-sendinput-smoke-os-capability-matrix.md) |
 | IMPL-034UkPTR1W1N5M0K3P06 | Issue #313 Windows 実 OS SendInput ポインタ smoke（driver 計測ジオメトリ + capability matrix 更新） | completed | [issue-313-windows-pointer-smoke.md](./issue-313-windows-pointer-smoke.md) |
+| IMPL-BneVKCjBRwNA5pxIVfIZ6X | Issue #285 IO-03 Compression — 設計正本照合・契約試験棚卸し | completed | [issue-285-io-03-compression-contract-audit.md](./issue-285-io-03-compression-contract-audit.md) |
