@@ -8,7 +8,7 @@ mod common;
 use std::io::Cursor;
 
 use common::extract::{TestDir, exists, read_staged};
-use common::tar::{HeaderSpec, entry_with, file_entry, tar, writer_tar};
+use common::tar::{HeaderSpec, entry_with, ext_entry, file_entry, pax_record, tar, writer_tar};
 use ruviform_io_archive::extract::{ExtractOptions, ExtractionSession};
 use ruviform_io_archive::tar::TarArchiveReader;
 use ruviform_io_archive::{ArchiveErrorKind, ArchiveReadLimits};
@@ -259,5 +259,43 @@ fn a_truncated_archive_end_fails_instead_of_handing_out_a_tree() {
     let bytes = file_entry("a.txt", b"data");
     let f = extract(bytes, dir.path(), options()).expect_err("must fail");
     assert_eq!(f.error().kind(), ArchiveErrorKind::Truncated);
+    assert!(!exists(&f.staging_root));
+}
+
+// --- extension-provided effective names -------------------------------
+
+#[test]
+fn pax_path_override_extracts_under_the_effective_name() {
+    // The ustar header name is fully replaced by the PAX `path`
+    // record — extraction must use the effective name everywhere.
+    let dir = TestDir::new("tar-pax-path");
+    let records = pax_record(b"path", b"sub/dir/real.txt");
+    let bytes = tar(&[
+        ext_entry(b'x', "PaxHeader", &records),
+        file_entry("hdr-name.txt", b"payload"),
+    ]);
+    let (_inner, tree) = extract(bytes, dir.path(), options()).expect("extract");
+    let root = tree.path().to_path_buf();
+    assert_eq!(
+        read_staged(&root.join("sub").join("dir").join("real.txt")).as_deref(),
+        Some(b"payload".as_slice())
+    );
+    assert!(!exists(&root.join("hdr-name.txt")));
+    assert_eq!(tree.receipt().unverified_entries, 0);
+    tree.cleanup().expect("cleanup");
+}
+
+#[test]
+fn pax_path_override_still_passes_path_policy() {
+    // A hostile `path` record is the *effective* name — it must hit
+    // the same SafeRelativePath policy as a plain header name.
+    let dir = TestDir::new("tar-pax-evil");
+    let records = pax_record(b"path", b"../evil.txt");
+    let bytes = tar(&[
+        ext_entry(b'x', "PaxHeader", &records),
+        file_entry("innocent.txt", b"x"),
+    ]);
+    let f = extract(bytes, dir.path(), options()).expect_err("must fail");
+    assert_eq!(f.error().kind(), ArchiveErrorKind::InvalidInput);
     assert!(!exists(&f.staging_root));
 }

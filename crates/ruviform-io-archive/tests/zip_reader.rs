@@ -291,6 +291,21 @@ fn aggregate_uncompressed_budget_enforced_in_verify_all() {
 }
 
 #[test]
+fn verify_all_surfaces_the_first_entry_failure() {
+    // A verified entry followed by a CRC-corrupt one: verify_all
+    // reports the corruption as an error rather than a partial
+    // receipt, and per-entry verification state stays honest.
+    let mut bad = EntrySpec::stored("bad", b"content");
+    bad.crc32 ^= 0xFFFF;
+    let bytes = build_simple(&[EntrySpec::stored("good", b"ok"), bad]);
+    let mut archive = reader(bytes);
+    let kind = kind_of(archive.verify_all());
+    assert_eq!(kind, ArchiveErrorKind::ChecksumMismatch);
+    assert!(archive.entry_is_verified(0));
+    assert!(!archive.entry_is_verified(1));
+}
+
+#[test]
 fn per_entry_actual_budget_cap_enforced_mid_stream() {
     // Declared size fits the budget but the *actual* deflate output
     // exceeds it — the cap must cut off while reading.
@@ -468,6 +483,15 @@ fn corrupt_deflate_stream_is_malformed_not_a_panic() {
         inner.map(ArchiveError::kind),
         Some(ArchiveErrorKind::Malformed)
     );
+}
+
+#[test]
+fn into_inner_returns_the_underlying_reader_without_verifying() {
+    // Mirror of the TAR contract: handing the inner stream back is not
+    // a completion proof — no entry was ever opened or verified.
+    let bytes = writer_zip(&[("a", ZipCompressionMethod::Stored, b"x")]);
+    let archive = reader(bytes.clone());
+    assert_eq!(archive.into_inner().into_inner(), bytes);
 }
 
 #[test]

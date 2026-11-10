@@ -131,6 +131,26 @@ fn cleanup_retains_a_foreign_file_at_a_recorded_name() {
 }
 
 #[test]
+fn recovery_handle_reports_absent_and_cleanup_succeeds() {
+    let dir = TestDir::new("st-absent");
+    let tree = extract_zip(&[("keep.txt", b"mine")], dir.path());
+    let root = tree.path().to_path_buf();
+    // Force a retained-node failure to obtain a live recovery handle.
+    let staged = root.join("keep.txt");
+    std::fs::remove_file(&staged).expect("remove staged");
+    std::fs::write(&staged, b"FOREIGN").expect("plant foreign");
+    let err = tree.cleanup().expect_err("cleanup must fail");
+    let handle = err.handle;
+    assert_eq!(handle.inspect().state, RecoveryTreeState::Present);
+
+    // The recorded tree disappears entirely → inspect reports Absent
+    // and a retried cleanup is an honest no-op success.
+    std::fs::remove_dir_all(&root).expect("remove root");
+    assert_eq!(handle.inspect().state, RecoveryTreeState::Absent);
+    handle.cleanup().expect("cleanup on absent root");
+}
+
+#[test]
 fn cleanup_refuses_to_delete_a_swapped_root_tree() {
     let dir = TestDir::new("st-swap");
     let tree = extract_zip(&[("keep.txt", b"mine")], dir.path());

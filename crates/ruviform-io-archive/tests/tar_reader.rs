@@ -192,6 +192,20 @@ fn pax_global_record_is_validated_but_never_applied() {
 }
 
 #[test]
+fn solaris_x_header_applies_pax_records() {
+    // 'X' (Solaris) extended headers carry the same record grammar as
+    // 'x' and feed the same effective-field overrides.
+    let records = pax_record(b"path", b"solaris/renamed.txt");
+    let bytes = tar(&[
+        ext_entry(b'X', "SolarisXHeader", &records),
+        file_entry("hdr-name", b"x"),
+    ]);
+    let mut archive = reader(bytes);
+    let entry = archive.next_entry().expect("entry").expect("some");
+    assert_eq!(entry.info().name().as_bytes(), b"solaris/renamed.txt");
+}
+
+#[test]
 fn gnu_magic_header_is_accepted() {
     let mut spec = HeaderSpec::file("gnu.txt", 4);
     spec.gnu = true;
@@ -552,6 +566,28 @@ fn discard_pending_io_failure_latches_failed() {
         kind_of(archive.discard_pending()),
         ArchiveErrorKind::Truncated
     );
+    assert_eq!(
+        kind_of(archive.next_entry()),
+        ArchiveErrorKind::InvalidState
+    );
+}
+
+#[test]
+fn discard_pending_enforces_the_total_budget() {
+    // The declared size fits the per-entry cap and the *total* budget
+    // is only consumed while bytes actually drain — so the pending
+    // discard is where an over-budget remainder is cut off.
+    let bytes = writer_tar(&[("big", b"0123456789")]);
+    let mut archive = reader_with(bytes, limits(|l| l.max_total_uncompressed_bytes = 6));
+    {
+        let _entry = archive.next_entry().expect("entry").expect("some");
+        // dropped unread → Pending{skip:10}
+    }
+    assert_eq!(
+        kind_of(archive.discard_pending()),
+        ArchiveErrorKind::LimitExceeded
+    );
+    // A mid-drain budget failure cannot resync the stream: Failed.
     assert_eq!(
         kind_of(archive.next_entry()),
         ArchiveErrorKind::InvalidState
