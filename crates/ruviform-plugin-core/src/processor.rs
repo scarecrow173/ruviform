@@ -46,7 +46,7 @@
 use ruviform_audio_core::SampleRate;
 use ruviform_media_core::{Error, Result};
 
-use crate::event::EventList;
+use crate::event::{Event, EventList};
 use crate::transport::TransportInfo;
 
 /// Read-side view contract over a per-channel planar `f32` buffer.
@@ -501,6 +501,31 @@ pub trait PluginProcessor {
     where
         I: BufferView,
         O: BufferViewMut;
+
+    /// Drains plugin→host reports queued by `process` calls since the
+    /// last drain, appending them to `out`.
+    ///
+    /// A *report* is a canonical [`Event`] flowing in the reverse
+    /// direction: [`EventKind::ParamValue`](crate::event::EventKind)
+    /// reports a parameter value
+    /// the plugin wants the host to observe (gesture confirmation,
+    /// output parameter queues in standards that carry them), and
+    /// `EventKind::Midi` reports a plugin-generated channel-voice
+    /// event. Reports are produced during `process` into a bounded
+    /// per-instance buffer; this pull-based drain gives the consumer
+    /// natural back-pressure — undrained reports accumulate only up
+    /// to the producer's declared bound and are dropped (counted) past
+    /// it.
+    ///
+    /// The default implementation reports nothing — plugins without
+    /// a reporting surface keep the previous behavior unchanged.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate
+    /// (the caller owns and may reuse the buffer); implementations
+    /// must not call it from inside `process`.
+    fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
+        let _ = out;
+    }
 }
 
 #[cfg(test)]
