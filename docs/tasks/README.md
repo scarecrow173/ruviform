@@ -268,6 +268,7 @@ Directory: `docs/tasks`
 | TASK-1EfMLBvEIXGocxCFFgixSj | Issue #377 — QueryBinding adopt-on-join 実装と恒久テスト | done | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | TASK-034Uhnq0kOMsOzPLSOL8Bz | Issue #378 T1 oracle addBinding epoch 整合 | done | [issue-378-t1-oracle-addbinding-epoch.md](./issue-378-t1-oracle-addbinding-epoch.md) |
 | TASK-hCLO8YPWLtzGOIGdhW5yxp | Issue #389 Plugin Editor Session headless fixture タスク（contract 認定 + DSP/RT 非干渉 fixture） | done | [issue-389-editor-session-headless.md](./issue-389-editor-session-headless.md) |
+| TASK-Q2ek2gQVRR1KvvM8kyaMei | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture タスク | done | [issue-389-editor-session-statemachine.md](./issue-389-editor-session-statemachine.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
 | TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | done | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TASK-034UwdhT5Gt2dptCoVPLfF | Issue #410 P2 — view ledger correlation hardening | done | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |

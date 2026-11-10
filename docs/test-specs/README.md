@@ -128,6 +128,7 @@ Directory: `docs/test-specs`
 | TSPEC-rf388DockLayoutPoc01 | Issue #388 GPUI Panel/Tab レイアウト内 Editor 埋め込みの実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-layout-poc.md](./issue-388-native-dock-layout-poc.md) |
 | TSPEC-rf388DockWindowing01 | Issue #388 slice 3 windowing 挙動の実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | TSPEC-Vqv91J1zDZ6Qvi57khd2TT | Issue #389 Plugin Editor Session headless fixture テスト仕様（DSP/RT 非干渉 + contract edge + focus 境界） | approved | [issue-389-editor-session-headless.md](./issue-389-editor-session-headless.md) |
+| TSPEC-Q5Bwy4OQ5KsQyE0Z4uhWg6 | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture テスト仕様（terminal-event・stale・timeout・degrade・crash） | approved | [issue-389-editor-session-statemachine.md](./issue-389-editor-session-statemachine.md) |
 | TSPEC-034UnAjuxNxMXzDMasVYeO | Issue #389 Plugin Editor Session hardening テスト仕様（fake-clock timeout・degrade・GraphicsLost contract） | approved | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TSPEC-034TaI7Luee0T88mH1IYv2 | Issue #390 Driver Boundary/Lab 検証 | draft | [issue-390-driver-boundary-lab.md](./issue-390-driver-boundary-lab.md) |
