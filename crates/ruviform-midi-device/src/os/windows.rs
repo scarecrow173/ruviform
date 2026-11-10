@@ -37,7 +37,7 @@ use windows_sys::Win32::Media::Multimedia::{
     DRV_QUERYDEVICEINTERFACE, DRV_QUERYDEVICEINTERFACESIZE,
 };
 use windows_sys::Win32::Media::{
-    MM_MIM_CLOSE, MM_MIM_DATA, MM_MIM_LONGDATA, MM_MIM_LONGERROR, MM_MIM_MOREDATA,
+    MM_MIM_CLOSE, MM_MIM_DATA, MM_MIM_ERROR, MM_MIM_LONGDATA, MM_MIM_LONGERROR, MM_MIM_MOREDATA,
     MMSYSERR_ALLOCATED, MMSYSERR_BADDEVICEID, MMSYSERR_NODRIVER, MMSYSERR_NOERROR,
 };
 
@@ -55,7 +55,8 @@ static NEXT_DOMAIN: AtomicU64 = AtomicU64::new(DOMAIN_BASE);
 
 /// Number of `SysEx` buffers registered per input — enough for typical
 /// `SysEx` bursts while bounding memory; overflow surfaces as
-/// `MIM_LONGERROR` → `dropped`.
+/// `MIM_MOREDATA` → `dropped`; `MIM_ERROR`/`MIM_LONGERROR` →
+/// `unsupported`.
 const SYSEX_BUFFER_COUNT: usize = 4;
 /// Per-buffer `SysEx` capacity in bytes (u32 because `dwBufferLength`
 /// is a DWORD).
@@ -454,13 +455,16 @@ extern "system" fn midi_in_proc(
                 None => shared.push_unsupported(),
             }
         }
-        // Driver-side loss notifications (same packed args, content
-        // irrelevant — the message itself was lost).
-        MM_MIM_MOREDATA | MM_MIM_LONGERROR => shared.push_dropped(),
-        // SysEx delivered via a long-data buffer — outside the
-        // channel-voice vocabulary. The returned header is re-queued
-        // lazily on `read` (callbacks may not call system functions).
-        MM_MIM_LONGDATA => shared.push_unsupported(),
+        // Driver-side queue overflow — the message itself was lost
+        // before reaching us (same packed args, content irrelevant).
+        MM_MIM_MOREDATA => shared.push_dropped(),
+        // Received-but-untranslatable traffic, all counted as
+        // unsupported rather than dropped (none is overload loss):
+        // `MIM_ERROR`/`MIM_LONGERROR` are driver-reported malformed
+        // messages, `MIM_LONGDATA` is SysEx outside the channel-voice
+        // vocabulary (its returned header is re-queued lazily on
+        // `read` — callbacks may not call system functions).
+        MM_MIM_ERROR | MM_MIM_LONGERROR | MM_MIM_LONGDATA => shared.push_unsupported(),
         MM_MIM_CLOSE => shared.mark_dead(),
         _ => {}
     }

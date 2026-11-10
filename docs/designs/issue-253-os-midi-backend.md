@@ -188,11 +188,14 @@ port 単位で一意）。
   （満杯なら dropped++）。非 channel-voice（0xF0+ system、
   0xF1–0xF7 common/realtime、status<0x80 の異常値）は
   `unsupported++`。
-- `MM_MIM_MOREDATA`(0x3C5): `dropped++`（driver queue 溢れ通知）。
-- `MM_MIM_LONGDATA`(0x3C4): `unsupported++`（SysEx=語彙外。
+- `MM_MIM_MOREDATA`(972 / 0x3CC): `dropped++`（driver queue 溢れ通知）。
+- `MM_MIM_LONGDATA`(964 / 0x3C4): `unsupported++`（SysEx=語彙外。
   buffer requeue は read 側）。
-- `MM_MIM_LONGERROR`(0x3C6): `dropped++`（long message 喪失）。
-- `MM_MIM_CLOSE`(0x3C7): `dead=true`（以後 read は
+- `MM_MIM_ERROR`(965 / 0x3C5): `unsupported++`（malformed short message
+  を driver が受信報告 — overload loss ではなく翻訳不能 traffic）。
+- `MM_MIM_LONGERROR`(966 / 0x3C6): `unsupported++`（malformed SysEx —
+  同上の理由で dropped ではなく unsupported）。
+- `MM_MIM_CLOSE`(962 / 0x3C2): `dead=true`（以後 read は
   `StreamInvalidated`）。
 - その他 msg: 無視（定義済み未知 message のみ）。
 

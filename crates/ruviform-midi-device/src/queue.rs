@@ -84,14 +84,15 @@ impl Shared {
     }
 
     /// Callback-side counter for a driver-reported loss
-    /// (`MIM_MOREDATA`, `MIM_LONGERROR`).
+    /// (`MIM_MOREDATA` — queue overflow before delivery).
     pub(crate) fn push_dropped(&self) {
         let mut inner = self.lock();
         inner.dropped = inner.dropped.saturating_add(1);
     }
 
     /// Callback-side counter for received-but-untranslatable traffic
-    /// (`SysEx` via `MIM_LONGDATA`, non-channel-voice `MIM_DATA`).
+    /// (`MIM_LONGDATA`/`MIM_ERROR`/`MIM_LONGERROR`, non-channel-voice
+    /// `MIM_DATA`).
     pub(crate) fn push_unsupported(&self) {
         let mut inner = self.lock();
         inner.unsupported = inner.unsupported.saturating_add(1);

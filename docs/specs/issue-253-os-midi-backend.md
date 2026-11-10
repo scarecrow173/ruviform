@@ -107,8 +107,9 @@ Issue #188 で確定した `ruviform-audio-core::midi_input` の 3 trait port
   （2 回目は `DeviceBusy`）。
 - callback（WinMM driver thread）: `MIM_DATA` を channel-voice
   `MidiEvent` に decode し adapter 内部 bounded queue へ
-  timestamp 付きで push。`MIM_MOREDATA`/`MIM_LONGERROR` は
-  `dropped` 計数、`MIM_LONGDATA` と非 channel-voice `MIM_DATA`
+  timestamp 付きで push。`MIM_MOREDATA` は `dropped` 計数、
+  `MIM_ERROR`/`MIM_LONGERROR`（driver 報告の malformed message）
+  と `MIM_LONGDATA`・非 channel-voice `MIM_DATA`
   （system common/realtime 等）は `unsupported` 計数 — いずれも
   サイレント失敗させない。callback 内で OS API を呼ばない
   （MSDN 制約）— SysEx buffer の requeue は `read` 側で行う。
