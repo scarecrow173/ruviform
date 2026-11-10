@@ -57,11 +57,11 @@
      "layer": "real-os",
      "status": "pass",
      "owner": "https://github.com/scarecrow173/ruviform/issues/314",
-     "note": "Issue #314 slice 4: ruviform-ui-gpui の tests/real_window.rs::lab_story_sv_fader_dock_real_window が RealOsGuiTest（ScenarioDriver::RealOs, real-scenario feature）経由で canonical ViewSpec を実 OS window に mount し、synvelis-dark × scale 1.0 で idle→focus→drag→commit→stale→invalid→teardown の semantic trace が共有 oracle expected_lab_story_trace と一致することを検証。semantic dispatch は ViewHost 経由の semantic action であり pointer/keyboard/OS-input 証拠ではない（OS input gate は #313 の別 scope で blocked のまま）。pixel 層は capture_frame → GpuiDriver::capture_window（Win32 PrintWindow 主・screen BitBlt 副）による実 OS window pixel で、idle/teardown 両 state を取得し golden_check（driver_class=real-os, capture=RealWindow）で baseline_missing → candidate → promote → pass を検証。Windows 実 desktop session で実測。macOS/Linux capture backend・scale 2.0 cell・consumer 製品 fixture 実接続は本 slice 対象外。",
+     "note": "Issue #314 slice 4 + follow-up: ruviform-ui-gpui の tests/real_window.rs::lab_story_sv_fader_dock_real_window が RealOsGuiTest（ScenarioDriver::RealOs, real-scenario feature）経由で canonical ViewSpec を実 OS window に mount し、synvelis-dark/audiolens-dark × theme scale 1.0/2.0 の 4 cell で idle→focus→drag→commit→stale→invalid→teardown の semantic trace が共有 oracle expected_lab_story_trace と一致することを検証（scale 軸は ResolvedTheme::with_scale の ScaleContext で tokens 不変を cell ごとに確認 — Fake/GPUI-simulated 層と同一規則）。semantic dispatch は ViewHost 経由の semantic action であり pointer/keyboard/OS-input 証拠ではない（OS input gate は #313 の別 scope で blocked のまま）。pixel 層は capture_frame → GpuiDriver::capture_window（Win32 PrintWindow 主・screen BitBlt 副）による実 OS window pixel で、cell ごとに idle/teardown を取得し golden_check（driver_class=real-os, capture=RealWindow, 実測 scale/backend, cell の実 mount theme）で baseline_missing → candidate → promote → pass を検証。canonical 実行経路は mise task test-ui-real-scenario（対話 desktop session 前提の manual lane、CI 対象外）。session 基盤が環境理由で成立しない場合は driver-lab evidence JSONL に observed=environment_blocked を記録し GUI Fail と区別する（cargo test に exit-code 区分はなく、分類は JSONL observed + panic tag で表現）。Windows 実 desktop session で 4 cell 全て実測（evidence/issue-314-real-scenario/）。macOS/Linux capture backend・consumer 製品 fixture 実接続・Plugin Dock snapshot は本 slice 対象外。",
      "mechanism": {
-      "kind": "cargo-test",
+      "kind": "mise-task",
+      "task": "test-ui-real-scenario",
       "package": "ruviform-ui-gpui",
-      "target": "real_window",
       "filter": "lab_story_sv_fader_dock_real_window"
      }
     }
@@ -118,11 +118,11 @@
      "layer": "real-os",
      "status": "pass",
      "owner": "https://github.com/scarecrow173/ruviform/issues/314",
-     "note": "Issue #314 slice 4: ruviform-ui-gpui の tests/real_window.rs::lab_story_al_waveform_seek_real_window が RealOsGuiTest（ScenarioDriver::RealOs, real-scenario feature）経由で canonical ViewSpec を実 OS window に mount し、audiolens-dark × scale 1.0 で idle→focus→drag→commit→stale→invalid→teardown の semantic trace が共有 oracle expected_lab_story_trace と一致することを検証。semantic dispatch は ViewHost 経由の semantic action であり pointer/keyboard/OS-input 証拠ではない（OS input gate は #313 の別 scope で blocked のまま）。pixel 層は capture_frame → GpuiDriver::capture_window（Win32 PrintWindow 主・screen BitBlt 副）による実 OS window pixel で、idle/teardown 両 state を取得し golden_check（driver_class=real-os, capture=RealWindow）で baseline_missing → candidate → promote → pass を検証。Windows 実 desktop session で実測。macOS/Linux capture backend・scale 2.0 cell・consumer 製品 fixture 実接続は本 slice 対象外。",
+     "note": "Issue #314 slice 4 + follow-up: ruviform-ui-gpui の tests/real_window.rs::lab_story_al_waveform_seek_real_window が RealOsGuiTest（ScenarioDriver::RealOs, real-scenario feature）経由で canonical ViewSpec を実 OS window に mount し、audiolens-dark/synvelis-dark × theme scale 1.0/2.0 の 4 cell で idle→focus→drag→commit→stale→invalid→teardown の semantic trace が共有 oracle expected_lab_story_trace と一致することを検証（scale 軸は ResolvedTheme::with_scale の ScaleContext で tokens 不変を cell ごとに確認 — Fake/GPUI-simulated 層と同一規則）。semantic dispatch は ViewHost 経由の semantic action であり pointer/keyboard/OS-input 証拠ではない（OS input gate は #313 の別 scope で blocked のまま）。pixel 層は capture_frame → GpuiDriver::capture_window（Win32 PrintWindow 主・screen BitBlt 副）による実 OS window pixel で、cell ごとに idle/teardown を取得し golden_check（driver_class=real-os, capture=RealWindow, 実測 scale/backend, cell の実 mount theme）で baseline_missing → candidate → promote → pass を検証。canonical 実行経路は mise task test-ui-real-scenario（対話 desktop session 前提の manual lane、CI 対象外）。session 基盤が環境理由で成立しない場合は driver-lab evidence JSONL に observed=environment_blocked を記録し GUI Fail と区別する（cargo test に exit-code 区分はなく、分類は JSONL observed + panic tag で表現）。Windows 実 desktop session で 4 cell 全て実測（evidence/issue-314-real-scenario/）。macOS/Linux capture backend・consumer 製品 fixture 実接続・Plugin Dock snapshot は本 slice 対象外。",
      "mechanism": {
-      "kind": "cargo-test",
+      "kind": "mise-task",
+      "task": "test-ui-real-scenario",
       "package": "ruviform-ui-gpui",
-      "target": "real_window",
       "filter": "lab_story_al_waveform_seek_real_window"
      }
     }
