@@ -173,21 +173,21 @@ use libloading::Library;
 use ruviform_media_core::{Rounding, TimeBase, TransportStatus};
 use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ErasedPlugin, EventKind, EventList, GuiHandle, GuiParentToken,
-    HostError, ParamFlags, ParamId, ParamInfo, Plugin, PluginDescriptor, PluginFactory,
-    PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus,
-    TransportInfo, erase,
+    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle,
+    GuiParentToken, HostError, ParamEvent, ParamFlags, ParamId, ParamInfo, Plugin,
+    PluginDescriptor, PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext,
+    ProcessResult, ProcessStatus, TransportInfo, erase,
 };
 use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, BusDirection, BusDirections_, BusInfo, Chord,
-    FrameRate, IAttributeList, IAttributeList_iid, IAttributeListTrait, IAudioProcessor,
-    IAudioProcessorTrait, IComponent, IComponentHandler, IComponentHandlerTrait, IComponentTrait,
-    IConnectionPoint, IConnectionPointTrait, IEditController, IEditControllerTrait, IEventList,
-    IHostApplication, IHostApplicationTrait, IMessage, IMessage_iid, IMessageTrait,
-    IParamValueQueue, IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait,
-    MediaTypes_, ParamID, ParamValue, ParameterInfo, ParameterInfo_::ParameterFlags_,
-    ProcessContext as VstProcessContext, ProcessContext_, ProcessData, ProcessModes_, ProcessSetup,
-    String128, SymbolicSampleSizes_, TChar, ViewType,
+    Event as VstEvent, FrameRate, IAttributeList, IAttributeList_iid, IAttributeListTrait,
+    IAudioProcessor, IAudioProcessorTrait, IComponent, IComponentHandler, IComponentHandlerTrait,
+    IComponentTrait, IConnectionPoint, IConnectionPointTrait, IEditController,
+    IEditControllerTrait, IEventList, IHostApplication, IHostApplicationTrait, IMessage,
+    IMessage_iid, IMessageTrait, IMidiMapping, IParamValueQueue, IParamValueQueueTrait,
+    IParameterChanges, IParameterChangesTrait, MediaTypes_, ParamID, ParamValue, ParameterInfo,
+    ParameterInfo_::ParameterFlags_, ProcessContext as VstProcessContext, ProcessContext_,
+    ProcessData, ProcessModes_, ProcessSetup, String128, SymbolicSampleSizes_, TChar, ViewType,
 };
 use vst3::Steinberg::{
     FUnknown, FUnknown_iid, IPlugFrame, IPlugFrameTrait, IPlugView, IPlugViewTrait,
@@ -198,7 +198,8 @@ use vst3::Steinberg::{
 };
 use vst3::{Class, ComPtr, ComWrapper, Interface};
 
-use crate::midi::{self, BridgeEventList, MidiBridgeStats};
+use crate::block;
+use crate::midi::{self, BridgeEventList, MidiAssignmentTable, MidiBridgeStats};
 use crate::sdk_enum_i32;
 use crate::strings::copy_wstring;
 
@@ -768,19 +769,24 @@ impl IComponentHandlerTrait for BridgeComponentHandler {
 }
 
 /// One parameter's point list — a bridge-owned `IParamValueQueue`
-/// handed to the plugin read-only (`addPoint` declines). The point
-/// `Vec` is allocated at `prepare` with `MAX_EVENTS_PER_BLOCK`
-/// capacity; `process` only `clear()`s and `push()`es inside it.
+/// handed to the plugin. `writable` selects the direction: the
+/// `inputParameterChanges` set is host-filled and plugin-read
+/// (`addPoint` declines), the `outputParameterChanges` set is
+/// plugin-filled and host-read. The point `Vec` is allocated at
+/// `prepare` with `MAX_EVENTS_PER_BLOCK` capacity; `process` only
+/// `clear()`s and `push()`es/`addPoint()`s inside it.
 ///
 /// The `RefCell` exists because the COM trait methods take `&self`;
-/// the queue is *call-scoped*: the bridge fills it inside `process`,
-/// the plugin reads it back inside the same `process` call, and the
-/// single-threaded child contract (the L1 runner drives one process
-/// thread) means a borrow can only conflict with a re-entrant FFI
-/// call — answered by `try_borrow`'s defined `kResultFalse`, never a
-/// cross-thread race or a `RefCell` panic across the ABI.
+/// the queue is *call-scoped*: the bridge fills input queues (or
+/// collects output queues) inside `process`, the plugin touches them
+/// inside the same `process` call, and the single-threaded child
+/// contract (the L1 runner drives one process thread) means a borrow
+/// can only conflict with a re-entrant FFI call — answered by
+/// `try_borrow`'s defined `kResultFalse`, never a cross-thread race
+/// or a `RefCell` panic across the ABI.
 struct BridgeParamQueue {
     id: u32,
+    writable: bool,
     points: RefCell<Vec<(i32, f64)>>,
 }
 
@@ -821,17 +827,41 @@ impl IParamValueQueueTrait for BridgeParamQueue {
         kResultTrue
     }
 
+    /// Appends a point — writable (output) queues only; read-only
+    /// (input) queues keep declining with `kNotImplemented`. A full
+    /// queue, a re-entrant borrow or a null `index` is the defined
+    /// `kResultFalse`; the point index written to `*index` is the
+    /// appended position.
     #[expect(unsafe_code)]
-    unsafe fn addPoint(&self, _sample_offset: i32, _value: f64, _index: *mut i32) -> tresult {
-        kNotImplemented
+    unsafe fn addPoint(&self, sample_offset: i32, value: f64, index: *mut i32) -> tresult {
+        if !self.writable || index.is_null() {
+            return kResultFalse;
+        }
+        let Ok(mut points) = self.points.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        if points.len() >= MAX_EVENTS_PER_BLOCK {
+            return kResultFalse;
+        }
+        points.push((sample_offset, value));
+        // SAFETY: `index` is non-null per the check above.
+        unsafe {
+            *index = i32::try_from(points.len() - 1).unwrap_or(i32::MAX);
+        }
+        kResultTrue
     }
 }
 
 /// The `IParameterChanges` supplied to `process` — a fixed queue set
 /// built at `prepare`; the `ComPtr`s keep the wrapped
 /// [`BridgeParamQueue`] objects alive for the instance's life.
+/// `writable` marks the `outputParameterChanges` direction: the
+/// plugin calls `addParameterData` to fetch-or-decline a queue. Each
+/// entry pairs the queue's `ParamID` with its `ComPtr` — the id is
+/// bridge-side metadata the COM pointer cannot answer cheaply.
 struct BridgeParameterChanges {
-    queues: Vec<ComPtr<IParamValueQueue>>,
+    queues: Vec<(u32, ComPtr<IParamValueQueue>)>,
+    writable: bool,
 }
 
 impl Class for BridgeParameterChanges {
@@ -848,16 +878,36 @@ impl IParameterChangesTrait for BridgeParameterChanges {
     unsafe fn getParameterData(&self, index: i32) -> *mut IParamValueQueue {
         self.queues
             .get(usize::try_from(index).unwrap_or(usize::MAX))
-            .map_or(ptr::null_mut(), ComPtr::as_ptr)
+            .map_or(ptr::null_mut(), |(_, queue)| queue.as_ptr())
     }
 
+    /// Writable sets resolve `ParamID` → the matching preallocated
+    /// queue (the plugin's output-parameter lookup); read-only sets
+    /// keep declining — the host never adds points to its own input
+    /// queues. An unknown id, a null `id`/`index` or a saturated
+    /// queue set is the defined null return.
     #[expect(unsafe_code)]
     unsafe fn addParameterData(
         &self,
-        _id: *const ParamID,
-        _index: *mut i32,
+        id: *const ParamID,
+        index: *mut i32,
     ) -> *mut IParamValueQueue {
-        ptr::null_mut()
+        if !self.writable || id.is_null() || index.is_null() {
+            return ptr::null_mut();
+        }
+        // SAFETY: `id` is a valid `ParamID` in-param per the check.
+        let id = unsafe { *id };
+        let Some(position) = self.queues.iter().position(|(queue_id, _)| *queue_id == id) else {
+            return ptr::null_mut();
+        };
+        let Some((_, queue)) = self.queues.get(position) else {
+            return ptr::null_mut();
+        };
+        // SAFETY: `index` is a valid out-param per the check.
+        unsafe {
+            *index = i32::try_from(position).unwrap_or(i32::MAX);
+        }
+        queue.as_ptr()
     }
 }
 
@@ -1528,6 +1578,39 @@ struct Vst3Plugin {
     /// The `IEventList` COM pointer kept for `ProcessData` — built
     /// once in `prepare` beside `event_list`.
     input_events: Option<ComPtr<IEventList>>,
+    /// Writable queue set for `ProcessData.outputParameterChanges` —
+    /// the plugin→host parameter-reporting direction (Issue #253).
+    /// Collected into `pending_reports` after each `process`.
+    output_queues: Vec<ComWrapper<BridgeParamQueue>>,
+    /// The `IParameterChanges` object handed to `process` as
+    /// `outputParameterChanges`.
+    output_param_changes: Option<ComPtr<IParameterChanges>>,
+    /// The `IEventList` wrapper handed to `process` as
+    /// `outputEvents` — the plugin appends channel-voice MIDI here.
+    output_event_list: Option<ComWrapper<BridgeEventList>>,
+    /// The `IEventList` COM pointer kept for `ProcessData`.
+    output_events: Option<ComPtr<IEventList>>,
+    /// `IMidiMapping` snapshot captured at `prepare` — the RT path
+    /// performs table lookups only, never plugin COM calls (the JUCE
+    /// `StoredMidiMapping` precedent).
+    midi_map: Option<MidiAssignmentTable>,
+    /// The controller's `IMidiMapping` interface — queried at `init`
+    /// (non-RT) and kept so `prepare` can snapshot the assignment
+    /// table. `None` when the plugin declares no mapping surface.
+    midi_mapping: Option<ComPtr<IMidiMapping>>,
+    /// Plugin→host reports collected from the output channels after
+    /// each `process` — drained through
+    /// [`PluginProcessor::drain_output_reports`]. Capacity reserved
+    /// at `prepare`; pushes stay inside it (defined drop past it).
+    pending_reports: Vec<Event>,
+    /// Scratch the `outputEvents` entries are copied into before
+    /// translation — ends the `BridgeEventList` borrow before
+    /// `pending_reports` is pushed into. Reserved at `prepare`.
+    report_event_scratch: Vec<VstEvent>,
+    /// Collection-side defined-skip counters for the plugin→host
+    /// direction — null channels, out-of-block offsets, unwritable
+    /// queues and untranslatable events.
+    report_stats: MidiBridgeStats,
     /// Cumulative MIDI translation counters — the observable side of
     /// the defined-skip policy (`crate::midi` module docs).
     midi_stats: MidiBridgeStats,
@@ -1574,6 +1657,15 @@ impl Vst3Plugin {
             param_changes: None,
             event_list: None,
             input_events: None,
+            output_queues: Vec::new(),
+            output_param_changes: None,
+            output_event_list: None,
+            output_events: None,
+            midi_map: None,
+            midi_mapping: None,
+            pending_reports: Vec::new(),
+            report_event_scratch: Vec::new(),
+            report_stats: MidiBridgeStats::new(),
             midi_stats: MidiBridgeStats::new(),
             library,
         }
@@ -1631,6 +1723,224 @@ impl Vst3Plugin {
             drop(view);
         }
         drop(self.plug_frame.take());
+    }
+
+    /// Builds the per-`prepare` channel objects `process` drives:
+    /// read-only input param queues + `IParameterChanges`, their
+    /// writable output mirrors for `outputParameterChanges`, the
+    /// input/output `IEventList` shells, the `IMidiMapping` snapshot,
+    /// and the report-collection buffers. All storage is preallocated
+    /// — `process` only clears/fills inside capacity (the module
+    /// docs' no-allocation RT contract). Non-RT: allocation is legal
+    /// here.
+    fn prepare_channels(&mut self) {
+        // One preallocated queue per declared param plus the
+        // `IParameterChanges` shell — `process` only fills inside
+        // capacity (the module docs' no-allocation RT contract).
+        self.event_queues = self
+            .params
+            .iter()
+            .map(|info| {
+                ComWrapper::new(BridgeParamQueue {
+                    id: info.id.0,
+                    writable: false,
+                    points: RefCell::new(Vec::with_capacity(MAX_EVENTS_PER_BLOCK)),
+                })
+            })
+            .collect();
+        let queues: Vec<(u32, ComPtr<IParamValueQueue>)> = self
+            .event_queues
+            .iter()
+            .filter_map(|queue| {
+                queue
+                    .to_com_ptr::<IParamValueQueue>()
+                    .map(|ptr| (queue.id, ptr))
+            })
+            .collect();
+        self.param_changes = ComWrapper::new(BridgeParameterChanges {
+            queues,
+            writable: false,
+        })
+        .to_com_ptr::<IParameterChanges>();
+        // The writable mirror for `ProcessData.outputParameterChanges`
+        // — same declared-param queue set, plugin-filled. Built once
+        // here; `process` clears/collects inside capacity.
+        self.output_queues = self
+            .params
+            .iter()
+            .map(|info| {
+                ComWrapper::new(BridgeParamQueue {
+                    id: info.id.0,
+                    writable: true,
+                    points: RefCell::new(Vec::with_capacity(MAX_EVENTS_PER_BLOCK)),
+                })
+            })
+            .collect();
+        let output_queues: Vec<(u32, ComPtr<IParamValueQueue>)> = self
+            .output_queues
+            .iter()
+            .filter_map(|queue| {
+                queue
+                    .to_com_ptr::<IParamValueQueue>()
+                    .map(|ptr| (queue.id, ptr))
+            })
+            .collect();
+        self.output_param_changes = ComWrapper::new(BridgeParameterChanges {
+            queues: output_queues,
+            writable: true,
+        })
+        .to_com_ptr::<IParameterChanges>();
+        // The `IEventList` shell for `ProcessData.inputEvents` —
+        // capacity reserved once here; `process` only clears/pushes
+        // inside it (the same no-allocation RT contract as the
+        // param queues).
+        let event_list = ComWrapper::new(BridgeEventList::with_capacity());
+        self.input_events = event_list.to_com_ptr::<IEventList>();
+        self.event_list = Some(event_list);
+        // The writable mirror for `ProcessData.outputEvents` — the
+        // plugin appends channel-voice MIDI here; `process` collects
+        // it into `pending_reports` after the call.
+        let output_event_list = ComWrapper::new(BridgeEventList::with_capacity());
+        self.output_events = output_event_list.to_com_ptr::<IEventList>();
+        self.output_event_list = Some(output_event_list);
+        // Snapshot the `IMidiMapping` table off the RT path — the
+        // plugin may change assignments between `prepare` calls, so
+        // the capture repeats here rather than at `init`.
+        self.midi_map = self.midi_mapping.as_ref().map(MidiAssignmentTable::capture);
+        // Report collection buffers — reserved once; `process` pushes
+        // inside capacity (defined drop past it).
+        self.pending_reports.clear();
+        self.pending_reports.reserve(MAX_EVENTS_PER_BLOCK);
+        self.report_event_scratch.clear();
+        self.report_event_scratch.reserve(block::MAX_BLOCK_EVENTS);
+    }
+
+    /// Copies `frames` from every wired host input channel into
+    /// `input_scratch` (unwired channels deliver silence — inputs
+    /// cannot alias the plugin's output buffers) and repoints the
+    /// channel-pointer arrays: inputs at scratch, outputs at the
+    /// host's buffers where wired and `output_scrap` where not.
+    ///
+    /// **RT contract:** RT-suitable — bounded copies into pre-sized
+    /// scratch, no allocation.
+    fn bounce_audio<I, O>(&mut self, inputs: &[I], outputs: &mut [O], frames: usize)
+    where
+        I: BufferView,
+        O: BufferViewMut,
+    {
+        // Input bounce — copy `frames` from every wired host channel
+        // into scratch; a channel the host did not wire delivers
+        // silence (see the module docs for why inputs cannot alias).
+        for (index, channel) in self.input_scratch.iter_mut().enumerate() {
+            let buffer = &mut channel[..frames];
+            match inputs.first().and_then(|bus| bus.channel(index)) {
+                Some(source) if source.len() >= frames => {
+                    buffer.copy_from_slice(&source[..frames]);
+                }
+                _ => buffer.fill(0.0),
+            }
+        }
+        // Repoint the channel-pointer arrays — preallocated `Vec`s,
+        // `iter_mut` keeps their length fixed (no realloc).
+        for (ptr, channel) in self
+            .input_ptrs
+            .iter_mut()
+            .zip(self.input_scratch.iter_mut())
+        {
+            *ptr = channel.as_mut_ptr();
+        }
+        for (index, ptr) in self.output_ptrs.iter_mut().enumerate() {
+            *ptr = match outputs.get_mut(0).and_then(|bus| bus.channel_mut(index)) {
+                Some(target) if target.len() >= frames => target.as_mut_ptr(),
+                _ => self
+                    .output_scrap
+                    .get_mut(index)
+                    .map_or(ptr::null_mut(), Vec::as_mut_ptr),
+            };
+        }
+    }
+
+    /// Collects the plugin→host reports the just-finished `process`
+    /// wrote into `outputParameterChanges`/`outputEvents` into
+    /// `pending_reports` — param-queue points become
+    /// [`EventKind::ParamValue`] reports, output event-list entries
+    /// go back through [`midi::incoming_event`] into
+    /// [`EventKind::Midi`] reports. Runs inside `process` (still the
+    /// RT path): bounded iteration over preallocated storage, pushes
+    /// inside reserved capacity — a full buffer or an untranslatable
+    /// entry is a defined skip counted in `report_stats`, never an
+    /// allocation. Reports accumulate across blocks until drained —
+    /// the bounded `pending_reports` capacity is the back-pressure
+    /// bound the neutral contract declares.
+    fn collect_output_reports(&mut self, frames: usize) {
+        self.report_event_scratch.clear();
+        let frame_bound = u32::try_from(frames).unwrap_or(u32::MAX);
+        // Parameter reports — every writable queue's points become
+        // `ParamValue` events at their sample offsets.
+        for queue in &self.output_queues {
+            let Ok(points) = queue.points.try_borrow() else {
+                self.report_stats.skipped += 1;
+                continue;
+            };
+            for &(offset, value) in points.iter() {
+                let frame = u32::try_from(offset).unwrap_or(u32::MAX);
+                // `ParamValue::new` (plugin-core — the vst3 `ParamValue`
+                // alias above is the `f64` typedef) clamps finite input
+                // into `[0,1]` and rejects non-finite — a plugin
+                // reporting NaN/inf or an out-of-block offset is a
+                // defined skip, not a fabricated value.
+                let Some(value) = ruviform_plugin_core::ParamValue::new(value).ok() else {
+                    self.report_stats.skipped += 1;
+                    continue;
+                };
+                if frame >= frame_bound {
+                    self.report_stats.skipped += 1;
+                    continue;
+                }
+                push_report(
+                    &mut self.pending_reports,
+                    &mut self.report_stats,
+                    Event::new(
+                        frame,
+                        EventKind::ParamValue(ParamEvent {
+                            param_id: ParamId(queue.id),
+                            value,
+                        }),
+                    ),
+                );
+            }
+        }
+        // MIDI reports — copy the plugin's `outputEvents` entries into
+        // scratch first so the `BridgeEventList` borrow ends before
+        // the report pushes.
+        if let Some(list) = self.output_event_list.as_ref()
+            && !list.copy_events_into(&mut self.report_event_scratch)
+        {
+            self.report_stats.skipped += 1;
+        }
+        for raw in self.report_event_scratch.iter().take(MAX_EVENTS_PER_BLOCK) {
+            match midi::incoming_event(raw, frames) {
+                Some(event) => {
+                    push_report(&mut self.pending_reports, &mut self.report_stats, event);
+                }
+                None => self.report_stats.skipped += 1,
+            }
+        }
+        // Canonical consumers expect frame-ordered reports; the sort
+        // is unstable (no allocation) over the reserved buffer.
+        self.pending_reports
+            .sort_unstable_by_key(|event| event.frame_offset());
+        // Next block starts clean — the output channels are per-call
+        // objects; clearing here keeps a plugin that forgets to is
+        // still correct.
+        for queue in &self.output_queues {
+            if let Ok(mut points) = queue.points.try_borrow_mut() {
+                points.clear();
+            }
+        }
+        if let Some(list) = self.output_event_list.as_ref() {
+            list.clear();
+        }
     }
 }
 
@@ -1725,17 +2035,26 @@ fn block_frames<I: BufferView, O: BufferViewMut>(
     frames
 }
 
-/// Distributes the block's `ParamValue` events onto the preallocated
-/// queues — `clear()` every queue, then push `(sample_offset,
-/// normalized_value)` points inside capacity. Foreign param ids (no
-/// queue exists), out-of-block offsets and events past
-/// `MAX_EVENTS_PER_BLOCK` are dropped by definition — never an
-/// allocation or a wrong-frame clamp.
+/// Distributes the block's parameter-bound events onto the
+/// preallocated queues — `clear()` every queue, then push
+/// `(sample_offset, normalized_value)` points inside capacity.
+/// Sources: `EventKind::ParamValue` events directly, and
+/// `EventKind::Midi` events consumed by `IMidiMapping` routing
+/// (`midi_map` + [`midi::routed_assignment`] — the same predicate
+/// [`midi::fill_event_list`] uses for suppression, so a routed event
+/// can never be delivered twice or lost between the two paths).
+/// Foreign param ids (no queue exists), out-of-block offsets and
+/// events past `MAX_EVENTS_PER_BLOCK` are dropped by definition —
+/// never an allocation or a wrong-frame clamp. Returns the per-call
+/// stats: `param_routed` counts MIDI events the mapping consumed;
+/// `translated`/`skipped` count queue deliveries and drops.
 fn fill_param_queues(
     queues: &[ComWrapper<BridgeParamQueue>],
     events: EventList<'_>,
     frames: usize,
-) {
+    midi_map: Option<&MidiAssignmentTable>,
+) -> MidiBridgeStats {
+    let mut stats = MidiBridgeStats::new();
     for queue in queues {
         if let Ok(mut points) = queue.points.try_borrow_mut() {
             points.clear();
@@ -1743,23 +2062,38 @@ fn fill_param_queues(
     }
     let frame_bound = u32::try_from(frames).unwrap_or(u32::MAX);
     for event in events.iter().take(MAX_EVENTS_PER_BLOCK) {
-        let EventKind::ParamValue(param) = event.kind() else {
-            continue;
+        let (param_id, value) = match event.kind() {
+            EventKind::ParamValue(param) => (param.param_id.0, param.value.get()),
+            EventKind::Midi(midi_event) => match midi::routed_assignment(&midi_event, midi_map) {
+                Some((id, value)) => {
+                    stats.param_routed += 1;
+                    (id, value)
+                }
+                None => continue,
+            },
+            _ => continue,
         };
         if event.frame_offset() >= frame_bound {
+            stats.skipped += 1;
             continue;
         }
         let offset = i32::try_from(event.frame_offset()).unwrap_or(i32::MAX);
-        let Some(queue) = queues.iter().find(|queue| queue.id == param.param_id.0) else {
+        let Some(queue) = queues.iter().find(|queue| queue.id == param_id) else {
+            stats.skipped += 1;
             continue;
         };
         let Ok(mut points) = queue.points.try_borrow_mut() else {
+            stats.skipped += 1;
             continue;
         };
         if points.len() < MAX_EVENTS_PER_BLOCK {
-            points.push((offset, param.value.get()));
+            points.push((offset, value));
+            stats.translated += 1;
+        } else {
+            stats.skipped += 1;
         }
     }
+    stats
 }
 
 /// Maps the optional neutral transport snapshot onto a VST3
@@ -1912,33 +2246,7 @@ impl PluginProcessor for Vst3Plugin {
             .collect();
         self.input_ptrs = vec![ptr::null_mut(); in_channels];
         self.output_ptrs = vec![ptr::null_mut(); out_channels];
-        // One preallocated queue per declared param plus the
-        // `IParameterChanges` shell — `process` only fills inside
-        // capacity (the module docs' no-allocation RT contract).
-        self.event_queues = self
-            .params
-            .iter()
-            .map(|info| {
-                ComWrapper::new(BridgeParamQueue {
-                    id: info.id.0,
-                    points: RefCell::new(Vec::with_capacity(MAX_EVENTS_PER_BLOCK)),
-                })
-            })
-            .collect();
-        let queues: Vec<ComPtr<IParamValueQueue>> = self
-            .event_queues
-            .iter()
-            .filter_map(ComWrapper::to_com_ptr::<IParamValueQueue>)
-            .collect();
-        self.param_changes =
-            ComWrapper::new(BridgeParameterChanges { queues }).to_com_ptr::<IParameterChanges>();
-        // The `IEventList` shell for `ProcessData.inputEvents` —
-        // capacity reserved once here; `process` only clears/pushes
-        // inside it (the same no-allocation RT contract as the
-        // param queues).
-        let event_list = ComWrapper::new(BridgeEventList::with_capacity());
-        self.input_events = event_list.to_com_ptr::<IEventList>();
-        self.event_list = Some(event_list);
+        self.prepare_channels();
         Ok(())
     }
 
@@ -1968,9 +2276,6 @@ impl PluginProcessor for Vst3Plugin {
             // a fabricated transition.
             return error();
         }
-        let Some(processor) = self.processor.as_ref() else {
-            return error();
-        };
         let frames = block_frames(
             inputs,
             outputs,
@@ -1983,48 +2288,28 @@ impl PluginProcessor for Vst3Plugin {
             return error();
         }
 
-        // Input bounce — copy `frames` from every wired host channel
-        // into scratch; a channel the host did not wire delivers
-        // silence (see the module docs for why inputs cannot alias).
-        for (index, channel) in self.input_scratch.iter_mut().enumerate() {
-            let buffer = &mut channel[..frames];
-            match inputs.first().and_then(|bus| bus.channel(index)) {
-                Some(source) if source.len() >= frames => {
-                    buffer.copy_from_slice(&source[..frames]);
-                }
-                _ => buffer.fill(0.0),
-            }
-        }
-        // Repoint the channel-pointer arrays — preallocated `Vec`s,
-        // `iter_mut` keeps their length fixed (no realloc).
-        for (ptr, channel) in self
-            .input_ptrs
-            .iter_mut()
-            .zip(self.input_scratch.iter_mut())
-        {
-            *ptr = channel.as_mut_ptr();
-        }
-        for (index, ptr) in self.output_ptrs.iter_mut().enumerate() {
-            *ptr = match outputs.get_mut(0).and_then(|bus| bus.channel_mut(index)) {
-                Some(target) if target.len() >= frames => target.as_mut_ptr(),
-                _ => self
-                    .output_scrap
-                    .get_mut(index)
-                    .map_or(ptr::null_mut(), Vec::as_mut_ptr),
-            };
-        }
+        self.bounce_audio(inputs, outputs, frames);
 
-        // Distribute param events into the preallocated queues.
-        fill_param_queues(&self.event_queues, events, frames);
+        // Distribute parameter-bound events into the preallocated
+        // queues — `ParamValue` events directly plus `Midi` events the
+        // `IMidiMapping` snapshot routes to parameters.
+        let param_stats =
+            fill_param_queues(&self.event_queues, events, frames, self.midi_map.as_ref());
+        self.midi_stats.translated += param_stats.translated;
+        self.midi_stats.skipped += param_stats.skipped;
+        self.midi_stats.param_routed += param_stats.param_routed;
         // Translate canonical MIDI events into the preallocated
         // `IEventList` — `ParamValue`/unknown kinds are not MIDI and
-        // are not counted; defined skips accumulate in `midi_stats`.
+        // are not counted; mapping-routed events are suppressed here
+        // (delivered via the queues above); defined skips accumulate
+        // in `midi_stats`.
         if let Some(event_list) = self.event_list.as_ref() {
             let stats = midi::fill_event_list(
                 event_list,
                 events,
                 transport.and_then(TransportInfo::musical),
                 self.sample_rate,
+                self.midi_map.as_ref(),
             );
             self.midi_stats.translated += stats.translated;
             self.midi_stats.skipped += stats.skipped;
@@ -2057,29 +2342,75 @@ impl PluginProcessor for Vst3Plugin {
                 .param_changes
                 .as_ref()
                 .map_or(ptr::null_mut(), ComPtr::as_ptr),
-            outputParameterChanges: ptr::null_mut(),
+            outputParameterChanges: self
+                .output_param_changes
+                .as_ref()
+                .map_or(ptr::null_mut(), ComPtr::as_ptr),
             inputEvents: self
                 .input_events
                 .as_ref()
                 .map_or(ptr::null_mut(), ComPtr::as_ptr),
-            outputEvents: ptr::null_mut(),
+            outputEvents: self
+                .output_events
+                .as_ref()
+                .map_or(ptr::null_mut(), ComPtr::as_ptr),
             processContext: process_context
                 .as_mut()
                 .map_or(ptr::null_mut(), ptr::from_mut),
         };
         // SAFETY: every pointer in `data` is valid for the call — the
         // channel-pointer arrays and scratch live in `self`, the bus
-        // structs, context and changes are locals alive across the
-        // call; `numChannels`/`numSamples` match their arrays.
+        // structs, context, changes and event lists are owned by
+        // `self` (or locals) alive across the call; `numChannels`/
+        // `numSamples` match their arrays. The `processor` borrow is
+        // taken last so the `&mut self` report collection below can
+        // run once the call returns.
+        let Some(processor) = self.processor.as_ref() else {
+            return error();
+        };
         let result = unsafe { processor.process(&raw mut data) };
         if result == kResultOk {
+            // Plugin→host reports: collect what the plugin wrote into
+            // `outputParameterChanges`/`outputEvents` while the
+            // objects are still call-scoped — a declined `process`
+            // leaves the channels in an undefined state, so nothing
+            // is collected for it.
+            self.collect_output_reports(frames);
             // SAFETY: live COM object; `getTailSamples` reports the
-            // tail the just-completed `process` recorded.
-            let tail = unsafe { processor.getTailSamples() };
+            // tail the just-completed `process` recorded. Re-borrowed
+            // — the earlier `processor` loan ended with the `process`
+            // call so the report collection could take `&mut self`.
+            let tail = unsafe {
+                self.processor
+                    .as_ref()
+                    .map_or(0, |processor| processor.getTailSamples())
+            };
             ProcessResult::new(ProcessStatus::Continue, tail)
         } else {
             error()
         }
+    }
+
+    /// Moves the reports collected from the plugin's
+    /// `outputParameterChanges`/`outputEvents` into `out` — the
+    /// consumer-facing half of the plugin→host reporting path.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate.
+    fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
+        out.append(&mut self.pending_reports);
+    }
+}
+
+/// Appends one collected report inside reserved capacity — a full
+/// buffer is the defined drop counted in `stats.skipped`.
+///
+/// **RT contract:** RT-suitable — bounded push, no allocation.
+fn push_report(reports: &mut Vec<Event>, stats: &mut MidiBridgeStats, event: Event) {
+    if reports.len() < reports.capacity() {
+        reports.push(event);
+        stats.translated += 1;
+    } else {
+        stats.skipped += 1;
     }
 }
 
@@ -2191,11 +2522,18 @@ impl Plugin for Vst3Plugin {
                     self.controller_cp = Some(e_cp);
                 }
             }
+            // `IMidiMapping` lives on the edit controller (a
+            // single-component plugin answers through the same
+            // object). `None` is honest — the plugin declares no
+            // CC→parameter routing and every MIDI event keeps the
+            // ordinary event path.
+            let midi_mapping = controller.cast::<IMidiMapping>();
             self.component = Some(component);
             self.processor = Some(processor);
             self.controller = Some(controller);
             self.single_component = single_component;
             self.handler = Some(handler_ptr);
+            self.midi_mapping = midi_mapping;
             // The host context must outlive the plugin objects — the
             // plugin may retain it past `initialize`.
             self.host_app = host_app.to_com_ptr::<IHostApplication>();
@@ -2386,7 +2724,8 @@ mod tests {
     use crate::component::GainComponent;
     use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
     use ruviform_media_core::{
-        MediaTime, MidiChannel, MidiEvent, MidiGroup, MidiKind, MidiValue, MusicalTimeInfo, NoteKey,
+        MediaTime, MidiChannel, MidiController, MidiEvent, MidiGroup, MidiKind, MidiValue,
+        MusicalTimeInfo, NoteKey,
     };
     // `ParamValue` here is the *neutral* normalized-value type — the
     // named import shadows the `vst3` `f64` alias brought in by
@@ -2794,5 +3133,113 @@ mod tests {
         assert_eq!(result.status, ProcessStatus::Continue);
         assert_eq!(left, vec![0.5_f32; FRAMES]);
         assert_eq!(right, vec![-0.25_f32; FRAMES]);
+    }
+
+    /// Issue #253 (b): the fixture controller's `IMidiMapping` routes
+    /// volume CC 7 through `inputParameterChanges` — the canonical
+    /// `ControlChange` scales the block instead of reaching the
+    /// plugin as an ordinary MIDI event.
+    #[test]
+    #[expect(clippy::cast_possible_truncation)]
+    fn imidi_mapping_routes_volume_cc_to_gain_param() {
+        let mut plugin = prepared_plugin();
+        let cc = MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::ControlChange {
+                controller: MidiController::new(7).unwrap(),
+                value: MidiValue::from_u7(63),
+            },
+        };
+        let events = [Event::new(0, EventKind::Midi(cc))];
+        let events = EventList::new(&events, FRAMES_U32).unwrap();
+        let (result, [left, right]) = drive_block(&mut *plugin, events, None);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        // `IMidiMapping` semantics: CC 7 → normalized `63/127`.
+        let gain = (63.0_f64 / 127.0) as f32;
+        assert_eq!(left, vec![0.5_f32 * gain; FRAMES]);
+        assert_eq!(right, vec![-0.25_f32 * gain; FRAMES]);
+        // The routed event produced the fixture's applied-value
+        // report — proof it arrived as a parameter, not a MIDI event.
+        let mut reports = Vec::new();
+        plugin.drain_output_reports(&mut reports);
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].frame_offset(), 0);
+        let EventKind::ParamValue(param) = reports[0].kind() else {
+            panic!("routed CC must surface as a ParamValue report");
+        };
+        assert_eq!(param.param_id, ParamId(0));
+    }
+
+    /// An unmapped controller keeps the ordinary MIDI path: the
+    /// fixture ignores it (passthrough audio) and nothing reports.
+    #[test]
+    fn unmapped_cc_passes_through_without_param_routing() {
+        let mut plugin = prepared_plugin();
+        let cc = MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::ControlChange {
+                controller: MidiController::new(20).unwrap(),
+                value: MidiValue::from_u7(100),
+            },
+        };
+        let events = [Event::new(0, EventKind::Midi(cc))];
+        let events = EventList::new(&events, FRAMES_U32).unwrap();
+        let (result, [left, right]) = drive_block(&mut *plugin, events, None);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert_eq!(left, vec![0.5_f32; FRAMES]);
+        assert_eq!(right, vec![-0.25_f32; FRAMES]);
+        let mut reports = Vec::new();
+        plugin.drain_output_reports(&mut reports);
+        assert_eq!(reports, Vec::<Event>::new());
+    }
+
+    /// Issue #253 (c): the fixture's plugin→host reports round-trip —
+    /// applied `ParamValue`s echo through `outputParameterChanges`,
+    /// `NoteOn`s through `outputEvents`, and the host collects both
+    /// into canonical `Event`s via `drain_output_reports`.
+    #[test]
+    fn plugin_output_reports_drain_as_canonical_events() {
+        let mut plugin = prepared_plugin();
+        let note_on = MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::NoteOn {
+                key: NoteKey::new(60).unwrap(),
+                velocity: MidiValue::from_u7(100),
+            },
+        };
+        let events = [
+            Event::new(
+                0,
+                EventKind::ParamValue(ParamEvent {
+                    param_id: ParamId(0),
+                    value: ParamValue::new(0.5).unwrap(),
+                }),
+            ),
+            Event::new(1, EventKind::Midi(note_on)),
+        ];
+        let events = EventList::new(&events, FRAMES_U32).unwrap();
+        let (result, [left, _right]) = drive_block(&mut *plugin, events, None);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        // The gain parameter applied — `0.5 * 0.5` / `-0.25 * 0.5`.
+        assert_eq!(left, vec![0.25_f32; FRAMES]);
+
+        let mut reports = Vec::new();
+        plugin.drain_output_reports(&mut reports);
+        assert_eq!(reports.len(), 2);
+        // Sorted by frame offset: `ParamValue`@0 then `Midi`@1.
+        assert_eq!(reports[0].frame_offset(), 0);
+        let EventKind::ParamValue(param) = reports[0].kind() else {
+            panic!("first report must be the ParamValue echo");
+        };
+        assert_eq!(param.param_id, ParamId(0));
+        assert_eq!(param.value.get(), 0.5);
+        assert_eq!(reports[1].frame_offset(), 1);
+        let EventKind::Midi(midi) = reports[1].kind() else {
+            panic!("second report must be the Midi echo");
+        };
+        assert!(matches!(midi.kind, MidiKind::NoteOn { .. }));
     }
 }

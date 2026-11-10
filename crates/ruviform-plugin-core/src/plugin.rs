@@ -12,7 +12,7 @@
 
 use crate::boundary::{GuiHandle, GuiParentToken, HostError};
 use crate::{
-    BufferView, BufferViewMut, BusDescriptor, EventList, ParamInfo, PluginDescriptor,
+    BufferView, BufferViewMut, BusDescriptor, Event, EventList, ParamInfo, PluginDescriptor,
     PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
 };
 
@@ -296,6 +296,12 @@ pub trait ErasedPlugin {
     fn open_gui(&mut self, parent: GuiParentToken) -> Result<GuiHandle, HostError>;
     /// [`Plugin::close_gui`].
     fn close_gui(&mut self) -> Result<(), HostError>;
+    /// [`PluginProcessor::drain_output_reports`].
+    ///
+    /// **RT contract:** non-RT only.
+    fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
+        let _ = out;
+    }
 }
 
 /// Type-erasing wrapper produced by [`erase()`].
@@ -349,6 +355,9 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
     }
     fn close_gui(&mut self) -> Result<(), HostError> {
         self.0.close_gui()
+    }
+    fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
+        self.0.drain_output_reports(out);
     }
 }
 
