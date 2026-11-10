@@ -1248,6 +1248,84 @@ fn rt_record_trace_context_adds_fields() {
     }
 }
 
+#[test]
+fn rt_record_trace_context_is_metadata_not_correlation() {
+    let (dispatch, buf) = capture_dispatch();
+    let mut exporter = TracingRecordExporter::new(dispatch);
+    let mut book = CorrelationBook::new();
+
+    // An expired link — a stale handle the book classifies unlinked.
+    let expired = book.issue();
+    assert!(book.expire(expired.token()));
+    let record = EventRecord::new(
+        RecordHeader::new(EventId::new(9), 1, test_source()).with_correlation(Some(expired)),
+        99,
+    );
+    let got = drain_records(&[record]);
+
+    // A syntactically valid but arbitrary traceparent: it contributes
+    // correlation *metadata* fields only — it is not authorization,
+    // not a span edge, and cannot repair or fabricate linkage.
+    let trace = TraceContext::parse("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+        .expect("valid traceparent");
+    let stats = exporter.emit_records(Instant::now(), &got, &book, Some(&trace));
+    assert_eq!(stats.emitted, 1);
+    assert_eq!(stats.correlation_unlinked, 1);
+    assert_eq!(stats.correlation_linked, 0);
+
+    let captured = buf.take();
+    let events = record_events(&captured);
+    assert_eq!(events.len(), 1);
+    let e = events[0];
+    // Trace fields are present as declared metadata...
+    assert_eq!(field_str(e, "trace_id"), "4bf92f3577b34da6a3ce929d0e0e4736");
+    assert_eq!(field_str(e, "parent_span_id"), "00f067aa0ba902b7");
+    assert!(field_bool(e, "trace_sampled"));
+    // ...while the record's own correlation classification is
+    // untouched: the expired token stays unlinked and the claimed
+    // handle is still reported verbatim.
+    assert_eq!(field_str(e, "correlation_status"), "unlinked");
+    assert_eq!(field_str(e, "unlinked_reason"), "expired");
+    assert_eq!(field_u64(e, "correlation_token"), expired.token().get());
+    // No span/parent *relationship* fields exist — `parent_span_id`
+    // above is the W3C traceparent field, not a fabricated edge.
+    for key in ["parent_span", "trace_span_id", "span_id"] {
+        assert!(fields(e).get(key).is_none(), "{key} must be absent");
+    }
+}
+
+#[test]
+fn rt_record_confidentiality_is_reported_not_enforced() {
+    let (dispatch, buf) = capture_dispatch();
+    let mut exporter = TracingRecordExporter::new(dispatch);
+    let book = CorrelationBook::new();
+
+    let internal = EventRecord::new(
+        RecordHeader::new(EventId::new(1), 1, test_source())
+            .with_confidentiality(Confidentiality::Internal),
+        11,
+    );
+    let confidential = EventRecord::new(
+        RecordHeader::new(EventId::new(2), 1, test_source())
+            .with_confidentiality(Confidentiality::Confidential),
+        22,
+    );
+    let got = drain_records(&[internal, confidential]);
+    let stats = exporter.emit_records(Instant::now(), &got, &book, None);
+    assert_eq!(stats.emitted, 2);
+
+    let captured = buf.take();
+    let events = record_events(&captured);
+    assert_eq!(events.len(), 2);
+    // The exporter reports the record's own classification verbatim —
+    // value redaction/authorization is the host's call, not the
+    // exporter's (see the slice-2 test-spec Non-goals).
+    assert_eq!(field_str(events[0], "confidentiality"), "internal");
+    assert_eq!(field_u64(events[0], "value"), 11);
+    assert_eq!(field_str(events[1], "confidentiality"), "confidential");
+    assert_eq!(field_u64(events[1], "value"), 22);
+}
+
 /// A layer that records the name of the span current at each event —
 /// verifies scoped-dispatch span context reaches `rt_record` events.
 #[derive(Clone, Default)]

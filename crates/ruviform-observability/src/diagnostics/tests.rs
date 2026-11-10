@@ -194,6 +194,48 @@ fn evidence_kinds_are_distinct_and_never_promote() {
 }
 
 #[test]
+fn evidence_clock_domain_stamp_is_preserved_verbatim() {
+    use ruviform_media_core::{
+        ClockDomainId, ClockEpochId, InputStamp, TimeBase, TimestampProvenance,
+    };
+
+    use crate::record::ClockContext;
+
+    // A domain-native clock reading must round-trip untouched: domain,
+    // ticks, timebase, epoch, and provenance are carried verbatim with
+    // no conversion — and `Estimated` provenance stays distinct from
+    // `Unstamped`.
+    let ctx = ClockContext::new(
+        InputStamp {
+            ticks: 96_000,
+            base: TimeBase::new(1, 48_000).expect("valid timebase"),
+            domain: ClockDomainId::SAMPLE_CLOCK,
+            provenance: TimestampProvenance::Estimated,
+        },
+        ClockEpochId::new(3),
+    );
+    let e = Evidence::reported(
+        None,
+        EvidenceMeta {
+            time: EvidenceTime::Clock(ctx),
+            ..meta("clock.domain", Some("clock.key"))
+        },
+    );
+
+    assert_eq!(e.time(), EvidenceTime::Clock(ctx));
+    match e.time() {
+        EvidenceTime::Clock(c) => {
+            assert_eq!(c.domain(), ClockDomainId::SAMPLE_CLOCK);
+            assert_eq!(c.position(), 96_000);
+            assert_eq!(c.time_base(), TimeBase::new(1, 48_000).unwrap());
+            assert_eq!(c.epoch(), ClockEpochId::new(3));
+            assert_eq!(c.provenance(), TimestampProvenance::Estimated);
+        }
+        other => panic!("expected EvidenceTime::Clock, got {other:?}"),
+    }
+}
+
+#[test]
 fn derived_and_inferred_require_non_empty_basis() {
     let empty: Vec<EvidenceRef> = Vec::new();
     assert!(matches!(
