@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-11"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -892,40 +892,40 @@ tuple の採否判定は #288 gate と consumer-verify（#219/
 
 ## Verification Notes
 
-- [ ] Serde 境界節が「serde 依存ゼロ・許可型は std::io +
+- [x] Serde 境界節が「serde 依存ゼロ・許可型は std::io +
       Ruviform 独自型・backend 型/Error/feature/version
       非公開・source() 経由のみ・自作 codec/registry なし」
       を全て含み、`tests/api_surface.rs`・`issue-300` R8・
       `issue-301` AC6 への参照を持つこと。
-- [ ] Format/Version 契約節が 3 形式（RFC 1951/1952/8878）
+- [x] Format/Version 契約節が 3 形式（RFC 1951/1952/8878）
       の区別・Zlib wrapper 対象外・Format 別 level
       semantics・`DecodeScope`・連結単位・checksum
       checked/unchecked・再現性の範囲（同一設定 round-trip
       + gzip header 固定・backend version 間 byte 一致は
       非保証）を含むこと。
-- [ ] Finish/状態機械節が Encoder/Decoder の状態遷移・
+- [x] Finish/状態機械節が Encoder/Decoder の状態遷移・
       `finish()` 冪等・Drop 無書込・`NotExhausted`/
       `InvalidState`・底流 Writer 保全を含み、
       `src/stream.rs`・`tests/encoder_contract.rs`・
       `tests/decoder_contract.rs` の実装と一致すること。
-- [ ] Resource Budget 節が `EncodeLimits`/`DecodeLimits`/
+- [x] Resource Budget 節が `EncodeLimits`/`DecodeLimits`/
       `max_window_log` の累積適用・境界包含・probe・
       CPU/backend heap/consumer heap の非保証を含むこと。
-- [ ] Error 契約節が `CompressionErrorKind` 12 variant と
+- [x] Error 契約節が `CompressionErrorKind` 12 variant と
       `io::ErrorKind` 対応・`source()` 復元を含み、
       `src/error.rs` と一致すること。
-- [ ] Backend 選定表の版・MSRV・ライセンスが
+- [x] Backend 選定表の版・MSRV・ライセンスが
       `crates/ruviform-io-compression/Cargo.toml` の
       dependency record と #300/#301 設計の記述に一致する
       こと（flate2 1.1.10 rust_backend・zstd-safe 8.2.0・
       dev-dep zstd 0.14.0）。
-- [ ] 証拠項目対応表の ENC/DEC/SEC/INT/ARC/COMP/BUF 各行
+- [x] 証拠項目対応表の ENC/DEC/SEC/INT/ARC/COMP/BUF 各行
       が実在する test-spec rule/節・#288 matrix 行・
       Issue/PR 番号へ解決できること。
-- [ ] Consumer 利用面節が AL #139・SV #82/#84/#25 の Issue
+- [x] Consumer 利用面節が AL #139・SV #82/#84/#25 の Issue
       番号と責務分界（schema/version は Consumer 所有・
       checksum は整合性検出・Ruviform 単一 Publish ≠
       Project Transaction/HEAD CAS）を含むこと。
-- [ ] 「設計合意と実装/検証の分離」節が存在し、未実施項目
+- [x] 「設計合意と実装/検証の分離」節が存在し、未実施項目
       を `not run`/`NotRun`/`Unsupported` と記録する方針を
       明記していること。
