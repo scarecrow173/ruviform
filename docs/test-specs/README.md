@@ -57,6 +57,7 @@ Directory: `docs/test-specs`
 | TSPEC-034UdQbwnBMc4dBhcTwfxI | Issue #243 GPUI 実窓 lifecycle 実機検証 試験仕様 | in-progress | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | TSPEC-034V4sgGc35MAPIRgG7lmm | Issue #243 — Windows 実 OS multiwindow smoke 検証契約 | approved | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | TSPEC-034QxdOanEeX8da72nWdYo | Issue #244 prefetch boundary-first/dead-generation/End commit-once test specification | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
+| TSPEC-O0zY9nWrOb2qwg92Z8nFZb | Issue #251 Stage W closeout test spec — 実機 lane 検証項目 | approved | [issue-251-stage-w-real-device-closeout.md](./issue-251-stage-w-real-device-closeout.md) |
 | TSPEC-034Vj5N4I9PzPBumQHnxgK | Issue #253 host-graph report consumer テスト仕様 | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | TESTSPEC-rf253osmidibackend001 | Issue #253 OS MIDI input backend test specification | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | TST-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice テスト仕様 | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
