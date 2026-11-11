@@ -23,13 +23,17 @@
 //!
 //! - `driver()` reports [`ScenarioDriver::RealOs`];
 //!   `capabilities()` claims `SemanticAction` + `MultiWindow`
-//!   everywhere and `VisualCapture` only on Windows — the sole OS
-//!   with a capture backend in this slice. `RealOsPointerOrKeyboard`
-//!   is never claimed: OS-level input is Issue #313 scope and stays
-//!   a separate evidence lane.
+//!   everywhere, `VisualCapture` on OSes with a capture backend
+//!   (Windows/Linux), and `RealOsPointerOrKeyboard` only where
+//!   [`os_input::supported`] reports an injection backend —
+//!   Windows-only in this slice (Issue #313).
 //! - `dispatch_input`/`select_*`/`invoke` are *semantic* dispatch
 //!   through `ViewHost` — they bypass hit-testing and are not
-//!   pointer/keyboard evidence.
+//!   pointer/keyboard evidence. The `os_*` methods below are the
+//!   only OS-injection path: they run real `SendInput` calls through
+//!   [`os_input`], gated by the Issue #552 preflight, and report
+//!   [`OsInputOutcome`] instead of collapsing blocked injection into
+//!   `fail`.
 //! - `capture_frame` returns real `PrintWindow`/`BitBlt` pixels via
 //!   [`super::GpuiDriver::capture_window`]; backend errors map to
 //!   [`CaptureOutcome::Unsupported`]/[`CaptureOutcome::NotRun`]
@@ -37,14 +41,14 @@
 //! - Stale `attach_epoch`/`generation` pins fail with
 //!   [`ScenarioError::StaleEpoch`]/[`ScenarioError::StaleGeneration`]
 //!   exactly like the other adapters — re-checked inside `App`
-//!   context on every operation and capture.
+//!   context on every operation, capture, and `os_*` call.
 //! - `settle` is frame-paced: it counts `drain` boundaries (one per
 //!   tick), never sleeps.
 //!
 //! **RT contract:** non-RT only.
 
 use std::cell::RefCell;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -57,7 +61,7 @@ use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::ipc::Event;
 use ruviform_ui::view::{AttachEpoch, ComponentKey, ComponentSnapshot, ViewSpec};
 use ruviform_ui::{
-    DriverEvent, Intent, UiError, WindowDriver, WindowId, WindowLifecycle, WindowSpec,
+    DriverEvent, Intent, LogicalRect, UiError, WindowDriver, WindowId, WindowLifecycle, WindowSpec,
 };
 use ruviform_ui_test::golden::RgbaImage;
 use ruviform_ui_test::scenario::visual::{CaptureOutcome, VisualGuiTest};
@@ -66,6 +70,10 @@ use ruviform_ui_test::scenario::{
     SemanticGuiTest, TargetQuery,
 };
 
+use super::capture::OsWindowGeometry;
+use super::os_input::{
+    self, OsInputOutcome, OsKey, PreflightCheck, PreflightReport, PreflightScope,
+};
 use super::{GpuiDriver, Inner, UiJob, ViewMount, minted_from_ipc};
 use crate::render::RvfView;
 
@@ -141,6 +149,16 @@ pub struct RealOsGuiTest {
     /// Metadata of the last successful capture — see
     /// [`last_capture_meta`](Self::last_capture_meta).
     last_capture: Arc<Mutex<Option<CaptureMeta>>>,
+    /// Per-window focus state observed through the app thread's
+    /// [`WindowLifecycle::Focused`] events — the gate for the
+    /// `os_*` ops that deliver input to the foreground window.
+    focused: Arc<Mutex<BTreeMap<WindowId, bool>>>,
+    /// Per-family session preflight cache (Issue #552) — each
+    /// `os_*` op gates on its family's cached check so a measured
+    /// ineffective backend reports `EnvironmentBlocked` instead of
+    /// injecting into the void; `os_input_preflight` probes the
+    /// missing families of its scope once.
+    os_preflight: RefCell<BTreeMap<&'static str, PreflightCheck>>,
 }
 
 /// How the session `body` ended — lets [`RealOsGuiTest::run`] tear
@@ -182,11 +200,13 @@ impl RealOsGuiTest {
         let (ready_tx, ready_rx) = channel::<Result<(), String>>();
         let intents = Arc::new(Mutex::new(Vec::<Intent>::new()));
         let last_capture = Arc::new(Mutex::new(None::<CaptureMeta>));
+        let focused = Arc::new(Mutex::new(BTreeMap::<WindowId, bool>::new()));
         let tick = options.tick;
         let settle_ticks = options.settle_ticks;
         let startup_settle_ticks = options.startup_settle_ticks;
 
         let thread_intents = Arc::clone(&intents);
+        let thread_focused = Arc::clone(&focused);
         let app = thread::spawn(move || -> Result<(), UiError> {
             let mut driver = GpuiDriver::new();
             driver.set_ui_jobs(jobs_rx);
@@ -201,17 +221,26 @@ impl RealOsGuiTest {
             }
             // Setup complete — the platform loop takes over from here.
             let _ = ready_tx.send(Ok(()));
-            driver.run(tick, move |event, _drv| {
-                if let DriverEvent::Windowed {
+            driver.run(tick, move |event, _drv| match event {
+                DriverEvent::Windowed {
                     event: WindowLifecycle::Action(intent),
                     ..
-                } = event
-                {
+                } => {
                     thread_intents
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .push(intent);
                 }
+                DriverEvent::Windowed {
+                    window,
+                    event: WindowLifecycle::Focused(active),
+                } => {
+                    thread_focused
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .insert(window, active);
+                }
+                _ => {}
             })
         });
 
@@ -236,6 +265,8 @@ impl RealOsGuiTest {
             settle_ticks,
             intents,
             last_capture,
+            focused,
+            os_preflight: RefCell::new(BTreeMap::new()),
         };
 
         let outcome = match gui.settle_n(startup_settle_ticks) {
@@ -324,14 +355,320 @@ impl RealOsGuiTest {
             })
         })
     }
+
+    // -----------------------------------------------------------------
+    // OS-input port (Issue #313 — `RealOsPointerOrKeyboard`).
+    //
+    // These methods are the *only* OS-injection path on this adapter:
+    // they drive `os_input` (`SendInput` on Windows) rather than the
+    // `ViewHost` semantic dispatch used by `SemanticGuiTest`. A
+    // scenario asserts `RealOsPointerOrKeyboard` through
+    // `run_scenario`'s capability pre-flight, then calls these to
+    // produce `channel: "os-injection"` evidence.
+    // -----------------------------------------------------------------
+
+    /// Runs the Issue #552 injection-effect preflight for `scope`,
+    /// probing only the families not yet verified this session and
+    /// merging the cached checks for the rest — each family is probed
+    /// at most once per session, so repeated calls never re-move the
+    /// cursor. The returned report's `effective` reflects the cached
+    /// checks for `scope`; callers should treat `!effective` as
+    /// `environment_blocked`, not a failure of the scenario itself.
+    ///
+    /// On non-Windows hosts every check reports `effective = false`
+    /// with `family`/`detail` explaining the missing backend.
+    pub fn os_input_preflight(&mut self, scope: PreflightScope) -> PreflightReport {
+        let missing: Vec<PreflightScope> = scope
+            .families()
+            .iter()
+            .filter(|family| !self.os_preflight.borrow().contains_key(*family))
+            .map(|family| match *family {
+                "pointer" => PreflightScope::Pointer,
+                _ => PreflightScope::Keyboard,
+            })
+            .collect();
+        for scope in missing {
+            for check in os_input::preflight(scope).checks {
+                self.os_preflight.borrow_mut().insert(check.family, check);
+            }
+        }
+        self.cached_preflight(scope)
+    }
+
+    /// Synthesizes a [`PreflightReport`] for `scope` from the cached
+    /// per-family checks — no probing.
+    fn cached_preflight(&self, scope: PreflightScope) -> PreflightReport {
+        let cache = self.os_preflight.borrow();
+        let checks: Vec<PreflightCheck> = scope
+            .families()
+            .iter()
+            .map(|family| {
+                cache
+                    .get(family)
+                    .cloned()
+                    .unwrap_or_else(|| PreflightCheck {
+                        family,
+                        effective: false,
+                        detail: "preflight not run for this family".to_string(),
+                    })
+            })
+            .collect();
+        PreflightReport {
+            effective: checks.iter().all(|check| check.effective),
+            checks,
+        }
+    }
+
+    /// The pre-injection gate every `os_*` op passes: backend
+    /// presence, then the cached session preflight for `family`
+    /// (probing lazily on first use). `Err(outcome)` is the honest
+    /// early-out the op returns as `Ok(outcome)`.
+    fn os_gate(&self, family: &'static str) -> Result<(), OsInputOutcome> {
+        if !os_input::supported() {
+            return Err(OsInputOutcome::Unsupported {
+                reason: format!("no OS input injection backend on {}", std::env::consts::OS),
+            });
+        }
+        let needs_probe = !self.os_preflight.borrow().contains_key(family);
+        if needs_probe {
+            let scope = match family {
+                "pointer" => PreflightScope::Pointer,
+                _ => PreflightScope::Keyboard,
+            };
+            for check in os_input::preflight(scope).checks {
+                self.os_preflight.borrow_mut().insert(check.family, check);
+            }
+        }
+        let cache = self.os_preflight.borrow();
+        match cache.get(family) {
+            Some(check) if check.effective => Ok(()),
+            Some(check) => Err(OsInputOutcome::EnvironmentBlocked {
+                detail: check.detail.clone(),
+            }),
+            None => Err(OsInputOutcome::EnvironmentBlocked {
+                detail: format!("preflight for family '{family}' did not run"),
+            }),
+        }
+    }
+
+    /// Whether `window` is currently the focused window, as observed
+    /// through the app thread's [`WindowLifecycle::Focused`] events.
+    /// `false` covers both "never focused" and "focus lost" — OS
+    /// input ops that target the foreground window refuse to run
+    /// against it (`OsInputOutcome::NotRun`).
+    #[must_use]
+    pub fn window_focused(&self, window: WindowId) -> bool {
+        self.focused
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&window)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// Queues a window focus request through the driver's own
+    /// `Op::Focus` path — the honest `activate_window` request the
+    /// OS applies (or ignores) before the next [`Focused`] event.
+    /// Callers then wait on [`window_focused`](Self::window_focused).
+    /// `focused: false` reports the driver's honest `Unsupported`
+    /// (gpui cannot release focus) — it never silently no-ops.
+    ///
+    /// # Errors
+    /// [`ScenarioError::Driver`] when `window` is unknown or focus
+    /// is unsupported on this backend.
+    pub fn request_focus(&mut self, window: WindowId, focused: bool) -> Result<(), ScenarioError> {
+        self.call(move |reply| {
+            Box::new(move |_inner, driver, _cx| {
+                let _ = reply.send(
+                    WindowDriver::focus(&mut driver.clone(), window, focused)
+                        .map_err(ScenarioError::from),
+                );
+            })
+        })
+    }
+
+    /// Injects one real keystroke (`key-down` + `key-up`) through
+    /// [`os_input::press_key`] — delivered to whatever window the OS
+    /// considers foreground, so `target`'s window must be observed
+    /// focused first. The view pin check keeps stale targets a
+    /// `fail`, and the family preflight keeps a blocked host an
+    /// `environment_blocked` — never a fabricated key delivery.
+    ///
+    /// # Errors
+    /// [`ScenarioError::NoSuchWindow`]/[`ScenarioError::NoSuchView`]/
+    /// stale-pin errors for dead targets;
+    /// [`ScenarioError::Driver`] when the OS accepted fewer than the
+    /// two events (a partial keystroke is `fail`, never `Injected`).
+    pub fn os_press_key(
+        &mut self,
+        target: &ScenarioTarget,
+        key: OsKey,
+    ) -> Result<OsInputOutcome, ScenarioError> {
+        if let Err(outcome) = self.os_gate("keyboard") {
+            return Ok(outcome);
+        }
+        if !self.window_focused(target.window) {
+            return Ok(OsInputOutcome::NotRun {
+                reason: format!("window {} is not the focused window", target.window),
+            });
+        }
+        let target = target.clone();
+        self.call(move |reply| {
+            Box::new(move |inner, driver, cx| {
+                let _ = reply.send(exec_check_os_target(inner, driver, cx, &target, None));
+            })
+        })?;
+        os_input::press_key(key).map_err(ScenarioError::from)?;
+        Ok(OsInputOutcome::Injected {
+            action: "key-press",
+            commanded: None,
+            cursor: None,
+            detail: format!("key {} injected via win32-SendInput", key.name()),
+        })
+    }
+
+    /// Aims the OS cursor at the measured center-relative point
+    /// `frac` inside `component`'s painted bounds — logical
+    /// `component_bounds` + `window_geometry` converted to physical
+    /// screen pixels, never a hard-coded coordinate — then injects
+    /// the absolute move and reads the cursor back for the
+    /// [`OsInputOutcome::Injected`] evidence. `frac` is the
+    /// normalized `(x, y)` offset inside the component rect
+    /// (`(0.5, 0.5)` = center); the lane picks the point.
+    ///
+    /// # Errors
+    /// Contract violations (unknown window/component, stale pins)
+    /// and `UiError::Host` from the injection call itself are
+    /// `Err(ScenarioError)`; a component that exists but has not
+    /// painted bounds yet returns `Ok(OsInputOutcome::NotRun)`.
+    pub fn os_pointer_move_to(
+        &mut self,
+        target: &ScenarioTarget,
+        component: &ComponentKey,
+        frac: (f64, f64),
+    ) -> Result<OsInputOutcome, ScenarioError> {
+        if let Err(outcome) = self.os_gate("pointer") {
+            return Ok(outcome);
+        }
+        let target = target.clone();
+        let component = component.clone();
+        let aim = self.call(move |reply| {
+            Box::new(move |inner, driver, cx| {
+                let _ = reply.send(exec_resolve_os_aim(
+                    inner, driver, cx, &target, &component, frac,
+                ));
+            })
+        })?;
+        let (x, y) = match aim {
+            Aim::Point(point) => point,
+            Aim::NotRun(reason) => {
+                return Ok(OsInputOutcome::NotRun { reason });
+            }
+        };
+        os_input::move_to(x, y).map_err(ScenarioError::from)?;
+        // Give the OS a beat to apply the queued move before the
+        // read-back, same budget as the smoke examples.
+        thread::sleep(OS_CURSOR_SETTLE);
+        let cursor = os_input::cursor_position().map_err(ScenarioError::from)?;
+        Ok(OsInputOutcome::Injected {
+            action: "pointer-move",
+            commanded: Some((x, y)),
+            cursor: Some(cursor),
+            detail: format!(
+                "move to ({x}, {y}) physical px; read-back ({}, {})",
+                cursor.0, cursor.1
+            ),
+        })
+    }
+
+    /// Injects `WM_LBUTTONDOWN` at the current cursor position —
+    /// the lane aims first with
+    /// [`os_pointer_move_to`](Self::os_pointer_move_to), whose
+    /// read-back is the position evidence. `target`'s window must be
+    /// the observed focused window (the click would otherwise land
+    /// on whatever is underneath — refused as `NotRun`).
+    ///
+    /// # Errors
+    /// Same error surface as [`os_press_key`](Self::os_press_key).
+    pub fn os_mouse_down(
+        &mut self,
+        target: &ScenarioTarget,
+    ) -> Result<OsInputOutcome, ScenarioError> {
+        self.os_mouse_button(target, true)
+    }
+
+    /// Injects `WM_LBUTTONUP` at the current cursor position —
+    /// completes a click/drag started by
+    /// [`os_mouse_down`](Self::os_mouse_down).
+    ///
+    /// # Errors
+    /// Same error surface as [`os_press_key`](Self::os_press_key).
+    pub fn os_mouse_up(
+        &mut self,
+        target: &ScenarioTarget,
+    ) -> Result<OsInputOutcome, ScenarioError> {
+        self.os_mouse_button(target, false)
+    }
+
+    /// Shared body for the button ops — gate, focus, pin check,
+    /// then the single injection call.
+    fn os_mouse_button(
+        &mut self,
+        target: &ScenarioTarget,
+        down: bool,
+    ) -> Result<OsInputOutcome, ScenarioError> {
+        if let Err(outcome) = self.os_gate("pointer") {
+            return Ok(outcome);
+        }
+        if !self.window_focused(target.window) {
+            return Ok(OsInputOutcome::NotRun {
+                reason: format!("window {} is not the focused window", target.window),
+            });
+        }
+        let target = target.clone();
+        self.call(move |reply| {
+            Box::new(move |inner, driver, cx| {
+                let _ = reply.send(exec_check_os_target(inner, driver, cx, &target, None));
+            })
+        })?;
+        if down {
+            os_input::mouse_down().map_err(ScenarioError::from)?;
+        } else {
+            os_input::mouse_up().map_err(ScenarioError::from)?;
+        }
+        Ok(OsInputOutcome::Injected {
+            action: if down { "mouse-down" } else { "mouse-up" },
+            commanded: None,
+            cursor: None,
+            detail: format!(
+                "left button {} at current cursor position via win32-SendInput",
+                if down { "down" } else { "up" }
+            ),
+        })
+    }
+}
+
+/// How long `os_pointer_move_to` waits before the cursor read-back —
+/// matches the smoke examples' measured budget for the OS to apply
+/// a queued absolute move.
+const OS_CURSOR_SETTLE: Duration = Duration::from_millis(80);
+
+/// What [`exec_resolve_os_aim`] computed — the physical-px screen
+/// point, or the honest `NotRun` reason.
+enum Aim {
+    /// Physical screen pixels to inject a move toward.
+    Point((i32, i32)),
+    /// The aim could not be computed from live state — `not_run`.
+    NotRun(String),
 }
 
 /// The capability set [`RealOsGuiTest`] honestly claims — see the
 /// module docs. `VisualCapture` requires an OS capture backend —
-/// Win32 on Windows, X11 (`GetImage`) on Linux; other OSes get
-/// semantic + multi-window only until a backend lands.
-/// `RealOsPointerOrKeyboard` stays unclaimed — OS-level input is
-/// Issue #313 scope.
+/// Win32 on Windows, X11 (`GetImage`) on Linux. `RealOsPointerOrKeyboard`
+/// requires an [`os_input`] injection backend — Win32 `SendInput` on
+/// Windows only in this slice (Issue #313); the claim records backend
+/// *presence* — a blocked environment stays claimed and each `os_*`
+/// op reports `EnvironmentBlocked` through the preflight gate instead.
 fn supported_capabilities() -> BTreeSet<ScenarioCapability> {
     let mut capabilities = BTreeSet::from([
         ScenarioCapability::SemanticAction,
@@ -339,6 +676,9 @@ fn supported_capabilities() -> BTreeSet<ScenarioCapability> {
     ]);
     if cfg!(any(windows, target_os = "linux")) {
         capabilities.insert(ScenarioCapability::VisualCapture);
+    }
+    if os_input::supported() {
+        capabilities.insert(ScenarioCapability::RealOsPointerOrKeyboard);
     }
     capabilities
 }
@@ -642,6 +982,72 @@ fn exec_capture_frame(
     }
 }
 
+/// Job prelude for the `os_*` ops that take no component: resolve
+/// the mounted view and re-check the pins. `component`, when given,
+/// is additionally required to be mounted — the same gate the
+/// semantic ops pass through.
+fn exec_check_os_target(
+    inner: &Rc<RefCell<Inner>>,
+    driver: &GpuiDriver,
+    cx: &mut App,
+    target: &ScenarioTarget,
+    key: Option<&ComponentKey>,
+) -> Result<(), ScenarioError> {
+    let mounted = mounted_view(inner, driver, cx, target.window, target.view)?;
+    check_pins(&mounted, target)?;
+    if let Some(key) = key {
+        component(&mounted, key)?;
+    }
+    Ok(())
+}
+
+/// Job body for [`RealOsGuiTest::os_pointer_move_to`] — resolves the
+/// pin-checked mounted view, then converts the component's measured
+/// [`LogicalRect`] into a physical-px screen point through
+/// [`GpuiDriver::window_geometry`]. A mounted-but-unpainted
+/// component or a degenerate rect reports [`Aim::NotRun`]; missing
+/// geometry/OS handles stay honest `Err` (`fail`), never a zero.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "screen coordinates are bounded by the OS virtual screen (thousands of px), far inside i32"
+)]
+fn exec_resolve_os_aim(
+    inner: &Rc<RefCell<Inner>>,
+    driver: &GpuiDriver,
+    cx: &mut App,
+    target: &ScenarioTarget,
+    key: &ComponentKey,
+    frac: (f64, f64),
+) -> Result<Aim, ScenarioError> {
+    let mounted = mounted_view(inner, driver, cx, target.window, target.view)?;
+    check_pins(&mounted, target)?;
+    component(&mounted, key)?;
+    let bounds = driver
+        .component_bounds(target.window)
+        .map_err(ScenarioError::from)?;
+    let Some(rect): Option<LogicalRect> = bounds.get(key).copied() else {
+        return Ok(Aim::NotRun(format!(
+            "component {key} has no painted bounds yet"
+        )));
+    };
+    if rect.width <= 0.0 || rect.height <= 0.0 {
+        return Ok(Aim::NotRun(format!(
+            "component {key} has degenerate bounds {rect:?}"
+        )));
+    }
+    let OsWindowGeometry {
+        origin_x,
+        origin_y,
+        scale_factor,
+        ..
+    } = driver
+        .window_geometry(target.window)
+        .map_err(ScenarioError::from)?;
+    let x = f64::from(origin_x) + (rect.x + rect.width * frac.0) * scale_factor;
+    let y = f64::from(origin_y) + (rect.y + rect.height * frac.1) * scale_factor;
+    Ok(Aim::Point((x.round() as i32, y.round() as i32)))
+}
+
 impl VisualGuiTest for RealOsGuiTest {
     /// Real OS-window pixels through
     /// [`super::GpuiDriver::capture_window`] (`PrintWindow` primary,
@@ -802,8 +1208,12 @@ mod tests {
         let caps = supported_capabilities();
         assert!(caps.contains(&ScenarioCapability::SemanticAction));
         assert!(caps.contains(&ScenarioCapability::MultiWindow));
-        // OS-level input is Issue #313 scope — never claimed here.
-        assert!(!caps.contains(&ScenarioCapability::RealOsPointerOrKeyboard));
+        // OS-level input is claimed exactly where `os_input` has an
+        // injection backend — Windows only in this slice (#313).
+        assert_eq!(
+            caps.contains(&ScenarioCapability::RealOsPointerOrKeyboard),
+            os_input::supported()
+        );
         assert!(!caps.contains(&ScenarioCapability::SimulatedPointerOrKeyboard));
         assert!(!caps.contains(&ScenarioCapability::Ime));
         assert!(!caps.contains(&ScenarioCapability::NativePluginDock));

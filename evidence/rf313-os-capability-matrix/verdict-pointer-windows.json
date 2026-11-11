@@ -1,5 +1,5 @@
 {
-  "schema": "rf313-real-os-pointer-smoke/v1",
+  "schema": "rf313-real-os-pointer-smoke/v2",
   "issue": 313,
   "lane": "windows-sendinput-pointer",
   "input_method": "win32-SendInput-mouse-absolute",
@@ -12,10 +12,20 @@
     "arch": "x86_64",
     "os_version": "Microsoft Windows 11 Pro",
     "gpu": "NVIDIA GeForce RTX 4070 SUPER",
-    "revision": "1dc235b9e0dcece626721b1094b1cad7c6d125a3",
-    "exe": "C:\\Users\\akiyoshi\\orca\\workspaces\\ruviform\\rf313-gt04win\\target\\debug\\examples\\real_os_pointer_smoke.exe",
-    "timestamp_unix_ms": 1794286006423,
-    "timestamp_utc": "2026-11-10T04:46:46Z"
+    "revision": "ae70b57e85d3fe78168eddda00177b5d388013fc",
+    "exe": "C:\\Users\\akiyoshi\\orca\\workspaces\\ruviform\\rf313-realos\\target\\debug\\examples\\real_os_pointer_smoke.exe",
+    "timestamp_unix_ms": 1794380792056,
+    "timestamp_utc": "2026-11-11T07:06:32Z"
+  },
+  "preflight": {
+    "effective": true,
+    "checks": [
+      {
+        "family": "pointer",
+        "effective": true,
+        "detail": "cursor (2117, 249) -> (2133, 265) confirmed by read-back Some((2132, 264))"
+      }
+    ]
   },
   "run": {
     "window": "w1",
@@ -268,6 +278,6 @@
       }
     ],
     "ticks": 23,
-    "elapsed_ms": 2527
+    "elapsed_ms": 2343
   }
 }

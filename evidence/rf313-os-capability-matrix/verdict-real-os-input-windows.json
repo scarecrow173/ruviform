@@ -1,0 +1,224 @@
+{
+  "schema": "rf313-real-os-input-scenario/v1",
+  "issue": 313,
+  "lane": "windows-sendinput-scenario",
+  "driver": "real-os",
+  "capability": "real-os-pointer-or-keyboard",
+  "input_method": "win32-SendInput",
+  "input_method_note": "OS automation injection through the real foreground path — not physical manual input; distinct from GPUI dispatch_keystroke/simulate_* and from ViewHost semantic dispatch",
+  "verdict": "pass",
+  "reasons": [
+    "keyboard + pointer OS-injection chain, intents, receipt and display legs verified"
+  ],
+  "environment": {
+    "os": "windows",
+    "arch": "x86_64",
+    "os_version": "Microsoft Windows 11 Pro",
+    "gpu": "NVIDIA GeForce RTX 4070 SUPER",
+    "scale_factor": 1.0,
+    "revision": "0.1.0",
+    "timestamp_unix": 1794380933
+  },
+  "preflight": {
+    "effective": true,
+    "checks": [
+      {
+        "family": "pointer",
+        "effective": true,
+        "detail": "cursor (2111, 243) -> (2127, 259) confirmed by read-back Some((2126, 258))"
+      },
+      {
+        "family": "keyboard",
+        "effective": true,
+        "detail": "VK_F24 down confirmed by read-back, released"
+      }
+    ]
+  },
+  "run": [
+    {
+      "channel": "os-injection",
+      "op": "tab-1",
+      "action": "key-press",
+      "commanded": null,
+      "cursor": null,
+      "detail": "key tab injected via win32-SendInput"
+    },
+    {
+      "channel": "os-injection",
+      "op": "right",
+      "action": "key-press",
+      "commanded": null,
+      "cursor": null,
+      "detail": "key right injected via win32-SendInput"
+    },
+    {
+      "channel": "os-injection",
+      "op": "tab-2",
+      "action": "key-press",
+      "commanded": null,
+      "cursor": null,
+      "detail": "key tab injected via win32-SendInput"
+    },
+    {
+      "channel": "os-injection",
+      "op": "left",
+      "action": "key-press",
+      "commanded": null,
+      "cursor": null,
+      "detail": "key left injected via win32-SendInput"
+    },
+    {
+      "channel": "os-injection",
+      "op": "gain-move",
+      "action": "pointer-move",
+      "commanded": [
+        336,
+        734
+      ],
+      "cursor": [
+        335,
+        733
+      ],
+      "detail": "move to (336, 734) physical px; read-back (335, 733)"
+    },
+    {
+      "channel": "os-injection",
+      "op": "gain-down",
+      "action": "mouse-down",
+      "commanded": null,
+      "cursor": null,
+      "detail": "left button down at current cursor position via win32-SendInput"
+    },
+    {
+      "channel": "os-injection",
+      "op": "gain-drag",
+      "action": "pointer-move",
+      "commanded": [
+        336,
+        347
+      ],
+      "cursor": [
+        335,
+        346
+      ],
+      "detail": "move to (336, 347) physical px; read-back (335, 346)"
+    },
+    {
+      "channel": "os-injection",
+      "op": "gain-up",
+      "action": "mouse-up",
+      "commanded": null,
+      "cursor": null,
+      "detail": "left button up at current cursor position via win32-SendInput"
+    },
+    {
+      "channel": "os-injection",
+      "op": "seek-move",
+      "action": "pointer-move",
+      "commanded": [
+        1344,
+        940
+      ],
+      "cursor": [
+        1343,
+        939
+      ],
+      "detail": "move to (1344, 940) physical px; read-back (1343, 939)"
+    },
+    {
+      "channel": "os-injection",
+      "op": "seek-down",
+      "action": "mouse-down",
+      "commanded": null,
+      "cursor": null,
+      "detail": "left button down at current cursor position via win32-SendInput"
+    },
+    {
+      "channel": "os-injection",
+      "op": "seek-up",
+      "action": "mouse-up",
+      "commanded": null,
+      "cursor": null,
+      "detail": "left button up at current cursor position via win32-SendInput"
+    },
+    {
+      "channel": "ipc",
+      "intents": [
+        {
+          "command_id": "view-313:a1:m1:gain:1",
+          "expect_receipt": false,
+          "intent": "Begin { target: \"mixer.gain\", control_id: \"gain\", sequence: 1, gesture_id: \"atomic-1\", origin_view: Some(\"view-313\"), atomic: true, value: ControlValue { plain: 0.55, normalized: 0.55 } }"
+        },
+        {
+          "command_id": "view-313:a1:m1:gain:2",
+          "expect_receipt": true,
+          "intent": "Commit { target: \"mixer.gain\", control_id: \"gain\", sequence: 2, gesture_id: \"atomic-1\", origin_view: Some(\"view-313\"), atomic: true, value: ControlValue { plain: 0.55, normalized: 0.55 } }"
+        },
+        {
+          "command_id": "view-313:a1:m1:seek:1",
+          "expect_receipt": false,
+          "intent": "Begin { target: \"mixer.seek\", control_id: \"seek\", sequence: 1, gesture_id: \"atomic-1\", origin_view: Some(\"view-313\"), atomic: true, value: ControlValue { plain: 0.45, normalized: 0.45 } }"
+        },
+        {
+          "command_id": "view-313:a1:m1:seek:2",
+          "expect_receipt": true,
+          "intent": "Commit { target: \"mixer.seek\", control_id: \"seek\", sequence: 2, gesture_id: \"atomic-1\", origin_view: Some(\"view-313\"), atomic: true, value: ControlValue { plain: 0.45, normalized: 0.45 } }"
+        },
+        {
+          "command_id": "view-313:a1:m1:gain:3",
+          "expect_receipt": false,
+          "intent": "Begin { target: \"mixer.gain\", control_id: \"gain\", sequence: 3, gesture_id: \"gpui-1\", origin_view: Some(\"view-313\"), atomic: false, value: ControlValue { plain: 0.25, normalized: 0.25 } }"
+        },
+        {
+          "command_id": "view-313:a1:m1:gain:4",
+          "expect_receipt": false,
+          "intent": "Preview { target: \"mixer.gain\", control_id: \"gain\", sequence: 4, gesture_id: \"gpui-1\", origin_view: Some(\"view-313\"), atomic: false, value: ControlValue { plain: 0.75, normalized: 0.75 } }"
+        },
+        {
+          "command_id": "view-313:a1:m1:gain:5",
+          "expect_receipt": true,
+          "intent": "Commit { target: \"mixer.gain\", control_id: \"gain\", sequence: 5, gesture_id: \"gpui-1\", origin_view: Some(\"view-313\"), atomic: false, value: ControlValue { plain: 0.75, normalized: 0.75 } }"
+        },
+        {
+          "command_id": "view-313:a1:m1:seek:3",
+          "expect_receipt": false,
+          "intent": "Begin { target: \"mixer.seek\", control_id: \"seek\", sequence: 3, gesture_id: \"gpui-2\", origin_view: Some(\"view-313\"), atomic: false, value: ControlValue { plain: 0.8, normalized: 0.8 } }"
+        },
+        {
+          "command_id": "view-313:a1:m1:seek:4",
+          "expect_receipt": true,
+          "intent": "Commit { target: \"mixer.seek\", control_id: \"seek\", sequence: 4, gesture_id: \"gpui-2\", origin_view: Some(\"view-313\"), atomic: false, value: ControlValue { plain: 0.8, normalized: 0.8 } }"
+        }
+      ]
+    },
+    {
+      "channel": "ipc",
+      "receipt": "posted",
+      "seek_phase": "Applied"
+    },
+    {
+      "channel": "os-capture",
+      "outcome": "captured"
+    }
+  ],
+  "scenario_report": {
+    "driver": "RealOs",
+    "verdict": "pass",
+    "detail": "keyboard + pointer OS-injection chain, intents, receipt and display legs verified",
+    "required": [
+      "SemanticAction",
+      "RealOsPointerOrKeyboard"
+    ],
+    "capabilities": [
+      "SemanticAction",
+      "RealOsPointerOrKeyboard",
+      "VisualCapture",
+      "MultiWindow"
+    ],
+    "timeout": {
+      "budget_ms": 60000,
+      "elapsed_ms": 1928,
+      "timed_out": false
+    }
+  }
+}

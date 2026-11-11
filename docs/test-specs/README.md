@@ -210,6 +210,7 @@ Directory: `docs/test-specs`
 | TSPEC-034JcCwISRw7E9Q8XoNvD8 | 動画基盤 API の契約保証（所有権・RT・色変換カーネル） | approved | [video-foundation-api.md](./video-foundation-api.md) |
 | TSPEC-034L6w5zHELr4fPxPNpBsk | Video Plugin Plain Contract Tests | proposed | [video-plugin-plain-contract-tests.md](./video-plugin-plain-contract-tests.md) |
 | TSPEC-42XLbuUif4jmek9sQGVA3S | ViewLink authoritative generation テスト仕様 | approved | [viewlink-authoritative-generation-tests.md](./viewlink-authoritative-generation-tests.md) |
+| TSPEC-34VOSINPDRV4REAL0SIN4 | Issue #313 — `RealOsPointerOrKeyboard` capability 検証契約 | approved | [issue-313-real-os-input-driver.md](./issue-313-real-os-input-driver.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

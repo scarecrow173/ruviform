@@ -1,5 +1,5 @@
 {
-  "schema": "rf313-real-os-smoke/v1",
+  "schema": "rf313-real-os-smoke/v2",
   "issue": 313,
   "lane": "windows-sendinput-keyboard",
   "input_method": "win32-SendInput",
@@ -12,10 +12,20 @@
     "arch": "x86_64",
     "os_version": "Microsoft Windows 11 Pro",
     "gpu": "NVIDIA GeForce RTX 4070 SUPER",
-    "revision": "4aa92c117aa62e0e6f5412933cb7c8bb53fb839a",
-    "exe": "C:\\Users\\akiyoshi\\orca\\workspaces\\ruviform\\rf313-realos-smoke\\target\\debug\\examples\\real_os_smoke.exe",
-    "timestamp_unix_ms": 1794188101063,
-    "timestamp_utc": "2026-11-09T01:35:01Z"
+    "revision": "ae70b57e85d3fe78168eddda00177b5d388013fc",
+    "exe": "C:\\Users\\akiyoshi\\orca\\workspaces\\ruviform\\rf313-realos\\target\\debug\\examples\\real_os_smoke.exe",
+    "timestamp_unix_ms": 1794380771607,
+    "timestamp_utc": "2026-11-11T07:06:11Z"
+  },
+  "preflight": {
+    "effective": true,
+    "checks": [
+      {
+        "family": "keyboard",
+        "effective": true,
+        "detail": "VK_F24 down confirmed by read-back, released"
+      }
+    ]
   },
   "run": {
     "window": "w1",
@@ -128,7 +138,7 @@
         "ok": true
       }
     ],
-    "ticks": 18,
-    "elapsed_ms": 1948
+    "ticks": 16,
+    "elapsed_ms": 2427
   }
 }

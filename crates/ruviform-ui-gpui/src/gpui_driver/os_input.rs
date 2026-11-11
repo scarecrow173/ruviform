@@ -103,6 +103,69 @@ impl OsKey {
     }
 }
 
+/// The honest result of one OS-injection operation driven through an
+/// adapter (Issue #313 — `RealOsPointerOrKeyboard` capability).
+///
+/// The variants deliberately mirror the lane verdict vocabulary
+/// (`pass`/`unsupported`/`environment_blocked`/`not_run`) so a caller
+/// never has to translate a failed-looking [`UiError`] into a verdict
+/// that hides the real cause:
+///
+/// - [`OsInputOutcome::Injected`] — every `SendInput` event was
+///   accepted by the OS; carries the measured evidence (commanded
+///   target point and cursor read-back for pointer moves).
+/// - [`OsInputOutcome::Unsupported`] — no injection backend on this
+///   OS; the operation never attempted an impossible injection.
+/// - [`OsInputOutcome::EnvironmentBlocked`] — the session preflight
+///   (Issue #552) proved injection ineffective (e.g. `SendInput`
+///   accepted but events never took effect). This is an environment
+///   diagnosis, never a GUI implementation failure.
+/// - [`OsInputOutcome::NotRun`] — a run precondition was not met
+///   (window not focused, component not yet laid out); the lane may
+///   retry after fixing the precondition.
+///
+/// Contract violations (stale target pins, unknown windows,
+/// partially-accepted injections) surface through the caller's own
+/// error channel instead — they are `fail`, never one of these.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub enum OsInputOutcome {
+    /// Every injected event was accepted; carries measured evidence.
+    Injected {
+        /// Short action tag — `"key-press"`, `"pointer-move"`,
+        /// `"mouse-down"`, `"mouse-up"`.
+        action: &'static str,
+        /// Commanded physical-px screen point for pointer moves;
+        /// `None` for keyboard/button ops that act at the current
+        /// position or foreground window.
+        commanded: Option<(i32, i32)>,
+        /// [`cursor_position`] read-back after the move (pointer
+        /// ops only) — the evidence the lane compares against
+        /// `commanded`.
+        cursor: Option<(i32, i32)>,
+        /// Human-readable detail (key name, timings, measured
+        /// deltas) for the verdict record.
+        detail: String,
+    },
+    /// No injection backend on this OS.
+    Unsupported {
+        /// Why injection is unsupported here.
+        reason: String,
+    },
+    /// Session preflight proved injection ineffective — record
+    /// `environment_blocked`, never a GUI `fail`.
+    EnvironmentBlocked {
+        /// The failing preflight stage's evidence.
+        detail: String,
+    },
+    /// A run precondition was not met — `not_run` evidence; the lane
+    /// may retry after fixing the precondition.
+    NotRun {
+        /// Which precondition failed (e.g. `"window w2 not focused"`).
+        reason: String,
+    },
+}
+
 /// Reports whether this platform has an OS injection backend.
 ///
 /// `false` means [`press_key`] and the pointer functions would
@@ -200,6 +263,19 @@ pub enum PreflightScope {
     Keyboard,
     /// Both pointer and keyboard injection.
     PointerAndKeyboard,
+}
+
+impl PreflightScope {
+    /// The family names this scope covers, in probe order
+    /// (pointer before keyboard) — `PreflightCheck::family` values.
+    #[must_use]
+    pub fn families(self) -> &'static [&'static str] {
+        match self {
+            Self::Pointer => &["pointer"],
+            Self::Keyboard => &["keyboard"],
+            Self::PointerAndKeyboard => &["pointer", "keyboard"],
+        }
+    }
 }
 
 /// One family's preflight outcome.

@@ -48,9 +48,16 @@
 
 use std::path::{Path, PathBuf};
 
+use ruviform_ui::behavior::{
+    CommandIntent, CommandPhase, CommandReceipt, DetachPolicy, ValueDescriptor,
+};
 use ruviform_ui::dock::ViewInstanceId;
-use ruviform_ui::view::{AttachEpochAllocator, ViewHost};
-use ruviform_ui::{UiError, WindowId, WindowSpec};
+use ruviform_ui::view::{
+    A11yRole, A11ySpec, AttachEpochAllocator, ComponentKey, ComponentSpec, ComponentVisualState,
+    ControlSpec, Orientation, PanelSpec, ViewHost, ViewSpec,
+};
+use ruviform_ui::{Event, UiError, WindowId, WindowSpec};
+use ruviform_ui_gpui::os_input::{self, OsInputOutcome, OsKey, PreflightReport, PreflightScope};
 use ruviform_ui_gpui::{CaptureMeta, RealOsGuiTest, RealWindowMount, RealWindowOptions, ViewMount};
 use ruviform_ui_test::driver_lab;
 use ruviform_ui_test::golden::{
@@ -60,10 +67,12 @@ use ruviform_ui_test::golden::{
 use ruviform_ui_test::lab_story::{self, StoryFixture};
 use ruviform_ui_test::scenario::visual::{CaptureOutcome, VisualGuiTest};
 use ruviform_ui_test::{
-    RunId, ScenarioError, ScenarioId, ScenarioReport, ScenarioTarget, SemanticGuiTest, TargetQuery,
-    record_golden_step,
+    RunId, ScenarioCapability, ScenarioError, ScenarioId, ScenarioOutcome, ScenarioReport,
+    ScenarioSpec, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery,
+    record_golden_step, run_scenario, settle_until,
 };
 use ruviform_ui_theme::{ResolvedTheme, ScaleContext, ThemeResolver, TokenDocument};
+use serde_json::{Value, json};
 
 /// Story matrix axes — both product themes × both declared scale
 /// factors, mirroring `stories.json` (`themes` + `scaleFactor`) and
@@ -525,4 +534,686 @@ fn lab_story_sv_fader_dock_real_window() {
 #[test]
 fn lab_story_al_waveform_seek_real_window() {
     real_window_story(&lab_story::al_waveform_seek_fixture());
+}
+
+// ---------------------------------------------------------------------
+// Issue #313 — `RealOsPointerOrKeyboard` OS-injection scenario.
+//
+// This lane is the honest OS-input chain, distinct from every other
+// layer: `RealOsGuiTest::os_*` ops drive `os_input` (Win32 `SendInput`
+// — OS automation injection, *not* physical manual input and *not* the
+// GPUI `dispatch_keystroke`/`simulate_*` or `dispatch_input` semantic
+// paths). Every op is gated by the Issue #552 `os_input::preflight`
+// effect probe; a host where `SendInput` accepts events that never
+// take effect records `environment_blocked`, never a pass.
+//
+// Chain proven on Windows: open real window → `request_focus` →
+// observed `Focused(true)` → `os_press_key` (Tab/Right/Tab/Left) →
+// `os_pointer_move_to`/`os_mouse_down`/`os_mouse_up` (measured
+// `component_bounds` × `window_geometry` aim + cursor read-back) →
+// IPC intents minted by the real bindings → receipt posted back →
+// `observe` `CommandPhase::Applied` → teardown. `run_scenario`
+// supplies capability pre-flight + report assembly.
+//
+// On Linux/macOS the capability is not claimed, `require_capabilities`
+// fails honestly, and the lane records `unsupported` — the same test
+// runs under the Xvfb lane and must not pretend input happened.
+// ---------------------------------------------------------------------
+
+/// Env var gating the capability-matrix verdict JSON — same
+/// relative-to-workspace anchor as `png_evidence_dir`.
+const OS_INPUT_VERDICT_ENV: &str = "RUVIFORM_REAL_OS_INPUT_VERDICT";
+
+/// Driver-lab mechanism tag for this lane.
+#[cfg(windows)]
+const OS_INPUT_MECHANISM: &str = "mise-task:test-ui-real-os-scenario";
+#[cfg(target_os = "linux")]
+const OS_INPUT_MECHANISM: &str = "mise-task:test-ui-offscreen-xvfb";
+
+fn key(name: &str) -> ComponentKey {
+    ComponentKey(name.to_string())
+}
+
+fn a11y_slider(label: &str, o: Orientation) -> A11ySpec {
+    A11ySpec {
+        role: Some(A11yRole::Slider),
+        label: Some(label.to_string()),
+        orientation: Some(o),
+        value_min: Some(0.0),
+        value_max: Some(1.0),
+        value_text: None,
+    }
+}
+
+fn os_input_control(name: &str, label: &str, o: Orientation) -> ControlSpec {
+    ControlSpec {
+        key: key(name),
+        control_id: None,
+        target: Some(format!("mixer.{name}")),
+        descriptor: ValueDescriptor {
+            default_value: Some(0.5),
+            step: Some(0.05),
+            ..ValueDescriptor::ranged(0.0, 1.0)
+        },
+        orientation: o,
+        detach_policy: DetachPolicy::Cancel,
+        unsupported: false,
+        visual: ComponentVisualState::default(),
+        a11y: a11y_slider(label, o),
+    }
+}
+
+/// The input spec — same two-control panel the `SendInput` smoke
+/// examples drive: Tab traverses `gain` → `seek`, arrows step the
+/// focused control (#479 convention), pointer drags/clicks aim at
+/// painted bounds.
+fn os_input_spec() -> ViewSpec {
+    ViewSpec {
+        root: ComponentSpec::Panel(PanelSpec {
+            key: key("root"),
+            title: Some("RF313 OS input scenario".to_string()),
+            children: vec![
+                ComponentSpec::Fader(os_input_control("gain", "Gain", Orientation::Vertical)),
+                ComponentSpec::Seek(os_input_control("seek", "Seek", Orientation::Horizontal)),
+            ],
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        }),
+    }
+}
+
+/// Resolves `RUVIFORM_REAL_OS_INPUT_VERDICT` relative to the
+/// workspace root — `None` disables the file (env-gate convention).
+fn os_input_verdict_path() -> Option<PathBuf> {
+    let raw = std::env::var(OS_INPUT_VERDICT_ENV).ok()?;
+    if raw.is_empty() {
+        return None;
+    }
+    let path = PathBuf::from(raw);
+    Some(if path.is_absolute() {
+        path
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(path)
+    })
+}
+
+/// Host OS/GPU metadata for the verdict record — PowerShell probe on
+/// Windows (same approach as the smoke examples), unavailable tags
+/// elsewhere.
+#[cfg(windows)]
+fn os_input_host_env() -> Value {
+    let script = "$os = Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty Caption; $gpu = Get-CimInstance Win32_VideoController | Select-Object -First 1 -ExpandProperty Name; [pscustomobject]@{ os_version = $os; gpu = $gpu } | ConvertTo-Json -Compress";
+    let parsed = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .output()
+        .ok()
+        .and_then(|out| serde_json::from_slice::<Value>(&out.stdout).ok());
+    parsed.unwrap_or_else(|| json!({"os_version": "unavailable", "gpu": "unavailable"}))
+}
+
+#[cfg(target_os = "linux")]
+fn os_input_host_env() -> Value {
+    json!({"os_version": "unavailable", "gpu": "unavailable"})
+}
+
+/// Writes the `rf313-real-os-input-scenario/v1` verdict JSON when
+/// the env gate names a path. `verdict` uses the task vocabulary
+/// (`pass`/`fail`/`not_run`/`unsupported`/`environment_blocked`).
+fn write_os_input_verdict(
+    verdict: &str,
+    reasons: &[String],
+    environment: &Value,
+    preflight: Option<&PreflightReport>,
+    run_log: &[Value],
+    report: Option<&ScenarioReport>,
+) {
+    let Some(path) = os_input_verdict_path() else {
+        return;
+    };
+    let doc = json!({
+        "schema": "rf313-real-os-input-scenario/v1",
+        "issue": 313,
+        "lane": "windows-sendinput-scenario",
+        "driver": "real-os",
+        "capability": "real-os-pointer-or-keyboard",
+        "input_method": "win32-SendInput",
+        "input_method_note": "OS automation injection through the real foreground path — not physical manual input; distinct from GPUI dispatch_keystroke/simulate_* and from ViewHost semantic dispatch",
+        "verdict": verdict,
+        "reasons": reasons,
+        "environment": environment,
+        "preflight": preflight.map(|p| json!({
+            "effective": p.effective,
+            "checks": p.checks.iter().map(|c| json!({
+                "family": c.family,
+                "effective": c.effective,
+                "detail": c.detail,
+            })).collect::<Vec<_>>(),
+        })),
+        "run": run_log,
+        "scenario_report": report.map(|r| json!({
+            "driver": format!("{:?}", r.driver),
+            "verdict": r.verdict.as_str(),
+            "detail": r.detail,
+            "required": r.required.iter().map(|c| format!("{c:?}")).collect::<Vec<_>>(),
+            "capabilities": r.capabilities.iter().map(|c| format!("{c:?}")).collect::<Vec<_>>(),
+            "timeout": r.timeout.map(|t| json!({"budget_ms": t.budget_ms, "elapsed_ms": t.elapsed_ms, "timed_out": t.timed_out})),
+        })),
+    });
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("verdict dir");
+    }
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&doc).expect("verdict json"),
+    )
+    .unwrap_or_else(|e| panic!("write verdict {}: {e}", path.display()));
+}
+
+/// `(control_id, normalized, atomic, gesture_id)` projections of the
+/// commit intents the run log analysis needs.
+fn commit_rows(intents: &[ruviform_ui_test::MintedIntent]) -> Vec<(String, f64, bool, String)> {
+    intents
+        .iter()
+        .filter_map(|m| match &m.intent {
+            CommandIntent::Commit {
+                control_id,
+                value,
+                atomic,
+                gesture_id,
+                ..
+            } => Some((
+                control_id.clone(),
+                value.normalized,
+                *atomic,
+                format!("{gesture_id:?}"),
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `(control_id, normalized, atomic, gesture_id)` for Begin intents —
+/// a keyboard step pairs Begin+Commit `atomic: true`; a pointer
+/// gesture pairs non-atomic Begin+Commit on one `gesture_id`.
+fn begin_rows(intents: &[ruviform_ui_test::MintedIntent]) -> Vec<(String, f64, bool, String)> {
+    intents
+        .iter()
+        .filter_map(|m| match &m.intent {
+            CommandIntent::Begin {
+                control_id,
+                value,
+                atomic,
+                gesture_id,
+                ..
+            } => Some((
+                control_id.clone(),
+                value.normalized,
+                *atomic,
+                format!("{gesture_id:?}"),
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The `RealOsPointerOrKeyboard` E2E scenario — Windows measures the
+/// full OS-injection chain; other OSes verify the capability is
+/// honestly unclaimed.
+#[test]
+fn real_os_input_scenario() {
+    let _ = env_logger::builder().is_test(false).try_init();
+    let view = ViewInstanceId::new(313).expect("nonzero");
+    let mut epochs = AttachEpochAllocator::new();
+    let mut host = ViewHost::new(view, epochs.mint());
+    host.mount(os_input_spec()).expect("mount input spec");
+    host.drain_events();
+
+    let outcome = RealOsGuiTest::run(
+        vec![RealWindowMount {
+            window: WindowSpec::default(),
+            view: ViewMount {
+                host,
+                theme: Some(resolve_theme("synvelis-dark")),
+            },
+        }],
+        RealWindowOptions {
+            startup_settle_ticks: STARTUP_SETTLE_TICKS,
+            ..RealWindowOptions::default()
+        },
+        |gui| os_input_session(gui, view),
+    );
+    if let Err(error) = outcome {
+        let message = error.to_string();
+        let environment = os_input_environment(None);
+        write_os_input_verdict(
+            "environment_blocked",
+            &[format!("real-window session could not start: {message}")],
+            &environment,
+            None,
+            &[],
+            None,
+        );
+        driver_lab::emit_evidence(
+            "rf313-real-os-input",
+            "real-os",
+            "pass",
+            "environment_blocked",
+            OS_INPUT_MECHANISM,
+            &format!("real-window session could not start: {message}"),
+        );
+        panic!("environment_blocked: real-window session could not start: {message}");
+    }
+}
+
+/// Environment record for the verdict JSON — measured values only;
+/// `scale_factor` comes from the real capture meta when available.
+fn os_input_environment(scale_factor: Option<f64>) -> Value {
+    let host = os_input_host_env();
+    json!({
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "os_version": host["os_version"],
+        "gpu": host["gpu"],
+        "scale_factor": scale_factor,
+        "revision": env!("CARGO_PKG_VERSION"),
+        "timestamp_unix": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs()),
+    })
+}
+
+/// One early-out lane record: verdict JSON + driver-lab evidence row.
+fn os_input_lane_result(
+    verdict: &str,
+    reasons: &[String],
+    environment: &Value,
+    preflight: Option<&PreflightReport>,
+) {
+    write_os_input_verdict(verdict, reasons, environment, preflight, &[], None);
+    driver_lab::emit_evidence(
+        "rf313-real-os-input",
+        "real-os",
+        "pass",
+        verdict,
+        OS_INPUT_MECHANISM,
+        &reasons.join("; "),
+    );
+}
+
+/// Session body: capability gate → focus → preflight → `run_scenario`
+/// → verdict JSON + driver-lab evidence + the test's own assertion.
+fn os_input_session(gui: &mut RealOsGuiTest, view: ViewInstanceId) {
+    let window = gui
+        .windows()
+        .into_iter()
+        .next()
+        .expect("one mounted window");
+    let target = gui
+        .resolve_target(&TargetQuery::new(window, view))
+        .expect("resolve input target");
+    let environment = os_input_environment(None);
+
+    // Capability honesty: no backend → require fails → `unsupported`.
+    if !gui
+        .capabilities()
+        .contains(&ScenarioCapability::RealOsPointerOrKeyboard)
+    {
+        os_input_lane_result(
+            "unsupported",
+            &["adapter does not claim real-os-pointer-or-keyboard on this OS".to_string()],
+            &environment,
+            None,
+        );
+        return;
+    }
+
+    // Foreground window is a hard precondition for keyboard/button
+    // delivery — refuse to inject at an unfocused window.
+    gui.request_focus(window, true)
+        .expect("queue focus request");
+    let focused = settle_until(gui, |g| g.window_focused(window), 40).expect("settle for focus");
+    if !focused {
+        let reasons = vec![format!("window {window} never reported Focused(true)")];
+        os_input_lane_result("not_run", &reasons, &environment, None);
+        panic!("not_run: {}", reasons.join("; "));
+    }
+
+    // Issue #552 gate: injection acceptance ≠ effect.
+    let preflight = gui.os_input_preflight(PreflightScope::PointerAndKeyboard);
+    if !preflight.effective {
+        let reasons: Vec<String> = preflight
+            .checks
+            .iter()
+            .filter(|c| !c.effective)
+            .map(|c| format!("{}: {}", c.family, c.detail))
+            .collect();
+        os_input_lane_result(
+            "environment_blocked",
+            &reasons,
+            &environment,
+            Some(&preflight),
+        );
+        panic!("environment_blocked: {}", reasons.join("; "));
+    }
+
+    // Preserve the user's cursor — the session restores it on exit.
+    let saved_cursor = os_input::cursor_position().ok();
+
+    let spec = ScenarioSpec::new(
+        RunId::new("run-rf313-os-input"),
+        ScenarioId::new("rf313-real-os-input"),
+    )
+    .require(ScenarioCapability::RealOsPointerOrKeyboard)
+    .require(ScenarioCapability::SemanticAction)
+    .timeout_ms(60_000);
+    let report = run_scenario(gui, &spec, |gui| os_input_scenario_body(gui, &target));
+
+    // Best-effort cursor restore — evidence already records it.
+    if let Some((x, y)) = saved_cursor {
+        let _ = os_input::move_to(x, y);
+    }
+
+    let verdict = match report.verdict {
+        ScenarioVerdict::Blocked => "environment_blocked",
+        other => other.as_str(),
+    };
+    let reasons: Vec<String> = report.detail.iter().cloned().collect();
+    let run_log: Vec<Value> = report
+        .observed
+        .as_ref()
+        .and_then(|v| v.get("run_log").and_then(Value::as_array))
+        .cloned()
+        .unwrap_or_default();
+    write_os_input_verdict(
+        verdict,
+        &reasons,
+        &os_input_environment(gui.last_capture_meta().map(|m| m.scale_factor)),
+        Some(&preflight),
+        &run_log,
+        Some(&report),
+    );
+    driver_lab::emit_evidence(
+        "rf313-real-os-input",
+        "real-os",
+        "pass",
+        verdict,
+        OS_INPUT_MECHANISM,
+        &format!(
+            "RealOsPointerOrKeyboard OS-injection scenario: {}",
+            report.detail.clone().unwrap_or_else(|| verdict.to_string())
+        ),
+    );
+    assert_eq!(
+        report.verdict,
+        ScenarioVerdict::Pass,
+        "OS-injection scenario must pass on an unblocked Windows host: {:?}",
+        report.detail
+    );
+}
+
+/// Records one `os_*` outcome into the run log. `Err` propagates —
+/// contract failures are `fail`. `Ok(non-Injected)` records the
+/// honest lane verdict the sequence must halt with.
+fn record_os_step(
+    tag: &str,
+    result: Result<OsInputOutcome, ScenarioError>,
+    log: &mut Vec<Value>,
+    problems: &mut Vec<String>,
+) -> Result<Option<ScenarioVerdict>, ScenarioError> {
+    match result? {
+        OsInputOutcome::Injected {
+            action,
+            commanded,
+            cursor,
+            detail,
+        } => {
+            log.push(json!({
+                "channel": "os-injection", "op": tag, "action": action,
+                "commanded": commanded, "cursor": cursor, "detail": detail,
+            }));
+            Ok(None)
+        }
+        OsInputOutcome::EnvironmentBlocked { detail } => {
+            log.push(json!({"channel": "os-injection", "op": tag, "outcome": "environment_blocked", "detail": detail}));
+            problems.push(format!("{tag}: environment_blocked — {detail}"));
+            Ok(Some(ScenarioVerdict::Blocked))
+        }
+        OsInputOutcome::Unsupported { reason } => {
+            log.push(json!({"channel": "os-injection", "op": tag, "outcome": "unsupported", "detail": reason}));
+            problems.push(format!("{tag}: unsupported — {reason}"));
+            Ok(Some(ScenarioVerdict::Unsupported))
+        }
+        OsInputOutcome::NotRun { reason } => {
+            log.push(json!({"channel": "os-injection", "op": tag, "outcome": "not_run", "detail": reason}));
+            problems.push(format!("{tag}: not_run — {reason}"));
+            Ok(Some(ScenarioVerdict::NotRun))
+        }
+        other => {
+            log.push(
+                json!({"channel": "os-injection", "op": tag, "outcome": format!("{other:?}")}),
+            );
+            problems.push(format!("{tag}: unexpected outcome {other:?}"));
+            Ok(Some(ScenarioVerdict::Fail))
+        }
+    }
+}
+
+/// The scenario body run by `run_scenario`: keyboard traversal +
+/// step commits, a pointer drag on `gain`, a click on `seek`, then
+/// the receipt/display leg. Returns the honest verdict —
+/// `EnvironmentBlocked`/`NotRun`/`Unsupported` outcomes never reach
+/// `Err` (they are evidence, not contract failures).
+fn os_input_scenario_body(
+    gui: &mut RealOsGuiTest,
+    target: &ScenarioTarget,
+) -> Result<ScenarioOutcome, ScenarioError> {
+    let mut run_log: Vec<Value> = vec![];
+    let mut problems: Vec<String> = vec![];
+    let mut stop: Option<ScenarioVerdict> = None;
+
+    // Run the op, record its outcome, settle two drain boundaries so
+    // the OS-delivered event lands before the next injection.
+    macro_rules! os_step {
+        ($gui:expr, $tag:literal, $result:expr) => {{
+            let result = $result;
+            if stop.is_none()
+                && let Some(v) = record_os_step($tag, result, &mut run_log, &mut problems)?
+            {
+                stop = Some(v);
+            }
+            $gui.settle()?;
+            $gui.settle()?;
+        }};
+    }
+
+    // Keyboard leg — Issue #451 traversal + #479 step commits.
+    os_step!(gui, "tab-1", gui.os_press_key(target, OsKey::Tab));
+    os_step!(gui, "right", gui.os_press_key(target, OsKey::Right));
+    os_step!(gui, "tab-2", gui.os_press_key(target, OsKey::Tab));
+    os_step!(gui, "left", gui.os_press_key(target, OsKey::Left));
+
+    // Pointer leg — drag `gain` down-to-up, click `seek` near 0.8.
+    os_step!(
+        gui,
+        "gain-move",
+        gui.os_pointer_move_to(target, &key("gain"), (0.5, 0.75))
+    );
+    os_step!(gui, "gain-down", gui.os_mouse_down(target));
+    os_step!(
+        gui,
+        "gain-drag",
+        gui.os_pointer_move_to(target, &key("gain"), (0.5, 0.25))
+    );
+    os_step!(gui, "gain-up", gui.os_mouse_up(target));
+    os_step!(
+        gui,
+        "seek-move",
+        gui.os_pointer_move_to(target, &key("seek"), (0.8, 0.5))
+    );
+    os_step!(gui, "seek-down", gui.os_mouse_down(target));
+    os_step!(gui, "seek-up", gui.os_mouse_up(target));
+
+    if let Some(verdict) = stop {
+        let mut outcome = ScenarioOutcome::new(verdict);
+        outcome.observed = Some(json!({"run_log": run_log}));
+        outcome.detail = Some(problems.join("; "));
+        return Ok(outcome);
+    }
+
+    // IPC leg — the real bindings minted intents from OS input.
+    let intents = gui.drain_intents();
+    let commits = commit_rows(&intents);
+    run_log.push(json!({
+        "channel": "ipc",
+        "intents": intents.iter().map(|m| json!({
+            "command_id": m.command_id,
+            "expect_receipt": m.expect_receipt,
+            "intent": format!("{:?}", m.intent),
+        })).collect::<Vec<_>>(),
+    }));
+    problems.extend(check_os_input_intents(&intents, &commits));
+
+    let receipts = os_input_receipt_leg(gui, target, &intents, &mut run_log, &mut problems)?;
+
+    // Display leg — a real OS capture proves the window is live
+    // (capture is #314 evidence; here it documents the display end).
+    match gui.capture_frame(target)? {
+        CaptureOutcome::Captured(_) => {
+            run_log.push(json!({"channel": "os-capture", "outcome": "captured"}));
+        }
+        other => {
+            run_log.push(json!({"channel": "os-capture", "outcome": format!("{other:?}")}));
+            problems.push(format!("capture_frame did not produce pixels: {other:?}"));
+        }
+    }
+
+    let mut outcome = ScenarioOutcome::new(if problems.is_empty() {
+        ScenarioVerdict::Pass
+    } else {
+        ScenarioVerdict::Fail
+    });
+    outcome.targets = vec![target.clone()];
+    outcome.receipts = receipts;
+    outcome.expected = Some(json!({
+        "gain": {"keyboard_commit": 0.55, "pointer_commit": 0.75},
+        "seek": {"keyboard_commit": 0.45, "pointer_commit": 0.80},
+        "receipt_phase": "Applied",
+        "channels": ["os-injection", "ipc", "os-capture"],
+    }));
+    outcome.observed = Some(json!({
+        "run_log": run_log,
+        "commits": commits.iter().map(|(c, v, a, g)| json!({
+            "control_id": c, "normalized": v, "atomic": a, "gesture": g,
+        })).collect::<Vec<_>>(),
+    }));
+    outcome
+        .evidence
+        .push("verdict:rf313-real-os-input-scenario".to_string());
+    outcome.detail = if problems.is_empty() {
+        Some(
+            "keyboard + pointer OS-injection chain, intents, receipt and display legs verified"
+                .to_string(),
+        )
+    } else {
+        Some(problems.join("; "))
+    };
+    Ok(outcome)
+}
+
+/// Verifies the minted intents against the input oracle: keyboard
+/// steps are atomic Begin+Commit pairs (gain 0.55, seek 0.45);
+/// pointer gestures are non-atomic Begin+Commit on one `gesture_id`
+/// (gain ≈0.75, seek ≈0.80). Returns the problems found.
+fn check_os_input_intents(
+    intents: &[ruviform_ui_test::MintedIntent],
+    commits: &[(String, f64, bool, String)],
+) -> Vec<String> {
+    let begins = begin_rows(intents);
+    let mut problems = Vec::new();
+    let approx = |v: f64, want: f64| (v - want).abs() <= 0.02;
+    for (control, want) in [("gain", 0.55), ("seek", 0.45)] {
+        let Some((_, got, atomic, _)) = commits.iter().find(|(c, _, _, _)| c == control) else {
+            problems.push(format!("no commit intent observed for {control}"));
+            continue;
+        };
+        if !approx(*got, want) {
+            problems.push(format!("{control} commit {got} != expected {want}"));
+        }
+        if !atomic {
+            problems.push(format!("{control} keyboard commit not atomic"));
+        }
+        if !begins.iter().any(|(c, _, a, _)| c == control && *a) {
+            problems.push(format!("{control} keyboard begin missing/not atomic"));
+        }
+    }
+    for (control, want) in [("gain", 0.75), ("seek", 0.80)] {
+        let commit = commits
+            .iter()
+            .rev()
+            .find(|(c, _, atomic, _)| c == control && !atomic);
+        let Some((_, got, _, gesture)) = commit else {
+            problems.push(format!("no non-atomic commit observed for {control}"));
+            continue;
+        };
+        if !approx(*got, want) {
+            problems.push(format!("{control} pointer commit {got} != expected {want}"));
+        }
+        if !begins
+            .iter()
+            .any(|(c, _, a, g)| c == control && !a && g == gesture)
+        {
+            problems.push(format!(
+                "{control} pointer begin missing for gesture {gesture}"
+            ));
+        }
+    }
+    problems
+}
+
+/// Receipt leg — answers the binding's `expect_receipt` commit for
+/// `seek`, then the view must observe `CommandPhase::Applied`.
+/// Returns the receipts recorded onto the outcome.
+fn os_input_receipt_leg(
+    gui: &mut RealOsGuiTest,
+    target: &ScenarioTarget,
+    intents: &[ruviform_ui_test::MintedIntent],
+    run_log: &mut Vec<Value>,
+    problems: &mut Vec<String>,
+) -> Result<Vec<CommandReceipt>, ScenarioError> {
+    let mut receipts = Vec::new();
+    // The head record is the newest receipt-expecting command — the
+    // receipt must answer it for the phase to read `Applied`.
+    if let Some(minted) = intents.iter().rev().find(|m| {
+        m.expect_receipt
+            && matches!(&m.intent, CommandIntent::Commit { control_id, .. }
+                if control_id == "seek")
+    }) {
+        let event = Event::result_ok(
+            minted.command_id.clone(),
+            json!({"status": "applied", "revision": 1}),
+        );
+        if let Some(receipt) = CommandReceipt::from_result(&event) {
+            receipts.push(receipt);
+        }
+        gui.post_event(target, &event)?;
+        gui.settle()?;
+        gui.settle()?;
+        let snapshot = gui.observe(target, &key("seek"))?;
+        run_log.push(json!({
+            "channel": "ipc",
+            "receipt": "posted",
+            "seek_phase": format!("{:?}", snapshot.phase),
+        }));
+        if snapshot.phase != CommandPhase::Applied {
+            problems.push(format!(
+                "seek phase after receipt is {:?}, expected Applied",
+                snapshot.phase
+            ));
+        }
+    } else {
+        problems.push("no expect_receipt commit for seek — receipt leg unproven".to_string());
+    }
+    Ok(receipts)
 }

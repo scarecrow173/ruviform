@@ -211,3 +211,4 @@ Directory: `docs/impl/ir`
 | IMPL-034VjwX2YHM8koidKb6AhG | Issue #253 host-graph report consumer wiring（host 側 opt-in drain API + fixture E2E） | completed | [issue-253-host-graph-report-consumer-wiring.md](./issue-253-host-graph-report-consumer-wiring.md) |
 | IMPL-034VnQ9uBnTxr8BNjvWsMt | Issue #253 L1 wire report verb（wire-v4 DrainOutputReports/Reports + runner backlog + host chunked drain + fixture E2E） | completed | [rf-253-l1-report-verb.md](./rf-253-l1-report-verb.md) |
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
+| IMPL-034VOSINPDRV4REAL0SIN6 | Issue #313 `RealOsPointerOrKeyboard` capability 実装と Windows 実入力 E2E 証拠 | completed | [issue-313-real-os-input-driver-slice.md](./issue-313-real-os-input-driver-slice.md) |
