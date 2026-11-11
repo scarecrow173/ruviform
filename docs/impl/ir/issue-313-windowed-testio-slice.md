@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034VFzhzdEyknToi5VSfS5"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #313 S2 windowed `TestIo`/`rvf.uitest.v1` GPUI backend 配線"
 created: "2026-11-11"
 updated: "2026-11-11"

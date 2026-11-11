@@ -214,4 +214,4 @@ Directory: `docs/impl/ir`
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
 | IMPL-034VOSINPDRV4REAL0SIN6 | Issue #313 `RealOsPointerOrKeyboard` capability 実装と Windows 実入力 E2E 証拠 | completed | [issue-313-real-os-input-driver-slice.md](./issue-313-real-os-input-driver-slice.md) |
 | IMPL-034VFhJztohjkuJtNUpBHT | Issue #253 unsupported transparency slice | completed | [issue-253-unsupported-transparency-slice.md](./issue-253-unsupported-transparency-slice.md) |
-| IMPL-034VFzhzdEyknToi5VSfS5 | Issue #313 S2 windowed `TestIo`/`rvf.uitest.v1` GPUI backend 配線 | in-progress | [issue-313-windowed-testio-slice.md](./issue-313-windowed-testio-slice.md) |
+| IMPL-034VFzhzdEyknToi5VSfS5 | Issue #313 S2 windowed `TestIo`/`rvf.uitest.v1` GPUI backend 配線 | completed | [issue-313-windowed-testio-slice.md](./issue-313-windowed-testio-slice.md) |

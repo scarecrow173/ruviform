@@ -1,7 +1,7 @@
 ---
 id: "TASK-034WIND0WEDTESTI0S2TK"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #313 — windowed `TestIo`/`rvf.uitest.v1` 実装タスク（slice S2）"
 created: "2026-11-11"
 updated: "2026-11-11"
@@ -74,51 +74,51 @@ relations:
 
 ## T1: neutral 語彙化（`ruviform-ui-test`）
 
-- [ ] `io.rs`: `TestIo` を `emit(DriverEvent)`・
+- [x] `io.rs`: `TestIo` を `emit(DriverEvent)`・
       `emit_ipc_body(WindowId, &str)`（新規）・
       `create_window(&WindowSpec)` へ。trait/method doc を neutral
       契約 + `emit_ipc_body` の malformed/suppressed/valid 三分岐
       语义へ更新。
-- [ ] `fixture.rs`: `TestApp::on_event(DriverEvent, &mut dyn
+- [x] `fixture.rs`: `TestApp::on_event(DriverEvent, &mut dyn
       WindowDriver)` + `shutdown(mode, &mut dyn WindowDriver)`。
-- [ ] `journal.rs`: `record_in(&DriverEvent)`（lifecycle kind
+- [x] `journal.rs`: `record_in(&DriverEvent)`（lifecycle kind
       対応表）・`record_suppressed(window, bytes)`・
       `JournalHandle` を `WindowDriver` decorator へ
       （`post_event`/`create_window`/`resize`/`focus`/
       `request_close`/`respond_close`/`destroy_window`/`exit` を
       `Out` 記録）・`deliver_routed` → `post_event`。
-- [ ] `fake_driver.rs`: `ready(&self, WindowId) -> bool` accessor
+- [x] `fake_driver.rs`: `ready(&self, WindowId) -> bool` accessor
       追加。
-- [ ] `headless.rs`: `FakeDriver` 上に再基盤化。interceptor で
+- [x] `headless.rs`: `FakeDriver` 上に再基盤化。interceptor で
       `window.created`/`window.close_requested`/`window.destroyed`/
       `ipc.suppressed` notice を lifecycle event から生成。
       `emit_ipc_body`（armed→suppressed / valid→`Action` 注入 /
       malformed→`In "message"` + `post_event(Event::error)`）。
       `windows()` は `spec_of`/`ready`/`close_pending`/`is_ipc_down`
       の実 state。`url: None`。
-- [ ] `agent.rs`: `emit` 2 箇所を `DriverEvent::Tick` /
+- [x] `agent.rs`: `emit` 2 箇所を `DriverEvent::Tick` /
       `Windowed{CloseRequested}` へ。
-- [ ] `dummy_app.rs`: `WindowSpec`/`DriverEvent`/`WindowLifecycle`
+- [x] `dummy_app.rs`: `WindowSpec`/`DriverEvent`/`WindowLifecycle`
       へ。`UiRuntime::dispatch_window_intent` +
       `deliver_routed`（post_event）。`ipc_emit` fixture →
       `emit_ipc_body`。`windows` fixture → `emit(Ready)`。
-- [ ] tests 移行 + `emit_ipc_body` 三分岐・metadata・close flow
+- [x] tests 移行 + `emit_ipc_body` 三分岐・metadata・close flow
       の検証追加。
 
 ## T2: windowed adapter（`ruviform-ui-gpui`）
 
-- [ ] `Cargo.toml`: `uitest` feature + `base64` optional dep +
+- [x] `Cargo.toml`: `uitest` feature + `base64` optional dep +
       `[[bin]] windowed_test_app`。
-- [ ] `lib.rs`: `UiJob`/`set_ui_jobs`/`drain_ui_jobs`/`ui_jobs`
+- [x] `lib.rs`: `UiJob`/`set_ui_jobs`/`drain_ui_jobs`/`ui_jobs`
       field の cfg を `any(real-scenario, uitest)` に widen、
       `#[cfg(feature = "uitest")] pub mod windowed_io`。
-- [ ] `windowed_io.rs`: `WindowedIo`（`call`+settle 2-job、emit
+- [x] `windowed_io.rs`: `WindowedIo`（`call`+settle 2-job、emit
       per-event mapping、`windows()` job 実 slot 読み、
       `emit_ipc_body` 三分岐 job、screenshot→`capture_window`、
       `set_fault`、capabilities/backend 正直 claim）+
       `UiSide`（`deliver` interceptor: journal+notices+ipc 抑止
       +`pending_shutdown` 処理）。
-- [ ] `bin/windowed_test_app.rs`: AUT（main=serve、app
+- [x] `bin/windowed_test_app.rs`: AUT（main=serve、app
       thread=`driver.run`+`catch_unwind`→`exit(3)`、stdout 予約・
       stderr diagnostics、`--fail-init`/`--windows N`、fixtures
       `windows`（real Ready bounded poll）/`ipc_emit`/
@@ -126,9 +126,9 @@ relations:
 
 ## T3: lane・検証・証拠
 
-- [ ] `tests/windowed_uitest.rs`（`RVF_WINDOWED_UITEST=1` opt-in、
+- [x] `tests/windowed_uitest.rs`（`RVF_WINDOWED_UITEST=1` opt-in、
       verdict JSON 出力）+ `mise.toml` `test-ui-windowed-uitest`。
-- [ ] headless lanes 全 pass（canonical mise）。
-- [ ] windowed lane 実走（desktop 不可なら environment_blocked
+- [x] headless lanes 全 pass（canonical mise）。
+- [x] windowed lane 実走（desktop 不可なら environment_blocked
       記録）。
-- [ ] `evidence/issue-313-windowed-uitest/` 記録 + impl IR 作成。
+- [x] `evidence/issue-313-windowed-uitest/` 記録 + impl IR 作成。
