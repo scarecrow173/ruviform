@@ -409,6 +409,21 @@ run = "cargo test -p ruviform-ui-gpui --features real-scenario --test real_windo
 description = "Run the Issue #314 real-window story matrix on Linux under Xvfb+openbox (RF-GT-05 offscreen CI lane — X11 GetImage pixel readback; writes evidence/issue-314-offscreen-xvfb/)"
 env = { RUVIFORM_DRIVER_LAB_EVIDENCE = "evidence/issue-314-offscreen-xvfb/driver-lab-evidence.jsonl", RUVIFORM_GOLDEN_EVIDENCE = "evidence/issue-314-offscreen-xvfb/golden-evidence.jsonl", RUVIFORM_REAL_WINDOW_PNG_DIR = "evidence/issue-314-offscreen-xvfb/png" }
 run = "xvfb-run -a -s '-screen 0 1920x1080x24' sh -c 'openbox >/dev/null 2>&1 & i=0; while [ $i -lt 50 ]; do xprop -root _NET_SUPPORTING_WM_CHECK >/dev/null 2>&1 && break; sleep 0.1; i=$((i+1)); done; exec cargo test -p ruviform-ui-gpui --features real-scenario --test real_window -- --test-threads=1'"
+
+# Issue #313 RF-GT-04 slice S1 real-OS input lane (manual): the
+# RealOsPointerOrKeyboard capability E2E — `RealOsGuiTest::os_*` ops
+# drive Win32 SendInput through the real foreground path on an
+# interactive desktop. The Issue #552 preflight gates injection
+# effectiveness first; an ineffective host records
+# `environment_blocked` in the verdict JSON + driver-lab JSONL and
+# the test marks itself with the `environment_blocked:` tag — never
+# a pass. Occupies the real cursor/keyboard — run unattended, never
+# alongside other input or focus changes.
+[tasks.test-ui-real-os-scenario]
+description = "Run the Issue #313 RealOsPointerOrKeyboard OS-injection scenario on the interactive Windows session (manual verification — writes evidence/rf313-os-capability-matrix/verdict-real-os-input-windows.json; occupies real cursor/keyboard — run unattended)"
+env = { RUVIFORM_DRIVER_LAB_EVIDENCE = "evidence/issue-314-real-scenario/driver-lab-evidence.jsonl", RUVIFORM_REAL_OS_INPUT_VERDICT = "evidence/rf313-os-capability-matrix/verdict-real-os-input-windows.json" }
+run = "cargo test -p ruviform-ui-gpui --features real-scenario --test real_window real_os_input"
+
 [tasks.example-ui-webview-e2e]
 description = "Run the real WebView round-trip check (page load → IPC → event delivery; WebView2 on Windows, manual verification — not a CI lane)"
 run = "cargo run -p ruviform-ui-webview --features webview --example e2e_smoke"
