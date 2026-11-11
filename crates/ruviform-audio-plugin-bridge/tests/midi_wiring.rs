@@ -1001,3 +1001,106 @@ fn ledger_eviction_delivers_synthetic_off() {
         "evicted keys' synthetic offs at offset 0 of the next call"
     );
 }
+
+// ---------------------------------------------------------------------------
+// real OS backend opt-in lane (Issue #253)
+// ---------------------------------------------------------------------------
+
+/// Issue #253 — the real OS MIDI backend (`ruviform-midi-device`'s
+/// `SystemBackend`) driving the identical `InputTx::pump` →
+/// `InputStage` → status-mirror path the `MockBackend` test covers
+/// deterministically: enumerate → open → repeated pump (observing
+/// `dropped`/`unsupported` counter transparency end-to-end) →
+/// process → close → `StreamInvalidated`.
+///
+/// Manual opt-in: `cargo test -p ruviform-audio-plugin-bridge --
+/// --ignored` (canonical mise lane registration is a recorded
+/// follow-up — `mise.toml` is outside this slice's edit scope).
+/// Honest exit on platforms without a backend
+/// (`DeviceError::Unsupported`) or with no input ports; hardware
+/// traffic is recorded, never asserted.
+#[test]
+#[ignore = "requires an OS MIDI input device; manual opt-in check"]
+fn real_midi_device_drives_input_tx_to_stage() {
+    let ports = match ruviform_midi_device::backend().input_ports() {
+        Ok(ports) => ports,
+        Err(err) => {
+            eprintln!("OS MIDI backend unavailable ({err:?}) — nothing to verify");
+            return;
+        }
+    };
+    let Some(port) = ports.into_iter().next() else {
+        eprintln!("no MIDI input ports — nothing to verify");
+        return;
+    };
+    let info = port.info();
+    eprintln!(
+        "port: id={} name={:?} origin={:?} ump={} timestamps={} domain={:?}",
+        info.id,
+        info.name,
+        info.origin,
+        info.capabilities.supports_ump,
+        info.capabilities.provides_timestamps,
+        info.capabilities.clock_domain,
+    );
+
+    let mut rig = build_rig(128, true);
+    // Anchor the backend's declared stamp domain at frame 0 — the
+    // WinMM subscription stamps in `TimeBase` 1/1000 s
+    // (`midi-device/src/queue.rs::Shared::new`). Mapped offsets are
+    // timing-dependent on real hardware and are recorded, not
+    // asserted.
+    if let Some(domain) = info.capabilities.clock_domain {
+        rig.control
+            .set_clock_anchor(Some(ClockAnchor {
+                domain,
+                stamp_ticks: 0,
+                stamp_base: TimeBase::new(1, 1_000).unwrap(),
+                frame: EngineFrame::new(ClockEpochId::new(0), 0),
+                calibration: TimestampProvenance::Carried,
+            }))
+            .unwrap();
+    }
+
+    let mut input = port.open().expect("open declared port");
+    // Pump for a short window so real traffic has a chance to arrive.
+    let (mut total_received, mut total_pushed) = (0usize, 0usize);
+    let (mut total_dropped, mut total_unsupported) = (0u64, 0u64);
+    for _ in 0..10 {
+        let stats = rig.input_tx.as_mut().unwrap().pump(&mut *input).unwrap();
+        total_received += stats.received;
+        total_pushed += stats.pushed;
+        total_dropped += stats.backend_dropped;
+        total_unsupported += stats.backend_unsupported;
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // Counter transparency end-to-end: every per-call observation
+    // must land on the `InputTx` cumulative counters — nothing may
+    // die at the port boundary.
+    assert_eq!(
+        rig.input_tx.as_ref().unwrap().dropped_backend(),
+        total_dropped
+    );
+    assert_eq!(
+        rig.input_tx.as_ref().unwrap().unsupported_backend(),
+        total_unsupported
+    );
+
+    feed(&mut rig.rt, rig.src_out, 256);
+    rig.rt.process(256, &RtContext::mint()).expect("process");
+    let snap = rig.control.snapshot();
+    eprintln!(
+        "observed: received={total_received} pushed={total_pushed} \
+         dropped={total_dropped} unsupported={total_unsupported} \
+         stage_counters={:?}",
+        snap.input
+    );
+
+    input.close();
+    // `close` invalidates the subscription — a further pump reports
+    // the backend error instead of delivering stale events.
+    assert!(matches!(
+        rig.input_tx.as_mut().unwrap().pump(&mut *input),
+        Err(DeviceError::StreamInvalidated)
+    ));
+}

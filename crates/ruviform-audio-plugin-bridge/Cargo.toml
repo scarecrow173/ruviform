@@ -20,6 +20,10 @@ ruviform-rt = { path = "../ruviform-rt" }
 # Issue #186: `assert_no_alloc` 測定窓 — param 配送経路の RT 検証
 # （Issue #22/#97/#98 と同一方式）。
 assert_no_alloc = "1.1"
+# Issue #253: `#[ignore]` 実機 E2E（tests/midi_wiring.rs）—
+# `SystemBackend`→`InputTx::pump`→`InputStage` の opt-in 実デバイス
+# 経路。adapter への dev-dep のみで公開 surface には出ない。
+ruviform-midi-device = { path = "../ruviform-midi-device" }
 
 [lints]
 workspace = true

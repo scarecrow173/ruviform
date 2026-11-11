@@ -28,3 +28,30 @@ for port in ports {
     println!("{}", port.info().name);
 }
 ```
+
+## Opt-in real-device verification
+
+`#[ignore]`-gated E2E (`tests/ports.rs::real_device_open_read_observe_close`)
+exercises the full real-device path — enumerate → open → repeated
+`read` (timestamp domain/provenance + `dropped`/`unsupported`
+observation) → close → `StreamInvalidated`. It exits honestly on
+platforms without a backend (`DeviceError::Unsupported`) or with no
+input ports; hardware traffic (nonzero counters, actual events) is
+recorded, never asserted.
+
+Interim entry point — canonical mise lane registration is a recorded
+follow-up (Issue #253 slice: `mise.toml` was outside the slice's edit
+scope; see `docs/impl/ir/issue-253-unsupported-transparency-slice.md`):
+
+```sh
+cargo test -p ruviform-midi-device -- --ignored
+```
+
+`examples/list_midi_ports.rs` remains the manual enumeration helper.
+The bridge-level real path (`SystemBackend` → `InputTx::pump` →
+`InputStage`) is covered by the `#[ignore]` E2E in
+`ruviform-audio-plugin-bridge/tests/midi_wiring.rs`:
+
+```sh
+cargo test -p ruviform-audio-plugin-bridge -- --ignored
+```
