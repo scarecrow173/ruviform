@@ -4,12 +4,12 @@ type: "impl"
 status: "completed"
 title: "Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-11"
 owners: ["scarecrow173"]
 relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/243"
-    - "../specs/issue-243-gpui-realwin-windows.md"
+    - "docs/specs/issue-243-gpui-realwin-windows.md"
   changes:
     added:
       - type: "file"
@@ -32,26 +32,27 @@ relations:
     moved: []
     generated: []
   implements:
-    - "../tasks/implement-issue-243-gpui-realwin-windows.md"
+    - "docs/tasks/implement-issue-243-gpui-realwin-windows.md"
   implemented-by: []
   depends-on:
-    - "../tasks/implement-issue-243-gpui-realwin-windows.md"
+    - "docs/tasks/implement-issue-243-gpui-realwin-windows.md"
   blocks: []
   supersedes: []
   superseded-by: []
   related:
     - "../../reports/issue-431-real-verify.md"
-    - "../designs/issue-243-gpui-realwin-windows.md"
+    - "../ir/issue-243-multiwindow-closeout-slice.md"
+    - "docs/designs/issue-243-gpui-realwin-windows.md"
   refines: []
   refined-by: []
   derives-from:
-    - "../test-specs/issue-243-gpui-realwin-windows.md"
+    - "docs/test-specs/issue-243-gpui-realwin-windows.md"
   derived-by: []
   verifies:
-    - "../test-specs/issue-243-gpui-realwin-windows.md"
+    - "docs/test-specs/issue-243-gpui-realwin-windows.md"
   verified-by: []
   references:
-    - "../specs/issue-243-gpui-realwin-windows.md"
+    - "docs/specs/issue-243-gpui-realwin-windows.md"
   defers: []
   deferred-by: []
 metadata:
@@ -272,6 +273,16 @@ exit code: **0**。`Created`/`Ready`/`Focused(true)`/`Resized 1280x800`/
 | consumer 非回帰（AudioLens/Synvelis） | 対象外 | consumer repo の作業 | audio-lens#166・synvelis#113/#114 |
 | `post_event` の実窓配送 | 部分 | headless fixture で検証済み。実窓では `RvfRoot` の描画件数に依存し自動判定経路なし（本 probe 未実施） | 必要なら描画観測経路の拡張を別 Issue で |
 
+## Related Experiments
+
+### Adopted
+
+<!-- 実験ログなし -->
+
+### Rejected
+
+<!-- なし -->
+
 ## Validation
 
 `git fetch origin main && git merge origin/main` → Already up to date
@@ -307,5 +318,8 @@ exit code: **0**。`Created`/`Ready`/`Focused(true)`/`Resized 1280x800`/
 - macOS/Linux での同等 probe 実行（同じ example がそのまま使える）。
 - 複数 DPI 環境での `ScaleFactorChanged`・モニタ切断の実測。
 - `post_event` 実窓配送の観測経路（描画 or ログ）の検討。
-- docs 生成 index（`docs/*/README.md`）と `docs/impl/ir/README.md` の
-  再生成・追記は dispatch の編集禁止範囲のため未実施 — Coordinator/後続へ。
+- ~~docs 生成 index（`docs/*/README.md`）と `docs/impl/ir/README.md` の
+  再生成・追記は dispatch の編集禁止範囲のため未実施 — Coordinator/後続へ~~
+  **実施済み（2026-11-11）**: closeout slice
+  （`docs/impl/ir/issue-243-multiwindow-closeout-slice.md`）で #243 関連
+  doc status 更新と管理 index 再生成を実施。

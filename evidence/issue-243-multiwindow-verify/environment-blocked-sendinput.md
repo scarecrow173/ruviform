@@ -75,3 +75,40 @@ Any process on the interactive desktop:
 Diagnostic scripts used (not committed): `%TEMP%\sendinput-rel-test.ps1`,
 `%TEMP%\legacy-apis-test.ps1`, `%TEMP%\sched-test.ps1`,
 `%TEMP%\il-all-windows.ps1`, `%TEMP%\class-filters.ps1`.
+
+## Resolution (2026-11-11 追記)
+
+本ブロックはその後解消した。最有力仮説は **Riot Vanguard `vgk.sys` の
+armed 状態**（LoL/Riot Client 起動から kernel driver の完全 unload まで
+の間、`SendInput` 注入イベントのみが実効を失う）。PR #551 の追加調査で:
+
+- 独立 Rust プローブ（P/Invoke を介さない extern 直宣言）が SendInput
+  API レベルで全 pass・`GetLastError=0`・`sizeof(INPUT)=40` を確認 —
+  呼び出し側の構造体/ABI 問題を否定。
+- LL hook 実測で `SendInput` と `mouse_event` は共に injected flag
+  （`inj=1`）付きで到達 — 本文書の「`LLMHF_INJECTED` 付きイベントのみ
+  drop される」仮説は反証された。
+- 回復時系列: LoL 終了 → `vgk` ドライバログ停止（17:47）→
+  20:43 SendInput 全回復。
+
+因果は**未確証**である点を明記する: Vanguard 関与は時系列相関と症状
+シグネチャに基づく最有力仮説であり、直接の因果証明はない。初回切り分け
+で `sc query vgk` = STOPPED を「否定済み」としたが、service 状態の
+STOPPED は kernel driver の armed/unload 状態と一致しない可能性があり、
+その点が初回記録と後続観測を整合させる説明となる。
+
+解消後の実測:
+
+- PR #551（2026-11-10・schema v1 時点）: Vanguard unload 後に
+  `mise run example-ui-gpui-real-os-multiwindow-smoke` を再実走し
+  verdict=pass・全 check green を canonical path に記録済み。
+- Issue #552 で `os_input::preflight`（注入 → 独立 OS API read-back の
+  実効検証）を 3 lane の lane 本体前に fail-closed 導入。再発時は
+  verdict `environment_blocked`・exit 3 で lane 本体を走らせず明示的に
+  失敗するため、「受理 ≠ 実効」を GUI fail として誤記録する経路は
+  塞がれた（再発防止）。
+- 2026-11-11（HEAD `4eea9115`・schema v2 時点）: 同 lane を再実走し
+  preflight effective（pointer+keyboard）・verdict=pass・exit 0・
+  16 checks 全 green。
+  `evidence/issue-243-multiwindow-verify/verdict-multiwindow-windows.json`
+  は v2 schema（`preflight` 付き）で再生成済み。

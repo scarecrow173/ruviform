@@ -110,6 +110,7 @@ Directory: `docs/designs`
 | DESIGN-034Rp1KqXNzTDTKRXTbqHx | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | DESIGN-wrF61tPcejIc31wMBYJHok | Issue #311 RF-GT-02 ui/guitest — IPC conformance fixture・deterministic record/replay・fault matrix 設計 | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | DESIGN-034S312gtUiTestDsnDD44 | Issue #312 ruviform-ui-test — test-only GUI host lifecycle・secure control adapter 設計 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| DESIGN-34VOSINPDRV4REAL0SIN2 | Issue #313 — `RealOsPointerOrKeyboard` capability 設計（OS-input port on `RealOsGuiTest`） | approved | [issue-313-real-os-input-driver-design.md](./issue-313-real-os-input-driver-design.md) |
 | DESIGN-034UkPTR1W1N5M0K3P02 | Issue #313 — Windows 実 OS SendInput ポインタ smoke 設計（部分スコープ・後続スライス） | approved | [issue-313-windows-pointer-smoke.md](./issue-313-windows-pointer-smoke.md) |
 | DESIGN-034UjLB6Yn2hveYiujXFY0 | Issue #313 — Windows 実 OS SendInput キーボード smoke 設計（部分スコープ） | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | DESIGN-034Ug8WYFJ37a8hKlmcQaW | Issue #314 slice 3 — GPUI/OS capture backend の設計 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
@@ -205,7 +206,6 @@ Directory: `docs/designs`
 | DESIGN-034JcePtzKFix4IuxyE5mD | 時間モデル拡張の設計（FrameRate/TimeBase 分離・Timecode 拡張・丸め誤差累積方針） | approved | [time-model-extension.md](./time-model-extension.md) |
 | DESIGN-034JZVID00000000000030 | 動画エンジン設計（パイプライン・スケジューラ・セッション） | approved | [video-engine.md](./video-engine.md) |
 | DESIGN-aYGxhiXLZHim70lzzr4olp | ViewLink.attach authoritative generation 採用設計 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
-| DESIGN-34VOSINPDRV4REAL0SIN2 | Issue #313 — `RealOsPointerOrKeyboard` capability 設計（OS-input port on `RealOsGuiTest`） | approved | [issue-313-real-os-input-driver-design.md](./issue-313-real-os-input-driver-design.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

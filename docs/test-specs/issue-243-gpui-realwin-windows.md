@@ -1,10 +1,10 @@
 ---
 id: "TSPEC-034UdQbwnBMc4dBhcTwfxI"
 type: "test-spec"
-status: "in-progress"
+status: "implemented"
 title: "Issue #243 GPUI 実窓 lifecycle 実機検証 試験仕様"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-11"
 owners: ["scarecrow173"]
 relations:
   source:

@@ -1,10 +1,10 @@
 ---
 id: "TASK-034V4uYcdcMjdFzOg15rFm"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #243 — Windows 実 OS multiwindow smoke 実装タスク"
 created: "2026-11-10"
-updated: "2026-11-10"
+updated: "2026-11-11"
 owners: []
 relations:
   source:

@@ -1,10 +1,10 @@
 ---
 id: "PLAN-034V4uVEulNfghJYxbNL9Y"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "Issue #243 — Windows 実 OS multiwindow smoke 実装計画"
 created: "2026-11-10"
-updated: "2026-11-10"
+updated: "2026-11-11"
 owners: []
 relations:
   source:

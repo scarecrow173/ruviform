@@ -1,10 +1,10 @@
 ---
 id: "TASK-034UdR18snUStfTR5NpZge"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #243 実装タスク"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-11"
 owners: ["scarecrow173"]
 relations:
   source:

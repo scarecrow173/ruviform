@@ -1,5 +1,5 @@
 {
-  "schema": "rf243-real-os-multiwindow-smoke/v1",
+  "schema": "rf243-real-os-multiwindow-smoke/v2",
   "issue": 243,
   "lane": "windows-sendinput-multiwindow",
   "input_method": "win32-SendInput keyboard/pointer + example-local modifier chords (Win+Arrow, Alt+F4)",
@@ -88,6 +88,21 @@
       "detail": "cancelled_count=1 win_event=true app_cancelled=false app_still_running=true progress_events=1068 events=[(Some(WindowId(1)), Cancelled)]"
     }
   ],
+  "preflight": {
+    "effective": true,
+    "checks": [
+      {
+        "family": "pointer",
+        "effective": true,
+        "detail": "cursor (2109, 241) -> (2125, 257) confirmed by read-back Some((2124, 256))"
+      },
+      {
+        "family": "keyboard",
+        "effective": true,
+        "detail": "VK_F24 down confirmed by read-back, released"
+      }
+    ]
+  },
   "traces": {
     "WindowId(1)": [
       "Created",
@@ -286,6 +301,6 @@
   },
   "run": {
     "ticks": 787,
-    "elapsed_ms": 92582
+    "elapsed_ms": 93928
   }
 }
