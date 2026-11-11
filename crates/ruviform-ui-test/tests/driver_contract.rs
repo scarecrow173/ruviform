@@ -15,8 +15,8 @@ use ruviform_ui::native_slot::{
     SlotVisibility, Support, SurfaceSlotRegistry,
 };
 use ruviform_ui::{
-    DataRegistry, DemoService, DockTarget, DockWorkspace, HostEvent, UiRuntime, ViewInstanceId,
-    WindowEvent, WindowHandle, WindowId,
+    DataRegistry, DemoService, DockTarget, DockWorkspace, DriverEvent, HostEvent, UiRuntime,
+    ViewInstanceId, WindowDriver, WindowId,
 };
 use ruviform_ui_test::{HeadlessIo, TestApp, TestIo, driver_lab, lab_story};
 use ruviform_ui_theme::{ResolveError, ResolvedColor, ThemeResolver, TokenDocument};
@@ -26,7 +26,7 @@ use ruviform_ui_theme::{ResolveError, ResolvedColor, ThemeResolver, TokenDocumen
 struct App;
 
 impl TestApp for App {
-    fn on_event(&mut self, _wev: WindowEvent, _wh: &mut dyn WindowHandle) {}
+    fn on_event(&mut self, _dev: DriverEvent, _drv: &mut dyn WindowDriver) {}
 }
 
 fn manifest_dir() -> PathBuf {
@@ -100,7 +100,7 @@ fn ui_dvr_01_driverless_headless_smoke() {
     let mut io = HeadlessIo::new(App);
     assert!(io.windows().is_empty());
     let w = io
-        .create_window(&ruviform_ui::WindowConfig::default())
+        .create_window(&ruviform_ui::WindowSpec::default())
         .expect("headless window 作成");
     assert_eq!(io.windows().len(), 1);
     let _ = w;

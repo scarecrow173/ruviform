@@ -1,32 +1,36 @@
-//! `HeadlessIo` — the [`TestIo`] implementation over [`FakeHost`]
-//! (Issue #312).
+//! `HeadlessIo` — the [`TestIo`] implementation over [`FakeDriver`]
+//! (Issue #312, rebased onto the neutral driver fake in Issue #313
+//! slice S2).
 //!
-//! Composition: `FakeHost` (window/event plumbing) + a `TestApp`
-//! (the consumer's event wiring) + `Journal` (observation) + named
-//! `FixtureController`s. `emit` injects host events through the fake
-//! queue and pumps them deterministically; every pump records inbound
-//! receipts, app→host calls pass through `JournalHandle`, and window
-//! lifecycle transitions produce notices.
+//! Composition: `FakeDriver` (window/event plumbing, `WindowDriver`
+//! semantics) + a `TestApp` (the consumer's event wiring) + `Journal`
+//! (observation) + named `FixtureController`s. `emit` injects driver
+//! events through the fake queue and pumps them deterministically;
+//! every pump records inbound receipts, app→host calls pass through
+//! `JournalHandle`, and window lifecycle transitions produce notices.
 //!
 //! **RT contract:** non-RT only.
 
-use ruviform_ui::{ErrorBody, HostEvent, WindowConfig, WindowEvent, WindowHandle, WindowId, codes};
+use ruviform_ui::ipc::{Event, parse_intent};
+use ruviform_ui::{
+    DriverEvent, ErrorBody, WindowDriver, WindowId, WindowLifecycle, WindowSpec, codes,
+};
 use serde_json::Value;
 
-use crate::fake::{FakeHost, FakeWindow};
+use crate::fake_driver::FakeDriver;
 use crate::fixture::{FixtureController, TestApp};
 use crate::io::TestIo;
 use crate::journal::{Journal, JournalHandle};
 use crate::proto::{
-    BackendMeta, Capabilities, CleanupReport, ClockDomain, DeniedCapabilities, FaultKind,
-    FixtureReceipt, FixtureSpec, Notice, ReadyState, ReceiptPage, Screenshot, ShutdownMode,
-    WindowMeta,
+    BackendMeta, Capabilities, CleanupReport, ClockDomain, DeniedCapabilities, Direction,
+    FaultKind, FixtureReceipt, FixtureSpec, Notice, ReadyState, ReceiptPage, Screenshot,
+    ShutdownMode, WindowMeta,
 };
 
-/// `TestIo` backed by [`FakeHost`] — the headless path every CI lane
-/// can drive end to end.
+/// `TestIo` backed by [`FakeDriver`] — the headless path every CI
+/// lane can drive end to end.
 pub struct HeadlessIo<A: TestApp> {
-    host: FakeHost,
+    host: FakeDriver,
     app: A,
     journal: Journal,
     fixtures: Vec<Box<dyn FixtureController>>,
@@ -42,7 +46,7 @@ impl<A: TestApp> HeadlessIo<A> {
     #[must_use]
     pub fn new(app: A) -> Self {
         Self {
-            host: FakeHost::new(),
+            host: FakeDriver::new(),
             app,
             journal: Journal::default(),
             fixtures: Vec::new(),
@@ -70,14 +74,14 @@ impl<A: TestApp> HeadlessIo<A> {
         &self.app
     }
 
-    /// The underlying fake host (inspection beyond `windows()`).
+    /// The underlying fake driver (inspection beyond `windows()`).
     #[must_use]
-    pub fn host(&self) -> &FakeHost {
+    pub fn host(&self) -> &FakeDriver {
         &self.host
     }
 
-    /// Mutable access to the fake host.
-    pub fn host_mut(&mut self) -> &mut FakeHost {
+    /// Mutable access to the fake driver.
+    pub fn host_mut(&mut self) -> &mut FakeDriver {
         &mut self.host
     }
 
@@ -106,7 +110,9 @@ impl<A: TestApp> HeadlessIo<A> {
 
     /// Pumps the fake queue through journal + app — every emitted
     /// event records `In` receipts, lifecycle notices, and drives
-    /// `TestApp::on_event` under a `JournalHandle`.
+    /// `TestApp::on_event` under a `JournalHandle`. The interceptor
+    /// is the same delivery shape a real adapter uses: journal in,
+    /// lifecycle bookkeeping, then app delivery.
     fn pump_events(&mut self) {
         let Self {
             host,
@@ -116,38 +122,32 @@ impl<A: TestApp> HeadlessIo<A> {
             notice_seq,
             ..
         } = self;
-        let suppressed = host.pump(&mut |wev, wh| {
-            journal.record_in(&wev);
-            if let WindowEvent::Windowed { window, event } = &wev {
-                match event {
-                    HostEvent::Destroyed => {
-                        let seq = *notice_seq;
-                        *notice_seq += 1;
-                        notices.push(Notice {
-                            seq,
-                            kind: "window.destroyed".to_string(),
-                            window: Some(window.get()),
-                            detail: Value::Null,
-                        });
-                    }
-                    HostEvent::CloseRequested => {
-                        let seq = *notice_seq;
-                        *notice_seq += 1;
-                        notices.push(Notice {
-                            seq,
-                            kind: "window.close_requested".to_string(),
-                            window: Some(window.get()),
-                            detail: Value::Null,
-                        });
-                    }
-                    _ => {}
+        let suppressed = host.pump(&mut |dev, drv| {
+            journal.record_in(&dev);
+            if let DriverEvent::Windowed { window, event } = &dev {
+                let kind = match event {
+                    WindowLifecycle::Created => Some("window.created"),
+                    WindowLifecycle::CloseRequested => Some("window.close_requested"),
+                    WindowLifecycle::Destroyed => Some("window.destroyed"),
+                    _ => None,
+                };
+                if let Some(kind) = kind {
+                    let seq = *notice_seq;
+                    *notice_seq += 1;
+                    notices.push(Notice {
+                        seq,
+                        kind: kind.to_string(),
+                        window: Some(window.get()),
+                        detail: Value::Null,
+                    });
                 }
             }
-            let mut jh = JournalHandle::new(wh, journal);
-            app.on_event(wev, &mut jh);
+            let mut jh = JournalHandle::new(drv, journal);
+            app.on_event(dev, &mut jh);
         });
-        for (window, event) in suppressed {
-            self.journal.record_suppressed(window, &event);
+        for (window, intent) in suppressed {
+            let bytes = serde_json::to_string(&intent).map_or(0, |s| s.len());
+            self.journal.record_suppressed(window, bytes);
             self.push_notice("ipc.suppressed", Some(window));
         }
     }
@@ -183,38 +183,71 @@ impl<A: TestApp> TestIo for HeadlessIo<A> {
         }
     }
 
-    fn emit(&mut self, ev: WindowEvent) {
+    fn emit(&mut self, ev: DriverEvent) {
         self.host.inject(ev);
         self.pump_events();
+    }
+
+    fn emit_ipc_body(&mut self, window: WindowId, body: &str) {
+        // Dead-window drop — the same silent-drop contract the driver
+        // applies to windowed events for retired ids.
+        if !self.host.windows().contains(&window) {
+            return;
+        }
+        if self.host.is_ipc_down(window) {
+            self.journal.record_suppressed(window, body.len());
+            self.push_notice("ipc.suppressed", Some(window));
+            return;
+        }
+        match parse_intent(body) {
+            Ok(intent) => self.emit(DriverEvent::Windowed {
+                window,
+                event: WindowLifecycle::Action(intent),
+            }),
+            Err(e) => {
+                // The raw body crossed the inbound boundary; the
+                // driver-side answer is an error event posted to the
+                // window — the same mapping real adapters apply to
+                // malformed inbound bodies.
+                self.journal
+                    .record(Direction::In, Some(window), "message", body.len());
+                self.journal
+                    .record(Direction::Out, Some(window), "post_event", 0);
+                self.host.post_event(window, &Event::error(e));
+            }
+        }
     }
 
     fn windows(&self) -> Vec<WindowMeta> {
         self.host
             .windows()
             .into_iter()
-            .filter_map(|id| {
-                self.host
-                    .windows
-                    .get(&id)
-                    .map(|fw: &FakeWindow| WindowMeta {
-                        id: id.get(),
-                        title: Some(fw.config.title.clone()),
-                        url: Some(fw.config.url.clone()),
-                        width: fw.config.width,
-                        height: fw.config.height,
-                        ready: fw.ready,
-                        close_pending: fw.close_pending,
-                        ipc_down: self.host.is_ipc_down(id),
-                    })
+            .map(|id| {
+                let spec = self.host.spec_of(id);
+                WindowMeta {
+                    id: id.get(),
+                    title: spec.map(|s| s.title.clone()),
+                    url: None,
+                    width: spec.map_or(0, |s| s.logical_size.width),
+                    height: spec.map_or(0, |s| s.logical_size.height),
+                    ready: self.host.ready(id),
+                    close_pending: self.host.close_pending(id),
+                    ipc_down: self.host.is_ipc_down(id),
+                }
             })
             .collect()
     }
 
-    fn create_window(&mut self, config: &WindowConfig) -> Result<WindowId, ErrorBody> {
-        self.host
-            .create_window(config)
-            .inspect(|&id| self.push_notice("window.created", Some(id)))
-            .map_err(|e| ErrorBody::new(codes::SERVICE_ERROR, e.to_string()))
+    fn create_window(&mut self, spec: &WindowSpec) -> Result<WindowId, ErrorBody> {
+        let id = self
+            .host
+            .create_window(spec)
+            .map_err(|e| ErrorBody::new(codes::SERVICE_ERROR, e.to_string()))?;
+        // Deliver the queued `Created` deterministically — the
+        // `window.created` notice and `In "created"` receipt are
+        // observable at this call's return.
+        self.pump_events();
+        Ok(id)
     }
 
     fn receipts(&self, since: u64, limit: usize) -> ReceiptPage {
@@ -237,7 +270,7 @@ impl<A: TestApp> TestIo for HeadlessIo<A> {
                 "fault requires a \"window\" param",
             ));
         };
-        if !self.host.windows.contains_key(&id) {
+        if !self.host.windows().contains(&id) {
             return Err(ErrorBody::new(
                 codes::INVALID_PARAMS,
                 format!("unknown window {id}"),

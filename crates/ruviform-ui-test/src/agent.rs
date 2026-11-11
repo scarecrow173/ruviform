@@ -23,7 +23,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 
 use ruviform_ui::ipc::{ErrorBody, Event, codes, parse_intent};
-use ruviform_ui::{UiError, WindowEvent, WindowId};
+use ruviform_ui::{DriverEvent, UiError, WindowId, WindowLifecycle};
 use serde_json::{Value, json};
 
 use crate::io::TestIo;
@@ -305,7 +305,7 @@ impl TestAgent {
             )];
         };
         for _ in 0..ticks {
-            io.emit(WindowEvent::Tick);
+            io.emit(DriverEvent::Tick);
         }
         vec![Event::result_ok(
             id,
@@ -351,9 +351,9 @@ impl TestAgent {
             }
             Err(e) => return vec![Event::result_err(id, e)],
         };
-        io.emit(WindowEvent::Windowed {
+        io.emit(DriverEvent::Windowed {
             window,
-            event: ruviform_ui::HostEvent::CloseRequested,
+            event: WindowLifecycle::CloseRequested,
         });
         vec![Event::result_ok(
             id,

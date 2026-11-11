@@ -1,15 +1,18 @@
 //! `TestIo` — the port through which [`crate::TestAgent`] reaches the
-//! app-under-test's host boundary (Issue #312).
+//! app-under-test's host boundary (Issue #312, neutral re-expression
+//! in Issue #313 slice S2).
 //!
-//! Implemented by headless wiring ([`crate::HeadlessIo`]) and by
-//! windowed-host wiring (RF-GT-04 consumes it over `run_multi`). Every
-//! method maps onto existing `ruviform-ui` port surface —
-//! `WindowEvent`/`WindowHandle` — so a real adapter needs no new
-//! host-facing API.
+//! Implemented by headless wiring ([`crate::HeadlessIo`] over
+//! `FakeDriver`) and by windowed-host wiring (RF-GT-04's GPUI
+//! adapter). Every method maps onto the driver-neutral
+//! `ruviform-ui` port surface — `DriverEvent`/`WindowDriver`/
+//! `WindowSpec`/typed `Event` — so a real adapter needs no new
+//! host-facing API and no legacy `WindowEvent`/`WindowHandle`
+//! vocabulary crosses the boundary.
 //!
 //! **RT contract:** non-RT only.
 
-use ruviform_ui::{ErrorBody, WindowConfig, WindowEvent, WindowId};
+use ruviform_ui::{DriverEvent, ErrorBody, WindowId, WindowSpec};
 
 use crate::proto::{
     BackendMeta, Capabilities, CleanupReport, FaultKind, FixtureReceipt, FixtureSpec, Notice,
@@ -31,8 +34,21 @@ pub trait TestIo {
 
     /// Injects one host-side event into the app (the same delivery a
     /// real event loop performs). Used by `clock.advance`,
-    /// `window.request_close`, and fixtures.
-    fn emit(&mut self, ev: WindowEvent);
+    /// `window.request_close`, and fixtures. Backends that cannot
+    /// fabricate a given driver-fact event drop it observably (a
+    /// notice), never silently.
+    fn emit(&mut self, ev: DriverEvent);
+
+    /// Injects one raw IPC body into a window's inbound channel —
+    /// the malformed-body counterpart of `emit(Action)` used by the
+    /// `ipc_emit` fixture. The backend decodes at its inbound
+    /// boundary, mirroring what real adapters do: an armed
+    /// `ipc_disconnect` suppresses the body pre-decode (suppressed
+    /// receipt + notice), a valid body becomes `Action` on the
+    /// normal delivery path, and a malformed body is answered
+    /// driver-side with `post_event(Event::error)` — the consumer
+    /// never sees it.
+    fn emit_ipc_body(&mut self, window: WindowId, body: &str);
 
     /// Read-only observation: window metadata snapshot.
     fn windows(&self) -> Vec<WindowMeta>;
@@ -41,7 +57,7 @@ pub trait TestIo {
     ///
     /// # Errors
     /// [`ErrorBody`] when creation fails or the port does not support it.
-    fn create_window(&mut self, config: &WindowConfig) -> Result<WindowId, ErrorBody>;
+    fn create_window(&mut self, spec: &WindowSpec) -> Result<WindowId, ErrorBody>;
 
     /// Read-only observation: paged receipt journal.
     fn receipts(&self, since: u64, limit: usize) -> ReceiptPage;

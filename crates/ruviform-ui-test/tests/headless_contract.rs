@@ -10,11 +10,12 @@
 use std::io::{Write, pipe};
 
 use ruviform_ui::{
-    CloseDecision, HostEvent, WindowConfig, WindowEvent, WindowHandle, WindowId, codes,
+    CloseDecision, DriverEvent, HostEvent, WindowConfig, WindowDriver, WindowEvent, WindowHandle,
+    WindowId, WindowLifecycle, WindowSpec, codes,
 };
 use ruviform_ui_test::{
-    AgentConfig, AppMeta, FixtureController, FixtureReceipt, FixtureSpec, HeadlessIo, Journal,
-    ReadyState, ServeOutcome, TestAgent, TestApp, TestIo, serve,
+    AgentConfig, AppMeta, Direction, FixtureController, FixtureReceipt, FixtureSpec, HeadlessIo,
+    Journal, ReadyState, ServeOutcome, TestAgent, TestApp, TestIo, serve,
 };
 use serde_json::{Value, json};
 
@@ -39,15 +40,15 @@ impl Sink {
 }
 
 impl TestApp for Sink {
-    fn on_event(&mut self, wev: WindowEvent, wh: &mut dyn WindowHandle) {
-        if let WindowEvent::Windowed { window, event } = &wev {
+    fn on_event(&mut self, dev: DriverEvent, drv: &mut dyn WindowDriver) {
+        if let DriverEvent::Windowed { window, event } = &dev {
             self.seen.push(format!("w{}:{event:?}", window.get()));
-            if matches!(event, HostEvent::CloseRequested)
+            if matches!(event, WindowLifecycle::CloseRequested)
                 && let Some(d) = self.decision
             {
-                let _ = wh.respond_close(*window, d);
+                let _ = drv.respond_close(*window, d);
             }
-            if matches!(event, HostEvent::Destroyed) {
+            if matches!(event, WindowLifecycle::Destroyed) {
                 self.jobs_cancelled.push(window.get());
             }
         }
@@ -69,12 +70,10 @@ impl FixtureController for DualFixture {
     ) -> Result<FixtureReceipt, ruviform_ui::ErrorBody> {
         let mut ids = Vec::new();
         for _ in 0..2 {
-            let id = io.create_window(&WindowConfig::default())?;
-            io.emit(WindowEvent::Windowed {
+            let id = io.create_window(&WindowSpec::default())?;
+            io.emit(DriverEvent::Windowed {
                 window: id,
-                event: HostEvent::Ready {
-                    url: "rvf://app/index.html".to_string(),
-                },
+                event: WindowLifecycle::Ready,
             });
             ids.push(id.get());
         }
@@ -460,12 +459,10 @@ fn ipc_disconnect_suppresses_messages_observably() {
         ),
     );
     assert_eq!(result_ok(&evs, "s")["applied"], true);
-    // Inbound message → suppressed receipt + notice, not delivered.
+    // Inbound raw body → suppressed pre-decode receipt + notice,
+    // not delivered.
     let before = io.app().seen.len();
-    io.emit(WindowEvent::Windowed {
-        window: WindowId::new(w1).unwrap(),
-        event: HostEvent::Message("x".to_string()),
-    });
+    io.emit_ipc_body(WindowId::new(w1).unwrap(), "x");
     let page = io.receipts(0, 64);
     assert!(
         page.entries
@@ -488,17 +485,68 @@ fn ipc_disconnect_suppresses_messages_observably() {
         ),
     );
     assert_eq!(result_ok(&evs, "c")["applied"], false);
-    io.emit(WindowEvent::Windowed {
-        window: WindowId::new(w1).unwrap(),
-        event: HostEvent::Message("y".to_string()),
-    });
+    // A valid body decodes at the inbound boundary and reaches the
+    // app as `Action` through the normal delivery path.
+    io.emit_ipc_body(
+        WindowId::new(w1).unwrap(),
+        &json!({"v":1,"kind":"intent","id":"i1","op":"demo.nop","params":{}}).to_string(),
+    );
     let page = io.receipts(0, 64);
     assert!(
         page.entries
             .iter()
             .any(|e| e.kind == "message" && e.window == Some(w1))
     );
-    assert!(io.app().seen.iter().any(|s| s.contains("Message")));
+    assert!(io.app().seen.iter().any(|s| s.contains("Action")));
+}
+
+#[test]
+fn malformed_ipc_body_answers_with_error_event_observably() {
+    let mut io = HeadlessIo::new(Sink::new(None));
+    io.add_fixture(Box::new(DualFixture));
+    let mut a = agent(None);
+    let _ = do_hello(&mut a, &mut io, "r");
+    let evs = a.handle(
+        &mut io,
+        &intent("f", "test.fixture.prepare", json!({"name": "dual"})),
+    );
+    let w1 = result_ok(&evs, "f")["applied"]["windows"][0]
+        .as_u64()
+        .unwrap();
+    let id = WindowId::new(w1).unwrap();
+    // A body that fails intent decode crosses the inbound boundary
+    // (In "message" receipt) and is answered driver-side with an
+    // `Event::error` posted to the window (Out "post_event"
+    // receipt); the consumer never sees a malformed `Action`.
+    let before = io.app().seen.len();
+    io.emit_ipc_body(id, "not-json");
+    let page = io.receipts(0, 64);
+    assert!(
+        page.entries
+            .iter()
+            .any(|e| e.direction == Direction::In && e.kind == "message" && e.window == Some(w1))
+    );
+    assert!(
+        page.entries.iter().any(|e| e.direction == Direction::Out
+            && e.kind == "post_event"
+            && e.window == Some(w1))
+    );
+    assert!(
+        io.host()
+            .events_for(id)
+            .iter()
+            .any(|e| matches!(e, ruviform_ui::Event::Error { .. }))
+    );
+    assert_eq!(
+        io.app().seen.len(),
+        before,
+        "malformed bodies never reach the consumer as Action"
+    );
+    // A dead-window target drops silently — no receipts, no error.
+    let dead = WindowId::new(99).unwrap();
+    let receipts_before = io.receipts(0, 4096).entries.len();
+    io.emit_ipc_body(dead, "not-json");
+    assert_eq!(io.receipts(0, 4096).entries.len(), receipts_before);
 }
 
 #[test]
@@ -658,7 +706,7 @@ fn close_defer_stays_pending_then_destroy() {
     io.host_mut()
         .destroy_window(WindowId::new(w1).unwrap())
         .unwrap();
-    io.emit(WindowEvent::Tick); // pump delivery
+    io.emit(DriverEvent::Tick); // pump delivery
     assert!(!io.windows().iter().any(|m| m.id == w1));
 }
 
@@ -668,7 +716,7 @@ fn close_defer_stays_pending_then_destroy() {
 fn receipts_paginate_and_report_truncation() {
     let mut j = Journal::new(4);
     for i in 0..10usize {
-        j.record(ruviform_ui_test::Direction::In, None, format!("e{i}"), 0);
+        j.record(Direction::In, None, format!("e{i}"), 0);
     }
     let page = j.entries_since(0, 3);
     assert_eq!(page.entries.len(), 3);
@@ -724,7 +772,7 @@ fn notices_op_drains_queue() {
     io.host_mut()
         .destroy_window(WindowId::new(w1).unwrap())
         .unwrap();
-    io.emit(WindowEvent::Tick);
+    io.emit(DriverEvent::Tick);
     let evs = a.handle(&mut io, &intent("n", "test.notices", json!({})));
     let data = result_ok(&evs, "n");
     let notices = data["notices"].as_array().unwrap();
