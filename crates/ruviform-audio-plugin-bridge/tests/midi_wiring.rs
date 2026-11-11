@@ -589,6 +589,7 @@ fn mock_backend_drives_input_stage_to_plugin() {
         timed_us(4_000, note_on(64)),
     ]);
     port.inject_dropped(2);
+    port.inject_unsupported(4);
 
     // Enumerate → `info` → `open` through the port traits — the same
     // calls an engine-side adapter selection makes.
@@ -600,12 +601,24 @@ fn mock_backend_drives_input_stage_to_plugin() {
     let mut input = ports[0].open().unwrap();
     assert!(port.is_open());
 
-    // Scripted backend drops surface through `pump`'s stats and the
-    // `InputTx` cumulative counter.
+    // Scripted backend drops and untranslatable traffic surface
+    // through `pump`'s stats and the `InputTx` cumulative counters —
+    // `unsupported` must not die at the port boundary (Issue #253).
     let stats = rig.input_tx.as_mut().unwrap().pump(&mut *input).unwrap();
     assert_eq!(stats.received, 3);
     assert_eq!(stats.pushed, 3);
     assert_eq!(stats.backend_dropped, 2);
+    assert_eq!(stats.backend_unsupported, 4);
+    assert_eq!(rig.input_tx.as_ref().unwrap().dropped_backend(), 2);
+    assert_eq!(rig.input_tx.as_ref().unwrap().unsupported_backend(), 4);
+
+    // `unsupported` accumulates across pumps like `dropped` does —
+    // a second scripted batch adds to the cumulative counter.
+    port.inject_unsupported(3);
+    let stats = rig.input_tx.as_mut().unwrap().pump(&mut *input).unwrap();
+    assert_eq!(stats.backend_unsupported, 3);
+    assert_eq!(stats.backend_dropped, 0);
+    assert_eq!(rig.input_tx.as_ref().unwrap().unsupported_backend(), 7);
     assert_eq!(rig.input_tx.as_ref().unwrap().dropped_backend(), 2);
 
     feed(&mut rig.rt, rig.src_out, 256);
@@ -615,6 +628,17 @@ fn mock_backend_drives_input_stage_to_plugin() {
     assert_eq!(calls.len(), 2, "256 frames split as 128+128");
     assert_eq!(calls[0], vec![(0, Ev::On(60)), (96, Ev::Off(60))]);
     assert_eq!(calls[1], vec![(64, Ev::On(64))]);
+
+    // The channel path's `unsupported` counter lives on `InputTx`
+    // (the `MidiInput::read` caller), not on the stage — the stage's
+    // `unsupported_backend` only accumulates on its own direct-`read`
+    // path, so the status mirror stays zero here (same ownership
+    // split as `dropped_backend`).
+    assert_eq!(
+        rig.control.snapshot().input.unsupported_backend,
+        0,
+        "channel-path unsupported is an InputTx counter, not a stage counter"
+    );
 
     // `close` invalidates the subscription — a further pump reports
     // the backend error instead of delivering stale events.

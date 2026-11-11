@@ -120,6 +120,7 @@ fn param(offset: u32, v: f64) -> Event {
 struct ScriptedInput {
     pending: VecDeque<TimedMidiInput>,
     dropped: u64,
+    unsupported: u64,
 }
 
 impl MidiInput for ScriptedInput {
@@ -129,8 +130,9 @@ impl MidiInput for ScriptedInput {
         // If the caller's budget was smaller than the queue, the
         // remainder is *not* dropped — it stays queued. `dropped` only
         // reports genuinely lost events.
-        let stats = MidiReadStats::new(self.dropped);
+        let stats = MidiReadStats::with_unsupported(self.dropped, self.unsupported);
         self.dropped = 0;
+        self.unsupported = 0;
         Ok(stats)
     }
 }
@@ -154,6 +156,7 @@ fn midi_delivery_note_cc_bend_with_frame_offsets() {
             timed_us(2000, note_off(60)), // duplicate stamp — stable order keeps input order
         ]),
         dropped: 0,
+        unsupported: 0,
     };
     stage.read(&mut input).unwrap();
 
@@ -224,6 +227,7 @@ fn midi_delivery_block_boundary_and_release_all() {
             timed_us(20_000, note_off(60)),     // frame 960 → future
         ]),
         dropped: 0,
+        unsupported: 0,
     };
     stage.read(&mut input).unwrap();
 
@@ -262,6 +266,7 @@ fn midi_delivery_rejections_are_observable() {
     let mut input = ScriptedInput {
         pending: VecDeque::from(vec![bad, timed_us(0, note_off(60))]),
         dropped: 3,
+        unsupported: 0,
     };
     stage.read(&mut input).unwrap();
     let mut scratch = [param(0, 0.0); 8];
@@ -277,6 +282,44 @@ fn midi_delivery_rejections_are_observable() {
     assert_eq!(counters.dropped_backend, 3);
 }
 
+/// Issue #253 — backend-reported untranslatable traffic must not die
+/// at `InputStage::read`: it accumulates on
+/// `InputStageCounters::unsupported_backend`, separately from
+/// `dropped_backend`, and never perturbs event delivery.
+#[test]
+fn midi_delivery_unsupported_is_observable() {
+    let mut stage = InputStage::new(frame_base());
+    stage.publish_anchor(Some(anchor()));
+    let mut input = ScriptedInput {
+        pending: VecDeque::from(vec![timed_us(0, note_on(60, 100))]),
+        dropped: 3,
+        unsupported: 4,
+    };
+    stage.read(&mut input).unwrap();
+
+    let mut scratch = [param(0, 0.0); 8];
+    let (live, _) = stage.collect_block(
+        EngineFrame::new(epoch(), 0),
+        256,
+        EngineFrame::new(epoch(), 0),
+        &mut scratch,
+    );
+    assert_eq!(live.len(), 1);
+    let counters = stage.counters();
+    assert_eq!(counters.unsupported_backend, 4);
+    assert_eq!(counters.dropped_backend, 3);
+    assert_eq!(counters.delivered, 1);
+
+    // Cumulative across reads — the second batch adds, not replaces.
+    let mut input = ScriptedInput {
+        pending: VecDeque::new(),
+        dropped: 0,
+        unsupported: 3,
+    };
+    stage.read(&mut input).unwrap();
+    assert_eq!(stage.counters().unsupported_backend, 7);
+}
+
 #[test]
 fn midi_delivery_zero_frame_block() {
     // A zero-frame call window has no deliverable offsets: the
@@ -287,6 +330,7 @@ fn midi_delivery_zero_frame_block() {
     let mut input = ScriptedInput {
         pending: VecDeque::from(vec![timed_us(0, cc(1, 10)), timed_us(0, note_on(72, 1))]),
         dropped: 0,
+        unsupported: 0,
     };
     stage.read(&mut input).unwrap();
     let mut scratch = [param(0, 0.0); 8];
@@ -313,6 +357,7 @@ fn rt_midi_delivery_collect_and_merge_no_alloc() {
             timed_us(2000, note_off(60)),
         ]),
         dropped: 0,
+        unsupported: 0,
     };
     stage.read(&mut input).unwrap();
 

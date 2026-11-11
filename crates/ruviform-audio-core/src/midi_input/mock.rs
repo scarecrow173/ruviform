@@ -7,8 +7,9 @@
 //! PoC/bridge tests (`docs/specs/issue-188-timed-midi.md`). It
 //! implements the three port traits over an `Arc<Mutex<…>>` state so
 //! a test can script enumeration results, inject timestamped events
-//! and backend-side drops, fail `open`, and observe `close` — the
-//! same surface a real OS adapter exposes, with none of the OS.
+//! and backend-side loss/untranslatable counters, fail `open`, and
+//! observe `close` — the same surface a real OS adapter exposes,
+//! with none of the OS.
 //!
 //! Thread model mirrors the real contract: `read` takes a short
 //! internal queue lock and never blocks; the test-side handle may be
@@ -32,6 +33,7 @@ struct PortState {
     info: MidiInputInfo,
     pending: VecDeque<TimedMidiInput>,
     dropped: u64,
+    unsupported: u64,
     opened: bool,
     closed: bool,
     open_error: Option<DeviceError>,
@@ -125,6 +127,7 @@ impl MockPort {
                 info,
                 pending: VecDeque::new(),
                 dropped: 0,
+                unsupported: 0,
                 opened: false,
                 closed: false,
                 open_error: None,
@@ -158,6 +161,15 @@ impl MockPort {
     /// [`MidiReadStats::dropped`] — models internal queue overflow.
     pub fn inject_dropped(&self, n: u64) {
         self.lock().dropped += n;
+    }
+
+    /// Script `n` received-but-untranslatable messages the next `read`
+    /// must surface via [`MidiReadStats::unsupported`] — models
+    /// `SysEx`, system common/realtime and malformed traffic the
+    /// channel-voice vocabulary excludes by design. Counted
+    /// separately from `dropped` (not an overload signal).
+    pub fn inject_unsupported(&self, n: u64) {
+        self.lock().unsupported += n;
     }
 
     /// Make the *next* `open` fail with `error` (one-shot — consumed
@@ -237,7 +249,10 @@ impl MidiInput for MockInput {
         }
         let n = state.pending.len().min(max_events);
         out.extend(state.pending.drain(..n));
-        Ok(MidiReadStats::new(std::mem::take(&mut state.dropped)))
+        Ok(MidiReadStats::with_unsupported(
+            std::mem::take(&mut state.dropped),
+            std::mem::take(&mut state.unsupported),
+        ))
     }
 
     /// Marks the subscription closed — subsequent `read`s report
@@ -358,5 +373,30 @@ mod tests {
         // backend whose counter resets per drain.
         let stats = first.read(&mut out, 8).unwrap();
         assert_eq!(stats.dropped, 0);
+    }
+
+    #[test]
+    fn injected_unsupported_surfaces_once_independently_of_dropped() {
+        let mut backend = MockBackend::new();
+        let port = backend.add_port(port_info("p"));
+        port.inject_dropped(2);
+        port.inject_unsupported(5);
+
+        let ports = backend.input_ports().unwrap();
+        let mut input = ports[0].open().unwrap();
+
+        let mut out = Vec::new();
+        let stats = input.read(&mut out, 8).unwrap();
+        // Both counters surface through the same since-last-read
+        // semantics, tracked separately — `unsupported` models
+        // excluded vocabulary traffic, not overload loss.
+        assert_eq!(
+            stats,
+            MidiReadStats::with_unsupported(2, 5),
+            "dropped and unsupported drain independently"
+        );
+        // Consumed — the next read reports zero for both.
+        let stats = input.read(&mut out, 8).unwrap();
+        assert_eq!(stats, MidiReadStats::new(0));
     }
 }

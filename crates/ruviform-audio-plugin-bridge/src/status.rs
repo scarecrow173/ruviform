@@ -34,6 +34,7 @@ pub struct NodeStatus {
     input_late: AtomicU64,
     input_rejected: AtomicU64,
     input_dropped_backend: AtomicU64,
+    input_unsupported_backend: AtomicU64,
     input_dropped_capacity: AtomicU64,
     input_released: AtomicU64,
     input_ledger_overflows: AtomicU64,
@@ -97,6 +98,8 @@ impl NodeStatus {
         self.input_rejected.store(c.rejected, Ordering::Relaxed);
         self.input_dropped_backend
             .store(c.dropped_backend, Ordering::Relaxed);
+        self.input_unsupported_backend
+            .store(c.unsupported_backend, Ordering::Relaxed);
         self.input_dropped_capacity
             .store(c.dropped_capacity, Ordering::Relaxed);
         self.input_released.store(c.released, Ordering::Relaxed);
@@ -144,6 +147,7 @@ impl NodeStatus {
                 late: load(&self.input_late),
                 rejected: load(&self.input_rejected),
                 dropped_backend: load(&self.input_dropped_backend),
+                unsupported_backend: load(&self.input_unsupported_backend),
                 dropped_capacity: load(&self.input_dropped_capacity),
                 released: load(&self.input_released),
                 ledger_overflows: load(&self.input_ledger_overflows),
@@ -166,4 +170,29 @@ pub(crate) enum Counter {
     ChaseOverflow,
     LedgerOverflow,
     StaleEpochControl,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_input_mirrors_whole_counters_including_unsupported() {
+        let status = NodeStatus::default();
+        let counters = InputStageCounters {
+            mapped: 1,
+            delivered: 2,
+            late: 3,
+            rejected: 4,
+            dropped_backend: 5,
+            unsupported_backend: 6,
+            dropped_capacity: 7,
+            released: 8,
+            ledger_overflows: 9,
+        };
+        status.set_input(counters);
+        // Absolute stores, not deltas — the stage is the authority.
+        status.set_input(counters);
+        assert_eq!(status.snapshot().input, counters);
+    }
 }
