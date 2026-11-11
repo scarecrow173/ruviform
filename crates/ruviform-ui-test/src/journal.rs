@@ -1,11 +1,11 @@
 //! Observation journal — a bounded receipt ring over host-boundary
-//! traffic (Issue #312).
+//! traffic (Issue #312, neutral re-expression in Issue #313 slice S2).
 //!
-//! [`Journal`] records what crosses the `WindowEvent`/`WindowHandle`
+//! [`Journal`] records what crosses the `DriverEvent`/`WindowDriver`
 //! boundary in both directions; [`JournalHandle`] is the
-//! [`WindowHandle`] decorator that captures the app→host direction.
+//! [`WindowDriver`] decorator that captures the app→host direction.
 //! Receipts store kind/window/direction/byte-size only — message
-//! bodies and eval scripts are never copied into the journal, which
+//! bodies and event payloads are never copied into the journal, which
 //! keeps the observation surface read-only and bounded by
 //! construction.
 //!
@@ -14,8 +14,8 @@
 use std::collections::VecDeque;
 
 use ruviform_ui::{
-    CloseDecision, HostEvent, MonitorInfo, RoutedEvent, UiError, WindowConfig, WindowEvent,
-    WindowHandle, WindowId,
+    CloseDecision, DriverEvent, Event, LogicalSize, MonitorInfo, RoutedEvent, UiError,
+    WindowCapabilities, WindowDriver, WindowId, WindowLifecycle, WindowSpec,
 };
 
 use crate::proto::{Direction, Receipt, ReceiptPage};
@@ -73,22 +73,23 @@ impl Journal {
         seq
     }
 
-    /// Records an inbound [`WindowEvent`] (host→app delivery).
-    pub fn record_in(&mut self, ev: &WindowEvent) -> u64 {
+    /// Records an inbound [`DriverEvent`] (host→app delivery).
+    pub fn record_in(&mut self, ev: &DriverEvent) -> u64 {
         match ev {
-            WindowEvent::Windowed { window, event } => {
-                let (kind, bytes) = host_event_kind(event);
+            DriverEvent::Windowed { window, event } => {
+                let (kind, bytes) = lifecycle_kind(event);
                 self.record(Direction::In, Some(*window), kind, bytes)
             }
-            WindowEvent::Tick => self.record(Direction::In, None, "tick", 0),
+            DriverEvent::Tick => self.record(Direction::In, None, "tick", 0),
             _ => self.record(Direction::In, None, "other", 0),
         }
     }
 
-    /// Records an inbound message suppressed by the `ipc_disconnect`
-    /// fault — the drop is observable, never silent.
-    pub fn record_suppressed(&mut self, window: WindowId, event: &HostEvent) -> u64 {
-        let (_, bytes) = host_event_kind(event);
+    /// Records an inbound payload suppressed by the `ipc_disconnect`
+    /// fault — the drop is observable, never silent. `bytes` is the
+    /// suppressed payload size the caller measured (raw body length
+    /// or serialized intent length).
+    pub fn record_suppressed(&mut self, window: WindowId, bytes: usize) -> u64 {
         self.record(Direction::In, Some(window), "suppressed", bytes)
     }
 
@@ -125,64 +126,67 @@ impl Journal {
     }
 }
 
-/// Maps a [`HostEvent`] to its receipt kind + payload size.
-fn host_event_kind(event: &HostEvent) -> (&'static str, usize) {
+/// Maps a [`WindowLifecycle`] to its receipt kind + payload size.
+/// `Action` reports the serialized intent length — the byte-size
+/// equivalent of the legacy `Message` body's length.
+fn lifecycle_kind(event: &WindowLifecycle) -> (&'static str, usize) {
     match event {
-        HostEvent::Ready { .. } => ("ready", 0),
-        HostEvent::Message(body) => ("message", body.len()),
-        HostEvent::Resized { .. } => ("resized", 0),
-        HostEvent::Focused(_) => ("focused", 0),
-        HostEvent::ScaleFactorChanged { .. } => ("scale_factor_changed", 0),
-        HostEvent::Moved { .. } => ("moved", 0),
-        HostEvent::CloseRequested => ("close_requested", 0),
-        HostEvent::Destroyed => ("destroyed", 0),
-        HostEvent::Tick => ("tick", 0),
+        WindowLifecycle::Created => ("created", 0),
+        WindowLifecycle::Ready => ("ready", 0),
+        WindowLifecycle::Action(intent) => (
+            "message",
+            serde_json::to_string(intent).map_or(0, |s| s.len()),
+        ),
+        WindowLifecycle::Resized { .. } => ("resized", 0),
+        WindowLifecycle::Moved { .. } => ("moved", 0),
+        WindowLifecycle::Focused(_) => ("focused", 0),
+        WindowLifecycle::ScaleFactorChanged { .. } => ("scale_factor_changed", 0),
+        WindowLifecycle::CloseRequested => ("close_requested", 0),
+        WindowLifecycle::Destroyed => ("destroyed", 0),
         _ => ("other", 0),
     }
 }
 
-/// [`WindowHandle`] decorator recording app→host traffic into a
+/// [`WindowDriver`] decorator recording app→host traffic into a
 /// [`Journal`] before forwarding — the read-only tee that makes the
 /// out direction observable on any host (fake or real).
 ///
-/// Usage inside `on_event`: wrap the supplied handle,
-/// `let mut jh = JournalHandle::new(wh, &mut journal);`, then call
-/// host ops on `jh`.
+/// Usage inside `on_event`: wrap the supplied driver,
+/// `let mut jh = JournalHandle::new(drv, &mut journal);`, then call
+/// driver ops on `jh`.
 pub struct JournalHandle<'a> {
-    inner: &'a mut dyn WindowHandle,
+    inner: &'a mut dyn WindowDriver,
     journal: &'a mut Journal,
 }
 
 impl<'a> JournalHandle<'a> {
     /// Wraps `inner` so every call is journaled then forwarded.
-    pub fn new(inner: &'a mut dyn WindowHandle, journal: &'a mut Journal) -> Self {
+    pub fn new(inner: &'a mut dyn WindowDriver, journal: &'a mut Journal) -> Self {
         Self { inner, journal }
     }
 }
 
-impl WindowHandle for JournalHandle<'_> {
-    fn eval(&mut self, window: WindowId, script: &str) {
-        self.journal
-            .record(Direction::Out, Some(window), "eval", script.len());
-        self.inner.eval(window, script);
+impl WindowDriver for JournalHandle<'_> {
+    fn capabilities(&self) -> WindowCapabilities {
+        self.inner.capabilities()
     }
 
-    fn resize(&mut self, window: WindowId, width: u32, height: u32) -> Result<(), UiError> {
+    fn create_window(&mut self, spec: &WindowSpec) -> Result<WindowId, UiError> {
+        self.journal
+            .record(Direction::Out, None, "create_window", 0);
+        self.inner.create_window(spec)
+    }
+
+    fn resize(&mut self, window: WindowId, size: LogicalSize) -> Result<(), UiError> {
         self.journal
             .record(Direction::Out, Some(window), "resize", 0);
-        self.inner.resize(window, width, height)
+        self.inner.resize(window, size)
     }
 
     fn focus(&mut self, window: WindowId, focused: bool) -> Result<(), UiError> {
         self.journal
             .record(Direction::Out, Some(window), "focus", 0);
         self.inner.focus(window, focused)
-    }
-
-    fn create_window(&mut self, config: &WindowConfig) -> Result<WindowId, UiError> {
-        self.journal
-            .record(Direction::Out, None, "create_window", 0);
-        self.inner.create_window(config)
     }
 
     fn request_close(&mut self, window: WindowId) {
@@ -203,6 +207,13 @@ impl WindowHandle for JournalHandle<'_> {
         self.inner.destroy_window(window)
     }
 
+    fn post_event(&mut self, window: WindowId, event: &Event) {
+        let bytes = serde_json::to_string(event).map_or(0, |s| s.len());
+        self.journal
+            .record(Direction::Out, Some(window), "post_event", bytes);
+        self.inner.post_event(window, event);
+    }
+
     fn windows(&self) -> Vec<WindowId> {
         self.inner.windows()
     }
@@ -217,11 +228,11 @@ impl WindowHandle for JournalHandle<'_> {
     }
 }
 
-/// Convenience: deliver one [`RoutedEvent`] the way apps do —
-/// serialize with [`ruviform_ui::dispatch_script`] and `eval` to its
-/// destination window (or record unrouted events without delivery).
-pub fn deliver_routed(wh: &mut dyn WindowHandle, re: &RoutedEvent) {
+/// Convenience: deliver one [`RoutedEvent`] the way neutral apps do —
+/// `post_event` the typed payload to its destination window (unrouted
+/// events are dropped, matching the legacy `eval` path).
+pub fn deliver_routed(drv: &mut dyn WindowDriver, re: &RoutedEvent) {
     if let Some(window) = re.window {
-        wh.eval(window, &ruviform_ui::dispatch_script(&re.event));
+        drv.post_event(window, &re.event);
     }
 }

@@ -137,6 +137,12 @@ impl FakeDriver {
         self.destroyed.clone()
     }
 
+    /// Whether `window` has reported `Ready` per fake state.
+    #[must_use]
+    pub fn ready(&self, window: WindowId) -> bool {
+        self.windows.get(&window).is_some_and(|w| w.ready)
+    }
+
     /// Whether `window` has an unanswered `CloseRequested`.
     #[must_use]
     pub fn close_pending(&self, window: WindowId) -> bool {

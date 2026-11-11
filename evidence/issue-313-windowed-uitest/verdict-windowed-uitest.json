@@ -1,0 +1,103 @@
+{
+  "schema": "rf313-windowed-uitest/v1",
+  "issue": 313,
+  "slice": "S2",
+  "lane": "windows-gpui-uitest",
+  "driver": "gpui-windowed",
+  "backend": "gpui",
+  "verdict": "pass",
+  "environment": {
+    "os": "windows",
+    "arch": "x86_64",
+    "capture_backend": true,
+    "desktop_session": true
+  },
+  "ops": {
+    "hello": {
+      "verdict": "pass",
+      "detail": {
+        "backend": "gpui-windowed",
+        "screenshot_claim": true,
+        "denied": {
+          "input_injection": false,
+          "dom_access": false
+        }
+      }
+    },
+    "windows": {
+      "verdict": "pass",
+      "detail": {
+        "windows": [
+          1
+        ]
+      }
+    },
+    "fixture.prepare": {
+      "verdict": "pass",
+      "detail": {
+        "created": 1
+      }
+    },
+    "receipts": {
+      "verdict": "pass",
+      "detail": {
+        "created": true,
+        "ready": true
+      }
+    },
+    "clock.advance": {
+      "verdict": "pass",
+      "detail": {
+        "tick": true,
+        "undeclared_code": "unavailable"
+      }
+    },
+    "ipc_emit": {
+      "verdict": "pass",
+      "detail": {
+        "message_receipt": true
+      }
+    },
+    "fault.set": {
+      "verdict": "pass",
+      "detail": {
+        "ipc_down": true,
+        "suppressed": true,
+        "notice": true
+      }
+    },
+    "fault.window_crash": {
+      "verdict": "pass",
+      "detail": {
+        "destroyed": true,
+        "notice": true
+      }
+    },
+    "screenshot": {
+      "verdict": "pass",
+      "detail": {
+        "format": "rgba-raw",
+        "width": 320,
+        "height": 240,
+        "decoded_bytes": 307200
+      }
+    },
+    "request_close": {
+      "verdict": "pass",
+      "detail": {
+        "veto_kept": true,
+        "default_approve_destroyed": true,
+        "error": ""
+      }
+    },
+    "shutdown": {
+      "verdict": "pass",
+      "detail": {
+        "windows_open": 2,
+        "windows_closed": 2,
+        "open_before": 2,
+        "exited": true
+      }
+    }
+  }
+}

@@ -1,8 +1,10 @@
-//! App-side traits the test port delegates to (Issue #312).
+//! App-side traits the test port delegates to (Issue #312, neutral
+//! re-expression in Issue #313 slice S2).
 //!
 //! - [`TestApp`]: the consumer's normal event wiring — exactly what a
-//!   production `on_event` callback does (`UiRuntime` dispatch,
-//!   eval delivery, close policy), plus a `shutdown` cleanup hook.
+//!   production `DriverEvent` handler does (`UiRuntime` dispatch,
+//!   `post_event` delivery, close policy), plus a `shutdown` cleanup
+//!   hook.
 //! - [`FixtureController`]: named, app-registered fixture
 //!   preparation reached through `test.fixture.prepare`. Fixtures
 //!   arrange deterministic state via [`crate::TestIo`] — they never
@@ -10,27 +12,27 @@
 //!
 //! **RT contract:** non-RT only.
 
-use ruviform_ui::{ErrorBody, WindowEvent, WindowHandle};
+use ruviform_ui::{DriverEvent, ErrorBody, WindowDriver};
 use serde_json::Value;
 
 use crate::TestIo;
 use crate::proto::{FixtureReceipt, FixtureSpec, ShutdownMode};
 
-/// The app-under-test's normal host-event wiring.
+/// The app-under-test's normal driver-event wiring.
 ///
-/// A consumer's production `on_event` does the same three things:
-/// normalize → dispatch → deliver. Implemented once here so the test
-/// host (fake or real) drives identical semantics.
+/// A consumer's production `DriverEvent` handler does the same three
+/// things: normalize → dispatch → deliver. Implemented once here so
+/// the test host (fake or real) drives identical semantics.
 pub trait TestApp {
-    /// Handles one [`WindowEvent`] with the host handle — the same
-    /// call a real `run_multi`/`run` `on_event` receives.
-    fn on_event(&mut self, wev: WindowEvent, wh: &mut dyn WindowHandle);
+    /// Handles one [`DriverEvent`] with the driver — the same call a
+    /// real `run`/`run_multi` handler receives.
+    fn on_event(&mut self, dev: DriverEvent, drv: &mut dyn WindowDriver);
 
     /// App-side cleanup on `test.shutdown`; the returned payload is
     /// reported verbatim as [`crate::CleanupReport::app`].
     ///
     /// Default: no app work (empty detail).
-    fn shutdown(&mut self, _mode: ShutdownMode, _wh: &mut dyn WindowHandle) -> Value {
+    fn shutdown(&mut self, _mode: ShutdownMode, _drv: &mut dyn WindowDriver) -> Value {
         Value::Null
     }
 }

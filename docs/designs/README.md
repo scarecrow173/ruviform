@@ -213,3 +213,4 @@ Directory: `docs/designs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | superseded | [music-time-model.md](./music-time-model.md) |
+| DESIGN-34WIND0WEDTESTI0S2DE | Issue #313 — windowed `TestIo` 設計（neutral 語彙統一 + GPUI adapter） | approved | [issue-313-windowed-testio-design.md](./issue-313-windowed-testio-design.md) |

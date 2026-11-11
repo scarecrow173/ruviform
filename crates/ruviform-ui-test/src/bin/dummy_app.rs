@@ -1,6 +1,7 @@
-//! `dummy_app` — the Issue #312 dummy consumer (RF-GT-03 acceptance).
+//! `dummy_app` — the Issue #312 dummy consumer (RF-GT-03 acceptance),
+//! on the neutral driver vocabulary (Issue #313 slice S2).
 //!
-//! A headless app-under-test composing `UiRuntime` + `FakeHost`
+//! A headless app-under-test composing `UiRuntime` + `FakeDriver`
 //! through [`HeadlessIo`], serving `rvf.uitest.v1` via
 //! [`serve_from_env`]. It is the showcase stand-in for the acceptance
 //! flow: test-mode start → capability query → fixture → observation →
@@ -19,8 +20,8 @@ use std::process::ExitCode;
 use std::sync::{Arc, Mutex};
 
 use ruviform_ui::{
-    CloseDecision, DataRegistry, ErrorBody, HostEvent, UiRuntime, WindowConfig, WindowEvent,
-    WindowHandle, codes,
+    CloseDecision, DataRegistry, DriverEvent, ErrorBody, Event, LifecycleState, RoutedEvent,
+    UiRuntime, WindowDriver, WindowLifecycle, WindowSpec, codes,
 };
 use ruviform_ui_test::{
     AgentConfig, AppMeta, FixtureController, FixtureReceipt, FixtureSpec, HeadlessIo, ReadyState,
@@ -61,8 +62,8 @@ struct DummyState {
     policy: ClosePolicy,
 }
 
-/// The dummy consumer's normal host wiring: normalize → dispatch →
-/// deliver, exactly what a production `on_event` closure does.
+/// The dummy consumer's normal driver wiring: normalize → dispatch →
+/// deliver, exactly what a production `DriverEvent` handler does.
 struct DummyApp {
     runtime: UiRuntime,
     state: Arc<Mutex<DummyState>>,
@@ -79,10 +80,15 @@ impl DummyApp {
 }
 
 impl TestApp for DummyApp {
-    fn on_event(&mut self, wev: WindowEvent, wh: &mut dyn WindowHandle) {
-        match wev {
-            WindowEvent::Windowed { window, event } => {
-                if matches!(event, HostEvent::CloseRequested) {
+    fn on_event(&mut self, dev: DriverEvent, drv: &mut dyn WindowDriver) {
+        match dev {
+            DriverEvent::Windowed { window, event } => match event {
+                WindowLifecycle::Action(intent) => {
+                    for re in self.runtime.dispatch_window_intent(window, intent) {
+                        deliver_routed(drv, &re);
+                    }
+                }
+                WindowLifecycle::CloseRequested => {
                     let decision = match self.state.lock().unwrap().policy {
                         ClosePolicy::Unanswered => None,
                         ClosePolicy::Approve => Some(CloseDecision::Approve),
@@ -90,21 +96,28 @@ impl TestApp for DummyApp {
                         ClosePolicy::Defer => Some(CloseDecision::Defer),
                     };
                     if let Some(d) = decision {
-                        let _ = wh.respond_close(window, d);
+                        let _ = drv.respond_close(window, d);
                     }
+                    // The same `closing` lifecycle event the legacy
+                    // `handle_window` path emitted for CloseRequested.
+                    deliver_routed(
+                        drv,
+                        &RoutedEvent {
+                            window: Some(window),
+                            event: Event::lifecycle(LifecycleState::Closing),
+                        },
+                    );
                 }
-                if matches!(event, HostEvent::Destroyed) {
+                WindowLifecycle::Destroyed => {
                     // The app's own window-job policy: a dead window's
                     // jobs are cancelled by the consumer, never the host.
                     self.runtime.cancel_window_jobs(window);
                 }
-                for re in self.runtime.handle_window(window, event) {
-                    deliver_routed(wh, &re);
-                }
-            }
-            WindowEvent::Tick => {
+                _ => {}
+            },
+            DriverEvent::Tick => {
                 for re in self.runtime.drain_jobs_routed() {
-                    deliver_routed(wh, &re);
+                    deliver_routed(drv, &re);
                 }
             }
             _ => {}
@@ -112,10 +125,10 @@ impl TestApp for DummyApp {
     }
 
     /// Cleanup accounting reported verbatim as `CleanupReport::app`.
-    fn shutdown(&mut self, _mode: ShutdownMode, wh: &mut dyn WindowHandle) -> Value {
+    fn shutdown(&mut self, _mode: ShutdownMode, drv: &mut dyn WindowDriver) -> Value {
         json!({
             "jobs_running": self.runtime.has_running_jobs(),
-            "windows_open": wh.windows().len(),
+            "windows_open": drv.windows().len(),
         })
     }
 }
@@ -151,20 +164,16 @@ impl FixtureController for WindowsFixture {
             .unwrap_or(true);
         let mut created = Vec::new();
         for _ in 0..count {
-            let id = io.create_window(&WindowConfig {
+            let id = io.create_window(&WindowSpec {
                 title: "dummy".to_string(),
-                width: 800,
-                height: 600,
+                logical_size: ruviform_ui::LogicalSize::new(800, 600),
                 position: None,
-                url: "rvf://app/index.html".to_string(),
-                devtools: false,
+                resizable: true,
             })?;
             if ready {
-                io.emit(WindowEvent::Windowed {
+                io.emit(DriverEvent::Windowed {
                     window: id,
-                    event: HostEvent::Ready {
-                        url: "rvf://app/index.html".to_string(),
-                    },
+                    event: WindowLifecycle::Ready,
                 });
             }
             created.push(id.get());
@@ -188,10 +197,10 @@ impl FixtureController for WindowsFixture {
     }
 }
 
-/// The `ipc_emit` fixture: emits one `HostEvent::Message` into
-/// `params.window` — the inbound path an `ipc_disconnect` fault
-/// suppresses. The body goes through the runtime's normal intent
-/// parse, so malformed bodies produce the normal error event.
+/// The `ipc_emit` fixture: injects one raw IPC body into
+/// `params.window`'s inbound channel — the path an `ipc_disconnect`
+/// fault suppresses pre-decode. Valid bodies become `Action` events;
+/// malformed bodies are answered driver-side with an `Event::error`.
 struct IpcEmitFixture;
 
 impl FixtureController for IpcEmitFixture {
@@ -222,10 +231,7 @@ impl FixtureController for IpcEmitFixture {
             .and_then(Value::as_str)
             .unwrap_or("{}")
             .to_string();
-        io.emit(WindowEvent::Windowed {
-            window,
-            event: HostEvent::Message(body),
-        });
+        io.emit_ipc_body(window, &body);
         Ok(FixtureReceipt {
             name: spec.name.clone(),
             applied: json!({ "window": raw }),
@@ -264,12 +270,10 @@ fn main() -> ExitCode {
         }
     }
     for _ in 0..windows {
-        if let Ok(id) = io.create_window(&WindowConfig::default()) {
-            io.emit(WindowEvent::Windowed {
+        if let Ok(id) = io.create_window(&WindowSpec::default()) {
+            io.emit(DriverEvent::Windowed {
                 window: id,
-                event: HostEvent::Ready {
-                    url: "rvf://app/index.html".to_string(),
-                },
+                event: WindowLifecycle::Ready,
             });
         }
     }
