@@ -1,0 +1,18 @@
+[check-linux] $ cargo check --target x86_64-unknown-linux-gnu -p ruviform-io-file -p ruviform-io-archive --all-targets && cargo clippy --target x86_64-unknown-linux-gnu -p ruviform-io-file -p ruviform-io-archive --all-targets -- -D warnings
+   Compiling libc v0.2.191
+   Compiling crc32fast v1.5.5
+    Checking adler2 v2.0.1
+    Checking simd-adler32 v0.3.10
+    Checking cfg-if v1.0.5
+    Checking tinyvec v1.13.3
+    Checking miniz_oxide v0.9.1
+    Checking unicode-normalization v0.1.26
+    Checking flate2 v1.1.11
+    Checking ruviform-io-compression v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf288-gaterun\crates\ruviform-io-compression)
+    Checking ruviform-io-file v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf288-gaterun\crates\ruviform-io-file)
+    Checking ruviform-io-archive v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf288-gaterun\crates\ruviform-io-archive)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.05s
+    Checking ruviform-io-file v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf288-gaterun\crates\ruviform-io-file)
+    Checking ruviform-io-compression v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf288-gaterun\crates\ruviform-io-compression)
+    Checking ruviform-io-archive v0.1.0 (C:\Users\akiyoshi\orca\workspaces\ruviform\rf288-gaterun\crates\ruviform-io-archive)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.97s

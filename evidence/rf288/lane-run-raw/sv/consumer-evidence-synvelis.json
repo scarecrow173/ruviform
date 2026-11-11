@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "kind": "consumer-verify-evidence",
+  "contract": "consumer-verify-tuple/v1",
+  "run": {
+    "workflow": "consumer-verify",
+    "runId": "42937524742",
+    "runAttempt": "1",
+    "runUrl": "https://github.com/scarecrow173/ruviform/actions/runs/42937524742",
+    "event": "workflow_dispatch",
+    "repository": "scarecrow173/ruviform"
+  },
+  "candidate": {
+    "ruviformRev": "9865cd57491f3f39061212a85f81f9ebce731bde"
+  },
+  "consumer": {
+    "name": "synvelis",
+    "repo": "scarecrow173/synvelis",
+    "requestedRef": "main",
+    "resolvedSha": "fb069c93426599a7b35c3affaafe13d1c1b55964",
+    "expectedSha": "fb069c93426599a7b35c3affaafe13d1c1b55964",
+    "shaMatch": true
+  },
+  "accessMode": "anonymous",
+  "tuple": {
+    "ruviformRev": "9865cd57491f3f39061212a85f81f9ebce731bde",
+    "consumerResolvedSha": "fb069c93426599a7b35c3affaafe13d1c1b55964",
+    "contract": "consumer-verify-tuple/v1"
+  },
+  "lanes": [
+    {
+      "name": "dep access probe (url.insteadOf + ls-remote)",
+      "command": "git config + ls-remote",
+      "feature": "access",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "manifest rev pin (sed 正規化)",
+      "command": "sed -i -E Cargo.toml",
+      "feature": "workspace",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "manifest rev pin + cargo fetch (lockfile re-resolve)",
+      "command": "sed + mise exec -- cargo fetch",
+      "feature": "workspace",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run check-ruviform-rev (lock 単一 SHA)",
+      "command": "mise run check-ruviform-rev",
+      "feature": "workspace",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run check",
+      "command": "mise run check",
+      "feature": "workspace",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run test (LFS fixtures)",
+      "command": "git lfs pull && mise run test",
+      "feature": "workspace",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run test-rt (RT no-alloc)",
+      "command": "mise run test-rt",
+      "feature": "rt",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run check-headless-deps",
+      "command": "mise run check-headless-deps",
+      "feature": "headless",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run sync-ui-deps (vendor 再生成)",
+      "command": "mise run sync-ui-deps",
+      "feature": "ui vendor",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run setup-ui (npm ci)",
+      "command": "mise run setup-ui",
+      "feature": "ui headless",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run check-ui (typecheck+vendor)",
+      "command": "mise run check-ui",
+      "feature": "ui headless",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run test-ui (vitest/happy-dom)",
+      "command": "mise run test-ui",
+      "feature": "ui headless",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run build-ui (vite+manifest)",
+      "command": "mise run build-ui",
+      "feature": "ui headless",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "check-ruviform-rev --require-vendor (lock+REV+manifest)",
+      "command": "node tools/check-ruviform-rev.mjs --require-vendor",
+      "feature": "ui vendor",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "extra tasks (aggregate)",
+      "command": "mise run <synvelis_extra_tasks>",
+      "feature": "extra dispatch input",
+      "os": "ubuntu-latest",
+      "outcome": "skipped",
+      "reason": null
+    },
+    {
+      "name": "GUI-CONTRACT boundary guard @ ruviform 9865cd57491f3f39061212a85f81f9ebce731bde",
+      "command": "mise run check-ui-driver-boundary",
+      "feature": "ui contract",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "GUI-SEMANTIC fake driver contract @ ruviform 9865cd57491f3f39061212a85f81f9ebce731bde",
+      "command": "mise run test-ui-driver-contract",
+      "feature": "ui semantic",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "GUI-CONTRACT consumer-side (通常 View/Domain headless)",
+      "command": "-",
+      "feature": "ui contract",
+      "os": "ubuntu-latest",
+      "outcome": "not_run",
+      "reason": "SV #175-177 が Owner — Consumer 通常 View/Domain headless fixture 未実装。実装後に extra_tasks/専用 lane で再実行"
+    },
+    {
+      "name": "GUI visual/OS + 実 window lanes",
+      "command": "-",
+      "feature": "real-window host",
+      "os": "ubuntu-latest",
+      "outcome": "unsupported",
+      "reason": "RF #313/#314 + SV #175-177 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
+    },
+    {
+      "name": "PLUGIN-NATIVE-DOCK (実 plugin binary)",
+      "command": "-",
+      "feature": "real-plugin",
+      "os": "ubuntu-latest",
+      "outcome": "unsupported",
+      "reason": "RF #388/#389 + SV #176 — Floating/Generic fallback のみの成功は採用 Pass にしない"
+    },
+    {
+      "name": "macOS/実 OS lanes",
+      "command": "-",
+      "feature": "os-specific",
+      "os": "ubuntu-latest",
+      "outcome": "unsupported",
+      "reason": "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
+    }
+  ],
+  "status": "pass",
+  "statusReason": null,
+  "coverage": {
+    "pass": 16,
+    "fail": 0,
+    "notRun": 1,
+    "unsupported": 3,
+    "skipped": 1
+  },
+  "generatedAt": "2026-11-11T01:20:13.959Z"
+}

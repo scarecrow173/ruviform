@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "kind": "consumer-verify-evidence",
+  "contract": "consumer-verify-tuple/v1",
+  "run": {
+    "workflow": "consumer-verify",
+    "runId": "42937524742",
+    "runAttempt": "1",
+    "runUrl": "https://github.com/scarecrow173/ruviform/actions/runs/42937524742",
+    "event": "workflow_dispatch",
+    "repository": "scarecrow173/ruviform"
+  },
+  "candidate": {
+    "ruviformRev": "9865cd57491f3f39061212a85f81f9ebce731bde"
+  },
+  "consumer": {
+    "name": "audiolens",
+    "repo": "scarecrow173/audio-lens",
+    "requestedRef": "main",
+    "resolvedSha": "9c25df9958a54c1fed85280bcef6fa63a4ab7372",
+    "expectedSha": "9c25df9958a54c1fed85280bcef6fa63a4ab7372",
+    "shaMatch": true
+  },
+  "accessMode": "anonymous",
+  "tuple": {
+    "ruviformRev": "9865cd57491f3f39061212a85f81f9ebce731bde",
+    "consumerResolvedSha": "9c25df9958a54c1fed85280bcef6fa63a4ab7372",
+    "contract": "consumer-verify-tuple/v1"
+  },
+  "lanes": [
+    {
+      "name": "dep access probe (url.insteadOf + ls-remote)",
+      "command": "git config + ls-remote",
+      "feature": "access",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "manifest rev pin (sed 正規化)",
+      "command": "sed -i -E Cargo.toml",
+      "feature": "workspace",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "manifest rev pin + cargo fetch (lockfile re-resolve)",
+      "command": "sed + mise exec -- cargo fetch",
+      "feature": "workspace",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run check-ruviform-lock",
+      "command": "mise run check-ruviform-lock",
+      "feature": "workspace",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run check-ci",
+      "command": "mise run check-ci",
+      "feature": "workspace",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "cargo build -p al-cli --profile ci (smoke)",
+      "command": "cargo build -p al-cli --profile ci",
+      "feature": "al-cli headless",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run check-cli-headless (smoke)",
+      "command": "mise run check-cli-headless",
+      "feature": "al-cli headless",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run test-ci (LFS fixtures)",
+      "command": "git lfs pull && mise run test-ci",
+      "feature": "workspace",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run sync-ui-deps (vendor 再生成)",
+      "command": "mise run sync-ui-deps",
+      "feature": "ui vendor",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "check-ruviform-rev --require-vendor (lock+REV)",
+      "command": "node tools/check-ruviform-rev.mjs --require-vendor",
+      "feature": "ui vendor",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run setup-ui (npm ci)",
+      "command": "mise run setup-ui",
+      "feature": "ui headless",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run check-ui (typecheck+vendor)",
+      "command": "mise run check-ui",
+      "feature": "ui headless",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "mise run test-ui (happy-dom)",
+      "command": "mise run test-ui",
+      "feature": "ui headless",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "extra tasks (aggregate)",
+      "command": "mise run <audiolens_extra_tasks>",
+      "feature": "extra dispatch input",
+      "os": "ubuntu-latest",
+      "outcome": "skipped",
+      "reason": null
+    },
+    {
+      "name": "GUI-CONTRACT boundary guard @ ruviform 9865cd57491f3f39061212a85f81f9ebce731bde",
+      "command": "mise run check-ui-driver-boundary",
+      "feature": "ui contract",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "GUI-SEMANTIC fake driver contract @ ruviform 9865cd57491f3f39061212a85f81f9ebce731bde",
+      "command": "mise run test-ui-driver-contract",
+      "feature": "ui semantic",
+      "os": "ubuntu-latest",
+      "outcome": "pass",
+      "reason": null
+    },
+    {
+      "name": "GUI-CONTRACT consumer-side (通常 View/Domain headless)",
+      "command": "-",
+      "feature": "ui contract",
+      "os": "ubuntu-latest",
+      "outcome": "not_run",
+      "reason": "AL #166/#127 が Owner — Consumer 通常 View/Domain headless fixture 未実装。実装後に extra_tasks/専用 lane で再実行"
+    },
+    {
+      "name": "GUI visual/OS + 実 window lanes",
+      "command": "-",
+      "feature": "real-window host",
+      "os": "ubuntu-latest",
+      "outcome": "unsupported",
+      "reason": "RF #313/#314 + AL #166/#127 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
+    },
+    {
+      "name": "macOS/実 OS lanes",
+      "command": "-",
+      "feature": "os-specific",
+      "os": "ubuntu-latest",
+      "outcome": "unsupported",
+      "reason": "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
+    }
+  ],
+  "status": "pass",
+  "statusReason": null,
+  "coverage": {
+    "pass": 15,
+    "fail": 0,
+    "notRun": 1,
+    "unsupported": 2,
+    "skipped": 1
+  },
+  "generatedAt": "2026-11-11T01:19:18.452Z"
+}
