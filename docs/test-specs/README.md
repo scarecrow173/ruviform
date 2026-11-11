@@ -217,3 +217,4 @@ Directory: `docs/test-specs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TSPEC-034WvK9mNqR2sTxYcAbEfG | consumer-impact-check workflow の PR 分類機械検査（記入検査・unknown 解消先・draft 除外） | superseded | [consumer-impact-check-pr-classification.md](./consumer-impact-check-pr-classification.md) |
+| TSPEC-34WIND0WEDTESTI0S2TS | Issue #313 — windowed `TestIo` 検証契約（slice S2） | approved | [issue-313-windowed-testio.md](./issue-313-windowed-testio.md) |

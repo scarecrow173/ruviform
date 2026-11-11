@@ -209,3 +209,4 @@ Directory: `docs/specs`
 | SPEC-034UetYOiYEThOr1lvUH8t | Issue #478 Fader/Knob 縦寸法契約 — h_full 兄弟押し出しのレイアウト判断 | implemented | [issue-478-fader-knob-height-contract.md](./issue-478-fader-knob-height-contract.md) |
 | SPEC-034JceNZQvAawWwMH4ct91 | 時間型拡張（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針） | implemented | [time-type-extension-framerate-timecode-rounding.md](./time-type-extension-framerate-timecode-rounding.md) |
 | SPEC-034N3JBtBP4dPi8ob9HwDV | video-proc RT 検証レーンへの assert_no_alloc 適用（Issue #126） | implemented | [video-proc-rt-verification-lane.md](./video-proc-rt-verification-lane.md) |
+| SPEC-034WIND0WEDTESTI0S2SP | Issue #313 — windowed `TestIo` / `rvf.uitest.v1` 配線（GPUI backend、slice S2） | approved | [issue-313-windowed-testio.md](./issue-313-windowed-testio.md) |
