@@ -1,7 +1,7 @@
 ---
 id: "TASK-034VEU3ZiDLQ7qcsk69rl0"
 type: "task"
-status: "in-progress"
+status: "completed"
 title: "Issue #253 unsupported 計数透過 + 実機 lane scaffold（bridge counter + mock + tests + E2E）"
 created: "2026-11-11"
 updated: "2026-11-11"
@@ -50,33 +50,35 @@ Issue #253 残存受入の 2 件を実装する: (a) `MidiReadStats.
 unsupported` の bridge 計数透過（先行 2 IR の「別 slice」ギャップ
 解消）、(b) 実デバイス/opt-in 検証 lane の scaffold（`#[ignore]`
 E2E 全経路 + evidence）。`mise.toml` canonical lane 登録は別
-Worker 占有のため対象外 — 暫定入口を IR/README に記録する。
+Worker 占有のため対象外だった — 暫定入口を IR/README に記録し、
+後続 slice `chore/253-midi-real-device-lane` で
+`test-midi-real-device` として登録済み（Notes 参照）。
 
-- [ ] T1 `mock.rs`: `PortState.unsupported` +
+- [x] T1 `mock.rs`: `PortState.unsupported` +
       `MockPort::inject_unsupported` + `MockInput::read` の
       `with_unsupported` 返却 + unit test（UT-01/02）。
-- [ ] T2 `input.rs`/`status.rs`: `PumpStats::backend_unsupported`・
+- [x] T2 `input.rs`/`status.rs`: `PumpStats::backend_unsupported`・
       `InputTx::unsupported_backend` 累積+getter・
       `InputStageCounters::unsupported_backend` + `read` 累積・
       `NodeStatus::input_unsupported_backend` mirror +
       `#[cfg(test)]` mirror test（ST/TX/NS）。
-- [ ] T2 `tests/midi_delivery.rs` + `tests/midi_wiring.rs`:
+- [x] T2 `tests/midi_delivery.rs` + `tests/midi_wiring.rs`:
       `ScriptedInput.unsupported` 拡張と deterministic 透過 test
       （ST-01/02・TX-01/02/03）。
-- [ ] T3 `ruviform-midi-device/tests/ports.rs`: `#[ignore]` E2E
+- [x] T3 `ruviform-midi-device/tests/ports.rs`: `#[ignore]` E2E
       拡張（enumerate→skip→open→複数 read→stamp/dropped/
       unsupported 観測→close→`StreamInvalidated`）（RL-01/02/03）。
-- [ ] T3 bridge `Cargo.toml` dev-dep `ruviform-midi-device` +
+- [x] T3 bridge `Cargo.toml` dev-dep `ruviform-midi-device` +
       `tests/midi_wiring.rs` に `#[ignore]` 実機 E2E
       （`SystemBackend`→`InputTx::pump`→`InputStage`、計数一貫性
       assert + close→`StreamInvalidated`）（RL-01/02/04）。
-- [ ] T3 `crates/ruviform-midi-device/README.md`: opt-in 暫定入口
+- [x] T3 `crates/ruviform-midi-device/README.md`: opt-in 暫定入口
       `cargo test -p ruviform-midi-device -- --ignored` の記録。
-- [ ] T4 `evidence/issue-253-real-midi-lane/`: 実機 lane 実行結果
+- [x] T4 `evidence/issue-253-real-midi-lane/`: 実機 lane 実行結果
       または `NotRun`+理由。暫定入口・canonical lane follow-up
       を IR `docs/impl/ir/issue-253-unsupported-transparency-slice.md`
       に明記。
-- [ ] T4 検証: `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`
+- [x] T4 検証: `mise run fmt-check`/`check`/`lint`/`test`/`test-rt`
       全 Pass + MSRV 補助（`mise exec rust@1.89.0`）+
       review-protocol 実施。
 
@@ -96,8 +98,9 @@ Worker 占有のため対象外 — 暫定入口を IR/README に記録する。
 - 前提実装済み: `ruviform-midi-device`（PR #561）、
   `MidiReadStats::with_unsupported`（同）、`midi_input::mock`（同）、
   `InputTx`/`InputStage`/`NodeStatus` mirror 機構（Issue #188）。
-- ブロッカーなし。`mise.toml` は別 Worker 占有 — canonical lane
-  登録は follow-up 行として残す。
+- ブロッカーなし。`mise.toml` は別 Worker 占有だったため
+  canonical lane 登録は follow-up 行として残した（→ 実施済み:
+  `test-midi-real-device` 登録済み）。
 
 ## Notes
 

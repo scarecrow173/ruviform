@@ -153,7 +153,7 @@ dev-dep と `unsupported_backend()` getter（T2）に依存。
 | `ScriptedInput` field 追加で既存 literal 全滅 | Low | 同ファイル内の構造体 — 全構築箇所を一括更新 |
 | bridge dev-dep による dep cycle | None | midi-device は bridge に依存しない（audio-core/media-core のみ） |
 | 実機 E2E が環境依存で fail | Med | RL-01 で skip/Unsupported を honest 処理。hardware traffic は assert しない |
-| `mise.toml` 不可により canonical lane 未登録 | Accepted | 暫定入口を IR/README に明記 + follow-up 行 |
+| `mise.toml` 不可により canonical lane 未登録 | Accepted | 暫定入口を IR/README に明記 + follow-up 行（→ 解消: `chore/253-midi-real-device-lane` slice で `test-midi-real-device` 登録済み） |
 
 ## Rollback Strategy
 
@@ -168,6 +168,6 @@ dev-dep と `unsupported_backend()` getter（T2）に依存。
 | --- | --- |
 | unsupported 計数透過 | UT/ST/TX/NS deterministic test + `mise run test` |
 | opt-in 実機経路 | `cargo test -p ruviform-midi-device -- --ignored` / `-p ruviform-audio-plugin-bridge -- --ignored` + evidence |
-| canonical lane 未登録の明示 | IR + README + PR 本文の follow-up 行 |
+| canonical lane 未登録の明示 | IR + README + PR 本文の follow-up 行（→ lane 登録済み: `test-midi-real-device`） |
 | 既存 lane 非回帰 | `mise run fmt-check`/`check`/`lint`/`test`/`test-rt` |
 | 対象外の明示 | spec/IR の Out of Scope + PR 本文 |

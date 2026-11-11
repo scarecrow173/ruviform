@@ -89,7 +89,9 @@ PR #561 の `ruviform-midi-device`（`MidiReadStats.unsupported` を
 
 ### Out of Scope
 
-- `mise.toml` canonical lane 登録（別 Worker 占有）、macOS/Linux
+- `mise.toml` canonical lane 登録（別 Worker 占有のため本設計の
+  対象外 — 後続 slice `chore/253-midi-real-device-lane` で
+  `test-midi-real-device` として登録済み）、macOS/Linux
   backend、実 DAW、`Verified` 昇格、V9-V13、video verb、MIDI2、
   consumer 消費実装、Issue Close。
 
@@ -276,7 +278,8 @@ owner）。`dropped_backend`/`dropped_capacity` と同一の分割。
   別 Worker 占有のため不可。暫定入口（`cargo test -p
   ruviform-midi-device -- --ignored` / `cargo test -p
   ruviform-audio-plugin-bridge -- --ignored`）を docs に記録し、
-  follow-up 行として残す。
+  follow-up 行として残す（→ 実施済み: `chore/253-midi-real-device-lane`
+  slice で `test-midi-real-device` として登録済み）。
 
 ## Test Strategy
 
