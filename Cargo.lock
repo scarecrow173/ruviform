@@ -6859,6 +6859,7 @@ dependencies = [
 name = "ruviform-ui-gpui"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "env_logger",
  "gpui",
  "raw-window-handle",

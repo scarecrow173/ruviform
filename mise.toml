@@ -424,6 +424,20 @@ description = "Run the Issue #313 RealOsPointerOrKeyboard OS-injection scenario 
 env = { RUVIFORM_DRIVER_LAB_EVIDENCE = "evidence/issue-314-real-scenario/driver-lab-evidence.jsonl", RUVIFORM_REAL_OS_INPUT_VERDICT = "evidence/rf313-os-capability-matrix/verdict-real-os-input-windows.json" }
 run = "cargo test -p ruviform-ui-gpui --features real-scenario --test real_window real_os_input"
 
+# Issue #313 RF-GT-04 slice S2 windowed uitest lane (manual): spawns
+# the real GPUI `windowed_test_app` AUT and drives the closed
+# rvf.uitest.v1 op set over stdio — handshake → observation →
+# fixture → clock → fault → screenshot → close → graceful shutdown —
+# writing evidence/issue-313-windowed-uitest/verdict-windowed-uitest.json.
+# No OS input injection — real windows open on the interactive
+# desktop only. `--test-threads=1` is required: parallel AUT spawns
+# would race real window focus. On a host without a desktop session
+# the lane records environment_blocked honestly, never a fake pass.
+[tasks.test-ui-windowed-uitest]
+description = "Run the Issue #313 slice S2 windowed rvf.uitest.v1 lane on the interactive desktop (manual verification — writes evidence/issue-313-windowed-uitest/verdict-windowed-uitest.json; environment_blocked when no desktop session)"
+env = { RVF_WINDOWED_UITEST = "1" }
+run = "cargo test -p ruviform-ui-gpui --features uitest --test windowed_uitest -- --test-threads=1"
+
 [tasks.example-ui-webview-e2e]
 description = "Run the real WebView round-trip check (page load → IPC → event delivery; WebView2 on Windows, manual verification — not a CI lane)"
 run = "cargo run -p ruviform-ui-webview --features webview --example e2e_smoke"

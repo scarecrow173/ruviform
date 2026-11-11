@@ -34,6 +34,17 @@ gpui-test = ["gpui", "gpui/test-support", "dep:ruviform-ui-test"]
 # stubs `capture_raw_parent`, so pixel capture would honestly report
 # `Unsupported` anyway.
 real-scenario = ["gpui", "dep:ruviform-ui-test"]
+# `uitest` enables the Issue #313 slice S2 windowed `TestIo` adapter
+# (`WindowedIo`) and the `windowed_test_app` AUT binary — the
+# `rvf.uitest.v1` control surface over real GPUI windows through the
+# `UiJob` seam (shared with `real-scenario`; the two never coexist in
+# one session). `base64` encodes `Screenshot.data_base64` payloads.
+uitest = ["gpui", "dep:ruviform-ui-test", "dep:base64"]
+
+[[bin]]
+name = "windowed_test_app"
+path = "src/bin/windowed_test_app.rs"
+required-features = ["uitest"]
 
 [dependencies]
 # - ruviform-ui: the port-defining crate this adapter implements.
@@ -49,9 +60,14 @@ ruviform-ui-theme = { path = "../ruviform-ui-theme", optional = true }
 #   Intent `params` payload. Optional: only needed by the render module.
 serde_json = { version = "1", optional = true }
 # - ruviform-ui-test: Issue #464 scenario adapter — `GpuiGuiTest`
-#   implements the driver-neutral `SemanticGuiTest` contract. Optional:
-#   only under `gpui-test` (test-support feature, never production).
+#   implements the driver-neutral `SemanticGuiTest` contract, and the
+#   Issue #313 `uitest` feature's `TestIo` port types. Optional:
+#   only under `gpui-test`/`real-scenario`/`uitest` (test surfaces,
+#   never production).
 ruviform-ui-test = { path = "../ruviform-ui-test", optional = true }
+# - base64: `Screenshot.data_base64` wire encoding for the `uitest`
+#   screenshot op (rgba-raw payloads). Optional: only under `uitest`.
+base64 = { version = "0.22", optional = true }
 # - raw-window-handle: the redemption seam — `Window::window_handle()`
 #   yields the OS parent token the surface adapter wraps into opaque
 #   lease payloads. The raw handle never leaves this adapter.

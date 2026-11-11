@@ -65,6 +65,11 @@ mod gpui_driver {
     /// The `NativeSurfaceSlot` port implementation for this backend
     /// (Issue #388) — slot ledger plus real OS surface containers.
     pub(super) mod surface;
+    /// Windowed [`ruviform_ui_test::TestIo`] adapter (Issue #313
+    /// slice S2) — the control-thread side of `rvf.uitest.v1` over
+    /// real GPUI windows via the [`UiJob`] seam.
+    #[cfg(feature = "uitest")]
+    pub mod windowed_io;
 
     use std::cell::RefCell;
     use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -96,12 +101,13 @@ mod gpui_driver {
 
     /// `Send` job executed inside [`drain`]'s `App` context — the
     /// real-window scenario adapter's command payload (Issue #314
-    /// slice 4). The closure receives the driver's shared state, the
-    /// driver handle, and `App`, so GPUI `Entity`/`Window` handles
-    /// never cross the thread boundary: only this boxed closure's
-    /// *arguments* stay on the UI thread. Wired by
+    /// slice 4) and the windowed `TestIo` control channel (Issue
+    /// #313 slice S2). The closure receives the driver's shared
+    /// state, the driver handle, and `App`, so GPUI `Entity`/`Window`
+    /// handles never cross the thread boundary: only this boxed
+    /// closure's *arguments* stay on the UI thread. Wired by
     /// [`GpuiDriver::set_ui_jobs`].
-    #[cfg(feature = "real-scenario")]
+    #[cfg(any(feature = "real-scenario", feature = "uitest"))]
     type UiJob = Box<dyn FnOnce(&Rc<RefCell<Inner>>, &GpuiDriver, &mut App) + Send>;
 
     /// `u32` logical pixel → gpui `f32` pixel — exact at all
@@ -270,10 +276,11 @@ mod gpui_driver {
         started: bool,
         exited: bool,
         /// Cross-thread UI-job inbox for the real-window scenario
-        /// adapter (Issue #314 slice 4). [`drain`] polls it after the
-        /// queued window ops each pass; `None` outside a
-        /// `real-scenario` session.
-        #[cfg(feature = "real-scenario")]
+        /// adapter (Issue #314 slice 4) and the windowed `TestIo`
+        /// adapter (Issue #313 slice S2). [`drain`] polls it after
+        /// the queued window ops each pass; `None` outside a
+        /// `real-scenario`/`uitest` session.
+        #[cfg(any(feature = "real-scenario", feature = "uitest"))]
         ui_jobs: Option<std::sync::mpsc::Receiver<UiJob>>,
     }
 
@@ -362,7 +369,7 @@ mod gpui_driver {
                 next: 1,
                 started: false,
                 exited: false,
-                #[cfg(feature = "real-scenario")]
+                #[cfg(any(feature = "real-scenario", feature = "uitest"))]
                 ui_jobs: None,
             }));
             Self {
@@ -512,10 +519,11 @@ mod gpui_driver {
         }
 
         /// Installs the cross-thread UI-job inbox [`drain`] polls
-        /// (Issue #314 slice 4) — the real-window scenario adapter's
-        /// command channel. Jobs are `Send` closures executed inside
-        /// `App` context; install before [`Self::run`].
-        #[cfg(feature = "real-scenario")]
+        /// (Issue #314 slice 4 / Issue #313 slice S2) — the real-window
+        /// scenario adapter's and windowed `TestIo`'s command channel.
+        /// Jobs are `Send` closures executed inside `App` context;
+        /// install before [`Self::run`].
+        #[cfg(any(feature = "real-scenario", feature = "uitest"))]
         fn set_ui_jobs(&mut self, rx: std::sync::mpsc::Receiver<UiJob>) {
             self.inner.borrow_mut().ui_jobs = Some(rx);
         }
@@ -1046,16 +1054,16 @@ mod gpui_driver {
         // Cross-thread scenario jobs run after the queued window ops
         // so they observe post-op state (a `Create` applied this pass
         // is visible to a `ResolveTarget` job in the same pass).
-        #[cfg(feature = "real-scenario")]
+        #[cfg(any(feature = "real-scenario", feature = "uitest"))]
         drain_ui_jobs(inner, driver, cx);
     }
 
     /// Polls the [`GpuiDriver::set_ui_jobs`] receiver and runs every
-    /// queued job inside `App` context — the `real-scenario`
-    /// adapter's only legal entity seam (Issue #314 slice 4).
-    /// Collected before execution so a job may borrow `inner`
-    /// freely.
-    #[cfg(feature = "real-scenario")]
+    /// queued job inside `App` context — the `real-scenario` and
+    /// `uitest` adapters' only legal entity seam (Issue #314 slice 4
+    /// / Issue #313 slice S2). Collected before execution so a job
+    /// may borrow `inner` freely.
+    #[cfg(any(feature = "real-scenario", feature = "uitest"))]
     fn drain_ui_jobs(inner: &Rc<RefCell<Inner>>, driver: &GpuiDriver, cx: &mut App) {
         let mut jobs = Vec::new();
         if let Some(rx) = inner.borrow().ui_jobs.as_ref() {
@@ -1578,6 +1586,8 @@ pub use gpui_driver::real_window::{
 pub use gpui_driver::scenario::GpuiGuiTest;
 #[cfg(feature = "gpui")]
 pub use gpui_driver::surface::{GpuiSurfaceAdapter, SharedSurface};
+#[cfg(feature = "uitest")]
+pub use gpui_driver::windowed_io::{UiSide, WindowedIo};
 #[cfg(feature = "gpui")]
 pub use gpui_driver::{GpuiDriver, IntentSink, ViewMount};
 

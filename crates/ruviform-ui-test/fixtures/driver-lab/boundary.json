@@ -88,9 +88,9 @@
       "package": "ruviform-ui-gpui",
       "role": "driver-adapter",
       "allowedDeps": ["gpui", "raw-window-handle"],
-      "viaFeatures": ["gpui", "gpui-test", "real-scenario"],
+      "viaFeatures": ["gpui", "gpui-test", "real-scenario", "uitest"],
       "required": true,
-      "reason": "Issue #386 の GPUI 標準 Driver adapter（main merge 済み）。gpui/gpui-test feature 経由の optional のみ許可。raw-window-handle は Issue #388 NativeSurfaceSlot の OS parent handle 捕捉用途で gpui feature 経由 optional のみ。real-scenario は Issue #314 slice 4 の real-window VisualGuiTest adapter で gpui + ruviform-ui-test のみを有効化し gpui/test-support を含めない"
+      "reason": "Issue #386 の GPUI 標準 Driver adapter（main merge 済み）。gpui/gpui-test feature 経由の optional のみ許可。raw-window-handle は Issue #388 NativeSurfaceSlot の OS parent handle 捕捉用途で gpui feature 経由 optional のみ。real-scenario は Issue #314 slice 4 の real-window VisualGuiTest adapter で gpui + ruviform-ui-test のみを有効化し gpui/test-support を含めない。uitest は Issue #313 slice S2 の windowed TestIo adapter（WindowedIo + windowed_test_app AUT）で gpui + ruviform-ui-test + base64 のみを有効化"
     },
     {
       "package": "ruviform-poc-native-dock",
