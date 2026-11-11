@@ -111,15 +111,44 @@ pub(crate) struct CpalDevice {
     /// domain, which is what makes `same_clock_domain` duplex
     /// correlation possible on shared-clock hosts).
     clock_profile: ClockProfile,
+    /// The backend host display name (e.g. `"WASAPI"`) — retained for
+    /// platform-specific input routing ([`native_input_route`]).
+    host_name: &'static str,
+    /// Whether this device handle is the host's *default input*
+    /// device — selects reroutable async activation plus the
+    /// default-device monitor on the Windows WASAPI-native input path
+    /// (pinned endpoints activate their `IMMDevice` directly instead).
+    default_input: bool,
 }
 
 impl CpalDevice {
-    pub(crate) fn new(inner: cpal::Device, clock_profile: ClockProfile) -> Self {
+    pub(crate) fn new(inner: cpal::Device, host_name: &'static str, default_input: bool) -> Self {
         Self {
             inner,
-            clock_profile,
+            clock_profile: clock_profile(host_name),
+            host_name,
+            default_input,
         }
     }
+}
+
+/// Whether [`CpalDevice::open_input_stream`] takes the
+/// platform-native input path instead of the portable cpal path.
+///
+/// Only Windows/WASAPI implements a native path today
+/// ([`crate::wasapi_input`], Issue #565 — it is the only route that
+/// can carry the per-packet `IAudioCaptureClient::GetBuffer` device
+/// position into `InputCallbackInfo::frame_position`). Every other
+/// host and platform keeps the cpal path unchanged.
+#[cfg(windows)]
+fn native_input_route(host_name: &str, _default_input: bool) -> bool {
+    host_name == "WASAPI"
+}
+
+/// Non-Windows hosts have no native input path — always `false`.
+#[cfg(not(windows))]
+fn native_input_route(_host_name: &str, _default_input: bool) -> bool {
+    false
 }
 
 impl Device for CpalDevice {
@@ -342,6 +371,28 @@ impl Device for CpalDevice {
             .map_err(|_| DeviceError::Backend("resource_exhausted"))?;
         scratch.resize(scratch_len, 0.0);
 
+        // Route to the platform-native input path where one exists —
+        // currently only Windows/WASAPI (`wasapi_input`, Issue #565).
+        // `native_input` is always `false` off Windows.
+        let native_input = native_input_route(self.host_name, self.default_input);
+        #[cfg(windows)]
+        if native_input {
+            return crate::wasapi_input::open_input_stream(
+                &self.inner,
+                self.default_input,
+                &negotiated.stream,
+                config.format,
+                scratch,
+                frames_capacity,
+                data_callback,
+                error_callback,
+                self.clock_profile.domain,
+                self.clock_profile.capture_provenance,
+            );
+        }
+        #[cfg(not(windows))]
+        let _ = native_input;
+
         // Ownership split mirrors the output direction: the data
         // closure owns `InputCallbackState` (callback + scratch +
         // clock profile) outright — no `Arc`/`Mutex` sharing with the
@@ -361,7 +412,10 @@ impl Device for CpalDevice {
             .build_input_stream::<f32, _, _>(
                 negotiated.stream,
                 move |data: &[f32], info: &cpal::InputCallbackInfo| {
-                    state.handle(data, info);
+                    // cpal exposes no frame position — `None` is the
+                    // honest "unsupported", never a synthesized counter
+                    // that would hide a real discontinuity.
+                    state.handle(data, info, None);
                 },
                 move |e: cpal::Error| {
                     error_callback(map_error(&e, ErrorCtx::ErrorCallback));

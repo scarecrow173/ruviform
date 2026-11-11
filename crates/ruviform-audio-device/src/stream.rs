@@ -26,9 +26,13 @@
 //!   [`ClockDomainId::MONOTONIC`]; hosts with per-device clocks
 //!   (ALSA) or unverifiable ones report [`ClockDomainId::UNKNOWN`],
 //!   which `same_clock_domain` correctly treats as *not* same-clock.
-//!   `frame_position` is always `None` — cpal exposes no frame
-//!   position — and `input_latency`/`output_latency` report
-//!   `Ok(None)` — cpal exposes no portable latency query.
+//!   `frame_position` is `None` on the cpal path — cpal exposes no
+//!   frame position — while the Windows WASAPI-native input path
+//!   ([`crate::wasapi_input`]) supplies the per-packet
+//!   `IAudioCaptureClient::GetBuffer` device position. Either way it
+//!   is a backend-reported value or honest `None`, never synthesized.
+//!   `input_latency`/`output_latency` report `Ok(None)` on the cpal
+//!   path — cpal exposes no portable latency query.
 //!
 //! [`OutputStream`] methods are control-path (non-RT) operations.
 
@@ -261,7 +265,10 @@ impl DataCallbackState {
 /// `None` only when both paths overflow.
 ///
 /// **RT contract:** RT-suitable — pure, allocation-free.
-fn instant_to_media_time(instant: StreamInstant, epoch: StreamInstant) -> Option<MediaTime> {
+pub(crate) fn instant_to_media_time(
+    instant: StreamInstant,
+    epoch: StreamInstant,
+) -> Option<MediaTime> {
     if let Ok(nanos) = i64::try_from(instant.as_nanos()) {
         return Some(MediaTime::new(nanos, DEVICE_CLOCK_TIMEBASE));
     }
@@ -347,17 +354,25 @@ impl InputCallbackState {
     /// One backend input data callback — RT-contract section.
     ///
     /// `data` is the backend's interleaved `f32` capture. The callback
-    /// instant seeds the epoch anchor on first fire.
-    pub(crate) fn handle(&mut self, data: &[f32], info: &CpalInputCallbackInfo) {
+    /// instant seeds the epoch anchor on first fire. `frame_position`
+    /// is the backend-reported capture-clock position of the packet's
+    /// first frame — `None` on the cpal path (cpal exposes no frame
+    /// position), `Some` on the WASAPI-native path (the per-packet
+    /// `IAudioCaptureClient::GetBuffer` device position). It is never
+    /// synthesized from callback counts, which would hide a real
+    /// discontinuity.
+    pub(crate) fn handle(
+        &mut self,
+        data: &[f32],
+        info: &CpalInputCallbackInfo,
+        frame_position: Option<u64>,
+    ) {
         let timestamp = info.timestamp();
         let epoch = *self.epoch.get_or_insert(timestamp.callback);
         let info = InputCallbackInfo {
             timestamp: map_input_timestamp(&timestamp, epoch, self.capture_provenance),
             clock_domain: self.clock_domain,
-            // cpal exposes no frame position — `None` is the honest
-            // "unsupported", never a synthesized counter that would
-            // hide a real discontinuity.
-            frame_position: None,
+            frame_position,
         };
         read_interleaved(
             &mut self.scratch,
@@ -591,7 +606,7 @@ mod tests {
         let info = cpal_input_info(input_instant(42, 0), input_instant(41, 0));
 
         assert_no_alloc::assert_no_alloc(|| {
-            state.handle(&data, &info);
+            state.handle(&data, &info, None);
         });
     }
 
@@ -623,7 +638,7 @@ mod tests {
         // 3 frames interleaved + tail sample.
         let data = [1.0_f32, -1.0, 2.0, -2.0, 3.0, -3.0, 9.0];
         let info = cpal_input_info(input_instant(10, 0), input_instant(9, 0));
-        state.handle(&data, &info);
+        state.handle(&data, &info, None);
 
         let collected = collected.lock().unwrap();
         assert_eq!(collected.len(), 1);

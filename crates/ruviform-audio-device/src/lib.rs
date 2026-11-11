@@ -72,5 +72,12 @@ mod error;
 #[path = "host.rs"]
 mod host_impl;
 mod stream;
+// Issue #565: WASAPI-native input path — supplies the per-packet
+// `IAudioCaptureClient::GetBuffer` device position as
+// `InputCallbackInfo::frame_position`, which cpal's portable callback
+// cannot carry. Windows-only platform gap-fill inside the same
+// backend, not a second backend crate (see the design note).
+#[cfg(windows)]
+mod wasapi_input;
 
 pub use host_impl::{Host, HostId, available_host_ids, default_host, host};

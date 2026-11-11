@@ -16,6 +16,30 @@ ruviform-media-core = { path = "../ruviform-media-core" }
 cpal = "0.18" # 統一 Error/ErrorKind・StreamTrait::now()・HW レイテンシ込み timestamp。
               # default = []（OS 既定 host のみ。Linux=ALSA / Windows=WASAPI）。
 
+# Issue #565: WASAPI input の `frame_position` を供給する native input path
+# （`src/wasapi_input.rs`）が使う Win32/WASAPI/COM API。cpal 0.18.2 と同一
+# バージョン（0.62）に揃え、Cargo.lock への新規 package 追加をゼロにする。
+# features は cpal の WASAPI host が使う集合から device 説明・プロパティ
+# ストア参照系を除いた最小限（capture path が必要とする API のみ）。
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Media",
+    "Win32_Media_Audio",
+    "Win32_Media_KernelStreaming",
+    "Win32_Media_Multimedia",
+    "Win32_Security",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Performance",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+] }
+# `windows::core::implement` expands to `windows_core::` paths, so the
+# core crate must be a direct dependency (same version cpal locks).
+windows-core = "0.62"
+
 [dev-dependencies]
 # コールバック経路の非 alloc 機械検証の試行（PoC 受け入れ基準「コールバック内非
 # alloc の検証」をコードレビュー証跡だけでなく機械検証で補強するため。設計書

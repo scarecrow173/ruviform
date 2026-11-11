@@ -635,8 +635,9 @@ fn unpack_interleaved(src: &[f32], channels: usize, frames: usize, dst: &mut [f3
 /// by `frame_offset / sample_rate` seconds expressed as
 /// [`DEVICE_CLOCK_TIMEBASE`] (nanosecond) ticks — the input-direction
 /// mirror of [`chunk_timestamp_info`]. `clock_domain` is carried
-/// unchanged and `frame_position` (always `None` for this adapter)
-/// advances by the chunk's frame offset when present.
+/// unchanged and `frame_position` advances by the chunk's frame offset
+/// when present (`None` on the cpal path, `Some` on the Windows
+/// WASAPI-native path — Issue #565).
 ///
 /// On `checked_add` overflow the original instant is kept rather than
 /// losing the timestamp; capture provenance is preserved.
