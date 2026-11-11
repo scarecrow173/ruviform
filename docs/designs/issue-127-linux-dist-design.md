@@ -4,7 +4,7 @@ type: "design"
 status: "draft"
 title: "Issue #127 Linux 実配布方式 設計 — GPUI 標準 Driver の runtime 依存・Capability Matrix・deb/AppImage/Flatpak 適合条件"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-11"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -69,11 +69,16 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/294"
     - "https://github.com/scarecrow173/ruviform/issues/465"
     - "https://github.com/scarecrow173/ruviform/issues/57"
+    - "https://github.com/scarecrow173/ruviform/issues/314"
     - "https://github.com/scarecrow173/audio-lens/issues/127"
     - "https://github.com/scarecrow173/synvelis/issues/28"
     - "docs/impl/exp/linux-container-device-and-arch-verification.jsonl"
+    - "docs/impl/ir/gt-05-ci-offscreen-lanes-slice.md"
+    - "docs/designs/gt-05-ci-offscreen-lanes-design.md"
     - "poc/ui/RESULTS.md"
     - "ci/verify-linux/Dockerfile"
+    - "mise.toml"
+    - ".github/workflows/ci.yml"
   defers: []
   deferred-by: []
 ---
@@ -100,7 +105,7 @@ relations:
 | `Pass` | 対象 OS/Backend/形式/revision で実測され、契約を満たした記録がある |
 | `Fail` | 対象環境で実測され、契約を満たさなかった記録がある |
 | `Unsupported` | 規格・API・プラットフォーム機構上その経路が存在しない、または現行実装が明示的に非対応と宣言している |
-| `NotRun` | 実行可能だが未実施。実機・Backend・パッケージ・Dock の各 gate がこれに該当する現状 |
+| `NotRun` | 実行可能だが未実施。実機・実 session Backend・パッケージ・Dock の各 gate がこれに該当する現状（X11 は L0 offscreen lane のみ実測済み） |
 | `Blocked` | 前提証拠・環境・依存 Issue が未充足で実行不能 |
 
 ルール:
@@ -108,6 +113,7 @@ relations:
 - `NotRun` / `Unsupported` / `Blocked` を `Pass` に転用しない。fake 層・headless・他 OS・他 Driver・旧 WebView 経路の成功を GPUI Linux 実機の成功として扱わない。
 - 実測を行う際は対象 Linux ディストリビューション/バージョン・Backend（X11 / Wayland / XWayland）・パッケージ形式・検証 revision を証拠に記録する義務がある。
 - 「文書・lockfile 由来」は依存の**存在宣言**であり、実行時動作の保証ではない。本設計では `Declared`（宣言）として実測（`Pass`/`Fail`）と区別する。
+- L0 offscreen lane（CI/コンテナ内の headless 環境: Xvfb+openbox+lavapipe ソフトウェア Vulkan）の実測は `P(L0)` と記し、**実機環境（実 GPU・実 display・実 session）の `Pass` と区別する**。`P(L0)` が付く項目の実機判定は別途 `NotRun` として記録する。
 
 ## Scope
 
@@ -131,10 +137,10 @@ relations:
 
 | 評価軸 | 確認すべき内容 | 現状 |
 | --- | --- | --- |
-| glibc / ベースライン | `rust:1-trixie` 系コンテナや各 distro の glibc が Rust 1.99.0 toolchain・GPUI 依存（`x11rb`・`wayland-*`・`ash` 等）の最低要件を満たすか | 未実測。`docs/adr/platform-and-toolchain-targets.md` の stable toolchain 方針（MSRV 1.89・pin 1.99.0）に整合する下限確認が必要 |
-| Vulkan ICD / GPU ドライバ | `blade-graphics`（ash/gpu-alloc/naga）が要求する Vulkan loader + ICD が対象 distro の標準ドライバで提供されるか。GPU 非依存 foundations の例外として GUI Driver は GPU 前提 | 未実測。Mesa（RADV/ANV）・各ベンダドライバの存在確認が必要 |
-| EGL / GL | `khronos-egl`・`glow` 経路の libEGL/libGL 存在 | 未実測 |
-| fontconfig / フォント | `fontconfig-parser`・`fontdb`・`cosmic-text` 系のフォント列挙が distro 標準の fontconfig + 最低 1 フォントで成立するか | 未実測。`ci/verify-linux` は `fonts-liberation` を同梱済み（旧 GTK 経路向け） |
+| glibc / ベースライン | `rust:1-trixie` 系コンテナや各 distro の glibc が Rust 1.99.0 toolchain・GPUI 依存（`x11rb`・`wayland-*`・`ash` 等）の最低要件を満たすか | Debian コンテナ（GT-05 実測環境）で toolchain 1.99.0 + GPUI 依存の build・起動を実測。ubuntu-24.04 向け CI lane（`ui-gpui-verify`/`ui-gpui-offscreen-verify`）は定義済みだが初回 hosted 実行は未実施 `NotRun`。他 distro の glibc 下限は未実測。なお `libc` crate は lockfile で 0.2.189 に pin 済み（0.2.190 で `libc::ENOATTR` が Linux から削除され gpui の `zed-async-tar` 依存が build 不能になる upstream 問題 — `docs/impl/ir/gt-05-ci-offscreen-lanes-slice.md`） |
+| Vulkan ICD / GPU ドライバ | `blade-graphics`（ash/gpu-alloc/naga）が要求する Vulkan loader + ICD が対象 distro の標準ドライバで提供されるか。GPU 非依存 foundations の例外として GUI Driver は GPU 前提 | ソフトウェア Vulkan は実測済み: lavapipe（`mesa-vulkan-drivers`）で Xvfb+openbox 下の描画を確認（GT-05・Docker Debian + mesa 25.0.7）。**mesa ≥24.2 が下限** — mesa 22.3.6 系は depth-24 `PutImage` `BadMatch` で恒久的黒画面（GT-05 IR Rejected 節）。ubuntu-24.04 の stock mesa 24.2.x は source 上 `chain->depth` 修正済みだが hosted runner 実測は `NotRun`。実機 GPU ICD（RADV/ANV・ベンダドライバ）は `NotRun` |
+| EGL / GL | `khronos-egl`・`glow` 経路の libEGL/libGL 存在 | 未実測（`libegl-dev`/`libgl1-mesa-dev` は ubuntu-24.04 lane の定義済み依存だが、EGL/GL 経路の実行時利用は未観測） |
+| fontconfig / フォント | `fontconfig-parser`・`fontdb`・`cosmic-text` 系のフォント列挙が distro 標準の fontconfig + 最低 1 フォントで成立するか | Xvfb+openbox+lavapipe 構成（Docker Debian・GT-05）で fontconfig 経由のフォント列挙・ラベル描画を実測。`ci/verify-linux` は `fonts-liberation` を同梱済み（旧 GTK 経路向け）。distro 別フォント環境は未実測 |
 | IME | X11 で `zed-xim`（XIM）経由の入力メソッドが機能するか。Wayland の IME（text-input protocol）は GPUI 側対応状況に依存 | 未実測・`NotRun` |
 | xdg-desktop-portal | `ashpd`/`zbus`/`oo7` が使う portal D-Bus API と対象 distro の portal 実装（xdg-desktop-portal-gtk/kde）の対応 | 未実測 |
 | Native Plugin Dock | §4 の XEmbed/XWayland 機構が対象 distro の X11/Wayland 環境で利用可能か | 未実測。#388 matrix 参照 |
@@ -147,21 +153,21 @@ GPUI 0.2.2 は default features で `wayland`・`x11` を有効化する（`docs
 
 | Backend | GPUI 宣言 | 現状判定 | 備考 |
 | --- | --- | --- | --- |
-| X11 ネイティブ | `x11` feature 有効 | `NotRun` | `x11-dl`（dlopen）+ `x11rb`/`xcb`/`xkbcommon`/`zed-xim` 経路。Xvfb での起動すら未実施 |
+| X11 ネイティブ | `x11` feature 有効 | `P(L0)`（実機 `NotRun`） | `x11-dl`（dlopen）+ `x11rb`/`xcb`/`xkbcommon`/`zed-xim` 経路。GT-05（Issue #314・`docs/impl/ir/gt-05-ci-offscreen-lanes-slice.md`）で Xvfb+openbox+lavapipe 上の起動・描画・X11 `GetImage` pixel readback を実測（Docker Debian + mesa 25.0.7・`real_window` 2 passed）。lane は `mise run test-ui-offscreen-xvfb`・CI job `ui-gpui-offscreen-verify`（ubuntu-latest）として定義済みだが hosted 初回実行は未実施。実機 X11 session は `NotRun` |
 | Wayland ネイティブ | `wayland` feature 有効 | `NotRun` | `wayland-client`/`wayland-backend`/`calloop`/`xkbcommon` 経路。 compositor・portal 依存 |
 | XWayland（X11 app on Wayland session） | X11 経路の一形態 | `NotRun` | Native Plugin Dock の L0 XEmbed が XWayland 経由で機能するかは #388 matrix で `NotRun` |
 
-Backend の最終サポート宣言は実機 matrix（§8）の結果を待つ。現時点で「Wayland のみ」「X11 のみ」等の絞り込みは行わない。
+Backend の最終サポート宣言は実機 matrix（§7）の結果を待つ。現時点で「Wayland のみ」「X11 のみ」等の絞り込みは行わない。
 
-## 2. Runtime Dependency Inventory（宣言レベル）
+## 2. Runtime Dependency Inventory（宣言レベル＋L0 実測分）
 
-`Cargo.lock` と `docs/designs/issue-386-driver-neutral-gui-host.md` に基づく GPUI 0.2.2 の Linux 依存を、パッケージングへの影響とともに整理する。**全て `Declared`（宣言）であり、実行時動作は未実測**。
+`Cargo.lock` と `docs/designs/issue-386-driver-neutral-gui-host.md` に基づく GPUI 0.2.2 の Linux 依存を、パッケージングへの影響とともに整理する。**大半は `Declared`（宣言）だが、GT-05（Issue #314・`docs/impl/ir/gt-05-ci-offscreen-lanes-slice.md`）で X11 offscreen lane の依存構成が Docker Debian 上で実測済み**（mesa 25.0.7・Xvfb+openbox+lavapipe で GPUI が起動・描画・pixel readback まで動作）。さらに `.github/workflows/ci.yml` の `ui-gpui-verify`/`ui-gpui-offscreen-verify` job に ubuntu-24.04 向けの **定義済み apt セット**が存在する: `pkg-config libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev libx11-dev libxi-dev libxtst-dev libwayland-dev wayland-protocols libfontconfig1-dev libfreetype-dev libvulkan-dev libegl-dev libgl1-mesa-dev mesa-vulkan-drivers libvulkan1` に加え、offscreen runtime の `xvfb xauth openbox x11-utils fonts-dejavu-core fontconfig`。同 apt セットの hosted runner 実行は未実施 `NotRun`。Wayland 経路・実機 GPU/実 session・未使用機能（portal/IME/oo7）の依存は引き続き `Declared`/`NotRun`。
 
 ### 2.1 グラフィックス / GPU
 
 | クレート | 役割 | 実行時システム依存（推定・宣言） | パッケージング含意 |
 | --- | --- | --- | --- |
-| `blade-graphics 0.7.1` | GPUI の描画基盤（Vulkan 主経路） | `libvulkan.so.1`（loader）+ GPU ICD（Mesa RADV/ANV・ベンダドライバ） | ICD は GPU/ドライバ由来のため同梱不可。Vulkan loader の有無確認が必須。未導入環境では起動不可の可能性（`NotRun`） |
+| `blade-graphics 0.7.1` | GPUI の描画基盤（Vulkan 主経路） | `libvulkan.so.1`（loader）+ GPU ICD（Mesa RADV/ANV・ベンダドライバ） | ICD は GPU/ドライバ由来のため同梱不可。Vulkan loader の有無確認が必須。未導入環境では起動不可の可能性。L0 lane では lavapipe（ソフトウェア ICD・mesa ≥24.2）で描画を実測。実機 GPU ICD は `NotRun` |
 | `ash` / `gpu-alloc` / `gpu-alloc-ash` / `naga` | Vulkan API・確保・シェーダ変換 | 同上（`ash` は `libvulkan` を dlopen） | loader のみ必要。ICD はシステム依存 |
 | `khronos-egl` / `glow` | EGL/GL サーフェス・フォールバック経路 | `libEGL.so.1` / `libGL.so.1` | Wayland/X11 surface 確立に必要な可能性。blade-graphics が Vulkan 主・GL 従の構成かは未検証 |
 | `ash-window` / `raw-window-handle` | ウィンドウハンドル受け渡し | なし（型のみ） | — |
@@ -172,8 +178,8 @@ Backend の最終サポート宣言は実機 matrix（§8）の結果を待つ�
 | --- | --- | --- | --- |
 | `wayland-client` / `wayland-backend` / `wayland-cursor` / `wayland-scanner` / `wayland-protocols` / `wayland-protocols-plasma` | Wayland client・プロトコル | `libwayland-client.so`・`libwayland-cursor.so`・`libxkbcommon.so`（wayland-backend の dlopen feature 依存を要確認） | distro 標準パッケージで充足可能性が高いが未実測 |
 | `calloop` / `calloop-wayland-source` | Wayland イベントループ | `libwayland-client` 経由 | 同上 |
-| `x11rb` / `x11rb-protocol` / `xcb` / `as-raw-xcb-connection` / `x11-dl` | X11 プロトコル・接続 | `libX11.so.6`・`libxcb.so.1`・`libXcursor`/`libXi`/`libXrandr` 等（`x11-dl` は dlopen） | `x11-dl` は実行時 dlopen のためリンク時依存にならず、実行時に各 `.so` が必要。バージョン寛容性は高いが未実測 |
-| `xkbcommon` | キーマップ・レイアウト | `libxkbcommon.so.0` | Wayland/X11 双方で必要。distro 標準で充足可能性高い |
+| `x11rb` / `x11rb-protocol` / `xcb` / `as-raw-xcb-connection` / `x11-dl` | X11 プロトコル・接続 | `libX11.so.6`・`libxcb.so.1`・`libXcursor`/`libXi`/`libXrandr` 等（`x11-dl` は dlopen） | `x11-dl` は実行時 dlopen のためリンク時依存にならず、実行時に各 `.so` が必要。Xvfb+openbox 下の実 X11 接続・window 生成・`GetImage` readback を L0 lane で実測。バージョン寛容性は高いが他 distro では未実測 |
+| `xkbcommon` | キーマップ・レイアウト | `libxkbcommon.so.0` | Wayland/X11 双方で必要。L0 lane で `libxkbcommon`/`libxkbcommon-x11` のロードを実測。distro 標準で充足可能性高い |
 | `zed-xim` | X11 IME（X Input Method）client | `libX11` + 実行時の IME サーバ（ibus/fcitx 等） | IME 実動作はサーバ側依存。`NotRun` |
 
 ### 2.3 テキスト / フォント / IME
@@ -181,7 +187,7 @@ Backend の最終サポート宣言は実機 matrix（§8）の結果を待つ�
 | クレート | 役割 | 実行時システム依存（推定・宣言） | パッケージング含意 |
 | --- | --- | --- | --- |
 | `cosmic-text` / `rustybuzz` / `swash` / `etagere` | テキスト shaping・レイアウト・グリフ atlas | なし（pure Rust）+ fontconfig 経由のフォント列挙 | — |
-| `fontdb` / `fontconfig-parser` / `yeslogic-fontconfig-sys` | フォント DB・fontconfig 解析 | `libfontconfig.so.1` + フォントファイル（`fonts-*`） | fontconfig と最低 1 フォントが必須。フォント非同梱ならシステムフォント依存 |
+| `fontdb` / `fontconfig-parser` / `yeslogic-fontconfig-sys` | フォント DB・fontconfig 解析 | `libfontconfig.so.1` + フォントファイル（`fonts-*`） | fontconfig と最低 1 フォントが必須。フォント非同梱ならシステムフォント依存。L0 lane で fontconfig+`fonts-dejavu-core` による列挙・描画を実測 |
 | `zed-font-kit`（GPUI `font-kit` feature の実クレート） | プラットフォームフォント API | Linux では fontconfig 経路 | feature 構成依存 |
 | `resvg` / `usvg` | SVG 描画 | pure Rust 主体（フォントは fontconfig 経由） | — |
 
@@ -198,35 +204,36 @@ Backend の最終サポート宣言は実機 matrix（§8）の結果を待つ�
 - **同梱候補**: GPUI バイナリ本体 + Rust 依存は静的リンクで同梱される。`libvulkan` loader・`libfontconfig`・フォント・`libxkbcommon`・`libX11`/`libxcb`・`libwayland-*`・`libEGL`/`libGL`・D-Bus/portal は**実行時システム依存**として残る可能性が高い。
 - **ICD/GPU ドライバは同梱不可**: Vulkan ICD は GPU ベンダ・カーネルモジュールに密結合しており、deb/AppImage/Flatpak のいずれでも同梱は現実的でない。対象 OS の GPU ドライバ提供が前提条件になる。
 - **フォントはポリシー次第**: 同梱すれば再現性が上がるがサイズ増。非同梱ならシステムフォント依存で描画差が出る可能性。
-- **`x11-dl`/`ash` の dlopen**: リンク時依存を持たないため deb の `Depends` に現れにくいが、実行時には各 `.so` が必要。`ldd` だけでは不足を検出できない点に注意（検証手順 §8 に反映）。
+- **`x11-dl`/`ash` の dlopen**: リンク時依存を持たないため deb の `Depends` に現れにくいが、実行時には各 `.so` が必要。`ldd` だけでは不足を検出できない点に注意（検証手順 §7 に反映）。
+- **L0 実測フロア**: GT-05 lane の依存構成（上記 ci.yml 定義の apt セットに相当）を Docker Debian で実測し、X11 headless 環境で GPUI を起動・描画させた**最初の実測依存集合**が得られている。deb `Depends` 設計の初期入力として使えるが、ubuntu-24.04 hosted 実行・実機 distro 差・最小 runtime 集合の切り詰めは未実測。
 
 ## 3. GUI Capability Matrix
 
-対象 OS（Linux・distro 未確定）× Backend（X11 / Wayland / XWayland）× capability の判定表。**現時点で Linux 実機の `Pass` は 1 件もない**。`Declared` は設計・lockfile 上の存在宣言、`Unsupported` は機構上の非対応、`NotRun` は未実施。
+対象 OS（Linux・distro 未確定）× Backend（X11 / Wayland / XWayland）× capability の判定表。**実機環境（実 GPU・実 display・実 session）の `Pass` は 0 件を維持**するが、GT-05（Issue #314・`docs/impl/ir/gt-05-ci-offscreen-lanes-slice.md`）で X11 の一部 capability が L0 offscreen lane（Xvfb+openbox+lavapipe）で実測済み。`Declared` は設計・lockfile 上の存在宣言、`Unsupported` は機構上の非対応、`NotRun` は未実施。
 
-凡例: `D`=Declared（宣言のみ・未実測）、`U`=Unsupported、`N`=NotRun、`B`=Blocked、`P`/`F`=Pass/Fail（実測・現在該当なし）。
+凡例: `D`=Declared（宣言のみ・未実測）、`U`=Unsupported、`N`=NotRun、`B`=Blocked、`P`/`F`=Pass/Fail（実機実測・現在該当なし）、`P(L0)`=L0 offscreen lane（headless・ソフトウェア Vulkan・WM 付き仮想 display）でのみ実測 Pass。**`P(L0)` の実機判定は `N` として扱う**。
 
 | Capability | X11 | Wayland | XWayland | 根拠・備考 |
 | --- | --- | --- | --- | --- |
-| ウィンドウ生成・ライフサイクル | N | N | N | GPUI `Application`/`Window` 経路は宣言済み（`D`）だが Linux 実機起動は未実施。#243 は Windows 実測のみ |
-| 複数ウィンドウ | N | N | N | 同上。Linux での multi-window 実測なし |
-| 入力（keyboard/mouse） | N | N | N | `x11rb`/`wayland-client` 経路は宣言済み。実入力イベント未観測 |
-| フォーカス | N | N | N | 同上 |
+| ウィンドウ生成・ライフサイクル | P(L0) | N | N | X11 は GT-05 で実 GPUI window 生成・teardown を実測（Docker Debian + mesa 25.0.7・Xvfb+openbox+lavapipe・`real_window` 2 passed。実行形: `mise run test-ui-offscreen-xvfb`・CI `ui-gpui-offscreen-verify`、hosted 初回実行は未実施）。実機 session は `NotRun`。Wayland/XWayland は `NotRun`。#243 は Windows 実測のみ |
+| 複数ウィンドウ | N | N | N | Linux での multi-window 実測なし（L0 lane は `_NET_WM_PID` 解決のため `--test-threads=1` 直列であり、同時複数 window は未検証） |
+| 入力（keyboard/mouse） | N | N | N | `x11rb`/`wayland-client` 経路は宣言済み。L0 lane の story walk は semantic dispatch（ViewHost 経由）であり OS 入力イベントではない。実入力は `NotRun` |
+| フォーカス | N | N | N | 同上。semantic dispatch は OS フォーカス遷移を証明しない |
 | IME | N | N | N | X11 は `zed-xim`（XIM）経路が宣言済みだが実動作 `NotRun`。Wayland の IME は text-input protocol 対応が GPUI 側で未確認のため `NotRun`（機構不在が確認されれば `Unsupported` へ再分類） |
-| フォント描画 | N | N | N | `cosmic-text`/`fontdb`/`fontconfig` 経路は宣言済み。フォント列挙・レンダリング品質は未実測 |
-| DPI / スケーリング | N | N | N | GPUI の scale factor 処理は宣言済み。HiDPI 実表示未観測 |
-| NativeSurfaceSlot（L0: 自プロセス内 surface） | N | N | N | `native_surface_slot` capability flag は存在。Linux での実 surface 確保は未実施 |
+| フォント描画 | P(L0) | N | N | `cosmic-text`/`fontdb`/`fontconfig` 経路は宣言済み。X11 は GT-05 の lab story（Fader/Tabs 等・ラベル text 描画含む）で fontconfig 経由の非一様 pixel を実測（Docker Debian）。実機フォント環境・描画品質差は `NotRun`。Wayland/XWayland は `NotRun` |
+| DPI / スケーリング | N | N | N | GPUI の scale factor 処理は宣言済み。L0 lane は story matrix で theme scale 1.0/2.0 cell を実施済みだが、OS レベルの scale factor・HiDPI 実表示は未観測（Xvfb は固定 display） |
+| NativeSurfaceSlot（L0: 自プロセス内 surface） | N | N | N | `native_surface_slot` capability flag は存在。Linux での実 surface 確保は未実施（L0 lane の lab story の Dock コンポーネントは NativeSurfaceSlot ではない） |
 | Native Plugin Dock L0（VST3/CLAP 埋込） | N | U | N | #388 matrix: X11 は `XEmbed`/`X11EmbedWindowID`・CLAP `x11` XID 経路が存在（`NotRun`）。Wayland ネイティブは CLAP/VST3 規格に埋込機構がなく `Unsupported` |
 | Native Plugin Dock L1（クロスプロセス GUI 親子） | U | U | U | #388 matrix: X11 は GtkSocket/Plug（GTK3 deprecated・GTK4 撤去）で現行 `Unsupported`。XWayland/Wayland も同様に `Unsupported`（現行経路なし）。要再評価 |
 | 実 Plugin GUI（#389 PluginEditorSession） | N | N | N | 実 plugin GUI の完了済み実装証拠なし。`NotRun` |
 | a11y（アクセシビリティ） | D | D | D | accesskit 系は Cargo.lock で未確認。ADR capability matrix では declared。実対応は未検証 |
-| GPU 非依存 fallback | N | N | N | GPU 無し/失敗時の software fallback 経路は未確認。`blade-graphics` が Vulkan 必須か GL fallback を持つか未検証 |
+| GPU 非依存 fallback | P(L0) | N | N | lavapipe（`mesa-vulkan-drivers` ソフトウェア Vulkan）で GPU ハードウェア非依存の Blade→Vulkan 描画を実測（GT-05・mesa ≥24.2 必須。22.3.6 系は depth `BadMatch` で恒久的黒画面）。実機 GPU 有無別・GL fallback 経路は `NotRun` |
 
 補足:
 
 - Wayland IME のように機構の有無が未確認の項目は `NotRun` とし、機構不在が確認された時点で `Unsupported` へ再分類する。
 - Native Plugin Dock の詳細行列（OS×Level×plugin 規格）は `docs/designs/issue-388-native-surface-slot.md` の D6 matrix が正本であり、本表はその Linux 行を配布設計の観点で再掲したもの。矛盾時は #388 側を正とする。
-- Linux での `Pass` が 0 件であることは設計上の欠陥ではなく、実機検証が後続 Issue に委ねられている現状の正直な記録である。
+- 実機での `Pass` が 0 件であることは設計上の欠陥ではなく、実機検証が後続 Issue に委ねられている現状の正直な記録である。`P(L0)` は headless CI/コンテナ環境の実測であり、実機 GPU・実入力・実 session の成功を意味しない。
 
 ## 4. Package Format Comparison — deb / AppImage / Flatpak
 
@@ -305,18 +312,20 @@ Issue #127 の AC3 に対応する。
 
 ## 7. Executable Verification Procedures
 
-Issue #127 AC5 の「実行可能な確認手順」を定義する。現時点では全て `NotRun` だが、手順自体は確定する。
+Issue #127 AC5 の「実行可能な確認手順」を定義する。L0 相当は GT-05 で一部実現済み（`P(L0)`）だが、L1 以降・実機 matrix は引き続き `NotRun`。手順自体は確定する。
 
 ### 7.1 確認手順の階層
 
 | 階層 | 環境 | 目的 | 現状 |
 | --- | --- | --- | --- |
-| L0: コンテナ（Xvfb/Wayland headless） | `ci/verify-linux` 系コンテナ（`rust:1-trixie` + Xvfb）を GPUI 用依存で拡張 | GPUI バイナリの**起動・ウィンドウ生成・基本描画**の smoke。実機 GPU/入力/IME/Dock は対象外 | 手順は既存コンテナを拡張して実現可能。未実施 `NotRun` |
+| L0: コンテナ（Xvfb/Wayland headless） | `ci/verify-linux` 系コンテナ（`rust:1-trixie` + Xvfb）を GPUI 用依存で拡張 | GPUI バイナリの**起動・ウィンドウ生成・基本描画**の smoke。実機 GPU/入力/IME/Dock は対象外 | **同等機能は GT-05 で実現済み（別形）**: `mise run test-ui-offscreen-xvfb`（`mise.toml`）の Xvfb+openbox+lavapipe 構成を Docker Debian（mesa 25.0.7）で実測（`real_window` 2 passed・`docs/impl/ir/gt-05-ci-offscreen-lanes-slice.md`）。CI job `ui-gpui-offscreen-verify`（`.github/workflows/ci.yml`・ubuntu-latest）は定義済みだが hosted 初回実行は未実施 `NotRun`。`ci/verify-linux` Dockerfile 拡張形の L0 も依然 `NotRun`（deferred） |
 | L1: 実機 Linux（X11 session） | 対象 distro の X11 環境 | X11 Backend での全 capability（入力・フォーカス・フォント・DPI/IME・NativeSurfaceSlot・Dock L0 XEmbed） | `NotRun`。#419/#262/#388/#389 の実機 lane で実施 |
 | L2: 実機 Linux（Wayland session） | 対象 distro の Wayland compositor 環境 | Wayland Backend での全 capability + XWayland 経由 Dock | `NotRun`。同上 |
 | L3: パッケージ形式別 | 各形式でビルドした成果物をクリーン環境へ install | deb/AppImage/Flatpak それぞれの起動・依存解決・Dock 適合・fallback | `NotRun`。形式採用後に実施 |
 
 ### 7.2 L0 コンテナ smoke の具体手順（将来実装用）
+
+**実現済みの別形**: 本節の smoke は GT-05 で `mise run test-ui-offscreen-xvfb` として実現済み（`xvfb-run`+openbox+lavapipe → `cargo test -p ruviform-ui-gpui --features real-scenario --test real_window -- --test-threads=1` を Docker Debian + mesa 25.0.7 で実測。ubuntu-latest runner 形は CI job `ui-gpui-offscreen-verify` に定義済み・hosted 初回実行は未実施）。`ci/verify-linux` Dockerfile を拡張する下記手順は依然 deferred の将来実装用である。GT-05 の実測で得られた lane 要件（**openbox 等 WM が必須** — bare Xvfb は mesa 25.x でも黒画面、**mesa ≥24.2** — 旧 mesa は depth-24 `PutImage` `BadMatch` で恒久的黒画面、**`--test-threads=1`** — `_NET_WM_PID` 解決の曖昧さ回避）は下記コンテナ形にも適用する。
 
 1. `ci/verify-linux/Dockerfile` を GPUI 用に拡張: `libvulkan1`・`mesa-vulkan-drivers`（llvmpipe/lavapipe）・`libfontconfig1`・`fonts-liberation`・`libxkbcommon0`・`libx11-6`・`libxcb1`・`libwayland-client0`・`libegl1`・`libgl1`・`xdg-desktop-portal`・`dbus-x11` を追加（正確なパッケージ名は対象 distro で確認）。
 2. `cargo build -p ruviform-ui-gpui --features gpui --example real_os_smoke`（既存 example を Linux で実行）。
@@ -338,6 +347,7 @@ Issue #127 AC5 の「実行可能な確認手順」を定義する。現時点�
 ### 7.4 証拠リンク
 
 - 実機・Native Plugin Dock の受入: **Issue #419**（GPUI/OS/backend・Native Plugin Dock 証拠）・**Issue #262**（GPUI Native 採用 gate）・**Issue #388**（NativeSurfaceSlot）・**Issue #389**（PluginEditorSession）。
+- L0 offscreen lane の実測記録: `docs/impl/ir/gt-05-ci-offscreen-lanes-slice.md`・`docs/designs/gt-05-ci-offscreen-lanes-design.md`（Issue #314 RF-GT-05・Xvfb+openbox+lavapipe・X11 `GetImage` pixel readback・`mise run test-ui-offscreen-xvfb` / CI `ui-gpui-offscreen-verify`）。
 - Consumer 非回帰: **Issue #294**（cross-consumer candidate gate の証拠 lane）。
 - 本設計の capability matrix が `Pass` になっても、#419/#262 の独立証拠が揃うまで GPUI 最終採用とはしない。
 
@@ -345,7 +355,8 @@ Issue #127 AC5 の「実行可能な確認手順」を定義する。現時点�
 
 | リスク / 懸念 | 内容 | 対応 |
 | --- | --- | --- |
-| GPUI Linux 実機未検証 | `Pass` が 0 件。起動すら未確認 | L0 コンテナ smoke → L1/L2 実機 matrix の順で検証。#419/#262 に委譲 |
+| GPUI Linux 実機未検証 | 実機 `Pass` は 0 件。L0 offscreen lane（Xvfb+openbox+lavapipe）でのみ起動・描画・pixel readback を実測（GT-05） | L1/L2 実機 matrix（§7.1）で検証。#419/#262 に委譲。`P(L0)` は実機の代替ではない |
+| headless lane 環境要件 | bare Xvfb（WM 無し）は mesa 25.x でも黒画面（present が drawable に届かない）。mesa <24.2 は depth-24 `PutImage` `BadMatch` で恒久的黒画面。ubuntu-24.04 stock mesa 24.2.x は source 上 `chain->depth` 修正済みだが hosted runner 実測は `NotRun`（GT-05 IR Risks） | openbox 等 WM + mesa ≥24.2 を lane 要件として固定済み（GT-05）。`--test-threads=1` 必須（`_NET_WM_PID` 解決の曖昧さ・occlusion 回避）。コンテナ/実機展開時も同要件を適用 |
 | Vulkan ICD 非同梱 | GPU ドライバ依存のため全形式で ICD 同梱不可。GPU 無し環境での fallback 未確認 | §2.5・§3 GPU fallback 行。実機で ICD 有無別に検証 |
 | Flatpak × Native Dock | sandbox が XEmbed/直接埋込を阻害する構造的疑義 | §4.1・§4.2。実機で portal 経由の可否を検証。不可なら Dock 必須 Consumer では `対象外` |
 | `x11-dl`/`ash` の dlopen 見落とし | `ldd` で検出できない実行時依存 | §7.2 の依存確認に `LD_DEBUG`/`strace` 的手法を含める（実装時） |
@@ -358,11 +369,11 @@ Issue #127 AC5 の「実行可能な確認手順」を定義する。現時点�
 
 | Issue #127 AC | 本設計の対応節 | 状態 |
 | --- | --- | --- |
-| AC1: distro/Backend/capability/runtime 依存を実測/未実測区別 Matrix で記録 | §1（distro/Backend）・§2（runtime 依存）・§3（capability matrix） | 記録完了。実測は `NotRun` |
+| AC1: distro/Backend/capability/runtime 依存を実測/未実測区別 Matrix で記録 | §1（distro/Backend）・§2（runtime 依存）・§3（capability matrix） | 記録完了。X11 の一部は L0 offscreen lane で実測（`P(L0)`・GT-05）、実機は `NotRun` |
 | AC2: deb/AppImage/Flatpak の適合条件比較と採用/保留/対象外の根拠。未実測を配布可能と断定しない | §4（比較表・判断根拠・必要証拠） | 記録完了。全形式 `保留` |
 | AC3: 旧 WebView/WebKitGTK を現行必須条件から除外・#465 と分離・削除済みと主張しない | §6 | 記録完了 |
 | AC4: Ruviform/Consumer の Owner 区別・暗黙の必須依存を生じさせない | §5 | 記録完了 |
-| AC5: 採否・対象 OS・未対応範囲・確認手順・判定語彙・#419/#262/#294 リンク | §3（判定語彙）・§4（採否=保留）・§7（手順・リンク） | 記録完了 |
+| AC5: 採否・対象 OS・未対応範囲・確認手順・判定語彙・#419/#262/#294 リンク | Evidence Vocabulary（判定語彙）・§4（採否=保留）・§7（手順・リンク） | 記録完了 |
 
 ## Sources and Relations
 

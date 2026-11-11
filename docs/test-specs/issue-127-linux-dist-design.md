@@ -4,7 +4,7 @@ type: "test-spec"
 status: "proposed"
 title: "Issue #127 Linux 実配布方式 設計文書の検証仕様 — Matrix 完全性・判定語彙・分離・Owner 境界"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-11"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -64,7 +64,7 @@ Linux 実配布方式の設計文書チェーン（`docs/{specs,designs,test-spe
 - **R1 AC 完全写像**: spec の Acceptance Criteria が Issue #127 本文の受入 5 行を全て含み、design の §9（または同等の対応表）が各 AC を設計節へ写像している。
 - **R2 判定語彙の固定**: design が `Pass`/`Fail`/`Unsupported`/`NotRun`/`Blocked` の語彙を定義し、capability matrix・パッケージ判断・distro/Backend の各判定に適用している。語彙の定義と使用が一貫している。
 - **R3 実測/未実測の区別**: capability matrix と runtime 依存が「実測（Pass/Fail）」「宣言（Declared）」「未実測（NotRun）」「非対応（Unsupported）」「実行不能（Blocked）」を区別している。`Declared` を `Pass` と混同しない。
-- **R4 Linux 実機 Pass ゼロの正直性**: Linux 実機の GPUI capability で `Pass` を主張する記述がない（全て `NotRun`/`Unsupported`/`Declared`）。fake/headless/旧 WebView/他 OS の成功を GPUI Linux 成功に転用しない。
+- **R4 Linux 実機 Pass ゼロの正直性**: Linux **実機**（実 GPU・実 display・実 session）の GPUI capability で `Pass` を主張する記述がない（実機判定は全て `NotRun`/`Unsupported`/`Declared`）。L0 offscreen lane（Xvfb+openbox+lavapipe 等の headless/CI 環境）の実測は `P(L0)` のようなスコープ明示記法で記録してよいが、実機 `Pass` と混同しない。fake/headless/旧 WebView/他 OS の成功を GPUI Linux 実機成功に転用しない。
 - **R5 パッケージ形式の保留**: deb/AppImage/Flatpak の全形式が `保留`（または同等の非断定）であり、「配布可能」「採用済み」「サポート対象」と断定する記述がない。各形式に 7 観点（同梱/システム依存・sandbox/portal・更新/インストール・OS/Driver 制約・Native Dock・失敗時 fallback・採否根拠）が記録されている。
 - **R6 旧 WebView 分離**: 旧 WebView/WebKitGTK 4.1 固有の runtime/Browser 検証が GPUI 配布の現行必須条件から除外されている。残存レガシー依存が #465 撤去計画と分離して明示され、「削除済み」「撤去完了」と主張しない。
 - **R7 Owner 境界**: Ruviform（再利用 capability matrix・runtime/ABI/packaging 条件・共通 GUI/NativeSurface 制約）と AudioLens/Synvelis（製品固有の配布形式・署名・同梱・対応 OS・リリース workflow・製品受入）が区別され、Ruviform の判断が両 Consumer に暗黙の必須依存を生じさせない条件が記述されている。
@@ -76,7 +76,7 @@ Linux 実配布方式の設計文書チェーン（`docs/{specs,designs,test-spe
 
 ## Examples
 
-- Given design §3 capability matrix、When 「X11 ウィンドウ生成」行を確認、Then 判定が `NotRun`（または `Declared`+`NotRun`）であり `Pass` ではない。
+- Given design §3 capability matrix、When 「X11 ウィンドウ生成」行を確認、Then L0 lane の実測は `P(L0)` 等のスコープ明示記法で記録され、実機判定は `NotRun`（または `Declared`+`NotRun`）のままであり、実機 `Pass` と記述していない。
 - Given design §4 形式比較、When 「Flatpak の採否」行を確認、Then `保留` であり「配布可能」「採用」と断定していない。
 - Given design §6、When 「WebKitGTK 4.1」言及を確認、Then 「歴史的参照」「#465 撤去」「削除済みではない」の文脈であり、GPUI 必須条件として扱われていない。
 - Given spec Acceptance Criteria、When Issue #127 本文の受入 5 行と照合、Then 5 行全てが spec/design に写像されている。
