@@ -63,6 +63,7 @@ Directory: `docs/designs`
 | DESIGN-cJ0I0j6o66AAfUm2eE5q8y | Issue #251 Stage W closeout 設計 — 実機 lane 拡張と証拠 matrix | approved | [issue-251-stage-w-real-device-closeout-design.md](./issue-251-stage-w-real-device-closeout-design.md) |
 | DESIGN-034Vj33PXgAsLoeNPU9c8f | Issue #253 plugin→host report の host-graph consumer 配線 | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | DESIGN-rf253osmidibackend001 | Issue #253 OS MIDI input backend design（WinMM adapter + Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
+| DESIGN-034VEQoHhDL68K8qLl8w8r | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | draft | [issue-253-unsupported-transparency-design.md](./issue-253-unsupported-transparency-design.md) |
 | DSN-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice 設計（IMidiMapping snapshot + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | DESIGN-034UjQBuwtfaWhLg6ZZMBn | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合設計 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | DESIGN-hXhz1NTWfHfPzPb5P4A5ff | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
