@@ -20,7 +20,6 @@ Directory: `docs/plans`
 | PLAN-TH7W8rd4PbQx5UHmtKkzs0 | Issue #198 sequential offline render implementation plan | approved | [implement-issue-198-sequential-offline-render.md](./implement-issue-198-sequential-offline-render.md) |
 | PLAN-034JP0n5QlXSj34GK30GBz | Issue #22 RT 検証基盤の実施（assert_no_alloc 適用・thread-check 統合・検証文書） | approved | [implement-issue-22-rt-verification.md](./implement-issue-22-rt-verification.md) |
 | PLAN-034JRcspAdty0HzWF0KzIr | Issue #24 オフライン実行ドライバ実装 | approved | [implement-issue-24-offline-execution-driver.md](./implement-issue-24-offline-execution-driver.md) |
-| PLAN-034UdQaz13FoOQV6oq6eKq | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 — 実装計画 | in-progress | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
 | PLAN-034JRQoIQSe5Sh13CkKfjN | Issue #25 音声エンジン実装 | approved | [implement-issue-25-audio-engine.md](./implement-issue-25-audio-engine.md) |
 | PLAN-034Vj4WmuQbtJHrZ5oTcnm | Implement Issue #253 host-graph report consumer | approved | [implement-issue-253-hostgraph-reports.md](./implement-issue-253-hostgraph-reports.md) |
 | PLAN-rf253osmidibackend001 | Issue #253 OS MIDI input backend implementation plan | approved | [implement-issue-253-os-midi-backend.md](./implement-issue-253-os-midi-backend.md) |
@@ -78,7 +77,6 @@ Directory: `docs/plans`
 | PLAN-YNOz2WL10n4v4Avi6qlRE9 | Issue #197 media reader / prefetch / RT consumer implementation plan | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
 | PLAN-034Qonvu2E5YQaWUHEcTeL | Issue #233 media-reader prefetch contract improvements implementation plan | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | PLAN-cNIlZseMNfbfI0D3uYpFLK | Issue #238 実施計画 — l1_proxy_e2e 壁時計 sleep 同期を有界 barrier/poll 待機へ置換 | approved | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
-| PLAN-034V4uVEulNfghJYxbNL9Y | Issue #243 — Windows 実 OS multiwindow smoke 実装計画 | approved | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | PLAN-034QxdNzPfzn5oye9cCzne | Issue #244 media-reader prefetch contract wart fixes implementation plan | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | PLAN-yYLB0HDhiCqmnfV65T7mNu | Issue #251 Stage W closeout 実施 plan | approved | [issue-251-stage-w-real-device-closeout-plan.md](./issue-251-stage-w-real-device-closeout-plan.md) |
 | PLAN-034UjQKJduyKqWBrTakfn1 | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
@@ -113,6 +111,7 @@ Directory: `docs/plans`
 | PLAN-034Rp5NNiOYZYrwCt2kHQ7 | Issue #310 Browser GUI Test Harness 実装計画 | implemented | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | PLAN-034S312gtUiTestPlnEE55 | Issue #312 ruviform-ui-test implementation plan | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| PLAN-034VOSINPDRV4REAL0SIN3 | Issue #313 — `RealOsPointerOrKeyboard` capability 実装計画 | approved | [issue-313-real-os-input-driver-plan.md](./issue-313-real-os-input-driver-plan.md) |
 | PLAN-034UkPTR1W1N5M0K3P04 | Issue #313 — Windows 実 OS SendInput ポインタ smoke 実装計画 | approved | [issue-313-windows-pointer-smoke.md](./issue-313-windows-pointer-smoke.md) |
 | PLAN-034UjMMA7vTOdlkqHFOrca | Issue #313 — Windows 実 OS SendInput キーボード smoke 実装計画 | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | PLAN-034Ug8XG3cIM1VEYu5sQpv | Issue #314 slice 3 — GPUI/OS capture backend 実装計画 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
@@ -166,7 +165,6 @@ Directory: `docs/plans`
 | PLAN-034VnMw6PrT9NBJxWK4N1L | Implement Issue #253 L1 wire report verb | approved | [rf-midi-l1-report-verb-plan.md](./rf-midi-l1-report-verb-plan.md) |
 | PLAN-034T7ZX1VmpTfXPra5KRin | RF384/RF385: Driver-neutral GUI contract + ruviform-ui-theme DTCG interpreter (Issue #384/#385) | in-progress | [rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md](./rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) |
 | PLAN-kreAOLAGHhliWIVO5VQM6G | ViewLink authoritative generation 実装計画 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
-| PLAN-034VOSINPDRV4REAL0SIN3 | Issue #313 — `RealOsPointerOrKeyboard` capability 実装計画 | approved | [issue-313-real-os-input-driver-plan.md](./issue-313-real-os-input-driver-plan.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -187,6 +185,7 @@ Directory: `docs/plans`
 | PLAN-034N9jeOhQNLPoHfcaUcqZ | Issue #130 実施計画 — media-core/dsp/audio-analysis assert_no_alloc レーン武装 | completed | [implement-issue-130-arm-assert-no-alloc.md](./implement-issue-130-arm-assert-no-alloc.md) |
 | PLAN-034J5K603qXDNmT82wI9v7 | Issue #18 データモデル API の実装（media-core / audio-core / video-core） | completed | [implement-issue-18-data-model.md](./implement-issue-18-data-model.md) |
 | PLAN-034Qh3xYzAbCdEfGhIjK | Issue #190 Transport Span Scheduler 実装計画 | completed | [implement-issue-190-transport-span-scheduler.md](./implement-issue-190-transport-span-scheduler.md) |
+| PLAN-034UdQaz13FoOQV6oq6eKq | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 — 実装計画 | completed | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
 | PLAN-034UexVzkirHD8NES7sXZQ | Issue #478 Fader/Knob 縦寸法契約 — 設計判断と実装引き継ぎ計画 | completed | [implement-issue-478-fader-knob-height-contract.md](./implement-issue-478-fader-knob-height-contract.md) |
 | PLAN-034JNstCXHhzzwOvo9iiCv | Issue #58 時間型拡張の実装（FrameRate 導入・Timecode シグネチャ移行・丸め誤差テスト） | completed | [implement-issue-58-time-type-extension.md](./implement-issue-58-time-type-extension.md) |
 | PLAN-034LNXQmQvHjRBD57FCPBw | Issue #76 実施計画 — プラグイン L1 アウトプロセス分離（plugin-export 新設 + plugin-host L1 プロキシ） | completed | [implement-issue-76-plugin-l1-out-of-process.md](./implement-issue-76-plugin-l1-out-of-process.md) |
@@ -198,6 +197,7 @@ Directory: `docs/plans`
 | PLAN-034QkFry8lZR9PeeXNpx09 | Issue #186 Parameter Control Events — implementation plan | completed | [issue-186-param-control-events.md](./issue-186-param-control-events.md) |
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
+| PLAN-034V4uVEulNfghJYxbNL9Y | Issue #243 — Windows 実 OS multiwindow smoke 実装計画 | completed | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | PLAN-J2SBIDqNyZcnFDIJmvppYM | Issue #294 consumer-verify → ci-issue-tracker 配線実装計画 — scope 別 job・reconcile 全 scope 化・contract test | completed | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | PLAN-034Ulf4tsZJz5CatpaE7hG | Issue #294 daily candidate-tuple trigger 実装計画 — decide.mjs tuple モード・daily-ci job・契約 test | completed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |

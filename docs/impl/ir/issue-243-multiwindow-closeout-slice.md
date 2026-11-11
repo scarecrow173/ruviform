@@ -31,12 +31,32 @@ relations:
         path: "docs/tasks/implement-issue-243-gpui-realwin-windows.md"
       - type: "file"
         path: "docs/tasks/issue-243-windows-multiwindow-smoke.md"
+      - type: "file"
+        path: "docs/specs/issue-243-gpui-realwin-windows.md"
+      - type: "file"
+        path: "docs/specs/issue-243-windows-multiwindow-smoke.md"
+      - type: "file"
+        path: "docs/test-specs/issue-243-gpui-realwin-windows.md"
+      - type: "file"
+        path: "docs/test-specs/issue-243-windows-multiwindow-smoke.md"
+      - type: "file"
+        path: "docs/plans/implement-issue-243-gpui-realwin-windows.md"
+      - type: "file"
+        path: "docs/plans/issue-243-windows-multiwindow-smoke.md"
     deleted: []
     renamed: []
     moved: []
     generated:
       - type: "file"
         path: "docs/tasks/README.md"
+      - type: "file"
+        path: "docs/specs/README.md"
+      - type: "file"
+        path: "docs/test-specs/README.md"
+      - type: "file"
+        path: "docs/plans/README.md"
+      - type: "file"
+        path: "docs/designs/README.md"
       - type: "file"
         path: "docs/impl/ir/README.md"
   implements:
@@ -138,7 +158,18 @@ fail-closed による再発防止）を追記し、#243 関連 task status を `
   `docs/tasks/issue-243-windows-multiwindow-smoke.md`:
   status `in-progress` → `done`（実装完了・マージ済み・本 slice で
   Windows 再検証も完了）。
-- `docs/tasks/README.md`: doc_maintenance で再生成（2 行が Settled へ）。
+- spec / test-spec / plan の #243 関連文書 status（Coordinator
+  承認による編集範囲拡張・2026-11-11）:
+  - `docs/specs/issue-243-gpui-realwin-windows.md`: proposed → implemented
+  - `docs/specs/issue-243-windows-multiwindow-smoke.md`: approved → implemented
+  - `docs/test-specs/issue-243-gpui-realwin-windows.md`: in-progress → implemented
+  - `docs/test-specs/issue-243-windows-multiwindow-smoke.md`: approved → implemented
+  - `docs/plans/implement-issue-243-gpui-realwin-windows.md`: in-progress → completed
+  - `docs/plans/issue-243-windows-multiwindow-smoke.md`: approved → completed
+- `docs/{tasks,specs,test-specs,plans,designs}/README.md`:
+  doc_maintenance apply で再生成（#243 行の status/配置更新に加え、
+  直前に main へ着地した #313 design/task 行の index-ordering /
+  metadata-mismatch も同時に解消）。
 - `docs/impl/ir/README.md`: hand-curated index のため手動で本 IR 行を
   追加。
 
@@ -151,10 +182,14 @@ fail-closed による再発防止）を追記し、#243 関連 task status を `
   根拠に初回は否定と記録されていたが、service 停止 ≠ kernel driver
   unload であり得る点が後続観測（LoL 終了 → vgk ログ停止 → 全回復）と
   整合する。時系列相関ベースの仮説として記録し、確証とは書かない。
-- **status 更新は task のみ、spec/test-spec/plan/design の status は
-  本 slice の編集範囲外**: 編集許可範囲が `docs/tasks/` 配下の status
-  更新に限定されていたため。それらの stale status 行は Coordinator への
-  確認事項として扱い、回答に応じて対応/未対応を PR に記録する。
+- **spec/test-spec/plan の status 更新は Coordinator 承認の範囲拡張で
+  実施**: 初期の編集許可範囲は `docs/tasks/` 配下の status 更新に限定
+  されていたため、`docs/specs`・`docs/test-specs`・`docs/plans` の
+  6 ファイルについて `orca orchestration ask` で拡張を依頼し、全件の
+  status 更新 + index 再生成が承認された（回答: 派生 index を直接
+  直すのではなく front matter の源を修正するのが正しい境界、
+  未検証項目を偽装しない旨の条件付き）。design の status は語彙上
+  `approved` が実態と一致するため変更していない。
 
 ## Related Experiments
 
@@ -191,11 +226,10 @@ true`（pointer/keyboard 両 check）、`problems=[]`、`checks` 16 件全 ok、
 
 ## Follow-ups
 
-- spec/test-spec/plan/design の #243 関連文書の status 行整合
-  （`docs/specs/README.md`・`docs/test-specs/README.md`・
-  `docs/plans/README.md` の stale 行）は、編集範囲外のため Coordinator
-  確認に依存 — 回答に応じて対応し、断られた場合は PR「未対応の作業」に
-  記録する。
+- ~~spec/test-spec/plan の #243 関連文書 status 行整合~~ **実施済み
+  （2026-11-11）**: Coordinator 承認の範囲拡張で 6 ファイルの status
+  front matter を更新し、管理 index を再生成済み（Changes 参照）。
+  design の status は `approved` が実態と一致するため不変。
 - macOS/Linux での同等 lane 実走、動的 DPI/モニター切断シナリオ —
   後続 #243 dispatch。
 - Native Plugin Dock 受入 — #388/#389・Synvelis #176 の OS 別 Gate。
