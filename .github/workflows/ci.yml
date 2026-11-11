@@ -1296,6 +1296,305 @@ jobs:
       - name: Lint host feature (mise run lint-l1-real-plugin)
         run: mise run lint-l1-real-plugin
 
+  # Issue #314 RF-GT-05 Phase 1: the GPUI driver lane — the
+  # driver-neutral contract family (boundary guard, driver contract,
+  # parity, native slot, component/view, golden core, scenario
+  # contract) plus the `gpui`/`gpui-test` feature lanes: semantic
+  # DrawnPlan oracle, scenario contract, consumer observation, and
+  # headless render tests. Headless by design — `gpui-test` stubs the
+  # OS surface so pixel capture honestly reports Unsupported; real
+  # pixels live in `test-ui-real-scenario` (Windows, manual) and
+  # `ui-gpui-offscreen-verify` (Linux Xvfb, below).
+  ui-gpui-verify:
+    name: ui-gpui-verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: ui-gpui-verify-${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust prek
+
+      # GPUI's Linux platform links X11/Wayland, fontconfig, Vulkan,
+      # and EGL/GL — the -dev packages its -sys dependencies probe via
+      # pkg-config. lavapipe (mesa-vulkan-drivers) gives the headless
+      # `gpui-test` renders a software Vulkan device.
+      - name: Install GPUI Linux build/runtime dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libxi-dev libxtst-dev libwayland-dev wayland-protocols \
+            libfontconfig1-dev libfreetype-dev libvulkan-dev libegl-dev \
+            libgl1-mesa-dev mesa-vulkan-drivers libvulkan1
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-ui-gpui-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-ui-gpui-
+
+      # Issue #329 (CI-OPT-02): same sccache setup as `verify` — the
+      # gpui feature lane compiles a different feature set, which
+      # sccache keeps distinct by construction. Kill switch: repo
+      # variable CI_SCCACHE_DISABLE=1.
+      - name: Set up sccache
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: "v0.19.0"
+
+      - name: Export sccache GHA backend env
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const token = process.env.ACTIONS_RUNTIME_TOKEN || '';
+            const url = process.env.ACTIONS_RESULTS_URL || '';
+            const gha = token !== '' && url !== '';
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', token);
+            core.exportVariable('ACTIONS_RESULTS_URL', url);
+            core.exportVariable('SCCACHE_GHA_ENABLED', gha ? 'true' : 'false');
+            core.exportVariable('SCCACHE_GHA_VERSION', `ruviform-v1-${process.env.RUNNER_OS || 'unknown'}`);
+            core.exportVariable('RUSTC_WRAPPER', 'sccache');
+            core.info(`sccache GHA backend: ${gha ? 'enabled' : 'disabled (cache credentials absent)'}`);
+
+      - name: Verify sccache environment
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v sccache
+          sccache --version
+          echo "RUSTC_WRAPPER=$RUSTC_WRAPPER"
+          echo "SCCACHE_GHA_ENABLED=$SCCACHE_GHA_ENABLED"
+          echo "SCCACHE_GHA_VERSION=$SCCACHE_GHA_VERSION"
+          if [ -n "${ACTIONS_RESULTS_URL:-}" ]; then echo "ACTIONS_RESULTS_URL: set"; else echo "::warning::ACTIONS_RESULTS_URL missing — sccache GHA backend disabled (local disk fallback)"; fi
+          if [ -n "${ACTIONS_RUNTIME_TOKEN:-}" ]; then echo "ACTIONS_RUNTIME_TOKEN: set"; else echo "::warning::ACTIONS_RUNTIME_TOKEN missing — sccache GHA backend disabled (local disk fallback)"; fi
+
+      - name: Driver boundary guard (mise run check-ui-driver-boundary)
+        run: mise run check-ui-driver-boundary
+
+      - name: Driver contract fixtures (mise run test-ui-driver-contract)
+        run: mise run test-ui-driver-contract
+
+      - name: Driver parity fixtures (mise run test-ui-parity)
+        run: mise run test-ui-parity
+
+      - name: Native slot contract (mise run test-ui-native-slot)
+        run: mise run test-ui-native-slot
+
+      - name: Component/view fixtures (mise run test-ui-component-view)
+        run: mise run test-ui-component-view
+
+      - name: Golden core (mise run test-ui-golden)
+        run: mise run test-ui-golden
+
+      - name: Scenario contract (mise run test-ui-scenario-contract)
+        run: mise run test-ui-scenario-contract
+
+      - name: Check GPUI feature (mise run check-ui-gpui)
+        run: mise run check-ui-gpui
+
+      - name: Lint GPUI feature (mise run lint-ui-gpui)
+        run: mise run lint-ui-gpui
+
+      - name: Test GPUI feature (mise run test-ui-gpui)
+        run: mise run test-ui-gpui
+
+      - name: Consumer observation seam (mise run test-ui-consumer-observation)
+        run: mise run test-ui-consumer-observation
+
+      - name: sccache statistics
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        shell: bash
+        run: sccache --show-stats || true
+
+  # Issue #314 RF-GT-05 Phase 2: Linux offscreen pixel-golden lane.
+  # `xvfb-run` provides a virtual X display — no GPU, no physical
+  # screen — and the mise task runs openbox inside it: a window
+  # manager is required for gpui's present path under Xvfb (bare
+  # Xvfb maps the window but presents never land — verified on
+  # mesa 25.x). GPUI renders into real X11 windows through Blade →
+  # lavapipe software Vulkan, and `gpui_driver::capture`'s X11
+  # backend reads the pixels back via `GetImage` — real OS-window
+  # pixels honestly recorded as `CapturePath::RealWindow` with
+  # `os_class=linux`. True render-target offscreen readback is not
+  # exposed by gpui 0.2.2's public API (evidence in
+  # docs/designs/gt-05-ci-offscreen-lanes-design.md), so the lane
+  # name refers to the headless environment, not the capture-path
+  # enum value.
+  ui-gpui-offscreen-verify:
+    name: ui-gpui-offscreen-verify
+    runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: ui-gpui-offscreen-verify
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust prek
+
+      # Same GPUI build deps as `ui-gpui-verify`'s Linux leg, plus the
+      # offscreen runtime: Xvfb virtual display (+xauth for
+      # xvfb-run), openbox as the window manager gpui's present path
+      # requires under Xvfb (bare Xvfb maps the window but no frame
+      # ever presents — verified empirically; see mise.toml
+      # test-ui-offscreen-xvfb), lavapipe software Vulkan (mesa ≥
+      # 24.2 — ubuntu-24.04 ships 24.2.x whose sw X11 WSI uses the
+      # window depth; older mesa hardcodes depth-24 PutImage against
+      # gpui's depth-32 ARGB windows → BadMatch → permanent black),
+      # pinned fonts so text rendering is deterministic across
+      # runner images, and x11-utils for the openbox readiness probe.
+      - name: Install GPUI offscreen lane dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libxi-dev libxtst-dev libwayland-dev wayland-protocols \
+            libfontconfig1-dev libfreetype-dev libvulkan-dev libegl-dev \
+            libgl1-mesa-dev mesa-vulkan-drivers libvulkan1 \
+            xvfb xauth openbox x11-utils fonts-dejavu-core fontconfig
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-ui-gpui-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-ui-gpui-
+
+      - name: Set up sccache
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: "v0.19.0"
+
+      - name: Export sccache GHA backend env
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const token = process.env.ACTIONS_RUNTIME_TOKEN || '';
+            const url = process.env.ACTIONS_RESULTS_URL || '';
+            const gha = token !== '' && url !== '';
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', token);
+            core.exportVariable('ACTIONS_RESULTS_URL', url);
+            core.exportVariable('SCCACHE_GHA_ENABLED', gha ? 'true' : 'false');
+            core.exportVariable('SCCACHE_GHA_VERSION', `ruviform-v1-${process.env.RUNNER_OS || 'unknown'}`);
+            core.exportVariable('RUSTC_WRAPPER', 'sccache');
+            core.info(`sccache GHA backend: ${gha ? 'enabled' : 'disabled (cache credentials absent)'}`);
+
+      - name: Verify sccache environment
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v sccache
+          sccache --version
+          echo "RUSTC_WRAPPER=$RUSTC_WRAPPER"
+          echo "SCCACHE_GHA_ENABLED=$SCCACHE_GHA_ENABLED"
+          echo "SCCACHE_GHA_VERSION=$SCCACHE_GHA_VERSION"
+          if [ -n "${ACTIONS_RESULTS_URL:-}" ]; then echo "ACTIONS_RESULTS_URL: set"; else echo "::warning::ACTIONS_RESULTS_URL missing — sccache GHA backend disabled (local disk fallback)"; fi
+          if [ -n "${ACTIONS_RUNTIME_TOKEN:-}" ]; then echo "ACTIONS_RUNTIME_TOKEN: set"; else echo "::warning::ACTIONS_RUNTIME_TOKEN missing — sccache GHA backend disabled (local disk fallback)"; fi
+
+      - name: Run offscreen golden lane (mise run test-ui-offscreen-xvfb)
+        run: mise run test-ui-offscreen-xvfb
+
+      # Evidence is env-gated inside the test; `always()` keeps the
+      # artifacts even when the lane fails (environment_blocked
+      # diagnosis needs the driver-lab JSONL).
+      - name: Upload offscreen evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offscreen-evidence-attempt-${{ github.run_attempt }}
+          path: evidence/issue-314-offscreen-xvfb/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: sccache statistics
+        if: vars.CI_SCCACHE_DISABLE != '1'
+        shell: bash
+        run: sccache --show-stats || true
+
   # Issue #366 (Full CI Stage 1): aggregated fail-closed summary — the
   # single terminal job every lane feeds. `if: always()` keeps it running
   # on skipped/failed needs; the verdict is a pure function of the `needs`
@@ -1319,7 +1618,7 @@ jobs:
   # `main-protect` ruleset's PR requirement plus human review.
   ci-summary:
     name: ci-summary
-    needs: [verify, verify-macos, rt-verify, icc-verify, compression-verify, io-structured-verify, ui-verify, ui-verify-macos, bench, l1-real-verify, l1-real-verify-macos]
+    needs: [verify, verify-macos, rt-verify, icc-verify, compression-verify, io-structured-verify, ui-verify, ui-verify-macos, ui-gpui-verify, ui-gpui-offscreen-verify, bench, l1-real-verify, l1-real-verify-macos]
     if: always()
     runs-on: ubuntu-latest
     env:
