@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034S7hWIC3uXInNg52Jtzp"
 type: "impl"
-status: "approved"
+status: "completed"
 title: "issue-299-io-structured-xml"
 created: "2026-11-05"
 updated: "2026-11-05"
