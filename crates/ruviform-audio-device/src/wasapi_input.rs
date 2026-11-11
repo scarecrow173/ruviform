@@ -12,6 +12,21 @@
 //! of cpal 0.18.2's `host/wasapi` input machinery plus the position
 //! hand-off cpal cannot express.
 //!
+//! Timestamp provenance: `capture` is the per-packet `GetBuffer`
+//! `qpcPosition` — the backend-reported instant the packet's first
+//! frame was recorded, already on the stream clock. `callback` is a
+//! fresh `QueryPerformanceCounter` read at packet-processing time —
+//! the port contract's *host-observed delivery instant*, on the same
+//! stream clock as [`NativeInputStream::now`]. cpal derives the
+//! callback instant from `IAudioClock::GetPosition`'s qpc half, but
+//! that is a position-*snapshot* instant: it reports `0` until the
+//! audio clock first runs (the first packet's callback instant would
+//! sit at the clock epoch, far *before* its own capture instant) and
+//! it lags the just-recorded packet by up to ~1 ms, so `capture`
+//! can appear after `callback`. A fresh counter read is honest on
+//! both counts — the delivery instant is by definition not earlier
+//! than the record instant.
+//!
 //! Scope: `#[cfg(windows)]` + host `"WASAPI"` input streams only
 //! ([`crate::device::native_input_route`]). Every other host,
 //! platform and the output direction keep the cpal path unchanged.
@@ -701,7 +716,9 @@ enum Command {
 struct RunContext {
     audio_client: Audio::IAudioClient,
     capture_client: Audio::IAudioCaptureClient,
-    audio_clock: Audio::IAudioClock,
+    /// `QueryPerformanceFrequency`, cached at open — the conversion
+    /// base for each packet's `perf_counter_instant` delivery stamp.
+    qpc_frequency: u64,
     commands: Receiver<Command>,
     /// Wait handles: `[pending, audio, monitor?]` — index 0 wakes for
     /// commands, 1 for capture packets, 2+ for default-device changes.
@@ -857,25 +874,6 @@ fn wait_for_handle_signal(handles: &[Foundation::HANDLE]) -> Result<usize, Devic
     Ok(usize::try_from(result.0 - Foundation::WAIT_OBJECT_0.0).unwrap_or(usize::MAX))
 }
 
-/// The `IAudioClock::GetPosition` qpc half → the callback
-/// [`StreamInstant`] (the device-position half is deliberately not
-/// used — the per-packet `GetBuffer` position is authoritative for
-/// `frame_position`).
-fn clock_callback_instant(audio_clock: &Audio::IAudioClock) -> Result<StreamInstant, DeviceError> {
-    let mut device_position = 0u64;
-    let mut qpc_position = 0u64;
-    // SAFETY: both out-params are valid u64 slots for the call;
-    // `audio_clock` is a live COM interface owned by this worker. The
-    // device-position half is discarded — the per-packet `GetBuffer`
-    // position is authoritative for `frame_position`.
-    unsafe {
-        audio_clock
-            .GetPosition(&raw mut device_position, Some(&raw mut qpc_position))
-            .map_err(|e| map_win_error(&e, ErrorCtx::ErrorCallback))?;
-    }
-    Ok(qpc100ns_to_stream_instant(qpc_position))
-}
-
 /// One captured packet → [`InputCallbackInfo`] + planar delivery.
 ///
 /// Discontinuity is evaluated *before* delivery (cpal parity): the
@@ -957,7 +955,12 @@ fn process_input(ctx: &mut RunContext) -> Result<(), DeviceError> {
                 Ok(()) => {}
             }
             let flags = flags.assume_init();
-            let callback = clock_callback_instant(&ctx.audio_clock)?;
+            // The delivery instant on the stream clock — a fresh QPC
+            // read, not `IAudioClock::GetPosition`'s position-snapshot
+            // instant (0 before the clock first runs, ~1 ms stale
+            // against the just-recorded packet — see the module
+            // provenance note).
+            let callback = perf_counter_instant(ctx.qpc_frequency)?;
             let packet_frames = u64::from(frames_available);
             let sample_count = usize::try_from(frames_available)
                 .ok()
@@ -1238,13 +1241,6 @@ pub(crate) fn open_input_stream(
             .GetService::<Audio::IAudioCaptureClient>()
             .map_err(|e| map_win_error(&e, ErrorCtx::Control))?
     };
-    // SAFETY: same as above.
-    let audio_clock = unsafe {
-        audio_client
-            .GetService::<Audio::IAudioClock>()
-            .map_err(|e| map_win_error(&e, ErrorCtx::Control))?
-    };
-
     // Default-device streams get the change monitor; pinned endpoints
     // do not (cpal `default_device_monitor` parity).
     let monitor = if default_device {
@@ -1277,7 +1273,7 @@ pub(crate) fn open_input_stream(
     let context = RunContext {
         audio_client,
         capture_client,
-        audio_clock,
+        qpc_frequency,
         commands: rx,
         handles,
         pending_device_changed,
