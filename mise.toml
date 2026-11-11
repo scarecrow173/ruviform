@@ -15,7 +15,7 @@ prek = "0.5.7"
 git-lfs = "3.8.0"
 "github:microsoft/apm" = "0.33.0"
 "pipx:serena-agent" = { version = "1.7.0", lazy = true }
-rust = { version = "1.99.0", components = ["rustfmt", "clippy"] }
+rust = { version = "1.99.0", components = ["rustfmt", "clippy"], mr_boxington = true }
 actionlint = "1.7.12"
 # UI PoC（poc/ui/frontend）の npm workspaces ビルド用。Issue #83:
 # 2026-10-21 Node.js セキュリティ更新を踏まえ修正版で固定
