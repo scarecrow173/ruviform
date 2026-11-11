@@ -824,3 +824,21 @@ run = "cargo test -p ruviform-audio-device --features real-device --test real_in
 [tasks.lint-audio-real-input]
 description = "Lint ruviform-audio-device at `-D warnings` with feature `real-device` (the E2E test target) — outside the default `lint` task's feature set"
 run = "cargo clippy -p ruviform-audio-device --all-targets --features real-device -- -D warnings"
+
+# Real-device MIDI lane (Issue #253): the `#[ignore]`-gated E2E tests
+# in `ruviform-midi-device` (adapter path — enumerate → open → repeated
+# `read` with stamp-domain/provenance + `dropped`/`unsupported`
+# observation → close → `StreamInvalidated`, plus the lib smoke test)
+# and `ruviform-audio-plugin-bridge` (`SystemBackend` → `InputTx::pump`
+# → `InputStage` counter-transparency path) exercise the real OS MIDI
+# backend — Windows WinMM is the only backend so far (other platforms
+# return `DeviceError::Unsupported`) — so the lane selects `--ignored`
+# explicitly. With no backend or no input ports the tests record the
+# condition and exit honestly — hardware traffic (events, nonzero
+# counters) is observed, never asserted or fabricated. Hardware-
+# dependent manual lane: never in CI; run records live under
+# `evidence/issue-253-real-midi-lane/`. `--test-threads=1` serializes
+# real port opens like `test-audio-real-input`.
+[tasks.test-midi-real-device]
+description = "Run the `#[ignore]`-gated real-device MIDI E2Es (`-p ruviform-midi-device -p ruviform-audio-plugin-bridge -- --ignored`) — Windows WinMM backend only; requires a MIDI input device and exits honestly without one (never fabricates measurements); manual lane, never CI"
+run = "cargo test -p ruviform-midi-device -p ruviform-audio-plugin-bridge -- --ignored --test-threads=1"

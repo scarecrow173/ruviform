@@ -2,9 +2,10 @@
 
 本ディレクトリは Issue #253 residual slice
 （`feature/253-unsupported-transparency-real-lane`）で整備した
-opt-in 実機検証 lane の実行記録。canonical lane 登録（mise task）は
-`mise.toml` が本 slice の編集範囲外のため follow-up として残り、
-暫定入口は `cargo test -- --ignored`。
+opt-in 実機検証 lane の実行記録。canonical lane は follow-up slice
+（`chore/253-midi-real-device-lane`）で `test-midi-real-device`
+として `mise.toml` に登録済み — 暫定入口
+`cargo test -- --ignored` は正規 lane に昇格した。
 
 ## 環境
 
@@ -46,6 +47,41 @@ test result: ok. 1 passed; 0 failed; 0 ignored; ... finished in 0.03s
 
 exit code: 0、出力: `no MIDI input ports`
 
+## canonical lane 実行記録（`test-midi-real-device`）
+
+follow-up slice `chore/253-midi-real-device-lane` で `mise.toml` に
+登録した canonical lane の実走記録。環境は上記「環境」表と同一
+（Windows 11 x64・rustc 1.99.0・MIDI input ポートなし）。
+
+### `mise run test-midi-real-device`
+
+exit code: 0
+
+```text
+[test-midi-real-device] $ cargo test -p ruviform-midi-device
+  -p ruviform-audio-plugin-bridge -- --ignored --test-threads=1
+
+running 1 test
+test real_midi_device_drives_input_tx_to_stage ... ok
+
+running 1 test
+test os::windows::tests::real_device_open_read_close_smoke ... ok
+
+running 1 test
+test real_device_open_read_observe_close ... ok
+```
+
+pass した 3 test の内訳は `--nocapture` 実走（補助証拠）で確認 —
+`real_device_open_read_observe_close` /
+`real_midi_device_drives_input_tx_to_stage` はともに
+`no MIDI input ports — nothing to verify` を記録して honest
+return（lib smoke は device 非在で即 return）。実測値の観測は
+0 件 — device 不在を Pass に偽装していない。
+
+### `mise exec -- cargo run -p ruviform-midi-device --example list_midi_ports`
+
+exit code: 0、出力: `no MIDI input ports`（環境再確認）
+
 ## 判定
 
 - **lane 整備**: Pass — enumerate → (ports なし → honest skip) →
@@ -59,9 +95,12 @@ exit code: 0、出力: `no MIDI input ports`
   `DeviceError::Unsupported` を返す経路はコード上実装済み
   （`backend().input_ports()` が `Err(Unsupported)` → early
   return）だが未実測。
-- **canonical lane 登録**: follow-up — `mise.toml` は別 Worker 占有
-  のため本 slice 対象外。`test-midi-real-input` 相当の lane 登録が
-  残作業。
+- **canonical lane 登録**: Done — `mise.toml` に
+  `test-midi-real-device` として登録済み
+  （`chore/253-midi-real-device-lane` slice。当時の仮称
+  `test-midi-real-input` 相当）。本環境での lane 実走は上記のとおり
+  全 `#[ignore]` test が honest skip・exit 0 — 実デバイス観測自体は
+  引き続き NotRun。
 
 ## 実機保有環境での再現手順
 
@@ -69,11 +108,11 @@ exit code: 0、出力: `no MIDI input ports`
 # 1. ポート列挙の確認
 cargo run -p ruviform-midi-device --example list_midi_ports
 
-# 2. adapter 経路（enumerate → open → read → 観測 → close）
-cargo test -p ruviform-midi-device -- --ignored --nocapture
-
-# 3. bridge 経路（SystemBackend → InputTx::pump → InputStage）
-cargo test -p ruviform-audio-plugin-bridge -- --ignored --nocapture
+# 2. canonical lane（adapter + bridge 両経路）
+mise run test-midi-real-device
+# eprintln の観測値を見る場合（補助入口）:
+# cargo test -p ruviform-midi-device -p ruviform-audio-plugin-bridge \
+#   -- --ignored --nocapture
 ```
 
 ポートが存在すれば、両 E2E は port capabilities・各 read/pump の
