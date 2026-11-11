@@ -16,30 +16,35 @@
 //! pointer/OS-input evidence.
 //!
 //! The visual layer is the point of this slice: `capture_frame`
-//! reads the real window's client-area pixels through
-//! `GpuiDriver::capture_window` (`PrintWindow` primary, screen
-//! `BitBlt` fallback — Windows only in this slice) and feeds them to
-//! `golden_check`/`BaselineStore::compare`. On a fresh store the
-//! verdict is `blocked`/`baseline_missing` — proof the pixels
+//! reads the real window's pixels through
+//! `GpuiDriver::capture_window` — `PrintWindow` primary, screen
+//! `BitBlt` fallback on Windows; X11 `GetImage` on Linux — and feeds
+//! them to `golden_check`/`BaselineStore::compare`. On a fresh store
+//! the verdict is `blocked`/`baseline_missing` — proof the pixels
 //! reached the compare path — and a second capture after
 //! candidate → promote must `pass`, the same loop
 //! `golden_capture.rs` verifies at the driver level.
 //!
-//! Windows + interactive desktop required: on a headless host the
-//! window cannot open and `run` reports `UiError::Host` — the cell
-//! records `observed="environment_blocked"` in the driver-lab
-//! evidence JSONL and panics with an `environment_blocked:` tag, a
-//! distinct classification from a GUI/test failure (the same
-//! verdict split the Issue #552 `os_input::preflight` lanes use —
-//! this lane injects no OS input, so the preflight itself does not
-//! apply). This target is gated on `real-scenario`, which
-//! `gpui-test` deliberately does not enable (the test platform
-//! stubs OS capture), so it runs as an auxiliary lane:
-//! `mise run test-ui-real-scenario` (manual, never CI) or
-//! `cargo test -p ruviform-ui-gpui --features real-scenario
-//! --test real_window`.
+//! Interactive display required: on Windows an interactive desktop
+//! session; on Linux an X display — the CI offscreen lane runs this
+//! target under `xvfb-run` (virtual framebuffer, no GPU/physical
+//! display) via `mise run test-ui-offscreen-xvfb`. On a headless
+//! host the window cannot open and `run` reports `UiError::Host` —
+//! the cell records `observed="environment_blocked"` in the
+//! driver-lab evidence JSONL and panics with an
+//! `environment_blocked:` tag, a distinct classification from a
+//! GUI/test failure (the same verdict split the Issue #552
+//! `os_input::preflight` lanes use — this lane injects no OS input,
+//! so the preflight itself does not apply). This target is gated on
+//! `real-scenario`, which `gpui-test` deliberately does not enable
+//! (the test platform stubs OS capture), so it runs as an
+//! auxiliary lane: `mise run test-ui-real-scenario` (manual, never
+//! CI — Windows interactive desktop) or
+//! `mise run test-ui-offscreen-xvfb` (Linux Xvfb — the RF-GT-05 CI
+//! lane), or `cargo test -p ruviform-ui-gpui --features
+//! real-scenario --test real_window`.
 
-#![cfg(all(windows, feature = "real-scenario"))]
+#![cfg(all(any(windows, target_os = "linux"), feature = "real-scenario"))]
 
 use std::path::{Path, PathBuf};
 
@@ -67,8 +72,22 @@ const THEMES: [&str; 2] = ["synvelis-dark", "audiolens-dark"];
 const SCALES: [f64; 2] = [1.0, 2.0];
 
 /// Mechanism tag written into driver-lab evidence rows — names the
-/// canonical mise lane that owns this test target.
+/// canonical mise lane that owns this test target on each OS.
+#[cfg(windows)]
 const EVIDENCE_MECHANISM: &str = "mise-task:test-ui-real-scenario";
+#[cfg(target_os = "linux")]
+const EVIDENCE_MECHANISM: &str = "mise-task:test-ui-offscreen-xvfb";
+
+/// `drain` boundaries waited before `body` — the driver default
+/// (30 ticks ≈ 0.5 s) covers Windows' first-paint settle. Linux
+/// needs far more: under the CI lane the renderer is Mesa
+/// lavapipe/llvmpipe on Xvfb, whose first-frame shader compilation
+/// takes seconds per window, so captures before ~9.6 s (600 ticks)
+/// read a still-black drawable.
+#[cfg(windows)]
+const STARTUP_SETTLE_TICKS: u32 = 30;
+#[cfg(target_os = "linux")]
+const STARTUP_SETTLE_TICKS: u32 = 600;
 
 /// Loads a theme fixture from the shared `ruviform-ui-test` theme
 /// JSON — identical to the Fake/GPUI-simulated matrix.
@@ -95,6 +114,11 @@ fn run_story_session(
     scale_factor: f64,
     body: impl FnOnce(&mut RealOsGuiTest, WindowId, ScenarioTarget) -> Result<(), ScenarioError>,
 ) {
+    // Surface gpui/blade platform logs when RUST_LOG is set — the
+    // real-window lane depends on the host GPU/X11 stack, so CI
+    // failures need the renderer's own diagnostics, not just the
+    // capture verdict.
+    let _ = env_logger::builder().is_test(false).try_init();
     let base = resolve_theme(theme_name);
     let themed = base.with_scale(ScaleContext {
         scale_factor,
@@ -120,7 +144,10 @@ fn run_story_session(
                 theme: Some(themed),
             },
         }],
-        RealWindowOptions::default(),
+        RealWindowOptions {
+            startup_settle_ticks: STARTUP_SETTLE_TICKS,
+            ..RealWindowOptions::default()
+        },
         |gui| {
             let window = gui
                 .windows()
@@ -204,8 +231,9 @@ fn story_environment(meta: CaptureMeta) -> EnvironmentMeta {
         os_version: None,
         backend: "gpui".to_string(),
         backend_detail: Some(format!(
-            "OsCapturedFrame.backend = {} (PrintWindow preferred, screen BitBlt fallback)",
-            meta.backend
+            "OsCapturedFrame.backend = {} ({})",
+            meta.backend,
+            capture_backend_note()
         )),
         gpu: None,
         scale_factor: meta.scale_factor,
@@ -214,6 +242,22 @@ fn story_environment(meta: CaptureMeta) -> EnvironmentMeta {
         ruviform_revision: env!("CARGO_PKG_VERSION").to_string(),
         tool_revision: None,
     }
+}
+
+/// Human-readable note for the OS capture path that produced
+/// `meta.backend` — kept beside the measured tag so baseline
+/// sidecars record *which* mechanism ran, per OS.
+#[cfg(windows)]
+fn capture_backend_note() -> &'static str {
+    "PrintWindow preferred, screen BitBlt fallback"
+}
+
+/// On Linux the pixels come from `GetImage` on the X11 window
+/// drawable — under the CI lane that drawable lives on an Xvfb
+/// virtual framebuffer (no GPU, no physical display).
+#[cfg(target_os = "linux")]
+fn capture_backend_note() -> &'static str {
+    "X11 GetImage on the window drawable (Xvfb virtual display in CI)"
 }
 
 /// Fresh per-run store dir — baselines never persist between runs,

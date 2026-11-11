@@ -19,6 +19,7 @@ gpui = [
     "dep:serde_json",
     "dep:raw-window-handle",
     "dep:windows-sys",
+    "dep:x11rb",
 ]
 # `gpui-test` enables gpui's `test-support` (TestAppContext /
 # `#[gpui::test]` / simulate_* APIs) for the headless render tests.
@@ -58,8 +59,10 @@ raw-window-handle = { version = "0.6", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # - windows-sys: the Win32 surface-container path (per-slot child HWND
-#   carrying clip/z-order/visibility for an embedded native editor).
-#   Target-gated and optional: only compiled on Windows under `gpui`.
+#   carrying clip/z-order/visibility for an embedded native editor)
+#   plus the OS-window pixel capture backend (`PrintWindow`/`BitBlt`
+#   in `gpui_driver::capture`). Target-gated and optional: only
+#   compiled on Windows under `gpui`.
 windows-sys = { version = "0.61", optional = true, features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
@@ -68,12 +71,25 @@ windows-sys = { version = "0.61", optional = true, features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# - x11rb: the X11 connection behind `gpui_driver::capture`'s Linux
+#   backend — `GetImage` pixel readback and window geometry for the
+#   Issue #314 offscreen (Xvfb) golden lane. Already in the graph via
+#   gpui's own x11rb dependency, so this adds no new crates; it is
+#   still optional so non-`gpui` builds stay headless. Target-gated:
+#   macOS keeps its unsupported placeholder.
+x11rb = { version = "0.13.1", optional = true, features = ["image"] }
+
 [dev-dependencies]
 # - ruviform-ui-test: the shared Window/Dock lifecycle fixture
 #   (`lifecycle::run_lifecycle`) that the Fake and GPUI drivers both run
 #   (Issue #386). Test-only; the production graph is untouched, and the
 #   test crate depends on no GPUI type, so the boundary stays one-way.
 ruviform-ui-test = { path = "../ruviform-ui-test" }
+# - env_logger: surfaces gpui/blade `log` records in the real-window
+#   lane when RUST_LOG is set — required to diagnose host GPU/X11
+#   stack failures that the capture verdict alone cannot explain.
+env_logger = "0.11"
 
 [[example]]
 name = "minimal_window"
