@@ -19,6 +19,7 @@ Directory: `docs/specs`
 | SPEC-034IcwhwIFSNUNKtX7KK0Q | Rust 開発基盤の確立（mise/APM lockfile・最小ワークスペース・手動CI） | approved | [establish-rust-dev-foundation.md](./establish-rust-dev-foundation.md) |
 | SPEC-034VtOJn6cykr1CPohlDAX | RF-GT-05 CI offscreen lanes — GPUI lane CI 収載 + Linux offscreen golden | approved | [gt-05-ci-offscreen-lanes.md](./gt-05-ci-offscreen-lanes.md) |
 | SPEC-034JcicHlRidBgcK1wPtj2 | 動画基盤 API の確定（video-core / video-proc・色変換・HDR 対応範囲） | approved | [implement-video-foundation-api.md](./implement-video-foundation-api.md) |
+| SPEC-A8NXYmNb4ydatXQlOH1ptr | IO-06 Gate matrix 実走と証拠記録（Issue #288 slice） | approved | [io-06-gate-run.md](./io-06-gate-run.md) |
 | SPEC-034O7hTzfdwtNrUQom8ISw | Issue #121 L1 診断・可観測性（underrun メトリクス・子 stderr 配管・失敗原因 payload） | approved | [issue-121-diagnostics.md](./issue-121-diagnostics.md) |
 | SPEC-034N3QmyfzJRPM3AVpKQTn | Issue #124 OFX フォローアップ（catalog_open cross-window h 露出修正 + instance clip props clone） | approved | [issue-124-ofx-cross-window-h-exposure.md](./issue-124-ofx-cross-window-h-exposure.md) |
 | SPEC-034udQra6CS6JQJJN4e0hG | Issue #127 Linux 実配布方式の設計 — GPUI 標準 Driver の runtime 依存・Capability Matrix・パッケージ形式適合条件 | proposed | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
@@ -46,7 +47,7 @@ Directory: `docs/specs`
 | SPEC-U5ytIWyq22nGIRlXTz2LIN | Issue #251 Stage W closeout — 実機 lane 証拠化と残存受入項目の検証・記録 | approved | [issue-251-stage-w-real-device-closeout.md](./issue-251-stage-w-real-device-closeout.md) |
 | SPEC-034Vj1oEP5t1a8EwNeZV4L | Issue #253 plugin→host report の host-graph consumer 配線 slice | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | SPEC-rf253osmidibackend001 | Issue #253 OS MIDI input backend slice（Windows 実装 + macOS/Linux Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
-| SPEC-034VEOYg1GvMKRp6MWAh4D | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | draft | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
+| SPEC-034VEOYg1GvMKRp6MWAh4D | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | SPEC-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice（IMidiMapping CC→param 配送 + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | SPEC-034UjQv2KPJWujHxiCffIK | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | SPEC-8EJ4gM4rl1pb5GPij5Nm0l | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
@@ -94,6 +95,7 @@ Directory: `docs/specs`
 | SPEC-3S6R25rgxNv9VL9etjWsH9 | Issue #311 RF-GT-02 Rust↔TypeScript IPC Schema Conformance・Deterministic Record/Replay・Fault Matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | SPEC-034S312gtUiTestSpecBB22 | Issue #312 test-only GUI host lifecycle・secure control adapter・fixture/clock/observation 仕様 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | SPEC-034VOSINPDRV4REAL0SIN1 | Issue #313 — `RealOsPointerOrKeyboard` capability 実装（real-window scenario adapter 経由の OS 注入 E2E） | approved | [issue-313-real-os-input-driver.md](./issue-313-real-os-input-driver.md) |
+| SPEC-034WIND0WEDTESTI0S2SP | Issue #313 — windowed `TestIo` / `rvf.uitest.v1` 配線（GPUI backend、slice S2） | approved | [issue-313-windowed-testio.md](./issue-313-windowed-testio.md) |
 | SPEC-034UkPTR1W1N5M0K3P01 | Issue #313 — Windows 実 OS SendInput ポインタ smoke（部分スコープ・後続スライス） | approved | [issue-313-windows-pointer-smoke.md](./issue-313-windows-pointer-smoke.md) |
 | SPEC-034UjKJM3JWo1yfqUTlRka | Issue #313 — Windows 実 OS SendInput キーボード smoke と OS Capability Matrix（部分スコープ） | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | SPEC-034Ug8RuRab8De5zcQCjTB | Issue #314 slice 3 — GPUI/OS capture backend と能力の正直な配線 | proposed | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
@@ -210,4 +212,3 @@ Directory: `docs/specs`
 | SPEC-034UetYOiYEThOr1lvUH8t | Issue #478 Fader/Knob 縦寸法契約 — h_full 兄弟押し出しのレイアウト判断 | implemented | [issue-478-fader-knob-height-contract.md](./issue-478-fader-knob-height-contract.md) |
 | SPEC-034JceNZQvAawWwMH4ct91 | 時間型拡張（FrameRate/TimeBase 意味分離・Timecode 拡張・丸め誤差累積方針） | implemented | [time-type-extension-framerate-timecode-rounding.md](./time-type-extension-framerate-timecode-rounding.md) |
 | SPEC-034N3JBtBP4dPi8ob9HwDV | video-proc RT 検証レーンへの assert_no_alloc 適用（Issue #126） | implemented | [video-proc-rt-verification-lane.md](./video-proc-rt-verification-lane.md) |
-| SPEC-034WIND0WEDTESTI0S2SP | Issue #313 — windowed `TestIo` / `rvf.uitest.v1` 配線（GPUI backend、slice S2） | approved | [issue-313-windowed-testio.md](./issue-313-windowed-testio.md) |

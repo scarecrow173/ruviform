@@ -22,6 +22,7 @@ Directory: `docs/test-specs`
 | TSPEC-034J6OIFK83GJIsST60Jck | 公開 enum 拡張性と時間演算精度の契約保証 | approved | [followup-enum-compat-and-time-arithmetic.md](./followup-enum-compat-and-time-arithmetic.md) |
 | TSPEC-034VuaxHGNnRX9WpfdZpMq | RF-GT-05 CI offscreen lanes test spec | approved | [gt-05-ci-offscreen-lanes.md](./gt-05-ci-offscreen-lanes.md) |
 | TSPEC-034LFCoZvNuuSaGpSTrbp0 | IccTransform ICC 経路 契約テスト仕様 | approved | [icc-transform-contract-tests.md](./icc-transform-contract-tests.md) |
+| TSPEC-hCescNtTTgZy1xetgEJlap | IO-06 Gate matrix 実走証拠の記録 | approved | [io-06-gate-run.md](./io-06-gate-run.md) |
 | TSPEC-034NOX3x1mfWrROBAq4Wqu | L1 supervisor core tests（Issue #116 — watch/poll state machine・backoff・GaveUp・host binding・checkpoint bound） | approved | [issue-116-supervisor-core-tests.md](./issue-116-supervisor-core-tests.md) |
 | TSPEC-034NOXcdTo4m1tfmRleM0V | L1 supervisor E2E tests（Issue #116 — 実子 restart・bundle burst・crash-loop GaveUp・restore 分類・lingering） | approved | [issue-116-supervisor-e2e-tests.md](./issue-116-supervisor-e2e-tests.md) |
 | TSPEC-034NlQ9qbEN4prlkfCwvdl | L1 bundle E2E tests（Issue #117 — pool lifecycle・隔離 surface・runner registry・dedicated 非回帰） | approved | [issue-117-bundle-e2e-tests.md](./issue-117-bundle-e2e-tests.md) |
@@ -60,7 +61,7 @@ Directory: `docs/test-specs`
 | TSPEC-O0zY9nWrOb2qwg92Z8nFZb | Issue #251 Stage W closeout test spec — 実機 lane 検証項目 | approved | [issue-251-stage-w-real-device-closeout.md](./issue-251-stage-w-real-device-closeout.md) |
 | TSPEC-034Vj5N4I9PzPBumQHnxgK | Issue #253 host-graph report consumer テスト仕様 | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | TESTSPEC-rf253osmidibackend001 | Issue #253 OS MIDI input backend test specification | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
-| TSPEC-034VERR0DyAdyknxAagH1U | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane テスト仕様 | draft | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
+| TSPEC-034VERR0DyAdyknxAagH1U | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane テスト仕様 | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | TST-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice テスト仕様 | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TSPEC-034UjQC8AnQxl52Q8wCT6N | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | TSPEC-sFT08b6Qp306TbonlKfL28 | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
@@ -109,6 +110,7 @@ Directory: `docs/test-specs`
 | TSPEC-e0XfO8Zf3a26iGOk1UyquR | Issue #311 RF-GT-02 test specification — fixture conformance・record/replay determinism・fault matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | TSPEC-034S312gtUiTestTspFF66 | Issue #312 ruviform-ui-test — lifecycle/control/fixture/clock/observation/fail-closed test specification | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | TSPEC-34VOSINPDRV4REAL0SIN4 | Issue #313 — `RealOsPointerOrKeyboard` capability 検証契約 | approved | [issue-313-real-os-input-driver.md](./issue-313-real-os-input-driver.md) |
+| TSPEC-34WIND0WEDTESTI0S2TS | Issue #313 — windowed `TestIo` 検証契約（slice S2） | approved | [issue-313-windowed-testio.md](./issue-313-windowed-testio.md) |
 | TSPEC-034UkPTR1W1N5M0K3P03 | Issue #313 — Windows 実 OS SendInput ポインタ smoke 検証契約 | approved | [issue-313-windows-pointer-smoke.md](./issue-313-windows-pointer-smoke.md) |
 | TSPEC-034UjMKOaa4DzlRpbwWOuL | Issue #313 — Windows 実 OS SendInput キーボード smoke 検証契約 | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | TSPEC-034Ug943CVpTG4Br56eTfE | Issue #314 slice 3 — GPUI/OS capture backend test spec | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
@@ -218,4 +220,3 @@ Directory: `docs/test-specs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TSPEC-034WvK9mNqR2sTxYcAbEfG | consumer-impact-check workflow の PR 分類機械検査（記入検査・unknown 解消先・draft 除外） | superseded | [consumer-impact-check-pr-classification.md](./consumer-impact-check-pr-classification.md) |
-| TSPEC-34WIND0WEDTESTI0S2TS | Issue #313 — windowed `TestIo` 検証契約（slice S2） | approved | [issue-313-windowed-testio.md](./issue-313-windowed-testio.md) |

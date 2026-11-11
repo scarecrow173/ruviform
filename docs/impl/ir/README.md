@@ -215,3 +215,4 @@ Directory: `docs/impl/ir`
 | IMPL-034VOSINPDRV4REAL0SIN6 | Issue #313 `RealOsPointerOrKeyboard` capability 実装と Windows 実入力 E2E 証拠 | completed | [issue-313-real-os-input-driver-slice.md](./issue-313-real-os-input-driver-slice.md) |
 | IMPL-034VFhJztohjkuJtNUpBHT | Issue #253 unsupported transparency slice | completed | [issue-253-unsupported-transparency-slice.md](./issue-253-unsupported-transparency-slice.md) |
 | IMPL-034VFzhzdEyknToi5VSfS5 | Issue #313 S2 windowed `TestIo`/`rvf.uitest.v1` GPUI backend 配線 | completed | [issue-313-windowed-testio-slice.md](./issue-313-windowed-testio-slice.md) |
+| IMPL-kQ7mXv2nLp8wRtYb5jHc3d | Issue #288 IO-06 Gate matrix 実走記録（rf288 slice） | completed | [io-06-gate-run-ir.md](./io-06-gate-run-ir.md) |

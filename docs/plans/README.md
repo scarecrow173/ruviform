@@ -79,7 +79,7 @@ Directory: `docs/plans`
 | PLAN-cNIlZseMNfbfI0D3uYpFLK | Issue #238 実施計画 — l1_proxy_e2e 壁時計 sleep 同期を有界 barrier/poll 待機へ置換 | approved | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
 | PLAN-034QxdNzPfzn5oye9cCzne | Issue #244 media-reader prefetch contract wart fixes implementation plan | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | PLAN-yYLB0HDhiCqmnfV65T7mNu | Issue #251 Stage W closeout 実施 plan | approved | [issue-251-stage-w-real-device-closeout-plan.md](./issue-251-stage-w-real-device-closeout-plan.md) |
-| PLAN-034VERRPegu2dLBq0VqYol | Implement Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | draft | [issue-253-unsupported-transparency-plan.md](./issue-253-unsupported-transparency-plan.md) |
+| PLAN-034VERRPegu2dLBq0VqYol | Implement Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-plan.md](./issue-253-unsupported-transparency-plan.md) |
 | PLAN-034UjQKJduyKqWBrTakfn1 | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | PLAN-H6keHUx9U3sTwtH2ngWKyQ | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | PLAN-034RoY5EwSBQJwEF1k5arE | Issue #276 generic logging adapter implementation plan | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
@@ -113,6 +113,7 @@ Directory: `docs/plans`
 | PLAN-fUxIG0DACT0SXtitvEBE3q | Issue #311 RF-GT-02 実装計画 — ui/guitest + Rust conformance lanes | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | PLAN-034S312gtUiTestPlnEE55 | Issue #312 ruviform-ui-test implementation plan | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | PLAN-034VOSINPDRV4REAL0SIN3 | Issue #313 — `RealOsPointerOrKeyboard` capability 実装計画 | approved | [issue-313-real-os-input-driver-plan.md](./issue-313-real-os-input-driver-plan.md) |
+| PLAN-034WIND0WEDTESTI0S2PL | Issue #313 — windowed `TestIo` / `rvf.uitest.v1` 実装計画（slice S2） | approved | [issue-313-windowed-testio-plan.md](./issue-313-windowed-testio-plan.md) |
 | PLAN-034UkPTR1W1N5M0K3P04 | Issue #313 — Windows 実 OS SendInput ポインタ smoke 実装計画 | approved | [issue-313-windows-pointer-smoke.md](./issue-313-windows-pointer-smoke.md) |
 | PLAN-034UjMMA7vTOdlkqHFOrca | Issue #313 — Windows 実 OS SendInput キーボード smoke 実装計画 | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | PLAN-034Ug8XG3cIM1VEYu5sQpv | Issue #314 slice 3 — GPUI/OS capture backend 実装計画 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
@@ -194,6 +195,7 @@ Directory: `docs/plans`
 | PLAN-034LFFj86hwRvUljHN54Mc | Issue #99 実施計画 — video-proc 色変換カーネル（linear working space + ICC 入出力経路） | completed | [implement-issue-99-color-conversion-kernels.md](./implement-issue-99-color-conversion-kernels.md) |
 | PLAN-034JcvpHIlt5JmqvgOquvI | プラグイン基盤の実装（ruviform-plugin-core + CLAP/VST3 アダプタ・binding PoC） | completed | [implement-plugin-foundation.md](./implement-plugin-foundation.md) |
 | PLAN-034JxNegJktSAJZ2LuO0N8 | Issue #21 RT 基盤の実装（ruviform-rt プリミティブ・ruviform-exec スレッド優先度機構） | completed | [implement-rt-foundation.md](./implement-rt-foundation.md) |
+| PLAN-K87gfjgzqnomAg4MWPIJvP | IO-06 Gate matrix 実走と証拠記録（Issue #288 slice） | completed | [io-06-gate-run-plan.md](./io-06-gate-run-plan.md) |
 | PLAN-034J6OTwge4rS96WZWkZgd | Issue #18 フォローアップの実装（公開 enum 方針適用・時間演算修正・改善トリアージ） | completed | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
 | PLAN-034QkFry8lZR9PeeXNpx09 | Issue #186 Parameter Control Events — implementation plan | completed | [issue-186-param-control-events.md](./issue-186-param-control-events.md) |
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
@@ -213,4 +215,3 @@ Directory: `docs/plans`
 | PLAN-034U0ARdtPkZR0btUirc6D | Issue #463 — Spectrogram cell intensity 修正計画 | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | PLAN-VM42GIDhiqjgeTP4U1EbJM | Issue #464 slice — Scenario Runner・Report 組み立て契約の実装計画 | completed | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
 | PLAN-Y2emYF0VFlVKTxwsGWm4Ev | ruviform-io-file Rooted Read Capability 実装計画 | completed | [rooted-read-capability.md](./rooted-read-capability.md) |
-| PLAN-034WIND0WEDTESTI0S2PL | Issue #313 — windowed `TestIo` / `rvf.uitest.v1` 実装計画（slice S2） | approved | [issue-313-windowed-testio-plan.md](./issue-313-windowed-testio-plan.md) |

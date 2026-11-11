@@ -22,6 +22,7 @@ Directory: `docs/designs`
 | DESIGN-034Mclz5y96MrTg7R2BNCx | エンジン/利用側へのプラグイン統合（RT endpoint 所有分離 + グラフ接着） | approved | [engine-plugin-host-integration.md](./engine-plugin-host-integration.md) |
 | DESIGN-034KQXr3w4dYgKO79dklG9 | Foundation/Observability 候補モジュールの最小 API・依存 DAG・新設時期の設計 | approved | [foundation-observability-minimal-api.md](./foundation-observability-minimal-api.md) |
 | DESIGN-034Vu9v1geiqmFittsRAEQ | RF-GT-05 CI offscreen lanes design | approved | [gt-05-ci-offscreen-lanes-design.md](./gt-05-ci-offscreen-lanes-design.md) |
+| DESIGN-xYI287PLIiNGr8mOrzVr7c | IO-06 Gate matrix 実走証拠の記録設計 | approved | [io-06-gate-run-design.md](./io-06-gate-run-design.md) |
 | DESIGN-034MIeiBWXpLjwgA1yolIT | L1 規格アダプタの子プロセス組込み・実プラグイン E2E（CLAP + VST3 host-side bridge — Issue #114） | approved | [issue-114-real-adapter-l1-e2e.md](./issue-114-real-adapter-l1-e2e.md) |
 | DESIGN-034N3J1C5vystrbJl69R1q | L1 GUI — プロセス境界越しの親ウィンドウ埋め込みの採否設計（Issue #115） | approved | [issue-115-l1-gui-cross-process-parenting.md](./issue-115-l1-gui-cross-process-parenting.md) |
 | DESIGN-034NNxNMrrk6OoIGfX18rk | L1 supervisor（自動再起動 util 層）設計（Issue #116） | approved | [issue-116-supervisor.md](./issue-116-supervisor.md) |
@@ -63,7 +64,7 @@ Directory: `docs/designs`
 | DESIGN-cJ0I0j6o66AAfUm2eE5q8y | Issue #251 Stage W closeout 設計 — 実機 lane 拡張と証拠 matrix | approved | [issue-251-stage-w-real-device-closeout-design.md](./issue-251-stage-w-real-device-closeout-design.md) |
 | DESIGN-034Vj33PXgAsLoeNPU9c8f | Issue #253 plugin→host report の host-graph consumer 配線 | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | DESIGN-rf253osmidibackend001 | Issue #253 OS MIDI input backend design（WinMM adapter + Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
-| DESIGN-034VEQoHhDL68K8qLl8w8r | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | draft | [issue-253-unsupported-transparency-design.md](./issue-253-unsupported-transparency-design.md) |
+| DESIGN-034VEQoHhDL68K8qLl8w8r | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-design.md](./issue-253-unsupported-transparency-design.md) |
 | DSN-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice 設計（IMidiMapping snapshot + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | DESIGN-034UjQBuwtfaWhLg6ZZMBn | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合設計 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | DESIGN-hXhz1NTWfHfPzPb5P4A5ff | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
@@ -112,6 +113,7 @@ Directory: `docs/designs`
 | DESIGN-wrF61tPcejIc31wMBYJHok | Issue #311 RF-GT-02 ui/guitest — IPC conformance fixture・deterministic record/replay・fault matrix 設計 | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | DESIGN-034S312gtUiTestDsnDD44 | Issue #312 ruviform-ui-test — test-only GUI host lifecycle・secure control adapter 設計 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | DESIGN-34VOSINPDRV4REAL0SIN2 | Issue #313 — `RealOsPointerOrKeyboard` capability 設計（OS-input port on `RealOsGuiTest`） | approved | [issue-313-real-os-input-driver-design.md](./issue-313-real-os-input-driver-design.md) |
+| DESIGN-34WIND0WEDTESTI0S2DE | Issue #313 — windowed `TestIo` 設計（neutral 語彙統一 + GPUI adapter） | approved | [issue-313-windowed-testio-design.md](./issue-313-windowed-testio-design.md) |
 | DESIGN-034UkPTR1W1N5M0K3P02 | Issue #313 — Windows 実 OS SendInput ポインタ smoke 設計（部分スコープ・後続スライス） | approved | [issue-313-windows-pointer-smoke.md](./issue-313-windows-pointer-smoke.md) |
 | DESIGN-034UjLB6Yn2hveYiujXFY0 | Issue #313 — Windows 実 OS SendInput キーボード smoke 設計（部分スコープ） | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | DESIGN-034Ug8WYFJ37a8hKlmcQaW | Issue #314 slice 3 — GPUI/OS capture backend の設計 | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
@@ -213,4 +215,3 @@ Directory: `docs/designs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | superseded | [music-time-model.md](./music-time-model.md) |
-| DESIGN-34WIND0WEDTESTI0S2DE | Issue #313 — windowed `TestIo` 設計（neutral 語彙統一 + GPUI adapter） | approved | [issue-313-windowed-testio-design.md](./issue-313-windowed-testio-design.md) |
