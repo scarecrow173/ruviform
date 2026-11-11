@@ -1,10 +1,10 @@
 ---
 id: "SPEC-034UdM9XszyXZB0hZ8wvnc"
 type: "spec"
-status: "proposed"
+status: "implemented"
 title: "Issue #243 GPUI 実機 GUI 検証 — Windows 実窓ライフサイクル証拠（部分スコープ）"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-11"
 owners: ["scarecrow173"]
 relations:
   source:

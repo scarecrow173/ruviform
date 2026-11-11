@@ -4,12 +4,12 @@ type: "impl"
 status: "completed"
 title: "Issue #243 Windows 実 OS multiwindow smoke 証拠"
 created: "2026-11-10"
-updated: "2026-11-10"
+updated: "2026-11-11"
 owners: []
 relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/243"
-    - "../specs/issue-243-windows-multiwindow-smoke.md"
+    - "docs/specs/issue-243-windows-multiwindow-smoke.md"
   changes:
     added:
       - type: "file"
@@ -52,18 +52,19 @@ relations:
   superseded-by: []
   related:
     - "../ir/issue-243-gpui-realwin-windows.md"
-    - "../designs/issue-243-gpui-realwin-windows.md"
-    - "../designs/issue-243-windows-multiwindow-smoke.md"
+    - "../ir/issue-243-multiwindow-closeout-slice.md"
+    - "docs/designs/issue-243-gpui-realwin-windows.md"
+    - "docs/designs/issue-243-windows-multiwindow-smoke.md"
   refines: []
   refined-by: []
   derives-from:
-    - "../test-specs/issue-243-windows-multiwindow-smoke.md"
+    - "docs/test-specs/issue-243-windows-multiwindow-smoke.md"
   derived-by: []
   verifies:
-    - "../test-specs/issue-243-windows-multiwindow-smoke.md"
+    - "docs/test-specs/issue-243-windows-multiwindow-smoke.md"
   verified-by: []
   references:
-    - "../specs/issue-243-windows-multiwindow-smoke.md"
+    - "docs/specs/issue-243-windows-multiwindow-smoke.md"
   defers: []
   deferred-by: []
 metadata:
@@ -238,30 +239,31 @@ sendinput.md` に記録。Issue #243 全体は Open 継続
 
 ## Risks
 
-- **post-refactor binary の実 OS 未検証**: refactor は clippy 対応の
-  構造変更であり headless lane は全 pass するが、実 OS 入力での
-  再検証は環境ブロックにより未実施。健全 host での再実行
-  （`mise run example-ui-gpui-real-os-multiwindow-smoke`）が
-  必要。pre-refactor の pass 証拠は有効だが最終コードの直接証拠
-  ではない。
-- **SendInput 環境ブロックの原因未同定**: session 中に導入された
-  injected-input filter（user-mode hook または kernel filter）の
-  可能性。サービス停止には admin 権限が必要で worker 範囲外。
-  reboot または該当コンポーネント除去で解消する可能性。
+- ~~**post-refactor binary の実 OS 未検証**~~ **解消（2026-11-11）**:
+  Vanguard unload 後の PR #551 再実走（schema v1）と closeout slice での
+  再実走（schema v2・HEAD `4eea9115`・`mise run
+  example-ui-gpui-real-os-multiwindow-smoke` exit 0・verdict=pass・
+  preflight effective・16 checks green）で最終コードの実 OS 直接証拠を
+  取得。詳細は `docs/impl/ir/issue-243-multiwindow-closeout-slice.md`。
+- ~~**SendInput 環境ブロックの原因未同定**~~ **解消（2026-11-11）**:
+  Riot Vanguard `vgk.sys` armed 状態が最有力原因（driver 完全 unload 後に
+  SendInput 全回復。因果は未確証 — 時系列相関ベース）。#552 の
+  `os_input::preflight` fail-closed で再発時は exit 3
+  `environment_blocked` で明示的に落ちる。詳細は
+  `evidence/issue-243-multiwindow-verify/environment-blocked-sendinput.md`
+  Resolution 節。
 - **実行中のユーザー物理入力との競合**: manual lane は実カーソルを
   使用するため、実行中のマウス/キーボード操作は結果を変え得る
   （運用注意として docs に明記）。
 
 ## Follow-ups
 
-- **再検証**: SendInput preflight（`move_to`→`cursor_position`
-  read-back）が機能する host で
-  `mise run example-ui-gpui-real-os-multiwindow-smoke` を再実行し、
-  verdict JSON を更新する。
-- **SendInput ブロック原因の特定**: admin 権限で残存 service
-  （`GameInputRedistService`・Razer 系）を停止する bisect、
-  または reboot 後の再確認。恒久的な filter なら #313 owner が
-  backend 代替（legacy API 等）を判断。
+- ~~**再検証**~~ **実施済み（2026-11-11）**: 上記 Risks 参照。canonical
+  verdict JSON は v2 schema・preflight 付きで再生成済み。
+- ~~**SendInput ブロック原因の特定**~~ **実施済み（2026-11-11）**:
+  Vanguard armed 状態が最有力仮説として記録（因果未確証は明記）。
+  恒久 filter 再発時は preflight が exit 3 で fail-closed するため、
+  backend 代替判断は再発時に #313 owner へ。
 - **macOS/Linux・動的 DPI/モニター・モニター切断**: 本 dispatch
   環境外。後続 #243 dispatch。
 - **Native Plugin Dock**: #388/#389・Synvelis #176 の OS 別 Gate。

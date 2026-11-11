@@ -203,6 +203,7 @@ Directory: `docs/impl/ir`
 | IMPL-034V4ltq3DWHBuZVbOLTjH | Issue #284 IO-02 Structured Formats 設計正本照合・契約試験棚卸し slice | completed | [issue-284-io-02-structured-formats-slice.md](./issue-284-io-02-structured-formats-slice.md) |
 | IMPL-034Ue3QZ2los1ccAjflw0X | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 | completed | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | IMPL-034V5Vzh8RJqYBNZRA9QZW | Issue #243 Windows 実 OS multiwindow smoke 証拠 | completed | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
+| IMPL-034VCg0FFHoUGWo9FDCg0f | Issue #243 Windows multiwindow verdict 再実走・帳簿整合 closeout slice | completed | [issue-243-multiwindow-closeout-slice.md](./issue-243-multiwindow-closeout-slice.md) |
 | IMPL-rAJqQxI07EYCwOdCi-Qyd | Issue #286 IO-04 ZIP/TAR Archive — 設計正本照合・契約試験棚卸し slice | completed | [issue-286-io-04-archive-acceptance-recheck.md](./issue-286-io-04-archive-acceptance-recheck.md) |
 | IMPL-BneVKCjBRwNA5pxIVfIZ6X | Issue #285 IO-03 Compression — 設計正本照合・契約試験棚卸し | completed | [issue-285-io-03-compression-contract-audit.md](./issue-285-io-03-compression-contract-audit.md) |
 | IMPL-034VeXFI5DET4CkhWJrBln | Issue #552 SendInput preflight（注入→実効 read-back で environment_blocked を区別） | completed | [issue-552-sendinput-preflight-read-back-environment-blocked.md](./issue-552-sendinput-preflight-read-back-environment-blocked.md) |
@@ -212,4 +213,5 @@ Directory: `docs/impl/ir`
 | IMPL-034VnQ9uBnTxr8BNjvWsMt | Issue #253 L1 wire report verb（wire-v4 DrainOutputReports/Reports + runner backlog + host chunked drain + fixture E2E） | completed | [rf-253-l1-report-verb.md](./rf-253-l1-report-verb.md) |
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
 | IMPL-034VOSINPDRV4REAL0SIN6 | Issue #313 `RealOsPointerOrKeyboard` capability 実装と Windows 実入力 E2E 証拠 | completed | [issue-313-real-os-input-driver-slice.md](./issue-313-real-os-input-driver-slice.md) |
+| IMPL-034VFhJztohjkuJtNUpBHT | Issue #253 unsupported transparency slice | completed | [issue-253-unsupported-transparency-slice.md](./issue-253-unsupported-transparency-slice.md) |
 | IMPL-034VFzhzdEyknToi5VSfS5 | Issue #313 S2 windowed `TestIo`/`rvf.uitest.v1` GPUI backend 配線 | in-progress | [issue-313-windowed-testio-slice.md](./issue-313-windowed-testio-slice.md) |

@@ -42,12 +42,11 @@ Directory: `docs/specs`
 | SPEC-034QdDDqIQgpFoBr9E1Z1T | Issue #219 両 Consumer 互換契約・影響判定・証拠要件と Cross-Repo CI Gate 仕様 | proposed | [issue-219-consumer-compat-contract.md](./issue-219-consumer-compat-contract.md) |
 | SPEC-034QoidM48Z7Yl3Xtw57h2 | Issue #233 media-reader prefetch fill/seek/pump contract clarifications + additive discard/reopen features | approved | [issue-233-media-reader-prefetch-contract-improvements.md](./issue-233-media-reader-prefetch-contract-improvements.md) |
 | SPEC-Kn4byTEKolEb9bRq7eawMU | Issue #238 l1_proxy_e2e Windows flake — 壁時計 sleep 同期を有界 readiness/barrier 待機へ置換する | approved | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
-| SPEC-034UdM9XszyXZB0hZ8wvnc | Issue #243 GPUI 実機 GUI 検証 — Windows 実窓ライフサイクル証拠（部分スコープ） | proposed | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
-| SPEC-034V4nfv1RJmI8TqYPEWcY | Issue #243 — Windows 実 OS multiwindow smoke（部分スコープ・後続スライス） | approved | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | SPEC-034Qx7sstYyddu4xbj5Q7d | Issue #244 media-reader prefetch contract residual wart fixes — boundary-first fault emission, reopen-failure dead generation, End commit-once | approved | [issue-244-media-reader-prefetch-contract-warts.md](./issue-244-media-reader-prefetch-contract-warts.md) |
 | SPEC-U5ytIWyq22nGIRlXTz2LIN | Issue #251 Stage W closeout — 実機 lane 証拠化と残存受入項目の検証・記録 | approved | [issue-251-stage-w-real-device-closeout.md](./issue-251-stage-w-real-device-closeout.md) |
 | SPEC-034Vj1oEP5t1a8EwNeZV4L | Issue #253 plugin→host report の host-graph consumer 配線 slice | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | SPEC-rf253osmidibackend001 | Issue #253 OS MIDI input backend slice（Windows 実装 + macOS/Linux Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
+| SPEC-034VEOYg1GvMKRp6MWAh4D | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | draft | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | SPEC-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice（IMidiMapping CC→param 配送 + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | SPEC-034UjQv2KPJWujHxiCffIK | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | SPEC-8EJ4gM4rl1pb5GPij5Nm0l | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
@@ -94,6 +93,7 @@ Directory: `docs/specs`
 | SPEC-034Rp1AEJDKiDTpPq3H4Yz | Issue #310 framework-neutral Browser GUI Test Harness (Playwright・Showcase実DOM検証) | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | SPEC-3S6R25rgxNv9VL9etjWsH9 | Issue #311 RF-GT-02 Rust↔TypeScript IPC Schema Conformance・Deterministic Record/Replay・Fault Matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | SPEC-034S312gtUiTestSpecBB22 | Issue #312 test-only GUI host lifecycle・secure control adapter・fixture/clock/observation 仕様 | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| SPEC-034VOSINPDRV4REAL0SIN1 | Issue #313 — `RealOsPointerOrKeyboard` capability 実装（real-window scenario adapter 経由の OS 注入 E2E） | approved | [issue-313-real-os-input-driver.md](./issue-313-real-os-input-driver.md) |
 | SPEC-034UkPTR1W1N5M0K3P01 | Issue #313 — Windows 実 OS SendInput ポインタ smoke（部分スコープ・後続スライス） | approved | [issue-313-windows-pointer-smoke.md](./issue-313-windows-pointer-smoke.md) |
 | SPEC-034UjKJM3JWo1yfqUTlRka | Issue #313 — Windows 実 OS SendInput キーボード smoke と OS Capability Matrix（部分スコープ） | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | SPEC-034Ug8RuRab8De5zcQCjTB | Issue #314 slice 3 — GPUI/OS capture backend と能力の正直な配線 | proposed | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
@@ -178,7 +178,6 @@ Directory: `docs/specs`
 | SPEC-034JQubfZRC7nRmTsYvLiq | SIMD dispatch 層（prepare 固定 + カーネル/サイズ別ルーティング + 本番精度契約） | approved | [simd-dispatch-layer.md](./simd-dispatch-layer.md) |
 | SPEC-034JZVID00000000000010 | 動画エンジン（フレームパイプライン・A/V 同期・シーク） | approved | [video-engine.md](./video-engine.md) |
 | SPEC-BXaMmK5e7X2mLZAG4xFeZv | ViewLink authoritative generation 採用 — backend attach応答epochのSDK seam | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
-| SPEC-034VOSINPDRV4REAL0SIN1 | Issue #313 — `RealOsPointerOrKeyboard` capability 実装（real-window scenario adapter 経由の OS 注入 E2E） | approved | [issue-313-real-os-input-driver.md](./issue-313-real-os-input-driver.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -200,6 +199,8 @@ Directory: `docs/specs`
 | SPEC-034N9j2YKqyKxZZZyUPKFe | Issue #130 media-core/dsp/audio-analysis assert_no_alloc レーン武装（AllocDisabler 宣言） | implemented | [issue-130-arm-assert-no-alloc-lane.md](./issue-130-arm-assert-no-alloc-lane.md) |
 | SPEC-034TRm8kN4vWqZxYsJpCe | Issue #151 メディア観測情報・非破壊 PCM 取得契約の拡張 | implemented | [issue-151-media-observation-contract.md](./issue-151-media-observation-contract.md) |
 | SPEC-034J6OCXHiP1izKRzbMmgz | Issue #18 フォローアップ（公開 enum 方針適用・時間演算修正・改善トリアージ） | implemented | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
+| SPEC-034UdM9XszyXZB0hZ8wvnc | Issue #243 GPUI 実機 GUI 検証 — Windows 実窓ライフサイクル証拠（部分スコープ） | implemented | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
+| SPEC-034V4nfv1RJmI8TqYPEWcY | Issue #243 — Windows 実 OS multiwindow smoke（部分スコープ・後続スライス） | implemented | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | SPEC-034Jc9BJlI7ULEBWoIlMP2 | Issue #28 UI 技術検証 PoC（wry・描画バックエンド・フロントエンド FW・配布） | implemented | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | SPEC-0kIy1SFw7ffSK1AAi4BXHu | Issue #400 借用 sealed readback を独立 decoder へ bounded に接続する共通API | implemented | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | SPEC-034Tnjp8f4gexhi9BsQuq1 | Issue #409 Rooted capability の再 root 化と停止可能な bounded directory 列挙 | implemented | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |

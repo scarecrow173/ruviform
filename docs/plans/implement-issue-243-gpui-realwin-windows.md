@@ -1,10 +1,10 @@
 ---
 id: "PLAN-034UdQaz13FoOQV6oq6eKq"
 type: "plan"
-status: "in-progress"
+status: "completed"
 title: "Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 — 実装計画"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-11"
 owners: ["scarecrow173"]
 relations:
   source:

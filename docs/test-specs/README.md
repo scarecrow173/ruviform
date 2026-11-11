@@ -54,12 +54,13 @@ Directory: `docs/test-specs`
 | TSPEC-NstsDZYKTSF6CL9kQDoyXC | Issue #198 sequential offline render — OF-01..OF-07 test specification | approved | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |
 | TSPEC-034Qonw7qg8hdeWBuDqEqQ | Issue #233 prefetch discard/drain/reopen_at + contract-doc test specification | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | TSPEC-Jm8jpNK8kjkyBaizXBqwQo | Issue #238 テスト仕様 — l1_proxy_e2e 同期機構の不変条件 | approved | [issue-238-l1-proxy-e2e-sync.md](./issue-238-l1-proxy-e2e-sync.md) |
-| TSPEC-034UdQbwnBMc4dBhcTwfxI | Issue #243 GPUI 実窓 lifecycle 実機検証 試験仕様 | in-progress | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
-| TSPEC-034V4sgGc35MAPIRgG7lmm | Issue #243 — Windows 実 OS multiwindow smoke 検証契約 | approved | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
+| TSPEC-034UdQbwnBMc4dBhcTwfxI | Issue #243 GPUI 実窓 lifecycle 実機検証 試験仕様 | implemented | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
+| TSPEC-034V4sgGc35MAPIRgG7lmm | Issue #243 — Windows 実 OS multiwindow smoke 検証契約 | implemented | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | TSPEC-034QxdOanEeX8da72nWdYo | Issue #244 prefetch boundary-first/dead-generation/End commit-once test specification | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | TSPEC-O0zY9nWrOb2qwg92Z8nFZb | Issue #251 Stage W closeout test spec — 実機 lane 検証項目 | approved | [issue-251-stage-w-real-device-closeout.md](./issue-251-stage-w-real-device-closeout.md) |
 | TSPEC-034Vj5N4I9PzPBumQHnxgK | Issue #253 host-graph report consumer テスト仕様 | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | TESTSPEC-rf253osmidibackend001 | Issue #253 OS MIDI input backend test specification | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
+| TSPEC-034VERR0DyAdyknxAagH1U | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane テスト仕様 | draft | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | TST-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice テスト仕様 | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TSPEC-034UjQC8AnQxl52Q8wCT6N | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | TSPEC-sFT08b6Qp306TbonlKfL28 | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
@@ -107,6 +108,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Rp62M5XwHUCClhVcEPk | Issue #310 Browser GUI Test Harness 検証仕様 | approved | [issue-310-browser-gui-test-harness.md](./issue-310-browser-gui-test-harness.md) |
 | TSPEC-e0XfO8Zf3a26iGOk1UyquR | Issue #311 RF-GT-02 test specification — fixture conformance・record/replay determinism・fault matrix | approved | [issue-311-ipc-conformance-replay.md](./issue-311-ipc-conformance-replay.md) |
 | TSPEC-034S312gtUiTestTspFF66 | Issue #312 ruviform-ui-test — lifecycle/control/fixture/clock/observation/fail-closed test specification | approved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
+| TSPEC-34VOSINPDRV4REAL0SIN4 | Issue #313 — `RealOsPointerOrKeyboard` capability 検証契約 | approved | [issue-313-real-os-input-driver.md](./issue-313-real-os-input-driver.md) |
 | TSPEC-034UkPTR1W1N5M0K3P03 | Issue #313 — Windows 実 OS SendInput ポインタ smoke 検証契約 | approved | [issue-313-windows-pointer-smoke.md](./issue-313-windows-pointer-smoke.md) |
 | TSPEC-034UjMKOaa4DzlRpbwWOuL | Issue #313 — Windows 実 OS SendInput キーボード smoke 検証契約 | approved | [issue-313-windows-realos-smoke.md](./issue-313-windows-realos-smoke.md) |
 | TSPEC-034Ug943CVpTG4Br56eTfE | Issue #314 slice 3 — GPUI/OS capture backend test spec | approved | [issue-314-golden-capture.md](./issue-314-golden-capture.md) |
@@ -210,7 +212,6 @@ Directory: `docs/test-specs`
 | TSPEC-034JcCwISRw7E9Q8XoNvD8 | 動画基盤 API の契約保証（所有権・RT・色変換カーネル） | approved | [video-foundation-api.md](./video-foundation-api.md) |
 | TSPEC-034L6w5zHELr4fPxPNpBsk | Video Plugin Plain Contract Tests | proposed | [video-plugin-plain-contract-tests.md](./video-plugin-plain-contract-tests.md) |
 | TSPEC-42XLbuUif4jmek9sQGVA3S | ViewLink authoritative generation テスト仕様 | approved | [viewlink-authoritative-generation-tests.md](./viewlink-authoritative-generation-tests.md) |
-| TSPEC-34VOSINPDRV4REAL0SIN4 | Issue #313 — `RealOsPointerOrKeyboard` capability 検証契約 | approved | [issue-313-real-os-input-driver.md](./issue-313-real-os-input-driver.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

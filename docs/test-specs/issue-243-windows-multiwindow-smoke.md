@@ -1,10 +1,10 @@
 ---
 id: "TSPEC-034V4sgGc35MAPIRgG7lmm"
 type: "test-spec"
-status: "approved"
+status: "implemented"
 title: "Issue #243 — Windows 実 OS multiwindow smoke 検証契約"
 created: "2026-11-10"
-updated: "2026-11-10"
+updated: "2026-11-11"
 owners: []
 relations:
   source:

@@ -1,10 +1,10 @@
 ---
 id: "SPEC-034V4nfv1RJmI8TqYPEWcY"
 type: "spec"
-status: "approved"
+status: "implemented"
 title: "Issue #243 — Windows 実 OS multiwindow smoke（部分スコープ・後続スライス）"
 created: "2026-11-10"
-updated: "2026-11-10"
+updated: "2026-11-11"
 owners: []
 relations:
   source:

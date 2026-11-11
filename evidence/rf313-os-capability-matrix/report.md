@@ -197,9 +197,9 @@ example-local chord（Win+Arrow・Alt+F4）で駆動した Windows 実測。
 
 | 対象 | 判定 | 根拠 |
 | --- | --- | --- |
-| 3 実 Window 生成・window 別 focus（実クリック）・keyboard commit・update_view state 保持・Dock detach/move/abort/reattach・Win+Arrow 実移動・minimize/restore・再生成（新 WindowId + fresh view state）・view ownership・Window-owned Job cancel vs Application-owned Job 生存・orphan view なし・teardown 後 runtime 生存 | **Pass（前回実測）** | pre-refactor binary の 1 回実測で全 check green（verdict=pass）。verdict JSON は環境ブロック run で上書き済みのため、詳細は `environment-blocked-sendinput.md` と本記録を参照 |
-| post-refactor binary の実 OS 再検証 | **NotRun** | 実行時点で host の `SendInput`/`SendKeys` が system-wide に無効化（受付を返すが注入イベントが一切効果を持たない。legacy `mouse_event`/`keybd_event`/`SetCursorPos` は正常）。`vgk`/`vgc`/`vgtray` 停止・LG HUB/GameInput proxy kill 後も不変。原因は未同定の injected-input filter で、worker 権限では除去不能。健全 host での再実行が必要 |
-| move/close/focus 失敗時の stale handle・二重破棄・孤立 view・RT 停止なし | **Pass（前回実測）+ NotRun（再検証）** | 前回 run で `destroyed_lifecycle_trace`/`no_orphaned_views`/`runtime_alive_after_teardown` が green。最終コードは headless lane で検証済みだが実 OS 再検証は環境ブロック |
+| 3 実 Window 生成・window 別 focus（実クリック）・keyboard commit・update_view state 保持・Dock detach/move/abort/reattach・Win+Arrow 実移動・minimize/restore・再生成（新 WindowId + fresh view state）・view ownership・Window-owned Job cancel vs Application-owned Job 生存・orphan view なし・teardown 後 runtime 生存 | **Pass** | 最終コードで再実走 pass（2026-11-11・HEAD `4eea9115`・schema v2・preflight effective・exit 0・16 checks green）。Vanguard unload 後の PR #551 再実走（schema v1 時点）でも pass を確認済み。verdict JSON は v2 schema で再生成済み |
+| post-refactor binary の実 OS 再検証 | **Pass** | 2026-11-10 の環境ブロック（host `SendInput` が system-wide で実効ゼロ）は Riot Vanguard `vgk.sys` armed 状態が最有力原因で、driver 完全 unload 後に SendInput 回復（PR #551 調査。因果は未確証 — `environment-blocked-sendinput.md` Resolution 参照）。#552 で `os_input::preflight` fail-closed を導入済み（再発時は exit 3 `environment_blocked`）。本 slice で v2 schema・preflight 込みの再実走が pass |
+| move/close/focus 失敗時の stale handle・二重破棄・孤立 view・RT 停止なし | **Pass** | 2026-11-11 再実走で全該当 check green（teardown 後 runtime 生存・window-owned Job cancel と app-owned Job 生存の区別を含む）。headless lane も全 pass |
 | macOS / Linux multiwindow | **NotRun** | 本環境は Windows のみ |
 | 動的 DPI・モニター間移動・モニター切断 | **NotRun** | 静的 2 monitor @1.0 のみ実測 |
 | Native Plugin Dock | **NotRun** | #388/#389・Synvelis #176 の OS 別 Gate。Floating/Generic fallback・Mock/画像を Native Dock PASS にしない |
@@ -222,6 +222,16 @@ worker の範囲外。fixture 側は cursor read-back oracle で
 「SendInput 受理 ≠ カーソル到達」を検出し fail として正直に
 記録する設計であり、oracle を弱めた Pass 偽装はしていない。
 
+**解決済み（2026-11-11 追記）**: 原因は Riot Vanguard `vgk.sys` の
+armed 状態が最有力（driver 完全 unload 後に SendInput 全回復。LL hook
+実測で injected-flag-drop 仮説は反証済み。因果は未確証）。回復後に
+本 lane は 2 回の再実走 pass を記録 — PR #551（schema v1）と本 slice
+（schema v2・HEAD `4eea9115`）。#552 の `os_input::preflight`
+fail-closed により再発時は GUI fail 誤記録ではなく exit 3
+`environment_blocked` で落ちる。詳細は
+`evidence/issue-243-multiwindow-verify/environment-blocked-sendinput.md`
+の Resolution 節を参照。
+
 ### 再現・再検証手順
 
 ```sh
@@ -229,6 +239,6 @@ worker の範囲外。fixture 側は cursor read-back oracle で
 # （例: sendinput-rel-test 相当の move_to -> cursor_position）
 mise run example-ui-gpui-real-os-multiwindow-smoke
 # verdict: evidence/issue-243-multiwindow-verify/verdict-multiwindow-windows.json
-# exit code: 0=pass / 1=fail / 2=unsupported(非 Windows)
+# exit code: 0=pass / 1=fail / 2=unsupported(非 Windows) / 3=environment_blocked(preflight 不通)
 # 実行中はマウス/キーボードに触れないこと（実カーソルを使用・復元）
 ```

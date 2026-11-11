@@ -7,14 +7,13 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034VuaZaztYPIHufg5gKhm | Add GT-05 CI offscreen lanes | in-progress | [add-gt-05-ci-offscreen-lanes.md](./add-gt-05-ci-offscreen-lanes.md) |
-| TASK-034UdR18snUStfTR5NpZge | Issue #243 実装タスク | in-progress | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034udQraUdxLs1SxuYiaAK | Issue #127 Linux 実配布方式 設計 — docs チェーン作成・索引再生成・検証・PR | in-progress | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
-| TASK-034V4uYcdcMjdFzOg15rFm | Issue #243 — Windows 実 OS multiwindow smoke 実装タスク | in-progress | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | TASK-034Vj6McJYc0Zg8Cae9FZg | Issue #253 host-graph report consumer タスク（host drain API + fixture E2E） | completed | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | TASK-rf253osmidibackend001 | Issue #253 OS MIDI input backend 実装タスク | completed | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
+| TASK-034VEU3ZiDLQ7qcsk69rl0 | Issue #253 unsupported 計数透過 + 実機 lane scaffold（bridge counter + mock + tests + E2E） | todo | [issue-253-task-unsupported-transparency.md](./issue-253-task-unsupported-transparency.md) |
 | TASK-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice タスク（IMidiMapping + plugin→host reporting） | completed | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
 | TASK-AsjkeCFskQSQZMsB5Tgl5H | Issue #301 T2 — zstd format/contract/API 試験 | completed | [issue-301-t2-zstd-tests.md](./issue-301-t2-zstd-tests.md) |
@@ -66,7 +65,6 @@ Directory: `docs/tasks`
 | TASK-DktMpNJBhrTSp3LAfeKMjo | T4 mise lane・索引・GPUI 採用証跡（Issue #386） | proposed | [t4-gpui-lanes-and-evidence-issue-386.md](./t4-gpui-lanes-and-evidence-issue-386.md) |
 | TASK-034T6RWXn4Bv9Hg8sM2eR5 | T4 GPUI Controls/Viz renderer(ruviform-ui-gpui::render) | proposed | [t4-gpui-renderer-issue-387.md](./t4-gpui-renderer-issue-387.md) |
 | TASK-1N5a7PAIOH2xfWl6PJFte5 | T5 Fake/GPUI 共通 Window/Dock lifecycle fixture（Issue #386 第 2 PR） | completed | [t5-shared-lifecycle-fixture-issue-386.md](./t5-shared-lifecycle-fixture-issue-386.md) |
-| TASK-034VOSINPDRV4REAL0SIN5 | Issue #313 — `RealOsPointerOrKeyboard` capability 実装タスク（slice S1） | in-progress | [issue-313-task1-real-os-input-driver.md](./issue-313-task1-real-os-input-driver.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -129,6 +127,7 @@ Directory: `docs/tasks`
 | TASK-034JxOaMsaSwEIVfvU9MC8 | ruviform-exec スレッド優先度機構の実装 | done | [implement-exec-thread-priority.md](./implement-exec-thread-priority.md) |
 | TASK-034JNwTz163N6eT3EJfdaD | FrameRate 型の実装（TimeBase newtype・検証付きコンストラクタ・nominal_fps） | done | [implement-framerate-type.md](./implement-framerate-type.md) |
 | TASK-034Jgi3OFauA1SWRPdvnnb | ruviform-io-symphonia バックエンド PoC 実装 | done | [implement-io-symphonia-backend-poc.md](./implement-io-symphonia-backend-poc.md) |
+| TASK-034UdR18snUStfTR5NpZge | Issue #243 実装タスク | done | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
 | TASK-034UBtKswl6dq50oYiJ9H8 | Issue #278 OBS-03 tracing_export slice 2 実装タスク | done | [implement-issue-278-observability-tracing-export-records.md](./implement-issue-278-observability-tracing-export-records.md) |
 | TASK-034UprmEYoMJcy1j0tHLHy | Issue #278 OBS-03 tracing_export 実装タスク | done | [implement-issue-278-observability-tracing-export.md](./implement-issue-278-observability-tracing-export.md) |
 | TASK-034T2PiH8yPGqaV8KE8r4M | Issue #289 OBS-07 Collector/Metrics/Snapshot 実装 | done | [implement-issue-289-observability-collector-metrics.md](./implement-issue-289-observability-collector-metrics.md) |
@@ -193,6 +192,7 @@ Directory: `docs/tasks`
 | TASK-034QdVbbaa7jKsLfhGKepC | T4 検証・IR 記録（actionlint・doc audit・実装記録） | done | [issue-219-t4-verify-ir.md](./issue-219-t4-verify-ir.md) |
 | TASK-034QsXMp7VDgLZ2W5FaZxq | Issue #223 MSRV 1.89 限定 pedantic clippy 失敗の整理 | done | [issue-223-msrv-clippy-triage.md](./issue-223-msrv-clippy-triage.md) |
 | TASK-M5TTFmL3gjHvlBOb7sPDjF | Issue #238 l1_proxy_e2e 壁時計 sleep 同期を barrier/有界 poll へ置換 | done | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
+| TASK-034V4uYcdcMjdFzOg15rFm | Issue #243 — Windows 実 OS multiwindow smoke 実装タスク | done | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | TASK-034Qxfh3HNkNZecEqGSpM1 | T1 prefetch boundary-first fault + dead-generation sequence (Issue #244 P2 amendment) | done | [issue-244-t1-boundary-first.md](./issue-244-t1-boundary-first.md) |
 | TASK-034QxfhGvckBvhC0QQYCgA | T2 prefetch End commit-once under backpressure (Issue #244) | done | [issue-244-t2-end-commit-once.md](./issue-244-t2-end-commit-once.md) |
 | TASK-034Qxfiiwcs7VUi4SIArot | T3 seeded fault fixture + discard_pending coverage (Issue #244) | done | [issue-244-t3-seeded-coverage.md](./issue-244-t3-seeded-coverage.md) |
@@ -255,6 +255,7 @@ Directory: `docs/tasks`
 | TASK-jXU3ZGuh6DP2FfCSvkx5FC | T2 TS wire validators — ipcwire/bindingwire + conformance テスト（Issue #311） | done | [issue-311-t2-ts-wire-validators.md](./issue-311-t2-ts-wire-validators.md) |
 | TASK-KayYlp12EsEWZZKk2pMZgF | T3 recorder/replay/oracle + consumer mocks + seeded シナリオ（Issue #311） | done | [issue-311-t3-recorder-replay-oracle.md](./issue-311-t3-recorder-replay-oracle.md) |
 | TASK-uyCbW614DqUYmATBzUrQxz | T4 fault matrix + Rust conformance lanes + mise/CI/AGENTS 同期 + IR（Issue #311） | done | [issue-311-t4-fault-matrix-lanes.md](./issue-311-t4-fault-matrix-lanes.md) |
+| TASK-034VOSINPDRV4REAL0SIN5 | Issue #313 — `RealOsPointerOrKeyboard` capability 実装タスク（slice S1） | done | [issue-313-task1-real-os-input-driver.md](./issue-313-task1-real-os-input-driver.md) |
 | TASK-034Vgd9bXcARNIc2rWG7tW | Issue #314 slice 4 follow-up — real-scenario lane + matrix tasks | done | [issue-314-real-scenario-lane.md](./issue-314-real-scenario-lane.md) |
 | TASK-LSK3NBKCdjJ7fablK2DEFK | T1 ci.yml dispatch 専用化 + concurrency 簡素化 + コメント同期（Issue #326） | done | [issue-326-t1-ci-yml-dispatch-only.md](./issue-326-t1-ci-yml-dispatch-only.md) |
 | TASK-kjitc7DOTjE43h2VO4qJgh | T2 trigger contract test（ci-yml-contract.test.mjs）+ dev-env 同期（Issue #326） | done | [issue-326-t2-trigger-contract-test.md](./issue-326-t2-trigger-contract-test.md) |
