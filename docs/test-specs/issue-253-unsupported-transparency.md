@@ -151,6 +151,11 @@ last-read 消費意味論を保つ」という不変条件を守る。実機依�
   検証を完結させ、実機 E2E（RL）は scaffold + 実機有無の honest
   記録に留める。実 hardware traffic の非零 unsupported は
   assert しない（発生させる物理手段が lane 内に無い）。
+- RL 系の canonical 入口は `mise run test-midi-real-device`
+  （`mise.toml` opt-in manual lane、CI 対象外。adapter 経路 +
+  bridge pump 経路の両 `#[ignore]` E2E を 1 lane で駆動。device
+  非在・非対応 OS では honest skip で exit 0 — 実測を Pass に
+  偽装しない）。
 - RT lane（`test-rt`）: 変更は計数追加のみで RT-suitable
   surface の allocation 形状を変えない — 既存 RT test が
   そのまま回帰検証になる。

@@ -107,3 +107,8 @@ Worker 占有のため対象外 — 暫定入口を IR/README に記録する。
   unsupported_backend == 0`（channel 経路時）を assert して固定。
 - 実機依存値（event 有無・非零計数）は assert せず evidence に
   記録する（hardware traffic を Pass 条件にしない）。
+- canonical lane は follow-up slice `chore/253-midi-real-device-
+  lane` で `test-midi-real-device` として `mise.toml` に登録済み
+  — 暫定入口 `cargo test -p <crate> -- --ignored` は正規 lane に
+  昇格。デバイス非在環境では全 `#[ignore]` test が honest skip
+  で exit 0（実測を偽装しない）。

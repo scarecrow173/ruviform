@@ -307,7 +307,11 @@ NotRun / Unsupported（正直な記録）:
 
 - canonical lane（`test-midi-real-input` 相当）の `mise.toml`
   登録 — Issue #251 `test-audio-real-input` パターン準拠
-  （`mise.toml` 占有解放後、別 slice）。
+  （`mise.toml` 占有解放後、別 slice）。→ **実施済み**:
+  `test-midi-real-device` として登録（`chore/253-midi-real-device-
+  lane` slice。adapter + bridge 両 `#[ignore]` 経路を 1 lane で
+  駆動。本環境の実走は全 test honest skip・exit 0 —
+  `evidence/issue-253-real-midi-lane/` に記録）。
 - 実デバイス保有環境での `#[ignore]` lane 実行と evidence 更新。
 - macOS CoreMIDI / Linux ALSA・JACK・PipeWire backend（別 slice）。
 - `InputTx` 累積計数の `NodeStatus` 統合 mirror（consumer 需要が
