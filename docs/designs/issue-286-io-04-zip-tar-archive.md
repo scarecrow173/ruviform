@@ -917,46 +917,46 @@ gate と consumer-verify（#219/#294）が Owner。
 
 ## Verification Notes
 
-- [ ] Reader/Writer/Entry モデル節が ZIP `Read + Seek`
+- [x] Reader/Writer/Entry モデル節が ZIP `Read + Seek`
       indexed・TAR `Read`/`Write` streaming の形式別 API
       族・共通 format 中立型（`ArchiveName`/`EntryKind`/
       `ArchiveEntryInfo`）・「形式が実在する情報のみ記録」
       を含み、#302/#303 設計への参照を持つこと。
-- [ ] Backend 隠蔽節が外部 `zip`/`tar` 非採用・内部
+- [x] Backend 隠蔽節が外部 `zip`/`tar` 非採用・内部
       Parser + `flate2` rust_backend/`crc32fast`/
       `unicode-normalization`/`ruviform-io-file` vfs の
       非公開依存・Serde 非依存・`std::io` ベースを含む
       こと。
-- [ ] 所有権/状態機械節が Entry 排他借用・明示 `finish`
+- [x] 所有権/状態機械節が Entry 排他借用・明示 `finish`
       のみが完了証拠・TAR `Ready`/`EntryOpen`/`Pending`/
       `Failed`・`discard_pending`/`discard_remaining`・
       Writer poison を含むこと。
-- [ ] Receipt 節が `ArchiveReadReceipt`/`EntryReadReceipt`
+- [x] Receipt 節が `ArchiveReadReceipt`/`EntryReadReceipt`
       の typed summary・`EntryChecksum`/`EntryDisposition`・
       `verified: bool` 非丸め・真正性 ≠ 整合性を含むこと。
-- [ ] Secure Extraction 節が信頼モデル（Untrusted 既定）・
+- [x] Secure Extraction 節が信頼モデル（Untrusted 既定）・
       Path Policy・canonical 衝突・kind/budget・OS/FS 別
       保護レベル表・TOCTOU 境界・Cleanup/Recovery を含む
       こと。
-- [ ] Format 範囲表の受理/`Unsupported` が `Cargo.toml`
+- [x] Format 範囲表の受理/`Unsupported` が `Cargo.toml`
       実装・crate README・#302/#303/#304 設計に一致する
       こと（ZIP classic Stored/Deflate・TAR USTAR/GNU/PAX・
       sparse/special/link/ZIP64/暗号化は `Unsupported`）。
-- [ ] Compression 組合せ節が tar.gz/tar.zst の 2 層
+- [x] Compression 組合せ節が tar.gz/tar.zst の 2 層
       finish 独立・ZIP 内部 codec の capability 閉じ込め・
       IO-03 への必須依存なしを含むこと。
-- [ ] 終了/公開契約節が Entry→Archive→Compression→
+- [x] 終了/公開契約節が Entry→Archive→Compression→
       StagedFile publish の finish 連鎖分離・`ExtractedTree`
       ≠ Directory Publish・無条件 Atomic Directory Publish
       非保証を含むこと。
-- [ ] 証拠項目対応表の API/ZIP/TAR/SEC/EXT/INT/COMP/DEP/
+- [x] 証拠項目対応表の API/ZIP/TAR/SEC/EXT/INT/COMP/DEP/
       OWN/WRT/REC/OS 各行が実在する test-spec rule/節・
       #288 matrix 行（A-N1〜A-X5）・Issue/PR 番号へ解決
       できること。
-- [ ] Consumer 利用面節が AL #139/#143・SV #82/#84/#25・
+- [x] Consumer 利用面節が AL #139/#143・SV #82/#84/#25・
       SV Project #17 の Issue 番号と責務分界（schema/
       version は Consumer 所有・`ExtractedTree` ≠ Project
       Transaction）を含むこと。
-- [ ] 「設計合意と実装/検証の分離」節が存在し、未実施項目
+- [x] 「設計合意と実装/検証の分離」節が存在し、未実施項目
       を `not run`/`NotRun`/`Unsupported` と記録する方針を
       明記していること。
