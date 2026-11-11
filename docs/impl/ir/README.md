@@ -217,3 +217,4 @@ Directory: `docs/impl/ir`
 | IMPL-034VFzhzdEyknToi5VSfS5 | Issue #313 S2 windowed `TestIo`/`rvf.uitest.v1` GPUI backend 配線 | completed | [issue-313-windowed-testio-slice.md](./issue-313-windowed-testio-slice.md) |
 | IMPL-TUskALcC8xZ3ofmqqt0sMj0 | Issue #253 README/specs interim wording closeout — canonical lane 登録済み整合 | completed | [issue-253-readme-specs-interim-wording-closeout.md](./issue-253-readme-specs-interim-wording-closeout.md) |
 | IMPL-034VNnxPkVZ7DW5CUalpn9 | Issue #286 IO-04 ZIP/TAR Archive — Verification Notes 1:1 監査・簿記 | completed | [issue-286-io-04-verification-notes-bookkeeping.md](./issue-286-io-04-verification-notes-bookkeeping.md) |
+| IMPL-kQ7mXv2nLp8wRtYb5jHc3d | Issue #288 IO-06 Gate matrix 実走記録（rf288 slice） | completed | [io-06-gate-run-ir.md](./io-06-gate-run-ir.md) |

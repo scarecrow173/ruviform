@@ -13,7 +13,7 @@ Directory: `docs/tasks`
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
 | TASK-034Vj6McJYc0Zg8Cae9FZg | Issue #253 host-graph report consumer タスク（host drain API + fixture E2E） | completed | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | TASK-rf253osmidibackend001 | Issue #253 OS MIDI input backend 実装タスク | completed | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
-| TASK-034VEU3ZiDLQ7qcsk69rl0 | Issue #253 unsupported 計数透過 + 実機 lane scaffold（bridge counter + mock + tests + E2E） | todo | [issue-253-task-unsupported-transparency.md](./issue-253-task-unsupported-transparency.md) |
+| TASK-034VEU3ZiDLQ7qcsk69rl0 | Issue #253 unsupported 計数透過 + 実機 lane scaffold（bridge counter + mock + tests + E2E） | in-progress | [issue-253-task-unsupported-transparency.md](./issue-253-task-unsupported-transparency.md) |
 | TASK-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice タスク（IMidiMapping + plugin→host reporting） | completed | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
 | TASK-AsjkeCFskQSQZMsB5Tgl5H | Issue #301 T2 — zstd format/contract/API 試験 | completed | [issue-301-t2-zstd-tests.md](./issue-301-t2-zstd-tests.md) |
@@ -152,6 +152,7 @@ Directory: `docs/tasks`
 | TASK-034Jf3FazZdLzFAFTDXUa3 | スカラー参照カーネルと共通型 | done | [implement-simd-poc-scalar-kernels.md](./implement-simd-poc-scalar-kernels.md) |
 | TASK-034J5KR5ueilYgXdyyF4ZU | ruviform-video-core のデータモデル実装 | done | [implement-video-core-data-model.md](./implement-video-core-data-model.md) |
 | TASK-034JcD1UTgLlW1lRoWI1Ng | video-proc カーネル API 形状と YUV→RGB 変換カーネルの実装 | done | [implement-yuv-to-rgb-kernel.md](./implement-yuv-to-rgb-kernel.md) |
+| TASK-HFfUybb3K6gZXTbsmRlDGW | IO-06 Gate matrix 実走と証拠記録（Issue #288 slice） | done | [io-06-gate-run-task.md](./io-06-gate-run-task.md) |
 | TASK-W49nvd39gPw0nVVlHofI5L | ruviform-ui: window contract types (WindowId/WindowEvent/RoutedEvent/CloseDecision/WindowHandle) | done | [issue-181-01-window-contract-types.md](./issue-181-01-window-contract-types.md) |
 | TASK-klq30A6pIf2U4FUAdY3iuL | ruviform-ui: UiRuntime multi-window routing (handle_window/drain_jobs_routed/cancel_window_jobs) | done | [issue-181-02-runtime-routing.md](./issue-181-02-runtime-routing.md) |
 | TASK-5bJ6JAK2lt9CHr2ZLSR42R | ruviform-ui: fake-host multi-window contract tests | done | [issue-181-03-fake-host-contract-tests.md](./issue-181-03-fake-host-contract-tests.md) |
@@ -256,6 +257,7 @@ Directory: `docs/tasks`
 | TASK-KayYlp12EsEWZZKk2pMZgF | T3 recorder/replay/oracle + consumer mocks + seeded シナリオ（Issue #311） | done | [issue-311-t3-recorder-replay-oracle.md](./issue-311-t3-recorder-replay-oracle.md) |
 | TASK-uyCbW614DqUYmATBzUrQxz | T4 fault matrix + Rust conformance lanes + mise/CI/AGENTS 同期 + IR（Issue #311） | done | [issue-311-t4-fault-matrix-lanes.md](./issue-311-t4-fault-matrix-lanes.md) |
 | TASK-034VOSINPDRV4REAL0SIN5 | Issue #313 — `RealOsPointerOrKeyboard` capability 実装タスク（slice S1） | done | [issue-313-task1-real-os-input-driver.md](./issue-313-task1-real-os-input-driver.md) |
+| TASK-034WIND0WEDTESTI0S2TK | Issue #313 — windowed `TestIo`/`rvf.uitest.v1` 実装タスク（slice S2） | done | [issue-313-task2-windowed-testio.md](./issue-313-task2-windowed-testio.md) |
 | TASK-034Vgd9bXcARNIc2rWG7tW | Issue #314 slice 4 follow-up — real-scenario lane + matrix tasks | done | [issue-314-real-scenario-lane.md](./issue-314-real-scenario-lane.md) |
 | TASK-LSK3NBKCdjJ7fablK2DEFK | T1 ci.yml dispatch 専用化 + concurrency 簡素化 + コメント同期（Issue #326） | done | [issue-326-t1-ci-yml-dispatch-only.md](./issue-326-t1-ci-yml-dispatch-only.md) |
 | TASK-kjitc7DOTjE43h2VO4qJgh | T2 trigger contract test（ci-yml-contract.test.mjs）+ dev-env 同期（Issue #326） | done | [issue-326-t2-trigger-contract-test.md](./issue-326-t2-trigger-contract-test.md) |
