@@ -92,7 +92,9 @@ slice」と明記した既知ギャップの解消を行う。
   `#[ignore]` smoke（`tests/ports.rs` の 1 test と
   `examples/list_midi_ports.rs`）のみで、観測 coverage
   （timestamp/dropped/unsupported の実測記録）が無く、canonical
-  lane も未登録である。
+  lane も未登録である（spec 起票時点の記述 — 後続 slice
+  `chore/253-midi-real-device-lane` で `test-midi-real-device`
+  として `mise.toml` 登録済み）。
 - 「unsupported を silent にしない」は port 契約の明示要件
   （`docs/specs/issue-253-os-midi-backend.md` R 系、`queue.rs`
   module doc）であり、bridge での読み捨てはその不変条件を
@@ -134,12 +136,16 @@ slice」と明記した既知ギャップの解消を行う。
   `NotRun`+理由の記録。
 - 暫定入口 `cargo test -p ruviform-midi-device -- --ignored` の
   文書化（canonical lane 登録は `mise.toml` が別 Worker 占有の
-  ため follow-up 行として残す）。
+  ため follow-up 行として残す → 実施済み: `chore/253-midi-real-device-lane`
+  slice で `test-midi-real-device` として `mise.toml` 登録済み）。
 
 ### Out of Scope
 
 - `mise.toml` への canonical lane（`test-midi-real-input` 等）
-  登録 — 別 Worker が同ファイルを占有中。follow-up 行として残す。
+  登録 — 別 Worker が同ファイルを占有中だったため本 slice では
+  対象外とし follow-up 行として残した（→ 実施済み:
+  `chore/253-midi-real-device-lane` slice で `test-midi-real-device`
+  として登録済み）。
 - macOS（CoreMIDI）/ Linux（ALSA・JACK・PipeWire）backend 実装。
 - 実 DAW 往復、`Declared`→`Verified` の capability 昇格。
 - V9 truncation / V11 ledger / V12 anchor republish / V13 CC/param
@@ -178,19 +184,20 @@ slice」と明記した既知ギャップの解消を行う。
 
 ## Acceptance Criteria
 
-- [ ] bridge 経路で `unsupported` 計数が捨てられず `PumpStats`/
+- [x] bridge 経路で `unsupported` 計数が捨てられず `PumpStats`/
   `InputTx`/`InputStage`/`status.rs` mirror まで透過すること
   （上記 2 IR の「別 slice」行を本 slice で閉じる）。
-- [ ] 実デバイス opt-in 経路が `#[ignore]` E2E（enumerate→open→
+- [x] 実デバイス opt-in 経路が `#[ignore]` E2E（enumerate→open→
   read→観測→close）として整備され、本環境で実行可能なら実測、
   不可なら `NotRun`+理由を `evidence/issue-253-real-midi-lane/`
   に記録。
-- [ ] canonical lane（mise task）登録は本 slice 対象外 — 暫定入口
+- [x] canonical lane（mise task）登録は本 slice 対象外 — 暫定入口
   `cargo test -p ruviform-midi-device -- --ignored` と follow-up
-  行を docs に明記。
-- [ ] 既存 lane が回帰しない（`mise run fmt-check`/`check`/`lint`/
+  行を docs に明記（→ 登録は後続 slice で実施済み:
+  `test-midi-real-device`）。
+- [x] 既存 lane が回帰しない（`mise run fmt-check`/`check`/`lint`/
   `test`/`test-rt` 全 Pass）。
-- [ ] macOS/Linux backend・実 DAW・`Verified` 昇格・V9-V13・video
+- [x] macOS/Linux backend・実 DAW・`Verified` 昇格・V9-V13・video
   verb・MIDI2・consumer 実装は対象外（Pass 扱いしない）。
 
 ## Deferred Design Concerns
@@ -199,8 +206,11 @@ slice」と明記した既知ギャップの解消を行う。
   登録 | 別 Worker が `mise.toml` を占有中のため本 slice では
   登録不可 | `mise.toml` 解放後に Issue #251 `test-audio-real-input`
   パターン（feature gate + `-- --ignored --test-threads=1` + lint
-  lane）で登録 | 未登録のままでは opt-in lane が `cargo test` 直接
-  実行に依存し canonical 入口と乖離する。
+  lane）で登録 → **解消済み**: `chore/253-midi-real-device-lane`
+  slice で `test-midi-real-device` として登録（adapter + bridge
+  両 `#[ignore]` E2E を 1 lane で駆動・manual lane） | 未登録の
+  ままでは opt-in lane が `cargo test` 直接実行に依存し canonical
+  入口と乖離する。
 - `InputTx` 累積計数の `NodeStatus` への統合 mirror | 現状
   `dropped_backend` も `InputTx` 側 getter のみで status mirror
   無し — 同じ形状を踏襲（stage 側 mirror は `InputStageCounters`

@@ -15,7 +15,7 @@ opt-in 実機検証 lane の実行記録。canonical lane は follow-up slice
 | toolchain | rustc 1.99.0 (b940084d7 2026-09-28) / cargo 1.99.0 |
 | MIDI input デバイス | なし（`list_midi_ports` が `no MIDI input ports` を報告） |
 
-## 実行結果（補助証拠 — canonical = mise、本 lane は暫定入口）
+## 実行結果（補助証拠 — canonical = `mise run test-midi-real-device`、以下は lane 登録前の暫定入口コマンド実行記録）
 
 ### `cargo test -p ruviform-midi-device -- --ignored`
 

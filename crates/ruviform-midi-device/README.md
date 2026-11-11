@@ -39,9 +39,13 @@ platforms without a backend (`DeviceError::Unsupported`) or with no
 input ports; hardware traffic (nonzero counters, actual events) is
 recorded, never asserted.
 
-Interim entry point — canonical mise lane registration is a recorded
-follow-up (Issue #253 slice: `mise.toml` was outside the slice's edit
-scope; see `docs/impl/ir/issue-253-unsupported-transparency-slice.md`):
+Canonical lane — `mise run test-midi-real-device` drives both
+`#[ignore]` real-device E2Es (this crate's port path and the
+bridge-level path below) in a single manual lane (never CI; exits
+honestly when no MIDI input port exists — see
+`evidence/issue-253-real-midi-lane/`). The lane was registered by the
+follow-up slice `chore/253-midi-real-device-lane`; the raw cargo
+invocation remains available for single-crate runs:
 
 ```sh
 cargo test -p ruviform-midi-device -- --ignored
@@ -50,7 +54,8 @@ cargo test -p ruviform-midi-device -- --ignored
 `examples/list_midi_ports.rs` remains the manual enumeration helper.
 The bridge-level real path (`SystemBackend` → `InputTx::pump` →
 `InputStage`) is covered by the `#[ignore]` E2E in
-`ruviform-audio-plugin-bridge/tests/midi_wiring.rs`:
+`ruviform-audio-plugin-bridge/tests/midi_wiring.rs` (also driven by
+`mise run test-midi-real-device`):
 
 ```sh
 cargo test -p ruviform-audio-plugin-bridge -- --ignored
