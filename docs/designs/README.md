@@ -60,6 +60,7 @@ Directory: `docs/designs`
 | DESIGN-034UdN3RWXD8Kk4elhwAtR | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 — 設計 | approved | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | DESIGN-034V4sf4ndYXHxJt8IBeXG | Issue #243 — Windows 実 OS multiwindow smoke 設計（部分スコープ・後続スライス） | approved | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | DESIGN-034QxcnAfFWswZmwSKPbKH | Issue #244 prefetch contract wart fixes — boundary-first emission, dead-generation sequence, End commit-once, seeded-fault coverage | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
+| DESIGN-cJ0I0j6o66AAfUm2eE5q8y | Issue #251 Stage W closeout 設計 — 実機 lane 拡張と証拠 matrix | approved | [issue-251-stage-w-real-device-closeout-design.md](./issue-251-stage-w-real-device-closeout-design.md) |
 | DESIGN-034Vj33PXgAsLoeNPU9c8f | Issue #253 plugin→host report の host-graph consumer 配線 | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | DESIGN-rf253osmidibackend001 | Issue #253 OS MIDI input backend design（WinMM adapter + Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | DSN-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice 設計（IMidiMapping snapshot + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |

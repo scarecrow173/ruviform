@@ -117,13 +117,16 @@ Issue #187（impl record `docs/impl/ir/issue-187-...md`・design `docs/designs/i
 
 ### 実機検証 NotRun matrix
 
+Stage W closeout slice（`docs/impl/ir/issue-251-stage-w-real-device-closeout-slice.md`、
+Audient iD4 / WASAPI 実機）で 2026-11-11 に実測済み — 最新値はそちらを正とする。
+
 | 検証行 | 状態 | 根拠 |
 | ------ | ---- | ---- |
-| `mise run test-audio-real-input`（capture e2e + duplex domain） | **NotRun** | 実機ハードウェア + OS capture permission が必要な手動 opt-in lane。本 slice は構造整備のみ（Issue #251 の headless 範囲） |
-| `mise run lint-audio-real-input` | 実施済み相当（上記 clippy 同一コマンドで pass） | lane ターゲットの lint は headless で検証可能 |
-| 実測 input latency / timestamp 精度 | **NotRun** | `input_latency` は `Ok(None)` を返す設計のため実測対象自体が存在しない。capture instant の精度は実機 lane の観測行 |
-| xrun / device removal / permission denied / format mismatch の実機発生 | **NotRun** | typed `DeviceError` への正規化は `error.rs` の単体テストで headless 検証済み。実 backend での発生確認は実機 lane 以降 |
-| same-clock duplex の実機相関（frame 単位の時刻整合） | **NotRun** | `clock_domain` の一致と `same_clock_domain` 判定は e2e lane が報告するが未実行。frame 相関 math は consumer 側（Synvelis #115/#117）と Issue #315 の管轄 |
+| `mise run test-audio-real-input`（capture e2e + duplex domain） | **Pass（Stage W で実走）** | Windows+WASAPI・Audient iD4 で 4/4 Pass。callbacks/capture `Some`/frame_position contiguity/order violations=0 を実測。Stage M・L は NotRun のまま |
+| `mise run lint-audio-real-input` | Pass（本 slice 及び Stage W で継続 Pass） | lane ターゲットの lint は headless で検証可能 |
+| 実測 input latency / timestamp 精度 | **Pass（実測済み）** | WASAPI native `input_latency()=Ok(Some(StreamLatency{frames:0,Unknown,Carried}))`・実効 latency（callback−capture）min 10.04 ms・全 callback `capture ≤ callback`。cpal 経路は `Ok(None)` の正直応答を duplex 行で記録 |
+| xrun / device removal / permission denied / format mismatch の実機発生 | 部分 Pass | format mismatch は 7 行 `Err(UnsupportedConfig)` を実測。device loss は既定 endpoint 切替 → `StreamInvalidated`（+`ClockDiscontinuity`）を実測（物理 USB 抜去経路は NotRun・対話式手順を文書化）。xrun は観測なし（0）。permission denied は NotRun |
+| same-clock duplex の実機相関（frame 単位の時刻整合） | 部分 Pass | `clock_domain` 一致（`ClockDomainId(2)`）と `same_clock_domain` verdict=true、UNKNOWN×2 の rejection=false を実測。frame 相関 math は consumer 側（Synvelis #115/#117）と Issue #315 の管轄のまま |
 
 ## Risks
 
