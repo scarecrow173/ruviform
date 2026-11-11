@@ -379,6 +379,36 @@ run = "cargo run -p ruviform-ui-gpui --features gpui --example real_os_multiwind
 description = "Run the Issue #314 real-window scenario matrix on the interactive session (manual verification — writes evidence/issue-314-real-scenario/; environment_blocked is recorded in driver-lab JSONL when no desktop session is available)"
 env = { RUVIFORM_DRIVER_LAB_EVIDENCE = "evidence/issue-314-real-scenario/driver-lab-evidence.jsonl", RUVIFORM_GOLDEN_EVIDENCE = "evidence/issue-314-real-scenario/golden-evidence.jsonl", RUVIFORM_REAL_WINDOW_PNG_DIR = "evidence/issue-314-real-scenario/png" }
 run = "cargo test -p ruviform-ui-gpui --features real-scenario --test real_window"
+# Issue #314 RF-GT-05 Linux offscreen lane (CI): the same
+# tests/real_window.rs {theme, scale} story matrix under
+# `real-scenario` on Linux inside `xvfb-run` — a virtual X display
+# with no GPU or physical screen. GPUI renders through its normal
+# Linux path (Blade → lavapipe software Vulkan in CI) into real X11
+# windows, and pixels are read back by the X11 `GetImage` backend in
+# gpui_driver::capture — real OS-window pixels, honestly recorded
+# as CapturePath::RealWindow with os_class=linux (true
+# render-target offscreen readback is not exposed by gpui 0.2.2 —
+# see docs/designs/gt-05-ci-offscreen-lanes-design.md). Requires
+# xvfb, openbox, mesa vulkan drivers (lavapipe ≥ 24.2 — older mesa
+# hardcodes depth-24 PutImage against gpui's depth-32 ARGB windows
+# and every present fails BadMatch), fonts, x11-utils (the xprop
+# readiness probe), and the X11/GTK dev packages gpui links
+# against. A window manager is a hard lane requirement, not a
+# nicety: under bare Xvfb gpui maps the window but no present ever
+# reaches the drawable (verified on mesa 25.x — likely gpui's
+# visibility/refresh loop never leaving its initial state without
+# WM map/visibility semantics), so openbox runs inside the same
+# xvfb-run session and the run waits on its
+# _NET_SUPPORTING_WM_CHECK before testing. Linux only; on a host
+# without X the session records environment_blocked exactly like
+# the Windows headless case. `--test-threads=1` is required, not
+# cosmetic: parallel tests would put two same-PID X11 toplevels on
+# the display at once — `_NET_WM_PID` resolution would be ambiguous
+# and the lower window's `GetImage` readback would be occluded.
+[tasks.test-ui-offscreen-xvfb]
+description = "Run the Issue #314 real-window story matrix on Linux under Xvfb+openbox (RF-GT-05 offscreen CI lane — X11 GetImage pixel readback; writes evidence/issue-314-offscreen-xvfb/)"
+env = { RUVIFORM_DRIVER_LAB_EVIDENCE = "evidence/issue-314-offscreen-xvfb/driver-lab-evidence.jsonl", RUVIFORM_GOLDEN_EVIDENCE = "evidence/issue-314-offscreen-xvfb/golden-evidence.jsonl", RUVIFORM_REAL_WINDOW_PNG_DIR = "evidence/issue-314-offscreen-xvfb/png" }
+run = "xvfb-run -a -s '-screen 0 1920x1080x24' sh -c 'openbox >/dev/null 2>&1 & i=0; while [ $i -lt 50 ]; do xprop -root _NET_SUPPORTING_WM_CHECK >/dev/null 2>&1 && break; sleep 0.1; i=$((i+1)); done; exec cargo test -p ruviform-ui-gpui --features real-scenario --test real_window -- --test-threads=1'"
 [tasks.example-ui-webview-e2e]
 description = "Run the real WebView round-trip check (page load → IPC → event delivery; WebView2 on Windows, manual verification — not a CI lane)"
 run = "cargo run -p ruviform-ui-webview --features webview --example e2e_smoke"

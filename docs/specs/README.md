@@ -17,6 +17,7 @@ Directory: `docs/specs`
 | SPEC-034KNvB6d6rMoH8b8xST22 | ruviform-edit 新設（NLE 非破壊編集データモデル + 評価射影） | approved | [edit-data-model.md](./edit-data-model.md) |
 | SPEC-034MbMNCaEATFCOgSdtwkA | エンジン/利用側へのプラグイン統合（plugin-host ノード化 + L1 選択配線） | proposed | [engine-plugin-host-integration.md](./engine-plugin-host-integration.md) |
 | SPEC-034IcwhwIFSNUNKtX7KK0Q | Rust 開発基盤の確立（mise/APM lockfile・最小ワークスペース・手動CI） | approved | [establish-rust-dev-foundation.md](./establish-rust-dev-foundation.md) |
+| SPEC-034VtOJn6cykr1CPohlDAX | RF-GT-05 CI offscreen lanes — GPUI lane CI 収載 + Linux offscreen golden | approved | [gt-05-ci-offscreen-lanes.md](./gt-05-ci-offscreen-lanes.md) |
 | SPEC-034JcicHlRidBgcK1wPtj2 | 動画基盤 API の確定（video-core / video-proc・色変換・HDR 対応範囲） | approved | [implement-video-foundation-api.md](./implement-video-foundation-api.md) |
 | SPEC-034O7hTzfdwtNrUQom8ISw | Issue #121 L1 診断・可観測性（underrun メトリクス・子 stderr 配管・失敗原因 payload） | approved | [issue-121-diagnostics.md](./issue-121-diagnostics.md) |
 | SPEC-034N3QmyfzJRPM3AVpKQTn | Issue #124 OFX フォローアップ（catalog_open cross-window h 露出修正 + instance clip props clone） | approved | [issue-124-ofx-cross-window-h-exposure.md](./issue-124-ofx-cross-window-h-exposure.md) |

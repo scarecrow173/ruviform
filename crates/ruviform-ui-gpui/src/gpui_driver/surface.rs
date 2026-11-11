@@ -106,7 +106,28 @@ fn clip_local(clip: Option<LogicalRect>, geometry: SlotGeometry) -> Option<PhysR
 /// redemption seam's raw material. Called once at window open while
 /// `&mut Window` is in scope. Only the non-test driver calls it
 /// (see `capture_raw_parent` in `lib.rs`).
-#[cfg(not(feature = "gpui-test"))]
+/// Linux cannot use the raw-window-handle seam: gpui 0.2.2's X11
+/// `PlatformWindow` leaves `HasWindowHandle`/`HasDisplayHandle`
+/// `unimplemented!()` — the call panics rather than erroring (same
+/// reason `capture_raw_parent` keeps `gpui-test` builds unset). The
+/// slot records [`super::capture::X11_RESOLVE_BY_PID`] instead; the
+/// capture backend resolves the process's own X11 toplevel lazily
+/// through `_NET_WM_PID` — set by gpui at open — when pixels or
+/// geometry are actually queried.
+#[cfg(all(not(feature = "gpui-test"), target_os = "linux"))]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "the shared `raw_parent_of` signature is Option — the non-Linux backends can genuinely fail to produce a handle; Linux always records the resolve-by-pid sentinel"
+)]
+pub(super) fn raw_parent_of(_window: &gpui::Window) -> Option<usize> {
+    Some(super::capture::X11_RESOLVE_BY_PID)
+}
+
+/// Non-Linux capture of `window`'s OS parent handle. Xlib/Xcb
+/// handles cannot appear off Linux (gpui's X11 backend is the only
+/// producer and it lives on this target), so the match keeps only
+/// the handles the non-Linux backends consume.
+#[cfg(all(not(feature = "gpui-test"), not(target_os = "linux")))]
 pub(super) fn raw_parent_of(window: &gpui::Window) -> Option<usize> {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     // `Window::window_handle` is shadowed by gpui's inherent
@@ -116,13 +137,22 @@ pub(super) fn raw_parent_of(window: &gpui::Window) -> Option<usize> {
     match handle.as_raw() {
         RawWindowHandle::Win32(w) => Some(w.hwnd.get().cast_unsigned()),
         RawWindowHandle::AppKit(w) => Some(w.ns_view.as_ptr() as usize),
-        RawWindowHandle::Xlib(w) => Some(w.window as usize),
-        RawWindowHandle::Xcb(w) => Some(w.window.get() as usize),
         _ => None,
     }
 }
 
 /// Physical-pixel rect the OS backend positions a container with.
+/// Field reads live only in the Win32 container backend — on
+/// targets without one the rect is write-only transport, so the
+/// fields are dead there by construction (the `expect` verifies the
+/// lint still fires if a non-Windows backend ever consumes them).
+#[cfg_attr(
+    not(target_os = "windows"),
+    expect(
+        dead_code,
+        reason = "PhysRect fields are read only by the Win32 container backend"
+    )
+)]
 #[derive(Copy, Clone, Debug)]
 pub(super) struct PhysRect {
     /// Left edge, parent client coordinates (physical px).
@@ -602,9 +632,10 @@ impl NativeSurfaceSlot for GpuiSurfaceAdapter {
         // surface outlives its lease.
         self.registry.release_slot(slot)?;
         self.released.insert(index);
-        if let Some(mut binding) = self.bindings.remove(&index) {
-            binding.container = None; // Drop destroys the OS surface.
-        }
+        // Dropping the removed binding drops its container — the
+        // container's `Drop` destroys the OS surface, so no surface
+        // outlives its lease (a no-op where no backend exists).
+        self.bindings.remove(&index);
         Ok(())
     }
 
@@ -1251,8 +1282,16 @@ mod backend {
 
 /// Stub backend for OSes without a container surface — `create` never
 /// succeeds (`lease_parent` returns [`SlotError::Unsupported`] before
-/// reaching it anyway), so a live `Container` cannot exist.
+/// reaching it anyway), so a live `Container` cannot exist. The stub
+/// `Container` keeps the Win32 signatures verbatim so the shared call
+/// sites compile on every target; it holds no state (`unused_self`)
+/// and cannot fail (`unnecessary_wraps`).
 #[cfg(not(target_os = "windows"))]
+#[expect(
+    clippy::unused_self,
+    clippy::unnecessary_wraps,
+    reason = "stub signatures mirror the Win32 Container interface — no state, no failure modes"
+)]
 mod backend {
     use ruviform_ui::SlotError;
 

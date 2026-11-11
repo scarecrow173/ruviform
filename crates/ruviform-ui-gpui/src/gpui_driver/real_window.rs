@@ -327,16 +327,17 @@ impl RealOsGuiTest {
 }
 
 /// The capability set [`RealOsGuiTest`] honestly claims — see the
-/// module docs. `VisualCapture` requires the Windows capture
-/// backend; other OSes get semantic + multi-window only until a
-/// backend lands. `RealOsPointerOrKeyboard` stays unclaimed —
-/// OS-level input is Issue #313 scope.
+/// module docs. `VisualCapture` requires an OS capture backend —
+/// Win32 on Windows, X11 (`GetImage`) on Linux; other OSes get
+/// semantic + multi-window only until a backend lands.
+/// `RealOsPointerOrKeyboard` stays unclaimed — OS-level input is
+/// Issue #313 scope.
 fn supported_capabilities() -> BTreeSet<ScenarioCapability> {
     let mut capabilities = BTreeSet::from([
         ScenarioCapability::SemanticAction,
         ScenarioCapability::MultiWindow,
     ]);
-    if cfg!(windows) {
+    if cfg!(any(windows, target_os = "linux")) {
         capabilities.insert(ScenarioCapability::VisualCapture);
     }
     capabilities
@@ -806,11 +807,11 @@ mod tests {
         assert!(!caps.contains(&ScenarioCapability::SimulatedPointerOrKeyboard));
         assert!(!caps.contains(&ScenarioCapability::Ime));
         assert!(!caps.contains(&ScenarioCapability::NativePluginDock));
-        // VisualCapture tracks the OS capture backend — Windows only
-        // in this slice.
+        // VisualCapture tracks the OS capture backend — Windows
+        // (Win32) and Linux (X11) have one in this slice.
         assert_eq!(
             caps.contains(&ScenarioCapability::VisualCapture),
-            cfg!(windows)
+            cfg!(any(windows, target_os = "linux"))
         );
     }
 

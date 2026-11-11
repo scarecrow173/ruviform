@@ -58,6 +58,17 @@ pub struct OsWindowGeometry {
     pub scale_factor: f64,
 }
 
+/// `raw_parent` sentinel recorded on Linux (see
+/// [`super::surface::raw_parent_of`]): gpui 0.2.2's X11
+/// `PlatformWindow` does not implement `HasWindowHandle` — the call
+/// panics — so the X11 window id cannot be captured at open. The
+/// X11 backend resolves it lazily: the process's own toplevel is
+/// the window gpui tagged `_NET_WM_PID` = our pid at open.
+/// `usize::MAX` cannot collide with a real handle (XIDs are 29-bit
+/// resource ids; HWND/NSView never reach it either).
+#[cfg(target_os = "linux")]
+pub(super) const X11_RESOLVE_BY_PID: usize = usize::MAX;
+
 /// One captured frame: RGBA8 pixels, row-major, top-down.
 ///
 /// `pixels.len() == width * height * 4`. This is a plain driver-side
@@ -83,7 +94,9 @@ pub struct OsCapturedFrame {
     /// `EnvironmentMeta::backend_detail`. `"win32-printwindow"` is
     /// the window's own rendered client area; `"win32-bitblt-screen"`
     /// is the displayed screen rect (fallback, may include ambient
-    /// desktop content such as the cursor).
+    /// desktop content such as the cursor); `"x11-getimage"` is the
+    /// X11 `GetImage` readback of the window drawable (Xvfb virtual
+    /// display in the CI offscreen lane).
     pub backend: &'static str,
 }
 
@@ -101,7 +114,8 @@ impl GpuiDriver {
     ///   or a failed OS capture call.
     /// - [`UiError::Unsupported`] — the window has no OS handle
     ///   (`gpui-test` platform) or the host OS has no capture backend
-    ///   in this slice (non-Windows).
+    ///   in this slice (macOS and other non-Windows/non-Linux
+    ///   targets).
     pub fn capture_window(&self, window: WindowId) -> Result<OsCapturedFrame, UiError> {
         let (opened, raw_parent, scale_factor) = {
             let inner = self.inner.borrow();
@@ -135,8 +149,9 @@ impl GpuiDriver {
     /// Same honesty contract as [`Self::capture_window`]: unknown
     /// or not-yet-opened windows are [`UiError::Host`], windows
     /// without an OS handle (`gpui-test`) are
-    /// [`UiError::Unsupported`], and non-Windows hosts have no
-    /// backend in this slice.
+    /// [`UiError::Unsupported`], and OSes without a backend in this
+    /// slice (macOS and other non-Windows/non-Linux targets) report
+    /// the same.
     ///
     /// # Errors
     /// - [`UiError::Host`] — unknown window id, window not yet open,
@@ -563,34 +578,336 @@ mod backend {
     }
 }
 
-/// Non-Windows placeholder — the `raw_parent` token is an
-/// NSView/X11 handle this slice does not capture or measure.
-/// Honest [`UiError::Unsupported`], never fabricated geometry.
-#[cfg(not(windows))]
+/// Linux X11 backend — real window pixel readback through the X
+/// protocol (`GetImage` on the window drawable), Issue #314
+/// RF-GT-05 offscreen lane.
+///
+/// `raw_parent` is [`X11_RESOLVE_BY_PID`] — gpui 0.2.2's X11
+/// `PlatformWindow` does not implement `HasWindowHandle`, so the
+/// driver records the sentinel at open and this backend resolves
+/// the window id lazily through `_NET_WM_PID` (see [`own_window`]).
+/// A fresh `x11rb` connection can query and read the window gpui
+/// created on its own connection — X resources are server-global.
+///
+/// Pixels come only from the X server's own rendered window
+/// contents — never semantic state, draw plans, or observer output.
+/// Under `xvfb-run` (the CI offscreen lane) the "screen" is a
+/// virtual framebuffer with no GPU or physical display, so the
+/// readback is deterministic; on a real X display it measures the
+/// displayed window, including border pixels when a WM sets
+/// `border_width` (Xvfb runs no WM, so border is 0 there).
+///
+/// The pixel layout is resolved per capture: `x11rb::image::Image`
+/// normalizes scanline padding, bits-per-pixel, and byte order, and
+/// `PixelLayout::from_visual_type` decodes R/G/B through the
+/// window's own visual masks. Palette/gray-scale visuals cannot be
+/// decoded honestly and return [`UiError::Unsupported`].
+#[cfg(target_os = "linux")]
+mod backend {
+    use ruviform_ui::UiError;
+    use x11rb::connection::Connection;
+    use x11rb::image::{Image, PixelLayout};
+    use x11rb::protocol::xproto::{
+        AtomEnum, ConnectionExt, Drawable, GetGeometryReply, Setup, Visualtype, Window,
+    };
+    use x11rb::rust_connection::RustConnection;
+
+    use super::{OsCapturedFrame, OsWindowGeometry};
+
+    /// Connects to the X server named by `DISPLAY` — `None` lets
+    /// x11rb apply its standard resolution (env var, then the local
+    /// socket). A headless host without X fails here, which the
+    /// scenario layer records as `environment_blocked` upstream.
+    fn connect() -> Result<(RustConnection, usize), UiError> {
+        x11rb::connect(None)
+            .map_err(|e| UiError::host(format!("X11 connect failed — is DISPLAY set? ({e})")))
+    }
+
+    /// `raw_parent` → X11 window id. [`X11_RESOLVE_BY_PID`] resolves
+    /// this process's own toplevel through `_NET_WM_PID`; any other
+    /// value is treated as a literal XID (a diagnostic path —
+    /// `raw_parent_of` never produces one on Linux today). Values
+    /// that cannot be a XID are host errors, not silent truncation.
+    fn window_xid(
+        conn: &RustConnection,
+        screen: usize,
+        raw_parent: usize,
+    ) -> Result<Window, UiError> {
+        if raw_parent == super::X11_RESOLVE_BY_PID {
+            return own_window(conn, screen);
+        }
+        u32::try_from(raw_parent)
+            .map_err(|_| UiError::host("window handle does not fit an X11 window id"))
+    }
+
+    /// The single X11 toplevel owned by this process. gpui sets
+    /// `_NET_WM_PID` to `std::process::id()` at open
+    /// (`platform/linux/x11/window.rs`), so the property identifies
+    /// our windows. Candidates come from the EWMH `_NET_CLIENT_LIST`
+    /// when a window manager maintains it — client windows are
+    /// reparented into frame windows under a WM, so root children
+    /// alone are not reliable — and fall back to a full `QueryTree`
+    /// walk for WM-less servers such as bare Xvfb. Zero or multiple
+    /// pid matches are host errors: guessing which window to read
+    /// would fabricate evidence.
+    fn own_window(conn: &RustConnection, screen: usize) -> Result<Window, UiError> {
+        let pid_atom = conn
+            .intern_atom(false, b"_NET_WM_PID")
+            .map_err(|e| UiError::host(format!("InternAtom _NET_WM_PID failed: {e}")))?
+            .reply()
+            .map_err(|e| UiError::host(format!("InternAtom _NET_WM_PID reply failed: {e}")))?
+            .atom;
+        let root = conn
+            .setup()
+            .roots
+            .get(screen)
+            .map(|root| root.root)
+            .ok_or_else(|| UiError::host("X11 screen has no root window"))?;
+        let candidates = client_list(conn, root)?.unwrap_or_else(|| tree_windows(conn, root));
+        // x11rb negotiates the connection in host byte order, so a
+        // format-32 property unit compares directly against the
+        // native-endian pid bytes.
+        let pid_bytes = std::process::id().to_ne_bytes();
+        let mut found = Vec::new();
+        for child in candidates {
+            let property = conn
+                .get_property(false, child, pid_atom, AtomEnum::CARDINAL, 0, 1)
+                .map_err(|e| UiError::host(format!("GetProperty _NET_WM_PID failed: {e}")))?
+                .reply()
+                .map_err(|e| UiError::host(format!("GetProperty _NET_WM_PID reply failed: {e}")))?;
+            if property.format == 32
+                && property.value.len() >= 4
+                && property.value[..4] == pid_bytes
+            {
+                found.push(child);
+            }
+        }
+        match found.as_slice() {
+            [xid] => Ok(*xid),
+            [] => Err(UiError::host(
+                "no X11 toplevel carries this process's _NET_WM_PID",
+            )),
+            _ => Err(UiError::host(format!(
+                "{} X11 toplevels carry this process's _NET_WM_PID — window identity is ambiguous",
+                found.len()
+            ))),
+        }
+    }
+
+    /// `_NET_CLIENT_LIST` on the root — the EWMH-managed set of
+    /// client toplevels. `None` when no window manager maintains the
+    /// property (bare Xvfb), which selects the tree-walk fallback.
+    /// A present-but-malformed property is a host error, not a
+    /// silent fallback: the WM claimed to manage the list.
+    fn client_list(conn: &RustConnection, root: Window) -> Result<Option<Vec<Window>>, UiError> {
+        let atom = conn
+            .intern_atom(false, b"_NET_CLIENT_LIST")
+            .map_err(|e| UiError::host(format!("InternAtom _NET_CLIENT_LIST failed: {e}")))?
+            .reply()
+            .map_err(|e| UiError::host(format!("InternAtom _NET_CLIENT_LIST reply failed: {e}")))?
+            .atom;
+        let property = conn
+            .get_property(false, root, atom, AtomEnum::WINDOW, 0, u32::MAX)
+            .map_err(|e| UiError::host(format!("GetProperty _NET_CLIENT_LIST failed: {e}")))?
+            .reply()
+            .map_err(|e| {
+                UiError::host(format!("GetProperty _NET_CLIENT_LIST reply failed: {e}"))
+            })?;
+        if property.type_ == 0 {
+            return Ok(None);
+        }
+        if property.format != 32 || property.value.len() % 4 != 0 {
+            return Err(UiError::host(
+                "_NET_CLIENT_LIST has an unexpected format — cannot enumerate client windows",
+            ));
+        }
+        // `len % 4 == 0` was checked above, so the remainder is empty.
+        let (units, _) = property.value.as_chunks::<4>();
+        let windows = units.iter().map(|unit| u32::from_ne_bytes(*unit)).collect();
+        Ok(Some(windows))
+    }
+
+    /// Every window in the server's window tree below `root`,
+    /// collected by recursive `QueryTree`. Used only when no window
+    /// manager maintains `_NET_CLIENT_LIST`; the pid filter in
+    /// [`own_window`] keeps frame/helper windows out of the match.
+    fn tree_windows(conn: &RustConnection, root: Window) -> Vec<Window> {
+        fn visit(conn: &RustConnection, window: Window, depth: u32, out: &mut Vec<Window>) {
+            // Bound the walk: X server trees are shallow, and a
+            // pathological server must not turn capture into an
+            // unbounded request loop.
+            if depth > 16 || out.len() > 4096 {
+                return;
+            }
+            let Ok(cookie) = conn.query_tree(window) else {
+                return;
+            };
+            let Ok(reply) = cookie.reply() else {
+                return;
+            };
+            for child in reply.children {
+                out.push(child);
+                visit(conn, child, depth + 1, out);
+            }
+        }
+        let mut out = Vec::new();
+        visit(conn, root, 0, &mut out);
+        out
+    }
+
+    /// `GetGeometry` on the window drawable — position is
+    /// parent-relative; `client_geometry` translates it to root
+    /// coordinates for input targeting.
+    fn geometry(conn: &RustConnection, xid: Window) -> Result<GetGeometryReply, UiError> {
+        conn.get_geometry(xid as Drawable)
+            .map_err(|e| UiError::host(format!("GetGeometry failed: {e}")))?
+            .reply()
+            .map_err(|e| UiError::host(format!("GetGeometry reply failed: {e}")))
+    }
+
+    /// The `Visualtype` matching `visual_id` in the selected screen's
+    /// setup — supplies the R/G/B masks for pixel decode.
+    fn find_visual(setup: &Setup, screen: usize, visual_id: u32) -> Result<Visualtype, UiError> {
+        setup
+            .roots
+            .get(screen)
+            .into_iter()
+            .flat_map(|root| root.allowed_depths.iter())
+            .flat_map(|depth| depth.visuals.iter())
+            .find(|visual| visual.visual_id == visual_id)
+            .copied()
+            .ok_or_else(|| UiError::host("window visual not found in server setup"))
+    }
+
+    /// Captures the window drawable's pixels via `GetImage`
+    /// (`ZPixmap`, all planes) and decodes them through the window's
+    /// visual.
+    ///
+    /// # Errors
+    /// [`UiError::Host`] on connect/geometry/readback failure or an
+    /// empty window; [`UiError::Unsupported`] when the window's
+    /// visual is not TrueColor/DirectColor (palette and gray-scale
+    /// visuals have no honest RGB decode in this slice).
+    pub(super) fn capture_client_area(
+        raw_parent: usize,
+        scale_factor: f64,
+    ) -> Result<OsCapturedFrame, UiError> {
+        let (conn, screen) = connect()?;
+        let xid = window_xid(&conn, screen, raw_parent)?;
+        let geo = geometry(&conn, xid)?;
+        if geo.width == 0 || geo.height == 0 {
+            return Err(UiError::host("window has an empty geometry"));
+        }
+        let (image, visual_id) = Image::get(&conn, xid as Drawable, 0, 0, geo.width, geo.height)
+            .map_err(|e| UiError::host(format!("GetImage failed: {e}")))?;
+        let visual = find_visual(conn.setup(), screen, visual_id)?;
+        let layout = PixelLayout::from_visual_type(visual).map_err(|_| {
+            UiError::unsupported(
+                "visual_capture",
+                "window visual is not TrueColor/DirectColor — no honest RGB decode",
+            )
+        })?;
+        let (w, h) = (image.width(), image.height());
+        let mut pixels = Vec::with_capacity(usize::from(w) * usize::from(h) * 4);
+        for row in 0..h {
+            for col in 0..w {
+                let (red, green, blue) = layout.decode(image.get_pixel(col, row));
+                // `decode` expands each component to 16 bits; the
+                // top byte is the 8-bit channel value.
+                pixels.extend_from_slice(&[
+                    (red >> 8) as u8,
+                    (green >> 8) as u8,
+                    (blue >> 8) as u8,
+                    0xFF,
+                ]);
+            }
+        }
+        Ok(OsCapturedFrame {
+            width: u32::from(w),
+            height: u32::from(h),
+            scale_factor,
+            pixels,
+            backend: "x11-getimage",
+        })
+    }
+
+    /// Client-area geometry of the window drawable in root
+    /// coordinates — the input-targeting query. `GetGeometry` alone
+    /// reports parent-relative coordinates, which are wrong for a
+    /// WM-reparented toplevel, so the origin is translated to the
+    /// root window; the returned size is the drawable's inside size,
+    /// which already excludes any `border_width`.
+    ///
+    /// # Errors
+    /// [`UiError::Host`] on connect/geometry/translate failure or an
+    /// empty client area.
+    pub(super) fn client_geometry(
+        raw_parent: usize,
+        scale_factor: f64,
+    ) -> Result<OsWindowGeometry, UiError> {
+        let (conn, screen) = connect()?;
+        let xid = window_xid(&conn, screen, raw_parent)?;
+        let geo = geometry(&conn, xid)?;
+        let root = conn
+            .setup()
+            .roots
+            .get(screen)
+            .map(|root| root.root)
+            .ok_or_else(|| UiError::host("X11 screen has no root window"))?;
+        let origin = conn
+            .translate_coordinates(xid, root, 0, 0)
+            .map_err(|e| UiError::host(format!("TranslateCoordinates failed: {e}")))?
+            .reply()
+            .map_err(|e| UiError::host(format!("TranslateCoordinates reply failed: {e}")))?;
+        // `GetGeometry` width/height is the window's inside size —
+        // the border is outside the drawable, so the client area is
+        // exactly geo.width x geo.height and `border_width` plays no
+        // part. `TranslateCoordinates(0,0)` lands on the drawable's
+        // top-left, inside any border.
+        let w = i64::from(geo.width);
+        let h = i64::from(geo.height);
+        if w <= 0 || h <= 0 {
+            return Err(UiError::host("window client area is empty"));
+        }
+        Ok(OsWindowGeometry {
+            origin_x: i32::from(origin.dst_x),
+            origin_y: i32::from(origin.dst_y),
+            width: u32::try_from(w).map_err(|_| UiError::host("client width overflows u32"))?,
+            height: u32::try_from(h).map_err(|_| UiError::host("client height overflows u32"))?,
+            scale_factor,
+        })
+    }
+}
+
+/// Remaining non-Windows/non-Linux placeholder (macOS and other
+/// targets) — the `raw_parent` token is an NSView handle this slice
+/// does not capture or measure. Honest [`UiError::Unsupported`],
+/// never fabricated geometry.
+#[cfg(not(any(windows, target_os = "linux")))]
 mod backend {
     use ruviform_ui::UiError;
 
     use super::{OsCapturedFrame, OsWindowGeometry};
 
-    /// Always unsupported on non-Windows targets in this slice.
+    /// Always unsupported on this target in this slice.
     pub(super) fn capture_client_area(
         _raw_parent: usize,
         _scale_factor: f64,
     ) -> Result<OsCapturedFrame, UiError> {
         Err(UiError::unsupported(
             "visual_capture",
-            "OS window capture is implemented for Windows only in this slice",
+            "OS window capture is implemented for Windows and Linux (X11) only in this slice",
         ))
     }
 
-    /// Always unsupported on non-Windows targets in this slice.
+    /// Always unsupported on this target in this slice.
     pub(super) fn client_geometry(
         _raw_parent: usize,
         _scale_factor: f64,
     ) -> Result<OsWindowGeometry, UiError> {
         Err(UiError::unsupported(
             "window_geometry",
-            "OS window geometry is implemented for Windows only in this slice",
+            "OS window geometry is implemented for Windows and Linux (X11) only in this slice",
         ))
     }
 }

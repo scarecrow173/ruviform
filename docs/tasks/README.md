@@ -6,6 +6,7 @@ Directory: `docs/tasks`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| TASK-034VuaZaztYPIHufg5gKhm | Add GT-05 CI offscreen lanes | in-progress | [add-gt-05-ci-offscreen-lanes.md](./add-gt-05-ci-offscreen-lanes.md) |
 | TASK-034UdR18snUStfTR5NpZge | Issue #243 実装タスク | in-progress | [implement-issue-243-gpui-realwin-windows.md](./implement-issue-243-gpui-realwin-windows.md) |
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |

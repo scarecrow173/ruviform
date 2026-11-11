@@ -21,6 +21,7 @@ Directory: `docs/designs`
 | DESIGN-034KNBPbww1kvzVUF4Ab1H | ruviform-edit 設計（NLE 編集データモデル + 評価射影） | approved | [edit-data-model.md](./edit-data-model.md) |
 | DESIGN-034Mclz5y96MrTg7R2BNCx | エンジン/利用側へのプラグイン統合（RT endpoint 所有分離 + グラフ接着） | approved | [engine-plugin-host-integration.md](./engine-plugin-host-integration.md) |
 | DESIGN-034KQXr3w4dYgKO79dklG9 | Foundation/Observability 候補モジュールの最小 API・依存 DAG・新設時期の設計 | approved | [foundation-observability-minimal-api.md](./foundation-observability-minimal-api.md) |
+| DESIGN-034Vu9v1geiqmFittsRAEQ | RF-GT-05 CI offscreen lanes design | approved | [gt-05-ci-offscreen-lanes-design.md](./gt-05-ci-offscreen-lanes-design.md) |
 | DESIGN-034MIeiBWXpLjwgA1yolIT | L1 規格アダプタの子プロセス組込み・実プラグイン E2E（CLAP + VST3 host-side bridge — Issue #114） | approved | [issue-114-real-adapter-l1-e2e.md](./issue-114-real-adapter-l1-e2e.md) |
 | DESIGN-034N3J1C5vystrbJl69R1q | L1 GUI — プロセス境界越しの親ウィンドウ埋め込みの採否設計（Issue #115） | approved | [issue-115-l1-gui-cross-process-parenting.md](./issue-115-l1-gui-cross-process-parenting.md) |
 | DESIGN-034NNxNMrrk6OoIGfX18rk | L1 supervisor（自動再起動 util 層）設計（Issue #116） | approved | [issue-116-supervisor.md](./issue-116-supervisor.md) |
