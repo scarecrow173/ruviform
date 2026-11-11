@@ -63,7 +63,8 @@ relations:
     - "docs/designs/gt-05-ci-offscreen-lanes-design.md"
   derived-by: []
   verifies: []
-  verified-by: []
+  verified-by:
+    - "docs/test-specs/gt-05-ci-offscreen-lanes.md"
   references: []
   defers: []
   deferred-by: []

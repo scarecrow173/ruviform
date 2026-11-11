@@ -8,6 +8,7 @@ Directory: `docs/plans`
 | --- | --- | --- | --- |
 | PLAN-034IR3qOr15LGNY9mEindJ | Issue #1 設計ベースラインの開発基盤・README／AGENTS への反映 | approved | [apply-issue-1-architecture-baseline-to-repo.md](./apply-issue-1-architecture-baseline-to-repo.md) |
 | PLAN-034IdrispOUms1c32192B6 | Rust 開発基盤のブートストラップ（toolchain pin・最小ワークスペース・mise タスク・手動CI） | approved | [dev-foundation-bootstrap.md](./dev-foundation-bootstrap.md) |
+| PLAN-034Vu9Of9q1USFJKWTGNY6 | RF-GT-05 CI offscreen lanes plan | approved | [gt-05-ci-offscreen-lanes-plan.md](./gt-05-ci-offscreen-lanes-plan.md) |
 | PLAN-034JgkWCimxdvr81k6b0ow | オーディオデバイス境界ポートと ruviform-audio-device PoC の実装（Issue #23） | approved | [implement-audio-device-port-and-cpal-poc.md](./implement-audio-device-port-and-cpal-poc.md) |
 | PLAN-034OnRCESpswfHetayj7CH | Issue #121 実施計画 — L1 diagnostics（observability crate・audio counters・stderr drain・FailureCause・pre-mint diagnostics） | approved | [implement-issue-121-l1-diagnostics.md](./implement-issue-121-l1-diagnostics.md) |
 | PLAN-034QedYKnRFb63F40E0Mb6 | Implement Issue #184 M1 ruviform-graph crate: typed IR + validator + PoC | approved | [implement-issue-184-m1-ruviform-graph-crate-typed-ir-validator-poc.md](./implement-issue-184-m1-ruviform-graph-crate-typed-ir-validator-poc.md) |

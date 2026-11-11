@@ -20,6 +20,7 @@ Directory: `docs/test-specs`
 | TSPEC-034JZDNRML000000000005 | denormal flush テスト仕様 | approved | [denormal-flush-tests.md](./denormal-flush-tests.md) |
 | TSPEC-034KPgCJjA5nOIvEtscQj8 | ruviform-edit 編集データモデル テスト仕様 | approved | [edit-data-model-tests.md](./edit-data-model-tests.md) |
 | TSPEC-034J6OIFK83GJIsST60Jck | 公開 enum 拡張性と時間演算精度の契約保証 | approved | [followup-enum-compat-and-time-arithmetic.md](./followup-enum-compat-and-time-arithmetic.md) |
+| TSPEC-034VuaxHGNnRX9WpfdZpMq | RF-GT-05 CI offscreen lanes test spec | approved | [gt-05-ci-offscreen-lanes.md](./gt-05-ci-offscreen-lanes.md) |
 | TSPEC-034LFCoZvNuuSaGpSTrbp0 | IccTransform ICC 経路 契約テスト仕様 | approved | [icc-transform-contract-tests.md](./icc-transform-contract-tests.md) |
 | TSPEC-034NOX3x1mfWrROBAq4Wqu | L1 supervisor core tests（Issue #116 — watch/poll state machine・backoff・GaveUp・host binding・checkpoint bound） | approved | [issue-116-supervisor-core-tests.md](./issue-116-supervisor-core-tests.md) |
 | TSPEC-034NOXcdTo4m1tfmRleM0V | L1 supervisor E2E tests（Issue #116 — 実子 restart・bundle burst・crash-loop GaveUp・restore 分類・lingering） | approved | [issue-116-supervisor-e2e-tests.md](./issue-116-supervisor-e2e-tests.md) |
