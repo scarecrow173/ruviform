@@ -46,6 +46,7 @@ Directory: `docs/specs`
 | SPEC-U5ytIWyq22nGIRlXTz2LIN | Issue #251 Stage W closeout — 実機 lane 証拠化と残存受入項目の検証・記録 | approved | [issue-251-stage-w-real-device-closeout.md](./issue-251-stage-w-real-device-closeout.md) |
 | SPEC-034Vj1oEP5t1a8EwNeZV4L | Issue #253 plugin→host report の host-graph consumer 配線 slice | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | SPEC-rf253osmidibackend001 | Issue #253 OS MIDI input backend slice（Windows 実装 + macOS/Linux Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
+| SPEC-034VEOYg1GvMKRp6MWAh4D | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | draft | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | SPEC-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice（IMidiMapping CC→param 配送 + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | SPEC-034UjQv2KPJWujHxiCffIK | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | SPEC-8EJ4gM4rl1pb5GPij5Nm0l | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |

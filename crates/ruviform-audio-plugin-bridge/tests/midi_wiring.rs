@@ -589,6 +589,7 @@ fn mock_backend_drives_input_stage_to_plugin() {
         timed_us(4_000, note_on(64)),
     ]);
     port.inject_dropped(2);
+    port.inject_unsupported(4);
 
     // Enumerate → `info` → `open` through the port traits — the same
     // calls an engine-side adapter selection makes.
@@ -600,12 +601,24 @@ fn mock_backend_drives_input_stage_to_plugin() {
     let mut input = ports[0].open().unwrap();
     assert!(port.is_open());
 
-    // Scripted backend drops surface through `pump`'s stats and the
-    // `InputTx` cumulative counter.
+    // Scripted backend drops and untranslatable traffic surface
+    // through `pump`'s stats and the `InputTx` cumulative counters —
+    // `unsupported` must not die at the port boundary (Issue #253).
     let stats = rig.input_tx.as_mut().unwrap().pump(&mut *input).unwrap();
     assert_eq!(stats.received, 3);
     assert_eq!(stats.pushed, 3);
     assert_eq!(stats.backend_dropped, 2);
+    assert_eq!(stats.backend_unsupported, 4);
+    assert_eq!(rig.input_tx.as_ref().unwrap().dropped_backend(), 2);
+    assert_eq!(rig.input_tx.as_ref().unwrap().unsupported_backend(), 4);
+
+    // `unsupported` accumulates across pumps like `dropped` does —
+    // a second scripted batch adds to the cumulative counter.
+    port.inject_unsupported(3);
+    let stats = rig.input_tx.as_mut().unwrap().pump(&mut *input).unwrap();
+    assert_eq!(stats.backend_unsupported, 3);
+    assert_eq!(stats.backend_dropped, 0);
+    assert_eq!(rig.input_tx.as_ref().unwrap().unsupported_backend(), 7);
     assert_eq!(rig.input_tx.as_ref().unwrap().dropped_backend(), 2);
 
     feed(&mut rig.rt, rig.src_out, 256);
@@ -615,6 +628,17 @@ fn mock_backend_drives_input_stage_to_plugin() {
     assert_eq!(calls.len(), 2, "256 frames split as 128+128");
     assert_eq!(calls[0], vec![(0, Ev::On(60)), (96, Ev::Off(60))]);
     assert_eq!(calls[1], vec![(64, Ev::On(64))]);
+
+    // The channel path's `unsupported` counter lives on `InputTx`
+    // (the `MidiInput::read` caller), not on the stage — the stage's
+    // `unsupported_backend` only accumulates on its own direct-`read`
+    // path, so the status mirror stays zero here (same ownership
+    // split as `dropped_backend`).
+    assert_eq!(
+        rig.control.snapshot().input.unsupported_backend,
+        0,
+        "channel-path unsupported is an InputTx counter, not a stage counter"
+    );
 
     // `close` invalidates the subscription — a further pump reports
     // the backend error instead of delivering stale events.
@@ -976,4 +1000,107 @@ fn ledger_eviction_delivers_synthetic_off() {
         vec![(0, Ev::Off(0)), (0, Ev::Off(1))],
         "evicted keys' synthetic offs at offset 0 of the next call"
     );
+}
+
+// ---------------------------------------------------------------------------
+// real OS backend opt-in lane (Issue #253)
+// ---------------------------------------------------------------------------
+
+/// Issue #253 — the real OS MIDI backend (`ruviform-midi-device`'s
+/// `SystemBackend`) driving the identical `InputTx::pump` →
+/// `InputStage` → status-mirror path the `MockBackend` test covers
+/// deterministically: enumerate → open → repeated pump (observing
+/// `dropped`/`unsupported` counter transparency end-to-end) →
+/// process → close → `StreamInvalidated`.
+///
+/// Manual opt-in: `cargo test -p ruviform-audio-plugin-bridge --
+/// --ignored` (canonical mise lane registration is a recorded
+/// follow-up — `mise.toml` is outside this slice's edit scope).
+/// Honest exit on platforms without a backend
+/// (`DeviceError::Unsupported`) or with no input ports; hardware
+/// traffic is recorded, never asserted.
+#[test]
+#[ignore = "requires an OS MIDI input device; manual opt-in check"]
+fn real_midi_device_drives_input_tx_to_stage() {
+    let ports = match ruviform_midi_device::backend().input_ports() {
+        Ok(ports) => ports,
+        Err(err) => {
+            eprintln!("OS MIDI backend unavailable ({err:?}) — nothing to verify");
+            return;
+        }
+    };
+    let Some(port) = ports.into_iter().next() else {
+        eprintln!("no MIDI input ports — nothing to verify");
+        return;
+    };
+    let info = port.info();
+    eprintln!(
+        "port: id={} name={:?} origin={:?} ump={} timestamps={} domain={:?}",
+        info.id,
+        info.name,
+        info.origin,
+        info.capabilities.supports_ump,
+        info.capabilities.provides_timestamps,
+        info.capabilities.clock_domain,
+    );
+
+    let mut rig = build_rig(128, true);
+    // Anchor the backend's declared stamp domain at frame 0 — the
+    // WinMM subscription stamps in `TimeBase` 1/1000 s
+    // (`midi-device/src/queue.rs::Shared::new`). Mapped offsets are
+    // timing-dependent on real hardware and are recorded, not
+    // asserted.
+    if let Some(domain) = info.capabilities.clock_domain {
+        rig.control
+            .set_clock_anchor(Some(ClockAnchor {
+                domain,
+                stamp_ticks: 0,
+                stamp_base: TimeBase::new(1, 1_000).unwrap(),
+                frame: EngineFrame::new(ClockEpochId::new(0), 0),
+                calibration: TimestampProvenance::Carried,
+            }))
+            .unwrap();
+    }
+
+    let mut input = port.open().expect("open declared port");
+    // Pump for a short window so real traffic has a chance to arrive.
+    let (mut total_received, mut total_pushed) = (0usize, 0usize);
+    let (mut total_dropped, mut total_unsupported) = (0u64, 0u64);
+    for _ in 0..10 {
+        let stats = rig.input_tx.as_mut().unwrap().pump(&mut *input).unwrap();
+        total_received += stats.received;
+        total_pushed += stats.pushed;
+        total_dropped += stats.backend_dropped;
+        total_unsupported += stats.backend_unsupported;
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // Counter transparency end-to-end: every per-call observation
+    // must land on the `InputTx` cumulative counters — nothing may
+    // die at the port boundary.
+    assert_eq!(
+        rig.input_tx.as_ref().unwrap().dropped_backend(),
+        total_dropped
+    );
+    assert_eq!(
+        rig.input_tx.as_ref().unwrap().unsupported_backend(),
+        total_unsupported
+    );
+
+    feed(&mut rig.rt, rig.src_out, 256);
+    rig.rt.process(256, &RtContext::mint()).expect("process");
+    let snap = rig.control.snapshot();
+    eprintln!(
+        "observed: received={total_received} pushed={total_pushed} \
+         dropped={total_dropped} unsupported={total_unsupported} \
+         stage_counters={:?}",
+        snap.input
+    );
+
+    input.close();
+    // `close` invalidates the subscription — a further pump reports
+    // the backend error instead of delivering stale events.
+    assert!(matches!(
+        rig.input_tx.as_mut().unwrap().pump(&mut *input),
+        Err(DeviceError::StreamInvalidated)
+    ));
 }

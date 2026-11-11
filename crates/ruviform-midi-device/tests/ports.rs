@@ -2,10 +2,10 @@
 //! consumer (e.g. `InputTx::pump`) actually takes.
 
 use ruviform_audio_core::device::DeviceError;
-use ruviform_audio_core::midi_input::MidiInputEnumerator;
+use ruviform_audio_core::midi_input::{MidiInput, MidiInputEnumerator};
 #[cfg(windows)]
-use ruviform_audio_core::midi_input::{MidiInput, MidiInputPort, MidiPortOrigin, MidiReadStats};
-#[cfg(windows)]
+use ruviform_audio_core::midi_input::{MidiInputPort, MidiPortOrigin, MidiReadStats};
+use ruviform_media_core::TimestampProvenance;
 use ruviform_midi_device::backend;
 
 #[cfg(windows)]
@@ -61,19 +61,88 @@ fn unsupported_platforms_return_explicit_unsupported() {
     ));
 }
 
-#[cfg(windows)]
+/// Issue #253 real-device lane — the full port lifecycle on the actual
+/// OS backend: enumerate → open → repeated `read` (timestamp domain,
+/// provenance, `dropped`/`unsupported` observation) → close →
+/// `StreamInvalidated`.
+///
+/// Manual opt-in: `cargo test -p ruviform-midi-device -- --ignored`
+/// (canonical mise lane registration is a recorded follow-up — this
+/// crate's Cargo.toml and `mise.toml` are outside this slice's edit
+/// scope). Honest exit on platforms without a backend
+/// (`DeviceError::Unsupported`) or with no input ports — hardware
+/// traffic (nonzero counters, actual events) is recorded, never
+/// asserted, because nothing in the lane can physically generate it.
 #[test]
 #[ignore = "requires a MIDI input device; manual opt-in check"]
-fn real_device_open_read_close() {
-    let ports = backend().input_ports().unwrap();
+fn real_device_open_read_observe_close() {
+    let backend: Box<dyn MidiInputEnumerator> = Box::new(backend());
+    let ports = match backend.input_ports() {
+        Ok(ports) => ports,
+        Err(err) => {
+            eprintln!("OS MIDI backend unavailable ({err:?}) — nothing to verify");
+            return;
+        }
+    };
     let Some(port) = ports.into_iter().next() else {
         eprintln!("no MIDI input ports — nothing to verify");
         return;
     };
-    let mut input: Box<dyn MidiInput> = port.open().unwrap();
+
+    let info = port.info();
+    eprintln!(
+        "port: id={} name={:?} origin={:?} ump={} timestamps={} domain={:?}",
+        info.id,
+        info.name,
+        info.origin,
+        info.capabilities.supports_ump,
+        info.capabilities.provides_timestamps,
+        info.capabilities.clock_domain,
+    );
+
+    let mut input: Box<dyn MidiInput> = port.open().expect("open declared port");
+
+    // Drain for a short window so real traffic has a chance to arrive;
+    // every observable counter and stamp field is recorded.
     let mut out = Vec::new();
-    let stats = input.read(&mut out, 64).unwrap();
-    eprintln!("read {} events, stats {stats:?}", out.len());
+    let (mut total_dropped, mut total_unsupported) = (0u64, 0u64);
+    for _ in 0..10 {
+        let stats = input.read(&mut out, 64).expect("read on open subscription");
+        total_dropped += stats.dropped;
+        total_unsupported += stats.unsupported;
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+
+    // Contract-level stamp invariants (hold without traffic): a
+    // stamped port's events must carry the *declared* clock domain and
+    // `Carried` provenance, with non-decreasing driver ticks.
+    if info.capabilities.provides_timestamps {
+        let declared_domain = info
+            .capabilities
+            .clock_domain
+            .expect("stamped port declares a domain");
+        let mut prev_ticks = None;
+        for event in &out {
+            assert_eq!(
+                event.stamp.domain, declared_domain,
+                "events must be stamped in the port's declared domain"
+            );
+            assert_eq!(event.stamp.provenance, TimestampProvenance::Carried);
+            if let Some(prev) = prev_ticks {
+                assert!(
+                    event.stamp.ticks >= prev,
+                    "driver ticks must be non-decreasing"
+                );
+            }
+            prev_ticks = Some(event.stamp.ticks);
+        }
+    }
+
+    eprintln!(
+        "observed: {} events, dropped={total_dropped}, unsupported={total_unsupported}",
+        out.len()
+    );
+
     input.close();
     // After close the subscription reports invalidation.
     assert!(matches!(
