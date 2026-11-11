@@ -78,9 +78,26 @@ static DOMAIN_MISMATCHES: AtomicUsize = AtomicUsize::new(0);
 /// Callbacks carrying `capture: Some` / `capture: None`.
 static CAPTURE_SOME: AtomicUsize = AtomicUsize::new(0);
 static CAPTURE_NONE: AtomicUsize = AtomicUsize::new(0);
-/// Callbacks carrying `frame_position: Some` (expected 0 — this
-/// adapter reports `None`; a nonzero count is a finding).
+/// Callbacks carrying `frame_position: Some`. On the Windows
+/// WASAPI-native input path (Issue #565) every callback must carry
+/// the backend-reported device position; backends that cannot report
+/// one honestly keep `None`.
 static FRAME_POSITION_SOME: AtomicUsize = AtomicUsize::new(0);
+/// `frame_position` values that did not continue the previous
+/// packet's `position + frames` expectation. Each must coincide with
+/// a `ClockDiscontinuity` error event — a jump the backend did not
+/// report is a contract violation.
+static FRAME_POSITION_GAPS: AtomicUsize = AtomicUsize::new(0);
+/// First `frame_position` observed (`u64::MAX` before the first
+/// `Some`) — printed as progression evidence.
+static FIRST_FRAME_POSITION: AtomicU64 = AtomicU64::new(u64::MAX);
+/// Largest `frame_position` observed.
+static LAST_FRAME_POSITION: AtomicU64 = AtomicU64::new(0);
+/// The `frame_position` expected for the next callback —
+/// `position + frames` of the previous `Some` packet (`u64::MAX`
+/// before the first `Some` anchors the epoch; WASAPI callbacks are
+/// serial per stream so a plain load/store sequence suffices).
+static EXPECTED_FRAME_POSITION: AtomicU64 = AtomicU64::new(u64::MAX);
 /// Non-finite (`NaN`/`±inf`) samples observed across all callbacks.
 static NON_FINITE_SAMPLES: AtomicU64 = AtomicU64::new(0);
 /// Bits of the largest `|sample|` observed (non-negative `f32` bits
@@ -90,6 +107,9 @@ static PEAK_SAMPLE_BITS: AtomicU32 = AtomicU32::new(0);
 static ERROR_EVENTS: AtomicUsize = AtomicUsize::new(0);
 /// `DeviceError::Xrun` events seen on the error callback.
 static XRUNS: AtomicUsize = AtomicUsize::new(0);
+/// `DeviceError::ClockDiscontinuity` events seen on the error
+/// callback — the honest signal a `frame_position` epoch broke.
+static CLOCK_DISCONTINUITIES: AtomicUsize = AtomicUsize::new(0);
 /// [`error_kind_code`] of the most recent error event (`0` = none).
 static LAST_ERROR_KIND: AtomicUsize = AtomicUsize::new(0);
 /// The `ClockDomainId` raw value the stream reported before `start()`
@@ -133,6 +153,10 @@ fn real_input_stream_captures_planar_audio() {
         }
     };
     println!("  host: {}", host.name());
+    // Issue #565: the Windows WASAPI-native input path must report
+    // `frame_position` on every callback; other hosts/backends keep
+    // `None` honestly, so the assertions below are host-gated.
+    let is_wasapi = host.name() == "WASAPI";
 
     let Some(device) = default_input_device(&host) else {
         return;
@@ -218,6 +242,24 @@ fn real_input_stream_captures_planar_audio() {
         0,
         "backend delivered NaN/inf samples"
     );
+    if is_wasapi {
+        // Every WASAPI callback must carry the backend-reported
+        // device position — a `None` would mean the native path was
+        // bypassed or the position was dropped.
+        assert_eq!(
+            FRAME_POSITION_SOME.load(Ordering::Relaxed),
+            CALLBACKS.load(Ordering::Relaxed),
+            "WASAPI input must report frame_position on every callback"
+        );
+        // A position jump is only legitimate when the stream also
+        // reported `ClockDiscontinuity` — an unreported jump would
+        // mean the epoch broke silently.
+        assert!(
+            FRAME_POSITION_GAPS.load(Ordering::Relaxed)
+                <= CLOCK_DISCONTINUITIES.load(Ordering::Relaxed),
+            "frame_position jumped without a ClockDiscontinuity report"
+        );
+    }
 }
 
 /// The duplex-domain check: input and output streams opened on the
@@ -519,8 +561,22 @@ fn data_callback() -> InputDataCallback {
                     CAPTURE_NONE.fetch_add(1, Ordering::Relaxed);
                 }
             }
-            if info.frame_position.is_some() {
+            if let Some(position) = info.frame_position {
                 FRAME_POSITION_SOME.fetch_add(1, Ordering::Relaxed);
+                // The next callback's first-frame position must equal
+                // this packet's `position + frames` — WASAPI delivers
+                // contiguous capture-clock spans unless a discontinuity
+                // was reported. Callbacks are serial per stream.
+                let expected = EXPECTED_FRAME_POSITION.load(Ordering::Relaxed);
+                if expected != u64::MAX && position != expected {
+                    FRAME_POSITION_GAPS.fetch_add(1, Ordering::Relaxed);
+                }
+                EXPECTED_FRAME_POSITION
+                    .store(position.wrapping_add(frames as u64), Ordering::Relaxed);
+                if FIRST_FRAME_POSITION.load(Ordering::Relaxed) == u64::MAX {
+                    FIRST_FRAME_POSITION.store(position, Ordering::Relaxed);
+                }
+                LAST_FRAME_POSITION.fetch_max(position, Ordering::Relaxed);
             }
 
             // One bounded pass over the slab: non-finite scan + peak.
@@ -551,6 +607,9 @@ fn error_callback() -> InputErrorCallback {
         LAST_ERROR_KIND.store(error_kind_code(error), Ordering::Relaxed);
         if error == DeviceError::Xrun {
             XRUNS.fetch_add(1, Ordering::Relaxed);
+        }
+        if error == DeviceError::ClockDiscontinuity {
+            CLOCK_DISCONTINUITIES.fetch_add(1, Ordering::Relaxed);
         }
     })
 }
@@ -607,9 +666,21 @@ fn print_capture_summary(domain: ClockDomainId) {
         CAPTURE_SOME.load(Ordering::Relaxed),
         CAPTURE_NONE.load(Ordering::Relaxed),
     );
+    let first_position = FIRST_FRAME_POSITION.load(Ordering::Relaxed);
     println!(
-        "  frame_position reported: {}",
-        FRAME_POSITION_SOME.load(Ordering::Relaxed)
+        "  frame_position: some={} gaps={} first={} last={}",
+        FRAME_POSITION_SOME.load(Ordering::Relaxed),
+        FRAME_POSITION_GAPS.load(Ordering::Relaxed),
+        if first_position == u64::MAX {
+            "none".to_owned()
+        } else {
+            first_position.to_string()
+        },
+        LAST_FRAME_POSITION.load(Ordering::Relaxed),
+    );
+    println!(
+        "  clock discontinuities: {}",
+        CLOCK_DISCONTINUITIES.load(Ordering::Relaxed)
     );
     println!(
         "  non-finite samples: {}",

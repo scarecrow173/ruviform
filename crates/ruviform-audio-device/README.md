@@ -11,6 +11,16 @@
   trait オブジェクトとしてのみ呼び出し側へ届き、全バックエンドエラーはポートの
   `DeviceError` に正規化される。第 2 のバックエンド（cubeb 等）は feature
   スイッチではなく*別のアダプタクレート*になる。
+- 例外 — Windows/WASAPI 入力の native path（Issue #565）: cpal の公開
+  callback metadata は `frame_position` を運べない（WASAPI の
+  `IAudioCaptureClient::GetBuffer` device position は cpal 内部で破棄
+  される）ため、Windows かつ host = WASAPI の入力ストリームのみ
+  `src/wasapi_input.rs` が cpal をバイパスしてネイティブに駆動し、
+  `InputCallbackInfo::frame_position` に backend 報告値を供給する。
+  別クレートにできない理由（adapter→adapter 依存禁止・cpal internals
+  到達不能）と設計判断は
+  docs/designs/issue-565-wasapi-input-frame-position-design.md を参照。
+  非 Windows・WASAPI 以外の host・出力方向は従来どおり cpal 経路で不変。
 - Host 列挙・選択: `default_host`, `available_host_ids`, `host`。
 - フォーマット交渉（第一責務）: 開ける `F32` `AudioFormat` を優先 —
   バックエンド既定が別エンコーディングでも F32 対応レンジのみを
@@ -27,6 +37,8 @@
   engine と同じ利用側層。foundations/Primitives への下向き依存のみ）
 - 許可依存: `ruviform-audio-core`（ポート定義元）, `ruviform-media-core`
   （デバイスクロックの `MediaTime`）, `cpal`（バックエンド・封じ込め）。
+  Windows のみ `windows`/`windows-core` 0.62（WASAPI native input path が
+  使う Win32/COM API — cpal と同一バージョン、公開面には現れない）。
   エンジンクレート（`ruviform-audio`）にも他アダプタにも依存しない。
 
 ## RT 契約
