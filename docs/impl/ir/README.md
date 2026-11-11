@@ -215,3 +215,5 @@ Directory: `docs/impl/ir`
 | IMPL-034VOSINPDRV4REAL0SIN6 | Issue #313 `RealOsPointerOrKeyboard` capability 実装と Windows 実入力 E2E 証拠 | completed | [issue-313-real-os-input-driver-slice.md](./issue-313-real-os-input-driver-slice.md) |
 | IMPL-034VFhJztohjkuJtNUpBHT | Issue #253 unsupported transparency slice | completed | [issue-253-unsupported-transparency-slice.md](./issue-253-unsupported-transparency-slice.md) |
 | IMPL-034VFzhzdEyknToi5VSfS5 | Issue #313 S2 windowed `TestIo`/`rvf.uitest.v1` GPUI backend 配線 | completed | [issue-313-windowed-testio-slice.md](./issue-313-windowed-testio-slice.md) |
+| IMPL-TUskALcC8xZ3ofmqqt0sMj0 | Issue #253 README/specs interim wording closeout — canonical lane 登録済み整合 | completed | [issue-253-readme-specs-interim-wording-closeout.md](./issue-253-readme-specs-interim-wording-closeout.md) |
+| IMPL-034VNnxPkVZ7DW5CUalpn9 | Issue #286 IO-04 ZIP/TAR Archive — Verification Notes 1:1 監査・簿記 | completed | [issue-286-io-04-verification-notes-bookkeeping.md](./issue-286-io-04-verification-notes-bookkeeping.md) |
