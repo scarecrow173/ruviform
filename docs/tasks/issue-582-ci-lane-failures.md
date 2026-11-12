@@ -56,6 +56,7 @@ run 43270011255 の 3 系統失敗を修正し、対象ブランチの `ci` work
 - [x] `ci.yml` ui-gpui-verify に `mise exec -- cargo fetch --locked` step 追加
 - [x] `mise run test-video-proc-icc` / `lint-video-proc-icc` / `check-ui-driver-boundary` / `cargo fetch --locked` がローカルで成功
 - [x] doc-chain(spec/design/plan/task/test-spec + IR)作成
-- [ ] `git merge origin/main` → 触った docs dir の管理 index を doc-maintenance で再生成
-- [ ] commit → push → PR(`Refs #582`)
+- [x] dispatch run で顕在化した既存破損を修正: `rvf_view_native_slot_*` 5 test + 専用 helper を `#[cfg(target_os = "windows")]` で gate(`BACKEND_AVAILABLE = cfg!(windows)` 由来。coordinator 承認の範囲拡張で `crates/ruviform-ui-gpui/` を編集)
+- [x] `git merge origin/main` → 触った docs dir の管理 index を doc-maintenance で再生成
+- [x] commit → push → PR(`Refs #582`)
 - [ ] `gh workflow run ci.yml --ref bugfix/582-ci-lanes-failures` で対象 4 job success を確認し URL を PR に記載

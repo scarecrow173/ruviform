@@ -30,6 +30,8 @@ relations:
         path: "Cargo.lock"
       - type: "file"
         path: "crates/ruviform-video-proc/src/icc.rs"
+      - type: "file"
+        path: "crates/ruviform-ui-gpui/src/render.rs"
     deleted: []
     renamed: []
     moved: []
@@ -66,7 +68,7 @@ metadata:
 
 ## Summary
 
-run 43270011255(sha `246e364e`)の 3 系統 ci 失敗を修正した。(1) `ui-gpui-verify` に `mise exec -- cargo fetch --locked` step を追加し、冷キャッシュ時の `cargo metadata --offline` 失敗を解消。(2) `Cargo.lock` の `libc` を 0.2.189 に pin 復元し xattr 0.2.3 の `ENOATTR` 参照を回復。(3) moxcms 0.9.2 の ICC.1:2022 §8.10.2 c) perceptual fallback に対し、`IccTransform::new` が Issue #125 AC3 の missing-intent-tag reject を境界で再強制。
+run 43270011255(sha `246e364e`)の 3 系統 ci 失敗を修正した。(1) `ui-gpui-verify` に `mise exec -- cargo fetch --locked` step を追加し、冷キャッシュ時の `cargo metadata --offline` 失敗を解消。(2) `Cargo.lock` の `libc` を 0.2.189 に pin 復元し xattr 0.2.3 の `ENOATTR` 参照を回復。(3) moxcms 0.9.2 の ICC.1:2022 §8.10.2 c) perceptual fallback に対し、`IccTransform::new` が Issue #125 AC3 の missing-intent-tag reject を境界で再強制。(4) dispatch run 43318635475 で顕在化した既存破損 — `BACKEND_AVAILABLE = cfg!(windows)` により Linux では `declare_slot` が常に `Unsupported` を返すのに `rvf_view_native_slot_*` 5 test が成功を仮定 — を `#[cfg(target_os = "windows")]` で gate(coordinator 承認の範囲拡張)。
 
 ## Changes
 
@@ -85,12 +87,17 @@ run 43270011255(sha `246e364e`)の 3 系統 ci 失敗を修正した。(1) `ui-g
 - `Errors` doc に missing intent tag の reject を追記。
 - test `icc_transform_missing_intent_b2a_tag_rejects` を追加 — in-memory `lut_rgb_profile` で B2A0-only profile を生成し dst-side 対称契約を固定(committed fixture 不増)。既存 `icc_transform_missing_intent_lut_tag_rejects` は無変更で pass。
 
+### `crates/ruviform-ui-gpui/src/render.rs`
+
+- `rvf_view_native_slot_*` 5 test と同 test のみが使う helper `tabs_with_native_slot`/`declare_and_bind` に `#[cfg(target_os = "windows")]` を付与。native slot の container backend は Windows のみ存在(`surface::BACKEND_AVAILABLE = cfg!(target_os = "windows")`)し、非 Windows では `declare_slot` が常に `SlotError::Unsupported` を返すため、成功を仮定するこれらの test は Linux で決定論的に失敗する既存破損だった。#566 で `ui-gpui-verify` lane が追加されて以降、guard/libc の先行失敗に隠れて未顕在化。lane・guard・検証条件は変更せず、backend 非依存の test は全て Linux で継続実行される。
+
 ## Decisions During Implementation
 
 - **moxcms pin ではなく 0.9.2 適応を選択**: 0.9.2 の fallback は ICC.1:2022 §8.10.2 c) の規格準拠実装であり engine 退行ではない。pin は lockfile 再生成で失われやすく(libc pin 喪失が同一 failure mode)、`IccIntent` の missing-tag reject は `IccTransform::new` が所有する境界の不変条件として再強制するのが責務的に正しい。
 - **encoder workaround は維持**: `write_lut_entry` は 0.9.1/0.9.2 で同一のため `fix_mft1_tags` は 0.9.2 でも必要・有効。committed `.icc` fixture は変更なし。
 - **fetch step は ci.yml 側**: mise task に入れず consumer-verify と同型の CI step とした — guard task は `--offline` 検査であり、全依存の fetch 前提を CI が明示する方が責務が明確。
 - **dst-side test は in-memory 生成**: committed fixture を増やさず `lut_rgb_profile` helper で B2A0-only profile を構築。
+- **native_slot test は cfg gate(coordinator 承認の範囲拡張)**: 当初の編集範囲外だった `crates/ruviform-ui-gpui/` への変更は、同一 lane の green 化に必要な既存破損の修正として `orca orchestration ask` で拡張許可を取得。test を `Unsupported` 期待に書き換える代わりに platform gate を選んだ — これらの test が検証するのは Windows container backend 上の slot 投影挙動であり、非 Windows での honest `Unsupported` は別 test(`slot_clip_reports_only_real_restrictions` 等)が既に担保している。
 
 ## Verification
 
@@ -98,6 +105,8 @@ run 43270011255(sha `246e364e`)の 3 系統 ci 失敗を修正した。(1) `ui-g
 - `mise run lint-video-proc-icc` → exit 0(`-D warnings`)。
 - `mise run check-ui-driver-boundary` → verdict: pass(dep-graph/signature/allowlist)。
 - `mise exec -- cargo fetch --locked` → exit 0。
+- `mise run test-ui-gpui`(Windows) → exit 0(77 lib tests + 統合 test 全 pass。gate 対象 5 test は Windows で継続実行・pass)。
+- `cargo fmt -p ruviform-ui-gpui -- --check` → exit 0。
 - CI: `gh workflow run ci.yml --ref bugfix/582-ci-lane-failures` の結果は PR 本文に記載。
 
 ## Related Experiments
