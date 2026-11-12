@@ -30,6 +30,14 @@
 //!   the values are recorded, not asserted (environment-dependent),
 //!   while `capture > callback` (a capture instant after its
 //!   delivery instant) is a contract violation that hard-fails.
+//! - Output latency observation (Issue #251 Stage W residual): the
+//!   output stream is started for ~1 s and the effective output
+//!   latency is measured per callback as `playback - callback` —
+//!   the same record-don't-assert policy; non-positive deltas are
+//!   counted as diagnostics because the backend's playback estimate
+//!   can legitimately reach the `callback` instant when its buffered
+//!   estimate saturates and the driver reports zero stream latency.
+//!   The `output_latency()` query's answer is recorded too.
 //! - Format-mismatch rejection: non-F32 / out-of-space configs are
 //!   verified against the real device's supported space —
 //!   `Err(DeviceError::UnsupportedConfig)` before the backend.
@@ -61,8 +69,9 @@ use std::time::Duration;
 
 use ruviform_audio_core::device::{
     BufferSize, Device, DeviceEnumerator, DeviceError, InputCallbackInfo, InputDataCallback,
-    InputErrorCallback, InputStream, InputStreamConfig, OutputCallbackInfo, OutputStreamConfig,
-    SupportedBufferSize, SupportedInputFormat, SupportedOutputFormat, same_clock_domain,
+    InputErrorCallback, InputStream, InputStreamConfig, OutputCallbackInfo, OutputDataCallback,
+    OutputErrorCallback, OutputStreamConfig, SupportedBufferSize, SupportedInputFormat,
+    SupportedOutputFormat, same_clock_domain,
 };
 use ruviform_audio_core::{
     AudioBufferView, AudioBufferViewMut, AudioFormat, ChannelLayout, SampleFormat, SampleRate,
@@ -72,6 +81,9 @@ use ruviform_media_core::ClockDomainId;
 
 /// How long the input stream captures.
 const CAPTURE_SECONDS: Duration = Duration::from_secs(2);
+/// How long the output stream plays silence for the latency
+/// observation.
+const OUTPUT_SECONDS: Duration = Duration::from_secs(1);
 /// Hard bound on total runtime — the watchdog aborts the process if
 /// any control-path call (enumerate/open/start/stop) hangs.
 const MAX_RUN: Duration = Duration::from_secs(30);
@@ -164,6 +176,45 @@ static EXPECTED_DOMAIN: AtomicU64 = AtomicU64::new(u64::MAX);
 /// Negotiated channel count — every callback's `input.channels()`
 /// must match it.
 static EXPECTED_CHANNELS: AtomicUsize = AtomicUsize::new(usize::MAX);
+
+/// Output-direction observation counters (Issue #251 Stage W
+/// residual) — kept separate from the input `CALLBACKS` et al. so the
+/// two lanes' summaries never mix.
+///
+/// Data-callback invocations observed on the output stream.
+static OUT_CALLBACKS: AtomicUsize = AtomicUsize::new(0);
+/// Total frames delivered across all output callbacks.
+static OUT_TOTAL_FRAMES: AtomicU64 = AtomicU64::new(0);
+/// Smallest `out.frames()` observed (`usize::MAX` before the first
+/// callback).
+static OUT_MIN_FRAMES: AtomicUsize = AtomicUsize::new(usize::MAX);
+/// Largest `out.frames()` observed.
+static OUT_MAX_FRAMES: AtomicUsize = AtomicUsize::new(0);
+/// Callbacks carrying `playback: Some` / `playback: None`.
+static OUT_PLAYBACK_SOME: AtomicUsize = AtomicUsize::new(0);
+static OUT_PLAYBACK_NONE: AtomicUsize = AtomicUsize::new(0);
+/// Effective output latency statistics — `playback - callback` in
+/// nanoseconds across callbacks that carried a `playback` instant
+/// (the observed buffering+hardware path latency, recorded not
+/// asserted). `i64::MAX` before the first sample.
+static OUT_LATENCY_MIN_NS: AtomicI64 = AtomicI64::new(i64::MAX);
+static OUT_LATENCY_MAX_NS: AtomicI64 = AtomicI64::new(i64::MIN);
+static OUT_LATENCY_SUM_NS: AtomicI64 = AtomicI64::new(0);
+/// Callbacks whose `playback - callback` delta was non-positive —
+/// the backend estimate's degenerate floor. cpal computes playback
+/// as `callback + buffered + stream_latency` with `buffered`
+/// saturating at zero (stream start / underrun) and this driver
+/// reporting ~zero stream latency, so `playback == callback` is an
+/// honest backend report, not a contract violation. Recorded for
+/// diagnostics only — latency magnitudes are environment-dependent.
+static OUT_NONPOSITIVE_PLAYBACK: AtomicUsize = AtomicUsize::new(0);
+/// Total error-callback events on the output stream.
+static OUT_ERROR_EVENTS: AtomicUsize = AtomicUsize::new(0);
+/// `DeviceError::Xrun` events seen on the output error callback.
+static OUT_XRUNS: AtomicUsize = AtomicUsize::new(0);
+/// [`error_kind_code`] of the most recent output error event
+/// (`0` = none).
+static OUT_LAST_ERROR_KIND: AtomicUsize = AtomicUsize::new(0);
 
 /// Spawns the watchdog: if the run has not finished within
 /// [`MAX_RUN`], prints a marker and aborts the process — a manual lane
@@ -410,6 +461,113 @@ fn real_duplex_streams_agree_on_clock_domain() {
         Err(error) => println!("  output.output_latency(): query failed: {error}"),
     }
     // Streams drop unstarted — opening was the whole check.
+}
+
+/// The output-direction latency observation (Issue #251 Stage W
+/// residual): the duplex check opens its output stream but never
+/// starts it, so `OutputTimestamp.playback` — the backend-reported
+/// DAC instant — had never been observed on real hardware. This test
+/// starts the default output stream for [`OUTPUT_SECONDS`] of silence
+/// and records the effective output latency (`playback - callback`)
+/// per callback plus the `output_latency()` answer — values recorded,
+/// not asserted (same policy as the input side). Non-positive deltas
+/// are counted and printed as diagnostics: cpal's playback estimate
+/// can legitimately reach the `callback` instant when its buffered
+/// estimate saturates and the driver reports zero stream latency.
+///
+/// Skips loudly when the host has no usable output device or F32
+/// format — an environmental absence, not a defect. Once a stream
+/// runs, zero callbacks is a FAIL, not a pass.
+#[test]
+#[ignore = "real-device lane: requires audio hardware (run `mise run test-audio-real-input`)"]
+fn real_output_stream_observes_latency() {
+    spawn_watchdog();
+    println!("real_input_e2e: output latency observation");
+    println!("  playback {OUTPUT_SECONDS:?} of silence, watchdog {MAX_RUN:?}");
+
+    let host = match default_host() {
+        Ok(host) => host,
+        Err(error) => {
+            println!("  default_host() failed: {error}");
+            return;
+        }
+    };
+    println!("  host: {}", host.name());
+
+    let Some(output_device) = host.default_output_device().ok().flatten() else {
+        println!("  SKIP: no default output device — output latency check impossible");
+        return;
+    };
+    let name = output_device
+        .name()
+        .unwrap_or_else(|_| "<name query failed>".to_owned());
+    println!("  device: \"{name}\"");
+
+    let Some(output_format) = negotiate_output_format(output_device.as_ref()) else {
+        println!("  SKIP: no F32-openable output format");
+        return;
+    };
+    println!("  negotiated format: {output_format:?}");
+
+    let output = match output_device.open_output_stream(
+        &OutputStreamConfig {
+            format: output_format,
+            buffer_size: BufferSize::Default,
+        },
+        output_data_callback(),
+        output_error_callback(),
+    ) {
+        Ok(stream) => stream,
+        Err(error) => panic!("open_output_stream failed: {error}"),
+    };
+
+    println!("  stream.format(): {:?}", output.format());
+    match output.buffer_size() {
+        Ok(size) => println!("  stream.buffer_size() pre-start: {size:?}"),
+        Err(error) => println!("  stream.buffer_size() pre-start: query failed: {error}"),
+    }
+    match output.now() {
+        Ok(now) => println!("  stream.now() pre-start: {} ns", now.value()),
+        Err(error) => println!("  stream.now() pre-start: query failed: {error}"),
+    }
+    match output.output_latency() {
+        Ok(latency) => println!("  output.output_latency() pre-start: {latency:?}"),
+        Err(error) => println!("  output.output_latency() pre-start: query failed: {error}"),
+    }
+
+    if let Err(error) = output.start() {
+        panic!("start() failed on a real output device: {error}");
+    }
+    println!("  playing silence {OUTPUT_SECONDS:?}…");
+    thread::sleep(OUTPUT_SECONDS);
+
+    if let Err(error) = output.stop() {
+        println!("  stop() failed: {error}");
+    }
+    match output.output_latency() {
+        Ok(latency) => println!("  output.output_latency() post-stop: {latency:?}"),
+        Err(error) => println!("  output.output_latency() post-stop: query failed: {error}"),
+    }
+
+    print_output_summary();
+
+    // The verification contract — "open+start but silence" is itself
+    // a failed verification. Latency magnitudes and non-positive
+    // deltas stay unasserted (environment-dependent backend
+    // estimates); the asserts cover delivery and that the backend
+    // actually populated the `playback` channel being observed.
+    assert!(
+        OUT_CALLBACKS.load(Ordering::Relaxed) > 0,
+        "output stream started but no data callback observed"
+    );
+    assert!(
+        OUT_TOTAL_FRAMES.load(Ordering::Relaxed) > 0,
+        "output callbacks fired but delivered zero frames"
+    );
+    assert!(
+        OUT_PLAYBACK_SOME.load(Ordering::Relaxed) > 0,
+        "output callbacks fired but the backend never populated timestamp.playback"
+    );
 }
 
 /// The format-mismatch verification: configs the port's negotiation
@@ -1121,6 +1279,126 @@ fn error_kind_code(error: DeviceError) -> usize {
         DeviceError::Backend(_) => 9,
         _ => 99,
     }
+}
+
+/// The output RT data callback — runs on the backend's real-time
+/// thread. Writes silence (zeros) into the whole `out` slab so the
+/// observation is inaudible, then records observations through
+/// relaxed atomics only: callback/frame counts and the per-callback
+/// `playback - callback` latency delta. No allocation, no I/O, no
+/// blocking, no panicking — same discipline as the input
+/// `data_callback`.
+fn output_data_callback() -> OutputDataCallback {
+    Box::new(
+        move |mut out: AudioBufferViewMut<'_, f32>, info: OutputCallbackInfo| {
+            let frames = out.frames();
+            OUT_CALLBACKS.fetch_add(1, Ordering::Relaxed);
+            OUT_TOTAL_FRAMES.fetch_add(frames as u64, Ordering::Relaxed);
+            OUT_MIN_FRAMES.fetch_min(frames, Ordering::Relaxed);
+            OUT_MAX_FRAMES.fetch_max(frames, Ordering::Relaxed);
+            out.data_mut().fill(0.0);
+
+            let callback_ns = info.timestamp.callback.value();
+            match info.timestamp.playback {
+                Some(playback) => {
+                    OUT_PLAYBACK_SOME.fetch_add(1, Ordering::Relaxed);
+                    // `playback - callback` = the effective output
+                    // latency (buffering + hardware path) for this
+                    // block. The magnitude is environment-dependent —
+                    // recorded not asserted. A non-positive delta is
+                    // the estimate's degenerate floor (buffered
+                    // saturated + zero stream latency), counted for
+                    // diagnostics only.
+                    let delta_ns = playback.value() - callback_ns;
+                    OUT_LATENCY_MIN_NS.fetch_min(delta_ns, Ordering::Relaxed);
+                    OUT_LATENCY_MAX_NS.fetch_max(delta_ns, Ordering::Relaxed);
+                    // Summed clamped to ±1000 s — the mean is
+                    // diagnostic; an unclamped bogus instant would
+                    // wrap i64 and poison the record.
+                    OUT_LATENCY_SUM_NS.fetch_add(
+                        delta_ns.clamp(-1_000_000_000_000, 1_000_000_000_000),
+                        Ordering::Relaxed,
+                    );
+                    if delta_ns <= 0 {
+                        OUT_NONPOSITIVE_PLAYBACK.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+                None => {
+                    OUT_PLAYBACK_NONE.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        },
+    )
+}
+
+/// The output error callback — same observation discipline as the
+/// input `error_callback`: counts events, records the latest error
+/// kind and tallies xruns without allocating.
+fn output_error_callback() -> OutputErrorCallback {
+    Box::new(|error: DeviceError| {
+        OUT_ERROR_EVENTS.fetch_add(1, Ordering::Relaxed);
+        OUT_LAST_ERROR_KIND.store(error_kind_code(error), Ordering::Relaxed);
+        if error == DeviceError::Xrun {
+            OUT_XRUNS.fetch_add(1, Ordering::Relaxed);
+        }
+    })
+}
+
+/// Prints the post-`stop()` output observation summary from the
+/// control thread — the output-direction counterpart of
+/// [`print_capture_summary`].
+fn print_output_summary() {
+    println!("--- output summary ---");
+    println!("  callbacks: {}", OUT_CALLBACKS.load(Ordering::Relaxed));
+    println!(
+        "  total frames: {}",
+        OUT_TOTAL_FRAMES.load(Ordering::Relaxed)
+    );
+    let min_frames = OUT_MIN_FRAMES.load(Ordering::Relaxed);
+    println!(
+        "  frames per callback: min={} max={}",
+        if min_frames == usize::MAX {
+            0
+        } else {
+            min_frames
+        },
+        OUT_MAX_FRAMES.load(Ordering::Relaxed),
+    );
+    let playback_some = OUT_PLAYBACK_SOME.load(Ordering::Relaxed);
+    println!(
+        "  playback timestamp: some={} none={}",
+        playback_some,
+        OUT_PLAYBACK_NONE.load(Ordering::Relaxed),
+    );
+    let latency_min = OUT_LATENCY_MIN_NS.load(Ordering::Relaxed);
+    println!(
+        "  effective output latency (playback - callback): min={} ns max={} ns mean={} ns ({} samples, non-positive={})",
+        if latency_min == i64::MAX {
+            "n/a".to_owned()
+        } else {
+            latency_min.to_string()
+        },
+        if playback_some == 0 {
+            "n/a".to_owned()
+        } else {
+            OUT_LATENCY_MAX_NS.load(Ordering::Relaxed).to_string()
+        },
+        if playback_some == 0 {
+            "n/a".to_owned()
+        } else {
+            (OUT_LATENCY_SUM_NS.load(Ordering::Relaxed)
+                / i64::try_from(playback_some).unwrap_or(i64::MAX))
+            .to_string()
+        },
+        playback_some,
+        OUT_NONPOSITIVE_PLAYBACK.load(Ordering::Relaxed),
+    );
+    println!(
+        "  error events: {} (xrun={}, last kind code={})",
+        OUT_ERROR_EVENTS.load(Ordering::Relaxed),
+        OUT_XRUNS.load(Ordering::Relaxed),
+        OUT_LAST_ERROR_KIND.load(Ordering::Relaxed),
+    );
 }
 
 /// Prints the post-`stop()` observation summary from the control
