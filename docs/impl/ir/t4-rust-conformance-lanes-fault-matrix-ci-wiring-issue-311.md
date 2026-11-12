@@ -96,6 +96,16 @@ metadata:
 - **clippy `too_many_lines`（101/100）回避**: host runner を `HostState` struct（`new`/`collect`/`run_op`）に分割 — `#[allow]` 不使用で構造的に解消
 - **fault-matrix は専用 test ファイルとして実装**: task doc の計画どおり `test/faultmatrix.test.ts`。seeded generator で静的 corpus 外の fault 組合せを検証
 
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
 ## Validation
 
 実施環境: Windows 11 x64・Git Bash・Rust 1.99.0（mise pin）・Node 26.12.1。

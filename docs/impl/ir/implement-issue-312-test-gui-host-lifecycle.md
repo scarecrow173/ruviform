@@ -134,3 +134,16 @@ task `TASK-034S312gtUiTestT1GG77`〜`TASK-034S312gtUiTestT3II99`（plan `PLAN-03
 - **feature/optional 依存**: 新規クレートは feature なし。consumer 向け新規必須依存なし（`os_pipe` は本クレート内 dev/serve テスト用途）
 - **RT 影響**: なし（全 API 非 RT・RT クレートから参照されない）
 - **Test Host を使わない CLI/DSP/RT・WebView-only consumer**: ビルド/実行への影響なし（members 追加のみ）
+
+## Risks
+
+- **実 window/実 OS 経路は未検証** — 検証は headless `FakeHost` + dummy_app の cross-process 経路のみ。`wry`/`tao`/WebView2 実窓への `TestIo` 結線、実 OS での screenshot/実時計/GPU/vsync 制御は本スコープ外であり、実機挙動との差異が残り得る
+- **screenshot は `Unsupported` 宣言** — headless backend は `screenshot:false` で `unavailable` を返し合成画像を生成しない。`observe.screenshot` の実画像契約は未検証
+- **`ipc_disconnect` のモデル限界** — frontend→host の inbound `Message` 抑制を意味し、双方向 IPC 断や webview プロセス死亡の全形を完全には再現しない
+- **`ShutdownMode::Now` の「即時」性** — headless では teardown/cleanup を skip して exited 遷移する契約として検証済みだが、実 event loop での強制中断粒度は backend 次第
+
+## Follow-ups
+
+- 実 window/実 OS 経路（`TestIo` の wry/tao/WebView2 結線・実 screenshot/実時計/GPU/vsync 制御）は RF-GT-04（Issue #313・OS/Browser driver）と #243 へ引き渡す
+- `observe.screenshot` の実 backend 実装と capability 昇格は実機対応 Issue で実施
+- `ipc_disconnect`・`ShutdownMode::Now` の実 backend での粒度検証は #313 の検証対象

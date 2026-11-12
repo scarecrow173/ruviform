@@ -39,12 +39,17 @@ audio-lens #102 の R1 契約提案に基づき、`al-analysis` の
 選択・消去順序・失敗判定を移植元と同一に保ち、同一入力に対して同一の
 解・条件数 proxy・失敗（`None`）を返す（bit-exact 置換可能）。
 
-## 実装内容
+## Context
 
-- `linalg::complex_solve(mat, rhs) -> Option<(Vec<(f64, f64)>, f64)>`:
-  正方複素連立一次方程式 `A·w = b` を解く。複素値は `(re, im)` タプル
-  （`csolve` と同じ表現・`fft::cmul1` が内部で使う表現でもある）。
-- アルゴリズムは `csolve` の逐語移植:
+- source: [Issue #167](https://github.com/scarecrow173/ruviform/issues/167)・[audio-lens #102](https://github.com/scarecrow173/audio-lens/issues/102)（R1 契約提案）
+- 実施内容: `al-analysis` の `expensive::channel::csolve`（複素 Gaussian 消去 + 部分 pivot + 条件数 proxy）を `ruviform-numeric::linalg::complex_solve` として移植し、AL 側のローカル二重実装を将来的に除去可能にする
+- 変更ファイル（front matter `relations.changes.modified`）: `crates/ruviform-numeric/{Cargo.toml,README.md,src/lib.rs,src/linalg.rs}`・`docs/impl/ir/README.md`
+
+## Implementation
+
+### Changes
+
+- `crates/ruviform-numeric/src/linalg.rs` — `linalg::complex_solve(mat, rhs) -> Option<(Vec<(f64, f64)>, f64)>` を追加。正方複素連立一次方程式 `A·w = b` を解き、複素値は `(re, im)` タプルで表現。アルゴリズム:
   - 拡大係数行列 `[A | b]` を構築し、列ごとに
     `max_by(|i, j| cabs(aug[i][col]).total_cmp(&cabs(aug[rj][col])))`
     で部分 pivot 選択（同値最大は `max_by` の仕様どおり最後の index
@@ -57,21 +62,31 @@ audio-lens #102 の R1 契約提案に基づき、`al-analysis` の
     評価順を固定（`fft::cmul1`・crate の bit-exact 契約と同じ流儀）。
   - 条件数 proxy = 消過 pivot 絶対値の最大/最小比（`piv_min <= 0` なら
     `INFINITY`）。スペクトル条件数 `condition_number` とは別物の診断値。
-- 失敗判定は `csolve` と同一のみ: `n == 0`・非正方/ragged・
-  `rhs` 長不一致・pivot `< 1e-30`。**非有限入力は拒否しない**
-  （NaN/Inf は IEEE どおり解へ伝播し `Some` を返す）— `csolve` が
-  有限性検査を持たないため、同一の失敗判定を維持する意図的な契約。
-  `least_squares` 等の `None` 拒否とはこの点で異なり、
-  `linalg` モジュール doc・`lib.rs` 精度契約に例外として明記した。
-- 依存追加なし（std のみ・`num-complex` 不採用 — workspace の Cargo
-  マニフェストに同依存は存在せず、`csolve` 自体も `(f64, f64)` タプル
-  表現のため移植がそのまま成立する）。RT 契約は確保を伴うため
-  **non-RT only**。
-- `clippy::many_single_char_names`（workspace pedantic）対応で変数名は
-  意味名に置換（`a`→`mat`、`b`→`rhs`、`m`→`aug` 等）。算術式・評価
-  順序は移植元と同一のため bit-exact 性に影響しない。
+- `crates/ruviform-numeric/src/lib.rs` — 公開 export と精度契約への非有限伝播の例外明記
+- `crates/ruviform-numeric/Cargo.toml`・`README.md` — 依存・記述更新（依存追加なし）
+- `docs/impl/ir/README.md` — 索引更新
+- テスト追加: `linalg::tests` 6 件 + doctest 1 件（一覧は Validation）
 
-## 検証（全て実実行・pass）
+### Decisions During Implementation
+
+- **bit-exact 置換可能を目的に逐語移植** — アルゴリズムは `csolve` の逐語移植で、pivot 選択・消去順序・失敗判定を移植元と同一に保ち、同一入力に対して同一の解・条件数 proxy・失敗（`None`）を返す。コメントで対応関係を明記
+- **複素値は `(re, im)` タプル表現** — `csolve` と同じ表現であり、`fft::cmul1` が内部で使う表現でもある
+- **失敗判定は `csolve` と同一のみ**: `n == 0`・非正方/ragged・`rhs` 長不一致・pivot `< 1e-30`。**非有限入力は拒否しない**（NaN/Inf は IEEE どおり解へ伝播し `Some` を返す）— `csolve` が有限性検査を持たないため、同一の失敗判定を維持する意図的な契約。`least_squares` 等の `None` 拒否とはこの点で異なり、`linalg` モジュール doc・`lib.rs` 精度契約に例外として明記した
+- **依存追加なし** — std のみ・`num-complex` 不採用（workspace の Cargo マニフェストに同依存は存在せず、`csolve` 自体も `(f64, f64)` タプル表現のため移植がそのまま成立する）
+- **non-RT only** — RT 契約は確保を伴うため
+- **`clippy::many_single_char_names`（workspace pedantic）対応** — 変数名は意味名に置換（`a`→`mat`、`b`→`rhs`、`m`→`aug` 等）。算術式・評価順序は移植元と同一のため bit-exact 性に影響しない
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 | コマンド | 結果 |
 | --- | --- |
@@ -103,7 +118,7 @@ audio-lens #102 の R1 契約提案に基づき、`al-analysis` の
 バージョン上書きを生じたため `git checkout -- Cargo.lock` で復元
 （依存追加なしのため lockfile 再生成トリガ非該当）。
 
-## 受け入れ条件との対応
+### 受け入れ条件との対応
 
 | 要件 | 対応 |
 | --- | --- |
@@ -112,7 +127,9 @@ audio-lens #102 の R1 契約提案に基づき、`al-analysis` の
 | 単体テスト | 上表 7 件（既知解・特異/劣条件・非正方・非有限） |
 | `fmt`/`check`/`lint`/`test`/`build` 全 pass | 上表どおり全て実実行・pass |
 
-## 未解決・既知制限
+## Risks
+
+実装時に `未解決・既知制限` として記録された既知制限:
 
 1. **bit-exact 性の検証は構造的一致による** — AL 側との直接比較実行は
    別リポジトリのため未実施。同一式・同一順序の逐語移植と
@@ -121,10 +138,14 @@ audio-lens #102 の R1 契約提案に基づき、`al-analysis` の
 2. **条件数 proxy は概算値** — pivot 比は真のスペクトル条件数ではない
    （`csolve` 同様、呼出側が `cond > 1e3` で ill-conditioned 判定する
    診断用）。必要なら `condition_number`（AᴴA 版）が別途必要。
-3. **複素最小二乗（非正方）の直接 API は未提供** — Issue の用途は AL
+
+## Follow-ups
+
+1. **複素最小二乗（非正方）の直接 API は未提供** — Issue の用途は AL
    が外部で正規方程式を構成する正方ソルバであり、本 Issue では
    `csolve` 等価物の提供に留めた（YAGNI）。非正方の complex
    `LeastSquares` 相当が必要になった場合は別 Issue。
-4. **split re/im planar 形式の API は未提供** — FFT 系の複素規約とは
+2. **split re/im planar 形式の API は未提供** — FFT 系の複素規約とは
    別に、`csolve` との表現一致（`(re, im)` タプル）を優先した。
    planar 変換は利用側の責務。
+3. AL 側 `csolve` の `complex_solve` への移行時に、実値での差分確認を実施（上記 Risks 1 の推奨）。

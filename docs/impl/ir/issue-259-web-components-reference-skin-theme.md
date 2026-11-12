@@ -48,12 +48,43 @@ Status: delivered (headless-verified)
 Depends on: Issue #258 (`ui/core` headless contract, landed via PR #267 / merge `9ff4de9`)
 Design source: `docs/designs/issue-257-…` §12 (Reference Skin/Theme) and §13 (framework-neutral Web UI/Native Hybrid)
 
-## What was built
+## Summary
+
+Delivered `ui/components` (`@ruviform/ui-components`, private):
+framework-neutral Web Components — plain TypeScript Custom Elements on
+`ui/core` — implementing the Reference Skin controls (knob, fader,
+seekbar, toggle, numeric-input, transport, range-selector), three-layer
+design tokens with `<rvf-theme>` scoping, and namespaced
+`rvf-gesture`/`rvf-transport` events. Headless-verified: typecheck,
+build, and `node --test` suites green; the `ui-verify` CI lane was
+extended with components steps.
+
+## Context
+
+- Source: Issue #259 — <https://github.com/scarecrow173/ruviform/issues/259>
+- Design source: `docs/designs/issue-257-driver-neutral-ui-contract.md` §12 (Reference Skin/Theme) and §13 (framework-neutral Web UI/Native Hybrid) (`relations.related` / `derives-from`)
+- Depends on: Issue #258 `ui/core` headless contract (landed via PR #267 / merge `9ff4de9`)
+- Boundary: no DAW/analysis/track/playback/project/command state in any
+  control — `ChannelStrip`/`TransportBar`/`ParameterControl` exist only
+  as thin composition in `examples/showcase.html`.
+- `implements` is empty: this record has no dedicated task doc; scope
+  comes from the issue and the #257 design contract.
+
+## Implementation
+
+### Changes
 
 New package `ui/components` (`@ruviform/ui-components`, private) — plain
 TypeScript Custom Elements on top of `ui/core`. No UI framework,
 runtime, compiler, or renderer dependency; `happy-dom@21.0.4` is a
 test-only devDependency providing the DOM for `node --test`.
+
+- `ui/components/` — the entire new package (module map below).
+- `ui/core` — one behavior fix to the default `parse`: it strips a
+  trailing unit suffix (`"45 %"` round-trips) and rejects empty text
+  (`Number("") === 0` would silently commit zero on a cleared field).
+  No new contract surface was added; the DOM boundary stays one-way
+  through `src/headless.ts`.
 
 ### Module map
 
@@ -71,7 +102,7 @@ test-only devDependency providing the DOM for `node --test`.
 | `test/*.test.ts` + `test/env.ts` | 65 headless tests over happy-dom |
 | `examples/showcase.html` | thin composition demo (two consumer themes, no logic fork) |
 
-### Decisions worth recording
+### Decisions During Implementation
 
 - **Controlled value**: `value`/`checked`/`valueLow`/`valueHigh` writes
   never emit intent events (consumer's authoritative echo is suppressed
@@ -107,7 +138,7 @@ test-only devDependency providing the DOM for `node --test`.
   source; `tsconfig.build.json` uses `rewriteRelativeImportExtensions`
   so `dist/` emits `.js` specifiers (verified).
 
-## Review-cycle fixes (two-reviewer pass)
+### Review-cycle fixes (two-reviewer pass)
 
 - **Gesture-id minting**: pointer/wheel/edit gestures use unique ids
   (`ptr-<id>-<seq>`, `wheel-<seq>`, `edit-<seq>`) — the contract rejects
@@ -156,7 +187,17 @@ test-only devDependency providing the DOM for `node --test`.
   `InteractionEvent`/`ValueDescriptor`/`ControlInput` without deep
   imports; `dispatchInput` is the supported dispatch door for skins.
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+None.
+
+### Rejected
+
+None.
+
+## Validation
 
 Ran and green:
 
@@ -173,25 +214,26 @@ CI: `ui-verify` job gained `check-ui-components`, `test-ui-components`,
 `build-ui-components` steps (#258 pattern: `mise install node@26.12.1`,
 `npm ci` from committed lockfile, explicit `node --test` glob).
 
-## Not verified here (follow-up / manual)
+## Risks
+
+- All verification is headless (happy-dom + `node --test`); real
+  WebView2 / WKWebView / WebKitGTK rendering, pointer capture, IME, and
+  high-DPI output are unverified until Issue #261 windowed work.
+- `matchMedia` (`prefers-reduced-motion`, contrast) is not exercised —
+  happy-dom lacks it; CSS declares the behavior but a real browser run
+  is pending.
+- Ordering limitation: a `value` written under the *default* descriptor
+  and later superseded by a descriptor swap is reset — consumers must
+  set `descriptor`/`ports` before or at mount.
+- Screen-reader announcement behavior is asserted structurally only
+  (ARIA attributes), not verified with a real screen reader.
+
+## Follow-ups
 
 - Real WebView2 / WKWebView / WebKitGTK rendering, pointer capture,
   IME, and high-DPI output — deferred to Issue #261 windowed work.
-- `matchMedia` (`prefers-reduced-motion`, contrast) — happy-dom lacks
-  it; CSS declares the behavior but a real browser run is pending.
-- Screen-reader announcement behavior — ARIA is asserted structurally
-  only.
+- `matchMedia` (`prefers-reduced-motion`, contrast) — verify in a real
+  browser run.
+- Screen-reader announcement behavior — verify with a real screen
+  reader / a11y pass.
 - React/other-framework consumer fixtures — Issue #263 scope.
-
-## Boundary notes
-
-- No DAW/analysis/track/playback/project/command state in any control —
-  ChannelStrip/TransportBar/ParameterControl exist only as thin
-  composition in `examples/showcase.html`.
-- `ui/core` gained exactly one behavior fix: the default `parse` strips
-  a trailing unit suffix and rejects empty text (the DOM boundary stays
-  one-way through `src/headless.ts`; no new surface was added to the
-  contract).
-- Ordering limitation: a `value` written under the *default* descriptor
-  and later superseded by a descriptor swap is reset — consumers set
-  `descriptor`/`ports` before or at mount.

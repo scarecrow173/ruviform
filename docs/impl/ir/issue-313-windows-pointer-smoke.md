@@ -181,6 +181,16 @@ factor から実行時に導出する。
   slots/bounds の意味的まとまり（driver 所有 channel）で
   解消。振る舞い不変。
 
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
 ## Validation
 
 | 検証 | 結果 |

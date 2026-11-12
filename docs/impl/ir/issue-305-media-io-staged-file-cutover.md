@@ -197,7 +197,17 @@ media-io の依存 DAG（domain core 3 クレートのみ）は変更してい�
 - `ruviform-io-file` 自体の API 変更なし（#295/#296 契約の消費のみ）。
 - WAV wire format・変換 policy・finalize 契約は無変更。
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 正規入口 `mise run <task>`、`CARGO_BUILD_JOBS=2`。実環境:
 Windows 11 x64 / Git Bash、rustc は mise 管理 toolchain。
@@ -355,9 +365,27 @@ review-protocol 実施（runtime subagent 並列派遣、両者 read-only）:
   本 Issue 範囲外の pre-existing staleness（別 Issue 候補）。
 - 判定: **ACCEPT**（blocking 指摘は全て解消、正規検証全 PASS）。
 
-## Remaining / handoff
+## Risks
 
-- Consumer repo（AudioLens #143 / Synvelis #84）の移行・lockfile 更新・
-  cross-repo gate は coordinator/integration 側で実施。
-- 本 PR は `Refs #305` 相当（全 AC 充足を主張しない）。candidate SHA・
-  検証 command を coordinator に報告。
+- 非 block note（Review より）: `failure.info().temp_state()` は
+  cleanup 成功後もスナップショット時点の `Retained` を示す
+  （io-file 契約上の snapshot semantics）。verify hook が
+  temp_path を FS 経由で再 open して書換える可能性は同一
+  process 信頼境界の制限として残置。
+- `PublishEffect::Published`/`Indeterminate` の render 経路は
+  io-file 自身の mock 単体試験で既検証済みだが、本 Issue では
+  新規注入経路を整備していない（Acceptance ledger 参照）。
+- media-io `lib.rs`/`README` の「no implementor yet」記述は
+  本 Issue 範囲外の pre-existing staleness（別 Issue 候補）。
+- Consumer repo（AudioLens/Synvelis）の移行・cross-repo gate は
+  本 worker 範囲外で BLOCKED — coordinator/integration 責務。
+
+## Follow-ups
+
+- Consumer repo（AudioLens #143 / Synvelis #84）の移行・
+  lockfile 更新・cross-repo gate は coordinator/integration 側で
+  実施。
+- 本 PR は `Refs #305` 相当（全 AC 充足を主張しない）。
+  candidate SHA・検証 command を coordinator に報告。
+- media-io `lib.rs`/`README` の「no implementor yet」staleness
+  の是正は別 Issue 候補。

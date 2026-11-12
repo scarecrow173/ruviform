@@ -132,6 +132,16 @@ deadline 強制がなく、Floating は `Unsupported` 拒否のみ、GPU cause
   4 bool 目で警告したため、排他性を型で表す enum に統合した。
   `mark_failed`/成功着地で `None` に戻す挙動は旧実装と同一。
 
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
 ## Validation
 
 canonical（mise）:

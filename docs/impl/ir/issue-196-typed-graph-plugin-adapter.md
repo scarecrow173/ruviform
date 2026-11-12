@@ -89,7 +89,25 @@ metadata:
 
 # Issue #196 implementation record — M4 typed graph plugin adapter
 
-## What was built
+## Summary
+
+Implemented Issue #196 (M4 typed graph plugin adapter): extended
+`ruviform-plugin-core` / `ruviform-plugin-host` / `ruviform-media-core`
+for typed bus enumeration, lifecycle reporting, and offset precision,
+and added the consumer-layer crate `ruviform-audio-plugin-bridge` with
+multi-bus routing, process-start-relative event offsets, and an honest
+`AdapterCapability` matrix. Verified by 5 E2E tests against the M4
+gates plus workspace-wide dev lanes.
+
+## Context
+
+- Source: <https://github.com/scarecrow173/ruviform/issues/196>
+- Tasks: [../../tasks/issue-196-t-1-plugin-core-bus-enumeration.md](../../tasks/issue-196-t-1-plugin-core-bus-enumeration.md), [../../tasks/issue-196-t-2-host-media-bus-enumeration.md](../../tasks/issue-196-t-2-host-media-bus-enumeration.md), [../../tasks/issue-196-t-3-bridge-crate.md](../../tasks/issue-196-t-3-bridge-crate.md), [../../tasks/issue-196-t-4-verification-evidence.md](../../tasks/issue-196-t-4-verification-evidence.md)
+- Upstream: [plan](../../plans/implement-issue-196-typed-graph-plugin-adapter.md), [design](../../designs/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md), [spec](../../specs/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md), [ADR](../../adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md), [discovery](../../discovery/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md), [test-spec](../../test-specs/issue-196-typed-graph-plugin-adapter-tests.md)
+
+## Implementation
+
+### Changes
 
 - `ruviform-plugin-core`: `BusRole` (Main/Aux/Sidechain/Send/Return)
   replaces `main: bool` on `BusDescriptor`; `Plugin::buses()` +
@@ -107,7 +125,31 @@ metadata:
   `PluginNodeControl`/`NodeReport` SPSC, `PlanVault`, `PluginNodeFactory`,
   honest `AdapterCapability` matrix per backend.
 
-## Measured evidence (M4 gates)
+### Decisions During Implementation
+
+- L1 bus enumeration is reported as `BusReport::Unavailable` rather
+  than inferred — no wire verb exists, so the capability matrix stays
+  honest instead of guessing bus tables.
+- `PluginNode` renders silent slabs for unconnected/disabled buses and
+  performs no implicit downmix; `SpanSink` output is partitioned into
+  legal `BlockContract` calls only, and event offsets are
+  process-start-relative.
+- The bridge is additive: the legacy single-bus
+  `PluginEndpoint::process_audio` path is untouched.
+- `TransportScheduler` gained bounded `pop_receipt`/`pop_fault` so
+  RT-adjacent report draining stays bounded.
+
+## Related Experiments
+
+### Adopted
+
+None.
+
+### Rejected
+
+None.
+
+## Validation
 
 - `cargo test -p ruviform-audio-plugin-bridge` — 5 E2E tests green:
   - `multi_bus_audio_routes_and_processes`: Main stereo + Sidechain
@@ -127,15 +169,28 @@ metadata:
   green (workspace-wide, no regressions).
 - Legacy single-bus path preserved: `PluginEndpoint::process_audio`
   untouched; bridge is additive.
+- Not run in this worktree pass: `verify-ci`, `test-l1-real-plugin`,
+  `lint-l1-real-plugin` (CI-profile lanes; dev lanes green).
 
-## Known gaps (named, not hidden)
+## Risks
 
-- L1 bus enumeration needs a wire verb — declared `Unavailable`.
-- CLAP in-block transport events (`in_block_transport`) stay
-  `Declared` until real-plugin evidence exists (not adopted).
-- Graph Swap / Retire-overflow / crash convergence are covered by the
-  host's existing fault suite (`PluginHost` lifecycle convergence);
+- L1 bus enumeration requires a wire verb that does not exist yet; it
+  is declared `Unavailable`, so consumers must not assume L1 bus tables
+  are known.
+- CLAP in-block transport events (`in_block_transport`) remain
+  `Declared` rather than `Verified` until real-plugin evidence exists.
+- Graph Swap / Retire-overflow / crash convergence are covered only by
+  the host's existing fault suite (`PluginHost` lifecycle convergence);
   the bridge adds `VaultExceeded`/`EndpointError` reports but does not
   re-verify the full L1 crash matrix end-to-end.
-- `verify-ci` / `test-l1-real-plugin` / `lint-l1-real-plugin` lanes
-  not run in this worktree pass (CI-profile lanes; dev lanes green).
+
+## Follow-ups
+
+- L1 bus enumeration: define the wire verb and flip `BusReport` from
+  `Unavailable` once the protocol supports it.
+- CLAP in-block transport events: gather real-plugin evidence before
+  adopting beyond `Declared`.
+- Re-verify the full L1 crash matrix end-to-end for the bridge
+  (`VaultExceeded`/`EndpointError` paths).
+- Run the CI-profile lanes (`verify-ci`, `test-l1-real-plugin`,
+  `lint-l1-real-plugin`) on CI / a CI-profile worktree.

@@ -80,7 +80,9 @@ task `TASK-034JgsIynX51YyqUrzgppO`（plan `PLAN-034JcvpHIlt5JmqvgOquvI` T7）と
 - 実施タスク: [../../tasks/sync-docs-and-verify-plugin-foundation.md](../../tasks/sync-docs-and-verify-plugin-foundation.md)
 - 上流: [plan](../../plans/implement-plugin-foundation.md) T7・V-7、[spec](../../specs/implement-plugin-foundation.md)
 
-## Changes
+## Implementation
+
+### Changes
 
 - `Cargo.toml` — 層内順序コメントを T6 までの path 依存確定状態（plugin-core → audio-core・media-core、アダプタ → plugin-core・audio-core・media-core＋binding クレート）へ同期
 - `README.md` — ワークスペース行・`crates/` 行に拡張層 plugin 3 クレートと Issue #29 実装状態を追記。「検討中（要 PoC）」のプラグイン連携行は方式決定・実装済みとなったため同節から除去（実在リストで記述）
@@ -90,7 +92,23 @@ task `TASK-034JgsIynX51YyqUrzgppO`（plan `PLAN-034JcvpHIlt5JmqvgOquvI` T7）と
 - `docs/discovery/evaluate-plugin-binding-options.md` — status `resolved`（spec/plan/ADR 全て派生済み）
 - `docs/{plans,specs,discovery}/README.md` — 索引 status を実体に同期
 
-## Verification
+### Decisions During Implementation
+
+- **status 遷移は既存規約に合わせた** — plan `approved`→`completed`、spec `approved`→`implemented`（Issue #18 の規約と同じ）、discovery `resolved`（spec/plan/ADR 全て派生済み）
+- **`README.md` の「検討中（要 PoC）」行は削除ではなく記述の一本化** — 方式決定・実装済みとなったため同節から除去し、実在リスト側で plugin 3 クレートと Issue #29 実装状態を記述
+- **plan の `implemented-by` は分割ルールの相互リンク義務に従い 7 タスク全件をバックフィル**
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 全項目実行・合格:
 
@@ -107,6 +125,12 @@ task `TASK-034JgsIynX51YyqUrzgppO`（plan `PLAN-034JcvpHIlt5JmqvgOquvI` T7）と
 | `doc_status.js audit --json` | 0 findings（blocking 0） |
 | `doc_status.js lint --rule broken-link` | 0 findings |
 | `doc_status.js health` | clean（blocking 0・warnings 0） |
+
+## Risks
+
+- `mise run bench` はベンチ未実装のため実質 no-op（入口のみ）— 性能面の回帰検出は本検証に含まれない
+- 本タスクの検証はワークスペース総合スイートと文書監査に限定され、review-protocol（Reviewer A/B → Validator → Judge）と follow-up triage は後続フロー — レビュー指摘による追加修正の可能性が残る
+- `vst3` 生成バインディング SDK 出自のライセンス継続調査・macOS/Linux エントリのクロスビルド実測は未完了（Follow-ups 参照）
 
 ## Follow-ups
 

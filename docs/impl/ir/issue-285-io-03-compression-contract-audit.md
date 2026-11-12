@@ -110,7 +110,7 @@ deflate/zstd 各系）、`common/mod.rs` に `FailFlush`・
 - 正本設計: `docs/designs/issue-285-io-03-compression-serde-boundary.md`
 - 実装: `crates/ruviform-io-compression`（#300/#301 merge 済み）
 
-## What Was Done
+## Implementation
 
 ### 照合
 
@@ -121,7 +121,7 @@ deflate/zstd 各系）、`common/mod.rs` に `FailFlush`・
 - `tests/` 既存 8 file を ENC/DEC/SEC/BUF 証拠項目へ写像し、
   failure-path と境界条件の穴を特定。
 
-### 追加試験（test-spec R1〜R12 対応）
+### Changes（test-spec R1〜R12 対応）
 
 - Encoder（`tests/encoder_contract.rs`、gzip/deflate/zstd 各
   系）: `new_fails_when_header_write_fails`・
@@ -153,7 +153,31 @@ deflate/zstd 各系）、`common/mod.rs` に `FailFlush`・
   証拠項目対応表（ENC-02/03/04/05・DEC-01/02・SEC-01/02/04・
   BUF-01）へ新試験名を併記。契約記述は無変更。
 
-## Verification（実測・mise canonical）
+### Decisions During Implementation
+
+- `src/` 無変更: 照合で設計不整合が確認されなかったため、
+  task の「既存実装の変更は設計不整合が確認できた最小限」の
+  条件に従い test/docs のみを変更した。
+- fault fixture は write 回数ではなく「最初に byte を吐く
+  呼出」で失敗を駆動し、回数は引数で明示 — backend 更新で
+  emission 粒度が変わっても試験が fail して検出される
+  （偽装 pass しない）。
+- 高圧縮率 budget 試験は ~1 MiB zeros（実圧縮 <1/100 を assert）
+  で「本当に展開が起きる」ことを fixture 自体で保証した。
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
+
+実測値（mise canonical lane）:
 
 | コマンド | OS | toolchain | 結果 |
 | --- | --- | --- | --- |
@@ -170,34 +194,7 @@ deflate/zstd 各系）、`common/mod.rs` に `FailFlush`・
 ruviform-io-compression --all-features` exit 0（unit/
 integration 149 + doctests 9 = 158 pass）。
 
-## NotRun / Unsupported（正直な記録）
-
-- 性能計測・ベンチマーク・長時間 Fuzz campaign — 本 slice は
-  headless 契約試験のみ。後続: #300/#301 設計の性能節・#288
-  性能 gate・per-format test-spec の audit 規則。
-- 両 Consumer（AudioLens #139・Synvelis #82/#84）実 repo での
-  Round-trip/保存結果回帰 — consumer-verify（#219/#294）と
-  #288 gate の責務。`Unsupported`（本 worktree の権限外）。
-- #288 Integration Gate・cross-OS 実機（macOS/Linux `zstd`
-  vendored build）・実ネットワーク FS — headless Windows の
-  み。後続: CI 既存 OS lane・#288。
-- `Cancelled` kind の上位 Job 連携 — 上位 Job/Consumer 実装時
-  （設計正本の Deferred と同一）。
-- Issue #285 の close — Coordinator が PR merge 後に判断。
-
-## Decisions and Trade-offs
-
-- `src/` 無変更: 照合で設計不整合が確認されなかったため、
-  task の「既存実装の変更は設計不整合が確認できた最小限」の
-  条件に従い test/docs のみを変更した。
-- fault fixture は write 回数ではなく「最初に byte を吐く
-  呼出」で失敗を駆動し、回数は引数で明示 — backend 更新で
-  emission 粒度が変わっても試験が fail して検出される
-  （偽装 pass しない）。
-- 高圧縮率 budget 試験は ~1 MiB zeros（実圧縮 <1/100 を assert）
-  で「本当に展開が起きる」ことを fixture 自体で保証した。
-
-## Known Gaps
+## Risks
 
 - `RecoveringWriter::after_ok` の失敗窓は write 呼出回数基準
   であり、encoder が内部 buffer する形式（deflate の小 write）
@@ -208,6 +205,24 @@ integration 149 + doctests 9 = 158 pass）。
   `fill_buf` 経由で同じ失敗を観測する。`read` を直接 override
   する backend 側の別経路は対象外（decoder は `BufRead`
   契約で `fill_buf`/`consume` を使う）。
+- 検証は headless Windows のみ。cross-OS 実機（macOS/Linux の
+  `zstd` vendored build）・実ネットワーク FS・両 Consumer 実
+  repo での回帰は本 slice では未検証（Follow-ups 参照）。
+
+## Follow-ups
+
+- 性能計測・ベンチマーク・長時間 Fuzz campaign — 本 slice は
+  headless 契約試験のみ。後続: #300/#301 設計の性能節・#288
+  性能 gate・per-format test-spec の audit 規則。
+- 両 Consumer（AudioLens #139・Synvelis #82/#84）実 repo での
+  Round-trip/保存結果回帰 — consumer-verify（#219/#294）と
+  #288 gate の責務（`Unsupported`: 本 worktree の権限外）。
+- #288 Integration Gate・cross-OS 実機（macOS/Linux `zstd`
+  vendored build）・実ネットワーク FS — headless Windows の
+  み。後続: CI 既存 OS lane・#288。
+- `Cancelled` kind の上位 Job 連携 — 上位 Job/Consumer 実装時
+  （設計正本の Deferred と同一）。
+- Issue #285 の close — Coordinator が PR merge 後に判断。
 
 ## References
 

@@ -178,7 +178,14 @@ CI（PR #345、2026-11-05）:
 - gate-report artifact: `verdict=pass`・`classificationOk=true`・6 lane 全 `expected=true/result=success/verdict=Pass`。
 - Shadow 比較: expected 集合 == 実行集合（full のため偽陰性検出器は本 run では未発動 — 設計どおり）。
 
-## 残課題（段階移行 runbook 側の未実施事項）
+## Risks
+
+- 分類器の誤判定(expected が本当に必要な lane を欠く)は偽陰性源。分類不能・共通設定変更・lockfile は Full CI へ倒す fallback 規則で緩和しているが、分類規則の盲点は残りうる — shadow 期間の継続観測(Follow-ups)が前提。
+- `ci-gate` は現状 required context ではなく観測用(Shadow Mode)。lane job の `if:` は未接続のため、gate が Fail しても merge 判定は従来の 12 required contexts が担う — 誤検出は CI を止めないが、逆に gate の検出も merge を防がない。
+- fail-closed 設計上、分類失敗・期待集合出力欠落は gate Fail となる。gate を required context へ昇格する Stage C/D 以降は、classifier/toolchain の障害が全 merge を止めうる — 昇格前に kill switch(`CI_IMPACT_DISABLE=1`)と復旧手順の確認が必要。
+- `edited` trigger の採用により title 編集でも再実行される。concurrency group が前 run を cancel するため実害なしと判断したが、連続編集で run が churn しうる。
+
+## Follow-ups
 
 - 偽陰性なし確認の継続観測（docs-only/単一 crate 変更 PR で expected 部分集合の実測蓄積）。
 - ruleset `main-protect` の required context 移行（12 → `ci-gate` 単一。design runbook の Stage C/D、無保護期間なし手順）。

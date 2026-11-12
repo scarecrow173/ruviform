@@ -135,6 +135,16 @@ Issue #186 の設計/PoC/棚卸しを完了し、plugin-core に中立な param-
 - `Dispatched` 投影は plugin acknowledgment ではなく partition からの決定論的写像として実装（R10 の honest observability）。
 - RT lane は `PluginEndpoint::process` を `assert_no_alloc` 測定窓で検証（CountPlugin は atomic のみ使用）。
 
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
 ## Validation
 
 - `mise run fmt-check` — PASS

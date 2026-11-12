@@ -179,7 +179,7 @@ audio-lens #102（R3 契約提案）が要求する基礎スペクトル統計�
 
 （なし）
 
-## Verification
+## Validation
 
 - `mise run fmt` — pass（ソース整形済み）。
 - `mise run check` — pass。
@@ -195,3 +195,15 @@ audio-lens #102（R3 契約提案）が要求する基礎スペクトル統計�
   式の独立 oracle と全統計値で `to_bits` 一致（退化・単要素・空・
   擬似スペクトルの 6 系列）。argmax tie・NaN 非対称・`n=1` entropy
   NaN・median 上位中央値の個別契約テストも pass。
+
+## Risks
+
+- AL verbatim 移植のため AL 式の非対称（`bandwidth` の NaN 伝播・`entropy` の `n=1` で `ln(1)=0` 除算 NaN・argmax 同率は最後）を意図的に維持 — consumer 側で「修正」すると bit-exact 互換が崩れる
+- `flux`/`ols_slope` は AL の `zip` 黙認から `Err("length")` 検証へ意図的に変更 — AL 側で等長前提が破れた入力を渡した場合の挙動は本クレート規約側が優先される
+- `median` は内部確保の non-RT — 将来 RT 経路で必要になれば scratch 注入形（`_into`）の追加が必要（現時点は消費者が offline 解析のみのため YAGNI で未実装）
+- `spec.slope` の bin 域選択（`1..(half*9/10).max(2)`）・`prev` 保持・`mean_row` 蓄積・`spec_rec` 変換は呼出側ポリシーとして残っており、誤用は consumer 側の責務
+
+## Follow-ups
+
+- AL 側（audio-lens #102 R3 契約）での bit-exact 置換は consumer 側タスク — `spec` API が移行先
+- `median` の scratch 注入形（`_into`）は需要が立証された時点で再評価

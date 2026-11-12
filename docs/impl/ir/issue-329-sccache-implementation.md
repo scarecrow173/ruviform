@@ -74,13 +74,40 @@ metadata:
 
 CI-OPT-02。`.github/workflows/ci.yml` の `verify` 3OS matrix と `ui-verify` webview/UI lane に sccache を先行導入し、GitHub Actions cache backend(`SCCACHE_GHA_*`)でジョブ間コンパイル成果物を共有した。`mozilla-actions/sccache-action` を immutable commit SHA `fc920bf0ec8de6ee65d409111f7ec508035751ba`(v0.0.11)で pin し、sccache v0.19.0 を導入。`RUSTC_WRAPPER=sccache` + `SCCACHE_GHA_VERSION=ruviform-v1-<RUNNER_OS>`(OS 名前空間)を `actions/github-script` 経由で `GITHUB_ENV` へ export(ACTIONS_RUNTIME_TOKEN / ACTIONS_RESULTS_URL は JS action コンテキストでのみ確実に参照可能)。各 job に環境確認 step と `sccache --show-stats` step を追加。RT/ICC/L1/bench はスコープ外。無効化は repo variable `CI_SCCACHE_DISABLE=1`。
 
-## Changes
+## Context
+
+- 実施タスク: `../../tasks/issue-329-t1-sccache-verify-ui-lanes.md`(CI-OPT-02)
+- 上流: plan `../../plans/issue-329-sccache-compile-cache.md`、spec `../../specs/issue-329-sccache-compile-cache.md`、design `../../designs/issue-329-sccache-compile-cache.md`、ADR `../../adr/issue-329-sccache-gha-backend.md`、test-spec `../../test-specs/issue-329-sccache-compile-cache.md`
+- 実測 exp: `../exp/issue-329-sccache-compile-cache.md`(cold/warm run・kill switch・ローカル破損実験の記録)
+- 目的: `verify` 3OS matrix と `ui-verify` lane に sccache を先行導入し、job 間のコンパイル成果物共有で CI 時間を削減する。RT/ICC/L1/bench はスコープ外
+
+## Implementation
+
+### Changes
 
 - `.github/workflows/ci.yml`: `verify`・`ui-verify` に `Set up sccache` / `Export sccache GHA backend env` / `Verify sccache environment` / `sccache statistics` の 4 step を追加(全て `if: vars.CI_SCCACHE_DISABLE != '1'`)。job 名・job 数・permissions・既存 step・cargo registry cache は非変更。
 - `AGENTS.md`: ci.yml bullet に sccache が verify/ui-verify で有効・RT/ICC/L1/bench は後続展開・`CI_SCCACHE_DISABLE=1` で無効化と明記。
 - `docs/` doc chain: spec→ADR(GHA backend 採用・SHA pin)→design→plan→test-spec→task→exp→IR を整備。生成 index 更新済み。
 
-## Verification(実測)
+### Decisions During Implementation
+
+- `mozilla-actions/sccache-action` を immutable commit SHA `fc920bf0ec8de6ee65d409111f7ec508035751ba`(v0.0.11)で pin — supply chain を固定するため(ADR `issue-329-sccache-gha-backend` の決定)。
+- `SCCACHE_GHA_*` env は `actions/github-script` 経由で `GITHUB_ENV` へ export — `ACTIONS_RUNTIME_TOKEN`/`ACTIONS_RESULTS_URL` は JS action コンテキストでのみ確実に参照可能なため。
+- `SCCACHE_GHA_VERSION=ruviform-v1-<RUNNER_OS>` で OS 名前空間化 — OS 間で compile artifact を共有せず、MSRV lane(1.89)とも分離する。
+- kill switch は repo variable `CI_SCCACHE_DISABLE=1` — workflow YAML 変更不要で無効化できることを実測で確認(exp §4)。
+- RT/ICC/L1/bench への展開は verify/ui-verify の効果実測を以て follow-up で段階展開(staged rollout)。
+
+## Related Experiments
+
+### Adopted
+
+- `../exp/issue-329-sccache-compile-cache.md` — cold/warm 実測で verify lane の hit rate 47–62%・job 時間 10–30% 削減・write error 時の fail-open・`CI_SCCACHE_DISABLE=1` kill switch を確認し、GHA backend 採用を裏付けた(front matter `metadata.experiments.adopted` と一致)。
+
+### Rejected
+
+なし。
+
+## Validation
 
 ### CI 実測(全項目 Pass)
 
@@ -110,7 +137,7 @@ CI-OPT-02。`.github/workflows/ci.yml` の `verify` 3OS matrix と `ui-verify` w
 - **Cargo.lock 更新実験**: `cargo update --precise` で依存 version 変更 → lock hash 変化・sccache miss で再 compile。lockfile は検証後に `git checkout` で復元
 - **無効時実験**: `RUSTC_WRAPPER` 未設定 = 通常 rustc(=`CI_SCCACHE_DISABLE=1` と同等の挙動)で compile/test 正常
 
-## NotRun(後続検証が必要)
+### NotRun(後続検証が必要)
 
 - **Cargo.lock 更新の CI 実測**: warm→warm の lock bump は本 PR スコープ外。後続で dependabot/手動 lock bump PR で再計測。
 - **toolchain 更新時**: rust 1.99→別版 bump + `SCCACHE_GHA_VERSION` `v1`→`v2` bump で新 namespace 観測が手順。未実施。
@@ -134,9 +161,17 @@ CI-OPT-02。`.github/workflows/ci.yml` の `verify` 3OS matrix と `ui-verify` w
 - **transfer**: ビルド中に entry 単位で cache API 呼出し。多数同時書込で rate limit(cold run 観測)。
 - **fork PR**: runtime token が read-only のため write 拒否→fail-open。観測は NotRun。
 
-## Followups
+## Risks
+
+- GHAC write rate limit: cold run で write error 36–100%、ui-verify windows は cold で write error 100% のため warm hit rate も 0.95% に留まる。write error は fail-open で compile/test は完走するが、hit rate 低下は wall time 削減効果の減退に直結する。対策は Follow-ups。
+- fork PR の GHAC 挙動は未観測(upstream repo に fork PR がない)。仕様上 fork の runtime token は read-only scope で write 拒否→fail-open 想定だが、実挙動は未確認(Validation「NotRun」参照)。
+- GHA cache は repo 単位 ~10GB でアクセス頻度・容量制限により自動 evict される。`SCCACHE_GHA_VERSION` bump で論理 purge は可能だが、eviction による hit rate 低下は運用上起こりうる。
+- cache 破損時の正しさ: sccache は破損 entry を誤結果として返さず re-compile に fallback する(ローカル実験で確認済み)。GHAC backend 上での破損注入は権限外で未実施 — write error 観測による fail-open は実証済み。
+
+## Follow-ups
 
 - GHAC write rate limit 対策の検討(`SCCACHE_GHA_CACHE_WRITE` 併用・backend 切替・worker 数制御)
 - lock bump / toolchain bump 時の warm→warm 再計測
+- fork PR が発生した際の GHAC 挙動観測(read-only token → write 拒否→fail-open の想定確認)
 - RT/ICC/L1/bench への staged 展開可否判定
 - Consumer repo への適用(AL #148 / SV #147)

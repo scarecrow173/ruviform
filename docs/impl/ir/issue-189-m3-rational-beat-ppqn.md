@@ -130,6 +130,16 @@ consumer は無変更でコンパイル・テストを通過する。
   既に正しく、`MusicalTimeInfo.ppqn` が 960 を正直に報告するため M3 では
   コード不変更・Golden で固定した（Erratum は文書側で解消済み）。
 
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
 ## Validation
 
 実行コマンドと結果（worktree `rf189-rational-beat`、Rust 1.99.0）:

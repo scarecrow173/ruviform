@@ -132,7 +132,17 @@ signature 変更は `install_plan` のみで、既存呼出は全て `.unwrap()`
 - **`plan_builder` を提供**: 「拒否」だけでなく「正しく構築する経路」を control 自身が mint し、consumer が外部 base を手作りする動機を除去。
 - **`TransportScheduler::install_plan`（media-core/plugin-core 側）は変更しない**: 下位層の generic scheduler は base を contract ではなく builder 入力として受ける設計であり、検証責務は bridge の所有境界（control）に置く。scheduler 側に二重検証を入れると同一規則の重複実装になる。
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+None.
+
+### Rejected
+
+None.
+
+## Validation
 
 - OS: Windows 11 x64（Git Bash） / toolchain: `cargo 1.99.0`（mise pin・MSRV 1.89 準拠コード）
 - `mise run fmt-check` — exit 0
@@ -144,17 +154,37 @@ signature 変更は `install_plan` のみで、既存呼出は全て `.unwrap()`
 
 NotRun（未実測・明記）: 実 plugin/実機 OS 上での精度・性能計測、consumer 実 repo でのビルド（#219/#294 の cross-consumer lane は coordinator/PR 側で実施判断）。本変更は非 RT control 側の accessor + 事前検証のみで RT callback 経路に新規 alloc/Mutex/blocking を導入しないため、RT no-alloc 非回帰は `test-rt` lane 通過で担保。
 
+## Risks
+
+- 実 plugin/実機 OS 上での精度・性能計測は未実施 — 検証は
+  headless の workspace lane（fmt/check/lint/test/test-rt）と
+  doc lint に限定される。
+- consumer 実 repo でのビルドは未実施（#219/#294 の
+  cross-consumer lane は coordinator/PR 側で実施判断）。
+- `install_plan` 戻り値型の変更は破壊的 — `Result<(),
+  QueueFull>` → `Result<(), InstallPlanError>`（
+  `#[non_exhaustive]`）。error 型を名指しする downstream は
+  `InstallPlanError::QueueFull` への機械移行が必要（本 repo に
+  該当なし、crate 内 callers は全て `.unwrap()` 経由で
+  source-compatible）。
+- foreign-base plan の install は以前は照合なしで stage
+  されていた — `AttachConfig.frame_base` と異なる base の
+  plan は新たに `FrameBaseMismatch` で拒否される挙動変更
+  （意図的な fail-closed 化）。
+
+## Follow-ups
+
+- synvelis: `control.check_frame_base(frame_base)?` による型付き
+  照合、または `control.plan_builder(gen)` / `control.frame_base()`
+  による外部 base 供給の除去 — Issue #101 で対応予定
+  （impacted・positive）。
+- audio-lens: plugin-bridge 非依存のため no impact。#219/#294
+  lane での実ビルド確認は未実施。
+- consumer 実 repo でのビルド確認 — #219/#294 cross-consumer
+  lane。
+- 実 plugin/実機 OS 上での精度・性能計測。
+
 ## Consumer Impact Materials
 
 - **synvelis**: **impacted（positive・対応は別 Issue #101）** — `ParamDispatch::new(control,node,frame_base)` が受け取る外部 `frame_base` に対し、`control.check_frame_base(frame_base)?` で bridge 起源と型付き照合する道ができた。`control.plan_builder(gen)` / `control.frame_base()` を使えば外部 base 供給自体も除去可能。API 追加のみで破壊的変更は `install_plan` 戻り値型のみ（synvelis 側が `QueueFull` を名指ししている場合は variant 経由へ機械移行）。
 - **audio-lens**: **no impact** — 変更は `ruviform-audio-plugin-bridge` に限定。issue-219 IR 記録の consumer inventory では audio-lens は `ruviform-ui`/`ruviform-ui-webview`/`ruviform-viz` 系の利用で plugin-bridge に依存しない。#219/#294 lane での実ビルド確認は未実施（NotRun）。
-
-## Related Experiments
-
-### Adopted
-
-None.
-
-### Rejected
-
-None.

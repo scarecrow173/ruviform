@@ -53,6 +53,13 @@ metadata:
 
 `l1_proxy_e2e.rs` の壁時計 `thread::sleep` 同期を全廃し、配信系は 2 round-trip `SaveState` pipeline barrier、カウンタ系は構造的上界、heir/drain 系は `freeze()` の `drain_cv` 待機へ置き換えた。assertion 式は 1 行も変更していない（`git diff` で全 `-` 行が sleep/コメントのみであることを確認）。変更ファイルは `l1_proxy_e2e.rs` のみ（+130/−35）。
 
+## Context
+
+- 正本要件: Issue #238（<https://github.com/scarecrow173/ruviform/issues/238>）
+- 実施タスク: `docs/tasks/issue-238-l1-proxy-e2e-flake.md`
+- 上流: `docs/plans/issue-238-l1-proxy-e2e-flake.md`、`docs/specs/issue-238-l1-proxy-e2e-flake.md`、test-spec `docs/test-specs/issue-238-l1-proxy-e2e-sync.md`（`verifies`/`depends-on`）
+- 背景: #236 `dropped_submits` 4 vs 0、#237 lookahead 未配送として観測された Windows runner の flake（根因は Diagnosis 節）。
+
 ## Diagnosis（実証済み）
 
 - 根因: leg の submit gate `cleared[slot] >= last_pushed[slot]`（`data.rs`）は drain 済み seq でのみ slot を解放し、drain は `process` 呼び出し中にのみ走る。固定 sleep は「call N−1 の drain 終了までに seq N−D の completion が reader に push される」ことを仮定していた — Windows runner の scheduler stall がこれを破った（#236 `dropped_submits` 4 vs 0、#237 lookahead 未配送）。
@@ -60,7 +67,9 @@ metadata:
 - hung child 系（`--hang-after-msgs=5`）は reply が一切来ないため barrier 不可 — 代わりに ring depth 3 / submit channel capacity = depth の構造的上界で `dropped_submits == CALLS−3` が timing 非依存であることを確認（子は hung 中も stdin を読み続けるため pipe も詰まらない）。
 - heir 3 テストの 700 ms は `converge_child` → `mark_drain_bounded` → `freeze()` が `drain_cv` で `DrainState::Done`（drain 自身の ~500 ms deadline または EOF）を有界待機するため冗長だった。notification pop 自身が bounded wait になる。
 
-## Changes（`crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs`）
+## Implementation
+
+### Changes（`crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs`）
 
 - `pipeline_barrier(&mut L1Instance)` と `composite_e2e::pipeline_barrier(&mut PluginHost, PluginHandle)` を新設。`Err` は lifecycle mirror + counter dump 付き panic、message-counter fault flag との併用禁止を doc に明記。
 - 9 配送系 call site（`process_roundtrip`/`process_underrun` refill/`bundled_child_hosts_independent_instances`/`rejected_block_replies`/`interleave_disjoint_blocks`/`mixed_routes_full_series`/`runner_bin_serves_real_gain`/`runner_bin_serves_bundled`×2 loop/`dedicated_route_isolates`）を call 毎 barrier 化。bundled は 1 barrier が共有 stdin 経由で全 instance queue を覆う。
@@ -68,7 +77,27 @@ metadata:
 - hung 2 テストの sleep 除去（構造的上界コメント付き）。heir 3 テストの 700 ms 除去。
 - 残留 `thread::sleep` は bounded-poll wait helper ×5 のみ（93/101/2225/2250/2270）— 正しい形。
 
-## Verification（実測、Windows 11 x64 worktree）
+### Decisions During Implementation
+
+- 配送系テストは壁時計 sleep ではなく 2 round-trip `SaveState` pipeline barrier で同期する（barrier の順序証明は Diagnosis 節）。
+- カウンタ系は構造的上界（ring depth / submit channel capacity）で `dropped_submits` 等の期待値を timing 非依存にする。
+- hung child 系（reply が一切来ない）は barrier が使えないため、構造的上界 + コメントで代替する。
+- heir/drain 系は `freeze()` の `drain_cv` 待機で bounded wait 化し、冗長な sleep を除去する。
+- 直列化・並列度調整は採用しない — barrier が wait 機構として flake を閉じ、各 test は固有 child/process を持つ（Verification 節の 7 連続 green が裏付け）。
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
+
+実測環境: Windows 11 x64 worktree。
 
 | 検証 | 結果 |
 | --- | --- |
@@ -93,13 +122,19 @@ metadata:
 
 直列化・並列度調整は採用せず — barrier が wait 機構で flake を閉じ、各 test は固有 child/process を持つため資源競合なし（plan の判断通り、7 連続 green が裏付け）。
 
-## Review（review-protocol）
+### Review（review-protocol）
 
 - 客観チェック: fmt/check/lint/test + 反復実行（上表）— 全 PASS。
 - Reviewer A（cooperative）/ B（adversarial）を並行 dispatch — 両者とも **Issue Candidate ゼロ**。barrier の wire-order 証明、 bundled 共有 stdin 網羅、hung 構造的上界、freeze/`drain_cv` 同期、assertion 非変更を双方が独立に検証。
 - Judge: CONFIRMED P0/P1 なし → **ACCEPT WITH NON-BLOCKING NOTES**。非 blocking 指摘（「popped by next drain」の表現が over-promise、message-counter footgun の doc 注記）は両 helper の doc に反映済み。
 
-## Followups
+## Risks
+
+- barrier の順序証明は `driver_main` の「1 iteration で `DriverCmd::Command` 書込 → `drain_submits`」という直列構造に依存する。driver loop の順序を変える変更で証明が崩れ得る（ただし barrier は `command_timeout` で有界のため、失敗は無限 hang ではなく timeout/panic として顕在化する）。
+- hung child 系の `dropped_submits == CALLS−3` は ring depth 3 / submit channel capacity = depth の構造的上界に依存する。これらの定数を変える変更では期待値の再導出が必要。
+- 残留 `thread::sleep` は bounded-poll wait helper ×5 のみで「正しい形」と判断したが、helper の deadline/budget 定数に依存する待機である点は変わらない。
+
+## Follow-ups
 
 - `l1_supervisor_e2e.rs`・`l1_video_e2e.rs`・export 側 `l1_runner_e2e.rs` にも同種の sleep 同期が残る可能性 — Issue 範囲外、別途監査対象として報告。
 - barrier helper の前提（drain-after-command per iteration）は `driver_main` の構造に依存 — 将来 driver loop の順序を変える変更時は本 doc/test-spec を再参照すること。

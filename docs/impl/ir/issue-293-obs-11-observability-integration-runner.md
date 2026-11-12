@@ -116,7 +116,7 @@ Host 注入 `tracing::Dispatch`（global install なし）を提供する。
 - `README.md`: `integration` feature 節（起動・通常停止・異常停止・
   Logging OFF・Debug Session の使用例）。
 
-### Decisions
+### Decisions During Implementation
 
 - Runner はスレッド/タイマーを所有せず Host が `poll_once` を呼ぶ
   — RT/非 RT 境界を Host に残すため。
@@ -126,7 +126,17 @@ Host 注入 `tracing::Dispatch`（global install なし）を提供する。
 - Dispatch test の source は `ReportingHint::OnIncrease` を使用 —
   `SnapshotOnly` は export policy で抑制され event が出ないため。
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 - `mise run fmt-check` / `check` / `lint` / `test` / `test-rt`: すべて
   exit 0（workspace default features。`integration` は default off の
@@ -148,3 +158,32 @@ Host 注入 `tracing::Dispatch`（global install なし）を提供する。
   越え保持、`Draining` 中の one-shot `shutdown` 不可は documented
   契約、reconfigure drain の `Instant::now()` 使用）。判定:
   ACCEPT WITH NON-BLOCKING NOTES。
+
+## Risks
+
+- `integration` は default off の feature のため、canonical lane
+  （workspace default features）の `mise run check`/`lint`/`test` は
+  feature-gated code をカバーしない。`--all-features` および
+  `integration` / `integration,logging` / `integration,tracing-export`
+  の feature 組合せ clippy+test を補助証拠として実施済みだが、
+  default 構成での直接検証ではない点に留意。
+- review の P2/P3 non-blocking note が残る: runner 生涯 counter・
+  `last_shutdown` の restart 越え保持、`Draining` 中の one-shot
+  `shutdown` 不可（documented 契約）、reconfigure drain の
+  `Instant::now()` 使用。blocking ではないが観測・仕様化の余地あり。
+- consumer 統合・実機計測は本 slice では NotRun（task の Deferred
+  どおり #281/#219 cross-repo gate・consumer gate の責務）。
+
+## Follow-ups
+
+- AudioLens #138・Synvelis #81 の consumer 統合・両 Consumer 受入 —
+  NotRun（#281/#219 cross-repo gate）。
+- RT callback での Subscriber/allocator/lock/IO/非有界 wake 混入の
+  実機計測・AudioLens f64/Synvelis 再生回帰 — NotRun（consumer gate）。
+- Linux/macOS 実機・MSRV lane — NotRun（#219/#223 gate。
+  observability の MSRV lane は後続 slice
+  `implement-issue-293-probe-source-adapter.md` で追加・Rust 1.89
+  実走済み）。
+- concrete probe adapter の ruviform-audio 側実装 — 後続 slice
+  `implement-issue-293-probe-source-adapter.md` で実装済み。
+- OTLP 等の外部 exporter — 対象外（初期完成条件に混ぜない）。

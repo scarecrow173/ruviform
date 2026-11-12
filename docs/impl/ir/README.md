@@ -28,6 +28,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QqITVZVkBse5tdUFJVQ | Dock tests, demo, and verification | completed | [dock-tests-demo-and-verification.md](./dock-tests-demo-and-verification.md) |
 | IMPL-034QqISOcHeC4rS84Z3V0d | Dock workspace and two-phase move | completed | [dock-workspace-and-two-phase-move.md](./dock-workspace-and-two-phase-move.md) |
 | IMPL-034WsHV56f7WLl8ACG16mb | docs/impl/ir・exp の管理 index を doc-maintenance で生成可能にする | completed | [docs-impl-ir-exp-index-doc-maintenance.md](./docs-impl-ir-exp-index-doc-maintenance.md) |
+| IMPL-034WuWdvMVZx1zeCjy7MoV | docs/impl/ir missing-section 本文補完（Issue #590） | completed | [docs-impl-ir-missing-section-issue-590.md](./docs-impl-ir-missing-section-issue-590.md) |
 | IMPL-034JftzSzGUrGW76DpIyVM | Document video-core ownership contract | completed | [document-video-core-ownership-contract.md](./document-video-core-ownership-contract.md) |
 | IMPL-034JEzb6zrstxQuNrV0fmM | DSP/SIMD PoC benchmark | completed | [dsp-simd-poc-benchmark.md](./dsp-simd-poc-benchmark.md) |
 | IMPL-034JC0drffSR2IoiSS2k4M | Finalize backend ADR and sync workspace ledgers | completed | [finalize-backend-adr-and-sync-workspace-ledgers.md](./finalize-backend-adr-and-sync-workspace-ledgers.md) |

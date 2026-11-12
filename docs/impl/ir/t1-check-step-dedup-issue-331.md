@@ -83,7 +83,17 @@ CI `verify` job から独立 `Type-check workspace (mise run check-ci)` step を
 - sccache 設定・cargo registry cache — #329 スコープ、本 issue では触らない。
 - dev profile と ci profile の統一 — profile 統一は等価性を実証できないため非適用。
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+- `docs/impl/exp/issue-331-check-clippy-test-dedup.md` — check/clippy のローカルユニット集合実測(292 ユニット・workspace 140 ユニットの rustc/clippy-driver 二重 frontend pass の特定)、CI baseline/変更後 run の verify step 時間、注入実験 8 ケースによる等価性証明を記録した実測 exp。本統合の採用根拠。raw 証拠は `docs/impl/exp/data/issue-331-verify-step-runs.jsonl`。
+
+### Rejected
+
+なし。
+
+## Validation
 
 | 検証 | 実行 | 結果 |
 | --- | --- | --- |
@@ -109,6 +119,17 @@ CI `verify` job から独立 `Type-check workspace (mise run check-ci)` step を
 | example 警告 | lint-ci | Pass |
 | bench 警告 | lint-ci | Pass |
 | 失敗テスト | test-ci | Pass(lint-ci は check-mode のためテスト実行なし=期待どおり非検出) |
+
+## Risks
+
+- clippy-driver への一本化は注入実験 8 ケースで主要診断の等価性を実証したが、素の rustc の全診断との完全等価は未証明。挙動差が疑われる場合の切り分け用に `check-ci` タスクをローカルに残存させている(手順は `## Notes / Rollback` 参照)。
+- 改善効果の実測は PR #343 run 41825566750 の単一サンプル(check+lint 合計比 −28〜−37s)。step 時間は run 間で変動が大きく(16–92s)、単発差分を恒常的改善と断定するには継続計測が必要。
+
+## Follow-ups
+
+- `collect-ci-metrics.mjs` による verify step 時間の継続計測。対象 run の raw data は `docs/impl/exp/data/issue-331-verify-step-runs.jsonl` に追記する運用。
+- 実測効果が確認できない場合は spec/design 記録どおり統合を戻す。rollback 手順は `## Notes / Rollback` を参照。
+- `rt-verify`/`icc-verify`/`ui-verify`/`l1-real-verify`/`bench`、sccache・registry cache(#329)、dev/ci profile 統一は本 Issue の非適用スコープとして明示済み。これら lane の統合・最適化は別 Issue の判断事項。
 
 ## Notes / Rollback
 

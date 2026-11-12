@@ -70,7 +70,25 @@ metadata:
 
 # Issue #414 projection→controlled display 正規経路 実装記録
 
-## 実施内容
+## Summary
+
+binding `on_projection` の accepted revision を `ViewHost::apply_projection`
+から `InteractionControl::apply_external` へ配線し、外部 projection が
+controlled display（renderer 消費値 `snapshot.display`）へ authoritative
+値として反映される正規経路を実装した。driver-lab に `UI-DVR-09`
+required case を追加し、idle/stale/undecodable・gesture flush・
+detach-reattach 復元を headless lane で固定した。
+
+## Context
+
+- 実施タスク: [../../tasks/issue-414-projection-controlled-display.md](../../tasks/issue-414-projection-controlled-display.md)
+- spec / design / plan / test-spec: `docs/specs|designs|plans|test-specs/issue-414-projection-controlled-display.md`
+- source: <https://github.com/scarecrow173/ruviform/issues/414>
+- references: <https://github.com/scarecrow173/ruviform/issues/387>・<https://github.com/scarecrow173/ruviform/issues/410>
+
+## Implementation
+
+### Changes
 
 - `crates/ruviform-ui/src/behavior.rs`
   - `projection_value_input(&serde_json::Value) -> Option<ValueInput>`：
@@ -111,7 +129,35 @@ metadata:
   - `tests/driver_contract.rs`：required_cases 数を 8→9 に更新
     （manifest 整合 assertion の追従）。
 
-## RED → GREEN 実測
+### Decisions During Implementation
+
+- projection payload の decode を厳格化 — 有限 JSON number・
+  `{"plain": n}`・`{"normalized": n}` のみ受理し、それ以外
+  （文字列・null・bool・配列・複数 key・非有限値）は `None`。
+  業務 JSON を無条件に f64 へ解釈しない。
+- gesture 中の外部 projection は `pending_external` に stage し、
+  `end_gesture` で flush — intent/gesture event は発行しない
+  （外部値は display/committed のみに着地）。
+- `register_control` で生存 binding の `last_observed` を新規
+  control の mapper 経由で復元適用 — detach→reattach・再登録で
+  display が default に留まらないようにした。
+- gesture 中に複数 projection が届いた場合は最新の 1 件のみが
+  着地（staging は上書き保持）— 最終 authoritative 値が残る設計
+  であり意図どおり。
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
+
+### RED → GREEN 実測
 
 - RED（修復前）: 外部非ゼロ projection を idle で受けても
   `snapshot.observed` のみ更新され `snapshot.display.normalized`
@@ -120,7 +166,7 @@ metadata:
 - GREEN（修復後）: 同一経路で display/committed が authoritative 値へ
   更新されることを全 lane で確認。
 
-## 検証実績（Windows 11 x64・Git Bash、mise rust 1.99.0 既定）
+### 検証実績（Windows 11 x64・Git Bash、mise rust 1.99.0 既定）
 
 | 検証 | 結果 |
 | --- | --- |
@@ -139,26 +185,26 @@ metadata:
 | `mise run check-ui-gpui` / `lint-ui-gpui` / `test-ui-gpui` | pass（31 test） |
 | `mise run test-ui-test-msrv` | pass（Rust 1.89.0 MSRV lane） |
 
-## merge 後再検証
+### merge 後再検証
 
 - `git fetch origin main && git merge origin/main`：HEAD =
   origin/main = `79d1db0a` で既に最新（merge 対象差分なし・
   Already up to date）。上記検証はすべてこの HEAD 上で実施。
 
-## NotRun / 引き渡し
+## Risks
 
 - macOS / Linux 実機・実 OS window: NotRun（Windows のみ実測。
   driver-lab manifest の real-os case は not_run のまま）。
+- `pending_external` flush は `end_gesture` 集約のため、gesture
+  終了の全経路で一貫適用されるが、gesture 中に複数 projection が
+  届いた場合は最新の 1 件のみが着地する（staging は上書き保持。
+  最終 authoritative 値が残る設計であり意図どおり）。
+
+## Follow-ups
+
 - Issue #410（view command ledgers・epoch correlation・retention）
   領域: 本変更は ledger 機構に非接触。retention/correlation の
   契約は別 Issue で扱う。
 - SV 側（synvelis）恒久 workaround / 第二 ledger: 追加していない
   （Issue 受入条件どおり RF 所有境界で修復）。SV183 の Ready 化は
   RF414 解消確認後の root 管轄。
-
-## 残リスク
-
-- `pending_external` flush は `end_gesture` 集約のため、gesture
-  終了の全経路で一貫適用されるが、gesture 中に複数 projection が
-  届いた場合は最新の 1 件のみが着地する（staging は上書き保持。
-  最終 authoritative 値が残る設計であり意図どおり）。

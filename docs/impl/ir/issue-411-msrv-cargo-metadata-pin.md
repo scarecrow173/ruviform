@@ -58,7 +58,22 @@ metadata:
 
 # Issue #411 — cargo_metadata 0.19 系への依存選定修復 実装記録
 
-## 実施内容
+## Summary
+
+`ruviform-ui-test` の `cargo_metadata` 依存を 0.23 → 0.19.2 へ
+切替え、Rust 1.89.0 MSRV lane `test-ui-test-msrv` を新設して
+MSRV 超過（`cargo-platform@0.3.3 requires rustc 1.91`）を修復した。
+branch `fix/gui-guard-msrv`（head e3a42630）・PR #413。
+
+## Context
+
+- 実施タスク: [../../tasks/issue-411-msrv-cargo-metadata-pin.md](../../tasks/issue-411-msrv-cargo-metadata-pin.md)
+- spec / design / plan / test-spec: `docs/specs|designs|plans|test-specs/issue-411-msrv-cargo-metadata-pin.md`
+- source: <https://github.com/scarecrow173/ruviform/issues/411>
+
+## Implementation
+
+### Changes
 
 - `crates/ruviform-ui-test/Cargo.toml`: `cargo_metadata = "0.23"` →
   `"0.19"`（解決先 0.19.2・cargo-platform ^0.1.2 に閉じる。
@@ -76,7 +91,32 @@ metadata:
 - doc: `docs/development-environment.md` opt-in タスク節へ追記、
   crate README の stale 依存記述（os_pipe 言及）を実依存へ修正。
 
-## RED → GREEN 実測
+### Decisions During Implementation
+
+- `cargo_metadata` は 0.19.2 を選定 — 0.20/0.21 系列は評価済み
+  だが、platform 0.2 系で MSRV 適合する一方
+  cargo-util-schemas 系の追加 transitive tree を引くため不採用
+  （design に記録）。
+- `*.name.to_string()` → `*.name.clone()` 12 箇所 — 0.19.2 で
+  name 系が `String` 化したことへの呼出互換調整。clippy
+  `implicit_clone` 解消が目的で、生成値は同一 String。
+- `test-ui-test-msrv` は `test-ofx-msrv` 同型の opt-in task と
+  して新設（`CARGO_TARGET_DIR=target/msrv-ui-test` で既定 lane
+  と分離）。
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
+
+### RED → GREEN 実測
 
 - RED（修復前）: `mise run test-ui-test-msrv` →
   `error: rustc 1.89.0 is not supported by the following package:
@@ -86,7 +126,7 @@ metadata:
   （driver_boundary 10・driver_contract 5・e2e_process 15・
   fake_driver 14・headless_contract 32・lib/bin unittest 0）。
 
-## 検証実績（Windows 11 x64・Git Bash、mise rust 1.99.0 既定）
+### 検証実績（Windows 11 x64・Git Bash、mise rust 1.99.0 既定）
 
 | 検証 | 結果 |
 | --- | --- |
@@ -99,7 +139,7 @@ metadata:
 | `mise run test-ofx-msrv` | pass（既存 MSRV lane 退行なし） |
 | `mise run test-ui-test-msrv` | pass（Rust 1.89.0・76 test） |
 
-## merge 後再検証（origin/main 68bb8710 取込・HEAD e3a42630）
+### merge 後再検証（origin/main 68bb8710 取込・HEAD e3a42630）
 
 - merge: ort 自動 merge・手動 conflict 解消なし。Cargo.lock は
   union（削除行 0・cargo_metadata 0.19.2 / cargo-platform 0.1.9
@@ -122,14 +162,19 @@ metadata:
 - branch `fix/gui-guard-msrv`（head e3a42630）を push、PR #413
   作成済み（merge/close は root 管轄）。
 
-## NotRun / 引き渡し
+## Risks
+
+- macOS / Linux 実機: NotRun（Windows のみ実測）。
+- workspace `test` で `ruviform-plugin-host`
+  `l1_proxy_e2e`（`wedged_child_write_converges_and_teardown_is_bounded`）
+  が並行負荷時に spawn timeout の flaky を観測 — 本変更と無関係
+  （PR407 でも既知 flaky 記録）、単独再実行で suite 184/184 pass。
+  詳細は上記 merge 後再検証を参照。
+
+## Follow-ups
 
 - Synvelis 側 lock 更新と `mise run test-msrv` 再検証: 別 repo・
   別作業（root 管轄）。本 PR の candidate SHA では RF 側 manifest/
   lock は収束済み — Consumer lock 再生成で cargo_metadata 0.19.2 /
   cargo-platform 0.1.9 に収束する想定（manifest 制約上 MSRV 超過へ
   再発する経路なし）。
-- macOS / Linux 実機: NotRun（Windows のみ実測）。
-- `cargo_metadata` 0.20/0.21 系列: 評価済み採用せず（design 記録
-  — platform 0.2 系で MSRV 適合だが cargo-util-schemas 系の追加
-  transitive tree を引くため 0.19.2 を選定）。

@@ -146,6 +146,16 @@ fixture がなく、(b) session ops が DSP `process` に干渉しない
 - **`src/` 差分ゼロを維持**: 公開契約・依存・lockfile・
   workspace manifest に一切触れていない（`git diff` で確認）。
 
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
 ## Validation
 
 canonical（mise）— 全て実行済み:

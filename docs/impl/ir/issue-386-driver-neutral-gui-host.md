@@ -72,13 +72,19 @@ metadata:
 
 # Issue #386 実装記録（第 2 PR）
 
-## 1. 第 1 PR（#394）までの到達点
+## Summary
 
-`ruviform-ui::driver`（中立契約）・`ruviform-ui-test::FakeDriver`・
-`ruviform-ui-gpui::GpuiDriver`（`gpui` feature）・mise lane（`check-ui-gpui`/
-`lint-ui-gpui`/`test-ui-gpui`）が main に入っている。Issue #386 は OPEN のまま。
+T5（`docs/tasks/t5-shared-lifecycle-fixture-issue-386.md`）として、driver 中立の共通 lifecycle fixture `ruviform-ui-test::lifecycle`（`run_lifecycle` + `expected_trace()`）を追加し、Fake Driver と GPUI Driver が同一 trace に一致することを headless で確認した。GPUI test platform の制約（window handle なし）への seam を追加し、design の移行表を拡張した。Issue #386 は OPEN のまま（一部 DoD 未達 — Validation の DoD 対応を参照）。
 
-## 2. 第 2 PR で実装したもの
+## Context
+
+- 実施タスク: `docs/tasks/t5-shared-lifecycle-fixture-issue-386.md`（depends-on `docs/tasks/t4-gpui-lanes-and-evidence-issue-386.md`）
+- 上流: plan `../../plans/implement-issue-386-driver-neutral-gui-host.md`、spec `../../specs/issue-386-driver-neutral-gui-host.md`、design `../../designs/issue-386-driver-neutral-gui-host.md`、test-spec `../../test-specs/issue-386-driver-neutral-gui-host.md`
+- 前提（第 1 PR / PR #394 までの到達点）: `ruviform-ui::driver`（中立契約）・`ruviform-ui-test::FakeDriver`・`ruviform-ui-gpui::GpuiDriver`（`gpui` feature）・mise lane（`check-ui-gpui`/`lint-ui-gpui`/`test-ui-gpui`）が main に入っている。
+
+## Implementation
+
+### Changes
 
 - **共通 lifecycle fixture**（`ruviform-ui-test::lifecycle`）:
   `run_lifecycle` が中立 `WindowDriver` と Dock（`DockWorkspace`）だけで
@@ -99,44 +105,29 @@ metadata:
 - **移行表**: `docs/designs/issue-386-driver-neutral-gui-host.md` の
   「旧 API → 新 API 移行表」を Host/Window/Dock/Binding の 3 セクション
   （型・実装ファイル・移行手順・状態）に拡張した。
-
-## 3. 依存追加の記録
-
-- `ruviform-ui-gpui` の `[dev-dependencies]` に `ruviform-ui-test`（path）を追加。
+- **依存追加の記録**: `ruviform-ui-gpui` の `[dev-dependencies]` に `ruviform-ui-test`（path）を追加。
   テスト専用で本番グラフには入らない。`ruviform-ui-test` は gpui に依存しない。
   Cargo.lock には `ruviform-ui-test` の 1 行追加のみ。新規外部 crate は無し。
 
-## 4. DoD（Issue #386 本文）対応
+### Decisions During Implementation
 
-| DoD 項目 | 状態 | 根拠 |
-| --- | --- | --- |
-| common public interfaces が GPUI/JS/WebView/OS Handle なしで build できる | 達成 | `cargo tree -p ruviform-ui -e normal` に gpui/wry/tao/winit なし。`check-ui-driver-boundary` pass（dep-graph・signature・allowlist） |
-| 旧 API → 新 API の型/実装ファイル/移行手順の表 | 達成（表）/ 未達（一部移行の実装） | design の移行表 H1–H13・D1–D3・B1–B4。`WebViewWindowConfig`・WebView の `post_event`/Ready/Action 写像は未実装（H1–H5） |
-| Fake Driver と GPUI Driver で 2Window/Close veto/focus/Dock rollback の同一 meaning fixture 合格 | 達成（headless 同一 trace）/ 未達（実 OS） | R6。`fake_driver_matches_shared_lifecycle_trace`・`gpui_driver_matches_shared_lifecycle_trace` |
-| GPUI への直依存は Driver + composition root 例外のみ | 達成 | gpui は `ruviform-ui-gpui` のみ。`ruviform-ui` の依存グラフに gpui なし |
-| Contract は GPUI なしで型検査できる | 達成 | `cargo check -p ruviform-ui`（feature なし）・`cargo test -p ruviform-ui`・`check-ui-driver-boundary` |
+- `GpuiDriver::settle_for_test` は `cfg(all(test, gpui-test))` かつ `pub(crate)` — 公開 signature に gpui 型を出さないため。
+- `capture_raw_parent` を `cfg(test)` + `gpui-test` ビルドで None を返す seam とした — test platform の window は OS handle を持たず `window_handle()` が panic するため。本番・非 test ビルドの挙動は不変。判断理由は surface 親 HWND を lifecycle fixture が使わないこと。
+- 旧 WebView path・本番 `run` は変更しない（task T5 Acceptance）。
 
-## 5. 未達・NotRun（理由つき）
+## Related Experiments
 
-- **実 OS 検証（NotRun）**: 実 window 表示・DPI 遷移・IME・OS 起因の focus・
-  実 close ボタン・GPU device lost・実 plugin Native Dock。理由: CI と
-  `TestAppContext` では実 platform window がない。手動 entry は
-  `example-ui-gpui-minimal`。
-- **Late receipt の GPUI 側（部分）**: GPUI の受信は view inbox の件数で検証。
-  view の描画までは検証していない（既存の `rvf_view_inbox_queued_receipt_keeps_head` が補完）。
-- **Dock と GPUI の統合（未達）**: `DockWorkspace` は headless モデルとして
-  共通 fixture で検証した。GPUI の実 window 上の Dock 2-phase move は未実施。
-- **WebView 側の写像（未達・Phase 1）**: H1–H5・H9 の adapter 内写像は未実装。
-  旧 `HostHandle`/`WindowHandle`/`run` は残置（削除しない）。
-- **capability の粗さ（既知の不整合）**: `GpuiDriver` は `focus` を Supported と
-  宣言するが、`focus(_, false)` は gpui 0.2.2 の制約で `UiError::Unsupported` を返す。
-  fixture は「Ok か Unsupported のどちらか（Host error ではない）」を要求し、
-  capability 宣言の精緻化は後続 Issue へ。
-- **`render.rs` の clippy 警告（既存・範囲外）**: `clippy --features gpui-test`
-  の `too_many_lines`（`rvf_view_native_slot_public_api_cannot_starve_pushes`）。
-  既存のテストコードで、`lint-ui-gpui`（`gpui` feature）は対象外。
+### Adopted
 
-## 6. 検証結果（第 2 PR の作業ツリー・merge 前）
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
+
+### 検証結果（第 2 PR の作業ツリー・merge 前）
 
 | コマンド | 結果 |
 | --- | --- |
@@ -155,3 +146,33 @@ metadata:
 | `mise run test-ui-test-msrv` | pass（MSRV 1.89、`lifecycle_fixture` 含む） |
 
 最終検証は merge 後の HEAD で実施し、PR 本文に結果を記録する。
+
+### DoD（Issue #386 本文）対応
+
+| DoD 項目 | 状態 | 根拠 |
+| --- | --- | --- |
+| common public interfaces が GPUI/JS/WebView/OS Handle なしで build できる | 達成 | `cargo tree -p ruviform-ui -e normal` に gpui/wry/tao/winit なし。`check-ui-driver-boundary` pass（dep-graph・signature・allowlist） |
+| 旧 API → 新 API の型/実装ファイル/移行手順の表 | 達成（表）/ 未達（一部移行の実装） | design の移行表 H1–H13・D1–D3・B1–B4。`WebViewWindowConfig`・WebView の `post_event`/Ready/Action 写像は未実装（H1–H5） |
+| Fake Driver と GPUI Driver で 2Window/Close veto/focus/Dock rollback の同一 meaning fixture 合格 | 達成（headless 同一 trace）/ 未達（実 OS） | R6。`fake_driver_matches_shared_lifecycle_trace`・`gpui_driver_matches_shared_lifecycle_trace` |
+| GPUI への直依存は Driver + composition root 例外のみ | 達成 | gpui は `ruviform-ui-gpui` のみ。`ruviform-ui` の依存グラフに gpui なし |
+| Contract は GPUI なしで型検査できる | 達成 | `cargo check -p ruviform-ui`（feature なし）・`cargo test -p ruviform-ui`・`check-ui-driver-boundary` |
+
+### NotRun
+
+- 実 OS 検証: 実 window 表示・DPI 遷移・IME・OS 起因の focus・実 close ボタン・GPU device lost・実 plugin Native Dock。理由: CI と `TestAppContext` では実 platform window がない。手動 entry は `example-ui-gpui-minimal`。
+- Late receipt の GPUI 側は部分検証: 受信は view inbox の件数で確認し、view の描画までは未検証（既存の `rvf_view_inbox_queued_receipt_keeps_head` が補完）。
+
+## Risks
+
+- capability の粗さ（既知の不整合）: `GpuiDriver` は `focus` を Supported と宣言するが、`focus(_, false)` は gpui 0.2.2 の制約で `UiError::Unsupported` を返す。fixture は「Ok か Unsupported のどちらか（Host error ではない）」を要求しており、headless trace の一致は capability 宣言の正しさを保証しない。宣言の精緻化は後続 Issue。
+- `render.rs` の clippy 警告（既存・範囲外）: `clippy --features gpui-test` の `too_many_lines`（`rvf_view_native_slot_public_api_cannot_starve_pushes`）。既存のテストコードで、`lint-ui-gpui`（`gpui` feature）は対象外。
+- 同一 trace の一致は Fake Driver と GPUI `TestAppContext` 上の headless 検証であり、実 OS window・実 plugin 経路の挙動を保証しない（実 OS 検証は NotRun）。
+
+## Follow-ups
+
+- 実 OS 検証（Validation「NotRun」参照）: 実 window 表示・DPI・IME・OS 起因 focus・実 close・GPU device lost・実 plugin Native Dock。手動 entry は `example-ui-gpui-minimal`。
+- Late receipt の GPUI 側: view の描画までの検証。
+- Dock と GPUI の統合（未達）: `DockWorkspace` は headless モデルとして共通 fixture で検証した。GPUI の実 window 上の Dock 2-phase move は未実施。
+- WebView 側の写像（未達・Phase 1）: H1–H5・H9 の adapter 内写像は未実装。旧 `HostHandle`/`WindowHandle`/`run` は残置（削除しない）。
+- `GpuiDriver` の capability 宣言精緻化（`focus` Supported 宣言と `focus(_, false)` の `UiError::Unsupported` 返却の不整合 — 後続 Issue）。
+- merge 後 HEAD での最終検証（検証結果節の注記どおり、結果は PR 本文へ記録）。

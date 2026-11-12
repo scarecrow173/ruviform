@@ -94,7 +94,17 @@ Task: `docs/tasks/issue-327-t1-baseline-measurement.md`。Plan: `docs/plans/issu
 - lane=other をゼロにするよう step 分類を現行 workflow 名に合わせて拡張（将来の未知 step は引き続き `other` で可視化）。
 - baseline raw を `docs/impl/exp/data/` に配置（dsp-simd-poc・rt-observability-poc と同じ data/ 規約 — flat event-log 監査範囲外の raw JSONL）。
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 実行済み（実コマンド・結果）:
 
@@ -125,8 +135,31 @@ Task: `docs/tasks/issue-327-t1-baseline-measurement.md`。Plan: `docs/plans/issu
 - 実験イベント: `docs/impl/exp/issue-327-ci-baseline.jsonl`
 - 代表 run URL: ruviform `actions/runs/41780346388`・audio-lens `actions/runs/41770611162`・synvelis `actions/runs/41782019309`
 
-## Remaining Issues
+## Risks
 
-- `ci/metrics/collect-ci-metrics.mjs` の needs パーサは `needs: x`/`needs: [a,b]` のみ対応（reusable workflow・動的 needs は `unknown` warn に落ちる）。対象 workflow は現状この形式のみで実害なし。
-- consumer-verify dispatch lane の consumer leg が直近で失敗しがち（verify-synvelis/verify-audiolens）。情報 lane・required 外だが、Cross-Consumer 検証の実効性として後続 Issue で要観察。
-- audio-lens は run 蓄積 n=2 で baseline の統計的厚みがない。run が蓄積次第 `--runs` 再実行で Baseline を再測する運用を想定。
+- `ci/metrics/collect-ci-metrics.mjs` の needs パーサは
+  `needs: x`/`needs: [a,b]` のみ対応 — reusable workflow・
+  動的 needs は `unknown` warn に落ちる。対象 workflow は
+  現状この形式のみで実害なしだが、workflow 側の記法変更で
+  critical path 解決が `unknown` に退行し得る。
+- consumer-verify dispatch lane の consumer leg
+  （verify-synvelis/verify-audiolens）が直近で失敗しがち —
+  情報 lane・required 外だが、Cross-Consumer 検証の実効性と
+  して後続 Issue で要観察。
+- audio-lens は run 蓄積 n=2 で baseline の統計的厚みがない —
+  p50/p95 等の統計値は出ず観測値のみの報告となる。
+- `mise run fmt-check`/`check`/`lint`/`test`・actionlint は
+  未実行（変更が JS 計測スクリプトと docs のみで Rust ソース
+  不変のため比例性原則で省略。スクリプト自体は `node` で
+  直接実行検証済み）。実 GUI・実 Plugin・実機検証は
+  NotApplicable（計測のみ・ヘッドレス API 観測）。
+
+## Follow-ups
+
+- needs パーサの拡張 — 対象 workflow が reusable workflow・
+  動的 needs を採用した場合に検討（現状は `unknown` warn で
+  可視化される）。
+- consumer-verify dispatch lane の consumer leg 失敗傾向 —
+  後続 Issue で要観察。
+- audio-lens の run 蓄積後に `--runs` 再実行で Baseline を
+  再測する運用。

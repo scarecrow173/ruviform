@@ -68,22 +68,34 @@ metadata:
 
 # Issue #388 GPUI Panel/Tab レイアウト内 VST3 Editor 埋め込み PoC 実装記録
 
-## 実装内容
+## Summary
 
-1. **`GpuiDriver::update_view`（`ruviform-ui-gpui`）**: mounted `ViewSpec` の差し替えを window 操作と同じ
-   `Op` キューで適用する。window 単位の `Slot` に mounted `RvfView` の entity を保持し、`RvfView::update_spec` で
-   `ViewHost::update` を呼んで再描画する。未知 window は `UiError::Host`。
-   - 拒否された spec は前の木を残す（`ViewHost::update` 契約）。拒否理由は呼び出し元へ返らない（既知の制限）。
-2. **Dock layout scenario（`ruviform-poc-native-dock`）**: `RVF_POC_SCENARIO=dock` で `poc/dock.rs` を起動。
-   Panel → Tabs（Editor: `NativeSlot`、Other: 空の Panel）のレイアウトを `create_view_window` で開き、
-   driver の canonical surface に slot を declare → `bind_native_slot` → projection 待ち → lease → session open。
-   その後 tab 切替（hide/show）、window resize（grow/shrink）、focus、close、解放を順に実行し、
-   各観測を `check=… result=pass|fail` の証拠行にする。exit は失敗数で決まる。
-3. **plugin 起動の共通化**: `poc.rs` の plugin 登録・instantiate・initialize を `instantiate` に集約し、
-   floating probe と Dock scenario で共有する。floating probe の挙動は変えていない。
-4. **mise**: `poc-native-dock-layout` タスクを追加（`RVF_POC_SCENARIO=dock`）。
+Issue #388 の一環として、GPUI の Panel/Tab レイアウト内 `NativeSlot` container へ実 VST3 editor を attach する PoC（`RVF_POC_SCENARIO=dock`、`crates/ruviform-poc-native-dock/src/poc/dock.rs`）を実装した。`GpuiDriver::update_view`（mounted `ViewSpec` の差し替え）を追加し、tab 切替・resize・focus・close・解放の各観測を `check=… result=pass|fail` の証拠行で記録する。Windows 11 + Vinyl 1.12.0 で exit 0・`summary failures=0`。Dock PASS は未付与（test-spec の完了条件を全ては満たさない — Validation 参照）。
 
-## 判断
+## Context
+
+- Issue #388（GPUI native dock / NativeSurfaceSlot）。test-spec `docs/test-specs/issue-388-native-dock-layout-poc.md`、design `docs/designs/issue-388-native-surface-slot.md`、depends-on `docs/test-specs/issue-388-389-native-dock-contract.md`（Issue #389 の headless contract）
+- 関連: `docs/impl/ir/issue-389-vst3-l0-editor-attach-implementation.md`、`docs/discovery/issue-388-389-native-dock-current-state.md`
+- 本 PoC の Pass は Dock PASS ではない（test-spec 明記）。Dock PASS は clip・入力・re-dock・plugin resize 等の完了条件を含めて判定する。
+
+## Implementation
+
+### Changes
+
+- **`GpuiDriver::update_view`（`ruviform-ui-gpui`）**: mounted `ViewSpec` の差し替えを window 操作と同じ
+  `Op` キューで適用する。window 単位の `Slot` に mounted `RvfView` の entity を保持し、`RvfView::update_spec` で
+  `ViewHost::update` を呼んで再描画する。未知 window は `UiError::Host`。
+  - 拒否された spec は前の木を残す（`ViewHost::update` 契約）。拒否理由は呼び出し元へ返らない（既知の制限）。
+- **Dock layout scenario（`ruviform-poc-native-dock`）**: `RVF_POC_SCENARIO=dock` で `poc/dock.rs` を起動。
+  Panel → Tabs（Editor: `NativeSlot`、Other: 空の Panel）のレイアウトを `create_view_window` で開き、
+  driver の canonical surface に slot を declare → `bind_native_slot` → projection 待ち → lease → session open。
+  その後 tab 切替（hide/show）、window resize（grow/shrink）、focus、close、解放を順に実行し、
+  各観測を `check=… result=pass|fail` の証拠行にする。exit は失敗数で決まる。
+- **plugin 起動の共通化**: `poc.rs` の plugin 登録・instantiate・initialize を `instantiate` に集約し、
+  floating probe と Dock scenario で共有する。floating probe の挙動は変えていない。
+- **mise**: `poc-native-dock-layout` タスクを追加（`RVF_POC_SCENARIO=dock`）。
+
+### Decisions During Implementation
 
 - **canonical surface を使う**: 既存の floating probe は `GpuiSurfaceAdapter::new` による独立 ledger を使うが、
   renderer の投影は canonical surface にしか届かない。Dock scenario は canonical surface を使い、
@@ -91,16 +103,35 @@ metadata:
 - **tab 切替は host 駆動**: pointer 入力の自動化は範囲外（NotRun）。`ViewHost` の既存 reconcile 経路を通すことで、
   renderer の inactive-tab 抑止（既存テストで担保）と同じ経路を実機で確認する。
 - **clip は検証しない**: slot が window 端まで伸びるため、editor の overhang は画面上に出ない。
-  clip の Pass 根拠がないため NotRun とした（report.md 参照）。
+  clip の Pass 根拠がないため NotRun とした（`evidence/rf388-native-dock-layout/report.md` 参照）。
 
-## 検証
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 - `cargo build -p ruviform-poc-native-dock --features gpui,vst3`: 成功（dev profile）
 - `cargo test -p ruviform-ui-gpui --features gpui --lib update_view`: 1 pass
 - 実機: `RVF_POC_SCENARIO=dock` + Vinyl 1.12.0 で exit 0、`summary failures=0`。
   証拠: `evidence/rf388-native-dock-layout/dock-vinyl-win11.log`、`report.md`、`pixel-sample.txt`。
+- test-spec `docs/test-specs/issue-388-native-dock-layout-poc.md` の DL-01〜DL-12 に対応する観測を実施。
+  本記録の Pass は Dock PASS ではない — test-spec は Dock PASS を clip・入力・re-dock・plugin resize 等の
+  完了条件を含めて判定すると明記しており、本 PoC はその一部のみをカバーする。
 
-## 残課題（本記録の範囲外）
+## Risks
+
+- `GpuiDriver::update_view` は拒否された spec の理由を呼び出し元へ返さない（`ViewHost::update` 契約で前の木を残すのみ）。呼び出し側は拒否を検知できない — result channel の追加は Follow-ups。
+- clip（ancestor overhang）は Pass 根拠がなく未検証。slot が window 端まで伸びる layout では editor の overhang が画面に出ないため、本記録の成功は視覚的な clip 正しさを意味しない。
+- tab 切替は host 駆動の reconcile 経路で確認しており、pointer 入力による実操作・keyboard / IME / popup の editor 配送は未検証。
+
+## Follow-ups
 
 - plugin 側 resize（host→plugin `onSize` 経路）未配線。
 - keyboard / IME / popup の editor 配送、pointer 操作による tab 切替、clip（ancestor overhang）検証。

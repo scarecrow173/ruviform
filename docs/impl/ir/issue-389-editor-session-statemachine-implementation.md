@@ -197,6 +197,16 @@ result)` → 定期的に `tick`/`tick_all`）を実際に回す fixture が
   state を変える術がない — event/state は session が emit した
   ものを test が全量 assert するため、握り潰しは観測を曇らせない。
 
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
 ## Validation
 
 canonical（mise）— 全て実行済み:

@@ -105,6 +105,16 @@ metadata:
 - **extra_tasks は operator 信頼入力**: pattern は shell 注入排除のみで意味論は制約しない。job `timeout-minutes: 120` が暴走境界。
 - **unsupported 行は ubuntu headless の宣言**: 実窓 host（RF #313/#314）・macOS/実 OS 正式受入の実測は本 run の範囲外。
 
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
 ## Validation
 
 | 検証 | コマンド | 結果 |
@@ -115,6 +125,20 @@ metadata:
 | checkout 機構 smoke | temp repo: `git init`+`fetch --depth 1 origin <sha|master>`+`checkout --detach FETCH_HEAD`+`rev-parse HEAD` | branch・40-hex SHA 双方で解決成功（SHA fetch は `uploadpack.allowAnySHA1InWant` 有効 remote で再現） |
 | 実 runner dispatch（基準 head `30205f2`） | [run 42302538464](https://github.com/scarecrow173/ruviform/actions/runs/42302538464) `gh workflow run --ref <branch>` + artifact `pr392-run-artifacts/` | **partial pass**: preflight・clone・tuple 照合（両 Consumer shaMatch=true）・verify-synvelis 全 lane pass・verify-audiolens `check-ci` fail（`SinkConfig.span_events` E0063 — RF #335/#348 で RF main 既導入・AL 未追随の実不整合、AL127 別 task 登録）・fail 以降は skipped 派生・summary 強制発火。修復後 head は未実走 |
 | Consumer scratch lane 実走 | run 42302538464（基準 head） | **SV pass（全 14 lane）/ AL fail**（`check-ci` E0063 `SinkConfig.span_events` — RF #335/#348 で RF main 既導入・AL `04f1861` 未追随。修復は AL repo 責務・workflow 補償なし。修復後 head は未実走） |
+
+## Risks
+
+- **実 runner 検証は基準 head `30205f2` のみ** — review 修復後 head は未実走であり、修復内容の実 runner での正式 Pass は未取得（Known Limitations 記録どおり、修復後 head は別候補・正式 Pass へ転用しない）
+- **verify-audiolens の `check-ci` fail は AL repo 側の未追随が実不整合** — `SinkConfig.span_events` 初期化子欠落（E0063）は RF #335/#348 由来で AL `04f1861` が未追随。修復は AL repo 責務であり workflow 側で補償しない
+- **SHA fetch の境界** — unadvertised commit の fetch は GitHub が受理するが、GC 済み・未 push の SHA は clone step fail → `fail` 証拠として正直に出る
+- **`extra_tasks` は operator 信頼入力** — pattern は shell 注入排除のみで意味論は制約しない。job `timeout-minutes: 120` が暴走境界
+- **unsupported 行は ubuntu headless の宣言** — 実窓 host（RF #313/#314）・macOS/実 OS 正式受入の実測は本 run の範囲外で、宣言と実測の乖離は残る
+
+## Follow-ups
+
+- AL repo 側の `SinkConfig.span_events` 追随修復（AL127 互換修復・別 task 登録済み）と、修復後 head での実 runner 再 dispatch
+- `unsupported` 行の実測は RF #313/#314（実窓 host・macOS/実 OS 正式受入）の完了待ち
+- #219（長期 cross-consumer owner）は Open 維持、#305/#306 は候補連携・extra task 接続点の利用側、#365/#367/#368 は scheduler/tracker 責務の正本（`## Links` 参照）
 
 ## Links
 

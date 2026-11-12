@@ -144,6 +144,8 @@ API 不在と `WavMuxer<&mut StagedFile>` フローの実走を確認。
 
 ## Implementation
 
+### Changes
+
 - `staged_lifecycle.rs`: type-state 境界（create→write→seal→
   readback→publish→reopen、CreateNew 競合→`NotPublished`+
   `DestinationExists`+先入主保全、Replace owner 差替え、
@@ -168,7 +170,18 @@ API 不在と `WavMuxer<&mut StagedFile>` フローの実走を確認。
   decode → `publish` → 再 decode。truncated WAV の独立 decode
   不一致→abort、二重 finalize 拒否。
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+- serde_json は非有限 f64 をエラーにせず null に写すため、encode 失敗 fixture は custom Serialize impl 失敗に切替
+- WAV 未 finalize drop は backend が best-effort finalize するため placeholder 仮定を捨て、incomplete 試験は truncated bytes の独立 decode 不一致で検証
+
+## Validation
 
 全て実走・実値は `evidence/rf306/report.md` 正本。要約:
 
@@ -195,6 +208,30 @@ API 不在と `WavMuxer<&mut StagedFile>` フローの実走を確認。
   両 Consumer 実 runner（Blocked: AL127 修復・SV e815384 候補
   旧 API 参照残存 — coordinator 管理）、実 fault 強制再現
   （io-file mock adapter 層で既検証）、macOS/Linux。
+
+## Risks
+
+- 両 Consumer 実 runner は Blocked: AL127 修復・SV e815384
+  候補の旧 API 参照残存が残り、consumer 側受入は
+  coordinator 管理の後続検証待ち。
+- io-compression/io-structured feature matrix lane・macOS/Linux
+  は NotRun — 合成境界の網羅は Windows headless の 31 件に
+  限定される。
+- main `ccf61a2` 既知の plugin-host 起動 Timeout flake は本
+  run 未発生（失敗未観測のため分類対象なし。同一性は推測
+  しない）。
+- 実 fault 強制再現は io-file mock adapter 層で既検証済みで、
+  本 e2e lane では fault 注入の再現は行っていない。
+
+## Follow-ups
+
+- io-compression/io-structured feature matrix lane の実施。
+- 両 Consumer 実 runner の受入 — AL127 修復・SV e815384 候補
+  の旧 API 参照残存の解消は coordinator 管理
+  （`docs/tasks/issue-294-t2-consumer-verify-workflow-tuple-ui-lanes.md`）。
+- macOS/Linux lane での合成 E2E 実施。
+- issue-295/296/304 系旧文書に残る `AlreadyExists` 表記の
+  是正は範囲外・報告のみ（Notes 参照）。
 
 ## Notes
 

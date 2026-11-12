@@ -179,7 +179,7 @@ family 単位で gate する。注入の実効がない環境は GUI `fail` で�
   実カーソル/キーボードを占有し unattended 前提である旨を
   description に明記（タスク固有の例外許可 1 件を使用）。
 
-### 設計判断
+### Decisions During Implementation
 
 - `GuiAction`/`SemanticGuiTest` に OS op を増やさず `RealOsGuiTest`
   側の並行 port とした — semantic 契約を汚さず、`os_*` 呼出しだけが
@@ -188,7 +188,17 @@ family 単位で gate する。注入の実効がない環境は GUI `fail` で�
   op 単位でも維持し、family ごとの 1 回 probe でセッション中の
   注入可効性を固定する。
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 ### 実測（Windows 11 Pro x64、GPUI real window、scale 1.0）
 
@@ -231,7 +241,26 @@ family 単位で gate する。注入の実効がない環境は GUI `fail` で�
 - `probe` 用の一時的な診断コード（inbox_len eprintln）は debug 後に
   すべて除去済み。
 
-## Remaining
+## Risks
+
+- macOS/Linux 実機は `os_input::supported()` が false で
+  capability 未 claim → `unsupported` verdict（設計どおりだが、
+  実入力経路の実測は Windows のみ）。
+- 動的 DPI/マルチモニター環境は未検証（本機は静的
+  2×1080p@1.0 のみ）。`exec_resolve_os_aim` の物理座標解決は
+  単一 scale factor 前提の実測値に基づく。
+- `SendInput` は OS automation injection であり物理手動入力
+  ではない — verdict JSON の `input_method`/`input_method_note`
+  に明記済みだが、証拠の解釈上の制約として残る。
+- real-window セッション teardown の `RefCell already borrowed`
+  / `HRESULT 0x80070578`（invalid window handle）は main 由来の
+  既存現象で本 slice 範囲外 — ERROR ログに出るがテスト結果には
+  影響しない（原因は閉塞/close ハンドラの borrow 競合が疑わしい）。
+- family 単位 preflight は session 内 cache で固定するため、
+  実行中に注入可効性が変化する環境（別アプリの排他制御等）では
+  gate が古い判定を返し得る。
+
+## Follow-ups
 
 - macOS/Linux 実機行: `os_input::supported()` が false となり
   capability 未 claim → `unsupported` verdict（本 slice の設計どおり）。
@@ -239,4 +268,4 @@ family 単位で gate する。注入の実効がない環境は GUI `fail` で�
   capability probe、windowed `TestIo`/`rvf.uitest.v1` 配線（S2）、
   consumer 受入 — 後続 slice へ。
 - teardown の `RefCell already borrowed` / invalid HWND ノイズの
-  原因調査（本 slice 範囲外）。
+  原因調査（本 slice 範囲外・別 Issue 候補）。

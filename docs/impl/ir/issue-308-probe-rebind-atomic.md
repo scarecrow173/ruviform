@@ -134,7 +134,18 @@ Issue #185 の probe 実装では `on_publish` が `ClearAll{generation}` に続
 - **`StopAtBoundary` は broker 側で entry.mode を Monitor に更新** — enqueue 失敗時も RT 側 generation guard が既に capture を止めているため、broker 状態と観測実態が一致する。
 - **policy は resolve 時消費・command 化しない** — RT 側は staged binding の mode/budget のみを見ればよく、policy 自体は非 RT の関心事。
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+- 世代付き staged slots（`RebindBegin`/`RebindStage`/`RebindCommit` + `mem::swap` commit）— design で選定した方式をそのまま実装。
+
+### Rejected
+
+- `ruviform-rt/src/spsc.rs` への batch push 追加 — batch command variant 方式より変更面が大きく、staged slots で同等の all-or-nothing を達成できるため。
+- `ProbeCommand` への単一巨大 batch variant — command サイズが `max_probes` に比例して bounded でなくなり、SPSC slot の固定サイズ前提を崩すため。
+
+## Validation
 
 - OS: Windows 11 x64（Git Bash） / toolchain: `cargo 1.99.0`（mise pin）
 - `git fetch origin main && git merge origin/main` — clean merge（競合なし）後に再検証
@@ -146,18 +157,42 @@ Issue #185 の probe 実装では `on_publish` が `ClearAll{generation}` に続
 
 NotRun（未実測・明記）: 実デバイス/実 plugin 経路での probe 観測（#294 cross-consumer lane は coordinator 側の後続検証）、browser harness（#310 は本 Issue の前提ではない）。`on_publish` の呼出は ruviform 内テストのみで、consumer repo（synvelis/audio-lens）からの直接利用は現時点で存在しない。
 
+## Risks
+
+- `on_publish` の戻り値変更は破壊的 — `Result<(), ProbeError>`
+  → `Result<RebindReceipt, ProbeError>`。呼出側は receipt の
+  `bound`/`unbound`/capture 遷移を扱う必要がある
+  （migration note 記録どおり）。
+- rebind command 列の変更は `ClearAll`+個別 `Bind` → 3 相
+  プロトコル — `ProbeCommand` は `#[non_exhaustive]` のため
+  variant 追加自体は source-compatible だが、旧 `ClearAll` を
+  前提にした drain 側ロジックは staged slots 方式へ移行済みで
+  あり、外部で command を解釈する consumer は影響を受け得る。
+- 実デバイス/実 plugin 経路での probe 観測は未実施 — 検証は
+  ruviform 内テスト（`tests/typed_probe.rs` 18/18・新規 6 件）
+  と RT lane のみで、#294 cross-consumer lane は coordinator
+  側の後続検証。
+- `on_publish` の呼出は ruviform 内テストのみで、consumer repo
+  （synvelis/audio-lens）からの直接利用は現時点で存在しない —
+  `RebindReceipt`/`CapturePolicy` の実 consumer での採用は未検証。
+- staged 溢れ時の attempt invalidate は防御経路 — broker は
+  `max_probes` 上限で stage 数 ≤ `max_probes` のため通常到達
+  しないが、到達時は commit も拒否され retry 前提になる。
+- browser harness（#310）は本 Issue の前提ではなく、GUI 経由の
+  観測は対象外。
+
+## Follow-ups
+
+- synvelis#107/#109 の capture-stop/segment oracle が必要とする
+  「requested/enqueued/installed/observed」の分離情報は
+  `RebindReceipt`/`CapturePolicy` が土台 — consumer 側配線は
+  別 Issue。
+- consumer repo（synvelis/audio-lens）からの `on_publish`
+  呼出経路の配線と、#294 cross-consumer lane での実機 probe
+  観測。
+- #310 browser harness（別系統の後続検証）。
+
 ## Consumer Impact Materials
 
 - **synvelis**: **no direct impact（将来の受け皿）** — ruviform 内に `on_publish` の caller は存在せず、consumer 側の呼出経路は未配線。`RebindReceipt`/`CapturePolicy` は GUI-readable receipt として設計されており、synvelis#107/#109 の capture-stop/segment oracle が必要とする「requested/enqueued/installed/observed」の分離情報を提供する土台になる。
 - **audio-lens**: **no impact** — probe typed runtime の利用は現時点で consumer 未接続。
-
-## Related Experiments
-
-### Adopted
-
-- 世代付き staged slots（`RebindBegin`/`RebindStage`/`RebindCommit` + `mem::swap` commit）— design で選定した方式をそのまま実装。
-
-### Rejected
-
-- `ruviform-rt/src/spsc.rs` への batch push 追加 — batch command variant 方式より変更面が大きく、staged slots で同等の all-or-nothing を達成できるため。
-- `ProbeCommand` への単一巨大 batch variant — command サイズが `max_probes` に比例して bounded でなくなり、SPSC slot の固定サイズ前提を崩すため。
