@@ -60,7 +60,15 @@ metadata:
 
 `.github/workflows/ci.yml` と `.github/workflows/consumer-impact-check.yml` の `permissions:` 直後に Issue #328 推奨形の workflow-level `concurrency:` block を追加した。`pull_request` では group が `${{ github.workflow }}-refs/pull/<N>/merge` で `cancel-in-progress: true`、それ以外の event では `${{ github.workflow }}-<run_id>` で cancel 無効。job 名・trigger・permissions・step の変更はゼロ。`AGENTS.md` の ci.yml 記述に同旨の一文を追加。
 
-## Changes
+## Context
+
+- 実施タスク: `docs/tasks/issue-328-t1-ci-pr-concurrency.md`(plan `docs/plans/issue-328-ci-pr-concurrency.md`)
+- 上流: spec `docs/specs/issue-328-ci-pr-concurrency.md`、design `docs/designs/issue-328-ci-pr-concurrency.md`、ADR `docs/adr/issue-328-ci-concurrency-grouping.md`、test-spec `docs/test-specs/issue-328-ci-pr-concurrency.md`
+- task の Objective: design の snippet を両 workflow の `permissions:` 直後に追加し、静的検証と AGENTS.md 同期まで行う。実測(AC3/C3)は coordinator が本 PR の CI で実施する引き継ぎ
+
+## Implementation
+
+### Changes
 
 | file | diff |
 | --- | --- |
@@ -68,7 +76,19 @@ metadata:
 | `.github/workflows/consumer-impact-check.yml` | `concurrency:` block + 説明コメント 7 行追加(+7) |
 | `AGENTS.md` | ci.yml bullet 内に concurrency 説明 1 文を挿入 |
 
-## Design verification(静的・机上)
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
+
+### 静的検証（机上）
 
 test-spec の INV/Cases に対する評価:
 
@@ -78,9 +98,8 @@ test-spec の INV/Cases に対する評価:
 - INV-4: cancel run の check run conclusion は `cancelled` で元 head SHA に紐づく。required checks は最新 head SHA を評価。`cancelled` は合格条件(success/skipped)を満たさない → 偽装経路なし。
 - INV-5: `git diff` は両 workflow で `concurrency:` + コメントのみ(job 名・job 数・trigger・permissions・step 非変更)。
 - 式の合法性: `concurrency` で許可される expression context は `github`/`inputs`/`vars`/`needs`/`strategy`/`matrix`。`github.workflow`/`github.event_name`/`github.ref`/`github.run_id` は全て `github` context 内。`cancel-in-progress` の条件式は公式ドキュメントに例示あり。
-- 既知 edge(ADR 記録): 古い run の手動 re-run は同 group に再入し最新 run を cancel し得る。cancel 方向は fail-safe(古い revision の check が欠ける=merge 不可、誤マージは起きない)。復旧 = 最新 run の再実行 or 再 push。
 
-## Verification(実測、Windows 11 x64 worktree / Git Bash)
+### 実測検証（Windows 11 x64 worktree / Git Bash）
 
 | 検証 | コマンド | 結果 |
 | --- | --- | --- |
@@ -98,15 +117,22 @@ toolchain: mise 2026.10.1 / actionlint 1.7.12。
 - **AC3 / test-spec C3(同一 PR 連続 push で旧 run cancel の実測)**: worker 環境では push・PR 操作を行わない規約のため未実施。本 PR の CI で 2 push 実験を行い、旧 run(cancelled)・新 run(completed)両方の Run URL を記録すること — coordinator 側で実施・記録を引き継ぐ。
 - **別 PR/main push/dispatch の非 cancel 実測**: 同上。式の静的評価(INV-2)で構造的に保証されるが、実機観測は本 PR の運用で確認推奨。
 
-## Review(review-protocol)
+## Review
 
 - 客観チェック: actionlint・diff・doc audit・graph gate — 全 PASS(上表)。
 - Reviewer A(cooperative): spec R1–R6 の充足を設計・実装・検証表でトレース — 全項充足。
 - Reviewer B(adversarial): ref 意味論・trigger types・same-SHA re-trigger・merge queue・cross-workflow 衝突・式 context 合法性・artifact/cache 副作用を攻撃 — 唯一の実質 edge(古い run の手動 re-run → 最新 run cancel)は ADR/design に既記録・fail-safe・復旧手順あり。
 - Judge: CONFIRMED P0/P1 なし → **ACCEPT**(非 blocking 観測のみ)。
 
-## Followups
+## Risks
 
+- concurrency の cancel 意味論は GitHub 側の実行時挙動に依存する。静的評価(INV-1〜5)と review で裏付けたが、同一 PR 連続 push での旧 run cancel・別 event での非 cancel の実測は coordinator 側の引き継ぎ待ち(Validation「NotRun」参照)。万が一 cancel が効かなくても required checks の評価対象は最新 head SHA のままで、誤マージ経路は INV-4 で否定済み(影響は CI 時間の増大に留まる)。
+- `consumer-verify.yml` は dispatch-only で本変更なし。将来 `pull_request` trigger を持つ workflow を追加する際に同じ group 式の適用を忘れると、その workflow では stale run cancel が効かない(Follow-ups 参照)。
+- 既知 edge(ADR 記録): 古い run の手動 re-run は同 group に再入し最新 run を cancel し得る。cancel 方向は fail-safe(古い revision の check が欠ける=merge 不可、誤マージは起きない)。復旧 = 最新 run の再実行 or 再 push。
+
+## Follow-ups
+
+- AC3 / test-spec C3(同一 PR 連続 push で旧 run cancel)と別 PR/main push/dispatch の非 cancel 実測は coordinator が本 PR の CI で実施し、旧 run(cancelled)・新 run(completed)両方の Run URL を記録する(Validation「NotRun」参照)。
 - `consumer-verify.yml` は dispatch-only で本変更なし(設計で no-op 判断を記録)。将来 `pull_request` trigger を持つ workflow を追加する場合は同じ group 式を適用し、`github.workflow` 接頭辞で isolation を維持すること。
 - merge queue(`merge_group`)導入時は concurrency group 設計を再検討する(現行式は run_id 一意で安全側だが、queue 効率のため専用 group が望ましい可能性)。
 - doc audit の残存警告(spec `traceability-missing-upstream`・test-spec `inconsistent-reciprocal-relation`)は issue-238/312 と同型の慣例レベル — spec の upstream は Issue 本文自身が source であり upstream doc が存在しないため。

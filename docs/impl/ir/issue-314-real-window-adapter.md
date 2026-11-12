@@ -57,7 +57,41 @@ metadata:
 
 # IR — Issue #314 slice 4 residual real-window adapter
 
-## 実装したもの
+## Summary
+
+`ruviform-ui-gpui` に `real-scenario` feature と `RealOsGuiTest`
+（caller スレッド façade + UI スレッド job pump）を実装し、
+canonical story を実 window に mount して共有 oracle walk・
+idle/teardown の実 pixel capture・`golden_check`
+（`driver_class=real-os`・`capture=RealWindow`・実測
+scale/backend）を実施した。`GpuiDriver` の `UiJob` seam
+（`Send` クロージャを `mpsc` 経由で UI スレッドの `App`
+context 内で実行）を追加し、capability は
+`SemanticAction`+`MultiWindow` 常時・`VisualCapture` は
+Windows のみ claim（`RealOsPointerOrKeyboard` は claim
+しない — OS-level input は #313 scope）。`stories.json` の
+両 story `drivers.real-os` を `pass` に更新し、
+`evidence/issue-314-real-window/` に driver-lab/golden
+JSONL と idle/teardown PNG 4 枚を記録した。Issue #314 は
+open のまま（残件は Risks/Follow-ups 参照）。
+
+## Context
+
+- 実施タスク: `docs/tasks/issue-314-real-window-adapter.md`
+  （Issue #314 slice 4 residual）
+- 上流: `docs/specs/issue-314-real-window-adapter.md`・
+  `docs/designs/issue-314-real-window-adapter.md`・
+  `docs/plans/issue-314-real-window-adapter.md`・
+  `docs/test-specs/issue-314-real-window-adapter.md`、
+  Issue #314・#262（採用判定）・#313（OS Gate）
+- 境界: 本 slice は実 window + 実 pixel capture のみ。
+  OS-level input（SendInput 等）は #313 scope であり、
+  `dispatch_input` は semantic dispatch で pointer/keyboard
+  証拠を名乗らない。
+
+## Implementation
+
+### Changes
 
 - `real-scenario` feature: `gpui` + `dep:ruviform-ui-test`、
   `gpui/test-support` は含めない（test platform は OS capture を
@@ -83,7 +117,29 @@ metadata:
 - `stories.json`: 両 story の `drivers.real-os` を `pass` に更新
   （実績 note + `cargo-test` mechanism）。
 
-## 検証実績（Windows 11 desktop session）
+### Decisions During Implementation
+
+- `gpui/test-support` は `real-scenario` feature に含めない —
+  test platform は OS capture を stub するため pixel 証拠を
+  名乗れない。`gpui-test` との併用は想定しない。
+- `UiJob` seam は `Send` クロージャ + `mpsc` で GPUI 型を
+  UI スレッドに固定 — `drain` が window ops 適用後に
+  `App` context 内で `drain_ui_jobs` として実行する構成を採用。
+- capability は実装どおり `SemanticAction`+`MultiWindow` 常時・
+  `VisualCapture` は Windows のみ。`RealOsPointerOrKeyboard` は
+  claim しない（OS-level input は #313 scope）。
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 - `cargo test -p ruviform-ui-gpui --features real-scenario --test
   real_window`: 2 passed（補助証拠。canonical lane は mise.toml が
@@ -106,11 +162,24 @@ metadata:
   claim しない。#313 の capability matrix 検証は別 lane
   （`example-ui-gpui-real-os-smoke` 等）が担う。
 
-## 残件（Issue #314 は open のまま）
+## Risks
 
-- consumer gate・OS input（#313）・macOS/Linux capture backend・
-  Plugin Dock snapshot（#388/SV#176）は別 scope。
-- `real-scenario` の canonical mise lane 未整備（mise.toml は
-  編集範囲外）。現状は補助 `cargo test` lane。
 - real-os story matrix は declared theme × scale 1.0 のみ
   （scale 2.0 cell・第 2 theme は未実施 — note に明記）。
+- `real-scenario` の canonical mise lane 未整備（mise.toml は
+  編集範囲外）。現状は補助 `cargo test` lane のみで、canonical
+  検証入口での再現性は未担保。
+- consumer gate・OS input（#313）・macOS/Linux capture backend・
+  Plugin Dock snapshot（#388/SV#176）は別 scope で未検証。
+- 検証は Windows 11 desktop session のみ — 他 OS・他 scale・
+  他 theme での real window 挙動は未実測。
+
+## Follow-ups
+
+- consumer gate — 別 scope（Issue #314 は open のまま）。
+- OS input（#313）— 別 scope。
+- macOS/Linux capture backend — 別 scope。
+- Plugin Dock snapshot（#388/SV#176）— 別 scope。
+- `real-scenario` の canonical mise lane 整備（mise.toml の
+  編集が必要）。
+- real-os story matrix の scale 2.0 cell・第 2 theme 拡張。

@@ -60,24 +60,56 @@ metadata:
 
 # Issue #184 M1 ruviform-graph 実装記録
 
-## 実装内容
+## Summary
 
-`crates/ruviform-graph` を新設（構造層・通常依存 `ruviform-audio-core` のみ）。
-`GraphBuilder`（u64=1 起点の決定的 ID 採番・private `GraphSpec`）、orthogonal port
-属性（`PortFormat::domain()` が domain の唯一の正）、`Validator`（referential →
-direction → domain → format 階層 → layout/`ChannelMap` → capacity → required →
-全グラフ SCC cycle 判定、`ValidationErrors` 全件収集）、`StableHandleMap`
-（Kahn + `BTreeMap` tie-break の deterministic topo）、`GraphProject`
-（requested/published revision 区別・失敗時 published 維持）を実装。
+Issue #184 M1 として `crates/ruviform-graph` を新設し、typed Graph IR
+（`GraphBuilder`・orthogonal port 属性・`Validator`・
+`StableHandleMap`・`GraphProject`）と PoC（ex_001〜ex_006）を実装した。
+設計の M1 migration 範囲（構造層）をカバーし、記録された全検証
+コマンドが exit 0。
+
+## Context
+
+- source: [Issue #184](https://github.com/scarecrow173/ruviform/issues/184)
+- implements: `docs/tasks/t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md`・`t-2-validator-stablehandlemap-graphproject.md`・`t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md`
+- derives-from: `docs/designs/issue-184-typed-graph-ir-ports-buses-connections-validation-revisions-m1.md`
+- depends-on: `docs/plans/implement-issue-184-m1-ruviform-graph-crate-typed-ir-validator-poc.md`
+- verified-by: `docs/test-specs/issue-184-m1-typed-graph-ir-representation-multi-bus-topology-validation-failure.md`
+
+## Implementation
+
+### Changes
+
+- `crates/ruviform-graph/` 新設（構造層・通常依存 `ruviform-audio-core` のみ）:
+  - `GraphBuilder` — u64=1 起点の決定的 ID 採番・private `GraphSpec`
+  - orthogonal port 属性 — `PortFormat::domain()` が domain の唯一の正
+  - `Validator` — referential → direction → domain → format 階層 → layout/`ChannelMap` → capacity → required → 全グラフ SCC cycle 判定、`ValidationErrors` 全件収集
+  - `StableHandleMap` — Kahn + `BTreeMap` tie-break の deterministic topo
+  - `GraphProject` — requested/published revision 区別・失敗時 published 維持
+- `Cargo.toml`（workspace members 登録）・`Cargo.lock`・`crates/README.md`・`AGENTS.md` 更新
+- PoC `ex_001`〜`ex_006`（`cargo test -p ruviform-graph --test poc_ex`）
+
+### Decisions During Implementation
 
 設計との相違点（意図的）:
+
 - 通常依存は `ruviform-audio-core` のみ。`ruviform-media-core` は crate-local
   error 型採用により不要となり直接依存しない（推移的にのみ到達）。
 - `LatencyStatus` は M1 では未導入（capability 記録のみ・runtime 意味は M2+）。
 - 実測した `ChannelLayout::channels()` 戻り型は `u32`（設計想定と一致）。
 - `AudioFormat` は `PartialEq`/`Eq`/`Hash` 実装済み — field 比較は不要だった。
 
-## 検証結果（実行済み）
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 | コマンド | 結果 |
 | --- | --- |
@@ -94,8 +126,16 @@ direction → domain → format 階層 → layout/`ChannelMap` → capacity → 
 
 merge 後に fmt-check/check/lint/test/test-rt/poc_ex を再実行し全て exit 0。
 
-## 未検証項目
+## Risks
 
-- CI 実行（repo の CI は workflow_dispatch 手動のみ — 未トリガ）。
-- M2 以降の compiler/runtime 統合（本 migration 範囲外）。
-- serde/永続化・delayed-cycle 実行（M1 非対象として設計で明示）。
+`未検証項目` として記録された未検証・範囲外項目:
+
+- CI 実行（repo の CI は workflow_dispatch 手動のみ — 未トリガ）。ローカル gate は全 exit 0 だが CI 上の確認は残る
+- M2 以降の compiler/runtime 統合は本 migration 範囲外 — 構造層のみの実装であり、後続 Milestone の統合時に本 IR の契約との整合確認が必要
+- serde/永続化・delayed-cycle 実行は M1 非対象として設計で明示 — 永続化・実行意味論は未カバー
+
+## Follow-ups
+
+- CI 実行（workflow_dispatch でのトリガと結果確認）
+- M2 以降の compiler/runtime 統合（本 migration 範囲外）
+- serde/永続化・delayed-cycle 実行（M1 非対象として設計で明示 — 必要になった時点で別途対応）

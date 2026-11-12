@@ -141,6 +141,8 @@ extract_zip,extract_tar,extract_staging}.rs`（本 slice
 
 ## Implementation
 
+### Changes
+
 追加した契約試験（全て headless・実 FS temp dir のみ）:
 
 - `tests/zip_reader.rs`
@@ -193,7 +195,17 @@ extract_zip,extract_tar,extract_staging}.rs`（本 slice
   snapshot の test ファイル列挙を実績へ修正し、本 slice の
   追加試験を記録。
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 canonical 検証（Windows 11・mise 管理 toolchain・
 `origin/main` = `8ff39973` merge 後）:
@@ -215,20 +227,31 @@ canonical 検証（Windows 11・mise 管理 toolchain・
 - 補助証拠（非 canonical）: `cargo test -p
   ruviform-io-archive` 単独実行も pass。
 
-## NotRun / Unsupported（本 slice 対象外・後続 gate）
+## Risks
 
 - OS/FS 別 TOCTOU 実機検証（Linux/macOS 実機・unix backend
-  の実 FS 試験）: `check-linux` は type-check/lint のみ。
-  unix backend の実行試験は Linux CI lane 依存 — NotRun。
-- 両 Consumer（AudioLens/Synvelis）の独立受入: #288
-  cross-consumer gate / #294 consumer-verify の範囲 —
-  NotRun。
-- `tar.zst` 合成の個別試験: gzip と同一機構のため未追加
-  （gzip で 2 層独立 finish は pin 済み）。
-- Fuzz 実走・性能/互換性実測・MSRV/OS matrix の個別実施:
-  `test-io-msrv` lane と CI matrix に委譲。
-- Archive→`StagedFile` publish の E2E: #306
+  の実 FS 試験）は `check-linux` が type-check/lint のみで
+  未実施 — unix backend の実行試験は Linux CI lane 依存の
+  残存リスク。
+- `tar.zst` 合成の個別試験は未追加（gzip と同一機構で
+  2 層独立 finish は pin 済みだが、zstd backend 固有の
+  差異は未検証）。
+- 両 Consumer（AudioLens/Synvelis）の独立受入は
+  #288 cross-consumer gate / #294 consumer-verify の範囲で
+  本 slice では NotRun。
+
+## Follow-ups
+
+- unix backend の実 FS 実行試験（OS/FS 別 TOCTOU 実機検証）
+  — Linux CI lane で実施。
+- 両 Consumer（AudioLens/Synvelis）の独立受入 —
+  #288 cross-consumer gate / #294 consumer-verify の範囲。
+- `tar.zst` 合成の個別試験 — gzip で契約は pin 済みだが、
+  必要に応じて zstd backend 向けに追加。
+- Archive→`StagedFile` publish の E2E — #306
   `ruviform-io-e2e` の範囲（本 crate の `ExtractedTree`
   は publish を行わない設計）。
+- Fuzz 実走・性能/互換性実測・MSRV/OS matrix の個別実施
+  — `test-io-msrv` lane と CI matrix に委譲。
 - 既存の範囲外 broken relation（#243/#313/#410 系の doc
-  graph エラー）: 本 slice では修正しない。
+  graph エラー）— 本 slice では修正しない（別途対応）。

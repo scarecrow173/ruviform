@@ -52,7 +52,35 @@ Status: delivered (headless-verified)
 Depends on: Issue #258 (`ui/core`, merge `9ff4de9`), Issue #259 (`ui/components`, commit `84e6972` / main `e3d1471`)
 Design source: `docs/designs/issue-257-…` §12 (VizStyle/token paint contract) and §13 (framework-neutral Web UI/Native Hybrid)
 
-## What was built
+## Summary
+
+Delivered `ui/viz` (`@ruviform/ui-viz`, private): framework-neutral
+reference viz renderers — Waveform, Level Meter, Spectrum — plus
+`VizStyle` resolution and Canvas2D/WebGL2 backends behind Custom Element
+surfaces, built on `ui/core`/`ui/components` ports. Headless-verified:
+typecheck and `node --test` suites green (fake 2D/GL executors); the
+`ui-verify` CI lane was extended with viz steps. Spectrogram,
+TimeSeries/FeaturePlot remain deferred.
+
+## Context
+
+- Source: Issue #260 — <https://github.com/scarecrow173/ruviform/issues/260>
+- Design source: `docs/designs/issue-257-driver-neutral-ui-contract.md` §12 (VizStyle/token paint contract) and §13 (framework-neutral Web UI/Native Hybrid) (`relations.related` / `derives-from`)
+- Depends on: Issue #258 `ui/core` (merge `9ff4de9`), Issue #259 `ui/components` (commit `84e6972` / main `e3d1471`)
+- Dispatched scope: Waveform, Level Meter, Spectrum renderers +
+  `VizStyle` + Canvas2D/WebGL2 backends + Custom Element surfaces.
+  Spectrogram and generic TimeSeries/FeaturePlot remain deferred to the
+  broader #260 acceptance set / Issue #262 native-parity lane.
+- Boundary: no DAW/analysis/track/playback/project state anywhere in the
+  package — sources are ports, elements hold only viewport/presentation
+  state; LOD decimation, FFT, and measurement stay in `ruviform-viz` /
+  `ruviform-audio-analysis` (Issue #157) behind the `*DataSource` ports.
+- `implements` is empty: this record has no dedicated task doc; scope
+  comes from the issue and the #257 design contract.
+
+## Implementation
+
+### Changes
 
 New package `ui/viz` (`@ruviform/ui-viz`, private) — plain TypeScript +
 Web platform APIs. No UI framework, runtime, or renderer-library
@@ -61,10 +89,11 @@ the DOM for `node --test`. No data-processing dependency: LOD
 decimation, FFT, and measurement stay in `ruviform-viz` /
 `ruviform-audio-analysis` (Issue #157) behind the `*DataSource` ports.
 
-Dispatched scope: Waveform, Level Meter, Spectrum renderers + `VizStyle`
-+ Canvas2D/WebGL2 backends + Custom Element surfaces. Spectrogram and
-generic TimeSeries/FeaturePlot remain deferred to the broader #260
-acceptance set / Issue #262 native-parity lane.
+- `ui/viz/` — the entire new package (module map below).
+- `ui/components/src/tokens.ts` — `viz.*` token roles (+ dark map)
+  added; paint roles only, no control-surface change.
+- `.github/workflows/ci.yml` — `ui-verify` job gained
+  `check-ui-viz`/`test-ui-viz`/`build-ui-viz` steps.
 
 ### Module map
 
@@ -91,7 +120,7 @@ acceptance set / Issue #262 native-parity lane.
 | `test/*.test.ts` + `test/env.ts` | 89 headless tests: happy-dom + fake 2D/GL contexts incl. context-pinning canvas |
 | `examples/showcase.html` | synthetic-source demo page (no analysis state in-page) |
 
-### Decisions worth recording
+### Decisions During Implementation
 
 - **Paint/data separation is structural**: `ResolvedVizStyle` contains
   only paint values; `appearance`/`--rvf-viz-*` changes set
@@ -127,7 +156,7 @@ acceptance set / Issue #262 native-parity lane.
   `rvf-select` events. Viewport state lives in the element, not the
   source.
 
-## Review-cycle fixes (found during implementation testing)
+### Review-cycle fixes (found during implementation testing)
 
 - **Query-cache key mismatch**: first query used element width as the
   LOD budget pre-layout, so the post-layout query missed the cache —
@@ -140,7 +169,7 @@ acceptance set / Issue #262 native-parity lane.
 - **`erasableSyntaxOnly`** forbade constructor parameter properties in
   several classes.
 
-### Review-protocol pass (blocking findings fixed)
+#### Review-protocol pass (blocking findings fixed)
 
 - **GL hatch clipping** — `hatchLines` segments deliberately extend
   past the op rect; Canvas2D relied on `ctx.clip` but WebGL2 had no
@@ -185,7 +214,17 @@ acceptance set / Issue #262 native-parity lane.
   the status part is `role="status" aria-live="polite"` and the overlay
   canvas is `aria-hidden`.
 
-## Verification
+## Related Experiments
+
+### Adopted
+
+None.
+
+### Rejected
+
+None.
+
+## Validation
 
 Ran and green:
 
@@ -213,24 +252,31 @@ CI: `ui-verify` job gained `check-ui-viz`, `test-ui-viz`,
 `npm ci` from committed `package-lock.json`, explicit `node --test`
 glob).
 
-## Not verified here (follow-up / manual)
+## Risks
+
+- All verification is headless (happy-dom + fake 2D/GL executors); real
+  browser/WebView rendering, real WebGL2 raster output, real
+  ResizeObserver layout, dpr>1 output, and pointer feel are unverified
+  — no pixel or GPU validation was performed.
+- Screen-reader announcement behavior is asserted structurally only.
+- Frame-rate/memory performance under real 60 fps streams is
+  unmeasured — `stats` counters exist for consumer fixtures but no
+  benchmark run.
+- Spectrogram, TimeSeries/FeaturePlot, and spectrogram-style color
+  ramps are not implemented (deferred scope — see Follow-ups);
+  consumers needing them must wait for the #262/#263 lanes.
+
+## Follow-ups
 
 - Real browser/WebView rendering, real WebGL2 raster output, real
-  ResizeObserver layout, dpr>1 output, pointer feel — no pixel or GPU
-  validation was performed; happy-dom + recorded-ops fakes only.
-- Screen-reader announcement behavior — ARIA/status asserted
-  structurally only.
-- Frame-rate/memory performance under real 60 fps streams — `stats`
-  counters exist for consumer fixtures; no benchmark run.
+  ResizeObserver layout, dpr>1 output, pointer feel — pending a
+  real-GPU/browser validation pass.
+- Screen-reader announcement behavior — verify with a real screen
+  reader / a11y pass.
+- Frame-rate/memory performance under real 60 fps streams — run a
+  benchmark via consumer fixtures using the `stats` counters.
 - Spectrogram, TimeSeries/FeaturePlot, spectrogram-style color ramps —
   deferred (#260 full scope / #262 native lane / #263 showcase).
-
-## Boundary notes
-
-- No DAW/analysis/track/playback/project state anywhere in the package:
-  sources are ports, elements hold only viewport/presentation state.
-- `ui/components` gained the `viz.*` token roles (+ dark map) in
-  `tokens.ts` — paint roles only; no control-surface change.
-- `MemoryWaveformSource`/`ManualSnapshotSource` are reference
-  fixtures (bounded in-memory datasets), not bridges to
-  `ruviform-viz`; a native bridge is Issue #262 scope.
+- `MemoryWaveformSource`/`ManualSnapshotSource` are reference fixtures
+  (bounded in-memory datasets), not bridges to `ruviform-viz`; a native
+  bridge is Issue #262 scope.

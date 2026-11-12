@@ -73,10 +73,28 @@ metadata:
 
 # Issue #423 実装記録
 
-設計: [designs/issue-423-webview-dock-verify.md](../../designs/issue-423-webview-dock-verify.md)
-報告: [reports/issue-423-gpui-real-window.md](../../reports/issue-423-gpui-real-window.md)
+## Summary
 
-## 1. 実装の内容
+WebView adapter（`ruviform-ui-webview`）を共通 neutral
+`WindowDriver` 契約へ移行し、`WindowCapabilities::focus` の宣言を
+実装と一致させた。GPUI 実窓で Created/Ready/Focused/Resized/Moved
+を確認し（報告 §1）、late receipt が driver 経由で view の描画投影
+まで届くことを固定した。headless 範囲の受入 A1/A2/A4/A5/A6 は
+達成、A3（実窓検証）は部分達成 — close・Dock 2-phase・detach は
+手順のみ記録。
+
+## Context
+
+- 実施タスク: [../../tasks/issue-423-webview-dock-verify.md](../../tasks/issue-423-webview-dock-verify.md)
+- plan: [../../plans/implement-issue-423-webview-dock-verify.md](../../plans/implement-issue-423-webview-dock-verify.md)
+- spec: [../../specs/issue-423-webview-dock-verify.md](../../specs/issue-423-webview-dock-verify.md)
+- 設計: [designs/issue-423-webview-dock-verify.md](../../designs/issue-423-webview-dock-verify.md)
+- 報告: [reports/issue-423-gpui-real-window.md](../../reports/issue-423-gpui-real-window.md)
+- source: <https://github.com/scarecrow173/ruviform/issues/423>
+
+## Implementation
+
+### Changes
 
 | 項目 | 内容 | 根拠 |
 | --- | --- | --- |
@@ -88,7 +106,33 @@ metadata:
 | late receipt | `commit_on_host` を抽出し、`rvf_driver_late_receipt_projects_into_view_after_ready` で driver 経由の描画投影を検証 | design §4 |
 | test seam | `GpuiDriver::view_for_test`（`cfg(test)` + `gpui-test` のみ） | 同上 |
 
-## 2. 受入の対応表
+### Decisions During Implementation
+
+- WebView 公開面を `run_multi` / `SessionConfig` /
+  `WebViewWindowConfig` のみに限定 — `run` / `HostConfig` /
+  `SessionConfig::single` / `dispatch_script` 再 export を削除
+  （design §2 の逸脱節どおり、旧 API を adapter 内に閉じる）。
+- `WindowCapabilities::focus` の文言を「取得」に限定し、release
+  は操作単位で `Unsupported` を返しうると明記 — `lifecycle.rs`
+  の既存の許容と一致させ、宣言と実装を一致させた（design §3）。
+- `commit_on_host` を抽出して late receipt の driver 経由描画
+  投影を検証可能にした（design §4）。
+- `GpuiDriver::view_for_test` は `cfg(test)` + `gpui-test`
+  feature のみに限定した test seam とした。
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
+
+### 受入の対応表
 
 | 受入 | 状態 | 証拠 |
 | --- | --- | --- |
@@ -99,7 +143,7 @@ metadata:
 | A5 共通層に GPUI/WebView 固有型が出ない | 達成 | `check-ui-driver-boundary`: verdict pass（dep-graph / signature / allowlist） |
 | A6 `#[non_exhaustive]` / MSRV 1.89 / lint | 達成 | `lint`（workspace `-D warnings`）pass、`test-ui-test-msrv` pass。新規 public enum なし |
 
-## 3. 検証結果（作業ツリー、merge 前の origin/main = `34d34b0a` 基点）
+### 検証結果（作業ツリー、merge 前の origin/main = `34d34b0a` 基点）
 
 | mise task | 結果 |
 | --- | --- |
@@ -117,10 +161,23 @@ metadata:
 | `check-ui-webview` / `lint-ui-webview` | pass |
 | `test-ui-webview` | pass（10 件、うち新規 2 件） |
 
-## 4. 未実施・NotRun
+## Risks
 
-- WebView の実 WebView2 上の end-to-end（page load → IPC → event の往復）: NotRun。headless では再現できず、`demo_app` の手動実行も行っていない。
-- GPUI 実 window の close veto・Dock 2-phase・detach/reattach: NotRun（手順は報告 §2–3）。
-- 実 OS lane（DPI・IME・OS focus・実 close・GPU device lost）: NotRun（consumer 受入 #262/#243/#390 系）。
-- 旧 `ruviform-ui` の legacy trait の削除: 対象外（Phase 2 の別判断）。
-- review-protocol（独立サブエージェントによる diff レビュー）: 本記録の後段で実施し、結果を PR 本文に記載する。
+- WebView の実 WebView2 上の end-to-end（page load → IPC →
+  event の往復）: NotRun。headless では再現できず、`demo_app`
+  の手動実行も行っていない。
+- GPUI 実 window の close veto・Dock 2-phase・detach/reattach:
+  NotRun（手順は報告 §2–3）。
+- 実 OS lane（DPI・IME・OS focus・実 close・GPU device lost）:
+  NotRun（consumer 受入 #262/#243/#390 系）。
+
+## Follow-ups
+
+- T5（impl record・報告書・PR 本文の受入対応表）: in-progress、
+  T6（merge 後 HEAD での全体検証と review-protocol）: pending
+  （task `docs/tasks/issue-423-webview-dock-verify.md` の
+  スライス表どおり）。
+- review-protocol（独立サブエージェントによる diff レビュー）:
+  本記録の後段で実施し、結果を PR 本文に記載する。
+- 旧 `ruviform-ui` の legacy trait の削除: 対象外（Phase 2 の
+  別判断）。

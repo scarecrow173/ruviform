@@ -27,9 +27,28 @@ metadata:
 
 # Issue #181 — multi-window 実装記録
 
-## 変更内容
+## Summary
 
-### ruviform-ui（コントラクト・crate 内に backend 型なし）
+Issue #181 として、`ruviform-ui` / `ruviform-ui-webview` に multi-window
+（window ごとの event routing・lifecycle contract）を実装した。
+`WindowId`/`WindowEvent`/`RoutedEvent`/`CloseDecision`/`WindowHandle`
+port をコアに追加し、adapter 側は 1 本の tao event loop が `Session`
+レジストリで複数 window を管理する `run_multi` を提供する。
+fake-host 契約テスト 13 件を含む全 mise gate が PASS。実 OS/backend
+での multi-window 実機検証は未実施（headless 契約とコンパイル/lint
+まで）。
+
+## Context
+
+- source: [Issue #181](https://github.com/scarecrow173/ruviform/issues/181)
+- implements: `docs/tasks/issue-181-01-window-contract-types.md`・`issue-181-02-runtime-routing.md`・`issue-181-03-fake-host-contract-tests.md`・`issue-181-04-webview-run-multi.md`・`issue-181-05-demo-multi-and-verification.md`
+- satisfies: `docs/specs/issue-181-multi-window.md`・`docs/designs/issue-181-multi-window.md`・`docs/test-specs/issue-181-multi-window.md`
+
+## Implementation
+
+### Changes
+
+#### ruviform-ui（コントラクト・crate 内に backend 型なし）
 
 - `src/window.rs`（新規）: `WindowId`（NonZeroU64 ・ session 内一意・
   再利用なし・wire には出ない）、`WindowEvent`（`Windowed{window,event}`
@@ -55,7 +74,7 @@ metadata:
   （service が呼出し元 window を backend 型なしで観測できる）。
 - `src/lib.rs`: `pub mod window` + 再 export。
 
-### ruviform-ui-webview（wry/tao adapter）
+#### ruviform-ui-webview（wry/tao adapter）
 
 - `src/session.rs`（新規）: `SessionConfig{data_dir, tick, windows}` +
   `run_multi`。1 本の tao event loop が `Session` レジストリ
@@ -79,14 +98,35 @@ metadata:
   検証面として明記）。`Cargo.toml` に `[[example]]` 登録。
 - `README.md`: `session` モジュールの責務と `demo_multi` 実行方法を追記。
 
-### IPC wire 互換性
+#### IPC wire 互換性
 
 `rvf.ipc.v1` の wire 形式は**不変**（`SCHEMA_VERSION = 1` のまま）。
 routing は host 側 `WindowId` で行い、WebView-local correlation id
 （衝突し得る）は wire 上そのまま — 応答は発行元 webview にのみ
 返るため衝突しない。wire/schema 変更なしを docs で明示。
 
-## 検証結果（mise タスクのみ・全て実実行）
+### Decisions During Implementation
+
+- `CloseRequested` は emit のみで window を破棄せず loop も終了しない — `respond_close` の `Approve`/`Veto`/`Defer` と未回答時の既定 `Approve` で判断し、`Destroyed` は queue 経由で別 event として emit
+- 未 `Ready` の window への `eval` は有界 backlog（16・古い順 drop）に積み `Ready` で flush。既破棄・不明宛は silent drop
+- 全 window で 1 つの `WebContext` を共有（WebView2 UDF シングルトンロック対策・session 一生分保持）
+- IPC wire 形式は不変（`SCHEMA_VERSION = 1`）— routing は host 側 `WindowId` で行い、WebView-local correlation id は発行元 webview にのみ応答が返るため衝突しない
+- `JobRecord.owner: Option<WindowId>` は routing 用のみで job lifetime は window に従わない。window 単位 cleanup は opt-in の `cancel_window_jobs`（close で自動呼出ししない・既 cancel 済みは数え直さない）
+- `SessionConfig::single(&HostConfig)` で既存 single-window config との互換変換を提供
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
+
+`mise` タスクのみ・全て実実行。
 
 | タスク | 結果 |
 | --- | --- |
@@ -115,7 +155,9 @@ fake-host（`WindowHandle` 実装）で以下を検証:
 - `ServiceContext::origin` が呼出し window を観測する
 - malformed body の error は起点 window 宛のみ
 
-## 未検証（正直な能力旗）
+## Risks
+
+`未検証（正直な能力旗）` として記録された未検証・未保証項目:
 
 - **実 OS/backend 検証は未実施**: `run_multi`/`demo_multi` の実 window
   動作（WebView2・WKWebView・WebKitGTK）は headless 契約と
@@ -141,7 +183,7 @@ fake-host（`WindowHandle` 実装）で以下を検証:
   （`cancel_window_jobs`）は全て consumer 側の方針 — host/runtime は
   強制しない。
 
-## 残課題
+## Follow-ups
 
 - 実 OS multi-window PoC（Issue #182 以降の docking/移動文脈で実機
   検証を想定）。

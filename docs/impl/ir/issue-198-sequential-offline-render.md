@@ -84,7 +84,25 @@ metadata:
 
 # Issue #198 implementation record — stateful sequential offline render
 
-## What was built
+## Summary
+
+Implemented Issue #198: a stateful sequential offline render driver in
+the new `ruviform-audio::render` module — a fresh prepared instance per
+render, preroll/PDC/tail handling with typed tail evidence, ordered
+event/transport delivery, staged output with independent reopen
+verification, and a `RenderReceipt`. Also fixed a root-cause channel
+configuration bug in `RtRuntime::input_writer` found by the render
+tests. Verified by 7 render tests (OF-01..OF-07) plus workspace lanes.
+
+## Context
+
+- Source: <https://github.com/scarecrow173/ruviform/issues/198>
+- Tasks: [../../tasks/task-198-t1-render-core.md](../../tasks/task-198-t1-render-core.md), [../../tasks/task-198-t2-driver-output.md](../../tasks/task-198-t2-driver-output.md), [../../tasks/task-198-t3-tests-verification.md](../../tasks/task-198-t3-tests-verification.md)
+- Upstream: [plan](../../plans/implement-issue-198-sequential-offline-render.md), [design](../../designs/issue-198-sequential-offline-render.md), [spec](../../specs/issue-198-sequential-offline-render.md), [ADR](../../adr/issue-198-sequential-offline-render-placement-and-contracts.md), [discovery](../../discovery/issue-198-sequential-offline-render.md), [test-spec](../../test-specs/issue-198-sequential-offline-render.md)
+
+## Implementation
+
+### Changes
 
 - `ruviform-audio::render` (new module, engine layer — `ruviform-exec`
   cannot see media types per the layer baseline): the sequential
@@ -140,7 +158,34 @@ metadata:
   independent-chunk `OfflineDriver` keeps its existing contract; the
   new driver does not broaden it.
 
-## Measured evidence (OF-01..OF-07)
+### Decisions During Implementation
+
+- The driver lives in `ruviform-audio` (engine layer) because
+  `ruviform-exec` cannot see media types per the layer baseline.
+- Exact rendering requires `OfflineRenderSupport::Verified` for every
+  installed processor; `Unknown`/`Declared` reject at preflight
+  (`PreflightError::OfflineUnsupported`) rather than approximating.
+- `DeliveryPolicy::Exact` is required; degraded/approximate policies
+  are rejected rather than emulated.
+- `TailSpec::{None,Known,Estimated}` keeps undefined tails explicit —
+  the caller must pick a variant and nothing is silently truncated;
+  `TailEvidence` reports which variant was used.
+- Output goes through `StagedOutput` temp sibling + independent reopen
+  `verify` + `publish`; the destination is untouched on every failure.
+- The `input_writer` channel fix was made at the owning layer
+  (`typed/runtime.rs`) rather than worked around in the driver.
+
+## Related Experiments
+
+### Adopted
+
+None.
+
+### Rejected
+
+None.
+
+## Validation
 
 - `cargo test -p ruviform-audio --test render` — 7 tests green:
   - `of01_block_size_invariance`: `OnePole` stateful render at
@@ -188,6 +233,31 @@ metadata:
   verification; `Cargo.lock` regenerated via `cargo
   generate-lockfile`.
 
+## Risks
+
+- `InputFeeder` covers only the boundary-input contract; file/source
+  decode feeding (Issue #197 `SourceReader` integration) is not part
+  of this driver — renders needing decoded sources must integrate it
+  downstream.
+- Plugin `ProcessConfig` capability (Issue #196, in parallel) is not
+  wired into the render gate; plugin-specific exact-render capabilities
+  arrive with the plugin adapter's own fixtures.
+- `DeliveryPolicy::Exact` is required; degraded/approximate policies
+  are rejected rather than emulated, so callers needing approximation
+  cannot use this driver.
+- `tail=Estimated` emits the caller's estimate and reports it as
+  `TailEvidence::Estimated` — it does not model plugin decay curves.
+- Evidence is Windows 11 x64 only; other platforms are unverified in
+  this record (the CI matrix covers them on merge).
+
+## Follow-ups
+
+- Issue #197 `SourceReader` integration for file/source decode
+  feeding.
+- Plugin-adapter fixtures for plugin-specific exact-render
+  capabilities (with the #196 `ProcessConfig` wiring).
+- Non-Windows platform verification via the CI matrix on merge.
+
 ## Consumer-impact classification
 
 - synvelis: no impact — additive module in `ruviform-audio`; no
@@ -196,19 +266,3 @@ metadata:
   unaffected unless they opt into the render gate.
 - audio-lens: no impact — same reasoning; the existing
   `ruviform-exec` chunk APIs are untouched.
-
-## Known gaps (named, not hidden)
-
-- `InputFeeder` covers the boundary-input contract; file/source
-  decode feeding (Issue #197 `SourceReader` integration) is a
-  downstream consumer concern, not part of this driver.
-- Plugin `ProcessConfig` capability (`#196` in parallel) is not
-  wired into the render gate — the `offline_support` gate covers
-  the processor-level contract; plugin-specific exact-render
-  capabilities arrive with the plugin adapter's own fixtures.
-- `DeliveryPolicy::Exact` is required; degraded/approximate policies
-  are rejected rather than emulated.
-- `tail=Estimated` emits the caller's estimate and reports it as
-  `TailEvidence::Estimated` — it does not model plugin decay curves.
-- Windows 11 x64 evidence only; other platforms unverified (CI matrix
-  covers them on merge).

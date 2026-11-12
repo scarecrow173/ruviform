@@ -104,7 +104,25 @@ metadata:
 
 # Issue #188 timed MIDI PoC — implementation record
 
-## What was built
+## Summary
+
+Issue #188 として timed MIDI input の PoC を実装した。ADR Option A
+に従い既存 foundation クレート（media-core / plugin-core /
+audio-core / audio-plugin-bridge / plugin-clap）に新規クレートなしで、
+MIDI channel-voice 語彙・`InputStamp` 時刻契約・bounded delivery
+merge・wire kind tag・`MidiInput` port・`InputStage`・adapter
+capability honesty を追加した。
+
+## Context
+
+- source: [Issue #188](https://github.com/scarecrow173/ruviform/issues/188)
+- implements: `docs/tasks/issue-188-01-media-core-midi-vocabulary.md`・`issue-188-02-plugin-core-eventkind-midi-merge.md`・`issue-188-03-audio-core-midi-input-port.md`・`issue-188-04-bridge-input-stage-merge.md`・`issue-188-05-adapter-capability-honesty.md`・`issue-188-06-midi-delivery-tests.md`
+- related: `docs/specs/issue-188-timed-midi.md`・`docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md`・`docs/designs/issue-188-timed-midi.md`・`docs/designs/issue-188-timed-midi-detailed.md`・`docs/test-specs/issue-188-timed-midi.md`
+- depends-on: `docs/plans/issue-188-timed-midi.md`
+
+## Implementation
+
+### Changes
 
 ADR Option A, in existing foundation crates (no new crate):
 
@@ -117,25 +135,54 @@ ADR Option A, in existing foundation crates (no new crate):
 - **bridge `cap`** — four new capability fields: `midi_channel_voice`, `midi_ump`, `note_expression`, `midi_sysex`. L0/L1 `Verified`; CLAP `Declared`/`Declared`; VST3 `Unsupported` for all four with explicit defined-skip notes.
 - **plugin-clap `adapt`** — `translate_midi_event`: `CoreEventSpace::Midi` (MIDI 1.0 bytes) and `Midi2` (UMP mt2/mt4) → `EventKind::Midi` channel voice; system/SysEx/NoteExpression/NoteChoke/NoteEnd defined-skipped; note-attribute bytes a defined narrowing. MIDI translation is wired into `translate_events` behind the param path.
 
-## Evidence
+### Decisions During Implementation
+
+- ADR Option A — 既存 foundation クレートへの追加で新規クレートは作らない
+- raw stamp は consumer のために保存 — chain 内に PPQN quantization を置かない
+- capability は honest declaration — L0/L1 `Verified`、CLAP `Declared`、VST3 は 4 項目全て `Unsupported` + defined-skip note
+- wire kind tag `1` の sub-tag 0–6 canonical payload・reserved `u64` はゼロ必須 — unknown tag/sub-tag・範囲外 field は `WireError::Malformed`（silent encode/drop しない）
+- system/SysEx/NoteExpression/NoteChoke/NoteEnd は defined-skip — MIDI translation は param path 配下の `CoreEventSpace::Midi`/`Midi2` → channel voice のみ
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
+
+`mise run fmt-check`, `check`, `lint`, `test`, `test-rt` — all green at record time; `verify-ci` run at finalize.
+
+### Evidence
 
 - `tests/midi_delivery.rs` (bridge): 5 tests — Note On/Off, CC, Pitch Bend with µs-stamp→frame-offset mapping incl. duplicate stamps (stable order), block-boundary late/future/zero-frame, rejection + backend-drop observability, `release_all` on stop, `rt_midi_delivery_collect_and_merge_no_alloc`.
 - CLAP `translate_events_translates_midi_channel_voice` — Note On / CC / bend center delivered as `EventKind::Midi` at correct offsets (representative-adapter Note/CC delivery).
 - media-core: `rt_ledger_no_alloc`, `rt_map_stamp_no_alloc`; plugin-core: `rt_merge_call_events_no_alloc`; wire round-trip + malformed-input tests for all 7 sub-tags.
+
+## Risks
+
+`Consumer impact` の未検証記録と `Remaining work` の未対応項目から、現時点の制限:
+
+- **audio-lens への影響は未検証** — consumer impact 節の記録どおり repo を本 worktree で未検査。「no impact」は未検証の暫定評価。
+- **VST3 経路では MIDI channel voice が届かない** — `cap` で 4 項目全て `Unsupported`（defined skip）であり、VST3 adapter 利用時は note/CC が plugin に到達しない。
+- **実 OS MIDI backend は未存在** — `MidiInputEnumerator`/`MidiInputPort`/`MidiInput` は port 契約のみで、midir/coremidi 等の実装 adapter がないため現時点で実デバイス入力は流れない。
+- **`InputStage` は call path 未結合** — standalone で検証済みだが `PluginNode`/`CallSink` への統合は deferred であり、plugin 呼出しではまだ MIDI は merge されない。
 
 ## Consumer impact
 
 - **synvelis**: impacted (new capability surface; `#188` is the foundation for Synvelis #12 recording — no breaking changes; `EventKind` non-exhaustive addition is source-compatible).
 - **audio-lens**: no impact (does not consume plugin-event surface) — *unverified*, repo not inspected in this worktree.
 
-## Remaining work (follow-up issues to split)
+## Follow-ups
+
+`Remaining work (follow-up issues to split)` として記録された分割予定項目:
 
 - Bridge `PluginNode`/`CallSink` wiring of `InputStage` into the span call path (stage exists standalone; node integration deferred).
 - VST3 `Vst::Event` note/legacy-CC translation (currently `Unsupported`, defined skip).
 - OS MIDI backend adapter (e.g. midir/coremidi) implementing `MidiInputEnumerator`.
 - `ScheduledEvent` replay path through `TransportScheduler` for recorded-MIDI playback (plan-level integration), loop/seek chase beyond `release_all`.
 - `note_expression`/`midi_sysex` neutral vocabulary if needed — currently declared `Unsupported` honestly.
-
-## Verification
-
-`mise run fmt-check`, `check`, `lint`, `test`, `test-rt` — all green at record time; `verify-ci` run at finalize.

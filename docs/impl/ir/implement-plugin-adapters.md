@@ -73,14 +73,16 @@ task `TASK-034JgsI5J4HU4qcoEBQfDx`（plan `PLAN-034JcvpHIlt5JmqvgOquvI` T6）と
 - 上流: [plan](../../plans/implement-plugin-foundation.md) T6、方式 ADR、[spec](../../specs/implement-plugin-foundation.md)（境界バリデーション・状態写像・非露出の要件正本）、[test-spec](../../test-specs/plugin-foundation.md)
 - PoC 土台: [T3 IR](poc-clap-binding-adapter.md)・[T4 IR](poc-vst3-binding-adapter.md)
 
-## Changes
+## Implementation
 
-### イベント整列の方式統一（両アダプタ）
+### Changes
+
+#### イベント整列の方式統一（両アダプタ）
 
 - `ruviform-plugin-core` に `sort_events_by_frame_offset(&mut [Event])` を追加 — 安定・in-place（挿入ソート）・alloc なしの共有実装。`EventList::new` が拒否する非整列入力をアダプタが正規化する際の正本とする
 - CLAP `adapt.rs` は `sort_unstable_by_key`（同オフセット順序非保証 — PoC で benign とされた残件）から、VST3 `block.rs` `EventScratch::sort` は `sort_by_key`（TimSort 系で補助メモリを alloc し得る — process 経路の no-alloc 契約違反になり得た）から、いずれも共有ソートへ切替
 
-### CLAP アダプタ経路のテスト空白解消
+#### CLAP アダプタ経路のテスト空白解消
 
 T3 時点で `adapt.rs`/`plugin.rs` に `mod tests` がなく、dev-dep 宣言済みの `clack-host` も未使用だった（IR 記述の「clack-host 駆動」は未実装）。T6 で以下を追加:
 
@@ -89,15 +91,32 @@ T3 時点で `adapt.rs`/`plugin.rs` に `mod tests` がなく、dev-dep 宣言�
 - clack-host 駆動の ABI エンドツーエンド（2 件）: `clap_entry` → factory → init → activate → start → process → stop → deactivate → destroy の全経路と、境界拒否が `PluginInstanceError::ProcessingFailed` として ABI 越しに表面化することの確認
 - テスト容易性のため `#[cfg(test)] pub(crate) mod test_support`（`StereoFixture` と安全な `AudioPorts` ビルダ）と `GainShared::initialize`/`destroy`・`GainAudioProcessor::activate_inner`（ライフサイクル遷移を集約する private ヘルパ）を追加 — 公開 API 面は不変
 
-### VST3 再アクティベート経路
+#### VST3 再アクティベート経路
 
 - `component.rs` に `re_activation_cycles_through_lifecycle` を追加 — `setProcessing(0)`+`setActive(0)` 後の `setActive(1)`→`setupProcessing`→`setProcessing(1)` 往復と、再交渉した最大フレーム数超過ブロックの拒否を検証
 
-### ドキュメント整備
+#### ドキュメント整備
 
 - `crates/ruviform-plugin-clap/src/lib.rs`: 他クレート型への rustdoc リンクを修飾パスへ修正（`cargo doc` 警告 5 件を解消）
 
-## Verification
+### Decisions During Implementation
+
+- **方式 ADR の採用側に変更なし** — CLAP=`clack`・VST3=`vst3` の選定は維持し、本タスクの実質は PoC 残件の解消（イベント整列・再アクティベート・MSRV 実測）・CLAP アダプタ経路のテスト空白解消・公開面監査に限定した（Summary 記録どおり）
+- **イベント整列は共有実装へ一元化** — `sort_events_by_frame_offset`（安定・in-place・alloc なし）を plugin-core の正本とし、CLAP の `sort_unstable_by_key`（同オフセット順序非保証）と VST3 の `sort_by_key`（補助メモリを alloc し得る）を置き換えた
+- **テスト容易性のため `#[cfg(test)]` ヘルパを追加** — `test_support` モジュールと private ライフサイクルヘルパで公開 API 面を変えずに clack-host 駆動 E2E を実現
+- **`static`/`thread_local` 共有スクラッチは両クレートに存在しないことを grep で確認** — ADR の禁止条項を構造レビューで担保
+
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
+## Validation
 
 - `cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3`: **40 + 18 単体テスト + 3 doctest 全パス**
 - `cargo clippy -p ... --all-targets -- -D warnings`: 0 findings
@@ -106,6 +125,12 @@ T3 時点で `adapt.rs`/`plugin.rs` に `mod tests` がなく、dev-dep 宣言�
 - エクスポート実測: `ruviform_plugin_clap.dll` → `clap_entry`、`ruviform_plugin_vst3.dll` → `GetPluginFactory`/`InitDll`/`ExitDll`（PE エクスポートディレクトリ解析。macOS `bundleEntry`/`bundleExit`・Linux `ModuleEntry`/`ModuleExit` は cfg ゲート済みコードとして存在、クロスビルド未実測 — T4 残件どおり）
 - MSRV 実測: `cargo +1.85 check -p ruviform-plugin-clap -p ruviform-plugin-vst3 --all-targets` 両者成功 — 方式 ADR の `vst3` MSRV 残件を解消
 - `static`/`thread_local` 共有スクラッチ: 両クレートに該当なし（grep 確認）
+
+## Risks
+
+- macOS `bundleEntry`/`bundleExit`・Linux `ModuleEntry`/`ModuleExit` は cfg ゲート済みコードとして存在するが、本ホスト（Windows）ではクロスビルド未実測 — エクスポート名の実機確認は CI 3OS matrix 待ち（T4 残件どおり）
+- no-alloc 契約の検証は `rt_` 命名テストと構造レビュー（grep）に依存しており、実 alloc 計測レーンは Issue #22 の範囲
+- `vst3` 生成バインディングの SDK 出自（ライセンス系統）の継続調査が未完了
 
 ## Follow-ups
 

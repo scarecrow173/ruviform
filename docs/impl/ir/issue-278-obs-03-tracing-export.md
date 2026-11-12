@@ -174,7 +174,7 @@ canonical（`mise run`、merge `origin/main` = 7816a22a 取り込み後）:
   更新で二重報告は防止）、dedup fingerprint に `loss` を含めない
   （loss 変化は validity/issue 遷移に随伴する前提）。
 
-## NotRun / Unsupported
+### NotRun / Unsupported
 
 - `EventRecord`→event 変換・`CorrelationBook` unlinked 処理・W3C
   Trace Context adapter（有効/不正/未信頼入力）— NotRun（#293
@@ -188,3 +188,16 @@ canonical（`mise run`、merge `origin/main` = 7816a22a 取り込み後）:
 - 実 subscriber への end-to-end 出力検証（JSON/fmt）— 本スライスは
   capture `Layer` による field/level 検証まで。stdout 保護は
   #281 gate。
+
+## Risks
+
+- **exporter の subscriber panic は呼出側へ伝播する設計** — baseline を emit 前に更新するため panic 時の同一増分の二重報告は防げるが、イベント 1 件の喪失と引換え（panic 時は host 側が既に異常という前提。残 P3 として記録済み）
+- **OnIncrease dedup の fingerprint に `loss` を含めない前提** — loss 変化は validity/issue 遷移に随伴するという前提に依存（残 P3。前提が崩れる入力では dedup が効かない可能性）
+- **`*_mono_us` は exporter 初回 `emit`/sink 初回 event 基準の相対時刻** — wall-clock 捏造はしないが、絶対時刻との相関は consumer 側の責務
+- **Thread/async span 伝播は scoped `Dispatch` のみ** — span context を跨ぐ event の親子関係は本スライスの範囲外
+
+## Follow-ups
+
+- Issue #293: `EventRecord`→event 変換・`CorrelationBook` unlinked 処理・W3C Trace Context adapter・RT Correlation token 寿命と Clock 不明/欠落/再生成の unlinked 処理（runner 配線の責務）
+- Issue #281: 両 Consumer（AudioLens/Synvelis）での同一 Key/Field/Severity・stdout 保護・Privacy 検証（cross-repo gate）
+- Thread/async `tracing` Context（span）伝播の完全対応と、実 subscriber への end-to-end 出力検証（JSON/fmt）は上記 NotRun 項目の続きとして別途対応

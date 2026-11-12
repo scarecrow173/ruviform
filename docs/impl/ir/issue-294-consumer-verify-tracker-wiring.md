@@ -108,6 +108,16 @@ consumer-verify の失敗 run を既存 ci-issue-tracker 機構で Issue 追跡�
 - **Issue title は scope 由来**: `ci` と `consumer-verify` が同一 Issue に混ざらないよう `[CI failure][<branch>] <workflow> failed` を `issueTitle(scope)` で生成。marker tag/label/history 上限は scope 内で共有する既存規約を維持。
 - **verdict → tracker 入力の写像は conclusion のみ**: tracker は evidence JSON の verdict を読まず workflow run の conclusion を見る。`not_run`/`unsupported` は consumer-verify.yml が failure conclusion を出さない限り tracker の失敗集合（`failure`/`timed_out`/`startup_failure`）に入らず、success でもない（close は既存の「新しい一意な success が失敗 revision と main tip を cover」規約のみ）。contract test でこの境界を固定した。
 
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
 ## Validation
 
 | Check | Result |
@@ -123,7 +133,14 @@ consumer-verify の失敗 run を既存 ci-issue-tracker 機構で Issue 追跡�
 | `mise exec -- actionlint .github/workflows/ci-issue-tracker.yml .github/workflows/ci-issue-tracker-reconcile.yml` | pass（exit 0） |
 | `node .claude/skills/doc-maintenance/scripts/doc_maintenance.js apply --json` | applied — 5 managed index 再生成（findings 650 → 635、残件は既存の manual/migration 分類） |
 
-## NotRun / 残件
+## Risks
+
+- **daily dispatch 起因の consumer-verify 失敗は reconcile 依存** — daily-ci.yml が GITHUB_TOKEN で dispatch するため anti-recursion で `workflow_run` completed が発火せず、reconcile が権威ある run history を走査する既存境界に依存する。reconcile が失敗・遅延した場合は daily dispatch 起因の失敗 run の Issue 追跡が遅れる
+- **tracker は evidence JSON の verdict を読まず workflow run の conclusion のみを評価** — `not_run`/`unsupported` は consumer-verify.yml が failure conclusion を出さない限り失敗集合に入らず Issue 起票対象にならない（`gate=blocked → fail` の sanctioned 写像は evidence 側の既存挙動で本 slice では不変）。verdict 語彙の変更が conclusion 写像を変えた場合は tracker の分類前提が崩れ得る
+- **`classifyRun` の workflow identity 照合は path または name の少なくとも一方が必須** — 両方欠落した run は scope 照合不能として skip される（fail-closed だが取りこぼし方向）
+- **consumer-verify scope の Issue は本変更で新規に立ち始める** — `ci` scope の既存 Issue title・marker・履歴は不変だが、scope 別 Issue の運用（重複・close 判定）は初回実データで初めて観測される
+
+## Follow-ups
 
 - 実 daily dispatch の実走証跡: NotRun（run API 制限・ops 事項）。reconcile の consumer-verify scope は次回 scheduled/manual 実行で初めて実データを処理する。
 - both-consumer-pass の実測: NotRun（audio-lens 側 export portability 修正待ち、#294 umbrella の別 slice）。

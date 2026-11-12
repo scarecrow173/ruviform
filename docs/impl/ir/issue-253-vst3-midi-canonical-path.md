@@ -176,6 +176,16 @@ in-process E2E（`host::tests`）で CC7→gain 配送・未マップ CC の
   UMP group を持たないため、nonzero group の routed 候補は defined
   skip（`param_routed` にも `translated` にも計上しない既存方針を維持）。
 
+## Related Experiments
+
+### Adopted
+
+なし。
+
+### Rejected
+
+なし。
+
 ## Validation
 
 実施済み（Windows 11 x64, rust 1.99.0 via mise）:
@@ -223,7 +233,14 @@ NotRun / Unsupported:
   adapter/fixture 面で証明済みだが、node 層の consumer は未配線
   （`Declared` の根拠）。
 
-## Remaining
+## Risks
+
+- `param_reporting` は `Declared`（adapter 面の出力 channel 実装と fixture E2E 証明は完了したが、host-graph consumer への配線と実 plugin/実 DAW での往復は未実施）— `Verified` 昇格は consumer 配線 + 実機検証待ち
+- IMidiMapping 経路は fixture cdylib 経由の in-process E2E でのみ証明 — 実 OS MIDI backend（slice (a)）・opt-in 実デバイス/実 plugin 検証（slice (d)）・実 DAW 往復は NotRun
+- nonzero UMP group の routed 候補は defined skip（`param_routed` にも `translated` にも計上しない既存方針を維持）— group 対応は将来課題
+- `midi_channel_voice` は real-plugin 検証未実施のため `Declared` 維持
+
+## Follow-ups
 
 - Issue #253 は open のまま: 実 OS MIDI backend、opt-in 実デバイス
   lane、実 DAW 往復、report consumer 配線が残る。
