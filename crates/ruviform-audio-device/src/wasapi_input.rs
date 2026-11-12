@@ -241,6 +241,12 @@ fn map_win_error(e: &windows::core::Error, ctx: ErrorCtx) -> DeviceError {
         DeviceError::UnsupportedConfig
     } else if hr == Audio::AUDCLNT_E_WRONG_ENDPOINT_TYPE {
         DeviceError::Unsupported
+    } else if hr == Foundation::E_ACCESSDENIED {
+        // The OS-level access denial (e.g. microphone privacy
+        // settings) — classified the same as the cpal path's
+        // `ErrorKind::PermissionDenied`, so one OS refusal reads
+        // identically on both routes.
+        DeviceError::Backend("permission_denied")
     } else {
         // Any other COM/Win32 failure — classification only, the
         // backend message is deliberately not captured (port rule).
@@ -1464,6 +1470,15 @@ mod tests {
             ),
             DeviceError::Backend("host_unavailable"),
         );
+        // `E_ACCESSDENIED` is the OS privacy denial — it classifies
+        // the same as the cpal path's `ErrorKind::PermissionDenied`
+        // on both contexts (`error.rs::map_error` parity).
+        for ctx in [ErrorCtx::Control, ErrorCtx::ErrorCallback] {
+            assert_eq!(
+                map_win_error(&err(Foundation::E_ACCESSDENIED), ctx),
+                DeviceError::Backend("permission_denied"),
+            );
+        }
         // Unmapped HRESULTs land in the backend bucket.
         assert_eq!(
             map_win_error(&err(windows::core::HRESULT(-1)), ErrorCtx::Control),
