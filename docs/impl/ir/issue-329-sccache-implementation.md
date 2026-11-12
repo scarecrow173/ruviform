@@ -1,7 +1,7 @@
 ---
 id: "IR-AOG9nbOVfD39LGT2RmqBPq"
-type: "impl-record"
-status: "done"
+type: "impl"
+status: "completed"
 title: "Issue #329 sccache コンパイルキャッシュ先行導入(verify/ui-verify)"
 created: "2026-11-04"
 updated: "2026-11-04"

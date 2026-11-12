@@ -12,11 +12,16 @@ relations:
     - "https://github.com/scarecrow173/audio-lens/issues/102"
   changes:
     modified:
-      - "crates/ruviform-numeric/Cargo.toml"
-      - "crates/ruviform-numeric/README.md"
-      - "crates/ruviform-numeric/src/lib.rs"
-      - "crates/ruviform-numeric/src/linalg.rs"
-      - "docs/impl/ir/README.md"
+      - type: "file"
+        path: "crates/ruviform-numeric/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-numeric/README.md"
+      - type: "file"
+        path: "crates/ruviform-numeric/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-numeric/src/linalg.rs"
+      - type: "file"
+        path: "docs/impl/ir/README.md"
 metadata:
   experiments:
     adopted: []

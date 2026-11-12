@@ -65,6 +65,10 @@ relations:
   references:
     - "../../designs/issue-423-webview-dock-verify.md"
   defers: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #423 実装記録

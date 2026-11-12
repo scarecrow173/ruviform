@@ -1,7 +1,7 @@
 ---
 id: "IR-Rf242SpawnHeirBarrier01"
-type: "impl-record"
-status: "done"
+type: "impl"
+status: "completed"
 title: "Issue #242 実装記録 — 残存 L1 E2E suite の wall-clock settle を `--spawn-heir` 決定的 converge barrier へ置換"
 created: "2026-11-02"
 updated: "2026-11-02"
@@ -43,6 +43,10 @@ relations:
     - "crates/ruviform-plugin-host/src/supervisor.rs"
   defers: []
   deferred-by: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #242 実装記録 — 残存 L1 E2E suite の wall-clock settle を決定的 converge barrier へ置換

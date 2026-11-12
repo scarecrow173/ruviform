@@ -81,6 +81,10 @@ relations:
   refined-by: []
   derives-from: []
   derived-by: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #196 implementation record — M4 typed graph plugin adapter

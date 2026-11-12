@@ -46,6 +46,10 @@ relations:
     renamed: []
     moved: []
     generated: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # 実装内容

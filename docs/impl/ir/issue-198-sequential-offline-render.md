@@ -76,6 +76,10 @@ relations:
   refined-by: []
   derives-from: []
   derived-by: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #198 implementation record — stateful sequential offline render

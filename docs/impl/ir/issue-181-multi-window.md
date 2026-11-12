@@ -19,6 +19,10 @@ relations:
     - "docs/specs/issue-181-multi-window.md"
     - "docs/designs/issue-181-multi-window.md"
     - "docs/test-specs/issue-181-multi-window.md"
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #181 — multi-window 実装記録

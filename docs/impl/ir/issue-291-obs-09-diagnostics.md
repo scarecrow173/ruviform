@@ -11,9 +11,11 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/291"
   changes:
     added:
-      - "crates/ruviform-observability/src/diagnostics/"
+      - type: "directory"
+        path: "crates/ruviform-observability/src/diagnostics/"
     modified:
-      - "crates/ruviform-observability/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-observability/src/lib.rs"
     deleted: []
     renamed: []
     moved: []

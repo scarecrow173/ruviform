@@ -10,12 +10,17 @@ relations:
   source: []
   changes:
     added:
-      - "crates/ruviform-observability/src/tracing_export/trace_context.rs"
-      - "crates/ruviform-observability/src/tracing_export/records.rs"
+      - type: "file"
+        path: "crates/ruviform-observability/src/tracing_export/trace_context.rs"
+      - type: "file"
+        path: "crates/ruviform-observability/src/tracing_export/records.rs"
     modified:
-      - "crates/ruviform-observability/src/tracing_export/schema.rs"
-      - "crates/ruviform-observability/src/tracing_export/mod.rs"
-      - "crates/ruviform-observability/src/tracing_export/tests.rs"
+      - type: "file"
+        path: "crates/ruviform-observability/src/tracing_export/schema.rs"
+      - type: "file"
+        path: "crates/ruviform-observability/src/tracing_export/mod.rs"
+      - type: "file"
+        path: "crates/ruviform-observability/src/tracing_export/tests.rs"
     deleted: []
     renamed: []
     moved: []

@@ -50,6 +50,10 @@ relations:
   references: []
   defers: []
   deferred-by: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #411 — cargo_metadata 0.19 系への依存選定修復 実装記録

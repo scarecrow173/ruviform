@@ -44,6 +44,10 @@ relations:
     deleted: []
     renamed: []
     moved: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #426 実装記録

@@ -11,12 +11,17 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/293"
   changes:
     added:
-      - "crates/ruviform-observability/src/integration/"
-      - "crates/ruviform-observability/tests/integration.rs"
+      - type: "directory"
+        path: "crates/ruviform-observability/src/integration/"
+      - type: "file"
+        path: "crates/ruviform-observability/tests/integration.rs"
     modified:
-      - "crates/ruviform-observability/Cargo.toml"
-      - "crates/ruviform-observability/src/lib.rs"
-      - "crates/ruviform-observability/README.md"
+      - type: "file"
+        path: "crates/ruviform-observability/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-observability/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-observability/README.md"
     deleted: []
     renamed: []
     moved: []

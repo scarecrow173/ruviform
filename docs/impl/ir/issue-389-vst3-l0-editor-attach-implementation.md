@@ -53,6 +53,9 @@ relations:
   deferred-by: []
 metadata:
   issues: [389]
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #389 VST3/L0 実外部 Editor attach 実装記録

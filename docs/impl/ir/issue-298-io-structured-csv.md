@@ -62,6 +62,10 @@ relations:
         path: "docs/test-specs/README.md"
       - type: "file"
         path: "docs/tasks/README.md"
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue 298 ruviform-io-structured — CSV format module（IO-IMP-04）

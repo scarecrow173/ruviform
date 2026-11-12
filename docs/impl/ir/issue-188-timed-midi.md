@@ -96,6 +96,10 @@ relations:
   refined-by: []
   derives-from: []
   derived-by: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #188 timed MIDI PoC — implementation record
