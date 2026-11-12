@@ -49,6 +49,10 @@ relations:
         path: "crates/ruviform-ui-gpui/src/render.rs"
       - type: "file"
         path: "crates/ruviform-ui-test/fixtures/driver-lab/stories.json"
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # IR — Issue #314 slice 4 residual real-window adapter

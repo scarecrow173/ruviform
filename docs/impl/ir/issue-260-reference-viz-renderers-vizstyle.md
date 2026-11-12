@@ -1,3 +1,51 @@
+---
+id: "IMPL-GhxLqs97yNh1VgtsWdSDL3"
+type: "impl"
+status: "completed"
+title: "Issue #260 Reference Viz Renderer・VizStyle (Waveform / Meter / Spectrum) 実装記録"
+created: "2026-11-03"
+updated: "2026-11-03"
+owners: ["scarecrow173"]
+relations:
+  source:
+    - "https://github.com/scarecrow173/ruviform/issues/260"
+  changes:
+    added:
+      - type: "directory"
+        path: "ui/viz/"
+    modified:
+      - type: "file"
+        path: "ui/components/src/tokens.ts"
+      - type: "file"
+        path: ".github/workflows/ci.yml"
+    deleted: []
+    renamed: []
+    moved: []
+    generated: []
+  implements: []
+  implemented-by: []
+  depends-on: []
+  blocks: []
+  supersedes: []
+  superseded-by: []
+  related:
+    - "docs/designs/issue-257-driver-neutral-ui-contract.md"
+  refines: []
+  refined-by: []
+  derives-from:
+    - "docs/designs/issue-257-driver-neutral-ui-contract.md"
+  derived-by: []
+  verifies: []
+  verified-by: []
+  references: []
+  defers: []
+  deferred-by: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
+---
+
 # Implementation Record — Issue #260: Reference Viz Renderer・VizStyle (Waveform / Meter / Spectrum)
 
 Status: delivered (headless-verified)

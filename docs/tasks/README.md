@@ -299,6 +299,7 @@ Directory: `docs/tasks`
 | TASK-034UiUpK8eTff8QiCEtGrP | Issue #480 — tab_focus op 駆動解放の実装と恒久テスト | done | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TASK-DBfsqONthDwUwmD4GpGXzq | Issue #490 T1 oracle addQuery epoch 整合 | done | [issue-490-t1-oracle-addquery-epoch.md](./issue-490-t1-oracle-addquery-epoch.md) |
 | TASK-9cTXJ0IYeniJ7ZmRBuYibG | Issue #565-T1: WASAPI-native input path — frame_position 供給 | done | [issue-565-task1-wasapi-input-frame-position.md](./issue-565-task1-wasapi-input-frame-position.md) |
+| TASK-rQRQ2bkMVhq40SWTKL1zXd | Issue #586 T1 — ir front matter 是正・ir/exp index 再生成・audit 検証 | done | [issue-586-impl-index-generation.md](./issue-586-impl-index-generation.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

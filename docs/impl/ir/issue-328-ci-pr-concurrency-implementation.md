@@ -1,7 +1,7 @@
 ---
 id: "IR-mfG5TUv6nTb9bSBIpPKVbE"
-type: "impl-record"
-status: "done"
+type: "impl"
+status: "completed"
 title: "Issue #328 実装記録 — CI PR concurrency(cancel stale PR runs)"
 created: "2026-11-04"
 updated: "2026-11-04"
@@ -48,6 +48,10 @@ relations:
     - "https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs"
   defers: []
   deferred-by: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #328 実装記録 — CI PR concurrency(cancel stale PR runs)

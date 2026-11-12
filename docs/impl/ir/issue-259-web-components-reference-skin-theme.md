@@ -1,3 +1,47 @@
+---
+id: "IMPL-KOaepeNi5SFj7gy0GtgA38"
+type: "impl"
+status: "completed"
+title: "Issue #259 Framework-neutral Web Components / Reference Skin / Theme・Slot 実装記録"
+created: "2026-11-03"
+updated: "2026-11-03"
+owners: ["scarecrow173"]
+relations:
+  source:
+    - "https://github.com/scarecrow173/ruviform/issues/259"
+  changes:
+    added:
+      - type: "directory"
+        path: "ui/components/"
+    modified: []
+    deleted: []
+    renamed: []
+    moved: []
+    generated: []
+  implements: []
+  implemented-by: []
+  depends-on: []
+  blocks: []
+  supersedes: []
+  superseded-by: []
+  related:
+    - "docs/designs/issue-257-driver-neutral-ui-contract.md"
+  refines: []
+  refined-by: []
+  derives-from:
+    - "docs/designs/issue-257-driver-neutral-ui-contract.md"
+  derived-by: []
+  verifies: []
+  verified-by: []
+  references: []
+  defers: []
+  deferred-by: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
+---
+
 # Implementation Record — Issue #259: Framework-neutral Web Components / Reference Skin / Theme・Slot
 
 Status: delivered (headless-verified)

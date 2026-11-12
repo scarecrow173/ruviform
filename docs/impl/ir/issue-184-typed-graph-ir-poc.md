@@ -52,6 +52,10 @@ relations:
   references: []
   defers: []
   deferred-by: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #184 M1 ruviform-graph 実装記録

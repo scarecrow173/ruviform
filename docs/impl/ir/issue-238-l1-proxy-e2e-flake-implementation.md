@@ -1,7 +1,7 @@
 ---
 id: "IR-Dq3ecXwX1PJIko0O9pISR5"
-type: "impl-record"
-status: "done"
+type: "impl"
+status: "completed"
 title: "Issue #238 実装記録 — l1_proxy_e2e 壁時計 sleep 同期を barrier/有界 poll へ置換"
 created: "2026-11-02"
 updated: "2026-11-02"
@@ -41,6 +41,10 @@ relations:
   references: []
   defers: []
   deferred-by: []
+metadata:
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #238 実装記録 — l1_proxy_e2e 壁時計 sleep 同期を barrier/有界 poll へ置換

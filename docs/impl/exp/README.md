@@ -30,3 +30,25 @@ Directory: `docs/impl/exp`
 - [issue-333-impact-based-ci.md](issue-333-impact-based-ci.md) — Issue #333 (CI-OPT-06) impact classifier + ci-gate Shadow Mode 観測記録（expected×actual 照合・full fallback 発火・偽陰性検出器の稼働状態・段階移行の残課題。raw: `data/issue-333-impact-decision-run-41835836190.json` + `data/issue-333-gate-report-run-41835836190.json`）
 - [issue-346-selective-enforcement.md](issue-346-selective-enforcement.md) — Issue #346 (CI-OPT-06) 選択実行有効化 Before/After メトリクス記録（Shadow 期の wall/critical path/runner_total・macOS queue 滞留実測・After 未実測の明示と推定根拠・監視継続点。raw: `data/issue-346-enforcement-before-runs.jsonl`）
 - `data/` — raw per-run measurement JSONL (`dsp-simd-poc-20261021-01.jsonl`, `-02.jsonl`; `rt-observability-poc-20261023-01.jsonl`, `-02.jsonl`, `-03.jsonl`; `rt-observability-poc-20261024-corrected-01.jsonl`, `-02.jsonl`, `-03.jsonl`; 1 line = 1 measurement point) plus corrected-run summary `rt-observability-poc-20261024-summary.json`, backend dependency snapshot `rt-observability-backend-metadata-20261024.json`, and capture script `rt-observability-capture.cjs`, plus `issue-327-ci-baseline-runs.jsonl` (Issue #327 cross-repo CI timing raw rows: 1 line = 1 record of run/job/step/run-metrics/cache/required-contexts) and `issue-332-playwright-browser-runs.jsonl` (Issue #332 browser-lane Before/After step timing raw rows: 1 line = 1 record of run/job/step) and `issue-331-verify-step-runs.jsonl` (Issue #331 verify-lane Before/After step timing raw rows: 1 line = 1 record of run/job/step) and `issue-333-impact-decision-run-41835836190.json` / `issue-333-gate-report-run-41835836190.json` (Issue #333 Shadow Mode artifact snapshots: impact-decision lane map and ci-gate verdict report for PR #345 run 41835836190) and `issue-334-shadow-classification-run-41840536142.jsonl` (Issue #334 Shadow Mode observation: selective decision, expected×actual lane verdicts and false-negative check for PR #347 run 41840536142; 1 line = 1 run summary or lane record) and `issue-335-shadow-classification-run-41848239157.jsonl` (Issue #335 Shadow Mode observation: selective decision, expected×actual lane verdicts and false-negative check for PR #348 run 41848239157; 1 line = 1 run summary or lane record) and `issue-346-enforcement-before-runs.jsonl` (Issue #346 selective-enforcement Before metrics raw rows: 1 line = 1 record of run/job/step/run-metrics for the last 15 ci runs before lane `if:` enablement). Not an impl-doc event log, so it lives in a subdirectory outside the flat `*.jsonl` event-log audit scope
+
+<!-- doc-suite:generated-index -->
+
+Directory: `docs/impl/exp`
+
+| File |
+| --- |
+| [ac1-host-experiment-wry-tao-webview.jsonl](./ac1-host-experiment-wry-tao-webview.jsonl) |
+| [ac2-render-canvas2d-webgl2-webgpu.jsonl](./ac2-render-canvas2d-webgl2-webgpu.jsonl) |
+| [ac3-surface-adjacent-child.jsonl](./ac3-surface-adjacent-child.jsonl) |
+| [ac3-surface-adjacent-parent.jsonl](./ac3-surface-adjacent-parent.jsonl) |
+| [ac4-ipc-json-rtt-pull-evaluate-script-push.jsonl](./ac4-ipc-json-rtt-pull-evaluate-script-push.jsonl) |
+| [ac5-frontend-compare.jsonl](./ac5-frontend-compare.jsonl) |
+| [ac6-dist-single-binary.jsonl](./ac6-dist-single-binary.jsonl) |
+| [ac7-adr-finalize.jsonl](./ac7-adr-finalize.jsonl) |
+| [device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl](./device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl) |
+| [dsp-simd-poc-benchmark-comparison.jsonl](./dsp-simd-poc-benchmark-comparison.jsonl) |
+| [issue-327-ci-baseline.jsonl](./issue-327-ci-baseline.jsonl) |
+| [issue-57-high-load-webgpu-multi-webview.jsonl](./issue-57-high-load-webgpu-multi-webview.jsonl) |
+| [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
+| [plugin-gui-attach-e1-e2.jsonl](./plugin-gui-attach-e1-e2.jsonl) |
+| [rt-observability-poc.jsonl](./rt-observability-poc.jsonl) |

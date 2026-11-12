@@ -61,6 +61,9 @@ relations:
   deferred-by: []
 metadata:
   issues: [388]
+  experiments:
+    adopted: []
+    rejected: []
 ---
 
 # Issue #388 GPUI Panel/Tab レイアウト内 VST3 Editor 埋め込み PoC 実装記録

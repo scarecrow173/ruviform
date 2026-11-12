@@ -56,6 +56,7 @@ relations:
   references: []
   defers: []
   deferred-by: []
+metadata:
   experiments:
     adopted: []
     rejected: []
