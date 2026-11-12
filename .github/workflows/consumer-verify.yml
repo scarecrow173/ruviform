@@ -104,6 +104,10 @@ concurrency:
 
 env:
   RUVIFORM_REV: ${{ inputs.ruviform_rev || github.sha }}
+  # Rust toolchain pin は mise.ci.toml(CI 専用)に分離 — MISE_ENV=ci で
+  # 有効化する。candidate checkout が旧 SHA(mise.ci.toml 無し)の場合は
+  # その mise.toml の pin がそのまま使われるため後方互換。
+  MISE_ENV: ci
 
 jobs:
   preflight:
