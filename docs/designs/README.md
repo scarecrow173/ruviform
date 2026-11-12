@@ -188,6 +188,7 @@ Directory: `docs/designs`
 | DESIGN-eBMdc3IAyT8cNugckC1k2Q | Issue #490 oracle late-create query epoch 整合設計 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | DESIGN-5Zp45sCRwv11kYwJ4MGJBX | Issue #565 WASAPI-native input path 設計 — per-packet device_position を frame_position に写す | approved | [issue-565-wasapi-input-frame-position-design.md](./issue-565-wasapi-input-frame-position-design.md) |
+| DESIGN-MnDOJoPVmxmAz1hdgVs3T3 | Issue #586 設計 — ir front matter 是正分類・index marker 配置・検証手順 | approved | [issue-586-impl-index-generation-design.md](./issue-586-impl-index-generation-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |
