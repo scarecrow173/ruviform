@@ -162,6 +162,7 @@ Directory: `docs/plans`
 | PLAN-2uLb895SP6hIbAneuh5Pjs | Issue #490 oracle late-create query epoch 実装計画 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | PLAN-034VehuU5KuL3vurAXEXph | Issue #552 — SendInput preflight 実装計画 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | PLAN-zmhvig6ptUxYZGsi0NwJ4MGJBX | Issue #565 WASAPI-native input frame_position 実装 plan | approved | [issue-565-wasapi-input-frame-position-plan.md](./issue-565-wasapi-input-frame-position-plan.md) |
+| PLAN-5ts8wdqB6w1EhNnXtogfbs | Issue #582 実施計画 — ci 3 lane 失敗の修正と workflow_dispatch 検証 | approved | [issue-582-ci-lane-failures-plan.md](./issue-582-ci-lane-failures-plan.md) |
 | PLAN-034Wv7IN094RjMqLSM1Bzx | Issue #583 実施計画 — mr_boxington 失敗の原因確定・検証・記録 | approved | [issue-583-consumer-verify-mise-plan.md](./issue-583-consumer-verify-mise-plan.md) |
 | PLAN-8R4q0cr04yTyNYSk6Y5f3B | Issue #586 実施計画 — ir front matter 是正と ir/exp index 再生成 | approved | [issue-586-impl-index-generation-plan.md](./issue-586-impl-index-generation-plan.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |

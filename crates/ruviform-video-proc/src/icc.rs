@@ -151,6 +151,44 @@ impl IccIntent {
             Self::RelativeColorimetric => RenderingIntent::RelativeColorimetric,
         }
     }
+
+    /// `true` when `profile` carries device→PCS (A2B) LUT tags but
+    /// not the one this intent selects. moxcms ≥0.9.2 resolves that
+    /// case to the perceptual (tag 0) table per ICC.1:2022 §8.10.2
+    /// c); the [`IccTransform`] contract rejects it instead (Issue
+    /// #125 AC3 — a missing intent tag must fail, never bake the
+    /// perceptual mapping under another intent's name), so
+    /// [`IccTransform::new`] re-imposes the rule the engine no
+    /// longer reports. Profiles with no A2B tags at all are left to
+    /// the engine (matrix-shaper or hard reject).
+    fn lacks_a_to_b_tag(self, profile: &ColorProfile) -> bool {
+        if profile.lut_a_to_b_perceptual.is_none()
+            && profile.lut_a_to_b_saturation.is_none()
+            && profile.lut_a_to_b_colorimetric.is_none()
+        {
+            return false;
+        }
+        match self {
+            Self::Perceptual => profile.lut_a_to_b_perceptual.is_none(),
+            Self::RelativeColorimetric => profile.lut_a_to_b_colorimetric.is_none(),
+        }
+    }
+
+    /// `true` when `profile` carries PCS→device (B2A) LUT tags but
+    /// not the one this intent selects — the destination-side mirror
+    /// of [`Self::lacks_a_to_b_tag`].
+    fn lacks_b_to_a_tag(self, profile: &ColorProfile) -> bool {
+        if profile.lut_b_to_a_perceptual.is_none()
+            && profile.lut_b_to_a_saturation.is_none()
+            && profile.lut_b_to_a_colorimetric.is_none()
+        {
+            return false;
+        }
+        match self {
+            Self::Perceptual => profile.lut_b_to_a_perceptual.is_none(),
+            Self::RelativeColorimetric => profile.lut_b_to_a_colorimetric.is_none(),
+        }
+    }
 }
 
 /// Prepared ICC profile transform — `Rgba8`/`RgbaF32` →
@@ -214,9 +252,10 @@ impl IccTransform {
     ///
     /// [`Error::InvalidValue`] — `"icc profile"` when either byte
     /// string fails to parse as an ICC profile; `"icc transform"` when
-    /// either profile's color space is not RGB or the profile pair
-    /// cannot build an RGBA→RGBA transform. Engine errors never
-    /// escape as engine types.
+    /// either profile's color space is not RGB, a profile carries LUT
+    /// tags for a transform direction but not the requested intent's
+    /// tag, or the profile pair cannot build an RGBA→RGBA transform.
+    /// Engine errors never escape as engine types.
     ///
     /// # Examples
     ///
@@ -239,6 +278,16 @@ impl IccTransform {
         // (a CMYK executor would consume it as the K ink and emit
         // opaque alpha) — reject before the executor is built.
         if src.color_space != DataColorSpace::Rgb || dst.color_space != DataColorSpace::Rgb {
+            return Err(Error::InvalidValue("icc transform"));
+        }
+        // moxcms ≥0.9.2 resolves a missing intent LUT tag to the
+        // profile's perceptual (tag 0) table — the ICC.1:2022
+        // §8.10.2 c) fallback — so the engine no longer reports the
+        // case `IccIntent`'s contract rejects (Issue #125 AC3).
+        // Re-impose it here, before the executor is baked: the
+        // source profile's device→PCS direction reads its A2B tags,
+        // the destination's PCS→device direction its B2A tags.
+        if intent.lacks_a_to_b_tag(&src) || intent.lacks_b_to_a_tag(&dst) {
             return Err(Error::InvalidValue("icc transform"));
         }
         let executor = src
@@ -1705,6 +1754,33 @@ mod tests {
                 "missing B2A tables must reject ({intent:?})"
             );
         }
+    }
+
+    /// Destination-side mirror of the A2B0-only case: a profile
+    /// carrying only the perceptual B2A table (no B2A1) must reject
+    /// `RelativeColorimetric` and accept `Perceptual` — the same
+    /// boundary rule enforced by `IccTransform::new` since moxcms
+    /// ≥0.9.2 falls back to the perceptual tag (ICC.1:2022 §8.10.2
+    /// c)). Built in-memory: no committed fixture carries a lone
+    /// B2A0 tag.
+    #[test]
+    fn icc_transform_missing_intent_b2a_tag_rejects() {
+        let b2a0_only = lut_rgb_profile(
+            "icc-lut-b2a0-only",
+            None,
+            None,
+            Some(mft_lut(halve3, LutType::Lut16)),
+            None,
+        );
+        assert!(
+            IccTransform::new(SRGB, &b2a0_only, IccIntent::Perceptual).is_ok(),
+            "B2A0 + Perceptual must build"
+        );
+        assert_eq!(
+            IccTransform::new(SRGB, &b2a0_only, IccIntent::RelativeColorimetric).map(|_| ()),
+            Err(Error::InvalidValue("icc transform")),
+            "missing B2A1 must reject"
+        );
     }
 
     /// RT contract on the LUT path: repeated `process` on an

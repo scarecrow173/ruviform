@@ -3796,6 +3796,7 @@ mod tests {
 
     /// `Tabs` whose first tab holds a `NativeSlot` for `slot_key` —
     /// the docked-editor layout the slot glue is measured against.
+    #[cfg(target_os = "windows")]
     fn tabs_with_native_slot(slot_key: &ComponentKey) -> ComponentSpec {
         use ruviform_ui::view::{NativeSlotSpec, TabSpec, TabsSpec};
         let slot_component = ComponentSpec::NativeSlot(NativeSlotSpec {
@@ -3833,6 +3834,7 @@ mod tests {
 
     /// Declares a Hidden slot on `window`'s canonical adapter and
     /// binds it to `key` — the consumer-side mount flow.
+    #[cfg(target_os = "windows")]
     fn declare_and_bind(
         driver: &mut crate::GpuiDriver,
         window: ruviform_ui::WindowId,
@@ -3876,6 +3878,7 @@ mod tests {
     /// the active tab gets geometry/clip/visible; switching to a tab
     /// where it is absent suppresses it `Hidden` — all asserted on
     /// the canonical adapter's event ledger (Issue #387 × #388).
+    #[cfg(target_os = "windows")]
     #[gpui::test]
     fn rvf_view_native_slot_projects_layout(cx: &mut TestAppContext) {
         use ruviform_ui::{SlotEvent, WindowDriver};
@@ -4364,6 +4367,7 @@ mod tests {
     /// refused (released slot — permanent `Released` on every
     /// aspect) must never be shown, and nothing is recorded on the
     /// ledger as if it had been.
+    #[cfg(target_os = "windows")]
     #[gpui::test]
     fn rvf_view_native_slot_fail_closed_on_refusal(cx: &mut TestAppContext) {
         use ruviform_ui::{SlotEvent, WindowDriver};
@@ -4450,6 +4454,7 @@ mod tests {
     /// `SharedSurface` clone (per-call borrows — it cannot hold a
     /// `RefMut`) can never block the renderer's pushes, so every
     /// `Visible` → `Hidden` → `Visible` transition lands honestly.
+    #[cfg(target_os = "windows")]
     #[gpui::test]
     fn rvf_view_native_slot_public_api_cannot_starve_pushes(cx: &mut TestAppContext) {
         use ruviform_ui::WindowDriver;
@@ -4587,6 +4592,7 @@ mod tests {
     /// support still satisfies a frame that needs no clip (mask ==
     /// viewport → `None`), so the slot shows — while `set_clip` is
     /// never pushed at all.
+    #[cfg(target_os = "windows")]
     #[gpui::test]
     fn rvf_view_native_slot_unclipped_shows_without_clip_support(cx: &mut TestAppContext) {
         use ruviform_ui::{
@@ -4690,6 +4696,7 @@ mod tests {
     /// clip reset, a rebound slot's fresh `clip: None` ledger
     /// vacuously satisfies a `None` request while the port still
     /// clips to a stale rect.
+    #[cfg(target_os = "windows")]
     #[gpui::test]
     fn rvf_view_native_slot_forget_clears_clip(cx: &mut TestAppContext) {
         use ruviform_ui::WindowDriver;

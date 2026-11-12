@@ -299,6 +299,7 @@ Directory: `docs/tasks`
 | TASK-034UiUpK8eTff8QiCEtGrP | Issue #480 — tab_focus op 駆動解放の実装と恒久テスト | done | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TASK-DBfsqONthDwUwmD4GpGXzq | Issue #490 T1 oracle addQuery epoch 整合 | done | [issue-490-t1-oracle-addquery-epoch.md](./issue-490-t1-oracle-addquery-epoch.md) |
 | TASK-9cTXJ0IYeniJ7ZmRBuYibG | Issue #565-T1: WASAPI-native input path — frame_position 供給 | done | [issue-565-task1-wasapi-input-frame-position.md](./issue-565-task1-wasapi-input-frame-position.md) |
+| TASK-vioQrXcHCVk7TkuPqAIPKc | Issue #582 T1 — ci 3 lane 失敗の修正・doc-chain・workflow_dispatch 検証 | done | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 | TASK-034Wv7JmMeNPkMsHD0V8Cf | Issue #583 T1 — 原因確定・mise 検証・consumer-verify dispatch・doc-chain | done | [issue-583-consumer-verify-mise.md](./issue-583-consumer-verify-mise.md) |
 | TASK-rQRQ2bkMVhq40SWTKL1zXd | Issue #586 T1 — ir front matter 是正・ir/exp index 再生成・audit 検証 | done | [issue-586-impl-index-generation.md](./issue-586-impl-index-generation.md) |
 | TASK-034WuW3rqyBgYH8WlRZH2D | Issue #590 T1 — ir missing-section 本文補完・audit/index 検証 | done | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |

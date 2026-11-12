@@ -1386,6 +1386,16 @@ jobs:
           key: ${{ runner.os }}-cargo-ui-gpui-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-ui-gpui-
 
+      # The boundary guard runs `cargo metadata --offline`, which
+      # fails on a cold lane cache when any locked crate is not yet
+      # in the local registry (run 43270011255 — the consumer clone's
+      # partial fetch did not cover the full workspace incl. dev-deps;
+      # consumer-verify.yml documents the same failure at its GUI
+      # candidate probe). `cargo fetch --locked` populates the whole
+      # lockfile — dev-deps included — before the offline metadata run.
+      - name: Fetch locked cargo dependencies
+        run: mise exec -- cargo fetch --locked
+
       # Issue #329 (CI-OPT-02): same sccache setup as `verify` — the
       # gpui feature lane compiles a different feature set, which
       # sccache keeps distinct by construction. Kill switch: repo
