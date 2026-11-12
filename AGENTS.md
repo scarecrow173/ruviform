@@ -76,7 +76,8 @@
 ## 開発環境（mise）
 
 - 開発ツールとタスクの正本は `mise.toml` とする。
-- `mise.toml` は uv / prek / git-lfs / apm / pipx 系の共通基盤ツールに加え、このリポジトリで pin した Rust ツールチェーン（`rust = "1.99.0"`）と actionlint、UI PoC ビルド用の Node.js（`node = "26.12.1"`、Issue #83 のセキュリティ修正版）を管理する。`fmt` / `check` / `lint` / `test` / `build` 等の検証タスクも同ファイルが正本（対応表は [docs/development-environment.md](docs/development-environment.md) を参照）。
+- `mise.toml` は uv / prek / git-lfs / apm / pipx 系の共通基盤ツールと actionlint、UI PoC ビルド用の Node.js（`node = "26.12.1"`、Issue #83 のセキュリティ修正版）を管理する。`fmt` / `check` / `lint` / `test` / `build` 等の検証タスクも同ファイルが正本（対応表は [docs/development-environment.md](docs/development-environment.md) を参照）。
+- Rust toolchain は `mise.toml` では pin しない。通常開発は環境導入済みの rust（rustup / global mise）を使う。CI 専用の pin（`rust = "1.99.0"` + components）は `mise.ci.toml` に置き、CI では `MISE_ENV=ci` で有効化する（lockfile は `MISE_ENV=ci mise lock` が生成する `mise.ci.lock`）。
 - 初回セットアップでは、miseをインストールした後に以下を実行する（Windows 11 x64・Git Bash で検証済み。macOS / Linux は未検証）。
 
 ```sh
@@ -105,6 +106,7 @@ mise exec -- apm install --frozen
 | lockfile | 再生成トリガ | 手順 |
 | --- | --- | --- |
 | `mise.lock` | `mise.toml` の `[tools]` 変更・バージョン更新時 | `mise install` → `mise lock`（現行ツールは github / aqua 系バックエンドのため `.mise/locks/` sidecar は生成されない。PyPI・npm 解決の pipx / npm 系ツールを追加して sidecar が生成された場合は `.gitignore` の `!.mise/locks/` 例外によりそのままコミット対象になる） |
+| `mise.ci.lock` | `mise.ci.toml` の `[tools]` 変更・バージョン更新時 | `MISE_ENV=ci mise lock`（CI 専用ツール — 現状は rust pin のみ） |
 | `apm.lock.yaml` | `apm.yml` の dependencies / targets / MCP 変更時 | `apm install`（lock 自動更新）→ `apm lock` で整合確認 |
 | `Cargo.lock` | ワークスペースの `[dependencies]` 変更時 | `cargo build` / `cargo generate-lockfile` で自動更新 |
 

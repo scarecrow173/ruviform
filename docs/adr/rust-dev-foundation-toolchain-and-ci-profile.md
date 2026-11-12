@@ -4,7 +4,7 @@ type: "adr"
 status: "accepted"
 title: "開発基盤の toolchain・Cargoプロファイル・CI方針"
 created: "2026-10-18"
-updated: "2026-10-19"
+updated: "2026-11-13"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -171,6 +171,10 @@ GitHub Issue #2 と上流 spec `SPEC-034IcwhwIFSNUNKtX7KK0Q`（[../specs/establi
 * [ ] CI が `--profile ci` と `CARGO_INCREMENTAL=0` を明示し、実行前後の `df -h` / `du -sh target` を記録する
 * [ ] `Cargo.lock` が追跡され、`.gitignore` に `target/` が含まれる
 * [ ] 最小 workspace クレートの smoke test がプロジェクト実装未着手でも成功する
+
+## 追記（2026-11-13）
+
+「**ツールチェーン**: `mise.toml` で Rust ツールチェーンを管理する」の配置を精緻化する。Rust pin（version + components）は CI 専用の `mise.ci.toml` に分離し、`MISE_ENV=ci` で有効化する（lockfile は `MISE_ENV=ci mise lock` が生成する `mise.ci.lock`）。通常開発では repo は toolchain を pin せず、環境導入済みの rust（rustup / global mise）を使う。mise による toolchain 管理・`rust-toolchain.toml` 非併用・lockfile による CI 再現という本決定の核心は維持される。audio-lens / synvelis も同一構成。
 
 ## More Information
 

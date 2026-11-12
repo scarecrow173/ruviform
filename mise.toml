@@ -5,7 +5,9 @@ lockfile = true
 [env]
 UV_EXCLUDE_NEWER = "1 week"
 
-# Shared infrastructure tools plus this repository's pinned Rust toolchain.
+# Shared infrastructure tools. Rust toolchain はここでは pin しない —
+# 通常開発は環境導入済みの rust(rustup / global mise)を使い、CI 用の
+# pin は mise.ci.toml(MISE_ENV=ci で有効化)に分離する。
 [tools]
 # Issue #85: GHSA-hq85-5cpj-mr62（eMudhra/emSign 中間 CA 侵害）の
 # 修正版 0.13.4 以上を明示固定（0.12.x は同梱 CA バンドルに影響 CA が残る）。
@@ -15,7 +17,6 @@ prek = "0.5.7"
 git-lfs = "3.8.0"
 "github:microsoft/apm" = "0.33.0"
 "pipx:serena-agent" = { version = "1.7.0", lazy = true }
-rust = { version = "1.99.0", components = ["rustfmt", "clippy"], mr_boxington = true }
 actionlint = "1.7.12"
 # UI PoC（poc/ui/frontend）の npm workspaces ビルド用。Issue #83:
 # 2026-10-21 Node.js セキュリティ更新を踏まえ修正版で固定
