@@ -1,7 +1,7 @@
 ---
 id: "TASK-034Wv7JmMeNPkMsHD0V8Cf"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #583 T1 — 原因確定・mise 検証・consumer-verify dispatch・doc-chain"
 created: "2026-11-13"
 updated: "2026-11-13"
@@ -57,5 +57,5 @@ consumer-verify preflight の `mr_boxington` 失敗について、直接原因�
 - [x] `MISE_ENV=ci mise install --locked`(全 7 tool)と fresh `MISE_DATA_DIR` での node install が exit 0
 - [x] doc-chain(spec/design/plan/task/test-spec)作成
 - [x] `git merge origin/main` → 触った docs dir の管理 index を doc-maintenance で再生成
-- [ ] commit → push → PR(`Refs #583`)
-- [ ] `gh workflow run consumer-verify.yml --ref <branch>` で preflight success を確認し PR 本文に URL 記載
+- [x] commit → push → PR(`Refs #583`)
+- [x] `gh workflow run consumer-verify.yml --ref bugfix/583-consumer-verify-mise` で run 43305677667 が全 job success(preflight 24s / verify-audiolens 3m13s / verify-synvelis 5m44s / summary 3s)

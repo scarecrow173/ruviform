@@ -53,7 +53,6 @@ Directory: `docs/tasks`
 | TASK-034U1MMRtRon6XPgSgK7gD | Issue #461 残課題 — TimeAxis label canvas 描画の実装タスク | in-progress | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | TASK-034U0zT7iVYoM99rNxQgBT | Issue #463 — Spectrogram cell intensity 修正タスク | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | TASK-034Veln6e33I4gj6qIv08d | Issue #552 — SendInput preflight 実装タスク | in-progress | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
-| TASK-034Wv7JmMeNPkMsHD0V8Cf | Issue #583 T1 — 原因確定・mise 検証・consumer-verify dispatch・doc-chain | in-progress | [issue-583-consumer-verify-mise.md](./issue-583-consumer-verify-mise.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -300,6 +299,7 @@ Directory: `docs/tasks`
 | TASK-034UiUpK8eTff8QiCEtGrP | Issue #480 — tab_focus op 駆動解放の実装と恒久テスト | done | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TASK-DBfsqONthDwUwmD4GpGXzq | Issue #490 T1 oracle addQuery epoch 整合 | done | [issue-490-t1-oracle-addquery-epoch.md](./issue-490-t1-oracle-addquery-epoch.md) |
 | TASK-9cTXJ0IYeniJ7ZmRBuYibG | Issue #565-T1: WASAPI-native input path — frame_position 供給 | done | [issue-565-task1-wasapi-input-frame-position.md](./issue-565-task1-wasapi-input-frame-position.md) |
+| TASK-034Wv7JmMeNPkMsHD0V8Cf | Issue #583 T1 — 原因確定・mise 検証・consumer-verify dispatch・doc-chain | done | [issue-583-consumer-verify-mise.md](./issue-583-consumer-verify-mise.md) |
 | TASK-rQRQ2bkMVhq40SWTKL1zXd | Issue #586 T1 — ir front matter 是正・ir/exp index 再生成・audit 検証 | done | [issue-586-impl-index-generation.md](./issue-586-impl-index-generation.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
