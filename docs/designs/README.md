@@ -188,6 +188,7 @@ Directory: `docs/designs`
 | DESIGN-eBMdc3IAyT8cNugckC1k2Q | Issue #490 oracle late-create query epoch 整合設計 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | DESIGN-5Zp45sCRwv11kYwJ4MGJBX | Issue #565 WASAPI-native input path 設計 — per-packet device_position を frame_position に写す | approved | [issue-565-wasapi-input-frame-position-design.md](./issue-565-wasapi-input-frame-position-design.md) |
+| DESIGN-ubGFwmTpu82MiFMYl0RSVo | Issue #582 設計 — ci 3 lane 失敗の修正方針(冷キャッシュ fetch / libc pin / moxcms 0.9.2 境界適応) | approved | [issue-582-ci-lane-failures-design.md](./issue-582-ci-lane-failures-design.md) |
 | DESIGN-034Wv6hcYDLZycrIcEQ7Ec | Issue #583 設計 — mr_boxington 回帰の原因確定と検証方針(設定変更不要の判断) | approved | [issue-583-consumer-verify-mise-design.md](./issue-583-consumer-verify-mise-design.md) |
 | DESIGN-MnDOJoPVmxmAz1hdgVs3T3 | Issue #586 設計 — ir front matter 是正分類・index marker 配置・検証手順 | approved | [issue-586-impl-index-generation-design.md](./issue-586-impl-index-generation-design.md) |
 | DESIGN-034WuVTmYfKSkp3sJ8biu2 | Issue #590 設計 — ir missing-section 補完方針・セクション記述規約・検証手順 | approved | [issue-590-ir-missing-sections-design.md](./issue-590-ir-missing-sections-design.md) |

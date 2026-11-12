@@ -11,6 +11,7 @@ Directory: `docs/impl/ir`
 | IMPL-Nq2aV7kR4tYc9XwL3ZsH8D | Issue #386 Backend-neutral GUI Host 契約・GPUI Driver・Window/Dock 移行 — 第 2 PR 実装記録 | in-progress | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
 | IMPL-Rt5Bv8wKm2NcXd7PqLe4Yg | Issue #423 WebView 写像・focus capability 精緻化・GPUI 実窓検証 — 実装記録 | in-progress | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
 | IMPL-_exo5tf9F8bfLQSN05ZaeA | Issue #426 実装記録 — GPUI lab binding・story matrix・mechanism 実在検査・Golden 境界・Consumer 検査 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
+| IMPL-IVBg1yR3uF3Zq1zXqfrIYj | Issue #582 ci lane failures implementation record | draft | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

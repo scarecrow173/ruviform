@@ -179,6 +179,7 @@ Directory: `docs/test-specs`
 | TSPEC-hojj4XgrGAgMW3wK6Tr5Ok | Issue #490 oracle late-create query epoch テスト仕様 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | TSPEC-034VedyL5Ej4Yc3P62YgUl | Issue #552 — SendInput preflight 検証契約 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TSPEC-TnJfu6sTEzaQgA5YPfDd7e | Issue #565 WASAPI input frame_position test spec | approved | [issue-565-wasapi-input-frame-position.md](./issue-565-wasapi-input-frame-position.md) |
+| TSPEC-7QVSRiKeJAQ2bbzvImiekm | Issue #582 テスト仕様 — ci lane 修復・missing intent tag reject 維持・検証意図の保持 | approved | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 | TSPEC-034Wv7Ke6jN2sUWj85BnMi | Issue #583 テスト仕様 — mise install 回帰・preflight 成功・検証意図の維持 | approved | [issue-583-consumer-verify-mise.md](./issue-583-consumer-verify-mise.md) |
 | TSPEC-qGTnI0yoN6l104dWZX2Oqx | Issue #586 テスト仕様 — index 生成可能性・front matter 不変性・audit 非回帰 | approved | [issue-586-impl-index-generation.md](./issue-586-impl-index-generation.md) |
 | TSPEC-034WuVVSQeKKcnzXki6miZ | Issue #590 テスト仕様 — missing-section 0・本文品質・front matter/filename 不変・audit 非回帰 | approved | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |

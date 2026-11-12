@@ -162,6 +162,7 @@ Directory: `docs/specs`
 | SPEC-1ZxAql6tPbxsqXhvmGvphr | Issue #490 oracle late-create query epoch 整合 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | SPEC-034VeaErc3izqznL8Ycsk6 | Issue #552 — real-OS input lane SendInput preflight（注入→実効 read-back で EnvironmentBlocked と GUI Fail を区別） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | SPEC-4LwDFLWjvbGeZQSqW0Y93X | Issue #565 WASAPI input frame_position: IAudioClock::GetPosition の device position を port に乗せる | approved | [issue-565-wasapi-input-frame-position.md](./issue-565-wasapi-input-frame-position.md) |
+| SPEC-QDhe8xTiwyoX9UufhbVtoS | Issue #582 ci 3 lane 失敗(gpui-verify 冷キャッシュ / libc pin 喪失 / moxcms 0.9.2 drift)を修正する | approved | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 | SPEC-034Wv5sDkKQHAHjQDgLKG3 | Issue #583 consumer-verify preflight の mise mr_boxington 失敗を調査・検証する | approved | [issue-583-consumer-verify-mise.md](./issue-583-consumer-verify-mise.md) |
 | SPEC-Ede97f0t7vgWfr5wdww2Ib | Issue #586 docs/impl/ir・exp の管理 index を doc-maintenance で生成可能にする | approved | [issue-586-impl-index-generation.md](./issue-586-impl-index-generation.md) |
 | SPEC-034WuVytWK4glbu9CinZwq | Issue #590 docs/impl/ir の missing-section 本文補完 | approved | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |
