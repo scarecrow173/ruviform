@@ -5,6 +5,15 @@ WebView ホスト・`rvf://` カスタムプロトコル・組込みアセット
 バックエンド検出を提供するオプションのプラットフォーム adapter
 (Issue #156)。採択済み UI ADR(WebView-first hybrid)に従う。
 
+> **legacy/preview 注記（Issue #465）**: 本 crate は旧 WebView-first
+> 基盤の adapter であり、driver-neutral 標準は `ruviform-ui-gpui`
+> （Issue #384/#386）です。新規 `ViewSpec` の parity 対象ではなく、
+> 物理撤去は #419 採用判定 + consumer 側撤去（audio-lens #189 /
+> synvelis #232）の成立を gate とする別判断です。現行 main 基準の
+> 分類台帳は `evidence/rf465/inventory.json`（entry `RV-001`–`RV-006`）、
+> doc chain は `docs/specs|designs|plans|tasks|test-specs|impl/*/wv-removal-inventory*`
+> を参照してください。
+
 ## 責務
 
 - セッションホスト(`session` モジュール・feature `webview`・Issue #181 / #423):
