@@ -164,6 +164,7 @@ Directory: `docs/impl/ir`
 | IMPL-034RTBAAcyzygMEGzkuazL | Issue 302 T3 ledger and verification | completed | [issue-302-t3-ledger-and-verification.md](./issue-302-t3-ledger-and-verification.md) |
 | IMPL-034Uxng6BqRjROMnmJ4lor | Issue #305 io-e2e WAV byte golden + fault fixtures | completed | [issue-305-io-e2e-wav-byte-golden-fault-fixtures.md](./issue-305-io-e2e-wav-byte-golden-fault-fixtures.md) |
 | IMPL-0Rj3kVwF2mN8qXbCeLpY4d | Issue 305 media-io 旧 StagedOutput 完全削除・StagedFile 移行 | completed | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
+| IMPL-034WXT9H5uOuqU6UXmcmuk | Issue #306 G07/G08 fault seam・corpus replay | completed | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |
 | IMPL-At0dLb2kB9niysH7FtgPk8 | Issue #306 汎用 I/O 合成 E2E — ruviform-io-e2e 試験クレートと RF #305 候補 scratch 証拠 (IO-IMP-12) | completed | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | IMPL-mK9jH2gF5dS8aQ1wE4rT7y | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 実装記録 | completed | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | IMPL-034UudZrMUImnIREPB6lU1 | Issue #306 IO 合成 E2E slice-2 — Fault/Fuzz fixture・OS/FS probe・Rooted boundary | completed | [issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md](./issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md) |

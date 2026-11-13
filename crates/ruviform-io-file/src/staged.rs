@@ -197,8 +197,9 @@ impl StagedFile {
     }
 
     /// Test-support constructor: injects the adapter and snapshot
-    /// directly (used by the fault-injection mock).
-    #[cfg(test)]
+    /// directly (used by the fault-injection mock — `cfg(test)` unit
+    /// tests and the opt-in `fault-injection` feature facade).
+    #[cfg(any(test, feature = "fault-injection"))]
     pub(crate) fn with_ops(ops: Box<dyn PlatformFileOps>, info: RecoveryInfo) -> Self {
         Self {
             owner: StageOwner::new(ops, info),

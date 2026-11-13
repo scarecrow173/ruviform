@@ -24,6 +24,16 @@
 //! - `wav_fault` — finalize/write fault injection over
 //!   `&mut StagedFile`, cancel/drop boundaries, and the publish
 //!   outcome trichotomy classifier (Issue #305).
+//! - `fault_seam` — publish classification contract tests driven
+//!   through the public API only, with faults injected via
+//!   `ruviform-io-file`'s opt-in `fault-injection` feature
+//!   (`#[doc(hidden)]` mock facade): `Indeterminate`, post-publish
+//!   directory-sync failure, `TempState::Unknown`, and per-phase
+//!   `NotPublished` (Issue #306 G07).
+//! - `corpus_replay` — `#[ignore]`d, opt-in bounded corpus replay:
+//!   fixed-seed deterministic mutations of writer-canonical bytes
+//!   replayed through every composed reader under byte/decoded/
+//!   deadline budgets (`mise run test-io-e2e-corpus`, Issue #306 G08).
 //!
 //! # RT contract
 //!
