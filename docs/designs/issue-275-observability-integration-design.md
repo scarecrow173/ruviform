@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計"
 created: "2026-11-09"
-updated: "2026-11-10"
+updated: "2026-11-14"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -478,6 +478,86 @@ issue-275-obs-design-reconciliation.md`）。
 | G-7 | 外部 Provider/Exporter 故障で RT/Job 正本・Source のメトリクス/Query を損なわない | `issue-276-…` SinkFailureMode/Health・`issue-293-…` drain/error isolation・`issue-291-…` sink panic isolation + #281 G4 |
 | G-8 | MSRV・Linux/macOS/Windows・Cross-Repo #219/#281 に Evidence（未実行は NOT RUN） | #219 consumer-verify runbook + #294 candidate gate + #281 PASS 証跡書式。`test-observability-msrv`（MSRV 1.89・all features）は 2026-11-10 slice で実行済み。Linux/macOS・cross-repo evidence は `NotRun` |
 | G-9 | #101/#103 の古い Logging 保留・クレート抽出前提を合意版として設計書更新し影響変更を記録 | 本 slice: `foundation-observability-minimal-api.md`・`shared-foundations-and-modularization-policy.md` への改訂注記（後述） |
+
+## OBS-01〜11 Owner/API/Feature/CI Case 対応表
+
+Issue #275 残件の対応付け（2026-11-14 追記）。OBS-01〜11
+それぞれの実装 Owner・公開 API・Cargo feature・既存 CI
+Case を、`gh issue view`・`crates/ruviform-observability/
+Cargo.toml`・`src/`・`.github/workflows/`・`mise.toml` の
+実測に基づき対応付ける。実測根拠の snapshot は
+`evidence/rf275/obs-owner-map-audit.md`。lane 名は
+`mise.toml` タスク名と workflow job 名に一致させた。
+`ci.yml` は dispatch-only（`daily-ci.yml` が main SHA で
+起動）であり、lane の定義存在は個別 SHA での実行済みを
+意味しない — 実測 Pass は各 run の artifact/summary が
+正本。
+
+状態区分の語彙（POLICIES）: 要件状態は `Required`/
+`Deferred`/`NotApplicable`、実行結果は `Pass`/`Fail`/
+`NotRun`/`Unsupported`。本表は要件状態と「既存 lane で
+実行し得るか」の対応を記し、特定 SHA の実測結果を
+推論しない。OS 要件レベルは現行方針どおり Windows は
+OS-L1 必須・GUI-L2/EXT-L3 は使用機能のみ Required、
+macOS/Linux は OS-L1 必須・GUI/EXT は利用要件発生まで
+Deferred とする。
+
+| OBS | Owner Issue | Module / crate | Feature | 公開 API（代表） | 正本 doc | 既存 CI Case | 状態区分 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| OBS-01 | [#276](https://github.com/scarecrow173/ruviform/issues/276) CLOSED（実装正本）。検証は #281 | `ruviform-observability::logging` | `logging` | `LoggingConfig`/`SinkConfig`/`SinkDestination`/`LogFormat`/`RotationPeriod`/`SinkFailureMode`/`build_logging`/`build_logging_layers`/`LoggingHealth`/`SinkHealthSnapshot`/`HealthSnapshot` | `docs/designs/issue-276-generic-logging-adapter.md` + 同 test-spec | `msrv-verify`/`test-observability-msrv`（rust@1.89.0・`--all-features`・Linux）のみが `tests/logging.rs`・`src/logging/*`・example `logging_host` を compile+test。default 非含有のため `verify`/`rt-verify` 系では compile されない。Win/macOS native の feature 付き build/link/test は `NotRun` | OS-L1 Required（feature 有効時）。Linux MSRV lane で実行可、Win/macOS は `NotRun` |
+| OBS-02 | [#277](https://github.com/scarecrow173/ruviform/issues/277) CLOSED | `ruviform-observability::{core, source}` | なし（default） | `counter()`/`Counter`/`CounterReader`、`gauge()`/`Gauge`/`GaugeReader`、`histogram()`/`Histogram`/`HistogramReader`/`HistogramError`；`MetricDescriptor`/`CounterDescriptor`/`SourceId`/`SourceGeneration`/`SourceIdentity`/`ObservationRegistrar`/`RegistrationLease`/`SourceLifecycle`/`ObservationScope`/`CounterSource`/`MetricSource`/`MetricReader` | `docs/designs/issue-277-observability-core-source-contract.md` + 同 test-spec | `verify`（Win/Linux）・`verify-macos` の `check-full`/`build-full`/`test-full`；`rt-verify` の `test-rt`（`rt_counter_ops_allocate_nothing`・`rt_gauge_ops_allocate_nothing`・`rt_histogram_observe_allocates_nothing`）；`msrv-verify` | OS-L1 Required。3 OS lane + rt lane で実行可。個別 SHA の Pass は各 run が正本 |
+| OBS-03 | [#278](https://github.com/scarecrow173/ruviform/issues/278) CLOSED | `ruviform-observability::tracing_export` | `tracing-export` | `TracingExporter`/`TracingRecordExporter`/`TracingFindingSink`/`TraceContext`/`EmitStats`/`RecordEmitStats`/`DEFAULT_MAX_EMISSIONS_PER_POLL`/`DEFAULT_MAX_EVENTS_PER_DRAIN` | `docs/designs/issue-278-observability-tracing-export.md`・`issue-278-observability-tracing-export-records.md` + 同 test-spec | `msrv-verify`/`test-observability-msrv`（`--all-features`）が `src/tracing_export/tests.rs`・`tests/rt_boundary.rs`（`required-features=["tracing-export"]`、dispatch 設置下の RT 非発行契約）を実行。Win/macOS native の feature 付き build/link は `NotRun` | OS-L1 Required（feature 有効時）。Linux MSRV lane のみ、Win/macOS は `NotRun` |
+| OBS-04 | [#279](https://github.com/scarecrow173/ruviform/issues/279) CLOSED | `ruviform-plugin-host`（`l1`/`composite` — observability 側に feature なし） | なし | `ObservationRegistrar` port の実装・`set_observation_registrar`・4 Counter（`dropped_submits`/`passthrough_submits`/`results_failed_observed`/`results_dropped`）の Source 登録 | `docs/designs/issue-279-plugin-host-counter-source-registration.md` + 同 test-spec | `verify`（Win/Linux）・`verify-macos` の `test-full`（plugin-host は workspace member・default features）；`rt-verify` の `test-rt` | OS-L1 Required。3 OS lane で実行可 |
+| OBS-05 | [#280](https://github.com/scarecrow173/ruviform/issues/280) CLOSED | `ruviform-observability::{record, rt_bridge}`（leaf deps: `ruviform-rt`・`ruviform-media-core` — ADR obs-05） | なし | `rt_bridge::bridge`/`RtRecorder`/`RecordSink`/`ReceivedRecord`；`ClockContext`/`CorrelationBook`/`CorrelationToken`/`CorrelationLink`/`CorrelationStatus`/`EventRecord`/`RecordHeader`/`EventId` | `docs/designs/issue-280-rt-record-bridge-clock-correlation.md` + `docs/adr/obs-05-observability-leaf-primitive-deps.md` + 同 test-spec | `verify` 3 OS + `rt-verify`（`rt_try_record_and_counters_allocate_nothing`・`rt_record_ops_allocate_nothing`・`rt_clock_context_ops_allocate_nothing`）+ `msrv-verify` | OS-L1 Required。実機負荷下の RT 計測は #281 実機 Gate（別段階・`NotRun`） |
+| OBS-06 | [#281](https://github.com/scarecrow173/ruviform/issues/281) OPEN（検証 Gate Owner）+ [#219](https://github.com/scarecrow173/ruviform/issues/219)・[#294](https://github.com/scarecrow173/ruviform/issues/294)（cross-repo 機構）+ [AL #127](https://github.com/scarecrow173/audio-lens/issues/127)・[SV #28](https://github.com/scarecrow173/synvelis/issues/28)（Consumer Oracle） | なし（gate — module を持たない） | — | —（gate 証拠の収集・判定を所有。Case 組: OBS-RT/OBS-LOG/OBS-SRC/OBS-PRIV/OBS-PROF/OBS-AL/OBS-SV） | Issue #281 本文 + `docs/designs/issue-294-cross-consumer-candidate-gate.md`・`issue-219-cross-repo-ci-gate-credential-runbook.md` 等 | `consumer-verify.yml`（`verify-audiolens`/`verify-synvelis` + fail-closed `summary`）・`rt-verify`・`msrv-verify` が証拠源。Daily/manual Full CI の対象 SHA 証拠が必須 | Required（継続中）。gate 未実施分は `NotRun` のまま — 本表は実行済みを意味しない |
+| OBS-07 | [#289](https://github.com/scarecrow173/ruviform/issues/289) CLOSED | `ruviform-observability::{collector, metrics}` | なし | `Collector`/`CollectorRegistrar`/`CollectorHandle`/`PollRunner`/`ObservationBatch`/`MetricsSnapshot`/`CollectorHealth`/`CollectorState`/`CollectorConfig`/`PollError`/`ObservationWindow`；`Measurement`/`MeasurementValidity`/`MeasurementIssue`/`MetricValue` | `docs/designs/issue-289-observability-collector-metrics.md` + 同 test-spec | `verify` 3 OS の `test-full`（`src/collector/tests.rs` 等）+ `msrv-verify` | OS-L1 Required。3 OS lane で実行可 |
+| OBS-08 | [#290](https://github.com/scarecrow173/ruviform/issues/290) CLOSED | `ruviform-observability::rt_timing`（default）+ `ruviform-observability::profiling`（`allocation-probe`） | なし / `allocation-probe` | rt_timing: `timing_bridge`/`TimingRecorder`/`TimingSink`/`TimingWindow`/`TimingSnapshot`/`TimingClock`/`TimingRecord`/`TimingSample`/`QuantileEstimate`/`TIMING_SCHEMA_VERSION`；profiling: `CountingAllocator`/`AllocationScope`/`AllocationWindow`/`AllocationStats`/`OpStats` | `docs/designs/issue-290-observability-rt-timing.md`・`issue-290-observability-allocation-probe.md` + 同 test-spec | rt_timing: `verify` 3 OS + `rt-verify`（`rt_record_allocates_nothing`・`rt_record_ops_allocate_nothing`）。profiling: `msrv-verify`/`test-observability-msrv`（`--all-features`）のみ。Win/macOS native の `allocation-probe` build は `NotRun` | OS-L1 Required。rt_timing は 3 OS lane、profiling は Linux MSRV lane のみで Win/macOS は `NotRun` |
+| OBS-09 | [#291](https://github.com/scarecrow173/ruviform/issues/291) CLOSED | `ruviform-observability::diagnostics` | なし | `Diagnostics`/`DiagnosticsHealth`/`Evidence`/`EvidenceKind`/`EvidenceRef`/`EvidenceEntry`/`DiagnosticFinding`/`FindingSeverity`/`FindingCertainty`/`FindingStatus`/`HealthState`/`HealthEvaluator`/`HealthRule`/`Hysteresis`/`DiagnosticSnapshot`/`DiagnosticReport`/`FindingSink`/`SinkPolicy`/`DiagnosticsEvent` | `docs/designs/issue-291-observability-diagnostics.md` + 同 test-spec | `verify` 3 OS の `test-full`（`src/diagnostics/tests.rs` 等）+ `msrv-verify` | OS-L1 Required。3 OS lane で実行可 |
+| OBS-10 | [#292](https://github.com/scarecrow173/ruviform/issues/292) CLOSED | `ruviform-observability::debug` | なし | `DebugInspector`/`DebugConfig`/`DebugHealth`/`InspectionBudget`/`InspectionRequest`/`InspectionSnapshot`/`InvariantCheck`/`InvariantOutcome`/`InvariantVerdict`/`ProbeSource`/`DebugSessionState`/`DebugReport`/`ExportLimits`/`DEBUG_REPORT_SCHEMA_VERSION` | `docs/designs/issue-292-observability-debug-inspection.md` + 同 test-spec | `verify` 3 OS の `test-full`（`src/debug/tests.rs` 等）+ `rt-verify`（`rt_debug_value_types_allocate_nothing`）+ `msrv-verify` | OS-L1 Required。3 OS lane で実行可。実 OS GUI 上の debug 表示は Deferred（後述） |
+| OBS-11 | [#293](https://github.com/scarecrow173/ruviform/issues/293) CLOSED | `ruviform-observability::integration` | `integration` | `ObservabilityConfig`/`ObservationRunner`/`RunnerState`/`RunnerHealth`/`PollOutcome`/`DrainCompleteness`/`ShutdownReport`/`ReconfigureReport`/`ConfigError`/`ExportPolicy`/`DebugSettings`/`NonMigrated`/`RunnerError`/`ExportTotals` | `docs/designs/issue-293-observability-integration-runner.md` + 同 test-spec | `integration` は `ruviform-audio` の dev-dependency が `features=["integration"]` を要求するため `cargo test --workspace` 系で feature unify され、`verify`/`verify-macos` の `test-full` と `msrv-verify` で compile+test（`tests/integration.rs`・`src/integration/tests.rs`）。`cargo build --workspace`（`build-full`）は dev-dep 非含有で default のみ | OS-L1 Required。3 OS lane で実行可。GUI 購読境界の実機検証は Deferred（後述） |
+
+### Consumer 独立 Oracle の引き渡し
+
+- **AudioLens [#127](https://github.com/scarecrow173/
+  audio-lens/issues/127)**（Logging parity・Privacy・
+  f64/長尺精度の独立 Headless 受入）と **Synvelis
+  [#28](https://github.com/scarecrow173/synvelis/issues/28)**
+  （Subscriber/RT/DAW/精度の独立 Headless 受入）は、
+  RF #281（OBS-06 gate）および #294（candidate tuple
+  集約・fail-closed `summary`）経由で要求される。
+  consumer-verify の lane 記録は pass/not_run/
+  unsupported を区別し、`not run` を pass にしない。
+- **AL [#138](https://github.com/scarecrow173/audio-lens/
+  issues/138)・SV [#81](https://github.com/scarecrow173/
+  synvelis/issues/81) は CLOSED の導入履歴 Issue** で
+  あり継続受入 Owner ではない。本表・後続 gate で再 Open
+  する記述は行わない。
+- **独立 Oracle**: 一方の Consumer の Pass を他方へ
+  転用しない。AL/SV それぞれの repo 側 task・fixture・
+  Oracle が受入の正本。
+
+## Deferred 範囲の Owner/Trigger
+
+Issue #275 現行受入（2026-11-13）では、実外部
+Provider・実 OS GUI・実 Device・長時間 Profiler は
+「利用要件発生まで Deferred」であり、現行設計 Close の
+必須実走にしない。Deferred は要件状態であり、実行結果
+`NotRun` を `Pass`/`Unsupported` に置き換えない。各項目
+の再開 Owner と Activation Trigger を以下に固定する。
+
+| Deferred 項目 | 現行の扱い | 再開 Owner | Activation Trigger | 放置時リスク |
+| --- | --- | --- | --- | --- |
+| 実外部 Provider/Exporter（実 OTLP endpoint・外部 tracing backend 等） | Issue #275 非対象（必須 OTLP/Tracy/Prometheus を作らない）。in-repo の変換・health 契約のみ | Ruviform Observability owner — 利用決定時に新規 Issue を起票し #281 で gate 証拠を収集 | Host/Consumer が実 exporter 接続を製品機能として採用すると決定した時点 | 外部連携の故障・精度問題が in-repo 検証をすり抜ける |
+| 実 OS GUI（実 Window 上の Observability 購読/表示） | `integration` の GUI 向け non-RT Snapshot/Subscription は API/契約のみ。実画面検証は GUI-L2 | RF #293（API 境界）+ 利用機能の Owner Issue（AL #127/SV #28 の Windows L2 Case。real-window 系 lane の設計正本: `docs/designs/issue-313-windows-realos-smoke.md`・`docs/designs/issue-314-real-scenario-lane.md`） | Host が Observability の GUI 診断表示を実際に提供・利用すると決定し、Windows 利用機能として GUI-L2 Required 化された時点 | GUI 経路の実機不具合が headless 検証をすり抜ける |
+| 実 Device（物理 Audio/MIDI 機器・実機負荷） | RT Bridge/Timing の契約試験は headless のみ。実機負荷下の latency/欠落は未計測 | RF #281（OBS-06 gate の実機負荷段階）+ device 利用機能の Owner Issue | 実機 Device を使う製品機能の利用が決定した時点（POLICIES EXT-L3） | 実機条件下の RT/欠落問題が gate 前に顕在化する |
+| 長時間 Profiler（samply 等の長時間・実負荷計測） | `allocation-probe`/`rt_timing` は開発・テスト用の有界計測のみ。長時間 profiling は未実施 | RF #281 + 利用要件を起票する新規 Issue（必要時） | 長時間・実負荷での性能/確保時間計測要件が具体化した時点 | 長時間劣化・リソースリークが短時間試験をすり抜ける |
+
+なお **feature compile matrix**（`--no-default-features`・
+各 feature 単独・full consumer 組合せの compile 検証）は
+Deferred ではなく #281 G0 の継続 gate 項目であり、
+要件状態 `Required`・実行結果 `NotRun` のまま維持する。
+macOS/Linux の GUI/EXT も同様に「利用要件発生まで
+Deferred」（POLICIES）であり、具体的な利用決定が Trigger。
 
 ## #101/#103 前提の更新記録
 

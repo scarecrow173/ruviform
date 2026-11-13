@@ -99,6 +99,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QgS4TFyEN937G8j8DKR | Issue #190 T-2: span scheduler apply | completed | [issue-190-t-2-span-scheduler-apply.md](./issue-190-t-2-span-scheduler-apply.md) |
 | IMPL-034QgS61F2OZZNh6JVUeV3 | Issue #190 T-3: plugin bridge + mock PoC | completed | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
 | IMPL-034QhS434AsmoWfCforctH | Issue 191: PCM WAV encode/mux backend with MediaSink + StagedOutput | completed | [issue-191-pcm-wav-encode-mux-backend-with-mediasink-stagedoutput.md](./issue-191-pcm-wav-encode-mux-backend-with-mediasink-stagedoutput.md) |
+| IMPL-034WYgZmp0Qv3NLjgtu1jn | Issue #192 TA Invariant Map — 監査対応表・非循環性静的確認の実装記録 | completed | [issue-192-ta-invariant-map.md](./issue-192-ta-invariant-map.md) |
 | IMPL-034QgTkRw195m2audIoRtXwQ | Issue #195 M2 typed graph audio compiler/runtime: schedule, bounded buffers, PDC, stateful RT ownership, plan activation | completed | [issue-195-m2-typed-graph-compiler-runtime.md](./issue-195-m2-typed-graph-compiler-runtime.md) |
 | IMPL-issue196-m4-adapter | Issue #196 — M4 typed graph plugin adapter (multi-bus / lifecycle / offset precision) | completed | [issue-196-typed-graph-plugin-adapter.md](./issue-196-typed-graph-plugin-adapter.md) |
 | IMPL-8FuQb4NPvHVC136oYJUME7 | Issue #197 Generic Media Reader implementation record | completed | [issue-197-media-reader-implementation-record.md](./issue-197-media-reader-implementation-record.md) |
@@ -112,6 +113,7 @@ Directory: `docs/impl/ir`
 | IR-Rf242SpawnHeirBarrier01 | Issue #242 実装記録 — 残存 L1 E2E suite の wall-clock settle を `--spawn-heir` 決定的 converge barrier へ置換 | completed | [issue-242-l1-e2e-barrier-implementation.md](./issue-242-l1-e2e-barrier-implementation.md) |
 | IMPL-034Ue3QZ2los1ccAjflw0X | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 | completed | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | IMPL-034VCg0FFHoUGWo9FDCg0f | Issue #243 Windows multiwindow verdict 再実走・帳簿整合 closeout slice | completed | [issue-243-multiwindow-closeout-slice.md](./issue-243-multiwindow-closeout-slice.md) |
+| IMPL-034WZGD4u8P1g1M1fq3DI4 | Issue #243 Window/Job 不変条件 Headless 検証 証拠 | completed | [issue-243-window-job-headless.md](./issue-243-window-job-headless.md) |
 | IMPL-034V5Vzh8RJqYBNZRA9QZW | Issue #243 Windows 実 OS multiwindow smoke 証拠 | completed | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | IMPL-034QxLzTwkgQnhtvv7jXvB | Issue 244 media-reader prefetch contract residual warts | completed | [issue-244-media-reader-prefetch-contract-residual-warts.md](./issue-244-media-reader-prefetch-contract-residual-warts.md) |
 | IMPL-034QAt6Gd3zLwrqmsnq9CK | Issue 249 prefetch detection-Ended strands End marker | completed | [issue-249-prefetch-detection-ended-strands-end-marker.md](./issue-249-prefetch-detection-ended-strands-end-marker.md) |
@@ -133,6 +135,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QTOFbpeDKVZDoNfrXP5 | Issue #263 design system showcase theme matrix a11y regression cross-consumer gates | completed | [issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md](./issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md) |
 | IMPL-034QMvf4KmvWw53y1DczqT | Issue #265 CorrelationPlan prefers_direct コストモデル校正（mixed-radix 実コスト反映と direct 維持ガード） | completed | [issue-265-correlationplan-prefers-direct-mixed-radix-direct.md](./issue-265-correlationplan-prefers-direct-mixed-radix-direct.md) |
 | IMPL-034V68pdzoGf0crvlem0Zy | Issue #275 Observability integration design reconciliation and contract-test inventory | completed | [issue-275-obs-design-reconciliation.md](./issue-275-obs-design-reconciliation.md) |
+| IMPL-034WZPoBmkr0oYITBjQA67 | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け | completed | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
 | IMPL-034RwLrHlik3I1I7ljPS1y | Issue 276 T1: logging config/API types + feature wiring | completed | [issue-276-t1-logging-config-api-types-feature-wiring.md](./issue-276-t1-logging-config-api-types-feature-wiring.md) |
 | IMPL-034RwLt9pOcXsRFEHwaQA8 | Issue 276 T2: bounded writer + sinks + build result | completed | [issue-276-t2-bounded-writer-sinks-build-result.md](./issue-276-t2-bounded-writer-sinks-build-result.md) |
 | IMPL-034RwLuQ6IZyb2JEQ9I1Sz | Issue 276 T3: contract tests + host example + docs + verification | completed | [issue-276-t3-contract-tests-host-example-docs-verification.md](./issue-276-t3-contract-tests-host-example-docs-verification.md) |
@@ -165,6 +168,7 @@ Directory: `docs/impl/ir`
 | IMPL-034RTBAAcyzygMEGzkuazL | Issue 302 T3 ledger and verification | completed | [issue-302-t3-ledger-and-verification.md](./issue-302-t3-ledger-and-verification.md) |
 | IMPL-034Uxng6BqRjROMnmJ4lor | Issue #305 io-e2e WAV byte golden + fault fixtures | completed | [issue-305-io-e2e-wav-byte-golden-fault-fixtures.md](./issue-305-io-e2e-wav-byte-golden-fault-fixtures.md) |
 | IMPL-0Rj3kVwF2mN8qXbCeLpY4d | Issue 305 media-io 旧 StagedOutput 完全削除・StagedFile 移行 | completed | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
+| IMPL-034WXT9H5uOuqU6UXmcmuk | Issue #306 G07/G08 fault seam・corpus replay | completed | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |
 | IMPL-At0dLb2kB9niysH7FtgPk8 | Issue #306 汎用 I/O 合成 E2E — ruviform-io-e2e 試験クレートと RF #305 候補 scratch 証拠 (IO-IMP-12) | completed | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | IMPL-mK9jH2gF5dS8aQ1wE4rT7y | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 実装記録 | completed | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | IMPL-034UudZrMUImnIREPB6lU1 | Issue #306 IO 合成 E2E slice-2 — Fault/Fuzz fixture・OS/FS probe・Rooted boundary | completed | [issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md](./issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md) |
@@ -208,6 +212,7 @@ Directory: `docs/impl/ir`
 | IMPL-034UaLZbuMa8o4uov8RY26 | Issue #436 実装記録 — GpuiObserver drawn の consumer 側検証（ruviform 内 consumer 型テスト） | completed | [issue-436-drawn-consumer-verification.md](./issue-436-drawn-consumer-verification.md) |
 | IMPL-034UcjJXdshRRIGjbzDcS9 | Issue #442/#443/#435 検証クローズアウト — 既実装 3 Issue の検証証拠と文書整合 | completed | [issue-442-443-435-verification-closeout.md](./issue-442-443-435-verification-closeout.md) |
 | IMPL-034Uh5vBGP1ASyRB9MdhY8 | Issue #478 Fader/Knob 縦寸法契約 — grow+min_h slot 実装 | completed | [issue-478-fader-knob-grow-min-h-slot.md](./issue-478-fader-knob-grow-min-h-slot.md) |
+| IMPL-034WZFUVrjVFDc3zOgWJHp | Issue 532 DComp audit doc chain | completed | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
 | IMPL-034VeXFI5DET4CkhWJrBln | Issue #552 SendInput preflight（注入→実効 read-back で environment_blocked を区別） | completed | [issue-552-sendinput-preflight-read-back-environment-blocked.md](./issue-552-sendinput-preflight-read-back-environment-blocked.md) |
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |

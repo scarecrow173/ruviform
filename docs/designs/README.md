@@ -52,6 +52,7 @@ Directory: `docs/designs`
 | DESIGN-034Qh2kLmNoPqRsTuVwX | Issue #190 Transport Span Scheduler — 実装設計 | approved | [issue-190-transport-span-scheduler.md](./issue-190-transport-span-scheduler.md) |
 | DESIGN-034Qhua2OtuBq26hwS8LpX | Issue #191 PCM WAV output backend design | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | DESIGN-034UBX7Lbr3m4u4ZGzQpHA | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| DESIGN-034WYfShwch3ZurjTQp3Sp | Issue #192 TA Invariant Map — 監査設計 | approved | [issue-192-ta-invariant-map-design.md](./issue-192-ta-invariant-map-design.md) |
 | DESIGN-034UCMjL9ps9ffJkQqwDlR | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | DESIGN-034WZ7Y0r628xfq8Nhga00 | Issue #193 Migration Plan Update — 版付き Snapshot 設計 | draft | [issue-193-migration-plan-update-design.md](./issue-193-migration-plan-update-design.md) |
 | DESIGN-034QfjYdt3o2a4lijg4lwt | Issue #195 M2 Typed Graph Compiler・Bounded Buffers/PDC・RT Runtime・Stateful Ownership・Activation | approved | [issue-195-m2-typed-graph-compiler-buffer-pdc-rt-runtime-ownership-activation.md](./issue-195-m2-typed-graph-compiler-buffer-pdc-rt-runtime-ownership-activation.md) |
@@ -62,6 +63,7 @@ Directory: `docs/designs`
 | DESIGN-034UF2Q9OH59VxiQZUfUgN | Issue #219 Cross-Repo 影響判定・CI Gate 運用設計 — Consumer 棚卸し・影響分類テンプレート・候補 Gate・切り分け/保留復旧・M0-M7 証拠可視化 | draft | [issue-219-cross-repo-impact-gate-operations.md](./issue-219-cross-repo-impact-gate-operations.md) |
 | DESIGN-034QolOnuF7kf2drxSsvvH | Issue #233 prefetch contract improvements — discard_pending drain, seek discard flag, reopen_at structural design | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | DESIGN-034UdN3RWXD8Kk4elhwAtR | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 — 設計 | approved | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
+| DESIGN-034WZGgweiRw2qZcHmfIbr | Issue #243 — Window/Job 不変条件 Headless 検証設計 | approved | [issue-243-window-job-headless-design.md](./issue-243-window-job-headless-design.md) |
 | DESIGN-034V4sf4ndYXHxJt8IBeXG | Issue #243 — Windows 実 OS multiwindow smoke 設計（部分スコープ・後続スライス） | approved | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | DESIGN-034QxcnAfFWswZmwSKPbKH | Issue #244 prefetch contract wart fixes — boundary-first emission, dead-generation sequence, End commit-once, seeded-fault coverage | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | DESIGN-cJ0I0j6o66AAfUm2eE5q8y | Issue #251 Stage W closeout 設計 — 実機 lane 拡張と証拠 matrix | approved | [issue-251-stage-w-real-device-closeout-design.md](./issue-251-stage-w-real-device-closeout-design.md) |
@@ -70,6 +72,7 @@ Directory: `docs/designs`
 | DESIGN-034VEQoHhDL68K8qLl8w8r | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-design.md](./issue-253-unsupported-transparency-design.md) |
 | DSN-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice 設計（IMidiMapping snapshot + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | DESIGN-034UjQBuwtfaWhLg6ZZMBn | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合設計 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| DESIGN-034WZCcSruHEmlEMFX1Mlu | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け設計 | approved | [issue-275-obs-owner-map-design.md](./issue-275-obs-owner-map-design.md) |
 | DESIGN-hXhz1NTWfHfPzPb5P4A5ff | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | DESIGN-034RoXjgYbKKZ3ZSazkSGi | Issue #276 汎用 Logging Adapter 設計 | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | DESIGN-034Rp1Um3ZXDWfRx8pCmuw | Issue #277 OBS-02 軽量Primitive・Observation Source契約: Gauge/Histogram・Descriptor・SourceId/Generation・Registrar/Lease・寿命 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
@@ -105,6 +108,7 @@ Directory: `docs/designs`
 | DESIGN-mH3gJLoQj3rdU7xRXX8eZD | Issue #304 ruviform-io-archive — Secure Extraction・Staging/Recovery・OS 別 Root Capability 設計 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
 | DESIGN-034UvWqyRcaTQap2SH5FfT | Issue #305 IO E2E slice — WAV Byte Golden・Fault fixture 設計 | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | DESIGN-eVPQpm7tyMUS2gxitU5KtN | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行設計 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
+| DESIGN-034WXOSFa35dv10W4LdOri | Issue #306 G07/G08 fault seam・corpus replay 設計 | approved | [issue-306-fault-seam-fuzz-design.md](./issue-306-fault-seam-fuzz-design.md) |
 | DESIGN-ODmc6p5Cp7Kbq0u35OrAiR | Issue #306 汎用 I/O 合成 E2E — 試験専用クレート構成・境界試験設計 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | DESIGN-fH3jK9mP2qW8rT5yU7iO4a | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 設計 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | DESIGN-034UtzREeBZLceakda7vIS | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture 設計 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
@@ -191,6 +195,8 @@ Directory: `docs/designs`
 | DESIGN-64fKOE68pKEdIkGIEgcsyW | Issue #479 — 値制御コンポーネントのキーボード操作の設計 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | DESIGN-034UiRsPAtNVImhGaTw2TY | Issue #480 設計 — tab_focus の op 駆動解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | DESIGN-eBMdc3IAyT8cNugckC1k2Q | Issue #490 oracle late-create query epoch 整合設計 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
+| DESIGN-034WZDs4eeCII39QySEoEq | Issue #532 DComp 監査文書チェーン設計 | approved | [issue-532-dcomp-audit-design.md](./issue-532-dcomp-audit-design.md) |
+| DESIGN-034WZDvbXaGkQVl6nT6jRx | Issue #532 DComp Native Dock 再開条件と方式 A/B/C 調査設計 | approved | [issue-532-dcomp-native-dock.md](./issue-532-dcomp-native-dock.md) |
 | DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | DESIGN-5Zp45sCRwv11kYwJ4MGJBX | Issue #565 WASAPI-native input path 設計 — per-packet device_position を frame_position に写す | approved | [issue-565-wasapi-input-frame-position-design.md](./issue-565-wasapi-input-frame-position-design.md) |
 | DESIGN-ubGFwmTpu82MiFMYl0RSVo | Issue #582 設計 — ci 3 lane 失敗の修正方針(冷キャッシュ fetch / libc pin / moxcms 0.9.2 境界適応) | approved | [issue-582-ci-lane-failures-design.md](./issue-582-ci-lane-failures-design.md) |

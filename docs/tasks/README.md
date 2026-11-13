@@ -186,6 +186,7 @@ Directory: `docs/tasks`
 | TASK-034Qh6uIoPqWsErTyU | Issue #190 T-2: transport controller + RT span scheduler | done | [issue-190-t-2-span-scheduler-apply.md](./issue-190-t-2-span-scheduler-apply.md) |
 | TASK-034Qh7vBnMxZaSdFgH | Issue #190 T-3: plugin transport bridge + Mock Driver PoC | done | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
 | TASK-034UCcxDGa2UGOpkpXCbQJ | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | done | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| TASK-034WYgYyoC0JWYkg6gXlBK | Issue #192 TA Invariant Map — 監査対応表の作成と非循環性の静的確認 | done | [issue-192-ta-invariant-map-task.md](./issue-192-ta-invariant-map-task.md) |
 | TASK-034UCVp0kqovy1IEDp0LWy | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | done | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | TASK-Awm44usEpigGUWYXNxfbWd | Issue #196 T-1: plugin-core bus role + enumeration contract | done | [issue-196-t-1-plugin-core-bus-enumeration.md](./issue-196-t-1-plugin-core-bus-enumeration.md) |
 | TASK-HfEXpjuOcYSGP35UqpabKo | Issue #196 T-2: media-core receipt/fault pop + host bus enumeration | done | [issue-196-t-2-host-media-bus-enumeration.md](./issue-196-t-2-host-media-bus-enumeration.md) |
@@ -197,6 +198,7 @@ Directory: `docs/tasks`
 | TASK-034QdVbbaa7jKsLfhGKepC | T4 検証・IR 記録（actionlint・doc audit・実装記録） | done | [issue-219-t4-verify-ir.md](./issue-219-t4-verify-ir.md) |
 | TASK-034QsXMp7VDgLZ2W5FaZxq | Issue #223 MSRV 1.89 限定 pedantic clippy 失敗の整理 | done | [issue-223-msrv-clippy-triage.md](./issue-223-msrv-clippy-triage.md) |
 | TASK-M5TTFmL3gjHvlBOb7sPDjF | Issue #238 l1_proxy_e2e 壁時計 sleep 同期を barrier/有界 poll へ置換 | done | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
+| TASK-034WZGuoovHD3cTIYBWUGN | Issue #243 — Window/Job 不変条件 Headless 検証 実装タスク | done | [issue-243-window-job-headless-task.md](./issue-243-window-job-headless-task.md) |
 | TASK-034V4uYcdcMjdFzOg15rFm | Issue #243 — Windows 実 OS multiwindow smoke 実装タスク | done | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | TASK-034Qxfh3HNkNZecEqGSpM1 | T1 prefetch boundary-first fault + dead-generation sequence (Issue #244 P2 amendment) | done | [issue-244-t1-boundary-first.md](./issue-244-t1-boundary-first.md) |
 | TASK-034QxfhGvckBvhC0QQYCgA | T2 prefetch End commit-once under backpressure (Issue #244) | done | [issue-244-t2-end-commit-once.md](./issue-244-t2-end-commit-once.md) |
@@ -205,6 +207,7 @@ Directory: `docs/tasks`
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
 | TASK-NhYDSYvlGjsQQzBFWEXYE7 | Issue #251-T1: Stage W closeout — 実機 lane 証拠化と残存受入項目の検証・記録 | done | [issue-251-task1-stage-w-real-device-closeout.md](./issue-251-task1-stage-w-real-device-closeout.md) |
 | TASK-034UjQLrFyv9HY5QSH9HmW | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | done | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| TASK-034WZKWej3HLlqCGxHSDcH | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けタスク | done | [issue-275-obs-owner-map-task.md](./issue-275-obs-owner-map-task.md) |
 | TASK-y0ulI5SiiOT2XfWozCd8uK | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | done | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | TASK-034UyRQzDJa5cPKTt3NLFF | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | done | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
 | TASK-5IbSvHOaqP5LVXNKwJaonI | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | done | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |
@@ -243,6 +246,7 @@ Directory: `docs/tasks`
 | TASK-7VWD8KuRBS2voBCngFoIJF | A1 IO MSRV lane 追加・DAG/RT audit 証跡・検証 | done | [issue-306-a1-msrv-dag-rt-audit.md](./issue-306-a1-msrv-dag-rt-audit.md) |
 | TASK-034UtEdJ4J9ekRBHmpucta | F1 IO E2E fixture 実装 — Fault/Fuzz・Directory・OS/FS probe | done | [issue-306-f1-fixture-extension.md](./issue-306-f1-fixture-extension.md) |
 | TASK-034UtEeCVQCg44aM7iUrV3 | F2 正規検証・evidence・CI handoff 記録 | done | [issue-306-f2-verification-handoff.md](./issue-306-f2-verification-handoff.md) |
+| TASK-034WXSB8zGVc9NKQicjOEp | Issue #306 G07 fault seam 判定・契約試験 + G08 corpus replay | done | [issue-306-fault-seam-fuzz-task.md](./issue-306-fault-seam-fuzz-task.md) |
 | TASK-pL5wE8rT1yU4iO7pA2sD6f | Issue #306 OS-L1 既存 CI 証拠検査・不足 Case 補完 (Slice V+T) | done | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |
 | TASK-laPtj98NpzxI9OnVwLg5y4 | T2 File・Structured 境界試験 (Issue #306) | done | [issue-306-t2-file-structured-boundary.md](./issue-306-t2-file-structured-boundary.md) |
@@ -303,6 +307,7 @@ Directory: `docs/tasks`
 | TASK-G72QPe3EioqQac8Dsnoglk | Issue #479 — 値制御キーボード操作の実装タスク | done | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | TASK-034UiUpK8eTff8QiCEtGrP | Issue #480 — tab_focus op 駆動解放の実装と恒久テスト | done | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TASK-DBfsqONthDwUwmD4GpGXzq | Issue #490 T1 oracle addQuery epoch 整合 | done | [issue-490-t1-oracle-addquery-epoch.md](./issue-490-t1-oracle-addquery-epoch.md) |
+| TASK-034WZGjTqfOXG0HuO24s2c | Issue 532 DComp audit doc chain task | done | [issue-532-dcomp-audit-task.md](./issue-532-dcomp-audit-task.md) |
 | TASK-9cTXJ0IYeniJ7ZmRBuYibG | Issue #565-T1: WASAPI-native input path — frame_position 供給 | done | [issue-565-task1-wasapi-input-frame-position.md](./issue-565-task1-wasapi-input-frame-position.md) |
 | TASK-vioQrXcHCVk7TkuPqAIPKc | Issue #582 T1 — ci 3 lane 失敗の修正・doc-chain・workflow_dispatch 検証 | done | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 | TASK-034Wv7JmMeNPkMsHD0V8Cf | Issue #583 T1 — 原因確定・mise 検証・consumer-verify dispatch・doc-chain | done | [issue-583-consumer-verify-mise.md](./issue-583-consumer-verify-mise.md) |

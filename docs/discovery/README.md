@@ -16,6 +16,7 @@ Directory: `docs/discovery`
 | DISC-034O7hCIm5rGi3tA4rmxuc | Issue #121 L1 診断・可観測性（underrun メトリクス・子 stderr 配管・失敗原因 payload） | active | [issue-121-diagnostics.md](./issue-121-diagnostics.md) |
 | DISC-034QdFl4ZIWzDfKWh0Cg90 | Issue #184 型付き複数Bus/Port・Graph IRの現行実装棚卸しとcrate配置比較 | active | [issue-184-bus-port-graph-ir-crate.md](./issue-184-bus-port-graph-ir-crate.md) |
 | DISC-034QhIlaOBN3t7jVxA4sW7 | Issue #185 Generic Probe: Node/Port observation capability, selective monitoring, RT-safe bounded PCM capture — existing-surface inventory and design option survey | active | [issue-185-generic-probe-observation-inventory.md](./issue-185-generic-probe-observation-inventory.md) |
+| DISC-034WYeBHWSdbvryUnNKkus | Issue #192 TA-001〜012 Invariant ↔ 現行API/Issue/L1テスト対応表 + 依存非循環性監査 | active | [issue-192-ta-invariant-map.md](./issue-192-ta-invariant-map.md) |
 | DISC-034Q6prdW5pMq5zW9uTb3z | Issue #194 M0 互換性・依存・検証 Baseline 実測監査 | active | [issue-194-m0-baseline-audit.md](./issue-194-m0-baseline-audit.md) |
 | DISC-034QfjLwjBVqddpxivwOTg | Issue #195 M2 Typed Graph Audio Compiler・Buffer/PDC・Stateful RT Ownership・Plan Activation の現行棚卸し | active | [issue-195-m2-typed-graph-compiler-runtime-audit.md](./issue-195-m2-typed-graph-compiler-runtime-audit.md) |
 | DISC-034QdBDFXQ7CpGCCYpN94k | Issue #219 両 Consumer 依存形態・検証基盤棚卸しと Cross-Repo CI 前提実測 | draft | [issue-219-consumer-cross-repo-ci.md](./issue-219-consumer-cross-repo-ci.md) |
@@ -57,5 +58,6 @@ Directory: `docs/discovery`
 | DISC-im2uskbeNbGlhxBg1mtsTR | Issue #386 Driver-neutral GUI Host: 現行契約棚卸しと WebView 前提分離案 | resolved | [issue-386-driver-neutral-gui-host-inventory.md](./issue-386-driver-neutral-gui-host-inventory.md) |
 | DISC-c2G2365EomTupKRjR3zoqt | Issue #388/#389 Native Plugin Dock 現行実装監査（GuiParentToken / L1 Unsupported / wire / Dock 契約の棚卸し） | resolved | [issue-388-389-native-dock-current-state.md](./issue-388-389-native-dock-current-state.md) |
 | DISC-PZXzzHRXfnvatIchgHgLEJ | Issue #465 Legacy WebView 基盤の棚卸し — 撤去対象・移行先・consumer 影響 | resolved | [issue-465-legacy-webview-inventory.md](./issue-465-legacy-webview-inventory.md) |
+| DISC-034WZDbDyQpBcWspeahHje | Issue #532 GPUI DComp topmost 合成制約 — 現行 L1 証拠照合・再開条件・方式 A/B/C 調査手順監査 | resolved | [issue-532-dcomp-native-dock.md](./issue-532-dcomp-native-dock.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |

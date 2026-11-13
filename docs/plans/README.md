@@ -75,6 +75,7 @@ Directory: `docs/plans`
 | PLAN-ayJ9gag4RycXPJ01POnAkp | Issue #188 Timed MIDI — implementation plan | approved | [issue-188-timed-midi.md](./issue-188-timed-midi.md) |
 | PLAN-034Qhwlp4j8Gy5S5uG46Qr | Issue #191 PCM WAV output backend implementation plan | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | PLAN-034UCajy65hNl8zISc6rvu | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| PLAN-034WYgMWpq7xkREpxpFnGt | Issue #192 TA Invariant Map — 監査・対応表作成計画 | approved | [issue-192-ta-invariant-map-plan.md](./issue-192-ta-invariant-map-plan.md) |
 | PLAN-034UCTG1MAGz2NU32GulcZ | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 計画 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | PLAN-YNOz2WL10n4v4Avi6qlRE9 | Issue #197 media reader / prefetch / RT consumer implementation plan | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
 | PLAN-034Qonvu2E5YQaWUHEcTeL | Issue #233 media-reader prefetch contract improvements implementation plan | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
@@ -83,6 +84,7 @@ Directory: `docs/plans`
 | PLAN-yYLB0HDhiCqmnfV65T7mNu | Issue #251 Stage W closeout 実施 plan | approved | [issue-251-stage-w-real-device-closeout-plan.md](./issue-251-stage-w-real-device-closeout-plan.md) |
 | PLAN-034VERRPegu2dLBq0VqYol | Implement Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-plan.md](./issue-253-unsupported-transparency-plan.md) |
 | PLAN-034UjQKJduyKqWBrTakfn1 | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| PLAN-034WZJtam1qsAaVqT64TYw | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け計画 | approved | [issue-275-obs-owner-map-plan.md](./issue-275-obs-owner-map-plan.md) |
 | PLAN-H6keHUx9U3sTwtH2ngWKyQ | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | PLAN-034RoY5EwSBQJwEF1k5arE | Issue #276 generic logging adapter implementation plan | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | PLAN-034UyQfNa0aSYqwNDMIZn9 | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
@@ -164,6 +166,7 @@ Directory: `docs/plans`
 | PLAN-1OVcOgiEi7tc3VMXPzF9F3 | Issue #479 — 値制御キーボード操作の実装計画 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | PLAN-034UiTo1gkl570hZTb2iU7 | Issue #480 実装計画 — tab_focus の op 駆動解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | PLAN-2uLb895SP6hIbAneuh5Pjs | Issue #490 oracle late-create query epoch 実装計画 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
+| PLAN-034WZEqWKThthcYF1frADG | Issue #532 DComp 監査文書チェーン計画 | approved | [issue-532-dcomp-audit-plan.md](./issue-532-dcomp-audit-plan.md) |
 | PLAN-034VehuU5KuL3vurAXEXph | Issue #552 — SendInput preflight 実装計画 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | PLAN-zmhvig6ptUxYZGsi0NwJ4MGJBX | Issue #565 WASAPI-native input frame_position 実装 plan | approved | [issue-565-wasapi-input-frame-position-plan.md](./issue-565-wasapi-input-frame-position-plan.md) |
 | PLAN-5ts8wdqB6w1EhNnXtogfbs | Issue #582 実施計画 — ci 3 lane 失敗の修正と workflow_dispatch 検証 | approved | [issue-582-ci-lane-failures-plan.md](./issue-582-ci-lane-failures-plan.md) |
@@ -207,10 +210,12 @@ Directory: `docs/plans`
 | PLAN-034QkFry8lZR9PeeXNpx09 | Issue #186 Parameter Control Events — implementation plan | completed | [issue-186-param-control-events.md](./issue-186-param-control-events.md) |
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
+| PLAN-034WZGtEYdaixOYopRPVvk | Issue #243 — Window/Job 不変条件 Headless 検証 実装計画 | completed | [issue-243-window-job-headless-plan.md](./issue-243-window-job-headless-plan.md) |
 | PLAN-034V4uVEulNfghJYxbNL9Y | Issue #243 — Windows 実 OS multiwindow smoke 実装計画 | completed | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | PLAN-J2SBIDqNyZcnFDIJmvppYM | Issue #294 consumer-verify → ci-issue-tracker 配線実装計画 — scope 別 job・reconcile 全 scope 化・contract test | completed | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | PLAN-034Ulf4tsZJz5CatpaE7hG | Issue #294 daily candidate-tuple trigger 実装計画 — decide.mjs tuple モード・daily-ci job・契約 test | completed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
+| PLAN-034WXSiTHXNyUkkb6VasRN | Issue #306 G07/G08 fault seam・corpus replay 実装計画 | completed | [issue-306-fault-seam-fuzz-plan.md](./issue-306-fault-seam-fuzz-plan.md) |
 | PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | PLAN-034TnojDZIYRnnvSTlTg34 | Issue #409 scoped re-root + bounded enumeration 実装計画 | completed | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |

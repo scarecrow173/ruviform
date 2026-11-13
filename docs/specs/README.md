@@ -37,6 +37,7 @@ Directory: `docs/specs`
 | SPEC-034Qg9hT0w1z3B9vJkLmNo | Issue #190 Generic Transport Span Scheduler / Applied Receipt / Clock-Plan Generation contract | approved | [issue-190-transport-span-scheduler.md](./issue-190-transport-span-scheduler.md) |
 | SPEC-034QhrD80l0ZtpqNTqFvHa | Issue #191 PCM WAV encode/mux output backend | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | SPEC-034UBU16WQsh5QzC5ak17G | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| SPEC-034WYfwcdnbMdpGzQQzRKN | Issue #192 TA Invariant ↔ 現行API/Issue/L1テスト対応表 + 依存非循環性監査 | approved | [issue-192-ta-invariant-map.md](./issue-192-ta-invariant-map.md) |
 | SPEC-034UCI2A3NOXf96MhNKdmi | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 仕様 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | SPEC-034WZ7XezzT5NZf0iyG6Wn | Issue #193 Migration Plan Update — 版付き Snapshot・M0〜M7 Owner/Gate 確定 仕様 | draft | [issue-193-migration-plan-update.md](./issue-193-migration-plan-update.md) |
 | SPEC-034QfjN7Wt7AJBbhXeK60o | Issue #195 Typed Graph Audio Compiler・Prepared Plan・Buffer/PDC・Stateful RT Ownership・Plan Activation (Migration M2) | approved | [issue-195-typed-graph-audio-compiler-buffer-pdc-stateful-ownership-activation-m2.md](./issue-195-typed-graph-audio-compiler-buffer-pdc-stateful-ownership-activation-m2.md) |
@@ -53,6 +54,7 @@ Directory: `docs/specs`
 | SPEC-034VEOYg1GvMKRp6MWAh4D | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | SPEC-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice（IMidiMapping CC→param 配送 + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | SPEC-034UjQv2KPJWujHxiCffIK | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| SPEC-034WZzsCw7LraB3uPLZvMl | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けと Deferred 範囲の Owner/Trigger 明記 | approved | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
 | SPEC-8EJ4gM4rl1pb5GPij5Nm0l | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | SPEC-034RoXidyTvNC4Cd998l35 | Issue #276 汎用 Logging Adapter(observability::logging) | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | SPEC-034Rp1Lwq5BGjy5ucoWJ4s | Issue #277 OBS-02 軽量Primitive・Observation Source型・登録/寿命契約 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
@@ -165,6 +167,7 @@ Directory: `docs/specs`
 | SPEC-z3dzJJAH4RMnLrkQfhkR0m | Issue #479 — Seek/Fader/Knob のキーボード操作（共通 key 規約） | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | SPEC-034UiRf9jEzvH2FbreqPsA | Issue #480 — Tabs strip の FocusHandle unmount 解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | SPEC-1ZxAql6tPbxsqXhvmGvphr | Issue #490 oracle late-create query epoch 整合 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
+| SPEC-034WZDrkNL8aP1DM6LjaVq | Issue #532 DComp 合成制約 — 監査・再開条件・調査手順の文書化 | approved | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
 | SPEC-034VeaErc3izqznL8Ycsk6 | Issue #552 — real-OS input lane SendInput preflight（注入→実効 read-back で EnvironmentBlocked と GUI Fail を区別） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | SPEC-4LwDFLWjvbGeZQSqW0Y93X | Issue #565 WASAPI input frame_position: IAudioClock::GetPosition の device position を port に乗せる | approved | [issue-565-wasapi-input-frame-position.md](./issue-565-wasapi-input-frame-position.md) |
 | SPEC-QDhe8xTiwyoX9UufhbVtoS | Issue #582 ci 3 lane 失敗(gpui-verify 冷キャッシュ / libc pin 喪失 / moxcms 0.9.2 drift)を修正する | approved | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
@@ -211,8 +214,10 @@ Directory: `docs/specs`
 | SPEC-034TRm8kN4vWqZxYsJpCe | Issue #151 メディア観測情報・非破壊 PCM 取得契約の拡張 | implemented | [issue-151-media-observation-contract.md](./issue-151-media-observation-contract.md) |
 | SPEC-034J6OCXHiP1izKRzbMmgz | Issue #18 フォローアップ（公開 enum 方針適用・時間演算修正・改善トリアージ） | implemented | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
 | SPEC-034UdM9XszyXZB0hZ8wvnc | Issue #243 GPUI 実機 GUI 検証 — Windows 実窓ライフサイクル証拠（部分スコープ） | implemented | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
+| SPEC-034WZG9kaa77G2ljsalr6Q | Issue #243 — Window/Job 不変条件の Fake/Headless Scenario 検証（部分スコープ・後続スライス） | implemented | [issue-243-window-job-headless.md](./issue-243-window-job-headless.md) |
 | SPEC-034V4nfv1RJmI8TqYPEWcY | Issue #243 — Windows 実 OS multiwindow smoke（部分スコープ・後続スライス） | implemented | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | SPEC-034Jc9BJlI7ULEBWoIlMP2 | Issue #28 UI 技術検証 PoC（wry・描画バックエンド・フロントエンド FW・配布） | implemented | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
+| SPEC-034WXOCYjbhvL8XtAwcQYk | Issue #306 G07/G08 — fault seam 判定・契約試験 + bounded corpus-replay 入口 | implemented | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |
 | SPEC-0kIy1SFw7ffSK1AAi4BXHu | Issue #400 借用 sealed readback を独立 decoder へ bounded に接続する共通API | implemented | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | SPEC-034Tnjp8f4gexhi9BsQuq1 | Issue #409 Rooted capability の再 root 化と停止可能な bounded directory 列挙 | implemented | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | SPEC-Lk3RvQ8mTxWn5HcZb2GdYu | Issue #435 — Label/Table ViewSpec kind と Fake/GPUI parity | implemented | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
