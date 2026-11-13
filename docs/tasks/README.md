@@ -7,7 +7,7 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034VuaZaztYPIHufg5gKhm | Add GT-05 CI offscreen lanes | in-progress | [add-gt-05-ci-offscreen-lanes.md](./add-gt-05-ci-offscreen-lanes.md) |
-| TASK-gRRWzc0F8au2cehYadUxhR | Issue #598 T1 — ui-gpui-verify-macos lane 追加・ci-summary 宣言登録・test-ui-gpui feature 拡張・workflow_dispatch 検証 | in-progress | [ci-os-l1-gpui-macos.md](./ci-os-l1-gpui-macos.md) |
+| TASK-gRRWzc0F8au2cehYadUxhR | Issue #598 T1 — ui-gpui-verify-macos lane 追加・ci-summary 宣言登録・test-ui-gpui feature 拡張・workflow_dispatch 検証 | completed | [ci-os-l1-gpui-macos.md](./ci-os-l1-gpui-macos.md) |
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034udQraUdxLs1SxuYiaAK | Issue #127 Linux 実配布方式 設計 — docs チェーン作成・索引再生成・検証・PR | in-progress | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |

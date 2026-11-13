@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034WR1i5LXEheCHSySWZsA"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #598 GPUI macOS Feature lane and 3OS native build/link CI evidence"
 created: "2026-11-13"
 updated: "2026-11-13"
@@ -32,6 +32,8 @@ relations:
         path: "ci/summary/tests/summary.test.mjs"
       - type: "file"
         path: "mise.toml"
+      - type: "file"
+        path: "crates/ruviform-ui-gpui/src/gpui_driver/capture.rs"
     deleted: []
     renamed: []
     moved: []
@@ -117,6 +119,7 @@ Issue #598（RF-CI-L1-01）の受入条件に基づく。`POLICIES.md` §2 は m
 - **`check-ui-gpui`/`lint-ui-gpui` は `--features gpui` のまま**: `uitest` コードの compile+link は test lane が担保し、`real-scenario` が CI lint 対象外である既存先例と同じ整理。feature 組合せを増やすと gpui 本体の再 compile が発生するため、`gpui-test`+`uitest` の 1 組合せに統一した。
 - **`docs/development-environment.md` の lane 記述は未更新**: 編集範囲外のため残件として PR に記録（rf594 と同じ扱い）。
 - **ローカルでの `cargo check -p ruviform-ui-gpui --features "gpui-test uitest" --all-targets`**: Windows ローカルで exit 0 を確認（補助証拠 — canonical は mise task）。feature 組合せの compile 可能性を CI 実走前にローカルで確認した。
+- **macOS 限定 lint 欠陥の修正（coordinator 承認の範囲拡張）**: 初回 Full CI（run 43421898733, `expected_sha` = f3790d3）で `ui-gpui-verify-macos` が `lint-ui-gpui` の `clippy::doc_markdown` で失敗 — `capture.rs:883` の doc comment が `NSView` をバックティック無しで記述しており、`#[cfg(not(any(windows, target_os = "linux")))]` の macOS 専用 fallback module 内のため Linux/Windows lane では一度も lint されていなかった潜在欠陥。crate 全体の cfg 監査で macOS 固有の compile surface はこの 1 module のみと確認し、clippy 提示の修正（`NSView` をバックティックで囲む comment-only 変更）を `crates/` 範囲拡張の承認を得て適用。`#[allow]` による抑制・コード変更なし。新 lane が macOS 限定の潜在欠陥を正しく fail-closed で検出したこと自体が本 Issue の証拠価値を実証した。
 
 ## Related Experiments
 
@@ -136,21 +139,32 @@ Issue #598（RF-CI-L1-01）の受入条件に基づく。`POLICIES.md` §2 は m
 - `mise run test-ci-summary` → exit 0（31 tests / 31 pass / 0 fail / 0 skipped / 0 cancelled）。
 - `mise tasks ls` / `mise task test-ui-gpui` → `mise.toml` が parse 可能で、新しい run コマンド `--features "gpui-test uitest"` が正しく解決されることを確認。
 - `mise exec -- cargo check -p ruviform-ui-gpui --features "gpui-test uitest" --all-targets`（補助証拠 — canonical は mise task）→ exit 0（Windows 11 x64・rust 1.99.1・mbx managed target）。`gpui-test`+`uitest` 組合せの型検査が通ることを確認。
-- doc-maintenance `index apply`（docs/specs, designs, plans, tasks, test-specs）→ 全 dir で written/blocked なし（index は既に同期）。`docs/impl/ir` は sync_impl_index 経路で別途 reconcile 予定。
-- `git diff --check` 相当の空白検査はコミット前に実施予定。
+- `mise run lint ruviform-ui-gpui`（capture.rs 修正後・coordinator 指定の scoped lint）→ exit 0（Windows 11 x64）。macOS cfg 節は Windows では compile されないため lint 実効は CI 実走で確認。
+- doc-maintenance `index apply`（docs/specs, designs, plans, tasks, test-specs）→ 全 dir で written/blocked なし（index は既に同期）。`docs/impl/ir` は `sync_impl_index.js --kind ir --apply` で reconcile 済み。
+- `git diff --check` → 問題なし（prek pre-commit hook も全 commit で pass）。
+- `gh workflow run ci.yml` 1 回目（run [43421898733](https://github.com/scarecrow173/ruviform/actions/runs/43421898733), `expected_sha` = f3790d3b = doc-chain + CI 配線 commit）→ **failure（fail-closed 正常動作）**。`ui-gpui-verify-macos` が `lint-ui-gpui` の `clippy::doc_markdown`（capture.rs:883 `NSView`）で失敗し、`ci-summary` が `ui-gpui-verify-macos:job-failure` で Fail — 他 18 job は全て success（`uitest` feature 拡張による `test-ui-gpui` は ubuntu/windows GPUI lane で成功 = bin Build/Link が 2 OS で実証済み）。walltime 11m21s。
+- `gh workflow run ci.yml` 2 回目（run [43424042262](https://github.com/scarecrow173/ruviform/actions/runs/43424042262), `expected_sha` = 50695a4f = NSView 修正込みブランチ先端）→ **success**。全 20 job（15 declared lane + matrix leg + ci-summary）success。`ui-gpui-verify-macos` success（8m35s — `check-ui-gpui`/`lint-ui-gpui`/`test-ui-gpui`（`gpui-test uitest` で `windowed_test_app` Build/Link）/`test-ui-consumer-observation` 全 step success、checkout-sha evidence upload 確認）。`ci-summary` verdict **PASS** — `ui-gpui-verify-macos` declared=true/result=success/Pass、checkout leg `ui-gpui-verify-macos` sha=`50695a4f…` 一致 Pass、event/expected/summary-checkout SHA 3 者一致、run URL 記録。3 OS の `verify`/`verify-macos`（ubuntu/windows/macos）と全 GPUI lane（ubuntu/windows/macos + offscreen）の OS-L1 証拠を対象 SHA で取得。
 
-実走予定（Issue 受入条件）:
+### Walltime / runner 時間の比較（AC4）
 
-- `gh workflow run ci.yml --ref chore/598-ci-os-l1-gpui-macos -f expected_sha=<対象SHA>` で手動 Full CI を実走し、`ui-gpui-verify-macos`・3 OS `verify`/`verify-macos`・既存 GPUI lane・`ci-summary` の結果を run URL・checkout SHA evidence・walltime 比較と共に記録する。
+| 指標 | 変更前（run 43385858552, success） | 変更後（run 43424042262, success） | 差分 |
+| --- | --- | --- | --- |
+| run walltime | 8m29s | 13m44s | +5m15s |
+| critical path | `ui-gpui-verify (windows)` 8m11s | `ui-gpui-verify (windows)` 12m34s | +4m23s |
+| `ui-gpui-verify-macos` | —（未存在） | 8m35s | 新規 1 job |
+| runner 時間合計（概算） | ~46 min（19 job） | ~62 min（20 job） | +~16 min |
+
+増分の内訳: (a) 新規 macOS GPUI lane 8m35s（OS-L1 必須証拠の欠落を埋める最小の 1 job — macOS runner は課金倍率が高いが他 lane の step 複製以上の重複なし）。(b) `test-ui-gpui` の `uitest` 追加による feature 組合せ変更で GPUI 系 3 lane の compile が増加 — windows leg +4m23s・ubuntu leg +1m10s・macOS leg は初回 cold のため 8m35s。`uitest` は `gpui`/`gpui-test` と feature 統合されるため gpui 本体の重複 compile は発生せず、増分は `ruviform-ui-gpui` 自身（uitest module + `windowed_test_app` bin link）に限定される。初回は新 feature 組合せで sccache key が cold のため以後の run で短縮が見込めるが、実測として walltime +5m15s・runner +~16 min を記録する（設計見積りの macOS lane 5〜10 分の範囲内）。
 
 ## Risks
 
-- **macOS での gpui compile 失敗**: `gpui` feature の macOS backend 依存（Metal/Cocoa 系）は CI で初めて compile される。失敗時は step 単位で `check-ui-gpui`（型）と `test-ui-gpui`（link/test）を切り分け、原因が crate 側なら別 Issue へ切り出す（本タスクの範囲は CI 配線）。
-- **macOS runner starvation**: `verify-macos` で `abandoned`（runner 取得 timeout）の前例あり。`ui-gpui-verify-macos` も同リスクを負うが、分離 job のため他 lane の証拠を道連れにせず、`ci-summary` が `job-abandoned` で fail-closed に検出する（意図どおりの挙動）。
-- **`uitest` 併用の実機相互作用**: cfg 面の衝突は確認済みでローカル `cargo check --all-targets` も通過したが、macOS runner での compile/link は CI 実走でのみ確定する。
-- **walltime 増**: macOS 分は課金倍率が高いが、OS-L1 必須証拠の欠落を埋める最小の 1 job。sccache GHA backend が `verify-macos`/`ui-verify-macos` の workspace compile 済み artifact を部分再利用するため、gpui 固有依存以外の compile は軽い見込み。実測は CI run で記録する。
+- **macOS での gpui compile/lint**: 実走で顕在化した `doc_markdown` 欠陥は修正済みで 2 回目 run で green。gpui 本体の macOS backend compile は初回から成功（`check-ui-gpui` step success — Metal/Cocoa 系 deps は runner SDK で問題なく build された）。
+- **`uitest` 併用の実機相互作用**: 3 OS の `test-ui-gpui` が全て success — `windowed_uitest` は env gate で no-op、`windowed_test_app` は Build/Link のみで実行されない（GUI-L2 主張なし）。
+- **walltime 増**: 上記比較のとおり +5m15s（critical path は windows GPUI leg の初回 cold compile が主因）。新規重複ビルドはなく、sccache 温存後の定常値は下がる見込み。
+- **macOS runner starvation**: 今回は `abandoned` なく 8m35s で完了。発生時は分離 job のため他 lane 証拠は保全され `ci-summary` が fail-closed で検出する（意図どおり）。
 
 ## Follow-ups
 
-- 対象 SHA の手動 `ci.yml` Full CI 実走 → `ui-gpui-verify-macos` success・3 OS lane 非退行・`ci-summary` PASS を確認し、run URL・walltime 比較を本 IR と PR に記録（Issue #598 AC5）。
+- ~~対象 SHA の手動 `ci.yml` Full CI 実走~~ → **完了**（run 43424042262 success・ci-summary PASS・3 OS OS-L1 証拠取得。初回 run 43421898733 で macOS 限定 lint 欠陥を検出→修正→再実走で green）。
 - `docs/development-environment.md` の lane 構成記述を新 lane 数に合わせて更新する別タスク（編集範囲外のため本タスクでは未対応）。
+- `POLICIES.md` L3-4 の行末空白（main 既存欠陥・coordinator 事前通知）: run 43424042262 の `verify` 系 lane（prek `trailing-whitespace` 含む）が全て success で実害なしを実測確認 — 本タスクでは未着手のまま。

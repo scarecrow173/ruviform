@@ -1,7 +1,7 @@
 ---
 id: "TASK-gRRWzc0F8au2cehYadUxhR"
 type: "task"
-status: "in-progress"
+status: "completed"
 title: "Issue #598 T1 — ui-gpui-verify-macos lane 追加・ci-summary 宣言登録・test-ui-gpui feature 拡張・workflow_dispatch 検証"
 created: "2026-11-13"
 updated: "2026-11-13"
@@ -50,13 +50,13 @@ relations:
 
 ## Checklist
 
-- [ ] doc-chain（spec/design/plan/task/test-spec + IR）作成
-- [ ] `ci.yml` に `ui-gpui-verify-macos` job 追加（macos-latest・`ui-gpui-verify` 同一 step から Linux 依存導入を除去・`CHECKOUT_LEG=ui-gpui-verify-macos`・checkout-sha evidence）
-- [ ] `ci-summary.needs` に `ui-gpui-verify-macos` を追加
-- [ ] `ci/summary/summary.mjs` の `REQUIRED_JOBS` / `REQUIRED_CHECKOUT_LEGS` と `summary.test.mjs` の列挙に `ui-gpui-verify-macos` を追加
-- [ ] `mise.toml` の `test-ui-gpui` を `--features "gpui-test uitest"` へ拡張し description 更新
-- [ ] `mise exec -- actionlint` exit 0
-- [ ] `mise run test-ci-summary` exit 0
-- [ ] 触った docs dir の管理 index を doc-maintenance `index apply` で再生成
-- [ ] `git merge origin/main` → commit → push（`chore/598-ci-os-l1-gpui-macos`）→ PR 作成
-- [ ] `gh workflow run ci.yml --ref <branch> -f expected_sha=<sha>` で `ui-gpui-verify-macos` success・3 OS lane 非退行・`ci-summary` pass を確認し、walltime 比較と共に URL を PR/IR に記載
+- [x] doc-chain（spec/design/plan/task/test-spec + IR）作成
+- [x] `ci.yml` に `ui-gpui-verify-macos` job 追加（macos-latest・`ui-gpui-verify` 同一 step から Linux 依存導入を除去・`CHECKOUT_LEG=ui-gpui-verify-macos`・checkout-sha evidence）
+- [x] `ci-summary.needs` に `ui-gpui-verify-macos` を追加
+- [x] `ci/summary/summary.mjs` の `REQUIRED_JOBS` / `REQUIRED_CHECKOUT_LEGS` と `summary.test.mjs` の列挙に `ui-gpui-verify-macos` を追加
+- [x] `mise.toml` の `test-ui-gpui` を `--features "gpui-test uitest"` へ拡張し description 更新
+- [x] `mise exec -- actionlint` exit 0
+- [x] `mise run test-ci-summary` exit 0
+- [x] 触った docs dir の管理 index を doc-maintenance `index apply` で再生成
+- [x] `git merge origin/main` → commit → push（`chore/598-ci-os-l1-gpui-macos`）→ PR 作成
+- [x] `gh workflow run ci.yml --ref <branch> -f expected_sha=<sha>` で `ui-gpui-verify-macos` success・3 OS lane 非退行・`ci-summary` pass を確認し、walltime 比較と共に URL を PR/IR に記載（run 43424042262 success・初回 run 43421898733 で macOS 限定 `doc_markdown` 欠陥を検出→coordinator 承認の範囲拡張で capture.rs 修正→再実走 green）
