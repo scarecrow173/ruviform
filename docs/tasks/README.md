@@ -16,7 +16,6 @@ Directory: `docs/tasks`
 | TASK-rf253osmidibackend001 | Issue #253 OS MIDI input backend 実装タスク | completed | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | TASK-034VEU3ZiDLQ7qcsk69rl0 | Issue #253 unsupported 計数透過 + 実機 lane scaffold（bridge counter + mock + tests + E2E） | completed | [issue-253-task-unsupported-transparency.md](./issue-253-task-unsupported-transparency.md) |
 | TASK-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice タスク（IMidiMapping + plugin→host reporting） | completed | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
-| TASK-034WZKWej3HLlqCGxHSDcH | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けタスク | in-progress | [issue-275-obs-owner-map-task.md](./issue-275-obs-owner-map-task.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
 | TASK-AsjkeCFskQSQZMsB5Tgl5H | Issue #301 T2 — zstd format/contract/API 試験 | completed | [issue-301-t2-zstd-tests.md](./issue-301-t2-zstd-tests.md) |
 | TASK-nnP07tqKBoCJML7LH9xWsQ | Issue #301 T3 — compression-verify lane matrix・crate 文書 | completed | [issue-301-t3-ci-docs.md](./issue-301-t3-ci-docs.md) |
@@ -207,6 +206,7 @@ Directory: `docs/tasks`
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
 | TASK-NhYDSYvlGjsQQzBFWEXYE7 | Issue #251-T1: Stage W closeout — 実機 lane 証拠化と残存受入項目の検証・記録 | done | [issue-251-task1-stage-w-real-device-closeout.md](./issue-251-task1-stage-w-real-device-closeout.md) |
 | TASK-034UjQLrFyv9HY5QSH9HmW | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | done | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| TASK-034WZKWej3HLlqCGxHSDcH | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けタスク | done | [issue-275-obs-owner-map-task.md](./issue-275-obs-owner-map-task.md) |
 | TASK-y0ulI5SiiOT2XfWozCd8uK | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | done | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | TASK-034UyRQzDJa5cPKTt3NLFF | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | done | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
 | TASK-5IbSvHOaqP5LVXNKwJaonI | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | done | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |
