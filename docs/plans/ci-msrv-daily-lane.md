@@ -70,7 +70,7 @@ relations:
 
 ## Scope
 
-単一実装ストリーム。`.github/workflows/ci.yml` の job 追加と `ci-summary` needs 更新、`ci/summary/summary.mjs` + test の宣言 lane 登録、doc-chain 6 件と管理 index 再生成。`mise.toml` の `*-msrv` タスクは既存のまま（調整不要と判断 — `mise exec rust@1.89.0` 内蔵で CI からそのまま呼べる）。`daily-ci.yml`・`consumer-verify.yml`・`ci-issue-tracker*.yml`・`crates/`・`mise.ci.toml` は変更しない。
+単一実装ストリーム。`.github/workflows/ci.yml` の job 追加と `ci-summary` needs 更新、`ci/summary/summary.mjs` + test の宣言 lane 登録、doc-chain 6 件と管理 index 再生成。`mise.toml` の `*-msrv` タスクは既存のまま（調整不要と判断 — `mise exec rust@1.89.0` 内蔵で CI からそのまま呼べる）。`daily-ci.yml`・`consumer-verify.yml`・`ci-issue-tracker*.yml`・`mise.ci.toml` は変更しない。`crates/` は原則変更しないが、初回 dispatch run で顕在化した `ruviform-observability` retention テストの fixture 非決定性については coordinator 承認の範囲拡張として `crates/ruviform-observability/tests/logging.rs` のみ修正する（テスト無効化・allow 追加は禁止）。
 
 ## Upstream Documents
 
@@ -88,10 +88,11 @@ relations:
 6. `git fetch origin main && git merge origin/main` → 触った docs dir の管理 index を `doc-maintenance` の `index apply` で再生成。
 7. Conventional Commits で commit → `git push -u origin feature/594-ci-msrv-lane` → `gh pr create`（`Closes #594`）。
 8. `gh workflow run ci`（`expected_sha` = ブランチ先端）→ `gh run watch` で `msrv-verify` の success と他 lane の非退行を確認。結果 URL を PR 本文に追記。
+9. 初回 dispatch で `test-observability-msrv` が `rolling_file_retention_*` 2 件で失敗した場合、原因（seed file の birth time 非区別性）を特定し、coordinator 承認済みの範囲拡張として `crates/ruviform-observability/tests/logging.rs` の fixture を決定的に修正 → 再 commit/push → ブランチ先端でもう一度 dispatch して green を確認する。
 
 ## File map
 
-- 変更: `.github/workflows/ci.yml`、`ci/summary/summary.mjs`、`ci/summary/tests/summary.test.mjs`
+- 変更: `.github/workflows/ci.yml`、`ci/summary/summary.mjs`、`ci/summary/tests/summary.test.mjs`、`crates/ruviform-observability/tests/logging.rs`（範囲拡張・fixture 修正のみ）
 - 変更なし確認: `mise.toml`（4 タスクは変更不要）
 - 新規: `docs/{specs,designs,plans,tasks,test-specs,impl/ir}/ci-msrv-daily-lane*.md`
 - 再生成: `docs/{specs,designs,plans,tasks,test-specs,impl/ir}/README.md`

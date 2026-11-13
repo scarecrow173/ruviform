@@ -69,10 +69,16 @@ relations:
 
 ## File map
 
-- 変更: `.github/workflows/ci.yml`（`msrv-verify` job 追加 + `ci-summary.needs` 更新）、`ci/summary/summary.mjs`（2 リストに `msrv-verify` 追加）、`ci/summary/tests/summary.test.mjs`（2 列挙に追加）
+- 変更: `.github/workflows/ci.yml`（`msrv-verify` job 追加 + `ci-summary.needs` 更新）、`ci/summary/summary.mjs`（2 リストに `msrv-verify` 追加）、`ci/summary/tests/summary.test.mjs`（2 列挙に追加）、`crates/ruviform-observability/tests/logging.rs`（retention テスト fixture の birth time 区別化 — coordinator 承認の範囲拡張）
 - 変更なし確認: `mise.toml`（4 タスクは既存のまま動作するため調整不要）
 - 新規: doc-chain 6 件（spec/design/plan/task/test-spec/IR）
 - 再生成: `docs/{specs,designs,plans,tasks,test-specs,impl/ir}/README.md`（管理 index）
+
+## 実 CI 初回 run で顕在化した fixture 非決定性（coordinator 承認の範囲拡張）
+
+初回 `gh workflow run ci`（run 43383950490, `expected_sha` = 4a6026d8）で `msrv-verify` の `test-observability-msrv` step が失敗した。失敗は `tests/logging.rs` の `rolling_file_retention_deletes_oldest_at_build` と `rolling_file_retention_matches_prefixed_and_suffixed_files` の 2 件。これらのテストは seed file 5 件を tight loop で連続 write し、upstream `tracing-appender` 0.2.5 の `prune_old_logs` が `Metadata::created()`（birth time）で retention 対象をソートすることに依存して「oldest first」削除を検証している。Linux runner で連続 write した file が同一 timestamp tick を共有すると、同順位の削除順が readdir 順に退化し契約が壊れる。feature-gated（`required-features = ["logging"]`）の test target は `--all-features` を使う `test-observability-msrv` でのみ実行されるため、通常 lane では検出されず MSRV lane の Linux 初走行で顕在化した。
+
+対応（coordinator 承認済み・テスト無効化/allow 禁止条件）: birth time は明示設定できないため、seed 生成ループに 100ms の実時間間隔（`SEED_FILE_BIRTH_GAP`）を挿入し、各 file の birth time を区別可能にする。production code・task 定義・検証強度は不変で、fixture の決定性のみを回復する。upstream 側の恒久修正（mtime/filename ベースの retention 等）は本 Issue の範囲外 — 必要なら別 Issue とする。
 
 ## Risks and Trade-offs
 

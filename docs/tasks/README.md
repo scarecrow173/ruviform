@@ -7,7 +7,6 @@ Directory: `docs/tasks`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | TASK-034VuaZaztYPIHufg5gKhm | Add GT-05 CI offscreen lanes | in-progress | [add-gt-05-ci-offscreen-lanes.md](./add-gt-05-ci-offscreen-lanes.md) |
-| TASK-034WJHI8uOfxwmbj8vGwDa | Issue #594 T1 — ci.yml MSRV lane 追加・ci-summary 宣言登録・workflow_dispatch 検証 | in-progress | [ci-msrv-daily-lane.md](./ci-msrv-daily-lane.md) |
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034udQraUdxLs1SxuYiaAK | Issue #127 Linux 実配布方式 設計 — docs チェーン作成・索引再生成・検証・PR | in-progress | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
@@ -99,6 +98,7 @@ Directory: `docs/tasks`
 | TASK-034JRQBPxKgu0yLVIB6Xm7 | セッション統合（OutputStream callback → RT グラフ駆動） | done | [audio-engine-session.md](./audio-engine-session.md) |
 | TASK-034MrsUVP3NUi1Nrap9gyd | audio シーム（AudioNode FnMut impl + plan.rs 退役 — Retirer/ptr_eq/Drop for RtPlan/drain） | done | [audio-fnmut-node-and-plan-retirement.md](./audio-fnmut-node-and-plan-retirement.md) |
 | TASK-034IwBWH50nD9Unn8HghJD | テンプレート残存プレースホルダーのベースラインスイープ | done | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
+| TASK-034WJHI8uOfxwmbj8vGwDa | Issue #594 T1 — ci.yml MSRV lane 追加・ci-summary 宣言登録・workflow_dispatch 検証 | done | [ci-msrv-daily-lane.md](./ci-msrv-daily-lane.md) |
 | TASK-034MLSwRAMOjT59ZH5kQFn | CLAP host bridge（host feature・ClapLibrary/descriptor+param 合成・intern-once・lifecycle/params/error 写像・ClapPluginFactory） | done | [clap-host-bridge.md](./clap-host-bridge.md) |
 | TASK-034LFHv6XBnCj3XsdaEGVG | Issue #99 色変換カーネル closeout | done | [color-conversion-closeout.md](./color-conversion-closeout.md) |
 | TASK-034LFHuE6Ii7Wqar445Znn | Issue #99 色変換カーネル final verification | done | [color-conversion-final-verification.md](./color-conversion-final-verification.md) |

@@ -59,7 +59,7 @@ ci MSRV lane — `ci.yml` の `msrv-verify` job と `ci-summary` 集計・`ci/su
 - INV-2(宣言 lane): `ci-summary.needs`・`summary.mjs` `REQUIRED_JOBS`・`REQUIRED_CHECKOUT_LEGS`・`summary.test.mjs` 列挙の 4 箇所が `msrv-verify` で一致し、needs からの削除・evidence 欠落が fail-closed で検出される。
 - INV-3(sha evidence): `msrv-verify` は `CHECKOUT_LEG=msrv-verify` で `checkout-sha-msrv-verify-attempt-<n>` artifact を upload し、他 lane と同一の実測 sha を供給する。
 - INV-4(lane evidence): `if: always()` の step で `GITHUB_STEP_SUMMARY` に run/attempt・commit・宣言 rust-version・4 step outcome を記録する（失敗時も証跡が残る）。
-- INV-5(検証意図の維持): 既存 job 定義・`mise.toml` の `*-msrv` タスク・他 workflow・`crates/` を変更せず、lane 削除・skip・検査緩和を行わない。
+- INV-5(検証意図の維持): 既存 job 定義・`mise.toml` の `*-msrv` タスク・他 workflow を変更せず、lane 削除・skip・検査緩和を行わない。`crates/` は `ruviform-observability` の retention テスト fixture 修正（coordinator 承認の範囲拡張 — birth time を区別可能にする決定的 seed 生成。テスト無効化・allow 追加は禁止）を除き変更しない。
 
 ## Examples
 

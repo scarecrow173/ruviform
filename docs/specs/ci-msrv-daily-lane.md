@@ -30,6 +30,8 @@ relations:
         path: "ci/summary/summary.mjs"
       - type: "file"
         path: "ci/summary/tests/summary.test.mjs"
+      - type: "file"
+        path: "crates/ruviform-observability/tests/logging.rs"
     deleted: []
     renamed: []
     moved: []
@@ -92,13 +94,14 @@ relations:
 - `.github/workflows/ci.yml` への `msrv-verify` job 追加（ubuntu-latest・mise 復元・`mise install rust@1.89.0`・cargo registry cache・4 タスク実行・`if: always()` lane evidence 記録）。
 - `ci-summary` job の `needs` への登録と、`ci/summary/summary.mjs` の `REQUIRED_JOBS` / `REQUIRED_CHECKOUT_LEGS` への宣言 lane 登録（coordinator 承認の範囲拡張 — 「kept in sync with ci.yml needs list」契約を維持するために必要）。
 - `ci/summary/tests/summary.test.mjs` の lane 列挙の整合。
+- `crates/ruviform-observability/tests/logging.rs` の retention テスト fixture 修正（coordinator 承認の第 2 範囲拡張 — 初回 `workflow_dispatch` run で `test-observability-msrv` が `rolling_file_retention_*` 2 件で失敗し、原因が seed file の birth time 非区別性にあると特定されたため。テスト無効化・allow 追加は禁止条件つきで、seed file 生成を決定的にする修正のみ許可）。
 - doc-chain（spec/design/plan/task/test-spec/IR）と管理 index の再生成。
 
 ### Out of Scope
 
 - `*-msrv` mise タスク自体の削除・変更（ローカルで任意実行できる状態は維持する）。
 - `daily-ci.yml` の dispatch 判定ロジック、`consumer-verify.yml`、`ci-issue-tracker*.yml` の変更。
-- `crates/` 以下の実装コード、`mise.ci.toml` の変更。
+- `crates/` 以下の実装コード（`ruviform-observability` の test fixture 修正を除く）、`mise.ci.toml` の変更。
 - MSRV clippy 検証（Issue #223 の情報 lane）の CI 常設化 — 別系統として deferred。
 - `docs/development-environment.md` 等の lane 一覧記述の更新（編集範囲外。残件として PR に記録）。
 

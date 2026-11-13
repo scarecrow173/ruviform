@@ -6,7 +6,6 @@ Directory: `docs/impl/ir`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
-| IMPL-034WJNAwo0m2Ia4NNALd1w | Issue #594 MSRV lane implementation record | in-progress | [ci-msrv-daily-lane.md](./ci-msrv-daily-lane.md) |
 | IMPL-034VuaCh48ZagIaCgYEDjZ | RF-GT-05 CI offscreen lanes implementation record | draft | [gt-05-ci-offscreen-lanes-slice.md](./gt-05-ci-offscreen-lanes-slice.md) |
 | IMPL-034R4JLReInVta6Yn0RgRW | Issue #219 consumer-verify anonymous-HTTPS access mode + 棚卸し refresh | in-progress | [issue-219-consumer-verify-anonymous-https-access-mode-refresh.md](./issue-219-consumer-verify-anonymous-https-access-mode-refresh.md) |
 | IMPL-Nq2aV7kR4tYc9XwL3ZsH8D | Issue #386 Backend-neutral GUI Host 契約・GPUI Driver・Window/Dock 移行 — 第 2 PR 実装記録 | in-progress | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
@@ -21,6 +20,7 @@ Directory: `docs/impl/ir`
 | IMPL-034IemQE6RlhuBXtirqKVX | Add manual CI workflow | completed | [add-manual-ci-workflow.md](./add-manual-ci-workflow.md) |
 | IMPL-034J6ZxczGEFBgX52lYD1y | Apply non_exhaustive to public enums | completed | [apply-non-exhaustive-to-public-enums.md](./apply-non-exhaustive-to-public-enums.md) |
 | IMPL-034IwOgrHkNf8v0cnrOpIl | Baseline placeholder sweep | completed | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
+| IMPL-034WJNAwo0m2Ia4NNALd1w | Issue #594 MSRV lane implementation record | completed | [ci-msrv-daily-lane.md](./ci-msrv-daily-lane.md) |
 | IMPL-034Ie9ddczoaNNz2v7zAYp | Create minimal workspace and smoke test | completed | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | IMPL-8mKEqSbFQtdciXddX1oUij | Create plugin-core foundation crate | completed | [create-plugin-core-foundation.md](./create-plugin-core-foundation.md) |
 | IMPL-034JfEIKHmfeyIZETbwKfD | Create video-proc crate skeleton | completed | [create-video-proc-crate-skeleton.md](./create-video-proc-crate-skeleton.md) |
