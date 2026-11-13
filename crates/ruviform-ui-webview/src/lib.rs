@@ -35,6 +35,18 @@
 //! (Windows), `WKWebView` (macOS, system-provided),
 //! `libwebkit2gtk-4.1` (Linux).
 //!
+//! ## Legacy status (Issue #465)
+//!
+//! This crate is classified **legacy/preview**: it keeps working for
+//! the consumers that still use it (`AudioLens` `al-gui` webview feature,
+//! `Synvelis` `synvelis` webview bin) but is not a parity target for new
+//! `ViewSpec` work — the driver-neutral standard is
+//! `ruviform-ui-gpui`. Physical removal is gated on the GPUI adoption
+//! decision (Issue #419) plus consumer-side retirement owned by
+//! audio-lens#189 and synvelis#232; it is **not** removed by the
+//! inventory slice. The authoritative ledger is
+//! `evidence/rf465/inventory.json` (entry `RV-001`–`RV-006`).
+//!
 //! ## Dependency layers
 //!
 //! Optional platform adapter per the baseline (A.2): depends on

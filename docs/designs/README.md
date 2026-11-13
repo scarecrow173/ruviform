@@ -224,6 +224,7 @@ Directory: `docs/designs`
 | DESIGN-034JcePtzKFix4IuxyE5mD | 時間モデル拡張の設計（FrameRate/TimeBase 分離・Timecode 拡張・丸め誤差累積方針） | approved | [time-model-extension.md](./time-model-extension.md) |
 | DESIGN-034JZVID00000000000030 | 動画エンジン設計（パイプライン・スケジューラ・セッション） | approved | [video-engine.md](./video-engine.md) |
 | DESIGN-aYGxhiXLZHim70lzzr4olp | ViewLink.attach authoritative generation 採用設計 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
+| DESIGN-ZwNUJSnzzVrmRrqQ7S6lJ9 | Issue #465 WebView 移行台帳現行化 — 4 分類スキームと証拠設計 | approved | [wv-removal-inventory-design.md](./wv-removal-inventory-design.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

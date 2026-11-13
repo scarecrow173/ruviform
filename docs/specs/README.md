@@ -192,6 +192,7 @@ Directory: `docs/specs`
 | SPEC-034JQubfZRC7nRmTsYvLiq | SIMD dispatch 層（prepare 固定 + カーネル/サイズ別ルーティング + 本番精度契約） | approved | [simd-dispatch-layer.md](./simd-dispatch-layer.md) |
 | SPEC-034JZVID00000000000010 | 動画エンジン（フレームパイプライン・A/V 同期・シーク） | approved | [video-engine.md](./video-engine.md) |
 | SPEC-BXaMmK5e7X2mLZAG4xFeZv | ViewLink authoritative generation 採用 — backend attach応答epochのSDK seam | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
+| SPEC-WXP3Ux78gYSf2Aj16emS6p | Issue #465 WebView 移行台帳の現行化 — 現行 main 基準の分類検証（P2 物理撤去は対象外） | approved | [wv-removal-inventory.md](./wv-removal-inventory.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

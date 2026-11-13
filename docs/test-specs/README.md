@@ -228,6 +228,7 @@ Directory: `docs/test-specs`
 | TSPEC-034JcCwISRw7E9Q8XoNvD8 | 動画基盤 API の契約保証（所有権・RT・色変換カーネル） | approved | [video-foundation-api.md](./video-foundation-api.md) |
 | TSPEC-034L6w5zHELr4fPxPNpBsk | Video Plugin Plain Contract Tests | proposed | [video-plugin-plain-contract-tests.md](./video-plugin-plain-contract-tests.md) |
 | TSPEC-42XLbuUif4jmek9sQGVA3S | ViewLink authoritative generation テスト仕様 | approved | [viewlink-authoritative-generation-tests.md](./viewlink-authoritative-generation-tests.md) |
+| TSPEC-Wm6ujGxaqkur53e1zm0Xak | Issue #465 WebView 移行台帳現行化 — 分類検証契約 | approved | [wv-removal-inventory.md](./wv-removal-inventory.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

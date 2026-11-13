@@ -461,6 +461,7 @@ Directory: `docs/tasks`
 | TASK-034LFHddlrfvXu5Jlmwdr0 | working space カーネル実装（ToWorking + FromWorking） | done | [working-space-kernels.md](./working-space-kernels.md) |
 | TASK-034JPwZ8htMzYNPNgOceEI | 分析・レポート記述・文書整合 | done | [write-dispatch-analysis-report.md](./write-dispatch-analysis-report.md) |
 | TASK-034Jf4g6600XCHwXaEZG26 | 採否 ADR | done | [write-simd-adoption-adr.md](./write-simd-adoption-adr.md) |
+| TASK-kUY7hTjLYAgqQfA46CSw7r | Issue #465 WebView 移行台帳現行化 — 分類検証と台帳確定 | done | [wv-removal-inventory-task.md](./wv-removal-inventory-task.md) |
 
 | TASK-034RTggRy4UgfgaFSfQY4f | T1 ruviform-io-structured scaffold・共通契約・JSON Format (Issue #297) | done | [issue-297-t1-crate-and-contract.md](./issue-297-t1-crate-and-contract.md) |
 | TASK-034RTghO8nOg3ZiYGau2pe | T2 YAML/TOML Format module・Budget 写像・2相分類 (Issue #297) | done | [issue-297-t2-yaml-toml.md](./issue-297-t2-yaml-toml.md) |
