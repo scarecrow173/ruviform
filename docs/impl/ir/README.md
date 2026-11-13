@@ -21,6 +21,7 @@ Directory: `docs/impl/ir`
 | IMPL-034J6ZxczGEFBgX52lYD1y | Apply non_exhaustive to public enums | completed | [apply-non-exhaustive-to-public-enums.md](./apply-non-exhaustive-to-public-enums.md) |
 | IMPL-034IwOgrHkNf8v0cnrOpIl | Baseline placeholder sweep | completed | [baseline-placeholder-sweep.md](./baseline-placeholder-sweep.md) |
 | IMPL-034WJNAwo0m2Ia4NNALd1w | Issue #594 MSRV lane implementation record | completed | [ci-msrv-daily-lane.md](./ci-msrv-daily-lane.md) |
+| IMPL-034WR1i5LXEheCHSySWZsA | Issue #598 GPUI macOS Feature lane and 3OS native build/link CI evidence | completed | [ci-os-l1-gpui-macos.md](./ci-os-l1-gpui-macos.md) |
 | IMPL-034Ie9ddczoaNNz2v7zAYp | Create minimal workspace and smoke test | completed | [create-minimal-workspace-and-smoke-test.md](./create-minimal-workspace-and-smoke-test.md) |
 | IMPL-8mKEqSbFQtdciXddX1oUij | Create plugin-core foundation crate | completed | [create-plugin-core-foundation.md](./create-plugin-core-foundation.md) |
 | IMPL-034JfEIKHmfeyIZETbwKfD | Create video-proc crate skeleton | completed | [create-video-proc-crate-skeleton.md](./create-video-proc-crate-skeleton.md) |

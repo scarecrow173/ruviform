@@ -13,6 +13,7 @@ Directory: `docs/designs`
 | DESIGN-034JROdBjynllTNAVDZwaI | 音声エンジン設計 | approved | [audio-engine.md](./audio-engine.md) |
 | DESIGN-034JOoWdEHXnb8G1QyMzCm | chunk 分割時の per-chunk timestamp 合成設計 | approved | [chunk-timestamp-design.md](./chunk-timestamp-design.md) |
 | DESIGN-034WJELx3H0UQk20mwM76W | Issue #594 設計 — ci.yml MSRV lane の構成と ci-summary 宣言 lane 登録 | approved | [ci-msrv-daily-lane.md](./ci-msrv-daily-lane.md) |
+| DESIGN-MSdMxhOZx7fphrbdNWWeNB | Issue #598 設計 — ui-gpui-verify-macos lane の構成と Native Build/Link 棚卸し | approved | [ci-os-l1-gpui-macos.md](./ci-os-l1-gpui-macos.md) |
 | DESIGN-034LFikCuBIoaD4mWBEjIU | ruviform-video-proc 色変換カーネル設計（f32 linear working space + ICC 入出力経路） | approved | [color-conversion-kernels.md](./color-conversion-kernels.md) |
 | DESIGN-034KScKaiUBXz4qKJZqM3h | ruviform-video-proc コンポジット/遷移カーネル設計（blend/affine/基本遷移初期セット） | approved | [composite-transition-kernels.md](./composite-transition-kernels.md) |
 | DESIGN-034JZDNRML000000000003 | DenormalFlush ノード設計 | approved | [denormal-flush-node.md](./denormal-flush-node.md) |
