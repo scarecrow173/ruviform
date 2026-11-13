@@ -170,6 +170,7 @@ Directory: `docs/impl/ir`
 | IMPL-034UiuvjiiksJVjjkxtT5W | Issue #308 — Generation切替時のProbe再Binding全件整合・部分失敗契約 | completed | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
 | IMPL-034Ux2ZcFoBhisTdYZmYtY | Issue #309 — PROBE-TIME複数Probe時間アライメントfixture検証 | completed | [issue-309-probe-time-align-fixture.md](./issue-309-probe-time-align-fixture.md) |
 | IMPL-034Ukaiqpkd3tCCzSFomK7 | Issue #309 — PROBE-TIME時間コンテキスト・整列契約の実装 | completed | [issue-309-probe-time-context-and-alignment.md](./issue-309-probe-time-context-and-alignment.md) |
+| IMPL-034WT5GBcSlZWbHVBMkaQo | Issue #313 OS-L1 既存CI証拠照合・Capability記録・Timeout headless gap 補完 | completed | [issue-313-os-l1-ci-evidence.md](./issue-313-os-l1-ci-evidence.md) |
 | IMPL-034VOSINPDRV4REAL0SIN6 | Issue #313 `RealOsPointerOrKeyboard` capability 実装と Windows 実入力 E2E 証拠 | completed | [issue-313-real-os-input-driver-slice.md](./issue-313-real-os-input-driver-slice.md) |
 | IMPL-034VFzhzdEyknToi5VSfS5 | Issue #313 S2 windowed `TestIo`/`rvf.uitest.v1` GPUI backend 配線 | completed | [issue-313-windowed-testio-slice.md](./issue-313-windowed-testio-slice.md) |
 | IMPL-034UkdjBdy4RDY0x9rZrE0 | Issue #313 Windows 実 OS SendInput キーボード smoke と OS Capability Matrix 証拠 | completed | [issue-313-windows-os-sendinput-smoke-os-capability-matrix.md](./issue-313-windows-os-sendinput-smoke-os-capability-matrix.md) |
