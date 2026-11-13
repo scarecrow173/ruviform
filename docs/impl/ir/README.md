@@ -115,6 +115,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QxLzTwkgQnhtvv7jXvB | Issue 244 media-reader prefetch contract residual warts | completed | [issue-244-media-reader-prefetch-contract-residual-warts.md](./issue-244-media-reader-prefetch-contract-residual-warts.md) |
 | IMPL-034QAt6Gd3zLwrqmsnq9CK | Issue 249 prefetch detection-Ended strands End marker | completed | [issue-249-prefetch-detection-ended-strands-end-marker.md](./issue-249-prefetch-detection-ended-strands-end-marker.md) |
 | IMPL-034UK2UedkRURdGA03P7k9 | Issue #251 audio-device real backend input plumbing (headless slice) | completed | [issue-251-audio-device-real-backend-input-plumbing-headless-slice.md](./issue-251-audio-device-real-backend-input-plumbing-headless-slice.md) |
+| IMPL-034WTILJv8M98cnqJJ8cqJ | Issue 251 audio input OS L1 evidence | completed | [issue-251-audio-input-os-l1-evidence.md](./issue-251-audio-input-os-l1-evidence.md) |
 | IMPL-034W4Hv9p1zQfi7uOoypfu | Issue #251 Stage W residual — error parity + 実効 output latency 実機観測 | completed | [issue-251-stage-w-output-latency.md](./issue-251-stage-w-output-latency.md) |
 | IMPL-034R251StageWcl0seoutX | Issue #251 Stage W real-device closeout — Windows/WASAPI 実機 lane 証拠化 | completed | [issue-251-stage-w-real-device-closeout-slice.md](./issue-251-stage-w-real-device-closeout-slice.md) |
 | IMPL-034VjwX2YHM8koidKb6AhG | Issue #253 host-graph report consumer wiring | completed | [issue-253-host-graph-report-consumer-wiring.md](./issue-253-host-graph-report-consumer-wiring.md) |
