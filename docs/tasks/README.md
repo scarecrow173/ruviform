@@ -16,6 +16,7 @@ Directory: `docs/tasks`
 | TASK-rf253osmidibackend001 | Issue #253 OS MIDI input backend 実装タスク | completed | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | TASK-034VEU3ZiDLQ7qcsk69rl0 | Issue #253 unsupported 計数透過 + 実機 lane scaffold（bridge counter + mock + tests + E2E） | completed | [issue-253-task-unsupported-transparency.md](./issue-253-task-unsupported-transparency.md) |
 | TASK-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice タスク（IMidiMapping + plugin→host reporting） | completed | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
+| TASK-034WZKWej3HLlqCGxHSDcH | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けタスク | in-progress | [issue-275-obs-owner-map-task.md](./issue-275-obs-owner-map-task.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
 | TASK-AsjkeCFskQSQZMsB5Tgl5H | Issue #301 T2 — zstd format/contract/API 試験 | completed | [issue-301-t2-zstd-tests.md](./issue-301-t2-zstd-tests.md) |
 | TASK-nnP07tqKBoCJML7LH9xWsQ | Issue #301 T3 — compression-verify lane matrix・crate 文書 | completed | [issue-301-t3-ci-docs.md](./issue-301-t3-ci-docs.md) |
@@ -185,6 +186,7 @@ Directory: `docs/tasks`
 | TASK-034Qh6uIoPqWsErTyU | Issue #190 T-2: transport controller + RT span scheduler | done | [issue-190-t-2-span-scheduler-apply.md](./issue-190-t-2-span-scheduler-apply.md) |
 | TASK-034Qh7vBnMxZaSdFgH | Issue #190 T-3: plugin transport bridge + Mock Driver PoC | done | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
 | TASK-034UCcxDGa2UGOpkpXCbQJ | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | done | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| TASK-034WYgYyoC0JWYkg6gXlBK | Issue #192 TA Invariant Map — 監査対応表の作成と非循環性の静的確認 | done | [issue-192-ta-invariant-map-task.md](./issue-192-ta-invariant-map-task.md) |
 | TASK-034UCVp0kqovy1IEDp0LWy | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | done | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | TASK-Awm44usEpigGUWYXNxfbWd | Issue #196 T-1: plugin-core bus role + enumeration contract | done | [issue-196-t-1-plugin-core-bus-enumeration.md](./issue-196-t-1-plugin-core-bus-enumeration.md) |
 | TASK-HfEXpjuOcYSGP35UqpabKo | Issue #196 T-2: media-core receipt/fault pop + host bus enumeration | done | [issue-196-t-2-host-media-bus-enumeration.md](./issue-196-t-2-host-media-bus-enumeration.md) |
@@ -243,6 +245,7 @@ Directory: `docs/tasks`
 | TASK-7VWD8KuRBS2voBCngFoIJF | A1 IO MSRV lane 追加・DAG/RT audit 証跡・検証 | done | [issue-306-a1-msrv-dag-rt-audit.md](./issue-306-a1-msrv-dag-rt-audit.md) |
 | TASK-034UtEdJ4J9ekRBHmpucta | F1 IO E2E fixture 実装 — Fault/Fuzz・Directory・OS/FS probe | done | [issue-306-f1-fixture-extension.md](./issue-306-f1-fixture-extension.md) |
 | TASK-034UtEeCVQCg44aM7iUrV3 | F2 正規検証・evidence・CI handoff 記録 | done | [issue-306-f2-verification-handoff.md](./issue-306-f2-verification-handoff.md) |
+| TASK-034WXSB8zGVc9NKQicjOEp | Issue #306 G07 fault seam 判定・契約試験 + G08 corpus replay | done | [issue-306-fault-seam-fuzz-task.md](./issue-306-fault-seam-fuzz-task.md) |
 | TASK-pL5wE8rT1yU4iO7pA2sD6f | Issue #306 OS-L1 既存 CI 証拠検査・不足 Case 補完 (Slice V+T) | done | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |
 | TASK-laPtj98NpzxI9OnVwLg5y4 | T2 File・Structured 境界試験 (Issue #306) | done | [issue-306-t2-file-structured-boundary.md](./issue-306-t2-file-structured-boundary.md) |

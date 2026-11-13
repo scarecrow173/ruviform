@@ -52,6 +52,7 @@ Directory: `docs/designs`
 | DESIGN-034Qh2kLmNoPqRsTuVwX | Issue #190 Transport Span Scheduler — 実装設計 | approved | [issue-190-transport-span-scheduler.md](./issue-190-transport-span-scheduler.md) |
 | DESIGN-034Qhua2OtuBq26hwS8LpX | Issue #191 PCM WAV output backend design | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | DESIGN-034UBX7Lbr3m4u4ZGzQpHA | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| DESIGN-034WYfShwch3ZurjTQp3Sp | Issue #192 TA Invariant Map — 監査設計 | approved | [issue-192-ta-invariant-map-design.md](./issue-192-ta-invariant-map-design.md) |
 | DESIGN-034UCMjL9ps9ffJkQqwDlR | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | DESIGN-034QfjYdt3o2a4lijg4lwt | Issue #195 M2 Typed Graph Compiler・Bounded Buffers/PDC・RT Runtime・Stateful Ownership・Activation | approved | [issue-195-m2-typed-graph-compiler-buffer-pdc-rt-runtime-ownership-activation.md](./issue-195-m2-typed-graph-compiler-buffer-pdc-rt-runtime-ownership-activation.md) |
 | DESIGN-C1EIkNXtQvzacfPU0a2bhv | Issue #196 M4 Typed Graph Plugin Adapter — 実装設計 | approved | [issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md](./issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md) |
@@ -70,6 +71,7 @@ Directory: `docs/designs`
 | DESIGN-034VEQoHhDL68K8qLl8w8r | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-design.md](./issue-253-unsupported-transparency-design.md) |
 | DSN-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice 設計（IMidiMapping snapshot + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | DESIGN-034UjQBuwtfaWhLg6ZZMBn | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合設計 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| DESIGN-034WZCcSruHEmlEMFX1Mlu | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け設計 | approved | [issue-275-obs-owner-map-design.md](./issue-275-obs-owner-map-design.md) |
 | DESIGN-hXhz1NTWfHfPzPb5P4A5ff | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | DESIGN-034RoXjgYbKKZ3ZSazkSGi | Issue #276 汎用 Logging Adapter 設計 | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | DESIGN-034Rp1Um3ZXDWfRx8pCmuw | Issue #277 OBS-02 軽量Primitive・Observation Source契約: Gauge/Histogram・Descriptor・SourceId/Generation・Registrar/Lease・寿命 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
@@ -105,6 +107,7 @@ Directory: `docs/designs`
 | DESIGN-mH3gJLoQj3rdU7xRXX8eZD | Issue #304 ruviform-io-archive — Secure Extraction・Staging/Recovery・OS 別 Root Capability 設計 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
 | DESIGN-034UvWqyRcaTQap2SH5FfT | Issue #305 IO E2E slice — WAV Byte Golden・Fault fixture 設計 | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | DESIGN-eVPQpm7tyMUS2gxitU5KtN | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行設計 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
+| DESIGN-034WXOSFa35dv10W4LdOri | Issue #306 G07/G08 fault seam・corpus replay 設計 | approved | [issue-306-fault-seam-fuzz-design.md](./issue-306-fault-seam-fuzz-design.md) |
 | DESIGN-ODmc6p5Cp7Kbq0u35OrAiR | Issue #306 汎用 I/O 合成 E2E — 試験専用クレート構成・境界試験設計 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | DESIGN-fH3jK9mP2qW8rT5yU7iO4a | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 設計 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | DESIGN-034UtzREeBZLceakda7vIS | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture 設計 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |

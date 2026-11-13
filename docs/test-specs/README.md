@@ -50,6 +50,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Qh4wErTyUiOpAsD | Issue #190 Transport Span Scheduler テスト仕様 | approved | [issue-190-transport-span-scheduler-tests.md](./issue-190-transport-span-scheduler-tests.md) |
 | TSPEC-034Qhwm0HeEmVIU2j6ttxT | Issue #191 PCM WAV output test specification | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | TSPEC-034UC88veX939aXOGHd2sw | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
+| TSPEC-034WYgclyB5Fcmkva75gsf | Issue #192 TA Invariant Map — 対応表・非循環監査の検証規約 | approved | [issue-192-ta-invariant-map.md](./issue-192-ta-invariant-map.md) |
 | TSPEC-034UCSrsj3GYcyfu8KYMB2 | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | TSPEC-034QfqUJnhyPPfGZsl7kXW | Issue #195 M2 typed graph compiler/runtime: schedule, buffers, PDC, ownership, activation, faults, legacy coexistence | approved | [issue-195-m2-typed-graph-compiler-runtime-tests.md](./issue-195-m2-typed-graph-compiler-runtime-tests.md) |
 | TSPEC-7zOboSetinQdiV2b3AD6Yq | Issue #196 M4 Typed Graph Plugin Adapter テスト仕様 | approved | [issue-196-typed-graph-plugin-adapter-tests.md](./issue-196-typed-graph-plugin-adapter-tests.md) |
@@ -67,6 +68,7 @@ Directory: `docs/test-specs`
 | TSPEC-034VERR0DyAdyknxAagH1U | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane テスト仕様 | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | TST-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice テスト仕様 | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TSPEC-034UjQC8AnQxl52Q8wCT6N | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| TSPEC-8W-EruC9xGTrXeKm8RqkJ | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けの検証規則 | approved | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
 | TSPEC-sFT08b6Qp306TbonlKfL28 | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | TSPEC-034RoYjtRWwL5tpZsCCp6T | Issue #276 generic logging adapter test specification | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | TSPEC-034Rp29Zp9BL0LmhcrU4IF | Issue #277 OBS-02 observability core/source contract tests | approved | [issue-277-observability-core-source-tests.md](./issue-277-observability-core-source-tests.md) |
@@ -102,6 +104,7 @@ Directory: `docs/test-specs`
 | TSPEC-pWc14Y17FV06GN2600rX8h | Issue #304 ruviform-io-archive Secure Extraction・Staging/Recovery テスト仕様 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
 | TSPEC-034UvWxgBRObLuwfTjwqMx | Issue #305 IO E2E WAV Golden/Fault テスト仕様 | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | TSPEC-0kY8BSgqOCJHezrud22f3h | Issue #305 Media I/O StagedFile 移行 テスト仕様 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
+| TSPEC-034WXOTmrti91Jpbt5kIxV | Issue #306 G07/G08 fault seam・corpus replay テスト仕様 | approved | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |
 | TSPEC-rviIWrpuHyJUT11Wykzopn | Issue #306 汎用 I/O 合成 E2E テスト仕様 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | TSPEC-nB3vC7xZ0qW5eR8tY1uI4o | Issue #306 IO E2E — OS-L1 CI 証拠と Case 補完 試験仕様 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | TSPEC-034UtBs1z6PAEjR3T4EiV2 | Issue #306 IO E2E slice 2 テスト仕様 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |

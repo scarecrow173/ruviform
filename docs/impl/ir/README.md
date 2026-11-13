@@ -98,6 +98,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QgS4TFyEN937G8j8DKR | Issue #190 T-2: span scheduler apply | completed | [issue-190-t-2-span-scheduler-apply.md](./issue-190-t-2-span-scheduler-apply.md) |
 | IMPL-034QgS61F2OZZNh6JVUeV3 | Issue #190 T-3: plugin bridge + mock PoC | completed | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
 | IMPL-034QhS434AsmoWfCforctH | Issue 191: PCM WAV encode/mux backend with MediaSink + StagedOutput | completed | [issue-191-pcm-wav-encode-mux-backend-with-mediasink-stagedoutput.md](./issue-191-pcm-wav-encode-mux-backend-with-mediasink-stagedoutput.md) |
+| IMPL-034WYgZmp0Qv3NLjgtu1jn | Issue #192 TA Invariant Map — 監査対応表・非循環性静的確認の実装記録 | completed | [issue-192-ta-invariant-map.md](./issue-192-ta-invariant-map.md) |
 | IMPL-034QgTkRw195m2audIoRtXwQ | Issue #195 M2 typed graph audio compiler/runtime: schedule, bounded buffers, PDC, stateful RT ownership, plan activation | completed | [issue-195-m2-typed-graph-compiler-runtime.md](./issue-195-m2-typed-graph-compiler-runtime.md) |
 | IMPL-issue196-m4-adapter | Issue #196 — M4 typed graph plugin adapter (multi-bus / lifecycle / offset precision) | completed | [issue-196-typed-graph-plugin-adapter.md](./issue-196-typed-graph-plugin-adapter.md) |
 | IMPL-8FuQb4NPvHVC136oYJUME7 | Issue #197 Generic Media Reader implementation record | completed | [issue-197-media-reader-implementation-record.md](./issue-197-media-reader-implementation-record.md) |
@@ -133,6 +134,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QTOFbpeDKVZDoNfrXP5 | Issue #263 design system showcase theme matrix a11y regression cross-consumer gates | completed | [issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md](./issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md) |
 | IMPL-034QMvf4KmvWw53y1DczqT | Issue #265 CorrelationPlan prefers_direct コストモデル校正（mixed-radix 実コスト反映と direct 維持ガード） | completed | [issue-265-correlationplan-prefers-direct-mixed-radix-direct.md](./issue-265-correlationplan-prefers-direct-mixed-radix-direct.md) |
 | IMPL-034V68pdzoGf0crvlem0Zy | Issue #275 Observability integration design reconciliation and contract-test inventory | completed | [issue-275-obs-design-reconciliation.md](./issue-275-obs-design-reconciliation.md) |
+| IMPL-034WZPoBmkr0oYITBjQA67 | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け | completed | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
 | IMPL-034RwLrHlik3I1I7ljPS1y | Issue 276 T1: logging config/API types + feature wiring | completed | [issue-276-t1-logging-config-api-types-feature-wiring.md](./issue-276-t1-logging-config-api-types-feature-wiring.md) |
 | IMPL-034RwLt9pOcXsRFEHwaQA8 | Issue 276 T2: bounded writer + sinks + build result | completed | [issue-276-t2-bounded-writer-sinks-build-result.md](./issue-276-t2-bounded-writer-sinks-build-result.md) |
 | IMPL-034RwLuQ6IZyb2JEQ9I1Sz | Issue 276 T3: contract tests + host example + docs + verification | completed | [issue-276-t3-contract-tests-host-example-docs-verification.md](./issue-276-t3-contract-tests-host-example-docs-verification.md) |
@@ -165,6 +167,7 @@ Directory: `docs/impl/ir`
 | IMPL-034RTBAAcyzygMEGzkuazL | Issue 302 T3 ledger and verification | completed | [issue-302-t3-ledger-and-verification.md](./issue-302-t3-ledger-and-verification.md) |
 | IMPL-034Uxng6BqRjROMnmJ4lor | Issue #305 io-e2e WAV byte golden + fault fixtures | completed | [issue-305-io-e2e-wav-byte-golden-fault-fixtures.md](./issue-305-io-e2e-wav-byte-golden-fault-fixtures.md) |
 | IMPL-0Rj3kVwF2mN8qXbCeLpY4d | Issue 305 media-io 旧 StagedOutput 完全削除・StagedFile 移行 | completed | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
+| IMPL-034WXT9H5uOuqU6UXmcmuk | Issue #306 G07/G08 fault seam・corpus replay | completed | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |
 | IMPL-At0dLb2kB9niysH7FtgPk8 | Issue #306 汎用 I/O 合成 E2E — ruviform-io-e2e 試験クレートと RF #305 候補 scratch 証拠 (IO-IMP-12) | completed | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | IMPL-mK9jH2gF5dS8aQ1wE4rT7y | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 実装記録 | completed | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | IMPL-034UudZrMUImnIREPB6lU1 | Issue #306 IO 合成 E2E slice-2 — Fault/Fuzz fixture・OS/FS probe・Rooted boundary | completed | [issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md](./issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md) |

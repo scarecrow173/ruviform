@@ -9,6 +9,13 @@ publish.workspace = true
 
 [features]
 default = []
+# Test-only fault-injection seam (Issue #306 G07): enables the
+# `#[doc(hidden)] pub mod mock` facade so cross-crate contract tests
+# (e.g. `ruviform-io-e2e`) can script the private `PlatformFileOps`
+# boundary. Non-default and additive only — the public API, default
+# builds, and RT surface are unchanged; the module exposes std-type
+# scripting types, never `PlatformFileOps` itself.
+fault-injection = []
 
 [dependencies]
 
