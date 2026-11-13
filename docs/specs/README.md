@@ -87,6 +87,7 @@ Directory: `docs/specs`
 | SPEC-034UvWaV1HSJ4d8QLZI8fF | Issue #305 IO E2E slice — WAV→StagedFile Byte Golden・Fault fixture | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | SPEC-P6IzbXqAJ2cgiMm8llJIIO | Issue #305 Media I/O 旧 StagedOutput 完全削除・WAV→StagedFile 移行 (IO-IMP-11) | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | SPEC-lYVG6Gr07aTIBC8BSS0WKW | Issue #306 汎用 I/O 合成 E2E — StagedFile/Structured/Compression/Archive/WAV 境界試験 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
+| SPEC-kT8mQ2wX9pL4nR7vC1zB5e | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完（Slice V+T） | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | SPEC-034UtxqBI7DX73fpCfjAok | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture・OS/FS 実測・CI handoff | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
 | SPEC-akGFe19N27efIRTF1LTQdg | Issue #306 IO E2E slice 3 — IO MSRV lane・DAG/RT 境界 audit 証跡 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | SPEC-P7W4Dz6p2EQIQNPclAQG2U | Issue #307 PluginNode attach 時 frame_base の非 RT 型付き検証（verified clock context） | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |

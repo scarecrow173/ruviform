@@ -105,6 +105,7 @@ Directory: `docs/plans`
 | PLAN-034UwaGC4jBLVC4SdHmkU4 | Issue #305 IO E2E WAV Golden/Fault 実装計画 | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | PLAN-gWrX94JcoMQacCOPFR5FKD | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行 実装計画 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | PLAN-W0d5X9GIZLFMnSGqu9OlBg | Issue #306 汎用 I/O 合成 E2E 実装計画 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
+| PLAN-dS6gH1jK4lM9nB2vC8xZ3q | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 実施計画 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | PLAN-034UtCUZnaLUCtLUqb8nYz | Issue #306 IO E2E slice 2 実装計画 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
 | PLAN-eShTb4vnZSc0gaiPtChnIU | Issue #306 IO E2E slice 3 実装計画 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |

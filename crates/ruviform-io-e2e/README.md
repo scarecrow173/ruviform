@@ -9,7 +9,9 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
 - `StagedFile → SealedFile → publish → 再 Open` の型状態・実 OS
   保証を、Structured（`write_file`/`read_file`）、TAR→Compression、
   ZIP/TAR→Secure Extraction、WAV `finalize→seal→readback→publish`
-  の各合成境界で pin する。
+  の各合成境界で pin する（`staged_lifecycle.rs`）。seal→publish
+  間の外部 temp rewrite/delete・RecoveryHandle cleanup 失敗→retry
+  の実 FS 経路もここで検証する。
 - 完成証明（`finish`/`finalize`）なし・Verified EOF 未完・不完全
   形式の bytes が publish されない否定経路を検証する。
 - Path Traversal・canonical/casefold 衝突・resource budget 超過の
