@@ -880,7 +880,7 @@ mod backend {
 }
 
 /// Remaining non-Windows/non-Linux placeholder (macOS and other
-/// targets) — the `raw_parent` token is an NSView handle this slice
+/// targets) — the `raw_parent` token is an `NSView` handle this slice
 /// does not capture or measure. Honest [`UiError::Unsupported`],
 /// never fabricated geometry.
 #[cfg(not(any(windows, target_os = "linux")))]
