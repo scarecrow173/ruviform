@@ -28,7 +28,13 @@ publish.workspace = true
 # - serde (derive): test-only document structs for the structured
 #   boundary.
 [dev-dependencies]
-ruviform-io-file = { path = "../ruviform-io-file" }
+# `fault-injection` enables io-file's `#[doc(hidden)]` mock facade used
+# by `tests/fault_seam.rs` (Issue #306 G07 contract tests). Test-only:
+# the feature is additive, non-default, and never reaches the public
+# API or production builds.
+ruviform-io-file = { path = "../ruviform-io-file", features = [
+    "fault-injection",
+] }
 ruviform-io-structured = { path = "../ruviform-io-structured", features = [
     "json",
     "yaml",

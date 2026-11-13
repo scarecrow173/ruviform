@@ -270,6 +270,15 @@ run = "cargo clippy -p ruviform-io-e2e --all-targets -- -D warnings"
 [tasks.test-io-e2e]
 description = "Run the io-e2e composition boundary tests (staged lifecycle, structured/compression/archive/wav layers)"
 run = "cargo test -p ruviform-io-e2e"
+# G08 opt-in lane (Issue #306): bounded, seed-fixed corpus replay —
+# NOT part of the normal test-io-e2e lane (the test is #[ignore]d).
+# Fixed seed/case/byte/time budgets live in
+# crates/ruviform-io-e2e/tests/corpus_replay.rs; format exclusions
+# (deflate, WAV, secure extraction, publish FS path, sustained fuzz)
+# are documented there and in evidence/rf306/.
+[tasks.test-io-e2e-corpus]
+description = "Run the opt-in bounded corpus replay for io-e2e readers (fixed seed, 48 cases/format, byte+time budgets; Issue #306 G08)"
+run = "cargo test -p ruviform-io-e2e --test corpus_replay -- --ignored --nocapture"
 
 # IO file/archive lane (Issue #409): the rooted-read capability and the
 # shared vfs backend (unix/windows/unsupported) live in io-file; io-archive
