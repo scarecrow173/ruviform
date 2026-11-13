@@ -226,6 +226,16 @@ fn text_sink_writes_human_readable_line() {
     assert!(content.contains("text event"), "got: {content}");
 }
 
+// Upstream `tracing-appender` retention (`prune_old_logs`) orders
+// candidates by `Metadata::created()` (birth time), not by the date in
+// the file name. Seed files written back-to-back can share one
+// timestamp tick on filesystems with coarse granularity, leaving the
+// "oldest first" deletion order to arbitrary readdir order — observed on
+// ubuntu-latest CI (run 43383950490, `test-observability-msrv`). Space
+// the writes so each file's birth time is distinguishable. Birth time
+// cannot be set explicitly, so real elapsed time is the only lever.
+const SEED_FILE_BIRTH_GAP: std::time::Duration = std::time::Duration::from_millis(100);
+
 // E3 / R5: retention — 構築時に max_files を超えた古いファイルを削除する。
 #[test]
 fn rolling_file_retention_deletes_oldest_at_build() {
@@ -236,6 +246,7 @@ fn rolling_file_retention_deletes_oldest_at_build() {
             format!("day {day}\n"),
         )
         .unwrap();
+        std::thread::sleep(SEED_FILE_BIRTH_GAP);
     }
     // max_files=3・daily rotation・prefix "app" — 構築時に古い順で削除。
     let result = build_logging(&LoggingConfig {
@@ -325,6 +336,7 @@ fn rolling_file_retention_matches_prefixed_and_suffixed_files() {
             format!("day {day}\n"),
         )
         .unwrap();
+        std::thread::sleep(SEED_FILE_BIRTH_GAP);
     }
     // prefix 一致・suffix 不一致は retention 対象外に残るはず。
     fs::write(dir.path().join("app.2020-01-01.txt"), "not a log\n").unwrap();
