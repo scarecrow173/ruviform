@@ -812,6 +812,10 @@ run = [
   "cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host --test l1_real_adapter_e2e -- --ignored",
 ]
 
+[tasks.check-l1-real-plugin]
+description = "Type-check CLAP/VST3 adapter host-feature libs, runner bins, tests and examples on the current OS; native check for non-Linux CI lanes"
+run = "cargo check -p ruviform-plugin-clap -p ruviform-plugin-vst3 --all-targets --features host"
+
 [tasks.lint-l1-real-plugin]
 description = "Lint the CLAP/VST3 adapter crates at `-D warnings` with feature `host` (bridge, runner bins and E2E test targets) — outside the default `lint` task's feature set"
 run = "cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 --all-targets --features host -- -D warnings"
