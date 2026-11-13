@@ -6,6 +6,7 @@ Directory: `docs/impl/ir`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| IMPL-034WR1i5LXEheCHSySWZsA | Issue #598 GPUI macOS Feature lane and 3OS native build/link CI evidence | in-progress | [ci-os-l1-gpui-macos.md](./ci-os-l1-gpui-macos.md) |
 | IMPL-034VuaCh48ZagIaCgYEDjZ | RF-GT-05 CI offscreen lanes implementation record | draft | [gt-05-ci-offscreen-lanes-slice.md](./gt-05-ci-offscreen-lanes-slice.md) |
 | IMPL-034R4JLReInVta6Yn0RgRW | Issue #219 consumer-verify anonymous-HTTPS access mode + 棚卸し refresh | in-progress | [issue-219-consumer-verify-anonymous-https-access-mode-refresh.md](./issue-219-consumer-verify-anonymous-https-access-mode-refresh.md) |
 | IMPL-Nq2aV7kR4tYc9XwL3ZsH8D | Issue #386 Backend-neutral GUI Host 契約・GPUI Driver・Window/Dock 移行 — 第 2 PR 実装記録 | in-progress | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |

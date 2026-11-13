@@ -8,6 +8,7 @@ Directory: `docs/plans`
 | --- | --- | --- | --- |
 | PLAN-034IR3qOr15LGNY9mEindJ | Issue #1 設計ベースラインの開発基盤・README／AGENTS への反映 | approved | [apply-issue-1-architecture-baseline-to-repo.md](./apply-issue-1-architecture-baseline-to-repo.md) |
 | PLAN-034WJG3B2sBoAiz4O4YbAf | Issue #594 実施計画 — ci.yml MSRV lane 追加と workflow_dispatch 検証 | approved | [ci-msrv-daily-lane.md](./ci-msrv-daily-lane.md) |
+| PLAN-BPJj0VR61YLMy1KGoMC8jJ | Issue #598 実施計画 — ui-gpui-verify-macos lane 追加と workflow_dispatch 検証 | approved | [ci-os-l1-gpui-macos.md](./ci-os-l1-gpui-macos.md) |
 | PLAN-034IdrispOUms1c32192B6 | Rust 開発基盤のブートストラップ（toolchain pin・最小ワークスペース・mise タスク・手動CI） | approved | [dev-foundation-bootstrap.md](./dev-foundation-bootstrap.md) |
 | PLAN-034Vu9Of9q1USFJKWTGNY6 | RF-GT-05 CI offscreen lanes plan | approved | [gt-05-ci-offscreen-lanes-plan.md](./gt-05-ci-offscreen-lanes-plan.md) |
 | PLAN-034JgkWCimxdvr81k6b0ow | オーディオデバイス境界ポートと ruviform-audio-device PoC の実装（Issue #23） | approved | [implement-audio-device-port-and-cpal-poc.md](./implement-audio-device-port-and-cpal-poc.md) |
