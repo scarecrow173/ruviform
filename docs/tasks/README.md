@@ -196,6 +196,7 @@ Directory: `docs/tasks`
 | TASK-034QdVbbaa7jKsLfhGKepC | T4 検証・IR 記録（actionlint・doc audit・実装記録） | done | [issue-219-t4-verify-ir.md](./issue-219-t4-verify-ir.md) |
 | TASK-034QsXMp7VDgLZ2W5FaZxq | Issue #223 MSRV 1.89 限定 pedantic clippy 失敗の整理 | done | [issue-223-msrv-clippy-triage.md](./issue-223-msrv-clippy-triage.md) |
 | TASK-M5TTFmL3gjHvlBOb7sPDjF | Issue #238 l1_proxy_e2e 壁時計 sleep 同期を barrier/有界 poll へ置換 | done | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
+| TASK-034WZGuoovHD3cTIYBWUGN | Issue #243 — Window/Job 不変条件 Headless 検証 実装タスク | done | [issue-243-window-job-headless-task.md](./issue-243-window-job-headless-task.md) |
 | TASK-034V4uYcdcMjdFzOg15rFm | Issue #243 — Windows 実 OS multiwindow smoke 実装タスク | done | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | TASK-034Qxfh3HNkNZecEqGSpM1 | T1 prefetch boundary-first fault + dead-generation sequence (Issue #244 P2 amendment) | done | [issue-244-t1-boundary-first.md](./issue-244-t1-boundary-first.md) |
 | TASK-034QxfhGvckBvhC0QQYCgA | T2 prefetch End commit-once under backpressure (Issue #244) | done | [issue-244-t2-end-commit-once.md](./issue-244-t2-end-commit-once.md) |
