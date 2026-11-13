@@ -189,7 +189,7 @@ mod supervisor;
 mod video;
 
 pub use command::{
-    FailureCause, GuiHandle, GuiParentToken, HostCommand, HostError, HostReply, ParentSlotLease,
+    FailureCause, GuiHandle, HostCommand, HostError, HostReply, ParentLease, ParentSlotLease,
     PluginEditorSessionId, PluginHandle,
 };
 pub use composite::{
@@ -598,7 +598,7 @@ mod tests {
         assert_eq!(
             host.execute(HostCommand::OpenGui {
                 handle,
-                parent: GuiParentToken::new(0),
+                parent: ParentLease::new(0, 0),
             }),
             Err(HostError::Unsupported)
         );

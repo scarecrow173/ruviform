@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
 
-use ruviform_plugin_core::GuiParentToken;
+use ruviform_plugin_core::ParentLease;
 use ruviform_plugin_host::{
     AttachMode, EditorOpError, EditorSessionState, InProcessEditorOps, InProcessHost,
     ParentSlotLease, PluginEditorSessionId, PluginEditorSessions, PluginHandle,
@@ -160,7 +160,7 @@ fn windowing_ops(
         Box::new(move |lease: &ParentSlotLease| {
             surface
                 .redeem(lease.raw())
-                .map(GuiParentToken::new)
+                .map(|token| ParentLease::new(SlotLease::new(lease.raw()).seq(), token))
                 .map_err(|error| match error {
                     SlotError::Unsupported => EditorOpError::Unsupported,
                     _ => EditorOpError::LeaseRejected,

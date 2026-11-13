@@ -20,7 +20,7 @@
 //! plugin-side instance contracts ([`Plugin`], [`PluginFactory`],
 //! [`ErasedPlugin`], [`erase`], [`erase_sendable`], [`HostInput`],
 //! [`HostOutput`]), the shared host-boundary vocabulary
-//! ([`PluginHandle`], [`GuiHandle`], [`GuiParentToken`],
+//! ([`PluginHandle`], [`GuiHandle`], [`ParentLease`],
 //! [`PluginEditorSessionId`], [`ParentSlotLease`], [`HostError`])
 //! and the L1 out-of-process wire codec ([`wire`]).
 //!
@@ -101,7 +101,7 @@ mod video_plugin;
 pub mod wire;
 
 pub use boundary::{
-    FailureCause, GuiHandle, GuiParentToken, HostError, ParentSlotLease, PluginEditorSessionId,
+    FailureCause, GuiHandle, HostError, ParentLease, ParentSlotLease, PluginEditorSessionId,
     PluginHandle,
 };
 pub use bus::{BusDescriptor, BusDirection, BusRole};

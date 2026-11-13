@@ -29,9 +29,9 @@ use ruviform_media_core::{
 };
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    Event, EventKind, EventList, FailureCause, GuiParentToken, HostError, HostInput, HostOutput,
-    LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamValue,
-    PluginDescriptor, PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
+    Event, EventKind, EventList, FailureCause, HostError, HostInput, HostOutput, LifecycleError,
+    LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamValue, ParentLease, PluginDescriptor,
+    PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
 };
 
 use l1::diag::DiagRegistry;
@@ -289,7 +289,7 @@ fn crash_transitions_failed_and_notifies() {
     // `Failed` precedes the `Unsupported` GUI rejection.
     assert_eq!(
         instance.execute(wire::Command::OpenGui {
-            parent: GuiParentToken::new(0)
+            parent: ParentLease::new(0, 0)
         }),
         Err(HostError::Failed)
     );
@@ -456,7 +456,7 @@ fn gui_defined_rejection() {
 
     assert_eq!(
         instance.execute(wire::Command::OpenGui {
-            parent: GuiParentToken::new(0)
+            parent: ParentLease::new(0, 0)
         }),
         Err(HostError::Unsupported)
     );
@@ -2089,9 +2089,9 @@ mod composite_e2e {
 
     use ruviform_audio_core::{AudioBufferViewMut, PlanarBufferView, PlanarBufferViewMut};
     use ruviform_plugin_core::{
-        ErasedPlugin, Event, EventKind, EventList, FailureCause, GuiParentToken, HostError,
-        HostInput, HostOutput, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId,
-        ParamInfo, ParamValue, PluginDescriptor, ProcessConfig, ProcessResult, TransportInfo,
+        ErasedPlugin, Event, EventKind, EventList, FailureCause, HostError, HostInput, HostOutput,
+        LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamInfo, ParamValue,
+        ParentLease, PluginDescriptor, ProcessConfig, ProcessResult, TransportInfo,
     };
     use ruviform_plugin_host::{
         AudioCounterSnapshot, ChildExit, DiagnosticQuery, DiagnosticRecord, EndpointBounds,
@@ -2650,7 +2650,7 @@ mod composite_e2e {
             assert_eq!(
                 host.execute(HostCommand::OpenGui {
                     handle,
-                    parent: GuiParentToken::new(0)
+                    parent: ParentLease::new(0, 0)
                 }),
                 Err(HostError::Unsupported)
             );
