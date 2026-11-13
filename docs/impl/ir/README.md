@@ -98,6 +98,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QgS4TFyEN937G8j8DKR | Issue #190 T-2: span scheduler apply | completed | [issue-190-t-2-span-scheduler-apply.md](./issue-190-t-2-span-scheduler-apply.md) |
 | IMPL-034QgS61F2OZZNh6JVUeV3 | Issue #190 T-3: plugin bridge + mock PoC | completed | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
 | IMPL-034QhS434AsmoWfCforctH | Issue 191: PCM WAV encode/mux backend with MediaSink + StagedOutput | completed | [issue-191-pcm-wav-encode-mux-backend-with-mediasink-stagedoutput.md](./issue-191-pcm-wav-encode-mux-backend-with-mediasink-stagedoutput.md) |
+| IMPL-034WYgZmp0Qv3NLjgtu1jn | Issue #192 TA Invariant Map — 監査対応表・非循環性静的確認の実装記録 | completed | [issue-192-ta-invariant-map.md](./issue-192-ta-invariant-map.md) |
 | IMPL-034QgTkRw195m2audIoRtXwQ | Issue #195 M2 typed graph audio compiler/runtime: schedule, bounded buffers, PDC, stateful RT ownership, plan activation | completed | [issue-195-m2-typed-graph-compiler-runtime.md](./issue-195-m2-typed-graph-compiler-runtime.md) |
 | IMPL-issue196-m4-adapter | Issue #196 — M4 typed graph plugin adapter (multi-bus / lifecycle / offset precision) | completed | [issue-196-typed-graph-plugin-adapter.md](./issue-196-typed-graph-plugin-adapter.md) |
 | IMPL-8FuQb4NPvHVC136oYJUME7 | Issue #197 Generic Media Reader implementation record | completed | [issue-197-media-reader-implementation-record.md](./issue-197-media-reader-implementation-record.md) |

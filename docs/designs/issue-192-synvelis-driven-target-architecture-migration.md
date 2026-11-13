@@ -340,6 +340,15 @@ umbrella Issue #192 の受入条件と、#193 G0〜G7・関連 Issue/
 | TA-011 | Window Close で Application/Project-owned Job が無断 Cancel されない | #181・#182・PR #237/#240・job lifetime 契約 | window/job lifecycle test | 実装 merge 済み。実 GUI での最終確認は #243 に連携 |
 | TA-012 | Audio/Video/Plugin/CLI/UI/Legacy Consumer が互換 API で回帰 | #219（spec proposed）・#294・#281・consumer issues（SV #28・AL #127・AL #140〜#142・SV #83） | consumer-verify CI + consumer repo 回帰 | CI 基盤部分 merge（#224/#274）。両 Consumer 独立受入は未完 |
 
+> **現行 API/Issue/L1テスト対応表（正本）**: 各 TA gate の「現行
+> API/crate・設計判断・実装 Issue・既存 OS-L1 テスト・未達
+> Headless Gap → Open Gate」の 1 対 1 対応付けと、feature 別依存の
+> 非循環性の静的確認（`cargo metadata` 実測）は
+> [`docs/discovery/issue-192-ta-invariant-map.md`](../discovery/issue-192-ta-invariant-map.md)
+> を正本とする（2026-11-14 時点の 42 member・循環 0 の実測を含む）。
+> 本表は 2026-11-09 snapshot のまま維持し、対応表は受入管理の索引で
+> あって invariant の再定義ではない。
+
 ## G0〜G7・E2E・GUI lane の実行構造（#193 現行版）
 
 - **G0〜G7**: #193 が各 M stage の受入 gate を定義する
