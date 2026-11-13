@@ -70,6 +70,7 @@ Directory: `docs/designs`
 | DESIGN-034VEQoHhDL68K8qLl8w8r | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-design.md](./issue-253-unsupported-transparency-design.md) |
 | DSN-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice 設計（IMidiMapping snapshot + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | DESIGN-034UjQBuwtfaWhLg6ZZMBn | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合設計 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| DESIGN-034WZCcSruHEmlEMFX1Mlu | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け設計 | approved | [issue-275-obs-owner-map-design.md](./issue-275-obs-owner-map-design.md) |
 | DESIGN-hXhz1NTWfHfPzPb5P4A5ff | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | DESIGN-034RoXjgYbKKZ3ZSazkSGi | Issue #276 汎用 Logging Adapter 設計 | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | DESIGN-034Rp1Um3ZXDWfRx8pCmuw | Issue #277 OBS-02 軽量Primitive・Observation Source契約: Gauge/Histogram・Descriptor・SourceId/Generation・Registrar/Lease・寿命 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |
