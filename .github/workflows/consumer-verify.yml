@@ -389,11 +389,17 @@ jobs:
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.fetch.outcome == 'success'
         working-directory: ${{ runner.temp }}/audio-lens
         run: mise run check-ruviform-lock
-      - name: check-ci lane
+      - name: check-full lane (legacy check-ci fallback)
         id: check
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.fetch.outcome == 'success'
         working-directory: ${{ runner.temp }}/audio-lens
-        run: mise run check-ci
+        run: |
+          set -euo pipefail
+          if mise tasks info check-full >/dev/null 2>&1; then
+            mise run check-full
+          else
+            mise run check-ci
+          fi
       - name: smoke lane (al-cli ci profile build)
         id: smoke_build
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.check.outcome == 'success'
@@ -404,14 +410,18 @@ jobs:
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.check.outcome == 'success'
         working-directory: ${{ runner.temp }}/audio-lens
         run: mise run check-cli-headless
-      - name: test-ci lane (with LFS fixtures)
+      - name: test-full lane (legacy test-ci fallback; LFS fixtures)
         id: test
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.check.outcome == 'success'
         working-directory: ${{ runner.temp }}/audio-lens
         run: |
           set -euo pipefail
           git lfs pull
-          mise run test-ci
+          if mise tasks info test-full >/dev/null 2>&1; then
+            mise run test-full
+          else
+            mise run test-ci
+          fi
       # UI headless lane 群は rust lane と独立に証拠を採る（fetch 成功のみ依存）。
       # sync-ui-deps は内部で ruviform へ git fetch するため credential cleanup より前。
       - name: sync-ui-deps (vendor を候補 SHA で再生成)
@@ -565,10 +575,10 @@ jobs:
             rec "manifest rev pin (sed 正規化)" "sed -i -E Cargo.toml" "workspace" "$(o '${{ steps.pin.outcome }}')"
             rec "manifest rev pin + cargo fetch (lockfile re-resolve)" "sed + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
             rec "mise run check-ruviform-lock" "mise run check-ruviform-lock" "workspace" "$(o '${{ steps.lock.outcome }}')"
-            rec "mise run check-ci" "mise run check-ci" "workspace" "$(o '${{ steps.check.outcome }}')"
+            rec "mise run check-full (legacy check-ci fallback)" "mise run check-full || mise run check-ci" "workspace" "$(o '${{ steps.check.outcome }}')"
             rec "cargo build -p al-cli --profile ci (smoke)" "cargo build -p al-cli --profile ci" "al-cli headless" "$(o '${{ steps.smoke_build.outcome }}')"
             rec "mise run check-cli-headless (smoke)" "mise run check-cli-headless" "al-cli headless" "$(o '${{ steps.smoke.outcome }}')"
-            rec "mise run test-ci (LFS fixtures)" "git lfs pull && mise run test-ci" "workspace" "$(o '${{ steps.test.outcome }}')"
+            rec "mise run test-full (legacy test-ci fallback; LFS fixtures)" "git lfs pull && (mise run test-full || legacy mise run test-ci)" "workspace" "$(o '${{ steps.test.outcome }}')"
             rec "mise run sync-ui-deps (vendor 再生成)" "mise run sync-ui-deps" "ui vendor" "$(o '${{ steps.sync_ui.outcome }}')"
             rec "check-ruviform-rev --require-vendor (lock+REV)" "node tools/check-ruviform-rev.mjs --require-vendor" "ui vendor" "$(o '${{ steps.rev_vendor.outcome }}')"
             rec "mise run setup-ui (npm ci)" "mise run setup-ui" "ui headless" "$(o '${{ steps.setup_ui.outcome }}')"
@@ -818,19 +828,29 @@ jobs:
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success'
         working-directory: ${{ runner.temp }}/synvelis
         run: mise run check-ruviform-rev
-      - name: check lane
+      - name: check-full lane (legacy check fallback)
         id: check
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success'
         working-directory: ${{ runner.temp }}/synvelis
-        run: mise run check
-      - name: test lane (with LFS fixtures)
+        run: |
+          set -euo pipefail
+          if mise tasks info check-full >/dev/null 2>&1; then
+            mise run check-full
+          else
+            mise run check
+          fi
+      - name: test-full lane (legacy test fallback; LFS fixtures)
         id: test
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.check.outcome == 'success'
         working-directory: ${{ runner.temp }}/synvelis
         run: |
           set -euo pipefail
           git lfs pull
-          mise run test
+          if mise tasks info test-full >/dev/null 2>&1; then
+            mise run test-full
+          else
+            mise run test
+          fi
       - name: test-rt lane (RT no-alloc)
         id: test_rt
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.check.outcome == 'success'
@@ -1001,8 +1021,8 @@ jobs:
             rec "manifest rev pin (sed 正規化)" "sed -i -E Cargo.toml" "workspace" "$(o '${{ steps.pin.outcome }}')"
             rec "manifest rev pin + cargo fetch (lockfile re-resolve)" "sed + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
             rec "mise run check-ruviform-rev (lock 単一 SHA)" "mise run check-ruviform-rev" "workspace" "$(o '${{ steps.rev.outcome }}')"
-            rec "mise run check" "mise run check" "workspace" "$(o '${{ steps.check.outcome }}')"
-            rec "mise run test (LFS fixtures)" "git lfs pull && mise run test" "workspace" "$(o '${{ steps.test.outcome }}')"
+            rec "mise run check-full (legacy check fallback)" "mise run check-full || legacy mise run check" "workspace" "$(o '${{ steps.check.outcome }}')"
+            rec "mise run test-full (legacy test fallback; LFS fixtures)" "git lfs pull && (mise run test-full || legacy mise run test)" "workspace" "$(o '${{ steps.test.outcome }}')"
             rec "mise run test-rt (RT no-alloc)" "mise run test-rt" "rt" "$(o '${{ steps.test_rt.outcome }}')"
             rec "mise run check-headless-deps" "mise run check-headless-deps" "headless" "$(o '${{ steps.headless_deps.outcome }}')"
             rec "mise run sync-ui-deps (vendor 再生成)" "mise run sync-ui-deps" "ui vendor" "$(o '${{ steps.sync_ui.outcome }}')"
