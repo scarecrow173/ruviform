@@ -65,7 +65,7 @@ relations:
   derived-by: []
   verifies: []
   verified-by:
-    - "docs/tasks/issue-275-obs-owner-map-task.md"
+    - "docs/test-specs/issue-275-obs-owner-map.md"
   references:
     - "evidence/rf275/obs-owner-map-audit.md"
     - "https://github.com/scarecrow173/ruviform/issues/275"
@@ -120,17 +120,17 @@ map` 文書チェーンと監査証拠を完成させる。
 - [x] Issue 状態（`gh issue view`）・crate/feature/CI lane の
       実測棚卸し → `evidence/rf275/obs-owner-map-audit.md`
 - [x] spec → design → test-spec の文書チェーン作成
-- [ ] 統合設計正本への対応表・Deferred 表・AL/SV 引き渡し節の
+- [x] 統合設計正本への対応表・Deferred 表・AL/SV 引き渡し節の
       追記
-- [ ] plan → task → impl(ir/exp) の文書チェーン完成
+- [x] plan → task → impl(ir/exp) の文書チェーン完成
 - [x] index 再生成（doc-maintenance `index apply` で
       specs/designs/plans/tasks/test-specs を再生成、
       `docs/impl/ir/README.md` は `sync_impl_index.js
       --kind ir --apply` で再生成。`docs/impl/exp` の
       `.md` exp 記録は管理 index（`*.jsonl` のみ対象）の
       対象外のため変更なし）
-- [ ] `mise run fmt-check` + `prek run --files` による軽量検証
-- [ ] `doc-status` audit と review-protocol レビュー
+- [x] `mise run fmt-check` + `prek run --files` による軽量検証
+- [x] `doc-status` audit と review-protocol レビュー
 - [ ] `git fetch origin main && git merge origin/main` → index
       再生成 → commit → push → PR
 

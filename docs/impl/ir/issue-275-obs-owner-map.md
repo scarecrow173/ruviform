@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034WZPoBmkr0oYITBjQA67"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け"
 created: "2026-11-14"
 updated: "2026-11-14"

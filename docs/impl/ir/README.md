@@ -8,7 +8,6 @@ Directory: `docs/impl/ir`
 | --- | --- | --- | --- |
 | IMPL-034VuaCh48ZagIaCgYEDjZ | RF-GT-05 CI offscreen lanes implementation record | draft | [gt-05-ci-offscreen-lanes-slice.md](./gt-05-ci-offscreen-lanes-slice.md) |
 | IMPL-034R4JLReInVta6Yn0RgRW | Issue #219 consumer-verify anonymous-HTTPS access mode + 棚卸し refresh | in-progress | [issue-219-consumer-verify-anonymous-https-access-mode-refresh.md](./issue-219-consumer-verify-anonymous-https-access-mode-refresh.md) |
-| IMPL-034WZPoBmkr0oYITBjQA67 | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け | in-progress | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
 | IMPL-Nq2aV7kR4tYc9XwL3ZsH8D | Issue #386 Backend-neutral GUI Host 契約・GPUI Driver・Window/Dock 移行 — 第 2 PR 実装記録 | in-progress | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
 | IMPL-Rt5Bv8wKm2NcXd7PqLe4Yg | Issue #423 WebView 写像・focus capability 精緻化・GPUI 実窓検証 — 実装記録 | in-progress | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
 | IMPL-_exo5tf9F8bfLQSN05ZaeA | Issue #426 実装記録 — GPUI lab binding・story matrix・mechanism 実在検査・Golden 境界・Consumer 検査 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
@@ -134,6 +133,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QTOFbpeDKVZDoNfrXP5 | Issue #263 design system showcase theme matrix a11y regression cross-consumer gates | completed | [issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md](./issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md) |
 | IMPL-034QMvf4KmvWw53y1DczqT | Issue #265 CorrelationPlan prefers_direct コストモデル校正（mixed-radix 実コスト反映と direct 維持ガード） | completed | [issue-265-correlationplan-prefers-direct-mixed-radix-direct.md](./issue-265-correlationplan-prefers-direct-mixed-radix-direct.md) |
 | IMPL-034V68pdzoGf0crvlem0Zy | Issue #275 Observability integration design reconciliation and contract-test inventory | completed | [issue-275-obs-design-reconciliation.md](./issue-275-obs-design-reconciliation.md) |
+| IMPL-034WZPoBmkr0oYITBjQA67 | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け | completed | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
 | IMPL-034RwLrHlik3I1I7ljPS1y | Issue 276 T1: logging config/API types + feature wiring | completed | [issue-276-t1-logging-config-api-types-feature-wiring.md](./issue-276-t1-logging-config-api-types-feature-wiring.md) |
 | IMPL-034RwLt9pOcXsRFEHwaQA8 | Issue 276 T2: bounded writer + sinks + build result | completed | [issue-276-t2-bounded-writer-sinks-build-result.md](./issue-276-t2-bounded-writer-sinks-build-result.md) |
 | IMPL-034RwLuQ6IZyb2JEQ9I1Sz | Issue 276 T3: contract tests + host example + docs + verification | completed | [issue-276-t3-contract-tests-host-example-docs-verification.md](./issue-276-t3-contract-tests-host-example-docs-verification.md) |

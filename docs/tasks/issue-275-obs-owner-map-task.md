@@ -1,7 +1,7 @@
 ---
 id: "TASK-034WZKWej3HLlqCGxHSDcH"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けタスク"
 created: "2026-11-14"
 updated: "2026-11-14"
@@ -129,20 +129,20 @@ Issue #275 の残件（headless 監査・文書スライス）を実施する。
 
 ## Done When
 
-- [ ] OBS-01〜11 の Owner/API/Feature/CI Case 対応表が統合
+- [x] OBS-01〜11 の Owner/API/Feature/CI Case 対応表が統合
       設計正本に追記されている
-- [ ] AL #127・SV #28 の引き渡しと Deferred Owner/Trigger が
+- [x] AL #127・SV #28 の引き渡しと Deferred Owner/Trigger が
       明記されている
-- [ ] 文書チェーンと監査証拠が完成している
-- [ ] index が再生成/追記され、軽量検証と review-protocol
+- [x] 文書チェーンと監査証拠が完成している
+- [x] index が再生成/追記され、軽量検証と review-protocol
       レビューが完了している
 
 ## Verification
 
-- [ ] `mise run fmt-check` が成功する
-- [ ] `mise exec -- prek run --files <変更ファイル>` が成功する
-- [ ] `doc-maintenance`/`sync_impl_index`/`audit_docs` で
+- [x] `mise run fmt-check` が成功する
+- [x] `mise exec -- prek run --files <変更ファイル>` が成功する
+- [x] `doc-maintenance`/`sync_impl_index`/`audit_docs` で
       整合を確認する
-- [ ] 対応表の全行が `evidence/rf275/obs-owner-map-audit.md`
+- [x] 対応表の全行が `evidence/rf275/obs-owner-map-audit.md`
       の実測と一致する
-- [ ] review-protocol で blocker が残っていない
+- [x] review-protocol で blocker が残っていない

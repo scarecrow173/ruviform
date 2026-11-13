@@ -1,5 +1,5 @@
 ---
-id: "TSPEC-8W-EruC9xGTrXeKm8RqkJ"
+id: "TSPEC-Zub5EkBZ2Fg4lBUvyXezm4"
 type: "test-spec"
 status: "approved"
 title: "Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けの検証規則"
