@@ -28,7 +28,7 @@ Scope: scarecrow173/ruviform / 三リポジトリ共通の検証方針
 | **Linux** | **必須** | 利用要件発生までDeferred | 利用要件発生までDeferred |
 
 - Windowsでも、**使わないDevice・Plugin形式・Host mode・特殊FS等の全組合せは必須にしない**。利用する能力だけをCase/Device/Format/環境ごとに指定する。
-- Windowsで利用する機能のGUI-L2/EXT-L3がNotRun/Failなら**その機能は未受入**。Fake/Headless/Offscreen成功は実GUI、Generic/Floating Editorは実Native Dock、Mock Pluginは実Plugin動作の代用にならない。既知のWindows Native Dock画素合成制約も未解決のままPassにしない。
+- Windowsで利用する機能のGUI-L2/EXT-L3がNotRun/Failなら**その機能は未受入**。Fake/Headless/Offscreen成功は実GUI、Generic/Floating Editorは実Native Dock、Mock Pluginは実Plugin動作の代用にならない。Native Dockの画素合成など、実利用機能の未解決不具合をPassにしない。
 - macOS/LinuxはOS-L1までが現行必須。実GUI/物理機器/実PluginをそのOSで利用する必要が生じた時点で、対象OS・機能のGUI-L2/EXT-L3をRequiredへ昇格し、Owner、Issue、環境、受入Caseを定義する。
 - 本方針は3OSを**設計対象から除外する判断ではない**。OS-L1がPassしても、未実測のCPUアーキテクチャ、OSバージョン、配布パッケージ、実デスクトップ環境を正式対応済みと主張しない。
 
