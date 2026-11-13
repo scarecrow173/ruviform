@@ -130,7 +130,7 @@ mise exec -- apm install --frozen
 
 ### 暫定規約
 
-- `unsafe` は原則禁止。必要な場合のみ SAFETY コメント付きの局所許可（`#[expect(unsafe_code)]`、未対応なら `#[allow(unsafe_code)]`）で例外的に認める。`workspace.lints.rust.unsafe_code = "warn"` は `lint` / `lint-ci` の `-D warnings` ゲートで実質 deny として機能し、局所許可のない `unsafe` は検証を通過しない。
+- `unsafe` は原則禁止。必要な場合のみ SAFETY コメント付きの局所許可（`#[expect(unsafe_code)]`、未対応なら `#[allow(unsafe_code)]`）で例外的に認める。`workspace.lints.rust.unsafe_code = "warn"` は `lint` / `lint-full` の `-D warnings` ゲートで実質 deny として機能し、局所許可のない `unsafe` は検証を通過しない。
 - feature: default feature は最小限とする。新規 feature・optional 依存は追加理由を PR に記録する。
 - 依存追加: メンテナンス状況・ライセンス・依存木サイズを確認し理由を記録する。`Cargo.lock` は追跡を継続する。
 - lint: `workspace.lints` が正本。CI は `clippy -- -D warnings` を必須ゲートとする。rustfmt は標準設定（`rustfmt.toml` は必要時に追加）。
