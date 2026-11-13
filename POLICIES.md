@@ -51,5 +51,5 @@ Scope: scarecrow173/ruviform / 三リポジトリ共通の検証方針
 ## 5. Ruviform固有の適用
 
 - Driver-neutralの共通APIを保ち、GPUI/OS Handle/Plugin SDK等の具体型を公開契約へ漏出させない。共通基盤の変更はAudioLensのf64/長尺/CLIとSynvelisのDAW/RT/Projectを独立に評価する。
-- Windowsの実Window・Native Plugin Dock・Audio/MIDI実機等の受入は、共有契約と製品のそれぞれのOwnerに分離する。例：[GUI #243](https://github.com/scarecrow173/ruviform/issues/243)、[Native Dock #388](https://github.com/scarecrow173/ruviform/issues/388)、[DComp #532](https://github.com/scarecrow173/ruviform/issues/532)、[Consumer Gate #294](https://github.com/scarecrow173/ruviform/issues/294)。
+- Windowsの実Window・Native Plugin Dock・Audio/MIDI実機等の受入では、Ruviformは共通のDriver/Adapter/API契約および共通実装の責務を持ち、各Consumerは製品固有の操作・状態遷移・実利用環境について独立した受入責務を持つ。実行証拠と受入Ownerは対象機能のIssueで明示し、恒久ポリシーには個別Issue番号を固定しない。
 - [対象プラットフォームADR](docs/adr/platform-and-toolchain-targets.md)が定める3OS/CPU設計対象と、本書の**検証深度の優先順位**を区別する。Windowsファーストの設計専有やmacOS/Linuxの対象外化を認めるものではない。
