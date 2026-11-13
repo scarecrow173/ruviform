@@ -52,6 +52,7 @@ Directory: `docs/specs`
 | SPEC-034VEOYg1GvMKRp6MWAh4D | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | SPEC-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice（IMidiMapping CC→param 配送 + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | SPEC-034UjQv2KPJWujHxiCffIK | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| SPEC-034WZzsCw7LraB3uPLZvMl | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けと Deferred 範囲の Owner/Trigger 明記 | approved | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
 | SPEC-8EJ4gM4rl1pb5GPij5Nm0l | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | SPEC-034RoXidyTvNC4Cd998l35 | Issue #276 汎用 Logging Adapter(observability::logging) | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | SPEC-034Rp1Lwq5BGjy5ucoWJ4s | Issue #277 OBS-02 軽量Primitive・Observation Source型・登録/寿命契約 | approved | [issue-277-observability-core-source-contract.md](./issue-277-observability-core-source-contract.md) |

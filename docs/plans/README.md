@@ -83,6 +83,7 @@ Directory: `docs/plans`
 | PLAN-yYLB0HDhiCqmnfV65T7mNu | Issue #251 Stage W closeout 実施 plan | approved | [issue-251-stage-w-real-device-closeout-plan.md](./issue-251-stage-w-real-device-closeout-plan.md) |
 | PLAN-034VERRPegu2dLBq0VqYol | Implement Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-plan.md](./issue-253-unsupported-transparency-plan.md) |
 | PLAN-034UjQKJduyKqWBrTakfn1 | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| PLAN-034WZJtam1qsAaVqT64TYw | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け計画 | approved | [issue-275-obs-owner-map-plan.md](./issue-275-obs-owner-map-plan.md) |
 | PLAN-H6keHUx9U3sTwtH2ngWKyQ | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | PLAN-034RoY5EwSBQJwEF1k5arE | Issue #276 generic logging adapter implementation plan | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | PLAN-034UyQfNa0aSYqwNDMIZn9 | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
