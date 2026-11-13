@@ -64,6 +64,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     env:
+      # actionlint is required by the staged-file hygiene hook in this lane.
+      MISE_ENABLE_TOOLS: rust,prek,actionlint
       CARGO_INCREMENTAL: "0"
       # checkout-sha artifact leg name (Issue #366 sha evidence)
       CHECKOUT_LEG: verify-${{ matrix.os }}
@@ -112,7 +114,7 @@ jobs:
       - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked rust prek
+          mise install --locked rust prek actionlint
 
       # cpal's ALSA backend links via alsa-sys, whose build script
       # requires the ALSA development headers (pkg-config).
@@ -206,6 +208,8 @@ jobs:
     name: verify-macos
     runs-on: macos-latest
     env:
+      # actionlint is required by the staged-file hygiene hook in this lane.
+      MISE_ENABLE_TOOLS: rust,prek,actionlint
       CARGO_INCREMENTAL: "0"
       # checkout-sha artifact leg name (Issue #366 sha evidence)
       CHECKOUT_LEG: verify-macos
@@ -250,7 +254,7 @@ jobs:
       - name: Restore CI-required tools from mise.lock
         run: |
           mise trust
-          mise install --locked rust prek
+          mise install --locked rust prek actionlint
 
       - name: Restore cargo registry/git index cache
         uses: actions/cache@v6.1.0
