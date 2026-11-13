@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-14"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -56,6 +56,7 @@ relations:
   verifies: []
   verified-by:
     - "docs/test-specs/issue-193-migration-execution-plan.md"
+    - "docs/test-specs/issue-193-migration-plan-update.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/181"
     - "https://github.com/scarecrow173/ruviform/issues/182"
@@ -700,6 +701,337 @@ Issue は計画正本として Open を継続し、個別 Gate の証拠で
   → 本書は merge 済み正本（umbrella 設計文書・#194
   discovery・#219 spec・領域別 issue-* 文書・ADR）のみを
   参照する。
+
+## Snapshot-2026-11-14 — M0〜M7 着手条件・Headless Slice・Owner/Gate 確定（版付き）
+
+**版識別子:** `Snapshot-2026-11-14`（Issue 状態を `gh` で
+実測した基準日版）。本節は Issue #193 残件の版付き
+Snapshot であり、M0〜M7/G0〜G7/RB0〜RB6・GUI lane・
+Cross-Consumer 受入の定義を**変更しない**。既存節は
+2026-11-09/2026-11-04 時点の履歴 snapshot として保持
+し、本節を最新の状態記録とする。証拠:
+[evidence/rf193/issue-state-census-2026-11-14.md](../../evidence/rf193/issue-state-census-2026-11-14.md)。
+設計根拠:
+[docs/designs/issue-193-migration-plan-update-design.md](issue-193-migration-plan-update-design.md)。
+
+**状態語彙（POLICIES.md）:** 要求状態
+Required/Deferred/NotApplicable と実行結果
+Pass/Fail/NotRun/Unsupported は別軸。Issue の
+open/closed は実装 Blocked by と同義ではない。
+OS-L1（3OS Native Build/Link/Headless/RT/CLI/必要
+Feature・Consumer 独立 Oracle）は Required。GUI-L2/
+EXT-L3 は Windows で実際に提供・利用する機能のみ
+Required、macOS/Linux は利用要件発生まで Deferred。
+
+### Issue 状態照合の結果（2026-11-14 実測）
+
+- M0〜M7 の実装 Issue #184〜#198・M1 着手 Gate
+  #199/#201・IO 系 #282/#288/#295/#296/#305・OBS 系
+  #280/#293・Probe Gap #307〜#309・GUI Test #310〜#312/
+  #314・GUI lane #384〜#387/#390・3OS OS-L1 CI #598 は
+  **CLOSED**。Consumer 側も SV #13〜#16/#24/#25/#83/
+  #100/#104/#105/#110/#111/#113/#175/#190/#377、
+  AL #105/#131/#132/#140〜#143/#166/#206 が CLOSED。
+- OPEN の残存 Owner/Gate: RF #219/#243/#251/#253/#262/
+  #275/#281/#294/#306/#313/#388/#389/#419/#465/#532/
+  #553/#558/#559/#560/#562/#315〜#318、SV #22/#23/#28/
+  #84/#101/#106〜#109/#112/#114〜#117/#119/#124/#126/
+  #127/#130/#138/#176/#177/#259/#264/#266/#271〜#274/
+  #232/#277〜#296、AL #127/#189。
+- 確認した全 Open Issue で `着手条件（Blocked by）` は
+  「なし」（2026-11-13 ゲート正規化）。実 OS GUI/
+  Device/Plugin Gate は `統合・受入で関係する Issue
+  （着手は止めない）` 側に分離済みであり、Closed/
+  Deferred/NotRun を実装 Blocked by として誤記して
+  いないことを確認した（検証記録は evidence 参照）。
+
+### M0〜M7 Snapshot（開始条件・Headless Slice・完了定義・Integration Gate・責務・Blocked by・Owner）
+
+共通: 各 Milestone の OS-L1 必須範囲は 3OS の Native
+Build/Link・Headless/RT/CLI・必要 Feature を既存の
+変更検知付き Daily Full CI と手動 Full CI で対象 SHA
+実走すること（新規 Workflow は増設しない）。Blocked by
+は全 Milestone「なし」。
+
+#### M0 Baseline（#194 CLOSED）
+
+- **開始条件**: 充足済み（G0 監査条件全項充足・報告
+  PR #200 merge・#194 Close 済み）。
+- **着手可能 Headless Slice**: 変更ごとの Consumer 影響
+  分類（impacted/no impact/unknown）の記録運用
+  （#219 運用、対象 SHA は #294 tuple）。
+- **完了定義**: G0 証拠の維持と変更影響ごとの継続比較。
+- **Integration Gate**: なし（継続運用。個別変更の
+  tuple 判定は #294）。
+- **責務**: RF #219/#294（分類・tuple 判定 Owner）、
+  AL #127/SV #28（Consumer 別 Oracle）。
+- **Blocked by**: なし（Issue 本文の `着手条件
+  （Blocked by）` は空。実 OS/実機 Gate は Integration
+  Gate・Deferred/Activation 側）。
+- **独立 Owner Issue**: [#219](https://github.com/scarecrow173/ruviform/issues/219)、
+  [#294](https://github.com/scarecrow173/ruviform/issues/294)、
+  [AL #127](https://github.com/scarecrow173/audio-lens/issues/127)、
+  [SV #28](https://github.com/scarecrow173/synvelis/issues/28)。
+
+#### M1 Graph（#184 CLOSED、PR #225）
+
+- **開始条件**: 充足済み。
+- **着手可能 Headless Slice**: Typed Graph IR/Validator/
+  非 RT 検証の継続拡張。SV #106 Semantic→Typed Graph
+  Lowering の Consumer 側 headless 作業。
+- **完了定義**: G1 — Typed Domain/Direction/Channel/
+  Multiplicity/Capability と Cycle/無効接続の非 RT 検証、
+  合法な既存単一 Bus Graph の Compat 経路継続（Synvelis
+  EX-001〜006）。
+- **Integration Gate**: SV #106（Semantic lowering 接続）、
+  #294 tuple での両 Consumer G1 証拠。
+- **責務**: RF typed graph 実装済み（#184）。Consumer
+  lowering は SV #106 が Owner。
+- **Blocked by**: なし。
+- **独立 Owner Issue**: [SV #106](https://github.com/scarecrow173/synvelis/issues/106)、
+  [#294](https://github.com/scarecrow173/ruviform/issues/294)。
+
+#### M2 Audio Runtime（#195 CLOSED、PR #227）
+
+- **開始条件**: 充足済み。
+- **着手可能 Headless Slice**: Compiler/PDC/Prepared
+  Schedule/RT Ownership の headless・CI 検証継続。RT
+  時間 budget は L1 CI lane（#598 CLOSED で 3OS L1 証拠
+  補完済み）と headless fault case で扱う。
+- **完了定義**: G2 — DAG 順序・Buffer lifetime/PDC・
+  無割当/非 blocking/no OS I/O・Single RT Owner・
+  Last-good・Generation 不一致 Event 拒否・Retire・
+  過負荷 Fault の再現（EX-007〜020、TA-001〜012）。
+- **Integration Gate**: SV #106/#109（Graph/Probe/RT
+  Oracle）、SV #28/AL #127 の RT・精度独立判定、
+  #294 tuple。
+- **責務**: RF #195 実装済み。RT fault/負荷の残 Gate は
+  各 Owner Issue と #294。
+- **Blocked by**: なし。
+- **独立 Owner Issue**: [SV #109](https://github.com/scarecrow173/synvelis/issues/109)、
+  [#294](https://github.com/scarecrow173/ruviform/issues/294)、
+  [SV #28](https://github.com/scarecrow173/synvelis/issues/28)、
+  [AL #127](https://github.com/scarecrow173/audio-lens/issues/127)。
+
+#### M3 Time/Event（#189/#190/#188/#186 CLOSED）
+
+- **開始条件**: 充足済み。
+- **着手可能 Headless Slice**: Rational Beat/Variable
+  PPQN・Transport Span・Timed MIDI・Parameter Events の
+  headless 継続。#253 の OS 非依存部分（backend 抽象・
+  VST3 翻訳の headless 側）。
+- **完了定義**: G3 — PPQN 480/960/1000/1920・1/7 Beat・
+  Tempo/Loop/Seek/負 Pre-roll・Clock Epoch・Transport
+  Applied Frame・Note Off/Overflow/Sustain（PPQN-01〜12、
+  TT-001〜024）。
+- **Integration Gate**: [#253](https://github.com/scarecrow173/ruviform/issues/253)
+  （OS MIDI backend・VST3 翻訳）、SV #126（MIDI
+  Import/Export native timestamp/chase）・SV #127
+  （Plugin Process 境界精度）。
+- **責務**: RF #253 が OS backend Owner。SV #126/#127 が
+  Consumer 側受入 Owner。
+- **Blocked by**: なし。
+- **独立 Owner Issue**: [#253](https://github.com/scarecrow173/ruviform/issues/253)、
+  [SV #126](https://github.com/scarecrow173/synvelis/issues/126)、
+  [SV #127](https://github.com/scarecrow173/synvelis/issues/127)。
+
+#### M4 Plugin（#196 CLOSED、PR #232）
+
+- **開始条件**: 充足済み。
+- **着手可能 Headless Slice**: plugin host L1/feature
+  test・CLAP/VST3 能力差/Unsupported/明示 Degraded の
+  headless 記録継続。
+- **完了定義**: G4 — ProcessConfig min/max 厳守・256
+  Frame callback 内 100 Frame Loop Wrap の正確性検証・
+  EngineFrame→callback/span/physical-process offset
+  対応（TT-025〜030）。
+- **Integration Gate**: #388/#389/#532（NativeSurfaceSlot/
+  Editor Session/DComp 制約）、SV #176（実 Plugin Dock
+  製品 Gate）、SV #127（Plugin Process 境界）、
+  #294 tuple。
+- **責務**: RF #196 実装済み。Native Dock/実 Plugin は
+  RF #388/#389/#532（共通）と SV #176（製品）が Owner。
+- **Blocked by**: なし。
+- **独立 Owner Issue**: [#388](https://github.com/scarecrow173/ruviform/issues/388)、
+  [#389](https://github.com/scarecrow173/ruviform/issues/389)、
+  [#532](https://github.com/scarecrow173/ruviform/issues/532)、
+  [SV #176](https://github.com/scarecrow173/synvelis/issues/176)、
+  [SV #127](https://github.com/scarecrow173/synvelis/issues/127)。
+
+#### M5 Device/Reader（#187/#197 CLOSED、PR #231/#250）
+
+- **開始条件**: 充足済み。
+- **着手可能 Headless Slice**: bounded Reader/Prefetch/
+  RT 消費/underrun の headless 継続（Mock Input
+  経路）。#251 の OS 非依存部分。
+- **完了定義**: G5 — Clock 根拠/Confidence/
+  Discontinuity・xrun・Decode/Prefetch underrun の明示、
+  録音 Lossless と Probe Lossy の区別。
+- **Integration Gate**: [#251](https://github.com/scarecrow173/ruviform/issues/251)
+  （real backend input plumbing・実機検証）、SV #115
+  （実 Audio Device 録音統合）・SV #117
+  （Monitoring/Punch/Latency）。
+- **責務**: RF #251 が real backend Owner。SV #115/#117
+  が製品録音受入 Owner。
+- **Blocked by**: なし。
+- **独立 Owner Issue**: [#251](https://github.com/scarecrow173/ruviform/issues/251)、
+  [SV #115](https://github.com/scarecrow173/synvelis/issues/115)、
+  [SV #117](https://github.com/scarecrow173/synvelis/issues/117)。
+
+#### M6 Output/Offline（#191/#198 CLOSED、PR #229/#235）
+
+- **開始条件**: 充足済み。
+- **着手可能 Headless Slice**: stateful-safe sequential
+  offline・WAV drain/finalize→reopen の headless 継続。
+  StagedFile publish（#295/#296/#305 CLOSED）経由の FS
+  edge・#306 の fault/fuzz headless 行。
+- **完了定義**: G6 — stateful DSP/Plugin の無条件時間
+  並列化禁止・Export→drain/finalize→close/sync→
+  reopen/verify・失敗/取消/容量不足で Completed や破損
+  した公開先を作らない（MR-001〜028 該当ケース）。
+- **Integration Gate**: [#306](https://github.com/scarecrow173/ruviform/issues/306)
+  （IO-IMP-12 合成 E2E・Fault/Fuzz/OS/FS・Consumer 受入）、
+  SV #28・AL #127（Consumer 別非回帰）。
+- **責務**: RF #306 が共通 I/O 合成 Gate Owner。
+  Consumer 側は SV #28/AL #127。
+- **Blocked by**: なし。
+- **独立 Owner Issue**: [#306](https://github.com/scarecrow173/ruviform/issues/306)、
+  [SV #28](https://github.com/scarecrow173/synvelis/issues/28)、
+  [AL #127](https://github.com/scarecrow173/audio-lens/issues/127)。
+
+#### M7 UI/Probe（#181/#182/#185 CLOSED、PR #237/#240/#230）
+
+- **開始条件**: 充足済み。
+- **着手可能 Headless Slice**: Window/Job 寿命分離・
+  Dock/Restore・Generic Probe の headless/fake 継続。
+  GUI Test 基盤 #310〜#312/#314 は CLOSED、#313 が実 OS
+  Driver/Capability Matrix の残件。
+- **完了定義**: G7 — 既存 API/Project/他 Consumer の
+  回帰試験・platform evidence・Legacy Deprecation の
+  理由/利用者通知/復旧手順・未検証事項の明記。後継 ADR
+  なしに Accepted ADR と相反する方式へ変更しない。
+- **Integration Gate**: GUI lane Acceptance — GPUI 採否
+  #262→#419、Native Dock #388/#389/#532、実 Window/OS
+  #313/#243、SV #112/#114/#176/#177、AL #127/#189、
+  #219/#294 tuple、WebView 撤去 #465。
+- **責務**: RF #243/#262/#313/#388/#389/#419/#465/#532
+  が共通 Owner。SV #112/#114/#176/#177 と AL #127/#189
+  が製品 Owner。
+- **Blocked by**: なし。
+- **独立 Owner Issue**: [#243](https://github.com/scarecrow173/ruviform/issues/243)、
+  [#262](https://github.com/scarecrow173/ruviform/issues/262)、
+  [#313](https://github.com/scarecrow173/ruviform/issues/313)、
+  [#388](https://github.com/scarecrow173/ruviform/issues/388)、
+  [#389](https://github.com/scarecrow173/ruviform/issues/389)、
+  [#419](https://github.com/scarecrow173/ruviform/issues/419)、
+  [#465](https://github.com/scarecrow173/ruviform/issues/465)、
+  [#532](https://github.com/scarecrow173/ruviform/issues/532)、
+  [SV #112](https://github.com/scarecrow173/synvelis/issues/112)、
+  [SV #114](https://github.com/scarecrow173/synvelis/issues/114)、
+  [SV #176](https://github.com/scarecrow173/synvelis/issues/176)、
+  [SV #177](https://github.com/scarecrow173/synvelis/issues/177)、
+  [AL #127](https://github.com/scarecrow173/audio-lens/issues/127)、
+  [AL #189](https://github.com/scarecrow173/audio-lens/issues/189)。
+
+### 並行 Lane（M0〜M7 の Blocked by にしない）
+
+- **Script**: RF [#553](https://github.com/scarecrow173/ruviform/issues/553)
+  （AUTX-01 共通化設計レビュー — 共通 Engine 実装を要求
+  しない）→ [#558](https://github.com/scarecrow173/ruviform/issues/558)→
+  [#559](https://github.com/scarecrow173/ruviform/issues/559)/
+  [#560](https://github.com/scarecrow173/ruviform/issues/560)。
+  SV [#259](https://github.com/scarecrow173/synvelis/issues/259)（AUTX-00）
+  → [#271](https://github.com/scarecrow173/synvelis/issues/271)〜
+  [#274](https://github.com/scarecrow173/synvelis/issues/274)、
+  [#264](https://github.com/scarecrow173/synvelis/issues/264)/
+  [#266](https://github.com/scarecrow173/synvelis/issues/266)。
+  共有契約変更時のみ #294 tuple と SV #28/AL #127 で検証。
+- **Creative Branch / Render Checkpoint**: SV
+  [#277](https://github.com/scarecrow173/synvelis/issues/277)（CB-00）
+  → [#278](https://github.com/scarecrow173/synvelis/issues/278)〜
+  [#288](https://github.com/scarecrow173/synvelis/issues/288)、
+  RCP [#289](https://github.com/scarecrow173/synvelis/issues/289)〜
+  [#296](https://github.com/scarecrow173/synvelis/issues/296)。
+  RF [#562](https://github.com/scarecrow173/ruviform/issues/562)
+  （Generic Alternate Evaluation Context PoC —
+  Headless/Fake 優先、実 Plugin は Deferred）。
+- **Future capability**: RF
+  [#315](https://github.com/scarecrow173/ruviform/issues/315)〜
+  [#318](https://github.com/scarecrow173/ruviform/issues/318)、
+  SV #119/#124/#130/#138 — 各 Issue の着手 Trigger 未達で
+  Deferred/NotStarted。Blocked by にしない。
+
+### Deferred/Activation 記録（L2/L3 が必要な製品利用条件）
+
+| 製品利用条件 | 検証レベル | Owner Issue | 現行分類 |
+| --- | --- | --- | --- |
+| Windows 実 Window/Dock/IME/DPI/Focus | GUI-L2 | RF #313/#243、SV #114 | Required（提供機能のみ） |
+| 実 Plugin Native Dock（VST3/CLAP/AU） | EXT-L3 | RF #388/#389/#532、SV #176 | Required（Windows 利用時） |
+| 実 Audio Input Device 録音 | EXT-L3 | RF #251、SV #115/#117 | Required（利用時） |
+| OS MIDI backend・VST3 翻訳 | EXT-L3 | RF #253、SV #126/#127 | Required（利用時） |
+| OBS 実 Provider/外部環境 | EXT-L3 | RF #281 | Deferred（利用要件まで） |
+| macOS/Linux の GUI-L2/EXT-L3 | — | 各 Owner Issue | Deferred（利用要件まで） |
+| Future capability（RF #315〜#318、SV #119/#124/#130/#138） | — | 各 Future Issue | Deferred/NotStarted |
+
+本 Snapshot の完了（版付き状態記録の作成）と、上表
+Required 項目の将来の実機受入（各 Owner Issue での
+Pass）は**別の完了条件**である。前者を後者の Pass と
+みなさない。
+
+### AL/SV 別 Oracle・候補 SHA・既存 CI の M0〜M7 受入への接続
+
+- **AL Oracle**（f64 精度・長尺・PTS/timebase・NaN/
+  gap・Dataset/Export・CLI/headless 分離）: AL #127 が
+  Owner。M0〜M7 の各完了定義で Consumer 別証拠の
+  AudioLens 側を担う。
+- **SV Oracle**（f32/RT・Project/Undo/Save・Plugin
+  Model・DAW 意味論）: SV #28 が Owner、実行計画は
+  SV #23。Synvelis 側証拠を担う。
+- **候補 SHA tuple**: Ruviform/AL/SV 3 repo の resolved
+  SHA を Cargo.lock 正本で管理し、RF #294 が tuple ごと
+  に両 Consumer を独立判定する。片方の Pass を他方へ
+  流用しない。
+- **既存 CI**: 変更検知付き Daily Full CI と手動 Full
+  CI（`workflow_dispatch`）を使用。RF #598・SV #377・
+  AL #206（3OS OS-L1 CI 証拠）は CLOSED。OS 別実走証拠
+  は各 Run URL/SHA で #294/#219 経由に記録し、Job
+  定義や green のみを個別 Case の Pass としない。
+
+### DAG と Owner の表（実装順序の正本・2026-11-14 確定）
+
+| 領域 | Owner（Issue） | 先行関係 |
+| --- | --- | --- |
+| M0 Baseline 継続分類 | RF #219/#294、AL #127、SV #28 | 全 Milestone の前提（充足済み） |
+| M1 Graph | RF #184（済）、SV #106、#294 | G0 充足済み。SV #106 が Consumer 接続 |
+| M2 Audio Runtime | RF #195（済）、SV #109、SV #28/AL #127、#294 | G1 契約 + RT Oracle |
+| M3 Time/Event | RF #189/#190/#188/#186（済）、#253、SV #126/#127 | G2 契約。#253 は OS backend 残件 |
+| M4 Plugin | RF #196（済）、#388/#389/#532、SV #176/#127 | G2+G3 契約。実 Plugin Dock は EXT-L3 |
+| M5 Device/Reader | RF #187/#197（済）、#251、SV #115/#117 | Mock 先行。実 Device は EXT-L3 |
+| M6 Output/Offline | RF #191/#198（済）、#306、SV #28/AL #127 | E2E-L 最低限済。#306 が合成 Gate |
+| M7 UI/Probe | RF #181/#182/#185（済）、#243/#262/#313/#388/#389/#419/#465/#532、SV #112/#114/#176/#177、AL #127/#189 | GUI lane Acceptance と直結 |
+| Script Lane | RF #553/#558/#559/#560、SV #259/#264/#266/#271〜#274 | M0〜M7 を Block しない。共有契約は #294 で検証 |
+| Creative Branch Lane | SV #277〜#296、RF #562 | M0〜M7 を Block しない。RF #562 は Headless PoC |
+| Future capability | RF #315〜#318、SV #119/#124/#130/#138 | Trigger 未達で Deferred/NotStarted |
+| GPUI 採否 | #262 → #419 | #388/#389/#390 Evidence + 両 Consumer 受入。着手 Blocker にしない |
+| 両 Consumer 互換判定 | #219 / #294 | 候補 SHA tuple ごとの対象能力別証拠 |
+| Legacy WebView 撤去 | #465（RF）、AL #189、SV #232 | 破壊的撤去は製品 Native 代替 + Windows 利用 GUI/Plugin 実受入 + 両 Consumer 独立回帰の後 |
+
+### Verification Notes（Snapshot 節の検証）
+
+- [x] M0〜M7 全 Milestone に開始条件・着手可能 Headless
+  Slice・完了定義・Integration Gate・責務・Blocked by・
+  独立 Owner Issue を Issue URL 付きで対応付けた。
+- [x] Issue 状態は 2026-11-14 の `gh` 実測
+  （`evidence/rf193/issue-state-census-2026-11-14.md`）
+  に基づき、Closed/Deferred/NotRun を実装 Blocked by
+  として誤記していない。
+- [x] L2/L3 の製品利用条件を Deferred/Activation とし
+  て記録し、計画 Snapshot 完了と将来実機受入を分離した。
+- [x] AL f64/長尺/CLI・SV f32/DAW/RT の別 Oracle、候補
+  SHA tuple、既存 Daily/手動 CI、OS 別実走証拠の接続先
+  を M0〜M7 受入へ対応付けた。
+- [ ] `docs/` 以外に差分がないことを `git status`/
+  `git diff` で確認（PR 前に実施）。
 
 ## Deferred Design Concerns
 
