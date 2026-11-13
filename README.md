@@ -64,16 +64,22 @@ mise run setup                    # = apm install && prek install && git lfs ins
 # lockfile の厳格検証が必要な場合（apm.yml と apm.lock.yaml が非同期なら失敗）:
 mise exec -- apm install --frozen
 
-# 3. Rust 検証（ローカル開発・CI 共通の入口）
+# 3. Rust 検証（通常は対象クレートのみ）
 mise run fmt-check                # cargo fmt --all -- --check
-mise run check                    # cargo check --workspace --all-targets
-mise run lint                     # cargo clippy --workspace --all-targets -- -D warnings
-mise run test                     # cargo test --workspace
-mise run build                    # cargo build --workspace
-mise run verify-ci                # CI 同等: fmt-check -> check-ci -> lint-ci -> test-ci（--profile ci）
+mise run check ruviform-rt        # 対象クレートの型チェック
+mise run lint ruviform-rt         # 対象クレートの Clippy (-D warnings)
+mise run test ruviform-rt         # 対象クレートのテスト
+mise run build ruviform-rt        # 実行・Linkが必要なときだけ
+
+# Workspace全体（現OS・標準Feature）を任意に確認する場合
+mise run check-full
+mise run lint-full
+mise run test-full
+mise run build-full
+mise run verify-full              # fmt-check -> lint-full -> test-full
 ```
 
-`mise run verify-ci` と `*-ci` タスクは CI 用途向けで、成果物が `target/ci/` に `target/debug/` と並存して容量を消費するため、常用は想定していません。
+`*-full` はCI専用ではなく、実行範囲がWorkspace全体であることを示します。通常のローカル実行はdev/test Profile、CIでは `MISE_ENV=ci` により固定Rust toolchainとCargo `ci` Profile（`target/ci/`）を使用します。広範囲の検証を日常ローカルで繰り返す必要はありません（[POLICIES.md](POLICIES.md)）。
 
 ## Repository layout
 
