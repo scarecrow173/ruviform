@@ -464,3 +464,97 @@ fn e2e_tcp_without_secret_refuses_to_serve() {
     let _ = child.wait();
     assert!(!connected, "app must not dial without a run secret");
 }
+
+// ---------- stall: DriverError::Timeout paths ----------
+
+/// `--stall after-serve` completes the protocol session — the
+/// shutdown reply (including `cleanup.exited`, the host-loop flag,
+/// not the OS process) is delivered — but the process never exits.
+/// A bounded [`TestDriver::wait_exit`] must report
+/// [`DriverError::Timeout`], never hang or silently pass, and `kill`
+/// must still reap the stalled child.
+#[test]
+fn e2e_stall_after_serve_wait_exit_times_out() {
+    let mut d = spawn_stdio(&["--stall", "after-serve"]).expect("handshake");
+    let reply = d
+        .call(ops::SHUTDOWN, json!({ "mode": "graceful" }))
+        .expect("shutdown reply");
+    assert_eq!(reply["bye"], true);
+    assert_eq!(reply["cleanup"]["exited"], true);
+    let err = d
+        .wait_exit(Duration::from_millis(500))
+        .expect_err("stalled child must not be reported as exited");
+    assert!(
+        matches!(err, DriverError::Timeout),
+        "expected DriverError::Timeout, got {err:?}"
+    );
+    // The cleanup guarantee still holds: kill reaps the stalled child.
+    d.kill().expect("kill");
+    let status = d.try_exit_status().expect("exit status");
+    assert!(status.is_some_and(|s| !s.success()));
+}
+
+/// `--stall before-serve` never opens the control channel: the
+/// driver's TCP accept loop must give up with
+/// [`DriverError::Timeout`] at its bound instead of hanging, and the
+/// never-dialling child is killed — no orphan survives.
+#[test]
+fn e2e_stall_before_serve_tcp_connect_times_out() {
+    let mut cmd = dummy_cmd();
+    cmd.arg("--stall").arg("before-serve");
+    let err = TestDriver::spawn_tcp(&mut cmd).expect_err("must time out");
+    assert!(
+        matches!(err, DriverError::Timeout),
+        "expected DriverError::Timeout, got {err:?}"
+    );
+}
+
+/// Driver EOF ends the serve loop the same way `test.shutdown`
+/// does — with `--stall after-serve` the abnormal-end path must also
+/// leave the process alive (non-exit is not graceful-exit-only), and
+/// an explicit kill still reaps it.
+#[test]
+fn e2e_stall_after_driver_eof_child_survives_until_killed() {
+    let mut child = dummy_cmd()
+        .arg("--stall")
+        .arg("after-serve")
+        .env(ENV_CONTROL, "stdio")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn");
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    write_frame(
+        &mut stdin,
+        &json!({
+            "v": 1u32, "kind": "intent", "id": "h",
+            "op": "test.hello", "params": {"run_id": "r-stall-eof"}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    match read_frame(&mut stdout).unwrap() {
+        FrameRead::Frame(body) => {
+            let v: Value = serde_json::from_str(&body).unwrap();
+            assert_eq!(v["ok"], true);
+        }
+        other => panic!("expected welcome, got {other:?}"),
+    }
+    // Driver failure: drop the write end mid-session.
+    drop(stdin);
+    // The stalled AUT must still be running — EOF cleanup ran but
+    // the process refuses to exit.
+    let deadline = Instant::now() + Duration::from_millis(500);
+    while Instant::now() < deadline {
+        assert!(
+            child.try_wait().unwrap().is_none(),
+            "stalled child exited after driver EOF"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    child.kill().expect("kill");
+    let status = child.wait().expect("wait");
+    assert!(!status.success());
+}
