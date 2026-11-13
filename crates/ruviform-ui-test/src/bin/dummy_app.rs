@@ -17,7 +17,8 @@
 //!   exiting — `before-serve` never opens the control channel,
 //!   `after-serve` ends the protocol session but never exits. The
 //!   non-exit fixture for driver timeout tests; the driver must
-//!   kill and reap the process.
+//!   kill and reap the process — including on handshake failure,
+//!   where a stalled child would otherwise be orphaned.
 //!
 //! All diagnostics go to stderr — stdout is the control channel.
 
