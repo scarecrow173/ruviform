@@ -112,6 +112,7 @@ Directory: `docs/impl/ir`
 | IR-Rf242SpawnHeirBarrier01 | Issue #242 実装記録 — 残存 L1 E2E suite の wall-clock settle を `--spawn-heir` 決定的 converge barrier へ置換 | completed | [issue-242-l1-e2e-barrier-implementation.md](./issue-242-l1-e2e-barrier-implementation.md) |
 | IMPL-034Ue3QZ2los1ccAjflw0X | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 | completed | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | IMPL-034VCg0FFHoUGWo9FDCg0f | Issue #243 Windows multiwindow verdict 再実走・帳簿整合 closeout slice | completed | [issue-243-multiwindow-closeout-slice.md](./issue-243-multiwindow-closeout-slice.md) |
+| IMPL-034WZGD4u8P1g1M1fq3DI4 | Issue #243 Window/Job 不変条件 Headless 検証 証拠 | completed | [issue-243-window-job-headless.md](./issue-243-window-job-headless.md) |
 | IMPL-034V5Vzh8RJqYBNZRA9QZW | Issue #243 Windows 実 OS multiwindow smoke 証拠 | completed | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | IMPL-034QxLzTwkgQnhtvv7jXvB | Issue 244 media-reader prefetch contract residual warts | completed | [issue-244-media-reader-prefetch-contract-residual-warts.md](./issue-244-media-reader-prefetch-contract-residual-warts.md) |
 | IMPL-034QAt6Gd3zLwrqmsnq9CK | Issue 249 prefetch detection-Ended strands End marker | completed | [issue-249-prefetch-detection-ended-strands-end-marker.md](./issue-249-prefetch-detection-ended-strands-end-marker.md) |
@@ -133,6 +134,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QTOFbpeDKVZDoNfrXP5 | Issue #263 design system showcase theme matrix a11y regression cross-consumer gates | completed | [issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md](./issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md) |
 | IMPL-034QMvf4KmvWw53y1DczqT | Issue #265 CorrelationPlan prefers_direct コストモデル校正（mixed-radix 実コスト反映と direct 維持ガード） | completed | [issue-265-correlationplan-prefers-direct-mixed-radix-direct.md](./issue-265-correlationplan-prefers-direct-mixed-radix-direct.md) |
 | IMPL-034V68pdzoGf0crvlem0Zy | Issue #275 Observability integration design reconciliation and contract-test inventory | completed | [issue-275-obs-design-reconciliation.md](./issue-275-obs-design-reconciliation.md) |
+| IMPL-034WZPoBmkr0oYITBjQA67 | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け | completed | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
 | IMPL-034RwLrHlik3I1I7ljPS1y | Issue 276 T1: logging config/API types + feature wiring | completed | [issue-276-t1-logging-config-api-types-feature-wiring.md](./issue-276-t1-logging-config-api-types-feature-wiring.md) |
 | IMPL-034RwLt9pOcXsRFEHwaQA8 | Issue 276 T2: bounded writer + sinks + build result | completed | [issue-276-t2-bounded-writer-sinks-build-result.md](./issue-276-t2-bounded-writer-sinks-build-result.md) |
 | IMPL-034RwLuQ6IZyb2JEQ9I1Sz | Issue 276 T3: contract tests + host example + docs + verification | completed | [issue-276-t3-contract-tests-host-example-docs-verification.md](./issue-276-t3-contract-tests-host-example-docs-verification.md) |
