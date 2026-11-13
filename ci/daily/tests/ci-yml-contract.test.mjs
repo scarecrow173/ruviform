@@ -240,3 +240,46 @@ test("self-check: nested keys and comments are not triggers", () => {
   );
   assert.deepEqual(seqFilter, ["push"]);
 });
+
+
+// Scope contract: shared static lint/format runs once on Linux; cross-OS
+// native build/link and feature execution must remain independently gated.
+test("CI: Linux owns shared lint; Windows/macOS retain OS-L1 checks", () => {
+  const ci = readWorkflow("ci.yml");
+  function job(id) {
+    const start = ci.indexOf("\n  " + id + ":\n");
+    assert.ok(start >= 0, "missing CI job " + id);
+    const rest = ci.slice(start + 1);
+    const next = rest.slice(1).search(/\n  [A-Za-z][\w-]*:\n/);
+    return next < 0 ? rest : rest.slice(0, next + 1);
+  }
+  const verify = job("verify");
+  const mac = job("verify-macos");
+  for (const command of ["mise exec -- prek run --all-files", "mise run fmt-check", "mise run lint-full"]) {
+    assert.ok(verify.includes("if: matrix.os == 'ubuntu-latest'\n        run: " + command),
+      command + " must be Linux-only");
+    assert.ok(!mac.includes("run: " + command), command + " repeated on macOS");
+  }
+  for (const command of ["mise run check-full", "mise run build-full"]) {
+    assert.ok(verify.includes("if: matrix.os == 'windows-latest'\n        run: " + command),
+      command + " missing on Windows");
+    assert.ok(mac.includes("run: " + command), command + " missing on macOS");
+  }
+  for (const [matrixJob, macJob, lintTask] of [
+    ["ui-verify", "ui-verify-macos", "lint-ui-webview"],
+    ["ui-gpui-verify", "ui-gpui-verify-macos", "lint-ui-gpui"],
+    ["l1-real-verify", "l1-real-verify-macos", "lint-l1-real-plugin"],
+  ]) {
+    const linuxWindows = job(matrixJob);
+    assert.ok(linuxWindows.includes("if: matrix.os == 'ubuntu-latest'\n        run: mise run " + lintTask),
+      matrixJob + ": Clippy must be Linux-only");
+    assert.ok(!job(macJob).includes("run: mise run " + lintTask),
+      macJob + ": duplicate macOS lint");
+  }
+  assert.ok(job("l1-real-verify").includes("run: mise run check-l1-real-plugin"));
+  assert.ok(job("l1-real-verify-macos").includes("run: mise run check-l1-real-plugin"));
+  for (const j of ["verify", "verify-macos", "ui-verify", "ui-verify-macos",
+    "ui-gpui-verify", "ui-gpui-verify-macos", "l1-real-verify", "l1-real-verify-macos"]) {
+    assert.ok(/\brun: mise run test-/.test(job(j)), j + ": no native test");
+  }
+});
