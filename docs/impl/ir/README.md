@@ -119,6 +119,7 @@ Directory: `docs/impl/ir`
 | IMPL-034R251StageWcl0seoutX | Issue #251 Stage W real-device closeout — Windows/WASAPI 実機 lane 証拠化 | completed | [issue-251-stage-w-real-device-closeout-slice.md](./issue-251-stage-w-real-device-closeout-slice.md) |
 | IMPL-034VjwX2YHM8koidKb6AhG | Issue #253 host-graph report consumer wiring | completed | [issue-253-host-graph-report-consumer-wiring.md](./issue-253-host-graph-report-consumer-wiring.md) |
 | IMPL-034UIypTlJgH6ElxJp3gHE | issue-253 midi backend fixture and vst3 translation | completed | [issue-253-midi-backend-fixture-and-vst3-translation.md](./issue-253-midi-backend-fixture-and-vst3-translation.md) |
+| IMPL-034WUeMyAfuU4RnkO7aDgw | Issue #253 OS-L1 既存CI証拠照合・Backend能力/未実装の正直な記録 | completed | [issue-253-midi-os-l1-evidence.md](./issue-253-midi-os-l1-evidence.md) |
 | IMPL-034Vi78tpdb4wvJ1oTJpLb | Issue #253 OS MIDI input backend adapter（Windows WinMM + 非対応 OS Unsupported 境界） | completed | [issue-253-os-midi-input-backend-adapter-windows-winmm-os-unsupported.md](./issue-253-os-midi-input-backend-adapter-windows-winmm-os-unsupported.md) |
 | IMPL-TUskALcC8xZ3ofmqqt0sMj0 | Issue #253 README/specs interim wording closeout — canonical lane 登録済み整合 | completed | [issue-253-readme-specs-interim-wording-closeout.md](./issue-253-readme-specs-interim-wording-closeout.md) |
 | IMPL-034VFhJztohjkuJtNUpBHT | Issue #253 unsupported transparency slice | completed | [issue-253-unsupported-transparency-slice.md](./issue-253-unsupported-transparency-slice.md) |
