@@ -241,6 +241,7 @@ Directory: `docs/tasks`
 | TASK-7VWD8KuRBS2voBCngFoIJF | A1 IO MSRV lane 追加・DAG/RT audit 証跡・検証 | done | [issue-306-a1-msrv-dag-rt-audit.md](./issue-306-a1-msrv-dag-rt-audit.md) |
 | TASK-034UtEdJ4J9ekRBHmpucta | F1 IO E2E fixture 実装 — Fault/Fuzz・Directory・OS/FS probe | done | [issue-306-f1-fixture-extension.md](./issue-306-f1-fixture-extension.md) |
 | TASK-034UtEeCVQCg44aM7iUrV3 | F2 正規検証・evidence・CI handoff 記録 | done | [issue-306-f2-verification-handoff.md](./issue-306-f2-verification-handoff.md) |
+| TASK-034WXSB8zGVc9NKQicjOEp | Issue #306 G07 fault seam 判定・契約試験 + G08 corpus replay | done | [issue-306-fault-seam-fuzz-task.md](./issue-306-fault-seam-fuzz-task.md) |
 | TASK-pL5wE8rT1yU4iO7pA2sD6f | Issue #306 OS-L1 既存 CI 証拠検査・不足 Case 補完 (Slice V+T) | done | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |
 | TASK-laPtj98NpzxI9OnVwLg5y4 | T2 File・Structured 境界試験 (Issue #306) | done | [issue-306-t2-file-structured-boundary.md](./issue-306-t2-file-structured-boundary.md) |

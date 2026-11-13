@@ -101,6 +101,7 @@ Directory: `docs/test-specs`
 | TSPEC-pWc14Y17FV06GN2600rX8h | Issue #304 ruviform-io-archive Secure Extraction・Staging/Recovery テスト仕様 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
 | TSPEC-034UvWxgBRObLuwfTjwqMx | Issue #305 IO E2E WAV Golden/Fault テスト仕様 | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | TSPEC-0kY8BSgqOCJHezrud22f3h | Issue #305 Media I/O StagedFile 移行 テスト仕様 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
+| TSPEC-034WXOTmrti91Jpbt5kIxV | Issue #306 G07/G08 fault seam・corpus replay テスト仕様 | approved | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |
 | TSPEC-rviIWrpuHyJUT11Wykzopn | Issue #306 汎用 I/O 合成 E2E テスト仕様 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | TSPEC-nB3vC7xZ0qW5eR8tY1uI4o | Issue #306 IO E2E — OS-L1 CI 証拠と Case 補完 試験仕様 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | TSPEC-034UtBs1z6PAEjR3T4EiV2 | Issue #306 IO E2E slice 2 テスト仕様 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
