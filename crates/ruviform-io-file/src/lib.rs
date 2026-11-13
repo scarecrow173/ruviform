@@ -99,8 +99,9 @@
 #![allow(clippy::module_name_repetitions)]
 
 mod error;
-#[cfg(test)]
-mod mock;
+#[cfg(any(test, feature = "fault-injection"))]
+#[doc(hidden)]
+pub mod mock;
 mod options;
 #[cfg(any(unix, windows))]
 mod os;
