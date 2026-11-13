@@ -59,6 +59,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Qonw7qg8hdeWBuDqEqQ | Issue #233 prefetch discard/drain/reopen_at + contract-doc test specification | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | TSPEC-Jm8jpNK8kjkyBaizXBqwQo | Issue #238 テスト仕様 — l1_proxy_e2e 同期機構の不変条件 | approved | [issue-238-l1-proxy-e2e-sync.md](./issue-238-l1-proxy-e2e-sync.md) |
 | TSPEC-034UdQbwnBMc4dBhcTwfxI | Issue #243 GPUI 実窓 lifecycle 実機検証 試験仕様 | implemented | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
+| TSPEC-034WZH4z1vyfix6vJI76aI | Issue #243 — Window/Job 不変条件 Headless 検証契約 | approved | [issue-243-window-job-headless.md](./issue-243-window-job-headless.md) |
 | TSPEC-034V4sgGc35MAPIRgG7lmm | Issue #243 — Windows 実 OS multiwindow smoke 検証契約 | implemented | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | TSPEC-034QxdOanEeX8da72nWdYo | Issue #244 prefetch boundary-first/dead-generation/End commit-once test specification | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | TSPEC-O0zY9nWrOb2qwg92Z8nFZb | Issue #251 Stage W closeout test spec — 実機 lane 検証項目 | approved | [issue-251-stage-w-real-device-closeout.md](./issue-251-stage-w-real-device-closeout.md) |
@@ -67,7 +68,7 @@ Directory: `docs/test-specs`
 | TSPEC-034VERR0DyAdyknxAagH1U | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane テスト仕様 | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | TST-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice テスト仕様 | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TSPEC-034UjQC8AnQxl52Q8wCT6N | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
-| TSPEC-8W-EruC9xGTrXeKm8RqkJ | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けの検証規則 | approved | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
+| TSPEC-Zub5EkBZ2Fg4lBUvyXezm4 | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けの検証規則 | approved | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
 | TSPEC-sFT08b6Qp306TbonlKfL28 | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | TSPEC-034RoYjtRWwL5tpZsCCp6T | Issue #276 generic logging adapter test specification | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
 | TSPEC-034Rp29Zp9BL0LmhcrU4IF | Issue #277 OBS-02 observability core/source contract tests | approved | [issue-277-observability-core-source-tests.md](./issue-277-observability-core-source-tests.md) |

@@ -112,6 +112,7 @@ Directory: `docs/impl/ir`
 | IR-Rf242SpawnHeirBarrier01 | Issue #242 実装記録 — 残存 L1 E2E suite の wall-clock settle を `--spawn-heir` 決定的 converge barrier へ置換 | completed | [issue-242-l1-e2e-barrier-implementation.md](./issue-242-l1-e2e-barrier-implementation.md) |
 | IMPL-034Ue3QZ2los1ccAjflw0X | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 | completed | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | IMPL-034VCg0FFHoUGWo9FDCg0f | Issue #243 Windows multiwindow verdict 再実走・帳簿整合 closeout slice | completed | [issue-243-multiwindow-closeout-slice.md](./issue-243-multiwindow-closeout-slice.md) |
+| IMPL-034WZGD4u8P1g1M1fq3DI4 | Issue #243 Window/Job 不変条件 Headless 検証 証拠 | completed | [issue-243-window-job-headless.md](./issue-243-window-job-headless.md) |
 | IMPL-034V5Vzh8RJqYBNZRA9QZW | Issue #243 Windows 実 OS multiwindow smoke 証拠 | completed | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | IMPL-034QxLzTwkgQnhtvv7jXvB | Issue 244 media-reader prefetch contract residual warts | completed | [issue-244-media-reader-prefetch-contract-residual-warts.md](./issue-244-media-reader-prefetch-contract-residual-warts.md) |
 | IMPL-034QAt6Gd3zLwrqmsnq9CK | Issue 249 prefetch detection-Ended strands End marker | completed | [issue-249-prefetch-detection-ended-strands-end-marker.md](./issue-249-prefetch-detection-ended-strands-end-marker.md) |

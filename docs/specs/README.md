@@ -212,6 +212,7 @@ Directory: `docs/specs`
 | SPEC-034TRm8kN4vWqZxYsJpCe | Issue #151 メディア観測情報・非破壊 PCM 取得契約の拡張 | implemented | [issue-151-media-observation-contract.md](./issue-151-media-observation-contract.md) |
 | SPEC-034J6OCXHiP1izKRzbMmgz | Issue #18 フォローアップ（公開 enum 方針適用・時間演算修正・改善トリアージ） | implemented | [issue-18-followup-enum-and-time-fix.md](./issue-18-followup-enum-and-time-fix.md) |
 | SPEC-034UdM9XszyXZB0hZ8wvnc | Issue #243 GPUI 実機 GUI 検証 — Windows 実窓ライフサイクル証拠（部分スコープ） | implemented | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
+| SPEC-034WZG9kaa77G2ljsalr6Q | Issue #243 — Window/Job 不変条件の Fake/Headless Scenario 検証（部分スコープ・後続スライス） | implemented | [issue-243-window-job-headless.md](./issue-243-window-job-headless.md) |
 | SPEC-034V4nfv1RJmI8TqYPEWcY | Issue #243 — Windows 実 OS multiwindow smoke（部分スコープ・後続スライス） | implemented | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | SPEC-034Jc9BJlI7ULEBWoIlMP2 | Issue #28 UI 技術検証 PoC（wry・描画バックエンド・フロントエンド FW・配布） | implemented | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | SPEC-034WXOCYjbhvL8XtAwcQYk | Issue #306 G07/G08 — fault seam 判定・契約試験 + bounded corpus-replay 入口 | implemented | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |

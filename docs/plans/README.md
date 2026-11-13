@@ -209,6 +209,7 @@ Directory: `docs/plans`
 | PLAN-034QkFry8lZR9PeeXNpx09 | Issue #186 Parameter Control Events — implementation plan | completed | [issue-186-param-control-events.md](./issue-186-param-control-events.md) |
 | PLAN-034JfKRCFCu8oJr5iCe6AV | Issue #20 メディア I/O 抽象境界と第一バックエンド PoC | completed | [issue-20-i-o-poc.md](./issue-20-i-o-poc.md) |
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
+| PLAN-034WZGtEYdaixOYopRPVvk | Issue #243 — Window/Job 不変条件 Headless 検証 実装計画 | completed | [issue-243-window-job-headless-plan.md](./issue-243-window-job-headless-plan.md) |
 | PLAN-034V4uVEulNfghJYxbNL9Y | Issue #243 — Windows 実 OS multiwindow smoke 実装計画 | completed | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | PLAN-J2SBIDqNyZcnFDIJmvppYM | Issue #294 consumer-verify → ci-issue-tracker 配線実装計画 — scope 別 job・reconcile 全 scope 化・contract test | completed | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |

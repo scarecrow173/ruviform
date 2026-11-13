@@ -62,6 +62,7 @@ Directory: `docs/designs`
 | DESIGN-034UF2Q9OH59VxiQZUfUgN | Issue #219 Cross-Repo 影響判定・CI Gate 運用設計 — Consumer 棚卸し・影響分類テンプレート・候補 Gate・切り分け/保留復旧・M0-M7 証拠可視化 | draft | [issue-219-cross-repo-impact-gate-operations.md](./issue-219-cross-repo-impact-gate-operations.md) |
 | DESIGN-034QolOnuF7kf2drxSsvvH | Issue #233 prefetch contract improvements — discard_pending drain, seek discard flag, reopen_at structural design | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | DESIGN-034UdN3RWXD8Kk4elhwAtR | Issue #243 GPUI 実機 GUI 検証 Windows 実窓ライフサイクル証拠 — 設計 | approved | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
+| DESIGN-034WZGgweiRw2qZcHmfIbr | Issue #243 — Window/Job 不変条件 Headless 検証設計 | approved | [issue-243-window-job-headless-design.md](./issue-243-window-job-headless-design.md) |
 | DESIGN-034V4sf4ndYXHxJt8IBeXG | Issue #243 — Windows 実 OS multiwindow smoke 設計（部分スコープ・後続スライス） | approved | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | DESIGN-034QxcnAfFWswZmwSKPbKH | Issue #244 prefetch contract wart fixes — boundary-first emission, dead-generation sequence, End commit-once, seeded-fault coverage | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | DESIGN-cJ0I0j6o66AAfUm2eE5q8y | Issue #251 Stage W closeout 設計 — 実機 lane 拡張と証拠 matrix | approved | [issue-251-stage-w-real-device-closeout-design.md](./issue-251-stage-w-real-device-closeout-design.md) |
