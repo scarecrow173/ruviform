@@ -171,6 +171,7 @@ Directory: `docs/impl/ir`
 | IMPL-034UiuvjiiksJVjjkxtT5W | Issue #308 — Generation切替時のProbe再Binding全件整合・部分失敗契約 | completed | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
 | IMPL-034Ux2ZcFoBhisTdYZmYtY | Issue #309 — PROBE-TIME複数Probe時間アライメントfixture検証 | completed | [issue-309-probe-time-align-fixture.md](./issue-309-probe-time-align-fixture.md) |
 | IMPL-034Ukaiqpkd3tCCzSFomK7 | Issue #309 — PROBE-TIME時間コンテキスト・整列契約の実装 | completed | [issue-309-probe-time-context-and-alignment.md](./issue-309-probe-time-context-and-alignment.md) |
+| IMPL-034WT5GBcSlZWbHVBMkaQo | Issue #313 OS-L1 既存CI証拠照合・Capability記録・Timeout headless gap 補完 | completed | [issue-313-os-l1-ci-evidence.md](./issue-313-os-l1-ci-evidence.md) |
 | IMPL-034VOSINPDRV4REAL0SIN6 | Issue #313 `RealOsPointerOrKeyboard` capability 実装と Windows 実入力 E2E 証拠 | completed | [issue-313-real-os-input-driver-slice.md](./issue-313-real-os-input-driver-slice.md) |
 | IMPL-034VFzhzdEyknToi5VSfS5 | Issue #313 S2 windowed `TestIo`/`rvf.uitest.v1` GPUI backend 配線 | completed | [issue-313-windowed-testio-slice.md](./issue-313-windowed-testio-slice.md) |
 | IMPL-034UkdjBdy4RDY0x9rZrE0 | Issue #313 Windows 実 OS SendInput キーボード smoke と OS Capability Matrix 証拠 | completed | [issue-313-windows-os-sendinput-smoke-os-capability-matrix.md](./issue-313-windows-os-sendinput-smoke-os-capability-matrix.md) |
@@ -189,6 +190,7 @@ Directory: `docs/impl/ir`
 | IMPL-OW0F0pEruOX61ZMf3ODHQD | Issue #388/#389 Native Plugin Dock 早期 Gate — NativeSurfaceSlot / PluginEditorSession 契約実装 | completed | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | IMPL-rf388DockLayoutPoc01 | Issue #388 GPUI Panel/Tab レイアウト内 VST3 Editor 埋め込み PoC 実装記録（Windows / L0） | completed | [issue-388-native-dock-layout-poc-implementation.md](./issue-388-native-dock-layout-poc-implementation.md) |
 | IMPL-rf388DockWindowingSlice301 | Issue #388 GPUI native dock slice 3 — ancestor clip / keyboard・focus routing / 2-phase re-dock 実装記録（Windows / VST3 / L0） | completed | [issue-388-native-dock-windowing-slice3-implementation.md](./issue-388-native-dock-windowing-slice3-implementation.md) |
+| IMPL-034WSQTRYaDQlCGdESELFh | Issue 388 OS L1 CI evidence | completed | [issue-388-os-l1-ci-evidence.md](./issue-388-os-l1-ci-evidence.md) |
 | IMPL-jcCS5NAauic4OhiRJK2CAb | Issue #389 Plugin Editor Session headless fixture 実装記録（contract 認定 + DSP/RT 非干渉 fixture + NotRun 記録） | completed | [issue-389-editor-session-headless-implementation.md](./issue-389-editor-session-headless-implementation.md) |
 | IMPL-9fK2mQxT7vBnRwYsJhGtUi | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture 実装記録（driver async protocol fixture + SM-xx terminal-event 検証） | completed | [issue-389-editor-session-statemachine-implementation.md](./issue-389-editor-session-statemachine-implementation.md) |
 | IMPL-034UnS9SUfwZF2v4zSQck6 | Issue #389 Plugin Editor Session hardening 実装記録（timeout/degrade/GraphicsLost/DComp 記録） | completed | [issue-389-session-hardening-implementation.md](./issue-389-session-hardening-implementation.md) |

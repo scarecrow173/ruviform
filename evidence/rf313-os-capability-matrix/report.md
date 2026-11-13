@@ -242,3 +242,105 @@ mise run example-ui-gpui-real-os-multiwindow-smoke
 # exit code: 0=pass / 1=fail / 2=unsupported(非 Windows) / 3=environment_blocked(preflight 不通)
 # 実行中はマウス/キーボードに触れないこと（実カーソルを使用・復元）
 ```
+
+## Issue #313 OS-L1 slice — 既存 CI 証拠照合・Capability 記録・Timeout gap 補完（2026-11-13 追記）
+
+本節は **OS-L1（Native Build/Link・headless/RT/Feature の Compile/Test）
+の既存 CI 証拠照合**と、headless `rvf.uitest.v1` の Timeout 未assert
+gap の補完を記録する。GUI-L2/L3 の実機受入は本 slice の対象外であり、
+Deferred を Pass 扱いしない。
+
+### 対象 SHA と CI Run
+
+| 項目 | 値 |
+| --- | --- |
+| 対象 SHA | `e93c438adc4af5b498e10926fe859ac1338ac390`（main HEAD・PR #599 merge） |
+| Full CI run | [43428172820](https://github.com/scarecrow173/ruviform/actions/runs/43428172820) — conclusion=**success**（2026-11-13 dispatch、同 SHA 最新 completed） |
+| 証拠収集 | `gh run view` / `gh run list` / job log（`gh run view --log`）による lane・test 単位の照合。新 CI Workflow は作成していない |
+
+### Lane × OS カバレッジ（run 43428172820 実測）
+
+| lane | Windows | Linux | macOS | 内容 |
+| --- | --- | --- | --- | --- |
+| `verify` / `verify-macos` `test-full` | Pass | Pass | Pass | workspace `cargo test` 全件 0 failed。`ruviform-ui-test` 全 test target を実走し `e2e_process.rs` は 3 OS とも 15 tests・0 failed を log で確認。Windows の target 別件数（検証済み）: lib 72 / component_view 17 / driver_boundary 11 / driver_contract 7 / driver_parity 14 / e2e_process 15 / fake_driver 14 / golden 8 / headless_contract 33 / lifecycle_fixture 1 / native_slot_contract 13 / scenario_contract 16 — Linux/macOS は cfg 依存で件数が異なり得るため suite 合格のみ記録 |
+| `ui-gpui-verify` / `ui-gpui-verify-macos` | Pass | Pass | Pass | `check-ui-driver-boundary` + driver contract/parity/native-slot/component-view/golden/scenario-contract/consumer-observation 各 fixture lane + `test-ui-gpui` = `cargo test -p ruviform-ui-gpui --features "gpui-test uitest"`。**`windowed_test_app` bin が 3 OS 全てで Compile+Link+実行**（bin unittest harness 0 tests = Build/Link 証拠）。`windowed_uitest.rs` target も compile+link+実行（2 tests・env gate で no-op — 下記 Capability 表参照） |
+| `ui-gpui-offscreen-verify` | — | Pass | — | `xvfb-run`+`openbox`+`cargo test -p ruviform-ui-gpui --features real-scenario --test real_window` → **3/3 pass**（105s）: `lab_story_al_waveform_seek_real_window`、`lab_story_sv_fader_dock_real_window`（実 window + X11 capture → golden compare）、`real_os_input_scenario`（capability 未 claim を `verdict=unsupported` として正直に記録して return） |
+
+### Capability 記録（OS 別・正直な現状）
+
+Build/Link 成功と Driver 機能対応は別物として記録する。`results.jsonl`
+の対応行（#313 scoped）と同一内容。
+
+| capability | Windows | Linux | macOS | Owner / 将来 Activation |
+| --- | --- | --- | --- | --- |
+| `os_input`（実 OS 入力 backend） | **Pass** — `os_input::supported()`=true、Win32 `SendInput` automation injection。`real_os_input_scenario` verdict=pass（2026-11-11）+ keyboard/pointer smoke verdict=pass。**物理手動入力ではない** | **Unsupported** — `supported()` は `cfg!(windows)`。offscreen lane で `real_os_input_scenario` が `verdict=unsupported` を正直に記録（fail にも pass にも偽装しない） | **Unsupported** — 同上。backend なし・実行 lane なし | 将来の Linux（X11/XTest 等）/ macOS（CGEvent 等）OS-input backend。実機 lane 計画時に activation |
+| `capture`（VisualCapture backend） | **Pass** — `real_os_input_scenario` の os-capture leg（実ピクセル `capture_frame`）+ manual `golden_capture` lane | **Pass** — x11rb（X11 GetImage）。offscreen lane の lab_story 実 window テストが実ピクセル→golden compare で pass | **Unsupported** — `capture.rs` は macOS で正直な Unsupported placeholder を返す（backend は windows+linux/x11rb のみ） | 将来の macOS capture backend（ScreenCaptureKit 等） |
+| `windowed_uitest`（windowed `rvf.uitest.v1` GUI-L2 lane） | **Pass** — manual interactive lane（`RVF_WINDOWED_UITEST=1`、2026-11-11、verdict=pass 全 11 ops、`evidence/issue-313-windowed-uitest/verdict-windowed-uitest.json`）。CI では target の compile+link のみで env gate により**実行は NotRun** | **NotRun** — interactive desktop lane なし。CI は compile+link のみ | **NotRun** — 同上 | 将来の Linux/macOS interactive windowed lane |
+| `ScenarioDriver::RealOs` adapter | **Pass** — `RealOsGuiTest`（`real-scenario` feature）が `driver()=RealOs` を報告し `RealOsPointerOrKeyboard` を claim（Windows のみ）。`verdict-real-os-input-windows.json` | **Pass** — adapter は compile+実行（offscreen lane 3/3）。ただし `RealOsPointerOrKeyboard` は未 claim（`os_input` Unsupported と同根） | **NotRun** — `real_window` test target は `cfg(any(windows, linux))` で macOS では空。CI lane も `real-scenario` を有効化しない | 将来の macOS real-OS lane（#313 残スコープ） |
+
+補足: `results.jsonl` の stale 行 `scenario-driver-realos-adapter`
+（旧 status=Unsupported「adapter 未実装」）は e93c438a 時点の実装済み
+事実（`RealOsGuiTest`・`real-scenario` feature）に合わせて訂正した。
+`SemanticAction`/`MultiWindow` は feature が compile される OS で
+claim され、`RealOsPointerOrKeyboard` の claim は
+`os_input::supported()`（現状 Windows のみ）に限定される —
+capability claim と Build 成功を混同していない。
+
+### Timeout headless gap の補完（本 slice のコード変更）
+
+`driver.rs` の `DriverError::Timeout` 経路（`wait_exit` の caller
+指定 bound・TCP accept loop の `CONNECT_TIMEOUT`）は実装済みだったが
+`tests/` 側に assert がなかった。`WindowedIo::JOB_TIMEOUT`（15s）は
+`ruviform-ui-gpui` 側のため本 slice の編集範囲外（driver 実装の変更は
+行わず、既存 public API のみで検証した）。
+
+- `crates/ruviform-ui-test/src/bin/dummy_app.rs` — `--stall
+  before-serve|after-serve` を追加。`before-serve` は制御チャネルを
+  開く前に、`after-serve` は `serve_from_env` 終了後（shutdown /
+  driver EOF / disabled のいずれでも）に永久 park する非終了
+  fixture。既存契約は不変。
+- `crates/ruviform-ui-test/tests/e2e_process.rs` — 3 テスト追加:
+  1. `e2e_stall_after_serve_wait_exit_times_out` — protocol 完了
+     （`bye:true` + `cleanup.exited:true` は host-loop フラグであって
+     OS プロセス終了ではない）後も process が残るため、
+     `wait_exit(500ms)` が `DriverError::Timeout` を返すこと、
+     hang/silent pass しないこと、`kill` で確実に reap されることを
+     assert。
+  2. `e2e_stall_before_serve_tcp_connect_times_out` — dial しない
+     child に対し TCP accept loop が `CONNECT_TIMEOUT` bound で
+     `DriverError::Timeout` を返し child を kill する（orphan なし）
+     ことを assert。
+  3. `e2e_stall_after_driver_eof_child_survives_until_killed` —
+     driver EOF（異常終了側）でも stalled child が生存し続け、
+     明示 kill で reap されることを assert。
+
+ローカル検証（Windows 11 Pro・branch `test/313-os-l1-evidence-timeout`
+@`20762e0a`）: `mise run test ruviform-ui-test` → `e2e_process.rs`
+**18/18 pass**（既存 15 + 新規 3、15.11s — TCP timeout が
+`CONNECT_TIMEOUT` 実測分を含む）。Linux/macOS での実走は merge 後の
+`ci.yml` verify lane が初回実行となる（現時点 NotRun、Pass 扱いしない）。
+
+### NotRun / Unsupported の owner まとめ
+
+| 項目 | status | owner / 後続 |
+| --- | --- | --- |
+| macOS/Linux 実 OS 入力（keyboard/pointer/IME/a11y） | Unsupported（backend なし）/ NotRun（実機 lane なし） | 将来の OS-input backend + 各 OS real-OS smoke task |
+| macOS capture backend | Unsupported（placeholder は正直な非対応） | 将来の macOS capture backend |
+| macOS `real-scenario` adapter 実行 | NotRun（test target が cfg で空・lane なし） | 将来の macOS real-OS lane |
+| Linux/macOS windowed uitest 実走 | NotRun（compile+link のみ・env gate no-op） | 将来の interactive windowed lane |
+| 新規 timeout テストの Linux/macOS 実走 | NotRun | merge 後 `ci.yml` verify lane（統合検証は merge SHA の CI が正本） |
+| Windows L2/L3 実機ケース（DPI 動的・モニター切断・2 window・Native Dock） | NotRun | #243 / SV #114 委譲（本 slice 対象外） |
+| 実 Native Plugin Dock | NotRun | #388/#389/#532 Owner |
+
+### 実測と仮定の区別（本 slice）
+
+- **実測**: run 43428172820 の job log から lane・test target・件数・
+  結果を照合（checkout SHA `e93c438` 各 job で一致確認）。ローカルの
+  `mise run test ruviform-ui-test` 実走結果（exit 0・18/18）。
+- **仮定・留保**: CI job の green は個別 Case の Pass を意味しない
+  （POLICIES.md §4）— 本表は test target 名と件数まで記録し、
+  capability の Supported/Unsupported 判定は backend 実装
+  （`os_input::supported()` の `cfg!(windows)`、`capture.rs` の
+  cfg 分岐、`real_window.rs` の cfg ゲート）と各 lane の実測に
+  基づく。SendInput は OS automation injection であり物理入力では
+  ない。
