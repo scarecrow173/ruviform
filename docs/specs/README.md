@@ -10,6 +10,7 @@ Directory: `docs/specs`
 | SPEC-034Kq7ipiNwhFkBrHtwlII | ruviform-audio-analysis 実装 spec | approved | [audio-analysis.md](./audio-analysis.md) |
 | SPEC-034JROd7c0jBSZ1hnPEAg5 | 音声エンジン（pull グラフ・デバイスアダプタ統合・RT パス） | approved | [audio-engine.md](./audio-engine.md) |
 | SPEC-034JOoOaExdxXgKrQ80l7x | chunk 分割時の OutputCallbackInfo timestamp 合成 | approved | [chunk-timestamp-synthesis.md](./chunk-timestamp-synthesis.md) |
+| SPEC-034WJCD5J0DyrDlQtauRjA | Issue #594 daily-dispatch ci.yml に MSRV lane を追加しローカル必須検証から除外する | approved | [ci-msrv-daily-lane.md](./ci-msrv-daily-lane.md) |
 | SPEC-034LEXC13iAgtRjaqGTPoF | ruviform-video-proc 色変換カーネル追加（linear working space + ICC 入出力経路） | proposed | [color-conversion-kernels.md](./color-conversion-kernels.md) |
 | SPEC-034KScJM81H7da9TxzL0H5 | ruviform-video-proc コンポジット/遷移カーネル追加（blend/affine 初期セット） | approved | [composite-transition-kernels.md](./composite-transition-kernels.md) |
 | SPEC-034JZDNRML000000000001 | denormal 対策（エンジン層: ソフトウェア flush 方針） | approved | [denormal-mitigation.md](./denormal-mitigation.md) |
