@@ -46,6 +46,11 @@ window_job_headless` → 4 tests / 0 failed / 約 0.22s。
 （`E0308`）と `for event in events` 重複行を検出し修正後に
 全件 pass を確認。
 
+`git merge origin/main`（`71445679` → `3d981b75`）後に
+同一 4 コマンドを merged tree で再実行し、全て exit 0 を
+再確認（docs/他 crate のみの差分、`ruviform-ui-test` への
+影響なし）。
+
 ## 4. 実行状態の正直な記録
 
 | 項目 | 状態 | 理由 |

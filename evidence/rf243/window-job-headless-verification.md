@@ -68,8 +68,12 @@
 
 ## 備考
 
-- 全コマンドは作業 tree の未コミット状態で実行。コミット後の
-  内容は同一（docs/evidence のみの差分は Rust 検証に影響しない）。
+- 上記 4 コマンドは作業 tree の未コミット状態で実行し、
+  その後 `git merge origin/main`（`71445679` → `3d981b75`、
+  docs/他 crate のみの差分）後に同一 4 コマンドを再実行して
+  全て exit 0 を再確認した。merge は index 生成物を含まない
+  コード差分を `ruviform-ui-test` に持ち込まないが、
+  念のため canonical lane を merged tree で再検証した。
 - `node` script（docs 生成系）実行時に `Buffer()` deprecation
   warning が出力される（repo tooling 由来、変更対象外）。
   警告抑制は行っていない。
