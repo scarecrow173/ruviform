@@ -7,6 +7,7 @@ Directory: `docs/impl/ir`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | IMPL-034VuaCh48ZagIaCgYEDjZ | RF-GT-05 CI offscreen lanes implementation record | draft | [gt-05-ci-offscreen-lanes-slice.md](./gt-05-ci-offscreen-lanes-slice.md) |
+| IMPL-034WZ8jEVUJPCfjc4NtvqF | Issue 193 migration plan update snapshot | in-progress | [issue-193-migration-plan-update.md](./issue-193-migration-plan-update.md) |
 | IMPL-034R4JLReInVta6Yn0RgRW | Issue #219 consumer-verify anonymous-HTTPS access mode + 棚卸し refresh | in-progress | [issue-219-consumer-verify-anonymous-https-access-mode-refresh.md](./issue-219-consumer-verify-anonymous-https-access-mode-refresh.md) |
 | IMPL-Nq2aV7kR4tYc9XwL3ZsH8D | Issue #386 Backend-neutral GUI Host 契約・GPUI Driver・Window/Dock 移行 — 第 2 PR 実装記録 | in-progress | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
 | IMPL-Rt5Bv8wKm2NcXd7PqLe4Yg | Issue #423 WebView 写像・focus capability 精緻化・GPUI 実窓検証 — 実装記録 | in-progress | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |

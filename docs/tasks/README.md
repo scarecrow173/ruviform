@@ -11,6 +11,7 @@ Directory: `docs/tasks`
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034udQraUdxLs1SxuYiaAK | Issue #127 Linux 実配布方式 設計 — docs チェーン作成・索引再生成・検証・PR | in-progress | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
+| TASK-034WZ7YMSR5UKu8AhtpOgk | Issue #193 Migration Plan Update Snapshot 文書化 | todo | [issue-193-migration-plan-update-task.md](./issue-193-migration-plan-update-task.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
 | TASK-034Vj6McJYc0Zg8Cae9FZg | Issue #253 host-graph report consumer タスク（host drain API + fixture E2E） | completed | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | TASK-rf253osmidibackend001 | Issue #253 OS MIDI input backend 実装タスク | completed | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
