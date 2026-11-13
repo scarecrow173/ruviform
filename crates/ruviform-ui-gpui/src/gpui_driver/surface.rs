@@ -12,7 +12,7 @@
 //!
 //! Layering: this module speaks only `ruviform-ui` vocabulary. The
 //! plugin-side `LeaseRedeemer` glue — `ParentSlotLease` →
-//! `GuiParentToken` — lives at the consumer composition root
+//! `ParentLease` — lives at the consumer composition root
 //! (`plugin`/`ui` crates never depend on each other).
 //!
 //! **RT contract:** non-RT only — UI-thread only, same as the driver.
@@ -226,8 +226,8 @@ struct Binding {
 /// `open_gui` time the consumer calls [`Self::redeem`] with that
 /// payload: the adapter validates the lease against its ledger
 /// (stale/revoked/forged leases are refused) and yields the raw OS
-/// parent token for the container — the value a `GuiParentToken`
-/// wraps. The raw token never crosses into shared vocabulary.
+/// parent token for the container — the payload a `ParentLease`
+/// carries. The raw token never crosses into shared vocabulary.
 ///
 /// **RT contract:** non-RT only — UI-thread only.
 pub struct GpuiSurfaceAdapter {

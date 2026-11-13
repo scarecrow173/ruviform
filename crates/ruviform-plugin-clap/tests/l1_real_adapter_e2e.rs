@@ -23,9 +23,8 @@ use std::time::{Duration, Instant};
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_clap::host::fixture_lib_name;
 use ruviform_plugin_core::{
-    Event, EventKind, EventList, FailureCause, GuiParentToken, HostError, HostInput, HostOutput,
-    LifecycleState, ParamEvent, ParamId, ParamValue, PluginDescriptor, ProcessConfig,
-    ProcessResult,
+    Event, EventKind, EventList, FailureCause, HostError, HostInput, HostOutput, LifecycleState,
+    ParamEvent, ParamId, ParamValue, ParentLease, PluginDescriptor, ProcessConfig, ProcessResult,
 };
 use ruviform_plugin_host::{
     ChildExit, DiagnosticQuery, HostCommand, HostNotification, HostReply, OutOfProcessSpec,
@@ -353,7 +352,7 @@ fn real_adapter_l1_full_series() {
     assert_eq!(
         host.execute(HostCommand::OpenGui {
             handle,
-            parent: GuiParentToken::new(0),
+            parent: ParentLease::new(0, 0),
         }),
         Err(HostError::Unsupported)
     );

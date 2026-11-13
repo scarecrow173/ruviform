@@ -1,4 +1,6 @@
-//! `#[cfg(test)]` fault-injection `PlatformFileOps`.
+//! Fault-injection `PlatformFileOps` — compiled under `cfg(test)` for
+//! the crate's own unit tests and under the opt-in `fault-injection`
+//! feature for cross-crate contract tests (Issue #306 G07).
 //!
 //! `MockFileOps` simulates a one-file virtual filesystem (temp +
 //! destination byte buffers plus a stage call log) behind `Arc<Mutex>`
@@ -10,19 +12,32 @@
 //! happy path (validate/sync/prepare → Ok, publish → `Applied` +
 //! `Removed`, dir sync → Ok, cleanup → `Removed`, inspect → actual
 //! state, readback → Ok).
+//!
+//! The crate-private types (`MockFileOps`, `MockScript`, `MockPublish`)
+//! are re-used verbatim; the `pub` surface at the bottom of this file
+//! is a std-type-only facade ([`FaultScript`], [`PublishScript`],
+//! [`staged_file`], [`MockFs`]) so external test crates never see the
+//! `PlatformFileOps` boundary itself.
 
 use crate::options::{PublishMode, PublishOptions};
+use crate::outcome::{OperationId, TempState};
 use crate::platform::{
     ApplyOutcome, CleanupAttempt, PlatformFileOps, PublishAttempt, ReadSeek, TempDisposition,
 };
+use crate::receipt::RecoveryInfo;
+use crate::staged::StagedFile;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 /// The mock's observable filesystem: temp contents, destination
 /// contents, and the stage call log.
+///
+/// `pub` only so the `fault-injection` facade can hand it to external
+/// contract tests as observation evidence; the fields stay plain std
+/// types (`Vec<u8>` buffers and a stage-name log).
 #[derive(Debug, Default)]
-pub(crate) struct MockFs {
+pub struct MockFs {
     /// Temp file contents — `None` means the temp is absent.
     pub temp: Option<Vec<u8>>,
     /// Destination contents — `None` means nothing published/existing.
@@ -214,7 +229,10 @@ impl PlatformFileOps for MockFileOps {
             .unwrap_or_else(MockPublish::applied);
         let mut fs = self.fs();
         if scripted.physically_applied {
-            fs.dest = fs.temp.clone();
+            // `clone_from` cannot borrow `fs.temp` while `fs.dest` is
+            // mutably borrowed through the guard — clone to a local.
+            let published = fs.temp.clone();
+            fs.dest = published;
         }
         if scripted.attempt.temp == TempDisposition::Removed {
             fs.temp = None;
@@ -255,4 +273,270 @@ impl PlatformFileOps for MockFileOps {
     fn temp_path(&self) -> Option<&Path> {
         Some(&self.temp_path)
     }
+}
+
+// ---------------------------------------------------------------------------
+// `fault-injection` facade — the std-type-only scripting surface external
+// contract tests (e.g. `ruviform-io-e2e`) consume. Everything below maps
+// onto the crate-private `MockScript`/`MockFileOps` above; no
+// `PlatformFileOps` type appears in a `pub` signature, so the private
+// boundary stays private.
+// ---------------------------------------------------------------------------
+
+/// A scripted `io::Error` for one mock stage.
+fn mock_error(kind: io::ErrorKind, stage: &'static str) -> io::Error {
+    io::Error::new(kind, format!("mock {stage} fault"))
+}
+
+/// What a scripted publish attempt reports to the pipeline — the
+/// facade-side name for the adapter's `ApplyOutcome` classification.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublishReport {
+    /// The publish applied (the temp is consumed per `temp`).
+    Applied,
+    /// The publish definitively did not apply.
+    NotApplied,
+    /// The publish outcome cannot be determined — the pipeline
+    /// normalizes this to `PublishEffect::Indeterminate` and does not
+    /// auto-delete the leftover.
+    Unknown,
+}
+
+impl PublishReport {
+    const fn outcome(self) -> ApplyOutcome {
+        match self {
+            Self::Applied => ApplyOutcome::Applied,
+            Self::NotApplied => ApplyOutcome::NotApplied,
+            Self::Unknown => ApplyOutcome::Unknown,
+        }
+    }
+}
+
+/// What a scripted stage reports about the staged temp — the
+/// facade-side name for `TempDisposition`.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TempReport {
+    /// The temp was consumed by the publish or removed.
+    Removed,
+    /// The temp is still present.
+    Retained,
+    /// The temp's presence could not be determined.
+    Unknown,
+}
+
+impl TempReport {
+    const fn disposition(self) -> TempDisposition {
+        match self {
+            Self::Removed => TempDisposition::Removed,
+            Self::Retained => TempDisposition::Retained,
+            Self::Unknown => TempDisposition::Unknown,
+        }
+    }
+}
+
+/// A scripted publish attempt: the reported outcome, the resulting
+/// temp disposition, an optional OS-level diagnostic kind, and whether
+/// the mock *physically* moved the temp bytes to the destination —
+/// an axis independent of the report so `Unknown` + applied models
+/// "applied but could not be told" honestly.
+///
+/// Build with [`PublishScript::new`] and the `with_*` methods. Unset
+/// fields default to the happy path: `temp: Removed`, no error, and
+/// `physically_applied` matching an `Applied` report.
+#[derive(Debug, Clone)]
+pub struct PublishScript {
+    report: PublishReport,
+    temp: TempReport,
+    error: Option<io::ErrorKind>,
+    physically_applied: bool,
+}
+
+impl PublishScript {
+    /// A script reporting `report`; remaining fields take happy-path
+    /// defaults.
+    #[must_use]
+    pub fn new(report: PublishReport) -> Self {
+        Self {
+            report,
+            temp: TempReport::Removed,
+            error: None,
+            physically_applied: matches!(report, PublishReport::Applied),
+        }
+    }
+
+    /// The temp disposition the attempt reports.
+    #[must_use]
+    pub fn with_temp(mut self, temp: TempReport) -> Self {
+        self.temp = temp;
+        self
+    }
+
+    /// The OS-level diagnostic the attempt reports — an `io::Error`
+    /// with this kind. `AlreadyExists`/`Unsupported` carry semantic
+    /// weight in the pipeline's `PublishFailureKind` classification.
+    #[must_use]
+    pub fn with_error(mut self, kind: io::ErrorKind) -> Self {
+        self.error = Some(kind);
+        self
+    }
+
+    /// Whether the mock physically applies the publish (moves the temp
+    /// bytes to the destination) regardless of the reported outcome.
+    #[must_use]
+    pub fn with_physically_applied(mut self, applied: bool) -> Self {
+        self.physically_applied = applied;
+        self
+    }
+
+    fn into_mock(self) -> MockPublish {
+        MockPublish {
+            attempt: PublishAttempt {
+                effect: self.report.outcome(),
+                temp: self.temp.disposition(),
+                error: self.error.map(|kind| mock_error(kind, "publish")),
+            },
+            physically_applied: self.physically_applied,
+        }
+    }
+}
+
+/// Per-stage fault script for [`staged_file`]. Every slot is optional:
+/// an unset stage runs the happy path, and a consumed slot falls back
+/// to it (the same once-only semantics as the internal `MockScript`).
+///
+/// Build with [`FaultScript::new`] and the stage methods — each names
+/// one pipeline stage and the fault it injects.
+#[derive(Debug, Default)]
+pub struct FaultScript {
+    validate: Option<io::ErrorKind>,
+    sync_file: Option<io::ErrorKind>,
+    prepare: Option<io::ErrorKind>,
+    sync_directory: Option<io::ErrorKind>,
+    readback: Option<io::ErrorKind>,
+    publish: Option<PublishScript>,
+    cleanup: Option<(TempReport, Option<io::ErrorKind>)>,
+    inspect: Option<Result<TempReport, io::ErrorKind>>,
+}
+
+impl FaultScript {
+    /// An empty script — every stage on the happy path.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// `validate_publish` fails with this error kind.
+    #[must_use]
+    pub fn validate_error(mut self, kind: io::ErrorKind) -> Self {
+        self.validate = Some(kind);
+        self
+    }
+
+    /// `sync_file` fails with this error kind.
+    #[must_use]
+    pub fn sync_file_error(mut self, kind: io::ErrorKind) -> Self {
+        self.sync_file = Some(kind);
+        self
+    }
+
+    /// `prepare_for_publish` (the close stage) fails with this error
+    /// kind.
+    #[must_use]
+    pub fn prepare_error(mut self, kind: io::ErrorKind) -> Self {
+        self.prepare = Some(kind);
+        self
+    }
+
+    /// `sync_directory` fails with this error kind.
+    #[must_use]
+    pub fn sync_directory_error(mut self, kind: io::ErrorKind) -> Self {
+        self.sync_directory = Some(kind);
+        self
+    }
+
+    /// `open_readback` fails with this error kind.
+    #[must_use]
+    pub fn readback_error(mut self, kind: io::ErrorKind) -> Self {
+        self.readback = Some(kind);
+        self
+    }
+
+    /// The publish attempt reports `script`.
+    #[must_use]
+    pub fn publish(mut self, script: PublishScript) -> Self {
+        self.publish = Some(script);
+        self
+    }
+
+    /// `cleanup_temp` reports `temp` (plus an optional error kind).
+    #[must_use]
+    pub fn cleanup(mut self, temp: TempReport, error: Option<io::ErrorKind>) -> Self {
+        self.cleanup = Some((temp, error));
+        self
+    }
+
+    /// `inspect_temp` reports `result` once — `Ok` a temp disposition,
+    /// `Err` an `io::Error` with the given kind.
+    #[must_use]
+    pub fn inspect(mut self, result: Result<TempReport, io::ErrorKind>) -> Self {
+        self.inspect = Some(result);
+        self
+    }
+
+    fn into_mock_script(self) -> MockScript {
+        MockScript {
+            validate: self.validate.map(|kind| Err(mock_error(kind, "validate"))),
+            sync_file: self
+                .sync_file
+                .map(|kind| Err(mock_error(kind, "sync_file"))),
+            prepare: self.prepare.map(|kind| Err(mock_error(kind, "prepare"))),
+            publish: self.publish.map(PublishScript::into_mock),
+            sync_directory: self
+                .sync_directory
+                .map(|kind| Err(mock_error(kind, "sync_directory"))),
+            cleanup: self.cleanup.map(|(temp, error)| CleanupAttempt {
+                temp: temp.disposition(),
+                error: error.map(|kind| mock_error(kind, "cleanup")),
+            }),
+            inspect: self.inspect.map(|result| match result {
+                Ok(temp) => Ok(temp.disposition()),
+                Err(kind) => Err(mock_error(kind, "inspect")),
+            }),
+            readback: self.readback.map(|kind| Err(mock_error(kind, "readback"))),
+        }
+    }
+}
+
+/// Builds a [`StagedFile`] driven by [`MockFileOps`] under `script`,
+/// with `initial_temp`/`existing_dest` as the mock filesystem's
+/// starting contents. Returns the staged file plus the shared
+/// [`MockFs`] observation handle — temp/destination bytes and the
+/// stage call log stay inspectable after the pipeline moves the
+/// adapter into a `RecoveryHandle`.
+///
+/// `destination` is diagnostic only (it lands in `RecoveryInfo`); the
+/// mock performs no real filesystem I/O.
+#[must_use]
+pub fn staged_file(
+    destination: &Path,
+    script: FaultScript,
+    initial_temp: Option<Vec<u8>>,
+    existing_dest: Option<Vec<u8>>,
+) -> (StagedFile, Arc<Mutex<MockFs>>) {
+    let fs = Arc::new(Mutex::new(MockFs {
+        temp: initial_temp,
+        dest: existing_dest,
+        calls: Vec::new(),
+    }));
+    let ops = MockFileOps::new(fs.clone(), script.into_mock_script());
+    let temp_path = ops.temp_path().map(Path::to_path_buf);
+    let info = RecoveryInfo::new(
+        OperationId::next(),
+        destination.to_path_buf(),
+        temp_path,
+        TempState::Retained,
+    );
+    (StagedFile::with_ops(Box::new(ops), info), fs)
 }

@@ -1,5 +1,5 @@
 //! The shared host-boundary vocabulary: the opaque [`PluginHandle`],
-//! the GUI tokens [`GuiHandle`]/[`GuiParentToken`], the session-side
+//! the GUI tokens [`GuiHandle`]/[`ParentLease`], the session-side
 //! [`PluginEditorSessionId`]/[`ParentSlotLease`] vocabulary and the
 //! command-surface error [`HostError`].
 //!
@@ -86,28 +86,61 @@ impl GuiHandle {
     }
 }
 
-/// Opaque parent-window token for GUI embedding (e.g. a HWND or
-/// `NSView` pointer narrowed to an integer by the caller).
+/// Opaque, generation-bound parent-window lease presented to
+/// [`Plugin::open_gui`](crate::Plugin::open_gui).
+///
+/// This is the *plugin-side* parent vocabulary: it replaces the raw
+/// OS-handle token so that no caller can hand an unvalidated native
+/// handle to a plugin. `generation` binds the lease to the issuer's
+/// issuance epoch (e.g. a `SurfaceSlotRegistry` sequence) and
+/// `payload` carries the redeemed raw OS parent token (`u64`-narrowed
+/// HWND/`NSView`/etc.) that only the OS adapter interprets.
+///
+/// `ParentLease` is opaque vocabulary, not authentication: stale,
+/// revoked, or forged *session-side* leases are rejected earlier, at
+/// the issuer-side redeem seam, before a `ParentLease` can be minted.
+/// Minting is an adapter-internal operation — [`ParentLease::new`] is
+/// `#[doc(hidden)]` and session-facing surfaces only ever receive a
+/// [`ParentSlotLease`], never this type.
 ///
 /// **RT contract:** RT-suitable — `Copy` value type.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct GuiParentToken(u64);
+pub struct ParentLease {
+    generation: u32,
+    payload: u64,
+}
 
-impl GuiParentToken {
-    /// Wraps a platform parent identifier as an opaque token.
+impl ParentLease {
+    /// Creates a lease binding `generation` to the redeemed `payload`.
+    ///
+    /// `#[doc(hidden)]` public because minting is an adapter-internal
+    /// operation — only a redeem seam that has validated the
+    /// session-side [`ParentSlotLease`] may produce one.
     ///
     /// **RT contract:** RT-suitable — `const`, pure.
+    #[doc(hidden)]
     #[must_use]
-    pub const fn new(raw: u64) -> Self {
-        Self(raw)
+    pub const fn new(generation: u32, payload: u64) -> Self {
+        Self {
+            generation,
+            payload,
+        }
     }
 
-    /// The raw platform identifier.
+    /// The issuer-side lease generation this parent lease is bound to.
     ///
     /// **RT contract:** RT-suitable — `const`, pure.
     #[must_use]
-    pub const fn raw(self) -> u64 {
-        self.0
+    pub const fn generation(self) -> u32 {
+        self.generation
+    }
+
+    /// The redeemed raw OS parent token.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn payload(self) -> u64 {
+        self.payload
     }
 }
 
@@ -163,12 +196,9 @@ impl PluginEditorSessionId {
 /// `SurfaceSlotRegistry` in a GUI driver), never a raw OS handle. The
 /// payload structure is the issuer's private implementation detail —
 /// sessions and the wire carry it uninterpreted, and only the
-/// issuer-side adapter redeems it into an OS parent token.
-///
-/// [`GuiParentToken`] remains the lower-level raw vocabulary used at
-/// the OS-adapter boundary inside that redemption; it is *not*
-/// replaced by this type and stays behind the adapter, never on the
-/// session-facing surface.
+/// issuer-side adapter redeems it into a [`ParentLease`] through the
+/// host's redeem seam; the redeemed lease stays behind the adapter
+/// boundary and is *not* exposed on the session-facing surface.
 ///
 /// **RT contract:** RT-suitable — `Copy` value type.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

@@ -34,6 +34,7 @@ Directory: `docs/tasks`
 | TASK-034RJ02dFTbxsMkC5rKofw | Issue #331 T1 — verify lane の check-ci を lint-ci に統合 + 等価性・実測記録 | in-progress | [issue-331-t1-check-step-dedup.md](./issue-331-t1-check-step-dedup.md) |
 | TASK-ibEQJ0Q4JzJ0UtqiKM5W5u | Issue #388/#389 Native Dock 契約タスク（boundary / native_slot / editor_session） | completed | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TASK-rf388DockWindowing01 | Issue #388 slice 3 タスク — clip/focus/redock windowing 実測 | in-progress | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
+| TASK-034WYaQlaDnroaK9zoe9D3 | Issue #389 Parent Lease 移行タスク | in-progress | [issue-389-parent-lease-task.md](./issue-389-parent-lease-task.md) |
 | TASK-034UnqS8L3S2tF4h6u8LJd | Issue #389 Plugin Editor Session hardening タスク（timeout/degrade/GraphicsLost/DComp 記録） | in-progress | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | TASK-ll0hVC7GhO5tm1LEDBWZIe | Issue #389 VST3/L0 実外部 Editor attach タスク（adapter open_gui + PoC vst3 lane） | completed | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TASK-034TaJ4jQd92g4mWa81cxX | Issue #390 Driver Contract/Lab 実装 | todo | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
@@ -242,6 +243,7 @@ Directory: `docs/tasks`
 | TASK-7VWD8KuRBS2voBCngFoIJF | A1 IO MSRV lane 追加・DAG/RT audit 証跡・検証 | done | [issue-306-a1-msrv-dag-rt-audit.md](./issue-306-a1-msrv-dag-rt-audit.md) |
 | TASK-034UtEdJ4J9ekRBHmpucta | F1 IO E2E fixture 実装 — Fault/Fuzz・Directory・OS/FS probe | done | [issue-306-f1-fixture-extension.md](./issue-306-f1-fixture-extension.md) |
 | TASK-034UtEeCVQCg44aM7iUrV3 | F2 正規検証・evidence・CI handoff 記録 | done | [issue-306-f2-verification-handoff.md](./issue-306-f2-verification-handoff.md) |
+| TASK-034WXSB8zGVc9NKQicjOEp | Issue #306 G07 fault seam 判定・契約試験 + G08 corpus replay | done | [issue-306-fault-seam-fuzz-task.md](./issue-306-fault-seam-fuzz-task.md) |
 | TASK-pL5wE8rT1yU4iO7pA2sD6f | Issue #306 OS-L1 既存 CI 証拠検査・不足 Case 補完 (Slice V+T) | done | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |
 | TASK-laPtj98NpzxI9OnVwLg5y4 | T2 File・Structured 境界試験 (Issue #306) | done | [issue-306-t2-file-structured-boundary.md](./issue-306-t2-file-structured-boundary.md) |

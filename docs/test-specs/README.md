@@ -102,6 +102,7 @@ Directory: `docs/test-specs`
 | TSPEC-pWc14Y17FV06GN2600rX8h | Issue #304 ruviform-io-archive Secure Extraction・Staging/Recovery テスト仕様 | approved | [issue-304-io-archive-extract.md](./issue-304-io-archive-extract.md) |
 | TSPEC-034UvWxgBRObLuwfTjwqMx | Issue #305 IO E2E WAV Golden/Fault テスト仕様 | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | TSPEC-0kY8BSgqOCJHezrud22f3h | Issue #305 Media I/O StagedFile 移行 テスト仕様 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
+| TSPEC-034WXOTmrti91Jpbt5kIxV | Issue #306 G07/G08 fault seam・corpus replay テスト仕様 | approved | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |
 | TSPEC-rviIWrpuHyJUT11Wykzopn | Issue #306 汎用 I/O 合成 E2E テスト仕様 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | TSPEC-nB3vC7xZ0qW5eR8tY1uI4o | Issue #306 IO E2E — OS-L1 CI 証拠と Case 補完 試験仕様 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | TSPEC-034UtBs1z6PAEjR3T4EiV2 | Issue #306 IO E2E slice 2 テスト仕様 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
@@ -146,6 +147,7 @@ Directory: `docs/test-specs`
 | TSPEC-rf388DockWindowing01 | Issue #388 slice 3 windowing 挙動の実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | TSPEC-Vqv91J1zDZ6Qvi57khd2TT | Issue #389 Plugin Editor Session headless fixture テスト仕様（DSP/RT 非干渉 + contract edge + focus 境界） | approved | [issue-389-editor-session-headless.md](./issue-389-editor-session-headless.md) |
 | TSPEC-Q5Bwy4OQ5KsQyE0Z4uhWg6 | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture テスト仕様（terminal-event・stale・timeout・degrade・crash） | approved | [issue-389-editor-session-statemachine.md](./issue-389-editor-session-statemachine.md) |
+| TESTSPEC-034WXSuI7vNQqJ4kL2mB8 | Issue #389 Parent Lease 移行 test-spec | approved | [issue-389-parent-lease.md](./issue-389-parent-lease.md) |
 | TSPEC-034UnAjuxNxMXzDMasVYeO | Issue #389 Plugin Editor Session hardening テスト仕様（fake-clock timeout・degrade・GraphicsLost contract） | approved | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TSPEC-034TaI7Luee0T88mH1IYv2 | Issue #390 Driver Boundary/Lab 検証 | draft | [issue-390-driver-boundary-lab.md](./issue-390-driver-boundary-lab.md) |

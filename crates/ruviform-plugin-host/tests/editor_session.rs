@@ -16,8 +16,8 @@ use std::time::Duration;
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventList, GuiHandle, GuiParentToken, HostInput, HostOutput,
-    LifecycleState, ParamInfo, PluginDescriptor, PrepareError, ProcessConfig, ProcessContext,
+    BufferView, BufferViewMut, EventList, GuiHandle, HostInput, HostOutput, LifecycleState,
+    ParamInfo, ParentLease, PluginDescriptor, PrepareError, ProcessConfig, ProcessContext,
     ProcessResult, ProcessStatus, TransportInfo,
 };
 use ruviform_plugin_host::{
@@ -657,7 +657,7 @@ impl Plugin for GuiPlugin {
         &[]
     }
 
-    fn open_gui(&mut self, _parent: GuiParentToken) -> Result<GuiHandle, HostError> {
+    fn open_gui(&mut self, _parent: ParentLease) -> Result<GuiHandle, HostError> {
         if self.gui_supported {
             Ok(GuiHandle::new(7))
         } else {
@@ -700,7 +700,7 @@ fn host_with_plugin(gui_supported: bool) -> InProcessHost {
 /// raw parent token the plugin receives. The real issuer validates the
 /// lease first (see `l0_redeemer_refusal_blocks_open_and_never_issues_opengui`).
 fn token_redeemer() -> Box<LeaseRedeemer<'static>> {
-    Box::new(|lease: &ParentSlotLease| Ok(GuiParentToken::new(lease.raw())))
+    Box::new(|lease: &ParentSlotLease| Ok(ParentLease::new(0, lease.raw())))
 }
 
 fn instantiate(host: &mut InProcessHost) -> PluginHandle {
@@ -851,12 +851,13 @@ fn l0_redeemer_refusal_blocks_open_and_never_issues_opengui() {
 #[test]
 fn l0_redeemer_token_reaches_plugin_open_gui() {
     // The adapter-backed redeemer maps the opaque lease payload to the
-    // raw parent token the plugin sees — distinct from pass-through.
+    // generation-bound `ParentLease` the plugin sees — distinct from
+    // pass-through.
     use std::cell::Cell;
     use std::rc::Rc;
 
     struct TokenProbe {
-        seen: Rc<Cell<Option<u64>>>,
+        seen: Rc<Cell<Option<ParentLease>>>,
     }
     impl ruviform_plugin_core::PluginProcessor for TokenProbe {
         fn prepare(
@@ -888,8 +889,8 @@ fn l0_redeemer_token_reaches_plugin_open_gui() {
         fn params(&self) -> &[ParamInfo] {
             &[]
         }
-        fn open_gui(&mut self, parent: GuiParentToken) -> Result<GuiHandle, HostError> {
-            self.seen.set(Some(parent.raw()));
+        fn open_gui(&mut self, parent: ParentLease) -> Result<GuiHandle, HostError> {
+            self.seen.set(Some(parent));
             Ok(GuiHandle::new(9))
         }
         fn close_gui(&mut self) -> Result<(), HostError> {
@@ -897,7 +898,7 @@ fn l0_redeemer_token_reaches_plugin_open_gui() {
         }
     }
     struct ProbeFactory {
-        seen: Rc<Cell<Option<u64>>>,
+        seen: Rc<Cell<Option<ParentLease>>>,
     }
     impl PluginFactory for ProbeFactory {
         fn descriptor(&self) -> PluginDescriptor {
@@ -923,7 +924,7 @@ fn l0_redeemer_token_reaches_plugin_open_gui() {
         let mut ops = InProcessEditorOps::with_redeemer(
             &mut host,
             instance,
-            Box::new(|_lease| Ok(GuiParentToken::new(0xBBBB))),
+            Box::new(|_lease| Ok(ParentLease::new(0x1234, 0xBBBB))),
         );
         session
             .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
@@ -933,7 +934,7 @@ fn l0_redeemer_token_reaches_plugin_open_gui() {
             EditorSessionState::Attached { .. }
         ));
     }
-    assert_eq!(seen.get(), Some(0xBBBB));
+    assert_eq!(seen.get(), Some(ParentLease::new(0x1234, 0xBBBB)));
 }
 
 #[test]

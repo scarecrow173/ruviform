@@ -49,6 +49,7 @@ Directory: `docs/impl/exp`
 | [device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl](./device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl) |
 | [dsp-simd-poc-benchmark-comparison.jsonl](./dsp-simd-poc-benchmark-comparison.jsonl) |
 | [issue-327-ci-baseline.jsonl](./issue-327-ci-baseline.jsonl) |
+| [issue-389-parent-lease-exp.jsonl](./issue-389-parent-lease-exp.jsonl) |
 | [issue-57-high-load-webgpu-multi-webview.jsonl](./issue-57-high-load-webgpu-multi-webview.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
 | [plugin-gui-attach-e1-e2.jsonl](./plugin-gui-attach-e1-e2.jsonl) |

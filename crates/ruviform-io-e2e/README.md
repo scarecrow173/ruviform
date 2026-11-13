@@ -23,8 +23,10 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
   失敗分類・recovery handle 所有権・publish 競合・TAR+gzip 複合
   の publish 前独立検証）を検証する（`fault_boundary.rs`）。
   `Indeterminate`・DirSync 後失敗・`TempState::Unknown` は実 OS
-  で正直に誘発不能なため fixture 化せず、`ruviform-io-file` の
-  `#[cfg(test)]` mock 試験を正本として参照する。
+  で正直に誘発不能なため実 FS fixture 化せず、opt-in
+  `fault-injection` feature 経由の `#[doc(hidden)]` mock facade
+  による公開 API 契約試験（`fault_seam.rs`、Issue #306 G07）と
+  `ruviform-io-file` の `#[cfg(test)]` mock 試験を正本とする。
 - Negative/fuzz fixture（ZIP symlink/special entry・ZIP bomb
   budget・XML DOCTYPE/entity 拒否・corrupt/truncated
   TAR/gzip/JSON・決定的 mutation sweep）を検証する
@@ -50,7 +52,15 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
   `Published`/`NotPublished`/not-provably-unpublished に分類する
   （`wav_fault.rs`）。`Published`/`Indeterminate` の失敗 effect・
   DirSync 後失敗・`TempState::Unknown` は実 OS で誘発不能のため
-  NotRun（`ruviform-io-file` の mock 試験が正本）。
+  NotRun（`fault_seam.rs` と `ruviform-io-file` の mock 試験が
+  正本）。
+- bounded corpus replay（Issue #306 G08）: writer 正規 bytes を
+  種に splitmix64（固定 seed）で mutation した corpus を
+  json/yaml/toml/csv/xml/gzip/zstd/zip/tar の各 reader へ replay
+  し、panic しないこと・typed error 分類・byte/decoded byte/
+  deadline budget を検証する（`corpus_replay.rs`）。`#[ignore]`
+  付きの opt-in で、`mise run test-io-e2e-corpus` 経由でのみ
+  実行される（seed/case/budget/形式別除外はファイル冒頭に明記）。
 
 ## 依存方向
 
@@ -68,7 +78,8 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
 ## 検証
 
 ```sh
-mise run test-io-e2e   # cargo test -p ruviform-io-e2e
+mise run test-io-e2e          # cargo test -p ruviform-io-e2e
+mise run test-io-e2e-corpus   # opt-in: bounded corpus replay（G08、#[ignore] 試験）
 mise run test-io-msrv  # MSRV 1.89 toolchain で IO 系 6 crate を test
                        # （io-file/io-archive/io-structured/io-compression/
                        #  io-wav/io-e2e。Issue #306。io-e2e の dev-deps 経由で
@@ -79,9 +90,10 @@ mise run test-io-msrv  # MSRV 1.89 toolchain で IO 系 6 crate を test
 主張境界: 実施した OS/FS・toolchain のみを実測として記録する。
 実測範囲と NotRun/Unsupported の一覧・#219/#294 への引き渡し
 条件は `evidence/rf306/fault-fuzz-report.md`（合成試験）と
-`evidence/rf305/wav-golden-fault-report.md`（WAV golden/fault
-fixture）を正本とする。adapter 系 fault matrix（Applied/
-NotApplied/Unknown・DirSync 後失敗・Indeterminate・Temp 残留）は
-`ruviform-io-file` の `#[cfg(test)]` MockFileOps ユニット試験が
-正本。macOS/Linux 実 OS・Network/Cloud FS・性能・実 4 GiB
+`evidence/rf306/fault-seam-fuzz-report.md`（G07 seam 判定・
+G08 corpus replay）および `evidence/rf305/wav-golden-fault-report.md`
+（WAV golden/fault fixture）を正本とする。adapter 系 fault matrix
+（Applied/NotApplied/Unknown・DirSync 後失敗・Indeterminate・Temp
+残留）は `ruviform-io-file` の `#[cfg(test)]` MockFileOps
+ユニット試験と `fault_seam.rs` の opt-in 契約試験が正本。macOS/Linux 実 OS・Network/Cloud FS・性能・実 4 GiB
 ファイルの publish は未実測（NotRun/Unsupported）。

@@ -1,7 +1,7 @@
 //! The host boundary vocabulary: [`HostCommand`] and [`HostReply`].
 //!
 //! The shared vocabulary the command surface names —
-//! [`PluginHandle`], [`GuiHandle`], [`GuiParentToken`] and
+//! [`PluginHandle`], [`GuiHandle`], [`ParentLease`] and
 //! [`HostError`] — is owned by `ruviform-plugin-core` (so the L1 wire
 //! codec and the plugin runner can share it) and re-exported here
 //! unchanged: `ruviform_plugin_host::PluginHandle` and friends keep
@@ -20,7 +20,7 @@
 use ruviform_plugin_core::{PluginDescriptor, ProcessConfig};
 
 pub use ruviform_plugin_core::{
-    FailureCause, GuiHandle, GuiParentToken, HostError, ParentSlotLease, PluginEditorSessionId,
+    FailureCause, GuiHandle, HostError, ParentLease, ParentSlotLease, PluginEditorSessionId,
     PluginHandle,
 };
 
@@ -89,12 +89,12 @@ pub enum HostCommand {
         /// Bytes produced by an earlier `SaveState`.
         bytes: Vec<u8>,
     },
-    /// Open the plugin GUI under an opaque parent window.
+    /// Open the plugin GUI under an opaque parent-window lease.
     OpenGui {
         /// Target instance.
         handle: PluginHandle,
-        /// Platform parent window token.
-        parent: GuiParentToken,
+        /// Generation-bound parent-window lease.
+        parent: ParentLease,
     },
     /// Close the plugin GUI.
     CloseGui {

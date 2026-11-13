@@ -172,19 +172,27 @@ jobs:
           if [ -n "${ACTIONS_RESULTS_URL:-}" ]; then echo "ACTIONS_RESULTS_URL: set"; else echo "::warning::ACTIONS_RESULTS_URL missing — sccache GHA backend disabled (local disk fallback)"; fi
           if [ -n "${ACTIONS_RUNTIME_TOKEN:-}" ]; then echo "ACTIONS_RUNTIME_TOKEN: set"; else echo "::warning::ACTIONS_RUNTIME_TOKEN missing — sccache GHA backend disabled (local disk fallback)"; fi
 
-      - name: Check config files with prek
+      - name: Check config files with prek (Linux hygiene)
+        if: matrix.os == 'ubuntu-latest'
         run: mise exec -- prek run --all-files
 
-      - name: Check formatting (mise run fmt-check)
+      - name: Check formatting (Linux rustfmt)
+        if: matrix.os == 'ubuntu-latest'
         run: mise run fmt-check
 
-      # Issue #331 (CI-OPT-04): `cargo clippy` compiles workspace members with
-      # clippy-driver in check mode and emits every rustc diagnostic plus
-      # clippy lints, so a separate `cargo check` step only re-evaluated the
-      # same unit set a second time. This step owns type-checking and warning
-      # detection for the whole workspace (--all-targets).
-      - name: Type-check & lint workspace (mise run lint-full)
+      # Linux Clippy is the canonical all-targets lint and rustc diagnostic gate.
+      # Windows retains rustc check and real native build/link instead.
+      - name: Lint workspace (Linux; mise run lint-full)
+        if: matrix.os == 'ubuntu-latest'
         run: mise run lint-full
+
+      - name: Type-check workspace (Windows; mise run check-full)
+        if: matrix.os == 'windows-latest'
+        run: mise run check-full
+
+      - name: Build/link workspace (Windows; mise run build-full)
+        if: matrix.os == 'windows-latest'
+        run: mise run build-full
 
       - name: Test workspace (mise run test-full)
         run: mise run test-full
@@ -300,14 +308,12 @@ jobs:
           if [ -n "${ACTIONS_RESULTS_URL:-}" ]; then echo "ACTIONS_RESULTS_URL: set"; else echo "::warning::ACTIONS_RESULTS_URL missing — sccache GHA backend disabled (local disk fallback)"; fi
           if [ -n "${ACTIONS_RUNTIME_TOKEN:-}" ]; then echo "ACTIONS_RUNTIME_TOKEN: set"; else echo "::warning::ACTIONS_RUNTIME_TOKEN missing — sccache GHA backend disabled (local disk fallback)"; fi
 
-      - name: Check config files with prek
-        run: mise exec -- prek run --all-files
+      # Linux verify runs full hygiene/rustfmt/Clippy; macOS keeps its native L1 gate.
+      - name: Type-check workspace (macOS; mise run check-full)
+        run: mise run check-full
 
-      - name: Check formatting (mise run fmt-check)
-        run: mise run fmt-check
-
-      - name: Type-check & lint workspace (mise run lint-full)
-        run: mise run lint-full
+      - name: Build/link workspace (macOS; mise run build-full)
+        run: mise run build-full
 
       - name: Test workspace (mise run test-full)
         run: mise run test-full
@@ -743,6 +749,7 @@ jobs:
         run: mise run check-ui-webview
 
       - name: Lint UI webview feature (mise run lint-ui-webview)
+        if: matrix.os == 'ubuntu-latest'
         run: mise run lint-ui-webview
 
       - name: Test UI webview feature (mise run test-ui-webview)
@@ -979,8 +986,6 @@ jobs:
       - name: Type-check UI webview feature (mise run check-ui-webview)
         run: mise run check-ui-webview
 
-      - name: Lint UI webview feature (mise run lint-ui-webview)
-        run: mise run lint-ui-webview
 
       - name: Test UI webview feature (mise run test-ui-webview)
         run: mise run test-ui-webview
@@ -1226,10 +1231,15 @@ jobs:
       # cdylibs + `host`-feature runner bins, runs the in-process bridge
       # + runner-bin unit tests, then the out-of-process E2E. No ALSA
       # step — the adapter dependency tree contains no cpal.
+      - name: Type-check host feature (Windows; all targets)
+        if: matrix.os == 'windows-latest'
+        run: mise run check-l1-real-plugin
+
       - name: Run real-plugin L1 lane (mise run test-l1-real-plugin)
         run: mise run test-l1-real-plugin
 
       - name: Lint host feature (mise run lint-l1-real-plugin)
+        if: matrix.os == 'ubuntu-latest'
         run: mise run lint-l1-real-plugin
 
   # macOS leg of `l1-real-verify` (Issue #333/#326 rev
@@ -1297,11 +1307,12 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: Type-check host feature (macOS; all targets)
+        run: mise run check-l1-real-plugin
+
       - name: Run real-plugin L1 lane (mise run test-l1-real-plugin)
         run: mise run test-l1-real-plugin
 
-      - name: Lint host feature (mise run lint-l1-real-plugin)
-        run: mise run lint-l1-real-plugin
 
   # Issue #314 RF-GT-05 Phase 1: the GPUI driver lane — the
   # driver-neutral contract family (boundary guard, driver contract,
@@ -1463,6 +1474,7 @@ jobs:
         run: mise run check-ui-gpui
 
       - name: Lint GPUI feature (mise run lint-ui-gpui)
+        if: matrix.os == 'ubuntu-latest'
         run: mise run lint-ui-gpui
 
       - name: Test GPUI feature (mise run test-ui-gpui)
@@ -1618,8 +1630,6 @@ jobs:
       - name: Check GPUI feature (mise run check-ui-gpui)
         run: mise run check-ui-gpui
 
-      - name: Lint GPUI feature (mise run lint-ui-gpui)
-        run: mise run lint-ui-gpui
 
       - name: Test GPUI feature (mise run test-ui-gpui)
         run: mise run test-ui-gpui

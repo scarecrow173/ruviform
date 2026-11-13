@@ -131,6 +131,7 @@ Directory: `docs/specs`
 | SPEC-034T6RWQv8Hm2Lj4pD9sT6 | Issue #387 Driver-neutral Component/View Specs・Headless Behavior・GPUI Controls/Viz Renderer | proposed | [issue-387-component-view-specs.md](./issue-387-component-view-specs.md) |
 | SPEC-rf388DockWindowing01 | Issue #388 NativeSurfaceSlot slice 3 — Windows/VST3/L0 ancestor clip・keyboard/focus routing・re-dock/float 2-phase の実測仕様 | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | SPEC-zrIXGa6QONDm4o1DVVUwaz | Issue #388 Driver-neutral NativeSurfaceSlot 契約（早期 Gate 設計・契約実装） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
+| SPEC-034WXSykXHx9U87oel8vLy | Issue #389 GuiParentToken → 型付き Parent Lease 公開 API 移行 | approved | [issue-389-parent-lease.md](./issue-389-parent-lease.md) |
 | SPEC-ynejrtwiz2jIJrf3DwFtAK | Issue #389 Driver-neutral PluginEditorSession（state / typed HostPort / L0-L1 接続設計） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | SPEC-034UnwHc80Nd7iT5pKN2Eg | Issue #389 Plugin Editor Session hardening — bounded timeout・明示 degrade・GPU cause・DComp 正直記録 | approved | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | SPEC-034T9TZQ7ztGDAPvFaz9IT | Issue #390 Driver Contract Lab — UI-DVR fixture registry・境界 Guard・GPUI なし Fake・Native Component Lab harness | proposed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
@@ -212,6 +213,7 @@ Directory: `docs/specs`
 | SPEC-034UdM9XszyXZB0hZ8wvnc | Issue #243 GPUI 実機 GUI 検証 — Windows 実窓ライフサイクル証拠（部分スコープ） | implemented | [issue-243-gpui-realwin-windows.md](./issue-243-gpui-realwin-windows.md) |
 | SPEC-034V4nfv1RJmI8TqYPEWcY | Issue #243 — Windows 実 OS multiwindow smoke（部分スコープ・後続スライス） | implemented | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | SPEC-034Jc9BJlI7ULEBWoIlMP2 | Issue #28 UI 技術検証 PoC（wry・描画バックエンド・フロントエンド FW・配布） | implemented | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
+| SPEC-034WXOCYjbhvL8XtAwcQYk | Issue #306 G07/G08 — fault seam 判定・契約試験 + bounded corpus-replay 入口 | implemented | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |
 | SPEC-0kIy1SFw7ffSK1AAi4BXHu | Issue #400 借用 sealed readback を独立 decoder へ bounded に接続する共通API | implemented | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | SPEC-034Tnjp8f4gexhi9BsQuq1 | Issue #409 Rooted capability の再 root 化と停止可能な bounded directory 列挙 | implemented | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | SPEC-Lk3RvQ8mTxWn5HcZb2GdYu | Issue #435 — Label/Table ViewSpec kind と Fake/GPUI parity | implemented | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |

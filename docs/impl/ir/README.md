@@ -165,6 +165,7 @@ Directory: `docs/impl/ir`
 | IMPL-034RTBAAcyzygMEGzkuazL | Issue 302 T3 ledger and verification | completed | [issue-302-t3-ledger-and-verification.md](./issue-302-t3-ledger-and-verification.md) |
 | IMPL-034Uxng6BqRjROMnmJ4lor | Issue #305 io-e2e WAV byte golden + fault fixtures | completed | [issue-305-io-e2e-wav-byte-golden-fault-fixtures.md](./issue-305-io-e2e-wav-byte-golden-fault-fixtures.md) |
 | IMPL-0Rj3kVwF2mN8qXbCeLpY4d | Issue 305 media-io 旧 StagedOutput 完全削除・StagedFile 移行 | completed | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
+| IMPL-034WXT9H5uOuqU6UXmcmuk | Issue #306 G07/G08 fault seam・corpus replay | completed | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |
 | IMPL-At0dLb2kB9niysH7FtgPk8 | Issue #306 汎用 I/O 合成 E2E — ruviform-io-e2e 試験クレートと RF #305 候補 scratch 証拠 (IO-IMP-12) | completed | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | IMPL-mK9jH2gF5dS8aQ1wE4rT7y | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 実装記録 | completed | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | IMPL-034UudZrMUImnIREPB6lU1 | Issue #306 IO 合成 E2E slice-2 — Fault/Fuzz fixture・OS/FS probe・Rooted boundary | completed | [issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md](./issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md) |
@@ -196,6 +197,7 @@ Directory: `docs/impl/ir`
 | IMPL-034WSQTRYaDQlCGdESELFh | Issue 388 OS L1 CI evidence | completed | [issue-388-os-l1-ci-evidence.md](./issue-388-os-l1-ci-evidence.md) |
 | IMPL-jcCS5NAauic4OhiRJK2CAb | Issue #389 Plugin Editor Session headless fixture 実装記録（contract 認定 + DSP/RT 非干渉 fixture + NotRun 記録） | completed | [issue-389-editor-session-headless-implementation.md](./issue-389-editor-session-headless-implementation.md) |
 | IMPL-9fK2mQxT7vBnRwYsJhGtUi | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture 実装記録（driver async protocol fixture + SM-xx terminal-event 検証） | completed | [issue-389-editor-session-statemachine-implementation.md](./issue-389-editor-session-statemachine-implementation.md) |
+| IMPL-034WYcEVkJHFgwJtp10GaL | Issue #389 Parent Lease 移行 IR | completed | [issue-389-parent-lease-ir.md](./issue-389-parent-lease-ir.md) |
 | IMPL-034UnS9SUfwZF2v4zSQck6 | Issue #389 Plugin Editor Session hardening 実装記録（timeout/degrade/GraphicsLost/DComp 記録） | completed | [issue-389-session-hardening-implementation.md](./issue-389-session-hardening-implementation.md) |
 | IMPL-qCX7OwfBENOC4OHbkUSGZ | Issue #389 VST3/L0 実外部 Editor attach 実装記録 | completed | [issue-389-vst3-l0-editor-attach-implementation.md](./issue-389-vst3-l0-editor-attach-implementation.md) |
 | IMPL-034UDl0o66TbT5Ovx4NeVe | Issue #398/#400 残件 audit — rooted capability・sealed readback decoder bridge の受入照合と検証証拠 | completed | [issue-398-400-audit-rooted-capability-sealed-readback-decoder-bridge.md](./issue-398-400-audit-rooted-capability-sealed-readback-decoder-bridge.md) |

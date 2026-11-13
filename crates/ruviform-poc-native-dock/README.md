@@ -55,7 +55,7 @@ RVF_POC_VST3_PATH='C:/Program Files/Common Files/VST3/iZotope/Vinyl.vst3' \
 ## 責務境界
 
 - plugin 系 ↔ ui 系の直接依存は持たない。session↔surface の redeem
-  (`ParentSlotLease` → `GuiParentToken`) は本クレートの redeemer が
+  (`ParentSlotLease` → `ParentLease`) は本クレートの redeemer が
   adapter の live-lease 検証経由で行う。
 - `raw-window-handle`/`HWND` などの OS 型は公開 API に露出しない
   （adapter 内・opaque `u64` token のみ境界越え）。
