@@ -127,7 +127,6 @@ mise exec -- apm install --frozen
 ### 検証入口
 
 - 検証タスクの対応表・CI lane 構成・Consumer 影響分類の運用詳細は [docs/development-environment.md](docs/development-environment.md) を参照。cargo コマンドは直接実行せず、`mise.toml` のタスクを `mise run <task>` 経由で呼ぶ（ローカル開発と CI で同一入口）。
-- 通常のローカル実装検証は `mise run check-local <package>` / `mise run test-local <package>` を基本とし、`build-local` は必要時のみ使う。Workspace全体の `check`/`lint`/`test`/`build` と `verify-ci`、MSRV・3OS/Feature横断は原則Daily/手動Full CIが担当する（[POLICIES.md](POLICIES.md) 第5章）。
 
 ### 暫定規約
 
