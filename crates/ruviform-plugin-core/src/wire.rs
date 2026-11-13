@@ -96,10 +96,10 @@ use ruviform_video_core::{
 };
 
 use crate::{
-    Event, EventKind, EventList, GuiHandle, GuiParentToken, HostError, LifecycleError,
-    LifecycleEvent, LifecycleState, ParamEvent, ParamFlags, ParamId, ParamValue,
-    PlainParamInfoOwned, PlainParamValue, PluginDescriptor, PluginHandle, PrepareError,
-    ProcessConfig, ProcessResult, ProcessStatus, TransportInfo, VideoProcessConfig,
+    Event, EventKind, EventList, GuiHandle, HostError, LifecycleError, LifecycleEvent,
+    LifecycleState, ParamEvent, ParamFlags, ParamId, ParamValue, ParentLease, PlainParamInfoOwned,
+    PlainParamValue, PluginDescriptor, PluginHandle, PrepareError, ProcessConfig, ProcessResult,
+    ProcessStatus, TransportInfo, VideoProcessConfig,
 };
 
 /// The protocol version carried by [`Message::Hello`]. A proxy and a
@@ -112,7 +112,11 @@ use crate::{
 /// tags, which are unchanged. `4` is the Issue #253 report revision —
 /// [`Command::DrainOutputReports`] (tag 23) and [`Reply::Reports`]
 /// (tag 8) are additive on top of the v3 tags, which are unchanged.
-pub const WIRE_VERSION: u16 = 4;
+/// `5` is the Issue #389 parent-lease revision — [`Command::OpenGui`]'s
+/// `parent` field changed from a raw `u64` token to the
+/// generation-bound [`ParentLease`] (`u32` generation + `u64`
+/// payload); verb tag 8 and every other tag are unchanged.
+pub const WIRE_VERSION: u16 = 5;
 
 /// Maximum frames per processing block carried on the wire
 /// (`Activate` configs and shm block payloads share this bound).
@@ -720,11 +724,13 @@ pub enum Command {
         /// Bytes produced by an earlier `SaveState`.
         bytes: Vec<u8>,
     },
-    /// Open the plugin GUI under an opaque parent window →
+    /// Open the plugin GUI under an opaque parent-window lease →
     /// [`Reply::Opened`].
     OpenGui {
-        /// Platform parent window token.
-        parent: GuiParentToken,
+        /// Generation-bound parent-window lease (opaque vocabulary —
+        /// L1 GUI is not implemented; the verb is carried for the
+        /// future cross-process contract only).
+        parent: ParentLease,
     },
     /// Close the plugin GUI.
     CloseGui,
@@ -1573,7 +1579,7 @@ fn encode_command(command: &Command, out: &mut Vec<u8>) -> Result<(), WireError>
         }
         Command::OpenGui { parent } => {
             push_u8(out, 8);
-            encode_gui_parent_token(parent, out);
+            encode_parent_lease(parent, out);
         }
         Command::CloseGui => push_u8(out, 9),
         Command::CreateInstance {
@@ -1645,7 +1651,7 @@ fn decode_command(verb: u8, reader: &mut Reader<'_>) -> Result<Command, WireErro
             bytes: reader.read_bytes(WIRE_MAX_STATE_BYTES)?,
         }),
         8 => Ok(Command::OpenGui {
-            parent: decode_gui_parent_token(reader)?,
+            parent: decode_parent_lease(reader)?,
         }),
         9 => Ok(Command::CloseGui),
         10 => {
@@ -1904,18 +1910,21 @@ pub fn decode_gui_handle(reader: &mut Reader<'_>) -> Result<GuiHandle, WireError
     Ok(GuiHandle::new(reader.read_u32()?))
 }
 
-/// Appends a [`GuiParentToken`] (`u64` raw token).
-pub fn encode_gui_parent_token(token: &GuiParentToken, out: &mut Vec<u8>) {
-    push_u64(out, token.raw());
+/// Appends a [`ParentLease`] (`u32` generation + `u64` payload).
+pub fn encode_parent_lease(lease: &ParentLease, out: &mut Vec<u8>) {
+    push_u32(out, lease.generation());
+    push_u64(out, lease.payload());
 }
 
-/// Reads a [`GuiParentToken`].
+/// Reads a [`ParentLease`].
 ///
 /// # Errors
 ///
 /// [`WireError::Truncated`].
-pub fn decode_gui_parent_token(reader: &mut Reader<'_>) -> Result<GuiParentToken, WireError> {
-    Ok(GuiParentToken::new(reader.read_u64()?))
+pub fn decode_parent_lease(reader: &mut Reader<'_>) -> Result<ParentLease, WireError> {
+    let generation = reader.read_u32()?;
+    let payload = reader.read_u64()?;
+    Ok(ParentLease::new(generation, payload))
 }
 
 /// Appends a [`PluginHandle`] (`u32` slot, `u16` generation).
@@ -3379,7 +3388,7 @@ mod tests {
             ),
             (
                 Command::OpenGui {
-                    parent: GuiParentToken::new(0xABCD_EF12_3456_7890),
+                    parent: ParentLease::new(0x1234_5678, 0xABCD_EF12_3456_7890),
                 },
                 0,
             ),
@@ -4099,10 +4108,10 @@ mod tests {
             field_roundtrip(&gui, encode_gui_handle, decode_gui_handle),
             gui
         );
-        let token = GuiParentToken::new(u64::MAX);
+        let lease = ParentLease::new(u32::MAX, u64::MAX);
         assert_eq!(
-            field_roundtrip(&token, encode_gui_parent_token, decode_gui_parent_token),
-            token
+            field_roundtrip(&lease, encode_parent_lease, decode_parent_lease),
+            lease
         );
     }
 
@@ -4210,7 +4219,7 @@ mod tests {
             Err(WireError::UnsupportedVariant)
         );
         assert_eq!(out, before);
-        assert_eq!(WIRE_VERSION, 4);
+        assert_eq!(WIRE_VERSION, 5);
     }
 
     #[test]
@@ -4527,8 +4536,8 @@ mod tests {
     }
 
     #[test]
-    fn wire_version_is_v4() {
-        assert_eq!(WIRE_VERSION, 4);
+    fn wire_version_is_v5() {
+        assert_eq!(WIRE_VERSION, 5);
     }
 
     #[test]

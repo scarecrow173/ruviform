@@ -10,7 +10,7 @@
 //! so that both the host and an out-of-process plugin runner can name
 //! them without a host↔runner dependency.
 
-use crate::boundary::{GuiHandle, GuiParentToken, HostError};
+use crate::boundary::{GuiHandle, HostError, ParentLease};
 use crate::{
     BufferView, BufferViewMut, BusDescriptor, Event, EventList, ParamInfo, PluginDescriptor,
     PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
@@ -188,7 +188,7 @@ pub trait Plugin: PluginProcessor {
         Err(HostError::Unsupported)
     }
 
-    /// Opens the plugin GUI under an opaque parent window token.
+    /// Opens the plugin GUI under an opaque parent-window lease.
     ///
     /// **RT contract:** non-RT only.
     ///
@@ -196,7 +196,7 @@ pub trait Plugin: PluginProcessor {
     ///
     /// [`HostError::Unsupported`] by default — GUI-less plugins
     /// decline the command.
-    fn open_gui(&mut self, _parent: GuiParentToken) -> Result<GuiHandle, HostError> {
+    fn open_gui(&mut self, _parent: ParentLease) -> Result<GuiHandle, HostError> {
         Err(HostError::Unsupported)
     }
 
@@ -293,7 +293,7 @@ pub trait ErasedPlugin {
     /// [`Plugin::restore_state`].
     fn restore_state(&mut self, state: &[u8]) -> Result<(), HostError>;
     /// [`Plugin::open_gui`].
-    fn open_gui(&mut self, parent: GuiParentToken) -> Result<GuiHandle, HostError>;
+    fn open_gui(&mut self, parent: ParentLease) -> Result<GuiHandle, HostError>;
     /// [`Plugin::close_gui`].
     fn close_gui(&mut self) -> Result<(), HostError>;
     /// [`PluginProcessor::drain_output_reports`].
@@ -350,7 +350,7 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
     fn restore_state(&mut self, state: &[u8]) -> Result<(), HostError> {
         self.0.restore_state(state)
     }
-    fn open_gui(&mut self, parent: GuiParentToken) -> Result<GuiHandle, HostError> {
+    fn open_gui(&mut self, parent: ParentLease) -> Result<GuiHandle, HostError> {
         self.0.open_gui(parent)
     }
     fn close_gui(&mut self) -> Result<(), HostError> {

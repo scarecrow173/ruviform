@@ -11,7 +11,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventList, GuiHandle, GuiParentToken, ParamInfo, PluginDescriptor,
+    BufferView, BufferViewMut, EventList, GuiHandle, ParamInfo, ParentLease, PluginDescriptor,
     PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
 };
 use ruviform_plugin_host::{
@@ -36,7 +36,7 @@ const SIZE: EditorSize = EditorSize {
 
 /// Shared observation channel between the probe and the harness.
 struct ProbeShared {
-    /// The `GuiParentToken` the redeemer handed `open_gui`.
+    /// The redeemed payload the redeemer handed `open_gui`.
     parent_token: Cell<u64>,
     /// The real child HWND the editor created.
     child_hwnd: Cell<usize>,
@@ -348,10 +348,10 @@ impl Plugin for NativeEditorProbe {
         &[]
     }
 
-    fn open_gui(&mut self, parent: GuiParentToken) -> Result<GuiHandle, HostError> {
-        self.shared.parent_token.set(parent.raw());
+    fn open_gui(&mut self, parent: ParentLease) -> Result<GuiHandle, HostError> {
+        self.shared.parent_token.set(parent.payload());
         self.shared.opens.set(self.shared.opens.get() + 1);
-        let _child = probe::create_editor(parent.raw(), &self.shared)?;
+        let _child = probe::create_editor(parent.payload(), &self.shared)?;
         Ok(GuiHandle::new(1))
     }
 
@@ -860,7 +860,8 @@ fn ev(line: &str) {
 /// Builds the session ops with the consumer-side redeemer — the
 /// composition the architecture baseline reserves for this crate:
 /// the adapter's live-lease validation turns an opaque
-/// [`ParentSlotLease`] payload into the native [`GuiParentToken`].
+/// [`ParentSlotLease`] payload into the generation-bound
+/// [`ParentLease`] `open_gui` consumes.
 fn make_ops(
     host: &mut InProcessHost,
     adapter: Rc<RefCell<GpuiSurfaceAdapter>>,
@@ -873,7 +874,7 @@ fn make_ops(
             adapter
                 .borrow()
                 .redeem(lease.raw())
-                .map(GuiParentToken::new)
+                .map(|token| ParentLease::new(SlotLease::new(lease.raw()).seq(), token))
                 .map_err(|error| match error {
                     SlotError::Unsupported => EditorOpError::Unsupported,
                     _ => EditorOpError::LeaseRejected,

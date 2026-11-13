@@ -1064,7 +1064,7 @@ impl InProcessHost {
     fn open_gui(
         &mut self,
         handle: PluginHandle,
-        parent: crate::GuiParentToken,
+        parent: crate::ParentLease,
     ) -> Result<HostReply, HostError> {
         let instance = self.instance_mut(handle)?;
         match &mut instance.slot {
@@ -1125,7 +1125,7 @@ mod tests {
     use ruviform_rt::RtContext;
 
     use super::*;
-    use crate::{GuiParentToken, Plugin, erase, erase_sendable};
+    use crate::{ParentLease, Plugin, erase, erase_sendable};
 
     const SEND_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
         id: "org.ruviform.test.send-gain",
@@ -1262,7 +1262,7 @@ mod tests {
             self.gain = f32::from_le_bytes(bytes);
             Ok(())
         }
-        fn open_gui(&mut self, _parent: GuiParentToken) -> Result<GuiHandle, HostError> {
+        fn open_gui(&mut self, _parent: ParentLease) -> Result<GuiHandle, HostError> {
             Ok(GuiHandle::new(7))
         }
         fn close_gui(&mut self) -> Result<(), HostError> {
@@ -1717,7 +1717,7 @@ mod tests {
         match host
             .execute(HostCommand::OpenGui {
                 handle,
-                parent: GuiParentToken::new(0),
+                parent: ParentLease::new(0, 0),
             })
             .unwrap()
         {

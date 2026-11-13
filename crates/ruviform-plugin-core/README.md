@@ -27,13 +27,14 @@ CLAP・VST3・binding クレート（`clack`, `vst3`, `clap-sys` 等）由来の
   `VideoPluginInstance` ↔ `ErasedVideoPlugin`/`VideoPluginFactory`/`erase_video`
   （audio 側の `Plugin` ↔ `ErasedPlugin`/`PluginFactory`/`erase` と同型の対応）
 - ホスト境界語彙（`boundary` モジュール）: `PluginHandle`,
-  `GuiHandle`, `GuiParentToken`, `PluginEditorSessionId`,
+  `GuiHandle`, `ParentLease`（generation 付き不透明 parent-window
+  lease — `Plugin::open_gui`/`HostCommand`/wire が運ぶ plugin 側
+  語彙。OS handle は adapter 内部に閉じ込める）, `PluginEditorSessionId`,
   `ParentSlotLease`（Issue #389 の session 面 opaque parent 語彙 —
-  raw `GuiParentToken` を置き換えず、OS adapter 内 redemption の
-  session 側対応物）、`HostError`
+  redeem seam が `ParentLease` へ変換する session 側対応物）、`HostError`
 - L1 wire プロトコル（`wire` モジュール — アウトプロセス経路の codec 正本）:
   手書き LE codec・`Message`/`Command`/`Reply`/`Descriptor` 型・`WIRE_VERSION`
-  （現行 **3** — Issue #117 が v2 で `instance` envelope・`CreateInstance`/
+  （現行 **5** — Issue #117 が v2 で `instance` envelope・`CreateInstance`/
   `DestroyInstance` を、Issue #118 が v3 で video `Command` tag 12-22・
   `Reply` tag 4-7・`HostError` tag 10 `InvalidValue`・`VideoFrameDesc`/
   `PlainParamInfoOwned` codec・`WIRE_VIDEO_MAX_*` 上限を additive 追加。
