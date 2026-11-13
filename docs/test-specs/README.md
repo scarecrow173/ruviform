@@ -185,6 +185,7 @@ Directory: `docs/test-specs`
 | TSPEC-LqfidO2iIqcMjOeeHeLMd2 | Issue #479 — 値制御キーボード操作の検証契約 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | TSPEC-034UiRtw5zDZciI3peq94F | Issue #480 tab_focus 解放テスト仕様 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TSPEC-hojj4XgrGAgMW3wK6Tr5Ok | Issue #490 oracle late-create query epoch テスト仕様 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
+| TSPEC-034WZEsNYIpYAIB3snCErj | Issue #532 DComp 監査文書チェーン検証 | approved | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
 | TSPEC-034VedyL5Ej4Yc3P62YgUl | Issue #552 — SendInput preflight 検証契約 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TSPEC-TnJfu6sTEzaQgA5YPfDd7e | Issue #565 WASAPI input frame_position test spec | approved | [issue-565-wasapi-input-frame-position.md](./issue-565-wasapi-input-frame-position.md) |
 | TSPEC-7QVSRiKeJAQ2bbzvImiekm | Issue #582 テスト仕様 — ci lane 修復・missing intent tag reject 維持・検証意図の保持 | approved | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |

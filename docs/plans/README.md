@@ -166,6 +166,7 @@ Directory: `docs/plans`
 | PLAN-1OVcOgiEi7tc3VMXPzF9F3 | Issue #479 — 値制御キーボード操作の実装計画 | approved | [issue-479-keyboard-value-controls.md](./issue-479-keyboard-value-controls.md) |
 | PLAN-034UiTo1gkl570hZTb2iU7 | Issue #480 実装計画 — tab_focus の op 駆動解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | PLAN-2uLb895SP6hIbAneuh5Pjs | Issue #490 oracle late-create query epoch 実装計画 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
+| PLAN-034WZEqWKThthcYF1frADG | Issue #532 DComp 監査文書チェーン計画 | approved | [issue-532-dcomp-audit-plan.md](./issue-532-dcomp-audit-plan.md) |
 | PLAN-034VehuU5KuL3vurAXEXph | Issue #552 — SendInput preflight 実装計画 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | PLAN-zmhvig6ptUxYZGsi0NwJ4MGJBX | Issue #565 WASAPI-native input frame_position 実装 plan | approved | [issue-565-wasapi-input-frame-position-plan.md](./issue-565-wasapi-input-frame-position-plan.md) |
 | PLAN-5ts8wdqB6w1EhNnXtogfbs | Issue #582 実施計画 — ci 3 lane 失敗の修正と workflow_dispatch 検証 | approved | [issue-582-ci-lane-failures-plan.md](./issue-582-ci-lane-failures-plan.md) |
