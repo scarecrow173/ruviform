@@ -1964,7 +1964,8 @@ jobs:
           # Measure THIS job's actual checkout — never `github.sha` — so the
           # summary records what was really on disk. The evaluator requires
           # it to agree with every lane's measured sha and `expected_sha`.
-          export HEAD_SHA="$(git rev-parse HEAD)"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          export HEAD_SHA
           mise exec -- node ci/summary/summary.mjs --report ci-summary-report.json
 
       - name: Upload ci-summary report
