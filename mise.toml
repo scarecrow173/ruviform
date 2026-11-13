@@ -109,6 +109,27 @@ hide = true
 description = "Build workspace with `cargo build --workspace` (dev profile; writes only target/)"
 run = "cargo build --workspace"
 
+# 通常開発向け: 必ず対象Cargo packageを指定する（無引数ではCargoの-p検査で失敗）。
+# miseはタスク名の後の引数を末尾に転送するため、追加Feature等も指定可能。
+# 例: mise run check-local ruviform-rt
+#     mise run test-local ruviform-rt rt_
+#     mise run check-local ruviform-ui-gpui --features gpui
+# workspace全体を検証する check/test/build はCI再現・原因切り分け用に維持する。
+[tasks.check-local]
+description = "変更したCargo packageの型チェック: mise run check-local <package> [cargo args]"
+raw_args = true
+run = "cargo check --locked --all-targets -p"
+
+[tasks.test-local]
+description = "変更したCargo packageのテスト: mise run test-local <package> [cargo args]"
+raw_args = true
+run = "cargo test --locked -p"
+
+[tasks.build-local]
+description = "変更したCargo packageの必要時Build: mise run build-local <package> [cargo args]"
+raw_args = true
+run = "cargo build --locked -p"
+
 # RT contract tests and benchmarks share the dev/bench profiles (no -ci
 # variants yet). `test-rt` selects the `rt_*`-prefixed RT contract tests by name
 # filter (added in Issues #18/#21, e.g. `rt_output_callback_path_allocates_nothing`);
