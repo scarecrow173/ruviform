@@ -150,6 +150,7 @@ Directory: `docs/designs`
 | DESIGN-034T6RWQr3Kn5Xp8bC7yF1 | Issue #387 Component/View Specs・Headless Behavior・GPUI Renderer 設計 | proposed | [issue-387-component-view-specs.md](./issue-387-component-view-specs.md) |
 | DESIGN-rf388DockWindowing01 | Issue #388 slice 3 設計 — slot projection clip 修正と windowing PoC scenario | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | DESIGN-E2c3n3d0DhHGOrf8ZGHJrP | Issue #388 Driver-neutral NativeSurfaceSlot 契約設計（SurfaceSlotRegistry / SlotLease / port） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
+| DESIGN-034WXSz6r3CcQjiLo08b8H | Issue #389 Parent Lease 公開 API 移行設計 | approved | [issue-389-parent-lease-design.md](./issue-389-parent-lease-design.md) |
 | DESIGN-x7UlzjoyvZa1pu2ARRLOZZ | Issue #389 Driver-neutral PluginEditorSession 設計（state machine / typed HostPort / L0-L1 写像・wire negotiation 方針） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | DESIGN-034UnxZxmELaLcIYblZFRI | Issue #389 Plugin Editor Session hardening 設計（deadline/clock・明示 degrade・GraphicsLost・DComp 記録） | approved | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | DESIGN-8EX9crwtfdh9PhZtOJ2cfY | Issue #389 VST3/L0 実外部 Editor attach 設計（Vst3Plugin::open_gui/close_gui + Windows HWND attach） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |

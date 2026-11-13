@@ -8,7 +8,9 @@
 //! OS handle, never a `ruviform-ui` slot type — so plugin-side and
 //! UI-side code never depend on each other. The GUI driver resolves the
 //! lease back into a real parent inside its OS adapter; that adapter is
-//! the only place a raw [`GuiParentToken`] is minted.
+//! the only place a raw OS handle is resolved — the redeem seam mints
+//! the generation-bound [`ParentLease`] the plugin's `open_gui`
+//! consumes.
 //!
 //! Current-reality note (audit `docs/discovery/
 //! issue-388-389-native-dock-current-state.md`): L1 GUI is still
@@ -27,7 +29,7 @@ use std::fmt;
 use std::time::{Duration, Instant};
 
 use ruviform_plugin_core::{
-    GuiParentToken, HostError, ParentSlotLease, PluginEditorSessionId, PluginHandle,
+    HostError, ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
 };
 
 use crate::command::{HostCommand, HostReply};
@@ -1533,7 +1535,7 @@ impl PluginEditorSessions {
 /// L0 editor-session ops: drives the existing [`InProcessHost`]
 /// `OpenGui`/`CloseGui` command path for one instance.
 ///
-/// Every `OpenGui` carries a raw [`GuiParentToken`] minted by the
+/// Every `OpenGui` carries a [`ParentLease`] minted by the
 /// injected [`LeaseRedeemer`] — the only path from a session
 /// [`ParentSlotLease`] to a native parent. There is no pass-through: a
 /// lease payload is never reinterpreted as a raw token. A plugin whose
@@ -1547,21 +1549,20 @@ pub struct InProcessEditorOps<'a> {
     redeemer: Box<LeaseRedeemer<'a>>,
 }
 
-/// Redeems an opaque [`ParentSlotLease`] into the raw
-/// [`GuiParentToken`] a plugin's `open_gui` consumes.
+/// Redeems an opaque [`ParentSlotLease`] into the [`ParentLease`] a
+/// plugin's `open_gui` consumes.
 ///
 /// This is the composition-side seam: the lease payload is the
 /// issuer's private encoding, and only the issuer-side adapter (e.g.
 /// a GUI driver's surface-slot implementation) can validate it and
 /// map it to a real OS parent handle. The host's L0 command surface
-/// speaks [`GuiParentToken`]; this callback is where the
+/// speaks [`ParentLease`]; this callback is where the
 /// redemption — including staleness checks — happens. A failed
 /// redemption surfaces as the returned [`EditorOpError`] (typically
 /// [`EditorOpError::LeaseRejected`]).
 ///
 /// **RT contract:** non-RT only — UI-thread only.
-pub type LeaseRedeemer<'a> =
-    dyn FnMut(&ParentSlotLease) -> Result<GuiParentToken, EditorOpError> + 'a;
+pub type LeaseRedeemer<'a> = dyn FnMut(&ParentSlotLease) -> Result<ParentLease, EditorOpError> + 'a;
 
 impl<'a> InProcessEditorOps<'a> {
     /// Wraps `host` to drive editor ops for `instance`, redeeming leases

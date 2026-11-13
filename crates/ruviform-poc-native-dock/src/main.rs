@@ -11,7 +11,7 @@
 //! - `NativeSurfaceSlot::declare_slot`/`lease_parent` → real child-HWND
 //!   container under the GPUI window.
 //! - `LeaseRedeemer` redemption — opaque `ParentSlotLease` →
-//!   `GuiParentToken` → `Plugin::open_gui` → real native editor HWND
+//!   `ParentLease` → `Plugin::open_gui` → real native editor HWND
 //!   parented under the container.
 //! - `set_geometry`/`set_visibility`/`request_focus` landing on the
 //!   real editor (`GetWindowRect`/`IsWindowVisible`/`GetFocus`).

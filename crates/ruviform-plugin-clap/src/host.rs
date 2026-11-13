@@ -1369,7 +1369,7 @@ mod tests {
             Err(HostError::Unsupported)
         );
         assert_eq!(
-            plugin.open_gui(ruviform_plugin_core::GuiParentToken::new(0)),
+            plugin.open_gui(ruviform_plugin_core::ParentLease::new(0, 0)),
             Err(HostError::Unsupported)
         );
         assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));

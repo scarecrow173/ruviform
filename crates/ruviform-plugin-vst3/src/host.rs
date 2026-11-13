@@ -173,10 +173,10 @@ use libloading::Library;
 use ruviform_media_core::{Rounding, TimeBase, TransportStatus};
 use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle,
-    GuiParentToken, HostError, ParamEvent, ParamFlags, ParamId, ParamInfo, Plugin,
-    PluginDescriptor, PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext,
-    ProcessResult, ProcessStatus, TransportInfo, erase,
+    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle, HostError,
+    ParamEvent, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
+    PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
+    ProcessStatus, TransportInfo, erase,
 };
 use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, BusDirection, BusDirections_, BusInfo, Chord,
@@ -2611,7 +2611,7 @@ impl Plugin for Vst3Plugin {
     /// declines; [`HostError::Unsupported`] when no editor view
     /// exists or the platform type is unsupported.
     #[expect(unsafe_code)]
-    fn open_gui(&mut self, parent: GuiParentToken) -> Result<GuiHandle, HostError> {
+    fn open_gui(&mut self, parent: ParentLease) -> Result<GuiHandle, HostError> {
         if self.phase < Phase::Initialized {
             // `createView` is only legal on an initialized
             // controller — the same bad-state convention as
@@ -2649,9 +2649,10 @@ impl Plugin for Vst3Plugin {
         let Some(frame) = frame_wrapper.to_com_ptr::<IPlugFrame>() else {
             return Err(HostError::PluginFailed);
         };
-        // `parent` is the redeemed raw platform handle — re-widened
-        // inside the OS adapter boundary only.
-        let parent_ptr = parent.raw() as *mut c_void;
+        // `parent.payload()` is the redeemed raw platform handle — re-widened
+        // inside the OS adapter boundary only; `generation` is issuer
+        // metadata the OS layer never interprets.
+        let parent_ptr = parent.payload() as *mut c_void;
         if unsafe { view.setFrame(frame.as_ptr()) } != kResultOk {
             return Err(HostError::PluginFailed);
         }
@@ -3037,7 +3038,7 @@ mod tests {
         let factories = library.factories();
         let mut plugin = factories[0].create();
         assert_eq!(
-            plugin.open_gui(GuiParentToken::new(0)),
+            plugin.open_gui(ParentLease::new(0, 0)),
             Err(HostError::PluginFailed)
         );
         // close with nothing open is the honest refusal.
@@ -3054,7 +3055,7 @@ mod tests {
         let mut plugin = factories[0].create();
         plugin.init().expect("init");
         assert_eq!(
-            plugin.open_gui(GuiParentToken::new(0)),
+            plugin.open_gui(ParentLease::new(0, 0)),
             Err(HostError::Unsupported)
         );
         // The failed open leaves no view: close is the same refusal.
