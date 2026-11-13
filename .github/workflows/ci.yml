@@ -181,11 +181,11 @@ jobs:
       # clippy lints, so a separate `cargo check` step only re-evaluated the
       # same unit set a second time. This step owns type-checking and warning
       # detection for the whole workspace (--all-targets).
-      - name: Type-check & lint workspace (mise run lint-ci)
-        run: mise run lint-ci
+      - name: Type-check & lint workspace (mise run lint-full)
+        run: mise run lint-full
 
-      - name: Test workspace (mise run test-ci)
-        run: mise run test-ci
+      - name: Test workspace (mise run test-full)
+        run: mise run test-full
 
       - name: sccache statistics
         if: vars.CI_SCCACHE_DISABLE != '1'
@@ -302,11 +302,11 @@ jobs:
       - name: Check formatting (mise run fmt-check)
         run: mise run fmt-check
 
-      - name: Type-check & lint workspace (mise run lint-ci)
-        run: mise run lint-ci
+      - name: Type-check & lint workspace (mise run lint-full)
+        run: mise run lint-full
 
-      - name: Test workspace (mise run test-ci)
-        run: mise run test-ci
+      - name: Test workspace (mise run test-full)
+        run: mise run test-full
 
       - name: sccache statistics
         if: vars.CI_SCCACHE_DISABLE != '1'
