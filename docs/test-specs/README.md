@@ -12,6 +12,7 @@ Directory: `docs/test-specs`
 | TSPEC-034JRQpjZtjsWuJOB1WYN0 | 音声エンジン テスト仕様 | draft | [audio-engine-tests.md](./audio-engine-tests.md) |
 | TSPEC-034Jeo1j5l7fBhYc8iYsTN | ベンチ・検証タスクと CI スモーク挙動の契約保証 | approved | [bench-tasks-and-ci-smoke.md](./bench-tasks-and-ci-smoke.md) |
 | TSPEC-034JOtlBoKc1LUny4Iu67z | chunk timestamp 合成の契約テスト | approved | [chunk-timestamp-contracts.md](./chunk-timestamp-contracts.md) |
+| TSPEC-034WJHzDIayt1oSwCvPcSi | Issue #594 テスト仕様 — MSRV lane の CI 実行・ci-summary fail-closed 伝播・検証意図の保持 | approved | [ci-msrv-daily-lane.md](./ci-msrv-daily-lane.md) |
 | TSPEC-034IdHsItEuo0TZWTPOJUu | ci プロファイルのビルド挙動と成果物分離 | proposed | [ci-profile-build-behavior.md](./ci-profile-build-behavior.md) |
 | TSPEC-034LFChh51ZlHnSWXsKqDw | video-proc 色変換・working space カーネル テスト仕様 | approved | [color-working-space-kernel-tests.md](./color-working-space-kernel-tests.md) |
 | TSPEC-034KSVh4JNdOEJMzGYbZic | video-proc コンポジット/遷移カーネル テスト仕様 | approved | [composite-transition-kernels-tests.md](./composite-transition-kernels-tests.md) |
