@@ -13,6 +13,11 @@
 //!   answers the failed half of the ready/failed contract.
 //! - `--windows N`: create `N` initial windows before serving
 //!   (default 1; each emits `Ready`).
+//! - `--stall before-serve|after-serve`: park forever instead of
+//!   exiting — `before-serve` never opens the control channel,
+//!   `after-serve` ends the protocol session but never exits. The
+//!   non-exit fixture for driver timeout tests; the driver must
+//!   kill and reap the process.
 //!
 //! All diagnostics go to stderr — stdout is the control channel.
 
@@ -197,6 +202,27 @@ impl FixtureController for WindowsFixture {
     }
 }
 
+/// Where `--stall` parks the process — the non-exit fixture for
+/// driver timeout tests.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum StallPhase {
+    /// Park before `serve_from_env` — the control channel never opens.
+    BeforeServe,
+    /// Park after `serve_from_env` returns — the protocol session
+    /// ended (shutdown / driver EOF / disabled) but the process
+    /// never exits.
+    AfterServe,
+}
+
+/// The stall fixture: never return — the driver must kill and reap
+/// the process. Models an AUT that hangs instead of exiting.
+fn park_forever(phase: &str) -> ! {
+    eprintln!("dummy_app: --stall {phase}: process will not exit");
+    loop {
+        std::thread::park();
+    }
+}
+
 /// The `ipc_emit` fixture: injects one raw IPC body into
 /// `params.window`'s inbound channel — the path an `ipc_disconnect`
 /// fault suppresses pre-decode. Valid bodies become `Action` events;
@@ -250,6 +276,7 @@ fn main() -> ExitCode {
     io.add_fixture(Box::new(IpcEmitFixture));
 
     let mut windows = 1u32;
+    let mut stall = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -262,6 +289,20 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 };
                 windows = n.min(8);
+            }
+            "--stall" => {
+                let Some(phase) = args.next() else {
+                    eprintln!("dummy_app: --stall requires before-serve|after-serve");
+                    return ExitCode::from(2);
+                };
+                stall = Some(match phase.as_str() {
+                    "before-serve" => StallPhase::BeforeServe,
+                    "after-serve" => StallPhase::AfterServe,
+                    other => {
+                        eprintln!("dummy_app: unknown stall phase {other:?}");
+                        return ExitCode::from(2);
+                    }
+                });
             }
             other => {
                 eprintln!("dummy_app: unknown arg {other:?}");
@@ -278,6 +319,9 @@ fn main() -> ExitCode {
         }
     }
 
+    if stall == Some(StallPhase::BeforeServe) {
+        park_forever("before-serve");
+    }
     let config = AgentConfig::new(AppMeta {
         name: "dummy_app".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
@@ -285,6 +329,9 @@ fn main() -> ExitCode {
     });
     let outcome = serve_from_env(&mut io, config);
     eprintln!("dummy_app: {outcome:?}");
+    if stall == Some(StallPhase::AfterServe) {
+        park_forever("after-serve");
+    }
     match outcome {
         ServeOutcome::Shutdown { .. }
         | ServeOutcome::DriverGone { .. }
