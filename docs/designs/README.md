@@ -105,6 +105,7 @@ Directory: `docs/designs`
 | DESIGN-034UvWqyRcaTQap2SH5FfT | Issue #305 IO E2E slice — WAV Byte Golden・Fault fixture 設計 | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | DESIGN-eVPQpm7tyMUS2gxitU5KtN | Issue #305 Media I/O 旧 StagedOutput 撤去・StagedFile 移行設計 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | DESIGN-ODmc6p5Cp7Kbq0u35OrAiR | Issue #306 汎用 I/O 合成 E2E — 試験専用クレート構成・境界試験設計 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
+| DESIGN-fH3jK9mP2qW8rT5yU7iO4a | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 設計 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | DESIGN-034UtzREeBZLceakda7vIS | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture 設計 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
 | DESIGN-CTGZSygUhyfXwQSdShQuap | Issue #306 IO E2E slice 3 — IO MSRV lane・DAG/RT 境界 audit 設計 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | DESIGN-dHUQ40Hk50tvziqjx7Kewj | Issue #307 attach 時 frame_base 検証 context — 実装設計 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |

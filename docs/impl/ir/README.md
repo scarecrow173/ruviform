@@ -163,6 +163,7 @@ Directory: `docs/impl/ir`
 | IMPL-034Uxng6BqRjROMnmJ4lor | Issue #305 io-e2e WAV byte golden + fault fixtures | completed | [issue-305-io-e2e-wav-byte-golden-fault-fixtures.md](./issue-305-io-e2e-wav-byte-golden-fault-fixtures.md) |
 | IMPL-0Rj3kVwF2mN8qXbCeLpY4d | Issue 305 media-io 旧 StagedOutput 完全削除・StagedFile 移行 | completed | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | IMPL-At0dLb2kB9niysH7FtgPk8 | Issue #306 汎用 I/O 合成 E2E — ruviform-io-e2e 試験クレートと RF #305 候補 scratch 証拠 (IO-IMP-12) | completed | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
+| IMPL-mK9jH2gF5dS8aQ1wE4rT7y | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 実装記録 | completed | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | IMPL-034UudZrMUImnIREPB6lU1 | Issue #306 IO 合成 E2E slice-2 — Fault/Fuzz fixture・OS/FS probe・Rooted boundary | completed | [issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md](./issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md) |
 | IMPL-034V8l54mhl7RUcgflLUyv | Issue #306 IO 合成 E2E slice-4 feature-matrix lane 実測証拠 | completed | [issue-306-io-e2e-slice-4-feature-matrix-lane.md](./issue-306-io-e2e-slice-4-feature-matrix-lane.md) |
 | IMPL-euXEIcDb4J5tm1vO1GDkHH | Issue #306 IO 合成 E2E slice-3 — IO MSRV lane・DAG/RT 境界 audit 証跡 | completed | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |

@@ -102,6 +102,7 @@ Directory: `docs/test-specs`
 | TSPEC-034UvWxgBRObLuwfTjwqMx | Issue #305 IO E2E WAV Golden/Fault テスト仕様 | approved | [issue-305-io-e2e-wav-golden-fault.md](./issue-305-io-e2e-wav-golden-fault.md) |
 | TSPEC-0kY8BSgqOCJHezrud22f3h | Issue #305 Media I/O StagedFile 移行 テスト仕様 | approved | [issue-305-media-io-staged-file-cutover.md](./issue-305-media-io-staged-file-cutover.md) |
 | TSPEC-rviIWrpuHyJUT11Wykzopn | Issue #306 汎用 I/O 合成 E2E テスト仕様 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
+| TSPEC-nB3vC7xZ0qW5eR8tY1uI4o | Issue #306 IO E2E — OS-L1 CI 証拠と Case 補完 試験仕様 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | TSPEC-034UtBs1z6PAEjR3T4EiV2 | Issue #306 IO E2E slice 2 テスト仕様 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
 | TSPEC-7h5x0wTVw48oHC6pAm1VId | Issue #306 IO E2E slice 3 テスト仕様 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | TSPEC-XQ6Q9VkNnBlPRcMf4cqLFu | Issue #307 attach 時 frame_base 検証 context — テスト仕様 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
