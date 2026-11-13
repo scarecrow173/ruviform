@@ -4,8 +4,10 @@
 
 Issueの起票・改訂、設計、実装、テスト、レビュー、受入判定の際は、このリポジトリの [POLICIES.md](POLICIES.md) を読み、その規則に従う。
 
-このリポジトリは Ruviform — Rust を中心とした再利用可能なマルチメディア基盤（設計・初期セットアップ段階）です。
-以下はこのリポジトリで作業するエージェント共通の作業契約であり、開発・設計原則、リポジトリ固有の作業契約、Rust ワークスペースの暫定開発規約、mise / APM の運用、Git と安全性の方針を定めます。
+作業開始時は、検証・受入方針を `POLICIES.md`、タスク名・引数を `mise.toml`、Rust Workspace の構成を `Cargo.toml` で確認する。詳細をこのファイルに重複記載しない。
+
+このリポジトリは Ruviform — Rust を中心とした再利用可能なマルチメディア共通基盤です。
+このファイルは、エージェント向けの作業入口とリポジトリ固有の実装上の注意、開発ツールの参照先を案内します。
 
 ## 開発・設計原則
 
@@ -56,8 +58,6 @@ Issueの起票・改訂、設計、実装、テスト、レビュー、受入判
 - 観測されたテストを通すためだけのハードコードや特殊ケースを追加しない。
 - 不具合修正では、表面的な症状だけでなく、破られた契約や不変条件を検証するテストを優先する。
 - 適切な場合は、意味のある最下位レイヤーと外部から観測できる挙動の両方で検証する。
-- 検証の範囲は、変更の規模とリスクに比例させる。
-- 実際に実行して成功していない検証を、成功したと報告しない。
 
 ### スコープと比例性を守る
 
@@ -73,16 +73,14 @@ Issueの起票・改訂、設計、実装、テスト、レビュー、受入判
 - 調査・レビューのみの依頼ではファイルを編集しない。
 - 変更依頼では、依頼範囲に必要な実装・設定・テストの整合性を保ち、無関係な変更や既存の作業を保持する。
 - 調査の深さはタスクに応じて調整する。機械的な変更に、不具合調査と同じ深さの原因追跡を強制しない。
-- 公開APIや外部との契約、永続データ形式などの互換性を変える場合は、影響を確認して変更方針を明示する。
-- 完了時には変更内容、実行した検証と結果、未実行の検証、残る問題を区別して報告する。
 - 実装されていない API・クレート・検証を、実在するものまたは実行済みと報告しない。
 
 ## 開発環境（mise）
 
 - 開発ツールとタスクの正本は `mise.toml` とする。
-- `mise.toml` は uv / prek / git-lfs / apm / pipx 系の共通基盤ツールと actionlint、UI PoC ビルド用の Node.js（`node = "26.12.1"`、Issue #83 のセキュリティ修正版）を管理する。`fmt` / `check` / `lint` / `test` / `build` 等の検証タスクも同ファイルが正本（対応表は [docs/development-environment.md](docs/development-environment.md) を参照）。
-- Rust toolchain は `mise.toml` では pin しない。通常開発は環境導入済みの rust（rustup / global mise）を使う。CI 専用の pin（`rust = "1.99.0"` + components）は `mise.ci.toml` に置き、CI では `MISE_ENV=ci` で有効化する（lockfile は `MISE_ENV=ci mise lock` が生成する `mise.ci.lock`）。
-- 初回セットアップでは、miseをインストールした後に以下を実行する（Windows 11 x64・Git Bash で検証済み。macOS / Linux は未検証）。
+- タスクの用途・引数・関連ツールは `mise.toml` と [docs/development-environment.md](docs/development-environment.md) を参照する。
+- RustツールチェーンとCargo Profileの設定は `mise.toml` / `mise.ci.toml` / `Cargo.toml`、適用方針は `POLICIES.md` を参照する。
+- 初回cloneやツール・生成物の復元が必要な場合は、miseをインストールして以下を実行する。
 
 ```sh
 # ツール復元（mise.lock に記録済みの固定バージョンを復元）
@@ -109,33 +107,32 @@ mise exec -- apm install --frozen
 
 | lockfile | 再生成トリガ | 手順 |
 | --- | --- | --- |
-| `mise.lock` | `mise.toml` の `[tools]` 変更・バージョン更新時 | `mise install` → `mise lock`（現行ツールは github / aqua 系バックエンドのため `.mise/locks/` sidecar は生成されない。PyPI・npm 解決の pipx / npm 系ツールを追加して sidecar が生成された場合は `.gitignore` の `!.mise/locks/` 例外によりそのままコミット対象になる） |
+| `mise.lock` | `mise.toml` の `[tools]` 変更・バージョン更新時 | `mise install` → `mise lock`。依存する sidecar が生成された場合は併せて管理する |
 | `mise.ci.lock` | `mise.ci.toml` の `[tools]` 変更・バージョン更新時 | `MISE_ENV=ci mise lock`（CI 専用ツール — 現状は rust pin のみ） |
 | `apm.lock.yaml` | `apm.yml` の dependencies / targets / MCP 変更時 | `apm install`（lock 自動更新）→ `apm lock` で整合確認 |
-| `Cargo.lock` | ワークスペースの `[dependencies]` 変更時 | `cargo build` / `cargo generate-lockfile` で自動更新 |
+| `Cargo.lock` | Workspaceの依存関係変更時 | `mise exec -- cargo update -p <dependency>` 等で必要な依存のみを更新し、lockfile差分を確認する |
 
-- いずれかの lockfile が不整合となった場合は `git checkout -- <lockfile>` で戻し、上記の手順で再生成する。
+- lockfileの不整合が発生した場合は変更差分と依存元を確認し、必要な範囲のみ再生成する。既存の作業を無断で破棄しない。
 
-## Rust ワークスペースと暫定開発規約
+## Rust ワークスペースの参照先と実装上の注意
 
 ### ワークスペース構成
 
-- ルート `Cargo.toml` がワークスペースの正本。`[workspace]`（`resolver = "2"`）、`[workspace.package]`（`version = "0.1.0"` は仮置き。`edition = "2024"` は Issue #34 で確定。`rust-version = "1.89"` は Issue #34 で 1.85 確定後、Issue #52 / docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md で 1.89 に引上げ（fearless_simd 本番昇格前提）。`license` の現行値は仮置き。`publish = false` は未決定クレートを公開しない licensing ADR の原則であり、メンバーは `publish.workspace = true` で継承する）、`[workspace.lints]`（共通 lint の正本）、`[profile.dev]` / `[profile.ci]` を定義する。
-- メンバー構成（層別の計38クレート一覧と各クレート README へのリンク）は [crates/README.md](crates/README.md) を索引とする。各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は `crates/<name>/README.md` と crate-level doc に転記しており、そちらを参照。層構造と `path` 依存方向・クレート DAG の正本は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)（Issue #1 由来・approved）であり、`members` は実装 Phase に応じて段階追加される。残りの `path` 依存は API 確定に伴い追加する。上記以外の公開 API は引き続き未確定であり、実装 Issue で確定する。
-- Adapter クレートとして `crates/ruviform-audio-device` を Issue #23（cpal 条件付き採用・[docs/adr/select-audio-device-backend.md](docs/adr/select-audio-device-backend.md)・accepted）で新設済み。adapter 層はドメイン基盤の外側（engine と同じ利用側層）で、foundations/Primitives への下向き依存のみを持つ。`ruviform-audio-device` は cpal を内部依存に閉じ込め、`ruviform_audio_core::device` のポート trait（`DeviceEnumerator`/`Device`/`OutputStream`）を `Box<dyn>` 経由で実装する。cpal の型・エラー・feature 名を公開 API に露出せず、コアクレートからの強制依存・adapter→adapter 依存は作らない。手動検証 example（`list_devices`・`play_sine`）は実機依存で CI 対象外。
+- Workspaceのメンバー・Feature・依存関係・Profileの正本はルートの `Cargo.toml`。構成の一覧と各クレートの詳細は [crates/README.md](crates/README.md) および `crates/<name>/README.md` を参照する。クレート数・未確定API・実装Phaseの記述はここへ固定しない。
+- 依存方向と責務境界の設計資料は [docs/designs/ruviform-architecture-design-baseline.md](docs/designs/ruviform-architecture-design-baseline.md)。デバイスAdapter固有の実装契約は [docs/adr/select-audio-device-backend.md](docs/adr/select-audio-device-backend.md) と該当クレートの資料を参照する。
 
 ### 検証入口
 
 - 検証タスクの対応表・CI lane 構成・Consumer 影響分類の運用詳細は [docs/development-environment.md](docs/development-environment.md) を参照。cargo コマンドは直接実行せず、`mise.toml` のタスクを `mise run <task>` 経由で呼ぶ（ローカル開発と CI で同一入口）。
 
-### 暫定規約
+### Rust実装上の注意
 
-- `unsafe` は原則禁止。必要な場合のみ SAFETY コメント付きの局所許可（`#[expect(unsafe_code)]`、未対応なら `#[allow(unsafe_code)]`）で例外的に認める。`workspace.lints.rust.unsafe_code = "warn"` は `lint` / `lint-ci` の `-D warnings` ゲートで実質 deny として機能し、局所許可のない `unsafe` は検証を通過しない。
+- `unsafe` は原則禁止。必要な場合のみ SAFETY コメント付きの局所許可（`#[expect(unsafe_code)]`、未対応なら `#[allow(unsafe_code)]`）で例外的に認める。`workspace.lints.rust.unsafe_code = "warn"` は `lint` / `lint-full` の `-D warnings` ゲートで実質 deny として機能し、局所許可のない `unsafe` は検証を通過しない。
 - feature: default feature は最小限とする。新規 feature・optional 依存は追加理由を PR に記録する。
 - 依存追加: メンテナンス状況・ライセンス・依存木サイズを確認し理由を記録する。`Cargo.lock` は追跡を継続する。
 - lint: `workspace.lints` が正本。CI は `clippy -- -D warnings` を必須ゲートとする。rustfmt は標準設定（`rustfmt.toml` は必要時に追加）。
 - 公開 enum: クレート外から到達可能な全公開 enum に enum レベルの `#[non_exhaustive]` を付与する（クレート内部限定 enum は対象外）。`#![allow(clippy::exhaustive_enums)]` は置かず、`workspace.lints.clippy` で restriction lint `exhaustive_enums = "warn"` を有効化し `-D warnings` ゲートで強制する。正本: [docs/adr/public-enum-non-exhaustive-policy.md](docs/adr/public-enum-non-exhaustive-policy.md)。
-- doc test: 公開 API の例は doctest に書き、`cargo test` で検証する。
+- doc test: 公開APIの例はdoctestに記述する。実行タスクは `mise.toml` で確認する。
 - MSRV clippy 検証（Issue #223）・RT 検証レーン（Issue #22）の詳細は [docs/development-guidelines.md](docs/development-guidelines.md) を参照。
 
 ### アーキテクチャ確定契約（設計ベースライン）
