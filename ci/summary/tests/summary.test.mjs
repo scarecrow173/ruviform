@@ -66,6 +66,7 @@ test("REQUIRED_JOBS covers every Full CI lane incl. macOS legs and io-structured
     "bench",
     "l1-real-verify",
     "l1-real-verify-macos",
+    "msrv-verify",
   ]) {
     assert.ok(REQUIRED_JOBS.includes(job), job);
   }
@@ -90,6 +91,7 @@ test("REQUIRED_CHECKOUT_LEGS expands matrix lanes into per-OS legs", () => {
     "l1-real-verify-ubuntu-latest",
     "l1-real-verify-windows-latest",
     "l1-real-verify-macos",
+    "msrv-verify",
   ]) {
     assert.ok(REQUIRED_CHECKOUT_LEGS.includes(leg), leg);
   }

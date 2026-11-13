@@ -57,6 +57,7 @@ export const REQUIRED_JOBS = [
   "bench",
   "l1-real-verify",
   "l1-real-verify-macos",
+  "msrv-verify",
 ];
 
 // Declared checkout-sha evidence legs. One artifact per matrix leg and
@@ -82,6 +83,7 @@ export const REQUIRED_CHECKOUT_LEGS = [
   "l1-real-verify-ubuntu-latest",
   "l1-real-verify-windows-latest",
   "l1-real-verify-macos",
+  "msrv-verify",
 ];
 
 // `abandoned` is emitted for jobs cancelled while queued (observed: macOS
