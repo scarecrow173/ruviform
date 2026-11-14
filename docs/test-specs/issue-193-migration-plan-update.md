@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034WZ8iKotT2AuzW4LcRZy"
 type: "test-spec"
-status: "draft"
+status: "approved"
 title: "Issue #193 Migration Plan Update Snapshot 検証"
 created: "2026-11-14"
 updated: "2026-11-14"
@@ -83,7 +83,7 @@ DAG 矛盾が解消されていること。
   片方の Consumer Pass を他方へ流用しない（spec R-5）。
 - R-SNAP-6: DAG/Owner 表が実装順序の正本として維持さ
   れ、実 Device/OS Native Dock/両 Consumer 実測の未完了が
-  Open Gate Issue（#251/#253/#388/#313/#281/#294 等）へ
+  Open Gate Issue（#251/#253/#388/#281/#294 等）へ
   接続されている（spec R-6）。
 - R-SNAP-7: 差分は編集許可範囲内の文書・証拠・生成
   index のみであり、コード・CI・Issue 本文・GitHub
@@ -97,11 +97,11 @@ DAG 矛盾が解消されていること。
   Then 全 Milestone の Blocked by は「なし」となり、
   #262/#388/#419・#288/#306・#275/#281・#219/#294 は
   Integration Gate/独立 Owner Issue 側にのみ現れる。
-- Given #288・#310〜#312・#314・#384〜#387・#390・#598・
-  SV #13〜#16・#175・AL #143/#166/#206 が CLOSED で
-  あること、When M0〜M7 の完了定義を記述する、
+- Given #288・#310〜#312・#313・#314・#243・#384〜#387・
+  #390・#598・SV #13〜#16・#175・AL #143/#166/#206 が
+  CLOSED であること、When M0〜M7 の完了定義を記述する、
   Then これらを「未着手」「Blocked」と記述せず、後続の
-  Open Gate（#306・#313・#281・#294 等）を接続先とする。
+  Open Gate（#306・#281・#294 等）を接続先とする。
 - Given AL #127（f64/長尺/CLI）と SV #28（f32/DAW/RT）
   が別 Oracle の Owner であること、When M0〜M7 の
   Consumer 証拠接続を記述する、Then 両 Consumer を
