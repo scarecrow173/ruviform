@@ -206,3 +206,78 @@ feature compile matrix lane を新設した。本節は §1〜§5 の
   への結果投入、Windows 利用機能 L2/L3、実機・実 Provider。
   これらは §3 の各 Gate 行・§4.2 の棚卸しどおり `NotRun`/
   `Deferred` のまま。
+
+## 7. 追記: Virtual-first Owner/受入整合の再指向（Issue #275 slice、2026-11-15）
+
+branch `scarecrow173/rf275-virtualfirst`（docs-only slice）で、
+Issue #275 残受入 item「現行 Virtual-first の Owner/受入整合」
+を処理した。本節は §1〜§6 の監査記録を改変せず追記のみとする
+（§6 と同一規則）。
+
+### 7.1 対象と方法
+
+- 対象: `docs/designs/issue-275-observability-integration-
+  design.md` の「Deferred 範囲の Owner/Trigger」表（実 OS
+  GUI・実 Device 行）と「Consumer Gate 割当（要約）」の
+  Windows 利用機能 L2/L3 行が、旧方針 `#313/#314 系
+  real-window lane` を参照したまま残っていた。
+- 方法: `gh issue view` による参照 Issue の実在・状態照合、
+  POLICIES.md §2.1（2026-11-15 決定）・Issue #275 本文
+  「2026-11-15 Virtual-first正式受入Owner整理」との突合、
+  文書差分の追記・参照差し替え。
+- 内部 doc chain・検証記録: `evidence/rf275/
+  obs-virtualfirst-{spec,design,plan,task,evidence}.md`。
+
+### 7.2 参照 Issue の実在照合結果（`gh issue view`、2026-11-15）
+
+| Issue | 状態 | 役割（Virtual-first 方針での位置づけ） |
+| --- | --- | --- |
+| RF #627 | CLOSED | 仮想優先の 3 repo 検証契約・POLICIES 整合の設計正本（方針基盤。Issue 状態は closed、POLICIES §2.1 の根拠文書） |
+| RF #628 | OPEN | deterministic core — VirtualClock/PCM fixture/MIDI trace/独立 Oracle/run metadata（OS-L1 契約試験基盤） |
+| RF #629 | OPEN | Windows 実 OS 仮想 Audio/MIDI Endpoint・Provisioning・本番 API 通過 Gate（EXT-L3 の OS API 経路） |
+| RF #630 | OPEN | VST3/CLAP Test Plugin Suite — 実 ABI/State/RT/Native Editor（正規 ABI Test Plugin fixture） |
+| RF #631 | OPEN | GPUI 実 Window Scenario Runner・Test GUI Dogfooding・Pixel/Receipt/Evidence（GUI-L2/Native Dock runner） |
+| RF #281 | OPEN | OBS-06 Cross-Consumer 互換/RT/精度検証 Gate（継続 Owner・変更なし） |
+| RF #294 | OPEN | consumer-verify UI/Golden/RT 横断 Gate（candidate SHA・OS 証拠。継続 Owner・変更なし） |
+| RF #313 | CLOSED（2026-11-13） | 旧 real-GUI Smoke/Window Driver lane — Virtual-first 方針で #631 系へ再編されたため参照失効 |
+| RF #314 | CLOSED（2026-11-11） | 旧 Semantic/Visual Golden lane — 同上 |
+| AL #127 | OPEN | AudioLens 継続追従 Owner（製品機能 Owner・変更なし） |
+| SV #28 | OPEN | Synvelis 継続追従 Owner（製品機能 Owner・変更なし） |
+
+### 7.3 充足済み item の照合根拠（本 slice が確認した事実）
+
+- **OBS-01〜11 API/Feature/Owner/OS-L1 fixture matching**:
+  §1 照合表・§2 Fixture×lane 証拠行列・§4.2 未対応 Case
+  棚卸しで充足済み。本 slice での再照合で変更なし。
+- **AL/SV consumer-gate assignment（#281/#294/AL#127/
+  SV#28）**: §3 Consumer Gate 割当表で充足済み。AL/SV
+  Oracle・Windows L2/L3 の Consumer Owner 委譲は維持。
+- **Virtual-first 再指向の内容**: 設計正本の Deferred 表
+  実 OS GUI 行は再開 Owner を `RF #293 + #631 + #630 +
+  AL#127/SV#28`（方針基盤 #627）へ、実 Device 行を
+  `RF #281 + #629 + #628 + device 利用機能 Owner` へ更新。
+  Consumer Gate 割当の Windows L2/L3 行は RF 側 Owner を
+  `#281・#294・#293・#628〜631 共通 Harness（方針基盤
+  #627）`、実行経路を「RF Virtual-first Harness lanes」へ
+  更新。dated note（2026-11-15）を両節に追加し、front-
+  matter `updated` を 2026-11-15 に更新した。
+- **本 slice が変更しないもの**: §3「Windows 利用機能
+  L2/L3」行・§4.2 の `RF #293/#313/#314`・「real-window
+  lanes」記述は 2026-11-14 監査時点の記録として保持する。
+  現行 Owner の正本は本節 §7.2/§7.3 と設計正本の dated
+  note であり、台帳 §1〜§6 の書き換えは行わない
+  （追記専用規則）。
+
+### 7.4 正直さの記録
+
+- #628〜631 は全て OPEN であり、Harness の実装・lane は
+  未完。参照の整合は Owner/Trigger の指し先を現行方針へ
+  合わせるものであり、当該 L2/L3 Case の実行済みを
+  意味しない。未検証は `NotRun` のまま。
+- 物理機材・市販 Plugin の一括 Required 化は課さない
+  （POLICIES §2.1）。design-Close と impl 受入は分離し、
+  本 slice の merge は Issue #275 全体の完了を宣言しない
+  （PR 本文は `Refs #275`）。
+- Issue #275 の checkbox 更新は Coordinator 側の
+  bookkeeping であり、本 ledger では「充足済みの照合根拠」
+  の記録に留める。

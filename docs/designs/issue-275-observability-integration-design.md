@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計"
 created: "2026-11-09"
-updated: "2026-11-14"
+updated: "2026-11-15"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -548,9 +548,24 @@ Provider・実 OS GUI・実 Device・長時間 Profiler は
 | Deferred 項目 | 現行の扱い | 再開 Owner | Activation Trigger | 放置時リスク |
 | --- | --- | --- | --- | --- |
 | 実外部 Provider/Exporter（実 OTLP endpoint・外部 tracing backend 等） | Issue #275 非対象（必須 OTLP/Tracy/Prometheus を作らない）。in-repo の変換・health 契約のみ | Ruviform Observability owner — 利用決定時に新規 Issue を起票し #281 で gate 証拠を収集 | Host/Consumer が実 exporter 接続を製品機能として採用すると決定した時点 | 外部連携の故障・精度問題が in-repo 検証をすり抜ける |
-| 実 OS GUI（実 Window 上の Observability 購読/表示） | `integration` の GUI 向け non-RT Snapshot/Subscription は API/契約のみ。実画面検証は GUI-L2 | RF #293（API 境界）+ 利用機能の Owner Issue（AL #127/SV #28 の Windows L2 Case。real-window 系 lane の設計正本: `docs/designs/issue-313-windows-realos-smoke.md`・`docs/designs/issue-314-real-scenario-lane.md`） | Host が Observability の GUI 診断表示を実際に提供・利用すると決定し、Windows 利用機能として GUI-L2 Required 化された時点 | GUI 経路の実機不具合が headless 検証をすり抜ける |
-| 実 Device（物理 Audio/MIDI 機器・実機負荷） | RT Bridge/Timing の契約試験は headless のみ。実機負荷下の latency/欠落は未計測 | RF #281（OBS-06 gate の実機負荷段階）+ device 利用機能の Owner Issue | 実機 Device を使う製品機能の利用が決定した時点（POLICIES EXT-L3） | 実機条件下の RT/欠落問題が gate 前に顕在化する |
+| 実 OS GUI（実 Window 上の Observability 購読/表示） | `integration` の GUI 向け non-RT Snapshot/Subscription は API/契約のみ。実画面検証は GUI-L2 | RF #293（API 境界）+ RF #631 real-GUI/plugin-dock runner（OPEN — 実 Window scenario・Pixel/Receipt/Evidence）+ RF #630 ABI Test Plugin（OPEN — Native Editor/Plugin Dock の実 ABI L3）+ 利用機能の Owner Issue（AL #127/SV #28 の Windows L2 Case）。方針基盤: RF #627（CLOSED — POLICIES §2.1 仮想優先契約）。旧 real-window lane 正本 `docs/designs/issue-313-windows-realos-smoke.md`・`docs/designs/issue-314-real-scenario-lane.md` の Issue #313/#314 は CLOSED であり、本行の検証経路は #628〜631 共通 Harness へ再指向（2026-11-15 追記） | Host が Observability の GUI 診断表示を実際に提供・利用すると決定し、Windows 利用機能として GUI-L2 Required 化された時点 | GUI 経路の実機不具合が headless 検証をすり抜ける |
+| 実 Device（物理 Audio/MIDI 機器・実機負荷） | RT Bridge/Timing の契約試験は headless のみ。実機負荷下の latency/欠落は未計測。OS API L3 は RF #629 OS virtual endpoint・RF #628 deterministic test runtime（VirtualClock/PCM/Fault、いずれも OPEN）経由で検証する方針（POLICIES §2.1、2026-11-15 追記） | RF #281（OBS-06 gate）+ RF #629 OS virtual endpoint survey/probe（OPEN — 本番 Audio/MIDI API を通す仮想 Endpoint）+ device 利用機能の Owner Issue。物理機材は原則必須 Gate から外し、正式サポート宣言・個別不具合調査時のみ物理 Case を定義 | OS Audio/MIDI API を通す L3 検証が必要な利用機能の確定時点（#629/#628 Harness Case として起票）。物理機材の正式サポート宣言・物理機材固有の不具合調査が必要になった時点は物理 Case を別途定義 | 実機条件下の RT/欠落問題が gate 前に顕在化する。仮想 Endpoint の Pass は物理機材の Driver/ADC-DAC を保証しない（POLICIES §2.1） |
 | 長時間 Profiler（samply 等の長時間・実負荷計測） | `allocation-probe`/`rt_timing` は開発・テスト用の有界計測のみ。長時間 profiling は未実施 | RF #281 + 利用要件を起票する新規 Issue（必要時） | 長時間・実負荷での性能/確保時間計測要件が具体化した時点 | 長時間劣化・リソースリークが短時間試験をすり抜ける |
+
+（2026-11-15 追記）上表の実 OS GUI・実 Device 行の再開
+Owner/Trigger を POLICIES §2.1（2026-11-15 決定「仮想優先の
+受入と共通テスト基盤」）へ再指向した。Windows で実際に
+提供・利用する GUI-L2/EXT-L3 は、RF #628〜631 共通 Harness
+（#628 deterministic test runtime・#629 OS virtual endpoint・
+#630 ABI Test Plugin・#631 real-GUI runner、いずれも OPEN）
+と RF #281/#294・製品 Owner（AL #127/SV #28）へ委譲する。
+方針基盤は RF #627（CLOSED・POLICIES §2.1 の設計正本）。
+旧 #313/#314 系 real-window lane の Issue は CLOSED であり、
+対応する設計書参照は失効した。未検証 Case は `NotRun` と
+正直に記録し、物理機材・市販 Plugin の一括 Required 化は
+課さず、design-Close と impl 受入を分離する。照合記録は
+`evidence/rf275/obs-acceptance-ledger.md` §7 と
+`evidence/rf275/obs-virtualfirst-*` が正本。
 
 なお **feature compile matrix**（`--no-default-features`・
 各 feature 単独・full consumer 組合せの compile 検証）は
@@ -588,11 +603,18 @@ Gate・Windows 利用機能 L2/L3 Gate の Issue 割当）は、
   | --- | --- | --- | --- |
   | AL Logging/Privacy/f64 独立 Oracle | #281・#294・#219 | AL #127（#138 は CLOSED 履歴） | consumer-verify `verify-audiolens` lanes + AL repo 側 Oracle |
   | SV RT/DAW/GUI 独立 Oracle | #281・#294・#219 | SV #28（#81 は CLOSED 履歴） | consumer-verify `verify-synvelis` lanes（`test-rt` 含む）+ SV repo 側 Oracle |
-  | Windows 利用機能 L2/L3 故障・RT/Privacy | #281・#294・#293・#313/#314 系 lane | AL #127・SV #28（製品機能 Owner） | 各 Consumer repo の Windows L2/L3 Case + RF real-window lanes。未利用機能は Required にしない |
+  | Windows 利用機能 L2/L3 故障・RT/Privacy | #281・#294・#293・#628〜631 共通 Harness（方針基盤 #627） | AL #127・SV #28（製品機能 Owner） | 各 Consumer repo の Windows L2/L3 Case + RF Virtual-first Harness lanes（OS virtual endpoint・ABI Test Plugin・real-GUI runner）。未利用機能は Required にしない |
   | Feature compile matrix | #281 G0 | — | 既存 lane なし（`NotRun`・Required 維持） |
 
 - 一方の Consumer の Pass を他方へ転用しない。AL/SV それ
   ぞれの repo 側 task・fixture・Oracle が受入の正本。
+- **2026-11-15 追記（Virtual-first 再指向）**: 上表
+  「Windows 利用機能 L2/L3」行の RF 側 Owner・実行経路を
+  POLICIES §2.1 の #628〜631 共通 Harness へ更新した。
+  旧 `#313/#314 系 lane` 参照は CLOSED Issue 由来のため
+  失効。未検証 Case は `NotRun` のまま維持し、詳細は
+  「Deferred 範囲の Owner/Trigger」節の dated note と
+  `evidence/rf275/obs-acceptance-ledger.md` §7 が正本。
 
 ## #101/#103 前提の更新記録
 
