@@ -27,17 +27,20 @@ pub struct NodeStatus {
     chase_overflows: AtomicU64,
     /// Delivered-note ledger force-releases on overflow.
     ledger_overflows: AtomicU64,
+    /// Merged events dropped by `merge_call_events` defined
+    /// truncation — the amount, not just the incident (which
+    /// `event_scratch_overflows` still counts once per call).
+    event_merge_truncated: AtomicU64,
     /// Mirrored [`InputStage`] counters — stored whole, never
     /// incremented (the stage is the authority).
     input_mapped: AtomicU64,
     input_delivered: AtomicU64,
     input_late: AtomicU64,
     input_rejected: AtomicU64,
+    input_anchor_rejected: AtomicU64,
     input_dropped_backend: AtomicU64,
     input_unsupported_backend: AtomicU64,
     input_dropped_capacity: AtomicU64,
-    input_released: AtomicU64,
-    input_ledger_overflows: AtomicU64,
     stale_epoch_controls: AtomicU64,
 }
 
@@ -69,6 +72,9 @@ pub struct NodeStatusSnapshot {
     pub ledger_overflows: u64,
     /// `SetClock` controls ignored for naming a foreign clock epoch.
     pub stale_epoch_controls: u64,
+    /// Events `merge_call_events` truncated to fit the per-call
+    /// scratch — cumulative, observable loss.
+    pub event_merge_truncated: u64,
     /// Live-input stage counters mirrored at the last callback —
     /// zeros when the node has no input leg.
     pub input: InputStageCounters,
@@ -96,15 +102,14 @@ impl NodeStatus {
         self.input_delivered.store(c.delivered, Ordering::Relaxed);
         self.input_late.store(c.late, Ordering::Relaxed);
         self.input_rejected.store(c.rejected, Ordering::Relaxed);
+        self.input_anchor_rejected
+            .store(c.anchor_rejected, Ordering::Relaxed);
         self.input_dropped_backend
             .store(c.dropped_backend, Ordering::Relaxed);
         self.input_unsupported_backend
             .store(c.unsupported_backend, Ordering::Relaxed);
         self.input_dropped_capacity
             .store(c.dropped_capacity, Ordering::Relaxed);
-        self.input_released.store(c.released, Ordering::Relaxed);
-        self.input_ledger_overflows
-            .store(c.ledger_overflows, Ordering::Relaxed);
     }
 
     fn field(&self, c: Counter) -> &AtomicU64 {
@@ -120,6 +125,7 @@ impl NodeStatus {
             Counter::NotesChased => &self.notes_chased,
             Counter::ChaseOverflow => &self.chase_overflows,
             Counter::LedgerOverflow => &self.ledger_overflows,
+            Counter::EventMergeTruncated => &self.event_merge_truncated,
             Counter::StaleEpochControl => &self.stale_epoch_controls,
         }
     }
@@ -141,16 +147,16 @@ impl NodeStatus {
             chase_overflows: load(&self.chase_overflows),
             ledger_overflows: load(&self.ledger_overflows),
             stale_epoch_controls: load(&self.stale_epoch_controls),
+            event_merge_truncated: load(&self.event_merge_truncated),
             input: InputStageCounters {
                 mapped: load(&self.input_mapped),
                 delivered: load(&self.input_delivered),
                 late: load(&self.input_late),
                 rejected: load(&self.input_rejected),
+                anchor_rejected: load(&self.input_anchor_rejected),
                 dropped_backend: load(&self.input_dropped_backend),
                 unsupported_backend: load(&self.input_unsupported_backend),
                 dropped_capacity: load(&self.input_dropped_capacity),
-                released: load(&self.input_released),
-                ledger_overflows: load(&self.input_ledger_overflows),
             },
         }
     }
@@ -169,6 +175,7 @@ pub(crate) enum Counter {
     NotesChased,
     ChaseOverflow,
     LedgerOverflow,
+    EventMergeTruncated,
     StaleEpochControl,
 }
 
@@ -184,11 +191,10 @@ mod tests {
             delivered: 2,
             late: 3,
             rejected: 4,
+            anchor_rejected: 2,
             dropped_backend: 5,
             unsupported_backend: 6,
             dropped_capacity: 7,
-            released: 8,
-            ledger_overflows: 9,
         };
         status.set_input(counters);
         // Absolute stores, not deltas — the stage is the authority.
